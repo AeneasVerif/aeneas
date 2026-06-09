@@ -125,6 +125,37 @@ Name reuse also works with definitions that already exist in the environment (e.
 from a previous `#decompose` call or manually written). If the name resolves to an
 existing definition whose value matches the extraction, it is reused.
 
+## Using expressions on the RHS
+
+Instead of providing a name (which creates a new definition), you can provide an
+arbitrary expression wrapped in parentheses. The expression must be definitionally
+equal (at default transparency) to the extracted sub-expression.
+
+```
+def add_mul (y x : U32) := do
+  let x ← x + y
+  x * 2#u32
+
+def f (x : U32) : Result U32 := do
+  let x ← x + 1#u32
+  let x ← x * 2#u32
+  let x ← x + 2#u32
+  let x ← x * 2#u32
+  pure x
+
+#decompose f f_eq
+  letRange 0 2 => (add_mul 1#u32)
+  letRange 1 2 => (add_mul 2#u32)
+-- f_eq : f x = do
+--   let x ← add_mul 1#u32 x
+--   let x ← add_mul 2#u32 x
+--   pure x
+```
+
+This is useful when the auxiliary function already exists and you want `#decompose`
+to verify the correspondence and rewrite using the existing function directly,
+rather than creating a new definition.
+
 ## Options
 
 - `set_option Aeneas.Decompose.checkDuplicate false` — disable the warning when two
@@ -230,9 +261,43 @@ partial def elabDecomposePat : Syntax → Except String DecomposePattern
     return .argArg idx.getNat .full
   | stx => throw s!"Unknown decompose pattern: {stx}"
 
-syntax decompose_clause := decompose_pat " => " ident
+declare_syntax_cat decompose_rhs (behavior := symbol)
+syntax ident : decompose_rhs
+syntax "(" term ")" : decompose_rhs
+
+syntax decompose_clause := decompose_pat " => " decompose_rhs
 
 syntax (name := decomposeCmd) "#decompose " ident ident (ppLine decompose_clause)* : command
+
+-- ============================================================================
+-- Clause RHS representation
+-- ============================================================================
+
+/-- RHS of a decompose clause: either a name for a new auxiliary definition,
+    or an existing expression to use (already elaborated). -/
+inductive ClauseRhs where
+  /-- Create (or reuse) an auxiliary definition with this name. -/
+  | defName (name : Name) (ident : Ident)
+  /-- Use this expression instead of creating a new definition.
+      `expr` is the elaborated expression, `unfoldNames` are head constants
+      to delta-unfold in the proof. -/
+  | useExpr (expr : Expr) (unfoldNames : Array Name)
+
+/-- Get a display name for a clause RHS (for error messages). -/
+def ClauseRhs.toMessageData : ClauseRhs → MessageData
+  | .defName name _ => m!"{name}"
+  | .useExpr expr _ => m!"{expr}"
+
+/-- Get the names to unfold in the proof for this RHS. -/
+def ClauseRhs.getUnfoldNames : ClauseRhs → Array Name
+  | .defName name _ => #[name]
+  | .useExpr _ names => names
+
+/-- Collect the head constant names from an expression (for delta unfolding in proofs). -/
+private def collectHeadConsts (e : Expr) : Array Name :=
+  match e.getAppFn with
+  | .const name _ => #[name]
+  | _ => #[]
 
 -- ============================================================================
 -- Binding representation
@@ -720,19 +785,44 @@ private def addDefinition (name : Name) (levelParams : List Name)
   modify fun s => { s with introduced := s.introduced.push (name, value) }
 
 -- ============================================================================
+-- Core extraction: helpers for expression RHS
+-- ============================================================================
+
+/-- Use an existing expression instead of creating a new definition.
+    Checks that the expression is definitionally equal to the extracted body (closed
+    over free local variables), then returns the expression applied to those fvars. -/
+private def useExprForDef (fnValue : Expr) (rhsExpr : Expr)
+    (clauseDesc : MessageData) : DecomposeM Expr := do
+  let relevantFVars ← collectFreeLocalFVars fnValue
+  let fnValueClosed ← mkLamAbstract relevantFVars fnValue
+  -- Use default transparency so regular definitions (not just abbrevs) are unfolded
+  let isEq ← isDefEq rhsExpr fnValueClosed
+  unless isEq do
+    throwError "#decompose: cannot apply {clauseDesc}: the provided expression\
+      {indentExpr rhsExpr}\nis not definitionally equal (at default transparency) to the \
+      extracted body{indentExpr fnValueClosed}"
+  -- After isDefEq, metavariables in rhsExpr may have been resolved
+  let rhsExpr ← instantiateMVars rhsExpr
+  return mkAppN rhsExpr relevantFVars
+
+-- ============================================================================
 -- Core extraction: `full`
 -- ============================================================================
 
-/-- Extract the whole expression as a new definition.
-    Returns the call expression that replaces it. -/
-def extractFull (body : Expr) (newName : Name)
+/-- Extract the whole expression as a new definition (or match it against an
+    existing expression). Returns the call expression that replaces it. -/
+def extractFull (body : Expr) (rhs : ClauseRhs)
     (levelParams : List Name) (srcIsNoncomputable : Bool)
     (clauseDesc : MessageData) : DecomposeM Expr := do
-  let relevantFVars ← collectFreeLocalFVars body
-  let fnValue ← mkLamAbstract relevantFVars body
-  let fnType  ← mkForallAbstract relevantFVars (← inferType body)
-  addDefinition newName levelParams fnType fnValue srcIsNoncomputable clauseDesc
-  return mkAppN (mkConst newName (levelParams.map Level.param)) relevantFVars
+  match rhs with
+  | .useExpr rhsExpr _ =>
+    useExprForDef body rhsExpr clauseDesc
+  | .defName newName _ =>
+    let relevantFVars ← collectFreeLocalFVars body
+    let fnValue ← mkLamAbstract relevantFVars body
+    let fnType  ← mkForallAbstract relevantFVars (← inferType body)
+    addDefinition newName levelParams fnType fnValue srcIsNoncomputable clauseDesc
+    return mkAppN (mkConst newName (levelParams.map Level.param)) relevantFVars
 
 -- ============================================================================
 -- Core extraction: `letRange`
@@ -741,7 +831,7 @@ def extractFull (body : Expr) (newName : Name)
 /-- Extract `count` consecutive bindings starting at `start`.
     Returns the **full** modified body (wrapping bindings before the range too). -/
 def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
-    (start count : Nat) (newName : Name)
+    (start count : Nat) (rhs : ClauseRhs)
     (levelParams : List Name) (srcIsNoncomputable : Bool)
     (clauseDesc : MessageData) : DecomposeM Expr := do
   let n := bindings.size            -- number of actual bindings
@@ -762,15 +852,19 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
       if let some m := entry.monadExpr then return some m
     return none
 
-  -- Helper: add the definition and build the call expression.
-  -- Uses `collectFreeLocalFVars` to capture all relevant fvars from the local
-  -- context (function params, navigation fvars from letAt/branch/lam, etc.).
+  -- Helper: add the definition (or use an existing expression) and build the
+  -- call expression. Uses `collectFreeLocalFVars` to capture all relevant fvars
+  -- from the local context (function params, navigation fvars from letAt/branch/lam, etc.).
   let addDef (fnValue : Expr) : DecomposeM Expr := do
-    let relevantFVars ← collectFreeLocalFVars fnValue
-    let fnValueClosed ← mkLamAbstract relevantFVars fnValue
-    let fnTypeClosed  ← mkForallAbstract relevantFVars (← inferType fnValue)
-    addDefinition newName levelParams fnTypeClosed fnValueClosed srcIsNoncomputable clauseDesc
-    return mkAppN (mkConst newName (levelParams.map Level.param)) relevantFVars
+    match rhs with
+    | .useExpr rhsExpr _ =>
+      useExprForDef fnValue rhsExpr clauseDesc
+    | .defName newName _ =>
+      let relevantFVars ← collectFreeLocalFVars fnValue
+      let fnValueClosed ← mkLamAbstract relevantFVars fnValue
+      let fnTypeClosed  ← mkForallAbstract relevantFVars (← inferType fnValue)
+      addDefinition newName levelParams fnTypeClosed fnValueClosed srcIsNoncomputable clauseDesc
+      return mkAppN (mkConst newName (levelParams.map Level.param)) relevantFVars
 
   if includesTerminal then
     -- ── Case A: range goes to the end ──────────────────────────────────
@@ -1046,7 +1140,7 @@ where
 -- ============================================================================
 
 /-- Format a decompose clause for error messages. -/
-private def formatClause (pat : DecomposePattern) (name : Name) : MessageData :=
+private def formatClause (pat : DecomposePattern) (rhs : ClauseRhs) : MessageData :=
   let rec go : DecomposePattern → String
     | .letRange s c => s!"letRange {s} {c}"
     | .letAt i inner => s!"letAt {i} ({go inner})"
@@ -1055,41 +1149,41 @@ private def formatClause (pat : DecomposePattern) (name : Name) : MessageData :=
     | .lam n inner => s!"lam {n} ({go inner})"
     | .appFun inner => s!"appFun ({go inner})"
     | .argArg i inner => s!"argArg {i} ({go inner})"
-  m!"{go pat} => {name}"
+  m!"{go pat} => {rhs.toMessageData}"
 
 /-- Apply one decompose clause: navigate with the pattern, extract, replace.
     Returns the modified function body. -/
-partial def applyClause (body : Expr) (pat : DecomposePattern) (newName : Name)
+partial def applyClause (body : Expr) (pat : DecomposePattern) (rhs : ClauseRhs)
     (levelParams : List Name)
     (srcIsNoncomputable : Bool) : DecomposeM Expr := do
-  let clauseDesc := formatClause pat newName
+  let clauseDesc := formatClause pat rhs
   match pat with
   | .full =>
-    extractFull body newName levelParams srcIsNoncomputable clauseDesc
+    extractFull body rhs levelParams srcIsNoncomputable clauseDesc
 
   | .letRange start count =>
     withBindings body #[] fun bindings terminal => do
-      extractLetRange bindings terminal start count newName levelParams srcIsNoncomputable clauseDesc
+      extractLetRange bindings terminal start count rhs levelParams srcIsNoncomputable clauseDesc
 
   | .letAt idx inner =>
     modifyBindingValue body idx fun value => do
-      applyClause value inner newName levelParams srcIsNoncomputable
+      applyClause value inner rhs levelParams srcIsNoncomputable
 
   | .branch idx inner =>
     modifyBranch body idx fun branchBody => do
-      applyClause branchBody inner newName levelParams srcIsNoncomputable
+      applyClause branchBody inner rhs levelParams srcIsNoncomputable
 
   | .lam n inner =>
     modifyUnderLambdas body n fun innerBody => do
-      applyClause innerBody inner newName levelParams srcIsNoncomputable
+      applyClause innerBody inner rhs levelParams srcIsNoncomputable
 
   | .appFun inner =>
     modifyAppFun body fun fn => do
-      applyClause fn inner newName levelParams srcIsNoncomputable
+      applyClause fn inner rhs levelParams srcIsNoncomputable
 
   | .argArg idx inner =>
     modifyAppArg body idx fun arg => do
-      applyClause arg inner newName levelParams srcIsNoncomputable
+      applyClause arg inner rhs levelParams srcIsNoncomputable
 
 -- ============================================================================
 -- Proof generation
@@ -1130,18 +1224,19 @@ def proveStep (goalType : Expr) (defNames : Array Name) : TermElabM Expr := do
     - Declaration ranges (for go-to-definition on introduced names)
     - Term info (for hover on identifiers in the command syntax) -/
 private def registerDecomposeInfo (cmdStx : Syntax) (eqId : Ident) (eqName : Name)
-    (parsedClauses : Array (DecomposePattern × Name × Ident)) : TermElabM Unit := do
+    (parsedClauses : Array (DecomposePattern × ClauseRhs)) : TermElabM Unit := do
   -- Register the equation theorem
   Elab.addDeclarationRangesFromSyntax eqName cmdStx eqId
   Term.addTermInfo' eqId (← mkConstWithLevelParams eqName) (isBinder := true)
   -- Register each auxiliary definition (deduplicate: same name may appear multiple times
-  -- when the user reuses a name across clauses)
+  -- when the user reuses a name across clauses). Skip expression RHS (no new definition).
   let mut registered : Array Name := #[]
-  for (_, auxName, auxIdent) in parsedClauses do
-    unless registered.contains auxName do
-      Elab.addDeclarationRangesFromSyntax auxName cmdStx auxIdent
-      Term.addTermInfo' auxIdent (← mkConstWithLevelParams auxName) (isBinder := true)
-      registered := registered.push auxName
+  for (_, clauseRhs) in parsedClauses do
+    if let .defName auxName auxIdent := clauseRhs then
+      unless registered.contains auxName do
+        Elab.addDeclarationRangesFromSyntax auxName cmdStx auxIdent
+        Term.addTermInfo' auxIdent (← mkConstWithLevelParams auxName) (isBinder := true)
+        registered := registered.push auxName
 
 /-- Resolve the equation theorem name in the current namespace. -/
 private def resolveEqName (eqId : Ident) : TermElabM Name := do
@@ -1152,7 +1247,7 @@ private def resolveEqName (eqId : Ident) : TermElabM Name := do
 /-- Decompose a non-recursive function using its definitional body directly. -/
 private def decomposeViaDef (fnName : Name) (levelParams : List Name)
     (srcIsNoncomputable : Bool)
-    (parsedClauses : Array (DecomposePattern × Name × Ident))
+    (parsedClauses : Array (DecomposePattern × ClauseRhs))
     (cmdStx : Syntax) (eqId : Ident) : TermElabM Unit := do
   let env ← getEnv
   let some info := env.find? fnName | throwError "No declaration: {fnName}"
@@ -1163,23 +1258,30 @@ private def decomposeViaDef (fnName : Name) (levelParams : List Name)
   -- Open the function parameters
   lambdaTelescope fnValue fun params body => do
     -- Apply each clause sequentially
-    let ((currentBody, introNames), _) ←
+    let ((currentBody, unfoldNames), _) ←
       (do
         let mut currentBody := body
-        let mut introNames : Array Name := #[]
-        for (pat, newName, _) in parsedClauses do
-          currentBody ← applyClause currentBody pat newName levelParams srcIsNoncomputable
-          if !introNames.contains newName then
-            introNames := introNames.push newName
-        return (currentBody, introNames) : DecomposeM _).run {}
+        let mut unfoldNames : Array Name := #[]
+        for (pat, clauseRhs) in parsedClauses do
+          currentBody ← applyClause currentBody pat clauseRhs levelParams srcIsNoncomputable
+          for n in clauseRhs.getUnfoldNames do
+            if !unfoldNames.contains n then
+              unfoldNames := unfoldNames.push n
+        return (currentBody, unfoldNames) : DecomposeM _).run {}
+
+    -- Instantiate any metavariables resolved during isDefEq (expression RHS)
+    let currentBody ← instantiateMVars currentBody
 
     -- Prove: ∀ params, body = currentBody
     let eqType ← mkForallFVars params (← mkEq body currentBody)
-    let proof ← proveStep eqType introNames
+    let eqType ← instantiateMVars eqType
+    let proof ← proveStep eqType unfoldNames
+    let proof ← instantiateMVars proof
 
     -- Build the theorem: ∀ params, f params = currentBody
     let lhs := mkAppN (mkConst fnName (levelParams.map Level.param)) params
     let thmTypeForall ← mkForallFVars params (← mkEq lhs currentBody)
+    let thmTypeForall ← instantiateMVars thmTypeForall
 
     let eqName ← resolveEqName eqId
 
@@ -1202,7 +1304,7 @@ private def decomposeViaDef (fnName : Name) (levelParams : List Name)
     decompose, then chain `eq_def` with the decomposition proof. -/
 private def decomposeViaEqDef (fnName eqDefName : Name) (levelParams : List Name)
     (srcIsNoncomputable : Bool)
-    (parsedClauses : Array (DecomposePattern × Name × Ident))
+    (parsedClauses : Array (DecomposePattern × ClauseRhs))
     (cmdStx : Syntax) (eqId : Ident) : TermElabM Unit := do
   let eqDefInfo ← getConstInfo eqDefName
 
@@ -1214,19 +1316,23 @@ private def decomposeViaEqDef (fnName eqDefName : Name) (levelParams : List Name
       throwError "#decompose: unexpected eq_def LHS for '{fnName}'"
 
     -- Apply each clause to the clean body
-    let ((currentBody, introNames), _) ←
+    let ((currentBody, unfoldNames), _) ←
       (do
         let mut currentBody := cleanBody
-        let mut introNames : Array Name := #[]
-        for (pat, newName, _) in parsedClauses do
-          currentBody ← applyClause currentBody pat newName levelParams srcIsNoncomputable
-          if !introNames.contains newName then
-            introNames := introNames.push newName
-        return (currentBody, introNames) : DecomposeM _).run {}
+        let mut unfoldNames : Array Name := #[]
+        for (pat, clauseRhs) in parsedClauses do
+          currentBody ← applyClause currentBody pat clauseRhs levelParams srcIsNoncomputable
+          for n in clauseRhs.getUnfoldNames do
+            if !unfoldNames.contains n then
+              unfoldNames := unfoldNames.push n
+        return (currentBody, unfoldNames) : DecomposeM _).run {}
+
+    -- Instantiate any metavariables resolved during isDefEq (expression RHS)
+    let currentBody ← instantiateMVars currentBody
 
     -- Prove: ∀ params, clean_body = currentBody
     let internalEqType ← mkForallFVars params (← mkEq cleanBody currentBody)
-    let internalProof ← proveStep internalEqType introNames
+    let internalProof ← proveStep internalEqType unfoldNames
 
     -- Build the final proof: ∀ params, f params = currentBody
     -- by composing eq_def (f params = clean_body) with the internal proof
@@ -1275,17 +1381,27 @@ def elabDecompose : CommandElab := fun stx => do
       let srcIsNoncomputable := isNoncomputable env fnName
 
       -- Parse all clauses (keep the name syntax for LSP info)
-      let mut parsedClauses : Array (DecomposePattern × Name × Ident) := #[]
+      let mut parsedClauses : Array (DecomposePattern × ClauseRhs) := #[]
       for clauseStx in clauses do
         match clauseStx with
-        | `(decompose_clause| $pat => $name) => do
+        | `(decompose_clause| $pat => $rhsStx:decompose_rhs) => do
           let p ← match elabDecomposePat pat with
             | .ok p => pure p
             | .error msg => throwError msg
-          -- Resolve the new name in the current namespace
-          let ns ← getCurrNamespace
-          let fullName := if ns.isAnonymous then name.getId else ns ++ name.getId
-          parsedClauses := parsedClauses.push (p, fullName, name)
+          match rhsStx with
+          | `(decompose_rhs| $name:ident) =>
+            -- Identifier RHS: create or reuse a definition
+            let ns ← getCurrNamespace
+            let fullName := if ns.isAnonymous then name.getId else ns ++ name.getId
+            parsedClauses := parsedClauses.push (p, .defName fullName name)
+          | `(decompose_rhs| ( $term:term )) =>
+            -- Expression RHS: elaborate the term and use it directly
+            let rhsExpr ← Term.elabTerm term none
+            Term.synthesizeSyntheticMVarsNoPostponing
+            let rhsExpr ← instantiateMVars rhsExpr
+            let headConsts := collectHeadConsts rhsExpr
+            parsedClauses := parsedClauses.push (p, .useExpr rhsExpr headConsts)
+          | _ => throwError "Invalid decompose clause RHS syntax"
         | _ => throwError "Invalid decompose clause syntax"
 
       -- Check if the function has an unfolding equation theorem (recursive functions:

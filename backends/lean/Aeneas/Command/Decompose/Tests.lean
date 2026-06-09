@@ -2288,4 +2288,182 @@ def caller (x : U32) : Result U32 := do
 
 end test58
 
+-- ============================================================================
+-- Test 59: Expression RHS — basic usage (from issue #1109)
+-- ============================================================================
+
+namespace test59
+
+def f (x : U32) : Result U32 := do
+  let x ← x + 1#u32
+  let x ← x * 2#u32
+  let x ← x + 2#u32
+  let x ← x * 2#u32
+  let x ← x + 3#u32
+  let x ← x * 2#u32
+  pure x
+
+def add_mul (y x : U32) : Result U32 := do
+  let x ← x + y
+  x * 2#u32
+
+-- Test single expression RHS clause
+#decompose f f_eq1
+  letRange 0 2 => (add_mul 1#u32)
+
+/--
+info: f_eq1 : ∀ (x : U32),
+  f x = do
+    let x ← add_mul 1#u32 x
+    let x ← x + 2#u32
+    let x ← x * 2#u32
+    let x ← x + 3#u32
+    let x ← x * 2#u32
+    pure x
+-/
+#guard_msgs in
+#check @f_eq1
+
+-- Full test with all three clauses
+#decompose f f_eq
+  letRange 0 2 => (add_mul 1#u32)
+  letRange 1 2 => (add_mul 2#u32)
+  letRange 2 2 => (add_mul 3#u32)
+
+/--
+info: f_eq : ∀ (x : U32),
+  f x = do
+    let x ← add_mul 1#u32 x
+    let x ← add_mul 2#u32 x
+    let x ← add_mul 3#u32 x
+    pure x
+-/
+#guard_msgs in
+#check @f_eq
+
+/--
+info: 'Aeneas.Command.Decompose.Tests.test59.f_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms f_eq
+
+end test59
+
+-- ============================================================================
+-- Test 60: Expression RHS — mixing identifier and expression RHS
+-- ============================================================================
+
+namespace test60
+
+def g (x : U32) : Result U32 := do
+  let a ← x + 1#u32
+  let b ← a + 1#u32
+  let c ← b + 1#u32
+  c + 10#u32
+
+def add1 (x : U32) : Result U32 := x + 1#u32
+
+#decompose g g_eq
+  letRange 0 1 => g_first
+  letRange 1 1 => (add1)
+
+/--
+info: def Aeneas.Command.Decompose.Tests.test60.g_first : U32 → Result (UScalar UScalarTy.U32) :=
+fun x => x + 1#u32
+-/
+#guard_msgs in
+#print g_first
+
+/--
+info: g_eq : ∀ (x : U32),
+  g x = do
+    let a ← g_first x
+    let b ← add1 a
+    let c ← b + 1#u32
+    c + 10#u32
+-/
+#guard_msgs in
+#check @g_eq
+
+end test60
+
+-- ============================================================================
+-- Test 61: Expression RHS — full pattern with expression
+-- ============================================================================
+
+namespace test61
+
+def h (x : U32) : Result U32 := do
+  let a ← x + 1#u32
+  a + 2#u32
+
+def h_impl (x : U32) : Result U32 := do
+  let a ← x + 1#u32
+  a + 2#u32
+
+#decompose h h_eq
+  full => (h_impl)
+
+/--
+info: h_eq : ∀ (x : U32), h x = h_impl x
+-/
+#guard_msgs in
+#check @h_eq
+
+end test61
+
+-- ============================================================================
+-- Test 62: Expression RHS — error on non-defeq expression
+-- ============================================================================
+
+namespace test62
+
+def k (x : U32) : Result U32 := do
+  let a ← x + 1#u32
+  a + 2#u32
+
+def k_wrong (x : U32) : Result U32 := do
+  let a ← x + 1#u32
+  a + 3#u32  -- different from k!
+
+/--
+error: #decompose: cannot apply full => k_wrong: the provided expression
+  k_wrong
+is not definitionally equal (at default transparency) to the extracted body
+  fun x => do
+    let a ← x + 1#u32
+    a + 2#u32
+-/
+#guard_msgs in
+#decompose k k_eq
+  full => (k_wrong)
+
+end test62
+
+-- ============================================================================
+-- Test 63: Expression RHS — with lambda expression (no named definition)
+-- ============================================================================
+
+namespace test63
+
+def m (x : U32) : Result U32 := do
+  let a ← x + 1#u32
+  let b ← a + 2#u32
+  b + 3#u32
+
+#decompose m m_eq
+  letRange 0 1 => (fun (x : U32) => x + 1#u32)
+
+/--
+info: m_eq : ∀ (x : U32),
+  m x = do
+    let a ← (fun x => x + 1#u32) x
+    let b ← a + 2#u32
+    b + 3#u32
+-/
+#guard_msgs in
+#check @m_eq
+
+end test63
+
 end Aeneas.Command.Decompose.Tests
