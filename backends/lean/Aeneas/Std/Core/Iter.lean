@@ -239,6 +239,36 @@ def core.iter.range.IteratorRange.next
       | some n => ok ⟨ some range', {range with start := n} ⟩
     else ok ⟨ none, range ⟩
 
+/-- Specialization of `IteratorRange.next` to `Usize`: rewrites the iterator
+step to a plain `if/then/else` whose `then` branch is the checked add
+`iter.start + 1#usize`. Useful as a `simp` lemma so range loops can be
+discharged by `step`-style reasoning without unfolding the trait dispatch. -/
+@[simp]
+theorem core.iter.range.IteratorRange.next_Usize_def
+    (iter : core.ops.range.Range Usize) :
+    core.iter.range.IteratorRange.next core.iter.range.StepUsize iter =
+      if iter.start.val < iter.«end».val then
+        do let next ← iter.start + 1#usize
+           ok (some iter.start, { start := next, «end» := iter.«end» })
+      else ok (none, iter) := by
+  simp only [core.iter.range.IteratorRange.next,
+    core.cmp.impls.PartialOrdUsize.lt, liftFun2, bind_tc_ok,
+    core.clone.impls.CloneUsize.clone,
+    core.iter.range.StepUsize.forward_checked,
+    Usize.checked_add, core.num.checked_add_UScalar, Option.ofResult,
+    decide_eq_true_eq]
+  split
+  · -- start < end: the checked add succeeds
+    rename_i hlt
+    have hspec := @UScalar.add_spec _ iter.start 1#usize (by scalar_tac)
+    simp only [WP.spec, WP.theta] at hspec
+    revert hspec; cases iter.start + 1#usize with
+    | ok z => intro hspec; simp
+    | fail e => intro h; exact h.elim
+    | div => intro h; exact h.elim
+  · -- start ≥ end
+    rename_i _hge; simp
+
 @[rust_fun
   "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>}::step_by"]
 def core.iter.range.IteratorRange.step_by
