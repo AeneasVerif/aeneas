@@ -847,9 +847,6 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
                 | Repeat _ ->
                     [%craise] st.span
                       "Repeat should have been removed in a micropass"
-                | ShallowInitBox _ ->
-                    [%craise] st.span
-                      "ShallowInitBox should have been removed in a micropass"
                 | Use _
                 | RvRef
                     ( _,
@@ -910,13 +907,13 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
   | Continue i -> ([ (ctx, Continue i) ], cf_singleton __FILE__ __LINE__ st.span)
   | StorageLive _ | Nop ->
       ([ (ctx, Unit) ], cf_singleton __FILE__ __LINE__ st.span)
-  | CopyNonOverlapping _ ->
-      [%craise] st.span "CopyNonOverlapping is not supported yet"
   | Loop loop_body ->
       let eval_loop_body = eval_block config loop_body in
       InterpLoops.eval_loop config st.span eval_loop_body ctx
   | Switch switch -> eval_switch config st.span switch ctx
   | Error s -> [%craise] st.span s
+  | _ ->
+      [%craise] st.span ("unsupported statement: " ^ show_statement_kind st.kind)
 
 and eval_rvalue_global (config : config) (span : Meta.span) (dest : place)
     (rv : rvalue) : stl_cm_fun =
@@ -1583,7 +1580,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
       in
       let output = mk_simpl_etuple ~borrow_proj:true outputs in
       let input =
-        mk_eproj_loans_value_from_symbolic_value ctx.type_ctx.type_infos
+        mk_eproj_loans_value_from_symbolic_value ctx.env ctx.type_ctx.type_infos
           abs.regions.owned ret_spc ret_sv_ty
       in
       let input = EApp (EFunCall abs.abs_id, [ [ input ] ]) in
