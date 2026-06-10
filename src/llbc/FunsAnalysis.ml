@@ -32,16 +32,71 @@ type fun_info = {
 }
 [@@deriving show]
 
-(** Various information about a module's functions *)
-type modules_funs_info = fun_info FunDeclId.Map.t
+(** Various information about a module's functions and trait methods.
+
+    The [fun_decl_id_map] field records the canonical id for every function
+    declaration. The fun_decl backing a trait method definition is refered to
+    using [FunOrMethodId.Method] instead of its fun_decl_id. *)
+type modules_funs_info = {
+  fun_decl_id_map : FunOrMethodId.id FunDeclId.Map.t;
+  infos : fun_info FunOrMethodId.Map.t;
+}
+[@@deriving show]
+
+let lookup_fun_info (infos : modules_funs_info) (id : FunOrMethodId.id) :
+    fun_info option =
+  FunOrMethodId.Map.find_opt id infos.infos
+
+let fun_or_method_id_of_fun_decl_id (infos : modules_funs_info)
+    (id : FunDeclId.id) : FunOrMethodId.id =
+  [%silent_unwrap_opt_span] None
+    (FunDeclId.Map.find_opt id infos.fun_decl_id_map)
+
+let fun_or_method_id_of_fn_ptr (infos : modules_funs_info) (kind : fn_ptr_kind)
+    : FunOrMethodId.id option =
+  match kind with
+  | FunId (FRegular id) -> Some (fun_or_method_id_of_fun_decl_id infos id)
+  | TraitMethod (trait_ref, method_id, _) ->
+      Some (FunOrMethodId.of_trait_method trait_ref method_id)
+  | FunId (FBuiltin _) -> None
+
+let lookup_fun_decl_info (infos : modules_funs_info) (id : FunDeclId.id) :
+    fun_info option =
+  lookup_fun_info infos (fun_or_method_id_of_fun_decl_id infos id)
+
+let lookup_fn_ptr_info (infos : modules_funs_info) (kind : fn_ptr_kind) :
+    fun_info option =
+  Option.bind (fun_or_method_id_of_fn_ptr infos kind) (lookup_fun_info infos)
+
+let compute_fun_decl_id_map (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
+    FunOrMethodId.id FunDeclId.Map.t =
+  let ids = ref FunDeclId.Map.empty in
+  FunDeclId.Map.iter
+    (fun id _ ->
+      ids := FunDeclId.Map.add id (FunOrMethodId.of_regular_fun_decl_id id) !ids)
+    funs_map;
+  TraitDeclId.Map.iter
+    (fun trait_decl_id (trait_decl : trait_decl) ->
+      Types.TraitMethodId.Map.iter
+        (fun method_id (method_ : trait_method Types.binder) ->
+          let id = method_.binder_value.item.id in
+          let canonical_id = FunOrMethodId.Method (trait_decl_id, method_id) in
+          ids := FunDeclId.Map.add id canonical_id !ids)
+        trait_decl.methods)
+    m.trait_decls;
+  !ids
 
 let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     modules_funs_info =
   let fmt_env = Charon.Print.crate_to_fmt_env m in
-  let infos = ref FunDeclId.Map.empty in
-  let register_info (id : FunDeclId.id) (info : fun_info) : unit =
-    assert (not (FunDeclId.Map.mem id !infos));
-    infos := FunDeclId.Map.add id info !infos
+  let fun_decl_id_map = compute_fun_decl_id_map m funs_map in
+  let infos = ref { fun_decl_id_map; infos = FunOrMethodId.Map.empty } in
+  let register_info (id : FunOrMethodId.id) (info : fun_info) : unit =
+    assert (not (FunOrMethodId.Map.mem id !infos.infos));
+    infos := { !infos with infos = FunOrMethodId.Map.add id info !infos.infos }
+  in
+  let register_fun_decl_info (id : FunDeclId.id) (info : fun_info) : unit =
+    register_info (fun_or_method_id_of_fun_decl_id !infos id) info
   in
 
   (* Analyze a group of mutually recursive functions.
@@ -87,12 +142,13 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
           method maybe_stateful b = stateful := !stateful || b
           method! visit_statement _ st = super#visit_statement st.span st
 
+          (* Custom function called by hand, this isn't visit_fun_decl_id! *)
           method visit_fid span id =
             if FunDeclId.Set.mem id fun_ids then (
               can_diverge := true;
               is_rec := true)
             else
-              let info = FunDeclId.Map.find_opt id !infos in
+              let info = lookup_fun_decl_info !infos id in
               let info =
                 [%unwrap_opt_span] (Some span) info
                   "The function called here is missing from the crate \
@@ -236,7 +292,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     let fun_ids = List.map (fun (d : fun_decl) -> d.def_id) funs in
     let fun_ids = FunDeclId.Set.of_list fun_ids in
     let info = analyze_fun_decls fun_ids funs in
-    List.iter (fun (f : fun_decl) -> register_info f.def_id info) funs
+    List.iter (fun (f : fun_decl) -> register_fun_decl_info f.def_id info) funs
   in
 
   let rec analyze_decl_groups (decls : declaration_group list) : unit =

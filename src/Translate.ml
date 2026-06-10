@@ -107,8 +107,8 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     (marked_ids : marked_ids)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t)
     (pure_global_decls : Pure.global_decl GlobalDeclId.Map.t)
-    (fun_sigs : SymbolicToPureCore.fun_sigs FunDeclId.Map.t) (fdef : fun_decl) :
-    pure_fun_translation_no_loops =
+    (fun_sigs : SymbolicToPureCore.fun_sigs FunOrMethodId.Map.t)
+    (fdef : fun_decl) : pure_fun_translation_no_loops =
   (* Debug *)
   [%ltrace
     name_to_string trans_ctx fdef.item_meta.name
@@ -271,8 +271,8 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
 let translate_function_to_pure (trans_ctx : trans_ctx) (marked_ids : marked_ids)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t)
     (pure_global_decls : Pure.global_decl Pure.GlobalDeclId.Map.t)
-    (fun_sigs : SymbolicToPureCore.fun_sigs FunDeclId.Map.t) (fdef : fun_decl) :
-    pure_fun_translation_no_loops option =
+    (fun_sigs : SymbolicToPureCore.fun_sigs FunOrMethodId.Map.t)
+    (fdef : fun_decl) : pure_fun_translation_no_loops option =
   try
     Some
       (translate_function_to_pure_aux trans_ctx marked_ids pure_type_decls
@@ -360,7 +360,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
 
   (* Compute the fun sigs for the whole crate *)
   let fun_sigs =
-    FunDeclId.Map.of_list
+    FunOrMethodId.Map.of_list
       (List.filter_map
          (fun (fdef : LlbcAst.fun_decl) ->
            try
@@ -375,7 +375,11 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
              let sg = translate_fun_sig_from_decomposed dsg in
              let ty = PureUtils.mk_arrows sg.inputs sg.output in
              let sg : fun_sigs = { dsg; sg; ty } in
-             Some (fdef.def_id, sg)
+             let id =
+               FunsAnalysis.fun_or_method_id_of_fun_decl_id
+                 trans_ctx.fun_ctx.fun_infos fdef.def_id
+             in
+             Some (id, sg)
            with CFailure error ->
              let name = name_to_string trans_ctx fdef.item_meta.name in
              let name_pattern =
@@ -400,8 +404,8 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
   let builtin_fun_sigs =
     BuiltinFunIdMap.map
       (fun (info : builtin_fun_info) ->
-        SymbolicToPureTypes.translate_fun_sig trans_ctx (FBuiltin info.fun_id)
-          info.fun_sig
+        SymbolicToPureTypes.translate_fun_sig trans_ctx
+          (Pure.FunId (FBuiltin info.fun_id)) info.fun_sig
           (List.map (fun _ -> None) info.fun_sig.item_binder_value.inputs))
       builtin_fun_infos
   in
@@ -785,8 +789,12 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     Option.get (Charon.GAstUtils.init_fun_id_of_global global)
   in
   let trans =
+    let id =
+      FunsAnalysis.fun_or_method_id_of_fun_decl_id
+        ctx.trans_ctx.fun_ctx.fun_infos global_init
+    in
     [%silent_unwrap_opt_span] None
-      (FunDeclId.Map.find_opt global_init ctx.trans_funs)
+      (FunOrMethodId.Map.find_opt id ctx.trans_funs)
   in
   [%sanity_check] global.item_meta.span (trans.loops = [] && trans.bodies = []);
   let body = trans.f in
@@ -1089,7 +1097,13 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     | FunGroup (NonRecGroup id) -> (
         (* Lookup - the translated function may not be in the map if we had
            to ignore it because of errors *)
-        let pure_fun = FunDeclId.Map.find_opt id ctx.trans_funs in
+        let pure_fun =
+          let id =
+            FunsAnalysis.fun_or_method_id_of_fun_decl_id
+              ctx.trans_ctx.fun_ctx.fun_infos id
+          in
+          FunOrMethodId.Map.find_opt id ctx.trans_funs
+        in
         (* Special case: we skip trait method *declarations* (we will
            extract their type directly in the records we generate for
            the trait declarations themselves, there is no point in having
@@ -1109,7 +1123,12 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         (* Lookup *)
         let pure_funs =
           List.filter_map
-            (fun id -> FunDeclId.Map.find_opt id ctx.trans_funs)
+            (fun id ->
+              let id =
+                FunsAnalysis.fun_or_method_id_of_fun_decl_id
+                  ctx.trans_ctx.fun_ctx.fun_infos id
+              in
+              FunOrMethodId.Map.find_opt id ctx.trans_funs)
             ids
         in
         if List.exists (fun pf -> pf.f.is_global_decl_body) pure_funs then
@@ -1439,10 +1458,15 @@ let extract_translated_crate (filename : string) (dest_dir : string)
     Pure.TypeDeclId.Map.of_list
       (List.map (fun (d : Pure.type_decl) -> (d.def_id, d)) trans_types)
   in
-  let trans_funs : pure_fun_translation FunDeclId.Map.t =
-    FunDeclId.Map.of_list
+  let trans_funs : pure_fun_translation FunOrMethodId.Map.t =
+    FunOrMethodId.Map.of_list
       (List.map
-         (fun (trans : pure_fun_translation) -> (trans.f.def_id, trans))
+         (fun (trans : pure_fun_translation) ->
+           let id =
+             FunsAnalysis.fun_or_method_id_of_fun_decl_id
+               trans_ctx.fun_ctx.fun_infos trans.f.def_id
+           in
+           (id, trans))
          trans_funs)
   in
 
@@ -1564,7 +1588,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             );
           ctx)
       ctx
-      (FunDeclId.Map.values trans_funs)
+      (FunOrMethodId.Map.values trans_funs)
   in
 
   let ctx =
