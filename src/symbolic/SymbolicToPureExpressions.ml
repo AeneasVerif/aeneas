@@ -417,7 +417,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
                   | PtrFromParts RMut -> "ptr_from_parts_mut"
                   | PtrFromParts RShared -> "ptr_from_parts_shared"
                 end
-              | FunId (FRegular fid) | TraitMethod (_, _, fid) -> (
+              | FunId (FRegular fid) -> (
                   let decl =
                     FunDeclId.Map.find fid ctx.fun_ctx.llbc_fun_decls
                   in
@@ -431,6 +431,9 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
                   | _ ->
                       (* We shouldn't get there *)
                       [%craise] decl.item_meta.span "Unexpected")
+              | TraitMethod (trait_ref, method_id, _) ->
+                  Charon.GAstUtils.get_method_name ctx.decls_ctx.crate
+                    trait_ref.trait_decl_ref.binder_value.id method_id
             in
             name ^ "_back"
           in
