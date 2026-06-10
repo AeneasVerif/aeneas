@@ -404,8 +404,8 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
   let builtin_fun_sigs =
     BuiltinFunIdMap.map
       (fun (info : builtin_fun_info) ->
-        SymbolicToPureTypes.translate_fun_sig trans_ctx (FBuiltin info.fun_id)
-          info.fun_sig
+        SymbolicToPureTypes.translate_fun_sig trans_ctx
+          (Pure.FunId (FBuiltin info.fun_id)) info.fun_sig
           (List.map (fun _ -> None) info.fun_sig.item_binder_value.inputs))
       builtin_fun_infos
   in

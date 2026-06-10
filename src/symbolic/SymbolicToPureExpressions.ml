@@ -374,7 +374,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
         let func = Fun (FromLlbc (fid_t, None)) in
         (* Retrieve the effect information about this function (can fail,
          * takes a state as input, etc.) *)
-        let effect_info = get_fun_effect_info ctx fid None in
+        let effect_info = get_fun_effect_info ctx fid_t None in
         (* Generate the variables for the backward functions returned by the forward
            function. *)
         let ctx, ignore_fwd_output, back_funs =
@@ -384,7 +384,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
           let decls_ctx = ctx.decls_ctx in
           let dsg =
             translate_inst_fun_sig_to_decomposed_fun_type (Some ctx.span)
-              decls_ctx fid inst_sg
+              decls_ctx fid_t inst_sg
               (List.map (fun _ -> None) sg.inputs)
           in
           let back_tys = compute_back_tys_with_info dsg in

@@ -723,13 +723,13 @@ and translate_back_input_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
 
 (** Small utility. *)
 and compute_raw_fun_effect_info (span : Meta.span option)
-    (fun_infos : FunsAnalysis.modules_funs_info) (fun_id : A.fn_ptr_kind)
+    (fun_infos : FunsAnalysis.modules_funs_info) (fun_id : fn_ptr_kind)
     (gid : T.RegionGroupId.id option) : fun_effect_info =
   match fun_id with
   | TraitMethod _ | FunId (FRegular _) ->
       let info =
         [%silent_unwrap_opt_span] span
-          (FunsAnalysis.lookup_fn_ptr_info fun_infos fun_id)
+          (lookup_pure_fn_ptr_info fun_infos fun_id)
       in
       {
         (* Note that backward functions can't fail *)
@@ -760,7 +760,7 @@ and compute_raw_fun_effect_info (span : Meta.span option)
     - [generic_args]: the generic arguments with which the uninstantiated
       signature was instantiated, leading to the current [sg] *)
 and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
-    (decls_ctx : C.decls_ctx) (fun_id : A.fn_ptr_kind) (sg : A.inst_fun_sig)
+    (decls_ctx : C.decls_ctx) (fun_id : fn_ptr_kind) (sg : A.inst_fun_sig)
     (input_names : string option list) : decomposed_fun_type =
   [%ltrace
     let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
@@ -885,7 +885,7 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
           inputs
       in
       "translate_back_inputs_for_gid:" ^ "\n- function:"
-      ^ Charon.Print.fn_ptr_kind_to_string ctx fun_id
+      ^ PrintPure.regular_fun_id_to_string pctx (FromLlbc (fun_id, None))
       ^ "\n- gid: "
       ^ RegionGroupId.to_string gid
       ^ "\n- output: " ^ output ^ "\n- back inputs: " ^ inputs];
@@ -919,7 +919,7 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
           outputs
       in
       "compute_back_outputs_for_gid:" ^ "\n- function:"
-      ^ Charon.Print.fn_ptr_kind_to_string ctx fun_id
+      ^ PrintPure.regular_fun_id_to_string pctx (FromLlbc (fun_id, None))
       ^ "\n- gid: "
       ^ RegionGroupId.to_string gid
       ^ "\n- inputs: " ^ inputs ^ "\n- back outputs: " ^ outputs];
@@ -986,7 +986,7 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
   { fwd_inputs; fwd_output; back_sg; fwd_info }
 
 and translate_fun_sig_with_regions_hierarchy_to_decomposed (span : span option)
-    (decls_ctx : C.decls_ctx) (fun_id : A.fn_ptr_kind)
+    (decls_ctx : C.decls_ctx) (fun_id : fn_ptr_kind)
     (regions_hierarchy : T.region_var_groups) (sg : A.bound_fun_sig)
     (input_names : string option list) : decomposed_fun_sig =
   let inst_sg : LlbcAst.inst_fun_sig =
@@ -1169,7 +1169,7 @@ and translate_fun_sig_from_decomposed (dsg : Pure.decomposed_fun_sig) : fun_sig
     back_effect_info;
   }
 
-and translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
+and translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : fn_ptr_kind)
     (sg : A.bound_fun_sig) (input_names : string option list) : Pure.fun_sig =
   (* Compute the regions hierarchy *)
   let regions_hierarchy =
@@ -1177,19 +1177,20 @@ and translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
   in
   (* Compute the decomposed fun signature *)
   let sg =
-    translate_fun_sig_with_regions_hierarchy_to_decomposed None decls_ctx
-      (FunId fun_id) regions_hierarchy sg input_names
+    translate_fun_sig_with_regions_hierarchy_to_decomposed None decls_ctx fun_id
+      regions_hierarchy sg input_names
   in
   (* Finish the translation *)
   translate_fun_sig_from_decomposed sg
 
 (** TODO: not very clean. *)
-and get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fn_ptr_kind)
+and get_fun_effect_info (ctx : bs_ctx) (fun_id : fn_ptr_kind)
     (gid : T.RegionGroupId.id option) : fun_effect_info =
   match fun_id with
   | TraitMethod _ | FunId (FRegular _) ->
       let sg =
-        [%silent_unwrap_opt_span] (Some ctx.span) (lookup_fn_ptr_sig ctx fun_id)
+        [%silent_unwrap_opt_span] (Some ctx.span)
+          (lookup_pure_fn_ptr_sig ctx fun_id)
       in
       let sg = sg.dsg in
       let info =
