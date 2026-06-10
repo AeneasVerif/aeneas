@@ -545,16 +545,70 @@ private def mkUncurry (fvar : Expr) (body : Expr) : MetaM Expr := do
   let fn ← mkLamAbstract #[fvar] body
   mkAppM ``_root_.Aeneas.Std.uncurry #[fn]
 
+/-- Compute the product type corresponding to an `FVarTree`.
+    Leaf: the fvar's type. Pair: `leftType × rightType`. -/
+private partial def FVarTree.type : FVarTree → MetaM Expr
+  | .leaf fvar => inferType fvar
+  | .pair left right => do
+    mkAppM ``Prod #[← left.type, ← right.type]
+
 /-- Rebuild a `Std.uncurry` chain from an `FVarTree`.
-    For `pair (pair (leaf a) (leaf b)) (pair (leaf c) (leaf d))` and body,
-    produces `uncurry (uncurry (fun a b => uncurry (fun c d => body)))`. -/
+
+    Produces an expression compatible with `openUncurryFVars`: every `uncurry` node
+    has a lambda as its function argument.
+
+    The key invariant: the argument to `uncurry` must be a lambda. For a
+    `pair left right` node, the right subtree's reconstruction naturally ends up
+    inside a lambda (created by the left subtree). But when the *left* child is
+    itself a `pair`, its recursive result is `uncurry(...)`, not a lambda. In that
+    case we introduce a fresh pair-typed intermediate variable `_x` (mirroring the
+    variables Lean's elaborator creates for nested tuple patterns), so the outer
+    `uncurry` still gets a lambda. The right subtree's variables are placed at the
+    same lambda level as `_x`, so that `openUncurryLambdas` sees all parameters.
+
+    Example: `pair (pair (leaf a) (leaf b)) (leaf c)` and body produces:
+      `uncurry (fun _x c => uncurry (fun a b => body) _x)`
+    NOT: `uncurry (uncurry (fun a b c => body))` (which `openUncurryFVars` can't parse)
+    NOT: `uncurry (fun _x => uncurry (fun a b c => body) _x)` (right var `c` hidden) -/
 private partial def rebuildUncurryFromTree (tree : FVarTree) (body : Expr) : MetaM Expr := do
   match tree with
   | .leaf fvar => mkLamAbstract #[fvar] body
   | .pair left right =>
-    let rightCont ← rebuildUncurryFromTree right body
-    let leftCont ← rebuildUncurryFromTree left rightCont
-    mkAppM ``_root_.Aeneas.Std.uncurry #[leftCont]
+    match left with
+    | .leaf fvar =>
+      -- Left is a leaf: recurse on right normally, then abstract the leaf fvar.
+      -- The right's result (lambda or uncurry) ends up inside the left's lambda.
+      let rightCont ← rebuildUncurryFromTree right body
+      let lam ← mkLamAbstract #[fvar] rightCont
+      mkAppM ``_root_.Aeneas.Std.uncurry #[lam]
+    | .pair _ _ =>
+      -- Left is a nested pair: introduce a fresh pair-typed intermediate `_x`.
+      -- The right child's parameter(s) must be at the SAME lambda level as `_x`
+      -- so that `openUncurryLambdas` sees ≥2 binders and takes the tuple path.
+      let leftPairType ← left.type
+      withLocalDeclD `_x leftPairType fun leftVar => do
+        -- Right child: for a leaf, use the fvar directly; for a pair, introduce
+        -- another intermediate `_x` (same name is fine — different fvar).
+        -- Both end up as parameters of the outer lambda.
+        rebuildRightChild right body fun rightParam rightBody => do
+          -- Build the left destructor and apply it to `_x` in the body
+          let leftDestructor ← rebuildUncurryFromTree left rightBody
+          let fullBody := mkApp leftDestructor leftVar
+          let lam ← mkLamAbstract #[leftVar, rightParam] fullBody
+          mkAppM ``_root_.Aeneas.Std.uncurry #[lam]
+where
+  /-- Process the right child of a pair node whose left child is a `.pair`.
+      For a leaf, use the fvar directly. For a pair, introduce a fresh pair-typed
+      intermediate and add a fully-applied uncurry in the body. -/
+  rebuildRightChild (child : FVarTree) (body : Expr)
+      (k : Expr → Expr → MetaM Expr) : MetaM Expr := do
+    match child with
+    | .leaf fvar => k fvar body
+    | .pair _ _ =>
+      let pairType ← child.type
+      withLocalDeclD `_x pairType fun pairVar => do
+        let destructor ← rebuildUncurryFromTree child body
+        k pairVar (mkApp destructor pairVar)
 
 /-- Rebuild an expression from `bindings[startIdx .. endIdx-1]` followed by `terminal`.
     Abstracts fvars bottom-up using `mkLambdaFVars` / `mkLetFVars`.
