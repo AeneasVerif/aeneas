@@ -288,7 +288,11 @@ let fun_builtin_filter_types_trait_clauses (ty_to_string : 'a -> string)
     | None -> Result.Ok clauses
     | Some filter ->
         if List.length filter <> List.length types then (
-          let decl = FunDeclId.Map.find id ctx.trans_funs in
+          let id =
+            FunsAnalysis.fun_or_method_id_of_fun_decl_id
+              ctx.trans_ctx.fun_ctx.fun_infos id
+          in
+          let decl = A.FunOrMethodId.Map.find id ctx.trans_funs in
           let err =
             "Ill-formed builtin information for function "
             ^ name_to_string ctx decl.f.item_meta.name
@@ -309,7 +313,11 @@ let fun_builtin_filter_types_trait_clauses (ty_to_string : 'a -> string)
     | None -> Result.Ok (types, explicit)
     | Some filter ->
         if List.length filter <> List.length types then (
-          let decl = FunDeclId.Map.find id ctx.trans_funs in
+          let id =
+            FunsAnalysis.fun_or_method_id_of_fun_decl_id
+              ctx.trans_ctx.fun_ctx.fun_infos id
+          in
+          let decl = A.FunOrMethodId.Map.find id ctx.trans_funs in
           let err =
             "Ill-formed builtin information for function "
             ^ name_to_string ctx decl.f.item_meta.name
@@ -995,12 +1003,12 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       [%sanity_check] span (generics.const_generics = [] || backend () <> HOL4);
       (* Compute the information about the explicit/implicit input type parameters *)
       let explicit =
-        let lookup is_trait_method fun_decl_id lp_id =
+        let lookup is_trait_method id lp_id =
           try
             (* Lookup the function to retrieve the signature information *)
             let trans_fun =
               [%silent_unwrap] span
-                (A.FunDeclId.Map.find_opt fun_decl_id ctx.trans_funs)
+                (A.FunOrMethodId.Map.find_opt id ctx.trans_funs)
             in
             let trans_fun =
               match lp_id with
@@ -1023,9 +1031,17 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
         in
         match fun_id with
         | FromLlbc (FunId (FRegular fun_decl_id), lp_id) ->
-            lookup false fun_decl_id lp_id
-        | FromLlbc (TraitMethod (_trait_ref, _method_name, fun_decl_id), lp_id)
-          -> lookup true fun_decl_id lp_id
+            let id =
+              FunsAnalysis.fun_or_method_id_of_fun_decl_id
+                ctx.trans_ctx.fun_ctx.fun_infos fun_decl_id
+            in
+            lookup false id lp_id
+        | FromLlbc (TraitMethod (trait_ref, method_id, _), lp_id) ->
+            let id =
+              A.FunOrMethodId.Method
+                (trait_ref.trait_decl_ref.trait_decl_id, method_id)
+            in
+            lookup true id lp_id
         | FromLlbc (FunId (FBuiltin aid), _) ->
             Some
               (Builtin.BuiltinFunIdMap.find aid ctx.builtin_sigs).explicit_info
@@ -2806,11 +2822,12 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
   [%ltrace trait_decl.name];
   let methods = trait_decl.methods in
   (* Small helper *)
-  let compute_item_name (item_name : string) (id : fun_decl_id) :
+  let compute_item_name (method_id : trait_method_id) (item_name : string) :
       FunDeclId.id option * string =
     [%ldebug "(" ^ trait_decl.name ^ "): compute_item_name: " ^ item_name];
     let trans : pure_fun_translation =
-      match FunDeclId.Map.find_opt id ctx.trans_funs with
+      let id = A.FunOrMethodId.Method (trait_decl.def_id, method_id) in
+      match A.FunOrMethodId.Map.find_opt id ctx.trans_funs with
       | Some decl -> decl
       | None ->
           [%craise] trait_decl.item_meta.span
@@ -2845,7 +2862,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
         List.map
           (fun meth ->
             let default_id, fun_name =
-              compute_item_name meth.item_name meth.fun_ref.binder_value.fun_id
+              compute_item_name meth.method_id meth.item_name
             in
             (meth.method_id, default_id, fun_name))
           methods
@@ -2865,8 +2882,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
                  ^ " library seems to be missing the corresponding field.");
                 (* Use the LLBC definition to compute the name *)
                 let default_id, fun_name =
-                  compute_item_name meth.item_name
-                    meth.fun_ref.binder_value.fun_id
+                  compute_item_name meth.method_id meth.item_name
                 in
                 (meth.method_id, default_id, fun_name)
             | Some info ->
@@ -3050,10 +3066,10 @@ let extract_trait_decl_method_items_aux (ctx : extraction_ctx)
   (* Lookup the definition *)
   let method_id = meth.method_id in
   let fn = meth.fun_ref in
-  let fun_decl_id = fn.binder_value.fun_id in
   let trans =
+    let id = A.FunOrMethodId.Method (decl.def_id, method_id) in
     [%silent_unwrap_opt_span] None
-      (A.FunDeclId.Map.find_opt fun_decl_id ctx.trans_funs)
+      (A.FunOrMethodId.Map.find_opt id ctx.trans_funs)
   in
   let span = trans.f.item_meta.span in
   (* Extract the items *)
@@ -3408,8 +3424,12 @@ let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
   let method_decl_id = fn.binder_value.fun_id in
   (* Lookup the definition *)
   let trans =
+    let id =
+      FunsAnalysis.fun_or_method_id_of_fun_decl_id
+        ctx.trans_ctx.fun_ctx.fun_infos method_decl_id
+    in
     [%unwrap_with_span] span
-      (A.FunDeclId.Map.find_opt method_decl_id ctx.trans_funs)
+      (A.FunOrMethodId.Map.find_opt id ctx.trans_funs)
       "Could not lookup the translated function, probably because of an error \
        which happened before"
   in

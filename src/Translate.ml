@@ -789,8 +789,12 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     Option.get (Charon.GAstUtils.init_fun_id_of_global global)
   in
   let trans =
+    let id =
+      FunsAnalysis.fun_or_method_id_of_fun_decl_id
+        ctx.trans_ctx.fun_ctx.fun_infos global_init
+    in
     [%silent_unwrap_opt_span] None
-      (FunDeclId.Map.find_opt global_init ctx.trans_funs)
+      (FunOrMethodId.Map.find_opt id ctx.trans_funs)
   in
   [%sanity_check] global.item_meta.span (trans.loops = [] && trans.bodies = []);
   let body = trans.f in
@@ -1093,7 +1097,13 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     | FunGroup (NonRecGroup id) -> (
         (* Lookup - the translated function may not be in the map if we had
            to ignore it because of errors *)
-        let pure_fun = FunDeclId.Map.find_opt id ctx.trans_funs in
+        let pure_fun =
+          let id =
+            FunsAnalysis.fun_or_method_id_of_fun_decl_id
+              ctx.trans_ctx.fun_ctx.fun_infos id
+          in
+          FunOrMethodId.Map.find_opt id ctx.trans_funs
+        in
         (* Special case: we skip trait method *declarations* (we will
            extract their type directly in the records we generate for
            the trait declarations themselves, there is no point in having
@@ -1113,7 +1123,12 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         (* Lookup *)
         let pure_funs =
           List.filter_map
-            (fun id -> FunDeclId.Map.find_opt id ctx.trans_funs)
+            (fun id ->
+              let id =
+                FunsAnalysis.fun_or_method_id_of_fun_decl_id
+                  ctx.trans_ctx.fun_ctx.fun_infos id
+              in
+              FunOrMethodId.Map.find_opt id ctx.trans_funs)
             ids
         in
         if List.exists (fun pf -> pf.f.is_global_decl_body) pure_funs then
@@ -1443,10 +1458,15 @@ let extract_translated_crate (filename : string) (dest_dir : string)
     Pure.TypeDeclId.Map.of_list
       (List.map (fun (d : Pure.type_decl) -> (d.def_id, d)) trans_types)
   in
-  let trans_funs : pure_fun_translation FunDeclId.Map.t =
-    FunDeclId.Map.of_list
+  let trans_funs : pure_fun_translation FunOrMethodId.Map.t =
+    FunOrMethodId.Map.of_list
       (List.map
-         (fun (trans : pure_fun_translation) -> (trans.f.def_id, trans))
+         (fun (trans : pure_fun_translation) ->
+           let id =
+             FunsAnalysis.fun_or_method_id_of_fun_decl_id
+               trans_ctx.fun_ctx.fun_infos trans.f.def_id
+           in
+           (id, trans))
          trans_funs)
   in
 
@@ -1568,7 +1588,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             );
           ctx)
       ctx
-      (FunDeclId.Map.values trans_funs)
+      (FunOrMethodId.Map.values trans_funs)
   in
 
   let ctx =
