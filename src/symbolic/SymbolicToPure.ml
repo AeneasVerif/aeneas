@@ -166,11 +166,18 @@ let translate_binder (span : span option) (translate_inside : 'a -> 'b)
   }
 
 let translate_trait_method (span : span option) (translate_ty : T.ty -> ty)
-    (bound_method : A.trait_method T.binder) : fun_decl_ref binder =
-  translate_binder span
-    (fun (m : A.trait_method) ->
-      translate_fun_decl_ref span translate_ty m.item)
-    bound_method
+    (method_id : TraitMethodId.id) (bound_method : A.trait_method T.binder) :
+    trait_method =
+  let method_ = bound_method.binder_value in
+  {
+    method_id;
+    item_name = method_.name;
+    fun_ref =
+      translate_binder span
+        (fun (m : A.trait_method) ->
+          translate_fun_decl_ref span translate_ty m.item)
+        bound_method;
+  }
 
 let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     : trait_decl =
@@ -236,9 +243,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   let methods =
     List.map
       (fun ((method_id, m) : TraitMethodId.id * A.trait_method T.binder) ->
-        ( method_id,
-          m.binder_value.name,
-          translate_trait_method opt_span translate_ty m ))
+        translate_trait_method opt_span translate_ty method_id m)
       (TraitMethodId.Map.to_list methods)
   in
   {
