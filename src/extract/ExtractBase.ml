@@ -1947,8 +1947,9 @@ let ctx_compute_trait_decl_constructor (ctx : extraction_ctx)
     LLBC types, that is the types from before the translation to pure, which
     simplifies types like boxes and references. *)
 let ctx_compute_trait_clause_name (ctx : extraction_ctx)
-    (current_def_name : Types.name) (params : Types.generic_params)
-    (clauses : Types.trait_param list) (clause_id : trait_clause_id) : string =
+    ?(keep_var_generics = false) (current_def_name : Types.name)
+    (params : Types.generic_params) (clauses : Types.trait_param list)
+    (clause_id : trait_clause_id) : string =
   (* We derive the name of the clause from the trait instance.
      For instance, if the clause gives us an instance of `Foo<u32>`,
      we generate a name along the lines of "fooU32Inst".
@@ -1981,13 +1982,14 @@ let ctx_compute_trait_clause_name (ctx : extraction_ctx)
     | None -> [ "clause" ]
     | Some impl_trait_decl ->
         let args = clause_trait.generics in
-        trait_name_with_generics_to_simple_name ctx.trans_ctx ~prefix
-          impl_trait_decl.item_meta.name params args
+        trait_name_with_generics_to_simple_name ctx.trans_ctx ~keep_var_generics
+          ~prefix impl_trait_decl.item_meta.name params args
   in
   String.concat "" clause
 
 let ctx_compute_trait_parent_clause_name (ctx : extraction_ctx)
-    (trait_decl : trait_decl) (clause : trait_param) : string =
+    ?(keep_var_generics = false) (trait_decl : trait_decl)
+    (clause : trait_param) : string =
   (* We derive the name of the clause from the trait instance.
      For instance, if the clause gives us an instance of `Foo<u32>`,
      we generate a name along the lines of "fooU32Inst".
@@ -1996,7 +1998,7 @@ let ctx_compute_trait_parent_clause_name (ctx : extraction_ctx)
   let clause =
     let current_def_name = trait_decl.item_meta.name in
     let params = trait_decl.llbc_generics in
-    ctx_compute_trait_clause_name ctx current_def_name params
+    ctx_compute_trait_clause_name ctx ~keep_var_generics current_def_name params
       trait_decl.llbc_parent_clauses clause.clause_id
   in
   let clause =

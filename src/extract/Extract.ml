@@ -2688,16 +2688,55 @@ let extract_trait_decl_register_parent_clause_names (ctx : extraction_ctx)
   let clause_names =
     match builtin_info with
     | None ->
+        (* Compute the full name of a parent clause. [keep_var_generics] controls
+           whether we keep the (variable) type arguments of the trait instance:
+           we set it to [true] to disambiguate clauses which would otherwise
+           collide. *)
+        let compute_name ~keep_var_generics (c : trait_param) : string =
+          let name =
+            ctx_compute_trait_parent_clause_name ~keep_var_generics ctx
+              trait_decl c
+          in
+          (* Add a prefix if necessary *)
+          if !record_fields_short_names then name
+          else ctx_compute_trait_decl_name ctx trait_decl ^ name
+        in
+        (* First pass: compute the names as we always did. *)
+        let base =
+          List.map
+            (fun c -> (c, compute_name ~keep_var_generics:false c))
+            trait_decl.parent_clauses
+        in
+        (* Count how many times each name occurs: a trait can have several
+           parent clauses which instantiate the *same* trait with different
+           type arguments (e.g., [Copy<Self>] and [Copy<Self::Inner>]), which
+           would otherwise produce the same name. *)
+        let counts =
+          List.fold_left
+            (fun m (_, n) ->
+              let c =
+                match Collections.StringMap.find_opt n m with
+                | None -> 1
+                | Some k -> k + 1
+              in
+              Collections.StringMap.add n c m)
+            Collections.StringMap.empty base
+        in
+        (* Second pass: for the clauses whose name collides with another clause
+           of the same trait, recompute the name keeping the type arguments so
+           the names become distinct. *)
         List.map
-          (fun (c : trait_param) ->
-            let name = ctx_compute_trait_parent_clause_name ctx trait_decl c in
-            (* Add a prefix if necessary *)
+          (fun (c, name) ->
+            let is_dup =
+              match Collections.StringMap.find_opt name counts with
+              | Some k -> k > 1
+              | None -> false
+            in
             let name =
-              if !record_fields_short_names then name
-              else ctx_compute_trait_decl_name ctx trait_decl ^ name
+              if is_dup then compute_name ~keep_var_generics:true c else name
             in
             (c.clause_id, name))
-          trait_decl.parent_clauses
+          base
     | Some info ->
         [%cassert] trait_decl.item_meta.span
           (List.length trait_decl.parent_clauses
