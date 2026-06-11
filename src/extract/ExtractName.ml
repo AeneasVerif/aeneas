@@ -147,8 +147,7 @@ let pattern_to_extract_name_visitor =
 
     [keep_var_generics]: if true, we do *not* drop generic arguments which are
     all variables. This is used to disambiguate trait parent clauses which
-    instantiate the same trait with different type variables (e.g., [Copy<Self>]
-    vs [Copy<Self_NonZeroInner>]).
+    instantiate the same trait with different type variables. *)
 let pattern_to_extract_name ?(keep_var_generics = false)
     (_span : Meta.span option) (name : pattern) : string list =
   let c = { tgt = TkName } in
