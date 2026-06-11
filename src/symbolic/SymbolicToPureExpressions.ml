@@ -535,19 +535,24 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
     | S.Unop (E.Neg overflow) -> (
         match args with
         | [ arg ] ->
-            let int_ty = ty_as_integer ctx.span arg.ty in
-            (* Note that negation can lead to an overflow and thus fail (it
-             * is thus monadic) *)
+            let unop, can_fail =
+              match arg.ty with
+              | TLiteral (TFloat ((F32 | F64) as float_ty)) ->
+                  (FNeg float_ty, false)
+              | TLiteral (TFloat _) ->
+                  [%craise] ctx.span "Only f32 and f64 are supported"
+              | _ ->
+                  let int_ty = ty_as_integer ctx.span arg.ty in
+                  (* Note that integer negation can lead to an overflow and thus
+                   * fail (it is thus monadic). *)
+                  (Neg int_ty, overflow <> OWrap)
+            in
             let effect_info =
-              {
-                can_fail = overflow <> OWrap;
-                can_diverge = false;
-                is_rec = false;
-              }
+              { can_fail; can_diverge = false; is_rec = false }
             in
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_tpat_from_fvar dest_mplace dest in
-            (ctx, Unop (Neg int_ty), effect_info, args, [], dest)
+            (ctx, Unop unop, effect_info, args, [], dest)
         | _ -> [%craise] ctx.span "Unreachable")
     | S.Unop (E.Cast kind) -> begin
         let kind, can_fail =
@@ -603,13 +608,6 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               args];
         match args with
         | [ arg0; arg1 ] ->
-            let effect_info =
-              {
-                can_fail = ExpressionsUtils.binop_can_fail binop;
-                can_diverge = false;
-                is_rec = false;
-              }
-            in
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_tpat_from_fvar dest_mplace dest in
             let get_single_int_ty () =
@@ -618,40 +616,80 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               [%sanity_check] ctx.span (int_ty0 = int_ty1);
               int_ty0
             in
-            let binop =
+            let float_args_ty =
+              match (arg0.ty, arg1.ty) with
+              | ( TLiteral (TFloat ((F32 | F64) as float_ty0)),
+                  TLiteral (TFloat ((F32 | F64) as float_ty1)) ) ->
+                  [%sanity_check] ctx.span (float_ty0 = float_ty1);
+                  Some float_ty0
+              | TLiteral (TFloat _), TLiteral (TFloat _) ->
+                  [%craise] ctx.span "Only f32 and f64 are supported"
+              | _ -> None
+            in
+            (* Charon uses the same binop constructors for integer and float
+               arithmetic, but failure behavior is type-dependent. Integer division
+               by zero and checked overflow can panic; float division by zero and
+               overflow produce IEEE-754 values instead. We start with Charon's
+               default binop failure flag, then override it below for float
+               arithmetic after inspecting the operand types. *)
+            let default_can_fail = ExpressionsUtils.binop_can_fail binop in
+            let mk_num_binop int_binop float_binop =
+              match float_args_ty with
+              | Some float_ty -> (float_binop float_ty, false)
+              | None -> (int_binop (get_single_int_ty ()), default_can_fail)
+            in
+            let binop, can_fail =
               match binop with
-              | Expressions.BitXor -> BitXor (get_single_int_ty ())
-              | Expressions.BitAnd -> BitAnd (get_single_int_ty ())
-              | Expressions.BitOr -> BitOr (get_single_int_ty ())
+              | Expressions.BitXor ->
+                  (BitXor (get_single_int_ty ()), default_can_fail)
+              | Expressions.BitAnd ->
+                  (BitAnd (get_single_int_ty ()), default_can_fail)
+              | Expressions.BitOr ->
+                  (BitOr (get_single_int_ty ()), default_can_fail)
               | Expressions.Eq ->
                   [%sanity_check] ctx.span (arg0.ty = arg1.ty);
-                  Eq arg0.ty
+                  (Eq arg0.ty, default_can_fail)
               | Expressions.Ne ->
                   [%sanity_check] ctx.span (arg0.ty = arg1.ty);
-                  Ne arg0.ty
-              | Expressions.Lt -> Lt (get_single_int_ty ())
-              | Expressions.Le -> Le (get_single_int_ty ())
-              | Expressions.Ge -> Ge (get_single_int_ty ())
-              | Expressions.Gt -> Gt (get_single_int_ty ())
-              | Expressions.Add om -> Add (om, get_single_int_ty ())
-              | Expressions.Sub om -> Sub (om, get_single_int_ty ())
-              | Expressions.Mul om -> Mul (om, get_single_int_ty ())
-              | Expressions.Div om -> Div (om, get_single_int_ty ())
-              | Expressions.Rem om -> Rem (om, get_single_int_ty ())
-              | Expressions.AddChecked -> AddChecked (get_single_int_ty ())
-              | Expressions.SubChecked -> SubChecked (get_single_int_ty ())
-              | Expressions.MulChecked -> MulChecked (get_single_int_ty ())
+                  (Ne arg0.ty, default_can_fail)
+              | Expressions.Lt ->
+                  mk_num_binop (fun ty -> Lt ty) (fun ty -> FLt ty)
+              | Expressions.Le ->
+                  mk_num_binop (fun ty -> Le ty) (fun ty -> FLe ty)
+              | Expressions.Ge ->
+                  mk_num_binop (fun ty -> Ge ty) (fun ty -> FGe ty)
+              | Expressions.Gt ->
+                  mk_num_binop (fun ty -> Gt ty) (fun ty -> FGt ty)
+              | Expressions.Add om ->
+                  mk_num_binop (fun ty -> Add (om, ty)) (fun ty -> FAdd ty)
+              | Expressions.Sub om ->
+                  mk_num_binop (fun ty -> Sub (om, ty)) (fun ty -> FSub ty)
+              | Expressions.Mul om ->
+                  mk_num_binop (fun ty -> Mul (om, ty)) (fun ty -> FMul ty)
+              | Expressions.Div om ->
+                  mk_num_binop (fun ty -> Div (om, ty)) (fun ty -> FDiv ty)
+              | Expressions.Rem om ->
+                  mk_num_binop (fun ty -> Rem (om, ty)) (fun ty -> FRem ty)
+              | Expressions.AddChecked ->
+                  (AddChecked (get_single_int_ty ()), default_can_fail)
+              | Expressions.SubChecked ->
+                  (SubChecked (get_single_int_ty ()), default_can_fail)
+              | Expressions.MulChecked ->
+                  (MulChecked (get_single_int_ty ()), default_can_fail)
               | Expressions.Shl om ->
                   let ty0 = ty_as_integer ctx.span arg0.ty in
                   let ty1 = ty_as_integer ctx.span arg1.ty in
-                  Shl (om, ty0, ty1)
+                  (Shl (om, ty0, ty1), default_can_fail)
               | Expressions.Shr om ->
                   let ty0 = ty_as_integer ctx.span arg0.ty in
                   let ty1 = ty_as_integer ctx.span arg1.ty in
-                  Shr (om, ty0, ty1)
+                  (Shr (om, ty0, ty1), default_can_fail)
               | Expressions.Offset ->
                   [%craise] ctx.span "Not supported: `binop::offset`"
-              | Expressions.Cmp -> Cmp (get_single_int_ty ())
+              | Expressions.Cmp -> (Cmp (get_single_int_ty ()), default_can_fail)
+            in
+            let effect_info =
+              { can_fail; can_diverge = false; is_rec = false }
             in
             (ctx, Binop binop, effect_info, args, [], dest)
         | _ -> [%craise] ctx.span "Unreachable")

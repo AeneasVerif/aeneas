@@ -902,6 +902,7 @@ let unop_to_string (env : fmt_env) (unop : unop) : string =
   match unop with
   | Not _ -> "¬"
   | Neg _ -> "-"
+  | FNeg _ -> "-."
   | Cast kind -> cast_kind_to_string env kind
   | ArrayToSlice -> "array_to_slice"
 
@@ -924,6 +925,10 @@ let binop_to_string (env : fmt_env) (binop : binop) =
   | Le int_ty -> "<=" ^ int_ty_to_string int_ty
   | Ge int_ty -> ">=" ^ int_ty_to_string int_ty
   | Gt int_ty -> ">" ^ int_ty_to_string int_ty
+  | FLt float_ty -> "<::<" ^ float_type_to_string float_ty ^ ">"
+  | FLe float_ty -> "<=::<" ^ float_type_to_string float_ty ^ ">"
+  | FGe float_ty -> ">=::<" ^ float_type_to_string float_ty ^ ">"
+  | FGt float_ty -> ">::<" ^ float_type_to_string float_ty ^ ">"
   | Div (om, int_ty) ->
       Print.overflow_mode_to_string om ^ "./" ^ int_ty_to_string int_ty
   | Rem (om, int_ty) ->
@@ -934,6 +939,11 @@ let binop_to_string (env : fmt_env) (binop : binop) =
       Print.overflow_mode_to_string om ^ ".-" ^ int_ty_to_string int_ty
   | Mul (om, int_ty) ->
       Print.overflow_mode_to_string om ^ ".*" ^ int_ty_to_string int_ty
+  | FAdd float_ty -> ".+::<" ^ float_type_to_string float_ty ^ ">"
+  | FSub float_ty -> ".-::<" ^ float_type_to_string float_ty ^ ">"
+  | FMul float_ty -> ".*::<" ^ float_type_to_string float_ty ^ ">"
+  | FDiv float_ty -> "./::<" ^ float_type_to_string float_ty ^ ">"
+  | FRem float_ty -> ".%::<" ^ float_type_to_string float_ty ^ ">"
   | Shl (om, int_ty0, int_ty1) ->
       Print.overflow_mode_to_string om
       ^ ".<<"

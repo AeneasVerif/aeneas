@@ -113,6 +113,10 @@ let literal_to_tvalue (span : Meta.span) (ty : literal_type) (cv : literal)
       [%sanity_check] span (int_ty = sv_ty);
       [%sanity_check] span (check_scalar_value_in_range min_ptr_size sv);
       { value = VLiteral (VScalar sv); ty = TLiteral ty }
+  | TFloat ((F32 | F64) as float_ty), VFloat fv ->
+      [%sanity_check] span (float_ty = fv.float_ty);
+      { value = VLiteral (VFloat fv); ty = TLiteral ty }
+  | TFloat _, VFloat _ -> [%craise] span "Only f32 and f64 are supported"
   (* Remaining cases (invalid) *)
   | _, _ -> [%craise] span "Improperly typed constant value"
 
@@ -955,6 +959,9 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
         | Not, (TLiteral (TUInt _) as lty) -> lty
         | Neg OPanic, (TLiteral (TInt _) as lty) -> lty
         | Neg OPanic, (TLiteral (TUInt _) as lty) -> lty
+        | Neg _, (TLiteral (TFloat (F32 | F64)) as lty) -> lty
+        | Neg _, TLiteral (TFloat _) ->
+            [%craise] span "Only f32 and f64 are supported"
         | Cast (CastScalar (_, tgt_ty)), _ -> TLiteral tgt_ty
         | Cast (CastUnsize (ty0, ty1, _)), _ ->
             (* If the following function succeeds, then it means the cast is well-formed
@@ -1106,7 +1113,7 @@ let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
         "The type is not primitively copyable";
       TLiteral TBool)
     else
-      (* Other operations: input types are integers *)
+      (* Other operations: input types are integers or supported floats *)
       match (v1.ty, v2.ty) with
       | TLiteral lty1, TLiteral lty2
         when literal_type_is_integer lty1 && literal_type_is_integer lty2 -> (
@@ -1128,6 +1135,26 @@ let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
               (* The number of bits can be of a different integer type
                  than the operand *)
               TLiteral (integer_as_literal int_ty1)
+          | Ne | Eq -> [%craise] span "Unreachable")
+      | TLiteral lty1, TLiteral lty2
+        when literal_type_is_float lty1 && literal_type_is_float lty2 -> (
+          let float_ty1, float_ty2 =
+            (literal_as_float span lty1, literal_as_float span lty2)
+          in
+          [%sanity_check] span (float_ty1 = float_ty2);
+          match binop with
+          | Lt | Le | Ge | Gt -> TLiteral TBool
+          | Div _ | Rem _ | Add _ | Sub _ | Mul _ -> TLiteral (TFloat float_ty1)
+          | BitXor
+          | BitAnd
+          | BitOr
+          | AddChecked
+          | SubChecked
+          | MulChecked
+          | Offset
+          | Shl _
+          | Shr _
+          | Cmp -> [%craise] span "Invalid float binary operation"
           | Ne | Eq -> [%craise] span "Unreachable")
       | _ -> [%craise] span "Invalid inputs for binop"
   in

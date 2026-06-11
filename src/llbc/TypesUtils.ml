@@ -94,6 +94,17 @@ let ty_has_borrows (span : Meta.span option) (infos : TypesAnalysis.type_infos)
     typechecking like we do for other marker * traits. *)
 let ty_is_copyable (_ty : ty) : bool = true
 
+let literal_type_is_float (t : literal_type) : bool =
+  match t with
+  | TFloat (F32 | F64) -> true
+  | _ -> false
+
+let literal_as_float (span : Meta.span) (literal : literal_type) : float_type =
+  match literal with
+  | TFloat ((F32 | F64) as float_ty) -> float_ty
+  | TFloat _ -> [%craise] span "Only f32 and f64 are supported"
+  | _ -> [%craise] span "Unreachable"
+
 let ty_has_adt_with_borrows span (infos : TypesAnalysis.type_infos) (ty : ty) :
     bool =
   let visitor =
