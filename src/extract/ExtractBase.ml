@@ -596,7 +596,7 @@ type extraction_ctx = {
   trait_decl_id : trait_decl_id option;
       (** If we are extracting a trait declaration, identifies it *)
   trans_types : Pure.type_decl Pure.TypeDeclId.Map.t;
-  trans_funs : pure_fun_translation A.FunDeclId.Map.t;
+  trans_funs : pure_fun_translation A.FunOrMethodId.Map.t;
   trans_globals : Pure.global_decl Pure.GlobalDeclId.Map.t;
   builtin_sigs : Pure.fun_sig Builtin.BuiltinFunIdMap.t;
   functions_with_decreases_clause : PureUtils.FunLoopIdSet.t;
@@ -2382,14 +2382,15 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
                 | AssocIdMethod method_id -> (
                     match
                       List.find_opt
-                        (fun (mid, _, _) -> mid = method_id)
+                        (fun meth -> meth.method_id = method_id)
                         trait_decl.methods
                     with
                     | None -> None
-                    | Some (_, _, bound_fn) ->
+                    | Some meth ->
                         Option.map
                           (fun (def : A.fun_decl) -> def.item_meta)
-                          (FunDeclId.Map.find_opt bound_fn.binder_value.fun_id
+                          (FunDeclId.Map.find_opt
+                             meth.fun_ref.binder_value.fun_id
                              ctx.trans_ctx.fun_ctx.fun_decls))
                 | AssocIdConst _ ->
                     (* TODO: missing item meta information *)

@@ -40,8 +40,7 @@ def the_loop_loop.body
     × (Slice Std.U8) × Bool))
   := do
   let (s1, to_slice_mut_back) ← lift (Array.to_slice_mut s.y)
-  let (result, i, s2) ← f s.x next_in s1
-  let (done1, n) := result
+  let ((done1, n), i, s2) ← f s.x next_in s1
   let next_in1 ←
     core.slice.index.Slice.index
       (core.slice.index.SliceIndexRangeFromUsizeSlice Std.U8) next_in

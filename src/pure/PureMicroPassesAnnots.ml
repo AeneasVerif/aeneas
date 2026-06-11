@@ -213,7 +213,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
                 in
                 [%ldebug "function name: " ^ trans_fun.name];
                 trans_fun.signature
-            | TraitMethod (tref, method_id, method_decl_id) ->
+            | TraitMethod (tref, method_id, _) ->
                 [%ldebug
                   "method name: "
                   ^ Charon.GAstUtils.get_method_name trans_ctx.crate
@@ -228,8 +228,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
                 in
                 (* TODO: we shouldn't call `SymbolicToPure` here, there should
                    be a way to translate these signatures earlier. *)
-                SymbolicToPureTypes.translate_fun_sig trans_ctx
-                  (FRegular method_decl_id) method_sig
+                SymbolicToPureTypes.translate_fun_sig trans_ctx fid method_sig
                   (List.map (fun _ -> None) method_sig.item_binder_value.inputs)
             | FunId (FBuiltin aid) ->
                 Builtin.BuiltinFunIdMap.find aid builtin_sigs

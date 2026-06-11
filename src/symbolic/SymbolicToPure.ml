@@ -166,11 +166,18 @@ let translate_binder (span : span option) (translate_inside : 'a -> 'b)
   }
 
 let translate_trait_method (span : span option) (translate_ty : T.ty -> ty)
-    (bound_method : A.trait_method T.binder) : fun_decl_ref binder =
-  translate_binder span
-    (fun (m : A.trait_method) ->
-      translate_fun_decl_ref span translate_ty m.item)
-    bound_method
+    (method_id : TraitMethodId.id) (bound_method : A.trait_method T.binder) :
+    trait_method =
+  let method_ = bound_method.binder_value in
+  {
+    method_id;
+    item_name = method_.name;
+    fun_ref =
+      translate_binder span
+        (fun (m : A.trait_method) ->
+          translate_fun_decl_ref span translate_ty m.item)
+        bound_method;
+  }
 
 let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     : trait_decl =
@@ -236,9 +243,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   let methods =
     List.map
       (fun ((method_id, m) : TraitMethodId.id * A.trait_method T.binder) ->
-        ( method_id,
-          m.binder_value.name,
-          translate_trait_method opt_span translate_ty m ))
+        translate_trait_method opt_span translate_ty method_id m)
       (TraitMethodId.Map.to_list methods)
   in
   {
@@ -345,9 +350,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
 
 let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     global_decl =
-  let { A.item_meta; def_id; generics = llbc_generics; ty; src; value; _ } =
-    decl
-  in
+  let { A.item_meta; def_id; generics = llbc_generics; ty; src; _ } = decl in
   let body_id = Option.get (Charon.GAstUtils.init_fun_id_of_global decl) in
   let name =
     Print.name_to_string
@@ -367,7 +370,9 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     match builtin_info with
     | Some info -> info.can_fail
     | None -> (
-        match FunDeclId.Map.find_opt body_id ctx.fun_ctx.fun_infos with
+        match
+          FunsAnalysis.lookup_fun_decl_info ctx.fun_ctx.fun_infos body_id
+        with
         | None -> (* Don't know: true by default *) true
         | Some info -> info.can_fail)
   in

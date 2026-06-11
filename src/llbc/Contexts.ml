@@ -46,7 +46,7 @@ type type_ctx = {
 type fun_ctx = {
   fun_decls : fun_decl FunDeclId.Map.t;
       (** Copy of the declarations in the crate *)
-  fun_infos : FunsAnalysis.fun_info FunDeclId.Map.t;
+  fun_infos : FunsAnalysis.modules_funs_info;
   to_extract : fun_decl FunDeclId.Map.t;
       (** The fun declarations that should be extracted.
 

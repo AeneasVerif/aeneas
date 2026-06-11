@@ -1870,6 +1870,13 @@ type global_decl = {
 }
 [@@deriving show]
 
+type trait_method = {
+  method_id : trait_method_id;
+  item_name : trait_item_name;
+  fun_ref : fun_decl_ref binder;
+}
+[@@deriving show]
+
 type trait_decl = {
   def_id : trait_decl_id;
   name : string;
@@ -1889,7 +1896,7 @@ type trait_decl = {
   llbc_parent_clauses : Types.trait_param list;
   consts : (assoc_const_id * trait_item_name * ty) list;
   types : (assoc_type_id * trait_item_name) list;
-  methods : (trait_method_id * trait_item_name * fun_decl_ref binder) list;
+  methods : trait_method list;
 }
 [@@deriving show]
 

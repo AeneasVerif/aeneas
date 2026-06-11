@@ -374,7 +374,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
         let func = Fun (FromLlbc (fid_t, None)) in
         (* Retrieve the effect information about this function (can fail,
          * takes a state as input, etc.) *)
-        let effect_info = get_fun_effect_info ctx fid None in
+        let effect_info = get_fun_effect_info ctx fid_t None in
         (* Generate the variables for the backward functions returned by the forward
            function. *)
         let ctx, ignore_fwd_output, back_funs =
@@ -384,7 +384,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
           let decls_ctx = ctx.decls_ctx in
           let dsg =
             translate_inst_fun_sig_to_decomposed_fun_type (Some ctx.span)
-              decls_ctx fid inst_sg
+              decls_ctx fid_t inst_sg
               (List.map (fun _ -> None) sg.inputs)
           in
           let back_tys = compute_back_tys_with_info dsg in
@@ -417,7 +417,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
                   | PtrFromParts RMut -> "ptr_from_parts_mut"
                   | PtrFromParts RShared -> "ptr_from_parts_shared"
                 end
-              | FunId (FRegular fid) | TraitMethod (_, _, fid) -> (
+              | FunId (FRegular fid) -> (
                   let decl =
                     FunDeclId.Map.find fid ctx.fun_ctx.llbc_fun_decls
                   in
@@ -431,6 +431,9 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
                   | _ ->
                       (* We shouldn't get there *)
                       [%craise] decl.item_meta.span "Unexpected")
+              | TraitMethod (trait_ref, method_id, _) ->
+                  Charon.GAstUtils.get_method_name ctx.decls_ctx.crate
+                    trait_ref.trait_decl_ref.binder_value.id method_id
             in
             name ^ "_back"
           in
@@ -1593,10 +1596,10 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         let ty =
           match kind with
           | T.FunId (FBuiltin _) -> [%craise] ctx.span "Unimplemented"
-          | T.FunId (FRegular fid) ->
+          | T.FunId (FRegular _) ->
               let sg =
                 [%unwrap_with_span] ctx.span
-                  (FunDeclId.Map.find_opt fid ctx.fun_sigs)
+                  (lookup_fn_ptr_sig ctx kind)
                   "Internal error, please file an issue"
               in
               (* Check that the function lives in the expected effect - otherwise we
