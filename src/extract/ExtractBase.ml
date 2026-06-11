@@ -897,6 +897,14 @@ let ctx_get_termination_measure (span : Meta.span) (def_id : A.FunDeclId.id)
     (loop_id : (LoopId.id * bool) option) (ctx : extraction_ctx) : string =
   ctx_get (Some span) (TerminationMeasureId (FRegular def_id, loop_id)) ctx
 
+let ctx_lookup_fun_decl_info (ctx : extraction_ctx) (id : A.FunDeclId.id) :
+    pure_fun_translation option =
+  let id =
+    FunsAnalysis.fun_or_method_id_of_fun_decl_id ctx.trans_ctx.fun_ctx.fun_infos
+      id
+  in
+  A.FunOrMethodId.Map.find_opt id ctx.trans_funs
+
 (** Small helper to compute the name of a unary operation *)
 let unop_name (unop : unop) : string =
   match unop with

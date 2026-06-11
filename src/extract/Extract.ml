@@ -288,11 +288,9 @@ let fun_builtin_filter_types_trait_clauses (ty_to_string : 'a -> string)
     | None -> Result.Ok clauses
     | Some filter ->
         if List.length filter <> List.length types then (
-          let id =
-            FunsAnalysis.fun_or_method_id_of_fun_decl_id
-              ctx.trans_ctx.fun_ctx.fun_infos id
+          let decl =
+            [%silent_unwrap_opt_span] None (ctx_lookup_fun_decl_info ctx id)
           in
-          let decl = A.FunOrMethodId.Map.find id ctx.trans_funs in
           let err =
             "Ill-formed builtin information for function "
             ^ name_to_string ctx decl.f.item_meta.name
@@ -313,11 +311,9 @@ let fun_builtin_filter_types_trait_clauses (ty_to_string : 'a -> string)
     | None -> Result.Ok (types, explicit)
     | Some filter ->
         if List.length filter <> List.length types then (
-          let id =
-            FunsAnalysis.fun_or_method_id_of_fun_decl_id
-              ctx.trans_ctx.fun_ctx.fun_infos id
+          let decl =
+            [%silent_unwrap_opt_span] None (ctx_lookup_fun_decl_info ctx id)
           in
-          let decl = A.FunOrMethodId.Map.find id ctx.trans_funs in
           let err =
             "Ill-formed builtin information for function "
             ^ name_to_string ctx decl.f.item_meta.name
@@ -3424,12 +3420,8 @@ let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
   let method_decl_id = fn.binder_value.fun_id in
   (* Lookup the definition *)
   let trans =
-    let id =
-      FunsAnalysis.fun_or_method_id_of_fun_decl_id
-        ctx.trans_ctx.fun_ctx.fun_infos method_decl_id
-    in
     [%unwrap_with_span] span
-      (A.FunOrMethodId.Map.find_opt id ctx.trans_funs)
+      (ctx_lookup_fun_decl_info ctx method_decl_id)
       "Could not lookup the translated function, probably because of an error \
        which happened before"
   in

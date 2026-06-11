@@ -789,12 +789,8 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     Option.get (Charon.GAstUtils.init_fun_id_of_global global)
   in
   let trans =
-    let id =
-      FunsAnalysis.fun_or_method_id_of_fun_decl_id
-        ctx.trans_ctx.fun_ctx.fun_infos global_init
-    in
     [%silent_unwrap_opt_span] None
-      (FunOrMethodId.Map.find_opt id ctx.trans_funs)
+      (ExtractBase.ctx_lookup_fun_decl_info ctx global_init)
   in
   [%sanity_check] global.item_meta.span (trans.loops = [] && trans.bodies = []);
   let body = trans.f in
@@ -1097,13 +1093,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     | FunGroup (NonRecGroup id) -> (
         (* Lookup - the translated function may not be in the map if we had
            to ignore it because of errors *)
-        let pure_fun =
-          let id =
-            FunsAnalysis.fun_or_method_id_of_fun_decl_id
-              ctx.trans_ctx.fun_ctx.fun_infos id
-          in
-          FunOrMethodId.Map.find_opt id ctx.trans_funs
-        in
+        let pure_fun = ExtractBase.ctx_lookup_fun_decl_info ctx id in
         (* Special case: we skip trait method *declarations* (we will
            extract their type directly in the records we generate for
            the trait declarations themselves, there is no point in having
@@ -1123,12 +1113,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         (* Lookup *)
         let pure_funs =
           List.filter_map
-            (fun id ->
-              let id =
-                FunsAnalysis.fun_or_method_id_of_fun_decl_id
-                  ctx.trans_ctx.fun_ctx.fun_infos id
-              in
-              FunOrMethodId.Map.find_opt id ctx.trans_funs)
+            (fun id -> ExtractBase.ctx_lookup_fun_decl_info ctx id)
             ids
         in
         if List.exists (fun pf -> pf.f.is_global_decl_body) pure_funs then
