@@ -360,44 +360,45 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
 
   (* Compute the fun sigs for the whole crate *)
   let fun_sigs =
-    FunOrMethodId.Map.of_list
-      (List.filter_map
-         (fun (fdef : LlbcAst.fun_decl) ->
-           try
-             [%ltrace
-               "Translating the signature of: "
-               ^ name_to_string trans_ctx fdef.item_meta.name];
-             let open SymbolicToPureCore in
-             let open SymbolicToPureTypes in
-             let dsg =
-               translate_fun_sig_from_decl_to_decomposed trans_ctx fdef
-             in
-             let sg = translate_fun_sig_from_decomposed dsg in
-             let ty = PureUtils.mk_arrows sg.inputs sg.output in
-             let sg : fun_sigs = { dsg; sg; ty } in
-             let id =
-               FunsAnalysis.fun_or_method_id_of_fun_decl_id
-                 trans_ctx.fun_ctx.fun_infos fdef.def_id
-             in
-             Some (id, sg)
-           with CFailure error ->
-             let name = name_to_string trans_ctx fdef.item_meta.name in
-             let name_pattern =
-               try
-                 name_to_pattern_string (Some fdef.item_meta.span) trans_ctx
-                   fdef.item_meta.name
-               with CFailure _ ->
-                 "(could not compute the name pattern due to a different error)"
-             in
-             [%warn_opt_span] error.span
-               ("Could not translate the function signature of '" ^ name
-              ^ " because of previous error\nName pattern: '" ^ name_pattern
-              ^ "'" ^ "\nDefinition span: "
-               ^ Errors.raw_span_to_string fdef.item_meta.span
-               ^ compute_local_uses_error_message trans_ctx (IdFun fdef.def_id)
-               );
-             None)
-         (FunDeclId.Map.values trans_ctx.fun_ctx.to_extract))
+    let fun_sig_entries =
+      List.filter_map
+        (fun (fdef : LlbcAst.fun_decl) ->
+          try
+            [%ltrace
+              "Translating the signature of: "
+              ^ name_to_string trans_ctx fdef.item_meta.name];
+            let open SymbolicToPureCore in
+            let open SymbolicToPureTypes in
+            let dsg =
+              translate_fun_sig_from_decl_to_decomposed trans_ctx fdef
+            in
+            let sg = translate_fun_sig_from_decomposed dsg in
+            let ty = PureUtils.mk_arrows sg.inputs sg.output in
+            let sg : fun_sigs = { dsg; sg; ty } in
+            let id =
+              FunsAnalysis.fun_or_method_id_of_fun_decl_id
+                trans_ctx.fun_ctx.fun_infos fdef.def_id
+            in
+            Some (id, sg)
+          with CFailure error ->
+            let name = name_to_string trans_ctx fdef.item_meta.name in
+            let name_pattern =
+              try
+                name_to_pattern_string (Some fdef.item_meta.span) trans_ctx
+                  fdef.item_meta.name
+              with CFailure _ ->
+                "(could not compute the name pattern due to a different error)"
+            in
+            [%warn_opt_span] error.span
+              ("Could not translate the function signature of '" ^ name
+             ^ " because of previous error\nName pattern: '" ^ name_pattern
+             ^ "'" ^ "\nDefinition span: "
+              ^ Errors.raw_span_to_string fdef.item_meta.span
+              ^ compute_local_uses_error_message trans_ctx (IdFun fdef.def_id));
+            None)
+        (FunDeclId.Map.values trans_ctx.fun_ctx.to_extract)
+    in
+    FunOrMethodId.Map.of_list fun_sig_entries
   in
 
   (* Translate the signatures of the builtin functions *)
