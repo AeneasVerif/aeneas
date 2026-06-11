@@ -828,10 +828,7 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     *)
     let global_pure = GlobalDeclId.Map.find_opt id ctx.trans_globals in
     Extract.extract_global_decl ctx fmt global_pure body config.interface;
-    (* Record the global, plus its synthetic init body fn (which would not
-       otherwise reach [EmitJson.record_fun] because [extract_definitions]
-       skips global-init [FunGroup]s — they're written here instead). *)
-    EmitJson.record_fun ctx body;
+    (* Record the global. We deliberately do NOT record its synthetic init-body. *)
     match global_pure with
     | Some g -> EmitJson.record_global ctx g
     | None -> ())
