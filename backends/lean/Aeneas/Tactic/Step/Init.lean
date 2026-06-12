@@ -323,7 +323,8 @@ initialize stepAttr : StepSpecAttr ← do
 
 def StepSpecAttr.find? (s : StepSpecAttr) (name : Name) (e : Expr) : MetaM (Array Name) := do
   let state := s.ext.getState (← getEnv)
-  let dtree := state.rules.get! name
+  let .some dtree := state.rules.get? name
+  | throwError "no such spec statement as {name}, valid ones are {state.rules.keys}"
   let rules ← dtree.getMatch e
   pure (rules.filter (fun th => th ∉ state.deactivated))
 
