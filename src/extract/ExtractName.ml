@@ -54,7 +54,7 @@ module NameMatcherMap = struct
   let to_string = NMM.to_string
 end
 
-let pattern_to_extract_name_visitor =
+let mk_pattern_to_extract_name_visitor ~(keep_var_generics : bool) =
   let all_vars =
     let check (g : generic_arg) : bool =
       match g with
@@ -98,7 +98,7 @@ let pattern_to_extract_name_visitor =
     inherit [_] map_pattern as super
 
     method! visit_PIdent _ s d g =
-      if all_vars g then super#visit_PIdent () s d []
+      if (not keep_var_generics) && all_vars g then super#visit_PIdent () s d []
       else super#visit_PIdent () s d g
 
     method! visit_EComp _ id =
@@ -134,14 +134,28 @@ let pattern_to_extract_name_visitor =
       else super#visit_EPrimAdt () adt g
   end
 
+(** The default visitor, which drops generic arguments which are all variables
+    (see {!mk_pattern_to_extract_name_visitor}). Kept as a shared instance so
+    the default callers are unaffected. *)
+let pattern_to_extract_name_visitor =
+  mk_pattern_to_extract_name_visitor ~keep_var_generics:false
+
 (** Helper to convert name patterns to names for extraction.
 
     For impl blocks, we simply use the name of the type (without its arguments)
-    if all the arguments are variables. *)
-let pattern_to_extract_name (_span : Meta.span option) (name : pattern) :
-    string list =
+    if all the arguments are variables.
+
+    [keep_var_generics]: if true, we do *not* drop generic arguments which are
+    all variables. This is used to disambiguate trait parent clauses which
+    instantiate the same trait with different type variables. *)
+let pattern_to_extract_name ?(keep_var_generics = false)
+    (_span : Meta.span option) (name : pattern) : string list =
   let c = { tgt = TkName } in
-  let visitor = pattern_to_extract_name_visitor in
+  let visitor =
+    if keep_var_generics then
+      mk_pattern_to_extract_name_visitor ~keep_var_generics:true
+    else pattern_to_extract_name_visitor
+  in
   let name = visitor#visit_pattern () name in
   List.map (pattern_elem_to_string c) name
 
@@ -165,7 +179,7 @@ let name_to_simple_name (ctx : ctx) (n : Types.name) : string list =
 
 (** If the [prefix] is Some, we attempt to remove the common prefix between
     [prefix] and [name] from [name] *)
-let name_with_generics_to_simple_name (ctx : ctx)
+let name_with_generics_to_simple_name (ctx : ctx) ?(keep_var_generics = false)
     ?(prefix : Types.name option = None) (name : Types.name)
     (p : Types.generic_params) (g : Types.generic_args) : string list =
   let c = default_to_pat_config in
@@ -182,4 +196,4 @@ let name_with_generics_to_simple_name (ctx : ctx)
         let _, _, name = pattern_common_prefix { equiv = true } prefix name in
         name
   in
-  pattern_to_extract_name None name
+  pattern_to_extract_name ~keep_var_generics None name
