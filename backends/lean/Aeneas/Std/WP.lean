@@ -829,6 +829,11 @@ theorem loop.spec_decr_nat {α : Type u} {β : Type v}
 end Aeneas.Std
 
 namespace Aeneas.Std.WP
+
+/-- Note that `forall_const` is too general: it can eliminate unused outputs that we actually
+want to introduce in the context -/
+theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
+
 -- registers the spec statements for use in the step tactic, see Spec.lean
 #register_spec_statement {
     name := ``Std.WP.spec
@@ -840,10 +845,21 @@ namespace Aeneas.Std.WP
     mk_spec_bind := ``Std.WP.spec_bind'
     mk_spec_bind_skip_args := 4
     uncurry_elim_tactics := #[
-      ``Std.WP.qimp_spec_uncurry', ``Std.WP.qimp_spec_unit, ``Std.WP.qimp_spec_exists,
-      ``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
+      ``Std.WP.qimp_spec_uncurry', ``Std.WP.qimp_spec_unit,
+                  ``Std.WP.qimp_uncurry', ``Std.WP.qimp_unit,
+                  ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
+                  -- `Prod.forall`/`Prod.exists` split `∀ x : α × β, p x` into
+                  -- `∀ a b, p (a, b)`, so a tuple post-binder produces one
+                  -- output per leaf rather than a single pair.
+                  ``Prod.forall, ``Prod.exists,
+                  ``forall_unit, ``true_imp_iff
     ]
-    qimp_elim_tactics := #[ ``Std.WP.qimp_spec_iff, ]
+    qimp_elim_tactics := #[
+      ``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
+                  ``Std.WP.imp_and_iff, ``Std.WP.imp_exists_iff,
+                  ``Prod.forall, ``Prod.exists, ``Std.uncurry_apply_pair,
+                  ``forall_unit, ``true_imp_iff
+        ]
     liftings := #[]
   }
 
@@ -857,9 +873,21 @@ namespace Aeneas.Std.WP
     mk_spec_bind := ``Std.WP.dspec_bind'
     mk_spec_bind_skip_args := 4
     uncurry_elim_tactics := #[
-      ``Std.WP.qimp_dspec_uncurry', ``Std.WP.qimp_dspec_unit, ``Std.WP.qimp_dspec_exists
+      ``Std.WP.qimp_dspec_uncurry', ``Std.WP.qimp_dspec_unit,
+                  ``Std.WP.qimp_uncurry', ``Std.WP.qimp_unit,
+                  ``Std.WP.qimp_dspec_exists, ``Std.WP.qimp_exists,
+                  -- `Prod.forall`/`Prod.exists` split `∀ x : α × β, p x` into
+                  -- `∀ a b, p (a, b)`, so a tuple post-binder produces one
+                  -- output per leaf rather than a single pair.
+                  ``Prod.forall, ``Prod.exists,
+                  ``forall_unit, ``true_imp_iff
     ]
-    qimp_elim_tactics := #[ ``Std.WP.qimp_dspec_iff, ]
+    qimp_elim_tactics := #[
+      ``Std.WP.qimp_dspec_iff, ``Std.WP.qimp_iff,
+                  ``Std.WP.imp_and_iff, ``Std.WP.imp_exists_iff,
+                  ``Prod.forall, ``Prod.exists, ``Std.uncurry_apply_pair,
+                  ``forall_unit, ``true_imp_iff
+        ]
     liftings := #[
       { from_statement := ``Std.WP.spec
         conversion_thm := ``Std.WP.spec_dspec

@@ -1238,7 +1238,6 @@ x : α
 f : α → Result Unit
 f_spec : ∀ (x : α) [Inhabited α], f x ⦃ x✝ => True ⦄
 _ : [> let PUnit.unit ← f x <]
-_✝ : True
 ⊢ (do
       f x
       ok ()) ⦃

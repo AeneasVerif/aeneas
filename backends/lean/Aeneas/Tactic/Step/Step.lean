@@ -617,13 +617,13 @@ def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState : Ste
     Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
             { simpThms := #[← stepSimpExt.getTheorems],
               addSimpThms :=
-                info.uncurry_elim_tactics ++
-                #[ -- `Prod.forall`/`Prod.exists` split `∀ x : α × β, p x` into
-                  -- `∀ a b, p (a, b)`, so a tuple post-binder produces one
-                  -- output per leaf rather than a single pair.
-                  ``Std.WP.qimp_uncurry', ``Std.WP.qimp_unit, ``Std.WP.qimp_exists,
-                  ``Prod.forall, ``Prod.exists,
-                  ``forall_unit, ``true_imp_iff] }
+                info.uncurry_elim_tactics } --++
+                -- #[ -- `Prod.forall`/`Prod.exists` split `∀ x : α × β, p x` into
+                --   -- `∀ a b, p (a, b)`, so a tuple post-binder produces one
+                --   -- output per leaf rather than a single pair.
+                --   ``Std.WP.qimp_uncurry', ``Std.WP.qimp_unit, ``Std.WP.qimp_exists,
+                --   ``Prod.forall, ``Prod.exists,
+                --   ``forall_unit, ``true_imp_iff] }
             (.targets #[] true)
     | trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after decomposing the nested `uncurry'`"
@@ -635,10 +635,10 @@ def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState : Ste
     Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
             { declsToUnfold := #[``Std.WP.curry, ``Std.WP.uncurry']
               addSimpThms :=
-                info.qimp_elim_tactics ++
-                #[ ``Std.WP.qimp_iff, ``Std.WP.imp_and_iff, ``Prod.forall, ``Prod.exists, ``Std.uncurry_apply_pair,
-                   ``Std.WP.imp_and_iff,  -- ``Std.WP.imp_exists_iff,
-                   ``forall_unit, ``true_imp_iff] }
+                info.qimp_elim_tactics } -- ++
+                -- #[ ``Std.WP.qimp_iff, ``Std.WP.imp_and_iff, ``Prod.forall, ``Prod.exists, ``Std.uncurry_apply_pair,
+                --    ``Std.WP.imp_and_iff,  -- ``Std.WP.imp_exists_iff,
+                --    ``forall_unit, ``true_imp_iff] }
             (.targets #[] true)
     | trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after aliminating `qimp_spec` and `qimp` and decomposing the post-condition"
@@ -1887,9 +1887,11 @@ case a
 x : U32
 f : U32 → Result U32
 h : ∀ (x : U32), f x ⦃ y => ∃ z > 0, ↑y = ↑x + z ⦄
-y : U32
-z : ∃ z > 0, ↑y = ↑x + z
-⊢ ↑y > ↑x
+y : ℕ
+z : U32
+_✝¹ : y > 0
+_✝ : ↑z = ↑x + y
+⊢ ↑z > ↑x
 -/
 #guard_msgs in
   example (x : U32) (f : U32 → Result U32) (h : ∀ x, f x ⦃ y => ∃ z, z > 0 ∧ y.val = x.val + z ⦄) :
@@ -1931,15 +1933,14 @@ z_post : ↑z = ↑x + ↑y
 
   /- Test that manipulates a post-condition containing an ∃ -/
   /--
-warning: Too many ids provided ([some (s'), some (h0), some (h1)]): expected ≤ 2 ids, got 3
----
 error: unsolved goals
 case a
 zero : Slice U32 → Result (Slice U32)
 zero_spec :
   ∀ (s : Slice U32), zero s ⦃ s' => ∃ (h : s'.length = s.length), ∀ (i : ℕ) (x : i < s.length), s'[i] = 0#u32 ⦄
 s s' : Slice U32
-h0 : ∃ (h : s'.length = s.length), ∀ (i : ℕ) (x : i < s.length), s'[i] = 0#u32
+h0 : s'.length = s.length
+h1 : ∀ (i : ℕ) (x : i < s.length), s'[i] = 0#u32
 ⊢ (do
       let _ ← zero s'
       ok ()) ⦃
