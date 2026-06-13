@@ -674,8 +674,9 @@ let export_type (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     || ((not is_opaque) && config.extract_transparent)
   in
   if extract then (
-    if extract_decl then
+    if extract_decl then (
       Extract.extract_type_decl ctx fmt type_decl_group kind def;
+      EmitJson.record_type ctx def);
     if extract_extra_info then
       Extract.extract_type_decl_extra_info ctx fmt kind def)
 
@@ -819,14 +820,18 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
          (builtin_globals_map ())
        = None
   in
-  if extract then
+  if extract then (
     (* We don't wrap global declaration groups between calls to functions
        [{start, end}_global_decl_group] (which don't exist): global declaration
        groups are always singletons, so the [extract_global_decl] function
        takes care of generating the delimiters.
     *)
-    let global = GlobalDeclId.Map.find_opt id ctx.trans_globals in
-    Extract.extract_global_decl ctx fmt global body config.interface
+    let global_pure = GlobalDeclId.Map.find_opt id ctx.trans_globals in
+    Extract.extract_global_decl ctx fmt global_pure body config.interface;
+    (* Record the global. We deliberately do NOT record its synthetic init-body. *)
+    match global_pure with
+    | Some g -> EmitJson.record_global ctx g
+    | None -> ())
 
 (** Utility.
 
@@ -907,7 +912,8 @@ let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
         then
           Some
             (fun () ->
-              Extract.extract_fun_decl ctx fmt kind has_decr_clause def)
+              Extract.extract_fun_decl ctx fmt kind has_decr_clause def;
+              EmitJson.record_fun ctx def)
         else None)
       decls
   in
@@ -1263,6 +1269,10 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
   let out = open_out fi.filename in
   let fmt = Format.formatter_of_out_channel out in
 
+  (* Tell the manifest accumulator which file/namespace the upcoming
+     declarations will be attributed to. No-op when [-emit-json] is off. *)
+  EmitJson.begin_file ~filename:fi.filename ~namespace:fi.namespace;
+
   (* Print the headers.
    * Note that we don't use the OCaml formatter for purpose: we want to control
    * line insertion (we have to make sure that some instructions like [open MODULE]
@@ -1511,6 +1521,9 @@ let extract_translated_crate (filename : string) (dest_dir : string)
       extracted_opaque;
     }
   in
+  (* Initialize the manifest accumulator (a module-local singleton). Cheap
+     even when [-emit-json] is off — just resets a few empty fields. *)
+  EmitJson.init ~dest_dir;
 
   (* Register unique names for all the top-level types, globals, functions...
 
@@ -2086,6 +2099,20 @@ let extract_translated_crate (filename : string) (dest_dir : string)
        }
      in
      extract_file gen_config ctx file_info);
+
+  (* Emit the [translation.json] sidecar listing every Lean function declaration
+     we just wrote, when [-emit-json] is on. No-op otherwise. *)
+  let aeneas_version =
+    match GitVersion.commit with
+    | Some h -> h
+    | None -> "unknown"
+  in
+  (match
+     EmitJson.write_if_enabled ~aeneas_version ~crate_name:crate.name ~subdir
+       ~llbc_file:filename
+   with
+  | Some path -> log#linfo (lazy ("Generated: " ^ path))
+  | None -> ());
 
   (* Generate the build file *)
   match Config.backend () with
