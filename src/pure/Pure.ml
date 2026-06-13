@@ -642,12 +642,14 @@ and binop =
   | Shl of overflow_mode * integer_type * integer_type
   | Shr of overflow_mode * integer_type * integer_type
   | Cmp of integer_type
+  | BoolAnd
+      (** Boolean conjunction. Used to translate Rust [a & b] on booleans. *)
   | BoolOr
-      (** This doesn't exist in the MIR because && and || are elaborated to lazy
-          boolean operations. We introduce || in the pure code to be able to
-          reconstruct assertions of the shape [assert!(b0 || b1)]. Note that we
-          do not introduce && because we can translate an [assert! (b0 && b1)]
-          to [assert b0; assert b1]. *)
+      (** Boolean disjunction. Used to translate Rust [a | b] on booleans (see
+          [BoolAnd]), and also introduced by the symbolic-to-pure translation
+          to reconstruct assertions of the shape [assert!(b0 || b1)]. 
+          [assert!(b0 && b1)] can be translated to [assert b0; assert b1]. *)
+  | BoolXor  (** Boolean exclusive-or, used to translate Rust [a ^ b] on booleans. *)
 
 and builtin_impl_data =
   | BuiltinCopy

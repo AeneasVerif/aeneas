@@ -620,9 +620,15 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
             in
             let binop =
               match binop with
-              | Expressions.BitXor -> BitXor (get_single_int_ty ())
-              | Expressions.BitAnd -> BitAnd (get_single_int_ty ())
-              | Expressions.BitOr -> BitOr (get_single_int_ty ())
+              | Expressions.BitXor ->
+                  if arg0.ty = TLiteral TBool then BoolXor
+                  else BitXor (get_single_int_ty ())
+              | Expressions.BitAnd ->
+                  if arg0.ty = TLiteral TBool then BoolAnd
+                  else BitAnd (get_single_int_ty ())
+              | Expressions.BitOr ->
+                  if arg0.ty = TLiteral TBool then BoolOr
+                  else BitOr (get_single_int_ty ())
               | Expressions.Eq ->
                   [%sanity_check] ctx.span (arg0.ty = arg1.ty);
                   Eq arg0.ty

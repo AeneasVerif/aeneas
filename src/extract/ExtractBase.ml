@@ -950,7 +950,9 @@ let named_binop_name (binop : binop) : string =
   | BitOr ty -> add_int_name ty ^ "or"
   | Shl (_, ty, _) -> add_int_name ty ^ "shl"
   | Shr (_, ty, _) -> add_int_name ty ^ "shr"
+  | BoolAnd -> "bool_and"
   | BoolOr -> "bool_or"
+  | BoolXor -> "bool_xor"
   | _ -> raise (Failure "Unreachable")
 
 let dyn_constructor () = "Dyn.mk" (* TODO: backends other than Lean *)

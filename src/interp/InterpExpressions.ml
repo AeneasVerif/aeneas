@@ -1074,6 +1074,17 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
             [%craise] span
               ("Unimplemented binary operation: " ^ binop_to_string binop)
       end
+    | VLiteral (VBool b1), VLiteral (VBool b2) -> begin
+        (* Bitwise [&] / [|] / [^] applied to booleans. *)
+        match binop with
+        | BitAnd ->
+            Ok { value = VLiteral (VBool (b1 && b2)); ty = TLiteral TBool }
+        | BitOr ->
+            Ok { value = VLiteral (VBool (b1 || b2)); ty = TLiteral TBool }
+        | BitXor ->
+            Ok { value = VLiteral (VBool (b1 <> b2)); ty = TLiteral TBool }
+        | _ -> [%craise] span ("Invalid inputs for binop: " ^ binop_to_string binop)
+      end
     | _ -> [%craise] span ("Invalid inputs for binop: " ^ binop_to_string binop)
 
 let eval_binary_op_concrete (config : config) (span : Meta.span) (binop : binop)
@@ -1106,8 +1117,12 @@ let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
         "The type is not primitively copyable";
       TLiteral TBool)
     else
-      (* Other operations: input types are integers *)
+      (* Other operations: input types are integers, except [BitAnd]/[BitOr]/
+         [BitXor] which also accept booleans. *)
       match (v1.ty, v2.ty) with
+      | TLiteral TBool, TLiteral TBool
+        when binop = BitAnd || binop = BitOr || binop = BitXor ->
+          TLiteral TBool
       | TLiteral lty1, TLiteral lty2
         when literal_type_is_integer lty1 && literal_type_is_integer lty2 -> (
           let int_ty1, int_ty2 = (ty_as_integer v1.ty, ty_as_integer v2.ty) in
