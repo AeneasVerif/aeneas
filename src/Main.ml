@@ -208,6 +208,14 @@ let () =
          collisions with field projectors. Example: the `len` method in `impl \
          Struct { fn len(&self) -> usize { ... } }` would be named \
          `Struct.impl.len`." );
+      ( "-core-models-lib",
+        Arg.Set core_models_lib,
+        " For Lean: disable the Rust core library overrides from \
+         ExtractBuiltinLean.ml. Items like the `Clone` impl for arrays are \
+         extracted using the standard name-mangling scheme rather than \
+         hand-tuned names such as `core.array.CloneArray.clone`, and the \
+         associated shape overrides (keep_params, can_fail, etc.) are \
+         ignored." );
       ( "-all-computable",
         Arg.Set all_computable,
         " For Lean: do not insert `noncomputable section` at the top of the \
@@ -454,6 +462,9 @@ let () =
   if !lean_gen_lakefile && not (backend () = Lean) then
     fail_with_error
       "The -lean-default-lakefile option is valid only for the Lean backend";
+  if !core_models_lib && not (backend () = Lean) then
+    fail_with_error
+      "The -core-models-lib option is valid only for the Lean backend";
   if !set_max_heartbeats && not (backend () = Lean) then
     fail_with_error
       "The -max-heartbeats option is valid only for the Lean backend";

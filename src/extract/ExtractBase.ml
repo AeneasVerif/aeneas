@@ -1911,8 +1911,29 @@ let ctx_compute_trait_impl_name_raw (ctx : extraction_ctx)
             in
             [%ldebug "trait_name: " ^ trait_name];
 
-            (* Put together *)
-            let name = flatten_name [ self_name; "Insts"; trait_name ] in
+            (* Put together. Under [-core-models-lib], non-local trait impls
+               get prefixed with the Rust crate they originate from (matching
+               the convention used for non-impl items, where the crate is the
+               leading namespace component). For local impls, the local crate
+               is stripped, as elsewhere. We also skip the prefix if the self
+               type's name already starts with that crate (the ADT case),
+               which would otherwise yield a duplicated crate component. *)
+            let name_parts = [ self_name; "Insts"; trait_name ] in
+            let name_parts =
+              if !core_models_lib && not trait_impl.item_meta.is_local then
+                match trait_impl.item_meta.name with
+                | PeIdent (crate, _) :: _ ->
+                    let crate = rewrite_crate_for_core_models_lib crate in
+                    let already_prefixed =
+                      self_name = crate
+                      || String.starts_with ~prefix:(crate ^ ".") self_name
+                    in
+                    if already_prefixed then name_parts
+                    else crate :: name_parts
+                | _ -> name_parts
+              else name_parts
+            in
+            let name = flatten_name name_parts in
             [%ldebug "Final name: " ^ name];
             name)
   | Some name -> name
