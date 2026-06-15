@@ -683,7 +683,7 @@ let eval_function_call_symbolic_inst (span : Meta.span) (func : fn_ptr)
       mk_symbolic_fun_call_inst span ctx ~call_kind:func.kind
         ~call_generics:func.generics ~call_span:span
         ~inst_generics:func.generics ~tr_self sg
-  | TraitMethod (trait_ref, method_id, _) ->
+  | TraitMethod (trait_ref, method_id) ->
       (* Check that there are no bound regions *)
       [%cassert] span
         (trait_ref.trait_decl_ref.binder_regions = [])
@@ -696,21 +696,24 @@ let eval_function_call_symbolic_inst (span : Meta.span) (func : fn_ptr)
           (match trait_ref.kind with
           | TraitImpl _ -> false
           | _ -> true);*)
-      (* Lookup the trait decl and substitution *)
       let trait_decl = ctx_lookup_trait_decl span ctx trait_decl_ref.id in
-      let fn_ref =
-        Option.get
-          (Substitute.lookup_and_subst_trait_decl_method trait_decl method_id
-             trait_ref func.generics)
+      let meth =
+        ([%silent_unwrap] span (lookup_trait_decl_method trait_decl method_id))
+          .item_binder_value
+          .binder_value
       in
-      (* *)
+      let signature =
+        [%silent_unwrap] span
+          (Substitute.lookup_flat_method_sig ctx.crate trait_decl_ref.id
+             method_id)
+      in
       let tr_self = trait_ref.kind in
-      (* Lookup the declaration *)
-      let def = ctx_lookup_fun_decl span ctx fn_ref.id in
-      let signature = bound_fun_sig_of_decl def in
+      let inst_generics =
+        concat_generic_args trait_decl_ref.generics func.generics
+      in
       mk_symbolic_fun_call_inst span ctx ~call_kind:func.kind
-        ~call_generics:func.generics ~call_span:def.item_meta.span
-        ~inst_generics:fn_ref.generics ~tr_self signature
+        ~call_generics:func.generics ~call_span:meth.item_meta.span
+        ~inst_generics ~tr_self signature
 
 (** Helper to evaluate global references for lifetime static.
 

@@ -339,7 +339,7 @@ let fun_or_method_id_of_pure_fn_ptr (kind : fn_ptr_kind) :
     A.FunOrMethodId.id option =
   match kind with
   | FunId (FRegular id) -> Some (A.FunOrMethodId.Fun id)
-  | TraitMethod (trait_ref, method_id, _) ->
+  | TraitMethod (trait_ref, method_id) ->
       Some
         (A.FunOrMethodId.Method
            (trait_ref.trait_decl_ref.trait_decl_id, method_id))

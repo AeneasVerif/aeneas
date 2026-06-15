@@ -12,11 +12,11 @@ let log = Logging.symbolic_to_pure_expressions_log
 let translate_fn_ptr_kind (ctx : bs_ctx) (id : A.fn_ptr_kind) : fn_ptr_kind =
   match id with
   | FunId fun_id -> FunId fun_id
-  | TraitMethod (trait_ref, method_id, fun_decl_id) ->
+  | TraitMethod (trait_ref, method_id) ->
       let trait_ref =
         translate_fwd_trait_ref (Some ctx.span) ctx.decls_ctx trait_ref
       in
-      TraitMethod (trait_ref, method_id, fun_decl_id)
+      TraitMethod (trait_ref, method_id)
 
 (* Introduce variables for the backward functions.
 
@@ -431,7 +431,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
                   | _ ->
                       (* We shouldn't get there *)
                       [%craise] decl.item_meta.span "Unexpected")
-              | TraitMethod (trait_ref, method_id, _) ->
+              | TraitMethod (trait_ref, method_id) ->
                   Charon.GAstUtils.get_method_name ctx.decls_ctx.crate
                     trait_ref.trait_decl_ref.binder_value.id method_id
             in

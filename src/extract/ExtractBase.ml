@@ -2390,12 +2390,7 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
                         trait_decl.methods
                     with
                     | None -> None
-                    | Some meth ->
-                        Option.map
-                          (fun (def : A.fun_decl) -> def.item_meta)
-                          (FunDeclId.Map.find_opt
-                             meth.fun_ref.binder_value.fun_id
-                             ctx.trans_ctx.fun_ctx.fun_decls))
+                    | Some meth -> Some meth.item_meta)
                 | AssocIdConst _ ->
                     (* TODO: missing item meta information *)
                     None
@@ -2435,7 +2430,7 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
         if is_trait_decl_field then llbc_name
         else
           match src with
-          | TraitDeclItem (_, _, true) ->
+          | TraitDeclItem _ ->
               llbc_name @ [ PeIdent ("default", Disambiguator.zero) ]
           | _ -> llbc_name
       in

@@ -213,7 +213,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
                 in
                 [%ldebug "function name: " ^ trans_fun.name];
                 trans_fun.signature
-            | TraitMethod (tref, method_id, _) ->
+            | TraitMethod (tref, method_id) ->
                 [%ldebug
                   "method name: "
                   ^ Charon.GAstUtils.get_method_name trans_ctx.crate
@@ -238,14 +238,14 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
              args of the trait ref with the generics args of the method call itself *)
           let generics =
             match fid with
-            | TraitMethod (trait_ref, _, _) ->
+            | TraitMethod (trait_ref, _) ->
                 append_generic_args trait_ref.trait_decl_ref.decl_generics
                   qualif.generics
             | _ -> qualif.generics
           in
           let tr_self =
             match fid with
-            | TraitMethod (trait_ref, _, _) -> trait_ref.trait_id
+            | TraitMethod (trait_ref, _) -> trait_ref.trait_id
             (* Dummy, won't be used since we're not substituting for a trait. *)
             | _ -> UnknownTrait "add_type_annotations_to_fun_decl"
           in
