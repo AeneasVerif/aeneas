@@ -402,14 +402,14 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
         (FunOrMethodId.Method (trait_decl.def_id, method_id), sg)
       in
       let translate_trait_methods (trait_decl : LlbcAst.trait_decl) =
+        let methods =
+          TraitDeclId.Map.find trait_decl.def_id
+            trans_ctx.trait_methods_to_extract
+        in
         List.map
           (fun (method_id, bound_method) ->
             translate_method_sig trait_decl method_id bound_method)
-          (List.filter
-             (fun ((_, bound_method) : _ * LlbcAst.trait_method Types.binder) ->
-               let method_ = bound_method.binder_value in
-               FunDeclId.Map.mem method_.item.id trans_ctx.fun_ctx.to_extract)
-             (TraitMethodId.Map.to_list trait_decl.methods))
+          (TraitMethodId.Map.to_list methods)
       in
       let entries =
         List.concat

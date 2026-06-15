@@ -176,6 +176,17 @@ let compute_contexts (crate : crate) : decls_ctx =
       crate.trait_impls
   in
 
+  let trait_methods_to_extract =
+    TraitDeclId.Map.mapi
+      (fun _ (trait_decl : trait_decl) ->
+        TraitMethodId.Map.filter
+          (fun _ (bound_method : trait_method Types.binder) ->
+            let method_ = bound_method.binder_value in
+            FunDeclId.Set.mem method_.item.id !fun_decl_ids)
+          trait_decl.methods)
+      crate.trait_decls
+  in
+
   {
     crate;
     graph_of_uses = crate_graph;
@@ -183,6 +194,7 @@ let compute_contexts (crate : crate) : decls_ctx =
     fun_ctx;
     global_decls_to_extract;
     trait_decls_to_extract;
+    trait_methods_to_extract;
     trait_impls_to_extract;
   }
 

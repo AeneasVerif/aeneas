@@ -194,7 +194,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     implied_clauses = llbc_parent_clauses;
     consts;
     types;
-    methods;
+    methods = _;
     vtable = _;
   } : A.trait_decl =
     trait_decl
@@ -246,16 +246,14 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
         (const_id, c.name, translate_ty c.ty))
       (T.AssocConstId.Map.to_list consts)
   in
+  let methods_to_extract =
+    TraitDeclId.Map.find def_id ctx.trait_methods_to_extract
+  in
   let methods =
-    List.filter_map
+    List.map
       (fun ((method_id, m) : TraitMethodId.id * A.trait_method T.binder) ->
-        let method_ = m.binder_value in
-        if FunDeclId.Map.mem method_.item.id ctx.fun_ctx.to_extract then
-          Some
-            (translate_trait_method ctx opt_span translate_ty trait_decl
-               method_id m)
-        else None)
-      (TraitMethodId.Map.to_list methods)
+        translate_trait_method ctx opt_span translate_ty trait_decl method_id m)
+      (TraitMethodId.Map.to_list methods_to_extract)
   in
   {
     def_id;
