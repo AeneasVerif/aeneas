@@ -1873,6 +1873,10 @@ type global_decl = {
 type trait_method = {
   method_id : trait_method_id;
   item_name : trait_item_name;
+  item_meta : T.item_meta;
+  signature : fun_sig;
+  (* The signature of the method. Its [generic_params] contain the method
+     generics; the signature can refer to both trait and method generics. *)
   fun_ref : fun_decl_ref binder;
 }
 [@@deriving show]
