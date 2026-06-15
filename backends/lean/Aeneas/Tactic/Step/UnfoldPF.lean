@@ -144,7 +144,7 @@ elab "dspec_induction" func:ident : tactic => do
   let constant_params := func_params.map (fun x => fixpoint_induct_params.contains x)
   trace[UnfoldPF] "constant_params: {constant_params}"
   let .some func_application := goalTy.find? (fun e => e.getAppFn.isConstOf func_expr_name)
-  | throwError "no"
+  | throwError "{func} not found in goal"
   trace[UnfoldPF] "func app in goal is: {func_application}"
   let args_in_goal := func_application.getAppArgs
   let const_args := (args_in_goal.zip constant_params).filterMap
