@@ -2822,31 +2822,22 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
   [%ltrace trait_decl.name];
   let methods = trait_decl.methods in
   (* Small helper *)
-  let compute_item_name (method_id : trait_method_id) (item_name : string) :
-      FunDeclId.id option * string =
+  let compute_item_name (meth : trait_method) : FunDeclId.id option * string =
+    let item_name = meth.item_name in
     [%ldebug "(" ^ trait_decl.name ^ "): compute_item_name: " ^ item_name];
-    let trans : pure_fun_translation =
-      let id = A.FunOrMethodId.Method (trait_decl.def_id, method_id) in
-      match A.FunOrMethodId.Map.find_opt id ctx.trans_funs with
-      | Some decl -> decl
-      | None ->
-          [%craise] trait_decl.item_meta.span
-            ("Unexpected error: could not find the declaration for method '"
-           ^ item_name ^ "' for trait declaration '"
-            ^ name_to_string ctx trait_decl.item_meta.name
-            ^ "'")
-    in
 
-    let f = trans.f in
     (* We do something special to reuse the [ctx_compute_fun_decl]
        function. TODO: make it cleaner. *)
     let llbc_name : Types.name =
       [ Types.PeIdent (item_name, Disambiguator.zero) ]
     in
-    let f = { f with item_meta = { f.item_meta with name = llbc_name } } in
+    let item_meta = { meth.item_meta with name = llbc_name } in
     [%ldebug
-      "compute_item_name: llbc_name=" ^ name_to_string ctx f.item_meta.name];
-    let name = ctx_compute_fun_name f true ctx in
+      "compute_item_name: llbc_name=" ^ name_to_string ctx item_meta.name];
+    let name =
+      ctx_compute_fun_global_name_no_suffix item_meta TopLevelItem
+        ~is_trait_decl_field:true ctx
+    in
     (* Add a prefix if necessary *)
     let name =
       if !record_fields_short_names then name
@@ -2861,9 +2852,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
         (* Not a builtin function *)
         List.map
           (fun meth ->
-            let default_id, fun_name =
-              compute_item_name meth.method_id meth.item_name
-            in
+            let default_id, fun_name = compute_item_name meth in
             (meth.method_id, default_id, fun_name))
           methods
     | Some info ->
@@ -2881,9 +2870,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
                  ^ Config.backend_name ()
                  ^ " library seems to be missing the corresponding field.");
                 (* Use the LLBC definition to compute the name *)
-                let default_id, fun_name =
-                  compute_item_name meth.method_id meth.item_name
-                in
+                let default_id, fun_name = compute_item_name meth in
                 (meth.method_id, default_id, fun_name)
             | Some info ->
                 let fun_name = info.extract_name in
