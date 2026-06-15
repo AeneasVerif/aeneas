@@ -177,13 +177,53 @@ let compute_contexts (crate : crate) : decls_ctx =
   in
 
   let trait_methods_to_extract =
+    let trait_method_ids = ref TraitDeclId.Map.empty in
+    let add_trait_method_id trait_decl_id method_id =
+      trait_method_ids :=
+        TraitDeclId.Map.update trait_decl_id
+          (fun opt_set ->
+            let set = Option.value opt_set ~default:TraitMethodId.Set.empty in
+            Some (TraitMethodId.Set.add method_id set))
+          !trait_method_ids
+    in
+    let visitor =
+      object
+        inherit [_] iter_crate as super
+
+        (* Include a method if an implementation of it is in the extracted functions. *)
+        method! visit_item_source env (src : item_source) =
+          (match src with
+          | TraitDeclItem (trait_ref, AssocIdMethod method_id, _)
+          | TraitImplItem (_, trait_ref, AssocIdMethod method_id, _) ->
+              add_trait_method_id trait_ref.id method_id
+          | _ -> ());
+          super#visit_item_source env src
+
+        (* Include a method if it is mentioned in the extracted functions. *)
+        method! visit_fn_ptr env fn_ptr =
+          (match fn_ptr.kind with
+          | TraitMethod (trait_ref, method_id, _) ->
+              let trait_decl_id = trait_ref.trait_decl_ref.binder_value.id in
+              add_trait_method_id trait_decl_id method_id
+          | _ -> ());
+          super#visit_fn_ptr env fn_ptr
+      end
+    in
+    List.iter
+      (visitor#visit_fun_decl ())
+      (FunDeclId.Map.values fun_ctx.to_extract);
+    List.iter
+      (visitor#visit_global_decl ())
+      (GlobalDeclId.Map.values global_decls_to_extract);
+
     TraitDeclId.Map.mapi
-      (fun _ (trait_decl : trait_decl) ->
-        TraitMethodId.Map.filter
-          (fun _ (bound_method : trait_method Types.binder) ->
-            let method_ = bound_method.binder_value in
-            FunDeclId.Set.mem method_.item.id !fun_decl_ids)
-          trait_decl.methods)
+      (fun trait_decl_id (trait_decl : trait_decl) ->
+        match TraitDeclId.Map.find_opt trait_decl_id !trait_method_ids with
+        | None -> TraitMethodId.Map.empty
+        | Some method_ids ->
+            TraitMethodId.Map.filter
+              (fun method_id _ -> TraitMethodId.Set.mem method_id method_ids)
+              trait_decl.methods)
       crate.trait_decls
   in
 
