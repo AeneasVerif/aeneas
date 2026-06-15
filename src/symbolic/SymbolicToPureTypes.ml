@@ -1042,6 +1042,74 @@ and translate_fun_sigs_from_decomposed (dsg : Pure.decomposed_fun_sig) :
   let ty = mk_arrows sg.inputs sg.output in
   { dsg; sg; ty }
 
+and translate_flat_trait_method_sigs (decls_ctx : C.decls_ctx)
+    (trait_decl : A.trait_decl) (method_id : TraitMethodId.id)
+    (bound_method : A.trait_method T.binder) : fun_sigs =
+  let span = trait_decl.item_meta.span in
+  let method_ = bound_method.binder_value in
+  let trait_decl_ref : T.trait_decl_ref T.region_binder =
+    let generics =
+      Charon.TypesUtils.generic_args_of_params (Some span) trait_decl.generics
+    in
+    {
+      binder_regions = [];
+      binder_value = ({ id = trait_decl.def_id; generics } : T.trait_decl_ref);
+    }
+  in
+  let trait_ref = ({ kind = T.Self; trait_decl_ref } : T.trait_ref) in
+  let trait_ref = translate_fwd_trait_ref (Some span) decls_ctx trait_ref in
+  let fun_id = TraitMethod (trait_ref, method_id, method_.item.id) in
+  let sg =
+    [%silent_unwrap_opt_span] (Some span)
+      (Substitute.lookup_flat_method_sig decls_ctx.crate trait_decl.def_id
+         method_id)
+  in
+  let input_names = List.map (fun _ -> None) sg.item_binder_value.inputs in
+  translate_fun_sigs (Some span) decls_ctx fun_id sg input_names
+
+and translate_trait_method_sig (decls_ctx : C.decls_ctx)
+    (trait_decl : A.trait_decl) (method_id : TraitMethodId.id)
+    (bound_method : A.trait_method T.binder) : Pure.fun_sig =
+  (* We do something somewhat silly here: we flatten the signature, translate
+     it, then unflatten it into two nested binders. This is needed because
+     [translate_fun_sig] doesn't handle nested binder levels. *)
+  let span = trait_decl.item_meta.span in
+  let flat_sig =
+    (translate_flat_trait_method_sigs decls_ctx trait_decl method_id
+       bound_method)
+      .sg
+  in
+  let trait_generics, _ =
+    translate_generic_params (Some span) trait_decl.generics
+  in
+  let method_llbc_generics = bound_method.binder_params in
+  let method_generics, preds =
+    translate_generic_params (Some span) method_llbc_generics
+  in
+  let generics =
+    append_generic_args
+      (generic_args_of_params trait_generics)
+      (bound_generic_args_of_params method_generics)
+  in
+  let subst = make_subst_from_generics flat_sig.generics generics in
+  let inputs = List.map (ty_substitute subst) flat_sig.inputs in
+  let output = ty_substitute subst flat_sig.output in
+
+  let explicit_info = compute_explicit_info method_generics inputs in
+  let known_from_trait_refs =
+    compute_known_info explicit_info method_generics
+  in
+  {
+    flat_sig with
+    generics = method_generics;
+    llbc_generics = method_llbc_generics;
+    explicit_info;
+    known_from_trait_refs;
+    preds;
+    inputs;
+    output;
+  }
+
 and translate_fun_sigs_from_decl (decls_ctx : C.decls_ctx)
     (fdef : LlbcAst.fun_decl) : fun_sigs =
   let span = fdef.item_meta.span in

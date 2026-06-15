@@ -165,13 +165,19 @@ let translate_binder (span : span option) (translate_inside : 'a -> 'b)
     binder_llbc_generics;
   }
 
-let translate_trait_method (span : span option) (translate_ty : T.ty -> ty)
+let translate_trait_method (ctx : Contexts.decls_ctx) (span : span option)
+    (translate_ty : T.ty -> ty) (trait_decl : A.trait_decl)
     (method_id : TraitMethodId.id) (bound_method : A.trait_method T.binder) :
     trait_method =
   let method_ = bound_method.binder_value in
+  let signature =
+    translate_trait_method_sig ctx trait_decl method_id bound_method
+  in
   {
     method_id;
     item_name = method_.name;
+    item_meta = method_.item_meta;
+    signature;
     fun_ref =
       translate_binder span
         (fun (m : A.trait_method) ->
@@ -241,9 +247,14 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
       (T.AssocConstId.Map.to_list consts)
   in
   let methods =
-    List.map
+    List.filter_map
       (fun ((method_id, m) : TraitMethodId.id * A.trait_method T.binder) ->
-        translate_trait_method opt_span translate_ty method_id m)
+        let method_ = m.binder_value in
+        if FunDeclId.Map.mem method_.item.id ctx.fun_ctx.to_extract then
+          Some
+            (translate_trait_method ctx opt_span translate_ty trait_decl
+               method_id m)
+        else None)
       (TraitMethodId.Map.to_list methods)
   in
   {

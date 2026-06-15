@@ -3065,21 +3065,16 @@ let extract_trait_decl_method_items_aux (ctx : extraction_ctx)
     (fmt : F.formatter) (decl : trait_decl) (meth : trait_method) : unit =
   (* Lookup the definition *)
   let method_id = meth.method_id in
-  let fn = meth.fun_ref in
-  let trans =
-    let id = A.FunOrMethodId.Method (decl.def_id, method_id) in
-    [%silent_unwrap_opt_span] None
-      (A.FunOrMethodId.Map.find_opt id ctx.trans_funs)
-  in
-  let span = trans.f.item_meta.span in
+  let signature = meth.signature in
+  let span = meth.item_meta.span in
   (* Extract the items *)
   let fun_name = ctx_get_trait_method span decl.def_id method_id ctx in
   let ty () =
-    let method_llbc_generics = fn.binder_llbc_generics in
-    let method_generics = fn.binder_generics in
-    let method_explicit_info = fn.binder_explicit_info in
+    let method_llbc_generics = signature.llbc_generics in
+    let method_generics = signature.generics in
+    let method_explicit_info = signature.explicit_info in
     let ctx, type_params, cg_params, trait_clauses =
-      ctx_add_generic_params span trans.f.item_meta.name Method
+      ctx_add_generic_params span meth.item_meta.name Method
         method_llbc_generics method_generics ctx
     in
     let backend_uses_forall =
@@ -3098,15 +3093,7 @@ let extract_trait_decl_method_items_aux (ctx : extraction_ctx)
 
     (* Extract the inputs and output *)
     F.pp_print_space fmt ();
-    (* We substitute the function item generics in temrs of the trait + method
-       generics. *)
-    let signature = trans.f.signature in
-    let subst =
-      make_subst_from_generics signature.generics fn.binder_value.fun_generics
-    in
     let ({ inputs; output; _ } : fun_sig) = signature in
-    let inputs = List.map (ty_substitute subst) inputs in
-    let output = ty_substitute subst output in
     extract_fun_input_parameters_types span ctx fmt inputs;
     extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:false output
   in
