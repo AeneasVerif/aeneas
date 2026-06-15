@@ -409,8 +409,8 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
               (FunDeclId.Map.find_opt fid decls_ctx.fun_ctx.fun_decls)
               "Could not lookup a function declaration"
           in
-          let dsg = translate_fun_sig_from_decl_to_decomposed decls_ctx fdecl in
-          let sg = translate_fun_sig_from_decomposed dsg in
+          let sigs = translate_fun_sigs_from_decl decls_ctx fdecl in
+          let sg = sigs.sg in
           (* Check that the function lives in the expected effect - otherwise we
                  have to lift it *)
           [%cassert_opt_span] span sg.fwd_info.effect_info.can_fail
@@ -422,9 +422,7 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
             "Unimplemented";
           (* Substitute *)
           let subst = make_subst_from_generics sg.generics generics in
-          let inputs = List.map (ty_substitute subst) sg.inputs in
-          let output = ty_substitute subst sg.output in
-          mk_arrows inputs output
+          ty_substitute subst sigs.ty
       | T.TraitMethod _ -> [%craise_opt_span] span "Unimplemented")
   | TFnPtr _ -> [%craise_opt_span] span "Arrow types are not supported yet"
   | TDynTrait { binder } ->
@@ -1072,6 +1070,13 @@ and translate_fun_sig_from_decl_to_decomposed (decls_ctx : C.decls_ctx)
         (PrintPure.decls_ctx_to_fmt_env decls_ctx)
         sg];
   sg
+
+and translate_fun_sigs_from_decl (decls_ctx : C.decls_ctx)
+    (fdef : LlbcAst.fun_decl) : fun_sigs =
+  let dsg = translate_fun_sig_from_decl_to_decomposed decls_ctx fdef in
+  let sg = translate_fun_sig_from_decomposed dsg in
+  let ty = mk_arrows sg.inputs sg.output in
+  { dsg; sg; ty }
 
 and mk_output_ty_from_effect_info (effect_info : fun_effect_info) (ty : ty) : ty
     =

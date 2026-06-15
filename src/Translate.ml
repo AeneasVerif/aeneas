@@ -373,14 +373,8 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
             [%ltrace
               "Translating the signature of: "
               ^ name_to_string trans_ctx fdef.item_meta.name];
-            let open SymbolicToPureCore in
             let open SymbolicToPureTypes in
-            let dsg =
-              translate_fun_sig_from_decl_to_decomposed trans_ctx fdef
-            in
-            let sg = translate_fun_sig_from_decomposed dsg in
-            let ty = PureUtils.mk_arrows sg.inputs sg.output in
-            let sg : fun_sigs = { dsg; sg; ty } in
+            let sg = translate_fun_sigs_from_decl trans_ctx fdef in
             let id =
               FunsAnalysis.fun_or_method_id_of_fun_decl_id
                 trans_ctx.fun_ctx.fun_infos fdef.def_id
