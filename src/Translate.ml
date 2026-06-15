@@ -182,12 +182,8 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
   in
 
   let sg =
-    let id =
-      FunsAnalysis.fun_or_method_id_of_fun_decl_id trans_ctx.fun_ctx.fun_infos
-        fdef.def_id
-    in
     ([%silent_unwrap] fdef.item_meta.span
-       (FunOrMethodId.Map.find_opt id fun_sigs))
+       (FunOrMethodId.Map.find_opt (FunOrMethodId.Fun fdef.def_id) fun_sigs))
       .dsg
   in
 
@@ -364,9 +360,9 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
       (List.map (fun (d : Pure.global_decl) -> (d.def_id, d)) global_decls)
   in
 
-  (* Compute the fun sigs for the whole crate *)
+  (* Compute the function signatures for the whole crate *)
   let fun_sigs =
-    let fun_sig_entries =
+    let fun_decl_sigs =
       List.filter_map
         (fun (fdef : LlbcAst.fun_decl) ->
           try
@@ -375,11 +371,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
               ^ name_to_string trans_ctx fdef.item_meta.name];
             let open SymbolicToPureTypes in
             let sg = translate_fun_sigs_from_decl trans_ctx fdef in
-            let id =
-              FunsAnalysis.fun_or_method_id_of_fun_decl_id
-                trans_ctx.fun_ctx.fun_infos fdef.def_id
-            in
-            Some (id, sg)
+            Some (FunOrMethodId.Fun fdef.def_id, sg)
           with CFailure error ->
             let name = name_to_string trans_ctx fdef.item_meta.name in
             let name_pattern =
@@ -398,7 +390,37 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
             None)
         (FunDeclId.Map.values trans_ctx.fun_ctx.to_extract)
     in
-    FunOrMethodId.Map.of_list fun_sig_entries
+
+    let method_sigs =
+      let translate_method_sig (trait_decl : LlbcAst.trait_decl)
+          (method_id : TraitMethodId.id)
+          (bound_method : LlbcAst.trait_method Types.binder) =
+        let sg =
+          SymbolicToPureTypes.translate_flat_trait_method_sigs trans_ctx
+            trait_decl method_id bound_method
+        in
+        (FunOrMethodId.Method (trait_decl.def_id, method_id), sg)
+      in
+      let translate_trait_methods (trait_decl : LlbcAst.trait_decl) =
+        List.map
+          (fun (method_id, bound_method) ->
+            translate_method_sig trait_decl method_id bound_method)
+          (List.filter
+             (fun ((_, bound_method) : _ * LlbcAst.trait_method Types.binder) ->
+               let method_ = bound_method.binder_value in
+               FunDeclId.Map.mem method_.item.id trans_ctx.fun_ctx.to_extract)
+             (TraitMethodId.Map.to_list trait_decl.methods))
+      in
+      let entries =
+        List.concat
+          (List.map translate_trait_methods
+             (TraitDeclId.Map.values trans_ctx.trait_decls_to_extract))
+      in
+      FunOrMethodId.Map.of_list entries
+    in
+
+    FunOrMethodId.Map.of_list
+      (FunOrMethodId.Map.bindings method_sigs @ fun_decl_sigs)
   in
 
   (* Translate the signatures of the builtin functions *)
@@ -1444,15 +1466,10 @@ let extract_translated_crate (filename : string) (dest_dir : string)
     Pure.TypeDeclId.Map.of_list
       (List.map (fun (d : Pure.type_decl) -> (d.def_id, d)) trans_types)
   in
-  let trans_funs : pure_fun_translation FunOrMethodId.Map.t =
-    FunOrMethodId.Map.of_list
+  let trans_funs : pure_fun_translation FunDeclId.Map.t =
+    FunDeclId.Map.of_list
       (List.map
-         (fun (trans : pure_fun_translation) ->
-           let id =
-             FunsAnalysis.fun_or_method_id_of_fun_decl_id
-               trans_ctx.fun_ctx.fun_infos trans.f.def_id
-           in
-           (id, trans))
+         (fun (trans : pure_fun_translation) -> (trans.f.def_id, trans))
          trans_funs)
   in
 
@@ -1574,7 +1591,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             );
           ctx)
       ctx
-      (FunOrMethodId.Map.values trans_funs)
+      (FunDeclId.Map.values trans_funs)
   in
 
   let ctx =

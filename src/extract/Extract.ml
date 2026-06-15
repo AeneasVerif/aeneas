@@ -974,7 +974,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
          ]}
       *)
       (match fun_id with
-      | FromLlbc (TraitMethod (trait_ref, method_name, _fun_decl_id), lp_id) ->
+      | FromLlbc (TraitMethod (trait_ref, method_name, _), lp_id) ->
           let trait_decl_id = trait_ref.trait_decl_ref.trait_decl_id in
           let trait_decl =
             TraitDeclId.Map.find trait_decl_id ctx.trans_trait_decls
@@ -1016,22 +1016,17 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
               Some (adjust_explicit_info explicit false generics)
             end
           | FromLlbc (TraitMethod (trait_ref, method_id, _), lp_id) -> begin
-              (* Lookup the function to retrieve the signature information *)
-              let id =
-                A.FunOrMethodId.Method
-                  (trait_ref.trait_decl_ref.trait_decl_id, method_id)
+              [%sanity_check] span (lp_id = None);
+              let trait_decl =
+                TraitDeclId.Map.find trait_ref.trait_decl_ref.trait_decl_id
+                  ctx.trans_trait_decls
               in
-              let trans_fun =
-                [%silent_unwrap] span
-                  (A.FunOrMethodId.Map.find_opt id ctx.trans_funs)
+              let meth =
+                List.find
+                  (fun (meth : trait_method) -> meth.method_id = method_id)
+                  trait_decl.methods
               in
-              let trans_fun =
-                match lp_id with
-                | None -> trans_fun.f
-                | Some (lp_id, true) -> Pure.LoopId.nth trans_fun.bodies lp_id
-                | Some (lp_id, false) -> Pure.LoopId.nth trans_fun.loops lp_id
-              in
-              let explicit = trans_fun.signature.explicit_info in
+              let explicit = meth.signature.explicit_info in
               Some (adjust_explicit_info explicit true generics)
             end
           | FromLlbc (FunId (FBuiltin aid), _) ->

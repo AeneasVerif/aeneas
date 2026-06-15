@@ -32,72 +32,53 @@ type fun_info = {
 }
 [@@deriving show]
 
-(** Various information about a module's functions and trait methods.
-
-    The [fun_decl_id_map] field records the canonical id for every function
-    declaration. The fun_decl backing a trait method definition is refered to
-    using [FunOrMethodId.Method] instead of its fun_decl_id. *)
-type modules_funs_info = {
-  fun_decl_id_map : FunOrMethodId.id FunDeclId.Map.t;
-  infos : fun_info FunOrMethodId.Map.t;
-}
+(** Various information about a module's functions and trait methods. *)
+type modules_funs_info = { infos : fun_info FunOrMethodId.Map.t }
 [@@deriving show]
 
 let lookup_fun_info (infos : modules_funs_info) (id : FunOrMethodId.id) :
     fun_info option =
   FunOrMethodId.Map.find_opt id infos.infos
 
-let fun_or_method_id_of_fun_decl_id (infos : modules_funs_info)
-    (id : FunDeclId.id) : FunOrMethodId.id =
-  [%silent_unwrap_opt_span] None
-    (FunDeclId.Map.find_opt id infos.fun_decl_id_map)
-
-let fun_or_method_id_of_fn_ptr (infos : modules_funs_info) (kind : fn_ptr_kind)
-    : FunOrMethodId.id option =
+let fun_or_method_id_of_fn_ptr (kind : fn_ptr_kind) : FunOrMethodId.id option =
   match kind with
-  | FunId (FRegular id) -> Some (fun_or_method_id_of_fun_decl_id infos id)
+  | FunId (FRegular id) -> Some (FunOrMethodId.Fun id)
   | TraitMethod (trait_ref, method_id, _) ->
       Some (FunOrMethodId.of_trait_method trait_ref method_id)
   | FunId (FBuiltin _) -> None
 
 let lookup_fun_decl_info (infos : modules_funs_info) (id : FunDeclId.id) :
     fun_info option =
-  lookup_fun_info infos (fun_or_method_id_of_fun_decl_id infos id)
+  lookup_fun_info infos (FunOrMethodId.Fun id)
 
 let lookup_fn_ptr_info (infos : modules_funs_info) (kind : fn_ptr_kind) :
     fun_info option =
-  Option.bind (fun_or_method_id_of_fn_ptr infos kind) (lookup_fun_info infos)
-
-let compute_fun_decl_id_map (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
-    FunOrMethodId.id FunDeclId.Map.t =
-  let ids = ref FunDeclId.Map.empty in
-  FunDeclId.Map.iter
-    (fun id _ ->
-      ids := FunDeclId.Map.add id (FunOrMethodId.of_regular_fun_decl_id id) !ids)
-    funs_map;
-  TraitDeclId.Map.iter
-    (fun trait_decl_id (trait_decl : trait_decl) ->
-      Types.TraitMethodId.Map.iter
-        (fun method_id (method_ : trait_method Types.binder) ->
-          let id = method_.binder_value.item.id in
-          let canonical_id = FunOrMethodId.Method (trait_decl_id, method_id) in
-          ids := FunDeclId.Map.add id canonical_id !ids)
-        trait_decl.methods)
-    m.trait_decls;
-  !ids
+  Option.bind (fun_or_method_id_of_fn_ptr kind) (lookup_fun_info infos)
 
 let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     modules_funs_info =
   let fmt_env = Charon.Print.crate_to_fmt_env m in
-  let fun_decl_id_map = compute_fun_decl_id_map m funs_map in
-  let infos = ref { fun_decl_id_map; infos = FunOrMethodId.Map.empty } in
+  let infos = ref { infos = FunOrMethodId.Map.empty } in
   let register_info (id : FunOrMethodId.id) (info : fun_info) : unit =
     assert (not (FunOrMethodId.Map.mem id !infos.infos));
-    infos := { !infos with infos = FunOrMethodId.Map.add id info !infos.infos }
+    infos := { infos = FunOrMethodId.Map.add id info !infos.infos }
   in
   let register_fun_decl_info (id : FunDeclId.id) (info : fun_info) : unit =
-    register_info (fun_or_method_id_of_fun_decl_id !infos id) info
+    register_info (FunOrMethodId.Fun id) info
   in
+  let register_trait_method_info (trait_decl_id : TraitDeclId.id)
+      (method_id : Types.TraitMethodId.id) : unit =
+    register_info
+      (FunOrMethodId.Method (trait_decl_id, method_id))
+      { can_fail = true; stateful = false; can_diverge = false; is_rec = false }
+  in
+
+  TraitDeclId.Map.iter
+    (fun trait_decl_id (trait_decl : trait_decl) ->
+      Types.TraitMethodId.Map.iter
+        (fun method_id _ -> register_trait_method_info trait_decl_id method_id)
+        trait_decl.methods)
+    m.trait_decls;
 
   (* Analyze a group of mutually recursive functions.
    * As the functions can call each other, we compute the same information

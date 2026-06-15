@@ -332,13 +332,13 @@ let bs_ctx_to_pure_fmt_env (ctx : bs_ctx) : PrintPure.fmt_env =
   }
 
 let lookup_fn_ptr_sig (ctx : bs_ctx) (kind : A.fn_ptr_kind) : fun_sigs option =
-  Option.bind (fun_or_method_id_of_fn_ptr ctx.fun_ctx.fun_infos kind) (fun id ->
+  Option.bind (fun_or_method_id_of_fn_ptr kind) (fun id ->
       A.FunOrMethodId.Map.find_opt id ctx.fun_sigs)
 
-let fun_or_method_id_of_pure_fn_ptr (infos : modules_funs_info)
-    (kind : fn_ptr_kind) : A.FunOrMethodId.id option =
+let fun_or_method_id_of_pure_fn_ptr (kind : fn_ptr_kind) :
+    A.FunOrMethodId.id option =
   match kind with
-  | FunId (FRegular id) -> Some (fun_or_method_id_of_fun_decl_id infos id)
+  | FunId (FRegular id) -> Some (A.FunOrMethodId.Fun id)
   | TraitMethod (trait_ref, method_id, _) ->
       Some
         (A.FunOrMethodId.Method
@@ -347,14 +347,12 @@ let fun_or_method_id_of_pure_fn_ptr (infos : modules_funs_info)
 
 let lookup_pure_fn_ptr_sig (ctx : bs_ctx) (kind : fn_ptr_kind) : fun_sigs option
     =
-  Option.bind (fun_or_method_id_of_pure_fn_ptr ctx.fun_ctx.fun_infos kind)
-    (fun id -> A.FunOrMethodId.Map.find_opt id ctx.fun_sigs)
+  Option.bind (fun_or_method_id_of_pure_fn_ptr kind) (fun id ->
+      A.FunOrMethodId.Map.find_opt id ctx.fun_sigs)
 
 let lookup_pure_fn_ptr_info (infos : modules_funs_info) (kind : fn_ptr_kind) :
     fun_info option =
-  Option.bind
-    (fun_or_method_id_of_pure_fn_ptr infos kind)
-    (lookup_fun_info infos)
+  Option.bind (fun_or_method_id_of_pure_fn_ptr kind) (lookup_fun_info infos)
 
 let ctx_generic_args_to_string (ctx : bs_ctx) (args : T.generic_args) : string =
   let env = bs_ctx_to_fmt_env ctx in

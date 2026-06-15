@@ -596,7 +596,7 @@ type extraction_ctx = {
   trait_decl_id : trait_decl_id option;
       (** If we are extracting a trait declaration, identifies it *)
   trans_types : Pure.type_decl Pure.TypeDeclId.Map.t;
-  trans_funs : pure_fun_translation A.FunOrMethodId.Map.t;
+  trans_funs : pure_fun_translation A.FunDeclId.Map.t;
   trans_globals : Pure.global_decl Pure.GlobalDeclId.Map.t;
   builtin_sigs : Pure.fun_sig Builtin.BuiltinFunIdMap.t;
   functions_with_decreases_clause : PureUtils.FunLoopIdSet.t;
@@ -899,11 +899,7 @@ let ctx_get_termination_measure (span : Meta.span) (def_id : A.FunDeclId.id)
 
 let ctx_lookup_fun_decl_info (ctx : extraction_ctx) (id : A.FunDeclId.id) :
     pure_fun_translation option =
-  let id =
-    FunsAnalysis.fun_or_method_id_of_fun_decl_id ctx.trans_ctx.fun_ctx.fun_infos
-      id
-  in
-  A.FunOrMethodId.Map.find_opt id ctx.trans_funs
+  A.FunDeclId.Map.find_opt id ctx.trans_funs
 
 (** Small helper to compute the name of a unary operation *)
 let unop_name (unop : unop) : string =
