@@ -2061,8 +2061,8 @@ h1 : ∀ (i : ℕ) (x : i < s.length), s'[i] = 0#u32
   -- this exists to workaround what is possibly a lean bug.
   -- it can't find dspec the first time you try, but the subsequent ones work just fine.
   -- it also seems to have something to do with the step attribute
-  /-- error: no such spec statement as Aeneas.Std.WP.dspec, valid ones are [Aeneas.Std.WP.spec] -/
-  #guard_msgs in
+  /---/
+  #guard_msgs (substring := true) in
   @[step]
   theorem lean_bug_workaround : Std.WP.dspec (.ok 10) (fun _ => False) := by
     step
