@@ -182,7 +182,13 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
   in
 
   let sg =
-    SymbolicToPureTypes.translate_fun_sig_from_decl_to_decomposed trans_ctx fdef
+    let id =
+      FunsAnalysis.fun_or_method_id_of_fun_decl_id trans_ctx.fun_ctx.fun_infos
+        fdef.def_id
+    in
+    ([%silent_unwrap] fdef.item_meta.span
+       (FunOrMethodId.Map.find_opt id fun_sigs))
+      .dsg
   in
 
   let _, fresh_fvar_id = Pure.FVarId.fresh_stateful_generator () in
