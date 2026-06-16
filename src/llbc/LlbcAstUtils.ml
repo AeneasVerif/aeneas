@@ -61,11 +61,6 @@ let crate_get_opaque_non_builtin_decls (k : crate) (filter_builtin : bool)
   let ctx = Charon.NameMatcher.ctx_from_crate k in
   let is_opaque_fun (d : fun_decl) : bool =
     (not (body_is_known d.body))
-    (* Something to pay attention to: we must ignore trait method *declarations*
-       (which don't have a body but must not be considered as opaque) *)
-    && (match d.src with
-       | TraitDeclItem (_, _, false) -> false
-       | _ -> true)
     && ((not filter_builtin)
        || (not
              (NameMatcherMap.mem ctx d.item_meta.name (builtin_globals_map ())))

@@ -182,7 +182,9 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
   in
 
   let sg =
-    SymbolicToPureTypes.translate_fun_sig_from_decl_to_decomposed trans_ctx fdef
+    ([%silent_unwrap] fdef.item_meta.span
+       (FunOrMethodId.Map.find_opt (FunOrMethodId.Fun fdef.def_id) fun_sigs))
+      .dsg
   in
 
   let _, fresh_fvar_id = Pure.FVarId.fresh_stateful_generator () in
@@ -358,46 +360,67 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
       (List.map (fun (d : Pure.global_decl) -> (d.def_id, d)) global_decls)
   in
 
-  (* Compute the fun sigs for the whole crate *)
+  (* Compute the function signatures for the whole crate *)
   let fun_sigs =
+    let fun_decl_sigs =
+      List.filter_map
+        (fun (fdef : LlbcAst.fun_decl) ->
+          try
+            [%ltrace
+              "Translating the signature of: "
+              ^ name_to_string trans_ctx fdef.item_meta.name];
+            let open SymbolicToPureTypes in
+            let sg = translate_fun_sigs_from_decl trans_ctx fdef in
+            Some (FunOrMethodId.Fun fdef.def_id, sg)
+          with CFailure error ->
+            let name = name_to_string trans_ctx fdef.item_meta.name in
+            let name_pattern =
+              try
+                name_to_pattern_string (Some fdef.item_meta.span) trans_ctx
+                  fdef.item_meta.name
+              with CFailure _ ->
+                "(could not compute the name pattern due to a different error)"
+            in
+            [%warn_opt_span] error.span
+              ("Could not translate the function signature of '" ^ name
+             ^ " because of previous error\nName pattern: '" ^ name_pattern
+             ^ "'" ^ "\nDefinition span: "
+              ^ Errors.raw_span_to_string fdef.item_meta.span
+              ^ compute_local_uses_error_message trans_ctx (IdFun fdef.def_id));
+            None)
+        (FunDeclId.Map.values trans_ctx.fun_ctx.to_extract)
+    in
+
+    let method_sigs =
+      let translate_method_sig (trait_decl : LlbcAst.trait_decl)
+          (method_id : TraitMethodId.id)
+          (bound_method : LlbcAst.trait_method Types.binder) =
+        let sg =
+          SymbolicToPureTypes.translate_flat_trait_method_sigs trans_ctx
+            trait_decl method_id bound_method
+        in
+        (FunOrMethodId.Method (trait_decl.def_id, method_id), sg)
+      in
+      let translate_trait_methods (trait_decl : LlbcAst.trait_decl) =
+        let methods =
+          TraitDeclId.Map.find trait_decl.def_id
+            trans_ctx.trait_methods_to_extract
+        in
+        List.map
+          (fun (method_id, bound_method) ->
+            translate_method_sig trait_decl method_id bound_method)
+          (TraitMethodId.Map.to_list methods)
+      in
+      let entries =
+        List.concat
+          (List.map translate_trait_methods
+             (TraitDeclId.Map.values trans_ctx.trait_decls_to_extract))
+      in
+      FunOrMethodId.Map.of_list entries
+    in
+
     FunOrMethodId.Map.of_list
-      (List.filter_map
-         (fun (fdef : LlbcAst.fun_decl) ->
-           try
-             [%ltrace
-               "Translating the signature of: "
-               ^ name_to_string trans_ctx fdef.item_meta.name];
-             let open SymbolicToPureCore in
-             let open SymbolicToPureTypes in
-             let dsg =
-               translate_fun_sig_from_decl_to_decomposed trans_ctx fdef
-             in
-             let sg = translate_fun_sig_from_decomposed dsg in
-             let ty = PureUtils.mk_arrows sg.inputs sg.output in
-             let sg : fun_sigs = { dsg; sg; ty } in
-             let id =
-               FunsAnalysis.fun_or_method_id_of_fun_decl_id
-                 trans_ctx.fun_ctx.fun_infos fdef.def_id
-             in
-             Some (id, sg)
-           with CFailure error ->
-             let name = name_to_string trans_ctx fdef.item_meta.name in
-             let name_pattern =
-               try
-                 name_to_pattern_string (Some fdef.item_meta.span) trans_ctx
-                   fdef.item_meta.name
-               with CFailure _ ->
-                 "(could not compute the name pattern due to a different error)"
-             in
-             [%warn_opt_span] error.span
-               ("Could not translate the function signature of '" ^ name
-              ^ " because of previous error\nName pattern: '" ^ name_pattern
-              ^ "'" ^ "\nDefinition span: "
-               ^ Errors.raw_span_to_string fdef.item_meta.span
-               ^ compute_local_uses_error_message trans_ctx (IdFun fdef.def_id)
-               );
-             None)
-         (FunDeclId.Map.values trans_ctx.fun_ctx.to_extract))
+      (FunOrMethodId.Map.bindings method_sigs @ fun_decl_sigs)
   in
 
   (* Translate the signatures of the builtin functions *)
@@ -790,12 +813,8 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     Option.get (Charon.GAstUtils.init_fun_id_of_global global)
   in
   let trans =
-    let id =
-      FunsAnalysis.fun_or_method_id_of_fun_decl_id
-        ctx.trans_ctx.fun_ctx.fun_infos global_init
-    in
     [%silent_unwrap_opt_span] None
-      (FunOrMethodId.Map.find_opt id ctx.trans_funs)
+      (ExtractBase.ctx_lookup_fun_decl_info ctx global_init)
   in
   [%sanity_check] global.item_meta.span (trans.loops = [] && trans.bodies = []);
   let body = trans.f in
@@ -1103,13 +1122,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     | FunGroup (NonRecGroup id) -> (
         (* Lookup - the translated function may not be in the map if we had
            to ignore it because of errors *)
-        let pure_fun =
-          let id =
-            FunsAnalysis.fun_or_method_id_of_fun_decl_id
-              ctx.trans_ctx.fun_ctx.fun_infos id
-          in
-          FunOrMethodId.Map.find_opt id ctx.trans_funs
-        in
+        let pure_fun = ExtractBase.ctx_lookup_fun_decl_info ctx id in
         (* Special case: we skip trait method *declarations* (we will
            extract their type directly in the records we generate for
            the trait declarations themselves, there is no point in having
@@ -1117,7 +1130,6 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         match pure_fun with
         | Some pure_fun -> (
             match pure_fun.f.Pure.src with
-            | TraitDeclItem (_, _, false) -> ()
             (* Global initializers are translated along with the global definition *)
             | _ when pure_fun.f.is_global_decl_body -> ()
             | _ ->
@@ -1129,12 +1141,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         (* Lookup *)
         let pure_funs =
           List.filter_map
-            (fun id ->
-              let id =
-                FunsAnalysis.fun_or_method_id_of_fun_decl_id
-                  ctx.trans_ctx.fun_ctx.fun_infos id
-              in
-              FunOrMethodId.Map.find_opt id ctx.trans_funs)
+            (fun id -> ExtractBase.ctx_lookup_fun_decl_info ctx id)
             ids
         in
         if List.exists (fun pf -> pf.f.is_global_decl_body) pure_funs then
@@ -1468,15 +1475,10 @@ let extract_translated_crate (filename : string) (dest_dir : string)
     Pure.TypeDeclId.Map.of_list
       (List.map (fun (d : Pure.type_decl) -> (d.def_id, d)) trans_types)
   in
-  let trans_funs : pure_fun_translation FunOrMethodId.Map.t =
-    FunOrMethodId.Map.of_list
+  let trans_funs : pure_fun_translation FunDeclId.Map.t =
+    FunDeclId.Map.of_list
       (List.map
-         (fun (trans : pure_fun_translation) ->
-           let id =
-             FunsAnalysis.fun_or_method_id_of_fun_decl_id
-               trans_ctx.fun_ctx.fun_infos trans.f.def_id
-           in
-           (id, trans))
+         (fun (trans : pure_fun_translation) -> (trans.f.def_id, trans))
          trans_funs)
   in
 
@@ -1601,7 +1603,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             );
           ctx)
       ctx
-      (FunOrMethodId.Map.values trans_funs)
+      (FunDeclId.Map.values trans_funs)
   in
 
   let ctx =
