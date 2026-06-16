@@ -17,6 +17,14 @@ noncomputable section
 
 namespace issue_1051
 
+/-- Trait declaration: [core::convert::AsRef]
+    Source: '/rustc/library/core/src/convert/mod.rs', lines 219:0-219:52
+    Name pattern: [core::convert::AsRef]
+    Visibility: public -/
+@[rust_trait "core::convert::AsRef"]
+structure core.convert.AsRef (Self : Type) (T : Type) where
+  as_ref : Self → Result T
+
 /-- [core::num::niche_types::NonZeroU8Inner]
     Source: '/rustc/library/core/src/num/niche_types.rs', lines 20:8-20:55
     Name pattern: [core::num::niche_types::NonZeroU8Inner]
@@ -123,5 +131,26 @@ def get_inner
   := do
   core.num.nonzero.NonZero.get
     U8.Insts.CoreNumNonzeroZeroablePrimitiveNonZeroU8Inner x
+
+/-- Trait declaration: [issue_1051::KeySerde]
+    Source: 'tests/src/issue-1051.rs', lines 8:0-13:1
+    Visibility: public -/
+structure KeySerde (Self : Type) where
+  serialize : Self → Result (alloc.vec.Vec Std.U8)
+  deserialize : forall {T : Type} (coreconvertAsRefPSliceU8Inst :
+    core.convert.AsRef T (Slice Std.U8)), T → Result (core.result.Result Self
+    Unit)
+
+/-- Trait declaration: [issue_1051::KeyPairSerde]
+    Source: 'tests/src/issue-1051.rs', lines 15:0-23:1
+    Visibility: public -/
+structure KeyPairSerde (Self : Type) (Self_PublicKey : Type) (Self_PrivateKey :
+  Type) where
+  KeySerdeSelfPublicKeyInst : KeySerde Self_PublicKey
+  KeySerdeSelfPrivateKeyInst : KeySerde Self_PrivateKey
+  from_public_and_private : Slice Std.U8 → Slice Std.U8 → Result
+    (core.result.Result Self Unit)
+  get_public : Self → Result Self_PublicKey
+  get_private : Self → Result Self_PrivateKey
 
 end issue_1051
