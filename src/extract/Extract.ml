@@ -28,67 +28,58 @@ let texpr_to_string (ctx : extraction_ctx) =
 let extract_fun_decl_register_names (ctx : extraction_ctx)
     (has_decreases_clause : fun_decl -> bool) (def : pure_fun_translation) :
     extraction_ctx =
-  match def.f.src with
-  | TraitDeclItem (_, _, false) ->
-      (* Ignore the trait methods **declarations** (rem.: we do not ignore the trait
-         method implementations): we do not need to refer to them directly. We will
-         only use their type for the fields of the records we generate for the trait
-         declarations *)
-      ctx
-  | _ -> (
-      (* Use the builtin names if necessary *)
-      match def.f.builtin_info with
-      | Some info ->
-          (* Builtin function: register the filtering information, if there is *)
-          let ctx =
-            match info.keep_params with
-            | Some keep ->
-                {
-                  ctx with
-                  funs_filter_type_args_map =
-                    FunDeclId.Map.add def.f.def_id keep
-                      ctx.funs_filter_type_args_map;
-                }
-            | _ -> ctx
-          in
-          let ctx =
-            match info.keep_trait_clauses with
-            | Some keep ->
-                {
-                  ctx with
-                  funs_filter_trait_clauses_map =
-                    FunDeclId.Map.add def.f.def_id keep
-                      ctx.funs_filter_trait_clauses_map;
-                }
-            | _ -> ctx
-          in
-          let f = def.f in
-          let fun_id = (Pure.FunId (FRegular f.def_id), f.loop_id) in
-          ctx_add f.item_meta.span (FunId (FromLlbc fun_id)) info.extract_name
-            ctx
-      | None ->
-          (* Not builtin *)
-          (* Register the decrease clauses, if necessary *)
-          let register_decreases ctx def =
-            if has_decreases_clause def then
-              (* Add the termination measure *)
-              let ctx = ctx_add_termination_measure def ctx in
-              (* Add the decreases proof for Lean only *)
-              match backend () with
-              | Coq | FStar -> ctx
-              | HOL4 -> [%craise] def.item_meta.span "Unexpected"
-              | Lean -> ctx_add_decreases_proof def ctx
-            else ctx
-          in
-          (* We have to register the function itself, and the loops it
-             may contain (which are extracted as functions) *)
-          let funs = (def.f :: def.loops) @ def.bodies in
-          (* Register the decrease clauses *)
-          let ctx = List.fold_left register_decreases ctx funs in
-          (* Register the name of the function and the loops *)
-          let register_fun ctx f = ctx_add_fun_decl f ctx in
-          let register_funs ctx fl = List.fold_left register_fun ctx fl in
-          register_funs ctx funs)
+  (* Use the builtin names if necessary *)
+  match def.f.builtin_info with
+  | Some info ->
+      (* Builtin function: register the filtering information, if there is *)
+      let ctx =
+        match info.keep_params with
+        | Some keep ->
+            {
+              ctx with
+              funs_filter_type_args_map =
+                FunDeclId.Map.add def.f.def_id keep
+                  ctx.funs_filter_type_args_map;
+            }
+        | _ -> ctx
+      in
+      let ctx =
+        match info.keep_trait_clauses with
+        | Some keep ->
+            {
+              ctx with
+              funs_filter_trait_clauses_map =
+                FunDeclId.Map.add def.f.def_id keep
+                  ctx.funs_filter_trait_clauses_map;
+            }
+        | _ -> ctx
+      in
+      let f = def.f in
+      let fun_id = (Pure.FunId (FRegular f.def_id), f.loop_id) in
+      ctx_add f.item_meta.span (FunId (FromLlbc fun_id)) info.extract_name ctx
+  | None ->
+      (* Not builtin *)
+      (* Register the decrease clauses, if necessary *)
+      let register_decreases ctx def =
+        if has_decreases_clause def then
+          (* Add the termination measure *)
+          let ctx = ctx_add_termination_measure def ctx in
+          (* Add the decreases proof for Lean only *)
+          match backend () with
+          | Coq | FStar -> ctx
+          | HOL4 -> [%craise] def.item_meta.span "Unexpected"
+          | Lean -> ctx_add_decreases_proof def ctx
+        else ctx
+      in
+      (* We have to register the function itself, and the loops it
+         may contain (which are extracted as functions) *)
+      let funs = (def.f :: def.loops) @ def.bodies in
+      (* Register the decrease clauses *)
+      let ctx = List.fold_left register_decreases ctx funs in
+      (* Register the name of the function and the loops *)
+      let register_fun ctx f = ctx_add_fun_decl f ctx in
+      let register_funs ctx fl = List.fold_left register_fun ctx fl in
+      register_funs ctx funs
 
 (** Simply add the global name to the context. *)
 let extract_global_decl_register_names (ctx : extraction_ctx)
@@ -974,7 +965,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
          ]}
       *)
       (match fun_id with
-      | FromLlbc (TraitMethod (trait_ref, method_name, _), lp_id) ->
+      | FromLlbc (TraitMethod (trait_ref, method_name), lp_id) ->
           let trait_decl_id = trait_ref.trait_decl_ref.trait_decl_id in
           let trait_decl =
             TraitDeclId.Map.find trait_decl_id ctx.trans_trait_decls
@@ -1015,7 +1006,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
               let explicit = trans_fun.signature.explicit_info in
               Some (adjust_explicit_info explicit false generics)
             end
-          | FromLlbc (TraitMethod (trait_ref, method_id, _), lp_id) -> begin
+          | FromLlbc (TraitMethod (trait_ref, method_id), lp_id) -> begin
               [%sanity_check] span (lp_id = None);
               let trait_decl =
                 TraitDeclId.Map.find trait_ref.trait_decl_ref.trait_decl_id
@@ -2490,7 +2481,7 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
   in
   let trait_default =
     match decl.src with
-    | TraitDeclItem (_, _, true) -> [ "trait_default" ]
+    | TraitDeclItem _ -> [ "trait_default" ]
     | _ -> []
   in
   let attributes = attributes @ trait_default in
@@ -2870,8 +2861,9 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
             | Some info ->
                 let fun_name = info.extract_name in
                 let default_id =
-                  if info.has_default then Some meth.fun_ref.binder_value.fun_id
-                  else None
+                  Option.map
+                    (fun (default : fun_decl_ref) -> default.fun_id)
+                    meth.default.binder_value
                 in
                 (meth.method_id, default_id, fun_name))
           methods
@@ -3356,7 +3348,7 @@ let extract_trait_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
   (* The  methods *)
   List.iter
     (fun meth ->
-      let explicit_info = meth.fun_ref.binder_explicit_info in
+      let explicit_info = meth.default.binder_explicit_info in
       (* TODO: this looks incorrect, we should instantiate the binder properly *)
       let params =
         params

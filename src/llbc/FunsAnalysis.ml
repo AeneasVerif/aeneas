@@ -43,7 +43,7 @@ let lookup_fun_info (infos : modules_funs_info) (id : FunOrMethodId.id) :
 let fun_or_method_id_of_fn_ptr (kind : fn_ptr_kind) : FunOrMethodId.id option =
   match kind with
   | FunId (FRegular id) -> Some (FunOrMethodId.Fun id)
-  | TraitMethod (trait_ref, method_id, _) ->
+  | TraitMethod (trait_ref, method_id) ->
       Some (FunOrMethodId.of_trait_method trait_ref method_id)
   | FunId (FBuiltin _) -> None
 

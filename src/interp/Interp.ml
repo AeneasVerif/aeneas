@@ -193,7 +193,7 @@ let compute_contexts (crate : crate) : decls_ctx =
         (* Include a method if an implementation of it is in the extracted functions. *)
         method! visit_item_source env (src : item_source) =
           (match src with
-          | TraitDeclItem (trait_ref, AssocIdMethod method_id, _)
+          | TraitDeclItem (trait_ref, AssocIdMethod method_id)
           | TraitImplItem (_, trait_ref, AssocIdMethod method_id, _) ->
               add_trait_method_id trait_ref.id method_id
           | _ -> ());
@@ -202,7 +202,7 @@ let compute_contexts (crate : crate) : decls_ctx =
         (* Include a method if it is mentioned in the extracted functions. *)
         method! visit_fn_ptr env fn_ptr =
           (match fn_ptr.kind with
-          | TraitMethod (trait_ref, method_id, _) ->
+          | TraitMethod (trait_ref, method_id) ->
               let trait_decl_id = trait_ref.trait_decl_ref.binder_value.id in
               add_trait_method_id trait_decl_id method_id
           | _ -> ());
@@ -215,6 +215,13 @@ let compute_contexts (crate : crate) : decls_ctx =
     List.iter
       (visitor#visit_global_decl ())
       (GlobalDeclId.Map.values global_decls_to_extract);
+    TraitDeclId.Map.iter
+      (fun trait_decl_id (trait_decl : trait_decl) ->
+        TraitMethodId.Map.iter
+          (fun method_id (_method : trait_method binder) ->
+            add_trait_method_id trait_decl_id method_id)
+          trait_decl.methods)
+      trait_decls_to_extract;
 
     TraitDeclId.Map.mapi
       (fun trait_decl_id (trait_decl : trait_decl) ->

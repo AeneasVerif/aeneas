@@ -178,10 +178,10 @@ let translate_trait_method (ctx : Contexts.decls_ctx) (span : span option)
     item_name = method_.name;
     item_meta = method_.item_meta;
     signature;
-    fun_ref =
+    default =
       translate_binder span
         (fun (m : A.trait_method) ->
-          translate_fun_decl_ref span translate_ty m.item)
+          Option.map (translate_fun_decl_ref span translate_ty) m.default)
         bound_method;
   }
 

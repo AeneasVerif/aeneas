@@ -1044,9 +1044,8 @@ and translate_fun_sigs_from_decomposed (dsg : Pure.decomposed_fun_sig) :
 
 and translate_flat_trait_method_sigs (decls_ctx : C.decls_ctx)
     (trait_decl : A.trait_decl) (method_id : TraitMethodId.id)
-    (bound_method : A.trait_method T.binder) : fun_sigs =
+    (_bound_method : A.trait_method T.binder) : fun_sigs =
   let span = trait_decl.item_meta.span in
-  let method_ = bound_method.binder_value in
   let trait_decl_ref : T.trait_decl_ref T.region_binder =
     let generics =
       Charon.TypesUtils.generic_args_of_params (Some span) trait_decl.generics
@@ -1058,7 +1057,7 @@ and translate_flat_trait_method_sigs (decls_ctx : C.decls_ctx)
   in
   let trait_ref = ({ kind = T.Self; trait_decl_ref } : T.trait_ref) in
   let trait_ref = translate_fwd_trait_ref (Some span) decls_ctx trait_ref in
-  let fun_id = TraitMethod (trait_ref, method_id, method_.item.id) in
+  let fun_id = TraitMethod (trait_ref, method_id) in
   let sg =
     [%silent_unwrap_opt_span] (Some span)
       (Substitute.lookup_flat_method_sig decls_ctx.crate trait_decl.def_id

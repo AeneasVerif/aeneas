@@ -1124,7 +1124,6 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         match pure_fun with
         | Some pure_fun -> (
             match pure_fun.f.Pure.src with
-            | TraitDeclItem (_, _, false) -> ()
             (* Global initializers are translated along with the global definition *)
             | _ when pure_fun.f.is_global_decl_body -> ()
             | _ ->
