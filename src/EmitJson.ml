@@ -15,16 +15,14 @@ type loop_info = {
     entries. Non-loop entries have neither. All other fields are always emitted.
 *)
 type entry = {
-  def_id : int;
-      (** Charon [FunDeclId] reified to a plain int. *)
+  def_id : int;  (** Charon [FunDeclId] reified to a plain int. *)
   lean_name : string;
   lean_file : string;
   is_opaque : bool;
       (** [true] when Aeneas extracted the declaration as an axiom. *)
   can_fail : bool;
       (** [true] when the function's return type is wrapped in [Result]. *)
-  can_diverge : bool;
-      (** [true] when the function may not terminate. *)
+  can_diverge : bool;  (** [true] when the function may not terminate. *)
   is_rec : bool;
       (** [true] when the function is part of a mutually recursive group. *)
   reducible : bool;
@@ -50,8 +48,7 @@ type global_entry = {
 (** Where the manifest itself sits and which backend files Aeneas wrote. *)
 type output_info = {
   subdir : string option; [@default None]
-  llbc_file : string;
-      (** Basename of the [.llbc] input file. *)
+  llbc_file : string;  (** Basename of the [.llbc] input file. *)
   lean_files : string list;
       (** Lean files written, relative to the directory containing this file. *)
 }
