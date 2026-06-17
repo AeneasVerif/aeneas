@@ -1,78 +1,44 @@
-(** Emit a [translation.json] file alongside the extracted Lean files.
-
-    The file contains the Aeneas-only data which connects the Lean translation
-    to the original Rust code. It does NOT duplicate any data already present in
-    the input [.llbc] file.
-
-    The [translation.json] and the LLBC share the [def_id] field, as the join
-    key linking each entry back to its source declaration in the LLBC. *)
-
-(* ------------------------------------------------------------------------ *)
-(* Schema                                                                   *)
-(*                                                                          *)
-(* Each type carries [@@deriving to_yojson] so the JSON serialiser is       *)
-(* auto-generated. Attributes:                                              *)
-(*   [@key "name"]      – rename the JSON field                             *)
-(*   [@default None]    – omit the field entirely when the value is [None]. *)
-(*                        (ppx_deriving_yojson omits a field on output when  *)
-(*                        it equals its [@default]; note [@yojson.option] is  *)
-(*                        a ppx_yojson_conv attribute and is NOT honoured     *)
-(*                        here.)                                              *)
-(* ------------------------------------------------------------------------ *)
+(** Emit a translation.json file alongside the extracted Lean files. This file
+    contains the Aeneas data which connects the Lean translation to the Rust
+    code. *)
 
 type loop_info = {
   loop_id_idx : int; [@key "id"]
   loop_pos : int list; [@key "pos"]
-      (** Nesting position of this loop in the source function: [[0]] is the
-          first loop at top level, [[0; 1]] is the second nested loop inside it,
-          etc. Mirrors [Pure.fun_decl.loop_pos]. *)
   is_body : bool;
 }
 [@@deriving to_yojson]
 
-(** One emitted Lean function declaration.
+(** Lean function declaration.
 
     [loop] and [parent_lean_name] are present only on loop-wrapper / loop-body
     entries. Non-loop entries have neither. All other fields are always emitted.
 *)
 type entry = {
   def_id : int;
-      (** Charon [FunDeclId] reified to a plain int. The single LLBC-derived
-          field, kept as a join key. Several manifest entries can share the same
-          [def_id]: a Rust fn with N loops produces 1 + 2N entries (the parent,
-          plus a wrapper and body for each loop) all sharing the parent's
-          [def_id]; their [lean_name] / [loop] field disambiguate. *)
+      (** Charon [FunDeclId] reified to a plain int. *)
   lean_name : string;
   lean_file : string;
   is_opaque : bool;
-      (** [true] when Aeneas extracted the declaration as an axiom (no body in
-          the Pure AST). LLBC always carries a body field, so the
-          opaque/non-opaque distinction is post-translation. *)
+      (** [true] when Aeneas extracted the declaration as an axiom. *)
   can_fail : bool;
-      (** [true] when the function's return type is wrapped in [Result] — i.e.
-          the function can panic. Computed by the symbolic interpreter, not
-          present in LLBC. *)
+      (** [true] when the function's return type is wrapped in [Result]. *)
   can_diverge : bool;
-      (** [true] when the function may not terminate (recursive, contains a
-          loop, or transitively calls a divergent function). *)
+      (** [true] when the function may not terminate. *)
   is_rec : bool;
-      (** [true] when the function is part of a (mutually) recursive group. *)
+      (** [true] when the function is part of a mutually recursive group. *)
   reducible : bool;
-      (** [true] when Aeneas marks the Lean def with [@[reducible]] (set by
-          [PureMicroPasses.compute_reducible] for trivial wrapper bodies). *)
+      (** [true] when Aeneas marks the Lean def with [@[reducible]]. *)
   loop : loop_info option; [@default None] [@key "loop"]
   parent_lean_name : string option; [@default None]
 }
 [@@deriving to_yojson]
 
-(** One emitted Lean type declaration. The LLBC carries every other fact about a
-    type Aeneas needs, so the manifest only records the join key, the chosen
-    Lean name, and the file it was written into. *)
+(** Lean type declaration. *)
 type type_entry = { def_id : int; lean_name : string; lean_file : string }
 [@@deriving to_yojson]
 
-(** One emitted Lean global declaration. [can_fail] is the only Aeneas-derived
-    semantic fact (mirrors [Pure.global_decl.can_fail]). *)
+(** Lean global declaration. *)
 type global_entry = {
   def_id : int;
   lean_name : string;
@@ -81,13 +47,11 @@ type global_entry = {
 }
 [@@deriving to_yojson]
 
-(** Output-routing info: where the manifest itself sits and which backend files
-    Aeneas wrote, all chosen by Aeneas based on CLI flags. *)
+(** Where the manifest itself sits and which backend files Aeneas wrote. *)
 type output_info = {
   subdir : string option; [@default None]
   llbc_file : string;
-      (** Basename of the [.llbc] input file. Stored as a basename only so that
-          [translation.json] is machine-independent. *)
+      (** Basename of the [.llbc] input file. *)
   lean_files : string list;
       (** Lean files written, relative to the directory containing this file. *)
 }
@@ -96,13 +60,9 @@ type output_info = {
 type envelope = {
   aeneas_version : string;
   charon_version : string;
-      (** The version of charon that emitted the [.llbc] input. Aeneas only
-          accepts an [.llbc] whose stamp matches the charon-ml version it was
-          built against, so this is also the charon-ml version. *)
+      (** The version of charon that emitted the [.llbc] input. *)
   crate_name : string; [@key "crate"]
-      (** Identifier of the source Rust crate. Surfaces the LLBC's [crate.name]
-          at the envelope level so the manifest is self-describing without
-          requiring access to the [.llbc]. *)
+      (** Identifier of the source Rust crate. *)
   output : output_info;
   functions : entry list;
   types : type_entry list;
@@ -113,12 +73,10 @@ type envelope = {
 (* ------------------------------------------------------------------------ *)
 (* Mutable accumulator state                                                *)
 (*                                                                          *)
-(* The state lives as a module-local singleton rather than as a field on    *)
-(* [extraction_ctx] so this feature touches no upstream record types. One   *)
-(* aeneas process translates one crate, so a singleton is appropriate.      *)
-(* Lifecycle: [init] at the start of [extract_translated_crate],            *)
-(* [begin_file] at the top of every [extract_file], [record_*] called from  *)
-(* the export-* hooks, [write_if_enabled] once at the end.                  *)
+(* Lifecycle: [init_if_enabled] at the start of [extract_translated_crate], *)
+(* [begin_file_if_enabled] at the top of every [extract_file],              *)
+(* [record_*_if_enabled] called from the export-* hooks,                    *)
+(* [write_if_enabled] once at the end.                                      *)
 (* ------------------------------------------------------------------------ *)
 
 type state = {
@@ -144,17 +102,19 @@ let make_state () : state =
 
 let state : state = make_state ()
 
-let init ~(dest_dir : string) : unit =
-  state.function_entries <- [];
-  state.type_entries <- [];
-  state.global_entries <- [];
-  state.lean_files <- [];
-  state.current_lean_file <- "";
-  state.current_lean_namespace <- "";
-  state.dest_dir <- dest_dir
+let init_if_enabled ~(dest_dir : string) : unit =
+  if !Config.emit_json then begin
+    state.function_entries <- [];
+    state.type_entries <- [];
+    state.global_entries <- [];
+    state.lean_files <- [];
+    state.current_lean_file <- "";
+    state.current_lean_namespace <- "";
+    state.dest_dir <- dest_dir
+  end
 
 (* ------------------------------------------------------------------------ *)
-(* Entry construction (depends on ExtractBase)                              *)
+(* Entry construction                                                       *)
 (* ------------------------------------------------------------------------ *)
 
 let qualify (basename : string) : string =
@@ -221,10 +181,10 @@ let global_entry_of_global_decl (ctx : ExtractBase.extraction_ctx)
   }
 
 (* ------------------------------------------------------------------------ *)
-(* Pipeline hooks (no-ops when [-emit-json] is off)                         *)
+(* Pipeline hooks (no-ops when -emit-json is off)                           *)
 (* ------------------------------------------------------------------------ *)
 
-let begin_file ~(filename : string) ~(namespace : string) : unit =
+let begin_file_if_enabled ~(filename : string) ~(namespace : string) : unit =
   if !Config.emit_json then begin
     let rel_lean_file =
       let dest = Filename.concat state.dest_dir "" in
@@ -238,18 +198,19 @@ let begin_file ~(filename : string) ~(namespace : string) : unit =
     state.lean_files <- rel_lean_file :: state.lean_files
   end
 
-let record_fun (ctx : ExtractBase.extraction_ctx) (def : Pure.fun_decl) : unit =
+let record_fun_if_enabled (ctx : ExtractBase.extraction_ctx)
+    (def : Pure.fun_decl) : unit =
   if !Config.emit_json then
     state.function_entries <-
       entry_of_fun_decl ctx def :: state.function_entries
 
-let record_type (ctx : ExtractBase.extraction_ctx) (def : Pure.type_decl) : unit
-    =
+let record_type_if_enabled (ctx : ExtractBase.extraction_ctx)
+    (def : Pure.type_decl) : unit =
   if !Config.emit_json then
     state.type_entries <- type_entry_of_type_decl ctx def :: state.type_entries
 
-let record_global (ctx : ExtractBase.extraction_ctx) (def : Pure.global_decl) :
-    unit =
+let record_global_if_enabled (ctx : ExtractBase.extraction_ctx)
+    (def : Pure.global_decl) : unit =
   if !Config.emit_json then
     state.global_entries <-
       global_entry_of_global_decl ctx def :: state.global_entries
@@ -266,13 +227,13 @@ let write (path : string) (env : envelope) : unit =
       Yojson.Safe.pretty_to_channel out (envelope_to_yojson env);
       output_char out '\n')
 
-let write_if_enabled ~(aeneas_version : string) ~(crate_name : string)
-    ~(subdir : string option) ~(llbc_file : string) : string option =
+let write_if_enabled ~(crate_name : string) ~(subdir : string option)
+    ~(llbc_file : string) : string option =
   if !Config.emit_json then begin
     let path = Filename.concat state.dest_dir "translation.json" in
     write path
       {
-        aeneas_version;
+        aeneas_version = Option.value GitVersion.commit ~default:"unknown";
         charon_version = Charon.CharonVersion.supported_charon_version;
         crate_name;
         output =

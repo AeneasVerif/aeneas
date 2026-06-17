@@ -4,9 +4,7 @@ When Aeneas is invoked with `-emit-json` (Lean backend only) it writes a `transl
 
 ## Purpose
 
-The manifest describes **what Aeneas did**: the Lean declarations it produced and their connection to the original Rust source. It records data that exists only after translation and is not present in the `.llbc` input. It does **not** duplicate facts already available in the `.llbc`.
-
-Consumers join the two artefacts via `def_id`.
+The manifest describes **what Aeneas did**: the Lean declarations it produced and their connection to the original Rust source. Generally it records data that exists only after translation and is not present in the `.llbc` input. Consumers join the two artefacts via `def_id`.
 
 ## Location
 
@@ -51,4 +49,4 @@ Consumers join the two artefacts via `def_id`.
 
 **Loop position** (`loop.pos`): nesting path of the loop in the source function. `[0]` is the first top-level loop, `[0, 1]` is the second loop nested inside it, etc. Matches `Pure.fun_decl.loop_pos`.
 
-**One Rust function, many entries**: a function with N loops produces 1 + 2N entries all sharing the same `def_id` — the parent, a wrapper, and a body for each loop.
+**One Rust function, many entries**: a function with several loops produces multiple entries all sharing the same `def_id`.
