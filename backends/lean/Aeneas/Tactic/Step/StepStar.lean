@@ -840,20 +840,6 @@ where
     try some <$> Step.evalStepCore cfg.stepConfig (some (.str .anonymous "_")) none ids false postsBasename cfg.preconditionTac ss
     catch _ => pure none
 
-  makeIds (base: Name) (numElem numPost : Nat) (defaultId := "x"): Array (TSyntax ``Lean.binderIdent) :=
-    let (root, base?) := match base with
-      | .str root base => (root, some base)
-      | .num root _ => (root, none)
-      | .anonymous => (.anonymous, none)
-    let base := base?.getD defaultId
-    let optionallyEnumerated base num := match num with
-      | 0 => #[]
-      | 1 => #[Name.str root base]
-      | num => Array.ofFn fun (i: Fin num) => Name.str root s!"{base}_{i.val+1}"
-    let elemNames := optionallyEnumerated base numElem
-    let postNames := optionallyEnumerated s!"{base}_post" numPost
-    elemNames ++ postNames |>.map (mkNode ``Lean.binderIdent #[mkIdent ·])
-
   makeCaseArgs tag names :=
     let tag := Lean.mkNode ``Lean.binderIdent #[mkIdent tag]
     let binderIdents := names.map nameToBinderIdent
