@@ -37,7 +37,7 @@ Consumers join the two artefacts via `def_id`.
 | Field | Always present | Meaning |
 |---|---|---|
 | `def_id` | yes | `FunDeclId` (join key into `.llbc`) |
-| `lean_id` | yes | Fully-qualified Lean name (`Namespace.BaseName`) |
+| `lean_name` | yes | Fully-qualified Lean name (`Namespace.Name`) |
 | `lean_file` | yes | Path relative to `dest_dir` |
 | `is_opaque` | yes | Extracted as an axiom (no body in the Pure AST) |
 | `can_fail` | yes | Return type wrapped in `Result` (function can panic) |
@@ -45,9 +45,9 @@ Consumers join the two artefacts via `def_id`.
 | `is_rec` | yes | Part of a mutually recursive group |
 | `reducible` | yes | Marked `@[reducible]` by Aeneas |
 | `loop` | loop entries only | `{ "id": N, "pos": [...], "is_body": bool }` |
-| `parent_lean_id` | loop entries only | `lean_id` of the enclosing Rust function |
+| `parent_lean_name` | loop entries only | `lean_name` of the enclosing Rust function |
 
-`loop` and `parent_lean_id` appear together or not at all.
+`loop` and `parent_lean_name` appear together or not at all.
 
 **Loop position** (`loop.pos`): nesting path of the loop in the source function. `[0]` is the first top-level loop, `[0, 1]` is the second loop nested inside it, etc. Matches `Pure.fun_decl.loop_pos`.
 

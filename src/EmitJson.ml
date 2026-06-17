@@ -13,7 +13,11 @@
 (* Each type carries [@@deriving to_yojson] so the JSON serialiser is       *)
 (* auto-generated. Attributes:                                              *)
 (*   [@key "name"]      – rename the JSON field                             *)
-(*   [@yojson.option]   – omit the field entirely when the value is [None]  *)
+(*   [@default None]    – omit the field entirely when the value is [None]. *)
+(*                        (ppx_deriving_yojson omits a field on output when  *)
+(*                        it equals its [@default]; note [@yojson.option] is  *)
+(*                        a ppx_yojson_conv attribute and is NOT honoured     *)
+(*                        here.)                                              *)
 (* ------------------------------------------------------------------------ *)
 
 type loop_info = {
@@ -28,7 +32,7 @@ type loop_info = {
 
 (** One emitted Lean function declaration.
 
-    [loop] and [parent_lean_id] are present only on loop-wrapper / loop-body
+    [loop] and [parent_lean_name] are present only on loop-wrapper / loop-body
     entries. Non-loop entries have neither. All other fields are always emitted.
 *)
 type entry = {
@@ -37,8 +41,8 @@ type entry = {
           field, kept as a join key. Several manifest entries can share the same
           [def_id]: a Rust fn with N loops produces 1 + 2N entries (the parent,
           plus a wrapper and body for each loop) all sharing the parent's
-          [def_id]; their [lean_id] / [loop] field disambiguate. *)
-  lean_id : string;
+          [def_id]; their [lean_name] / [loop] field disambiguate. *)
+  lean_name : string;
   lean_file : string;
   is_opaque : bool;
       (** [true] when Aeneas extracted the declaration as an axiom (no body in
@@ -56,22 +60,22 @@ type entry = {
   reducible : bool;
       (** [true] when Aeneas marks the Lean def with [@[reducible]] (set by
           [PureMicroPasses.compute_reducible] for trivial wrapper bodies). *)
-  loop : loop_info option; [@yojson.option] [@key "loop"]
-  parent_lean_id : string option; [@yojson.option]
+  loop : loop_info option; [@default None] [@key "loop"]
+  parent_lean_name : string option; [@default None]
 }
 [@@deriving to_yojson]
 
 (** One emitted Lean type declaration. The LLBC carries every other fact about a
     type Aeneas needs, so the manifest only records the join key, the chosen
     Lean name, and the file it was written into. *)
-type type_entry = { def_id : int; lean_id : string; lean_file : string }
+type type_entry = { def_id : int; lean_name : string; lean_file : string }
 [@@deriving to_yojson]
 
 (** One emitted Lean global declaration. [can_fail] is the only Aeneas-derived
     semantic fact (mirrors [Pure.global_decl.can_fail]). *)
 type global_entry = {
   def_id : int;
-  lean_id : string;
+  lean_name : string;
   lean_file : string;
   can_fail : bool;
 }
@@ -80,7 +84,7 @@ type global_entry = {
 (** Output-routing info: where the manifest itself sits and which backend files
     Aeneas wrote, all chosen by Aeneas based on CLI flags. *)
 type output_info = {
-  subdir : string option; [@yojson.option]
+  subdir : string option; [@default None]
   llbc_file : string;
       (** Basename of the [.llbc] input file. Stored as a basename only so that
           [translation.json] is machine-independent. *)
@@ -161,10 +165,10 @@ let qualify (basename : string) : string =
 let entry_of_fun_decl (ctx : ExtractBase.extraction_ctx) (def : Pure.fun_decl) :
     entry =
   let span = def.item_meta.span in
-  let lean_id =
+  let lean_name =
     qualify (ExtractBase.ctx_get_local_function span def.def_id def.loop_id ctx)
   in
-  let parent_lean_id =
+  let parent_lean_name =
     match def.loop_id with
     | None -> None
     | Some _ ->
@@ -186,7 +190,7 @@ let entry_of_fun_decl (ctx : ExtractBase.extraction_ctx) (def : Pure.fun_decl) :
   let eff = def.signature.fwd_info.effect_info in
   {
     def_id = Pure.FunDeclId.to_int def.def_id;
-    lean_id;
+    lean_name;
     lean_file = state.current_lean_file;
     is_opaque = Option.is_none def.body;
     can_fail = eff.can_fail;
@@ -194,7 +198,7 @@ let entry_of_fun_decl (ctx : ExtractBase.extraction_ctx) (def : Pure.fun_decl) :
     is_rec = eff.is_rec;
     reducible = def.backend_attributes.reducible;
     loop;
-    parent_lean_id;
+    parent_lean_name;
   }
 
 let type_entry_of_type_decl (ctx : ExtractBase.extraction_ctx)
@@ -202,7 +206,7 @@ let type_entry_of_type_decl (ctx : ExtractBase.extraction_ctx)
   let span = def.item_meta.span in
   {
     def_id = Pure.TypeDeclId.to_int def.def_id;
-    lean_id = qualify (ExtractBase.ctx_get_local_type span def.def_id ctx);
+    lean_name = qualify (ExtractBase.ctx_get_local_type span def.def_id ctx);
     lean_file = state.current_lean_file;
   }
 
@@ -211,7 +215,7 @@ let global_entry_of_global_decl (ctx : ExtractBase.extraction_ctx)
   let span = def.item_meta.span in
   {
     def_id = Pure.GlobalDeclId.to_int def.def_id;
-    lean_id = qualify (ExtractBase.ctx_get_global span def.def_id ctx);
+    lean_name = qualify (ExtractBase.ctx_get_global span def.def_id ctx);
     lean_file = state.current_lean_file;
     can_fail = def.can_fail;
   }
