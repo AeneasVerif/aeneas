@@ -19,7 +19,14 @@ jobs:
         run: |
           set -eo pipefail
 
-          TAG_NAME="nightly-$(date +'%Y.%m.%d')"
+          SHORT_SHA="$(git rev-parse --short HEAD)"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # Manual run
+            TAG_NAME="build-${SHORT_SHA}"
+          else
+            # Scheduled run
+            TAG_NAME="nightly-$(date +'%Y.%m.%d')-${SHORT_SHA}"
+          fi
           echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Create Release
@@ -81,10 +88,14 @@ jobs:
           restore-prefixes-first-match: ${{ matrix.os }}-release
 
       - name: Package
+        env:
+          # The release tag reported by `aeneas -version`.
+          # `--impure` is required for nix to read the env var.
+          AENEAS_RELEASE_VERSION: ${{ needs.prepare.outputs.tag_name }}
         run: |
           set -eo pipefail
 
-          nix build -L .#${{ matrix.nix_attr }}
+          nix build -L --impure .#${{ matrix.nix_attr }}
           mkdir dist_staging
           cp -R result/. dist_staging/
           # Nix preserves read-only permissions from the store, so we must make files writable.
