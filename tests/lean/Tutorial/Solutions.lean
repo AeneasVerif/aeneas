@@ -472,8 +472,8 @@ theorem pseudo_random_spec :
     simp [*]
     unfold dummy_hash
     simp
-    -- note that here, i am refraining from using the result of dummy_hash,
-    -- since its supposed to represent a hash function where we can't predict the result,
+    -- note that here, I am refraining from using the result of dummy_hash,
+    -- since it's supposed to represent a hash function where we can't predict the result,
     -- but it actually is just a constant
     step
     grind
