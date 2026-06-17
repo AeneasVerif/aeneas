@@ -51,9 +51,13 @@ structure core.iter.adapters.rev.Rev (T : Type u) where
 structure core.iter.traits.iterator.Iterator (Self : Type) (Self_Item : Type)
   where
   next : Self → Result ((Option Self_Item) × Self)
-  step_by : Self → Usize → Result (core.iter.adapters.step_by.StepBy Self)
-  enumerate : Self → Result (core.iter.adapters.enumerate.Enumerate Self)
-  take : Self → Usize → Result (core.iter.adapters.take.Take Self)
+  step_by : Self → Usize → Result (core.iter.adapters.step_by.StepBy Self) :=
+    fun self step_by =>
+      if step_by.val = 0 then .fail .panic else .ok ⟨ self, step_by ⟩
+  enumerate : Self → Result (core.iter.adapters.enumerate.Enumerate Self) :=
+    fun self => .ok { iter := self, count := 0#usize }
+  take : Self → Usize → Result (core.iter.adapters.take.Take Self) :=
+    fun self n => .ok ⟨ self, n ⟩
   -- rev : Self → Result (core.iter.adapters.rev.Rev Self) -- requires DoubleEndedIterator, leading to circularity
   -- TODO: collect
 

@@ -3652,9 +3652,19 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
       (List.combine trait_decl.implied_clauses impl.parent_trait_refs);
 
     (* The methods *)
+    let pure_trait_decl =
+      TraitDeclId.Map.find trait_decl_id ctx.trans_trait_decls
+    in
+    let keep_method (item_name : string) : bool =
+      match pure_trait_decl.builtin_info with
+      | None -> true
+      | Some info ->
+          List.exists (fun (name, _) -> name = item_name) info.methods
+    in
     List.iter
-      (fun (method_id, _name, bound_fn) ->
-        extract_trait_impl_method_items ctx fmt impl method_id bound_fn)
+      (fun (method_id, name, bound_fn) ->
+        if keep_method name then
+          extract_trait_impl_method_items ctx fmt impl method_id bound_fn)
       impl.methods;
 
     (* Close the outer boxes for the definition, as well as the brackets *)
