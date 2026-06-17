@@ -2257,7 +2257,7 @@ info: g_prefix_eq : ∀ (x : U32),
 info: def Aeneas.Command.Decompose.Tests.test57_ns.g_prefix : U32 →
   Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
 fun x => do
-  let (a, b, c, d) ←
+  let ((a, b), (c, d)) ←
     do
       let v ← x + 1#u32
       let w ← x + 2#u32
@@ -2268,6 +2268,126 @@ fun x => do
 #print g_prefix
 
 end test57_ns
+
+-- ============================================================================
+-- Test 57b: Nested tuple — ((a, b), (c, d), (e, f))
+-- ============================================================================
+
+namespace test57b_ns
+open Aeneas Aeneas.Std Result
+
+def g (x : U32) : Result U32 := do
+  let ((a, b), (c, d), (e, f)) ← (do
+    let v ← x + 1#u32
+    let w ← x + 2#u32
+    let u ← x + 3#u32
+    ok ((v, w), (w, u), (u, v)))
+  let r ← a + c
+  let s ← r + e
+  let t ← b + d
+  let u ← t + f
+  s + u
+
+#decompose g g_prefix_eq
+  letRange 0 3 => g_prefix
+
+/--
+info: def Aeneas.Command.Decompose.Tests.test57b_ns.g_prefix : U32 →
+  Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
+fun x => do
+  let ((a, b), ((c, d), (e, f))) ←
+    do
+      let v ← x + 1#u32
+      let w ← x + 2#u32
+      let u ← x + 3#u32
+      ok ((v, w), (w, u), u, v)
+  let r ← a + c
+  let s ← r + e
+  pure (b, d, f, s)
+-/
+#guard_msgs in
+#print g_prefix
+/--
+info: g_prefix_eq : ∀ (x : U32),
+  g x = do
+    let (b, d, f, s) ← g_prefix x
+    let t ← b + d
+    let u ← t + f
+    s + u
+-/
+#guard_msgs in
+#check @g_prefix_eq
+/--
+info: 'Aeneas.Command.Decompose.Tests.test57b_ns.g_prefix_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms g_prefix_eq
+
+end test57b_ns
+
+-- ============================================================================
+-- Test 57c: Deeply nested tuple — (((a, b), (c, d)), ((e, f), (g, h)))
+-- ============================================================================
+
+namespace test57c_ns
+open Aeneas Aeneas.Std Result
+
+def g (x : U32) : Result U32 := do
+  let (((a, b), (c, d)), ((e, f), (g, h))) ← (do
+    let v ← x + 1#u32
+    let w ← x + 2#u32
+    let u ← x + 3#u32
+    let t ← x + 4#u32
+    ok (((v, w), (w, u)), ((u, t), (t, v))))
+  let r1 ← a + c
+  let r2 ← r1 + e
+  let r3 ← r2 + g
+  let r4 ← b + d
+  let r5 ← r4 + f
+  let r6 ← r5 + h
+  r3 + r6
+
+#decompose g g_prefix_eq
+  letRange 0 4 => g_prefix
+
+/--
+info: def Aeneas.Command.Decompose.Tests.test57c_ns.g_prefix : U32 →
+  Result
+    (UScalar UScalarTy.U32 ×
+      UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
+fun x => do
+  let (((a, b), (c, d)), ((e, f), (g, h))) ←
+    do
+      let v ← x + 1#u32
+      let w ← x + 2#u32
+      let u ← x + 3#u32
+      let t ← x + 4#u32
+      ok (((v, w), w, u), (u, t), t, v)
+  let r1 ← a + c
+  let r2 ← r1 + e
+  let r3 ← r2 + g
+  pure (b, d, f, h, r3)
+-/
+#guard_msgs in
+#print g_prefix
+/--
+info: g_prefix_eq : ∀ (x : U32),
+  g x = do
+    let (b, d, f, h, r3) ← g_prefix x
+    let r4 ← b + d
+    let r5 ← r4 + f
+    let r6 ← r5 + h
+    r3 + r6
+-/
+#guard_msgs in
+#check @g_prefix_eq
+/--
+info: 'Aeneas.Command.Decompose.Tests.test57c_ns.g_prefix_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms g_prefix_eq
+
+end test57c_ns
 
 namespace test58
 open Aeneas Aeneas.Std Result
@@ -2287,5 +2407,86 @@ def caller (x : U32) : Result U32 := do
   letRange 0 1 => caller_prefix
 
 end test58
+
+-- ============================================================================
+-- Test 59: Sequential letRange with nested tuple destructuring in continuation
+--          Regression test for round-tripping through rebuildUncurryFromTree
+-- ============================================================================
+
+namespace test59
+open Aeneas Aeneas.Std Result
+
+/-- Function with a nested tuple destructuring (`let ((b0, b1), back) ← ...`)
+    in the continuation after the first letRange extraction. -/
+def test59_fn (pk : Slice U8) : Result U8 := do
+  let a0 ← Slice.index_usize pk 0#usize         -- 0
+  let a1 ← Slice.index_usize pk 1#usize         -- 1
+  -- Range 1 (bindings 2-4)
+  let a2 ← a0 + a1                              -- 2
+  let a3 ← a2 + 1#u8                            -- 3
+  let a4 ← a3 + 1#u8                            -- 4
+  -- Continuation: nested tuple destructuring (binding 5)
+  let ((b0, b1), back) ← core.slice.Slice.split_at_mut pk 2#usize  -- 5
+  -- Range 2 (new bindings 4-5 after extraction)
+  let c0 ← Slice.index_usize b0 0#usize         -- 6
+  let c1 ← Slice.index_usize b1 0#usize         -- 7
+  -- Rest
+  let pk1 := back (b0, b1)
+  let e0 ← Slice.index_usize pk1 0#usize
+  e0 + a4
+
+-- The second letRange must see past the f1 call's uncurry chain into the
+-- remaining bindings. Before the fix, rebuildUncurryFromTree produced
+-- `uncurry(uncurry(...))` which openUncurryFVars couldn't parse, causing
+-- withBindings to stop early and treat the whole continuation as the terminal.
+#decompose test59_fn test59_eq
+  letRange 2 3 => test59_f1
+  letRange 3 2 => test59_f2
+
+/--
+info: def Aeneas.Command.Decompose.Tests.test59.test59_f1 : U8 → U8 → Result (UScalar UScalarTy.U8) :=
+fun a0 a1 => do
+  let a2 ← a0 + a1
+  let a3 ← a2 + 1#u8
+  a3 + 1#u8
+-/
+#guard_msgs in
+#print test59_f1
+
+-- f2 extracts the nested tuple + one more binding. Since c0 is unused in the
+-- continuation, f2 returns (b0, b1, back) — the fvars needed by the continuation.
+/--
+info: def Aeneas.Command.Decompose.Tests.test59.test59_f2 : Slice U8 →
+  Result (Slice U8 × Slice U8 × (Slice U8 × Slice U8 → Slice U8)) :=
+fun pk => do
+  let ((b0, b1), back) ← core.slice.Slice.split_at_mut pk 2#usize
+  let _ ← b0.index_usize 0#usize
+  pure (b0, b1, back)
+-/
+#guard_msgs in
+#print test59_f2
+
+/--
+info: test59_eq : ∀ (pk : Slice U8),
+  test59_fn pk = do
+    let a0 ← pk.index_usize 0#usize
+    let a1 ← pk.index_usize 1#usize
+    let a4 ← test59_f1 a0 a1
+    let (b0, b1, back) ← test59_f2 pk
+    let _ ← b1.index_usize 0#usize
+    let pk1 : Slice U8 := back (b0, b1)
+    let e0 ← pk1.index_usize 0#usize
+    e0 + a4
+-/
+#guard_msgs in
+#check @test59_eq
+
+/--
+info: 'Aeneas.Command.Decompose.Tests.test59.test59_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms test59_eq
+
+end test59
 
 end Aeneas.Command.Decompose.Tests
