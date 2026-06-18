@@ -743,14 +743,18 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
   let mkFreshAnon (isProp : Bool) :=
     if isProp then mkFreshAnonPropUserName else mkFreshUserName `x
   let mkFreshName (nPropsBefore : Nat) (i : Nat) (isProp : Bool) : TacticM Name := do
+    -- Use the user-provided name if possible
     if h : i < args.ids.size then
       match args.ids[i] with
       | none => mkFreshAnon isProp
       | some n => pure n
     else
+      -- Otherwise, it depends on whether the var is a prop or not
       if ¬ isProp then
+        -- Generate a name for an output var
         mkFreshUserName `x
       else
+        -- Generate a name for a post-condition
         match args.postsBasename with
         | none => mkFreshAnonPropUserName
         | some baseName =>
