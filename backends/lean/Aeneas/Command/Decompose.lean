@@ -79,6 +79,35 @@ def g (b : Bool) (x : U32) : Result U32 := do
 
 ### `letAt idx inner`
 Navigate to the value of the `idx`-th binding, then apply `inner` to it.
+When `idx` points past all bindings (i.e., to the terminal expression), or when
+`idx` is 0 and the expression is not a let or bind, `inner` is applied to the
+full expression at that point. This allows `letAt N` to designate the expression
+after `N` bindings:
+
+```
+def f (x : U32) : Result U32 := do
+  let a ← x + 1#u32       -- binding 0
+  let b ← a + 1#u32       -- binding 1
+  b + 10#u32               -- terminal: letAt 2 reaches here
+
+#decompose f f_eq
+  letAt 2 (full) => f_tail  -- extracts `b + 10#u32`
+```
+
+### `afterLets inner`
+Navigate past all consecutive let/bind bindings to the terminal expression,
+then apply `inner` to it. Equivalent to `letAt N` where N is the number of
+bindings, but without needing to know N in advance.
+
+```
+def f (x : U32) : Result U32 := do
+  let a ← x + 1#u32
+  let b ← a + 2#u32
+  b + 3#u32               -- afterLets reaches here
+
+#decompose f f_eq
+  afterLets (full) => f_tail  -- extracts `b + 3#u32`
+```
 
 ### `lam n inner`
 Open `n` lambda binders, then apply `inner` to the body.
@@ -163,14 +192,6 @@ register_option Aeneas.Decompose.useExisting : Bool := {
   descr := "Allow reusing definitions that already exist in the environment"
 }
 
-/-- State for the decompose command: tracks definitions introduced so far. -/
-structure DecomposeState where
-  introduced : Array (Name × Expr) := #[]
-
-/-- Monad for the decompose command: `MetaM` with additional state tracking
-    which definitions have been introduced in the current `#decompose` sequence. -/
-abbrev DecomposeM := StateRefT DecomposeState MetaM
-
 -- ============================================================================
 -- Pattern representation
 -- ============================================================================
@@ -179,12 +200,34 @@ abbrev DecomposeM := StateRefT DecomposeState MetaM
 inductive DecomposePattern where
   | letRange (start count : Nat)
   | letAt (index : Nat) (inner : DecomposePattern)
+  | afterLets (inner : DecomposePattern)
   | full
   | branch (index : Nat) (inner : DecomposePattern)
   | lam (count : Nat) (inner : DecomposePattern)
   | appFun (inner : DecomposePattern)
   | argArg (index : Nat) (inner : DecomposePattern)
   deriving Repr, Inhabited
+
+/-- Navigation context for enhanced error messages. Records the expression
+    being navigated and the pattern prefix that has been successfully applied
+    so far, so that error messages can show where navigation failed. -/
+structure NavContext where
+  /-- The root expression (before any navigation) -/
+  rootExpr : Option Expr := none
+  /-- Pattern elements successfully applied to reach the current position -/
+  appliedPrefix : Array DecomposePattern := #[]
+  /-- The current pattern element being applied (for the error message) -/
+  currentPattern : Option DecomposePattern := none
+
+/-- State for the decompose command: tracks definitions introduced so far
+    and navigation context for error messages. -/
+structure DecomposeState where
+  introduced : Array (Name × Expr) := #[]
+  navCtx : NavContext := {}
+
+/-- Monad for the decompose command: `MetaM` with additional state tracking
+    which definitions have been introduced in the current `#decompose` sequence. -/
+abbrev DecomposeM := StateRefT DecomposeState MetaM
 
 -- ============================================================================
 -- Syntax
@@ -195,6 +238,8 @@ declare_syntax_cat decompose_pat (behavior := symbol)
 
 syntax &"letRange" num num : decompose_pat
 syntax &"letAt" num "(" decompose_pat ")" : decompose_pat
+syntax &"afterLets" "(" decompose_pat ")" : decompose_pat
+syntax &"afterLets" &"full" : decompose_pat
 syntax &"full" : decompose_pat
 syntax &"branch" num "(" decompose_pat ")" : decompose_pat
 syntax &"branch" num &"full" : decompose_pat
@@ -210,6 +255,10 @@ partial def elabDecomposePat : Syntax → Except String DecomposePattern
     return .letRange start.getNat count.getNat
   | `(decompose_pat| letAt $idx ($inner)) => do
     return .letAt idx.getNat (← elabDecomposePat inner)
+  | `(decompose_pat| afterLets ($inner)) => do
+    return .afterLets (← elabDecomposePat inner)
+  | `(decompose_pat| afterLets full) =>
+    return .afterLets .full
   | `(decompose_pat| full) =>
     return .full
   | `(decompose_pat| branch $idx ($inner)) => do
@@ -927,6 +976,79 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
           rebuildBindings bindings replacement 0 start
 
 -- ============================================================================
+-- Pattern formatting and error helpers (used by navigation and applyClause)
+-- ============================================================================
+
+/-- Format a pattern for error messages. -/
+def formatPattern : DecomposePattern → String
+  | .letRange s c => s!"letRange {s} {c}"
+  | .letAt i inner => s!"letAt {i} ({formatPattern inner})"
+  | .afterLets inner => s!"afterLets ({formatPattern inner})"
+  | .full => "full"
+  | .branch i inner => s!"branch {i} ({formatPattern inner})"
+  | .lam n inner => s!"lam {n} ({formatPattern inner})"
+  | .appFun inner => s!"appFun ({formatPattern inner})"
+  | .argArg i inner => s!"argArg {i} ({formatPattern inner})"
+
+/-- Format a decompose clause for error messages. -/
+private def formatClause (pat : DecomposePattern) (name : Name) : MessageData :=
+  m!"{formatPattern pat} => {name}"
+
+/-- Format a pattern element (without its inner pattern) for error messages. -/
+private def formatPatternHead : DecomposePattern → String
+  | .letRange s c => s!"letRange {s} {c}"
+  | .letAt i _ => s!"letAt {i} _"
+  | .afterLets _ => s!"afterLets _"
+  | .full => "full"
+  | .branch i _ => s!"branch {i} _"
+  | .lam n _ => s!"lam {n} _"
+  | .appFun _ => s!"appFun _"
+  | .argArg i _ => s!"argArg {i} _"
+
+/-- Format a list of applied prefix patterns (outermost first). -/
+private def formatPrefixPath (prefix_ : Array DecomposePattern) : String :=
+  if prefix_.isEmpty then ""
+  else
+    -- Build the nested pattern string from the prefix elements
+    let parts := prefix_.map fun p => match p with
+      | .letAt i _ => s!"letAt {i}"
+      | .afterLets _ => "afterLets"
+      | .branch i _ => s!"branch {i}"
+      | .lam n _ => s!"lam {n}"
+      | .appFun _ => "appFun"
+      | .argArg i _ => s!"argArg {i}"
+      | .letRange s c => s!"letRange {s} {c}"
+      | .full => "full"
+    -- Nest from outside in: letAt 2 (letAt 0)
+    parts.foldr (init := "_") fun part acc =>
+      s!"{part} ({acc})"
+
+/-- Throw a navigation error with context from `DecomposeState.navCtx`.
+    Formats the error to show the failing pattern element, the sub-expression
+    it was applied to, and (if non-empty) the prefix pattern that was
+    successfully applied. -/
+def throwNavError (currentExpr : Expr) (rawMsg : MessageData) : DecomposeM α := do
+  let ctx := (← get).navCtx
+  let failingElem := match ctx.currentPattern with
+    | some pat => formatPatternHead pat
+    | none => "(unknown)"
+  -- Use the root expression (set at pattern entry) for the top-level display,
+  -- and the current sub-expression for deeper context
+  if ctx.appliedPrefix.isEmpty then
+    -- Top-level: show the root expression (the full function body)
+    let displayExpr := ctx.rootExpr.getD currentExpr
+    let exprMsg ← ppExpr displayExpr
+    throwError "Can not apply `{failingElem}` to expression:\n{exprMsg}\n\n\
+      Underlying error: {rawMsg}"
+  else
+    -- Nested: show the sub-expression reached after applying the prefix
+    let exprMsg ← ppExpr currentExpr
+    let prefixStr := formatPrefixPath ctx.appliedPrefix
+    throwError "Can not apply `{failingElem}` to expression:\n{exprMsg}\n\
+      that results from applying the partial pattern `{prefixStr}` to the function body\n\n\
+      Underlying error: {rawMsg}"
+
+-- ============================================================================
 -- Navigation helpers (for composite patterns)
 -- ============================================================================
 
@@ -946,7 +1068,7 @@ private def modifyUnderLambdasCore (strict : Bool) (e : Expr) (n : Nat)
         mkLambdaFVars #[fvar] modifiedBody
     | _ =>
       if strict then
-        throwError "lam: expected {n + 1} more lambda binder(s), got {← ppExpr e}"
+        throwNavError e m!"lam: expected {n + 1} more lambda binder(s), got {← ppExpr e}"
       else
         action e
 
@@ -974,7 +1096,7 @@ def modifyBranch (e : Expr) (idx : Nat) (action : Expr → DecomposeM Expr) : De
     else if idx == 1 then
       let elseB' ← action elseB
       return mkApp5 (mkConst ``ite e.getAppFn.constLevels!) α cond inst thenB elseB'
-    else throwError "branch {idx}: ite has only branches 0 (then) and 1 (else)"
+    else throwNavError e m!"branch {idx}: ite has only branches 0 (then) and 1 (else)"
   -- Try dite
   if let some (α, cond, inst, thenB, elseB) := matchDite? e then
     if idx == 0 then
@@ -983,26 +1105,26 @@ def modifyBranch (e : Expr) (idx : Nat) (action : Expr → DecomposeM Expr) : De
     else if idx == 1 then
       let elseB' ← modifyUnderLambdasPermissive elseB 1 action
       return mkApp5 (mkConst ``dite e.getAppFn.constLevels!) α cond inst thenB elseB'
-    else throwError "branch {idx}: dite has only branches 0 (then) and 1 (else)"
+    else throwNavError e m!"branch {idx}: dite has only branches 0 (then) and 1 (else)"
   -- Try match (detected via matchMatcherApp?)
   if let some mApp ← matchMatcherApp? e then
     if h : idx < mApp.alts.size then
       let some info ← getMatcherInfo? mApp.matcherName
-        | throwError "branch {idx}: could not get matcher info for '{mApp.matcherName}'"
+        | throwNavError e m!"branch {idx}: could not get matcher info for '{mApp.matcherName}'"
       let numLambdas := info.altNumParams[idx]?.getD 0
       let alt := mApp.alts[idx]
       let alt' ← modifyUnderLambdasPermissive alt numLambdas action
       let mApp' := { mApp with alts := mApp.alts.set idx alt' }
       return mApp'.toExpr
     else
-      throwError "branch {idx}: match has only {mApp.alts.size} alternative(s) (0-indexed)"
-  throwError "branch {idx}: expression is not an ite, dite, or match"
+      throwNavError e m!"branch {idx}: match has only {mApp.alts.size} alternative(s) (0-indexed)"
+  throwNavError e m!"branch {idx}: expression is not an ite, dite, or match"
 
 /-- Modify the function part of an application. -/
 def modifyAppFun (e : Expr) (action : Expr → DecomposeM Expr) : DecomposeM Expr := do
   let fn := e.getAppFn
   let args := e.getAppArgs
-  if args.size == 0 then throwError "appFun: expression is not an application"
+  if args.size == 0 then throwNavError e m!"appFun: expression is not an application"
   let fn' ← action fn
   return mkAppN fn' args
 
@@ -1011,7 +1133,7 @@ def modifyAppArg (e : Expr) (idx : Nat) (action : Expr → DecomposeM Expr) : De
   let fn := e.getAppFn
   let args := e.getAppArgs
   if idx >= args.size then
-    throwError "argArg {idx}: application has only {args.size} arguments"
+    throwNavError e m!"argArg {idx}: application has only {args.size} arguments"
   let args' ← args.mapIdxM fun i arg => if i == idx then action arg else pure arg
   return mkAppN fn args'
 
@@ -1020,11 +1142,13 @@ def modifyAppArg (e : Expr) (idx : Nat) (action : Expr → DecomposeM Expr) : De
 -- ============================================================================
 
 /-- Navigate to the value of the `idx`-th binding and apply `action` to it.
-    Returns the modified full expression. -/
+    Returns the modified full expression.
+    When `idx == 0`: if the expression is a let or bind, operates on the bound
+    expression; otherwise operates on the full expression (the "terminal"). -/
 partial def modifyBindingValue (e : Expr) (idx : Nat)
     (action : Expr → DecomposeM Expr) : DecomposeM Expr := do
   if idx == 0 then
-    -- Modify the current binding's value
+    -- Modify the current binding's value, or the terminal if not a let/bind
     match e with
     | .letE name type value body nonDep =>
       let value' ← action value
@@ -1034,7 +1158,9 @@ partial def modifyBindingValue (e : Expr) (idx : Nat)
       | some (m, inst, α, β, computation, continuation) =>
         let computation' ← action computation
         return mkApp6 (mkConst ``Bind.bind (e.getAppFn.constLevels!)) m inst α β computation' continuation
-      | none => throwError "letAt 0: not a let or bind"
+      | none =>
+        -- Not a let or bind: operate on the full expression (terminal)
+        action e
   else
     -- Navigate past this binding
     match e with
@@ -1049,7 +1175,7 @@ partial def modifyBindingValue (e : Expr) (idx : Nat)
         -- Open the continuation, handling Std.uncurry for tuple-destructuring binds
         let newCont ← openBindCont continuation (idx - 1) action
         return mkApp6 (mkConst ``Bind.bind (e.getAppFn.constLevels!)) m inst α β computation newCont
-      | none => throwError "letAt {idx}: reached terminal before binding"
+      | none => throwNavError e m!"letAt {idx}: reached terminal before binding"
 where
   /-- Open a bind continuation (which may be a plain lambda or a `Std.uncurry`
       chain for tuple-destructuring binds), apply `modifyBindingValue` to the
@@ -1086,7 +1212,7 @@ where
           return result
       | _ =>
         if fvars.isEmpty then
-          throwError "letAt: bind continuation is not a lambda"
+          throwNavError cont m!"letAt: bind continuation is not a lambda"
         else
           -- No more lambdas but we have fvars: the body is the innermost expression
           let modifiedBody ← modifyBindingValue cont idx action
@@ -1096,26 +1222,86 @@ where
           return result
 
 -- ============================================================================
+-- Navigate past all bindings to the terminal expression
+-- ============================================================================
+
+/-- Navigate past all let/bind bindings to the terminal expression and apply
+    `action` to it. Returns the modified full expression. -/
+partial def modifyAfterLets (e : Expr) (action : Expr → DecomposeM Expr) : DecomposeM Expr := do
+  match e with
+  | .letE name type value body _nonDep =>
+    withLetDecl name type value fun fvar => do
+      let body' := body.instantiate1 fvar
+      let modifiedBody ← modifyAfterLets body' action
+      mkLetFVars #[fvar] modifiedBody
+  | _ =>
+    match matchBind? e with
+    | some (m, inst, α, β, computation, continuation) =>
+      let newCont ← openBindContAfterLets continuation action
+      return mkApp6 (mkConst ``Bind.bind (e.getAppFn.constLevels!)) m inst α β computation newCont
+    | none =>
+      -- Terminal: apply action here
+      action e
+where
+  /-- Open a bind continuation and recursively skip bindings in its body. -/
+  openBindContAfterLets (cont : Expr) (action : Expr → DecomposeM Expr) :
+      DecomposeM Expr := do
+    openBindContAfterLetsAux cont action #[]
+  /-- Auxiliary: opens uncurry+lambda layers, then recurses on the body. -/
+  openBindContAfterLetsAux (cont : Expr) (action : Expr → DecomposeM Expr)
+      (fvars : Array Expr) : DecomposeM Expr := do
+    if cont.isAppOfArity ``_root_.Aeneas.Std.uncurry 4 then
+      let f := cont.getAppArgs[3]!
+      match f with
+      | .lam lname ltype lbody lbinfo =>
+        withLocalDecl lname lbinfo ltype fun fvar => do
+          let lbody' := lbody.instantiate1 fvar
+          openBindContAfterLetsAux lbody' action (fvars.push fvar)
+      | _ =>
+        openBindContAfterLetsAux f action fvars
+    else
+      match cont with
+      | .lam lname ltype lbody lbinfo =>
+        withLocalDecl lname lbinfo ltype fun fvar => do
+          let lbody' := lbody.instantiate1 fvar
+          let allFVars := fvars.push fvar
+          let modifiedBody ← modifyAfterLets lbody' action
+          -- Rebuild: innermost lambda first, then uncurry layers from inside out
+          let mut result ← mkLambdaFVars #[allFVars.back!] modifiedBody
+          for j in (List.range (allFVars.size - 1)).reverse do
+            result ← mkUncurry allFVars[j]! result
+          return result
+      | _ =>
+        if fvars.isEmpty then
+          -- Terminal right after bind (no continuation lambda): apply action
+          action cont
+        else
+          let modifiedBody ← modifyAfterLets cont action
+          let mut result ← mkLambdaFVars #[fvars.back!] modifiedBody
+          for j in (List.range (fvars.size - 1)).reverse do
+            result ← mkUncurry fvars[j]! result
+          return result
+
+-- ============================================================================
 -- Apply a single clause (pattern + name) to the current body
 -- ============================================================================
 
-/-- Format a decompose clause for error messages. -/
-private def formatClause (pat : DecomposePattern) (name : Name) : MessageData :=
-  let rec go : DecomposePattern → String
-    | .letRange s c => s!"letRange {s} {c}"
-    | .letAt i inner => s!"letAt {i} ({go inner})"
-    | .full => "full"
-    | .branch i inner => s!"branch {i} ({go inner})"
-    | .lam n inner => s!"lam {n} ({go inner})"
-    | .appFun inner => s!"appFun ({go inner})"
-    | .argArg i inner => s!"argArg {i} ({go inner})"
-  m!"{go pat} => {name}"
+/-- Set the navigation context for error messages. Called before each navigation
+    step so that `throwNavError` can format errors with the right context. -/
+private def setNavCtx (rootExpr : Expr) (pat : DecomposePattern)
+    (appliedPrefix : Array DecomposePattern) : DecomposeM Unit :=
+  modify fun s => { s with navCtx := {
+    rootExpr := some rootExpr
+    appliedPrefix
+    currentPattern := some pat
+  }}
 
 /-- Apply one decompose clause: navigate with the pattern, extract, replace.
     Returns the modified function body. -/
 partial def applyClause (body : Expr) (pat : DecomposePattern) (newName : Name)
     (levelParams : List Name)
-    (srcIsNoncomputable : Bool) : DecomposeM Expr := do
+    (srcIsNoncomputable : Bool)
+    (appliedPrefix : Array DecomposePattern := #[]) : DecomposeM Expr := do
   let clauseDesc := formatClause pat newName
   match pat with
   | .full =>
@@ -1126,24 +1312,40 @@ partial def applyClause (body : Expr) (pat : DecomposePattern) (newName : Name)
       extractLetRange bindings terminal start count newName levelParams srcIsNoncomputable clauseDesc
 
   | .letAt idx inner =>
+    setNavCtx body pat appliedPrefix
     modifyBindingValue body idx fun value => do
       applyClause value inner newName levelParams srcIsNoncomputable
+        (appliedPrefix.push pat)
+
+  | .afterLets inner =>
+    setNavCtx body pat appliedPrefix
+    modifyAfterLets body fun terminal => do
+      applyClause terminal inner newName levelParams srcIsNoncomputable
+        (appliedPrefix.push pat)
 
   | .branch idx inner =>
+    setNavCtx body pat appliedPrefix
     modifyBranch body idx fun branchBody => do
       applyClause branchBody inner newName levelParams srcIsNoncomputable
+        (appliedPrefix.push pat)
 
   | .lam n inner =>
+    setNavCtx body pat appliedPrefix
     modifyUnderLambdas body n fun innerBody => do
       applyClause innerBody inner newName levelParams srcIsNoncomputable
+        (appliedPrefix.push pat)
 
   | .appFun inner =>
+    setNavCtx body pat appliedPrefix
     modifyAppFun body fun fn => do
       applyClause fn inner newName levelParams srcIsNoncomputable
+        (appliedPrefix.push pat)
 
   | .argArg idx inner =>
+    setNavCtx body pat appliedPrefix
     modifyAppArg body idx fun arg => do
       applyClause arg inner newName levelParams srcIsNoncomputable
+        (appliedPrefix.push pat)
 
 -- ============================================================================
 -- Proof generation

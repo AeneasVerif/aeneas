@@ -1789,7 +1789,12 @@ def test45 (b : Bool) : Nat :=
 
 -- Bool match has 2 alts (0 and 1); index 2 should fail
 /--
-error: branch 2: match has only 2 alternative(s) (0-indexed)
+error: Can not apply `branch 2 _` to expression:
+match b with
+| true => 1
+| false => 2
+
+Underlying error: branch 2: match has only 2 alternative(s) (0-indexed)
 -/
 #guard_msgs in
 #decompose test45 test45_eq
@@ -2488,5 +2493,185 @@ info: 'Aeneas.Command.Decompose.Tests.test59.test59_eq' depends on axioms: [prop
 #print axioms test59_eq
 
 end test59
+
+-- ============================================================================
+-- Test 60: letAt with idx past all bindings (terminal access)
+-- ============================================================================
+
+def test60 (x y : U32) : Result U32 := do
+  let z ← x + y
+  let w ← z + 1#u32
+  w + 2#u32
+
+-- letAt 2 navigates past 2 bindings and operates on the terminal `w + 2#u32`
+#decompose test60 test60_eq
+  letAt 2 (full) => test60_terminal
+
+/--
+info: def Aeneas.Command.Decompose.Tests.test60_terminal : UScalar UScalarTy.U32 → Result (UScalar UScalarTy.U32) :=
+fun w => w + 2#u32
+-/
+#guard_msgs in
+#print test60_terminal
+/--
+info: test60_eq : ∀ (x y : U32),
+  test60 x y = do
+    let z ← x + y
+    let w ← z + 1#u32
+    test60_terminal w
+-/
+#guard_msgs in
+#check @test60_eq
+
+-- ============================================================================
+-- Test 61: afterLets pattern — navigate past all bindings to the terminal
+-- ============================================================================
+
+def test61 (x y : U32) : Result U32 := do
+  let a ← x + 1#u32
+  let b ← a + y
+  let c ← b + 2#u32
+  c + 3#u32
+
+-- afterLets navigates past all bindings to `c + 3#u32`
+#decompose test61 test61_eq
+  afterLets (full) => test61_tail
+
+/--
+info: def Aeneas.Command.Decompose.Tests.test61_tail : UScalar UScalarTy.U32 → Result (UScalar UScalarTy.U32) :=
+fun c => c + 3#u32
+-/
+#guard_msgs in
+#print test61_tail
+/--
+info: test61_eq : ∀ (x y : U32),
+  test61 x y = do
+    let a ← x + 1#u32
+    let b ← a + y
+    let c ← b + 2#u32
+    test61_tail c
+-/
+#guard_msgs in
+#check @test61_eq
+
+-- ============================================================================
+-- Test 62: afterLets inside a letAt (nested navigation)
+-- ============================================================================
+
+def test62 (x : U32) : Result U32 := do
+  let z ← (do
+    let a ← x + 1#u32
+    let b ← a + 2#u32
+    b + 3#u32)
+  z + 4#u32
+
+-- letAt 0 dives into the bound expression, then afterLets goes to its terminal
+#decompose test62 test62_eq
+  letAt 0 (afterLets (full)) => test62_inner_tail
+
+/--
+info: def Aeneas.Command.Decompose.Tests.test62_inner_tail : UScalar UScalarTy.U32 → Result (UScalar UScalarTy.U32) :=
+fun b => b + 3#u32
+-/
+#guard_msgs in
+#print test62_inner_tail
+/--
+info: test62_eq : ∀ (x : U32),
+  test62 x = do
+    let z ←
+      do
+        let a ← x + 1#u32
+        let b ← a + 2#u32
+        test62_inner_tail b
+    z + 4#u32
+-/
+#guard_msgs in
+#check @test62_eq
+
+-- ============================================================================
+-- Test 63: letAt 0 on a non-let/bind expression (terminal) — operates on full
+-- ============================================================================
+
+def test63 (x : U32) : Result U32 := do
+  x + 1#u32
+
+-- letAt 0 on a single terminal expression (no lets)
+#decompose test63 test63_eq
+  letAt 0 (full) => test63_body
+
+/--
+info: def Aeneas.Command.Decompose.Tests.test63_body : U32 → Result (UScalar UScalarTy.U32) :=
+fun x => x + 1#u32
+-/
+#guard_msgs in
+#print test63_body
+/--
+info: test63_eq : ∀ (x : U32), test63 x = test63_body x
+-/
+#guard_msgs in
+#check @test63_eq
+
+-- ============================================================================
+-- Test 64: Error message — pattern fails at top level
+-- ============================================================================
+
+def test64 (x : U32) : Result U32 := do
+  let z ← x + 1#u32
+  z + 2#u32
+
+/--
+error: Can not apply `letAt 5 _` to expression:
+do
+  let z ← x + 1#u32
+  z + 2#u32
+
+Underlying error: letAt 4: reached terminal before binding
+-/
+#guard_msgs in
+#decompose test64 test64_eq
+  letAt 5 (full) => test64_bad
+
+-- ============================================================================
+-- Test 65: Error message — pattern fails with non-empty prefix
+-- ============================================================================
+
+def test65 (b : Bool) (x y : U32) : Result U32 := do
+  let z ← (do
+    let z' ← if b then Result.ok x else x + y
+    Pure.pure z')
+  z + 1#u32
+
+/--
+error: Can not apply `branch 2 _` to expression:
+if b = true then Result.ok x else x + y
+that results from applying the partial pattern `letAt 0 (letAt 0 (_))` to the function body
+
+Underlying error: branch 2: ite has only branches 0 (then) and 1 (else)
+-/
+#guard_msgs in
+#decompose test65 test65_eq
+  letAt 0 (letAt 0 (branch 2 full)) => test65_bad
+
+-- ============================================================================
+-- Test 66: afterLets on a single expression (no bindings) — same as full
+-- ============================================================================
+
+def test66 (x : U32) : Result U32 :=
+  x + 1#u32
+
+#decompose test66 test66_eq
+  afterLets (full) => test66_body
+
+/--
+info: def Aeneas.Command.Decompose.Tests.test66_body : U32 → Result (UScalar UScalarTy.U32) :=
+fun x => x + 1#u32
+-/
+#guard_msgs in
+#print test66_body
+/--
+info: test66_eq : ∀ (x : U32), test66 x = test66_body x
+-/
+#guard_msgs in
+#check @test66_eq
 
 end Aeneas.Command.Decompose.Tests
