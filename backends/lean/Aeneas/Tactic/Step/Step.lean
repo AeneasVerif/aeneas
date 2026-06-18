@@ -563,7 +563,7 @@ def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) 
     trace[Step] "Introduced the \"pretty\" let binding: {← inferType e}"
 
 /-- Recursively destructure an introduced fvar of a Prod type according to the
-shape of a `BTree`. Returns the leaf fvarsand the updated goal. The destructured FVars
+shape of a `BTree`. Returns the leaf fvars and the updated goal. The destructured FVars
 are named later in `introOutputs`.
 
 NOTE: We are using `cases` to break up the FVar which could be slow for nested
