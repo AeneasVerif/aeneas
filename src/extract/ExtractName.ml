@@ -134,6 +134,12 @@ let pattern_to_extract_name_visitor =
       else super#visit_EPrimAdt () adt g
   end
 
+(** Under [-core-models-lib], the [core] Rust crate is renamed to [core_models]
+    in extracted names so that the user's [core_models] Lean library is
+    referenced instead of Aeneas's standard library. *)
+let rewrite_crate_for_core_models_lib (crate : string) : string =
+  if !Config.core_models_lib && crate = "core" then "core_models" else crate
+
 (** Helper to convert name patterns to names for extraction.
 
     For impl blocks, we simply use the name of the type (without its arguments)
@@ -143,7 +149,10 @@ let pattern_to_extract_name (_span : Meta.span option) (name : pattern) :
   let c = { tgt = TkName } in
   let visitor = pattern_to_extract_name_visitor in
   let name = visitor#visit_pattern () name in
-  List.map (pattern_elem_to_string c) name
+  let names = List.map (pattern_elem_to_string c) name in
+  match names with
+  | head :: rest -> rewrite_crate_for_core_models_lib head :: rest
+  | [] -> []
 
 let name_matcher_expr_to_extract_name (_span : Meta.span option) (name : expr) :
     string =
