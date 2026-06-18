@@ -423,3 +423,26 @@ info: Try this:
 example : (do let ((a, b), (c, d)) ← quadProg
               ok (a + b + c * 2 + d)) ⦃ res => res = 48 ⦄ := by step*?
 end SpecProjection
+
+-- tests for ∃ in postcondition
+def existentialProg : Result (Nat × Nat) := ok (1, 2)
+
+@[step]
+theorem existentialProg_spec : existentialProg ⦃ x y => x = 1 ∧ ∃ z, z > 0 ∧ y = z + 1 ⦄ := by
+  unfold existentialProg; simp
+
+/--
+error: unsolved goals
+case a
+x y : ℕ
+hx : x = 1
+z : ℕ
+hz : z > 0
+h : y = z + 1
+⊢ x + y > 2
+-/
+#guard_msgs in
+example : (do let (x, y) ← existentialProg; ok (x + y)) ⦃ res => res > 2 ⦄ := by
+  step with existentialProg_spec as ⟨ x, y, hx, z, hz, h ⟩
+
+

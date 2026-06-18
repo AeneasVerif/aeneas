@@ -719,7 +719,7 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
   if (← getUnsolvedGoals).isEmpty then trace[Step] "Main goal solved by cleanup simp!"; return none
 
   /- Now compute the prop-status of the remaining leading binders (these are the
-     post-conditions to introduce). -/
+     post-conditions and existential variables to introduce). -/
   let goal ← getMainGoal
   let outputIsProp ← goal.withContext do
     let type ← goal.getType
@@ -732,14 +732,14 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
   if totalSlots < args.ids.size ∧ args.idsUserProvided then
     logWarning m!"Too many ids provided ({args.ids}): expected ≤ {totalSlots} ids, got {args.ids.size}"
 
-  /- The output count is the number of leaf fvars produced by destructuring. -/
-  let outputCount := outputFVars.size
-  /- The post-condition count: the trailing prop quantifiers/implications. -/
-  let postCount := outputIsProp.size
-  trace[Step] "Output count: {outputCount}, post count: {postCount}"
+  /- The prefix length is the number of leaf fvars produced by destructuring the outputs. -/
+  let prefixLength := outputFVars.size
+  /- The postfix length: the remaining binders (post-condition and existential variables). -/
+  let postfixLength := outputIsProp.size
+  trace[Step] "Prefix length (outputs): {prefixLength}, postfix length (post-conditions): {postfixLength}"
 
   /- Compute names for outputs (from `args.ids`) and posts. -/
-  let totalNumProps := postCount
+  let totalNumProps := (outputIsProp.filter id).size
   let mkFreshAnon (isProp : Bool) :=
     if isProp then mkFreshAnonPropUserName else mkFreshUserName `x
   let mkFreshName (nPropsBefore : Nat) (i : Nat) (isProp : Bool) : TacticM Name := do
@@ -763,7 +763,7 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
           pure (Name.str root s!"{baseStr}{postIdx}")
 
   /- Names for the already-introduced output fvars (one name per leaf). -/
-  let outputIds ← (Array.range outputCount).mapM fun i => mkFreshName 0 i false
+  let outputIds ← (Array.range prefixLength).mapM fun i => mkFreshName 0 i false
 
   /- Rename the output fvars to the user-provided names. -/
   let mut goal ← getMainGoal
@@ -777,14 +777,20 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
   introPrettyEquality args fExpr (outputFVars.map Expr.fvar)
   traceGoalWithNode "goal after introducing the pretty equality"
 
-  /- Compute names for the post-conditions. -/
-  let postsIds ← (List.range postCount).mapM fun i => mkFreshName i (outputCount + i) true
+  /- Compute names for the post-conditions and existential variables. -/
+  let mut postsIdsArr : Array Name := #[]
+  let mut nPropsBefore := 0
+  for i in [0:postfixLength] do
+    let isProp := outputIsProp[i]!
+    postsIdsArr := postsIdsArr.push (← mkFreshName nPropsBefore (prefixLength + i) isProp)
+    if isProp then nPropsBefore := nPropsBefore + 1
+  let postsIds := postsIdsArr.toList
 
-  /- Introduce the post-conditions. -/
+  /- Introduce the post-conditions and existential variables. -/
   let goal ← getMainGoal
-  let (posts, goal) ← goal.introN postCount postsIds
+  let (posts, goal) ← goal.introN postfixLength postsIds
   setGoals [goal]
-  traceGoalWithNode "goal after introducing the post-conditions"
+  traceGoalWithNode "goal after introducing the post-conditions and existential variables"
 
   -- Build the Output information
   let mkName? (n : Name) : Option Name :=
