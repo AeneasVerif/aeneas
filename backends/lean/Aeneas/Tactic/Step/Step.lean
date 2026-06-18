@@ -589,7 +589,8 @@ partial def destructureFVar {α} (goal : MVarId) (fv : FVarId) (tree : BTree α)
       throwError "destructureFVar: cases on Prod returned {subgoals.size} subgoals, expected 1"
 
 /-- Introduce one universally-quantified output and destructure it according to
-the tree's shape. -/
+the tree's shape. The destructured FVars are named later in `introOutputs`.
+-/
 def introOneSurfaceBinder {α} (goal : MVarId) (tree : BTree α) :
     TacticM (Array FVarId × MVarId) := do
   let tmp ← mkFreshUserName `_x
@@ -687,6 +688,9 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
   let goal ← getMainGoal
   let goalTy ← instantiateMVars (← goal.getType)
   let goalTy := goalTy.consumeMData
+
+  -- There might be no quantifier if the function outputs `()`, in which case we
+  -- eliminate the `forall` quantifier (via `forall_unit`) when doing the simplification above.
   if goalTy.isForall then
     if ¬ (← isProp goalTy.bindingDomain!) then
       let (fvs, goal') ← introOneSurfaceBinder goal callSiteTree
@@ -695,8 +699,6 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
     else
       trace[Step] "leading quantifier is a Prop — no output to introduce"
   else
-    -- There might be no quantifier if the function outputs `()`, in which case we
-    -- eliminate the `forall` quantifier (via `forall_unit`) when doing the simplification above.
     trace[Step] "no leading quantifier — skipping output introduction"
   traceGoalWithNode "goal after introducing the output"
 
