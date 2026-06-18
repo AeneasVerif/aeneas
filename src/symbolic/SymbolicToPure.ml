@@ -165,12 +165,25 @@ let translate_binder (span : span option) (translate_inside : 'a -> 'b)
     binder_llbc_generics;
   }
 
-let translate_trait_method (span : span option) (translate_ty : T.ty -> ty)
-    (bound_method : A.trait_method T.binder) : fun_decl_ref binder =
-  translate_binder span
-    (fun (m : A.trait_method) ->
-      translate_fun_decl_ref span translate_ty m.item)
-    bound_method
+let translate_trait_method (ctx : Contexts.decls_ctx) (span : span option)
+    (translate_ty : T.ty -> ty) (trait_decl : A.trait_decl)
+    (method_id : TraitMethodId.id) (bound_method : A.trait_method T.binder) :
+    trait_method =
+  let method_ = bound_method.binder_value in
+  let signature =
+    translate_trait_method_sig ctx trait_decl method_id bound_method
+  in
+  {
+    method_id;
+    item_name = method_.name;
+    item_meta = method_.item_meta;
+    signature;
+    default =
+      translate_binder span
+        (fun (m : A.trait_method) ->
+          Option.map (translate_fun_decl_ref span translate_ty) m.default)
+        bound_method;
+  }
 
 let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     : trait_decl =
@@ -181,7 +194,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     implied_clauses = llbc_parent_clauses;
     consts;
     types;
-    methods;
+    methods = _;
     vtable = _;
   } : A.trait_decl =
     trait_decl
@@ -233,13 +246,14 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
         (const_id, c.name, translate_ty c.ty))
       (T.AssocConstId.Map.to_list consts)
   in
+  let methods_to_extract =
+    TraitDeclId.Map.find def_id ctx.trait_methods_to_extract
+  in
   let methods =
     List.map
       (fun ((method_id, m) : TraitMethodId.id * A.trait_method T.binder) ->
-        ( method_id,
-          m.binder_value.name,
-          translate_trait_method opt_span translate_ty m ))
-      (TraitMethodId.Map.to_list methods)
+        translate_trait_method ctx opt_span translate_ty trait_decl method_id m)
+      (TraitMethodId.Map.to_list methods_to_extract)
   in
   {
     def_id;
@@ -345,9 +359,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
 
 let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     global_decl =
-  let { A.item_meta; def_id; generics = llbc_generics; ty; src; value; _ } =
-    decl
-  in
+  let { A.item_meta; def_id; generics = llbc_generics; ty; src; _ } = decl in
   let body_id = Option.get (Charon.GAstUtils.init_fun_id_of_global decl) in
   let name =
     Print.name_to_string
@@ -367,7 +379,9 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     match builtin_info with
     | Some info -> info.can_fail
     | None -> (
-        match FunDeclId.Map.find_opt body_id ctx.fun_ctx.fun_infos with
+        match
+          FunsAnalysis.lookup_fun_decl_info ctx.fun_ctx.fun_infos body_id
+        with
         | None -> (* Don't know: true by default *) true
         | Some info -> info.can_fail)
   in

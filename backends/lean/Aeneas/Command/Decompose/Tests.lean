@@ -1789,7 +1789,12 @@ def test45 (b : Bool) : Nat :=
 
 -- Bool match has 2 alts (0 and 1); index 2 should fail
 /--
-error: branch 2: match has only 2 alternative(s) (0-indexed)
+error: Can not apply `branch 2 _` to expression:
+match b with
+| true => 1
+| false => 2
+
+Underlying error: branch 2: match has only 2 alternative(s) (0-indexed)
 -/
 #guard_msgs in
 #decompose test45 test45_eq
@@ -2257,7 +2262,7 @@ info: g_prefix_eq : ∀ (x : U32),
 info: def Aeneas.Command.Decompose.Tests.test57_ns.g_prefix : U32 →
   Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
 fun x => do
-  let (a, b, c, d) ←
+  let ((a, b), (c, d)) ←
     do
       let v ← x + 1#u32
       let w ← x + 2#u32
@@ -2268,6 +2273,126 @@ fun x => do
 #print g_prefix
 
 end test57_ns
+
+-- ============================================================================
+-- Test 57b: Nested tuple — ((a, b), (c, d), (e, f))
+-- ============================================================================
+
+namespace test57b_ns
+open Aeneas Aeneas.Std Result
+
+def g (x : U32) : Result U32 := do
+  let ((a, b), (c, d), (e, f)) ← (do
+    let v ← x + 1#u32
+    let w ← x + 2#u32
+    let u ← x + 3#u32
+    ok ((v, w), (w, u), (u, v)))
+  let r ← a + c
+  let s ← r + e
+  let t ← b + d
+  let u ← t + f
+  s + u
+
+#decompose g g_prefix_eq
+  letRange 0 3 => g_prefix,
+
+/--
+info: def Aeneas.Command.Decompose.Tests.test57b_ns.g_prefix : U32 →
+  Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
+fun x => do
+  let ((a, b), ((c, d), (e, f))) ←
+    do
+      let v ← x + 1#u32
+      let w ← x + 2#u32
+      let u ← x + 3#u32
+      ok ((v, w), (w, u), u, v)
+  let r ← a + c
+  let s ← r + e
+  pure (b, d, f, s)
+-/
+#guard_msgs in
+#print g_prefix
+/--
+info: g_prefix_eq : ∀ (x : U32),
+  g x = do
+    let (b, d, f, s) ← g_prefix x
+    let t ← b + d
+    let u ← t + f
+    s + u
+-/
+#guard_msgs in
+#check @g_prefix_eq
+/--
+info: 'Aeneas.Command.Decompose.Tests.test57b_ns.g_prefix_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms g_prefix_eq
+
+end test57b_ns
+
+-- ============================================================================
+-- Test 57c: Deeply nested tuple — (((a, b), (c, d)), ((e, f), (g, h)))
+-- ============================================================================
+
+namespace test57c_ns
+open Aeneas Aeneas.Std Result
+
+def g (x : U32) : Result U32 := do
+  let (((a, b), (c, d)), ((e, f), (g, h))) ← (do
+    let v ← x + 1#u32
+    let w ← x + 2#u32
+    let u ← x + 3#u32
+    let t ← x + 4#u32
+    ok (((v, w), (w, u)), ((u, t), (t, v))))
+  let r1 ← a + c
+  let r2 ← r1 + e
+  let r3 ← r2 + g
+  let r4 ← b + d
+  let r5 ← r4 + f
+  let r6 ← r5 + h
+  r3 + r6
+
+#decompose g g_prefix_eq
+  letRange 0 4 => g_prefix,
+
+/--
+info: def Aeneas.Command.Decompose.Tests.test57c_ns.g_prefix : U32 →
+  Result
+    (UScalar UScalarTy.U32 ×
+      UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
+fun x => do
+  let (((a, b), (c, d)), ((e, f), (g, h))) ←
+    do
+      let v ← x + 1#u32
+      let w ← x + 2#u32
+      let u ← x + 3#u32
+      let t ← x + 4#u32
+      ok (((v, w), w, u), (u, t), t, v)
+  let r1 ← a + c
+  let r2 ← r1 + e
+  let r3 ← r2 + g
+  pure (b, d, f, h, r3)
+-/
+#guard_msgs in
+#print g_prefix
+/--
+info: g_prefix_eq : ∀ (x : U32),
+  g x = do
+    let (b, d, f, h, r3) ← g_prefix x
+    let r4 ← b + d
+    let r5 ← r4 + f
+    let r6 ← r5 + h
+    r3 + r6
+-/
+#guard_msgs in
+#check @g_prefix_eq
+/--
+info: 'Aeneas.Command.Decompose.Tests.test57c_ns.g_prefix_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms g_prefix_eq
+
+end test57c_ns
 
 namespace test58
 open Aeneas Aeneas.Std Result
@@ -2289,10 +2414,271 @@ def caller (x : U32) : Result U32 := do
 end test58
 
 -- ============================================================================
--- Test 59: Expression RHS — basic usage (from issue #1109)
+-- Test 59: Sequential letRange with nested tuple destructuring in continuation
+--          Regression test for round-tripping through rebuildUncurryFromTree
 -- ============================================================================
 
 namespace test59
+open Aeneas Aeneas.Std Result
+
+/-- Function with a nested tuple destructuring (`let ((b0, b1), back) ← ...`)
+    in the continuation after the first letRange extraction. -/
+def test59_fn (pk : Slice U8) : Result U8 := do
+  let a0 ← Slice.index_usize pk 0#usize         -- 0
+  let a1 ← Slice.index_usize pk 1#usize         -- 1
+  -- Range 1 (bindings 2-4)
+  let a2 ← a0 + a1                              -- 2
+  let a3 ← a2 + 1#u8                            -- 3
+  let a4 ← a3 + 1#u8                            -- 4
+  -- Continuation: nested tuple destructuring (binding 5)
+  let ((b0, b1), back) ← core.slice.Slice.split_at_mut pk 2#usize  -- 5
+  -- Range 2 (new bindings 4-5 after extraction)
+  let c0 ← Slice.index_usize b0 0#usize         -- 6
+  let c1 ← Slice.index_usize b1 0#usize         -- 7
+  -- Rest
+  let pk1 := back (b0, b1)
+  let e0 ← Slice.index_usize pk1 0#usize
+  e0 + a4
+
+-- The second letRange must see past the f1 call's uncurry chain into the
+-- remaining bindings. Before the fix, rebuildUncurryFromTree produced
+-- `uncurry(uncurry(...))` which openUncurryFVars couldn't parse, causing
+-- withBindings to stop early and treat the whole continuation as the terminal.
+#decompose test59_fn test59_eq
+  letRange 2 3 => test59_f1,
+  letRange 3 2 => test59_f2,
+
+/--
+info: def Aeneas.Command.Decompose.Tests.test59.test59_f1 : U8 → U8 → Result (UScalar UScalarTy.U8) :=
+fun a0 a1 => do
+  let a2 ← a0 + a1
+  let a3 ← a2 + 1#u8
+  a3 + 1#u8
+-/
+#guard_msgs in
+#print test59_f1
+
+-- f2 extracts the nested tuple + one more binding. Since c0 is unused in the
+-- continuation, f2 returns (b0, b1, back) — the fvars needed by the continuation.
+/--
+info: def Aeneas.Command.Decompose.Tests.test59.test59_f2 : Slice U8 →
+  Result (Slice U8 × Slice U8 × (Slice U8 × Slice U8 → Slice U8)) :=
+fun pk => do
+  let ((b0, b1), back) ← core.slice.Slice.split_at_mut pk 2#usize
+  let _ ← b0.index_usize 0#usize
+  pure (b0, b1, back)
+-/
+#guard_msgs in
+#print test59_f2
+
+/--
+info: test59_eq : ∀ (pk : Slice U8),
+  test59_fn pk = do
+    let a0 ← pk.index_usize 0#usize
+    let a1 ← pk.index_usize 1#usize
+    let a4 ← test59_f1 a0 a1
+    let (b0, b1, back) ← test59_f2 pk
+    let _ ← b1.index_usize 0#usize
+    let pk1 : Slice U8 := back (b0, b1)
+    let e0 ← pk1.index_usize 0#usize
+    e0 + a4
+-/
+#guard_msgs in
+#check @test59_eq
+
+/--
+info: 'Aeneas.Command.Decompose.Tests.test59.test59_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms test59_eq
+
+end test59
+
+-- ============================================================================
+-- Test 60: letAt with idx past all bindings (terminal access)
+-- ============================================================================
+
+def test60 (x y : U32) : Result U32 := do
+  let z ← x + y
+  let w ← z + 1#u32
+  w + 2#u32
+
+-- letAt 2 navigates past 2 bindings and operates on the terminal `w + 2#u32`
+#decompose test60 test60_eq
+  letAt 2 (full) => test60_terminal,
+
+/--
+info: def Aeneas.Command.Decompose.Tests.test60_terminal : UScalar UScalarTy.U32 → Result (UScalar UScalarTy.U32) :=
+fun w => w + 2#u32
+-/
+#guard_msgs in
+#print test60_terminal
+/--
+info: test60_eq : ∀ (x y : U32),
+  test60 x y = do
+    let z ← x + y
+    let w ← z + 1#u32
+    test60_terminal w
+-/
+#guard_msgs in
+#check @test60_eq
+
+-- ============================================================================
+-- Test 61: afterLets pattern — navigate past all bindings to the terminal
+-- ============================================================================
+
+def test61 (x y : U32) : Result U32 := do
+  let a ← x + 1#u32
+  let b ← a + y
+  let c ← b + 2#u32
+  c + 3#u32
+
+-- afterLets navigates past all bindings to `c + 3#u32`
+#decompose test61 test61_eq
+  afterLets (full) => test61_tail,
+
+/--
+info: def Aeneas.Command.Decompose.Tests.test61_tail : UScalar UScalarTy.U32 → Result (UScalar UScalarTy.U32) :=
+fun c => c + 3#u32
+-/
+#guard_msgs in
+#print test61_tail
+/--
+info: test61_eq : ∀ (x y : U32),
+  test61 x y = do
+    let a ← x + 1#u32
+    let b ← a + y
+    let c ← b + 2#u32
+    test61_tail c
+-/
+#guard_msgs in
+#check @test61_eq
+
+-- ============================================================================
+-- Test 62: afterLets inside a letAt (nested navigation)
+-- ============================================================================
+
+def test62 (x : U32) : Result U32 := do
+  let z ← (do
+    let a ← x + 1#u32
+    let b ← a + 2#u32
+    b + 3#u32)
+  z + 4#u32
+
+-- letAt 0 dives into the bound expression, then afterLets goes to its terminal
+#decompose test62 test62_eq
+  letAt 0 (afterLets (full)) => test62_inner_tail,
+
+/--
+info: def Aeneas.Command.Decompose.Tests.test62_inner_tail : UScalar UScalarTy.U32 → Result (UScalar UScalarTy.U32) :=
+fun b => b + 3#u32
+-/
+#guard_msgs in
+#print test62_inner_tail
+/--
+info: test62_eq : ∀ (x : U32),
+  test62 x = do
+    let z ←
+      do
+        let a ← x + 1#u32
+        let b ← a + 2#u32
+        test62_inner_tail b
+    z + 4#u32
+-/
+#guard_msgs in
+#check @test62_eq
+
+-- ============================================================================
+-- Test 63: letAt 0 on a non-let/bind expression (terminal) — operates on full
+-- ============================================================================
+
+def test63 (x : U32) : Result U32 := do
+  x + 1#u32
+
+-- letAt 0 on a single terminal expression (no lets)
+#decompose test63 test63_eq
+  letAt 0 (full) => test63_body,
+
+/--
+info: def Aeneas.Command.Decompose.Tests.test63_body : U32 → Result (UScalar UScalarTy.U32) :=
+fun x => x + 1#u32
+-/
+#guard_msgs in
+#print test63_body
+/--
+info: test63_eq : ∀ (x : U32), test63 x = test63_body x
+-/
+#guard_msgs in
+#check @test63_eq
+
+-- ============================================================================
+-- Test 64: Error message — pattern fails at top level
+-- ============================================================================
+
+def test64 (x : U32) : Result U32 := do
+  let z ← x + 1#u32
+  z + 2#u32
+
+/--
+error: Can not apply `letAt 5 _` to expression:
+do
+  let z ← x + 1#u32
+  z + 2#u32
+
+Underlying error: letAt 4: reached terminal before binding
+-/
+#guard_msgs in
+#decompose test64 test64_eq
+  letAt 5 (full) => test64_bad,
+
+-- ============================================================================
+-- Test 65: Error message — pattern fails with non-empty prefix
+-- ============================================================================
+
+def test65 (b : Bool) (x y : U32) : Result U32 := do
+  let z ← (do
+    let z' ← if b then Result.ok x else x + y
+    Pure.pure z')
+  z + 1#u32
+
+/--
+error: Can not apply `branch 2 _` to expression:
+if b = true then Result.ok x else x + y
+that results from applying the partial pattern `letAt 0 (letAt 0 (_))` to the function body
+
+Underlying error: branch 2: ite has only branches 0 (then) and 1 (else)
+-/
+#guard_msgs in
+#decompose test65 test65_eq
+  letAt 0 (letAt 0 (branch 2 full)) => test65_bad,
+
+-- ============================================================================
+-- Test 66: afterLets on a single expression (no bindings) — same as full
+-- ============================================================================
+
+def test66 (x : U32) : Result U32 :=
+  x + 1#u32
+
+#decompose test66 test66_eq
+  afterLets (full) => test66_body,
+
+/--
+info: def Aeneas.Command.Decompose.Tests.test66_body : U32 → Result (UScalar UScalarTy.U32) :=
+fun x => x + 1#u32
+-/
+#guard_msgs in
+#print test66_body
+/--
+info: test66_eq : ∀ (x : U32), test66 x = test66_body x
+-/
+#guard_msgs in
+#check @test66_eq
+
+-- ============================================================================
+-- Test 67: Expression RHS — basic usage (from issue #1109)
+-- ============================================================================
+
+namespace test67
 
 def f (x : U32) : Result U32 := do
   let x ← x + 1#u32
@@ -2342,18 +2728,18 @@ info: f_eq : ∀ (x : U32),
 #check @f_eq
 
 /--
-info: 'Aeneas.Command.Decompose.Tests.test59.f_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test67.f_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms f_eq
 
-end test59
+end test67
 
 -- ============================================================================
--- Test 60: Expression RHS — mixing identifier and expression RHS
+-- Test 68: Expression RHS — mixing identifier and expression RHS
 -- ============================================================================
 
-namespace test60
+namespace test68
 
 def g (x : U32) : Result U32 := do
   let a ← x + 1#u32
@@ -2368,7 +2754,7 @@ def add1 (x : U32) : Result U32 := x + 1#u32
   letRange 1 1 => add1,
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test60.g_first : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test68.g_first : U32 → Result (UScalar UScalarTy.U32) :=
 fun x => x + 1#u32
 -/
 #guard_msgs in
@@ -2385,13 +2771,13 @@ info: g_eq : ∀ (x : U32),
 #guard_msgs in
 #check @g_eq
 
-end test60
+end test68
 
 -- ============================================================================
--- Test 61: Expression RHS — full pattern with expression
+-- Test 69: Expression RHS — full pattern with expression
 -- ============================================================================
 
-namespace test61
+namespace test69
 
 def h (x : U32) : Result U32 := do
   let a ← x + 1#u32
@@ -2410,13 +2796,13 @@ info: h_eq : ∀ (x : U32), h x = h_impl x
 #guard_msgs in
 #check @h_eq
 
-end test61
+end test69
 
 -- ============================================================================
--- Test 62: Expression RHS — error on non-defeq expression
+-- Test 70: Expression RHS — error on non-defeq expression
 -- ============================================================================
 
-namespace test62
+namespace test70
 
 def k (x : U32) : Result U32 := do
   let a ← x + 1#u32
@@ -2438,13 +2824,13 @@ is not definitionally equal (at default transparency) to the extracted body
 #decompose k k_eq
   full => k_wrong,
 
-end test62
+end test70
 
 -- ============================================================================
--- Test 63: Expression RHS — with lambda expression (no named definition)
+-- Test 71: Expression RHS — with lambda expression (no named definition)
 -- ============================================================================
 
-namespace test63
+namespace test71
 
 def m (x : U32) : Result U32 := do
   let a ← x + 1#u32
@@ -2464,6 +2850,6 @@ info: m_eq : ∀ (x : U32),
 #guard_msgs in
 #check @m_eq
 
-end test63
+end test71
 
 end Aeneas.Command.Decompose.Tests
