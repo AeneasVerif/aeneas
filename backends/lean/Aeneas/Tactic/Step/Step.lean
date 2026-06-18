@@ -261,27 +261,27 @@ def postName (base : Name) (suffix : String) : Name :=
   base.getPrefix ++ .mkSimple (base.getString! ++ "_post" ++ suffix)
 
 /-- A generic binary tree with data at the leaves. Underlies `FVarTree` and `NameTree`. -/
-inductive BinTree (α : Type) where
+inductive BTree (α : Type) where
   | leaf (val : α)
-  | pair (left right : BinTree α)
+  | pair (left right : BTree α)
 deriving Inhabited, Repr
 
-/-- Flatten a `BinTree` into a left-to-right array of leaf values. -/
-def BinTree.flatten {α} : BinTree α → Array α
+/-- Flatten a `BTree` into a left-to-right array of leaf values. -/
+def BTree.flatten {α} : BTree α → Array α
   | .leaf v => #[v]
   | .pair l r => l.flatten ++ r.flatten
 
-/-- Monadic map over the leaf values of a `BinTree`. -/
-def BinTree.mapM {m} [Monad m] {α β} (f : α → m β) : BinTree α → m (BinTree β)
+/-- Monadic map over the leaf values of a `BTree`. -/
+def BTree.mapM {m} [Monad m] {α β} (f : α → m β) : BTree α → m (BTree β)
   | .leaf v => return .leaf (← f v)
   | .pair l r => return .pair (← l.mapM f) (← r.mapM f)
 
 /-- A tree of fvars reflecting the decomposition structure of a continuation's input.
 See `uncurryTelescope`. -/
-abbrev FVarTree := BinTree Expr
+abbrev FVarTree := BTree Expr
 
 /-- A tree of binder names, obtained from an `FVarTree`. -/
-abbrev NameTree := BinTree (Option Name)
+abbrev NameTree := BTree (Option Name)
 
 /-- Peel `uncurry`/`uncurry'`/lambda wrappers from a continuation expression,
 introducing fvars into the local context, and call `k` with the resulting
@@ -563,8 +563,13 @@ def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) 
     trace[Step] "Introduced the \"pretty\" let binding: {← inferType e}"
 
 /-- Recursively destructure an introduced fvar of a Prod type according to the
-shape of a `BinTree`. Returns the leaf fvarsand the updated goal. -/
-partial def destructureFVar {α} (goal : MVarId) (fv : FVarId) (tree : BinTree α) :
+shape of a `BTree`. Returns the leaf fvarsand the updated goal. The destructured FVars
+are named later in `introOutputs`.
+
+NOTE: We are using `cases` to break up the FVar which could be slow for nested
+goals or when the goal context gets large. Something to keep an eye on
+-/
+partial def destructureFVar {α} (goal : MVarId) (fv : FVarId) (tree : BTree α) :
     TacticM (Array FVarId × MVarId) := do
   match tree with
   | .leaf _ => return (#[fv], goal)
@@ -585,7 +590,7 @@ partial def destructureFVar {α} (goal : MVarId) (fv : FVarId) (tree : BinTree �
 
 /-- Introduce one universally-quantified output and destructure it according to
 the tree's shape. -/
-def introOneSurfaceBinder {α} (goal : MVarId) (tree : BinTree α) :
+def introOneSurfaceBinder {α} (goal : MVarId) (tree : BTree α) :
     TacticM (Array FVarId × MVarId) := do
   let tmp ← mkFreshUserName `_x
   let (fv, goal') ← goal.intro tmp
