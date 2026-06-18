@@ -7,6 +7,7 @@ import Aeneas.Tactic.Simp.SimpLemmas
 import AeneasMeta.Async
 import Aeneas.Tactic.Solver.Grind.Init
 import Aeneas.Tactic.Step.InferPost
+import Aeneas.Do
 
 namespace Aeneas
 
@@ -186,7 +187,7 @@ structure Args where
   local assumptions -/
   inferGhostVars : Bool
   /-- If the main goal after progress is of the form `?post args...`, use `inferPost` to
-      synthesize and assign the metavariable and attempt to close the goal with `agrind` -/
+      synthesize and assign the metavariable. -/
   inferPost : Bool
   /-- Introduce a dummy variable in the environment, which gets pretty-printed to something
   of the following shape:
@@ -815,6 +816,20 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal)
         pure (some ({goal := ← getMainGoal, outputs, stepState := mainGoal.stepState} : MainGoal))
       else pure none
 
+/-- If the option is set, infer an unresolved postcondition metavariable in the main goal. -/
+def inferPostMainGoal (args : Args) (mainGoal : Option MainGoal) : TacticM (Option MainGoal) := do
+  withTraceNode `Step (fun _ => pure m!"inferPostMainGoal") do
+  unless args.inferPost do
+    return mainGoal
+  let some mg := mainGoal | return none
+  let goalTy ← instantiateMVars (← mg.goal.getType)
+  let (head, _) := goalTy.withApp fun f a => (f, a)
+  unless head.isMVar do
+    return mainGoal
+  commitIfNoEx do
+    let goal ← inferPost mg.goal (eliminate := fun decl => decl.type.isAppOf ``prettyMonadEq)
+    pure (some { mg with goal := goal })
+
 def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
   TacticM Goals := do
   withTraceNode `Step (fun _ => pure m!"stepWith") do
@@ -858,26 +873,8 @@ def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
     withTraceNode `Step
       (fun _ => pure m!"Main goal after simplifying the post-conditions and the target") do
       trace[Step] "{mainGoal.goal}"
-  -- If inferPost is enabled, try to infer the postcondition
-  let mainGoal ← do
-    if args.inferPost then
-      if let some mg := mainGoal then
-        let goalTy ← instantiateMVars (← mg.goal.getType)
-        let (head, _) := goalTy.withApp fun f a => (f, a)
-        if head.isMVar then
-          let mainGoal ← commitIfNoEx do
-            let goal ← inferPost mg.goal (eliminate := fun decl => decl.type.isAppOf ``prettyMonadEq)
-            pure (some { mg with goal := goal })
-          -- Try to solve the inferred postcondition
-          if let some mg := mainGoal then
-            setGoals [mg.goal]
-            args.solvePreconditionTac args.stepState.grindState?
-            if ← mg.goal.isAssigned then pure none
-            else pure mainGoal
-          else pure none
-        else pure mainGoal
-      else pure mainGoal
-    else pure mainGoal
+  -- If inferPost is enabled, try to infer the postcondition.
+  let mainGoal ← inferPostMainGoal args mainGoal
   /- Put everything together -/
   let newNonPropGoals ← newNonPropGoals.filterM fun mvar => not <$> mvar.isAssigned
   pure ({ unassignedVars := newNonPropGoals.toArray, preconditions := newPropGoals.toArray, mainGoal })

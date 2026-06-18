@@ -18,19 +18,24 @@ theorem applyF_spec (f : U32 → Result U32) (x : U32)
 info: Try this:
 
   [apply]     let* ⟨ y, y_post ⟩ ← [ +inferPost ] applyF_spec
-    case hf => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
+    case hf =>
+      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
+      agrind
     agrind
+---
+trace:
 -/
 #guard_msgs in
 example (a : U32) (h : a.val + 1 ≤ U32.max) :
     applyF (fun x => x + 1#u32) a ⦃ y => y.val = a.val + 1 ⦄ := by
   step*? +inferPost
+  trace_state
 
 -- Higher-order in 2 functions, operates on a pair of inputs/outputs
 def callPair (f : U32 → Result U32) (g : U32 → Result U32) (xy : U32 × U32) : Result (U32 × U32) := do
   let a ← f xy.1
   let b ← g xy.2
-  return (a, b)
+  pure (a, b)
 
 @[step]
 theorem callPair_spec (f g : U32 → Result U32) (xy : U32 × U32)
@@ -41,19 +46,25 @@ theorem callPair_spec (f g : U32 → Result U32) (xy : U32 × U32)
   step*
 
 -- TODO: fix the output of step*? below (it shouldn't decompose the pair into `ab` and `_`)
--- TODO: the generated script is actually not correct (there misses calls to `agrind` in the cases `hf` and `hg`)
 /--
 info: Try this:
 
   [apply]     let* ⟨ ab, _, ab_post1, ab_post2 ⟩ ← [ +inferPost ] callPair_spec
-    case hf => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
-    case hg => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
+    case hf =>
+      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
+      agrind
+    case hg =>
+      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
+      agrind
     agrind
+---
+trace:
 -/
 #guard_msgs in
 example (x y : U32) (hx : x.val + 1 ≤ U32.max) (hy : y.val + 2 ≤ U32.max) :
     callPair (fun a => a + 1#u32) (fun b => b + 2#u32) (x, y) ⦃ ab => ab.1.val = x.val + 1 ∧ ab.2.val = y.val + 2 ⦄ := by
   step*? +inferPost
+  trace_state
 
 -- Calls f then g in sequence
 def callFThenG (f g : U32 → Result U32) (x : U32) : Result U32 := do
@@ -73,20 +84,26 @@ theorem callFThenG_spec (f g : U32 → Result U32) (x : U32)
 info: Try this:
 
   [apply]     let* ⟨ y, y_post ⟩ ← [ +inferPost ] callFThenG_spec
-    case hf => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
+    case hf =>
+      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
+      agrind
     case hg =>
-      intros y a✝
-      let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
+      intros y _
+      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
+      agrind
     agrind
+---
+trace:
 -/
 #guard_msgs in
 example (x : U32) (h1 : x.val + 1 ≤ U32.max) (h2 : x.val + 2 ≤ U32.max) :
     callFThenG (fun a => a + 1#u32) (fun b => b + 1#u32) x ⦃ y => y.val = x.val + 2 ⦄ := by
   step*? +inferPost
+  trace_state
 
 def callSlicemapM (x : Slice U32) : Result (Slice U32) := do
   let y ← x.mapM (fun x => x + 1#u32)
-  return y
+  pure y
 
 /--
 info: Try this:
@@ -94,8 +111,11 @@ info: Try this:
   [apply]     let* ⟨ y, y_post1, y_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
     case hf =>
       intros i hi
-      let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
+      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
+      agrind
     agrind
+---
+trace:
 -/
 #guard_msgs in
 example (s : Slice U32) (h : ∀ i (hi : i < s.len), s[i] < U32.max) :
@@ -105,11 +125,12 @@ example (s : Slice U32) (h : ∀ i (hi : i < s.len), s[i] < U32.max) :
     ⦄ := by
   unfold callSlicemapM
   step*? +inferPost
+  trace_state
 
 def callSlicemapMTwice (x : Slice U32) : Result (Slice U32) := do
   let y ← x.mapM (fun x => x + 1#u32)
   let z ← y.mapM (fun x => x * x)
-  return z
+  pure z
 
 /--
 info: Try this:
@@ -117,12 +138,16 @@ info: Try this:
   [apply]     let* ⟨ y, y_post1, y_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
     case hf =>
       intros i hi
-      let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
+      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
+      agrind
     let* ⟨ z, z_post1, z_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
     case hf =>
       intros i hi
-      let* ⟨ ⟩ ← [ +inferPost ] U32.mul_spec
+      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.mul_spec
+      agrind
     agrind
+---
+trace:
 -/
 #guard_msgs in
 example (s : Slice U32) (h : ∀ i (hi : i < s.len), (s[i] + 1) * (s[i] + 1) ≤ U32.max) :
@@ -132,5 +157,6 @@ example (s : Slice U32) (h : ∀ i (hi : i < s.len), (s[i] + 1) * (s[i] + 1) ≤
     ⦄ := by
   unfold callSlicemapMTwice
   step*? +inferPost
+  trace_state
 
 end higher_order

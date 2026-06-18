@@ -175,16 +175,19 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
       let ty = translate span ty in
       let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
       TAdt (TBuiltin (TRawPtr mut), generics)
-  | TTraitType (trait_ref, type_name) ->
+  | TTraitType (trait_ref, type_name, generics) ->
       let trait_ref = translate_strait_ref span trait_ref in
+      [%cassert_opt_span] span
+        (generics = TypesUtils.empty_generic_args)
+        "Unimplemented";
       TTraitType (trait_ref, type_name)
   | TFnDef _ | TFnPtr _ ->
       [%craise_opt_span] span "Arrow types are not supported yet"
   | TDynTrait _ ->
       [%craise_opt_span] span "Dynamic trait types are not supported yet"
-  | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
   | TError _ ->
       [%craise_opt_span] span "Found type error in the output of charon"
+  | _ -> [%craise_opt_span] span ("unsupported type: " ^ T.show_ty ty)
 
 and translate_sgeneric_args (span : Meta.span option)
     (generics : T.generic_args) : generic_args =
@@ -389,7 +392,10 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
       let ty = translate ty in
       let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
       TAdt (TBuiltin (TRawPtr mut), generics)
-  | TTraitType (trait_ref, type_name) ->
+  | TTraitType (trait_ref, type_name, generics) ->
+      [%cassert_opt_span] span
+        (generics = TypesUtils.empty_generic_args)
+        "Unimplemented";
       let trait_ref = translate_fwd_trait_ref span decls_ctx trait_ref in
       TTraitType (trait_ref, type_name)
   | TFnDef { binder_regions; binder_value = { kind; generics } } -> (
@@ -403,8 +409,8 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
               (FunDeclId.Map.find_opt fid decls_ctx.fun_ctx.fun_decls)
               "Could not lookup a function declaration"
           in
-          let dsg = translate_fun_sig_from_decl_to_decomposed decls_ctx fdecl in
-          let sg = translate_fun_sig_from_decomposed dsg in
+          let sigs = translate_fun_sigs_from_decl decls_ctx fdecl in
+          let sg = sigs.sg in
           (* Check that the function lives in the expected effect - otherwise we
                  have to lift it *)
           [%cassert_opt_span] span sg.fwd_info.effect_info.can_fail
@@ -416,9 +422,7 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
             "Unimplemented";
           (* Substitute *)
           let subst = make_subst_from_generics sg.generics generics in
-          let inputs = List.map (ty_substitute subst) sg.inputs in
-          let output = ty_substitute subst sg.output in
-          mk_arrows inputs output
+          ty_substitute subst sigs.ty
       | T.TraitMethod _ -> [%craise_opt_span] span "Unimplemented")
   | TFnPtr _ -> [%craise_opt_span] span "Arrow types are not supported yet"
   | TDynTrait { binder } ->
@@ -426,9 +430,9 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
         translate_generic_params span binder.binder_params
       in
       TDynTrait { params }
-  | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
   | TError _ ->
       [%craise_opt_span] span "Found type error in the output of charon"
+  | _ -> [%craise_opt_span] span ("unsupported type: " ^ T.show_ty ty)
 
 and translate_fwd_generic_args (span : Meta.span option)
     (decls_ctx : C.decls_ctx) (generics : T.generic_args) : generic_args =
@@ -530,17 +534,20 @@ and compute_back_ty_num_levels (span : Meta.span option)
     | TRawPtr _ ->
         (* TODO: not sure what to do here *)
         save_count outer_regions
-    | TTraitType (trait_ref, _) ->
+    | TTraitType (trait_ref, _, generics) ->
         [%sanity_check_opt_span] span
           (TypesUtils.trait_ref_kind_is_local_clause_or_builtin trait_ref.kind);
+        [%cassert_opt_span] span
+          (generics = TypesUtils.empty_generic_args)
+          "Unimplemented";
         save_count outer_regions
     | TFnDef _ | TFnPtr _ ->
         [%craise_opt_span] span "Arrow types are not supported yet"
     | TDynTrait _ ->
         [%craise_opt_span] span "Dynamic trait types are not supported yet"
-    | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
     | TError _ ->
         [%craise_opt_span] span "Found type error in the output of charon"
+    | _ -> [%craise_opt_span] span ("unsupported type: " ^ T.show_ty ty)
   in
   explore T.RegionGroupId.Set.empty ty;
   !max_level
@@ -662,17 +669,20 @@ and translate_back_ty_aux (span : Meta.span option) (decls_ctx : C.decls_ctx)
     | TRawPtr _ ->
         (* TODO: not sure what to do here *)
         stop outer_regions ty
-    | TTraitType (trait_ref, _) ->
+    | TTraitType (trait_ref, _, generics) ->
         [%sanity_check_opt_span] span
           (TypesUtils.trait_ref_kind_is_local_clause_or_builtin trait_ref.kind);
+        [%cassert_opt_span] span
+          (generics = TypesUtils.empty_generic_args)
+          "Unimplemented";
         stop outer_regions ty
     | TFnDef _ | TFnPtr _ ->
         [%craise_opt_span] span "Arrow types are not supported yet"
     | TDynTrait _ ->
         [%craise_opt_span] span "Dynamic trait types are not supported yet"
-    | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
     | TError _ ->
         [%craise_opt_span] span "Found type error in the output of charon"
+    | _ -> [%craise_opt_span] span ("unsupported type: " ^ T.show_ty ty)
   in
   explore T.RegionGroupId.Set.empty ty
 
@@ -711,12 +721,13 @@ and translate_back_input_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
 
 (** Small utility. *)
 and compute_raw_fun_effect_info (span : Meta.span option)
-    (fun_infos : fun_info A.FunDeclId.Map.t) (fun_id : A.fn_ptr_kind)
+    (fun_infos : FunsAnalysis.modules_funs_info) (fun_id : fn_ptr_kind)
     (gid : T.RegionGroupId.id option) : fun_effect_info =
   match fun_id with
-  | TraitMethod (_, _, fid) | FunId (FRegular fid) ->
+  | TraitMethod _ | FunId (FRegular _) ->
       let info =
-        [%silent_unwrap_opt_span] span (A.FunDeclId.Map.find_opt fid fun_infos)
+        [%silent_unwrap_opt_span] span
+          (lookup_pure_fn_ptr_info fun_infos fun_id)
       in
       {
         (* Note that backward functions can't fail *)
@@ -747,7 +758,7 @@ and compute_raw_fun_effect_info (span : Meta.span option)
     - [generic_args]: the generic arguments with which the uninstantiated
       signature was instantiated, leading to the current [sg] *)
 and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
-    (decls_ctx : C.decls_ctx) (fun_id : A.fn_ptr_kind) (sg : A.inst_fun_sig)
+    (decls_ctx : C.decls_ctx) (fun_id : fn_ptr_kind) (sg : A.inst_fun_sig)
     (input_names : string option list) : decomposed_fun_type =
   [%ltrace
     let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
@@ -872,7 +883,7 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
           inputs
       in
       "translate_back_inputs_for_gid:" ^ "\n- function:"
-      ^ Charon.Print.fn_ptr_kind_to_string ctx fun_id
+      ^ PrintPure.regular_fun_id_to_string pctx (FromLlbc (fun_id, None))
       ^ "\n- gid: "
       ^ RegionGroupId.to_string gid
       ^ "\n- output: " ^ output ^ "\n- back inputs: " ^ inputs];
@@ -906,7 +917,7 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
           outputs
       in
       "compute_back_outputs_for_gid:" ^ "\n- function:"
-      ^ Charon.Print.fn_ptr_kind_to_string ctx fun_id
+      ^ PrintPure.regular_fun_id_to_string pctx (FromLlbc (fun_id, None))
       ^ "\n- gid: "
       ^ RegionGroupId.to_string gid
       ^ "\n- inputs: " ^ inputs ^ "\n- back outputs: " ^ outputs];
@@ -972,10 +983,14 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
   (* Return *)
   { fwd_inputs; fwd_output; back_sg; fwd_info }
 
-and translate_fun_sig_with_regions_hierarchy_to_decomposed (span : span option)
-    (decls_ctx : C.decls_ctx) (fun_id : A.fn_ptr_kind)
-    (regions_hierarchy : T.region_var_groups) (sg : A.bound_fun_sig)
-    (input_names : string option list) : decomposed_fun_sig =
+and translate_fun_sigs (span : span option) (decls_ctx : C.decls_ctx)
+    (fun_id : fn_ptr_kind) (sg : A.bound_fun_sig)
+    (input_names : string option list) : fun_sigs =
+  (* Retrieve the list of parent backward functions *)
+  let regions_hierarchy =
+    RegionsHierarchy.compute_regions_hierarchy_for_sig span decls_ctx.crate sg
+  in
+
   let inst_sg : LlbcAst.inst_fun_sig =
     let ({ T.inputs; output; _ } : T.fun_sig) = sg.item_binder_value in
     [%sanity_check_opt_span] span
@@ -1016,28 +1031,87 @@ and translate_fun_sig_with_regions_hierarchy_to_decomposed (span : span option)
     translate_inst_fun_sig_to_decomposed_fun_type span decls_ctx fun_id inst_sg
       input_names
   in
-  { generics; llbc_generics = sg.item_binder_params; preds; fun_ty }
-
-and translate_fun_sig_to_decomposed (decls_ctx : C.decls_ctx)
-    (fun_id : FunDeclId.id) (sg : A.bound_fun_sig)
-    (input_names : string option list) : decomposed_fun_sig =
-  let span =
-    ([%silent_unwrap_opt_span] None
-       (FunDeclId.Map.find_opt fun_id decls_ctx.fun_ctx.fun_decls))
-      .item_meta
-      .span
+  let dsg =
+    { generics; llbc_generics = sg.item_binder_params; preds; fun_ty }
   in
-  (* Retrieve the list of parent backward functions *)
-  let regions_hierarchy =
-    RegionsHierarchy.compute_regions_hierarchy_for_sig (Some span)
-      decls_ctx.crate sg
+  translate_fun_sigs_from_decomposed dsg
+
+and translate_fun_sigs_from_decomposed (dsg : Pure.decomposed_fun_sig) :
+    fun_sigs =
+  let sg = translate_fun_sig_from_decomposed dsg in
+  let ty = mk_arrows sg.inputs sg.output in
+  { dsg; sg; ty }
+
+and translate_flat_trait_method_sigs (decls_ctx : C.decls_ctx)
+    (trait_decl : A.trait_decl) (method_id : TraitMethodId.id)
+    (_bound_method : A.trait_method T.binder) : fun_sigs =
+  let span = trait_decl.item_meta.span in
+  let trait_decl_ref : T.trait_decl_ref T.region_binder =
+    let generics =
+      Charon.TypesUtils.generic_args_of_params (Some span) trait_decl.generics
+    in
+    {
+      binder_regions = [];
+      binder_value = ({ id = trait_decl.def_id; generics } : T.trait_decl_ref);
+    }
   in
+  let trait_ref = ({ kind = T.Self; trait_decl_ref } : T.trait_ref) in
+  let trait_ref = translate_fwd_trait_ref (Some span) decls_ctx trait_ref in
+  let fun_id = TraitMethod (trait_ref, method_id) in
+  let sg =
+    [%silent_unwrap_opt_span] (Some span)
+      (Substitute.lookup_flat_method_sig decls_ctx.crate trait_decl.def_id
+         method_id)
+  in
+  let input_names = List.map (fun _ -> None) sg.item_binder_value.inputs in
+  translate_fun_sigs (Some span) decls_ctx fun_id sg input_names
 
-  translate_fun_sig_with_regions_hierarchy_to_decomposed (Some span) decls_ctx
-    (FunId (FRegular fun_id)) regions_hierarchy sg input_names
+and translate_trait_method_sig (decls_ctx : C.decls_ctx)
+    (trait_decl : A.trait_decl) (method_id : TraitMethodId.id)
+    (bound_method : A.trait_method T.binder) : Pure.fun_sig =
+  (* We do something somewhat silly here: we flatten the signature, translate
+     it, then unflatten it into two nested binders. This is needed because
+     [translate_fun_sig] doesn't handle nested binder levels. *)
+  let span = trait_decl.item_meta.span in
+  let flat_sig =
+    (translate_flat_trait_method_sigs decls_ctx trait_decl method_id
+       bound_method)
+      .sg
+  in
+  let trait_generics, _ =
+    translate_generic_params (Some span) trait_decl.generics
+  in
+  let method_llbc_generics = bound_method.binder_params in
+  let method_generics, preds =
+    translate_generic_params (Some span) method_llbc_generics
+  in
+  let generics =
+    append_generic_args
+      (generic_args_of_params trait_generics)
+      (bound_generic_args_of_params method_generics)
+  in
+  let subst = make_subst_from_generics flat_sig.generics generics in
+  let inputs = List.map (ty_substitute subst) flat_sig.inputs in
+  let output = ty_substitute subst flat_sig.output in
 
-and translate_fun_sig_from_decl_to_decomposed (decls_ctx : C.decls_ctx)
-    (fdef : LlbcAst.fun_decl) : decomposed_fun_sig =
+  let explicit_info = compute_explicit_info method_generics inputs in
+  let known_from_trait_refs =
+    compute_known_info explicit_info method_generics
+  in
+  {
+    flat_sig with
+    generics = method_generics;
+    llbc_generics = method_llbc_generics;
+    explicit_info;
+    known_from_trait_refs;
+    preds;
+    inputs;
+    output;
+  }
+
+and translate_fun_sigs_from_decl (decls_ctx : C.decls_ctx)
+    (fdef : LlbcAst.fun_decl) : fun_sigs =
+  let span = fdef.item_meta.span in
   let input_names =
     match fdef.body with
     | StructuredBody body ->
@@ -1046,19 +1120,9 @@ and translate_fun_sig_from_decl_to_decomposed (decls_ctx : C.decls_ctx)
           (LlbcAstUtils.fun_body_get_input_vars body)
     | _ -> List.map (fun _ -> None) fdef.signature.inputs
   in
-  let sg =
-    translate_fun_sig_to_decomposed decls_ctx fdef.def_id
-      (bound_fun_sig_of_decl fdef)
-      input_names
-  in
-  [%ltrace
-    "- name: "
-    ^ T.show_name fdef.item_meta.name
-    ^ "\n- sg:\n"
-    ^ PrintPure.decomposed_fun_sig_to_string
-        (PrintPure.decls_ctx_to_fmt_env decls_ctx)
-        sg];
-  sg
+  translate_fun_sigs (Some span) decls_ctx (FunId (FRegular fdef.def_id))
+    (bound_fun_sig_of_decl fdef)
+    input_names
 
 and mk_output_ty_from_effect_info (effect_info : fun_effect_info) (ty : ty) : ty
     =
@@ -1156,26 +1220,20 @@ and translate_fun_sig_from_decomposed (dsg : Pure.decomposed_fun_sig) : fun_sig
     back_effect_info;
   }
 
-and translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
+and translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : fn_ptr_kind)
     (sg : A.bound_fun_sig) (input_names : string option list) : Pure.fun_sig =
-  (* Compute the regions hierarchy *)
-  let regions_hierarchy =
-    RegionsHierarchy.compute_regions_hierarchy_for_sig None decls_ctx.crate sg
-  in
-  (* Compute the decomposed fun signature *)
-  let sg =
-    translate_fun_sig_with_regions_hierarchy_to_decomposed None decls_ctx
-      (FunId fun_id) regions_hierarchy sg input_names
-  in
-  (* Finish the translation *)
-  translate_fun_sig_from_decomposed sg
+  let sigs = translate_fun_sigs None decls_ctx fun_id sg input_names in
+  sigs.sg
 
 (** TODO: not very clean. *)
-and get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fn_ptr_kind)
+and get_fun_effect_info (ctx : bs_ctx) (fun_id : fn_ptr_kind)
     (gid : T.RegionGroupId.id option) : fun_effect_info =
   match fun_id with
-  | TraitMethod (_, _, fid) | FunId (FRegular fid) ->
-      let sg = A.FunDeclId.Map.find fid ctx.fun_sigs in
+  | TraitMethod _ | FunId (FRegular _) ->
+      let sg =
+        [%silent_unwrap_opt_span] (Some ctx.span)
+          (lookup_pure_fn_ptr_sig ctx fun_id)
+      in
       let sg = sg.dsg in
       let info =
         match gid with

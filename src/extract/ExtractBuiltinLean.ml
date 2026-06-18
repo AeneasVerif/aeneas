@@ -383,8 +383,8 @@ let lean_builtin_funs =
     mk_fun "core::clone::impls::{core::clone::Clone<&'0 @T>}::clone"
       "core.clone.impls.CloneShared.clone";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 18 *)
-    mk_fun "core::cmp::Eq::assert_receiver_is_total_eq"
-      "core.cmp.Eq.assert_receiver_is_total_eq.default";
+    mk_fun "core::cmp::Eq::assert_fields_are_eq"
+      "core.cmp.Eq.assert_fields_are_eq.default";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 98 *)
     mk_fun "core::cmp::Ord::clamp" "core.cmp.Ord.clamp.default";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 86 *)
@@ -948,8 +948,7 @@ let lean_builtin_trait_decls =
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 13 *)
     mk_trait_decl "core::cmp::Eq" "core.cmp.Eq"
       ~parent_clauses:[ "partialEqInst" ]
-      ~methods:
-        [ ("assert_receiver_is_total_eq", "assert_receiver_is_total_eq") ];
+      ~methods:[ ("assert_fields_are_eq", "assert_fields_are_eq") ];
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 76 *)
     mk_trait_decl "core::cmp::Ord" "core.cmp.Ord"
       ~parent_clauses:[ "eqInst"; "partialOrdInst" ]

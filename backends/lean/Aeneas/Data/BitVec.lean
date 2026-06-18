@@ -88,7 +88,7 @@ theorem BitVec.getElem_set {n} {bv: BitVec n} {b: Bool} {i: Fin n} {j: Nat}
 := by subst h; ext; rw [cast_eq, cast_eq]
 
 @[simp] theorem BitVec.getElem_ofBoolListLE {ls: List Bool} {i: Nat}
-: ∀ (h: i < ls.length), (BitVec.ofBoolListLE ls)[i] = ls[i]
+: ∀ (h: i < ls.length), (BitVec.ofBoolListLE ls)[i]'h = ls[i]
 := by
   let rec odd_div(x: Nat): (2*x + 1) / 2 = x := by
     cases x
@@ -112,9 +112,9 @@ theorem BitVec.getElem_set {n} {bv: BitVec n} {b: Bool} {i: Fin n} {j: Nat}
       apply BitVec.getElem_ofBoolListLE i_lt
       apply i_lt
 
-@[simp] theorem BitVec.getElem_ofFn {n} (f: Fin n → Bool) (i: Nat) {i_idx: i < n}
-: (BitVec.ofFn f)[i] = f ⟨i, i_idx⟩
-:= by simp [ofFn]
+@[simp] theorem BitVec.getElem_ofFn {n} (f: Fin n → Bool) (i: Nat) (i_idx: i < n)
+: (BitVec.ofFn f)[i]'i_idx = f ⟨i, i_idx⟩
+:= by simp only [ofFn, getElem_cast, getElem_ofBoolListLE, List.getElem_ofFn]
 
 /-!
 # Simp lemmas
@@ -122,7 +122,7 @@ theorem BitVec.getElem_set {n} {bv: BitVec n} {b: Bool} {i: Fin n} {j: Nat}
 
 attribute [simp, bvify] BitVec.ofNat_mul
 
-@[simp, simp_lists_safe, grind =, agrind =]
+@[simp, simp_lists_safe, grind =]
 theorem BitVec.getElem!_eq_false {w : ℕ} (x : BitVec w) (i : ℕ) (hi : w ≤ i) :
   x[i]! = false := by
   unfold getElem! instGetElem?OfGetElemOfDecidable decidableGetElem?
@@ -131,6 +131,7 @@ theorem BitVec.getElem!_eq_false {w : ℕ} (x : BitVec w) (i : ℕ) (hi : w ≤ 
   . omega
   . rfl
 
+@[simp_lists]
 theorem BitVec.getElem!_eq_getElem {w : ℕ} (x : BitVec w) (i : ℕ) (hi : i < w) :
   x[i]! = x[i] := by
   unfold getElem! instGetElem?OfGetElemOfDecidable decidableGetElem?
@@ -150,6 +151,8 @@ theorem BitVec.getElem!_eq_getElem {w : ℕ} (x : BitVec w) (i : ℕ) (hi : i < 
   by_cases i < w
   . simp only [getElem!_eq_getElem, getElem_and, *]
   . simp_all only [not_lt, getElem!_eq_false, Bool.and_self]
+
+attribute [simp_lists] BitVec.getElem_or BitVec.getElem_and BitVec.getElem_xor BitVec.getElem_not
 
 @[simp, simp_lists_safe]
 theorem Bool.toNat_ofNat_mod2 (x : ℕ) : (Bool.ofNat (x % 2)).toNat = x % 2 := by
@@ -224,10 +227,9 @@ theorem BitVec.and_two_pow_sub_one_eq_mod {w} (x : BitVec w) (n : Nat) :
       simp_all only [ofNat_eq_ofNat, not_lt, nonpos_iff_eq_zero, pow_zero, Nat.lt_one_iff,
         Nat.mod_self, tsub_zero, Nat.and_self]
 
-@[simp, simp_lists_safe, simp_scalar_safe, grind =, agrind =]
+@[simp, simp_lists_safe, simp_scalar_safe, grind =]
 theorem BitVec.shiftLeft_sub_one_eq_mod {w} (x : BitVec w) (n : Nat) :
-  x &&& 1#w <<< n - 1#w = x % 2 ^ n := by
-  simp only [BitVec.ofNat_eq_ofNat]
+  x &&& 1#w <<< n - 1#w = x % 2#w ^ n := by
   simp only [BitVec.shiftLeft_eq_mul_twoPow]
   have : 1#w * BitVec.twoPow w n = 2#w ^ n := by
     have : 1#w = 1 := by simp
@@ -239,28 +241,48 @@ theorem BitVec.shiftLeft_sub_one_eq_mod {w} (x : BitVec w) (n : Nat) :
   simp only [BitVec.and_two_pow_sub_one_eq_mod]
 
 @[simp, simp_lists_safe, grind =, agrind =]
-theorem BitVec.getElem!_zero (w i : ℕ ) : (0#w)[i]! = false := by
+theorem BitVec.getElem!_zero (w i : ℕ) : (0#w)[i]! = false := by
   simp only [getElem!_eq_testBit_toNat, toNat_ofNat, Nat.zero_mod, Nat.zero_testBit]
 
-@[simp, simp_lists_safe, grind =, agrind =]
+@[simp, simp_lists_safe, grind =]
 theorem BitVec.getElem!_shiftLeft_false {w} (v : BitVec w) (n i : ℕ) (h : i < n ∨ w ≤ i) :
   (v <<< n)[i]! = false := by
   simp only [getElem!_eq_testBit_toNat, toNat_shiftLeft, Nat.testBit_mod_two_pow,
     Nat.testBit_shiftLeft, ge_iff_le, Bool.and_eq_false_imp, decide_eq_true_eq]
   omega
 
-@[simp, simp_lists_safe, grind =, agrind =]
+@[simp, simp_lists_safe, grind =]
 theorem BitVec.getElem!_shiftLeft_eq {w} (v : BitVec w) (n i : ℕ) (h : n ≤ i ∧ i < w) :
   (v <<< n)[i]! = v[i - n]! := by
   simp only [getElem!_eq_testBit_toNat, toNat_shiftLeft, Nat.testBit_mod_two_pow, h, decide_true,
     Nat.testBit_shiftLeft, Bool.true_and]
+
+attribute [simp_lists] BitVec.getElem_shiftLeft
+
+@[simp_lists_safe]
+theorem BitVec.getElem_shiftLeft'' {w} (v : BitVec w) (n i : ℕ) (hw : i < w) (hn : n ≤ i) :
+  (v <<< n)[i]'hw = v[i - n] := by
+  rw [← BitVec.getElem!_eq_getElem (hi := hw), ← BitVec.getElem!_eq_getElem (hi := by omega)]
+  exact BitVec.getElem!_shiftLeft_eq v n i ⟨hn, hw⟩
 
 @[simp, simp_lists_safe, grind =, agrind =]
 theorem BitVec.getElem!_shiftRight {w} (v : BitVec w) (n i : ℕ) :
   (v >>> n)[i]! = v[n + i]! := by
   simp only [getElem!_eq_testBit_toNat, toNat_ushiftRight, Nat.testBit_shiftRight]
 
-@[simp, simp_lists_safe, grind =, agrind =]
+@[simp, simp_lists_safe]
+theorem BitVec.getElem_shiftRight_lt {m n : Nat} (v : BitVec m) (hm : i < m) (h : n + i < m) :
+    (v >>> n)[i]'hm = v[n + i] := by
+  rw [← BitVec.getElem!_eq_getElem (hi := hm), ← BitVec.getElem!_eq_getElem (hi := h)]
+  exact BitVec.getElem!_shiftRight v n i
+
+@[simp, simp_lists_safe]
+theorem BitVec.getElem_shiftRight_false {m n : Nat} (v : BitVec m) (hm : i < m) (h : m ≤ n + i) :
+    (v >>> n)[i]'hm = false := by
+  rw [← BitVec.getElem!_eq_getElem (hi := hm), BitVec.getElem!_shiftRight]
+  exact BitVec.getElem!_eq_false v (n + i) h
+
+@[simp, simp_lists_safe, grind =]
 theorem BitVec.getElem!_mod_pow2_eq {w} (x : BitVec w) (i j : ℕ) (h : j < i) :
   (x % 2#w ^ i)[j]! = x[j]! := by
   simp [BitVec.getElem!_eq_testBit_toNat]
@@ -290,7 +312,13 @@ theorem BitVec.getElem!_mod_pow2_eq {w} (x : BitVec w) (i j : ℕ) (h : j < i) :
           simp only [Nat.pow_add, Nat.mul_mod_right]
         simp only [this, Nat.mod_zero]
 
-@[simp, simp_lists_safe, grind =, agrind =]
+@[simp, simp_lists_safe, grind =]
+theorem BitVec.getElem_mod_pow2_eq {w} (x : BitVec w) (i j : ℕ) (hw : j < w) (h : j < i) :
+  (x % 2#w ^ i)[j] = x[j] := by
+  rw [← BitVec.getElem!_eq_getElem (hi := hw), ← BitVec.getElem!_eq_getElem (hi := hw)]
+  exact BitVec.getElem!_mod_pow2_eq x i j h
+
+@[simp, simp_lists_safe, grind =]
 theorem BitVec.getElem!_mod_pow2_false {w} (x : BitVec w) (i j : ℕ) (h : i ≤ j) :
   (x % 2#w ^ i)[j]! = false := by
   simp [BitVec.getElem!_eq_testBit_toNat]
@@ -327,8 +355,14 @@ theorem BitVec.getElem!_mod_pow2_false {w} (x : BitVec w) (i j : ℕ) (h : i ≤
       have : 2^w ≤ 2^j := by apply Nat.pow_le_pow_of_le <;> omega
       omega
 
-@[simp_lists_safe, grind =, agrind =]
-theorem BitVec.getElem!_toNat_eq_false {n} (b : BitVec n) (i : ℕ) (hi : n ≤ i) :
+@[simp, simp_lists_safe, grind =]
+theorem BitVec.getElem_mod_pow2_false {w} (x : BitVec w) (i j : ℕ) (hw : j < w) (h : i ≤ j) :
+  (x % 2#w ^ i)[j] = false := by
+  rw [← BitVec.getElem!_eq_getElem (hi := hw)]
+  exact BitVec.getElem!_mod_pow2_false x i j h
+
+@[simp_lists_safe, grind =]
+theorem BitVec.testBit_toNat_eq_false {n} (b : BitVec n) (i : ℕ) (hi : n ≤ i) :
   b.toNat.testBit i = false := by
   rw [← BitVec.getElem!_eq_testBit_toNat]
   simp_lists
@@ -373,40 +407,24 @@ def BitVec.fromLEBytes (l : List Byte) : BitVec (8 * l.length) :=
 def BitVec.fromBEBytes (l : List Byte) : BitVec (8 * l.length) :=
   (BitVec.fromLEBytes l.reverse).cast (by simp)
 
-@[simp, simp_lists_safe, simp_scalar_safe, grind =, agrind =]
-theorem BitVec.toLEBytes_length {w} (v : BitVec w) (h : w % 8 = 0) :
-  v.toLEBytes.length = w / 8 := by
+@[simp, simp_lists_safe, simp_scalar_safe, scalar_tac_simps, grind =, agrind =]
+theorem BitVec.toLEBytes_length {w} (v : BitVec w) :
+  v.toLEBytes.length = (w + 7) / 8 := by
   if h1: w = 0 then
-    simp only [toLEBytes, gt_iff_lt, lt_self_iff_false, ↓reduceIte, List.length_nil, Nat.zero_div,
-      h1]
+    subst h1; simp [toLEBytes]
   else
     unfold toLEBytes
-    have : w > 0 := by omega
-    simp only [gt_iff_lt, ↓reduceIte, List.length_cons, this]
+    have hw : w > 0 := by omega
+    simp only [gt_iff_lt, ↓reduceIte, List.length_cons, hw]
     rw [BitVec.toLEBytes_length]
-    . have : w ≥ 8 := by omega
-      have : w = (w  - 8) + 8 := by omega
-      conv => rhs; rw [this]
-      simp only [Nat.ofNat_pos, Nat.add_div_right]
-    . omega
+    omega
 
-@[simp, simp_lists_safe, grind =, agrind =]
+@[simp, simp_lists_safe, grind =]
 theorem BitVec.getElem!_cast (x : BitVec n) (h : n = m) (i : ℕ) :
   (x.cast h)[i]! = x[i]! := by
   simp only [getElem!_eq_testBit_toNat, toNat_cast]
 
--- TODO: move
-@[simp_lists_safe, grind =, agrind =]
-theorem List.getElem!_cons_eq_getElem!_sub {α} [Inhabited α] (x : α) (tl : List α) (i : ℕ) (hi : 0 < i) :
-  (x :: tl)[i]! = tl[i - 1]! := by
-  simp only [Nat.not_eq, ne_eq, not_lt_zero', or_true, getElem!_cons_nzero, hi]
-
-@[simp_lists_safe, grind =, agrind =]
-theorem List.getElem!_cons_zero' {α} [Inhabited α] (x : α) (tl : List α) (i : ℕ) (hi : i = 0) :
-  (x :: tl)[i]! = x := by
-  simp only [hi, getElem!_cons_zero]
-
-@[simp, simp_lists_safe, grind =, agrind =]
+@[simp, simp_lists_safe, grind =]
 theorem BitVec.toLEBytes_getElem!_testBit (v : BitVec w) (i j : ℕ) (hj : j < 8) :
   (v.toLEBytes[i]!).testBit j = v[8 * i + j]! := by
   unfold toLEBytes
@@ -431,7 +449,7 @@ theorem BitVec.toLEBytes_getElem!_testBit (v : BitVec w) (i j : ℕ) (hj : j < 8
     simp_lists
 termination_by i
 
-@[simp, simp_lists_safe, grind =, agrind =]
+@[simp, simp_lists_safe, grind =]
 theorem BitVec.fromLEBytes_getElem! (v : List Byte) (j : ℕ) :
   (BitVec.fromLEBytes v)[j]! = v[j / 8]!.testBit (j % 8) := by
   unfold BitVec.fromLEBytes
@@ -443,7 +461,7 @@ theorem BitVec.fromLEBytes_getElem! (v : List Byte) (j : ℕ) :
     by_cases hj: j < 8
     . have : j < 8 * (v'.length + 1) := by scalar_tac
       simp_lists
-      erw [getElem!_eq_testBit_toNat]
+      rw [BitVec.getElem_eq_testBit_toNat]
       have : j % 8 = j := by apply Nat.mod_eq_of_lt; omega
       simp [*]
     . have : 0 < j / 8 := by scalar_tac +nonLin
@@ -465,32 +483,74 @@ theorem BitVec.fromLEBytes_getElem! (v : List Byte) (j : ℕ) :
         simp only [h0, h1]
       . simp_lists
 
-@[simp, simp_lists_safe, grind =, agrind =]
+@[simp, simp_lists_safe, grind =]
+theorem BitVec.toLEBytes_getElem_testBit (v : BitVec w) (i j : ℕ)
+  (hi : i < v.toLEBytes.length)
+  (h : j < 8 ∧ 8 * i + j < w) :
+  (v.toLEBytes[i]'hi).testBit j = v[8 * i + j]'(by grind) := by
+  rw [List.Inhabited_getElem_eq_getElem! _ _ hi, ← BitVec.getElem!_eq_getElem (hi := h.right)]
+  exact BitVec.toLEBytes_getElem!_testBit v i j h.left
+
+@[simp, simp_lists_safe, grind =]
+theorem BitVec.toLEBytes_getElem_testBit_eq_false (v : BitVec w) (i j : ℕ)
+  (hi : i < v.toLEBytes.length)
+  (h : 8 ≤ j ∨ w ≤ 8 * i + j) :
+  (v.toLEBytes[i]'hi).testBit j = false := by
+  rcases h with h8 | hw
+  · exact BitVec.testBit_toNat_eq_false _ j h8
+  · by_cases hj : j < 8
+    · rw [List.Inhabited_getElem_eq_getElem! _ _ hi, BitVec.toLEBytes_getElem!_testBit v i j hj,
+          BitVec.getElem!_eq_false v (8 * i + j) hw]
+    · exact BitVec.testBit_toNat_eq_false _ j (by omega)
+
+@[simp, simp_lists_safe, grind =]
+theorem BitVec.fromLEBytes_getElem (v : List Byte) (j : ℕ) (hj : j < 8 * v.length) :
+  (BitVec.fromLEBytes v)[j]'hj = v[j / 8].testBit (j % 8) := by
+  have hjdiv : j / 8 < v.length := by omega
+  rw [← BitVec.getElem!_eq_getElem (hi := hj), List.Inhabited_getElem_eq_getElem! v (j / 8) hjdiv]
+  exact BitVec.fromLEBytes_getElem! v j
+
+@[simp, simp_lists_safe, grind =]
 theorem BitVec.fromLEBytes_toLEBytes {w : ℕ} (h : w % 8 = 0) (b : BitVec w) :
-  BitVec.fromLEBytes b.toLEBytes = BitVec.cast (by simp only [toLEBytes_length, Nat.dvd_iff_mod_eq_zero, Nat.mul_div_cancel', h]) b := by
+  BitVec.fromLEBytes b.toLEBytes = BitVec.cast (by simp only [toLEBytes_length]; omega) b := by
   simp only [eq_iff, fromLEBytes_getElem!, getElem!_cast]
   simp_lists
-  simp only [Nat.dvd_iff_mod_eq_zero, h, Nat.mul_div_cancel']
+  have : (w + 7) / 8 = w / 8 := by omega
+  simp only [this, Nat.dvd_iff_mod_eq_zero, h, Nat.mul_div_cancel']
   simp only [Nat.div_add_mod, implies_true]
 
-@[simp]
-theorem BitVec.toBEBytes_length {w} (v : BitVec w) (h : w % 8 = 0) :
-  v.toBEBytes.length = w / 8 := by
+@[simp, simp_lists_safe, simp_scalar_safe, scalar_tac_simps, grind =, agrind =]
+theorem BitVec.toBEBytes_length {w} (v : BitVec w) :
+  v.toBEBytes.length = (w + 7) / 8 := by
   unfold toBEBytes
-  simp only [List.length_reverse, toLEBytes_length, h]
+  simp only [List.length_reverse, toLEBytes_length]
 
-@[simp, simp_lists_safe, grind =, agrind =]
+@[simp, simp_lists_safe, grind =]
 theorem BitVec.getElem!_default_eq_false {w} (i : ℕ) :
   (default : BitVec w)[i]! = false := by simp only [default, zero_eq, getElem!_zero]
 
-@[simp, simp_lists_safe, grind =, agrind =]
+@[simp, simp_lists_safe, grind =]
 theorem BitVec.getElem!_setWidth {n : Nat} (m : Nat) (x : BitVec n) (i : Nat) (h : i < m) :
   (setWidth m x)[i]! = x[i]! := by
   simp only [getElem!_eq_testBit_toNat, toNat_setWidth, Nat.testBit_mod_two_pow,
     Bool.and_eq_right_iff_imp, decide_eq_true_eq]
   omega
 
-@[simp, simp_lists_safe, grind =, agrind =]
+attribute [simp_lists] BitVec.getElem_setWidth
+attribute [simp_lists_safe] BitVec.getLsbD_eq_getElem
+
+@[simp, simp_lists_safe]
+theorem getLsbD_eq_false {x : BitVec w} {i : Nat} (h : w ≤ i) :
+  x.getLsbD i = false := by
+  simp only [BitVec.getLsbD]
+  exact BitVec.testBit_toNat_eq_false x i h
+
+@[simp_lists_safe↓]
+theorem BitVec.getElem_setWidth_eq_getElem {n : Nat} (m : Nat) (x : BitVec n) (i : Nat)
+  (hm : i < m) (hn : i < n) : (setWidth m x)[i] = x[i] :=
+  by grind
+
+@[simp, simp_lists_safe, grind =]
 theorem BitVec.getElem!_setWidth_eq_false {n : Nat} (m : Nat) (x : BitVec n)
   (i : Nat) (h : n ≤ i ∨ m ≤ i) :
   (setWidth m x)[i]! = false := by
@@ -502,13 +562,14 @@ theorem BitVec.getElem!_setWidth_eq_false {n : Nat} (m : Nat) (x : BitVec n)
   simp only [getElem!_eq_testBit_toNat] at this
   apply this
 
-@[simp, simp_lists_safe, grind =, agrind =]
+@[simp, simp_lists_safe, grind =]
 theorem BitVec.getElem!_toLEBytes {w : ℕ} (b : BitVec w) (i j : ℕ) (h : j < 8) :
   (b.toLEBytes[i]!)[j]! = b[8 * i + j]! := by
   if h1: w = 0 then
-    simp_all only [Nat.zero_mod, toLEBytes_length, Nat.zero_div, not_lt_zero', not_false_eq_true,
-      getElem!_neg, getElem!_pos, Bool.default_bool]
-    simp only [default, zero_eq, getElem_zero]
+    subst h1
+    simp only [toLEBytes, gt_iff_lt, lt_self_iff_false, ↓reduceIte, List.length_nil,
+      _root_.not_lt_zero, not_false_eq_true, getElem!_neg, getElem!_default_eq_false,
+      Bool.default_bool]
   else
     unfold toLEBytes
     have : w > 0 := by omega
@@ -526,14 +587,48 @@ theorem BitVec.getElem!_toLEBytes {w : ℕ} (b : BitVec w) (i j : ℕ) (h : j < 
         . simp_lists
       . omega
 
-@[simp, simp_lists_safe, grind =, agrind =]
+@[simp, simp_lists_safe, grind =]
 theorem BitVec.testBit_getElem!_toLEBytes {w:ℕ} (x : BitVec w) (i j : ℕ) (h : j < 8) :
   x.toLEBytes[i]!.testBit j = x[8 * i + j]! := by
   have := getElem!_toLEBytes x i j h
   simp_all only [List.getElem!_eq_getElem?_getD, getElem!_eq_testBit_toNat]
 
+@[simp, simp_lists_safe, grind =]
+theorem BitVec.getElem_toLEBytes_eq_getElem {w : ℕ} (b : BitVec w) (i j : ℕ)
+  (hi : i < b.toLEBytes.length) (h : j < 8) (hij : 8 * i + j < w) :
+  (b.toLEBytes[i])[j] = b[8 * i + j] := by
+  rw [List.Inhabited_getElem_eq_getElem! _ _ hi, ← BitVec.getElem!_eq_getElem (hi := h),
+      ← BitVec.getElem!_eq_getElem (hi := hij)]
+  exact BitVec.getElem!_toLEBytes b i j h
+
+@[simp, simp_lists_safe, grind =]
+theorem BitVec.getElem_toLEBytes_eq_false {w : ℕ} (b : BitVec w) (i j : ℕ)
+  (hi : i < b.toLEBytes.length) (h : j < 8) (hij : w ≤ 8 * i + j) :
+  (b.toLEBytes[i])[j] = false := by
+  rw [List.Inhabited_getElem_eq_getElem! _ _ hi, ← BitVec.getElem!_eq_getElem (hi := h),
+      BitVec.getElem!_toLEBytes b i j h]
+  exact BitVec.getElem!_eq_false b (8 * i + j) hij
+
+@[simp, simp_lists_safe, grind =]
+theorem BitVec.testBit_getElem_toLEBytes_eq_getElem {w:ℕ} (x : BitVec w) (i j : ℕ)
+  (hi : i < x.toLEBytes.length) (h : j < 8 ∧ 8 * i + j < w) :
+  x.toLEBytes[i].testBit j = x[8 * i + j] := by
+  rw [List.Inhabited_getElem_eq_getElem! _ _ hi, ← BitVec.getElem!_eq_getElem (hi := h.right)]
+  exact BitVec.testBit_getElem!_toLEBytes x i j h.left
+
+@[simp, simp_lists_safe, grind =]
+theorem BitVec.testBit_getElem_toLEBytes_eq_false {w:ℕ} (x : BitVec w) (i j : ℕ)
+  (hi : i < x.toLEBytes.length) (h : 8 ≤ j ∨ w ≤ 8 * i + j) :
+  x.toLEBytes[i].testBit j = false := by
+  rcases h with h8 | hw
+  · exact BitVec.testBit_toNat_eq_false _ j h8
+  · by_cases hj : j < 8
+    · rw [List.Inhabited_getElem_eq_getElem! _ _ hi, BitVec.testBit_getElem!_toLEBytes x i j hj,
+          BitVec.getElem!_eq_false x (8 * i + j) hw]
+    · exact BitVec.testBit_toNat_eq_false _ j (by omega)
+
 theorem BitVec.or_mod_two_pow {n : Nat} (a b : BitVec n) (k : Nat) :
-  (a ||| b) % 2 ^ k = (a % 2 ^ k) ||| (b % 2 ^ k) := by
+  (a ||| b) % 2#n ^ k = (a % 2#n ^ k) ||| (b % 2#n ^ k) := by
   by_cases k < n <;> natify <;> simp
   · have : 2 ^ k < 2 ^ n := by simp_scalar
     cases k
@@ -548,16 +643,16 @@ theorem BitVec.or_mod_two_pow {n : Nat} (a b : BitVec n) (k : Nat) :
 
 @[simp]
 theorem BitVec.or_mod_two_pow_iff_true {n : Nat} (a b : BitVec n) (k : Nat) :
-  ((a ||| b) % 2 ^ k = (a % 2 ^ k) ||| (b % 2 ^ k)) ↔ True := by
+  ((a ||| b) % 2#n ^ k = (a % 2#n ^ k) ||| (b % 2#n ^ k)) ↔ True := by
   simp only [BitVec.or_mod_two_pow]
 
 @[simp]
 theorem BitVec.or_mod_two_pow_iff_true' {n : Nat} (a b : BitVec n) (k : Nat) :
-  ((a % 2 ^ k) ||| (b % 2 ^ k) = (a ||| b) % 2 ^ k) ↔ True := by
+  ((a % 2#n ^ k) ||| (b % 2#n ^ k) = (a ||| b) % 2#n ^ k) ↔ True := by
   simp only [BitVec.or_mod_two_pow]
 
 theorem BitVec.and_mod_two_pow {n : Nat} (a b : BitVec n) (k : Nat) :
-  (a &&& b) % 2 ^ k = (a % 2 ^ k) &&& (b % 2 ^ k) := by
+  (a &&& b) % 2#n ^ k = (a % 2#n ^ k) &&& (b % 2#n ^ k) := by
   by_cases k < n <;> natify <;> simp
   · have : 2 ^ k < 2 ^ n := by simp_scalar
     cases k
@@ -572,16 +667,16 @@ theorem BitVec.and_mod_two_pow {n : Nat} (a b : BitVec n) (k : Nat) :
 
 @[simp]
 theorem BitVec.and_mod_two_pow_iff_true {n : Nat} (a b : BitVec n) (k : Nat) :
-  ((a &&& b) % 2 ^ k = (a % 2 ^ k) &&& (b % 2 ^ k)) ↔ True := by
+  ((a &&& b) % 2#n ^ k = (a % 2#n ^ k) &&& (b % 2#n ^ k)) ↔ True := by
   simp only [BitVec.and_mod_two_pow]
 
 @[simp]
 theorem BitVec.and_mod_two_pow_iff_true' {n : Nat} (a b : BitVec n) (k : Nat) :
-  ((a % 2 ^ k) &&& (b % 2 ^ k) = (a &&& b) % 2 ^ k) ↔ True := by
+  ((a % 2#n ^ k) &&& (b % 2#n ^ k) = (a &&& b) % 2#n ^ k) ↔ True := by
   simp only [BitVec.and_mod_two_pow]
 
 theorem BitVec.xor_mod_two_pow {n : Nat} (a b : BitVec n) (k : Nat) :
-  (a ^^^ b) % 2 ^ k = (a % 2 ^ k) ^^^ (b % 2 ^ k) := by
+  (a ^^^ b) % 2#n ^ k = (a % 2#n ^ k) ^^^ (b % 2#n ^ k) := by
   by_cases k < n <;> natify <;> simp
   · have : 2 ^ k < 2 ^ n := by simp_scalar
     cases k
@@ -596,12 +691,12 @@ theorem BitVec.xor_mod_two_pow {n : Nat} (a b : BitVec n) (k : Nat) :
 
 @[simp]
 theorem BitVec.xor_mod_two_pow_iff_true {n : Nat} (a b : BitVec n) (k : Nat) :
-  ((a ^^^ b) % 2 ^ k = (a % 2 ^ k) ^^^ (b % 2 ^ k)) ↔ True := by
+  ((a ^^^ b) % 2#n ^ k = (a % 2#n ^ k) ^^^ (b % 2#n ^ k)) ↔ True := by
   simp only [BitVec.xor_mod_two_pow]
 
 @[simp]
 theorem BitVec.xor_mod_two_pow_iff_true' {n : Nat} (a b : BitVec n) (k : Nat) :
-  ((a % 2 ^ k) ^^^ (b % 2 ^ k) = (a ^^^ b) % 2 ^ k) ↔ True := by
+  ((a % 2#n ^ k) ^^^ (b % 2#n ^ k) = (a ^^^ b) % 2#n ^ k) ↔ True := by
   simp only [BitVec.xor_mod_two_pow]
 
 @[simp, simp_lists_safe, simp_scalar_safe]

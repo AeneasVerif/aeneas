@@ -470,7 +470,7 @@ let rec compare_rtys ?(allow_erased = false) (span : Meta.span) (ctx : eval_ctx)
   | TVar id1, TVar id2 ->
       [%sanity_check] span (id1 = id2);
       default
-  | TTraitType _, TTraitType _ ->
+  | TTraitType (_, _, _), TTraitType (_, _, _) ->
       (* The types should have been normalized. If after normalization we
          get trait types, we can consider them as variables *)
       [%sanity_check] span (ty1 = ty2);
@@ -1114,21 +1114,13 @@ let proj_borrows_intersects_proj_loans (span : Meta.span) (ctx : eval_ctx)
   else false
 
 (** Result of looking up aproj_borrows which intersect a given aproj_loans in
-    the context.
-
-    Note that because we we force the expansion of primitively copyable values
-    before giving them to abstractions, we only have the following
-    possibilities:
-    - no aproj_borrows, in which case the symbolic value was either dropped or
-      is in the context
-    - exactly one aproj_borrows over a non-shared value
-    - potentially several aproj_borrows over shared values
-
-    The result contains the ids of the abstractions in which the projectors were
-    found, as well as the projection types used in those abstractions. *)
-type looked_up_aproj_borrows =
-  | NonSharedProj of AbsId.id * rty * abs_level
-  | SharedProjs of (AbsId.id * rty * abs_level) list
+    the context. *)
+type looked_up_aproj_borrows = {
+  non_shared_projs : (AbsId.id * rty * abs_level) list;
+      (** Projections appearing below a regular symbolic borrows projector *)
+  shared_projs : (AbsId.id * rty * abs_level) list;
+      (** Projections appearing below an [aproj_shared_borrows] *)
+}
 
 (** Lookup the aproj_borrows (including aproj_shared_borrows) over a symbolic
     value which intersect a given set of regions.
@@ -1140,17 +1132,13 @@ type looked_up_aproj_borrows =
 let lookup_intersecting_aproj_borrows_opt (span : Meta.span)
     (lookup_shared : bool) (regions : RegionId.Set.t) (proj : symbolic_proj)
     (ctx : eval_ctx) : looked_up_aproj_borrows option =
-  let found : looked_up_aproj_borrows option ref = ref None in
-  let set_non_shared ((id, ty, level) : AbsId.id * rty * abs_level) : unit =
-    match !found with
-    | None -> found := Some (NonSharedProj (id, ty, level))
-    | Some _ -> [%craise] span "Unreachable"
+  let shared_projs = ref [] in
+  let non_shared_projs = ref [] in
+  let add_non_shared (x : AbsId.id * rty * abs_level) : unit =
+    non_shared_projs := x :: !non_shared_projs
   in
   let add_shared (x : AbsId.id * rty * abs_level) : unit =
-    match !found with
-    | None -> found := Some (SharedProjs [ x ])
-    | Some (SharedProjs pl) -> found := Some (SharedProjs (x :: pl))
-    | Some (NonSharedProj _) -> [%craise] span "Unreachable"
+    shared_projs := x :: !shared_projs
   in
   let check_add_proj_borrows (is_shared : bool) (abs : abs) (level : abs_level)
       (proj' : symbolic_proj) =
@@ -1160,7 +1148,7 @@ let lookup_intersecting_aproj_borrows_opt (span : Meta.span)
         (regions, proj.sv_id, proj.proj_ty)
     then
       let x = (abs.abs_id, proj.proj_ty, level) in
-      if is_shared then add_shared x else set_non_shared x
+      if is_shared then add_shared x else add_non_shared x
     else ()
   in
   let visitor =
@@ -1198,27 +1186,10 @@ let lookup_intersecting_aproj_borrows_opt (span : Meta.span)
   (* Visit *)
   visitor#visit_eval_ctx None ctx;
   (* Return *)
-  !found
-
-(** Lookup the aproj_borrows (not aproj_borrows_shared!) over a symbolic value
-    which intersects a given set of regions.
-
-    Note that there should be **at most one** (one reason is that we force the
-    expansion of primitively copyable values before giving them to
-    abstractions).
-
-    Returns the id of the owning abstraction, and the projection type used in
-    this abstraction. *)
-let lookup_intersecting_aproj_borrows_not_shared_opt (span : Meta.span)
-    (regions : RegionId.Set.t) (proj : symbolic_proj) (ctx : eval_ctx) :
-    (AbsId.id * rty * abs_level) option =
-  let lookup_shared = false in
-  match
-    lookup_intersecting_aproj_borrows_opt span lookup_shared regions proj ctx
-  with
-  | None -> None
-  | Some (NonSharedProj (abs_id, rty, level)) -> Some (abs_id, rty, level)
-  | _ -> [%craise] span "Unexpected"
+  let shared_projs = !shared_projs in
+  let non_shared_projs = !non_shared_projs in
+  if shared_projs = [] && non_shared_projs = [] then None
+  else Some { shared_projs; non_shared_projs }
 
 (** Similar to {!lookup_intersecting_aproj_borrows_opt}, but updates the values.
 
@@ -2269,9 +2240,11 @@ let normalize_proj_ty (regions : RegionId.Set.t) (ty : rty) : rty =
   in
   visitor#visit_ty () ty
 
-(** Compute the union of two normalized projection types *)
-let rec norm_proj_tys_union (span : Meta.span) (ctx : eval_ctx) (ty1 : rty)
-    (ty2 : rty) : rty =
+(** Compute the union of two normalized projection types.
+
+    [strict]: if true, the projection types must be disjoint. *)
+let rec norm_proj_tys_union (span : Meta.span) ?(strict : bool = true)
+    (ctx : eval_ctx) (ty1 : rty) (ty2 : rty) : rty =
   match (ty1, ty2) with
   | TAdt tref1, TAdt tref2 ->
       [%sanity_check] span (tref1.id = tref2.id);
@@ -2279,7 +2252,8 @@ let rec norm_proj_tys_union (span : Meta.span) (ctx : eval_ctx) (ty1 : rty)
         {
           id = tref1.id;
           generics =
-            norm_proj_generic_args_union span ctx tref1.generics tref2.generics;
+            norm_proj_generic_args_union span ~strict ctx tref1.generics
+              tref2.generics;
         }
   | TVar id1, TVar id2 ->
       [%sanity_check] span (id1 = id2);
@@ -2291,48 +2265,64 @@ let rec norm_proj_tys_union (span : Meta.span) (ctx : eval_ctx) (ty1 : rty)
   | TRef (r1, ty1, rk1), TRef (r2, ty2, rk2) ->
       [%sanity_check] span (rk1 = rk2);
       TRef
-        ( norm_proj_regions_union span r1 r2,
-          norm_proj_tys_union span ctx ty1 ty2,
+        ( norm_proj_regions_union span ~strict r1 r2,
+          norm_proj_tys_union span ~strict ctx ty1 ty2,
           rk1 )
   | TRawPtr (ty1, rk1), TRawPtr (ty2, rk2) ->
       [%sanity_check] span (rk1 = rk2);
-      TRawPtr (norm_proj_tys_union span ctx ty1 ty2, rk1)
-  | TTraitType (tr1, item1), TTraitType (tr2, item2) ->
+      TRawPtr (norm_proj_tys_union span ~strict ctx ty1 ty2, rk1)
+  | TTraitType (tr1, item1, generics1), TTraitType (tr2, item2, generics2) ->
       [%sanity_check] span (item1 = item2);
-      TTraitType (norm_proj_trait_refs_union span tr1 tr2, item1)
+      (* There might be regions but let's ignore this for now... *)
+      [%sanity_check] span (generics1 = generics2);
+      TTraitType (norm_proj_trait_refs_union span tr1 tr2, item1, generics1)
   | ( TFnPtr
         {
           binder_regions = binder_regions1;
           binder_value =
-            { is_unsafe = false; inputs = inputs1; output = output1 };
+            {
+              is_unsafe = false;
+              inputs = inputs1;
+              output = output1;
+              abi = abi1;
+            };
         },
       TFnPtr
         {
           binder_regions = binder_regions2;
           binder_value =
-            { is_unsafe = false; inputs = inputs2; output = output2 };
-        } ) ->
+            {
+              is_unsafe = false;
+              inputs = inputs2;
+              output = output2;
+              abi = abi2;
+            };
+        } )
+    when abi1 = abi2 ->
       (* TODO: general case *)
       [%sanity_check] span (binder_regions1 = []);
       [%sanity_check] span (binder_regions2 = []);
       let binder_value =
         {
           is_unsafe = false;
-          inputs = List.map2 (norm_proj_tys_union span ctx) inputs1 inputs2;
-          output = norm_proj_tys_union span ctx output1 output2;
+          inputs =
+            List.map2 (norm_proj_tys_union span ~strict ctx) inputs1 inputs2;
+          output = norm_proj_tys_union span ~strict ctx output1 output2;
+          abi = abi1;
         }
       in
       TFnPtr { binder_regions = []; binder_value }
   | TArray (ty0, len0), TArray (ty1, len1) ->
       [%sanity_check] span (len0 = len1);
-      TArray (norm_proj_tys_union span ctx ty0 ty1, len0)
-  | TSlice ty0, TSlice ty1 -> TSlice (norm_proj_tys_union span ctx ty0 ty1)
+      TArray (norm_proj_tys_union span ~strict ctx ty0 ty1, len0)
+  | TSlice ty0, TSlice ty1 ->
+      TSlice (norm_proj_tys_union span ~strict ctx ty0 ty1)
   | _ ->
       [%ltrace
         "- ty1: " ^ ty_to_string ctx ty1 ^ "\n- ty2: " ^ ty_to_string ctx ty2];
       [%internal_error] span
 
-and norm_proj_generic_args_union span (ctx : eval_ctx)
+and norm_proj_generic_args_union span ?(strict : bool = true) (ctx : eval_ctx)
     (generics1 : generic_args) (generics2 : generic_args) : generic_args =
   let {
     regions = regions1;
@@ -2351,8 +2341,8 @@ and norm_proj_generic_args_union span (ctx : eval_ctx)
     generics2
   in
   {
-    regions = List.map2 (norm_proj_regions_union span) regions1 regions2;
-    types = List.map2 (norm_proj_tys_union span ctx) types1 types2;
+    regions = List.map2 (norm_proj_regions_union span ~strict) regions1 regions2;
+    types = List.map2 (norm_proj_tys_union span ctx ~strict) types1 types2;
     const_generics =
       List.map2
         (norm_proj_const_generics_union span)
@@ -2361,15 +2351,17 @@ and norm_proj_generic_args_union span (ctx : eval_ctx)
       List.map2 (norm_proj_trait_refs_union span) trait_refs1 trait_refs2;
   }
 
-and norm_proj_regions_union (span : Meta.span) (r1 : region) (r2 : region) :
-    region =
+and norm_proj_regions_union (span : Meta.span) ?(strict : bool = true)
+    (r1 : region) (r2 : region) : region =
   match (r1, r2) with
   | RVar (Free _), RVar (Free _) ->
-      (* There is an intersection: the regions should be disjoint *)
-      [%internal_error] span
+      (* There is an intersection: if [strict] is true then the regions should be disjoint *)
+      [%cassert] span (not strict) "Unexpected region intersection";
+      r1
   | RVar (Free rid), RErased | RErased, RVar (Free rid) ->
       [%sanity_check] span (rid = RegionId.zero);
       RVar (Free rid)
+  | RErased, RErased -> RErased
   | _ -> [%internal_error] span
 
 and norm_proj_trait_refs_union (span : Meta.span) (tr1 : trait_ref)

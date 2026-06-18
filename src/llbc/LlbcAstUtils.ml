@@ -61,11 +61,6 @@ let crate_get_opaque_non_builtin_decls (k : crate) (filter_builtin : bool)
   let ctx = Charon.NameMatcher.ctx_from_crate k in
   let is_opaque_fun (d : fun_decl) : bool =
     (not (body_is_known d.body))
-    (* Something to pay attention to: we must ignore trait method *declarations*
-       (which don't have a body but must not be considered as opaque) *)
-    && (match d.src with
-       | TraitDeclItem (_, _, false) -> false
-       | _ -> true)
     && ((not filter_builtin)
        || (not
              (NameMatcherMap.mem ctx d.item_meta.name (builtin_globals_map ())))
@@ -100,6 +95,14 @@ let strip_target_suffix (n : name) : name =
   | Types.PeTarget _ :: rest -> List.rev rest
   | _ -> n
 
+let strip_target_or_instantiated_suffix (n : name) : name =
+  let rec strip_all (n : name) : name =
+    match n with
+    | (PeTarget _ | PeInstantiated _) :: rest -> strip_all rest
+    | _ -> List.rev n
+  in
+  strip_all (List.rev n)
+
 (** Extract and strip any trailing [PeTarget] element from a name, returning the
     cleaned name and an optional target suffix string (with [-] replaced by
     [_]). *)
@@ -122,9 +125,7 @@ let name_to_pattern (span : Meta.span option) (ctx : Charon.NameMatcher.ctx)
   else
     try Charon.NameMatcher.name_to_pattern ctx c n
     with Not_found | Assert_failure _ ->
-      [%craise_opt_span] span
-        "Could not convert the name to a pattern because of missing \
-         definition(s)"
+      [%craise_opt_span] span "Could not convert the name to a pattern"
 
 let name_with_crate_to_pattern_string (span : Meta.span option)
     (crate : LlbcAst.crate) (n : Types.name) : string =
@@ -146,9 +147,7 @@ let name_with_generics_to_pattern (span : Meta.span option)
   else
     try Charon.NameMatcher.name_with_generics_to_pattern ctx c params n args
     with Not_found | Assert_failure _ ->
-      [%craise_opt_span] span
-        "Could not convert the name to a pattern because of missing \
-         definition(s)"
+      [%craise_opt_span] span "Could not convert the name to a pattern"
 
 let name_with_generics_crate_to_pattern_string (span : Meta.span option)
     (crate : LlbcAst.crate) (n : Types.name) (params : Types.generic_params)

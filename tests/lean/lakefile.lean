@@ -41,6 +41,7 @@ package «tests» {}
 @[default_target] lean_lib Into
 @[default_target] lean_lib Iterators
 @[default_target] lean_lib IteratorsArray
+@[default_target] lean_lib IssueCharon1172
 @[default_target] lean_lib Issue134LoopSharedBorrows
 @[default_target] lean_lib Issue194RecursiveStructProjector
 @[default_target] lean_lib Issue270LoopList
@@ -64,10 +65,12 @@ package «tests» {}
 @[default_target] lean_lib MiniTree
 @[default_target] lean_lib MultiTarget
 @[default_target] lean_lib MutBorrowInSharedBorrow
+@[default_target] lean_lib OpaqueMutRegion
 @[default_target] lean_lib Names
 @[default_target] lean_lib NestedBorrows
 @[default_target] lean_lib NoNestedBorrows
 @[default_target] lean_lib Options
+@[default_target] lean_lib OverflowingOps
 @[default_target] lean_lib Order
 @[default_target] lean_lib Paper
 @[default_target] lean_lib PoloniusList

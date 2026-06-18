@@ -46,7 +46,7 @@ type type_ctx = {
 type fun_ctx = {
   fun_decls : fun_decl FunDeclId.Map.t;
       (** Copy of the declarations in the crate *)
-  fun_infos : FunsAnalysis.fun_info FunDeclId.Map.t;
+  fun_infos : FunsAnalysis.modules_funs_info;
   to_extract : fun_decl FunDeclId.Map.t;
       (** The fun declarations that should be extracted.
 
@@ -70,6 +70,11 @@ type decls_ctx = {
           extracted. *)
   trait_decls_to_extract : trait_decl TraitDeclId.Map.t;
       (** Similar to [global_decls_to_extract] *)
+  trait_methods_to_extract :
+    trait_method Types.binder TraitMethodId.Map.t TraitDeclId.Map.t;
+      (** The trait methods whose declaration should be extracted as fields of
+          their trait declaration. This map contains an entry for every
+          [TraitDeclId]. *)
   trait_impls_to_extract : trait_impl TraitImplId.Map.t;
       (** Similar to [global_decls_to_extract] *)
 }
@@ -607,7 +612,7 @@ let ctx_type_get_instantiated_variants_fields_types (span : Meta.span)
     (ctx : eval_ctx) (def_id : TypeDeclId.id) (generics : generic_args) :
     (VariantId.id option * ty list) list =
   let def = ctx_lookup_type_decl span ctx def_id in
-  Substitute.type_decl_get_instantiated_variants_fields_types def generics
+  Substitute.type_decl_get_instantiated_variants_fields_types span def generics
 
 (** Same as [ctx_type_get_instantiated_variants_fields_types], but also erases
     the regions *)

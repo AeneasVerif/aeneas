@@ -310,6 +310,12 @@ let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
           set_has_loans level;
           set_has_mut_loans level)
 
+      method! visit_EValue (level, _ty) _ _ =
+        (* An EValue is essentially an ended loan: it is a concrete value
+           consumed by the backward function. We treat it as a mutable loan
+           so that the containing ADT is not classified as UnknownProj. *)
+        set_has_mut_loans level
+
       method! visit_ESymbolic (level, ty) pm eproj =
         [%sanity_check] span (pm = PNone);
         match eproj with
@@ -718,7 +724,17 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
                       match (f, args) with
                       | (V.ELoop _ | V.EJoin _), [ args ] -> args
                       | V.EFunCall _, _ ->
-                          List.map (mk_simpl_tuple_texpr span) args
+                          (* Filter out empty argument groups (e.g., from
+                             unit return values that got filtered away) *)
+                          let args =
+                            List.filter_map
+                              (fun args ->
+                                match args with
+                                | [] -> None
+                                | _ -> Some (mk_simpl_tuple_texpr span args))
+                              args
+                          in
+                          args
                       | _ -> [%internal_error] span
                     in
                     (Some ([%add_loc] mk_apps span fvar args), can_fail)
@@ -741,8 +757,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
               in
               mk_adt_texpr span ty variant_id fields)
             (mk_simpl_tuple_texpr span)
-            (* Stop filtering once we enter an ADT *)
-            ~filter:false ctx input input.ty fields
+            ~filter ctx input input.ty fields
         in
         match out with
         | None -> (ctx, false, None)
