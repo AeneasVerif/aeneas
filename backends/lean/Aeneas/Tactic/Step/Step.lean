@@ -695,6 +695,8 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
     else
       trace[Step] "leading quantifier is a Prop — no output to introduce"
   else
+    -- There might be no quantifier if the function outputs `()`, in which case we
+    -- eliminate the `forall` quantifier (via `forall_unit`) when doing the simplification above.
     trace[Step] "no leading quantifier — skipping output introduction"
   traceGoalWithNode "goal after introducing the output"
 
