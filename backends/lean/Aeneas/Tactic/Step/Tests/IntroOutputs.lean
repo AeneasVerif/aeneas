@@ -77,14 +77,18 @@ example : nestedProg ⦃ ((a, b), c) => a = 5 ∧ b = 6 ∧ c = 7 ⦄ := by
   step*?
 
 /--
-info: Try this:
-
-  [apply]     let* ⟨ a, b, a_post1, a_post2, a_post3 ⟩ ← nestedProg_spec
-    agrind
+error: unsolved goals
+case a
+a : ℕ × ℕ
+b : ℕ
+a_post1 : a.1 = 5
+a_post2 : a.2 = 6
+a_post3 : b = 7
+⊢ a.1 = 5 ∧ a.2 = 6 ∧ b = 7
 -/
 #guard_msgs in
 example : nestedProg ⦃ a b => a.1 = 5 ∧ a.2 = 6 ∧ b = 7 ⦄ := by
-  step*?
+  step with nestedProg_spec
 
 /--
 info: Try this:
@@ -144,14 +148,20 @@ example : (do let (a, b) ← quadProg
               ok (a.1 + a.2 + b.1 + b.2)) ⦃ res => res = 38 ⦄ := by step*?
 
 /--
-info: Try this:
-
-  [apply]     let* ⟨ a, b, c, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
-    agrind
+error: unsolved goals
+case a
+c : ℕ × ℕ
+a b : ℕ
+a_post1 : a = 8
+a_post2 : b = 9
+a_post3 : c.1 = 10
+a_post4 : c.2 = 11
+⊢ a + b * 2 + c.1 + c.2 = 47
 -/
 #guard_msgs in
 example : (do let ((a, b), c) ← quadProg
-              ok (a + b * 2 + c.1 + c.2)) ⦃ res => res = 47 ⦄ := by step*?
+              ok (a + b * 2 + c.1 + c.2)) ⦃ res => res = 47 ⦄ := by
+  step with quadProg_spec
 
 /--
 info: Try this:
@@ -181,14 +191,19 @@ theorem quadProg_spec :
   unfold quadProg; step*
 
 /--
-info: Try this:
-
-  [apply]     let* ⟨ a, b, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
-    agrind
+error: unsolved goals
+case a
+a b : ℕ × ℕ
+a_post1 : a.1 = 8
+a_post2 : a.2 = 9
+a_post3 : b.1 = 10
+a_post4 : b.2 = 11
+⊢ a.1 + a.2 + b.1 + b.2 = 38
 -/
 #guard_msgs in
 example : (do let (a, b) ← quadProg
-              ok (a.1 + a.2 + b.1 + b.2)) ⦃ res => res = 38 ⦄ := by step*?
+              ok (a.1 + a.2 + b.1 + b.2)) ⦃ res => res = 38 ⦄ := by
+  step with quadProg_spec
 
 /--
 info: Try this:
