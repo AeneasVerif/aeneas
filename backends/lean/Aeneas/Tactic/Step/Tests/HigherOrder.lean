@@ -50,8 +50,12 @@ theorem callPair_spec (f g : U32 → Result U32) (xy : U32 × U32)
 info: Try this:
 
   [apply]     let* ⟨ ab, ab_post1, ab_post2 ⟩ ← [ +inferPost ] callPair_spec
-    case hf => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
-    case hg => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
+    case hf =>
+      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
+      agrind
+    case hg =>
+      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
+      agrind
     agrind
 ---
 trace:
