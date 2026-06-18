@@ -557,9 +557,30 @@ let create_push_abstractions_from_abs_region_groups
   in
   List.fold_left insert_abs ctx (List.combine rg_ids empty_absl)
 
-(** Auxiliary helper for [eval_non_builtin_function_call_symbolic] Instantiate
-    the signature and introduce fresh abstractions and region ids while doing
-    so.
+type symbolic_fun_call_inst = {
+  call_kind : fn_ptr_kind;
+  call_generics : generic_args;
+  call_span : Meta.span;
+  call_sig : bound_fun_sig;
+  call_inst_sig : inst_fun_sig;
+}
+
+let mk_symbolic_fun_call_inst (span : Meta.span) (ctx : eval_ctx)
+    ~(call_kind : fn_ptr_kind) ~(call_generics : generic_args)
+    ~(call_span : Meta.span) ~(inst_generics : generic_args)
+    ~(tr_self : trait_ref_kind) (signature : bound_fun_sig) :
+    symbolic_fun_call_inst =
+  {
+    call_kind;
+    call_generics;
+    call_span;
+    call_sig = signature;
+    call_inst_sig =
+      instantiate_fun_sig (Some span) ctx inst_generics tr_self signature;
+  }
+
+(** Auxiliary helper for [eval_function_call_symbolic] Instantiate the signature
+    and introduce fresh abstractions and region ids while doing so.
 
     We perform some manipulations when instantiating the signature.
 
@@ -616,70 +637,83 @@ let create_push_abstractions_from_abs_region_groups
       let option_has_value (T : Type) (x : Option T) : result bool =
         OptionHasValueImpl.has_value T x
     ]} *)
-let eval_non_builtin_function_call_symbolic_inst (span : Meta.span)
-    (call : call) (ctx : eval_ctx) :
-    fn_ptr_kind * generic_args * fun_decl * inst_fun_sig =
-  match call.func with
-  | FnOpDynamic _ ->
-      (* Function pointer case: TODO *)
-      [%craise] span "Function pointers are not supported yet"
-  | FnOpRegular func ->
-      let fid, generics, tr_self =
-        match func.kind with
-        | FunId (FRegular fid) ->
-            [%ltrace "Regular function"];
-            let tr_self = UnknownTrait __FUNCTION__ in
-            (fid, func.generics, tr_self)
-        | FunId (FBuiltin _) ->
-            (* Unreachable: must be a transparent function *)
-            [%craise] span "Unreachable"
-        | TraitMethod (trait_ref, method_id, _) ->
-            [%ltrace
-              "trait method call:\n- call: " ^ call_to_string ctx call
-              ^ "\n- method name: "
-              ^ Charon.GAstUtils.get_method_name ctx.crate
-                  trait_ref.trait_decl_ref.binder_value.id method_id
-              ^ "\n- call.generics:\n"
-              ^ generic_args_to_string ctx func.generics
-              ^ "\n- trait_ref.trait_decl_ref: "
-              ^ trait_decl_ref_region_binder_to_string ctx
-                  trait_ref.trait_decl_ref];
-            (* Check that there are no bound regions *)
-            [%cassert] span
-              (trait_ref.trait_decl_ref.binder_regions = [])
-              "Unexpected bound regions";
-            let trait_decl_ref = trait_ref.trait_decl_ref.binder_value in
-            (* This should be a call to a trait clause method (if it were a method
-               coming from an impl, there should be no indirection through the trait
-               reference itself (Charon should have simplified this). *)
-            (*[%sanity_check] span
-              (match trait_ref.kind with
-              | TraitImpl _ -> false
-              | _ -> true);*)
-            (* Lookup the trait decl and substitution *)
-            let trait_decl = ctx_lookup_trait_decl span ctx trait_decl_ref.id in
-            let fn_ref =
-              Option.get
-                (Substitute.lookup_and_subst_trait_decl_method trait_decl
-                   method_id trait_ref func.generics)
-            in
-            (* *)
-            let tr_self = trait_ref.kind in
-            (fn_ref.id, fn_ref.generics, tr_self)
-      in
+let eval_function_call_symbolic_inst (span : Meta.span) (func : fn_ptr)
+    (ctx : eval_ctx) : symbolic_fun_call_inst =
+  match func.kind with
+  | FunId (FRegular fid) ->
+      let tr_self = UnknownTrait __FUNCTION__ in
       (* Lookup the declaration *)
       let def = ctx_lookup_fun_decl span ctx fid in
       let signature = bound_fun_sig_of_decl def in
-      [%ltrace
-        "- call: " ^ call_to_string ctx call ^ "\n- call.generics:\n"
-        ^ generic_args_to_string ctx generics
-        ^ "\n- def.signature:\n"
-        ^ fun_sig_to_string ctx signature];
-      (* Instantiate *)
-      let inst_sg =
-        instantiate_fun_sig (Some span) ctx generics tr_self signature
+      mk_symbolic_fun_call_inst span ctx ~call_kind:func.kind
+        ~call_generics:func.generics ~call_span:def.item_meta.span
+        ~inst_generics:func.generics ~tr_self signature
+  | FunId (FBuiltin fid) ->
+      (* In symbolic mode, the behavior of a function call is completely
+         defined by the signature of the function: we thus simply generate
+         correctly instantiated signatures, and delegate the work to an
+         auxiliary function *)
+      let sg = Builtin.get_builtin_fun_sig fid in
+      (* Sanity check: make sure the type parameters don't contain regions -
+         this is a current limitation of our synthesis, *except if the function
+         is [Box::new] (TODO: the case [Box::new] is a hack) *)
+      if fid = BoxNew then
+        (* Sanity check: check that we are not using nested borrows *)
+        [%classert] span
+          (List.for_all
+             (fun ty ->
+               not
+                 (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos ty))
+             func.generics.types)
+          (lazy
+            ("Instantiating [Box::new] with nested borrows is not allowed for \
+              now (" ^ fn_ptr_to_string ctx func ^ ")"))
+      else
+        [%classert] span
+          (List.for_all
+             (fun ty -> not (ty_has_mut_borrows ctx.type_ctx.type_infos ty))
+             func.generics.types)
+          (lazy
+            ("Instantiating the type parameters of a function with types \
+              containing mutable borrows is currently not allowed ("
+           ^ fn_ptr_to_string ctx func ^ ")"));
+
+      (* There shouldn't be any reference to Self *)
+      let tr_self = UnknownTrait __FUNCTION__ in
+      mk_symbolic_fun_call_inst span ctx ~call_kind:func.kind
+        ~call_generics:func.generics ~call_span:span
+        ~inst_generics:func.generics ~tr_self sg
+  | TraitMethod (trait_ref, method_id) ->
+      (* Check that there are no bound regions *)
+      [%cassert] span
+        (trait_ref.trait_decl_ref.binder_regions = [])
+        "Unexpected bound regions";
+      let trait_decl_ref = trait_ref.trait_decl_ref.binder_value in
+      (* This should be a call to a trait clause method (if it were a method
+         coming from an impl, there should be no indirection through the
+         trait reference itself (Charon should have simplified this). *)
+      (*[%sanity_check] span
+          (match trait_ref.kind with
+          | TraitImpl _ -> false
+          | _ -> true);*)
+      let trait_decl = ctx_lookup_trait_decl span ctx trait_decl_ref.id in
+      let meth =
+        ([%silent_unwrap] span (lookup_trait_decl_method trait_decl method_id))
+          .item_binder_value
+          .binder_value
       in
-      (func.kind, func.generics, def, inst_sg)
+      let signature =
+        [%silent_unwrap] span
+          (Substitute.lookup_flat_method_sig ctx.crate trait_decl_ref.id
+             method_id)
+      in
+      let tr_self = trait_ref.kind in
+      let inst_generics =
+        concat_generic_args trait_decl_ref.generics func.generics
+      in
+      mk_symbolic_fun_call_inst span ctx ~call_kind:func.kind
+        ~call_generics:func.generics ~call_span:meth.item_meta.span
+        ~inst_generics ~tr_self signature
 
 (** Helper to evaluate global references for lifetime static.
 
@@ -1358,15 +1392,22 @@ and eval_function_call_concrete (config : config) (span : Meta.span)
 
 and eval_function_call_symbolic (config : config) (span : Meta.span)
     (call : call) : stl_cm_fun =
+ fun ctx ->
   match call.func with
   | FnOpDynamic _ -> [%craise] span "Function pointers are not supported yet"
-  | FnOpRegular func -> (
-      match func.kind with
-      | FunId (FRegular _) | TraitMethod _ ->
-          eval_non_builtin_function_call_symbolic config span call
-      | FunId (FBuiltin fid) ->
-          eval_builtin_function_call_symbolic config span fid func call.args
-            call.dest)
+  | FnOpRegular func ->
+      [%ltrace
+        "function call:\n- call: " ^ call_to_string ctx call ^ "\n- fn_ptr : "
+        ^ fn_ptr_to_string ctx func];
+      let call_info = eval_function_call_symbolic_inst span func ctx in
+      [%ltrace
+        "- call: " ^ call_to_string ctx call ^ "\n- call.generics:\n"
+        ^ generic_args_to_string ctx call_info.call_generics
+        ^ "\n- def.signature:\n"
+        ^ fun_sig_to_string ctx call_info.call_sig];
+      (* Evaluate the function call *)
+      eval_function_call_symbolic_from_inst_sig config call_info call.args
+        call.dest ctx
 
 (** Evaluate a local (i.e., non-builtin) function call in concrete mode *)
 and eval_non_builtin_function_call_concrete (config : config) (span : Meta.span)
@@ -1458,38 +1499,29 @@ and eval_non_builtin_function_call_concrete (config : config) (span : Meta.span)
       (* Continue *)
       (ctx_resl, cc_comp cc cf_pop)
 
-(** Evaluate a local (i.e., non-builtin) function call in symbolic mode *)
-and eval_non_builtin_function_call_symbolic (config : config) (span : Meta.span)
-    (call : call) : stl_cm_fun =
- fun ctx ->
-  let func, generics, def, inst_sg =
-    eval_non_builtin_function_call_symbolic_inst span call ctx
-  in
-  (* Sanity check: same number of inputs *)
-  [%sanity_check] span (List.length call.args = List.length def.signature.inputs);
-  (* Sanity check: the class of borrows present in the type is supported *)
-  List.iter
-    ([%add_loc] check_ty_is_supported span ctx)
-    (inst_sg.output :: inst_sg.inputs);
-  (* Evaluate the function call *)
-  eval_function_call_symbolic_from_inst_sig config def.item_meta.span func
-    def.signature inst_sg generics call.args call.dest ctx
-
 (** Evaluate a function call in symbolic mode by using the function signature.
 
     This allows us to factorize the evaluation of local and non-local function
     calls in symbolic mode: only their signatures matter.
 
-    The [self_trait_ref] trait ref refers to [Self]. We use it when calling a
-    provided trait method, because those methods have a special treatment: we
-    dot not group them with the required trait methods, and forbid (for now)
-    overriding them. We treat them as regular method, which take an additional
-    trait ref as input. *)
+    The [call_info] contains the signature after instantiation together with the
+    original call information used by the symbolic AST. *)
 and eval_function_call_symbolic_from_inst_sig (config : config)
-    (span : Meta.span) (fid : fn_ptr_kind) (sg : fun_sig)
-    (inst_sg : inst_fun_sig) (generics : generic_args) (args : operand list)
-    (dest : place) : stl_cm_fun =
+    (call_info : symbolic_fun_call_inst) (args : operand list) (dest : place) :
+    stl_cm_fun =
  fun ctx ->
+  let span = call_info.call_span in
+  let fid = call_info.call_kind in
+  let sg = call_info.call_sig.item_binder_value in
+  let inst_sg = call_info.call_inst_sig in
+  let generics = call_info.call_generics in
+  (* Sanity check: same number of inputs *)
+  [%sanity_check] span
+    (List.length args = List.length call_info.call_sig.item_binder_value.inputs);
+  (* Sanity check: the class of borrows present in the type is supported *)
+  List.iter
+    ([%add_loc] check_ty_is_supported span ctx)
+    (call_info.call_inst_sig.output :: call_info.call_inst_sig.inputs);
   [%ltrace
     "- fid: "
     ^ fn_ptr_kind_to_string ctx fid
@@ -1660,46 +1692,6 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
    * where we haven't panicked. Of course, the translation needs to take the
    * panic case into account... *)
   ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span cc)
-
-(** Evaluate a non-local function call in symbolic mode *)
-and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
-    (fid : builtin_fun_id) (func : fn_ptr) (args : operand list) (dest : place)
-    : stl_cm_fun =
- fun ctx ->
-  (* In symbolic mode, the behavior of a function call is completely defined
-     by the signature of the function: we thus simply generate correctly
-     instantiated signatures, and delegate the work to an auxiliary function *)
-  let sg = Builtin.get_builtin_fun_sig fid in
-  (* Sanity check: make sure the type parameters don't contain regions -
-       this is a current limitation of our synthesis, *except if the function
-       is [Box::new] (TODO: the case [Box::new] is a hack) *)
-  if fid = BoxNew then
-    (* Sanity check: check that we are not using nested borrows *)
-    [%classert] span
-      (List.for_all
-         (fun ty ->
-           not (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos ty))
-         func.generics.types)
-      (lazy
-        ("Instantiating [Box::new] with nested borrows is not allowed for now ("
-       ^ fn_ptr_to_string ctx func ^ ")"))
-  else
-    [%classert] span
-      (List.for_all
-         (fun ty -> not (ty_has_mut_borrows ctx.type_ctx.type_infos ty))
-         func.generics.types)
-      (lazy
-        ("Instantiating the type parameters of a function with types \
-          containing mutable borrows is currently not allowed ("
-       ^ fn_ptr_to_string ctx func ^ ")"));
-
-  (* There shouldn't be any reference to Self *)
-  let tr_self = UnknownTrait __FUNCTION__ in
-  let inst_sig = instantiate_fun_sig (Some span) ctx func.generics tr_self sg in
-
-  (* Evaluate the function call *)
-  eval_function_call_symbolic_from_inst_sig config span (FunId (FBuiltin fid))
-    sg.item_binder_value inst_sig func.generics args dest ctx
 
 (** Evaluate a statement seen as a function body *)
 and eval_function_body (config : config) (body : block) : stl_cm_fun =

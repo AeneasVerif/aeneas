@@ -2408,26 +2408,36 @@ let filter_generic_params_used_in_texpr (generic : generic_params) (e : texpr) :
   let generics : generic_params = { types; const_generics; trait_clauses } in
   (generics, filter)
 
-let generic_args_of_params (generics : generic_params) : generic_args =
+type mk_var = { mk : 'a. 'a -> 'a de_bruijn_var }
+
+let mk_generic_args_of_params (mk_var : mk_var) (generics : generic_params) :
+    generic_args =
   let types =
-    List.map (fun (v : type_param) -> TVar (Free v.index)) generics.types
+    List.map (fun (v : type_param) -> TVar (mk_var.mk v.index)) generics.types
   in
   let const_generics =
     List.map
-      (fun (v : const_generic_param) -> CgVar (Free v.index))
+      (fun (v : const_generic_param) -> CgVar (mk_var.mk v.index))
       generics.const_generics
   in
   let trait_refs =
     List.map
       (fun (c : trait_param) ->
         {
-          trait_id = Clause (Free c.clause_id);
+          trait_id = Clause (mk_var.mk c.clause_id);
           trait_decl_ref =
             { trait_decl_id = c.trait_id; decl_generics = c.generics };
         })
       generics.trait_clauses
   in
   { types; const_generics; trait_refs }
+
+let generic_args_of_params (generics : generic_params) : generic_args =
+  mk_generic_args_of_params { mk = (fun x -> Free x) } generics
+
+(* Like `generic_args_of_params` but makes all the variables `Bound` instead of `Free`. *)
+let bound_generic_args_of_params (generics : generic_params) : generic_args =
+  mk_generic_args_of_params { mk = (fun x -> Bound (0, x)) } generics
 
 type decomposed_loop_result = {
   variant_id : variant_id;
