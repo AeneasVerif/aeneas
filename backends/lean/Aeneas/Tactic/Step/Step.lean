@@ -567,7 +567,7 @@ shape of a `BTree`. Returns the leaf fvars and the updated goal. The destructure
 are named later in `introOutputs`.
 
 NOTE: We are using `cases` to break up the FVar which could be slow for nested
-goals or when the goal context gets large. Something to keep an eye on
+goals or when the goal context gets large. Something to keep an eye on.
 -/
 partial def destructureFVar {α} (goal : MVarId) (fv : FVarId) (tree : BTree α) :
     TacticM (Array FVarId × MVarId) := do
