@@ -445,4 +445,31 @@ h : y = z + 1
 example : (do let (x, y) ← existentialProg; ok (x + y)) ⦃ res => res > 2 ⦄ := by
   step with existentialProg_spec as ⟨ x, y, hx, z, hz, h ⟩
 
+-- Testing that we don't destructure too far when we don't have to
 
+section
+
+def pred (_ : Nat × Nat) : Prop := True
+
+@[scoped step]
+theorem quadProg_spec :
+    quadProg ⦃ a b => pred a ∧ pred b ⦄ := by
+  unfold quadProg; step*; simp [pred]
+
+/--
+error: unsolved goals
+case a
+a : ℕ × ℕ
+b c : ℕ
+a_post1 : pred a
+a_post2 : pred (b, c)
+⊢ a.1 + a.2 + b + c = 38
+-/
+#guard_msgs in
+example :
+  (do
+     let (a, (b, c)) ← quadProg
+     ok (a.1 + a.2 + b + c)) ⦃ res => res = 38 ⦄ := by
+  step with quadProg_spec
+
+end
