@@ -2098,7 +2098,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
      extract_file gen_config ctx file_info);
 
   (* Emit translation.json. *)
-  EmitJson.write_if_enabled ~crate_name:crate.name ~subdir ~llbc_file:filename
+  EmitJson.write_if_enabled ~crate_name:crate.name ~llbc_file:filename
   |> Option.iter (fun path -> log#linfo (lazy ("Generated: " ^ path)));
 
   (* Generate the build file *)

@@ -1,6 +1,13 @@
-(** Emit a translation.json file alongside the extracted Lean files. This file
-    contains the Aeneas data which connects the Lean translation to the Rust
-    code. *)
+(** Emit translation.json which contains the Aeneas data which connects the Lean
+    translation to the Rust code. *)
+
+(** Rust source location of a declaration, taken from LLBC [item_meta.span]. *)
+type source = {
+  file : string;  (** Path to the Rust source file. *)
+  begin_line : int;  (** First line of the declaration. *)
+  end_line : int;  (** Last line of the declaration. *)
+}
+[@@deriving to_yojson]
 
 type loop_info = {
   loop_id_idx : int; [@key "id"]
@@ -9,15 +16,15 @@ type loop_info = {
 }
 [@@deriving to_yojson]
 
-(** Lean function declaration.
-
-    [loop] and [parent_lean_name] are present only on loop-wrapper / loop-body
-    entries. Non-loop entries have neither. All other fields are always emitted.
-*)
-type entry = {
+(** Lean function declaration. *)
+type function_entry = {
   def_id : int;  (** Charon [FunDeclId] reified to a plain int. *)
-  lean_name : string;
-  lean_file : string;
+  lean_name : string;  (** Fully-qualified Lean name. *)
+  lean_file : string;  (** Path relative to this manifest's directory. *)
+  rust_name : string;  (** Fully-qualified Rust name (from [item_meta.name]). *)
+  is_local : bool;
+      (** [true] if defined in the current crate, [false] if external. *)
+  source : source;  (** Rust source location (from [item_meta.span]). *)
   is_opaque : bool;
       (** [true] when Aeneas extracted the declaration as an axiom. *)
   can_fail : bool;
@@ -28,12 +35,21 @@ type entry = {
   reducible : bool;
       (** [true] when Aeneas marks the Lean def with [@[reducible]]. *)
   loop : loop_info option; [@default None] [@key "loop"]
+      (** Present only on loop-wrapper / loop-body entries *)
   parent_lean_name : string option; [@default None]
+      (** Present only on loop-wrapper / loop-body entries *)
 }
 [@@deriving to_yojson]
 
 (** Lean type declaration. *)
-type type_entry = { def_id : int; lean_name : string; lean_file : string }
+type type_entry = {
+  def_id : int;
+  lean_name : string;
+  lean_file : string;
+  rust_name : string;
+  is_local : bool;
+  source : source;
+}
 [@@deriving to_yojson]
 
 (** Lean global declaration. *)
@@ -41,16 +57,18 @@ type global_entry = {
   def_id : int;
   lean_name : string;
   lean_file : string;
+  rust_name : string;
+  is_local : bool;
+  source : source;
   can_fail : bool;
 }
 [@@deriving to_yojson]
 
-(** Where the manifest itself sits and which backend files Aeneas wrote. *)
-type output_info = {
-  subdir : string option; [@default None]
-  llbc_file : string;  (** Basename of the [.llbc] input file. *)
-  lean_files : string list;
-      (** Lean files written, relative to the directory containing this file. *)
+(** The files involved, recorded exactly as Aeneas knew them. *)
+type files_info = {
+  dest_dir : string;  (** The output directory Aeneas wrote. *)
+  llbc_file : string;  (** The [.llbc] input path, as passed to Aeneas. *)
+  lean_files : string list;  (** The Lean files written by Aeneas. *)
 }
 [@@deriving to_yojson]
 
@@ -60,8 +78,8 @@ type envelope = {
       (** The version of charon that emitted the [.llbc] input. *)
   crate_name : string; [@key "crate"]
       (** Identifier of the source Rust crate. *)
-  output : output_info;
-  functions : entry list;
+  files : files_info;
+  functions : function_entry list;
   types : type_entry list;
   globals : global_entry list;
 }
@@ -77,7 +95,7 @@ type envelope = {
 (* ------------------------------------------------------------------------ *)
 
 type state = {
-  mutable function_entries : entry list;
+  mutable function_entries : function_entry list;
   mutable type_entries : type_entry list;
   mutable global_entries : global_entry list;
   mutable lean_files : string list;
@@ -97,40 +115,43 @@ let make_state () : state =
     dest_dir = "";
   }
 
+(* One Aeneas process translates one crate, so a module-local singleton. *)
 let state : state = make_state ()
 
 let init_if_enabled ~(dest_dir : string) : unit =
-  if !Config.emit_json then begin
-    state.function_entries <- [];
-    state.type_entries <- [];
-    state.global_entries <- [];
-    state.lean_files <- [];
-    state.current_lean_file <- "";
-    state.current_lean_namespace <- "";
-    state.dest_dir <- dest_dir
-  end
+  if !Config.emit_json then state.dest_dir <- dest_dir
 
 (* ------------------------------------------------------------------------ *)
 (* Entry construction                                                       *)
 (* ------------------------------------------------------------------------ *)
 
-let qualify (basename : string) : string =
-  assert (state.current_lean_file <> "");
+(** Add current Lean namespace to a short name to form the full Lean name. *)
+let full_lean_name (basename : string) : string =
   if state.current_lean_namespace = "" then basename
   else state.current_lean_namespace ^ "." ^ basename
 
-let entry_of_fun_decl (ctx : ExtractBase.extraction_ctx) (def : Pure.fun_decl) :
-    entry =
+(** Extract the Rust source location (file + line range) from a span. *)
+let source_of_span (span : Meta.span) : source =
+  let data = span.data in
+  let file =
+    match data.file.name with
+    | Virtual s | Local s | NotReal s -> s
+  in
+  { file; begin_line = data.beg_loc.line; end_line = data.end_loc.line }
+
+let function_entry_of_fun_decl (ctx : ExtractBase.extraction_ctx)
+    (def : Pure.fun_decl) : function_entry =
   let span = def.item_meta.span in
   let lean_name =
-    qualify (ExtractBase.ctx_get_local_function span def.def_id def.loop_id ctx)
+    full_lean_name
+      (ExtractBase.ctx_get_local_function span def.def_id def.loop_id ctx)
   in
   let parent_lean_name =
     match def.loop_id with
     | None -> None
     | Some _ ->
         Some
-          (qualify
+          (full_lean_name
              (ExtractBase.ctx_get_local_function span def.def_id None ctx))
   in
   let loop =
@@ -149,6 +170,9 @@ let entry_of_fun_decl (ctx : ExtractBase.extraction_ctx) (def : Pure.fun_decl) :
     def_id = Pure.FunDeclId.to_int def.def_id;
     lean_name;
     lean_file = state.current_lean_file;
+    rust_name = ExtractBase.name_to_string ctx def.item_meta.name;
+    is_local = def.item_meta.is_local;
+    source = source_of_span span;
     is_opaque = Option.is_none def.body;
     can_fail = eff.can_fail;
     can_diverge = eff.can_diverge;
@@ -163,8 +187,12 @@ let type_entry_of_type_decl (ctx : ExtractBase.extraction_ctx)
   let span = def.item_meta.span in
   {
     def_id = Pure.TypeDeclId.to_int def.def_id;
-    lean_name = qualify (ExtractBase.ctx_get_local_type span def.def_id ctx);
+    lean_name =
+      full_lean_name (ExtractBase.ctx_get_local_type span def.def_id ctx);
     lean_file = state.current_lean_file;
+    rust_name = ExtractBase.name_to_string ctx def.item_meta.name;
+    is_local = def.item_meta.is_local;
+    source = source_of_span span;
   }
 
 let global_entry_of_global_decl (ctx : ExtractBase.extraction_ctx)
@@ -172,8 +200,11 @@ let global_entry_of_global_decl (ctx : ExtractBase.extraction_ctx)
   let span = def.item_meta.span in
   {
     def_id = Pure.GlobalDeclId.to_int def.def_id;
-    lean_name = qualify (ExtractBase.ctx_get_global span def.def_id ctx);
+    lean_name = full_lean_name (ExtractBase.ctx_get_global span def.def_id ctx);
     lean_file = state.current_lean_file;
+    rust_name = ExtractBase.name_to_string ctx def.item_meta.name;
+    is_local = def.item_meta.is_local;
+    source = source_of_span span;
     can_fail = def.can_fail;
   }
 
@@ -183,23 +214,17 @@ let global_entry_of_global_decl (ctx : ExtractBase.extraction_ctx)
 
 let begin_file_if_enabled ~(filename : string) ~(namespace : string) : unit =
   if !Config.emit_json then begin
-    let rel_lean_file =
-      let dest = Filename.concat state.dest_dir "" in
-      let plen = String.length dest in
-      if String.length filename >= plen && String.sub filename 0 plen = dest
-      then String.sub filename plen (String.length filename - plen)
-      else Filename.basename filename
-    in
-    state.current_lean_file <- rel_lean_file;
+    (* Record the path as Aeneas wrote it, without rewriting. *)
+    state.current_lean_file <- filename;
     state.current_lean_namespace <- namespace;
-    state.lean_files <- rel_lean_file :: state.lean_files
+    state.lean_files <- filename :: state.lean_files
   end
 
 let record_fun_if_enabled (ctx : ExtractBase.extraction_ctx)
     (def : Pure.fun_decl) : unit =
   if !Config.emit_json then
     state.function_entries <-
-      entry_of_fun_decl ctx def :: state.function_entries
+      function_entry_of_fun_decl ctx def :: state.function_entries
 
 let record_type_if_enabled (ctx : ExtractBase.extraction_ctx)
     (def : Pure.type_decl) : unit =
@@ -224,8 +249,8 @@ let write (path : string) (env : envelope) : unit =
       Yojson.Safe.pretty_to_channel out (envelope_to_yojson env);
       output_char out '\n')
 
-let write_if_enabled ~(crate_name : string) ~(subdir : string option)
-    ~(llbc_file : string) : string option =
+let write_if_enabled ~(crate_name : string) ~(llbc_file : string) :
+    string option =
   if !Config.emit_json then begin
     let path = Filename.concat state.dest_dir "translation.json" in
     write path
@@ -233,10 +258,10 @@ let write_if_enabled ~(crate_name : string) ~(subdir : string option)
         aeneas_version = Option.value GitVersion.commit ~default:"unknown";
         charon_version = Charon.CharonVersion.supported_charon_version;
         crate_name;
-        output =
+        files =
           {
-            subdir;
-            llbc_file = Filename.basename llbc_file;
+            dest_dir = state.dest_dir;
+            llbc_file;
             lean_files = List.rev state.lean_files;
           };
         functions = List.rev state.function_entries;

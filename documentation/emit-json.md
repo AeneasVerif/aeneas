@@ -4,23 +4,23 @@ When Aeneas is invoked with `-emit-json` (Lean backend only) it writes a `transl
 
 ## Purpose
 
-The manifest describes **what Aeneas did**: the Lean declarations it produced and their connection to the original Rust source. Generally it records data that exists only after translation and is not present in the `.llbc` input. Consumers join the two artefacts via `def_id`.
+The manifest describes **what Aeneas did**: the Lean declarations it produced and their connection to the original Rust source. Most fields record data that exists only after translation and is not present in the `.llbc` input. Consumers can join the two artefacts via `def_id` to obtain the full data.
 
 ## Location
 
-`translation.json` is written to the top-level output directory passed via `-dest`. All paths inside the file are relative to that directory (i.e., relative to `translation.json` itself).
+`translation.json` is written to the top-level output directory passed via `-dest`. 
 
 ## Schema
 
 ```json
 {
-  "aeneas_version": "abc1234",
+  "Aeneas_version": "abc1234",
   "charon_version": "xyz5678",
   "crate": "my_crate",
-  "output": {
-    "subdir": "SubDir",
-    "llbc_file": "input.llbc",
-    "lean_files": ["SubDir/Types.lean", "SubDir/Funs.lean"]
+  "files": {
+    "dest_dir": "out",
+    "llbc_file": "build/input.llbc",
+    "lean_files": ["out/SubDir/Types.lean", "out/SubDir/Funs.lean"]
   },
   "functions": [...],
   "types": [...],
@@ -28,24 +28,33 @@ The manifest describes **what Aeneas did**: the Lean declarations it produced an
 }
 ```
 
-`llbc_file` is the basename of the `.llbc` input. `lean_files` are relative to the directory containing `translation.json`. `subdir` is omitted when the `-subdir` flag was not used.
+The paths in `files` are recorded as Aeneas knew them, so they are relative to Aeneas's working directory or absolute, matching how Aeneas was invoked:
+
+- `files.dest_dir`: the output directory Aeneas wrote to, `translation.json` itself lives here.
+- `files.llbc_file`: the `.llbc` input path, as passed to Aeneas.
+- `files.lean_files`: the Lean files written, each is under `dest_dir`.
 
 ### Function entry fields
 
 | Field | Always present | Meaning |
 |---|---|---|
 | `def_id` | yes | `FunDeclId` (join key into `.llbc`) |
-| `lean_name` | yes | Fully-qualified Lean name (`Namespace.Name`) |
-| `lean_file` | yes | Path relative to `dest_dir` |
-| `is_opaque` | yes | Extracted as an axiom (no body in the Pure AST) |
+| `lean_name` | yes | Full Lean name (`Namespace.Name`) |
+| `lean_file` | yes | The Lean file this is in |
+| `rust_name` | yes | Full Rust name |
+| `is_local` | yes | `true` if defined in the current crate, `false` if external |
+| `source` | yes | Rust source location: `{ "file": "...", "begin_line": N, "end_line": M }` |
+| `is_opaque` | yes | Extracted as an axiom |
 | `can_fail` | yes | Return type wrapped in `Result` (function can panic) |
 | `can_diverge` | yes | May not terminate |
 | `is_rec` | yes | Part of a mutually recursive group |
-| `reducible` | yes | Marked `@[reducible]` by Aeneas |
+| `reducible` | yes | Marked as reducible by Aeneas |
 | `loop` | loop entries only | `{ "id": N, "pos": [...], "is_body": bool }` |
 | `parent_lean_name` | loop entries only | `lean_name` of the enclosing Rust function |
 
 `loop` and `parent_lean_name` appear together or not at all.
+
+Type and global entries carry `def_id`, `lean_name`, `lean_file`, `rust_name`, `is_local`, and `source`; global entries additionally carry `can_fail`.
 
 **Loop position** (`loop.pos`): nesting path of the loop in the source function. `[0]` is the first top-level loop, `[0, 1]` is the second loop nested inside it, etc. Matches `Pure.fun_decl.loop_pos`.
 
