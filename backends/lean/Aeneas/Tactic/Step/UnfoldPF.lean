@@ -97,14 +97,6 @@ theorem WP_func_admissible (α β : Type) (arg) (post)
   apply Lean.Order.admissible_flatOrder
   simp only [WP.dspec]
 
-macro "prove_admissible" : tactic =>
-  `(tactic| (
-      (repeat' apply curry_admissible)
-      (repeat' (apply Lean.Order.admissible_pi ; intro))
-      (apply WP_func_admissible)
-  )
-  )
-
 def getParamNames (ty : Expr) : MetaM (Array Name) := do
   forallTelescope ty fun xs _ => do
     xs.mapM fun x => do
@@ -125,13 +117,10 @@ elab "dspec_induction" func:ident : tactic => do
   let func_expr := func_expr.getAppFn
   let func_expr_name := func_expr.constName!
 
-  -- do some wierd hacky nonsense to get `func.fixpoint_induct`.
-  -- more obvious methods fail, presumably due to buggy lean behavior
-  let namee := func.getId.mkStr "fixpoint_induct"
-  let fi_stx : Syntax ← `(term | $(mkIdent namee))
-  let fixpoint_induct ← Term.elabTerm fi_stx none
-  let fixpoint_induct := fixpoint_induct.getAppFn
-  trace[UnfoldPF] "type of fixpoint_induct is {← inferType fixpoint_induct}"
+  let func_name ← resolveGlobalConstNoOverload func
+  let fi_name := func_name ++ `fixpoint_induct
+  executeReservedNameAction fi_name -- see https://leanprover.zulipchat.com/#narrow/channel/113488-general/topic/.60.2Efixpoint_induct.60.20doesn.27t.20exist.20in.20environment.20until.20used.3F/with/602621282
+  let fixpoint_induct ← Meta.mkConstWithFreshMVarLevels fi_name
 
   -- sadly, there are many possible forms that fixpoint_induct can take.
   -- we need to reverse engineer which form it is by looking at its type.
@@ -207,6 +196,14 @@ def simple_diverge (x : Std.I32) : Result Std.I32 := do
     let i1 ← 1#i32 + 1#i32
     simple_diverge i1
 partial_fixpoint
+
+macro "prove_admissible" : tactic =>
+  `(tactic| (
+      (repeat' apply curry_admissible)
+      (repeat' (apply Lean.Order.admissible_pi ; intro))
+      (apply WP_func_admissible)
+  )
+  )
 
 -- this version demonstrates what the dspec_induction tactic does, just done manually
 theorem test_div_manual (x : Std.I32) : Std.WP.dspec (simple_diverge x) (fun res => res = 10#i32)
