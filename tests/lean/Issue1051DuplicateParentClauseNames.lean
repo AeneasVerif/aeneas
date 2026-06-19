@@ -114,8 +114,32 @@ axiom core.num.nonzero.NonZero.get
   core.num.nonzero.ZeroablePrimitive T Clause0_NonZeroInner) :
   core.num.nonzero.NonZero T Clause0_NonZeroInner → Result T
 
+/-- Trait declaration: [issue_1051_duplicate_parent_clause_names::TraitA]
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 9:0-9:19
+    Visibility: public -/
+structure TraitA (Self : Type) where
+
+/-- Trait declaration: [issue_1051_duplicate_parent_clause_names::TraitB]
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 11:0-14:1
+    Visibility: public -/
+structure TraitB (Self : Type) (Self_X : Type) (Self_Y : Type) where
+  TraitASelfXInst : TraitA Self_X
+  TraitASelfYInst : TraitA Self_Y
+
+/-- Trait declaration: [issue_1051_duplicate_parent_clause_names::TraitC]
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 18:0-18:19
+    Visibility: public -/
+structure TraitC (Self : Type) where
+
+/-- Trait declaration: [issue_1051_duplicate_parent_clause_names::TraitE]
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 20:0-23:1
+    Visibility: public -/
+structure TraitE (Self : Type) (Self_X : Type) (Self_Y : Type) where
+  TraitAInst : TraitA Self_X
+  TraitCInst : TraitC Self_Y
+
 /-- [issue_1051_duplicate_parent_clause_names::get_inner]:
-    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 7:0-9:1
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 27:0-29:1
     Visibility: public -/
 def get_inner
   (x : core.num.nonzero.NonZero Std.U8 core.num.niche_types.NonZeroU8Inner) :
@@ -123,17 +147,5 @@ def get_inner
   := do
   core.num.nonzero.NonZero.get
     U8.Insts.CoreNumNonzeroZeroablePrimitiveNonZeroU8Inner x
-
-/-- Trait declaration: [issue_1051_duplicate_parent_clause_names::TraitA]
-    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 13:0-13:19
-    Visibility: public -/
-structure TraitA (Self : Type) where
-
-/-- Trait declaration: [issue_1051_duplicate_parent_clause_names::TraitB]
-    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 15:0-18:1
-    Visibility: public -/
-structure TraitB (Self : Type) (Self_X : Type) (Self_Y : Type) where
-  TraitASelfXInst : TraitA Self_X
-  TraitASelfYInst : TraitA Self_Y
 
 end issue_1051_duplicate_parent_clause_names
