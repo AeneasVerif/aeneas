@@ -15,7 +15,7 @@ import Aeneas.Tactic.Step.Step
    However, this requires a bunch of boilerplate that can be automated in the case that
    the conclusion is a dspec theorem about a function call.
    In particular, the statement needs to be proven to be admissible.
-   
+
    See the examples below to see what the tactic does
    and the manual examples show what the tactic is doing written out directly. -/
 
@@ -330,16 +330,35 @@ theorem pseudo_random_spec :
     grind
 
 -- these two examples demonstrate how .fixpoint_induct theorems can take various forms.
-def first_arg_const (x y : Nat) : Option Nat :=
-  if x = 0 then Option.some 0
+def first_arg_const (x y : Nat) : Result Nat :=
+  if x = 0 then .ok 0
   else first_arg_const x (y + 1)
 partial_fixpoint
 
-def second_arg_const (x y : Nat) : Option Nat :=
-  if y = 0 then Option.some 0
+def second_arg_const (x y : Nat) : Result Nat :=
+  if y = 0 then .ok 0
   else second_arg_const (x + 1) y
 partial_fixpoint
 
+-- uncomment to see the difference:
+-- #check first_arg_const.fixpoint_induct
+-- #check second_arg_const.fixpoint_induct
+
+example x y : (first_arg_const x y) div⦃fun x => x = 0⦄ := by
+  revert y
+  dspec_induction first_arg_const
+  intros first_arg_const' ih y
+  split
+  · trivial
+  · apply ih
+
+example x y : (second_arg_const x y) div⦃fun x => x = 0⦄ := by
+  revert x
+  dspec_induction second_arg_const
+  intros second_arg_const' ih y
+  split
+  · trivial
+  · apply ih
 
 end Test
 
