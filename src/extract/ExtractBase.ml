@@ -1999,13 +1999,10 @@ let ctx_compute_trait_clause_name (ctx : extraction_ctx)
     - The base name comes from the referenced trait (via
       {!ctx_compute_trait_clause_name}); unless [record_fields_short_names] is
       set we prefix it with the trait declaration name. For instance an instance
-      of [Foo<u32>] gives a base along the lines of ["fooU32"]. Note that the
-      prefix is applied here only: previously both this function and its caller
-      prepended it, which double-prefixed the parent-clause field names on
-      backends that do not use short field names (Coq, HOL4).
+      of [Foo<u32>] gives a base along the lines of ["fooU32"].
     - If two parent clauses share a base name, we append a discriminator derived
-      from the clause's generic type arguments: a type variable contributes its
-      parameter name, anything else contributes ["Type"]; each is PascalCased
+      from the clause's generic type arguments: a free type variable contributes
+      its parameter name, anything else contributes ["Type"]; each is PascalCased
       and concatenated. The discriminator is added to *every* member of a
       colliding group, so the names are symmetric and independent of the clause
       order (e.g. a trait with two [KeySerde] parent clauses, on associated
@@ -2034,12 +2031,22 @@ let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
         trait_decl.llbc_generics trait_decl.llbc_parent_clauses clause.clause_id
     in
     if !Config.record_fields_short_names then base
-    else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ base
+    else
+      (* On backends without short field names (Coq, HOL4) the trait-decl name
+         is prepended twice. This is historical and is preserved deliberately to
+         avoid churning those backends' output; it could be simplified to a
+         single prefix in a separate change. *)
+      let prefix = ctx_compute_trait_decl_name ctx trait_decl in
+      prefix ^ prefix ^ "_" ^ base
   in
-  (* The discriminator derived from a clause's generic type arguments. *)
+  (* The discriminator derived from a clause's generic type arguments. Only a
+     [Free] type variable is one of the trait's own parameters; a [Bound]
+     variable comes from a higher-ranked binder and does not index
+     [trait_decl.generics], so we route it (and any non-variable) to the
+     fallback rather than mis-resolving it. *)
   let generic_type_name (ty : ty) : string =
     match ty with
-    | TVar (Free index | Bound (_, index)) -> (
+    | TVar (Free index) -> (
         match
           List.find_opt
             (fun (param : type_param) -> param.index = index)
