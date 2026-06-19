@@ -247,16 +247,16 @@ fn test() {
     assert!(x[0] == 0xfffffffe);
 }
 
-pub fn dummy_hash(_ : u32) -> u32 {
-    // pretend that this function is opaque and we can't assume anything about the output
-    return 1000;
+trait Hash {
+  fn hash(_ : u32) -> u32;
 }
 
-pub fn pseudo_random() -> u32 {
+
+pub fn pseudo_random<T : Hash>() -> u32 {
   let mut state : u32 = 0;
 
   while state < 100 {
-    state = dummy_hash(state);
+    state = <T as Hash>::hash(state);
   }
   return state;
 }

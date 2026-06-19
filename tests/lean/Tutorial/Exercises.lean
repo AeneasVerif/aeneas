@@ -851,29 +851,29 @@ def add
   add_loop x1 y max1 0#u8 0#usize
 
 open ControlFlow
-/-- [tutorial::dummy_hash]:
-    Source: 'src/lib.rs', lines 250:0-253:1
-    Visibility: public -/
-def dummy_hash (i : Std.U32) : Result Std.U32 := do
-  ok 1000#u32
+/-- Trait declaration: [tutorial::Hash]
+    Source: 'src/lib.rs', lines 250:0-252:1 -/
+structure Hash (Self : Type) where
+  hash : Std.U32 → Result Std.U32
 
 /-- [tutorial::pseudo_random]: loop 0:
     Source: 'src/lib.rs', lines 258:2-260:3
     Visibility: public -/
 @[rust_loop]
-def pseudo_random_loop (state : Std.U32) : Result Std.U32 := do
+def pseudo_random_loop
+  {T : Type} (HashInst : Hash T) (state : Std.U32) : Result Std.U32 := do
   if state < 100#u32
-  then let state1 ← dummy_hash state
-       pseudo_random_loop state1
+  then let state1 ← HashInst.hash state
+       pseudo_random_loop HashInst state1
   else ok state
 partial_fixpoint
 
 /-- [tutorial::pseudo_random]:
     Source: 'src/lib.rs', lines 255:0-262:1
     Visibility: public -/
-@[reducible] def pseudo_random : Result Std.U32 := do
-               pseudo_random_loop 0#u32
-
+@[reducible]
+def pseudo_random {T : Type} (HashInst : Hash T) : Result Std.U32 := do
+  pseudo_random_loop HashInst 0#u32
 
 /- Exercise about dspec.
 For the usual spec `r ⦃post⦄`, one needs to prove that `r` terminates and
@@ -886,11 +886,12 @@ It works with the `step` tactic and any `@step` theorems for `spec` are automati
 lifted to `dspec`. You will also need the `dspec_induction` tactic to complete this exercise,
 which is used to prove a fact about a recursive function by induction in its recursive calls.
 
-`dummy_hash` is supposed to represent an opaque function where we can't reason about its output,
-so don't make use of its definition as a constant for the solution.
+The hash function is opaque and the `hash_spec` input tells nothing about its value.
 -/
-theorem pseudo_random_spec :
-  pseudo_random ⦃fun x => x.val >= 100⦄div := by
+theorem pseudo_random_spec {T} {h : Hash T}
+  (hash_spec : ∀ x, (h.hash x) ⦃fun _ => True⦄div)
+  :
+  pseudo_random h ⦃fun x => x.val >= 100⦄div := by
   sorry
 
 end Tutorial.Solutions
