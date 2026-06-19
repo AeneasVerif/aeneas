@@ -9,14 +9,15 @@ import Aeneas.Tactic.Solver.Grind.Init
 import Aeneas.Tactic.Step.InferPost
 import Aeneas.Tactic.Step.Step
 
--- tactic for unfolding partial_fixpoint definitions with fixpoint_induct
--- normally you would use the normal unfold tactic, but that requires the proof to be terminating
--- instead, you need to use the .fixpoint_induct theorem that is automatically created by lean
--- however, this requires a bunch of boilerplate that can be automated in the case that
--- the conclusion is a dspec theorem about a function call.
--- in particular, the statement needs to be proven to be admissible.
--- see the examples below to see what the tactic does
--- and the manual examples show what the tactic is doing written out directly
+/- Tactic for unfolding partial_fixpoint definitions with fixpoint_induct.
+   Normally you would use the normal unfold tactic, but that requires the proof to be terminating.
+   Instead, you need to use the .fixpoint_induct theorem that is automatically created by lean.
+   However, this requires a bunch of boilerplate that can be automated in the case that
+   the conclusion is a dspec theorem about a function call.
+   In particular, the statement needs to be proven to be admissible.
+   
+   See the examples below to see what the tactic does
+   and the manual examples show what the tactic is doing written out directly. -/
 
 namespace Aeneas
 
@@ -135,7 +136,7 @@ elab "dspec_induction" func:ident : tactic => do
   -- sadly, there are many possible forms that fixpoint_induct can take.
   -- we need to reverse engineer which form it is by looking at its type.
   -- see the examples at the end of this file, it depends on which parameters to the
-  -- original function are unchanged in recursive calls. {
+  -- original function are unchanged in recursive calls.
   let func_params ← getParamNames (← inferType func_expr)
   let fixpoint_induct_params ← getParamNames (← inferType fixpoint_induct)
   -- the last 3 parameters are the motive, admissibility, and proof of induction
@@ -152,14 +153,12 @@ elab "dspec_induction" func:ident : tactic => do
   let nonconst_args := (args_in_goal.zip constant_params).filterMap
     fun (x, b) => if b then none else some x
   trace[UnfoldPF] "const_args: {const_args}"
-  -- }
 
   -- make a type family that abstracts over instances of func in the goal type
   -- first, we need to find out what type the motive expects, by inspecting the theorem
   -- this should be something that inputs all of the nonconst_args
   let applied_fixpoint_induct_type ← inferType (mkAppN fixpoint_induct const_args)
   let applied_func_type := (getInputTypes (getInputTypes applied_fixpoint_induct_type).getLast!)[0]!
-  -- let applied_func_type ← inferType func_expr
   let fmvar ← Meta.mkFreshExprMVar (some applied_func_type)
   let value_to_replace_in_motive := mkAppN fmvar nonconst_args
   let abs_goal_ty := goalTy.replace
@@ -176,8 +175,7 @@ elab "dspec_induction" func:ident : tactic => do
 
   let [g_admissible, g_main] ← goal.apply fi_app | throwError "this shouldn't happen 1"
 
-  -- prove the admissibility condition. this chunk of code is equivalent to the
-  -- `prove_admissible` tactic above, but apparently calling that directly might cause problems
+  -- Prove the admissibility condition
   let _ ← withTransparency .default <| do -- using a more restricted reducibility doesn't work on some tests below
     let onError {α} : TacticM α := throwError "failed to prove admissibility condition"
     let curry_admissible ← mkConstWithFreshMVarLevels `Aeneas.UnfoldPF.curry_admissible
@@ -320,8 +318,7 @@ theorem pseudo_random_spec :
   unfold pseudo_random_loop.body
   simp
   by_cases ((↑x : Nat) < 100)
-  ·
-    simp [*]
+  · simp [*]
     unfold dummy_hash
     simp
     -- note that here, i am refraining from using the result of dummy_hash,
@@ -329,8 +326,7 @@ theorem pseudo_random_spec :
     -- but it actually is just a constant
     step
     grind
-  ·
-    simp [*]
+  · simp [*]
     grind
 
 -- these two examples demonstrate how .fixpoint_induct theorems can take various forms.

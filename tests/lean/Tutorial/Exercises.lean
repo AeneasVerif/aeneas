@@ -875,19 +875,19 @@ partial_fixpoint
                pseudo_random_loop 0#u32
 
 
-/- exersize about dspec.
+/- Exercise about dspec.
 For the usual spec `r ⦃post⦄`, one needs to prove that `r` terminates and
 produces a value that satisfies `post`
 
 However, sometimes a function may be potentially nonterminating.
-dspec (notated `r div⦃post⦄`) is a weaker statement,
-and only means that if r terminates then the result satisfies `post`.
-It works with the `step` tactic and any @step theorems for spec are automatically
-lifted to dspec. You will also need the `dspec_induction` tactic to complete this exercise,
-which is used to prove a fact about a recursive function by induction in it's recursive calls.
+`dspec` (notation `r div⦃post⦄`) is a weaker statement,
+and only means that if `r` terminates then the result satisfies `post`.
+It works with the `step` tactic and any `@step` theorems for `spec` are automatically
+lifted to `dspec`. You will also need the `dspec_induction` tactic to complete this exercise,
+which is used to prove a fact about a recursive function by induction in its recursive calls.
 
-`dummy_hash` is supposed to represent an opaque function where we can't reason about it's output,
-so don't make use of it's definition as a constant for the solution.
+`dummy_hash` is supposed to represent an opaque function where we can't reason about its output,
+so don't make use of its definition as a constant for the solution.
 -/
 theorem pseudo_random_spec :
   pseudo_random div⦃fun x => x.val >= 100⦄ := by
