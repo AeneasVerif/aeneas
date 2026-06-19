@@ -1986,27 +1986,130 @@ let ctx_compute_trait_clause_name (ctx : extraction_ctx)
   in
   String.concat "" clause
 
-let ctx_compute_trait_parent_clause_name (ctx : extraction_ctx)
-    (trait_decl : trait_decl) (clause : trait_param) : string =
-  (* We derive the name of the clause from the trait instance.
-     For instance, if the clause gives us an instance of `Foo<u32>`,
-     we generate a name along the lines of "fooU32Inst".
-  *)
-  (* We need to lookup the LLBC definitions, to have the original instantiation *)
-  let clause =
-    let current_def_name = trait_decl.item_meta.name in
-    let params = trait_decl.llbc_generics in
-    ctx_compute_trait_clause_name ctx current_def_name params
-      trait_decl.llbc_parent_clauses clause.clause_id
+(** Compute the names of the parent clauses (the super-trait dictionaries) of a
+    trait declaration, guaranteeing they are pairwise distinct: they become
+    fields of the same record, and Lean/F* reject a record with two
+    identically-named fields.
+
+    How a parent-clause name is chosen:
+    - The base name comes from the referenced trait (via
+      {!ctx_compute_trait_clause_name}); unless [record_fields_short_names] is
+      set we prefix it with the trait declaration name. For instance an instance
+      of [Foo<u32>] gives a base along the lines of ["fooU32"]. Note that the
+      prefix is applied here only: previously both this function and its caller
+      prepended it, which double-prefixed the parent-clause field names on
+      backends that do not use short field names (Coq, HOL4).
+    - If two parent clauses share a base name, we append a discriminator derived
+      from the clause's generic type arguments: a type variable contributes its
+      parameter name, anything else contributes ["Type"]; each is PascalCased
+      and concatenated. The discriminator is added to *every* member of a
+      colliding group, so the names are symmetric and independent of the clause
+      order (e.g. a trait with two [KeySerde] parent clauses, on associated
+      types [PublicKey] and [PrivateKey], yields [KeySerdeSelfPublicKeyInst] and
+      [KeySerdeSelfPrivateKeyInst]).
+    - We append the ["Inst"] suffix last (lowercasing the first letter for the
+      FStar backend), so the discriminator is inserted before it, never trimmed.
+
+    Two parent clauses can only share a base name when they reference the same
+    trait, and in that case their generic arguments differ (otherwise they would
+    be the same clause), so the discriminator distinguishes them. We therefore
+    do not need a further numeric tie-break; we assert uniqueness instead.
+
+    We do this here rather than rely on {!basename_to_unique}: parent clauses
+    are registered in the "unsafe" names map (collisions are allowed there
+    because Lean/F* disambiguate record-field accesses by type), so the global
+    uniqueness machinery does not see them. *)
+let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
+    (trait_decl : trait_decl)
+    (builtin_info : Pure.builtin_trait_decl_info option) :
+    (trait_param * string) list =
+  (* The base name of a clause, without the "Inst" suffix. *)
+  let compute_base (clause : trait_param) : string =
+    let base =
+      ctx_compute_trait_clause_name ctx trait_decl.item_meta.name
+        trait_decl.llbc_generics trait_decl.llbc_parent_clauses clause.clause_id
+    in
+    if !Config.record_fields_short_names then base
+    else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ base
   in
-  let clause =
-    if !Config.record_fields_short_names then clause
-    else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ clause
+  (* The discriminator derived from a clause's generic type arguments. *)
+  let generic_type_name (ty : ty) : string =
+    match ty with
+    | TVar (Free index | Bound (_, index)) -> (
+        match
+          List.find_opt
+            (fun (param : type_param) -> param.index = index)
+            trait_decl.generics.types
+        with
+        | Some param -> param.name
+        | None -> "Type" ^ TypeVarId.to_string index)
+    | _ -> "Type"
   in
-  let clause = clause ^ "Inst" in
-  match backend () with
-  | FStar -> StringUtils.lowercase_first_letter clause
-  | Coq | HOL4 | Lean -> clause
+  let pascal_case (name : string) : string =
+    String.split_on_char '_' name
+    |> List.map StringUtils.capitalize_first_letter
+    |> String.concat ""
+  in
+  let discriminator (clause : trait_param) : string =
+    clause.generics.types
+    |> List.map (fun ty -> pascal_case (generic_type_name ty))
+    |> String.concat ""
+  in
+  let add_inst (name : string) : string =
+    let name = name ^ "Inst" in
+    match backend () with
+    | FStar -> StringUtils.lowercase_first_letter name
+    | Coq | HOL4 | Lean -> name
+  in
+  (* A semantic name per clause. For computed clauses this is
+     base [+ discriminator if the base is shared] + "Inst"; for builtin clauses
+     we use the names provided by the builtin information as-is. *)
+  let names =
+    match builtin_info with
+    | None ->
+        let bases =
+          List.map (fun c -> (c, compute_base c)) trait_decl.parent_clauses
+        in
+        let base_counts =
+          List.fold_left
+            (fun counts (_, base) ->
+              StringMap.add base
+                (Option.value (StringMap.find_opt base counts) ~default:0 + 1)
+                counts)
+            StringMap.empty bases
+        in
+        let is_shared base =
+          Option.value (StringMap.find_opt base base_counts) ~default:0 > 1
+        in
+        List.map
+          (fun (c, base) ->
+            let core =
+              if is_shared base then base ^ discriminator c else base
+            in
+            (c, add_inst core))
+          bases
+    | Some info ->
+        [%cassert] trait_decl.item_meta.span
+          (List.length trait_decl.parent_clauses
+          = List.length info.parent_clauses)
+          ("Invalid builtin information for trait decl: "
+          ^ name_to_string ctx trait_decl.item_meta.name
+          ^ "; expected "
+          ^ string_of_int (List.length trait_decl.parent_clauses)
+          ^ " parent clauses, found "
+          ^ string_of_int (List.length info.parent_clauses));
+        List.combine trait_decl.parent_clauses info.parent_clauses
+  in
+  (* Sanity check: the discriminator is expected to make the names pairwise
+     distinct (see above). Fail loudly if it didn't, rather than silently
+     emitting a record with two identically-named fields. *)
+  let chosen = List.map snd names in
+  [%cassert] trait_decl.item_meta.span
+    (List.length (List.sort_uniq String.compare chosen) = List.length chosen)
+    ("Could not generate distinct names for the parent clauses of trait '"
+    ^ name_to_string ctx trait_decl.item_meta.name
+    ^ "': " ^ String.concat ", " chosen);
+  names
 
 let ctx_compute_trait_type_name (ctx : extraction_ctx) (trait_decl : trait_decl)
     (item : string) : string =
