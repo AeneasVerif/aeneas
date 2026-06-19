@@ -21,7 +21,7 @@ import Aeneas.Tactic.Step.Step
 
 namespace Aeneas
 
-namespace UnfoldPF
+namespace DspecInduction
 
 open Lean Elab Term Meta Tactic
 open Utils
@@ -132,16 +132,16 @@ elab "dspec_induction" func:ident : tactic => do
   let fixpoint_induct_params := fixpoint_induct_params.extract 0 (fixpoint_induct_params.size - 3)
   -- which params are constant, these are treated specially by fixpoint_induct
   let constant_params := func_params.map (fun x => fixpoint_induct_params.contains x)
-  trace[UnfoldPF] "constant_params: {constant_params}"
+  trace[DspecInduction] "constant_params: {constant_params}"
   let .some func_application := goalTy.find? (fun e => e.getAppFn.isConstOf func_expr_name)
   | throwError "{func} not found in goal"
-  trace[UnfoldPF] "func app in goal is: {func_application}"
+  trace[DspecInduction] "func app in goal is: {func_application}"
   let args_in_goal := func_application.getAppArgs
   let const_args := (args_in_goal.zip constant_params).filterMap
     fun (x, b) => if b then some x else none
   let nonconst_args := (args_in_goal.zip constant_params).filterMap
     fun (x, b) => if b then none else some x
-  trace[UnfoldPF] "const_args: {const_args}"
+  trace[DspecInduction] "const_args: {const_args}"
 
   -- make a type family that abstracts over instances of func in the goal type
   -- first, we need to find out what type the motive expects, by inspecting the theorem
@@ -155,21 +155,21 @@ elab "dspec_induction" func:ident : tactic => do
   let abs_goal_ty := abs_goal_ty.abstract #[fmvar]
   let abs_goal_ty := Expr.lam `func applied_func_type abs_goal_ty .default
 
-  trace[UnfoldPF] "fixpoint_induct with motive: {abs_goal_ty}"
+  trace[DspecInduction] "fixpoint_induct with motive: {abs_goal_ty}"
 
   let fi_app := mkAppN fixpoint_induct (const_args ++ #[abs_goal_ty])
 
-  trace[UnfoldPF] "going to apply {fi_app}"
-  trace[UnfoldPF] "of type : {← inferType fi_app}"
+  trace[DspecInduction] "going to apply {fi_app}"
+  trace[DspecInduction] "of type : {← inferType fi_app}"
 
   let [g_admissible, g_main] ← goal.apply fi_app | throwError "this shouldn't happen 1"
 
   -- Prove the admissibility condition
   let _ ← withTransparency .default <| do -- using a more restricted reducibility doesn't work on some tests below
     let onError {α} : TacticM α := throwError "failed to prove admissibility condition"
-    let curry_admissible ← mkConstWithFreshMVarLevels `Aeneas.UnfoldPF.curry_admissible
+    let curry_admissible ← mkConstWithFreshMVarLevels `Aeneas.DspecInduction.curry_admissible
     let admissible_pi ← mkConstWithFreshMVarLevels `Lean.Order.admissible_pi
-    let WP_func_admissible ← mkConstWithFreshMVarLevels `Aeneas.UnfoldPF.WP_func_admissible
+    let WP_func_admissible ← mkConstWithFreshMVarLevels `Aeneas.DspecInduction.WP_func_admissible
     let [g_admissible]
       ← repeat' (fun g => g.apply curry_admissible) [g_admissible] | onError
     let [g_admissible]
@@ -183,7 +183,7 @@ elab "dspec_induction" func:ident : tactic => do
   pure ()
 
 -- uncomment to see debug traces:
--- set_option trace.UnfoldPF true
+-- set_option trace.DspecInduction true
 
 namespace Test
 
@@ -359,5 +359,5 @@ example x y : (second_arg_const x y) ⦃fun x => x = 0⦄div := by
 
 end Test
 
-end UnfoldPF
+end DspecInduction
 end Aeneas

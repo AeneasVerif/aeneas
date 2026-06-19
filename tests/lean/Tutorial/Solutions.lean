@@ -452,6 +452,13 @@ theorem add_with_carry_spec
   step as ⟨ c, x' ⟩
   simp_all
 
+  -- I am refraining from using the result of dummy_hash,
+  -- since it's supposed to represent a hash function where we can't predict the result,
+  -- but it actually is just a constant
+@[step]
+theorem dummy_hash_spec x : (dummy_hash x) ⦃fun _ => True⦄div :=
+  by simp [dummy_hash]
+
 
 theorem pseudo_random_spec :
   pseudo_random ⦃fun x => x.val >= 100⦄div := by
@@ -470,13 +477,7 @@ theorem pseudo_random_spec :
   by_cases ((↑x : Nat) < 100)
   ·
     simp [*]
-    unfold dummy_hash
-    simp
-    -- note that here, I am refraining from using the result of dummy_hash,
-    -- since it's supposed to represent a hash function where we can't predict the result,
-    -- but it actually is just a constant
-    step
-    grind
+    step*
   ·
     simp [*]
     grind
