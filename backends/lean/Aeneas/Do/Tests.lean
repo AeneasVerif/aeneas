@@ -704,6 +704,10 @@ def do_let_pat_unused : Result Nat := do
   let ((a, b, c), d) := ((1, 2, 3), 4)
   ok 42
 
+def unit_bind : Result Nat := do
+  let () ← ok ()
+  ok 1
+
 end Tests
 
 /- ## Regression tests for `elabDoMatch` with unresolved discriminant type metavars.

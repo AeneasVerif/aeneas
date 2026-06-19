@@ -2,6 +2,15 @@ open Types
 open Utils
 include Charon.TypesUtils
 
+let concat_generic_args (generics1 : generic_args) (generics2 : generic_args) :
+    generic_args =
+  {
+    regions = generics1.regions @ generics2.regions;
+    types = generics1.types @ generics2.types;
+    const_generics = generics1.const_generics @ generics2.const_generics;
+    trait_refs = generics1.trait_refs @ generics2.trait_refs;
+  }
+
 (** Return the set of regions in an type - TODO: add static?
 
     This function should be used on non-erased and non-bound regions. For

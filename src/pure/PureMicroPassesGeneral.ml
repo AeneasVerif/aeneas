@@ -3112,7 +3112,7 @@ let add_fuel (ctx : ctx) (trans : pure_fun_translation) : pure_fun_translation =
 (** Perform the following transformation:
 
     {[
-      let y <-- f x   (* Must be an application, is not necessarily monadic *)
+      let y <-- f x   (* Not necessarily monadic *)
       let (a, b) := y (* Tuple decomposition *)
       ...
     ]}
@@ -3122,49 +3122,95 @@ let add_fuel (ctx : ctx) (trans : pure_fun_translation) : pure_fun_translation =
     {[
       let (a, b) <-- f x
       ...
+    ]}
+
+    More generally, if [pat] is any pattern (not just a single variable), we
+    absorb any immediately following pure let-bindings that decompose an open
+    sub-field of [pat] into a tuple. For example:
+
+    {[
+      let (p, back) <-- f x
+      let (a, b) := p
+      ...
+    ]}
+
+    becomes:
+
+    {[
+      let ((a, b), back) <-- f x
+      ...
     ]} *)
 let merge_let_app_then_decompose_tuple_visitor (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
+
+  (* Replace the open variable [var_id] in [pat] with [replacement] *)
+  let replace_open_in_pat (var_id : fvar_id) (replacement : tpat) (p : tpat) :
+      tpat =
+    let visitor =
+      object
+        inherit [_] map_tpat as super
+
+        method! visit_tpat () p =
+          match p.pat with
+          | POpen (v, _) when v.id = var_id -> replacement
+          | _ -> super#visit_tpat () p
+      end
+    in
+    visitor#visit_tpat () p
+  in
+
+  (* Repeatedly absorb pure let-bindings that decompose an open sub-field
+     of [pat] into a tuple.
+
+     Returns the updated pattern, the remaining continuation, and the
+     updated substitution environment. *)
+  let rec absorb_decompositions (open_vars : FVarId.Set.t)
+      (env : texpr FVarId.Map.t) (pat : tpat) (next : texpr) :
+      tpat * texpr * texpr FVarId.Map.t =
+    match next.e with
+    | Let (false, pat1, { e = FVar var_id; _ }, next1)
+      when FVarId.Set.mem var_id open_vars && is_pat_tuple pat1 ->
+        (* [next] is [let <tuple_pat> := <var>] where <var> is an open
+           sub-field of [pat]. Merge [pat1] into [pat]. *)
+        let pat1 =
+          tpat_replace_ignored_vars_with_free_vars ctx.fresh_fvar_id pat1
+        in
+        let pat1_expr = [%silent_unwrap] span (tpat_to_texpr span pat1) in
+        let env = FVarId.Map.add var_id pat1_expr env in
+        let new_pat = replace_open_in_pat var_id pat1 pat in
+        (* Update the set of open variables: remove the merged one,
+           add any new open variables from the replacement pattern *)
+        let open_vars = FVarId.Set.remove var_id open_vars in
+        let open_vars = FVarId.Set.union open_vars (tpat_get_fvars pat1) in
+        absorb_decompositions open_vars env new_pat next1
+    | _ -> (pat, next, env)
+  in
+
   object (self)
     inherit [_] map_expr
 
     method! visit_Let env monadic0 pat0 bound0 next0 =
       let bound0 = self#visit_texpr env bound0 in
-      (* Check if we need to merge two let-bindings *)
-      if is_pat_open pat0 then
-        let var0, _ = [%add_loc] as_pat_open span pat0 in
-        match next0.e with
-        | Let (false, pat1, { e = FVar var_id; _ }, next1) when var_id = var0.id
-          -> begin
-            (* Check if we are decomposing a tuple *)
-            if is_pat_tuple pat1 then
-              (* Introduce fresh variables for all the ignored variables
-                   to make sure we can turn the pattern into an expression *)
-              let pat1 =
-                tpat_replace_ignored_vars_with_free_vars ctx.fresh_fvar_id pat1
-              in
-              let pat1_expr = Option.get (tpat_to_texpr span pat1) in
-              (* Register the mapping from the variable we remove to the expression *)
-              let env = FVarId.Map.add var0.id pat1_expr env in
-              (* Continue *)
-              let next1 = self#visit_texpr env next1 in
-              Let (monadic0, pat1, bound0, next1)
-            else
-              let next0 = self#visit_texpr env next0 in
-              Let (monadic0, pat0, bound0, next0)
-          end
-        | _ ->
-            let next0 = self#visit_texpr env next0 in
-            Let (monadic0, pat0, bound0, next0)
-      else
-        let next0 = self#visit_texpr env next0 in
-        Let (monadic0, pat0, bound0, next0)
+      (* Try to absorb any immediately following pure let-bindings that
+         decompose open sub-fields of [pat0] into tuples *)
+      let open_vars = tpat_get_fvars pat0 in
+      let pat0, next0, env =
+        if FVarId.Set.is_empty open_vars then (pat0, next0, env)
+        else absorb_decompositions open_vars env pat0 next0
+      in
+      let next0 = self#visit_texpr env next0 in
+      Let (monadic0, pat0, bound0, next0)
 
-    (* Replace the variables *)
+    (* Replace the variables.
+       We apply substitutions recursively: if [var_id] maps to an expression
+       that itself contains variables in the env (due to chained tuple
+       decompositions), those are also substituted. This is safe because
+       fresh variable ids are monotonically increasing, so cycles are
+       impossible. *)
     method! visit_FVar env var_id =
       match FVarId.Map.find_opt var_id env with
       | None -> FVar var_id
-      | Some e -> e.e
+      | Some e -> (self#visit_texpr env e).e
   end
 
 let merge_let_app_then_decompose_tuple =
