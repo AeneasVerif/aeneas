@@ -74,8 +74,9 @@ attribute [step_simps]
   Std.WP.uncurry'_eq
 
 /- `bind_assoc` / `bind_assoc_eq` are handled by the `bindAssocPreservingNames`
-   simproc below: it performs the same rewrite but preserves the binder name from
-   the original continuation lambda.  See `bindAssocPreservingNames` for details. -/
+   simproc: it performs the same rewrite but preserves the binder name from
+   the original continuation lambda. See `bindAssocPreservingNames` for details. -/
+
 attribute [step_simps] Aeneas.Std.uncurry_apply_pair
 
 attribute [step_post_simps]
