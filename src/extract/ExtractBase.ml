@@ -1991,35 +1991,23 @@ let ctx_compute_trait_clause_name (ctx : extraction_ctx)
   String.concat "" clause
 
 (** Compute the names of the parent clauses (the super-trait dictionaries) of a
-    trait declaration, guaranteeing they are pairwise distinct: they become
-    fields of the same record, and Lean/F* reject a record with two
-    identically-named fields.
+    trait declaration, guaranteeing they are pairwise distinct.
 
     How a parent-clause name is chosen:
-    - The base name comes from the referenced trait (via
+    - Base name comes from the referenced trait (via
       {!ctx_compute_trait_clause_name}); unless [record_fields_short_names] is
-      set we prefix it with the trait declaration name. For instance an instance
-      of [Foo<u32>] gives a base along the lines of ["fooU32"].
+      set we prefix it with the trait declaration name.
     - If two parent clauses share a base name, we append a discriminator derived
       from the clause's generic type arguments: a free type variable contributes
-      its parameter name, anything else contributes ["Type"]; each is PascalCased
-      and concatenated. The discriminator is added to *every* member of a
-      colliding group, so the names are symmetric and independent of the clause
-      order (e.g. a trait with two [KeySerde] parent clauses, on associated
-      types [PublicKey] and [PrivateKey], yields [KeySerdeSelfPublicKeyInst] and
-      [KeySerdeSelfPrivateKeyInst]).
+      its parameter name, anything else contributes ["Type"]; each is
+      PascalCased and concatenated. The discriminator is added to every member
+      of a colliding group.
     - We append the ["Inst"] suffix last (lowercasing the first letter for the
-      FStar backend), so the discriminator is inserted before it, never trimmed.
+      FStar backend).
 
     Two parent clauses can only share a base name when they reference the same
-    trait, and in that case their generic arguments differ (otherwise they would
-    be the same clause), so the discriminator distinguishes them. We therefore
-    do not need a further numeric tie-break; we assert uniqueness instead.
-
-    We do this here rather than rely on {!basename_to_unique}: parent clauses
-    are registered in the "unsafe" names map (collisions are allowed there
-    because Lean/F* disambiguate record-field accesses by type), so the global
-    uniqueness machinery does not see them. *)
+    trait, and in that case their generic arguments differ so uniqueness is
+    guaranteed. *)
 let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
     (trait_decl : trait_decl)
     (builtin_info : Pure.builtin_trait_decl_info option) :
@@ -2033,9 +2021,7 @@ let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
     if !Config.record_fields_short_names then base
     else
       (* On backends without short field names (Coq, HOL4) the trait-decl name
-         is prepended twice. This is historical and is preserved deliberately to
-         avoid churning those backends' output; it could be simplified to a
-         single prefix in a separate change. *)
+         is prepended twice. This is historical. *)
       let prefix = ctx_compute_trait_decl_name ctx trait_decl in
       prefix ^ prefix ^ "_" ^ base
   in
