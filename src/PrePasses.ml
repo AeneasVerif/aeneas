@@ -1032,7 +1032,7 @@ let filter_marker_traits (crate : crate) : crate =
     in
     let item_source_is_filtered (src : item_source) : bool =
       match src with
-      | TraitDeclItem (trait_ref, _, _) -> is_filtered_id trait_ref.id
+      | TraitDeclItem (trait_ref, _) -> is_filtered_id trait_ref.id
       | TraitImplItem (impl_ref, trait_ref, _, _) ->
           TraitImplId.Set.mem impl_ref.id filtered_impl_ids
           || is_filtered_id trait_ref.id
@@ -2126,14 +2126,17 @@ let simplify_trait_calls (crate : crate) : crate =
     crate.fun_decls;
 
   GlobalDeclId.Map.iter
-    (fun _ (d : global_decl) -> visitor#visit_fun_decl_id () d.init)
+    (fun _ (d : global_decl) -> visitor#visit_constant_expr () d.value)
     crate.global_decls;
 
   TraitDeclId.Map.iter
     (fun _ (d : trait_decl) ->
       TraitMethodId.Map.iter
         (fun _ (d : trait_method binder) ->
-          visitor#visit_fun_decl_id () d.binder_value.item.id)
+          Option.iter
+            (fun (default : fun_decl_ref) ->
+              visitor#visit_fun_decl_id () default.id)
+            d.binder_value.default)
         d.methods)
     crate.trait_decls;
 

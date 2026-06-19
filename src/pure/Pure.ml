@@ -1213,9 +1213,7 @@ and cast_kind =
 
 and fn_ptr_kind =
   | FunId of llbc_fun_id
-  | TraitMethod of trait_ref * trait_method_id * fun_decl_id
-      (** The fun decl id is not really needed and only provided for convenience
-          purposes *)
+  | TraitMethod of trait_ref * trait_method_id
 
 (** A function id for a non-builtin function.
 
@@ -1870,6 +1868,17 @@ type global_decl = {
 }
 [@@deriving show]
 
+type trait_method = {
+  method_id : trait_method_id;
+  item_name : trait_item_name;
+  item_meta : T.item_meta;
+  signature : fun_sig;
+  (* The signature of the method. Its [generic_params] contain the method
+     generics; the signature can refer to both trait and method generics. *)
+  default : fun_decl_ref option binder;
+}
+[@@deriving show]
+
 type trait_decl = {
   def_id : trait_decl_id;
   name : string;
@@ -1889,7 +1898,7 @@ type trait_decl = {
   llbc_parent_clauses : Types.trait_param list;
   consts : (assoc_const_id * trait_item_name * ty) list;
   types : (assoc_type_id * trait_item_name) list;
-  methods : (trait_method_id * trait_item_name * fun_decl_ref binder) list;
+  methods : trait_method list;
 }
 [@@deriving show]
 

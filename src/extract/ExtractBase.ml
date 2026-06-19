@@ -897,6 +897,10 @@ let ctx_get_termination_measure (span : Meta.span) (def_id : A.FunDeclId.id)
     (loop_id : (LoopId.id * bool) option) (ctx : extraction_ctx) : string =
   ctx_get (Some span) (TerminationMeasureId (FRegular def_id, loop_id)) ctx
 
+let ctx_lookup_fun_decl_info (ctx : extraction_ctx) (id : A.FunDeclId.id) :
+    pure_fun_translation option =
+  A.FunDeclId.Map.find_opt id ctx.trans_funs
+
 (** Small helper to compute the name of a unary operation *)
 let unop_name (unop : unop) : string =
   match unop with
@@ -1142,6 +1146,7 @@ let keywords () =
           "prelude";
           "private";
           "protected";
+          "public";
           "raw";
           "record";
           "reduce";
@@ -2381,15 +2386,11 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
                 | AssocIdMethod method_id -> (
                     match
                       List.find_opt
-                        (fun (mid, _, _) -> mid = method_id)
+                        (fun meth -> meth.method_id = method_id)
                         trait_decl.methods
                     with
                     | None -> None
-                    | Some (_, _, bound_fn) ->
-                        Option.map
-                          (fun (def : A.fun_decl) -> def.item_meta)
-                          (FunDeclId.Map.find_opt bound_fn.binder_value.fun_id
-                             ctx.trans_ctx.fun_ctx.fun_decls))
+                    | Some meth -> Some meth.item_meta)
                 | AssocIdConst _ ->
                     (* TODO: missing item meta information *)
                     None
@@ -2429,7 +2430,7 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
         if is_trait_decl_field then llbc_name
         else
           match src with
-          | TraitDeclItem (_, _, true) ->
+          | TraitDeclItem _ ->
               llbc_name @ [ PeIdent ("default", Disambiguator.zero) ]
           | _ -> llbc_name
       in

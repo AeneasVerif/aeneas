@@ -758,9 +758,9 @@ namespace Aeneas.Std.WP
 open Std Result
 open Std.Do
 
-instance Result.instWP : WP Result (.except Error (.except PUnit .pure)) where
+instance Result.instWP : WP Result.{u} (.except (ULift Error) (.except PUnit .pure)) where
   wp x := {
-    trans Q := match x with | .ok a => Q.1 a | .fail e => Q.2.1 e | .div => Q.2.2.1 ()
+    trans Q := match x with | .ok a => Q.1 a | .fail e => Q.2.1 (ULift.up e) | .div => Q.2.2.1 .unit
     conjunctiveRaw Q₁ Q₂ := by
       apply SPred.bientails.of_eq
       cases x <;> simp
@@ -777,17 +777,25 @@ instance : LawfulMonad Result where
     bind_map := by intros; rfl
     bind_assoc := by intros _ _ _ x _ _; cases x <;> rfl
 
-instance Result.instWPMonad : WPMonad Result (.except Error (.except PUnit .pure)) where
+instance Result.instWPMonad : WPMonad Result (.except (ULift Error) (.except PUnit .pure)) where
   wp_pure a := by apply PredTrans.ext; intro Q; simp [PredTrans.apply, wp, WP.wp]; rfl
   wp_bind x f := by apply PredTrans.ext; intro Q; simp [PredTrans.apply, wp, WP.wp]; cases x <;> rfl
 
-theorem Result.of_wp {α} {x : Result α} (P : Result α → Prop) :
-    (⊢ₛ wp⟦x⟧ post⟨fun a => ⌜P (.ok a)⌝,
-                  fun e => ⌜P (.fail e)⌝,
-                  fun () => ⌜P .div⌝⟩) → P x := by
+theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
+    (⊢ₛ wp⟦x⟧ (fun a => ⌜P (.ok a)⌝,
+                  fun e => ⌜P (.fail e.down)⌝,
+                  fun .unit => ⌜P .div⌝, .unit)) → P x := by
   intro hspec
   simp only [WP.wp, PredTrans.apply] at hspec
   split at hspec <;> simp_all
+
+/-- Lift an Aeneas step spec to an mvcgen-compatible `Triple`. -/
+theorem spec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
+    (h : spec x Q) :
+    ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
+  obtain ⟨v, hx, hQv⟩ := spec_imp_exists h
+  subst hx
+  simp [Triple, WP.wp, PredTrans.apply, hQv]
 
 end Aeneas.Std.WP
 
@@ -856,21 +864,16 @@ theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
     mk_spec_bind := ``Std.WP.spec_bind'
     mk_spec_bind_skip_args := 4
     uncurry_elim_tactics := #[
-      ``Std.WP.qimp_spec_uncurry', ``Std.WP.qimp_spec_unit,
-                  ``Std.WP.qimp_uncurry', ``Std.WP.qimp_unit,
-                  ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
-                  -- `Prod.forall`/`Prod.exists` split `∀ x : α × β, p x` into
-                  -- `∀ a b, p (a, b)`, so a tuple post-binder produces one
-                  -- output per leaf rather than a single pair.
-                  ``Prod.forall, ``Prod.exists,
-                  ``forall_unit, ``true_imp_iff
+      ``Std.WP.qimp_spec_unit, ``Std.WP.qimp_unit,
+      ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
+      ``forall_unit, ``true_imp_iff
     ]
     qimp_elim_tactics := #[
       ``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
-                  ``Std.WP.imp_and_iff, ``Std.WP.imp_exists_iff,
-                  ``Prod.forall, ``Prod.exists, ``Std.uncurry_apply_pair,
-                  ``forall_unit, ``true_imp_iff
-        ]
+      ``Std.WP.imp_and_iff, ``Std.uncurry_apply_pair,
+      ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
+      ``Std.WP.imp_exists_iff,
+      ``forall_unit, ``true_imp_iff]
     liftings := #[]
   }
 
@@ -884,21 +887,16 @@ theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
     mk_spec_bind := ``Std.WP.dspec_bind'
     mk_spec_bind_skip_args := 4
     uncurry_elim_tactics := #[
-      ``Std.WP.qimp_dspec_uncurry', ``Std.WP.qimp_dspec_unit,
-                  ``Std.WP.qimp_uncurry', ``Std.WP.qimp_unit,
-                  ``Std.WP.qimp_dspec_exists, ``Std.WP.qimp_exists,
-                  -- `Prod.forall`/`Prod.exists` split `∀ x : α × β, p x` into
-                  -- `∀ a b, p (a, b)`, so a tuple post-binder produces one
-                  -- output per leaf rather than a single pair.
-                  ``Prod.forall, ``Prod.exists,
-                  ``forall_unit, ``true_imp_iff
+      ``Std.WP.qimp_dspec_unit, ``Std.WP.qimp_unit,
+      ``Std.WP.qimp_dspec_exists, ``Std.WP.qimp_exists,
+      ``forall_unit, ``true_imp_iff
     ]
     qimp_elim_tactics := #[
       ``Std.WP.qimp_dspec_iff, ``Std.WP.qimp_iff,
-                  ``Std.WP.imp_and_iff, ``Std.WP.imp_exists_iff,
-                  ``Prod.forall, ``Prod.exists, ``Std.uncurry_apply_pair,
-                  ``forall_unit, ``true_imp_iff
-        ]
+      ``Std.WP.imp_and_iff, ``Std.uncurry_apply_pair,
+      ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
+      ``Std.WP.imp_exists_iff,
+      ``forall_unit, ``true_imp_iff]
     liftings := #[
       { from_statement := ``Std.WP.spec
         conversion_thm := ``Std.WP.spec_dspec
