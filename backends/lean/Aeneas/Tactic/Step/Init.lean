@@ -279,7 +279,7 @@ structure StepSpecAttr where
   ext  : Extension
   deriving Inhabited
 
-private def generateMvcgenSpec (stx : Syntax) (attrKind : AttributeKind)
+private def generateMvcgenSpec (thm : Name) (stx : Syntax) (attrKind : AttributeKind)
     (thDecl : AsyncConstantInfo) : MetaM Unit := do
   let sig := thDecl.sig.get
   let thName := thDecl.name
@@ -288,7 +288,7 @@ private def generateMvcgenSpec (stx : Syntax) (attrKind : AttributeKind)
     let thConst := Lean.mkConst thName (sig.levelParams.map .param)
     let thApp := mkAppN thConst fvars
     -- Wrap with spec_to_mvcgen to produce: Triple (f args) ⌜True⌝ post⟨...⟩
-    let proof ← mkAppM ``Aeneas.Std.WP.spec_to_mvcgen #[thApp]
+    let proof ← mkAppM thm #[thApp]
     let innerTy ← inferType proof
     -- Re-introduce all fvars as binders
     let proofTerm ← mkLambdaFVars fvars proof
@@ -331,7 +331,8 @@ private def saveStepSpecFromThm (ext : Extension) (attrKind : AttributeKind) (st
     -- Also generate a corresponding mvcgen (@[spec]) lemma
     try
       trace[Step] "Registering with mvcgen"
-      MetaM.run' (generateMvcgenSpec stx attrKind thDecl)
+      if let .some thm := info.to_mvcgen then
+        MetaM.run' (generateMvcgenSpec thm stx attrKind thDecl)
     catch e =>
       logWarning m!"Could not generate mvcgen spec for {thName}: {e.toMessageData}"
     pure ()

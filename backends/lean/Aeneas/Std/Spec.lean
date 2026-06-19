@@ -29,6 +29,8 @@ structure SpecInfo where
   uncurry_elim_tactics : Array Lean.Name
   qimp_elim_tactics : Array Lean.Name
 
+  to_mvcgen: Option Name
+
   liftings : Array LiftingInfo
   deriving Inhabited
 

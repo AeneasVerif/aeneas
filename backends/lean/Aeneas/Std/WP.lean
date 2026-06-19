@@ -241,6 +241,10 @@ def qimp_dspec_iff {α β} (P : α → Prop) (k : α → Result β) (Q : β → 
 @[simp, grind =, agrind =]
 theorem dspec_ok (x : α) : dspec (ok x) p ↔ p x := by simp [dspec]
 
+theorem dspec_imp_forall {m:Result α} {P:Post α} :
+  dspec m P → (∀ y, m = ok y → P y) := by
+  grind only [= dspec_ok]
+
 end Aeneas.Std.WP
 
 /-
@@ -797,6 +801,12 @@ theorem spec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
   subst hx
   simp [Triple, WP.wp, PredTrans.apply, hQv]
 
+theorem dspec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
+    (h : dspec x Q) :
+    ⦃ ⌜ ¬ x = .div ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
+  simp [Triple, WP.wp, PredTrans.apply, SPred.pure]
+  cases x <;> simp [*, dspec] at * <;> trivial
+
 end Aeneas.Std.WP
 
 namespace Aeneas.Std
@@ -874,6 +884,7 @@ theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
       ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
       ``Std.WP.imp_exists_iff,
       ``forall_unit, ``true_imp_iff]
+    to_mvcgen := .some ``Std.WP.spec_to_mvcgen
     liftings := #[]
   }
 
@@ -897,6 +908,7 @@ theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
       ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
       ``Std.WP.imp_exists_iff,
       ``forall_unit, ``true_imp_iff]
+    to_mvcgen := .some ``Std.WP.dspec_to_mvcgen
     liftings := #[
       { from_statement := ``Std.WP.spec
         conversion_thm := ``Std.WP.spec_dspec
