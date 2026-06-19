@@ -148,4 +148,29 @@ def get_inner
   core.num.nonzero.NonZero.get
     U8.Insts.CoreNumNonzeroZeroablePrimitiveNonZeroU8Inner x
 
+/-- Trait declaration: [issue_1051_duplicate_parent_clause_names::Gen]
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 36:0-38:1
+    Visibility: public -/
+structure Gen (Self : Type) (T : Type) where
+  get : Self → Result T
+
+/-- Trait declaration: [issue_1051_duplicate_parent_clause_names::UsesGen]
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 40:0-40:40
+    Visibility: public -/
+structure UsesGen (Self : Type) where
+  GenSelfU8Inst : Gen Self Std.U8
+  GenSelfU16Inst : Gen Self Std.U16
+
+/-- Trait declaration: [issue_1051_duplicate_parent_clause_names::GenN]
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 44:0-44:33
+    Visibility: public -/
+structure GenN (Self : Type) (N : Std.Usize) where
+
+/-- Trait declaration: [issue_1051_duplicate_parent_clause_names::UsesGenN]
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 46:0-46:40
+    Visibility: public -/
+structure UsesGenN (Self : Type) where
+  GenNSelf3Inst : GenN Self 3#usize
+  GenNSelf5Inst : GenN Self 5#usize
+
 end issue_1051_duplicate_parent_clause_names
