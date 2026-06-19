@@ -261,8 +261,8 @@ scoped syntax:54 term:55 " ⦃ " term+ " => " term " ⦄" : term
 scoped syntax:54 term:55 " ⦃ " term " ⦄" : term
 
 -- for dspec
-scoped syntax:54 term:55 " div⦃ " term+ " => " term " ⦄" : term
-scoped syntax:54 term:55 " div⦃ " term " ⦄" : term
+scoped syntax:54 term:55 " ⦃ " term+ " => " term " ⦄div" : term
+scoped syntax:54 term:55 " ⦃ " term " ⦄div" : term
 
 open Lean PrettyPrinter
 
@@ -324,7 +324,7 @@ macro_rules
         `(uncurry' $inner)
     let post ← run 0 xs
     `(Aeneas.Std.WP.spec $e $post)
-  | `($e div⦃ $x $xs:term* => $p ⦄) => do
+  | `($e ⦃ $x $xs:term* => $p ⦄div) => do
     let xs := x :: xs.toList
     let rec run (depth : Nat) (xs : List Term) : MacroM Term := do
       match xs with
@@ -340,7 +340,7 @@ macro_rules
 /-- Macro expansion for predicate with no arrow -/
 macro_rules
   | `($e ⦃ $p ⦄) => do `(_root_.Aeneas.Std.WP.spec $e $p)
-  | `($e div⦃ $p ⦄) => do `(_root_.Aeneas.Std.WP.dspec $e $p)
+  | `($e ⦃ $p ⦄div) => do `(_root_.Aeneas.Std.WP.dspec $e $p)
 
 /-!
 # Pretty-printing
@@ -468,6 +468,17 @@ def delabSpec : Delab := do
     `($monadExpr ⦃ $bodyTerm ⦄)
   else
     `($monadExpr ⦃ $(binders[0]!) $(binders.drop 1)* => $bodyTerm ⦄)
+
+/-- Delaborator for `WP.dspec e post` → `e ⦃ binders => body ⦄div`. -/
+@[scoped delab app.Aeneas.Std.WP.dspec]
+def delabDSpec : Delab := do
+  guard $ (← getExpr).isAppOfArity' ``dspec 3
+  let monadExpr ← withNaryArg 1 delab
+  let (binders, bodyTerm) ← withNaryArg 2 delabPostBinders
+  if binders.size == 0 then
+    `($monadExpr ⦃ $bodyTerm ⦄div)
+  else
+    `($monadExpr ⦃ $(binders[0]!) $(binders.drop 1)* => $bodyTerm ⦄div)
 
 /-!
 # Tests

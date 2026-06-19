@@ -454,7 +454,7 @@ theorem add_with_carry_spec
 
 
 theorem pseudo_random_spec :
-  pseudo_random div⦃fun x => x.val >= 100⦄ := by
+  pseudo_random ⦃fun x => x.val >= 100⦄div := by
   unfold pseudo_random
   -- unfold pseudo_random_loop
   -- if we proceed by unfolding `loop`, then the proof will be non-terminating.

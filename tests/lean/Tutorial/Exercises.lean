@@ -880,7 +880,7 @@ For the usual spec `r ⦃post⦄`, one needs to prove that `r` terminates and
 produces a value that satisfies `post`
 
 However, sometimes a function may be potentially nonterminating.
-`dspec` (notation `r div⦃post⦄`) is a weaker statement,
+`dspec` (notation `r ⦃post⦄div`) is a weaker statement,
 and only means that if `r` terminates then the result satisfies `post`.
 It works with the `step` tactic and any `@step` theorems for `spec` are automatically
 lifted to `dspec`. You will also need the `dspec_induction` tactic to complete this exercise,
@@ -890,7 +890,7 @@ which is used to prove a fact about a recursive function by induction in its rec
 so don't make use of its definition as a constant for the solution.
 -/
 theorem pseudo_random_spec :
-  pseudo_random div⦃fun x => x.val >= 100⦄ := by
+  pseudo_random ⦃fun x => x.val >= 100⦄div := by
   sorry
 
 end Tutorial.Solutions

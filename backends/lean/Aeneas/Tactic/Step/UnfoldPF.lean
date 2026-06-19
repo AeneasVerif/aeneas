@@ -302,7 +302,7 @@ def pseudo_random_loop (state : Std.U32) : Result Std.U32 := do
 
 
 theorem pseudo_random_spec :
-  pseudo_random div⦃fun x => x.val >= 100⦄ := by
+  pseudo_random ⦃fun x => x.val >= 100⦄div := by
   unfold pseudo_random
   unfold pseudo_random_loop
   -- note here that we must make a potentially non-obvious decision about
@@ -341,7 +341,7 @@ partial_fixpoint
 -- #check first_arg_const.fixpoint_induct
 -- #check second_arg_const.fixpoint_induct
 
-example x y : (first_arg_const x y) div⦃fun x => x = 0⦄ := by
+example x y : (first_arg_const x y) ⦃fun x => x = 0⦄div := by
   revert y
   dspec_induction first_arg_const
   intros first_arg_const' ih y
@@ -349,7 +349,7 @@ example x y : (first_arg_const x y) div⦃fun x => x = 0⦄ := by
   · trivial
   · apply ih
 
-example x y : (second_arg_const x y) div⦃fun x => x = 0⦄ := by
+example x y : (second_arg_const x y) ⦃fun x => x = 0⦄div := by
   revert x
   dspec_induction second_arg_const
   intros second_arg_const' ih y
