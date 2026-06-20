@@ -2021,44 +2021,30 @@ let trait_clause_discriminator (span : Meta.span)
        (trait_clause_discriminator_token span type_params)
        clause.generics.types)
 
-(** Compute the names of the parent clauses (the super-trait dictionaries) of a
-    trait declaration. The names become the fields of the trait's
-    record/structure, so they must be pairwise distinct.
+(** Compute the names of the parent clauses of a trait declaration.
 
-    For a computed (non-builtin) trait each name is
-    [base (+ discriminator) ^ "Inst"]:
-    - The base name comes from the referenced trait (via
-      {!ctx_compute_trait_clause_name}); unless [record_fields_short_names] is
-      set it is prefixed with the trait declaration name.
+    For a computed trait each name is [base ^ (discriminator) ^ "Inst"]:
+    - The base name comes from the referenced trait (and trait-decl name for
+      long names).
     - Concrete type arguments and const-generic arguments are already reflected
       in the base name, so two clauses referencing the same trait at different
-      such arguments already get distinct bases. The only way two clauses share
-      a base is when they differ in associated-type projections (e.g. two
-      [TraitA] bounds, one on [Self::X] and one on [Self::Y]).
-    - For a shared base we append a discriminator (see
-      {!trait_clause_discriminator}) to every member of the colliding group.
-    - The ["Inst"] suffix is appended last (first letter lowercased for FStar).
+      such arguments already get distinct bases.
+    - For a shared base we append a discriminator to every member of the
+      colliding group.
 
     For a builtin trait the names are taken verbatim from the builtin
-    information (no discriminator, no ["Inst"] suffix added here).
-
-    Example: a [TraitB] whose associated types [X] and [Y] are both bounded by
-    [TraitA] gets the two fields [TraitASelfXInst] and [TraitASelfYInst].
-
-    These rules keep the names distinct: clauses that share a base differ in
-    their associated-type projections, which the discriminator reflects. *)
+    information (no discriminator, no ["Inst"] suffix added here). *)
 let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
     (trait_decl : trait_decl)
     (builtin_info : Pure.builtin_trait_decl_info option) :
     (trait_param * string) list =
-  (* The trait-decl name prefix is the same for every clause, so compute it
-     once. On backends without short field names (Coq, HOL4) it is prepended
-     twice; this is historical. *)
+  (* The trait-decl name prefix is the same for each clause. On backends without 
+     short field names it is duplicated (preserves historical behaviour). *)
   let prefix =
     if !Config.record_fields_short_names then None
     else Some (ctx_compute_trait_decl_name ctx trait_decl)
   in
-  (* The base name of a clause, before any discriminator and the "Inst" suffix. *)
+  (* The base name of a clause. *)
   let compute_base (clause : trait_param) : string =
     let base =
       ctx_compute_trait_clause_name ctx trait_decl.item_meta.name
@@ -2085,17 +2071,14 @@ let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
       ^ " parent clauses, found "
       ^ string_of_int (List.length info.parent_clauses))
   in
-  (* A semantic name per clause. For computed clauses this is
-     base [+ discriminator if the base is shared] + "Inst"; for builtin clauses
-     we use the names provided by the builtin information as-is. *)
+  (* A semantic name per clause. *)
   let names =
     match builtin_info with
     | None ->
         let bases =
           List.map (fun c -> (c, compute_base c)) trait_decl.parent_clauses
         in
-        (* The set of base names carried by more than one clause: only these
-           need a discriminator. Computed in a single pass. *)
+        (* The set of base names carried by more than one clause. *)
         let _, shared =
           List.fold_left
             (fun (seen, shared) (_, base) ->
