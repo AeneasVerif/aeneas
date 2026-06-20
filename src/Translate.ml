@@ -1072,7 +1072,9 @@ let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
   (* Check if the trait declaration is builtin, in which case we ignore it *)
   if not (trait_decl_is_builtin ctx trait_decl_id) then (
     let ctx = { ctx with trait_decl_id = Some trait_decl.def_id } in
-    if extract_decl then Extract.extract_trait_decl ctx fmt trait_decl;
+    if extract_decl then (
+      Extract.extract_trait_decl ctx fmt trait_decl;
+      EmitJson.record_trait_decl_if_enabled ctx trait_decl);
     if extract_extra_info then
       Extract.extract_trait_decl_extra_info ctx fmt trait_decl)
   else ()
@@ -1086,8 +1088,9 @@ let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
     [%silent_unwrap_opt_span] None
       (TraitImplId.Map.find_opt trait_impl_id ctx.trans_trait_impls)
   in
-  if not (trait_impl_is_builtin ctx trait_impl_id) then
-    Extract.extract_trait_impl ctx fmt ~is_rec trait_impl
+  if not (trait_impl_is_builtin ctx trait_impl_id) then (
+    Extract.extract_trait_impl ctx fmt ~is_rec trait_impl;
+    EmitJson.record_trait_impl_if_enabled ctx trait_impl)
 
 (** A generic utility to generate the extracted definitions: as we may want to
     split the definitions between different files (or not), we can control what

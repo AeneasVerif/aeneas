@@ -24,7 +24,9 @@ The manifest describes **what Aeneas did**: the Lean declarations it produced an
   },
   "functions": [...],
   "types": [...],
-  "globals": [...]
+  "globals": [...],
+  "trait_decls": [...],
+  "trait_impls": [...]
 }
 ```
 
@@ -34,7 +36,7 @@ The paths in `files` are recorded as Aeneas knew them, so they are relative to A
 - `files.llbc_file`: the `.llbc` input path, as passed to Aeneas.
 - `files.lean_files`: the Lean files written, each is under `dest_dir`.
 
-### Function entry fields
+### Function entries
 
 | Field | Always present | Meaning |
 |---|---|---|
@@ -54,7 +56,23 @@ The paths in `files` are recorded as Aeneas knew them, so they are relative to A
 
 `loop` and `parent_lean_name` appear together or not at all.
 
-Type and global entries carry `def_id`, `lean_name`, `lean_file`, `rust_name`, `is_local`, and `source`; global entries additionally carry `can_fail`.
+### Type and global entries
+
+Type and global entries carry `def_id`, `lean_name`, `lean_file`, `rust_name`, `is_local`, and `source`; global entries additionally carry `can_fail`. Note that `def_id` is `TypeDeclId` or `GlobalDeclId` respectively. 
+
+### Trait entries
+
+`trait_decls` entries carry the same standard fields as type entries: `def_id` (a `TraitDeclId`), `lean_name`, `lean_file`, `rust_name`, `is_local`, and `source`. Builtin traits are not included in the outputted json.
+
+`trait_impls` entries carry the same standard fields (`def_id` is a `TraitImplId`) plus a link to the trait they implement:
+
+| Field | Always present | Meaning |
+|---|---|---|
+| `impl_trait_def_id` | yes | `TraitDeclId` of the implemented trait. |
+| `impl_trait_rust_name` | yes | Full Rust path of the implemented trait. |
+| `impl_trait_is_builtin` | yes | `true` when the implemented trait is builtin. |
+
+Note: `impl_trait_def_id` is always a valid LLBC trait decl. However it has a matching entry in this manifest's `trait_decls` for local traits but not for builtin traits. Equivalently, `impl_trait_is_builtin` iff there is no entry for `impl_trait_def_id` in this manifest's `trait_decls`.
 
 **Loop position** (`loop.pos`): nesting path of the loop in the source function. `[0]` is the first top-level loop, `[0, 1]` is the second loop nested inside it, etc. Matches `Pure.fun_decl.loop_pos`.
 

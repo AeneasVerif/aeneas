@@ -64,6 +64,35 @@ type global_entry = {
 }
 [@@deriving to_yojson]
 
+(** Lean trait declaration. *)
+type trait_decl_entry = {
+  def_id : int;
+  lean_name : string;
+  lean_file : string;
+  rust_name : string;
+  is_local : bool;
+  source : source;
+}
+[@@deriving to_yojson]
+
+(** Lean trait implementation. *)
+type trait_impl_entry = {
+  def_id : int;
+  lean_name : string;
+  lean_file : string;
+  rust_name : string;
+  is_local : bool;
+  source : source;
+  impl_trait_def_id : int;
+      (** [TraitDeclId] of the implemented trait. A valid LLBC trait decl but
+          has entry in [trait_decls] iff the trait is not builtin. *)
+  impl_trait_rust_name : string;
+      (** Full Rust path of the implemented trait. *)
+  impl_trait_is_builtin : bool;
+      (** [true] when the implemented trait is builtin. *)
+}
+[@@deriving to_yojson]
+
 (** The files involved, recorded exactly as Aeneas knew them. *)
 type files_info = {
   dest_dir : string;  (** The output directory Aeneas wrote. *)
@@ -82,6 +111,8 @@ type envelope = {
   functions : function_entry list;
   types : type_entry list;
   globals : global_entry list;
+  trait_decls : trait_decl_entry list;
+  trait_impls : trait_impl_entry list;
 }
 [@@deriving to_yojson]
 
@@ -98,6 +129,8 @@ type state = {
   mutable function_entries : function_entry list;
   mutable type_entries : type_entry list;
   mutable global_entries : global_entry list;
+  mutable trait_decl_entries : trait_decl_entry list;
+  mutable trait_impl_entries : trait_impl_entry list;
   mutable lean_files : string list;
   mutable current_lean_file : string;
   mutable current_lean_namespace : string;
@@ -109,6 +142,8 @@ let make_state () : state =
     function_entries = [];
     type_entries = [];
     global_entries = [];
+    trait_decl_entries = [];
+    trait_impl_entries = [];
     lean_files = [];
     current_lean_file = "";
     current_lean_namespace = "";
@@ -208,6 +243,40 @@ let global_entry_of_global_decl (ctx : ExtractBase.extraction_ctx)
     can_fail = def.can_fail;
   }
 
+let trait_decl_entry_of_trait_decl (ctx : ExtractBase.extraction_ctx)
+    (def : Pure.trait_decl) : trait_decl_entry =
+  let span = def.item_meta.span in
+  {
+    def_id = Pure.TraitDeclId.to_int def.def_id;
+    lean_name =
+      full_lean_name (ExtractBase.ctx_get_trait_decl span def.def_id ctx);
+    lean_file = state.current_lean_file;
+    rust_name = ExtractBase.name_to_string ctx def.item_meta.name;
+    is_local = def.item_meta.is_local;
+    source = source_of_span span;
+  }
+
+let trait_impl_entry_of_trait_impl (ctx : ExtractBase.extraction_ctx)
+    (def : Pure.trait_impl) : trait_impl_entry =
+  let span = def.item_meta.span in
+  let impl_trait_id = def.impl_trait.trait_decl_id in
+  let impl_trait_decl =
+    Pure.TraitDeclId.Map.find impl_trait_id ctx.trans_trait_decls
+  in
+  {
+    def_id = Pure.TraitImplId.to_int def.def_id;
+    lean_name =
+      full_lean_name (ExtractBase.ctx_get_trait_impl span def.def_id ctx);
+    lean_file = state.current_lean_file;
+    rust_name = ExtractBase.name_to_string ctx def.item_meta.name;
+    is_local = def.item_meta.is_local;
+    source = source_of_span span;
+    impl_trait_def_id = Pure.TraitDeclId.to_int impl_trait_id;
+    impl_trait_rust_name =
+      ExtractBase.name_to_string ctx impl_trait_decl.item_meta.name;
+    impl_trait_is_builtin = Option.is_some impl_trait_decl.builtin_info;
+  }
+
 (* ------------------------------------------------------------------------ *)
 (* Pipeline hooks (no-ops when -emit-json is off)                           *)
 (* ------------------------------------------------------------------------ *)
@@ -236,6 +305,18 @@ let record_global_if_enabled (ctx : ExtractBase.extraction_ctx)
   if !Config.emit_json then
     state.global_entries <-
       global_entry_of_global_decl ctx def :: state.global_entries
+
+let record_trait_decl_if_enabled (ctx : ExtractBase.extraction_ctx)
+    (def : Pure.trait_decl) : unit =
+  if !Config.emit_json then
+    state.trait_decl_entries <-
+      trait_decl_entry_of_trait_decl ctx def :: state.trait_decl_entries
+
+let record_trait_impl_if_enabled (ctx : ExtractBase.extraction_ctx)
+    (def : Pure.trait_impl) : unit =
+  if !Config.emit_json then
+    state.trait_impl_entries <-
+      trait_impl_entry_of_trait_impl ctx def :: state.trait_impl_entries
 
 (* ------------------------------------------------------------------------ *)
 (* Writing                                                                  *)
@@ -267,6 +348,8 @@ let write_if_enabled ~(crate_name : string) ~(llbc_file : string) :
         functions = List.rev state.function_entries;
         types = List.rev state.type_entries;
         globals = List.rev state.global_entries;
+        trait_decls = List.rev state.trait_decl_entries;
+        trait_impls = List.rev state.trait_impl_entries;
       };
     Some path
   end
