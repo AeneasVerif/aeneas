@@ -1990,21 +1990,24 @@ let ctx_compute_trait_clause_name (ctx : extraction_ctx)
   in
   String.concat "" clause
 
-(** The discriminator token contributed by one generic type argument of a parent
-    clause. Only a [Free] type variable denotes one of the trait's own
-    parameters (indexing [type_params]); a [Bound] variable comes from a
-    higher-ranked binder and does not index them, so it (and any non-variable)
-    falls back to ["Type"]. The result is PascalCased. *)
-let trait_clause_discriminator_token (type_params : type_param list) (ty : ty) :
-    string =
+(** Given a type argument, calculate a discriminator fragment in PascalCase. *)
+let trait_clause_discriminator_token (span : Meta.span)
+    (type_params : type_param list) (ty : ty) : string =
   let raw =
     match ty with
-    | TVar (Free index) -> (
-        match
-          List.find_opt (fun (p : type_param) -> p.index = index) type_params
-        with
-        | Some param -> param.name
-        | None -> "Type" ^ TypeVarId.to_string index)
+    (* In this case we take the name of the trait parameter it refers to. The
+       lookup is never None for a well-formed LLBC: a Free type variable in a
+       parent clause is an index into the enclosing trait's type parameters. *)
+    | TVar (Free index) ->
+        let param =
+          [%unwrap_with_span] span
+            (List.find_opt
+               (fun (p : type_param) -> p.index = index)
+               type_params)
+            ("Unexpected type variable " ^ TypeVarId.to_string index)
+        in
+        param.name
+    (* A bound variable or non-variable argument has no distinguishing name. *)
     | _ -> "Type"
   in
   StringUtils.to_camel_case raw
@@ -2014,11 +2017,11 @@ let trait_clause_discriminator_token (type_params : type_param list) (ty : ty) :
     clause, concatenated. Const-generic and trait-reference arguments are
     intentionally ignored, as they cannot produce a base-name collision (see
     {!ctx_compute_trait_parent_clause_names}). *)
-let trait_clause_discriminator (type_params : type_param list)
-    (clause : trait_param) : string =
+let trait_clause_discriminator (span : Meta.span)
+    (type_params : type_param list) (clause : trait_param) : string =
   String.concat ""
     (List.map
-       (trait_clause_discriminator_token type_params)
+       (trait_clause_discriminator_token span type_params)
        clause.generics.types)
 
 (** Compute the names of the parent clauses (the super-trait dictionaries) of a
@@ -2108,7 +2111,9 @@ let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
           (fun (c, base) ->
             let disambiguated =
               if StringSet.mem base shared then
-                base ^ trait_clause_discriminator trait_decl.generics.types c
+                base
+                ^ trait_clause_discriminator trait_decl.item_meta.span
+                    trait_decl.generics.types c
               else base
             in
             (c, add_inst disambiguated))
