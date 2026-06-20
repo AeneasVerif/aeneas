@@ -56,6 +56,10 @@ The paths in `files` are recorded as Aeneas knew them, so they are relative to A
 
 `loop` and `parent_lean_name` appear together or not at all.
 
+**Loop position** (`loop.pos`): nesting path of the loop in the source function. `[0]` is the first top-level loop, `[0, 1]` is the second loop nested inside it, etc. Matches `Pure.fun_decl.loop_pos`.
+
+**One Rust function, many entries**: a function with several loops produces multiple entries all sharing the same `def_id`.
+
 ### Type and global entries
 
 Type and global entries carry `def_id`, `lean_name`, `lean_file`, `rust_name`, `is_local`, and `source`; global entries additionally carry `can_fail`. Note that `def_id` is `TypeDeclId` or `GlobalDeclId` respectively. 
@@ -72,8 +76,4 @@ Type and global entries carry `def_id`, `lean_name`, `lean_file`, `rust_name`, `
 | `impl_trait_rust_name` | yes | Full Rust path of the implemented trait. |
 | `impl_trait_is_builtin` | yes | `true` when the implemented trait is builtin. |
 
-Note: `impl_trait_def_id` is always a valid LLBC trait decl. However it has a matching entry in this manifest's `trait_decls` for local traits but not for builtin traits. Equivalently, `impl_trait_is_builtin` iff there is no entry for `impl_trait_def_id` in this manifest's `trait_decls`.
-
-**Loop position** (`loop.pos`): nesting path of the loop in the source function. `[0]` is the first top-level loop, `[0, 1]` is the second loop nested inside it, etc. Matches `Pure.fun_decl.loop_pos`.
-
-**One Rust function, many entries**: a function with several loops produces multiple entries all sharing the same `def_id`.
+**Note:** `impl_trait_def_id` is always a valid LLBC trait decl. However it has a matching entry in this manifest's `trait_decls` for local traits but not for builtin traits. Equivalently, `impl_trait_is_builtin` iff there is no entry for `impl_trait_def_id` in this manifest's `trait_decls`.
