@@ -70,10 +70,10 @@ Type and global entries carry `def_id`, `lean_name`, `lean_file`, `rust_name`, `
 
 `trait_impls` entries carry the same standard fields (`def_id` is a `TraitImplId`) plus a link to the trait they implement:
 
-| Field | Always present | Meaning |
-|---|---|---|
-| `impl_trait_def_id` | yes | `TraitDeclId` of the implemented trait. |
-| `impl_trait_rust_name` | yes | Full Rust path of the implemented trait. |
-| `impl_trait_is_builtin` | yes | `true` when the implemented trait is builtin. |
+| Field | Meaning |
+|---|---|
+| `impl_trait_def_id` | `TraitDeclId` of the implemented trait. |
+| `impl_trait_rust_name` | Full Rust path of the implemented trait. |
+| `impl_trait_is_builtin` | `true` when the implemented trait is builtin. |
 
 **Note:** `impl_trait_def_id` is always a valid LLBC trait decl. However it has a matching entry in this manifest's `trait_decls` for local traits but not for builtin traits. Equivalently, `impl_trait_is_builtin` iff there is no entry for `impl_trait_def_id` in this manifest's `trait_decls`.
