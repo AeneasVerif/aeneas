@@ -2012,13 +2012,10 @@ let trait_clause_discriminator_token (span : Meta.span)
   in
   StringUtils.to_camel_case raw
 
-(** The discriminator appended to a parent clause's base name to tell apart two
-    clauses that share it: the PascalCased generic *type* arguments of the
-    clause, concatenated. Const-generic and trait-reference arguments are
-    intentionally ignored, as they cannot produce a base-name collision (see
-    {!ctx_compute_trait_parent_clause_names}). *)
+(** Build the full discriminator string for a parent clause. *)
 let trait_clause_discriminator (span : Meta.span)
     (type_params : type_param list) (clause : trait_param) : string =
+  (* Map over the clause's generic type arguments and concatenate. *)
   String.concat ""
     (List.map
        (trait_clause_discriminator_token span type_params)
