@@ -2021,6 +2021,18 @@ let trait_clause_discriminator (span : Meta.span)
        (trait_clause_discriminator_token span type_params)
        clause.generics.types)
 
+(* Builtin information must describe exactly the trait's parent clauses. *)
+let check_builtin_arity (ctx : extraction_ctx) (trait_decl : trait_decl)
+    (info : Pure.builtin_trait_decl_info) : unit =
+  [%cassert] trait_decl.item_meta.span
+    (List.length trait_decl.parent_clauses = List.length info.parent_clauses)
+    ("Invalid builtin information for trait decl: "
+    ^ name_to_string ctx trait_decl.item_meta.name
+    ^ "; expected "
+    ^ string_of_int (List.length trait_decl.parent_clauses)
+    ^ " parent clauses, found "
+    ^ string_of_int (List.length info.parent_clauses))
+
 (** Compute the names of the parent clauses of a trait declaration.
 
     For a computed trait each name is [base ^ (discriminator) ^ "Inst"]:
@@ -2054,24 +2066,13 @@ let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
     | None -> base
     | Some p -> p ^ p ^ "_" ^ base
   in
-  let add_inst (name : string) : string =
+  let add_inst_and_normalize (name : string) : string =
     let name = name ^ "Inst" in
     match backend () with
     | FStar -> StringUtils.lowercase_first_letter name
     | Coq | HOL4 | Lean -> name
   in
-  (* Builtin information must describe exactly the trait's parent clauses. *)
-  let check_builtin_arity (info : Pure.builtin_trait_decl_info) : unit =
-    [%cassert] trait_decl.item_meta.span
-      (List.length trait_decl.parent_clauses = List.length info.parent_clauses)
-      ("Invalid builtin information for trait decl: "
-      ^ name_to_string ctx trait_decl.item_meta.name
-      ^ "; expected "
-      ^ string_of_int (List.length trait_decl.parent_clauses)
-      ^ " parent clauses, found "
-      ^ string_of_int (List.length info.parent_clauses))
-  in
-  (* A semantic name per clause. *)
+  (* Compute a name for each parent clause. *)
   let names =
     match builtin_info with
     | None ->
@@ -2096,10 +2097,10 @@ let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
                     trait_decl.generics.types c
               else base
             in
-            (c, add_inst disambiguated))
+            (c, add_inst_and_normalize disambiguated))
           bases
     | Some info ->
-        check_builtin_arity info;
+        check_builtin_arity ctx trait_decl info;
         List.combine trait_decl.parent_clauses info.parent_clauses
   in
   names
