@@ -379,6 +379,20 @@ let lean_builtin_funs =
     mk_fun
       "core::array::{core::ops::index::IndexMut<[@T; @N], @I, @O>}::index_mut"
       "core.array.Array.index_mut";
+    (* AsRef and AsMut for arrays *)
+    mk_fun "core::array::{core::convert::AsRef<[@T; @N], [@T]>}::as_ref"
+      "Array.Insts.CoreConvertAsRefSlice.as_ref";
+    mk_fun "core::array::{core::convert::AsMut<[@T; @N], [@T]>}::as_mut"
+      "Array.Insts.CoreConvertAsMutSlice.as_mut";
+    (* IntoIterator for shared array and slice references *)
+    mk_fun
+      "core::array::{core::iter::traits::collect::IntoIterator<&'a [@T; @N], \
+       &'a @T, core::slice::iter::Iter<'a, @T>>}::into_iter"
+      "SharedArray.Insts.CoreIterTraitsCollectIntoIteratorSharedATIter.into_iter";
+    mk_fun
+      "core::slice::iter::{core::iter::traits::collect::IntoIterator<&'a [@T], \
+       &'a @T, core::slice::iter::Iter<'a, @T>>}::into_iter"
+      "SharedSlice.Insts.CoreIterTraitsCollectIntoIteratorSharedATIter.into_iter";
     (* file: "Aeneas/Std/Core/Core.lean", line: 132 *)
     mk_fun "core::clone::impls::{core::clone::Clone<&'0 @T>}::clone"
       "core.clone.impls.CloneShared.clone";
@@ -572,6 +586,40 @@ let lean_builtin_funs =
       "core::iter::adapters::step_by::{core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, \
        @Clause0_Item>}::take"
       "core.iter.adapters.step_by.IteratorStepBy.take";
+    (* Enumerate.next and friends *)
+    mk_fun
+      "core::iter::adapters::enumerate::{core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, \
+       (usize, @Clause0_Item)>}::next"
+      "core.iter.adapters.enumerate.IteratorEnumerate.next";
+    mk_fun
+      "core::iter::adapters::enumerate::{core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, \
+       (usize, @Clause0_Item)>}::step_by"
+      "core.iter.adapters.enumerate.IteratorEnumerate.step_by";
+    mk_fun
+      "core::iter::adapters::enumerate::{core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, \
+       (usize, @Clause0_Item)>}::enumerate"
+      "core.iter.adapters.enumerate.IteratorEnumerate.enumerate";
+    mk_fun
+      "core::iter::adapters::enumerate::{core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, \
+       (usize, @Clause0_Item)>}::take"
+      "core.iter.adapters.enumerate.IteratorEnumerate.take";
+    (* Take.next and friends *)
+    mk_fun
+      "core::iter::adapters::take::{core::iter::traits::iterator::Iterator<core::iter::adapters::take::Take<@I>, \
+       @Clause0_Item>}::next"
+      "core.iter.adapters.take.IteratorTake.next";
+    mk_fun
+      "core::iter::adapters::take::{core::iter::traits::iterator::Iterator<core::iter::adapters::take::Take<@I>, \
+       @Clause0_Item>}::step_by"
+      "core.iter.adapters.take.IteratorTake.step_by";
+    mk_fun
+      "core::iter::adapters::take::{core::iter::traits::iterator::Iterator<core::iter::adapters::take::Take<@I>, \
+       @Clause0_Item>}::enumerate"
+      "core.iter.adapters.take.IteratorTake.enumerate";
+    mk_fun
+      "core::iter::adapters::take::{core::iter::traits::iterator::Iterator<core::iter::adapters::take::Take<@I>, \
+       @Clause0_Item>}::take"
+      "core.iter.adapters.take.IteratorTake.take";
     (* file: "Aeneas/Std/Core/Iter.lean", line: 212 *)
     mk_fun
       "core::iter::range::{core::iter::range::Step<usize>}::backward_checked"
@@ -583,6 +631,38 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Iter.lean", line: 197 *)
     mk_fun "core::iter::range::{core::iter::range::Step<usize>}::steps_between"
       "core.iter.range.StepUsize.steps_between";
+    (* Step instances for U8, U16, U32, U64, U128 *)
+    mk_fun "core::iter::range::{core::iter::range::Step<u8>}::backward_checked"
+      "core.iter.range.StepU8.backward_checked";
+    mk_fun "core::iter::range::{core::iter::range::Step<u8>}::forward_checked"
+      "core.iter.range.StepU8.forward_checked";
+    mk_fun "core::iter::range::{core::iter::range::Step<u8>}::steps_between"
+      "core.iter.range.StepU8.steps_between";
+    mk_fun "core::iter::range::{core::iter::range::Step<u16>}::backward_checked"
+      "core.iter.range.StepU16.backward_checked";
+    mk_fun "core::iter::range::{core::iter::range::Step<u16>}::forward_checked"
+      "core.iter.range.StepU16.forward_checked";
+    mk_fun "core::iter::range::{core::iter::range::Step<u16>}::steps_between"
+      "core.iter.range.StepU16.steps_between";
+    mk_fun "core::iter::range::{core::iter::range::Step<u32>}::backward_checked"
+      "core.iter.range.StepU32.backward_checked";
+    mk_fun "core::iter::range::{core::iter::range::Step<u32>}::forward_checked"
+      "core.iter.range.StepU32.forward_checked";
+    mk_fun "core::iter::range::{core::iter::range::Step<u32>}::steps_between"
+      "core.iter.range.StepU32.steps_between";
+    mk_fun "core::iter::range::{core::iter::range::Step<u64>}::backward_checked"
+      "core.iter.range.StepU64.backward_checked";
+    mk_fun "core::iter::range::{core::iter::range::Step<u64>}::forward_checked"
+      "core.iter.range.StepU64.forward_checked";
+    mk_fun "core::iter::range::{core::iter::range::Step<u64>}::steps_between"
+      "core.iter.range.StepU64.steps_between";
+    mk_fun
+      "core::iter::range::{core::iter::range::Step<u128>}::backward_checked"
+      "core.iter.range.StepU128.backward_checked";
+    mk_fun "core::iter::range::{core::iter::range::Step<u128>}::forward_checked"
+      "core.iter.range.StepU128.forward_checked";
+    mk_fun "core::iter::range::{core::iter::range::Step<u128>}::steps_between"
+      "core.iter.range.StepU128.steps_between";
     (* file: "Aeneas/Std/Core/Iter.lean", line: 251 *)
     mk_fun
       "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, \
@@ -614,6 +694,10 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Iter.lean", line: 60 *)
     mk_fun "core::iter::traits::iterator::Iterator::step_by"
       "core.iter.traits.iterator.Iterator.step_by.default";
+    mk_fun "core::iter::traits::iterator::Iterator::enumerate"
+      "core.iter.traits.iterator.Iterator.enumerate.default";
+    mk_fun "core::iter::traits::iterator::Iterator::take"
+      "core.iter.traits.iterator.Iterator.take.default";
     (* file: "Aeneas/Std/Core/Core.lean", line: 73 *)
     mk_fun "core::mem::replace" "core.mem.replace" ~can_fail:false ~lift:false;
     (* file: "Aeneas/Std/Core/Core.lean", line: 77 *)
@@ -901,6 +985,7 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Slice.lean", line: 526 *)
     mk_fun "core::slice::{[@T]}::copy_from_slice"
       "core.slice.Slice.copy_from_slice";
+    mk_fun "core::slice::{[@T]}::fill" "core.slice.Slice.fill";
     (* file: "Aeneas/Std/Slice.lean", line: 290 *)
     mk_fun "core::slice::{[@T]}::get" "core.slice.Slice.get";
     (* file: "Aeneas/Std/Slice.lean", line: 304 *)
@@ -1232,6 +1317,12 @@ let lean_builtin_trait_impls =
     mk_trait_impl "core::fmt::Debug<usize>" "core.fmt.DebugUsize";
     (* file: "Aeneas/Std/Core/Iter.lean", line: 218 *)
     mk_trait_impl "core::iter::range::Step<usize>" "core.iter.range.StepUsize";
+    (* Step instances for unsigned scalar types *)
+    mk_trait_impl "core::iter::range::Step<u8>" "core.iter.range.StepU8";
+    mk_trait_impl "core::iter::range::Step<u16>" "core.iter.range.StepU16";
+    mk_trait_impl "core::iter::range::Step<u32>" "core.iter.range.StepU32";
+    mk_trait_impl "core::iter::range::Step<u64>" "core.iter.range.StepU64";
+    mk_trait_impl "core::iter::range::Step<u128>" "core.iter.range.StepU128";
     (* file: "Aeneas/Std/VecIter.lean", line: 91 *)
     mk_trait_impl
       "core::iter::traits::collect::FromIterator<alloc::vec::Vec<@T>, @T>"
@@ -1239,6 +1330,15 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Core/Iter.lean", line: 163 *)
     mk_trait_impl "core::iter::traits::collect::IntoIterator<@I, @Item, @I>"
       "core.iter.traits.collect.IntoIterator.Blanket";
+    (* IntoIterator for shared array and slice references *)
+    mk_trait_impl
+      "core::iter::traits::collect::IntoIterator<&'a [@T; @N], &'a @T, \
+       core::slice::iter::Iter<'a, @T>>"
+      "SharedArray.Insts.CoreIterTraitsCollectIntoIteratorSharedATIter";
+    mk_trait_impl
+      "core::iter::traits::collect::IntoIterator<&'a [@T], &'a @T, \
+       core::slice::iter::Iter<'a, @T>>"
+      "SharedSlice.Insts.CoreIterTraitsCollectIntoIteratorSharedATIter";
     (* file: "Aeneas/Std/VecIter.lean", line: 58 *)
     mk_trait_impl
       "core::iter::traits::collect::IntoIterator<alloc::vec::Vec<@T>, @T, \
@@ -1256,6 +1356,15 @@ let lean_builtin_trait_impls =
       "core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, \
        @Clause0_Item>"
       "core.iter.traits.iterator.IteratorStepBy";
+    (* Iterator instances for Enumerate and Take *)
+    mk_trait_impl
+      "core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, \
+       (usize, @Clause0_Item)>"
+      "core.iter.traits.iterator.IteratorEnumerate";
+    mk_trait_impl
+      "core::iter::traits::iterator::Iterator<core::iter::adapters::take::Take<@I>, \
+       @Clause0_Item>"
+      "core.iter.traits.iterator.IteratorTake";
     (* file: "Aeneas/Std/Core/Iter.lean", line: 265 *)
     mk_trait_impl
       "core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>"

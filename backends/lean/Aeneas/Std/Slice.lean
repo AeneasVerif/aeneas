@@ -1046,4 +1046,50 @@ theorem Slice.mapM_spec {α β} {f : α → Result β} {s : Slice α} {post : Na
   case h_2 e heq => simp [hl'] at heq
   case h_3 heq => simp [hl'] at heq
 
+-- ============================================================================
+-- Slice.fill — overwrite every element with a clone of `v`
+-- ============================================================================
+
+/-- Model for `<[T]>::fill(v)`: returns a slice of the same length where every
+    element is obtained by calling `clone(v)`. Mirrors Rust stdlib. -/
+@[rust_fun "core::slice::{[@T]}::fill"]
+def core.slice.Slice.fill {T : Type} (cloneInst : core.clone.Clone T)
+    (s : Slice T) (v : T) : Result (Slice T) :=
+  match h : s.val.mapM (fun _ => cloneInst.clone v) with
+  | .ok val => .ok ⟨val, List.mapM_Result_length h ▸ s.property⟩
+  | .fail e => .fail e
+  | .div => .div
+
+private theorem List.mapM_const_ok {T : Type} (l : List T)
+    {g : Result T} {v : T} (hg : g = ok v) :
+    l.mapM (fun _ => g) = ok (List.replicate l.length v) := by
+  subst hg
+  have : ∀ acc, List.mapM.loop (fun _ => ok v) l acc = ok (acc.reverse ++ List.replicate l.length v) := by
+    intro acc; induction l generalizing acc with
+    | nil => simp [List.mapM.loop, pure]
+    | cons _ _ ih => simp [List.mapM.loop, bind_tc_ok, ih, List.reverse_cons, List.append_assoc, List.replicate_succ]
+  simp [List.mapM, this]
+
+@[step]
+theorem core.slice.Slice.fill.spec {T : Type} (cloneInst : core.clone.Clone T)
+    (s : Slice T) (v : T)
+    (hclone : cloneInst.clone v ⦃ fun v' => v' = v ⦄) :
+    core.slice.Slice.fill cloneInst s v
+    ⦃ (s' : Slice T) =>
+      s'.length = s.length ∧
+      s'.val = List.replicate s.length v ⦄ := by
+  unfold core.slice.Slice.fill
+  have hcl : cloneInst.clone v = ok v := by
+    simp only [WP.spec, WP.theta] at hclone
+    match hc : cloneInst.clone v with
+    | .ok v' =>
+      congr 1; have := hclone; rw [hc] at this; simp [WP.wp_return] at this; exact this
+    | .fail _ => exfalso; have := hclone; rw [hc] at this; simp at this
+    | .div => exfalso; have := hclone; rw [hc] at this; simp at this
+  have hmapM := List.mapM_const_ok s.val hcl
+  split
+  · rename_i val heq; rw [hmapM] at heq; cases heq; simp [spec_ok, Slice.length, List.length_replicate]
+  · exfalso; simp_all
+  · exfalso; simp_all
+
 end Aeneas.Std

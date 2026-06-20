@@ -69,7 +69,7 @@ axiom core.iter.traits.iterator.Iterator.zip.default
     Visibility: public -/
 @[rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::zip"]
-axiom core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.zip
+axiom core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedT.zip
   {T : Type} {U : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
   (itertraitscollectIntoIteratorInst : core.iter.traits.collect.IntoIterator U
   Clause0_Item Clause0_IntoIter) :
@@ -565,7 +565,7 @@ def zip_iter (a : Slice Std.U8) (b : Slice Std.U8) : Result Unit := do
   let i ← core.slice.Slice.iter a
   let i1 ← core.slice.Slice.iter b
   let iter ←
-    core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.zip
+    core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedT.zip
       (core.iter.traits.collect.IntoIterator.Blanket
       (core.iter.traits.iterator.IteratorSliceIter Std.U8)) i i1
   zip_iter_loop iter
