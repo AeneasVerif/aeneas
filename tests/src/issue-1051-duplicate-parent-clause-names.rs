@@ -1,5 +1,5 @@
 //@ [!lean] skip
-//! Regression test for https://github.com/AeneasVerif/aeneas/issues/1051 (When a trait has two 
+//! Regression test for https://github.com/AeneasVerif/aeneas/issues/1051 (When a trait has two
 //! parent clauses that derive the same field name, name collision would happen.
 use std::num::NonZeroU8;
 
@@ -27,7 +27,7 @@ pub fn get_inner(x: NonZeroU8) -> u8 {
     x.get()
 }
 
-// Example 4: Two parent clauses of the same generic trait, they differ in a type argument. These 
+// Example 4: Two parent clauses of the same generic trait, they differ in a type argument. These
 // don't need deduplication since the base names shouldn't collide.
 pub trait Gen<T> {
     fn get(&self) -> T;
@@ -35,7 +35,7 @@ pub trait Gen<T> {
 
 pub trait UsesGen: Gen<u8> + Gen<u16> {}
 
-// Example 5: Two parent clauses of the same generic trait, they differ in a const-generic argument. 
+// Example 5: Two parent clauses of the same generic trait, they differ in a const-generic argument.
 // These don't need deduplication since the base names shouldn't collide.
 pub trait GenN<const N: usize> {}
 
