@@ -2050,8 +2050,7 @@ let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
     (trait_decl : trait_decl)
     (builtin_info : Pure.builtin_trait_decl_info option) :
     (trait_param * string) list =
-  (* The trait-decl name prefix is the same for each clause. On backends without 
-     short field names it is duplicated (preserves historical behaviour). *)
+  (* The trait-decl name prefix is the same for each clause. *)
   let prefix =
     if !Config.record_fields_short_names then None
     else Some (ctx_compute_trait_decl_name ctx trait_decl)
@@ -2064,7 +2063,7 @@ let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
     in
     match prefix with
     | None -> base
-    | Some p -> p ^ p ^ "_" ^ base
+    | Some p -> p ^ "_" ^ base
   in
   let add_inst_and_normalize (name : string) : string =
     let name = name ^ "Inst" in
