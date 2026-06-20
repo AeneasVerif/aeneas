@@ -115,31 +115,31 @@ axiom core.num.nonzero.NonZero.get
   core.num.nonzero.NonZero T Clause0_NonZeroInner → Result T
 
 /-- Trait declaration: [issue_1051_duplicate_parent_clause_names::TraitA]
-    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 9:0-9:19
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 8:0-8:19
     Visibility: public -/
 structure TraitA (Self : Type) where
 
 /-- Trait declaration: [issue_1051_duplicate_parent_clause_names::TraitB]
-    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 11:0-14:1
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 10:0-13:1
     Visibility: public -/
 structure TraitB (Self : Type) (Self_X : Type) (Self_Y : Type) where
   TraitASelfXInst : TraitA Self_X
   TraitASelfYInst : TraitA Self_Y
 
 /-- Trait declaration: [issue_1051_duplicate_parent_clause_names::TraitC]
-    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 18:0-18:19
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 17:0-17:19
     Visibility: public -/
 structure TraitC (Self : Type) where
 
 /-- Trait declaration: [issue_1051_duplicate_parent_clause_names::TraitE]
-    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 20:0-23:1
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 19:0-22:1
     Visibility: public -/
 structure TraitE (Self : Type) (Self_X : Type) (Self_Y : Type) where
   TraitAInst : TraitA Self_X
   TraitCInst : TraitC Self_Y
 
 /-- [issue_1051_duplicate_parent_clause_names::get_inner]:
-    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 27:0-29:1
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 26:0-28:1
     Visibility: public -/
 def get_inner
   (x : core.num.nonzero.NonZero Std.U8 core.num.niche_types.NonZeroU8Inner) :
@@ -149,25 +149,25 @@ def get_inner
     U8.Insts.CoreNumNonzeroZeroablePrimitiveNonZeroU8Inner x
 
 /-- Trait declaration: [issue_1051_duplicate_parent_clause_names::Gen]
-    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 36:0-38:1
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 32:0-34:1
     Visibility: public -/
 structure Gen (Self : Type) (T : Type) where
   get : Self → Result T
 
 /-- Trait declaration: [issue_1051_duplicate_parent_clause_names::UsesGen]
-    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 40:0-40:40
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 36:0-36:40
     Visibility: public -/
 structure UsesGen (Self : Type) where
   GenSelfU8Inst : Gen Self Std.U8
   GenSelfU16Inst : Gen Self Std.U16
 
 /-- Trait declaration: [issue_1051_duplicate_parent_clause_names::GenN]
-    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 44:0-44:33
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 40:0-40:33
     Visibility: public -/
 structure GenN (Self : Type) (N : Std.Usize) where
 
 /-- Trait declaration: [issue_1051_duplicate_parent_clause_names::UsesGenN]
-    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 46:0-46:40
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 42:0-42:40
     Visibility: public -/
 structure UsesGenN (Self : Type) where
   GenNSelf3Inst : GenN Self 3#usize
