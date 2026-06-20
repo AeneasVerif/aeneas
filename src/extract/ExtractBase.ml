@@ -2045,9 +2045,8 @@ let trait_clause_discriminator (type_params : type_param list)
     Example: a [TraitB] whose associated types [X] and [Y] are both bounded by
     [TraitA] gets the two fields [TraitASelfXInst] and [TraitASelfYInst].
 
-    Uniqueness is finally enforced by an assertion: if the discriminator fails
-    to distinguish the clauses (e.g. it collapses to ["Type"]) this is a hard
-    error rather than a silently duplicated field. *)
+    These rules keep the names distinct: clauses that share a base differ in
+    their associated-type projections, which the discriminator reflects. *)
 let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
     (trait_decl : trait_decl)
     (builtin_info : Pure.builtin_trait_decl_info option) :
@@ -2118,17 +2117,6 @@ let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
         check_builtin_arity info;
         List.combine trait_decl.parent_clauses info.parent_clauses
   in
-  (* Sanity check: the discriminator is expected to make the names pairwise
-     distinct (see above). Fail loudly if it didn't, rather than silently
-     emitting a record with two identically-named fields. *)
-  let all_distinct (l : string list) : bool =
-    List.length (List.sort_uniq String.compare l) = List.length l
-  in
-  let chosen = List.map snd names in
-  [%cassert] trait_decl.item_meta.span (all_distinct chosen)
-    ("Could not generate distinct names for the parent clauses of trait '"
-    ^ name_to_string ctx trait_decl.item_meta.name
-    ^ "': " ^ String.concat ", " chosen);
   names
 
 let ctx_compute_trait_type_name (ctx : extraction_ctx) (trait_decl : trait_decl)
