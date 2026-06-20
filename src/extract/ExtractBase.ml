@@ -2279,7 +2279,7 @@ let ctx_compute_const_generic_var_basename (_ctx : extraction_ctx)
 let ctx_compute_trait_clause_basename (ctx : extraction_ctx)
     (current_def_name : Types.name) (params : Types.generic_params)
     (clause_id : trait_clause_id) : string =
-  (* This is similar to {!ctx_compute_trait_parent_clause_name}: we
+  (* This is similar to {!ctx_compute_trait_parent_clause_names}: we
      derive the name from the trait reference (i.e., from the type) *)
   let clause =
     ctx_compute_trait_clause_name ctx current_def_name params
