@@ -502,4 +502,302 @@ def test_take_exhausted_then_next : Result Unit := do
 /- Unit test for [iter_adapters::test_take_exhausted_then_next] -/
 #assert (test_take_exhausted_then_next == ok ())
 
+/-- [iter_adapters::test_range_single_element]:
+    Source: 'tests/src/iter_adapters.rs', lines 206:0-210:1
+    Visibility: public -/
+def test_range_single_element : Result Unit := do
+  let (o, it) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepU8
+      { start := 0#u8, «end» := 1#u8 }
+  let i ← core.option.Option.unwrap o
+  massert (i = 0#u8)
+  let (o1, _) ← core.iter.range.IteratorRange.next core.iter.range.StepU8 it
+  let b := core.option.Option.is_none o1
+  massert b
+
+/- Unit test for [iter_adapters::test_range_single_element] -/
+#assert (test_range_single_element == ok ())
+
+/-- [iter_adapters::test_range_u8_near_max]:
+    Source: 'tests/src/iter_adapters.rs', lines 214:0-218:1
+    Visibility: public -/
+def test_range_u8_near_max : Result Unit := do
+  let (o, it) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepU8
+      { start := 254#u8, «end» := 255#u8 }
+  let i ← core.option.Option.unwrap o
+  massert (i = 254#u8)
+  let (o1, _) ← core.iter.range.IteratorRange.next core.iter.range.StepU8 it
+  let b := core.option.Option.is_none o1
+  massert b
+
+/- Unit test for [iter_adapters::test_range_u8_near_max] -/
+#assert (test_range_u8_near_max == ok ())
+
+/-- [iter_adapters::test_range_u8_start_gt_end]:
+    Source: 'tests/src/iter_adapters.rs', lines 222:0-225:1
+    Visibility: public -/
+def test_range_u8_start_gt_end : Result Unit := do
+  let (o, _) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepU8
+      { start := 10#u8, «end» := 5#u8 }
+  let b := core.option.Option.is_none o
+  massert b
+
+/- Unit test for [iter_adapters::test_range_u8_start_gt_end] -/
+#assert (test_range_u8_start_gt_end == ok ())
+
+/-- [iter_adapters::test_range_u8_start_eq_end]:
+    Source: 'tests/src/iter_adapters.rs', lines 229:0-232:1
+    Visibility: public -/
+def test_range_u8_start_eq_end : Result Unit := do
+  let (o, _) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepU8
+      { start := 5#u8, «end» := 5#u8 }
+  let b := core.option.Option.is_none o
+  massert b
+
+/- Unit test for [iter_adapters::test_range_u8_start_eq_end] -/
+#assert (test_range_u8_start_eq_end == ok ())
+
+/-- [iter_adapters::test_range_u16_boundary]:
+    Source: 'tests/src/iter_adapters.rs', lines 236:0-242:1
+    Visibility: public -/
+def test_range_u16_boundary : Result Unit := do
+  let (o, it) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepU16
+      { start := 0#u16, «end» := 3#u16 }
+  let i ← core.option.Option.unwrap o
+  massert (i = 0#u16)
+  let (o1, it1) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepU16 it
+  let i1 ← core.option.Option.unwrap o1
+  massert (i1 = 1#u16)
+  let (o2, it2) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepU16 it1
+  let i2 ← core.option.Option.unwrap o2
+  massert (i2 = 2#u16)
+  let (o3, _) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepU16 it2
+  let b := core.option.Option.is_none o3
+  massert b
+
+/- Unit test for [iter_adapters::test_range_u16_boundary] -/
+#assert (test_range_u16_boundary == ok ())
+
+/-- [iter_adapters::test_range_u32_boundary]:
+    Source: 'tests/src/iter_adapters.rs', lines 246:0-251:1
+    Visibility: public -/
+def test_range_u32_boundary : Result Unit := do
+  let (o, it) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepU32
+      { start := 0#u32, «end» := 2#u32 }
+  let i ← core.option.Option.unwrap o
+  massert (i = 0#u32)
+  let (o1, it1) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepU32 it
+  let i1 ← core.option.Option.unwrap o1
+  massert (i1 = 1#u32)
+  let (o2, _) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepU32 it1
+  let b := core.option.Option.is_none o2
+  massert b
+
+/- Unit test for [iter_adapters::test_range_u32_boundary] -/
+#assert (test_range_u32_boundary == ok ())
+
+/-- [iter_adapters::test_range_u64_boundary]:
+    Source: 'tests/src/iter_adapters.rs', lines 255:0-261:1
+    Visibility: public -/
+def test_range_u64_boundary : Result Unit := do
+  let (o, it) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepU64
+      { start := 100#u64, «end» := 103#u64 }
+  let i ← core.option.Option.unwrap o
+  massert (i = 100#u64)
+  let (o1, it1) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepU64 it
+  let i1 ← core.option.Option.unwrap o1
+  massert (i1 = 101#u64)
+  let (o2, it2) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepU64 it1
+  let i2 ← core.option.Option.unwrap o2
+  massert (i2 = 102#u64)
+  let (o3, _) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepU64 it2
+  let b := core.option.Option.is_none o3
+  massert b
+
+/- Unit test for [iter_adapters::test_range_u64_boundary] -/
+#assert (test_range_u64_boundary == ok ())
+
+/-- [iter_adapters::test_range_usize_start_gt_end]:
+    Source: 'tests/src/iter_adapters.rs', lines 265:0-268:1
+    Visibility: public -/
+def test_range_usize_start_gt_end : Result Unit := do
+  let (o, _) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepUsize
+      { start := 10#usize, «end» := 5#usize }
+  let b := core.option.Option.is_none o
+  massert b
+
+/- Unit test for [iter_adapters::test_range_usize_start_gt_end] -/
+#assert (test_range_usize_start_gt_end == ok ())
+
+/-- [iter_adapters::test_step_by_larger_than_range]:
+    Source: 'tests/src/iter_adapters.rs', lines 272:0-276:1
+    Visibility: public -/
+def test_step_by_larger_than_range : Result Unit := do
+  let it ←
+    core.iter.range.IteratorRange.step_by core.iter.range.StepU8
+      { start := 0#u8, «end» := 3#u8 } 10#usize
+  let (o, it1) ←
+    core.iter.adapters.step_by.IteratorStepBy.next
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it
+  let i ← core.option.Option.unwrap o
+  massert (i = 0#u8)
+  let (o1, _) ←
+    core.iter.adapters.step_by.IteratorStepBy.next
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it1
+  let b := core.option.Option.is_none o1
+  massert b
+
+/- Unit test for [iter_adapters::test_step_by_larger_than_range] -/
+#assert (test_step_by_larger_than_range == ok ())
+
+/-- [iter_adapters::test_step_by_exact_range]:
+    Source: 'tests/src/iter_adapters.rs', lines 280:0-284:1
+    Visibility: public -/
+def test_step_by_exact_range : Result Unit := do
+  let it ←
+    core.iter.range.IteratorRange.step_by core.iter.range.StepU8
+      { start := 0#u8, «end» := 5#u8 } 5#usize
+  let (o, it1) ←
+    core.iter.adapters.step_by.IteratorStepBy.next
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it
+  let i ← core.option.Option.unwrap o
+  massert (i = 0#u8)
+  let (o1, _) ←
+    core.iter.adapters.step_by.IteratorStepBy.next
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it1
+  let b := core.option.Option.is_none o1
+  massert b
+
+/- Unit test for [iter_adapters::test_step_by_exact_range] -/
+#assert (test_step_by_exact_range == ok ())
+
+/-- [iter_adapters::test_step_by_one]:
+    Source: 'tests/src/iter_adapters.rs', lines 288:0-295:1
+    Visibility: public -/
+def test_step_by_one : Result Unit := do
+  let it ←
+    core.iter.range.IteratorRange.step_by core.iter.range.StepU8
+      { start := 0#u8, «end» := 4#u8 } 1#usize
+  let (o, it1) ←
+    core.iter.adapters.step_by.IteratorStepBy.next
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it
+  let i ← core.option.Option.unwrap o
+  massert (i = 0#u8)
+  let (o1, it2) ←
+    core.iter.adapters.step_by.IteratorStepBy.next
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it1
+  let i1 ← core.option.Option.unwrap o1
+  massert (i1 = 1#u8)
+  let (o2, it3) ←
+    core.iter.adapters.step_by.IteratorStepBy.next
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it2
+  let i2 ← core.option.Option.unwrap o2
+  massert (i2 = 2#u8)
+  let (o3, it4) ←
+    core.iter.adapters.step_by.IteratorStepBy.next
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it3
+  let i3 ← core.option.Option.unwrap o3
+  massert (i3 = 3#u8)
+  let (o4, _) ←
+    core.iter.adapters.step_by.IteratorStepBy.next
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it4
+  let b := core.option.Option.is_none o4
+  massert b
+
+/- Unit test for [iter_adapters::test_step_by_one] -/
+#assert (test_step_by_one == ok ())
+
+/-- [iter_adapters::test_step_by_empty]:
+    Source: 'tests/src/iter_adapters.rs', lines 299:0-302:1
+    Visibility: public -/
+def test_step_by_empty : Result Unit := do
+  let it ←
+    core.iter.range.IteratorRange.step_by core.iter.range.StepU8
+      { start := 5#u8, «end» := 5#u8 } 3#usize
+  let (o, _) ←
+    core.iter.adapters.step_by.IteratorStepBy.next
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it
+  let b := core.option.Option.is_none o
+  massert b
+
+/- Unit test for [iter_adapters::test_step_by_empty] -/
+#assert (test_step_by_empty == ok ())
+
+/-- [iter_adapters::test_step_by_odd_range]:
+    Source: 'tests/src/iter_adapters.rs', lines 306:0-312:1
+    Visibility: public -/
+def test_step_by_odd_range : Result Unit := do
+  let it ←
+    core.iter.range.IteratorRange.step_by core.iter.range.StepU8
+      { start := 0#u8, «end» := 5#u8 } 2#usize
+  let (o, it1) ←
+    core.iter.adapters.step_by.IteratorStepBy.next
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it
+  let i ← core.option.Option.unwrap o
+  massert (i = 0#u8)
+  let (o1, it2) ←
+    core.iter.adapters.step_by.IteratorStepBy.next
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it1
+  let i1 ← core.option.Option.unwrap o1
+  massert (i1 = 2#u8)
+  let (o2, it3) ←
+    core.iter.adapters.step_by.IteratorStepBy.next
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it2
+  let i2 ← core.option.Option.unwrap o2
+  massert (i2 = 4#u8)
+  let (o3, _) ←
+    core.iter.adapters.step_by.IteratorStepBy.next
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it3
+  let b := core.option.Option.is_none o3
+  massert b
+
+/- Unit test for [iter_adapters::test_step_by_odd_range] -/
+#assert (test_step_by_odd_range == ok ())
+
+/-- [iter_adapters::test_step_by_u8_near_max]:
+    Source: 'tests/src/iter_adapters.rs', lines 316:0-322:1
+    Visibility: public -/
+def test_step_by_u8_near_max : Result Unit := do
+  let it ←
+    core.iter.range.IteratorRange.step_by core.iter.range.StepU8
+      { start := 250#u8, «end» := 255#u8 } 2#usize
+  let (o, it1) ←
+    core.iter.adapters.step_by.IteratorStepBy.next
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it
+  let i ← core.option.Option.unwrap o
+  massert (i = 250#u8)
+  let (o1, it2) ←
+    core.iter.adapters.step_by.IteratorStepBy.next
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it1
+  let i1 ← core.option.Option.unwrap o1
+  massert (i1 = 252#u8)
+  let (o2, it3) ←
+    core.iter.adapters.step_by.IteratorStepBy.next
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it2
+  let i2 ← core.option.Option.unwrap o2
+  massert (i2 = 254#u8)
+  let (o3, _) ←
+    core.iter.adapters.step_by.IteratorStepBy.next
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8) it3
+  let b := core.option.Option.is_none o3
+  massert b
+
+/- Unit test for [iter_adapters::test_step_by_u8_near_max] -/
+#assert (test_step_by_u8_near_max == ok ())
+
 end iter_adapters

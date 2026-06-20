@@ -195,3 +195,128 @@ pub fn test_take_exhausted_then_next() {
     // Third call: n is now 0, returns None
     assert!(it.next().is_none());
 }
+
+// ============================================================================
+// Step trait boundary tests: observable behavior of steps_between,
+// forward_checked, backward_checked via range iteration corner cases.
+// ============================================================================
+
+/// Range 0..1 yields exactly one element (forward_checked(0, 1) = Some(1))
+#[verify::test]
+pub fn test_range_single_element() {
+    let mut it = (0u8..1u8).into_iter();
+    assert!(it.next().unwrap() == 0);
+    assert!(it.next().is_none());
+}
+
+/// Range at U8 max boundary: 254..255 (forward_checked(254, 1) = Some(255))
+#[verify::test]
+pub fn test_range_u8_near_max() {
+    let mut it = (254u8..255u8).into_iter();
+    assert!(it.next().unwrap() == 254);
+    assert!(it.next().is_none());
+}
+
+/// Range where start > end yields nothing (steps_between returns (0, None))
+#[verify::test]
+pub fn test_range_u8_start_gt_end() {
+    let mut it = (10u8..5u8).into_iter();
+    assert!(it.next().is_none());
+}
+
+/// Range where start == end yields nothing (steps_between returns (0, Some(0)))
+#[verify::test]
+pub fn test_range_u8_start_eq_end() {
+    let mut it = (5u8..5u8).into_iter();
+    assert!(it.next().is_none());
+}
+
+/// U16 boundary: small range
+#[verify::test]
+pub fn test_range_u16_boundary() {
+    let mut it = (0u16..3u16).into_iter();
+    assert!(it.next().unwrap() == 0);
+    assert!(it.next().unwrap() == 1);
+    assert!(it.next().unwrap() == 2);
+    assert!(it.next().is_none());
+}
+
+/// U32 near zero
+#[verify::test]
+pub fn test_range_u32_boundary() {
+    let mut it = (0u32..2u32).into_iter();
+    assert!(it.next().unwrap() == 0);
+    assert!(it.next().unwrap() == 1);
+    assert!(it.next().is_none());
+}
+
+/// U64 mid-range
+#[verify::test]
+pub fn test_range_u64_boundary() {
+    let mut it = (100u64..103u64).into_iter();
+    assert!(it.next().unwrap() == 100);
+    assert!(it.next().unwrap() == 101);
+    assert!(it.next().unwrap() == 102);
+    assert!(it.next().is_none());
+}
+
+/// usize with start > end
+#[verify::test]
+pub fn test_range_usize_start_gt_end() {
+    let mut it = (10usize..5usize).into_iter();
+    assert!(it.next().is_none());
+}
+
+/// StepBy with step larger than range (forward_checked overflow → None, range exhausts)
+#[verify::test]
+pub fn test_step_by_larger_than_range() {
+    let mut it = (0u8..3u8).step_by(10);
+    assert!(it.next().unwrap() == 0);
+    assert!(it.next().is_none());
+}
+
+/// StepBy where step exactly equals range length
+#[verify::test]
+pub fn test_step_by_exact_range() {
+    let mut it = (0u8..5u8).step_by(5);
+    assert!(it.next().unwrap() == 0);
+    assert!(it.next().is_none());
+}
+
+/// StepBy(1) is same as regular iteration
+#[verify::test]
+pub fn test_step_by_one() {
+    let mut it = (0u8..4u8).step_by(1);
+    assert!(it.next().unwrap() == 0);
+    assert!(it.next().unwrap() == 1);
+    assert!(it.next().unwrap() == 2);
+    assert!(it.next().unwrap() == 3);
+    assert!(it.next().is_none());
+}
+
+/// StepBy on empty range
+#[verify::test]
+pub fn test_step_by_empty() {
+    let mut it = (5u8..5u8).step_by(3);
+    assert!(it.next().is_none());
+}
+
+/// StepBy(2) on odd-length range: last element not yielded
+#[verify::test]
+pub fn test_step_by_odd_range() {
+    let mut it = (0u8..5u8).step_by(2);
+    assert!(it.next().unwrap() == 0);
+    assert!(it.next().unwrap() == 2);
+    assert!(it.next().unwrap() == 4);
+    assert!(it.next().is_none());
+}
+
+/// StepBy near U8 max
+#[verify::test]
+pub fn test_step_by_u8_near_max() {
+    let mut it = (250u8..255u8).step_by(2);
+    assert!(it.next().unwrap() == 250);
+    assert!(it.next().unwrap() == 252);
+    assert!(it.next().unwrap() == 254);
+    assert!(it.next().is_none());
+}
