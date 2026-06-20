@@ -697,8 +697,9 @@ let export_type (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     || ((not is_opaque) && config.extract_transparent)
   in
   if extract then (
-    if extract_decl then
+    if extract_decl then (
       Extract.extract_type_decl ctx fmt type_decl_group kind def;
+      EmitJson.record_type_if_enabled ctx def);
     if extract_extra_info then
       Extract.extract_type_decl_extra_info ctx fmt kind def)
 
@@ -838,14 +839,15 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
          (builtin_globals_map ())
        = None
   in
-  if extract then
+  if extract then (
     (* We don't wrap global declaration groups between calls to functions
        [{start, end}_global_decl_group] (which don't exist): global declaration
        groups are always singletons, so the [extract_global_decl] function
        takes care of generating the delimiters.
     *)
-    let global = GlobalDeclId.Map.find_opt id ctx.trans_globals in
-    Extract.extract_global_decl ctx fmt global body config.interface
+    let pure_global = GlobalDeclId.Map.find_opt id ctx.trans_globals in
+    Extract.extract_global_decl ctx fmt pure_global body config.interface;
+    Option.iter (EmitJson.record_global_if_enabled ctx) pure_global)
 
 (** Utility.
 
@@ -926,7 +928,8 @@ let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
         then
           Some
             (fun () ->
-              Extract.extract_fun_decl ctx fmt kind has_decr_clause def)
+              Extract.extract_fun_decl ctx fmt kind has_decr_clause def;
+              EmitJson.record_fun_if_enabled ctx def)
         else None)
       decls
   in
@@ -1069,7 +1072,9 @@ let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
   (* Check if the trait declaration is builtin, in which case we ignore it *)
   if not (trait_decl_is_builtin ctx trait_decl_id) then (
     let ctx = { ctx with trait_decl_id = Some trait_decl.def_id } in
-    if extract_decl then Extract.extract_trait_decl ctx fmt trait_decl;
+    if extract_decl then (
+      Extract.extract_trait_decl ctx fmt trait_decl;
+      EmitJson.record_trait_decl_if_enabled ctx trait_decl);
     if extract_extra_info then
       Extract.extract_trait_decl_extra_info ctx fmt trait_decl)
   else ()
@@ -1083,8 +1088,9 @@ let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
     [%silent_unwrap_opt_span] None
       (TraitImplId.Map.find_opt trait_impl_id ctx.trans_trait_impls)
   in
-  if not (trait_impl_is_builtin ctx trait_impl_id) then
-    Extract.extract_trait_impl ctx fmt ~is_rec trait_impl
+  if not (trait_impl_is_builtin ctx trait_impl_id) then (
+    Extract.extract_trait_impl ctx fmt ~is_rec trait_impl;
+    EmitJson.record_trait_impl_if_enabled ctx trait_impl)
 
 (** A generic utility to generate the extracted definitions: as we may want to
     split the definitions between different files (or not), we can control what
@@ -1269,6 +1275,9 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
   (* Open the file and create the formatter *)
   let out = open_out fi.filename in
   let fmt = Format.formatter_of_out_channel out in
+
+  (* Tell EmitJson file/namespace for the upcoming declarations. *)
+  EmitJson.begin_file_if_enabled ~filename:fi.filename ~namespace:fi.namespace;
 
   (* Print the headers.
    * Note that we don't use the OCaml formatter for purpose: we want to control
@@ -1513,6 +1522,8 @@ let extract_translated_crate (filename : string) (dest_dir : string)
       extracted_opaque;
     }
   in
+  (* Initialize EmitJson. *)
+  EmitJson.init_if_enabled ~dest_dir;
 
   (* Register unique names for all the top-level types, globals, functions...
 
@@ -2088,6 +2099,10 @@ let extract_translated_crate (filename : string) (dest_dir : string)
        }
      in
      extract_file gen_config ctx file_info);
+
+  (* Emit translation.json. *)
+  EmitJson.write_if_enabled ~crate_name:crate.name ~llbc_file:filename
+  |> Option.iter (fun path -> log#linfo (lazy ("Generated: " ^ path)));
 
   (* Generate the build file *)
   match Config.backend () with
