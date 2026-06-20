@@ -641,6 +641,72 @@ where
           pure info'
       pure (info ++ info', none)
 
+  /-- Process preconditions produced by step in the case of higher order spec theorems.
+      On those goals we attach the generated script under the associated `case` branch. -/
+  processPreconditions (cfg : Config) (fuel : Option Nat) (ss : Step.StepState)
+      (preconditions : Array (MVarId × Step.OptTask (Option Expr))) :
+      TacticM (Array (MVarId × Step.OptTask (Option Expr)) × Info ×
+        Array (TaskOrDone (Option Syntax.Tactic))) := do
+    let sorryStx ← `(tactic|· sorry)
+    if cfg.stepConfig.inferPost then
+      let mut remaining : Array (MVarId × Step.OptTask (Option Expr)) := #[]
+      let mut extra : Info := {}
+      let mut scriptEntries : Array (TaskOrDone (Option Syntax.Tactic)) := #[]
+      for (mvarId, proof) in preconditions do
+        match proof with
+        | .task y =>
+          -- Async proof in progress, keep as-is.
+          remaining := remaining.push (mvarId, proof)
+          scriptEntries := scriptEntries.push
+            (TaskOrDone.task (y.map fun (e : Option _) => if e.isNone then some sorryStx else none))
+        | .none =>
+          if ← mvarId.isAssigned then
+            continue
+          -- Check if this precondition contains a spec goal
+          -- (possibly under ∀ binders, e.g., ∀ y, mid y → f y ⦃ post ⦄).
+          let precTy ← instantiateMVars (← mvarId.getType)
+          let rec stripForall (e : Expr) : Expr :=
+            match e.consumeMData with
+            | .forallE _ _ body _ => stripForall body
+            | e => e
+          let innerTy := stripForall precTy
+          let isSpec := innerTy.consumeMData.withApp fun f args =>
+            f.isConstOf ``Std.WP.spec && args.size == 3
+          if isSpec then
+            let tag ← mvarId.getTag
+            let (subInfo, introNames) ← commitIfNoEx do
+              setGoals [mvarId]
+              let size ← getIntrosSize <$> mvarId.getType
+              let (introFVars, mvarId) ← mvarId.introNP size
+              -- Collect the user names while the fvars are still in scope.
+              let introNames ← mvarId.withContext do
+                introFVars.mapM fun fvar => fvar.getUserName
+              setGoals [mvarId]
+              let info ← traverseProgram cfg fuel ss
+              pure (info, introNames)
+            let subStx ← subInfo.script.toSyntax
+            let introStx : Array Syntax.Tactic ←
+              if !introNames.isEmpty then
+                let idents := introNames.map fun name =>
+                  mkIdent (if name.isInternal then `_ else name)
+                pure #[← `(tactic| intros $idents*)]
+              else pure #[]
+            let allTacs := introStx ++ subStx
+            let caseArgs := makeCaseArgs tag #[]
+            let caseTac ← `(tactic| case $caseArgs => $allTacs*)
+            scriptEntries := scriptEntries.push (TaskOrDone.mk (some caseTac))
+            extra := extra ++ { subInfo with script := .tacs #[] }
+          else
+            remaining := remaining.push (mvarId, proof)
+            scriptEntries := scriptEntries.push (TaskOrDone.mk (some sorryStx))
+      pure (remaining, extra, scriptEntries)
+    else
+      let scriptEntries : Array (TaskOrDone (Option Syntax.Tactic)) := preconditions.map fun (_, p) =>
+        match p with
+        | .none => TaskOrDone.mk (some sorryStx)
+        | .task y => TaskOrDone.task (y.map fun (e : Option _) => if e.isNone then some sorryStx else none)
+      pure (preconditions, {}, scriptEntries)
+
   onBind (cfg : Config) (names : Array (Option Name)) (ss : Step.StepState) : TacticM (Info × Option (MVarId × Step.StepState)) := do
     withTraceNode `Step (fun _ => pure m!"onBind ({names})") do
     let postsBasename := names[0]?.join
@@ -697,73 +763,8 @@ where
             match cfg.preconditionTac with
             | none => `(tactic| step $config with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩)
             | some tac => `(tactic| step $config with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩ by $(#[tac])*)
-      /- If inferPost is enabled, try to recursively process unsolved preconditions
-         that are `spec` goals.
-
-         For each recursively processed precondition, we wrap its script in
-         `case <tag> => [intro ...;] <recursive script>` so the generated proof
-         navigates to the correct goal. -/
-      let sorryStx ← `(tactic|· sorry)
       let (preconditions, extraInfo, preconditionsScript) ←
-        if cfg.stepConfig.inferPost then
-          let mut remaining : Array (MVarId × Step.OptTask (Option Expr)) := #[]
-          let mut extra : Info := {}
-          let mut scriptEntries : Array (TaskOrDone (Option Syntax.Tactic)) := #[]
-          for (mvarId, proof) in preconditions do
-            match proof with
-            | .task y =>
-              -- Async proof in progress, keep as-is
-              remaining := remaining.push (mvarId, proof)
-              scriptEntries := scriptEntries.push
-                (TaskOrDone.task (y.map fun (e : Option _) => if e.isNone then some sorryStx else none))
-            | .none =>
-              if ← mvarId.isAssigned then
-                continue
-              -- Check if this precondition contains a spec goal
-              -- (possibly under ∀ binders, e.g., ∀ y, mid y → f y ⦃ post ⦄)
-              let precTy ← instantiateMVars (← mvarId.getType)
-              let rec stripForall (e : Expr) : Expr :=
-                match e.consumeMData with
-                | .forallE _ _ body _ => stripForall body
-                | e => e
-              let innerTy := stripForall precTy
-              let isSpec := innerTy.consumeMData.withApp fun f args =>
-                f.isConstOf ``Std.WP.spec && args.size == 3
-              if isSpec then
-                let tag ← mvarId.getTag
-                -- Recursively process this spec precondition
-                let (subInfo, introNames) ← commitIfNoEx do
-                  setGoals [mvarId]
-                  let size ← getIntrosSize <$> mvarId.getType
-                  let (introFVars, mvarId) ← mvarId.introNP size
-                  -- Collect the user names while the fvars are still in scope
-                  let introNames ← mvarId.withContext do
-                    introFVars.mapM fun fvar => fvar.getUserName
-                  setGoals [mvarId]
-                  let info ← traverseProgram cfg fuel ss
-                  pure (info, introNames)
-                -- Build the script: case <tag> => [intros;] <recursive script>
-                let subStx ← subInfo.script.toSyntax
-                let introStx : Array Syntax.Tactic ←
-                  if !introNames.isEmpty then
-                    let idents := introNames.map mkIdent
-                    pure #[← `(tactic| intros $idents*)]
-                  else pure #[]
-                let allTacs := introStx ++ subStx
-                let caseArgs := makeCaseArgs tag #[]
-                let caseTac ← `(tactic| case $caseArgs => $allTacs*)
-                scriptEntries := scriptEntries.push (TaskOrDone.mk (some caseTac))
-                extra := extra ++ { subInfo with script := .tacs #[] }
-              else
-                remaining := remaining.push (mvarId, proof)
-                scriptEntries := scriptEntries.push (TaskOrDone.mk (some sorryStx))
-          pure (remaining, extra, scriptEntries)
-        else
-          let scriptEntries : Array (TaskOrDone (Option Syntax.Tactic)) := preconditions.map fun (_, p) =>
-            match p with
-            | .none => TaskOrDone.mk (some sorryStx)
-            | .task y => TaskOrDone.task (y.map fun (e : Option _) => if e.isNone then some sorryStx else none)
-          pure (preconditions, {}, scriptEntries)
+        processPreconditions cfg fuel ss preconditions
 
       /- After recursive processing, filter out unassigned vars that got assigned
          (e.g., `?post` assigned by `inferPost` during recursive spec processing) -/
@@ -774,6 +775,7 @@ where
         else
           pure unassignedVars
 
+      let sorryStx ← `(tactic|· sorry)
       let unassignedVarsScript : Array (TaskOrDone (Option Syntax.Tactic)) :=
         unassignedVars.map fun _ => TaskOrDone.mk (some sorryStx)
 
@@ -1258,9 +1260,8 @@ example {α : Type}
 error: unsolved goals
 f : Result (Bool × Bool)
 f_spec : f ⦃ x✝ x✝¹ => True ⦄
-x✝¹ x✝ : Bool
-_ : [> let(x✝¹, x✝) ← f <]
-_✝ : True
+x _✝ : Bool
+_ : [> let(x, _✝) ← f <]
 ⊢ False
 -/
 #guard_msgs in

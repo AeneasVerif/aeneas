@@ -193,6 +193,20 @@ be directly manipulated by the user. -/
 @[simp, grind =] theorem uncurry_apply_pair {α β γ} (f : α → β → γ) (a : α) (b : β) :
     uncurry f (a, b) = f a b := rfl
 
+/- reduction lemmas for `uncurry` restricted to functions whose end
+result is `Prop`. Used by `step` to clean up spec post-conditions that
+arrived as `uncurry p x` but where the call site didn't destructure further.
+
+We restrict the final return type to `Prop` so the simp lemmas cannot fire on
+bind continuations. `uncurry_eq_prop` handles the base case and
+`uncurry_eq_prop_arrow` handles the curried case. -/
+
+theorem uncurry_eq_prop {α β} (x : α × β) (p : α → β → Prop) :
+    uncurry p x = p x.fst x.snd := by cases x; rfl
+
+theorem uncurry_eq_prop_arrow {α β σ} (x : α × β) (p : α → β → σ → Prop) :
+    uncurry p x = p x.fst x.snd := by cases x; rfl
+
 /- Allow `partial_fixpoint` to see through `uncurry` in bind continuations.
 This is needed because the custom `do` elaborator generates
 `e >>= uncurry fun a b => rest` for tuple-destructuring `let (a, b) ← e`. -/
