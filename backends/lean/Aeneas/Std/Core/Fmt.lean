@@ -41,6 +41,15 @@ def core.result.Result.unwrap.mut {T E : Type}
   | .Ok x => .ok (x, fun x => .Ok x)
   | .Err _ => .fail .panic
 
+/-- `Result.unwrap` extracts the value when the result is statically known
+to be `.Ok`. -/
+@[step]
+theorem core.result.Result.unwrap.step_spec
+    {T E : Type} (D : core.fmt.Debug E) (r : core.result.Result T E) (a : T)
+    (h : r = core.result.Result.Ok a) :
+    core.result.Result.unwrap D r ⦃ x => x = a ⦄ := by
+  rw [h]; simp [core.result.Result.unwrap]
+
 
 -- TODO: this is a simplistic model
 @[rust_type "core::fmt::Arguments"]
