@@ -165,7 +165,14 @@ let lean_builtin_types =
     (* file: "Aeneas/Std/Core/Atomic.lean", line: 6 *)
     mk_type "core::sync::atomic::AtomicBool" "core.sync.atomic.AtomicBool";
     (* file: "Aeneas/Std/Core/Atomic.lean", line: 10 *)
+    mk_type "core::sync::atomic::AtomicU8" "core.sync.atomic.AtomicU8";
+    (* file: "Aeneas/Std/Core/Atomic.lean", line: 14 *)
     mk_type "core::sync::atomic::AtomicU32" "core.sync.atomic.AtomicU32";
+    (* file: "Aeneas/Std/Core/Atomic.lean", line: 18 *)
+    mk_type "core::sync::atomic::AtomicU64" "core.sync.atomic.AtomicU64";
+    (* Note: core::sync::atomic::Ordering is not registered here because Aeneas
+       generates it correctly from the LLBC (it's a simple enum). Only opaque
+       types that Aeneas cannot translate need to be registered as builtins. *)
   ]
 
 let lean_builtin_consts = []
