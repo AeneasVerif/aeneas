@@ -1,6 +1,7 @@
 import Lean
 import Aeneas.Std.Global
 import Aeneas.Extract
+import AeneasMeta.BvEnumToBitVec
 
 namespace Aeneas
 
@@ -191,7 +192,12 @@ be directly manipulated by the user. -/
   fun (a, b) => f a b
 
 @[simp, grind =] theorem uncurry_apply_pair {α β γ} (f : α → β → γ) (a : α) (b : β) :
-    uncurry f (a, b) = f a b := rfl
+    uncurry f (a, b) = f a b :=
+  /- This proof is intentionally not `:= rfl`: `simp` would flag this lemma as
+     a reflexivity lemma, meaning it would not apply it but would directly use
+     `rfl` in the proofs, triggering unwanted whnf reductions in some calls
+     to `step`. -/
+  id rfl
 
 /- reduction lemmas for `uncurry` restricted to functions whose end
 result is `Prop`. Used by `step` to clean up spec post-conditions that
@@ -302,6 +308,12 @@ def Option.ofResult {a : Type u} (x : Result a) :
   match x with
   | ok x => some x
   | _ => none
+
+/-!
+# bv_decide
+-/
+
+#define_bv_decide_toBitVec PUnit
 
 /-!
 # Dyn

@@ -2,6 +2,7 @@ import Aeneas.Std.Primitives
 import Aeneas.Std.Delab
 import Std.Do
 import Aeneas.Tactic.Solver.Grind.Init
+import Aeneas.Std.Spec
 
 namespace Aeneas.Std.WP
 
@@ -14,26 +15,31 @@ def Wp α := Post α → Pre
 
 def wp_return (x:α) : Wp α := fun p => p x
 
-def wp_bind (m:Wp α) (k:α -> Wp β) : Wp β :=
-  fun p => m (fun r => k r p)
-
-def wp_ord (wp1 wp2:Wp α) :=
-  forall p, wp1 p → wp2 p
-
 def theta (m:Result α) : Wp α :=
   match m with
   | ok x => wp_return x
   | fail _ => fun _ => False
   | div => fun _ => False
 
-def p2wp (post:Post α) : Wp α :=
-  fun p => forall r, post r → p r
-
-def spec_general (x:Result α) (p:Post α) :=
-  wp_ord (p2wp p) (theta x)
-
 def spec {α} (x:Result α) (p:Post α) :=
   theta x p
+
+def dspec {α} (x:Result α) (p:Post α) :=
+  match x with
+  | ok x => p x
+  | fail _ => False
+  | div => True
+
+theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p := by
+  intros s
+  simp [spec, dspec] at *
+  cases x <;> simp at * <;> assumption
+
+
+theorem dspec_admissible {α} (p : Post α )
+  : Lean.Order.admissible (fun x => dspec x p) := by
+  apply Lean.Order.admissible_flatOrder
+  simp [dspec]
 
 /-- Variant of `uncurry` used to decompose tuples in post-conditions.
 
@@ -187,6 +193,58 @@ theorem exists_imp_spec {m:Result α} {P:Post α} :
   (∃ y, m = ok y ∧ P y) → spec m P := by
   exact (spec_equiv_exists m P).2
 
+-- `dspec` theorems
+theorem dspec_mono' {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : dspec m P₀):
+  qimp P₀ P₁ → dspec m P₁ := by
+  intros HMonPost
+  revert h
+  unfold dspec
+  cases m <;> grind [qimp]
+
+/-- Implication of a `dspec` predicate with quantifier -/
+def qimp_dspec {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) : Prop :=
+  ∀ x, P x → dspec (k x) Q
+
+theorem dspec_bind' {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
+  dspec m Pₘ →
+  (qimp_dspec Pₘ k Pₖ) →
+  dspec (Std.bind m k) Pₖ := by
+  intro Hm Hk
+  cases m
+  · simp
+    apply Hk
+    apply Hm
+  · simp
+    apply Hm
+  · simp
+    apply Hm
+
+@[simp]
+def qimp_dspec_uncurry' {α₀ α₁ β} (P : α₀ → α₁ → Prop) (k : α₀ × α₁ → Result β) (Q : β → Prop) :
+  qimp_dspec (uncurry' P) k Q ↔ ∀ x, qimp_dspec (P x) (curry k x) Q := by
+  simp [qimp_dspec, curry]
+
+@[simp]
+theorem qimp_dspec_unit {α} (P : Unit → Prop) (k : Unit → Result α) (Q : α → Prop) :
+  qimp_dspec P k Q ↔ (P () → dspec (k ()) Q) := by
+  grind [qimp_dspec]
+
+@[simp]
+theorem qimp_dspec_exists {α β γ} (P : γ → α → Prop) (k : α → Result β) (Q : β → Prop) :
+  qimp_dspec (fun x => ∃ y, P y x) k Q ↔ ∀ x, qimp_dspec (P x) k Q := by
+  simp only [qimp_dspec, forall_exists_index]; grind
+
+def qimp_dspec_iff {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) :
+  qimp_dspec P k Q ↔ ∀ x, imp (P x) (dspec (k x) Q) := by
+  simp [qimp_dspec, imp]
+
+@[simp, grind =, agrind =]
+theorem dspec_ok (x : α) : dspec (ok x) p ↔ p x := by simp [dspec]
+
+theorem dspec_imp_forall {m:Result α} {P:Post α} :
+  dspec m P → (∀ y, m = ok y → P y) := by
+  grind only [= dspec_ok]
+
 end Aeneas.Std.WP
 
 /-
@@ -205,6 +263,10 @@ open Std WP Result
 This way we can expressions like: `x + y ⦃ z => ... ⦄` without having to put parentheses around `x + y`. -/
 scoped syntax:54 term:55 " ⦃ " term+ " => " term " ⦄" : term
 scoped syntax:54 term:55 " ⦃ " term " ⦄" : term
+
+-- for dspec
+scoped syntax:54 term:55 " ⦃ " term+ " => " term " ⦄div" : term
+scoped syntax:54 term:55 " ⦃ " term " ⦄div" : term
 
 open Lean PrettyPrinter
 
@@ -248,6 +310,9 @@ macro_rules
   | `($e ⦃ $x => $p ⦄) => do
     let post ← mkBinderFun 0 x p
     `(Aeneas.Std.WP.spec $e $post)
+  | `($e div⦃ $x => $p ⦄) => do
+    let post ← mkBinderFun 0 x p
+    `(Aeneas.Std.WP.dspec $e $post)
 
 /-- Macro expansion for multiple elements -/
 macro_rules
@@ -263,10 +328,23 @@ macro_rules
         `(uncurry' $inner)
     let post ← run 0 xs
     `(Aeneas.Std.WP.spec $e $post)
+  | `($e ⦃ $x $xs:term* => $p ⦄div) => do
+    let xs := x :: xs.toList
+    let rec run (depth : Nat) (xs : List Term) : MacroM Term := do
+      match xs with
+      | [] => `($p)
+      | [x] => mkBinderFun depth x p
+      | x :: xs =>
+        let xs ← run (depth + 1) xs
+        let inner ← mkBinderFun depth x xs
+        `(uncurry' $inner)
+    let post ← run 0 xs
+    `(Aeneas.Std.WP.dspec $e $post)
 
 /-- Macro expansion for predicate with no arrow -/
 macro_rules
   | `($e ⦃ $p ⦄) => do `(_root_.Aeneas.Std.WP.spec $e $p)
+  | `($e ⦃ $p ⦄div) => do `(_root_.Aeneas.Std.WP.dspec $e $p)
 
 /-!
 # Pretty-printing
@@ -394,6 +472,17 @@ def delabSpec : Delab := do
     `($monadExpr ⦃ $bodyTerm ⦄)
   else
     `($monadExpr ⦃ $(binders[0]!) $(binders.drop 1)* => $bodyTerm ⦄)
+
+/-- Delaborator for `WP.dspec e post` → `e ⦃ binders => body ⦄div`. -/
+@[scoped delab app.Aeneas.Std.WP.dspec]
+def delabDSpec : Delab := do
+  guard $ (← getExpr).isAppOfArity' ``dspec 3
+  let monadExpr ← withNaryArg 1 delab
+  let (binders, bodyTerm) ← withNaryArg 2 delabPostBinders
+  if binders.size == 0 then
+    `($monadExpr ⦃ $bodyTerm ⦄div)
+  else
+    `($monadExpr ⦃ $(binders[0]!) $(binders.drop 1)* => $bodyTerm ⦄div)
 
 /-!
 # Tests
@@ -712,6 +801,12 @@ theorem spec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
   subst hx
   simp [Triple, WP.wp, PredTrans.apply, hQv]
 
+theorem dspec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
+    (h : dspec x Q) :
+    ⦃ ⌜ ¬ x = .div ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
+  simp [Triple, WP.wp, PredTrans.apply, SPred.pure]
+  cases x <;> simp [*, dspec] at * <;> trivial
+
 end Aeneas.Std.WP
 
 namespace Aeneas.Std
@@ -761,3 +856,63 @@ theorem loop.spec_decr_nat {α : Type u} {β : Type v}
   apply this
 
 end Aeneas.Std
+
+namespace Aeneas.Std.WP
+
+/-- Note that `forall_const` is too general: it can eliminate unused outputs that we actually
+want to introduce in the context -/
+theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
+
+-- registers the spec statements for use in the step tactic, see Spec.lean
+#register_spec_statement {
+    name := ``Std.WP.spec
+    arity := 3
+    program_index := 1
+    post_index := 2
+    mk_spec_mono := ``Std.WP.spec_mono'
+    mk_spec_mono_skip_args := 2
+    mk_spec_bind := ``Std.WP.spec_bind'
+    mk_spec_bind_skip_args := 4
+    uncurry_elim_tactics := #[
+      ``Std.WP.qimp_spec_unit, ``Std.WP.qimp_unit,
+      ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
+      ``forall_unit, ``true_imp_iff
+    ]
+    qimp_elim_tactics := #[
+      ``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
+      ``Std.WP.imp_and_iff, ``Std.uncurry_apply_pair,
+      ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
+      ``Std.WP.imp_exists_iff,
+      ``forall_unit, ``true_imp_iff]
+    to_mvcgen := .some ``Std.WP.spec_to_mvcgen
+    liftings := #[]
+  }
+
+#register_spec_statement {
+    name := ``Std.WP.dspec
+    arity := 3
+    program_index := 1
+    post_index := 2
+    mk_spec_mono := ``Std.WP.dspec_mono'
+    mk_spec_mono_skip_args := 2
+    mk_spec_bind := ``Std.WP.dspec_bind'
+    mk_spec_bind_skip_args := 4
+    uncurry_elim_tactics := #[
+      ``Std.WP.qimp_dspec_unit, ``Std.WP.qimp_unit,
+      ``Std.WP.qimp_dspec_exists, ``Std.WP.qimp_exists,
+      ``forall_unit, ``true_imp_iff
+    ]
+    qimp_elim_tactics := #[
+      ``Std.WP.qimp_dspec_iff, ``Std.WP.qimp_iff,
+      ``Std.WP.imp_and_iff, ``Std.uncurry_apply_pair,
+      ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
+      ``Std.WP.imp_exists_iff,
+      ``forall_unit, ``true_imp_iff]
+    to_mvcgen := .some ``Std.WP.dspec_to_mvcgen
+    liftings := #[
+      { from_statement := ``Std.WP.spec
+        conversion_thm := ``Std.WP.spec_dspec
+        conversion_thm_inferred_args := 3 }
+    ]
+  }
+end Aeneas.Std.WP

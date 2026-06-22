@@ -1,5 +1,6 @@
 /- Arrays/Slices -/
 import Aeneas.Std.Slice
+import Aeneas.Std.Array.Array
 import Aeneas.Std.Core.Iter
 
 namespace Aeneas.Std
@@ -92,6 +93,49 @@ def core.iter.traits.iterator.IteratorSliceIter (T : Type) :
   step_by := core.slice.iter.IteratorSliceIter.step_by
   enumerate := core.slice.iter.IteratorSliceIter.enumerate
   take := core.slice.iter.IteratorSliceIter.take
+}
+
+-- ============================================================================
+-- IntoIterator for shared array references: &[T; N] → Iter<T>
+-- ============================================================================
+
+/-- Model for `IntoIterator::into_iter` for `&[T; N]`.
+Mirrors Rust: `(&[T; N]).into_iter()` returns an `Iter<T>` over the array
+viewed as a slice. -/
+@[rust_fun
+  "core::array::{core::iter::traits::collect::IntoIterator<&'a [@T; @N], &'a @T, core::slice::iter::Iter<'a, @T>>}::into_iter"]
+def SharedArray.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter
+    {T : Type} {N : Usize} (a : Array T N) : Result (core.slice.iter.Iter T) :=
+  ok ⟨ ⟨a.val, by scalar_tac⟩, 0 ⟩
+
+@[reducible, rust_trait_impl
+  "core::iter::traits::collect::IntoIterator<&'a [@T; @N], &'a @T, core::slice::iter::Iter<'a, @T>>"]
+def SharedArray.Insts.CoreIterTraitsCollectIntoIteratorSharedIter
+    (T : Type) (N : Usize) :
+    core.iter.traits.collect.IntoIterator (Array T N) T (core.slice.iter.Iter T) := {
+  iteratorInst := core.iter.traits.iterator.IteratorSliceIter T
+  into_iter := SharedArray.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter
+}
+
+-- ============================================================================
+-- IntoIterator for shared slice references: &[T] → Iter<T>
+-- ============================================================================
+
+/-- Model for `IntoIterator::into_iter` for `&[T]`.
+Mirrors Rust: `(&[T]).into_iter()` returns an `Iter<T>` starting at index 0. -/
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::collect::IntoIterator<&'a [@T], &'a @T, core::slice::iter::Iter<'a, @T>>}::into_iter"]
+def SharedSlice.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter
+    {T : Type} (s : Slice T) : Result (core.slice.iter.Iter T) :=
+  ok ⟨ s, 0 ⟩
+
+@[reducible, rust_trait_impl
+  "core::iter::traits::collect::IntoIterator<&'a [@T], &'a @T, core::slice::iter::Iter<'a, @T>>"]
+def SharedSlice.Insts.CoreIterTraitsCollectIntoIteratorSharedIter
+    (T : Type) :
+    core.iter.traits.collect.IntoIterator (Slice T) T (core.slice.iter.Iter T) := {
+  iteratorInst := core.iter.traits.iterator.IteratorSliceIter T
+  into_iter := SharedSlice.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter
 }
 
 @[rust_type "core::slice::iter::ChunksExact" (body := .opaque)]
@@ -318,4 +362,21 @@ private def collectNestedStepBy
     (core.iter.traits.iterator.IteratorSliceIter Nat) sbi 2#usize
   collectNestedStepBy sbi2) == .ok [0, 4]
 
+-- ============================================================================
+-- Step specs for SharedArray.into_iter and SharedSlice.into_iter
+-- ============================================================================
+
+@[step]
+theorem SharedArray.into_iter.spec {T : Type} {N : Usize} (a : Array T N) :
+    SharedArray.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter a
+    ⦃ (iter : core.slice.iter.Iter T) =>
+      iter.slice.val = a.val ∧ iter.i = 0 ⦄ := by
+  simp [SharedArray.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter, WP.spec_ok]
+
+@[step]
+theorem SharedSlice.into_iter.spec {T : Type} (s : Slice T) :
+    SharedSlice.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter s
+    ⦃ (iter : core.slice.iter.Iter T) =>
+      iter.slice = s ∧ iter.i = 0 ⦄ := by
+  simp [SharedSlice.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter, WP.spec_ok]
 end Aeneas.Std

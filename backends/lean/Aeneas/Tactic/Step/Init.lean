@@ -220,34 +220,46 @@ end Methods
   ```
 -/
 def getStepSpecFunArgsExpr (ty : Expr) :
-  MetaM Expr := do
+  MetaM (Expr × SpecInfo) := do
   let ty := ty.consumeMData
   unless ← isProp ty do
     throwError "Expected a proposition, got {←inferType ty}"
   -- ty == ∀ xs, spec (f x1 ... xn) P
-  let (xs, xs_bi, ty₂) ← forallMetaTelescope ty
+  let (xs, _xs_bi, ty₂) ← forallMetaTelescope ty
   trace[Step] "Universally quantified arguments and assumptions: {xs}"
   -- ty₂ == spec (f x1 ... xn) P
   let (spec?, args) := ty₂.consumeMData.withApp (fun f args => (f, args))
-  if h: spec?.isConstOf ``Std.WP.spec ∧ args.size = 3
-  then pure args[1] -- this is `f x1 ... xn`
+  let specName ← match spec? with
+    | Expr.const name _ => pure name
+    | _ => throwError "Not a constant"
+  let .some info ← specStatementLookup specName
+    | throwError "{specName} is not a supported spec statement name"
+  if _h: args.size = info.arity
+  then pure (args[info.program_index]!, info) -- this is `f x1 ... xn`
   else throwError "Expected to be a `spec (f x1 ... xn) P`, got {ty₂}"
 
+deriving instance Ord for Lean.Name
 structure Rules where
-  rules : DiscrTree Name
+  rules : Std.TreeMap Name (DiscrTree Name)
   /- We can't remove keys from a discrimination tree, so to support
      local rules we keep a set of deactivated rules (rules which have
      come out of scope) on the side -/
   deactivated : Std.HashSet Name
 deriving Inhabited
 
-def Rules.empty : Rules := ⟨ DiscrTree.empty, Std.HashSet.emptyWithCapacity ⟩
+def Rules.empty : Rules := ⟨ Std.TreeMap.empty, Std.HashSet.emptyWithCapacity ⟩
 
-def Extension := SimpleScopedEnvExtension (DiscrTreeKey × Name) Rules
+def Extension := SimpleScopedEnvExtension ((Name × DiscrTreeKey) × Name) Rules
 deriving Inhabited
 
-def Rules.insert (r : Rules) (kv : Array DiscrTree.Key × Name) : Rules :=
-  { rules := r.rules.insertKeyValue kv.fst kv.snd,
+def Rules.insert (r : Rules) (kv : (Name × Array DiscrTree.Key) × Name) : Rules :=
+  let ((specName, prog), thm) := kv
+  { rules :=
+    r.rules.insert specName ((match r.rules.get? specName with
+      | .some dt => dt
+      | .none => DiscrTree.empty
+    ).insertKeyValue prog thm)
+    ,
     deactivated := r.deactivated.erase kv.snd }
 
 def Rules.erase (r : Rules) (k : Name) : Rules :=
@@ -267,7 +279,7 @@ structure StepSpecAttr where
   ext  : Extension
   deriving Inhabited
 
-private def generateMvcgenSpec (stx : Syntax) (attrKind : AttributeKind)
+private def generateMvcgenSpec (thm : Name) (stx : Syntax) (attrKind : AttributeKind)
     (thDecl : AsyncConstantInfo) : MetaM Unit := do
   let sig := thDecl.sig.get
   let thName := thDecl.name
@@ -276,7 +288,7 @@ private def generateMvcgenSpec (stx : Syntax) (attrKind : AttributeKind)
     let thConst := Lean.mkConst thName (sig.levelParams.map .param)
     let thApp := mkAppN thConst fvars
     -- Wrap with spec_to_mvcgen to produce: Triple (f args) ⌜True⌝ post⟨...⟩
-    let proof ← mkAppM ``Aeneas.Std.WP.spec_to_mvcgen #[thApp]
+    let proof ← mkAppM thm #[thApp]
     let innerTy ← inferType proof
     -- Re-introduce all fvars as binders
     let proofTerm ← mkLambdaFVars fvars proof
@@ -303,22 +315,24 @@ private def saveStepSpecFromThm (ext : Extension) (attrKind : AttributeKind) (st
     let some thDecl := env.findAsync? thName
       | throwError "Could not find theorem {thName}"
     let type := thDecl.sig.get.type
-    let fKey ← MetaM.run' (do
+    let (fKey, info) ← MetaM.run' (do
       trace[Step] "Theorem: {type}"
       -- Normalize to eliminate the let-bindings
       let ty ← normalizeLetBindings type
       trace[Step] "Theorem after normalization (to eliminate the let bindings): {ty}"
-      let fExpr ← getStepSpecFunArgsExpr ty
+      let (fExpr, info) ← getStepSpecFunArgsExpr ty
       trace[Step] "Registering spec theorem for expr: {fExpr}"
       -- Convert the function expression to a discrimination tree key
-      DiscrTree.mkPath fExpr)
+      pure (← DiscrTree.mkPath fExpr, info))
     -- Save the entry
-    ScopedEnvExtension.add ext (fKey, thName) attrKind
+    -- TODO: use info.name to use a different discrimination tree here!
+    ScopedEnvExtension.add ext ((info.name, fKey), thName) attrKind
     trace[Step] "Saved the entry"
     -- Also generate a corresponding mvcgen (@[spec]) lemma
     try
       trace[Step] "Registering with mvcgen"
-      MetaM.run' (generateMvcgenSpec stx attrKind thDecl)
+      if let .some thm := info.to_mvcgen then
+        MetaM.run' (generateMvcgenSpec thm stx attrKind thDecl)
     catch e =>
       logWarning m!"Could not generate mvcgen spec for {thName}: {e.toMessageData}"
     pure ()
@@ -340,9 +354,11 @@ initialize stepAttr : StepSpecAttr ← do
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl, ext := ext }
 
-def StepSpecAttr.find? (s : StepSpecAttr) (e : Expr) : MetaM (Array Name) := do
+def StepSpecAttr.find? (s : StepSpecAttr) (name : Name) (e : Expr) : MetaM (Array Name) := do
   let state := s.ext.getState (← getEnv)
-  let rules ← state.rules.getMatch e
+  let .some dtree := state.rules.get? name
+  | throwError "no such spec statement as {name}, valid ones are {state.rules.keys}"
+  let rules ← dtree.getMatch e
   pure (rules.filter (fun th => th ∉ state.deactivated))
 
 def StepSpecAttr.getState (s : StepSpecAttr) : MetaM Rules := do
@@ -352,8 +368,10 @@ def showStoredStepThms : MetaM Unit := do
   let st ← stepAttr.getState
   -- TODO: how can we iterate over (at least) the values stored in the tree?
   --let s := st.toList.foldl (fun s (f, th) => f!"{s}\n{f} → {th}") f!""
-  let s := f!"{st.rules}, {st.deactivated.toArray}"
-  IO.println s
+  for key in st.rules.keys do
+    let s := f!"thms for {key}: {st.rules.get! key}}"
+    IO.println s
+  IO.println "deactivated: {st.deactivated.toArray}"
 
 /-! # Attribute: `step_pure` -/
 
