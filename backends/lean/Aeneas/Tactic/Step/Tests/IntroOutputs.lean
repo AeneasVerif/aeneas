@@ -445,6 +445,41 @@ h : y = z + 1
 example : (do let (x, y) ← existentialProg; ok (x + y)) ⦃ res => res > 2 ⦄ := by
   step with existentialProg_spec as ⟨ x, y, hx, z, hz, h ⟩
 
+/- A *nested*-tuple result combined with a *leading* existential in the post.
+   The post's `∃` only becomes visible after the output is destructured, so it
+   must be split by the post-destructure cleanup pass. -/
+def nestedExistentialProg : Result ((Nat × Nat) × Nat) := ok ((1, 2), 3)
+
+@[step]
+theorem nestedExistentialProg_spec :
+    nestedExistentialProg ⦃ (a, b) c => ∃ (_ : a = 1), b = 2 ∧ c = 3 ⦄ := by
+  unfold nestedExistentialProg; exact ⟨rfl, rfl, rfl⟩
+
+/--
+info: Try this:
+
+  [apply]     let* ⟨ a, b, c, a_post1, a_post2, a_post3 ⟩ ← nestedExistentialProg_spec
+    agrind
+-/
+#guard_msgs in
+example :
+    (do let ((a, b), c) ← nestedExistentialProg; ok (a + b + c)) ⦃ x => x = 6 ⦄ := by
+  step*?
+
+/--
+error: unsolved goals
+case a
+c a b : ℕ
+ha : a = 1
+hb : b = 2
+hc : c = 3
+⊢ a + b + c = 6
+-/
+#guard_msgs in
+example :
+    (do let ((a, b), c) ← nestedExistentialProg; ok (a + b + c)) ⦃ x => x = 6 ⦄ := by
+  step with nestedExistentialProg_spec as ⟨ a, b, c, ha, hb, hc ⟩
+
 -- Testing that we don't destructure too far when we don't have to
 
 section

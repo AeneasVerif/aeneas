@@ -39,6 +39,10 @@ package «tests» {}
 @[default_target] lean_lib Hashmap
 @[default_target] lean_lib Into
 @[default_target] lean_lib Issue1044OpaqueTuple
+@[default_target] lean_lib IterAdapters
+@[default_target] lean_lib Iterators
+@[default_target] lean_lib IteratorsArray
+@[default_target] lean_lib IssueCharon1172
 @[default_target] lean_lib Issue134LoopSharedBorrows
 @[default_target] lean_lib Issue194RecursiveStructProjector
 @[default_target] lean_lib Issue270LoopList
@@ -48,9 +52,6 @@ package «tests» {}
 @[default_target] lean_lib Issue804ClosureReturnRef
 @[default_target] lean_lib Issue807MissingSymbolicValue
 @[default_target] lean_lib Issue815GlobalReferencingFallibleGlobal
-@[default_target] lean_lib IssueCharon1172
-@[default_target] lean_lib Iterators
-@[default_target] lean_lib IteratorsArray
 @[default_target] lean_lib IteratorsScalar
 @[default_target] lean_lib JoinDuplicate
 @[default_target] lean_lib Joins

@@ -27,9 +27,17 @@
    ppx_deriving.show
    ppx_deriving.eq
    ppx_deriving.ord
+   ppx_deriving_yojson
    visitors.ppx
    aeneas.ppx))
- (libraries charon core_unix ocamlgraph str progress domainslib)
+ (libraries
+  charon
+  core_unix
+  ocamlgraph
+  str
+  progress
+  domainslib
+  ppx_deriving_yojson)
  (modules
   BorrowCheck
   Builtin
@@ -75,6 +83,7 @@
   LlbcAstUtils
   LlbcOfJson
   Logging
+  EmitJson
   Meta
   NameMatcher
   Parallel
