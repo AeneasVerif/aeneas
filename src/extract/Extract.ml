@@ -2682,6 +2682,72 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
   | Some global -> extract_global_decl_aux ctx fmt global body interface
   | None -> ()
 
+let deduplicate_trait_parent_clause_names (generics : generic_params)
+    (names : (trait_param * string) list) : (trait_param * string) list =
+  let count_name counts (_, name) =
+    let count = Option.value (StringMap.find_opt name counts) ~default:0 in
+    StringMap.add name (count + 1) counts
+  in
+  let name_counts = List.fold_left count_name StringMap.empty names in
+  let is_duplicate name =
+    Option.value (StringMap.find_opt name name_counts) ~default:0 > 1
+  in
+  let generic_type_name (ty : ty) =
+    match ty with
+    | TVar (Free index | Bound (_, index)) -> (
+        match
+          List.find_opt
+            (fun (param : type_param) -> param.index = index)
+            generics.types
+        with
+        | Some param -> param.name
+        | None -> "Type" ^ TypeVarId.to_string index)
+    | _ -> "Type"
+  in
+  let pascal_case_name name =
+    String.split_on_char '_' name
+    |> List.map StringUtils.capitalize_first_letter
+    |> String.concat ""
+  in
+  let drop_inst_suffix name =
+    let suffix = "Inst" in
+    let suffix_len = String.length suffix in
+    let name_len = String.length name in
+    if
+      name_len >= suffix_len
+      && String.sub name (name_len - suffix_len) suffix_len = suffix
+    then String.sub name 0 (name_len - suffix_len)
+    else name
+  in
+  let add_generic_types_suffix (((clause : trait_param), name) as clause_name) =
+    if not (is_duplicate name) then clause_name
+    else
+      let suffix =
+        clause.generics.types
+        |> List.map (fun ty -> ty |> generic_type_name |> pascal_case_name)
+        |> String.concat ""
+      in
+      if suffix = "" then clause_name
+      else (clause, drop_inst_suffix name ^ suffix ^ "Inst")
+  in
+  let rec fresh_name seen name i =
+    let candidate = name ^ string_of_int i in
+    if StringSet.mem candidate seen then fresh_name seen name (i + 1)
+    else candidate
+  in
+  let add_unique_name seen (clause, name) =
+    let name =
+      if StringSet.mem name seen then fresh_name seen name 1 else name
+    in
+    (StringSet.add name seen, (clause, name))
+  in
+  let _, names =
+    names
+    |> List.map add_generic_types_suffix
+    |> List.fold_left_map add_unique_name StringSet.empty
+  in
+  names
+
 (** Similar to {!extract_trait_decl_register_names} *)
 let extract_trait_decl_register_parent_clause_names (ctx : extraction_ctx)
     (trait_decl : trait_decl)
@@ -2698,7 +2764,7 @@ let extract_trait_decl_register_parent_clause_names (ctx : extraction_ctx)
               if !record_fields_short_names then name
               else ctx_compute_trait_decl_name ctx trait_decl ^ name
             in
-            (c.clause_id, name))
+            (c, name))
           trait_decl.parent_clauses
     | Some info ->
         [%cassert] trait_decl.item_meta.span
@@ -2710,15 +2776,16 @@ let extract_trait_decl_register_parent_clause_names (ctx : extraction_ctx)
           ^ string_of_int (List.length trait_decl.parent_clauses)
           ^ " parent clauses, found "
           ^ string_of_int (List.length info.parent_clauses));
-        List.map
-          (fun (c, name) -> (c.clause_id, name))
-          (List.combine trait_decl.parent_clauses info.parent_clauses)
+        List.combine trait_decl.parent_clauses info.parent_clauses
+  in
+  let clause_names =
+    deduplicate_trait_parent_clause_names trait_decl.generics clause_names
   in
   (* Register the names *)
   List.fold_left
-    (fun ctx (cid, cname) ->
+    (fun ctx (c, cname) ->
       ctx_add trait_decl.item_meta.span
-        (TraitParentClauseId (trait_decl.def_id, cid))
+        (TraitParentClauseId (trait_decl.def_id, c.clause_id))
         cname ctx)
     ctx clause_names
 
