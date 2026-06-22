@@ -173,4 +173,40 @@ structure UsesGenN (Self : Type) where
   GenNSelf3Inst : GenN Self 3#usize
   GenNSelf5Inst : GenN Self 5#usize
 
+/-- [issue_1051_duplicate_parent_clause_names::Foo]
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 48:0-48:15
+    Visibility: public -/
+@[reducible]
+def Foo := Unit
+
+/-- [issue_1051_duplicate_parent_clause_names::SideBar]
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 49:0-49:19
+    Visibility: public -/
+@[reducible]
+def SideBar := Unit
+
+/-- [issue_1051_duplicate_parent_clause_names::FooSide]
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 50:0-50:19
+    Visibility: public -/
+@[reducible]
+def FooSide := Unit
+
+/-- [issue_1051_duplicate_parent_clause_names::Bar]
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 51:0-51:15
+    Visibility: public -/
+@[reducible]
+def Bar := Unit
+
+/-- Trait declaration: [issue_1051_duplicate_parent_clause_names::Parent]
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 53:0-53:25
+    Visibility: public -/
+structure Parent (Self : Type) (T : Type) (U : Type) where
+
+/-- Trait declaration: [issue_1051_duplicate_parent_clause_names::Combined]
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 55:0-55:66
+    Visibility: public -/
+structure Combined (Self : Type) where
+  ParentSelfFooSideBarSelfTypeTypeInst : Parent Self Foo SideBar
+  ParentSelfFooSideBarSelfTypeTypeInst : Parent Self FooSide Bar
+
 end issue_1051_duplicate_parent_clause_names

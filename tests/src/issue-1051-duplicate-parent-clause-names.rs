@@ -40,3 +40,17 @@ pub trait UsesGen: Gen<u8> + Gen<u16> {}
 pub trait GenN<const N: usize> {}
 
 pub trait UsesGenN: GenN<3> + GenN<5> {}
+
+// Example 6: The specific combination of names causes a collision. I.e.,
+// `Parent`+`Self`+`Foo`+`SideBar` = `ParentSelfFooSideBar`
+// `Parent`+`Self`+`FooSide`+`Bar` = `ParentSelfFooSideBar`
+
+pub struct Foo;
+pub struct SideBar;
+pub struct FooSide;
+pub struct Bar;
+
+pub trait Parent<T, U> {}
+
+pub trait Combined: Parent<Foo, SideBar> + Parent<FooSide, Bar> {}
+
