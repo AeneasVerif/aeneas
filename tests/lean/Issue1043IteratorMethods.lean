@@ -17,19 +17,6 @@ noncomputable section
 
 namespace issue_1043_iterator_methods
 
-/-- [core::iter::adapters::enumerate::{impl core::iter::traits::iterator::Iterator<(usize, Clause0_Item)> for core::iter::adapters::enumerate::Enumerate<I>}::next]:
-    Source: '/rustc/library/core/src/iter/adapters/enumerate.rs', lines 79:4-79:64
-    Name pattern: [core::iter::adapters::enumerate::{core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, (usize, @Clause0_Item)>}::next]
-    Visibility: public -/
-@[rust_fun
-  "core::iter::adapters::enumerate::{core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, (usize, @Clause0_Item)>}::next"]
-axiom
-  core.iter.adapters.enumerate.Enumerate.Insts.CoreIterTraitsIteratorIteratorPairUsizeClause0_Item.next
-  {I : Type} {Clause0_Item : Type} (traitsiteratorIteratorInst :
-  core.iter.traits.iterator.Iterator I Clause0_Item) :
-  core.iter.adapters.enumerate.Enumerate I → Result ((Option (Std.Usize ×
-    Clause0_Item)) × (core.iter.adapters.enumerate.Enumerate I))
-
 /-- [core::iter::adapters::enumerate::{impl core::iter::traits::iterator::Iterator<(usize, Clause0_Item)> for core::iter::adapters::enumerate::Enumerate<I>}::collect]:
     Source: '/rustc/library/core/src/iter/adapters/enumerate.rs', lines 62:0-64:16
     Name pattern: [core::iter::adapters::enumerate::{core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, (usize, @Clause0_Item)>}::collect]
@@ -43,20 +30,6 @@ axiom
   (traitscollectFromIteratorBPairUsizeClause0_ItemInst :
   core.iter.traits.collect.FromIterator B (Std.Usize × Clause0_Item)) :
   core.iter.adapters.enumerate.Enumerate I → Result B
-
-/-- [core::iter::adapters::enumerate::{impl core::iter::traits::iterator::Iterator<(usize, Clause0_Item)> for core::iter::adapters::enumerate::Enumerate<I>}::enumerate]:
-    Source: '/rustc/library/core/src/iter/adapters/enumerate.rs', lines 62:0-64:16
-    Name pattern: [core::iter::adapters::enumerate::{core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, (usize, @Clause0_Item)>}::enumerate]
-    Visibility: public -/
-@[rust_fun
-  "core::iter::adapters::enumerate::{core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, (usize, @Clause0_Item)>}::enumerate"]
-axiom
-  core.iter.adapters.enumerate.Enumerate.Insts.CoreIterTraitsIteratorIteratorPairUsizeClause0_Item.enumerate
-  {I : Type} {Clause0_Item : Type} (traitsiteratorIteratorInst :
-  core.iter.traits.iterator.Iterator I Clause0_Item) :
-  core.iter.adapters.enumerate.Enumerate I → Result
-    (core.iter.adapters.enumerate.Enumerate
-    (core.iter.adapters.enumerate.Enumerate I))
 
 /-- [core::iter::adapters::enumerate::{impl core::iter::traits::iterator::Iterator<(usize, Clause0_Item)> for core::iter::adapters::enumerate::Enumerate<I>}::map]:
     Source: '/rustc/library/core/src/iter/adapters/enumerate.rs', lines 62:0-64:16
@@ -73,33 +46,6 @@ axiom
   core.iter.adapters.enumerate.Enumerate I → F → Result
     (core.iter.adapters.map.Map (core.iter.adapters.enumerate.Enumerate I) F)
 
-/-- Trait implementation: [core::iter::adapters::enumerate::{impl core::iter::traits::iterator::Iterator<(usize, Clause0_Item)> for core::iter::adapters::enumerate::Enumerate<I>}]
-    Source: '/rustc/library/core/src/iter/adapters/enumerate.rs', lines 62:0-64:16
-    Name pattern: [core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, (usize, @Clause0_Item)>] -/
-@[reducible, rust_trait_impl
-  "core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, (usize, @Clause0_Item)>"]
-def
-  core.iter.adapters.enumerate.Enumerate.Insts.CoreIterTraitsIteratorIteratorPairUsizeClause0_Item
-  {I : Type} {Clause0_Item : Type} (traitsiteratorIteratorInst :
-  core.iter.traits.iterator.Iterator I Clause0_Item) :
-  core.iter.traits.iterator.Iterator (core.iter.adapters.enumerate.Enumerate I)
-  (Std.Usize × Clause0_Item) := {
-  next :=
-    core.iter.adapters.enumerate.Enumerate.Insts.CoreIterTraitsIteratorIteratorPairUsizeClause0_Item.next
-    traitsiteratorIteratorInst
-  map := fun {B : Type} {F : Type} (opsfunctionFnMutPTuplePairUsizeFPInst :
-    core.ops.function.FnMut F (Std.Usize × Clause0_Item) B) =>
-    core.iter.adapters.enumerate.Enumerate.Insts.CoreIterTraitsIteratorIteratorPairUsizeClause0_Item.map
-    traitsiteratorIteratorInst opsfunctionFnMutPTuplePairUsizeFPInst
-  enumerate :=
-    core.iter.adapters.enumerate.Enumerate.Insts.CoreIterTraitsIteratorIteratorPairUsizeClause0_Item.enumerate
-    traitsiteratorIteratorInst
-  collect := fun {B : Type} (traitscollectFromIteratorPPairUsizePInst :
-    core.iter.traits.collect.FromIterator B (Std.Usize × Clause0_Item)) =>
-    core.iter.adapters.enumerate.Enumerate.Insts.CoreIterTraitsIteratorIteratorPairUsizeClause0_Item.collect
-    traitsiteratorIteratorInst traitscollectFromIteratorPPairUsizePInst
-}
-
 /-- [core::iter::adapters::map::{impl core::iter::traits::iterator::Iterator<B> for core::iter::adapters::map::Map<I, F>}::collect]:
     Source: '/rustc/library/core/src/iter/adapters/map.rs', lines 99:0-101:27
     Name pattern: [core::iter::adapters::map::{core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, @F>, @B>}::collect]
@@ -113,44 +59,6 @@ axiom core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.collect
   core.ops.function.FnMut F Clause0_Item B) (traitscollectFromIteratorInst :
   core.iter.traits.collect.FromIterator B1 B) :
   core.iter.adapters.map.Map I F → Result B1
-
-/-- [core::iter::range::{impl core::iter::range::Step for u32}::backward_checked]:
-    Source: '/rustc/library/core/src/iter/range.rs', lines 290:16-290:74
-    Name pattern: [core::iter::range::{core::iter::range::Step<u32>}::backward_checked]
-    Visibility: public -/
-@[rust_fun
-  "core::iter::range::{core::iter::range::Step<u32>}::backward_checked"]
-axiom U32.Insts.CoreIterRangeStep.backward_checked
-  : Std.U32 → Std.Usize → Result (Option Std.U32)
-
-/-- [core::iter::range::{impl core::iter::range::Step for u32}::forward_checked]:
-    Source: '/rustc/library/core/src/iter/range.rs', lines 282:16-282:73
-    Name pattern: [core::iter::range::{core::iter::range::Step<u32>}::forward_checked]
-    Visibility: public -/
-@[rust_fun
-  "core::iter::range::{core::iter::range::Step<u32>}::forward_checked"]
-axiom U32.Insts.CoreIterRangeStep.forward_checked
-  : Std.U32 → Std.Usize → Result (Option Std.U32)
-
-/-- [core::iter::range::{impl core::iter::range::Step for u32}::steps_between]:
-    Source: '/rustc/library/core/src/iter/range.rs', lines 271:16-271:84
-    Name pattern: [core::iter::range::{core::iter::range::Step<u32>}::steps_between]
-    Visibility: public -/
-@[rust_fun "core::iter::range::{core::iter::range::Step<u32>}::steps_between"]
-axiom U32.Insts.CoreIterRangeStep.steps_between
-  : Std.U32 → Std.U32 → Result (Std.Usize × (Option Std.Usize))
-
-/-- Trait implementation: [core::iter::range::{impl core::iter::range::Step for u32}]
-    Source: '/rustc/library/core/src/iter/range.rs', lines 266:12-266:43
-    Name pattern: [core::iter::range::Step<u32>] -/
-@[reducible, rust_trait_impl "core::iter::range::Step<u32>"]
-def U32.Insts.CoreIterRangeStep : core.iter.range.Step Std.U32 := {
-  cloneInst := core.clone.CloneU32
-  partialOrdInst := core.cmp.PartialOrdU32
-  steps_between := U32.Insts.CoreIterRangeStep.steps_between
-  forward_checked := U32.Insts.CoreIterRangeStep.forward_checked
-  backward_checked := U32.Insts.CoreIterRangeStep.backward_checked
-}
 
 /-- [core::iter::range::{impl core::iter::traits::iterator::Iterator<A> for core::ops::range::Range<A>}::collect]:
     Source: '/rustc/library/core/src/iter/range.rs', lines 980:0-980:40
@@ -186,16 +94,6 @@ axiom core.iter.traits.iterator.Iterator.map.default
   (opsfunctionFnMutFTupleClause0_ItemBInst : core.ops.function.FnMut F
   Clause0_Item B) :
   Self → F → Result (core.iter.adapters.map.Map Self F)
-
-/-- [core::iter::traits::iterator::Iterator::enumerate]:
-    Source: '/rustc/library/core/src/iter/traits/iterator.rs', lines 1044:4-1046:20
-    Name pattern: [core::iter::traits::iterator::Iterator::enumerate]
-    Visibility: public -/
-@[rust_fun "core::iter::traits::iterator::Iterator::enumerate"]
-axiom core.iter.traits.iterator.Iteratorenumerate.default
-  {Self : Type} {Clause0_Item : Type} (IteratorInst :
-  core.iter.traits.iterator.Iterator Self Clause0_Item) :
-  Self → Result (core.iter.adapters.enumerate.Enumerate Self)
 
 /-- [issue_1043_iterator_methods::indexed_squares::closure]
     Source: 'tests/src/issue-1043-iterator-methods.rs', lines 9:25-9:46 -/
@@ -272,7 +170,7 @@ def indexed_squares
       (indexed_squares.closure.Insts.CoreOpsFunctionFnMutTuplePairUsizeU32U32
       coreitertraitsiteratorIteratorIU32Inst) e ()
   core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.collect
-    (core.iter.adapters.enumerate.Enumerate.Insts.CoreIterTraitsIteratorIteratorPairUsizeClause0_Item
+    (core.iter.traits.iterator.IteratorEnumerate
     coreitertraitsiteratorIteratorIU32Inst)
     (indexed_squares.closure.Insts.CoreOpsFunctionFnMutTuplePairUsizeU32U32
     coreitertraitsiteratorIteratorIU32Inst)
@@ -283,6 +181,6 @@ def indexed_squares
     Visibility: public -/
 def call_it (n : Std.U32) : Result (alloc.vec.Vec Std.U32) := do
   indexed_squares (core.iter.traits.iterator.IteratorRange
-    U32.Insts.CoreIterRangeStep) { start := 0#u32, «end» := n }
+    core.iter.range.StepU32) { start := 0#u32, «end» := n }
 
 end issue_1043_iterator_methods
