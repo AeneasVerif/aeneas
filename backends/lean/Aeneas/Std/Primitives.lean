@@ -191,7 +191,12 @@ be directly manipulated by the user. -/
   fun (a, b) => f a b
 
 @[simp, grind =] theorem uncurry_apply_pair {α β γ} (f : α → β → γ) (a : α) (b : β) :
-    uncurry f (a, b) = f a b := rfl
+    uncurry f (a, b) = f a b :=
+  /- This proof is intentionally not `:= rfl`: `simp` would flag this lemma as
+     a reflexivity lemma, meaning it would not apply it but would directly use
+     `rfl` in the proofs, triggering unwanted whnf reductions in some calls
+     to `step`. -/
+  id rfl
 
 /- reduction lemmas for `uncurry` restricted to functions whose end
 result is `Prop`. Used by `step` to clean up spec post-conditions that
