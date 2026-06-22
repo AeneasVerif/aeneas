@@ -7,6 +7,7 @@ import Aeneas.Tactic.Conv.Bvify.Init
 import Aeneas.Data.Nat
 import Aeneas.Data.Int
 import Aeneas.Tactic.Simp.SimpLists.Init
+import AeneasMeta.BvEnumToBitVec
 
 namespace Aeneas
 
@@ -32,6 +33,7 @@ inductive UScalarTy where
 | U32
 | U64
 | U128
+deriving BvEnumToBitVec
 
 /-- Kinds of signed integers -/
 inductive IScalarTy where
@@ -41,6 +43,7 @@ inductive IScalarTy where
 | I32
 | I64
 | I128
+deriving BvEnumToBitVec
 
 @[implicit_reducible]
 def UScalarTy.numBits (ty : UScalarTy) : Nat :=

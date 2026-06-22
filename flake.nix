@@ -117,6 +117,7 @@
                 calendar
                 core_unix
                 ppx_deriving
+                ppx_deriving_yojson
                 visitors
                 yojson
                 zarith
