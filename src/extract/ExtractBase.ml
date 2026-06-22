@@ -341,13 +341,13 @@ let unsafe_names_map_add (id : id) (name : string) (nm : unsafe_names_map) :
     useful to generate code where all variable names are assigned at most once.
 
     [append]: function to append an index to a string *)
-let basename_to_unique_aux (collision : string -> bool)
-    (append : string -> int -> string) (basename : string) : string =
+let string_to_unique (collision : string -> bool)
+    (append : string -> int -> string) (name : string) : string =
   let rec gen (i : int) : string =
-    let s = append basename i in
+    let s = append name i in
     if collision s then gen (i + 1) else s
   in
-  if collision basename then gen 1 else basename
+  if collision name then gen 1 else name
 
 type names_maps = {
   names_map : names_map;
@@ -2038,11 +2038,12 @@ let check_builtin_arity (ctx : extraction_ctx) (trait_decl : trait_decl)
     For a computed trait each name is [base ^ (discriminator) ^ "Inst"]:
     - The base name comes from the referenced trait (and trait-decl name for
       long names).
-    - Concrete type arguments and const-generic arguments are already reflected
-      in the base name, so two clauses referencing the same trait at different
-      such arguments already get distinct bases.
+    - Concrete type arguments and const-generic arguments are reflected in the
+      base name, so two clauses referencing the same trait at different such
+      arguments usually get distinct bases.
     - For a shared base we append a discriminator to every member of the
       colliding group.
+    - If there is still a name collision a numerical suffix is added.
 
     For a builtin trait the names are taken verbatim from the builtin
     information (no discriminator, no ["Inst"] suffix added here). *)
@@ -2087,17 +2088,34 @@ let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
             (StringSet.empty, StringSet.empty)
             bases
         in
-        List.map
-          (fun (c, base) ->
-            let disambiguated =
-              if StringSet.mem base shared then
-                base
-                ^ trait_clause_discriminator trait_decl.item_meta.span
-                    trait_decl.generics.types c
-              else base
-            in
-            (c, add_inst_and_normalize disambiguated))
-          bases
+        let scheme_names =
+          List.map
+            (fun (c, base) ->
+              let disambiguated =
+                if StringSet.mem base shared then
+                  base
+                  ^ trait_clause_discriminator trait_decl.item_meta.span
+                      trait_decl.generics.types c
+                else base
+              in
+              (c, add_inst_and_normalize disambiguated))
+            bases
+        in
+        (* Base + discriminator can still produce equal names (e.g., names that
+           concatenate ambiguously) so add a numeric suffix if required. *)
+        let _, named =
+          List.fold_left_map
+            (fun used (c, name) ->
+              let name =
+                string_to_unique
+                  (fun s -> StringSet.mem s used)
+                  (fun n i -> n ^ string_of_int i)
+                  name
+              in
+              (StringSet.add name used, (c, name)))
+            StringSet.empty scheme_names
+        in
+        named
     | Some info ->
         check_builtin_arity ctx trait_decl info;
         List.combine trait_decl.parent_clauses info.parent_clauses
@@ -2293,7 +2311,7 @@ let basename_to_unique (ctx : extraction_ctx) (name : string) =
     || StringSet.mem s ctx.names_maps.strict_names_map.names_set
   in
 
-  basename_to_unique_aux collision name_append_index name
+  string_to_unique collision name_append_index name
 
 (** Generate a unique type variable name and add it to the context *)
 let ctx_add_type_var (span : Meta.span) (origin : generic_origin)

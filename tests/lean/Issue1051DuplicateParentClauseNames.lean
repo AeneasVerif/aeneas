@@ -207,6 +207,6 @@ structure Parent (Self : Type) (T : Type) (U : Type) where
     Visibility: public -/
 structure Combined (Self : Type) where
   ParentSelfFooSideBarSelfTypeTypeInst : Parent Self Foo SideBar
-  ParentSelfFooSideBarSelfTypeTypeInst : Parent Self FooSide Bar
+  ParentSelfFooSideBarSelfTypeTypeInst1 : Parent Self FooSide Bar
 
 end issue_1051_duplicate_parent_clause_names

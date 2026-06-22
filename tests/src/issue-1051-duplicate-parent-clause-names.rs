@@ -53,4 +53,3 @@ pub struct Bar;
 pub trait Parent<T, U> {}
 
 pub trait Combined: Parent<Foo, SideBar> + Parent<FooSide, Bar> {}
-
