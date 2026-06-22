@@ -1,6 +1,7 @@
 import Lean
 import Aeneas.Std.Global
 import Aeneas.Extract
+import AeneasMeta.BvEnumToBitVec
 
 namespace Aeneas
 
@@ -307,6 +308,12 @@ def Option.ofResult {a : Type u} (x : Result a) :
   match x with
   | ok x => some x
   | _ => none
+
+/-!
+# bv_decide
+-/
+
+#define_bv_decide_toBitVec PUnit
 
 /-!
 # Dyn
