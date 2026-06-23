@@ -326,7 +326,7 @@ private def saveStepSpecFromThm (ext : Extension) (attrKind : AttributeKind) (st
       pure (← DiscrTree.mkPath fExpr, info))
     -- Save the entry
     -- TODO: use info.name to use a different discrimination tree here!
-    ScopedEnvExtension.add ext ((info.name, fKey), thName) attrKind
+    ScopedEnvExtension.add ext ((info.spec_name, fKey), thName) attrKind
     trace[Step] "Saved the entry"
     -- Also generate a corresponding mvcgen (@[spec]) lemma
     try

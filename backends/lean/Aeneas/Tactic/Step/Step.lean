@@ -516,7 +516,7 @@ def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th
   -- `thTy` should be of the shape `spec program post`: we need to retrieve `program`
   let (thHead, thArgs) := thTy.consumeMData.withApp (fun f args => (f, args))
   -- TODO: here is where it should be able to lift from spec to dspec
-  if !thHead.isConst || thHead.constName! != info.name then
+  if !thHead.isConst || thHead.constName! != info.spec_name then
     throwError "Not a spec theorem"
 
   let (program, P) ←
@@ -1093,7 +1093,7 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
       for lifting in liftings do
         let pspecs : Array Name ← do
           let thNames ← stepAttr.find? -- looks up the theorem in a discrimination tree
-            (match lifting with | .none => info.name | .some l => l.from_statement)
+            (match lifting with | .none => info.spec_name | .some l => l.from_statement)
             fExpr
           /- TODO: because of reduction, there may be several valid theorems (for
             instance for the scalars). We need to sort them from most specific to

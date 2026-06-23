@@ -323,5 +323,6 @@ theorem interp_vis {F} (f : (i : E.I) → ITree F (E.O i)) i (k : E.O i → ITre
 
 -- #synth CCPO (ITree E R)
 -- #synth MonoBind (ITree E)
+-- #synth Bind (ITree E)
 
 namespace Aeneas.Data.Coinductive
