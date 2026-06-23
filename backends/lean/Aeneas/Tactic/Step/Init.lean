@@ -359,9 +359,13 @@ initialize stepAttr : StepSpecAttr ← do
   pure { attr := attrImpl, ext := ext }
 
 def StepSpecAttr.find? (s : StepSpecAttr) (name : Name) (e : Expr) : MetaM (Array Name) := do
-  let state := s.ext.getState (← getEnv)
+  let env ← getEnv
+  let state := s.ext.getState env
+  let specState := specAttr.getState env
+  if not (specState.specInfos.contains name) then
+    throwError "no such spec statement as {name}, valid ones are {state.rules.keys}"
   let .some dtree := state.rules.get? name
-  | throwError "no such spec statement as {name}, valid ones are {state.rules.keys}"
+  | pure #[] -- no spec theorems have been added for this theorem yet
   let rules ← dtree.getMatch e
   pure (rules.filter (fun th => th ∉ state.deactivated))
 
