@@ -20,7 +20,6 @@ def Coin : Effect := {
 
 def ITreeC := ITree Coin
 
-
 -- can just use coinductive props!
 coinductive coinSpec {α} (p : Post α) : (x : ITreeC α) → Prop where
 | ret : ∀ x, p x → coinSpec p (ITree.ret x)
@@ -78,6 +77,54 @@ theorem coinSpec_bind {α β} {k : α -> ITreeC β} {Pₖ : Post β} {m : ITreeC
   · simp only
     exists m, k
 
+  instance : MonadLift Result ITreeC where
+    monadLift r := match r with
+      | .fail _e => .div -- TODO
+      | .div => .div
+      | .ok x => .ret x
+
+theorem spec_coinSpec {α} {x : Result α} {p: Post α} : spec x p → coinSpec p x := by
+  intros s
+  cases x
+  · apply coinSpec.ret
+    assumption
+  · contradiction
+  · contradiction
+#check spec_coinSpec
+
+@[simp]
+theorem qimp_coinSpec_unit {α} (P : Unit → Prop) (k : Unit → ITreeC α) (Q : α → Prop) :
+  qimp_coinSpec P k Q ↔ (P () → coinSpec Q (k ())) := by
+  grind [qimp_coinSpec]
+
+@[simp]
+theorem qimp_coinSpec_exists {α β γ} (P : γ → α → Prop) (k : α → ITreeC β) (Q : β → Prop) :
+  qimp_coinSpec (fun x => ∃ y, P y x) k Q ↔ ∀ x, qimp_coinSpec (P x) k Q := by
+  simp only [qimp_coinSpec, forall_exists_index]; grind
+
+def qimp_coinSpec_iff {α β} (P : α → Prop) (k : α → ITreeC β) (Q : β → Prop) :
+  qimp_coinSpec P k Q ↔ ∀ x, imp (P x) (coinSpec Q (k x)) := by
+  simp [qimp_coinSpec, imp]
+
+#check CoInd.unfold
+
+@[simp, grind =, agrind =]
+theorem coinSpec_ret {α p} (x : α) : coinSpec p (ITree.ret x) ↔ p x := by
+  constructor
+  · intros s
+    generalize h : ITree.ret x = thing at s
+    cases s with
+    | @ret x asdf =>
+    have h := congrArg (CoInd.unfold _) h
+    cases h
+    assumption
+    | vis k _ =>
+    have h := congrArg (CoInd.unfold _) h
+    cases h
+  · intros
+    apply coinSpec.ret
+    assumption
+
 #register_spec_statement {
     spec_name := ``coinSpec
     arity := 3
@@ -88,14 +135,14 @@ theorem coinSpec_bind {α β} {k : α -> ITreeC β} {Pₖ : Post β} {m : ITreeC
     mk_spec_bind := ``coinSpec_bind
     mk_spec_bind_skip_args := 4
     uncurry_elim_tactics := #[
-      -- ``Std.WP.qimp_dspec_unit,
+      ``qimp_coinSpec_unit,
       ``Std.WP.qimp_unit,
-      -- ``Std.WP.qimp_dspec_exists,
+      ``qimp_coinSpec_exists,
       ``Std.WP.qimp_exists,
       ``forall_unit, ``true_imp_iff
     ]
     qimp_elim_tactics := #[
-      -- ``Std.WP.qimp_dspec_iff,
+      ``qimp_coinSpec_iff,
       ``Std.WP.qimp_iff,
       ``Std.WP.imp_and_iff, ``Std.uncurry_apply_pair,
       ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
@@ -104,17 +151,11 @@ theorem coinSpec_bind {α β} {k : α -> ITreeC β} {Pₖ : Post β} {m : ITreeC
     ]
     to_mvcgen := .none
     liftings := #[
-      -- { from_statement := ``Std.WP.spec
-      --   conversion_thm := ``Std.WP.spec_dspec
-      --   conversion_thm_inferred_args := 3 }
+      { from_statement := ``Std.WP.spec
+        conversion_thm := ``spec_coinSpec
+        conversion_thm_inferred_args := 3 }
     ]
   }
-
-  instance : MonadLift Result ITreeC where
-    monadLift r := match r with
-      | .fail _e => .div -- TODO
-      | .div => .div
-      | .ok x => .ret x
 
   instance : Monad ITreeC := instMonadITree
   instance {T} : Lean.Order.PartialOrder (ITreeC T) := instPartialOrderCoIndOfInhabitedPUnit _
@@ -125,14 +166,28 @@ theorem coinSpec_bind {α β} {k : α -> ITreeC β} {Pₖ : Post β} {m : ITreeC
   def res : Result Nat := .ok 5
   def itreec : ITreeC Nat := res
 
-  /--
-error: no such spec statement as coinSpec, valid ones are [Aeneas.Std.WP.dspec, Aeneas.Std.WP.spec]
--/
-#guard_msgs in
+  -- #check bind
+
+  example : spec
+    (do let x ← 1#i32 + 2#i32
+        let y ← x + x
+        .ok x)
+    (fun z => z.val == 6)  := by
+    step?
+    sorry
+
+  #check I32.add_spec
+  -- set_option trace.Step true
+
   example : coinSpec (fun z => z.val == 6)
     (do let x ← 1#i32 + 2#i32
         let y ← x + x
-        ITree.ret y)  := by
-    step
-    step
-    simp [*]
+        ITree.vis () fun (b : Bool) =>
+        if b then ITree.ret y else ITree.ret 6#i32)  := by
+    step with (fun h1 h2 => spec_coinSpec (I32.add_spec h1 h2))
+    step with (fun h1 h2 => spec_coinSpec (I32.add_spec h1 h2))
+    apply coinSpec.vis
+    intros b
+    cases b
+    · simp [*]
+    · simp [*]
