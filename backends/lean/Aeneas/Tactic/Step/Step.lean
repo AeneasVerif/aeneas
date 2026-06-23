@@ -228,7 +228,7 @@ structure Args where
    If comp = bind m k then return true and m
    Else return false and comp
 
-   NEW: also looks up which type of spec is being used in the statment,
+   Also looks up which type of spec is being used in the statement,
    and returns the corresponding SpecInfo
 -/
 def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr × SpecInfo) := do
@@ -237,12 +237,12 @@ def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr × SpecInfo) := do
   let (spec?, args) := goalTy.consumeMData.withApp (fun f args => (f, args))
   let name ← match spec? with
     | Expr.const name _ => pure name
-    | _ => throwError "{spec?} is not a spec statement name"
+    | _ => throwError "{spec?} is not a spec statement"
   let .some info ← specStatementLookup name
-    | throwError "{name} is not a supported spec statement name"
+    | throwError "{name} is not a supported spec statement"
   let compTy ← if h: args.size = info.arity
                then pure (args[info.program_index]!)
-               else throwError "Goal is not a `spec m P`"
+               else throwError "Goal is not a fully applied `spec m P`"
 
   trace[Step] "compTy: {compTy}"
 
@@ -515,7 +515,6 @@ def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th
 
   -- `thTy` should be of the shape `spec program post`: we need to retrieve `program`
   let (thHead, thArgs) := thTy.consumeMData.withApp (fun f args => (f, args))
-  -- TODO: here is where it should be able to lift from spec to dspec
   if !thHead.isConst || thHead.constName! != info.name then
     throwError "Not a spec theorem"
 
@@ -1042,7 +1041,7 @@ where
   for decl in decls.reverse do
     trace[Step] "Trying assumption: {decl.userName} : {decl.type}"
     try
-      -- TODO: do we ever want to do a lifting with an assumption?
+      -- TODO: generalize to allow lifting assumptions
       let goal ← stepWith info .none args isLet fExpr decl.toExpr
       return (some (goal, .localHyp decl))
     catch _ => continue
@@ -1120,7 +1119,7 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
       for decl in decls.reverse do
         trace[Step] "Trying recursive assumption: {decl.userName} : {decl.type}"
         try
-          -- TODO: do we ever want to do a lifting for a recursive assumption?
+          -- We should never need to lift a recursive assumption
           let goals ← stepWith info .none args goalIsLet fExpr decl.toExpr
           return (goals, .localHyp decl)
         catch _ => continue
@@ -1541,13 +1540,11 @@ namespace Test
   -- set_option trace.Step true
   -- set_option pp.rawOnError true
 
-
   set_option says.verify true
 
   -- The following command displays the database of theorems:
   -- #eval showStoredStepThms
   open alloc.vec
-
 
   /- This test case checks what happens when `step`:
      - manages to solve the current goal
@@ -2141,12 +2138,10 @@ h1 : ∀ (i : ℕ) (x : i < s.length), s'[i] = 0#u32
   -- this exists to workaround what is possibly a lean bug.
   -- it can't find dspec the first time you try, but the subsequent ones work just fine.
   -- it also seems to have something to do with the step attribute
-  /---/
   #guard_msgs (substring := true) in
   @[step]
   theorem lean_bug_workaround : Std.WP.dspec (.ok 10) (fun _ => False) := by
     step
-    --
 
   theorem test_div (x : Std.I32) : Std.WP.dspec (simple_diverge x) (fun res => res = 10#i32)
     := by
@@ -2194,7 +2189,6 @@ h1 : ∀ (i : ℕ) (x : i < s.length), s'[i] = 0#u32
       step
       step
       simp [*]
-      --
 
   example : WP.spec
     (do let x ← 1#i32 + 2#i32
@@ -2203,7 +2197,6 @@ h1 : ∀ (i : ℕ) (x : i < s.length), s'[i] = 0#u32
     step
     step
     simp [*]
-    --
 
   -- requires lifting spec to dspec
   example : WP.dspec
@@ -2233,7 +2226,6 @@ h1 : ∀ (i : ℕ) (x : i < s.length), s'[i] = 0#u32
     step -- this should fail!
     step
     simp [*]
-    --
 end DspecTests
 
 end Test

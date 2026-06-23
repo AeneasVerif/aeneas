@@ -34,8 +34,6 @@ theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p :=
   intros s
   simp [spec, dspec] at *
   cases x <;> simp at * <;> assumption
-
-
 theorem dspec_admissible {α} (p : Post α )
   : Lean.Order.admissible (fun x => dspec x p) := by
   apply Lean.Order.admissible_flatOrder
@@ -310,7 +308,7 @@ macro_rules
   | `($e ⦃ $x => $p ⦄) => do
     let post ← mkBinderFun 0 x p
     `(Aeneas.Std.WP.spec $e $post)
-  | `($e div⦃ $x => $p ⦄) => do
+  | `($e ⦃ $x => $p ⦄div) => do
     let post ← mkBinderFun 0 x p
     `(Aeneas.Std.WP.dspec $e $post)
 

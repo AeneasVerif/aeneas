@@ -244,7 +244,6 @@ partial_fixpoint
 
 theorem test_div_2_manual (x y : Std.I32) : Std.WP.dspec (simple_diverge_2' x y) (fun res => res = 10#i32)
   := by
-    --
     revert x y
     apply simple_diverge_2'.fixpoint_induct
       (motive := fun simple_diverge_2' => ∀ x y, WP.dspec (simple_diverge_2' x y) (fun res => res = 10#i32))
@@ -256,7 +255,6 @@ theorem test_div_2_manual (x y : Std.I32) : Std.WP.dspec (simple_diverge_2' x y)
       . step
         step
         simp [*]
-        --
 
 theorem test_div_2_tactic (x y : Std.I32) : Std.WP.dspec (simple_diverge_2' x y) (fun res => res = 10#i32)
   := by

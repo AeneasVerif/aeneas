@@ -38,7 +38,7 @@ structure SpecInfoExtensionState where
   specInfos : Std.HashMap Name SpecInfo
   deriving Inhabited
 
--- /- Initialize the state extension for adding spec theorems -/
+/- Initialize the state extension for adding spec theorems -/
 initialize specAttr : SimpleScopedEnvExtension SpecInfo SpecInfoExtensionState  ← do
   let ext ← registerSimpleScopedEnvExtension {
     name        := `specStatementRegistrationExtension,
