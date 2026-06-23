@@ -49,6 +49,7 @@
   Cps
   Deps
   Errors
+  FileGraph
   Expressions
   ExpressionsUtils
   Extract

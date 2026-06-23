@@ -139,6 +139,9 @@ let () =
       ( "-emit-json",
         Arg.Set emit_json,
         " Emit a translation.json file alongside the Lean files (Lean only)" );
+      ( "-dump-file-graph",
+        Arg.Set dump_file_graph,
+        " Print the file-dependency graph and its SCCs" );
       ("-print-llbc", Arg.Set print_llbc, " Print the imported LLBC");
       ( "-abort-on-error",
         Arg.Set fail_hard,

@@ -1449,6 +1449,16 @@ let extract_translated_crate (filename : string) (dest_dir : string)
   } =
     trans_crate
   in
+  (* Diagnostic for the multi-file extraction: print the file-level
+     dependency graph and its SCCs, then continue with normal extraction. *)
+  if !Config.dump_file_graph then (
+    let get_name (id : Types.item_id) : string =
+      match LlbcAstUtils.crate_get_item_meta crate id with
+      | Some m -> name_to_string trans_ctx m.name
+      | None -> "<unknown item>"
+    in
+    print_string (FileGraph.dump crate ~get_name);
+    flush stdout);
   (* Initialize the names map by registering the keywords used in the
      language, as well as some primitive names ("u32", etc.).
      We insert the names of the local declarations later. *)

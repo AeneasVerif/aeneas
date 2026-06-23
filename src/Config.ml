@@ -231,6 +231,11 @@ let lean_gen_lakefile = ref false
 (** Only for Lean: emit a translation.json file alongside the Lean files. *)
 let emit_json = ref false
 
+(** Print the file-dependency graph and its strongly-connected components before
+    normal extraction. This previews which Rust source files would need to share
+    Lean files when opting for multi-file extraction. *)
+let dump_file_graph = ref false
+
 (** If true, treat the unit functions (function taking no inputs and returning
     no outputs) as unit tests: evaluate them with the interpreter and check that
     they don't panic. *)
