@@ -38,6 +38,7 @@ package «tests» {}
 @[default_target] lean_lib DynamicSize
 @[default_target] lean_lib FromTo
 @[default_target] lean_lib Hashmap
+@[default_target] lean_lib HigherRankedTraitBounds
 @[default_target] lean_lib Into
 @[default_target] lean_lib IterAdapters
 @[default_target] lean_lib Iterators
@@ -48,10 +49,12 @@ package «tests» {}
 @[default_target] lean_lib Issue270LoopList
 @[default_target] lean_lib Issue440TypeError
 @[default_target] lean_lib Issue789LoopCtxMatch
+@[default_target] lean_lib Issue801Hrtb
 @[default_target] lean_lib Issue803SelfInArray
 @[default_target] lean_lib Issue807MissingSymbolicValue
 @[default_target] lean_lib Issue815GlobalReferencingFallibleGlobal
 @[default_target] lean_lib Issue1044OpaqueTuple
+@[default_target] lean_lib Issue1141ImplFnRef
 @[default_target] lean_lib Joins
 @[default_target] lean_lib JoinDuplicate
 @[default_target] lean_lib ListBorrows
