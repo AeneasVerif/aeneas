@@ -10,6 +10,9 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace hashmap
 
 /-- [hashmap::hash_key]:
@@ -18,21 +21,21 @@ namespace hashmap
 def hash_key (k : Std.Usize) : Result Std.Usize := do
   ok k
 
-/-- [hashmap::{core::clone::Clone for hashmap::Fraction}::clone]:
+/-- [hashmap::{impl core::clone::Clone for hashmap::Fraction}::clone]:
     Source: 'tests/src/hashmap.rs', lines 43:9-43:14
     Visibility: public -/
 def Fraction.Insts.CoreCloneClone.clone
   (self : Fraction) : Result Fraction := do
   ok self
 
-/-- [hashmap::{core::clone::Clone for hashmap::Fraction}::clone_from]:
+/-- [hashmap::{impl core::clone::Clone for hashmap::Fraction}::clone_from]:
     Source: 'tests/src/hashmap.rs', lines 43:9-43:14
     Visibility: public -/
 def Fraction.Insts.CoreCloneClone.clone_from
   (self : Fraction) (source : Fraction) : Result Fraction := do
   Fraction.Insts.CoreCloneClone.clone source
 
-/-- Trait implementation: [hashmap::{core::clone::Clone for hashmap::Fraction}]
+/-- Trait implementation: [hashmap::{impl core::clone::Clone for hashmap::Fraction}]
     Source: 'tests/src/hashmap.rs', lines 43:9-43:14 -/
 @[reducible]
 def Fraction.Insts.CoreCloneClone : core.clone.Clone Fraction := {
@@ -40,7 +43,7 @@ def Fraction.Insts.CoreCloneClone : core.clone.Clone Fraction := {
   clone_from := Fraction.Insts.CoreCloneClone.clone_from
 }
 
-/-- Trait implementation: [hashmap::{core::marker::Copy for hashmap::Fraction}]
+/-- Trait implementation: [hashmap::{impl core::marker::Copy for hashmap::Fraction}]
     Source: 'tests/src/hashmap.rs', lines 43:16-43:20 -/
 @[reducible]
 def Fraction.Insts.CoreMarkerCopy : core.marker.Copy Fraction := {

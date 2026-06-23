@@ -9,13 +9,16 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 /- You can remove the following line by using the CLI option `-all-computable`: -/
 noncomputable section
 
 namespace loops_issues
 
-/-- [core::iter::range::{core::iter::range::Step for i32}::backward_checked]:
-    Source: '/rustc/library/core/src/iter/range.rs', lines 340:16-340:74
+/-- [core::iter::range::{impl core::iter::range::Step for i32}::backward_checked]:
+    Source: '/rustc/library/core/src/iter/range.rs', lines 342:16-342:74
     Name pattern: [core::iter::range::{core::iter::range::Step<i32>}::backward_checked]
     Visibility: public -/
 @[rust_fun
@@ -23,8 +26,8 @@ namespace loops_issues
 axiom I32.Insts.CoreIterRangeStep.backward_checked
   : Std.I32 → Std.Usize → Result (Option Std.I32)
 
-/-- [core::iter::range::{core::iter::range::Step for i32}::forward_checked]:
-    Source: '/rustc/library/core/src/iter/range.rs', lines 319:16-319:73
+/-- [core::iter::range::{impl core::iter::range::Step for i32}::forward_checked]:
+    Source: '/rustc/library/core/src/iter/range.rs', lines 321:16-321:73
     Name pattern: [core::iter::range::{core::iter::range::Step<i32>}::forward_checked]
     Visibility: public -/
 @[rust_fun
@@ -32,16 +35,16 @@ axiom I32.Insts.CoreIterRangeStep.backward_checked
 axiom I32.Insts.CoreIterRangeStep.forward_checked
   : Std.I32 → Std.Usize → Result (Option Std.I32)
 
-/-- [core::iter::range::{core::iter::range::Step for i32}::steps_between]:
-    Source: '/rustc/library/core/src/iter/range.rs', lines 304:16-304:84
+/-- [core::iter::range::{impl core::iter::range::Step for i32}::steps_between]:
+    Source: '/rustc/library/core/src/iter/range.rs', lines 306:16-306:84
     Name pattern: [core::iter::range::{core::iter::range::Step<i32>}::steps_between]
     Visibility: public -/
 @[rust_fun "core::iter::range::{core::iter::range::Step<i32>}::steps_between"]
 axiom I32.Insts.CoreIterRangeStep.steps_between
   : Std.I32 → Std.I32 → Result (Std.Usize × (Option Std.Usize))
 
-/-- Trait implementation: [core::iter::range::{core::iter::range::Step for i32}]
-    Source: '/rustc/library/core/src/iter/range.rs', lines 299:12-299:37
+/-- Trait implementation: [core::iter::range::{impl core::iter::range::Step for i32}]
+    Source: '/rustc/library/core/src/iter/range.rs', lines 301:12-301:43
     Name pattern: [core::iter::range::Step<i32>] -/
 @[reducible, rust_trait_impl "core::iter::range::Step<i32>"]
 def I32.Insts.CoreIterRangeStep : core.iter.range.Step Std.I32 := {
@@ -186,9 +189,8 @@ def mut_loop_len_loop.body
   then
     let s ← lift (Array.to_slice buf)
     let i := Slice.len s
-    if 0#usize <= i
-    then ok (cont true)
-    else fail panic
+    massert (0#usize <= i)
+    ok (cont true)
   else ok (done ())
 
 /-- [loops_issues::mut_loop_len]: loop 0:

@@ -9,6 +9,9 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace tutorial
 
 /-- [tutorial::choose]:
@@ -153,7 +156,7 @@ end
 structure Counter (Self : Type) where
   incr : Self → Result (Std.Usize × Self)
 
-/-- [tutorial::{tutorial::Counter for usize}::incr]:
+/-- [tutorial::{impl tutorial::Counter for usize}::incr]:
     Source: 'src/lib.rs', lines 110:4-114:5
     Visibility: public -/
 def Usize.Insts.TutorialCounter.incr
@@ -161,7 +164,7 @@ def Usize.Insts.TutorialCounter.incr
   let self1 ← self + 1#usize
   ok (self, self1)
 
-/-- Trait implementation: [tutorial::{tutorial::Counter for usize}]
+/-- Trait implementation: [tutorial::{impl tutorial::Counter for usize}]
     Source: 'src/lib.rs', lines 109:0-115:1 -/
 @[reducible]
 def Usize.Insts.TutorialCounter : Counter Std.Usize := {

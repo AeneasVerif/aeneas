@@ -9,20 +9,23 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 /- You can remove the following line by using the CLI option `-all-computable`: -/
 noncomputable section
 
 namespace rust_borrow_check_issues
 
 /-- [core::mem::drop]:
-    Source: '/rustc/library/core/src/mem/mod.rs', lines 971:0-973:24
+    Source: '/rustc/library/core/src/mem/mod.rs', lines 1000:0-1002:24
     Name pattern: [core::mem::drop]
     Visibility: public -/
 @[rust_fun "core::mem::drop"]
 axiom core.mem.drop {T : Type} : T → Result Unit
 
 /-- [core::option::{core::option::Option<T>}::as_mut]:
-    Source: '/rustc/library/core/src/option.rs', lines 766:4-766:52
+    Source: '/rustc/library/core/src/option.rs', lines 763:4-763:52
     Name pattern: [core::option::{core::option::Option<@T>}::as_mut]
     Visibility: public -/
 @[rust_fun "core::option::{core::option::Option<@T>}::as_mut"]
@@ -44,7 +47,8 @@ def unnecessary_error_2 (b0 : Bool) (b1 : Bool) : Result Unit := do
             else ok 1#u32
   let _ ←
     if b1
-    then core.mem.drop 2#u32
+    then do
+         core.mem.drop 2#u32
          ok (true, 2#u32)
     else ok (false, 0#u32)
   let _ ← 2#u32 + 1#u32

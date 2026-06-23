@@ -9,6 +9,9 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace blanket_impl
 
 /-- Trait declaration: [blanket_impl::Trait1]
@@ -25,12 +28,12 @@ structure Trait2 (Self : Type) where
 def Trait2.foo.default (Self : Type) : Result Unit := do
   ok ()
 
-/-- [blanket_impl::{blanket_impl::Trait2 for T}::foo]:
+/-- [blanket_impl::{impl blanket_impl::Trait2 for T}::foo]:
     Source: 'tests/src/blanket_impl.rs', lines 9:0-9:31 -/
 def Trait2.Blanket.foo {T : Type} (Trait1Inst : Trait1 T) : Result Unit := do
   ok ()
 
-/-- Trait implementation: [blanket_impl::{blanket_impl::Trait2 for T}]
+/-- Trait implementation: [blanket_impl::{impl blanket_impl::Trait2 for T}]
     Source: 'tests/src/blanket_impl.rs', lines 9:0-9:31 -/
 @[reducible]
 def Trait2.Blanket {T : Type} (Trait1Inst : Trait1 T) : Trait2 T := {

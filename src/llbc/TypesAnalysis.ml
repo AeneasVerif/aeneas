@@ -102,7 +102,7 @@ let initialize_type_decl_info (span : Meta.span option) (crate : crate)
     !Config.use_tuple_structs && (not is_rec) && type_decl_is_tuple_struct def
   in
   let has_regions = List.length def.generics.regions > 0 in
-  let name_matcher_ctx : LlbcAst.block Charon.NameMatcher.ctx =
+  let name_matcher_ctx : Charon.NameMatcher.ctx =
     Charon.NameMatcher.ctx_from_crate crate
   in
   (* We have some specialized knowledge of some library types; we don't
@@ -115,7 +115,8 @@ let initialize_type_decl_info (span : Meta.span option) (crate : crate)
       (builtin_types_map ())
   in
   let name_to_string () =
-    Charon.PrintLlbcAst.Crate.crate_name_to_string crate def.item_meta.name
+    let env = Charon.Print.crate_to_fmt_env crate in
+    Charon.Print.name_to_string env def.item_meta.name
   in
 
   (* We initialize the mutable regions differently depending on whether the
@@ -141,20 +142,30 @@ let initialize_type_decl_info (span : Meta.span option) (crate : crate)
                   Type: " ^ name_to_string ());
               RegionId.Set.empty)
         | None ->
-            (* No builtin information: print a warning if the type contains region
-               parameters *)
-            if def.generics.regions <> [] then
-              [%warn_opt_span] span
-                ("Found an unknown type declaration with region parameters: as \
-                  we can not know whether the regions are used in mutable \
-                  borrows or not the extracted code may be incorrect.\n\
-                  Type: " ^ name_to_string ());
-            if Config.opaque_types_have_mut_regions_by_default then
+            (* No builtin information: use Charon's per-region [mutability] analysis *)
+            let has_unknown_regions = ref false in
+            let mut_regions =
               RegionId.Set.of_list
-                (List.map
-                   (fun (r : region_param) -> r.index)
+                (List.filter_map
+                   (fun (r : region_param) ->
+                     match r.mutability with
+                     | LtMutable -> Some r.index
+                     | LtUnknown ->
+                         has_unknown_regions := true;
+                         if Config.opaque_types_have_mut_regions_by_default then
+                           Some r.index
+                         else None
+                     | LtShared -> None)
                    def.generics.regions)
-            else RegionId.Set.empty)
+            in
+            if !has_unknown_regions then
+              [%warn_opt_span] span
+                ("Found an unknown type declaration with region parameters for \
+                  which Charon could not determine mutability: we \
+                  conservatively assume they are used in mutable borrows, but \
+                  the extracted code may be incorrect.\n\
+                  Type: " ^ name_to_string ());
+            mut_regions)
     | _ -> RegionId.Set.empty
   in
   initialize_g_type_info is_tuple_struct ~is_rec ~has_regions ~mut_regions
@@ -274,7 +285,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
       (ty_info : partial_type_info) (ty : ty) : partial_type_info =
     match ty with
     | TLiteral _ | TNever | TDynTrait _ -> ty_info
-    | TTraitType (tref, _) ->
+    | TTraitType (tref, _, _) ->
         (* TODO: normalize the trait types.
            For now we only emit a warning because it makes some tests fail. *)
         [%cassert_warn_opt_span] span
@@ -470,9 +481,9 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
         in
         [%cassert_opt_span] span (not has_regions) "Unimplemented";
         ty_info
-    | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
     | TError _ ->
         [%craise_opt_span] span "Found type error in the output of charon"
+    | _ -> [%craise_opt_span] span ("unsupported type: " ^ show_ty ty)
   in
   (* Explore *)
   analyze span expl_info_init ty_info ty
@@ -799,7 +810,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
             self#visit_region outer r;
             let outer = r :: outer in
             self#visit_ty outer ref_ty
-        | TTraitType (tref, _) ->
+        | TTraitType (tref, _, _) ->
             (* TODO: normalize the trait types.
                For now we only emit a warning because it makes some tests fail. *)
             [%cassert_warn_opt_span] span
@@ -810,14 +821,9 @@ let compute_outlive_proj_ty (span : Meta.span option)
                back values computed for the generated backward functions may \
                be incorrect.";
             ()
-        | TRawPtr _
-        | TDynTrait _
-        | TFnPtr _
-        | TFnDef _
-        | TPtrMetadata _
         | TError _ ->
-            (* Don't know what to do *)
-            [%craise_opt_span] span "Not handled yet"
+            [%craise_opt_span] span "Found type error in the output of charon"
+        | _ -> [%craise_opt_span] span ("unsupported type: " ^ show_ty ty)
     end
   in
   visitor#visit_ty [] ty;

@@ -42,7 +42,7 @@ type fun_sig_named_outputs = {
 
 type fun_ctx = {
   llbc_fun_decls : A.fun_decl A.FunDeclId.Map.t;
-  fun_infos : fun_info A.FunDeclId.Map.t;
+  fun_infos : modules_funs_info;
 }
 [@@deriving show]
 
@@ -149,7 +149,7 @@ type bs_ctx = {
   trans_global_decls : global_decl GlobalDeclId.Map.t;
   type_ctx : type_ctx;  (** TODO: remove: this is already in decls_ctx *)
   fun_ctx : fun_ctx;
-  fun_sigs : fun_sigs FunDeclId.Map.t;
+  fun_sigs : fun_sigs A.FunOrMethodId.Map.t;
   fun_decl : A.fun_decl;
   bid : RegionGroupId.id option;
       (** TODO: rename
@@ -331,12 +331,34 @@ let bs_ctx_to_pure_fmt_env (ctx : bs_ctx) : PrintPure.fmt_env =
     pbvars_counter = BVarId.zero;
   }
 
+let lookup_fn_ptr_sig (ctx : bs_ctx) (kind : A.fn_ptr_kind) : fun_sigs option =
+  Option.bind (fun_or_method_id_of_fn_ptr kind) (fun id ->
+      A.FunOrMethodId.Map.find_opt id ctx.fun_sigs)
+
+let fun_or_method_id_of_pure_fn_ptr (kind : fn_ptr_kind) :
+    A.FunOrMethodId.id option =
+  match kind with
+  | FunId (FRegular id) -> Some (A.FunOrMethodId.Fun id)
+  | TraitMethod (trait_ref, method_id) ->
+      Some
+        (A.FunOrMethodId.Method
+           (trait_ref.trait_decl_ref.trait_decl_id, method_id))
+  | FunId (FBuiltin _) -> None
+
+let lookup_pure_fn_ptr_sig (ctx : bs_ctx) (kind : fn_ptr_kind) : fun_sigs option
+    =
+  Option.bind (fun_or_method_id_of_pure_fn_ptr kind) (fun id ->
+      A.FunOrMethodId.Map.find_opt id ctx.fun_sigs)
+
+let lookup_pure_fn_ptr_info (infos : modules_funs_info) (kind : fn_ptr_kind) :
+    fun_info option =
+  Option.bind (fun_or_method_id_of_pure_fn_ptr kind) (lookup_fun_info infos)
+
 let ctx_generic_args_to_string (ctx : bs_ctx) (args : T.generic_args) : string =
   let env = bs_ctx_to_fmt_env ctx in
-  Print.Types.generic_args_to_string env args
+  Print.generic_args_to_string env args
 
-let name_to_string (ctx : bs_ctx) =
-  Print.Types.name_to_string (bs_ctx_to_fmt_env ctx)
+let name_to_string (ctx : bs_ctx) = Print.name_to_string (bs_ctx_to_fmt_env ctx)
 
 let symbolic_value_to_string (ctx : bs_ctx) (sv : V.symbolic_value) : string =
   let env = bs_ctx_to_fmt_env ctx in
@@ -373,11 +395,11 @@ let fvar_to_string (ctx : bs_ctx) (v : fvar) : string =
 
 let ty_to_string (ctx : bs_ctx) (ty : T.ty) : string =
   let env = bs_ctx_to_fmt_env ctx in
-  Print.Types.ty_to_string env ty
+  Print.ty_to_string env ty
 
 let type_decl_to_string (ctx : bs_ctx) (def : T.type_decl) : string =
   let env = bs_ctx_to_fmt_env ctx in
-  Print.Types.type_decl_to_string env def
+  Print.type_decl_to_string env def
 
 let pure_type_decl_to_string (ctx : bs_ctx) (def : type_decl) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
@@ -397,7 +419,7 @@ let symbolic_loop_to_string (ctx : bs_ctx) (e : SymbolicAst.loop) : string =
 
 let fun_id_to_string (ctx : bs_ctx) (id : A.fun_id) : string =
   let env = bs_ctx_to_fmt_env ctx in
-  Print.Types.fun_id_to_string env id
+  Print.fun_id_to_string env id
 
 let fun_sig_to_string (ctx : bs_ctx) (sg : fun_sig) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in

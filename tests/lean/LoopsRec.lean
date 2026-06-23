@@ -9,6 +9,9 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace loops_rec
 
 /-- [loops_rec::iter]: loop 0:
@@ -1001,9 +1004,11 @@ def as_radix_minimized_loop
   then
     let _ ←
       if i = 0#usize
-      then let i1 ← Array.index_usize scalar i
+      then do
+           let i1 ← Array.index_usize scalar i
            i1 >>> 1#i32
       else
+        do
         let i1 ← Array.index_usize scalar i
         let i2 ← i1 >>> 1#i32
         let i3 ← i1 <<< 63#i32

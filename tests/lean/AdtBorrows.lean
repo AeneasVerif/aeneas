@@ -9,6 +9,9 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace adt_borrows
 
 /-- [adt_borrows::SharedWrapper]
@@ -212,8 +215,7 @@ def MutWrapper2.id
     Source: 'tests/src/adt-borrows.rs', lines 148:0-157:1 -/
 def use_mut_wrapper2 : Result Unit := do
   let (w, create_back, create_back1) ← MutWrapper2.create 0#i32 10#i32
-  let (p, unwrap_back, unwrap_back1) ← MutWrapper2.unwrap w
-  let (px, py) := p
+  let ((px, py), unwrap_back, unwrap_back1) ← MutWrapper2.unwrap w
   let px1 ← px + 1#i32
   let py1 ← py + 1#i32
   let x := create_back { w with x := (unwrap_back px1).x }

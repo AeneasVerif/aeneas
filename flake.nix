@@ -117,6 +117,7 @@
                 calendar
                 core_unix
                 ppx_deriving
+                ppx_deriving_yojson
                 visitors
                 yojson
                 zarith
@@ -143,14 +144,16 @@
             charon-ml = charon-ml.override { inherit ocamlPackages; };
           };
 
-        mk-aeneas-release = { aeneas, charon-portable }: pkgs.runCommand "aeneas-release.tar.gz" {
-          buildInputs = pkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.macdylibbundler ];
-        } ''
-          mkdir release
-          cd release
+        mk-aeneas-release = { aeneas, charon-portable }: pkgs.runCommand "aeneas-release"
+          {
+            buildInputs = pkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.macdylibbundler ];
+          } ''
+          mkdir $out
+          cd $out
           cp ${charon-portable}/bin/charon ${charon-portable}/bin/charon-driver .
           cp ${aeneas}/bin/aeneas .
           cp -r ${./backends} backends
+          cp ${inputs.charon}/rust-toolchain .
 
           ${pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
             # Make the binary writable so macdylibbundler can modify its load paths
@@ -163,7 +166,6 @@
             dylibbundler -od -b -x ./aeneas -d ./libs -p @executable_path/libs
           ''}
 
-          tar -czvf $out *
         '';
 
         aeneas-release = mk-aeneas-release { inherit charon-portable aeneas; };

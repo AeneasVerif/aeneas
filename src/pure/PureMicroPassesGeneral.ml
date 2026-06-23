@@ -10,11 +10,23 @@ let remove_meta (ctx : ctx) (def : fun_decl) : fun_decl =
 (** Introduce calls to [massert] (monadic assertion).
 
     The pattern below is very frequent especially as it is introduced by the
-    [assert!] macro. We perform the following simplification:
+    [assert!] macro. We perform the following simplifications:
     {[
-      if b then e else fail ~~>massert b;
-      e
-    ]} *)
+      if b then e else fail ~~> massert b; e
+      if b then fail else e ~~> massert (¬b); e
+    ]}
+
+    We also reconstruct boolean OR patterns. After the above simplification
+    transforms inner switches, we look for:
+    {[
+      if e0 then (massert e1; cont) else e_else
+        ~~> massert (¬e0 || e1); if e0 then cont else e_else
+
+      if e0 then e_then else (massert e1; cont)
+        ~~> massert (¬e0 || e1); if e0 then cont else e_else
+    ]}
+    This eventually allows properly reconstructing the or patterns in
+    assertions. *)
 let intro_massert_visitor (_ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
   let mk_massert scrut =
@@ -26,6 +38,14 @@ let intro_massert_visitor (_ctx : ctx) (def : fun_decl) =
     in
     [%add_loc] mk_app span massert scrut
   in
+  (* Check if an expression is a [massert] application, and if so return the
+     argument *)
+  let get_massert_arg (e : texpr) : texpr option =
+    match e.e with
+    | App ({ e = Qualif { id = FunOrOp (Fun (Pure Assert)); _ }; _ }, scrut_arg)
+      -> Some scrut_arg
+    | _ -> None
+  in
   object
     inherit [_] map_expr as super
 
@@ -33,7 +53,7 @@ let intro_massert_visitor (_ctx : ctx) (def : fun_decl) =
       match switch with
       | If (e_true, e_false) ->
           if is_fail_panic e_false.e then begin
-            (* Introduce a call to [massert] *)
+            (* Introduce a call to [massert scrut] *)
             let massert = mk_massert scrut in
             (* Introduce the let-binding *)
             let monadic = true in
@@ -41,14 +61,62 @@ let intro_massert_visitor (_ctx : ctx) (def : fun_decl) =
             super#visit_Let env monadic pat massert e_true
           end
           else if is_fail_panic e_true.e then
-            (* Introduce a call to [massert] (we need to negate the scrutinee) *)
+            (* Introduce a call to [massert (¬scrut)] *)
             let scrut = mk_bool_not scrut in
             let massert = mk_massert scrut in
             (* Introduce the let-binding *)
             let monadic = true in
             let pat = mk_ignored_pat mk_unit_ty in
             super#visit_Let env monadic pat massert e_false
-          else super#visit_Switch env scrut switch
+          else begin
+            (* Visit the children first so that inner switches containing panics
+               are already transformed to massert calls *)
+            let scrut = super#visit_texpr env scrut in
+            let e_true = super#visit_texpr env e_true in
+            let e_false = super#visit_texpr env e_false in
+            (* Check for patterns where one branch starts with [massert]:
+               {[
+                 if e0 then (massert e1; cont) else e_else
+                   ~~> massert (¬e0 || e1); if e0 then cont else e_else
+
+                 if e0 then e_then else (massert e1; cont)
+                   ~~> massert (¬e0 || e1); if e0 then cont else e_else
+               ]}
+               This is valid because when [e0 = false], [¬e0 || e1 = true]
+               so the massert trivially succeeds, preserving the semantics. *)
+            let check_else_branch () =
+              match e_false.e with
+              | Let (true, pat, rhs, cont_else) -> (
+                  match get_massert_arg rhs with
+                  | Some e1 ->
+                      let new_scrut = mk_bool_or scrut e1 in
+                      let massert = mk_massert new_scrut in
+                      let remaining_switch =
+                        {
+                          e = Switch (scrut, If (e_true, cont_else));
+                          ty = e_false.ty;
+                        }
+                      in
+                      Let (true, pat, massert, remaining_switch)
+                  | None -> Switch (scrut, If (e_true, e_false)))
+              | _ -> Switch (scrut, If (e_true, e_false))
+            in
+            match e_true.e with
+            | Let (true, pat, rhs, cont_then) -> (
+                match get_massert_arg rhs with
+                | Some e1 ->
+                    let new_scrut = mk_bool_or (mk_bool_not scrut) e1 in
+                    let massert = mk_massert new_scrut in
+                    let remaining_switch =
+                      {
+                        e = Switch (scrut, If (cont_then, e_false));
+                        ty = e_true.ty;
+                      }
+                    in
+                    Let (true, pat, massert, remaining_switch)
+                | None -> check_else_branch ())
+            | _ -> check_else_branch ()
+          end
       | _ -> super#visit_Switch env scrut switch
   end
 
@@ -623,7 +691,7 @@ let inline_unop unop = not (lift_unop unop)
 (** A helper predicate *)
 let lift_binop (binop : binop) : bool =
   match binop with
-  | Eq _ | Lt _ | Le _ | Ne _ | Ge _ | Gt _ -> false
+  | Eq _ | Lt _ | Le _ | Ne _ | Ge _ | Gt _ | BoolOr -> false
   | BitXor _
   | BitAnd _
   | BitOr _
@@ -1101,7 +1169,11 @@ let filter_useless (ctx : ctx) (def : fun_decl) : fun_decl =
               if not monadic then
                 (* Not a monadic let-binding: simple case *)
                 (e.e, used)
-              else (* Monadic let-binding: can't filter *)
+              else if texpr_cannot_fail re then
+                (* Monadic let-binding that always succeeds: safe to remove *)
+                (e.e, used)
+              else
+                (* Monadic let-binding and the bound expression may fail: can't filter *)
                 dont_filter ()
             else (* There are used variables: don't filter *)
               dont_filter ()
@@ -2193,13 +2265,12 @@ let simplify_trait_calls_visitor (ctx : ctx) (def : fun_decl) =
                               (TraitImplId.Map.find_opt impl_id ctx.trait_impls)
                               "Internal error"
                           in
-                          let method_decl =
-                            snd
-                              ([%unwrap_with_span] span
-                                 (List.find_opt
-                                    (fun (name, _) -> name = method_name)
-                                    impl.methods)
-                                 "Internal error")
+                          let _method_id, _method_name, method_decl =
+                            [%unwrap_with_span] span
+                              (List.find_opt
+                                 (fun (_, name, _) -> name = method_name)
+                                 impl.methods)
+                              "Internal error"
                           in
 
                           (* Create a call to the method *)
@@ -3041,7 +3112,7 @@ let add_fuel (ctx : ctx) (trans : pure_fun_translation) : pure_fun_translation =
 (** Perform the following transformation:
 
     {[
-      let y <-- f x   (* Must be an application, is not necessarily monadic *)
+      let y <-- f x   (* Not necessarily monadic *)
       let (a, b) := y (* Tuple decomposition *)
       ...
     ]}
@@ -3051,49 +3122,95 @@ let add_fuel (ctx : ctx) (trans : pure_fun_translation) : pure_fun_translation =
     {[
       let (a, b) <-- f x
       ...
+    ]}
+
+    More generally, if [pat] is any pattern (not just a single variable), we
+    absorb any immediately following pure let-bindings that decompose an open
+    sub-field of [pat] into a tuple. For example:
+
+    {[
+      let (p, back) <-- f x
+      let (a, b) := p
+      ...
+    ]}
+
+    becomes:
+
+    {[
+      let ((a, b), back) <-- f x
+      ...
     ]} *)
 let merge_let_app_then_decompose_tuple_visitor (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
+
+  (* Replace the open variable [var_id] in [pat] with [replacement] *)
+  let replace_open_in_pat (var_id : fvar_id) (replacement : tpat) (p : tpat) :
+      tpat =
+    let visitor =
+      object
+        inherit [_] map_tpat as super
+
+        method! visit_tpat () p =
+          match p.pat with
+          | POpen (v, _) when v.id = var_id -> replacement
+          | _ -> super#visit_tpat () p
+      end
+    in
+    visitor#visit_tpat () p
+  in
+
+  (* Repeatedly absorb pure let-bindings that decompose an open sub-field
+     of [pat] into a tuple.
+
+     Returns the updated pattern, the remaining continuation, and the
+     updated substitution environment. *)
+  let rec absorb_decompositions (open_vars : FVarId.Set.t)
+      (env : texpr FVarId.Map.t) (pat : tpat) (next : texpr) :
+      tpat * texpr * texpr FVarId.Map.t =
+    match next.e with
+    | Let (false, pat1, { e = FVar var_id; _ }, next1)
+      when FVarId.Set.mem var_id open_vars && is_pat_tuple pat1 ->
+        (* [next] is [let <tuple_pat> := <var>] where <var> is an open
+           sub-field of [pat]. Merge [pat1] into [pat]. *)
+        let pat1 =
+          tpat_replace_ignored_vars_with_free_vars ctx.fresh_fvar_id pat1
+        in
+        let pat1_expr = [%silent_unwrap] span (tpat_to_texpr span pat1) in
+        let env = FVarId.Map.add var_id pat1_expr env in
+        let new_pat = replace_open_in_pat var_id pat1 pat in
+        (* Update the set of open variables: remove the merged one,
+           add any new open variables from the replacement pattern *)
+        let open_vars = FVarId.Set.remove var_id open_vars in
+        let open_vars = FVarId.Set.union open_vars (tpat_get_fvars pat1) in
+        absorb_decompositions open_vars env new_pat next1
+    | _ -> (pat, next, env)
+  in
+
   object (self)
     inherit [_] map_expr
 
     method! visit_Let env monadic0 pat0 bound0 next0 =
       let bound0 = self#visit_texpr env bound0 in
-      (* Check if we need to merge two let-bindings *)
-      if is_pat_open pat0 then
-        let var0, _ = [%add_loc] as_pat_open span pat0 in
-        match next0.e with
-        | Let (false, pat1, { e = FVar var_id; _ }, next1) when var_id = var0.id
-          -> begin
-            (* Check if we are decomposing a tuple *)
-            if is_pat_tuple pat1 then
-              (* Introduce fresh variables for all the ignored variables
-                   to make sure we can turn the pattern into an expression *)
-              let pat1 =
-                tpat_replace_ignored_vars_with_free_vars ctx.fresh_fvar_id pat1
-              in
-              let pat1_expr = Option.get (tpat_to_texpr span pat1) in
-              (* Register the mapping from the variable we remove to the expression *)
-              let env = FVarId.Map.add var0.id pat1_expr env in
-              (* Continue *)
-              let next1 = self#visit_texpr env next1 in
-              Let (monadic0, pat1, bound0, next1)
-            else
-              let next0 = self#visit_texpr env next0 in
-              Let (monadic0, pat0, bound0, next0)
-          end
-        | _ ->
-            let next0 = self#visit_texpr env next0 in
-            Let (monadic0, pat0, bound0, next0)
-      else
-        let next0 = self#visit_texpr env next0 in
-        Let (monadic0, pat0, bound0, next0)
+      (* Try to absorb any immediately following pure let-bindings that
+         decompose open sub-fields of [pat0] into tuples *)
+      let open_vars = tpat_get_fvars pat0 in
+      let pat0, next0, env =
+        if FVarId.Set.is_empty open_vars then (pat0, next0, env)
+        else absorb_decompositions open_vars env pat0 next0
+      in
+      let next0 = self#visit_texpr env next0 in
+      Let (monadic0, pat0, bound0, next0)
 
-    (* Replace the variables *)
+    (* Replace the variables.
+       We apply substitutions recursively: if [var_id] maps to an expression
+       that itself contains variables in the env (due to chained tuple
+       decompositions), those are also substituted. This is safe because
+       fresh variable ids are monotonically increasing, so cycles are
+       impossible. *)
     method! visit_FVar env var_id =
       match FVarId.Map.find_opt var_id env with
       | None -> FVar var_id
-      | Some e -> e.e
+      | Some e -> (self#visit_texpr env e).e
   end
 
 let merge_let_app_then_decompose_tuple =

@@ -12,11 +12,11 @@ let log = Logging.symbolic_to_pure_expressions_log
 let translate_fn_ptr_kind (ctx : bs_ctx) (id : A.fn_ptr_kind) : fn_ptr_kind =
   match id with
   | FunId fun_id -> FunId fun_id
-  | TraitMethod (trait_ref, method_name, fun_decl_id) ->
+  | TraitMethod (trait_ref, method_id) ->
       let trait_ref =
         translate_fwd_trait_ref (Some ctx.span) ctx.decls_ctx trait_ref
       in
-      TraitMethod (trait_ref, method_name, fun_decl_id)
+      TraitMethod (trait_ref, method_id)
 
 (* Introduce variables for the backward functions.
 
@@ -215,8 +215,106 @@ let rec translate_expr (e : S.expr) (ctx : bs_ctx) : texpr =
   | Let lete -> translate_let ctx lete
   | Join (ectx, input_values, input_abs) ->
       translate_join ctx ectx input_values input_abs
+  | TargetDispatch (input_svs, targets) ->
+      translate_target_dispatch input_svs targets ctx
 
 and translate_panic (ctx : bs_ctx) : texpr = Option.get ctx.mk_panic
+
+(** Translate a [TargetDispatch] node into a [get_target] call followed by an
+    if-then-else chain dispatching on the target string.
+
+    Generated pure code:
+    {[
+      let tgt ← get_target
+      if tgt = "target1" then target1_fn args...
+      else if tgt = "target2" then target2_fn args...
+      else targetN_fn args...
+    ]} *)
+and translate_target_dispatch (input_svs : V.symbolic_value list)
+    (targets : (string * T.fun_decl_ref) list) (ctx : bs_ctx) : texpr =
+  let span = ctx.span in
+  [%cassert] span
+    (List.length targets >= 2)
+    "TargetDispatchBody must have at least 2 targets";
+
+  let str_ty = TAdt (TBuiltin TStr, empty_generic_args) in
+
+  (* Translate the input symbolic values to pure expressions *)
+  let input_exprs =
+    List.map
+      (fun (sv : V.symbolic_value) ->
+        let fvar = SymbolicValueId.Map.find sv.sv_id ctx.sv_to_var in
+        mk_texpr_from_fvar fvar)
+      input_svs
+  in
+
+  (* The output type of the function *)
+  let result_ty =
+    let sg = translate_fun_sig_from_decomposed ctx.sg in
+    sg.output
+  in
+
+  (* Build a call to one of the per-target functions *)
+  let mk_target_call (fdr : T.fun_decl_ref) : texpr =
+    let pure_generics =
+      translate_fwd_generic_args (Some span) ctx.decls_ctx fdr.generics
+    in
+    let qualif : qualif =
+      {
+        id = FunOrOp (Fun (FromLlbc (FunId (FRegular fdr.id), None)));
+        generics = pure_generics;
+      }
+    in
+    let call_ty =
+      mk_arrows (List.map (fun (e : texpr) -> e.ty) input_exprs) result_ty
+    in
+    let func : texpr = { e = Qualif qualif; ty = call_ty } in
+    [%add_loc] mk_apps span func input_exprs
+  in
+
+  (* Build the if-then-else chain (bottom-up) *)
+  let tgt_fvar =
+    mk_fresh_fvar ctx.fresh_fvar_id ~basename:(Some "tgt") str_ty
+  in
+  let tgt_expr = mk_texpr_from_fvar tgt_fvar in
+
+  let mk_eq_scrut (target_name : string) : texpr =
+    let str_lit : texpr = { e = Const (VStr target_name); ty = str_ty } in
+    let bool_ty = TLiteral TBool in
+    let eq_qualif : qualif =
+      { id = FunOrOp (Binop (Eq str_ty)); generics = empty_generic_args }
+    in
+    let eq_fn : texpr =
+      { e = Qualif eq_qualif; ty = TArrow (str_ty, TArrow (str_ty, bool_ty)) }
+    in
+    let app1 : texpr =
+      { e = App (eq_fn, tgt_expr); ty = TArrow (str_ty, bool_ty) }
+    in
+    { e = App (app1, str_lit); ty = bool_ty }
+  in
+
+  let rev_targets = List.rev targets in
+  let _last_target_name, last_fdr = List.hd rev_targets in
+  let remaining = List.rev (List.tl rev_targets) in
+
+  let dispatch_expr =
+    List.fold_right
+      (fun (target_name, (fdr : T.fun_decl_ref)) else_branch ->
+        let scrut = mk_eq_scrut target_name in
+        let then_branch = mk_target_call fdr in
+        [%add_loc] mk_switch span scrut (If (then_branch, else_branch)))
+      remaining (mk_target_call last_fdr)
+  in
+
+  (* Wrap in a monadic let: [let tgt ← get_target; dispatch_expr] *)
+  let get_target_call : texpr =
+    let qualif : qualif =
+      { id = FunOrOp (Fun (Pure GetTarget)); generics = empty_generic_args }
+    in
+    { e = Qualif qualif; ty = mk_result_ty str_ty }
+  in
+  let tgt_pat = mk_tpat_from_fvar None tgt_fvar in
+  mk_closed_let span true tgt_pat get_target_call dispatch_expr
 
 (** [opt_v]: the value to return, in case we translate a forward body.
 
@@ -276,7 +374,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
         let func = Fun (FromLlbc (fid_t, None)) in
         (* Retrieve the effect information about this function (can fail,
          * takes a state as input, etc.) *)
-        let effect_info = get_fun_effect_info ctx fid None in
+        let effect_info = get_fun_effect_info ctx fid_t None in
         (* Generate the variables for the backward functions returned by the forward
            function. *)
         let ctx, ignore_fwd_output, back_funs =
@@ -286,7 +384,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
           let decls_ctx = ctx.decls_ctx in
           let dsg =
             translate_inst_fun_sig_to_decomposed_fun_type (Some ctx.span)
-              decls_ctx fid inst_sg
+              decls_ctx fid_t inst_sg
               (List.map (fun _ -> None) sg.inputs)
           in
           let back_tys = compute_back_tys_with_info dsg in
@@ -319,15 +417,23 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
                   | PtrFromParts RMut -> "ptr_from_parts_mut"
                   | PtrFromParts RShared -> "ptr_from_parts_shared"
                 end
-              | FunId (FRegular fid) | TraitMethod (_, _, fid) -> (
+              | FunId (FRegular fid) -> (
                   let decl =
                     FunDeclId.Map.find fid ctx.fun_ctx.llbc_fun_decls
                   in
-                  match Collections.List.last decl.item_meta.name with
+                  let name =
+                    LlbcAstUtils.strip_target_or_instantiated_suffix
+                      decl.item_meta.name
+                  in
+                  match Collections.List.last name with
                   | PeIdent (s, _) -> s
+                  | PeImpl _ -> "impl"
                   | _ ->
                       (* We shouldn't get there *)
                       [%craise] decl.item_meta.span "Unexpected")
+              | TraitMethod (trait_ref, method_id) ->
+                  Charon.GAstUtils.get_method_name ctx.decls_ctx.crate
+                    trait_ref.trait_decl_ref.binder_value.id method_id
             in
             name ^ "_back"
           in
@@ -466,7 +572,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
                     [%craise] ctx.span
                       ("Raw ptr casts are only supported between pointers to \
                         literal types; found: "
-                      ^ Charon.PrintExpressions.cast_kind_to_string env kind)
+                      ^ Charon.Print.cast_kind_to_string env kind)
               in
               let src_ty, src_mut = get_ty src_ty in
               let tgt_ty, tgt_mut = get_ty tgt_ty in
@@ -911,7 +1017,11 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
     (ctx : bs_ctx) : texpr =
   [%ltrace
     "abs (level: " ^ string_of_int abs_level ^ "):\n" ^ abs_to_string ctx abs];
-  let call = V.FunCallId.Map.find call_id ctx.calls in
+  let call =
+    [%unwrap_with_span] ctx.span
+      (V.FunCallId.Map.find_opt call_id ctx.calls)
+      "Internal error: please file an issue"
+  in
   let info = V.AbsId.Map.find_opt abs.abs_id ctx.abs_id_to_info in
   (* For now we do not support sub-abstractions giving back values.
 
@@ -965,17 +1075,27 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
       !inputs
     in
     (* Retrieve the values given back by this function: those are the output
-     * values. We rely on the fact that there are no nested borrows to use the
-     * meta-place information from the input values given to the forward function
-     * (we need to add [None] for the return avalue) *)
+       values. We rely on the fact that there are no nested borrows to use the
+       meta-place information from the input values given to the forward function
+       (we need to add [None] for the return avalue).
+
+       Note: [simplify_dummy_vales_useless_abs] modifies the structure of the
+       abstractions with the consequence that the avalues don't match the
+       places - we check that the length is the same for this reason.
+       TODO: fix the issue. The problem comes from the fact that [simplify_dummy_vales_useless_abs]
+       sometimes filters avalues. We should store the place the value comes from
+       as meta-information. *)
     let output_mpl =
-      List.append
-        (List.map
-           (translate_opt_mplace (Some call.span) ctx.decls_ctx)
-           call.args_places)
-        [ None ]
+      let mpl =
+        List.append
+          (List.map
+             (translate_opt_mplace (Some call.span) ctx.decls_ctx)
+             call.args_places)
+          [ None ]
+      in
+      if List.length mpl = List.length abs.avalues then Some mpl else None
     in
-    let ctx, outputs = abs_to_given_back (Some output_mpl) abs abs_level ctx in
+    let ctx, outputs = abs_to_given_back output_mpl abs abs_level ctx in
     (* Group the output values together *)
     let output = mk_simpl_tuple_pat outputs in
     (* Translate the next expression *)
@@ -1435,11 +1555,11 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         in
         ({ e = StructUpdate su; ty = var.ty }, false)
     | VaCgValue cg_id -> ({ e = CVar cg_id; ty = var.ty }, false)
-    | VaTraitConstValue (trait_ref, const_name) ->
+    | VaTraitConstValue (trait_ref, const_id) ->
         let trait_ref =
           translate_fwd_trait_ref (Some ctx.span) ctx.decls_ctx trait_ref
         in
-        let qualif_id = TraitConst (trait_ref, const_name) in
+        let qualif_id = TraitConst (trait_ref, const_id) in
         let qualif = { id = qualif_id; generics = empty_generic_args } in
         let ty = mk_result_ty var.ty in
         ({ e = Qualif qualif; ty }, true)
@@ -1476,10 +1596,10 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         let ty =
           match kind with
           | T.FunId (FBuiltin _) -> [%craise] ctx.span "Unimplemented"
-          | T.FunId (FRegular fid) ->
+          | T.FunId (FRegular _) ->
               let sg =
                 [%unwrap_with_span] ctx.span
-                  (FunDeclId.Map.find_opt fid ctx.fun_sigs)
+                  (lookup_fn_ptr_sig ctx kind)
                   "Internal error, please file an issue"
               in
               (* Check that the function lives in the expected effect - otherwise we

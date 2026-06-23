@@ -65,6 +65,8 @@ structure Config where
       that are not bound in the function call). This requires `assumTac` to
       be `true`. -/
   inferGhostVars : Bool := true
+  /-- Infer a postcondition for unresolved `?post args...` subgoals left by `progress` -/
+  inferPost : Bool := false
   /-- Use `scalar_tac` to discharge preconditions -/
   scalarTac : Bool := false
   /- Use `simp [*]` to discharge preconditions -/
@@ -109,7 +111,7 @@ structure Config where
 deriving Repr
 
 def Config.toGrindConfig (cfg : Config) : Grind.Config :=
-  let { async := _, assumTac := _, inferGhostVars := _, scalarTac := _, simpStar := _,
+  let { async := _, assumTac := _, inferGhostVars := _, inferPost := _, scalarTac := _, simpStar := _,
         grind := _, withGroundSimprocs := _, nla := _,
         threadGrindState := _, grindPreprocessIters := _, grindPreprocessSplit := _,
         preprocessGrind := _,
@@ -301,8 +303,34 @@ initialize stepFunMap :
 def getStepFunMap (env : Environment) : Array (Name × Name) :=
   stepFunMap.getState env
 
-private def saveStepSpecFromThm (ext : Extension) (attrKind : AttributeKind) (thName : Name) :
-  AttrM Unit := do
+private def generateMvcgenSpec (stx : Syntax) (attrKind : AttributeKind)
+    (thDecl : AsyncConstantInfo) : MetaM Unit := do
+  let sig := thDecl.sig.get
+  let thName := thDecl.name
+  forallTelescope sig.type fun fvars _ => do
+    -- Apply the original theorem to all fvars to get: spec (f args) Q
+    let thConst := Lean.mkConst thName (sig.levelParams.map .param)
+    let thApp := mkAppN thConst fvars
+    -- Wrap with spec_to_mvcgen to produce: Triple (f args) ⌜True⌝ post⟨...⟩
+    let proof ← mkAppM ``Aeneas.Std.WP.spec_to_mvcgen #[thApp]
+    let innerTy ← inferType proof
+    -- Re-introduce all fvars as binders
+    let proofTerm ← mkLambdaFVars fvars proof
+    let thmTy ← mkForallFVars fvars innerTy
+    let mvcgenSpecName := Name.str thName "mvcgen_spec"
+    let auxDecl : TheoremVal := {
+      name        := mvcgenSpecName
+      levelParams := sig.levelParams
+      type        := thmTy
+      value       := proofTerm
+    }
+    addDecl (.thmDecl auxDecl)
+    addDeclarationRangesFromSyntax mvcgenSpecName stx
+    -- Register with @[spec] so mvcgen can find it
+    Lean.Attribute.add mvcgenSpecName `spec .missing attrKind
+
+private def saveStepSpecFromThm (ext : Extension) (attrKind : AttributeKind) (stx : Syntax)
+    (thName : Name) : AttrM Unit := do
   -- Lookup the theorem
   let env ← getEnv
   -- Ignore some auxiliary definitions (see the comments for attrIgnoreMutRec)
@@ -329,6 +357,12 @@ private def saveStepSpecFromThm (ext : Extension) (attrKind : AttributeKind) (th
     if let some funHeadName := funHeadName? then
       ScopedEnvExtension.add stepFunMap (funHeadName, thName) attrKind
     trace[Step] "Saved the entry"
+    -- Also generate a corresponding mvcgen (@[spec]) lemma
+    try
+      trace[Step] "Registering with mvcgen"
+      MetaM.run' (generateMvcgenSpec stx attrKind thDecl)
+    catch e =>
+      logWarning m!"Could not generate mvcgen spec for {thName}: {e.toMessageData}"
     pure ()
 
 /- Initiliaze the `step` attribute. -/
@@ -339,7 +373,7 @@ initialize stepAttr : StepSpecAttr ← do
     descr := "Adds theorems to the `step` database"
     add := fun thName stx attrKind => do
       Attribute.Builtin.ensureNoArgs stx
-      saveStepSpecFromThm ext attrKind thName
+      saveStepSpecFromThm ext attrKind stx thName
     erase := fun thName => do
       let s := ext.getState (← getEnv)
       let s := s.erase thName
@@ -448,8 +482,8 @@ def reduceProdProjs (e : Expr) : MetaM Expr := do
 
 open Std.WP
 
-theorem intro_predn (p : α × β → Prop) : p = predn (fun x y => p (x, y)) := by
-  unfold predn
+theorem intro_uncurry' (p : α × β → Prop) : p = uncurry' (fun x y => p (x, y)) := by
+  unfold uncurry'
   simp only
 
 theorem lift_to_spec x (p0 p1 : α → Prop) (h0 : p0 x) (h1 : p0 = p1) : spec (Std.lift x) p1 := by
@@ -461,22 +495,22 @@ namespace Test
   theorem test_pos_triple (pos_triple : Nat × Nat × Nat) (thm : (fun (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0) pos_triple) :
     Std.lift pos_triple ⦃ x y z => x > 0 ∧ y > 0 ∧ z > 0 ⦄ := by
     --
-    have h := fun x => intro_predn (fun y => match (x, y) with | (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
+    have h := fun x => intro_uncurry' (fun y => match (x, y) with | (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
     --
-    have h' := intro_predn (fun (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
-    replace h := congrArg predn (funext h)
+    have h' := intro_uncurry' (fun (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
+    replace h := congrArg uncurry' (funext h)
     replace h := Eq.trans h' h
     clear h'
     --
     replace h := lift_to_spec pos_triple (fun (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
-      (predn fun x => predn fun x_1 y => match (x, x_1, y) with | (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
+      (uncurry' fun x => uncurry' fun x_1 y => match (x, x_1, y) with | (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
       thm h
     exact h
 
   /-- Example which uses tactics -/
   theorem test_pos_triple' (pos_triple : Nat × Nat × Nat) (thm : (fun (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0) pos_triple) :
     Std.lift pos_triple ⦃ x y z => x > 0 ∧ y > 0 ∧ z > 0 ⦄ := by
-    simp -failIfUnchanged -iota only [_root_.Aeneas.Std.lift, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.predn] at thm ⊢
+    simp -failIfUnchanged -iota only [_root_.Aeneas.Std.lift, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.uncurry'] at thm ⊢
     exact thm
 
 end Test
@@ -536,21 +570,21 @@ def liftThmType (thmTy : Expr) (pat : Option Syntax)
   /- Substitute the pattern -/
   let thmTy ← mkPred thmTy pat fvarsPat fvars
   trace[Step] "Theorem after substituting the pattern: {thmTy}"
-  /- Create the nested `predn` -/
-  let rec mkPredn (fvars : List Expr) : MetaM Expr := do
-    withTraceNode `Step (fun _ => pure m!"mkPredn: fvars: {fvars}") do
+  /- Create the nested `uncurry'` -/
+  let rec mkUncurry' (fvars : List Expr) : MetaM Expr := do
+    withTraceNode `Step (fun _ => pure m!"mkUncurry': fvars: {fvars}") do
     match fvars with
     | [] => throwError "Unexpected"
     | [x] =>
       trace[Progres] "Introducing a single lambda: x: {x}, thmTy: {thmTy}"
       mkLambdaFVars #[x] thmTy
     | x :: fvars => do
-      trace[Progres] "Introducing `predn`: x: {x}"
-      let thm ← mkPredn fvars
+      trace[Progres] "Introducing `uncurry'`: x: {x}"
+      let thm ← mkUncurry' fvars
       trace[Progres] "thm: {thm}"
-      mkAppM ``predn #[← mkLambdaFVars #[x] thm]
-  let thmTy ← mkPredn patFVars.toList
-  trace[Step] "result of mkPredn: {thmTy}"
+      mkAppM ``uncurry' #[← mkLambdaFVars #[x] thm]
+  let thmTy ← mkUncurry' patFVars.toList
+  trace[Step] "result of mkUncurry': {thmTy}"
   /- Add the `spec` -/
   let liftExpr ← mkAppM ``Std.lift #[pat]
   trace[Step] "liftExpr: {liftExpr}"
@@ -589,7 +623,7 @@ def liftThm (stx : Syntax) (name : Name) (pat : Option (TSyntax `term))
     | none =>
       `(tactic|
         simp -failIfUnchanged -iota only
-          [_root_.Aeneas.Std.lift, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.predn] <;>
+          [_root_.Aeneas.Std.lift, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.uncurry'] <;>
         exact $(mkIdent name))
     | some stx => pure stx
   let (goals, _) ← runTactic mvar.mvarId! tacticStx
@@ -862,7 +896,7 @@ initialize stepPureAttribute : StepPureSpecAttr ← do
         -- Introduce the lifted theorem
         let liftedThmName ← MetaM.run' (liftThm stx thName pat)
         -- Save the lifted theorem to the `step` database
-        saveStepSpecFromThm stepAttr.ext attrKind liftedThmName
+        saveStepSpecFromThm stepAttr.ext attrKind stx liftedThmName
   }
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl }
@@ -932,7 +966,7 @@ def mkStepPureDefThm (stx : Syntax) (pat : Option (TSyntax `term)) (n : Name)
   let tacticStx ←
     `(tactic|
         simp only
-          [_root_.Aeneas.Std.lift, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.predn, _root_.implies_true])
+          [_root_.Aeneas.Std.lift, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.uncurry', _root_.implies_true])
   liftThm stx n pat mkPat mkPred suffix (tacticStx := some tacticStx)
 
 local elab "#step_pure_def" id:ident pat:(term)? : command => do
@@ -1003,11 +1037,17 @@ initialize stepPureDefAttribute : StepPureDefSpecAttr ← do
         -- Introduce the lifted theorem
         let thmName ← MetaM.run' (mkStepPureDefThm stx pat declName)
         -- Save the lifted theorem to the `step` database
-        saveStepSpecFromThm stepAttr.ext attrKind thmName
+        saveStepSpecFromThm stepAttr.ext attrKind stx thmName
   }
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl }
 
+open Tactic
+
+/-! # Logging Utils -/
+def traceGoalWithNode (msg : String) : TacticM Unit := Utils.traceGoalWithNode `Step msg
+
 end Step
+
 
 end Aeneas

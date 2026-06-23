@@ -9,15 +9,20 @@ Wall in Pompei, digital image from Michael Lahanis.
 </figcaption>
 </div></p>
 
-# Aeneas [Eh-nee-as]
+# Aeneas
 
-Aeneas (pronunced [Ay-nay-as]) is a verification toolchain for Rust programs.  It relies on a translation from Rusts's MIR
-internal language to a pure lamdba calculus.  It is intended to be used in combination with
+Aeneas (pronunced [Eh-nee-as]) is a verification toolchain for Rust programs.  It relies on a translation from Rust's MIR
+internal language to a pure lambda calculus.  It is intended to be used in combination with
 [Charon](https://github.com/AeneasVerif/charon), which compiles Rust programs to an intermediate
 representation called LLBC. It currently has backends for [F\*](https://www.fstar-lang.org),
 [Coq](https://coq.inria.fr/), [HOL4](https://hol-theorem-prover.org/) and [LEAN](https://leanprover.github.io/).
 
-If you want to contribute or ask questions, we strongly encourage you to join the [Zulip](https://aeneas-verif.zulipchat.com/).
+If you want to contribute or ask questions, we strongly encourage you to join the
+[Zulip](https://aeneas-verif.zulipchat.com/). In particular, we welcome external
+contributions but ask contributors to engage with us before making deep modifications of
+the code or implementing non trivial features, as these require in-depth design
+discussions and careful reviews. If you want to contribute a new feature you should either
+discuss it on the Zulip or open the corresponding issue on github.
 
 ## Project Structure
 
@@ -42,7 +47,7 @@ opam switch create 5.3.0
 
 You can then install the dependencies with the following command:
 ```
-opam install ppx_deriving visitors easy_logging zarith yojson core_unix odoc \
+opam install ppx_deriving ppx_deriving_yojson visitors easy_logging zarith yojson core_unix odoc \
   ocamlgraph menhir ocamlformat.0.27.0 unionFind zarith progress domainslib
 ```
 
@@ -142,12 +147,20 @@ The tool classifies each Rust function into one of the following categories:
 
 ### Setup
 
-The tool combines information from two extraction passes:
+The tool combines information from two sources:
 
-1. **Aeneas doc-info extraction** — extracts function metadata (names, visibility,
-   opacity, call graph, source spans) from the LLBC file produced by Charon.
+1. **Aeneas `translation.json`** — emitted by Aeneas alongside the Lean files (via
+   `-emit-json`). It records the Lean declarations Aeneas produced and their
+   connection to the original Rust source (Lean names, Rust names, source spans,
+   opacity, whether each function can fail/diverge, etc.). See `src/EmitJson.ml`.
 2. **Lean doc extraction** — extracts `@[step]` theorem metadata (theorem statements,
    sorry status, annotated identifiers) from the compiled Lean environment.
+
+> **Note:** `translation.json` is intentionally minimal. Unlike the previous custom
+> doc-info pass it does not include the Rust source text (read on demand from
+> `--rust-src`), the call graph, or Rust visibility (`pub`). The interactive
+> dependency graph is therefore edgeless, and the "visibility" column reflects
+> whether a declaration is local to the crate being verified.
 
 #### Step 1: Generate the LLBC file
 
@@ -160,14 +173,15 @@ charon cargo --preset=aeneas
 This produces a `.llbc` file (e.g., `my_crate.llbc`). If your project uses custom
 `cfg` flags for extraction, pass them here.
 
-#### Step 2: Extract doc-info from LLBC
+#### Step 2: Translate to Lean and emit `translation.json`
 
 ```bash
-aeneas -doc-info -doc-info-dest doc-info.json my_crate.llbc
+aeneas -backend lean -emit-json my_crate.llbc
 ```
 
-This produces a JSON file containing the list of all functions, their visibility,
-opacity, source spans, and call graph.
+This produces the Lean files **and** a `translation.json` file alongside them,
+containing all functions, types and globals with their Lean names, Rust names,
+source spans, and opacity. (`-emit-json` is only valid for the Lean backend.)
 
 #### Step 3: Extract Lean verification metadata
 
@@ -191,7 +205,7 @@ annotated identifiers.
 
 ```bash
 python3 -m scripts.aeneas_doc generate \
-  --doc-info doc-info.json \
+  --translation translation.json \
   --lean-doc lean-doc.json \
   --rust-src path/to/rust/src/ \
   --lean-src path/to/lean/project/ \
@@ -202,7 +216,7 @@ python3 -m scripts.aeneas_doc generate \
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--doc-info` | Yes | Path to the doc-info JSON from Step 2 |
+| `--translation` | Yes | Path to the `translation.json` from Step 2 |
 | `--lean-doc` | No | Path to the Lean doc JSON from Step 3 |
 | `--rust-src` | No | Path to the Rust source directory (enables "Source" links) |
 | `--lean-src` | No | Path to the Lean project root (enables Lean "Source" links) |
@@ -218,8 +232,8 @@ The generated documentation is fully static HTML — no server required. Open
 Using the demo crate included in the Aeneas test suite:
 
 ```bash
-# 1. Extract doc-info from the pre-built LLBC file
-bin/aeneas -doc-info -doc-info-dest /tmp/demo-doc-info.json tests/llbc/demo.llbc
+# 1. Translate to Lean and emit translation.json from the pre-built LLBC file
+bin/aeneas -backend lean -emit-json -dest /tmp/demo-lean tests/llbc/demo.llbc
 
 # 2. Extract Lean verification metadata
 cd tests/lean
@@ -229,7 +243,7 @@ cd ../..
 
 # 3. Generate the HTML documentation
 python3 -m scripts.aeneas_doc generate \
-  --doc-info /tmp/demo-doc-info.json \
+  --translation /tmp/demo-lean/translation.json \
   --lean-doc /tmp/demo-lean-doc.json \
   --rust-src tests/src \
   --lean-src tests/lean \
@@ -237,6 +251,7 @@ python3 -m scripts.aeneas_doc generate \
   --title "Demo Crate" \
   --open
 ```
+
 
 ### What the Documentation Contains
 

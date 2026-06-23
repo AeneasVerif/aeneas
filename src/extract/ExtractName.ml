@@ -38,14 +38,14 @@ module NameMatcherMap = struct
   let config = default_match_config
   let empty = NMM.empty
 
-  let find_opt (ctx : 'stt ctx) (name : Types.name) (m : 'a t) : 'a option =
+  let find_opt (ctx : ctx) (name : Types.name) (m : 'a t) : 'a option =
     NMM.find_opt ctx config name m
 
-  let find_with_generics_opt (ctx : 'stt ctx) (name : Types.name)
+  let find_with_generics_opt (ctx : ctx) (name : Types.name)
       (g : Types.generic_args) (m : 'a t) : 'a option =
     NMM.find_with_generics_opt ctx config name g m
 
-  let mem (ctx : 'stt ctx) (name : Types.name) (m : 'a t) : bool =
+  let mem (ctx : ctx) (name : Types.name) (m : 'a t) : bool =
     NMM.mem ctx config name m
 
   let of_list (ls : (pattern * 'a) list) : 'a t = NMM.of_list ls
@@ -64,11 +64,25 @@ let pattern_to_extract_name_visitor =
     List.for_all check
   in
 
+  (* Detect whether a string is a target name.
+     For now we use the fact that these are the only names that are
+     allowed to contain '-' (and they always contain this character).
+
+     TODO: this is a hack. We need to update the name generation by
+     not going through the patterns, but directly to strings. *)
+  let name_is_target (s : string) : bool = String.contains s '-' in
+
   (* Make the names shorter. For now, we simply remove all prefixes. *)
   let rec simplify_name (id : pattern) =
     let shorten (id : pattern) =
       match id with
       | [] | [ _ ] -> id
+      | [ id0; (PIdent (id1_s, _, []) as id1) ] ->
+          (* If the name ends with a target name, we preserve the element before. *)
+          if name_is_target id1_s then
+            let id0 = simplify_name [ id0 ] in
+            id0 @ [ id1 ]
+          else simplify_name [ id1 ]
       | _ :: id -> simplify_name id
     in
     (* We have a special case for the literals *)
@@ -95,8 +109,15 @@ let pattern_to_extract_name_visitor =
       match ty with
       | EComp id ->
           (* Only keep the last ident *)
-          let id = Collections.List.last id in
-          super#visit_PImpl () (EComp [ id ])
+          let id =
+            match List.rev id with
+            | (PIdent (id0_s, _, []) as id0) :: id1 :: _ ->
+                (* Preserve the elem before last if the last elem is a target name *)
+                if name_is_target id0_s then [ id1; id0 ] else [ id0 ]
+            | id0 :: _ -> [ id0 ]
+            | [] -> id
+          in
+          super#visit_PImpl () (EComp id)
       | _ -> super#visit_PImpl () ty
 
     method! visit_EPrimAdt _ adt g =
@@ -138,13 +159,13 @@ let pattern_to_trait_impl_extract_name = pattern_to_extract_name None
 (* TODO: this is provisional. We just want to make sure that the extraction
    names we derive from the patterns (for the builtin definitions) are
    consistent with the extraction names we derive from the Rust names *)
-let name_to_simple_name (ctx : 'stt ctx) (n : Types.name) : string list =
+let name_to_simple_name (ctx : ctx) (n : Types.name) : string list =
   let c = default_to_pat_config in
   pattern_to_extract_name None (name_to_pattern ctx c n)
 
 (** If the [prefix] is Some, we attempt to remove the common prefix between
     [prefix] and [name] from [name] *)
-let name_with_generics_to_simple_name (ctx : 'stt ctx)
+let name_with_generics_to_simple_name (ctx : ctx)
     ?(prefix : Types.name option = None) (name : Types.name)
     (p : Types.generic_params) (g : Types.generic_args) : string list =
   let c = default_to_pat_config in

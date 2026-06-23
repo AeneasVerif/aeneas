@@ -1531,6 +1531,22 @@ let opt_destruct_ret (e : texpr) : texpr option =
     when variant_id = Some result_ok_id -> Some arg
   | _ -> None
 
+(** Check if a *monadic* texpr is guaranteed to always return [ok]. Used by
+    [filter_useless] to safely remove [let _ ← e; cont] when [e] can't fail. *)
+let rec texpr_cannot_fail (e : texpr) : bool =
+  Option.is_some (opt_destruct_ret e)
+  ||
+  match e.e with
+  | Switch (_, If (e_true, e_false)) ->
+      texpr_cannot_fail e_true && texpr_cannot_fail e_false
+  | Switch (_, Match branches) ->
+      List.for_all
+        (fun (br : match_branch) -> texpr_cannot_fail br.branch)
+        branches
+  | Let (true, _, rhs, cont) -> texpr_cannot_fail rhs && texpr_cannot_fail cont
+  | Let (false, _, _, cont) -> texpr_cannot_fail cont
+  | _ -> false
+
 let decompose_mplace_to_local (p : mplace) :
     (E.LocalId.id * string option * mprojection_elem list) option =
   let rec decompose (proj : mprojection_elem list) (p : mplace) =
@@ -2392,26 +2408,36 @@ let filter_generic_params_used_in_texpr (generic : generic_params) (e : texpr) :
   let generics : generic_params = { types; const_generics; trait_clauses } in
   (generics, filter)
 
-let generic_args_of_params (generics : generic_params) : generic_args =
+type mk_var = { mk : 'a. 'a -> 'a de_bruijn_var }
+
+let mk_generic_args_of_params (mk_var : mk_var) (generics : generic_params) :
+    generic_args =
   let types =
-    List.map (fun (v : type_param) -> TVar (Free v.index)) generics.types
+    List.map (fun (v : type_param) -> TVar (mk_var.mk v.index)) generics.types
   in
   let const_generics =
     List.map
-      (fun (v : const_generic_param) -> CgVar (Free v.index))
+      (fun (v : const_generic_param) -> CgVar (mk_var.mk v.index))
       generics.const_generics
   in
   let trait_refs =
     List.map
       (fun (c : trait_param) ->
         {
-          trait_id = Clause (Free c.clause_id);
+          trait_id = Clause (mk_var.mk c.clause_id);
           trait_decl_ref =
             { trait_decl_id = c.trait_id; decl_generics = c.generics };
         })
       generics.trait_clauses
   in
   { types; const_generics; trait_refs }
+
+let generic_args_of_params (generics : generic_params) : generic_args =
+  mk_generic_args_of_params { mk = (fun x -> Free x) } generics
+
+(* Like `generic_args_of_params` but makes all the variables `Bound` instead of `Free`. *)
+let bound_generic_args_of_params (generics : generic_params) : generic_args =
+  mk_generic_args_of_params { mk = (fun x -> Bound (0, x)) } generics
 
 type decomposed_loop_result = {
   variant_id : variant_id;
@@ -2717,7 +2743,7 @@ let binop_can_fail : binop -> bool = function
   | Mul (OWrap, _)
   | Shl (OWrap, _, _)
   | Shr (OWrap, _, _)
-  | AddChecked _ | SubChecked _ | MulChecked _ | Cmp _ -> false
+  | AddChecked _ | SubChecked _ | MulChecked _ | BoolOr | Cmp _ -> false
   | Div _ | Rem _ | Add _ | Sub _ | Mul _ | Shl _ | Shr _ -> true
 
 let mk_bool_not (b : texpr) : texpr =
@@ -2726,3 +2752,14 @@ let mk_bool_not (b : texpr) : texpr =
   in
   let neg = { e = qualif; ty = TArrow (TLiteral TBool, TLiteral TBool) } in
   { e = App (neg, b); ty = TLiteral TBool }
+
+let mk_bool_or (b0 : texpr) (b1 : texpr) : texpr =
+  let bool_ty = TLiteral TBool in
+  let qualif =
+    Qualif { id = FunOrOp (Binop BoolOr); generics = empty_generic_args }
+  in
+  let binop =
+    { e = qualif; ty = TArrow (bool_ty, TArrow (bool_ty, bool_ty)) }
+  in
+  let app1 = { e = App (binop, b0); ty = TArrow (bool_ty, bool_ty) } in
+  { e = App (app1, b1); ty = bool_ty }

@@ -194,6 +194,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
               (f.ty, mk_known (), false)
           | UpdateAtIndex _ -> (known_f_ty, known_args_tys, false)
           | ResultUnwrapMut -> (hole, mk_holes (), false)
+          | GetTarget -> (f.ty, mk_known (), false)
         end
       | FromLlbc (fid, lp_id) -> begin
           (* Lookup the signature *)
@@ -212,20 +213,22 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
                 in
                 [%ldebug "function name: " ^ trans_fun.name];
                 trans_fun.signature
-            | TraitMethod (tref, method_name, method_decl_id) ->
-                [%ldebug "method name: " ^ method_name];
+            | TraitMethod (tref, method_id) ->
+                [%ldebug
+                  "method name: "
+                  ^ Charon.GAstUtils.get_method_name trans_ctx.crate
+                      tref.trait_decl_ref.trait_decl_id method_id];
                 if Option.is_some lp_id then
                   [%craise] span
                     "Trying to get a loop subfunction from a method call";
                 let method_sig =
                   [%silent_unwrap] span
                     (Charon.Substitute.lookup_flat_method_sig trans_ctx.crate
-                       tref.trait_decl_ref.trait_decl_id method_name)
+                       tref.trait_decl_ref.trait_decl_id method_id)
                 in
                 (* TODO: we shouldn't call `SymbolicToPure` here, there should
                    be a way to translate these signatures earlier. *)
-                SymbolicToPureTypes.translate_fun_sig trans_ctx
-                  (FRegular method_decl_id) method_sig
+                SymbolicToPureTypes.translate_fun_sig trans_ctx fid method_sig
                   (List.map (fun _ -> None) method_sig.item_binder_value.inputs)
             | FunId (FBuiltin aid) ->
                 Builtin.BuiltinFunIdMap.find aid builtin_sigs
@@ -235,14 +238,14 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
              args of the trait ref with the generics args of the method call itself *)
           let generics =
             match fid with
-            | TraitMethod (trait_ref, _, _) ->
+            | TraitMethod (trait_ref, _) ->
                 append_generic_args trait_ref.trait_decl_ref.decl_generics
                   qualif.generics
             | _ -> qualif.generics
           in
           let tr_self =
             match fid with
-            | TraitMethod (trait_ref, _, _) -> trait_ref.trait_id
+            | TraitMethod (trait_ref, _) -> trait_ref.trait_id
             (* Dummy, won't be used since we're not substituting for a trait. *)
             | _ -> UnknownTrait "add_type_annotations_to_fun_decl"
           in

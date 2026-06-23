@@ -263,11 +263,12 @@ let rec apply_eproj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
   let ety = Substitute.erase_regions ty in
   [%sanity_check] span (ty_is_rty ty && ety = v.ty);
   (* Project - if there are no regions from the abstraction in the type, return [_] *)
-  if not (ty_has_regions_in_set regions ty) then { value = EIgnored; ty }
+  if not (ty_has_regions_in_set regions ty) then
+    { value = EIgnored (Some (ctx.env, v)); ty }
   else
     let value : evalue =
       match (v.value, ty) with
-      | VLiteral _, TLiteral _ -> EIgnored
+      | VLiteral _, TLiteral _ -> EIgnored (Some (ctx.env, v))
       | VAdt adt, TAdt { id; generics } ->
           (* Retrieve the types of the fields *)
           let field_types =
@@ -321,7 +322,7 @@ let rec apply_eproj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
                 EBorrow (EMutBorrow (PNone, bid, bv'))
             | VSharedBorrow (_, _), RShared ->
                 (* We do not need to track shared borrows *)
-                EIgnored
+                EIgnored (Some (ctx.env, v))
             | VReservedMutBorrow _, _ ->
                 [%craise] span
                   "Can't apply a proj_borrow over a reserved mutable borrow"
@@ -347,7 +348,7 @@ let rec apply_eproj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
                 EBorrow (EIgnoredMutBorrow (opt_bid, bv))
             | VSharedBorrow (_, _), RShared ->
                 (* We ignore shared borrows *)
-                EIgnored
+                EIgnored (Some (ctx.env, v))
             | VReservedMutBorrow _, _ ->
                 [%craise] span
                   "Can't apply a proj_borrow over a reserved mutable borrow"
@@ -378,7 +379,7 @@ let rec apply_eproj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
               ( PNone,
                 EProjBorrows
                   { proj = { sv_id = s.sv_id; proj_ty = ty }; loans = [] } )
-          else EIgnored
+          else EIgnored (Some (ctx.env, mk_tvalue_from_symbolic_value s))
       | _ ->
           [%ltrace
             "unexpected inputs:\n- input value: "
@@ -493,7 +494,9 @@ let apply_eproj_loans_on_symbolic_expansion (span : Meta.span)
   (* Match *)
   let (value, ty) : evalue * ty =
     match (see, proj_ty) with
-    | SeLiteral _, TLiteral _ -> (EIgnored, original_sv_ty)
+    | SeLiteral lit, TLiteral _ ->
+        ( EIgnored (Some (ctx.env, { value = VLiteral lit; ty = proj_ty })),
+          original_sv_ty )
     | SeAdt (variant_id, fields), TAdt { id = adt_id; generics } ->
         (* Project over the field values *)
         let field_types =
@@ -502,7 +505,7 @@ let apply_eproj_loans_on_symbolic_expansion (span : Meta.span)
         in
         let fields =
           List.map2
-            (mk_eproj_loans_value_from_symbolic_value type_infos regions)
+            (mk_eproj_loans_value_from_symbolic_value ctx.env type_infos regions)
             fields field_types
         in
         (EAdt { borrow_proj = false; variant_id; fields }, original_sv_ty)
@@ -511,7 +514,8 @@ let apply_eproj_loans_on_symbolic_expansion (span : Meta.span)
         [%sanity_check] span (spc.sv_ty = ref_ty);
         (* Apply the projector to the borrowed value *)
         let child_av =
-          mk_eproj_loans_value_from_symbolic_value type_infos regions spc ref_ty
+          mk_eproj_loans_value_from_symbolic_value ctx.env type_infos regions
+            spc ref_ty
         in
         (* Check if the region is in the set of projected regions (note that
          * we never project over static regions) *)
@@ -526,9 +530,9 @@ let apply_eproj_loans_on_symbolic_expansion (span : Meta.span)
             if ty_has_regions_in_set regions ref_ty then Some bid else None
           in
           (ELoan (EIgnoredMutLoan (opt_bid, child_av)), ref_ty)
-    | SeSharedRef (_, _), TRef (_, _, RShared) ->
+    | SeSharedRef (_, sv), TRef (_, _, RShared) ->
         (* We ignore shared borrows/loans in the abstraction expressions *)
-        (EIgnored, proj_ty)
+        (EIgnored (Some (ctx.env, mk_tvalue_from_symbolic_value sv)), proj_ty)
     | _ -> [%craise] span "Unreachable"
   in
   { value; ty }

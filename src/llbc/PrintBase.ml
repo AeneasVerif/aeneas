@@ -1,8 +1,6 @@
 include Charon.PrintUtils
-include Charon.PrintTypes
-include Charon.PrintLlbcAst
-open Charon.PrintTypes
-open Charon.PrintExpressions
+include Charon.Print
+include Charon.Print.Llbc
 open Types
 open Values
 open ValuesUtils
@@ -123,8 +121,6 @@ let bool_to_string (b : bool) : string = if b then "true" else "false"
 
 (** Pretty-printing for values *)
 module Values = struct
-  include Charon.PrintValues
-
   let symbolic_value_id_to_pretty_string (id : SymbolicValueId.id) : string =
     "s@" ^ SymbolicValueId.to_string id
 
@@ -708,7 +704,7 @@ module Values = struct
     | ESymbolic (pm, proj) ->
         eproj_to_string ~with_ended env proj |> add_proj_marker pm
     | EValue (_, mv) -> "@mvalue(" ^ tvalue_to_string ~span env mv ^ ")"
-    | EIgnored -> "(_ : " ^ ty_to_string env v.ty ^ ")"
+    | EIgnored _ -> "(_ : " ^ ty_to_string env v.ty ^ ")"
     | EMutBorrowInput x ->
         "@mut_input("
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr x

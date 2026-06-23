@@ -575,3 +575,14 @@ fn as_radix_minimized() {
         i += 1;
     }
 }
+
+// Combination of a loop with a single break and a single function call.
+// Used to trigger a bug where the fresh region abstractions would not see their
+// kind updated from [FunCall] to [Loop].
+fn single_break(d: &[u8]) {
+    loop {
+        if d[0] == 0 {
+            break;
+        }
+    }
+}

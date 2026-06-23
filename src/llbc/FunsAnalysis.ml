@@ -32,17 +32,53 @@ type fun_info = {
 }
 [@@deriving show]
 
-(** Various information about a module's functions *)
-type modules_funs_info = fun_info FunDeclId.Map.t
+(** Various information about a module's functions and trait methods. *)
+type modules_funs_info = { infos : fun_info FunOrMethodId.Map.t }
+[@@deriving show]
+
+let lookup_fun_info (infos : modules_funs_info) (id : FunOrMethodId.id) :
+    fun_info option =
+  FunOrMethodId.Map.find_opt id infos.infos
+
+let fun_or_method_id_of_fn_ptr (kind : fn_ptr_kind) : FunOrMethodId.id option =
+  match kind with
+  | FunId (FRegular id) -> Some (FunOrMethodId.Fun id)
+  | TraitMethod (trait_ref, method_id) ->
+      Some (FunOrMethodId.of_trait_method trait_ref method_id)
+  | FunId (FBuiltin _) -> None
+
+let lookup_fun_decl_info (infos : modules_funs_info) (id : FunDeclId.id) :
+    fun_info option =
+  lookup_fun_info infos (FunOrMethodId.Fun id)
+
+let lookup_fn_ptr_info (infos : modules_funs_info) (kind : fn_ptr_kind) :
+    fun_info option =
+  Option.bind (fun_or_method_id_of_fn_ptr kind) (lookup_fun_info infos)
 
 let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     modules_funs_info =
-  let fmt_env = Charon.PrintLlbcAst.Crate.crate_to_fmt_env m in
-  let infos = ref FunDeclId.Map.empty in
-  let register_info (id : FunDeclId.id) (info : fun_info) : unit =
-    assert (not (FunDeclId.Map.mem id !infos));
-    infos := FunDeclId.Map.add id info !infos
+  let fmt_env = Charon.Print.crate_to_fmt_env m in
+  let infos = ref { infos = FunOrMethodId.Map.empty } in
+  let register_info (id : FunOrMethodId.id) (info : fun_info) : unit =
+    assert (not (FunOrMethodId.Map.mem id !infos.infos));
+    infos := { infos = FunOrMethodId.Map.add id info !infos.infos }
   in
+  let register_fun_decl_info (id : FunDeclId.id) (info : fun_info) : unit =
+    register_info (FunOrMethodId.Fun id) info
+  in
+  let register_trait_method_info (trait_decl_id : TraitDeclId.id)
+      (method_id : Types.TraitMethodId.id) : unit =
+    register_info
+      (FunOrMethodId.Method (trait_decl_id, method_id))
+      { can_fail = true; stateful = false; can_diverge = false; is_rec = false }
+  in
+
+  TraitDeclId.Map.iter
+    (fun trait_decl_id (trait_decl : trait_decl) ->
+      Types.TraitMethodId.Map.iter
+        (fun method_id _ -> register_trait_method_info trait_decl_id method_id)
+        trait_decl.methods)
+    m.trait_decls;
 
   (* Analyze a group of mutually recursive functions.
    * As the functions can call each other, we compute the same information
@@ -60,7 +96,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     let can_diverge = ref false in
     let is_rec = ref false in
     let group_has_builtin_info = ref false in
-    let name_matcher_ctx : LlbcAst.block Charon.NameMatcher.ctx =
+    let name_matcher_ctx : Charon.NameMatcher.ctx =
       Charon.NameMatcher.ctx_from_crate m
     in
 
@@ -79,7 +115,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     let visit_fun (f : fun_decl) : unit =
       [%ltrace
         "Analyzing fun:\n"
-        ^ Charon.PrintTypes.name_to_string fmt_env f.item_meta.name];
+        ^ Charon.Print.name_to_string fmt_env f.item_meta.name];
       let obj =
         object (self)
           inherit [_] iter_statement as super
@@ -87,12 +123,13 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
           method maybe_stateful b = stateful := !stateful || b
           method! visit_statement _ st = super#visit_statement st.span st
 
+          (* Custom function called by hand, this isn't visit_fun_decl_id! *)
           method visit_fid span id =
             if FunDeclId.Set.mem id fun_ids then (
               can_diverge := true;
               is_rec := true)
             else
-              let info = FunDeclId.Map.find_opt id !infos in
+              let info = lookup_fun_decl_info !infos id in
               let info =
                 [%unwrap_opt_span] (Some span) info
                   "The function called here is missing from the crate \
@@ -109,7 +146,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
 
           method! visit_rvalue env rv =
             match rv with
-            | Use (Constant { kind = CTraitConst _; _ }) ->
+            | Use (Constant { kind = CTraitConst _; _ }, _) ->
                 (* We consider that trait constants can fail, similarly to
                    trait methods. *)
                 self#may_fail true
@@ -120,8 +157,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
             | Len _
             | NullaryOp _
             | RawPtr _
-            | Repeat _
-            | ShallowInitBox _ -> ()
+            | Repeat _ -> ()
             | RvRef ({ kind = PlaceGlobal gref; _ }, _, _) -> (
                 (* A reference to a global: propagate can_fail.
 
@@ -135,7 +171,9 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
                 in
                 match builtin_info with
                 | Some info -> self#may_fail info.can_fail
-                | None -> self#visit_fid env global.init)
+                | None ->
+                    self#visit_fid env
+                      (Option.get (init_fun_id_of_global global)))
             | UnaryOp (uop, _) -> can_fail := unop_can_fail uop || !can_fail
             | BinaryOp (bop, _, _) ->
                 can_fail := binop_can_fail bop || !can_fail
@@ -176,14 +214,22 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
       let has_builtin_info = builtin_info <> None in
       group_has_builtin_info := !group_has_builtin_info || has_builtin_info;
       match f.body with
-      | None ->
+      | StructuredBody body -> obj#visit_block body.body.span body.body
+      | TargetDispatchBody targets ->
+          (* get_target can fail, and so can each target function *)
+          obj#may_fail true;
+          (* Also propagate effects from the target implementations *)
+          List.iter
+            (fun ((_target_name : string), (fdr : Types.fun_decl_ref)) ->
+              obj#visit_fid f.item_meta.span fdr.id)
+            targets
+      | _ ->
           let info_can_fail =
             match builtin_info with
             | None -> true
             | Some { can_fail } -> can_fail
           in
           obj#may_fail info_can_fail
-      | Some body -> obj#visit_block body.body.span body.body
     in
     List.iter visit_fun d;
     (* We need to know if the declaration group contains a global - note that
@@ -227,7 +273,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     let fun_ids = List.map (fun (d : fun_decl) -> d.def_id) funs in
     let fun_ids = FunDeclId.Set.of_list fun_ids in
     let info = analyze_fun_decls fun_ids funs in
-    List.iter (fun (f : fun_decl) -> register_info f.def_id info) funs
+    List.iter (fun (f : fun_decl) -> register_fun_decl_info f.def_id info) funs
   in
 
   let rec analyze_decl_groups (decls : declaration_group list) : unit =
@@ -238,13 +284,13 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     | FunGroup decl :: decls' ->
         (try analyze_fun_decl_group (g_declaration_group_to_list decl)
          with CFailure error ->
-           let fmt_env = Charon.PrintLlbcAst.Crate.crate_to_fmt_env m in
+           let fmt_env = Charon.Print.crate_to_fmt_env m in
            let decls = Charon.GAstUtils.g_declaration_group_to_list decl in
            let decl_id_to_string (id : FunDeclId.id) : string =
              match FunDeclId.Map.find_opt id m.fun_decls with
              | None -> show_fun_decl_id id
              | Some d ->
-                 Charon.PrintTypes.name_to_string fmt_env d.item_meta.name
+                 Charon.Print.name_to_string fmt_env d.item_meta.name
                  ^ " ("
                  ^ span_to_string d.item_meta.span
                  ^ ")"
@@ -262,7 +308,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
             declarations or functions and traits, for instance) are not \
             supported yet: ["
           ^ String.concat ", "
-              (List.map Charon.PrintGAst.item_id_to_string
+              (List.map Charon.Print.item_id_to_string
                  (Charon.GAstUtils.g_declaration_group_to_list ids))
           ^ "]")
   in

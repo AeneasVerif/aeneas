@@ -3,7 +3,7 @@ open Lake DSL
 
 -- Important: mathlib imports std4 and quote4: we mustn't add a `require std4` line
 require mathlib from git
-  "https://github.com/leanprover-community/mathlib4.git" @ "v4.28.0-rc1"
+  "https://github.com/leanprover-community/mathlib4.git" @ "v4.30.0-rc2"
 
 package «aeneas» {}
 
@@ -20,7 +20,7 @@ private def notCI : Bool := run_io
 /-- Generate the `.ml` file listing the definitions supported by the standard library. -/
 lean_exe extract where
   root := `AeneasExtract
-  supportInterpreter := false
+  supportInterpreter := true
 
 /-- Extract verification documentation metadata as JSON. -/
 lean_exe doc_extract where

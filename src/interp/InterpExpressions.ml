@@ -97,8 +97,8 @@ let literal_to_tvalue (span : Meta.span) (ty : literal_type) (cv : literal)
     (ctx : eval_ctx) : tvalue =
   (* Check the type while converting - we actually need some information
    * contained in the type *)
-  [%ltrace "- cv: " ^ Print.Values.literal_to_string cv];
-  let ptr_size = ctx.crate.target_information.target_pointer_size in
+  [%ltrace "- cv: " ^ Print.literal_to_string cv];
+  let min_ptr_size = get_target_min_ptr_size ctx.crate in
   match (ty, cv) with
   (* Scalar, boolean... *)
   | TBool, VBool v -> { value = VLiteral (VBool v); ty = TLiteral ty }
@@ -106,12 +106,12 @@ let literal_to_tvalue (span : Meta.span) (ty : literal_type) (cv : literal)
   | TInt int_ty, VScalar (SignedScalar (sv_ty, _) as sv) ->
       (* Check the type and the ranges *)
       [%sanity_check] span (int_ty = sv_ty);
-      [%sanity_check] span (check_scalar_value_in_range ptr_size sv);
+      [%sanity_check] span (check_scalar_value_in_range min_ptr_size sv);
       { value = VLiteral (VScalar sv); ty = TLiteral ty }
   | TUInt int_ty, VScalar (UnsignedScalar (sv_ty, _) as sv) ->
       (* Check the type and the ranges *)
       [%sanity_check] span (int_ty = sv_ty);
-      [%sanity_check] span (check_scalar_value_in_range ptr_size sv);
+      [%sanity_check] span (check_scalar_value_in_range min_ptr_size sv);
       { value = VLiteral (VScalar sv); ty = TLiteral ty }
   (* Remaining cases (invalid) *)
   | _, _ -> [%craise] span "Improperly typed constant value"
@@ -249,8 +249,8 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
                    simplify the given back value to unit when translating
                    to pure) so we can simply ignore them. *)
                 {
-                  input = Some (mk_eignored mk_unit_ty);
-                  output = Some { value = EIgnored; ty };
+                  input = Some (mk_eignored None mk_unit_ty);
+                  output = Some { value = EIgnored None; ty };
                 }
               in
 
@@ -420,7 +420,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
                 ("Encountered an unsupported constant: "
                 ^ constant_expr_to_string ctx cv
                 ^ " : " ^ ty_to_string ctx cv.ty))
-      | CTraitConst (trait_ref, const_name) -> (
+      | CTraitConst (trait_ref, const_id) -> (
           [%ldebug "trait constant"];
           let ctx0 = ctx in
           (* Simply introduce a fresh symbolic value.
@@ -463,7 +463,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
                   ( ctx0,
                     None,
                     value_as_symbolic span sval.value,
-                    SymbolicAst.VaTraitConstValue (trait_ref, const_name),
+                    SymbolicAst.VaTraitConstValue (trait_ref, const_id),
                     e )
               in
               (borrow, ctx, cf)
@@ -476,7 +476,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
                   ( ctx0,
                     None,
                     value_as_symbolic span v.value,
-                    SymbolicAst.VaTraitConstValue (trait_ref, const_name),
+                    SymbolicAst.VaTraitConstValue (trait_ref, const_id),
                     e )
               in
               (v, ctx, cf))
@@ -617,8 +617,7 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
     * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Evaluate the operand *)
   let v, ctx, cc = eval_operand config span op ctx in
-  let ptr_size = ctx.crate.target_information.target_pointer_size in
-  (* Apply the unop *)
+  let min_ptr_size = get_target_min_ptr_size ctx.crate in
   let r =
     match (unop, v.value) with
     | Not, VLiteral (VBool b) -> Ok { v with value = VLiteral (VBool (not b)) }
@@ -629,7 +628,9 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
         let int_ty = get_ty i in
         let x =
           if integer_type_is_signed int_ty then Z.of_int (-1)
-          else scalar_max ptr_size int_ty
+          else
+            let ptr_size = get_target_ptr_size span ctx.crate in
+            scalar_max ptr_size int_ty
         in
         let value = Z.sub x (get_val i) in
         Ok
@@ -637,10 +638,11 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
             v with
             value =
               VLiteral
-                (VScalar (Result.get_ok (mk_scalar ptr_size int_ty value)));
+                (VScalar (Result.get_ok (mk_scalar min_ptr_size int_ty value)));
           }
     | Neg OPanic, VLiteral (VScalar sv) -> (
         let i = Z.neg (get_val sv) in
+        let ptr_size = get_target_ptr_size span ctx.crate in
         match mk_scalar ptr_size (get_ty sv) i with
         | Error _ -> Error EPanic
         | Ok sv -> Ok { v with value = VLiteral (VScalar sv) })
@@ -650,6 +652,7 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
         let src_ty, tgt_ty = (literal_as_integer src, literal_as_integer tgt) in
         [%sanity_check] span (src_ty = get_ty sv);
         let i = get_val sv in
+        let ptr_size = get_target_ptr_size span ctx.crate in
         match mk_scalar ptr_size tgt_ty i with
         | Error _ -> Error EPanic
         | Ok sv ->
@@ -661,6 +664,7 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
         (* Cast bool -> int *)
         let tgt_ty = literal_as_integer tgt in
         let i = Z.of_int (if sv then 1 else 0) in
+        let ptr_size = get_target_ptr_size span ctx.crate in
         match mk_scalar ptr_size tgt_ty i with
         | Error _ -> Error EPanic
         | Ok sv ->
@@ -1002,7 +1006,6 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
     (* For the non-equality operations, the input values are necessarily scalars *)
     match (v1.value, v2.value) with
     | VLiteral (VScalar sv1), VLiteral (VScalar sv2) -> begin
-        let ptr_size = ctx.crate.target_information.target_pointer_size in
         let sv1_value, sv2_value = (get_val sv1, get_val sv2) in
         let sv1_int_ty, sv2_int_ty = (get_ty sv1, get_ty sv2) in
         (* There are binops which require the two operands to have the same
@@ -1035,16 +1038,23 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
               match binop with
               | Div OPanic ->
                   if sv2_value = Z.zero then Error ()
-                  else mk_scalar ptr_size sv1_int_ty (Z.div sv1_value sv2_value)
+                  else
+                    let ptr_size = get_target_ptr_size span ctx.crate in
+                    mk_scalar ptr_size sv1_int_ty (Z.div sv1_value sv2_value)
               | Rem OPanic ->
                   (* See [https://github.com/ocaml/Zarith/blob/master/z.mli] *)
                   if sv2_value = Z.zero then Error ()
-                  else mk_scalar ptr_size sv1_int_ty (Z.rem sv1_value sv2_value)
+                  else
+                    let ptr_size = get_target_ptr_size span ctx.crate in
+                    mk_scalar ptr_size sv1_int_ty (Z.rem sv1_value sv2_value)
               | Add OPanic ->
+                  let ptr_size = get_target_ptr_size span ctx.crate in
                   mk_scalar ptr_size sv1_int_ty (Z.add sv1_value sv2_value)
               | Sub OPanic ->
+                  let ptr_size = get_target_ptr_size span ctx.crate in
                   mk_scalar ptr_size sv1_int_ty (Z.sub sv1_value sv2_value)
               | Mul OPanic ->
+                  let ptr_size = get_target_ptr_size span ctx.crate in
                   mk_scalar ptr_size sv1_int_ty (Z.mul sv1_value sv2_value)
               | BitXor -> raise Unimplemented
               | BitAnd -> raise Unimplemented
@@ -1418,7 +1428,7 @@ let eval_rvalue_not_global (config : config) (span : Meta.span)
   let wrap_in_result (v, ctx, cc) = (Ok v, ctx, cc) in
   (* Delegate to the proper auxiliary function *)
   match rvalue with
-  | Use op -> wrap_in_result (eval_operand config span op ctx)
+  | Use (op, _) -> wrap_in_result (eval_operand config span op ctx)
   | RvRef (p, bkind, _) ->
       wrap_in_result (eval_rvalue_ref config span p bkind ctx)
   | UnaryOp (unop, op) -> eval_unary_op config span unop op ctx

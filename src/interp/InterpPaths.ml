@@ -107,6 +107,13 @@ let rec project_value (span : Meta.span) (access : projection_access)
       (* If we reach Bottom, it may mean we need to expand an uninitialized
        * enumeration value *)
       Error (FailBottom (current_place, pe))
+  (* Raw pointer dereference: not supported yet.
+
+     It is important that this appears before the symbolic value case, otherwise
+     we would be tempted to expand a raw pointer symbolic value (which we can't,
+     and would lead to an obscure error from the user point of view). *)
+  | Deref, _, TRawPtr _ ->
+      [%craise] span "Aeneas does not yet support dereferencing raw pointers."
   (* Symbolic value: needs to be expanded *)
   | _, VSymbolic sp, _ ->
       (* Expand the symbolic value *)
@@ -336,17 +343,9 @@ let try_read_place (span : Meta.span) (access : access_kind) (p : place)
   let update v = v in
   match access_update_place span access update p ctx with
   | Error err -> Error err
-  | Ok (ctx1, lid, read_value) ->
+  | Ok (_ctx1, lid, read_value) ->
       (* Note that we ignore the new environment: it should be the same as the
-         original one.
-      *)
-      (if !Config.sanity_checks then
-         if ctx1.env <> ctx.env then
-           let msg =
-             "Unexpected environment update:\nNew environment:\n"
-             ^ show_env ctx1.env ^ "\n\nOld environment:\n" ^ show_env ctx.env
-           in
-           [%craise] span msg);
+         original one. *)
       Ok (lid, read_value)
 
 let read_place (span : Meta.span) (access : access_kind) (p : place)

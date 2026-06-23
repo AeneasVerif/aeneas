@@ -375,10 +375,8 @@ partial def Script.toSyntax (script : Script) : MetaM (Array Syntax.Tactic) := d
     let s1 ← toSyntax s1
     pure (s0 ++ s1)
 
-attribute [step_simps] Aeneas.Std.bind_assoc_eq
-
 inductive TargetKind where
-| bind (fn : Name)
+| bind (names : Array (Option Name))
 | switch (info : Bifurcation.Info)
 | result
 | unknown
@@ -397,10 +395,9 @@ def analyzeTarget : TacticM TargetKind := do
       let e ← Utils.normalizeLetBindings program
       if let .const ``Bind.bind .. := e.getAppFn then
         let #[_m, _self, _α, _β, _value, cont] := e.getAppArgs
-          | throwError "Expected bind to have 4 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
-        Utils.lambdaOne cont fun x _ => do
-          let name ← x.fvarId!.getUserName
-          pure (.bind name)
+          | throwError "Expected bind to have 6 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
+        let names ← Step.getPostNames cont
+        pure (.bind names)
       else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
         pure (.switch bfInfo)
       else
@@ -495,8 +492,7 @@ where
         else pure (some (fuel - 1))
     let targetKind ← analyzeTarget
     match targetKind with
-    | .bind varName => do
-      let names := if varName.hasMacroScopes then #[] else #[some varName]
+    | .bind names => do
       let (info, mainGoalAndState) ← onBind cfg names ss
       /- Continue, if necessary -/
       match mainGoalAndState with
@@ -599,6 +595,7 @@ where
     match mvarId with
     | none => pure (info, mvarId)
     | some mvarId =>
+      setGoals [mvarId]
       /- Attempt to finish with a tactic -/
       -- TODO: don't use syntax
       -- TODO: use global options
@@ -643,6 +640,72 @@ where
               subgoals := #[(mvarId, none)] }
           pure info'
       pure (info ++ info', none)
+
+  /-- Process preconditions produced by step in the case of higher order spec theorems.
+      On those goals we attach the generated script under the associated `case` branch. -/
+  processPreconditions (cfg : Config) (fuel : Option Nat) (ss : Step.StepState)
+      (preconditions : Array (MVarId × Step.OptTask (Option Expr))) :
+      TacticM (Array (MVarId × Step.OptTask (Option Expr)) × Info ×
+        Array (TaskOrDone (Option Syntax.Tactic))) := do
+    let sorryStx ← `(tactic|· sorry)
+    if cfg.stepConfig.inferPost then
+      let mut remaining : Array (MVarId × Step.OptTask (Option Expr)) := #[]
+      let mut extra : Info := {}
+      let mut scriptEntries : Array (TaskOrDone (Option Syntax.Tactic)) := #[]
+      for (mvarId, proof) in preconditions do
+        match proof with
+        | .task y =>
+          -- Async proof in progress, keep as-is.
+          remaining := remaining.push (mvarId, proof)
+          scriptEntries := scriptEntries.push
+            (TaskOrDone.task (y.map fun (e : Option _) => if e.isNone then some sorryStx else none))
+        | .none =>
+          if ← mvarId.isAssigned then
+            continue
+          -- Check if this precondition contains a spec goal
+          -- (possibly under ∀ binders, e.g., ∀ y, mid y → f y ⦃ post ⦄).
+          let precTy ← instantiateMVars (← mvarId.getType)
+          let rec stripForall (e : Expr) : Expr :=
+            match e.consumeMData with
+            | .forallE _ _ body _ => stripForall body
+            | e => e
+          let innerTy := stripForall precTy
+          let isSpec := innerTy.consumeMData.withApp fun f args =>
+            f.isConstOf ``Std.WP.spec && args.size == 3
+          if isSpec then
+            let tag ← mvarId.getTag
+            let (subInfo, introNames) ← commitIfNoEx do
+              setGoals [mvarId]
+              let size ← getIntrosSize <$> mvarId.getType
+              let (introFVars, mvarId) ← mvarId.introNP size
+              -- Collect the user names while the fvars are still in scope.
+              let introNames ← mvarId.withContext do
+                introFVars.mapM fun fvar => fvar.getUserName
+              setGoals [mvarId]
+              let info ← traverseProgram cfg fuel ss
+              pure (info, introNames)
+            let subStx ← subInfo.script.toSyntax
+            let introStx : Array Syntax.Tactic ←
+              if !introNames.isEmpty then
+                let idents := introNames.map fun name =>
+                  mkIdent (if name.isInternal then `_ else name)
+                pure #[← `(tactic| intros $idents*)]
+              else pure #[]
+            let allTacs := introStx ++ subStx
+            let caseArgs := makeCaseArgs tag #[]
+            let caseTac ← `(tactic| case $caseArgs => $allTacs*)
+            scriptEntries := scriptEntries.push (TaskOrDone.mk (some caseTac))
+            extra := extra ++ { subInfo with script := .tacs #[] }
+          else
+            remaining := remaining.push (mvarId, proof)
+            scriptEntries := scriptEntries.push (TaskOrDone.mk (some sorryStx))
+      pure (remaining, extra, scriptEntries)
+    else
+      let scriptEntries : Array (TaskOrDone (Option Syntax.Tactic)) := preconditions.map fun (_, p) =>
+        match p with
+        | .none => TaskOrDone.mk (some sorryStx)
+        | .task y => TaskOrDone.task (y.map fun (e : Option _) => if e.isNone then some sorryStx else none)
+      pure (preconditions, {}, scriptEntries)
 
   onBind (cfg : Config) (names : Array (Option Name)) (ss : Step.StepState) : TacticM (Info × Option (MVarId × Step.StepState)) := do
     withTraceNode `Step (fun _ => pure m!"onBind ({names})") do
@@ -700,13 +763,22 @@ where
             match cfg.preconditionTac with
             | none => `(tactic| step $config with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩)
             | some tac => `(tactic| step $config with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩ by $(#[tac])*)
+      let (preconditions, extraInfo, preconditionsScript) ←
+        processPreconditions cfg fuel ss preconditions
+
+      /- After recursive processing, filter out unassigned vars that got assigned
+         (e.g., `?post` assigned by `inferPost` during recursive spec processing) -/
+      let unassignedVars ←
+        if cfg.stepConfig.inferPost then
+          unassignedVars.filterM fun mvarId => do
+            pure !(← mvarId.isAssigned)
+        else
+          pure unassignedVars
+
       let sorryStx ← `(tactic|· sorry)
       let unassignedVarsScript : Array (TaskOrDone (Option Syntax.Tactic)) :=
         unassignedVars.map fun _ => TaskOrDone.mk (some sorryStx)
-      let preconditionsScript : Array (TaskOrDone (Option Syntax.Tactic)) := preconditions.map fun (_, p) =>
-        match p with
-        | .none => TaskOrDone.mk (some sorryStx)
-        | .task y => TaskOrDone.task (y.map fun (e : Option _) => if e.isNone then some sorryStx else none)
+
       let preconditions ← preconditions.mapM fun (x, y) => do
         let y := match y with | .none => TaskOrDone.done .none | .task y => TaskOrDone.task y
         pure (x, some y)
@@ -714,8 +786,9 @@ where
       let info : Info := {
           script := .tacs (#[TaskOrDone.mk (some currTac)] ++ unassignedVarsScript ++ preconditionsScript),
           unassignedVars,
-          subgoals := preconditions,
+          subgoals := preconditions ++ extraInfo.subgoals,
         }
+      let info := { info with unassignedVars := info.unassignedVars ++ extraInfo.unassignedVars }
       pure (info, mainGoal)
     else
       let (info, mvarId) ← onFinish cfg (← getMainGoal)
@@ -1133,8 +1206,7 @@ example (l : List Nat) :
 /--
 info: Try this:
 
-  [apply]     simp only [step_simps]
-    let* ⟨ ⟩ ← core.num.U32.overflowing_add_eq.step_spec
+  [apply]   let* ⟨ ⟩ ← core.num.U32.overflowing_add_eq.step_spec
 -/
 #guard_msgs in
 example (x y : U32) :
@@ -1152,7 +1224,6 @@ _✝ : if ↑x + ↑y > UScalar.max UScalarTy.U32 then ↑x✝¹ + U32.size = �
 #guard_msgs in
 example (x y : U32) :
   (lift (core.num.U32.overflowing_add x y)) ⦃ (_, _) => False ⦄ := by
-  simp only [step_simps]
   step*
 
 /--
@@ -1189,9 +1260,8 @@ example {α : Type}
 error: unsolved goals
 f : Result (Bool × Bool)
 f_spec : f ⦃ x✝ x✝¹ => True ⦄
-x✝¹ x✝ : Bool
-_ : [> let(x✝¹, x✝) ← f <]
-_✝ : True
+x _✝ : Bool
+_ : [> let(x, _✝) ← f <]
 ⊢ False
 -/
 #guard_msgs in
@@ -1286,6 +1356,15 @@ set_option maxHeartbeats 800000 in
 example (a b : U32) (h : a = b) (hbnd : a.val + b.val ≤ U32.max) :
     letBindContradictionFn a b ⦃ r => r.val = a.val + b.val ⦄ := by
   unfold letBindContradictionFn
+  step*
+
+/- This is a regression test: at some point `step*` would get stuck on `match p with | (o, k) => match o with ...` -/
+example (f : Usize → Result Unit) (p : Option Usize × Usize) (h : p.1 = some 0#usize)
+    (hf : ∀ j, f j ⦃ _ => True ⦄) :
+    (let (o, _) := p
+     match o with
+     | none => ok ()
+     | some j => f j) ⦃ _ => True ⦄ := by
   step*
 
 end Examples

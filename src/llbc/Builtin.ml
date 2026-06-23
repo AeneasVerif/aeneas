@@ -86,7 +86,7 @@ module Sig = struct
   let mk_sig generics inputs output : bound_fun_sig =
     {
       item_binder_params = generics;
-      item_binder_value = { inputs; output; is_unsafe = false };
+      item_binder_value = { inputs; output; is_unsafe = false; abi = AbiRust };
     }
 
   (** [fn<T>(T) -> Box<T>] *)
@@ -217,7 +217,7 @@ type builtin_fun_info = {
 let mk_builtin_fun_info (raw : raw_builtin_fun_info) :
     builtin_fun_id * builtin_fun_info =
   let fun_id, fun_sig, can_fail, keep_types = raw in
-  let name = Charon.PrintTypes.builtin_fun_id_to_string fun_id in
+  let name = Charon.Print.builtin_fun_id_to_string fun_id in
   (fun_id, { fun_id; fun_sig; can_fail; name; keep_types })
 
 (** The list of builtin functions and all their information:

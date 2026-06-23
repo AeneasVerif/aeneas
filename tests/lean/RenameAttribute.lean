@@ -9,6 +9,9 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace rename_attribute
 
 /-- Trait declaration: [rename_attribute::BoolTrait]
@@ -24,19 +27,19 @@ structure BoolTest (Self : Type) where
 def BoolTrait.retTest.default {Self : Type} (self : Self) : Result Bool := do
   ok true
 
-/-- [rename_attribute::{rename_attribute::BoolTrait for bool}::get_bool]:
+/-- [rename_attribute::{impl rename_attribute::BoolTrait for bool}::get_bool]:
     Source: 'tests/src/rename_attribute.rs', lines 24:4-26:5
     Visibility: public -/
 def BoolImpl.getTest (self : Bool) : Result Bool := do
   ok self
 
-/-- [rename_attribute::{rename_attribute::BoolTrait for bool}::ret_true]:
+/-- [rename_attribute::{impl rename_attribute::BoolTrait for bool}::ret_true]:
     Source: 'tests/src/rename_attribute.rs', lines 23:0-27:1
     Visibility: public -/
 def BoolImpl.retTest (self : Bool) : Result Bool := do
   ok true
 
-/-- Trait implementation: [rename_attribute::{rename_attribute::BoolTrait for bool}]
+/-- Trait implementation: [rename_attribute::{impl rename_attribute::BoolTrait for bool}]
     Source: 'tests/src/rename_attribute.rs', lines 23:0-27:1 -/
 @[reducible]
 def BoolImpl : BoolTest Bool := {

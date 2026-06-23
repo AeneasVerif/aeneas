@@ -16,6 +16,7 @@ module TraitDeclId = T.TraitDeclId
 module TraitImplId = T.TraitImplId
 module TraitClauseId = T.TraitClauseId
 module Disambiguator = T.Disambiguator
+module TraitMethodId = T.TraitMethodId
 
 (** We redefine identifiers for loop: in {!Values}, the identifiers are global
     (they monotonically increase across functions) while in {!module:Pure} we
@@ -38,8 +39,11 @@ type float_type = T.float_type [@@deriving show, ord]
 type const_generic_var_id = T.const_generic_var_id [@@deriving show, ord]
 type trait_decl_id = T.trait_decl_id [@@deriving show, ord]
 type trait_impl_id = T.trait_impl_id [@@deriving show, ord]
+type trait_method_id = T.trait_method_id [@@deriving show, ord]
+type assoc_type_id = T.assoc_type_id [@@deriving show, ord]
+type assoc_const_id = T.assoc_const_id [@@deriving show, ord]
 type trait_clause_id = T.trait_clause_id [@@deriving show, ord]
-type trait_item_name = T.trait_item_name [@@deriving show, ord]
+type trait_item_name = A.trait_item_name [@@deriving show, ord]
 type global_decl_id = T.global_decl_id [@@deriving show, ord]
 type type_decl_id = TypeDeclId.id [@@deriving show, ord]
 type fun_decl_id = A.fun_decl_id [@@deriving show, ord]
@@ -131,6 +135,13 @@ type pure_builtin_fun_id =
       (** Temporary fix: the
           [core::result::{core::result::Result<@T, @E>}::unwrap] instantiated
           with mutable borrows - TODO: remove *)
+  | GetTarget
+      (** Returns the compilation target as a string.
+
+          Used to translate multi-target dispatch bodies: [TargetDispatchBody]
+          bodies generate a call to [get_target] and dispatch on the result. The
+          function is fallible and axiomatized; nothing can be deduced from its
+          output. *)
 [@@deriving show, ord]
 
 (* Builtin declarations coming from external libraries.
@@ -277,6 +288,12 @@ class ['self] iter_ty_base =
     method visit_trait_decl_id : 'env -> trait_decl_id -> unit = fun _ _ -> ()
     method visit_trait_impl_id : 'env -> trait_impl_id -> unit = fun _ _ -> ()
 
+    method visit_trait_method_id : 'env -> trait_method_id -> unit =
+      fun _ _ -> ()
+
+    method visit_assoc_type_id : 'env -> assoc_type_id -> unit = fun _ _ -> ()
+    method visit_assoc_const_id : 'env -> assoc_const_id -> unit = fun _ _ -> ()
+
     method visit_trait_clause_id : 'env -> trait_clause_id -> unit =
       fun _ _ -> ()
 
@@ -336,6 +353,15 @@ class ['self] map_ty_base =
       fun _ x -> x
 
     method visit_trait_impl_id : 'env -> trait_impl_id -> trait_impl_id =
+      fun _ x -> x
+
+    method visit_trait_method_id : 'env -> trait_method_id -> trait_method_id =
+      fun _ x -> x
+
+    method visit_assoc_type_id : 'env -> assoc_type_id -> assoc_type_id =
+      fun _ x -> x
+
+    method visit_assoc_const_id : 'env -> assoc_const_id -> assoc_const_id =
       fun _ x -> x
 
     method visit_trait_clause_id : 'env -> trait_clause_id -> trait_clause_id =
@@ -399,6 +425,15 @@ class virtual ['self] reduce_ty_base =
       fun _ _ -> self#zero
 
     method visit_trait_impl_id : 'env -> trait_impl_id -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_trait_method_id : 'env -> trait_method_id -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_assoc_type_id : 'env -> assoc_type_id -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_assoc_const_id : 'env -> assoc_const_id -> 'a =
       fun _ _ -> self#zero
 
     method visit_trait_clause_id : 'env -> trait_clause_id -> 'a =
@@ -481,6 +516,17 @@ class virtual ['self] mapreduce_ty_base =
     method visit_trait_impl_id : 'env -> trait_impl_id -> trait_impl_id * 'a =
       fun _ x -> (x, self#zero)
 
+    method visit_trait_method_id :
+        'env -> trait_method_id -> trait_method_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_assoc_type_id : 'env -> assoc_type_id -> assoc_type_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_assoc_const_id : 'env -> assoc_const_id -> assoc_const_id * 'a
+        =
+      fun _ x -> (x, self#zero)
+
     method visit_trait_clause_id :
         'env -> trait_clause_id -> trait_clause_id * 'a =
       fun _ x -> (x, self#zero)
@@ -521,8 +567,7 @@ type ty =
     (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
   | TLiteral of literal_type
   | TArrow of ty * ty
-  | TTraitType of trait_ref * string
-      (** The string is for the name of the associated type *)
+  | TTraitType of trait_ref * assoc_type_id
   | TNever
   | TDynTrait of dyn_predicate
   | TError
@@ -569,7 +614,7 @@ and generic_params = {
 
 and trait_type_constraint = {
   trait_ref : trait_ref;
-  type_name : trait_item_name;
+  type_id : assoc_type_id;
   ty : ty;
 }
 
@@ -597,6 +642,12 @@ and binop =
   | Shl of overflow_mode * integer_type * integer_type
   | Shr of overflow_mode * integer_type * integer_type
   | Cmp of integer_type
+  | BoolOr
+      (** This doesn't exist in the MIR because && and || are elaborated to lazy
+          boolean operations. We introduce || in the pure code to be able to
+          reconstruct assertions of the shape [assert!(b0 || b1)]. Note that we
+          do not introduce && because we can translate an [assert! (b0 && b1)]
+          to [assert b0; assert b1]. *)
 
 and builtin_impl_data =
   | BuiltinCopy
@@ -1162,9 +1213,7 @@ and cast_kind =
 
 and fn_ptr_kind =
   | FunId of llbc_fun_id
-  | TraitMethod of trait_ref * string * fun_decl_id
-      (** The fun decl id is not really needed and only provided for convenience
-          purposes *)
+  | TraitMethod of trait_ref * trait_method_id
 
 (** A function id for a non-builtin function.
 
@@ -1204,7 +1253,7 @@ and qualif_id =
   | ScalarValProj of integer_type
       (** Projector to the mathematical integer value of a scalar type (e.g.,
           [UScalar.val : UScalar ty -> Nat]) *)
-  | TraitConst of trait_ref * string  (** A trait associated constant *)
+  | TraitConst of trait_ref * assoc_const_id  (** A trait associated constant *)
   | MkDynTrait of trait_ref  (** Dyn trait constructor *)
   | LoopOp  (** Loop fixed-point operator *)
 
@@ -1819,6 +1868,17 @@ type global_decl = {
 }
 [@@deriving show]
 
+type trait_method = {
+  method_id : trait_method_id;
+  item_name : trait_item_name;
+  item_meta : T.item_meta;
+  signature : fun_sig;
+  (* The signature of the method. Its [generic_params] contain the method
+     generics; the signature can refer to both trait and method generics. *)
+  default : fun_decl_ref option binder;
+}
+[@@deriving show]
+
 type trait_decl = {
   def_id : trait_decl_id;
   name : string;
@@ -1836,9 +1896,9 @@ type trait_decl = {
   preds : predicates;
   parent_clauses : trait_param list;
   llbc_parent_clauses : Types.trait_param list;
-  consts : (trait_item_name * ty) list;
-  types : trait_item_name list;
-  methods : (trait_item_name * fun_decl_ref binder) list;
+  consts : (assoc_const_id * trait_item_name * ty) list;
+  types : (assoc_type_id * trait_item_name) list;
+  methods : trait_method list;
 }
 [@@deriving show]
 
@@ -1861,8 +1921,8 @@ type trait_impl = {
           simplification of types like boxes and references. *)
   preds : predicates;
   parent_trait_refs : trait_ref list;
-  consts : (trait_item_name * global_decl_ref) list;
-  types : (trait_item_name * ty) list;
-  methods : (trait_item_name * fun_decl_ref binder) list;
+  consts : (assoc_const_id * trait_item_name * global_decl_ref) list;
+  types : (assoc_type_id * trait_item_name * ty) list;
+  methods : (trait_method_id * trait_item_name * fun_decl_ref binder) list;
 }
 [@@deriving show]

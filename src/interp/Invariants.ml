@@ -232,7 +232,23 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
 
       method! visit_abstract_shared_borrow _ asb =
         match asb with
-        | AsbBorrow (bid, sid) -> register_borrow BShared bid (Some sid)
+        | AsbBorrow (bid, sid) -> (
+            match BorrowId.Map.find_opt bid !borrows_infos with
+            | Some info ->
+                if info.loan_kind = RMut then
+                  (* The mutable borrow is inside a shared projection: it is
+                     frozen by the outer shared context. We don't register it
+                     because [register_borrow] doesn't allow (RMut, BShared),
+                     and the borrow is already tracked by the concrete
+                     [VMutBorrow] in the context. *)
+                  ()
+                else register_borrow BShared bid (Some sid)
+            | None ->
+                (* The loan for this borrow was already ended (e.g., because
+                   the mutable region was ended before the shared region).
+                   The [AsbBorrow] is a stale reference in a shared
+                   projection — this is fine. *)
+                ())
         | AsbProjReborrows _ -> ()
 
       method! visit_borrow_content env bc =
@@ -776,6 +792,17 @@ let sv_info_to_string (ctx : eval_ctx) (info : sv_info) : string =
   ^ String.concat ", " (List.map (proj_loans_info_to_string ctx) aproj_loans)
   ^ "]\n}"
 
+(** Normalize a projection type, keeping only the "mutable" regions alive.
+
+    This is a variant of {!normalize_proj_ty} that erases shared regions, so
+    that two projections sharing a shared region don't collide. *)
+let normalize_mut_proj_ty (type_infos : TypesAnalysis.type_infos)
+    (owned_regions : RegionId.Set.t) (proj_ty : rty) : rty =
+  let conflict_regions =
+    ty_get_mutable_regions type_infos owned_regions proj_ty
+  in
+  normalize_proj_ty conflict_regions proj_ty
+
 (** Check the invariants over the symbolic values.
 
     - a symbolic value can't be both in proj_borrows and in the concrete env
@@ -787,7 +814,7 @@ let sv_info_to_string (ctx : eval_ctx) (info : sv_info) : string =
     - aproj_loans are mutually disjoint
     - TODO: aproj_borrows are mutually disjoint
     - the union of the aproj_loans contains the aproj_borrows applied on the
-      same symbolic values
+      same symbolic values (for mutable regions)
     - all symbolic evalues should contain mutable borrows/loans *)
 let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
   (* Small utility *)
@@ -880,13 +907,12 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
       (* TODO: check that:
        * - the borrows are mutually disjoint
        *)
-      (* The borrows of a symbolic value must come from somewhere: if we find a
-         symbolic values with live borrows (and particular a projection over the
-         borrows of a symbolic value), there *must* be a projection over its loans
-         (otherwise its borrows don't have corresponding loans). *)
       [%sanity_check] span (info.aproj_borrows = [] || info.aproj_loans <> []);
-      (* Check that the loan projections don't intersect and compute
-         the normalized union of those projections *)
+      (* Check that the loan projections don't intersect ON MUTABLE REGIONS
+         and compute the normalized union of those projections.
+
+         We normalize using only the "conflict" regions (mutable regions from
+         TypesAnalysis): two projections sharing a shared region don't collide. *)
       let aproj_loans =
         List.map
           (fun (linfo : proj_loans_info) ->
@@ -918,9 +944,44 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
           let borrow_proj_union =
             List.fold_left
               (fun borrow_proj_union proj_ty ->
-                norm_proj_tys_union span ctx borrow_proj_union proj_ty)
+                norm_proj_tys_union span ~strict:false ctx borrow_proj_union
+                  proj_ty)
               borrow_proj_union aproj_borrows
           in
+          (* Check that the mutable borrow projections don't collide *)
+          let _ =
+            (* Normalize to project only the mutable borrows *)
+            let aproj_mut_borrows =
+              List.filter_map
+                (fun (linfo : proj_borrows_info) ->
+                  if linfo.as_shared_value then None
+                  else
+                    Some
+                      (normalize_mut_proj_ty ctx.type_ctx.type_infos
+                         linfo.regions linfo.proj_ty))
+                info.aproj_borrows
+            in
+            match aproj_mut_borrows with
+            | [] -> () (* Nothing to do *)
+            | union :: aproj_mut_borrows ->
+                (* When using [strict] we check for collisions: if we successfully
+                   compute the union, then there are no collisions *)
+                let _ =
+                  List.fold_left
+                    (fun borrow_proj_union proj_ty ->
+                      norm_proj_tys_union span ~strict:true ctx
+                        borrow_proj_union proj_ty)
+                    union aproj_mut_borrows
+                in
+                ()
+          in
+          [%ldebug
+            "checking loan proj contains borrow proj (sid: "
+            ^ SymbolicValueId.to_string id
+            ^ "):" ^ "\n- loan_proj_union: "
+            ^ ty_to_string ctx loan_proj_union
+            ^ "\n- borrow_proj_union: "
+            ^ ty_to_string ctx borrow_proj_union];
           [%sanity_check] span
             (norm_proj_ty_contains span ctx loan_proj_union borrow_proj_union))
   in

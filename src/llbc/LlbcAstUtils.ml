@@ -15,6 +15,29 @@ end
 module FunIdMap = Collections.MakeMap (FunIdOrderedType)
 module FunIdSet = Collections.MakeSet (FunIdOrderedType)
 
+let body_as_body = Charon.LlbcAstUtils.body_as_structured
+
+let body_as_body_exn file line f =
+  match body_as_body f with
+  | Some body -> body
+  | None -> Errors.craise_opt_span file line None "Not a LLBC body"
+
+let body_is_known (b : body) : bool = Option.is_some (body_as_body b)
+
+let body_as_target_dispatch (b : body) :
+    (string * Types.fun_decl_ref) list option =
+  match b with
+  | TargetDispatchBody targets -> Some targets
+  | _ -> None
+
+let body_is_target_dispatch (b : body) : bool =
+  Option.is_some (body_as_target_dispatch b)
+
+(** A function body is translatable if it is either a structured body (normal
+    case) or a target dispatch body (multi-target). *)
+let body_is_translatable (b : body) : bool =
+  body_is_known b || body_is_target_dispatch b
+
 let lookup_fun_sig (fun_id : fun_id) (fun_decls : fun_decl FunDeclId.Map.t) :
     bound_fun_sig =
   match fun_id with
@@ -37,12 +60,7 @@ let crate_get_opaque_non_builtin_decls (k : crate) (filter_builtin : bool)
   let open ExtractBuiltin in
   let ctx = Charon.NameMatcher.ctx_from_crate k in
   let is_opaque_fun (d : fun_decl) : bool =
-    d.body = None
-    (* Something to pay attention to: we must ignore trait method *declarations*
-       (which don't have a body but must not be considered as opaque) *)
-    && (match d.src with
-       | TraitDeclItem (_, _, false) -> false
-       | _ -> true)
+    (not (body_is_known d.body))
     && ((not filter_builtin)
        || (not
              (NameMatcherMap.mem ctx d.item_meta.name (builtin_globals_map ())))
@@ -66,15 +84,48 @@ let crate_has_opaque_non_builtin_decls (k : crate) (filter_builtin : bool)
   crate_get_opaque_non_builtin_decls k filter_builtin type_decls fun_decls
   <> ([], [])
 
-let name_to_pattern (span : Meta.span option) (ctx : 'a Charon.NameMatcher.ctx)
+(** Strip trailing [PeTarget] elements from a name.
+
+    Multi-target extraction appends [PeTarget] to per-target function names.
+    This element doesn't participate in pattern matching (the pattern generator
+    skips it), so we strip it before calling [name_to_pattern] to avoid
+    triggering its roundtrip assertion. *)
+let strip_target_suffix (n : name) : name =
+  match List.rev n with
+  | Types.PeTarget _ :: rest -> List.rev rest
+  | _ -> n
+
+let strip_target_or_instantiated_suffix (n : name) : name =
+  let rec strip_all (n : name) : name =
+    match n with
+    | (PeTarget _ | PeInstantiated _) :: rest -> strip_all rest
+    | _ -> List.rev n
+  in
+  strip_all (List.rev n)
+
+(** Extract and strip any trailing [PeTarget] element from a name, returning the
+    cleaned name and an optional target suffix string (with [-] replaced by
+    [_]). *)
+let extract_target_suffix (name : name) : name * string option =
+  match Collections.List.last name with
+  | PeTarget target ->
+      let target = String.concat "_" (String.split_on_char '-' target) in
+      (Collections.List.prefix (List.length name - 1) name, Some target)
+  | _ -> (name, None)
+
+let add_target_suffix (name : name) (target_suffix : string option) : name =
+  match target_suffix with
+  | None -> name
+  | Some target -> name @ [ PeTarget target ]
+
+let name_to_pattern (span : Meta.span option) (ctx : Charon.NameMatcher.ctx)
     (c : Charon.NameMatcher.to_pat_config) (n : name) =
+  let n = strip_target_suffix n in
   if !Config.fail_hard then Charon.NameMatcher.name_to_pattern ctx c n
   else
     try Charon.NameMatcher.name_to_pattern ctx c n
-    with Not_found ->
-      [%craise_opt_span] span
-        "Could not convert the name to a pattern because of missing \
-         definition(s)"
+    with Not_found | Assert_failure _ ->
+      [%craise_opt_span] span "Could not convert the name to a pattern"
 
 let name_with_crate_to_pattern_string (span : Meta.span option)
     (crate : LlbcAst.crate) (n : Types.name) : string =
@@ -89,16 +140,14 @@ let name_with_crate_to_pattern_string (span : Meta.span option)
   Charon.NameMatcher.pattern_to_string { tgt = TkPattern } pat
 
 let name_with_generics_to_pattern (span : Meta.span option)
-    (ctx : 'a Charon.NameMatcher.ctx) (c : Charon.NameMatcher.to_pat_config)
+    (ctx : Charon.NameMatcher.ctx) (c : Charon.NameMatcher.to_pat_config)
     (params : generic_params) (n : Charon.Types.name) (args : generic_args) =
   if !Config.fail_hard then
     Charon.NameMatcher.name_with_generics_to_pattern ctx c params n args
   else
     try Charon.NameMatcher.name_with_generics_to_pattern ctx c params n args
-    with Not_found ->
-      [%craise_opt_span] span
-        "Could not convert the name to a pattern because of missing \
-         definition(s)"
+    with Not_found | Assert_failure _ ->
+      [%craise_opt_span] span "Could not convert the name to a pattern"
 
 let name_with_generics_crate_to_pattern_string (span : Meta.span option)
     (crate : LlbcAst.crate) (n : Types.name) (params : Types.generic_params)
@@ -154,7 +203,7 @@ let block_has_break_continue_return (st : block) : bool =
 
 (** Compute the size of a function body - we count the number of statements and
     blocks *)
-let compute_body_size (f : fun_body) : int =
+let compute_body_size (b : body) : int =
   let size = ref 0 in
   let incr () = size := !size + 1 in
   let visitor =
@@ -170,12 +219,13 @@ let compute_body_size (f : fun_body) : int =
         super#visit_block env st
     end
   in
-  visitor#visit_block () f.body;
+  let () =
+    match b with
+    | StructuredBody body -> visitor#visit_block () body.body
+    | _ -> ()
+  in
   !size
 
 (** Compute the size of a function - we count the number of statements and
     blocks *)
-let compute_fun_decl_size (f : fun_decl) : int =
-  match f.body with
-  | None -> 0
-  | Some body -> compute_body_size body
+let compute_fun_decl_size (f : fun_decl) : int = compute_body_size f.body

@@ -1,6 +1,7 @@
 import Lean
 import Aeneas.Std.Global
 import Aeneas.Extract
+import AeneasMeta.BvEnumToBitVec
 
 namespace Aeneas
 
@@ -165,7 +166,8 @@ section Order
 open Lean.Order
 
 instance : PartialOrder (Result α) := inferInstanceAs (PartialOrder (FlatOrder .div))
-noncomputable instance : CCPO (Result α) := inferInstanceAs (CCPO (FlatOrder .div))
+noncomputable instance : CCPO (Result α) where
+  has_csup hc := FlatOrder.instCCPO (b := Result.div).has_csup hc
 noncomputable instance : MonoBind Result where
   bind_mono_left h := by
     cases h
@@ -178,6 +180,70 @@ noncomputable instance : MonoBind Result where
     · exact FlatOrder.rel.refl
 
 end Order
+
+/-- Aeneas-internal version of `Function.uncurry` for tuple destructuring in bind
+continuations. We use our own copy so that none of the `simp`/`step` attribute
+manipulations we perform on it impact user-written specs that use `Function.uncurry`
+directly.
+
+`uncurry` is purely internal to Aeneas' elaboration pipeline and should never
+be directly manipulated by the user. -/
+@[inline] def uncurry {α β γ} (f : α → β → γ) : α × β → γ :=
+  fun (a, b) => f a b
+
+@[simp, grind =] theorem uncurry_apply_pair {α β γ} (f : α → β → γ) (a : α) (b : β) :
+    uncurry f (a, b) = f a b :=
+  /- This proof is intentionally not `:= rfl`: `simp` would flag this lemma as
+     a reflexivity lemma, meaning it would not apply it but would directly use
+     `rfl` in the proofs, triggering unwanted whnf reductions in some calls
+     to `step`. -/
+  id rfl
+
+/- reduction lemmas for `uncurry` restricted to functions whose end
+result is `Prop`. Used by `step` to clean up spec post-conditions that
+arrived as `uncurry p x` but where the call site didn't destructure further.
+
+We restrict the final return type to `Prop` so the simp lemmas cannot fire on
+bind continuations. `uncurry_eq_prop` handles the base case and
+`uncurry_eq_prop_arrow` handles the curried case. -/
+
+theorem uncurry_eq_prop {α β} (x : α × β) (p : α → β → Prop) :
+    uncurry p x = p x.fst x.snd := by cases x; rfl
+
+theorem uncurry_eq_prop_arrow {α β σ} (x : α × β) (p : α → β → σ → Prop) :
+    uncurry p x = p x.fst x.snd := by cases x; rfl
+
+/- Allow `partial_fixpoint` to see through `uncurry` in bind continuations.
+This is needed because the custom `do` elaborator generates
+`e >>= uncurry fun a b => rest` for tuple-destructuring `let (a, b) ← e`. -/
+section
+open Lean.Order
+
+@[partial_fixpoint_monotone]
+theorem monotone_uncurry
+    {α : Type u} {β : Type v} {φ : Sort w} [PartialOrder φ]
+    {γ : Sort z} [PartialOrder γ]
+    (f : γ → α → β → φ)
+    (hmono : monotone f) :
+    monotone (fun x => uncurry (f x)) := by
+  intro x y hxy p
+  simp [uncurry]
+  exact monotone_apply p.2 _ (monotone_apply p.1 _ hmono) x y hxy
+
+@[partial_fixpoint_monotone]
+theorem monotone_uncurry_applied
+    {α : Type u} {β : Type v} {φ : Sort w} [PartialOrder φ]
+    {γ : Sort z} [PartialOrder γ]
+    (f : γ → α → β → φ) (p : α × β)
+    (hmono : monotone f) :
+    monotone (fun x => uncurry (f x) p) := by
+  intro x y hxy
+  simp [uncurry]
+  exact monotone_apply p.2 _ (monotone_apply p.1 _ hmono) x y hxy
+
+end
+
+attribute [simp, grind =] Function.uncurry_apply_pair
 
 /-!
 # Lift
@@ -242,6 +308,12 @@ def Option.ofResult {a : Type u} (x : Result a) :
   match x with
   | ok x => some x
   | _ => none
+
+/-!
+# bv_decide
+-/
+
+#define_bv_decide_toBitVec PUnit
 
 /-!
 # Dyn

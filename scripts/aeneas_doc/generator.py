@@ -2,7 +2,9 @@
 Aeneas Verification Documentation Generator.
 
 Reads:
-  1. doc-info JSON from Aeneas (Rust-side inventory)
+  1. translation.json from Aeneas (`aeneas -emit-json`) — the Aeneas-side source
+     connecting the Lean translation to the Rust source (functions, types, globals,
+     Lean names, Rust spans, opacity, ...). See `aeneas_doc/translation.py`.
   2. lean-doc JSON from AeneasDocExtract (Lean-side step theorems)
   3. Rust and Lean source files
 
@@ -16,6 +18,8 @@ import html as html_module
 from pathlib import Path
 from collections import defaultdict
 from typing import Optional
+
+from aeneas_doc.translation import load_translation_as_doc_info
 
 # ---------------------------------------------------------------------------
 # Data model
@@ -39,12 +43,13 @@ STATUS_LABELS = {
 
 
 class RustFunction:
-    """A Rust function extracted from LLBC doc-info."""
+    """A Rust function (from translation.json, adapted to the internal doc-info shape)."""
 
     def __init__(self, data: dict):
         self.def_id = data["def_id"]
         self.name_parts = data["name"]
         self.name_pattern = data["name_pattern"]
+        self.lean_name = data.get("lean_name")
         self.span = data.get("span")
         self.source_text = data.get("source_text")
         self.is_public = data.get("is_public", False)
@@ -150,12 +155,13 @@ class LeanDefinition:
 
 
 class RustType:
-    """A Rust type extracted from LLBC doc-info."""
+    """A Rust type (from translation.json, adapted to the internal doc-info shape)."""
 
     def __init__(self, data: dict):
         self.def_id = data["def_id"]
         self.name_parts = data["name"]
         self.name_pattern = data["name_pattern"]
+        self.lean_name = data.get("lean_name")
         self.kind = data.get("kind", "unknown")
         self.is_public = data.get("is_public", False)
         self.span = data.get("span")
@@ -182,12 +188,6 @@ class RustType:
 # Data loading
 # ---------------------------------------------------------------------------
 
-def load_doc_info(path: str) -> dict:
-    """Load the LLBC doc-info JSON."""
-    with open(path) as f:
-        return json.load(f)
-
-
 def load_lean_doc(path: str) -> dict:
     """Load the Lean doc extractor JSON."""
     with open(path) as f:
@@ -208,12 +208,13 @@ def parse_types(doc_info: dict) -> list:
 
 
 class RustGlobal:
-    """A Rust global constant/static extracted from LLBC doc-info."""
+    """A Rust global constant/static (from translation.json, adapted to the internal doc-info shape)."""
 
     def __init__(self, data: dict):
         self.def_id = data["def_id"]
         self.name_parts = data["name"]
         self.name_pattern = data["name_pattern"]
+        self.lean_name = data.get("lean_name")
         self.is_public = data.get("is_public", False)
         self.span = data.get("span")
         self.source_text = data.get("source_text")
@@ -328,6 +329,13 @@ def match_functions_to_theorems(functions: list, theorems: list):
 def _find_theorems_for(fn: 'RustFunction', thm_by_fun: dict,
                        thm_by_suffix: dict) -> list:
     """Find step theorems matching a Rust function."""
+    # Strategy 0: exact match on the Lean name reported by Aeneas in
+    # translation.json. This is the authoritative link (the step theorem's
+    # `function` field is exactly this Lean name), so prefer it.
+    lean_name = getattr(fn, "lean_name", None)
+    if lean_name and lean_name in thm_by_fun:
+        return thm_by_fun[lean_name]
+
     # Strategy 1: exact match on name_pattern converted to Lean-style
     lean_name = fn.name_pattern.replace("::", ".")
     if lean_name in thm_by_fun:
@@ -2442,7 +2450,7 @@ def generate_graph_page(functions: list, output_dir: Path):
 # ---------------------------------------------------------------------------
 
 def generate_docs(
-    doc_info_path: str,
+    translation_path: str,
     lean_doc_path: Optional[str],
     rust_src_dir: Optional[str],
     output_dir: str,
@@ -2453,8 +2461,10 @@ def generate_docs(
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    # Load data
-    doc_info = load_doc_info(doc_info_path)
+    # Load data: Aeneas' translation.json is the single Aeneas-side source,
+    # converted to the internal doc-info shape (reads Rust snippets from
+    # --rust-src when available).
+    doc_info = load_translation_as_doc_info(translation_path, rust_src_dir)
     crate_name = title or doc_info.get("crate_name", "Unknown Crate")
 
     global _CRATE_TITLE
@@ -2532,6 +2542,20 @@ def generate_docs(
     for ld in lean_definitions:
         if ld.rust_name:
             lean_rust_names_norm[_normalize_rust_name(ld.rust_name)].append(ld)
+
+    # Robust link via Lean name: translation.json reports each declaration's Lean
+    # name directly, so we can connect Rust decls to their Lean model definition by
+    # exact Lean name (independent of any rust_name string-format differences).
+    lean_def_by_name = {ld.name: ld for ld in lean_definitions}
+    for decl in list(functions) + list(globals_list):
+        ln = getattr(decl, "lean_name", None)
+        ld = lean_def_by_name.get(ln) if ln else None
+        if ld is None:
+            continue
+        if ld not in rust_to_lean[decl.name_pattern]:
+            rust_to_lean[decl.name_pattern].append(ld)
+        if ld.rust_fn is None and decl.name_pattern in rust_fn_map:
+            ld.rust_fn = rust_fn_map[decl.name_pattern]
 
     # Check for unmatched local Rust functions
     for fn in functions:

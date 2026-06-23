@@ -28,67 +28,58 @@ let texpr_to_string (ctx : extraction_ctx) =
 let extract_fun_decl_register_names (ctx : extraction_ctx)
     (has_decreases_clause : fun_decl -> bool) (def : pure_fun_translation) :
     extraction_ctx =
-  match def.f.src with
-  | TraitDeclItem (_, _, false) ->
-      (* Ignore the trait methods **declarations** (rem.: we do not ignore the trait
-         method implementations): we do not need to refer to them directly. We will
-         only use their type for the fields of the records we generate for the trait
-         declarations *)
-      ctx
-  | _ -> (
-      (* Use the builtin names if necessary *)
-      match def.f.builtin_info with
-      | Some info ->
-          (* Builtin function: register the filtering information, if there is *)
-          let ctx =
-            match info.keep_params with
-            | Some keep ->
-                {
-                  ctx with
-                  funs_filter_type_args_map =
-                    FunDeclId.Map.add def.f.def_id keep
-                      ctx.funs_filter_type_args_map;
-                }
-            | _ -> ctx
-          in
-          let ctx =
-            match info.keep_trait_clauses with
-            | Some keep ->
-                {
-                  ctx with
-                  funs_filter_trait_clauses_map =
-                    FunDeclId.Map.add def.f.def_id keep
-                      ctx.funs_filter_trait_clauses_map;
-                }
-            | _ -> ctx
-          in
-          let f = def.f in
-          let fun_id = (Pure.FunId (FRegular f.def_id), f.loop_id) in
-          ctx_add f.item_meta.span (FunId (FromLlbc fun_id)) info.extract_name
-            ctx
-      | None ->
-          (* Not builtin *)
-          (* Register the decrease clauses, if necessary *)
-          let register_decreases ctx def =
-            if has_decreases_clause def then
-              (* Add the termination measure *)
-              let ctx = ctx_add_termination_measure def ctx in
-              (* Add the decreases proof for Lean only *)
-              match backend () with
-              | Coq | FStar -> ctx
-              | HOL4 -> [%craise] def.item_meta.span "Unexpected"
-              | Lean -> ctx_add_decreases_proof def ctx
-            else ctx
-          in
-          (* We have to register the function itself, and the loops it
-             may contain (which are extracted as functions) *)
-          let funs = (def.f :: def.loops) @ def.bodies in
-          (* Register the decrease clauses *)
-          let ctx = List.fold_left register_decreases ctx funs in
-          (* Register the name of the function and the loops *)
-          let register_fun ctx f = ctx_add_fun_decl f ctx in
-          let register_funs ctx fl = List.fold_left register_fun ctx fl in
-          register_funs ctx funs)
+  (* Use the builtin names if necessary *)
+  match def.f.builtin_info with
+  | Some info ->
+      (* Builtin function: register the filtering information, if there is *)
+      let ctx =
+        match info.keep_params with
+        | Some keep ->
+            {
+              ctx with
+              funs_filter_type_args_map =
+                FunDeclId.Map.add def.f.def_id keep
+                  ctx.funs_filter_type_args_map;
+            }
+        | _ -> ctx
+      in
+      let ctx =
+        match info.keep_trait_clauses with
+        | Some keep ->
+            {
+              ctx with
+              funs_filter_trait_clauses_map =
+                FunDeclId.Map.add def.f.def_id keep
+                  ctx.funs_filter_trait_clauses_map;
+            }
+        | _ -> ctx
+      in
+      let f = def.f in
+      let fun_id = (Pure.FunId (FRegular f.def_id), f.loop_id) in
+      ctx_add f.item_meta.span (FunId (FromLlbc fun_id)) info.extract_name ctx
+  | None ->
+      (* Not builtin *)
+      (* Register the decrease clauses, if necessary *)
+      let register_decreases ctx def =
+        if has_decreases_clause def then
+          (* Add the termination measure *)
+          let ctx = ctx_add_termination_measure def ctx in
+          (* Add the decreases proof for Lean only *)
+          match backend () with
+          | Coq | FStar -> ctx
+          | HOL4 -> [%craise] def.item_meta.span "Unexpected"
+          | Lean -> ctx_add_decreases_proof def ctx
+        else ctx
+      in
+      (* We have to register the function itself, and the loops it
+         may contain (which are extracted as functions) *)
+      let funs = (def.f :: def.loops) @ def.bodies in
+      (* Register the decrease clauses *)
+      let ctx = List.fold_left register_decreases ctx funs in
+      (* Register the name of the function and the loops *)
+      let register_fun ctx f = ctx_add_fun_decl f ctx in
+      let register_funs ctx fl = List.fold_left register_fun ctx fl in
+      register_funs ctx funs
 
 (** Simply add the global name to the context. *)
 let extract_global_decl_register_names (ctx : extraction_ctx)
@@ -288,7 +279,9 @@ let fun_builtin_filter_types_trait_clauses (ty_to_string : 'a -> string)
     | None -> Result.Ok clauses
     | Some filter ->
         if List.length filter <> List.length types then (
-          let decl = FunDeclId.Map.find id ctx.trans_funs in
+          let decl =
+            [%silent_unwrap_opt_span] None (ctx_lookup_fun_decl_info ctx id)
+          in
           let err =
             "Ill-formed builtin information for function "
             ^ name_to_string ctx decl.f.item_meta.name
@@ -309,7 +302,9 @@ let fun_builtin_filter_types_trait_clauses (ty_to_string : 'a -> string)
     | None -> Result.Ok (types, explicit)
     | Some filter ->
         if List.length filter <> List.length types then (
-          let decl = FunDeclId.Map.find id ctx.trans_funs in
+          let decl =
+            [%silent_unwrap_opt_span] None (ctx_lookup_fun_decl_info ctx id)
+          in
           let err =
             "Ill-formed builtin information for function "
             ^ name_to_string ctx decl.f.item_meta.name
@@ -594,7 +589,7 @@ let extract_binop (span : Meta.span) (ctx : extraction_ctx)
   (* Some binary operations have a special notation depending on the backend *)
   (match (backend (), binop) with
   | HOL4, (Eq _ | Ne _)
-  | (FStar | Coq | Lean), (Eq _ | Lt _ | Le _ | Ne _ | Ge _ | Gt _)
+  | (FStar | Coq | Lean), (Eq _ | Lt _ | Le _ | Ne _ | Ge _ | Gt _ | BoolOr)
   | ( Lean,
       ( Div (OPanic, _)
       | Rem (OPanic, _)
@@ -604,7 +599,7 @@ let extract_binop (span : Meta.span) (ctx : extraction_ctx)
       | Shl (OPanic, _, _)
       | Shr (OPanic, _, _)
       | BitXor _ | BitOr _ | BitAnd _ ) ) ->
-      let binop =
+      let binop_str =
         match binop with
         | Eq _ -> "="
         | Lt _ -> "<"
@@ -622,27 +617,37 @@ let extract_binop (span : Meta.span) (ctx : extraction_ctx)
         | BitXor _ -> "^^^"
         | BitOr _ -> "|||"
         | BitAnd _ -> "&&&"
+        | BoolOr -> "||"
         | _ ->
             [%add_loc] admit_string span
               ("Unimplemented binary operation: " ^ binop_to_string ctx binop)
       in
-      let binop =
-        match backend () with
-        | FStar | Lean | HOL4 -> binop
-        | Coq -> "s" ^ binop
+      let binop_str =
+        match (backend (), binop) with
+        | Coq, BoolOr -> binop_str
+        | Coq, _ -> "s" ^ binop_str
+        | _ -> binop_str
       in
       extract_expr ~inside:true arg0;
       F.pp_print_space fmt ();
-      F.pp_print_string fmt binop;
+      F.pp_print_string fmt binop_str;
       F.pp_print_space fmt ();
       extract_expr ~inside:true arg1
-  | Lean, (Add (OWrap, _) | Sub (OWrap, _) | Mul (OWrap, _) | Div (OWrap, _)) ->
+  | ( Lean,
+      ( Add (OWrap, _)
+      | Sub (OWrap, _)
+      | Mul (OWrap, _)
+      | Div (OWrap, _)
+      | Shl (OWrap, _, _)
+      | Shr (OWrap, _, _) ) ) ->
       let binop =
         match binop with
         | Add _ -> "add"
         | Sub _ -> "sub"
         | Mul _ -> "mul"
         | Div _ -> "div"
+        | Shl _ -> "shl"
+        | Shr _ -> "shr"
         | _ ->
             [%add_loc] admit_string span "Internal error: please file an issue"
       in
@@ -760,12 +765,12 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
             qualif.generics args out_ty
       | ScalarValProj ty, _ ->
           extract_scalar_val_projector span ctx fmt ~inside ty args
-      | TraitConst (trait_ref, const_name), _ ->
+      | TraitConst (trait_ref, const_id), _ ->
           extract_trait_ref span ctx fmt TypeDeclId.Set.empty ~inside:true
             trait_ref;
           let name =
             ctx_get_trait_const span trait_ref.trait_decl_ref.trait_decl_id
-              const_name ctx
+              const_id ctx
           in
           let add_brackets (s : string) =
             if backend () = Coq then "(" ^ s ^ ")" else s
@@ -960,7 +965,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
          ]}
       *)
       (match fun_id with
-      | FromLlbc (TraitMethod (trait_ref, method_name, _fun_decl_id), lp_id) ->
+      | FromLlbc (TraitMethod (trait_ref, method_name), lp_id) ->
           let trait_decl_id = trait_ref.trait_decl_ref.trait_decl_id in
           let trait_decl =
             TraitDeclId.Map.find trait_decl_id ctx.trans_trait_decls
@@ -985,59 +990,66 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       [%sanity_check] span (generics.const_generics = [] || backend () <> HOL4);
       (* Compute the information about the explicit/implicit input type parameters *)
       let explicit =
-        let lookup is_trait_method fun_decl_id lp_id =
-          try
-            (* Lookup the function to retrieve the signature information *)
-            let trans_fun =
-              [%silent_unwrap] span
-                (A.FunDeclId.Map.find_opt fun_decl_id ctx.trans_funs)
-            in
-            let trans_fun =
-              match lp_id with
-              | None -> trans_fun.f
-              | Some (lp_id, true) -> Pure.LoopId.nth trans_fun.bodies lp_id
-              | Some (lp_id, false) -> Pure.LoopId.nth trans_fun.loops lp_id
-            in
-            let explicit = trans_fun.signature.explicit_info in
-            (* If it is a trait method, we need to remove the prefix
-               which accounts for the generics of the impl. *)
-            let explicit =
-              adjust_explicit_info explicit is_trait_method generics
-            in
-            (* *)
-            Some explicit
-          with CFailure _ ->
-            (* Fallback if, for instance, we could not lookup the declaration *)
-            [%save_error] span "Internal error";
-            None
-        in
-        match fun_id with
-        | FromLlbc (FunId (FRegular fun_decl_id), lp_id) ->
-            lookup false fun_decl_id lp_id
-        | FromLlbc (TraitMethod (_trait_ref, _method_name, fun_decl_id), lp_id)
-          -> lookup true fun_decl_id lp_id
-        | FromLlbc (FunId (FBuiltin aid), _) ->
-            Some
-              (Builtin.BuiltinFunIdMap.find aid ctx.builtin_sigs).explicit_info
-        | Pure (UpdateAtIndex Array) ->
-            Some
-              {
-                explicit_types = [ Implicit ];
-                explicit_const_generics = [ Implicit ];
-              }
-        | Pure (UpdateAtIndex Slice) ->
-            Some { explicit_types = [ Implicit ]; explicit_const_generics = [] }
-        | Pure Discriminant ->
-            Some { explicit_types = [ Implicit ]; explicit_const_generics = [] }
-        | Pure ToResult ->
-            Some { explicit_types = [ Implicit ]; explicit_const_generics = [] }
-        | Pure ResultUnwrapMut ->
-            Some
-              {
-                explicit_types = [ Implicit; Implicit ];
-                explicit_const_generics = [];
-              }
-        | Pure _ -> None
+        try
+          match fun_id with
+          | FromLlbc (FunId (FRegular fun_decl_id), lp_id) -> begin
+              (* Lookup the function to retrieve the signature information *)
+              let trans_fun =
+                [%silent_unwrap] span (ctx_lookup_fun_decl_info ctx fun_decl_id)
+              in
+              let trans_fun =
+                match lp_id with
+                | None -> trans_fun.f
+                | Some (lp_id, true) -> Pure.LoopId.nth trans_fun.bodies lp_id
+                | Some (lp_id, false) -> Pure.LoopId.nth trans_fun.loops lp_id
+              in
+              let explicit = trans_fun.signature.explicit_info in
+              Some (adjust_explicit_info explicit false generics)
+            end
+          | FromLlbc (TraitMethod (trait_ref, method_id), lp_id) -> begin
+              [%sanity_check] span (lp_id = None);
+              let trait_decl =
+                TraitDeclId.Map.find trait_ref.trait_decl_ref.trait_decl_id
+                  ctx.trans_trait_decls
+              in
+              let meth =
+                List.find
+                  (fun (meth : trait_method) -> meth.method_id = method_id)
+                  trait_decl.methods
+              in
+              let explicit = meth.signature.explicit_info in
+              Some (adjust_explicit_info explicit true generics)
+            end
+          | FromLlbc (FunId (FBuiltin aid), _) ->
+              Some
+                (Builtin.BuiltinFunIdMap.find aid ctx.builtin_sigs)
+                  .explicit_info
+          | Pure (UpdateAtIndex Array) ->
+              Some
+                {
+                  explicit_types = [ Implicit ];
+                  explicit_const_generics = [ Implicit ];
+                }
+          | Pure (UpdateAtIndex Slice) ->
+              Some
+                { explicit_types = [ Implicit ]; explicit_const_generics = [] }
+          | Pure Discriminant ->
+              Some
+                { explicit_types = [ Implicit ]; explicit_const_generics = [] }
+          | Pure ToResult ->
+              Some
+                { explicit_types = [ Implicit ]; explicit_const_generics = [] }
+          | Pure ResultUnwrapMut ->
+              Some
+                {
+                  explicit_types = [ Implicit; Implicit ];
+                  explicit_const_generics = [];
+                }
+          | Pure _ -> None
+        with CFailure _ ->
+          (* Fallback if, for instance, we could not lookup the declaration *)
+          [%save_error] span "Internal error";
+          None
       in
       (* Filter the generics.
 
@@ -1366,9 +1378,14 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
             (ctx, end_let))
           else (ctx, fun _ -> ())
         in
-        (* Print the bound expression *)
+        (* Print the bound expression. *)
         F.pp_open_hovbox fmt ctx.indent_incr;
-        extract_texpr span ctx fmt ~inside:false ~inside_do:monadic re;
+        let inside_do_rhs =
+          match backend () with
+          | Lean -> false
+          | _ -> monadic
+        in
+        extract_texpr span ctx fmt ~inside:false ~inside_do:inside_do_rhs re;
         F.pp_close_box fmt ();
         (ctx, end_let)
     in
@@ -2464,7 +2481,7 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
   in
   let trait_default =
     match decl.src with
-    | TraitDeclItem (_, _, true) -> [ "trait_default" ]
+    | TraitDeclItem _ -> [ "trait_default" ]
     | _ -> []
   in
   let attributes = attributes @ trait_default in
@@ -2715,27 +2732,27 @@ let extract_trait_decl_register_constant_names (ctx : extraction_ctx)
     match builtin_info with
     | None ->
         List.map
-          (fun (item_name, _) ->
+          (fun (const_id, item_name, _) ->
             let name = ctx_compute_trait_const_name ctx trait_decl item_name in
             (* Add a prefix if necessary *)
             let name =
               if !record_fields_short_names then name
               else ctx_compute_trait_decl_name ctx trait_decl ^ name
             in
-            (item_name, name))
+            (const_id, name))
           consts
     | Some info ->
         let const_map = StringMap.of_list info.consts in
         List.map
-          (fun (item_name, _) ->
-            (item_name, StringMap.find item_name const_map))
+          (fun (const_id, item_name, _) ->
+            (const_id, StringMap.find item_name const_map))
           consts
   in
   (* Register the names *)
   List.fold_left
-    (fun ctx (item_name, name) ->
+    (fun ctx (const_id, name) ->
       ctx_add trait_decl.item_meta.span
-        (TraitItemId (trait_decl.def_id, item_name))
+        (TraitConstId (trait_decl.def_id, const_id))
         name ctx)
     ctx constant_names
 
@@ -2756,17 +2773,17 @@ let extract_trait_decl_type_names (ctx : extraction_ctx)
           else ctx_compute_trait_decl_name ctx trait_decl ^ type_name
         in
         List.map
-          (fun item_name ->
+          (fun (type_id, item_name) ->
             (* Type name *)
             let type_name = compute_type_name item_name in
-            (item_name, type_name))
+            (type_id, type_name))
           types
     | Some info ->
         let type_map = StringMap.of_list info.types in
         List.map
-          (fun item_name ->
+          (fun (type_id, item_name) ->
             match StringMap.find_opt item_name type_map with
-            | Some type_name -> (item_name, type_name)
+            | Some type_name -> (type_id, type_name)
             | None ->
                 [%craise] trait_decl.item_meta.span
                   ("Unexpected error: could not find the information for the \
@@ -2778,9 +2795,9 @@ let extract_trait_decl_type_names (ctx : extraction_ctx)
   in
   (* Register the names *)
   List.fold_left
-    (fun ctx (item_name, type_name) ->
+    (fun ctx (type_id, type_name) ->
       ctx_add trait_decl.item_meta.span
-        (TraitItemId (trait_decl.def_id, item_name))
+        (TraitTypeId (trait_decl.def_id, type_id))
         type_name ctx)
     ctx type_names
 
@@ -2791,36 +2808,28 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
   [%ltrace trait_decl.name];
   let methods = trait_decl.methods in
   (* Small helper *)
-  let compute_item_name (item_name : string) (id : fun_decl_id) :
-      string * FunDeclId.id option * string =
+  let compute_item_name (meth : trait_method) : FunDeclId.id option * string =
+    let item_name = meth.item_name in
     [%ldebug "(" ^ trait_decl.name ^ "): compute_item_name: " ^ item_name];
-    let trans : pure_fun_translation =
-      match FunDeclId.Map.find_opt id ctx.trans_funs with
-      | Some decl -> decl
-      | None ->
-          [%craise] trait_decl.item_meta.span
-            ("Unexpected error: could not find the declaration for method '"
-           ^ item_name ^ "' for trait declaration '"
-            ^ name_to_string ctx trait_decl.item_meta.name
-            ^ "'")
-    in
 
-    let f = trans.f in
     (* We do something special to reuse the [ctx_compute_fun_decl]
        function. TODO: make it cleaner. *)
     let llbc_name : Types.name =
       [ Types.PeIdent (item_name, Disambiguator.zero) ]
     in
-    let f = { f with item_meta = { f.item_meta with name = llbc_name } } in
+    let item_meta = { meth.item_meta with name = llbc_name } in
     [%ldebug
-      "compute_item_name: llbc_name=" ^ name_to_string ctx f.item_meta.name];
-    let name = ctx_compute_fun_name f true ctx in
+      "compute_item_name: llbc_name=" ^ name_to_string ctx item_meta.name];
+    let name =
+      ctx_compute_fun_global_name_no_suffix item_meta TopLevelItem
+        ~is_trait_decl_field:true ctx
+    in
     (* Add a prefix if necessary *)
     let name =
       if !record_fields_short_names then name
       else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ name
     in
-    (item_name, None, name)
+    (None, name)
   in
   (* Compute the names *)
   let method_names =
@@ -2828,36 +2837,40 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
     | None ->
         (* Not a builtin function *)
         List.map
-          (fun (name, bound_fn) ->
-            compute_item_name name bound_fn.binder_value.fun_id)
+          (fun meth ->
+            let default_id, fun_name = compute_item_name meth in
+            (meth.method_id, default_id, fun_name))
           methods
     | Some info ->
         (* This is a builtin *)
         let funs_map = StringMap.of_list info.methods in
         List.map
-          (fun (item_name, fun_binder) ->
-            match StringMap.find_opt item_name funs_map with
+          (fun meth ->
+            match StringMap.find_opt meth.item_name funs_map with
             | None ->
                 [%warn] trait_decl.item_meta.span
                   ("When retrieving the builtin information for trait decl '"
                  ^ trait_decl.name
-                 ^ "', could not find the information for item '" ^ item_name
-                 ^ "'. The model defined in the " ^ Config.backend_name ()
+                 ^ "', could not find the information for item '"
+                 ^ meth.item_name ^ "'. The model defined in the "
+                 ^ Config.backend_name ()
                  ^ " library seems to be missing the corresponding field.");
                 (* Use the LLBC definition to compute the name *)
-                compute_item_name item_name fun_binder.binder_value.fun_id
+                let default_id, fun_name = compute_item_name meth in
+                (meth.method_id, default_id, fun_name)
             | Some info ->
                 let fun_name = info.extract_name in
                 let default_id =
-                  if info.has_default then Some fun_binder.binder_value.fun_id
-                  else None
+                  Option.map
+                    (fun (default : fun_decl_ref) -> default.fun_id)
+                    meth.default.binder_value
                 in
-                (item_name, default_id, fun_name))
+                (meth.method_id, default_id, fun_name))
           methods
   in
   (* Register the names *)
   List.fold_left
-    (fun ctx (item_name, default_id, fun_name) ->
+    (fun ctx (method_id, default_id, fun_name) ->
       (* Register the method name.
 
           Similarly as with structure fields, in the case of Lean check
@@ -2871,7 +2884,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
       in
       let ctx =
         ctx_add trait_decl.item_meta.span
-          (TraitMethodId (trait_decl.def_id, item_name))
+          (TraitMethodId (trait_decl.def_id, method_id))
           fun_name ctx
       in
       (* Also register the default implementation if there is *)
@@ -3023,23 +3036,19 @@ let explicit_info_drop_prefix (g1 : generic_params) (g2 : explicit_info) :
 
     Extract the items for a method in a trait decl. *)
 let extract_trait_decl_method_items_aux (ctx : extraction_ctx)
-    (fmt : F.formatter) (decl : trait_decl) (item_name : string)
-    (fn : fun_decl_ref binder) : unit =
+    (fmt : F.formatter) (decl : trait_decl) (meth : trait_method) : unit =
   (* Lookup the definition *)
-  let fun_decl_id = fn.binder_value.fun_id in
-  let trans =
-    [%silent_unwrap_opt_span] None
-      (A.FunDeclId.Map.find_opt fun_decl_id ctx.trans_funs)
-  in
-  let span = trans.f.item_meta.span in
+  let method_id = meth.method_id in
+  let signature = meth.signature in
+  let span = meth.item_meta.span in
   (* Extract the items *)
-  let fun_name = ctx_get_trait_method span decl.def_id item_name ctx in
+  let fun_name = ctx_get_trait_method span decl.def_id method_id ctx in
   let ty () =
-    let method_llbc_generics = fn.binder_llbc_generics in
-    let method_generics = fn.binder_generics in
-    let method_explicit_info = fn.binder_explicit_info in
+    let method_llbc_generics = signature.llbc_generics in
+    let method_generics = signature.generics in
+    let method_explicit_info = signature.explicit_info in
     let ctx, type_params, cg_params, trait_clauses =
-      ctx_add_generic_params span trans.f.item_meta.name Method
+      ctx_add_generic_params span meth.item_meta.name Method
         method_llbc_generics method_generics ctx
     in
     let backend_uses_forall =
@@ -3058,23 +3067,15 @@ let extract_trait_decl_method_items_aux (ctx : extraction_ctx)
 
     (* Extract the inputs and output *)
     F.pp_print_space fmt ();
-    (* We substitute the function item generics in temrs of the trait + method
-       generics. *)
-    let signature = trans.f.signature in
-    let subst =
-      make_subst_from_generics signature.generics fn.binder_value.fun_generics
-    in
     let ({ inputs; output; _ } : fun_sig) = signature in
-    let inputs = List.map (ty_substitute subst) inputs in
-    let output = ty_substitute subst output in
     extract_fun_input_parameters_types span ctx fmt inputs;
     extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:false output
   in
   extract_trait_decl_item ctx fmt fun_name ty
 
 let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
-    (decl : trait_decl) (item_name : string) (fn : fun_decl_ref binder) : unit =
-  try extract_trait_decl_method_items_aux ctx fmt decl item_name fn
+    (decl : trait_decl) (meth : trait_method) : unit =
+  try extract_trait_decl_method_items_aux ctx fmt decl meth
   with CFailure _ ->
     F.pp_print_space fmt ();
     extract_admit fmt
@@ -3103,7 +3104,8 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
    in
    let types =
      List.map
-       (fun name -> ctx_get_trait_type decl.item_meta.span decl.def_id name ctx)
+       (fun (type_id, _) ->
+         ctx_get_trait_type decl.item_meta.span decl.def_id type_id ctx)
        decl.types
    in
    let types =
@@ -3128,8 +3130,8 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
    in
    let consts =
      List.map
-       (fun (name, _) ->
-         ctx_get_trait_const decl.item_meta.span decl.def_id name ctx)
+       (fun (const_id, _, _) ->
+         ctx_get_trait_const decl.item_meta.span decl.def_id const_id ctx)
        decl.consts
    in
    let consts =
@@ -3170,6 +3172,33 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   let generics = decl.generics in
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
+  (* First, reserve the trait field names (constants, types, methods, parent
+     clauses) so that generic parameter names are made fresh w.r.t. them.
+     This prevents e.g. a const generic parameter [N] from keeping its name
+     when the trait also has a field named [N]. *)
+  let ctx =
+    let field_names =
+      List.map
+        (fun (const_id, _, _) ->
+          ctx_get_trait_const decl.item_meta.span decl.def_id const_id ctx)
+        decl.consts
+      @ List.map
+          (fun (type_id, _) ->
+            ctx_get_trait_type decl.item_meta.span decl.def_id type_id ctx)
+          decl.types
+      @ List.map
+          (fun meth ->
+            ctx_get_trait_method decl.item_meta.span decl.def_id meth.method_id
+              ctx)
+          decl.methods
+      @ List.map
+          (fun (clause : trait_param) ->
+            ctx_get_trait_parent_clause decl.item_meta.span decl.def_id
+              clause.clause_id ctx)
+          decl.parent_clauses
+    in
+    ctx_reserve_names field_names ctx
+  in
   let ctx, type_params, cg_params, trait_clauses =
     ctx_add_generic_params decl.item_meta.span decl.item_meta.name Item
       decl.llbc_generics generics ctx
@@ -3208,9 +3237,9 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
 
     (* The constants *)
     List.iter
-      (fun (name, ty) ->
+      (fun (const_id, _, ty) ->
         let item_name =
-          ctx_get_trait_const decl.item_meta.span decl.def_id name ctx
+          ctx_get_trait_const decl.item_meta.span decl.def_id const_id ctx
         in
         let ty () =
           let inside = false in
@@ -3223,10 +3252,10 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
 
     (* The types *)
     List.iter
-      (fun name ->
+      (fun (type_id, _) ->
         (* Extract the type *)
         let item_name =
-          ctx_get_trait_type decl.item_meta.span decl.def_id name ctx
+          ctx_get_trait_type decl.item_meta.span decl.def_id type_id ctx
         in
         let ty () =
           F.pp_print_space fmt ();
@@ -3253,7 +3282,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
 
     (* The methods *)
     List.iter
-      (fun (name, fn) -> extract_trait_decl_method_items ctx fmt decl name fn)
+      (fun meth -> extract_trait_decl_method_items ctx fmt decl meth)
       decl.methods;
 
     (* Close the outer boxes for the definition *)
@@ -3292,18 +3321,18 @@ let extract_trait_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
   let params = params @ [ Explicit ] in
   (* The constants *)
   List.iter
-    (fun (name, _) ->
+    (fun (const_id, _, _) ->
       let item_name =
-        ctx_get_trait_const decl.item_meta.span decl.def_id name ctx
+        ctx_get_trait_const decl.item_meta.span decl.def_id const_id ctx
       in
       extract_coq_arguments_instruction ctx fmt item_name params)
     decl.consts;
   (* The types *)
   List.iter
-    (fun name ->
+    (fun (type_id, _) ->
       (* The type *)
       let item_name =
-        ctx_get_trait_type decl.item_meta.span decl.def_id name ctx
+        ctx_get_trait_type decl.item_meta.span decl.def_id type_id ctx
       in
       extract_coq_arguments_instruction ctx fmt item_name params)
     decl.types;
@@ -3318,8 +3347,8 @@ let extract_trait_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
     decl.parent_clauses;
   (* The  methods *)
   List.iter
-    (fun (item_name, bound_fn) ->
-      let explicit_info = bound_fn.binder_explicit_info in
+    (fun meth ->
+      let explicit_info = meth.default.binder_explicit_info in
       (* TODO: this looks incorrect, we should instantiate the binder properly *)
       let params =
         params
@@ -3331,7 +3360,7 @@ let extract_trait_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
       in
       (* Extract *)
       let item_name =
-        ctx_get_trait_method decl.item_meta.span decl.def_id item_name ctx
+        ctx_get_trait_method decl.item_meta.span decl.def_id meth.method_id ctx
       in
       extract_coq_arguments_instruction ctx fmt item_name params)
     decl.methods;
@@ -3349,7 +3378,7 @@ let extract_trait_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
 
     Extract the items for a method in a trait impl. *)
 let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
-    (fmt : F.formatter) (impl : trait_impl) (item_name : string)
+    (fmt : F.formatter) (impl : trait_impl) (method_id : trait_method_id)
     (fn : fun_decl_ref binder) : unit =
   let span = impl.item_meta.span in
   let trait_decl_id = impl.impl_trait.trait_decl_id in
@@ -3357,12 +3386,12 @@ let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
   (* Lookup the definition *)
   let trans =
     [%unwrap_with_span] span
-      (A.FunDeclId.Map.find_opt method_decl_id ctx.trans_funs)
+      (ctx_lookup_fun_decl_info ctx method_decl_id)
       "Could not lookup the translated function, probably because of an error \
        which happened before"
   in
   (* Extract the items *)
-  let fun_name = ctx_get_trait_method span trait_decl_id item_name ctx in
+  let fun_name = ctx_get_trait_method span trait_decl_id method_id ctx in
   let ty () =
     (* Extract the generics - we need to quantify over the generics which
        are specific to the method, and call it will all the generics
@@ -3394,8 +3423,9 @@ let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
   extract_trait_impl_item ctx fmt fun_name ty
 
 let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
-    (impl : trait_impl) (item_name : string) (fn : fun_decl_ref binder) : unit =
-  try extract_trait_impl_method_items_aux ctx fmt impl item_name fn
+    (impl : trait_impl) (method_id : trait_method_id) (fn : fun_decl_ref binder)
+    : unit =
+  try extract_trait_impl_method_items_aux ctx fmt impl method_id fn
   with CFailure _ ->
     F.pp_print_space fmt ();
     extract_admit fmt
@@ -3481,6 +3511,29 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Print the generics *)
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
+  (* First, reserve the trait decl field names (constants, types, methods, parent
+     clauses) so that generic parameter names are made fresh w.r.t. them.
+     See the comment in {!extract_trait_decl}. *)
+  let ctx =
+    let decl_id = impl.impl_trait.trait_decl_id in
+    let trait_decl = TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
+    let field_names =
+      List.map
+        (fun (const_id, _, _) -> ctx_get_trait_const span decl_id const_id ctx)
+        trait_decl.consts
+      @ List.map
+          (fun (type_id, _) -> ctx_get_trait_type span decl_id type_id ctx)
+          trait_decl.types
+      @ List.map
+          (fun meth -> ctx_get_trait_method span decl_id meth.method_id ctx)
+          trait_decl.methods
+      @ List.map
+          (fun (clause : trait_param) ->
+            ctx_get_trait_parent_clause span decl_id clause.clause_id ctx)
+          trait_decl.parent_clauses
+    in
+    ctx_reserve_names field_names ctx
+  in
   let ctx, type_params, cg_params, trait_clauses =
     ctx_add_generic_params span impl.item_meta.name Item impl.llbc_generics
       impl.generics ctx
@@ -3526,8 +3579,8 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
 
     (* The constants *)
     List.iter
-      (fun (name, gref) ->
-        let item_name = ctx_get_trait_const span trait_decl_id name ctx in
+      (fun (const_id, _, gref) ->
+        let item_name = ctx_get_trait_const span trait_decl_id const_id ctx in
         (* Lookup the information about the explicit/implicit parameters *)
         let explicit =
           match GlobalDeclId.Map.find_opt gref.global_id ctx.trans_globals with
@@ -3574,9 +3627,9 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
 
     (* The types *)
     List.iter
-      (fun (name, ty) ->
+      (fun (type_id, _, ty) ->
         (* Extract the type *)
-        let item_name = ctx_get_trait_type span trait_decl_id name ctx in
+        let item_name = ctx_get_trait_type span trait_decl_id type_id ctx in
         let ty () =
           F.pp_print_space fmt ();
           extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:false ty
@@ -3600,8 +3653,8 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
 
     (* The methods *)
     List.iter
-      (fun (name, bound_fn) ->
-        extract_trait_impl_method_items ctx fmt impl name bound_fn)
+      (fun (method_id, _name, bound_fn) ->
+        extract_trait_impl_method_items ctx fmt impl method_id bound_fn)
       impl.methods;
 
     (* Close the outer boxes for the definition, as well as the brackets *)

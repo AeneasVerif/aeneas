@@ -1,8 +1,7 @@
 name: Release
 on:
-  push:
-    branches:
-      - main
+  schedule:
+    - cron: '0 4 * * *' # Nightly at 04:00 UTC
   workflow_dispatch:
 
 jobs:
@@ -20,9 +19,7 @@ jobs:
         run: |
           set -eo pipefail
 
-          # Generates a sortable timestamp: YYYY.MM.DD.HHMMSS. We append the SHA
-          # for uniqueness.
-          TAG_NAME="build-$(date +'%Y.%m.%d.%H%M%S')-${{ github.sha }}"
+          TAG_NAME="nightly-$(date +'%Y.%m.%d')"
           echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
 
       - name: Create Release
@@ -41,28 +38,38 @@ jobs:
       contents: write
       actions: write
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: [self-hosted, linux, nix]
             artifact_name: aeneas-linux-x86_64
             nix_attr: aeneas-static-release
+            nix_machine: true
+          - os: ubuntu-24.04-arm
+            artifact_name: aeneas-linux-aarch64
+            nix_attr: aeneas-static-release
+            nix_machine: false
           - os: macos-15-intel
             artifact_name: aeneas-macos-x86_64
             nix_attr: aeneas-release
+            nix_machine: false
           - os: macos-latest
             artifact_name: aeneas-macos-aarch64
             nix_attr: aeneas-release
+            nix_machine: false
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Install nix
+        if: ${{ ! matrix.nix_machine }}
         uses: nixbuild/nix-quick-install-action@v30
         with:
           nix_conf: |
             keep-env-derivations = true
             keep-outputs = true
       - name: Restore Nix Cache
+        if: ${{ ! matrix.nix_machine }}
         id: restore-nix-cache
         uses: nix-community/cache-nix-action/restore@v6
         with:
@@ -75,7 +82,47 @@ jobs:
           set -eo pipefail
 
           nix build -L .#${{ matrix.nix_attr }}
-          cp result ${{ matrix.artifact_name }}.tar.gz
+          mkdir dist_staging
+          cp -R result/. dist_staging/
+          # Nix preserves read-only permissions from the store, so we must make files writable.
+          chmod -R +w dist_staging
+
+      - name: Install elan (Lean toolchain manager)
+        if: ${{ ! matrix.nix_machine }}
+        run: |
+          set -eo pipefail
+
+          curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> $GITHUB_PATH
+
+      - name: Cache Lean dependencies
+        uses: actions/cache@v4
+        with:
+          path: dist_staging/backends/lean/.lake
+          key: ${{ matrix.os }}-lean-${{ hashFiles('dist_staging/backends/lean/lake-manifest.json') }}
+          restore-keys: |
+            ${{ matrix.os }}-lean-
+
+      - name: Pre-compile Lean Library
+        run: |
+          set -eo pipefail
+
+          script="$PWD/scripts/ci-precompile-lean.sh"
+          cd dist_staging/backends/lean
+          if [[ "${{ matrix.nix_machine }}" == "true" ]]; then
+            nix develop ../../.. --command "$script"
+          else
+            "$script"
+          fi
+
+      - name: Re-package Tarball
+        run: |
+          set -eo pipefail
+
+          cd dist_staging
+          # Remove existing archive to avoid overwrite failures on macOS
+          rm -f ../${{ matrix.artifact_name }}.tar.gz
+          tar -czf ../${{ matrix.artifact_name }}.tar.gz *
 
       # Verify the binary is functional.
       - name: Smoke Test
@@ -94,7 +141,7 @@ jobs:
           files: ${{ matrix.artifact_name }}.tar.gz
 
       - name: Save Nix Cache
-        if: always()
+        if: ${{ always() && ! matrix.nix_machine }}
         uses: nix-community/cache-nix-action/save@v6
         with:
           primary-key: ${{ steps.restore-nix-cache.outputs.primary-key }}

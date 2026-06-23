@@ -11,8 +11,17 @@ open Result Error Arith
 /-!
 # Negation: Definitions
 -/
-@[step_pure_def]
 def IScalar.neg {ty : IScalarTy} (x : IScalar ty) : Result (IScalar ty) := IScalar.tryMk ty (- x.val)
+
+@[step]
+theorem IScalar.neg_step {ty} (x: IScalar ty) (h: x ≠ IScalar.min ty): IScalar.neg x ⦃ r => r = -x.val ⦄ := by
+  simp [neg]
+  have h := tryMk_eq ty (-x.val)
+  simp [inBounds] at h
+  split at h <;> simp_all
+  have := IScalar.hBounds x
+  simp [IScalar.min] at *
+  grind
 
 /--
 The notation typeclass for heterogeneous negation.
@@ -48,5 +57,11 @@ prefix:75  "-."   => HNeg.hNeg
 attribute [match_pattern] HNeg.hNeg
 
 instance {ty} : HNeg (IScalar ty) (Result (IScalar ty)) where hNeg x := IScalar.neg x
+
+@[step]
+theorem HNeg.hNeg.step {ty} (x: IScalar ty) (h: x ≠ IScalar.min ty): HNeg.hNeg x ⦃ r => r = -x.val ⦄ := by
+  simp [HNeg.hNeg]
+  apply IScalar.neg_step
+  grind
 
 end Aeneas.Std

@@ -13,6 +13,9 @@ namespace Std
 
 open Result Error WP
 
+local macro_rules
+| `(tactic| get_elem_tactic) => `(tactic| grind)
+
 namespace alloc.vec
 
 @[rust_type "alloc::vec::Vec"]
@@ -58,31 +61,45 @@ theorem Vec.len_val {α : Type u} (v : Vec α) : (Vec.len v).val = v.length :=
 grind_pattern Vec.len_val => v.length
 grind_pattern [agrind] Vec.len_val => v.length
 
-@[reducible] instance {α : Type u} : GetElem (Vec α) Nat α (fun a i => i < a.val.length) where
+instance {α : Type u} : GetElem (Vec α) Nat α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i h
 
-@[reducible] instance {α : Type u} : GetElem? (Vec α) Nat α (fun a i => i < a.val.length) where
+@[simp, simp_lists_safe, simp_lists_hyps_simps, grind =, agrind =]
+theorem Vec.getElem_Nat_eq {α : Type u} (v : Vec α) (i : Nat) (h : i < v.val.length) :
+    v[i]'h = v.val[i] := rfl
+
+instance {α : Type u} : GetElem? (Vec α) Nat α (fun a i => i < a.val.length) where
   getElem? a i := getElem? a.val i
   getElem! a i := getElem! a.val i
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =, agrind =]
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_safe, grind =, agrind =]
 theorem Vec.getElem?_Nat_eq {α : Type u} (v : Vec α) (i : Nat) : v[i]? = v.val[i]? := by rfl
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =, agrind =]
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_safe, grind =, agrind =]
 theorem Vec.getElem!_Nat_eq {α : Type u} [Inhabited α] (v : Vec α) (i : Nat) : v[i]! = v.val[i]! := by rfl
 
-@[reducible] instance {α : Type u} : GetElem (Vec α) Usize α (fun a i => i < a.val.length) where
+instance {α : Type u} : GetElem (Vec α) Usize α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i.val h
 
-@[reducible] instance {α : Type u} : GetElem? (Vec α) Usize α (fun a i => i < a.val.length) where
+@[simp, grind =, agrind =, simp_lists_safe, simp_lists_hyps_simps]
+theorem Vec.getElem_Usize_eq {α : Type u} (v : Vec α) (i : Usize) (h : i.val < v.val.length) :
+    v[i]'h = v.val[i.val] := rfl
+
+instance {α : Type u} : GetElem? (Vec α) Usize α (fun a i => i < a.val.length) where
   getElem? a i := getElem? a.val i.val
   getElem! a i := getElem! a.val i.val
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =, agrind =] theorem Vec.getElem?_Usize_eq {α : Type u} (v : Vec α) (i : Usize) : v[i]? = v.val[i.val]? := by rfl
-@[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =, agrind =] theorem Vec.getElem!_Usize_eq {α : Type u} [Inhabited α] (v : Vec α) (i : Usize) : v[i]! = v.val[i.val]! := by rfl
+@[simp, scalar_tac_simps, simp_lists_safe, simp_lists_hyps_simps, grind =, agrind =]
+theorem Vec.getElem?_Usize_eq {α : Type u} (v : Vec α) (i : Usize) : v[i]? = v.val[i.val]? := by rfl
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps, grind, agrind] abbrev Vec.get? {α : Type u} (v : Vec α) (i : Nat) : Option α := getElem? v i
-@[simp, scalar_tac_simps, simp_lists_hyps_simps, grind, agrind] abbrev Vec.get! {α : Type u} [Inhabited α] (v : Vec α) (i : Nat) : α := getElem! v i
+@[simp, scalar_tac_simps, simp_lists_safe, simp_lists_hyps_simps, grind =, agrind =]
+theorem Vec.getElem!_Usize_eq {α : Type u} [Inhabited α] (v : Vec α) (i : Usize) : v[i]! = v.val[i.val]! := by rfl
+
+@[simp, scalar_tac_simps, simp_lists_safe, simp_lists_hyps_simps, grind, agrind]
+abbrev Vec.get? {α : Type u} (v : Vec α) (i : Nat) : Option α := getElem? v i
+
+@[simp, scalar_tac_simps, simp_lists_safe, simp_lists_hyps_simps, grind, agrind]
+abbrev Vec.get! {α : Type u} [Inhabited α] (v : Vec α) (i : Nat) : α := getElem! v i
 
 def Vec.set {α : Type u} (v: Vec α) (i: Usize) (x: α) : Vec α :=
   ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
@@ -92,7 +109,7 @@ def Vec.set_opt {α : Type u} (v: Vec α) (i: Usize) (x: Option α) : Vec α :=
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =, agrind =]
 theorem Vec.set_val_eq {α : Type u} (v: Vec α) (i: Usize) (x: α) :
-  (v.set i x) = v.val.set i.val x := by
+  v.set i x = v.val.set i.val x := by
   simp [set]
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =, agrind =]
@@ -134,9 +151,9 @@ def Vec.index_usize {α : Type u} (v: Vec α) (i: Usize) : Result α :=
   | some x => ok x
 
 @[step]
-theorem Vec.index_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
+theorem Vec.index_usize_spec {α : Type u} (v: Vec α) (i: Usize)
   (hbound : i.val < v.length) :
-  v.index_usize i ⦃ x => x = v.val[i.val]! ⦄ := by
+  v.index_usize i ⦃ x => x = v.val[i.val] ⦄ := by
   simp only [index_usize]
   simp at *
   simp [*]
@@ -168,9 +185,9 @@ def Vec.index_mut_usize {α : Type u} (v: Vec α) (i: Usize) :
   | div => div
 
 @[step]
-theorem Vec.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
+theorem Vec.index_mut_usize_spec {α : Type u} (v: Vec α) (i: Usize)
   (hbound : i.val < v.length) :
-  v.index_mut_usize i ⦃ x y => x = v.val[i.val]! ∧ y = v.set i ⦄ := by
+  v.index_mut_usize i ⦃ x y => x = v.val[i.val] ∧ y = v.set i ⦄ := by
   simp only [index_mut_usize]
   have ⟨ x, h ⟩ := spec_imp_exists (index_usize_spec v i hbound)
   simp [h]
@@ -236,7 +253,7 @@ theorem Vec.index_RangeTo_spec {α : Type} (v : Vec α) (r : core.ops.range.Rang
 theorem Vec.index_mut_RangeTo_spec {α : Type} (v : Vec α) (r : core.ops.range.RangeTo Usize)
     (h : r.end ≤ v.length) :
     Vec.index_mut (core.slice.index.SliceIndexRangeToUsizeSlice α) v r
-    ⦃ (s1, back) =>
+    ⦃ (s1 : Slice α) (back : Slice α → Vec α) =>
       s1.val = v.val.slice 0 r.end ∧
       s1.length = r.«end» ∧
       ∀ s', (back s').val = v.val.setSlice! 0 s'.val ⦄ := by
@@ -261,7 +278,7 @@ theorem Vec.index_RangeFrom_spec {α : Type} (v : Vec α) (r : core.ops.range.Ra
 theorem Vec.index_mut_RangeFrom_spec {α : Type} (v : Vec α) (r : core.ops.range.RangeFrom Usize)
     (h : r.start ≤ v.length) :
     Vec.index_mut (core.slice.index.SliceIndexRangeFromUsizeSlice α) v r
-    ⦃ (s1, back) =>
+    ⦃ (s1 : Slice α) (back : Slice α → Vec α) =>
       s1.val = v.val.drop r.start ∧
       s1.length = v.length - r.start.val ∧
       ∀ s', (back s').val = v.val.setSlice! r.start.val s'.val ⦄ := by
@@ -286,7 +303,7 @@ theorem Vec.index_Range_spec {α : Type} (v : Vec α) (r : core.ops.range.Range 
 theorem Vec.index_mut_Range_spec {α : Type} (v : Vec α) (r : core.ops.range.Range Usize)
     (h0 : r.start ≤ r.end) (h1 : r.end ≤ v.length) :
     Vec.index_mut (core.slice.index.SliceIndexRangeUsizeSlice α) v r
-    ⦃ (s1, back) =>
+    ⦃ (s1 : Slice α) (back : Slice α → Vec α) =>
       s1.val = v.val.slice r.start r.end ∧
       s1.length = r.end - r.start ∧
       ∀ s2, back s2 = Slice.setSlice! v r.start.val s2 ⦄ := by
@@ -386,11 +403,44 @@ theorem alloc.vec.Vec.resize_spec {T} (cloneInst : core.clone.Clone T)
   . simp
   . simp [*]
 
-@[simp, scalar_tac_simps, grind =, agrind =]
+@[simp↓, scalar_tac_simps↓, grind =, agrind =]
 theorem alloc.vec.Vec.set_getElem!_eq α [Inhabited α] (x : alloc.vec.Vec α) (i : Usize) :
   x.set i x[i]! = x := by
   simp only [getElem!_Usize_eq]
   simp only [Vec, set_val_eq, Subtype.ext_iff, List.set_getElem!]
+
+@[simp↓, scalar_tac_simps, simp_lists_safe, grind =, agrind =]
+theorem alloc.vec.Vec.set_getElem_eq α (x : alloc.vec.Vec α) (i : Usize) (h : i.val < x.length) :
+  x.set i x[i] = x := by
+  have h' : i.val < x.val.length := by
+    simpa using h
+  have hself : x.val.set i.val x.val[i.val] = x.val :=
+    List.set_getElem_self (as := x.val) (i := i.val) (h := h')
+  simp only [alloc.vec.Vec, Subtype.ext_iff, set_val_eq] at hself ⊢
+  exact hself
+
+@[simp_lists_safe↓]
+theorem alloc.vec.Vec.set_getElem_eq' α (x : alloc.vec.Vec α) (i j : Usize) (h : j.val < x.length) (hEq : i = j) :
+  x.set i (x[j]'h) = x := by
+  simp only [hEq, h, set_getElem_eq]
+
+@[simp↓, simp_lists_safe↓]
+theorem alloc.vec.Vec.getElem_set_eq α (v : alloc.vec.Vec α) (i : Usize) (x : α) (h : i.val < (v.set i x).length) :
+  (v.set i x)[i]'h = x := by
+  simp only [getElem_Usize_eq, set_val_eq, List.getElem_set_self]
+
+@[simp↓, simp_lists_safe↓]
+theorem alloc.vec.Vec.getElem_set_eq' α (v : alloc.vec.Vec α) (i j : Usize) (x : α) (h : j.val < (v.set i x).length)
+  (h' : i = j) :
+  (v.set i x)[j]'h = x := by
+  simp only [getElem_Usize_eq, set_val_eq, List.getElem_set_self, h']
+
+@[simp↓, simp_lists_safe↓]
+theorem alloc.vec.Vec.getElem_set_neq α (v : alloc.vec.Vec α) (i j : Usize) (x : α)
+  (h : j.val < (v.set i x).length) (h' : i ≠ j) :
+  (v.set i x)[j]'h = v[j] := by
+  simp only [getElem_Usize_eq, set_val_eq]
+  simp_lists
 
 @[rust_fun
   "alloc::vec::{core::convert::From<alloc::vec::Vec<@T>, [@T; @N]>}::from"]
@@ -423,6 +473,11 @@ def core.convert.FromBoxSliceVec (T : Type) :
 def alloc.vec.Vec.setSlice! {α : Type u} (s : alloc.vec.Vec α) (i : ℕ) (s' : List α) : alloc.vec.Vec α :=
   ⟨s.val.setSlice! i s', by scalar_tac⟩
 
+@[simp, scalar_tac_simps, simp_scalar_safe, simp_lists_safe, grind =, agrind =]
+theorem alloc.vec.Vec.setSlice!_length {α : Type u} (s : alloc.vec.Vec α) (i : ℕ) (s' : List α) :
+  (s.setSlice! i s').length = s.length := by
+  simp only [Vec.length, Vec.setSlice!, List.length_setSlice!]
+
 @[simp_lists_safe, grind =, agrind =]
 theorem alloc.vec.Vec.setSlice!_getElem!_prefix {α} [Inhabited α]
   (s : alloc.vec.Vec α) (s' : List α) (i j : ℕ) (h : j < i) :
@@ -431,17 +486,53 @@ theorem alloc.vec.Vec.setSlice!_getElem!_prefix {α} [Inhabited α]
   simp_lists
 
 @[simp_lists_safe, grind =, agrind =]
+theorem alloc.vec.Vec.setSlice!_getElem_prefix {α}
+  (s : alloc.vec.Vec α) (s' : List α) (i j : ℕ) (h : j < i ∧ j < s.length) :
+  (s.setSlice! i s')[j] = s[j] := by
+  have hj' : j < (s.setSlice! i s').length := by
+    simpa [Vec.setSlice!_length] using h.2
+  have h1 : (s.setSlice! i s')[j]? = s[j]? := by
+    simp only [Vec.getElem?_Nat_eq, Vec.setSlice!]
+    simp_lists [List.setSlice!_getElem?_prefix]
+  simpa [Vec.getElem?_Nat_eq, Vec.getElem_Nat_eq,
+    List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2] using h1
+
+@[simp_lists_safe, grind =, agrind =]
 theorem alloc.vec.Vec.setSlice!_getElem!_middle {α} [Inhabited α]
   (s : alloc.vec.Vec α) (s' : List α) (i j : ℕ) (h : i ≤ j ∧ j - i < s'.length ∧ j < s.length) :
   (s.setSlice! i s')[j]! = s'[j - i]! := by
   simp only [Vec.setSlice!, Vec.getElem!_Nat_eq]
   simp_lists
 
+@[simp_lists_safe, grind =, agrind =]
+theorem alloc.vec.Vec.setSlice!_getElem_middle {α}
+  (s : alloc.vec.Vec α) (s' : List α) (i j : ℕ) (h : i ≤ j ∧ j - i < s'.length ∧ j < s.length) :
+  (s.setSlice! i s')[j] = s'[j - i] := by
+  have hj' : j < (s.setSlice! i s').length := by
+    simpa [Vec.setSlice!_length] using h.2.2
+  have hji : j - i < s'.length := h.2.1
+  have h1 : (s.setSlice! i s')[j]? = s'[j - i]? := by
+    simp only [Vec.getElem?_Nat_eq, Vec.setSlice!]
+    simp_lists [List.setSlice!_getElem?_middle]
+  simpa [Vec.getElem?_Nat_eq, Vec.getElem_Nat_eq,
+    List.getElem?_eq_getElem hj', List.getElem?_eq_getElem hji] using h1
+
 theorem alloc.vec.Vec.setSlice!_getElem!_suffix {α} [Inhabited α]
   (s : alloc.vec.Vec α) (s' : List α) (i j : ℕ) (h : i + s'.length ≤ j) :
   (s.setSlice! i s')[j]! = s[j]! := by
   simp only [Vec.setSlice!, Vec.getElem!_Nat_eq]
   simp_lists
+
+theorem alloc.vec.Vec.setSlice!_getElem_suffix {α}
+  (s : alloc.vec.Vec α) (s' : List α) (i j : ℕ) (h : i + s'.length ≤ j ∧ j < s.length) :
+  (s.setSlice! i s')[j] = s[j] := by
+  have hj' : j < (s.setSlice! i s').length := by
+    simpa [Vec.setSlice!_length] using h.2
+  have h1 : (s.setSlice! i s')[j]? = s[j]? := by
+    simp only [Vec.getElem?_Nat_eq, Vec.setSlice!]
+    simp_lists [List.setSlice!_getElem?_suffix]
+  simpa [Vec.getElem?_Nat_eq, Vec.getElem_Nat_eq,
+    List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2] using h1
 
 @[rust_fun "alloc::vec::{core::clone::Clone<alloc::vec::Vec<@T>>}::clone"
     (keepParams := [true, false]) (keepTraitClauses := [true, false])]

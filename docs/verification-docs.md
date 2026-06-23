@@ -7,8 +7,8 @@ for every function — like a verification-aware rustdoc.
 ## Quick Start
 
 ```bash
-# 1. Generate LLBC doc-info (Rust-side inventory)
-aeneas -doc-info -doc-info-dest doc-info.json my-crate.llbc
+# 1. Translate to Lean and emit translation.json (Aeneas-side inventory)
+aeneas -backend lean -emit-json my-crate.llbc
 
 # 2. (Optional) Generate Lean doc info (step theorems)
 cd proofs/ && lake exe doc_extract MyModule lean-doc.json
@@ -16,7 +16,7 @@ cd proofs/ && lake exe doc_extract MyModule lean-doc.json
 # 3. Generate HTML
 cd /path/to/aeneas/scripts
 python3 -m aeneas_doc generate \
-  --doc-info doc-info.json \
+  --translation translation.json \
   --lean-doc lean-doc.json \
   --rust-src /path/to/src/ \
   --output /tmp/verification-docs/
@@ -50,9 +50,9 @@ open /tmp/verification-docs/index.html
 
 ```
 ┌──────────────┐     ┌───────────────────┐     ┌──────────────────┐
-│  .llbc file  │     │ aeneas -doc-info  │     │  Lean project    │
-│  (Charon)    │────▶│  (OCaml mode)     │     │  lake exe        │
-└──────────────┘     │  → doc-info.json  │     │  doc_extract     │
+│  .llbc file  │     │ aeneas -backend   │     │  Lean project    │
+│  (Charon)    │────▶│  lean -emit-json  │     │  lake exe        │
+└──────────────┘     │ → translation.json│     │  doc_extract     │
                      └────────┬──────────┘     │  → lean-doc.json │
                               │                └────────┬─────────┘
                               │                         │
@@ -70,23 +70,30 @@ open /tmp/verification-docs/index.html
 
 ### Components
 
-1. **Aeneas doc-info mode** (`src/DocInfo.ml`): New `-doc-info` flag that reads
-   the LLBC crate and outputs a JSON with all functions, types, globals, traits,
-   their visibility, opacity, source spans, and source text.
+1. **Aeneas `-emit-json` mode** (`src/EmitJson.ml`): when translating with the Lean
+   backend, the `-emit-json` flag writes a `translation.json` alongside the Lean
+   files, listing all functions, types, globals and traits with their Lean names,
+   Rust names, source spans, and opacity. (Introduced in AeneasVerif/aeneas#1009.)
 
 2. **Lean doc extractor** (`backends/lean/AeneasDocExtract.lean`): Lean executable
    that loads a verification project's environment, finds all `@[step]` theorems,
    extracts which function each specifies, classifies sorry status, and pretty-prints
    theorem statements.
 
-3. **HTML generator** (`scripts/aeneas_doc/`): Python (stdlib only) that merges
-   the two JSON data sources, matches Rust functions to Lean specs, computes
-   statistics, and renders static HTML with vendored highlight.js.
+3. **HTML generator** (`scripts/aeneas_doc/`): Python (stdlib only). `translation.py`
+   adapts `translation.json` (reading Rust source snippets from `--rust-src`);
+   `generator.py` matches Rust declarations to their Lean specs by Lean name,
+   computes statistics, and renders static HTML with vendored highlight.js.
+
+> **Note:** `translation.json` is intentionally minimal and does not carry the call
+> graph or Rust visibility. The dependency graph is therefore edgeless and the
+> "visibility" column reflects locality to the crate being verified rather than
+> `pub`/private.
 
 ## Dependencies
 
 - **Python 3** (stdlib only — no pip install needed)
-- **Aeneas** (for the `-doc-info` flag)
+- **Aeneas** (for the `-emit-json` flag)
 - **Lean 4 + Lake** (for building the doc extractor)
 - **highlight.js** (vendored in `scripts/aeneas_doc/static/`, BSD-3-Clause)
 
@@ -96,8 +103,8 @@ open /tmp/verification-docs/index.html
 python3 -m aeneas_doc generate [OPTIONS]
 
 Required:
-  --doc-info PATH    Aeneas doc-info JSON (from `aeneas -doc-info`)
-  --output PATH      Output directory for generated HTML
+  --translation PATH  Aeneas translation.json (from `aeneas -emit-json`)
+  --output PATH       Output directory for generated HTML
 
 Optional:
   --lean-doc PATH    Lean doc-extract JSON (from `lake exe doc_extract`)
@@ -114,10 +121,10 @@ AENEAS := /path/to/aeneas
 LLBC := my-crate.llbc
 
 verification-docs: $(LLBC)
-	$(AENEAS)/bin/aeneas -doc-info -doc-info-dest /tmp/doc-info.json $(LLBC)
+	$(AENEAS)/bin/aeneas -backend lean -emit-json -dest /tmp/lean $(LLBC)
 	cd proofs && lake exe doc_extract MyModule /tmp/lean-doc.json
 	cd $(AENEAS)/scripts && python3 -m aeneas_doc generate \
-	  --doc-info /tmp/doc-info.json \
+	  --translation /tmp/lean/translation.json \
 	  --lean-doc /tmp/lean-doc.json \
 	  --rust-src src/ \
 	  --output docs/verification/ \

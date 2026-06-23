@@ -57,6 +57,34 @@ on a big file. Only use `lake build` once at the very end to confirm the final r
 **NEVER run `lake clean` or delete `.lake/`.** This forces a full rebuild (30+ min).
 Fix root causes instead.
 
+## ⚠️ Initial Setup: Run `lake build` Before First MCP Use
+
+The lean-lsp-mcp LSP server has a **cold-start timeout issue**: if the project's
+`.olean` files are missing or stale (e.g., after a `git merge`, branch switch, or
+fresh clone), the first MCP tool call will time out because the LSP tries to elaborate
+the file from scratch — which requires compiling all dependencies, easily exceeding
+the MCP request timeout.
+
+**Before the VERY FIRST use of any lean-lsp-mcp tool** (typically at the start of a
+new verification task), run:
+
+```bash
+cd <lean_project_path> && lake build
+```
+
+This pre-compiles all `.olean` files so the LSP can load them instantly. After this
+initial build, the MCP tools will respond in seconds for incremental edits.
+
+**When to run the initial build:**
+- At the start of a new agent session (first task assignment)
+- After `git merge` / `git pull` that changed `.lean` files in dependencies
+- After switching branches
+- After any operation that invalidates `.olean` caches
+
+**You do NOT need to re-run `lake build` during normal proof iteration.** Once the
+initial build is done, the LSP picks up file edits incrementally. Only re-run
+`lake build` for the specific cases listed in "When to use `lean_build`" below.
+
 ## Tool Reference
 
 ### File and Goal Inspection (read-only — use freely)
@@ -101,6 +129,8 @@ the change automatically (typically within a few seconds). You do NOT need to ca
 `lean_build` runs `lake build` and restarts the LSP server. It takes **10–30+
 minutes** on large projects. Use it ONLY when:
 
+- **Initial setup** — before the very first MCP tool call in a new session (see
+  "Initial Setup" section above). You can also run `lake build` directly in bash.
 - **You modified a dependency file** and need to refresh the imports in the file
   you are currently working on (e.g., you changed a lemma in `A.lean` and
   need `B.lean` to pick up the new version).
