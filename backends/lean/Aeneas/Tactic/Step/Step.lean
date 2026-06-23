@@ -424,9 +424,13 @@ def getPostNamesFromGoal : TacticM (Array (Option Name)) := do
     let goalTy ← (← getMainGoal).getType
     let goalTy ← instantiateMVars goalTy
     goalTy.consumeMData.withApp fun spec? args => do
-    -- TODO: this could be generalized to work with other specs, like `dspec`
-    if spec?.isConstOf ``Std.WP.spec ∧ args.size = 3 then
-      getPostNames args[2]!
+    let specname ← match spec? with
+      | Expr.const name _ => pure name
+      | _ => throwError "{spec?} is not a spec statement"
+    let .some info ← specStatementLookup specname
+      | throwError "{specname} is not a supported spec statement"
+    if args.size = info.arity then
+      getPostNames args[info.post_index]!
     else pure #[]
   catch _ => pure #[]
 
@@ -515,7 +519,7 @@ def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th
 
   -- `thTy` should be of the shape `spec program post`: we need to retrieve `program`
   let (thHead, thArgs) := thTy.consumeMData.withApp (fun f args => (f, args))
-  if !thHead.isConst || thHead.constName! != info.name then
+  if !thHead.isConst || thHead.constName! != info.spec_name then
     throwError "Not a spec theorem"
 
   let (program, P) ←
@@ -1092,7 +1096,7 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
       for lifting in liftings do
         let pspecs : Array Name ← do
           let thNames ← stepAttr.find? -- looks up the theorem in a discrimination tree
-            (match lifting with | .none => info.name | .some l => l.from_statement)
+            (match lifting with | .none => info.spec_name | .some l => l.from_statement)
             fExpr
           /- TODO: because of reduction, there may be several valid theorems (for
             instance for the scalars). We need to sort them from most specific to

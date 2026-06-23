@@ -16,7 +16,7 @@ structure LiftingInfo where
   conversion_thm_inferred_args : Nat
 
 structure SpecInfo where
-  name : Lean.Name
+  spec_name : Lean.Name
   arity : Nat
   program_index : Nat -- index into the arguments of the Result value
   post_index : Nat
@@ -46,7 +46,7 @@ initialize specAttr : SimpleScopedEnvExtension SpecInfo SpecInfoExtensionState  
       specInfos := Std.HashMap.emptyWithCapacity
     },
     addEntry    := fun state new =>
-      {state with specInfos := state.specInfos.insert new.name new},
+      {state with specInfos := state.specInfos.insert new.spec_name new},
   }
   pure ext
 
