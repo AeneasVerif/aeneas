@@ -810,8 +810,23 @@ private def addDefinition (name : Name) (levelParams : List Name)
     Lean.enableRealizationsForConst name
     modifyEnv fun env' => noncomputableExt.tag env' name
   else
-    addAndCompile (.defnDecl decl)
+    -- Add the declaration first (this only type-checks), then *attempt* to
+    -- compile it. Compilation can still fail even when `isNC` is `false`: a
+    -- `partial_fixpoint` (or otherwise recursive) constant that is not tagged
+    -- `noncomputable` but has no compiled code (no LCNF) — e.g. an axiomatised
+    -- XOF loop — is invisible to `hasNoncomputableDep`, yet a helper that
+    -- captures a call to it cannot be compiled ("Failed to find LCNF
+    -- signature"). In that case fall back to tagging the helper
+    -- `noncomputable`, exactly as the predictive `isNC` branch does. Helpers
+    -- produced by `#decompose` are only ever reasoned about in proofs, so
+    -- losing executable code is harmless.
+    addDecl (.defnDecl decl)
     Lean.enableRealizationsForConst name
+    -- TODO: this try ... catch is a bit ugly.
+    try
+      compileDecl (.defnDecl decl) (logErrors := false)
+    catch _ =>
+      modifyEnv fun env' => noncomputableExt.tag env' name
   -- Check for duplicate values among previously introduced definitions
   if checkDuplicate then
     for (prevName, prevValue) in introduced do
