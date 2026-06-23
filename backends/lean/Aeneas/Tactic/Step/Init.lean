@@ -240,6 +240,10 @@ def getStepSpecFunArgsExpr (ty : Expr) :
 
 deriving instance Ord for Lean.Name
 structure Rules where
+  /--
+  This mapping stores theorems to be used automatically with the `step` tactic,
+  spec statement name -> program expression pattern -> step theorem name
+  -/
   rules : Std.TreeMap Name (DiscrTree Name)
   /- We can't remove keys from a discrimination tree, so to support
      local rules we keep a set of deactivated rules (rules which have
@@ -279,7 +283,7 @@ structure StepSpecAttr where
   ext  : Extension
   deriving Inhabited
 
-private def generateMvcgenSpec (thm : Name) (stx : Syntax) (attrKind : AttributeKind)
+private def generateMvcgenSpec (toMvcgenThm : Name) (stx : Syntax) (attrKind : AttributeKind)
     (thDecl : AsyncConstantInfo) : MetaM Unit := do
   let sig := thDecl.sig.get
   let thName := thDecl.name
@@ -288,7 +292,7 @@ private def generateMvcgenSpec (thm : Name) (stx : Syntax) (attrKind : Attribute
     let thConst := Lean.mkConst thName (sig.levelParams.map .param)
     let thApp := mkAppN thConst fvars
     -- Wrap with spec_to_mvcgen to produce: Triple (f args) ⌜True⌝ post⟨...⟩
-    let proof ← mkAppM thm #[thApp]
+    let proof ← mkAppM toMvcgenThm #[thApp]
     let innerTy ← inferType proof
     -- Re-introduce all fvars as binders
     let proofTerm ← mkLambdaFVars fvars proof

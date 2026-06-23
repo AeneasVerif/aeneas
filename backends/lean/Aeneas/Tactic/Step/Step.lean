@@ -418,7 +418,7 @@ def getBindVarNames : TacticM (Array (Option Name)) := do
   catch _ => pure #[]
 
 /-- Extract the names used in the post-condition of the current goal.
-    The goal should have the shape `spec program post`. -/
+    The goal should be a valid spec statement, such as `spec program post`. -/
 def getPostNamesFromGoal : TacticM (Array (Option Name)) := do
   try
     let goalTy ← (← getMainGoal).getType
