@@ -34,8 +34,6 @@ theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p :=
   intros s
   simp [spec, dspec] at *
   cases x <;> simp at * <;> assumption
-
-
 theorem dspec_admissible {α} (p : Post α )
   : Lean.Order.admissible (fun x => dspec x p) := by
   apply Lean.Order.admissible_flatOrder
@@ -310,35 +308,28 @@ macro_rules
   | `($e ⦃ $x => $p ⦄) => do
     let post ← mkBinderFun 0 x p
     `(Aeneas.Std.WP.spec $e $post)
-  | `($e div⦃ $x => $p ⦄) => do
+  | `($e ⦃ $x => $p ⦄div) => do
     let post ← mkBinderFun 0 x p
     `(Aeneas.Std.WP.dspec $e $post)
+
+def mk_function_syntax (p : TSyntax `term) (depth : Nat) (xs : List Term) : MacroM Term := do
+  match xs with
+  | [] => `($p)
+  | [x] => mkBinderFun depth x p
+  | x :: xs =>
+    let xs ← mk_function_syntax p (depth + 1) xs
+    let inner ← mkBinderFun depth x xs
+    `(uncurry' $inner)
 
 /-- Macro expansion for multiple elements -/
 macro_rules
   | `($e ⦃ $x $xs:term* => $p ⦄) => do
     let xs := x :: xs.toList
-    let rec run (depth : Nat) (xs : List Term) : MacroM Term := do
-      match xs with
-      | [] => `($p)
-      | [x] => mkBinderFun depth x p
-      | x :: xs =>
-        let xs ← run (depth + 1) xs
-        let inner ← mkBinderFun depth x xs
-        `(uncurry' $inner)
-    let post ← run 0 xs
+    let post ← mk_function_syntax p 0 xs
     `(Aeneas.Std.WP.spec $e $post)
   | `($e ⦃ $x $xs:term* => $p ⦄div) => do
     let xs := x :: xs.toList
-    let rec run (depth : Nat) (xs : List Term) : MacroM Term := do
-      match xs with
-      | [] => `($p)
-      | [x] => mkBinderFun depth x p
-      | x :: xs =>
-        let xs ← run (depth + 1) xs
-        let inner ← mkBinderFun depth x xs
-        `(uncurry' $inner)
-    let post ← run 0 xs
+    let post ← mk_function_syntax p 0 xs
     `(Aeneas.Std.WP.dspec $e $post)
 
 /-- Macro expansion for predicate with no arrow -/
