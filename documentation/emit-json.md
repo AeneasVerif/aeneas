@@ -14,14 +14,9 @@ The manifest describes **what Aeneas did**: the Lean declarations it produced an
 
 ```json
 {
-  "Aeneas_version": "abc1234",
+  "aeneas_version": "abc1234",
   "charon_version": "xyz5678",
   "crate": "my_crate",
-  "files": {
-    "dest_dir": "out",
-    "llbc_file": "build/input.llbc",
-    "lean_files": ["out/SubDir/Types.lean", "out/SubDir/Funs.lean"]
-  },
   "functions": [...],
   "types": [...],
   "globals": [...],
@@ -30,19 +25,13 @@ The manifest describes **what Aeneas did**: the Lean declarations it produced an
 }
 ```
 
-The paths in `files` are recorded as Aeneas knew them, so they are relative to Aeneas's working directory or absolute, matching how Aeneas was invoked:
-
-- `files.dest_dir`: the output directory Aeneas wrote to, `translation.json` itself lives here.
-- `files.llbc_file`: the `.llbc` input path, as passed to Aeneas.
-- `files.lean_files`: the Lean files written, each is under `dest_dir`.
-
 ### Function entries
 
 | Field | Always present | Meaning |
 |---|---|---|
 | `def_id` | yes | `FunDeclId` (join key into `.llbc`) |
 | `lean_name` | yes | Full Lean name (`Namespace.Name`) |
-| `lean_file` | yes | The Lean file this is in |
+| `lean_file` | yes | The Lean file this is in, relative to translate.json |
 | `rust_name` | yes | Full Rust name |
 | `is_local` | yes | `true` if defined in the current crate, `false` if external |
 | `source` | yes | Rust source location: `{ "file": "...", "begin_line": N, "end_line": M }` |
