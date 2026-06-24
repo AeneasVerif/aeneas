@@ -1097,6 +1097,7 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
         let pspecs : Array Name ← do
           -- some liftings will use liftM to convert to a different monad, so we strip
           -- liftM off of fExpr if it exists
+          -- TODO: delete this whole liftM thing after i alter Result to use ITree
           let fExpr :=
             let (liftM?, args) := fExpr.consumeMData.withApp (fun f args => (f, args))
             if h: liftM?.isConstOf ``liftM ∧ args.size = 5
