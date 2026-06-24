@@ -77,11 +77,11 @@ theorem coinSpec_bind {α β} {k : α -> ITreeC β} {Pₖ : Post β} {m : ITreeC
   · simp only
     exists m, k
 
-  instance : MonadLift Result ITreeC where
-    monadLift r := match r with
-      | .fail _e => .div -- TODO
-      | .div => .div
-      | .ok x => .ret x
+instance : MonadLift Result ITreeC where
+  monadLift r := match r with
+    | .fail _e => .div -- TODO
+    | .div => .div
+    | .ok x => .ret x
 
 theorem spec_coinSpec {α} {x : Result α} {p: Post α} : spec x p → coinSpec p x := by
   intros s
