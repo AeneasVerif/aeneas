@@ -166,26 +166,17 @@ theorem coinSpec_ret {α p} (x : α) : coinSpec p (ITree.ret x) ↔ p x := by
   def res : Result Nat := .ok 5
   def itreec : ITreeC Nat := res
 
-  -- #check bind
-
-  example : spec
-    (do let x ← 1#i32 + 2#i32
-        let y ← x + x
-        .ok x)
-    (fun z => z.val == 6)  := by
-    step?
-    sorry
 
   #check I32.add_spec
   -- set_option trace.Step true
 
-  example : coinSpec (fun z => z.val == 6)
+  theorem test : coinSpec (fun z => z.val == 6)
     (do let x ← 1#i32 + 2#i32
         let y ← x + x
         ITree.vis () fun (b : Bool) =>
         if b then ITree.ret y else ITree.ret 6#i32)  := by
-    step with (fun h1 h2 => spec_coinSpec (I32.add_spec h1 h2))
-    step with (fun h1 h2 => spec_coinSpec (I32.add_spec h1 h2))
+    step
+    step
     apply coinSpec.vis
     intros b
     cases b

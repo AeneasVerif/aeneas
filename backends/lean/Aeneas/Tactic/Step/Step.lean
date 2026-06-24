@@ -1095,6 +1095,13 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
       let liftings : Array (Option LiftingInfo) := #[.none] ++ Array.map .some info.liftings
       for lifting in liftings do
         let pspecs : Array Name ← do
+          -- some liftings will use liftM to convert to a different monad, so we strip
+          -- liftM off of fExpr if it exists
+          let fExpr :=
+            let (liftM?, args) := fExpr.consumeMData.withApp (fun f args => (f, args))
+            if h: liftM?.isConstOf ``liftM ∧ args.size = 5
+            then args[4]
+            else fExpr
           let thNames ← stepAttr.find? -- looks up the theorem in a discrimination tree
             (match lifting with | .none => info.spec_name | .some l => l.from_statement)
             fExpr
@@ -1108,6 +1115,7 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
         -- Try the theorems one by one
         for pspec in pspecs do
           let pspecExpr ← Term.mkConst pspec
+          -- TODO: should this fExpr have the liftM stripped also?
           match ← tryApply info lifting args goalIsLet fExpr "pspec theorem" pspecExpr with
           | some goals => return (goals, .stepThm pspec)
           | none => pure ()
