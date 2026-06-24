@@ -562,7 +562,22 @@ where
       withLocalDecl lname lbinfo ltype fun fvar => do
         let lbody' := lbody.instantiate1 fvar
         openUncurryLambdasCPSAux lbody' (fvars.push fvar) k
-    | _ => k fvars f
+    | _ =>
+      -- Curried (point-free) tuple destructuring: after opening the leading
+      -- lambdas, the body may be a *partially-applied* `Std.uncurry g` (arity 4,
+      -- i.e. with no `α × β` operand). This is the shape the Aeneas micro-pass that
+      -- removes useless tuple decompositions emits, e.g.
+      -- `uncurry (fun a => uncurry (fun b c => body))` instead of the older
+      -- `uncurry (fun a rest => uncurry (fun b c => body) rest)`. Descend into `g`
+      -- so that `b, c` are collected as further components rather than being left
+      -- stranded in the body (which produced a malformed, mis-grouped FVarTree).
+      -- An *applied* uncurry (arity ≥ 5, operand `_xN`) is the older nested-tuple
+      -- shape handled by `buildFVarTreeAux`; we must NOT descend into it here.
+      if f.isAppOfArity ``_root_.Aeneas.Std.uncurry 4 then
+        let g := f.getAppArgs[3]!
+        openUncurryLambdasCPSAux g fvars k
+      else
+        k fvars f
 
 /-- Abstract over `fvars`, always creating lambda binders (even for let-decl fvars).
     Standard `mkLambdaFVars` creates let-bindings for let-decl fvars, which is wrong
@@ -810,8 +825,23 @@ private def addDefinition (name : Name) (levelParams : List Name)
     Lean.enableRealizationsForConst name
     modifyEnv fun env' => noncomputableExt.tag env' name
   else
-    addAndCompile (.defnDecl decl)
+    -- Add the declaration first (this only type-checks), then *attempt* to
+    -- compile it. Compilation can still fail even when `isNC` is `false`: a
+    -- `partial_fixpoint` (or otherwise recursive) constant that is not tagged
+    -- `noncomputable` but has no compiled code (no LCNF) — e.g. an axiomatised
+    -- XOF loop — is invisible to `hasNoncomputableDep`, yet a helper that
+    -- captures a call to it cannot be compiled ("Failed to find LCNF
+    -- signature"). In that case fall back to tagging the helper
+    -- `noncomputable`, exactly as the predictive `isNC` branch does. Helpers
+    -- produced by `#decompose` are only ever reasoned about in proofs, so
+    -- losing executable code is harmless.
+    addDecl (.defnDecl decl)
     Lean.enableRealizationsForConst name
+    -- TODO: this try ... catch is a bit ugly.
+    try
+      compileDecl (.defnDecl decl) (logErrors := false)
+    catch _ =>
+      modifyEnv fun env' => noncomputableExt.tag env' name
   -- Check for duplicate values among previously introduced definitions
   if checkDuplicate then
     for (prevName, prevValue) in introduced do
