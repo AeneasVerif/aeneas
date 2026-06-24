@@ -658,6 +658,106 @@ theorem core.num.«%S».from_be_bytes.step_spec (x : Array I8 (%Size)#usize) :
   lift (core.num.«%S».from_be_bytes x) ⦃ y => y.bv = (BitVec.fromBEBytes (x.val.map I8.bv)).cast (by simp) ⦄  := by
   simp only [spec_ok, lift, from_be_bytes]
 
+/-!
+# `cast_signed` / `cast_unsigned`
+-/
+
+@[rust_fun "core::num::{u8}::cast_signed"]
+def core.num.U8.cast_signed (x : U8) : Result I8 := ok ⟨x.bv⟩
+
+@[rust_fun "core::num::{i8}::cast_unsigned"]
+def core.num.I8.cast_unsigned (x : I8) : Result U8 := ok ⟨x.bv⟩
+
+@[rust_fun "core::num::{u16}::cast_signed"]
+def core.num.U16.cast_signed (x : U16) : Result I16 := ok ⟨x.bv⟩
+
+@[rust_fun "core::num::{i16}::cast_unsigned"]
+def core.num.I16.cast_unsigned (x : I16) : Result U16 := ok ⟨x.bv⟩
+
+@[rust_fun "core::num::{u32}::cast_signed"]
+def core.num.U32.cast_signed (x : U32) : Result I32 := ok ⟨x.bv⟩
+
+@[rust_fun "core::num::{i32}::cast_unsigned"]
+def core.num.I32.cast_unsigned (x : I32) : Result U32 := ok ⟨x.bv⟩
+
+@[rust_fun "core::num::{u64}::cast_signed"]
+def core.num.U64.cast_signed (x : U64) : Result I64 := ok ⟨x.bv⟩
+
+@[rust_fun "core::num::{i64}::cast_unsigned"]
+def core.num.I64.cast_unsigned (x : I64) : Result U64 := ok ⟨x.bv⟩
+
+@[rust_fun "core::num::{u128}::cast_signed"]
+def core.num.U128.cast_signed (x : U128) : Result I128 := ok ⟨x.bv⟩
+
+@[rust_fun "core::num::{i128}::cast_unsigned"]
+def core.num.I128.cast_unsigned (x : I128) : Result U128 := ok ⟨x.bv⟩
+
+@[rust_fun "core::num::{usize}::cast_signed"]
+def core.num.Usize.cast_signed (x : Usize) : Result Isize := ok ⟨x.bv⟩
+
+@[rust_fun "core::num::{isize}::cast_unsigned"]
+def core.num.Isize.cast_unsigned (x : Isize) : Result Usize := ok ⟨x.bv⟩
+
+@[step]
+theorem core.num.U8.cast_signed.step_spec (x : U8) :
+    core.num.U8.cast_signed x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.U8.cast_signed]
+
+@[step]
+theorem core.num.I8.cast_unsigned.step_spec (x : I8) :
+    core.num.I8.cast_unsigned x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.I8.cast_unsigned]
+
+@[step]
+theorem core.num.U16.cast_signed.step_spec (x : U16) :
+    core.num.U16.cast_signed x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.U16.cast_signed]
+
+@[step]
+theorem core.num.I16.cast_unsigned.step_spec (x : I16) :
+    core.num.I16.cast_unsigned x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.I16.cast_unsigned]
+
+@[step]
+theorem core.num.U32.cast_signed.step_spec (x : U32) :
+    core.num.U32.cast_signed x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.U32.cast_signed]
+
+@[step]
+theorem core.num.I32.cast_unsigned.step_spec (x : I32) :
+    core.num.I32.cast_unsigned x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.I32.cast_unsigned]
+
+@[step]
+theorem core.num.U64.cast_signed.step_spec (x : U64) :
+    core.num.U64.cast_signed x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.U64.cast_signed]
+
+@[step]
+theorem core.num.I64.cast_unsigned.step_spec (x : I64) :
+    core.num.I64.cast_unsigned x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.I64.cast_unsigned]
+
+@[step]
+theorem core.num.U128.cast_signed.step_spec (x : U128) :
+    core.num.U128.cast_signed x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.U128.cast_signed]
+
+@[step]
+theorem core.num.I128.cast_unsigned.step_spec (x : I128) :
+    core.num.I128.cast_unsigned x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.I128.cast_unsigned]
+
+@[step]
+theorem core.num.Usize.cast_signed.step_spec (x : Usize) :
+    core.num.Usize.cast_signed x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.Usize.cast_signed]
+
+@[step]
+theorem core.num.Isize.cast_unsigned.step_spec (x : Isize) :
+    core.num.Isize.cast_unsigned x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.Isize.cast_unsigned]
+
 end Std
 
 end Aeneas
