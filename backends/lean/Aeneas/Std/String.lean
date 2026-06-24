@@ -41,7 +41,7 @@ example : Str := toStr "hello"
 
     Used by multi-target dispatch: nothing meaningful can be deduced from
     its output. -/
-axiom get_target : Result Str
+axiom get_target : Result String
 
 @[step]
 axiom get_target.spec : get_target ⦃ fun _ => True ⦄

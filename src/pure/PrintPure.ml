@@ -247,6 +247,7 @@ let literal_type_to_string (ty : literal_type) : string =
   | TChar -> "char"
   | TPureNat -> "ℕ"
   | TPureInt -> "ℤ"
+  | TPureStr -> "String"
 
 let type_var_to_string (v : type_param) = "(" ^ v.name ^ ": Type)"
 
@@ -267,6 +268,7 @@ let literal_to_string (lit : literal) : string =
   | VByteStr bs -> "[" ^ String.concat ", " (List.map string_of_int bs) ^ "]"
   | VPureNat x -> Z.to_string x ^ "#ℕ"
   | VPureInt x -> Z.to_string x ^ "#ℤ"
+  | VPureStr s -> "\"" ^ s ^ "\""
 
 let builtin_ty_to_string (aty : builtin_ty) : string =
   match aty with

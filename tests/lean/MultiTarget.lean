@@ -104,7 +104,7 @@ def dispatch_add.«aarch64-apple-darwin»
     Source: 'tests/src/multi-target.rs', lines 52:0-70:1 -/
 def dispatch_add (i : Std.U128) (i1 : Std.U128) : Result Std.U128 := do
   let tgt ← get_target
-  if tgt = (toStr "x86_64-apple-darwin")
+  if tgt = "x86_64-apple-darwin"
   then dispatch_add.«x86_64-apple-darwin» i i1
   else dispatch_add.«aarch64-apple-darwin» i i1
 
