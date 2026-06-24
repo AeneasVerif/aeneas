@@ -50,6 +50,7 @@
   Deps
   Errors
   FileGraph
+  FileMapping
   Expressions
   ExpressionsUtils
   Extract
