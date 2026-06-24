@@ -1029,6 +1029,28 @@ def tryApply (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args) (isL
   | some res => pure (some res)
   | none => pure none
 
+/-- Given a theorem to be applied, find the lifting that can lift it to the given
+    spec statment represented by `info`
+    or `none` if it already is the correct spec statement
+-/
+def getLiftingForThm (info : SpecInfo) (thm : Expr) : MetaM (Option LiftingInfo) := do
+  let thTy ← inferType thm
+  let thTy ← normalizeLetBindings thTy
+  let thOutput ← forallTelescopeReducing thTy (fun _ out => return out)
+  let spec? := thOutput.consumeMData.withApp (fun f _ => f)
+  trace[Step] "spec? is {spec?}"
+  let name ← match spec? with
+    | Expr.const name _ => pure name
+    | _ =>
+      -- We don't want to error here to ensure it doesn't break cases where
+      -- no lifting occurs, but the theorem can't reduce
+      return .none
+  trace[Step] "name is {name}"
+  for lifting in info.liftings do
+    if lifting.from_statement == name then return lifting
+  if name == info.spec_name then return .none else
+  throwError "{name} is not a valid spec theorem"
+
 /-- Try to step with an assumption.
     Return `some` if we succeed, `none` otherwise.
 
@@ -1045,8 +1067,8 @@ where
   for decl in decls.reverse do
     trace[Step] "Trying assumption: {decl.userName} : {decl.type}"
     try
-      -- TODO: generalize to allow lifting assumptions
-      let goal ← stepWith info .none args isLet fExpr decl.toExpr
+      let lifting ← getLiftingForThm info decl.toExpr
+      let goal ← stepWith info lifting args isLet fExpr decl.toExpr
       return (some (goal, .localHyp decl))
     catch _ => continue
   pure none
@@ -1076,7 +1098,8 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
      Otherwise, lookup one. -/
   match withTh with
   | some th => do
-    let goals ← stepWith info .none args goalIsLet fExpr th
+    let lifting ← getLiftingForThm info th
+    let goals ← stepWith info lifting args goalIsLet fExpr th
     return (goals, .givenExpr th)
   | none =>
     -- Try all the assumptions one by one and if it fails try to lookup a theorem.
@@ -2212,7 +2235,28 @@ h1 : ∀ (i : ℕ) (x : i < s.length), s'[i] = 0#u32
     step
     simp [*]
 
-  -- test out using a spec theorem to prove a dspec
+  -- test lifting using `step with`
+  example : WP.dspec
+    (do let x ← 1#i32 + 2#i32
+        let y ← x + x
+        ok y) (fun z => z.val == 6) := by
+    step with I32.add_spec
+    step with I32.add_spec
+    simp [*]
+
+  -- test lifting an assumption
+  example (f : I32 → Result I32)
+    (h : ∀ x, (f x) ⦃fun y => y.val = 10⦄)
+    :
+    ( do let x ← f 1#i32
+         let y ← x + 1#i32
+         ok y) ⦃fun y => y.val = 11⦄div
+    := by
+    step
+    step
+    simp [*]
+
+  -- test using a spec theorem to prove a dspec
   example : WP.dspec
     (do let x ← simple_converge 5#i32
         let _y ← simple_converge 6#i32
