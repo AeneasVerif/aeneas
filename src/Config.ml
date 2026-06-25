@@ -220,6 +220,11 @@ let use_fuel = ref false
     for the types, clauses and functions, or if we group them in one file. *)
 let split_files = ref false
 
+(** Split the generated definitions into one module per Rust source file,
+    mirroring the crate structure. Source files that form an import cycle are
+    merged into a single module. Mutually exclusive with [split_files]. *)
+let split_by_file = ref false
+
 (** Only for Lean: generate the library entry point, if the crate is split
     between different files. The entry point is simply a file with the name of
     the crate and which includes all the other files. *)

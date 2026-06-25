@@ -125,6 +125,11 @@ let () =
         Arg.Set split_files,
         " Split the definitions between different files for types, functions, \
          etc." );
+      ( "-split-by-file",
+        Arg.Set split_by_file,
+        " Split the definitions into one module per Rust source file, \
+         mirroring the crate structure. Mutually exclusive with -split-files."
+      );
       ( "-checks",
         Arg.Set sanity_checks,
         " Activate extensive sanity checks (warning: causes a ~100 times slow \
@@ -468,6 +473,10 @@ let () =
       "The -max-recdepth option is valid only for the Lean backend";
   if !emit_json && not (backend () = Lean) then
     fail_with_error "The -emit-json option is valid only for the Lean backend";
+  check_arg_not !split_files "-split-files" !split_by_file "-split-by-file";
+  if !split_by_file && not (backend () = Lean) then
+    fail_with_error
+      "The -split-by-file option is valid only for the Lean backend";
 
   check_arg_implies !diagnose_detailed "-diagnose-detailed"
     !diagnose_micro_passes "-diagnose-micro-passes";
@@ -756,7 +765,7 @@ let () =
 
       (* Print a warning if we had to extract opaque definitions and the option
          [-split-file] is not on *)
-      if !extracted_opaque && not !split_files then
+      if !extracted_opaque && not (!split_files || !split_by_file) then
         log#lwarning
           (lazy
             "The crate contains extracted external, unknown definitions: we \
