@@ -320,3 +320,32 @@ pub fn test_step_by_u8_near_max() {
     assert!(it.next().unwrap() == 254);
     assert!(it.next().is_none());
 }
+
+// ============================================================================
+// RangeInclusive tests
+// ============================================================================
+
+/// RangeInclusive `a..=b` yields a, a+1, ..., b (inclusive)
+#[verify::test]
+pub fn test_range_inclusive_basic() {
+    let mut it = 1usize..=3usize;
+    assert!(it.next().unwrap() == 1);
+    assert!(it.next().unwrap() == 2);
+    assert!(it.next().unwrap() == 3);
+    assert!(it.next().is_none());
+}
+
+/// RangeInclusive `a..=a` yields exactly one element
+#[verify::test]
+pub fn test_range_inclusive_singleton() {
+    let mut it = 7usize..=7usize;
+    assert!(it.next().unwrap() == 7);
+    assert!(it.next().is_none());
+}
+
+/// RangeInclusive `a..=b` with a > b is empty
+#[verify::test]
+pub fn test_range_inclusive_empty() {
+    let mut it = 5usize..=3usize;
+    assert!(it.next().is_none());
+}

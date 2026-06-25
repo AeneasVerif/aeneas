@@ -459,4 +459,98 @@ theorem core.iter.adapters.take.IteratorTake.next_ChunksExact_spec {T : Type}
     simp only [hsub_eq, bind_tc_ok]
     split <;> simp_all
 
+-- ============================================================================
+-- Zip<A, B> and RangeInclusive<A> iterator specs
+-- ============================================================================
+
+/-- `RangeInclusive::new a b` yields `⟨a, b, exhausted := false⟩`. -/
+@[step]
+theorem core.ops.range.RangeInclusive.new_spec {Idx : Type} (a b : Idx) :
+    core.ops.range.RangeInclusive.new a b
+    ⦃ (r : core.ops.range.RangeInclusive Idx) =>
+      r.start = a ∧ r.«end» = b ∧ r.exhausted = false ⦄ := by
+  simp [core.ops.range.RangeInclusive.new, spec_ok]
+
+/-- `Iterator::zip` for `RangeInclusive`: `Zip { fst := ri, snd := b }` where
+    `b = other.into_iter()` (requires `into_iter` to succeed). -/
+@[step]
+theorem core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.zip_spec
+    {A U Item IntoIter : Type}
+    (StepInst : core.iter.range.Step A)
+    (IntoIterInst : core.iter.traits.collect.IntoIterator U Item IntoIter)
+    (self : core.ops.range.RangeInclusive A) (other : U) (other' : IntoIter)
+    (h_into : IntoIterInst.into_iter other = ok other') :
+    core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.zip
+      StepInst IntoIterInst self other
+    ⦃ (z : core.iter.adapters.zip.Zip (core.ops.range.RangeInclusive A) IntoIter) =>
+      z.fst = self ∧ z.snd = other' ⦄ := by
+  simp [core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.zip,
+    h_into, spec_ok]
+
+/-- Generic `RangeInclusive<UScalar ty>::next`: conditional spec for the three
+    cases (empty ⇒ `none`; iterating `start < end` ⇒ yield+advance;
+    `start == end` ⇒ yield once then mark exhausted).  `h_lt` says the bundled
+    `PartialOrd.lt` is `·.val < ·.val` (discharged by `rfl` per concrete type). -/
+theorem core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next_UScalar_spec
+    {ty : UScalarTy}
+    {cloneInst : core.clone.Clone (UScalar ty)}
+    {partialOrdInst : core.cmp.PartialOrd (UScalar ty) (UScalar ty)}
+    (h_lt : ∀ a b : UScalar ty, partialOrdInst.lt a b = ok (decide (a.val < b.val)))
+    (r : core.ops.range.RangeInclusive (UScalar ty)) :
+    core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
+      (core.iter.range.UScalarStep ty cloneInst partialOrdInst) r
+    ⦃ (o : Option (UScalar ty)) (r' : core.ops.range.RangeInclusive (UScalar ty)) =>
+      if r.exhausted ∨ r.«end».val < r.start.val then
+        o = none ∧ r' = r
+      else if r.start.val < r.«end».val then
+        o = some r.start ∧ r'.start.val = r.start.val + 1 ∧
+        r'.«end» = r.«end» ∧ r'.exhausted = false
+      else
+        o = some r.start ∧ r'.start = r.start ∧
+        r'.«end» = r.«end» ∧ r'.exhausted = true ⦄ := by
+  unfold core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
+  simp only [core.iter.range.UScalarStep,
+    core.iter.range.UScalarStep.forward_checked, h_lt, bind_tc_ok]
+  by_cases hexh : r.exhausted = true
+  · simp only [hexh, Bool.true_or, ↓reduceIte, spec_ok, true_or]
+    simp
+  · by_cases hgt : r.«end».val < r.start.val
+    · have : (r.exhausted || decide (r.«end».val < r.start.val)) = true := by simp [hgt]
+      simp only [this, ↓reduceIte, spec_ok]
+      simp [hexh, hgt]
+    · have hguard : (r.exhausted || decide (r.«end».val < r.start.val)) = false := by
+        simp only [Bool.eq_false_iff, ne_eq, Bool.or_eq_true, decide_eq_true_eq, not_or]
+        exact ⟨hexh, hgt⟩
+      have hnotempty : ¬ (r.exhausted = true ∨ r.«end».val < r.start.val) := by
+        push Not; exact ⟨hexh, Nat.le_of_not_lt hgt⟩
+      simp only [hguard, Bool.false_eq_true, ↓reduceIte]
+      by_cases hlt : r.start.val < r.«end».val
+      · simp only [hlt, decide_true, ↓reduceIte]
+        have hfwd : r.start.val + (1#usize).val ≤ UScalar.max ty := by scalar_tac
+        simp only [hfwd, ↓reduceDIte, bind_tc_ok]
+        simp only [spec_ok, hnotempty, ↓reduceIte, UScalar.ofNatCore_val_eq]
+        exact ⟨rfl, by scalar_tac, rfl, by simpa using hexh⟩
+      · simp only [hlt, decide_false, Bool.false_eq_true, ↓reduceIte]
+        simp only [spec_ok, hnotempty, ↓reduceIte]
+        exact ⟨rfl, rfl, rfl, rfl⟩
+
+-- Per-type specializations of `next` for every unsigned scalar.
+uscalar
+@[step]
+theorem core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next_'S_spec
+    (r : core.ops.range.RangeInclusive «%S») :
+    core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
+      core.iter.range.Step'S r
+    ⦃ (o : Option «%S») (r' : core.ops.range.RangeInclusive «%S») =>
+      if r.exhausted ∨ r.«end».val < r.start.val then
+        o = none ∧ r' = r
+      else if r.start.val < r.«end».val then
+        o = some r.start ∧ r'.start.val = r.start.val + 1 ∧
+        r'.«end» = r.«end» ∧ r'.exhausted = false
+      else
+        o = some r.start ∧ r'.start = r.start ∧
+        r'.«end» = r.«end» ∧ r'.exhausted = true ⦄ :=
+  core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next_UScalar_spec
+    (by intros; rfl) r
+
 end Aeneas.Std
