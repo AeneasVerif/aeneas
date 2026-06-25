@@ -27,28 +27,28 @@ axiom SharedAVec.Insts.CoreIterTraitsCollectIntoIteratorSharedATIter.into_iter
   {T : Type} (A : Type) : alloc.vec.Vec T → Result (core.slice.iter.Iter T)
 
 /-- [loop_shared_borrow_proj::Cap]
-    Source: 'tests/src/loop-shared-borrow-proj.rs', lines 21:0-23:1
+    Source: 'tests/src/loop-shared-borrow-proj.rs', lines 7:0-9:1
     Visibility: public -/
 structure Cap where
   children : alloc.vec.Vec Std.U32
 
 /-- [loop_shared_borrow_proj::Guard]
-    Source: 'tests/src/loop-shared-borrow-proj.rs', lines 29:0-31:1
+    Source: 'tests/src/loop-shared-borrow-proj.rs', lines 15:0-17:1
     Visibility: public -/
 axiom Guard : Type
 
 /-- [loop_shared_borrow_proj::wrap]:
-    Source: 'tests/src/loop-shared-borrow-proj.rs', lines 35:0-37:1
+    Source: 'tests/src/loop-shared-borrow-proj.rs', lines 21:0-23:1
     Visibility: public -/
 axiom wrap : Cap → Result Guard
 
 /-- [loop_shared_borrow_proj::{loop_shared_borrow_proj::Guard<'a>}::get]:
-    Source: 'tests/src/loop-shared-borrow-proj.rs', lines 42:4-44:5
+    Source: 'tests/src/loop-shared-borrow-proj.rs', lines 28:4-30:5
     Visibility: public -/
 axiom Guard.get : Guard → Result Cap
 
 /-- [loop_shared_borrow_proj::carve]: loop body 0:
-    Source: 'tests/src/loop-shared-borrow-proj.rs', lines 49:4-55:1
+    Source: 'tests/src/loop-shared-borrow-proj.rs', lines 35:4-41:1
     Visibility: public -/
 @[rust_loop_body]
 def carve_loop.body
@@ -63,7 +63,7 @@ def carve_loop.body
               else ok (cont iter1)
 
 /-- [loop_shared_borrow_proj::carve]: loop 0:
-    Source: 'tests/src/loop-shared-borrow-proj.rs', lines 49:4-55:1
+    Source: 'tests/src/loop-shared-borrow-proj.rs', lines 35:4-41:1
     Visibility: public -/
 @[rust_loop]
 def carve_loop
@@ -73,7 +73,7 @@ def carve_loop
     iter
 
 /-- [loop_shared_borrow_proj::carve]:
-    Source: 'tests/src/loop-shared-borrow-proj.rs', lines 47:0-55:1
+    Source: 'tests/src/loop-shared-borrow-proj.rs', lines 33:0-41:1
     Visibility: public -/
 def carve (cap_ref : Cap) (x : Std.U32) : Result Bool := do
   let parent ← wrap cap_ref
