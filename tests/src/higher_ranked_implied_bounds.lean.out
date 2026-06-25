@@ -1,0 +1,6 @@
+[[92mInfo[39m ] Imported: tests/llbc/higher_ranked_implied_bounds.llbc
+[[91mError[39m] Unimplemented: found an occurrence of a lifetime constraint relating
+         a higher-ranked lifetime to a free lifetime.
+Source: 'tests/src/higher_ranked_implied_bounds.rs', lines 18:0-22:1
+Compiler source: llbc/TypesAnalysis.ml, line 962
+

@@ -1112,6 +1112,11 @@ and translate_trait_method_sig (decls_ctx : C.decls_ctx)
 and translate_fun_sigs_from_decl (decls_ctx : C.decls_ctx)
     (fdef : LlbcAst.fun_decl) : fun_sigs =
   let span = fdef.item_meta.span in
+  (* Reject signatures that introduce an implied bound relating a higher-ranked
+     (locally-bound) lifetime to a free one (e.g. `for<'a> Trait<Adt<'a, 'b>>`
+     where the definition of `Adt` relates its lifetime parameters). *)
+  TypesAnalysis.check_fun_decl_no_bound_free_implied_bounds
+    decls_ctx.type_ctx.type_decls fdef;
   let input_names =
     match fdef.body with
     | StructuredBody body ->
