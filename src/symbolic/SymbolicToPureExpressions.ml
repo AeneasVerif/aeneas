@@ -618,6 +618,13 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               [%sanity_check] ctx.span (int_ty0 = int_ty1);
               int_ty0
             in
+            (* The comparison operations accept both integers and booleans *)
+            let get_single_lit_ty () =
+              let lit_ty0 = ty_as_literal ctx.span arg0.ty in
+              let lit_ty1 = ty_as_literal ctx.span arg1.ty in
+              [%sanity_check] ctx.span (lit_ty0 = lit_ty1);
+              lit_ty0
+            in
             let binop =
               match binop with
               | Expressions.BitXor -> BitXor (get_single_int_ty ())
@@ -629,10 +636,10 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               | Expressions.Ne ->
                   [%sanity_check] ctx.span (arg0.ty = arg1.ty);
                   Ne arg0.ty
-              | Expressions.Lt -> Lt (get_single_int_ty ())
-              | Expressions.Le -> Le (get_single_int_ty ())
-              | Expressions.Ge -> Ge (get_single_int_ty ())
-              | Expressions.Gt -> Gt (get_single_int_ty ())
+              | Expressions.Lt -> Lt (get_single_lit_ty ())
+              | Expressions.Le -> Le (get_single_lit_ty ())
+              | Expressions.Ge -> Ge (get_single_lit_ty ())
+              | Expressions.Gt -> Gt (get_single_lit_ty ())
               | Expressions.Add om -> Add (om, get_single_int_ty ())
               | Expressions.Sub om -> Sub (om, get_single_int_ty ())
               | Expressions.Mul om -> Mul (om, get_single_int_ty ())
