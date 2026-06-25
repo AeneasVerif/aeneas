@@ -15,12 +15,12 @@ set_option maxRecDepth 2048
 namespace higher_ranked_trait_bounds
 
 /-- Trait declaration: [higher_ranked_trait_bounds::RefTrait]
-    Source: './tests/src/higher_ranked_trait_bounds.rs', lines 7:0-9:1 -/
+    Source: 'tests/src/higher_ranked_trait_bounds.rs', lines 7:0-9:1 -/
 structure RefTrait (Self : Type) (X : Type) where
   get : Self → Result X
 
 /-- [higher_ranked_trait_bounds::use_higher_ranked_trait_bound]:
-    Source: './tests/src/higher_ranked_trait_bounds.rs', lines 12:0-14:1 -/
+    Source: 'tests/src/higher_ranked_trait_bounds.rs', lines 12:0-14:1 -/
 def use_higher_ranked_trait_bound
   {P : Type} (RefTraitPShared0U8Inst : RefTrait P Std.U8) (p : P) :
   Result Std.U8
@@ -28,7 +28,7 @@ def use_higher_ranked_trait_bound
   RefTraitPShared0U8Inst.get p
 
 /-- [higher_ranked_trait_bounds::use_higher_ranked_trait_bound_where]:
-    Source: './tests/src/higher_ranked_trait_bounds.rs', lines 17:0-22:1 -/
+    Source: 'tests/src/higher_ranked_trait_bounds.rs', lines 17:0-22:1 -/
 def use_higher_ranked_trait_bound_where
   {P : Type} (RefTraitPShared0U8Inst : RefTrait P Std.U8) (p : P) :
   Result Std.U8
@@ -36,7 +36,7 @@ def use_higher_ranked_trait_bound_where
   RefTraitPShared0U8Inst.get p
 
 /-- [higher_ranked_trait_bounds::call_fn_ref]:
-    Source: './tests/src/higher_ranked_trait_bounds.rs', lines 25:0-27:1 -/
+    Source: 'tests/src/higher_ranked_trait_bounds.rs', lines 25:0-27:1 -/
 def call_fn_ref
   {T0 : Type} (coreopsfunctionFnT0TupleSharedU8U8Inst : core.ops.function.Fn T0
   Std.U8 Std.U8) (g : T0) (x : Std.U8) :
@@ -45,7 +45,7 @@ def call_fn_ref
   coreopsfunctionFnT0TupleSharedU8U8Inst.call g x
 
 /-- [higher_ranked_trait_bounds::call_fnmut_ref]:
-    Source: './tests/src/higher_ranked_trait_bounds.rs', lines 30:0-32:1 -/
+    Source: 'tests/src/higher_ranked_trait_bounds.rs', lines 30:0-32:1 -/
 def call_fnmut_ref
   {T0 : Type} (coreopsfunctionFnMutT0TupleSharedU8TupleInst :
   core.ops.function.FnMut T0 Std.U8 Unit) (g : T0) (x : Std.U8) :
@@ -54,8 +54,19 @@ def call_fnmut_ref
   let _ ← coreopsfunctionFnMutT0TupleSharedU8TupleInst.call_mut g x
   ok ()
 
+/-- [higher_ranked_trait_bounds::call_fnmut_mut_ref]:
+    Source: 'tests/src/higher_ranked_trait_bounds.rs', lines 34:0-37:1 -/
+def call_fnmut_mut_ref
+  {T0 : Type} (coreopsfunctionFnMutT0TupleMut0U8TupleInst :
+  core.ops.function.FnMut T0 Std.U8 Unit) (g : T0) (x : Std.U8) :
+  Result Std.U8
+  := do
+  let (g1, x1) ← coreopsfunctionFnMutT0TupleMut0U8TupleInst.call_mut g x
+  let (_, x2) ← coreopsfunctionFnMutT0TupleMut0U8TupleInst.call_mut g1 x1
+  ok x2
+
 /-- [higher_ranked_trait_bounds::call_fnonce_ref]:
-    Source: './tests/src/higher_ranked_trait_bounds.rs', lines 35:0-37:1 -/
+    Source: 'tests/src/higher_ranked_trait_bounds.rs', lines 40:0-42:1 -/
 def call_fnonce_ref
   {T0 : Type} (coreopsfunctionFnOnceT0TupleSharedU8U8Inst :
   core.ops.function.FnOnce T0 Std.U8 Std.U8) (g : T0) (x : Std.U8) :
@@ -64,7 +75,7 @@ def call_fnonce_ref
   coreopsfunctionFnOnceT0TupleSharedU8U8Inst.call_once g x
 
 /-- [higher_ranked_trait_bounds::call_fn_two_refs]:
-    Source: './tests/src/higher_ranked_trait_bounds.rs', lines 40:0-42:1 -/
+    Source: 'tests/src/higher_ranked_trait_bounds.rs', lines 45:0-47:1 -/
 def call_fn_two_refs
   {T0 : Type} (coreopsfunctionFnT0PairSharedU8SharedU8U8Inst :
   core.ops.function.Fn T0 (Std.U8 × Std.U8) Std.U8) (g : T0) (x : Std.U8)
@@ -74,7 +85,7 @@ def call_fn_two_refs
   coreopsfunctionFnT0PairSharedU8SharedU8U8Inst.call g (x, y)
 
 /-- [higher_ranked_trait_bounds::ignore_higher_ranked_fn]:
-    Source: './tests/src/higher_ranked_trait_bounds.rs', lines 45:0-45:47 -/
+    Source: 'tests/src/higher_ranked_trait_bounds.rs', lines 50:0-50:47 -/
 def ignore_higher_ranked_fn
   {T0 : Type} (coreopsfunctionFnT0TupleSharedTupleTupleInst :
   core.ops.function.Fn T0 Unit Unit) (_g : T0) :

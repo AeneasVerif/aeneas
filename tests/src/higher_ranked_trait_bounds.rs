@@ -31,6 +31,11 @@ fn call_fnmut_ref(mut g: impl FnMut(&u8), x: u8) {
     g(&x)
 }
 
+fn call_fnmut_mut_ref(mut g: impl FnMut(&mut u8), x: &mut u8) {
+    g(x);
+    g(x)
+}
+
 // `impl FnOnce(&_) -> _`.
 fn call_fnonce_ref(g: impl FnOnce(&u8) -> u8, x: u8) -> u8 {
     g(&x)
