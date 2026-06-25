@@ -148,6 +148,25 @@ def core.array.equality.PartialEqArray.ne
     List.anyM (fun (x, y) => partialEqInst.ne x y) (List.zip a0.val a1.val)
   else .ok true
 
+/-- `<[T] as PartialEq<[U]>>::eq`: two slices are equal iff they have the same
+    length and are elementwise equal (per the element `PartialEq`). -/
+@[rust_fun "core::slice::cmp::{core::cmp::PartialEq<[@T], [@U]>}::eq"]
+def core.slice.cmp.PartialEqSlice.eq
+  {T : Type} {U : Type} (partialEqInst : core.cmp.PartialEq T U)
+  (s0 : Slice T) (s1 : Slice U) : Result Bool := do
+  if s0.length = s1.length then
+    List.allM (fun (x, y) => partialEqInst.eq x y) (List.zip s0.val s1.val)
+  else .ok false
+
+/-- `<[T] as PartialEq<[U]>>::ne`: negation of slice equality. -/
+@[rust_fun "core::slice::cmp::{core::cmp::PartialEq<[@T], [@U]>}::ne"]
+def core.slice.cmp.PartialEqSlice.ne
+  {T : Type} {U : Type} (partialEqInst : core.cmp.PartialEq T U)
+  (s0 : Slice T) (s1 : Slice U) : Result Bool := do
+  if s0.length = s1.length then
+    List.anyM (fun (x, y) => partialEqInst.ne x y) (List.zip s0.val s1.val)
+  else .ok true
+
 @[rust_fun "core::array::{core::fmt::Debug<core::array::TryFromSliceError>}::fmt"]
 def core.array.DebugTryFromSliceError.fmt
   (_ : core.array.TryFromSliceError) (fmt : core.fmt.Formatter) :
