@@ -27,7 +27,7 @@ partial_fixpoint
 
 -- Extract the two let-bindings inside the else branch
 #decompose recPF1 recPF1_eq
-  branch 1 (letRange 1 2) => recPF1_add
+  branch 1 (letRange 1 2) => recPF1_add,
 
 /--
 info: recPF1_eq : ∀ (n : ℕ),
@@ -69,7 +69,7 @@ def recPF2 (n : Nat) : Result Nat := do
 partial_fixpoint
 
 #decompose recPF2 recPF2_eq
-  branch 0 full => recPF2_base
+  branch 0 full => recPF2_base,
 
 /--
 info: recPF2_eq : ∀ (n : ℕ),
@@ -103,7 +103,7 @@ def recStruct : List Nat → Result Nat
     .ok (x + inc)
 
 #decompose recStruct recStruct_eq
-  branch 1 (letRange 1 1) => recStruct_inc
+  branch 1 (letRange 1 1) => recStruct_inc,
 
 /--
 info: recStruct_eq : ∀ (x : List ℕ),
@@ -137,7 +137,7 @@ def recPF3 (n : Nat) : Result Nat := do
 partial_fixpoint
 
 #decompose recPF3 recPF3_eq
-  branch 1 full => recPF3_else
+  branch 1 full => recPF3_else,
 
 /--
 info: recPF3_eq : ∀ (n : ℕ), recPF3 n = if (n == 0) = true then Result.ok 0 else recPF3_else n

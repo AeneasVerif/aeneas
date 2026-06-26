@@ -2,6 +2,7 @@ import Lean
 import Aeneas.Tactic.Solver.ScalarTac
 import Aeneas.Tactic.Step.Init
 import Aeneas.Tactic.Step.GrindState
+import Aeneas.Tactic.Step.BindAssocSimproc
 import Aeneas.Std
 -- just here until the unit bind PR gets merged
 import Aeneas.Do
@@ -66,7 +67,7 @@ want to introduce in the context -/
 theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
 
 attribute [step_simps]
-  bind_assoc Std.bind_tc_ok Std.bind_tc_fail Std.bind_tc_div
+  Std.bind_tc_ok Std.bind_tc_fail Std.bind_tc_div
   /- Those are quite useful to simplify the goal further by eliminating existential quantifiers for instance. -/
   and_assoc Std.Result.ok.injEq Prod.mk.injEq
   exists_eq_left exists_eq_left' exists_eq_right exists_eq_right' exists_eq exists_eq' true_and and_true
@@ -74,7 +75,10 @@ attribute [step_simps]
   -- This one gets only applied to full applications of `uncurry'`, which are typically revealed after applying `spec_ok`
   Std.WP.uncurry'_eq
 
-attribute [step_simps] Aeneas.Std.bind_assoc_eq
+/- `bind_assoc` / `bind_assoc_eq` are handled by the `bindAssocPreservingNames`
+   simproc: it performs the same rewrite but preserves the binder name from
+   the original continuation lambda. See `bindAssocPreservingNames` for details. -/
+
 attribute [step_simps] Aeneas.Std.uncurry_apply_pair
 
 attribute [step_post_simps]
@@ -647,6 +651,7 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
   let some _ ← withTraceNode `Step (fun _ => pure m!"simpAt: monadic/unit/exists preprocessing") do
     Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
             { simpThms := #[← stepSimpExt.getTheorems],
+              simprocs := #[← stepSimprocExt.getSimprocs],
               addSimpThms :=
                 #[``Std.WP.qimp_spec_unit, ``Std.WP.qimp_unit,
                   ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
@@ -901,7 +906,7 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal)
       `ok ... ⦃ x₀ ... xₙ => ... ⦄`
       -/
       let r ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
-        {simpThms := #[← stepSimpExt.getTheorems], declsToUnfold := #[``pure]} (.targets #[] true)
+        {simpThms := #[← stepSimpExt.getTheorems], simprocs := #[← stepSimprocExt.getSimprocs], declsToUnfold := #[``pure]} (.targets #[] true)
       if r.isSome then
         pure (some ({goal := ← getMainGoal, outputs, stepState := mainGoal.stepState} : MainGoal))
       else pure none
@@ -1180,7 +1185,7 @@ def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option 
   /- Simplify the goal -- TODO: this might close it: we need to check that and abort if necessary,
      and properly track that in the `Stats` -/
   let _ ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
-      {simpThms := #[← stepSimpExt.getTheorems]} (.targets #[] true)
+      {simpThms := #[← stepSimpExt.getTheorems], simprocs := #[← stepSimprocExt.getSimprocs]} (.targets #[] true)
   withMainContext do
 
   /- **Assumption tactic**:

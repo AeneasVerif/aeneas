@@ -460,7 +460,8 @@ where
     let mvarId0 ← getMainGoal
     let r ← Simp.simpAt (simpOnly := true)
       { maxDischargeDepth := 1, failIfUnchanged := false}
-      {simpThms := #[← Step.stepSimpExt.getTheorems]}
+      {simpThms := #[← Step.stepSimpExt.getTheorems],
+       simprocs := #[← Step.stepSimprocExt.getSimprocs]}
       (.targets #[] true)
     /- We may have proven the goal already -/
     let tac : Array Syntax.Tactic ← do
