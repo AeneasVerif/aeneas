@@ -471,6 +471,44 @@ let extract_cast_kind_gen (span : Meta.span)
              in
              let tgt = integer_type_to_string tgt in
              (cast_str, None, Some tgt)
+         | (TInt _ | TUInt _), TFloat ((F32 | F64) as float_ty)
+           when backend () = Lean ->
+             let src = literal_as_integer src in
+             let cast_str =
+               match (Scalars.integer_type_is_signed src, float_ty) with
+               | false, F32 -> "F32.ofUScalar"
+               | true, F32 -> "F32.ofIScalar"
+               | false, F64 -> "F64.ofUScalar"
+               | true, F64 -> "F64.ofIScalar"
+               | _, (F16 | F128) ->
+                   admit_string __FILE__ __LINE__ span "Unreachable"
+             in
+             (cast_str, None, None)
+         | TFloat ((F32 | F64) as float_ty), (TInt _ | TUInt _)
+           when backend () = Lean ->
+             let tgt = literal_as_integer tgt in
+             let cast_str =
+               match (float_ty, Scalars.integer_type_is_signed tgt) with
+               | F32, false -> "F32.toUScalar"
+               | F32, true -> "F32.toIScalar"
+               | F64, false -> "F64.toUScalar"
+               | F64, true -> "F64.toIScalar"
+               | (F16 | F128), _ ->
+                   admit_string __FILE__ __LINE__ span "Unreachable"
+             in
+             (cast_str, None, Some (integer_type_to_string tgt))
+         | TFloat F32, TFloat F64 when backend () = Lean ->
+             ("Float32.toFloat", None, None)
+         | TFloat F64, TFloat F32 when backend () = Lean ->
+             ("Float.toFloat32", None, None)
+         | TFloat (F32 | F64), TFloat (F32 | F64) when backend () = Lean ->
+             ("id", None, None)
+         | ( (TFloat _ | TInt _ | TUInt _ | TBool | TChar | TPureNat | TPureInt),
+             TFloat _ )
+         | TFloat _, (TInt _ | TUInt _ | TBool | TChar | TPureNat | TPureInt) ->
+             [%craise] span
+               "Float casts are only supported for f32 and f64 in the Lean \
+                backend"
          | TInt _, TBool | TUInt _, TBool ->
              (* This is not allowed by rustc: the way of doing it in Rust is: [x != 0] *)
              [%craise] span "Unexpected cast: integer to bool"
@@ -562,7 +600,9 @@ let extract_unop (span : Meta.span)
     (extract_expr : inside:bool -> texpr -> unit) (fmt : F.formatter)
     ~(inside : bool) (unop : unop) (arg : texpr) : unit =
   match unop with
-  | Not _ | Neg _ | ArrayToSlice ->
+  | FNeg _ when backend () <> Lean ->
+      [%craise] span "Float operations are only supported in the Lean backend"
+  | Not _ | Neg _ | FNeg _ | ArrayToSlice ->
       let unop = unop_name unop in
       if inside then F.pp_print_string fmt "(";
       F.pp_print_string fmt unop;
@@ -590,6 +630,7 @@ let extract_binop (span : Meta.span) (ctx : extraction_ctx)
   (match (backend (), binop) with
   | HOL4, (Eq _ | Ne _)
   | (FStar | Coq | Lean), (Eq _ | Lt _ | Le _ | Ne _ | Ge _ | Gt _ | BoolOr)
+  | Lean, (FLt _ | FLe _ | FGe _ | FGt _ | FAdd _ | FSub _ | FMul _ | FDiv _)
   | ( Lean,
       ( Div (OPanic, _)
       | Rem (OPanic, _)
@@ -601,17 +642,26 @@ let extract_binop (span : Meta.span) (ctx : extraction_ctx)
       | BitXor _ | BitOr _ | BitAnd _ ) ) ->
       let binop_str =
         match binop with
+        | Eq (TLiteral (TFloat (F32 | F64))) when backend () = Lean -> "=="
         | Eq _ -> "="
         | Lt _ -> "<"
         | Le _ -> "<="
         | Ne _ -> if backend () = Lean then "!=" else "<>"
         | Ge _ -> ">="
         | Gt _ -> ">"
+        | FLt _ -> "<"
+        | FLe _ -> "<="
+        | FGe _ -> ">="
+        | FGt _ -> ">"
         | Div (OPanic, _) -> "/"
         | Rem (OPanic, _) -> "%"
         | Add (OPanic, _) -> "+"
         | Sub (OPanic, _) -> "-"
         | Mul (OPanic, _) -> "*"
+        | FAdd _ -> "+"
+        | FSub _ -> "-"
+        | FMul _ -> "*"
+        | FDiv _ -> "/"
         | Shl (OPanic, _, _) -> "<<<"
         | Shr (OPanic, _, _) -> ">>>"
         | BitXor _ -> "^^^"
@@ -633,6 +683,24 @@ let extract_binop (span : Meta.span) (ctx : extraction_ctx)
       F.pp_print_string fmt binop_str;
       F.pp_print_space fmt ();
       extract_expr ~inside:true arg1
+  | Lean, FRem _ ->
+      let binop = named_binop_name binop in
+      F.pp_print_string fmt binop;
+      F.pp_print_space fmt ();
+      extract_expr ~inside:true arg0;
+      F.pp_print_space fmt ();
+      extract_expr ~inside:true arg1
+  | ( (FStar | Coq | HOL4),
+      ( FLt _
+      | FLe _
+      | FGe _
+      | FGt _
+      | FAdd _
+      | FSub _
+      | FMul _
+      | FDiv _
+      | FRem _ ) ) ->
+      [%craise] span "Float operations are only supported in the Lean backend"
   | ( Lean,
       ( Add (OWrap, _)
       | Sub (OWrap, _)

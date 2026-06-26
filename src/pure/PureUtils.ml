@@ -941,6 +941,11 @@ let ty_as_integer (span : Meta.span) (t : ty) : T.integer_type =
   | TLiteral (TUInt int_ty) -> Unsigned int_ty
   | _ -> [%craise] span "Unreachable"
 
+let ty_as_float (span : Meta.span) (t : ty) : T.float_type =
+  match t with
+  | TLiteral (TFloat float_ty) -> float_ty
+  | _ -> [%craise] span "Unreachable"
+
 let ty_as_literal (span : Meta.span) (t : ty) : literal_type =
   match t with
   | TLiteral ty -> ty
@@ -2737,10 +2742,23 @@ let get_tuple_size (e : texpr) : int option =
   | _ -> None
 
 let binop_can_fail : binop -> bool = function
-  | BitXor _ | BitAnd _ | BitOr _ | Eq _ | Lt _ | Le _ | Ne _ | Ge _ | Gt _
+  | BitXor _
+  | BitAnd _
+  | BitOr _
+  | Eq _
+  | Lt _
+  | Le _
+  | Ne _
+  | Ge _
+  | Gt _
+  | FLt _
+  | FLe _
+  | FGe _
+  | FGt _
   | Add (OWrap, _)
   | Sub (OWrap, _)
   | Mul (OWrap, _)
+  | FAdd _ | FSub _ | FMul _ | FDiv _ | FRem _
   | Shl (OWrap, _, _)
   | Shr (OWrap, _, _)
   | AddChecked _ | SubChecked _ | MulChecked _ | BoolOr | Cmp _ -> false

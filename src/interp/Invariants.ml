@@ -387,6 +387,9 @@ let check_literal_type (span : Meta.span) (cv : literal) (ty : literal_type) :
       [%sanity_check] span (sv_ty = int_ty)
   | VScalar (UnsignedScalar (sv_ty, _)), TUInt int_ty ->
       [%sanity_check] span (sv_ty = int_ty)
+  | VFloat fv, TFloat ((F32 | F64) as float_ty) ->
+      [%sanity_check] span (fv.float_ty = float_ty)
+  | VFloat _, TFloat _ -> [%craise] span "Only f32 and f64 are supported"
   | VBool _, TBool | VChar _, TChar -> ()
   | _ -> [%craise] span "Erroneous typing"
 

@@ -921,6 +921,10 @@ let unop_name (unop : unop) : string =
       match backend () with
       | Lean -> "-."
       | _ -> int_name int_ty ^ "_neg")
+  | FNeg _ -> (
+      match backend () with
+      | Lean -> "-"
+      | FStar | Coq | HOL4 -> "float_neg")
   | ArrayToSlice -> (
       match backend () with
       | Lean -> "Std.Array.to_slice"
@@ -942,6 +946,9 @@ let named_binop_name (binop : binop) : string =
   match binop with
   | Div (_, ty) -> add_int_name ty ^ "div"
   | Rem (_, ty) -> add_int_name ty ^ "rem"
+  | FRem F32 -> "F32.rem"
+  | FRem F64 -> "F64.rem"
+  | FRem _ -> raise (Failure "Unsupported float type")
   | Add (_, ty) -> add_int_name ty ^ "add"
   | Sub (_, ty) -> add_int_name ty ^ "sub"
   | Mul (_, ty) -> add_int_name ty ^ "mul"
