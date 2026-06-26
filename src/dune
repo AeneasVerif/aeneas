@@ -51,6 +51,7 @@
   Errors
   FileGraph
   FileMapping
+  FilePlan
   Expressions
   ExpressionsUtils
   Extract

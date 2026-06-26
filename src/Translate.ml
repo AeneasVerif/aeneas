@@ -1103,8 +1103,8 @@ let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
 (** A generic utility to generate the extracted definitions: as we may want to
     split the definitions between different files (or not), we can control what
     is precisely extracted. *)
-let extract_definitions (fmt : Format.formatter) (config : gen_config)
-    (ctx : gen_ctx) : unit =
+let extract_definitions ?(groups : declaration_group list option)
+    (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx) : unit =
   (* Export the definition groups to the file, in the proper order.
      - [extract_decl]: extract the type declaration (if not filtered)
      - [extract_extra_info]: extra the extra type information (e.g.,
@@ -1254,13 +1254,17 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
           "Mixed-recursive declaration groups are not supported"
   in
 
+  (* By default we emit every declaration group; callers that split the crate
+     across files (e.g. [-split-by-file]) pass the subset destined for this
+     file. *)
+  let groups = Option.value groups ~default:ctx.crate.declarations in
   List.iter
     (fun g ->
       try export_decl_group g
       with CFailure _ ->
         (* An exception was raised: ignore it *)
         ())
-    ctx.crate.declarations
+    groups
 
 type extract_file_info = {
   filename : string;
@@ -1278,8 +1282,8 @@ type extract_file_info = {
           of the file *)
 }
 
-let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
-    : unit =
+let extract_file ?(groups : declaration_group list option) (config : gen_config)
+    (ctx : gen_ctx) (fi : extract_file_info) : unit =
   (* Open the file and create the formatter *)
   let out = open_out fi.filename in
   let fmt = Format.formatter_of_out_channel out in
@@ -1409,7 +1413,7 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
   Format.pp_open_vbox fmt 0;
 
   (* Extract the definitions *)
-  extract_definitions fmt config ctx;
+  extract_definitions ?groups fmt config ctx;
 
   (* Close the box and end the formatting *)
   Format.pp_close_box fmt ();
@@ -1436,6 +1440,161 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
   (* Flush and close the file *)
   close_out out
 
+(** The representative item of a declaration group. All the members of a group
+    share a source file / SCC, so any member is a valid representative. *)
+let group_repr_item (g : declaration_group) : Types.item_id =
+  let hd f = function
+    | NonRecGroup id -> f id
+    | RecGroup ids -> f (List.hd ids)
+  in
+  match g with
+  | TypeGroup g -> hd (fun id -> Types.IdType id) g
+  | FunGroup g -> hd (fun id -> Types.IdFun id) g
+  | GlobalGroup g -> hd (fun id -> Types.IdGlobal id) g
+  | TraitDeclGroup g -> hd (fun id -> Types.IdTraitDecl id) g
+  | TraitImplGroup g -> hd (fun id -> Types.IdTraitImpl id) g
+  | MixedGroup g -> (
+      match g with
+      | NonRecGroup id -> id
+      | RecGroup ids -> List.hd ids)
+
+(** Per-file extraction ([-split-by-file]): emit one Lean module per source
+    file, merging files that form an import cycle into a single module. *)
+let extract_by_file (ctx : gen_ctx) (crate : crate) ~(dest_dir : string)
+    ~(namespace : string) ~(crate_name : string) ~(has_opaque : bool)
+    ~(fg : FileGraph.t) ~(placed : FilePlan.placed_module list) : unit =
+  let open FileGraph in
+  let scc_data : bucket SCC.sccs = fg.sccs in
+
+  (* bucket -> SCC id *)
+  let bucket_to_scc =
+    SCC.SccId.Map.fold
+      (fun scc_id buckets acc ->
+        List.fold_left (fun acc b -> BucketMap.add b scc_id acc) acc buckets)
+      scc_data.sccs BucketMap.empty
+  in
+  let group_scc (g : declaration_group) : SCC.SccId.id option =
+    match FileGraph.bucket_of_item crate (group_repr_item g) with
+    | None -> None
+    | Some b -> BucketMap.find_opt b bucket_to_scc
+  in
+
+  (* Partition the crate's declaration groups by SCC in a single pass, keeping
+     charon's topological order within each SCC. A group whose representative
+     item has no bucket (no metadata) maps to no SCC and is dropped. *)
+  let groups_by_scc : declaration_group list SCC.SccId.Map.t =
+    SCC.SccId.Map.map List.rev
+      (List.fold_left
+         (fun acc g ->
+           match group_scc g with
+           | None -> acc
+           | Some scc_id ->
+               SCC.SccId.Map.update scc_id
+                 (function
+                   | None -> Some [ g ]
+                   | Some gs -> Some (g :: gs))
+                 acc)
+         SCC.SccId.Map.empty crate.declarations)
+  in
+
+  let scc_modules =
+    List.fold_left
+      (fun acc (m : FilePlan.placed_module) -> SCC.SccId.Map.add m.scc_id m acc)
+      SCC.SccId.Map.empty placed
+  in
+
+  let noncomputable = has_opaque && not !Config.all_computable in
+  let base_config =
+    {
+      extract_types = true;
+      extract_decreases_clauses = !Config.extract_decreases_clauses;
+      extract_template_decreases_clauses = false;
+      extract_fun_decls = true;
+      extract_trait_decls = true;
+      extract_trait_impls = true;
+      extract_transparent = true;
+      extract_opaque = true;
+      extract_globals = true;
+      interface = false;
+    }
+  in
+
+  (* Emit one file per SCC, in topological (dependency-first) order. *)
+  List.iter
+    (fun (m : FilePlan.placed_module) ->
+      if m.is_dropped then ()
+      else
+        let scc_id = m.scc_id in
+        (* Imports: the module names of the SCCs this one depends on, skipping any
+         dropped (empty builtin-only external) module. *)
+        let deps =
+          Option.value
+            (SCC.SccId.Map.find_opt scc_id scc_data.scc_deps)
+            ~default:SCC.SccId.Set.empty
+        in
+        let custom_includes =
+          List.filter_map
+            (fun dep_id ->
+              let dep = SCC.SccId.Map.find dep_id scc_modules in
+              if dep.is_dropped then None else Some dep.import_name)
+            (SCC.SccId.Set.elements deps)
+        in
+        let config = { base_config with interface = m.is_external } in
+        let scc_groups =
+          Option.value (SCC.SccId.Map.find_opt scc_id groups_by_scc) ~default:[]
+        in
+        let custom_msg =
+          if m.is_external then
+            ": external declarations.\n\
+             -- This is a template file: rename it to drop the \"_Template\" \
+             suffix and fill the holes."
+          else ""
+        in
+        let file_info =
+          {
+            filename = m.filename;
+            namespace;
+            in_namespace = not m.is_external;
+            (* External modules don't open the crate namespace: their declarations
+             have absolute (external) names, and they cannot import a local
+             module to obtain the namespace without creating an import cycle
+             (every local module imports the external modules).
+
+             TODO: We will have to revisit this in a bit
+             *)
+            open_namespace = false;
+            crate_name;
+            rust_module_name = crate.name;
+            module_name = m.import_name;
+            custom_msg;
+            custom_imports = [];
+            custom_includes;
+            noncomputable = (if m.is_external then false else noncomputable);
+          }
+        in
+        (* Create the (possibly nested) directory for the file. *)
+        let dir = Filename.dirname m.filename in
+        if not (Sys.file_exists dir) then Core_unix.mkdir_p dir;
+        extract_file ~groups:scc_groups config ctx file_info)
+    placed;
+
+  (* Generate the library entry point: a [Crate.lean] beside the [Crate/] tree
+     that imports every emitted local leaf module, so [import Crate] pulls in the
+     whole crate. (-gen-lib-entry is incompatible with -subdir, so [dest_dir] is
+     the Lake source root and the entry module name is just [crate_name].) *)
+  if !Config.generate_lib_entry_point then (
+    let local_modules =
+      List.filter_map
+        (fun (m : FilePlan.placed_module) ->
+          if m.is_dropped || m.is_external then None else Some m.import_name)
+        placed
+    in
+    let filename = Filename.concat dest_dir (crate_name ^ ".lean") in
+    let out = open_out filename in
+    List.iter (fun m -> Printf.fprintf out "import %s\n" m) local_modules;
+    close_out out;
+    log#linfo (lazy ("Generated: " ^ filename)))
+
 let extract_translated_crate (filename : string) (dest_dir : string)
     (subdir : string option) (crate : crate) (trans_ctx : trans_ctx)
     (trans_crate : translated_crate) (extracted_opaque : bool ref) : unit =
@@ -1449,16 +1608,6 @@ let extract_translated_crate (filename : string) (dest_dir : string)
   } =
     trans_crate
   in
-  (* Diagnostic for the multi-file extraction: print the file-level
-     dependency graph and its SCCs, then continue with normal extraction. *)
-  if !Config.dump_file_graph then (
-    let get_name (id : Types.item_id) : string =
-      match LlbcAstUtils.crate_get_item_meta crate id with
-      | Some m -> name_to_string trans_ctx m.name
-      | None -> "<unknown item>"
-    in
-    print_string (FileGraph.dump crate ~get_name);
-    flush stdout);
   (* Initialize the names map by registering the keywords used in the
      language, as well as some primitive names ("u32", etc.).
      We insert the names of the local declarations later. *)
@@ -1849,8 +1998,41 @@ let extract_translated_crate (filename : string) (dest_dir : string)
   in
   let has_opaque = has_opaque_types || has_opaque_funs in
 
+  (* The file graph (SCCs) and, in [-split-by-file] mode, the placement plan are
+     each computed exactly once here, then shared by the [-dump-file-graph]
+     diagnostic and the actual emitter — so the dump mirrors what is written by
+     construction. The graph is forced lazily: only [-split-by-file] (and the
+     dump) need it. *)
+  let file_graph = lazy (FileGraph.compute crate) in
+  let placement =
+    if !Config.split_by_file then
+      Some
+        (FilePlan.place_by_file (Lazy.force file_graph) ~import_prefix
+           ~module_root_dir:
+             (FilePlan.module_root_dir ~full_dest_dir ~crate_name)
+           ~ext ~has_opaque_types ~has_opaque_funs)
+    else None
+  in
+
+  (* Diagnostic: print the file-dependency graph, and in [-split-by-file] mode
+     the exact set of files that will be written, then continue extraction. *)
+  if !Config.dump_file_graph then (
+    let get_name (id : Types.item_id) : string =
+      match LlbcAstUtils.crate_get_item_meta crate id with
+      | Some m -> name_to_string trans_ctx m.name
+      | None -> "<unknown item>"
+    in
+    print_string (FileGraph.render (Lazy.force file_graph) ~get_name);
+    Option.iter
+      (fun placed -> print_string (FilePlan.render_placement placed))
+      placement;
+    flush stdout);
+
   (* Extract one or several files, depending on the configuration *)
-  (if !Config.split_files then (
+  (if !Config.split_by_file then
+     extract_by_file ctx crate ~dest_dir ~namespace ~crate_name ~has_opaque
+       ~fg:(Lazy.force file_graph) ~placed:(Option.get placement)
+   else if !Config.split_files then (
      let base_gen_config =
        {
          extract_types = false;

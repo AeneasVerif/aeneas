@@ -458,8 +458,9 @@ let () =
   (* Sanity check: the use of decrease clauses is not compatible with the use of fuel *)
   check_arg_not !use_fuel "-use-fuel" !extract_decreases_clauses
     "-decreases-clauses";
-  check_arg_implies !generate_lib_entry_point "-gen-lib-entry" !split_files
-    "-split-files";
+  if !generate_lib_entry_point && not (!split_files || !split_by_file) then
+    fail_with_error
+      "The -gen-lib-entry option requires -split-files or -split-by-file";
   check_arg_not !generate_lib_entry_point "-gen-lib-entry"
     (Option.is_some !subdir) "-subdir";
   if !lean_gen_lakefile && not (backend () = Lean) then
@@ -477,6 +478,9 @@ let () =
   if !split_by_file && not (backend () = Lean) then
     fail_with_error
       "The -split-by-file option is valid only for the Lean backend";
+  (* Fail on this combination of flags until -decreases-clauses is deprecated. *)
+  check_arg_not !split_by_file "-split-by-file" !extract_decreases_clauses
+    "-decreases-clauses";
 
   check_arg_implies !diagnose_detailed "-diagnose-detailed"
     !diagnose_micro_passes "-diagnose-micro-passes";

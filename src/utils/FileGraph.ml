@@ -36,11 +36,8 @@ let path_of_file_name (n : file_name) : string =
 
 (** The bucket an item belongs to, or [None] if we can't find its metadata.
 
-    Bucketing is gated on [is_local]: a local item goes to a [BFile] keyed on its
-    source path, a non-local item to an external bucket by kind. We don't
-    distinguish the [file_name] constructor for local items because charon always
-    gives them a real [Local] path ([Virtual] is only ever non-local stdlib, and
-    [NotReal] is rejected upstream in [translate_span_data]). *)
+    Bucketing is gated on [is_local]: a local item goes to a [BFile] keyed on
+    its source path, a non-local item to an external bucket by kind. *)
 let bucket_of_item (crate : crate) (id : item_id) : bucket option =
   match crate_get_item_meta crate id with
   | None -> None
@@ -219,6 +216,3 @@ let render (graph : t) ~(get_name : item_id -> string) : string =
   line "=======================================================================";
 
   Buffer.contents buf
-
-let dump (crate : crate) ~(get_name : item_id -> string) : string =
-  render (compute crate) ~get_name
