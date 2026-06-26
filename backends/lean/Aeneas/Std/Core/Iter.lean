@@ -47,6 +47,16 @@ structure core.iter.adapters.take.Take (I : Type u) where
 structure core.iter.adapters.rev.Rev (T : Type u) where
   iter : T
 
+/-- `core::iter::adapters::zip::Zip` — the `a.zip(b)` adapter.
+
+    The real Rust struct also carries `index`/`len` fields used for instance
+    by the `TrustedRandomAccess` specialisation; for now we omit them. -/
+@[rust_type "core::iter::adapters::zip::Zip"]
+structure core.iter.adapters.zip.Zip (A : Type u) (B : Type u) where
+  mk ::
+  fst : A
+  snd : B
+
 @[rust_trait "core::iter::traits::iterator::Iterator"]
 structure core.iter.traits.iterator.Iterator (Self : Type) (Self_Item : Type)
   where
@@ -54,7 +64,12 @@ structure core.iter.traits.iterator.Iterator (Self : Type) (Self_Item : Type)
   step_by : Self → Usize → Result (core.iter.adapters.step_by.StepBy Self)
   enumerate : Self → Result (core.iter.adapters.enumerate.Enumerate Self)
   take : Self → Usize → Result (core.iter.adapters.take.Take Self)
-  -- rev : Self → Result (core.iter.adapters.rev.Rev Self) -- requires DoubleEndedIterator, leading to circularity
+  -- TODO: adding more fields like rev leads to a circularity.
+  -- As an approximation we could only require these methods to implement a smaller version of
+  -- `Iterator` with, e.g., only the `next` method. Most implementations should satisfy this
+  -- model. In order to make the extraction work, we would also define a coercion from
+  -- `Iterator` to `SimpleIterator`.
+  -- rev : Self → Result (core.iter.adapters.rev.Rev Self) -- this leads to a circularity
   -- TODO: collect
 
 @[rust_fun "core::iter::traits::iterator::Iterator::step_by"]
@@ -482,6 +497,239 @@ def core.iter.traits.iterator.IteratorRange {A : Type}
   enumerate := core.iter.range.IteratorRange.enumerate StepInst
   take := core.iter.range.IteratorRange.take StepInst
 }
+
+/-- `Zip<A, B>::next` (default `ZipImpl::next`, `zip.rs:164-168`):
+    ```rust
+    let x = self.a.next()?;   // advance A
+    let y = self.b.next()?;   // advance B (only if A produced)
+    Some((x, y))
+    ```
+    `?` short-circuits: if A yields `none`, B is *not* advanced. -/
+@[rust_fun
+  "core::iter::adapters::zip::{core::iter::traits::iterator::Iterator<core::iter::adapters::zip::Zip<@A, @B>, (@Clause0_Item, @Clause1_Item)>}::next"]
+def core.iter.adapters.zip.Zip.Insts.CoreIterTraitsIteratorIteratorPair.next
+  {A B Item_A Item_B : Type}
+  (IA : core.iter.traits.iterator.Iterator A Item_A)
+  (IB : core.iter.traits.iterator.Iterator B Item_B)
+  (z : core.iter.adapters.zip.Zip A B) :
+  Result ((Option (Item_A × Item_B)) × core.iter.adapters.zip.Zip A B) := do
+  let (oa, a') ← IA.next z.fst
+  match oa with
+  | none => ok (none, ⟨a', z.snd⟩)
+  | some a => do
+      let (ob, b') ← IB.next z.snd
+      match ob with
+      | none => ok (none, ⟨a', b'⟩)
+      | some b => ok (some (a, b), ⟨a', b'⟩)
+
+@[rust_fun "core::ops::range::{core::ops::range::RangeInclusive<@Idx>}::new"]
+def core.ops.range.RangeInclusive.new {Idx : Type}
+    (start «end» : Idx) : Result (core.ops.range.RangeInclusive Idx) :=
+  ok ⟨start, «end», false⟩
+
+@[rust_fun "core::ops::range::{core::ops::range::RangeInclusive<@Idx>}::is_empty"]
+def core.ops.range.RangeInclusive.is_empty {Idx : Type} (inst : core.cmp.PartialOrd Idx Idx)
+  (self : core.ops.range.RangeInclusive Idx) : Result Bool := do
+  if self.exhausted then ok true
+  else
+    let startLeEnd ← inst.le self.start self.«end»
+    pure (not startLeEnd)
+
+/-- `RangeInclusive<A>::next` (`range.rs:1396`):
+    ```rust
+    default fn spec_next(&mut self) -> Option<A> {
+        if self.is_empty() {
+            return None;
+        }
+        let is_iterating = self.start < self.end;
+        Some(if is_iterating {
+            let n =
+                Step::forward_checked(self.start.clone(), 1).expect("`Step` invariants not upheld");
+            mem::replace(&mut self.start, n)
+        } else {
+            self.exhausted = true;
+            self.start.clone()
+        })
+    }
+    ``` -/
+@[rust_fun
+  "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::RangeInclusive<@A>, @A>}::next"]
+def core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
+  {A : Type} (StepInst : core.iter.range.Step A)
+  (self : core.ops.range.RangeInclusive A) :
+  Result ((Option A) × core.ops.range.RangeInclusive A) := do
+  if ← self.is_empty StepInst.partialOrdInst then .ok (none, self)
+  else
+    let is_iterating ← StepInst.partialOrdInst.lt self.start self.«end»
+    if is_iterating then
+      let n ← StepInst.forward_checked self.start 1#usize
+      match n with
+      | none => .fail .panic
+      | some n => ok (some self.start, ⟨n, self.«end», self.exhausted⟩)
+    else
+      let n ← StepInst.cloneInst.clone self.start
+      ok (some n, ⟨self.start, self.«end», true⟩)
+
+/-- `Iterator::zip` for `RangeInclusive`: `Zip::new(self, other.into_iter())` -/
+@[rust_fun
+  "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::RangeInclusive<@A>, @A>}::zip"]
+def core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.zip
+  {A U Item IntoIter : Type}
+  (_StepInst : core.iter.range.Step A)
+  (IntoIterInst : core.iter.traits.collect.IntoIterator U Item IntoIter)
+  (r : core.ops.range.RangeInclusive A) (other : U) :
+  Result (core.iter.adapters.zip.Zip (core.ops.range.RangeInclusive A) IntoIter) := do
+  let b ← IntoIterInst.into_iter other
+  ok ⟨r, b⟩
+
+-- ============================================================================
+-- Iterator-adapter methods: `rev` / `zip` / `next_back` / `Rev::next` / defaults
+-- ============================================================================
+
+/-- `Iterator::zip` default body: `Zip::new(self, other.into_iter())`. -/
+@[rust_fun "core::iter::traits::iterator::Iterator::zip"]
+def core.iter.traits.iterator.Iterator.zip.default
+  {Self U Item0 Item1 IntoIter : Type}
+  (_IteratorInst : core.iter.traits.iterator.Iterator Self Item0)
+  (IntoIterInst : core.iter.traits.collect.IntoIterator U Item1 IntoIter) :
+  Self → U → Result (core.iter.adapters.zip.Zip Self IntoIter) :=
+  fun self other => do
+    let b ← IntoIterInst.into_iter other
+    ok ⟨self, b⟩
+
+/-- `Iterator::rev` default body: `Rev { iter: self }`. -/
+@[rust_fun "core::iter::traits::iterator::Iterator::rev"]
+def core.iter.traits.iterator.Iterator.rev.default
+  {Self Item0 Item1 : Type}
+  (_IteratorInst : core.iter.traits.iterator.Iterator Self Item0)
+  (_DEInst : core.iter.traits.double_ended.DoubleEndedIterator Self Item1) :
+  Self → Result (core.iter.adapters.rev.Rev Self) :=
+  fun self => ok ⟨self⟩
+
+/-- `Iterator::next` on `Rev<I>`: delegates to the inner `next_back`. -/
+@[rust_fun
+  "core::iter::adapters::rev::{core::iter::traits::iterator::Iterator<core::iter::adapters::rev::Rev<@I>, @Clause0_Clause0_Item>}::next"]
+def core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next
+  {I Item : Type}
+  (DEInst : core.iter.traits.double_ended.DoubleEndedIterator I Item) :
+  core.iter.adapters.rev.Rev I →
+    Result ((Option Item) × core.iter.adapters.rev.Rev I) :=
+  fun self => do
+    let (o, it) ← DEInst.next_back self.iter
+    ok (o, ⟨it⟩)
+
+/-- `Range<A>::rev`: `Rev { iter: self }`. -/
+@[rust_fun
+  "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>}::rev"]
+def core.ops.range.Range.Insts.CoreIterTraitsIteratorIterator.rev
+  {A Item : Type} (_StepInst : core.iter.range.Step A)
+  (_DEInst : core.iter.traits.double_ended.DoubleEndedIterator (core.ops.range.Range A) Item) :
+  core.ops.range.Range A → Result (core.iter.adapters.rev.Rev (core.ops.range.Range A)) :=
+  fun self => ok ⟨self⟩
+
+/-- `Range<A>::zip`: `Zip::new(self, other.into_iter())`. -/
+@[rust_fun
+  "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>}::zip"]
+def core.ops.range.Range.Insts.CoreIterTraitsIteratorIterator.zip
+  {A U Item IntoIter : Type} (_StepInst : core.iter.range.Step A)
+  (IntoIterInst : core.iter.traits.collect.IntoIterator U Item IntoIter) :
+  core.ops.range.Range A → U →
+    Result (core.iter.adapters.zip.Zip (core.ops.range.Range A) IntoIter) :=
+  fun self other => do
+    let b ← IntoIterInst.into_iter other
+    ok ⟨self, b⟩
+
+/-- `Range<A>::next_back` (`DoubleEndedIterator`): if `start < end`, decrement
+    `end` by one and yield the new `end`; otherwise `none`. -/
+@[rust_fun
+  "core::iter::range::{core::iter::traits::double_ended::DoubleEndedIterator<core::ops::range::Range<@A>, @A>}::next_back"]
+def core.ops.range.Range.Insts.CoreIterTraitsDoubleEndedIterator.next_back
+  {A : Type} (StepInst : core.iter.range.Step A) :
+  core.ops.range.Range A → Result ((Option A) × core.ops.range.Range A) :=
+  fun r => do
+    let lt ← StepInst.partialOrdInst.lt r.start r.«end»
+    if lt then do
+      let b ← StepInst.backward_checked r.«end» 1#usize
+      match b with
+      | none => .fail .panic
+      | some e' => ok (some e', { r with «end» := e' })
+    else ok (none, r)
+
+/-- `RangeInclusive<A>::rev`: `Rev { iter: self }`. -/
+@[rust_fun
+  "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::RangeInclusive<@A>, @A>}::rev"]
+def core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.rev
+  {A Item : Type} (_StepInst : core.iter.range.Step A)
+  (_DEInst : core.iter.traits.double_ended.DoubleEndedIterator
+    (core.ops.range.RangeInclusive A) Item) :
+  core.ops.range.RangeInclusive A →
+    Result (core.iter.adapters.rev.Rev (core.ops.range.RangeInclusive A)) :=
+  fun self => ok ⟨self⟩
+
+/-- `RangeInclusive<A>::take`: `Take { iter: self, n }`. -/
+@[rust_fun
+  "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::RangeInclusive<@A>, @A>}::take"]
+def core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.take
+  {A : Type} (_StepInst : core.iter.range.Step A) :
+  core.ops.range.RangeInclusive A → Usize →
+    Result (core.iter.adapters.take.Take (core.ops.range.RangeInclusive A)) :=
+  fun self n => ok ⟨self, n⟩
+
+/-- `RangeInclusive<A>::enumerate`: `Enumerate { iter: self, count: 0 }`. -/
+@[rust_fun
+  "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::RangeInclusive<@A>, @A>}::enumerate"]
+def core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.enumerate
+  {A : Type} (_StepInst : core.iter.range.Step A) :
+  core.ops.range.RangeInclusive A →
+    Result (core.iter.adapters.enumerate.Enumerate (core.ops.range.RangeInclusive A)) :=
+  fun self => ok ⟨self, 0#usize⟩
+
+/-- `RangeInclusive<A>::step_by`: `StepBy { iter: self, step_by: n }` (`n ≠ 0`). -/
+@[rust_fun
+  "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::RangeInclusive<@A>, @A>}::step_by"]
+def core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.step_by
+  {A : Type} (_StepInst : core.iter.range.Step A) :
+  core.ops.range.RangeInclusive A → Usize →
+    Result (core.iter.adapters.step_by.StepBy (core.ops.range.RangeInclusive A)) :=
+  fun self n => if n.val = 0 then .fail .panic else ok ⟨self, n⟩
+
+/-- `RangeInclusive<A>::next_back` (`DoubleEndedIterator`): symmetric to `next`,
+    consuming from the high end (`end`).
+
+```rust
+fn spec_next_back(&mut self) -> Option<A> {
+  if self.is_empty() {
+      return None;
+  }
+  let is_iterating = self.start < self.end;
+  Some(if is_iterating {
+      let n =
+          Step::backward_checked(self.end.clone(), 1).expect("`Step` invariants not upheld");
+      mem::replace(&mut self.end, n)
+  } else {
+      self.exhausted = true;
+      self.end.clone()
+  })
+}
+```
+-/
+@[rust_fun
+  "core::iter::range::{core::iter::traits::double_ended::DoubleEndedIterator<core::ops::range::RangeInclusive<@A>, @A>}::next_back"]
+def core.ops.range.RangeInclusive.Insts.CoreIterTraitsDoubleEndedIterator.next_back
+  {A : Type} (StepInst : core.iter.range.Step A)
+  (self : core.ops.range.RangeInclusive A) :
+  Result ((Option A) × core.ops.range.RangeInclusive A) := do
+  if ← self.is_empty StepInst.partialOrdInst then .ok (none, self)
+  else
+    let is_iterating ← StepInst.partialOrdInst.lt self.start self.«end»
+    if is_iterating then
+      let n ← StepInst.backward_checked self.«end» 1#usize
+      match n with
+      | none => .fail .panic
+      | some e' => ok (some self.«end», ⟨self.start, e', self.exhausted⟩)
+    else
+      let n ← StepInst.cloneInst.clone self.end
+      ok (some n, ⟨self.start, self.«end», true⟩)
 
 @[rust_type "core::iter::adapters::map::Map"]
 structure core.iter.adapters.map.Map (I : Type u) (F : Type v) where
