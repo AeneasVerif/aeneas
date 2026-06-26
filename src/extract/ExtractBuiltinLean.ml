@@ -343,14 +343,14 @@ let lean_builtin_funs =
     mk_fun
       "core::array::equality::{core::cmp::PartialEq<[@T; @N], [@U; @N]>}::eq"
       "core.array.equality.PartialEqArray.eq";
-    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 143 *)
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 144 *)
     mk_fun
       "core::array::equality::{core::cmp::PartialEq<[@T; @N], [@U; @N]>}::ne"
       "core.array.equality.PartialEqArray.ne";
-    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 263 *)
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 372 *)
     mk_fun "core::array::{[@T; @N]}::as_mut_slice"
       "core.array.Array.as_mut_slice";
-    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 242 *)
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 351 *)
     mk_fun "core::array::{[@T; @N]}::as_slice" "core.array.Array.as_slice";
     (* file: "Aeneas/Std/Array/Array.lean", line: 295 *)
     mk_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone"
@@ -358,23 +358,23 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Array/Array.lean", line: 308 *)
     mk_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone_from"
       "core.array.CloneArray.clone_from";
-    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 254 *)
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 363 *)
     mk_fun "core::array::{core::convert::AsMut<[@T; @N], [@T]>}::as_mut"
       "Array.Insts.CoreConvertAsMutSlice.as_mut";
-    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 247 *)
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 356 *)
     mk_fun "core::array::{core::convert::AsRef<[@T; @N], [@T]>}::as_ref"
       "Array.Insts.CoreConvertAsRefSlice.as_ref";
-    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 204 *)
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 313 *)
     mk_fun
       "core::array::{core::convert::TryFrom<&'a [@T; @N], &'a [@T], \
        core::array::TryFromSliceError>}::try_from"
       "core.array.TryFromSharedArraySlice.try_from";
-    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 219 *)
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 328 *)
     mk_fun
       "core::array::{core::convert::TryFrom<&'a mut [@T; @N], &'a mut [@T], \
        core::array::TryFromSliceError>}::try_from"
       "core.array.TryFromMutArraySlice.try_from";
-    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 184 *)
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 293 *)
     mk_fun
       "core::array::{core::convert::TryFrom<[@T; @N], &'0 [@T], \
        core::array::TryFromSliceError>}::try_from"
@@ -385,10 +385,10 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Array/Array.lean", line: 386 *)
     mk_fun "core::array::{core::default::Default<[@T; @N]>}::default"
       "core.default.DefaultArray.default";
-    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 235 *)
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 344 *)
     mk_fun "core::array::{core::fmt::Debug<[@T; @N]>}::fmt"
       "core.array.DebugArray.fmt";
-    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 170 *)
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 279 *)
     mk_fun
       "core::array::{core::fmt::Debug<core::array::TryFromSliceError>}::fmt"
       "core.array.DebugTryFromSliceError.fmt";
@@ -967,7 +967,7 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 153 *)
     mk_fun "core::slice::cmp::{core::cmp::PartialEq<[@T], [@U]>}::eq"
       "core.slice.cmp.PartialEqSlice.eq";
-    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 162 *)
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 221 *)
     mk_fun "core::slice::cmp::{core::cmp::PartialEq<[@T], [@U]>}::ne"
       "core.slice.cmp.PartialEqSlice.ne";
     (* file: "Aeneas/Std/Slice.lean", line: 351 *)
@@ -1461,7 +1461,7 @@ let lean_builtin_trait_impls =
       "core.convert.FromVecArray";
     (* file: "Aeneas/Std/Core/Convert.lean", line: 22 *)
     mk_trait_impl "core::convert::Into<@Self, @T>" "core.convert.IntoFrom";
-    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 211 *)
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 320 *)
     mk_trait_impl
       "core::convert::TryFrom<&'a [@T; @N], &'a [@T], \
        core::array::TryFromSliceError>"
@@ -1486,7 +1486,7 @@ let lean_builtin_trait_impls =
       ~keep_params:(Some [ true; false ]);
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 151 *)
     mk_trait_impl "core::fmt::Debug<bool>" "core.fmt.DebugBool";
-    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 177 *)
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 286 *)
     mk_trait_impl "core::fmt::Debug<core::array::TryFromSliceError>"
       "core.fmt.DebugTryFromSliceError";
     (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 134 *)
