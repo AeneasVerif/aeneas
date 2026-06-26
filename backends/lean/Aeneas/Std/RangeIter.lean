@@ -495,7 +495,9 @@ theorem core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next_
     {ty : UScalarTy}
     {cloneInst : core.clone.Clone (UScalar ty)}
     {partialOrdInst : core.cmp.PartialOrd (UScalar ty) (UScalar ty)}
+    (h_clone : ∀ x : UScalar ty, cloneInst.clone x = ok x)
     (h_lt : ∀ a b : UScalar ty, partialOrdInst.lt a b = ok (decide (a.val < b.val)))
+    (h_le : ∀ a b : UScalar ty, partialOrdInst.le a b = ok (decide (a.val ≤ b.val)))
     (r : core.ops.range.RangeInclusive (UScalar ty)) :
     core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
       (core.iter.range.UScalarStep ty cloneInst partialOrdInst) r
@@ -508,9 +510,17 @@ theorem core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next_
       else
         o = some r.start ∧ r'.start = r.start ∧
         r'.«end» = r.«end» ∧ r'.exhausted = true ⦄ := by
+  have h_empty : core.ops.range.RangeInclusive.is_empty partialOrdInst r
+      = ok (r.exhausted || decide (r.«end».val < r.start.val)) := by
+    unfold core.ops.range.RangeInclusive.is_empty
+    by_cases he : r.exhausted = true
+    · simp [he]
+    · simp only [Bool.not_eq_true] at he
+      simp only [he, Bool.false_or, h_le, bind_tc_ok]
+      simp [pure, ← decide_not]
   unfold core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
   simp only [core.iter.range.UScalarStep,
-    core.iter.range.UScalarStep.forward_checked, h_lt, bind_tc_ok]
+    core.iter.range.UScalarStep.forward_checked, h_lt, h_clone, bind_tc_ok, h_empty]
   by_cases hexh : r.exhausted = true
   · simp only [hexh, Bool.true_or, ↓reduceIte, spec_ok, true_or]
     simp
@@ -551,6 +561,6 @@ theorem core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next_
         o = some r.start ∧ r'.start = r.start ∧
         r'.«end» = r.«end» ∧ r'.exhausted = true ⦄ :=
   core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next_UScalar_spec
-    (by intros; rfl) r
+    (by simp) (by intros; rfl) (by intros; rfl) r
 
 end Aeneas.Std
