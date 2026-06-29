@@ -38,4 +38,11 @@ def from_elem
   := do
   alloc.vec.from_elem corecloneCloneInst x n
 
+/-- [vec::singleton]:
+    Source: 'tests/src/vec.rs', lines 17:0-19:1 -/
+def singleton {T : Type} (x : T) : Result (alloc.vec.Vec T) := do
+  let y ←
+    lift (Std.Array.to_slice (Array.make 1#usize [ x ] : Array T 1#usize))
+  ok (alloc.slice.Slice.into_vec y)
+
 end vec
