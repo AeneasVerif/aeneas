@@ -68,6 +68,9 @@ jobs:
           nix_conf: |
             keep-env-derivations = true
             keep-outputs = true
+            extra-substituters = https://hacl.cachix.org
+            extra-trusted-public-keys = hacl.cachix.org-1:FzsZ2xsByOwKwIWNPII7yMOelJNDZ12mDAj3d1eGX0c=
+
       - name: Restore Nix Cache
         if: ${{ ! matrix.nix_machine }}
         id: restore-nix-cache

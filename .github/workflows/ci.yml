@@ -37,7 +37,7 @@ jobs:
             extra-trusted-public-keys = hacl.cachix.org-1:FzsZ2xsByOwKwIWNPII7yMOelJNDZ12mDAj3d1eGX0c=
       - &setup_cachix_push
         name: Set up Cachix push
-        if: ${{ env.HAS_CACHIX_AUTH_TOKEN == 'true' }}
+        if: ${{ runner.environment == 'github-hosted' && env.HAS_CACHIX_AUTH_TOKEN == 'true' }}
         uses: cachix/cachix-action@v17
         with:
           name: hacl
