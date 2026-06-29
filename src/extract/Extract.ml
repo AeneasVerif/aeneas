@@ -2686,39 +2686,16 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
 let extract_trait_decl_register_parent_clause_names (ctx : extraction_ctx)
     (trait_decl : trait_decl)
     (builtin_info : Pure.builtin_trait_decl_info option) : extraction_ctx =
-  (* Compute the clause names *)
+  (* The clause names are computed (and deduplicated) all at once: see
+     {!ctx_compute_trait_parent_clause_names}. *)
   let clause_names =
-    match builtin_info with
-    | None ->
-        List.map
-          (fun (c : trait_param) ->
-            let name = ctx_compute_trait_parent_clause_name ctx trait_decl c in
-            (* Add a prefix if necessary *)
-            let name =
-              if !record_fields_short_names then name
-              else ctx_compute_trait_decl_name ctx trait_decl ^ name
-            in
-            (c.clause_id, name))
-          trait_decl.parent_clauses
-    | Some info ->
-        [%cassert] trait_decl.item_meta.span
-          (List.length trait_decl.parent_clauses
-          = List.length info.parent_clauses)
-          ("Invalid builtin information for trait decl: "
-          ^ name_to_string ctx trait_decl.item_meta.name
-          ^ "; expected "
-          ^ string_of_int (List.length trait_decl.parent_clauses)
-          ^ " parent clauses, found "
-          ^ string_of_int (List.length info.parent_clauses));
-        List.map
-          (fun (c, name) -> (c.clause_id, name))
-          (List.combine trait_decl.parent_clauses info.parent_clauses)
+    ctx_compute_trait_parent_clause_names ctx trait_decl builtin_info
   in
   (* Register the names *)
   List.fold_left
-    (fun ctx (cid, cname) ->
+    (fun ctx (c, cname) ->
       ctx_add trait_decl.item_meta.span
-        (TraitParentClauseId (trait_decl.def_id, cid))
+        (TraitParentClauseId (trait_decl.def_id, c.clause_id))
         cname ctx)
     ctx clause_names
 
