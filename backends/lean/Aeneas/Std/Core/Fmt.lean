@@ -127,7 +127,7 @@ def core.fmt.Formatter.debug_struct_field1_finish
   -- TODO: more precise model that actually uses the `Debug` instance
   .ok (.Ok (), fmt)
 
-@[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field2_finish"]
+@[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field2_finish", simp]
 def core.fmt.Formatter.debug_struct_field2_finish (fmt : core.fmt.Formatter) (_ : Str)
   (_ : Str) (_ : Dyn (fun dyn => core.fmt.Debug dyn))
   (_ : Str) (_ : Dyn (fun dyn => core.fmt.Debug dyn)) :
@@ -156,7 +156,7 @@ def core.fmt.Formatter.debug_struct_field4_finish (fmt : core.fmt.Formatter) (_ 
   fun _ _ _ _ _ _ _ _ =>
   .ok (.Ok (), fmt)
 
-@[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field5_finish"]
+@[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field5_finish", simp]
 def core.fmt.Formatter.debug_struct_field5_finish (fmt : core.fmt.Formatter) (_ : Str) :
   Str → Dyn (fun dyn => core.fmt.Debug dyn) →
   Str → Dyn (fun dyn => core.fmt.Debug dyn) →
@@ -166,7 +166,7 @@ def core.fmt.Formatter.debug_struct_field5_finish (fmt : core.fmt.Formatter) (_ 
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
   fun _ _ _ _ _ _ _ _ _ _ => .ok (.Ok (), fmt)
 
-@[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_tuple_field1_finish"]
+@[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_tuple_field1_finish", simp]
 def core.fmt.Formatter.debug_tuple_field1_finish :
   core.fmt.Formatter → Str → Dyn (fun dyn => core.fmt.Debug dyn) →
     Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=

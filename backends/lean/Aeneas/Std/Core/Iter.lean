@@ -230,7 +230,7 @@ structure core.iter.traits.exact_size.ExactSizeIterator (Self : Type) (Item : Ty
     needed for U64/U128). -/
 def core.iter.range.UScalarStep.steps_between {ty : UScalarTy}
     (start end_ : UScalar ty) : Result (Usize × (Option Usize)) :=
-  if start.val > end_.val then ok ⟨ 0#usize, none ⟩
+  if h: start.val > end_.val then ok ⟨ 0#usize, none ⟩
   else
     let diff := end_.val - start.val
     if h : diff ≤ Usize.max then
@@ -240,16 +240,33 @@ def core.iter.range.UScalarStep.steps_between {ty : UScalarTy}
       let usizeMax := Usize.ofNatCore Usize.max (by scalar_tac)
       ok ⟨ usizeMax, none ⟩
 
-private theorem UScalar.max_add_one_eq_size (ty : UScalarTy) :
-    UScalar.max ty + 1 = 2^ty.numBits := by
-  cases ty <;> scalar_tac
+/-- Generic `steps_between` for all signed scalar types. -/
+def core.iter.range.IScalarStep.steps_between {ty : IScalarTy}
+    (start end_ : IScalar ty) : Result (Usize × (Option Usize)) :=
+  if h: start.val > end_.val then ok ⟨ 0#usize, none ⟩
+  else
+    let diff := end_.val - start.val
+    if h : diff ≤ Usize.max then
+      let steps := Usize.ofNatCore diff.toNat (by grind)
+      ok ⟨ steps, some steps ⟩
+    else
+      let usizeMax := Usize.ofNatCore Usize.max (by scalar_tac)
+      ok ⟨ usizeMax, none ⟩
 
 /-- Generic `forward_checked` for all unsigned scalar types. -/
 def core.iter.range.UScalarStep.forward_checked {ty : UScalarTy}
     (start : UScalar ty) (n : Usize) : Result (Option (UScalar ty)) :=
   if h : start.val + n.val ≤ UScalar.max ty then
     ok (some (UScalar.ofNatCore (start.val + n.val)
-      (by have := UScalar.max_add_one_eq_size ty; omega)))
+      (by cases ty <;> grind)))
+  else ok none
+
+/-- Generic `forward_checked` for all signed scalar types. -/
+def core.iter.range.IScalarStep.forward_checked {ty : IScalarTy}
+    (start : IScalar ty) (n : Usize) : Result (Option (IScalar ty)) :=
+  if h : start.val + n.val ≤ IScalar.max ty then
+    ok (some (IScalar.ofIntCore (start.val + n.val)
+      (by cases ty <;> grind)))
   else ok none
 
 /-- Generic `backward_checked` for all unsigned scalar types. -/
@@ -257,6 +274,14 @@ def core.iter.range.UScalarStep.backward_checked {ty : UScalarTy}
     (start : UScalar ty) (n : Usize) : Result (Option (UScalar ty)) :=
   if h : n.val ≤ start.val then
     ok (some (UScalar.ofNatCore (start.val - n.val)
+      (by have := start.hBounds; omega)))
+  else ok none
+
+/-- Generic `backward_checked` for all unsigned scalar types. -/
+def core.iter.range.IScalarStep.backward_checked {ty : IScalarTy}
+    (start : IScalar ty) (n : Usize) : Result (Option (IScalar ty)) :=
+  if h : n.val ≤ start.val then
+    ok (some (IScalar.ofIntCore (start.val - n.val)
       (by have := start.hBounds; omega)))
   else ok none
 
@@ -275,6 +300,19 @@ def core.iter.range.UScalarStep (ty : UScalarTy)
   steps_between := UScalarStep.steps_between
   forward_checked := UScalarStep.forward_checked
   backward_checked := UScalarStep.backward_checked
+}
+
+/-- Generic Step instance for all unsigned scalar types. The per-type instances
+    below are abbreviations of this, differing only in Clone/PartialOrd. -/
+def core.iter.range.IScalarStep (ty : IScalarTy)
+    (cloneInst : core.clone.Clone (IScalar ty))
+    (partialOrdInst : core.cmp.PartialOrd (IScalar ty) (IScalar ty)) :
+    core.iter.range.Step (IScalar ty) := {
+  cloneInst
+  partialOrdInst
+  steps_between := IScalarStep.steps_between
+  forward_checked := IScalarStep.forward_checked
+  backward_checked := IScalarStep.backward_checked
 }
 
 -- Per-type abbreviations with @[rust_fun] tags for the Aeneas compiler.
@@ -332,6 +370,60 @@ abbrev core.iter.range.StepU128.forward_checked := @UScalarStep.forward_checked 
 abbrev core.iter.range.StepU128.backward_checked := @UScalarStep.backward_checked .U128
 @[rust_trait_impl "core::iter::range::Step<u128>"]
 abbrev core.iter.range.StepU128 := UScalarStep .U128 core.clone.CloneU128 core.cmp.PartialOrdU128
+
+@[rust_fun "core::iter::range::{core::iter::range::Step<isize>}::steps_between"]
+abbrev core.iter.range.StepIsize.steps_between := @IScalarStep.steps_between .Isize
+@[rust_fun "core::iter::range::{core::iter::range::Step<isize>}::forward_checked"]
+abbrev core.iter.range.StepIsize.forward_checked := @IScalarStep.forward_checked .Isize
+@[rust_fun "core::iter::range::{core::iter::range::Step<isize>}::backward_checked"]
+abbrev core.iter.range.StepIsize.backward_checked := @IScalarStep.backward_checked .Isize
+@[rust_trait_impl "core::iter::range::Step<isize>"]
+abbrev core.iter.range.StepIsize := IScalarStep .Isize core.clone.CloneIsize core.cmp.PartialOrdIsize
+
+@[rust_fun "core::iter::range::{core::iter::range::Step<i8>}::steps_between"]
+abbrev core.iter.range.StepI8.steps_between := @IScalarStep.steps_between .I8
+@[rust_fun "core::iter::range::{core::iter::range::Step<i8>}::forward_checked"]
+abbrev core.iter.range.StepI8.forward_checked := @IScalarStep.forward_checked .I8
+@[rust_fun "core::iter::range::{core::iter::range::Step<i8>}::backward_checked"]
+abbrev core.iter.range.StepI8.backward_checked := @IScalarStep.backward_checked .I8
+@[rust_trait_impl "core::iter::range::Step<i8>"]
+abbrev core.iter.range.StepI8 := IScalarStep .I8 core.clone.CloneI8 core.cmp.PartialOrdI8
+
+@[rust_fun "core::iter::range::{core::iter::range::Step<i16>}::steps_between"]
+abbrev core.iter.range.StepI16.steps_between := @IScalarStep.steps_between .I16
+@[rust_fun "core::iter::range::{core::iter::range::Step<i16>}::forward_checked"]
+abbrev core.iter.range.StepI16.forward_checked := @IScalarStep.forward_checked .I16
+@[rust_fun "core::iter::range::{core::iter::range::Step<i16>}::backward_checked"]
+abbrev core.iter.range.StepI16.backward_checked := @IScalarStep.backward_checked .I16
+@[rust_trait_impl "core::iter::range::Step<i16>"]
+abbrev core.iter.range.StepI16 := IScalarStep .I16 core.clone.CloneI16 core.cmp.PartialOrdI16
+
+@[rust_fun "core::iter::range::{core::iter::range::Step<i32>}::steps_between"]
+abbrev core.iter.range.StepI32.steps_between := @IScalarStep.steps_between .I32
+@[rust_fun "core::iter::range::{core::iter::range::Step<i32>}::forward_checked"]
+abbrev core.iter.range.StepI32.forward_checked := @IScalarStep.forward_checked .I32
+@[rust_fun "core::iter::range::{core::iter::range::Step<i32>}::backward_checked"]
+abbrev core.iter.range.StepI32.backward_checked := @IScalarStep.backward_checked .I32
+@[rust_trait_impl "core::iter::range::Step<i32>"]
+abbrev core.iter.range.StepI32 := IScalarStep .I32 core.clone.CloneI32 core.cmp.PartialOrdI32
+
+@[rust_fun "core::iter::range::{core::iter::range::Step<i64>}::steps_between"]
+abbrev core.iter.range.StepI64.steps_between := @IScalarStep.steps_between .I64
+@[rust_fun "core::iter::range::{core::iter::range::Step<i64>}::forward_checked"]
+abbrev core.iter.range.StepI64.forward_checked := @IScalarStep.forward_checked .I64
+@[rust_fun "core::iter::range::{core::iter::range::Step<i64>}::backward_checked"]
+abbrev core.iter.range.StepI64.backward_checked := @IScalarStep.backward_checked .I64
+@[rust_trait_impl "core::iter::range::Step<i64>"]
+abbrev core.iter.range.StepI64 := IScalarStep .I64 core.clone.CloneI64 core.cmp.PartialOrdI64
+
+@[rust_fun "core::iter::range::{core::iter::range::Step<i128>}::steps_between"]
+abbrev core.iter.range.StepI128.steps_between := @IScalarStep.steps_between .I128
+@[rust_fun "core::iter::range::{core::iter::range::Step<i128>}::forward_checked"]
+abbrev core.iter.range.StepI128.forward_checked := @IScalarStep.forward_checked .I128
+@[rust_fun "core::iter::range::{core::iter::range::Step<i128>}::backward_checked"]
+abbrev core.iter.range.StepI128.backward_checked := @IScalarStep.backward_checked .I128
+@[rust_trait_impl "core::iter::range::Step<i128>"]
+abbrev core.iter.range.StepI128 := IScalarStep .I128 core.clone.CloneI128 core.cmp.PartialOrdI128
 
 -- ============================================================================
 -- Enumerate.next — generic over any inner iterator
