@@ -458,7 +458,7 @@ let lean_builtin_funs =
       "core.convert.num.ptr_try_from_impls.TryFromU32Usize.try_from";
     (* file: "Aeneas/Std/Core/Convert.lean", line: 28 *)
     mk_fun "core::convert::{core::convert::From<@T, @T>}::from"
-      "core.convert.FromSame.from_" ~can_fail:false;
+      "core.convert.FromSame.from" ~can_fail:false;
     (* file: "Aeneas/Std/Core/Convert.lean", line: 17 *)
     mk_fun "core::convert::{core::convert::Into<@T, @U>}::into"
       "core.convert.IntoFrom.into";

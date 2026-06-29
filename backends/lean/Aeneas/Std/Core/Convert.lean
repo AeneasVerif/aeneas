@@ -26,11 +26,11 @@ def core.convert.IntoFrom {T : Type} {U : Type} (fromInst : core.convert.From U 
 }
 
 @[simp, step_simps, rust_fun "core::convert::{core::convert::From<@T, @T>}::from" -canFail]
-def core.convert.FromSame.from_ {T : Type} (x : T) : T := x
+def core.convert.FromSame.from {T : Type} (x : T) : T := x
 
 @[reducible, rust_trait_impl "core::convert::From<@Self, @Self>"]
 def core.convert.FromSame (T : Type) : core.convert.From T T := {
-  «from» := fun x => ok (core.convert.FromSame.from_ x)
+  «from» := fun x => ok (core.convert.FromSame.from x)
 }
 
 @[rust_trait "core::convert::TryFrom"]
