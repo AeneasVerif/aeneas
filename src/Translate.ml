@@ -1255,7 +1255,7 @@ let extract_definitions ?(groups : declaration_group list option)
   in
 
   (* By default we emit every declaration group; callers that split the crate
-     across files (e.g. [-split-by-file]) pass the subset destined for this
+     across files (e.g. [-split-files]) pass the subset destined for this
      file. *)
   let groups = Option.value groups ~default:ctx.crate.declarations in
   List.iter
@@ -1458,8 +1458,8 @@ let group_repr_item (g : declaration_group) : Types.item_id =
       | NonRecGroup id -> id
       | RecGroup ids -> List.hd ids)
 
-(** Per-file extraction ([-split-by-file]): emit one Lean module per source
-    file, merging files that form an import cycle into a single module. *)
+(** Per-file extraction ([-split-files]): emit one Lean module per source file,
+    merging files that form an import cycle into a single module. *)
 let extract_by_file (ctx : gen_ctx) (crate : crate) ~(dest_dir : string)
     ~(namespace : string) ~(crate_name : string) ~(has_opaque : bool)
     ~(fg : FileGraph.t) ~(placed : FilePlan.placed_module list) : unit =
@@ -1548,6 +1548,17 @@ let extract_by_file (ctx : gen_ctx) (crate : crate) ~(dest_dir : string)
             ": external declarations.\n\
              -- This is a template file: rename it to drop the \"_Template\" \
              suffix and fill the holes."
+          else if List.length m.buckets > 1 then
+            (* A merged module: the source files formed an import cycle, so they
+               share one Lean module. List them so the merge is self-documenting. *)
+            let srcs =
+              List.filter_map
+                (function
+                  | BFile p -> Some p
+                  | _ -> None)
+                m.buckets
+            in
+            ": merged from " ^ String.concat ", " srcs
           else ""
         in
         let file_info =
@@ -1580,9 +1591,10 @@ let extract_by_file (ctx : gen_ctx) (crate : crate) ~(dest_dir : string)
 
   (* Generate the library entry point: a [Crate.lean] beside the [Crate/] tree
      that imports every emitted local leaf module, so [import Crate] pulls in the
-     whole crate. (-gen-lib-entry is incompatible with -subdir, so [dest_dir] is
-     the Lake source root and the entry module name is just [crate_name].) *)
-  if !Config.generate_lib_entry_point then (
+     whole crate. For [-split-files] this is on by default; it is only skipped
+     with [-subdir], where the tree is embedded in a larger project and [dest_dir]
+     is not the Lake source root. *)
+  if !Config.generate_lib_entry_point || Option.is_none !Config.subdir then (
     let local_modules =
       List.filter_map
         (fun (m : FilePlan.placed_module) ->
@@ -1900,7 +1912,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
            [Foo_Types.fst], [Foo_Funs.fst], etc.
          *)
         let filebasename =
-          if !Config.split_files then
+          if !Config.split_files_legacy then
             if Config.backend () = Lean then full_dest_dir ^ "/"
             else Filename.concat full_dest_dir crate_name ^ module_delimiter
           else Filename.concat full_dest_dir crate_name
@@ -2000,14 +2012,12 @@ let extract_translated_crate (filename : string) (dest_dir : string)
   in
   let has_opaque = has_opaque_types || has_opaque_funs in
 
-  (* The file graph (SCCs) and, in [-split-by-file] mode, the placement plan are
-     each computed exactly once here, then shared by the [-dump-file-graph]
-     diagnostic and the actual emitter — so the dump mirrors what is written by
-     construction. The graph is forced lazily: only [-split-by-file] (and the
-     dump) need it. *)
+  (* The file graph (SCCs) and, in [-split-files] mode, the placement plan are
+     each computed here, then shared by the [-dump-file-graph]
+     diagnostic and the emitter. *)
   let file_graph = lazy (FileGraph.compute crate) in
   let placement =
-    if !Config.split_by_file then
+    if !Config.split_files then
       Some
         (FilePlan.place_by_file (Lazy.force file_graph) ~import_prefix
            ~module_root_dir:
@@ -2016,7 +2026,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
     else None
   in
 
-  (* Diagnostic: print the file-dependency graph, and in [-split-by-file] mode
+  (* Diagnostic: print the file-dependency graph, and in [-split-files] mode
      the exact set of files that will be written, then continue extraction. *)
   if !Config.dump_file_graph then (
     let get_name (id : Types.item_id) : string =
@@ -2031,10 +2041,10 @@ let extract_translated_crate (filename : string) (dest_dir : string)
     flush stdout);
 
   (* Extract one or several files, depending on the configuration *)
-  (if !Config.split_by_file then
+  (if !Config.split_files then
      extract_by_file ctx crate ~dest_dir ~namespace ~crate_name ~has_opaque
        ~fg:(Lazy.force file_graph) ~placed:(Option.get placement)
-   else if !Config.split_files then (
+   else if !Config.split_files_legacy then (
      let base_gen_config =
        {
          extract_types = false;
@@ -2321,7 +2331,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
        * Generate the library entry point, if the crate is split between
        * different files.
        *)
-      if !Config.split_files && !Config.generate_lib_entry_point then (
+      if !Config.split_files_legacy && !Config.generate_lib_entry_point then (
         let filename = Filename.concat dest_dir (crate_name ^ ".lean") in
         let out = open_out filename in
         (* Write *)

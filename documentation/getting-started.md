@@ -27,10 +27,11 @@ This compiles the Rust code and produces `my_crate.llbc`, a serialized intermedi
 ## Step 2: Generate Lean Code
 
 ```bash
-aeneas -backend lean my_crate.llbc -dest proofs -subdir /MyCrate/Code -split-files -namespace MyCrate
+aeneas -backend lean my_crate.llbc -dest proofs -subdir /MyCrate/Code -split-files-legacy -namespace MyCrate
 ```
 
-This creates Lean files under `proofs/MyCrate/Code/`:
+This tutorial uses `-split-files-legacy`, the simple by-kind layout, which
+creates these Lean files under `proofs/MyCrate/Code/`:
 
 | Generated file                   | Contains                                         |
 |----------------------------------|--------------------------------------------------|
@@ -40,7 +41,10 @@ This creates Lean files under `proofs/MyCrate/Code/`:
 | `TypesExternal_Template.lean`    | Stubs for external types (you complete this)     |
 
 **Key aeneas flags:**
-- `-split-files` — one file per declaration group (recommended for large crates)
+- `-split-files` — one Lean module per Rust source file, mirroring the crate
+  (recommended for large crates; also emits a `MyCrate.lean` entry point by
+  default, unless `-subdir` is given)
+- `-split-files-legacy` — the older by-kind layout used in this tutorial
 - `-dest <dir>` — output directory
 - `-subdir <dir>` — subdirectory within dest
 - `-namespace <name>` — Lean namespace prefix

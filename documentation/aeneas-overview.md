@@ -207,8 +207,11 @@ When Aeneas translates a Rust crate, it produces several Lean files:
 | **TypesExternal.lean**             | User-maintained file with type models (never overwritten by Aeneas)                         |
 | **FunsExternal.lean**              | User-maintained file with function models (never overwritten by Aeneas)                     |
 
-> **Tip:** Use the `-split-files` option to have Aeneas generate one file per
-> declaration group as detailed in the above table. This is helpful for large crates.
+> **Tip:** Use the `-split-files` option to have Aeneas generate one Lean module
+> per Rust source file, mirroring the crate's module structure. Source files that
+> form an import cycle are merged into a single module. The older by-kind layout
+> in the table above (one `Types.lean`/`Funs.lean` etc. for the whole crate) is
+> still available as `-split-files-legacy`. Either is helpful for large crates.
 
 ### 3.2 Scalar Types
 
@@ -411,7 +414,10 @@ representation.
 ```
 
 Useful options:
-- `-split-files` — one file per declaration group
+- `-split-files` — one Lean module per Rust source file (mirrors the crate
+  structure); also emits a `Crate.lean` entry point by default (unless `-subdir`)
+- `-split-files-legacy` — one file per declaration kind (the older by-kind split)
+- `-gen-lib-entry` — request the `Crate.lean` entry point for `-split-files-legacy`
 - `-dest DIR` — output directory for generated files
 
 **6. Import and verify:**

@@ -123,21 +123,22 @@ let () =
          the option -decreases-clauses" );
       ( "-split-files",
         Arg.Set split_files,
-        " Split the definitions between different files for types, functions, \
-         etc." );
-      ( "-split-by-file",
-        Arg.Set split_by_file,
         " Split the definitions into one module per Rust source file, \
-         mirroring the crate structure. Mutually exclusive with -split-files."
-      );
+         mirroring the crate structure. Mutually exclusive with \
+         -split-files-legacy." );
+      ( "-split-files-legacy",
+        Arg.Set split_files_legacy,
+        " Legacy split mode: split the definitions between different files by \
+         kind (types, functions, etc.)." );
       ( "-checks",
         Arg.Set sanity_checks,
         " Activate extensive sanity checks (warning: causes a ~100 times slow \
          down)." );
       ( "-gen-lib-entry",
         Arg.Set generate_lib_entry_point,
-        " Add an entry point file to the generated library (only valid if the \
-         crate is split between different files)" );
+        " Add an entry point file to the generated library. On by default with \
+         -split-files (unless -subdir is given); use this flag to request it \
+         for -split-files-legacy. Requires a split mode." );
       ( "-lean-default-lakefile",
         Arg.Clear lean_gen_lakefile,
         " Generate a default lakefile.lean (Lean only)" );
@@ -458,9 +459,9 @@ let () =
   (* Sanity check: the use of decrease clauses is not compatible with the use of fuel *)
   check_arg_not !use_fuel "-use-fuel" !extract_decreases_clauses
     "-decreases-clauses";
-  if !generate_lib_entry_point && not (!split_files || !split_by_file) then
+  if !generate_lib_entry_point && not (!split_files || !split_files_legacy) then
     fail_with_error
-      "The -gen-lib-entry option requires -split-files or -split-by-file";
+      "The -gen-lib-entry option requires -split-files or -split-files-legacy";
   check_arg_not !generate_lib_entry_point "-gen-lib-entry"
     (Option.is_some !subdir) "-subdir";
   if !lean_gen_lakefile && not (backend () = Lean) then
@@ -474,12 +475,12 @@ let () =
       "The -max-recdepth option is valid only for the Lean backend";
   if !emit_json && not (backend () = Lean) then
     fail_with_error "The -emit-json option is valid only for the Lean backend";
-  check_arg_not !split_files "-split-files" !split_by_file "-split-by-file";
-  if !split_by_file && not (backend () = Lean) then
-    fail_with_error
-      "The -split-by-file option is valid only for the Lean backend";
+  check_arg_not !split_files_legacy "-split-files-legacy" !split_files
+    "-split-files";
+  if !split_files && not (backend () = Lean) then
+    fail_with_error "The -split-files option is valid only for the Lean backend";
   (* Fail on this combination of flags until -decreases-clauses is deprecated. *)
-  check_arg_not !split_by_file "-split-by-file" !extract_decreases_clauses
+  check_arg_not !split_files "-split-files" !extract_decreases_clauses
     "-decreases-clauses";
 
   check_arg_implies !diagnose_detailed "-diagnose-detailed"
@@ -487,15 +488,15 @@ let () =
 
   if !borrow_check then (
     check (!dest_dir = "") "Options -borrow-check and -dest are not compatible";
-    check_not !split_files
-      "Options -borrow-check and -split-files are not compatible";
+    check_not !split_files_legacy
+      "Options -borrow-check and -split-files-legacy are not compatible";
     check_not !test_unit_functions
       "Options -borrow-check and -test-unit-functions are not compatible";
     check_not !extract_decreases_clauses
       "Options -borrow-check and -decreases-clauses are not compatible";
     check_not !use_fuel "Options -borrow-check and -use-fuel are not compatible";
-    check_not !split_files
-      "Options -borrow-check and -split-files are not compatible");
+    check_not !split_files_legacy
+      "Options -borrow-check and -split-files-legacy are not compatible");
   check_arg_not
     !loops_to_recursive_functions
     "-loops-to-rec" !no_recursive_loops "-loops-no-rec";
@@ -767,9 +768,9 @@ let () =
           false)
       in
 
-      (* Print a warning if we had to extract opaque definitions and the option
-         [-split-file] is not on *)
-      if !extracted_opaque && not (!split_files || !split_by_file) then
+      (* Print a warning if we had to extract opaque definitions and no split
+         mode is on *)
+      if !extracted_opaque && not (!split_files || !split_files_legacy) then
         log#lwarning
           (lazy
             "The crate contains extracted external, unknown definitions: we \
