@@ -5,6 +5,7 @@ import Aeneas.Std.Range
 import Aeneas.Std.Core.Ops
 import Aeneas.Std.RawPtr
 import Aeneas.Tactic.Simp.SimpScalar.SimpScalar
+import Aeneas.Std.SliceDef
 
 namespace Aeneas.Std
 
@@ -18,8 +19,6 @@ attribute [-simp] List.getElem!_eq_getElem?_getD
 /-!
 # Slice
 -/
-
-def Slice (α : Type u) := { l : List α // l.length ≤ Usize.max }
 
 /-- We need this to coerce slices to lists without marking `Slice` as reducible.
     Also not that we *do not* want to mark `Slice` as reducible: it triggers issues.

@@ -25,13 +25,13 @@ let lean_builtin_types =
     (* file: "Aeneas/Std/Core/Convert.lean", line: 10 *)
     mk_type "core::convert::Infallible" "core.convert.Infallible"
       ~kind:(KEnum []);
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 46 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 47 *)
     mk_type "core::fmt::Arguments" "core.fmt.Arguments";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 7 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 8 *)
     mk_type "core::fmt::Error" "core.fmt.Error";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 11 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 12 *)
     mk_type "core::fmt::Formatter" "core.fmt.Formatter";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 49 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 50 *)
     mk_type "core::fmt::rt::Argument" "core.fmt.rt.Argument";
     (* file: "Aeneas/Std/Core/Iter.lean", line: 36 *)
     mk_type "core::iter::adapters::enumerate::Enumerate"
@@ -543,40 +543,49 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 6 *)
     mk_fun "core::fmt::num::{core::fmt::LowerHex<u16>}::fmt"
       "core.fmt.num.LowerHexU16.fmt";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 61 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 62 *)
     mk_fun "core::fmt::rt::{core::fmt::rt::Argument<'0>}::new_debug"
       "core.fmt.rt.Argument.new_debug";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 156 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 186 *)
     mk_fun "core::fmt::rt::{core::fmt::rt::Argument<'0>}::new_display"
       "core.fmt.rt.Argument.new_display";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 52 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 53 *)
     mk_fun "core::fmt::{core::fmt::Arguments<'a>}::from_str"
       "core.fmt.Arguments.from_str";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 55 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 56 *)
     mk_fun "core::fmt::{core::fmt::Arguments<'a>}::new" "core.fmt.Arguments.new";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 88 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 89 *)
     mk_fun "core::fmt::{core::fmt::Debug<&'0 @T>}::fmt"
       "core.fmt.DebugShared.fmt";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 100 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 101 *)
     mk_fun "core::fmt::{core::fmt::Debug<()>}::fmt" "core.fmt.DebugUnit.fmt";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 94 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 95 *)
     mk_fun "core::fmt::{core::fmt::Debug<bool>}::fmt" "core.fmt.DebugBool.fmt";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 115 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 116 *)
     mk_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field1_finish"
       "core.fmt.Formatter.debug_struct_field1_finish";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 122 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 123 *)
+    mk_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field2_finish"
+      "core.fmt.Formatter.debug_struct_field2_finish";
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 131 *)
+    mk_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field3_finish"
+      "core.fmt.Formatter.debug_struct_field3_finish";
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 141 *)
     mk_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field4_finish"
       "core.fmt.Formatter.debug_struct_field4_finish";
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 152 *)
+    mk_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field5_finish"
+      "core.fmt.Formatter.debug_struct_field5_finish";
     (* file: "Aeneas/Std/Core/FmtWithSlice.lean", line: 7 *)
     mk_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_fields_finish"
       "core.fmt.Formatter.debug_struct_fields_finish";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 132 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 162 *)
     mk_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_tuple_field1_finish"
       "core.fmt.Formatter.debug_tuple_field1_finish";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 81 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 82 *)
     mk_fun "core::fmt::{core::fmt::Formatter<'a>}::write_fmt"
       "core.fmt.Formatter.write_fmt";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 75 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 76 *)
     mk_fun "core::fmt::{core::fmt::Formatter<'a>}::write_str"
       "core.fmt.Formatter.write_str";
     (* file: "Aeneas/Std/Core/Discriminant.lean", line: 26 *)
@@ -955,13 +964,13 @@ let lean_builtin_funs =
       "core::result::{core::ops::try_trait::Try<core::result::Result<@T, \
        @E>>}::branch"
       "core.result.Result.Insts.CoreOpsTry.branch";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 106 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 107 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::expect"
       "core.result.Result.expect";
     (* file: "Aeneas/Std/Core/Convert.lean", line: 78 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::is_ok"
       "core.result.Result.is_ok";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 19 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 20 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::unwrap"
       "core.result.Result.unwrap";
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 153 *)
@@ -970,130 +979,130 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 221 *)
     mk_fun "core::slice::cmp::{core::cmp::PartialEq<[@T], [@U]>}::ne"
       "core.slice.cmp.PartialEqSlice.ne";
-    (* file: "Aeneas/Std/Slice.lean", line: 351 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 350 *)
     mk_fun "core::slice::index::{core::ops::index::Index<[@T], @I, @O>}::index"
       "core.slice.index.Slice.index";
-    (* file: "Aeneas/Std/Slice.lean", line: 429 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 428 *)
     mk_fun
       "core::slice::index::{core::ops::index::IndexMut<[@T], @I, \
        @O>}::index_mut"
       "core.slice.index.Slice.index_mut";
-    (* file: "Aeneas/Std/Slice.lean", line: 377 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 376 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
        [@T], [@T]>}::get"
       "core.slice.index.SliceIndexRangeUsizeSlice.get";
-    (* file: "Aeneas/Std/Slice.lean", line: 384 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 383 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
        [@T], [@T]>}::get_mut"
       "core.slice.index.SliceIndexRangeUsizeSlice.get_mut";
-    (* file: "Aeneas/Std/Slice.lean", line: 398 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 397 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
        [@T], [@T]>}::get_unchecked"
       "core.slice.index.SliceIndexRangeUsizeSlice.get_unchecked";
-    (* file: "Aeneas/Std/Slice.lean", line: 404 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 403 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
        [@T], [@T]>}::get_unchecked_mut"
       "core.slice.index.SliceIndexRangeUsizeSlice.get_unchecked_mut";
-    (* file: "Aeneas/Std/Slice.lean", line: 410 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 409 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
        [@T], [@T]>}::index"
       "core.slice.index.SliceIndexRangeUsizeSlice.index";
-    (* file: "Aeneas/Std/Slice.lean", line: 416 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 415 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
        [@T], [@T]>}::index_mut"
       "core.slice.index.SliceIndexRangeUsizeSlice.index_mut";
-    (* file: "Aeneas/Std/Slice.lean", line: 599 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 598 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
        [@T], [@T]>}::get"
       "core.slice.index.SliceIndexRangeFromUsizeSlice.get";
-    (* file: "Aeneas/Std/Slice.lean", line: 605 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 604 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
        [@T], [@T]>}::get_mut"
       "core.slice.index.SliceIndexRangeFromUsizeSlice.get_mut";
-    (* file: "Aeneas/Std/Slice.lean", line: 619 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 618 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
        [@T], [@T]>}::get_unchecked"
       "core.slice.index.SliceIndexRangeFromUsizeSlice.get_unchecked";
-    (* file: "Aeneas/Std/Slice.lean", line: 625 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 624 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
        [@T], [@T]>}::get_unchecked_mut"
       "core.slice.index.SliceIndexRangeFromUsizeSlice.get_unchecked_mut";
-    (* file: "Aeneas/Std/Slice.lean", line: 631 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 630 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
        [@T], [@T]>}::index"
       "core.slice.index.SliceIndexRangeFromUsizeSlice.index";
-    (* file: "Aeneas/Std/Slice.lean", line: 638 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 637 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
        [@T], [@T]>}::index_mut"
       "core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut";
-    (* file: "Aeneas/Std/Slice.lean", line: 456 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 455 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, \
        [@T], [@T]>}::get"
       "core.slice.index.SliceIndexRangeToUsizeSlice.get";
-    (* file: "Aeneas/Std/Slice.lean", line: 463 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 462 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, \
        [@T], [@T]>}::get_mut"
       "core.slice.index.SliceIndexRangeToUsizeSlice.get_mut";
-    (* file: "Aeneas/Std/Slice.lean", line: 478 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 477 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, \
        [@T], [@T]>}::get_unchecked"
       "core.slice.index.SliceIndexRangeToUsizeSlice.get_unchecked";
-    (* file: "Aeneas/Std/Slice.lean", line: 484 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 483 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, \
        [@T], [@T]>}::get_unchecked_mut"
       "core.slice.index.SliceIndexRangeToUsizeSlice.get_unchecked_mut";
-    (* file: "Aeneas/Std/Slice.lean", line: 491 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 490 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, \
        [@T], [@T]>}::index"
       "core.slice.index.SliceIndexRangeToUsizeSlice.index";
-    (* file: "Aeneas/Std/Slice.lean", line: 498 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 497 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, \
        [@T], [@T]>}::index_mut"
       "core.slice.index.SliceIndexRangeToUsizeSlice.index_mut";
-    (* file: "Aeneas/Std/Slice.lean", line: 539 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 538 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
        @T>}::get"
       "core.slice.index.Usize.get";
-    (* file: "Aeneas/Std/Slice.lean", line: 544 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 543 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
        @T>}::get_mut"
       "core.slice.index.Usize.get_mut";
-    (* file: "Aeneas/Std/Slice.lean", line: 549 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 548 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
        @T>}::get_unchecked"
       "core.slice.index.Usize.get_unchecked";
-    (* file: "Aeneas/Std/Slice.lean", line: 555 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 554 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
        @T>}::get_unchecked_mut"
       "core.slice.index.Usize.get_unchecked_mut";
-    (* file: "Aeneas/Std/Slice.lean", line: 561 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 560 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
        @T>}::index"
       "core.slice.index.Usize.index";
-    (* file: "Aeneas/Std/Slice.lean", line: 565 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 564 *)
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
        @T>}::index_mut"
@@ -1176,33 +1185,33 @@ let lean_builtin_funs =
     mk_fun "core::slice::{[@T]}::chunks_exact" "core.slice.Slice.chunks_exact";
     (* file: "Aeneas/Std/SliceIter.lean", line: 31 *)
     mk_fun "core::slice::{[@T]}::contains" "core.slice.Slice.contains";
-    (* file: "Aeneas/Std/Slice.lean", line: 593 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 592 *)
     mk_fun "core::slice::{[@T]}::copy_from_slice"
       "core.slice.Slice.copy_from_slice";
-    (* file: "Aeneas/Std/Slice.lean", line: 1055 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 1054 *)
     mk_fun "core::slice::{[@T]}::fill" "core.slice.Slice.fill";
-    (* file: "Aeneas/Std/Slice.lean", line: 357 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 356 *)
     mk_fun "core::slice::{[@T]}::get" "core.slice.Slice.get";
-    (* file: "Aeneas/Std/Slice.lean", line: 371 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 370 *)
     mk_fun "core::slice::{[@T]}::get_mut" "core.slice.Slice.get_mut";
-    (* file: "Aeneas/Std/Slice.lean", line: 363 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 362 *)
     mk_fun "core::slice::{[@T]}::get_unchecked" "core.slice.Slice.get_unchecked";
-    (* file: "Aeneas/Std/Slice.lean", line: 124 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 123 *)
     mk_fun "core::slice::{[@T]}::is_empty" "core.slice.Slice.is_empty";
     (* file: "Aeneas/Std/SliceIter.lean", line: 27 *)
     mk_fun "core::slice::{[@T]}::iter" "core.slice.Slice.iter";
     (* file: "Aeneas/Std/SliceIter.lean", line: 54 *)
     mk_fun "core::slice::{[@T]}::iter_mut" "core.slice.Slice.iter_mut";
-    (* file: "Aeneas/Std/Slice.lean", line: 50 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 49 *)
     mk_fun "core::slice::{[@T]}::len" "Slice.len" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Slice.lean", line: 334 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 333 *)
     mk_fun "core::slice::{[@T]}::reverse" "core.slice.Slice.reverse"
       ~can_fail:false;
-    (* file: "Aeneas/Std/Slice.lean", line: 702 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 701 *)
     mk_fun "core::slice::{[@T]}::split_at" "core.slice.Slice.split_at";
-    (* file: "Aeneas/Std/Slice.lean", line: 713 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 712 *)
     mk_fun "core::slice::{[@T]}::split_at_mut" "core.slice.Slice.split_at_mut";
-    (* file: "Aeneas/Std/Slice.lean", line: 773 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 772 *)
     mk_fun "core::slice::{[@T]}::swap" "core.slice.Slice.swap";
     (* file: "Aeneas/Std/StringIter.lean", line: 11 *)
     mk_fun
@@ -1269,13 +1278,13 @@ let lean_builtin_trait_decls =
     (* file: "Aeneas/Std/Core/Error.lean", line: 5 *)
     mk_trait_decl "core::error::Error" "core.error.Error"
       ~parent_clauses:[ "fmtDebugInst"; "fmtDisplayInst" ];
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 14 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 15 *)
     mk_trait_decl "core::fmt::Debug" "core.fmt.Debug"
       ~methods:[ ("fmt", "fmt") ];
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 67 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 68 *)
     mk_trait_decl "core::fmt::Display" "core.fmt.Display"
       ~methods:[ ("fmt", "fmt") ];
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 71 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 72 *)
     mk_trait_decl "core::fmt::LowerHex" "core.fmt.LowerHex"
       ~methods:[ ("fmt", "fmt") ];
     (* file: "Aeneas/Std/Core/Hash.lean", line: 11 *)
@@ -1397,7 +1406,7 @@ let lean_builtin_trait_decls =
     mk_trait_decl "core::ops::try_trait::Try" "core.ops.try_trait.Try"
       ~parent_clauses:[ "FromResidualInst" ]
       ~methods:[ ("from_output", "from_output"); ("branch", "branch") ];
-    (* file: "Aeneas/Std/Slice.lean", line: 341 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 340 *)
     mk_trait_decl "core::slice::index::SliceIndex" "core.slice.index.SliceIndex"
       ~parent_clauses:[ "sealedInst" ]
       ~methods:
@@ -1409,7 +1418,7 @@ let lean_builtin_trait_decls =
           ("index", "index");
           ("index_mut", "index_mut");
         ];
-    (* file: "Aeneas/Std/Slice.lean", line: 338 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 337 *)
     mk_trait_decl "core::slice::index::private_slice_index::Sealed"
       "core.slice.index.private_slice_index.Sealed";
   ]
@@ -1477,14 +1486,14 @@ let lean_builtin_trait_impls =
       "core.default.DefaultArrayEmpty";
     (* file: "Aeneas/Std/Array/Array.lean", line: 396 *)
     mk_trait_impl "core::default::Default<[@T; @N]>" "core.default.DefaultArray";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 140 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 170 *)
     mk_trait_impl "core::fmt::Debug<&'0 @T>" "core.fmt.DebugShared";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 146 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 176 *)
     mk_trait_impl "core::fmt::Debug<()>" "core.fmt.DebugUnit";
     (* file: "Aeneas/Std/Vec.lean", line: 592 *)
     mk_trait_impl "core::fmt::Debug<alloc::vec::Vec<@T>>" "core.fmt.DebugVec"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 151 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 181 *)
     mk_trait_impl "core::fmt::Debug<bool>" "core.fmt.DebugBool";
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 286 *)
     mk_trait_impl "core::fmt::Debug<core::array::TryFromSliceError>"
@@ -1604,7 +1613,7 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 108 *)
     mk_trait_impl "core::ops::index::Index<[@T; @N], @I, @O>"
       "core.ops.index.IndexArray";
-    (* file: "Aeneas/Std/Slice.lean", line: 524 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 523 *)
     mk_trait_impl "core::ops::index::Index<[@T], @I, @O>"
       "core.ops.index.IndexSlice";
     (* file: "Aeneas/Std/Vec.lean", line: 209 *)
@@ -1614,44 +1623,44 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 115 *)
     mk_trait_impl "core::ops::index::IndexMut<[@T; @N], @I, @O>"
       "core.ops.index.IndexMutArray";
-    (* file: "Aeneas/Std/Slice.lean", line: 531 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 530 *)
     mk_trait_impl "core::ops::index::IndexMut<[@T], @I, @O>"
       "core.ops.index.IndexMutSlice";
     (* file: "Aeneas/Std/Vec.lean", line: 217 *)
     mk_trait_impl "core::ops::index::IndexMut<alloc::vec::Vec<@T>, @T, @O>"
       "alloc.vec.Vec.IndexMut"
       ~keep_params:(Some [ true; true; false; true ]);
-    (* file: "Aeneas/Std/Slice.lean", line: 439 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 438 *)
     mk_trait_impl
       "core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], \
        [@T]>"
       "core.slice.index.SliceIndexRangeUsizeSlice";
-    (* file: "Aeneas/Std/Slice.lean", line: 664 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 663 *)
     mk_trait_impl
       "core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
        [@T], [@T]>"
       "core.slice.index.SliceIndexRangeFromUsizeSlice";
-    (* file: "Aeneas/Std/Slice.lean", line: 511 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 510 *)
     mk_trait_impl
       "core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], \
        [@T]>"
       "core.slice.index.SliceIndexRangeToUsizeSlice";
-    (* file: "Aeneas/Std/Slice.lean", line: 574 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 573 *)
     mk_trait_impl "core::slice::index::SliceIndex<usize, [@T], @T>"
       "core.slice.index.SliceIndexUsizeSlice";
-    (* file: "Aeneas/Std/Slice.lean", line: 435 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 434 *)
     mk_trait_impl
       "core::slice::index::private_slice_index::Sealed<core::ops::range::Range<usize>>"
       "core.slice.index.private_slice_index.SealedRangeUsize";
-    (* file: "Aeneas/Std/Slice.lean", line: 659 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 658 *)
     mk_trait_impl
       "core::slice::index::private_slice_index::Sealed<core::ops::range::RangeFrom<usize>>"
       "core.slice.index.private_slice_index.SealedRangeFromUsize";
-    (* file: "Aeneas/Std/Slice.lean", line: 451 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 450 *)
     mk_trait_impl
       "core::slice::index::private_slice_index::Sealed<core::ops::range::RangeTo<usize>>"
       "core.slice.index.private_slice_index.SealedRangeToUsize";
-    (* file: "Aeneas/Std/Slice.lean", line: 570 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 569 *)
     mk_trait_impl "core::slice::index::private_slice_index::Sealed<usize>"
       "core.slice.index.private_slice_index.SealedUsize";
   ]
