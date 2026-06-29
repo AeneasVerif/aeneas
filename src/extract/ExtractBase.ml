@@ -319,29 +319,13 @@ let unsafe_names_map_add (id : id) (name : string) (nm : unsafe_names_map) :
     unsafe_names_map =
   { id_to_name = IdMap.add id name nm.id_to_name }
 
-(** Make a (variable) basename unique (by adding an index).
+(** Make a (variable) name unique (by adding an index).
 
     We do this in an inefficient manner (by testing all indices starting from 0)
     but it shouldn't be a bottleneck.
 
-    Also note that at some point, we thought about trying to reuse names of
-    variables which are not used anymore, like here:
-    {[
-      let x = ... in
-      ...
-      let x0 = ... in // We could use the name "x" if [x] is not used below
-      ...
-    ]}
-
-    However it is a good idea to keep things as they are for F*: as F* is
-    designed for extrinsic proofs, a proof about a function follows this
-    function's structure. The consequence is that we often end up copy-pasting
-    function bodies. As in the proofs (in assertions and when calling lemmas) we
-    often need to talk about the "past" (i.e., previous values), it is very
-    useful to generate code where all variable names are assigned at most once.
-
     [append]: function to append an index to a string *)
-let string_to_unique (collision : string -> bool)
+let name_to_unique (collision : string -> bool)
     (append : string -> int -> string) (name : string) : string =
   let rec gen (i : int) : string =
     let s = append name i in
@@ -2107,7 +2091,7 @@ let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
           List.fold_left_map
             (fun used (c, name) ->
               let name =
-                string_to_unique
+                name_to_unique
                   (fun s -> StringSet.mem s used)
                   (fun n i -> n ^ string_of_int i)
                   name
@@ -2311,7 +2295,7 @@ let basename_to_unique (ctx : extraction_ctx) (name : string) =
     || StringSet.mem s ctx.names_maps.strict_names_map.names_set
   in
 
-  string_to_unique collision name_append_index name
+  name_to_unique collision name_append_index name
 
 (** Generate a unique type variable name and add it to the context *)
 let ctx_add_type_var (span : Meta.span) (origin : generic_origin)
