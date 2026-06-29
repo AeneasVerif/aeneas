@@ -1593,6 +1593,8 @@ let extract_by_file (ctx : gen_ctx) (crate : crate) ~(dest_dir : string)
     let out = open_out filename in
     List.iter (fun m -> Printf.fprintf out "import %s\n" m) local_modules;
     close_out out;
+    (* Record it in translation.json's [lean_files] (it bypasses extract_file). *)
+    EmitJson.record_lean_file_if_enabled ~filename;
     log#linfo (lazy ("Generated: " ^ filename)))
 
 let extract_translated_crate (filename : string) (dest_dir : string)

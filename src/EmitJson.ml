@@ -283,6 +283,12 @@ let begin_file_if_enabled ~(filename : string) ~(namespace : string) : unit =
     state.current_lean_namespace <- namespace
   end
 
+(** Record a Lean file that is written outside of [extract_file] (e.g. the
+    [-gen-lib-entry] library entry point), so it still appears in [lean_files].
+    Records no declarations, so it leaves [current_lean_file] untouched. *)
+let record_lean_file_if_enabled ~(filename : string) : unit =
+  if !Config.emit_json then state.lean_files <- filename :: state.lean_files
+
 let record_fun_if_enabled (ctx : ExtractBase.extraction_ctx)
     (def : Pure.fun_decl) : unit =
   if !Config.emit_json then
