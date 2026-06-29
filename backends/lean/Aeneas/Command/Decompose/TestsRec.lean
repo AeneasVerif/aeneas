@@ -154,4 +154,51 @@ fun n => do
 #guard_msgs in
 #print recPF3_else
 
-namespace Aeneas.Command.Decompose.TestsRec
+-- ============================================================================
+-- Test 5: partial_fixpoint with NO LCNF — helper captures the recursive call
+-- ============================================================================
+-- Regression test: a `partial_fixpoint` that reaches an `axiom` has no compiled
+-- code (no LCNF) and yet is NOT tagged `noncomputable` (partial_fixpoints are
+-- not compiled). When a decomposition clause extracts a helper that *captures
+-- the recursive call*, the helper references this LCNF-less constant. The
+-- predictive `hasNoncomputableDep` check does not catch it (the constant is
+-- neither `noncomputable` nor an axiom/opaque itself), so `#decompose` used to
+-- fail with "Failed to find LCNF signature". `addDefinition` now adds the
+-- helper and *attempts* to compile it, falling back to a `noncomputable` tag
+-- when compilation fails. This mirrors SymCrust's `sign_internal_loop`, whose
+-- body reaches an axiomatised SHAKE/Keccak primitive.
+
+axiom recAxOp (n : Nat) : Result Nat
+
+noncomputable section
+def recAxLoop (n : Nat) : Result Nat := do
+  if n == 0 then .ok 0
+  else
+    let a ← recAxOp n
+    let b ← recAxLoop (n - 1)
+    .ok (a + b)
+partial_fixpoint
+end
+
+-- The helper `recAxLoop_rec` captures the recursive call `recAxLoop (n - 1)`.
+#decompose recAxLoop recAxLoop_eq
+  branch 1 (letRange 1 2) => recAxLoop_rec
+
+/--
+info: recAxLoop_eq : ∀ (n : ℕ),
+  recAxLoop n =
+    if (n == 0) = true then Result.ok 0
+    else do
+      let a ← recAxOp n
+      recAxLoop_rec n a
+-/
+#guard_msgs in
+#check @recAxLoop_eq
+/--
+info: def Aeneas.Command.Decompose.TestsRec.recAxLoop_rec : ℕ → ℕ → Result ℕ :=
+fun n a => do
+  let b ← recAxLoop (n - 1)
+  Result.ok (a + b)
+-/
+#guard_msgs in
+#print recAxLoop_rec

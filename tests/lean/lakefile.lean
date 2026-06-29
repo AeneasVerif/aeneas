@@ -39,6 +39,7 @@ package «tests» {}
 @[default_target] lean_lib FromTo
 @[default_target] lean_lib Hashmap
 @[default_target] lean_lib Into
+@[default_target] lean_lib IterAdapters
 @[default_target] lean_lib Iterators
 @[default_target] lean_lib IteratorsArray
 @[default_target] lean_lib IssueCharon1172
@@ -55,6 +56,7 @@ package «tests» {}
 @[default_target] lean_lib JoinDuplicate
 @[default_target] lean_lib ListBorrows
 @[default_target] lean_lib LoopSharedLoanInJoin
+@[default_target] lean_lib LoopSharedBorrowProj
 @[default_target] lean_lib Loops
 @[default_target] lean_lib LoopsRec
 @[default_target] lean_lib LoopsAdts

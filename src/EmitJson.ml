@@ -93,21 +93,12 @@ type trait_impl_entry = {
 }
 [@@deriving to_yojson]
 
-(** The files involved, recorded exactly as Aeneas knew them. *)
-type files_info = {
-  dest_dir : string;  (** The output directory Aeneas wrote. *)
-  llbc_file : string;  (** The [.llbc] input path, as passed to Aeneas. *)
-  lean_files : string list;  (** The Lean files written by Aeneas. *)
-}
-[@@deriving to_yojson]
-
 type envelope = {
   aeneas_version : string;
   charon_version : string;
       (** The version of charon that emitted the [.llbc] input. *)
   crate_name : string; [@key "crate"]
       (** Identifier of the source Rust crate. *)
-  files : files_info;
   functions : function_entry list;
   types : type_entry list;
   globals : global_entry list;
@@ -131,7 +122,6 @@ type state = {
   mutable global_entries : global_entry list;
   mutable trait_decl_entries : trait_decl_entry list;
   mutable trait_impl_entries : trait_impl_entry list;
-  mutable lean_files : string list;
   mutable current_lean_file : string;
   mutable current_lean_namespace : string;
   mutable dest_dir : string;
@@ -144,7 +134,6 @@ let make_state () : state =
     global_entries = [];
     trait_decl_entries = [];
     trait_impl_entries = [];
-    lean_files = [];
     current_lean_file = "";
     current_lean_namespace = "";
     dest_dir = "";
@@ -283,10 +272,15 @@ let trait_impl_entry_of_trait_impl (ctx : ExtractBase.extraction_ctx)
 
 let begin_file_if_enabled ~(filename : string) ~(namespace : string) : unit =
   if !Config.emit_json then begin
-    (* Record the path as Aeneas wrote it, without rewriting. *)
-    state.current_lean_file <- filename;
-    state.current_lean_namespace <- namespace;
-    state.lean_files <- filename :: state.lean_files
+    (* Record the Lean file relative to dest_dir. *)
+    let basename = Filename.basename filename in
+    let rel =
+      match !Config.subdir with
+      | None -> basename
+      | Some subdir -> Filename.concat subdir basename
+    in
+    state.current_lean_file <- rel;
+    state.current_lean_namespace <- namespace
   end
 
 let record_fun_if_enabled (ctx : ExtractBase.extraction_ctx)
@@ -330,8 +324,7 @@ let write (path : string) (env : envelope) : unit =
       Yojson.Safe.pretty_to_channel out (envelope_to_yojson env);
       output_char out '\n')
 
-let write_if_enabled ~(crate_name : string) ~(llbc_file : string) :
-    string option =
+let write_if_enabled ~(crate_name : string) : string option =
   if !Config.emit_json then begin
     let path = Filename.concat state.dest_dir "translation.json" in
     write path
@@ -339,12 +332,6 @@ let write_if_enabled ~(crate_name : string) ~(llbc_file : string) :
         aeneas_version = Option.value GitVersion.commit ~default:"unknown";
         charon_version = Charon.CharonVersion.supported_charon_version;
         crate_name;
-        files =
-          {
-            dest_dir = state.dest_dir;
-            llbc_file;
-            lean_files = List.rev state.lean_files;
-          };
         functions = List.rev state.function_entries;
         types = List.rev state.type_entries;
         globals = List.rev state.global_entries;

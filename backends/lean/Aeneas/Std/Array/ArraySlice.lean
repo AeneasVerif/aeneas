@@ -224,6 +224,23 @@ def core.array.DebugArray.fmt
 def core.array.Array.as_slice {T : Type} {N : Usize} (a : Array T N) : Result (Slice T) :=
   ok (⟨ a.val, by scalar_tac ⟩)
 
+/-- Model for `<[T; N] as AsRef<[T]>>::as_ref`: returns the array viewed as a slice. -/
+@[rust_fun "core::array::{core::convert::AsRef<[@T; @N], [@T]>}::as_ref"]
+def Array.Insts.CoreConvertAsRefSlice.as_ref
+    {T : Type} {N : Usize} (a : Array T N) : Result (Slice T) :=
+  ok (⟨ a.val, by scalar_tac ⟩)
+
+/-- Model for `<[T; N] as AsMut<[T]>>::as_mut`: returns the array as a mutable slice
+    plus a back-conversion that restores it to an array. -/
+@[rust_fun "core::array::{core::convert::AsMut<[@T; @N], [@T]>}::as_mut"]
+def Array.Insts.CoreConvertAsMutSlice.as_mut
+    {T : Type} {N : Usize} (a : Array T N) :
+    Result ((Slice T) × (Slice T → Array T N)) :=
+  let back (s : Slice T) : Array T N :=
+    if h : s.length = N then ⟨ s.val, by scalar_tac ⟩
+    else a
+  ok (⟨ a.val, by scalar_tac ⟩, back)
+
 @[rust_fun "core::array::{[@T; @N]}::as_mut_slice"]
 def core.array.Array.as_mut_slice
   {T : Type} {N : Usize} (a : Array T N) :
@@ -232,6 +249,25 @@ def core.array.Array.as_mut_slice
     if h: s.length = N then ⟨ s.val, by scalar_tac ⟩
     else a
   ok (⟨ a.val, by scalar_tac ⟩, back)
+
+@[step]
+theorem Array.Insts.CoreConvertAsRefSlice.as_ref.spec
+    {T : Type} {N : Usize} (a : Array T N) :
+    Array.Insts.CoreConvertAsRefSlice.as_ref a
+    ⦃ (s : Slice T) => s.val = a.val ⦄ := by
+  simp [Array.Insts.CoreConvertAsRefSlice.as_ref, WP.spec_ok]
+
+@[step]
+theorem Array.Insts.CoreConvertAsMutSlice.as_mut.spec
+    {T : Type} {N : Usize} (a : Array T N) :
+    Array.Insts.CoreConvertAsMutSlice.as_mut a
+    ⦃ (s : Slice T) (back : Slice T → Array T N) =>
+      s.val = a.val ∧
+      s.length = N.val ∧
+      ∀ s' : Slice T, s'.length = N.val → (back s').val = s'.val ⦄ := by
+  simp [Array.Insts.CoreConvertAsMutSlice.as_mut, WP.spec_ok, Slice.length]
+  intro s' hs'
+  simp [hs']
 
 @[simp, step_simps]
 theorem Array.index_SliceIndexRangeUsizeSlice {T : Type} {N : Usize}

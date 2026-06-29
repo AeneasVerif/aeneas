@@ -5,9 +5,20 @@ on:
     branches: [main]
 
 jobs:
+  select-runner:
+    uses: ./.github/workflows/select-runner.yml
+
   build:
-    runs-on: [self-hosted, linux, nix]
+    needs: [select-runner]
+    runs-on: ${{ fromJSON(needs.select-runner.outputs.runs_on) }}
     steps:
+      - name: Install Nix
+        if: ${{ runner.environment == 'github-hosted' }}
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            extra-substituters = https://hacl.cachix.org
+            extra-trusted-public-keys = hacl.cachix.org-1:FzsZ2xsByOwKwIWNPII7yMOelJNDZ12mDAj3d1eGX0c=
       - uses: actions/checkout@v4
       - run: nix build '.?dir=docs/user'#book
       - uses: actions/upload-pages-artifact@v3
