@@ -25,6 +25,10 @@ def core.convert.IntoFrom {T : Type} {U : Type} (fromInst : core.convert.From U 
   into := core.convert.IntoFrom.into fromInst
 }
 
+@[rust_trait "core::convert::AsRef"]
+structure core.convert.AsRef (Self : Type) (T : Type) where
+  as_ref : Self → Result T
+
 @[simp, step_simps, rust_fun "core::convert::{core::convert::From<@T, @T>}::from" -canFail]
 def core.convert.FromSame.from {T : Type} (x : T) : T := x
 

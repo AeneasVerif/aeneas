@@ -341,13 +341,6 @@ def core.array.TryFromMutArraySlice.try_from
     ok ((.Ok ⟨ s.val, by scalar_tac⟩, back))
   else ok ((.Err (), fun _ => s))
 
-@[simp, rust_fun "core::array::{core::fmt::Debug<[@T; @N]>}::fmt"]
-def core.array.DebugArray.fmt
-  {T : Type} {N : Usize} (_ : core.fmt.Debug T) (_ : Array T N) (fmt : core.fmt.Formatter) :
-  Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
-  -- TODO: this model is simplistic
-  ok (.Ok (), fmt)
-
 @[rust_fun "core::array::{[@T; @N]}::as_slice"]
 def core.array.Array.as_slice {T : Type} {N : Usize} (a : Array T N) : Result (Slice T) :=
   ok (⟨ a.val, by scalar_tac ⟩)
@@ -498,5 +491,17 @@ theorem Array.index_mut_SliceIndexRangeFromUsizeSlice {T : Type} {N : Usize}
   · simp [Array.to_slice]
   · simp [Slice.length, List.length_drop]
   · intro s'; simp [Array.from_slice, Array.to_slice]
+
+@[reducible, rust_trait_impl "core::convert::AsRef<[@T; @N], [@T]>"]
+def Array.Insts.CoreConvertAsRefSlice (T : Type) (N : Std.Usize) :
+  core.convert.AsRef (Array T N) (Slice T) := {
+  as_ref := Array.Insts.CoreConvertAsRefSlice.as_ref
+}
+
+@[reducible, rust_trait_impl "core::convert::AsMut<[@T; @N], [@T]>"]
+def Array.Insts.CoreConvertAsMutSlice (T : Type) (N : Std.Usize) :
+  core.convert.AsMut (Array T N) (Slice T) := {
+  as_mut := Array.Insts.CoreConvertAsMutSlice.as_mut
+}
 
 end Aeneas.Std
