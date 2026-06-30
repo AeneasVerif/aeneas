@@ -1,4 +1,4 @@
-//@ [fstar] aeneas-args=-decreases-clauses -split-files
+//@ [fstar] aeneas-args=-decreases-clauses -split-files-legacy
 //@ [coq] aeneas-args=-use-fuel
 //@ [coq,fstar] subdir=misc
 //@ [coq,fstar] aeneas-args=-loops-to-rec
