@@ -17,9 +17,9 @@ def alloc.boxed.AsMutBox.as_mut {T : Type} (x : T) : T × (T → T) :=
 
 namespace core
 
-@[rust_trait "core::convert::From" (methodsInfo := [⟨ "from", "from_" ⟩])]
+@[rust_trait "core::convert::From"]
 structure convert.From (Self T : Type) where
-  from_ : T → Result Self
+  «from» : T → Result Self
 
 @[rust_trait "core::clone::Clone" (defaultMethods := ["clone_from"])]
 structure clone.Clone (Self : Type) where

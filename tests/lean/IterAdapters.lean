@@ -800,4 +800,66 @@ def test_step_by_u8_near_max : Result Unit := do
 /- Unit test for [iter_adapters::test_step_by_u8_near_max] -/
 #assert (test_step_by_u8_near_max == ok ())
 
+/-- [iter_adapters::test_range_inclusive_basic]:
+    Source: 'tests/src/iter_adapters.rs', lines 330:0-336:1
+    Visibility: public -/
+def test_range_inclusive_basic : Result Unit := do
+  let it ← core.ops.range.RangeInclusive.new 1#usize 3#usize
+  let (o, it1) ←
+    core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
+      core.iter.range.StepUsize it
+  let i ← core.option.Option.unwrap o
+  massert (i = 1#usize)
+  let (o1, it2) ←
+    core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
+      core.iter.range.StepUsize it1
+  let i1 ← core.option.Option.unwrap o1
+  massert (i1 = 2#usize)
+  let (o2, it3) ←
+    core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
+      core.iter.range.StepUsize it2
+  let i2 ← core.option.Option.unwrap o2
+  massert (i2 = 3#usize)
+  let (o3, _) ←
+    core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
+      core.iter.range.StepUsize it3
+  let b := core.option.Option.is_none o3
+  massert b
+
+/- Unit test for [iter_adapters::test_range_inclusive_basic] -/
+#assert (test_range_inclusive_basic == ok ())
+
+/-- [iter_adapters::test_range_inclusive_singleton]:
+    Source: 'tests/src/iter_adapters.rs', lines 340:0-344:1
+    Visibility: public -/
+def test_range_inclusive_singleton : Result Unit := do
+  let it ← core.ops.range.RangeInclusive.new 7#usize 7#usize
+  let (o, it1) ←
+    core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
+      core.iter.range.StepUsize it
+  let i ← core.option.Option.unwrap o
+  massert (i = 7#usize)
+  let (o1, _) ←
+    core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
+      core.iter.range.StepUsize it1
+  let b := core.option.Option.is_none o1
+  massert b
+
+/- Unit test for [iter_adapters::test_range_inclusive_singleton] -/
+#assert (test_range_inclusive_singleton == ok ())
+
+/-- [iter_adapters::test_range_inclusive_empty]:
+    Source: 'tests/src/iter_adapters.rs', lines 348:0-351:1
+    Visibility: public -/
+def test_range_inclusive_empty : Result Unit := do
+  let it ← core.ops.range.RangeInclusive.new 5#usize 3#usize
+  let (o, _) ←
+    core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
+      core.iter.range.StepUsize it
+  let b := core.option.Option.is_none o
+  massert b
+
+/- Unit test for [iter_adapters::test_range_inclusive_empty] -/
+#assert (test_range_inclusive_empty == ok ())
+
 end iter_adapters
