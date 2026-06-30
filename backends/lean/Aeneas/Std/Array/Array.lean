@@ -409,4 +409,10 @@ def core.default.DefaultArrayEmpty (T : Type) : core.default.Default (Array T (U
   default := core.default.DefaultArrayEmpty.default T
 }
 
+@[reducible, rust_trait_impl "core::marker::Copy<[@T; @N]>"]
+def Array.Insts.CoreMarkerCopy {T : Type} (N : Std.Usize)
+  (markerCopyInst : core.marker.Copy T) : core.marker.Copy (Array T N) := {
+  cloneInst := core.clone.CloneArray N markerCopyInst.cloneInst
+}
+
 end Aeneas.Std
