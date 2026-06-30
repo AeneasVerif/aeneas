@@ -136,9 +136,9 @@ let () =
          down)." );
       ( "-gen-lib-entry",
         Arg.Set generate_lib_entry_point,
-        " Add an entry point file to the generated library. On by default with \
-         -split-files (unless -subdir is given); use this flag to request it \
-         for -split-files-legacy. Requires a split mode." );
+        " Add an entry point file to the generated library. Redundant: \
+         -split-files already emits it by default (unless -subdir is given). \
+         Requires -split-files." );
       ( "-lean-default-lakefile",
         Arg.Clear lean_gen_lakefile,
         " Generate a default lakefile.lean (Lean only)" );
@@ -459,9 +459,14 @@ let () =
   (* Sanity check: the use of decrease clauses is not compatible with the use of fuel *)
   check_arg_not !use_fuel "-use-fuel" !extract_decreases_clauses
     "-decreases-clauses";
-  if !generate_lib_entry_point && not (!split_files || !split_files_legacy) then
-    fail_with_error
-      "The -gen-lib-entry option requires -split-files or -split-files-legacy";
+  (* [-split-files] already emits the entry point by default, so [-gen-lib-entry]
+     is only meaningful (indeed redundant) there. The legacy split cannot produce
+     a buildable entry point (its files sit at the dest root, but the entry would
+     [import Crate.Funs], which needs [-subdir] — itself incompatible with
+     [-gen-lib-entry]), so we reject that combination rather than emit a broken
+     file. *)
+  if !generate_lib_entry_point && not !split_files then
+    fail_with_error "The -gen-lib-entry option requires -split-files";
   check_arg_not !generate_lib_entry_point "-gen-lib-entry"
     (Option.is_some !subdir) "-subdir";
   if !lean_gen_lakefile && not (backend () = Lean) then
@@ -488,8 +493,8 @@ let () =
 
   if !borrow_check then (
     check (!dest_dir = "") "Options -borrow-check and -dest are not compatible";
-    check_not !split_files_legacy
-      "Options -borrow-check and -split-files-legacy are not compatible";
+    check_not !split_files
+      "Options -borrow-check and -split-files are not compatible";
     check_not !test_unit_functions
       "Options -borrow-check and -test-unit-functions are not compatible";
     check_not !extract_decreases_clauses

@@ -417,7 +417,7 @@ Useful options:
 - `-split-files` — one Lean module per Rust source file (mirrors the crate
   structure); also emits a `Crate.lean` entry point by default (unless `-subdir`)
 - `-split-files-legacy` — one file per declaration kind (the older by-kind split)
-- `-gen-lib-entry` — request the `Crate.lean` entry point for `-split-files-legacy`
+- `-gen-lib-entry` — redundant: `-split-files` already emits the `Crate.lean` entry by default
 - `-dest DIR` — output directory for generated files
 
 **6. Import and verify:**

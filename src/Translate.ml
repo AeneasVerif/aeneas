@@ -2327,18 +2327,11 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          Maybe generate it if the user asks for it?
       *)
   | Lean ->
-      (*
-       * Generate the library entry point, if the crate is split between
-       * different files.
-       *)
-      if !Config.split_files_legacy && !Config.generate_lib_entry_point then (
-        let filename = Filename.concat dest_dir (crate_name ^ ".lean") in
-        let out = open_out filename in
-        (* Write *)
-        Printf.fprintf out "import %s.Funs\n" crate_name;
-        (* Flush and close the file, log *)
-        close_out out;
-        log#linfo (lazy ("Generated: " ^ filename)));
+      (* Note: the [-split-files] entry point ([Crate.lean]) is generated inside
+         [extract_by_file]. The legacy split ([-split-files-legacy]) has no entry
+         point: it cannot produce a buildable one without [-subdir] (which is
+         incompatible with [-gen-lib-entry]), so that combination is rejected at
+         the CLI. *)
 
       (*
        * Generate the lakefile.lean file, if the user asks for it
