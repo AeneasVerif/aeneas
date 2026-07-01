@@ -1,5 +1,6 @@
 //@ [!lean] skip
 //@ charon-args=--targets x86_64-apple-darwin,aarch64-apple-darwin
+//@ charon-args=--sysroot=miri
 #![allow(unused, non_camel_case_types)]
 
 trait SimdTrait {
