@@ -91,6 +91,9 @@
         charon-portable =
           if system == "aarch64-linux" then
             # Upstream `charon-portable` hardcodes the x86_64 Linux ELF loader.
+            # The wrapped `charon` binary is still suitable for the aarch64
+            # release artifact because that artifact only needs to run on the
+            # matching host platform, not across Linux architectures.
             charon
           else
             inputs.charon.packages.${system}.charon-portable;
