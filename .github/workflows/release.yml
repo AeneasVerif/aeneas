@@ -20,7 +20,7 @@ jobs:
           set -eo pipefail
 
           TAG_NAME="nightly-$(date +'%Y.%m.%d')"
-          echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -96,7 +96,7 @@ jobs:
           set -eo pipefail
 
           curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
-          echo "$HOME/.elan/bin" >> $GITHUB_PATH
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
 
       - name: Cache Lean dependencies
         uses: actions/cache@v4
@@ -124,8 +124,8 @@ jobs:
 
           cd dist_staging
           # Remove existing archive to avoid overwrite failures on macOS
-          rm -f ../${{ matrix.artifact_name }}.tar.gz
-          tar -czf ../${{ matrix.artifact_name }}.tar.gz *
+          rm -f "../${{ matrix.artifact_name }}.tar.gz"
+          tar -czf "../${{ matrix.artifact_name }}.tar.gz" -- *
 
       # Verify the binary is functional.
       - name: Smoke Test
@@ -151,3 +151,39 @@ jobs:
           gc-max-store-size: 2G
           purge: true
           purge-created: 604800 # 7 * 24 * 3600 = 7 days in seconds
+
+  notify:
+    name: Notify Zulip
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    if: ${{ success() || failure() }}
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate Zulip Message
+        env:
+          TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 ./scripts/ci-release-message.py | tee "$GITHUB_ENV"
+
+      - name: Send Zulip Release Summary
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            { "text": ${{ toJSON(env.MSG) }} }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ZULIP_WEBHOOK_URL }}
+
+      - name: Send Zulip Error Message
+        if: ${{ failure() }}
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            { "text": "Unexpected Error: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ZULIP_WEBHOOK_URL }}
