@@ -37,61 +37,91 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
   let scc_list = SCC.SccId.Map.bindings fg.sccs.sccs in
   let is_builtin = LlbcAstUtils.item_is_builtin crate in
   let merge_counter = ref 0 in
-  List.map
-    (fun (scc_id, buckets) ->
-      (* Only the external buckets are emitted as interface/template files. *)
-      let is_external =
-        List.exists
-          (function
-            | BExternalTypes | BExternalFuns -> true
-            | BFile _ -> false)
-          buckets
-      in
-      (* An external SCC has nothing to emit iff all its declarations are
+  let placed =
+    List.map
+      (fun (scc_id, buckets) ->
+        (* Only the external buckets are emitted as interface/template files. *)
+        let is_external =
+          List.exists
+            (function
+              | BExternalTypes | BExternalFuns -> true
+              | BFile _ -> false)
+            buckets
+        in
+        (* An external SCC has nothing to emit iff all its declarations are
          builtins (resolved via [import Aeneas]): dropping it avoids an empty
          template file and a dangling import. Decide from the actual members,
          not the crate-global opacity flags, which over- and under-approximate
          in both directions. *)
-      let is_dropped =
-        is_external
-        && List.for_all
-             (fun b ->
-               (* Every SCC bucket has members by construction
+        let is_dropped =
+          is_external
+          && List.for_all
+               (fun b ->
+                 (* Every SCC bucket has members by construction
                   ({!FileGraph.compute} builds the SCCs from the member map's
                   keys), so a missing entry is a broken invariant. *)
-               List.for_all is_builtin
-                 ([%silent_unwrap_opt_span] None
-                    (BucketMap.find_opt b fg.members)))
-             buckets
-      in
-      let import_name, filename =
-        if is_external then
-          let suffix =
-            if
-              List.exists
-                (function
-                  | BExternalFuns -> true
-                  | _ -> false)
-                buckets
-            then "FunsExternal"
-            else "TypesExternal"
-          in
-          ( import_prefix ^ suffix,
-            module_root_dir ^ "/" ^ suffix ^ "_Template" ^ ext )
+                 List.for_all is_builtin
+                   ([%silent_unwrap_opt_span] None
+                      (BucketMap.find_opt b fg.members)))
+               buckets
+        in
+        let import_name, filename =
+          if is_external then
+            let suffix =
+              if
+                List.exists
+                  (function
+                    | BExternalFuns -> true
+                    | _ -> false)
+                  buckets
+              then "FunsExternal"
+              else "TypesExternal"
+            in
+            ( import_prefix ^ suffix,
+              module_root_dir ^ "/" ^ suffix ^ "_Template" ^ ext )
+          else
+            let components =
+              match buckets with
+              | [ BFile p ] -> FileMapping.module_components_of_file p
+              | _ ->
+                  let idx = !merge_counter in
+                  incr merge_counter;
+                  FileMapping.merged_module_components idx
+            in
+            ( import_prefix ^ FileMapping.dotted_module_name components,
+              module_root_dir ^ "/" ^ FileMapping.lean_file_subpath components
+            )
+        in
+        { scc_id; buckets; is_external; is_dropped; import_name; filename })
+      scc_list
+  in
+  (* Guard against module-name collisions. [StringUtils.to_camel_case] strips
+     underscores (so [src/foo_bar.rs] and a [#[path]]-mapped [src/fooBar.rs]
+     both become [FooBar]), and merged SCCs take a synthesized [MergeN] name a
+     real [src/mergeN.rs] source could also produce. Two modules sharing an
+     [import_name] would have the emitter's second [open_out] silently truncate
+     the first, so fail loudly instead. Dropped modules are never written, so
+     skip them. *)
+  let describe (m : placed_module) : string =
+    String.concat " + " (List.map display_bucket m.buckets)
+  in
+  let (_ : placed_module Collections.StringMap.t) =
+    List.fold_left
+      (fun seen (m : placed_module) ->
+        if m.is_dropped then seen
         else
-          let components =
-            match buckets with
-            | [ BFile p ] -> FileMapping.module_components_of_file p
-            | _ ->
-                let idx = !merge_counter in
-                incr merge_counter;
-                FileMapping.merged_module_components idx
-          in
-          ( import_prefix ^ FileMapping.dotted_module_name components,
-            module_root_dir ^ "/" ^ FileMapping.lean_file_subpath components )
-      in
-      { scc_id; buckets; is_external; is_dropped; import_name; filename })
-    scc_list
+          match Collections.StringMap.find_opt m.import_name seen with
+          | Some prev ->
+              [%craise_opt_span] None
+                (Printf.sprintf
+                   "Module-name collision in -split-files: %s and %s both map \
+                    to the Lean module [%s] (file %s). Rename one of the Rust \
+                    sources so their camel-cased module names differ."
+                   (describe prev) (describe m) m.import_name m.filename)
+          | None -> Collections.StringMap.add m.import_name m seen)
+      Collections.StringMap.empty placed
+  in
+  placed
 
 (** Render the generated-files section of the [-dump-file-graph] report: exactly
     the files the [-split-files] emitter will write (dropped builtin-only
