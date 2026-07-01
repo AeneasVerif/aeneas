@@ -76,7 +76,13 @@
         ocamlPackages = pkgs.ocaml-ng.ocamlPackages_5_2;
         ocamlPackagesStatic = pkgs.pkgsStatic.ocaml-ng.ocamlPackages_5_2;
         coqPackages = pkgs.coqPackages_8_18;
-        charon = inputs.charon.packages.${system}.charon;
+        charon =
+          if system == "aarch64-linux" then
+            # Work around Charon test failures in the GitHub `ubuntu-24.04-arm` runner
+            # (`cargo miri setup` permission errors in `charon` tests).
+            inputs.charon.packages.${system}.charon.overrideAttrs (_: { doCheck = false; })
+          else
+            inputs.charon.packages.${system}.charon;
         charon-portable = inputs.charon.packages.${system}.charon-portable;
         charon-ml = inputs.charon.packages.${system}.charon-ml.override { inherit ocamlPackages; };
 
