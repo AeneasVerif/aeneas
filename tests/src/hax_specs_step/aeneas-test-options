@@ -1,0 +1,7 @@
+[!lean] skip
+[lean] aeneas-args=-specs hax-step
+charon-args=--start-from=crate
+charon-args=--rustc-arg=--cfg=hax_compilation
+charon-args=--rustc-arg=-Zcrate-attr=feature(register_tool)
+charon-args=--rustc-arg=-Zcrate-attr=register_tool(_hax)
+charon-args=-- -Zhost-config -Ztarget-applies-to-host --config host.rustflags=["--cfg","hax"]
