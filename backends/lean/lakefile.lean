@@ -25,4 +25,4 @@ lean_exe extract where
 /-- Extract verification documentation metadata as JSON. -/
 lean_exe doc_extract where
   root := `AeneasDocExtract
-  supportInterpreter := false
+  supportInterpreter := true

@@ -1723,45 +1723,15 @@ def generate_lean_page(lean_def: 'LeanDefinition', output_dir: Path,
                 content += f'''
     <h2>Source Code</h2>
     <p class="src-link"><a href="{src_link}">{_esc(module_file)}:{begin}-{end}</a></p>
-    {_source_block(snippet_text, "lean")}
+    <details open>
+      <summary>View source</summary>
+      {_source_block(snippet_text, "lean")}
+    </details>
     '''
 
-    # Signature block with binder-by-binder rendering when available
+    # `kind_kw` is reused by the Elaborated Definition section below.
     kind_kw = lean_def.kind if lean_def.kind in ("def", "inductive", "structure",
         "opaque", "axiom", "abbrev") else "def"
-    if lean_def.binders is not None and lean_def.return_type is not None:
-        # Build natural header: def name {T : Type} (l : CList T) : ReturnType
-        sig_parts: list = [f'<span class="kw">{_esc(kind_kw)}</span> {_esc(lean_def.name)}']
-        for b in lean_def.binders:
-            bname = _esc(b["name"])
-            btype_html = _render_annotated_html(b["annotated_type"], known_fns or {}, inline=True)
-            if b.get("inst_implicit"):
-                sig_parts.append(f' [{bname} : {btype_html}]')
-            elif b.get("implicit"):
-                sig_parts.append(f' {{{bname} : {btype_html}}}')
-            else:
-                sig_parts.append(f' ({bname} : {btype_html})')
-        ret_html = _render_annotated_html(lean_def.return_type["annotated_type"],
-                                          known_fns or {}, inline=True)
-        sig_parts.append(f' : {ret_html}')
-        sig_html = f'<pre class="lean-annotated">{"".join(sig_parts)}</pre>'
-        content += f'''
-    <h2>Signature</h2>
-    {sig_html}
-    '''
-    elif lean_def.type_signature:
-        # Fallback: "def name : full_type" (flat)
-        if lean_def.annotated_type_signature:
-            sig_annotated = [f"{kind_kw} {lean_def.name} : "] + lean_def.annotated_type_signature
-            sig_html = _render_annotated_html(sig_annotated, known_fns or {})
-        else:
-            sig_html = _annotated_lean_block(
-                f"{kind_kw} {lean_def.name} : {lean_def.type_signature}",
-                known_fns or {})
-        content += f'''
-    <h2>Signature</h2>
-    {sig_html}
-    '''
 
     # Rust counterpart link — make the Rust name itself clickable
     if lean_def.rust_name:
@@ -2637,6 +2607,21 @@ def generate_docs(
             without_prefix = ".".join(parts[1:])
             if without_prefix not in known_fns:
                 known_fns[without_prefix] = f"{ld.slug}.html"
+
+    # Also allow linking by bare short name (last component), so identifiers that
+    # appear unqualified in Lean source — e.g. a parent in `structure X extends
+    # wfEncapKey ...` — become clickable. Only add short names that are
+    # UNAMBIGUOUS (map to exactly one definition) and reasonably distinctive
+    # (len >= 3), to avoid mis-linking locals like `p`/`n`/`xs`.
+    _short_counts: dict = {}
+    _short_href: dict = {}
+    for ld in lean_definitions:
+        short = ld.name.split(".")[-1]
+        _short_counts[short] = _short_counts.get(short, 0) + 1
+        _short_href[short] = f"{ld.slug}.html"
+    for short, cnt in _short_counts.items():
+        if cnt == 1 and len(short) >= 3 and short not in known_fns:
+            known_fns[short] = _short_href[short]
 
     # Build lean_map: Lean function name → LeanDefinition (for theorem links)
     lean_map = {ld.name: ld for ld in lean_definitions}
