@@ -76,15 +76,28 @@
         ocamlPackages = pkgs.ocaml-ng.ocamlPackages_5_2;
         ocamlPackagesStatic = pkgs.pkgsStatic.ocaml-ng.ocamlPackages_5_2;
         coqPackages = pkgs.coqPackages_8_18;
+        charonBase = inputs.charon.packages.${system}.charon;
         charon =
           if system == "aarch64-linux" then
-            # Work around Charon test failures in the GitHub `ubuntu-24.04-arm` runner
-            # (`cargo miri setup` permission errors in `charon` tests).
-            inputs.charon.packages.${system}.charon.overrideAttrs (_: { doCheck = false; })
+            charonBase.overrideAttrs (old: {
+              postPatch = (old.postPatch or "") + ''
+                # Keep Charon's snapshot tests enabled on aarch64 by forcing the
+                # cargo integration tests to use the same default target as the
+                # committed snapshots.
+                old='    cmd.args(&test_case.cargo_args);'
+                new='    if !test_case.cargo_args.iter().any(|arg| arg == "--target" || arg.starts_with("--target="))
+        && !test_case.charon_args.iter().any(|arg| arg == "--target" || arg.starts_with("--target=") || arg.starts_with("--targets=")) {
+        cmd.arg("--target=x86_64-unknown-linux-gnu");
+    }
+    cmd.args(&test_case.cargo_args);'
+                substituteInPlace tests/cargo.rs --replace-fail "$old" "$new"
+              '';
+            })
           else
-            inputs.charon.packages.${system}.charon;
+            charonBase;
         charon-portable =
           if system == "aarch64-linux" then
+            # Upstream `charon-portable` hardcodes the x86_64 Linux ELF loader.
             charon
           else
             inputs.charon.packages.${system}.charon-portable;
