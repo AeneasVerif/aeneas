@@ -597,6 +597,11 @@ type extraction_ctx = {
   functions_with_decreases_clause : PureUtils.FunLoopIdSet.t;
   trans_trait_decls : Pure.trait_decl Pure.TraitDeclId.Map.t;
   trans_trait_impls : Pure.trait_impl Pure.TraitImplId.Map.t;
+  specs : Spec.spec list;
+      (** Gathered specs (statements of correctness) for this crate (see
+          {!module:Spec}). *)
+  proof_obligations : Spec.proof_obligation list;
+      (** Gathered proof obligations for this crate (see {!module:Spec}). *)
   types_filter_type_args_map : bool list TypeDeclId.Map.t;
       (** The map to filter the type arguments for the builtin type definitions.
 

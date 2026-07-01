@@ -17,6 +17,18 @@ type fun_and_loops = {
 type pure_fun_translation_no_loops = Pure.fun_decl
 type pure_fun_translation = fun_and_loops
 
+(** The whole crate, translated to pure. *)
+type translated_crate = {
+  type_decls : Pure.type_decl list;
+  builtin_fun_sigs : Pure.fun_sig Builtin.BuiltinFunIdMap.t;
+  fun_decls : pure_fun_translation list;
+  global_decls : Pure.global_decl list;
+  trait_decls : Pure.trait_decl list;
+  trait_impls : Pure.trait_impl list;
+  specs : Spec.spec list;
+  proof_obligations : Spec.proof_obligation list;
+}
+
 let trans_ctx_to_fmt_env (ctx : trans_ctx) : Print.fmt_env =
   Print.Contexts.decls_ctx_to_fmt_env ctx
 

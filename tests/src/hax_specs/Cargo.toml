@@ -1,0 +1,11 @@
+[package]
+name = "hax_specs"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "hax_specs"
+path = "src/lib.rs"
+
+[dependencies]
+hax-lib = "0.3.6"

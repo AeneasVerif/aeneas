@@ -2417,6 +2417,185 @@ let fix_closure_lifetimes (crate : crate) (f : fun_decl) : fun_decl =
           f
       | _, _ -> f)
 
+(** Drop items marked with hax's [late_skip] attribute.
+
+    Hax annotates several internal helpers — the [const _: () = { … }] wrappers
+    around its decoration functions, the [fn future] helper it inserts inside
+    every [ensures] block, … — with
+    [#[_hax::json("{\"ItemStatus\":{\"Included\":{\"late_skip\":true}}}")]]. The
+    marker tells consumers "this item is hax-internal, don't include it in the
+    extracted output". This pass acts on that marker by filtering every
+    top-level decl list of the {b LLBC} crate, before Pure translation runs —
+    that way translation, spec/proof-obligation production and extraction all
+    see a consistent crate with no late_skip items.
+
+    The [_hax::json] payload is parsed via {!HaxAttributes.parse_attr}; this
+    module just decides whether each item should be kept. *)
+module HaxLateSkipFilterPrePass = struct
+  module A = LlbcAst
+  module T = Types
+
+  (** [true] iff the item should be dropped: it carries [late_skip] and is NOT
+      also a decoration fn (i.e. doesn't carry a [Uid]). Decoration fns have
+      [late_skip + Uid] but are consumed by {!HaxProducer.produce} *)
+  let drop_item (attr_info : Charon.Meta.attr_info) : bool =
+    let payloads =
+      List.filter_map HaxAttributes.parse_attr attr_info.attributes
+    in
+    let has_late_skip = List.mem HaxAttributes.Late_skip payloads in
+    let has_uid =
+      List.exists
+        (function
+          | HaxAttributes.Uid _ -> true
+          | _ -> false)
+        payloads
+    in
+    has_late_skip && not has_uid
+
+  let is_late_skip_fun (decls : A.fun_decl A.FunDeclId.Map.t)
+      (id : A.FunDeclId.id) : bool =
+    match A.FunDeclId.Map.find_opt id decls with
+    | None -> false
+    | Some d -> drop_item d.item_meta.attr_info
+
+  let is_late_skip_global (decls : A.global_decl A.GlobalDeclId.Map.t)
+      (id : A.GlobalDeclId.id) : bool =
+    match A.GlobalDeclId.Map.find_opt id decls with
+    | None -> false
+    | Some d -> drop_item d.item_meta.attr_info
+
+  let is_late_skip_type (decls : T.type_decl T.TypeDeclId.Map.t)
+      (id : T.TypeDeclId.id) : bool =
+    match T.TypeDeclId.Map.find_opt id decls with
+    | None -> false
+    | Some d -> drop_item d.item_meta.attr_info
+
+  let is_late_skip_trait_decl (decls : A.trait_decl T.TraitDeclId.Map.t)
+      (id : T.TraitDeclId.id) : bool =
+    match T.TraitDeclId.Map.find_opt id decls with
+    | None -> false
+    | Some d -> drop_item d.item_meta.attr_info
+
+  let is_late_skip_trait_impl (decls : A.trait_impl T.TraitImplId.Map.t)
+      (id : T.TraitImplId.id) : bool =
+    match T.TraitImplId.Map.find_opt id decls with
+    | None -> false
+    | Some d -> drop_item d.item_meta.attr_info
+
+  (** Filter the ids inside one [g_declaration_group]. Returns [None] if the
+      group becomes empty. *)
+  let filter_group (is_dropped : 'id -> bool) (g : 'id A.g_declaration_group) :
+      'id A.g_declaration_group option =
+    match g with
+    | NonRecGroup id -> if is_dropped id then None else Some (NonRecGroup id)
+    | RecGroup ids -> (
+        match List.filter (fun id -> not (is_dropped id)) ids with
+        | [] -> None
+        | xs -> Some (RecGroup xs))
+
+  let filter_declaration (crate : A.crate) (d : A.declaration_group) :
+      A.declaration_group option =
+    let wrap ctor g = Option.map ctor g in
+    match d with
+    | FunGroup g ->
+        wrap
+          (fun g -> A.FunGroup g)
+          (filter_group (is_late_skip_fun crate.fun_decls) g)
+    | GlobalGroup g ->
+        wrap
+          (fun g -> A.GlobalGroup g)
+          (filter_group (is_late_skip_global crate.global_decls) g)
+    | TypeGroup g ->
+        wrap
+          (fun g -> A.TypeGroup g)
+          (filter_group (is_late_skip_type crate.type_decls) g)
+    | TraitDeclGroup g ->
+        wrap
+          (fun g -> A.TraitDeclGroup g)
+          (filter_group (is_late_skip_trait_decl crate.trait_decls) g)
+    | TraitImplGroup g ->
+        wrap
+          (fun g -> A.TraitImplGroup g)
+          (filter_group (is_late_skip_trait_impl crate.trait_impls) g)
+    | MixedGroup g ->
+        (* A mixed (mutually-recursive, cross-kind) group: dispatch each item to
+           the per-kind check, so a late_skip item buried in such a group is
+           dropped from the declaration list too (keeping it consistent with the
+           filtered [crate.*_decls] maps). *)
+        let is_late_skip_item (id : item_id) : bool =
+          match id with
+          | IdFun id -> is_late_skip_fun crate.fun_decls id
+          | IdGlobal id -> is_late_skip_global crate.global_decls id
+          | IdType id -> is_late_skip_type crate.type_decls id
+          | IdTraitDecl id -> is_late_skip_trait_decl crate.trait_decls id
+          | IdTraitImpl id -> is_late_skip_trait_impl crate.trait_impls id
+        in
+        wrap (fun g -> A.MixedGroup g) (filter_group is_late_skip_item g)
+
+  (** Run the pass on an LLBC crate. *)
+  let run (crate : A.crate) : A.crate =
+    if not (Config.spec_config_is_hax ()) then crate
+    else
+      let n_funs_before = A.FunDeclId.Map.cardinal crate.fun_decls in
+      let n_globals_before = A.GlobalDeclId.Map.cardinal crate.global_decls in
+      let n_types_before = T.TypeDeclId.Map.cardinal crate.type_decls in
+      let n_decls_before = List.length crate.declarations in
+      let fun_decls =
+        A.FunDeclId.Map.filter
+          (fun _ (d : A.fun_decl) -> not (drop_item d.item_meta.attr_info))
+          crate.fun_decls
+      in
+      let global_decls =
+        A.GlobalDeclId.Map.filter
+          (fun _ (d : A.global_decl) -> not (drop_item d.item_meta.attr_info))
+          crate.global_decls
+      in
+      let type_decls =
+        T.TypeDeclId.Map.filter
+          (fun _ (d : T.type_decl) -> not (drop_item d.item_meta.attr_info))
+          crate.type_decls
+      in
+      let trait_decls =
+        T.TraitDeclId.Map.filter
+          (fun _ (d : A.trait_decl) -> not (drop_item d.item_meta.attr_info))
+          crate.trait_decls
+      in
+      let trait_impls =
+        T.TraitImplId.Map.filter
+          (fun _ (d : A.trait_impl) -> not (drop_item d.item_meta.attr_info))
+          crate.trait_impls
+      in
+      let declarations =
+        List.filter_map (filter_declaration crate) crate.declarations
+      in
+      let n_dropped_funs = n_funs_before - A.FunDeclId.Map.cardinal fun_decls in
+      let n_dropped_globals =
+        n_globals_before - A.GlobalDeclId.Map.cardinal global_decls
+      in
+      let n_dropped_types =
+        n_types_before - T.TypeDeclId.Map.cardinal type_decls
+      in
+      let n_dropped_decls = n_decls_before - List.length declarations in
+      let total =
+        n_dropped_funs + n_dropped_globals + n_dropped_types + n_dropped_decls
+      in
+      if total > 0 then
+        [%ldebug
+          Printf.sprintf
+            "late-skip-pass: dropped %d fn(s), %d global(s), %d type(s), %d \
+             decl-group(s)"
+            n_dropped_funs n_dropped_globals n_dropped_types n_dropped_decls];
+      {
+        crate with
+        fun_decls;
+        global_decls;
+        type_decls;
+        trait_decls;
+        trait_impls;
+        declarations;
+      }
+end
+
 let apply_passes (crate : crate) : crate =
   (* Passes that apply to the whole crate *)
   let crate = update_array_default crate in
@@ -2482,6 +2661,7 @@ let apply_passes (crate : crate) : crate =
   let crate = filter_eq_assert_fields_method crate in
   let crate = filter_marker_traits crate in
   let crate = filter_type_aliases crate in
+  let crate = HaxLateSkipFilterPrePass.run crate in
   let crate = replace_static crate in
   let crate = remove_vtables crate in
   let crate = rename_type_vars crate in

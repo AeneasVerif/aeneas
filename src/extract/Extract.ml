@@ -516,6 +516,16 @@ let fun_builtin_filter_types_trait_clauses (ty_to_string : 'a -> string)
       Result.Ok (types, explicit, clauses)
   | Result.Error msg, _ | _, Result.Error msg -> Result.Error msg
 
+(** Emit a boxed delimiter: [<l> <inner> <r>] inside an [hovbox] *)
+let emit_delim ?(add_spaces = true) fmt l k r : unit =
+  F.pp_open_hovbox fmt 0;
+  F.pp_print_string fmt l;
+  if add_spaces then F.pp_print_space fmt ();
+  k ();
+  if add_spaces then F.pp_print_space fmt ();
+  F.pp_print_string fmt r;
+  F.pp_close_box fmt ()
+
 (** [inside]: see {!extract_ty}. [with_type]: do we also generate a type
     annotation? This is necessary for backends like Coq when we write lambdas
     (Coq is not powerful enough to infer the type).
