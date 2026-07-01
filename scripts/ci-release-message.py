@@ -66,29 +66,24 @@ def main():
     success = env("PREPARE_RESULT") == "success" and env("BUILD_RESULT") == "success"
 
     lines = [
-        f"*Release {env('TAG_NAME', 'unknown')}*",
-        "✅✅✅" if success else "❌❌❌",
-        "",
-        "*Links:*",
+        f"## Aeneas release: {env('TAG_NAME', 'unknown')}",
     ]
 
     if env("TAG_NAME"):
         lines.append(
-            f"release: {env('GITHUB_SERVER_URL')}/{env('GITHUB_REPOSITORY')}/releases/tag/{env('TAG_NAME')}"
+            f"tag: {env('GITHUB_SERVER_URL')}/{env('GITHUB_REPOSITORY')}/releases/tag/{env('TAG_NAME')}"
         )
     lines.extend(
         [
-            f"commit: {env('GITHUB_SERVER_URL')}/{env('GITHUB_REPOSITORY')}/commit/{env('GITHUB_SHA')}",
             f"run: {env('GITHUB_SERVER_URL')}/{env('GITHUB_REPOSITORY')}/actions/runs/{env('GITHUB_RUN_ID')}",
             "",
             "*Statuses:*",
-            f"{status_icon(env('PREPARE_RESULT', 'missing'))} prepare ({env('PREPARE_RESULT', 'missing')})",
         ]
     )
 
     if builds:
         for artifact_name, result in builds:
-            lines.append(f"{status_icon(result)} {artifact_name} ({result})")
+            lines.append(f"{status_icon(result)} {artifact_name}")
     else:
         lines.append(f"{status_icon(env('BUILD_RESULT', 'missing'))} builds ({env('BUILD_RESULT', 'missing')})")
 
