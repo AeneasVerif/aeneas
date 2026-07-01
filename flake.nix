@@ -86,8 +86,10 @@
             charonBase.overrideAttrs (old: {
               # Keep Charon's snapshot tests enabled on aarch64 by forcing the
               # cargo integration tests to use the same default target as the
-              # committed snapshots, while leaving tests that already specify
-              # `--target` / `--targets` unchanged.
+              # committed x86_64 snapshots. This is needed because those tests
+              # compare LLBC output against checked-in fixtures, and the host
+              # default target changes that output on aarch64. Tests that
+              # already specify `--target` / `--targets` remain unchanged.
               patches = (old.patches or [ ]) ++ [ charonAarch64CargoTargetPatch ];
             })
           else
@@ -97,7 +99,9 @@
             # Upstream `charon-portable` hardcodes the x86_64 Linux ELF loader.
             # The wrapped `charon` binary is still suitable for the aarch64
             # release artifact because that artifact only needs to run on the
-            # matching host platform, not across Linux architectures.
+            # matching host platform, not across Linux architectures. Keep this
+            # workaround until upstream `charon-portable` stops assuming the
+            # x86_64 loader path on all Linux targets.
             charon
           else
             inputs.charon.packages.${system}.charon-portable;

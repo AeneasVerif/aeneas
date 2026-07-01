@@ -15,8 +15,8 @@
      cmd.args(&test_case.charon_args);
      cmd.arg("--");
 +    if !has_explicit_target {
-+        // Match the target baked into the committed snapshots so these tests
-+        // stay stable across host architectures.
++        // Match the checked-in x86_64 snapshots that these tests were authored
++        // against so they stay stable across host architectures.
 +        cmd.arg("--target=x86_64-unknown-linux-gnu");
 +    }
      cmd.args(&test_case.cargo_args);
