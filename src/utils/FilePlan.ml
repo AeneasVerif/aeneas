@@ -56,8 +56,12 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
         is_external
         && List.for_all
              (fun b ->
+               (* Every SCC bucket has members by construction
+                  ({!FileGraph.compute} builds the SCCs from the member map's
+                  keys), so a missing entry is a broken invariant. *)
                List.for_all is_builtin
-                 (Option.value (BucketMap.find_opt b fg.members) ~default:[]))
+                 ([%silent_unwrap_opt_span] None
+                    (BucketMap.find_opt b fg.members)))
              buckets
       in
       let import_name, filename =
