@@ -907,6 +907,7 @@ let unop_to_string (env : fmt_env) (unop : unop) : string =
 
 let binop_to_string (env : fmt_env) (binop : binop) =
   let int_ty_to_string int_ty = "::<" ^ integer_type_to_string int_ty ^ ">" in
+  let lit_ty_to_string lit_ty = "::<" ^ literal_type_to_string lit_ty ^ ">" in
   let int_tys_to_string int_ty0 int_ty1 =
     "::<"
     ^ integer_type_to_string int_ty0
@@ -920,10 +921,10 @@ let binop_to_string (env : fmt_env) (binop : binop) =
   | BitOr int_ty -> "|" ^ int_ty_to_string int_ty
   | Eq ty -> "==" ^ "::<" ^ ty_to_string env false ty ^ ">"
   | Ne ty -> "!=" ^ "::<" ^ ty_to_string env false ty ^ ">"
-  | Lt int_ty -> "<" ^ int_ty_to_string int_ty
-  | Le int_ty -> "<=" ^ int_ty_to_string int_ty
-  | Ge int_ty -> ">=" ^ int_ty_to_string int_ty
-  | Gt int_ty -> ">" ^ int_ty_to_string int_ty
+  | Lt lit_ty -> "<" ^ lit_ty_to_string lit_ty
+  | Le lit_ty -> "<=" ^ lit_ty_to_string lit_ty
+  | Ge lit_ty -> ">=" ^ lit_ty_to_string lit_ty
+  | Gt lit_ty -> ">" ^ lit_ty_to_string lit_ty
   | Div (om, int_ty) ->
       Print.overflow_mode_to_string om ^ "./" ^ int_ty_to_string int_ty
   | Rem (om, int_ty) ->

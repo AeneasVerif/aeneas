@@ -5,6 +5,8 @@ import Mathlib.Tactic.Linarith
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.Notations
 import Aeneas.Std.Scalar.Elab
+import Aeneas.Std.Scalar.Casts
+import Aeneas.Std.Core.Result
 import Aeneas.Std.Array.Array
 import Aeneas.Tactic.Solver.ScalarTac
 import Aeneas.Tactic.Step.Init
@@ -380,192 +382,192 @@ end num -- core.convert.num
 
 @[reducible]
 def FromUsizeU8 : core.convert.From Usize U8 := {
-  from_ := fun x => ok (num.FromUsizeU8.from x)
+  «from» := fun x => ok (num.FromUsizeU8.from x)
 }
 
 @[reducible]
 def FromUsizeU16 : core.convert.From Usize U16 := {
-  from_ := fun x => ok (num.FromUsizeU16.from x)
+  «from» := fun x => ok (num.FromUsizeU16.from x)
 }
 
 @[reducible]
 def FromUsizeU32 : core.convert.From Usize U32 := {
-  from_ := fun x => ok (num.FromUsizeU32.from x)
+  «from» := fun x => ok (num.FromUsizeU32.from x)
 }
 
 @[reducible]
 def FromUsizeUsize : core.convert.From Usize Usize := {
-  from_ := fun x => ok (num.FromUsizeUsize.from x)
+  «from» := fun x => ok (num.FromUsizeUsize.from x)
 }
 
 @[reducible]
 def FromU8U8 : core.convert.From U8 U8 := {
-  from_ := fun x => ok (num.FromU8U8.from x)
+  «from» := fun x => ok (num.FromU8U8.from x)
 }
 
 @[reducible]
 def FromU16U8 : core.convert.From U16 U8 := {
-  from_ := fun x => ok (num.FromU16U8.from x)
+  «from» := fun x => ok (num.FromU16U8.from x)
 }
 
 @[reducible]
 def FromU16U16 : core.convert.From U16 U16 := {
-  from_ := fun x => ok (num.FromU16U16.from x)
+  «from» := fun x => ok (num.FromU16U16.from x)
 }
 
 @[reducible]
 def FromU32U8 : core.convert.From U32 U8 := {
-  from_ := fun x => ok (num.FromU32U8.from x)
+  «from» := fun x => ok (num.FromU32U8.from x)
 }
 
 @[reducible]
 def FromU32U16 : core.convert.From U32 U16 := {
-  from_ := fun x => ok (num.FromU32U16.from x)
+  «from» := fun x => ok (num.FromU32U16.from x)
 }
 
 @[reducible]
 def FromU32U32 : core.convert.From U32 U32 := {
-  from_ := fun x => ok (num.FromU32U32.from x)
+  «from» := fun x => ok (num.FromU32U32.from x)
 }
 
 @[reducible]
 def FromU64U8 : core.convert.From U64 U8 := {
-  from_ := fun x => ok (num.FromU64U8.from x)
+  «from» := fun x => ok (num.FromU64U8.from x)
 }
 
 @[reducible]
 def FromU64U16 : core.convert.From U64 U16 := {
-  from_ := fun x => ok (num.FromU64U16.from x)
+  «from» := fun x => ok (num.FromU64U16.from x)
 }
 
 @[reducible]
 def FromU64U32 : core.convert.From U64 U32 := {
-  from_ := fun x => ok (num.FromU64U32.from x)
+  «from» := fun x => ok (num.FromU64U32.from x)
 }
 
 @[reducible]
 def FromU64U64 : core.convert.From U64 U64 := {
-  from_ := fun x => ok (num.FromU64U64.from x)
+  «from» := fun x => ok (num.FromU64U64.from x)
 }
 
 @[reducible]
 def FromU128U8 : core.convert.From U128 U8 := {
-  from_ := fun x => ok (num.FromU128U8.from x)
+  «from» := fun x => ok (num.FromU128U8.from x)
 }
 
 @[reducible]
 def FromU128U16 : core.convert.From U128 U16 := {
-  from_ := fun x => ok (num.FromU128U16.from x)
+  «from» := fun x => ok (num.FromU128U16.from x)
 }
 
 @[reducible]
 def FromU128U32 : core.convert.From U128 U32 := {
-  from_ := fun x => ok (num.FromU128U32.from x)
+  «from» := fun x => ok (num.FromU128U32.from x)
 }
 
 @[reducible]
 def FromU128U64 : core.convert.From U128 U64 := {
-  from_ := fun x => ok (num.FromU128U64.from x)
+  «from» := fun x => ok (num.FromU128U64.from x)
 }
 
 @[reducible]
 def FromU128U128 : core.convert.From U128 U128 := {
-  from_ := fun x => ok (num.FromU128U128.from x)
+  «from» := fun x => ok (num.FromU128U128.from x)
 }
 
 @[reducible]
 def FromIsizeI8 : core.convert.From Isize I8 := {
-  from_ := fun x => ok (num.FromIsizeI8.from x)
+  «from» := fun x => ok (num.FromIsizeI8.from x)
 }
 
 @[reducible]
 def FromIsizeI16 : core.convert.From Isize I16 := {
-  from_ := fun x => ok (num.FromIsizeI16.from x)
+  «from» := fun x => ok (num.FromIsizeI16.from x)
 }
 
 @[reducible]
 def FromIsizeI32 : core.convert.From Isize I32 := {
-  from_ := fun x => ok (num.FromIsizeI32.from x)
+  «from» := fun x => ok (num.FromIsizeI32.from x)
 }
 
 @[reducible]
 def FromIsizeIsize : core.convert.From Isize Isize := {
-  from_ := fun x => ok (num.FromIsizeIsize.from x)
+  «from» := fun x => ok (num.FromIsizeIsize.from x)
 }
 
 @[reducible]
 def FromI8I8 : core.convert.From I8 I8 := {
-  from_ := fun x => ok (num.FromI8I8.from x)
+  «from» := fun x => ok (num.FromI8I8.from x)
 }
 
 @[reducible]
 def FromI16I8 : core.convert.From I16 I8 := {
-  from_ := fun x => ok (num.FromI16I8.from x)
+  «from» := fun x => ok (num.FromI16I8.from x)
 }
 
 @[reducible]
 def FromI16I16 : core.convert.From I16 I16 := {
-  from_ := fun x => ok (num.FromI16I16.from x)
+  «from» := fun x => ok (num.FromI16I16.from x)
 }
 
 @[reducible]
 def FromI32I8 : core.convert.From I32 I8 := {
-  from_ := fun x => ok (num.FromI32I8.from x)
+  «from» := fun x => ok (num.FromI32I8.from x)
 }
 
 @[reducible]
 def FromI32I16 : core.convert.From I32 I16 := {
-  from_ := fun x => ok (num.FromI32I16.from x)
+  «from» := fun x => ok (num.FromI32I16.from x)
 }
 
 @[reducible]
 def FromI32I32 : core.convert.From I32 I32 := {
-  from_ := fun x => ok (num.FromI32I32.from x)
+  «from» := fun x => ok (num.FromI32I32.from x)
 }
 
 @[reducible]
 def FromI64I8 : core.convert.From I64 I8 := {
-  from_ := fun x => ok (num.FromI64I8.from x)
+  «from» := fun x => ok (num.FromI64I8.from x)
 }
 
 @[reducible]
 def FromI64I16 : core.convert.From I64 I16 := {
-  from_ := fun x => ok (num.FromI64I16.from x)
+  «from» := fun x => ok (num.FromI64I16.from x)
 }
 
 @[reducible]
 def FromI64I32 : core.convert.From I64 I32 := {
-  from_ := fun x => ok (num.FromI64I32.from x)
+  «from» := fun x => ok (num.FromI64I32.from x)
 }
 
 @[reducible]
 def FromI64I64 : core.convert.From I64 I64 := {
-  from_ := fun x => ok (num.FromI64I64.from x)
+  «from» := fun x => ok (num.FromI64I64.from x)
 }
 
 @[reducible]
 def FromI128I8 : core.convert.From I128 I8 := {
-  from_ := fun x => ok (num.FromI128I8.from x)
+  «from» := fun x => ok (num.FromI128I8.from x)
 }
 
 @[reducible]
 def FromI128I16 : core.convert.From I128 I16 := {
-  from_ := fun x => ok (num.FromI128I16.from x)
+  «from» := fun x => ok (num.FromI128I16.from x)
 }
 
 @[reducible]
 def FromI128I32 : core.convert.From I128 I32 := {
-  from_ := fun x => ok (num.FromI128I32.from x)
+  «from» := fun x => ok (num.FromI128I32.from x)
 }
 
 @[reducible]
 def FromI128I64 : core.convert.From I128 I64 := {
-  from_ := fun x => ok (num.FromI128I64.from x)
+  «from» := fun x => ok (num.FromI128I64.from x)
 }
 
 @[reducible]
 def FromI128I128 : core.convert.From I128 I128 := {
-  from_ := fun x => ok (num.FromI128I128.from x)
+  «from» := fun x => ok (num.FromI128I128.from x)
 }
 
 end core.convert
@@ -657,6 +659,183 @@ iscalar_no_isize @[step]
 theorem core.num.«%S».from_be_bytes.step_spec (x : Array I8 (%Size)#usize) :
   lift (core.num.«%S».from_be_bytes x) ⦃ y => y.bv = (BitVec.fromBEBytes (x.val.map I8.bv)).cast (by simp) ⦄  := by
   simp only [spec_ok, lift, from_be_bytes]
+
+/-!
+# `cast_signed` / `cast_unsigned`
+-/
+
+@[rust_fun "core::num::{u8}::cast_signed"]
+def core.num.U8.cast_signed (x : U8) : Result I8 := ok ⟨x.bv⟩
+
+@[rust_fun "core::num::{i8}::cast_unsigned"]
+def core.num.I8.cast_unsigned (x : I8) : Result U8 := ok ⟨x.bv⟩
+
+@[rust_fun "core::num::{u16}::cast_signed"]
+def core.num.U16.cast_signed (x : U16) : Result I16 := ok ⟨x.bv⟩
+
+@[rust_fun "core::num::{i16}::cast_unsigned"]
+def core.num.I16.cast_unsigned (x : I16) : Result U16 := ok ⟨x.bv⟩
+
+@[rust_fun "core::num::{u32}::cast_signed"]
+def core.num.U32.cast_signed (x : U32) : Result I32 := ok ⟨x.bv⟩
+
+@[rust_fun "core::num::{i32}::cast_unsigned"]
+def core.num.I32.cast_unsigned (x : I32) : Result U32 := ok ⟨x.bv⟩
+
+@[rust_fun "core::num::{u64}::cast_signed"]
+def core.num.U64.cast_signed (x : U64) : Result I64 := ok ⟨x.bv⟩
+
+@[rust_fun "core::num::{i64}::cast_unsigned"]
+def core.num.I64.cast_unsigned (x : I64) : Result U64 := ok ⟨x.bv⟩
+
+@[rust_fun "core::num::{u128}::cast_signed"]
+def core.num.U128.cast_signed (x : U128) : Result I128 := ok ⟨x.bv⟩
+
+@[rust_fun "core::num::{i128}::cast_unsigned"]
+def core.num.I128.cast_unsigned (x : I128) : Result U128 := ok ⟨x.bv⟩
+
+@[rust_fun "core::num::{usize}::cast_signed"]
+def core.num.Usize.cast_signed (x : Usize) : Result Isize := ok ⟨x.bv⟩
+
+@[rust_fun "core::num::{isize}::cast_unsigned"]
+def core.num.Isize.cast_unsigned (x : Isize) : Result Usize := ok ⟨x.bv⟩
+
+@[step]
+theorem core.num.U8.cast_signed.step_spec (x : U8) :
+    core.num.U8.cast_signed x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.U8.cast_signed]
+
+@[step]
+theorem core.num.I8.cast_unsigned.step_spec (x : I8) :
+    core.num.I8.cast_unsigned x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.I8.cast_unsigned]
+
+@[step]
+theorem core.num.U16.cast_signed.step_spec (x : U16) :
+    core.num.U16.cast_signed x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.U16.cast_signed]
+
+@[step]
+theorem core.num.I16.cast_unsigned.step_spec (x : I16) :
+    core.num.I16.cast_unsigned x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.I16.cast_unsigned]
+
+@[step]
+theorem core.num.U32.cast_signed.step_spec (x : U32) :
+    core.num.U32.cast_signed x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.U32.cast_signed]
+
+@[step]
+theorem core.num.I32.cast_unsigned.step_spec (x : I32) :
+    core.num.I32.cast_unsigned x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.I32.cast_unsigned]
+
+@[step]
+theorem core.num.U64.cast_signed.step_spec (x : U64) :
+    core.num.U64.cast_signed x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.U64.cast_signed]
+
+@[step]
+theorem core.num.I64.cast_unsigned.step_spec (x : I64) :
+    core.num.I64.cast_unsigned x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.I64.cast_unsigned]
+
+@[step]
+theorem core.num.U128.cast_signed.step_spec (x : U128) :
+    core.num.U128.cast_signed x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.U128.cast_signed]
+
+@[step]
+theorem core.num.I128.cast_unsigned.step_spec (x : I128) :
+    core.num.I128.cast_unsigned x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.I128.cast_unsigned]
+
+@[step]
+theorem core.num.Usize.cast_signed.step_spec (x : Usize) :
+    core.num.Usize.cast_signed x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.Usize.cast_signed]
+
+@[step]
+theorem core.num.Isize.cast_unsigned.step_spec (x : Isize) :
+    core.num.Isize.cast_unsigned x ⦃ y => y.bv = x.bv ⦄ := by
+  simp only [spec_ok, core.num.Isize.cast_unsigned]
+
+/-! ## `{u8,u16,...}::is_multiple_of`
+
+`n.is_multiple_of(m)` ≡ `n % m == 0`.
+Note that with `Nat` we have: `x % 0 = x`, meaning `x % 0 = 0 ↔ x = 0`,
+which matches Rust's definition of `is_multiple_of`. -/
+
+def UScalar.is_multiple_of (n m : UScalar ty) : Result Bool :=
+  ok (n.val % m.val == 0)
+
+@[rust_fun "core::num::{u8}::is_multiple_of"]
+def core.num.U8.is_multiple_of (n m : U8) : Result Bool := UScalar.is_multiple_of n m
+
+@[rust_fun "core::num::{u16}::is_multiple_of"]
+def core.num.U16.is_multiple_of (n m : U16) : Result Bool := UScalar.is_multiple_of n m
+
+@[rust_fun "core::num::{u32}::is_multiple_of"]
+def core.num.U32.is_multiple_of (n m : U32) : Result Bool := UScalar.is_multiple_of n m
+
+@[rust_fun "core::num::{u64}::is_multiple_of"]
+def core.num.U64.is_multiple_of (n m : U64) : Result Bool := UScalar.is_multiple_of n m
+
+@[rust_fun "core::num::{u128}::is_multiple_of"]
+def core.num.U128.is_multiple_of (n m : U128) : Result Bool := UScalar.is_multiple_of n m
+
+@[rust_fun "core::num::{usize}::is_multiple_of"]
+def core.num.Usize.is_multiple_of (n m : Usize) : Result Bool := UScalar.is_multiple_of n m
+
+/-! ## `TryFrom` between integer types -/
+
+theorem UScalar.is_multiple_of.spec (a b : UScalar ty) :
+    UScalar.is_multiple_of a b
+    ⦃ (r : Bool) => r = (a.val % b.val = 0) ⦄ := by
+  simp [UScalar.is_multiple_of]
+
+uscalar
+@[step]
+theorem core.num.«%S».is_multiple_of.spec (a b : «%S») :
+    core.num.«%S».is_multiple_of a b
+    ⦃ (r : Bool) => r = (a.val % b.val = 0) ⦄ := UScalar.is_multiple_of.spec a b
+
+@[reducible, rust_type "core::num::error::TryFromIntError"]
+def core.num.error.TryFromIntError : Type := Unit
+
+/-- General fallible conversion between unsigned scalar types. -/
+def core.num.tryFromUScalar {srcTy : UScalarTy} (tgtTy : UScalarTy) (i : UScalar srcTy) :
+  Result (core.result.Result (UScalar tgtTy) core.num.error.TryFromIntError) :=
+  if i.val ≤ UScalar.max tgtTy then
+    ok (.Ok (UScalar.cast tgtTy i))
+  else
+    ok (.Err ())
+
+-- TODO: define for all scalar pairs
+@[rust_fun "core::convert::num::ptr_try_from_impls::{core::convert::TryFrom<u32, usize, core::num::error::TryFromIntError>}::try_from"]
+def core.convert.num.ptr_try_from_impls.TryFromU32Usize.try_from (i : Usize) :
+  Result (core.result.Result U32 core.num.error.TryFromIntError) :=
+  core.num.tryFromUScalar .U32 i
+
+-- TODO: define for all scalar pairs
+@[step]
+theorem core.convert.num.ptr_try_from_impls.TryFromU32Usize.try_from.step_spec
+    (i : Usize) :
+    core.convert.num.ptr_try_from_impls.TryFromU32Usize.try_from i
+    ⦃ (r : core.result.Result U32 core.num.error.TryFromIntError) =>
+      (i.val ≤ U32.max →
+         ∃ x : U32, r = .Ok x ∧ x.val = i.val) ∧
+      (U32.max < i.val → r = .Err ()) ⦄ := by
+  unfold core.convert.num.ptr_try_from_impls.TryFromU32Usize.try_from
+    core.num.tryFromUScalar
+  split <;> rename_i hb <;> simp only [WP.spec_ok]
+  · refine ⟨fun _ => ⟨_, rfl, ?_⟩, fun habsurd => by scalar_tac⟩
+    have hcast :=
+      (UScalar.cast_inBounds_spec (src_ty := .Usize) (tgt_ty := .U32) i
+        (by scalar_tac))
+    simp only [lift, WP.spec_ok] at hcast
+    exact hcast
+  · refine ⟨fun habsurd => by scalar_tac, fun _ => trivial⟩
 
 end Std
 
