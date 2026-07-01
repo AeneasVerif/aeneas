@@ -2019,10 +2019,10 @@ let extract_translated_crate (filename : string) (dest_dir : string)
   let placement =
     if !Config.split_files then
       Some
-        (FilePlan.place_by_file (Lazy.force file_graph) ~import_prefix
+        (FilePlan.place_by_file (Lazy.force file_graph) ~crate ~import_prefix
            ~module_root_dir:
              (FilePlan.module_root_dir ~full_dest_dir ~crate_name)
-           ~ext ~has_opaque_types ~has_opaque_funs)
+           ~ext)
     else None
   in
 

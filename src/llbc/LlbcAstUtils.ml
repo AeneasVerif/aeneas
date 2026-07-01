@@ -84,6 +84,54 @@ let crate_has_opaque_non_builtin_decls (k : crate) (filter_builtin : bool)
   crate_get_opaque_non_builtin_decls k filter_builtin type_decls fun_decls
   <> ([], [])
 
+(** Return a predicate deciding whether an item is a builtin external
+    declaration.
+
+    Unlike {!crate_get_opaque_non_builtin_decls} (types and funs only, and with
+    no opacity/kind restriction here), this dispatches on the item kind to the
+    matching [ExtractBuiltin] name-matcher map, so it covers types, funs,
+    globals, trait decls and trait impls, transparent or opaque. The
+    {!Charon.NameMatcher.ctx} is built once and captured by the returned
+    closure. An item whose metadata can't be found is treated as non-builtin. *)
+let item_is_builtin (k : crate) : item_id -> bool =
+  let open ExtractBuiltin in
+  let ctx = Charon.NameMatcher.ctx_from_crate k in
+  fun (id : item_id) : bool ->
+    match id with
+    | IdType tid -> (
+        match TypeDeclId.Map.find_opt tid k.type_decls with
+        | None -> false
+        | Some d ->
+            NameMatcherMap.mem ctx d.item_meta.name (builtin_types_map ()))
+    | IdFun fid -> (
+        match FunDeclId.Map.find_opt fid k.fun_decls with
+        | None -> false
+        | Some d ->
+            NameMatcherMap.mem ctx d.item_meta.name (builtin_funs_map ())
+            || NameMatcherMap.mem ctx d.item_meta.name (builtin_globals_map ()))
+    | IdGlobal gid -> (
+        match GlobalDeclId.Map.find_opt gid k.global_decls with
+        | None -> false
+        | Some d ->
+            NameMatcherMap.mem ctx d.item_meta.name (builtin_globals_map ()))
+    | IdTraitDecl tid -> (
+        match TraitDeclId.Map.find_opt tid k.trait_decls with
+        | None -> false
+        | Some d ->
+            NameMatcherMap.mem ctx d.item_meta.name (builtin_trait_decls_map ())
+        )
+    | IdTraitImpl iid -> (
+        match TraitImplId.Map.find_opt iid k.trait_impls with
+        | None -> false
+        | Some d -> (
+            match TraitDeclId.Map.find_opt d.impl_trait.id k.trait_decls with
+            | None -> false
+            | Some trait_decl ->
+                Option.is_some
+                  (NameMatcherMap.find_with_generics_opt ctx
+                     trait_decl.item_meta.name d.impl_trait.generics
+                     (builtin_trait_impls_map ()))))
+
 (** Strip trailing [PeTarget] elements from a name.
 
     Multi-target extraction appends [PeTarget] to per-target function names.

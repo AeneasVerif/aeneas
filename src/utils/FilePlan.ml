@@ -31,10 +31,11 @@ let module_root_dir ~(full_dest_dir : string) ~(crate_name : string) : string =
 (** Resolve every SCC of the file graph to its Lean module identity, in
     topological (dependency-first) order. Merge indices are allocated to
     multi-bucket local SCCs in that order. *)
-let place_by_file (fg : FileGraph.t) ~(import_prefix : string)
-    ~(module_root_dir : string) ~(ext : string) ~(has_opaque_types : bool)
-    ~(has_opaque_funs : bool) : placed_module list =
+let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
+    ~(import_prefix : string) ~(module_root_dir : string) ~(ext : string) :
+    placed_module list =
   let scc_list = SCC.SccId.Map.bindings fg.sccs.sccs in
+  let is_builtin = LlbcAstUtils.item_is_builtin crate in
   let merge_counter = ref 0 in
   List.map
     (fun (scc_id, buckets) ->
@@ -46,18 +47,18 @@ let place_by_file (fg : FileGraph.t) ~(import_prefix : string)
             | BFile _ -> false)
           buckets
       in
-      (* An external SCC whose declarations are all builtins (resolved via
-         [import Aeneas]) has nothing to emit: dropping it avoids an empty
-         template file and a dangling import. *)
+      (* An external SCC has nothing to emit iff all its declarations are
+         builtins (resolved via [import Aeneas]): dropping it avoids an empty
+         template file and a dangling import. Decide from the actual members,
+         not the crate-global opacity flags, which over- and under-approximate
+         in both directions. *)
       let is_dropped =
         is_external
-        && not
-             (List.exists
-                (function
-                  | BExternalTypes -> has_opaque_types
-                  | BExternalFuns -> has_opaque_funs
-                  | BFile _ -> false)
-                buckets)
+        && List.for_all
+             (fun b ->
+               List.for_all is_builtin
+                 (Option.value (BucketMap.find_opt b fg.members) ~default:[]))
+             buckets
       in
       let import_name, filename =
         if is_external then
