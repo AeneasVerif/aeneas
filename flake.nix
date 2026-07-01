@@ -76,6 +76,10 @@
         ocamlPackages = pkgs.ocaml-ng.ocamlPackages_5_2;
         ocamlPackagesStatic = pkgs.pkgsStatic.ocaml-ng.ocamlPackages_5_2;
         coqPackages = pkgs.coqPackages_8_18;
+        charonAarch64CargoTargetPatch = builtins.path {
+          path = ./patches/charon-aarch64-cargo-target.patch;
+          name = "charon-aarch64-cargo-target.patch";
+        };
         charonBase = inputs.charon.packages.${system}.charon;
         charon =
           if system == "aarch64-linux" then
@@ -84,7 +88,7 @@
               # cargo integration tests to use the same default target as the
               # committed snapshots, while leaving tests that already specify
               # `--target` / `--targets` unchanged.
-              patches = (old.patches or [ ]) ++ [ ./patches/charon-aarch64-cargo-target.patch ];
+              patches = (old.patches or [ ]) ++ [ charonAarch64CargoTargetPatch ];
             })
           else
             charonBase;
