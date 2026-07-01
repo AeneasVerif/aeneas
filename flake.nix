@@ -80,12 +80,11 @@
         charon =
           if system == "aarch64-linux" then
             charonBase.overrideAttrs (old: {
-              postPatch = (old.postPatch or "") + ''
-                # Keep Charon's snapshot tests enabled on aarch64 by forcing the
-                # cargo integration tests to use the same default target as the
-                # committed snapshots.
-                perl -0pi -e 's@    cmd\\.arg\\(\"--\"\\);\\n    cmd\\.args\\(&test_case\\.cargo_args\\);@    cmd.arg(\"--\");\\n    if !test_case.cargo_args.iter().any(|arg| arg == \"--target\" || arg.starts_with(\"--target=\"))\\n        && !test_case.charon_args.iter().any(|arg| arg == \"--target\" || arg.starts_with(\"--target=\") || arg.starts_with(\"--targets=\"))\\n    {\\n        cmd.arg(\"--target=x86_64-unknown-linux-gnu\");\\n    }\\n    cmd.args(&test_case.cargo_args);@' tests/cargo.rs
-              '';
+              # Keep Charon's snapshot tests enabled on aarch64 by forcing the
+              # cargo integration tests to use the same default target as the
+              # committed snapshots, while leaving tests that already specify
+              # `--target` / `--targets` unchanged.
+              patches = (old.patches or [ ]) ++ [ ./patches/charon-aarch64-cargo-target.patch ];
             })
           else
             charonBase;

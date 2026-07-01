@@ -1,0 +1,22 @@
+--- a/tests/cargo.rs
++++ b/tests/cargo.rs
+@@ -10,8 +10,19 @@
+     }
+     cmd.arg("--dest-file");
+     cmd.arg(test_case.output_file.with_extension("llbc"));
++    let has_explicit_target = test_case
++        .cargo_args
++        .iter()
++        .any(|arg| arg == "--target" || arg.starts_with("--target="))
++        || test_case
++            .charon_args
++            .iter()
++            .any(|arg| arg == "--target" || arg.starts_with("--target=") || arg.starts_with("--targets="));
+     cmd.args(&test_case.charon_args);
+     cmd.arg("--");
++    if !has_explicit_target {
++        cmd.arg("--target=x86_64-unknown-linux-gnu");
++    }
+     cmd.args(&test_case.cargo_args);
+     if matches!(test_case.expect, Failure) {
+         cmd.arg("--quiet");
