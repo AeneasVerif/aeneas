@@ -83,7 +83,11 @@
             inputs.charon.packages.${system}.charon.overrideAttrs (_: { doCheck = false; })
           else
             inputs.charon.packages.${system}.charon;
-        charon-portable = inputs.charon.packages.${system}.charon-portable;
+        charon-portable =
+          if system == "aarch64-linux" then
+            charon
+          else
+            inputs.charon.packages.${system}.charon-portable;
         charon-ml = inputs.charon.packages.${system}.charon-ml.override { inherit ocamlPackages; };
 
         easy_logging = pkgs.callPackage
