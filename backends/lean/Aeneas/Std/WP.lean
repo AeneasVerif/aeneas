@@ -3,10 +3,13 @@ import Aeneas.Std.Delab
 import Std.Do
 import Aeneas.Tactic.Solver.Grind.Init
 import Aeneas.Std.Spec
+import Aeneas.Data.Coinductive.ITree
+import Aeneas.Data.Coinductive.Effect
 
 namespace Aeneas.Std.WP
 
 open Std Result
+open Aeneas.Data.Coinductive
 
 def Post α := (α -> Prop)
 def Pre := Prop
@@ -15,29 +18,47 @@ def Wp α := Post α → Pre
 
 def wp_return (x:α) : Wp α := fun p => p x
 
-def theta (m:Result α) : Wp α :=
-  match m with
-  | ok x => wp_return x
-  | fail _ => fun _ => False
-  | div => fun _ => False
+-- TODO: clean this up if i end up going with the coinductive one
+-- def theta (m:Result α) : Wp α :=
+--   match m with
+--   | ok x => wp_return x
+--   | fail _ => fun _ => False
+--   | div => fun _ => False
 
-def spec {α} (x:Result α) (p:Post α) :=
-  theta x p
+-- def spec {α} (x:Result α) (p:Post α) :=
+--   theta x p
 
-def dspec {α} (x:Result α) (p:Post α) :=
-  match x with
-  | ok x => p x
-  | fail _ => False
-  | div => True
+coinductive spec' {α} (p : Post α) : (x : Result α) → Prop where
+| ret : ∀ x, p x → spec' p (ITree.ret x)
+-- | vis : ∀ k, (∀ b, spec p (k b)) → spec p (ITree.vis () k)
+-- | fail : ∀ k, (∀ b, spec p (k b)) → spec p (ITree.vis () k)
+
+def spec {α} p x := @spec' α x p
+
+-- TODO: clean up
+-- def dspec {α} (x:Result α) (p:Post α) :=
+--   match x with
+--   | ok x => p x
+--   | fail _ => False
+--   | div => True
+coinductive dspec' {α} (p : Post α) : (x : Result α) → Prop where
+| ret : ∀ x, p x → dspec' p (ITree.ret x)
+| div : dspec' p div
+
+def dspec {α} p x := @dspec' α x p
 
 theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p := by
   intros s
   simp [spec, dspec] at *
-  cases x <;> simp at * <;> assumption
-theorem dspec_admissible {α} (p : Post α )
-  : Lean.Order.admissible (fun x => dspec x p) := by
-  apply Lean.Order.admissible_flatOrder
-  simp [dspec]
+  cases s
+  apply dspec'.ret
+  assumption
+
+-- TODO: do i need this?
+-- theorem dspec_admissible {α} (p : Post α )
+--   : Lean.Order.admissible (fun x => dspec x p) := by
+--   apply Lean.Order.admissible_flatOrder
+--   simp [dspec]
 
 /-- Variant of `uncurry` used to decompose tuples in post-conditions.
 
@@ -56,13 +77,17 @@ def uncurry' {α β} (p : α → β → Prop) : α × β → Prop :=
 @[defeq] theorem uncurry'_eq x (p : α → β → Prop) : uncurry' p x = p x.fst x.snd := by simp [uncurry']
 
 @[simp, grind =, agrind =]
-theorem spec_ok (x : α) : spec (ok x) p ↔ p x := by simp [spec, theta, wp_return]
+theorem spec_ok (x : α) : spec (ok x) p ↔ p x := by
+  simp [spec, spec', ok]
+  grind
 
 @[simp, grind =, agrind =]
-theorem spec_fail (e : Error) : spec (fail e) p ↔ False := by simp [spec, theta]
+theorem spec_fail (e : Error) : spec (fail e) p ↔ False := by
+  grind only [spec', spec, fail, not_vis_ret]
 
 @[simp, grind =, agrind =]
-theorem spec_div : spec div p ↔ False := by simp [spec, theta]
+theorem spec_div : spec div p ↔ False := by
+  grind only [spec, div, spec', not_ret_div]
 
 /-! ### `spec_*` for tuple posts
 
@@ -85,22 +110,18 @@ theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : sp
   (∀ x, P₀ x → P₁ x) → spec m P₁ := by
   intros HMonPost
   revert h
-  unfold spec theta wp_return
+  simp [spec, spec']
   cases m <;> grind
 
 theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
   spec m Pₘ →
   (forall x, Pₘ x → spec (k x) Pₖ) →
-  spec (Std.bind m k) Pₖ := by
+  spec (m >>= k) Pₖ := by
   intro Hm Hk
-  cases m
-  · simp
-    apply Hk
-    apply Hm
-  · simp
-    apply Hm
-  · simp
-    apply Hm
+  simp [spec] at *
+  cases Hm
+  simp [Bind.bind]
+  grind only
 
 /-- Small helper to currify functions -/
 def curry {α β γ} (f : α × β → γ) (x : α) : β → γ := fun y => f (x, y)
@@ -128,8 +149,8 @@ theorem spec_mono' {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : s
   qimp P₀ P₁ → spec m P₁ := by
   intros HMonPost
   revert h
-  unfold spec theta wp_return
-  cases m <;> grind [qimp]
+  unfold spec spec'
+  grind only [qimp]
 
 /-- Implication of a `spec` predicate with quantifier -/
 def qimp_spec {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) : Prop :=
@@ -141,14 +162,10 @@ theorem spec_bind' {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α
   (qimp_spec Pₘ k Pₖ) →
   spec (Std.bind m k) Pₖ := by
   intro Hm Hk
-  cases m
-  · simp
-    apply Hk
-    apply Hm
-  · simp
-    apply Hm
-  · simp
-    apply Hm
+  simp [spec, spec', bind, Bind.bind, qimp_spec] at *
+  rcases Hm with ⟨x, px, rfl⟩
+  simp only [itree_ret_bind]
+  grind only
 
 /-- We use this lemma to decompose nested `uncurry'` predicates into a sequence of universal quantifiers. -/
 @[simp]
@@ -181,7 +198,8 @@ theorem qimp_spec_exists {α β γ} (P : γ → α → Prop) (k : α → Result 
 
 theorem spec_equiv_exists (m:Result α) (P:Post α) :
   spec m P ↔ (∃ y, m = ok y ∧ P y) := by
-  cases m <;> simp [spec, theta, wp_return]
+  simp [spec, spec', ok]
+  grind only
 
 theorem spec_imp_exists {m:Result α} {P:Post α} :
   spec m P → (∃ y, m = ok y ∧ P y) := by
@@ -196,8 +214,8 @@ theorem dspec_mono' {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : 
   qimp P₀ P₁ → dspec m P₁ := by
   intros HMonPost
   revert h
-  unfold dspec
-  cases m <;> grind [qimp]
+  unfold dspec dspec'
+  grind only [qimp]
 
 /-- Implication of a `dspec` predicate with quantifier -/
 def qimp_dspec {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) : Prop :=
@@ -208,14 +226,12 @@ theorem dspec_bind' {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result �
   (qimp_dspec Pₘ k Pₖ) →
   dspec (Std.bind m k) Pₖ := by
   intro Hm Hk
-  cases m
-  · simp
-    apply Hk
-    apply Hm
-  · simp
-    apply Hm
-  · simp
-    apply Hm
+  simp [dspec, dspec', bind, Bind.bind, qimp_dspec] at *
+  rcases Hm with ⟨h, Hm⟩
+  · rcases Hm with ⟨x, px, rfl⟩
+    simp only [itree_ret_bind]
+    grind only
+  · simp [*, div]
 
 @[simp]
 def qimp_dspec_uncurry' {α₀ α₁ β} (P : α₀ → α₁ → Prop) (k : α₀ × α₁ → Result β) (Q : β → Prop) :
@@ -237,7 +253,9 @@ def qimp_dspec_iff {α β} (P : α → Prop) (k : α → Result β) (Q : β → 
   simp [qimp_dspec, imp]
 
 @[simp, grind =, agrind =]
-theorem dspec_ok (x : α) : dspec (ok x) p ↔ p x := by simp [dspec]
+theorem dspec_ok (x : α) : dspec (ok x) p ↔ p x := by
+  simp [dspec, dspec', ok, div]
+  grind
 
 theorem dspec_imp_forall {m:Result α} {P:Post α} :
   dspec m P → (∀ y, m = ok y → P y) := by
@@ -789,50 +807,53 @@ namespace Aeneas.Std.WP
 open Std Result
 open Std.Do
 
-instance Result.instWP : WP Result.{u} (.except (ULift Error) (.except PUnit .pure)) where
-  wp x := {
-    trans Q := match x with | .ok a => Q.1 a | .fail e => Q.2.1 (ULift.up e) | .div => Q.2.2.1 .unit
-    conjunctiveRaw Q₁ Q₂ := by
-      apply SPred.bientails.of_eq
-      cases x <;> simp
-  }
+-- TODO: do we expect mvcgen to work with Result if we include arbitrary effects?
+-- what do we lose by getting rid of this stuff?
+-- instance Result.instWP : WP Result.{u} (.except (ULift Error) (.except PUnit .pure)) where
+--   wp x := {
+--     trans Q := match x with | .ok a => Q.1 a | .fail e => Q.2.1 (ULift.up e) | .div => Q.2.2.1 .unit
+--     conjunctiveRaw Q₁ Q₂ := by
+--       apply SPred.bientails.of_eq
+--       cases x <;> simp
+--   }
 
-instance : LawfulMonad Result where
-    map_const := by intros; rfl
-    id_map := by intros _ x; cases x <;> rfl
-    seqLeft_eq := by intros _ _ x y; cases x <;> cases y <;> rfl
-    seqRight_eq := by intros _ _ x y; cases x <;> cases y <;> rfl
-    pure_seq := by intros _ _ _ x; cases x <;> rfl
-    pure_bind := by intros; rfl
-    bind_pure_comp := by intros; rfl
-    bind_map := by intros; rfl
-    bind_assoc := by intros _ _ _ x _ _; cases x <;> rfl
 
-instance Result.instWPMonad : WPMonad Result (.except (ULift Error) (.except PUnit .pure)) where
-  wp_pure a := by apply PredTrans.ext; intro Q; simp [PredTrans.apply, wp, WP.wp]; rfl
-  wp_bind x f := by apply PredTrans.ext; intro Q; simp [PredTrans.apply, wp, WP.wp]; cases x <;> rfl
+-- instance : LawfulMonad Result where
+--     map_const := by intros; rfl
+--     id_map := by intros _ x; cases x <;> rfl
+--     seqLeft_eq := by intros _ _ x y; cases x <;> cases y <;> rfl
+--     seqRight_eq := by intros _ _ x y; cases x <;> cases y <;> rfl
+--     pure_seq := by intros _ _ _ x; cases x <;> rfl
+--     pure_bind := by intros; rfl
+--     bind_pure_comp := by intros; rfl
+--     bind_map := by intros; rfl
+--     bind_assoc := by intros _ _ _ x _ _; cases x <;> rfl
 
-theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
-    (⊢ₛ wp⟦x⟧ (fun a => ⌜P (.ok a)⌝,
-                  fun e => ⌜P (.fail e.down)⌝,
-                  fun .unit => ⌜P .div⌝, .unit)) → P x := by
-  intro hspec
-  simp only [WP.wp, PredTrans.apply] at hspec
-  split at hspec <;> simp_all
+-- instance Result.instWPMonad : WPMonad Result (.except (ULift Error) (.except PUnit .pure)) where
+--   wp_pure a := by apply PredTrans.ext; intro Q; simp [PredTrans.apply, wp, WP.wp]; rfl
+--   wp_bind x f := by apply PredTrans.ext; intro Q; simp [PredTrans.apply, wp, WP.wp]; cases x <;> rfl
 
-/-- Lift an Aeneas step spec to an mvcgen-compatible `Triple`. -/
-theorem spec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
-    (h : spec x Q) :
-    ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
-  obtain ⟨v, hx, hQv⟩ := spec_imp_exists h
-  subst hx
-  simp [Triple, WP.wp, PredTrans.apply, hQv]
+-- theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
+--     (⊢ₛ wp⟦x⟧ (fun a => ⌜P (.ok a)⌝,
+--                   fun e => ⌜P (.fail e.down)⌝,
+--                   fun .unit => ⌜P .div⌝, .unit)) → P x := by
+--   intro hspec
+--   simp only [WP.wp, PredTrans.apply] at hspec
+--   split at hspec <;> simp_all
 
-theorem dspec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
-    (h : dspec x Q) :
-    ⦃ ⌜ ¬ x = .div ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
-  simp [Triple, WP.wp, PredTrans.apply, SPred.pure]
-  cases x <;> simp [*, dspec] at * <;> trivial
+-- /-- Lift an Aeneas step spec to an mvcgen-compatible `Triple`. -/
+-- theorem spec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
+--     (h : spec x Q) :
+--     ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
+--   obtain ⟨v, hx, hQv⟩ := spec_imp_exists h
+--   subst hx
+--   simp [Triple, WP.wp, PredTrans.apply, hQv]
+
+-- theorem dspec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
+--     (h : dspec x Q) :
+--     ⦃ ⌜ ¬ x = .div ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
+--   simp [Triple, WP.wp, PredTrans.apply, SPred.pure]
+--   cases x <;> simp [*, dspec] at * <;> trivial
 
 end Aeneas.Std.WP
 
@@ -911,7 +932,7 @@ theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
       ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
       ``Std.WP.imp_exists_iff,
       ``forall_unit, ``true_imp_iff]
-    to_mvcgen := .some ``Std.WP.spec_to_mvcgen
+    to_mvcgen := .none -- .some ``Std.WP.spec_to_mvcgen
     liftings := #[]
   }
 
@@ -935,7 +956,7 @@ theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
       ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
       ``Std.WP.imp_exists_iff,
       ``forall_unit, ``true_imp_iff]
-    to_mvcgen := .some ``Std.WP.dspec_to_mvcgen
+    to_mvcgen := .none -- .some ``Std.WP.dspec_to_mvcgen
     liftings := #[
       { from_statement := ``Std.WP.spec
         conversion_thm := ``Std.WP.spec_dspec
