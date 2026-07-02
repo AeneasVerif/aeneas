@@ -7,6 +7,7 @@ require mathlib from git
 
 package «aeneas» where
   preferReleaseBuild := true
+  buildArchive := s!"lean-build-aeneas-{System.Platform.target}.tar.gz"
 
 @[default_target] lean_lib «Aeneas» {}
 
