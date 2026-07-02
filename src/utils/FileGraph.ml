@@ -30,10 +30,6 @@ end
 module BucketSet = Collections.MakeSet (BucketOrd)
 module BucketMap = Collections.MakeMap (BucketOrd)
 
-let path_of_file_name (n : file_name) : string =
-  match n with
-  | Virtual s | Local s | NotReal s -> s
-
 (** The bucket an item belongs to, or [None] if we can't find its metadata.
 
     Bucketing is gated on [is_local]: a local item goes to a [BFile] keyed on
@@ -43,7 +39,7 @@ let bucket_of_item (crate : crate) (id : item_id) : bucket option =
   | None -> None
   | Some meta ->
       if meta.is_local then
-        Some (BFile (path_of_file_name meta.span.data.file.name))
+        Some (BFile (Meta.path_of_file_name meta.span.data.file.name))
       else
         Some
           (match id with
@@ -56,43 +52,40 @@ let display_bucket (b : bucket) : string =
   | BExternalTypes -> "<external types>"
   | BExternalFuns -> "<external funs>"
 
-let item_kind (id : item_id) : string =
-  match id with
-  | IdType _ -> "type"
-  | IdFun _ -> "fun"
-  | IdGlobal _ -> "global"
-  | IdTraitDecl _ -> "trait"
-  | IdTraitImpl _ -> "impl"
-
-(** Enumerate every declaration in the crate as an [item_id]. *)
-let all_items (crate : crate) : item_id list =
-  List.map (fun (k, _) -> IdType k) (TypeDeclId.Map.bindings crate.type_decls)
-  @ List.map (fun (k, _) -> IdFun k) (FunDeclId.Map.bindings crate.fun_decls)
-  @ List.map
-      (fun (k, _) -> IdGlobal k)
-      (GlobalDeclId.Map.bindings crate.global_decls)
-  @ List.map
-      (fun (k, _) -> IdTraitDecl k)
-      (TraitDeclId.Map.bindings crate.trait_decls)
-  @ List.map
-      (fun (k, _) -> IdTraitImpl k)
-      (TraitImplId.Map.bindings crate.trait_impls)
-
 type t = {
   crate_name : string;
+  item_bucket : bucket AnyDeclIdMap.t;
+      (** Every declaration's bucket, computed once. Items whose metadata can't
+          be found (e.g. ids a prepass removed from the maps but not from
+          [crate.declarations]) are absent. *)
   members : item_id list BucketMap.t;
   edges : BucketSet.t BucketMap.t;
   sccs : bucket SCC.sccs;
 }
 
 let compute (crate : crate) : t =
-  let items = all_items crate in
+  (* Enumerate the declarations through [crate.declarations] — the same source
+     of truth the emitter partitions — and map each item to its bucket once. *)
+  (* [declaration_group_to_list] comes from charon's [GAstUtils] via
+     [LlbcAstUtils]. *)
+  let items = List.concat_map declaration_group_to_list crate.declarations in
+  let item_bucket : bucket AnyDeclIdMap.t =
+    List.fold_left
+      (fun acc id ->
+        match bucket_of_item crate id with
+        | None -> acc
+        | Some b -> AnyDeclIdMap.add id b acc)
+      AnyDeclIdMap.empty items
+  in
+  let bucket_of (id : item_id) : bucket option =
+    AnyDeclIdMap.find_opt id item_bucket
+  in
 
   (* Map each bucket to the items it contains. *)
   let members : item_id list BucketMap.t ref = ref BucketMap.empty in
   List.iter
     (fun id ->
-      match bucket_of_item crate id with
+      match bucket_of id with
       | None -> ()
       | Some b ->
           members :=
@@ -118,12 +111,12 @@ let compute (crate : crate) : t =
   in
   AnyDeclIdMap.iter
     (fun used users ->
-      match bucket_of_item crate used with
+      match bucket_of used with
       | None -> ()
       | Some ub ->
           Deps.ItemInfoSet.iter
             (fun (user : Deps.item_info) ->
-              match bucket_of_item crate user.id with
+              match bucket_of user.id with
               | None -> ()
               | Some usb -> add_edge usb ub)
             users)
@@ -140,7 +133,13 @@ let compute (crate : crate) : t =
   in
   let sccs = Scc.compute graph_list in
 
-  { crate_name = crate.name; members = !members; edges = !edges; sccs }
+  {
+    crate_name = crate.name;
+    item_bucket;
+    members = !members;
+    edges = !edges;
+    sccs;
+  }
 
 (** Render the report.
 
@@ -171,7 +170,8 @@ let render (graph : t) ~(get_name : item_id -> string) : string =
       let ids = Option.value (BucketMap.find_opt b graph.members) ~default:[] in
       line "%s  (%d declarations)" (display_bucket b) (List.length ids);
       List.iter
-        (fun id -> line "    [%-6s] %s" (item_kind id) (get_name id))
+        (fun id ->
+          line "    [%-11s] %s" (item_id_to_kind_name id) (get_name id))
         (List.rev ids))
     bucket_list;
   line "";

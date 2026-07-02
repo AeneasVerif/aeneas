@@ -465,8 +465,8 @@ let () =
      [import Crate.Funs], which needs [-subdir] — itself incompatible with
      [-gen-lib-entry]), so we reject that combination rather than emit a broken
      file. *)
-  if !generate_lib_entry_point && not !split_files then
-    fail_with_error "The -gen-lib-entry option requires -split-files";
+  check_arg_implies !generate_lib_entry_point "-gen-lib-entry" !split_files
+    "-split-files";
   check_arg_not !generate_lib_entry_point "-gen-lib-entry"
     (Option.is_some !subdir) "-subdir";
   if !lean_gen_lakefile && not (backend () = Lean) then
@@ -483,10 +483,13 @@ let () =
   check_arg_not !split_files_legacy "-split-files-legacy" !split_files
     "-split-files";
   if !split_files && not (backend () = Lean) then
-    fail_with_error "The -split-files option is valid only for the Lean backend";
+    fail_with_error
+      "The -split-files option is valid only for the Lean backend. For the \
+       by-kind split (Types/Funs/...), use -split-files-legacy";
   (* Fail on this combination of flags until -decreases-clauses is deprecated. *)
-  check_arg_not !split_files "-split-files" !extract_decreases_clauses
-    "-decreases-clauses";
+  if !split_files && !extract_decreases_clauses then
+    fail_with_error
+      "The -split-files option is incompatible with -decreases-clauses";
 
   check_arg_implies !diagnose_detailed "-diagnose-detailed"
     !diagnose_micro_passes "-diagnose-micro-passes";

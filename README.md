@@ -152,15 +152,20 @@ and tactics specialized for monadic programs (see
 
 When translating a crate which requires external definitions (i.e., definitions
 coming from external dependencies such as the Rust standard library), we advise using the
-`-split-files` option. With `-split-files`, Aeneas will generate template files listing
-the missing definitions for which the user will have to provide hand-written models.
+`-split-files` option. With `-split-files`, Aeneas generates one Lean module per Rust
+source file (mirroring the crate structure), plus template files listing the missing
+external definitions for which the user has to provide hand-written models.
 For instance, it can lead to the following structure in Lean:
 ```
-... // Files containing type definitions, etc.
-FunsExternal_Template.lean // automatically generated template file
-FunsExternal.lean // hand-written file maintained by the user (not overwritten during the translation)
-Funs.lean // automatically generated file which imports FunsExternal.lean
+Crate.lean // automatically generated library entry point
+Crate/Foo.lean, Crate/Bar.lean, ... // one automatically generated module per Rust source file
+Crate/FunsExternal_Template.lean // automatically generated template file
+Crate/FunsExternal.lean // hand-written file maintained by the user (not overwritten during the translation)
 ```
+
+The previous behavior of `-split-files` — splitting the definitions by kind
+(`Types.lean`, `Funs.lean` importing `FunsExternal.lean`, etc.) — is still available
+under the `-split-files-legacy` option, which also supports the non-Lean backends.
 
 Rather than adding models to the `TypesExternal.lean`, `FunsExternal.lean`, etc. files it
 is possible to port the models to the Aeneas standard library, so that all client projects

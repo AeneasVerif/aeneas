@@ -45,8 +45,11 @@ let module_components_of_file (path : string) : string list =
         in
         List.rev (stem :: rrest)
   in
-  (* A path that reduces to nothing (e.g. "src/" alone) falls back to the root. *)
-  let parts = if parts = [] then [ "lib" ] else parts in
+  (* Charon always supplies a real local file path for local items, so a path that
+     reduces to nothing means a broken upstream invariant. *)
+  if parts = [] then
+    [%craise_opt_span] None
+      ("Cannot map the source file path to a Lean module: " ^ path);
   List.map StringUtils.to_camel_case parts
 
 (** The module-path components for a merged (multi-file) SCC. *)

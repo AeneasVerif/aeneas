@@ -14,7 +14,7 @@ type placed_module = {
   is_dropped : bool;
       (** [true] for external modules whose referenced declarations are all
           builtins: we neither emit a (empty) template file for them nor import
-          them from local modules. *)
+          them from local modules. Implies [is_external]. *)
   import_name : string;  (** Dotted Lean module name, e.g. [Crate.Foo]. *)
   filename : string;  (** On-disk path the emitter writes. *)
 }
@@ -23,8 +23,9 @@ type placed_module = {
     directory is already [full_dest_dir]; otherwise we nest under [crate_name]
     so that [-dest D] yields a self-contained [D/Crate/...] tree plus a
     [D/Crate.lean] entry point. *)
-let module_root_dir ~(full_dest_dir : string) ~(crate_name : string) : string =
-  match !Config.subdir with
+let module_root_dir ~(subdir : string option) ~(full_dest_dir : string)
+    ~(crate_name : string) : string =
+  match subdir with
   | Some _ -> full_dest_dir
   | None -> Filename.concat full_dest_dir crate_name
 

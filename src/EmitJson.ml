@@ -157,10 +157,7 @@ let full_lean_name (basename : string) : string =
 (** Extract the Rust source location (file + line range) from a span. *)
 let source_of_span (span : Meta.span) : source =
   let data = span.data in
-  let file =
-    match data.file.name with
-    | Virtual s | Local s | NotReal s -> s
-  in
+  let file = Meta.path_of_file_name data.file.name in
   { file; begin_line = data.beg_loc.line; end_line = data.end_loc.line }
 
 let function_entry_of_fun_decl (ctx : ExtractBase.extraction_ctx)
