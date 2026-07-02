@@ -80,6 +80,11 @@
         charon-release = inputs.charon.packages.${system}.charon-release;
         charon-ml = inputs.charon.packages.${system}.charon-ml.override { inherit ocamlPackages; };
 
+        # The version embedded into the `aeneas` binary (reported by `aeneas -version`).
+        commitSha = self.shortRev or self.dirtyShortRev or "unknown";
+        releaseVersion = builtins.getEnv "AENEAS_RELEASE_VERSION";
+        aeneasVersion = if releaseVersion != "" then releaseVersion else commitSha;
+
         easy_logging = pkgs.callPackage
           ({ fetchFromGitHub, ocamlPackages }:
             ocamlPackages.buildDunePackage rec {
@@ -110,6 +115,7 @@
               duneVersion = "3";
               src = ./src;
               OCAMLPARAM = "_,warn-error=+A"; # Turn all warnings into errors.
+              AENEAS_VERSION = aeneasVersion;
               propagatedBuildInputs = [
                 easy_logging
                 charon-ml
