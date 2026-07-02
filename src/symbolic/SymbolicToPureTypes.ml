@@ -755,11 +755,26 @@ and compute_raw_fun_effect_info (span : Meta.span option)
     Remark: as we take as input an instantiated function signature, we assume
     the types have already been normalized.
 
-    - [generic_args]: the generic arguments with which the uninstantiated
-      signature was instantiated, leading to the current [sg] *)
+    - [uninst_output]: the *uninstantiated* output type of the signature. We use
+      it to decide whether to eliminate the (unit) output of the forward
+      function (see [fwd_info.ignore_output]). This decision must be based on
+      the uninstantiated output rather than the instantiated one: a function
+      that is generic in its output type is compiled without eliminating its
+      output (because its output is not syntactically unit), so we must not
+      eliminate it at a call site either, even if the output type variable
+      happens to be instantiated with unit there.
+
+    For instance, [fn f<T>(r: &mut u32, t: T) -> T] is translated to
+    [f : U32 → T → Result (T × U32)]. When calling [f] with [T = ()], the
+    instantiated output is [()], but [f] still returns [() × U32] (it was
+    compiled generically): we must destructure the pair rather than assume the
+    output was eliminated. Deciding based on [uninst_output] (here the variable
+    [T], which is not unit) rather than the instantiated output (here [()])
+    gives the correct behavior. *)
 and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     (decls_ctx : C.decls_ctx) (fun_id : fn_ptr_kind) (sg : A.inst_fun_sig)
-    (input_names : string option list) : decomposed_fun_type =
+    (uninst_output : Types.ty) (input_names : string option list) :
+    decomposed_fun_type =
   [%ltrace
     let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
     "- sg.regions_hierarchy: "
@@ -971,7 +986,8 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
   let fwd_info : fun_sig_info =
     let ignore_output =
       if !Config.simplify_merged_fwd_backs then
-        ty_is_unit fwd_output
+        (* See the documentation of [uninst_output] above. *)
+        Charon.TypesUtils.ty_is_unit uninst_output
         && List.exists
              (fun (info : back_sg_info) -> not info.filter)
              (RegionGroupId.Map.values back_sg)
@@ -1028,8 +1044,10 @@ and translate_fun_sigs (span : span option) (decls_ctx : C.decls_ctx)
   let generics, preds = translate_generic_params span sg.item_binder_params in
 
   let fun_ty =
+    (* Here the signature is not instantiated, so the uninstantiated output is
+       simply the signature's output. *)
     translate_inst_fun_sig_to_decomposed_fun_type span decls_ctx fun_id inst_sg
-      input_names
+      inst_sg.output input_names
   in
   let dsg =
     { generics; llbc_generics = sg.item_binder_params; preds; fun_ty }

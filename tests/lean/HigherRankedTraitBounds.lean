@@ -51,7 +51,7 @@ def call_fnmut_ref
   core.ops.function.FnMut T0 Std.U8 Unit) (g : T0) (x : Std.U8) :
   Result Unit
   := do
-  let g1 ← coreopsfunctionFnMutT0TupleSharedU8TupleInst.call_mut g x
+  let (_, g1) ← coreopsfunctionFnMutT0TupleSharedU8TupleInst.call_mut g x
   let _ ← coreopsfunctionFnMutT0TupleSharedU8TupleInst.call_mut g1 x
   ok ()
 
