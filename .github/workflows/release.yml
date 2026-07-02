@@ -90,11 +90,11 @@ jobs:
       - name: Package
         env:
           # The release tag reported by `aeneas -version`.
-          # `--impure` is required for nix to read the env var.
           AENEAS_RELEASE_VERSION: ${{ needs.prepare.outputs.tag_name }}
         run: |
           set -eo pipefail
 
+          # Pass `--impure` so that nix can read `AENEAS_RELEASE_VERSION`
           nix build -L --impure .#${{ matrix.nix_attr }}
           mkdir dist_staging
           cp -R result/. dist_staging/
@@ -140,6 +140,8 @@ jobs:
 
       # Verify the binary is functional.
       - name: Smoke Test
+        env:
+          AENEAS_RELEASE_VERSION: ${{ needs.prepare.outputs.tag_name }}
         run: |
           set -eo pipefail
 
@@ -147,6 +149,14 @@ jobs:
           cd staging
           tar xf ../${{ matrix.artifact_name }}.tar.gz
           ./aeneas --help > /dev/null
+
+          # Verify the reported version matches the release tag
+          version_output="$(./aeneas -version)"
+          expected="aeneas ${AENEAS_RELEASE_VERSION}"
+          if [[ "$version_output" != "$expected" ]]; then
+            echo "Version mismatch: expected '$expected', got '$version_output'" >&2
+            exit 1
+          fi
 
       - name: Upload Artifact
         uses: softprops/action-gh-release@v2
