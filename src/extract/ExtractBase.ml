@@ -759,13 +759,229 @@ let id_to_string (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
       in
       trait_decl_id_to_string trait_decl_id ^ ", method name: " ^ method_name
 
+let dyn_constructor () = "Dyn.mk" (* TODO: backends other than Lean *)
+let dyn_ty = "Dyn"
+
+(** The backend's reserved syntactic keywords. *)
+let reserved_keywords () : string list =
+  match backend () with
+  | FStar ->
+      [
+        "assert";
+        "assert_norm";
+        "assume";
+        "else";
+        "end";
+        "fun";
+        "fn";
+        "FStar";
+        "FStar.Mul";
+        "if";
+        "in";
+        "include";
+        "int";
+        "let";
+        "list";
+        "match";
+        "open";
+        "rec";
+        "scalar_cast";
+        "then";
+        "type";
+        "Type0";
+        "Type";
+        "unit";
+        "val";
+        "with";
+      ]
+  | Coq ->
+      [
+        "assert";
+        "Arguments";
+        "Axiom";
+        "char_of_byte";
+        "Check";
+        "Declare";
+        "Definition";
+        "else";
+        "end";
+        "End";
+        "fun";
+        "Fixpoint";
+        "if";
+        "in";
+        "int";
+        "Inductive";
+        "Import";
+        "let";
+        "Lemma";
+        "match";
+        "Module";
+        "not";
+        "Notation";
+        "Proof";
+        "Qed";
+        "rec";
+        "Record";
+        "Require";
+        "Scope";
+        "Search";
+        "SearchPattern";
+        "Set";
+        "then";
+        (* [tt] is unit *)
+        "tt";
+        "type";
+        "Type";
+        "unit";
+        "with";
+      ]
+  | Lean ->
+      [
+        "Pi";
+        "Prop";
+        "Sort";
+        "Type";
+        "abbrev";
+        "alias";
+        "as";
+        "at";
+        "attribute";
+        "axiom";
+        "axioms";
+        "begin";
+        "break";
+        "by";
+        "BuiltinFn";
+        "BuiltinFnMut";
+        "BuiltinFnOnce";
+        "calc";
+        "catch";
+        "class";
+        "const";
+        "constant";
+        "constants";
+        "continue";
+        "decreasing_by";
+        "def";
+        "definition";
+        "deriving";
+        "do";
+        "else";
+        "end";
+        "example";
+        "exists";
+        "export";
+        "extends";
+        "for";
+        "forall";
+        "from";
+        "fun";
+        "have";
+        "hiding";
+        "if";
+        "import";
+        "in";
+        "include";
+        "inductive";
+        "infix";
+        "infixl";
+        "infixr";
+        "instance";
+        "lemma";
+        "let";
+        "local";
+        "macro";
+        "macro_rules";
+        "match";
+        "mut";
+        "mutual";
+        "name";
+        "namespace";
+        "noncomputable";
+        "notation";
+        "omit";
+        "opaque";
+        "opaque_defs";
+        "open";
+        "override";
+        "parameter";
+        "parameters";
+        "partial";
+        "postfix";
+        "precedence";
+        "prefix";
+        "prelude";
+        "private";
+        "protected";
+        "public";
+        "raw";
+        "record";
+        "reduce";
+        "renaming";
+        "replacing";
+        "reserve";
+        "run_cmd";
+        "section";
+        "set_option";
+        "simp";
+        "Std.Array.empty";
+        "structure";
+        "syntax";
+        "termination_by";
+        "then";
+        "theorem";
+        "theory";
+        "to";
+        "toStr";
+        "universe";
+        "universes";
+        "unless";
+        "unsafe";
+        "using";
+        "using_well_founded";
+        "variable";
+        "variables";
+        "where";
+        "with";
+        dyn_constructor ();
+      ]
+  | HOL4 ->
+      [
+        "Axiom";
+        "case";
+        "Definition";
+        "else";
+        "End";
+        "fix";
+        "fix_exec";
+        "fn";
+        "fun";
+        "if";
+        "in";
+        "int";
+        "Inductive";
+        "let";
+        "of";
+        "Proof";
+        "QED";
+        "then";
+        "Theorem";
+      ]
+
+let reserved_keywords_set : StringSet.t Lazy.t =
+  lazy (StringSet.of_list (reserved_keywords ()))
+
+let is_reserved_keyword (s : string) : bool =
+  StringSet.mem s (Lazy.force reserved_keywords_set)
+
 let ctx_add (span : Meta.span) (id : id) (name : string) (ctx : extraction_ctx)
     : extraction_ctx =
   (* In Lean, identifiers cannot contain "-". We wrap any dot-separated
      component that contains a hyphen in French quotes (« ... »). *)
   let name =
     match backend () with
-    | Lean ->
+    | Lean -> (
         let parts = String.split_on_char '.' name in
         let parts =
           List.map
@@ -780,7 +996,10 @@ let ctx_add (span : Meta.span) (id : id) (name : string) (ctx : extraction_ctx)
               else s)
             parts
         in
-        String.concat "." parts
+        (* A reserved keyword is illegal only as a bare name. *)
+        match parts with
+        | [ s ] when is_reserved_keyword s -> "«" ^ s ^ "»"
+        | _ -> String.concat "." parts)
     | _ -> name
   in
   (* Actually add the name *)
@@ -957,9 +1176,6 @@ let named_binop_name (binop : binop) : string =
   | BoolOr -> "bool_or"
   | _ -> raise (Failure "Unreachable")
 
-let dyn_constructor () = "Dyn.mk" (* TODO: backends other than Lean *)
-let dyn_ty = "Dyn"
-
 (** A list of keywords/identifiers used by the backend and with which we want to
     check collision.
 
@@ -1000,213 +1216,7 @@ let keywords () =
     List.map named_binop_name
       (List.flatten (List.map mk_binops T.all_int_types))
   in
-  let misc =
-    match backend () with
-    | FStar ->
-        [
-          "assert";
-          "assert_norm";
-          "assume";
-          "else";
-          "end";
-          "fun";
-          "fn";
-          "FStar";
-          "FStar.Mul";
-          "if";
-          "in";
-          "include";
-          "int";
-          "let";
-          "list";
-          "match";
-          "open";
-          "rec";
-          "scalar_cast";
-          "then";
-          "type";
-          "Type0";
-          "Type";
-          "unit";
-          "val";
-          "with";
-        ]
-    | Coq ->
-        [
-          "assert";
-          "Arguments";
-          "Axiom";
-          "char_of_byte";
-          "Check";
-          "Declare";
-          "Definition";
-          "else";
-          "end";
-          "End";
-          "fun";
-          "Fixpoint";
-          "if";
-          "in";
-          "int";
-          "Inductive";
-          "Import";
-          "let";
-          "Lemma";
-          "match";
-          "Module";
-          "not";
-          "Notation";
-          "Proof";
-          "Qed";
-          "rec";
-          "Record";
-          "Require";
-          "Scope";
-          "Search";
-          "SearchPattern";
-          "Set";
-          "then";
-          (* [tt] is unit *)
-          "tt";
-          "type";
-          "Type";
-          "unit";
-          "with";
-        ]
-    | Lean ->
-        [
-          "Pi";
-          "Prop";
-          "Sort";
-          "Type";
-          "abbrev";
-          "alias";
-          "as";
-          "at";
-          "attribute";
-          "axiom";
-          "axioms";
-          "begin";
-          "break";
-          "by";
-          "BuiltinFn";
-          "BuiltinFnMut";
-          "BuiltinFnOnce";
-          "calc";
-          "catch";
-          "class";
-          "const";
-          "constant";
-          "constants";
-          "continue";
-          "decreasing_by";
-          "def";
-          "definition";
-          "deriving";
-          "do";
-          "else";
-          "end";
-          "example";
-          "exists";
-          "export";
-          "extends";
-          "for";
-          "forall";
-          "from";
-          "fun";
-          "have";
-          "hiding";
-          "if";
-          "import";
-          "in";
-          "include";
-          "inductive";
-          "infix";
-          "infixl";
-          "infixr";
-          "instance";
-          "lemma";
-          "let";
-          "local";
-          "macro";
-          "macro_rules";
-          "match";
-          "mut";
-          "mutual";
-          "name";
-          "namespace";
-          "noncomputable";
-          "notation";
-          "omit";
-          "opaque";
-          "opaque_defs";
-          "open";
-          "override";
-          "parameter";
-          "parameters";
-          "partial";
-          "postfix";
-          "precedence";
-          "prefix";
-          "prelude";
-          "private";
-          "protected";
-          "public";
-          "raw";
-          "record";
-          "reduce";
-          "renaming";
-          "replacing";
-          "reserve";
-          "run_cmd";
-          "section";
-          "set_option";
-          "simp";
-          "Std.Array.empty";
-          "structure";
-          "syntax";
-          "termination_by";
-          "then";
-          "theorem";
-          "theory";
-          "to";
-          "toStr";
-          "universe";
-          "universes";
-          "unless";
-          "unsafe";
-          "using";
-          "using_well_founded";
-          "variable";
-          "variables";
-          "where";
-          "with";
-          dyn_constructor ();
-        ]
-    | HOL4 ->
-        [
-          "Axiom";
-          "case";
-          "Definition";
-          "else";
-          "End";
-          "fix";
-          "fix_exec";
-          "fn";
-          "fun";
-          "if";
-          "in";
-          "int";
-          "Inductive";
-          "let";
-          "of";
-          "Proof";
-          "QED";
-          "then";
-          "Theorem";
-        ]
-  in
-  List.concat [ named_unops; named_binops; misc ]
+  List.concat [ named_unops; named_binops; reserved_keywords () ]
 
 let builtin_adts () : (builtin_ty * string) list =
   (* We voluntarily omit the type [Error]: it is never directly
