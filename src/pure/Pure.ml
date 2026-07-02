@@ -627,10 +627,12 @@ and binop =
   | BitOr of integer_type
   | Eq of ty
   | Ne of ty
-  | Lt of integer_type
-  | Le of integer_type
-  | Ge of integer_type
-  | Gt of integer_type
+  | Lt of literal_type
+      (** The comparison operations carry a [literal_type] because they can be
+          applied both to integers and booleans (with order: [false < true]). *)
+  | Le of literal_type
+  | Ge of literal_type
+  | Gt of literal_type
   | Add of overflow_mode * integer_type
   | Sub of overflow_mode * integer_type
   | Mul of overflow_mode * integer_type

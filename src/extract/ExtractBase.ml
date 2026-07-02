@@ -945,10 +945,10 @@ let named_binop_name (binop : binop) : string =
   | Add (_, ty) -> add_int_name ty ^ "add"
   | Sub (_, ty) -> add_int_name ty ^ "sub"
   | Mul (_, ty) -> add_int_name ty ^ "mul"
-  | Lt ty -> add_int_name ty ^ "lt"
-  | Le ty -> add_int_name ty ^ "le"
-  | Ge ty -> add_int_name ty ^ "ge"
-  | Gt ty -> add_int_name ty ^ "gt"
+  | Lt ty -> add_int_name (PureUtils.literal_as_integer ty) ^ "lt"
+  | Le ty -> add_int_name (PureUtils.literal_as_integer ty) ^ "le"
+  | Ge ty -> add_int_name (PureUtils.literal_as_integer ty) ^ "ge"
+  | Gt ty -> add_int_name (PureUtils.literal_as_integer ty) ^ "gt"
   | BitXor ty -> add_int_name ty ^ "xor"
   | BitAnd ty -> add_int_name ty ^ "and"
   | BitOr ty -> add_int_name ty ^ "or"
@@ -974,16 +974,21 @@ let keywords () =
     @ List.map (fun it -> unop_name (Neg (Signed it))) T.all_signed_int_types
   in
   let mk_binops (ty : integer_type) =
+    let lit_ty : literal_type =
+      match ty with
+      | Signed it -> TInt it
+      | Unsigned it -> TUInt it
+    in
     [
       Div (OPanic, ty);
       Rem (OPanic, ty);
       Add (OPanic, ty);
       Sub (OPanic, ty);
       Mul (OPanic, ty);
-      Lt ty;
-      Le ty;
-      Ge ty;
-      Gt ty;
+      Lt lit_ty;
+      Le lit_ty;
+      Ge lit_ty;
+      Gt lit_ty;
       BitXor ty;
       BitAnd ty;
       BitOr ty;

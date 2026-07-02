@@ -77,7 +77,7 @@
         ocamlPackagesStatic = pkgs.pkgsStatic.ocaml-ng.ocamlPackages_5_2;
         coqPackages = pkgs.coqPackages_8_18;
         charon = inputs.charon.packages.${system}.charon;
-        charon-portable = inputs.charon.packages.${system}.charon-portable;
+        charon-release = inputs.charon.packages.${system}.charon-release;
         charon-ml = inputs.charon.packages.${system}.charon-ml.override { inherit ocamlPackages; };
 
         easy_logging = pkgs.callPackage
@@ -117,6 +117,7 @@
                 calendar
                 core_unix
                 ppx_deriving
+                ppx_deriving_yojson
                 visitors
                 yojson
                 zarith
@@ -143,16 +144,15 @@
             charon-ml = charon-ml.override { inherit ocamlPackages; };
           };
 
-        mk-aeneas-release = { aeneas, charon-portable }: pkgs.runCommand "aeneas-release"
+        mk-aeneas-release = { aeneas, charon-release }: pkgs.runCommand "aeneas-release"
           {
             buildInputs = pkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.macdylibbundler ];
           } ''
           mkdir $out
           cd $out
-          cp ${charon-portable}/bin/charon ${charon-portable}/bin/charon-driver .
+          cp -r ${charon-release}/. .
           cp ${aeneas}/bin/aeneas .
           cp -r ${./backends} backends
-          cp ${inputs.charon}/rust-toolchain .
 
           ${pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
             # Make the binary writable so macdylibbundler can modify its load paths
@@ -167,8 +167,8 @@
 
         '';
 
-        aeneas-release = mk-aeneas-release { inherit charon-portable aeneas; };
-        aeneas-static-release = mk-aeneas-release { inherit charon-portable; aeneas = aeneas-static; };
+        aeneas-release = mk-aeneas-release { inherit charon-release aeneas; };
+        aeneas-static-release = mk-aeneas-release { inherit charon-release; aeneas = aeneas-static; };
 
         aeneas-check-tidiness = pkgs.stdenv.mkDerivation rec {
           name = "aeneas-check-tidiness";

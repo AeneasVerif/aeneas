@@ -1,9 +1,8 @@
 import Aeneas.Std.Scalar
 import Aeneas.Std.Slice
+import Aeneas.Std.StringDef
 
 namespace Aeneas.Std
-
-def Str := Slice U8
 
 instance : DecidableEq Str := inferInstanceAs (DecidableEq (Slice U8))
 

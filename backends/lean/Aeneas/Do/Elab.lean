@@ -206,6 +206,10 @@ partial def analyzePat (pat : Term) (ty : Expr) : ElabM PatShape := do
     subPats.toList.zip subTypes |>.toArray.mapM fun (p, t) => analyzePat p t
   match pat with
   | `(_) => return .leaf none
+  | `(()) =>
+    unless (← whnf ty).isAppOf ``PUnit do
+      throwErrorAt pat "analyzePat: expected unit type for pattern"
+    return .leaf none
   | `($id:ident) => return .leaf (some id)
   | `(($x, $xs,*)) =>
     let subPats : Array Term := #[x] ++ xs.getElems
