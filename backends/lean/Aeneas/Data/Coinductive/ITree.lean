@@ -272,8 +272,6 @@ instance : MonoBind (ITree E) where
     · grind [monotone, PartialOrder.rel_refl]
     · intro _; grind
 
-#check itree_div_bind
-
 @[simp]
 theorem div_bind (t : S → ITree E R) :
   .div >>= t = .div := by simp [Bind.bind]
@@ -324,5 +322,36 @@ theorem interp_vis {F} (f : (i : E.I) → ITree F (E.O i)) i (k : E.O i → ITre
 -- #synth CCPO (ITree E R)
 -- #synth MonoBind (ITree E)
 -- #synth Bind (ITree E)
+
+#check CoInd.approx
+
+-- TODO: These have been added on top of original library. I'm not sure if there's a better
+-- way to do this yet.
+
+@[simp, grind .]
+theorem not_vis_ret {E} {α} {x : α} {e k} : ¬ ITree.ret (E := E) x = ITree.vis e k := by
+  intros eq
+  have eq := congrArg (fun i => i.approx 1) eq
+  simp at eq
+
+@[simp, grind .]
+theorem not_ret_div {E} {α} {x : α} : ¬ ITree.ret (E := E) x = ITree.div := by
+  intros eq
+  have eq := congrArg (fun i => i.approx 1) eq
+  simp at eq
+
+@[simp, grind .]
+theorem not_div_vis {E} {α} {e k} : ¬  @ITree.div α E = ITree.vis e k := by
+  intros eq
+  have eq := congrArg (fun i => i.approx 1) eq
+  simp at eq
+
+@[simp, grind .]
+theorem ret_inj {E} {α} {x y} : @ITree.ret α E x = ITree.ret y → x = y := by
+  intros eq
+  have eq := congrArg (fun i => i.approx 1) eq
+  simp at eq
+  grind only
+
 
 namespace Aeneas.Data.Coinductive

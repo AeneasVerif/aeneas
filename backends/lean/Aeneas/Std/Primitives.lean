@@ -2,6 +2,8 @@ import Lean
 import Aeneas.Std.Global
 import Aeneas.Extract
 import AeneasMeta.BvEnumToBitVec
+import Aeneas.Data.Coinductive.ITree
+import Aeneas.Data.Coinductive.Effect
 
 namespace Aeneas
 
@@ -12,6 +14,7 @@ namespace Std
 -/
 
 open Lean Elab Command Term Meta
+open Aeneas.Data.Coinductive
 
 syntax (name := assert) "#assert" term: command
 
@@ -60,11 +63,43 @@ deriving Repr, BEq
 
 open Error
 
-inductive Result (α : Type u) where
-  | ok (v: α): Result α
-  | fail (e: Error): Result α
-  | div
-deriving Repr, BEq
+-- TODO: delete this
+-- inductive Result (α : Type u) where
+--   | ok (v: α): Result α
+--   | fail (e: Error): Result α
+--   | div
+-- deriving Repr, BEq
+
+inductive RustEffect.I : Type u where
+| fail : Error → RustEffect.I
+-- there is an issue that both threads have to return the return type.
+-- maybe this is fine, and you can just bind an operation that returns Unit?
+-- i could make a generalized ITree definition which allows you to do stuff to the return type in Effect?
+
+def RustEffect.O (i : RustEffect.I) : Type u :=
+  match i with
+  | .fail _ => PEmpty
+
+def RustEffect : Effect.{u} := {
+  I := RustEffect.I
+  O := RustEffect.O
+}
+
+def Result (α : Type u) : Type u := ITree RustEffect α
+
+instance : Monad Result := instMonadITree
+instance : LawfulMonad Result := instLawfulMonadITree
+
+def Result.ok {α} (a : α) : Result α := .ret a
+
+def Result.fail {α} (e : Error) : Result α := .vis (.fail e) PEmpty.elim
+
+def Result.div {α} : Result α := ITree.div
+
+example : ¬ Result.fail e1 = Result.ok x := by
+  simp [Result.fail, Result.ok]
+  --
+  sorry
 
 open Result
 
@@ -78,27 +113,36 @@ instance Result_Nonempty (α : Type u) : Nonempty (Result α) :=
 # Helpers
 -/
 
-@[global_simps]
-def ok? {α: Type u} (r: Result α): Bool :=
-  match r with
-  | ok _ => true
-  | fail _ | div => false
+-- TODO: where these ever used anywhere? not sure yet.
+-- @[global_simps]
+-- def ok? {α: Type u} (r: Result α): Bool :=
+--   ITree.cases
+--     (fun o =>
+--       match o with
+--       | .ok _ => true
+--       | .fail _ => false
+--     )
+--     false
+--     (fun _ _ => false)
+--     r
 
-def div? {α: Type u} (r: Result α): Bool :=
-  match r with
-  | div => true
-  | ok _ | fail _ => false
+-- def div? {α: Type u} (r: Result α): Bool :=
+--   ITree.cases
+--     (fun _ => false)
+--     true
+--     (fun _ _ => false)
+--     r
 
 def massert (b : Prop) [Decidable b] : Result Unit :=
   if b then ok () else fail assertionFailure
 
 macro "prove_eval_global" : tactic => `(tactic| simp (failIfUnchanged := false) only [global_simps] <;> first | apply Eq.refl | decide)
 
-@[global_simps]
-def eval_global {α: Type u} (x: Result α) (_: ok? x := by prove_eval_global) : α :=
-  match x with
-  | fail _ | div => by contradiction
-  | ok x => x
+-- @[global_simps]
+-- def eval_global {α: Type u} (x: Result α) (_: ok? x := by prove_eval_global) : α :=
+--   -- match x with
+--   -- | fail _ | div => by contradiction
+--   -- | ok x => x
 
 @[simp]
 def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
@@ -115,47 +159,78 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
 # Do-DSL Support
 -/
 
-def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
-  match x with
-  | ok v  => f v
-  | fail v => fail v
-  | div => div
+-- TODO: in addition to type levels, does it cause issues that bind comes from the Monad instance?
+-- -- TODO: is it ok to not have β be at a different level `v`?
+-- def bind {α : Type u} {β : Type u} (x: Result α) (f: α → Result β) : Result β :=
+--   ITree.bind x f
 
--- Allows using Result in do-blocks
-instance : Bind Result where
-  bind := bind
+-- TODO: should this just be deleted to clean things up now, or left for backwards compatibility?
+def bind {α : Type u} {β : Type u} (x: Result α) (f: α → Result β) : Result β :=
+  @Bind.bind Result _ α β x f
+
+-- -- Allows using Result in do-blocks
+-- instance : Bind Result where
+  -- bind := bind
 
 -- Allows using pure x in do-blocks
 instance : Pure Result where
   pure := fun x => ok x
 
-@[simp] theorem bind_ok (x : α) (f : α → Result β) : bind (.ok x) f = f x := by simp [bind]
-@[simp] theorem bind_fail (x : Error) (f : α → Result β) : bind (.fail x) f = .fail x := by simp [bind]
-@[simp] theorem bind_div (f : α → Result β) : bind .div f = .div := by simp [bind]
+@[simp] theorem bind_ok (x : α) (f : α → Result β) : bind (.ok x) f = f x :=
+  by simp [bind, Bind.bind, ok]
+@[simp] theorem bind_fail (x : Error) (f : α → Result β) : bind (.fail x) f = .fail x :=
+  by simp [bind, Bind.bind, fail]
+     apply congrArg
+     funext x
+     contradiction
+
+@[simp] theorem bind_div (f : α → Result β) : bind .div f = .div := by simp [bind, Bind.bind, div]
 
 @[simp] theorem bind_tc_ok (x : α) (f : α → Result β) :
-  (do let y ← .ok x; f y) = f x := by simp [Bind.bind, bind]
+  (do let y ← .ok x; f y) = f x := by simp [Bind.bind, ok]
 
 @[simp] theorem bind_tc_fail (x : Error) (f : α → Result β) :
-  (do let y ← fail x; f y) = fail x := by simp [Bind.bind, bind]
+  (do let y ← fail x; f y) = fail x := by
+  simp [Bind.bind, bind, fail]
+  apply congrArg
+  funext x
+  contradiction
 
 @[simp] theorem bind_tc_div (f : α → Result β) :
-  (do let y ← div; f y) = div := by simp [Bind.bind, bind]
+  (do let y ← div; f y) = div := by simp [Bind.bind, bind, div]
 
 @[simp] theorem bind_assoc_eq {a b c : Type u}
   (e : Result a) (g :  a → Result b) (h : b → Result c) :
   (Bind.bind (Bind.bind e g) h) =
-  (Bind.bind e (λ x => Bind.bind (g x) h)) := by
-  simp [Bind.bind]
-  cases e <;> simp
+  (Bind.bind e (λ x => Bind.bind (g x) h)) := by apply bind_assoc
 
-@[simp]
-def bind_eq_iff (x : Result α) (y y' : α → Result β) :
-  ((Bind.bind x y) = (Bind.bind x y')) ↔
-  ∀ v, x = ok v → y v = y' v := by
-  cases x <;> simp_all
-
-instance : Monad Result where
+-- TODO: i think that this is false for the ITree version?
+-- because if x = `vis _ k`, then the rhs of the ↔ says exactly nothing,
+-- and the lhs says that y = y'.
+-- @[simp]
+-- def bind_eq_iff (x : Result α) (y y' : α → Result β) :
+--   ((Bind.bind x y) = (Bind.bind x y')) ↔
+--   ∀ v, x = ok v → y v = y' v := by
+  -- -- cases x <;> simp_all
+  -- constructor
+  -- · intros
+  --   subst_vars
+  --   simp at *
+  --   assumption
+  -- · intros h
+  --   revert h
+  --   refine ITree.cases ?_ ?_ ?_ x
+  --   ·
+  --     intros r h
+  --     refine (.trans (pure_bind _ _) (.trans ?_ (Eq.symm (pure_bind _ _))))
+  --     apply h
+  --     simp [pure]
+  --     rfl
+  --   · intros h
+  --     simp [bind, itree_div_bind]
+  --   ·
+  --     intros
+  --     sorry
 
 /-!
 # Partial Fixpoint
@@ -165,19 +240,9 @@ section Order
 
 open Lean.Order
 
-instance : PartialOrder (Result α) := inferInstanceAs (PartialOrder (FlatOrder .div))
-noncomputable instance : CCPO (Result α) where
-  has_csup hc := FlatOrder.instCCPO (b := Result.div).has_csup hc
-noncomputable instance : MonoBind Result where
-  bind_mono_left h := by
-    cases h
-    · exact FlatOrder.rel.bot
-    · exact FlatOrder.rel.refl
-  bind_mono_right h := by
-    cases ‹Result _›
-    · exact h _
-    · exact FlatOrder.rel.refl
-    · exact FlatOrder.rel.refl
+instance : PartialOrder (Result α) := instPartialOrderCoIndOfInhabitedPUnit _
+noncomputable instance : CCPO (Result α) := instCCPOCoIndOfInhabitedPUnit _
+noncomputable instance : MonoBind Result := instMonoBindITree
 
 end Order
 
@@ -277,14 +342,12 @@ inductive ControlFlow (α : Type u) (β : Type v) where
   | done (v : β) -- break
 deriving Repr, BEq
 
-def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) (x : α) : Result β := do
-  match body x with
-  | ok r =>
-    match r with
-    | ControlFlow.cont x => loop body x
-    | ControlFlow.done x => ok x
-  | fail e => fail e
-  | div => div
+-- TODO: will the fact that β now has level u instead of v cause problems?
+def loop {α : Type u} {β : Type u} (body : α → Result (ControlFlow α β)) (x : α) : Result β := do
+  let r ← body x
+  match r with
+  | ControlFlow.cont x => loop body x
+  | ControlFlow.done x => ok x
 partial_fixpoint
 
 /-!
@@ -301,13 +364,16 @@ instance SubtypeLawfulBEq [BEq α] (p : α → Prop) [LawfulBEq α] : LawfulBEq 
   eq_of_beq {a b} h := by cases a; cases b; simp_all [BEq.beq]
   rfl := by intro a; cases a; simp [BEq.beq]
 
+-- TODO: will this make sense, given that .vis now returns none?
 /- A helper function that converts failure to none and success to some
    TODO: move up to Core module? -/
 def Option.ofResult {a : Type u} (x : Result a) :
   Option a :=
-  match x with
-  | ok x => some x
-  | _ => none
+  ITree.cases
+    .some
+    .none
+    (fun _ _ => .none)
+    x
 
 /-!
 # bv_decide

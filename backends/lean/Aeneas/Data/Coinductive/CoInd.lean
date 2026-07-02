@@ -34,7 +34,7 @@ inductive PFunctor.Obj (PF : PFunctor) (α : Type u) : Type u where
 
 /-- A **polynomial functor (PF)**: a functor `F` that is isomorphic to some
 polynomial functor `PFunctor`. Note that unlike Qpf in Mathlib and QPFTypes, this definition does *not* support quotients and instead requires an isomorphism to PFunctor. -/
-class PF (F : Type u → Type u) where
+class PF (F : Type u → Type v) where
   P : PFunctor
   unpack {α} : F α → P.Obj α
   pack {α} : P.Obj α → F α
