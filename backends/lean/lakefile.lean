@@ -5,7 +5,9 @@ open Lake DSL
 require mathlib from git
   "https://github.com/leanprover-community/mathlib4.git" @ "v4.30.0-rc2"
 
-package «aeneas» {}
+package «aeneas» where
+  preferReleaseBuild := true
+  buildArchive := s!"lean-build-aeneas-{System.Platform.target}.tar.gz"
 
 @[default_target] lean_lib «Aeneas» {}
 

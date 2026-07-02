@@ -13,5 +13,9 @@ fi
 # required for plugin loading.
 CI="" lake build
 
+# Pack prebuilt oleans into an archive for Lake's automatic olean download.
+# Users who pin to a release tag get these instead of compiling from source.
+lake pack
+
 # Delete heavy dependency sources to keep the release archive small.
 rm -rf .lake/packages
