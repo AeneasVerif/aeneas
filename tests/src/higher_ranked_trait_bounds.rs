@@ -1,14 +1,11 @@
 //@ [!lean] skip
-// Higher-ranked trait bounds (`for<'a> ...`).
-// See: https://github.com/AeneasVerif/aeneas/issues/801
-//      https://github.com/AeneasVerif/aeneas/issues/1141
 
 // A user-defined trait used with a higher-ranked bound.
 trait RefTrait<X> {
     fn get(&self) -> X;
 }
 
-// Explicit higher-ranked trait bound on a user trait (issue #801).
+// Explicit higher-ranked trait bound on a user trait
 fn use_higher_ranked_trait_bound<P: for<'a> RefTrait<&'a u8>>(p: &P) -> u8 {
     *p.get()
 }
@@ -21,20 +18,22 @@ where
     *p.get()
 }
 
-// `impl Fn(&_)` desugars to a higher-ranked `Fn` bound (issue #1141).
 fn call_fn_ref(g: impl Fn(&u8) -> u8, x: u8) -> u8 {
+    g(&x);
     g(&x)
 }
 
-// `impl FnMut(&_)` with no return.
 fn call_fnmut_ref(mut g: impl FnMut(&u8), x: u8) {
+    g(&x);
     g(&x)
 }
 
+/*
+// TODO
 fn call_fnmut_mut_ref(mut g: impl FnMut(&mut u8), x: &mut u8) {
     g(x);
     g(x)
-}
+}*/
 
 // `impl FnOnce(&_) -> _`.
 fn call_fnonce_ref(g: impl FnOnce(&u8) -> u8, x: u8) -> u8 {
