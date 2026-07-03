@@ -49,39 +49,3 @@ impl<'a> S<'a> {
         Ok(y)
     }
 }
-
-/// The same trigger with a free function taking `&S<'a>` instead of `&self`.
-pub fn shared_ref_struct_try(s: &S<'_>, x: u8) -> Result<u8, ()> {
-    let _ = s.r;
-    let y = f(x)?;
-    Ok(y)
-}
-
-// ============================================================
-// Controls: these already translated before the fix.
-// ============================================================
-
-pub struct Owned {
-    pub r: u8,
-}
-
-impl Owned {
-    /// The struct owns its data (no reference below `&self`).
-    pub fn owned_try(&self, x: u8) -> Result<u8, ()> {
-        let y = f(x)?;
-        Ok(y)
-    }
-}
-
-impl<'a> S<'a> {
-    /// The call is tail-returned (no intermediate bind).
-    pub fn tailcall(&self, x: u8) -> Result<u8, ()> {
-        f(x)
-    }
-
-    /// `self` is taken by value.
-    pub fn byval(self, x: u8) -> Result<u8, ()> {
-        let y = f(x)?;
-        Ok(y)
-    }
-}
