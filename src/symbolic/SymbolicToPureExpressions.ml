@@ -384,7 +384,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
           let decls_ctx = ctx.decls_ctx in
           let dsg =
             translate_inst_fun_sig_to_decomposed_fun_type (Some ctx.span)
-              decls_ctx fid_t inst_sg
+              decls_ctx fid_t inst_sg sg.output
               (List.map (fun _ -> None) sg.inputs)
           in
           let back_tys = compute_back_tys_with_info dsg in
