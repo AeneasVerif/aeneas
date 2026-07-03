@@ -3,8 +3,8 @@ open Contexts
 open InterpJoinCore
 
 (** Prepare the shared loans in the abstractions by moving them to fresh
-    abstractions as well as the symbolic mutable borrows which point to symbolic
-    loans in frozen abstractions.
+    abstractions, as well as the symbolic mutable borrows which point to
+    symbolic loans in frozen abstractions.
 
     We use this for instance to prepare an evaluation context before computing a
     fixed point.

@@ -76,6 +76,7 @@ package «tests» {}
 @[default_target] lean_lib OpaqueMutRegion
 @[default_target] lean_lib Names
 @[default_target] lean_lib NestedBorrows
+@[default_target] lean_lib NestedSharedBorrows
 @[default_target] lean_lib NoNestedBorrows
 @[default_target] lean_lib Options
 @[default_target] lean_lib OverflowingOps
