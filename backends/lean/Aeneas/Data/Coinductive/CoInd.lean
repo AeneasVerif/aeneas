@@ -18,16 +18,16 @@ However, the technical implementation differs and we currently do not support qu
 
 /-- A polynomial functor, given by a set of "shapes" `In` and for each shape `i`, a type `Out i`
 describing the outputs. The polynomial functor it represents maps `α` to `Σ i : In, Out i → α`. -/
-structure PFunctor : Type (u + 1) where
+structure PFunctor : Type ((max u v) + 1) where
   In : Type u
-  Out : In → Type u
+  Out : In → Type v
 
 /-- The application of a polynomial functor `PF` to a type `α`: a shape `i : PF.In`
 together with a function filling each position `PF.Out i → α`.
 
 The `obj_dummy` constructor is a technical device to prevent Lean from eta-expanding
 this type. -/
-inductive PFunctor.Obj (PF : PFunctor) (α : Type u) : Type u where
+inductive PFunctor.Obj (PF : PFunctor.{u, v}) (α : Type w) : Type (max u v w) where
   | obj (i : PF.In) (k : PF.Out i → α)
   -- Necessary to avoid eta expansion on this type.
   | obj_dummy (e : Empty)
@@ -35,7 +35,7 @@ inductive PFunctor.Obj (PF : PFunctor) (α : Type u) : Type u where
 /-- A **polynomial functor (PF)**: a functor `F` that is isomorphic to some
 polynomial functor `PFunctor`. Note that unlike Qpf in Mathlib and QPFTypes, this definition does *not* support quotients and instead requires an isomorphism to PFunctor. -/
 class PF (F : Type u → Type v) where
-  P : PFunctor
+  P : PFunctor.{a, b}
   unpack {α} : F α → P.Obj α
   pack {α} : P.Obj α → F α
   unpack_pack {α} (x : F α) : pack (unpack x) = x
@@ -361,6 +361,7 @@ instance [Inhabited (F PUnit)] : PartialOrder (CoInd F) where
     intro c1 c2 h1 h2
     ext n
     induction n generalizing c1 c2 h1 h2; rfl
+    rename_i n ih -- TODO: make this not suck
     unfold CoInd.le at h1 h2
     cases h1 with
     | inl h1 => grind [CoInd.le.coherent_bot_eq]
@@ -371,6 +372,7 @@ instance [Inhabited (F PUnit)] : PartialOrder (CoInd F) where
     cases h1
     cases h2
     simp_all
+    rename_i _ _ _ _ le1 _ _ _ _ _ le2 _ _ -- TODO: this also
     rename (_ ∧ _) => eq
     cases eq
     subst_eqs
@@ -378,7 +380,11 @@ instance [Inhabited (F PUnit)] : PartialOrder (CoInd F) where
     rw [<-unfold_fold _ c2]
     unfold CoInd.fold
     simp [PF.map, *]
-    grind
+    congr
+    funext x
+    apply ih
+    · apply le1
+    · apply le2
 
 /-!
 ## CCPO

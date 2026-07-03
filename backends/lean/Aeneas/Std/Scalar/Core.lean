@@ -612,14 +612,50 @@ theorem UScalar.tryMkOpt_eq (ty : UScalarTy) (x : Nat) :
   split_ifs <;> simp_all
   simp [UScalar.val, UScalarTy.numBits] at *
 
+-- TODO: maybe to make this sort of thing closer to the original Result veresion,
+-- i could consider putting the Fail case into the Ret case of the ITree?
+-- or mabye i could make a match function for Result which gives
+-- 3 cases: ok, fail, and 'other effect'?
 theorem UScalar.tryMk_eq (ty : UScalarTy) (x : Nat) :
-  match tryMk ty x with
-  | ok y => y.val = x ∧ inBounds ty x
-  | fail _ => ¬ (inBounds ty x)
-  | _ => False := by
+  (∃ v, tryMk ty x = .ok v ∧ inBounds ty v.val ∧ x = v.val)
+  ∨ (∃ e, tryMk ty x = .fail e ∧ ¬ (inBounds ty x))
+    := by
   have := UScalar.tryMkOpt_eq ty x
   simp [tryMk, ofOption]
-  cases h: tryMkOpt ty x <;> simp_all
+  cases h: tryMkOpt ty x
+  · right
+    grind
+  · left
+    grind
+
+theorem UScalar.tryMk_eq_test (ty : UScalarTy) (x : Nat) :
+  -- match tryMk ty x with
+  -- | ok y => y.val = x ∧ inBounds ty x
+  -- | fail _ => ¬ (inBounds ty x)
+  -- | _ => False
+  (tryMk ty x).cases
+    (fun y => y.val = x ∧ inBounds ty x)
+    False
+    (fun e _ =>
+      match e with
+      | .fail _e => ¬ (inBounds ty x)
+      -- | _ => False -- uncomment this once there are other effects
+      )
+  := by
+  have := UScalar.tryMkOpt_eq ty x
+  simp [tryMk, ofOption]
+  cases h: tryMkOpt ty x <;> simp_all [fail, Aeneas.Data.Coinductive.ITree.cases]
+  --
+
+-- TODO: delete old one
+-- theorem UScalar.tryMk_eq (ty : UScalarTy) (x : Nat) :
+--   match tryMk ty x with
+--   | ok y => y.val = x ∧ inBounds ty x
+--   | fail _ => ¬ (inBounds ty x)
+--   | _ => False := by
+--   have := UScalar.tryMkOpt_eq ty x
+--   simp [tryMk, ofOption]
+--   cases h: tryMkOpt ty x <;> simp_all
 
 theorem IScalar.tryMkOpt_eq (ty : IScalarTy) (x : Int) :
   match tryMkOpt ty x with
@@ -635,13 +671,26 @@ theorem IScalar.tryMkOpt_eq (ty : IScalarTy) (x : Int) :
   cases h: System.Platform.numBits_eq <;> simp_all <;> omega
 
 theorem IScalar.tryMk_eq (ty : IScalarTy) (x : Int) :
-  match tryMk ty x with
-  | ok y => y.val = x ∧ inBounds ty x
-  | fail _ => ¬ (inBounds ty x)
-  | _ => False := by
-  have := tryMkOpt_eq ty x
-  simp [tryMk]
-  cases h : tryMkOpt ty x <;> simp_all
+  (∃ v, tryMk ty x = .ok v ∧ inBounds ty v.val ∧ x = v.val)
+  ∨ (∃ e, tryMk ty x = .fail e ∧ ¬ (inBounds ty x))
+    := by
+  have := IScalar.tryMkOpt_eq ty x
+  simp [tryMk, ofOption]
+  cases h: tryMkOpt ty x
+  · right
+    grind
+  · left
+    grind
+
+-- TODO: delete old one
+-- theorem IScalar.tryMk_eq (ty : IScalarTy) (x : Int) :
+--   match tryMk ty x with
+--   | ok y => y.val = x ∧ inBounds ty x
+--   | fail _ => ¬ (inBounds ty x)
+--   | _ => False := by
+--   have := tryMkOpt_eq ty x
+--   simp [tryMk]
+--   cases h : tryMkOpt ty x <;> simp_all
 
 @[simp] theorem UScalar.zero_in_cbounds {ty : UScalarTy} : 0 < 2^ty.numBits := by
   simp

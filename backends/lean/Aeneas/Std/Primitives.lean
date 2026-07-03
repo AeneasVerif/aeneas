@@ -70,17 +70,17 @@ open Error
 --   | div
 -- deriving Repr, BEq
 
-inductive RustEffect.I : Type u where
+inductive RustEffect.I : Type where
 | fail : Error → RustEffect.I
 -- there is an issue that both threads have to return the return type.
 -- maybe this is fine, and you can just bind an operation that returns Unit?
 -- i could make a generalized ITree definition which allows you to do stuff to the return type in Effect?
 
-def RustEffect.O (i : RustEffect.I) : Type u :=
+def RustEffect.O (i : RustEffect.I) : Type :=
   match i with
   | .fail _ => PEmpty
 
-def RustEffect : Effect.{u} := {
+def RustEffect : Effect := {
   I := RustEffect.I
   O := RustEffect.O
 }
@@ -88,6 +88,8 @@ def RustEffect : Effect.{u} := {
 def Result (α : Type u) : Type u := ITree RustEffect α
 
 instance : Monad Result := instMonadITree
+instance : Bind Result where
+  bind := ITree.bind
 instance : LawfulMonad Result := instLawfulMonadITree
 
 def Result.ok {α} (a : α) : Result α := .ret a
@@ -96,10 +98,26 @@ def Result.fail {α} (e : Error) : Result α := .vis (.fail e) PEmpty.elim
 
 def Result.div {α} : Result α := ITree.div
 
-example : ¬ Result.fail e1 = Result.ok x := by
-  simp [Result.fail, Result.ok]
-  --
-  sorry
+-- TODO: adding these to simp set messes up some things
+-- @[simp, grind .]
+theorem ok_not_fail {α} {a : α} {e} : ¬ Result.ok a = .fail e := by grind [Result.ok, Result.fail, not_vis_ret]
+-- @[simp, grind .]
+theorem ok_not_div {α} {a : α} : ¬ Result.ok a = .div := by grind [Result.ok, Result.div, not_ret_div]
+-- @[simp, grind .]
+theorem ok_inj {α} {a b : α} : Result.ok a = .ok b → a = b := by grind [Result.ok, ret_inj]
+
+-- previously Result was an inductive with ok, div, and fail cases only.
+-- this function can be used in many cases to replace pattern matching on that inductive:
+-- TODO: maybe delete this and just use ITree.cases directly?
+abbrev Result.match {α} (r : Result α)
+  {motive : Result α → Type}
+  (ok : ∀ r, motive (pure r))
+  (div :  motive (.div))
+  (vis : ∀ i k, motive (ITree.vis i k))
+  : motive r := ITree.cases ok div vis r
+
+-- making .cases go
+-- theorem ITree.cases.div
 
 open Result
 
@@ -161,12 +179,12 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
 
 -- TODO: in addition to type levels, does it cause issues that bind comes from the Monad instance?
 -- -- TODO: is it ok to not have β be at a different level `v`?
--- def bind {α : Type u} {β : Type u} (x: Result α) (f: α → Result β) : Result β :=
---   ITree.bind x f
+def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
+  ITree.bind x f
 
 -- TODO: should this just be deleted to clean things up now, or left for backwards compatibility?
-def bind {α : Type u} {β : Type u} (x: Result α) (f: α → Result β) : Result β :=
-  @Bind.bind Result _ α β x f
+-- def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
+--   @Bind.bind Result _ α β x f
 
 -- -- Allows using Result in do-blocks
 -- instance : Bind Result where
@@ -343,12 +361,26 @@ inductive ControlFlow (α : Type u) (β : Type v) where
 deriving Repr, BEq
 
 -- TODO: will the fact that β now has level u instead of v cause problems?
-def loop {α : Type u} {β : Type u} (body : α → Result (ControlFlow α β)) (x : α) : Result β := do
-  let r ← body x
+def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) (x : α) : Result β := do
+  ITree.bind (body x) fun r =>
+  -- let r ← body x
+  -- _
   match r with
   | ControlFlow.cont x => loop body x
   | ControlFlow.done x => ok x
 partial_fixpoint
+
+
+-- TODO: this is original, delete this
+-- def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) (x : α) : Result β := do
+--   match body x with
+--   | ok r =>
+--     match r with
+--     | ControlFlow.cont x => loop body x
+--     | ControlFlow.done x => ok x
+--   | fail e => fail e
+--   | div => div
+-- partial_fixpoint
 
 /-!
 # Misc
