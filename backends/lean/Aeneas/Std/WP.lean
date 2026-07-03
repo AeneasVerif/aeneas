@@ -28,12 +28,12 @@ def wp_return (x:α) : Wp α := fun p => p x
 -- def spec {α} (x:Result α) (p:Post α) :=
 --   theta x p
 
-coinductive spec' {α} (p : Post α) : (x : Result α) → Prop where
-| ret : ∀ x, p x → spec' p (ITree.ret x)
+@[grind]
+inductive spec {α} : (x : Result α) → (p : Post α) →  Prop where
+| ret : ∀ x, p x → spec (ITree.ret x) p
 -- | vis : ∀ k, (∀ b, spec p (k b)) → spec p (ITree.vis () k)
 -- | fail : ∀ k, (∀ b, spec p (k b)) → spec p (ITree.vis () k)
 
-def spec {α} p x := @spec' α x p
 
 -- TODO: clean up
 -- def dspec {α} (x:Result α) (p:Post α) :=
@@ -41,17 +41,14 @@ def spec {α} p x := @spec' α x p
 --   | ok x => p x
 --   | fail _ => False
 --   | div => True
-coinductive dspec' {α} (p : Post α) : (x : Result α) → Prop where
-| ret : ∀ x, p x → dspec' p (ITree.ret x)
-| div : dspec' p div
-
-def dspec {α} p x := @dspec' α x p
+inductive dspec {α} : (x : Result α) → (p : Post α) →  Prop where
+| ret : ∀ x, p x → dspec (ITree.ret x) p
+| div : dspec div p
 
 theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p := by
   intros s
-  simp [spec, dspec] at *
   cases s
-  apply dspec'.ret
+  apply dspec.ret
   assumption
 
 -- TODO: do i need this?
@@ -78,16 +75,23 @@ def uncurry' {α β} (p : α → β → Prop) : α × β → Prop :=
 
 @[simp, grind =, agrind =]
 theorem spec_ok (x : α) : spec (ok x) p ↔ p x := by
-  simp [spec, spec', ok]
-  grind
+  constructor
+  · intros s
+    generalize H : ok x = v at s
+    simp [ok] at H
+    cases s
+    grind only [ret_inj]
+  · intros px
+    constructor
+    assumption
 
 @[simp, grind =, agrind =]
 theorem spec_fail (e : Error) : spec (fail e) p ↔ False := by
-  grind only [spec', spec, fail, not_vis_ret]
+  grind only [spec, fail, not_vis_ret]
 
 @[simp, grind =, agrind =]
 theorem spec_div : spec div p ↔ False := by
-  grind only [spec, div, spec', not_ret_div]
+  grind only [spec, div, not_ret_div]
 
 /-! ### `spec_*` for tuple posts
 
@@ -110,15 +114,15 @@ theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : sp
   (∀ x, P₀ x → P₁ x) → spec m P₁ := by
   intros HMonPost
   revert h
-  simp [spec, spec']
-  cases m <;> grind
+  intros s
+  cases s
+  grind
 
 theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
   spec m Pₘ →
   (forall x, Pₘ x → spec (k x) Pₖ) →
   spec (m >>= k) Pₖ := by
   intro Hm Hk
-  simp [spec] at *
   cases Hm
   simp [Bind.bind]
   grind only
@@ -149,7 +153,9 @@ theorem spec_mono' {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : s
   qimp P₀ P₁ → spec m P₁ := by
   intros HMonPost
   revert h
-  unfold spec spec'
+  intros s
+  cases s
+  constructor
   grind only [qimp]
 
 /-- Implication of a `spec` predicate with quantifier -/
@@ -162,8 +168,8 @@ theorem spec_bind' {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α
   (qimp_spec Pₘ k Pₖ) →
   spec (Std.bind m k) Pₖ := by
   intro Hm Hk
-  simp [spec, spec', bind, Bind.bind, qimp_spec] at *
-  rcases Hm with ⟨x, px, rfl⟩
+  simp only [bind, qimp_spec] at *
+  cases Hm
   simp only [itree_ret_bind]
   grind only
 
@@ -198,8 +204,11 @@ theorem qimp_spec_exists {α β γ} (P : γ → α → Prop) (k : α → Result 
 
 theorem spec_equiv_exists (m:Result α) (P:Post α) :
   spec m P ↔ (∃ y, m = ok y ∧ P y) := by
-  simp [spec, spec', ok]
-  grind only
+  constructor
+  · intros s
+    cases s
+    grind only [ok]
+  · grind
 
 theorem spec_imp_exists {m:Result α} {P:Post α} :
   spec m P → (∃ y, m = ok y ∧ P y) := by
@@ -214,7 +223,8 @@ theorem dspec_mono' {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : 
   qimp P₀ P₁ → dspec m P₁ := by
   intros HMonPost
   revert h
-  unfold dspec dspec'
+  intros s
+  cases s <;> constructor
   grind only [qimp]
 
 /-- Implication of a `dspec` predicate with quantifier -/
@@ -226,12 +236,12 @@ theorem dspec_bind' {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result �
   (qimp_dspec Pₘ k Pₖ) →
   dspec (Std.bind m k) Pₖ := by
   intro Hm Hk
-  simp [dspec, dspec', bind, Bind.bind, qimp_dspec] at *
-  rcases Hm with ⟨h, Hm⟩
-  · rcases Hm with ⟨x, px, rfl⟩
-    simp only [itree_ret_bind]
+  simp only [bind, qimp_dspec] at *
+  cases Hm
+  · simp only [itree_ret_bind]
     grind only
-  · simp [*, div]
+  · simp [div]
+    constructor
 
 @[simp]
 def qimp_dspec_uncurry' {α₀ α₁ β} (P : α₀ → α₁ → Prop) (k : α₀ × α₁ → Result β) (Q : β → Prop) :
@@ -254,8 +264,14 @@ def qimp_dspec_iff {α β} (P : α → Prop) (k : α → Result β) (Q : β → 
 
 @[simp, grind =, agrind =]
 theorem dspec_ok (x : α) : dspec (ok x) p ↔ p x := by
-  simp [dspec, dspec', ok, div]
-  grind
+  simp [ok]
+  constructor
+  · intros s
+    generalize h : ITree.ret x = v at s
+    cases s <;> grind [div, ret_inj, not_ret_div]
+  · intros px
+    constructor
+    assumption
 
 theorem dspec_imp_forall {m:Result α} {P:Post α} :
   dspec m P → (∀ y, m = ok y → P y) := by
@@ -850,7 +866,13 @@ theorem loop.spec {α : Type u} {β : Type v} {γ : Type w}
   apply @wf.wf.fix γ (fun x' =>
     ∀ x, measure x = x' →
     inv x → loop body x ⦃ post ⦄)
-  grind [loop]
+  intros y h x eq ix
+  have hBody' := hBody x ix; clear hBody
+  rw [WP.spec_equiv_exists] at hBody'
+  rcases hBody' with ⟨y, p, yc⟩
+  unfold loop
+  simp [p, Result.ok]
+  grind
 
 theorem loop.spec_decr_nat {α : Type u} {β : Type v}
   (measure : α → Nat)

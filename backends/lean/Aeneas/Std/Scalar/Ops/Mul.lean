@@ -43,7 +43,8 @@ theorem UScalar.mul_equiv {ty} (x y : UScalar ty) :
   match mul x y with
   | ok z => x.val * y.val ≤ UScalar.max ty ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv
   | fail _ => UScalar.max ty < x.val * y.val
-  | .div => False := by
+  | .div => False
+  := by
   simp only [mul]
   have := tryMk_eq ty (x.val * y.val)
   split <;> simp_all only [inBounds, true_and, not_lt, gt_iff_lt]

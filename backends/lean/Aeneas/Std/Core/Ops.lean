@@ -64,11 +64,9 @@ def BuiltinFnOnce (Inputs : Type u) (Outputs : Type v) : core.ops.function.FnOnc
 
 def BuiltinFnMut (Inputs : Type u) (Outputs : Type v) : core.ops.function.FnMut (Inputs → Result Outputs) Inputs Outputs := {
   FnOnceInst := BuiltinFnOnce Inputs Outputs
-  call_mut f x :=
-    match f x with
-    | ok y => ok (y, f)
-    | fail e => fail e
-    | div => div
+  call_mut f x := do
+    bind (f x) λ v =>
+    ok (v, f)
 }
 
 def BuiltinFn (Inputs : Type u) (Outputs : Type v) : core.ops.function.Fn (Inputs → Result Outputs) Inputs Outputs := {

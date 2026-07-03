@@ -17,11 +17,8 @@ def IScalar.neg {ty : IScalarTy} (x : IScalar ty) : Result (IScalar ty) := IScal
 theorem IScalar.neg_step {ty} (x: IScalar ty) (h: x ≠ IScalar.min ty): IScalar.neg x ⦃ r => r = -x.val ⦄ := by
   simp [neg]
   have h := tryMk_eq ty (-x.val)
-  simp [inBounds] at h
-  split at h <;> simp_all
   have := IScalar.hBounds x
-  simp [IScalar.min] at *
-  grind
+  cases h <;> try grind [IScalar.min]
 
 /--
 The notation typeclass for heterogeneous negation.

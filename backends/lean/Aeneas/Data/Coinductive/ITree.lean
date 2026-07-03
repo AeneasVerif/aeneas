@@ -10,17 +10,18 @@ open Lean.Order
 -- which uses the traditional tau constructor, this version instead has a bottom element
 -- div. tau is not needed to guard recursion, since we are using partial_fixpoint
 -- instead of coinduction.
-inductive ITreeF (E : Effect.{u}) (R : Type v) (ITree : Type w) : Type (max u v w) where
+inductive ITreeF.{u,v} (E : Effect.{u}) (R : Type v) (ITree : Type (max u v)) : Type (max u v) where
   | ret (r : R)
   | div -- equivalent to infinite tau stream from traditional ITrees
   | vis (i : E.I) (k : E.O i → ITree)
 
-inductive ITreeF.In (E : Effect.{u}) (R : Type u) : Type u where
+
+inductive ITreeF.In (E : Effect.{u}) (R : Type v) : Type (max u v) where
   | ret (r : R)
   | div
   | vis (i : E.I)
 
-instance (E : Effect.{u}) (R : Type u) : PF (ITreeF E R) where
+instance (E : Effect.{u}) (R : Type v) : PF (ITreeF E R) where
   P := ⟨ITreeF.In E R, fun
     | .ret _ => PEmpty
     | .div => PEmpty
@@ -36,10 +37,10 @@ instance (E : Effect.{u}) (R : Type u) : PF (ITreeF E R) where
   unpack_pack := by rintro _ ⟨⟩ <;> simp
   pack_unpack := by rintro _ (⟨⟨⟩, _⟩ | ⟨⟨⟩⟩) <;> simp <;> funext x <;> cases x
 
-abbrev ITree (E : Effect.{u}) (R : Type u) : Type u := CoInd (ITreeF E R)
+abbrev ITree.{u, v} (E : Effect.{v}) (R : Type u) : Type (max u v) := CoInd (ITreeF E R)
 abbrev ITreeN (E : Effect.{u}) (R : Type u) (n : Nat) : Type u := CoIndN (ITreeF E R) n
 
-variable {E : Effect.{u}} {R : Type u}
+variable {E : Effect.{v}} {R : Type u}
 
 def ITree.fold (t : ITreeF E R (ITree E R)) : ITree E R := CoInd.fold _ t
 def ITree.ret (r : R) : ITree E R := ITree.fold (.ret r)
@@ -160,7 +161,7 @@ theorem ITree.le_unfold (t1 t2 : ITree E R) :
         grind
 
 -- use Bind.bind instead
-def ITree.bind {S} (t1 : ITree E R) (t2 : R → ITree E S) :=
+def ITree.bind.{w} {S : Type w} (t1 : ITree E R) (t2 : R → ITree E S) :=
   match t1.unfold with
   | .ret r => t2 r
   | .div => .div
@@ -285,73 +286,208 @@ def Effect.trigger (E₁ : Effect.{u}) {E₂ : Effect.{u}} [E₁ -< E₂] (i : E
   let ⟨i₂, f⟩ := (Subeffect.map i);
   ITree.vis i₂ (λ x => return (f x))
 
-def ITree.iter {α β} (t : α → ITree E (α ⊕ β)) : α → ITree E β :=
+-- TODO: make β have level b instead of a
+def ITree.iter {α : Type a} {β : Type b} (t : α → ITree E (α ⊕ β)) : α → ITree E β :=
   λ a => do
-    match ← (t a) with
+    bind (t a) λ val =>
+    match val with
     | .inl a => .iter t a
     | .inr b => return b
 partial_fixpoint
 
-def ITree.interp {F} (f : (i : E.I) → ITree F (E.O i)) : ITree E R → ITree F R :=
-  ITree.iter λ t =>
-    match t.unfold with
-    | .ret r => return (.inr r)
-    | .div => ITree.div
-    | .vis i k => f i >>= λ o => return (.inl (k o))
+-- TODO: do we need interp?
+-- def ITree.interp {F : Effect.{w}} (f : (i : E.I) → ITree F (E.O i)) : ITree E R → ITree F R :=
+--   ITree.iter λ t =>
+--     match t.unfold with
+--     | .ret r => return (.inr r)
+--     | .div => ITree.div
+--     -- | .vis i k => f i >>= λ o => return (.inl (k o))
+--     | .vis i k => bind (f i) λ o => return (.inl (k o))
 
-@[simp]
-theorem interp_pure {F} (f : (i : E.I) → ITree F (E.O i)) (r : R) :
-  ITree.interp f (pure r) = pure r := by
-    unfold ITree.interp ITree.iter
-    simp
+-- @[simp]
+-- theorem interp_pure {F} (f : (i : E.I) → ITree F (E.O i)) (r : R) :
+--   ITree.interp f (pure r) = pure r := by
+--     unfold ITree.interp ITree.iter ITree.bind
+--     simp
 
-@[simp]
-theorem interp_div {F} (f : (i : E.I) → ITree F (E.O i)) :
-  ITree.interp (R:=R) f .div = .div := by
-    unfold ITree.interp
-    rw (occs := [1]) [ITree.iter]
-    simp
+-- @[simp]
+-- theorem interp_div {F} (f : (i : E.I) → ITree F (E.O i)) :
+--   ITree.interp (R:=R) f .div = .div := by
+--     unfold ITree.interp
+--     rw (occs := [1]) [ITree.iter]
+--     simp
 
-@[simp]
-theorem interp_vis {F} (f : (i : E.I) → ITree F (E.O i)) i (k : E.O i → ITree E R) :
-  ITree.interp f (ITree.vis i k) = (f i) >>= λ o => (ITree.interp f (k o)) := by
-    unfold ITree.interp
-    rw (occs := [1]) [ITree.iter]
-    simp
+-- -- #synth LawfulMonad (ITree E)
+-- -- #check instLawfulMonadITree.bind_assoc
+-- @[simp]
+-- theorem interp_vis {F : Effect.{v}} (f : (i : E.I) → ITree F (E.O i)) i (k : E.O i → ITree E R) :
+--   ITree.interp f (ITree.vis i k) = (f i) >>= (λ o => (ITree.interp f (k o))) := by
+--     unfold ITree.interp
+--     rw (occs := [1]) [ITree.iter]
+--     simp
+--     rw [instLawfulMonadITree.bind_assoc]
+--     simp [(Eq.refl _ : ITree.bind = Bind.bind)]
+--     rw [bind_assoc]
+    --
 
 -- #synth CCPO (ITree E R)
 -- #synth MonoBind (ITree E)
 -- #synth Bind (ITree E)
 
-#check CoInd.approx
-
 -- TODO: These have been added on top of original library. I'm not sure if there's a better
 -- way to do this yet.
 
-@[simp, grind .]
+-- @[simp, grind .]
 theorem not_vis_ret {E} {α} {x : α} {e k} : ¬ ITree.ret (E := E) x = ITree.vis e k := by
   intros eq
   have eq := congrArg (fun i => i.approx 1) eq
   simp at eq
 
-@[simp, grind .]
+-- @[simp, grind .]
 theorem not_ret_div {E} {α} {x : α} : ¬ ITree.ret (E := E) x = ITree.div := by
   intros eq
   have eq := congrArg (fun i => i.approx 1) eq
   simp at eq
 
-@[simp, grind .]
+-- @[simp, grind .]
 theorem not_div_vis {E} {α} {e k} : ¬  @ITree.div α E = ITree.vis e k := by
   intros eq
   have eq := congrArg (fun i => i.approx 1) eq
   simp at eq
 
-@[simp, grind .]
+-- @[simp, grind .]
 theorem ret_inj {E} {α} {x y} : @ITree.ret α E x = ITree.ret y → x = y := by
   intros eq
   have eq := congrArg (fun i => i.approx 1) eq
   simp at eq
   grind only
+
+#check ITree.cases
+#check Eq.rec
+
+def Eqrec2.{w, u_1} {α : Sort u_1} {a' : α} {motive : (a : α) → a' = a → Sort w}
+  (refl : motive a' (Eq.refl a')) {a'1 : α}
+  (t : a' = a'1) : motive a'1 t := by
+  subst t
+  apply refl
+
+def Eqrec3.{w, u_1} {α : Sort u_1} {a' : α} {motive : (a : α) → a' = a → Sort w}
+  {a'1 : α}
+  (t : a' = a'1)
+  (refl : motive a'1 t)
+  :
+  motive a' (Eq.refl a')
+  := by
+  subst t
+  apply refl
+
+-- theorems to make ITree.cases actually compute with simp
+@[simp]
+theorem ITree.cases.ret {E R motive r d v x}
+  : @ITree.cases E R motive r d v (.ret x) = r x := by
+  --
+  -- TODO: the issue is that i need to do this rewrite, but the rewrite tactic
+  -- isn't fancy enough
+  -- rw [<-ITree.unfold_fold (E := E) (ITree.ret x)]
+  -- this would help, but again we aren't fancy enough
+  -- generalize h : (ITree.ret x) = a
+  -- so we need to do a transport manually! using the equality in a cast!
+  --
+  -- once we get that, we will be able to do this cases
+  -- cases (ITree.ret (E := E) x).unfold
+  -- simp [ITree.cases, ITreeF.rec, ITree.unfold, CoInd.unfold]
+  --
+  --
+  let rwmotive : (i : ITree E R) → (ITree.ret x = i) → Prop :=
+    fun i eq => (@ITree.cases E R motive r d v i) = cast (congrArg _ eq) (r x)
+  -- generalize h : (ITree.ret x) = a at R
+  let a := ITree.ret (E := E) x
+  have h : a = ITree.ret x := by rfl
+  generalize h2 : a = b at h
+  subst a
+  clear h2
+  --
+  have thing := Eq.rec (motive := rwmotive) (t := Eq.symm h)
+  unfold rwmotive at thing
+  -- apply thing
+  --
+  have thing2 := Eqrec3 (motive := rwmotive) (t := Eq.symm h)
+  unfold rwmotive at thing2
+  apply thing2
+  clear thing thing2
+  -- unfold rwmotive
+  -- apply thing2 -- this works, but doesn't give us what we need!
+  -- rw [<- ITree.unfold_fold (E := E) b]
+  -- have thing3 := Eqrec3 (motive := rwmotive) (t := Eq.symm (ITree.unfold_fold (E := E) (ITree.ret x)))
+  -- apply thing3 -- NOTE: this one works!
+  -- unfold rwmotive
+  -- ok so i have evaded transport hell and done the thing, but....
+  -- this cases still doesn't work because of more transport hell issues
+  -- cases (ITree.ret (E := E) x).unfold
+  --
+  revert h
+  rw [<- ITree.unfold_fold (E := E) b]
+  -- cases (ITree.ret (E := E) x).unfold
+  cases b.unfold
+  ·
+    intros h
+    simp [fold]
+    -- simp [fold, CoInd.fold, cases, unfold]
+    -- have bla := (Eqrec2 (motive := rwmotive) (t := Eq.symm h))
+    -- unfold rwmotive at bla
+    --
+    sorry
+  · sorry
+  · sorry
+  --
+  -- sorry
+
+-- NOTE: while it is possible to fix the above,
+-- i also could just make an alternate version of ITree.cases
+-- that is not dependently typed and it would be very easy to prove things about
+
+def ITree.reccases {E : Effect.{u}} {R}
+    {motive : Sort v}
+    (ret : R → motive)
+    (div : motive)
+    (vis : (i : E.I) → (k : E.O i → ITree E R) → motive)
+    (t : ITree E R) : motive := by
+    -- rw [<-ITree.unfold_fold t]
+    cases t.unfold with
+    | ret x => apply ret x
+    | div => apply div
+    | vis e k => apply vis e k
+
+#check ITreeF.rec
+
+theorem ITree.reccases.ret {E R motive r d v x}
+  : @ITree.reccases E R motive r d v (.ret x) = r x := by
+  rw [<-ITree.unfold_fold (E := E) (ITree.ret x)]
+  -- generalize h : (ITree.ret x) = a
+  cases h : (ITree.ret (E := E) x).unfold
+  -- simp [ITree.cases, ITreeF.rec, ITree.unfold, CoInd.unfold]
+  ·
+    simp [reccases]
+    -- unfold fold unfold
+    -- NOTE: here, we clearly should be able to use fold_unfold at the end and then
+    -- we would be able to step ITreeF.rec !!! but it doesnt work somehow
+    rename_i r'
+    have thing : (fold (ITreeF.ret r')).unfold = ITreeF.ret r'
+      := fold_unfold (ITreeF E R) (ITreeF.ret r')
+    -- rw [thing] -- ANOTHER Transpot hell issue!
+    let rwmotive : (i : ITreeF E R (ITree E R)) -> (eq : (fold (ITreeF.ret r')).unfold = i) -> Prop :=
+      fun i eq =>
+        ITreeF.rec (motive := fun t => (fold (ITreeF.ret r')).unfold = t → motive) (fun r_1 h => r r_1) (fun h => d)
+        (fun i k h => v i k) i eq = r x
+    --
+    apply Eqrec2 (a' := ITreeF.ret r') (motive := rwmotive) (t := Eq.symm thing)
+    unfold rwmotive
+    simp
+    simp at h
+    subst x
+    rfl
+  · sorry
+  · sorry
 
 
 namespace Aeneas.Data.Coinductive
