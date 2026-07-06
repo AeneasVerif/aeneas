@@ -269,22 +269,24 @@ let trait_impl_entry_of_trait_impl (ctx : ExtractBase.extraction_ctx)
 
 let begin_file_if_enabled ~(filename : string) ~(namespace : string) : unit =
   if !Config.emit_json then begin
-    (* Record the Lean file relative to dest_dir. *)
-    let basename = Filename.basename filename in
+    (* Record the Lean file relative to [dest_dir]. With [-split-files] the
+       relative path can have several directory components (e.g.
+       [Crate/Alpha/Part1.lean]), so strip the [dest_dir] prefix instead of
+       taking the basename. *)
     let rel =
-      match !Config.subdir with
-      | None -> basename
-      | Some subdir -> Filename.concat subdir basename
+      let prefix =
+        if String.ends_with ~suffix:"/" state.dest_dir then state.dest_dir
+        else state.dest_dir ^ "/"
+      in
+      if String.starts_with ~prefix filename then
+        String.sub filename (String.length prefix)
+          (String.length filename - String.length prefix)
+      else (* Not under [dest_dir] (not expected): keep the basename. *)
+        Filename.basename filename
     in
     state.current_lean_file <- rel;
     state.current_lean_namespace <- namespace
   end
-
-(** Record a Lean file that is written outside of [extract_file] (e.g. the
-    [-gen-lib-entry] library entry point), so it still appears in [lean_files].
-    Records no declarations, so it leaves [current_lean_file] untouched. *)
-let record_lean_file_if_enabled ~(filename : string) : unit =
-  if !Config.emit_json then state.lean_files <- filename :: state.lean_files
 
 let record_fun_if_enabled (ctx : ExtractBase.extraction_ctx)
     (def : Pure.fun_decl) : unit =

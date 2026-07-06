@@ -1488,8 +1488,7 @@ let extract_by_file (ctx : gen_ctx) (crate : crate) ~(dest_dir : string)
   in
 
   (* Write an imports-only Lean file (a layer aggregator): the standard
-     generated header plus one [import] line per module. Bypasses
-     [extract_file], so record it in translation.json's [lean_files] here. *)
+     generated header plus one [import] line per module. *)
   let write_imports_file ~(filename : string) ~(custom_msg : string)
       ~(imports : string list) : unit =
     let out = open_out filename in
@@ -1497,7 +1496,6 @@ let extract_by_file (ctx : gen_ctx) (crate : crate) ~(dest_dir : string)
     Printf.fprintf out "-- [%s]%s\n" crate.name custom_msg;
     List.iter (fun m -> Printf.fprintf out "import %s\n" m) imports;
     close_out out;
-    EmitJson.record_lean_file_if_enabled ~filename;
     log#linfo (lazy ("Generated: " ^ filename))
   in
 
@@ -1639,8 +1637,6 @@ let extract_by_file (ctx : gen_ctx) (crate : crate) ~(dest_dir : string)
     let out = open_out filename in
     List.iter (fun m -> Printf.fprintf out "import %s\n" m) local_modules;
     close_out out;
-    (* Record it in translation.json's [lean_files] (it bypasses extract_file). *)
-    EmitJson.record_lean_file_if_enabled ~filename;
     log#linfo (lazy ("Generated: " ^ filename)))
 
 let extract_translated_crate (filename : string) (dest_dir : string)
