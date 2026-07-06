@@ -366,7 +366,6 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
         have := @Int.ediv_le_self (-x.val).toNat (-y.val).toNat (by omega)
         omega
       -- Then use the hypothesis about the fact that we're not equal to the bound
-      zify at hIneq
       have : (-x.val).toNat = -x.val := by omega
       rw [this] at hIneq; rw [this]
       have : (-y.val).toNat = -y.val := by omega

@@ -76,6 +76,7 @@ attribute [step_simps]
 
 attribute [step_simps] Aeneas.Std.bind_assoc_eq
 attribute [step_simps] Aeneas.Std.uncurry_apply_pair
+attribute [step_simps] ite_self -- this is sometimes necessary
 
 attribute [step_post_simps]
   -- We often see expressions like `Int.ofNat 3`
