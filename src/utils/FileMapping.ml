@@ -56,15 +56,17 @@ let module_components_of_file (path : string) : string list =
 let merged_module_components (idx : int) : string list =
   [ "Merge" ^ string_of_int idx ]
 
+(** The name of the modules extracted from a single rust module that must split
+    up due to alternating opaque/non-opaque SCCs. *)
+let layer_module_components (base : string list) ~(is_template : bool)
+    ~(index : int) : string list =
+  let word = if is_template then "Axioms" else "Part" in
+  base @ [ word ^ string_of_int index ]
+
 (** Assemble a dotted Lean module name from its components, e.g.
     [["Happy"; "Baz"; "Bang"]] -> ["Happy.Baz.Bang"]. *)
 let dotted_module_name (components : string list) : string =
   String.concat "." components
-
-(** The Lean file sub-path (relative to the destination directory) for a module,
-    e.g. [["Happy"; "Baz"; "Bang"]] -> ["Happy/Baz/Bang.lean"]. *)
-let lean_file_subpath (components : string list) : string =
-  String.concat "/" components ^ ".lean"
 
 (** Unit tests *)
 let () =
@@ -84,5 +86,16 @@ let () =
   assert (mc "foo.rs" = [ "Foo" ]);
   assert (merged_module_components 0 = [ "Merge0" ]);
   assert (merged_module_components 3 = [ "Merge3" ]);
-  assert (dotted_module_name [ "Happy"; "Baz"; "Bang" ] = "Happy.Baz.Bang");
-  assert (lean_file_subpath [ "Happy"; "Baz"; "Bang" ] = "Happy/Baz/Bang.lean")
+  assert (
+    layer_module_components [ "A" ] ~is_template:false ~index:1
+    = [ "A"; "Part1" ]);
+  assert (
+    layer_module_components [ "A" ] ~is_template:true ~index:2
+    = [ "A"; "Axioms2" ]);
+  assert (
+    layer_module_components [ "Geometry"; "Shapes" ] ~is_template:false ~index:3
+    = [ "Geometry"; "Shapes"; "Part3" ]);
+  assert (
+    layer_module_components [ "FunsExternal" ] ~is_template:true ~index:1
+    = [ "FunsExternal"; "Axioms1" ]);
+  assert (dotted_module_name [ "Happy"; "Baz"; "Bang" ] = "Happy.Baz.Bang")
