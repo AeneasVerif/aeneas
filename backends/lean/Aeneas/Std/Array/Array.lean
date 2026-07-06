@@ -343,8 +343,9 @@ theorem Array.setSlice!_getElem_prefix {α} {n}
   have h1 : (s.setSlice! i s')[j]? = s[j]? := by
     simp only [Array.getElem?_Nat_eq, Array.setSlice!]
     simp_lists [List.setSlice!_getElem?_prefix]
-  simpa [Array.getElem?_Nat_eq, Array.getElem_Nat_eq,
-    List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2] using h1
+  simp only [Array.getElem?_Nat_eq, List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2,
+    Option.some.injEq] at h1
+  exact h1
 
 @[simp_lists_safe]
 theorem Array.setSlice!_getElem!_middle {α} {n} [Inhabited α]
@@ -363,8 +364,9 @@ theorem Array.setSlice!_getElem_middle {α} {n}
   have h1 : (s.setSlice! i s')[j]? = s'[j - i]? := by
     simp only [Array.getElem?_Nat_eq, Array.setSlice!]
     simp_lists [List.setSlice!_getElem?_middle]
-  simpa [Array.getElem?_Nat_eq, Array.getElem_Nat_eq,
-    List.getElem?_eq_getElem hj', List.getElem?_eq_getElem hji] using h1
+  simp only [Array.getElem?_Nat_eq, List.getElem?_eq_getElem hj', List.getElem?_eq_getElem hji,
+    Option.some.injEq] at h1
+  exact h1
 
 theorem Array.setSlice!_getElem!_suffix {α} {n} [Inhabited α]
   (s : Array α n) (s' : List α) (i j : ℕ) (h : i + s'.length ≤ j) :
@@ -379,9 +381,9 @@ theorem Array.setSlice!_getElem_suffix {α} {n}
   have h1 : (s.setSlice! i s')[j]? = s[j]? := by
     simp only [Array.getElem?_Nat_eq, Array.setSlice!]
     simp_lists [List.setSlice!_getElem?_suffix]
-  simpa [Array.getElem?_Nat_eq, Array.getElem_Nat_eq,
-    List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2] using h1
-
+  simp only [Array.getElem?_Nat_eq, List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2,
+    Option.some.injEq] at h1
+  exact h1
 /- Remark: see the comment for `core.default.DefaultArray` -/
 @[rust_fun "core::array::{core::default::Default<[@T; @N]>}::default"]
 def core.default.DefaultArray.default {T : Type} (N : Usize) (defaultInst : core.default.Default T) : Result (Array T N) := do
@@ -407,6 +409,12 @@ def core.default.DefaultArrayEmpty.default (T : Type) : Result (Array T (Usize.o
 @[reducible, rust_trait_impl "core::default::Default<[@T; 0]>"]
 def core.default.DefaultArrayEmpty (T : Type) : core.default.Default (Array T (Usize.ofNat 0)) := {
   default := core.default.DefaultArrayEmpty.default T
+}
+
+@[reducible, rust_trait_impl "core::marker::Copy<[@T; @N]>"]
+def Array.Insts.CoreMarkerCopy {T : Type} (N : Std.Usize)
+  (markerCopyInst : core.marker.Copy T) : core.marker.Copy (Array T N) := {
+  cloneInst := core.clone.CloneArray N markerCopyInst.cloneInst
 }
 
 end Aeneas.Std

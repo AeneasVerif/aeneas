@@ -491,6 +491,24 @@ module type PrimMatcher = sig
     rty ->
     tavalue
 
+  (** Parameters:
+      - [ctx0]
+      - [ctx1]
+      - [ty0]
+      - [asb0]
+      - [ty1]
+      - [asb1]
+      - [ty]: result of matching ty0 and ty1 *)
+  val match_aproj_shared_borrows :
+    eval_ctx ->
+    eval_ctx ->
+    rty ->
+    abstract_shared_borrows ->
+    rty ->
+    abstract_shared_borrows ->
+    rty ->
+    tavalue
+
   (** Match two arbitrary avalues whose constructors don't match (this function
       is typically used to raise the proper exception). *)
   val match_avalues :

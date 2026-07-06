@@ -933,3 +933,126 @@ let compute_outlive_proj_ty (span : Meta.span option)
     (RegionId.Set.inter outlive_regions regions = RegionId.Set.empty);
 
   outlive_regions
+
+(** Detect "implied bounds" that relate a locally-bound (higher-ranked) region
+    to a free region, and reject such cases.
+
+    A higher-ranked trait bound or arrow type (e.g.
+    [for<'a> Trait<Pair<'a, 'b>>]) may, through the implied bounds of the types
+    it mentions (here [Pair<'a, 'b>] where [struct Pair<'a, 'b: 'a>]), introduce
+    an outlives constraint between the locally-bound region ['a] and the free
+    region ['b]. Such constraints are hard to take into account so for now we
+    detect such cases and reject them.
+
+    Such implied bounds come from two sources:
+    - the [regions_outlive] / [types_outlive] predicates of the declarations of
+      the ADTs mentioned in the types (Charon materializes them transitively);
+    - the borrows we dive into: in a borrow [&'r T], the lifetime ['r] of the
+      borrow must be shorter than (i.e. is outlived by) every lifetime appearing
+      in the referent [T]. We track the borrow regions we have dived into to
+      check these. *)
+let check_no_bound_free_implied_bounds (span : Meta.span option)
+    (type_decls : type_decl TypeDeclId.Map.t) (tys : ty list) : unit =
+  let is_bound (r : region) =
+    match r with
+    | RVar (Bound _) -> true
+    | _ -> false
+  in
+  let is_free (r : region) =
+    match r with
+    | RVar (Free _) -> true
+    | _ -> false
+  in
+  (* The constraint "[r0] outlives [r1]" is problematic if it relates a
+     locally-bound region and a free one. *)
+  let check_pair (r0 : region) (r1 : region) : unit =
+    if (is_bound r0 && is_free r1) || (is_free r0 && is_bound r1) then
+      [%craise_opt_span] span
+        "Unimplemented: found an occurrence of a lifetime constraint relating\n\
+        \         a higher-ranked lifetime to a free lifetime."
+  in
+  let regions_of_ty (ty : ty) : region list =
+    let acc = ref [] in
+    let v =
+      object
+        inherit [_] iter_ty
+        method! visit_region _ r = acc := r :: !acc
+      end
+    in
+    v#visit_ty () ty;
+    !acc
+  in
+  let visitor =
+    object (self)
+      inherit [_] iter_ty as super
+
+      (* [outer] is the list of borrow regions we have dived into: the referent
+         of a borrow must outlive the borrow, so every region we encounter must
+         outlive each of the [outer] borrow regions. *)
+      method! visit_region (outer : region list) (r : region) =
+        List.iter (fun o -> check_pair r o) outer
+
+      method! visit_ty (outer : region list) (ty : ty) =
+        match ty with
+        | TRef (r, ref_ty, _) ->
+            (* [r] itself must outlive the outer borrow regions. *)
+            self#visit_region outer r;
+            (* The regions of [ref_ty] must outlive [r] (the borrow's lifetime
+               is shorter than the lifetimes appearing in the referent), as well
+               as the outer borrow regions: we record [r] and dive in. *)
+            self#visit_ty (r :: outer) ref_ty
+        | TAdt { id; generics = adt_generics } ->
+            (* The implied bounds coming from the ADT's own declaration
+               (constraints between its lifetime/type parameters). *)
+            (match id with
+            | TAdtId id -> (
+                match TypeDeclId.Map.find_opt id type_decls with
+                | None -> ()
+                | Some decl ->
+                    let subst =
+                      Charon.Substitute.make_subst_from_generics decl.generics
+                        adt_generics Self
+                    in
+                    let preds =
+                      Charon.Substitute.predicates_substitute subst
+                        decl.generics
+                    in
+                    (* [r0] outlives [r1] *)
+                    List.iter
+                      (fun (p : (region, region) outlives_pred region_binder) ->
+                        let r0, r1 = p.binder_value in
+                        check_pair r0 r1)
+                      preds.regions_outlive;
+                    (* [ty] outlives [r]: every region of [ty] outlives [r] *)
+                    List.iter
+                      (fun (p : (ty, region) outlives_pred region_binder) ->
+                        let ty, r = p.binder_value in
+                        List.iter (fun rt -> check_pair rt r) (regions_of_ty ty))
+                      preds.types_outlive)
+            | _ -> ());
+            (* Dive into the generic arguments. The region arguments are checked
+               against [outer] by [visit_region], the type arguments are
+               recursed into. *)
+            super#visit_ty outer ty
+        | _ -> super#visit_ty outer ty
+    end
+  in
+  List.iter (visitor#visit_ty []) tys
+
+(** Check that a function signature does not introduce an implied bound relating
+    a locally-bound (higher-ranked) region to a free region (see
+    {!check_no_bound_free_implied_bounds}). We look at the input/output types as
+    well as the types appearing in the (possibly higher-ranked) trait clauses.
+*)
+let check_fun_decl_no_bound_free_implied_bounds
+    (type_decls : type_decl TypeDeclId.Map.t) (f : fun_decl) : unit =
+  let span = Some f.item_meta.span in
+  let ({ inputs; output; _ } : fun_sig) = f.signature in
+  (* The types mentioned in the (possibly higher-ranked) trait clauses. *)
+  let clause_tys =
+    List.concat_map
+      (fun (c : trait_param) -> c.trait.binder_value.generics.types)
+      f.generics.trait_clauses
+  in
+  check_no_bound_free_implied_bounds span type_decls
+    ((output :: inputs) @ clause_tys)

@@ -119,6 +119,14 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
           item_binder_value = fdef.signature;
         }];
 
+  (* Reject signatures that introduce an implied bound relating a higher-ranked
+     (locally-bound) lifetime to a free one. This is also checked when translating
+     the signature, but the body is translated through a separate entry point, so
+     we check here too to cleanly skip the function rather than failing later when
+     looking up its (untranslated) signature. *)
+  TypesAnalysis.check_fun_decl_no_bound_free_implied_bounds
+    trans_ctx.type_ctx.type_decls fdef;
+
   (* Compute the symbolic ASTs, if the function is transparent *)
   let symbolic_trans =
     translate_function_to_symbolics trans_ctx marked_ids fdef
@@ -2101,7 +2109,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
      extract_file gen_config ctx file_info);
 
   (* Emit translation.json. *)
-  EmitJson.write_if_enabled ~crate_name:crate.name ~llbc_file:filename
+  EmitJson.write_if_enabled ~crate_name:crate.name
   |> Option.iter (fun path -> log#linfo (lazy ("Generated: " ^ path)));
 
   (* Generate the build file *)

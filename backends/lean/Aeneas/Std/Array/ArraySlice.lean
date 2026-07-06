@@ -137,16 +137,144 @@ def core.array.equality.PartialEqArray.eq
   {T : Type} {U : Type} {N : Usize} (partialEqInst : core.cmp.PartialEq T U)
   (a0 : Array T N) (a1 : Array U N) : Result Bool := do
   if a0.length = a1.length then
-    List.allM (fun (x, y) => partialEqInst.eq x y) (List.zip a0.val a1.val)
+    -- We mimick as much as possible the Rust implementation
+    List.allM (fun (x, y) => do let b ← partialEqInst.ne x y; ok (¬ b)) (List.zip a0.val a1.val)
   else .ok false
 
 @[rust_fun "core::array::equality::{core::cmp::PartialEq<[@T; @N], [@U; @N]>}::ne"]
 def core.array.equality.PartialEqArray.ne
   {T : Type} {U : Type} {N : Usize} (partialEqInst : core.cmp.PartialEq T U)
   (a0 : Array T N) (a1 : Array U N) : Result Bool := do
-  if a0.length = a1.length then
-    List.anyM (fun (x, y) => partialEqInst.ne x y) (List.zip a0.val a1.val)
+  let b ← core.array.equality.PartialEqArray.eq partialEqInst a0 a1
+  ok (¬ b)
+
+/-- `<[T] as PartialEq<[U]>>::eq`: two slices are equal iff they have the same
+    length and are elementwise equal (per the element `PartialEq`). -/
+@[rust_fun "core::slice::cmp::{core::cmp::PartialEq<[@T], [@U]>}::eq"]
+def core.slice.cmp.PartialEqSlice.eq
+  {T : Type} {U : Type} (partialEqInst : core.cmp.PartialEq T U)
+  (s0 : Slice T) (s1 : Slice U) : Result Bool := do
+  if s0.length = s1.length then
+    -- We mimick as much as possible the Rust implementation
+    List.allM (fun (x, y) => do let b ← partialEqInst.ne x y; ok (¬ b)) (List.zip s0.val s1.val)
+  else .ok false
+
+/-- Helper -/
+private theorem core.slice.cmp.allM_pairs_eq_spec {α} (p : α → α → Result Bool)
+    (hp : ∀ x y, p x y ⦃ b => b ↔ x = y ⦄) :
+    ∀ (l1 l2 : List α), l1.length = l2.length →
+    WP.spec (List.allM (fun (xy : α × α) => p xy.1 xy.2) (List.zip l1 l2))
+      (fun b => b ↔ l1 = l2) := by
+  intro l1
+  induction l1 with
+  | nil =>
+    intro l2 hlen
+    have : l2 = [] := by cases l2 <;> simp_all
+    subst this
+    simp only [List.zip_nil_left, List.allM, pure, spec_ok]
+  | cons x xs ih =>
+    intro l2 hlen
+    cases l2 with
+    | nil => simp at hlen
+    | cons y ys =>
+      simp only [List.length_cons, Nat.add_right_cancel_iff] at hlen
+      simp only [List.zip_cons_cons, List.allM]
+      apply spec_bind (hp x y)
+      intro r hr
+      cases r with
+      | true =>
+        have hxy : x = y := hr.mp rfl
+        subst hxy
+        apply spec_mono (ih ys hlen)
+        intro b hb
+        simp only [List.cons.injEq, true_and] at *
+        exact hb
+      | false =>
+        simp only [pure, spec_ok]
+        have hne : x ≠ y := by intro h; have := hr.mpr h; simp at this
+        simp [hne]
+
+/-- Spec for homogeneous partial equality -/
+theorem core.slice.cmp.PartialEqSlice.eq_homo_spec
+  {α} (partialEq : core.cmp.PartialEq α α) (s1 s2 : Slice α)
+  (hNe : ∀ x y, partialEq.ne x y ⦃ b => b ↔ ¬ (x = y) ⦄) :
+  core.slice.cmp.PartialEqSlice.eq partialEq s1 s2 ⦃ (b : Bool) => b ↔ (s1 = s2) ⦄ := by
+  unfold core.slice.cmp.PartialEqSlice.eq
+  by_cases hlen : s1.length = s2.length
+  · simp only [hlen, ↓reduceIte]
+    apply spec_mono (core.slice.cmp.allM_pairs_eq_spec
+      (fun x y => do let b ← partialEq.ne x y; ok (¬ b))
+      (by
+        intro x y
+        apply spec_bind (hNe x y)
+        intro b hb
+        simp only [spec_ok]
+        cases b <;> simp_all)
+      s1.val s2.val hlen)
+    intro b hb
+    rw [Slice.eq_iff]; exact hb
+  · simp only [hlen, ↓reduceIte, spec_ok]
+    have hne : s1 ≠ s2 := fun h => hlen (by rw [h])
+    simp [hne]
+
+/-- `<[T] as PartialEq<[U]>>::ne`: negation of slice equality. -/
+@[rust_fun "core::slice::cmp::{core::cmp::PartialEq<[@T], [@U]>}::ne"]
+def core.slice.cmp.PartialEqSlice.ne
+  {T : Type} {U : Type} (partialEqInst : core.cmp.PartialEq T U)
+  (s0 : Slice T) (s1 : Slice U) : Result Bool := do
+  if s0.length = s1.length then
+    List.anyM (fun (x, y) => partialEqInst.ne x y) (List.zip s0.val s1.val)
   else .ok true
+
+/-- Helper -/
+private theorem core.slice.cmp.anyM_pairs_ne_spec {α} (p : α → α → Result Bool)
+    (hp : ∀ x y, p x y ⦃ b => b ↔ ¬ (x = y) ⦄) :
+    ∀ (l1 l2 : List α), l1.length = l2.length →
+    WP.spec (List.anyM (fun (xy : α × α) => p xy.1 xy.2) (List.zip l1 l2))
+      (fun b => b ↔ ¬ (l1 = l2)) := by
+  intro l1
+  induction l1 with
+  | nil =>
+    intro l2 hlen
+    have : l2 = [] := by cases l2 <;> simp_all
+    subst this
+    simp [pure, spec_ok]
+  | cons x xs ih =>
+    intro l2 hlen
+    cases l2 with
+    | nil => simp at hlen
+    | cons y ys =>
+      simp only [List.length_cons, Nat.add_right_cancel_iff] at hlen
+      simp only [List.zip_cons_cons, List.anyM]
+      apply spec_bind (hp x y)
+      intro r hr
+      cases r with
+      | true =>
+        simp only [pure, spec_ok]
+        have hne : x ≠ y := hr.mp rfl
+        simp [hne]
+      | false =>
+        have hxy : x = y := by by_contra h; have := hr.mpr h; simp at this
+        subst hxy
+        apply spec_mono (ih ys hlen)
+        intro b hb
+        simp only [List.cons.injEq, true_and] at *
+        exact hb
+
+/-- Spec for homogeneous partial inequality -/
+theorem core.slice.cmp.PartialEqSlice.ne_homo_spec
+  {α} (partialEq : core.cmp.PartialEq α α) (s1 s2 : Slice α)
+  (hNe : ∀ x y, partialEq.ne x y ⦃ b => b ↔ ¬ (x = y) ⦄) :
+  core.slice.cmp.PartialEqSlice.ne partialEq s1 s2 ⦃ (b : Bool) => b ↔ ¬ (s1 = s2) ⦄ := by
+  unfold core.slice.cmp.PartialEqSlice.ne
+  by_cases hlen : s1.length = s2.length
+  · simp only [hlen, ↓reduceIte]
+    apply spec_mono (core.slice.cmp.anyM_pairs_ne_spec partialEq.ne hNe s1.val s2.val hlen)
+    intro b hb
+    rw [Slice.eq_iff]; exact hb
+  · simp only [hlen, ↓reduceIte, spec_ok]
+    have hne : s1 ≠ s2 := fun h => hlen (by rw [h])
+    simp [hne]
 
 @[rust_fun "core::array::{core::fmt::Debug<core::array::TryFromSliceError>}::fmt"]
 def core.array.DebugTryFromSliceError.fmt
@@ -212,13 +340,6 @@ def core.array.TryFromMutArraySlice.try_from
       | _ => s
     ok ((.Ok ⟨ s.val, by scalar_tac⟩, back))
   else ok ((.Err (), fun _ => s))
-
-@[simp, rust_fun "core::array::{core::fmt::Debug<[@T; @N]>}::fmt"]
-def core.array.DebugArray.fmt
-  {T : Type} {N : Usize} (_ : core.fmt.Debug T) (_ : Array T N) (fmt : core.fmt.Formatter) :
-  Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
-  -- TODO: this model is simplistic
-  ok (.Ok (), fmt)
 
 @[rust_fun "core::array::{[@T; @N]}::as_slice"]
 def core.array.Array.as_slice {T : Type} {N : Usize} (a : Array T N) : Result (Slice T) :=
@@ -370,5 +491,17 @@ theorem Array.index_mut_SliceIndexRangeFromUsizeSlice {T : Type} {N : Usize}
   · simp [Array.to_slice]
   · simp [Slice.length, List.length_drop]
   · intro s'; simp [Array.from_slice, Array.to_slice]
+
+@[reducible, rust_trait_impl "core::convert::AsRef<[@T; @N], [@T]>"]
+def Array.Insts.CoreConvertAsRefSlice (T : Type) (N : Std.Usize) :
+  core.convert.AsRef (Array T N) (Slice T) := {
+  as_ref := Array.Insts.CoreConvertAsRefSlice.as_ref
+}
+
+@[reducible, rust_trait_impl "core::convert::AsMut<[@T; @N], [@T]>"]
+def Array.Insts.CoreConvertAsMutSlice (T : Type) (N : Std.Usize) :
+  core.convert.AsMut (Array T N) (Slice T) := {
+  as_mut := Array.Insts.CoreConvertAsMutSlice.as_mut
+}
 
 end Aeneas.Std

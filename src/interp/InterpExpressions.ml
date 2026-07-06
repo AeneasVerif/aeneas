@@ -1003,8 +1003,26 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
     let b = v1 = v2 in
     Ok { value = VLiteral (VBool b); ty = TLiteral TBool })
   else
-    (* For the non-equality operations, the input values are necessarily scalars *)
+    (* For the non-equality operations, the input values are necessarily scalars,
+       with the exception of the comparison operations which also accept booleans
+       (booleans are ordered: [false < true]). *)
     match (v1.value, v2.value) with
+    | VLiteral (VBool b1), VLiteral (VBool b2) -> begin
+        (* Booleans only support the comparison operations *)
+        match binop with
+        | Lt | Le | Ge | Gt ->
+            let b =
+              match binop with
+              | Lt -> (not b1) && b2
+              | Le -> (not b1) || b2
+              | Ge -> b1 || not b2
+              | Gt -> b1 && not b2
+              | _ -> [%craise] span "Unreachable"
+            in
+            Ok ({ value = VLiteral (VBool b); ty = TLiteral TBool } : tvalue)
+        | _ ->
+            [%craise] span ("Invalid inputs for binop: " ^ binop_to_string binop)
+      end
     | VLiteral (VScalar sv1), VLiteral (VScalar sv2) -> begin
         let sv1_value, sv2_value = (get_val sv1, get_val sv2) in
         let sv1_int_ty, sv2_int_ty = (get_ty sv1, get_ty sv2) in
@@ -1106,8 +1124,13 @@ let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
         "The type is not primitively copyable";
       TLiteral TBool)
     else
-      (* Other operations: input types are integers *)
+      (* Other operations: input types are integers, with the exception of the
+         comparison operations which also accept booleans (booleans are ordered:
+         [false < true]). *)
       match (v1.ty, v2.ty) with
+      | TLiteral TBool, TLiteral TBool
+        when binop = Lt || binop = Le || binop = Ge || binop = Gt ->
+          TLiteral TBool
       | TLiteral lty1, TLiteral lty2
         when literal_type_is_integer lty1 && literal_type_is_integer lty2 -> (
           let int_ty1, int_ty2 = (ty_as_integer v1.ty, ty_as_integer v2.ty) in
