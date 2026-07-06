@@ -17,6 +17,15 @@ noncomputable section
 
 namespace nested_shared_borrows
 
+/-- [core::ops::bit::{impl core::ops::bit::BitXorAssign<&'_0 u8> for u8}::bitxor_assign]:
+    Source: '/rustc/library/core/src/internal_macros.rs', lines 64:12-64:45
+    Name pattern: [core::ops::bit::{core::ops::bit::BitXorAssign<u8, &'0 u8>}::bitxor_assign]
+    Visibility: public -/
+@[rust_fun
+  "core::ops::bit::{core::ops::bit::BitXorAssign<u8, &'0 u8>}::bitxor_assign"]
+axiom U8.Insts.CoreOpsBitBitXorAssignShared0U8.bitxor_assign
+  : Std.U8 → Std.U8 → Result Std.U8
+
 /-- [core::option::{impl core::ops::try_trait::Try for core::option::Option<T>}::branch]:
     Source: '/rustc/library/core/src/option.rs', lines 2779:4-2779:64
     Name pattern: [core::option::{core::ops::try_trait::Try<core::option::Option<@T>>}::branch]
@@ -98,5 +107,46 @@ def S.method_try
   | core.ops.control_flow.ControlFlow.Break residual =>
     core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
       Std.U8 (core.convert.FromSame Unit) residual
+
+/-- [nested_shared_borrows::RefSlice]
+    Source: 'tests/src/nested-shared-borrows.rs', lines 54:0-56:1
+    Visibility: public -/
+structure RefSlice where
+  s : Slice Std.U8
+
+/-- [nested_shared_borrows::xor_slice]: loop body 0:
+    Source: 'tests/src/nested-shared-borrows.rs', lines 60:4-62:5
+    Visibility: public -/
+@[rust_loop_body]
+def xor_slice_loop.body
+  (iter : core.slice.iter.Iter Std.U8) (result : Std.U8) :
+  Result (ControlFlow ((core.slice.iter.Iter Std.U8) × Std.U8) Std.U8)
+  := do
+  let (o, iter1) ← core.slice.iter.IteratorSliceIter.next iter
+  match o with
+  | none => ok (done result)
+  | some x =>
+    let result1 ←
+      U8.Insts.CoreOpsBitBitXorAssignShared0U8.bitxor_assign result x
+    ok (cont (iter1, result1))
+
+/-- [nested_shared_borrows::xor_slice]: loop 0:
+    Source: 'tests/src/nested-shared-borrows.rs', lines 60:4-62:5
+    Visibility: public -/
+@[rust_loop]
+def xor_slice_loop
+  (iter : core.slice.iter.Iter Std.U8) (result : Std.U8) : Result Std.U8 := do
+  loop
+    (fun (iter1, result1) => xor_slice_loop.body iter1 result1)
+    (iter, result)
+
+/-- [nested_shared_borrows::xor_slice]:
+    Source: 'tests/src/nested-shared-borrows.rs', lines 58:0-64:1
+    Visibility: public -/
+def xor_slice (rs : RefSlice) : Result Std.U8 := do
+  let iter ←
+    SharedSlice.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter
+      rs.s
+  xor_slice_loop iter 0#u8
 
 end nested_shared_borrows
