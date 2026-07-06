@@ -878,6 +878,12 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
           "Region ids should not be visited directly; the visitor should catch \
            cases that contain region ids earlier."
 
+      (* The region ids appearing in [binder_regions] (higher-ranked trait
+         bounds, arrow types, etc.) are *binding* occurrences, not uses: leave
+         them untouched. The corresponding uses are [RVar (Bound _)], handled
+         by [visit_RVar] below. *)
+      method! visit_region_param _ rp = rp
+
       method! visit_RVar _ var =
         match var with
         | Free rid -> RVar (Free (get_free_region rid))
