@@ -714,8 +714,24 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
                     (* No variable was introduced: it means the abstraction should
                        be ignored (it consumes unit and outputs unit). *)
                     [%sanity_check] span (args = [ [] ]);
-                    [%sanity_check] span
-                      (V.AbsId.Set.mem abs_id ctx.ignored_abs_ids);
+                    (* The abstraction is normally registered in
+                       [ignored_abs_ids]. There is one exception, arising with
+                       nested borrows: a loop/join backward abstraction may be
+                       merged away during collapse, so that a self-referential
+                       loop/join backward call embedded in a surviving
+                       abstraction's continuation refers to an id that no longer
+                       corresponds to any (registered) abstraction. Since such a
+                       call still consumes and produces unit (as witnessed by
+                       [args = [[]]] above), it is safe to ignore it. For
+                       function calls, the backward abstraction is always
+                       registered under its (stable) original id, so we keep the
+                       strict check. *)
+                    (match f with
+                    | V.EFunCall _ ->
+                        [%sanity_check] span
+                          (V.AbsId.Set.mem abs_id ctx.ignored_abs_ids)
+                    | V.ELoop _ | V.EJoin _ -> ()
+                    | _ -> [%internal_error] span);
                     (None, false)
                 | Some { fvar; can_fail } ->
                     (* The list of lists of arguments is only used in the presence
