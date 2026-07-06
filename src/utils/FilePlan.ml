@@ -135,7 +135,7 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
      charon's topological order within each SCC. All the members of a group
      share a source file / SCC, so any member is a valid representative; a
      group whose representative has no bucket (no metadata) maps to no SCC and
-     is dropped. *)
+     is dropped, with a warning. *)
   let bucket_to_scc =
     SCC.SccId.Map.fold
       (fun scc_id buckets acc ->
@@ -154,7 +154,19 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
       (List.fold_left
          (fun acc g ->
            match group_scc g with
-           | None -> acc
+           | None ->
+               (* The group-level counterpart of the missing-metadata warning
+                  in [FileGraph.compute]. *)
+               let repr =
+                 match LlbcAstUtils.declaration_group_to_list g with
+                 | [] -> "<empty declaration group>"
+                 | repr :: _ -> Types.show_item_id repr
+               in
+               [%warn_opt_span] None
+                 ("Multi-file extraction: dropping a declaration group whose \
+                   representative has no source-file bucket (representative: "
+                ^ repr ^ ")");
+               acc
            | Some scc_id ->
                SCC.SccId.Map.update scc_id
                  (function

@@ -73,7 +73,15 @@ let compute (crate : crate) : t =
     List.fold_left
       (fun acc id ->
         match bucket_of_item crate id with
-        | None -> acc
+        | None ->
+            (* No metadata: a prepass removed the id from the decl maps but not
+               from [crate.declarations]. The item can't be bucketed, so it is
+               dropped from the split output ([FilePlan.place_by_file] also
+               warns when this drops a whole declaration group). *)
+            [%warn_opt_span] None
+              ("Multi-file extraction: no metadata found for " ^ show_item_id id
+             ^ "; it will not appear in the output");
+            acc
         | Some b -> AnyDeclIdMap.add id b acc)
       AnyDeclIdMap.empty items
   in
