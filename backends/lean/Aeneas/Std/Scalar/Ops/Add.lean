@@ -53,18 +53,24 @@ theorem UScalar.add_equiv {ty} (x y : UScalar ty) :
   simp [*]
 
 theorem IScalar.add_equiv {ty} (x y : IScalar ty) :
-  match x + y with
-  | ok z =>
+  (x + y).reccases
+  (fun z =>
     IScalar.inBounds ty (x.val + y.val) ∧
     z.val = x.val + y.val ∧
-    z.bv = x.bv + y.bv
-  | fail _ => ¬ (IScalar.inBounds ty (x.val + y.val))
-  | _ => ⊥ := by
+    z.bv = x.bv + y.bv)
+  ⊥
+  (fun (e : RustEffect.I) _k =>
+    match e with
+    | .fail _e => ¬ (IScalar.inBounds ty (x.val + y.val)))
+  := by
   have : x + y = add x y := by rfl
   rw [this]
   simp [add]
   have h := tryMk_eq ty (↑x + ↑y)
   simp [inBounds] at h
+  generalize test : (tryMk ty (↑x + ↑y)) = thing at h
+  cases thing -- TODO: to make this work, i need cases_eliminator attr on cases for result
+              -- its not good enough to have it just for ITree!
   split at h <;> simp_all
   apply BitVec.eq_of_toInt_eq
   simp
