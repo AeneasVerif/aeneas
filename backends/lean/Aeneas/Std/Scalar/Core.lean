@@ -612,11 +612,8 @@ theorem UScalar.tryMkOpt_eq (ty : UScalarTy) (x : Nat) :
   split_ifs <;> simp_all
   simp [UScalar.val, UScalarTy.numBits] at *
 
--- TODO: maybe to make this sort of thing closer to the original Result veresion,
--- i could consider putting the Fail case into the Ret case of the ITree?
--- or mabye i could make a match function for Result which gives
--- 3 cases: ok, fail, and 'other effect'?
-theorem UScalar.tryMk_eq (ty : UScalarTy) (x : Nat) :
+-- TODO: delete this:
+theorem UScalar.tryMk_eq_DELETE_THIS_PROBABLY (ty : UScalarTy) (x : Nat) :
   (∃ v, tryMk ty x = .ok v ∧ inBounds ty v.val ∧ x = v.val)
   ∨ (∃ e, tryMk ty x = .fail e ∧ ¬ (inBounds ty x))
     := by
@@ -628,24 +625,19 @@ theorem UScalar.tryMk_eq (ty : UScalarTy) (x : Nat) :
   · left
     grind
 
-theorem UScalar.tryMk_eq_test (ty : UScalarTy) (x : Nat) :
-  -- match tryMk ty x with
-  -- | ok y => y.val = x ∧ inBounds ty x
-  -- | fail _ => ¬ (inBounds ty x)
-  -- | _ => False
-  (tryMk ty x).cases
+theorem UScalar.tryMk_eq (ty : UScalarTy) (x : Nat) :
+  (tryMk ty x).reccases
     (fun y => y.val = x ∧ inBounds ty x)
     False
-    (fun e _ =>
+    (fun (e : RustEffect.I) _ =>
       match e with
-      | .fail _e => ¬ (inBounds ty x)
+      | RustEffect.I.fail _e => ¬ (inBounds ty x)
       -- | _ => False -- uncomment this once there are other effects
       )
   := by
   have := UScalar.tryMkOpt_eq ty x
   simp [tryMk, ofOption]
-  cases h: tryMkOpt ty x <;> simp_all [fail, Aeneas.Data.Coinductive.ITree.cases]
-  --
+  cases h: tryMkOpt ty x <;> simp_all [fail, ok]
 
 -- TODO: delete old one
 -- theorem UScalar.tryMk_eq (ty : UScalarTy) (x : Nat) :
@@ -670,17 +662,32 @@ theorem IScalar.tryMkOpt_eq (ty : IScalarTy) (x : Int) :
   simp [Int.bmod] <;> split <;> (try omega) <;>
   cases h: System.Platform.numBits_eq <;> simp_all <;> omega
 
+-- TODO: delete this
+-- theorem IScalar.tryMk_eq (ty : IScalarTy) (x : Int) :
+--   (∃ v, tryMk ty x = .ok v ∧ inBounds ty v.val ∧ x = v.val)
+--   ∨ (∃ e, tryMk ty x = .fail e ∧ ¬ (inBounds ty x))
+--     := by
+--   have := IScalar.tryMkOpt_eq ty x
+--   simp [tryMk, ofOption]
+--   cases h: tryMkOpt ty x
+--   · right
+--     grind
+--   · left
+--     grind
+
 theorem IScalar.tryMk_eq (ty : IScalarTy) (x : Int) :
-  (∃ v, tryMk ty x = .ok v ∧ inBounds ty v.val ∧ x = v.val)
-  ∨ (∃ e, tryMk ty x = .fail e ∧ ¬ (inBounds ty x))
-    := by
-  have := IScalar.tryMkOpt_eq ty x
-  simp [tryMk, ofOption]
-  cases h: tryMkOpt ty x
-  · right
-    grind
-  · left
-    grind
+  (tryMk ty x).reccases
+  (fun y => y.val = x ∧ inBounds ty x)
+  False
+  (fun (e : RustEffect.I) _ =>
+    match e with
+    | RustEffect.I.fail _e => ¬ (inBounds ty x)
+    -- | _ => False -- uncomment this once there are other effects
+    )
+  := by
+  have := tryMkOpt_eq ty x
+  simp [tryMk]
+  cases h : tryMkOpt ty x <;> simp_all [fail, ok]
 
 -- TODO: delete old one
 -- theorem IScalar.tryMk_eq (ty : IScalarTy) (x : Int) :
