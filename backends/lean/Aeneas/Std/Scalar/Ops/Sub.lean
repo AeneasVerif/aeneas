@@ -37,13 +37,13 @@ instance {ty} : HSub (IScalar ty) (IScalar ty) (Result (IScalar ty)) where
 -/
 
 theorem UScalar.sub_equiv {ty} (x y : UScalar ty) :
-  match x - y with
-  | ok z =>
+  (x - y).nmatch -- TODO: here, the dependent version breaks things in the proof
+  (fun z =>
     y.val ≤ x.val ∧
     x.val = z.val + y.val ∧
-    z.bv = x.bv - y.bv
-  | fail _ => x.val < y.val
-  | _ => ⊥ := by
+    z.bv = x.bv - y.bv)
+  (fun _ => x.val < y.val)
+  ⊥ := by
   have : x - y = sub x y := by rfl
   simp [this, sub]
   dcases h : x.val < y.val <;> simp [h]
@@ -81,18 +81,19 @@ theorem UScalar.sub_equiv {ty} (x y : UScalar ty) :
     ring_nf
 
 theorem IScalar.sub_equiv {ty} (x y : IScalar ty) :
-  match x - y with
-  | ok z =>
+  (x - y).nmatch
+  (fun z =>
     IScalar.inBounds ty (x.val - y.val) ∧
     z.val = x.val - y.val ∧
-    z.bv = x.bv - y.bv
-  | fail _ => ¬ (IScalar.inBounds ty (x.val - y.val))
-  | _ => ⊥ := by
+    z.bv = x.bv - y.bv)
+  (fun _ => ¬ (IScalar.inBounds ty (x.val - y.val)))
+  ⊥ := by
   have : x - y = sub x y := by rfl
   simp [this, sub]
   have h := tryMk_eq ty (↑x - ↑y)
   simp [inBounds] at h
-  split at h <;> simp_all
+  generalize valh : (tryMk ty (↑x - ↑y)) = val at h
+  cases val <;> simp_all
   apply BitVec.eq_of_toInt_eq
   simp
   have := bmod_pow_numBits_eq_of_lt ty (x.val - y.val) (by omega) (by omega)
@@ -107,7 +108,8 @@ theorem UScalar.sub_bv_spec {ty} {x y : UScalar ty}
   (h : y.val ≤ x.val) :
   x - y ⦃ z => z.val = x.val - y.val ∧ y.val ≤ x.val ∧ z.bv = x.bv - y.bv ⦄ := by
   have h := @sub_equiv ty x y
-  split at h <;> simp_all
+  generalize hval : x - y = val at h
+  cases val <;> simp_all
   omega
 
 /- Generic theorem - shouldn't be used much -/
@@ -116,7 +118,8 @@ theorem IScalar.sub_bv_spec {ty} {x y : IScalar ty}
   (hmax : ↑x - ↑y ≤ IScalar.max ty) :
   x - y ⦃ z => (↑z : Int) = ↑x - ↑y ∧ z.bv = x.bv - y.bv ⦄ := by
   have h := @sub_equiv ty x y
-  split at h <;> simp_all [min, max]
+  generalize hval : x - y = val at h
+  cases val <;> simp_all [min, max]
   omega
 
 uscalar theorem «%S».sub_bv_spec {x y : «%S»} (h : y.val ≤ x.val) :
@@ -138,7 +141,8 @@ theorem UScalar.sub_spec {ty} {x y : UScalar ty}
   (h : y.val ≤ x.val) :
   x - y ⦃ z => z.val = x.val - y.val ∧ y.val ≤ x.val ⦄ := by
   have h := @sub_equiv ty x y
-  split at h <;> simp_all
+  generalize hval : x - y = val at h
+  cases val <;> simp_all
   omega
 
 /- Generic theorem - shouldn't be used much -/
@@ -148,7 +152,8 @@ theorem IScalar.sub_spec {ty} {x y : IScalar ty}
   (hmax : ↑x - ↑y ≤ IScalar.max ty) :
   x - y ⦃ z => (↑z : Int) = ↑x - ↑y ⦄ := by
   have h := @sub_equiv ty x y
-  split at h <;> simp_all [min, max]
+  generalize hval : x - y = val at h
+  cases val <;> simp_all [min, max]
   omega
 
 uscalar @[step] theorem «%S».sub_spec {x y : «%S»} (h : y.val ≤ x.val) :
