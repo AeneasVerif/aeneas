@@ -59,7 +59,6 @@ theorem curry_admissible (a1 a2 a3) (P : (a1 → a2 → a3) → Prop) [CCPO a3]
     intros f
     apply hc
   )
-  simp at h
   --
   rw [← Order.fun_csup_eq]
   unfold fun_csup
