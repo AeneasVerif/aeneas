@@ -626,7 +626,7 @@ theorem UScalar.tryMk_eq_DELETE_THIS_PROBABLY (ty : UScalarTy) (x : Nat) :
     grind
 
 theorem UScalar.tryMk_eq (ty : UScalarTy) (x : Nat) :
-  (tryMk ty x).reccases
+  (tryMk ty x).match
     (fun y => y.val = x ∧ inBounds ty x)
     False
     (fun (e : RustEffect.I) _ =>
@@ -676,7 +676,7 @@ theorem IScalar.tryMkOpt_eq (ty : IScalarTy) (x : Int) :
 --     grind
 
 theorem IScalar.tryMk_eq (ty : IScalarTy) (x : Int) :
-  (tryMk ty x).reccases
+  (tryMk ty x).match
   (fun y => y.val = x ∧ inBounds ty x)
   False
   (fun (e : RustEffect.I) _ =>
