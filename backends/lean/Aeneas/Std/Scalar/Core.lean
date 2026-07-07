@@ -628,7 +628,7 @@ theorem UScalar.tryMk_eq_DELETE_THIS_PROBABLY (ty : UScalarTy) (x : Nat) :
 theorem UScalar.tryMk_eq (ty : UScalarTy) (x : Nat) :
   (tryMk ty x).match
     (fun y => y.val = x ∧ inBounds ty x)
-    (fun e => ¬ (inBounds ty x))
+    (fun _e => ¬ (inBounds ty x))
     False
   := by
   have := UScalar.tryMkOpt_eq ty x
