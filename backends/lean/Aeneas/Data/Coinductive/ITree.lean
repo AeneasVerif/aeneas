@@ -52,6 +52,7 @@ def ITree.unfold (t : ITree E R) : ITreeF E R (ITree E R) := CoInd.unfold _ t
 
 instance : Inhabited (ITreeF E R PUnit) where default := .div
 
+-- TODO: are all these little simp theorems every used or needed?
 @[simp]
 theorem ITree.unfold_fold (t : ITree E R) :
   ITree.fold (ITree.unfold t) = t := by simp [ITree.fold, ITree.unfold]
@@ -66,8 +67,6 @@ theorem fold_ret_approx_1 (r : R) n :
   (ITree.fold (ITreeF.ret (E:=E) r)).approx (n + 1) = ITreeF.ret r :=
     ret_approx_1 r n
 
-
--- TODO: why doesnt this work
 @[simp]
 theorem div_approx_1 n :
   (ITree.div (E:=E) (R:=R)).approx  (n + 1) = ITreeF.div := by
@@ -286,7 +285,6 @@ def Effect.trigger (E₁ : Effect.{u}) {E₂ : Effect.{u}} [E₁ -< E₂] (i : E
   let ⟨i₂, f⟩ := (Subeffect.map i);
   ITree.vis i₂ (λ x => return (f x))
 
--- TODO: make β have level b instead of a
 def ITree.iter {α : Type a} {β : Type b} (t : α → ITree E (α ⊕ β)) : α → ITree E β :=
   λ a => do
     bind (t a) λ val =>
@@ -378,148 +376,132 @@ def Eqrec3.{w, u_1} {α : Sort u_1} {a' : α} {motive : (a : α) → a' = a → 
 @[simp]
 theorem ITree.cases.ret {E R motive r d v x}
   : @ITree.cases E R motive r d v (.ret x) = r x := by
-  --
-  -- TODO: the issue is that i need to do this rewrite, but the rewrite tactic
-  -- isn't fancy enough
-  -- rw [<-ITree.unfold_fold (E := E) (ITree.ret x)]
-  -- this would help, but again we aren't fancy enough
-  -- generalize h : (ITree.ret x) = a
-  -- so we need to do a transport manually! using the equality in a cast!
-  --
-  -- once we get that, we will be able to do this cases
-  -- cases (ITree.ret (E := E) x).unfold
-  -- simp [ITree.cases, ITreeF.rec, ITree.unfold, CoInd.unfold]
-  --
-  --
-  let rwmotive : (i : ITree E R) → (ITree.ret x = i) → Prop :=
-    fun i eq => (@ITree.cases E R motive r d v i) = cast (congrArg _ eq) (r x)
-  -- generalize h : (ITree.ret x) = a at R
-  let a := ITree.ret (E := E) x
-  have h : a = ITree.ret x := by rfl
-  generalize h2 : a = b at h
-  subst a
-  clear h2
-  --
-  have thing := Eq.rec (motive := rwmotive) (t := Eq.symm h)
-  unfold rwmotive at thing
-  -- apply thing
-  --
-  have thing2 := Eqrec3 (motive := rwmotive) (t := Eq.symm h)
-  unfold rwmotive at thing2
-  apply thing2
-  clear thing thing2
-  -- unfold rwmotive
-  -- apply thing2 -- this works, but doesn't give us what we need!
-  -- rw [<- ITree.unfold_fold (E := E) b]
-  -- have thing3 := Eqrec3 (motive := rwmotive) (t := Eq.symm (ITree.unfold_fold (E := E) (ITree.ret x)))
-  -- apply thing3 -- NOTE: this one works!
-  -- unfold rwmotive
-  -- ok so i have evaded transport hell and done the thing, but....
-  -- this cases still doesn't work because of more transport hell issues
-  -- cases (ITree.ret (E := E) x).unfold
-  --
-  revert h
-  rw [<- ITree.unfold_fold (E := E) b]
-  -- cases (ITree.ret (E := E) x).unfold
-  cases b.unfold
-  ·
-    intros h
-    simp [fold]
-    -- simp [fold, CoInd.fold, cases, unfold]
-    -- have bla := (Eqrec2 (motive := rwmotive) (t := Eq.symm h))
-    -- unfold rwmotive at bla
-    --
-    sorry
-  · sorry
-  · sorry
-  --
-  -- sorry
-
--- NOTE: while it is possible to fix the above,
--- i also could just make an alternate version of ITree.cases
--- that is not dependently typed and it would be very easy to prove things about
-
--- @[cases_eliminator]
-def ITree.reccases {E : Effect.{u}} {R}
-    {Out : Sort v}
-    (ret : R → Out)
-    (div : Out)
-    (vis : (i : E.I) → (k : E.O i → ITree E R) → Out)
-    (t : ITree E R) : Out := by
-    -- rw [<-ITree.unfold_fold t]
-    cases t.unfold with
-    | ret x => apply ret x
-    | div => apply div
-    | vis e k => apply vis e k
-
-#check ITreeF.rec
+  simp [cases]
+  -- simp [ITree.ret] -- uncomment to see where the rewrite target is supposed to be in the goal
+  have to_rewrite_by : (fold (ITreeF.ret x)).unfold = ITreeF.ret x
+    := fold_unfold (ITreeF E R) (ITreeF.ret x)
+  -- rw [to_rewrite_by] -- we want to do this.... but we are in transport hell!
+  let rwmotive : (i : ITreeF E R (ITree E R)) -> (eq : (fold (ITreeF.ret x)).unfold = i)
+    -> Prop := fun i eq =>
+      ITreeF.rec (motive := fun t => (fold (ITreeF.ret x)).unfold = t → motive (fold (ITree.ret x).unfold))
+        (fun r_1 h => cast (by simp [fold, unfold] at h; rw[unfold_fold]; simp[pure, *] ) (r r_1))
+        (fun h => cast (by contradiction) d)
+        (fun i k h => cast (by contradiction) (v i k)) i eq = r x
+  refine @Eq.rec _ (ITreeF.ret x) rwmotive ?_ _ (Eq.symm to_rewrite_by)
+  unfold rwmotive
+  simp [cast]
 
 @[simp]
-theorem ITree.reccases.ret {E R motive r d v x}
-  : @ITree.reccases E R motive r d v (.ret x) = r x := by
-  rw [<-ITree.unfold_fold (E := E) (ITree.ret x)]
-  cases h : (ITree.ret (E := E) x).unfold with
-  | ret r' =>
-    simp at h
-    subst x
-    simp [reccases]
-    have to_rewrite_by : (fold (ITreeF.ret r')).unfold = ITreeF.ret r'
-      := fold_unfold (ITreeF E R) (ITreeF.ret r')
-    -- rw [to_rewrite_by] -- we want to do this.... but we are in transport hell!
-    -- we can circumvent transport hell by manually transporting along this type family
-    let motive : (i : ITreeF E R (ITree E R)) -> (eq : (fold (ITreeF.ret r')).unfold = i)
-      -> Prop := fun i eq =>
-        ITreeF.rec (motive := fun t => (fold (ITreeF.ret r')).unfold = t → motive)
-          (fun r_1 h => r r_1) (fun h => d)
-          (fun i k h => v i k) i eq = r r'
-    refine @Eq.rec _ (ITreeF.ret r') motive ?_ _ (Eq.symm to_rewrite_by)
-    unfold motive
-    simp
-  | _ => simp at h
+theorem ITree.cases.div {E R motive r d v}
+  : @ITree.cases E R motive r d v .div = d := by
+  simp [cases]
+  -- simp [ITree.div] -- uncomment to see where the rewrite target is supposed to be in the goal
+  have to_rewrite_by : (fold ITreeF.div).unfold = ITreeF.div
+    := fold_unfold (ITreeF E R) (ITreeF.div)
+  -- rw [to_rewrite_by] -- we want to do this.... but we are in transport hell!
+  let rwmotive : (i : ITreeF E R (ITree E R)) -> (eq : (fold ITreeF.div).unfold = i)
+    -> Prop := fun i eq =>
+      ITreeF.rec (motive := fun t => (fold ITreeF.div).unfold = t → motive (fold ITree.div.unfold))
+        (fun r_1 h => cast (by contradiction) (r r_1))
+        (fun h => cast (by simp [fold, unfold]) d)
+        (fun i k h => cast (by contradiction) (v i k)) i eq = d
+  refine @Eq.rec _ ITreeF.div rwmotive ?_ _ (Eq.symm to_rewrite_by)
+  unfold rwmotive
+  simp [cast]
 
 @[simp]
-theorem ITree.reccases.div {E R motive r d v}
-  : @ITree.reccases E R motive r d v .div = d := by
-  -- cases h
-  rw [<-ITree.unfold_fold (E := E) (ITree.div)]
-  cases h : (ITree.div.unfold) with
-  | div =>
-    simp at h
-    simp [reccases]
-    have to_rewrite_by : (fold (ITreeF.div)).unfold = ITreeF.div
-      := fold_unfold (ITreeF E R) (ITreeF.div)
-    -- rw [to_rewrite_by] -- again, rw is not smart enough
-    let motive : (i : ITreeF E R (ITree E R)) -> (eq : (fold (ITreeF.div)).unfold = i)
-      -> Prop := fun i eq =>
-        ITreeF.rec (motive := fun t => (fold (ITreeF.div)).unfold = t → motive)
-          (fun r_1 h => r r_1) (fun h => d)
-          (fun i k h => v i k) i eq = d
-    refine @Eq.rec _ (ITreeF.div) motive ?_ _ (Eq.symm to_rewrite_by)
-    simp [motive]
-  | _ => simp at h
+theorem ITree.cases.vis {E R motive r d v e k}
+  : @ITree.cases E R motive r d v (.vis e k) = v e k := by
+  simp [cases]
+  -- simp [ITree.vis] -- uncomment to see where the rewrite target is supposed to be in the goal
+  have to_rewrite_by : (fold (ITreeF.vis e k)).unfold = ITreeF.vis e k
+    := fold_unfold (ITreeF E R) (ITreeF.vis e k)
+  -- rw [to_rewrite_by] -- we want to do this.... but we are in transport hell!
+  let rwmotive : (i : ITreeF E R (ITree E R)) -> (eq : (fold (ITreeF.vis e k)).unfold = i)
+    -> Prop := fun i eq =>
+      ITreeF.rec (motive := fun t => (fold (ITreeF.vis e k)).unfold = t → motive (fold (ITree.vis e k).unfold))
+        (fun r_1 h => cast (by contradiction) (r r_1))
+        (fun h => cast (by contradiction) d)
+        (fun i k h => cast (by simp [fold, unfold] at h; rw [unfold_fold]; grind) (v i k)) i eq = v e k
+  refine @Eq.rec _ (ITreeF.vis e k) rwmotive ?_ _ (Eq.symm to_rewrite_by)
+  unfold rwmotive
+  simp [cast]
 
-@[simp]
-theorem ITree.reccases.vis {E R motive r d v e k}
-  : @ITree.reccases E R motive r d v (.vis e k) = v e k := by
-  -- cases h
-  rw [<-ITree.unfold_fold (E := E) (ITree.vis e k)]
-  cases h : (ITree.vis e k).unfold with
-  | vis e' k' =>
-    simp at h
-    cases h
-    subst_vars
-    simp [reccases]
-    have to_rewrite_by : (fold (ITreeF.vis e' k)).unfold = ITreeF.vis e' k
-      := fold_unfold (ITreeF E R) (ITreeF.vis e' k)
-    -- rw [to_rewrite_by] -- again, rw is not smart enough
-    let motive : (i : ITreeF E R (ITree E R)) -> (eq : (fold (ITreeF.vis e' k)).unfold = i)
-      -> Prop := fun i eq =>
-        ITreeF.rec (motive := fun t => (fold (ITreeF.vis e' k)).unfold = t → motive)
-          (fun r_1 h => r r_1) (fun h => d)
-          (fun i k h => v i k) i eq = v e' k
-    refine @Eq.rec _ (ITreeF.vis e' k) motive ?_ _ (Eq.symm to_rewrite_by)
-    simp [motive]
-  | _ => simp at h
+-- TODO: delete non-dependent eliminator if we indeed don't need it
+-- -- @[cases_eliminator]
+-- def ITree.reccases {E : Effect.{u}} {R}
+--     {Out : Sort v}
+--     (ret : R → Out)
+--     (div : Out)
+--     (vis : (i : E.I) → (k : E.O i → ITree E R) → Out)
+--     (t : ITree E R) : Out := by
+--     -- rw [<-ITree.unfold_fold t]
+--     cases t.unfold with
+--     | ret x => apply ret x
+--     | div => apply div
+--     | vis e k => apply vis e k
+
+-- #check ITreeF.rec
+
+-- @[simp]
+-- theorem ITree.reccases.ret {E R motive r d v x}
+--   : @ITree.reccases E R motive r d v (.ret x) = r x := by
+--   simp [reccases]
+--   simp [ITree.ret]
+--   have to_rewrite_by : (fold (ITreeF.ret x)).unfold = ITreeF.ret x
+--     := fold_unfold (ITreeF E R) (ITreeF.ret x)
+--   -- rw [to_rewrite_by] -- we want to do this.... but we are in transport hell!
+--   let rwmotive : (i : ITreeF E R (ITree E R)) -> (eq : (fold (ITreeF.ret x)).unfold = i)
+--     -> Prop := fun i eq =>
+--       ITreeF.rec (motive := fun t => (fold (ITreeF.ret x)).unfold = t → motive)
+--         (fun r_1 h => r r_1) (fun h => d)
+--         (fun i k h => v i k) i eq = r x
+--   refine @Eq.rec _ (ITreeF.ret x) rwmotive ?_ _ (Eq.symm to_rewrite_by)
+--   unfold rwmotive
+--   simp
+
+-- @[simp]
+-- theorem ITree.reccases.div {E R motive r d v}
+--   : @ITree.reccases E R motive r d v .div = d := by
+--   -- simp [ITree.div, fold]
+--   --
+--   rw [<-ITree.unfold_fold (E := E) (ITree.div)]
+--   cases h : (ITree.div.unfold) with
+--   | div =>
+--     simp [reccases]
+--     have to_rewrite_by : (fold (ITreeF.div)).unfold = ITreeF.div
+--       := fold_unfold (ITreeF E R) (ITreeF.div)
+--     -- rw [to_rewrite_by] -- again, rw is not smart enough
+--     let motive : (i : ITreeF E R (ITree E R)) -> (eq : (fold (ITreeF.div)).unfold = i)
+--       -> Prop := fun i eq =>
+--         ITreeF.rec (motive := fun t => (fold (ITreeF.div)).unfold = t → motive)
+--           (fun r_1 h => r r_1) (fun h => d)
+--           (fun i k h => v i k) i eq = d
+--     refine @Eq.rec _ (ITreeF.div) motive ?_ _ (Eq.symm to_rewrite_by)
+--     simp [motive]
+--   | _ => simp at h
+
+-- @[simp]
+-- theorem ITree.reccases.vis {E R motive r d v e k}
+--   : @ITree.reccases E R motive r d v (.vis e k) = v e k := by
+--   rw [<-ITree.unfold_fold (E := E) (ITree.vis e k)]
+--   cases h : (ITree.vis e k).unfold with
+--   | vis e' k' =>
+--     simp at h
+--     cases h
+--     subst_vars
+--     simp [reccases]
+--     have to_rewrite_by : (fold (ITreeF.vis e' k)).unfold = ITreeF.vis e' k
+--       := fold_unfold (ITreeF E R) (ITreeF.vis e' k)
+--     -- rw [to_rewrite_by] -- again, rw is not smart enough
+--     let motive : (i : ITreeF E R (ITree E R)) -> (eq : (fold (ITreeF.vis e' k)).unfold = i)
+--       -> Prop := fun i eq =>
+--         ITreeF.rec (motive := fun t => (fold (ITreeF.vis e' k)).unfold = t → motive)
+--           (fun r_1 h => r r_1) (fun h => d)
+--           (fun i k h => v i k) i eq = v e' k
+--     refine @Eq.rec _ (ITreeF.vis e' k) motive ?_ _ (Eq.symm to_rewrite_by)
+--     simp [motive]
+--   | _ => simp at h
 
 
 namespace Aeneas.Data.Coinductive
