@@ -109,8 +109,9 @@ theorem ok_inj {α} {a b : α} : Result.ok a = .ok b → a = b := by grind [Resu
 -- previously Result was an inductive with ok, div, and fail cases only.
 -- this function can be used in many cases to replace pattern matching on that inductive:
 -- TODO: maybe delete this and just use ITree.cases directly?
+@[elab_as_elim, cases_eliminator]
 abbrev Result.match {α} (r : Result α)
-  {motive : Result α → Type}
+  {motive : Result α → Sort v}
   (ok : ∀ r, motive (pure r))
   (div :  motive (.div))
   (vis : ∀ i k, motive (ITree.vis i k))

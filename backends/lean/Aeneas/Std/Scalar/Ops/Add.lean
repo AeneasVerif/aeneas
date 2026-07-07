@@ -68,10 +68,15 @@ theorem IScalar.add_equiv {ty} (x y : IScalar ty) :
   simp [add]
   have h := tryMk_eq ty (↑x + ↑y)
   simp [inBounds] at h
-  generalize test : (tryMk ty (↑x + ↑y)) = thing at h
-  cases thing -- TODO: to make this work, i need cases_eliminator attr on cases for result
-              -- its not good enough to have it just for ITree!
-  split at h <;> simp_all
+  generalize valh : (tryMk ty (↑x + ↑y)) = val at h
+  -- cases val -- TODO: to make this work, i need cases_eliminator attr on cases for result
+  --             -- its not good enough to have it just for ITree!
+  -- TODO: to make this work good, i need the cases_eliminator attribute on Result.match
+  -- i need to use Result.match in the theorem statement,
+  -- and i need simp lemmas that step Result.match using Result.div, Result.ok, Result.vis
+  -- so that its not necessary to unfold these definitions in here.
+  -- i also need to make Result.match actually compute in ITree.lean.
+  cases val <;> simp_all [div, pure]
   apply BitVec.eq_of_toInt_eq
   simp
   have := bmod_pow_numBits_eq_of_lt ty (x.val + y.val) (by omega) (by omega)
