@@ -239,27 +239,27 @@ instance : Pure Result where
   pure := fun x => ok x
 
 @[simp] theorem bind_ok (x : α) (f : α → Result β) : bind (.ok x) f = f x :=
-  by simp [bind, Bind.bind, ok]
+  by simp [bind, ok]
 @[simp] theorem bind_fail (x : Error) (f : α → Result β) : bind (.fail x) f = .fail x :=
-  by simp [bind, Bind.bind, fail]
+  by simp [bind, fail]
      apply congrArg
      funext x
      contradiction
 
-@[simp] theorem bind_div (f : α → Result β) : bind .div f = .div := by simp [bind, Bind.bind, div]
+@[simp] theorem bind_div (f : α → Result β) : bind .div f = .div := by simp [bind, div]
 
 @[simp] theorem bind_tc_ok (x : α) (f : α → Result β) :
   (do let y ← .ok x; f y) = f x := by simp [Bind.bind, ok]
 
 @[simp] theorem bind_tc_fail (x : Error) (f : α → Result β) :
   (do let y ← fail x; f y) = fail x := by
-  simp [Bind.bind, bind, fail]
+  simp [Bind.bind, fail]
   apply congrArg
   funext x
   contradiction
 
 @[simp] theorem bind_tc_div (f : α → Result β) :
-  (do let y ← div; f y) = div := by simp [Bind.bind, bind, div]
+  (do let y ← div; f y) = div := by simp [Bind.bind, div]
 
 @[simp] theorem bind_assoc_eq {a b c : Type u}
   (e : Result a) (g :  a → Result b) (h : b → Result c) :
@@ -445,11 +445,10 @@ instance SubtypeLawfulBEq [BEq α] (p : α → Prop) [LawfulBEq α] : LawfulBEq 
    TODO: move up to Core module? -/
 def Option.ofResult {a : Type u} (x : Result a) :
   Option a :=
-  ITree.cases
+  x.nmatch
     .some
+    (fun _ => .none)
     .none
-    (fun _ _ => .none)
-    x
 
 /-!
 # bv_decide
