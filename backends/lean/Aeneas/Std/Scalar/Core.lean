@@ -628,12 +628,8 @@ theorem UScalar.tryMk_eq_DELETE_THIS_PROBABLY (ty : UScalarTy) (x : Nat) :
 theorem UScalar.tryMk_eq (ty : UScalarTy) (x : Nat) :
   (tryMk ty x).match
     (fun y => y.val = x ∧ inBounds ty x)
+    (fun e => ¬ (inBounds ty x))
     False
-    (fun (e : RustEffect.I) _ =>
-      match e with
-      | RustEffect.I.fail _e => ¬ (inBounds ty x)
-      -- | _ => False -- uncomment this once there are other effects
-      )
   := by
   have := UScalar.tryMkOpt_eq ty x
   simp [tryMk, ofOption]
@@ -678,12 +674,8 @@ theorem IScalar.tryMkOpt_eq (ty : IScalarTy) (x : Int) :
 theorem IScalar.tryMk_eq (ty : IScalarTy) (x : Int) :
   (tryMk ty x).match
   (fun y => y.val = x ∧ inBounds ty x)
+  (fun _e => ¬ (inBounds ty x))
   False
-  (fun (e : RustEffect.I) _ =>
-    match e with
-    | RustEffect.I.fail _e => ¬ (inBounds ty x)
-    -- | _ => False -- uncomment this once there are other effects
-    )
   := by
   have := tryMkOpt_eq ty x
   simp [tryMk]

@@ -39,10 +39,8 @@ theorem UScalar.add_equiv {ty} (x y : UScalar ty) :
   (fun z => x.val + y.val < 2^ty.numBits ∧
     z.val = x.val + y.val ∧
     z.bv = x.bv + y.bv)
+  (fun _e => ¬ (UScalar.inBounds ty (x.val + y.val)))
   ⊥
-  (fun e _k =>
-    match (e : RustEffect.I) with
-    | .fail _e => ¬ (UScalar.inBounds ty (x.val + y.val)))
   := by
   have : x + y = add x y := by rfl
   rw [this]
@@ -50,7 +48,7 @@ theorem UScalar.add_equiv {ty} (x y : UScalar ty) :
   have h := tryMk_eq ty (↑x + ↑y)
   simp [inBounds] at h
   generalize valh : (tryMk ty (↑x + ↑y)) = val at h
-  cases val <;> (try (simp_all <;> split)) <;> simp_all [pure]
+  cases val <;> simp_all
   zify; simp
   zify at h
   have := @Int.emod_eq_of_lt (x.val + y.val) (2^ty.numBits) (by omega) (by omega)
@@ -62,10 +60,8 @@ theorem IScalar.add_equiv {ty} (x y : IScalar ty) :
       IScalar.inBounds ty (x.val + y.val) ∧
       z.val = x.val + y.val ∧
       z.bv = x.bv + y.bv)
+    (fun _e => ¬ (IScalar.inBounds ty (x.val + y.val)))
     ⊥
-    (fun (e : RustEffect.I) _k =>
-      match e with
-      | .fail _e => ¬ (IScalar.inBounds ty (x.val + y.val)))
   := by
   have : x + y = add x y := by rfl
   rw [this]
@@ -73,7 +69,7 @@ theorem IScalar.add_equiv {ty} (x y : IScalar ty) :
   have h := tryMk_eq ty (↑x + ↑y)
   simp [inBounds] at h
   generalize valh : (tryMk ty (↑x + ↑y)) = val at h
-  cases val <;> simp_all [pure]
+  cases val <;> simp_all
   apply BitVec.eq_of_toInt_eq
   simp
   have := bmod_pow_numBits_eq_of_lt ty (x.val + y.val) (by omega) (by omega)
@@ -91,7 +87,6 @@ theorem UScalar.add_bv_spec {ty} {x y : UScalar ty}
   have h := @add_equiv ty x y
   generalize hval : (x + y) = val at h
   cases val <;> simp_all [max]
-  -- split at h <;> simp_all [max]
   have : 0 < 2^ty.numBits := by simp
   omega
 
@@ -101,7 +96,8 @@ theorem IScalar.add_bv_spec {ty}  {x y : IScalar ty}
   (hmax : ↑x + ↑y ≤ IScalar.max ty) :
   x + y ⦃ z => (↑z : Int) = ↑x + ↑y ∧ z.bv = x.bv + y.bv ⦄ := by
   have h := @add_equiv ty x y
-  split at h <;> simp_all [min, max]
+  generalize hval : (x + y) = val at h
+  cases val <;> simp_all [min, max]
   omega
 
 uscalar theorem «%S».add_bv_spec {x y : «%S»} (hmax : x.val + y.val ≤ «%S».max) :
@@ -125,7 +121,8 @@ theorem UScalar.add_spec {ty} {x y : UScalar ty}
   (hmax : ↑x + ↑y ≤ UScalar.max ty) :
   x + y ⦃ z => (↑z : Nat) = ↑x + ↑y ⦄ := by
   have h := @add_equiv ty x y
-  split at h <;> simp_all [max]
+  generalize hval : (x + y) = val at h
+  cases val <;> simp_all [max]
   have : 0 < 2^ty.numBits := by simp
   omega
 
@@ -136,7 +133,8 @@ theorem IScalar.add_spec {ty} {x y : IScalar ty}
   (hmax : ↑x + ↑y ≤ IScalar.max ty) :
   x + y ⦃ z => (↑z : Int) = ↑x + ↑y ⦄ := by
   have h := @add_equiv ty x y
-  split at h <;> simp_all [min, max]
+  generalize hval : (x + y) = val at h
+  cases val <;> simp_all [min, max]
   omega
 
 uscalar @[step] theorem «%S».add_spec {x y : «%S»} (hmax : x.val + y.val ≤ «%S».max) :

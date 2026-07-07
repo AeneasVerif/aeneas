@@ -104,29 +104,64 @@ theorem ok_not_fail {α} {a : α} {e} : ¬ Result.ok a = .fail e := by grind [Re
 -- @[simp, grind .]
 theorem ok_not_div {α} {a : α} : ¬ Result.ok a = .div := by grind [Result.ok, Result.div, not_ret_div]
 -- @[simp, grind .]
-theorem ok_inj {α} {a b : α} : Result.ok a = .ok b → a = b := by grind [Result.ok, ret_inj]
+@[simp]
+theorem Result.ok.injEq {α} {a b : α} : (Result.ok a = .ok b) = (a = b) := by
+  grind [Result.ok, ret_inj]
 
 -- previously Result was an inductive with ok, div, and fail cases only.
 -- this function can be used in many cases to replace pattern matching on that inductive:
+-- TODO: why do things error when this is def instead of abbrev?
 @[elab_as_elim, cases_eliminator]
 abbrev Result.match {α} (r : Result α)
   {motive : Result α → Sort v}
-  (ok : ∀ r, motive (pure r))
+  (ok : ∀ r, motive (.ok r))
+  (fail : ∀ e, motive (.fail e))
   (div :  motive (.div))
-  (vis : ∀ i k, motive (ITree.vis i k))
-  : motive r := ITree.cases ok div vis r
+  -- will add more inputs as we add effects
+  : motive r := ITree.cases ok div (
+      fun e k => match e with
+        | .fail e => by
+            have same : k = PEmpty.elim := by funext x; contradiction
+            simp [same]
+            exact (fail e)
+    ) r
 
 @[simp]
-theorem Result.match.ok {R motive r d v x}
-  : @Result.match R (.ok x) motive r d v = r x := ITree.cases.ret
+theorem Result.match.ok {R motive r d f x}
+  : @Result.match R (.ok x) motive r f d = r x := ITree.cases.ret
 
 @[simp]
-theorem Result.match.div {R motive r d v}
-  : @Result.match R .div motive r d v = d := ITree.cases.div
+theorem Result.match.div {R motive r d f}
+  : @Result.match R .div motive r f d = d := ITree.cases.div
 
 @[simp]
-theorem Result.match.vis {R motive r d v e k}
-  : @Result.match R (.vis e k) motive r d v = v e k := ITree.cases.vis
+theorem Result.match.fail {R motive r d f e}
+  : @Result.match R (.fail e) motive r f d = f e := ITree.cases.vis
+
+-- TODO: do we need both versions? I had problems with motives not being correct using the
+-- dependent version, and maybe you can't use this one as a cases eliminator. TODO
+def Result.nmatch {α} (r : Result α)
+  {Out : Sort v}
+  (ok : α  → Out)
+  (fail : Error → Out)
+  (div :  Out)
+  -- will add more inputs as we add effects
+  : Out := ITree.cases ok div (
+      fun e _k => match e with
+        | .fail e => fail e
+    ) r
+
+@[simp]
+theorem Result.nmatch.ok {R Out r d f x}
+  : @Result.nmatch R (.ok x) Out r f d = r x := ITree.cases.ret
+
+@[simp]
+theorem Result.nmatch.div {R Out r d f}
+  : @Result.nmatch R .div Out r f d = d := ITree.cases.div
+
+@[simp]
+theorem Result.nmatch.fail {R Out r d f e}
+  : @Result.nmatch R (.fail e) Out r f d = f e := ITree.cases.vis
 
 open Result
 
