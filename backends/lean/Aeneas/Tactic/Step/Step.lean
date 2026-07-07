@@ -3,8 +3,6 @@ import Aeneas.Tactic.Solver.ScalarTac
 import Aeneas.Tactic.Step.Init
 import Aeneas.Tactic.Step.GrindState
 import Aeneas.Std
--- just here until the unit bind PR gets merged
-import Aeneas.Do
 import Aeneas.Tactic.Simp.SimpLemmas
 import AeneasMeta.Async
 import Aeneas.Tactic.Solver.Grind.Init
@@ -239,7 +237,7 @@ def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr × SpecInfo) := do
   let name ← match spec? with
     | Expr.const name _ => pure name
     | _ => throwError "{spec?} is not a spec statement"
-  let .some info ← specStatementLookup name
+  let .some info ← specInfoLookup name
     | throwError "{name} is not a supported spec statement"
   let compTy ← if h: args.size = info.arity
                then pure (args[info.program_index]!)
@@ -428,7 +426,7 @@ def getPostNamesFromGoal : TacticM (Array (Option Name)) := do
     let specname ← match spec? with
       | Expr.const name _ => pure name
       | _ => throwError "{spec?} is not a spec statement"
-    let .some info ← specStatementLookup specname
+    let .some info ← specInfoLookup specname
       | throwError "{specname} is not a supported spec statement"
     if args.size = info.arity then
       getPostNames args[info.post_index]!

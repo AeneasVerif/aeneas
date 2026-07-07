@@ -854,8 +854,8 @@ namespace Aeneas.Std.WP
 want to introduce in the context -/
 theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
 
--- registers the spec statements for use in the step tactic, see Spec.lean
-#register_spec_statement {
+-- registers the spec info for use in the step tactic, see Spec.lean
+#register_spec_info {
     spec_name := ``Std.WP.spec
     arity := 3
     program_index := 1
@@ -879,7 +879,7 @@ theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
     liftings := #[]
   }
 
-#register_spec_statement {
+#register_spec_info {
     spec_name := ``Std.WP.dspec
     arity := 3
     program_index := 1

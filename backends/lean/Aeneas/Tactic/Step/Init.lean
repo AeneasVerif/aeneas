@@ -232,7 +232,7 @@ def getStepSpecFunArgsExpr (ty : Expr) :
   let specName ← match spec? with
     | Expr.const name _ => pure name
     | _ => throwError "Not a constant"
-  let .some info ← specStatementLookup specName
+  let .some info ← specInfoLookup specName
     | throwError "{specName} is not a supported spec statement name"
   if _h: args.size = info.arity
   then pure (args[info.program_index]!, info) -- this is `f x1 ... xn`
