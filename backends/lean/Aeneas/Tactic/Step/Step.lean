@@ -1037,7 +1037,7 @@ def tryApply (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args) (isL
 def getLiftingForThm (info : SpecInfo) (thm : Expr) : MetaM (Option LiftingInfo) := do
   let thTy ← inferType thm
   let thTy ← normalizeLetBindings thTy
-  let thOutput ← forallTelescopeReducing thTy (fun _ out => return out)
+  let thOutput ← forallTelescope thTy (fun _ out => return out)
   let spec? := thOutput.consumeMData.withApp (fun f _ => f)
   trace[Step] "spec? is {spec?}"
   let name ← match spec? with
