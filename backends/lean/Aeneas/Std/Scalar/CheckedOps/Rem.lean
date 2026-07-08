@@ -65,8 +65,8 @@ theorem core.num.checked_rem_IScalar_bv_spec {ty} (x y : IScalar ty) :
   . zify at *
     simp_all
   . rename_i hnz
-    simp
-    have hnz' : y.val ≠ 0 := by zify at *; simp_all
+    have hnz' : y.val ≠ 0 := by
+      intro h; apply hnz; exact h
     have : x % y = x.rem y := by rfl
     have ⟨ _, hz ⟩ := spec_imp_exists (@IScalar.rem_bv_spec _ x y hnz')
     simp [this, IScalar.rem, hnz] at hz

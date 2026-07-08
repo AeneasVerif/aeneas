@@ -33,35 +33,51 @@ theorem sixNats_spec : sixNats ⦃ ((a, b), c) ((d, e), f) => a = 3 ∧ b = 4 �
   unfold sixNats; step*
 
 /--
-warning: unused variable `a`
+warning: Variable name `a` is not explicitly referenced.
+
+The binding can be removed (if unused) or named `_` (if used implicitly).
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ---
-warning: unused variable `b`
+warning: Variable name `b` is not explicitly referenced.
+
+The binding can be removed (if unused) or named `_` (if used implicitly).
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ---
-warning: unused variable `c`
+warning: Variable name `c` is not explicitly referenced.
+
+The binding can be removed (if unused) or named `_` (if used implicitly).
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ---
-warning: unused variable `d`
+warning: Variable name `d` is not explicitly referenced.
+
+The binding can be removed (if unused) or named `_` (if used implicitly).
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ---
-warning: unused variable `b`
+warning: Variable name `b` is not explicitly referenced.
+
+The binding can be removed (if unused) or named `_` (if used implicitly).
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ---
-warning: unused variable `c`
+warning: Variable name `c` is not explicitly referenced.
+
+The binding can be removed (if unused) or named `_` (if used implicitly).
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ---
-warning: unused variable `e`
+warning: Variable name `e` is not explicitly referenced.
+
+The binding can be removed (if unused) or named `_` (if used implicitly).
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ---
-warning: unused variable `h`
+warning: Variable name `h` is not explicitly referenced.
+
+The binding can be removed (if unused) or named `_` (if used implicitly).
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 -/
