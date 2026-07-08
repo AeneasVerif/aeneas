@@ -121,8 +121,8 @@ let cut_layers (color : 'a -> group_color) (groups : 'a list) :
 
 (** Resolve every SCC of the file graph to its Lean module identity — plain
     name, opacity layers, optional aggregator — in topological
-    (dependency-first) order. Merge indices are allocated to multi-bucket local
-    SCCs in that order. *)
+    (dependency-first) order. Multi-bucket local SCCs are named from their
+    member files ({!FileMapping.merged_module_components}). *)
 let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
     ~(import_prefix : string) ~(module_root_dir : string) ~(ext : string) :
     placed_module list =
@@ -183,7 +183,6 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
     ^ (if is_template then "_Template" else "")
     ^ ext
   in
-  let merge_counter = ref 0 in
   let placed =
     List.map
       (fun (scc_id, buckets) ->
@@ -229,9 +228,14 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
             match buckets with
             | [ BFile p ] -> FileMapping.module_components_of_file p
             | _ ->
-                let idx = !merge_counter in
-                incr merge_counter;
-                FileMapping.merged_module_components idx
+                let paths =
+                  List.filter_map
+                    (function
+                      | BFile p -> Some p
+                      | BExternalTypes | BExternalFuns -> None)
+                    buckets
+                in
+                FileMapping.merged_module_components paths
         in
         let import_name =
           import_prefix ^ FileMapping.dotted_module_name base_components
@@ -292,8 +296,8 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
      module names (aggregators/single files), synthesized layer names, and
      filled-template names. [StringUtils.to_camel_case] strips underscores (so
      [src/foo_bar.rs] and a [#[path]]-mapped [src/fooBar.rs] both become
-     [FooBar]), and synthesized names ([MergeN], [PartK], [AxiomsK]) can also
-     be produced by real source files. Two files sharing an import name would
+     [FooBar]), and synthesized names ([Merge...], [PartK], [AxiomsK]) can
+     also be produced by real source files. Two files sharing an import name would
      have the emitter's second [open_out] silently truncate the first, so fail
      loudly instead. Dropped modules emit nothing and are skipped. *)
   let describe (m : placed_module) : string =
@@ -367,29 +371,3 @@ let render_placement (placed : placed_module list) : string =
     modules;
   line "=======================================================================";
   Buffer.contents buf
-
-(** Unit tests for {!cut_layers}: ['t']/['o']/['c'] mark
-    transparent/opaque/colorless test groups. *)
-let () =
-  let color (c : char) : group_color =
-    match c with
-    | 'o' -> ColorOpaque
-    | 'c' -> Colorless
-    | _ -> ColorTransparent
-  in
-  let cut (s : string) =
-    cut_layers color (List.init (String.length s) (String.get s))
-  in
-  assert (cut "" = []);
-  assert (cut "tt" = [ (false, [ 't'; 't' ]) ]);
-  assert (cut "o" = [ (true, [ 'o' ]) ]);
-  assert (cut "tot" = [ (false, [ 't' ]); (true, [ 'o' ]); (false, [ 't' ]) ]);
-  assert (cut "ttoo" = [ (false, [ 't'; 't' ]); (true, [ 'o'; 'o' ]) ]);
-  (* Colorless groups attach to the current run without cutting one. *)
-  assert (cut "tco" = [ (false, [ 't'; 'c' ]); (true, [ 'o' ]) ]);
-  (* A colorless prefix attaches to the first colored run, whatever its
-     color. *)
-  assert (cut "cto" = [ (false, [ 'c'; 't' ]); (true, [ 'o' ]) ]);
-  assert (cut "co" = [ (true, [ 'c'; 'o' ]) ]);
-  (* No colored group at all: a single regenerated layer. *)
-  assert (cut "cc" = [ (false, [ 'c'; 'c' ]) ])

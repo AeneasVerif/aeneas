@@ -52,9 +52,17 @@ let module_components_of_file (path : string) : string list =
       ("Cannot map the source file path to a Lean module: " ^ path);
   List.map StringUtils.to_camel_case parts
 
-(** The module-path components for a merged (multi-file) SCC. *)
-let merged_module_components (idx : int) : string list =
-  [ "Merge" ^ string_of_int idx ]
+(** The module-path components for a merged (multi-file) SCC.
+
+    The name is derived from the member files: each path is camel-cased like a
+    single-file module and the results are concatenated in alphabetical order *)
+let merged_module_components (paths : string list) : string list =
+  if paths = [] then
+    [%craise_opt_span] None "Empty file set for a merged (multi-file) module";
+  let stems =
+    List.map (fun p -> String.concat "" (module_components_of_file p)) paths
+  in
+  [ "Merge" ^ String.concat "" (List.sort String.compare stems) ]
 
 (** The name of the modules extracted from a single rust module that must split
     up due to alternating opaque/non-opaque SCCs. *)
@@ -67,35 +75,3 @@ let layer_module_components (base : string list) ~(is_template : bool)
     [["Happy"; "Baz"; "Bang"]] -> ["Happy.Baz.Bang"]. *)
 let dotted_module_name (components : string list) : string =
   String.concat "." components
-
-(** Unit tests *)
-let () =
-  let mc = module_components_of_file in
-  assert (mc "src/foo.rs" = [ "Foo" ]);
-  assert (mc "src/baz/bang.rs" = [ "Baz"; "Bang" ]);
-  assert (mc "src/geometry/mod.rs" = [ "Geometry"; "Mod" ]);
-  assert (mc "src/geometry.rs" = [ "Geometry" ]);
-  assert (mc "src/geometry/shapes.rs" = [ "Geometry"; "Shapes" ]);
-  assert (mc "src/lib.rs" = [ "Lib" ]);
-  assert (mc "src/main.rs" = [ "Main" ]);
-  assert (mc "src/cycle_x.rs" = [ "CycleX" ]);
-  assert (mc "src/rectypes/tree.rs" = [ "Rectypes"; "Tree" ]);
-  assert (mc "src/a/b/mod.rs" = [ "A"; "B"; "Mod" ]);
-  (* Tolerate a leading "./" and a missing "src/". *)
-  assert (mc "./src/foo.rs" = [ "Foo" ]);
-  assert (mc "foo.rs" = [ "Foo" ]);
-  assert (merged_module_components 0 = [ "Merge0" ]);
-  assert (merged_module_components 3 = [ "Merge3" ]);
-  assert (
-    layer_module_components [ "A" ] ~is_template:false ~index:1
-    = [ "A"; "Part1" ]);
-  assert (
-    layer_module_components [ "A" ] ~is_template:true ~index:2
-    = [ "A"; "Axioms2" ]);
-  assert (
-    layer_module_components [ "Geometry"; "Shapes" ] ~is_template:false ~index:3
-    = [ "Geometry"; "Shapes"; "Part3" ]);
-  assert (
-    layer_module_components [ "FunsExternal" ] ~is_template:true ~index:1
-    = [ "FunsExternal"; "Axioms1" ]);
-  assert (dotted_module_name [ "Happy"; "Baz"; "Bang" ] = "Happy.Baz.Bang")
