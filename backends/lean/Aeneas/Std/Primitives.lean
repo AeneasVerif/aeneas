@@ -63,18 +63,8 @@ deriving Repr, BEq
 
 open Error
 
--- TODO: delete this
--- inductive Result (α : Type u) where
---   | ok (v: α): Result α
---   | fail (e: Error): Result α
---   | div
--- deriving Repr, BEq
-
 inductive RustEffect.I : Type where
 | fail : Error → RustEffect.I
--- there is an issue that both threads have to return the return type.
--- maybe this is fine, and you can just bind an operation that returns Unit?
--- i could make a generalized ITree definition which allows you to do stuff to the return type in Effect?
 
 def RustEffect.O (i : RustEffect.I) : Type :=
   match i with
@@ -87,10 +77,6 @@ def RustEffect : Effect := {
 
 def Result (α : Type u) : Type u := ITree RustEffect α
 
-instance : Monad Result := instMonadITree
-instance : Bind Result where
-  bind := ITree.bind
-instance : LawfulMonad Result := instLawfulMonadITree
 
 def Result.ok {α} (a : α) : Result α := .ret a
 
@@ -98,13 +84,34 @@ def Result.fail {α} (e : Error) : Result α := .vis (.fail e) PEmpty.elim
 
 def Result.div {α} : Result α := ITree.div
 
+
+-- TODO: in addition to type levels, does it cause issues that bind comes from the Monad instance?
+-- -- TODO: is it ok to not have β be at a different level `v`?
+def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
+  ITree.bind x f
+-- instance : Monad Result := instMonadITree
+instance : Monad Result where
+  pure := .ok
+  bind := bind
+-- instance : Bind Result where
+--   bind := bind -- ITree.bind
+instance : LawfulMonad Result := instLawfulMonadITree
+
 -- TODO: adding these to simp set messes up some things
--- @[simp, grind .]
+@[simp, grind .]
+-- @[simp]
 theorem ok_not_fail {α} {a : α} {e} : ¬ Result.ok a = .fail e := by grind [Result.ok, Result.fail, not_vis_ret]
--- @[simp, grind .]
+-- @[simp]
+@[simp, grind .]
+theorem fail_not_ok {α} {a : α} {e} : ¬ Result.fail e = .ok a := by grind [Result.ok, Result.fail, not_vis_ret]
+-- @[simp]
+@[simp, grind .]
 theorem ok_not_div {α} {a : α} : ¬ Result.ok a = .div := by grind [Result.ok, Result.div, not_ret_div]
--- @[simp, grind .]
-@[simp]
+-- @[simp]
+@[simp, grind .]
+theorem div_not_ok {α} {a : α} : ¬ Result.div = .ok a := by grind [Result.ok, Result.div, not_ret_div]
+-- @[simp]
+@[simp, grind .]
 theorem Result.ok.injEq {α} {a b : α} : (Result.ok a = .ok b) = (a = b) := by
   grind [Result.ok, ret_inj]
 
@@ -221,11 +228,6 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
 # Do-DSL Support
 -/
 
--- TODO: in addition to type levels, does it cause issues that bind comes from the Monad instance?
--- -- TODO: is it ok to not have β be at a different level `v`?
-def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
-  ITree.bind x f
-
 -- TODO: should this just be deleted to clean things up now, or left for backwards compatibility?
 -- def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
 --   @Bind.bind Result _ α β x f
@@ -235,8 +237,8 @@ def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Resu
   -- bind := bind
 
 -- Allows using pure x in do-blocks
-instance : Pure Result where
-  pure := fun x => ok x
+-- instance : Pure Result where
+--   pure := fun x => ok x
 
 @[simp] theorem bind_ok (x : α) (f : α → Result β) : bind (.ok x) f = f x :=
   by simp [bind, ok]
@@ -249,17 +251,17 @@ instance : Pure Result where
 @[simp] theorem bind_div (f : α → Result β) : bind .div f = .div := by simp [bind, div]
 
 @[simp] theorem bind_tc_ok (x : α) (f : α → Result β) :
-  (do let y ← .ok x; f y) = f x := by simp [Bind.bind, ok]
+  (do let y ← .ok x; f y) = f x := by simp [bind, Bind.bind, ok]
 
 @[simp] theorem bind_tc_fail (x : Error) (f : α → Result β) :
   (do let y ← fail x; f y) = fail x := by
-  simp [Bind.bind, fail]
+  simp [bind, Bind.bind, fail]
   apply congrArg
   funext x
   contradiction
 
 @[simp] theorem bind_tc_div (f : α → Result β) :
-  (do let y ← div; f y) = div := by simp [Bind.bind, div]
+  (do let y ← div; f y) = div := by simp [bind, Bind.bind, div]
 
 @[simp] theorem bind_assoc_eq {a b c : Type u}
   (e : Result a) (g :  a → Result b) (h : b → Result c) :
@@ -306,6 +308,31 @@ instance : PartialOrder (Result α) := instPartialOrderCoIndOfInhabitedPUnit _
 noncomputable instance : CCPO (Result α) := instCCPOCoIndOfInhabitedPUnit _
 noncomputable instance : MonoBind Result := instMonoBindITree
 
+-- TODO: is there a way to not need to state this, and just use the typeclass instance?
+-- @[partial_fixpoint_monotone]
+-- theorem monotone_bind
+--     {α β : Type u}
+--     {γ : Sort w} [PartialOrder γ]
+--     (f : γ → Result α) (g : γ → α → Result β)
+--     (hmono₁ : monotone f)
+--     (hmono₂ : monotone g) :
+--     monotone (fun (x : γ) => bind (f x) (g x)) := by
+--   intro x₁ x₂ hx₁₂
+--   apply PartialOrder.rel_trans
+--   · apply MonoBind.bind_mono_left (hmono₁ _ _ hx₁₂)
+--   · apply MonoBind.bind_mono_right (fun y => monotone_apply y _ hmono₂ _ _ hx₁₂)
+
+@[partial_fixpoint_monotone]
+theorem bind_mono {R : Type a} {α} {S : Type b} [PartialOrder α]
+  (f : α → Result R) (g : α → R → Result S) :
+  monotone f →
+  monotone g →
+  monotone (λ x => bind (f x) (g x)) := by
+    simp [bind]
+    apply Aeneas.Data.Coinductive.bind_mono
+
+-- TODO: when we add more effects, use Aeneas.Data.Coinductive.vis_mono
+-- to instantiate monotonicity theorems for those effects.
 end Order
 
 /-- Aeneas-internal version of `Function.uncurry` for tuple destructuring in bind
@@ -404,11 +431,8 @@ inductive ControlFlow (α : Type u) (β : Type v) where
   | done (v : β) -- break
 deriving Repr, BEq
 
--- TODO: will the fact that β now has level u instead of v cause problems?
 def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) (x : α) : Result β := do
-  ITree.bind (body x) fun r =>
-  -- let r ← body x
-  -- _
+  bind (body x) fun r =>
   match r with
   | ControlFlow.cont x => loop body x
   | ControlFlow.done x => ok x

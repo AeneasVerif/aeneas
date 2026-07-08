@@ -35,7 +35,7 @@ instance {ty} : HAdd (IScalar ty) (IScalar ty) (Result (IScalar ty)) where
 -/
 
 theorem UScalar.add_equiv {ty} (x y : UScalar ty) :
-  (x + y).match
+  (x + y).nmatch
   (fun z => x.val + y.val < 2^ty.numBits ∧
     z.val = x.val + y.val ∧
     z.bv = x.bv + y.bv)
@@ -55,7 +55,7 @@ theorem UScalar.add_equiv {ty} (x y : UScalar ty) :
   simp [*]
 
 theorem IScalar.add_equiv {ty} (x y : IScalar ty) :
-  (x + y).match
+  (x + y).nmatch
     (fun z =>
       IScalar.inBounds ty (x.val + y.val) ∧
       z.val = x.val + y.val ∧

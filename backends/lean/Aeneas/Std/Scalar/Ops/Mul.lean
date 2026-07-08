@@ -40,7 +40,7 @@ Theorems with a specification which use integers and bit-vectors
 -/
 
 theorem UScalar.mul_equiv {ty} (x y : UScalar ty) :
-  (mul x y).match
+  (mul x y).nmatch
   (fun z => x.val * y.val ≤ UScalar.max ty ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv)
   (fun _ => UScalar.max ty < x.val * y.val)
   False
@@ -73,14 +73,14 @@ theorem UScalar.mul_bv_spec {ty} {x y : UScalar ty}
   omega
 
 theorem IScalar.mul_equiv {ty} (x y : IScalar ty) :
-  (mul x y).match
+  (mul x y).nmatch
   (fun z => IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv)
   (fun _ => ¬(IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty))
   False := by
   simp only [mul, not_and, not_le]
   have := tryMk_eq ty (x.val * y.val)
   generalize hval : tryMk ty (↑x * ↑y) = value at this
-  cases value <;> simp_all only [«match».ok, «match».div, «match».fail, inBounds, min, max, true_and, not_and, not_lt] <;>
+  cases value <;> simp_all only [«nmatch».ok, «nmatch».div, «nmatch».fail, inBounds, min, max, true_and, not_and, not_lt] <;>
   simp_all only [tryMk, ofOption, tryMkOpt, check_bounds, and_self, decide_true, dite_true,
     ok.injEq, Bool.decide_and, Bool.and_eq_true, decide_eq_true_eq] <;>
   simp only [← hval, ofIntCore, val] <;>

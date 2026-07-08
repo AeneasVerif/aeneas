@@ -30,7 +30,7 @@ def wp_return (x:α) : Wp α := fun p => p x
 
 @[grind]
 inductive spec {α} : (x : Result α) → (p : Post α) →  Prop where
-| ret : ∀ x, p x → spec (ITree.ret x) p
+| ret : ∀ x, p x → spec (.ok x) p
 -- | vis : ∀ k, (∀ b, spec p (k b)) → spec p (ITree.vis () k)
 -- | fail : ∀ k, (∀ b, spec p (k b)) → spec p (ITree.vis () k)
 
@@ -42,7 +42,7 @@ inductive spec {α} : (x : Result α) → (p : Post α) →  Prop where
 --   | fail _ => False
 --   | div => True
 inductive dspec {α} : (x : Result α) → (p : Post α) →  Prop where
-| ret : ∀ x, p x → dspec (ITree.ret x) p
+| ret : ∀ x, p x → dspec (.ok x) p
 | div : dspec div p
 
 theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p := by
@@ -78,20 +78,18 @@ theorem spec_ok (x : α) : spec (ok x) p ↔ p x := by
   constructor
   · intros s
     generalize H : ok x = v at s
-    simp [ok] at H
     cases s
-    grind only [ret_inj]
+    simp at H
+    grind
   · intros px
     constructor
     assumption
 
 @[simp, grind =, agrind =]
-theorem spec_fail (e : Error) : spec (fail e) p ↔ False := by
-  grind only [spec, fail, not_vis_ret]
+theorem spec_fail (e : Error) : spec (fail e) p ↔ False := by grind
 
 @[simp, grind =, agrind =]
-theorem spec_div : spec div p ↔ False := by
-  grind only [spec, div, not_ret_div]
+theorem spec_div : spec div p ↔ False := by grind
 
 /-! ### `spec_*` for tuple posts
 
@@ -168,9 +166,9 @@ theorem spec_bind' {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α
   (qimp_spec Pₘ k Pₖ) →
   spec (Std.bind m k) Pₖ := by
   intro Hm Hk
-  simp only [bind, qimp_spec] at *
+  simp only [qimp_spec] at *
   cases Hm
-  simp only [itree_ret_bind]
+  simp
   grind only
 
 /-- We use this lemma to decompose nested `uncurry'` predicates into a sequence of universal quantifiers. -/
@@ -236,11 +234,11 @@ theorem dspec_bind' {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result �
   (qimp_dspec Pₘ k Pₖ) →
   dspec (Std.bind m k) Pₖ := by
   intro Hm Hk
-  simp only [bind, qimp_dspec] at *
+  simp only [qimp_dspec] at *
   cases Hm
-  · simp only [itree_ret_bind]
+  · simp
     grind only
-  · simp [div]
+  · simp
     constructor
 
 @[simp]
@@ -264,11 +262,10 @@ def qimp_dspec_iff {α β} (P : α → Prop) (k : α → Result β) (Q : β → 
 
 @[simp, grind =, agrind =]
 theorem dspec_ok (x : α) : dspec (ok x) p ↔ p x := by
-  simp [ok]
   constructor
   · intros s
-    generalize h : ITree.ret x = v at s
-    cases s <;> grind [div, ret_inj, not_ret_div]
+    generalize h : Result.ok x = v at s
+    cases s <;> simp at *; grind
   · intros px
     constructor
     assumption
@@ -907,7 +904,7 @@ theorem loop.spec {α : Type u} {β : Type v} {γ : Type w}
   rw [WP.spec_equiv_exists] at hBody'
   rcases hBody' with ⟨y, p, yc⟩
   unfold loop
-  simp [p, Result.ok]
+  simp [p]
   grind
 
 theorem loop.spec_decr_nat {α : Type u} {β : Type v}

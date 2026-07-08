@@ -672,14 +672,14 @@ theorem IScalar.tryMkOpt_eq (ty : IScalarTy) (x : Int) :
 --     grind
 
 theorem IScalar.tryMk_eq (ty : IScalarTy) (x : Int) :
-  (tryMk ty x).match
+  (tryMk ty x).nmatch
   (fun y => y.val = x ∧ inBounds ty x)
   (fun _e => ¬ (inBounds ty x))
   False
   := by
   have := tryMkOpt_eq ty x
   simp [tryMk]
-  cases h : tryMkOpt ty x <;> simp_all [fail, ok]
+  cases h : tryMkOpt ty x <;> simp_all
 
 -- TODO: delete old one
 -- theorem IScalar.tryMk_eq (ty : IScalarTy) (x : Int) :
