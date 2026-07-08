@@ -54,7 +54,7 @@ private def getFunName? (e : Expr) : Option Name :=
 private def extractSpecFunName? (type : Expr) : MetaM (Option Name) := do
   try
     let ty ← Utils.normalizeLetBindings type
-    let fExpr ← getStepSpecFunArgsExpr ty
+    let (fExpr, _info) ← getStepSpecFunArgsExpr ty
     return getFunName? fExpr
   catch e =>
     IO.eprintln s!"  Warning: failed to extract function name from spec: {← e.toMessageData.toString}"
