@@ -1010,7 +1010,7 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
     | VLiteral (VBool b1), VLiteral (VBool b2) -> begin
         (* Booleans only support the comparison operations and bitwise operators (&, |, ^) *)
         match binop with
-        | Lt | Le | Ge | Gt ->
+        | Lt | Le | Ge | Gt | BitAnd | BitOr | BitXor ->
             let b =
               match binop with
               | Lt -> (not b1) && b2
