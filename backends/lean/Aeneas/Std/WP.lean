@@ -303,15 +303,6 @@ partial def mkBinderFun (depth : Nat) (binder : Term) (body : Term) : MacroM Ter
     buildUncurryLam leafIdents wrappedBody
   | _ => `(fun $binder => $body)
 
-/-- Macro expansion for a single element -/
-macro_rules
-  | `($e ⦃ $x => $p ⦄) => do
-    let post ← mkBinderFun 0 x p
-    `(Aeneas.Std.WP.spec $e $post)
-  | `($e ⦃ $x => $p ⦄div) => do
-    let post ← mkBinderFun 0 x p
-    `(Aeneas.Std.WP.dspec $e $post)
-
 def mk_function_syntax (p : TSyntax `term) (depth : Nat) (xs : List Term) : MacroM Term := do
   match xs with
   | [] => `($p)
@@ -321,15 +312,60 @@ def mk_function_syntax (p : TSyntax `term) (depth : Nat) (xs : List Term) : Macr
     let inner ← mkBinderFun depth x xs
     `(uncurry' $inner)
 
+/-- If `stx` is a bare identifier or a juxtaposition (application) of bare
+identifiers — i.e. a binder group like `a b c` — return the identifiers in
+order.  Otherwise return `none`, so anonymous constructors `⟨a, b⟩`, tuple
+patterns, and other structured terms are left untouched. -/
+private partial def binderGroupIdents? (stx : Syntax) : Option (Array Term) :=
+  if stx.isIdent then some #[⟨stx⟩]
+  else if stx.getKind == ``Lean.Parser.Term.app || stx.getKind == Lean.nullKind then
+    stx.getArgs.foldlM (init := (#[] : Array Term)) fun acc s =>
+      (binderGroupIdents? s).map (acc ++ ·)
+  else none
+
+/-- Expand a binder that shares one type ascription across several names —
+`(a b c : T)` — into the list of single binders `[(a : T), (b : T), (c : T)]`,
+so each name becomes its own product component (exactly as if written
+separately).  Tuple/pattern binders `(a, b)`, `(⟨a, b⟩ : T)`, single binders
+`(a : T)`, and bare identifiers are returned unchanged. -/
+private def expandGroupedBinder (binder : Term) : MacroM (List Term) := do
+  match binder with
+  | `(($e : $t)) =>
+    match binderGroupIdents? e.raw with
+    | some ids =>
+      if ids.size ≤ 1 then pure [binder]
+      else ids.toList.mapM fun id => `(($id : $t))
+    | none => pure [binder]
+  | _ => pure [binder]
+
+/-- Flatten grouped binders across the whole binder list. -/
+private def expandBinders (xs : List Term) : MacroM (List Term) := do
+  let mut out : Array Term := #[]
+  for x in xs do
+    out := out ++ (← expandGroupedBinder x).toArray
+  pure out.toList
+
+/-- Build the postcondition term for `⦃ xs => p ⦄`, expanding grouped binders
+into one component per name first. -/
+private def mkPost (p : Term) (xs : List Term) : MacroM Term := do
+  mk_function_syntax p 0 (← expandBinders xs)
+
+/-- Macro expansion for a single element (may expand to several via a grouped binder) -/
+macro_rules
+  | `($e ⦃ $x => $p ⦄) => do
+    let post ← mkPost p [x]
+    `(Aeneas.Std.WP.spec $e $post)
+  | `($e ⦃ $x => $p ⦄div) => do
+    let post ← mkPost p [x]
+    `(Aeneas.Std.WP.dspec $e $post)
+
 /-- Macro expansion for multiple elements -/
 macro_rules
   | `($e ⦃ $x $xs:term* => $p ⦄) => do
-    let xs := x :: xs.toList
-    let post ← mk_function_syntax p 0 xs
+    let post ← mkPost p (x :: xs.toList)
     `(Aeneas.Std.WP.spec $e $post)
   | `($e ⦃ $x $xs:term* => $p ⦄div) => do
-    let xs := x :: xs.toList
-    let post ← mk_function_syntax p 0 xs
+    let post ← mkPost p (x :: xs.toList)
     `(Aeneas.Std.WP.dspec $e $post)
 
 /-- Macro expansion for predicate with no arrow -/
