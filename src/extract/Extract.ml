@@ -589,8 +589,8 @@ let extract_binop (span : Meta.span) (ctx : extraction_ctx)
   (* Some binary operations have a special notation depending on the backend *)
   (match (backend (), binop) with
   | HOL4, (Eq _ | Ne _)
-  | (FStar | Coq | Lean), (Eq _ | Lt _ | Le _ | Ne _ | Ge _ | Gt _ | BoolOr)
-  | (FStar | Coq | Lean), BoolAnd
+  | (FStar | Coq | Lean), (Eq _ | Lt _ | Le _ | Ne _ | Ge _ | Gt _)
+  | (FStar | Lean), (BoolAnd | BoolOr)
   | Lean, BoolXor
   | ( Lean,
       ( Div (OPanic, _)
@@ -628,7 +628,6 @@ let extract_binop (span : Meta.span) (ctx : extraction_ctx)
       in
       let binop_str =
         match (backend (), binop) with
-        | Coq, (BoolAnd | BoolOr) -> binop_str
         | Coq, _ -> "s" ^ binop_str
         | _ -> binop_str
       in
