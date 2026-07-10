@@ -44,6 +44,15 @@ def core.ops.deref.DerefMutBoxInst (T : Type) :
 structure core.ops.bit.BitAnd (Self : Type) (Rhs : Type) (Self_Output : Type) where
   bitand : Self → Rhs → Result Self_Output
 
+@[rust_trait "core::ops::drop::Drop"]
+structure core.ops.drop.Drop (Self : Type) where
+  drop : Self → Result Self
+
+@[rust_fun "core::ops::drop::Drop::drop"]
+def core.ops.drop.Drop.drop.default {Self : Type}
+    (DropInst : core.ops.drop.Drop Self) : Self → Result Self :=
+  fun s => DropInst.drop s
+
 @[rust_trait "core::ops::function::FnOnce"]
 structure core.ops.function.FnOnce (Self : Type u) (Args : Type v) (Output : Type w) where
   call_once : Self → Args → Result Output

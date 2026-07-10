@@ -78,7 +78,7 @@ structure Config where
   /--`grind` parameter: see `Lean.Grind.Config` -/
   splits : Nat := 4
   /--`grind` parameter: see `Lean.Grind.Config` -/
-  ematch : Nat := 5
+  ematch : Nat := 3
   /--`grind` parameter: see `Lean.Grind.Config` -/
   splitMatch : Bool := false
   /--`grind` parameter: see `Lean.Grind.Config` -/
@@ -90,7 +90,7 @@ structure Config where
   /--`grind` parameter: see `Lean.Grind.Config` -/
   gen : Nat  := 2
   /--`grind` parameter: see `Lean.Grind.Config` -/
-  instances : Nat  := 1000
+  instances : Nat  := 100
   /--`grind` parameter: see `Lean.Grind.Config` -/
   canonHeartbeats : Nat := 1000
   /-- Should we use non-linear arithmetic lemmas when calling `grind`? See `Aeneas.Grind.AGrindConfig`. -/
@@ -232,7 +232,7 @@ def getStepSpecFunArgsExpr (ty : Expr) :
   let specName ← match spec? with
     | Expr.const name _ => pure name
     | _ => throwError "Not a constant"
-  let .some info ← specStatementLookup specName
+  let .some info ← specInfoLookup specName
     | throwError "{specName} is not a supported spec statement name"
   if _h: args.size = info.arity
   then pure (args[info.program_index]!, info) -- this is `f x1 ... xn`

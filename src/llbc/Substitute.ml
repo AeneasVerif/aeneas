@@ -159,18 +159,34 @@ let env_subst_rids (r_subst : RegionId.id -> RegionId.id) (x : env) : env =
   let vis = subst_ids_visitor { empty_id_subst with r_subst } in
   vis#visit_env () x
 
+(** A substitution that erases the *free* regions (replacing them with
+    [RErased]) but leaves the *bound* regions untouched. This is used to erase
+    the regions of a signature while preserving the locally-bound regions of
+    higher-ranked trait bounds (e.g. [for<'a> Trait<&'a _>]). *)
+let erase_free_regions_subst : subst =
+  {
+    empty_subst with
+    r_subst =
+      (function
+      | Free _ -> RErased
+      | Bound _ as var -> RVar var);
+  }
+
 let generic_args_of_params_erase_regions (span : Meta.span option)
     (generics : generic_params) : generic_args =
   let generics = Charon.TypesUtils.generic_args_of_params span generics in
   (* Note that put aside erasing the regions, we don't need to perform any susbtitutions
      actually, and we only need to erase the regions inside the trait clauses. *)
   let regions = List.map (fun _ -> RErased) generics.regions in
-  (* Erase the regions in the trait clauses. *)
+  (* Erase the free regions in the trait clauses, but keep the bound regions.
+     A trait clause may be higher-ranked (e.g. [for<'a> Trait<&'a _>]), in which
+     case its [trait_decl_ref] carries bound regions in [binder_regions]: we
+     preserve those (and their uses inside the binder) rather than erasing them.
+     Lifetime constraints over the bound regions (e.g. [for<'a> 'a : 'b]) are not
+     supported and are rejected elsewhere (outlives guards). *)
   let trait_refs =
     List.map
-      (fun (tref : trait_ref) ->
-        [%sanity_check_opt_span] span (tref.trait_decl_ref.binder_regions = []);
-        st_substitute_visitor#visit_trait_ref erase_regions_subst tref)
+      (st_substitute_visitor#visit_trait_ref erase_free_regions_subst)
       generics.trait_refs
   in
   { generics with regions; trait_refs }

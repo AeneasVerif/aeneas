@@ -589,7 +589,9 @@ let extract_binop (span : Meta.span) (ctx : extraction_ctx)
   (* Some binary operations have a special notation depending on the backend *)
   (match (backend (), binop) with
   | HOL4, (Eq _ | Ne _)
-  | (FStar | Coq | Lean), (Eq _ | Lt _ | Le _ | Ne _ | Ge _ | Gt _ | BoolOr)
+  | (FStar | Coq | Lean), (Eq _ | Lt _ | Le _ | Ne _ | Ge _ | Gt _)
+  | (FStar | Lean), (BoolAnd | BoolOr)
+  | Lean, BoolXor
   | ( Lean,
       ( Div (OPanic, _)
       | Rem (OPanic, _)
@@ -617,14 +619,15 @@ let extract_binop (span : Meta.span) (ctx : extraction_ctx)
         | BitXor _ -> "^^^"
         | BitOr _ -> "|||"
         | BitAnd _ -> "&&&"
+        | BoolAnd -> "&&"
         | BoolOr -> "||"
+        | BoolXor -> "^^"
         | _ ->
             [%add_loc] admit_string span
               ("Unimplemented binary operation: " ^ binop_to_string ctx binop)
       in
       let binop_str =
         match (backend (), binop) with
-        | Coq, BoolOr -> binop_str
         | Coq, _ -> "s" ^ binop_str
         | _ -> binop_str
       in

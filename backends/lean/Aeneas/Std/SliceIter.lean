@@ -189,6 +189,54 @@ def core.iter.traits.iterator.IteratorChunksExact (T : Type) :
   take := core.slice.iter.IteratorChunksExact.take
 }
 
+-- ============================================================================
+-- `rev` / `zip` for slice `Iter<T>` and `ChunksExact<T>`
+-- ============================================================================
+
+/-- `Iter<T>::rev`: `Rev { iter: self }`. -/
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::rev"]
+def core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorShared.rev
+  {T Item : Type}
+  (_DEInst : core.iter.traits.double_ended.DoubleEndedIterator (core.slice.iter.Iter T) Item) :
+  core.slice.iter.Iter T → Result (core.iter.adapters.rev.Rev (core.slice.iter.Iter T)) :=
+  fun self => ok ⟨self⟩
+
+/-- `Iter<T>::zip`: `Zip::new(self, other.into_iter())`. -/
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::zip"]
+def core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorShared.zip
+  {T U Item IntoIter : Type}
+  (IntoIterInst : core.iter.traits.collect.IntoIterator U Item IntoIter) :
+  core.slice.iter.Iter T → U →
+    Result (core.iter.adapters.zip.Zip (core.slice.iter.Iter T) IntoIter) :=
+  fun self other => do
+    let b ← IntoIterInst.into_iter other
+    ok ⟨self, b⟩
+
+/-- `ChunksExact<T>::rev`: `Rev { iter: self }`. -/
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>}::rev"]
+def core.slice.iter.ChunksExact.Insts.CoreIterTraitsIteratorIteratorSharedSlice.rev
+  {T Item : Type}
+  (_DEInst : core.iter.traits.double_ended.DoubleEndedIterator
+    (core.slice.iter.ChunksExact T) Item) :
+  core.slice.iter.ChunksExact T →
+    Result (core.iter.adapters.rev.Rev (core.slice.iter.ChunksExact T)) :=
+  fun self => ok ⟨self⟩
+
+/-- `ChunksExact<T>::zip`: `Zip::new(self, other.into_iter())`. -/
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>}::zip"]
+def core.slice.iter.ChunksExact.Insts.CoreIterTraitsIteratorIteratorSharedSlice.zip
+  {T U Item IntoIter : Type}
+  (IntoIterInst : core.iter.traits.collect.IntoIterator U Item IntoIter) :
+  core.slice.iter.ChunksExact T → U →
+    Result (core.iter.adapters.zip.Zip (core.slice.iter.ChunksExact T) IntoIter) :=
+  fun self other => do
+    let b ← IntoIterInst.into_iter other
+    ok ⟨self, b⟩
+
 /-- Split a list into non-overlapping chunks of exactly size `n`, returning the
     full-sized chunks and the trailing remainder (which has fewer than `n` elements). -/
 def List.toChunksExact (n : Nat) (hn : 0 < n) (l : List α) :

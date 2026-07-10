@@ -3,8 +3,6 @@ import Aeneas.Tactic.Solver.ScalarTac
 import Aeneas.Tactic.Step.Init
 import Aeneas.Tactic.Step.GrindState
 import Aeneas.Std
--- just here until the unit bind PR gets merged
-import Aeneas.Do
 import Aeneas.Tactic.Simp.SimpLemmas
 import AeneasMeta.Async
 import Aeneas.Tactic.Solver.Grind.Init
@@ -77,6 +75,7 @@ attribute [step_simps]
 
 attribute [step_simps] Aeneas.Std.bind_assoc_eq
 attribute [step_simps] Aeneas.Std.uncurry_apply_pair
+attribute [step_simps] ite_self -- this is sometimes necessary
 
 attribute [step_post_simps]
   -- We often see expressions like `Int.ofNat 3`
@@ -238,7 +237,7 @@ def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr × SpecInfo) := do
   let name ← match spec? with
     | Expr.const name _ => pure name
     | _ => throwError "{spec?} is not a spec statement"
-  let .some info ← specStatementLookup name
+  let .some info ← specInfoLookup name
     | throwError "{name} is not a supported spec statement"
   let compTy ← if h: args.size = info.arity
                then pure (args[info.program_index]!)
@@ -427,7 +426,7 @@ def getPostNamesFromGoal : TacticM (Array (Option Name)) := do
     let specname ← match spec? with
       | Expr.const name _ => pure name
       | _ => throwError "{spec?} is not a spec statement"
-    let .some info ← specStatementLookup specname
+    let .some info ← specInfoLookup specname
       | throwError "{specname} is not a supported spec statement"
     if args.size = info.arity then
       getPostNames args[info.post_index]!
@@ -1036,7 +1035,7 @@ def tryApply (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args) (isL
 def getLiftingForThm (info : SpecInfo) (thm : Expr) : MetaM (Option LiftingInfo) := do
   let thTy ← inferType thm
   let thTy ← normalizeLetBindings thTy
-  let thOutput ← forallTelescopeReducing thTy (fun _ out => return out)
+  let thOutput ← forallTelescope thTy (fun _ out => return out)
   let spec? := thOutput.consumeMData.withApp (fun f _ => f)
   trace[Step] "spec? is {spec?}"
   let name ← match spec? with
@@ -1118,14 +1117,6 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
       let liftings : Array (Option LiftingInfo) := #[.none] ++ Array.map .some info.liftings
       for lifting in liftings do
         let pspecs : Array Name ← do
-          -- some liftings will use liftM to convert to a different monad, so we strip
-          -- liftM off of fExpr if it exists
-          -- TODO: delete this whole liftM thing after i alter Result to use ITree
-          let fExpr :=
-            let (liftM?, args) := fExpr.consumeMData.withApp (fun f args => (f, args))
-            if h: liftM?.isConstOf ``liftM ∧ args.size = 5
-            then args[4]
-            else fExpr
           let thNames ← stepAttr.find? -- looks up the theorem in a discrimination tree
             (match lifting with | .none => info.spec_name | .some l => l.from_statement)
             fExpr
@@ -1139,7 +1130,6 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
         -- Try the theorems one by one
         for pspec in pspecs do
           let pspecExpr ← Term.mkConst pspec
-          -- TODO: should this fExpr have the liftM stripped also?
           match ← tryApply info lifting args goalIsLet fExpr "pspec theorem" pspecExpr with
           | some goals => return (goals, .stepThm pspec)
           | none => pure ()

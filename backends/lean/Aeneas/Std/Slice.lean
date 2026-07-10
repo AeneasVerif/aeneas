@@ -5,6 +5,7 @@ import Aeneas.Std.Range
 import Aeneas.Std.Core.Ops
 import Aeneas.Std.RawPtr
 import Aeneas.Tactic.Simp.SimpScalar.SimpScalar
+import Aeneas.Std.SliceDef
 
 namespace Aeneas.Std
 
@@ -18,8 +19,6 @@ attribute [-simp] List.getElem!_eq_getElem?_getD
 /-!
 # Slice
 -/
-
-def Slice (α : Type u) := { l : List α // l.length ≤ Usize.max }
 
 /-- We need this to coerce slices to lists without marking `Slice` as reducible.
     Also not that we *do not* want to mark `Slice` as reducible: it triggers issues.
@@ -842,8 +841,9 @@ theorem Slice.setSlice!_getElem_prefix {α}
   have h1 : (s.setSlice! i s')[j]? = s[j]? := by
     simp only [Slice.getElem?_Nat_eq, Slice.setSlice!]
     simp_lists [List.setSlice!_getElem?_prefix]
-  simpa [Slice.getElem?_Nat_eq, Slice.getElem_Nat_eq,
-    List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2] using h1
+  simp only [Slice.getElem?_Nat_eq, List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2,
+    Option.some.injEq] at h1
+  exact h1
 
 @[simp_lists_safe]
 theorem Slice.setSlice!_getElem!_middle {α} [Inhabited α]
@@ -862,8 +862,9 @@ theorem Slice.setSlice!_getElem_middle {α}
   have h1 : (s.setSlice! i s')[j]? = s'[j - i]? := by
     simp only [Slice.getElem?_Nat_eq, Slice.setSlice!]
     simp_lists [List.setSlice!_getElem?_middle]
-  simpa [Slice.getElem?_Nat_eq, Slice.getElem_Nat_eq,
-    List.getElem?_eq_getElem hj', List.getElem?_eq_getElem hji] using h1
+  simp only [Slice.getElem?_Nat_eq, List.getElem?_eq_getElem hj', List.getElem?_eq_getElem hji,
+    Option.some.injEq] at h1
+  exact h1
 
 theorem Slice.setSlice!_getElem!_suffix {α} [Inhabited α]
   (s : Slice α) (s' : List α) (i j : ℕ) (h : i + s'.length ≤ j) :
@@ -879,8 +880,9 @@ theorem Slice.setSlice!_getElem_suffix {α}
   have h1 : (s.setSlice! i s')[j]? = s[j]? := by
     simp only [Slice.getElem?_Nat_eq, Slice.setSlice!]
     simp_lists [List.setSlice!_getElem?_suffix]
-  simpa [Slice.getElem?_Nat_eq, Slice.getElem_Nat_eq,
-    List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2] using h1
+  simp only [Slice.getElem?_Nat_eq, List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2,
+    Option.some.injEq] at h1
+  exact h1
 
 @[simp, simp_lists_safe]
 theorem Slice.setSlice!_val (s : Slice α) (i : ℕ) (s' : List α) :

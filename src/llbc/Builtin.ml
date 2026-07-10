@@ -86,7 +86,14 @@ module Sig = struct
   let mk_sig generics inputs output : bound_fun_sig =
     {
       item_binder_params = generics;
-      item_binder_value = { inputs; output; is_unsafe = false; abi = AbiRust };
+      item_binder_value =
+        {
+          inputs;
+          output;
+          abi = AbiRust;
+          is_unsafe = false;
+          is_variadic = false;
+        };
     }
 
   (** [fn<T>(T) -> Box<T>] *)

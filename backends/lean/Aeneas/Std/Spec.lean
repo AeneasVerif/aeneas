@@ -9,7 +9,6 @@ open Extensions
 -- This file defines an extension for defining spec statements that
 -- can be used with the step tactic.
 
-
 structure LiftingInfo where
   from_statement : Name
   conversion_thm : Name
@@ -50,11 +49,11 @@ initialize specAttr : SimpleScopedEnvExtension SpecInfo SpecInfoExtensionState  
   }
   pure ext
 
-syntax (name := register_spec_statement_cmd)
-  "#register_spec_statement " term : command
+syntax (name := register_spec_info_cmd)
+  "#register_spec_info " term : command
 
-@[command_elab register_spec_statement_cmd]
-unsafe def register_spec_statement : Lean.Elab.Command.CommandElab := fun stx => do
+@[command_elab register_spec_info_cmd]
+unsafe def register_spec_info : Lean.Elab.Command.CommandElab := fun stx => do
   let info := stx[1]
   let expr ← Command.liftTermElabM do
     elabTerm info (some (mkConst ``SpecInfo))
@@ -62,7 +61,7 @@ unsafe def register_spec_statement : Lean.Elab.Command.CommandElab := fun stx =>
     Lean.Meta.evalExpr SpecInfo (mkConst ``SpecInfo) expr
   specAttr.add value
 
-def specStatementLookup (n : Name) : MetaM (Option SpecInfo) := do
+def specInfoLookup (n : Name) : MetaM (Option SpecInfo) := do
   let env ← getEnv
   let state := specAttr.getState env
   return state.specInfos.get? n
