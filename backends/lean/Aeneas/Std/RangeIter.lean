@@ -471,22 +471,6 @@ theorem core.ops.range.RangeInclusive.new_spec {Idx : Type} (a b : Idx) :
       r.start = a ∧ r.«end» = b ∧ r.exhausted = false ⦄ := by
   simp [core.ops.range.RangeInclusive.new, spec_ok]
 
-/-- `Iterator::zip` for `RangeInclusive`: `Zip { fst := ri, snd := b }` where
-    `b = other.into_iter()` (requires `into_iter` to succeed). -/
-@[step]
-theorem core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.zip_spec
-    {A U Item IntoIter : Type}
-    (StepInst : core.iter.range.Step A)
-    (IntoIterInst : core.iter.traits.collect.IntoIterator U Item IntoIter)
-    (self : core.ops.range.RangeInclusive A) (other : U) (other' : IntoIter)
-    (h_into : IntoIterInst.into_iter other = ok other') :
-    core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.zip
-      StepInst IntoIterInst self other
-    ⦃ (z : core.iter.adapters.zip.Zip (core.ops.range.RangeInclusive A) IntoIter) =>
-      z.fst = self ∧ z.snd = other' ⦄ := by
-  simp [core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.zip,
-    h_into, spec_ok]
-
 /-- Generic `RangeInclusive<UScalar ty>::next`: conditional spec for the three
     cases (empty ⇒ `none`; iterating `start < end` ⇒ yield+advance;
     `start == end` ⇒ yield once then mark exhausted).  `h_lt` says the bundled
