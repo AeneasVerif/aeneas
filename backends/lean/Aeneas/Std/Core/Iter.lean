@@ -57,13 +57,29 @@ structure core.iter.adapters.zip.Zip (A : Type u) (B : Type u) where
   fst : A
   snd : B
 
+def core.iter.traits.iterator.Iterator.step_by.default
+  {Self : Type} (self: Self) (step_by : Std.Usize) :
+  Result (core.iter.adapters.step_by.StepBy Self) :=
+  if step_by.val = 0 then .fail .panic
+  else .ok ⟨ self, step_by ⟩
+
+def core.iter.traits.iterator.Iterator.enumerate.default
+  {Self : Type} (self: Self) :
+  Result (core.iter.adapters.enumerate.Enumerate Self) :=
+  .ok { iter := self, count := 0#usize }
+
+def core.iter.traits.iterator.Iterator.take.default
+  {Self : Type} (self: Self) (n : Std.Usize) :
+  Result (core.iter.adapters.take.Take Self) :=
+  .ok ⟨ self, n ⟩
+
 @[rust_trait "core::iter::traits::iterator::Iterator"]
 structure core.iter.traits.iterator.Iterator (Self : Type) (Self_Item : Type)
   where
   next : Self → Result ((Option Self_Item) × Self)
-  step_by : Self → Usize → Result (core.iter.adapters.step_by.StepBy Self)
-  enumerate : Self → Result (core.iter.adapters.enumerate.Enumerate Self)
-  take : Self → Usize → Result (core.iter.adapters.take.Take Self)
+  step_by : Self → Usize → Result (core.iter.adapters.step_by.StepBy Self) := core.iter.traits.iterator.Iterator.step_by.default
+  enumerate : Self → Result (core.iter.adapters.enumerate.Enumerate Self) := core.iter.traits.iterator.Iterator.enumerate.default
+  take : Self → Usize → Result (core.iter.adapters.take.Take Self) := core.iter.traits.iterator.Iterator.take.default
   -- TODO: adding more fields like rev leads to a circularity.
   -- As an approximation we could only require these methods to implement a smaller version of
   -- `Iterator` with, e.g., only the `next` method. Most implementations should satisfy this
@@ -71,12 +87,6 @@ structure core.iter.traits.iterator.Iterator (Self : Type) (Self_Item : Type)
   -- `Iterator` to `SimpleIterator`.
   -- rev : Self → Result (core.iter.adapters.rev.Rev Self) -- this leads to a circularity
   -- TODO: collect
-
-def core.iter.traits.iterator.Iterator.step_by.default
-  {Self : Type} (self: Self) (step_by : Std.Usize) :
-  Result (core.iter.adapters.step_by.StepBy Self) :=
-  if step_by.val = 0 then .fail .panic
-  else .ok ⟨ self, step_by ⟩
 
 @[trait_default, rust_fun "core::iter::traits::iterator::Iterator::step_by"]
 def core.iter.traits.iterator.Iterator.step_by.trait_default
@@ -86,11 +96,6 @@ def core.iter.traits.iterator.Iterator.step_by.trait_default
   Result (core.iter.adapters.step_by.StepBy Self) :=
   core.iter.traits.iterator.Iterator.step_by.default self step_by
 
-def core.iter.traits.iterator.Iterator.enumerate.default
-  {Self : Type} (self: Self) :
-  Result (core.iter.adapters.enumerate.Enumerate Self) :=
-  .ok { iter := self, count := 0#usize }
-
 @[trait_default, rust_fun "core::iter::traits::iterator::Iterator::enumerate"]
 def core.iter.traits.iterator.Iterator.enumerate.trait_default
   {Self Item : Type}
@@ -98,11 +103,6 @@ def core.iter.traits.iterator.Iterator.enumerate.trait_default
   (self: Self) :
   Result (core.iter.adapters.enumerate.Enumerate Self) :=
   core.iter.traits.iterator.Iterator.enumerate.default self
-
-def core.iter.traits.iterator.Iterator.take.default
-  {Self : Type} (self: Self) (n : Std.Usize) :
-  Result (core.iter.adapters.take.Take Self) :=
-  .ok ⟨ self, n ⟩
 
 @[trait_default, rust_fun "core::iter::traits::iterator::Iterator::take"]
 def core.iter.traits.iterator.Iterator.take.trait_default
