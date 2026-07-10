@@ -2816,7 +2816,7 @@ let extract_trait_decl_type_names (ctx : extraction_ctx)
 
 (** Similar to {!extract_trait_decl_register_names} *)
 let extract_trait_decl_method_names (ctx : extraction_ctx)
-    (trait_decl : trait_decl) (trait_decl_name : string)
+    (trait_decl : trait_decl) (_trait_decl_name : string)
     (builtin_info : Pure.builtin_trait_decl_info option) : extraction_ctx =
   [%ltrace trait_decl.name];
   let methods = trait_decl.methods in
@@ -2900,14 +2900,10 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
           (TraitMethodId (trait_decl.def_id, method_id))
           fun_name ctx
       in
-      (* Also register the default implementation if there is *)
-      match default_id with
-      | Some def_id when backend () = Lean ->
-          ctx_add trait_decl.item_meta.span
-            (FunId (FromLlbc (FunId (FRegular def_id), None)))
-            (trait_decl_name ^ fun_name ^ ".default")
-            ctx
-      | _ -> ctx)
+      (* We do not register the default_id: it is registered when registering
+         the default method itself. *)
+      ignore default_id;
+      ctx)
     ctx method_names
 
 (** Similar to {!extract_type_decl_register_names} *)
