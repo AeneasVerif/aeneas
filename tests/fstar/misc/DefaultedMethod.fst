@@ -76,5 +76,5 @@ let main : result unit =
   let* _ = noOverride_Insts_Defaulted_methodTrait_provided_method () in
   let* _ = yesOverride_Insts_Defaulted_methodTrait_provided_method () in
   let* n = i32_Insts_CoreCmpOrd_min 10 1 in
-  if n = 1 then Ok () else Fail Failure
+  massert (n = 1)
 

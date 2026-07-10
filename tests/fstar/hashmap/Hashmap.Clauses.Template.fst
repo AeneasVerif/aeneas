@@ -42,7 +42,7 @@ let hashMap_move_elements_loop_decreases (#t : Type0) (ntable : hashMap_t t)
   admit ()
 
 (** [hashmap::{hashmap::HashMap<T>}::contains_key_in_list]: decreases clause
-    Source: 'tests/src/hashmap.rs', lines 1:0-231:9 *)
+    Source: 'tests/src/hashmap.rs', lines 220:8-232:5 *)
 unfold
 let hashMap_contains_key_in_list_loop_decreases (#t : Type0) (key : usize)
   (ls : aList_t t) : nat =
@@ -63,7 +63,7 @@ let hashMap_get_mut_in_list_loop_decreases (#t : Type0) (ls : aList_t t)
   admit ()
 
 (** [hashmap::{hashmap::HashMap<T>}::remove_from_list]: decreases clause
-    Source: 'tests/src/hashmap.rs', lines 1:0-297:17 *)
+    Source: 'tests/src/hashmap.rs', lines 276:12-300:5 *)
 unfold
 let hashMap_remove_from_list_loop_decreases (#t : Type0) (key : usize)
   (ls : aList_t t) : nat =

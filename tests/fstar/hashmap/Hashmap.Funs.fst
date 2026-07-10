@@ -242,7 +242,7 @@ let hashMap_insert
   else Ok self1
 
 (** [hashmap::{hashmap::HashMap<T>}::contains_key_in_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 1:0-231:9
+    Source: 'tests/src/hashmap.rs', lines 220:8-232:5
     Visibility: public *)
 let rec hashMap_contains_key_in_list_loop
   (#t : Type0) (key : usize) (ls : aList_t t) :
@@ -365,7 +365,7 @@ let hashMap_get_mut
   Ok (o, back)
 
 (** [hashmap::{hashmap::HashMap<T>}::remove_from_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 1:0-297:17 *)
+    Source: 'tests/src/hashmap.rs', lines 276:12-300:5 *)
 let rec hashMap_remove_from_list_loop
   (#t : Type0) (key : usize) (ls : aList_t t) :
   Tot (result ((option t) & (aList_t t)))

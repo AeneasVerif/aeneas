@@ -804,7 +804,7 @@ let remove_useless_joins (crate : crate) (f : fun_decl) : fun_decl =
 let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
     fun_decl =
   let f0 = f in
-  let filter_in_body (body : block) : block =
+  let filter_in_body (argument_locals : LocalId.Set.t) (body : block) : block =
     let filtered = ref LocalId.Set.empty in
 
     let filter_shallow (st : statement) : statement list =
@@ -822,7 +822,9 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
     let filter_storage (st : statement) : statement list =
       match st.kind with
       | StorageLive _ -> []
-      | StorageDead loc when LocalId.Set.mem loc !filtered -> []
+      | StorageDead loc
+        when LocalId.Set.mem loc !filtered
+             || LocalId.Set.mem loc argument_locals -> []
       | _ -> [ st ]
     in
 
@@ -854,7 +856,14 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
   let body =
     match f.body with
     | StructuredBody body ->
-        StructuredBody { body with body = filter_in_body body.body }
+        let argument_locals =
+          body.locals.locals |> List.tl
+          |> Collections.List.prefix body.locals.arg_count
+          |> List.map (fun (var : local) -> var.index)
+          |> LocalId.Set.of_list
+        in
+        StructuredBody
+          { body with body = filter_in_body argument_locals body.body }
     | other -> other
   in
   let f = { f with body } in
@@ -1426,6 +1435,7 @@ let refresh_statement_ids (_ : crate) (f : fun_decl) : fun_decl =
 (** We simplify statements of the shape:
     {[
       x := from_str<'_>(const ("Error"));
+      StorageDead ...;
       panic(core::panicking::panic_fmt)
 
         ~>
@@ -1455,28 +1465,37 @@ let simplify_panics (crate : crate) (f : fun_decl) : fun_decl =
       inherit [_] map_statement
 
       method! visit_block env (block : block) =
+        let is_from_str_call (st : statement) : bool =
+          match st.kind with
+          | Call
+              ({ func = FnOpRegular { kind = FunId (FRegular fid); _ }; _ }, _)
+            -> (
+              match FunDeclId.Map.find_opt fid crate.fun_decls with
+              | Some decl -> is_from_str decl
+              | None -> false)
+          | _ -> false
+        in
+
+        let rec skip_storage_dead (stl : statement list) : statement list =
+          match stl with
+          | st :: stl -> (
+              match st.kind with
+              | StorageDead _ -> skip_storage_dead stl
+              | _ -> st :: stl)
+          | [] -> []
+        in
+
         let rec update (stl : statement list) : statement list =
           match stl with
           | [] -> []
-          | [ st0; st1 ] -> (
-              match (st0.kind, st1.kind) with
-              | ( Call
-                    ( {
-                        func = FnOpRegular { kind = FunId (FRegular fid); _ };
-                        _;
-                      },
-                      _ ),
-                  Abort (Panic _) ) -> (
-                  match FunDeclId.Map.find_opt fid crate.fun_decls with
-                  | Some decl when is_from_str decl -> [ st1 ]
-                  | _ ->
-                      [
-                        self#visit_statement env st0;
-                        self#visit_statement env st1;
-                      ])
-              | _ ->
-                  [ self#visit_statement env st0; self#visit_statement env st1 ]
-              )
+          | st0 :: stl when is_from_str_call st0 -> (
+              match skip_storage_dead stl with
+              | st1 :: stl1 -> (
+                  match st1.kind with
+                  | Abort (Panic _) ->
+                      self#visit_statement env st1 :: update stl1
+                  | _ -> self#visit_statement env st0 :: update stl)
+              | [] -> self#visit_statement env st0 :: update stl)
           | st0 :: stl -> self#visit_statement env st0 :: update stl
         in
         { block with statements = update block.statements }
