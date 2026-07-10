@@ -346,7 +346,7 @@ Definition hashMap_insert
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::contains_key_in_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 1:0-231:9
+    Source: 'tests/src/hashmap.rs', lines 220:8-232:5
     Visibility: public *)
 Fixpoint hashMap_contains_key_in_list_loop
   {T : Type} (n : nat) (key : usize) (ls : AList_t T) : result bool :=
@@ -497,7 +497,7 @@ Definition hashMap_get_mut
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::remove_from_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 1:0-297:17 *)
+    Source: 'tests/src/hashmap.rs', lines 276:12-300:5 *)
 Fixpoint hashMap_remove_from_list_loop
   {T : Type} (n : nat) (key : usize) (ls : AList_t T) :
   result ((option T) * (AList_t T))
