@@ -37,7 +37,7 @@ instance {ty} : HSub (IScalar ty) (IScalar ty) (Result (IScalar ty)) where
 -/
 
 theorem UScalar.sub_equiv {ty} (x y : UScalar ty) :
-  (x - y).nmatch -- TODO: here, the dependent version breaks things in the proof
+  (x - y).match_dep -- TODO: here, the dependent version breaks things in the proof
   (fun z =>
     y.val ≤ x.val ∧
     x.val = z.val + y.val ∧
@@ -81,7 +81,7 @@ theorem UScalar.sub_equiv {ty} (x y : UScalar ty) :
     ring_nf
 
 theorem IScalar.sub_equiv {ty} (x y : IScalar ty) :
-  (x - y).nmatch
+  (x - y).match_dep
   (fun z =>
     IScalar.inBounds ty (x.val - y.val) ∧
     z.val = x.val - y.val ∧

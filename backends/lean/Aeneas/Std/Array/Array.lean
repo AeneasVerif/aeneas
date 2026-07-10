@@ -232,7 +232,7 @@ def Array.index_mut_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) :
 theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize)
   (hbound : i.val < v.length) :
   v.index_mut_usize i ⦃ x back => x = v.val[i.val] ∧ back = set v i ⦄ := by
-  simp only [index_mut_usize, Bind.bind, bind]
+  simp only [index_mut_usize, Bind.bind]
   have ⟨ x, h ⟩ := spec_imp_exists (index_usize_spec v i hbound)
   simp [h]
 
@@ -283,7 +283,7 @@ theorem Array.clone_length {α : Type u} {n : Usize} (clone : α → Result α) 
   s'.length = s.length := by
   simp [Array.clone] at h
   simp [List.clone] at h
-  split at h <;> simp_all
+  cases _ : List.mapM clone ↑s <;> simp_all
 
 @[step]
 theorem Array.clone_spec {α : Type u} {n : Usize} {clone : α → Result α} {s : Array α n} (h : ∀ x ∈ s.val, clone x = ok x) :

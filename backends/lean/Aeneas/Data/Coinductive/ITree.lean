@@ -360,6 +360,13 @@ theorem ret_inj {E} {α} {x y} : @ITree.ret α E x = ITree.ret y → x = y := by
   simp at eq
   grind only
 
+theorem vis_inj_effect {E} {α} {e1 e2 k1 k2} : @ITree.vis α E e1 k1 = ITree.vis e2 k2
+  → e1 = e2 := by
+  intros eq
+  have eq := congrArg (fun i => i.approx 1) eq
+  simp at eq
+  grind
+
 
 -- TODO: probably dont need this:
 def Eqrec3.{w, u_1} {α : Sort u_1} {a' : α} {motive : (a : α) → a' = a → Sort w}

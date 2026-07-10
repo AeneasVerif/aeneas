@@ -27,7 +27,10 @@ theorem core.iter.range.IteratorRange.next_Usize_spec
     liftFun1, liftFun2, bind_tc_ok,
     hlt, decide_true, ↓reduceIte]
   have hadd := @UScalar.add_equiv UScalarTy.Usize range.start (1#usize)
-  split at hadd
+  -- generalize hval : range.start + 1#usize = val at hadd
+  -- cases val
+  cases h : range.start + 1#usize <;> simp only [h] at *
+  -- split at hadd
   · rename_i z heq
     obtain ⟨_, hval, _⟩ := hadd
     have hdite : range.start.val + 1 ≤ UScalar.max .Usize := by scalar_tac
