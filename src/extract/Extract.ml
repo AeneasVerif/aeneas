@@ -2118,7 +2118,17 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
       [ "reducible" ]
     else []
   in
-  let attributes = rust_attributes @ reduc_attribute in
+  (* A trait method's default-implementation body is emitted with the
+     [trait_default] attribute so that the [impl_def] command can unfold it when
+     resolving self-referential trait-impl fields (see the TraitDefault elab). *)
+  let trait_default =
+    if backend () = Lean then
+      match def.src with
+      | TraitDeclItem _ -> [ "trait_default" ]
+      | _ -> []
+    else []
+  in
+  let attributes = rust_attributes @ reduc_attribute @ trait_default in
   extract_attributes span ctx fmt def.item_meta.name None attributes "rust_fun"
     []
     ~is_external:(not def.item_meta.is_local);
