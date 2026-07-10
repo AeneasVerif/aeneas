@@ -626,14 +626,14 @@ theorem UScalar.tryMk_eq_DELETE_THIS_PROBABLY (ty : UScalarTy) (x : Nat) :
     grind
 
 theorem UScalar.tryMk_eq (ty : UScalarTy) (x : Nat) :
-  (tryMk ty x).match
+  (tryMk ty x).match_dep
     (fun y => y.val = x ∧ inBounds ty x)
     (fun _e => ¬ (inBounds ty x))
-    False
+    (fun _ => False)
   := by
   have := UScalar.tryMkOpt_eq ty x
   simp [tryMk, ofOption]
-  cases h: tryMkOpt ty x <;> simp_all [fail, ok]
+  cases h: tryMkOpt ty x <;> simp_all
 
 -- TODO: delete old one
 -- theorem UScalar.tryMk_eq (ty : UScalarTy) (x : Nat) :
@@ -672,10 +672,10 @@ theorem IScalar.tryMkOpt_eq (ty : IScalarTy) (x : Int) :
 --     grind
 
 theorem IScalar.tryMk_eq (ty : IScalarTy) (x : Int) :
-  (tryMk ty x).nmatch
+  (tryMk ty x).match_dep
   (fun y => y.val = x ∧ inBounds ty x)
   (fun _e => ¬ (inBounds ty x))
-  False
+  (fun _ => False)
   := by
   have := tryMkOpt_eq ty x
   simp [tryMk]

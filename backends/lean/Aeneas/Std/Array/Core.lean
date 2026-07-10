@@ -34,20 +34,22 @@ theorem List.mapM_clone_eq {T : Type u} {clone : T → Result T} {l : List T}
   apply h
 
 def List.clone (clone : α → Result α) (l : List α) : Result ({ l' : List α // l'.length = l.length}) :=
+  -- TODO: clean this up
   -- match h :List.mapM clone l with
   -- | ok v => ok ⟨ v, by have := List.mapM_Result_length h; scalar_tac ⟩
   -- | fail e => fail e
   -- | div => div
-  (List.mapM clone l).match
-  (fun v => ok ⟨ v, by have := List.mapM_Result_length h; scalar_tac ⟩)
-  (fun e => fail e)
-  div
+  -- (List.mapM clone l).match_dep
+  Result.match_dep' (motive := fun l => _) (List.mapM clone l)
+  (fun v h => ok ⟨ v, by have := List.mapM_Result_length h; scalar_tac ⟩)
+  (fun e _h => fail e)
+  (fun _h => div)
 
 @[step]
 def List.clone_spec {clone : α → Result α} {l : List α} (h : ∀ x ∈ l, clone x = ok x) :
   List.clone clone l ⦃ l' => l'.val = l ∧ l'.val.length = l.length ⦄ := by
   simp only [List.clone]
   have := List.mapM_clone_eq h
-  split <;> simp_all
+  simp [this]
 
 end Aeneas.Std

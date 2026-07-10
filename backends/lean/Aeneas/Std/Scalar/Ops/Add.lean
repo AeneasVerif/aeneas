@@ -35,7 +35,7 @@ instance {ty} : HAdd (IScalar ty) (IScalar ty) (Result (IScalar ty)) where
 -/
 
 theorem UScalar.add_equiv {ty} (x y : UScalar ty) :
-  (x + y).nmatch
+  (x + y).match_dep
   (fun z => x.val + y.val < 2^ty.numBits ∧
     z.val = x.val + y.val ∧
     z.bv = x.bv + y.bv)
@@ -49,13 +49,15 @@ theorem UScalar.add_equiv {ty} (x y : UScalar ty) :
   simp [inBounds] at h
   generalize valh : (tryMk ty (↑x + ↑y)) = val at h
   cases val <;> simp_all
+  -- TODO: using my registered MatcherInfo, currently this sort of works but needs the generalize for some reason
+  -- split at h <;> simp_all
   zify; simp
   zify at h
   have := @Int.emod_eq_of_lt (x.val + y.val) (2^ty.numBits) (by omega) (by omega)
   simp [*]
 
 theorem IScalar.add_equiv {ty} (x y : IScalar ty) :
-  (x + y).nmatch
+  (x + y).match_dep
     (fun z =>
       IScalar.inBounds ty (x.val + y.val) ∧
       z.val = x.val + y.val ∧

@@ -99,33 +99,41 @@ instance : LawfulMonad Result := instLawfulMonadITree
 
 -- TODO: adding these to simp set messes up some things
 @[simp, grind .]
--- @[simp]
 theorem ok_not_fail {α} {a : α} {e} : ¬ Result.ok a = .fail e := by grind [Result.ok, Result.fail, not_vis_ret]
--- @[simp]
 @[simp, grind .]
 theorem fail_not_ok {α} {a : α} {e} : ¬ Result.fail e = .ok a := by grind [Result.ok, Result.fail, not_vis_ret]
--- @[simp]
 @[simp, grind .]
 theorem ok_not_div {α} {a : α} : ¬ Result.ok a = .div := by grind [Result.ok, Result.div, not_ret_div]
--- @[simp]
 @[simp, grind .]
 theorem div_not_ok {α} {a : α} : ¬ Result.div = .ok a := by grind [Result.ok, Result.div, not_ret_div]
--- @[simp]
+@[simp, grind .]
+theorem fail_not_div {α} {e} : ¬ @Result.fail α e = .div := by grind [Result.div, Result.fail, not_div_vis]
+@[simp, grind .]
+theorem div_not_fail {α} {e} : ¬ .div = @Result.fail α e := by grind [Result.div, Result.fail, not_div_vis]
 @[simp, grind .]
 theorem Result.ok.injEq {α} {a b : α} : (Result.ok a = .ok b) = (a = b) := by
   grind [Result.ok, ret_inj]
+@[simp, grind .]
+theorem Result.fail.injEq {α} {a b : Error} : (@Result.fail α a = .fail b) = (a = b) := by
+  grind [Result.fail, vis_inj_effect]
 
+-- NOTE: in order for lean's metaprogramming surrounding the `split` tactic to not
+-- spaghetti code itself to death, cases without inputs like div must input a Unit
+-- NOTE: its seems that for registering a matcher for split, we need the motive to be before the result input.
+-- NOTE: in order to register custom matches for the `split` tactic,
+-- the name of the function must start with "match_". See the implementation of Matcherinfo.lean/`getMatcherInfo?`
 -- previously Result was an inductive with ok, div, and fail cases only.
 -- this function can be used in many cases to replace pattern matching on that inductive:
 -- TODO: why do things error when this is def instead of abbrev?
 @[elab_as_elim, cases_eliminator]
-abbrev Result.match {α} (r : Result α)
+abbrev Result.match_dep {α}
   {motive : Result α → Sort v}
+  (r : Result α)
   (ok : ∀ r, motive (.ok r))
   (fail : ∀ e, motive (.fail e))
-  (div :  motive (.div))
+  (div :  Unit → motive (.div))
   -- will add more inputs as we add effects
-  : motive r := ITree.cases ok div (
+  : motive r := ITree.cases ok (div ()) (
       fun e k => match e with
         | .fail e => by
             have same : k = PEmpty.elim := by funext x; contradiction
@@ -135,40 +143,126 @@ abbrev Result.match {α} (r : Result α)
 
 @[simp]
 theorem Result.match.ok {R motive r d f x}
-  : @Result.match R (.ok x) motive r f d = r x := ITree.cases.ret
+  : @Result.match_dep R motive (.ok x) r f d = r x := ITree.cases.ret
 
 @[simp]
 theorem Result.match.div {R motive r d f}
-  : @Result.match R .div motive r f d = d := ITree.cases.div
+  : @Result.match_dep R motive .div r f d = d () := ITree.cases.div
 
 @[simp]
 theorem Result.match.fail {R motive r d f e}
-  : @Result.match R (.fail e) motive r f d = f e := ITree.cases.vis
+  : @Result.match_dep R motive (.fail e) r f d = f e := ITree.cases.vis
 
--- TODO: do we need both versions? I had problems with motives not being correct using the
--- dependent version, and maybe you can't use this one as a cases eliminator. TODO
-def Result.nmatch {α} (r : Result α)
-  {Out : Sort v}
-  (ok : α  → Out)
-  (fail : Error → Out)
-  (div :  Out)
+-- theorem Result.match_dep_destruct {α}
+--   {motive : Result α → Sort v}
+--   (r : Result α)
+--   (ok : ∀ r, motive (.ok r))
+--   (fail : ∀ e, motive (.fail e))
+--   (div :  Unit → motive (.div))
+--   : r.match_dep (motive:=motive) ok fail div =
+--     (∃ a, r = .ok a ∧ ok _) := by sorry
+
+-- @[elab_as_elim, cases_eliminator]
+abbrev Result.match_dep' {α}
+  {motive : Result α → Sort v}
+  (r : Result α)
+  (ok : ∀ x, r = .ok x → motive (.ok x))
+  (fail : ∀ e, r = .fail e → motive (.fail e))
+  (div : r = .div → motive (.div))
   -- will add more inputs as we add effects
-  : Out := ITree.cases ok div (
-      fun e _k => match e with
-        | .fail e => fail e
-    ) r
+  : motive r :=
+    Result.match_dep (motive := fun r' => r = r' -> motive r') r ok fail (fun _ => div) rfl
 
 @[simp]
-theorem Result.nmatch.ok {R Out r d f x}
-  : @Result.nmatch R (.ok x) Out r f d = r x := ITree.cases.ret
+theorem Result.match_dep'.ok {R motive v r d f x}
+  (h : v = Result.ok x)
+  : @Result.match_dep' R motive v r f d = cast (congrArg motive (Eq.symm h)) (r x h) := by
+  cases v <;> unfold match_dep' <;> simp <;> grind
 
 @[simp]
-theorem Result.nmatch.div {R Out r d f}
-  : @Result.nmatch R .div Out r f d = d := ITree.cases.div
+theorem Result.match_dep'.fail {R motive v r d f e}
+  (h : v = Result.fail e)
+  : @Result.match_dep' R motive v r f d = cast (congrArg motive (Eq.symm h)) (f e h) := by
+  cases v <;> unfold match_dep' <;> simp <;> grind
 
 @[simp]
-theorem Result.nmatch.fail {R Out r d f e}
-  : @Result.nmatch R (.fail e) Out r f d = f e := ITree.cases.vis
+theorem Result.match_dep'.div {R motive v r d f}
+  (h : v = .div)
+  : @Result.match_dep' R motive v r f d = cast (congrArg motive (Eq.symm h)) (d h) := by
+  cases v <;> unfold match_dep' <;> simp <;> grind
+
+-- @[elab_as_elim, cases_eliminator]
+abbrev Result.match_dep'' {α}
+  {motive : Result α → Sort v}
+  (r : Result α)
+  (ok : ∀ x, r = .ok x → motive r)
+  (fail : ∀ e, r = .fail e → motive r)
+  (div : r = .div → motive r)
+  -- will add more inputs as we add effects
+  : motive r :=
+    Result.match_dep (motive := fun r' => r = r' -> motive r') r
+      (fun r (.refl _) => ok r (by assumption))
+      (fun e (.refl _) => fail e (by assumption))
+      (fun _ (.refl _) => div (by assumption))
+      rfl
+
+-- theorem Result.match_dep''.ok {R motive v r d f x}
+--   (h : v = Result.ok x)
+--   : @Result.match_dep'' R motive v r f d = r x h := by
+--   cases v
+--   sorry
+
+-- TODO: this is how to register for split, but we probably won't use that
+-- run_meta
+--   Lean.Meta.Match.addMatcherInfo ``Result.match_dep {
+--     numParams := 1
+--     numDiscrs := 1
+--     altInfos := #[
+--       {
+--         numFields := 1
+--         numOverlaps := 0
+--         hasUnitThunk := false
+--       },
+--       {
+--         numFields := 1
+--         numOverlaps := 0
+--         hasUnitThunk := false
+--       },
+--       {
+--         numFields := 0
+--         numOverlaps := 0
+--         hasUnitThunk := true
+--       }
+--     ]
+--     uElimPos? := .some 0
+--     discrInfos := #[{ hName? := none }]
+--     overlaps := { map := Std.HashMap.ofList [] }
+--   }
+
+-- -- TODO: do we need both versions? I had problems with motives not being correct using the
+-- -- dependent version, and maybe you can't use this one as a cases eliminator. TODO
+-- def Result.match_nondep {α} (r : Result α)
+--   {Out : Sort v}
+--   (ok : α  → Out)
+--   (fail : Error → Out)
+--   (div :  Out)
+--   -- will add more inputs as we add effects
+--   : Out := ITree.cases ok div (
+--       fun e _k => match e with
+--         | .fail e => fail e
+--     ) r
+
+-- @[simp]
+-- theorem Result.nmatch.ok {R Out r d f x}
+--   : @Result.match_nondep R (.ok x) Out r f d = r x := ITree.cases.ret
+
+-- @[simp]
+-- theorem Result.nmatch.div {R Out r d f}
+--   : @Result.match_nondep R .div Out r f d = d := ITree.cases.div
+
+-- @[simp]
+-- theorem Result.nmatch.fail {R Out r d f e}
+--   : @Result.match_nondep R (.fail e) Out r f d = f e := ITree.cases.vis
 
 open Result
 
@@ -469,10 +563,10 @@ instance SubtypeLawfulBEq [BEq α] (p : α → Prop) [LawfulBEq α] : LawfulBEq 
    TODO: move up to Core module? -/
 def Option.ofResult {a : Type u} (x : Result a) :
   Option a :=
-  x.nmatch
+  x.match_dep
     .some
     (fun _ => .none)
-    .none
+    (fun _ => .none)
 
 /-!
 # bv_decide
