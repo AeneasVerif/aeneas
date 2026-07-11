@@ -254,7 +254,7 @@ def HashMap.insert
   else ok self1
 
 /-- [hashmap::{hashmap::HashMap<T>}::contains_key_in_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 1:0-231:9
+    Source: 'tests/src/hashmap.rs', lines 220:8-232:5
     Visibility: public -/
 @[rust_loop]
 def HashMap.contains_key_in_list_loop
@@ -379,7 +379,7 @@ def HashMap.get_mut
   ok (o, back)
 
 /-- [hashmap::{hashmap::HashMap<T>}::remove_from_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 1:0-297:17 -/
+    Source: 'tests/src/hashmap.rs', lines 276:12-300:5 -/
 @[rust_loop]
 def HashMap.remove_from_list_loop
   {T : Type} (key : Std.Usize) (ls : AList T) :
