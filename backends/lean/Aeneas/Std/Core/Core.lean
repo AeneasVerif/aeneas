@@ -1,6 +1,7 @@
 import Lean
 import Aeneas.Std.Primitives
 import Aeneas.Tactic.Step.Init
+import Aeneas.Tactic.Elab.TraitDefault.Init
 import Aeneas.Std.Alloc
 
 namespace Aeneas
@@ -26,9 +27,10 @@ structure clone.Clone (Self : Type) where
   clone : Self → Result Self
   clone_from : Self → Self → Result Self := fun _ => clone
 
-def clone.Clone.from_from.default {Self : Type} (clone : Self → Result Self)
+@[trait_default]
+def clone.Clone.clone_from.default {Self : Type} (CloneInst : core.clone.Clone Self)
   (_self source : Self) : Result Self :=
-  clone source
+  CloneInst.clone source
 
 @[reducible, rust_trait_impl "core::clone::Clone<alloc::alloc::Global>"]
 def core.clone.CloneGlobal : core.clone.Clone Global := {
