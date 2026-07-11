@@ -47,18 +47,11 @@ Definition Bool_Insts_TraitsBoolTrait_get_bool (self : bool) : result bool :=
   Ok self
 .
 
-(** [traits::{impl traits::BoolTrait for bool}::ret_true]:
-    Source: 'tests/src/traits.rs', lines 13:0-17:1
-    Visibility: public *)
-Definition Bool_Insts_TraitsBoolTrait_ret_true (self : bool) : result bool :=
-  Ok true
-.
-
 (** Trait implementation: [traits::{impl traits::BoolTrait for bool}]
     Source: 'tests/src/traits.rs', lines 13:0-17:1 *)
 Definition Bool_Insts_TraitsBoolTrait : BoolTrait_t bool := {|
   BoolTrait_t_get_bool := Bool_Insts_TraitsBoolTrait_get_bool;
-  BoolTrait_t_ret_true := Bool_Insts_TraitsBoolTrait_ret_true;
+  BoolTrait_t_ret_true := boolTrait_ret_true_default;
 |}.
 
 (** [traits::test_bool_trait_bool]:
@@ -66,7 +59,7 @@ Definition Bool_Insts_TraitsBoolTrait : BoolTrait_t bool := {|
     Visibility: public *)
 Definition test_bool_trait_bool (x : bool) : result bool :=
   b <- Bool_Insts_TraitsBoolTrait_get_bool x;
-  if b then Bool_Insts_TraitsBoolTrait_ret_true x else Ok false
+  if b then boolTrait_ret_true_default x else Ok false
 .
 
 (** [traits::{impl traits::BoolTrait for core::option::Option<T>}::get_bool]:
@@ -77,20 +70,12 @@ Definition core_option_Option_Insts_TraitsBoolTrait_get_bool
   match self with | None => Ok false | Some _ => Ok true end
 .
 
-(** [traits::{impl traits::BoolTrait for core::option::Option<T>}::ret_true]:
-    Source: 'tests/src/traits.rs', lines 24:0-31:1
-    Visibility: public *)
-Definition core_option_Option_Insts_TraitsBoolTrait_ret_true
-  {T : Type} (self : option T) : result bool :=
-  Ok true
-.
-
 (** Trait implementation: [traits::{impl traits::BoolTrait for core::option::Option<T>}]
     Source: 'tests/src/traits.rs', lines 24:0-31:1 *)
 Definition core_option_Option_Insts_TraitsBoolTrait (T : Type) : BoolTrait_t
   (option T) := {|
   BoolTrait_t_get_bool := core_option_Option_Insts_TraitsBoolTrait_get_bool;
-  BoolTrait_t_ret_true := core_option_Option_Insts_TraitsBoolTrait_ret_true;
+  BoolTrait_t_ret_true := boolTrait_ret_true_default;
 |}.
 
 (** [traits::test_bool_trait_option]:
@@ -98,7 +83,7 @@ Definition core_option_Option_Insts_TraitsBoolTrait (T : Type) : BoolTrait_t
     Visibility: public *)
 Definition test_bool_trait_option {T : Type} (x : option T) : result bool :=
   b <- core_option_Option_Insts_TraitsBoolTrait_get_bool x;
-  if b then core_option_Option_Insts_TraitsBoolTrait_ret_true x else Ok false
+  if b then boolTrait_ret_true_default x else Ok false
 .
 
 (** [traits::test_bool_trait]:
