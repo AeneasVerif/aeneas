@@ -216,8 +216,15 @@ let always_deconstruct_adts_with_matches = ref false
 (** Controls whether we use fuel to control termination. *)
 let use_fuel = ref false
 
-(** Controls whether we split the generated definitions between different files
-    for the types, clauses and functions, or if we group them in one file. *)
+(** Legacy split mode: split the generated definitions between different files
+    by kind (types, clauses and functions), instead of grouping them in one
+    file. Superseded by [split_files]; kept as [-split-files-legacy]. *)
+let split_files_legacy = ref false
+
+(** Split the generated definitions into one module per Rust source file,
+    mirroring the crate structure. Source files that form an import cycle are
+    merged into a single module. Mutually exclusive with [split_files_legacy].
+*)
 let split_files = ref false
 
 (** Only for Lean: generate the library entry point, if the crate is split
@@ -230,6 +237,11 @@ let lean_gen_lakefile = ref false
 
 (** Only for Lean: emit a translation.json file alongside the Lean files. *)
 let emit_json = ref false
+
+(** Print the file-dependency graph and its strongly-connected components before
+    normal extraction. This previews which Rust source files would need to share
+    Lean files when opting for multi-file extraction. *)
+let dump_file_graph = ref false
 
 (** If true, treat the unit functions (function taking no inputs and returning
     no outputs) as unit tests: evaluate them with the interpreter and check that

@@ -84,6 +84,86 @@ let crate_has_opaque_non_builtin_decls (k : crate) (filter_builtin : bool)
   crate_get_opaque_non_builtin_decls k filter_builtin type_decls fun_decls
   <> ([], [])
 
+(** Return a predicate deciding whether an item is a builtin external
+    declaration.
+
+    Unlike {!crate_get_opaque_non_builtin_decls} (types and funs only, and with
+    no opacity/kind restriction here), this dispatches on the item kind to the
+    matching [ExtractBuiltin] name-matcher map, so it covers types, funs,
+    globals, trait decls and trait impls, transparent or opaque. The
+    {!Charon.NameMatcher.ctx} is built once and captured by the returned
+    closure. An item whose metadata can't be found is treated as non-builtin. *)
+let item_is_builtin (k : crate) : item_id -> bool =
+  let open ExtractBuiltin in
+  let ctx = Charon.NameMatcher.ctx_from_crate k in
+  fun (id : item_id) : bool ->
+    match id with
+    | IdType tid -> (
+        match TypeDeclId.Map.find_opt tid k.type_decls with
+        | None -> false
+        | Some d ->
+            NameMatcherMap.mem ctx d.item_meta.name (builtin_types_map ()))
+    | IdFun fid -> (
+        match FunDeclId.Map.find_opt fid k.fun_decls with
+        | None -> false
+        | Some d ->
+            NameMatcherMap.mem ctx d.item_meta.name (builtin_funs_map ())
+            || NameMatcherMap.mem ctx d.item_meta.name (builtin_globals_map ()))
+    | IdGlobal gid -> (
+        match GlobalDeclId.Map.find_opt gid k.global_decls with
+        | None -> false
+        | Some d ->
+            NameMatcherMap.mem ctx d.item_meta.name (builtin_globals_map ()))
+    | IdTraitDecl tid -> (
+        match TraitDeclId.Map.find_opt tid k.trait_decls with
+        | None -> false
+        | Some d ->
+            NameMatcherMap.mem ctx d.item_meta.name (builtin_trait_decls_map ())
+        )
+    | IdTraitImpl iid -> (
+        match TraitImplId.Map.find_opt iid k.trait_impls with
+        | None -> false
+        | Some d -> (
+            match TraitDeclId.Map.find_opt d.impl_trait.id k.trait_decls with
+            | None -> false
+            | Some trait_decl ->
+                Option.is_some
+                  (NameMatcherMap.find_with_generics_opt ctx
+                     trait_decl.item_meta.name d.impl_trait.generics
+                     (builtin_trait_impls_map ()))))
+
+(** Whether an item is opaque: a type whose fields/variants were not translated,
+    or a function/global whose body is unknown. We deliberately do not read
+    [item_meta.opacity]: extern blocks, [--opaque=] patterns and [Foreign]
+    visibility-dependent opacity all funnel into the observable state, which is
+    also what the emitter tests at the pure level ([Option.is_none body] — keep
+    the two in sync). Trait decls and impls are never opaque: charon ignores
+    opacity annotations on them.
+
+    Same predicates as {!crate_get_opaque_non_builtin_decls} (which only covers
+    types and funs); a global delegates to its initializer's body. An item whose
+    declaration can't be found is treated as transparent. *)
+let item_is_opaque (k : crate) (id : item_id) : bool =
+  let fun_is_opaque (fid : FunDeclId.id) : bool =
+    match FunDeclId.Map.find_opt fid k.fun_decls with
+    | None -> false
+    | Some d -> not (body_is_known d.body)
+  in
+  match id with
+  | IdType tid -> (
+      match TypeDeclId.Map.find_opt tid k.type_decls with
+      | None -> false
+      | Some d -> d.kind = Opaque)
+  | IdFun fid -> fun_is_opaque fid
+  | IdGlobal gid -> (
+      match GlobalDeclId.Map.find_opt gid k.global_decls with
+      | None -> false
+      | Some d -> (
+          match init_fun_id_of_global d with
+          | None -> false
+          | Some fid -> fun_is_opaque fid))
+  | IdTraitDecl _ | IdTraitImpl _ -> false
+
 (** Strip trailing [PeTarget] elements from a name.
 
     Multi-target extraction appends [PeTarget] to per-target function names.

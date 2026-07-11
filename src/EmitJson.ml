@@ -157,10 +157,7 @@ let full_lean_name (basename : string) : string =
 (** Extract the Rust source location (file + line range) from a span. *)
 let source_of_span (span : Meta.span) : source =
   let data = span.data in
-  let file =
-    match data.file.name with
-    | Virtual s | Local s | NotReal s -> s
-  in
+  let file = Meta.path_of_file_name data.file.name in
   { file; begin_line = data.beg_loc.line; end_line = data.end_loc.line }
 
 let function_entry_of_fun_decl (ctx : ExtractBase.extraction_ctx)
@@ -272,12 +269,20 @@ let trait_impl_entry_of_trait_impl (ctx : ExtractBase.extraction_ctx)
 
 let begin_file_if_enabled ~(filename : string) ~(namespace : string) : unit =
   if !Config.emit_json then begin
-    (* Record the Lean file relative to dest_dir. *)
-    let basename = Filename.basename filename in
+    (* Record the Lean file relative to [dest_dir]. With [-split-files] the
+       relative path can have several directory components (e.g.
+       [Crate/Alpha/Part1.lean]), so strip the [dest_dir] prefix instead of
+       taking the basename. *)
     let rel =
-      match !Config.subdir with
-      | None -> basename
-      | Some subdir -> Filename.concat subdir basename
+      let prefix =
+        if String.ends_with ~suffix:"/" state.dest_dir then state.dest_dir
+        else state.dest_dir ^ "/"
+      in
+      if String.starts_with ~prefix filename then
+        String.sub filename (String.length prefix)
+          (String.length filename - String.length prefix)
+      else (* Not under [dest_dir] (not expected): keep the basename. *)
+        Filename.basename filename
     in
     state.current_lean_file <- rel;
     state.current_lean_namespace <- namespace

@@ -68,7 +68,15 @@ let compute_graph_of_uses (m : crate) : graph_of_uses =
   (* Visit the crate *)
   let visitor =
     object
-      inherit [_] iter_crate_with_span
+      inherit [_] iter_crate_with_span as super
+
+      (* Workaround: upstream `iter_crate_with_span` does not track the current
+         item environment for type declarations, making type-to-type uses invisible.
+         Override here until fixed upstream. *)
+      method! visit_type_decl (_ : (item_id * span) option) (decl : type_decl) =
+        let decl_span_info = Some (IdType decl.def_id, decl.item_meta.span) in
+        super#visit_type_decl decl_span_info decl
+
       method! visit_type_decl_id info id = add_edge (IdType id) info
       method! visit_fun_decl_id info id = add_edge (IdFun id) info
       method! visit_global_decl_id info id = add_edge (IdGlobal id) info
