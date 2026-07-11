@@ -547,4 +547,30 @@ theorem core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next_
   core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next_UScalar_spec
     (by simp) (by intros; rfl) (by intros; rfl) r
 
+@[reducible,
+  rust_trait_impl "core::iter::traits::double_ended::DoubleEndedIterator<core::ops::range::Range<@A>, @A>"]
+def core.ops.range.Range.Insts.DoubleEndedIterator
+  {A : Type} (StepInst : core.iter.range.Step A) :
+  core.iter.traits.double_ended.DoubleEndedIterator (core.ops.range.Range A) A
+  := {
+  iteratorInst := core.iter.traits.iterator.IteratorRange StepInst
+  next_back := core.ops.range.Range.Insts.CoreIterTraitsDoubleEndedIterator.next_back StepInst
+}
+
+
+@[reducible,
+  rust_trait_impl "core::iter::traits::iterator::Iterator<core::ops::range::RangeInclusive<@A>, @A>"]
+impl_def core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator
+  {A : Type} (StepInst : core.iter.range.Step A) :
+  core.iter.traits.iterator.Iterator (core.ops.range.RangeInclusive A) A := {
+  next :=
+    core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next StepInst
+  step_by := core.iter.traits.iterator.Iterator.step_by.trait_default
+    (core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator StepInst)
+  enumerate := core.iter.traits.iterator.Iterator.enumerate.trait_default
+    (core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator StepInst)
+  take := core.iter.traits.iterator.Iterator.take.trait_default
+    (core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator StepInst)
+}
+
 end Aeneas.Std

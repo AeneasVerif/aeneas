@@ -1482,6 +1482,11 @@ let lean_builtin_trait_impls =
        alloc::vec::into_iter::IntoIter<@T, @A>>"
       "core.iter.traits.collect.IntoIteratorVec"
       ~keep_params:(Some [ true; false ]);
+    (* file: "Aeneas/Std/RangeIter.lean", line: 551 *)
+    mk_trait_impl
+      "core::iter::traits::double_ended::DoubleEndedIterator<core::ops::range::Range<@A>, \
+       @A>"
+      "core.ops.range.Range.Insts.DoubleEndedIterator";
     (* file: "Aeneas/Std/VecIter.lean", line: 20 *)
     mk_trait_impl
       "core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, \
@@ -1507,6 +1512,11 @@ let lean_builtin_trait_impls =
     mk_trait_impl
       "core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>"
       "core.iter.traits.iterator.IteratorRange";
+    (* file: "Aeneas/Std/RangeIter.lean", line: 562 *)
+    mk_trait_impl
+      "core::iter::traits::iterator::Iterator<core::ops::range::RangeInclusive<@A>, \
+       @A>"
+      "core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator";
     (* file: "Aeneas/Std/SliceIter.lean", line: 145 *)
     mk_trait_impl
       "core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, \
