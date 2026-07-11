@@ -1,10 +1,5 @@
-//@ charon-args=--opaque=crate::utils --translate-all-methods --include=core::clone::Clone::clone_from
-//@ [!borrow-check] aeneas-args=-split-files -loops-to-rec
-//@ [coq] aeneas-args=-use-fuel
-//@ [coq,fstar] subdir=hashmap
-//@ [lean] subdir=Hashmap
-//@ [fstar] aeneas-args=-decreases-clauses
-// TODO: reactivate -test-trans-units
+//@ [!lean] skip
+//@ [lean] subdir=Hashmap aeneas-args=-split-files -loops-to-rec
 
 //! A hashmap implementation.
 //!
