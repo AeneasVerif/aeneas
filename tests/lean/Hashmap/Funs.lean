@@ -16,36 +16,34 @@ set_option maxRecDepth 2048
 namespace hashmap
 
 /-- [hashmap::hash_key]:
-    Source: 'tests/src/hashmap.rs', lines 36:0-41:1
+    Source: 'tests/src/hashmap.rs', lines 32:0-37:1
     Visibility: public -/
 def hash_key (k : Std.Usize) : Result Std.Usize := do
   ok k
 
 /-- [hashmap::{impl core::clone::Clone for hashmap::Fraction}::clone]:
-    Source: 'tests/src/hashmap.rs', lines 43:9-43:14
+    Source: 'tests/src/hashmap.rs', lines 39:9-39:14
     Visibility: public -/
 def Fraction.Insts.CoreCloneClone.clone
   (self : Fraction) : Result Fraction := do
   ok self
 
 /-- Trait implementation: [hashmap::{impl core::clone::Clone for hashmap::Fraction}]
-    Source: 'tests/src/hashmap.rs', lines 43:9-43:14 -/
+    Source: 'tests/src/hashmap.rs', lines 39:9-39:14 -/
 @[reducible]
-impl_def Fraction.Insts.CoreCloneClone : core.clone.Clone Fraction := {
+def Fraction.Insts.CoreCloneClone : core.clone.Clone Fraction := {
   clone := Fraction.Insts.CoreCloneClone.clone
-  clone_from := core.clone.Clone.clone_from.default
-    Fraction.Insts.CoreCloneClone
 }
 
 /-- Trait implementation: [hashmap::{impl core::marker::Copy for hashmap::Fraction}]
-    Source: 'tests/src/hashmap.rs', lines 43:16-43:20 -/
+    Source: 'tests/src/hashmap.rs', lines 39:16-39:20 -/
 @[reducible]
 def Fraction.Insts.CoreMarkerCopy : core.marker.Copy Fraction := {
   cloneInst := Fraction.Insts.CoreCloneClone
 }
 
 /-- [hashmap::{hashmap::HashMap<T>}::allocate_slots]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 68:8-71:9 -/
+    Source: 'tests/src/hashmap.rs', lines 64:8-67:9 -/
 @[rust_loop]
 def HashMap.allocate_slots_loop
   {T : Type} (slots : alloc.vec.Vec (AList T)) (n : Std.Usize) :
@@ -60,7 +58,7 @@ def HashMap.allocate_slots_loop
 partial_fixpoint
 
 /-- [hashmap::{hashmap::HashMap<T>}::allocate_slots]:
-    Source: 'tests/src/hashmap.rs', lines 67:4-73:5 -/
+    Source: 'tests/src/hashmap.rs', lines 63:4-69:5 -/
 @[reducible]
 def HashMap.allocate_slots
   {T : Type} (slots : alloc.vec.Vec (AList T)) (n : Std.Usize) :
@@ -69,7 +67,7 @@ def HashMap.allocate_slots
   HashMap.allocate_slots_loop slots n
 
 /-- [hashmap::{hashmap::HashMap<T>}::new_with_capacity]:
-    Source: 'tests/src/hashmap.rs', lines 76:4-87:5 -/
+    Source: 'tests/src/hashmap.rs', lines 72:4-83:5 -/
 def HashMap.new_with_capacity
   (T : Type) (capacity : Std.Usize) (max_load_factor : Fraction) :
   Result (HashMap T)
@@ -87,14 +85,14 @@ def HashMap.new_with_capacity
     }
 
 /-- [hashmap::{hashmap::HashMap<T>}::new]:
-    Source: 'tests/src/hashmap.rs', lines 89:4-98:5
+    Source: 'tests/src/hashmap.rs', lines 85:4-94:5
     Visibility: public -/
 def HashMap.new (T : Type) : Result (HashMap T) := do
   HashMap.new_with_capacity T 32#usize
     { dividend := 4#usize, divisor := 5#usize }
 
 /-- [hashmap::{hashmap::HashMap<T>}::clear]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 104:8-107:9
+    Source: 'tests/src/hashmap.rs', lines 100:8-103:9
     Visibility: public -/
 @[rust_loop]
 def HashMap.clear_loop
@@ -114,20 +112,20 @@ def HashMap.clear_loop
 partial_fixpoint
 
 /-- [hashmap::{hashmap::HashMap<T>}::clear]:
-    Source: 'tests/src/hashmap.rs', lines 100:4-108:5
+    Source: 'tests/src/hashmap.rs', lines 96:4-104:5
     Visibility: public -/
 def HashMap.clear {T : Type} (self : HashMap T) : Result (HashMap T) := do
   let slots ← HashMap.clear_loop self.slots 0#usize
   ok { self with num_entries := 0#usize, slots }
 
 /-- [hashmap::{hashmap::HashMap<T>}::len]:
-    Source: 'tests/src/hashmap.rs', lines 110:4-112:5
+    Source: 'tests/src/hashmap.rs', lines 106:4-108:5
     Visibility: public -/
 def HashMap.len {T : Type} (self : HashMap T) : Result Std.Usize := do
   ok self.num_entries
 
 /-- [hashmap::{hashmap::HashMap<T>}::insert_in_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 1:0-133:9 -/
+    Source: 'tests/src/hashmap.rs', lines 1:0-129:9 -/
 @[rust_loop]
 def HashMap.insert_in_list_loop
   {T : Type} (key : Std.Usize) (value : T) (ls : AList T) :
@@ -145,7 +143,7 @@ def HashMap.insert_in_list_loop
 partial_fixpoint
 
 /-- [hashmap::{hashmap::HashMap<T>}::insert_in_list]:
-    Source: 'tests/src/hashmap.rs', lines 117:4-134:5 -/
+    Source: 'tests/src/hashmap.rs', lines 113:4-130:5 -/
 @[reducible]
 def HashMap.insert_in_list
   {T : Type} (key : Std.Usize) (value : T) (ls : AList T) :
@@ -154,7 +152,7 @@ def HashMap.insert_in_list
   HashMap.insert_in_list_loop key value ls
 
 /-- [hashmap::{hashmap::HashMap<T>}::insert_no_resize]:
-    Source: 'tests/src/hashmap.rs', lines 137:4-145:5 -/
+    Source: 'tests/src/hashmap.rs', lines 133:4-141:5 -/
 def HashMap.insert_no_resize
   {T : Type} (self : HashMap T) (key : Std.Usize) (value : T) :
   Result (HashMap T)
@@ -175,7 +173,7 @@ def HashMap.insert_no_resize
        ok { self with slots := v }
 
 /-- [hashmap::{hashmap::HashMap<T>}::move_elements_from_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 199:12-206:17 -/
+    Source: 'tests/src/hashmap.rs', lines 195:12-202:17 -/
 @[rust_loop]
 def HashMap.move_elements_from_list_loop
   {T : Type} (ntable : HashMap T) (ls : AList T) : Result (HashMap T) := do
@@ -187,14 +185,14 @@ def HashMap.move_elements_from_list_loop
 partial_fixpoint
 
 /-- [hashmap::{hashmap::HashMap<T>}::move_elements_from_list]:
-    Source: 'tests/src/hashmap.rs', lines 196:4-209:5 -/
+    Source: 'tests/src/hashmap.rs', lines 192:4-205:5 -/
 @[reducible]
 def HashMap.move_elements_from_list
   {T : Type} (ntable : HashMap T) (ls : AList T) : Result (HashMap T) := do
   HashMap.move_elements_from_list_loop ntable ls
 
 /-- [hashmap::{hashmap::HashMap<T>}::move_elements]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 185:8-192:9 -/
+    Source: 'tests/src/hashmap.rs', lines 181:8-188:9 -/
 @[rust_loop]
 def HashMap.move_elements_loop
   {T : Type} (ntable : HashMap T) (slots : alloc.vec.Vec (AList T))
@@ -216,7 +214,7 @@ def HashMap.move_elements_loop
 partial_fixpoint
 
 /-- [hashmap::{hashmap::HashMap<T>}::move_elements]:
-    Source: 'tests/src/hashmap.rs', lines 183:4-193:5 -/
+    Source: 'tests/src/hashmap.rs', lines 179:4-189:5 -/
 @[reducible]
 def HashMap.move_elements
   {T : Type} (ntable : HashMap T) (slots : alloc.vec.Vec (AList T)) :
@@ -225,7 +223,7 @@ def HashMap.move_elements
   HashMap.move_elements_loop ntable slots 0#usize
 
 /-- [hashmap::{hashmap::HashMap<T>}::try_resize]:
-    Source: 'tests/src/hashmap.rs', lines 160:4-179:5 -/
+    Source: 'tests/src/hashmap.rs', lines 156:4-175:5 -/
 def HashMap.try_resize {T : Type} (self : HashMap T) : Result (HashMap T) := do
   let capacity := alloc.vec.Vec.len self.slots
   let n1 ← core.num.Usize.MAX / 2#usize
@@ -239,7 +237,7 @@ def HashMap.try_resize {T : Type} (self : HashMap T) : Result (HashMap T) := do
   else ok { self with saturated := true }
 
 /-- [hashmap::{hashmap::HashMap<T>}::insert]:
-    Source: 'tests/src/hashmap.rs', lines 149:4-156:5
+    Source: 'tests/src/hashmap.rs', lines 145:4-152:5
     Visibility: public -/
 def HashMap.insert
   {T : Type} (self : HashMap T) (key : Std.Usize) (value : T) :
@@ -254,7 +252,7 @@ def HashMap.insert
   else ok self1
 
 /-- [hashmap::{hashmap::HashMap<T>}::contains_key_in_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 220:8-232:5
+    Source: 'tests/src/hashmap.rs', lines 216:8-228:5
     Visibility: public -/
 @[rust_loop]
 def HashMap.contains_key_in_list_loop
@@ -268,7 +266,7 @@ def HashMap.contains_key_in_list_loop
 partial_fixpoint
 
 /-- [hashmap::{hashmap::HashMap<T>}::contains_key_in_list]:
-    Source: 'tests/src/hashmap.rs', lines 219:4-232:5
+    Source: 'tests/src/hashmap.rs', lines 215:4-228:5
     Visibility: public -/
 @[reducible]
 def HashMap.contains_key_in_list
@@ -276,7 +274,7 @@ def HashMap.contains_key_in_list
   HashMap.contains_key_in_list_loop key ls
 
 /-- [hashmap::{hashmap::HashMap<T>}::contains_key]:
-    Source: 'tests/src/hashmap.rs', lines 212:4-216:5
+    Source: 'tests/src/hashmap.rs', lines 208:4-212:5
     Visibility: public -/
 def HashMap.contains_key
   {T : Type} (self : HashMap T) (key : Std.Usize) : Result Bool := do
@@ -289,7 +287,7 @@ def HashMap.contains_key
   HashMap.contains_key_in_list key a
 
 /-- [hashmap::{hashmap::HashMap<T>}::get_in_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 238:8-246:5 -/
+    Source: 'tests/src/hashmap.rs', lines 234:8-242:5 -/
 @[rust_loop]
 def HashMap.get_in_list_loop
   {T : Type} (key : Std.Usize) (ls : AList T) : Result (Option T) := do
@@ -302,14 +300,14 @@ def HashMap.get_in_list_loop
 partial_fixpoint
 
 /-- [hashmap::{hashmap::HashMap<T>}::get_in_list]:
-    Source: 'tests/src/hashmap.rs', lines 237:4-246:5 -/
+    Source: 'tests/src/hashmap.rs', lines 233:4-242:5 -/
 @[reducible]
 def HashMap.get_in_list
   {T : Type} (key : Std.Usize) (ls : AList T) : Result (Option T) := do
   HashMap.get_in_list_loop key ls
 
 /-- [hashmap::{hashmap::HashMap<T>}::get]:
-    Source: 'tests/src/hashmap.rs', lines 248:4-252:5
+    Source: 'tests/src/hashmap.rs', lines 244:4-248:5
     Visibility: public -/
 def HashMap.get
   {T : Type} (self : HashMap T) (key : Std.Usize) : Result (Option T) := do
@@ -322,7 +320,7 @@ def HashMap.get
   HashMap.get_in_list key a
 
 /-- [hashmap::{hashmap::HashMap<T>}::get_mut_in_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 255:8-263:5
+    Source: 'tests/src/hashmap.rs', lines 251:8-259:5
     Visibility: public -/
 @[rust_loop]
 def HashMap.get_mut_in_list_loop
@@ -348,7 +346,7 @@ def HashMap.get_mut_in_list_loop
 partial_fixpoint
 
 /-- [hashmap::{hashmap::HashMap<T>}::get_mut_in_list]:
-    Source: 'tests/src/hashmap.rs', lines 254:4-263:5
+    Source: 'tests/src/hashmap.rs', lines 250:4-259:5
     Visibility: public -/
 @[reducible]
 def HashMap.get_mut_in_list
@@ -358,7 +356,7 @@ def HashMap.get_mut_in_list
   HashMap.get_mut_in_list_loop ls key
 
 /-- [hashmap::{hashmap::HashMap<T>}::get_mut]:
-    Source: 'tests/src/hashmap.rs', lines 266:4-270:5
+    Source: 'tests/src/hashmap.rs', lines 262:4-266:5
     Visibility: public -/
 def HashMap.get_mut
   {T : Type} (self : HashMap T) (key : Std.Usize) :
@@ -379,7 +377,7 @@ def HashMap.get_mut
   ok (o, back)
 
 /-- [hashmap::{hashmap::HashMap<T>}::remove_from_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 276:12-300:5 -/
+    Source: 'tests/src/hashmap.rs', lines 272:12-296:5 -/
 @[rust_loop]
 def HashMap.remove_from_list_loop
   {T : Type} (key : Std.Usize) (ls : AList T) :
@@ -401,7 +399,7 @@ def HashMap.remove_from_list_loop
 partial_fixpoint
 
 /-- [hashmap::{hashmap::HashMap<T>}::remove_from_list]:
-    Source: 'tests/src/hashmap.rs', lines 274:4-300:5 -/
+    Source: 'tests/src/hashmap.rs', lines 270:4-296:5 -/
 @[reducible]
 def HashMap.remove_from_list
   {T : Type} (key : Std.Usize) (ls : AList T) :
@@ -410,7 +408,7 @@ def HashMap.remove_from_list
   HashMap.remove_from_list_loop key ls
 
 /-- [hashmap::{hashmap::HashMap<T>}::remove]:
-    Source: 'tests/src/hashmap.rs', lines 303:4-315:5
+    Source: 'tests/src/hashmap.rs', lines 299:4-311:5
     Visibility: public -/
 def HashMap.remove
   {T : Type} (self : HashMap T) (key : Std.Usize) :
