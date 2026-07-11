@@ -28,19 +28,13 @@ def Fraction.Insts.CoreCloneClone.clone
   (self : Fraction) : Result Fraction := do
   ok self
 
-/-- [hashmap::{impl core::clone::Clone for hashmap::Fraction}::clone_from]:
-    Source: 'tests/src/hashmap.rs', lines 43:9-43:14
-    Visibility: public -/
-def Fraction.Insts.CoreCloneClone.clone_from
-  (self : Fraction) (source : Fraction) : Result Fraction := do
-  Fraction.Insts.CoreCloneClone.clone source
-
 /-- Trait implementation: [hashmap::{impl core::clone::Clone for hashmap::Fraction}]
     Source: 'tests/src/hashmap.rs', lines 43:9-43:14 -/
 @[reducible]
-def Fraction.Insts.CoreCloneClone : core.clone.Clone Fraction := {
+impl_def Fraction.Insts.CoreCloneClone : core.clone.Clone Fraction := {
   clone := Fraction.Insts.CoreCloneClone.clone
-  clone_from := Fraction.Insts.CoreCloneClone.clone_from
+  clone_from := core.clone.Clone.clone_from.default
+    Fraction.Insts.CoreCloneClone
 }
 
 /-- Trait implementation: [hashmap::{impl core::marker::Copy for hashmap::Fraction}]
