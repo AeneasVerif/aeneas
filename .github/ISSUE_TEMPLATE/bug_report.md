@@ -24,8 +24,8 @@ Add further details as required, delete any part of the template which isn't rel
 **Aeneas command**: <!-- the `aeneas` command you ran, e.g. `aeneas -backend lean my_crate.llbc -dest proofs` -->
 
 **Versions**:
-- Aeneas: <!-- commit hash -->
-- Charon: <!-- version / commit hash -->
+- Aeneas: <!-- commit hash (`aeneas -version`)-->
+- Charon: <!-- version (`charon version`) or commit hash -->
 
 **Aeneas output**:
 
