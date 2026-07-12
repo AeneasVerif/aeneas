@@ -17,7 +17,6 @@ Please provide as much information as you can to help us understand your use-cas
 
 ```rust
 // add your code here
-
 ```
 
 **Current Aeneas output**:
