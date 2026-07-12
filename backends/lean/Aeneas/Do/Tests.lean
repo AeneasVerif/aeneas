@@ -223,7 +223,7 @@ def massert_test : Result Unit := do
     lift (Array.to_slice
       (Array.make 5#usize [ 0#u32, 1#u32, 2#u32, 3#u32, 4#u32 ]))
   let i ← core.slice.Slice.iter s
-  let it ← core.slice.iter.IteratorSliceIter.step_by i 1#usize
+  let it ← core.iter.traits.iterator.Iterator.step_by.default i 1#usize
   let (o, it1) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
@@ -239,7 +239,7 @@ info: def Do.Tests.massert_test : Result Unit :=
 do
   let s ← lift (Array.make 5#usize [0#u32, 1#u32, 2#u32, 3#u32, 4#u32] massert_test._proof_7).to_slice
   let i ← core.slice.Slice.iter s
-  let it ← core.slice.iter.IteratorSliceIter.step_by i 1#usize
+  let it ← core.iter.traits.iterator.Iterator.step_by.default i 1#usize
   let (o, it1) ← core.iter.adapters.step_by.IteratorStepBy.next (core.iter.traits.iterator.IteratorSliceIter U32) it
   let i1 ← core.option.Option.unwrap o
   massert (i1 = 0#u32)

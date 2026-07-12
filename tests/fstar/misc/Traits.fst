@@ -33,17 +33,11 @@ let boolTrait_ret_true_default (#self : Type0) (self1 : self) : result bool =
 let bool_Insts_TraitsBoolTrait_get_bool (self : bool) : result bool =
   Ok self
 
-(** [traits::{impl traits::BoolTrait for bool}::ret_true]:
-    Source: 'tests/src/traits.rs', lines 13:0-17:1
-    Visibility: public *)
-let bool_Insts_TraitsBoolTrait_ret_true (self : bool) : result bool =
-  Ok true
-
 (** Trait implementation: [traits::{impl traits::BoolTrait for bool}]
     Source: 'tests/src/traits.rs', lines 13:0-17:1 *)
 let bool_Insts_TraitsBoolTrait : boolTrait_t bool = {
   get_bool = bool_Insts_TraitsBoolTrait_get_bool;
-  ret_true = bool_Insts_TraitsBoolTrait_ret_true;
+  ret_true = boolTrait_ret_true_default;
 }
 
 (** [traits::test_bool_trait_bool]:
@@ -51,7 +45,7 @@ let bool_Insts_TraitsBoolTrait : boolTrait_t bool = {
     Visibility: public *)
 let test_bool_trait_bool (x : bool) : result bool =
   let* b = bool_Insts_TraitsBoolTrait_get_bool x in
-  if b then bool_Insts_TraitsBoolTrait_ret_true x else Ok false
+  if b then boolTrait_ret_true_default x else Ok false
 
 (** [traits::{impl traits::BoolTrait for core::option::Option<T>}::get_bool]:
     Source: 'tests/src/traits.rs', lines 25:4-30:5
@@ -60,19 +54,12 @@ let core_option_Option_Insts_TraitsBoolTrait_get_bool
   (#t : Type0) (self : option t) : result bool =
   begin match self with | None -> Ok false | Some _ -> Ok true end
 
-(** [traits::{impl traits::BoolTrait for core::option::Option<T>}::ret_true]:
-    Source: 'tests/src/traits.rs', lines 24:0-31:1
-    Visibility: public *)
-let core_option_Option_Insts_TraitsBoolTrait_ret_true
-  (#t : Type0) (self : option t) : result bool =
-  Ok true
-
 (** Trait implementation: [traits::{impl traits::BoolTrait for core::option::Option<T>}]
     Source: 'tests/src/traits.rs', lines 24:0-31:1 *)
 let core_option_Option_Insts_TraitsBoolTrait (t : Type0) : boolTrait_t (option
   t) = {
   get_bool = core_option_Option_Insts_TraitsBoolTrait_get_bool;
-  ret_true = core_option_Option_Insts_TraitsBoolTrait_ret_true;
+  ret_true = boolTrait_ret_true_default;
 }
 
 (** [traits::test_bool_trait_option]:
@@ -80,7 +67,7 @@ let core_option_Option_Insts_TraitsBoolTrait (t : Type0) : boolTrait_t (option
     Visibility: public *)
 let test_bool_trait_option (#t : Type0) (x : option t) : result bool =
   let* b = core_option_Option_Insts_TraitsBoolTrait_get_bool x in
-  if b then core_option_Option_Insts_TraitsBoolTrait_ret_true x else Ok false
+  if b then boolTrait_ret_true_default x else Ok false
 
 (** [traits::test_bool_trait]:
     Source: 'tests/src/traits.rs', lines 37:0-39:1
