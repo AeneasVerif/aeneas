@@ -1161,6 +1161,7 @@ let keywords () =
           "replacing";
           "reserve";
           "run_cmd";
+          "seal";
           "section";
           "set_option";
           "simp";
