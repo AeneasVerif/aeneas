@@ -45,10 +45,10 @@ warning: #decompose: 'Aeneas.Command.Decompose.TestsBig.test13_chunk2' has the s
 -/
 #guard_msgs in
 #decompose test13 test13_eq
-  letRange 0 5 => test13_chunk1
-  letRange 1 5 => test13_chunk2
-  letRange 1 5 => test13_chunk3
-  letRange 1 5 => test13_chunk4
+  letRange 0 5 => test13_chunk1,
+  letRange 1 5 => test13_chunk2,
+  letRange 1 5 => test13_chunk3,
+  letRange 1 5 => test13_chunk4,
 
 /--
 info: def Aeneas.Command.Decompose.TestsBig.test13_chunk1 : U32 → Result (UScalar UScalarTy.U32) :=
@@ -144,10 +144,10 @@ warning: #decompose: 'Aeneas.Command.Decompose.TestsBig.test14_chunk2' has the s
 -/
 #guard_msgs in
 #decompose test14 test14_eq
-  letRange 0 5 => test14_chunk1
-  letRange 1 5 => test14_chunk2
-  letRange 1 5 => test14_chunk3
-  letRange 1 5 => test14_chunk4
+  letRange 0 5 => test14_chunk1,
+  letRange 1 5 => test14_chunk2,
+  letRange 1 5 => test14_chunk3,
+  letRange 1 5 => test14_chunk4,
 
 /--
 info: test14_eq : ∀ (x : ℕ),
@@ -246,18 +246,18 @@ def test32 (mode : Bool) (flag : Bool) (x y z w : U32) : Result U32 := do
 
 #decompose test32 test32_eq
   -- 1-4: Extract 10 heavy bindings from each inner branch
-  branch 0 (branch 0 (letRange 0 10)) => test32_tt_comp
-  branch 0 (branch 1 (letRange 0 10)) => test32_te_comp
-  branch 1 (branch 0 (letRange 0 10)) => test32_et_comp
-  branch 1 (branch 1 (letRange 0 10)) => test32_ee_comp
+  branch 0 (branch 0 (letRange 0 10)) => test32_tt_comp,
+  branch 0 (branch 1 (letRange 0 10)) => test32_te_comp,
+  branch 1 (branch 0 (letRange 0 10)) => test32_et_comp,
+  branch 1 (branch 1 (letRange 0 10)) => test32_ee_comp,
   -- 5-8: Extract remaining from each inner branch
-  branch 0 (branch 0 full) => test32_tt
-  branch 0 (branch 1 full) => test32_te
-  branch 1 (branch 0 full) => test32_et
-  branch 1 (branch 1 full) => test32_ee
+  branch 0 (branch 0 full) => test32_tt,
+  branch 0 (branch 1 full) => test32_te,
+  branch 1 (branch 0 full) => test32_et,
+  branch 1 (branch 1 full) => test32_ee,
   -- 9-10: Extract full outer branches
-  branch 0 full => test32_then
-  branch 1 full => test32_else
+  branch 0 full => test32_then,
+  branch 1 full => test32_else,
 
 -- Verify all 10 generated definitions exist
 /--
@@ -433,13 +433,13 @@ def test44 (d : Weekday) : Nat :=
     let a := 1000000; let b := a + 2000000; let c := b + 3000000; let d := c + 4000000; let e := d + 5000000; e
 
 #decompose test44 test44_eq
-  branch 0 (letRange 0 5) => test44_mon
-  branch 1 (letRange 0 5) => test44_tue
-  branch 2 (letRange 0 5) => test44_wed
-  branch 3 (letRange 0 5) => test44_thu
-  branch 4 (letRange 0 5) => test44_fri
-  branch 5 (letRange 0 5) => test44_sat
-  branch 6 (letRange 0 5) => test44_sun
+  branch 0 (letRange 0 5) => test44_mon,
+  branch 1 (letRange 0 5) => test44_tue,
+  branch 2 (letRange 0 5) => test44_wed,
+  branch 3 (letRange 0 5) => test44_thu,
+  branch 4 (letRange 0 5) => test44_fri,
+  branch 5 (letRange 0 5) => test44_sat,
+  branch 6 (letRange 0 5) => test44_sun,
 
 /--
 info: def Aeneas.Command.Decompose.TestsBig.test44_mon : ℕ :=
@@ -602,31 +602,31 @@ def test55 (v1 : U32) (v2 : U32) (v3 : U32) (v4 : U32) (v5 : U32) (v6 : U32) (v7
   pure s24
 
 #decompose test55 test55_eq
-  letRange 0 4 => test55_add4
-  letRange 1 4 => test55_add4
-  letRange 2 4 => test55_add4
-  letRange 3 4 => test55_add4
-  letRange 4 4 => test55_add4
-  letRange 5 4 => test55_add4
-  letRange 6 4 => test55_add4
-  letRange 7 4 => test55_add4
-  letRange 8 4 => test55_add4
-  letRange 9 4 => test55_add4
-  letRange 10 4 => test55_add4
-  letRange 11 4 => test55_add4
-  letRange 12 4 => test55_add4
-  letRange 13 4 => test55_add4
-  letRange 14 4 => test55_add4
-  letRange 15 4 => test55_add4
-  letRange 16 4 => test55_add4
-  letRange 17 4 => test55_add4
-  letRange 18 4 => test55_add4
-  letRange 19 4 => test55_add4
-  letRange 20 4 => test55_add4
-  letRange 21 4 => test55_add4
-  letRange 22 4 => test55_add4
-  letRange 23 4 => test55_add4
-  letRange 24 4 => test55_add4
+  letRange 0 4 => test55_add4,
+  letRange 1 4 => test55_add4,
+  letRange 2 4 => test55_add4,
+  letRange 3 4 => test55_add4,
+  letRange 4 4 => test55_add4,
+  letRange 5 4 => test55_add4,
+  letRange 6 4 => test55_add4,
+  letRange 7 4 => test55_add4,
+  letRange 8 4 => test55_add4,
+  letRange 9 4 => test55_add4,
+  letRange 10 4 => test55_add4,
+  letRange 11 4 => test55_add4,
+  letRange 12 4 => test55_add4,
+  letRange 13 4 => test55_add4,
+  letRange 14 4 => test55_add4,
+  letRange 15 4 => test55_add4,
+  letRange 16 4 => test55_add4,
+  letRange 17 4 => test55_add4,
+  letRange 18 4 => test55_add4,
+  letRange 19 4 => test55_add4,
+  letRange 20 4 => test55_add4,
+  letRange 21 4 => test55_add4,
+  letRange 22 4 => test55_add4,
+  letRange 23 4 => test55_add4,
+  letRange 24 4 => test55_add4,
 
 /--
 info: 'Aeneas.Command.Decompose.TestsBig.test55_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
@@ -745,8 +745,8 @@ def test56 (b : Bool) (x y : U32) : Result U32 := do
     pure b50
 
 #decompose test56 test56_eq
-  branch 0 full => test56_then
-  branch 1 full => test56_else
+  branch 0 full => test56_then,
+  branch 1 full => test56_else,
 
 /--
 info: 'Aeneas.Command.Decompose.TestsBig.test56_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
