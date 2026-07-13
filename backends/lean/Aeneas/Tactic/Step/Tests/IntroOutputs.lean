@@ -150,8 +150,8 @@ example : (do let (a, b) ← quadProg
 /--
 error: unsolved goals
 case a
-c : ℕ × ℕ
 a b : ℕ
+c : ℕ × ℕ
 a_post1 : a = 8
 a_post2 : b = 9
 a_post3 : c.1 = 10
