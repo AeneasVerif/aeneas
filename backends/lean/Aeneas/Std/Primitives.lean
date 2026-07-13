@@ -75,7 +75,11 @@ def RustEffect : Effect := {
   O := RustEffect.O
 }
 
+-- We need Result to be irreducble outside this file (to not break metaprograms which normalize types),
+-- but reducible within. The `unseal` command only affects the local context.
+@[irreducible]
 def Result (α : Type u) : Type u := ITree RustEffect α
+unseal Result
 
 
 def Result.ok {α} (a : α) : Result α := .ret a
@@ -93,8 +97,6 @@ def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Resu
 instance : Monad Result where
   pure := .ok
   bind := bind
--- instance : Bind Result where
---   bind := bind -- ITree.bind
 instance : LawfulMonad Result := instLawfulMonadITree
 
 -- TODO: adding these to simp set messes up some things
