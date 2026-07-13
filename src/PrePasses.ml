@@ -2265,9 +2265,35 @@ let fix_closure_lifetimes (crate : crate) (f : fun_decl) : fun_decl =
           f
       | _, _ -> f)
 
+(** Normalize the generics of the calls to [Box::new].
+
+    [Box::new] has two generic arguments, the type of the allocated element and
+    the type of the allocator itself. Charon generally filters the second one
+    but not always: this pass addresses this issue. *)
+let normalize_box_new (crate : crate) : crate =
+  let visitor =
+    object
+      inherit [_] map_crate_with_span as super
+
+      method! visit_fn_ptr env fn_ptr =
+        match fn_ptr.kind with
+        | FunId (FBuiltin BoxNew) ->
+            (* Keep only the first one and drop the others (the allocator). *)
+            let generics =
+              match fn_ptr.generics.types with
+              | ty :: _ :: _ -> { fn_ptr.generics with types = [ ty ] }
+              | _ -> fn_ptr.generics
+            in
+            super#visit_fn_ptr env { fn_ptr with generics }
+        | _ -> super#visit_fn_ptr env fn_ptr
+    end
+  in
+  visitor#visit_crate None crate
+
 let apply_passes (crate : crate) : crate =
   (* Passes that apply to the whole crate *)
   let crate = update_array_default crate in
+  let crate = normalize_box_new crate in
   (* Passes that apply to individual function bodies *)
   let function_passes =
     [
