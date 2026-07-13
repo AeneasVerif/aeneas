@@ -283,6 +283,42 @@ structure StepSpecAttr where
   ext  : Extension
   deriving Inhabited
 
+/-! # Step function map
+
+An iterable map from function names to step theorem names. Unlike the
+discrimination tree, this can be enumerated (e.g., by the doc extractor).
+When registering a theorem for `spec (lift (f ...)) P`, the function name
+recorded is `f` (not `lift`). -/
+
+/-- Extract the head function name from a `spec` function expression,
+    stripping `Std.lift` if present.
+    `Std.lift` has signature `{α : Type} → α → Result α`, so the actual
+    value is args[1]. -/
+private def getFunHeadName? (fExpr : Expr) : Option Name :=
+  let fn := fExpr.getAppFn
+  match fn.constName? with
+  | some n =>
+    if n == ``Std.lift then
+      let args := fExpr.getAppArgs
+      -- Std.lift has signature {α : Type} → α → Result α
+      -- args[0] = type, args[1] = actual value
+      args[1]?.bind (·.getAppFn.constName?)
+    else some n
+  | none => none
+
+/-- Iterable map of (functionName, theoremName) pairs registered via `@[step]`. -/
+initialize stepFunMap :
+    SimpleScopedEnvExtension (Name × Name) (Array (Name × Name)) ←
+  registerSimpleScopedEnvExtension {
+    name    := `stepFunMap,
+    initial := #[],
+    addEntry := fun arr entry => arr.push entry,
+  }
+
+/-- Retrieve all `(funName, thmName)` pairs registered via `@[step]`. -/
+def getStepFunMap (env : Environment) : Array (Name × Name) :=
+  stepFunMap.getState env
+
 private def generateMvcgenSpec (toMvcgenThm : Name) (stx : Syntax) (attrKind : AttributeKind)
     (thDecl : AsyncConstantInfo) : MetaM Unit := do
   let sig := thDecl.sig.get
@@ -319,7 +355,7 @@ private def saveStepSpecFromThm (ext : Extension) (attrKind : AttributeKind) (st
     let some thDecl := env.findAsync? thName
       | throwError "Could not find theorem {thName}"
     let type := thDecl.sig.get.type
-    let (fKey, info) ← MetaM.run' (do
+    let (fKey, info, funHeadName?) ← MetaM.run' (do
       trace[Step] "Theorem: {type}"
       -- Normalize to eliminate the let-bindings
       let ty ← normalizeLetBindings type
@@ -327,10 +363,16 @@ private def saveStepSpecFromThm (ext : Extension) (attrKind : AttributeKind) (st
       let (fExpr, info) ← getStepSpecFunArgsExpr ty
       trace[Step] "Registering spec theorem for expr: {fExpr}"
       -- Convert the function expression to a discrimination tree key
-      pure (← DiscrTree.mkPath fExpr, info))
+      let fKey ← DiscrTree.mkPath fExpr
+      -- Also extract the head function name (stripping lift if present)
+      let funHeadName? := getFunHeadName? fExpr
+      pure (fKey, info, funHeadName?))
     -- Save the entry
     -- TODO: use info.name to use a different discrimination tree here!
     ScopedEnvExtension.add ext ((info.spec_name, fKey), thName) attrKind
+    -- Also save in the iterable function map
+    if let some funHeadName := funHeadName? then
+      ScopedEnvExtension.add stepFunMap (funHeadName, thName) attrKind
     trace[Step] "Saved the entry"
     -- Also generate a corresponding mvcgen (@[spec]) lemma
     try
