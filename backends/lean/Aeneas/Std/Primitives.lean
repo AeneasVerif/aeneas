@@ -400,8 +400,10 @@ section Order
 
 open Lean.Order
 
-instance : PartialOrder (Result α) := instPartialOrderCoIndOfInhabitedPUnit _
-noncomputable instance : CCPO (Result α) := instCCPOCoIndOfInhabitedPUnit _
+instance : PartialOrder (Result α) := instPartialOrderCoIndOfInhabitedPUnit (ITreeF RustEffect α) -- by unfold Result; infer_instance
+  -- instPartialOrderCoIndOfInhabitedPUnit _
+noncomputable instance : CCPO (Result α) := instCCPOCoIndOfInhabitedPUnit (ITreeF RustEffect α) -- by unfold Result; infer_instance
+  -- instCCPOCoIndOfInhabitedPUnit _
 noncomputable instance : MonoBind Result := instMonoBindITree
 
 -- TODO: is there a way to not need to state this, and just use the typeclass instance?

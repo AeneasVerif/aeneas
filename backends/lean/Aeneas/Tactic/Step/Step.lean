@@ -2169,8 +2169,7 @@ h1 : ∀ (i : ℕ) (x : i < s.length), s'[i] = 0#u32
       · apply Lean.Order.admissible_pi
         intros y
         apply Lean.Order.admissible_apply (fun _ fx => WP.dspec fx _)
-        apply Lean.Order.admissible_flatOrder
-        simp only [WP.dspec]
+        apply WP.dspec_admissible
       · intros
         simp only
         split

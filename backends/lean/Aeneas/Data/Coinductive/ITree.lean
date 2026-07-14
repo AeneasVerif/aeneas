@@ -125,18 +125,17 @@ theorem vis_mono α [PartialOrder α] i (f : α → E.O i → ITree E R) :
     have := hf t1 t2 hle o
     grind [CoInd.leN_le]
 
-def ITree.spin : ITree E R := ITree.div
-
 @[simp]
 theorem ITree.bot_eq :
-  CoInd.bot (ITreeF E R) = ITree.spin := by
+  CoInd.bot (ITreeF E R) = ITree.div := by
     ext n
     induction n; congr 0
-    rw [CoInd.bot_eq, spin]
+    rw [CoInd.bot_eq, div]
     simp [PF.map, PF.pack, CoInd.fold, *, PF.unpack, default]
 
+
 theorem ITree.le_unfold (t1 t2 : ITree E R) :
-  (t1 ⊑ t2) = (t1 = .spin ∨
+  (t1 ⊑ t2) = (t1 = .div ∨
     (∃ r, t1 = .ret r ∧ t2 = .ret r) ∨
     (∃ i t1' t2', t1 = .vis i t1' ∧ t2 = .vis i t2' ∧ ∀ o, t1' o ⊑ t2' o)) := by
     ext
@@ -147,7 +146,7 @@ theorem ITree.le_unfold (t1 t2 : ITree E R) :
       rw [<-Coinductive.unfold_fold _ t1, <-Coinductive.unfold_fold _ t2]
       rw [<-PF.unpack_pack (CoInd.unfold _ t1), <-PF.unpack_pack (CoInd.unfold _ t2)]
       simp only [h1, h2]
-      cases i <;> simp [PF.pack, ret, spin, div, vis, fold]
+      cases i <;> simp [PF.pack, ret, div, div, vis, fold]
       · grind
       · grind
     · rintro (rfl| ⟨_, rfl, rfl⟩ | ⟨_, _, _, rfl, rfl, _⟩)
@@ -201,10 +200,7 @@ theorem bind_mono {α} {S} [PartialOrder α]
     unfold ITree.bind
     rw [ITree.le_unfold] at hlef
     rcases hlef with (rfl|⟨_, rfl, rfl⟩|⟨_, _, _, rfl, rfl, _⟩)
-    · simp [ITree.spin]
-      simp [CoIndN.le, CoIndN.bot]
-      left
-      simp [ITree.spin]
+    · simp [CoIndN.le, CoIndN.bot]
     · rename_i x
       simp
       have := hg t1 t2 hle x
@@ -510,5 +506,56 @@ theorem ITree.cases.vis {E R motive r d v e k}
 --     simp [motive]
 --   | _ => simp at h
 
+
+theorem ITree.le_div_is_div
+  (t : ITree E R)
+  (h : t ⊑ div)
+  : t = div := by
+  -- have := bot_le t
+  -- apply PartialOrder.rel_antisymm <;> try assumption
+  -- simp [← ITree.bot_eq]
+  -- -- unfold bot at this
+  -- have bla := CoInd.csup_eq_bot (c := (empty_chain (ITree E R)))
+  -- have bla := bla (by grind [empty_chain])
+  -- -- rw [bla] at this
+  -- -- simp [bot, instCCPOCoIndOfInhabitedPUnit] at this
+  -- -- apply CoInd.csup_eq_bot
+  -- sorry
+  simp [PartialOrder.rel, CoInd.le] at h
+  cases h with | inl _ => assumption | inr h =>
+  simp [div, fold] at h
+  cases h
+  rename_i i k1 k2 a a1 a2
+  cases i
+  · simp [PF.unpack] at a2
+  · cases t
+    · simp [pure, ret, fold, PF.unpack] at a1
+    · rfl
+    · simp [vis, fold, PF.unpack] at a1
+  · simp [PF.unpack] at a2
+
+theorem ITree.le_ret_inj
+  (x y : R)
+  (h : ITree.ret (E:=E) x ⊑ ITree.ret y)
+  : x = y := by
+  simp [PartialOrder.rel, CoInd.le] at h
+  cases h with |inl h => _ | inr h => _
+  · exfalso
+    apply not_ret_div h
+  · simp [ret, fold] at h
+    cases h
+    rename_i i k1 k2 a a1 a2
+    cases i
+    · simp [PF.unpack] at a1 a2
+      simp [a1.left, a2.left]
+    · simp [PF.unpack] at a2
+    · simp [PF.unpack] at a2
+
+theorem ITree.div_is_bot :
+  bot = (.div : ITree E R) := by
+  unfold bot
+  have dir1 := csup_le (x := .div) (chain_empty (ITree E R)) (by grind [empty_chain])
+  apply ITree.le_div_is_div
+  assumption
 
 namespace Aeneas.Data.Coinductive
