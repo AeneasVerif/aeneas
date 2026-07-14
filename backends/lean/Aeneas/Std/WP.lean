@@ -10,6 +10,7 @@ namespace Aeneas.Std.WP
 
 open Std Result
 open Aeneas.Data.Coinductive
+open Lean.Order
 
 def Post α := (α -> Prop)
 def Pre := Prop
@@ -30,7 +31,7 @@ def wp_return (x:α) : Wp α := fun p => p x
 
 @[grind]
 inductive spec {α} : (x : Result α) → (p : Post α) →  Prop where
-| ret : ∀ x, p x → spec (.ok x) p
+| ret : ∀ p x, p x → spec (.ok x) p
 -- | vis : ∀ k, (∀ b, spec p (k b)) → spec p (ITree.vis () k)
 -- | fail : ∀ k, (∀ b, spec p (k b)) → spec p (ITree.vis () k)
 
@@ -42,8 +43,8 @@ inductive spec {α} : (x : Result α) → (p : Post α) →  Prop where
 --   | fail _ => False
 --   | div => True
 inductive dspec {α} : (x : Result α) → (p : Post α) →  Prop where
-| ret : ∀ x, p x → dspec (.ok x) p
-| div : dspec div p
+| ret : ∀ p x, p x → dspec (.ok x) p
+| div : ∀ p, dspec div p
 
 theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p := by
   intros s
@@ -51,11 +52,93 @@ theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p :=
   apply dspec.ret
   assumption
 
--- TODO: do i need this?
--- theorem dspec_admissible {α} (p : Post α )
---   : Lean.Order.admissible (fun x => dspec x p) := by
---   apply Lean.Order.admissible_flatOrder
---   simp [dspec]
+unseal Result
+theorem dspec_admissible {α} (p : Post α )
+  : admissible (fun x => dspec x p) := by
+  intro c hchain h
+  simp at h
+  by_cases (∃ a, c a) <;> rename_i h1
+  · have : c (CCPO.csup hchain) := by
+      by_cases (∃ a, c (.ok a))
+      · rename_i h2
+        rcases h2 with ⟨a, ca⟩
+        have dir1 := csup_le (x:=.ok a) hchain (by
+          intros y cy
+          have h := h y cy
+          cases h
+          · have order := hchain _ _ ca cy
+            cases order <;> try assumption
+            rename_i h
+            simp [ok] at *
+            rw [ITree.le_ret_inj _ _ h]
+            rfl
+          · simp [div, ok]
+            rw [← ITree.div_is_bot]
+            apply bot_le
+          )
+        have dir2 := le_csup hchain ca
+        rw [PartialOrder.rel_antisymm dir1 dir2]
+        assumption
+      · have := CCPO.csup_spec hchain
+        simp [is_sup] at this
+        have this := (this .div).mpr
+        have only_div : ∀ a, c a → a = div := by
+          intros a ca
+          have h := h a ca
+          cases h <;> grind
+        have this := this (by
+          intros y cy
+          simp [only_div y cy]
+          apply PartialOrder.rel_refl
+          )
+        simp [Result, instCCPOResult]
+        rw [ITree.le_div_is_div (CCPO.csup (c:=c) hchain) this]
+        rcases h1 with ⟨a, ca⟩
+        have h := h a ca
+        simp [div] at only_div
+        rw [← only_div a ca]
+        assumption
+    grind
+  · have : CCPO.csup hchain = bot := by
+      unfold bot empty_chain
+      congr
+      grind
+    rw [this]
+    unfold Result
+    rw [ITree.div_is_bot]
+    constructor
+seal Result
+  -- by_cases h' : ∃ x, c x ∧ x ≠ .div
+  -- ·
+  --   simp [Lean.Order.CCPO.csup]
+  --   -- simp [← flat_csup_eq, flat_csup, h']
+  --   apply Classical.some_spec₂ (q := (dspec · p))
+  --   intro x ⟨hcx, hneb⟩
+  --   apply h x hcx
+  --   --
+  -- ·
+  --   simp [Lean.Order.CCPO.csup]
+  --   simp [← flat_csup_eq, flat_csup, h', hnot]
+  -- -- unfold Lean.Order.admissible
+  -- -- intros c hc dspecc
+  -- -- simp at *
+  -- -- by_cases ∃ x, c (.ok x)
+  -- -- · sorry
+  -- -- ·
+  -- --   have : Lean.Order.CCPO.csup hc = Result.div := by
+  -- --     generalize hsup : Lean.Order.CCPO.csup hc = sup at *
+  -- --     have dspecc := dspecc (Lean.Order.CCPO.csup hc) ?_ -- (Lean.Order.CCPO.csup_spec hc)
+  -- --     cases h : (Lean.Order.CCPO.csup hc) <;> try rfl
+  -- --     · sorry
+  -- --     · sorry
+  -- --     ·
+  -- --       sorry
+  -- --     --
+  -- --     -- sorry
+  -- --   sorry
+  -- -- apply Lean.Order.admissible_flatOrder
+  -- -- simp [dspec]
+  -- -- sorry
 
 /-- Variant of `uncurry` used to decompose tuples in post-conditions.
 
