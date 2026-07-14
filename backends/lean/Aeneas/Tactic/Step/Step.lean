@@ -2196,7 +2196,7 @@ h1 : ∀ (i : ℕ) (x : i < s.length), s'[i] = 0#u32
     : Std.WP.dspec (simple_converge x) (fun res => res = 10#i32)
     := by
       unfold simple_converge
-      split <;> simp [WP.dspec]
+      split <;> simp
 
   -- test using dspec theorem to step dspec
   example : WP.dspec
