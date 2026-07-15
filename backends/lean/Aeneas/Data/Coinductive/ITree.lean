@@ -331,30 +331,32 @@ partial_fixpoint
 -- TODO: These have been added on top of original library. I'm not sure if there's a better
 -- way to do this yet.
 
--- @[simp, grind .]
+@[simp, grind .]
 theorem not_vis_ret {E} {α} {x : α} {e k} : ¬ ITree.ret (E := E) x = ITree.vis e k := by
   intros eq
   have eq := congrArg (fun i => i.approx 1) eq
   simp at eq
 
--- @[simp, grind .]
+@[simp, grind .]
 theorem not_ret_div {E} {α} {x : α} : ¬ ITree.ret (E := E) x = ITree.div := by
   intros eq
   have eq := congrArg (fun i => i.approx 1) eq
   simp at eq
 
--- @[simp, grind .]
+@[simp, grind .]
 theorem not_div_vis {E} {α} {e k} : ¬  @ITree.div α E = ITree.vis e k := by
   intros eq
   have eq := congrArg (fun i => i.approx 1) eq
   simp at eq
 
--- @[simp, grind .]
-theorem ret_inj {E} {α} {x y} : @ITree.ret α E x = ITree.ret y → x = y := by
-  intros eq
-  have eq := congrArg (fun i => i.approx 1) eq
-  simp at eq
-  grind only
+@[simp, grind .]
+theorem ret_inj {E} {α} {x y} : (@ITree.ret α E x = ITree.ret y) ↔ (x = y) := by
+  constructor
+  · intros eq
+    have eq := congrArg (fun i => i.approx 1) eq
+    simp at eq
+    grind only
+  · grind only
 
 theorem vis_inj_effect {E} {α} {e1 e2 k1 k2} : @ITree.vis α E e1 k1 = ITree.vis e2 k2
   → e1 = e2 := by
@@ -539,17 +541,14 @@ theorem ITree.le_ret_inj
   (h : ITree.ret (E:=E) x ⊑ ITree.ret y)
   : x = y := by
   simp [PartialOrder.rel, CoInd.le] at h
-  cases h with |inl h => _ | inr h => _
-  · exfalso
-    apply not_ret_div h
-  · simp [ret, fold] at h
-    cases h
-    rename_i i k1 k2 a a1 a2
-    cases i
-    · simp [PF.unpack] at a1 a2
-      simp [a1.left, a2.left]
-    · simp [PF.unpack] at a2
-    · simp [PF.unpack] at a2
+  simp [ret, fold] at h
+  cases h
+  rename_i i k1 k2 a a1 a2
+  cases i
+  · simp [PF.unpack] at a1 a2
+    simp [a1.left, a2.left]
+  · simp [PF.unpack] at a2
+  · simp [PF.unpack] at a2
 
 theorem ITree.div_is_bot :
   bot = (.div : ITree E R) := by

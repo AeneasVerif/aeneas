@@ -320,10 +320,6 @@ private def collectStepBy (sbi : core.iter.adapters.step_by.StepBy (core.slice.i
   (fun e => e == .panic)
   (fun _ => false)
 
--- TODO: decide where to place this function, its here just for now
-def Result.assert_eq_ok {T} [BEq T] (r : Result T) (t : T) : Bool :=
-  r.match_dep (fun x => x == t) (fun _ => false) (fun _ => false)
-
 -- step_by(1) returns all elements
 #assert (do
   let sbi ← core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [0, 1, 2, 3, 4]) 1#usize
