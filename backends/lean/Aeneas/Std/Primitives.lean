@@ -164,6 +164,12 @@ theorem Result.match.fail {R motive r d f e}
 --   : r.match_dep (motive:=motive) ok fail div =
 --     (∃ a, r = .ok a ∧ ok _) := by sorry
 
+-- TODO: clean up if i dont use this
+-- def Result.assert_eq_ok {T} [BEq T] (r : Result T) (t : T) : Bool :=
+--   r.match_dep (fun x => x == t) (fun _ => false) (fun _ => false)
+-- def Result.beq {T} [BEq T] (r1 r2 : Result T) : Bool :=
+--   r.match_dep (fun)
+
 -- @[elab_as_elim, cases_eliminator]
 abbrev Result.match_dep' {α}
   {motive : Result α → Sort v}
@@ -193,6 +199,10 @@ theorem Result.match_dep'.div {R motive v r d f}
   : @Result.match_dep' R motive v r f d = cast (congrArg motive (Eq.symm h)) (d h) := by
   cases v <;> unfold match_dep' <;> simp <;> grind
 
+def Result.assert_eq_ok {T} [BEq T] (r : Result T) (t : T) : Bool :=
+  r.match_dep (fun x => x == t) (fun _ => false) (fun _ => false)
+
+-- TODO: I don't think this one is needed:
 -- @[elab_as_elim, cases_eliminator]
 abbrev Result.match_dep'' {α}
   {motive : Result α → Sort v}

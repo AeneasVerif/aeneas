@@ -239,9 +239,6 @@ private def collectStepBy (sbi : core.iter.adapters.step_by.StepBy (core.slice.i
   (fun e => e == .panic)
   (fun _ => false)
 
-def Result.assert_eq_ok {T} [BEq T] (r : Result T) (t : T) : Bool :=
-  r.match_dep (fun x => x == t) (fun _ => false) (fun _ => false)
-
 -- step_by(1) returns all elements
 #assert (do
   let sbi ← core.iter.traits.iterator.Iterator.step_by.default
