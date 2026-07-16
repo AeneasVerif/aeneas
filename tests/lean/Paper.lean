@@ -28,7 +28,7 @@ def test_incr : Result Unit := do
   massert (x = 1#i32)
 
 /- Unit test for [paper::test_incr] -/
-#assert (test_incr == ok ())
+#assert ((test_incr ).is_ok ())
 
 /-- [paper::choose]:
     Source: 'tests/src/paper.rs', lines 19:0-25:1
@@ -53,7 +53,7 @@ def test_choose : Result Unit := do
   massert (y = 0#i32)
 
 /- Unit test for [paper::test_choose] -/
-#assert (test_choose == ok ())
+#assert ((test_choose ).is_ok ())
 
 /-- [paper::List]
     Source: 'tests/src/paper.rs', lines 40:0-43:1
@@ -105,7 +105,7 @@ def test_nth : Result Unit := do
   massert (i = 7#i32)
 
 /- Unit test for [paper::test_nth] -/
-#assert (test_nth == ok ())
+#assert ((test_nth ).is_ok ())
 
 /-- [paper::call_choose]:
     Source: 'tests/src/paper.rs', lines 82:0-88:1

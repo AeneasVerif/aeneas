@@ -18,42 +18,32 @@ open Aeneas.Data.Coinductive
 
 syntax (name := assert) "#assert" term: command
 
--- @[command_elab assert]
--- unsafe
--- def assertImpl : CommandElab := fun (stx: Syntax) => do
---   runTermElabM (fun _ => do
---     let r ← evalTerm Bool (mkConst ``Bool) stx[1]
---     if not r then
---       logInfo ("Assertion failed for:\n" ++ stx[1])
---       throwError ("Expression reduced to false:\n"  ++ stx[1])
---     pure ())
-
 @[command_elab assert]
+unsafe
 def assertImpl : CommandElab := fun (stx: Syntax) => do
   runTermElabM (fun _ => do
-    let prop ← Elab.Term.elabTerm stx[1] (.some (.sort .zero))
-    Term.synthesizeSyntheticMVarsNoPostponing
-    let prop ← instantiateMVars prop
-    let ty ← inferType prop
-    if ty != .sort .zero then
-      throwError "Assertion must be a Prop"
-    let mvar ← Meta.mkFreshExprMVar prop
-    let goal := mvar.mvarId!
-    let (newgoals, _) ← Lean.Elab.runTactic goal (← `(tactic| cbv))
-    if not newgoals.isEmpty then
+    let r ← evalTerm Bool (mkConst ``Bool) stx[1]
+    if not r then
       logInfo ("Assertion failed for:\n" ++ stx[1])
-      throwError ("Assertion failed for:\n"  ++ stx[1])
+      throwError ("Expression reduced to false:\n"  ++ stx[1])
     pure ())
 
-
-example : 1 + 1 = 2 := by
-  run_tac
-    let goal ← Lean.Elab.Tactic.getMainGoal
-    dbg_trace "{(← goal.getDecl).type}"
-    let (newgoals, _) ← Lean.Elab.runTactic goal (← `(tactic| cbv))
-    dbg_trace "{newgoals.length}"
-  -- cbv
-  --
+-- @[command_elab assert]
+-- def assertImpl : CommandElab := fun (stx: Syntax) => do
+--   runTermElabM (fun _ => do
+--     let prop ← Elab.Term.elabTerm stx[1] (.some (.sort .zero))
+--     Term.synthesizeSyntheticMVarsNoPostponing
+--     let prop ← instantiateMVars prop
+--     let ty ← inferType prop
+--     if ty != .sort .zero then
+--       throwError "Assertion must be a Prop"
+--     let mvar ← Meta.mkFreshExprMVar prop
+--     let goal := mvar.mvarId!
+--     let (newgoals, _) ← Lean.Elab.runTactic goal (← `(tactic| cbv))
+--     if not newgoals.isEmpty then
+--       logInfo ("Assertion failed for:\n" ++ stx[1])
+--       throwError ("Assertion failed for:\n"  ++ stx[1])
+--     pure ())
 
 
 syntax (name := elabSyntax) "#elab" term: command
@@ -98,20 +88,24 @@ def RustEffect : Effect := {
 
 -- We need Result to be irreducble outside this file (to not break metaprograms which normalize types),
 -- but reducible within. The `unseal` command only affects the local context.
-@[irreducible]
+@[irreducible /-, cbv_opaque-/]
 def Result (α : Type u) : Type u := ITree RustEffect α
 unseal Result
 
 
+-- TODO: clean up the cbv stuff
+-- @[cbv_opaque]
 def Result.ok {α} (a : α) : Result α := .ret a
 
+-- @[cbv_opaque]
 def Result.fail {α} (e : Error) : Result α := .vis (.fail e) PEmpty.elim
 
+-- @[cbv_opaque]
 def Result.div {α} : Result α := ITree.div
-
 
 -- TODO: in addition to type levels, does it cause issues that bind comes from the Monad instance?
 -- -- TODO: is it ok to not have β be at a different level `v`?
+-- @[cbv_opaque]
 def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
   ITree.bind x f
 -- instance : Monad Result := instMonadITree
@@ -119,6 +113,15 @@ instance : Monad Result where
   pure := .ok
   bind := bind
 instance : LawfulMonad Result := instLawfulMonadITree
+  -- pure_bind      (x : α) (f : α → m β) : pure x >>= f = f x
+
+-- @[cbv_eval]
+theorem Result_ok_bind.{u} {A B : Type u} : ∀ (x : A) (f : A → Result B),
+  bind (Result.ok x) f = f x := by
+    intros x f
+    let h := instLawfulMonadResult.pure_bind x f
+    simp [Bind.bind] at h
+    assumption
 
 -- TODO: adding these to simp set messes up some things
 @[simp, grind .]
@@ -149,7 +152,8 @@ theorem Result.fail.injEq {α} {a b : Error} : (@Result.fail α a = .fail b) = (
 -- this function can be used in many cases to replace pattern matching on that inductive:
 -- TODO: why do things error when this is def instead of abbrev?
 @[elab_as_elim, cases_eliminator]
-abbrev Result.match_dep {α}
+-- @[elab_as_elim, cases_eliminator, irreducible, cbv_opaque]
+def Result.match_dep {α}
   {motive : Result α → Sort v}
   (r : Result α)
   (ok : ∀ r, motive (.ok r))
@@ -163,6 +167,7 @@ abbrev Result.match_dep {α}
             simp [same]
             exact (fail e)
     ) r
+-- unseal Result.match_dep
 
 @[simp]
 theorem Result.match.ok {R motive r d f x}
@@ -176,8 +181,12 @@ theorem Result.match.div {R motive r d f}
 theorem Result.match.fail {R motive r d f e}
   : @Result.match_dep R motive (.fail e) r f d = f e := ITree.cases.vis
 
+def Result.is_ok {R : Type} [BEq R] (r : Result R) (expected : R) : Bool :=
+  r.match_dep (fun x => x == expected) (fun _ => false) (fun _ => false)
+
 -- @[elab_as_elim, cases_eliminator]
-abbrev Result.match_dep' {α}
+-- @[irreducible, cbv_opaque]
+def Result.match_dep' {α}
   {motive : Result α → Sort v}
   (r : Result α)
   (ok : ∀ x, r = .ok x → motive (.ok x))
@@ -204,6 +213,12 @@ theorem Result.match_dep'.div {R motive v r d f}
   (h : v = .div)
   : @Result.match_dep' R motive v r f d = cast (congrArg motive (Eq.symm h)) (d h) := by
   cases v <;> unfold match_dep' <;> simp <;> grind
+
+instance {T} [Repr T] : Repr (Result T) where
+  reprPrec x n := x.match_dep
+    (fun t => .append (.text "ok ") (reprPrec t n))
+    (fun e => .append (.text "fail ") (reprPrec e n))
+    (fun _ => .text "div")
 
 -- TODO: this is how to register for split, but we probably won't use that
 -- run_meta

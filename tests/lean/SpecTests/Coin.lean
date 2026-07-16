@@ -45,7 +45,7 @@ theorem coinSpec_bind {α β} {k : α -> ITreeC β} {Pₖ : Post β} {m : ITreeC
     (fun t => ∃ (m : ITreeC α) (k : _), t = ITree.bind m k ∧ coinSpec Pₘ m ∧ qimp_coinSpec Pₘ k Pₖ)
     ?_ _ ?_
   · clear k Hk
-    simp only
+    -- simp only
     rintro i ⟨m, k, rfl, cm, ck⟩
     cases cm with
     | ret a Pₘa =>
@@ -74,14 +74,15 @@ theorem coinSpec_bind {α β} {k : α -> ITreeC β} {Pₖ : Post β} {m : ITreeC
       simp
       right
       grind
-  · simp only
+  · --simp only
     exists m, k
 
 instance : MonadLift Result ITreeC where
-  monadLift r := match r with
-    | .fail _e => .div -- TODO
-    | .div => .div
-    | .ok x => .ret x
+  monadLift r :=
+    r.match_dep
+      (fun a => .ret a)
+      (fun _e => .div) -- TODO
+      (fun _ => .div)
 
 theorem spec_coinSpec {α} {x : Result α} {p: Post α} : spec x p → coinSpec p x := by
   intros s
