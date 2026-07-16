@@ -15,7 +15,7 @@ let ref_incr (x : i32) : result i32 =
     Source: 'tests/src/paper.rs', lines 12:0-16:1
     Visibility: public *)
 let test_incr : result unit =
-  let* x = ref_incr 0 in if x = 1 then Ok () else Fail Failure
+  let* x = ref_incr 0 in massert (x = 1)
 
 (** Unit test for [paper::test_incr] *)
 let _ = assert_norm (test_incr = Ok ())
@@ -35,11 +35,10 @@ let choose
 let test_choose : result unit =
   let* (z, choose_back) = choose true 0 0 in
   let* z1 = i32_add z 1 in
-  if z1 = 1
-  then
-    let (x, y) = choose_back z1 in
-    if x = 1 then if y = 0 then Ok () else Fail Failure else Fail Failure
-  else Fail Failure
+  let* _ = massert (z1 = 1) in
+  let (x, y) = choose_back z1 in
+  let* _ = massert (x = 1) in
+  massert (y = 0)
 
 (** Unit test for [paper::test_choose] *)
 let _ = assert_norm (test_choose = Ok ())
@@ -87,7 +86,7 @@ let test_nth : result unit =
   let* x1 = i32_add x 1 in
   let l = list_nth_mut_back x1 in
   let* i = sum l in
-  if i = 7 then Ok () else Fail Failure
+  massert (i = 7)
 
 (** Unit test for [paper::test_nth] *)
 let _ = assert_norm (test_nth = Ok ())

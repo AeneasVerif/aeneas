@@ -105,7 +105,7 @@ let remove_unreachable (crate : crate) (f : fun_decl) : fun_decl =
 
   let is_unreachable (st : statement) : bool =
     match st.kind with
-    | Call call -> (
+    | Call (call, _) -> (
         match call.func with
         | FnOpRegular { kind; _ } -> (
             match kind with
@@ -710,9 +710,10 @@ let remove_useless_joins (crate : crate) (f : fun_decl) : fun_decl =
           ^ Print.list_to_string ~sep:"\n" (statement_to_string crate) ls];
         let can_inline, ls = update_statements to_inline ls in
         match st.kind with
-        | Nop | StorageLive _ | StorageDead _ | PlaceMention _ | Drop _ ->
-            (can_inline, st :: ls)
-        | Abort _ | Return | Break _ | Continue _ -> (true, [ st ])
+        | Nop | StorageLive _ | StorageDead _ | PlaceMention _
+        | Drop (_, _, _, _) -> (can_inline, st :: ls)
+        | Abort _ | Return | UnwindResume | Break _ | Continue _ ->
+            (true, [ st ])
         | Switch switch ->
             [%ldebug "Switch: can_inline: " ^ Print.bool_to_string can_inline];
             (* Attempt to inline inside the body *)
@@ -749,7 +750,8 @@ let remove_useless_joins (crate : crate) (f : fun_decl) : fun_decl =
                 (can_inline, st :: ls)
             | BinaryOp _ | UnaryOp _ | Discriminant _ | Len _ | Repeat _ ->
                 (false, st :: ls))
-        | SetDiscriminant _ | Assert _ | Call _ | Error _ -> (false, st :: ls)
+        | SetDiscriminant _ | Assert (_, _, _) | Call (_, _) | Error _ ->
+            (false, st :: ls)
         | _ ->
             [%craise] st.span
               ("unsupported statement: " ^ show_statement_kind st.kind))
@@ -802,7 +804,7 @@ let remove_useless_joins (crate : crate) (f : fun_decl) : fun_decl =
 let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
     fun_decl =
   let f0 = f in
-  let filter_in_body (body : block) : block =
+  let filter_in_body (argument_locals : LocalId.Set.t) (body : block) : block =
     let filtered = ref LocalId.Set.empty in
 
     let filter_shallow (st : statement) : statement list =
@@ -820,7 +822,9 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
     let filter_storage (st : statement) : statement list =
       match st.kind with
       | StorageLive _ -> []
-      | StorageDead loc when LocalId.Set.mem loc !filtered -> []
+      | StorageDead loc
+        when LocalId.Set.mem loc !filtered
+             || LocalId.Set.mem loc argument_locals -> []
       | _ -> [ st ]
     in
 
@@ -852,7 +856,14 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
   let body =
     match f.body with
     | StructuredBody body ->
-        StructuredBody { body with body = filter_in_body body.body }
+        let argument_locals =
+          body.locals.locals |> List.tl
+          |> Collections.List.prefix body.locals.arg_count
+          |> List.map (fun (var : local) -> var.index)
+          |> LocalId.Set.of_list
+        in
+        StructuredBody
+          { body with body = filter_in_body argument_locals body.body }
     | other -> other
   in
   let f = { f with body } in
@@ -1424,6 +1435,7 @@ let refresh_statement_ids (_ : crate) (f : fun_decl) : fun_decl =
 (** We simplify statements of the shape:
     {[
       x := from_str<'_>(const ("Error"));
+      StorageDead ...;
       panic(core::panicking::panic_fmt)
 
         ~>
@@ -1453,24 +1465,37 @@ let simplify_panics (crate : crate) (f : fun_decl) : fun_decl =
       inherit [_] map_statement
 
       method! visit_block env (block : block) =
+        let is_from_str_call (st : statement) : bool =
+          match st.kind with
+          | Call
+              ({ func = FnOpRegular { kind = FunId (FRegular fid); _ }; _ }, _)
+            -> (
+              match FunDeclId.Map.find_opt fid crate.fun_decls with
+              | Some decl -> is_from_str decl
+              | None -> false)
+          | _ -> false
+        in
+
+        let rec skip_storage_dead (stl : statement list) : statement list =
+          match stl with
+          | st :: stl -> (
+              match st.kind with
+              | StorageDead _ -> skip_storage_dead stl
+              | _ -> st :: stl)
+          | [] -> []
+        in
+
         let rec update (stl : statement list) : statement list =
           match stl with
           | [] -> []
-          | [ st0; st1 ] -> (
-              match (st0.kind, st1.kind) with
-              | ( Call
-                    { func = FnOpRegular { kind = FunId (FRegular fid); _ }; _ },
-                  Abort (Panic _) ) -> (
-                  match FunDeclId.Map.find_opt fid crate.fun_decls with
-                  | Some decl when is_from_str decl -> [ st1 ]
-                  | _ ->
-                      [
-                        self#visit_statement env st0;
-                        self#visit_statement env st1;
-                      ])
-              | _ ->
-                  [ self#visit_statement env st0; self#visit_statement env st1 ]
-              )
+          | st0 :: stl when is_from_str_call st0 -> (
+              match skip_storage_dead stl with
+              | st1 :: stl1 -> (
+                  match st1.kind with
+                  | Abort (Panic _) ->
+                      self#visit_statement env st1 :: update stl1
+                  | _ -> self#visit_statement env st0 :: update stl)
+              | [] -> self#visit_statement env st0 :: update stl)
           | st0 :: stl -> self#visit_statement env st0 :: update stl
         in
         { block with statements = update block.statements }
@@ -1572,20 +1597,18 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
           let kind =
             match st.kind with
             | Assign (lv, rv) -> Assign (lv, visitor#visit_rvalue mk_unit_ty rv)
-            | Assert ({ cond; expected; check_kind }, on_failure) ->
+            | Assert ({ cond; expected; check_kind }, on_failure, on_unwind) ->
                 let cond = visitor#visit_operand mk_unit_ty cond in
-                Assert ({ cond; expected; check_kind }, on_failure)
-            | Call { func; args; dest } ->
+                Assert ({ cond; expected; check_kind }, on_failure, on_unwind)
+            | Call ({ func; args; dest }, on_unwind) ->
                 let func = visitor#visit_fn_operand mk_unit_ty func in
                 let args = List.map (visitor#visit_operand mk_unit_ty) args in
-                Call { func; args; dest }
-            | SetDiscriminant _
-            | StorageLive _
-            | StorageDead _
-            | PlaceMention _
-            | Drop _
+                Call ({ func; args; dest }, on_unwind)
+            | SetDiscriminant _ | StorageLive _ | StorageDead _ | PlaceMention _
+            | Drop (_, _, _, _)
             | Abort _
             | Return
+            | UnwindResume
             | Break _
             | Continue _
             | Nop
@@ -1720,7 +1743,7 @@ let replace_static (crate : crate) : crate =
             object
               inherit [_] map_statement
 
-              method! visit_Call _ call =
+              method! visit_Call _ call on_unwind =
                 match call.func with
                 | FnOpRegular { kind = FunId (FRegular id) as kind; generics }
                   when id = d.def_id ->
@@ -1735,8 +1758,8 @@ let replace_static (crate : crate) : crate =
                             };
                         }
                     in
-                    Call { call with func }
-                | _ -> Call call
+                    Call ({ call with func }, on_unwind)
+                | _ -> Call (call, on_unwind)
             end
           in
 
@@ -1998,7 +2021,7 @@ let simplify_trait_calls (crate : crate) : crate =
   let is_blanket_try_into = match_pattern try_into_pat in
 
   let try_replace_call (super_visit : unit -> statement_kind) (span : Meta.span)
-      (call : call) : statement_kind =
+      (call : call) (on_unwind : block) : statement_kind =
     match call.func with
     | FnOpRegular { kind = FunId (FRegular fid); generics } -> (
         match FunDeclId.Map.find_opt fid crate.fun_decls with
@@ -2067,7 +2090,7 @@ let simplify_trait_calls (crate : crate) : crate =
                       (* *)
                       let kind = FunId (FRegular method_ref.binder_value.id) in
                       let func = FnOpRegular { kind; generics } in
-                      Call { call with func }
+                      Call ({ call with func }, on_unwind)
                   | _ ->
                       (* TODO: *)
                       super_visit ())
@@ -2085,10 +2108,10 @@ let simplify_trait_calls (crate : crate) : crate =
       (* Keep track of the last span *)
       method! visit_statement _ st = super#visit_statement (Some st.span) st
 
-      method! visit_Call span call =
+      method! visit_Call span call on_unwind =
         try_replace_call
-          (fun _ -> super#visit_Call span call)
-          (Option.get span) call
+          (fun _ -> super#visit_Call span call on_unwind)
+          (Option.get span) call on_unwind
     end
   in
   let crate = visitor#visit_crate None crate in

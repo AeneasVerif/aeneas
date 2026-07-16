@@ -24,6 +24,7 @@ structure BoolTest (Self : Type) where
 /-- [rename_attribute::BoolTrait::ret_true]:
     Source: 'tests/src/rename_attribute.rs', lines 17:4-19:5
     Visibility: public -/
+@[trait_default]
 def BoolTrait.retTest.default {Self : Type} (self : Self) : Result Bool := do
   ok true
 
@@ -33,18 +34,12 @@ def BoolTrait.retTest.default {Self : Type} (self : Self) : Result Bool := do
 def BoolImpl.getTest (self : Bool) : Result Bool := do
   ok self
 
-/-- [rename_attribute::{impl rename_attribute::BoolTrait for bool}::ret_true]:
-    Source: 'tests/src/rename_attribute.rs', lines 23:0-27:1
-    Visibility: public -/
-def BoolImpl.retTest (self : Bool) : Result Bool := do
-  ok true
-
 /-- Trait implementation: [rename_attribute::{impl rename_attribute::BoolTrait for bool}]
     Source: 'tests/src/rename_attribute.rs', lines 23:0-27:1 -/
 @[reducible]
 def BoolImpl : BoolTest Bool := {
   getTest := BoolImpl.getTest
-  retTest := BoolImpl.retTest
+  retTest := BoolTrait.retTest.default
 }
 
 /-- [rename_attribute::test_bool_trait]:
@@ -53,7 +48,7 @@ def BoolImpl : BoolTest Bool := {
 def BoolFn (T : Type) (x : Bool) : Result Bool := do
   let b ← BoolImpl.getTest x
   if b
-  then BoolImpl.retTest x
+  then BoolTrait.retTest.default x
   else ok false
 
 /-- [rename_attribute::SimpleEnum]

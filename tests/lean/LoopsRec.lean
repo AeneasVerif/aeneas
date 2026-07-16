@@ -981,8 +981,8 @@ def decode_loop0
     let (dst_coeff, index_mut_back) ← Slice.index_mut_usize pe_dst i
     decode_loop0_loop0 dst_coeff
     if dst_coeff > 32#u8
-    then let s := index_mut_back dst_coeff
-         ok (true, s)
+    then let pe_dst1 := index_mut_back dst_coeff
+         ok (true, pe_dst1)
     else let i1 ← i + 1#usize
          let s := index_mut_back 0#u8
          decode_loop0 s i1

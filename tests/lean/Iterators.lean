@@ -71,7 +71,8 @@ def iter_range_step_by_loop
     Source: 'tests/src/iterators.rs', lines 8:0-10:1 -/
 def iter_range_step_by (n : Std.Usize) : Result Unit := do
   let iter ←
-    core.iter.range.IteratorRange.step_by core.iter.range.StepUsize
+    core.iter.traits.iterator.Iterator.step_by.trait_default
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize)
       { start := 0#usize, «end» := n } 2#usize
   iter_range_step_by_loop iter
 
@@ -503,7 +504,8 @@ def zip_iter (a : Slice Std.U8) (b : Slice Std.U8) : Result Unit := do
   let i ← core.slice.Slice.iter a
   let i1 ← core.slice.Slice.iter b
   let iter ←
-    core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorShared.zip
+    core.iter.traits.iterator.Iterator.zip.trait_default
+      (core.iter.traits.iterator.IteratorSliceIter Std.U8)
       (core.iter.traits.collect.IntoIterator.Blanket
       (core.iter.traits.iterator.IteratorSliceIter Std.U8)) i i1
   zip_iter_loop iter
