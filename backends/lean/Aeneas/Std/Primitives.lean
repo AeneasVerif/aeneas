@@ -18,22 +18,43 @@ open Aeneas.Data.Coinductive
 
 syntax (name := assert) "#assert" term: command
 
+-- @[command_elab assert]
+-- unsafe
+-- def assertImpl : CommandElab := fun (stx: Syntax) => do
+--   runTermElabM (fun _ => do
+--     let r ← evalTerm Bool (mkConst ``Bool) stx[1]
+--     if not r then
+--       logInfo ("Assertion failed for:\n" ++ stx[1])
+--       throwError ("Expression reduced to false:\n"  ++ stx[1])
+--     pure ())
+
 @[command_elab assert]
-unsafe
 def assertImpl : CommandElab := fun (stx: Syntax) => do
   runTermElabM (fun _ => do
-    let r ← evalTerm Bool (mkConst ``Bool) stx[1]
-    if not r then
+    let prop ← Elab.Term.elabTerm stx[1] (.some (.sort .zero))
+    Term.synthesizeSyntheticMVarsNoPostponing
+    let prop ← instantiateMVars prop
+    let ty ← inferType prop
+    if ty != .sort .zero then
+      throwError "Assertion must be a Prop"
+    let mvar ← Meta.mkFreshExprMVar prop
+    let goal := mvar.mvarId!
+    let (newgoals, _) ← Lean.Elab.runTactic goal (← `(tactic| cbv))
+    if not newgoals.isEmpty then
       logInfo ("Assertion failed for:\n" ++ stx[1])
-      throwError ("Expression reduced to false:\n"  ++ stx[1])
+      throwError ("Assertion failed for:\n"  ++ stx[1])
     pure ())
 
-/--
-info: true
--/
-#guard_msgs in
-#eval 2 == 2
-#assert (2 == 2)
+
+example : 1 + 1 = 2 := by
+  run_tac
+    let goal ← Lean.Elab.Tactic.getMainGoal
+    dbg_trace "{(← goal.getDecl).type}"
+    let (newgoals, _) ← Lean.Elab.runTactic goal (← `(tactic| cbv))
+    dbg_trace "{newgoals.length}"
+  -- cbv
+  --
+
 
 syntax (name := elabSyntax) "#elab" term: command
 
@@ -101,20 +122,20 @@ instance : LawfulMonad Result := instLawfulMonadITree
 
 -- TODO: adding these to simp set messes up some things
 @[simp, grind .]
-theorem ok_not_fail {α} {a : α} {e} : ¬ Result.ok a = .fail e := by grind [Result.ok, Result.fail, not_vis_ret]
+theorem ok_not_fail {α} {a : α} {e} : ¬ Result.ok a = .fail e := by grind [Result.ok, Result.fail]
 @[simp, grind .]
-theorem fail_not_ok {α} {a : α} {e} : ¬ Result.fail e = .ok a := by grind [Result.ok, Result.fail, not_vis_ret]
+theorem fail_not_ok {α} {a : α} {e} : ¬ Result.fail e = .ok a := by grind [Result.ok, Result.fail]
 @[simp, grind .]
-theorem ok_not_div {α} {a : α} : ¬ Result.ok a = .div := by grind [Result.ok, Result.div, not_ret_div]
+theorem ok_not_div {α} {a : α} : ¬ Result.ok a = .div := by grind [Result.ok, Result.div]
 @[simp, grind .]
-theorem div_not_ok {α} {a : α} : ¬ Result.div = .ok a := by grind [Result.ok, Result.div, not_ret_div]
+theorem div_not_ok {α} {a : α} : ¬ Result.div = .ok a := by grind [Result.ok, Result.div]
 @[simp, grind .]
-theorem fail_not_div {α} {e} : ¬ @Result.fail α e = .div := by grind [Result.div, Result.fail, not_div_vis]
+theorem fail_not_div {α} {e} : ¬ @Result.fail α e = .div := by grind [Result.div, Result.fail]
 @[simp, grind .]
-theorem div_not_fail {α} {e} : ¬ .div = @Result.fail α e := by grind [Result.div, Result.fail, not_div_vis]
+theorem div_not_fail {α} {e} : ¬ .div = @Result.fail α e := by grind [Result.div, Result.fail]
 @[simp, grind .]
 theorem Result.ok.injEq {α} {a b : α} : (Result.ok a = .ok b) = (a = b) := by
-  grind [Result.ok, ret_inj]
+  grind [Result.ok]
 @[simp, grind .]
 theorem Result.fail.injEq {α} {a b : Error} : (@Result.fail α a = .fail b) = (a = b) := by
   grind [Result.fail, vis_inj_effect]
@@ -155,21 +176,6 @@ theorem Result.match.div {R motive r d f}
 theorem Result.match.fail {R motive r d f e}
   : @Result.match_dep R motive (.fail e) r f d = f e := ITree.cases.vis
 
--- theorem Result.match_dep_destruct {α}
---   {motive : Result α → Sort v}
---   (r : Result α)
---   (ok : ∀ r, motive (.ok r))
---   (fail : ∀ e, motive (.fail e))
---   (div :  Unit → motive (.div))
---   : r.match_dep (motive:=motive) ok fail div =
---     (∃ a, r = .ok a ∧ ok _) := by sorry
-
--- TODO: clean up if i dont use this
--- def Result.assert_eq_ok {T} [BEq T] (r : Result T) (t : T) : Bool :=
---   r.match_dep (fun x => x == t) (fun _ => false) (fun _ => false)
--- def Result.beq {T} [BEq T] (r1 r2 : Result T) : Bool :=
---   r.match_dep (fun)
-
 -- @[elab_as_elim, cases_eliminator]
 abbrev Result.match_dep' {α}
   {motive : Result α → Sort v}
@@ -198,31 +204,6 @@ theorem Result.match_dep'.div {R motive v r d f}
   (h : v = .div)
   : @Result.match_dep' R motive v r f d = cast (congrArg motive (Eq.symm h)) (d h) := by
   cases v <;> unfold match_dep' <;> simp <;> grind
-
-def Result.assert_eq_ok {T} [BEq T] (r : Result T) (t : T) : Bool :=
-  r.match_dep (fun x => x == t) (fun _ => false) (fun _ => false)
-
--- TODO: I don't think this one is needed:
--- @[elab_as_elim, cases_eliminator]
-abbrev Result.match_dep'' {α}
-  {motive : Result α → Sort v}
-  (r : Result α)
-  (ok : ∀ x, r = .ok x → motive r)
-  (fail : ∀ e, r = .fail e → motive r)
-  (div : r = .div → motive r)
-  -- will add more inputs as we add effects
-  : motive r :=
-    Result.match_dep (motive := fun r' => r = r' -> motive r') r
-      (fun r (.refl _) => ok r (by assumption))
-      (fun e (.refl _) => fail e (by assumption))
-      (fun _ (.refl _) => div (by assumption))
-      rfl
-
--- theorem Result.match_dep''.ok {R motive v r d f x}
---   (h : v = Result.ok x)
---   : @Result.match_dep'' R motive v r f d = r x h := by
---   cases v
---   sorry
 
 -- TODO: this is how to register for split, but we probably won't use that
 -- run_meta
