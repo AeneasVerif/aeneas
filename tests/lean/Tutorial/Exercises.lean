@@ -24,7 +24,7 @@ theorem mul2_add1_spec (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
   : mul2_add1 x ⦃ y => ↑y = 2 * ↑x + (1 : Int) ∧ ↑y = 2 * ↑x + (1 : Int) ⦄
   := by
   unfold mul2_add1
-  step with U32.add_spec as ⟨ x1 ⟩
+  step with U32.add_spec.step_spec as ⟨ x1 ⟩
   step as ⟨ x2 ⟩
   scalar_tac
 
