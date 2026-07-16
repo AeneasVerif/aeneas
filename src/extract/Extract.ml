@@ -3762,7 +3762,7 @@ let extract_unit_test_if_marked (ctx : extraction_ctx) (fmt : F.formatter)
             F.pp_print_space fmt ();
             F.pp_print_string fmt "()");
           F.pp_print_space fmt ();
-          F.pp_print_string fmt "==";
+          F.pp_print_string fmt "=";
           F.pp_print_space fmt ();
           let success =
             ctx_get_variant def.item_meta.span (TBuiltin TResult) result_ok_id
