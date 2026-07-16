@@ -17,12 +17,16 @@ following test.
 namespace GrindValPatternBlowup
 
 private opaque MBuf : Type
-private opaque blen : MBuf → Nat
-private opaque wlen : MBuf → Nat
+private def blen : MBuf → Nat := fun _ => 100
+private def wlen : MBuf → Nat := fun _ => 200
+
 /-- A global `@[grind]` lemma the goal is closed through — this forces `grind`
     into the e-match loop (so the pathological trigger is actually exercised)
     while keeping the goal provable both with and without the fix. -/
-@[grind] private axiom wlen_eq (b : MBuf) : wlen b = blen b + 100
+@[grind =]
+private theorem wlen_eq (b : MBuf) : wlen b = blen b + 100 := by
+  simp [blen, wlen]
+
 /-- Distinctive default-priority application covering all 12 scalar variables
     (mirrors the recursive `loop0` / `vloop0` call in the real proof). -/
 private opaque Cov : MBuf → Usize → Usize → Usize → Usize → Usize → Usize → Usize →
