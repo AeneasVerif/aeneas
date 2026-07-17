@@ -5,10 +5,10 @@ require aeneas from "../../backends/lean"
 
 package «tests» {}
 
-@[default_target] lean_lib Adt
 @[default_target] lean_lib AdtBorrows
-@[default_target] lean_lib Arrays
+@[default_target] lean_lib Adt
 @[default_target] lean_lib ArraysDefs
+@[default_target] lean_lib Arrays
 @[default_target] lean_lib ArraySliceIndex
 @[default_target] lean_lib AsMut
 @[default_target] lean_lib AssertCfg
@@ -18,8 +18,8 @@ package «tests» {}
 @[default_target] lean_lib BlanketImpl
 @[default_target] lean_lib BoolCmp
 @[default_target] lean_lib Bst
-@[default_target] lean_lib Builtin
 @[default_target] lean_lib BuiltinAuto
+@[default_target] lean_lib Builtin
 @[default_target] lean_lib CastSigned
 @[default_target] lean_lib ChunksExact
 @[default_target] lean_lib Closures
@@ -27,16 +27,16 @@ package «tests» {}
 @[default_target] lean_lib ConstantsLean
 @[default_target] lean_lib ConstShadow
 @[default_target] lean_lib Curve25519
-@[default_target] lean_lib Default
 @[default_target] lean_lib DefaultedMethod
+@[default_target] lean_lib Default
 @[default_target] lean_lib Demo
 @[default_target] lean_lib Deref
 @[default_target] lean_lib Derive
 @[default_target] lean_lib Discriminant
-@[default_target] lean_lib Drop
 @[default_target] lean_lib DropBug
-@[default_target] lean_lib Dyn
+@[default_target] lean_lib Drop
 @[default_target] lean_lib DynamicSize
+@[default_target] lean_lib Dyn
 @[default_target] lean_lib FromTo
 @[default_target] lean_lib GenericUnitOutput
 @[default_target] lean_lib Hashmap
@@ -56,17 +56,17 @@ package «tests» {}
 @[default_target] lean_lib Issue815GlobalReferencingFallibleGlobal
 @[default_target] lean_lib IssueCharon1172
 @[default_target] lean_lib IterAdapters
-@[default_target] lean_lib Iterators
 @[default_target] lean_lib IteratorsArray
+@[default_target] lean_lib Iterators
 @[default_target] lean_lib IteratorsScalar
 @[default_target] lean_lib JoinDuplicate
 @[default_target] lean_lib Joins
 @[default_target] lean_lib ListBorrows
-@[default_target] lean_lib Loops
 @[default_target] lean_lib LoopsAdts
 @[default_target] lean_lib LoopSharedBorrowProj
 @[default_target] lean_lib LoopSharedLoanInJoin
 @[default_target] lean_lib LoopsIssues
+@[default_target] lean_lib Loops
 @[default_target] lean_lib LoopsNested
 @[default_target] lean_lib LoopsNestedRec
 @[default_target] lean_lib LoopsRec
@@ -96,4 +96,5 @@ package «tests» {}
 @[default_target] lean_lib SwitchTest
 @[default_target] lean_lib Traits
 @[default_target] lean_lib Tutorial
+@[default_target] lean_lib VecIter
 @[default_target] lean_lib Vec
