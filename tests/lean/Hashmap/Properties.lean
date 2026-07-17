@@ -29,9 +29,10 @@ namespace HashMap
 def distinct_keys (ls : List (Usize × α)) := ls.pairwise_rel (λ x y => x.fst ≠ y.fst)
 
 def hash_mod_key (k : Usize) (l : Nat) : Nat :=
-  match hash_key k with
-  | .ok k => k.val % l
-  | _ => 0
+  (hash_key k).match_dep
+    (fun k => k.val % l)
+    (fun _ => 0)
+    (fun _ => 0)
 
 @[simp, scalar_tac_simps, grind =, agrind =]
 theorem hash_mod_key_eq : hash_mod_key k l = k.val % l := by

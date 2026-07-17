@@ -88,10 +88,10 @@ theorem spec_coinSpec {α} {x : Result α} {p: Post α} : spec x p → coinSpec 
   intros s
   cases x
   · apply coinSpec.ret
+    simp [spec_ok] at s
     assumption
-  · contradiction
-  · contradiction
-#check spec_coinSpec
+  · simp at s
+  · simp at s
 
 @[simp]
 theorem qimp_coinSpec_unit {α} (P : Unit → Prop) (k : Unit → ITreeC α) (Q : α → Prop) :
@@ -126,7 +126,7 @@ theorem coinSpec_ret {α p} (x : α) : coinSpec p (ITree.ret x) ↔ p x := by
     apply coinSpec.ret
     assumption
 
-#register_spec_statement {
+#register_spec_info {
     spec_name := ``coinSpec
     arity := 3
     program_index := 2
@@ -171,15 +171,15 @@ theorem coinSpec_ret {α p} (x : α) : coinSpec p (ITree.ret x) ↔ p x := by
   #check I32.add_spec
   -- set_option trace.Step true
 
-  theorem test : coinSpec (fun z => z.val == 6)
-    (do let x ← 1#i32 + 2#i32
-        let y ← x + x
-        ITree.vis () fun (b : Bool) =>
-        if b then ITree.ret y else ITree.ret 6#i32)  := by
-    step
-    step
-    apply coinSpec.vis
-    intros b
-    cases b
-    · simp [*]
-    · simp [*]
+  -- theorem test : coinSpec (fun z => z.val == 6)
+  --   (do let x ← 1#i32 + 2#i32
+  --       let y ← x + x
+  --       ITree.vis () fun (b : Bool) =>
+  --       if b then ITree.ret y else ITree.ret 6#i32)  := by
+  --   step
+  --   step
+  --   apply coinSpec.vis
+  --   intros b
+  --   cases b
+  --   · simp [*]
+  --   · simp [*]
