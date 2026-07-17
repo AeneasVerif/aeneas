@@ -2472,7 +2472,14 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
           ctx_fun_global_name_to_extract_string item_meta ctx llbc_name
         else name
 
-let ctx_add_global_decl_and_body (def : global_decl) (ctx : extraction_ctx) :
+(** Register the name of a global declaration.
+
+    Note that we only register the name of the global itself, not the name of
+    its initializer body: the body is inlined into the global definition at
+    extraction time, so it is never referred to by name. The loops the body may
+    contain, on the other hand, are extracted as ordinary functions and get
+    their names registered through {!ctx_add_fun_decl}. *)
+let ctx_add_global_decl (def : global_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let name =
     ctx_compute_fun_global_name_no_suffix def.item_meta def.src ctx
@@ -2570,14 +2577,18 @@ let ctx_add_termination_measure (def : fun_decl) (ctx : extraction_ctx) :
 
 (* TODO: move to Extract *)
 let ctx_add_fun_decl (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
-  (* Sanity check: the function should not be a global body - those are handled
-   * separately *)
-  [%sanity_check] def.item_meta.span (not def.is_global_decl_body);
-  let def_id = def.def_id in
-  (* Add the function name *)
-  let def_name = ctx_compute_fun_name def false ctx in
-  let fun_id = (Pure.FunId (FRegular def_id), def.loop_id) in
-  ctx_add def.item_meta.span (FunId (FromLlbc fun_id)) def_name ctx
+  (* A global initializer body is not a function: it is registered as a global
+     (see [ctx_add_global_decl]) and inlined into the global definition, so it
+     has no function name of its own (and reusing the global's name would clash).
+     We thus skip it here. Note that the loops it may contain are *not* global
+     bodies (they are ordinary auxiliary functions) and are registered normally. *)
+  if def.is_global_decl_body then ctx
+  else
+    let def_id = def.def_id in
+    (* Add the function name *)
+    let def_name = ctx_compute_fun_name def false ctx in
+    let fun_id = (Pure.FunId (FRegular def_id), def.loop_id) in
+    ctx_add def.item_meta.span (FunId (FromLlbc fun_id)) def_name ctx
 
 let ctx_compute_type_decl_name (ctx : extraction_ctx) (def : type_decl) : string
     =

@@ -72,7 +72,11 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
         else ctx
       in
       (* We have to register the function itself, and the loops it
-         may contain (which are extracted as functions) *)
+         may contain (which are extracted as functions).
+
+         Note: if [def.f] is a global initializer body, [ctx_add_fun_decl]
+         skips it (the global is registered separately as a global); the loops
+         and bodies are ordinary functions and are registered normally. *)
       let funs = (def.f :: def.loops) @ def.bodies in
       (* Register the decrease clauses *)
       let ctx = List.fold_left register_decreases ctx funs in
@@ -84,7 +88,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
 (** Simply add the global name to the context. *)
 let extract_global_decl_register_names (ctx : extraction_ctx)
     (def : global_decl) : extraction_ctx =
-  ctx_add_global_decl_and_body def ctx
+  ctx_add_global_decl def ctx
 
 (** The following function factorizes the extraction of ADT values.
 

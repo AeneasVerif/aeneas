@@ -43,6 +43,7 @@ package «tests» {}
 @[default_target] lean_lib HigherRankedTraitBounds
 @[default_target] lean_lib Into
 @[default_target] lean_lib Issue1044OpaqueTuple
+@[default_target] lean_lib Issue1140GlobalLoop
 @[default_target] lean_lib Issue1141ImplFnRef
 @[default_target] lean_lib Issue134LoopSharedBorrows
 @[default_target] lean_lib Issue194RecursiveStructProjector
