@@ -28,24 +28,6 @@ def assertImpl : CommandElab := fun (stx: Syntax) => do
       throwError ("Expression reduced to false:\n"  ++ stx[1])
     pure ())
 
--- @[command_elab assert]
--- def assertImpl : CommandElab := fun (stx: Syntax) => do
---   runTermElabM (fun _ => do
---     let prop ← Elab.Term.elabTerm stx[1] (.some (.sort .zero))
---     Term.synthesizeSyntheticMVarsNoPostponing
---     let prop ← instantiateMVars prop
---     let ty ← inferType prop
---     if ty != .sort .zero then
---       throwError "Assertion must be a Prop"
---     let mvar ← Meta.mkFreshExprMVar prop
---     let goal := mvar.mvarId!
---     let (newgoals, _) ← Lean.Elab.runTactic goal (← `(tactic| cbv))
---     if not newgoals.isEmpty then
---       logInfo ("Assertion failed for:\n" ++ stx[1])
---       throwError ("Assertion failed for:\n"  ++ stx[1])
---     pure ())
-
-
 syntax (name := elabSyntax) "#elab" term: command
 
 @[command_elab elabSyntax]
@@ -88,34 +70,25 @@ def RustEffect : Effect := {
 
 -- We need Result to be irreducble outside this file (to not break metaprograms which normalize types),
 -- but reducible within. The `unseal` command only affects the local context.
-@[irreducible /-, cbv_opaque-/]
+@[irreducible]
 def Result (α : Type u) : Type u := ITree RustEffect α
 unseal Result
 
-
--- TODO: clean up the cbv stuff
--- @[cbv_opaque]
 def Result.ok {α} (a : α) : Result α := .ret a
 
--- @[cbv_opaque]
 def Result.fail {α} (e : Error) : Result α := .vis (.fail e) PEmpty.elim
 
--- @[cbv_opaque]
 def Result.div {α} : Result α := ITree.div
 
--- TODO: in addition to type levels, does it cause issues that bind comes from the Monad instance?
--- -- TODO: is it ok to not have β be at a different level `v`?
--- @[cbv_opaque]
 def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
   ITree.bind x f
--- instance : Monad Result := instMonadITree
+
 instance : Monad Result where
   pure := .ok
   bind := bind
-instance : LawfulMonad Result := instLawfulMonadITree
-  -- pure_bind      (x : α) (f : α → m β) : pure x >>= f = f x
 
--- @[cbv_eval]
+instance : LawfulMonad Result := instLawfulMonadITree
+
 theorem Result_ok_bind.{u} {A B : Type u} : ∀ (x : A) (f : A → Result B),
   bind (Result.ok x) f = f x := by
     intros x f
@@ -123,7 +96,6 @@ theorem Result_ok_bind.{u} {A B : Type u} : ∀ (x : A) (f : A → Result B),
     simp [Bind.bind] at h
     assumption
 
--- TODO: adding these to simp set messes up some things
 @[simp, grind .]
 theorem ok_not_fail {α} {a : α} {e} : ¬ Result.ok a = .fail e := by grind [Result.ok, Result.fail]
 @[simp, grind .]
@@ -143,23 +115,19 @@ theorem Result.ok.injEq {α} {a b : α} : (Result.ok a = .ok b) = (a = b) := by
 theorem Result.fail.injEq {α} {a b : Error} : (@Result.fail α a = .fail b) = (a = b) := by
   grind [Result.fail, vis_inj_effect]
 
--- NOTE: in order for lean's metaprogramming surrounding the `split` tactic to not
--- spaghetti code itself to death, cases without inputs like div must input a Unit
--- NOTE: its seems that for registering a matcher for split, we need the motive to be before the result input.
--- NOTE: in order to register custom matches for the `split` tactic,
--- the name of the function must start with "match_". See the implementation of Matcherinfo.lean/`getMatcherInfo?`
--- previously Result was an inductive with ok, div, and fail cases only.
+-- Before ITrees, Result was an inductive with ok, div, and fail cases only.
 -- this function can be used in many cases to replace pattern matching on that inductive:
--- TODO: why do things error when this is def instead of abbrev?
+-- NOTE about split: to work with the `split` tactic, the name must start with "match_", the motive must come
+-- before the Result input, and the div case must input a Unit.
+-- If we commit to not needing split, we can change these things.
 @[elab_as_elim, cases_eliminator]
--- @[elab_as_elim, cases_eliminator, irreducible, cbv_opaque]
 def Result.match_dep {α}
   {motive : Result α → Sort v}
   (r : Result α)
   (ok : ∀ r, motive (.ok r))
   (fail : ∀ e, motive (.fail e))
+  -- TODO: add more cases as we add more effects.
   (div :  Unit → motive (.div))
-  -- will add more inputs as we add effects
   : motive r := ITree.cases ok (div ()) (
       fun e k => match e with
         | .fail e => by
@@ -167,7 +135,6 @@ def Result.match_dep {α}
             simp [same]
             exact (fail e)
     ) r
--- unseal Result.match_dep
 
 @[simp]
 theorem Result.match.ok {R motive r d f x}
@@ -184,15 +151,12 @@ theorem Result.match.fail {R motive r d f e}
 def Result.is_ok {R : Type} [BEq R] (r : Result R) (expected : R) : Bool :=
   r.match_dep (fun x => x == expected) (fun _ => false) (fun _ => false)
 
--- @[elab_as_elim, cases_eliminator]
--- @[irreducible, cbv_opaque]
 def Result.match_dep' {α}
   {motive : Result α → Sort v}
   (r : Result α)
   (ok : ∀ x, r = .ok x → motive (.ok x))
   (fail : ∀ e, r = .fail e → motive (.fail e))
   (div : r = .div → motive (.div))
-  -- will add more inputs as we add effects
   : motive r :=
     Result.match_dep (motive := fun r' => r = r' -> motive r') r ok fail (fun _ => div) rfl
 
@@ -247,31 +211,6 @@ instance {T} [Repr T] : Repr (Result T) where
 --     overlaps := { map := Std.HashMap.ofList [] }
 --   }
 
--- -- TODO: do we need both versions? I had problems with motives not being correct using the
--- -- dependent version, and maybe you can't use this one as a cases eliminator. TODO
--- def Result.match_nondep {α} (r : Result α)
---   {Out : Sort v}
---   (ok : α  → Out)
---   (fail : Error → Out)
---   (div :  Out)
---   -- will add more inputs as we add effects
---   : Out := ITree.cases ok div (
---       fun e _k => match e with
---         | .fail e => fail e
---     ) r
-
--- @[simp]
--- theorem Result.nmatch.ok {R Out r d f x}
---   : @Result.match_nondep R (.ok x) Out r f d = r x := ITree.cases.ret
-
--- @[simp]
--- theorem Result.nmatch.div {R Out r d f}
---   : @Result.match_nondep R .div Out r f d = d := ITree.cases.div
-
--- @[simp]
--- theorem Result.nmatch.fail {R Out r d f e}
---   : @Result.match_nondep R (.fail e) Out r f d = f e := ITree.cases.vis
-
 open Result
 
 instance Result_Inhabited (α : Type u) : Inhabited (Result α) :=
@@ -284,36 +223,8 @@ instance Result_Nonempty (α : Type u) : Nonempty (Result α) :=
 # Helpers
 -/
 
--- TODO: where these ever used anywhere? not sure yet.
--- @[global_simps]
--- def ok? {α: Type u} (r: Result α): Bool :=
---   ITree.cases
---     (fun o =>
---       match o with
---       | .ok _ => true
---       | .fail _ => false
---     )
---     false
---     (fun _ _ => false)
---     r
-
--- def div? {α: Type u} (r: Result α): Bool :=
---   ITree.cases
---     (fun _ => false)
---     true
---     (fun _ _ => false)
---     r
-
 def massert (b : Prop) [Decidable b] : Result Unit :=
   if b then ok () else fail assertionFailure
-
-macro "prove_eval_global" : tactic => `(tactic| simp (failIfUnchanged := false) only [global_simps] <;> first | apply Eq.refl | decide)
-
--- @[global_simps]
--- def eval_global {α: Type u} (x: Result α) (_: ok? x := by prove_eval_global) : α :=
---   -- match x with
---   -- | fail _ | div => by contradiction
---   -- | ok x => x
 
 @[simp]
 def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
@@ -329,18 +240,6 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
 /-!
 # Do-DSL Support
 -/
-
--- TODO: should this just be deleted to clean things up now, or left for backwards compatibility?
--- def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
---   @Bind.bind Result _ α β x f
-
--- -- Allows using Result in do-blocks
--- instance : Bind Result where
-  -- bind := bind
-
--- Allows using pure x in do-blocks
--- instance : Pure Result where
---   pure := fun x => ok x
 
 @[simp] theorem bind_ok (x : α) (f : α → Result β) : bind (.ok x) f = f x :=
   by simp [bind, ok]
@@ -370,34 +269,6 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
   (Bind.bind (Bind.bind e g) h) =
   (Bind.bind e (λ x => Bind.bind (g x) h)) := by apply bind_assoc
 
--- TODO: i think that this is false for the ITree version?
--- because if x = `vis _ k`, then the rhs of the ↔ says exactly nothing,
--- and the lhs says that y = y'.
--- @[simp]
--- def bind_eq_iff (x : Result α) (y y' : α → Result β) :
---   ((Bind.bind x y) = (Bind.bind x y')) ↔
---   ∀ v, x = ok v → y v = y' v := by
-  -- -- cases x <;> simp_all
-  -- constructor
-  -- · intros
-  --   subst_vars
-  --   simp at *
-  --   assumption
-  -- · intros h
-  --   revert h
-  --   refine ITree.cases ?_ ?_ ?_ x
-  --   ·
-  --     intros r h
-  --     refine (.trans (pure_bind _ _) (.trans ?_ (Eq.symm (pure_bind _ _))))
-  --     apply h
-  --     simp [pure]
-  --     rfl
-  --   · intros h
-  --     simp [bind, itree_div_bind]
-  --   ·
-  --     intros
-  --     sorry
-
 /-!
 # Partial Fixpoint
 -/
@@ -412,20 +283,6 @@ noncomputable instance : CCPO (Result α) := instCCPOCoIndOfInhabitedPUnit (ITre
   -- instCCPOCoIndOfInhabitedPUnit _
 noncomputable instance : MonoBind Result := instMonoBindITree
 
--- TODO: is there a way to not need to state this, and just use the typeclass instance?
--- @[partial_fixpoint_monotone]
--- theorem monotone_bind
---     {α β : Type u}
---     {γ : Sort w} [PartialOrder γ]
---     (f : γ → Result α) (g : γ → α → Result β)
---     (hmono₁ : monotone f)
---     (hmono₂ : monotone g) :
---     monotone (fun (x : γ) => bind (f x) (g x)) := by
---   intro x₁ x₂ hx₁₂
---   apply PartialOrder.rel_trans
---   · apply MonoBind.bind_mono_left (hmono₁ _ _ hx₁₂)
---   · apply MonoBind.bind_mono_right (fun y => monotone_apply y _ hmono₂ _ _ hx₁₂)
-
 @[partial_fixpoint_monotone]
 theorem bind_mono {R : Type a} {α} {S : Type b} [PartialOrder α]
   (f : α → Result R) (g : α → R → Result S) :
@@ -437,6 +294,7 @@ theorem bind_mono {R : Type a} {α} {S : Type b} [PartialOrder α]
 
 -- TODO: when we add more effects, use Aeneas.Data.Coinductive.vis_mono
 -- to instantiate monotonicity theorems for those effects.
+
 end Order
 
 /-- Aeneas-internal version of `Function.uncurry` for tuple destructuring in bind
@@ -542,18 +400,6 @@ def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) 
   | ControlFlow.done x => ok x
 partial_fixpoint
 
-
--- TODO: this is original, delete this
--- def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) (x : α) : Result β := do
---   match body x with
---   | ok r =>
---     match r with
---     | ControlFlow.cont x => loop body x
---     | ControlFlow.done x => ok x
---   | fail e => fail e
---   | div => div
--- partial_fixpoint
-
 /-!
 # Misc
 -/
@@ -568,7 +414,7 @@ instance SubtypeLawfulBEq [BEq α] (p : α → Prop) [LawfulBEq α] : LawfulBEq 
   eq_of_beq {a b} h := by cases a; cases b; simp_all [BEq.beq]
   rfl := by intro a; cases a; simp [BEq.beq]
 
--- TODO: will this make sense, given that .vis now returns none?
+-- TODO: will this make sense when we add more effects, given that .vis returns none?
 /- A helper function that converts failure to none and success to some
    TODO: move up to Core module? -/
 def Option.ofResult {a : Type u} (x : Result a) :
