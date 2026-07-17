@@ -71,3 +71,9 @@ pub fn sum_into_take(v: Vec<u32>) -> u32 {
     }
     acc
 }
+
+// `for _ in chunks` over a `Vec` of slices
+// See: issue #464 (https://github.com/AeneasVerif/aeneas/issues/464)
+pub fn for_over_vec_of_slices(chunks: Vec<&[bool]>) {
+    for _c in chunks {}
+}
