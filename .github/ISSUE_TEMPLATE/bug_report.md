@@ -7,7 +7,7 @@ labels: bug
 
 <!-- Thank you for submitting a bug report! Please check this isn't already reported in another issue.
 
-Aeneas translates the LLBC produced by Charon into Lean, so a reproduction usually needs the Rust code, the Charon command that produced the `.llbc` and the Aeneas command together with its output.
+Aeneas translates the LLBC produced by Charon into Lean, so a reproduction usually needs the Rust code, the Charon command that produced the LLBC and the Aeneas command together with its output.
 
 Small, self-contained reproducible examples help us fix bugs much faster and the majority of bugs can be reproduced in a few lines of Rust.
 
@@ -32,7 +32,8 @@ Add further details as required, delete any part of the template which isn't rel
 <!-- In the case that Aeneas generates warnings or errors, include the output:
 - If Aeneas aborted with an `Uncaught exception`, paste the full backtrace.
 - Otherwise, paste the relevant errors/warnings.
-Running with `-print-error-emitters` includes the compiler source location of each error. -->
+Running with `-print-error-emitters` includes the compiler source location of each error. 
+Running with `-sequential` avoids parallelism which can result in a partial backtrace. -->
 
 ```text
 add aeneas output here
