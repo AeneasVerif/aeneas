@@ -293,7 +293,7 @@ theorem BitVec.getElem!_mod_pow2_eq {w} (x : BitVec w) (i j : ℕ) (h : j < i) :
     by_cases hw: w = 1
     . simp_all only [one_ne_zero, not_false_eq_true, pow_one, Nat.mod_self]
       cases i <;> simp_all only [ne_eq, Nat.add_eq_zero_iff, one_ne_zero, and_false, not_false_eq_true,
-        zero_pow, Nat.zero_mod, Nat.mod_zero, not_lt_zero']
+        zero_pow, Nat.zero_mod, Nat.mod_zero, Nat.not_lt_zero]
     . have : 2 < 2^w := by
         have : 2^1 < 2^w := by apply Nat.pow_lt_pow_of_lt <;> omega
         omega
@@ -577,7 +577,7 @@ theorem BitVec.getElem!_toLEBytes {w : ℕ} (b : BitVec w) (i j : ℕ) (h : j < 
     by_cases hi: i = 0
     . simp_all only [gt_iff_lt, List.getElem!_cons_zero, getElem!_setWidth, MulZeroClass.mul_zero,
       zero_add]
-    . simp only [Nat.not_eq, ne_eq, hi, not_false_eq_true, not_lt_zero', false_or, true_or,
+    . simp only [Nat.not_eq, ne_eq, hi, not_false_eq_true, Nat.not_lt_zero, false_or, true_or,
       List.getElem!_cons_nzero]
       rw [getElem!_toLEBytes]
       . by_cases 8 * i + j < w

@@ -47,8 +47,9 @@ opam switch create 5.3.0
 
 You can then install the dependencies with the following command:
 ```
-opam install ppx_deriving visitors easy_logging zarith yojson core_unix odoc \
-  ocamlgraph menhir ocamlformat.0.27.0 unionFind zarith progress domainslib
+opam install calendar core_unix domainslib easy_logging menhir \
+  ocamlformat.0.27.0 ocamlgraph odoc ppx_deriving ppx_deriving_yojson \
+  progress unionFind visitors yojson zarith
 ```
 
 Moreover, Aeneas uses the [Charon](https://github.com/AeneasVerif/charon) project and library.
@@ -130,6 +131,10 @@ one by one:
   are not supported yet (e.g., `'a : loop { loop { break 'a; } } `). This is a
   technical limitation, not a fundamental issue, that we plan to address in the
   near future and that we can prioritize depending on our users' needs.
+- **mutable references and generic types**: Instantiating a generic type (including `Self` through a
+  trait implementation) with a mutable reference is not supported yet (e.g., calling `id(&mut x)`
+  where `fn id<T>(x: T) -> T { x }`). We're working on addressing it and can prioritize it depending
+  on our users' needs.
 
 The following limitations will be lifted by the ongoing work on separation logic:
 - **unsafe code**

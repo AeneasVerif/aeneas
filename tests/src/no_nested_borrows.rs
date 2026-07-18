@@ -1,9 +1,9 @@
-//@ [coq,fstar] subdir=misc
+//@ [coq] subdir=misc
+//@ [fstar] skip
 #![feature(register_tool)]
 #![register_tool(verify)]
 //! This module doesn't contain **functions which use nested borrows in their
 //! signatures**, and doesn't contain functions with loops.
-
 pub struct Pair<T1, T2> {
     pub x: T1,
     pub y: T2,

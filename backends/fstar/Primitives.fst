@@ -58,6 +58,8 @@ let decrease (n: nat{n > 0}) : nat = n - 1
 
 let core_mem_replace (#a : Type0) (x : a) (y : a) : a & a = (x, x)
 
+let bool_xor (a b : bool) : bool = a <> b
+
 // We don't really use raw pointers for now
 type mut_raw_ptr (t : Type0) = { v : t }
 type const_raw_ptr (t : Type0) = { v : t }
