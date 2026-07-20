@@ -58,12 +58,10 @@ open Error
 
 inductive RustEffect.I : Type where
 | fail : Error → RustEffect.I
-| test_effect : RustEffect.I
 
 def RustEffect.O (i : RustEffect.I) : Type :=
   match i with
   | .fail _ => PEmpty
-  | .test_effect => PUnit
 
 def RustEffect : Effect := {
   I := RustEffect.I
