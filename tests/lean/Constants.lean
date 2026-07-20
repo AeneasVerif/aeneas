@@ -181,13 +181,12 @@ structure V (T : Type) (N : Std.Usize) where
 /-- [constants::{constants::V<T, N>}::LEN]
     Source: 'tests/src/constants.rs', lines 92:4-92:29
     Visibility: public -/
-@[global_simps, irreducible]
-def V.LEN (T : Type) (N : Std.Usize) : Std.Usize := N
+@[global_simps, irreducible] def V.LEN (N : Std.Usize) : Std.Usize := N
 
 /-- [constants::use_v]:
     Source: 'tests/src/constants.rs', lines 95:0-97:1
     Visibility: public -/
 def use_v (T : Type) (N : Std.Usize) : Result Std.Usize := do
-  ok (V.LEN T N)
+  ok (V.LEN N)
 
 end constants
