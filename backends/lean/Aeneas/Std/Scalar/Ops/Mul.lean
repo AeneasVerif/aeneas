@@ -40,11 +40,10 @@ Theorems with a specification which use integers and bit-vectors
 -/
 
 theorem UScalar.mul_equiv {ty} (x y : UScalar ty) :
-  (mul x y).match_dep
-  (fun z => x.val * y.val ≤ UScalar.max ty ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv)
-  (fun _ => UScalar.max ty < x.val * y.val)
-  (fun _ => False)
-  := by
+  match (mul x y).match with
+  | .ok z => x.val * y.val ≤ UScalar.max ty ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv
+  | .vis (.fail _) _ => UScalar.max ty < x.val * y.val
+  | .div => False := by
   simp only [mul]
   have := tryMk_eq ty (x.val * y.val)
   generalize hval : tryMk ty (↑x * ↑y) = val at this
@@ -69,22 +68,20 @@ theorem UScalar.mul_bv_spec {ty} {x y : UScalar ty}
   have : x * y = mul x y := by rfl
   have := mul_equiv x y
   generalize hval : x.mul y = val at this
-  cases val <;> simp_all [spec_ok, and_self, spec_fail]
+  cases val <;> simp_all [spec_ok, and_self, spec_vis]
   omega
 
 theorem IScalar.mul_equiv {ty} (x y : IScalar ty) :
-  (mul x y).match_dep
-  (fun z => IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv)
-  (fun _ => ¬(IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty))
-  (fun _ => False) := by
+  match (mul x y).match with
+  | .ok z => IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
+  | .vis (.fail _) _ => ¬(IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty)
+  | .div => False := by
   simp only [mul, not_and, not_le]
   have := tryMk_eq ty (x.val * y.val)
-  generalize hval : tryMk ty (↑x * ↑y) = value at this
-  cases value <;> simp_all only [«match».ok, «match».div, «match».fail, inBounds, min, max, true_and, not_and, not_lt] <;>
+  split <;> simp_all only [inBounds, min, max, true_and, not_and, not_lt] <;>
   simp_all only [tryMk, ofOption, tryMkOpt, check_bounds, and_self, decide_true, dite_true,
-    ok.injEq, Bool.decide_and, Bool.and_eq_true, decide_eq_true_eq] <;>
-  simp only [← hval, ofIntCore, val] <;>
-  clear hval <;>
+    Bool.decide_and, Bool.and_eq_true, decide_eq_true_eq] <;>
+  rename_i hEq <;> simp at hEq <;> simp only [← hEq, ofIntCore, val] <;>
   simp only [bv_toInt_eq, ← BitVec.toInt_inj, BitVec.toInt_mul]
   . split_conjs
     . omega

@@ -40,16 +40,24 @@ def List.clone (clone : α → Result α) (l : List α) : Result ({ l' : List α
   -- | fail e => fail e
   -- | div => div
   -- (List.mapM clone l).match_dep
-  Result.match_dep' (motive := fun l => _) (List.mapM clone l)
-  (fun v h => ok ⟨ v, by have := List.mapM_Result_length h; scalar_tac ⟩)
-  (fun e _h => fail e)
-  (fun _h => div)
+  -- Result.match_dep' (motive := fun l => _) (List.mapM clone l)
+  -- (fun v h => ok ⟨ v, by have := List.mapM_Result_length h; scalar_tac ⟩)
+  -- (fun e _h => fail e)
+  -- (fun _h => div)
+  match h : (List.mapM clone l).match with
+  | .ok v => ok ⟨ v, by
+    cases h2 : List.mapM clone l <;> simp_all
+    have := List.mapM_Result_length h2
+    scalar_tac ⟩
+  | .vis (.fail e) _ => fail e
+  | .div => div
 
 @[step]
 def List.clone_spec {clone : α → Result α} {l : List α} (h : ∀ x ∈ l, clone x = ok x) :
   List.clone clone l ⦃ l' => l'.val = l ∧ l'.val.length = l.length ⦄ := by
   simp only [List.clone]
   have := List.mapM_clone_eq h
-  simp [this]
+  split <;> simp_all
+  cases h : List.mapM clone l <;> simp_all
 
 end Aeneas.Std

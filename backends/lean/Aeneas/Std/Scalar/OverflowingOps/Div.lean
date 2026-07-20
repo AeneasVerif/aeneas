@@ -42,6 +42,9 @@ theorem UScalar.overflowing_div_eq {ty} (x y : UScalar ty) :
   simp [overflowing_div, UScalar.div]
   rw [map_eq_bind_pure_comp]
   split <;> simp [pure]
+  congr
+  funext
+  contradiction
 
 uscalar @[step_pure overflowing_div x y]
 theorem core.num.«%S».overflowing_div_eq (x y : «%S») :

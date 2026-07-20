@@ -35,13 +35,12 @@ instance {ty} : HAdd (IScalar ty) (IScalar ty) (Result (IScalar ty)) where
 -/
 
 theorem UScalar.add_equiv {ty} (x y : UScalar ty) :
-  (x + y).match_dep
-  (fun z => x.val + y.val < 2^ty.numBits ∧
+  match (x + y).match with
+  | .ok z => x.val + y.val < 2^ty.numBits ∧
     z.val = x.val + y.val ∧
-    z.bv = x.bv + y.bv)
-  (fun _e => ¬ (UScalar.inBounds ty (x.val + y.val)))
-  ⊥
-  := by
+    z.bv = x.bv + y.bv
+  | .vis (.fail _) _ => ¬ (UScalar.inBounds ty (x.val + y.val))
+  | _ => ⊥ := by
   have : x + y = add x y := by rfl
   rw [this]
   simp [add]
@@ -57,14 +56,13 @@ theorem UScalar.add_equiv {ty} (x y : UScalar ty) :
   simp [*]
 
 theorem IScalar.add_equiv {ty} (x y : IScalar ty) :
-  (x + y).match_dep
-    (fun z =>
-      IScalar.inBounds ty (x.val + y.val) ∧
-      z.val = x.val + y.val ∧
-      z.bv = x.bv + y.bv)
-    (fun _e => ¬ (IScalar.inBounds ty (x.val + y.val)))
-    ⊥
-  := by
+  match (x + y).match with
+  | .ok z =>
+    IScalar.inBounds ty (x.val + y.val) ∧
+    z.val = x.val + y.val ∧
+    z.bv = x.bv + y.bv
+  | .vis (.fail _) _ => ¬ (IScalar.inBounds ty (x.val + y.val))
+  | _ => ⊥ := by
   have : x + y = add x y := by rfl
   rw [this]
   simp [add]

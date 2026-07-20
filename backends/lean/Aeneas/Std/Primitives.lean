@@ -58,10 +58,12 @@ open Error
 
 inductive RustEffect.I : Type where
 | fail : Error → RustEffect.I
+-- | test_effect : RustEffect.I
 
 def RustEffect.O (i : RustEffect.I) : Type :=
   match i with
   | .fail _ => PEmpty
+  -- | .test_effect => PUnit
 
 def RustEffect : Effect := {
   I := RustEffect.I
@@ -76,10 +78,14 @@ unseal Result
 
 def Result.ok {α} (a : α) : Result α := .ret a
 
-def Result.fail {α} (e : Error) : Result α := .vis (.fail e) PEmpty.elim
+def Result.vis {α} (eff : RustEffect.I) (k : RustEffect.O eff → Result α) : Result α := ITree.vis eff k
+
+@[simp, grind .]
+def Result.fail {α} (e : Error) : Result α := Result.vis (.fail e) PEmpty.elim
 
 def Result.div {α} : Result α := ITree.div
 
+-- TODO: maybe rename Result.bind
 def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
   ITree.bind x f
 
@@ -89,6 +95,7 @@ instance : Monad Result where
 
 instance : LawfulMonad Result := instLawfulMonadITree
 
+-- TODO: is this not redundant with theorems below in this file?
 theorem Result_ok_bind.{u} {A B : Type u} : ∀ (x : A) (f : A → Result B),
   bind (Result.ok x) f = f x := by
     intros x f
@@ -97,92 +104,133 @@ theorem Result_ok_bind.{u} {A B : Type u} : ∀ (x : A) (f : A → Result B),
     assumption
 
 @[simp, grind .]
-theorem ok_not_fail {α} {a : α} {e} : ¬ Result.ok a = .fail e := by grind [Result.ok, Result.fail]
+theorem ok_not_vis {α} {a : α} {eff k} : ¬ Result.ok a = .vis eff k := by grind [Result.ok, Result.vis]
 @[simp, grind .]
-theorem fail_not_ok {α} {a : α} {e} : ¬ Result.fail e = .ok a := by grind [Result.ok, Result.fail]
+theorem vis_not_ok {α} {a : α} {eff k} : ¬ .vis eff k = Result.ok a := by grind [Result.ok, Result.vis]
 @[simp, grind .]
 theorem ok_not_div {α} {a : α} : ¬ Result.ok a = .div := by grind [Result.ok, Result.div]
 @[simp, grind .]
 theorem div_not_ok {α} {a : α} : ¬ Result.div = .ok a := by grind [Result.ok, Result.div]
 @[simp, grind .]
-theorem fail_not_div {α} {e} : ¬ @Result.fail α e = .div := by grind [Result.div, Result.fail]
+theorem vis_not_div {α} {eff k} : ¬ @Result.vis α eff k = .div := by grind [Result.div, Result.vis]
 @[simp, grind .]
-theorem div_not_fail {α} {e} : ¬ .div = @Result.fail α e := by grind [Result.div, Result.fail]
+theorem div_not_vis {α} {eff k} : ¬ .div = @Result.vis α eff k := by grind [Result.div, Result.vis]
 @[simp, grind .]
 theorem Result.ok.injEq {α} {a b : α} : (Result.ok a = .ok b) = (a = b) := by
   grind [Result.ok]
-@[simp, grind .]
-theorem Result.fail.injEq {α} {a b : Error} : (@Result.fail α a = .fail b) = (a = b) := by
-  grind [Result.fail, vis_inj_effect]
+-- TODO: do we need the stronger version of this that has the continuations with ≍?
+@[grind .]
+theorem Result.vis.injEq {α} {a b} {k1 k2} : (@Result.vis α a k1 = .vis b k2) → (a = b) := by
+  grind [Result.vis, vis_inj_effect]
 
--- Before ITrees, Result was an inductive with ok, div, and fail cases only.
--- this function can be used in many cases to replace pattern matching on that inductive:
--- NOTE about split: to work with the `split` tactic, the name must start with "match_", the motive must come
--- before the Result input, and the div case must input a Unit.
--- If we commit to not needing split, we can change these things.
+
+-- #check ITree.cases
 @[elab_as_elim, cases_eliminator]
-def Result.match_dep {α}
-  {motive : Result α → Sort v}
-  (r : Result α)
-  (ok : ∀ r, motive (.ok r))
-  (fail : ∀ e, motive (.fail e))
-  -- TODO: add more cases as we add more effects.
-  (div :  Unit → motive (.div))
-  : motive r := ITree.cases ok (div ()) (
-      fun e k => match e with
-        | .fail e => by
-            have same : k = PEmpty.elim := by funext x; contradiction
-            simp [same]
-            exact (fail e)
-    ) r
+def Result.cases {R}
+    {motive : Result R → Sort v}
+    (t : Result R)
+    (ret : ∀ r, motive (Result.ok r))
+    (vis : ∀ i k, motive (Result.vis i k))
+    (div :  motive (Result.div))
+    : motive t := ITree.cases ret div vis t
+
+-- inductive MatchResult : ∀ {α : Type u}, Result α → Type _ where
+-- | ok {α} : (a : α) → MatchResult (Result.ok a)
+-- | div : ∀ {α}, @MatchResult α .div
+-- | fail : ∀ {α}, (e : Error) → @MatchResult α (.fail e)
+
+inductive MatchResult (α : Type u) : Type u where
+| ok : (a : α) → MatchResult α
+| div : MatchResult α
+| vis : (eff : RustEffect.I) → (RustEffect.O eff → Result α) → MatchResult α
+
+def Result.match.{u} {α : Type u} (r : Result α) : MatchResult α :=
+  r.cases .ok .vis .div
+
+@[simp, grind .]
+theorem Result.match.ok {α : Type u} {a : α} : (Result.ok a).match = .ok a := by
+  simp [Result.match, Result.ok, Result.cases]
+@[simp, grind .]
+theorem Result.match.vis {α : Type u} {e k} : (@Result.vis α e k).match = .vis e k := by
+  simp [Result.match, Result.vis, Result.cases]
+@[simp, grind .]
+theorem Result.match.div {α : Type u} : Result.div.match = @MatchResult.div α := by
+  simp [Result.match, Result.div, Result.cases]
 
 @[simp]
-theorem Result.match.ok {R motive r d f x}
-  : @Result.match_dep R motive (.ok x) r f d = r x := ITree.cases.ret
+theorem Result.match.is_ok {α : Type u} {a : α} {r : Result α} : (r.match = .ok a) ↔ r = .ok a := by
+  cases r <;> grind
 
-@[simp]
-theorem Result.match.div {R motive r d f}
-  : @Result.match_dep R motive .div r f d = d () := ITree.cases.div
+-- -- Before ITrees, Result was an inductive with ok, div, and fail cases only.
+-- -- this function can be used in many cases to replace pattern matching on that inductive:
+-- -- NOTE about split: to work with the `split` tactic, the name must start with "match_", the motive must come
+-- -- before the Result input, and the div case must input a Unit.
+-- -- If we commit to not needing split, we can change these things.
+-- @[elab_as_elim, cases_eliminator]
+-- def Result.match_dep {α}
+--   {motive : Result α → Sort v}
+--   (r : Result α)
+--   (m : ∀ {r'}, MatchResult r' → motive r')
+--   : motive r := ITree.cases (fun x => m (.ok x)) (m .div) (
+--       fun e k => match e with
+--         | .fail e => by
+--             have same : k = PEmpty.elim := by funext x; contradiction
+--             simp [same]
+--             let h := (@m (.fail e) (.fail e))
+--             simp [fail] at h
+--             apply h
+--     ) r
 
-@[simp]
-theorem Result.match.fail {R motive r d f e}
-  : @Result.match_dep R motive (.fail e) r f d = f e := ITree.cases.vis
+-- @[simp]
+-- theorem Result.match.ok {R motive m x}
+--   : @Result.match_dep R motive (.ok x) m = (m (.ok x)) := ITree.cases.ret
+
+-- @[simp]
+-- theorem Result.match.div {R motive m}
+--   : @Result.match_dep R motive .div m = m .div := ITree.cases.div
+
+-- @[simp]
+-- theorem Result.match.fail {R motive m}
+--   : @Result.match_dep R motive (.fail e) m = m (.fail e) := ITree.cases.vis
 
 def Result.is_ok {R : Type} [BEq R] (r : Result R) (expected : R) : Bool :=
-  r.match_dep (fun x => x == expected) (fun _ => false) (fun _ => false)
+  match r.match with
+  | .ok x => x == expected
+  | _ => false
 
-def Result.match_dep' {α}
-  {motive : Result α → Sort v}
-  (r : Result α)
-  (ok : ∀ x, r = .ok x → motive (.ok x))
-  (fail : ∀ e, r = .fail e → motive (.fail e))
-  (div : r = .div → motive (.div))
-  : motive r :=
-    Result.match_dep (motive := fun r' => r = r' -> motive r') r ok fail (fun _ => div) rfl
+-- def Result.match_dep' {α}
+--   {motive : Result α → Sort v}
+--   (r : Result α)
+--   (ok : ∀ x, r = .ok x → motive (.ok x))
+--   (fail : ∀ e, r = .fail e → motive (.fail e))
+--   (div : r = .div → motive (.div))
+--   : motive r :=
+--     Result.match_dep (motive := fun r' => r = r' -> motive r') r ok fail (fun _ => div) rfl
 
-@[simp]
-theorem Result.match_dep'.ok {R motive v r d f x}
-  (h : v = Result.ok x)
-  : @Result.match_dep' R motive v r f d = cast (congrArg motive (Eq.symm h)) (r x h) := by
-  cases v <;> unfold match_dep' <;> simp <;> grind
+-- @[simp]
+-- theorem Result.match_dep'.ok {R motive v r d f x}
+--   (h : v = Result.ok x)
+--   : @Result.match_dep' R motive v r f d = cast (congrArg motive (Eq.symm h)) (r x h) := by
+--   cases v <;> unfold match_dep' <;> simp <;> grind
 
-@[simp]
-theorem Result.match_dep'.fail {R motive v r d f e}
-  (h : v = Result.fail e)
-  : @Result.match_dep' R motive v r f d = cast (congrArg motive (Eq.symm h)) (f e h) := by
-  cases v <;> unfold match_dep' <;> simp <;> grind
+-- @[simp]
+-- theorem Result.match_dep'.fail {R motive v r d f e}
+--   (h : v = Result.fail e)
+--   : @Result.match_dep' R motive v r f d = cast (congrArg motive (Eq.symm h)) (f e h) := by
+--   cases v <;> unfold match_dep' <;> simp <;> grind
 
-@[simp]
-theorem Result.match_dep'.div {R motive v r d f}
-  (h : v = .div)
-  : @Result.match_dep' R motive v r f d = cast (congrArg motive (Eq.symm h)) (d h) := by
-  cases v <;> unfold match_dep' <;> simp <;> grind
+-- @[simp]
+-- theorem Result.match_dep'.div {R motive v r d f}
+--   (h : v = .div)
+--   : @Result.match_dep' R motive v r f d = cast (congrArg motive (Eq.symm h)) (d h) := by
+--   cases v <;> unfold match_dep' <;> simp <;> grind
 
-instance {T} [Repr T] : Repr (Result T) where
-  reprPrec x n := x.match_dep
-    (fun t => .append (.text "ok ") (reprPrec t n))
-    (fun e => .append (.text "fail ") (reprPrec e n))
-    (fun _ => .text "div")
+-- TODO: do we need this?
+-- instance {T} [Repr T] : Repr (Result T) where
+--   reprPrec x n := x.match_dep fun x => match x with
+--     | .ok t => .append (.text "ok ") (reprPrec t n)
+--     | .fail e => .append (.text "fail ") (reprPrec e n)
+--     | .div => .text "div"
 
 -- TODO: this is how to register for split, but we probably won't use that
 -- run_meta
@@ -243,8 +291,13 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
 
 @[simp] theorem bind_ok (x : α) (f : α → Result β) : bind (.ok x) f = f x :=
   by simp [bind, ok]
-@[simp] theorem bind_fail (x : Error) (f : α → Result β) : bind (.fail x) f = .fail x :=
-  by simp [bind, fail]
+-- @[simp] theorem bind_fail (x : Error) (f : α → Result β) : bind (.fail x) f = .fail x :=
+--   by simp [bind, vis]
+--      apply congrArg
+--      funext x
+--      contradiction
+@[simp] theorem bind_vis (e k) (f : α → Result β) : bind (.vis e k) f = .vis e (fun x => bind (k x) f) :=
+  by simp [bind, vis]
      apply congrArg
      funext x
      contradiction
@@ -254,9 +307,16 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
 @[simp] theorem bind_tc_ok (x : α) (f : α → Result β) :
   (do let y ← .ok x; f y) = f x := by simp [bind, Bind.bind, ok]
 
-@[simp] theorem bind_tc_fail (x : Error) (f : α → Result β) :
-  (do let y ← fail x; f y) = fail x := by
-  simp [bind, Bind.bind, fail]
+-- TODO: will this create backwards compatibility issues?
+-- @[simp] theorem bind_tc_fail (x : Error) (f : α → Result β) :
+--   (do let y ← fail x; f y) = fail x := by
+--   simp [bind, Bind.bind, vis]
+--   apply congrArg
+--   funext x
+--   contradiction
+@[simp] theorem bind_tc_vis (e k) (f : α → Result β) :
+  (do let y ← Result.vis e k; f y) = .vis e (fun x => do let y ← k x; f y) := by
+  simp [bind, Bind.bind, vis]
   apply congrArg
   funext x
   contradiction
@@ -419,10 +479,9 @@ instance SubtypeLawfulBEq [BEq α] (p : α → Prop) [LawfulBEq α] : LawfulBEq 
    TODO: move up to Core module? -/
 def Option.ofResult {a : Type u} (x : Result a) :
   Option a :=
-  x.match_dep
-    .some
-    (fun _ => .none)
-    (fun _ => .none)
+  match x.match with
+  | .ok x => .some x
+  | _ => .none
 
 /-!
 # bv_decide
