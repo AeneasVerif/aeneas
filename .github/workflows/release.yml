@@ -186,7 +186,7 @@ jobs:
     name: Notify Zulip
     needs: [prepare, build, select-runner]
     runs-on: ${{ fromJSON(needs.select-runner.outputs.runs_on) }}
-    if: ${{ success() || failure() }}
+    if: ${{ github.repository == 'AeneasVerif/aeneas' && (success() || failure()) }}
     permissions:
       actions: read
       contents: read
