@@ -117,12 +117,32 @@ theorem IScalar.rem_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.val �
   · intros x' h
     exact h.1
 
-uscalar @[step] theorem «%S».rem_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0) :
-  x % y ⦃ z => (↑z : Nat) = ↑x % ↑y ⦄ :=
-  UScalar.rem_spec x hnz
+uscalar @[step] theorem «%S».rem_spec (x : «%S») {y : «%S»} :
+    partialSpec (x % y)
+      (fun z => (↑z : Nat) = ↑x % ↑y)
+      (fun | .divisionByZero => (↑y : Nat) = 0 | _ => False)
+      False := by
+  have hxy : (x % y : Result _) = UScalar.rem x y := rfl
+  rw [hxy]
+  by_cases hy : y.val = 0
+  · simp [partialSpec, UScalar.rem, hy]
+  · have h := UScalar.rem_spec x hy
+    rw [hxy] at h
+    simp_all [partialSpec]
+    split <;> simp_all
 
-iscalar @[step] theorem «%S».rem_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0) :
-  x % y ⦃ z => (↑z : Int) = Int.tmod ↑x ↑y ⦄ :=
-  IScalar.rem_spec x hnz
+iscalar @[step] theorem «%S».rem_spec (x : «%S») {y : «%S»} :
+    partialSpec (x % y)
+      (fun z => (↑z : Int) = Int.tmod ↑x ↑y)
+      (fun | .divisionByZero => (↑y : Int) = 0 | _ => False)
+      False := by
+  have hxy : (x % y : Result _) = IScalar.rem x y := rfl
+  rw [hxy]
+  by_cases hy : y.val = 0
+  · simp [partialSpec, IScalar.rem, hy]
+  · have h := IScalar.rem_spec x hy
+    rw [hxy] at h
+    simp_all [partialSpec]
+    split <;> simp_all
 
 end Aeneas.Std

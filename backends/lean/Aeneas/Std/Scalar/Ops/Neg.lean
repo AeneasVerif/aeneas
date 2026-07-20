@@ -6,7 +6,7 @@ import Mathlib.Data.BitVec
 
 namespace Aeneas.Std
 
-open Result Error Arith
+open Result Error Arith WP
 
 /-!
 # Negation: Definitions
@@ -14,11 +14,15 @@ open Result Error Arith
 def IScalar.neg {ty : IScalarTy} (x : IScalar ty) : Result (IScalar ty) := IScalar.tryMk ty (- x.val)
 
 @[step]
-theorem IScalar.neg_step {ty} (x: IScalar ty) (h: x ≠ IScalar.min ty): IScalar.neg x ⦃ r => r = -x.val ⦄ := by
-  simp [neg]
-  have h := tryMk_eq ty (-x.val)
+theorem IScalar.neg_step {ty} (x: IScalar ty) :
+    partialSpec (IScalar.neg x)
+      (fun r => r = -x.val)
+      (fun | .integerOverflow => (x : Int) = IScalar.min ty | _ => False)
+      False := by
+  simp only [neg, tryMk, Result.ofOption]
+  have h := tryMkOpt_eq ty (-x.val)
   simp [inBounds] at h
-  split at h <;> simp_all
+  cases hopt : tryMkOpt ty (-x.val) <;> simp_all [partialSpec]
   have := IScalar.hBounds x
   simp [IScalar.min] at *
   grind
@@ -59,9 +63,12 @@ attribute [match_pattern] HNeg.hNeg
 instance {ty} : HNeg (IScalar ty) (Result (IScalar ty)) where hNeg x := IScalar.neg x
 
 @[step]
-theorem HNeg.hNeg.step {ty} (x: IScalar ty) (h: x ≠ IScalar.min ty): HNeg.hNeg x ⦃ r => r = -x.val ⦄ := by
-  simp [HNeg.hNeg]
-  apply IScalar.neg_step
-  grind
+theorem HNeg.hNeg.step {ty} (x: IScalar ty) :
+    partialSpec (HNeg.hNeg x : Result (IScalar ty))
+      (fun r => r = -x.val)
+      (fun | .integerOverflow => (x : Int) = IScalar.min ty | _ => False)
+      False := by
+  show partialSpec (IScalar.neg x) _ _ _
+  exact IScalar.neg_step x
 
 end Aeneas.Std

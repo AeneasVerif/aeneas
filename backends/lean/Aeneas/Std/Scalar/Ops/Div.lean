@@ -414,13 +414,36 @@ theorem IScalar.div_spec {ty} {x y : IScalar ty}
   have ⟨ z, hz ⟩ := IScalar.div_bv_spec hzero hNoOverflow
   simp [hz]
 
-uscalar @[step] theorem «%S».div_spec (x : «%S») {y : «%S»} (hnz : ↑y ≠ (0 : Nat)) :
-  (x / y) ⦃ z => (↑z : Nat) = ↑x / ↑y ⦄ :=
-  exists_imp_spec (UScalar.div_spec x hnz)
+uscalar @[step] theorem «%S».div_spec (x : «%S») {y : «%S»} :
+    partialSpec (x / y)
+      (fun z => (↑z : Nat) = ↑x / ↑y)
+      (fun | .divisionByZero => (↑y : Nat) = 0 | _ => False)
+      False := by
+  have hxy : (x / y : Result _) = UScalar.div x y := rfl
+  rw [hxy]
+  by_cases hy : y.val = 0
+  · have hbv : y.bv = 0#_ := by zify; simp_all
+    simp [partialSpec, UScalar.div, hbv]; exact hy
+  · have ⟨ z, hz, hzVal ⟩ := UScalar.div_spec x hy
+    rw [hxy] at hz
+    simp [partialSpec, hz, hzVal]
 
-iscalar @[step] theorem «%S».div_spec {x y : «%S»} (hnz : ↑y ≠ (0 : Int))
-  (hNoOverflow : ¬ (x.val = «%S».min ∧ y.val = -1)) :
-  (x / y) ⦃ z => (↑z : Int) = Int.tdiv ↑x ↑y ⦄ :=
-  exists_imp_spec (IScalar.div_spec hnz (by scalar_tac))
+iscalar @[step] theorem «%S».div_spec {x y : «%S»} :
+    partialSpec (x / y)
+      (fun z => (↑z : Int) = Int.tdiv ↑x ↑y)
+      (fun | .divisionByZero => (↑y : Int) = 0
+           | .integerOverflow => (↑x : Int) = «%S».min ∧ (↑y : Int) = -1
+           | _ => False)
+      False := by
+  have hxy : (x / y : Result _) = IScalar.div x y := rfl
+  rw [hxy]
+  by_cases hy : y.val = 0
+  · simp [partialSpec, IScalar.div, hy]
+  · by_cases ho : x.val = IScalar.min (IScalarTy.«%S») ∧ y.val = -1
+    · simp [partialSpec, IScalar.div, ho.1, ho.2]
+      try scalar_tac
+    · have ⟨ z, hz, hzVal ⟩ := IScalar.div_spec hy ho
+      rw [hxy] at hz
+      simp [partialSpec, hz, hzVal]
 
 end Aeneas.Std

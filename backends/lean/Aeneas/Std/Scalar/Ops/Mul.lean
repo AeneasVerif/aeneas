@@ -42,23 +42,29 @@ Theorems with a specification which use integers and bit-vectors
 theorem UScalar.mul_equiv {ty} (x y : UScalar ty) :
   match mul x y with
   | ok z => x.val * y.val ≤ UScalar.max ty ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv
-  | fail _ => UScalar.max ty < x.val * y.val
+  | fail e => e = .integerOverflow ∧ UScalar.max ty < x.val * y.val
   | .div => False := by
   simp only [mul]
   have := tryMk_eq ty (x.val * y.val)
-  split <;> simp_all only [inBounds, true_and, not_lt, gt_iff_lt]
-  simp_all only [tryMk, ofOption, tryMkOpt, check_bounds, decide_true, dite_true, ok.injEq]
-  rename_i hEq; simp only [← hEq, ofNatCore, val]
-  split_conjs
-  . simp only [bv_toNat, max]; omega
-  . zify at this; zify; simp only [bv_toNat, BitVec.toNat_ofFin, Nat.cast_mul, BitVec.toNat_mul,
-    Int.natCast_emod, Nat.cast_pow, Nat.cast_ofNat] at *
-    rw [Int.emod_eq_of_lt]
-    . apply Int.pos_mul_pos_is_pos <;> simp
-    . simp only [this]
-  . have : 0 < 2^ty.numBits := by simp
-    simp only [max, gt_iff_lt]
-    omega
+  have hfail : ∀ e, mul x y = fail e → e = .integerOverflow := by
+    intro e he
+    simp only [mul, tryMk, Result.ofOption] at he
+    split at he <;> simp_all
+  split <;> simp_all only [inBounds, true_and, not_lt]
+  · simp_all only [tryMk, ofOption, tryMkOpt, check_bounds, decide_true, dite_true, ok.injEq]
+    rename_i hEq; simp only [← hEq, ofNatCore, val]
+    split_conjs
+    . simp only [bv_toNat, max]; omega
+    . zify at this; zify; simp only [bv_toNat, BitVec.toNat_ofFin, Nat.cast_mul, BitVec.toNat_mul,
+      Int.natCast_emod, Nat.cast_pow, Nat.cast_ofNat] at *
+      rw [Int.emod_eq_of_lt]
+      . apply Int.pos_mul_pos_is_pos <;> simp
+      . simp only [this]
+  · refine ⟨ hfail _ ?_, ?_ ⟩
+    · rw [mul]; assumption
+    · have : 0 < 2^ty.numBits := by simp
+      simp only [max, gt_iff_lt]
+      omega
 
 /-- Generic theorem - shouldn't be used much -/
 theorem UScalar.mul_bv_spec {ty} {x y : UScalar ty}
@@ -72,7 +78,7 @@ theorem UScalar.mul_bv_spec {ty} {x y : UScalar ty}
 theorem IScalar.mul_equiv {ty} (x y : IScalar ty) :
   match mul x y with
   | ok z => IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
-  | fail _ => ¬(IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty)
+  | fail e => e = .integerOverflow ∧ ¬(IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty)
   | .div => False := by
   simp only [mul, not_and, not_le]
   have := tryMk_eq ty (x.val * y.val)
@@ -109,7 +115,7 @@ theorem IScalar.mul_equiv {ty} (x y : IScalar ty) :
       simp_all only [iff_true, sup_eq_left, ge_iff_le, iff_false,
         not_lt, sub_left_inj, sup_eq_left] <;>
       omega
-  . omega
+  . grind
 
 /-- Generic theorem - shouldn't be used much -/
 theorem IScalar.mul_bv_spec {ty} {x y : IScalar ty}
@@ -150,13 +156,24 @@ theorem IScalar.mul_spec {ty} {x y : IScalar ty}
   apply @mul_bv_spec ty x y (by scalar_tac) (by scalar_tac)
   grind
 
-uscalar @[step] theorem «%S».mul_spec {x y : «%S»} (hmax : x.val * y.val ≤ «%S».max) :
-  x * y ⦃ z => (↑z : Nat) = ↑x * ↑y ⦄ :=
-  UScalar.mul_spec (by scalar_tac)
+uscalar @[step] theorem «%S».mul_spec {x y : «%S»} :
+    partialSpec (x * y)
+      (fun z => (↑z : Nat) = ↑x * ↑y)
+      (fun | .integerOverflow => ↑x * ↑y > «%S».max | _ => False)
+      False := by
+  have h := UScalar.mul_equiv x y
+  show partialSpec (UScalar.mul x y) _ _ _
+  simp only [partialSpec]
+  split <;> simp_all <;> scalar_tac
 
-iscalar @[step] theorem «%S».mul_spec {x y : «%S»}
-  (hmin : «%S».min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ «%S».max) :
-  (x * y) ⦃ z => (↑z : Int) = ↑x * ↑y ⦄ :=
-  IScalar.mul_spec (by scalar_tac) (by scalar_tac)
+iscalar @[step] theorem «%S».mul_spec {x y : «%S»} :
+    partialSpec (x * y)
+      (fun z => (↑z : Int) = ↑x * ↑y)
+      (fun | .integerOverflow => ↑x * ↑y < «%S».min ∨ ↑x * ↑y > «%S».max | _ => False)
+      False := by
+  have h := IScalar.mul_equiv x y
+  show partialSpec (IScalar.mul x y) _ _ _
+  simp only [partialSpec]
+  split <;> simp_all; scalar_tac
 
 end Aeneas.Std
