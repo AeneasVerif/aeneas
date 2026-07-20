@@ -314,11 +314,9 @@ private def collectStepBy (sbi : core.iter.adapters.step_by.StepBy (core.slice.i
 
 -- step_by(0) panics
 #assert
-  -- TODO: once i fix the below ones by dealing with BEq, fix this one too.
-  (core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [1, 2, 3]) 0#usize).match_dep
-  (fun _ => false)
-  (fun e => e == .panic)
-  (fun _ => false)
+  match (core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [1, 2, 3]) 0#usize).match with
+  | .vis (.fail e) _ => e == panic
+  | _ => false
 
 -- step_by(1) returns all elements
 #assert (do
@@ -383,10 +381,9 @@ private def collectStepBy (sbi : core.iter.adapters.step_by.StepBy (core.slice.i
 
 -- Verify that step_by(0) on the generic Iterator.step_by.default also panics
 #assert
-  (core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [1]) 0#usize).match_dep
-    (fun _ => false)
-    (fun e => e == .panic)
-    (fun _ => false)
+  match (core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [1]) 0#usize).match with
+  | .vis (.fail e) _ => e == panic
+  | _ => false
 
 -- Nested step_by: step_by(2) then step_by(2) on [0..8] gives [0, 4]
 private def collectNestedStepBy

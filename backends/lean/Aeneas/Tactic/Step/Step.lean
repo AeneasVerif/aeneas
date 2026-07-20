@@ -65,7 +65,7 @@ want to introduce in the context -/
 theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
 
 attribute [step_simps]
-  bind_assoc Std.bind_tc_ok Std.bind_tc_fail Std.bind_tc_div
+  bind_assoc Std.bind_tc_ok Std.bind_tc_vis Std.bind_tc_div
   /- Those are quite useful to simplify the goal further by eliminating existential quantifiers for instance. -/
   and_assoc Std.Result.ok.injEq Prod.mk.injEq
   exists_eq_left exists_eq_left' exists_eq_right exists_eq_right' exists_eq exists_eq' true_and and_true

@@ -168,8 +168,11 @@ theorem spec_ok (x : α) : spec (ok x) p ↔ p x := by
     constructor
     assumption
 
+-- TODO: clean this up
+-- @[simp, grind =, agrind =]
+-- theorem spec_fail (e : Error) : spec (fail e) p ↔ False := by grind
 @[simp, grind =, agrind =]
-theorem spec_fail (e : Error) : spec (fail e) p ↔ False := by grind
+theorem spec_vis (e k) : spec (.vis e k) p ↔ False := by grind
 
 @[simp, grind =, agrind =]
 theorem spec_div : spec div p ↔ False := by grind
@@ -185,7 +188,7 @@ theorem spec_ok_pair {α β} (a : α) (b : β) (f : α → β → Prop) :
 
 @[simp, grind =, agrind =]
 theorem spec_fail_pair (e : Error) (f : α → β → Prop) :
-    spec (fail e) (uncurry f) ↔ False := by simp
+    spec (fail e) (uncurry f) ↔ False := by grind
 
 @[simp, grind =, agrind =]
 theorem spec_div_pair (f : α → β → Prop) :

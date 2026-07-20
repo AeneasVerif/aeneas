@@ -648,11 +648,10 @@ def core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut {T : Type}
   else fail .panic
 
 theorem _SliceIndexRangeFromUsizeSlice.index_mut.test {T} (s : Slice T) (r : core.ops.range.RangeFrom Usize) (h : r.start ≤ s.length) :
-  (core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut r s).match_dep
-  (fun (s1, back) => back s1 = s)
-  (fun _ => False)
-  (fun _ => False) :=
-  by
+  match (core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut r s).match with
+  | .ok (s1, back) =>
+    back s1 = s
+  | _ => False := by
   unfold core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut
   simp [h]
 
@@ -686,8 +685,9 @@ theorem Slice.clone_length {T : Type} {clone : T → Result T} {s s' : Slice T} 
   s'.length = s.length := by
   simp [Slice.clone] at h
   simp [List.clone] at h
-  cases h2 : List.mapM clone ↑s <;> simp_all
+  split at h <;> simp_all
   rename_i heq
+  simp at heq
   have := List.mapM_Result_length heq
   cases s'; simp_all
   cases h; simp_all
@@ -915,7 +915,7 @@ theorem core.slice.index.SliceIndexRangeUsizeSlice.index.step_spec {α : Type}
   · simp only [spec_ok, true_and]
     simp_lists
     omega
-  · simp only [spec_fail]
+  · simp only [fail, spec_vis]
     scalar_tac
 
 -- RangeTo step specs
@@ -1010,10 +1010,10 @@ theorem core.slice.Slice.copy_from_slice.step_spec (copyInst : core.marker.Copy 
   simp [h]
 
 def Slice.mapM  {α β} (f : α → Result β) (x : Slice α) : Result (Slice β) :=
-  (x.val.mapM f).match_dep' (motive := fun _ => _)
-    (fun xs h => ok ⟨xs, List.mapM_Result_length h ▸ x.prop⟩)
-    (fun e _ => fail e)
-    (fun _ => div)
+  match h : (x.val.mapM f).match with
+  | .ok xs  => ok ⟨xs, List.mapM_Result_length (by simp at h; apply h) ▸ x.prop⟩
+  | .vis (.fail e) _ => fail e
+  | .div    => div
 
 @[step]
 theorem Slice.mapM_spec {α β} {f : α → Result β} {s : Slice α} {post : Nat → β → Prop}
@@ -1034,16 +1034,21 @@ theorem Slice.mapM_spec {α β} {f : α → Result β} {s : Slice α} {post : Na
       intro hall
       obtain ⟨b, hb⟩ := hall 0 (by simp); simp at hb
       obtain ⟨ts, hts⟩ := ih (fun i hi => hall (i + 1) (by simp; omega))
-      exact ⟨b :: ts, by simp [List.mapM_cons, hb, hts, pure, Bind.bind]⟩
+      exact ⟨b :: ts, by simp [List.mapM_cons, hb, hts, pure]⟩
   obtain ⟨l', hl'⟩ := hmapM_ok
-  simp [hl']
-  refine ⟨by grind [List.mapM_Result_length], fun i hi => ?_⟩
-  have hlen : i < s.len := by have := List.mapM_Result_length hl'; simp [Slice.len] at *; omega
-  have hthis := List.mapM_Result_ok hl' (↑i) (by scalar_tac)
-  specialize hf i hlen; simp only [getElem_Usize_eq] at hf
-  erw [hthis] at hf
-  simp [spec_ok] at hf ⊢
-  exact hf
+  split
+  case h_1 xs heq =>
+    simp only [UScalar.lt_equiv, Usize.ofNatCore_val_eq, spec_ok]
+    refine ⟨by grind [List.mapM_Result_length], fun i hi => ?_⟩
+    simp at heq
+    have hlen : i < s.len := by have := List.mapM_Result_length heq; simp [Slice.len] at *; omega
+    have hthis := List.mapM_Result_ok heq (↑i) (by scalar_tac)
+    specialize hf i hlen; simp only [getElem_Usize_eq] at hf
+    erw [hthis] at hf
+    simp only [spec_ok] at hf ⊢
+    exact hf
+  case h_2 e heq => simp [hl'] at heq
+  case h_3 heq => simp [hl'] at heq
 
 -- ============================================================================
 -- Slice.fill — overwrite every element with a clone of `v`
@@ -1054,10 +1059,10 @@ theorem Slice.mapM_spec {α β} {f : α → Result β} {s : Slice α} {post : Na
 @[rust_fun "core::slice::{[@T]}::fill"]
 def core.slice.Slice.fill {T : Type} (cloneInst : core.clone.Clone T)
     (s : Slice T) (v : T) : Result (Slice T) :=
-  (s.val.mapM (fun _ => cloneInst.clone v)).match_dep' (motive := fun _ => _)
-    (fun val h => .ok ⟨val, List.mapM_Result_length h ▸ s.property⟩)
-    (fun e _ => .fail e)
-    (fun _ => .div)
+  match h : (s.val.mapM (fun _ => cloneInst.clone v)).match with
+  | .ok val => .ok ⟨val, List.mapM_Result_length (by simp at h; apply h) ▸ s.property⟩
+  | .vis (.fail e) _ => .fail e
+  | .div => .div
 
 private theorem List.mapM_const_ok {T : Type} (l : List T)
     {g : Result T} {v : T} (hg : g = ok v) :
@@ -1081,6 +1086,6 @@ theorem core.slice.Slice.fill.spec {T : Type} (cloneInst : core.clone.Clone T)
   have hcl : cloneInst.clone v = ok v := by
     cases h : (cloneInst.clone v) <;> simp_all
   have hmapM := List.mapM_const_ok s.val hcl
-  simp [hmapM]
+  grind
 
 end Aeneas.Std

@@ -37,13 +37,13 @@ instance {ty} : HSub (IScalar ty) (IScalar ty) (Result (IScalar ty)) where
 -/
 
 theorem UScalar.sub_equiv {ty} (x y : UScalar ty) :
-  (x - y).match_dep -- TODO: here, the dependent version breaks things in the proof
-  (fun z =>
+  match (x - y).match with
+  | .ok z =>
     y.val ≤ x.val ∧
     x.val = z.val + y.val ∧
-    z.bv = x.bv - y.bv)
-  (fun _ => x.val < y.val)
-  ⊥ := by
+    z.bv = x.bv - y.bv
+  | .vis (.fail _) _ => x.val < y.val
+  | _ => ⊥ := by
   have : x - y = sub x y := by rfl
   simp [this, sub]
   dcases h : x.val < y.val <;> simp [h]
@@ -81,13 +81,13 @@ theorem UScalar.sub_equiv {ty} (x y : UScalar ty) :
     ring_nf
 
 theorem IScalar.sub_equiv {ty} (x y : IScalar ty) :
-  (x - y).match_dep
-  (fun z =>
+  match (x - y).match with
+  | .ok z =>
     IScalar.inBounds ty (x.val - y.val) ∧
     z.val = x.val - y.val ∧
-    z.bv = x.bv - y.bv)
-  (fun _ => ¬ (IScalar.inBounds ty (x.val - y.val)))
-  ⊥ := by
+    z.bv = x.bv - y.bv
+  | .vis (.fail _) _ => ¬ (IScalar.inBounds ty (x.val - y.val))
+  | _ => ⊥ := by
   have : x - y = sub x y := by rfl
   simp [this, sub]
   have h := tryMk_eq ty (↑x - ↑y)
