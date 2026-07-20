@@ -34,23 +34,28 @@ theorem List.mapM_clone_eq {T : Type u} {clone : T → Result T} {l : List T}
   apply h
 
 def List.clone (clone : α → Result α) (l : List α) : Result ({ l' : List α // l'.length = l.length}) :=
-  -- TODO: clean this up
-  -- match h :List.mapM clone l with
-  -- | ok v => ok ⟨ v, by have := List.mapM_Result_length h; scalar_tac ⟩
-  -- | fail e => fail e
-  -- | div => div
-  -- (List.mapM clone l).match_dep
-  -- Result.match_dep' (motive := fun l => _) (List.mapM clone l)
-  -- (fun v h => ok ⟨ v, by have := List.mapM_Result_length h; scalar_tac ⟩)
-  -- (fun e _h => fail e)
-  -- (fun _h => div)
   match h : (List.mapM clone l).match with
   | .ok v => ok ⟨ v, by
-    cases h2 : List.mapM clone l <;> simp_all
-    have := List.mapM_Result_length h2
-    scalar_tac ⟩
-  | .vis (.fail e) _ => fail e
-  | .div => div
+    simp at h
+    have := List.mapM_Result_length h
+    assumption⟩
+  -- TODO: is this acceptable?
+  | .vis _ _ => .fail .panic
+  | .div => .div
+  -- match h : (List.mapM clone l).match with
+  -- | .ok v => ok ⟨ v, by
+  --   simp at h
+  --   have := List.mapM_Result_length h
+  --   assumption⟩
+  -- | .vis e k => by
+  --     -- .vis e k
+  --     simp at h
+  --     simp [List.mapM] at h
+  --     simp [List.mapM.loop] at h
+  --     sorry
+  -- | .div => div
+  -- -- | _ => by
+  -- --   sorry
 
 @[step]
 def List.clone_spec {clone : α → Result α} {l : List α} (h : ∀ x ∈ l, clone x = ok x) :

@@ -358,12 +358,13 @@ theorem core.iter.adapters.enumerate.IteratorEnumerate.next_some_spec
   intro ⟨opt, it⟩ ⟨hopt, hit⟩
   subst hopt; subst hit
   have hadd := @UScalar.add_equiv UScalarTy.Usize self.count (1#usize)
-  generalize hval : self.count + 1#usize = val at hadd
-  cases val <;> simp at *
-  · rename_i z
+  split at hadd
+  · rename_i z heq
+    simp at heq
     obtain ⟨_, hval, _⟩ := hadd
-    simp [hval]
-  · exfalso; scalar_tac
+    simp [heq, bind_tc_ok, spec_ok, uncurry', hval]
+  · exfalso; simp [UScalar.inBounds] at hadd; scalar_tac
+  · exact hadd.elim
 
 /-- `Enumerate.next` — none case.  No `@[step]` — see the merged `next_spec`.
     When the inner iterator yields `none`, enumerate propagates none. -/
@@ -448,14 +449,13 @@ theorem core.iter.adapters.take.IteratorTake.next_ChunksExact_spec {T : Type}
     simp only [core.slice.iter.IteratorChunksExact.next]
     have hsub : ∃ z, iter.n - 1#usize = ok z ∧ z.val = iter.n.val - 1 := by
       have h := @UScalar.sub_equiv .Usize iter.n (1#usize)
-      generalize hval : iter.n - 1#usize = val at h
-      cases val
-      -- split at h
-      next z =>
+      split at h
+      next z heq =>
         obtain ⟨_, hval, _⟩ := h
-        exact ⟨z, rfl, by scalar_tac⟩
-      next =>
-        exfalso; simp at h; scalar_tac
+        simp at heq
+        exact ⟨z, heq, by scalar_tac⟩
+      next heq =>
+        exfalso; scalar_tac
       next => exact h.elim
     obtain ⟨z, hsub_eq, hzval⟩ := hsub
     simp only [hsub_eq, bind_tc_ok]

@@ -34,7 +34,7 @@ theorem core.num.checked_mul_UScalar_bv_spec {ty} (x y : UScalar ty) :
   | none => UScalar.max ty < x.val * y.val := by
   have h := UScalar.mul_equiv x y
   simp [checked_mul_UScalar]
-  cases hEq : UScalar.mul x y <;> simp_all [Option.ofResult]
+  split at h <;> simp_all [Option.ofResult]
 
 uscalar @[step_pure «%S».checked_mul x y]
 theorem «%S».checked_mul_bv_spec (x y : «%S») :
@@ -54,7 +54,7 @@ theorem core.num.checked_mul_IScalar_bv_spec {ty} (x y : IScalar ty) :
   | none => ¬ (IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty) := by
   have h := IScalar.mul_equiv x y
   simp [checked_mul_IScalar]
-  cases hEq : IScalar.mul x y <;> simp_all [Option.ofResult]
+  split at h <;> simp_all [Option.ofResult]
 
 iscalar @[step_pure «%S».checked_mul x y]
 theorem «%S».checked_mul_bv_spec (x y : «%S») :

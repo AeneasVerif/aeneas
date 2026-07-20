@@ -1012,7 +1012,9 @@ theorem core.slice.Slice.copy_from_slice.step_spec (copyInst : core.marker.Copy 
 def Slice.mapM  {α β} (f : α → Result β) (x : Slice α) : Result (Slice β) :=
   match h : (x.val.mapM f).match with
   | .ok xs  => ok ⟨xs, List.mapM_Result_length (by simp at h; apply h) ▸ x.prop⟩
-  | .vis (.fail e) _ => fail e
+  -- | .vis (.fail e) _ => fail e
+  -- TODO: is this ok?
+  | .vis _ _ => .fail .panic
   | .div    => div
 
 @[step]
@@ -1061,7 +1063,8 @@ def core.slice.Slice.fill {T : Type} (cloneInst : core.clone.Clone T)
     (s : Slice T) (v : T) : Result (Slice T) :=
   match h : (s.val.mapM (fun _ => cloneInst.clone v)).match with
   | .ok val => .ok ⟨val, List.mapM_Result_length (by simp at h; apply h) ▸ s.property⟩
-  | .vis (.fail e) _ => .fail e
+  -- TODO: is this ok?
+  | .vis _ _ => .fail .panic
   | .div => .div
 
 private theorem List.mapM_const_ok {T : Type} (l : List T)
