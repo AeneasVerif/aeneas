@@ -58,12 +58,12 @@ open Error
 
 inductive RustEffect.I : Type where
 | fail : Error → RustEffect.I
--- | test_effect : RustEffect.I
+| test_effect : RustEffect.I
 
 def RustEffect.O (i : RustEffect.I) : Type :=
   match i with
   | .fail _ => PEmpty
-  -- | .test_effect => PUnit
+  | .test_effect => PUnit
 
 def RustEffect : Effect := {
   I := RustEffect.I
@@ -159,6 +159,12 @@ theorem Result.match.div {α : Type u} : Result.div.match = @MatchResult.div α 
 
 @[simp]
 theorem Result.match.is_ok {α : Type u} {a : α} {r : Result α} : (r.match = .ok a) ↔ r = .ok a := by
+  cases r <;> grind
+@[simp]
+theorem Result.match.is_vis {α : Type u} {e k} {r : Result α} : (r.match = .vis e k) ↔ r = .vis e k := by
+  cases r <;> grind
+@[simp]
+theorem Result.match.is_div {α : Type u} {r : Result α} : (r.match = .div) ↔ r = .div := by
   cases r <;> grind
 
 -- -- Before ITrees, Result was an inductive with ok, div, and fail cases only.
@@ -298,9 +304,7 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
 --      contradiction
 @[simp] theorem bind_vis (e k) (f : α → Result β) : bind (.vis e k) f = .vis e (fun x => bind (k x) f) :=
   by simp [bind, vis]
-     apply congrArg
-     funext x
-     contradiction
+     rfl
 
 @[simp] theorem bind_div (f : α → Result β) : bind .div f = .div := by simp [bind, div]
 
@@ -317,9 +321,7 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
 @[simp] theorem bind_tc_vis (e k) (f : α → Result β) :
   (do let y ← Result.vis e k; f y) = .vis e (fun x => do let y ← k x; f y) := by
   simp [bind, Bind.bind, vis]
-  apply congrArg
-  funext x
-  contradiction
+  rfl
 
 @[simp] theorem bind_tc_div (f : α → Result β) :
   (do let y ← div; f y) = div := by simp [bind, Bind.bind, div]

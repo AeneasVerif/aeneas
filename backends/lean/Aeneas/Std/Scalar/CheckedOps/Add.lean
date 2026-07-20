@@ -35,7 +35,7 @@ theorem core.num.checked_add_UScalar_bv_spec {ty} (x y : UScalar ty) :
   have h := UScalar.add_equiv x y
   have hAdd : x + y = UScalar.add x y := by rfl
   rw [hAdd] at h
-  cases hEq : UScalar.add x y <;> simp_all [Option.ofResult, checked_add_UScalar, UScalar.max] <;>
+  split at h <;> simp_all [Option.ofResult, checked_add_UScalar, UScalar.max] <;>
   (have : 0 < 2^ty.numBits := by simp) <;>
   omega
 
@@ -58,7 +58,7 @@ theorem core.num.checked_add_IScalar_bv_spec {ty} (x y : IScalar ty) :
   have h := IScalar.add_equiv x y
   have hAdd : x + y = IScalar.add x y := by rfl
   rw [hAdd] at h
-  cases hEq : IScalar.add x y <;> simp_all [Option.ofResult, checked_add_IScalar, IScalar.min, IScalar.max] <;>
+  split at h <;> simp_all [Option.ofResult, checked_add_IScalar, IScalar.min, IScalar.max] <;>
   omega
 
 iscalar @[step_pure «%S».checked_add x y]
