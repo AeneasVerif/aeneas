@@ -22,6 +22,7 @@ structure Trait (Self : Type) where
 
 /-- [defaulted_method::Trait::provided_method]:
     Source: 'tests/src/defaulted_method.rs', lines 3:4-5:5 -/
+@[trait_default]
 def Trait.provided_method.default
   {Self : Type} (TraitInst : Trait Self) (self : Self) : Result Std.U32 := do
   TraitInst.required_method self
@@ -62,17 +63,12 @@ def YesOverride.Insts.Defaulted_methodTrait.required_method
   (self : YesOverride) : Result Std.U32 := do
   ok 42#u32
 
-/-- [defaulted_method::{impl defaulted_method::Trait for defaulted_method::YesOverride}::provided_method]:
-    Source: 'tests/src/defaulted_method.rs', lines 20:0-24:1 -/
-def YesOverride.Insts.Defaulted_methodTrait.provided_method
-  (self : YesOverride) : Result Std.U32 := do
-  YesOverride.Insts.Defaulted_methodTrait.required_method self
-
 /-- Trait implementation: [defaulted_method::{impl defaulted_method::Trait for defaulted_method::YesOverride}]
     Source: 'tests/src/defaulted_method.rs', lines 20:0-24:1 -/
 @[reducible]
-def YesOverride.Insts.Defaulted_methodTrait : Trait YesOverride := {
-  provided_method := YesOverride.Insts.Defaulted_methodTrait.provided_method
+impl_def YesOverride.Insts.Defaulted_methodTrait : Trait YesOverride := {
+  provided_method := Trait.provided_method.default
+    YesOverride.Insts.Defaulted_methodTrait
   required_method := YesOverride.Insts.Defaulted_methodTrait.required_method
 }
 
@@ -80,8 +76,9 @@ def YesOverride.Insts.Defaulted_methodTrait : Trait YesOverride := {
     Source: 'tests/src/defaulted_method.rs', lines 26:0-33:1 -/
 def main : Result Unit := do
   let _ ← NoOverride.Insts.Defaulted_methodTrait.provided_method ()
-  let _ ← YesOverride.Insts.Defaulted_methodTrait.provided_method ()
-  let n ← lift (core.cmp.impls.OrdI32.min 10#i32 1#i32)
+  let _ ←
+    Trait.provided_method.default YesOverride.Insts.Defaulted_methodTrait ()
+  let n ← core.cmp.Ord.min.trait_default core.cmp.OrdI32 10#i32 1#i32
   massert (n = 1#i32)
 
 end defaulted_method

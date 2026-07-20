@@ -473,22 +473,6 @@ theorem core.ops.range.RangeInclusive.new_spec {Idx : Type} (a b : Idx) :
       r.start = a ∧ r.«end» = b ∧ r.exhausted = false ⦄ := by
   simp [core.ops.range.RangeInclusive.new, spec_ok]
 
-/-- `Iterator::zip` for `RangeInclusive`: `Zip { fst := ri, snd := b }` where
-    `b = other.into_iter()` (requires `into_iter` to succeed). -/
-@[step]
-theorem core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.zip_spec
-    {A U Item IntoIter : Type}
-    (StepInst : core.iter.range.Step A)
-    (IntoIterInst : core.iter.traits.collect.IntoIterator U Item IntoIter)
-    (self : core.ops.range.RangeInclusive A) (other : U) (other' : IntoIter)
-    (h_into : IntoIterInst.into_iter other = ok other') :
-    core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.zip
-      StepInst IntoIterInst self other
-    ⦃ (z : core.iter.adapters.zip.Zip (core.ops.range.RangeInclusive A) IntoIter) =>
-      z.fst = self ∧ z.snd = other' ⦄ := by
-  simp [core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.zip,
-    h_into, spec_ok]
-
 /-- Generic `RangeInclusive<UScalar ty>::next`: conditional spec for the three
     cases (empty ⇒ `none`; iterating `start < end` ⇒ yield+advance;
     `start == end` ⇒ yield once then mark exhausted).  `h_lt` says the bundled
@@ -564,5 +548,31 @@ theorem core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next_
         r'.«end» = r.«end» ∧ r'.exhausted = true ⦄ :=
   core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next_UScalar_spec
     (by simp) (by intros; rfl) (by intros; rfl) r
+
+@[reducible,
+  rust_trait_impl "core::iter::traits::double_ended::DoubleEndedIterator<core::ops::range::Range<@A>, @A>"]
+def core.ops.range.Range.Insts.DoubleEndedIterator
+  {A : Type} (StepInst : core.iter.range.Step A) :
+  core.iter.traits.double_ended.DoubleEndedIterator (core.ops.range.Range A) A
+  := {
+  iteratorInst := core.iter.traits.iterator.IteratorRange StepInst
+  next_back := core.ops.range.Range.Insts.CoreIterTraitsDoubleEndedIterator.next_back StepInst
+}
+
+
+@[reducible,
+  rust_trait_impl "core::iter::traits::iterator::Iterator<core::ops::range::RangeInclusive<@A>, @A>"]
+impl_def core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator
+  {A : Type} (StepInst : core.iter.range.Step A) :
+  core.iter.traits.iterator.Iterator (core.ops.range.RangeInclusive A) A := {
+  next :=
+    core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next StepInst
+  step_by := core.iter.traits.iterator.Iterator.step_by.trait_default
+    (core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator StepInst)
+  enumerate := core.iter.traits.iterator.Iterator.enumerate.trait_default
+    (core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator StepInst)
+  take := core.iter.traits.iterator.Iterator.take.trait_default
+    (core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator StepInst)
+}
 
 end Aeneas.Std

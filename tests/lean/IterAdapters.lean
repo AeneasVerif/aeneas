@@ -21,7 +21,9 @@ def test_enumerate_slice : Result Unit := do
   let s ←
     lift (Array.to_slice (Array.make 3#usize [ 10#u32, 20#u32, 30#u32 ]))
   let i ← core.slice.Slice.iter s
-  let it ← core.slice.iter.IteratorSliceIter.enumerate i
+  let it ←
+    core.iter.traits.iterator.Iterator.enumerate.trait_default
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) i
   let (o, it1) ←
     core.iter.adapters.enumerate.IteratorEnumerate.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
@@ -55,7 +57,9 @@ def test_enumerate_slice : Result Unit := do
 def test_enumerate_empty : Result Unit := do
   let s ← lift (Array.to_slice (Std.Array.empty Std.U32))
   let i ← core.slice.Slice.iter s
-  let it ← core.slice.iter.IteratorSliceIter.enumerate i
+  let it ←
+    core.iter.traits.iterator.Iterator.enumerate.trait_default
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) i
   let (o, _) ←
     core.iter.adapters.enumerate.IteratorEnumerate.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
@@ -73,7 +77,9 @@ def test_take_2 : Result Unit := do
     lift (Array.to_slice
       (Array.make 4#usize [ 10#u32, 20#u32, 30#u32, 40#u32 ]))
   let i ← core.slice.Slice.iter s
-  let it ← core.slice.iter.IteratorSliceIter.take i 2#usize
+  let it ←
+    core.iter.traits.iterator.Iterator.take.trait_default
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) i 2#usize
   let (o, it1) ←
     core.iter.adapters.take.IteratorTake.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
@@ -100,7 +106,9 @@ def test_take_0 : Result Unit := do
   let s ←
     lift (Array.to_slice (Array.make 3#usize [ 10#u32, 20#u32, 30#u32 ]))
   let i ← core.slice.Slice.iter s
-  let it ← core.slice.iter.IteratorSliceIter.take i 0#usize
+  let it ←
+    core.iter.traits.iterator.Iterator.take.trait_default
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) i 0#usize
   let (o, _) ←
     core.iter.adapters.take.IteratorTake.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
@@ -116,7 +124,9 @@ def test_take_0 : Result Unit := do
 def test_take_more_than_available : Result Unit := do
   let s ← lift (Array.to_slice (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ]))
   let i ← core.slice.Slice.iter s
-  let it ← core.slice.iter.IteratorSliceIter.take i 5#usize
+  let it ←
+    core.iter.traits.iterator.Iterator.take.trait_default
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) i 5#usize
   let (o, it1) ←
     core.iter.adapters.take.IteratorTake.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
@@ -418,10 +428,13 @@ def test_enumerate_step_by : Result Unit := do
     lift (Array.to_slice
       (Array.make 6#usize [ 10#u32, 20#u32, 30#u32, 40#u32, 50#u32, 60#u32 ]))
   let i ← core.slice.Slice.iter s
-  let e ← core.slice.iter.IteratorSliceIter.enumerate i
+  let e ←
+    core.iter.traits.iterator.Iterator.enumerate.trait_default
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) i
   let it ←
-    core.iter.adapters.enumerate.IteratorEnumerate.step_by
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) e 2#usize
+    core.iter.traits.iterator.Iterator.step_by.trait_default
+      (core.iter.traits.iterator.IteratorEnumerate
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32)) e 2#usize
   let (o, it1) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorEnumerate
@@ -448,10 +461,13 @@ def test_enumerate_take : Result Unit := do
     lift (Array.to_slice
       (Array.make 5#usize [ 10#u32, 20#u32, 30#u32, 40#u32, 50#u32 ]))
   let i ← core.slice.Slice.iter s
-  let e ← core.slice.iter.IteratorSliceIter.enumerate i
+  let e ←
+    core.iter.traits.iterator.Iterator.enumerate.trait_default
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) i
   let it ←
-    core.iter.adapters.enumerate.IteratorEnumerate.take
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) e 2#usize
+    core.iter.traits.iterator.Iterator.take.trait_default
+      (core.iter.traits.iterator.IteratorEnumerate
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32)) e 2#usize
   let (o, it1) ←
     core.iter.adapters.take.IteratorTake.next
       (core.iter.traits.iterator.IteratorEnumerate
@@ -482,7 +498,9 @@ def test_enumerate_take : Result Unit := do
 def test_take_exhausted_then_next : Result Unit := do
   let s ← lift (Array.to_slice (Array.make 1#usize [ 42#u32 ]))
   let i ← core.slice.Slice.iter s
-  let it ← core.slice.iter.IteratorSliceIter.take i 2#usize
+  let it ←
+    core.iter.traits.iterator.Iterator.take.trait_default
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) i 2#usize
   let (o, it1) ←
     core.iter.adapters.take.IteratorTake.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
@@ -649,7 +667,8 @@ def test_range_usize_start_gt_end : Result Unit := do
     Visibility: public -/
 def test_step_by_larger_than_range : Result Unit := do
   let it ←
-    core.iter.range.IteratorRange.step_by core.iter.range.StepU8
+    core.iter.traits.iterator.Iterator.step_by.trait_default
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
       { start := 0#u8, «end» := 3#u8 } 10#usize
   let (o, it1) ←
     core.iter.adapters.step_by.IteratorStepBy.next
@@ -670,7 +689,8 @@ def test_step_by_larger_than_range : Result Unit := do
     Visibility: public -/
 def test_step_by_exact_range : Result Unit := do
   let it ←
-    core.iter.range.IteratorRange.step_by core.iter.range.StepU8
+    core.iter.traits.iterator.Iterator.step_by.trait_default
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
       { start := 0#u8, «end» := 5#u8 } 5#usize
   let (o, it1) ←
     core.iter.adapters.step_by.IteratorStepBy.next
@@ -691,7 +711,8 @@ def test_step_by_exact_range : Result Unit := do
     Visibility: public -/
 def test_step_by_one : Result Unit := do
   let it ←
-    core.iter.range.IteratorRange.step_by core.iter.range.StepU8
+    core.iter.traits.iterator.Iterator.step_by.trait_default
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
       { start := 0#u8, «end» := 4#u8 } 1#usize
   let (o, it1) ←
     core.iter.adapters.step_by.IteratorStepBy.next
@@ -727,7 +748,8 @@ def test_step_by_one : Result Unit := do
     Visibility: public -/
 def test_step_by_empty : Result Unit := do
   let it ←
-    core.iter.range.IteratorRange.step_by core.iter.range.StepU8
+    core.iter.traits.iterator.Iterator.step_by.trait_default
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
       { start := 5#u8, «end» := 5#u8 } 3#usize
   let (o, _) ←
     core.iter.adapters.step_by.IteratorStepBy.next
@@ -743,7 +765,8 @@ def test_step_by_empty : Result Unit := do
     Visibility: public -/
 def test_step_by_odd_range : Result Unit := do
   let it ←
-    core.iter.range.IteratorRange.step_by core.iter.range.StepU8
+    core.iter.traits.iterator.Iterator.step_by.trait_default
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
       { start := 0#u8, «end» := 5#u8 } 2#usize
   let (o, it1) ←
     core.iter.adapters.step_by.IteratorStepBy.next
@@ -774,7 +797,8 @@ def test_step_by_odd_range : Result Unit := do
     Visibility: public -/
 def test_step_by_u8_near_max : Result Unit := do
   let it ←
-    core.iter.range.IteratorRange.step_by core.iter.range.StepU8
+    core.iter.traits.iterator.Iterator.step_by.trait_default
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepU8)
       { start := 250#u8, «end» := 255#u8 } 2#usize
   let (o, it1) ←
     core.iter.adapters.step_by.IteratorStepBy.next

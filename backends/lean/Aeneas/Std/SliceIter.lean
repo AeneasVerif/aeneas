@@ -66,33 +66,17 @@ def core.slice.iter.IteratorSliceIter.next
     ok (some x, it)
   else ok (none, it)
 
-@[rust_fun
-  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::step_by"]
-def core.slice.iter.IteratorSliceIter.step_by {T} (slice : core.slice.iter.Iter T) (steps : Usize) :
-  Result (core.iter.adapters.step_by.StepBy (core.slice.iter.Iter T)) :=
-  if steps.val = 0 then .fail .panic
-  else ok (⟨ slice, steps ⟩)
-
-@[rust_fun
-  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::enumerate"]
-def core.slice.iter.IteratorSliceIter.enumerate {T} (slice : core.slice.iter.Iter T) :
-  Result (core.iter.adapters.enumerate.Enumerate (core.slice.iter.Iter T)) :=
-  .ok { iter := slice, count := 0#usize }
-
-@[rust_fun
-  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::take"]
-def core.slice.iter.IteratorSliceIter.take {T} (slice : core.slice.iter.Iter T) (n : Usize) :
-  Result (core.iter.adapters.take.Take (core.slice.iter.Iter T)) :=
-  ok ⟨ slice, n ⟩
-
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>"]
-def core.iter.traits.iterator.IteratorSliceIter (T : Type) :
+impl_def core.iter.traits.iterator.IteratorSliceIter (T : Type) :
   core.iter.traits.iterator.Iterator (core.slice.iter.Iter T) T := {
   next := core.slice.iter.IteratorSliceIter.next
-  step_by := core.slice.iter.IteratorSliceIter.step_by
-  enumerate := core.slice.iter.IteratorSliceIter.enumerate
-  take := core.slice.iter.IteratorSliceIter.take
+  step_by := core.iter.traits.iterator.Iterator.step_by.trait_default
+    (core.iter.traits.iterator.IteratorSliceIter T)
+  enumerate := core.iter.traits.iterator.Iterator.enumerate.trait_default
+    (core.iter.traits.iterator.IteratorSliceIter T)
+  take := core.iter.traits.iterator.Iterator.take.trait_default
+    (core.iter.traits.iterator.IteratorSliceIter T)
 }
 
 -- ============================================================================
@@ -158,84 +142,19 @@ def core.slice.iter.IteratorChunksExact.next
   | [] => ok (none, self)
   | chunk :: chunks => ok (some chunk, { chunks, remainder := self.remainder })
 
-@[rust_fun
-  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>}::step_by"]
-def core.slice.iter.IteratorChunksExact.step_by
-  {T : Type} (self : slice.iter.ChunksExact T) (steps : Usize) :
-  Result (core.iter.adapters.step_by.StepBy (slice.iter.ChunksExact T)) :=
-  if steps.val = 0 then .fail .panic
-  else ok (⟨ self, steps ⟩)
-
-@[rust_fun
-  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>}::enumerate"]
-def core.slice.iter.IteratorChunksExact.enumerate {T : Type} (self : core.slice.iter.ChunksExact T) :
-  Result (core.iter.adapters.enumerate.Enumerate (core.slice.iter.ChunksExact T)) :=
-  .ok { iter := self, count := 0#usize }
-
-@[rust_fun
-  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>}::take"]
-def core.slice.iter.IteratorChunksExact.take {T : Type} (self : core.slice.iter.ChunksExact T) (n : Usize) :
-  Result (core.iter.adapters.take.Take (core.slice.iter.ChunksExact T)) :=
-  ok ⟨ self, n ⟩
-
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>"]
-def core.iter.traits.iterator.IteratorChunksExact (T : Type) :
+impl_def core.iter.traits.iterator.IteratorChunksExact (T : Type) :
   core.iter.traits.iterator.Iterator (core.slice.iter.ChunksExact T) (Slice T)
   := {
   next := core.slice.iter.IteratorChunksExact.next
-  step_by := core.slice.iter.IteratorChunksExact.step_by
-  enumerate := core.slice.iter.IteratorChunksExact.enumerate
-  take := core.slice.iter.IteratorChunksExact.take
+  step_by := core.iter.traits.iterator.Iterator.step_by.trait_default
+    (core.iter.traits.iterator.IteratorChunksExact T)
+  enumerate := core.iter.traits.iterator.Iterator.enumerate.trait_default
+    (core.iter.traits.iterator.IteratorChunksExact T)
+  take := core.iter.traits.iterator.Iterator.take.trait_default
+    (core.iter.traits.iterator.IteratorChunksExact T)
 }
-
--- ============================================================================
--- `rev` / `zip` for slice `Iter<T>` and `ChunksExact<T>`
--- ============================================================================
-
-/-- `Iter<T>::rev`: `Rev { iter: self }`. -/
-@[rust_fun
-  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::rev"]
-def core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorShared.rev
-  {T Item : Type}
-  (_DEInst : core.iter.traits.double_ended.DoubleEndedIterator (core.slice.iter.Iter T) Item) :
-  core.slice.iter.Iter T → Result (core.iter.adapters.rev.Rev (core.slice.iter.Iter T)) :=
-  fun self => ok ⟨self⟩
-
-/-- `Iter<T>::zip`: `Zip::new(self, other.into_iter())`. -/
-@[rust_fun
-  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::zip"]
-def core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorShared.zip
-  {T U Item IntoIter : Type}
-  (IntoIterInst : core.iter.traits.collect.IntoIterator U Item IntoIter) :
-  core.slice.iter.Iter T → U →
-    Result (core.iter.adapters.zip.Zip (core.slice.iter.Iter T) IntoIter) :=
-  fun self other => do
-    let b ← IntoIterInst.into_iter other
-    ok ⟨self, b⟩
-
-/-- `ChunksExact<T>::rev`: `Rev { iter: self }`. -/
-@[rust_fun
-  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>}::rev"]
-def core.slice.iter.ChunksExact.Insts.CoreIterTraitsIteratorIteratorSharedSlice.rev
-  {T Item : Type}
-  (_DEInst : core.iter.traits.double_ended.DoubleEndedIterator
-    (core.slice.iter.ChunksExact T) Item) :
-  core.slice.iter.ChunksExact T →
-    Result (core.iter.adapters.rev.Rev (core.slice.iter.ChunksExact T)) :=
-  fun self => ok ⟨self⟩
-
-/-- `ChunksExact<T>::zip`: `Zip::new(self, other.into_iter())`. -/
-@[rust_fun
-  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>}::zip"]
-def core.slice.iter.ChunksExact.Insts.CoreIterTraitsIteratorIteratorSharedSlice.zip
-  {T U Item IntoIter : Type}
-  (IntoIterInst : core.iter.traits.collect.IntoIterator U Item IntoIter) :
-  core.slice.iter.ChunksExact T → U →
-    Result (core.iter.adapters.zip.Zip (core.slice.iter.ChunksExact T) IntoIter) :=
-  fun self other => do
-    let b ← IntoIterInst.into_iter other
-    ok ⟨self, b⟩
 
 /-- Split a list into non-overlapping chunks of exactly size `n`, returning the
     full-sized chunks and the trailing remainder (which has fewer than `n` elements). -/
@@ -314,68 +233,68 @@ private def collectStepBy (sbi : core.iter.adapters.step_by.StepBy (core.slice.i
 
 -- step_by(0) panics
 #assert
-  match (core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [1, 2, 3]) 0#usize).match with
+  match (core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [1, 2, 3]) 0#usize).match with
   | .vis (.fail e) _ => e == panic
   | _ => false
 
 -- step_by(1) returns all elements
 #assert (do
-  let sbi ← core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [0, 1, 2, 3, 4]) 1#usize
+  let sbi ← core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [0, 1, 2, 3, 4]) 1#usize
   collectStepBy sbi).is_ok [0, 1, 2, 3, 4]
 
 -- step_by(2) returns every other element
 #assert (do
-  let sbi ← core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [0, 1, 2, 3, 4]) 2#usize
+  let sbi ← core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [0, 1, 2, 3, 4]) 2#usize
   collectStepBy sbi).is_ok [0, 2, 4]
 
 -- step_by(3)
 #assert (do
-  let sbi ← core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [0, 1, 2, 3, 4, 5, 6]) 3#usize
+  let sbi ← core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [0, 1, 2, 3, 4, 5, 6]) 3#usize
   collectStepBy sbi).is_ok [0, 3, 6]
 
 -- step_by larger than collection: returns only first element
 #assert (do
-  let sbi ← core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [0, 1, 2]) 10#usize
+  let sbi ← core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [0, 1, 2]) 10#usize
   collectStepBy sbi).is_ok [0]
 
 -- step_by on empty iterator
 #assert (do
-  let sbi ← core.slice.iter.IteratorSliceIter.step_by (mkSliceIter []) 2#usize
+  let sbi ← core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter []) 2#usize
   collectStepBy sbi).is_ok []
 
 -- step_by(1) on single element
 #assert (do
-  let sbi ← core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [42]) 1#usize
+  let sbi ← core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [42]) 1#usize
   collectStepBy sbi).is_ok [42]
 
 -- step_by(2) on single element
 #assert (do
-  let sbi ← core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [42]) 2#usize
+  let sbi ← core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [42]) 2#usize
   collectStepBy sbi).is_ok [42]
 
 -- step_by equal to length: returns only first element
 #assert (do
-  let sbi ← core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [0, 1, 2]) 3#usize
+  let sbi ← core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [0, 1, 2]) 3#usize
   collectStepBy sbi).is_ok [0]
 
 -- step_by = length - 1
 #assert (do
-  let sbi ← core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [0, 1, 2]) 2#usize
+  let sbi ← core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [0, 1, 2]) 2#usize
   collectStepBy sbi).is_ok [0, 2]
 
 -- step_by(2) on two elements: returns only first
 #assert (do
-  let sbi ← core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [0, 1]) 2#usize
+  let sbi ← core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [0, 1]) 2#usize
   collectStepBy sbi).is_ok [0]
 
 -- step_by(2) on three elements: returns first and third
 #assert (do
-  let sbi ← core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [0, 1, 2]) 2#usize
+  let sbi ← core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [0, 1, 2]) 2#usize
   collectStepBy sbi).is_ok [0, 2]
 
 -- step_by(4) on longer sequence
 #assert (do
-  let sbi ← core.slice.iter.IteratorSliceIter.step_by
+  let sbi ← core.iter.traits.iterator.Iterator.step_by.default
     (mkSliceIter [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]) 4#usize
   collectStepBy sbi).is_ok [0, 4, 8]
 
@@ -404,10 +323,9 @@ private def collectNestedStepBy
       .ok (x :: rest)
 
 #assert (do
-  let sbi ← core.slice.iter.IteratorSliceIter.step_by
+  let sbi ← core.iter.traits.iterator.Iterator.step_by.default
     (mkSliceIter [0, 1, 2, 3, 4, 5, 6, 7]) 2#usize
-  let sbi2 ← core.iter.adapters.step_by.IteratorStepBy.step_by
-    (core.iter.traits.iterator.IteratorSliceIter Nat) sbi 2#usize
+  let sbi2 ← core.iter.traits.iterator.Iterator.step_by.default sbi 2#usize
   collectNestedStepBy sbi2).is_ok [0, 4]
 
 -- ============================================================================
