@@ -79,10 +79,9 @@ theorem coinSpec_bind {α β} {k : α -> ITreeC β} {Pₖ : Post β} {m : ITreeC
 
 instance : MonadLift Result ITreeC where
   monadLift r :=
-    r.match_dep
-      (fun a => .ret a)
-      (fun _e => .div) -- TODO
-      (fun _ => .div)
+  match r.match with
+  | .ok a => .ret a
+  | _ => .div -- TODO
 
 theorem spec_coinSpec {α} {x : Result α} {p: Post α} : spec x p → coinSpec p x := by
   intros s
@@ -106,8 +105,6 @@ theorem qimp_coinSpec_exists {α β γ} (P : γ → α → Prop) (k : α → ITr
 def qimp_coinSpec_iff {α β} (P : α → Prop) (k : α → ITreeC β) (Q : β → Prop) :
   qimp_coinSpec P k Q ↔ ∀ x, imp (P x) (coinSpec Q (k x)) := by
   simp [qimp_coinSpec, imp]
-
-#check CoInd.unfold
 
 @[simp, grind =, agrind =]
 theorem coinSpec_ret {α p} (x : α) : coinSpec p (ITree.ret x) ↔ p x := by
@@ -168,7 +165,6 @@ theorem coinSpec_ret {α p} (x : α) : coinSpec p (ITree.ret x) ↔ p x := by
   def itreec : ITreeC Nat := res
 
 
-  #check I32.add_spec
   -- set_option trace.Step true
 
   -- theorem test : coinSpec (fun z => z.val == 6)
