@@ -216,9 +216,11 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
             (* Add the current marker when visiting the borrow id *)
             register_borrow_id abs npm bid (Some sid)
         | AProjSharedBorrow _ ->
-            [%sanity_check] span (pm = PNone);
-            (* Process those normally *)
-            super#visit_aborrow_content (abs, pm) bc
+            [%sanity_check] span (pm = PNone)
+            (* Projected shared reborrows (nested borrows below a shared borrow)
+               are frozen: like the concrete borrows appearing inside shared
+               values, we do NOT register them, so that they don't drive the
+               matching/merging of abstractions. *)
         | AIgnoredMutBorrow (_, child)
         | AEndedIgnoredMutBorrow { child; given_back = _; given_back_meta = _ }
           ->
@@ -226,6 +228,25 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
             (* Ignore the id of the borrow, if there is *)
             self#visit_tavalue (abs, pm) child
         | AEndedMutBorrow _ | AEndedSharedBorrow -> [%craise] span "Unreachable"
+
+      (** Concrete borrows/loans may appear inside the shared values of shared
+          loans, in the presence of nested borrows below a shared borrow. Those
+          are frozen (immutable) as long as the outer shared borrow lives, so we
+          do NOT register their ids: they must not drive the merging of
+          abstractions during the reduce/collapse steps (registering them would
+          e.g. make a frozen shared borrow match the corresponding shared loan
+          and trigger a spurious self-merge). We still recurse to keep the
+          traversal total. *)
+      method! visit_borrow_content (abs, pm) bc =
+        match bc with
+        | VSharedBorrow _ -> ()
+        | VMutBorrow (_, child) -> self#visit_tvalue (abs, pm) child
+        | VReservedMutBorrow _ -> [%craise] span "Unreachable"
+
+      method! visit_loan_content (abs, pm) lc =
+        match lc with
+        | VSharedLoan (_, sv) -> self#visit_tvalue (abs, pm) sv
+        | VMutLoan _ -> ()
 
       method! visit_borrow_id _ _ = [%internal_error] span
       method! visit_loan_id (abs, pm) lid = register_loan_id abs pm lid
@@ -1487,19 +1508,12 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
   let match_shared_loan_with_other (match_rec : tvalue_matcher)
       (ctx0 : eval_ctx) (_ctx1 : eval_ctx) ~(loan_is_left : bool) (ty : ety)
       (lid : loan_id) (shared_value : tvalue) (other : tvalue) : tvalue =
-    (* Sanity checks *)
+    (* Sanity checks. Note that the shared value and the other value may contain
+       borrows: this happens with nested borrows below a shared borrow (e.g. an
+       array of shared references [&T]). As everything below a shared borrow is
+       frozen, we can keep those (frozen) borrows as they are. *)
     [%cassert_recover] S.recover span
       (not (ety_has_nested_borrows (Some span) ctx0.type_ctx.type_infos ty))
-      "Unimplemented";
-    [%cassert_recover] S.recover span
-      (not
-         (ValuesUtils.value_has_loans_or_borrows (Some span)
-            ctx0.type_ctx.type_infos shared_value.value))
-      "Unimplemented";
-    [%cassert_recover] S.recover span
-      (not
-         (ValuesUtils.value_has_borrows (Some span) ctx0.type_ctx.type_infos
-            other.value))
       "Unimplemented";
 
     (* Join the inner value. *)
@@ -1513,7 +1527,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     let nbid = ctx0.fresh_borrow_id () in
 
     let kind = RShared in
-    let bv_ty = ty in
+    (* [ty] is an erased type: it may contain regions (below a shared borrow) so
+       we refresh them to get a proper region type for the abstraction avalues. *)
+    let _, bv_ty = ty_refresh_regions (Some span) ctx0.fresh_region_id ty in
     let borrow_ty = mk_ref_ty (RVar (Free rid)) bv_ty kind in
 
     let borrow_av =
