@@ -30,7 +30,7 @@ instance : Membership Nat MulRange where
 namespace MulRange
 universe u v
 
-@[inline] protected def forIn' [Monad m] (range : MulRange) (init : β)
+@[inline, expose] protected def forIn' [Monad m] (range : MulRange) (init : β)
     (f : (i : Nat) → i ∈ range → β → m (ForInStep β)) : m β :=
   let rec @[specialize] loop (maxSteps : Nat) (b : β) (i : Nat)
       (hs : ∃ k, i = range.start * range.mul ^ k)
@@ -68,7 +68,7 @@ end MulRange
 We now introduce a convenient `mulRange` definition
 -/
 
-def mulRange (stop mul : Nat) (hMul : 1 < mul) (i : Nat) (hi : 0 < i) : List Nat :=
+@[expose] def mulRange (stop mul : Nat) (hMul : 1 < mul) (i : Nat) (hi : 0 < i) : List Nat :=
   if i < stop then
     i :: mulRange stop mul hMul (i * mul) (by rw [Nat.mul_pos_iff_of_pos_left] <;> omega)
   else []
@@ -80,7 +80,7 @@ decreasing_by
 namespace MulRange
 
 /-- A convenient utility for the proofs -/
-def foldWhile' {α : Type u} (r : MulRange) (f : α → (a : Nat) → (a ∈ r) → α) (i : Nat) (init : α)
+@[expose] def foldWhile' {α : Type u} (r : MulRange) (f : α → (a : Nat) → (a ∈ r) → α) (i : Nat) (init : α)
   (hi : r.start ≤ i ∧ ∃ k, i = r.start * r.mul ^ k) : α :=
   if h: i < r.stop then
     foldWhile' r f (i * r.mul)
@@ -102,7 +102,7 @@ decreasing_by
   omega
 
 /-- A convenient utility for the proofs -/
-def foldWhile {α : Type u} (stop mul : Nat) (hMul : 1 < mul)
+@[expose] def foldWhile {α : Type u} (stop mul : Nat) (hMul : 1 < mul)
   (f : α → (a : Nat) → α) (i : Nat) (hi : 0 < i) (init : α) : α :=
 if i < stop then
     foldWhile stop mul hMul f (i * mul) (by simp only [hi, Nat.mul_pos_iff_of_pos_left]; omega) (f init i)

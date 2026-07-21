@@ -1,6 +1,6 @@
 module
 public import Lean
-public import Aeneas.Std.Global
+public meta import Aeneas.Std.Global
 public import Aeneas.Extract
 public import AeneasMeta.BvEnumToBitVec
 public section
@@ -18,7 +18,7 @@ open Lean Elab Command Term Meta
 syntax (name := assert) "#assert" term: command
 
 @[command_elab assert]
-unsafe
+meta unsafe
 def assertImpl : CommandElab := fun (stx: Syntax) => do
   runTermElabM (fun _ => do
     let r ← evalTerm Bool (mkConst ``Bool) stx[1]
@@ -37,7 +37,7 @@ info: true
 syntax (name := elabSyntax) "#elab" term: command
 
 @[command_elab elabSyntax]
-unsafe
+meta unsafe
 def elabImpl : CommandElab := fun (stx: Syntax) => do
   runTermElabM (fun _ => do
     /- Simply elaborate the syntax to check that it is correct -/

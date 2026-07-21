@@ -1,7 +1,7 @@
 module
 public import Lean
-public import Aeneas.Tactic.Simp.SimpLists.Init
-public import Aeneas.Tactic.Simp.SimpScalar.Init
+public meta import Aeneas.Tactic.Simp.SimpLists.Init
+public meta import Aeneas.Tactic.Simp.SimpScalar.Init
 public section
 
 abbrev Byte := BitVec 8

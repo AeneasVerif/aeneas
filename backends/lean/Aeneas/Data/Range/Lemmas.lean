@@ -1,6 +1,6 @@
 module
 public import Aeneas.Tactic.Solver.Grind.Init
-public import Aeneas.Tactic.Solver.ScalarTac.Init
+public meta import Aeneas.Tactic.Solver.ScalarTac.Init
 public section
 
 -- TODO: add a namepsace

@@ -1,6 +1,7 @@
 module
-public import Mathlib.Tactic.Tauto
-public import Aeneas.Tactic.Simp.SimpBoolProp.Init
+import Mathlib.Tactic.Tauto
+public meta import Lean.Meta.Tactic.Simp.BuiltinSimprocs.Core
+public meta import Aeneas.Tactic.Simp.SimpBoolProp.Init
 public section
 
 /-!
@@ -11,8 +12,12 @@ namespace Aeneas.SimpBoolProp
 
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 
+/-- TODO: `reduceIte` can't be added to a custom simp set via `attribute` under the module system
+since builtin simprocs are not `meta`-marked, so `ensureAttrDeclIsMeta` rejects them. So here we
+register a local `meta` version of `reduceIte`. Perhaps there is a better way to do this. -/
+simproc ↓ [simp_bool_prop] reduceIte' (ite _ _ _) := reduceIte
+
 attribute [simp_bool_prop]
-  reduceIte
   true_implies false_implies implies_true imp_false
   Bool.true_and Bool.and_true
   Bool.false_and Bool.and_false

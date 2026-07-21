@@ -1,5 +1,6 @@
 module
-public import Aeneas.Tactic.Simproc.ReduceZMod.Init
+public meta import Aeneas.Tactic.Simproc.ReduceZMod.Init
+public meta import Mathlib.Data.Int.GCD
 public import Mathlib.Algebra.Algebra.ZMod
 public import AeneasMeta.Utils
 public section

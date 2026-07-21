@@ -35,12 +35,12 @@ structure SpecInfo where
   liftings : Array LiftingInfo
   deriving Inhabited
 
-structure SpecInfoExtensionState where
+meta structure SpecInfoExtensionState where
   specInfos : Std.HashMap Name SpecInfo
   deriving Inhabited
 
 /- Initialize the state extension for adding spec theorems -/
-initialize specAttr : SimpleScopedEnvExtension SpecInfo SpecInfoExtensionState  ← do
+meta initialize specAttr : SimpleScopedEnvExtension SpecInfo SpecInfoExtensionState  ← do
   let ext ← registerSimpleScopedEnvExtension {
     name        := `specStatementRegistrationExtension,
     initial     := {
@@ -55,7 +55,7 @@ syntax (name := register_spec_info_cmd)
   "#register_spec_info " term : command
 
 @[command_elab register_spec_info_cmd]
-unsafe def register_spec_info : Lean.Elab.Command.CommandElab := fun stx => do
+meta unsafe def register_spec_info : Lean.Elab.Command.CommandElab := fun stx => do
   let info := stx[1]
   let expr ← Command.liftTermElabM do
     elabTerm info (some (mkConst ``SpecInfo))
@@ -63,7 +63,7 @@ unsafe def register_spec_info : Lean.Elab.Command.CommandElab := fun stx => do
     Lean.Meta.evalExpr SpecInfo (mkConst ``SpecInfo) expr
   specAttr.add value
 
-def specInfoLookup (n : Name) : MetaM (Option SpecInfo) := do
+meta def specInfoLookup (n : Name) : MetaM (Option SpecInfo) := do
   let env ← getEnv
   let state := specAttr.getState env
   return state.specInfos.get? n

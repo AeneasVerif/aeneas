@@ -1,5 +1,6 @@
 module
 public import Aeneas.Tactic.Simproc.ReduceFin.Init
+public meta import AeneasMeta.Utils
 public import AeneasMeta.Utils
 public section
 

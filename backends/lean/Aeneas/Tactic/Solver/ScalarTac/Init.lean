@@ -28,17 +28,17 @@ register_simp_attr' scalarTacSimpExt scalarTacSimprocExt scalar_tac_simps
 syntax (name := scalar_tac) "scalar_tac" (term)? : attr
 syntax (name := scalar_tac_nonlin) "scalar_tac_nonlin" (term)? : attr
 
-def elabAttribute (stx : Syntax) : MetaM (Option Syntax) :=
+meta def elabAttribute (stx : Syntax) : MetaM (Option Syntax) :=
   withRef stx do
     match stx with
     | `(attr| scalar_tac $[$pat]?)
     | `(attr| scalar_tac_nonlin $[$pat]?) => pure pat
     | _ => Lean.Elab.throwUnsupportedSyntax
 
-initialize scalarTacAttribute : Saturate.Attribute.SaturateAttribute ←
+meta initialize scalarTacAttribute : Saturate.Attribute.SaturateAttribute ←
   Saturate.Attribute.makeAttribute `scalar_tac_map `scalar_tac elabAttribute
 
-initialize scalarTacNonLinAttribute : Saturate.Attribute.SaturateAttribute ←
+meta initialize scalarTacNonLinAttribute : Saturate.Attribute.SaturateAttribute ←
   Saturate.Attribute.makeAttribute `scalar_tac_nonlin_map `scalar_tac_nonlin elabAttribute
 
 end Aeneas.ScalarTac

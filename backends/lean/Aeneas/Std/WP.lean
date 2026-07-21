@@ -11,7 +11,7 @@ namespace Aeneas.Std.WP
 open Std Result
 
 def Post α := (α -> Prop)
-def Pre := Prop
+abbrev Pre := Prop
 
 def Wp α := Post α → Pre
 
@@ -51,7 +51,7 @@ We use this in the Hoare triple notation `⦃ ⦄`.
 Example: `f 0 ⦃ x y z => ... ⦄` desugars to
 `spec (f 0) (uncurry' fun x => uncurry' fun y z => ...)`.
 -/
-def uncurry' {α β} (p : α → β → Prop) : α × β → Prop :=
+@[expose] def uncurry' {α β} (p : α → β → Prop) : α × β → Prop :=
   fun (x, y) => p x y
 
 @[simp] theorem uncurry'_pair x y (p : α → β → Prop) : uncurry' p (x, y) = p x y := by simp [uncurry']

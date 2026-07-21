@@ -1,6 +1,6 @@
 module
 public import AeneasMeta.Utils
-public import Aeneas.Tactic.Solver.ScalarTac.Init
+public meta import Aeneas.Tactic.Solver.ScalarTac.Init
 public section
 
 namespace Aeneas.ReduceNat
