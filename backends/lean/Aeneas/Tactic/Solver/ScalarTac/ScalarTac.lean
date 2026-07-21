@@ -97,14 +97,41 @@ def goalIsLinearInt : Tactic.TacticM Bool := do
 example (x y : Int) (h0 : x ≤ y) (h1 : x ≠ y) : x < y := by
   omega
 
--- NOTE: the core *builtin* simprocs (`reduceIte`, `Nat.reduce*`, `Int.reduce*`) that used to be
--- listed here cannot be added to a custom simp set via `attribute` under the module system
--- (builtin simprocs are not `meta`-marked, so `ensureAttrDeclIsMeta` rejects them). They are now
--- injected by name into the `scalar_tac_simps` simproc set in `getSimpArgs` below.
 attribute [scalar_tac_simps]
   not_lt not_le
   lt_inf_iff le_inf_iff
   Fin.is_le'
+
+/- TODO: The core builtin simprocs cannot be added to the `scalar_tac_simps` set directly via `attribute` under the module system. Instead we register, for each, a local `meta` wrapper. -/
+simproc ↓ [scalar_tac_simps] reduceIte' (ite _ _ _) := reduceIte
+simproc [scalar_tac_simps] Nat.reduceLeDiff' ((_ : Nat) ≤ _) := Nat.reduceLeDiff
+simproc [scalar_tac_simps] Nat.reduceLT' ((_ : Nat) < _) := Nat.reduceLT
+simproc [scalar_tac_simps] Nat.reduceGT' ((_ : Nat) > _) := Nat.reduceGT
+dsimproc [scalar_tac_simps] Nat.reduceBEq' ((_ : Nat) == _) := Nat.reduceBEq
+dsimproc [scalar_tac_simps] Nat.reduceBNe' ((_ : Nat) != _) := Nat.reduceBNe
+dsimproc [scalar_tac_simps] Nat.reducePow' ((_ ^ _ : Nat)) := Nat.reducePow
+dsimproc [scalar_tac_simps] Nat.reduceAdd' ((_ + _ : Nat)) := Nat.reduceAdd
+dsimproc [scalar_tac_simps] Nat.reduceSub' ((_ - _ : Nat)) := Nat.reduceSub
+dsimproc [scalar_tac_simps] Nat.reduceMul' ((_ * _ : Nat)) := Nat.reduceMul
+dsimproc [scalar_tac_simps] Nat.reduceDiv' ((_ / _ : Nat)) := Nat.reduceDiv
+dsimproc [scalar_tac_simps] Nat.reduceMod' ((_ % _ : Nat)) := Nat.reduceMod
+simproc [scalar_tac_simps] Int.reduceLT' ((_ : Int) < _) := Int.reduceLT
+simproc [scalar_tac_simps] Int.reduceLE' ((_ : Int) ≤ _) := Int.reduceLE
+simproc [scalar_tac_simps] Int.reduceGT' ((_ : Int) > _) := Int.reduceGT
+simproc [scalar_tac_simps] Int.reduceGE' ((_ : Int) ≥ _) := Int.reduceGE
+simproc [scalar_tac_simps] Int.reduceEq' ((_ : Int) = _) := Int.reduceEq
+simproc [scalar_tac_simps] Int.reduceNe' ((_ : Int) ≠ _) := Int.reduceNe
+dsimproc [scalar_tac_simps] Int.reduceBEq' ((_ : Int) == _) := Int.reduceBEq
+dsimproc [scalar_tac_simps] Int.reduceBNe' ((_ : Int) != _) := Int.reduceBNe
+dsimproc [scalar_tac_simps] Int.reducePow' ((_ : Int) ^ (_ : Nat)) := Int.reducePow
+dsimproc [scalar_tac_simps] Int.reduceAdd' ((_ + _ : Int)) := Int.reduceAdd
+dsimproc [scalar_tac_simps] Int.reduceSub' ((_ - _ : Int)) := Int.reduceSub
+dsimproc [scalar_tac_simps] Int.reduceMul' ((_ * _ : Int)) := Int.reduceMul
+dsimproc [scalar_tac_simps] Int.reduceDiv' ((_ / _ : Int)) := Int.reduceDiv
+dsimproc [scalar_tac_simps] Int.reduceMod' ((_ % _ : Int)) := Int.reduceMod
+dsimproc [scalar_tac_simps] Int.reduceNegSucc' (Int.negSucc _) := Int.reduceNegSucc
+dsimproc [scalar_tac_simps] Int.reduceNeg' ((- _ : Int)) := Int.reduceNeg
+dsimproc [scalar_tac_simps] Int.reduceToNat' (Int.toNat _) := Int.reduceToNat
 
 /- Small trick to prevent `simp_all` from simplifying an assumption `h1 : P v` when we have
   `h0 : ∀ x, P x` in the context: we replace the forall quantifiers with our own definition
@@ -203,26 +230,11 @@ elab "scalar_tac_saturate" config:Parser.Tactic.optConfig : tactic => do
   let config ← elabConfig config
   let _ ← scalarTacSaturateForward config.toSaturateConfig none none (postprocessThm := none) (fun _ _ => pure ())
 
-/-- Core builtin simprocs we want active in `scalar_tac`'s preprocessing. They can't be added to
-    the `C` set via `attribute` under the module system (builtin simprocs aren't
-    `meta`-marked), so we inject them by name here. Pairs are `(name, post)`: `reduceIte` is a pre
-    (`↓`) simproc, the numeric reducers are post. -/
-private meta def scalarTacBuiltinSimprocs : List (Name × Bool) :=
-  [(``reduceIte, false),
-   (``Nat.reduceLeDiff, true), (``Nat.reduceLT, true), (``Nat.reduceGT, true), (``Nat.reduceBEq, true), (``Nat.reduceBNe, true),
-   (``Nat.reducePow, true), (``Nat.reduceAdd, true), (``Nat.reduceSub, true), (``Nat.reduceMul, true), (``Nat.reduceDiv, true), (``Nat.reduceMod, true),
-   (``Int.reduceLT, true), (``Int.reduceLE, true), (``Int.reduceGT, true), (``Int.reduceGE, true), (``Int.reduceEq, true), (``Int.reduceNe, true), (``Int.reduceBEq, true), (``Int.reduceBNe, true),
-   (``Int.reducePow, true), (``Int.reduceAdd, true), (``Int.reduceSub, true), (``Int.reduceMul, true), (``Int.reduceDiv, true), (``Int.reduceMod, true),
-   (``Int.reduceNegSucc, true), (``Int.reduceNeg, true), (``Int.reduceToNat, true)]
-
 meta def getSimpArgs : CoreM Simp.SimpArgs := do
-  let mut scalarTacProcs ← scalarTacSimprocExt.getSimprocs
-  for (n, post) in scalarTacBuiltinSimprocs do
-    scalarTacProcs ← scalarTacProcs.add n post
   pure {
     simprocs := #[
         ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs,
-        scalarTacProcs
+        ← scalarTacSimprocExt.getSimprocs
     ],
     simpThms := #[
       ← SimpBoolProp.simpBoolPropSimpExt.getTheorems,
