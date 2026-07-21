@@ -1,23 +1,24 @@
 module
 public import AeneasMeta.Utils
 public import AeneasMeta.Simp
+public meta import AeneasMeta.Simp.Simp
 public section
 
 namespace Aeneas.Split
 
 open Lean Meta Elab Tactic
 
-def mkExists (var body : Expr) : MetaM Expr := do
+meta def mkExists (var body : Expr) : MetaM Expr := do
   mkAppM ``Exists #[← mkLambdaFVars #[var] body]
 
-def mkExistsSeq (vars : List Expr) (body : Expr) : MetaM Expr := do
+meta def mkExistsSeq (vars : List Expr) (body : Expr) : MetaM Expr := do
   match vars with
   | [] => pure body
   | v :: vars =>
     let body ← mkExistsSeq vars body
     mkExists v body
 
-def mkOrSeq (disjs : List Expr) : MetaM Expr := do
+meta def mkOrSeq (disjs : List Expr) : MetaM Expr := do
   match disjs with
   | [] => pure (mkConst ``False)
   | [x] => pure x
@@ -53,7 +54,7 @@ List.casesOn : {α : Type u} →
 
 We return the fvars introduced for the variables appearing af
 -/
-def esplitCasesOn (isMatcher : Bool) (e : Expr) (casesOnName : Name) (h : Name) (vars : List (List (Option Name))) :
+meta def esplitCasesOn (isMatcher : Bool) (e : Expr) (casesOnName : Name) (h : Name) (vars : List (List (Option Name))) :
   TacticM (List (Array FVarId × FVarId × MVarId)) :=
   withTraceNode `Utils (fun _ => do pure m!"esplitCasesOn") do
   Tactic.focus do
@@ -236,7 +237,7 @@ We return the fvars introduced for:
 - the variables introduced when decomposing the inductive
 - the equality introduced in the context
 -/
-def esplit (e : Expr) (h : Name) (vars : List (List (Option Name))) :
+meta def esplit (e : Expr) (h : Name) (vars : List (List (Option Name))) :
   TacticM (List (Array FVarId × FVarId × MVarId)) :=
   Tactic.focus do
   withTraceNode `Utils (fun _ => do pure m!"esplit") do

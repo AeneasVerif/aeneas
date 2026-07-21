@@ -13,7 +13,7 @@ Tactics to introduce let-bindings while refolding/rewriting the context.
 
 open Lean Elab Term Meta Tactic
 
-def opaque_refold (h x : Name) (e : Expr) : TacticM Unit :=
+meta def opaque_refold (h x : Name) (e : Expr) : TacticM Unit :=
   withMainContext do
   /- Retrieve the list of propositions in the context -/
   let ctx ← getLCtx
@@ -64,7 +64,7 @@ example (x y z : Nat) (h0 : x + y = z) (h1 : x + y = 3) (_ : z ≤ 4) : x + y + 
   olet hb: (b : Nat) := a + z
   omega
 
-def transparent_refold (x : Name) (e : Expr) : TacticM Unit :=
+meta def transparent_refold (x : Name) (e : Expr) : TacticM Unit :=
   withMainContext do withTransparency .reducible do
   /- Retrieve the list of propositions in the context -/
   let ctx ← getLCtx

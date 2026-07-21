@@ -1,6 +1,6 @@
 module
-public import Lean
-public import AeneasMeta.Utils
+public meta import Lean
+public meta import AeneasMeta.Utils
 public section
 
 namespace Aeneas
@@ -19,13 +19,13 @@ syntax:max term noWs ".#" noWs num : term
 open Lean Meta Elab Term
 
 -- Auxliary function for computing the number of elements in a tuple (`Prod`) type.
-def getArity (type : Expr) : Nat :=
+meta def getArity (type : Expr) : Nat :=
   match type with
   | .app (.app (.const ``Prod _) _) as => getArity as + 1
   | _ => 1 -- It is not product
 
 -- Given a `tuple` of size `n`, construct a term that for accessing the `i`-th element
-def mkGetIdx (tuple : Expr) (n : Nat) (i : Nat) : MetaM Expr := do
+meta def mkGetIdx (tuple : Expr) (n : Nat) (i : Nat) : MetaM Expr := do
   match i with
   | 0 => mkAppM ``Prod.fst #[tuple]
   | i+1 =>
