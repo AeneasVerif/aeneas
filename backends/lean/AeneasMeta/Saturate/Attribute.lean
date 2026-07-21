@@ -1,6 +1,6 @@
 module
 public import Lean
-public import AeneasMeta.Utils
+public meta import AeneasMeta.Utils
 public import AeneasMeta.Extensions
 public section
 
@@ -154,7 +154,7 @@ structure SaturateAttribute where
   ext : Extension
   deriving Inhabited
 
-def makeAttribute (mapName attributeName : Name) (elabAttribute : Syntax → MetaM (Option Syntax)) :
+meta def makeAttribute (mapName attributeName : Name) (elabAttribute : Syntax → MetaM (Option Syntax)) :
   IO SaturateAttribute := do
   let ext ← mkExtension mapName
   let attrImpl : AttributeImpl := {
