@@ -1,4 +1,7 @@
-import Lean
+module
+public import Lean
+public meta import Lean.Elab.Declaration
+public section
 
 namespace Aeneas.Std.ScalarElab
 
@@ -49,7 +52,7 @@ with either "U8", or "U16", etc.
 
 -/
 
-def isSubstring (sub str : List Char) : Option (List Char) :=
+meta def isSubstring (sub str : List Char) : Option (List Char) :=
   match sub, str with
   | [], _ => some str
   | hd :: sub, hd' :: str =>
@@ -57,7 +60,7 @@ def isSubstring (sub str : List Char) : Option (List Char) :=
     else none
   | _, _ => none
 
-partial def elabString (ty : String) (str : String) : String :=
+meta partial def elabString (ty : String) (str : String) : String :=
   let rec replace (str : List Char) : List Char :=
     match isSubstring "'S".toList str with
     | some str => ty.toList ++ replace str
@@ -67,7 +70,7 @@ partial def elabString (ty : String) (str : String) : String :=
       | c :: str => c :: replace str
   String.ofList (replace str.toList)
 
-def elabSpecialName (ty : String) (n : Name) : CommandElabM Name := do
+meta def elabSpecialName (ty : String) (n : Name) : CommandElabM Name := do
   trace[ScalarElabSubst] "elabSpecialName: {n}"
   match n with
   | .anonymous => pure .anonymous
@@ -77,7 +80,7 @@ def elabSpecialName (ty : String) (n : Name) : CommandElabM Name := do
     pure (.str (← elabSpecialName ty pre) str)
   | .num pre i => pure (.num (← elabSpecialName ty pre) i)
 
-partial def elabSpecial (ty : String) (bw size : Syntax) (stx : Syntax) : CommandElabM Syntax := do
+meta partial def elabSpecial (ty : String) (bw size : Syntax) (stx : Syntax) : CommandElabM Syntax := do
   trace[ScalarElabSubst] "elabSpecial: stx: {stx}"
   match stx with
   | .missing => pure .missing
@@ -101,7 +104,7 @@ partial def elabSpecial (ty : String) (bw size : Syntax) (stx : Syntax) : Comman
     let val ← elabSpecialName ty val
     pure (.ident info rawVal val preresolved)
 
-def elabCommand (tysBws : List (String × Syntax × Syntax)) (cmd : TSyntax `command) : CommandElabM Unit := do
+meta def elabCommand (tysBws : List (String × Syntax × Syntax)) (cmd : TSyntax `command) : CommandElabM Unit := do
   let elabOne (tyBw : String × Syntax × Syntax) : CommandElabM Unit := do
     let (ty, bw, size) := tyBw
     ---let cmd0 := cmd
@@ -118,7 +121,7 @@ scoped syntax "%Size" : term
 scoped syntax (name := uscalarCommand) "uscalar" command : command
 
 @[command_elab uscalarCommand]
-def uscalarCommandImpl : CommandElab := fun stx => do
+meta def uscalarCommandImpl : CommandElab := fun stx => do
   trace[ScalarElab] "uscalar_command (stx): {stx}"
   match stx with
   | `(uscalarCommand| uscalar $cmd) =>
@@ -130,7 +133,7 @@ def uscalarCommandImpl : CommandElab := fun stx => do
 scoped syntax (name := uscalarNoUsizeCommand) "uscalar_no_usize" command : command
 
 @[command_elab uscalarNoUsizeCommand]
-def uscalarNoUsizeCommandImpl : CommandElab := fun stx => do
+meta def uscalarNoUsizeCommandImpl : CommandElab := fun stx => do
   trace[ScalarElab] "uscalar_no_usize_command (stx): {stx}"
   match stx with
   | `(uscalarNoUsizeCommand| uscalar_no_usize $cmd) =>
@@ -141,7 +144,7 @@ def uscalarNoUsizeCommandImpl : CommandElab := fun stx => do
 scoped syntax (name := iscalarCommand) "iscalar" command : command
 
 @[command_elab iscalarCommand]
-def iscalarCommandImpl : CommandElab := fun stx => do
+meta def iscalarCommandImpl : CommandElab := fun stx => do
   trace[ScalarElab] "iscalar_command (stx): {stx}"
   match stx with
   | `(iscalarCommand| iscalar $cmd) =>
@@ -153,7 +156,7 @@ def iscalarCommandImpl : CommandElab := fun stx => do
 scoped syntax (name := iscalarNoIsizeCommand) "iscalar_no_isize" command : command
 
 @[command_elab iscalarNoIsizeCommand]
-def iscalarNoIsizeNoIsizeCommandImpl : CommandElab := fun stx => do
+meta def iscalarNoIsizeNoIsizeCommandImpl : CommandElab := fun stx => do
   trace[ScalarElab] "iscalar_no_usize_command (stx): {stx}"
   match stx with
   | `(iscalarNoIsizeCommand| iscalar_no_isize $cmd) =>
@@ -164,7 +167,7 @@ def iscalarNoIsizeNoIsizeCommandImpl : CommandElab := fun stx => do
 scoped syntax (name := scalarCommand) "scalar" command : command
 
 @[command_elab scalarCommand]
-def scalarCommandImpl : CommandElab := fun stx => do
+meta def scalarCommandImpl : CommandElab := fun stx => do
   trace[ScalarElab] "scalar_command (stx): {stx}"
   match stx with
   | `(scalarCommand| scalar $cmd) =>

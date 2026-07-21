@@ -1,4 +1,6 @@
-import AeneasMeta.Saturate.Attribute
+module
+public import AeneasMeta.Saturate.Attribute
+public section
 
 open Lean Lean.Meta Lean.Elab Lean.Elab.Term Lean.Elab.Tactic
 

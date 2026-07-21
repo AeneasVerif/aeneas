@@ -1,5 +1,7 @@
-import Aeneas.Tactic.Step.Step
-import AeneasMeta.Split
+module
+public import Aeneas.Tactic.Step.Step
+public import AeneasMeta.Split
+public section
 open Lean Meta Elab Tactic
 
 namespace Aeneas

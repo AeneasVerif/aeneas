@@ -3,10 +3,12 @@ Copyright (c) 2025 Aeneas contributors
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Son Ho
 -/
-import Lean
-import Aeneas.Tactic.Solver.ScalarTac
-import Aeneas.Tactic.Step.Init
-import Aeneas.Tactic.Solver.Grind.Init
+module
+public import Lean
+public import Aeneas.Tactic.Solver.ScalarTac
+public import Aeneas.Tactic.Step.Init
+public import Aeneas.Tactic.Solver.Grind.Init
+public section
 
 /-!
 # Grind State Threading for `step` / `step*`

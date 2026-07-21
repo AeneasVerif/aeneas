@@ -1,12 +1,14 @@
-import Aeneas.Std.Core.Cmp
-import Aeneas.Std.Primitives
-import Aeneas.Std.Range
-import Aeneas.Std.Scalar.Core
-import Aeneas.Std.Scalar.Notations
-import Aeneas.Std.Scalar.CloneCopy
-import Aeneas.Std.Scalar.EqOrd
-import Aeneas.Std.Scalar.CheckedOps
-import Aeneas.Std.Core.Core
+module
+public import Aeneas.Std.Core.Cmp
+public import Aeneas.Std.Primitives
+public import Aeneas.Std.Range
+public import Aeneas.Std.Scalar.Core
+public import Aeneas.Std.Scalar.Notations
+public import Aeneas.Std.Scalar.CloneCopy
+public import Aeneas.Std.Scalar.EqOrd
+public import Aeneas.Std.Scalar.CheckedOps
+public import Aeneas.Std.Core.Core
+public section
 
 namespace Aeneas.Std
 

@@ -1,5 +1,7 @@
-import Aeneas.Std.Core.Iter
-import Aeneas.Std.Vec
+module
+public import Aeneas.Std.Core.Iter
+public import Aeneas.Std.Vec
+public section
 
 namespace Aeneas.Std
 

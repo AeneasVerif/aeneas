@@ -2,11 +2,13 @@
 Copyright (c) 2025. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Lean
-import Aeneas.Std.Primitives
-import Aeneas.Std.WP
-import AeneasMeta.Simp.Simp
-import AeneasMeta.Utils
+module
+public import Lean
+public import Aeneas.Std.Primitives
+public import Aeneas.Std.WP
+public import AeneasMeta.Simp.Simp
+public import AeneasMeta.Utils
+public section
 
 /-!
 # The `#decompose` command

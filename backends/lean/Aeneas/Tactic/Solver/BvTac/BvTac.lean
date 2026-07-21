@@ -1,6 +1,8 @@
-import Aeneas.Tactic.Conv.Bvify
-import Aeneas.Std
-import Aeneas.Tactic.Solver.BvTac.Init
+module
+public import Aeneas.Tactic.Conv.Bvify
+public import Aeneas.Std
+public import Aeneas.Tactic.Solver.BvTac.Init
+public section
 
 namespace Aeneas.BvTac
 

@@ -1,11 +1,12 @@
-import Aeneas.Data.Array
-import Aeneas.Data.BitVec
-import Aeneas.Data.Byte
-import Aeneas.Data.Discriminant
-import Aeneas.Data.Fin
-import Aeneas.Data.Int
-import Aeneas.Data.List
-import Aeneas.Data.Nat
-import Aeneas.Data.Range
-import Aeneas.Data.Tuples
-import Aeneas.Data.Vector
+module
+public import Aeneas.Data.Array
+public import Aeneas.Data.BitVec
+public import Aeneas.Data.Byte
+public import Aeneas.Data.Discriminant
+public import Aeneas.Data.Fin
+public import Aeneas.Data.Int
+public import Aeneas.Data.List
+public import Aeneas.Data.Nat
+public import Aeneas.Data.Range
+public import Aeneas.Data.Tuples
+public import Aeneas.Data.Vector

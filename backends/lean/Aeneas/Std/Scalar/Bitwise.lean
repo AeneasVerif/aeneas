@@ -1,7 +1,9 @@
-import Aeneas.Std.Scalar.Core
-import Aeneas.Std.Scalar.Elab
-import Aeneas.Tactic.Solver.ScalarTac
-import Mathlib.Data.BitVec
+module
+public import Aeneas.Std.Scalar.Core
+public import Aeneas.Std.Scalar.Elab
+public import Aeneas.Tactic.Solver.ScalarTac
+public import Mathlib.Data.BitVec
+public section
 
 namespace Aeneas.Std
 

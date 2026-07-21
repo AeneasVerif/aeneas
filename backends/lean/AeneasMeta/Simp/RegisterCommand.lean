@@ -1,6 +1,8 @@
 /- Adapated from `Lean/Meta/Tactic/Simp/RegisterCommand.lean` -/
-import Lean.Meta.Tactic.Simp.Simproc
-import Lean.Meta.Tactic.Simp.Attr
+module
+public meta import Lean.Meta.Tactic.Simp.Simproc
+public import Lean.Meta.Tactic.Simp.Attr
+public section
 
 namespace Aeneas.Simp
 

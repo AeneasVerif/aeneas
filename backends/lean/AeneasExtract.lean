@@ -1,4 +1,6 @@
-import Aeneas
+module
+public import Aeneas
+public section
 
 open Lean Aeneas Extract
 

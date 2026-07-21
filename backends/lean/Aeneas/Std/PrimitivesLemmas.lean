@@ -1,6 +1,8 @@
-import Aeneas.Std.Primitives
-import Aeneas.Tactic.Step.Init
-import Aeneas.Tactic.Conv.Bvify.Init
+module
+public import Aeneas.Std.Primitives
+public import Aeneas.Tactic.Step.Init
+public import Aeneas.Tactic.Conv.Bvify.Init
+public section
 
 namespace Aeneas.Std
 

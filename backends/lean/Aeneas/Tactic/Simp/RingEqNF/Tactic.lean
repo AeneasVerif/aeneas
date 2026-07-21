@@ -2,8 +2,10 @@
 Copyright (c) 2024 Aeneas contributors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Lean
-import Mathlib.Tactic.Ring.RingNF
+module
+public import Lean
+public import Mathlib.Tactic.Ring.RingNF
+public section
 
 /-!
 # `ring_eq_nf` Tactic
@@ -56,7 +58,7 @@ theorem eq_cancel_right_iff {α : Type*} [AddRightCancelMonoid α]
 
 /-! ## Expression parsing utilities -/
 
-private def exprToNat? (e : Expr) : Option Nat :=
+private meta def exprToNat? (e : Expr) : Option Nat :=
   let e := e.consumeMData
   if let some n := e.nat? then some n
   else if let some n := e.rawNatLit? then some n
@@ -64,7 +66,7 @@ private def exprToNat? (e : Expr) : Option Nat :=
 
 /-- Flatten a left-associated addition tree into a list of additive terms
   (e.g., `((x₀ + x₁) + ... xₙ)` to `[x₀, x₁, ..., xₙ]` -/
-private partial def flattenAdd (e : Expr) : List Expr :=
+private meta partial def flattenAdd (e : Expr) : List Expr :=
   match e.consumeMData.getAppFnArgs with
   | (``HAdd.hAdd, #[_, _, _, _, lhs, rhs]) =>
     flattenAdd lhs ++ [rhs]
@@ -98,7 +100,7 @@ private structure CMonomial where
     `ring_nf` normalises products so that the numeric coefficient is on the left
     (`n * base`). We also handle the `base * n` case for robustness. When no
     numeric factor is found, the coefficient defaults to 1. -/
-private def parseTerm (e : Expr) : CMonomial :=
+private meta def parseTerm (e : Expr) : CMonomial :=
   let e := e.consumeMData
   match e.getAppFnArgs with
   | (``HMul.hMul, #[_, _, _, _, a, b]) =>
@@ -115,7 +117,7 @@ private def parseTerm (e : Expr) : CMonomial :=
 
 /-- Flatten a `ring_nf`-normalized expression (a left-associated sum) and parse each
     summand into a `CMonomial`. -/
-private def parseNormExpr (e : Expr) : List CMonomial :=
+private meta def parseNormExpr (e : Expr) : List CMonomial :=
   (flattenAdd e).map parseTerm
 
 /-! ## Cancellation algorithm -/
@@ -123,7 +125,7 @@ private def parseNormExpr (e : Expr) : List CMonomial :=
 /-- Check whether two `CMonomial`s have the same base expression. Uses structural
     equality (`==`), which is safe here because both expressions come from the same
     `ring_nf` pass and are therefore already in a canonical form. -/
-private def sameBase (a b : CMonomial) : MetaM Bool :=
+private meta def sameBase (a b : CMonomial) : MetaM Bool :=
   match a.base, b.base with
   | none,   none   => return true
   | some x, some y => return x == y
@@ -143,7 +145,7 @@ private structure CancelResult where
     The algorithm iterates over each LHS monomial and searches for a matching base in
     the (shrinking) RHS remainder. When a match is found, the minimum coefficient is
     moved to `common` and any excess stays in the respective remainder. -/
-private def cancelCommon (lhs rhs : List CMonomial) : MetaM CancelResult := do
+private meta def cancelCommon (lhs rhs : List CMonomial) : MetaM CancelResult := do
   let mut lhsRem : List CMonomial := []
   let mut rhsRem := rhs
   let mut common : List CMonomial := []
@@ -177,15 +179,15 @@ private def cancelCommon (lhs rhs : List CMonomial) : MetaM CancelResult := do
 
 /-! ## Expression construction -/
 
-private def mkOfNat (ty : Expr) (n : Nat) : MetaM Expr :=
+private meta def mkOfNat (ty : Expr) (n : Nat) : MetaM Expr :=
   mkAppOptM ``OfNat.ofNat #[some ty, some (mkRawNatLit n), none]
 
-private def getCoeffExpr (ty : Expr) (m : CMonomial) : MetaM Expr :=
+private meta def getCoeffExpr (ty : Expr) (m : CMonomial) : MetaM Expr :=
   match m.coeffExpr with
   | some e => return e
   | none => mkOfNat ty m.coeff
 
-private def buildMonomialExpr (ty : Expr) (m : CMonomial) : MetaM Expr := do
+private meta def buildMonomialExpr (ty : Expr) (m : CMonomial) : MetaM Expr := do
   match m.base with
   | none => getCoeffExpr ty m
   | some base =>
@@ -194,7 +196,7 @@ private def buildMonomialExpr (ty : Expr) (m : CMonomial) : MetaM Expr := do
       let coeffExpr ← getCoeffExpr ty m
       mkAppM ``HMul.hMul #[base, coeffExpr]
 
-private def buildSumExpr (ty : Expr) (terms : List CMonomial) : MetaM Expr := do
+private meta def buildSumExpr (ty : Expr) (terms : List CMonomial) : MetaM Expr := do
   match terms with
   | [] => mkOfNat ty 0
   | [t] => buildMonomialExpr ty t
@@ -212,7 +214,7 @@ private def buildSumExpr (ty : Expr) (terms : List CMonomial) : MetaM Expr := do
     directly would require `AtomM.run` + `Mathlib.Tactic.Ring.proveEq`. We go through
     `runTactic` for simplicity; the cost is negligible because `ring` is fast on the
     small rearrangement goals produced by `cancelEq`. -/
-private def proveByRing (goalType : Expr) : MetaM (Option Expr) := do
+private meta def proveByRing (goalType : Expr) : MetaM (Option Expr) := do
   let mvar ← mkFreshExprMVar (some goalType)
   let (goals, _) ← Elab.runTactic mvar.mvarId!
     (← `(tactic| ring)) {} {} -- `ring` (not `ring_nf`): we need to *prove* the equality, not just normalize it
@@ -223,7 +225,7 @@ private def proveByRing (goalType : Expr) : MetaM (Option Expr) := do
 
 /-- Core cancellation logic, operating on a `ring_nf`-normalized equality expression.
     Returns a `Simp.Result` rewriting the equality to a simpler one. -/
-private def cancelEq (e : Expr) : MetaM Simp.Result := do
+private meta def cancelEq (e : Expr) : MetaM Simp.Result := do
   let some (ty, lhs, rhs) := e.eq?
     | return { expr := e }
   -- We assume the lhs and rhs have already been normalized

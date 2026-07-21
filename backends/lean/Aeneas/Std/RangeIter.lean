@@ -1,8 +1,10 @@
 /- Step specs for Range/StepBy iterators on Usize.
    These use WP.spec_bind directly to avoid importing the step tactic. -/
-import Aeneas.Std.Core.Iter
-import Aeneas.Std.Scalar
-import Aeneas.Std.SliceIter
+module
+public import Aeneas.Std.Core.Iter
+public import Aeneas.Std.Scalar
+public import Aeneas.Std.SliceIter
+public section
 
 namespace Aeneas.Std
 

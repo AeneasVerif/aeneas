@@ -1,6 +1,8 @@
-import Lean
-import AeneasMeta.Utils
-import AeneasMeta.Extensions
+module
+public import Lean
+public import AeneasMeta.Utils
+public import AeneasMeta.Extensions
+public section
 
 open Lean Lean.Meta Lean.Elab Lean.Elab.Term Lean.Elab.Tactic
 

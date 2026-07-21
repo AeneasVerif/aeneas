@@ -1,8 +1,10 @@
-import Lean
-import AeneasMeta.Utils
+module
+public import Lean
+public import AeneasMeta.Utils
 
-import Lean.Meta.DiscrTree
-import Lean.Meta.Tactic.Simp
+public import Lean.Meta.DiscrTree
+public import Lean.Meta.Tactic.Simp
+public section
 
 namespace Aeneas
 

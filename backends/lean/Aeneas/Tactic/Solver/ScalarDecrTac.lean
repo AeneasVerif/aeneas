@@ -1,8 +1,10 @@
 /- Some utilities to prove termination -/
-import Lean
-import Mathlib.Tactic.Core
-import AeneasMeta.Utils
-import Aeneas.Tactic.Solver.ScalarTac
+module
+public import Lean
+public import Mathlib.Tactic.Core
+public import AeneasMeta.Utils
+public import Aeneas.Tactic.Solver.ScalarTac
+public section
 
 namespace Aeneas
 

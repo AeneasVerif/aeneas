@@ -1,13 +1,15 @@
-import Lean
-import Aeneas.Tactic.Solver.ScalarTac
-import Aeneas.Tactic.Step.Init
-import Aeneas.Tactic.Step.GrindState
-import Aeneas.Std
-import Aeneas.Tactic.Simp.SimpLemmas
-import AeneasMeta.Async
-import Aeneas.Tactic.Solver.Grind.Init
-import Aeneas.Tactic.Step.InferPost
-import Aeneas.Tactic.Step.Step
+module
+public import Lean
+public import Aeneas.Tactic.Solver.ScalarTac
+public import Aeneas.Tactic.Step.Init
+public import Aeneas.Tactic.Step.GrindState
+public import Aeneas.Std
+public import Aeneas.Tactic.Simp.SimpLemmas
+public import AeneasMeta.Async
+public import Aeneas.Tactic.Solver.Grind.Init
+public import Aeneas.Tactic.Step.InferPost
+public import Aeneas.Tactic.Step.Step
+public section
 
 /- Tactic for unfolding partial_fixpoint definitions with fixpoint_induct.
    Normally you would use the normal unfold tactic, but that requires the proof to be terminating.

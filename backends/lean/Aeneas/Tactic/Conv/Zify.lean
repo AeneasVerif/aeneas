@@ -1,5 +1,7 @@
-import Aeneas.Tactic.Solver.Arith.Lemmas
-import Aeneas.Std.Scalar.Core
+module
+public import Aeneas.Tactic.Solver.Arith.Lemmas
+public import Aeneas.Std.Scalar.Core
+public section
 open Aeneas Arith Std
 
 attribute [zify_simps] ZMod.val_natCast ZMod.val_intCast ZMod.castInt_val_sub ZMod.natCast_val

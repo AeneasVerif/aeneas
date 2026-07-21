@@ -1,4 +1,6 @@
-import Aeneas.Tactic.Solver.ScalarTac.ScalarTac
+module
+public import Aeneas.Tactic.Solver.ScalarTac.ScalarTac
+public section
 
 namespace Aeneas.ScalarTac
 

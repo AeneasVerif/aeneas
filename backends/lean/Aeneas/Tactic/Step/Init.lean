@@ -1,10 +1,12 @@
-import Lean
-import AeneasMeta.Utils
-import Aeneas.Std.Primitives
-import AeneasMeta.Extensions
-import Aeneas.Tactic.Step.Trace
-import Aeneas.Std.WP
-import AeneasMeta.OptionConfig
+module
+public import Lean
+public import AeneasMeta.Utils
+public import Aeneas.Std.Primitives
+public import AeneasMeta.Extensions
+public import Aeneas.Tactic.Step.Trace
+public import Aeneas.Std.WP
+public import AeneasMeta.OptionConfig
+public section
 
 namespace Aeneas
 

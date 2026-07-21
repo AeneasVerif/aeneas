@@ -1,4 +1,6 @@
-import Aeneas.Tactic.Solver.BvTac.BvTac
+module
+public import Aeneas.Tactic.Solver.BvTac.BvTac
+public section
 
 /-!
 # Simprocs for scalar bitwise operations

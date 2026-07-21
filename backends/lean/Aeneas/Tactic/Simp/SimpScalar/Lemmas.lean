@@ -1,5 +1,7 @@
-import Aeneas.Tactic.Simp.SimpScalar.SimpScalar
-import Aeneas.Tactic.Simproc.ReduceNat
+module
+public import Aeneas.Tactic.Simp.SimpScalar.SimpScalar
+public import Aeneas.Tactic.Simproc.ReduceNat
+public section
 
 section
 

@@ -1,4 +1,6 @@
-import Aeneas.Tactic.Step.Step
+module
+public import Aeneas.Tactic.Step.Step
+public section
 
 /-!
 # Step Array Spec

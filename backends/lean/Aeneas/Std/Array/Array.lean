@@ -1,8 +1,10 @@
 /- Arrays -/
-import Aeneas.Data.List
-import Aeneas.Tactic.Step.Init
-import Aeneas.Std.Array.Core
-import Aeneas.Std.Core.Default
+module
+public import Aeneas.Data.List
+public import Aeneas.Tactic.Step.Init
+public import Aeneas.Std.Array.Core
+public import Aeneas.Std.Core.Default
+public section
 
 namespace Aeneas.Std
 

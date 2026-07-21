@@ -1,14 +1,16 @@
-import Lean
-import Lean.Meta.Tactic.Simp
-import Init.Data.List.Basic
-import Mathlib.Tactic.Ring.RingNF
-import AeneasMeta.Utils
-import Aeneas.Tactic.Solver.ScalarTac.Core
-import Aeneas.Tactic.Solver.ScalarTac.Init
-import AeneasMeta.Saturate
-import Aeneas.Tactic.Simp.SimpScalar.Init
-import Aeneas.Tactic.Simp.SimpBoolProp.SimpBoolProp
-import AeneasMeta.Simp
+module
+public import Lean
+public import Lean.Meta.Tactic.Simp
+public import Init.Data.List.Basic
+public import Mathlib.Tactic.Ring.RingNF
+public import AeneasMeta.Utils
+public import Aeneas.Tactic.Solver.ScalarTac.Core
+public import Aeneas.Tactic.Solver.ScalarTac.Init
+public import AeneasMeta.Saturate
+public import Aeneas.Tactic.Simp.SimpScalar.Init
+public import Aeneas.Tactic.Simp.SimpBoolProp.SimpBoolProp
+public import AeneasMeta.Simp
+public section
 
 namespace Aeneas
 

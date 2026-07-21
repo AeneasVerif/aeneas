@@ -1,12 +1,14 @@
-import Mathlib.Tactic.Basic
-import Mathlib.Tactic.Attr.Register
-import Mathlib.Data.Int.Cast.Basic
-import Mathlib.Order.Basic
-import Aeneas.Tactic.Conv.ZModify.Init
-import Aeneas.Tactic.Solver.Arith.Lemmas
-import Aeneas.Std.Scalar.Core
-import Aeneas.Tactic.Solver.ScalarTac.CondSimpTac
-import Aeneas.Tactic.Simp.SimpBoolProp.SimpBoolProp
+module
+public import Mathlib.Tactic.Basic
+public import Mathlib.Tactic.Attr.Register
+public import Mathlib.Data.Int.Cast.Basic
+public import Mathlib.Order.Basic
+public import Aeneas.Tactic.Conv.ZModify.Init
+public import Aeneas.Tactic.Solver.Arith.Lemmas
+public import Aeneas.Std.Scalar.Core
+public import Aeneas.Tactic.Solver.ScalarTac.CondSimpTac
+public import Aeneas.Tactic.Simp.SimpBoolProp.SimpBoolProp
+public section
 
 /-!
 # ZMod-ify tactic

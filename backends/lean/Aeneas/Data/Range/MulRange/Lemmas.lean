@@ -1,8 +1,10 @@
-import Mathlib.Data.Nat.Log
-import Mathlib.Algebra.Order.Ring.Canonical
-import Mathlib.Tactic.Ring.RingNF
-import Aeneas.Data.Range.MulRange.Basic
-import Aeneas.Data.Range.DivRange.Lemmas
+module
+public import Mathlib.Data.Nat.Log
+public import Mathlib.Algebra.Order.Ring.Canonical
+public import Mathlib.Tactic.Ring.RingNF
+public import Aeneas.Data.Range.MulRange.Basic
+public import Aeneas.Data.Range.DivRange.Lemmas
+public section
 
 namespace Aeneas
 

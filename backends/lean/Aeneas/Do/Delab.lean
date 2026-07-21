@@ -1,6 +1,8 @@
-import Lean
-import Aeneas.Do.Elab
-import Aeneas.Std.Delab
+module
+public import Lean
+public import Aeneas.Do.Elab
+public import Aeneas.Std.Delab
+public section
 
 /-! # Delaborator for new `do` pattern matching logic -/
 

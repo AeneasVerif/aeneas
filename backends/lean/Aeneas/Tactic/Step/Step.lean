@@ -1,14 +1,16 @@
-import Lean
-import Aeneas.Tactic.Solver.ScalarTac
-import Aeneas.Tactic.Step.Init
-import Aeneas.Tactic.Step.GrindState
-import Aeneas.Std
-import Aeneas.Tactic.Simp.SimpLemmas
-import AeneasMeta.Async
-import Aeneas.Tactic.Solver.Grind.Init
-import Aeneas.Tactic.Step.InferPost
-import Aeneas.Std.WP
-import Aeneas.Do
+module
+public import Lean
+public import Aeneas.Tactic.Solver.ScalarTac
+public import Aeneas.Tactic.Step.Init
+public import Aeneas.Tactic.Step.GrindState
+public import Aeneas.Std
+public import Aeneas.Tactic.Simp.SimpLemmas
+public import AeneasMeta.Async
+public import Aeneas.Tactic.Solver.Grind.Init
+public import Aeneas.Tactic.Step.InferPost
+public import Aeneas.Std.WP
+public import Aeneas.Do
+public section
 
 namespace Aeneas
 

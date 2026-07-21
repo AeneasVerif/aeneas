@@ -1,6 +1,8 @@
 /- Arrays/Slices -/
-import Aeneas.Std.Scalar.Core
-import Aeneas.Data.List.List
+module
+public import Aeneas.Std.Scalar.Core
+public import Aeneas.Data.List.List
+public section
 
 namespace Aeneas.Std
 

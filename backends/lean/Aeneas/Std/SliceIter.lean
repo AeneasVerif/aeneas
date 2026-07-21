@@ -1,7 +1,9 @@
 /- Arrays/Slices -/
-import Aeneas.Std.Slice
-import Aeneas.Std.Array.Array
-import Aeneas.Std.Core.Iter
+module
+public import Aeneas.Std.Slice
+public import Aeneas.Std.Array.Array
+public import Aeneas.Std.Core.Iter
+public section
 
 namespace Aeneas.Std
 

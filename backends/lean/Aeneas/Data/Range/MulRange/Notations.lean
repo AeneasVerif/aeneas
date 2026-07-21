@@ -1,5 +1,7 @@
-import Aeneas.Data.Range.Notations
-import Aeneas.Data.Range.MulRange.Basic
+module
+public import Aeneas.Data.Range.Notations
+public import Aeneas.Data.Range.MulRange.Basic
+public section
 
 namespace Aeneas.Notations
 

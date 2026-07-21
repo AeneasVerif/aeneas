@@ -1,13 +1,15 @@
-import Lean
-import Lean.Meta.Tactic.Simp
-import Aeneas.Std.Core.Core
-import Aeneas.Tactic.Step.Init
-import Aeneas.Tactic.Solver.ScalarTac.ScalarTac
-import Aeneas.Tactic.Conv.Bvify.Init
-import Aeneas.Data.Nat
-import Aeneas.Data.Int
-import Aeneas.Tactic.Simp.SimpLists.Init
-import AeneasMeta.BvEnumToBitVec
+module
+public import Lean
+public import Lean.Meta.Tactic.Simp
+public import Aeneas.Std.Core.Core
+public import Aeneas.Tactic.Step.Init
+public import Aeneas.Tactic.Solver.ScalarTac.ScalarTac
+public import Aeneas.Tactic.Conv.Bvify.Init
+public import Aeneas.Data.Nat
+public import Aeneas.Data.Int
+public import Aeneas.Tactic.Simp.SimpLists.Init
+public import AeneasMeta.BvEnumToBitVec
+public section
 
 namespace Aeneas
 

@@ -1,6 +1,8 @@
-import Mathlib.Data.Nat.Basic
-import Mathlib.Algebra.Group.Basic
-import AeneasMeta.Utils
+module
+public import Mathlib.Data.Nat.Basic
+public import Mathlib.Algebra.Group.Basic
+public import AeneasMeta.Utils
+public section
 
 namespace Aeneas
 

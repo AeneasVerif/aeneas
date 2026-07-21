@@ -1,11 +1,13 @@
 /- Arrays/Slices -/
-import Aeneas.Data.List
-import Aeneas.Std.Array.Core
-import Aeneas.Std.Range
-import Aeneas.Std.Core.Ops
-import Aeneas.Std.RawPtr
-import Aeneas.Tactic.Simp.SimpScalar.SimpScalar
-import Aeneas.Std.SliceDef
+module
+public import Aeneas.Data.List
+public import Aeneas.Std.Array.Core
+public import Aeneas.Std.Range
+public import Aeneas.Std.Core.Ops
+public import Aeneas.Std.RawPtr
+public import Aeneas.Tactic.Simp.SimpScalar.SimpScalar
+public import Aeneas.Std.SliceDef
+public section
 
 namespace Aeneas.Std
 

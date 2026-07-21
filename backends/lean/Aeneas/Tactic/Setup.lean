@@ -1,5 +1,7 @@
-import Aeneas.Std.Slice
-import Aeneas.Data.Vector
+module
+public import Aeneas.Std.Slice
+public import Aeneas.Data.Vector
+public section
 
 namespace Aeneas
 

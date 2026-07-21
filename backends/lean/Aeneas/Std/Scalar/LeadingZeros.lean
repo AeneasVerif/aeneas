@@ -1,6 +1,8 @@
-import Aeneas.Std.Scalar.Core
-import Aeneas.Std.Scalar.Elab
-import Mathlib.Data.Nat.Log
+module
+public import Aeneas.Std.Scalar.Core
+public import Aeneas.Std.Scalar.Elab
+public import Mathlib.Data.Nat.Log
+public section
 
 namespace Aeneas.Std
 

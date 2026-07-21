@@ -1,5 +1,7 @@
-import Aeneas.Std.Scalar.Core
-import Aeneas.Std.SliceDef
+module
+public import Aeneas.Std.Scalar.Core
+public import Aeneas.Std.SliceDef
+public section
 
 namespace Aeneas.Std
 

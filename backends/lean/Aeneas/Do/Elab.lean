@@ -1,6 +1,8 @@
-import Lean
-import Mathlib.Control.Monad.Cont
-import Aeneas.Std
+module
+public import Lean
+public import Mathlib.Control.Monad.Cont
+public import Aeneas.Std
+public section
 
 /-! # New `do` Elaborator
 

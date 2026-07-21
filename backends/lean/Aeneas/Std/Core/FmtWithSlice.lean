@@ -1,6 +1,8 @@
-import Aeneas.Std.Slice
-import Aeneas.Std.Core.Fmt
-import Aeneas.Std.String
+module
+public import Aeneas.Std.Slice
+public import Aeneas.Std.Core.Fmt
+public import Aeneas.Std.String
+public section
 
 namespace Aeneas.Std
 

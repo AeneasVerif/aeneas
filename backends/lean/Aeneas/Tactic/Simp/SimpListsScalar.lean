@@ -1,5 +1,7 @@
-import Aeneas.Tactic.Simp.SimpLists
-import Aeneas.Tactic.Simp.SimpScalar
+module
+public import Aeneas.Tactic.Simp.SimpLists
+public import Aeneas.Tactic.Simp.SimpScalar
+public section
 
 namespace Aeneas.SimpListsScalar
 

@@ -1,10 +1,12 @@
-import Aeneas.Std.Core.Fmt
-import Aeneas.Std.Array.Array
-import Aeneas.Std.Slice
-import Aeneas.Std.Range
-import Aeneas.Data.List.List
-import Aeneas.Std.Core.Convert
-import Aeneas.Std.Core.Cmp
+module
+public import Aeneas.Std.Core.Fmt
+public import Aeneas.Std.Array.Array
+public import Aeneas.Std.Slice
+public import Aeneas.Std.Range
+public import Aeneas.Data.List.List
+public import Aeneas.Std.Core.Convert
+public import Aeneas.Std.Core.Cmp
+public section
 
 /-! Array definitions which mention slices -/
 

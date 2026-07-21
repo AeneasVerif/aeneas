@@ -1,9 +1,11 @@
-import Lean
-import Lean.Meta.Tactic.Simp
-import Mathlib.Tactic.Linarith
-import Aeneas.Std.Scalar.Core
-import Aeneas.Std.Scalar.Ops.Add -- we need to use addition in some of the tests below
-import Aeneas.Tactic.Solver.ScalarTac
+module
+public import Lean
+public import Lean.Meta.Tactic.Simp
+public import Mathlib.Tactic.Linarith
+public import Aeneas.Std.Scalar.Core
+public import Aeneas.Std.Scalar.Ops.Add -- we need to use addition in some of the tests below
+public import Aeneas.Tactic.Solver.ScalarTac
+public section
 
 namespace Aeneas
 

@@ -1,4 +1,6 @@
-import Aeneas.Std.Core.Core
+module
+public import Aeneas.Std.Core.Core
+public section
 
 namespace Aeneas.Std
 

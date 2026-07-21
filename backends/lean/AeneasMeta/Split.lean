@@ -1,5 +1,7 @@
-import AeneasMeta.Utils
-import AeneasMeta.Simp
+module
+public import AeneasMeta.Utils
+public import AeneasMeta.Simp
+public section
 
 namespace Aeneas.Split
 

@@ -1,8 +1,10 @@
-import Lean
-import Aeneas.Std.Primitives
-import Aeneas.Tactic.Step.Init
-import Aeneas.Tactic.Elab.TraitDefault.Init
-import Aeneas.Std.Alloc
+module
+public import Lean
+public import Aeneas.Std.Primitives
+public import Aeneas.Tactic.Step.Init
+public import Aeneas.Tactic.Elab.TraitDefault.Init
+public import Aeneas.Std.Alloc
+public section
 
 namespace Aeneas
 

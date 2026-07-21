@@ -1,6 +1,8 @@
-import Lean
-import Aeneas.Tactic.Simp.SimpLists.Init
-import Aeneas.Tactic.Simp.SimpScalar.Init
+module
+public import Lean
+public import Aeneas.Tactic.Simp.SimpLists.Init
+public import Aeneas.Tactic.Simp.SimpScalar.Init
+public section
 
 abbrev Byte := BitVec 8
 abbrev Byte.ofNat := BitVec.ofNat 8

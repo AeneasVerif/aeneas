@@ -1,7 +1,9 @@
-import Lean
-import Aeneas.Std.Global
-import Aeneas.Extract
-import AeneasMeta.BvEnumToBitVec
+module
+public import Lean
+public import Aeneas.Std.Global
+public import Aeneas.Extract
+public import AeneasMeta.BvEnumToBitVec
+public section
 
 namespace Aeneas
 

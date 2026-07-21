@@ -1,4 +1,6 @@
-import AeneasMeta.Utils
+module
+public import AeneasMeta.Utils
+public section
 
 namespace Aeneas.Async
 

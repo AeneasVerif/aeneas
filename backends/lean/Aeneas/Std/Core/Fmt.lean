@@ -1,7 +1,9 @@
-import Aeneas.Std.Core.Core
-import Aeneas.Std.Core.Result
-import Aeneas.Std.Array.Array
-import Aeneas.Std.StringDef
+module
+public import Aeneas.Std.Core.Core
+public import Aeneas.Std.Core.Result
+public import Aeneas.Std.Array.Array
+public import Aeneas.Std.StringDef
+public section
 
 namespace Aeneas.Std
 

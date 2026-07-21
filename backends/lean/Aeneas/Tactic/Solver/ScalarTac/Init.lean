@@ -1,5 +1,7 @@
-import AeneasMeta.Saturate.Attribute
-import AeneasMeta.Simp
+module
+public import AeneasMeta.Saturate.Attribute
+public import AeneasMeta.Simp
+public section
 open Lean Meta Meta.Simp
 
 namespace Aeneas.ScalarTac

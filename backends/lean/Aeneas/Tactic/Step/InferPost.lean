@@ -1,9 +1,11 @@
-import Lean
-import AeneasMeta.Utils
-import AeneasMeta.Simp.Simp
-import Mathlib.Tactic.Simproc.ExistsAndEq
-import Aeneas.Tactic.Solver.Grind.Init
-import Aeneas.Tactic.Step.Init
+module
+public import Lean
+public import AeneasMeta.Utils
+public import AeneasMeta.Simp.Simp
+public import Mathlib.Tactic.Simproc.ExistsAndEq
+public import Aeneas.Tactic.Solver.Grind.Init
+public import Aeneas.Tactic.Step.Init
+public section
 
 namespace Aeneas
 

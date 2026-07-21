@@ -1,11 +1,13 @@
 /- Vectors -/
-import Lean
-import Lean.Meta.Tactic.Simp
-import Init.Data.List.Basic
-import Aeneas.Std.Scalar
-import Aeneas.Std.Slice
-import Aeneas.Tactic.Solver.ScalarTac
-import Aeneas.Tactic.Step.Init
+module
+public import Lean
+public import Lean.Meta.Tactic.Simp
+public import Init.Data.List.Basic
+public import Aeneas.Std.Scalar
+public import Aeneas.Std.Slice
+public import Aeneas.Tactic.Solver.ScalarTac
+public import Aeneas.Tactic.Step.Init
+public section
 
 namespace Aeneas
 

@@ -1,5 +1,7 @@
-import Lean
-import AeneasMeta.Utils
+module
+public import Lean
+public import AeneasMeta.Utils
+public section
 
 namespace Aeneas
 

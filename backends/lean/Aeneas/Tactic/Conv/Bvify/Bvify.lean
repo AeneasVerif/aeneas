@@ -1,11 +1,13 @@
-import Aeneas.Tactic.Conv.Bvify.Init
-import Aeneas.Tactic.Solver.Arith.Lemmas
-import Aeneas.Std.Scalar
-import Aeneas.Std.PrimitivesLemmas
-import Aeneas.Std.Scalar.CoreConvertNum -- we need this for the tests
-import Aeneas.Tactic.Solver.ScalarTac.CondSimpTac
-import Aeneas.Tactic.Simp.SimpBoolProp.SimpBoolProp
-import Aeneas.Tactic.Solver.Grind.Init
+module
+public import Aeneas.Tactic.Conv.Bvify.Init
+public import Aeneas.Tactic.Solver.Arith.Lemmas
+public import Aeneas.Std.Scalar
+public import Aeneas.Std.PrimitivesLemmas
+public import Aeneas.Std.Scalar.CoreConvertNum -- we need this for the tests
+public import Aeneas.Tactic.Solver.ScalarTac.CondSimpTac
+public import Aeneas.Tactic.Simp.SimpBoolProp.SimpBoolProp
+public import Aeneas.Tactic.Solver.Grind.Init
+public section
 
 /-!
 # `bvify` tactic

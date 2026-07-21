@@ -1,8 +1,10 @@
-import Mathlib.Data.Nat.Bitwise
-import Aeneas.Tactic.Simp.SimpScalar.Init
-import Aeneas.Tactic.Solver.ScalarTac.CondSimpTac
-import Aeneas.Tactic.Simp.SimpLists.Init -- We need to mark some lemmas as `simp_lists_safe`
-import Aeneas.Tactic.Simp.SimpBoolProp.SimpBoolProp
+module
+public import Mathlib.Data.Nat.Bitwise
+public import Aeneas.Tactic.Simp.SimpScalar.Init
+public import Aeneas.Tactic.Solver.ScalarTac.CondSimpTac
+public import Aeneas.Tactic.Simp.SimpLists.Init -- We need to mark some lemmas as `simp_lists_safe`
+public import Aeneas.Tactic.Simp.SimpBoolProp.SimpBoolProp
+public section
 
 /-!
 # `simp_scalar` tactic

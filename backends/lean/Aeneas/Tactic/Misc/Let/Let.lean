@@ -1,5 +1,7 @@
-import AeneasMeta.Utils
-import Mathlib.Tactic.DefEqTransformations
+module
+public import AeneasMeta.Utils
+public import Mathlib.Tactic.DefEqTransformations
+public section
 
 namespace Aeneas.Let
 

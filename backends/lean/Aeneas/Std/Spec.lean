@@ -1,5 +1,7 @@
-import Lean
-import AeneasMeta.Extensions
+module
+public import Lean
+public import AeneasMeta.Extensions
+public section
 -- import Aeneas.Tactic.Step.Init
 open Lean Elab Term Meta
 

@@ -1,6 +1,8 @@
-import AeneasMeta.Async.Async
-import AeneasMeta.Simp
-import Lean
+module
+public import AeneasMeta.Async.Async
+public import AeneasMeta.Simp
+public import Lean
+public section
 
 /-! We're putting the tactics used in the tests in a file different from the tests themselves because
   running tactics from the current file waits on compilation of all definitions.

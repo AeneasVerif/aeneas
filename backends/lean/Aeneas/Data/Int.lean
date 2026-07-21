@@ -1,4 +1,6 @@
-import Lean
+module
+public import Lean
+public section
 
 /-- Small helper
 

@@ -1,8 +1,10 @@
-import Aeneas.Std.Primitives
-import Aeneas.Std.Delab
-import Std.Do
-import Aeneas.Tactic.Solver.Grind.Init
-import Aeneas.Std.Spec
+module
+public import Aeneas.Std.Primitives
+public import Aeneas.Std.Delab
+public import Std.Do
+public import Aeneas.Tactic.Solver.Grind.Init
+public import Aeneas.Std.Spec
+public section
 
 namespace Aeneas.Std.WP
 

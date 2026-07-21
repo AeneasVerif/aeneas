@@ -1,8 +1,10 @@
-import Aeneas.Extract
-import Aeneas.Std.Primitives
-import Aeneas.Std.WP
-import Aeneas.Tactic.Step.Init
-import Aeneas.Tactic.Elab.TraitDefault.Init
+module
+public import Aeneas.Extract
+public import Aeneas.Std.Primitives
+public import Aeneas.Std.WP
+public import Aeneas.Tactic.Step.Init
+public import Aeneas.Tactic.Elab.TraitDefault.Init
+public section
 
 namespace Aeneas.Std
 
