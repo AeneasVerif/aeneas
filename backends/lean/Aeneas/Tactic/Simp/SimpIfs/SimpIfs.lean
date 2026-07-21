@@ -1,7 +1,7 @@
 module
-public import Aeneas.Tactic.Simp.SimpIfs.Init
+public meta import Aeneas.Tactic.Simp.SimpIfs.Init
 public import Aeneas.Tactic.Simp.SimpBoolProp.SimpBoolProp
-public import Aeneas.Tactic.Solver.ScalarTac.CondSimpTac
+public meta import Aeneas.Tactic.Solver.ScalarTac.CondSimpTac
 public section
 
 /-!
@@ -14,7 +14,7 @@ namespace Aeneas.SimpIfs
 
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 
-def simpIfsTac (config : ScalarTac.CondSimpTacConfig)
+meta def simpIfsTac (config : ScalarTac.CondSimpTacConfig)
   (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := pure #[]
   let hypsArgs : ScalarTac.CondSimpArgs := {
@@ -63,7 +63,7 @@ theorem dite_true {α} (c : Prop) [Decidable c] (h : c) (t : c → α) (e : ¬c 
 theorem dite_fase {α} (c : Prop) [Decidable c] (h : ¬ c) (t : c → α) (e : ¬c → α) :
   dite c t e = e h := by simp [h]
 
-def parseSimpIfs :
+meta def parseSimpIfs :
 TSyntax ``simp_ifs -> TacticM (ScalarTac.CondSimpTacConfig × ScalarTac.CondSimpPartialArgs × Utils.Location)
 | `(tactic| simp_ifs $config $[[$args,*]]? $[$loc:location]?) => do
   let config ← ScalarTac.elabCondSimpTacConfig config

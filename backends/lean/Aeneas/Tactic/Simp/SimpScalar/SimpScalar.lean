@@ -1,8 +1,8 @@
 module
 public import Mathlib.Data.Nat.Bitwise
 public import Aeneas.Tactic.Simp.SimpScalar.Init
-public import Aeneas.Tactic.Solver.ScalarTac.CondSimpTac
-public import Aeneas.Tactic.Simp.SimpLists.Init -- We need to mark some lemmas as `simp_lists_safe`
+public meta import Aeneas.Tactic.Solver.ScalarTac.CondSimpTac
+public meta import Aeneas.Tactic.Simp.SimpLists.Init -- We need to mark some lemmas as `simp_lists_safe`
 public import Aeneas.Tactic.Simp.SimpBoolProp.SimpBoolProp
 public section
 
@@ -194,7 +194,7 @@ theorem BitVec.toNat_lt_two_pow {w} (x : BitVec w) (i : ℕ) (h : w ≤ i) : x.t
 
 attribute [simp_scalar_safe] BitVec.setWidth_eq BitVec.ofNat_eq_ofNat
 
-def simpScalarTac (config : ScalarTac.CondSimpTacConfig)
+meta def simpScalarTac (config : ScalarTac.CondSimpTacConfig)
   (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := pure #[]
   let hypsArgs : ScalarTac.CondSimpArgs := {
@@ -251,7 +251,7 @@ theorem Nat.lt_pow (a i : ℕ) (h0 : 1 < a) (h1 : 1 < i) : a < a ^ i := ...
 -/
 syntax (name := simp_scalar) "simp_scalar" Parser.Tactic.optConfig ("[" (term<|>"*"),* "]")? (location)? : tactic
 
-def parseSimpScalar :
+meta def parseSimpScalar :
 TSyntax ``simp_scalar -> TacticM (ScalarTac.CondSimpTacConfig × ScalarTac.CondSimpPartialArgs × Utils.Location)
 | `(tactic| simp_scalar $config $[[$args,*]]? $[$loc:location]?) => do
   let config ← ScalarTac.elabCondSimpTacConfig config

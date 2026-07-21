@@ -136,7 +136,7 @@ dsimproc [scalar_tac_simps] Int.reduceToNat' (Int.toNat _) := Int.reduceToNat
 /- Small trick to prevent `simp_all` from simplifying an assumption `h1 : P v` when we have
   `h0 : ∀ x, P x` in the context: we replace the forall quantifiers with our own definition
   of `forall`. -/
-def forall' {α : Type u} (p : α → Prop) : Prop := ∀ (x: α), p x
+@[expose] def forall' {α : Type u} (p : α → Prop) : Prop := ∀ (x: α), p x
 
 theorem forall_eq_forall' {α : Type u} (p : α → Prop) : (∀ (x: α), p x) = forall' p := by
   simp [forall']

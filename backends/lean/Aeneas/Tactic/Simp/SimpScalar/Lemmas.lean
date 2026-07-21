@@ -1,6 +1,7 @@
 module
 public import Aeneas.Tactic.Simp.SimpScalar.SimpScalar
 public import Aeneas.Tactic.Simproc.ReduceNat
+import all Init.Data.Nat.Power2.Basic
 public section
 
 section
