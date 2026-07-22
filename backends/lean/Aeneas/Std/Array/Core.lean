@@ -35,7 +35,7 @@ theorem List.mapM_clone_eq {T : Type u} {clone : T → Result T} {l : List T}
   apply hind
   apply h
 
-def List.clone (clone : α → Result α) (l : List α) : Result ({ l' : List α // l'.length = l.length}) :=
+@[expose] def List.clone (clone : α → Result α) (l : List α) : Result ({ l' : List α // l'.length = l.length}) :=
   match h :List.mapM clone l with
   | ok v => ok ⟨ v, by have := List.mapM_Result_length h; scalar_tac ⟩
   | fail e => fail e

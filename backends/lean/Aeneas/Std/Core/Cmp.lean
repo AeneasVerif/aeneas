@@ -130,7 +130,7 @@ def core.cmp.Ord.max_body {Self : Type} (lt : Self → Self → Result Bool)
   (x y : Self) : Result Self := do
   if ← lt x y then ok y else ok x
 
-def core.cmp.Ord.min_body {Self : Type} (lt : Self → Self → Result Bool)
+@[expose] def core.cmp.Ord.min_body {Self : Type} (lt : Self → Self → Result Bool)
   (x y : Self) : Result Self := do
   if ← lt x y then ok x else ok y
 
@@ -159,7 +159,7 @@ def core.cmp.Ord.max.default {Self : Type} (lt : Self → Self → Result Bool)
   (x y : Self) : Result Self :=
   core.cmp.Ord.max_body lt x y
 
-def core.cmp.Ord.min.default {Self : Type} (lt : Self → Self → Result Bool)
+@[expose] def core.cmp.Ord.min.default {Self : Type} (lt : Self → Self → Result Bool)
   (x y : Self) : Result Self :=
   core.cmp.Ord.min_body lt x y
 

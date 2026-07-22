@@ -31,12 +31,12 @@ namespace SRRange
 universe u v
 
 /-- The number of elements in the range. -/
-@[simp] def size (r : SRRange) : Nat := (r.stop - r.start + r.step - 1) / r.step
+@[simp, expose] def size (r : SRRange) : Nat := (r.stop - r.start + r.step - 1) / r.step
 
 /-- A bound of the number of elements in the range -/
-@[simp] def sizeBound (r : SRRange) : Nat := r.stop - r.start
+@[simp, expose] def sizeBound (r : SRRange) : Nat := r.stop - r.start
 
-@[inline] protected def forIn' [Monad m] (range : SRRange) (init : β)
+@[inline, expose] protected def forIn' [Monad m] (range : SRRange) (init : β)
     (f : (i : Nat) → i ∈ range → β → m (ForInStep β)) : m β :=
   let rec @[specialize] loop (maxSteps : Nat) (b : β) (i : Nat)
       (hs : (i - range.start) % range.step = 0) (hl : range.start ≤ i := by omega) : m β := do
@@ -61,7 +61,7 @@ instance {m} [Monad m] : ForIn' m SRRange Nat inferInstance where
 -- No separate `ForIn` instance is required because it can be derived from `ForIn'`.
 
 /-- A convenient utility for the proofs, which uses well-founded recursion -/
-def foldWhile' {α : Type u} (r : SRRange) (f : α → (a : Nat) → (a ∈ r) → α) (i : Nat) (init : α)
+@[expose] def foldWhile' {α : Type u} (r : SRRange) (f : α → (a : Nat) → (a ∈ r) → α) (i : Nat) (init : α)
   (hi : r.start ≤ i ∧ (i - r.start) % r.step = 0) : α :=
   if h: i < r.stop then
     foldWhile' r f (i + r.step)
@@ -76,7 +76,7 @@ termination_by r.stop - i
 decreasing_by have:= r.step_pos; omega
 
 /-- A convenient utility for the proofs, which uses well-founded recursion -/
-def foldWhile {α : Type u} (max step : Nat) (hStep : 0 < step) (f : α → Nat → α) (i : Nat) (init : α) : α :=
+@[expose] def foldWhile {α : Type u} (max step : Nat) (hStep : 0 < step) (f : α → Nat → α) (i : Nat) (init : α) : α :=
   if i < max then foldWhile max step hStep f (i + step) (f init i)
   else init
 termination_by max - i

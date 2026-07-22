@@ -511,10 +511,10 @@ theorem IScalar.bound_suffices (ty : IScalarTy) (x : Int) :
   have := cMax_le_rMax ty
   omega
 
-def UScalar.ofNatCore {ty : UScalarTy} (x : Nat) (h : x < 2^ty.numBits) : UScalar ty :=
+@[expose] def UScalar.ofNatCore {ty : UScalarTy} (x : Nat) (h : x < 2^ty.numBits) : UScalar ty :=
   { bv := ⟨ x, h ⟩ }
 
-def IScalar.ofIntCore {ty : IScalarTy} (x : Int) (_ : -2^(ty.numBits-1) ≤ x ∧ x < 2^(ty.numBits - 1)) : IScalar ty :=
+@[expose] def IScalar.ofIntCore {ty : IScalarTy} (x : Int) (_ : -2^(ty.numBits-1) ≤ x ∧ x < 2^(ty.numBits - 1)) : IScalar ty :=
   -- TODO: we should leave `x` unchanged if it is positive, so that expressions like `(1#isize).val` can reduce to `1`
   let x' := (x % 2^ty.numBits).toNat
   have h : x' < 2^ty.numBits := by
