@@ -13,6 +13,8 @@ import Aeneas
 open Aeneas
 open Std Result WP Data Coinductive Effect Lean.Order
 
+-- This file shows how to build coinductive predicates over ITrees.
+
 def Coin : Effect := {
    I := Unit
    O := fun _ => Bool
@@ -124,58 +126,53 @@ theorem coinSpec_ret {α p} (x : α) : coinSpec p (ITree.ret x) ↔ p x := by
     assumption
 
 #register_spec_info {
-    spec_name := ``coinSpec
-    arity := 3
-    program_index := 2
-    post_index := 1
-    mk_spec_mono := ``coinSpec_mono
-    mk_spec_mono_skip_args := 2
-    mk_spec_bind := ``coinSpec_bind
-    mk_spec_bind_skip_args := 4
-    uncurry_elim_tactics := #[
-      ``qimp_coinSpec_unit,
-      ``Std.WP.qimp_unit,
-      ``qimp_coinSpec_exists,
-      ``Std.WP.qimp_exists,
-      ``forall_unit, ``true_imp_iff
-    ]
-    qimp_elim_tactics := #[
-      ``qimp_coinSpec_iff,
-      ``Std.WP.qimp_iff,
-      ``Std.WP.imp_and_iff, ``Std.uncurry_apply_pair,
-      ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
-      ``Std.WP.imp_exists_iff,
-      ``forall_unit, ``true_imp_iff
-    ]
-    to_mvcgen := .none
-    liftings := #[
-      { from_statement := ``Std.WP.spec
-        conversion_thm := ``spec_coinSpec
-        conversion_thm_inferred_args := 3 }
-    ]
-  }
+  spec_name := ``coinSpec
+  arity := 3
+  program_index := 2
+  post_index := 1
+  mk_spec_mono := ``coinSpec_mono
+  mk_spec_mono_skip_args := 2
+  mk_spec_bind := ``coinSpec_bind
+  mk_spec_bind_skip_args := 4
+  uncurry_elim_tactics := #[
+    ``qimp_coinSpec_unit,
+    ``Std.WP.qimp_unit,
+    ``qimp_coinSpec_exists,
+    ``Std.WP.qimp_exists,
+    ``forall_unit, ``true_imp_iff
+  ]
+  qimp_elim_tactics := #[
+    ``qimp_coinSpec_iff,
+    ``Std.WP.qimp_iff,
+    ``Std.WP.imp_and_iff, ``Std.uncurry_apply_pair,
+    ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
+    ``Std.WP.imp_exists_iff,
+    ``forall_unit, ``true_imp_iff
+  ]
+  to_mvcgen := .none
+  liftings := #[
+    { from_statement := ``Std.WP.spec
+      conversion_thm := ``spec_coinSpec
+      conversion_thm_inferred_args := 3 }
+  ]
+}
 
-  instance : Monad ITreeC := instMonadITree
-  instance {T} : Lean.Order.PartialOrder (ITreeC T) := instPartialOrderCoIndOfInhabitedPUnit _
-  noncomputable instance {T} : Lean.Order.CCPO (ITreeC T) := instCCPOCoIndOfInhabitedPUnit _
-  instance : MonoBind ITreeC := instMonoBindITree
+instance : Monad ITreeC := instMonadITree
+instance {T} : Lean.Order.PartialOrder (ITreeC T) := instPartialOrderCoIndOfInhabitedPUnit _
+noncomputable instance {T} : Lean.Order.CCPO (ITreeC T) := instCCPOCoIndOfInhabitedPUnit _
+instance : MonoBind ITreeC := instMonoBindITree
 
+-- Currently, step does not support other monads.
 
-  def res : Result Nat := .ok 5
-  def itreec : ITreeC Nat := res
-
-
-  -- set_option trace.Step true
-
-  -- theorem test : coinSpec (fun z => z.val == 6)
-  --   (do let x ← 1#i32 + 2#i32
-  --       let y ← x + x
-  --       ITree.vis () fun (b : Bool) =>
-  --       if b then ITree.ret y else ITree.ret 6#i32)  := by
-  --   step
-  --   step
-  --   apply coinSpec.vis
-  --   intros b
-  --   cases b
-  --   · simp [*]
-  --   · simp [*]
+-- theorem test : coinSpec (fun z => z.val == 6)
+--   (do let x ← 1#i32 + 2#i32
+--       let y ← x + x
+--       ITree.vis () fun (b : Bool) =>
+--       if b then ITree.ret y else ITree.ret 6#i32)  := by
+--   step
+--   step
+--   apply coinSpec.vis
+--   intros b
+--   cases b
+--   · simp [*]
+--   · simp [*]
