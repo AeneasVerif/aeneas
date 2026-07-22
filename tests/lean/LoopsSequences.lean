@@ -74,8 +74,8 @@ def key_expand_loop0.body
   (state_base : Array Std.U8 8#usize) (key : Key)
   (state_work : Array Std.U8 8#usize) (sample_buffer : Array Std.U8 1#usize)
   (i : Std.I32) :
-  Result (ControlFlow (Key × (Array Std.U8 8#usize) × (Array Std.U8 1#usize)
-    × Std.I32) (Key × (Array Std.U8 8#usize) × (Array Std.U8 1#usize)))
+  Result (ControlFlow (Key × (Array Std.U8 8#usize) × (Array Std.U8 1#usize) ×
+    Std.I32) (Key × (Array Std.U8 8#usize) × (Array Std.U8 1#usize)))
   := do
   if i < 32#i32
   then
@@ -116,8 +116,8 @@ def key_expand_loop1.body
   (state_base : Array Std.U8 8#usize) (key : Key)
   (state_work : Array Std.U8 8#usize) (sample_buffer : Array Std.U8 1#usize)
   (i : Std.I32) :
-  Result (ControlFlow (Key × (Array Std.U8 8#usize) × (Array Std.U8 1#usize)
-    × Std.I32) (Key × (Array Std.U8 8#usize)))
+  Result (ControlFlow (Key × (Array Std.U8 8#usize) × (Array Std.U8 1#usize) ×
+    Std.I32) (Key × (Array Std.U8 8#usize)))
   := do
   if i < 32#i32
   then

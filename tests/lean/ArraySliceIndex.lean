@@ -61,8 +61,7 @@ def slice_use_index_mut_range_from
     Visibility: public -/
 def slice_use_get_mut_range_from
   (s : Slice Std.U32) :
-  Result ((Option (Slice Std.U32)) × (Option (Slice Std.U32) → Slice
-    Std.U32))
+  Result ((Option (Slice Std.U32)) × (Option (Slice Std.U32) → Slice Std.U32))
   := do
   core.slice.Slice.get_mut (core.slice.index.SliceIndexRangeFromUsizeSlice
     Std.U32) s { start := 0#usize }

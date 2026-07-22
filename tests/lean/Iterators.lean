@@ -101,8 +101,8 @@ def slice_iter_mut_while_loop0.body
   (back : core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16)
   (b : Bool) :
   Result (ControlFlow ((core.slice.iter.IterMut Std.U16) ×
-    (core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16) ×
-    Bool) (core.slice.iter.IterMut Std.U16))
+    (core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16) × Bool)
+    (core.slice.iter.IterMut Std.U16))
   := do
   let (o, it1, next_back) ← core.slice.iter.IteratorIterMut.next it
   match o with
@@ -205,8 +205,8 @@ def slice_iter_mut_while_early_return_loop0.body
   (back : core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16)
   (b : Bool) :
   Result (ControlFlow ((core.slice.iter.IterMut Std.U16) ×
-    (core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16) ×
-    Bool) (core.slice.iter.IterMut Std.U16))
+    (core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16) × Bool)
+    (core.slice.iter.IterMut Std.U16))
   := do
   let (o, it1, next_back) ← core.slice.iter.IteratorIterMut.next it
   match o with
@@ -270,8 +270,8 @@ def slice_iter_mut_while_early_return_two_bools_loop0.body
   (back : core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16)
   (b0 : Bool) (b1 : Bool) :
   Result (ControlFlow ((core.slice.iter.IterMut Std.U16) ×
-    (core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16) ×
-    Bool × Bool) (core.slice.iter.IterMut Std.U16))
+    (core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16) × Bool
+    × Bool) (core.slice.iter.IterMut Std.U16))
   := do
   let (o, it1, next_back) ← core.slice.iter.IteratorIterMut.next it
   match o with

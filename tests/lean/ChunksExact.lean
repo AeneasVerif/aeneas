@@ -118,8 +118,7 @@ def test_chunks_exact_remainder_2 : Result Unit := do
     Source: 'tests/src/chunks_exact.rs', lines 61:0-73:1
     Visibility: public -/
 def test_chunks_exact_size_1 : Result Unit := do
-  let s ←
-    lift (Array.to_slice (Array.make 3#usize [ 10#u32, 20#u32, 30#u32 ]))
+  let s ← lift (Array.to_slice (Array.make 3#usize [ 10#u32, 20#u32, 30#u32 ]))
   let it ← core.slice.Slice.chunks_exact s 1#usize
   let (o, it1) ← core.slice.iter.IteratorChunksExact.next it
   let c1 ← core.option.Option.unwrap o

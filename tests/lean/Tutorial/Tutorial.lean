@@ -175,9 +175,7 @@ def Usize.Insts.TutorialCounter : Counter Std.Usize := {
     Source: 'src/lib.rs', lines 117:0-119:1
     Visibility: public -/
 def use_counter
-  {T : Type} (CounterInst : Counter T) (cnt : T) :
-  Result (Std.Usize × T)
-  := do
+  {T : Type} (CounterInst : Counter T) (cnt : T) : Result (Std.Usize × T) := do
   CounterInst.incr cnt
 
 /-- [tutorial::list_nth_mut1]: loop 0:
@@ -211,8 +209,7 @@ def list_nth_mut1
     Source: 'src/lib.rs', lines 135:4-137:5
     Visibility: public -/
 @[rust_loop]
-def list_tail_loop
-  {T : Type} (l : CList T) : Result (CList T → CList T) := do
+def list_tail_loop {T : Type} (l : CList T) : Result (CList T → CList T) := do
   match l with
   | CList.CCons t tl =>
     let back ← list_tail_loop tl

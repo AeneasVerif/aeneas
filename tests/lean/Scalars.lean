@@ -215,8 +215,7 @@ def test_is_multiple_of_zero_divisor : Result Unit := do
     Source: 'tests/src/scalars.rs', lines 158:0-160:1
     Visibility: public -/
 def test_try_from_usize_u32_ok : Result Unit := do
-  let r ←
-    core.convert.num.ptr_try_from_impls.TryFromU32Usize.try_from 5#usize
+  let r ← core.convert.num.ptr_try_from_impls.TryFromU32Usize.try_from 5#usize
   let b ← core.result.Result.is_ok r
   massert b
 

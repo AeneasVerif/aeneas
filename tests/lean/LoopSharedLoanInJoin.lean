@@ -69,8 +69,8 @@ def State.extract_loop.body
   (a : Array Std.U64 4#usize) (i1 : Std.U32) (result : Slice Std.U64)
   (lane_index : Std.Usize) :
   Result (ControlFlow ((core.ops.range.Range Std.Usize) × (Array Std.U64
-    4#usize) × Std.U32 × (Slice Std.U64) × Std.Usize) ((Array Std.U64
-    4#usize) × Std.U32 × (Slice Std.U64)))
+    4#usize) × Std.U32 × (Slice Std.U64) × Std.Usize) ((Array Std.U64 4#usize)
+    × Std.U32 × (Slice Std.U64)))
   := do
   let (o, iter1) ←
     core.iter.range.IteratorRange.next core.iter.range.StepUsize iter
