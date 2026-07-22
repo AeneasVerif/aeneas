@@ -307,7 +307,7 @@ instance SubtypeLawfulBEq [BEq α] (p : α → Prop) [LawfulBEq α] : LawfulBEq 
 
 /- A helper function that converts failure to none and success to some
    TODO: move up to Core module? -/
-def Option.ofResult {a : Type u} (x : Result a) :
+@[expose] def Option.ofResult {a : Type u} (x : Result a) :
   Option a :=
   match x with
   | ok x => some x

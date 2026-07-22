@@ -593,20 +593,20 @@ theorem IScalar.check_bounds_eq_inBounds (ty : IScalarTy) (x : Int) :
   . apply (check_bounds_imp_inBounds h)
   . simp_all
 
-def UScalar.tryMkOpt (ty : UScalarTy) (x : Nat) : Option (UScalar ty) :=
+@[expose] def UScalar.tryMkOpt (ty : UScalarTy) (x : Nat) : Option (UScalar ty) :=
   if h:UScalar.check_bounds ty x then
     some (UScalar.ofNatCore x (UScalar.check_bounds_imp_inBounds h))
   else none
 
-def UScalar.tryMk (ty : UScalarTy) (x : Nat) : Result (UScalar ty) :=
+@[expose] def UScalar.tryMk (ty : UScalarTy) (x : Nat) : Result (UScalar ty) :=
   Result.ofOption (tryMkOpt ty x) integerOverflow
 
-def IScalar.tryMkOpt (ty : IScalarTy) (x : Int) : Option (IScalar ty) :=
+@[expose] def IScalar.tryMkOpt (ty : IScalarTy) (x : Int) : Option (IScalar ty) :=
   if h:IScalar.check_bounds ty x then
     some (IScalar.ofIntCore x (IScalar.check_bounds_imp_inBounds h))
   else none
 
-def IScalar.tryMk (ty : IScalarTy) (x : Int) : Result (IScalar ty) :=
+@[expose] def IScalar.tryMk (ty : IScalarTy) (x : Int) : Result (IScalar ty) :=
   Result.ofOption (tryMkOpt ty x) integerOverflow
 
 theorem UScalar.tryMkOpt_eq (ty : UScalarTy) (x : Nat) :

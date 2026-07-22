@@ -37,40 +37,40 @@ macro:max x:term:max noWs "#isize" : term => `(Isize.ofInt $x (by first | decide
 
 -- Some pretty printing (for the goals)
 @[app_unexpander U8.ofNat]
-def unexpU8ofNat : Unexpander | `($_ $n $_) => `($n#u8) | _ => throw ()
+meta def unexpU8ofNat : Unexpander | `($_ $n $_) => `($n#u8) | _ => throw ()
 
 @[app_unexpander U16.ofNat]
-def unexpU16ofNat : Unexpander | `($_ $n $_) => `($n#u16) | _ => throw ()
+meta def unexpU16ofNat : Unexpander | `($_ $n $_) => `($n#u16) | _ => throw ()
 
 @[app_unexpander U32.ofNat]
-def unexpU32ofNat : Unexpander | `($_ $n $_) => `($n#u32) | _ => throw ()
+meta def unexpU32ofNat : Unexpander | `($_ $n $_) => `($n#u32) | _ => throw ()
 
 @[app_unexpander U64.ofNat]
-def unexpU64ofNat : Unexpander | `($_ $n $_) => `($n#u64) | _ => throw ()
+meta def unexpU64ofNat : Unexpander | `($_ $n $_) => `($n#u64) | _ => throw ()
 
 @[app_unexpander U128.ofNat]
-def unexpU128ofNat : Unexpander | `($_ $n $_) => `($n#u128) | _ => throw ()
+meta def unexpU128ofNat : Unexpander | `($_ $n $_) => `($n#u128) | _ => throw ()
 
 @[app_unexpander Usize.ofNat]
-def unexpUsizeofNat : Unexpander | `($_ $n $_) => `($n#usize) | _ => throw ()
+meta def unexpUsizeofNat : Unexpander | `($_ $n $_) => `($n#usize) | _ => throw ()
 
 @[app_unexpander I8.ofInt]
-def unexpI8ofInt : Unexpander | `($_ $n $_) => `($n#i8) | _ => throw ()
+meta def unexpI8ofInt : Unexpander | `($_ $n $_) => `($n#i8) | _ => throw ()
 
 @[app_unexpander I16.ofInt]
-def unexpI16ofInt : Unexpander | `($_ $n $_) => `($n#i16) | _ => throw ()
+meta def unexpI16ofInt : Unexpander | `($_ $n $_) => `($n#i16) | _ => throw ()
 
 @[app_unexpander I32.ofInt]
-def unexpI32ofInt : Unexpander | `($_ $n $_) => `($n#i32) | _ => throw ()
+meta def unexpI32ofInt : Unexpander | `($_ $n $_) => `($n#i32) | _ => throw ()
 
 @[app_unexpander I64.ofInt]
-def unexpI64ofInt : Unexpander | `($_ $n $_) => `($n#i64) | _ => throw ()
+meta def unexpI64ofInt : Unexpander | `($_ $n $_) => `($n#i64) | _ => throw ()
 
 @[app_unexpander I128.ofInt]
-def unexpI128ofInt : Unexpander | `($_ $n $_) => `($n#i128) | _ => throw ()
+meta def unexpI128ofInt : Unexpander | `($_ $n $_) => `($n#i128) | _ => throw ()
 
 @[app_unexpander Isize.ofInt]
-def unexpIsizeofInt : Unexpander | `($_ $n $_) => `($n#isize) | _ => throw ()
+meta def unexpIsizeofInt : Unexpander | `($_ $n $_) => `($n#isize) | _ => throw ()
 
 -- Notation for pattern matching
 -- We make the precedence looser than the negation.
