@@ -39,23 +39,8 @@ def List.clone (clone : α → Result α) (l : List α) : Result ({ l' : List α
     simp at h
     have := List.mapM_Result_length h
     assumption⟩
-  -- TODO: is this acceptable?
   | .vis _ _ => .fail .panic
   | .div => .div
-  -- match h : (List.mapM clone l).match with
-  -- | .ok v => ok ⟨ v, by
-  --   simp at h
-  --   have := List.mapM_Result_length h
-  --   assumption⟩
-  -- | .vis e k => by
-  --     -- .vis e k
-  --     simp at h
-  --     simp [List.mapM] at h
-  --     simp [List.mapM.loop] at h
-  --     sorry
-  -- | .div => div
-  -- -- | _ => by
-  -- --   sorry
 
 @[step]
 def List.clone_spec {clone : α → Result α} {l : List α} (h : ∀ x ∈ l, clone x = ok x) :

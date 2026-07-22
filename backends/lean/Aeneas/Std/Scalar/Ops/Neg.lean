@@ -18,8 +18,7 @@ theorem IScalar.neg_step {ty} (x: IScalar ty) (h: x ≠ IScalar.min ty): IScalar
   simp [neg]
   have h := tryMk_eq ty (-x.val)
   simp [inBounds] at h
-  generalize hval : (tryMk ty (-↑x)) = val at h
-  cases val <;> simp_all
+  split at h <;> simp_all
   have := IScalar.hBounds x
   simp [IScalar.min] at *
   grind

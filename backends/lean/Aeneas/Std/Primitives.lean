@@ -28,6 +28,13 @@ def assertImpl : CommandElab := fun (stx: Syntax) => do
       throwError ("Expression reduced to false:\n"  ++ stx[1])
     pure ())
 
+/--
+info: true
+-/
+#guard_msgs in
+#eval 2 == 2
+#assert (2 == 2)
+
 syntax (name := elabSyntax) "#elab" term: command
 
 @[command_elab elabSyntax]
@@ -83,7 +90,6 @@ def Result.fail {α} (e : Error) : Result α := Result.vis (.fail e) PEmpty.elim
 
 def Result.div {α} : Result α := ITree.div
 
--- TODO: maybe rename Result.bind
 def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
   ITree.bind x f
 
@@ -92,14 +98,6 @@ instance : Monad Result where
   bind := bind
 
 instance : LawfulMonad Result := instLawfulMonadITree
-
--- TODO: is this not redundant with theorems below in this file?
-theorem Result_ok_bind.{u} {A B : Type u} : ∀ (x : A) (f : A → Result B),
-  bind (Result.ok x) f = f x := by
-    intros x f
-    let h := instLawfulMonadResult.pure_bind x f
-    simp [Bind.bind] at h
-    assumption
 
 @[simp, grind .]
 theorem ok_not_vis {α} {a : α} {eff k} : ¬ Result.ok a = .vis eff k := by grind [Result.ok, Result.vis]
@@ -116,13 +114,11 @@ theorem div_not_vis {α} {eff k} : ¬ .div = @Result.vis α eff k := by grind [R
 @[simp, grind .]
 theorem Result.ok.injEq {α} {a b : α} : (Result.ok a = .ok b) = (a = b) := by
   grind [Result.ok]
--- TODO: do we need the stronger version of this that has the continuations with ≍?
+-- TODO: when necessary, we may need a stronger version of this which outputs ≍ for the continuations
 @[grind .]
 theorem Result.vis.injEq {α} {a b} {k1 k2} : (@Result.vis α a k1 = .vis b k2) → (a = b) := by
   grind [Result.vis, vis_inj_effect]
 
-
--- #check ITree.cases
 @[elab_as_elim, cases_eliminator]
 def Result.cases {R}
     {motive : Result R → Sort v}
@@ -132,16 +128,14 @@ def Result.cases {R}
     (div :  motive (Result.div))
     : motive t := ITree.cases ret div vis t
 
--- inductive MatchResult : ∀ {α : Type u}, Result α → Type _ where
--- | ok {α} : (a : α) → MatchResult (Result.ok a)
--- | div : ∀ {α}, @MatchResult α .div
--- | fail : ∀ {α}, (e : Error) → @MatchResult α (.fail e)
-
 inductive MatchResult (α : Type u) : Type u where
 | ok : (a : α) → MatchResult α
 | div : MatchResult α
 | vis : (eff : RustEffect.I) → (RustEffect.O eff → Result α) → MatchResult α
 
+/-!
+Can simulate a match on the Result type by matching on the output of this function.
+-/
 def Result.match.{u} {α : Type u} (r : Result α) : MatchResult α :=
   r.cases .ok .vis .div
 
@@ -165,103 +159,10 @@ theorem Result.match.is_vis {α : Type u} {e k} {r : Result α} : (r.match = .vi
 theorem Result.match.is_div {α : Type u} {r : Result α} : (r.match = .div) ↔ r = .div := by
   cases r <;> grind
 
--- -- Before ITrees, Result was an inductive with ok, div, and fail cases only.
--- -- this function can be used in many cases to replace pattern matching on that inductive:
--- -- NOTE about split: to work with the `split` tactic, the name must start with "match_", the motive must come
--- -- before the Result input, and the div case must input a Unit.
--- -- If we commit to not needing split, we can change these things.
--- @[elab_as_elim, cases_eliminator]
--- def Result.match_dep {α}
---   {motive : Result α → Sort v}
---   (r : Result α)
---   (m : ∀ {r'}, MatchResult r' → motive r')
---   : motive r := ITree.cases (fun x => m (.ok x)) (m .div) (
---       fun e k => match e with
---         | .fail e => by
---             have same : k = PEmpty.elim := by funext x; contradiction
---             simp [same]
---             let h := (@m (.fail e) (.fail e))
---             simp [fail] at h
---             apply h
---     ) r
-
--- @[simp]
--- theorem Result.match.ok {R motive m x}
---   : @Result.match_dep R motive (.ok x) m = (m (.ok x)) := ITree.cases.ret
-
--- @[simp]
--- theorem Result.match.div {R motive m}
---   : @Result.match_dep R motive .div m = m .div := ITree.cases.div
-
--- @[simp]
--- theorem Result.match.fail {R motive m}
---   : @Result.match_dep R motive (.fail e) m = m (.fail e) := ITree.cases.vis
-
 def Result.is_ok {R : Type} [BEq R] (r : Result R) (expected : R) : Bool :=
   match r.match with
   | .ok x => x == expected
   | _ => false
-
--- def Result.match_dep' {α}
---   {motive : Result α → Sort v}
---   (r : Result α)
---   (ok : ∀ x, r = .ok x → motive (.ok x))
---   (fail : ∀ e, r = .fail e → motive (.fail e))
---   (div : r = .div → motive (.div))
---   : motive r :=
---     Result.match_dep (motive := fun r' => r = r' -> motive r') r ok fail (fun _ => div) rfl
-
--- @[simp]
--- theorem Result.match_dep'.ok {R motive v r d f x}
---   (h : v = Result.ok x)
---   : @Result.match_dep' R motive v r f d = cast (congrArg motive (Eq.symm h)) (r x h) := by
---   cases v <;> unfold match_dep' <;> simp <;> grind
-
--- @[simp]
--- theorem Result.match_dep'.fail {R motive v r d f e}
---   (h : v = Result.fail e)
---   : @Result.match_dep' R motive v r f d = cast (congrArg motive (Eq.symm h)) (f e h) := by
---   cases v <;> unfold match_dep' <;> simp <;> grind
-
--- @[simp]
--- theorem Result.match_dep'.div {R motive v r d f}
---   (h : v = .div)
---   : @Result.match_dep' R motive v r f d = cast (congrArg motive (Eq.symm h)) (d h) := by
---   cases v <;> unfold match_dep' <;> simp <;> grind
-
--- TODO: do we need this?
--- instance {T} [Repr T] : Repr (Result T) where
---   reprPrec x n := x.match_dep fun x => match x with
---     | .ok t => .append (.text "ok ") (reprPrec t n)
---     | .fail e => .append (.text "fail ") (reprPrec e n)
---     | .div => .text "div"
-
--- TODO: this is how to register for split, but we probably won't use that
--- run_meta
---   Lean.Meta.Match.addMatcherInfo ``Result.match_dep {
---     numParams := 1
---     numDiscrs := 1
---     altInfos := #[
---       {
---         numFields := 1
---         numOverlaps := 0
---         hasUnitThunk := false
---       },
---       {
---         numFields := 1
---         numOverlaps := 0
---         hasUnitThunk := false
---       },
---       {
---         numFields := 0
---         numOverlaps := 0
---         hasUnitThunk := true
---       }
---     ]
---     uElimPos? := .some 0
---     discrInfos := #[{ hName? := none }]
---     overlaps := { map := Std.HashMap.ofList [] }
---   }
 
 open Result
 

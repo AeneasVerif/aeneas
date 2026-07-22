@@ -612,19 +612,6 @@ theorem UScalar.tryMkOpt_eq (ty : UScalarTy) (x : Nat) :
   split_ifs <;> simp_all
   simp [UScalar.val, UScalarTy.numBits] at *
 
--- TODO: delete this:
-theorem UScalar.tryMk_eq_DELETE_THIS_PROBABLY (ty : UScalarTy) (x : Nat) :
-  (∃ v, tryMk ty x = .ok v ∧ inBounds ty v.val ∧ x = v.val)
-  ∨ (∃ e, tryMk ty x = .fail e ∧ ¬ (inBounds ty x))
-    := by
-  have := UScalar.tryMkOpt_eq ty x
-  simp [tryMk, ofOption]
-  cases h: tryMkOpt ty x
-  · right
-    grind
-  · left
-    grind
-
 theorem UScalar.tryMk_eq (ty : UScalarTy) (x : Nat) :
   match (tryMk ty x).match with
     | .ok y => y.val = x ∧ inBounds ty x
@@ -634,17 +621,6 @@ theorem UScalar.tryMk_eq (ty : UScalarTy) (x : Nat) :
   have := UScalar.tryMkOpt_eq ty x
   simp [tryMk, ofOption]
   cases h: tryMkOpt ty x <;> simp_all
-  --
-
--- TODO: delete old one
--- theorem UScalar.tryMk_eq (ty : UScalarTy) (x : Nat) :
---   match tryMk ty x with
---   | ok y => y.val = x ∧ inBounds ty x
---   | fail _ => ¬ (inBounds ty x)
---   | _ => False := by
---   have := UScalar.tryMkOpt_eq ty x
---   simp [tryMk, ofOption]
---   cases h: tryMkOpt ty x <;> simp_all
 
 theorem IScalar.tryMkOpt_eq (ty : IScalarTy) (x : Int) :
   match tryMkOpt ty x with
@@ -659,19 +635,6 @@ theorem IScalar.tryMkOpt_eq (ty : IScalarTy) (x : Int) :
   simp [Int.bmod] <;> split <;> (try omega) <;>
   cases h: System.Platform.numBits_eq <;> simp_all <;> omega
 
--- TODO: delete this
--- theorem IScalar.tryMk_eq (ty : IScalarTy) (x : Int) :
---   (∃ v, tryMk ty x = .ok v ∧ inBounds ty v.val ∧ x = v.val)
---   ∨ (∃ e, tryMk ty x = .fail e ∧ ¬ (inBounds ty x))
---     := by
---   have := IScalar.tryMkOpt_eq ty x
---   simp [tryMk, ofOption]
---   cases h: tryMkOpt ty x
---   · right
---     grind
---   · left
---     grind
-
 theorem IScalar.tryMk_eq (ty : IScalarTy) (x : Int) :
   match (tryMk ty x).match with
   | .ok y => y.val = x ∧ inBounds ty x
@@ -681,16 +644,6 @@ theorem IScalar.tryMk_eq (ty : IScalarTy) (x : Int) :
   have := tryMkOpt_eq ty x
   simp [tryMk]
   cases h : tryMkOpt ty x <;> simp_all
-
--- TODO: delete old one
--- theorem IScalar.tryMk_eq (ty : IScalarTy) (x : Int) :
---   match tryMk ty x with
---   | ok y => y.val = x ∧ inBounds ty x
---   | fail _ => ¬ (inBounds ty x)
---   | _ => False := by
---   have := tryMkOpt_eq ty x
---   simp [tryMk]
---   cases h : tryMkOpt ty x <;> simp_all
 
 @[simp] theorem UScalar.zero_in_cbounds {ty : UScalarTy} : 0 < 2^ty.numBits := by
   simp
