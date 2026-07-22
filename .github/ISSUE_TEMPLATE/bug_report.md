@@ -32,8 +32,7 @@ Add further details as required, delete any part of the template which isn't rel
 <!-- In the case that Aeneas generates warnings or errors, include the output:
 - If Aeneas aborted with an `Uncaught exception`, paste the full backtrace.
 - Otherwise, paste the relevant errors/warnings.
-Running with `-print-error-emitters` includes the compiler source location of each error. 
-Running with `-sequential` avoids parallelism which can result in a partial backtrace. -->
+Run with `-print-error-emitters`, to include the compiler source location of each error, and `-sequential`, to avoid backtraces from being truncated because of parallel execution. -->
 
 ```text
 add aeneas output here
