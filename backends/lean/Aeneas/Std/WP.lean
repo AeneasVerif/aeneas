@@ -859,51 +859,52 @@ open Std.Do
 
 -- TODO: do we expect mvcgen to work with Result if we include arbitrary effects?
 -- what do we lose by getting rid of this stuff?
--- instance Result.instWP : WP Result.{u} (.except (ULift Error) (.except PUnit .pure)) where
---   wp x := {
---     trans Q := match x with | .ok a => Q.1 a | .fail e => Q.2.1 (ULift.up e) | .div => Q.2.2.1 .unit
---     conjunctiveRaw Q₁ Q₂ := by
---       apply SPred.bientails.of_eq
---       cases x <;> simp
---   }
+instance Result.instWP : WP Result.{u} (.except (ULift Error) (.except PUnit .pure)) where
+  wp x := {
+    -- TODO: what happens when more effects are added to vis constructor?
+    trans Q := match x.match with | .ok a => Q.1 a | .vis (.fail e) _ => Q.2.1 (ULift.up e) | .div => Q.2.2.1 .unit
+    conjunctiveRaw Q₁ Q₂ := by
+      apply SPred.bientails.of_eq
+      cases x <;> simp
+  }
+
+instance Result.instWPMonad : WPMonad Result (.except (ULift Error) (.except PUnit .pure)) where
+  wp_pure a := by apply PredTrans.ext; intro Q; simp [PredTrans.apply, wp, WP.wp]; rfl
+  wp_bind x f := by
+    apply PredTrans.ext
+    intro Q
+    simp [PredTrans.apply, wp, WP.wp]
+    cases x <;> cbv
 
 
--- instance : LawfulMonad Result where
---     map_const := by intros; rfl
---     id_map := by intros _ x; cases x <;> rfl
---     seqLeft_eq := by intros _ _ x y; cases x <;> cases y <;> rfl
---     seqRight_eq := by intros _ _ x y; cases x <;> cases y <;> rfl
---     pure_seq := by intros _ _ _ x; cases x <;> rfl
---     pure_bind := by intros; rfl
---     bind_pure_comp := by intros; rfl
---     bind_map := by intros; rfl
---     bind_assoc := by intros _ _ _ x _ _; cases x <;> rfl
-
--- instance Result.instWPMonad : WPMonad Result (.except (ULift Error) (.except PUnit .pure)) where
---   wp_pure a := by apply PredTrans.ext; intro Q; simp [PredTrans.apply, wp, WP.wp]; rfl
---   wp_bind x f := by apply PredTrans.ext; intro Q; simp [PredTrans.apply, wp, WP.wp]; cases x <;> rfl
-
--- theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
---     (⊢ₛ wp⟦x⟧ (fun a => ⌜P (.ok a)⌝,
---                   fun e => ⌜P (.fail e.down)⌝,
---                   fun .unit => ⌜P .div⌝, .unit)) → P x := by
---   intro hspec
---   simp only [WP.wp, PredTrans.apply] at hspec
---   split at hspec <;> simp_all
+theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
+    (⊢ₛ wp⟦x⟧ (fun a => ⌜P (.ok a)⌝,
+                  fun e => ⌜P (.fail e.down)⌝,
+                  fun .unit => ⌜P .div⌝, .unit)) → P x := by
+  intro hspec
+  simp only [WP.wp, PredTrans.apply] at hspec
+  split at hspec <;> simp_all
+  rename_i heq a
+  have : heq = PEmpty.elim := by funext; contradiction
+  simp [*]
 
 -- /-- Lift an Aeneas step spec to an mvcgen-compatible `Triple`. -/
--- theorem spec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
---     (h : spec x Q) :
---     ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
---   obtain ⟨v, hx, hQv⟩ := spec_imp_exists h
---   subst hx
---   simp [Triple, WP.wp, PredTrans.apply, hQv]
+theorem spec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
+    (h : spec x Q) :
+    ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
+  obtain ⟨v, hx, hQv⟩ := spec_imp_exists h
+  subst hx
+  simp [Triple, WP.wp, PredTrans.apply, hQv]
 
--- theorem dspec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
---     (h : dspec x Q) :
---     ⦃ ⌜ ¬ x = .div ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
---   simp [Triple, WP.wp, PredTrans.apply, SPred.pure]
---   cases x <;> simp [*, dspec] at * <;> trivial
+theorem dspec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
+    (h : dspec x Q) :
+    ⦃ ⌜ ¬ x = .div ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
+  simp [Triple, WP.wp, PredTrans.apply, SPred.pure]
+  cases x <;> simp [*] at *
+  · trivial
+  · rename_i i k
+    generalize hval : vis i k = val at h
+    cases h <;> simp at hval
 
 end Aeneas.Std.WP
 
@@ -988,7 +989,7 @@ theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
       ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
       ``Std.WP.imp_exists_iff,
       ``forall_unit, ``true_imp_iff]
-    to_mvcgen := .none -- .some ``Std.WP.spec_to_mvcgen
+    to_mvcgen := .some ``Std.WP.spec_to_mvcgen
     liftings := #[]
   }
 
@@ -1012,7 +1013,7 @@ theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
       ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
       ``Std.WP.imp_exists_iff,
       ``forall_unit, ``true_imp_iff]
-    to_mvcgen := .none -- .some ``Std.WP.dspec_to_mvcgen
+    to_mvcgen := .some ``Std.WP.dspec_to_mvcgen
     liftings := #[
       { from_statement := ``Std.WP.spec
         conversion_thm := ``Std.WP.spec_dspec
