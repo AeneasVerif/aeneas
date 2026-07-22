@@ -3,30 +3,31 @@ public import Aeneas.Std.Primitives
 public import Aeneas.Std.Delab
 public import Std.Do
 public import Aeneas.Tactic.Solver.Grind.Init
-public import Aeneas.Std.Spec
+public meta import Aeneas.Std.Spec
+public meta import Aeneas.Std.Delab
 public section
 
 namespace Aeneas.Std.WP
 
 open Std Result
 
-def Post α := (α -> Prop)
+abbrev Post α := (α -> Prop)
 abbrev Pre := Prop
 
-def Wp α := Post α → Pre
+abbrev Wp α := Post α → Pre
 
-def wp_return (x:α) : Wp α := fun p => p x
+@[expose] def wp_return (x:α) : Wp α := fun p => p x
 
-def theta (m:Result α) : Wp α :=
+@[expose] def theta (m:Result α) : Wp α :=
   match m with
   | ok x => wp_return x
   | fail _ => fun _ => False
   | div => fun _ => False
 
-def spec {α} (x:Result α) (p:Post α) :=
+@[expose] def spec {α} (x:Result α) (p:Post α) :=
   theta x p
 
-def dspec {α} (x:Result α) (p:Post α) :=
+@[expose] def dspec {α} (x:Result α) (p:Post α) :=
   match x with
   | ok x => p x
   | fail _ => False
@@ -274,7 +275,7 @@ open Lean PrettyPrinter
 
 Given `x0`, ..., `xn` and `body`, generates the (syntactic) term `fun (x0, ..., xn) => body`.
 -/
-partial def buildUncurryLam (xs : List (TSyntax `term)) (body : TSyntax `term) :
+meta partial def buildUncurryLam (xs : List (TSyntax `term)) (body : TSyntax `term) :
     MacroM (TSyntax `term) := do
   let uncurryIdent := mkIdent ``Std.uncurry
   match xs with
@@ -286,7 +287,7 @@ partial def buildUncurryLam (xs : List (TSyntax `term)) (body : TSyntax `term) :
     `($uncurryIdent (fun $a => $inner))
 
 /-- Helper to elaborate `binder => body` when binder is a tuple - this supports nested tuples. -/
-partial def mkBinderFun (depth : Nat) (binder : Term) (body : Term) : MacroM Term := do
+meta partial def mkBinderFun (depth : Nat) (binder : Term) (body : Term) : MacroM Term := do
   match binder with
   | `( ($a, $bs,*) ) =>
     let xs : List Term := a :: bs.getElems.toList
@@ -305,7 +306,7 @@ partial def mkBinderFun (depth : Nat) (binder : Term) (body : Term) : MacroM Ter
     buildUncurryLam leafIdents wrappedBody
   | _ => `(fun $binder => $body)
 
-def mk_function_syntax (p : TSyntax `term) (depth : Nat) (xs : List Term) : MacroM Term := do
+meta def mk_function_syntax (p : TSyntax `term) (depth : Nat) (xs : List Term) : MacroM Term := do
   match xs with
   | [] => `($p)
   | [x] => mkBinderFun depth x p
@@ -318,7 +319,7 @@ def mk_function_syntax (p : TSyntax `term) (depth : Nat) (xs : List Term) : Macr
 identifiers — i.e. a binder group like `a b c` — return the identifiers in
 order.  Otherwise return `none`, so anonymous constructors `⟨a, b⟩`, tuple
 patterns, and other structured terms are left untouched. -/
-private partial def binderGroupIdents? (stx : Syntax) : Option (Array Term) :=
+private meta partial def binderGroupIdents? (stx : Syntax) : Option (Array Term) :=
   if stx.isIdent then some #[⟨stx⟩]
   else if stx.getKind == ``Lean.Parser.Term.app || stx.getKind == Lean.nullKind then
     stx.getArgs.foldlM (init := (#[] : Array Term)) fun acc s =>
@@ -330,7 +331,7 @@ private partial def binderGroupIdents? (stx : Syntax) : Option (Array Term) :=
 so each name becomes its own product component (exactly as if written
 separately).  Tuple/pattern binders `(a, b)`, `(⟨a, b⟩ : T)`, single binders
 `(a : T)`, and bare identifiers are returned unchanged. -/
-private def expandGroupedBinder (binder : Term) : MacroM (List Term) := do
+private meta def expandGroupedBinder (binder : Term) : MacroM (List Term) := do
   match binder with
   | `(($e : $t)) =>
     match binderGroupIdents? e.raw with
@@ -341,7 +342,7 @@ private def expandGroupedBinder (binder : Term) : MacroM (List Term) := do
   | _ => pure [binder]
 
 /-- Flatten grouped binders across the whole binder list. -/
-private def expandBinders (xs : List Term) : MacroM (List Term) := do
+private meta def expandBinders (xs : List Term) : MacroM (List Term) := do
   let mut out : Array Term := #[]
   for x in xs do
     out := out ++ (← expandGroupedBinder x).toArray
@@ -349,7 +350,7 @@ private def expandBinders (xs : List Term) : MacroM (List Term) := do
 
 /-- Build the postcondition term for `⦃ xs => p ⦄`, expanding grouped binders
 into one component per name first. -/
-private def mkPost (p : Term) (xs : List Term) : MacroM Term := do
+private meta def mkPost (p : Term) (xs : List Term) : MacroM Term := do
   mk_function_syntax p 0 (← expandBinders xs)
 
 /-- Macro expansion for a single element (may expand to several via a grouped binder) -/
@@ -416,7 +417,7 @@ so the continuation lambdas are left untouched.
 
 Example: on `fun a b => fun c => body`, collects `[a, b]` and leaves the reader
 at `fun c => body`. -/
-private partial def enterUncurryOnce (acc : Array Std.Delab.BinderEntry)
+private meta partial def enterUncurryOnce (acc : Array Std.Delab.BinderEntry)
     (k : Array Std.Delab.BinderEntry → DelabM α) : DelabM α := do
   match (← getExpr) with
   | .lam n _ _ _ =>
@@ -430,7 +431,7 @@ private partial def enterUncurryOnce (acc : Array Std.Delab.BinderEntry)
   | _ => k acc
 
 /-- Is the expression an `uncurry'` or `uncurry` wrapper? -/
-private def isPostBinderWrapper (e : Expr) : Bool :=
+private meta def isPostBinderWrapper (e : Expr) : Bool :=
   match_expr e.consumeMData with
   | uncurry' _ _ _ => true
   | uncurry _ _ _ _ => true
@@ -440,7 +441,7 @@ private def isPostBinderWrapper (e : Expr) : Bool :=
 Returns `(binders, bodyTerm)` where each binder is a `Term` (either a plain
 name like `x` or a (potentially nested) tuple pattern like `(a, b)`).
 -/
-private partial def delabPostBinders : DelabM (Array Term × Term) := do
+private meta partial def delabPostBinders : DelabM (Array Term × Term) := do
   match_expr (← getExpr).consumeMData with
   | uncurry' _ _ _ =>
     /- `uncurry' f`: dive into `f` (arg 2) and peel one binder.
@@ -493,7 +494,7 @@ where
 
 /-- Delaborator for `WP.spec e post` → `e ⦃ binders => body ⦄`. -/
 @[scoped delab app.Aeneas.Std.WP.spec]
-def delabSpec : Delab := do
+meta def delabSpec : Delab := do
   guard $ (← getExpr).isAppOfArity' ``spec 3
   let monadExpr ← withNaryArg 1 delab
   let (binders, bodyTerm) ← withNaryArg 2 delabPostBinders
@@ -504,7 +505,7 @@ def delabSpec : Delab := do
 
 /-- Delaborator for `WP.dspec e post` → `e ⦃ binders => body ⦄div`. -/
 @[scoped delab app.Aeneas.Std.WP.dspec]
-def delabDSpec : Delab := do
+meta def delabDSpec : Delab := do
   guard $ (← getExpr).isAppOfArity' ``dspec 3
   let monadExpr ← withNaryArg 1 delab
   let (binders, bodyTerm) ← withNaryArg 2 delabPostBinders

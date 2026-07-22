@@ -91,7 +91,9 @@ def div? {α: Type u} (r: Result α): Bool :=
   | div => true
   | ok _ | fail _ => false
 
-def massert (b : Prop) [Decidable b] : Result Unit :=
+/- TODO (module system): better style would be avoid `@[expose]` here and instead export only the
+appropriate charatirization lemmas. The lemmas currently live in `Aeneas.Std.PrimitivesLemmas`. -/
+@[expose] def massert (b : Prop) [Decidable b] : Result Unit :=
   if b then ok () else fail assertionFailure
 
 macro "prove_eval_global" : tactic => `(tactic| simp (failIfUnchanged := false) only [global_simps] <;> first | apply Eq.refl | decide)
@@ -117,7 +119,7 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
 # Do-DSL Support
 -/
 
-def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
+@[expose] def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
   match x with
   | ok v  => f v
   | fail v => fail v
@@ -279,7 +281,7 @@ inductive ControlFlow (α : Type u) (β : Type v) where
   | done (v : β) -- break
 deriving Repr, BEq
 
-def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) (x : α) : Result β := do
+@[expose] def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) (x : α) : Result β := do
   match body x with
   | ok r =>
     match r with
