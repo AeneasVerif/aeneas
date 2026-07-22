@@ -283,7 +283,7 @@ theorem Array.clone_length {α : Type u} {n : Usize} (clone : α → Result α) 
   s'.length = s.length := by
   simp [Array.clone] at h
   simp [List.clone] at h
-  cases _ : List.mapM clone ↑s <;> simp_all
+  split at h <;> simp_all
 
 @[step]
 theorem Array.clone_spec {α : Type u} {n : Usize} {clone : α → Result α} {s : Array α n} (h : ∀ x ∈ s.val, clone x = ok x) :

@@ -19,29 +19,11 @@ def Wp α := Post α → Pre
 
 def wp_return (x:α) : Wp α := fun p => p x
 
--- TODO: clean this up if i end up going with the coinductive one
--- def theta (m:Result α) : Wp α :=
---   match m with
---   | ok x => wp_return x
---   | fail _ => fun _ => False
---   | div => fun _ => False
-
--- def spec {α} (x:Result α) (p:Post α) :=
---   theta x p
-
 @[grind]
 inductive spec {α} : (x : Result α) → (p : Post α) →  Prop where
 | ret : ∀ p x, p x → spec (.ok x) p
--- | vis : ∀ k, (∀ b, spec p (k b)) → spec p (ITree.vis () k)
--- | fail : ∀ k, (∀ b, spec p (k b)) → spec p (ITree.vis () k)
 
 
--- TODO: clean up
--- def dspec {α} (x:Result α) (p:Post α) :=
---   match x with
---   | ok x => p x
---   | fail _ => False
---   | div => True
 inductive dspec {α} : (x : Result α) → (p : Post α) →  Prop where
 | ret : ∀ p x, p x → dspec (.ok x) p
 | div : ∀ p, dspec div p
@@ -108,37 +90,6 @@ theorem dspec_admissible {α} (p : Post α )
     rw [ITree.div_is_bot]
     constructor
 seal Result
-  -- by_cases h' : ∃ x, c x ∧ x ≠ .div
-  -- ·
-  --   simp [Lean.Order.CCPO.csup]
-  --   -- simp [← flat_csup_eq, flat_csup, h']
-  --   apply Classical.some_spec₂ (q := (dspec · p))
-  --   intro x ⟨hcx, hneb⟩
-  --   apply h x hcx
-  --   --
-  -- ·
-  --   simp [Lean.Order.CCPO.csup]
-  --   simp [← flat_csup_eq, flat_csup, h', hnot]
-  -- -- unfold Lean.Order.admissible
-  -- -- intros c hc dspecc
-  -- -- simp at *
-  -- -- by_cases ∃ x, c (.ok x)
-  -- -- · sorry
-  -- -- ·
-  -- --   have : Lean.Order.CCPO.csup hc = Result.div := by
-  -- --     generalize hsup : Lean.Order.CCPO.csup hc = sup at *
-  -- --     have dspecc := dspecc (Lean.Order.CCPO.csup hc) ?_ -- (Lean.Order.CCPO.csup_spec hc)
-  -- --     cases h : (Lean.Order.CCPO.csup hc) <;> try rfl
-  -- --     · sorry
-  -- --     · sorry
-  -- --     ·
-  -- --       sorry
-  -- --     --
-  -- --     -- sorry
-  -- --   sorry
-  -- -- apply Lean.Order.admissible_flatOrder
-  -- -- simp [dspec]
-  -- -- sorry
 
 /-- Variant of `uncurry` used to decompose tuples in post-conditions.
 
