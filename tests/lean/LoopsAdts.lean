@@ -97,8 +97,8 @@ def update_array_mut_borrow
 def array_mut_borrow_loop1_loop.body
   (back : Array Std.U32 32#usize → Array Std.U32 32#usize) (b : Bool)
   (a : Array Std.U32 32#usize) :
-  Result (ControlFlow ((Array Std.U32 32#usize → Array Std.U32 32#usize) ×
-    Bool × (Array Std.U32 32#usize)) (Array Std.U32 32#usize))
+  Result (ControlFlow ((Array Std.U32 32#usize → Array Std.U32 32#usize) × Bool
+    × (Array Std.U32 32#usize)) (Array Std.U32 32#usize))
   := do
   if b
   then
@@ -137,9 +137,9 @@ def array_mut_borrow_loop1
 def array_mut_borrow_loop2_loop.body
   (back : Array Std.U32 32#usize → Array Std.U32 32#usize) (b : Bool)
   (a : Array Std.U32 32#usize) :
-  Result (ControlFlow ((Array Std.U32 32#usize → Array Std.U32 32#usize) ×
-    Bool × (Array Std.U32 32#usize)) ((Array Std.U32 32#usize) × (Array
-    Std.U32 32#usize → Array Std.U32 32#usize)))
+  Result (ControlFlow ((Array Std.U32 32#usize → Array Std.U32 32#usize) × Bool
+    × (Array Std.U32 32#usize)) ((Array Std.U32 32#usize) × (Array Std.U32
+    32#usize → Array Std.U32 32#usize)))
   := do
   if b
   then

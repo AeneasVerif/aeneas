@@ -103,9 +103,7 @@ def index_slice {T : Type} (s : Slice T) (i : Std.Usize) : Result T := do
     Source: 'tests/src/arrays.rs', lines 65:0-67:1
     Visibility: public -/
 def index_mut_slice
-  {T : Type} (s : Slice T) (i : Std.Usize) :
-  Result (T × (T → Slice T))
-  := do
+  {T : Type} (s : Slice T) (i : Std.Usize) : Result (T × (T → Slice T)) := do
   Slice.index_mut_usize s i
 
 /-- [arrays::slice_subslice_shared_]:
@@ -504,8 +502,7 @@ def sum2 (s : Slice Std.U32) (s2 : Slice Std.U32) : Result Std.U32 := do
     Source: 'tests/src/arrays.rs', lines 294:0-297:1
     Visibility: public -/
 def f0 : Result Unit := do
-  let (s, _) ←
-    lift (Array.to_slice_mut (Array.make 2#usize [ 1#u32, 2#u32 ]))
+  let (s, _) ← lift (Array.to_slice_mut (Array.make 2#usize [ 1#u32, 2#u32 ]))
   let _ ← Slice.index_mut_usize s 0#usize
   ok ()
 
@@ -669,8 +666,8 @@ def sum_mut_slice
 def add_acc_loop.body
   (paSrc : Array Std.U32 256#usize) (peDst : Array Std.U32 256#usize)
   (i : Std.Usize) :
-  Result (ControlFlow ((Array Std.U32 256#usize) × (Array Std.U32 256#usize)
-    × Std.Usize) ((Array Std.U32 256#usize) × (Array Std.U32 256#usize)))
+  Result (ControlFlow ((Array Std.U32 256#usize) × (Array Std.U32 256#usize) ×
+    Std.Usize) ((Array Std.U32 256#usize) × (Array Std.U32 256#usize)))
   := do
   if i < 256#usize
   then

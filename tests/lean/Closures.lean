@@ -239,8 +239,7 @@ def call_closure2.closure_1.Insts.CoreOpsFunctionFnMutTupleU32.call_mut
   (state : call_closure2.closure_1) (_ : Unit) :
   Result (Std.U32 × call_closure2.closure_1)
   := do
-  let i ←
-    call_closure2.closure_1.Insts.CoreOpsFunctionFnTupleU32.call state ()
+  let i ← call_closure2.closure_1.Insts.CoreOpsFunctionFnTupleU32.call state ()
   ok (i, state)
 
 /-- [closures::call_closure2::{impl core::ops::function::FnOnce<(), u32> for closures::call_closure2::closure#1}::call_once]:
@@ -337,8 +336,7 @@ def call_closure2.closure.Insts.CoreOpsFunctionFnTupleU32 :
 /-- [closures::call_closure2]:
     Source: 'tests/src/closures.rs', lines 38:0-41:1 -/
 def call_closure2 : Result Std.U32 := do
-  let _ ←
-    call_closure call_closure2.closure.Insts.CoreOpsFunctionFnTupleU32 ()
+  let _ ← call_closure call_closure2.closure.Insts.CoreOpsFunctionFnTupleU32 ()
   call_closure call_closure2.closure_1.Insts.CoreOpsFunctionFnTupleU32 ()
 
 /-- [closures::u8_id]:

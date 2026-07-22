@@ -18,19 +18,19 @@ namespace joins
     Source: 'tests/src/joins.rs', lines 4:0-7:1 -/
 def opt_add_1 (b : Bool) (x : Std.U32) : Result Std.U32 := do
   let y ← if b
-            then ok 1#u32
-            else ok 0#u32
+          then ok 1#u32
+          else ok 0#u32
   x + y
 
 /-- [joins::opt_add_2]:
     Source: 'tests/src/joins.rs', lines 9:0-13:1 -/
 def opt_add_2 (b : Bool) (x : Std.U32) : Result Std.U32 := do
   let y ← if b
-            then ok 1#u32
-            else ok 0#u32
+          then ok 1#u32
+          else ok 0#u32
   let z ← if b
-            then ok 1#u32
-            else ok 0#u32
+          then ok 1#u32
+          else ok 0#u32
   let i ← x + y
   i + z
 
