@@ -89,14 +89,7 @@ structure Config where
   funext : Bool := false
   /--`grind` parameter: see `Lean.Grind.Config` -/
   gen : Nat  := 2
-  /--`grind` parameter — max e-matching generation for **local** hypotheses (see
-     `Lean.Grind.Config`).  Kept tight (like `gen`, and below grind's default of 8):
-     precondition discharge should instantiate quantified *local* hypotheses only
-     shallowly.  Note this is a secondary guard: the primary defense against the
-     large-`∀`-hypothesis e-match blowup (e.g. the `ih` of a recursive `_loop`
-     spec) is lowering the pattern-selection priority of the `.val` projections —
-     see `Aeneas.Tactic.Solver.ScalarTac.Lemmas` and the regression test in
-     `Aeneas.Tactic.Solver.Grind.Tests`. -/
+  /--`grind` parameter: see `Lean.Grind.Config` -/
   genLocal : Nat := 2
   /--`grind` parameter: see `Lean.Grind.Config` -/
   instances : Nat  := 100
