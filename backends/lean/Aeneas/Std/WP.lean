@@ -857,36 +857,58 @@ namespace Aeneas.Std.WP
 open Std Result
 open Std.Do
 
--- TODO: do we expect mvcgen to work with Result if we include arbitrary effects?
--- what do we lose by getting rid of this stuff?
-instance Result.instWP : WP Result.{u} (.except (ULift Error) (.except PUnit .pure)) where
+-- mvcgen does not support all types of effects, and currently this implementation only works with fail and div.
+-- This option is set here so that this same code works for any extension to RustEffect.I
+set_option match.ignoreUnusedAlts true
+-- There are three types of exceptions in the type: the Error from Result.fail,
+-- a dummy exception thrown when any other effect is used, and Result.div.
+instance Result.instWP : WP Result.{u} (.except (ULift Error) (.except PUnit (.except PUnit .pure))) where
   wp x := {
-    -- TODO: what happens when more effects are added to vis constructor?
-    trans Q := match x.match with | .ok a => Q.1 a | .vis (.fail e) _ => Q.2.1 (ULift.up e) | .div => Q.2.2.1 .unit
+    trans Q := match x.match with
+      | .ok a => Q.1 a
+      | .vis eff _ =>
+        match eff with
+        | .fail e => Q.2.1 (ULift.up e)
+        | _ => Q.2.2.1 PUnit.unit
+      | .div => Q.2.2.2.1 .unit
     conjunctiveRaw Q₁ Q₂ := by
       apply SPred.bientails.of_eq
       cases x <;> simp
+      try (rename_i i k)
+      try (cases i <;> simp)
   }
+set_option match.ignoreUnusedAlts false
 
-instance Result.instWPMonad : WPMonad Result (.except (ULift Error) (.except PUnit .pure)) where
+instance Result.instWPMonad : WPMonad Result (.except (ULift Error) (.except PUnit (.except PUnit .pure))) where
   wp_pure a := by apply PredTrans.ext; intro Q; simp [PredTrans.apply, wp, WP.wp]; rfl
   wp_bind x f := by
     apply PredTrans.ext
     intro Q
     simp [PredTrans.apply, wp, WP.wp]
-    cases x <;> cbv
+    cases x
+    · cbv
+    · simp
+      rename_i i k
+      cases i <;> cbv
+    · cbv
 
 
+-- Because Result can contain more effects, we can't have this theorem. Leaving this here for future reference.
 theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
     (⊢ₛ wp⟦x⟧ (fun a => ⌜P (.ok a)⌝,
                   fun e => ⌜P (.fail e.down)⌝,
+                  fun _ => ⌜False⌝, -- this is the case for other effects, in which case this provides no info.
                   fun .unit => ⌜P .div⌝, .unit)) → P x := by
-  intro hspec
-  simp only [WP.wp, PredTrans.apply] at hspec
-  split at hspec <;> simp_all
-  rename_i heq a
-  have : heq = PEmpty.elim := by funext; contradiction
-  simp [*]
+    intro hspec
+    simp only [WP.wp, PredTrans.apply] at hspec
+    split at hspec <;> simp_all
+    rename_i x eff heq a
+    cases eff
+    have : heq = PEmpty.elim := by funext; contradiction
+    simp [*] at *
+    try trivial
+    try (all_goals simp at hspec)
+
 
 -- /-- Lift an Aeneas step spec to an mvcgen-compatible `Triple`. -/
 theorem spec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
