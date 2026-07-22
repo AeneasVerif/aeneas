@@ -523,11 +523,11 @@ theorem IScalar.bound_suffices (ty : IScalarTy) (x : Int) :
     apply Int.emod_lt_of_pos; simp
   { bv := ⟨ x', h ⟩ }
 
-@[reducible] def UScalar.ofNat {ty : UScalarTy} (x : Nat)
+@[reducible, expose] def UScalar.ofNat {ty : UScalarTy} (x : Nat)
   (hInBounds : x ≤ UScalar.cMax ty := by decide) : UScalar ty :=
   UScalar.ofNatCore x (UScalar.bound_suffices ty x hInBounds)
 
-@[reducible] def IScalar.ofInt {ty : IScalarTy} (x : Int)
+@[reducible, expose] def IScalar.ofInt {ty : IScalarTy} (x : Int)
   (hInBounds : IScalar.cMin ty ≤ x ∧ x ≤ IScalar.cMax ty := by decide) : IScalar ty :=
   IScalar.ofIntCore x (IScalar.bound_suffices ty x hInBounds)
 

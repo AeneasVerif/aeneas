@@ -1,5 +1,5 @@
 module
-public import Aeneas.Std.Scalar.Core
+public meta import Aeneas.Std.Scalar.Core
 public import Aeneas.Tactic.Solver.ScalarTac
 public import Mathlib.Data.BitVec
 public section

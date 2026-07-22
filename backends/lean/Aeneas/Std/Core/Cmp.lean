@@ -163,7 +163,7 @@ def core.cmp.Ord.max.default {Self : Type} (lt : Self → Self → Result Bool)
   (x y : Self) : Result Self :=
   core.cmp.Ord.min_body lt x y
 
-@[trait_default, rust_fun "core::cmp::Ord::min"]
+@[expose, trait_default, rust_fun "core::cmp::Ord::min"]
 def core.cmp.Ord.min.trait_default {Self : Type} (OrdInst : core.cmp.Ord Self)
   (x y : Self) : Result Self :=
   core.cmp.Ord.min.default OrdInst.partialOrdInst.lt x y

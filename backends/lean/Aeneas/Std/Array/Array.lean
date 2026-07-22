@@ -17,7 +17,7 @@ local macro_rules
 # Array
 -/
 
-def Array (α : Type u) (n : Usize) := { l : List α // l.length = n.val }
+@[expose] def Array (α : Type u) (n : Usize) := { l : List α // l.length = n.val }
 
 /-- We need this to coerce arrays to lists without marking `Array` as reducible.
     Also not that we *do not* want to mark `Array` as reducible: it triggers issues.
