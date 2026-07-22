@@ -119,9 +119,6 @@ theorem spec_ok (x : α) : spec (ok x) p ↔ p x := by
     constructor
     assumption
 
--- TODO: clean this up
--- @[simp, grind =, agrind =]
--- theorem spec_fail (e : Error) : spec (fail e) p ↔ False := by grind
 @[simp, grind =, agrind =]
 theorem spec_vis (e k) : spec (.vis e k) p ↔ False := by grind
 
@@ -893,11 +890,10 @@ instance Result.instWPMonad : WPMonad Result (.except (ULift Error) (.except PUn
     · cbv
 
 
--- Because Result can contain more effects, we can't have this theorem. Leaving this here for future reference.
 theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
     (⊢ₛ wp⟦x⟧ (fun a => ⌜P (.ok a)⌝,
                   fun e => ⌜P (.fail e.down)⌝,
-                  fun _ => ⌜False⌝, -- this is the case for other effects, in which case this provides no info.
+                  fun _ => ⌜False⌝, -- if other effects are used, this provides no information.
                   fun .unit => ⌜P .div⌝, .unit)) → P x := by
     intro hspec
     simp only [WP.wp, PredTrans.apply] at hspec
@@ -910,7 +906,7 @@ theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
     try (all_goals simp at hspec)
 
 
--- /-- Lift an Aeneas step spec to an mvcgen-compatible `Triple`. -/
+/-- Lift an Aeneas step spec to an mvcgen-compatible `Triple`. -/
 theorem spec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
     (h : spec x Q) :
     ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by

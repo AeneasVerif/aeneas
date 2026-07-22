@@ -1,5 +1,5 @@
 /-
-This file is adaped from https://github.com/ISTA-PLV/coinductive/tree/main,
+This file is from https://github.com/ISTA-PLV/coinductive/tree/main,
 see README in this folder.
 -/
 namespace Aeneas.Data.Coinductive

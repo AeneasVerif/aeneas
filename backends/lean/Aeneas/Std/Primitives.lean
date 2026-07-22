@@ -210,13 +210,6 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
 @[simp] theorem bind_tc_ok (x : α) (f : α → Result β) :
   (do let y ← .ok x; f y) = f x := by simp [bind, Bind.bind, ok]
 
--- TODO: will this create backwards compatibility issues?
--- @[simp] theorem bind_tc_fail (x : Error) (f : α → Result β) :
---   (do let y ← fail x; f y) = fail x := by
---   simp [bind, Bind.bind, vis]
---   apply congrArg
---   funext x
---   contradiction
 @[simp] theorem bind_tc_vis (e k) (f : α → Result β) :
   (do let y ← Result.vis e k; f y) = .vis e (fun x => do let y ← k x; f y) := by
   simp [bind, Bind.bind, vis]
@@ -238,10 +231,8 @@ section Order
 
 open Lean.Order
 
-instance : PartialOrder (Result α) := instPartialOrderCoIndOfInhabitedPUnit (ITreeF RustEffect α) -- by unfold Result; infer_instance
-  -- instPartialOrderCoIndOfInhabitedPUnit _
-noncomputable instance : CCPO (Result α) := instCCPOCoIndOfInhabitedPUnit (ITreeF RustEffect α) -- by unfold Result; infer_instance
-  -- instCCPOCoIndOfInhabitedPUnit _
+instance : PartialOrder (Result α) := instPartialOrderCoIndOfInhabitedPUnit (ITreeF RustEffect α)
+noncomputable instance : CCPO (Result α) := instCCPOCoIndOfInhabitedPUnit (ITreeF RustEffect α)
 noncomputable instance : MonoBind Result := instMonoBindITree
 
 @[partial_fixpoint_monotone]
@@ -253,8 +244,9 @@ theorem bind_mono {R : Type a} {α} {S : Type b} [PartialOrder α]
     simp [bind]
     apply Aeneas.Data.Coinductive.bind_mono
 
--- TODO: when we add more effects, use Aeneas.Data.Coinductive.vis_mono
+-- TODO: when we add more effects, use Aeneas.Data.Coinductive.ITree.vis_mono
 -- to instantiate monotonicity theorems for those effects.
+-- This will allow partial fixpoint definitions that call the effects.
 
 end Order
 
@@ -375,8 +367,7 @@ instance SubtypeLawfulBEq [BEq α] (p : α → Prop) [LawfulBEq α] : LawfulBEq 
   eq_of_beq {a b} h := by cases a; cases b; simp_all [BEq.beq]
   rfl := by intro a; cases a; simp [BEq.beq]
 
--- TODO: will this make sense when we add more effects, given that .vis returns none?
-/- A helper function that converts failure to none and success to some
+/- A helper function that converts failure (and any effects) to none and success to some
    TODO: move up to Core module? -/
 def Option.ofResult {a : Type u} (x : Result a) :
   Option a :=

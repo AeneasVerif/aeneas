@@ -9,10 +9,9 @@ namespace Aeneas.Data.Coinductive
 
 open Lean.Order
 
--- compared to the original version
--- which uses the traditional tau constructor, this version instead has a bottom element
--- div. tau is not needed to guard recursion, since we are using partial_fixpoint
--- instead of coinduction.
+-- Compared to the original version which uses the traditional tau constructor,
+-- this version instead has a bottom element div. Tau is not needed to guard recursion,
+-- since we are using partial_fixpoint instead of coinduction.
 inductive ITreeF.{u,v} (E : Effect.{u}) (R : Type v) (ITree : Type (max u v)) : Type (max u v) where
   | ret (r : R)
   | div -- equivalent to infinite tau stream from traditional ITrees
@@ -326,7 +325,7 @@ theorem vis_inj_effect {E} {α} {e1 e2 k1 k2} : @ITree.vis α E e1 k1 = ITree.vi
   simp at eq
   grind
 
--- theorems to make ITree.cases compute:
+-- Theorems to make ITree.cases compute:
 @[simp]
 theorem ITree.cases.ret {E R motive r d v x}
   : @ITree.cases E R motive r d v (.ret x) = r x := by cbv
