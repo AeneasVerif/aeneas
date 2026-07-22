@@ -1,0 +1,9 @@
+# Configures the "New issue" chooser: https://docs.github.com/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository
+blank_issues_enabled: false
+contact_links:
+  - name: Aeneas Zulip chat
+    url: https://aeneas-verif.zulipchat.com/
+    about: Questions, usage help, and general discussion.
+  - name: Charon issue tracker
+    url: https://github.com/AeneasVerif/charon/issues
+    about: For issues related to Charon (LLBC generation), report there instead.
