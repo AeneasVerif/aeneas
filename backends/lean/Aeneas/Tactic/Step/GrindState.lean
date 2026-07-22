@@ -5,6 +5,7 @@ Authors: Son Ho
 -/
 module
 public import Lean
+public import Lean.Meta.Tactic.Grind.Solve
 public import Aeneas.Tactic.Solver.ScalarTac
 public import Aeneas.Tactic.Step.Init
 public import Aeneas.Tactic.Solver.Grind.Init

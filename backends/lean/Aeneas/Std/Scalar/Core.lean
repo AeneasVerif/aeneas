@@ -672,20 +672,20 @@ abbrev  I128  := IScalar .I128
 
 /-!  ofNatCore -/
 -- TODO: typeclass?
-def Usize.ofNatCore := @UScalar.ofNatCore .Usize
-def U8.ofNatCore    := @UScalar.ofNatCore .U8
-def U16.ofNatCore   := @UScalar.ofNatCore .U16
-def U32.ofNatCore   := @UScalar.ofNatCore .U32
-def U64.ofNatCore   := @UScalar.ofNatCore .U64
-def U128.ofNatCore  := @UScalar.ofNatCore .U128
+@[expose] def Usize.ofNatCore := @UScalar.ofNatCore .Usize
+@[expose] def U8.ofNatCore    := @UScalar.ofNatCore .U8
+@[expose] def U16.ofNatCore   := @UScalar.ofNatCore .U16
+@[expose] def U32.ofNatCore   := @UScalar.ofNatCore .U32
+@[expose] def U64.ofNatCore   := @UScalar.ofNatCore .U64
+@[expose] def U128.ofNatCore  := @UScalar.ofNatCore .U128
 
 /-!  ofIntCore -/
-def Isize.ofIntCore := @IScalar.ofIntCore .Isize
-def I8.ofIntCore    := @IScalar.ofIntCore .I8
-def I16.ofIntCore   := @IScalar.ofIntCore .I16
-def I32.ofIntCore   := @IScalar.ofIntCore .I32
-def I64.ofIntCore   := @IScalar.ofIntCore .I64
-def I128.ofIntCore  := @IScalar.ofIntCore .I128
+@[expose] def Isize.ofIntCore := @IScalar.ofIntCore .Isize
+@[expose] def I8.ofIntCore    := @IScalar.ofIntCore .I8
+@[expose] def I16.ofIntCore   := @IScalar.ofIntCore .I16
+@[expose] def I32.ofIntCore   := @IScalar.ofIntCore .I32
+@[expose] def I64.ofIntCore   := @IScalar.ofIntCore .I64
+@[expose] def I128.ofIntCore  := @IScalar.ofIntCore .I128
 
 /-!  ofNat -/
 -- TODO: typeclass?
