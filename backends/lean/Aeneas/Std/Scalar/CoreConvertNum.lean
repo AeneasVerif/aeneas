@@ -802,7 +802,7 @@ theorem core.num.«%S».is_multiple_of.spec (a b : «%S») :
     core.num.«%S».is_multiple_of a b
     ⦃ (r : Bool) => r = (a.val % b.val = 0) ⦄ := UScalar.is_multiple_of.spec a b
 
-@[reducible, rust_type "core::num::error::TryFromIntError"]
+@[reducible, expose, rust_type "core::num::error::TryFromIntError"]
 def core.num.error.TryFromIntError : Type := Unit
 
 /-- General fallible conversion between unsigned scalar types. -/

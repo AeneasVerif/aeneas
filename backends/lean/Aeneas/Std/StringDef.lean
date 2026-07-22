@@ -5,6 +5,6 @@ public section
 
 namespace Aeneas.Std
 
-def Str := Slice U8
+@[expose] def Str := Slice U8
 
 end Aeneas.Std

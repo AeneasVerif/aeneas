@@ -7,7 +7,7 @@ public section
 
 namespace Aeneas.Std
 
-@[reducible, rust_type "core::fmt::Error"]
+@[reducible, expose, rust_type "core::fmt::Error"]
 def core.fmt.Error := Unit
 
 /- TODO: -/
@@ -46,10 +46,10 @@ def core.result.Result.unwrap.mut {T E : Type}
 
 
 -- TODO: this is a simplistic model
-@[rust_type "core::fmt::Arguments"]
+@[expose, rust_type "core::fmt::Arguments"]
 def core.fmt.Arguments : Type := Unit
 
-@[rust_type "core::fmt::rt::Argument"]
+@[expose, rust_type "core::fmt::rt::Argument"]
 def core.fmt.rt.Argument : Type := Unit
 
 @[rust_fun "core::fmt::{core::fmt::Arguments<'a>}::from_str"]
