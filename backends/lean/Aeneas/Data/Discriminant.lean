@@ -1,6 +1,6 @@
 module
 public import Lean
-public import Aeneas.Std.Scalar.Core
+public meta import Aeneas.Std.Scalar.Core
 public import Aeneas.Std.Scalar.Notations
 public section
 

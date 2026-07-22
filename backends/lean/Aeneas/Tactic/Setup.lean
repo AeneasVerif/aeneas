@@ -8,12 +8,12 @@ namespace Aeneas
 open Lean Elab Command Term Meta
 
 /-- When `true` (default), using the deprecated `#setup_aeneas_simps` command emits a warning. -/
-register_option Deprecated.setupAeneasSimps : Bool := {
+meta register_option Deprecated.setupAeneasSimps : Bool := {
   defValue := true
   descr := "Emit warnings when using the deprecated `#setup_aeneas_simps` command"
 }
 
-private def emitSetupAeneasSimpsWarning : CommandElabM Unit := do
+private meta def emitSetupAeneasSimpsWarning : CommandElabM Unit := do
   if Deprecated.setupAeneasSimps.get (← getOptions) then
     logWarning m!"`#setup_aeneas_simps` has been deprecated. \
       Set `set_option Aeneas.Deprecated.setupAeneasSimps false` to silence this warning."
