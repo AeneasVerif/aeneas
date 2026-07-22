@@ -356,4 +356,35 @@ def sum_into_take (v : alloc.vec.Vec Std.U32) : Result Std.U32 := do
       (core.iter.traits.iterator.IteratorVecIntoIter Std.U32) ii 3#usize
   sum_into_take_loop iter 0#u32
 
+/-- [vec_iter::for_over_vec_of_slices]: loop body 0:
+    Source: 'tests/src/vec-iter.rs', lines 78:4-78:23
+    Visibility: public -/
+@[rust_loop_body]
+def for_over_vec_of_slices_loop.body
+  (iter : alloc.vec.into_iter.IntoIter (Slice Bool)) :
+  Result (ControlFlow (alloc.vec.into_iter.IntoIter (Slice Bool)) Unit)
+  := do
+  let (o, iter1) ← alloc.vec.into_iter.IteratorIntoIter.next iter
+  match o with
+  | none => ok (done ())
+  | some _ => ok (cont iter1)
+
+/-- [vec_iter::for_over_vec_of_slices]: loop 0:
+    Source: 'tests/src/vec-iter.rs', lines 78:4-78:23
+    Visibility: public -/
+@[rust_loop]
+def for_over_vec_of_slices_loop
+  (iter : alloc.vec.into_iter.IntoIter (Slice Bool)) : Result Unit := do
+  loop
+    (fun iter1 => for_over_vec_of_slices_loop.body iter1)
+    iter
+
+/-- [vec_iter::for_over_vec_of_slices]:
+    Source: 'tests/src/vec-iter.rs', lines 77:0-79:1
+    Visibility: public -/
+def for_over_vec_of_slices
+  (chunks : alloc.vec.Vec (Slice Bool)) : Result Unit := do
+  let iter ← alloc.vec.IntoIteratorVec.into_iter chunks
+  for_over_vec_of_slices_loop iter
+
 end vec_iter

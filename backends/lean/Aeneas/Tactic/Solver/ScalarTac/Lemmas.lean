@@ -244,6 +244,12 @@ attribute [scalar_tac_simps]
   -- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do
   Int.subNatNat_eq_coe
 
+/- Decrease the priority of the following projectors when inferring grind patterns
+   (otherwise it leads to a lot of inefficient patterns). For instance, `grind` may
+   select pattern `x.val` instead of `x.val ≤ y.val` when seeing expression
+   `∀ x y, x.val ≤ y.val → ...` -/
+attribute [grind symbol low] UScalar.val IScalar.val Subtype.val
+
 @[scalar_tac x.val]
 theorem UScalar.bounds {ty : UScalarTy} (x : UScalar ty) :
   x.val ≤ UScalar.max ty := by
