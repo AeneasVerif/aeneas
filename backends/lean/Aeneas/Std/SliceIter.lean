@@ -3,6 +3,7 @@ module
 public import Aeneas.Std.Slice
 public import Aeneas.Std.Array.Array
 public import Aeneas.Std.Core.Iter
+public meta import Aeneas.Std.Core.Iter
 public section
 
 namespace Aeneas.Std

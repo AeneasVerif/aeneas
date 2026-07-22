@@ -90,7 +90,7 @@ structure core.iter.traits.iterator.Iterator (Self : Type) (Self_Item : Type)
   -- rev : Self → Result (core.iter.adapters.rev.Rev Self) -- this leads to a circularity
   -- TODO: collect
 
-@[trait_default, rust_fun "core::iter::traits::iterator::Iterator::step_by"]
+@[expose, trait_default, rust_fun "core::iter::traits::iterator::Iterator::step_by"]
 def core.iter.traits.iterator.Iterator.step_by.trait_default
   {Self Item : Type}
   (_IteratorInst : core.iter.traits.iterator.Iterator Self Item)
@@ -98,7 +98,7 @@ def core.iter.traits.iterator.Iterator.step_by.trait_default
   Result (core.iter.adapters.step_by.StepBy Self) :=
   core.iter.traits.iterator.Iterator.step_by.default self step_by
 
-@[trait_default, rust_fun "core::iter::traits::iterator::Iterator::enumerate"]
+@[expose, trait_default, rust_fun "core::iter::traits::iterator::Iterator::enumerate"]
 def core.iter.traits.iterator.Iterator.enumerate.trait_default
   {Self Item : Type}
   (_IteratorInst : core.iter.traits.iterator.Iterator Self Item)
@@ -106,7 +106,7 @@ def core.iter.traits.iterator.Iterator.enumerate.trait_default
   Result (core.iter.adapters.enumerate.Enumerate Self) :=
   core.iter.traits.iterator.Iterator.enumerate.default self
 
-@[trait_default, rust_fun "core::iter::traits::iterator::Iterator::take"]
+@[expose, trait_default, rust_fun "core::iter::traits::iterator::Iterator::take"]
 def core.iter.traits.iterator.Iterator.take.trait_default
   {Self Item : Type}
   (_IteratorInst : core.iter.traits.iterator.Iterator Self Item)
@@ -143,7 +143,7 @@ def core.iter.adapters.step_by.IteratorStepBy.next
 
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, @Clause0_Item>"]
-impl_def core.iter.traits.iterator.IteratorStepBy {I : Type} {Item : Type}
+public impl_def core.iter.traits.iterator.IteratorStepBy {I : Type} {Item : Type}
   (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
   core.iter.traits.iterator.Iterator (core.iter.adapters.step_by.StepBy I) Item := {
   next := core.iter.adapters.step_by.IteratorStepBy.next IteratorInst
