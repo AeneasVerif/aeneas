@@ -208,7 +208,7 @@ section Methods
      Given type `α₀ × ... × αₙ`, introduce fresh variables
      `x₀ : α₀, ..., xₙ : αₙ` and call the continuation with those.
   -/
-  def withFreshTupleFieldFVars [Inhabited a] (basename : Name) (ty : Expr) (k : Array Expr → m a) : m a := do
+  meta def withFreshTupleFieldFVars [Inhabited a] (basename : Name) (ty : Expr) (k : Array Expr → m a) : m a := do
     let tys := destProdsType ty
     let tys := List.map (fun (ty, i) => (Name.num basename i, fun _ => pure ty)) (List.zipIdx tys)
     withLocalDeclsD ⟨ tys ⟩ k
@@ -221,7 +221,7 @@ end Methods
   ∀ x1 ... xn, H1 → ... Hn → spec (f x1 ... xn) P
   ```
 -/
-def getStepSpecFunArgsExpr (ty : Expr) :
+meta def getStepSpecFunArgsExpr (ty : Expr) :
   MetaM (Expr × SpecInfo) := do
   let ty := ty.consumeMData
   unless ← isProp ty do
@@ -240,6 +240,8 @@ def getStepSpecFunArgsExpr (ty : Expr) :
   then pure (args[info.program_index]!, info) -- this is `f x1 ... xn`
   else throwError "Expected to be a `spec (f x1 ... xn) P`, got {ty₂}"
 
+meta section
+
 deriving instance Ord for Lean.Name
 structure Rules where
   /--
@@ -252,13 +254,14 @@ structure Rules where
      come out of scope) on the side -/
   deactivated : Std.HashSet Name
 deriving Inhabited
+end
 
-def Rules.empty : Rules := ⟨ Std.TreeMap.empty, Std.HashSet.emptyWithCapacity ⟩
+meta def Rules.empty : Rules := ⟨ Std.TreeMap.empty, Std.HashSet.emptyWithCapacity ⟩
 
-def Extension := SimpleScopedEnvExtension ((Name × DiscrTreeKey) × Name) Rules
+@[expose] def Extension := SimpleScopedEnvExtension ((Name × DiscrTreeKey) × Name) Rules
 deriving Inhabited
 
-def Rules.insert (r : Rules) (kv : (Name × Array DiscrTree.Key) × Name) : Rules :=
+meta def Rules.insert (r : Rules) (kv : (Name × Array DiscrTree.Key) × Name) : Rules :=
   let ((specName, prog), thm) := kv
   { rules :=
     r.rules.insert specName ((match r.rules.get? specName with
@@ -268,10 +271,10 @@ def Rules.insert (r : Rules) (kv : (Name × Array DiscrTree.Key) × Name) : Rule
     ,
     deactivated := r.deactivated.erase kv.snd }
 
-def Rules.erase (r : Rules) (k : Name) : Rules :=
+meta def Rules.erase (r : Rules) (k : Name) : Rules :=
   { r with deactivated := r.deactivated.insert k }
 
-def mkExtension (name : Name := by exact decl_name%) :
+meta def mkExtension (name : Name := by exact decl_name%) :
   IO Extension :=
   registerSimpleScopedEnvExtension {
     name        := name,
@@ -285,7 +288,7 @@ structure StepSpecAttr where
   ext  : Extension
   deriving Inhabited
 
-private def generateMvcgenSpec (toMvcgenThm : Name) (stx : Syntax) (attrKind : AttributeKind)
+private meta def generateMvcgenSpec (toMvcgenThm : Name) (stx : Syntax) (attrKind : AttributeKind)
     (thDecl : AsyncConstantInfo) : MetaM Unit := do
   let sig := thDecl.sig.get
   let thName := thDecl.name
@@ -311,7 +314,7 @@ private def generateMvcgenSpec (toMvcgenThm : Name) (stx : Syntax) (attrKind : A
     -- Register with @[spec] so mvcgen can find it
     Lean.Attribute.add mvcgenSpecName `spec .missing attrKind
 
-private def saveStepSpecFromThm (ext : Extension) (attrKind : AttributeKind) (stx : Syntax)
+private meta def saveStepSpecFromThm (ext : Extension) (attrKind : AttributeKind) (stx : Syntax)
     (thName : Name) : AttrM Unit := do
   -- Lookup the theorem
   let env ← getEnv
@@ -344,7 +347,7 @@ private def saveStepSpecFromThm (ext : Extension) (attrKind : AttributeKind) (st
     pure ()
 
 /- Initiliaze the `step` attribute. -/
-initialize stepAttr : StepSpecAttr ← do
+meta initialize stepAttr : StepSpecAttr ← do
   let ext ← mkExtension `stepMap
   let attrImpl : AttributeImpl := {
     name := `step
@@ -360,7 +363,7 @@ initialize stepAttr : StepSpecAttr ← do
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl, ext := ext }
 
-def StepSpecAttr.find? (s : StepSpecAttr) (name : Name) (e : Expr) : MetaM (Array Name) := do
+meta def StepSpecAttr.find? (s : StepSpecAttr) (name : Name) (e : Expr) : MetaM (Array Name) := do
   let env ← getEnv
   let state := s.ext.getState env
   let specState := specAttr.getState env
@@ -371,10 +374,10 @@ def StepSpecAttr.find? (s : StepSpecAttr) (name : Name) (e : Expr) : MetaM (Arra
   let rules ← dtree.getMatch e
   pure (rules.filter (fun th => th ∉ state.deactivated))
 
-def StepSpecAttr.getState (s : StepSpecAttr) : MetaM Rules := do
+meta def StepSpecAttr.getState (s : StepSpecAttr) : MetaM Rules := do
   pure (s.ext.getState (← getEnv))
 
-def showStoredStepThms : MetaM Unit := do
+meta def showStoredStepThms : MetaM Unit := do
   let st ← stepAttr.getState
   -- TODO: how can we iterate over (at least) the values stored in the tree?
   --let s := st.toList.foldl (fun s (f, th) => f!"{s}\n{f} → {th}") f!""
@@ -447,7 +450,7 @@ theorem spec_lift {α : Type} (x : α) (P : α → Prop) (h : P x) :
   simp [Std.lift]
   apply h
 
-def reduceProdProjs (e : Expr) : MetaM Expr := do
+meta def reduceProdProjs (e : Expr) : MetaM Expr := do
   let pre (e : Expr) : MetaM TransformStep := do
     trace[Utils] "Attempting to reduce: {e}"
     match ← reduceProj? e with
@@ -513,7 +516,7 @@ end Test
 
     Note that the pattern is optional: if the user doesn't provide it, we completely decompose
 -/
-def liftThmType (thmTy : Expr) (pat : Option Syntax)
+meta def liftThmType (thmTy : Expr) (pat : Option Syntax)
   /- `mkPat` generates the pattern to use to guide the replacement.
 
   For instance: `∃ x y, foo a = (x, y)`
@@ -582,13 +585,13 @@ def liftThmType (thmTy : Expr) (pat : Option Syntax)
   pure thmTy
 
 
-def liftThmReplaceInTy (thm0 pat npat : Expr) (_ : Array Expr) : MetaM Expr := do
+meta def liftThmReplaceInTy (thm0 pat npat : Expr) (_ : Array Expr) : MetaM Expr := do
   let thm ← mapVisit (fun _ e => do if e == pat then pure npat else pure e) thm0
   /- Reduce a bit the expression, but in a controlled manner, to make it cleaner -/
   let thm ← normalizeLetBindings thm
   reduceProdProjs thm
 
-def liftThm (stx : Syntax) (name : Name) (pat : Option (TSyntax `term))
+meta def liftThm (stx : Syntax) (name : Name) (pat : Option (TSyntax `term))
   (mkPat : Array Expr → Expr → MetaM Expr := fun _ _ => failure)
   (mkPred := liftThmReplaceInTy)
   (suffix : String := "step_spec")
@@ -694,7 +697,7 @@ syntax (name := step_pure) "step_pure" term : attr
 section
   variable {m : Type → Type} [Monad m] [MonadOptions m] [MonadTrace m] [AddMessageContext m] [MonadError m]
 
-  partial def parseCommaSeparated (isTuple : Bool) (stx : Syntax) (acc : Array Syntax := #[]) :
+  meta partial def parseCommaSeparated (isTuple : Bool) (stx : Syntax) (acc : Array Syntax := #[]) :
     m (Array Syntax) := do
     trace[StepElab] "parsing comma separated: {stx} with acc: {acc}"
     -- TODO: check if ident
@@ -750,7 +753,7 @@ section
     return the list of identifiers appearing inside the pattern.
 
   Remark: I tried implementing something simpler based on pattern matching but couldn't get it to work. -/
-  partial def getStepPurePatternIdents (stx : Syntax) : m (Array Ident) := do
+  meta partial def getStepPurePatternIdents (stx : Syntax) : m (Array Ident) := do
     trace[StepElab] "syntax: {stx}"
     -- Check if this is an identifier
     match stx with
@@ -807,7 +810,7 @@ end
 open Elab Term Attribute in
 /-- We desugar patterns of the shape `foo = (x, y, z)` to `∃ x y z, foo = (x, y, z)` in order to bind
     the variables introduced in the right-hand side, allowing us to elaborate the patterns. -/
-def elabStepPureAttribute (stx : Syntax) : AttrM (TSyntax `term) :=
+meta def elabStepPureAttribute (stx : Syntax) : AttrM (TSyntax `term) :=
   withRef stx do
     match stx with
     | `(attr| step_pure $x = $pat) => do
@@ -868,7 +871,7 @@ structure StepPureSpecAttr where
    If we don't put an equality in the pattern, `step_pure` will introduce one variable
    per field in the type of the pattern, if it is a tuple.
  -/
-initialize stepPureAttribute : StepPureSpecAttr ← do
+meta initialize stepPureAttribute : StepPureSpecAttr ← do
   let attrImpl : AttributeImpl := {
     name := `step_pure
     descr := "Adds lifted version of pure theorems to the `step_pure` database"
@@ -909,7 +912,7 @@ syntax (name := step_pure_def) "step_pure_def" (term)? : attr
 
 /-- We desugar patterns of the shape `foo = (x, y, z)` to `∃ x y z, foo = (x, y, z)` in order to bind
     the variables introduced in the right-hand side, allowing us to elaborate the patterns. -/
-def elabStepPureDefPattern (stx : Syntax) : AttrM (TSyntax `term) :=
+meta def elabStepPureDefPattern (stx : Syntax) : AttrM (TSyntax `term) :=
   withRef stx do
     match stx with
     | `(term| $x = $pat)
@@ -932,7 +935,7 @@ structure StepPureDefSpecAttr where
 theorem specLiftDef {α} (x : α) : Std.WP.spec (Std.lift x) (fun y => y = x) := by
   simp only [Std.lift, Std.WP.spec_ok]
 
-def mkStepPureDefThm (stx : Syntax) (pat : Option (TSyntax `term)) (n : Name)
+meta def mkStepPureDefThm (stx : Syntax) (pat : Option (TSyntax `term)) (n : Name)
   (suffix : String := "step_spec") : MetaM Name := do
   -- Regular case
   let mkPat (fvars : Array Expr) (ty : Expr) : MetaM Expr := do
@@ -987,7 +990,7 @@ info: Aeneas.Step.Test.wrapping_add.step_spec (x y : U8) : Std.lift (wrapping_ad
   #check wrapping_add.step_spec
 end Test
 
-def elabStepPureDefAttribute (stx : Syntax) : AttrM (Option (TSyntax `term)) :=
+meta def elabStepPureDefAttribute (stx : Syntax) : AttrM (Option (TSyntax `term)) :=
   withRef stx do
     match stx with
     | `(attr| step_pure_def $x = $pat)
@@ -1008,7 +1011,7 @@ def elabStepPureDefAttribute (stx : Syntax) : AttrM (Option (TSyntax `term)) :=
 
 /- The `step_pure_def` attribute, which automatically generates
    step lemmas for pure definitions. -/
-initialize stepPureDefAttribute : StepPureDefSpecAttr ← do
+meta initialize stepPureDefAttribute : StepPureDefSpecAttr ← do
   let attrImpl : AttributeImpl := {
     name := `step_pure_def
     descr := "Automatically generate `step` theorems for pure definitions"

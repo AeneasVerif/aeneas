@@ -1,7 +1,7 @@
 module
 public import Aeneas.Std.Primitives
-public import Aeneas.Tactic.Step.Init
-public import Aeneas.Tactic.Conv.Bvify.Init
+public meta import Aeneas.Tactic.Step.Init
+public meta import Aeneas.Tactic.Conv.Bvify.Init
 public section
 
 namespace Aeneas.Std

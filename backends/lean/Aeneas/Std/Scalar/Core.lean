@@ -4,10 +4,10 @@ public import Lean.Meta.Tactic.Simp
 public import Aeneas.Std.Core.Core
 public import Aeneas.Tactic.Step.Init
 public import Aeneas.Tactic.Solver.ScalarTac.ScalarTac
-public import Aeneas.Tactic.Conv.Bvify.Init
+public meta import Aeneas.Tactic.Conv.Bvify.Init
 public import Aeneas.Data.Nat
 public import Aeneas.Data.Int
-public import Aeneas.Tactic.Simp.SimpLists.Init
+public meta import Aeneas.Tactic.Simp.SimpLists.Init
 public import AeneasMeta.BvEnumToBitVec
 public section
 
@@ -47,7 +47,7 @@ inductive IScalarTy where
 | I128
 deriving BvEnumToBitVec
 
-@[implicit_reducible]
+@[implicit_reducible, expose]
 def UScalarTy.numBits (ty : UScalarTy) : Nat :=
   match ty with
   | Usize => System.Platform.numBits
@@ -57,7 +57,7 @@ def UScalarTy.numBits (ty : UScalarTy) : Nat :=
   | U64 => 64
   | U128 => 128
 
-@[implicit_reducible]
+@[implicit_reducible, expose]
 def IScalarTy.numBits (ty : IScalarTy) : Nat :=
   match ty with
   | Isize => System.Platform.numBits
@@ -73,7 +73,7 @@ structure UScalar (ty : UScalarTy) where
   bv : BitVec ty.numBits
 deriving Repr, BEq, DecidableEq
 
-def UScalar.val {ty} (x : UScalar ty) : ℕ := x.bv.toNat
+@[expose] def UScalar.val {ty} (x : UScalar ty) : ℕ := x.bv.toNat
 
 /-- Signed integer -/
 structure IScalar (ty : IScalarTy) where
@@ -81,7 +81,7 @@ structure IScalar (ty : IScalarTy) where
   bv : BitVec ty.numBits
 deriving Repr, BEq, DecidableEq
 
-def IScalar.val {ty} (x : IScalar ty) : ℤ := x.bv.toInt
+@[expose] def IScalar.val {ty} (x : IScalar ty) : ℤ := x.bv.toInt
 
 /-!
 # Bounds, Size
@@ -91,6 +91,8 @@ when using tactics like `assumption`: it often happens that unification attempts
 complex expressions (for instance by trying to reduce an expression like `2^128`, which
 is extremely expensive).
 -/
+
+@[expose] section
 
 irreducible_def UScalar.max (ty : UScalarTy) : Nat := 2^ty.numBits-1
 irreducible_def IScalar.min (ty : IScalarTy) : Int := -2^(ty.numBits - 1)
@@ -185,7 +187,9 @@ def I128.rMax : Int := 170141183460469231731687303715884105727
 def Isize.rMin : Int := -2^(System.Platform.numBits - 1)
 def Isize.rMax : Int := 2^(System.Platform.numBits - 1)-1
 
-def UScalar.rMax (ty : UScalarTy) : Nat :=
+end
+
+@[expose] def UScalar.rMax (ty : UScalarTy) : Nat :=
   match ty with
   | .Usize => Usize.rMax
   | .U8    => U8.rMax
@@ -194,7 +198,7 @@ def UScalar.rMax (ty : UScalarTy) : Nat :=
   | .U64   => U64.rMax
   | .U128  => U128.rMax
 
-def IScalar.rMin (ty : IScalarTy) : Int :=
+@[expose] def IScalar.rMin (ty : IScalarTy) : Int :=
   match ty with
   | .Isize => Isize.rMin
   | .I8    => I8.rMin
@@ -203,7 +207,7 @@ def IScalar.rMin (ty : IScalarTy) : Int :=
   | .I64   => I64.rMin
   | .I128  => I128.rMin
 
-def IScalar.rMax (ty : IScalarTy) : Int :=
+@[expose] def IScalar.rMax (ty : IScalarTy) : Int :=
   match ty with
   | .Isize => Isize.rMax
   | .I8    => I8.rMax
@@ -365,17 +369,17 @@ theorem UScalarTy.cNumBits_nonzero (ty : UScalarTy) : ty.cNumBits ≠ 0 := by
 theorem IScalarTy.cNumBits_nonzero (ty : IScalarTy) : ty.cNumBits ≠ 0 := by
   cases ty <;> simp [cNumBits, I32.numBits]
 
-def UScalar.cMax (ty : UScalarTy) : Nat :=
+@[expose] def UScalar.cMax (ty : UScalarTy) : Nat :=
   match ty with
   | .Usize => UScalar.rMax .U32
   | _ => UScalar.rMax ty
 
-def IScalar.cMin (ty : IScalarTy) : Int :=
+@[expose] def IScalar.cMin (ty : IScalarTy) : Int :=
   match ty with
   | .Isize => IScalar.rMin .I32
   | _ => IScalar.rMin ty
 
-def IScalar.cMax (ty : IScalarTy) : Int :=
+@[expose] def IScalar.cMax (ty : IScalarTy) : Int :=
   match ty with
   | .Isize => IScalar.rMax .I32
   | _ => IScalar.rMax ty

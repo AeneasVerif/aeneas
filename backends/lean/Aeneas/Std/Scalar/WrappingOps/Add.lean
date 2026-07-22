@@ -55,7 +55,7 @@ iscalar @[simp, bvify, grind =, agrind =] theorem core.num.«%S».wrapping_add_b
 
 @[simp] theorem UScalar.wrapping_add_val_eq {ty} (x y : UScalar ty) :
   (wrapping_add x y).val = (x.val + y.val) % (UScalar.size ty) := by
-  simp only [wrapping_add, val, size]
+  simp only [wrapping_add, val, size_def]
   have : 0 < 2^ty.numBits := by simp
   have : 2 ^ ty.numBits - 1 + 1 = 2^ty.numBits := by omega
   simp only [BitVec.toNat_add, bv_toNat]

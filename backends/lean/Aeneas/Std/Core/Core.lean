@@ -1,7 +1,7 @@
 module
 public import Lean
 public import Aeneas.Std.Primitives
-public import Aeneas.Tactic.Step.Init
+public meta import Aeneas.Tactic.Step.Init
 public import Aeneas.Tactic.Elab.TraitDefault.Init
 public import Aeneas.Std.Alloc
 public section

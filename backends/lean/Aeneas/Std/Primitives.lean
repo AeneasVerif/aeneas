@@ -104,7 +104,7 @@ def eval_global {α: Type u} (x: Result α) (_: ok? x := by prove_eval_global) :
   | fail _ | div => by contradiction
   | ok x => x
 
-@[simp]
+@[simp, expose]
 def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
   match x with
   | some x => ok x
@@ -270,7 +270,7 @@ attribute [simp, grind =] Function.uncurry_apply_pair
     which appear inside a `lift`. As only a specific set of functions from the standard library are
     purified (i.e., don't live in `Result`), this should not be a big issue in practice.
   -/
-def lift {α : Type u} (x : α) : Result α := Result.ok x
+@[expose] def lift {α : Type u} (x : α) : Result α := Result.ok x
 
 /-!
 # Loops
