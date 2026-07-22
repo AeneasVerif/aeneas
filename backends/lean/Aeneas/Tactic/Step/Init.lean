@@ -90,6 +90,8 @@ structure Config where
   /--`grind` parameter: see `Lean.Grind.Config` -/
   gen : Nat  := 2
   /--`grind` parameter: see `Lean.Grind.Config` -/
+  genLocal : Nat := 2
+  /--`grind` parameter: see `Lean.Grind.Config` -/
   instances : Nat  := 100
   /--`grind` parameter: see `Lean.Grind.Config` -/
   canonHeartbeats : Nat := 1000
@@ -115,8 +117,8 @@ def Config.toGrindConfig (cfg : Config) : Grind.Config :=
         grind := _, withGroundSimprocs := _, nla := _,
         threadGrindState := _, grindPreprocessIters := _, grindPreprocessSplit := _,
         preprocessGrind := _,
-        splits, ematch, splitMatch, splitIte, splitIndPred, funext, gen, instances, canonHeartbeats } := cfg
-  { splits, ematch, splitMatch, splitIte, splitIndPred, funext, gen, instances, canonHeartbeats }
+        splits, ematch, splitMatch, splitIte, splitIndPred, funext, gen, genLocal, instances, canonHeartbeats } := cfg
+  { splits, ematch, splitMatch, splitIte, splitIndPred, funext, gen, genLocal, instances, canonHeartbeats }
 
 declare_option_config_elab Config elabPartialConfig aeneas.step
 
