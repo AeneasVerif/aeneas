@@ -39,23 +39,23 @@ scalar @[simp] abbrev core.cmp.impls.Ord'S.cmp (x y : «%S») : Ordering := comp
 
 /- [core::cmp::impls::{core::cmp::PartialOrd<u8> for u8}::lt]:
    Name pattern: core::cmp::impls::{core::cmp::PartialOrd<u8, u8>}::lt -/
-scalar def core.cmp.impls.PartialOrd'S.lt (x y : «%S») : Bool := x.val < y.val
+scalar @[expose] def core.cmp.impls.PartialOrd'S.lt (x y : «%S») : Bool := x.val < y.val
 
 /- [core::cmp::impls::{core::cmp::PartialOrd<u8> for u8}::le]:
    Name pattern: core::cmp::impls::{core::cmp::PartialOrd<u8, u8>}::le -/
-scalar def core.cmp.impls.PartialOrd'S.le (x y : «%S») : Bool := x.val ≤ y.val
+scalar @[expose] def core.cmp.impls.PartialOrd'S.le (x y : «%S») : Bool := x.val ≤ y.val
 
 /- [core::cmp::impls::{core::cmp::PartialOrd<u8> for u8}::gt]:
    Name pattern: core::cmp::impls::{core::cmp::PartialOrd<u8, u8>}::gt -/
-scalar def core.cmp.impls.PartialOrd'S.gt (x y : «%S») : Bool := x.val > y.val
+scalar @[expose] def core.cmp.impls.PartialOrd'S.gt (x y : «%S») : Bool := x.val > y.val
 
 /- [core::cmp::impls::{core::cmp::PartialOrd<u8> for u8}::ge]:
    Name pattern: core::cmp::impls::{core::cmp::PartialOrd<u8, u8>}::ge -/
-scalar def core.cmp.impls.PartialOrd'S.ge (x y : «%S») : Bool := x.val ≥ y.val
+scalar @[expose] def core.cmp.impls.PartialOrd'S.ge (x y : «%S») : Bool := x.val ≥ y.val
 
 /- Trait implementation: [core::cmp::impls::{core::cmp::PartialOrd<u8> for u8}]
    Name pattern: core::cmp::PartialOrd<u8, u8> -/
-scalar @[reducible] def core.cmp.PartialOrd'S : core.cmp.PartialOrd «%S» «%S» := {
+scalar @[reducible, expose] def core.cmp.PartialOrd'S : core.cmp.PartialOrd «%S» «%S» := {
   partialEqInst := core.cmp.PartialEq'S
   partial_cmp := liftFun2 core.cmp.impls.PartialOrd'S.partial_cmp
   lt := liftFun2 core.cmp.impls.PartialOrd'S.lt

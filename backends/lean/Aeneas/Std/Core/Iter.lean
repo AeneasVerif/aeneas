@@ -115,7 +115,7 @@ def core.iter.traits.iterator.Iterator.take.trait_default
   core.iter.traits.iterator.Iterator.take.default self n
 
 /-- Skip up to `n` elements from an iterator -/
-def core.iter.adapters.step_by.skipN
+@[expose] def core.iter.adapters.step_by.skipN
     {I : Type} {Item : Type}
     (iterInst : core.iter.traits.iterator.Iterator I Item)
     (iter : I) : (n : Nat) → Result I
@@ -126,7 +126,7 @@ def core.iter.adapters.step_by.skipN
     | none => .ok iter
     | some _ => core.iter.adapters.step_by.skipN iterInst iter n
 
-@[rust_fun
+@[expose, rust_fun
   "core::iter::adapters::step_by::{core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, @Clause0_Item>}::next"]
 def core.iter.adapters.step_by.IteratorStepBy.next
   {I : Type} {Item : Type}
@@ -143,7 +143,7 @@ def core.iter.adapters.step_by.IteratorStepBy.next
 
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, @Clause0_Item>"]
-public impl_def core.iter.traits.iterator.IteratorStepBy {I : Type} {Item : Type}
+impl_def core.iter.traits.iterator.IteratorStepBy {I : Type} {Item : Type}
   (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
   core.iter.traits.iterator.Iterator (core.iter.adapters.step_by.StepBy I) Item := {
   next := core.iter.adapters.step_by.IteratorStepBy.next IteratorInst
@@ -251,7 +251,7 @@ def core.iter.range.IScalarStep.steps_between {ty : IScalarTy}
       ok ⟨ usizeMax, none ⟩
 
 /-- Generic `forward_checked` for all unsigned scalar types. -/
-def core.iter.range.UScalarStep.forward_checked {ty : UScalarTy}
+@[expose] def core.iter.range.UScalarStep.forward_checked {ty : UScalarTy}
     (start : UScalar ty) (n : Usize) : Result (Option (UScalar ty)) :=
   if h : start.val + n.val ≤ UScalar.max ty then
     ok (some (UScalar.ofNatCore (start.val + n.val)
@@ -288,7 +288,7 @@ def core.iter.range.IScalarStep.backward_checked {ty : IScalarTy}
 
 /-- Generic Step instance for all unsigned scalar types. The per-type instances
     below are abbreviations of this, differing only in Clone/PartialOrd. -/
-def core.iter.range.UScalarStep (ty : UScalarTy)
+@[expose] def core.iter.range.UScalarStep (ty : UScalarTy)
     (cloneInst : core.clone.Clone (UScalar ty))
     (partialOrdInst : core.cmp.PartialOrd (UScalar ty) (UScalar ty)) :
     core.iter.range.Step (UScalar ty) := {
@@ -427,7 +427,7 @@ abbrev core.iter.range.StepI128 := IScalarStep .I128 core.clone.CloneI128 core.c
 -- ============================================================================
 --  Model for `Iterator::next` on `Enumerate<I>`
 
-@[rust_fun
+@[expose, rust_fun
   "core::iter::adapters::enumerate::{core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, (usize, @Clause0_Item)>}::next"]
 def core.iter.adapters.enumerate.IteratorEnumerate.next
     {I : Type} {Item : Type}
@@ -460,7 +460,7 @@ impl_def core.iter.traits.iterator.IteratorEnumerate {I : Type} {Item : Type}
 -- ============================================================================
 -- Model for `Iterator::next` on `Take<I>`
 
-@[rust_fun
+@[expose, rust_fun
   "core::iter::adapters::take::{core::iter::traits::iterator::Iterator<core::iter::adapters::take::Take<@I>, @Clause0_Item>}::next"]
 def core.iter.adapters.take.IteratorTake.next
     {I : Type} {Item : Type}
@@ -488,7 +488,7 @@ impl_def core.iter.traits.iterator.IteratorTake {I : Type} {Item : Type}
     (core.iter.traits.iterator.IteratorTake IteratorInst)
 }
 
-@[rust_fun
+@[expose, rust_fun
   "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>}::next"]
 def core.iter.range.IteratorRange.next
    {A : Type} (StepInst : core.iter.range.Step A) :
@@ -541,12 +541,12 @@ def core.iter.adapters.zip.Zip.Insts.CoreIterTraitsIteratorIteratorPair.next
       | none => ok (none, ⟨a', b'⟩)
       | some b => ok (some (a, b), ⟨a', b'⟩)
 
-@[rust_fun "core::ops::range::{core::ops::range::RangeInclusive<@Idx>}::new"]
+@[expose, rust_fun "core::ops::range::{core::ops::range::RangeInclusive<@Idx>}::new"]
 def core.ops.range.RangeInclusive.new {Idx : Type}
     (start «end» : Idx) : Result (core.ops.range.RangeInclusive Idx) :=
   ok ⟨start, «end», false⟩
 
-@[rust_fun "core::ops::range::{core::ops::range::RangeInclusive<@Idx>}::is_empty"]
+@[expose, rust_fun "core::ops::range::{core::ops::range::RangeInclusive<@Idx>}::is_empty"]
 def core.ops.range.RangeInclusive.is_empty {Idx : Type} (inst : core.cmp.PartialOrd Idx Idx)
   (self : core.ops.range.RangeInclusive Idx) : Result Bool := do
   if self.exhausted then ok true
@@ -571,7 +571,7 @@ def core.ops.range.RangeInclusive.is_empty {Idx : Type} (inst : core.cmp.Partial
         })
     }
     ``` -/
-@[rust_fun
+@[expose, rust_fun
   "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::RangeInclusive<@A>, @A>}::next"]
 def core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
   {A : Type} (StepInst : core.iter.range.Step A)

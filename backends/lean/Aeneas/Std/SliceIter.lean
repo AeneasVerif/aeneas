@@ -136,7 +136,7 @@ def core.slice.iter.ChunksExact.getRemainder
   {T : Type} (self : core.slice.iter.ChunksExact T) : Result (Slice T) :=
   ok self.remainder
 
-@[rust_fun
+@[expose, rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>}::next"]
 def core.slice.iter.IteratorChunksExact.next
   {T : Type} (self : core.slice.iter.ChunksExact T) :
