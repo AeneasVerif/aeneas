@@ -1012,6 +1012,7 @@ def Slice.mapM  {α β} (f : α → Result β) (x : Slice α) : Result (Slice β
   match h : x.val.mapM f with
   | ok xs  => ok ⟨xs, List.mapM_Result_length h ▸ x.prop⟩
   | fail e => fail e
+  | ub => ub
   | div    => div
 
 @[step]
@@ -1047,6 +1048,7 @@ theorem Slice.mapM_spec {α β} {f : α → Result β} {s : Slice α} {post : Na
     exact hf
   case h_2 e heq => simp [hl'] at heq
   case h_3 heq => simp [hl'] at heq
+  case h_4 heq => simp [hl'] at heq
 
 -- ============================================================================
 -- Slice.fill — overwrite every element with a clone of `v`
@@ -1060,6 +1062,7 @@ def core.slice.Slice.fill {T : Type} (cloneInst : core.clone.Clone T)
   match h : s.val.mapM (fun _ => cloneInst.clone v) with
   | .ok val => .ok ⟨val, List.mapM_Result_length h ▸ s.property⟩
   | .fail e => .fail e
+  | .ub => .ub
   | .div => .div
 
 private theorem List.mapM_const_ok {T : Type} (l : List T)
@@ -1087,10 +1090,12 @@ theorem core.slice.Slice.fill.spec {T : Type} (cloneInst : core.clone.Clone T)
     | .ok v' =>
       congr 1; have := hclone; rw [hc] at this; simp [WP.wp_return] at this; exact this
     | .fail _ => exfalso; have := hclone; rw [hc] at this; simp at this
+    | .ub => exfalso; have := hclone; rw [hc] at this; simp at this
     | .div => exfalso; have := hclone; rw [hc] at this; simp at this
   have hmapM := List.mapM_const_ok s.val hcl
   split
   · rename_i val heq; rw [hmapM] at heq; cases heq; simp [spec_ok, Slice.length, List.length_replicate]
+  · exfalso; simp_all
   · exfalso; simp_all
   · exfalso; simp_all
 
