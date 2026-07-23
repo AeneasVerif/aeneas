@@ -1,6 +1,7 @@
 module
 public import Aeneas.Tactic.Conv.Bvify.Bvify
 public import Aeneas.Tactic.Simp.SimpScalar
+import all Init.Data.Nat.Power2.Basic
 public section
 
 @[bvify]

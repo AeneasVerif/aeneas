@@ -133,7 +133,7 @@ be discharged by `simp`.
 -/
 
 /-- Computable variant of `isPowerOfTwo`. -/
-@[scalar_tac_simps, simp_scalar_safe]
+@[scalar_tac_simps, simp_scalar_safe, expose]
 def Nat.isPowerOfTwo' (n : Nat) : Bool := 2 ^ n.log2 = n
 
 example : Nat.isPowerOfTwo' 65536 := by simp [scalar_tac_simps]
