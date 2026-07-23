@@ -109,7 +109,7 @@ theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α}
 def curry {α β γ} (f : α × β → γ) (x : α) : β → γ := fun y => f (x, y)
 
 /-- Implication -/
-def imp (P Q : Prop) : Prop := P → Q
+@[expose] def imp (P Q : Prop) : Prop := P → Q
 
 @[simp]
 theorem imp_and_iff (P0 P1 Q : Prop) : imp (P0 ∧ P1) Q ↔ P0 → imp P1 Q := by simp [imp]
