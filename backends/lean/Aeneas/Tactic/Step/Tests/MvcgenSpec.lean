@@ -28,4 +28,4 @@ example (arr : Array U8 25#usize) (i : Usize) (a : U8) (hi : i < arr.length) :
     ⦃ ⌜ True ⌝ ⦄
       Array.update arr i a
     ⦃ ⇓ r => ⌜ r.get? i = some a ⌝ ⦄ := by
-  mvcgen; grind
+  mvcgen <;> grind

@@ -19,7 +19,7 @@ info: Try this:
 
   [apply]     let* ⟨ y, y_post ⟩ ← [ +inferPost ] applyF_spec
     case hf =>
-      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
+      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec.step_spec
       agrind
     agrind
 ---
@@ -51,10 +51,10 @@ info: Try this:
 
   [apply]     let* ⟨ ab, ab_post1, ab_post2 ⟩ ← [ +inferPost ] callPair_spec
     case hf =>
-      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
+      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec.step_spec
       agrind
     case hg =>
-      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
+      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec.step_spec
       agrind
     agrind
 ---
@@ -85,11 +85,11 @@ info: Try this:
 
   [apply]     let* ⟨ y, y_post ⟩ ← [ +inferPost ] callFThenG_spec
     case hf =>
-      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
+      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec.step_spec
       agrind
     case hg =>
       intros y _
-      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
+      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec.step_spec
       agrind
     agrind
 ---
@@ -111,7 +111,7 @@ info: Try this:
   [apply]     let* ⟨ y, y_post1, y_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
     case hf =>
       intros i hi
-      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
+      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec.step_spec
       agrind
     agrind
 ---
@@ -136,7 +136,7 @@ example (s : Slice U32) (h : ∀ i (hi : i < s.len), s[i] < U32.max) :
   let* ⟨ y, y_post1, y_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
   case hf =>
     intros i hi
-    let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
+    let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec.step_spec
     agrind (instances := 20) (ematch := 1)
   agrind (instances := 40) (ematch := 2)
 
@@ -151,12 +151,12 @@ info: Try this:
   [apply]     let* ⟨ y, y_post1, y_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
     case hf =>
       intros i hi
-      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
+      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec.step_spec
       agrind
     let* ⟨ z, z_post1, z_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
     case hf =>
       intros i hi
-      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.mul_spec
+      let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.mul_spec.step_spec
       agrind
     agrind
 ---
@@ -182,12 +182,12 @@ example (s : Slice U32) (h : ∀ i (hi : i < s.len), (s[i] + 1) * (s[i] + 1) ≤
   let* ⟨ y, y_post1, y_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
   case hf =>
     intros i hi
-    let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
+    let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec.step_spec
     agrind (instances := 20) (ematch := 1)
   let* ⟨ z, z_post1, z_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
   case hf =>
     intros i hi
-    let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.mul_spec
+    let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.mul_spec.step_spec
     agrind (instances := 20) (ematch := 1)
   agrind (instances := 100) (ematch := 2)
 

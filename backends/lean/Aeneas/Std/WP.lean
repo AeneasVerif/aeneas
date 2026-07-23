@@ -243,6 +243,42 @@ theorem dspec_imp_forall {m:Result α} {P:Post α} :
   dspec m P → (∀ y, m = ok y → P y) := by
   grind only [= dspec_ok]
 
+/-- Partial-correctness variant of `spec`.
+
+`partialSpec x p_ok p_fail p_div` reads as: "if `x` reduces to `ok a` then `p_ok a` holds; if it
+reduces to `fail e` then `p_fail e` holds; if it diverges then `p_div` holds". Unlike `spec`, it
+does not assume the program terminates without exception. -/
+def partialSpec {α} (x : Result α)
+    (p_ok : α → Prop) (p_fail : Error → Prop) (p_div : Prop) : Prop :=
+  match x with
+  | ok a   => p_ok a
+  | fail e => p_fail e
+  | div    => p_div
+
+@[simp, grind =, agrind =]
+theorem partialSpec_ok (a : α) (p_ok : α → Prop) p_fail p_div :
+    partialSpec (ok a) p_ok p_fail p_div ↔ p_ok a := by
+  simp [partialSpec]
+
+@[simp, grind =, agrind =]
+theorem partialSpec_fail (e : Error) p_ok p_fail p_div :
+    partialSpec (α := α) (fail e) p_ok p_fail p_div ↔ p_fail e := by
+  simp [partialSpec]
+
+@[simp, grind =, agrind =]
+theorem partialSpec_div (p_ok : α → Prop) p_fail p_div :
+    partialSpec div p_ok p_fail p_div ↔ p_div := by
+  simp [partialSpec]
+
+/-- Derive a total-correctness `spec` from `partialSpec` by ruling out the failure and divergence
+cases. Used by `@[step]` to generate a step-tactic lemma from a `partialSpec` theorem. -/
+theorem spec_of_partialSpec
+    {α} {x : Result α} {p_ok : α → Prop} {p_fail : Error → Prop} {p_div : Prop}
+    (h : partialSpec x p_ok p_fail p_div)
+    (h_fail : ∀ e, ¬ p_fail e) (h_div : ¬ p_div) :
+    spec x p_ok := by
+  cases x <;> simp_all [partialSpec, spec, theta, wp_return]
+
 end Aeneas.Std.WP
 
 /-
@@ -789,13 +825,24 @@ namespace Aeneas.Std.WP
 open Std Result
 open Std.Do
 
-instance Result.instWP : WP Result.{u} (.except (ULift Error) (.except PUnit .pure)) where
+abbrev Result.postShape : PostShape := (.except (ULift Error) (.except PUnit .pure))
+
+instance Result.instWP : WP Result.{u} postShape where
   wp x := {
     trans Q := match x with | .ok a => Q.1 a | .fail e => Q.2.1 (ULift.up e) | .div => Q.2.2.1 .unit
     conjunctiveRaw Q₁ Q₂ := by
       apply SPred.bientails.of_eq
       cases x <;> simp
   }
+
+abbrev willYield {α : Type u} (r : α) (Q : PostCond α Result.postShape) : Prop :=
+  (Q.1 r).down
+
+abbrev willFail {α : Type u} (e : Error) (Q : PostCond α Result.postShape) : Prop :=
+  (Q.2.1 (.up e)).down
+
+abbrev willDiverge {α : Type u} (Q : PostCond α Result.postShape) : Prop :=
+  (Q.2.2.1 .unit).down
 
 instance : LawfulMonad Result where
     map_const := by intros; rfl
@@ -833,6 +880,19 @@ theorem dspec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
     ⦃ ⌜ ¬ x = .div ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
   simp [Triple, WP.wp, PredTrans.apply, SPred.pure]
   cases x <;> simp [*, dspec] at * <;> trivial
+
+/-- Lift an Aeneas partial-correctness spec to an mvcgen-compatible `Triple`. -/
+theorem partialSpec_to_mvcgen {α : Type u} {x : Result α}
+    {p_ok : α → Prop} {p_fail : Error → Prop} {p_div : Prop}
+    (h : partialSpec x p_ok p_fail p_div)
+    {Q : PostCond α Result.postShape}
+    (h_ok   : ∀ r, p_ok r → willYield r Q)
+    (h_fail : ∀ e, p_fail e → willFail e Q)
+    (h_div  : p_div → willDiverge Q) :
+    ⦃ ⌜ True ⌝ ⦄ x ⦃ Q ⦄ := by
+  cases x
+    <;> simp only [partialSpec] at h
+    <;> simp [Triple, WP.wp, PredTrans.apply, h_ok, h_fail, h_div, h]
 
 end Aeneas.Std.WP
 
