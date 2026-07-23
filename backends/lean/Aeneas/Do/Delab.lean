@@ -15,7 +15,7 @@ namespace Delab
 
 /-- `Std.uncurry (fun x₁ … xₙ => body) val` → `let (x₁, …, xₙ) := val; body`. -/
 @[delab app.Aeneas.Std.uncurry]
-def delabUncurryLet : Delab := do
+meta def delabUncurryLet : Delab := do
   unless Aeneas.customDoElab.get (← getOptions) do failure
   -- only fire when fully applied
   unless (← getExpr).isAppOfArity ``_root_.Aeneas.Std.uncurry 5 do failure
@@ -29,7 +29,7 @@ def delabUncurryLet : Delab := do
 
 /-- `T.casesOn val (fun f₁ … fₙ => body)` → `let ⟨f₁, …, fₙ⟩ := val; body` -/
 @[delab app]
-def delabSingleCtorCasesOn : Delab := do
+meta def delabSingleCtorCasesOn : Delab := do
   unless Aeneas.customDoElab.get (← getOptions) do failure
   let e ← getExpr
   let .const (.str typeName "casesOn") _ := e.getAppFn | failure
@@ -45,7 +45,7 @@ private structure CtorBindShape where
   numParams : Nat
 
 /-- Recognise `fun _x => T.casesOn _x …` for single-ctor `T ≠ Prod`. -/
-private def parseCtorBind? (arg : Expr) : DelabM CtorBindShape := do
+private meta def parseCtorBind? (arg : Expr) : DelabM CtorBindShape := do
   let .lam xName _ body _ := arg | failure
   let .const (.str typeName "casesOn") _ := body.getAppFn | failure
   let some (.inductInfo { ctors := [_], numParams, .. }) := (← getEnv).find? typeName
@@ -54,7 +54,7 @@ private def parseCtorBind? (arg : Expr) : DelabM CtorBindShape := do
 
 /-- Walk a `Bind.bind` chain into `doElem`s, recognising tuple and ctor
     destructuring continuations in addition to plain binds and lets. -/
-partial def aeneasDelabDoElems : DelabM (List DoElem) := do
+meta partial def aeneasDelabDoElems : DelabM (List DoElem) := do
   let e ← getExpr
   if e.isAppOfArity ``Bind.bind 6 then
     let α := e.getAppArgs[2]!
@@ -114,7 +114,7 @@ open Parser Term
 
 /-- Top-level `do`-block delab, restricted to the `Std.Result` monad. -/
 @[delab app.Bind.bind]
-def aeneasDelabDo : Delab := whenNotPPOption getPPExplicit <| whenPPOption getPPNotation do
+meta def aeneasDelabDo : Delab := whenNotPPOption getPPExplicit <| whenPPOption getPPNotation do
   unless Aeneas.customDoElab.get (← getOptions) do failure
   let e ← getExpr
   -- only use the new `do` delaborator for `Result _` do blocks
