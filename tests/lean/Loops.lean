@@ -450,7 +450,9 @@ def list_nth_mut_pair
     Visibility: public -/
 @[rust_loop]
 def list_nth_shared_pair_loop
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) : Result (T × T) := do
+  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
+  Result (T × T)
+  := do
   match ls0 with
   | List.Cons x0 tl0 =>
     match ls1 with
@@ -468,7 +470,9 @@ partial_fixpoint
     Visibility: public -/
 @[reducible]
 def list_nth_shared_pair
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) : Result (T × T) := do
+  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
+  Result (T × T)
+  := do
   list_nth_shared_pair_loop ls0 ls1 i
 
 /-- [loops::list_nth_mut_pair_merge]: loop 0:
@@ -518,7 +522,9 @@ def list_nth_mut_pair_merge
     Visibility: public -/
 @[rust_loop]
 def list_nth_shared_pair_merge_loop
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) : Result (T × T) := do
+  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
+  Result (T × T)
+  := do
   match ls0 with
   | List.Cons x0 tl0 =>
     match ls1 with
@@ -536,7 +542,9 @@ partial_fixpoint
     Visibility: public -/
 @[reducible]
 def list_nth_shared_pair_merge
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) : Result (T × T) := do
+  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
+  Result (T × T)
+  := do
   list_nth_shared_pair_merge_loop ls0 ls1 i
 
 /-- [loops::list_nth_mut_shared_pair]: loop 0:
@@ -901,8 +909,8 @@ def issue270 (v : List (List Std.U8)) : Result (Option (List Std.U8)) := do
 def issue400_1_loop.body
   (cond : Bool) (back : Std.I32 → (Std.I32 × Std.I32)) (y : Std.I32)
   (i : Std.I32) :
-  Result (ControlFlow ((Std.I32 → (Std.I32 × Std.I32)) × Std.I32 × Std.I32)
-    (Std.I32 × Std.I32))
+  Result (ControlFlow ((Std.I32 → (Std.I32 × Std.I32)) × Std.I32 ×
+    Std.I32) (Std.I32 × Std.I32))
   := do
   if i < 32#i32
   then
@@ -941,11 +949,11 @@ def issue400_1
 @[rust_loop_body]
 def issue400_2_loop.body
   (conds : Slice Bool)
-  (back : Std.I32 → Std.I32 → (Std.I32 × Std.I32 × Std.I32)) (y : Std.I32)
-  (z : Std.I32) (i : Std.Usize) :
-  Result (ControlFlow ((Std.I32 → Std.I32 → (Std.I32 × Std.I32 × Std.I32)) ×
-    Std.I32 × Std.I32 × Std.Usize) (Std.I32 × Std.I32 × (Std.I32 → Std.I32 →
-    (Std.I32 × Std.I32 × Std.I32))))
+  (back : Std.I32 → Std.I32 → (Std.I32 × Std.I32 × Std.I32))
+  (y : Std.I32) (z : Std.I32) (i : Std.Usize) :
+  Result (ControlFlow ((Std.I32 → Std.I32 → (Std.I32 × Std.I32 ×
+    Std.I32)) × Std.I32 × Std.I32 × Std.Usize) (Std.I32 × Std.I32 ×
+    (Std.I32 → Std.I32 → (Std.I32 × Std.I32 × Std.I32))))
   := do
   let i1 := Slice.len conds
   if i < i1
@@ -980,7 +988,8 @@ def issue400_2
   (a : Std.I32) (b : Std.I32) (c : Std.I32) (conds : Slice Bool) :
   Result (Std.I32 × Std.I32 × Std.I32)
   := do
-  let (y, z, back) ← issue400_2_loop (fun i i1 => (i, i1, c)) conds a b 0#usize
+  let (y, z, back) ←
+    issue400_2_loop (fun i i1 => (i, i1, c)) conds a b 0#usize
   let y1 ← y + 3#i32
   let z1 ← z + 5#i32
   ok (back y1 z1)

@@ -204,8 +204,8 @@ def MutWrapper2.unwrap
     Source: 'tests/src/adt-borrows.rs', lines 143:4-145:5 -/
 def MutWrapper2.id
   {T : Type} (self : MutWrapper2 T) :
-  Result ((MutWrapper2 T) × (MutWrapper2 T → MutWrapper2 T) × (MutWrapper2 T →
-    MutWrapper2 T))
+  Result ((MutWrapper2 T) × (MutWrapper2 T → MutWrapper2 T) × (MutWrapper2
+    T → MutWrapper2 T))
   := do
   let back'a := fun mw => { self with x := mw.x }
   let back'b := fun mw => { self with y := mw.y }
@@ -227,8 +227,8 @@ def use_mut_wrapper2 : Result Unit := do
     Source: 'tests/src/adt-borrows.rs', lines 159:0-161:1 -/
 def use_mut_wrapper2_id
   {T : Type} (x : MutWrapper2 T) :
-  Result ((MutWrapper2 T) × (MutWrapper2 T → MutWrapper2 T) × (MutWrapper2 T →
-    MutWrapper2 T))
+  Result ((MutWrapper2 T) × (MutWrapper2 T → MutWrapper2 T) × (MutWrapper2
+    T → MutWrapper2 T))
   := do
   let (mw, id_back, id_back1) ← MutWrapper2.id x
   let back'a := fun mw1 => { x with x := (id_back { mw with x := mw1.x }).x }
