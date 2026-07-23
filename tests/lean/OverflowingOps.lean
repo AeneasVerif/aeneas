@@ -16,7 +16,8 @@ namespace overflowing_ops
 
 /-- [overflowing_ops::u8_overflowing_add]:
     Source: 'tests/src/overflowing-ops.rs', lines 3:0-5:1 -/
-def u8_overflowing_add (x : Std.U8) (y : Std.U8) : Result (Std.U8 × Bool) := do
+def u8_overflowing_add
+  (x : Std.U8) (y : Std.U8) : Result (Std.U8 × Bool) := do
   ok (core.num.U8.overflowing_add x y)
 
 /-- [overflowing_ops::u16_overflowing_add]:
@@ -51,7 +52,8 @@ def usize_overflowing_add
 
 /-- [overflowing_ops::i8_overflowing_add]:
     Source: 'tests/src/overflowing-ops.rs', lines 22:0-24:1 -/
-def i8_overflowing_add (x : Std.I8) (y : Std.I8) : Result (Std.I8 × Bool) := do
+def i8_overflowing_add
+  (x : Std.I8) (y : Std.I8) : Result (Std.I8 × Bool) := do
   ok (core.num.I8.overflowing_add x y)
 
 /-- [overflowing_ops::i16_overflowing_add]:
@@ -86,7 +88,8 @@ def isize_overflowing_add
 
 /-- [overflowing_ops::u8_overflowing_sub]:
     Source: 'tests/src/overflowing-ops.rs', lines 41:0-43:1 -/
-def u8_overflowing_sub (x : Std.U8) (y : Std.U8) : Result (Std.U8 × Bool) := do
+def u8_overflowing_sub
+  (x : Std.U8) (y : Std.U8) : Result (Std.U8 × Bool) := do
   ok (core.num.U8.overflowing_sub x y)
 
 /-- [overflowing_ops::u16_overflowing_sub]:
@@ -121,7 +124,8 @@ def usize_overflowing_sub
 
 /-- [overflowing_ops::i8_overflowing_sub]:
     Source: 'tests/src/overflowing-ops.rs', lines 60:0-62:1 -/
-def i8_overflowing_sub (x : Std.I8) (y : Std.I8) : Result (Std.I8 × Bool) := do
+def i8_overflowing_sub
+  (x : Std.I8) (y : Std.I8) : Result (Std.I8 × Bool) := do
   ok (core.num.I8.overflowing_sub x y)
 
 /-- [overflowing_ops::i16_overflowing_sub]:
@@ -156,7 +160,8 @@ def isize_overflowing_sub
 
 /-- [overflowing_ops::u8_overflowing_mul]:
     Source: 'tests/src/overflowing-ops.rs', lines 79:0-81:1 -/
-def u8_overflowing_mul (x : Std.U8) (y : Std.U8) : Result (Std.U8 × Bool) := do
+def u8_overflowing_mul
+  (x : Std.U8) (y : Std.U8) : Result (Std.U8 × Bool) := do
   ok (core.num.U8.overflowing_mul x y)
 
 /-- [overflowing_ops::u16_overflowing_mul]:
@@ -191,7 +196,8 @@ def usize_overflowing_mul
 
 /-- [overflowing_ops::i8_overflowing_mul]:
     Source: 'tests/src/overflowing-ops.rs', lines 98:0-100:1 -/
-def i8_overflowing_mul (x : Std.I8) (y : Std.I8) : Result (Std.I8 × Bool) := do
+def i8_overflowing_mul
+  (x : Std.I8) (y : Std.I8) : Result (Std.I8 × Bool) := do
   ok (core.num.I8.overflowing_mul x y)
 
 /-- [overflowing_ops::i16_overflowing_mul]:
@@ -226,7 +232,8 @@ def isize_overflowing_mul
 
 /-- [overflowing_ops::u8_overflowing_div]:
     Source: 'tests/src/overflowing-ops.rs', lines 117:0-119:1 -/
-def u8_overflowing_div (x : Std.U8) (y : Std.U8) : Result (Std.U8 × Bool) := do
+def u8_overflowing_div
+  (x : Std.U8) (y : Std.U8) : Result (Std.U8 × Bool) := do
   core.num.U8.overflowing_div x y
 
 /-- [overflowing_ops::u16_overflowing_div]:
@@ -261,7 +268,8 @@ def usize_overflowing_div
 
 /-- [overflowing_ops::i8_overflowing_div]:
     Source: 'tests/src/overflowing-ops.rs', lines 136:0-138:1 -/
-def i8_overflowing_div (x : Std.I8) (y : Std.I8) : Result (Std.I8 × Bool) := do
+def i8_overflowing_div
+  (x : Std.I8) (y : Std.I8) : Result (Std.I8 × Bool) := do
   core.num.I8.overflowing_div x y
 
 /-- [overflowing_ops::i16_overflowing_div]:

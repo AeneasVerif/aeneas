@@ -21,7 +21,8 @@ namespace rust_borrow_check_issues
     Source: '/rustc/library/core/src/mem/mod.rs', lines 1000:0-1002:24
     Name pattern: [core::mem::drop]
     Visibility: public -/
-@[rust_fun "core::mem::drop"] axiom core.mem.drop {T : Type} : T → Result Unit
+@[rust_fun "core::mem::drop"]
+axiom core.mem.drop {T : Type} : T → Result Unit
 
 /-- [core::option::{core::option::Option<T>}::as_mut]:
     Source: '/rustc/library/core/src/option.rs', lines 763:4-763:52
@@ -42,8 +43,8 @@ def unnecessary_error : Result Unit := do
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 35:0-52:1 -/
 def unnecessary_error_2 (b0 : Bool) (b1 : Bool) : Result Unit := do
   let i ← if b0
-          then ok 0#u32
-          else ok 1#u32
+            then ok 0#u32
+            else ok 1#u32
   let _ ←
     if b1
     then do

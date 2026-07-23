@@ -36,8 +36,8 @@ def f
 @[rust_loop_body]
 def the_loop_loop.body
   (s : S) (next_in : Slice Std.U8) :
-  Result (ControlFlow (S × (Slice Std.U8)) (Std.U8 × (Array Std.U8 4#usize) ×
-    (Slice Std.U8) × Bool))
+  Result (ControlFlow (S × (Slice Std.U8)) (Std.U8 × (Array Std.U8 4#usize)
+    × (Slice Std.U8) × Bool))
   := do
   let (s1, to_slice_mut_back) ← lift (Array.to_slice_mut s.y)
   let ((done1, n), i, s2) ← f s.x next_in s1

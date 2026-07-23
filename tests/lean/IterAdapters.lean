@@ -18,7 +18,8 @@ namespace iter_adapters
     Source: 'tests/src/iter_adapters.rs', lines 14:0-24:1
     Visibility: public -/
 def test_enumerate_slice : Result Unit := do
-  let s ← lift (Array.to_slice (Array.make 3#usize [ 10#u32, 20#u32, 30#u32 ]))
+  let s ←
+    lift (Array.to_slice (Array.make 3#usize [ 10#u32, 20#u32, 30#u32 ]))
   let i ← core.slice.Slice.iter s
   let it ←
     core.iter.traits.iterator.Iterator.enumerate.trait_default
@@ -102,7 +103,8 @@ def test_take_2 : Result Unit := do
     Source: 'tests/src/iter_adapters.rs', lines 50:0-54:1
     Visibility: public -/
 def test_take_0 : Result Unit := do
-  let s ← lift (Array.to_slice (Array.make 3#usize [ 10#u32, 20#u32, 30#u32 ]))
+  let s ←
+    lift (Array.to_slice (Array.make 3#usize [ 10#u32, 20#u32, 30#u32 ]))
   let i ← core.slice.Slice.iter s
   let it ←
     core.iter.traits.iterator.Iterator.take.trait_default
@@ -301,7 +303,8 @@ def test_range_u64 : Result Unit := do
 @[rust_loop_body]
 def test_range_usize_loop.body
   (iter : core.ops.range.Range Std.Usize) (count : Std.Usize) :
-  Result (ControlFlow ((core.ops.range.Range Std.Usize) × Std.Usize) Std.Usize)
+  Result (ControlFlow ((core.ops.range.Range Std.Usize) × Std.Usize)
+    Std.Usize)
   := do
   let (o, iter1) ←
     core.iter.range.IteratorRange.next core.iter.range.StepUsize iter
@@ -372,7 +375,8 @@ def test_range_empty : Result Unit := do
     Source: 'tests/src/iter_adapters.rs', lines 137:0-144:1
     Visibility: public -/
 def test_array_into_iter : Result Unit := do
-  let s ← lift (Array.to_slice (Array.make 3#usize [ 10#u32, 20#u32, 30#u32 ]))
+  let s ←
+    lift (Array.to_slice (Array.make 3#usize [ 10#u32, 20#u32, 30#u32 ]))
   let it ← core.slice.Slice.iter s
   let (o, it1) ← core.slice.iter.IteratorSliceIter.next it
   let i ← core.option.Option.unwrap o
@@ -583,14 +587,16 @@ def test_range_u16_boundary : Result Unit := do
       { start := 0#u16, «end» := 3#u16 }
   let i ← core.option.Option.unwrap o
   massert (i = 0#u16)
-  let (o1, it1) ← core.iter.range.IteratorRange.next core.iter.range.StepU16 it
+  let (o1, it1) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepU16 it
   let i1 ← core.option.Option.unwrap o1
   massert (i1 = 1#u16)
   let (o2, it2) ←
     core.iter.range.IteratorRange.next core.iter.range.StepU16 it1
   let i2 ← core.option.Option.unwrap o2
   massert (i2 = 2#u16)
-  let (o3, _) ← core.iter.range.IteratorRange.next core.iter.range.StepU16 it2
+  let (o3, _) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepU16 it2
   let b := core.option.Option.is_none o3
   massert b
 
@@ -606,10 +612,12 @@ def test_range_u32_boundary : Result Unit := do
       { start := 0#u32, «end» := 2#u32 }
   let i ← core.option.Option.unwrap o
   massert (i = 0#u32)
-  let (o1, it1) ← core.iter.range.IteratorRange.next core.iter.range.StepU32 it
+  let (o1, it1) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepU32 it
   let i1 ← core.option.Option.unwrap o1
   massert (i1 = 1#u32)
-  let (o2, _) ← core.iter.range.IteratorRange.next core.iter.range.StepU32 it1
+  let (o2, _) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepU32 it1
   let b := core.option.Option.is_none o2
   massert b
 
@@ -625,14 +633,16 @@ def test_range_u64_boundary : Result Unit := do
       { start := 100#u64, «end» := 103#u64 }
   let i ← core.option.Option.unwrap o
   massert (i = 100#u64)
-  let (o1, it1) ← core.iter.range.IteratorRange.next core.iter.range.StepU64 it
+  let (o1, it1) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepU64 it
   let i1 ← core.option.Option.unwrap o1
   massert (i1 = 101#u64)
   let (o2, it2) ←
     core.iter.range.IteratorRange.next core.iter.range.StepU64 it1
   let i2 ← core.option.Option.unwrap o2
   massert (i2 = 102#u64)
-  let (o3, _) ← core.iter.range.IteratorRange.next core.iter.range.StepU64 it2
+  let (o3, _) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepU64 it2
   let b := core.option.Option.is_none o3
   massert b
 
