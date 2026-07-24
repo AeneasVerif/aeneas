@@ -2152,7 +2152,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
       if !Config.split_files && !Config.generate_lib_entry_point then (
         let filename = Filename.concat dest_dir (crate_name ^ ".lean") in
         let out = open_out filename in
-        (* Write (using the Lean module system) *)
+        (* Write *)
         Printf.fprintf out "module\n";
         Printf.fprintf out "public import %s.Funs\n" crate_name;
         Printf.fprintf out "public section\n";
