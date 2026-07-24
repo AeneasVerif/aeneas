@@ -29,7 +29,7 @@ structure clone.Clone (Self : Type) where
   clone : Self → Result Self
   clone_from : Self → Self → Result Self := fun _ => clone
 
-@[trait_default]
+@[expose, trait_default]
 def clone.Clone.clone_from.default {Self : Type} (CloneInst : core.clone.Clone Self)
   (_self source : Self) : Result Self :=
   CloneInst.clone source

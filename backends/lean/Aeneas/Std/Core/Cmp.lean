@@ -30,7 +30,7 @@ def core.cmp.PartialEq.ne.default {Self Rhs : Type} (eq : Self → Rhs → Resul
   (self : Self) (other : Rhs) : Result Bool := do
   ok (¬ (← eq self other))
 
-@[trait_default, rust_fun "core::cmp::PartialEq::ne"]
+@[expose, trait_default, rust_fun "core::cmp::PartialEq::ne"]
 def core.cmp.PartialEq.ne.trait_default {Self Rhs : Type}
   (PartialEqInst : core.cmp.PartialEq Self Rhs)
   (self : Self) (other : Rhs) : Result Bool :=

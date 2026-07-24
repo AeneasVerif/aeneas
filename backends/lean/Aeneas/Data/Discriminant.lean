@@ -2,6 +2,7 @@ module
 public import Lean
 public meta import Aeneas.Std.Scalar.Core
 public import Aeneas.Std.Scalar.Notations
+public meta import Mathlib.Data.List.Monad
 public section
 
 namespace Aeneas
@@ -27,7 +28,7 @@ inductive ScalarTy where
 | U8 | U16 | U32 | U64 | U128 | Usize
 | I8 | I16 | I32 | I64 | I128 | Isize
 
-def mkScalarValue (ty : ScalarTy) (val : Nat) : TermElabM Term := do
+meta def mkScalarValue (ty : ScalarTy) (val : Nat) : TermElabM Term := do
   let value := Syntax.mkNumLit (toString val)
   match ty with
   | .U8 => `($(value)#u8)
@@ -43,7 +44,7 @@ def mkScalarValue (ty : ScalarTy) (val : Nat) : TermElabM Term := do
   | .I128 => `($(value)#i128)
   | .Isize => `($(value)#isize)
 
-def mkScalarTy (ty : ScalarTy) : TermElabM Term := do
+meta def mkScalarTy (ty : ScalarTy) : TermElabM Term := do
   match ty with
   | .U8 => `(_root_.Aeneas.Std.U8)
   | .U16 => `(_root_.Aeneas.Std.U16)
@@ -62,7 +63,7 @@ def mkScalarTy (ty : ScalarTy) : TermElabM Term := do
 
 This function is adapted from `Lean.Elab.Deriving.BEq`.
 -/
-def generateReadDiscriminantCmds (declName : Name) (ty : ScalarTy) (discrValues : Option (List Nat)) :
+meta def generateReadDiscriminantCmds (declName : Name) (ty : ScalarTy) (discrValues : Option (List Nat)) :
   TermElabM (List Syntax) := do
   -- Lookup the declaration, which should be an inductive
   let env ← getEnv
@@ -123,12 +124,12 @@ def generateReadDiscriminantCmds (declName : Name) (ty : ScalarTy) (discrValues 
   let ty ← mkScalarTy ty
   let auxFunName := Name.mkStr declName "read_discriminant"
   let binders := header.binders
-  let defStx ← `(def $(mkIdent auxFunName):ident $binders:bracketedBinder* : $ty := $body:term)
+  let defStx ← `(public def $(mkIdent auxFunName):ident $binders:bracketedBinder* : $ty := $body:term)
 
   -- Generate the syntax for the instance
   let binders := binders.extract 0 indVal.numParams
   let args := header.argNames.map mkIdent
-  let instStx ← `(instance $binders:bracketedBinder* : Aeneas.Std.Discriminant ($header.targetType) ($ty) where
+  let instStx ← `(public instance $binders:bracketedBinder* : Aeneas.Std.Discriminant ($header.targetType) ($ty) where
       read_discriminant := @$(mkIdent auxFunName):ident $args*)
 
   --
@@ -136,14 +137,14 @@ def generateReadDiscriminantCmds (declName : Name) (ty : ScalarTy) (discrValues 
 
 /-- Given an inductive declaration name and an optional list of values, generate an instance
 of `Std.Discriminant`. If the list of values is not provided, we use values `0`, `1`, etc. -/
-def generateReadDiscriminant (declName : Name) (ty : ScalarTy) (discrValues : Option (List Nat)) :
+meta def generateReadDiscriminant (declName : Name) (ty : ScalarTy) (discrValues : Option (List Nat)) :
   CommandElabM Unit := do
   let cmds ← liftTermElabM (generateReadDiscriminantCmds declName ty discrValues)
   cmds.forM elabCommand
 
 syntax (name := readDiscriminant) "discriminant" ident ("["num,*"]")? : attr
 
-def elabTypeToken (stx : Syntax) : AttrM ScalarTy :=
+meta def elabTypeToken (stx : Syntax) : AttrM ScalarTy :=
   match stx.getId with
   | `u8 => pure ScalarTy.U8
   | `u16 => pure ScalarTy.U16
@@ -159,7 +160,7 @@ def elabTypeToken (stx : Syntax) : AttrM ScalarTy :=
   | `isize => pure ScalarTy.Isize
   | _ => throwUnsupportedSyntax
 
-def elabReadDiscriminantAttribute (stx : Syntax) : AttrM (ScalarTy × Option (List Nat)) :=
+meta def elabReadDiscriminantAttribute (stx : Syntax) : AttrM (ScalarTy × Option (List Nat)) :=
   withRef stx do
     match stx with
     | `(attr| discriminant $ty) => do
@@ -170,7 +171,7 @@ def elabReadDiscriminantAttribute (stx : Syntax) : AttrM (ScalarTy × Option (Li
       pure (← elabTypeToken ty, some ((x.getElems.toList.map Syntax.isNatLit?).map Option.get!))
     | _ => throwUnsupportedSyntax
 
-initialize discriminantAttribute : AttributeImpl ← do
+public meta initialize discriminantAttribute : AttributeImpl ← do
   let attrImpl : AttributeImpl := {
     name := `readDiscriminant
     descr := "Generates an instance of `Std.Discriminant` for the given inductive"

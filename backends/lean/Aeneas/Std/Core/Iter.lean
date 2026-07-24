@@ -602,7 +602,7 @@ def core.iter.traits.iterator.Iterator.zip.default
     let b ← into_iter other
     ok ⟨self, b⟩
 
-@[trait_default, rust_fun "core::iter::traits::iterator::Iterator::zip"]
+@[expose, trait_default, rust_fun "core::iter::traits::iterator::Iterator::zip"]
 def core.iter.traits.iterator.Iterator.zip.trait_default
   {Self U Item0 Item1 IntoIter : Type}
   (_IteratorInst : core.iter.traits.iterator.Iterator Self Item0)
@@ -616,7 +616,7 @@ def core.iter.traits.iterator.Iterator.rev.default
   Self → Result (core.iter.adapters.rev.Rev Self) :=
   fun self => ok ⟨self⟩
 
-@[trait_default, rust_fun "core::iter::traits::iterator::Iterator::rev"]
+@[expose, trait_default, rust_fun "core::iter::traits::iterator::Iterator::rev"]
 def core.iter.traits.iterator.Iterator.rev.trait_default
   {Self Item0 Item1 : Type}
   (_IteratorInst : core.iter.traits.iterator.Iterator Self Item0)
