@@ -126,11 +126,11 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
   | div => div
 
 -- Allows using Result in do-blocks
-@[expose] instance : Bind Result where
+instance : Bind Result where
   bind := bind
 
 -- Allows using pure x in do-blocks
-@[expose] instance : Pure Result where
+instance : Pure Result where
   pure := fun x => ok x
 
 @[simp] theorem bind_ok (x : α) (f : α → Result β) : bind (.ok x) f = f x := by simp [bind]
@@ -159,7 +159,7 @@ def bind_eq_iff (x : Result α) (y y' : α → Result β) :
   ∀ v, x = ok v → y v = y' v := by
   cases x <;> simp_all
 
-@[expose] instance : Monad Result where
+instance : Monad Result where
 
 /-!
 # Partial Fixpoint
