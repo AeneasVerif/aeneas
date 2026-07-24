@@ -12,9 +12,7 @@ namespace Aeneas.SimpBoolProp
 
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 
-/-- TODO: `reduceIte` can't be added to a custom simp set via `attribute` under the module system
-since builtin simprocs are not `meta`-marked, so `ensureAttrDeclIsMeta` rejects them. So here we
-register a local `meta` version of `reduceIte`. Perhaps there is a better way to do this. -/
+/-- TODO: builtin simprocs can't be directly added under the module system. -/
 simproc ↓ [simp_bool_prop] reduceIte' (ite _ _ _) := reduceIte
 
 attribute [simp_bool_prop]
