@@ -242,12 +242,12 @@ Definition h3
     Source: 'tests/src/traits.rs', lines 111:0-118:1
     Visibility: public *)
 Record OfTypeBis_t (Self : Type) (T : Type) := mkOfTypeBis_t {
-  OfTypeBis_tOfTypeBis_t_ToTypeInst : ToType_t T Self;
+  OfTypeBis_t_ToTypeInst : ToType_t T Self;
   OfTypeBis_t_of_type : T -> result Self;
 }.
 
 Arguments mkOfTypeBis_t { _ } { _ }.
-Arguments OfTypeBis_tOfTypeBis_t_ToTypeInst { _ } { _ } _.
+Arguments OfTypeBis_t_ToTypeInst { _ } { _ } _.
 Arguments OfTypeBis_t_of_type { _ } { _ } _.
 
 (** [traits::h4]:
@@ -336,14 +336,14 @@ Record WithConstTy_t (Self : Type) (Self_V : Type) (Self_W : Type) (LEN :
   usize) := mkWithConstTy_t {
   WithConstTy_tWithConstTy_t_LEN1 : result usize;
   WithConstTy_tWithConstTy_t_LEN2 : result usize;
-  WithConstTy_tWithConstTy_t_ToU64Inst : ToU64_t Self_W;
+  WithConstTy_t_ToU64Inst : ToU64_t Self_W;
   WithConstTy_t_f : Self_W -> array u8 LEN -> result Self_W;
 }.
 
 Arguments mkWithConstTy_t { _ } { _ } { _ } { _ }.
 Arguments WithConstTy_tWithConstTy_t_LEN1 { _ } { _ } { _ } { _ } _.
 Arguments WithConstTy_tWithConstTy_t_LEN2 { _ } { _ } { _ } { _ } _.
-Arguments WithConstTy_tWithConstTy_t_ToU64Inst { _ } { _ } { _ } { _ } _.
+Arguments WithConstTy_t_ToU64Inst { _ } { _ } { _ } { _ } _.
 Arguments WithConstTy_t_f { _ } { _ } { _ } { _ } _.
 
 (** [traits::WithConstTy::LEN2]
@@ -375,7 +375,7 @@ Definition Bool_Insts_TraitsWithConstTyU8U6432 : WithConstTy_t bool u8 u64
     Bool_Insts_TraitsWithConstTyU8U6432_LEN1;
   WithConstTy_tWithConstTy_t_LEN2 := Ok (withConstTy_LEN2_default bool u8 u64
     32%usize);
-  WithConstTy_tWithConstTy_t_ToU64Inst := U64_Insts_TraitsToU64;
+  WithConstTy_t_ToU64Inst := U64_Insts_TraitsToU64;
   WithConstTy_t_f := Bool_Insts_TraitsWithConstTyU8U6432_f;
 |}.
 
@@ -409,7 +409,7 @@ Definition use_with_const_ty3
   (withConstTyInst : WithConstTy_t H Clause0_V Clause0_W LEN) (x : Clause0_W) :
   result u64
   :=
-  withConstTyInst.(WithConstTy_tWithConstTy_t_ToU64Inst).(ToU64_t_to_u64) x
+  withConstTyInst.(WithConstTy_t_ToU64Inst).(ToU64_t_to_u64) x
 .
 
 (** [traits::test_where1]:
@@ -452,14 +452,13 @@ Arguments mkParentTrait1_t { _ }.
     Source: 'tests/src/traits.rs', lines 208:0-208:52
     Visibility: public *)
 Record ChildTrait_t (Self : Type) (Self_Clause0_W : Type) := mkChildTrait_t {
-  ChildTrait_tChildTrait_t_ParentTrait0Inst : ParentTrait0_t Self
-    Self_Clause0_W;
-  ChildTrait_tChildTrait_t_ParentTrait1Inst : ParentTrait1_t Self;
+  ChildTrait_t_ParentTrait0Inst : ParentTrait0_t Self Self_Clause0_W;
+  ChildTrait_t_ParentTrait1Inst : ParentTrait1_t Self;
 }.
 
 Arguments mkChildTrait_t { _ } { _ }.
-Arguments ChildTrait_tChildTrait_t_ParentTrait0Inst { _ } { _ } _.
-Arguments ChildTrait_tChildTrait_t_ParentTrait1Inst { _ } { _ } _.
+Arguments ChildTrait_t_ParentTrait0Inst { _ } { _ } _.
+Arguments ChildTrait_t_ParentTrait1Inst { _ } { _ } _.
 
 (** [traits::test_child_trait1]:
     Source: 'tests/src/traits.rs', lines 211:0-213:1
@@ -469,8 +468,7 @@ Definition test_child_trait1
   Clause0_Clause0_W) (x : T) :
   result string
   :=
-  childTraitInst.(ChildTrait_tChildTrait_t_ParentTrait0Inst).(ParentTrait0_t_get_name)
-    x
+  childTraitInst.(ChildTrait_t_ParentTrait0Inst).(ParentTrait0_t_get_name) x
 .
 
 (** [traits::test_child_trait2]:
@@ -481,8 +479,7 @@ Definition test_child_trait2
   Clause0_Clause0_W) (x : T) :
   result Clause0_Clause0_W
   :=
-  childTraitInst.(ChildTrait_tChildTrait_t_ParentTrait0Inst).(ParentTrait0_t_get_w)
-    x
+  childTraitInst.(ChildTrait_t_ParentTrait0Inst).(ParentTrait0_t_get_w) x
 .
 
 (** [traits::order1]:
@@ -500,11 +497,11 @@ Definition order1
     Source: 'tests/src/traits.rs', lines 224:0-224:38
     Visibility: public *)
 Record ChildTrait1_t (Self : Type) := mkChildTrait1_t {
-  ChildTrait1_tChildTrait1_t_ParentTrait1Inst : ParentTrait1_t Self;
+  ChildTrait1_t_ParentTrait1Inst : ParentTrait1_t Self;
 }.
 
 Arguments mkChildTrait1_t { _ }.
-Arguments ChildTrait1_tChildTrait1_t_ParentTrait1Inst { _ } _.
+Arguments ChildTrait1_t_ParentTrait1Inst { _ } _.
 
 (** Trait implementation: [traits::{impl traits::ParentTrait1 for usize}]
     Source: 'tests/src/traits.rs', lines 226:0-226:30 *)
@@ -514,8 +511,7 @@ Definition Usize_Insts_TraitsParentTrait1 : ParentTrait1_t usize
 (** Trait implementation: [traits::{impl traits::ChildTrait1 for usize}]
     Source: 'tests/src/traits.rs', lines 227:0-227:29 *)
 Definition Usize_Insts_TraitsChildTrait1 : ChildTrait1_t usize := {|
-  ChildTrait1_tChildTrait1_t_ParentTrait1Inst :=
-    Usize_Insts_TraitsParentTrait1;
+  ChildTrait1_t_ParentTrait1Inst := Usize_Insts_TraitsParentTrait1;
 |}.
 
 (** Trait declaration: [traits::Iterator]
@@ -530,13 +526,12 @@ Arguments mkIterator_t { _ } { _ }.
     Visibility: public *)
 Record IntoIterator_t (Self : Type) (Self_Item : Type) (Self_IntoIter : Type)
   := mkIntoIterator_t {
-  IntoIterator_tIntoIterator_t_IteratorInst : Iterator_t Self_IntoIter
-    Self_Item;
+  IntoIterator_t_IteratorInst : Iterator_t Self_IntoIter Self_Item;
   IntoIterator_t_into_iter : Self -> result Self_IntoIter;
 }.
 
 Arguments mkIntoIterator_t { _ } { _ } { _ }.
-Arguments IntoIterator_tIntoIterator_t_IteratorInst { _ } { _ } { _ } _.
+Arguments IntoIterator_t_IteratorInst { _ } { _ } { _ } _.
 Arguments IntoIterator_t_into_iter { _ } { _ } { _ } _.
 
 (** Trait declaration: [traits::FromResidual]
@@ -548,11 +543,11 @@ Arguments mkFromResidual_t { _ } { _ }.
 (** Trait declaration: [traits::Try]
     Source: 'tests/src/traits.rs', lines 248:0-250:1 *)
 Record Try_t (Self : Type) (Self_Residual : Type) := mkTry_t {
-  Try_tTry_t_FromResidualInst : FromResidual_t Self Self_Residual;
+  Try_t_FromResidualInst : FromResidual_t Self Self_Residual;
 }.
 
 Arguments mkTry_t { _ } { _ }.
-Arguments Try_tTry_t_FromResidualInst { _ } { _ } _.
+Arguments Try_t_FromResidualInst { _ } { _ } _.
 
 (** Trait declaration: [traits::WithTarget]
     Source: 'tests/src/traits.rs', lines 254:0-256:1
@@ -566,25 +561,24 @@ Arguments mkWithTarget_t { _ } { _ }.
     Visibility: public *)
 Record ParentTrait2_t (Self : Type) (Self_U : Type) (Self_Clause0_Target :
   Type) := mkParentTrait2_t {
-  ParentTrait2_tParentTrait2_t_WithTargetInst : WithTarget_t Self_U
-    Self_Clause0_Target;
+  ParentTrait2_t_WithTargetInst : WithTarget_t Self_U Self_Clause0_Target;
 }.
 
 Arguments mkParentTrait2_t { _ } { _ } { _ }.
-Arguments ParentTrait2_tParentTrait2_t_WithTargetInst { _ } { _ } { _ } _.
+Arguments ParentTrait2_t_WithTargetInst { _ } { _ } { _ } _.
 
 (** Trait declaration: [traits::ChildTrait2]
     Source: 'tests/src/traits.rs', lines 262:0-264:1
     Visibility: public *)
 Record ChildTrait2_t (Self : Type) (Self_Clause0_U : Type)
   (Self_Clause0_Clause0_Target : Type) := mkChildTrait2_t {
-  ChildTrait2_tChildTrait2_t_ParentTrait2Inst : ParentTrait2_t Self
-    Self_Clause0_U Self_Clause0_Clause0_Target;
+  ChildTrait2_t_ParentTrait2Inst : ParentTrait2_t Self Self_Clause0_U
+    Self_Clause0_Clause0_Target;
   ChildTrait2_t_convert : Self_Clause0_U -> result Self_Clause0_Clause0_Target;
 }.
 
 Arguments mkChildTrait2_t { _ } { _ } { _ }.
-Arguments ChildTrait2_tChildTrait2_t_ParentTrait2Inst { _ } { _ } { _ } _.
+Arguments ChildTrait2_t_ParentTrait2Inst { _ } { _ } { _ } _.
 Arguments ChildTrait2_t_convert { _ } { _ } { _ } _.
 
 (** Trait implementation: [traits::{impl traits::WithTarget<u32> for u32}]
@@ -596,7 +590,7 @@ Definition U32_Insts_TraitsWithTargetU32 : WithTarget_t u32 u32
     Source: 'tests/src/traits.rs', lines 270:0-272:1 *)
 Definition U32_Insts_TraitsParentTrait2U32U32 : ParentTrait2_t u32 u32 u32
   := {|
-  ParentTrait2_tParentTrait2_t_WithTargetInst := U32_Insts_TraitsWithTargetU32;
+  ParentTrait2_t_WithTargetInst := U32_Insts_TraitsWithTargetU32;
 |}.
 
 (** [traits::{impl traits::ChildTrait2<u32, u32> for u32}::convert]:
@@ -609,8 +603,7 @@ Definition U32_Insts_TraitsChildTrait2U32U32_convert (x : u32) : result u32 :=
 (** Trait implementation: [traits::{impl traits::ChildTrait2<u32, u32> for u32}]
     Source: 'tests/src/traits.rs', lines 274:0-278:1 *)
 Definition U32_Insts_TraitsChildTrait2U32U32 : ChildTrait2_t u32 u32 u32 := {|
-  ChildTrait2_tChildTrait2_t_ParentTrait2Inst :=
-    U32_Insts_TraitsParentTrait2U32U32;
+  ChildTrait2_t_ParentTrait2Inst := U32_Insts_TraitsParentTrait2U32U32;
   ChildTrait2_t_convert := U32_Insts_TraitsChildTrait2U32U32_convert;
 |}.
 
@@ -630,12 +623,12 @@ Arguments CFnOnce_t_call_once { _ } { _ } { _ } _.
     Visibility: public *)
 Record CFnMut_t (Self : Type) (Args : Type) (Self_Clause0_Output : Type)
   := mkCFnMut_t {
-  CFnMut_tCFnMut_t_CFnOnceInst : CFnOnce_t Self Args Self_Clause0_Output;
+  CFnMut_t_CFnOnceInst : CFnOnce_t Self Args Self_Clause0_Output;
   CFnMut_t_call_mut : Self -> Args -> result (Self_Clause0_Output * Self);
 }.
 
 Arguments mkCFnMut_t { _ } { _ } { _ }.
-Arguments CFnMut_tCFnMut_t_CFnOnceInst { _ } { _ } { _ } _.
+Arguments CFnMut_t_CFnOnceInst { _ } { _ } { _ } _.
 Arguments CFnMut_t_call_mut { _ } { _ } { _ } _.
 
 (** Trait declaration: [traits::CFn]
@@ -643,12 +636,12 @@ Arguments CFnMut_t_call_mut { _ } { _ } { _ } _.
     Visibility: public *)
 Record CFn_t (Self : Type) (Args : Type) (Self_Clause0_Clause0_Output : Type)
   := mkCFn_t {
-  CFn_tCFn_t_CFnMutInst : CFnMut_t Self Args Self_Clause0_Clause0_Output;
+  CFn_t_CFnMutInst : CFnMut_t Self Args Self_Clause0_Clause0_Output;
   CFn_t_call : Self -> Args -> result Self_Clause0_Clause0_Output;
 }.
 
 Arguments mkCFn_t { _ } { _ } { _ }.
-Arguments CFn_tCFn_t_CFnMutInst { _ } { _ } { _ } _.
+Arguments CFn_t_CFnMutInst { _ } { _ } { _ } _.
 Arguments CFn_t_call { _ } { _ } { _ } _.
 
 (** Trait declaration: [traits::GetTrait]

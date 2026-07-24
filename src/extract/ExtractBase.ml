@@ -319,35 +319,19 @@ let unsafe_names_map_add (id : id) (name : string) (nm : unsafe_names_map) :
     unsafe_names_map =
   { id_to_name = IdMap.add id name nm.id_to_name }
 
-(** Make a (variable) basename unique (by adding an index).
+(** Make a (variable) name unique (by adding an index).
 
     We do this in an inefficient manner (by testing all indices starting from 0)
     but it shouldn't be a bottleneck.
 
-    Also note that at some point, we thought about trying to reuse names of
-    variables which are not used anymore, like here:
-    {[
-      let x = ... in
-      ...
-      let x0 = ... in // We could use the name "x" if [x] is not used below
-      ...
-    ]}
-
-    However it is a good idea to keep things as they are for F*: as F* is
-    designed for extrinsic proofs, a proof about a function follows this
-    function's structure. The consequence is that we often end up copy-pasting
-    function bodies. As in the proofs (in assertions and when calling lemmas) we
-    often need to talk about the "past" (i.e., previous values), it is very
-    useful to generate code where all variable names are assigned at most once.
-
     [append]: function to append an index to a string *)
-let basename_to_unique_aux (collision : string -> bool)
-    (append : string -> int -> string) (basename : string) : string =
+let name_to_unique (collision : string -> bool)
+    (append : string -> int -> string) (name : string) : string =
   let rec gen (i : int) : string =
-    let s = append basename i in
+    let s = append name i in
     if collision s then gen (i + 1) else s
   in
-  if collision basename then gen 1 else basename
+  if collision name then gen 1 else name
 
 type names_maps = {
   names_map : names_map;
@@ -1998,27 +1982,137 @@ let ctx_compute_trait_clause_name (ctx : extraction_ctx)
   in
   String.concat "" clause
 
-let ctx_compute_trait_parent_clause_name (ctx : extraction_ctx)
-    (trait_decl : trait_decl) (clause : trait_param) : string =
-  (* We derive the name of the clause from the trait instance.
-     For instance, if the clause gives us an instance of `Foo<u32>`,
-     we generate a name along the lines of "fooU32Inst".
-  *)
-  (* We need to lookup the LLBC definitions, to have the original instantiation *)
-  let clause =
-    let current_def_name = trait_decl.item_meta.name in
-    let params = trait_decl.llbc_generics in
-    ctx_compute_trait_clause_name ctx current_def_name params
-      trait_decl.llbc_parent_clauses clause.clause_id
+(** Given a type argument, calculate a discriminator fragment in PascalCase. *)
+let trait_clause_discriminator_token (span : Meta.span)
+    (type_params : type_param list) (ty : ty) : string =
+  let raw =
+    match ty with
+    (* In this case we take the name of the trait parameter it refers to. The
+       lookup is never None for a well-formed LLBC: a Free type variable in a
+       parent clause is an index into the enclosing trait's type parameters. *)
+    | TVar (Free index) ->
+        let param =
+          [%unwrap_with_span] span
+            (List.find_opt
+               (fun (p : type_param) -> p.index = index)
+               type_params)
+            ("Unexpected type variable " ^ TypeVarId.to_string index)
+        in
+        param.name
+    (* A bound variable or non-variable argument has no distinguishing name. *)
+    | _ -> "Type"
   in
-  let clause =
-    if !Config.record_fields_short_names then clause
-    else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ clause
+  StringUtils.to_camel_case raw
+
+(** Build the full discriminator string for a parent clause. *)
+let trait_clause_discriminator (span : Meta.span)
+    (type_params : type_param list) (clause : trait_param) : string =
+  (* Map over the clause's generic type arguments and concatenate. *)
+  String.concat ""
+    (List.map
+       (trait_clause_discriminator_token span type_params)
+       clause.generics.types)
+
+(* Builtin information must describe exactly the trait's parent clauses. *)
+let check_builtin_arity (ctx : extraction_ctx) (trait_decl : trait_decl)
+    (info : Pure.builtin_trait_decl_info) : unit =
+  [%cassert] trait_decl.item_meta.span
+    (List.length trait_decl.parent_clauses = List.length info.parent_clauses)
+    ("Invalid builtin information for trait decl: "
+    ^ name_to_string ctx trait_decl.item_meta.name
+    ^ "; expected "
+    ^ string_of_int (List.length trait_decl.parent_clauses)
+    ^ " parent clauses, found "
+    ^ string_of_int (List.length info.parent_clauses))
+
+(** Compute the names of the parent clauses of a trait declaration.
+
+    For a computed trait each name is [base ^ (discriminator) ^ "Inst"]:
+    - The base name comes from the referenced trait (and trait-decl name for
+      long names).
+    - Concrete type arguments and const-generic arguments are reflected in the
+      base name, so two clauses referencing the same trait at different such
+      arguments usually get distinct bases.
+    - For a shared base we append a discriminator to every member of the
+      colliding group.
+    - If there is still a name collision a numerical suffix is added.
+
+    For a builtin trait the names are taken verbatim from the builtin
+    information (no discriminator, no ["Inst"] suffix added here). *)
+let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
+    (trait_decl : trait_decl)
+    (builtin_info : Pure.builtin_trait_decl_info option) :
+    (trait_param * string) list =
+  (* The trait-decl name prefix is the same for each clause. *)
+  let prefix =
+    if !Config.record_fields_short_names then None
+    else Some (ctx_compute_trait_decl_name ctx trait_decl)
   in
-  let clause = clause ^ "Inst" in
-  match backend () with
-  | FStar -> StringUtils.lowercase_first_letter clause
-  | Coq | HOL4 | Lean -> clause
+  (* The base name of a clause. *)
+  let compute_base (clause : trait_param) : string =
+    let base =
+      ctx_compute_trait_clause_name ctx trait_decl.item_meta.name
+        trait_decl.llbc_generics trait_decl.llbc_parent_clauses clause.clause_id
+    in
+    match prefix with
+    | None -> base
+    | Some p -> p ^ "_" ^ base
+  in
+  let add_inst_and_normalize (name : string) : string =
+    let name = name ^ "Inst" in
+    match backend () with
+    | FStar -> StringUtils.lowercase_first_letter name
+    | Coq | HOL4 | Lean -> name
+  in
+  (* Compute a name for each parent clause. *)
+  let names =
+    match builtin_info with
+    | None ->
+        let bases =
+          List.map (fun c -> (c, compute_base c)) trait_decl.parent_clauses
+        in
+        (* The set of base names carried by more than one clause. *)
+        let _, shared =
+          List.fold_left
+            (fun (seen, shared) (_, base) ->
+              if StringSet.mem base seen then (seen, StringSet.add base shared)
+              else (StringSet.add base seen, shared))
+            (StringSet.empty, StringSet.empty)
+            bases
+        in
+        let scheme_names =
+          List.map
+            (fun (c, base) ->
+              let disambiguated =
+                if StringSet.mem base shared then
+                  base
+                  ^ trait_clause_discriminator trait_decl.item_meta.span
+                      trait_decl.generics.types c
+                else base
+              in
+              (c, add_inst_and_normalize disambiguated))
+            bases
+        in
+        (* Base + discriminator can still produce equal names (e.g., names that
+           concatenate ambiguously) so add a numeric suffix if required. *)
+        let _, named =
+          List.fold_left_map
+            (fun used (c, name) ->
+              let name =
+                name_to_unique
+                  (fun s -> StringSet.mem s used)
+                  (fun n i -> n ^ string_of_int i)
+                  name
+              in
+              (StringSet.add name used, (c, name)))
+            StringSet.empty scheme_names
+        in
+        named
+    | Some info ->
+        check_builtin_arity ctx trait_decl info;
+        List.combine trait_decl.parent_clauses info.parent_clauses
+  in
+  names
 
 let ctx_compute_trait_type_name (ctx : extraction_ctx) (trait_decl : trait_decl)
     (item : string) : string =
@@ -2180,7 +2274,7 @@ let ctx_compute_const_generic_var_basename (_ctx : extraction_ctx)
 let ctx_compute_trait_clause_basename (ctx : extraction_ctx)
     (current_def_name : Types.name) (params : Types.generic_params)
     (clause_id : trait_clause_id) : string =
-  (* This is similar to {!ctx_compute_trait_parent_clause_name}: we
+  (* This is similar to {!ctx_compute_trait_parent_clause_names}: we
      derive the name from the trait reference (i.e., from the type) *)
   let clause =
     ctx_compute_trait_clause_name ctx current_def_name params
@@ -2209,7 +2303,7 @@ let basename_to_unique (ctx : extraction_ctx) (name : string) =
     || StringSet.mem s ctx.names_maps.strict_names_map.names_set
   in
 
-  basename_to_unique_aux collision name_append_index name
+  name_to_unique collision name_append_index name
 
 (** Generate a unique type variable name and add it to the context *)
 let ctx_add_type_var (span : Meta.span) (origin : generic_origin)
