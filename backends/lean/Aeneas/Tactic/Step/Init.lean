@@ -1034,7 +1034,7 @@ meta initialize stepPureDefAttribute : StepPureDefSpecAttr ← do
 open Tactic
 
 /-! # Logging Utils -/
-def traceGoalWithNode (msg : String) : TacticM Unit := Utils.traceGoalWithNode `Step msg
+meta def traceGoalWithNode (msg : String) : TacticM Unit := Utils.traceGoalWithNode `Step msg
 
 end Step
 

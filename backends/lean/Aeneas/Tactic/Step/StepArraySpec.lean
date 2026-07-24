@@ -38,7 +38,7 @@ namespace Std
 
 open Result WP
 
-def Array.allIdx (f : Usize → α → Bool) (ls : List α) (i : Nat := 0) : Bool :=
+meta def Array.allIdx (f : Usize → α → Bool) (ls : List α) (i : Nat := 0) : Bool :=
   match ls with
   | [] => True
   | hd :: tl =>
@@ -104,7 +104,7 @@ syntax (name := stepArraySpec)
     " { " ident " => " term " } " " by " tacticSeq : command
 
 open Lean Lean.Elab Lean.Parser.Command Lean.Elab.Command in
-def parseStepArraySpec
+meta def parseStepArraySpec
 : TSyntax ``stepArraySpec -> CommandElabM Unit := fun stx => do
   match stx with
   | `($[$vis]? step_array_spec (name := $thm_name:ident) $array:ident [ $i:ident ]! { $x:ident => $pred:term } by $tac:tacticSeq) => do

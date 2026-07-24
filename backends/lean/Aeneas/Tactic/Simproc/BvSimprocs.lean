@@ -13,7 +13,7 @@ section
 open Lean Meta in
 
 /-- Check if an expression is a numeric literal (Nat or Int, possibly negated). -/
-private def isNumLit : Lean.Expr → Bool
+private meta def isNumLit : Lean.Expr → Bool
   | Lean.Expr.lit (.natVal _) => true
   | Lean.Expr.app f a => isNumLit f || isNumLit a
   | Lean.Expr.const ``Nat.zero _ => true
@@ -22,7 +22,7 @@ private def isNumLit : Lean.Expr → Bool
 /-- Check if an expression is a scalar literal (without whnf). Matches the
     elaborated form of `n#u8`, `n#i32`, etc. which is `U8.ofNat n proof`
     or `I32.ofInt n proof`. -/
-private def isScalarLit (x : Lean.Expr) : Bool :=
+private meta def isScalarLit (x : Lean.Expr) : Bool :=
   match x with
   | Lean.Expr.app (Lean.Expr.app _ value) _ => isNumLit value
   | _ => false

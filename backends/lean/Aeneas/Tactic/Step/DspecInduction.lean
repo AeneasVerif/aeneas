@@ -9,6 +9,7 @@ public import AeneasMeta.Async
 public import Aeneas.Tactic.Solver.Grind.Init
 public import Aeneas.Tactic.Step.InferPost
 public import Aeneas.Tactic.Step.Step
+import all Init.Internal.Order.Basic
 public section
 
 /- Tactic for unfolding partial_fixpoint definitions with fixpoint_induct.
@@ -98,14 +99,14 @@ theorem WP_func_admissible (α β : Type) (arg) (post)
   apply Lean.Order.admissible_flatOrder
   simp only [WP.dspec]
 
-def getParamNames (ty : Expr) : MetaM (Array Name) := do
+meta def getParamNames (ty : Expr) : MetaM (Array Name) := do
   forallTelescope ty fun xs _ => do
     xs.mapM fun x => do
       let localDecl ← x.fvarId!.getDecl
       return localDecl.userName
 
 -- given a function type, return list of input types
-def getInputTypes (ty : Expr) : List Expr :=
+meta def getInputTypes (ty : Expr) : List Expr :=
   match ty with
   | .forallE _ ty body _ => .cons ty (getInputTypes body)
   | _ => []
