@@ -178,11 +178,8 @@ theorem Vec.set_length {α : Type u} (v: Vec α) (i: Usize) (x: α) :
 
 def Vec.index_mut_usize {α : Type u} (v: Vec α) (i: Usize) :
   Result (α × (α → Vec α)) :=
-  match Vec.index_usize v i with
-  | ok x =>
-    ok (x, Vec.set v i)
-  | fail e => fail e
-  | div => div
+  do let x ← Vec.index_usize v i
+     ok (x, Vec.set v i)
 
 @[step]
 theorem Vec.index_mut_usize_spec {α : Type u} (v: Vec α) (i: Usize)
@@ -353,11 +350,13 @@ def alloc.vec.Vec.with_capacity (T : Type) (_ : Usize) : alloc.vec.Vec T := Vec.
 def alloc.vec.Vec.extend_from_slice {T : Type} (cloneInst : core.clone.Clone T)
   (v : alloc.vec.Vec T) (s : Slice T) : Result (alloc.vec.Vec T) :=
   if h : v.length + s.length ≤ Usize.max then do
-    match h' : Slice.clone cloneInst.clone s with
-    | ok s' =>
-      ok ⟨ v.val ++ s'.val , by have := Slice.clone_length h'; scalar_tac ⟩
-    | fail e => fail e
-    | div => div
+    match h' : (Slice.clone cloneInst.clone s).match with
+    | .ok s' =>
+      ok ⟨ v.val ++ s'.val , by
+        simp at h'
+        have := Slice.clone_length h'
+        scalar_tac ⟩
+    | _ => Slice.clone cloneInst.clone s
   else fail .panic
 
 @[rust_fun "alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>}::deref"

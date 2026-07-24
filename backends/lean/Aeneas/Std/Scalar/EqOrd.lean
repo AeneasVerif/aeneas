@@ -106,7 +106,7 @@ uscalar
 theorem core.cmp.Ord.min.trait_default_'S.spec (x y : «%S») :
     core.cmp.Ord.min.trait_default core.cmp.Ord'S x y
     ⦃ r => r = core.cmp.impls.Ord'S.min x y ⦄ := by
-  simp [trait_default, default, min_body, impls.Ord'S.min, impls.PartialOrd'S.lt, WP.spec, WP.theta]
-  split_ifs <;> simp [WP.wp_return]
+  simp [trait_default, default, min_body, impls.Ord'S.min, impls.PartialOrd'S.lt]
+  split_ifs <;> simp [WP.spec_ok]
 
 end Aeneas.Std

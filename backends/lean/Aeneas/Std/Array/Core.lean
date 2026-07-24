@@ -18,32 +18,54 @@ instance {α : Type u} : GetElem? (List α) Usize α (fun l i => i < l.length) w
 /-
 # Theorems
 -/
-theorem List.mapM_clone_eq {T : Type u} {clone : T → Result T} {l : List T}
-  (h : ∀ x ∈ l, clone x = ok x) :
-  List.mapM clone l = ok l := by
-  have hind (l acc : List T) (h : ∀ x ∈ l, clone x = ok x) :
-    List.mapM.loop clone l acc = ok (List.reverse acc ++ l) := by
-    revert acc
-    induction l <;> intro acc <;> simp_all only [List.not_mem_nil, IsEmpty.forall_iff, implies_true,
-      List.append_nil, List.mem_cons, or_true, forall_const, forall_eq_or_imp] <;> unfold List.mapM.loop
-    . simp only [pure]
-    . rename_i hd tl ih
-      simp only [List.reverse_cons, List.append_assoc, List.cons_append, List.nil_append,
-        bind_tc_ok, h, ih]
-  apply hind
-  apply h
+def List.mapM_with_length {m : Type u → Type v} [Monad m] {α : Type w} {β : Type u} (f : α → m β) (as : List α)
+  : m ({ l : List β // l.length = as.length}) :=
+  match as with
+  | [] => pure ⟨[], by trivial⟩
+  | a :: as => do
+    let ⟨l, len⟩ ← List.mapM_with_length f as
+    let a' ← f a
+    pure ⟨a' :: l, by grind⟩
+
+theorem List.mapM_with_length_spec{post : Nat → β → Prop} {f : α → Result β} {l : List α}
+  (h : ∀ i (hi : i < l.length), f l[i] ⦃ post i ⦄) :
+  exists l', (List.mapM_with_length f l = .ok l')
+    ∧ (l'.val.map ok = l.map f)
+    := by
+  induction l generalizing post with
+  | nil => simp [mapM_with_length, pure]
+  | cons a as ih =>
+    have ih := ih (post := fun n => post n.succ)
+    have : ∀ (i : ℕ) (hi : i < as.length), f as[i] ⦃ post i.succ ⦄ := by
+      intros i hi
+      apply h i.succ (by grind)
+    obtain ⟨lih, propih⟩ := ih this
+    have fa := h 0 (by grind)
+    cases hfa : (f a) <;> simp_all
+    rename_i r
+    exists (r :: lih)
+    constructor
+    · constructor
+      · simp [mapM_with_length]
+        simp [*]
+        simp [Functor.map]
+      · grind
+    · grind
 
 def List.clone (clone : α → Result α) (l : List α) : Result ({ l' : List α // l'.length = l.length}) :=
-  match h :List.mapM clone l with
-  | ok v => ok ⟨ v, by have := List.mapM_Result_length h; scalar_tac ⟩
-  | fail e => fail e
-  | div => div
+  List.mapM_with_length clone l
 
 @[step]
-def List.clone_spec {clone : α → Result α} {l : List α} (h : ∀ x ∈ l, clone x = ok x) :
+theorem List.clone_spec {clone : α → Result α} {l : List α} (h : ∀ x ∈ l, clone x = ok x) :
   List.clone clone l ⦃ l' => l'.val = l ∧ l'.val.length = l.length ⦄ := by
   simp only [List.clone]
-  have := List.mapM_clone_eq h
-  split <;> simp_all
+  induction l with
+  | nil => simp [mapM_with_length, pure]
+  | cons a as ih =>
+    simp [mapM_with_length, pure]
+    have : ∀ x ∈ as, clone x = ok x := by grind
+    have ih := ih this
+    apply spec_bind ih; intros h2 h3
+    simp [*]
 
 end Aeneas.Std

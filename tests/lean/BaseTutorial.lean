@@ -68,18 +68,6 @@ def mul2_add1 (x : U32) : Result U32 := do
  -/
 #print Aeneas.Std.bind
 
-/- We show a desugared version of [mul2_add1] below: we remove the syntactic
-   sugar, and inline the definition of [bind] to make the matches over the
-   results explicit.
- -/
-def mul2_add1_desugared (x : U32) : Result U32 :=
-  match UScalar.add x x with
-  | ok x1 => -- Success case
-    match UScalar.add x1 (U32.ofNat 1) with
-    | ok x2 => ok x2
-    | error => error
-  | error => error -- Propagating the errors
-
 /- Now that we have seen how [mul2_add1] is defined precisely, we can prove
    simple properties about it. For instance, what about proving that it evaluates
    to [2 * x + 1]?

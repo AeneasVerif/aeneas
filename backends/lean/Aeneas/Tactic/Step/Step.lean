@@ -65,7 +65,7 @@ want to introduce in the context -/
 theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
 
 attribute [step_simps]
-  bind_assoc Std.bind_tc_ok Std.bind_tc_fail Std.bind_tc_div
+  bind_assoc Std.bind_tc_ok Std.bind_tc_vis Std.bind_tc_div
   /- Those are quite useful to simplify the goal further by eliminating existential quantifiers for instance. -/
   and_assoc Std.Result.ok.injEq Prod.mk.injEq
   exists_eq_left exists_eq_left' exists_eq_right exists_eq_right' exists_eq exists_eq' true_and and_true
@@ -2172,8 +2172,7 @@ h1 : ∀ (i : ℕ) (x : i < s.length), s'[i] = 0#u32
       · apply Lean.Order.admissible_pi
         intros y
         apply Lean.Order.admissible_apply (fun _ fx => WP.dspec fx _)
-        apply Lean.Order.admissible_flatOrder
-        simp only [WP.dspec]
+        apply WP.dspec_admissible
       · intros
         simp only
         split
@@ -2200,7 +2199,7 @@ h1 : ∀ (i : ℕ) (x : i < s.length), s'[i] = 0#u32
     : Std.WP.dspec (simple_converge x) (fun res => res = 10#i32)
     := by
       unfold simple_converge
-      split <;> simp [WP.dspec]
+      split <;> simp
 
   -- test using dspec theorem to step dspec
   example : WP.dspec

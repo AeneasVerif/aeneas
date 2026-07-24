@@ -613,10 +613,11 @@ theorem UScalar.tryMkOpt_eq (ty : UScalarTy) (x : Nat) :
   simp [UScalar.val, UScalarTy.numBits] at *
 
 theorem UScalar.tryMk_eq (ty : UScalarTy) (x : Nat) :
-  match tryMk ty x with
-  | ok y => y.val = x ∧ inBounds ty x
-  | fail _ => ¬ (inBounds ty x)
-  | _ => False := by
+  match (tryMk ty x).match with
+    | .ok y => y.val = x ∧ inBounds ty x
+    | .vis (.fail _e) _k => ¬ (inBounds ty x)
+    | _ => False
+  := by
   have := UScalar.tryMkOpt_eq ty x
   simp [tryMk, ofOption]
   cases h: tryMkOpt ty x <;> simp_all
@@ -635,10 +636,11 @@ theorem IScalar.tryMkOpt_eq (ty : IScalarTy) (x : Int) :
   cases h: System.Platform.numBits_eq <;> simp_all <;> omega
 
 theorem IScalar.tryMk_eq (ty : IScalarTy) (x : Int) :
-  match tryMk ty x with
-  | ok y => y.val = x ∧ inBounds ty x
-  | fail _ => ¬ (inBounds ty x)
-  | _ => False := by
+  match (tryMk ty x).match with
+  | .ok y => y.val = x ∧ inBounds ty x
+  | .vis (.fail _e) _k => ¬ (inBounds ty x)
+  | _ => False
+  := by
   have := tryMkOpt_eq ty x
   simp [tryMk]
   cases h : tryMkOpt ty x <;> simp_all
