@@ -102,7 +102,7 @@ attribute [scalar_tac_simps]
   lt_inf_iff le_inf_iff
   Fin.is_le'
 
-/- TODO: The core builtin simprocs cannot be added to the `scalar_tac_simps` set directly via `attribute` under the module system. Instead we register, for each, a local `meta` wrapper. -/
+/-- TODO: builtin simprocs can't be directly added under the module system. -/
 simproc ↓ [scalar_tac_simps] reduceIte' (ite _ _ _) := reduceIte
 simproc [scalar_tac_simps] Nat.reduceLeDiff' ((_ : Nat) ≤ _) := Nat.reduceLeDiff
 simproc [scalar_tac_simps] Nat.reduceLT' ((_ : Nat) < _) := Nat.reduceLT
