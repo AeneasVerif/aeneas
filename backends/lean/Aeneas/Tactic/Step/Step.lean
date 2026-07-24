@@ -541,6 +541,9 @@ meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool
   trace[Step] "Uninstantiated specMonoBind: {specMonoBind}: {← inferType specMonoBind}"
 
   let specMonoBind := mkAppN specMonoBind #[program, P, th]
+  /- Type-checking the application unifies spec parameters shared by the bind theorem
+     and the step theorem before unresolved theorem arguments are collected. -/
+  Lean.Meta.check specMonoBind
   let specMonoBindTy ← inferType specMonoBind
   trace[Step] "Applied specMonoBind with theorem: {specMonoBind}: {specMonoBindTy}"
 

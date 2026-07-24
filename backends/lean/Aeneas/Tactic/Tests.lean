@@ -1,5 +1,6 @@
 module
 public import Aeneas.Tactic.Solver.ScalarTac.Tests
+public import Aeneas.Tactic.Solver.Grind.Tests
 public import Aeneas.Tactic.Solver.BvTac.Tests
 public import Aeneas.Tactic.Conv.Bvify.Tests
 public import Aeneas.Tactic.Simp.SimpLists.Tests
