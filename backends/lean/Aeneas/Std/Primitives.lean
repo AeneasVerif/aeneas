@@ -91,8 +91,6 @@ def div? {α: Type u} (r: Result α): Bool :=
   | div => true
   | ok _ | fail _ => false
 
-/- TODO (module system): better style would be avoid `@[expose]` here and instead export only the
-appropriate charatirization lemmas. The lemmas currently live in `Aeneas.Std.PrimitivesLemmas`. -/
 @[expose] def massert (b : Prop) [Decidable b] : Result Unit :=
   if b then ok () else fail assertionFailure
 
