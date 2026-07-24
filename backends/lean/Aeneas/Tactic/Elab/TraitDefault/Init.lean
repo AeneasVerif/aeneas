@@ -322,8 +322,6 @@ meta def resolveStructFields (value : Expr) (selfFvarId : FVarId) (type : Expr) 
        compiles, and applies any declaration attributes (e.g., `@[simp]`). -/
 elab mods:declModifiers "impl_def " id:declId sig:optDeclSig val:declVal : command => do
   let modifiers ← elabModifiers mods
-  /- TODO: when migrating to the module system, recover the old visibility. Better style would
-  be to expose less and provide relevant theorems. -/
   let modifiers :=
     if modifiers.visibility matches .regular then { modifiers with visibility := .public }
     else modifiers
@@ -396,8 +394,6 @@ elab mods:declModifiers "impl_def " id:declId sig:optDeclSig val:declVal : comma
         }
 
         let docCtx := (← getLCtx, ← getLocalInstances)
-        /- TODO: when migrating to the module system, recover the old visibility. Better style would
-        be to expose less and provide relevant theorems. -/
         withExporting (isExporting := true) do
           addAndCompileNonRec docCtx preDef
 
