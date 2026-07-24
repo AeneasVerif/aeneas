@@ -1377,9 +1377,7 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
       List.iter
         (fun m -> Printf.fprintf out "public import %s\n" m)
         fi.custom_includes;
-      (* Everything below is part of the module's public interface (module
-         system). *)
-      Printf.fprintf out "public section\n";
+      Printf.fprintf out "@[expose] public section\n";
       (* Always open the Primitives namespace *)
       Printf.fprintf out "open Aeneas Aeneas.Std Result ControlFlow Error\n";
       (* It happens that we generate duplicated namespaces, like `betree.betree`.
