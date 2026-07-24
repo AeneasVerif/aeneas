@@ -264,7 +264,8 @@ theorem Vec.index_mut_slice_index {α : Type} (v : Vec α) (i : Usize) :
   Vec.index_mut (core.slice.index.SliceIndexUsizeSlice α) v i =
   index_mut_usize v i := by
   simp [Vec.index_mut, Vec.index_mut_usize, Slice.index_mut_usize]
-  rfl
+  simp [Slice.index_usize, Vec.index_usize, Slice.set, Functor.map, Bind.bind]
+  congr 1
 
 -- Vec index/index_mut with RangeTo
 
@@ -397,13 +398,10 @@ def alloc.vec.Vec.with_capacity (T : Type) (_ : Usize) : alloc.vec.Vec T := Vec.
 def alloc.vec.Vec.extend_from_slice {T : Type} (cloneInst : core.clone.Clone T)
   (v : alloc.vec.Vec T) (s : Slice T) : Result (alloc.vec.Vec T) :=
   if h : v.length + s.length ≤ Usize.max then do
-    match h' : (Slice.clone cloneInst.clone s).match with
-    | .ok s' =>
-      ok ⟨ v.val ++ s'.val , by
-        simp at h'
-        have := Slice.clone_length h'
-        scalar_tac ⟩
-    | _ => Slice.clone cloneInst.clone s
+    let s' ← List.clone cloneInst.clone s.val
+    ok (Vec.from (v.val ++ s'.val) (by
+      have hs := s'.property
+      simpa [hs] using h))
   else fail .panic
 
 @[rust_fun "alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>}::deref"
