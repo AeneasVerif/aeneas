@@ -564,3 +564,118 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
   (* Update the "reducible" attribute *)
   let ctx, _ = create_ctx () in
   compute_reducible ctx transl
+
+(** Minimize the generic parameters of the global declarations. *)
+let minimize_globals_generics (globals : global_decl list)
+    (transl : pure_fun_translation list) (trait_impls : trait_impl list) :
+    global_decl list * pure_fun_translation list * trait_impl list =
+  (* The initializer functions, by id *)
+  let init_funs =
+    FunDeclId.Map.of_list
+      (List.map (fun (t : pure_fun_translation) -> (t.f.def_id, t.f)) transl)
+  in
+  (* Compute the keep-masks and the filtered params for all the globals. *)
+  let filters : (generic_params * generics_filter) GlobalDeclId.Map.t =
+    List.fold_left
+      (fun filters (g : global_decl) ->
+        if Option.is_some g.builtin_info then filters
+        else
+          match FunDeclId.Map.find_opt g.body_id init_funs with
+          | None ->
+              (* The initializer was not translated (it must have errored) *)
+              filters
+          | Some body ->
+              let body_e =
+                match body.body with
+                | Some b -> b.body
+                | None ->
+                    (* Opaque: minimize from the type alone *)
+                    mk_unit_texpr
+              in
+              let generics, filter =
+                filter_generic_params_used_in_texpr ~extra_tys:[ g.ty ]
+                  g.generics body_e
+              in
+              let keeps_all =
+                List.for_all Fun.id filter.types
+                && List.for_all Fun.id filter.const_generics
+                && List.for_all Fun.id filter.trait_clauses
+              in
+              if keeps_all then filters
+              else GlobalDeclId.Map.add g.def_id (generics, filter) filters)
+      GlobalDeclId.Map.empty globals
+  in
+  if GlobalDeclId.Map.is_empty filters then (globals, transl, trait_impls)
+  else
+    let filter_args (gid : GlobalDeclId.id) (args : generic_args) : generic_args
+        =
+      match GlobalDeclId.Map.find_opt gid filters with
+      | None -> args
+      | Some (_, filter) -> filter_generic_args filter args
+    in
+    (* Shrink the global declarations *)
+    let globals =
+      List.map
+        (fun (g : global_decl) ->
+          match GlobalDeclId.Map.find_opt g.def_id filters with
+          | None -> g
+          | Some (generics, _) ->
+              let explicit_info = compute_explicit_info generics [] in
+              { g with generics; explicit_info })
+        globals
+    in
+    (* Filter the generic arguments at the use sites inside function bodies *)
+    let visitor =
+      object
+        inherit [_] map_expr as super
+
+        method! visit_qualif env (q : qualif) =
+          let q =
+            match q.id with
+            | Global gid -> { q with generics = filter_args gid q.generics }
+            | _ -> q
+          in
+          super#visit_qualif env q
+      end
+    in
+    let update_fun (f : fun_decl) : fun_decl =
+      {
+        f with
+        body =
+          Option.map
+            (fun (b : fun_body) ->
+              { b with body = visitor#visit_texpr () b.body })
+            f.body;
+      }
+    in
+    let transl =
+      List.map
+        (fun (t : pure_fun_translation) ->
+          {
+            f = update_fun t.f;
+            loops = List.map update_fun t.loops;
+            bodies = List.map update_fun t.bodies;
+          })
+        transl
+    in
+    (* Filter generic arguments of constant references inside trait impls *)
+    let trait_impls =
+      List.map
+        (fun (impl : trait_impl) ->
+          {
+            impl with
+            consts =
+              List.map
+                (fun (id, name, (gref : global_decl_ref)) ->
+                  ( id,
+                    name,
+                    {
+                      gref with
+                      global_generics =
+                        filter_args gref.global_id gref.global_generics;
+                    } ))
+                impl.consts;
+          })
+        trait_impls
+    in
+    (globals, transl, trait_impls)

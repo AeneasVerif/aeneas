@@ -2330,8 +2330,26 @@ type generics_filter = {
 }
 [@@deriving show]
 
+(** Apply generics_filter keep-mask to generic arguments (e.g. at a use site of
+    a declaration whose generic parameters were filtered). *)
+let filter_generic_args (filter : generics_filter) (generics : generic_args) :
+    generic_args =
+  let { types; const_generics; trait_refs } : generic_args = generics in
+  let keep mask l =
+    List.filter_map
+      (fun (b, x) -> if b then Some x else None)
+      (List.combine mask l)
+  in
+  {
+    types = keep filter.types types;
+    const_generics = keep filter.const_generics const_generics;
+    trait_refs = keep filter.trait_clauses trait_refs;
+  }
+
 (** Filter a list of generic arguments to only preserve the variables which are
-    inside of an expression.
+    inside of an expression (and, optionally, inside the types [extra_tys],
+    useful when the parameters must also serve a signature type which is not
+    part of the expression, e.g. the type of a global).
 
     We *do not* re-index the variables, because it is a bit tricky to do
     correctly (in particular, propagating the changes can be tricky). Instead,
@@ -2342,8 +2360,8 @@ type generics_filter = {
     Side remark: some functions (for computing names for trait clauses) actually
     *need* the indices of the trait clauses to be preserved from the LLBC code
     to the pure code. *)
-let filter_generic_params_used_in_texpr (generic : generic_params) (e : texpr) :
-    generic_params * generics_filter =
+let filter_generic_params_used_in_texpr ?(extra_tys : ty list = [])
+    (generic : generic_params) (e : texpr) : generic_params * generics_filter =
   (* Collect the sets of parameters used in the expression *)
   let type_ids = ref TypeVarId.Set.empty in
   let cg_ids = ref ConstGenericVarId.Set.empty in
@@ -2363,6 +2381,23 @@ let filter_generic_params_used_in_texpr (generic : generic_params) (e : texpr) :
     end
   in
   visitor#visit_texpr () e;
+  List.iter (visitor#visit_ty ()) extra_tys;
+  (* Close over the kept trait clauses. *)
+  let cardinals () =
+    ( TypeVarId.Set.cardinal !type_ids,
+      ConstGenericVarId.Set.cardinal !cg_ids,
+      TraitClauseId.Set.cardinal !clause_ids )
+  in
+  let rec close_over_clauses () =
+    let before = cardinals () in
+    List.iter
+      (fun (clause : trait_param) ->
+        if TraitClauseId.Set.mem clause.clause_id !clause_ids then
+          visitor#visit_generic_args () clause.generics)
+      generic.trait_clauses;
+    if cardinals () <> before then close_over_clauses ()
+  in
+  close_over_clauses ();
 
   (* Filter *)
   let { types; const_generics; trait_clauses } : generic_params = generic in
