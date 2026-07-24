@@ -135,7 +135,7 @@ theorem spec_mono' {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : s
   cases m <;> grind [qimp]
 
 /-- Implication of a `spec` predicate with quantifier -/
-def qimp_spec {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) : Prop :=
+@[expose] def qimp_spec {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) : Prop :=
   ∀ x, P x → spec (k x) Q
 
 /-- This alternative to `spec_bind` controls the introduction of universal quantifiers with `imp_spec`. -/
