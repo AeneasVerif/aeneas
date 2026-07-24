@@ -1,6 +1,8 @@
-import Aeneas.Std.String
-import Aeneas.Std.Core.Iter
-import Aeneas.Std.SliceIter
+module
+public import Aeneas.Std.String
+public import Aeneas.Std.Core.Iter
+public import Aeneas.Std.SliceIter
+public section
 
 namespace Aeneas.Std
 

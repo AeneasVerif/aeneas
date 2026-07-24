@@ -1,6 +1,8 @@
 /- Arrays -/
-import Aeneas.Std.Array.Array
-import Aeneas.Std.Core.Fmt
+module
+public import Aeneas.Std.Array.Array
+public import Aeneas.Std.Core.Fmt
+public section
 
 namespace Aeneas.Std
 

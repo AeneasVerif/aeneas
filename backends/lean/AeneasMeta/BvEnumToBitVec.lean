@@ -2,8 +2,10 @@
 Copyright (c) 2025. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Lean
-import Lean.Elab.Tactic.BVDecide.Frontend.Normalize.Enums
+module
+public meta import Lean.Elab.Deriving.Basic
+public meta import Lean.Elab.Tactic.BVDecide.Frontend.Normalize.Enums
+public section
 
 /-!
 # Eagerly realizing `bv_decide`'s enum conversion constants
@@ -63,7 +65,7 @@ all constructors nullary), otherwise the underlying `bv_decide` realisers throw.
 
 Idempotent: if the constants are already present (e.g. realised by an imported
 module) the realisers reuse them rather than failing. -/
-def realizeBvEnumToBitVec (declName : Name) : CoreM Unit := do
+meta def realizeBvEnumToBitVec (declName : Name) : CoreM Unit := do
   unless ← isEnumType declName do
     throwError m!"{.ofConstName declName} is not an enum inductive \
       (parameter-free with only nullary constructors); \
@@ -88,7 +90,7 @@ syntax (name := defineBvDecideToBitVec)
 
 open Lean.Elab.Command in
 @[command_elab defineBvDecideToBitVec]
-def elabDefineBvDecideToBitVec : CommandElab := fun stx =>
+meta def elabDefineBvDecideToBitVec : CommandElab := fun stx =>
   match stx with
   | `(#define_bv_decide_toBitVec $id:ident) =>
     liftCoreM do
@@ -99,14 +101,14 @@ def elabDefineBvDecideToBitVec : CommandElab := fun stx =>
 open Lean.Elab.Command in
 /-- `deriving` handler for `BvEnumToBitVec`: realises `bv_decide`'s enum
 conversion constants for each derived type and registers a marker instance. -/
-def mkBvEnumToBitVecInstance (declNames : Array Name) : CommandElabM Bool := do
+meta def mkBvEnumToBitVecInstance (declNames : Array Name) : CommandElabM Bool := do
   for declName in declNames do
     liftCoreM <| realizeBvEnumToBitVec declName
     let typeId := mkIdent declName
     elabCommand (← `(command| instance : BvEnumToBitVec $typeId := ⟨⟩))
   return true
 
-initialize
+meta initialize
   registerDerivingHandler ``BvEnumToBitVec mkBvEnumToBitVecInstance
 
 end Aeneas

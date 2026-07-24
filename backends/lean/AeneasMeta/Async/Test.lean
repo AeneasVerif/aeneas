@@ -1,4 +1,6 @@
-import AeneasMeta.Async.TestTactics
+module
+public import AeneasMeta.Async.TestTactics
+public section
 
 namespace Aeneas.Async.Test
 

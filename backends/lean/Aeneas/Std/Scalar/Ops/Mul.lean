@@ -1,9 +1,11 @@
-import Aeneas.Std.Scalar.Core
-import Aeneas.Std.Scalar.Misc
-import Aeneas.Std.Scalar.Elab
-import Aeneas.Tactic.Solver.ScalarTac
-import Mathlib.Data.BitVec
-import Mathlib.Data.Int.Init
+module
+public import Aeneas.Std.Scalar.Core
+public import Aeneas.Std.Scalar.Misc
+public import Aeneas.Std.Scalar.Elab
+public import Aeneas.Tactic.Solver.ScalarTac
+public import Mathlib.Data.BitVec
+public import Mathlib.Data.Int.Init
+public section
 
 namespace Aeneas.Std
 

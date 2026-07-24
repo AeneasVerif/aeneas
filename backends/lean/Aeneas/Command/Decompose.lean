@@ -2,11 +2,14 @@
 Copyright (c) 2025. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Lean
-import Aeneas.Std.Primitives
-import Aeneas.Std.WP
-import AeneasMeta.Simp.Simp
-import AeneasMeta.Utils
+module
+public import Lean
+public import Aeneas.Std.Primitives
+public import Aeneas.Std.WP
+public import AeneasMeta.Simp.Simp
+public import AeneasMeta.Utils
+public meta import AeneasMeta.Simp.Simp
+public section
 
 /-!
 # The `#decompose` command
@@ -179,7 +182,7 @@ initialize registerTraceClass `Decompose
 
 /-- If true (default), warn when two clauses in the same `#decompose` call produce
     definitionally equal definitions under different names. -/
-register_option Aeneas.Decompose.checkDuplicate : Bool := {
+meta register_option Aeneas.Decompose.checkDuplicate : Bool := {
   defValue := true
   descr := "Warn when two decomposition clauses produce identical definitions with different names"
 }
@@ -187,7 +190,7 @@ register_option Aeneas.Decompose.checkDuplicate : Bool := {
 /-- If true (default), when a clause uses a name that already exists in the environment,
     check that the existing definition is definitionally equal and reuse it.
     If false, only look at definitions introduced by the current `#decompose` call. -/
-register_option Aeneas.Decompose.useExisting : Bool := {
+meta register_option Aeneas.Decompose.useExisting : Bool := {
   defValue := true
   descr := "Allow reusing definitions that already exist in the environment"
 }
@@ -250,7 +253,7 @@ syntax &"appFun" &"full" : decompose_pat
 syntax &"argArg" num "(" decompose_pat ")" : decompose_pat
 syntax &"argArg" num &"full" : decompose_pat
 
-partial def elabDecomposePat : Syntax → Except String DecomposePattern
+meta partial def elabDecomposePat : Syntax → Except String DecomposePattern
   | `(decompose_pat| letRange $start $count) =>
     return .letRange start.getNat count.getNat
   | `(decompose_pat| letAt $idx ($inner)) => do
@@ -296,18 +299,18 @@ inductive FVarTree where
   | leaf : Expr → FVarTree
   | pair : FVarTree → FVarTree → FVarTree
 
-instance : Inhabited FVarTree where
+meta instance : Inhabited FVarTree where
   default := .leaf default
 
 /-- Collect all leaf fvars from a tree into a flat array. -/
-def FVarTree.fvars : FVarTree → Array Expr
+meta def FVarTree.fvars : FVarTree → Array Expr
   | .leaf fv => #[fv]
   | .pair l r => l.fvars ++ r.fvars
 
 /-- Build a right-nested tree from a list of sub-trees.
     `[t0, t1]` → `pair t0 t1`
     `[t0, t1, t2]` → `pair t0 (pair t1 t2)` -/
-def buildTreeFromList [Monad m] [MonadError m] : List FVarTree → m FVarTree
+meta def buildTreeFromList [Monad m] [MonadError m] : List FVarTree → m FVarTree
   | [] => throwError "buildTreeFromList: empty list (internal error)"
   | [t] => return t
   | t :: ts => return .pair t (← buildTreeFromList ts)
@@ -316,7 +319,7 @@ def buildTreeFromList [Monad m] [MonadError m] : List FVarTree → m FVarTree
     For simple binds, `fvars` has one element. For tuple-destructuring binds
     (`let (a, b, c) ← comp`), `fvars` has one element per component. -/
 
-structure BindingEntry where
+meta structure BindingEntry where
   name : Name
   type : Expr
   value : Expr       -- pure: the value; monadic: the computation
@@ -332,21 +335,21 @@ structure BindingEntry where
 
 /-- Match `Bind.bind` or `bind` applied to 6 args.
     Returns `(m, inst, α, β, computation, continuation)`. -/
-def matchBind? (e : Expr) : Option (Expr × Expr × Expr × Expr × Expr × Expr) := do
+meta def matchBind? (e : Expr) : Option (Expr × Expr × Expr × Expr × Expr × Expr) := do
   let fn := e.getAppFn
   let args := e.getAppArgs
   guard ((fn.isConstOf ``Bind.bind || fn.isConstOf ``bind) && args.size == 6)
   return (args[0]!, args[1]!, args[2]!, args[3]!, args[4]!, args[5]!)
 
 /-- Match `@ite α cond inst thenBranch elseBranch`. -/
-def matchIte? (e : Expr) : Option (Expr × Expr × Expr × Expr × Expr) := do
+meta def matchIte? (e : Expr) : Option (Expr × Expr × Expr × Expr × Expr) := do
   let fn := e.getAppFn
   let args := e.getAppArgs
   guard (fn.isConstOf ``ite && args.size == 5)
   return (args[0]!, args[1]!, args[2]!, args[3]!, args[4]!)
 
 /-- Match `@dite α cond inst thenBranch elseBranch`. -/
-def matchDite? (e : Expr) : Option (Expr × Expr × Expr × Expr × Expr) := do
+meta def matchDite? (e : Expr) : Option (Expr × Expr × Expr × Expr × Expr) := do
   let fn := e.getAppFn
   let args := e.getAppArgs
   guard (fn.isConstOf ``dite && args.size == 5)
@@ -376,7 +379,7 @@ def matchDite? (e : Expr) : Option (Expr × Expr × Expr × Expr × Expr) := do
     multiple fvars `#[c, d]` and an `FVarTree` recording the nesting structure.
     Nested tuples like `let ((a, b), (c, d)) ← ...` are fully opened to their
     leaf components. -/
-partial def withBindings (e : Expr) (acc : Array BindingEntry)
+meta partial def withBindings (e : Expr) (acc : Array BindingEntry)
     (k : Array BindingEntry → Expr → DecomposeM α) : DecomposeM α := do
   -- Pure let
   match e with
@@ -582,7 +585,7 @@ where
 /-- Abstract over `fvars`, always creating lambda binders (even for let-decl fvars).
     Standard `mkLambdaFVars` creates let-bindings for let-decl fvars, which is wrong
     when building extracted function definitions that should take parameters. -/
-private def mkLamAbstract (fvars : Array Expr) (body : Expr) : MetaM Expr := do
+private meta def mkLamAbstract (fvars : Array Expr) (body : Expr) : MetaM Expr := do
   let mut result := body
   for fv in fvars.reverse do
     let decl ← fv.fvarId!.getDecl
@@ -592,7 +595,7 @@ private def mkLamAbstract (fvars : Array Expr) (body : Expr) : MetaM Expr := do
 /-- Abstract over `fvars`, always creating forall binders (even for let-decl fvars).
     Standard `mkForallFVars` creates let-types for let-decl fvars, which is wrong
     when building extracted function type signatures. -/
-private def mkForallAbstract (fvars : Array Expr) (body : Expr) : MetaM Expr := do
+private meta def mkForallAbstract (fvars : Array Expr) (body : Expr) : MetaM Expr := do
   let mut result := body
   for fv in fvars.reverse do
     let decl ← fv.fvarId!.getDecl
@@ -605,13 +608,13 @@ private def mkForallAbstract (fvars : Array Expr) (body : Expr) : MetaM Expr := 
 
 /-- Build `Std.uncurry (fun x => body)` for a single pair layer.
     Always creates a lambda (not a let-binding), even for let-decl fvars. -/
-private def mkUncurry (fvar : Expr) (body : Expr) : MetaM Expr := do
+private meta def mkUncurry (fvar : Expr) (body : Expr) : MetaM Expr := do
   let fn ← mkLamAbstract #[fvar] body
   mkAppM ``_root_.Aeneas.Std.uncurry #[fn]
 
 /-- Compute the product type corresponding to an `FVarTree`.
     Leaf: the fvar's type. Pair: `leftType × rightType`. -/
-private partial def FVarTree.type : FVarTree → MetaM Expr
+private meta partial def FVarTree.type : FVarTree → MetaM Expr
   | .leaf fvar => inferType fvar
   | .pair left right => do
     mkAppM ``Prod #[← left.type, ← right.type]
@@ -634,7 +637,7 @@ private partial def FVarTree.type : FVarTree → MetaM Expr
       `uncurry (fun _x c => uncurry (fun a b => body) _x)`
     NOT: `uncurry (uncurry (fun a b c => body))` (which `openUncurryFVars` can't parse)
     NOT: `uncurry (fun _x => uncurry (fun a b c => body) _x)` (right var `c` hidden) -/
-private partial def rebuildUncurryFromTree (tree : FVarTree) (body : Expr) : MetaM Expr := do
+private meta partial def rebuildUncurryFromTree (tree : FVarTree) (body : Expr) : MetaM Expr := do
   match tree with
   | .leaf fvar => mkLamAbstract #[fvar] body
   | .pair left right =>
@@ -677,7 +680,7 @@ where
 /-- Rebuild an expression from `bindings[startIdx .. endIdx-1]` followed by `terminal`.
     Abstracts fvars bottom-up using `mkLambdaFVars` / `mkLetFVars`.
     Handles tuple-destructuring binds by reconstructing `Std.uncurry` chains. -/
-def rebuildBindings (bindings : Array BindingEntry) (terminal : Expr)
+meta def rebuildBindings (bindings : Array BindingEntry) (terminal : Expr)
     (startIdx endIdx : Nat) : MetaM Expr := do
   let mut result := terminal
   let mut i := endIdx
@@ -701,7 +704,7 @@ def rebuildBindings (bindings : Array BindingEntry) (terminal : Expr)
 -- ============================================================================
 
 /-- Project element `idx` from a nested tuple of `totalSize` components. -/
-partial def mkProjection (tuple : Expr) (totalSize idx : Nat) : MetaM Expr := do
+meta partial def mkProjection (tuple : Expr) (totalSize idx : Nat) : MetaM Expr := do
   if totalSize ≤ 1 then return tuple
   if idx == 0 then mkAppM ``Prod.fst #[tuple]
   else do
@@ -713,14 +716,14 @@ partial def mkProjection (tuple : Expr) (totalSize idx : Nat) : MetaM Expr := do
 -- ============================================================================
 
 /-- Which of `available` appear free in `e`? Preserves order. -/
-def filterRelevantFVars (e : Expr) (available : Array Expr) : MetaM (Array Expr) :=
+meta def filterRelevantFVars (e : Expr) (available : Array Expr) : MetaM (Array Expr) :=
   available.filterM fun fv => pure (e.containsFVar fv.fvarId!)
 
 /-- Collect all non-implementation-detail fvars from the local context that appear
     free in `e` or in the types of collected fvars (dependency closure).
     This ensures extracted definitions include all necessary type parameters.
     Returns fvars in context order. -/
-def collectFreeLocalFVars (e : Expr) : MetaM (Array Expr) := do
+meta def collectFreeLocalFVars (e : Expr) : MetaM (Array Expr) := do
   let lctx ← getLCtx
   -- Collect fvar IDs that we need (iteratively, until fixpoint)
   let mut needed : Std.HashSet FVarId := {}
@@ -754,7 +757,7 @@ def collectFreeLocalFVars (e : Expr) : MetaM (Array Expr) := do
 -- ============================================================================
 
 /-- Check if an expression transitively references any noncomputable or opaque constant. -/
-private def hasNoncomputableDep (env : Environment) (e : Expr) : Bool :=
+private meta def hasNoncomputableDep (env : Environment) (e : Expr) : Bool :=
   e.foldConsts false fun n acc =>
     acc || isNoncomputable env n ||
     match env.find? n with
@@ -777,7 +780,7 @@ private def hasNoncomputableDep (env : Environment) (e : Expr) : Bool :=
     noncomputable or opaque constants (which cause deferred IR errors).
     `clauseDesc` is used in error messages to identify which decomposition clause
     triggered the conflict. -/
-private def addDefinition (name : Name) (levelParams : List Name)
+private meta def addDefinition (name : Name) (levelParams : List Name)
     (type value : Expr) (srcIsNoncomputable : Bool)
     (clauseDesc : MessageData := "decomposition clause") : DecomposeM Unit := do
   let env ← getEnv
@@ -858,7 +861,7 @@ private def addDefinition (name : Name) (levelParams : List Name)
 
 /-- Extract the whole expression as a new definition.
     Returns the call expression that replaces it. -/
-def extractFull (body : Expr) (newName : Name)
+meta def extractFull (body : Expr) (newName : Name)
     (levelParams : List Name) (srcIsNoncomputable : Bool)
     (clauseDesc : MessageData) : DecomposeM Expr := do
   let relevantFVars ← collectFreeLocalFVars body
@@ -873,7 +876,7 @@ def extractFull (body : Expr) (newName : Name)
 
 /-- Extract `count` consecutive bindings starting at `start`.
     Returns the **full** modified body (wrapping bindings before the range too). -/
-def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
+meta def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
     (start count : Nat) (newName : Name)
     (levelParams : List Name) (srcIsNoncomputable : Bool)
     (clauseDesc : MessageData) : DecomposeM Expr := do
@@ -1010,7 +1013,7 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
 -- ============================================================================
 
 /-- Format a pattern for error messages. -/
-def formatPattern : DecomposePattern → String
+meta def formatPattern : DecomposePattern → String
   | .letRange s c => s!"letRange {s} {c}"
   | .letAt i inner => s!"letAt {i} ({formatPattern inner})"
   | .afterLets inner => s!"afterLets ({formatPattern inner})"
@@ -1021,11 +1024,11 @@ def formatPattern : DecomposePattern → String
   | .argArg i inner => s!"argArg {i} ({formatPattern inner})"
 
 /-- Format a decompose clause for error messages. -/
-private def formatClause (pat : DecomposePattern) (name : Name) : MessageData :=
+private meta def formatClause (pat : DecomposePattern) (name : Name) : MessageData :=
   m!"{formatPattern pat} => {name}"
 
 /-- Format a pattern element (without its inner pattern) for error messages. -/
-private def formatPatternHead : DecomposePattern → String
+private meta def formatPatternHead : DecomposePattern → String
   | .letRange s c => s!"letRange {s} {c}"
   | .letAt i _ => s!"letAt {i} _"
   | .afterLets _ => s!"afterLets _"
@@ -1036,7 +1039,7 @@ private def formatPatternHead : DecomposePattern → String
   | .argArg i _ => s!"argArg {i} _"
 
 /-- Format a list of applied prefix patterns (outermost first). -/
-private def formatPrefixPath (prefix_ : Array DecomposePattern) : String :=
+private meta def formatPrefixPath (prefix_ : Array DecomposePattern) : String :=
   if prefix_.isEmpty then ""
   else
     -- Build the nested pattern string from the prefix elements
@@ -1057,7 +1060,7 @@ private def formatPrefixPath (prefix_ : Array DecomposePattern) : String :=
     Formats the error to show the failing pattern element, the sub-expression
     it was applied to, and (if non-empty) the prefix pattern that was
     successfully applied. -/
-def throwNavError (currentExpr : Expr) (rawMsg : MessageData) : DecomposeM α := do
+meta def throwNavError (currentExpr : Expr) (rawMsg : MessageData) : DecomposeM α := do
   let ctx := (← get).navCtx
   let failingElem := match ctx.currentPattern with
     | some pat => formatPatternHead pat
@@ -1085,7 +1088,7 @@ def throwNavError (currentExpr : Expr) (rawMsg : MessageData) : DecomposeM α :=
 /-- Open `n` nested lambda binders, apply `action` to the innermost body, close them back.
     If `strict`, throws an error when fewer than `n` lambdas are found.
     If not strict, applies `action` to whatever expression remains. -/
-private def modifyUnderLambdasCore (strict : Bool) (e : Expr) (n : Nat)
+private meta def modifyUnderLambdasCore (strict : Bool) (e : Expr) (n : Nat)
     (action : Expr → DecomposeM Expr) : DecomposeM Expr := do
   match n with
   | 0 => action e
@@ -1104,20 +1107,20 @@ private def modifyUnderLambdasCore (strict : Bool) (e : Expr) (n : Nat)
 
 /-- Open up to `n` lambda binders (permissive: applies action even if fewer lambdas exist).
     Used for match/dite branches where Lean may compile away some binders. -/
-private def modifyUnderLambdasPermissive (e : Expr) (n : Nat)
+private meta def modifyUnderLambdasPermissive (e : Expr) (n : Nat)
     (action : Expr → DecomposeM Expr) : DecomposeM Expr :=
   modifyUnderLambdasCore (strict := false) e n action
 
 /-- Open exactly `n` lambda binders (strict: throws if fewer exist).
     Used for the `lam` navigation pattern. -/
-def modifyUnderLambdas (e : Expr) (n : Nat)
+meta def modifyUnderLambdas (e : Expr) (n : Nat)
     (action : Expr → DecomposeM Expr) : DecomposeM Expr :=
   modifyUnderLambdasCore (strict := true) e n action
 
 /-- Modify branch `idx` of an ite/dite/match expression.
     Calls `action` on the branch body (under all pattern-variable lambdas);
     returns the reconstructed expression. -/
-def modifyBranch (e : Expr) (idx : Nat) (action : Expr → DecomposeM Expr) : DecomposeM Expr := do
+meta def modifyBranch (e : Expr) (idx : Nat) (action : Expr → DecomposeM Expr) : DecomposeM Expr := do
   -- Try ite
   if let some (α, cond, inst, thenB, elseB) := matchIte? e then
     if idx == 0 then
@@ -1151,7 +1154,7 @@ def modifyBranch (e : Expr) (idx : Nat) (action : Expr → DecomposeM Expr) : De
   throwNavError e m!"branch {idx}: expression is not an ite, dite, or match"
 
 /-- Modify the function part of an application. -/
-def modifyAppFun (e : Expr) (action : Expr → DecomposeM Expr) : DecomposeM Expr := do
+meta def modifyAppFun (e : Expr) (action : Expr → DecomposeM Expr) : DecomposeM Expr := do
   let fn := e.getAppFn
   let args := e.getAppArgs
   if args.size == 0 then throwNavError e m!"appFun: expression is not an application"
@@ -1159,7 +1162,7 @@ def modifyAppFun (e : Expr) (action : Expr → DecomposeM Expr) : DecomposeM Exp
   return mkAppN fn' args
 
 /-- Modify argument `idx` of an application (0-indexed, explicit args). -/
-def modifyAppArg (e : Expr) (idx : Nat) (action : Expr → DecomposeM Expr) : DecomposeM Expr := do
+meta def modifyAppArg (e : Expr) (idx : Nat) (action : Expr → DecomposeM Expr) : DecomposeM Expr := do
   let fn := e.getAppFn
   let args := e.getAppArgs
   if idx >= args.size then
@@ -1175,7 +1178,7 @@ def modifyAppArg (e : Expr) (idx : Nat) (action : Expr → DecomposeM Expr) : De
     Returns the modified full expression.
     When `idx == 0`: if the expression is a let or bind, operates on the bound
     expression; otherwise operates on the full expression (the "terminal"). -/
-partial def modifyBindingValue (e : Expr) (idx : Nat)
+meta partial def modifyBindingValue (e : Expr) (idx : Nat)
     (action : Expr → DecomposeM Expr) : DecomposeM Expr := do
   if idx == 0 then
     -- Modify the current binding's value, or the terminal if not a let/bind
@@ -1257,7 +1260,7 @@ where
 
 /-- Navigate past all let/bind bindings to the terminal expression and apply
     `action` to it. Returns the modified full expression. -/
-partial def modifyAfterLets (e : Expr) (action : Expr → DecomposeM Expr) : DecomposeM Expr := do
+meta partial def modifyAfterLets (e : Expr) (action : Expr → DecomposeM Expr) : DecomposeM Expr := do
   match e with
   | .letE name type value body _nonDep =>
     withLetDecl name type value fun fvar => do
@@ -1318,7 +1321,7 @@ where
 
 /-- Set the navigation context for error messages. Called before each navigation
     step so that `throwNavError` can format errors with the right context. -/
-private def setNavCtx (rootExpr : Expr) (pat : DecomposePattern)
+private meta def setNavCtx (rootExpr : Expr) (pat : DecomposePattern)
     (appliedPrefix : Array DecomposePattern) : DecomposeM Unit :=
   modify fun s => { s with navCtx := {
     rootExpr := some rootExpr
@@ -1328,7 +1331,7 @@ private def setNavCtx (rootExpr : Expr) (pat : DecomposePattern)
 
 /-- Apply one decompose clause: navigate with the pattern, extract, replace.
     Returns the modified function body. -/
-partial def applyClause (body : Expr) (pat : DecomposePattern) (newName : Name)
+meta partial def applyClause (body : Expr) (pat : DecomposePattern) (newName : Name)
     (levelParams : List Name)
     (srcIsNoncomputable : Bool)
     (appliedPrefix : Array DecomposePattern := #[]) : DecomposeM Expr := do
@@ -1383,7 +1386,7 @@ partial def applyClause (body : Expr) (pat : DecomposePattern) (newName : Name)
 
 /-- Run `simp only` with the given theorems on the goal's target. Returns `none`
     if the goal was closed, `some mvarId` otherwise. -/
-private def simpOnlyTarget (mvarId : MVarId) (declsToUnfold : Array Name)
+private meta def simpOnlyTarget (mvarId : MVarId) (declsToUnfold : Array Name)
     (addSimpThms : Array Name) : MetaM (Option MVarId) := do
   let args : SimpArgs := { declsToUnfold, addSimpThms }
   let (ctx, simprocs) ← mkSimpCtx (simpOnly := true) { maxSteps := 100000 } .simp args
@@ -1396,7 +1399,7 @@ private def simpOnlyTarget (mvarId : MVarId) (declsToUnfold : Array Name)
 
 /-- Prove the decomposition equality: `∀ params, body_original = body_decomposed`.
     `defNames` are the names of all auxiliary definitions introduced. -/
-def proveStep (goalType : Expr) (defNames : Array Name) : TermElabM Expr := do
+meta def proveStep (goalType : Expr) (defNames : Array Name) : TermElabM Expr := do
   let simpThms := #[``Aeneas.Std.bind_assoc_eq, ``LawfulMonad.pure_bind]
   let mvar ← mkFreshExprMVar goalType
   let (_, mvarId) ← mvar.mvarId!.intros
@@ -1415,7 +1418,7 @@ def proveStep (goalType : Expr) (defNames : Array Name) : TermElabM Expr := do
 /-- Register LSP info for declarations introduced by `#decompose`:
     - Declaration ranges (for go-to-definition on introduced names)
     - Term info (for hover on identifiers in the command syntax) -/
-private def registerDecomposeInfo (cmdStx : Syntax) (eqId : Ident) (eqName : Name)
+private meta def registerDecomposeInfo (cmdStx : Syntax) (eqId : Ident) (eqName : Name)
     (parsedClauses : Array (DecomposePattern × Name × Ident)) : TermElabM Unit := do
   -- Register the equation theorem
   Elab.addDeclarationRangesFromSyntax eqName cmdStx eqId
@@ -1430,13 +1433,13 @@ private def registerDecomposeInfo (cmdStx : Syntax) (eqId : Ident) (eqName : Nam
       registered := registered.push auxName
 
 /-- Resolve the equation theorem name in the current namespace. -/
-private def resolveEqName (eqId : Ident) : TermElabM Name := do
+private meta def resolveEqName (eqId : Ident) : TermElabM Name := do
   let ns ← getCurrNamespace
   let rawName := eqId.getId
   pure (if ns.isAnonymous then rawName else ns ++ rawName)
 
 /-- Decompose a non-recursive function using its definitional body directly. -/
-private def decomposeViaDef (fnName : Name) (levelParams : List Name)
+private meta def decomposeViaDef (fnName : Name) (levelParams : List Name)
     (srcIsNoncomputable : Bool)
     (parsedClauses : Array (DecomposePattern × Name × Ident))
     (cmdStx : Syntax) (eqId : Ident) : TermElabM Unit := do
@@ -1486,7 +1489,7 @@ private def decomposeViaDef (fnName : Name) (levelParams : List Name)
     the raw definition body contains fixpoint combinator internals. Instead, we use the
     RHS of the `eq_def` theorem (the clean user-written body) as the expression to
     decompose, then chain `eq_def` with the decomposition proof. -/
-private def decomposeViaEqDef (fnName eqDefName : Name) (levelParams : List Name)
+private meta def decomposeViaEqDef (fnName eqDefName : Name) (levelParams : List Name)
     (srcIsNoncomputable : Bool)
     (parsedClauses : Array (DecomposePattern × Name × Ident))
     (cmdStx : Syntax) (eqId : Ident) : TermElabM Unit := do
@@ -1539,7 +1542,7 @@ private def decomposeViaEqDef (fnName eqDefName : Name) (levelParams : List Name
     trace[Decompose] "#decompose: created {parsedClauses.size} definition(s) and theorem '{eqName}' (via {eqDefName})"
 
 @[command_elab decomposeCmd]
-def elabDecompose : CommandElab := fun stx => do
+meta def elabDecompose : CommandElab := fun stx => do
   match stx with
   | `(command| #decompose $fnId $eqId $[$clauses]*) => do
     liftTermElabM do

@@ -1,5 +1,7 @@
-import Aeneas.Std.Scalar.Core
-import Aeneas.Std.Scalar.Elab
+module
+public import Aeneas.Std.Scalar.Core
+public import Aeneas.Std.Scalar.Elab
+public section
 
 namespace Aeneas.Std
 
@@ -53,7 +55,7 @@ iscalar @[simp, bvify, grind =, agrind =] theorem core.num.«%S».wrapping_sub_b
 
 @[simp] theorem UScalar.wrapping_sub_val_eq {ty} (x y : UScalar ty) :
   (wrapping_sub x y).val = (x.val + (UScalar.size ty - y.val)) % UScalar.size ty := by
-  simp only [wrapping_sub, val, size]
+  simp only [wrapping_sub, val, UScalar.size_def]
   have : 0 < 2^ty.numBits := by simp
   have : 2 ^ ty.numBits - 1 + 1 = 2^ty.numBits := by omega
   simp only [BitVec.toNat_sub, bv_toNat]

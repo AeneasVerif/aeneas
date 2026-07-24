@@ -1,12 +1,14 @@
-import Mathlib.Tactic.Basic
-import Mathlib.Tactic.Attr.Register
-import Mathlib.Data.Int.Cast.Basic
-import Mathlib.Order.Basic
-import Aeneas.Tactic.Conv.ZModify.Init
-import Aeneas.Tactic.Solver.Arith.Lemmas
-import Aeneas.Std.Scalar.Core
-import Aeneas.Tactic.Solver.ScalarTac.CondSimpTac
-import Aeneas.Tactic.Simp.SimpBoolProp.SimpBoolProp
+module
+public import Mathlib.Tactic.Basic
+public import Mathlib.Tactic.Attr.Register
+public import Mathlib.Data.Int.Cast.Basic
+public import Mathlib.Order.Basic
+public meta import Aeneas.Tactic.Conv.ZModify.Init
+public import Aeneas.Tactic.Solver.Arith.Lemmas
+public import Aeneas.Std.Scalar.Core
+public meta import Aeneas.Tactic.Solver.ScalarTac.CondSimpTac
+public import Aeneas.Tactic.Simp.SimpBoolProp.SimpBoolProp
+public section
 
 /-!
 # ZMod-ify tactic
@@ -27,7 +29,9 @@ structure Config where
   nonLin : Bool := true -- We use the non linear lemmas by default
   saturationPasses := 3
 
+meta section
 declare_config_elab elabConfig Config
+end
 
 attribute [zmodify] ge_iff_le gt_iff_lt Nat.mod_lt_of_lt
 
@@ -42,7 +46,7 @@ attribute [zmodify] Nat.mod_lt
 /-- `n` is the parameter of `ZMod`, in case it is not obvious from the context.
     In particular, if the user provides `n`, it activates the use of conditional rewritings by means of `scalar_tac`.
  -/
-def zmodifyTac (config : Config)
+meta def zmodifyTac (config : Config)
   (n : Option Expr) (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := do
     match n with
@@ -85,7 +89,7 @@ or by passing them directly as arguments to the tactic, e.g., `zmodify [my_lemma
 -/
 syntax (name := zmodify) "zmodify" Parser.Tactic.optConfig ("to" term)? ("[" (term<|>"*"),* "]")? (location)? : tactic
 
-def parseZModify :
+meta def parseZModify :
 TSyntax ``zmodify -> TacticM (Config × Option Expr × ScalarTac.CondSimpPartialArgs × Utils.Location)
 | `(tactic| zmodify $config $[to $n]? $[[$args,*]]? $[$loc:location]?) => do
   let config ← elabConfig config
@@ -102,11 +106,10 @@ elab stx:zmodify : tactic =>
   zmodifyTac config n args loc
 
 attribute [zmodify] Nat.eq_mod_iff_eq_ZMod Int.eq_mod_iff_eq_ZMod div_to_ZMod
-attribute [zmodify] Nat.reduceGcd
-
+dsimproc [zmodify] Nat.reduceGcd' (Nat.gcd _ _) := Nat.reduceGcd
 attribute [zmodify] ZMod.natCast_val ZMod.natCast_mod ZMod.cast_id' ZMod.intCast_mod id_eq
 attribute [zmodify] Int.cast_add Int.cast_natCast Int.cast_mul
-attribute [zmodify] Int.reduceNeg
+dsimproc [zmodify] Int.reduceNeg' ((- _ : Int)) := Int.reduceNeg
 
 @[zmodify]
 theorem Nat.eq_mod_zero_iff_eq_ZMod (n : ℕ) (a : Nat) : a % n = 0 ↔ (a : ZMod n) = 0 := by

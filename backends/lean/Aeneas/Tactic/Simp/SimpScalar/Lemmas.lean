@@ -1,5 +1,8 @@
-import Aeneas.Tactic.Simp.SimpScalar.SimpScalar
-import Aeneas.Tactic.Simproc.ReduceNat
+module
+public import Aeneas.Tactic.Simp.SimpScalar.SimpScalar
+public import Aeneas.Tactic.Simproc.ReduceNat
+import all Init.Data.Nat.Power2.Basic
+public section
 
 section
 
@@ -130,7 +133,7 @@ be discharged by `simp`.
 -/
 
 /-- Computable variant of `isPowerOfTwo`. -/
-@[scalar_tac_simps, simp_scalar_safe]
+@[scalar_tac_simps, simp_scalar_safe, expose]
 def Nat.isPowerOfTwo' (n : Nat) : Bool := 2 ^ n.log2 = n
 
 example : Nat.isPowerOfTwo' 65536 := by simp [scalar_tac_simps]

@@ -1,6 +1,8 @@
-import Lean
-import AeneasMeta.Utils
-import AeneasMeta.Extensions
+module
+public meta import Lean
+public meta import AeneasMeta.Utils
+public import AeneasMeta.Extensions
+public section
 
 open Lean Lean.Meta Lean.Elab Lean.Elab.Term Lean.Elab.Tactic
 
@@ -18,7 +20,7 @@ initialize registerTraceClass `Saturate.diagnostics
 
 namespace Attribute
 
-structure Key where
+meta structure Key where
   discrTreeKey : DiscrTreeKey
   deriving Inhabited
 
@@ -28,7 +30,7 @@ instance : ToFormat Key where
 instance : ToMessageData Key where
   toMessageData k := m!"({k.discrTreeKey})"
 
-structure Pattern where
+meta structure Pattern where
   pattern : Expr
   /- The variables bound in the theorem and that are used in the pattern -/
   boundVars : Array Nat
@@ -38,7 +40,7 @@ structure Pattern where
   instVar : Option Nat
 deriving Inhabited, BEq
 
-structure Rule where
+meta structure Rule where
   -- The source info allows to uniquely identify where the rule was introduced
   src : SourceInfo
   numBinders : Nat
@@ -47,16 +49,16 @@ structure Rule where
   thName : Name
   deriving Inhabited, BEq
 
-instance : ToFormat Pattern where
+meta instance : ToFormat Pattern where
   format x := f!"{x.pattern}"
 
-instance : ToMessageData Pattern where
+meta instance : ToMessageData Pattern where
   toMessageData x := m!"{x.pattern}"
 
-instance : ToFormat Rule where
+meta instance : ToFormat Rule where
   format x := f!"({x.numBinders}, {x.patterns}, {x.thName})"
 
-instance : ToMessageData Rule where
+meta instance : ToMessageData Rule where
   toMessageData x := m!"({x.numBinders}, {x.patterns}, {x.thName})"
 
 /-- The saturation attribute is a map from rule set name to set of rules.
@@ -97,7 +99,7 @@ instance : ToMessageData Rule where
 
     TODO: allow using several patterns.
 -/
-structure Rules where
+meta structure Rules where
   /- The set of rules.
 
      We actually save a *map* rather than a set: it is convenient useful
@@ -109,7 +111,7 @@ structure Rules where
   rules : DiscrTree Rule
 deriving Inhabited
 
-def Rules.empty : Rules := {
+meta def Rules.empty : Rules := {
   nameToRules := Std.HashMap.emptyWithCapacity,
   deactivatedRules := Std.HashSet.emptyWithCapacity
   rules := DiscrTree.empty
@@ -118,7 +120,7 @@ def Rules.empty : Rules := {
 abbrev Extension :=
   SimpleScopedEnvExtension (Key × Rule) Rules
 
-private def Rules.insert (s : Rules) (kv : Key × Rule) : Rules :=
+private meta def Rules.insert (s : Rules) (kv : Key × Rule) : Rules :=
   let { nameToRules, deactivatedRules, rules } := s
   let ⟨ k, v ⟩ := kv
   let nameToRules := nameToRules.insert v.thName v
@@ -127,7 +129,7 @@ private def Rules.insert (s : Rules) (kv : Key × Rule) : Rules :=
   --
   { nameToRules, deactivatedRules, rules }
 
-private def Rules.erase (s : Rules) (thName : Name) : Rules :=
+private meta def Rules.erase (s : Rules) (thName : Name) : Rules :=
   let { nameToRules, deactivatedRules, rules } := s
   /- Note that we can't remove a key from a discrimination tree, so we
      add the theorem name to the `deactivatedRules` set instead: when instantiating rules
@@ -136,7 +138,7 @@ private def Rules.erase (s : Rules) (thName : Name) : Rules :=
   let deactivatedRules := deactivatedRules.insert thName
   { nameToRules, deactivatedRules, rules }
 
-def mkExtension (name : Name := by exact decl_name%) :
+meta def mkExtension (name : Name := by exact decl_name%) :
   IO Extension :=
   registerSimpleScopedEnvExtension {
     name          := name,
@@ -145,14 +147,14 @@ def mkExtension (name : Name := by exact decl_name%) :
   }
 
 /-- The saturation attribute. -/
-structure SaturateAttribute where
+meta structure SaturateAttribute where
   -- The attribute
   attr : AttributeImpl
   -- The rule sets
   ext : Extension
   deriving Inhabited
 
-def makeAttribute (mapName attributeName : Name) (elabAttribute : Syntax → MetaM (Option Syntax)) :
+meta def makeAttribute (mapName attributeName : Name) (elabAttribute : Syntax → MetaM (Option Syntax)) :
   IO SaturateAttribute := do
   let ext ← mkExtension mapName
   let attrImpl : AttributeImpl := {
@@ -303,16 +305,16 @@ def makeAttribute (mapName attributeName : Name) (elabAttribute : Syntax → Met
 -- If `allow_loose` is specified, we allow not instantiating all the variables.
 syntax (name := aeneas_saturate) "aeneas_saturate" (term)? : attr
 
-def elabSaturateAttribute (stx : Syntax) : MetaM (Option Syntax) :=
+meta def elabSaturateAttribute (stx : Syntax) : MetaM (Option Syntax) :=
   withRef stx do
     match stx with
     | `(attr| aeneas_saturate $[$pat]?) => do pure pat
     | _ => throwUnsupportedSyntax
 
-initialize saturateAttr : SaturateAttribute ← do
+meta initialize saturateAttr : SaturateAttribute ← do
   makeAttribute `aeneas_saturate_map `aeneas_saturate elabSaturateAttribute
 
-def SaturateAttribute.find? (s : SaturateAttribute) (e : Expr) :
+meta def SaturateAttribute.find? (s : SaturateAttribute) (e : Expr) :
   MetaM (Array Rule) := do
   let s := s.ext.getState (← getEnv)
   let rules ← s.rules.getMatch e
@@ -320,10 +322,10 @@ def SaturateAttribute.find? (s : SaturateAttribute) (e : Expr) :
       and filter the rules which have been deactivated -/
   pure (rules.filter fun r => ¬ s.deactivatedRules.contains r.thName)
 
-def SaturateAttribute.getState (s : SaturateAttribute) : MetaM Rules := do
+meta def SaturateAttribute.getState (s : SaturateAttribute) : MetaM Rules := do
   pure (s.ext.getState (← getEnv))
 
-def SaturateAttribute.showStored (s : SaturateAttribute) : MetaM Unit := do
+meta def SaturateAttribute.showStored (s : SaturateAttribute) : MetaM Unit := do
   let st ← s.getState
   IO.println f!"rules:\n{st.rules}"
   IO.println f!"deactivated rules:\n{st.deactivatedRules.toArray}"

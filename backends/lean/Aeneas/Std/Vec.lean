@@ -1,11 +1,13 @@
 /- Vectors -/
-import Lean
-import Lean.Meta.Tactic.Simp
-import Init.Data.List.Basic
-import Aeneas.Std.Scalar
-import Aeneas.Std.Slice
-import Aeneas.Tactic.Solver.ScalarTac
-import Aeneas.Tactic.Step.Init
+module
+public import Lean
+public import Lean.Meta.Tactic.Simp
+public import Init.Data.List.Basic
+public import Aeneas.Std.Scalar
+public import Aeneas.Std.Slice
+public import Aeneas.Tactic.Solver.ScalarTac
+public import Aeneas.Tactic.Step.Init
+public section
 
 namespace Aeneas
 
@@ -18,7 +20,7 @@ local macro_rules
 
 namespace alloc.vec
 
-@[rust_type "alloc::vec::Vec"]
+@[expose, rust_type "alloc::vec::Vec"]
 def Vec (α : Type u) := { l : List α // l.length ≤ Usize.max }
 
 /-- We need this to coerce vectors to lists without marking `Vec` as reducible.
@@ -101,7 +103,7 @@ abbrev Vec.get? {α : Type u} (v : Vec α) (i : Nat) : Option α := getElem? v i
 @[simp, scalar_tac_simps, simp_lists_safe, simp_lists_hyps_simps, grind, agrind]
 abbrev Vec.get! {α : Type u} [Inhabited α] (v : Vec α) (i : Nat) : α := getElem! v i
 
-def Vec.set {α : Type u} (v: Vec α) (i: Usize) (x: α) : Vec α :=
+@[expose] def Vec.set {α : Type u} (v: Vec α) (i: Usize) (x: α) : Vec α :=
   ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
 
 def Vec.set_opt {α : Type u} (v: Vec α) (i: Usize) (x: Option α) : Vec α :=

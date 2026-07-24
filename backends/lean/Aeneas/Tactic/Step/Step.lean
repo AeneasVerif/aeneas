@@ -1,14 +1,16 @@
-import Lean
-import Aeneas.Tactic.Solver.ScalarTac
-import Aeneas.Tactic.Step.Init
-import Aeneas.Tactic.Step.GrindState
-import Aeneas.Std
-import Aeneas.Tactic.Simp.SimpLemmas
-import AeneasMeta.Async
-import Aeneas.Tactic.Solver.Grind.Init
-import Aeneas.Tactic.Step.InferPost
-import Aeneas.Std.WP
-import Aeneas.Do
+module
+public import Lean
+public import Aeneas.Tactic.Solver.ScalarTac
+public import Aeneas.Tactic.Step.Init
+public import Aeneas.Tactic.Step.GrindState
+public import Aeneas.Std
+public import Aeneas.Tactic.Simp.SimpLemmas
+public import AeneasMeta.Async
+public import Aeneas.Tactic.Solver.Grind.Init
+public import Aeneas.Tactic.Step.InferPost
+public import Aeneas.Std.WP
+public import Aeneas.Do
+public section
 
 namespace Aeneas
 
@@ -24,12 +26,12 @@ a bug and doesn't give the proper arguments: this way we make sure tactics like 
 will not crash if there is a bug in the code which adds the pretty equality (this is only useful
 information for the user).
 -/
-@[irreducible] def prettyMonadEq {α : Type u} {β : Type v} (_ : Std.Result α) (_ : β) : Type := Unit
+@[irreducible, expose] def prettyMonadEq {α : Type u} {β : Type v} (_ : Std.Result α) (_ : β) : Type := Unit
 
 macro:max "[> " "let" y:term " ← " x:term " <]"   : term => `(prettyMonadEq $x $y)
 
 @[app_unexpander prettyMonadEq]
-def unexpPrettyMonadEqofNat : Lean.PrettyPrinter.Unexpander | `($_ $x $y) => `([> let $y ← $x <]) | _ => throw ()
+meta def unexpPrettyMonadEqofNat : Lean.PrettyPrinter.Unexpander | `($_ $x $y) => `([> let $y ← $x <]) | _ => throw ()
 
 example (x y z : Std.U32) (_ : [> let z ← x + y <]) : True := by simp
 
@@ -55,7 +57,7 @@ def eq_imp_prettyMonadEq {α : Type u} {β : Type v} (x : Std.Result α) (y : β
 @[defeq] theorem iscalar_i64_eq   : Std.IScalar .I64 = Std.I64 := by rfl
 @[defeq] theorem iscalar_i128_eq  : Std.IScalar .I128 = Std.I128 := by rfl
 @[defeq] theorem iscalar_isize_eq : Std.IScalar .Isize = Std.Isize := by rfl
-def scalar_eqs := #[
+meta def scalar_eqs := #[
   ``uscalar_usize_eq, ``uscalar_u8_eq, ``uscalar_u16_eq, ``uscalar_u32_eq, ``uscalar_u64_eq, ``uscalar_u128_eq,
   ``iscalar_isize_eq, ``iscalar_i8_eq, ``iscalar_i16_eq, ``iscalar_i32_eq, ``iscalar_i64_eq, ``iscalar_i128_eq
 ]
@@ -77,9 +79,8 @@ attribute [step_simps] Aeneas.Std.bind_assoc_eq
 attribute [step_simps] Aeneas.Std.uncurry_apply_pair
 attribute [step_simps] ite_self -- this is sometimes necessary
 
-attribute [step_post_simps]
-  -- We often see expressions like `Int.ofNat 3`
-  Int.reduceToNat
+-- We often see expressions like `Int.ofNat 3`
+dsimproc [step_post_simps] Int.reduceToNat' (Int.toNat _) := Int.reduceToNat
 
 inductive TheoremOrLocal where
 | Theorem (thName : Name)
@@ -104,7 +105,7 @@ instance: ToString UsedTheorem where
   | .localHyp decl => s!"local hypothesis {decl.userName.toString}"
   | .stepThm name => s!"step theorem {name}"
 
-def toSyntax: UsedTheorem → MetaM Syntax.Term
+meta def toSyntax: UsedTheorem → MetaM Syntax.Term
 | givenExpr e =>
   -- Remark: exprToSyntax doesn't give the expected result
   Lean.Meta.Tactic.TryThis.delabToRefinableSyntax e
@@ -148,17 +149,17 @@ inductive OptTask α where
 | task (t : Task α)
 | none
 
-def OptTask.get (x : OptTask α) : Option α :=
+meta def OptTask.get (x : OptTask α) : Option α :=
   match x with
   | .task t => some t.get
   | .none => .none
 
-def OptTask.map (f : α → β) (x : OptTask α) (prio : Task.Priority := Task.Priority.default) (sync : Bool := false) : OptTask β :=
+meta def OptTask.map (f : α → β) (x : OptTask α) (prio : Task.Priority := Task.Priority.default) (sync : Bool := false) : OptTask β :=
   match x with
   | .task t => .task (t.map f prio sync)
   | .none => .none
 
-def OptTask.bind (x : OptTask α) (f : α → Task β) (prio : Task.Priority := Task.Priority.default) (sync : Bool := false) : OptTask β :=
+meta def OptTask.bind (x : OptTask α) (f : α → Task β) (prio : Task.Priority := Task.Priority.default) (sync : Bool := false) : OptTask β :=
   match x with
   | .task t => .task (t.bind f prio sync)
   | .none => .none
@@ -230,7 +231,7 @@ structure Args where
    Also looks up which type of spec is being used in the statement,
    and returns the corresponding SpecInfo
 -/
-def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr × SpecInfo) := do
+meta def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr × SpecInfo) := do
   forallTelescope goalTy fun nvars goalTy => do
 
   let (spec?, args) := goalTy.consumeMData.withApp (fun f args => (f, args))
@@ -254,33 +255,35 @@ def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr × SpecInfo) := do
 /-- Names introduced by the `do` elaborator's `mkPatContinuation` as a
     fallback (`_xN`) when no leaf name is available — e.g. all leaves are
     `_`. These get filtered out so we fall back to spec post-condition names. -/
-def Name.isElabSynthesized : Name → Bool
+meta def Name.isElabSynthesized : Name → Bool
   | .str .anonymous s => s.startsWith "_x" && s.length > 2 && (s.drop 2).all Char.isDigit
   | _ => false
 
 /-- Convert an fvar's user name into the `Option Name` slot used by `step*`.
     Returns `none` for macro-scoped names and `_xN` placeholders. -/
-def fvarNameSlot (fv : Expr) : MetaM (Option Name) := do
+meta def fvarNameSlot (fv : Expr) : MetaM (Option Name) := do
   let n ← fv.fvarId!.getUserName
   pure (if n.hasMacroScopes ∨ Name.isElabSynthesized n then none else some n)
 
 /-- Used to name post-condition hypotheses introduced by `step`. -/
-def postName (base : Name) (suffix : String) : Name :=
+meta def postName (base : Name) (suffix : String) : Name :=
   base.getPrefix ++ .mkSimple (base.getString! ++ "_post" ++ suffix)
 
+meta section
 /-- A generic binary tree with data at the leaves. Underlies `FVarTree` and `NameTree`. -/
 inductive BTree (α : Type) where
   | leaf (val : α)
   | pair (left right : BTree α)
 deriving Inhabited, Repr
+end
 
 /-- Flatten a `BTree` into a left-to-right array of leaf values. -/
-def BTree.flatten {α} : BTree α → Array α
+meta def BTree.flatten {α} : BTree α → Array α
   | .leaf v => #[v]
   | .pair l r => l.flatten ++ r.flatten
 
 /-- Monadic map over the leaf values of a `BTree`. -/
-def BTree.mapM {m} [Monad m] {α β} (f : α → m β) : BTree α → m (BTree β)
+meta def BTree.mapM {m} [Monad m] {α β} (f : α → m β) : BTree α → m (BTree β)
   | .leaf v => return .leaf (← f v)
   | .pair l r => return .pair (← l.mapM f) (← r.mapM f)
 
@@ -303,7 +306,7 @@ See the examples and state descriptions below for the full specification.
 - **A** (`uncurryTelescope`): entry — dispatch on `uncurry`/`uncurry'`/lambda/other
 - **B** (`intoUncurry`): inside uncurry — peel up to 2 lambdas from `f`
 - **C** (`decomposeFVar`): check if an fvar is destructured by applied `uncurry` in body -/
-partial def uncurryTelescope (e : Expr) (k : Option FVarTree → Expr → MetaM α) : MetaM α := do
+meta partial def uncurryTelescope (e : Expr) (k : Option FVarTree → Expr → MetaM α) : MetaM α := do
   /- ## State A: Entry
      - `e = uncurry f` or `e = uncurry' f`: go to B(f, ...).
      - `e = fun x => body`: plain lambda, introduce fvar, call k.
@@ -393,19 +396,19 @@ where
 
 /-- Analyze a continuation expression to compute a `NameTree`.
 Wrapper around `uncurryTelescope` that extracts names from the `FVarTree`. -/
-def getContInput (e : Expr) : MetaM NameTree := do
+meta def getContInput (e : Expr) : MetaM NameTree := do
   uncurryTelescope e fun optTree _body => do
     match optTree with
     | some tree => tree.mapM fvarNameSlot
     | none => return .leaf none
 
 /-- Extract names from a post-condition or bind-continuation expression. -/
-def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
+meta def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
   return (← getContInput e).flatten
 
 /-- Extract the variable names from the bind continuation in the current goal.
     Returns an empty array if the goal is not a bind. -/
-def getBindVarNames : TacticM (Array (Option Name)) := do
+meta def getBindVarNames : TacticM (Array (Option Name)) := do
   try
     withMainContext do
     let goalTy ← (← getMainGoal).getType
@@ -418,7 +421,7 @@ def getBindVarNames : TacticM (Array (Option Name)) := do
 
 /-- Extract the names used in the post-condition of the current goal.
     The goal should be a valid spec statement, such as `spec program post`. -/
-def getPostNamesFromGoal : TacticM (Array (Option Name)) := do
+meta def getPostNamesFromGoal : TacticM (Array (Option Name)) := do
   try
     let goalTy ← (← getMainGoal).getType
     let goalTy ← instantiateMVars goalTy
@@ -436,7 +439,7 @@ def getPostNamesFromGoal : TacticM (Array (Option Name)) := do
 /-- Extract variable names from the current goal for naming `step` outputs.
     If the goal is a bind (`let x ← ...` or `let (a, b, …) ← …`), extracts the
     binding names; otherwise falls back to the spec's post-condition. -/
-def getVarNamesFromGoal : TacticM (Array (Option Name) × Option Name) := do
+meta def getVarNamesFromGoal : TacticM (Array (Option Name) × Option Name) := do
   let bindNames ← getBindVarNames
   if bindNames.any Option.isSome then
     pure (bindNames, bindNames.findSome? id)
@@ -445,7 +448,7 @@ def getVarNamesFromGoal : TacticM (Array (Option Name) × Option Name) := do
     pure (names, names[0]?.join)
 
 /-- Attempt to resolve typeclasses. -/
-def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) := do
+meta def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) := do
   withTraceNode `Step (fun _ => pure m!"trySolveTypeclasses") do
   mvarsIds.filterMapM fun (mvar : MVarId) => do
     trace[Step] "goal: {mvar}"
@@ -477,7 +480,7 @@ def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) := do
 The resulting target should be of the shape:
 `qimp_spec P k Q` (or `qimp P Q`)
 -/
-def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th : Expr) :
+meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th : Expr) :
   TacticM (Array MVarId) := do
   withTraceNode `Step (fun _ => pure m!"tryMatch") do
   /- Apply the theorem
@@ -579,7 +582,7 @@ def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th
   pure mvarsIds
 
 /-- Small helper: introduce the pretty equality (e.g., `[> let z ← x + y <]`) -/
-def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) :
+meta def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) :
   TacticM Unit := do
   withTraceNode `Step (fun _ => pure m!"introPrettyEquality") do
   withMainContext do
@@ -603,7 +606,7 @@ are named later in `introOutputs`.
 NOTE: We are using `cases` to break up the FVar which could be slow for nested
 goals or when the goal context gets large. Something to keep an eye on.
 -/
-partial def destructureFVar {α} (goal : MVarId) (fv : FVarId) (tree : BTree α) :
+meta partial def destructureFVar {α} (goal : MVarId) (fv : FVarId) (tree : BTree α) :
     TacticM (Array FVarId × MVarId) := do
   match tree with
   | .leaf _ => return (#[fv], goal)
@@ -625,7 +628,7 @@ partial def destructureFVar {α} (goal : MVarId) (fv : FVarId) (tree : BTree α)
 /-- Introduce one universally-quantified output and destructure it according to
 the tree's shape. The destructured FVars are named later in `introOutputs`.
 -/
-def introOneSurfaceBinder {α} (goal : MVarId) (tree : BTree α) :
+meta def introOneSurfaceBinder {α} (goal : MVarId) (tree : BTree α) :
     TacticM (Array FVarId × MVarId) := do
   let tmp ← mkFreshUserName `_x
   let (fv, goal') ← goal.intro tmp
@@ -636,7 +639,7 @@ have shape `qimp_spec P k Q` or `qimp P Q`.
 
 Returns the bind continuation `k`'s tree (for `qimp_spec`) or the outer post
 `Q`'s tree (for `qimp`) -/
-def extractCallSiteTree (goalTy : Expr) : MetaM (Option NameTree) := do
+meta def extractCallSiteTree (goalTy : Expr) : MetaM (Option NameTree) := do
   match_expr goalTy.consumeMData with
   | Std.WP.qimp_spec _ _ _ k _ => return some (← getContInput k)
   | Std.WP.qimp _ _ Q => return some (← getContInput Q)
@@ -660,7 +663,7 @@ def extractCallSiteTree (goalTy : Expr) : MetaM (Option NameTree) := do
     If a grind state is provided, it is updated with the newly introduced hypotheses so that
     subsequent steps can reuse it.
 -/
-def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState : StepState) :
+meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState : StepState) :
   TacticM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"introOutputs") do
   traceGoalWithNode "Initial goal"
@@ -846,7 +849,7 @@ def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState : Ste
       (this is a way of avoiding spurious instantiations). This helps with the second phase.
     - we then use the other tactic on the preconditions
  -/
-def trySolvePreconditions (args : Args) (config : Config)
+meta def trySolvePreconditions (args : Args) (config : Config)
     (originalGoal : MVarId) (stepState : StepState)
     (solvePreconditionTac : Option StepGrindState → TacticM Unit)
     (newPropGoals : List MVarId)
@@ -892,7 +895,7 @@ The main thing we do is simplify the post-conditions.
 
 TODO: simplify or remove this function.
 -/
-def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal) := do
+meta def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"postprocessMainGoal") do
   match mainGoal with
   | none => pure none
@@ -934,7 +937,7 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal)
       else pure none
 
 /-- If the option is set, infer an unresolved postcondition metavariable in the main goal. -/
-def inferPostMainGoal (args : Args) (mainGoal : Option MainGoal) : TacticM (Option MainGoal) := do
+meta def inferPostMainGoal (args : Args) (mainGoal : Option MainGoal) : TacticM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"inferPostMainGoal") do
   unless args.inferPost do
     return mainGoal
@@ -947,7 +950,7 @@ def inferPostMainGoal (args : Args) (mainGoal : Option MainGoal) : TacticM (Opti
     let goal ← inferPost mg.goal (eliminate := fun decl => decl.type.isAppOf ``prettyMonadEq)
     pure (some { mg with goal := goal })
 
-def stepWith (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
+meta def stepWith (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
   TacticM Goals := do
   withTraceNode `Step (fun _ => pure m!"stepWith") do
   -- Save the main goal before tryMatch (needed for lazy grind state initialization)
@@ -998,21 +1001,21 @@ def stepWith (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args) (isL
 
 /-- Small utility: if `args` is not empty, return the name of the app in the first
     arg, if it is a const. -/
-def getFirstArgAppName (args : Array Expr) : MetaM (Option Name) := do
+meta def getFirstArgAppName (args : Array Expr) : MetaM (Option Name) := do
   if args.size = 0 then pure none
   else
     args[0]!.withApp fun f _ => do
     if f.isConst then pure (some f.constName)
     else pure none
 
-def getFirstArg (args : Array Expr) : Option Expr := do
+meta def getFirstArg (args : Array Expr) : Option Expr := do
   if args.size = 0 then none
   else some args[0]!
 
 /-- Helper: try to apply a theorem.
 
     Return the list of post-conditions we introduced if it succeeded. -/
-def tryApply (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args) (isLet:Bool) (fExpr : Expr) (kind : String) (th : Option Expr) :
+meta def tryApply (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args) (isLet:Bool) (fExpr : Expr) (kind : String) (th : Option Expr) :
   TacticM (Option Goals) := do
   let res ← do
     match th with
@@ -1035,7 +1038,7 @@ def tryApply (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args) (isL
     spec statment represented by `info`
     or `none` if it already is the correct spec statement
 -/
-def getLiftingForThm (info : SpecInfo) (thm : Expr) : MetaM (Option LiftingInfo) := do
+meta def getLiftingForThm (info : SpecInfo) (thm : Expr) : MetaM (Option LiftingInfo) := do
   let thTy ← inferType thm
   let thTy ← normalizeLetBindings thTy
   let thOutput ← forallTelescope thTy (fun _ out => return out)
@@ -1058,7 +1061,7 @@ def getLiftingForThm (info : SpecInfo) (thm : Expr) : MetaM (Option LiftingInfo)
 
     -- TODO: check that they are "compatible" with the goal to avoid a potentially expensive unification
 -/
-def tryAssumptions (info : SpecInfo) (args : Args) (isLet:Bool) (fExpr : Expr) :
+meta def tryAssumptions (info : SpecInfo) (args : Args) (isLet:Bool) (fExpr : Expr) :
   TacticM (Option (Goals × UsedTheorem)) := do
   withTraceNode `Step (fun _ => pure m!"tryAssumptions") do run
 where
@@ -1075,7 +1078,7 @@ where
     catch _ => continue
   pure none
 
-def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
+meta def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
   TacticM (Goals × UsedTheorem) := do
   withMainContext do
   -- Retrieve the goal
@@ -1159,7 +1162,7 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
 
 syntax stepArgs := Parser.Tactic.optConfig ("with" term)? ("as" " ⟨ " binderIdent,* " ⟩")? ("by" tacticSeq)?
 
-def parseStepArgs
+meta def parseStepArgs
 : TSyntax ``Aeneas.Step.stepArgs →
   TacticM (Config × Option Expr × Array (Option Name) × Bool × Option Name × Option Syntax.Tactic)
 | args@`(stepArgs| $config $[with $pspec:term]? $[as ⟨ $ids,* ⟩]? $[by $byTac]? ) =>
@@ -1205,7 +1208,7 @@ def parseStepArgs
 | _ => throwUnsupportedSyntax
 
 /-- Use `agrind` after preprocessing goal the goal, in particular to simplify arithmetic expressions. -/
-def evalAGrindWithPreprocess (withGroundSimprocs : Bool) (config : Grind.Config) (nla : Bool) : TacticM Unit := do
+meta def evalAGrindWithPreprocess (withGroundSimprocs : Bool) (config : Grind.Config) (nla : Bool) : TacticM Unit := do
   withTraceNode `Step (fun _ => do pure m!"evalAGrindWithPreprocess") do
   traceGoalWithNode "before preprocessing"
   let simpArgs : Simp.SimpArgs ← ScalarTac.getSimpArgs
@@ -1228,7 +1231,7 @@ def evalAGrindWithPreprocess (withGroundSimprocs : Bool) (config : Grind.Config)
       Aeneas.Grind.agrindEval config params mvarId
     catch e => trace[Step] "Grind failed:\n{e.toMessageData}"
 
-def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option Expr)
+meta def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option Expr)
   (ids : Array (Option Name)) (idsUserProvided : Bool) (postsBasename : Option Name := none)
   (byTacStx : Option Syntax.Tactic)
   (stepState : StepState := {})
@@ -1359,7 +1362,7 @@ def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option 
   trace[Step] "Step done"
   return ⟨ goals, usedTheorem ⟩
 
-def evalStep
+meta def evalStep
   (config : Config) (keepPretty : Option Name) (withArg: Option Expr)
   (ids: Array (Option Name)) (idsUserProvided : Bool)
   (postsBasename : Option Name := none) (byTac : Option Syntax.Tactic)
@@ -1499,7 +1502,7 @@ syntax optConfig := Parser.Tactic.optConfig
 syntax (name := letStep) "let" noWs "*" " ⟨ " binderIdent,* " ⟩" colGe
   " ← " colGe ("[" Parser.Tactic.optConfig " ] ")? ("*?" <|> "*" <|> term) ("by" tacticSeq)? : tactic
 
-def parseLetStep
+meta def parseLetStep
 : TSyntax ``Aeneas.Step.letStep ->
   TacticM (Config × Option Expr × Bool × Array (Option Name) × Option Name × Option Syntax.Tactic)
 | args@`(tactic| let* ⟨ $ids,* ⟩ ← $[[$config]]? $pspec $[by $byTac]?) =>  withMainContext do

@@ -1,5 +1,6 @@
-import Aeneas.Tactic.Solver.Arith
-import Aeneas.Tactic.Solver.BvTac
-import Aeneas.Tactic.Solver.Grind
-import Aeneas.Tactic.Solver.ScalarDecrTac
-import Aeneas.Tactic.Solver.ScalarTac
+module
+public import Aeneas.Tactic.Solver.Arith
+public import Aeneas.Tactic.Solver.BvTac
+public import Aeneas.Tactic.Solver.Grind
+public import Aeneas.Tactic.Solver.ScalarDecrTac
+public import Aeneas.Tactic.Solver.ScalarTac

@@ -1,1 +1,2 @@
-import Aeneas.Std.Std.Io
+module
+public import Aeneas.Std.Std.Io

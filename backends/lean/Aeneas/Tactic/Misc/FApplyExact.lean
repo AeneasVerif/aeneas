@@ -5,7 +5,9 @@
 
   Analogous to `fcongr` (which is `congr` with reducible transparency).
 -/
-import Lean
+module
+public import ImportGraph.Tools.MinImports
+public section
 
 open Lean Meta Parser Elab Tactic
 
@@ -15,14 +17,14 @@ syntax (name := fapply) "fapply " term : tactic
 syntax (name := fexact) "fexact " term : tactic
 
 @[tactic fapply]
-def evalFApply : Tactic
+meta def evalFApply : Tactic
 | `(tactic| fapply $e) => withMainContext do
     withTransparency .instances do
       evalTactic (← `(tactic| apply $e))
 | _ => throwUnsupportedSyntax
 
 @[tactic fexact]
-def evalFExact : Tactic
+meta def evalFExact : Tactic
 | `(tactic| fexact $e) => withMainContext do
     withTransparency .instances do
       evalTactic (← `(tactic| exact $e))

@@ -1,11 +1,13 @@
-import Aeneas.Tactic.Conv.Bvify.Init
-import Aeneas.Tactic.Solver.Arith.Lemmas
-import Aeneas.Std.Scalar
-import Aeneas.Std.PrimitivesLemmas
-import Aeneas.Std.Scalar.CoreConvertNum -- we need this for the tests
-import Aeneas.Tactic.Solver.ScalarTac.CondSimpTac
-import Aeneas.Tactic.Simp.SimpBoolProp.SimpBoolProp
-import Aeneas.Tactic.Solver.Grind.Init
+module
+public import Aeneas.Tactic.Conv.Bvify.Init
+public import Aeneas.Tactic.Solver.Arith.Lemmas
+public import Aeneas.Std.Scalar
+public import Aeneas.Std.PrimitivesLemmas
+public import Aeneas.Std.Scalar.CoreConvertNum -- we need this for the tests
+public import Aeneas.Tactic.Solver.ScalarTac.CondSimpTac
+public import Aeneas.Tactic.Simp.SimpBoolProp.SimpBoolProp
+public import Aeneas.Tactic.Solver.Grind.Init
+public section
 
 /-!
 # `bvify` tactic
@@ -23,17 +25,48 @@ structure Config where
   nonLin : Bool := true -- We use the non linear lemmas by default
   saturationPasses := 3
 
+meta section
 declare_config_elab elabConfig Config
+end
 
 /- Simp procedures -/
+
+/- Builtin simprocs cannot be added to the `bvify` set directly via `attribute`. -/
+simproc ↓ [bvify] reduceIte' (ite _ _ _) := reduceIte
+simproc [bvify] Nat.reduceLeDiff' ((_ : Nat) ≤ _) := Nat.reduceLeDiff
+simproc [bvify] Nat.reduceLT' ((_ : Nat) < _) := Nat.reduceLT
+simproc [bvify] Nat.reduceGT' ((_ : Nat) > _) := Nat.reduceGT
+dsimproc [bvify] Nat.reduceBEq' ((_ : Nat) == _) := Nat.reduceBEq
+dsimproc [bvify] Nat.reduceBNe' ((_ : Nat) != _) := Nat.reduceBNe
+dsimproc [bvify] Nat.reducePow' ((_ ^ _ : Nat)) := Nat.reducePow
+dsimproc [bvify] Nat.reduceAdd' ((_ + _ : Nat)) := Nat.reduceAdd
+dsimproc [bvify] Nat.reduceSub' ((_ - _ : Nat)) := Nat.reduceSub
+dsimproc [bvify] Nat.reduceMul' ((_ * _ : Nat)) := Nat.reduceMul
+dsimproc [bvify] Nat.reduceDiv' ((_ / _ : Nat)) := Nat.reduceDiv
+dsimproc [bvify] Nat.reduceMod' ((_ % _ : Nat)) := Nat.reduceMod
+simproc [bvify] Int.reduceLT' ((_ : Int) < _) := Int.reduceLT
+simproc [bvify] Int.reduceLE' ((_ : Int) ≤ _) := Int.reduceLE
+simproc [bvify] Int.reduceGT' ((_ : Int) > _) := Int.reduceGT
+simproc [bvify] Int.reduceGE' ((_ : Int) ≥ _) := Int.reduceGE
+simproc [bvify] Int.reduceEq' ((_ : Int) = _) := Int.reduceEq
+simproc [bvify] Int.reduceNe' ((_ : Int) ≠ _) := Int.reduceNe
+dsimproc [bvify] Int.reduceBEq' ((_ : Int) == _) := Int.reduceBEq
+dsimproc [bvify] Int.reduceBNe' ((_ : Int) != _) := Int.reduceBNe
+dsimproc [bvify] Int.reducePow' ((_ : Int) ^ (_ : Nat)) := Int.reducePow
+dsimproc [bvify] Int.reduceAdd' ((_ + _ : Int)) := Int.reduceAdd
+dsimproc [bvify] Int.reduceSub' ((_ - _ : Int)) := Int.reduceSub
+dsimproc [bvify] Int.reduceMul' ((_ * _ : Int)) := Int.reduceMul
+dsimproc [bvify] Int.reduceDiv' ((_ / _ : Int)) := Int.reduceDiv
+dsimproc [bvify] Int.reduceMod' ((_ % _ : Int)) := Int.reduceMod
+dsimproc [bvify] Int.reduceNegSucc' (Int.negSucc _) := Int.reduceNegSucc
+dsimproc [bvify] Int.reduceNeg' ((- _ : Int)) := Int.reduceNeg
+dsimproc [bvify] Int.reduceToNat' (Int.toNat _) := Int.reduceToNat
+dsimproc [bvify] BitVec.reduceMul' ((_ * _ : BitVec _)) := BitVec.reduceMul
+dsimproc [bvify] BitVec.reduceAdd' ((_ + _ : BitVec _)) := BitVec.reduceAdd
+dsimproc [bvify] BitVec.reduceSub' ((_ - _ : BitVec _)) := BitVec.reduceSub
+dsimproc [bvify] BitVec.reduceMod' ((_ % _ : BitVec _)) := BitVec.reduceMod
+dsimproc [bvify] BitVec.reduceDiv' ((_ / _ : BitVec _)) := BitVec.reduceDiv
 attribute [bvify]
-  reduceIte
-  Nat.reduceLeDiff Nat.reduceLT Nat.reduceGT Nat.reduceBEq Nat.reduceBNe
-  Nat.reducePow Nat.reduceAdd Nat.reduceSub Nat.reduceMul Nat.reduceDiv Nat.reduceMod
-  Int.reduceLT Int.reduceLE Int.reduceGT Int.reduceGE Int.reduceEq Int.reduceNe Int.reduceBEq Int.reduceBNe
-  Int.reducePow Int.reduceAdd Int.reduceSub Int.reduceMul Int.reduceDiv Int.reduceMod
-  Int.reduceNegSucc Int.reduceNeg Int.reduceToNat
-  BitVec.reduceMul BitVec.reduceAdd BitVec.reduceSub BitVec.reduceMod BitVec.reduceDiv
   Nat.dvd_iff_mod_eq_zero
   BitVec.ofNat_or BitVec.ofNat_and
 
@@ -286,7 +319,7 @@ theorem UScalar.le_equiv_bv_le {ty : UScalarTy} (x y : UScalar ty) : x ≤ y ↔
 @[bvify] theorem U128.le_bv (x y : U128) : x ≤ y ↔ x.bv ≤ y.bv := by rfl
 @[bvify] theorem Usize.le_bv (x y : Usize) : x ≤ y ↔ x.bv ≤ y.bv := by rfl
 
-def bvifyAddSimpThms (n : Expr) : TacticM (Array FVarId) := do
+meta def bvifyAddSimpThms (n : Expr) : TacticM (Array FVarId) := do
   let addThm (thName : Name) : TacticM FVarId := do
     let thm ← mkAppM thName #[n]
     Utils.addDeclTac (← Utils.mkFreshAnonPropUserName) thm (← inferType thm) (asLet := false) fun thm => pure thm.fvarId!
@@ -296,16 +329,16 @@ def bvifyAddSimpThms (n : Expr) : TacticM (Array FVarId) := do
   let eq_iff ← addThm ``BitVec.iff_ofNat_eq'
   pure #[le_iff, lt_iff, lt_max_iff, eq_iff]
 
-def bvifySimpConfig : Simp.Config := {maxDischargeDepth := 2, failIfUnchanged := false}
+meta def bvifySimpConfig : Simp.Config := {maxDischargeDepth := 2, failIfUnchanged := false}
 
-def bvifyTacSimp (loc : Utils.Location) : TacticM (Option (Array FVarId)) := do
+meta def bvifyTacSimp (loc : Utils.Location) : TacticM (Option (Array FVarId)) := do
   let args : ScalarTac.CondSimpArgs := {
       simpThms := #[← bvifySimpExt.getTheorems, ← SimpBoolProp.simpBoolPropSimpExt.getTheorems]
       simprocs := #[← bvifySimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs]
     }
   ScalarTac.condSimpTacSimp bvifySimpConfig args loc #[] #[] none
 
-def bvifyTac (config : Config) (n : Expr) (loc : Utils.Location) : TacticM Unit := do
+meta def bvifyTac (config : Config) (n : Expr) (loc : Utils.Location) : TacticM Unit := do
   let hypsArgs : ScalarTac.CondSimpArgs := {
       simpThms := #[← bvifyHypsSimpExt.getTheorems, ← SimpBoolProp.simpBoolPropHypsSimpExt.getTheorems]
       simprocs := #[← bvifyHypsSimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropHypsSimprocExt.getSimprocs]
@@ -346,7 +379,7 @@ with an `have` (e.g., `have h' : BitVec.ofNat n a < BitVec.ofNat n b := ...`), a
 -/
 syntax (name := bvify) "bvify " colGt Parser.Tactic.optConfig term (location)? : tactic
 
-def parseBvify : TSyntax ``bvify -> TacticM (Config × Expr × Utils.Location)
+meta def parseBvify : TSyntax ``bvify -> TacticM (Config × Expr × Utils.Location)
 | `(tactic| bvify $config $n:term $[$loc:location]?) => do
   let config ← elabConfig config
   -- TODO: if we forget the number of bits the error messages are spurious

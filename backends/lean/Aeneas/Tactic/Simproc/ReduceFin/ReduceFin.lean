@@ -1,5 +1,8 @@
-import Aeneas.Tactic.Simproc.ReduceFin.Init
-import AeneasMeta.Utils
+module
+public import Aeneas.Tactic.Simproc.ReduceFin.Init
+public meta import AeneasMeta.Utils
+public import AeneasMeta.Utils
+public section
 
 namespace Aeneas.ReduceFin
 

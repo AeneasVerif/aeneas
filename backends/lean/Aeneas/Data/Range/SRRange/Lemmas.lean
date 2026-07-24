@@ -1,7 +1,9 @@
-import Mathlib.Tactic.Ring.RingNF
-import Mathlib.Algebra.Order.Sub.Basic
-import Aeneas.Data.Range.SRRange.Basic
-import Aeneas.Data.List.List
+module
+public import Mathlib.Tactic.Ring.RingNF
+public import Mathlib.Algebra.Order.Sub.Basic
+public import Aeneas.Data.Range.SRRange.Basic
+public import Aeneas.Data.List.List
+public section
 
 namespace Aeneas
 

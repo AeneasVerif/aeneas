@@ -1,5 +1,7 @@
-import Aeneas.Tactic.Simp.SimpLists
-import Aeneas.Tactic.Simp.SimpScalar
+module
+public import Aeneas.Tactic.Simp.SimpLists
+public import Aeneas.Tactic.Simp.SimpScalar
+public section
 
 namespace Aeneas.SimpListsScalar
 
@@ -11,7 +13,7 @@ The `simp_lists_scalar` tactic is a combination of `simp_lists` and `simp_scalar
 
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 
-def simpListsScalarTac (config : ScalarTac.CondSimpTacConfig)
+meta def simpListsScalarTac (config : ScalarTac.CondSimpTacConfig)
   (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := pure #[]
   let hypsArgs : ScalarTac.CondSimpArgs := {
@@ -68,7 +70,7 @@ and `@[simp_scalar_safe]`).
 -/
 syntax (name := simp_lists) "simp_lists_scalar" Parser.Tactic.optConfig ("[" (term<|>"*"),* "]")? (location)? : tactic
 
-def parseSimpListsScalar :
+meta def parseSimpListsScalar :
 TSyntax ``simp_lists -> TacticM (ScalarTac.CondSimpTacConfig × ScalarTac.CondSimpPartialArgs × Utils.Location)
 | `(tactic| simp_lists_scalar $config $[[$args,*]]? $[$loc:location]?) => do
   let config ← ScalarTac.elabCondSimpTacConfig config

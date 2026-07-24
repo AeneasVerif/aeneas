@@ -1,4 +1,10 @@
-import Aeneas.Tactic.Solver.ScalarTac.ScalarTac
+module
+public meta import Aeneas.Tactic.Solver.ScalarTac.ScalarTac
+import Lean.Elab.ConfigEval.Instances
+import Lean.Elab.ConfigEval.DeriveEvalExpr
+import Lean.Elab.ConfigEval.DeriveEvalConfigItem
+meta import AeneasMeta.Simp.Simp
+public section
 
 namespace Aeneas.ScalarTac
 
@@ -22,7 +28,7 @@ structure CondSimpPartialArgs where
   addSimpThms : Array Name := #[]
   hypsToUse : Array FVarId := #[]
 
-def condSimpParseArgs (tacName : String) (args : TSyntaxArray [`term, `token.«*»]) :
+meta def condSimpParseArgs (tacName : String) (args : TSyntaxArray [`term, `token.«*»]) :
   TacticM CondSimpPartialArgs := do
   withTraceNode `ScalarTac (fun _ => pure m!"condSimpParseArgs") do
   withMainContext do
@@ -82,13 +88,13 @@ structure CondSimpArgs where
   addSimpThms : Array Name := #[]
   hypsToUse : Array FVarId := #[]
 
-instance : HAppend CondSimpArgs CondSimpArgs CondSimpArgs where
+meta instance : HAppend CondSimpArgs CondSimpArgs CondSimpArgs where
   hAppend c0 c1 :=
     let ⟨ a0, b0, c0, d0, e0, f0 ⟩ := c0
     let ⟨ a1, b1, c1, d1, e1, f1 ⟩ := c1
     ⟨ a0 ++ a1, b0 ++ b1, c0 ++ c1, d0 ++ d1, e0 ++ e1, f0 ++ f1 ⟩
 
-def CondSimpArgs.toSimpArgs (args : CondSimpArgs) : Simp.SimpArgs := {
+meta def CondSimpArgs.toSimpArgs (args : CondSimpArgs) : Simp.SimpArgs := {
     simpThms := args.simpThms,
     simprocs := args.simprocs,
     declsToUnfold := args.declsToUnfold,
@@ -96,7 +102,7 @@ def CondSimpArgs.toSimpArgs (args : CondSimpArgs) : Simp.SimpArgs := {
     addSimpThms := args.addSimpThms,
     hypsToUse := args.hypsToUse }
 
-def condSimpTacSimp (config : Simp.Config) (args : CondSimpArgs) (loc : Utils.Location)
+meta def condSimpTacSimp (config : Simp.Config) (args : CondSimpArgs) (loc : Utils.Location)
   (toClear : Array FVarId := #[])
   (additionalHypsToUse : Array FVarId := #[]) (state : Option (ScalarTac.State × Array FVarId)) :
   TacticM (Option (Array FVarId)) := do
@@ -132,7 +138,7 @@ structure PreprocessResult where
 /-- Preprocess the goal.
     Return `none` if the preprocessing actually solves the goal.
 -/
-def condSimpTacPreprocess (config : CondSimpTacConfig) (hypsArgs args : CondSimpArgs)
+meta def condSimpTacPreprocess (config : CondSimpTacConfig) (hypsArgs args : CondSimpArgs)
   (addSimpThms : TacticM (Array FVarId)) : TacticM (Option PreprocessResult) := do
   withTraceNode `ScalarTac (fun _ => pure m!"condSimpTacPreprocess") do
   withMainContext do
@@ -188,7 +194,7 @@ def condSimpTacPreprocess (config : CondSimpTacConfig) (hypsArgs args : CondSimp
   traceGoalWithNode `ScalarTac "Goal after adding the additional simp assumptions"
   pure (some { args, toClear, hypsToUse, state, oldAsms, newAsms, additionalSimpThms })
 
-def condSimpTacCore
+meta def condSimpTacCore
   (simpConfig : Simp.Config)
   (doFirstSimp : Bool)
   (loc : Utils.Location)
@@ -216,7 +222,7 @@ def condSimpTacCore
   if (← getUnsolvedGoals) == [] then pure none
   else pure (some (← getMainGoal))
 
-def condSimpTacClear (res : PreprocessResult) : TacticM Unit := do
+meta def condSimpTacClear (res : PreprocessResult) : TacticM Unit := do
   withTraceNode `ScalarTac (fun _ => pure m!"CondSimpTacClear") do
   setGoals [← (← getMainGoal).tryClearMany res.hypsToUse]
   traceGoalWithNode `ScalarTac "Goal after clearing the duplicated hypotheses to use"
@@ -226,7 +232,7 @@ def condSimpTacClear (res : PreprocessResult) : TacticM Unit := do
   traceGoalWithNode `ScalarTac "Goal after clearing the additional theorems"
 
 /-- A helper to define tactics which perform conditional simplifications with `scalar_tac` as a discharger. -/
-def condSimpTac
+meta def condSimpTac
   (config : CondSimpTacConfig)
   (simpConfig : Simp.Config) (hypsArgs args : CondSimpArgs)
   (addSimpThms : TacticM (Array FVarId)) (doFirstSimp : Bool)

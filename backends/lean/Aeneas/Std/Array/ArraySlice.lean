@@ -1,10 +1,13 @@
-import Aeneas.Std.Core.Fmt
-import Aeneas.Std.Array.Array
-import Aeneas.Std.Slice
-import Aeneas.Std.Range
-import Aeneas.Data.List.List
-import Aeneas.Std.Core.Convert
-import Aeneas.Std.Core.Cmp
+module
+public import Aeneas.Std.Core.Fmt
+public import Aeneas.Std.Array.Array
+public import Aeneas.Std.Slice
+public import Aeneas.Std.Range
+public import Aeneas.Data.List.List
+public import Aeneas.Std.Core.Convert
+public import Aeneas.Std.Core.Cmp
+import all Init.Data.List.Control
+public section
 
 /-! Array definitions which mention slices -/
 
@@ -16,7 +19,7 @@ attribute [-simp] List.getElem!_eq_getElem?_getD
 
 /-! Array to slice/subslices -/
 
-@[step_pure_def]
+@[step_pure_def, expose]
 def Array.to_slice {α : Type u} {n : Usize} (v : Array α n) : Slice α :=
   ⟨ v.val, by scalar_tac ⟩
 
@@ -91,7 +94,7 @@ theorem Array.update_subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a :
     simp_lists
   . scalar_tac
 
-@[rust_fun "core::array::{core::ops::index::Index<[@T; @N], @I, @O>}::index"]
+@[expose, rust_fun "core::array::{core::ops::index::Index<[@T; @N], @I, @O>}::index"]
 def core.array.Array.index
   {T I Output : Type} {N : Usize} (inst : core.ops.index.Index (Slice T) I Output)
   (a : Array T N) (i : I) : Result Output :=
@@ -120,7 +123,7 @@ def core.ops.index.IndexMutArray {T I Output : Type} {N : Usize}
   index_mut := core.array.Array.index_mut inst
 }
 
-@[reducible, rust_type "core::array::TryFromSliceError"]
+@[reducible, expose, rust_type "core::array::TryFromSliceError"]
 def core.array.TryFromSliceError := Unit
 
 @[simp, simp_lists_safe, grind =, agrind =]

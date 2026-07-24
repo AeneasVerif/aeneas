@@ -1,4 +1,6 @@
-import Lean
+module
+public import Lean
+public section
 open Lean Elab Term Meta
 
 namespace Aeneas.Step

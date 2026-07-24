@@ -1,7 +1,10 @@
 /- Arrays/Slices -/
-import Aeneas.Std.Slice
-import Aeneas.Std.Array.Array
-import Aeneas.Std.Core.Iter
+module
+public import Aeneas.Std.Slice
+public import Aeneas.Std.Array.Array
+public import Aeneas.Std.Core.Iter
+public meta import Aeneas.Std.Core.Iter
+public section
 
 namespace Aeneas.Std
 
@@ -133,7 +136,7 @@ def core.slice.iter.ChunksExact.getRemainder
   {T : Type} (self : core.slice.iter.ChunksExact T) : Result (Slice T) :=
   ok self.remainder
 
-@[rust_fun
+@[expose, rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>}::next"]
 def core.slice.iter.IteratorChunksExact.next
   {T : Type} (self : core.slice.iter.ChunksExact T) :

@@ -1,4 +1,6 @@
-import AeneasMeta.Simp
+module
+public import AeneasMeta.Simp
+public section
 open Lean Meta
 
 namespace Aeneas.RustAttributes
