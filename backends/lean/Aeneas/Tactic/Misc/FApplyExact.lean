@@ -6,8 +6,7 @@
   Analogous to `fcongr` (which is `congr` with reducible transparency).
 -/
 module
-public meta import Lean.Elab.Tactic.Basic
-public meta import Lean.Elab.Term.TermElabM
+public import Lean
 public section
 
 open Lean Meta Parser Elab Tactic
