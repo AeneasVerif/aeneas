@@ -12,11 +12,11 @@ open Utils Extensions
 
 namespace Saturate
 
-initialize registerTraceClass `Saturate
-initialize registerTraceClass `Saturate.insertPartialMatch
-initialize registerTraceClass `Saturate.explore
-initialize registerTraceClass `Saturate.attribute
-initialize registerTraceClass `Saturate.diagnostics
+meta initialize registerTraceClass `Saturate
+meta initialize registerTraceClass `Saturate.insertPartialMatch
+meta initialize registerTraceClass `Saturate.explore
+meta initialize registerTraceClass `Saturate.attribute
+meta initialize registerTraceClass `Saturate.diagnostics
 
 namespace Attribute
 
