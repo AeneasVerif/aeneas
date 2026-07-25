@@ -184,8 +184,8 @@ jobs:
 
   notify:
     name: Notify Zulip
-    needs: [prepare, build, select-runner]
-    runs-on: ${{ fromJSON(needs.select-runner.outputs.runs_on) }}
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
     if: ${{ github.repository == 'AeneasVerif/aeneas' && (success() || failure()) }}
     permissions:
       actions: read
