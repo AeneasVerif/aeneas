@@ -15,6 +15,16 @@ namespace Std
 
 open Lean Elab Command Term Meta
 
+/-- `#assert e` checks that the boolean expression `e` evaluates to `true`, raising an error
+otherwise (like a Rust `assert!`). It is emitted by the extraction engine for functions marked
+`#[verify::test]`.
+
+**Note:** `#assert` *compiles and runs* `e` (via `evalTerm`), so it needs the compiled/native code
+of every function `e` transitively calls. Consequently:
+
+* In the IDE (Lean server): always works, both with the module system or without.
+* In files which don't use the module system: works.
+* In a file which uses the module system, built using `lake build`: **does not work**. -/
 syntax (name := assert) "#assert" term: command
 
 @[command_elab assert]

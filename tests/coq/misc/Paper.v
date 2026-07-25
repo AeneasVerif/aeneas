@@ -9,13 +9,13 @@ Local Open Scope Primitives_scope.
 Module Paper.
 
 (** [paper::ref_incr]:
-    Source: 'tests/src/paper.rs', lines 7:0-9:1
+    Source: 'tests/src/paper.rs', lines 8:0-10:1
     Visibility: public *)
 Definition ref_incr (x : i32) : result i32 :=
   i32_add x 1%i32.
 
 (** [paper::test_incr]:
-    Source: 'tests/src/paper.rs', lines 12:0-16:1
+    Source: 'tests/src/paper.rs', lines 13:0-17:1
     Visibility: public *)
 Definition test_incr : result unit :=
   x <- ref_incr 0%i32; massert (x s= 1%i32)
@@ -25,7 +25,7 @@ Definition test_incr : result unit :=
 Check (test_incr)%return.
 
 (** [paper::choose]:
-    Source: 'tests/src/paper.rs', lines 19:0-25:1
+    Source: 'tests/src/paper.rs', lines 20:0-26:1
     Visibility: public *)
 Definition choose
   {T : Type} (b : bool) (x : T) (y : T) : result (T * (T -> (T * T))) :=
@@ -35,7 +35,7 @@ Definition choose
 .
 
 (** [paper::test_choose]:
-    Source: 'tests/src/paper.rs', lines 28:0-36:1
+    Source: 'tests/src/paper.rs', lines 29:0-37:1
     Visibility: public *)
 Definition test_choose : result unit :=
   p <- choose true 0%i32 0%i32;
@@ -51,7 +51,7 @@ Definition test_choose : result unit :=
 Check (test_choose)%return.
 
 (** [paper::List]
-    Source: 'tests/src/paper.rs', lines 40:0-43:1
+    Source: 'tests/src/paper.rs', lines 41:0-44:1
     Visibility: public *)
 Inductive List_t (T : Type) :=
 | List_Cons : T -> List_t T -> List_t T
@@ -62,7 +62,7 @@ Arguments List_Cons { _ }.
 Arguments List_Nil { _ }.
 
 (** [paper::list_nth_mut]:
-    Source: 'tests/src/paper.rs', lines 47:0-60:1
+    Source: 'tests/src/paper.rs', lines 48:0-61:1
     Visibility: public *)
 Fixpoint list_nth_mut
   {T : Type} (l : List_t T) (i : u32) : result (T * (T -> List_t T)) :=
@@ -83,7 +83,7 @@ Fixpoint list_nth_mut
 .
 
 (** [paper::sum]:
-    Source: 'tests/src/paper.rs', lines 62:0-71:1
+    Source: 'tests/src/paper.rs', lines 63:0-72:1
     Visibility: public *)
 Fixpoint sum (l : List_t i32) : result i32 :=
   match l with
@@ -93,7 +93,7 @@ Fixpoint sum (l : List_t i32) : result i32 :=
 .
 
 (** [paper::test_nth]:
-    Source: 'tests/src/paper.rs', lines 74:0-79:1
+    Source: 'tests/src/paper.rs', lines 75:0-80:1
     Visibility: public *)
 Definition test_nth : result unit :=
   p <-
@@ -110,7 +110,7 @@ Definition test_nth : result unit :=
 Check (test_nth)%return.
 
 (** [paper::call_choose]:
-    Source: 'tests/src/paper.rs', lines 82:0-88:1
+    Source: 'tests/src/paper.rs', lines 83:0-89:1
     Visibility: public *)
 Definition call_choose (p : (u32 * u32)) : result u32 :=
   let (px, py) := p in

@@ -6,13 +6,13 @@ open Primitives
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [paper::ref_incr]:
-    Source: 'tests/src/paper.rs', lines 7:0-9:1
+    Source: 'tests/src/paper.rs', lines 8:0-10:1
     Visibility: public *)
 let ref_incr (x : i32) : result i32 =
   i32_add x 1
 
 (** [paper::test_incr]:
-    Source: 'tests/src/paper.rs', lines 12:0-16:1
+    Source: 'tests/src/paper.rs', lines 13:0-17:1
     Visibility: public *)
 let test_incr : result unit =
   let* x = ref_incr 0 in massert (x = 1)
@@ -21,7 +21,7 @@ let test_incr : result unit =
 let _ = assert_norm (test_incr = Ok ())
 
 (** [paper::choose]:
-    Source: 'tests/src/paper.rs', lines 19:0-25:1
+    Source: 'tests/src/paper.rs', lines 20:0-26:1
     Visibility: public *)
 let choose
   (#t : Type0) (b : bool) (x : t) (y : t) : result (t & (t -> (t & t))) =
@@ -30,7 +30,7 @@ let choose
   else let back = fun y1 -> (x, y1) in Ok (y, back)
 
 (** [paper::test_choose]:
-    Source: 'tests/src/paper.rs', lines 28:0-36:1
+    Source: 'tests/src/paper.rs', lines 29:0-37:1
     Visibility: public *)
 let test_choose : result unit =
   let* (z, choose_back) = choose true 0 0 in
@@ -44,14 +44,14 @@ let test_choose : result unit =
 let _ = assert_norm (test_choose = Ok ())
 
 (** [paper::List]
-    Source: 'tests/src/paper.rs', lines 40:0-43:1
+    Source: 'tests/src/paper.rs', lines 41:0-44:1
     Visibility: public *)
 type list_t (t : Type0) =
 | List_Cons : t -> list_t t -> list_t t
 | List_Nil : list_t t
 
 (** [paper::list_nth_mut]:
-    Source: 'tests/src/paper.rs', lines 47:0-60:1
+    Source: 'tests/src/paper.rs', lines 48:0-61:1
     Visibility: public *)
 let rec list_nth_mut
   (#t : Type0) (l : list_t t) (i : u32) : result (t & (t -> list_t t)) =
@@ -68,7 +68,7 @@ let rec list_nth_mut
   end
 
 (** [paper::sum]:
-    Source: 'tests/src/paper.rs', lines 62:0-71:1
+    Source: 'tests/src/paper.rs', lines 63:0-72:1
     Visibility: public *)
 let rec sum (l : list_t i32) : result i32 =
   begin match l with
@@ -77,7 +77,7 @@ let rec sum (l : list_t i32) : result i32 =
   end
 
 (** [paper::test_nth]:
-    Source: 'tests/src/paper.rs', lines 74:0-79:1
+    Source: 'tests/src/paper.rs', lines 75:0-80:1
     Visibility: public *)
 let test_nth : result unit =
   let* (x, list_nth_mut_back) =
@@ -92,7 +92,7 @@ let test_nth : result unit =
 let _ = assert_norm (test_nth = Ok ())
 
 (** [paper::call_choose]:
-    Source: 'tests/src/paper.rs', lines 82:0-88:1
+    Source: 'tests/src/paper.rs', lines 83:0-89:1
     Visibility: public *)
 let call_choose (p : (u32 & u32)) : result u32 =
   let (px, py) = p in
