@@ -1712,6 +1712,7 @@ let replace_static (crate : crate) : crate =
               {
                 index = RegionId.of_int 1;
                 name = Some "'b";
+                variance = VaUnknown;
                 mutability = LtUnknown;
               };
             ];

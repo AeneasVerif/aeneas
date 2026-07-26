@@ -45,14 +45,20 @@ module Sig = struct
 
   (** Region 'a of id 0 *)
   let region_param_0 : region_param =
-    { index = rvar_id_0; name = Some "'a"; mutability = LtUnknown }
+    {
+      index = rvar_id_0;
+      name = Some "'a";
+      variance = VaUnknown;
+      mutability = LtUnknown;
+    }
 
   (** Region group: [{ parent={}; regions:{'a of id 0} }] *)
   let region_group_0 : region_var_group =
     { id = rg_id_0; regions = [ rvar_id_0 ]; parents = [] }
 
   (** Type parameter [T] of id 0 *)
-  let type_param_0 : type_param = { index = tvar_id_0; name = "T" }
+  let type_param_0 : type_param =
+    { index = tvar_id_0; name = "T"; variance = VaUnknown }
 
   let usize_ty : ty = TLiteral (TUInt Usize)
 

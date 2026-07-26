@@ -215,7 +215,7 @@ let translate_strait_type_constraint (span : Meta.span option)
   { trait_ref; type_id; ty }
 
 let translate_type_param (p : T.type_param) : type_param =
-  let { index; name } : T.type_param = p in
+  let { index; name; variance = _ } : T.type_param = p in
   { index; name }
 
 let translate_generic_params (span : Meta.span option)
