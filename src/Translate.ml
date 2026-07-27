@@ -1626,8 +1626,6 @@ let extract_by_file (ctx : gen_ctx) (crate : crate) ~(dest_dir : string)
      whole crate. For [-split-files] this is on by default; it is only skipped
      with [-subdir], where the tree is embedded in a larger project and [dest_dir]
      is not the Lake source root. *)
-  (* [-gen-lib-entry] is redundant here (the entry point is on by default) and
-     rejected with [-subdir] at the CLI, so the [-subdir] check subsumes it. *)
   if Option.is_none !Config.subdir then (
     let local_modules =
       List.filter_map
@@ -2376,11 +2374,15 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          Maybe generate it if the user asks for it?
       *)
   | Lean ->
-      (* Note: the [-split-files] entry point ([Crate.lean]) is generated inside
-         [extract_by_file]. The legacy split ([-split-files-legacy]) has no entry
-         point: it cannot produce a buildable one without [-subdir] (which is
-         incompatible with [-gen-lib-entry]), so that combination is rejected at
-         the CLI. *)
+      (* The per-file split ([-split-files]) emits its entry point ([Crate.lean])
+         by default, inside [extract_by_file]. The legacy split does not, so
+         [-gen-lib-entry] opts into generating a minimal [Crate.lean]. *)
+      if !Config.split_files_legacy && !Config.generate_lib_entry_point then (
+        let filename = Filename.concat dest_dir (crate_name ^ ".lean") in
+        let out = open_out filename in
+        Printf.fprintf out "import %s.Funs\n" crate_name;
+        close_out out;
+        log#linfo (lazy ("Generated: " ^ filename)));
 
       (*
        * Generate the lakefile.lean file, if the user asks for it

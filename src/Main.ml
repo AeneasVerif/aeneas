@@ -136,9 +136,8 @@ let () =
          down)." );
       ( "-gen-lib-entry",
         Arg.Set generate_lib_entry_point,
-        " Add an entry point file to the generated library. Redundant: \
-         -split-files already emits it by default (unless -subdir is given). \
-         Requires -split-files." );
+        " Add an entry point file to the generated library. Only for \
+         -split-files-legacy. Requires -split-files-legacy." );
       ( "-lean-default-lakefile",
         Arg.Clear lean_gen_lakefile,
         " Generate a default lakefile.lean (Lean only)" );
@@ -459,16 +458,10 @@ let () =
   (* Sanity check: the use of decrease clauses is not compatible with the use of fuel *)
   check_arg_not !use_fuel "-use-fuel" !extract_decreases_clauses
     "-decreases-clauses";
-  (* [-split-files] already emits the entry point by default, so [-gen-lib-entry]
-     is only meaningful (indeed redundant) there. The legacy split cannot produce
-     a buildable entry point (its files sit at the dest root, but the entry would
-     [import Crate.Funs], which needs [-subdir] — itself incompatible with
-     [-gen-lib-entry]), so we reject that combination rather than emit a broken
-     file. *)
-  check_arg_implies !generate_lib_entry_point "-gen-lib-entry" !split_files
-    "-split-files";
-  check_arg_not !generate_lib_entry_point "-gen-lib-entry"
-    (Option.is_some !subdir) "-subdir";
+  (* [-split-files] emits its entry point by default, so [-gen-lib-entry] only
+     applies to the legacy split. *)
+  check_arg_implies !generate_lib_entry_point "-gen-lib-entry"
+    !split_files_legacy "-split-files-legacy";
   if !lean_gen_lakefile && not (backend () = Lean) then
     fail_with_error
       "The -lean-default-lakefile option is valid only for the Lean backend";
