@@ -2158,8 +2158,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
         let out = open_out filename in
         if !Config.use_lean_modules then (
           Printf.fprintf out "module\n";
-          Printf.fprintf out "public import %s.Funs\n" crate_name;
-          Printf.fprintf out "public section\n")
+          Printf.fprintf out "public import %s.Funs\n" crate_name)
         else Printf.fprintf out "import %s.Funs\n" crate_name;
         (* Flush and close the file, log *)
         close_out out;
