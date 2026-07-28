@@ -61,6 +61,22 @@ example : Result (Array Int (Usize.ofNat 2)) := do
   let y ← ok 1
   ok (Array.make (Usize.ofNat 2) [x, y])
 
+@[simp, grind =]
+theorem Array.val_make {α : Type u} (n : Usize) (l : List α) (h) :
+    (Array.make n l h).val = l := rfl
+
+@[scalar_tac Array.make n l h, grind =]
+theorem Array.length_make {α : Type u} (n : Usize) (l : List α) (h) :
+    (Array.make n l h).length = n.val := h
+
+@[simp, grind =]
+theorem Array.make_val {α : Type u} {n : Usize} (a : Array α n) (h) :
+    Array.make n a.val h = a := rfl
+
+theorem Array.make_inj {α : Type u} {n : Usize} (l₁ l₂ : List α) (h₁ h₂) :
+    Array.make n l₁ h₁ = Array.make n l₂ h₂ ↔ l₁ = l₂ :=
+  Subtype.ext_iff
+
 instance {α : Type u} {n : Usize} : GetElem (Array α n) Nat α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i h
 
