@@ -2330,8 +2330,7 @@ type generics_filter = {
 }
 [@@deriving show]
 
-(** Apply generics_filter keep-mask to generic arguments (e.g. at a use site of
-    a declaration whose generic parameters were filtered). *)
+(** Apply generics_filter keep-mask to generic arguments. *)
 let filter_generic_args (filter : generics_filter) (generics : generic_args) :
     generic_args =
   let { types; const_generics; trait_refs } : generic_args = generics in
@@ -2347,9 +2346,7 @@ let filter_generic_args (filter : generics_filter) (generics : generic_args) :
   }
 
 (** Filter a list of generic arguments to only preserve the variables which are
-    inside of an expression (and, optionally, inside the types [extra_tys],
-    useful when the parameters must also serve a signature type which is not
-    part of the expression, e.g. the type of a global).
+    inside of an expression.
 
     We *do not* re-index the variables, because it is a bit tricky to do
     correctly (in particular, propagating the changes can be tricky). Instead,
