@@ -581,8 +581,7 @@ let minimize_globals_generics (globals : global_decl list)
         if Option.is_some g.builtin_info then filters
         else
           match
-            Option.bind
-              (FunDeclId.Map.find_opt g.body_id init_funs)
+            Option.bind (FunDeclId.Map.find_opt g.body_id init_funs)
               (fun (body : fun_decl) -> body.body)
           with
           | None ->

@@ -35,7 +35,7 @@ impl<T: Tr, U> S4<T, U> {
     pub const D: usize = T::LEN;
 }
 
-// Opaque global whose value genuinely depends on `T`. 
+// Opaque global whose value genuinely depends on `T`.
 pub struct S5<T>(T);
 impl<T> S5<T> {
     #[verify::opaque]
