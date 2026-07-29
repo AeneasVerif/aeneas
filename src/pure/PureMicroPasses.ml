@@ -580,21 +580,18 @@ let minimize_globals_generics (globals : global_decl list)
       (fun filters (g : global_decl) ->
         if Option.is_some g.builtin_info then filters
         else
-          match FunDeclId.Map.find_opt g.body_id init_funs with
+          match
+            Option.bind
+              (FunDeclId.Map.find_opt g.body_id init_funs)
+              (fun (body : fun_decl) -> body.body)
+          with
           | None ->
-              (* The initializer was not translated (it must have errored) *)
+              (* Only minimize a global when we can see the body. *)
               filters
           | Some body ->
-              let body_e =
-                match body.body with
-                | Some b -> b.body
-                | None ->
-                    (* Opaque: minimize from the type alone *)
-                    mk_unit_texpr
-              in
               let generics, filter =
                 filter_generic_params_used_in_texpr ~extra_tys:[ g.ty ]
-                  g.generics body_e
+                  g.generics body.body
               in
               let keeps_all =
                 List.for_all Fun.id filter.types

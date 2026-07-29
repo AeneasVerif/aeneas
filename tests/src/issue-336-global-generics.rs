@@ -1,4 +1,6 @@
 //@ [!lean] skip
+#![feature(register_tool)]
+#![register_tool(verify)]
 //! Regression tests for issue #336: the generic parameters of
 //! globals/constants are minimized to the parameters they actually use.
 
@@ -33,6 +35,13 @@ impl<T: Tr, U> S4<T, U> {
     pub const D: usize = T::LEN;
 }
 
+// Opaque global whose value genuinely depends on `T`. 
+pub struct S5<T>(T);
+impl<T> S5<T> {
+    #[verify::opaque]
+    pub const SIZE: usize = core::mem::size_of::<T>();
+}
+
 // Defaulted associated constant in a generic trait: it uses nothing, so all
 // the trait generics are dropped.
 pub trait WithDefault<T> {
@@ -55,4 +64,9 @@ pub fn use_len<const N: usize, T>() -> usize {
 pub fn use_all() -> usize {
     let _none = S3::<u8, u16>::NONE;
     S2::<u8>::ZERO as usize + S4::<P, u16>::D + <P as WithDefault<u32>>::DFLT
+}
+
+// Use site for the opaque global: the `T` argument must be preserved.
+pub fn use_size<T>() -> usize {
+    S5::<T>::SIZE
 }
