@@ -44,8 +44,7 @@ theorem Array.to_slice_mut_spec {α : Type u} {n : Usize} (a : Array α n) :
   simp [lift, to_slice_mut, to_slice, WP.spec_ok]
 
 def Array.subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) : Result (Slice α) :=
-  -- TODO: not completely sure here
-  if r.start.val < r.end.val ∧ r.end.val ≤ a.val.length then
+  if r.start.val ≤ r.end.val ∧ r.end.val ≤ a.val.length then
     ok ⟨ a.val.slice r.start.val r.end.val,
           by
             have := a.val.slice_length_le r.start.val r.end.val
@@ -59,7 +58,7 @@ theorem Array.subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array 
       (fun s =>
         s.val = a.val.slice r.start.val r.end.val ∧
         (∀ i, i + r.start.val < r.end.val → s.val[i]! = a.val[r.start.val + i]!))
-      (fun | .panic => ¬ (r.start.val < r.end.val ∧ r.end.val ≤ a.val.length) | _ => False)
+      (fun | .panic => ¬ (r.start.val ≤ r.end.val ∧ r.end.val ≤ a.val.length) | _ => False)
       False
   := by
   unfold subslice
@@ -71,8 +70,7 @@ theorem Array.subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array 
 
 
 def Array.update_subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) (s : Slice α) : Result (Array α n) :=
-  -- TODO: not completely sure here
-  if h: r.start.val < r.end.val ∧ r.end.val ≤ a.length ∧ s.val.length = r.end.val - r.start.val then
+  if h: r.start.val ≤ r.end.val ∧ r.end.val ≤ a.length ∧ s.val.length = r.end.val - r.start.val then
     ok ⟨ a.val.setSlice! r.start s.val, by scalar_tac ⟩
   else
     fail panic
@@ -90,7 +88,7 @@ theorem Array.update_subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a :
         (∀ i, r.start.val ≤ i → i < r.end.val → na[i]! = s[i - r.start.val]!) ∧
         (∀ i, r.end.val ≤ i → i < n.val → na[i]! = a[i]!))
       (fun | .panic =>
-              ¬ (r.start.val < r.end.val ∧ r.end.val ≤ a.length ∧ s.val.length = r.end.val - r.start.val)
+              ¬ (r.start.val ≤ r.end.val ∧ r.end.val ≤ a.length ∧ s.val.length = r.end.val - r.start.val)
            | _ => False)
       False := by
   unfold update_subslice
