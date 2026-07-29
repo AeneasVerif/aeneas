@@ -48,7 +48,7 @@ info: Aeneas.Step.SpecPartialTests.myDiv_partialSpec.step_spec (x y : U32) (h_fa
 #check myDiv_partialSpec.step_spec
 
 /--
-info: Aeneas.Step.SpecPartialTests.myDiv_partialSpec.mvcgen_spec (x y : U32) (Q : PostCond U32 Result.postShape)
+info: Aeneas.Step.SpecPartialTests.myDiv_partialSpec.mvcgen_spec (x y : U32) (Q : PostCond U32 postShape)
   (h_ok : ∀ (r : U32), ↑r = ↑x / ↑y → willYield r Q) (h_fail : ∀ (e : Error), ↑y = 0 → willFail e Q) :
   ⦃⌜True⌝⦄ myDiv x y ⦃Q⦄
 -/
@@ -75,7 +75,7 @@ info: Aeneas.Step.SpecPartialTests.myAdd_partialSpec.step_spec (x y : U32) (h_fa
 #check myAdd_partialSpec.step_spec
 
 /--
-info: Aeneas.Step.SpecPartialTests.myAdd_partialSpec.mvcgen_spec (x y : U32) (Q : PostCond U32 Result.postShape)
+info: Aeneas.Step.SpecPartialTests.myAdd_partialSpec.mvcgen_spec (x y : U32) (Q : PostCond U32 postShape)
   (h_ok : ∀ (r : U32), ↑r = ↑x + ↑y → willYield r Q) (h_fail : U32.max < ↑x + ↑y → willFail Error.integerOverflow Q) :
   ⦃⌜True⌝⦄ myAdd x y ⦃Q⦄
 -/
@@ -102,7 +102,7 @@ info: Aeneas.Step.SpecPartialTests.myAddSigned_partialSpec.step_spec (x y : I32)
 #check myAddSigned_partialSpec.step_spec
 
 /--
-info: Aeneas.Step.SpecPartialTests.myAddSigned_partialSpec.mvcgen_spec (x y : I32) (Q : PostCond I32 Result.postShape)
+info: Aeneas.Step.SpecPartialTests.myAddSigned_partialSpec.mvcgen_spec (x y : I32) (Q : PostCond I32 postShape)
   (h_ok : ∀ (r : I32), ↑r = ↑x + ↑y → willYield r Q) (h_fail_1 : I32.max < ↑x + ↑y → willFail Error.integerOverflow Q)
   (h_fail_2 : ↑x + ↑y < I32.min → willFail Error.integerOverflow Q) : ⦃⌜True⌝⦄ myAddSigned x y ⦃Q⦄
 -/
@@ -128,7 +128,7 @@ info: Aeneas.Step.SpecPartialTests.infiniteLoop_partialSpec.step_spec (h_div : F
 #check infiniteLoop_partialSpec.step_spec
 
 /--
-info: Aeneas.Step.SpecPartialTests.infiniteLoop_partialSpec.mvcgen_spec (Q : PostCond Unit Result.postShape)
+info: Aeneas.Step.SpecPartialTests.infiniteLoop_partialSpec.mvcgen_spec (Q : PostCond Unit postShape)
   (h_div : willDiverge Q) : ⦃⌜True⌝⦄ infiniteLoop ⦃Q⦄
 -/
 #guard_msgs in
