@@ -5,15 +5,16 @@
         "crane": "crane",
         "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
+        "jail-nix": "jail-nix",
         "nixpkgs": "nixpkgs",
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1784118315,
-        "narHash": "sha256-+ujCegoDtsFk7ALTLgPcbRZkursN7Nsmo9VglSMNP9c=",
+        "lastModified": 1784853955,
+        "narHash": "sha256-r/L1qUPJ97HnJrVvIbHcEIt3c2otIcwG0dvD13WhuUo=",
         "owner": "aeneasverif",
         "repo": "charon",
-        "rev": "cb50ff16b9f1066b8a97dc06da704de2da2fa41c",
+        "rev": "527ea8e3b5dcb52edd6aef0f7bc34cc09c11dd59",
         "type": "github"
       },
       "original": {
@@ -104,6 +105,21 @@
         "owner": "FStarLang",
         "repo": "fstar",
         "type": "github"
+      }
+    },
+    "jail-nix": {
+      "locked": {
+        "lastModified": 1776230864,
+        "narHash": "sha256-YsEjjdOsGEzTeD+iT7ONh071BqWAOQWpzYVei3okAXE=",
+        "owner": "~alexdavid",
+        "repo": "jail.nix",
+        "rev": "404e7da9da5ab9aa643666682b2ba1312fa5fbe8",
+        "type": "sourcehut"
+      },
+      "original": {
+        "owner": "~alexdavid",
+        "repo": "jail.nix",
+        "type": "sourcehut"
       }
     },
     "nixpkgs": {
