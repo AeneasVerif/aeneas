@@ -825,25 +825,6 @@ namespace Aeneas.Std.WP
 open Std Result
 open Std.Do
 
-abbrev Result.postShape : PostShape := (.except (ULift Error) (.except PUnit .pure))
-
-instance Result.instWP : WP Result.{u} postShape where
-  wp x := {
-    trans Q := match x with | .ok a => Q.1 a | .fail e => Q.2.1 (ULift.up e) | .div => Q.2.2.1 .unit
-    conjunctiveRaw Q₁ Q₂ := by
-      apply SPred.bientails.of_eq
-      cases x <;> simp
-  }
-
-abbrev willYield {α : Type u} (r : α) (Q : PostCond α Result.postShape) : Prop :=
-  (Q.1 r).down
-
-abbrev willFail {α : Type u} (e : Error) (Q : PostCond α Result.postShape) : Prop :=
-  (Q.2.1 (.up e)).down
-
-abbrev willDiverge {α : Type u} (Q : PostCond α Result.postShape) : Prop :=
-  (Q.2.2.1 .unit).down
-
 instance : LawfulMonad Result where
     map_const := by intros; rfl
     id_map := by intros _ x; cases x <;> rfl
@@ -893,6 +874,44 @@ theorem partialSpec_to_mvcgen {α : Type u} {x : Result α}
   cases x
     <;> simp only [partialSpec] at h
     <;> simp [Triple, WP.wp, PredTrans.apply, h_ok, h_fail, h_div, h]
+
+@[spec]
+theorem Result.ok_spec {α : Type} {a : α} {Q} (hQ : (Q.1 a).down) :
+  ⦃ ⌜ True ⌝ ⦄ Result.ok a ⦃ Q ⦄ := by simpa [Triple]
+
+@[spec]
+theorem Result.fail_spec {α : Type} {e : Error} {Q} (hQ : (Q.2.1 (ULift.up e)).down) :
+  ⦃ ⌜ True ⌝ ⦄ (Result.fail e : Result α) ⦃ Q ⦄ := by simpa [Triple]
+
+/-- A triple with postcondition `r = v` is equivalent to the program being `.ok v`. -/
+theorem triple_post_eq_iff_eq {α : Type} {x : Result α} {v : α} :
+    ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ r = v ⌝ ⦄ ↔ x = .ok v := by
+  cases x <;> simp_all [Triple, WP.wp, PredTrans.apply]
+
+/-- If the program equals `.ok v`, then a triple is equivalent to its postcondition on `.ok v`.  -/
+theorem triple_iff_post_of_eq_ok {α : Type} {x : Result α} {v : α} {P : α → Prop}
+    (hx : x = .ok v) : ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ P r ⌝ ⦄ ↔ P v := by
+  simp_all [Triple, WP.wp, PredTrans.apply]
+
+/-- A triple is equivalent to the existence of a value `a` such that the program is `.ok a`
+and the postcondition holds on `a`. -/
+theorem triple_iff_exists_ok {α : Type} {x : Result α} {P : α → Prop} :
+    ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ P r ⌝ ⦄ ↔ ∃ a, x = .ok a ∧ P a := by
+  cases x <;> simp_all [Triple, WP.wp, PredTrans.apply]
+
+/-- Enrich triple's postcondition to contain a triple stating which program produced the value. -/
+theorem triple_with_self {α : Type} {x : Result α} {P : α → Prop}
+    (h : ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ P r ⌝ ⦄) :
+    ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ P r ∧ ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r' => ⌜ r' = r ⌝ ⦄ ⌝ ⦄ := by
+  obtain ⟨a, hx, hPa⟩ := triple_iff_exists_ok.1 h
+  exact (triple_iff_post_of_eq_ok hx).2 ⟨hPa, triple_post_eq_iff_eq.2 hx⟩
+
+/- Modus-ponens-like reasoning on a `noThrow` and a `mayThrow` triple -/
+theorem triple_in_hypothesis {f : Result α} {Q : α → Assertion _} (p : Prop)
+    (h : ⦃ ⌜ True ⌝ ⦄ f ⦃ ⇓ r => Q r ⦄)
+    (hp : ⦃ ⌜ True ⌝ ⦄ f ⦃ ⇓? r => Q r → ⌜ p ⌝ ⦄) :
+    p := by
+  cases f <;> simp_all [Triple, WP.wp, PredTrans.apply]
 
 end Aeneas.Std.WP
 
