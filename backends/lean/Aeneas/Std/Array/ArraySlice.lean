@@ -44,8 +44,7 @@ theorem Array.to_slice_mut_spec {α : Type u} {n : Usize} (a : Array α n) :
   simp [lift, to_slice_mut, to_slice, WP.spec_ok]
 
 def Array.subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) : Result (Slice α) :=
-  -- TODO: not completely sure here
-  if r.start.val < r.end.val ∧ r.end.val ≤ a.val.length then
+  if r.start.val ≤ r.end.val ∧ r.end.val ≤ a.val.length then
     ok ⟨ a.val.slice r.start.val r.end.val,
           by
             have := a.val.slice_length_le r.start.val r.end.val
@@ -55,7 +54,7 @@ def Array.subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) 
 
 @[step]
 theorem Array.subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize)
-  (h0 : r.start.val < r.end.val) (h1 : r.end.val ≤ a.val.length) :
+  (h0 : r.start.val ≤ r.end.val) (h1 : r.end.val ≤ a.val.length) :
   subslice a r ⦃ s =>
   s.val = a.val.slice r.start.val r.end.val ∧
   (∀ i, i + r.start.val < r.end.val → s.val[i]! = a.val[r.start.val + i]!) ⦄
@@ -67,8 +66,7 @@ theorem Array.subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array 
 
 
 def Array.update_subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) (s : Slice α) : Result (Array α n) :=
-  -- TODO: not completely sure here
-  if h: r.start.val < r.end.val ∧ r.end.val ≤ a.length ∧ s.val.length = r.end.val - r.start.val then
+  if h: r.start.val ≤ r.end.val ∧ r.end.val ≤ a.length ∧ s.val.length = r.end.val - r.start.val then
     ok ⟨ a.val.setSlice! r.start s.val, by scalar_tac ⟩
   else
     fail panic
@@ -80,7 +78,7 @@ def Array.update_subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range 
 -- (the user will never write those symbols directly).
 @[step]
 theorem Array.update_subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize) (s : Slice α)
-  (_ : r.start.val < r.end.val) (_ : r.end.val ≤ a.length) (_ : s.length = r.end.val - r.start.val) :
+  (_ : r.start.val ≤ r.end.val) (_ : r.end.val ≤ a.length) (_ : s.length = r.end.val - r.start.val) :
   update_subslice a r s ⦃ na =>
   (∀ i, i < r.start.val → na[i]! = a[i]!) ∧
   (∀ i, r.start.val ≤ i → i < r.end.val → na[i]! = s[i - r.start.val]!) ∧
