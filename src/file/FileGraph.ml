@@ -23,7 +23,7 @@ module BucketOrd : Collections.OrderedType with type t = bucket = struct
 
   let compare = compare_bucket
   let to_string = show_bucket
-  let pp_t fmt x = Format.pp_print_string fmt (show_bucket x)
+  let pp_t = pp_bucket
   let show_t = show_bucket
 end
 
@@ -60,6 +60,8 @@ type t = {
           [crate.declarations]) are absent. *)
   members : item_id list BucketMap.t;
   edges : BucketSet.t BucketMap.t;
+      (** [edges] maps a bucket to the buckets it uses. Self-edges are omitted.
+      *)
   sccs : bucket SCC.sccs;
 }
 

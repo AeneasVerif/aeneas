@@ -113,10 +113,13 @@ let cut_layers (color : 'a -> group_color) (groups : 'a list) :
             | _ -> ((t, g :: pending_rev) :: runs_rev, [])))
       ([], []) groups
   in
+  (* The first colored group flushes [pending_rev] into the run it opens, so a
+     non-empty [pending_rev] survives only when no group was colored at all. *)
   match (runs_rev, pending_rev) with
   | [], [] -> []
   | [], pending_rev -> [ (false, List.rev pending_rev) ]
-  | runs_rev, _ ->
+  | runs_rev, pending_rev ->
+      [%sanity_check_opt_span] None (pending_rev = []);
       List.rev_map (fun (t, gs_rev) -> (t, List.rev gs_rev)) runs_rev
 
 (** Resolve every SCC of the file graph to its Lean module identity — plain
@@ -186,14 +189,25 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
   let placed =
     List.map
       (fun (scc_id, buckets) ->
-        (* Only the external buckets can be dropped or hold external decls. *)
-        let is_external =
-          List.exists
+        let file_paths =
+          List.filter_map
             (function
-              | BExternalTypes | BExternalFuns -> true
-              | BFile _ -> false)
+              | BFile p -> Some p
+              | BExternalTypes | BExternalFuns -> None)
             buckets
         in
+        (* Only the external buckets can be dropped or hold external decls. *)
+        let is_external = List.length file_paths <> List.length buckets in
+        (* An SCC mixing an external bucket with a local file would mean an
+           external declaration (transitively) uses a local one, which cannot
+           happen. Such an SCC has no sensible module name either, so fail
+           loudly rather than silently picking the external one. *)
+        if is_external && file_paths <> [] then
+          [%craise_opt_span] None
+            ("Multi-file extraction: external declarations ended up in a \
+              dependency cycle with local source file(s) ("
+            ^ String.concat ", " file_paths
+            ^ "), which should be impossible.");
         (* An external SCC has nothing to emit iff all its declarations are
            builtins (resolved via [import Aeneas]): dropping it avoids an
            empty file and a dangling import. Decide from the actual members,
@@ -225,17 +239,9 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
             in
             [ suffix ]
           else
-            match buckets with
-            | [ BFile p ] -> FileMapping.module_components_of_file p
-            | _ ->
-                let paths =
-                  List.filter_map
-                    (function
-                      | BFile p -> Some p
-                      | BExternalTypes | BExternalFuns -> None)
-                    buckets
-                in
-                FileMapping.merged_module_components paths
+            match file_paths with
+            | [ p ] -> FileMapping.module_components_of_file p
+            | paths -> FileMapping.merged_module_components paths
         in
         let import_name =
           import_prefix ^ FileMapping.dotted_module_name base_components

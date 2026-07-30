@@ -1574,10 +1574,9 @@ let extract_by_file (ctx : gen_ctx) (crate : crate) ~(dest_dir : string)
                      declarations have absolute (external) names, and they
                      cannot import a local module to obtain the namespace
                      without creating an import cycle (every local module
-                     imports the external modules).
-
-                     TODO: We will have to revisit this in a bit
-                     *)
+                     imports the external modules). This differs from the
+                     legacy split, where [FunsExternal_Template] imports
+                     [Crate.Types] and so can [open] the namespace. *)
                   open_namespace = false;
                   crate_name;
                   rust_module_name = crate.name;
