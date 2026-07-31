@@ -710,7 +710,7 @@ let remove_useless_joins (crate : crate) (f : fun_decl) : fun_decl =
           ^ Print.list_to_string ~sep:"\n" (statement_to_string crate) ls];
         let can_inline, ls = update_statements to_inline ls in
         match st.kind with
-        | Nop | StorageLive _ | StorageDead _ | PlaceMention _
+        | Nop | StorageLive _ | StorageDead _ | PlaceMention _ | Borrowck _
         | Drop (_, _, _, _) -> (can_inline, st :: ls)
         | Abort _ | Return | UnwindResume | Break _ | Continue _ ->
             (true, [ st ])
@@ -821,7 +821,7 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
 
     let filter_storage (st : statement) : statement list =
       match st.kind with
-      | StorageLive _ -> []
+      | StorageLive _ | Borrowck _ -> []
       | StorageDead loc
         when LocalId.Set.mem loc !filtered
              || LocalId.Set.mem loc argument_locals -> []
