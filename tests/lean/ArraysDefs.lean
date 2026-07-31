@@ -18,11 +18,11 @@ namespace arrays_defs
     Source: 'tests/src/arrays_defs.rs', lines 3:0-5:1
     Visibility: public -/
 def clone_array
-  {T : Type} {N : Std.Usize} (corecloneCloneInst : core.clone.Clone T)
+  {T : Type} {N : Std.Usize} (corecloneCloneTInst : core.clone.Clone T)
   (x : Array T N) :
   Result (Array T N)
   := do
-  core.array.CloneArray.clone corecloneCloneInst x
+  core.array.CloneArray.clone corecloneCloneTInst x
 
 /-- [arrays_defs::index_slice_0]:
     Source: 'tests/src/arrays_defs.rs', lines 7:0-9:1

@@ -22,10 +22,10 @@ def use_box_as_mut {T : Type} (x : T) : Result (T × (T → T)) := do
 /-- [as_mut::use_as_mut]:
     Source: 'tests/src/as_mut.rs', lines 6:0-8:1 -/
 def use_as_mut
-  {S : Type} {T : Type} (coreconvertAsMutInst : core.convert.AsMut T S) 
+  {S : Type} {T : Type} (coreconvertAsMutTSInst : core.convert.AsMut T S)
   (x : T) :
   Result (S × (S → T))
   := do
-  coreconvertAsMutInst.as_mut x
+  coreconvertAsMutTSInst.as_mut x
 
 end as_mut

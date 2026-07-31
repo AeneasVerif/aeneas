@@ -29,15 +29,15 @@ Definition trait2_foo_default (Self : Type) : result unit :=
 (** [blanket_impl::{impl blanket_impl::Trait2 for T}::foo]:
     Source: 'tests/src/blanket_impl.rs', lines 9:0-9:31 *)
 Definition Trait2_Blanket_foo
-  {T : Type} (trait1Inst : Trait1_t T) : result unit :=
+  {T : Type} (trait1TInst : Trait1_t T) : result unit :=
   Ok tt
 .
 
 (** Trait implementation: [blanket_impl::{impl blanket_impl::Trait2 for T}]
     Source: 'tests/src/blanket_impl.rs', lines 9:0-9:31 *)
-Definition Trait2_Blanket {T : Type} (trait1Inst : Trait1_t T) : Trait2_t T
+Definition Trait2_Blanket {T : Type} (trait1TInst : Trait1_t T) : Trait2_t T
   := {|
-  Trait2_t_foo := Trait2_Blanket_foo trait1Inst;
+  Trait2_t_foo := Trait2_Blanket_foo trait1TInst;
 |}.
 
 End BlanketImpl.

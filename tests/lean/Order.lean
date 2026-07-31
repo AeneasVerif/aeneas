@@ -18,10 +18,10 @@ namespace order
     Source: 'tests/src/order.rs', lines 5:0-7:1
     Visibility: public -/
 def compare
-  {T : Type} (corecmpOrdInst : core.cmp.Ord T) (x : T) (y : T) :
+  {T : Type} (corecmpOrdTInst : core.cmp.Ord T) (x : T) (y : T) :
   Result Ordering
   := do
-  corecmpOrdInst.cmp x y
+  corecmpOrdTInst.cmp x y
 
 /-- [order::u32_compare]:
     Source: 'tests/src/order.rs', lines 9:0-11:1

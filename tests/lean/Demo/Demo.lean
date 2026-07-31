@@ -165,10 +165,10 @@ def Usize.Insts.DemoCounter : Counter Std.Usize := {
     Source: 'tests/src/demo.rs', lines 112:0-114:1
     Visibility: public -/
 def use_counter
-  {T : Type} (CounterInst : Counter T) (cnt : T) :
+  {T : Type} (CounterTInst : Counter T) (cnt : T) :
   Result (Std.Usize × T)
   := do
-  CounterInst.incr cnt
+  CounterTInst.incr cnt
 
 /-- [demo::mod_add]:
     Source: 'tests/src/demo.rs', lines 117:0-125:1 -/

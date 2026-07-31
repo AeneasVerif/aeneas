@@ -32,8 +32,8 @@ axiom core.iter.adapters.zip.Zip (A : Type) (B : Type) : Type
   "core::iter::adapters::zip::{core::iter::traits::iterator::Iterator<core::iter::adapters::zip::Zip<@A, @B>, (@Clause0_Item, @Clause1_Item)>}::next"]
 axiom core.iter.adapters.zip.Zip.Insts.CoreIterTraitsIteratorIteratorPair.next
   {A : Type} {B : Type} {Clause0_Item : Type} {Clause1_Item : Type}
-  (traitsiteratorIteratorInst : core.iter.traits.iterator.Iterator A
-  Clause0_Item) (traitsiteratorIteratorInst1 :
+  (traitsiteratorIteratorAClause0ItemInst : core.iter.traits.iterator.Iterator
+  A Clause0_Item) (traitsiteratorIteratorBClause1ItemInst :
   core.iter.traits.iterator.Iterator B Clause1_Item) :
   core.iter.adapters.zip.Zip A B → Result ((Option (Clause0_Item ×
     Clause1_Item)) × (core.iter.adapters.zip.Zip A B))
@@ -46,7 +46,8 @@ axiom core.iter.adapters.zip.Zip.Insts.CoreIterTraitsIteratorIteratorPair.next
   "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>}::zip"]
 axiom core.ops.range.Range.Insts.CoreIterTraitsIteratorIterator.zip
   {A : Type} {U : Type} {Clause1_Item : Type} {Clause1_IntoIter : Type}
-  (StepInst : core.iter.range.Step A) (traitscollectIntoIteratorInst :
+  (StepAInst : core.iter.range.Step A)
+  (traitscollectIntoIteratorUClause1ItemClause1IntoIterInst :
   core.iter.traits.collect.IntoIterator U Clause1_Item Clause1_IntoIter) :
   core.ops.range.Range A → U → Result (core.iter.adapters.zip.Zip
     (core.ops.range.Range A) Clause1_IntoIter)
@@ -58,8 +59,9 @@ axiom core.ops.range.Range.Insts.CoreIterTraitsIteratorIterator.zip
 @[rust_fun "core::iter::traits::iterator::Iterator::zip"]
 axiom core.iter.traits.iterator.Iterator.zip.default
   {Self : Type} {U : Type} {Clause0_Item : Type} {Clause1_Item : Type}
-  {Clause1_IntoIter : Type} (IteratorInst : core.iter.traits.iterator.Iterator
-  Self Clause0_Item) (collectIntoIteratorInst :
+  {Clause1_IntoIter : Type} (IteratorClause0ItemInst :
+  core.iter.traits.iterator.Iterator Self Clause0_Item)
+  (collectIntoIteratorUClause1ItemClause1IntoIterInst :
   core.iter.traits.collect.IntoIterator U Clause1_Item Clause1_IntoIter) :
   Self → U → Result (core.iter.adapters.zip.Zip Self Clause1_IntoIter)
 
@@ -71,8 +73,8 @@ axiom core.iter.traits.iterator.Iterator.zip.default
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::zip"]
 axiom core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.zip
   {T : Type} {U : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
-  (itertraitscollectIntoIteratorInst : core.iter.traits.collect.IntoIterator U
-  Clause0_Item Clause0_IntoIter) :
+  (itertraitscollectIntoIteratorUClause0ItemClause0IntoIterInst :
+  core.iter.traits.collect.IntoIterator U Clause0_Item Clause0_IntoIter) :
   core.slice.iter.Iter T → U → Result (core.iter.adapters.zip.Zip
     (core.slice.iter.Iter T) Clause0_IntoIter)
 

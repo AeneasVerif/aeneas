@@ -175,10 +175,10 @@ def Usize.Insts.TutorialCounter : Counter Std.Usize := {
     Source: 'src/lib.rs', lines 117:0-119:1
     Visibility: public -/
 def use_counter
-  {T : Type} (CounterInst : Counter T) (cnt : T) :
+  {T : Type} (CounterTInst : Counter T) (cnt : T) :
   Result (Std.Usize × T)
   := do
-  CounterInst.incr cnt
+  CounterTInst.incr cnt
 
 /-- [tutorial::list_nth_mut1]: loop 0:
     Source: 'src/lib.rs', lines 124:4-132:1

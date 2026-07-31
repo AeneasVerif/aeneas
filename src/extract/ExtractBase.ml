@@ -1968,42 +1968,12 @@ let ctx_compute_trait_clause_name (ctx : extraction_ctx)
     match TraitDeclId.Map.find_opt trait_id ctx.crate.trait_decls with
     | None -> [ "clause" ]
     | Some impl_trait_decl ->
+        (* Keep the (variable) generic arguments, they identify which trait instance this clause is. *)
         let args = clause_trait.generics in
         trait_name_with_generics_to_simple_name ctx.trans_ctx ~prefix
-          impl_trait_decl.item_meta.name params args
+          ~keep_var_generics:true impl_trait_decl.item_meta.name params args
   in
   String.concat "" clause
-
-(** Given a type argument, calculate a discriminator fragment in PascalCase. *)
-let trait_clause_discriminator_token (span : Meta.span)
-    (type_params : type_param list) (ty : ty) : string =
-  let raw =
-    match ty with
-    (* In this case we take the name of the trait parameter it refers to. The
-       lookup is never None for a well-formed LLBC: a Free type variable in a
-       parent clause is an index into the enclosing trait's type parameters. *)
-    | TVar (Free index) ->
-        let param =
-          [%unwrap_with_span] span
-            (List.find_opt
-               (fun (p : type_param) -> p.index = index)
-               type_params)
-            ("Unexpected type variable " ^ TypeVarId.to_string index)
-        in
-        param.name
-    (* A bound variable or non-variable argument has no distinguishing name. *)
-    | _ -> "Type"
-  in
-  StringUtils.to_camel_case raw
-
-(** Build the full discriminator string for a parent clause. *)
-let trait_clause_discriminator (span : Meta.span)
-    (type_params : type_param list) (clause : trait_param) : string =
-  (* Map over the clause's generic type arguments and concatenate. *)
-  String.concat ""
-    (List.map
-       (trait_clause_discriminator_token span type_params)
-       clause.generics.types)
 
 (* Builtin information must describe exactly the trait's parent clauses. *)
 let check_builtin_arity (ctx : extraction_ctx) (trait_decl : trait_decl)
@@ -2019,18 +1989,13 @@ let check_builtin_arity (ctx : extraction_ctx) (trait_decl : trait_decl)
 
 (** Compute the names of the parent clauses of a trait declaration.
 
-    For a computed trait each name is [base ^ (discriminator) ^ "Inst"]:
-    - The base name comes from the referenced trait (and trait-decl name for
-      long names).
-    - Concrete type arguments and const-generic arguments are reflected in the
-      base name, so two clauses referencing the same trait at different such
-      arguments usually get distinct bases.
-    - For a shared base we append a discriminator to every member of the
-      colliding group.
-    - If there is still a name collision a numerical suffix is added.
+    For a computed trait each name is [base ^ "Inst"], where the base is derived
+    from the referenced trait, including its generic arguments. A numeric suffix
+    is added only as a guard against two identical bounds (impossible in
+    well-formed Rust).
 
     For a builtin trait the names are taken verbatim from the builtin
-    information (no discriminator, no ["Inst"] suffix added here). *)
+    information (no ["Inst"] suffix added here). *)
 let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
     (trait_decl : trait_decl)
     (builtin_info : Pure.builtin_trait_decl_info option) :
@@ -2060,36 +2025,12 @@ let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
   let names =
     match builtin_info with
     | None ->
-        let bases =
-          List.map (fun c -> (c, compute_base c)) trait_decl.parent_clauses
-        in
-        (* The set of base names carried by more than one clause. *)
-        let _, shared =
-          List.fold_left
-            (fun (seen, shared) (_, base) ->
-              if StringSet.mem base seen then (seen, StringSet.add base shared)
-              else (StringSet.add base seen, shared))
-            (StringSet.empty, StringSet.empty)
-            bases
-        in
-        let scheme_names =
-          List.map
-            (fun (c, base) ->
-              let disambiguated =
-                if StringSet.mem base shared then
-                  base
-                  ^ trait_clause_discriminator trait_decl.item_meta.span
-                      trait_decl.generics.types c
-                else base
-              in
-              (c, add_inst_and_normalize disambiguated))
-            bases
-        in
-        (* Base + discriminator can still produce equal names (e.g., names that
-           concatenate ambiguously) so add a numeric suffix if required. *)
+        (* The base already encodes each clause's trait instantiation so distinct super-traits get distinct bases by
+           construction. *)
         let _, named =
           List.fold_left_map
-            (fun used (c, name) ->
+            (fun used c ->
+              let name = add_inst_and_normalize (compute_base c) in
               let name =
                 name_to_unique
                   (fun s -> StringSet.mem s used)
@@ -2097,7 +2038,7 @@ let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
                   name
               in
               (StringSet.add name used, (c, name)))
-            StringSet.empty scheme_names
+            StringSet.empty trait_decl.parent_clauses
         in
         named
     | Some info ->

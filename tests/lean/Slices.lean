@@ -57,7 +57,7 @@ def split_at_mut
     Source: 'tests/src/slices.rs', lines 19:0-22:1
     Visibility: public -/
 def split_at_mut_and_deref
-  {T : Type} (coremarkerCopyInst : core.marker.Copy T) (x : Slice T)
+  {T : Type} (coremarkerCopyTInst : core.marker.Copy T) (x : Slice T)
   (n : Std.Usize) :
   Result ((T × T) × (Slice T))
   := do

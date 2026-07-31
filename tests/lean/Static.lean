@@ -23,10 +23,10 @@ structure WithSlice (Self : Type) where
 /-- [static::read]:
     Source: 'tests/src/static.rs', lines 27:0-29:1 -/
 def read
-  {S : Type} (WithSliceInst : WithSlice S) (t : S) (i : Std.Usize) :
+  {S : Type} (WithSliceSInst : WithSlice S) (t : S) (i : Std.Usize) :
   Result Std.U16
   := do
-  let s ← WithSliceInst.SLICE
+  let s ← WithSliceSInst.SLICE
   Slice.index_usize s i
 
 /-- [static::use_static::PREFIX]

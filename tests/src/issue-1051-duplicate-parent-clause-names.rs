@@ -53,3 +53,19 @@ pub struct Bar;
 pub trait Parent<T, U> {}
 
 pub trait Combined: Parent<Foo, SideBar> + Parent<FooSide, Bar> {}
+
+// Example 7: A trait with a provided (default) method.
+pub trait WithProvided {
+    fn required(&self) -> u32;
+    fn provided(&self) -> u32 {
+        self.required()
+    }
+}
+
+// Example 8: A function with two clauses of the same trait on different type parameters.
+pub fn two_clauses<A: TraitA, B: TraitA>(_a: A, _b: B) {}
+
+// Example 9: An associated-type bound whose argument is a projection of `Self`.
+pub trait Producer {
+    type Item: TraitA;
+}
