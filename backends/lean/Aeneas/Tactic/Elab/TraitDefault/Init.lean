@@ -322,9 +322,7 @@ meta def resolveStructFields (value : Expr) (selfFvarId : FVarId) (type : Expr) 
        compiles, and applies any declaration attributes (e.g., `@[simp]`). -/
 elab mods:declModifiers "impl_def " id:declId sig:optDeclSig val:declVal : command => do
   let modifiers ← elabModifiers mods
-  let modifiers :=
-    if modifiers.visibility matches .regular then { modifiers with visibility := .public }
-    else modifiers
+  let inPublicScope := (← getScope).isPublic
   let (binders, type?) := expandOptDeclSig sig
   let typeStx ← match type? with
     | some t => pure t
@@ -337,6 +335,10 @@ elab mods:declModifiers "impl_def " id:declId sig:optDeclSig val:declVal : comma
       throwErrorAt val.raw "impl_def only supports `:= body` syntax"
 
   runTermElabM fun _sectionVars => do
+    let isPub :=
+      if inPublicScope || !(← getEnv).header.isModule then !modifiers.visibility.isPrivate
+      else modifiers.visibility.isPublic
+    let modifiers := { modifiers with visibility := if isPub then .public else .private }
     let ⟨shortDeclName, declName, levelNames, _⟩ ←
       Term.expandDeclId (← getCurrNamespace) (← getLevelNames) id modifiers
 
@@ -394,7 +396,7 @@ elab mods:declModifiers "impl_def " id:declId sig:optDeclSig val:declVal : comma
         }
 
         let docCtx := (← getLCtx, ← getLocalInstances)
-        withExporting (isExporting := true) do
+        withExporting (isExporting := isPub) do
           addAndCompileNonRec docCtx preDef
 
 end Aeneas.TraitDefault
