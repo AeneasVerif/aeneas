@@ -251,6 +251,7 @@ let compute_literal_type (cv : literal) : ty =
   | VStr _ -> TAdt (TBuiltin TStr, empty_generic_args)
   | VPureNat _ -> TLiteral TPureNat
   | VPureInt _ -> TLiteral TPureInt
+  | VPureStr _ -> TLiteral TPureStr
   | VByteStr _ -> [%craise_opt_span] None "Byte string literals are unsupported"
 
 let fvar_get_id (v : fvar) : fvar_id = v.id

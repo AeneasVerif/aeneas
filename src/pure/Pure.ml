@@ -699,6 +699,7 @@ and literal_type =
   | TChar
   | TPureNat  (** Natural number *)
   | TPureInt  (** Mathematical (unbounded) integer *)
+  | TPureStr  (** Native (Lean) string - distinct from the Rust [Str] type *)
 
 and literal =
   | VScalar of scalar_value
@@ -709,6 +710,9 @@ and literal =
   | VStr of string
   | VPureNat of big_int
   | VPureInt of big_int
+  | VPureStr of string
+      (** A native (Lean) string literal - distinct from [VStr], which is a Rust
+          [str] literal. *)
 
 and type_param = { index : type_var_id; name : string }
 [@@deriving

@@ -97,6 +97,15 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) ~(is_pattern : bool)
           F.pp_print_string fmt c;
           if inside then F.pp_print_string fmt ")")
   | VStr s -> extract_str span ~inside fmt s
+  | VPureStr s -> (
+      (* A native (Lean) string literal *)
+      match backend () with
+      | Lean ->
+          let chars = StringUtils.string_to_chars s in
+          let s = String.concat "" (List.map Char.escaped chars) in
+          F.pp_print_string fmt ("\"" ^ s ^ "\"")
+      | FStar | Coq | HOL4 ->
+          [%admit_raise] span "Native string literals are unsupported" fmt)
   | VChar _ | VFloat _ | VByteStr _ ->
       [%admit_raise] span
         "Float, string, non-ASCII chars and byte string literals are \
@@ -301,6 +310,10 @@ let extract_literal_type (_ctx : extraction_ctx) (fmt : F.formatter)
   | TFloat float_ty -> F.pp_print_string fmt (float_name float_ty)
   | TPureNat -> F.pp_print_string fmt "ℕ"
   | TPureInt -> F.pp_print_string fmt "ℤ"
+  | TPureStr -> (
+      match backend () with
+      | Lean -> F.pp_print_string fmt "String"
+      | FStar | Coq | HOL4 -> F.pp_print_string fmt "string")
 
 (** [inside] constrols whether we should add parentheses or not around type
     applications (if [true] we add parentheses).
