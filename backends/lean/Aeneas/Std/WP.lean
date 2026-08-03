@@ -11,10 +11,10 @@ namespace Aeneas.Std.WP
 
 open Std Result
 
-abbrev Post α := (α -> Prop)
-abbrev Pre := Prop
+@[expose] def Post α := (α -> Prop)
+@[expose] def Pre := Prop
 
-abbrev Wp α := Post α → Pre
+@[expose] def Wp α := Post α → Pre
 
 @[expose] def wp_return (x:α) : Wp α := fun p => p x
 
