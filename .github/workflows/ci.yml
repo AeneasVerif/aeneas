@@ -78,7 +78,10 @@ jobs:
       - uses: actions/checkout@v4
       - if: needs.diff_lean_files.outputs.check_lean == 'true'
         # Lean cannot run its tests in the nix sandbox because `elan` will download things
-        run: nix develop --command bash -c "cd tests/lean && make"
+        run: |
+          nix develop --command bash -c \
+            "(cd backends/lean && lake exe cache get && lake build --iofail) && \
+             (cd tests/lean && make)"
 
   charon-pin-is-forward:
     needs: [select-runner]

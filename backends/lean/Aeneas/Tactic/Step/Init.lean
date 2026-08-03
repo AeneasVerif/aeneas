@@ -331,10 +331,6 @@ private theorem step_fail_False_iff :
     (∀ (_ : Aeneas.Std.Error), ¬ False) ↔ True :=
   ⟨fun _ => trivial, fun _ _ h => h⟩
 
-/-- For `simplifyStepHypotheses`: rewrites `¬ False` to `True`. -/
-private theorem step_div_False_iff : (¬ False) ↔ True :=
-  ⟨fun _ => trivial, fun _ h => h⟩
-
 end
 
 /-- Build a `Simp.Context` containing exactly the given lemmas (no default simp set,
@@ -349,14 +345,10 @@ private def mkSimpOnlyContext (lemmas : Array Name) : MetaM Simp.Context := do
     (congrTheorems := ← getSimpCongrTheorems)
 
 /-- Recursively split a metavariable whose target is `P ∧ Q` into separate goals
-    for each conjunct, by assigning it to `⟨?m₁, ?m₂⟩`. When at least one split
-    happens, leaf mvars get a fresh `userName` derived from the original mvar's
-    tag with an index suffix appended (e.g. `h_fail` becomes `h_fail_1`,
-    `h_fail_2`, …), so they remain distinct once abstracted. If the target is not
-    an `And`, the mvar is returned unchanged. Returns the list of leaf mvars. -/
+    for each conjunct. Returns the list of leaf mvars. -/
 private partial def splitAndGoals (mvarId : MVarId) : MetaM (Array MVarId) := do
   let target ← instantiateMVars (← mvarId.getType)
-  if target.app2? ``And |>.isNone then
+  if !target.isAppOfArity ``And 2 then
     return #[mvarId]
   let baseTag ← mvarId.getTag
   Prod.snd <$> go baseTag mvarId 0 #[]
@@ -377,7 +369,7 @@ where
       return (idx + 1, acc.push mvarId)
 
 /-- Simp lemmas shared by `simplifyStepHypotheses` and `simplifyMvcgenHypotheses` -/
-private def commonPushNotLemmas : Array Name :=
+private def commonSimpLemmas : Array Name :=
   #[``gt_iff_lt, ``ge_iff_le, ``not_or, ``not_lt, ``not_le, ``or_imp, ``imp_true_iff, ``not_true,
     ``true_implies, ``forall_and, ``true_and, ``and_true]
 
@@ -408,8 +400,6 @@ private def canonicalizeFailPostcond (thApp : Expr) : MetaM Expr := do
     let args := ty.getAppArgs
     unless args.size == 5 do return thApp
     let p_fail := args[3]!
-    -- Only rewrite when `p_fail` is a `match` on the error; leave the `e = c ∧ P` form, constants,
-    -- etc. untouched (rewriting them would only add work for the downstream simp set to undo).
     let isMatch ← withLocalDeclD `e (.const ``Aeneas.Std.Error []) fun e =>
       return (← matchMatcherApp? (p_fail.beta #[e]).headBeta).isSome
     unless isMatch do return thApp
@@ -425,7 +415,7 @@ private def canonicalizeFailPostcond (thApp : Expr) : MetaM Expr := do
 private def simplifyStepHypotheses (mvarFail mvarDiv : Expr) : MetaM Unit := do
   let simpCtx ← mkSimpOnlyContext (#[
       ``step_fail_failEq_iff, ``step_fail_remove_forall_iff,
-      ``step_fail_False_iff, ``step_div_False_iff] ++ commonPushNotLemmas)
+      ``step_fail_False_iff, ``not_false_iff] ++ commonSimpLemmas)
   let simplify (mv : Expr) (name : String) : MetaM Unit := do
     trace[Step] "simplifyStepHypotheses: {name} type: {← inferType mv}"
     try
@@ -492,15 +482,19 @@ private def saveMvcgenDecl (attrKind : AttributeKind) (stx : Syntax)
 
 /-- Register a theorem using `spec` with `mvcgen`. -/
 private def saveMvcgenSpecFromThm (stx : Syntax) (attrKind : AttributeKind)
-    (thDecl : AsyncConstantInfo) : MetaM Unit := do
+    (thDecl : AsyncConstantInfo) (ty : Expr) : MetaM Unit := do
   trace[Step] "saveMvcgenSpecFromThm: {thDecl.name}"
+  let (_, info) ← getStepSpecFunArgsExpr ty
+  let some to_mvcgen := info.to_mvcgen
+    | trace[Step] "No `to_mvcgen` conversion function found: {thDecl.name}"
+      return
   let sig := thDecl.sig.get
   let thName := thDecl.name
   forallTelescope sig.type fun fvars _ => do
     let thConst := Lean.mkConst thName (sig.levelParams.map .param)
     let thApp := mkAppN thConst fvars
     -- Wrap with spec_to_mvcgen to produce a statement about `Triple`.
-    let proof ← mkAppM ``Aeneas.Std.WP.spec_to_mvcgen #[thApp]
+    let proof ← mkAppM to_mvcgen #[thApp]
     let innerTy ← inferType proof
     let proofTerm ← mkLambdaFVars fvars proof
     let thmTy ← mkForallFVars fvars innerTy
@@ -535,10 +529,6 @@ private theorem mvcgen_fail_False_iff {α : Type u} {Q : Std.Do.PostCond α post
     (∀ e, False → willFail e Q) ↔ True :=
   ⟨fun _ => trivial, fun _ _ h => h.elim⟩
 
-private theorem mvcgen_div_False_iff {P : Prop} :
-    (False → P) ↔ True :=
-  ⟨fun _ => trivial, fun _ h => h.elim⟩
-
 private theorem mvcgen_uncurry' {α β} {p : α → β → Prop} {q : α × β → Prop} :
     (∀ (r : α × β), uncurry' p r → q r) ↔ (∀ (r₁ : α) (r₂ : β), p r₁ r₂ → q (r₁, r₂)) := by simp
 
@@ -548,7 +538,7 @@ end
 private def simplifyMvcgenHypotheses (mvarOk mvarFail mvarDiv : Expr) : MetaM Unit := do
   let simpCtx ← mkSimpOnlyContext (#[
       ``mvcgen_fail_failEq_iff, ``mvcgen_fail_False_iff,
-      ``mvcgen_div_False_iff, ``mvcgen_uncurry', ``and_imp, ``forall_eq] ++ commonPushNotLemmas)
+      ``mvcgen_uncurry', ``false_imp_iff, ``and_imp, ``forall_eq] ++ commonSimpLemmas)
   let simplify (mv : Expr) (name : String) : MetaM Unit := do
     trace[Step] "simplifyMvcgenHypotheses: {name} type: {← inferType mv}"
     try
@@ -618,7 +608,7 @@ private def applyStepAttr (ext : Extension) (attrKind : AttributeKind) (stx : Sy
       else
         try saveStepSpecFromThm ext attrKind thName ty
         catch e => logWarning m!"Could not save step spec for {thName}: {e.toMessageData}"
-        try saveMvcgenSpecFromThm stx attrKind thDecl
+        try saveMvcgenSpecFromThm stx attrKind thDecl ty
         catch e => logWarning m!"Could not generate mvcgen spec for {thName}: {e.toMessageData}"
 
 /-- Initialize the `step` attribute. -/
