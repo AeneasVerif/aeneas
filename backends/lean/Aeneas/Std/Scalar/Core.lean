@@ -674,7 +674,7 @@ abbrev  I128  := IScalar .I128
 /-!  ofNatCore -/
 -- TODO: typeclass?
 def Usize.ofNatCore := @UScalar.ofNatCore .Usize
-Def U8.ofNatCore    := @UScalar.ofNatCore .U8
+def U8.ofNatCore    := @UScalar.ofNatCore .U8
 def U16.ofNatCore   := @UScalar.ofNatCore .U16
 def U32.ofNatCore   := @UScalar.ofNatCore .U32
 def U64.ofNatCore   := @UScalar.ofNatCore .U64
