@@ -1592,8 +1592,6 @@ x y : UScalar ty
     x + y ⦃ _ => True ⦄ := by
     step as ⟨ z, h1 ⟩
 
-  #check UScalar.add_spec.step_spec
-
   example {ty} {x y : UScalar ty} (h : x.val + y.val ≤ UScalar.max ty) :
     x + y ⦃ _ => True ⦄ := by
     step as ⟨ z, h1 ⟩

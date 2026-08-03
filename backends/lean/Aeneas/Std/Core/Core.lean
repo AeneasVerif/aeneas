@@ -33,7 +33,7 @@ def clone.Clone.clone_from.default {Self : Type} (CloneInst : core.clone.Clone S
   CloneInst.clone source
 
 @[reducible, rust_trait_impl "core::clone::Clone<alloc::alloc::Global>"]
-def core.clone.CloneGlobal : core.clone.Clone Global := {
+def clone.CloneGlobal : core.clone.Clone Global := {
   clone := alloc.alloc.CloneGlobal.clone
 }
 
@@ -54,7 +54,7 @@ def alloc.boxed.CloneBox.clone {T : Type} (cloneInst : core.clone.Clone T) : T â
 
 @[reducible, rust_trait_impl "core::clone::Clone<Box<@T>>"
     (keepParams := [true, false]) (keepTraitClauses := [true, false])]
-def core.clone.CloneBox {T : Type} (cloneInst : core.clone.Clone T) : core.clone.Clone T := {
+def clone.CloneBox {T : Type} (cloneInst : core.clone.Clone T) : core.clone.Clone T := {
   clone := alloc.boxed.CloneBox.clone cloneInst
 }
 
@@ -63,7 +63,7 @@ structure marker.Copy (Self : Type) where
   cloneInst : core.clone.Clone Self
 
 @[reducible, rust_trait_impl "core::marker::Copy<bool>"]
-def core.marker.CopyBool : core.marker.Copy Bool := {
+def marker.CopyBool : core.marker.Copy Bool := {
   cloneInst := core.clone.CloneBool
 }
 
