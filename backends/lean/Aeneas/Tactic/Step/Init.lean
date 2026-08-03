@@ -26,6 +26,12 @@ initialize stepSimpExt : SimpExtension ←
     specific trait instances), can be simplified to far simpler functions: this
     is the main purpose of this attribute."
 
+/-- The `step_simps_proc` simproc attribute. -/
+initialize stepSimprocExt : Simp.SimprocExtension ←
+  Simp.registerSimprocAttr `step_simps_proc "\
+    The `step_simps_proc` attribute registers simproc procedures to be used
+    by `step` alongside the `step_simps` simp lemmas." none
+
 /-!
 # Attribute: `step_pre_simps`
 -/
