@@ -99,4 +99,81 @@ def S.method_try
     core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
       Std.U8 (core.convert.FromSame Unit) residual
 
+/-- [nested_shared_borrows::H]
+    Source: 'tests/src/nested-shared-borrows.rs', lines 57:0-57:23
+    Visibility: public -/
+@[reducible]
+def H (T : Type) := T
+
+/-- [nested_shared_borrows::{nested_shared_borrows::H<T>}::find_max]: loop body 0:
+    Source: 'tests/src/nested-shared-borrows.rs', lines 67:8-69:9
+    Visibility: public -/
+@[rust_loop_body]
+def H.find_max_loop.body
+  {T : Type} (t : T) (iter : core.ops.range.Range Std.Usize) (max : Option T) :
+  Result (ControlFlow ((core.ops.range.Range Std.Usize) × (Option T)) (Option
+    T))
+  := do
+  let (o, iter1) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepUsize iter
+  match o with
+  | none => ok (done max)
+  | some i =>
+    let t1 ← Array.index_usize (Array.make 1#usize [ t ]) i
+    ok (cont (iter1, some t1))
+
+/-- [nested_shared_borrows::{nested_shared_borrows::H<T>}::find_max]: loop 0:
+    Source: 'tests/src/nested-shared-borrows.rs', lines 67:8-69:9
+    Visibility: public -/
+@[rust_loop]
+def H.find_max_loop
+  {T : Type} (iter : core.ops.range.Range Std.Usize) (max : Option T) (t : T) :
+  Result (Option T)
+  := do
+  loop
+    (fun (iter1, max1) => H.find_max_loop.body t iter1 max1)
+    (iter, max)
+
+/-- [nested_shared_borrows::{nested_shared_borrows::H<T>}::find_max]:
+    Source: 'tests/src/nested-shared-borrows.rs', lines 64:4-71:5
+    Visibility: public -/
+@[reducible]
+def H.find_max {T : Type} (self : H T) : Result (Option T) := do
+  H.find_max_loop { start := 0#usize, «end» := 1#usize } none self
+
+/-- [nested_shared_borrows::find_max_slice]: loop body 0:
+    Source: 'tests/src/nested-shared-borrows.rs', lines 81:4-84:5
+    Visibility: public -/
+@[rust_loop_body]
+def find_max_slice_loop.body
+  {T : Type} (arr : Slice T) (max : Option T) (i : Std.Usize) :
+  Result (ControlFlow ((Option T) × Std.Usize) (Option T))
+  := do
+  let i1 := Slice.len arr
+  if i < i1
+  then
+    let t ← Slice.index_usize arr i
+    let i2 ← i + 1#usize
+    ok (cont (some t, i2))
+  else ok (done max)
+
+/-- [nested_shared_borrows::find_max_slice]: loop 0:
+    Source: 'tests/src/nested-shared-borrows.rs', lines 81:4-84:5
+    Visibility: public -/
+@[rust_loop]
+def find_max_slice_loop
+  {T : Type} (arr : Slice T) (max : Option T) (i : Std.Usize) :
+  Result (Option T)
+  := do
+  loop
+    (fun (max1, i1) => find_max_slice_loop.body arr max1 i1)
+    (max, i)
+
+/-- [nested_shared_borrows::find_max_slice]:
+    Source: 'tests/src/nested-shared-borrows.rs', lines 78:0-86:1
+    Visibility: public -/
+@[reducible]
+def find_max_slice {T : Type} (arr : Slice T) : Result (Option T) := do
+  find_max_slice_loop arr none 0#usize
+
 end nested_shared_borrows
