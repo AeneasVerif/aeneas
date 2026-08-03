@@ -77,6 +77,13 @@ attribute [step_simps] Aeneas.Std.bind_assoc_eq
 attribute [step_simps] Aeneas.Std.uncurry_apply_pair
 attribute [step_simps] ite_self -- this is sometimes necessary
 
+/- Tuple-destructuring binds (`let (a, b) ← e`) are elaborated as
+`Bind.bind e (uncurry f)`. The generic `bind_assoc` introduces an intermediate
+variable that prevents the destructuring from staying on the bind (see issue #1148).
+These two lemmas normalize tuple binds directly; they are given a high priority so
+they take precedence over the generic `bind_assoc` on `uncurry` continuations. -/
+attribute [step_simps high] Aeneas.Std.bind_assoc_uncurry Aeneas.Std.bind_uncurry_app
+
 attribute [step_post_simps]
   -- We often see expressions like `Int.ofNat 3`
   Int.reduceToNat
