@@ -867,9 +867,9 @@ theorem partialSpec_to_mvcgen {α : Type u} {x : Result α}
     {p_ok : α → Prop} {p_fail : Error → Prop} {p_div : Prop}
     (h : partialSpec x p_ok p_fail p_div)
     {Q : PostCond α Result.postShape}
-    (h_ok   : ∀ r, p_ok r → willYield r Q)
-    (h_fail : ∀ e, p_fail e → willFail e Q)
-    (h_div  : p_div → willDiverge Q) :
+    (h_ok   : ∀ r, p_ok r → PostCond.ok Q r)
+    (h_fail : ∀ e, p_fail e → PostCond.fail Q e)
+    (h_div  : p_div → PostCond.div Q) :
     ⦃ ⌜ True ⌝ ⦄ x ⦃ Q ⦄ := by
   cases x
     <;> simp only [partialSpec] at h
