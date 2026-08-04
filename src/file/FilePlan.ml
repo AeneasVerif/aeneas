@@ -26,6 +26,10 @@ type placed_layer = {
 type placed_module = {
   scc_id : SCC.SccId.id;
   buckets : bucket list;  (** The source-file/external buckets in this SCC. *)
+  source_files : string list;
+      (** The module's source files, named as charon reported them (see
+          {!FileGraph.display_bucket}) so their path can be resolved. Empty for
+          the external modules. *)
   is_external : bool;
       (** [true] for the external modules ([TypesExternal] / [FunsExternal]). *)
   is_dropped : bool;
@@ -290,6 +294,14 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
         {
           scc_id;
           buckets;
+          source_files =
+            List.map
+              (FileGraph.display_bucket fg)
+              (List.filter
+                 (function
+                   | BFile _ -> true
+                   | _ -> false)
+                 buckets);
           is_external;
           is_dropped;
           import_name;
@@ -307,7 +319,7 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
      have the emitter's second [open_out] silently truncate the first, so fail
      loudly instead. Dropped modules emit nothing and are skipped. *)
   let describe (m : placed_module) : string =
-    String.concat " + " (List.map display_bucket m.buckets)
+    String.concat " + " (List.map (FileGraph.display_bucket fg) m.buckets)
   in
   let (_ : (placed_module * string) Collections.StringMap.t) =
     List.fold_left
@@ -361,8 +373,8 @@ let render_placement (placed : placed_module list) : string =
       let role =
         if m.is_external then "external declarations"
         else
-          let src = String.concat " + " (List.map display_bucket m.buckets) in
-          if List.length m.buckets > 1 then "merged: " ^ src else src
+          let src = String.concat " + " m.source_files in
+          if List.length m.source_files > 1 then "merged: " ^ src else src
       in
       line "  %s" m.import_name;
       line "      %s" role;

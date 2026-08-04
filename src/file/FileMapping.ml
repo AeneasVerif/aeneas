@@ -1,9 +1,9 @@
 (** Mapping from Rust source-file paths to Lean module paths.
 
-    The functions operate on crate-relative paths as found in charon's
-    [item_meta] spans (e.g. ["src/baz/bang.rs"]) and return Lean module-path
-    components *without* the crate prefix (e.g. [["Baz"; "Bang"]]). The caller
-    prepends the crate (and optional subdir) prefix.
+    The functions take the paths found in charon's [item_meta] spans and return
+    Lean module-path components without the crate prefix (e.g.
+    [["Baz"; "Bang"]]). The caller prepends the crate (and optional subdir)
+    prefix.
 
     The mapping is a direct structural mirror of the crate's file tree: every
     source file maps to exactly one Lean file at the matching path, with each
@@ -16,23 +16,61 @@
     - ["src/geometry.rs"] -> [["Geometry"]]
     - ["src/lib.rs"] -> [["Lib"]]
     - ["src/main.rs"] -> [["Main"]]
-    - ["src/cycle_x.rs"] -> [["CycleX"]] (snake_case -> CamelCase) *)
+    - ["src/cycle_x.rs"] -> [["CycleX"]] (snake_case -> CamelCase)
+    - ["crates/mycrate/src/foo.rs"] -> [["Foo"]] (workspace member) *)
+
+(** Split a source path into components below the crate's source root.
+
+    Charon's paths are relative to the directory cargo was invoked from, which
+    for a workspace is the *workspace* root — so ["src"] is not necessarily the
+    first component ([crates/mycrate/src/foo.rs]). We therefore drop everything
+    through the last ["src"] component rather than a leading one. Paths with no
+    ["src"] at all are kept whole.
+
+    ["."] and [".."] are resolved first; a [".."] with nothing to pop is
+    dropped, since these paths only ever name a module and there is no root to
+    escape to.
+
+    The caveat of taking the last ["src"] is a Rust module literally named [src]
+    ([src/src/mod.rs] loses a level). That is rare, and the placement collision
+    guard in {!FilePlan.place_by_file} catches it if it ever matters. *)
+let source_path_components (path : string) : string list =
+  let parts =
+    List.fold_left
+      (fun acc p ->
+        match p with
+        | "" | "." -> acc
+        | ".." -> (
+            match acc with
+            | [] -> []
+            | _ :: rest -> rest)
+        | _ -> p :: acc)
+      []
+      (String.split_on_char '/' path)
+    |> List.rev
+  in
+  (* Everything after the last "src", or the whole path if there is none. *)
+  let rec after_last_src acc rest =
+    match rest with
+    | [] -> acc
+    | "src" :: tl -> after_last_src (Some tl) tl
+    | _ :: tl -> after_last_src acc tl
+  in
+  match after_last_src None parts with
+  | Some rest -> rest
+  | None -> parts
+
+(** The crate-relative source path, canonicalized: the inverse join of
+    {!source_path_components}. Used to key file buckets so that paths reaching
+    {!FileGraph} by different routes (a charon span vs. a reconstructed module
+    path) agree. *)
+let normalize_source_path (path : string) : string =
+  String.concat "/" (source_path_components path)
 
 (** The Lean module-path components for a source file, without the crate prefix.
-
-    Assumes a crate-relative path (a leading ["src/"] is stripped if present).
 *)
 let module_components_of_file (path : string) : string list =
-  (* Split into path components, dropping empty and "." segments. *)
-  let parts =
-    String.split_on_char '/' path |> List.filter (fun s -> s <> "" && s <> ".")
-  in
-  (* Drop a leading "src" component. *)
-  let parts =
-    match parts with
-    | "src" :: rest -> rest
-    | _ -> parts
-  in
+  let parts = source_path_components path in
   (* Strip the ".rs" extension from the last component. *)
   let parts =
     match List.rev parts with

@@ -1533,14 +1533,8 @@ let extract_by_file (ctx : gen_ctx) (crate : crate) ~(dest_dir : string)
         let merged_srcs =
           (* A merged module: the source files formed an import cycle, so they
              share one Lean module. List them so the merge is self-documenting. *)
-          if List.length m.buckets > 1 then
-            Some
-              (String.concat ", "
-                 (List.filter_map
-                    (function
-                      | FileGraph.BFile p -> Some p
-                      | _ -> None)
-                    m.buckets))
+          if List.length m.source_files > 1 then
+            Some (String.concat ", " m.source_files)
           else None
         in
         let merged_msg =
