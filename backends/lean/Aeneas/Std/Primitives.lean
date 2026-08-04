@@ -287,13 +287,25 @@ instance Result.instWP : WP Result.{u} postShape where
       cases x <;> simp
   }
 
-abbrev willYield {α : Type u} (r : α) (Q : PostCond α Result.postShape) : Prop :=
+abbrev PostCond.okAssertion {α : Type u} (Q : PostCond α Result.postShape) (r : α) :
+    Assertion postShape :=
+  Q.1 r
+
+abbrev PostCond.ok {α : Type u} (Q : PostCond α Result.postShape) (r : α) : Prop :=
   (Q.1 r).down
 
-abbrev willFail {α : Type u} (e : Error) (Q : PostCond α Result.postShape) : Prop :=
+abbrev PostCond.failAssertion {α : Type u} (Q : PostCond α Result.postShape) (e : ULift Error) :
+    Assertion postShape :=
+  Q.2.1 e
+
+abbrev PostCond.fail {α : Type u} (Q : PostCond α Result.postShape) (e : Error) : Prop :=
   (Q.2.1 (.up e)).down
 
-abbrev willDiverge {α : Type u} (Q : PostCond α Result.postShape) : Prop :=
+abbrev PostCond.divAssertion {α : Type u} (Q : PostCond α Result.postShape) :
+    PUnit → Assertion postShape :=
+  Q.2.2.1
+
+abbrev PostCond.div {α : Type u} (Q : PostCond α Result.postShape) : Prop :=
   (Q.2.2.1 .unit).down
 
 end
@@ -338,15 +350,15 @@ theorem loop_spec
   (h_inv_init : inv init)
   (h_body : ∀ x, inv x → ⦃ ⌜ True ⌝ ⦄ body x ⦃ post⟨
     fun cf => match cf with
-      | .cont r => ⌜ inv r ∧ (rel (termination r) (termination x) ∨ willDiverge P) ⌝
-      | .done r => ⌜ willYield r P ⌝,
-    P.2.1, P.2.2.1⟩ ⦄) :
+      | .cont r => ⌜ inv r ∧ (rel (termination r) (termination x) ∨ PostCond.div P) ⌝
+      | .done r => PostCond.okAssertion P r,
+    PostCond.failAssertion P, PostCond.divAssertion P⟩ ⦄) :
   ⦃ ⌜ True ⌝ ⦄ loop body init ⦃ P ⦄ := by
   suffices h : ∀ x, inv x → (wp⟦loop body x⟧ P).down by
     unfold Triple
     intro _
     exact h init h_inv_init
-  by_cases hdiv : (P.2.2.1 ()).down
+  by_cases hdiv : PostCond.div P
   case pos => -- Divergence permitted: use partial-fixpoint induction.
     intro x hinv
     delta loop

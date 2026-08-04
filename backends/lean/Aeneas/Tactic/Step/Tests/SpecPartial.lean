@@ -49,7 +49,7 @@ info: Aeneas.Step.SpecPartialTests.myDiv_partialSpec.step_spec (x y : U32) (h_fa
 
 /--
 info: Aeneas.Step.SpecPartialTests.myDiv_partialSpec.mvcgen_spec (x y : U32) (Q : PostCond U32 postShape)
-  (h_ok : ∀ (r : U32), ↑r = ↑x / ↑y → willYield r Q) (h_fail : ∀ (e : Error), ↑y = 0 → willFail e Q) :
+  (h_ok : ∀ (r : U32), ↑r = ↑x / ↑y → PostCond.ok Q r) (h_fail : ∀ (e : Error), ↑y = 0 → PostCond.fail Q e) :
   ⦃⌜True⌝⦄ myDiv x y ⦃Q⦄
 -/
 #guard_msgs in
@@ -76,8 +76,8 @@ info: Aeneas.Step.SpecPartialTests.myAdd_partialSpec.step_spec (x y : U32) (h_fa
 
 /--
 info: Aeneas.Step.SpecPartialTests.myAdd_partialSpec.mvcgen_spec (x y : U32) (Q : PostCond U32 postShape)
-  (h_ok : ∀ (r : U32), ↑r = ↑x + ↑y → willYield r Q) (h_fail : U32.max < ↑x + ↑y → willFail Error.integerOverflow Q) :
-  ⦃⌜True⌝⦄ myAdd x y ⦃Q⦄
+  (h_ok : ∀ (r : U32), ↑r = ↑x + ↑y → PostCond.ok Q r)
+  (h_fail : U32.max < ↑x + ↑y → PostCond.fail Q Error.integerOverflow) : ⦃⌜True⌝⦄ myAdd x y ⦃Q⦄
 -/
 #guard_msgs in
 #check myAdd_partialSpec.mvcgen_spec
@@ -103,8 +103,9 @@ info: Aeneas.Step.SpecPartialTests.myAddSigned_partialSpec.step_spec (x y : I32)
 
 /--
 info: Aeneas.Step.SpecPartialTests.myAddSigned_partialSpec.mvcgen_spec (x y : I32) (Q : PostCond I32 postShape)
-  (h_ok : ∀ (r : I32), ↑r = ↑x + ↑y → willYield r Q) (h_fail_1 : I32.max < ↑x + ↑y → willFail Error.integerOverflow Q)
-  (h_fail_2 : ↑x + ↑y < I32.min → willFail Error.integerOverflow Q) : ⦃⌜True⌝⦄ myAddSigned x y ⦃Q⦄
+  (h_ok : ∀ (r : I32), ↑r = ↑x + ↑y → PostCond.ok Q r)
+  (h_fail_1 : I32.max < ↑x + ↑y → PostCond.fail Q Error.integerOverflow)
+  (h_fail_2 : ↑x + ↑y < I32.min → PostCond.fail Q Error.integerOverflow) : ⦃⌜True⌝⦄ myAddSigned x y ⦃Q⦄
 -/
 #guard_msgs in
 #check myAddSigned_partialSpec.mvcgen_spec
@@ -129,7 +130,7 @@ info: Aeneas.Step.SpecPartialTests.infiniteLoop_partialSpec.step_spec (h_div : F
 
 /--
 info: Aeneas.Step.SpecPartialTests.infiniteLoop_partialSpec.mvcgen_spec (Q : PostCond Unit postShape)
-  (h_div : willDiverge Q) : ⦃⌜True⌝⦄ infiniteLoop ⦃Q⦄
+  (h_div : PostCond.div Q) : ⦃⌜True⌝⦄ infiniteLoop ⦃Q⦄
 -/
 #guard_msgs in
 #check infiniteLoop_partialSpec.mvcgen_spec
