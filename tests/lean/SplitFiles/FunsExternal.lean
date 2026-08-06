@@ -12,9 +12,6 @@ set_option maxHeartbeats 1000000
 /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
 set_option maxRecDepth 2048
 
-/- You can remove the following line by using the CLI option `-all-computable`: -/
-noncomputable section
-
 /-- Trait declaration: [core::fmt::Write]
     Source: '/rustc/library/core/src/fmt/mod.rs', lines 121:0-121:15
     Name pattern: [core::fmt::Write]

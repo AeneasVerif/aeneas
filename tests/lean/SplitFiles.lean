@@ -5,4 +5,5 @@ import SplitFiles.Layered
 import SplitFiles.Types
 import SplitFiles.Ops
 import SplitFiles.MergePingPong
+import SplitFiles.UsesLayered
 import SplitFiles.Viamacro

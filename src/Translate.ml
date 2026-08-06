@@ -1464,8 +1464,8 @@ let full_extraction_config () : gen_config =
     [AxiomsK_Template] files) when opaque and transparent declarations
     alternate. *)
 let extract_by_file (ctx : gen_ctx) (crate : crate) ~(dest_dir : string)
-    ~(namespace : string) ~(crate_name : string) ~(has_opaque : bool)
-    ~(fg : FileGraph.t) ~(placed : FilePlan.placed_module list) : unit =
+    ~(namespace : string) ~(crate_name : string) ~(fg : FileGraph.t)
+    ~(placed : FilePlan.placed_module list) : unit =
   let open FileGraph in
   let scc_data : bucket SCC.sccs = fg.sccs in
 
@@ -1475,7 +1475,6 @@ let extract_by_file (ctx : gen_ctx) (crate : crate) ~(dest_dir : string)
       SCC.SccId.Map.empty placed
   in
 
-  let noncomputable = has_opaque && not !Config.all_computable in
   let base_config =
     {
       (full_extraction_config ()) with
@@ -1578,11 +1577,10 @@ let extract_by_file (ctx : gen_ctx) (crate : crate) ~(dest_dir : string)
                   custom_msg;
                   custom_imports = [];
                   custom_includes;
-                  (* Templates hold only axioms, so they never need
-                     [noncomputable]; generated layers — external ones
-                     included — get the crate-level flag. *)
-                  noncomputable =
-                    (if layer.is_template then false else noncomputable);
+                  (* Per layer rather than per crate: set iff an axiom is
+                     actually visible from this file (see
+                     {!FilePlan.placed_layer}). *)
+                  noncomputable = layer.noncomputable;
                 }
               in
               (* Create the (possibly nested) directory for the file. *)
@@ -2062,7 +2060,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
         (FilePlan.place_by_file (Lazy.force file_graph) ~crate ~import_prefix
            ~module_root_dir:
              (FilePlan.module_root_dir ~subdir ~full_dest_dir ~crate_name)
-           ~ext)
+           ~ext ~all_computable:!Config.all_computable)
     else None
   in
 
@@ -2084,7 +2082,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
      [placement] is [Some] exactly in [-split-files] mode. *)
   (match placement with
   | Some placed ->
-      extract_by_file ctx crate ~dest_dir ~namespace ~crate_name ~has_opaque
+      extract_by_file ctx crate ~dest_dir ~namespace ~crate_name
         ~fg:(Lazy.force file_graph) ~placed
   | None ->
       if !Config.split_files_legacy then (

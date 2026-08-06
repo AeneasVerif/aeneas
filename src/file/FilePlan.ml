@@ -16,6 +16,11 @@ type placed_layer = {
       (** On-disk path the emitter writes ([_Template] included). *)
   groups : LlbcAst.declaration_group list;
       (** The layer's declaration groups, in charon order. *)
+  noncomputable : bool;
+      (** Whether the file needs Lean's [noncomputable section]: [true] iff an
+          axiom is visible from it: in this layer, in an earlier layer of the
+          same module, or in any module it transitively imports. Always [false]
+          for a template, which holds axioms and no definitions. *)
 }
 
 (** One generated Lean module in [-split-files] mode: a source file, a merged
@@ -131,8 +136,8 @@ let cut_layers (color : 'a -> group_color) (groups : 'a list) :
     (dependency-first) order. Multi-bucket local SCCs are named from their
     member files ({!FileMapping.merged_module_components}). *)
 let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
-    ~(import_prefix : string) ~(module_root_dir : string) ~(ext : string) :
-    placed_module list =
+    ~(import_prefix : string) ~(module_root_dir : string) ~(ext : string)
+    ~(all_computable : bool) : placed_module list =
   let scc_list = SCC.SccId.Map.bindings fg.sccs.sccs in
   let is_builtin = LlbcAstUtils.item_is_builtin crate in
   let is_opaque = LlbcAstUtils.item_is_opaque crate in
@@ -181,6 +186,68 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
                    | Some gs -> Some (g :: gs))
                  acc)
          SCC.SccId.Map.empty crate.declarations)
+  in
+
+  (* Whether a declaration group contributes an axiom to the file it lands in. *)
+  let group_has_axioms (g : LlbcAst.declaration_group) : bool =
+    List.exists
+      (fun id -> (not (is_builtin id)) && is_opaque id)
+      (LlbcAstUtils.declaration_group_to_list g)
+  in
+
+  (* Whether an axiom is visible to a dependent of each SCC. Dependents import a
+     module by its plain name, so they see all of its layers.
+
+     Folded in [scc_list] order, which {!SCC.compute} guarantees is
+     dependency-first, so every dependency is resolved by the time we need it. *)
+  let scc_reaches_axiom : bool SCC.SccId.Map.t =
+    List.fold_left
+      (fun acc (scc_id, _) ->
+        let groups =
+          Option.value (SCC.SccId.Map.find_opt scc_id groups_by_scc) ~default:[]
+        in
+        let from_deps =
+          SCC.SccId.Set.exists
+            (fun dep ->
+              [%silent_unwrap_opt_span] None (SCC.SccId.Map.find_opt dep acc))
+            (Option.value
+               (SCC.SccId.Map.find_opt scc_id fg.sccs.scc_deps)
+               ~default:SCC.SccId.Set.empty)
+        in
+        SCC.SccId.Map.add scc_id
+          (from_deps || List.exists group_has_axioms groups)
+          acc)
+      SCC.SccId.Map.empty scc_list
+  in
+
+  (* Does this SCC's *first* layer already see an axiom through its imports? *)
+  let deps_reach_axiom (scc_id : SCC.SccId.id) : bool =
+    SCC.SccId.Set.exists
+      (fun dep ->
+        [%silent_unwrap_opt_span] None
+          (SCC.SccId.Map.find_opt dep scc_reaches_axiom))
+      (Option.value
+         (SCC.SccId.Map.find_opt scc_id fg.sccs.scc_deps)
+         ~default:SCC.SccId.Set.empty)
+  in
+
+  (* [noncomputable] for each run of a module, in order. Layer k imports layer
+     k-1, so an axiom stays visible once it has appeared: the flag is a running
+     disjunction seeded with what the module's imports already expose. Templates
+     are axiom-only and never need it. *)
+  let runs_noncomputable ~(scc_id : SCC.SccId.id)
+      (runs : (bool * LlbcAst.declaration_group list) list) : bool list =
+    if all_computable then List.map (fun _ -> false) runs
+    else
+      let _, rev =
+        List.fold_left
+          (fun (seen, acc) (is_template, groups) ->
+            let seen = seen || List.exists group_has_axioms groups in
+            (seen, (if is_template then false else seen) :: acc))
+          (deps_reach_axiom scc_id, [])
+          runs
+      in
+      List.rev rev
   in
 
   let file_of_components ~(is_template : bool) (components : string list) :
@@ -254,10 +321,11 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
           Option.value (SCC.SccId.Map.find_opt scc_id groups_by_scc) ~default:[]
         in
         let runs = if is_dropped then [] else cut_layers color groups in
+        let runs_nc = runs_noncomputable ~scc_id runs in
         let aggregator, layers =
-          match runs with
-          | [] -> (None, [])
-          | [ (is_template, groups) ] ->
+          match (runs, runs_nc) with
+          | [], _ -> (None, [])
+          | [ (is_template, groups) ], [ noncomputable ] ->
               (* Uniform opacity: a single file at the plain name (a
                  [_Template] one if the whole module is opaque — the
                  [FunsExternal] convention). *)
@@ -268,12 +336,13 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
                     import_name;
                     filename = file_of_components ~is_template base_components;
                     groups;
+                    noncomputable;
                   };
                 ] )
-          | runs ->
+          | runs, runs_nc ->
               let layers =
                 List.mapi
-                  (fun i (is_template, groups) ->
+                  (fun i ((is_template, groups), noncomputable) ->
                     let components =
                       FileMapping.layer_module_components base_components
                         ~is_template ~index:(i + 1)
@@ -285,8 +354,9 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
                         ^ FileMapping.dotted_module_name components;
                       filename = file_of_components ~is_template components;
                       groups;
+                      noncomputable;
                     })
-                  runs
+                  (List.combine runs runs_nc)
               in
               ( Some (file_of_components ~is_template:false base_components),
                 layers )
