@@ -130,9 +130,11 @@ theorem core.slice.Slice.is_empty_spec {T : Type} (s : Slice T) :
     decide_eq_true_eq]
 
 @[step]
-theorem Slice.index_usize_spec {α : Type u} (v: Slice α) (i: Usize)
-  (hbound : i.val < v.length) :
-  v.index_usize i ⦃ x => x = v.val[i.val] ⦄ := by
+theorem Slice.index_usize_spec {α : Type u} (v: Slice α) (i: Usize) :
+    partialSpec (v.index_usize i)
+      (fun x => ∃ _ : i.val < v.length, x = v.val[i.val])
+      (fun | .arrayOutOfBounds => i.val ≥ v.length | _ => False)
+      False := by
   grind [index_usize]
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =]
@@ -265,12 +267,12 @@ def Slice.update {α : Type u} (v: Slice α) (i: Usize) (x: α) : Result (Slice 
     ok ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
 
 @[step]
-theorem Slice.update_spec {α : Type u} (v: Slice α) (i: Usize) (x : α)
-  (hbound : i.val < v.length) :
-  v.update i x ⦃ nv => nv = v.set i x ⦄ := by
-  simp only [update, set, setAtNat]
-  simp at *
-  simp [*]
+theorem Slice.update_spec {α : Type u} (v: Slice α) (i: Usize) (x : α) :
+    partialSpec (v.update i x)
+      (fun nv => i.val < v.length ∧ nv = v.set i x)
+      (fun | .arrayOutOfBounds => i.val ≥ v.length | _ => False)
+      False := by
+  grind [partialSpec, update, set, setAtNat]
 
 def Slice.index_mut_usize {α : Type u} (v: Slice α) (i: Usize) :
   Result (α × (α → Slice α)) := do
@@ -278,12 +280,14 @@ def Slice.index_mut_usize {α : Type u} (v: Slice α) (i: Usize) :
   ok (x, Slice.set v i)
 
 @[step]
-theorem Slice.index_mut_usize_spec {α : Type u} (v: Slice α) (i: Usize)
-  (hbound : i.val < v.length) :
-  v.index_mut_usize i ⦃ x back => x = v.val[i.val] ∧ back = Slice.set v i ⦄ := by
-  simp only [index_mut_usize, Bind.bind, bind]
-  have ⟨ x, h ⟩ := spec_imp_exists (Slice.index_usize_spec v i hbound)
-  simp [h]
+theorem Slice.index_mut_usize_spec {α : Type u} (v: Slice α) (i: Usize) :
+    partialSpec (v.index_mut_usize i)
+      (uncurry' fun x back => ∃ _ : i.val < v.length, x = v.val[i.val] ∧ back = Slice.set v i)
+      (fun | .arrayOutOfBounds => i.val ≥ v.length | _ => False)
+      False := by
+  have h := index_usize_spec v i
+  simp only [partialSpec, index_mut_usize, Bind.bind, bind, uncurry'] at h ⊢
+  cases hres : v.index_usize i <;> simp_all
 
 @[simp, simp_lists_safe]
 theorem Slice.update_index_eq α [Inhabited α] (x : Slice α) (i : Usize) (h : i.val < x.val.length) :
@@ -300,16 +304,22 @@ def Slice.subslice {α : Type u} (s : Slice α) (r : Range Usize) : Result (Slic
     fail panic
 
 @[step]
-theorem Slice.subslice_spec {α : Type u} [Inhabited α] (s : Slice α) (r : Range Usize)
-  (h0 : r.start.val ≤ r.end.val) (h1 : r.end.val ≤ s.val.length) :
-  subslice s r ⦃ ns => ns.val = s.slice r.start.val r.end.val ∧
-  (∀ i, i + r.start.val < r.end.val → ns[i]! = s[r.start.val + i]!) ⦄
+theorem Slice.subslice_spec {α : Type u} [Inhabited α] (s : Slice α) (r : Range Usize) :
+    partialSpec (subslice s r)
+      (fun ns => ns.val = s.slice r.start.val r.end.val ∧
+        ∃ _ : r.start.val ≤ r.end.val, ∃ _ : r.end.val ≤ s.val.length,
+        ∃ _ : ns.val.length = r.end.val - r.start.val,
+        (∀ i (_ : i + r.start.val < r.end.val), ns[i] = s[r.start.val + i]))
+      (fun | .panic => (r.start.val > r.end.val ∨ r.end.val > s.val.length) | _ => False)
+      False
   := by
-  simp_all only [subslice, length, and_self, ite_true, slice, spec_ok, true_and]
-  intro i _
-  have := List.getElem!_slice r.start.val r.end.val i s.val (by scalar_tac)
-  simp only [List.getElem!_eq_getElem?_getD, getElem!_Nat_eq] at *
-  apply this
+  unfold subslice
+  split
+  · simp only [slice, partialSpec_ok, true_and]
+    refine ⟨by grind, by grind, by grind, ?_⟩
+    intro i _
+    grind [List.getElem!_slice r.start.val r.end.val i s.val (by scalar_tac)]
+  · grind
 
 def Slice.update_subslice {α : Type u} (s : Slice α) (r : Range Usize) (ss : Slice α) : Result (Slice α) :=
   if h: r.start.val ≤ r.end.val ∧ r.end.val ≤ s.length ∧ ss.val.length = r.end.val - r.start.val then
@@ -725,16 +735,18 @@ def core.slice.Slice.split_at_mut {T : Type} (s : Slice T) (n : Usize) :
 
 /-- **Spec theorem for `core::slice::{[@T]}::split_at`** -/
 @[step]
-theorem core.slice.Slice.split_at.spec {T : Type} (s : Slice T) (n : Usize)
-    (h : n ≤ s.length) :
-    core.slice.Slice.split_at s n
-      ⦃ (s0 : Slice T) (s1 : Slice T) =>
-        s0.length = n.val ∧ s1.length = s.length - n.val ∧
-        s0.val = s.val.take n.val ∧ s1.val = s.val.drop n.val ⦄ := by
+theorem core.slice.Slice.split_at.spec {T : Type} (s : Slice T) (n : Usize) :
+    partialSpec (core.slice.Slice.split_at s n)
+      (uncurry' fun (s0 : Slice T) (s1 : Slice T) =>
+        s0.length = n.val ∧ s1.length + n.val = s.length ∧
+        s0.val = s.val.take n.val ∧ s1.val = s.val.drop n.val)
+      (fun | .panic => n > s.length | _ => False)
+      False := by
   unfold core.slice.Slice.split_at
-  simp only [h, ↓reduceDIte, WP.spec_ok, uncurry'_pair]
-  refine ⟨?_, ?_, ?_, ?_⟩ <;>
-  simp only [Slice.length, List.splitAt_eq, List.length_take, inf_eq_left, List.length_drop, *]
+  split <;> simp only [partialSpec, uncurry'_pair]
+  · refine ⟨?_, ?_, ?_, ?_⟩ <;>
+    simp [Slice.length, List.splitAt_eq, List.length_take, List.length_drop, *]
+  · scalar_tac
 
 /-- **Spec theorem for `core::slice::{[@T]}::split_at_mut`** -/
 -- TODO: ideally the postcondition binder would decompose the result pair as
@@ -743,27 +755,29 @@ theorem core.slice.Slice.split_at.spec {T : Type} (s : Slice T) (n : Usize)
 -- `((Slice T × Slice T) × BackFn)` return type cannot be split into three
 -- separate binders. We keep projectors for now.
 @[step]
-theorem core.slice.Slice.split_at_mut.spec {T : Type} (s : Slice T) (n : Usize)
-    (h : n ≤ s.length) :
-    core.slice.Slice.split_at_mut s n
-      ⦃ (res : Slice T × Slice T) (back : (Slice T × Slice T) → Slice T) =>
-        res.1.length = n.val ∧ res.2.length = s.length - n.val ∧
+theorem core.slice.Slice.split_at_mut.spec {T : Type} (s : Slice T) (n : Usize) :
+    partialSpec (core.slice.Slice.split_at_mut s n)
+      (uncurry' fun (res : Slice T × Slice T) (back : (Slice T × Slice T) → Slice T) =>
+        res.1.length = n.val ∧ res.2.length + n.val = s.length ∧
         res.1.val = s.val.take n.val ∧ res.2.val = s.val.drop n.val ∧
-        (∀ s0' s1', s0'.length = n.val → s1'.length = s.length - n.val →
+        (∀ s0' s1', s0'.length = n.val → s1'.length + n.val = s.length →
           (back (s0', s1')).val = s0'.val ++ s1'.val ∧
-          (back (s0', s1')).length = s.length) ⦄ := by
+          (back (s0', s1')).length = s.length))
+      (fun | .panic => n.val > s.length | _ => False)
+      False := by
   unfold core.slice.Slice.split_at_mut
-  simp only [h, ↓reduceDIte, WP.spec_ok, uncurry'_pair]
-  refine ⟨?_, ?_, ?_, ?_, fun s0' s1' hs0' hs1' => ?_⟩
-  · simp [Slice.length, List.splitAt_eq]; scalar_tac
-  · simp [Slice.length, List.splitAt_eq]
-  · simp [List.splitAt_eq]
-  · simp [List.splitAt_eq]
-  · split_ifs with hcond
-    · exact ⟨rfl, by simp [Slice.length, List.length_append]; scalar_tac⟩
-    · exfalso; apply hcond
-      simp [Slice.length, List.splitAt_eq] at *
-      exact ⟨by scalar_tac, by scalar_tac⟩
+  split <;> simp only [partialSpec, uncurry'_pair]
+  · refine ⟨?_, ?_, ?_, ?_, fun s0' s1' hs0' hs1' => ?_⟩
+    · simp [Slice.length, List.splitAt_eq]; scalar_tac
+    · simp [Slice.length, List.splitAt_eq]; scalar_tac
+    · simp [List.splitAt_eq]
+    · simp [List.splitAt_eq]
+    · split_ifs with hcond
+      · exact ⟨rfl, by simp [Slice.length, List.length_append]; scalar_tac⟩
+      · exfalso; apply hcond
+        simp [Slice.length, List.splitAt_eq] at *
+        exact ⟨by scalar_tac, by scalar_tac⟩
+  · scalar_tac
 
 @[rust_fun "core::slice::{[@T]}::swap"]
 def core.slice.Slice.swap {T : Type} (s : Slice T) (a b : Usize) : Result (Slice T) := do
@@ -781,26 +795,18 @@ theorem core.slice.Slice.swap_spec {T : Type} [Inhabited T] (s : Slice T) (a b :
       s'.val[b.val]! = s.val[a.val]! ∧
       ∀ i, i ≠ a.val → i ≠ b.val → s'.val[i]! = s.val[i]! ⦄ := by
   simp only [core.slice.Slice.swap, Bind.bind, bind]
-  have ⟨av, hav⟩ := spec_imp_exists (Slice.index_usize_spec s a ha)
+  have hav : Slice.index_usize s a = ok s.val[a.val] := by grind [Slice.index_usize]
   simp only [hav]
-  have ⟨bv, hbv⟩ := spec_imp_exists (Slice.index_usize_spec s b hb)
+  have hbv : Slice.index_usize s b = ok s.val[b.val] := by grind [Slice.index_usize]
   simp only [hbv]
-  have ⟨s1, hs1⟩ := spec_imp_exists (Slice.update_spec s a (s.val[b.val]) ha)
+  have ⟨s1, hs1⟩ := spec_imp_exists (spec_of_partialSpec (Slice.update_spec s a (s.val[b.val]))
+    (by grind) (by simp))
   simp only [hs1]
-  have hlen1 : b.val < s1.length := by rw [hs1.2, Slice.set_length]; exact hb
-  have ⟨s', hs'⟩ := spec_imp_exists (Slice.update_spec s1 b (s.val[a.val]) hlen1)
-  rw [hs1.2] at hs'
-  simp only [hs', spec_ok]
-  refine ⟨?_, ?_, ?_, ?_⟩
-  · simp only [Slice.length, Slice.set_val_eq, List.length_set]
-  · by_cases hab : (↑a : ℕ) = ↑b
-    · simp only [Slice.set_val_eq, hab]; grind
-    · simp only [Slice.set_val_eq]
-      grind
-  · simp only [Slice.set_val_eq]; grind
-  · intro i hia hib
-    simp only [Slice.set_val_eq]
-    grind
+  have hlen1 : b.val < (s.set a (s.val[b.val])).val.length := by
+    rw [Slice.set_val_eq, List.length_set]; simpa [Slice.length] using hb
+  have ⟨s', hs'⟩ := spec_imp_exists (spec_of_partialSpec
+    (Slice.update_spec (s.set a (s.val)[b.val]) b (s.val[a.val])) (by grind) (by simp))
+  grind
 
 @[simp, step_simps]
 theorem Slice.index_mut_SliceIndexRangeUsizeSliceInst (s : Slice α) (r : core.ops.range.Range Usize) :
