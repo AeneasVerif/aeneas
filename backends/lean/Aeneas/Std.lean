@@ -16,3 +16,4 @@ import Aeneas.Std.Vec
 import Aeneas.Std.VecIter
 import Aeneas.Data.Tuples
 import Aeneas.Std.RangeIter
+import Aeneas.Std.TraitInstTests
