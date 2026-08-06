@@ -1957,9 +1957,9 @@ namespace Test
       massert (x < 100#u32)
       massert (y < 100#u32)) ⦃ _ => True ⦄
     := by
-    let* ⟨⟩ ← massert_spec
+    let* ⟨⟩ ← massert_spec.step_spec
     extract_goal0
-    let* ⟨⟩ ← massert_spec
+    let* ⟨⟩ ← massert_spec.step_spec
 
   set_option linter.unusedTactic false in
   /--

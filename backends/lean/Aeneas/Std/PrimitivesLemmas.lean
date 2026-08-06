@@ -7,9 +7,13 @@ namespace Aeneas.Std
 open Result WP
 
 @[step]
-theorem massert_spec (b : Prop) [Decidable b] (h : b) :
-  massert b ⦃ _ => b ⦄ := by
-  simp [massert, *]
+theorem massert_spec (b : Prop) [Decidable b] :
+    partialSpec (massert b)
+      (fun _ => b)
+      (fun | .assertionFailure => ¬ b | _ => False)
+      False := by
+  unfold massert
+  split <;> simp_all [partialSpec]
 
 @[simp, step_pre_simps, bvify]
 theorem massert_ok (b : Prop) [Decidable b] : massert b = ok () ↔ b := by simp [massert]
