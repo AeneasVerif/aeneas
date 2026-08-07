@@ -39,6 +39,85 @@ def qstar {α : Type} (Q : Postcondition α) (H : HProp) :
     Postcondition α :=
   fun value => hstar (Q value) H
 
+theorem hstar_assoc (H₁ H₂ H₃ : HProp) :
+    hequiv (hstar (hstar H₁ H₂) H₃) (hstar H₁ (hstar H₂ H₃)) := by
+  intro h
+  constructor
+  · rintro ⟨h₁₂, h₃, hDisjoint₁₂₃, hEq, hStar₁₂, hH₃⟩
+    rcases hStar₁₂ with ⟨h₁, h₂, hDisjoint₁₂, hEq₁₂, hH₁, hH₂⟩
+    have hDisjoint₁₂₃' : Finmap.Disjoint (h₁ ∪ h₂) h₃ := by
+      simpa [hEq₁₂] using hDisjoint₁₂₃
+    have ⟨hDisjoint₁₃, hDisjoint₂₃⟩ :=
+      (Finmap.disjoint_union_left h₁ h₂ h₃).mp hDisjoint₁₂₃'
+    refine ⟨h₁, h₂ ∪ h₃, ?_, ?_, hH₁, ?_⟩
+    · exact (Finmap.disjoint_union_right h₁ h₂ h₃).mpr
+        ⟨hDisjoint₁₂, hDisjoint₁₃⟩
+    · calc
+        h = h₁₂ ∪ h₃ := hEq
+        _ = (h₁ ∪ h₂) ∪ h₃ := congrArg (· ∪ h₃) hEq₁₂
+        _ = h₁ ∪ (h₂ ∪ h₃) := Finmap.union_assoc
+    · exact ⟨h₂, h₃, hDisjoint₂₃, rfl, hH₂, hH₃⟩
+  · rintro ⟨h₁, h₂₃, hDisjoint₁₂₃, hEq, hH₁, hStar₂₃⟩
+    rcases hStar₂₃ with ⟨h₂, h₃, hDisjoint₂₃, hEq₂₃, hH₂, hH₃⟩
+    have hDisjoint₁₂₃' : Finmap.Disjoint h₁ (h₂ ∪ h₃) := by
+      simpa [hEq₂₃] using hDisjoint₁₂₃
+    have ⟨hDisjoint₁₂, hDisjoint₁₃⟩ :=
+      (Finmap.disjoint_union_right h₁ h₂ h₃).mp hDisjoint₁₂₃'
+    refine ⟨h₁ ∪ h₂, h₃, ?_, ?_, ?_, hH₃⟩
+    · exact (Finmap.disjoint_union_left h₁ h₂ h₃).mpr
+        ⟨hDisjoint₁₃, hDisjoint₂₃⟩
+    · calc
+        h = h₁ ∪ h₂₃ := hEq
+        _ = h₁ ∪ (h₂ ∪ h₃) := congrArg (h₁ ∪ ·) hEq₂₃
+        _ = (h₁ ∪ h₂) ∪ h₃ := Finmap.union_assoc.symm
+    · exact ⟨h₁, h₂, hDisjoint₁₂, rfl, hH₁, hH₂⟩
+
+theorem hstar_comm (H₁ H₂ : HProp) :
+    hequiv (hstar H₁ H₂) (hstar H₂ H₁) := by
+  intro h
+  constructor
+  · rintro ⟨h₁, h₂, hDisjoint, hEq, hH₁, hH₂⟩
+    exact ⟨h₂, h₁, Finmap.Disjoint.symm h₁ h₂ hDisjoint,
+      hEq.trans (Finmap.union_comm_of_disjoint hDisjoint), hH₂, hH₁⟩
+  · rintro ⟨h₂, h₁, hDisjoint, hEq, hH₂, hH₁⟩
+    exact ⟨h₁, h₂, Finmap.Disjoint.symm h₂ h₁ hDisjoint,
+      hEq.trans (Finmap.union_comm_of_disjoint hDisjoint), hH₁, hH₂⟩
+
+theorem hstar_hempty_l (H : HProp) :
+    hequiv (hstar hempty H) H := by
+  intro h
+  constructor
+  · rintro ⟨h₁, h₂, _, hEq, hEmpty, hH⟩
+    change h₁ = empty at hEmpty
+    subst h₁
+    simp only [empty, Finmap.empty_union] at hEq
+    subst h
+    exact hH
+  · intro hH
+    exact ⟨∅, h, Finmap.disjoint_empty h, by simp, rfl, hH⟩
+
+theorem hstar_hexists {α : Sort _} (J : α → HProp) (H : HProp) :
+    hequiv (hstar (hexists J) H) (hexists fun x => hstar (J x) H) := by
+  intro h
+  constructor
+  · rintro ⟨h₁, h₂, hDisjoint, hEq, ⟨x, hJ⟩, hH⟩
+    exact ⟨x, h₁, h₂, hDisjoint, hEq, hJ, hH⟩
+  · rintro ⟨x, h₁, h₂, hDisjoint, hEq, hJ, hH⟩
+    exact ⟨h₁, h₂, hDisjoint, hEq, ⟨x, hJ⟩, hH⟩
+
+theorem hstar_hpure_l (P : Prop) (H : HProp) :
+    hequiv (hstar (hpure P) H) (fun h => P ∧ H h) := by
+  intro h
+  constructor
+  · rintro ⟨h₁, h₂, _, hEq, ⟨hP, hEmpty⟩, hH⟩
+    change h₁ = empty at hEmpty
+    subst h₁
+    simp only [empty, Finmap.empty_union] at hEq
+    subst h
+    exact ⟨hP, hH⟩
+  · rintro ⟨hP, hH⟩
+    exact ⟨∅, h, Finmap.disjoint_empty h, by simp, ⟨hP, rfl⟩, hH⟩
+
 
 namespace SepLogic
 
