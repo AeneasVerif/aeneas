@@ -43,7 +43,13 @@ def closedByAllocations (witnesses : Set Witness) : St α → Prop
     | .Update r _ =>
       ⟨_, r⟩ ∈ witnesses ∧ closedByAllocations witnesses (next ())
     | .Free r =>
-      ⟨_, r⟩ ∈ witnesses ∧ closedByAllocations witnesses (next ())
+      ⟨_, r⟩ ∈ witnesses ∧
+        closedByAllocations
+          (fun witness =>
+            witness ∈ witnesses ∧
+              match witness with
+              | ⟨_, current⟩ => ¬ Aeneas.SLPoC.refEq current r)
+          (next ())
 
 def Witness.holds (witness : Witness) (h : Heap) : Prop :=
   match witness with
@@ -106,12 +112,17 @@ def runWithWitnesses : (m : St α) →
     | some h =>
       let nextState : HeapWithWitnesses := {
         heap := h
-        witnesses := state.witnesses
+        witnesses := fun witness =>
+          witness ∈ state.witnesses ∧
+            match witness with
+            | ⟨_, current⟩ => ¬ Aeneas.SLPoC.refEq current r
         holds := by
           intro current hCurrent
           rcases current with ⟨γ, current⟩
-          exact Aeneas.SLPoC.contains_free?_of_eq_some r state.heap
-            hContains (state.holds ⟨γ, current⟩ hCurrent) hFree
+          exact Aeneas.SLPoC.contains_free?_of_eq_some_of_refEq_ne
+            r state.heap hContains
+            (state.holds ⟨γ, current⟩ hCurrent.left)
+            hCurrent.right hFree
       }
       runWithWitnesses (next ()) nextState hBefore.right
     | none => none
