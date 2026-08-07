@@ -6,8 +6,7 @@ namespace Aeneas.SLPoC
    counter, not a concrete address in machine memory. -/
 abbrev AllocId := Nat
 
-/- Cells store their Lean type, whether they have been freed, and their value.
-   Keeping freed cells records invalid locations without reusing them. -/
+/- Cells store their Lean type, liveness flag, and value. -/
 abbrev Cell := Σ α : Type, Bool × α
 
 abbrev Heap := Finmap fun _ : AllocId => Cell
@@ -66,10 +65,8 @@ def update {α : Type} (r : ref α) (value : α) (h : Heap)
   h.insert r.allocId ⟨α, false, value⟩
 
 def free {α : Type} (r : ref α) (h : Heap)
-    (hLive : live h r) : Heap :=
-  match hlookup : h.lookup r.allocId with
-  | none => by simp [live, hlookup] at hLive
-  | some ⟨β, _, value⟩ => h.insert r.allocId ⟨β, true, value⟩
+    (_ : live h r) : Heap :=
+  h.erase r.allocId
 
 def read? {α : Type} (r : ref α) (h : Heap)
     (hContains : contains h r) : Option α :=
@@ -95,10 +92,10 @@ def update? {α : Type} (r : ref α) (value : α)
 def free? {α : Type} (r : ref α) (h : Heap) : Option Heap :=
   match h.lookup r.allocId with
   | none => none
-  | some ⟨β, freed, value⟩ =>
+  | some ⟨_, freed, _⟩ =>
     match freed with
     | true => none
-    | false => some (h.insert r.allocId ⟨β, true, value⟩)
+    | false => some (h.erase r.allocId)
 
 theorem contains_refEq {α β : Type} {h : Heap}
     {r₁ : ref α} {r₂ : ref β} (hLoc : refEq r₁ r₂)
@@ -160,28 +157,13 @@ theorem contains_update {α β : Type} (r : ref α) (value : α) (h : Heap)
     rw [Finmap.lookup_insert_of_ne _ hEq]
     exact hContains
 
-theorem contains_free {α β : Type} (r : ref α) (h : Heap)
-    (hLive : live h r) {r' : ref β} (hContains : contains h r') :
+theorem contains_free_of_refEq_ne {α β : Type} (r : ref α) (h : Heap)
+    (hLive : live h r) {r' : ref β} (hContains : contains h r')
+    (hNe : ¬ refEq r' r) :
     contains (free r h hLive) r' := by
-  unfold free
-  split
-  · contradiction
-  · rename_i γ freed value hLookup
-    have hCell : freed = false ∧ γ = α := by
-      simpa [live, hLookup] using hLive
-    have hType : γ = α := hCell.right
-    subst γ
-    have hContainsR : contains h r := by simp [contains, hLookup]
-    by_cases hEq : refEq r' r
-    · have hTypes : β = α := contains_refEq hEq hContains hContainsR
-      unfold refEq at hEq
-      unfold contains
-      rw [hEq, Finmap.lookup_insert]
-      exact hTypes.symm
-    · unfold refEq at hEq
-      unfold contains
-      rw [Finmap.lookup_insert_of_ne _ hEq]
-      exact hContains
+  unfold free contains refEq at *
+  rw [Finmap.lookup_erase_ne hNe]
+  exact hContains
 
 theorem contains_update?_of_eq_some {α β : Type} (r : ref α)
     (value : α) (h : Heap) {h' : Heap} {r' : ref β}
@@ -202,9 +184,10 @@ theorem contains_update?_of_eq_some {α β : Type} (r : ref α)
         exact contains_update r value h hLive hContains
       · simp [hLookup] at hUpdate
 
-theorem contains_free?_of_eq_some {α β : Type} (r : ref α)
+theorem contains_free?_of_eq_some_of_refEq_ne {α β : Type} (r : ref α)
     (h : Heap) {h' : Heap} {r' : ref β}
     (hContainsR : contains h r) (hContains : contains h r')
+    (hNe : ¬ refEq r' r)
     (hFree : free? r h = some h') :
     contains h' r' := by
   unfold free? at hFree
@@ -218,23 +201,7 @@ theorem contains_free?_of_eq_some {α β : Type} (r : ref α)
         have hLive : live h r := by
           simp [live, hLookup]
           simpa [contains, hLookup] using hContainsR
-        have hFreeEq :
-            free r h hLive = h.insert r.allocId ⟨γ, true, value⟩ := by
-          unfold free
-          split
-          · rename_i hLookup'
-            rw [hLookup] at hLookup'
-            contradiction
-          · rename_i δ freed' value' hLookup'
-            have hCells :
-                (⟨γ, false, value⟩ : Cell) =
-                  ⟨δ, freed', value'⟩ := by
-              apply Option.some.inj
-              exact hLookup.symm.trans hLookup'
-            cases hCells
-            rfl
-        rw [← hFreeEq]
-        exact contains_free r h hLive hContains
+        exact contains_free_of_refEq_ne r h hLive hContains hNe
       · simp [hLookup] at hFree
 
 
@@ -330,25 +297,12 @@ theorem disjoint_free_left {α : Type} {r : ref α}
     {h₁ h₂ : Heap} (hDisjoint : Finmap.Disjoint h₁ h₂)
     (hLive : live h₁ r) :
     Finmap.Disjoint (free r h₁ hLive) h₂ := by
-  have hUnallocated : unallocated h₂ r := by
-    intro hMem₂
-    unfold live at hLive
-    split at hLive
-    · contradiction
-    · rename_i cell hLookup
-      exact hDisjoint r.allocId
-        (Finmap.mem_of_lookup_eq_some hLookup) hMem₂
-  unfold free
-  split
-  · contradiction
-  · intro allocationId hMem₁ hMem₂
-    rw [Finmap.mem_insert] at hMem₁
-    rcases hMem₁ with hEq | hMem₁
-    · exact hUnallocated (hEq ▸ hMem₂)
-    · exact hDisjoint allocationId hMem₁ hMem₂
+  intro allocationId hMem₁ hMem₂
+  exact hDisjoint allocationId (Finmap.mem_erase.mp hMem₁).right hMem₂
 
 theorem free_union_left {α : Type} {h₁ h₂ : Heap}
-    (r : ref α) (hLive : live h₁ r) :
+    (r : ref α) (hDisjoint : Finmap.Disjoint h₁ h₂)
+    (hLive : live h₁ r) :
     free r (h₁ ∪ h₂) (live_union_left hLive) =
       free r h₁ hLive ∪ h₂ := by
   have hMem : r.allocId ∈ h₁ := by
@@ -357,22 +311,78 @@ theorem free_union_left {α : Type} {h₁ h₂ : Heap}
     · contradiction
     · rename_i cell hLookup
       exact Finmap.mem_of_lookup_eq_some hLookup
+  have hNotMem : r.allocId ∉ h₂ :=
+    fun hMem₂ => hDisjoint r.allocId hMem hMem₂
   unfold free
+  apply Finmap.ext_lookup
+  intro allocationId
+  by_cases hEq : allocationId = r.allocId
+  · subst allocationId
+    rw [Finmap.lookup_erase, Finmap.lookup_union_right
+      Finmap.notMem_erase_self]
+    exact Finmap.lookup_eq_none.mpr hNotMem |>.symm
+  · rw [Finmap.lookup_erase_ne hEq]
+    by_cases hMem₁ : allocationId ∈ h₁
+    · rw [Finmap.lookup_union_left hMem₁,
+        Finmap.lookup_union_left (Finmap.mem_erase.mpr ⟨hEq, hMem₁⟩),
+        Finmap.lookup_erase_ne hEq]
+    · rw [Finmap.lookup_union_right hMem₁,
+        Finmap.lookup_union_right
+          (fun hMem => hMem₁ (Finmap.mem_erase.mp hMem).right)]
+
+theorem fresh_empty_eq_singleton {α : Type} {r : ref α} {value : α}
+    {h : Heap} (hFresh : fresh empty r value h) :
+    h = singleton r value := by
+  rcases hFresh with ⟨_, rfl⟩
+  apply Finmap.ext_lookup
+  intro allocationId
+  by_cases hEq : allocationId = r.allocId
+  · subst allocationId
+    simp [empty, singleton]
+  · rw [Finmap.lookup_insert_of_ne _ hEq]
+    symm
+    apply Finmap.lookup_eq_none.mpr
+    change allocationId ∉
+      Finmap.singleton r.allocId ⟨α, false, value⟩
+    rwa [Finmap.mem_singleton]
+
+theorem live_singleton {α : Type} (r : ref α) (value : α) :
+    live (singleton r value) r := by
+  simp [live, singleton]
+
+theorem read_singleton {α : Type} (r : ref α) (value : α)
+    (hLive : live (singleton r value) r) :
+    read r (singleton r value) hLive = value := by
+  unfold read
   split
   · rename_i hLookup
-    have hLiveUnion := live_union_left (h₂ := h₂) hLive
-    simp [live, hLookup] at hLiveUnion
-  · rename_i β freed value hLookup
-    split
-    · rename_i hLookup₁
-      simp [live, hLookup₁] at hLive
-    · rename_i β₁ freed₁ value₁ hLookup₁
-      have hCells :
-          (⟨β, freed, value⟩ : Cell) = ⟨β₁, freed₁, value₁⟩ := by
-        apply Option.some.inj
-        exact hLookup.symm.trans
-          ((Finmap.lookup_union_left hMem).trans hLookup₁)
-      cases hCells
-      exact Finmap.insert_union
+    unfold singleton at hLookup
+    rw [Finmap.lookup_singleton_eq] at hLookup
+    contradiction
+  · rename_i β freed stored hLookup
+    unfold singleton at hLookup
+    rw [Finmap.lookup_singleton_eq] at hLookup
+    cases hLookup
+    rfl
+
+theorem update_singleton {α : Type} (r : ref α)
+    (oldValue newValue : α) (hLive : live (singleton r oldValue) r) :
+    update r newValue (singleton r oldValue) hLive =
+      singleton r newValue := by
+  simp [update, singleton]
+
+theorem free_singleton {α : Type} (r : ref α) (value : α)
+    (hLive : live (singleton r value) r) :
+    free r (singleton r value) hLive = empty := by
+  unfold free
+  apply Finmap.ext_lookup
+  intro allocationId
+  by_cases hEq : allocationId = r.allocId
+  · subst allocationId
+    simp [empty]
+  · rw [Finmap.lookup_erase_ne hEq]
+    simp only [empty, Finmap.lookup_empty]
+    apply Finmap.lookup_eq_none.mpr
+    simpa [singleton, Finmap.mem_singleton] using hEq
 
 end Aeneas.SLPoC
