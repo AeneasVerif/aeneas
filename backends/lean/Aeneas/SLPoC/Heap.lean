@@ -13,28 +13,28 @@ abbrev Heap := Finmap fun _ : AllocId => Cell
 
 def empty : Heap := ∅
 
-def ref (_ : Type) := AllocId
+def Ref (_ : Type) := AllocId
 
-private def ref.allocId {α : Type} (r : ref α) : AllocId := r
+private def Ref.allocId {α : Type} (r : Ref α) : AllocId := r
 
-def singleton {α : Type} (r : ref α) (value : α) : Heap :=
+def singleton {α : Type} (r : Ref α) (value : α) : Heap :=
   Finmap.singleton r.allocId ⟨α, value⟩
 
-def unallocated {α : Type} (h : Heap) (r : ref α) : Prop :=
+def unallocated {α : Type} (h : Heap) (r : Ref α) : Prop :=
   r.allocId ∉ h
 
-def fresh {α : Type} (h : Heap) (r : ref α) (value : α)
+def fresh {α : Type} (h : Heap) (r : Ref α) (value : α)
     (h' : Heap) : Prop :=
   unallocated h r ∧ h' = h.insert r.allocId ⟨α, value⟩
 
-def contains {α : Type} (h : Heap) (r : ref α) : Prop :=
+def contains {α : Type} (h : Heap) (r : Ref α) : Prop :=
   match h.lookup r.allocId with
   | none => False
   | some ⟨β, _⟩ => β = α
 
 theorem exists_fresh {α : Type} (value : α) (h : Heap) :
     ∃ r h', fresh h r value h' := by
-  let r : ref α := h.keys.sup id + 1
+  let r : Ref α := h.keys.sup id + 1
   let h' := h.insert r.allocId ⟨α, value⟩
   refine ⟨r, h', ?_, rfl⟩
   intro hMem
@@ -44,7 +44,7 @@ theorem exists_fresh {α : Type} (value : α) (h : Heap) :
     Finset.le_sup (f := fun x : Nat => x) hMemKeys
   exact Nat.not_succ_le_self _ hLe
 
-def read {α : Type} (r : ref α) (h : Heap)
+def read {α : Type} (r : Ref α) (h : Heap)
     (hContains : contains h r) : α :=
   match hlookup : h.lookup r.allocId with
   | none => by simp [contains, hlookup] at hContains
@@ -53,15 +53,15 @@ def read {α : Type} (r : ref α) (h : Heap)
         simpa [contains, hlookup] using hContains
       exact htype ▸ value
 
-def update {α : Type} (r : ref α) (value : α) (h : Heap)
+def update {α : Type} (r : Ref α) (value : α) (h : Heap)
     (_ : contains h r) : Heap :=
   h.insert r.allocId ⟨α, value⟩
 
-def free {α : Type} (r : ref α) (h : Heap)
+def free {α : Type} (r : Ref α) (h : Heap)
     (_ : contains h r) : Heap :=
   h.erase r.allocId
 
-theorem contains_union_left {α : Type} {h₁ h₂ : Heap} {r : ref α}
+theorem contains_union_left {α : Type} {h₁ h₂ : Heap} {r : Ref α}
     (hContains : contains h₁ r) : contains (h₁ ∪ h₂) r := by
   have hMem : r.allocId ∈ h₁ := by
     unfold contains at hContains
@@ -73,7 +73,7 @@ theorem contains_union_left {α : Type} {h₁ h₂ : Heap} {r : ref α}
   rw [Finmap.lookup_union_left hMem]
   exact hContains
 
-theorem read_union_left {α : Type} {h₁ h₂ : Heap} {r : ref α}
+theorem read_union_left {α : Type} {h₁ h₂ : Heap} {r : Ref α}
     (hContains : contains h₁ r) :
     read r (h₁ ∪ h₂) (contains_union_left hContains) =
       read r h₁ hContains := by
@@ -102,12 +102,12 @@ theorem read_union_left {α : Type} {h₁ h₂ : Heap} {r : ref α}
       rfl
 
 theorem update_union_left {α : Type} {h₁ h₂ : Heap}
-    (r : ref α) (value : α) (hContains : contains h₁ r) :
+    (r : Ref α) (value : α) (hContains : contains h₁ r) :
     update r value (h₁ ∪ h₂) (contains_union_left hContains) =
       update r value h₁ hContains ∪ h₂ := by
   exact Finmap.insert_union
 
-theorem fresh_frame {α : Type} {r : ref α} {value : α}
+theorem fresh_frame {α : Type} {r : Ref α} {value : α}
     {h₁ h₂ h : Heap} (hDisjoint : Finmap.Disjoint h₁ h₂)
     (hFresh : fresh (h₁ ∪ h₂) r value h) :
     ∃ h₁',
@@ -131,7 +131,7 @@ theorem fresh_frame {α : Type} {r : ref α} {value : α}
     · exact hDisjoint allocationId hMem₁ hMem₂
   · exact Finmap.insert_union
 
-theorem disjoint_update_left {α : Type} {r : ref α} {value : α}
+theorem disjoint_update_left {α : Type} {r : Ref α} {value : α}
     {h₁ h₂ : Heap} (hDisjoint : Finmap.Disjoint h₁ h₂)
     (hContains : contains h₁ r) :
     Finmap.Disjoint (update r value h₁ hContains) h₂ := by
@@ -150,7 +150,7 @@ theorem disjoint_update_left {α : Type} {r : ref α} {value : α}
   · exact hUnallocated (hEq ▸ hMem₂)
   · exact hDisjoint allocationId hMem₁ hMem₂
 
-theorem disjoint_free_left {α : Type} {r : ref α}
+theorem disjoint_free_left {α : Type} {r : Ref α}
     {h₁ h₂ : Heap} (hDisjoint : Finmap.Disjoint h₁ h₂)
     (hContains : contains h₁ r) :
     Finmap.Disjoint (free r h₁ hContains) h₂ := by
@@ -158,7 +158,7 @@ theorem disjoint_free_left {α : Type} {r : ref α}
   exact hDisjoint allocationId (Finmap.mem_erase.mp hMem₁).right hMem₂
 
 theorem free_union_left {α : Type} {h₁ h₂ : Heap}
-    (r : ref α) (hDisjoint : Finmap.Disjoint h₁ h₂)
+    (r : Ref α) (hDisjoint : Finmap.Disjoint h₁ h₂)
     (hContains : contains h₁ r) :
     free r (h₁ ∪ h₂) (contains_union_left hContains) =
       free r h₁ hContains ∪ h₂ := by
@@ -187,7 +187,7 @@ theorem free_union_left {α : Type} {h₁ h₂ : Heap}
         Finmap.lookup_union_right
           (fun hMem => hMem₁ (Finmap.mem_erase.mp hMem).right)]
 
-theorem fresh_empty_eq_singleton {α : Type} {r : ref α} {value : α}
+theorem fresh_empty_eq_singleton {α : Type} {r : Ref α} {value : α}
     {h : Heap} (hFresh : fresh empty r value h) :
     h = singleton r value := by
   rcases hFresh with ⟨_, rfl⟩
@@ -203,11 +203,11 @@ theorem fresh_empty_eq_singleton {α : Type} {r : ref α} {value : α}
       Finmap.singleton r.allocId ⟨α, value⟩
     rwa [Finmap.mem_singleton]
 
-theorem contains_singleton {α : Type} (r : ref α) (value : α) :
+theorem contains_singleton {α : Type} (r : Ref α) (value : α) :
     contains (singleton r value) r := by
   simp [contains, singleton]
 
-theorem read_singleton {α : Type} (r : ref α) (value : α)
+theorem read_singleton {α : Type} (r : Ref α) (value : α)
     (hContains : contains (singleton r value) r) :
     read r (singleton r value) hContains = value := by
   unfold read
@@ -222,14 +222,14 @@ theorem read_singleton {α : Type} (r : ref α) (value : α)
     cases hLookup
     rfl
 
-theorem update_singleton {α : Type} (r : ref α)
+theorem update_singleton {α : Type} (r : Ref α)
     (oldValue newValue : α)
     (hContains : contains (singleton r oldValue) r) :
     update r newValue (singleton r oldValue) hContains =
       singleton r newValue := by
   simp [update, singleton]
 
-theorem free_singleton {α : Type} (r : ref α) (value : α)
+theorem free_singleton {α : Type} (r : Ref α) (value : α)
     (hContains : contains (singleton r value) r) :
     free r (singleton r value) hContains = empty := by
   unfold free
