@@ -30,7 +30,7 @@ namespace Runner
 abbrev Witness := Σ α : Type, ref α
 
 def closedByAllocations (witnesses : Set Witness) : St α → Prop
-  | .ok _ | .fail _ | .div => True
+  | .ok _ => True
   | .event e next =>
     match e with
     | .Alloc value =>
@@ -54,10 +54,8 @@ structure HeapWithWitnesses where
 def runWithWitnesses : (m : St α) →
     (state : HeapWithWitnesses) →
     closedByAllocations state.witnesses m →
-    Std.Result (α × HeapWithWitnesses)
-  | .ok value, state, _ => .ok (value, state)
-  | .fail error, _, _ => .fail error
-  | .div, _, _ => .div
+    Option (α × HeapWithWitnesses)
+  | .ok value, state, _ => some (value, state)
   | .event (.Alloc value) next, state, hBefore =>
     let allocation := Aeneas.SLPoC.alloc value state.heap
     let r := allocation.1
@@ -79,17 +77,17 @@ def runWithWitnesses : (m : St α) →
     have hContains : Aeneas.SLPoC.contains state.heap r :=
       state.holds ⟨_, r⟩ hBefore.left
     match Aeneas.SLPoC.read? r state.heap hContains with
-    | none => .fail .undef
+    | none => none
     | some value =>
       runWithWitnesses (next value) state (hBefore.right value)
   | .event (.Update r value) next, state, hBefore =>
     have hContains : Aeneas.SLPoC.contains state.heap r :=
       state.holds ⟨_, r⟩ hBefore.left
     match hLookup : state.heap.lookup r.loc with
-    | none => .fail .undef
+    | none => none
     | some ⟨β, freed, oldValue⟩ =>
       if hFreed : freed then
-        .fail .undef
+        none
       else
         have hType : β = _ := by
           simpa [Aeneas.SLPoC.contains, hLookup] using hContains
@@ -110,10 +108,10 @@ def runWithWitnesses : (m : St α) →
     have hContains : Aeneas.SLPoC.contains state.heap r :=
       state.holds ⟨_, r⟩ hBefore.left
     match hLookup : state.heap.lookup r.loc with
-    | none => .fail .undef
+    | none => none
     | some ⟨β, freed, value⟩ =>
       if hFreed : freed then
-        .fail .undef
+        none
       else
         have hType : β = _ := by
           simpa [Aeneas.SLPoC.contains, hLookup] using hContains
@@ -134,16 +132,15 @@ def runWithWitnesses : (m : St α) →
 def run (m : St α) (h : Heap) (allocations : Set Witness)
     (hAllocations : ∀ witness, witness ∈ allocations → witness.holds h)
     (hClosed : closedByAllocations allocations m) :
-    Std.Result (α × Heap) :=
+    Option (α × Heap) :=
   let initial : HeapWithWitnesses := {
     heap := h
     witnesses := allocations
     holds := hAllocations
   }
   match runWithWitnesses m initial hClosed with
-  | .ok (value, state) => .ok (value, state.heap)
-  | .fail error => .fail error
-  | .div => .div
+  | some (value, state) => some (value, state.heap)
+  | none => none
 
 end Runner
 
