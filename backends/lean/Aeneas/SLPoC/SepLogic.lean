@@ -296,7 +296,7 @@ theorem theta_ev_frame (event : StEvents α) (Q : Postcondition α)
   | Free r =>
       rcases hEvent with ⟨hLive, hPost⟩
       refine ⟨live_union_left hLive, ?_⟩
-      rw [free_union_left r hLive]
+      rw [free_union_left r hDisjoint hLive]
       exact ⟨free r h₁ hLive, h₂,
         disjoint_free_left hDisjoint hLive, rfl, hPost, hH⟩
 
@@ -409,5 +409,79 @@ theorem triple_hpure' {P : Prop} {m : St α} {Q : Postcondition α}
   apply (triple_iff _ _ _).mpr
   intro h hPre
   exact (triple_iff hempty m Q).mp (hTriple hPre.1) h hPre.2
+
+theorem triple_pure {P : HProp} {Q : Postcondition α} {value : α}
+    (hPost : P ⊢ Q value) :
+    {{ P }} (pure value : St α) {{ Q }} := by
+  apply (triple_iff _ _ _).mpr
+  change P ⊢ Q value
+  exact hPost
+
+theorem triple_bind {P : HProp} {Q₁ : Postcondition α}
+    {Q : Postcondition β} {m : St α} {next : α → St β}
+    (hFirst : {{ P }} m {{ Q₁ }})
+    (hNext : ∀ value, {{ Q₁ value }} next value {{ Q }}) :
+    {{ P }} (m >>= next) {{ Q }} := by
+  apply (triple_iff _ _ _).mpr
+  intro h hPre
+  have hFirst' := (triple_iff P m Q₁).mp hFirst h hPre
+  have hBind :
+      Wp.bind (theta m) (fun value => theta (next value)) Q h := by
+    apply (theta m).monotone
+      (fun value => (triple_iff (Q₁ value) (next value) Q).mp
+        (hNext value))
+      h
+    exact hFirst'
+  exact (thetaMorphism.map_bind m next).1 Q h hBind
+
+theorem triple_seq {P H : HProp} {Q : Postcondition β}
+    {m₁ : St α} {m₂ : St β}
+    (hFirst : {{ P }} m₁ {{ fun _ => H }})
+    (hSecond : {{ H }} m₂ {{ Q }}) :
+    {{ P }} (m₁ >>= fun _ => m₂) {{ Q }} :=
+  triple_bind hFirst (fun _ => hSecond)
+
+theorem triple_alloc (value : α) :
+    {{ emp }} State.alloc value {{ fun r => r ↦ value }} := by
+  apply (triple_iff _ _ _).mpr
+  intro h hEmpty
+  subst h
+  intro r h' hFresh
+  change (r ↦ value) h'
+  exact fresh_empty_eq_singleton hFresh
+
+theorem triple_read (r : ref α) (value : α) :
+    {{ r ↦ value }} State.read r
+      {{ fun result => ⌜result = value⌝ ∗ r ↦ value }} := by
+  apply (triple_iff _ _ _).mpr
+  intro h hSingle
+  subst h
+  have hLive := live_singleton r value
+  refine ⟨hLive, ?_⟩
+  change (⌜read r (singleton r value) hLive = value⌝ ∗ r ↦ value)
+    (singleton r value)
+  apply (hstar_hpure_l _ _ _).mpr
+  exact ⟨read_singleton r value hLive, rfl⟩
+
+theorem triple_update (r : ref α) (oldValue newValue : α) :
+    {{ r ↦ oldValue }} State.update r newValue
+      {{ fun _ => r ↦ newValue }} := by
+  apply (triple_iff _ _ _).mpr
+  intro h hSingle
+  subst h
+  have hLive := live_singleton r oldValue
+  refine ⟨hLive, ?_⟩
+  change (r ↦ newValue) (update r newValue (singleton r oldValue) hLive)
+  exact update_singleton r oldValue newValue hLive
+
+theorem triple_free (r : ref α) (value : α) :
+    {{ r ↦ value }} State.free r {{ fun _ => emp }} := by
+  apply (triple_iff _ _ _).mpr
+  intro h hSingle
+  subst h
+  have hLive := live_singleton r value
+  refine ⟨hLive, ?_⟩
+  change emp (free r (singleton r value) hLive)
+  exact free_singleton r value hLive
 
 end Aeneas.SLPoC
