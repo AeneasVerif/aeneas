@@ -202,4 +202,33 @@ def thetaMorphism : MonadMorphism St Wp where
             Wp.bind (theta (k value)) (fun result => theta (next result)))
       exact Wp.bind_congr (by rfl) ih
 
+/-- Embed a precondition/postcondition pair into a weakest-precondition
+transformer. -/
+def pp2wp (P : HProp) (Q : Postcondition α) : Wp α where
+  run := fun R h =>
+    P h ∧ ∀ value h', Q value h' → R value h'
+  monotone := by
+    intro R₁ R₂ hR h hPre
+    exact ⟨hPre.1, fun value h' hPost =>
+      hR value h' (hPre.2 value h' hPost)⟩
+
+/-- A Hoare triple interpreted by embedding its pre/postcondition pair into
+the ordered weakest-precondition monad. -/
+def triple (P : HProp) (m : St α) (Q : Postcondition α) : Prop :=
+  theta m ≤ pp2wp P Q
+
+theorem triple_iff (P : HProp) (m : St α) (Q : Postcondition α) :
+    triple P m Q ↔ himpl P (theta m Q) := by
+  constructor
+  · intro hTriple h hP
+    exact hTriple Q h ⟨hP, fun _ _ hQ => hQ⟩
+  · intro hTriple R h hPre
+    exact (theta m).monotone hPre.2 h (hTriple h hPre.1)
+
+namespace SepLogic
+
+scoped notation:25 "{{ " P " }} " m " {{ " Q " }}" => triple P m Q
+
+end SepLogic
+
 end Aeneas.SLPoC
