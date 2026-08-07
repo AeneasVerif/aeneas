@@ -13,6 +13,9 @@ set_option maxHeartbeats 1000000
 /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
 set_option maxRecDepth 2048
 
+/- You can remove the following line by using the CLI option `-all-computable`: -/
+noncomputable section
+
 namespace split_files
 
 /-- [split_files::external::Sink]
@@ -45,5 +48,11 @@ def external.emit
   Result ((core.result.Result Unit core.fmt.Error) × external.Sink)
   := do
   external.Sink.Insts.CoreFmtWrite.write_str s (toStr "hi")
+
+/-- [split_files::external::use_helper]:
+    Source: 'src/external.rs', lines 28:0-30:1
+    Visibility: public -/
+def external.use_helper (x : Std.U32) : Result Std.U32 := do
+  macrolib.helper x
 
 end split_files

@@ -16,3 +16,11 @@ impl core::fmt::Write for Sink {
 pub fn emit(s: &mut Sink) -> core::fmt::Result {
     s.write_str("hi")
 }
+
+/// `macrolib::helper` has no translated body, so it lands in the same external
+/// bucket as the (transparent) `Write` trait decl above, as an axiom. The
+/// bucket therefore mixes opacities and must still come out as a single
+/// `FunsExternal_Template` file, never a `Part`/`Axioms` chain.
+pub fn use_helper(x: u32) -> u32 {
+    macrolib::helper(x)
+}

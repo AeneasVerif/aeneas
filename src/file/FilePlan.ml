@@ -231,6 +231,14 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
          ~default:SCC.SccId.Set.empty)
   in
 
+  (* The external modules are never layered. One [_Template] file iff anything in it is opaque.  *)
+  let external_run (groups : LlbcAst.declaration_group list) :
+      (bool * LlbcAst.declaration_group list) list =
+    match groups with
+    | [] -> []
+    | _ -> [ (List.exists group_has_axioms groups, groups) ]
+  in
+
   (* [noncomputable] for each run of a module, in order. Layer k imports layer
      k-1, so an axiom stays visible once it has appeared: the flag is a running
      disjunction seeded with what the module's imports already expose. Templates
@@ -320,7 +328,11 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
         let groups =
           Option.value (SCC.SccId.Map.find_opt scc_id groups_by_scc) ~default:[]
         in
-        let runs = if is_dropped then [] else cut_layers color groups in
+        let runs =
+          if is_dropped then []
+          else if is_external then external_run groups
+          else cut_layers color groups
+        in
         let runs_nc = runs_noncomputable ~scc_id runs in
         let aggregator, layers =
           match (runs, runs_nc) with

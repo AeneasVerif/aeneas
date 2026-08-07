@@ -16,3 +16,9 @@ macro_rules! define_counter {
         }
     };
 }
+
+/// A plain external function. Its body is not translated downstream, so it
+/// reaches the crate under extraction as an opaque external declaration
+pub fn helper(x: u32) -> u32 {
+    x + 7
+}
