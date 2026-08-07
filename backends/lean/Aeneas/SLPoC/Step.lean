@@ -134,8 +134,11 @@ private partial def flatten (e : Expr) : MetaM (Array Expr) := do
   return #[e]
 
 private def mkStar (atoms : Array Expr) : Expr :=
-  atoms.foldr (init := mkConst ``hempty) fun atom rest =>
-    mkApp2 (mkConst ``hstar) atom rest
+  match atoms.back? with
+  | none => mkConst ``hempty
+  | some last =>
+    atoms.pop.foldr (init := last) fun atom rest =>
+      mkApp2 (mkConst ``hstar) atom rest
 
 private def removeMatches (available required : Array Expr) :
     MetaM (Option (Array Expr)) := do
@@ -176,6 +179,8 @@ private partial def proveToEmp (atoms : Array Expr) : MetaM Expr := do
   unless fn.isConstOf ``hpure && args.size = 1 do
     throwError "cannot discard spatial assertion {atom}; only pure assertions may be discarded"
   let atomProof ← mkAppM ``hpure_elim #[args[0]!]
+  if atoms.size = 1 then
+    return atomProof
   let restProof ← proveToEmp (atoms.extract 1 atoms.size)
   mkAppM ``hstar_to_emp #[atomProof, restProof]
 
@@ -241,7 +246,8 @@ private def solveHimpl (goal : MVarId) : TacticM Unit := goal.withContext do
         let eqProof ← proveEqAC source reordered
         let reorderProof ← mkAppM ``himpl_of_eq #[eqProof]
         let discardProof ← proveToEmp discardedAtoms
-        let eliminateProof ← mkAppM ``hstar_elim_right #[discardProof]
+        let eliminateProof ← mkAppOptM ``hstar_elim_right
+          #[some matchedAssertion, some discarded, some discardProof]
         mkAppM ``himpl_trans #[reorderProof, eliminateProof]
     let mut current := matchedAssertion
     let mut insertionProof ← mkAppM ``himpl_refl #[current]
@@ -267,7 +273,7 @@ end SLFrame
 
 /-- Infer and prove separation-logic frames. Unmatched pure assertions may be
 discarded; unmatched spatial assertions are reported as an error. -/
-elab "sl_frame" : tactic => do
+elab "sl_frame" : tactic => withMainContext do
   let localAsms :=
     (← (← getLCtx).getAssumptions).map LocalDecl.fvarId |>.toArray
   let _ ← Simp.simpAt true
