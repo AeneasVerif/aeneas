@@ -514,4 +514,235 @@ theorem triple_free (r : Ref α) (value : α) :
   change emp (free r (singleton r value) hContains)
   exact free_singleton r value hContains
 
+namespace SepLogic
+
+scoped syntax:lead (name := specSyntax)
+  "(" term:lead ")" " ⦃" "⇓ " Lean.Parser.Term.funBinder " => " term " ⦄" : term
+scoped syntax:lead (name := specSyntaxPred)
+  "(" term:lead ")" " ⦃" "⇓ " term " ⦄" : term
+scoped syntax:lead (name := slSpecSyntax)
+  " ⦃" term " ⦄" term:lead
+  " ⦃" "⇓ " Lean.Parser.Term.funBinder " => " term " ⦄" : term
+scoped syntax:lead (name := slSpecSyntaxPred)
+  " ⦃" term " ⦄" term:lead " ⦃" "⇓ " term " ⦄" : term
+
+scoped macro_rules
+  | `(($m) ⦃⇓ $result => $Q⦄) =>
+      `(triple emp $m (fun $result => ⌜$Q⌝))
+  | `(($m) ⦃⇓ $Q:term⦄) =>
+      `(triple emp $m (fun _ => ⌜$Q⌝))
+  | `(⦃$P⦄ $m ⦃⇓ $result => $Q⦄) =>
+      `(triple iprop($P) $m (fun $result => iprop($Q)))
+  | `(⦃$P⦄ $m ⦃⇓ $Q⦄) =>
+      `(triple iprop($P) $m (fun _ => iprop($Q)))
+
+end SepLogic
+
+namespace Examples
+
+def add1 (x : Nat) : St Nat :=
+  pure (x + 1)
+
+theorem add1_spec (x : Nat) :
+    (add1 x) ⦃⇓ y => y = x + 1⦄ := by
+  apply triple_pure
+  intro h hEmpty
+  exact ⟨rfl, hEmpty⟩
+
+example (x : Nat) :
+    (do
+      let y ← add1 x
+      add1 y) ⦃⇓ y => y = x + 2⦄ := by
+  apply triple_bind (add1_spec x)
+  intro y
+  apply triple_hpure'
+  intro hy
+  apply triple_pure
+  intro h hEmpty
+  constructor
+  · omega
+  · exact hEmpty
+
+def add2 (x : Nat) : St (Nat × Nat) :=
+  pure (x + 1, x + 2)
+
+theorem add2_spec (x : Nat) :
+    (add2 x) ⦃⇓ (y, z) => y = x + 1 ∧ z = x + 2⦄ := by
+  apply triple_pure
+  intro h hEmpty
+  exact ⟨⟨rfl, rfl⟩, hEmpty⟩
+
+example (x : Nat) :
+    (do
+      let (y, _) ← add2 x
+      add2 y) ⦃⇓ (y, _) => y = x + 2⦄ := by
+  apply triple_bind (add2_spec x)
+  rintro ⟨y, z⟩
+  apply triple_hpure'
+  rintro ⟨hy, _⟩
+  apply triple_pure
+  intro h hEmpty
+  constructor
+  · omega
+  · exact hEmpty
+
+abbrev RawPtr := Ref
+
+def read_ptr {α : Type} (p : RawPtr α) : St α :=
+  State.read p
+
+def write_ptr {α : Type} (p : RawPtr α) (value : α) : St Unit :=
+  State.update p value
+
+def mut_to_raw {α : Type} (value : α) : St (RawPtr α) :=
+  State.alloc value
+
+def end_mut_to_raw {α : Type} (p : RawPtr α) : St α := do
+  let value ← State.read p
+  State.free p
+  pure value
+
+theorem read_ptr.spec {α : Type} {value : α} (p : RawPtr α) :
+    ⦃ p ↦ value ⦄ read_ptr p
+      ⦃⇓ result => ⌜result = value⌝ ∗ p ↦ value⦄ := by
+  exact triple_read p value
+
+theorem write_ptr.spec {α : Type} (value : α) {oldValue : α}
+    (p : RawPtr α) :
+    ⦃ p ↦ oldValue ⦄ write_ptr p value ⦃⇓ p ↦ value⦄ := by
+  exact triple_update p oldValue value
+
+theorem mut_to_raw.spec {α : Type} (value : α) :
+    ⦃ emp ⦄ mut_to_raw value ⦃⇓ p => p ↦ value⦄ := by
+  exact triple_alloc value
+
+theorem end_mut_to_raw.spec {α : Type} {value : α} (p : RawPtr α) :
+    ⦃ p ↦ value ⦄ end_mut_to_raw p
+      ⦃⇓ result => ⌜result = value⌝⦄ := by
+  unfold end_mut_to_raw
+  apply triple_bind (triple_read p value)
+  intro result
+  apply triple_hpure
+  intro hResult
+  apply triple_seq (triple_free p value)
+  apply triple_pure
+  intro h hEmpty
+  exact ⟨hResult, hEmpty⟩
+
+def incr_ptr (p : RawPtr Nat) : St Unit := do
+  let value ← read_ptr p
+  write_ptr p (value + 1)
+
+theorem incr_ptr.spec (p : RawPtr Nat) (value : Nat) :
+    ⦃ p ↦ value ⦄ incr_ptr p ⦃⇓ p ↦ value + 1⦄ := by
+  unfold incr_ptr
+  apply triple_bind (read_ptr.spec p)
+  intro result
+  apply triple_hpure
+  intro hResult
+  subst result
+  exact write_ptr.spec (value + 1) p
+
+def incr_borrow (value : Nat) : St Nat := do
+  let p ← mut_to_raw value
+  incr_ptr p
+  end_mut_to_raw p
+
+theorem incr_borrow.spec (value : Nat) :
+    (incr_borrow value) ⦃⇓ result => result = value + 1⦄ := by
+  unfold incr_borrow
+  apply triple_bind (mut_to_raw.spec value)
+  intro p
+  apply triple_bind (incr_ptr.spec p value)
+  intro _
+  exact end_mut_to_raw.spec p
+
+inductive EqOrDisj (α : Type) where
+  | equal (value : α)
+  | disjoint (leftValue rightValue : α)
+
+def isEqOrDisj {α : Type} (left right : RawPtr α)
+    (relation : EqOrDisj α) : HProp :=
+  match relation with
+  | .equal value => iprop(⌜left = right⌝ ∗ left ↦ value)
+  | .disjoint leftValue rightValue =>
+      iprop(left ↦ leftValue ∗ right ↦ rightValue)
+
+def EqOrDisj.read {α : Type} (relation : EqOrDisj α) : α :=
+  match relation with
+  | .equal value => value
+  | .disjoint leftValue _ => leftValue
+
+def EqOrDisj.write {α : Type} (relation : EqOrDisj α)
+    (value : α) : EqOrDisj α :=
+  match relation with
+  | .equal _ => .equal value
+  | .disjoint leftValue _ => .disjoint leftValue value
+
+private theorem himpl_refl (H : HProp) : H ⊢ H :=
+  fun _ hH => hH
+
+private theorem hstar_mono {P₁ P₂ Q₁ Q₂ : HProp}
+    (hP : P₁ ⊢ P₂) (hQ : Q₁ ⊢ Q₂) :
+    P₁ ∗ Q₁ ⊢ P₂ ∗ Q₂ := by
+  intro h
+  rintro ⟨h₁, h₂, hDisjoint, hEq, hP₁, hQ₁⟩
+  exact ⟨h₁, h₂, hDisjoint, hEq, hP h₁ hP₁, hQ h₂ hQ₁⟩
+
+private theorem hpure_hstar_intro {P : Prop} (H : HProp) (hP : P) :
+    H ⊢ ⌜P⌝ ∗ H := by
+  intro h hH
+  exact ⟨∅, h, Finmap.disjoint_empty h, by simp, ⟨hP, rfl⟩, hH⟩
+
+theorem read_ptr.spec' {α : Type} {relation : EqOrDisj α}
+    (left right : RawPtr α) :
+    ⦃ isEqOrDisj left right relation ⦄ read_ptr left
+      ⦃⇓ result =>
+        ⌜result = relation.read⌝ ∗ isEqOrDisj left right relation⦄ := by
+  cases relation with
+  | equal value =>
+      simp only [isEqOrDisj, EqOrDisj.read]
+      apply triple_hpure
+      intro hEq
+      subst right
+      apply triple_conseq (triple_read left value)
+      · exact himpl_refl _
+      · intro result
+        apply hstar_mono (himpl_refl _)
+        exact hpure_hstar_intro _ rfl
+  | disjoint leftValue rightValue =>
+      simp only [isEqOrDisj, EqOrDisj.read]
+      apply triple_conseq
+        (triple_frame (triple_read left leftValue)
+          (right ↦ rightValue))
+      · exact himpl_refl _
+      · intro result h
+        exact (hstar_assoc _ _ _ h).mp
+
+theorem write_ptr.spec' {α : Type} {relation : EqOrDisj α}
+    (left right : RawPtr α) (value : α) :
+    ⦃ isEqOrDisj left right relation ⦄ write_ptr right value
+      ⦃⇓ isEqOrDisj left right (relation.write value)⦄ := by
+  cases relation with
+  | equal oldValue =>
+      simp only [isEqOrDisj, EqOrDisj.write]
+      apply triple_hpure
+      intro hEq
+      subst right
+      apply triple_conseq (triple_update left oldValue value)
+      · exact himpl_refl _
+      · intro _
+        exact hpure_hstar_intro _ rfl
+  | disjoint leftValue rightValue =>
+      simp only [isEqOrDisj, EqOrDisj.write]
+      apply triple_conseq
+        (triple_frame (triple_update right rightValue value)
+          (left ↦ leftValue))
+      · intro h
+        exact (hstar_comm _ _ h).mp
+      · intro _ h
+        exact (hstar_comm _ _ h).mp
+
+end Examples
+
 end Aeneas.SLPoC
