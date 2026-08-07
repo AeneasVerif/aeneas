@@ -58,7 +58,7 @@ def runWithWitnesses : (m : St α) →
     (state : HeapWithWitnesses) →
     closedByAllocations state.witnesses m →
     Option (α × HeapWithWitnesses)
-  | .ok value, state, _ => some (value, state)
+  | .ok value, state, _ => pure (value, state)
   | .event (.Alloc value) next, state, hBefore =>
     let allocation := Aeneas.SLPoC.alloc value state.heap
     let r := allocation.1
@@ -86,51 +86,35 @@ def runWithWitnesses : (m : St α) →
   | .event (.Update r value) next, state, hBefore =>
     have hContains : Aeneas.SLPoC.contains state.heap r :=
       state.holds ⟨_, r⟩ hBefore.left
-    match hLookup : state.heap.lookup r.allocId with
+    match hUpdate : Aeneas.SLPoC.update? r value state.heap with
+    | some h =>
+      let nextState : HeapWithWitnesses := {
+        heap := h
+        witnesses := state.witnesses
+        holds := by
+          intro current hCurrent
+          rcases current with ⟨γ, current⟩
+          exact Aeneas.SLPoC.contains_update?_of_eq_some r value state.heap
+            hContains (state.holds ⟨γ, current⟩ hCurrent) hUpdate
+      }
+      runWithWitnesses (next ()) nextState hBefore.right
     | none => none
-    | some ⟨β, freed, oldValue⟩ =>
-      if hFreed : freed then
-        none
-      else
-        have hType : β = _ := by
-          simpa [Aeneas.SLPoC.contains, hLookup] using hContains
-        have hLive : Aeneas.SLPoC.live state.heap r := by
-          simp [Aeneas.SLPoC.live, hLookup, hFreed, hType]
-        let h := Aeneas.SLPoC.update r value state.heap hLive
-        let nextState : HeapWithWitnesses := {
-          heap := h
-          witnesses := state.witnesses
-          holds := by
-            intro current hCurrent
-            rcases current with ⟨γ, current⟩
-            exact Aeneas.SLPoC.contains_update r value state.heap hLive
-              (state.holds ⟨γ, current⟩ hCurrent)
-        }
-        runWithWitnesses (next ()) nextState hBefore.right
   | .event (.Free r) next, state, hBefore =>
     have hContains : Aeneas.SLPoC.contains state.heap r :=
       state.holds ⟨_, r⟩ hBefore.left
-    match hLookup : state.heap.lookup r.allocId with
+    match hFree : Aeneas.SLPoC.free? r state.heap with
+    | some h =>
+      let nextState : HeapWithWitnesses := {
+        heap := h
+        witnesses := state.witnesses
+        holds := by
+          intro current hCurrent
+          rcases current with ⟨γ, current⟩
+          exact Aeneas.SLPoC.contains_free?_of_eq_some r state.heap
+            hContains (state.holds ⟨γ, current⟩ hCurrent) hFree
+      }
+      runWithWitnesses (next ()) nextState hBefore.right
     | none => none
-    | some ⟨β, freed, value⟩ =>
-      if hFreed : freed then
-        none
-      else
-        have hType : β = _ := by
-          simpa [Aeneas.SLPoC.contains, hLookup] using hContains
-        have hLive : Aeneas.SLPoC.live state.heap r := by
-          simp [Aeneas.SLPoC.live, hLookup, hFreed, hType]
-        let h := Aeneas.SLPoC.free r state.heap hLive
-        let nextState : HeapWithWitnesses := {
-          heap := h
-          witnesses := state.witnesses
-          holds := by
-            intro current hCurrent
-            rcases current with ⟨γ, current⟩
-            exact Aeneas.SLPoC.contains_free r state.heap hLive
-              (state.holds ⟨γ, current⟩ hCurrent)
-        }
-        runWithWitnesses (next ()) nextState hBefore.right
 
 def run (m : St α) (h : Heap) (allocations : Set Witness)
     (hAllocations : ∀ witness, witness ∈ allocations → witness.holds h)
@@ -141,9 +125,9 @@ def run (m : St α) (h : Heap) (allocations : Set Witness)
     witnesses := allocations
     holds := hAllocations
   }
-  match runWithWitnesses m initial hClosed with
-  | some (value, state) => some (value, state.heap)
-  | none => none
+  do
+    let (value, state) ← runWithWitnesses m initial hClosed
+    pure (value, state.heap)
 
 end Runner
 
