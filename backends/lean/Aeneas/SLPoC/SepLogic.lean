@@ -4,27 +4,30 @@ import Aeneas.SLPoC.Computation
 namespace Aeneas.SLPoC
 
 /- Heap predicates describe heap fragments. -/
-abbrev HProp := Heap → Prop
+abbrev SLProp := Heap → Prop
+
+/- Preconditions are separation-logic propositions. -/
+abbrev SLPre := SLProp
 
 /- Postconditions describe both a returned value and a heap fragment. -/
-abbrev Postcondition (α : Type) := α → HProp
+abbrev SLPost (α : Type) := α → SLProp
 
-def himpl (H₁ H₂ : HProp) : Prop :=
+def himpl (H₁ H₂ : SLProp) : Prop :=
   ∀ h, H₁ h → H₂ h
 
-def hequiv (H₁ H₂ : HProp) : Prop :=
+def hequiv (H₁ H₂ : SLProp) : Prop :=
   ∀ h, H₁ h ↔ H₂ h
 
-def hempty : HProp :=
+def hempty : SLProp :=
   fun h => h = empty
 
-def hpure (P : Prop) : HProp :=
+def hpure (P : Prop) : SLProp :=
   fun h => P ∧ h = empty
 
-def hsingle {α : Type} (r : Ref α) (value : α) : HProp :=
+def hsingle {α : Type} (r : Ref α) (value : α) : SLProp :=
   fun h => h = singleton r value
 
-def hstar (H₁ H₂ : HProp) : HProp :=
+def hstar (H₁ H₂ : SLProp) : SLProp :=
   fun h =>
     ∃ h₁ h₂,
       Finmap.Disjoint h₁ h₂ ∧
@@ -32,14 +35,14 @@ def hstar (H₁ H₂ : HProp) : HProp :=
       H₁ h₁ ∧
       H₂ h₂
 
-def hexists {α : Sort _} (J : α → HProp) : HProp :=
+def hexists {α : Sort _} (J : α → SLProp) : SLProp :=
   fun h => ∃ x, J x h
 
-def qstar {α : Type} (Q : Postcondition α) (H : HProp) :
-    Postcondition α :=
+def qstar {α : Type} (Q : SLPost α) (H : SLProp) :
+    SLPost α :=
   fun value => hstar (Q value) H
 
-def qimpl {α : Type} (Q₁ Q₂ : Postcondition α) : Prop :=
+def qimpl {α : Type} (Q₁ Q₂ : SLPost α) : Prop :=
   ∀ value, himpl (Q₁ value) (Q₂ value)
 
 namespace SepLogic
@@ -67,7 +70,10 @@ end SepLogic
 
 open scoped SepLogic
 
-theorem hstar_assoc (H₁ H₂ H₃ : HProp) :
+theorem himpl_refl (H : SLProp) : H ⊢ H :=
+  fun _ hH => hH
+
+theorem hstar_assoc (H₁ H₂ H₃ : SLProp) :
     (H₁ ∗ H₂) ∗ H₃ ⊣⊢ H₁ ∗ (H₂ ∗ H₃) := by
   intro h
   constructor
@@ -100,7 +106,7 @@ theorem hstar_assoc (H₁ H₂ H₃ : HProp) :
         _ = (h₁ ∪ h₂) ∪ h₃ := Finmap.union_assoc.symm
     · exact ⟨h₁, h₂, hDisjoint₁₂, rfl, hH₁, hH₂⟩
 
-theorem hstar_comm (H₁ H₂ : HProp) :
+theorem hstar_comm (H₁ H₂ : SLProp) :
     H₁ ∗ H₂ ⊣⊢ H₂ ∗ H₁ := by
   intro h
   constructor
@@ -111,7 +117,14 @@ theorem hstar_comm (H₁ H₂ : HProp) :
     exact ⟨h₁, h₂, Finmap.Disjoint.symm h₂ h₁ hDisjoint,
       hEq.trans (Finmap.union_comm_of_disjoint hDisjoint), hH₁, hH₂⟩
 
-theorem hstar_hempty_l (H : HProp) :
+theorem hstar_mono {P₁ P₂ Q₁ Q₂ : SLProp}
+    (hP : P₁ ⊢ P₂) (hQ : Q₁ ⊢ Q₂) :
+    P₁ ∗ Q₁ ⊢ P₂ ∗ Q₂ := by
+  intro h
+  rintro ⟨h₁, h₂, hDisjoint, hEq, hP₁, hQ₁⟩
+  exact ⟨h₁, h₂, hDisjoint, hEq, hP h₁ hP₁, hQ h₂ hQ₁⟩
+
+theorem hstar_hempty_l (H : SLProp) :
     emp ∗ H ⊣⊢ H := by
   intro h
   constructor
@@ -124,7 +137,7 @@ theorem hstar_hempty_l (H : HProp) :
   · intro hH
     exact ⟨∅, h, Finmap.disjoint_empty h, by simp, rfl, hH⟩
 
-theorem hstar_hexists {α : Sort _} (J : α → HProp) (H : HProp) :
+theorem hstar_hexists {α : Sort _} (J : α → SLProp) (H : SLProp) :
     iprop(∃ x, J x) ∗ H ⊣⊢ iprop(∃ x, J x ∗ H) := by
   intro h
   constructor
@@ -133,7 +146,7 @@ theorem hstar_hexists {α : Sort _} (J : α → HProp) (H : HProp) :
   · rintro ⟨x, h₁, h₂, hDisjoint, hEq, hJ, hH⟩
     exact ⟨h₁, h₂, hDisjoint, hEq, ⟨x, hJ⟩, hH⟩
 
-theorem hstar_hpure_l (P : Prop) (H : HProp) :
+theorem hstar_hpure_l (P : Prop) (H : SLProp) :
     ⌜P⌝ ∗ H ⊣⊢ fun h => P ∧ H h := by
   intro h
   constructor
@@ -146,18 +159,23 @@ theorem hstar_hpure_l (P : Prop) (H : HProp) :
   · rintro ⟨hP, hH⟩
     exact ⟨∅, h, Finmap.disjoint_empty h, by simp, ⟨hP, rfl⟩, hH⟩
 
+theorem hpure_hstar_intro {P : Prop} (H : SLProp) (hP : P) :
+    H ⊢ ⌜P⌝ ∗ H := by
+  intro h hH
+  exact ⟨∅, h, Finmap.disjoint_empty h, by simp, ⟨hP, rfl⟩, hH⟩
+
 /-- Monotone predicate transformers, corresponding to `Wᴾᵘʳᵉ` in
 "Dijkstra Monads for All". -/
 structure Wp (α : Type) where
-  run : Postcondition α → HProp
+  run : SLPost α → SLPre
   monotone :
-    ∀ {Q₁ Q₂ : Postcondition α},
+    ∀ {Q₁ Q₂ : SLPost α},
       (∀ value, himpl (Q₁ value) (Q₂ value)) →
       himpl (run Q₁) (run Q₂)
 
 namespace Wp
 
-instance : CoeFun (Wp α) (fun _ => Postcondition α → HProp) :=
+instance : CoeFun (Wp α) (fun _ => SLPost α → SLPre) :=
   ⟨Wp.run⟩
 
 def pure (value : α) : Wp α :=
@@ -241,7 +259,7 @@ def theta_ev : StEvents α → Wp α
     }
   | .Read r => {
       run := fun Q h =>
-        ∃ hContains : contains h r, Q (read r h hContains) h
+        ∃ hContains : contains h r, Q (Heap.read r h hContains) h
       monotone := by
         intro Q₁ Q₂ hQ h hPre
         obtain ⟨hContains, hPost⟩ := hPre
@@ -249,7 +267,7 @@ def theta_ev : StEvents α → Wp α
     }
   | .Update r value => {
       run := fun Q h =>
-        ∃ hContains : contains h r, Q () (update r value h hContains)
+        ∃ hContains : contains h r, Q () (Heap.update r value h hContains)
       monotone := by
         intro Q₁ Q₂ hQ h hPre
         obtain ⟨hContains, hPost⟩ := hPre
@@ -257,7 +275,7 @@ def theta_ev : StEvents α → Wp α
     }
   | .Free r => {
       run := fun Q h =>
-        ∃ hContains : contains h r, Q () (free r h hContains)
+        ∃ hContains : contains h r, Q () (Heap.free r h hContains)
       monotone := by
         intro Q₁ Q₂ hQ h hPre
         obtain ⟨hContains, hPost⟩ := hPre
@@ -269,7 +287,7 @@ def theta : St α → Wp α
   | .event event next =>
       Wp.bind (theta_ev event) (fun value => theta (next value))
 
-theorem theta_sound (m : St α) (Q : Postcondition α) (h₀ : Heap)
+theorem theta_sound (m : St α) (Q : SLPost α) (h₀ : Heap)
     (hTheta : theta m Q h₀) :
     ∃ value h₁, Evaluates m h₀ value h₁ ∧ Q value h₁ := by
   induction m generalizing h₀ with
@@ -285,21 +303,21 @@ theorem theta_sound (m : St α) (Q : Postcondition α) (h₀ : Heap)
       | Read r =>
           obtain ⟨hContains, hNext⟩ := hTheta
           obtain ⟨result, h₁, hEvaluates, hPost⟩ :=
-            ih (read r h₀ hContains) h₀ hNext
+            ih (Heap.read r h₀ hContains) h₀ hNext
           exact ⟨result, h₁, Evaluates.read hContains hEvaluates, hPost⟩
       | Update r value =>
           obtain ⟨hContains, hNext⟩ := hTheta
           obtain ⟨result, h₁, hEvaluates, hPost⟩ :=
-            ih () (update r value h₀ hContains) hNext
+            ih () (Heap.update r value h₀ hContains) hNext
           exact ⟨result, h₁, Evaluates.update hContains hEvaluates, hPost⟩
       | Free r =>
           obtain ⟨hContains, hNext⟩ := hTheta
           obtain ⟨result, h₁, hEvaluates, hPost⟩ :=
-            ih () (free r h₀ hContains) hNext
+            ih () (Heap.free r h₀ hContains) hNext
           exact ⟨result, h₁, Evaluates.free hContains hEvaluates, hPost⟩
 
-theorem theta_ev_frame (event : StEvents α) (Q : Postcondition α)
-    (H : HProp) :
+theorem theta_ev_frame (event : StEvents α) (Q : SLPost α)
+    (H : SLProp) :
     theta_ev event Q ∗ H ⊢ theta_ev event (Q ∗+ H) := by
   intro h hPre
   rcases hPre with ⟨h₁, h₂, hDisjoint, hEq, hEvent, hH⟩
@@ -320,16 +338,16 @@ theorem theta_ev_frame (event : StEvents α) (Q : Postcondition α)
       rcases hEvent with ⟨hContains, hPost⟩
       refine ⟨contains_union_left hContains, ?_⟩
       rw [update_union_left r value hContains]
-      exact ⟨update r value h₁ hContains, h₂,
+      exact ⟨Heap.update r value h₁ hContains, h₂,
         disjoint_update_left hDisjoint hContains, rfl, hPost, hH⟩
   | Free r =>
       rcases hEvent with ⟨hContains, hPost⟩
       refine ⟨contains_union_left hContains, ?_⟩
       rw [free_union_left r hDisjoint hContains]
-      exact ⟨free r h₁ hContains, h₂,
+      exact ⟨Heap.free r h₁ hContains, h₂,
         disjoint_free_left hDisjoint hContains, rfl, hPost, hH⟩
 
-theorem theta_frame (m : St α) (Q : Postcondition α) (H : HProp) :
+theorem theta_frame (m : St α) (Q : SLPost α) (H : SLProp) :
     theta m Q ∗ H ⊢ theta m (Q ∗+ H) := by
   induction m with
   | ok value =>
@@ -359,7 +377,7 @@ def thetaMorphism : MonadMorphism St Wp where
 
 /-- Embed a precondition/postcondition pair into a weakest-precondition
 transformer. -/
-def pp2wp (P : HProp) (Q : Postcondition α) : Wp α where
+def pp2wp (P : SLPre) (Q : SLPost α) : Wp α where
   run := fun R h =>
     P h ∧ ∀ value h', Q value h' → R value h'
   monotone := by
@@ -369,150 +387,8 @@ def pp2wp (P : HProp) (Q : Postcondition α) : Wp α where
 
 /-- A Hoare triple interpreted by embedding its pre/postcondition pair into
 the ordered weakest-precondition monad. -/
-def triple (P : HProp) (m : St α) (Q : Postcondition α) : Prop :=
+def triple (P : SLPre) (m : St α) (Q : SLPost α) : Prop :=
   theta m ≤ pp2wp P Q
-
-namespace SepLogic
-
-scoped notation:25 "{{ " P " }} " m " {{ " Q " }}" => triple P m Q
-
-end SepLogic
-
-theorem triple_iff (P : HProp) (m : St α) (Q : Postcondition α) :
-    {{ P }} m {{ Q }} ↔ P ⊢ theta m Q := by
-  constructor
-  · intro hTriple h hP
-    exact hTriple Q h ⟨hP, fun _ _ hQ => hQ⟩
-  · intro hTriple R h hPre
-    exact (theta m).monotone hPre.2 h (hTriple h hPre.1)
-
-theorem triple_frame {P : HProp} {m : St α} {Q : Postcondition α}
-    (hTriple : {{ P }} m {{ Q }}) (H : HProp) :
-    {{ P ∗ H }} m {{ Q ∗+ H }} := by
-  apply (triple_iff _ _ _).mpr
-  intro h hPre
-  rcases hPre with ⟨h₁, h₂, hDisjoint, hEq, hP, hH⟩
-  apply theta_frame m Q H h
-  exact ⟨h₁, h₂, hDisjoint, hEq,
-    (triple_iff P m Q).mp hTriple h₁ hP, hH⟩
-
-theorem triple_conseq {P' P : HProp} {m : St α}
-    {Q' Q : Postcondition α}
-    (hTriple : {{ P' }} m {{ Q' }}) (hP : P ⊢ P')
-    (hQ : Q' ⊢+ Q) :
-    {{ P }} m {{ Q }} := by
-  apply (triple_iff _ _ _).mpr
-  intro h hPre
-  apply (theta m).monotone hQ h
-  exact (triple_iff P' m Q').mp hTriple h (hP h hPre)
-
-theorem triple_hpure {P : Prop} {H : HProp} {m : St α}
-    {Q : Postcondition α}
-    (hTriple : P → {{ H }} m {{ Q }}) :
-    {{ ⌜P⌝ ∗ H }} m {{ Q }} := by
-  apply (triple_iff _ _ _).mpr
-  intro h hPre
-  have ⟨hP, hH⟩ := (hstar_hpure_l P H h).mp hPre
-  exact (triple_iff H m Q).mp (hTriple hP) h hH
-
-theorem triple_hexists {ι : Sort _} {J : ι → HProp} {m : St α}
-    {Q : Postcondition α}
-    (hTriple : ∀ x, {{ J x }} m {{ Q }}) :
-    {{ iprop(∃ x, J x) }} m {{ Q }} := by
-  apply (triple_iff _ _ _).mpr
-  intro h hPre
-  rcases hPre with ⟨x, hJ⟩
-  exact (triple_iff (J x) m Q).mp (hTriple x) h hJ
-
-theorem triple_conseq_frame {H₂ H₁ H : HProp} {Q₁ Q : Postcondition α}
-    {m : St α}
-    (hTriple : {{ H₁ }} m {{ Q₁ }})
-    (hPre : H ⊢ H₁ ∗ H₂)
-    (hPost : Q₁ ∗+ H₂ ⊢+ Q) :
-    {{ H }} m {{ Q }} :=
-  triple_conseq (triple_frame hTriple H₂) hPre hPost
-
-theorem triple_hpure' {P : Prop} {m : St α} {Q : Postcondition α}
-    (hTriple : P → {{ emp }} m {{ Q }}) :
-    {{ ⌜P⌝ }} m {{ Q }} := by
-  apply (triple_iff _ _ _).mpr
-  intro h hPre
-  exact (triple_iff hempty m Q).mp (hTriple hPre.1) h hPre.2
-
-theorem triple_pure {P : HProp} {Q : Postcondition α} {value : α}
-    (hPost : P ⊢ Q value) :
-    {{ P }} (pure value : St α) {{ Q }} := by
-  apply (triple_iff _ _ _).mpr
-  change P ⊢ Q value
-  exact hPost
-
-theorem triple_bind {P : HProp} {Q₁ : Postcondition α}
-    {Q : Postcondition β} {m : St α} {next : α → St β}
-    (hFirst : {{ P }} m {{ Q₁ }})
-    (hNext : ∀ value, {{ Q₁ value }} next value {{ Q }}) :
-    {{ P }} (m >>= next) {{ Q }} := by
-  apply (triple_iff _ _ _).mpr
-  intro h hPre
-  have hFirst' := (triple_iff P m Q₁).mp hFirst h hPre
-  have hBind :
-      Wp.bind (theta m) (fun value => theta (next value)) Q h := by
-    apply (theta m).monotone
-      (fun value => (triple_iff (Q₁ value) (next value) Q).mp
-        (hNext value))
-      h
-    exact hFirst'
-  exact (thetaMorphism.map_bind m next).1 Q h hBind
-
-theorem triple_seq {P H : HProp} {Q : Postcondition β}
-    {m₁ : St α} {m₂ : St β}
-    (hFirst : {{ P }} m₁ {{ fun _ => H }})
-    (hSecond : {{ H }} m₂ {{ Q }}) :
-    {{ P }} (m₁ >>= fun _ => m₂) {{ Q }} :=
-  triple_bind hFirst (fun _ => hSecond)
-
-theorem triple_alloc (value : α) :
-    {{ emp }} State.alloc value {{ fun r => r ↦ value }} := by
-  apply (triple_iff _ _ _).mpr
-  intro h hEmpty
-  subst h
-  intro r h' hFresh
-  change (r ↦ value) h'
-  exact fresh_empty_eq_singleton hFresh
-
-theorem triple_read (r : Ref α) (value : α) :
-    {{ r ↦ value }} State.read r
-      {{ fun result => ⌜result = value⌝ ∗ r ↦ value }} := by
-  apply (triple_iff _ _ _).mpr
-  intro h hSingle
-  subst h
-  have hContains := contains_singleton r value
-  refine ⟨hContains, ?_⟩
-  change (⌜read r (singleton r value) hContains = value⌝ ∗ r ↦ value)
-    (singleton r value)
-  apply (hstar_hpure_l _ _ _).mpr
-  exact ⟨read_singleton r value hContains, rfl⟩
-
-theorem triple_update (r : Ref α) (oldValue newValue : α) :
-    {{ r ↦ oldValue }} State.update r newValue
-      {{ fun _ => r ↦ newValue }} := by
-  apply (triple_iff _ _ _).mpr
-  intro h hSingle
-  subst h
-  have hContains := contains_singleton r oldValue
-  refine ⟨hContains, ?_⟩
-  change (r ↦ newValue)
-    (update r newValue (singleton r oldValue) hContains)
-  exact update_singleton r oldValue newValue hContains
-
-theorem triple_free (r : Ref α) (value : α) :
-    {{ r ↦ value }} State.free r {{ fun _ => emp }} := by
-  apply (triple_iff _ _ _).mpr
-  intro h hSingle
-  subst h
-  have hContains := contains_singleton r value
-  refine ⟨hContains, ?_⟩
-  change emp (free r (singleton r value) hContains)
-  exact free_singleton r value hContains
 
 namespace SepLogic
 
@@ -537,6 +413,168 @@ scoped macro_rules
       `(triple iprop($P) $m (fun _ => iprop($Q)))
 
 end SepLogic
+
+theorem triple_iff (P : SLPre) (m : St α) (Q : SLPost α) :
+    triple P m Q ↔ P ⊢ theta m Q := by
+  constructor
+  · intro hTriple h hP
+    exact hTriple Q h ⟨hP, fun _ _ hQ => hQ⟩
+  · intro hTriple R h hPre
+    exact (theta m).monotone hPre.2 h (hTriple h hPre.1)
+
+theorem triple_frame {P : SLPre} {m : St α} {Q : SLPost α}
+    (hTriple : triple P m Q) (H : SLProp) :
+    triple (P ∗ H) m (Q ∗+ H) := by
+  apply (triple_iff _ _ _).mpr
+  intro h hPre
+  rcases hPre with ⟨h₁, h₂, hDisjoint, hEq, hP, hH⟩
+  apply theta_frame m Q H h
+  exact ⟨h₁, h₂, hDisjoint, hEq,
+    (triple_iff P m Q).mp hTriple h₁ hP, hH⟩
+
+theorem triple_conseq {P' P : SLPre} {m : St α}
+    {Q' Q : SLPost α}
+    (hTriple : triple P' m Q') (hP : P ⊢ P')
+    (hQ : Q' ⊢+ Q) :
+    triple P m Q := by
+  apply (triple_iff _ _ _).mpr
+  intro h hPre
+  apply (theta m).monotone hQ h
+  exact (triple_iff P' m Q').mp hTriple h (hP h hPre)
+
+theorem triple_hpure {P : Prop} {H : SLPre} {m : St α}
+    {Q : SLPost α}
+    (hTriple : P → triple H m Q) :
+    triple (⌜P⌝ ∗ H) m Q := by
+  apply (triple_iff _ _ _).mpr
+  intro h hPre
+  have ⟨hP, hH⟩ := (hstar_hpure_l P H h).mp hPre
+  exact (triple_iff H m Q).mp (hTriple hP) h hH
+
+theorem triple_hexists {ι : Sort _} {J : ι → SLPre} {m : St α}
+    {Q : SLPost α}
+    (hTriple : ∀ x, triple (J x) m Q) :
+    triple iprop(∃ x, J x) m Q := by
+  apply (triple_iff _ _ _).mpr
+  intro h hPre
+  rcases hPre with ⟨x, hJ⟩
+  exact (triple_iff (J x) m Q).mp (hTriple x) h hJ
+
+theorem triple_conseq_frame {H₂ : SLProp} {H₁ H : SLPre}
+    {Q₁ Q : SLPost α}
+    {m : St α}
+    (hTriple : triple H₁ m Q₁)
+    (hPre : H ⊢ H₁ ∗ H₂)
+    (hPost : Q₁ ∗+ H₂ ⊢+ Q) :
+    triple H m Q :=
+  triple_conseq (triple_frame hTriple H₂) hPre hPost
+
+theorem triple_hpure' {P : Prop} {m : St α} {Q : SLPost α}
+    (hTriple : P → triple emp m Q) :
+    triple ⌜P⌝ m Q := by
+  apply (triple_iff _ _ _).mpr
+  intro h hPre
+  exact (triple_iff hempty m Q).mp (hTriple hPre.1) h hPre.2
+
+theorem triple_pure {P : SLPre} {Q : SLPost α} {value : α}
+    (hPost : P ⊢ Q value) :
+    triple P (pure value : St α) Q := by
+  apply (triple_iff _ _ _).mpr
+  change P ⊢ Q value
+  exact hPost
+
+theorem triple_bind {P : SLPre} {Q₁ : SLPost α}
+    {Q : SLPost β} {m : St α} {next : α → St β}
+    (hFirst : triple P m Q₁)
+    (hNext : ∀ value, triple (Q₁ value) (next value) Q) :
+    triple P (m >>= next) Q := by
+  apply (triple_iff _ _ _).mpr
+  intro h hPre
+  have hFirst' := (triple_iff P m Q₁).mp hFirst h hPre
+  have hBind :
+      Wp.bind (theta m) (fun value => theta (next value)) Q h := by
+    apply (theta m).monotone
+      (fun value => (triple_iff (Q₁ value) (next value) Q).mp
+        (hNext value))
+      h
+    exact hFirst'
+  exact (thetaMorphism.map_bind m next).1 Q h hBind
+
+theorem triple_seq {P H : SLPre} {Q : SLPost β}
+    {m₁ : St α} {m₂ : St β}
+    (hFirst : triple P m₁ (fun _ => H))
+    (hSecond : triple H m₂ Q) :
+    triple P (m₁ >>= fun _ => m₂) Q :=
+  triple_bind hFirst (fun _ => hSecond)
+
+theorem alloc.spec (value : α) :
+    ⦃ emp ⦄ alloc value ⦃⇓ r => r ↦ value⦄ := by
+  apply (triple_iff _ _ _).mpr
+  intro h hEmpty
+  subst h
+  intro r h' hFresh
+  change (r ↦ value) h'
+  exact fresh_empty_eq_singleton hFresh
+
+theorem read.spec (r : Ref α) (value : α) :
+    ⦃ r ↦ value ⦄ read r
+      ⦃⇓ result => ⌜result = value⌝ ∗ r ↦ value⦄ := by
+  apply (triple_iff _ _ _).mpr
+  intro h hSingle
+  subst h
+  have hContains := contains_singleton r value
+  refine ⟨hContains, ?_⟩
+  change (⌜Heap.read r (singleton r value) hContains = value⌝ ∗ r ↦ value)
+    (singleton r value)
+  apply (hstar_hpure_l _ _ _).mpr
+  exact ⟨read_singleton r value hContains, rfl⟩
+
+theorem update.spec (r : Ref α) (oldValue newValue : α) :
+    ⦃ r ↦ oldValue ⦄ update r newValue
+      ⦃⇓ r ↦ newValue⦄ := by
+  apply (triple_iff _ _ _).mpr
+  intro h hSingle
+  subst h
+  have hContains := contains_singleton r oldValue
+  refine ⟨hContains, ?_⟩
+  change (r ↦ newValue)
+    (Heap.update r newValue (singleton r oldValue) hContains)
+  exact update_singleton r oldValue newValue hContains
+
+theorem free.spec (r : Ref α) (value : α) :
+    ⦃ r ↦ value ⦄ free r ⦃⇓ emp⦄ := by
+  apply (triple_iff _ _ _).mpr
+  intro h hSingle
+  subst h
+  have hContains := contains_singleton r value
+  refine ⟨hContains, ?_⟩
+  change emp (Heap.free r (singleton r value) hContains)
+  exact free_singleton r value hContains
+
+def mut_to_raw {α : Type} (value : α) : St (Ref α) :=
+  alloc value
+
+def end_mut_to_raw {α : Type} (r : Ref α) : St α := do
+  let value ← read r
+  free r
+  pure value
+
+theorem mut_to_raw.spec {α : Type} (value : α) :
+    ⦃ emp ⦄ mut_to_raw value ⦃⇓ r => r ↦ value⦄ := by
+  exact alloc.spec value
+
+theorem end_mut_to_raw.spec {α : Type} {value : α} (r : Ref α) :
+    ⦃ r ↦ value ⦄ end_mut_to_raw r
+      ⦃⇓ result => ⌜result = value⌝⦄ := by
+  unfold end_mut_to_raw
+  apply triple_bind (read.spec r value)
+  intro result
+  apply triple_hpure
+  intro hResult
+  apply triple_seq (free.spec r value)
+  apply triple_pure
+  intro h hEmpty
+  exact ⟨hResult, hEmpty⟩
 
 namespace Examples
 
@@ -586,62 +624,19 @@ example (x : Nat) :
   · omega
   · exact hEmpty
 
-abbrev RawPtr := Ref
+def incr_ptr (p : Ref Nat) : St Unit := do
+  let value ← read p
+  update p (value + 1)
 
-def read_ptr {α : Type} (p : RawPtr α) : St α :=
-  State.read p
-
-def write_ptr {α : Type} (p : RawPtr α) (value : α) : St Unit :=
-  State.update p value
-
-def mut_to_raw {α : Type} (value : α) : St (RawPtr α) :=
-  State.alloc value
-
-def end_mut_to_raw {α : Type} (p : RawPtr α) : St α := do
-  let value ← State.read p
-  State.free p
-  pure value
-
-theorem read_ptr.spec {α : Type} {value : α} (p : RawPtr α) :
-    ⦃ p ↦ value ⦄ read_ptr p
-      ⦃⇓ result => ⌜result = value⌝ ∗ p ↦ value⦄ := by
-  exact triple_read p value
-
-theorem write_ptr.spec {α : Type} (value : α) {oldValue : α}
-    (p : RawPtr α) :
-    ⦃ p ↦ oldValue ⦄ write_ptr p value ⦃⇓ p ↦ value⦄ := by
-  exact triple_update p oldValue value
-
-theorem mut_to_raw.spec {α : Type} (value : α) :
-    ⦃ emp ⦄ mut_to_raw value ⦃⇓ p => p ↦ value⦄ := by
-  exact triple_alloc value
-
-theorem end_mut_to_raw.spec {α : Type} {value : α} (p : RawPtr α) :
-    ⦃ p ↦ value ⦄ end_mut_to_raw p
-      ⦃⇓ result => ⌜result = value⌝⦄ := by
-  unfold end_mut_to_raw
-  apply triple_bind (triple_read p value)
-  intro result
-  apply triple_hpure
-  intro hResult
-  apply triple_seq (triple_free p value)
-  apply triple_pure
-  intro h hEmpty
-  exact ⟨hResult, hEmpty⟩
-
-def incr_ptr (p : RawPtr Nat) : St Unit := do
-  let value ← read_ptr p
-  write_ptr p (value + 1)
-
-theorem incr_ptr.spec (p : RawPtr Nat) (value : Nat) :
+theorem incr_ptr.spec (p : Ref Nat) (value : Nat) :
     ⦃ p ↦ value ⦄ incr_ptr p ⦃⇓ p ↦ value + 1⦄ := by
   unfold incr_ptr
-  apply triple_bind (read_ptr.spec p)
+  apply triple_bind (read.spec p value)
   intro result
   apply triple_hpure
   intro hResult
   subst result
-  exact write_ptr.spec (value + 1) p
+  exact update.spec p value (value + 1)
 
 def incr_borrow (value : Nat) : St Nat := do
   let p ← mut_to_raw value
@@ -661,8 +656,8 @@ inductive EqOrDisj (α : Type) where
   | equal (value : α)
   | disjoint (leftValue rightValue : α)
 
-def isEqOrDisj {α : Type} (left right : RawPtr α)
-    (relation : EqOrDisj α) : HProp :=
+def isEqOrDisj {α : Type} (left right : Ref α)
+    (relation : EqOrDisj α) : SLProp :=
   match relation with
   | .equal value => iprop(⌜left = right⌝ ∗ left ↦ value)
   | .disjoint leftValue rightValue =>
@@ -679,24 +674,9 @@ def EqOrDisj.write {α : Type} (relation : EqOrDisj α)
   | .equal _ => .equal value
   | .disjoint leftValue _ => .disjoint leftValue value
 
-private theorem himpl_refl (H : HProp) : H ⊢ H :=
-  fun _ hH => hH
-
-private theorem hstar_mono {P₁ P₂ Q₁ Q₂ : HProp}
-    (hP : P₁ ⊢ P₂) (hQ : Q₁ ⊢ Q₂) :
-    P₁ ∗ Q₁ ⊢ P₂ ∗ Q₂ := by
-  intro h
-  rintro ⟨h₁, h₂, hDisjoint, hEq, hP₁, hQ₁⟩
-  exact ⟨h₁, h₂, hDisjoint, hEq, hP h₁ hP₁, hQ h₂ hQ₁⟩
-
-private theorem hpure_hstar_intro {P : Prop} (H : HProp) (hP : P) :
-    H ⊢ ⌜P⌝ ∗ H := by
-  intro h hH
-  exact ⟨∅, h, Finmap.disjoint_empty h, by simp, ⟨hP, rfl⟩, hH⟩
-
-theorem read_ptr.spec' {α : Type} {relation : EqOrDisj α}
-    (left right : RawPtr α) :
-    ⦃ isEqOrDisj left right relation ⦄ read_ptr left
+theorem read.spec' {α : Type} {relation : EqOrDisj α}
+    (left right : Ref α) :
+    ⦃ isEqOrDisj left right relation ⦄ read left
       ⦃⇓ result =>
         ⌜result = relation.read⌝ ∗ isEqOrDisj left right relation⦄ := by
   cases relation with
@@ -705,7 +685,7 @@ theorem read_ptr.spec' {α : Type} {relation : EqOrDisj α}
       apply triple_hpure
       intro hEq
       subst right
-      apply triple_conseq (triple_read left value)
+      apply triple_conseq (read.spec left value)
       · exact himpl_refl _
       · intro result
         apply hstar_mono (himpl_refl _)
@@ -713,15 +693,15 @@ theorem read_ptr.spec' {α : Type} {relation : EqOrDisj α}
   | disjoint leftValue rightValue =>
       simp only [isEqOrDisj, EqOrDisj.read]
       apply triple_conseq
-        (triple_frame (triple_read left leftValue)
+        (triple_frame (read.spec left leftValue)
           (right ↦ rightValue))
       · exact himpl_refl _
       · intro result h
         exact (hstar_assoc _ _ _ h).mp
 
-theorem write_ptr.spec' {α : Type} {relation : EqOrDisj α}
-    (left right : RawPtr α) (value : α) :
-    ⦃ isEqOrDisj left right relation ⦄ write_ptr right value
+theorem update.spec' {α : Type} {relation : EqOrDisj α}
+    (left right : Ref α) (value : α) :
+    ⦃ isEqOrDisj left right relation ⦄ update right value
       ⦃⇓ isEqOrDisj left right (relation.write value)⦄ := by
   cases relation with
   | equal oldValue =>
@@ -729,14 +709,14 @@ theorem write_ptr.spec' {α : Type} {relation : EqOrDisj α}
       apply triple_hpure
       intro hEq
       subst right
-      apply triple_conseq (triple_update left oldValue value)
+      apply triple_conseq (update.spec left oldValue value)
       · exact himpl_refl _
       · intro _
         exact hpure_hstar_intro _ rfl
   | disjoint leftValue rightValue =>
       simp only [isEqOrDisj, EqOrDisj.write]
       apply triple_conseq
-        (triple_frame (triple_update right rightValue value)
+        (triple_frame (update.spec right rightValue value)
           (left ↦ leftValue))
       · intro h
         exact (hstar_comm _ _ h).mp
