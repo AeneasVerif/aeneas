@@ -21,7 +21,7 @@ def hempty : HProp :=
 def hpure (P : Prop) : HProp :=
   fun h => P ∧ h = empty
 
-def hsingle {α : Type} (r : ref α) (value : α) : HProp :=
+def hsingle {α : Type} (r : Ref α) (value : α) : HProp :=
   fun h => h = singleton r value
 
 def hstar (H₁ H₂ : HProp) : HProp :=
@@ -479,7 +479,7 @@ theorem triple_alloc (value : α) :
   change (r ↦ value) h'
   exact fresh_empty_eq_singleton hFresh
 
-theorem triple_read (r : ref α) (value : α) :
+theorem triple_read (r : Ref α) (value : α) :
     {{ r ↦ value }} State.read r
       {{ fun result => ⌜result = value⌝ ∗ r ↦ value }} := by
   apply (triple_iff _ _ _).mpr
@@ -492,7 +492,7 @@ theorem triple_read (r : ref α) (value : α) :
   apply (hstar_hpure_l _ _ _).mpr
   exact ⟨read_singleton r value hContains, rfl⟩
 
-theorem triple_update (r : ref α) (oldValue newValue : α) :
+theorem triple_update (r : Ref α) (oldValue newValue : α) :
     {{ r ↦ oldValue }} State.update r newValue
       {{ fun _ => r ↦ newValue }} := by
   apply (triple_iff _ _ _).mpr
@@ -504,7 +504,7 @@ theorem triple_update (r : ref α) (oldValue newValue : α) :
     (update r newValue (singleton r oldValue) hContains)
   exact update_singleton r oldValue newValue hContains
 
-theorem triple_free (r : ref α) (value : α) :
+theorem triple_free (r : Ref α) (value : α) :
     {{ r ↦ value }} State.free r {{ fun _ => emp }} := by
   apply (triple_iff _ _ _).mpr
   intro h hSingle
