@@ -44,6 +44,8 @@ theorem exists_fresh {α : Type} (value : α) (h : Heap) :
     Finset.le_sup (f := fun x : Nat => x) hMemKeys
   exact Nat.not_succ_le_self _ hLe
 
+namespace Heap
+
 def read {α : Type} (r : Ref α) (h : Heap)
     (hContains : contains h r) : α :=
   match hlookup : h.lookup r.allocId with
@@ -61,6 +63,8 @@ def free {α : Type} (r : Ref α) (h : Heap)
     (_ : contains h r) : Heap :=
   h.erase r.allocId
 
+end Heap
+
 theorem contains_union_left {α : Type} {h₁ h₂ : Heap} {r : Ref α}
     (hContains : contains h₁ r) : contains (h₁ ∪ h₂) r := by
   have hMem : r.allocId ∈ h₁ := by
@@ -75,15 +79,15 @@ theorem contains_union_left {α : Type} {h₁ h₂ : Heap} {r : Ref α}
 
 theorem read_union_left {α : Type} {h₁ h₂ : Heap} {r : Ref α}
     (hContains : contains h₁ r) :
-    read r (h₁ ∪ h₂) (contains_union_left hContains) =
-      read r h₁ hContains := by
+    Heap.read r (h₁ ∪ h₂) (contains_union_left hContains) =
+      Heap.read r h₁ hContains := by
   have hMem : r.allocId ∈ h₁ := by
     unfold contains at hContains
     split at hContains
     · contradiction
     · rename_i cell hLookup
       exact Finmap.mem_of_lookup_eq_some hLookup
-  unfold read
+  unfold Heap.read
   split
   · rename_i hLookup
     have hContainsUnion := contains_union_left (h₂ := h₂) hContains
@@ -103,8 +107,8 @@ theorem read_union_left {α : Type} {h₁ h₂ : Heap} {r : Ref α}
 
 theorem update_union_left {α : Type} {h₁ h₂ : Heap}
     (r : Ref α) (value : α) (hContains : contains h₁ r) :
-    update r value (h₁ ∪ h₂) (contains_union_left hContains) =
-      update r value h₁ hContains ∪ h₂ := by
+    Heap.update r value (h₁ ∪ h₂) (contains_union_left hContains) =
+      Heap.update r value h₁ hContains ∪ h₂ := by
   exact Finmap.insert_union
 
 theorem fresh_frame {α : Type} {r : Ref α} {value : α}
@@ -134,7 +138,7 @@ theorem fresh_frame {α : Type} {r : Ref α} {value : α}
 theorem disjoint_update_left {α : Type} {r : Ref α} {value : α}
     {h₁ h₂ : Heap} (hDisjoint : Finmap.Disjoint h₁ h₂)
     (hContains : contains h₁ r) :
-    Finmap.Disjoint (update r value h₁ hContains) h₂ := by
+    Finmap.Disjoint (Heap.update r value h₁ hContains) h₂ := by
   have hUnallocated : unallocated h₂ r := by
     intro hMem₂
     unfold contains at hContains
@@ -144,7 +148,7 @@ theorem disjoint_update_left {α : Type} {r : Ref α} {value : α}
       exact hDisjoint r.allocId
         (Finmap.mem_of_lookup_eq_some hLookup) hMem₂
   intro allocationId hMem₁ hMem₂
-  unfold update at hMem₁
+  unfold Heap.update at hMem₁
   rw [Finmap.mem_insert] at hMem₁
   rcases hMem₁ with hEq | hMem₁
   · exact hUnallocated (hEq ▸ hMem₂)
@@ -153,15 +157,15 @@ theorem disjoint_update_left {α : Type} {r : Ref α} {value : α}
 theorem disjoint_free_left {α : Type} {r : Ref α}
     {h₁ h₂ : Heap} (hDisjoint : Finmap.Disjoint h₁ h₂)
     (hContains : contains h₁ r) :
-    Finmap.Disjoint (free r h₁ hContains) h₂ := by
+    Finmap.Disjoint (Heap.free r h₁ hContains) h₂ := by
   intro allocationId hMem₁ hMem₂
   exact hDisjoint allocationId (Finmap.mem_erase.mp hMem₁).right hMem₂
 
 theorem free_union_left {α : Type} {h₁ h₂ : Heap}
     (r : Ref α) (hDisjoint : Finmap.Disjoint h₁ h₂)
     (hContains : contains h₁ r) :
-    free r (h₁ ∪ h₂) (contains_union_left hContains) =
-      free r h₁ hContains ∪ h₂ := by
+    Heap.free r (h₁ ∪ h₂) (contains_union_left hContains) =
+      Heap.free r h₁ hContains ∪ h₂ := by
   have hMem : r.allocId ∈ h₁ := by
     unfold contains at hContains
     split at hContains
@@ -170,7 +174,7 @@ theorem free_union_left {α : Type} {h₁ h₂ : Heap}
       exact Finmap.mem_of_lookup_eq_some hLookup
   have hNotMem : r.allocId ∉ h₂ :=
     fun hMem₂ => hDisjoint r.allocId hMem hMem₂
-  unfold free
+  unfold Heap.free
   apply Finmap.ext_lookup
   intro allocationId
   by_cases hEq : allocationId = r.allocId
@@ -209,8 +213,8 @@ theorem contains_singleton {α : Type} (r : Ref α) (value : α) :
 
 theorem read_singleton {α : Type} (r : Ref α) (value : α)
     (hContains : contains (singleton r value) r) :
-    read r (singleton r value) hContains = value := by
-  unfold read
+    Heap.read r (singleton r value) hContains = value := by
+  unfold Heap.read
   split
   · rename_i hLookup
     unfold singleton at hLookup
@@ -225,14 +229,14 @@ theorem read_singleton {α : Type} (r : Ref α) (value : α)
 theorem update_singleton {α : Type} (r : Ref α)
     (oldValue newValue : α)
     (hContains : contains (singleton r oldValue) r) :
-    update r newValue (singleton r oldValue) hContains =
+    Heap.update r newValue (singleton r oldValue) hContains =
       singleton r newValue := by
-  simp [update, singleton]
+  simp [Heap.update, singleton]
 
 theorem free_singleton {α : Type} (r : Ref α) (value : α)
     (hContains : contains (singleton r value) r) :
-    free r (singleton r value) hContains = empty := by
-  unfold free
+    Heap.free r (singleton r value) hContains = empty := by
+  unfold Heap.free
   apply Finmap.ext_lookup
   intro allocationId
   by_cases hEq : allocationId = r.allocId

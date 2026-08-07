@@ -14,8 +14,6 @@ abbrev St := FFree StEvents
 instance St.instLawfulMonad : LawfulMonad St :=
   inferInstanceAs (LawfulMonad (FFree StEvents))
 
-namespace State
-
 def alloc {α : Type} (value : α) : St (Ref α) :=
   FFree.trigger (.Alloc value)
 
@@ -27,7 +25,6 @@ def update {α : Type} (r : Ref α) (value : α) : St Unit :=
 
 def free {α : Type} (r : Ref α) : St Unit :=
   FFree.trigger (.Free r)
-end State
 
 inductive Evaluates : St α → Heap → α → Heap → Prop where
   | ok (value : α) (h : Heap) :
@@ -40,18 +37,18 @@ inductive Evaluates : St α → Heap → α → Heap → Prop where
   | read {β : Type} {r : Ref β} {next : β → St α}
       {h₀ h₁ : Heap} {result : α}
       (hContains : contains h₀ r)
-      (hNext : Evaluates (next (read r h₀ hContains)) h₀ result h₁) :
+      (hNext : Evaluates (next (Heap.read r h₀ hContains)) h₀ result h₁) :
       Evaluates (.event (.Read r) next) h₀ result h₁
   | update {β : Type} {r : Ref β} {value : β} {next : Unit → St α}
       {h₀ h₁ : Heap} {result : α}
       (hContains : contains h₀ r)
       (hNext :
-        Evaluates (next ()) (update r value h₀ hContains) result h₁) :
+        Evaluates (next ()) (Heap.update r value h₀ hContains) result h₁) :
       Evaluates (.event (.Update r value) next) h₀ result h₁
   | free {β : Type} {r : Ref β} {next : Unit → St α}
       {h₀ h₁ : Heap} {result : α}
       (hContains : contains h₀ r)
-      (hNext : Evaluates (next ()) (free r h₀ hContains) result h₁) :
+      (hNext : Evaluates (next ()) (Heap.free r h₀ hContains) result h₁) :
       Evaluates (.event (.Free r) next) h₀ result h₁
 
 end Aeneas.SLPoC
