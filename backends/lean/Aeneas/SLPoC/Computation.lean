@@ -11,6 +11,9 @@ inductive StEvents : Type → Type 1 where
 
 abbrev St := FFree StEvents
 
+instance St.instLawfulMonad : LawfulMonad St :=
+  inferInstanceAs (LawfulMonad (FFree StEvents))
+
 namespace State
 
 def alloc {α : Type} (value : α) : St (ref α) :=
