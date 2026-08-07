@@ -7,6 +7,8 @@ logic (SL) support.
 
 | File | Purpose |
 |---|---|
+| [`Computation.lean`](Computation.lean) | Instantiates the freer monad with heap events and defines its runner. |
+| [`FFree.lean`](FFree.lean) | Defines the generic freer monad. |
 | [`Heap.lean`](Heap.lean) | Defines locations, dynamically typed cells, and finite heaps. |
 | `README.md` | Records the purpose and meaning of files in this directory. |
 
