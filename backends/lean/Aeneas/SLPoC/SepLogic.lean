@@ -241,33 +241,62 @@ def theta_ev : StEvents α → Wp α
     }
   | .Read r => {
       run := fun Q h =>
-        ∃ hLive : live h r, Q (read r h hLive) h
+        ∃ hContains : contains h r, Q (read r h hContains) h
       monotone := by
         intro Q₁ Q₂ hQ h hPre
-        obtain ⟨hLive, hPost⟩ := hPre
-        exact ⟨hLive, hQ _ _ hPost⟩
+        obtain ⟨hContains, hPost⟩ := hPre
+        exact ⟨hContains, hQ _ _ hPost⟩
     }
   | .Update r value => {
       run := fun Q h =>
-        ∃ hLive : live h r, Q () (update r value h hLive)
+        ∃ hContains : contains h r, Q () (update r value h hContains)
       monotone := by
         intro Q₁ Q₂ hQ h hPre
-        obtain ⟨hLive, hPost⟩ := hPre
-        exact ⟨hLive, hQ _ _ hPost⟩
+        obtain ⟨hContains, hPost⟩ := hPre
+        exact ⟨hContains, hQ _ _ hPost⟩
     }
   | .Free r => {
       run := fun Q h =>
-        ∃ hLive : live h r, Q () (free r h hLive)
+        ∃ hContains : contains h r, Q () (free r h hContains)
       monotone := by
         intro Q₁ Q₂ hQ h hPre
-        obtain ⟨hLive, hPost⟩ := hPre
-        exact ⟨hLive, hQ _ _ hPost⟩
+        obtain ⟨hContains, hPost⟩ := hPre
+        exact ⟨hContains, hQ _ _ hPost⟩
     }
 
 def theta : St α → Wp α
   | .ok value => Wp.pure value
   | .event event next =>
       Wp.bind (theta_ev event) (fun value => theta (next value))
+
+theorem theta_sound (m : St α) (Q : Postcondition α) (h₀ : Heap)
+    (hTheta : theta m Q h₀) :
+    ∃ value h₁, Evaluates m h₀ value h₁ ∧ Q value h₁ := by
+  induction m generalizing h₀ with
+  | ok value =>
+      exact ⟨value, h₀, Evaluates.ok value h₀, hTheta⟩
+  | event event next ih =>
+      cases event with
+      | Alloc value =>
+          obtain ⟨r, h, hFresh⟩ := exists_fresh value h₀
+          obtain ⟨result, h₁, hEvaluates, hPost⟩ :=
+            ih r h (hTheta r h hFresh)
+          exact ⟨result, h₁, Evaluates.alloc hFresh hEvaluates, hPost⟩
+      | Read r =>
+          obtain ⟨hContains, hNext⟩ := hTheta
+          obtain ⟨result, h₁, hEvaluates, hPost⟩ :=
+            ih (read r h₀ hContains) h₀ hNext
+          exact ⟨result, h₁, Evaluates.read hContains hEvaluates, hPost⟩
+      | Update r value =>
+          obtain ⟨hContains, hNext⟩ := hTheta
+          obtain ⟨result, h₁, hEvaluates, hPost⟩ :=
+            ih () (update r value h₀ hContains) hNext
+          exact ⟨result, h₁, Evaluates.update hContains hEvaluates, hPost⟩
+      | Free r =>
+          obtain ⟨hContains, hNext⟩ := hTheta
+          obtain ⟨result, h₁, hEvaluates, hPost⟩ :=
+            ih () (free r h₀ hContains) hNext
+          exact ⟨result, h₁, Evaluates.free hContains hEvaluates, hPost⟩
 
 theorem theta_ev_frame (event : StEvents α) (Q : Postcondition α)
     (H : HProp) :
@@ -283,22 +312,22 @@ theorem theta_ev_frame (event : StEvents α) (Q : Postcondition α)
       exact ⟨h₁', h₂, hDisjoint', rfl,
         hEvent r h₁' hFresh₁, hH⟩
   | Read r =>
-      rcases hEvent with ⟨hLive, hPost⟩
-      refine ⟨live_union_left hLive, ?_⟩
-      rw [read_union_left hLive]
+      rcases hEvent with ⟨hContains, hPost⟩
+      refine ⟨contains_union_left hContains, ?_⟩
+      rw [read_union_left hContains]
       exact ⟨h₁, h₂, hDisjoint, rfl, hPost, hH⟩
   | Update r value =>
-      rcases hEvent with ⟨hLive, hPost⟩
-      refine ⟨live_union_left hLive, ?_⟩
-      rw [update_union_left r value hLive]
-      exact ⟨update r value h₁ hLive, h₂,
-        disjoint_update_left hDisjoint hLive, rfl, hPost, hH⟩
+      rcases hEvent with ⟨hContains, hPost⟩
+      refine ⟨contains_union_left hContains, ?_⟩
+      rw [update_union_left r value hContains]
+      exact ⟨update r value h₁ hContains, h₂,
+        disjoint_update_left hDisjoint hContains, rfl, hPost, hH⟩
   | Free r =>
-      rcases hEvent with ⟨hLive, hPost⟩
-      refine ⟨live_union_left hLive, ?_⟩
-      rw [free_union_left r hDisjoint hLive]
-      exact ⟨free r h₁ hLive, h₂,
-        disjoint_free_left hDisjoint hLive, rfl, hPost, hH⟩
+      rcases hEvent with ⟨hContains, hPost⟩
+      refine ⟨contains_union_left hContains, ?_⟩
+      rw [free_union_left r hDisjoint hContains]
+      exact ⟨free r h₁ hContains, h₂,
+        disjoint_free_left hDisjoint hContains, rfl, hPost, hH⟩
 
 theorem theta_frame (m : St α) (Q : Postcondition α) (H : HProp) :
     theta m Q ∗ H ⊢ theta m (Q ∗+ H) := by
@@ -456,12 +485,12 @@ theorem triple_read (r : ref α) (value : α) :
   apply (triple_iff _ _ _).mpr
   intro h hSingle
   subst h
-  have hLive := live_singleton r value
-  refine ⟨hLive, ?_⟩
-  change (⌜read r (singleton r value) hLive = value⌝ ∗ r ↦ value)
+  have hContains := contains_singleton r value
+  refine ⟨hContains, ?_⟩
+  change (⌜read r (singleton r value) hContains = value⌝ ∗ r ↦ value)
     (singleton r value)
   apply (hstar_hpure_l _ _ _).mpr
-  exact ⟨read_singleton r value hLive, rfl⟩
+  exact ⟨read_singleton r value hContains, rfl⟩
 
 theorem triple_update (r : ref α) (oldValue newValue : α) :
     {{ r ↦ oldValue }} State.update r newValue
@@ -469,19 +498,20 @@ theorem triple_update (r : ref α) (oldValue newValue : α) :
   apply (triple_iff _ _ _).mpr
   intro h hSingle
   subst h
-  have hLive := live_singleton r oldValue
-  refine ⟨hLive, ?_⟩
-  change (r ↦ newValue) (update r newValue (singleton r oldValue) hLive)
-  exact update_singleton r oldValue newValue hLive
+  have hContains := contains_singleton r oldValue
+  refine ⟨hContains, ?_⟩
+  change (r ↦ newValue)
+    (update r newValue (singleton r oldValue) hContains)
+  exact update_singleton r oldValue newValue hContains
 
 theorem triple_free (r : ref α) (value : α) :
     {{ r ↦ value }} State.free r {{ fun _ => emp }} := by
   apply (triple_iff _ _ _).mpr
   intro h hSingle
   subst h
-  have hLive := live_singleton r value
-  refine ⟨hLive, ?_⟩
-  change emp (free r (singleton r value) hLive)
-  exact free_singleton r value hLive
+  have hContains := contains_singleton r value
+  refine ⟨hContains, ?_⟩
+  change emp (free r (singleton r value) hContains)
+  exact free_singleton r value hContains
 
 end Aeneas.SLPoC
