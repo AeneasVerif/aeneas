@@ -73,6 +73,18 @@ open scoped SepLogic
 theorem himpl_refl (H : SLProp) : H ⊢ H :=
   fun _ hH => hH
 
+theorem himpl_trans {P Q R : SLProp} (hPQ : P ⊢ Q) (hQR : Q ⊢ R) :
+    P ⊢ R :=
+  fun h hP => hQR h (hPQ h hP)
+
+theorem himpl_of_eq {P Q : SLProp} (hEq : P = Q) : P ⊢ Q := by
+  subst Q
+  exact himpl_refl P
+
+theorem hequiv_eq {P Q : SLProp} (hEquiv : P ⊣⊢ Q) : P = Q := by
+  funext h
+  exact propext (hEquiv h)
+
 theorem hstar_assoc (H₁ H₂ H₃ : SLProp) :
     (H₁ ∗ H₂) ∗ H₃ ⊣⊢ H₁ ∗ (H₂ ∗ H₃) := by
   intro h
@@ -117,6 +129,20 @@ theorem hstar_comm (H₁ H₂ : SLProp) :
     exact ⟨h₁, h₂, Finmap.Disjoint.symm h₂ h₁ hDisjoint,
       hEq.trans (Finmap.union_comm_of_disjoint hDisjoint), hH₁, hH₂⟩
 
+theorem hstar_assoc_eq (H₁ H₂ H₃ : SLProp) :
+    ((H₁ ∗ H₂) ∗ H₃) = (H₁ ∗ (H₂ ∗ H₃)) :=
+  hequiv_eq (hstar_assoc H₁ H₂ H₃)
+
+theorem hstar_comm_eq (H₁ H₂ : SLProp) :
+    (H₁ ∗ H₂) = (H₂ ∗ H₁) :=
+  hequiv_eq (hstar_comm H₁ H₂)
+
+instance : Std.Associative hstar where
+  assoc := hstar_assoc_eq
+
+instance : Std.Commutative hstar where
+  comm := hstar_comm_eq
+
 theorem hstar_mono {P₁ P₂ Q₁ Q₂ : SLProp}
     (hP : P₁ ⊢ P₂) (hQ : Q₁ ⊢ Q₂) :
     P₁ ∗ Q₁ ⊢ P₂ ∗ Q₂ := by
@@ -136,6 +162,23 @@ theorem hstar_hempty_l (H : SLProp) :
     exact hH
   · intro hH
     exact ⟨∅, h, Finmap.disjoint_empty h, by simp, rfl, hH⟩
+
+theorem hstar_hempty_r (H : SLProp) :
+    H ∗ emp ⊣⊢ H := by
+  intro h
+  exact (hstar_comm H emp h).trans (hstar_hempty_l H h)
+
+theorem hstar_hempty_l_eq (H : SLProp) :
+    (emp ∗ H) = H :=
+  hequiv_eq (hstar_hempty_l H)
+
+theorem hstar_hempty_r_eq (H : SLProp) :
+    (H ∗ emp) = H :=
+  hequiv_eq (hstar_hempty_r H)
+
+instance : Std.LawfulIdentity hstar hempty where
+  left_id := hstar_hempty_l_eq
+  right_id := hstar_hempty_r_eq
 
 theorem hstar_hexists {α : Sort _} (J : α → SLProp) (H : SLProp) :
     iprop(∃ x, J x) ∗ H ⊣⊢ iprop(∃ x, J x ∗ H) := by
@@ -163,6 +206,21 @@ theorem hpure_hstar_intro {P : Prop} (H : SLProp) (hP : P) :
     H ⊢ ⌜P⌝ ∗ H := by
   intro h hH
   exact ⟨∅, h, Finmap.disjoint_empty h, by simp, ⟨hP, rfl⟩, hH⟩
+
+theorem hpure_elim (P : Prop) :
+    ⌜P⌝ ⊢ emp :=
+  fun _ hP => hP.2
+
+theorem hstar_to_emp {P Q : SLProp}
+    (hP : P ⊢ emp) (hQ : Q ⊢ emp) :
+    P ∗ Q ⊢ emp :=
+  himpl_trans (hstar_mono hP hQ)
+    (fun h => (hstar_hempty_l emp h).mp)
+
+theorem hstar_elim_right {P F : SLProp} (hF : F ⊢ emp) :
+    P ∗ F ⊢ P :=
+  himpl_trans (hstar_mono (himpl_refl P) hF)
+    (fun h => (hstar_hempty_r P h).mp)
 
 /-- Monotone predicate transformers, corresponding to `Wᴾᵘʳᵉ` in
 "Dijkstra Monads for All". -/
@@ -575,154 +633,5 @@ theorem end_mut_to_raw.spec {α : Type} {value : α} (r : Ref α) :
   apply triple_pure
   intro h hEmpty
   exact ⟨hResult, hEmpty⟩
-
-namespace Examples
-
-def add1 (x : Nat) : St Nat :=
-  pure (x + 1)
-
-theorem add1_spec (x : Nat) :
-    (add1 x) ⦃⇓ y => y = x + 1⦄ := by
-  apply triple_pure
-  intro h hEmpty
-  exact ⟨rfl, hEmpty⟩
-
-example (x : Nat) :
-    (do
-      let y ← add1 x
-      add1 y) ⦃⇓ y => y = x + 2⦄ := by
-  apply triple_bind (add1_spec x)
-  intro y
-  apply triple_hpure'
-  intro hy
-  apply triple_pure
-  intro h hEmpty
-  constructor
-  · omega
-  · exact hEmpty
-
-def add2 (x : Nat) : St (Nat × Nat) :=
-  pure (x + 1, x + 2)
-
-theorem add2_spec (x : Nat) :
-    (add2 x) ⦃⇓ (y, z) => y = x + 1 ∧ z = x + 2⦄ := by
-  apply triple_pure
-  intro h hEmpty
-  exact ⟨⟨rfl, rfl⟩, hEmpty⟩
-
-example (x : Nat) :
-    (do
-      let (y, _) ← add2 x
-      add2 y) ⦃⇓ (y, _) => y = x + 2⦄ := by
-  apply triple_bind (add2_spec x)
-  rintro ⟨y, z⟩
-  apply triple_hpure'
-  rintro ⟨hy, _⟩
-  apply triple_pure
-  intro h hEmpty
-  constructor
-  · omega
-  · exact hEmpty
-
-def incr_ptr (p : Ref Nat) : St Unit := do
-  let value ← read p
-  update p (value + 1)
-
-theorem incr_ptr.spec (p : Ref Nat) (value : Nat) :
-    ⦃ p ↦ value ⦄ incr_ptr p ⦃⇓ p ↦ value + 1⦄ := by
-  unfold incr_ptr
-  apply triple_bind (read.spec p value)
-  intro result
-  apply triple_hpure
-  intro hResult
-  subst result
-  exact update.spec p value (value + 1)
-
-def incr_borrow (value : Nat) : St Nat := do
-  let p ← mut_to_raw value
-  incr_ptr p
-  end_mut_to_raw p
-
-theorem incr_borrow.spec (value : Nat) :
-    (incr_borrow value) ⦃⇓ result => result = value + 1⦄ := by
-  unfold incr_borrow
-  apply triple_bind (mut_to_raw.spec value)
-  intro p
-  apply triple_bind (incr_ptr.spec p value)
-  intro _
-  exact end_mut_to_raw.spec p
-
-inductive EqOrDisj (α : Type) where
-  | equal (value : α)
-  | disjoint (leftValue rightValue : α)
-
-def isEqOrDisj {α : Type} (left right : Ref α)
-    (relation : EqOrDisj α) : SLProp :=
-  match relation with
-  | .equal value => iprop(⌜left = right⌝ ∗ left ↦ value)
-  | .disjoint leftValue rightValue =>
-      iprop(left ↦ leftValue ∗ right ↦ rightValue)
-
-def EqOrDisj.read {α : Type} (relation : EqOrDisj α) : α :=
-  match relation with
-  | .equal value => value
-  | .disjoint leftValue _ => leftValue
-
-def EqOrDisj.write {α : Type} (relation : EqOrDisj α)
-    (value : α) : EqOrDisj α :=
-  match relation with
-  | .equal _ => .equal value
-  | .disjoint leftValue _ => .disjoint leftValue value
-
-theorem read.spec' {α : Type} {relation : EqOrDisj α}
-    (left right : Ref α) :
-    ⦃ isEqOrDisj left right relation ⦄ read left
-      ⦃⇓ result =>
-        ⌜result = relation.read⌝ ∗ isEqOrDisj left right relation⦄ := by
-  cases relation with
-  | equal value =>
-      simp only [isEqOrDisj, EqOrDisj.read]
-      apply triple_hpure
-      intro hEq
-      subst right
-      apply triple_conseq (read.spec left value)
-      · exact himpl_refl _
-      · intro result
-        apply hstar_mono (himpl_refl _)
-        exact hpure_hstar_intro _ rfl
-  | disjoint leftValue rightValue =>
-      simp only [isEqOrDisj, EqOrDisj.read]
-      apply triple_conseq
-        (triple_frame (read.spec left leftValue)
-          (right ↦ rightValue))
-      · exact himpl_refl _
-      · intro result h
-        exact (hstar_assoc _ _ _ h).mp
-
-theorem update.spec' {α : Type} {relation : EqOrDisj α}
-    (left right : Ref α) (value : α) :
-    ⦃ isEqOrDisj left right relation ⦄ update right value
-      ⦃⇓ isEqOrDisj left right (relation.write value)⦄ := by
-  cases relation with
-  | equal oldValue =>
-      simp only [isEqOrDisj, EqOrDisj.write]
-      apply triple_hpure
-      intro hEq
-      subst right
-      apply triple_conseq (update.spec left oldValue value)
-      · exact himpl_refl _
-      · intro _
-        exact hpure_hstar_intro _ rfl
-  | disjoint leftValue rightValue =>
-      simp only [isEqOrDisj, EqOrDisj.write]
-      apply triple_conseq
-        (triple_frame (update.spec right rightValue value)
-          (left ↦ leftValue))
-      · intro h
-        exact (hstar_comm _ _ h).mp
-      · intro _ h
-        exact (hstar_comm _ _ h).mp
-
-end Examples
 
 end Aeneas.SLPoC
