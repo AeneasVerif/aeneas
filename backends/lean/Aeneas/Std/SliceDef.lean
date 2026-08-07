@@ -34,21 +34,6 @@ theorem ListN.to_from_inverse {α n} {l : ListN α n}
 theorem ListN.toList_inj {α n} (l1 l2 : ListN α n) (h : l1.toList = l2.toList) : l1 = l2 := by
   induction l1 <;> cases l2 <;> grind [ListN.toList]
 
--- theorem ListN.toList_inj {α n m} (l1 : ListN α n) (l2 : ListN α m)
---   (h : l1.toList = l2.toList) : l1 ≍ l2 := by
---   induction l1 <;> cases l2 <;> simp [ListN.toList]
---   --
-
--- theorem ListN.to_from_inverse {α n} {l : ListN α n}
---   : ListN.fromList l.toList = cast (by grind[ListN_length]) l := by
---   induction l <;> try grind [toList, fromList]
---   rename_i n a l ih
---   have : n = l.toList.length := by grind [ListN_length]
---   simp [ListN.fromList, ListN.toList]
---   rw [ih]
---   cbv
---   --
-
 -- TODO: clean this
 -- def Slice (α : Type u) := { l : List α // l.length ≤ Usize.max }
 
