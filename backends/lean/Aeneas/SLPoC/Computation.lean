@@ -83,7 +83,7 @@ def runWithWitnesses : (m : St α) →
   | .event (.Update r value) next, state, hBefore =>
     have hContains : Aeneas.SLPoC.contains state.heap r :=
       state.holds ⟨_, r⟩ hBefore.left
-    match hLookup : state.heap.lookup r.loc with
+    match hLookup : state.heap.lookup r.allocId with
     | none => none
     | some ⟨β, freed, oldValue⟩ =>
       if hFreed : freed then
@@ -107,7 +107,7 @@ def runWithWitnesses : (m : St α) →
   | .event (.Free r) next, state, hBefore =>
     have hContains : Aeneas.SLPoC.contains state.heap r :=
       state.holds ⟨_, r⟩ hBefore.left
-    match hLookup : state.heap.lookup r.loc with
+    match hLookup : state.heap.lookup r.allocId with
     | none => none
     | some ⟨β, freed, value⟩ =>
       if hFreed : freed then
