@@ -581,6 +581,19 @@ let print_error_diagnostics = ref false
     method names. *)
 let method_names_in_impl_namespace = ref false
 
+(** This is for Lean: if the option is on, when referring to a trait
+    implementation or to a trait clause in scope, we use the
+    [({Trait<Args> for Type})] notation instead of the (mangled) name of the
+    implementation (resp. the clause binder path). The notation is elaborated by
+    the [trait_inst] machinery of the Lean backend library, which resolves it by
+    searching the local context then the registry of implementations (registered
+    via the [trait_inst] attribute, which we always generate).
+
+    We fall back to the standard printing when the types are not representable
+    in the notation, or when the resolution would be ambiguous (e.g. two clauses
+    for the same trait and type in scope). *)
+let trait_inst_notation = ref false
+
 (** *)
 let all_computable = ref false
 
