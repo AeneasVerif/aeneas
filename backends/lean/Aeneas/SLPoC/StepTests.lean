@@ -269,4 +269,98 @@ example (p : Ref Nat) (value : Nat) :
   unfold readAndFree
   step* by sl_frame
 
+/-! ## The tactics ported from Separation Logic Foundations
+
+`SLTactics.lean` ports SLF's magic wand, ramified frame rule, `xsimpl`, `xpull`,
+`xchange`, `xval` and `xapp`. -/
+
+-- wand laws
+example (H1 H2 : SLProp) : H1 ∗ (H1 -∗ H2) ⊢ H2 := hwand_cancel H1 H2
+example (Q1 Q2 : SLPost Nat) : Q1 ∗+ (Q1 -∗∗ Q2) ⊢+ Q2 := qwand_cancel Q1 Q2
+
+-- sl_xpull: SLF's canonical example where the RHS witness depends on the LHS one
+example (p : Ref Nat) :
+    iprop(∃ n, ⌜0 < n⌝ ∗ p ↦ n) ⊢ iprop(∃ m, p ↦ (m + 1)) := by
+  sl_xpull
+  -- `sl_xpull` names the variables it introduces `x` and the facts `h`.
+  refine himpl_hexists_r (x - 1) ?_
+  rw [show x - 1 + 1 = x by omega]
+  sl_xsimpl
+
+-- sl_xchange with an entailment
+theorem cellPair (p q : Ref Nat) : iprop(p ↦ 1 ∗ q ↦ 2) ⊢ iprop(∃ n, p ↦ n ∗ q ↦ 2) :=
+  himpl_hexists_r 1 (himpl_refl _)
+
+example (p q r : Ref Nat) :
+    iprop(r ↦ 0 ∗ (p ↦ 1 ∗ q ↦ 2)) ⊢ iprop(∃ n, r ↦ 0 ∗ (p ↦ n ∗ q ↦ 2)) := by
+  sl_xchange (cellPair p q)
+  sl_xsimpl
+
+-- sl_xchange with an equality, on a triple precondition
+theorem swapEq (p q : Ref Nat) : iprop(p ↦ 1 ∗ q ↦ 2) = iprop(q ↦ 2 ∗ p ↦ 1) :=
+  hstar_comm_eq _ _
+
+example (p q : Ref Nat) :
+    ⦃ iprop((p ↦ 1 ∗ q ↦ 2) ∗ emp) ⦄ Examples.incr_ptr q ⦃⇓ iprop(q ↦ 3 ∗ p ↦ 1)⦄ := by
+  unfold Examples.incr_ptr
+  sl_xchange (swapEq p q)
+  step* by sl_frame
+
+-- sl_xval
+example (p : Ref Nat) : ⦃ p ↦ 1 ⦄ (pure 5 : St Nat) ⦃⇓ v => ⌜v = 5⌝ ∗ p ↦ 1⦄ := by
+  sl_xval
+  sl_xsimpl
+
+-- sl_xapp: terminal call through the ramified frame rule
+example (p q : Ref Nat) (x : Nat) :
+    ⦃ iprop(p ↦ x ∗ q ↦ 9) ⦄ Examples.incr_ptr p ⦃⇓ iprop(q ↦ 9 ∗ p ↦ (x + 1))⦄ := by
+  sl_xapp (Examples.incr_ptr.spec p x)
+
+
+/-! ### The ramified frame rule in `step` -/
+
+/-- `sl_step` finishes a terminal call: its obligation is the *main* goal, which
+`step`'s own `by` tactic does not reach. -/
+example (p q : Ref Nat) :
+    ⦃ iprop(p ↦ 3 ∗ q ↦ 7) ⦄ read p ⦃⇓ r => iprop(⌜r = 3⌝ ∗ (p ↦ 3 ∗ q ↦ 7))⦄ := by
+  sl_step
+
+/-- What the ramified frame rule buys: the precondition of the *caller* may be an
+existential, and `sl_frame` is free to open it because there is no frame
+metavariable to keep it out of.  The explicit frame rule cannot do this. -/
+example (q : Ref Nat) :
+    ⦃ hexists (fun n => iprop(q ↦ n)) ⦄ alloc 5
+      ⦃⇓ r => iprop(r ↦ 5 ∗ hexists (fun n => iprop(q ↦ n)))⦄ := by
+  step* by sl_frame
+
+/-- `sl_xpull` must refuse a frame-inference goal: introducing the existential of
+the left-hand side would put a variable out of the scope of the frame `?F`.  The
+`hPre` premise of the bind rule is exactly such a goal. -/
+example (p q : Ref Nat) (x : Nat) :
+    ⦃ iprop(hexists (fun n => iprop(q ↦ n)) ∗ p ↦ x) ⦄ touchThenSet p
+      ⦃⇓ iprop(hexists (fun n => iprop(q ↦ n)) ∗ p ↦ 7)⦄ := by
+  unfold touchThenSet
+  apply triple_step_bind (touchAny p) _ (touchAny.spec p)
+  case hPre =>
+    fail_if_success sl_xpull
+    sl_frame
+  case hNext =>
+    intro _ _
+    sl_pull
+    step* by sl_frame
+
+/-- A wand on the right is cancelled against an identical one on the left before
+being used to absorb the residual resources. -/
+example (Q₁ Q₂ : SLPost Nat) (H : SLProp) :
+    iprop(H ∗ (Q₁ -∗∗ Q₂)) ⊢ iprop(H ∗ (Q₁ -∗∗ Q₂)) := by
+  sl_frame
+
+/-- `sl_step` only touches the goals `step` produces. -/
+example (p q : Ref Nat) :
+    (⦃ iprop(p ↦ 3 ∗ q ↦ 7) ⦄ read p ⦃⇓ r => iprop(⌜r = 3⌝ ∗ (p ↦ 3 ∗ q ↦ 7))⦄)
+    ∧ (iprop(p ↦ 3 ∗ q ↦ 7) ⊢ iprop(q ↦ 7 ∗ p ↦ 3)) := by
+  refine ⟨?_, ?_⟩
+  sl_step
+  sl_frame
+
 end Aeneas.SLPoC
