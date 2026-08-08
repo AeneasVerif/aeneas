@@ -207,6 +207,39 @@ theorem hpure_hstar_intro {P : Prop} (H : SLProp) (hP : P) :
   intro h hH
   exact ⟨∅, h, Finmap.disjoint_empty h, by simp, ⟨hP, rfl⟩, hH⟩
 
+/-- Extraction of a pure fact from the left-hand side of an entailment.  This is
+SLF's `himpl_hstar_hpure_l`, the workhorse of `xpull`. -/
+theorem himpl_hpure_l {P : Prop} {H H' : SLProp} (h : P → H ⊢ H') :
+    ⌜P⌝ ∗ H ⊢ H' := by
+  intro heap hStar
+  have ⟨hP, hH⟩ := (hstar_hpure_l P H heap).mp hStar
+  exact h hP heap hH
+
+/-- Introduction of an existential quantifier on the left-hand side of an
+entailment (SLF's `himpl_hexists_l`). -/
+theorem himpl_hexists_l {ι : Sort _} {H : SLProp} {J : ι → SLProp}
+    (h : ∀ x, J x ⊢ H) : hexists J ⊢ H :=
+  fun heap hJ => h hJ.choose heap hJ.choose_spec
+
+/-- Instantiation of an existential quantifier on the right-hand side of an
+entailment (SLF's `himpl_hexists_r`).  `xsimpl` uses it with a metavariable for
+`x`, which the cancellation phase then instantiates by unification. -/
+theorem himpl_hexists_r {ι : Sort _} {H : SLProp} {J : ι → SLProp} (x : ι)
+    (h : H ⊢ J x) : H ⊢ hexists J :=
+  fun heap hH => ⟨x, h heap hH⟩
+
+/-- Float an existential out of the left factor of a separating conjunction. -/
+theorem hstar_hexists_l_eq {ι : Sort _} (J : ι → SLProp) (H : SLProp) :
+    (hexists J ∗ H) = iprop(∃ x, J x ∗ H) :=
+  hequiv_eq (hstar_hexists J H)
+
+/-- Float an existential out of the right factor of a separating conjunction. -/
+theorem hstar_hexists_r_eq {ι : Sort _} (H : SLProp) (J : ι → SLProp) :
+    (H ∗ hexists J) = iprop(∃ x, H ∗ J x) := by
+  rw [hstar_comm_eq, hstar_hexists_l_eq]
+  exact hequiv_eq fun _ => ⟨fun ⟨x, hx⟩ => ⟨x, (hstar_comm _ _ _).mp hx⟩,
+    fun ⟨x, hx⟩ => ⟨x, (hstar_comm _ _ _).mp hx⟩⟩
+
 theorem hpure_elim (P : Prop) :
     ⌜P⌝ ⊢ emp :=
   fun _ hP => hP.2
@@ -564,6 +597,21 @@ theorem triple_seq {P H : SLPre} {Q : SLPost β}
     (hSecond : triple H m₂ Q) :
     triple P (m₁ >>= fun _ => m₂) Q :=
   triple_bind hFirst (fun _ => hSecond)
+
+/-- Terminal `pure`, i.e. SLF's `xval`.  Registering it as a `step` lemma is what
+lets `step*` walk all the way to the `return` of a monadic function instead of
+stopping just before it. -/
+theorem ok.spec (value : α) :
+    ⦃ emp ⦄ (FFree.ok value : St α) ⦃⇓ result => ⌜result = value⌝⦄ :=
+  triple_pure fun _ hEmpty => ⟨rfl, hEmpty⟩
+
+/-- `ok.spec` again, stated through `Pure.pure`.  Both statements are needed:
+`step` indexes its database by the head symbol of the program, and a `pure` in
+the source is only unfolded to `FFree.ok` once it has been pushed through a
+`bind` by a previous step. -/
+theorem pure.spec (value : α) :
+    ⦃ emp ⦄ (Pure.pure value : St α) ⦃⇓ result => ⌜result = value⌝⦄ :=
+  ok.spec value
 
 theorem alloc.spec (value : α) :
     ⦃ emp ⦄ alloc value ⦃⇓ r => r ↦ value⦄ := by

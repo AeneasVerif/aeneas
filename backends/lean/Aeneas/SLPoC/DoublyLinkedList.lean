@@ -394,7 +394,7 @@ theorem nodesFrom_cons_shift (c : Ref (Node V) × V) (l : Cells V) (xs : Cells V
 @[simp] theorem lastPtr_singleton (c : Ref (Node V) × V) :
     lastPtr [c] = some c.1 := rfl
 
-theorem lastPtr_cons_cons (a b : Ref (Node V) × V) (l : Cells V) :
+@[sl_simps] theorem lastPtr_cons_cons (a b : Ref (Node V) × V) (l : Cells V) :
     lastPtr (a :: b :: l) = lastPtr (b :: l) := by
   simp [lastPtr]
 
@@ -428,7 +428,7 @@ theorem nodeAt_snoc_last (l : Cells V) (r : Ref (Node V)) (v : V) :
   rw [prevOf_snoc_last, nextOf_snoc_last]
 
 /-- Split the ownership of the last node out of `nodes`. -/
-theorem nodes_snoc (l : Cells V) (r : Ref (Node V)) (v : V) :
+@[sl_simps] theorem nodes_snoc (l : Cells V) (r : Ref (Node V)) (v : V) :
     nodes (l ++ [(r, v)]) =
       iprop(nodesFrom (l ++ [(r, v)]) 0 l ∗
         (r ↦ { prev := lastPtr l, next := none, payload := v })) := by
@@ -449,7 +449,7 @@ theorem getElem?_append_two_right (l : Cells V) (a b : Ref (Node V) × V) :
 
 /-- Split the ownership of the last two nodes out of `nodes`.  This is the shape
 of the heap both after `pushBack` and before `popBack`. -/
-theorem nodes_snoc_two (l : Cells V) (rt : Ref (Node V)) (vt : V)
+@[sl_simps high] theorem nodes_snoc_two (l : Cells V) (rt : Ref (Node V)) (vt : V)
     (rn : Ref (Node V)) (v : V) :
     nodes (l ++ [(rt, vt), (rn, v)]) =
       iprop(nodesFrom (l ++ [(rt, vt)]) 0 l ∗
@@ -490,7 +490,7 @@ theorem nodes_snoc_two (l : Cells V) (rt : Ref (Node V)) (vt : V)
   simp only [nodesFrom_cons, nodesFrom_nil, hstar_hempty_r_eq, hmid, hlast]
 
 /-- Split the ownership of the first node out of `nodes`. -/
-theorem nodes_cons (rh : Ref (Node V)) (vh : V) (l : Cells V) :
+@[sl_simps] theorem nodes_cons (rh : Ref (Node V)) (vh : V) (l : Cells V) :
     nodes ((rh, vh) :: l) =
       iprop((rh ↦ { prev := none, next := headPtr l, payload := vh }) ∗
         nodesFrom ((rh, vh) :: l) 1 l) := by
@@ -501,7 +501,7 @@ theorem nodes_cons (rh : Ref (Node V)) (vh : V) (l : Cells V) :
 
 /-- Split the ownership of the first two nodes out of `nodes`.  This is the
 shape of the heap both after `pushFront` and before `popFront`. -/
-theorem nodes_cons_two (rn : Ref (Node V)) (v : V) (rh : Ref (Node V)) (vh : V)
+@[sl_simps high] theorem nodes_cons_two (rn : Ref (Node V)) (v : V) (rh : Ref (Node V)) (vh : V)
     (l : Cells V) :
     nodes ((rn, v) :: (rh, vh) :: l) =
       iprop((rn ↦ { prev := none, next := some rh, payload := v }) ∗
@@ -528,11 +528,6 @@ theorem nodes_cons_two (rn : Ref (Node V)) (v : V) (rh : Ref (Node V)) (vh : V)
 
 /-! ## Auxiliary facts used by the specifications -/
 
-/-- Introduce an existential on the right-hand side of an entailment. -/
-theorem _root_.Aeneas.SLPoC.himpl_hexists_r {ι : Sort _} {H : SLProp}
-    {J : ι → SLProp} (x : ι) (h : H ⊢ J x) : H ⊢ hexists J :=
-  fun heap hH => ⟨x, h heap hH⟩
-
 @[simp] theorem get!_some {α : Type} [Inhabited α] (a : α) :
     (some a).get! = a := rfl
 
@@ -558,11 +553,11 @@ come from an empty list. -/
 theorem headPtr_eq_none_iff (l : Cells V) : headPtr l = none ↔ l = [] := by
   cases l <;> simp [headPtr]
 
-theorem headPtr_append_two (l : Cells V) (a b : Ref (Node V) × V) :
+@[sl_simps] theorem headPtr_append_two (l : Cells V) (a b : Ref (Node V) × V) :
     headPtr (l ++ [a, b]) = headPtr (l ++ [a]) := by
   cases l <;> rfl
 
-theorem lastPtr_append_two (l : Cells V) (a b : Ref (Node V) × V) :
+@[sl_simps] theorem lastPtr_append_two (l : Cells V) (a b : Ref (Node V) × V) :
     lastPtr (l ++ [a, b]) = some b.1 := by
   rw [show l ++ [a, b] = (l ++ [a]) ++ [b] by simp, lastPtr_snoc]
 
@@ -576,33 +571,22 @@ assertion `wellFormed s l`, and `self@` becomes `view l`. -/
 theorem new.spec :
     ⦃ emp ⦄ (new : St (DoublyLinkedList V)) ⦃⇓ s => wellFormed s []⦄ := by
   unfold new
-  apply triple_pure
-  simp only [wellFormed, nodes_nil, headPtr_nil, lastPtr_nil]
-  sl_frame
+  step* by sl_frame
 
 /-- `pushEmptyCase` inserts one node into an empty list. -/
 theorem pushEmptyCase.spec (s : DoublyLinkedList V) (v : V) :
     ⦃ wellFormed s [] ⦄ pushEmptyCase s v
       ⦃⇓ s' => ∃ r : Ref (Node V), wellFormed s' [(r, v)]⦄ := by
   unfold pushEmptyCase
-  simp only [wellFormed, nodes_nil, headPtr_nil, lastPtr_nil, hstar_hempty_r_eq]
-  apply triple_hpure'
-  intro _
-  step as ⟨ ptr ⟩ by sl_frame
-  apply triple_pure
-  apply himpl_hexists_r ptr
-  simp only [nodes_cons, nodesFrom_nil, headPtr_nil, hstar_hempty_r_eq,
-    headPtr_cons, lastPtr_singleton]
-  sl_frame
+  sl_pull _
+  step* by sl_frame
 
 /-- `pushBack` appends `v` to the list. -/
 theorem pushBack.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
     ⦃ wellFormed s l ⦄ pushBack s v
       ⦃⇓ s' => ∃ r : Ref (Node V), wellFormed s' (l ++ [(r, v)])⦄ := by
   unfold pushBack
-  simp only [wellFormed]
-  apply triple_hpure
-  rintro ⟨hhead, htail⟩
+  sl_pull ⟨hhead, htail⟩
   split
   · -- Special case: the list is empty
     rename_i hnone
@@ -626,19 +610,9 @@ theorem pushBack.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
       rw [hsome, lastPtr_snoc] at htail
       exact Option.some.inj htail
     subst hrt
-    rw [nodes_snoc]
-    step as ⟨ rn ⟩ by sl_frame
-    step as ⟨ oldTailNode, hOldTailNode ⟩ by sl_frame
-    step by sl_frame
-    apply triple_pure
-    apply himpl_hexists_r rn
-    have hhead' : headPtr (l' ++ [(oldTailPtr, vt), (rn, v)]) =
-        headPtr (l' ++ [(oldTailPtr, vt)]) := headPtr_append_two ..
-    have htail' : lastPtr (l' ++ [(oldTailPtr, vt), (rn, v)]) = some rn :=
-      lastPtr_append_two ..
-    rw [show l' ++ [(oldTailPtr, vt)] ++ [(rn, v)] =
-      l' ++ [(oldTailPtr, vt), (rn, v)] by simp, nodes_snoc_two, hOldTailNode]
-    sl_frame
+    simp only [show ∀ r : Ref (Node V), l' ++ [(oldTailPtr, vt)] ++ [(r, v)] =
+      l' ++ [(oldTailPtr, vt), (r, v)] from by simp]
+    step* by sl_frame
 
 /-- `popBack` removes the last node and returns its payload. -/
 theorem popBack.spec (s : DoublyLinkedList V) (l : Cells V) (rt : Ref (Node V))
@@ -646,46 +620,27 @@ theorem popBack.spec (s : DoublyLinkedList V) (l : Cells V) (rt : Ref (Node V))
     ⦃ wellFormed s (l ++ [(rt, vt)]) ⦄ popBack s
       ⦃⇓ (s', v) => ⌜v = vt⌝ ∗ wellFormed s' l⦄ := by
   unfold popBack
-  simp only [wellFormed, lastPtr_snoc]
-  apply triple_hpure
-  rintro ⟨hhead, htail⟩
+  sl_pull ⟨hhead, htail⟩
+  simp only [lastPtr_snoc] at htail
   simp only [htail, get!_some]
   rcases eq_nil_or_snoc l with rfl | ⟨l'', c, rfl⟩
   · -- The list had exactly one node: `head` and `tail` both become `none`
-    simp only [List.nil_append, nodes_cons, headPtr_nil, nodesFrom_nil,
-      hstar_hempty_r_eq] at hhead ⊢
-    step as ⟨ lastNode, hLastNode ⟩ by sl_frame
-    subst hLastNode
-    step by sl_frame
-    apply triple_pure
-    simp only [nodes_nil, lastPtr_nil]
-    sl_frame
+    simp only [List.nil_append] at hhead ⊢
+    step* by sl_frame
   · -- The list had at least two nodes: the penultimate one becomes the tail
     obtain ⟨rp, vp⟩ := c
     simp only [show l'' ++ [(rp, vp)] ++ [(rt, vt)] = l'' ++ [(rp, vp), (rt, vt)]
       from by simp] at hhead ⊢
-    have hh : headPtr (l'' ++ [(rp, vp), (rt, vt)]) = headPtr (l'' ++ [(rp, vp)]) :=
-      headPtr_append_two ..
-    have hlp : lastPtr (l'' ++ [(rp, vp)]) = some rp := lastPtr_snoc ..
-    rw [nodes_snoc_two]
     step as ⟨ lastNode, hLastNode ⟩ by sl_frame
     subst hLastNode
-    step by sl_frame
-    step as ⟨ penultimateNode, hPenultimateNode ⟩ by sl_frame
-    subst hPenultimateNode
-    step by sl_frame
-    apply triple_pure
-    rw [nodes_snoc]
-    sl_frame
+    step* by sl_frame
 
 /-- `pushFront` prepends `v` to the list. -/
 theorem pushFront.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
     ⦃ wellFormed s l ⦄ pushFront s v
       ⦃⇓ s' => ∃ r : Ref (Node V), wellFormed s' ((r, v) :: l)⦄ := by
   unfold pushFront
-  simp only [wellFormed]
-  apply triple_hpure
-  rintro ⟨hhead, htail⟩
+  sl_pull ⟨hhead, htail⟩
   split
   · -- Special case: the list is empty
     rename_i hnone
@@ -706,18 +661,7 @@ theorem pushFront.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
       obtain rfl : rh = oldHeadPtr := by
         rw [hsome, headPtr_cons] at hhead
         exact (Option.some.inj hhead).symm
-      rw [nodes_cons]
-      step as ⟨ rn ⟩ by sl_frame
-      step as ⟨ oldHeadNode, hOldHeadNode ⟩ by sl_frame
-      step by sl_frame
-      apply triple_pure
-      apply himpl_hexists_r rn
-      have htl :
-          lastPtr ((rn, v) :: (rh, vh) :: l') = lastPtr ((rh, vh) :: l') :=
-        lastPtr_cons_cons ..
-      have hhd : headPtr ((rn, v) :: (rh, vh) :: l') = some rn := rfl
-      rw [nodes_cons_two, hOldHeadNode]
-      sl_frame
+      step* by sl_frame
 
 /-- `popFront` removes the first node and returns its payload. -/
 theorem popFront.spec (s : DoublyLinkedList V) (rh : Ref (Node V)) (vh : V)
@@ -725,36 +669,19 @@ theorem popFront.spec (s : DoublyLinkedList V) (rh : Ref (Node V)) (vh : V)
     ⦃ wellFormed s ((rh, vh) :: l) ⦄ popFront s
       ⦃⇓ (s', v) => ⌜v = vh⌝ ∗ wellFormed s' l⦄ := by
   unfold popFront
-  simp only [wellFormed, headPtr_cons]
-  apply triple_hpure
-  rintro ⟨hhead, htail⟩
+  sl_pull ⟨hhead, htail⟩
+  simp only [headPtr_cons] at hhead
   simp only [hhead, get!_some]
   cases l with
   | nil =>
     -- The list had exactly one node: `head` and `tail` both become `none`
-    simp only [nodes_cons, headPtr_nil, nodesFrom_nil, hstar_hempty_r_eq] at htail ⊢
-    step as ⟨ firstNode, hFirstNode ⟩ by sl_frame
-    subst hFirstNode
-    step by sl_frame
-    apply triple_pure
-    simp only [nodes_nil, lastPtr_nil]
-    sl_frame
+    step* by sl_frame
   | cons c l' =>
     -- The list had at least two nodes: the second one becomes the head
     obtain ⟨r2, v2⟩ := c
-    rw [nodes_cons_two]
     step as ⟨ firstNode, hFirstNode ⟩ by sl_frame
     subst hFirstNode
-    step by sl_frame
-    step as ⟨ secondNode, hSecondNode ⟩ by sl_frame
-    have htl : lastPtr ((rh, vh) :: (r2, v2) :: l') = lastPtr ((r2, v2) :: l') :=
-      lastPtr_cons_cons ..
-    have hhd : headPtr ((r2, v2) :: l') = some r2 := rfl
-    subst hSecondNode
-    step by sl_frame
-    apply triple_pure
-    rw [nodes_cons]
-    sl_frame
+    step* by sl_frame
 
 /-! ## Reading an arbitrary node -/
 
@@ -788,13 +715,8 @@ invariant predicts, and leaves the list untouched. -/
 theorem nodes_read (l : Cells V) (i : Nat) (r : Ref (Node V)) (v : V)
     (h : l[i]? = some (r, v)) :
     ⦃ nodes l ⦄ read r ⦃⇓ node => ⌜node = nodeAt l i v⌝ ∗ nodes l⦄ := by
-  have hsplit := nodes_split l i r v h
-  apply triple_conseq_frame (read.spec r (nodeAt l i v))
-  · rw [hsplit]
-    sl_frame
-  · intro node
-    simp only [qstar, hsplit]
-    sl_frame
+  rw [nodes_split l i r v h]
+  step* by sl_frame
 
 theorem exists_cell (l : Cells V) (i : Nat) (hi : i < l.length) :
     ∃ r v, l[i]? = some (r, v) :=
@@ -820,8 +742,7 @@ theorem getLoop.spec (l : Cells V) (i j : Nat) (r : Ref (Node V))
       intro j r hn hji hr
       obtain rfl : j = i := by omega
       rw [getLoop, if_neg (by omega)]
-      apply triple_pure
-      sl_frame
+      step* by sl_frame
     | succ n ih =>
       intro j r hn hji hr
       rw [getLoop, if_pos (by omega)]
@@ -829,14 +750,12 @@ theorem getLoop.spec (l : Cells V) (i j : Nat) (r : Ref (Node V))
       have he : some rj = some r := by rw [hj] at hr; exact hr
       obtain rfl : r = rj := (Option.some.inj he).symm
       obtain ⟨r', v', hj'⟩ := exists_cell l (j + 1) (by omega)
-      apply triple_bind (nodes_read l j r vj hj)
-      intro node
-      apply triple_hpure
-      rintro rfl
+      step with nodes_read l j r vj hj as ⟨ node, hnode ⟩ by sl_frame
+      subst hnode
       have hnext : (nodeAt l j vj).next = some r' := by
         simp only [nodeAt, nextOf, if_neg (show j + 1 ≠ l.length by omega), hj']
         rfl
-      simp only [hnext, get!_some]
+      simp only [hnext, get!_some, hstar_hempty_r_eq]
       exact ih (j + 1) r' (by omega) (by omega) (by rw [hj']; rfl)
   exact key (i - j) j r rfl hji hr
 
@@ -846,30 +765,21 @@ theorem get.spec (s : DoublyLinkedList V) (l : Cells V) (i : Nat)
     ⦃ wellFormed s l ⦄ get s i
       ⦃⇓ v => ⌜(view l)[i]? = some v⌝ ∗ wellFormed s l⦄ := by
   unfold get
-  simp only [wellFormed]
-  apply triple_hpure
-  rintro ⟨hhead, htail⟩
+  sl_pull ⟨hhead, htail⟩
   obtain ⟨r0, v0, h0⟩ := exists_cell l 0 (by omega)
   have hhead' : s.head = some r0 := by
     rw [hhead, headPtr_eq_getElem?, h0]; rfl
   rw [hhead']
   simp only [get!_some]
-  apply triple_bind (getLoop.spec l i 0 r0 (by omega) hi (by rw [h0]; rfl))
-  intro r
-  apply triple_hpure
-  intro hr
+  step with getLoop.spec l i 0 r0 (by omega) hi (by rw [h0]; rfl)
+    as ⟨ r, hr ⟩ by sl_frame
   obtain ⟨ri, vi, hi'⟩ := exists_cell l i hi
-  have he : some ri = some r := by rw [hi'] at hr; exact hr
-  obtain rfl : r = ri := (Option.some.inj he).symm
-  apply triple_bind (nodes_read l i r vi hi')
-  intro node
-  apply triple_hpure
-  rintro rfl
-  apply triple_pure
-  have hview : (view l)[i]? = some vi := by
-    rw [view_getElem?, hi']; rfl
+  obtain rfl : r = ri := (Option.some.inj (by rw [hi'] at hr; exact hr)).symm
+  have hview : (view l)[i]? = some vi := by rw [view_getElem?, hi']; rfl
   have hpay : (nodeAt l i vi).payload = vi := rfl
-  sl_frame
+  step with nodes_read l i r vi hi' as ⟨ node, hnode ⟩ by sl_frame
+  subst hnode
+  step* by sl_frame
 
 /-! ## Ghost-free specifications
 
@@ -903,81 +813,54 @@ theorem new.isList_spec :
     ⦃ emp ⦄ (new : St (DoublyLinkedList V)) ⦃⇓ s => isList s []⦄ := by
   apply triple_conseq new.spec (himpl_refl _)
   intro s
-  exact himpl_hexists_r [] (hpure_hstar_intro _ rfl)
+  sl_frame
 
 /-- Verus: `ensures final(self).well_formed(), final(self)@ == old(self)@.push(v)`. -/
 theorem pushBack.isList_spec (s : DoublyLinkedList V) (vs : List V) (v : V) :
     ⦃ isList s vs ⦄ pushBack s v ⦃⇓ s' => isList s' (vs ++ [v])⦄ := by
-  unfold isList
-  apply triple_hexists
-  intro l
-  apply triple_hpure
-  rintro rfl
+  sl_pull l rfl
   apply triple_conseq (pushBack.spec s l v) (himpl_refl _)
-  intro s' h hPost
-  obtain ⟨r, hr⟩ := hPost
-  exact ⟨l ++ [(r, v)], (hstar_hpure_l _ _ _).mpr ⟨by simp, hr⟩⟩
+  intro s'
+  sl_frame
 
 /-- Verus: `ensures final(self).well_formed(), final(self)@ == seq![v].add(old(self)@)`. -/
 theorem pushFront.isList_spec (s : DoublyLinkedList V) (vs : List V) (v : V) :
     ⦃ isList s vs ⦄ pushFront s v ⦃⇓ s' => isList s' (v :: vs)⦄ := by
-  unfold isList
-  apply triple_hexists
-  intro l
-  apply triple_hpure
-  rintro rfl
+  sl_pull l rfl
   apply triple_conseq (pushFront.spec s l v) (himpl_refl _)
-  intro s' h hPost
-  obtain ⟨r, hr⟩ := hPost
-  exact ⟨(r, v) :: l, (hstar_hpure_l _ _ _).mpr ⟨rfl, hr⟩⟩
+  intro s'
+  sl_frame
 
 /-- Verus: `requires old(self)@.len() > 0`,
 `ensures final(self)@ == old(self)@.drop_last(), v == old(self)@[len - 1]`. -/
 theorem popBack.isList_spec (s : DoublyLinkedList V) (vs : List V) (v : V) :
     ⦃ isList s (vs ++ [v]) ⦄ popBack s
       ⦃⇓ (s', w) => ⌜w = v⌝ ∗ isList s' vs⦄ := by
-  unfold isList
-  apply triple_hexists
-  intro l
-  apply triple_hpure
-  intro hview
+  sl_pull l hview
   obtain ⟨l', r, rfl, hl'⟩ := view_eq_snoc l vs v hview
   apply triple_conseq (popBack.spec s l' r v) (himpl_refl _)
-  rintro ⟨s', w⟩ h hPost
-  obtain ⟨hw, hRest⟩ := (hstar_hpure_l _ _ _).mp hPost
-  exact (hstar_hpure_l _ _ _).mpr
-    ⟨hw, ⟨l', (hstar_hpure_l _ _ _).mpr ⟨hl', hRest⟩⟩⟩
+  rintro ⟨s', w⟩
+  sl_frame
 
 /-- Verus: `requires old(self)@.len() > 0`,
 `ensures final(self)@ == old(self)@.subrange(1, len), v == old(self)@[0]`. -/
 theorem popFront.isList_spec (s : DoublyLinkedList V) (v : V) (vs : List V) :
     ⦃ isList s (v :: vs) ⦄ popFront s
       ⦃⇓ (s', w) => ⌜w = v⌝ ∗ isList s' vs⦄ := by
-  unfold isList
-  apply triple_hexists
-  intro l
-  apply triple_hpure
-  intro hview
+  sl_pull l hview
   obtain ⟨r, l', rfl, hl'⟩ := view_eq_cons l v vs hview
   apply triple_conseq (popFront.spec s r v l') (himpl_refl _)
-  rintro ⟨s', w⟩ h hPost
-  obtain ⟨hw, hRest⟩ := (hstar_hpure_l _ _ _).mp hPost
-  exact (hstar_hpure_l _ _ _).mpr
-    ⟨hw, ⟨l', (hstar_hpure_l _ _ _).mpr ⟨hl', hRest⟩⟩⟩
+  rintro ⟨s', w⟩
+  sl_frame
 
 /-- Verus: `requires 0 <= i < self@.len()`, `ensures *v == self@[i as int]`. -/
 theorem get.isList_spec (s : DoublyLinkedList V) (vs : List V) (i : Nat)
     (hi : i < vs.length) :
     ⦃ isList s vs ⦄ get s i ⦃⇓ w => ⌜vs[i]? = some w⌝ ∗ isList s vs⦄ := by
-  unfold isList
-  apply triple_hexists
-  intro l
-  apply triple_hpure
-  rintro rfl
+  sl_pull l rfl
   apply triple_conseq (get.spec s l i (by simpa using hi)) (himpl_refl _)
-  intro w h hPost
-  obtain ⟨hw, hRest⟩ := (hstar_hpure_l _ _ _).mp hPost
-  exact (hstar_hpure_l _ _ _).mpr ⟨hw, ⟨l, (hstar_hpure_l _ _ _).mpr ⟨rfl, hRest⟩⟩⟩
+  intro w
+  sl_frame
 
 end DoublyLinkedList
 
@@ -999,13 +882,10 @@ theorem new.spec (t : DoublyLinkedList V) (l : Cells V) (hne : 0 < l.length) :
     ⦃ wellFormed t l ⦄ Iterator.new t
       ⦃⇓ it => ⌜it.l = t ∧ it.index = 0 ∧ valid it l⌝ ∗ wellFormed t l⦄ := by
   unfold Iterator.new
-  simp only [wellFormed]
-  apply triple_hpure
-  rintro ⟨hhead, htail⟩
-  apply triple_pure
+  sl_pull ⟨hhead, htail⟩
   have hv : valid ({ l := t, cur := t.head, index := 0 } : Iterator V) l :=
     ⟨hne, by rw [hhead, headPtr_eq_getElem?]⟩
-  sl_frame
+  step* by sl_frame
 
 /-- The iterator yields the element of the view at its index. -/
 theorem value.spec (it : Iterator V) (t : DoublyLinkedList V) (l : Cells V)
@@ -1014,22 +894,17 @@ theorem value.spec (it : Iterator V) (t : DoublyLinkedList V) (l : Cells V)
       ⦃⇓ v => ⌜(view l)[it.index]? = some v⌝ ∗ wellFormed t l⦄ := by
   subst hl
   unfold Iterator.value
-  simp only [wellFormed]
-  apply triple_hpure
-  rintro ⟨hhead, htail⟩
+  sl_pull ⟨hhead, htail⟩
   obtain ⟨hidx, hcur⟩ := hvalid
   obtain ⟨r, v, hcell⟩ := exists_cell l it.index hidx
   have hcur' : it.cur = some r := by rw [hcur, hcell]; rfl
   rw [hcur']
   simp only [get!_some]
-  apply triple_bind (nodes_read l it.index r v hcell)
-  intro node
-  apply triple_hpure
-  rintro rfl
-  apply triple_pure
   have hview : (view l)[it.index]? = some v := by rw [view_getElem?, hcell]; rfl
   have hpay : (nodeAt l it.index v).payload = v := rfl
-  sl_frame
+  step with nodes_read l it.index r v hcell as ⟨ node, hnode ⟩ by sl_frame
+  subst hnode
+  step* by sl_frame
 
 /-- Advancing the iterator: it reports whether there still is an element, and
 if so it becomes valid again at the next index. -/
@@ -1043,27 +918,21 @@ theorem moveNext.spec (it : Iterator V) (t : DoublyLinkedList V) (l : Cells V)
         wellFormed t l⦄ := by
   subst hl
   unfold Iterator.moveNext
-  simp only [wellFormed]
-  apply triple_hpure
-  rintro ⟨hhead, htail⟩
+  sl_pull ⟨hhead, htail⟩
   obtain ⟨hidx, hcur⟩ := hvalid
   obtain ⟨r, v, hcell⟩ := exists_cell l it.index hidx
   have hcur' : it.cur = some r := by rw [hcur, hcell]; rfl
   rw [hcur']
   simp only [get!_some]
-  apply triple_bind (nodes_read l it.index r v hcell)
-  intro node
-  apply triple_hpure
-  rintro rfl
+  step with nodes_read l it.index r v hcell as ⟨ node, hnode ⟩ by sl_frame
+  subst hnode
   by_cases hlast : it.index + 1 = l.length
   · -- The iterator was on the last node
     simp only [nodeAt, nextOf, if_pos hlast]
-    apply triple_pure
-    sl_frame
+    step* by sl_frame
   · -- There is a next node
     obtain ⟨r', v', hcell'⟩ := exists_cell l (it.index + 1) (by omega)
-    simp only [nodeAt, nextOf, if_neg hlast, hcell']
-    apply triple_pure
+    simp only [nodeAt, nextOf, if_neg hlast, hcell', Option.map_some]
     have hidx' : it.index + 1 < l.length := by omega
     have hv :
         valid ({ it with cur := some r', index := it.index + 1 } : Iterator V) l :=
@@ -1073,7 +942,7 @@ theorem moveNext.spec (it : Iterator V) (t : DoublyLinkedList V) (l : Cells V)
           it.index + 1 := rfl
     have hl' :
         ({ it with cur := some r', index := it.index + 1 } : Iterator V).l = it.l := rfl
-    sl_frame
+    step* by sl_frame
 
 end Iterator
 
@@ -1116,84 +985,75 @@ theorem run.spec :
       v1 = 1 ∧ v2 = 2 ∧ v3 = 3 ∧ g = false ∧ x = 3 ∧ y = 1 ∧ z = 2⦄ := by
   unfold run
   -- Build the list `1, 2, 3`
-  apply triple_bind DoublyLinkedList.new.spec
-  intro t0
-  apply triple_bind (DoublyLinkedList.pushBack.spec t0 [] 2)
-  intro t1
-  apply triple_hexists
-  intro r1
-  apply triple_bind (DoublyLinkedList.pushBack.spec t1 [(r1, 2)] 3)
-  intro t2
-  apply triple_hexists
-  intro r2
-  apply triple_bind (DoublyLinkedList.pushFront.spec t2 [(r1, 2), (r2, 3)] 1)
-  intro t3
-  apply triple_hexists
-  intro r3
+  step with DoublyLinkedList.new.spec as ⟨ t0 ⟩ by sl_frame
+  step with DoublyLinkedList.pushBack.spec t0 [] 2 as ⟨ t1 ⟩ by sl_frame
+  sl_pull r1
+  step with DoublyLinkedList.pushBack.spec t1 [(r1, 2)] 3 as ⟨ t2 ⟩ by sl_frame
+  sl_pull r2
+  step with DoublyLinkedList.pushFront.spec t2 [(r1, 2), (r2, 3)] 1
+    as ⟨ t3 ⟩ by sl_frame
+  sl_pull r3
   -- Walk the list with an iterator
-  apply triple_bind
-    (Iterator.new.spec t3 [(r3, 1), (r1, 2), (r2, 3)] (by simp))
-  intro it
-  apply triple_hpure
-  rintro ⟨hitl, hitidx, hitvalid⟩
-  apply triple_bind (Iterator.value.spec it t3 _ hitl hitvalid)
-  intro v1
-  apply triple_hpure
-  intro hv1
-  have e1 : v1 = 1 := by rw [hitidx] at hv1; simp [view] at hv1; omega
-  apply triple_bind (Iterator.moveNext.spec it t3 _ hitl hitvalid)
-  intro m1
-  apply triple_hpure
-  rintro ⟨hm1l, hm1good, hm1next⟩
+  step with Iterator.new.spec t3 [(r3, 1), (r1, 2), (r2, 3)] (by simp)
+    as ⟨ it, hitl, hitidx, hitvalid ⟩ by sl_frame
+  step with Iterator.value.spec it t3 _ hitl hitvalid as ⟨ v1, hv1 ⟩ by sl_frame
+  step with Iterator.moveNext.spec it t3 _ hitl hitvalid
+    as ⟨ m1, hm1l, hm1good, hm1next ⟩ by sl_frame
   obtain ⟨hvalid1, hidx1⟩ := hm1next (hm1good.mpr (by simp [hitidx]))
-  apply triple_bind
-    (Iterator.value.spec m1.1 t3 _ (hm1l.trans hitl) hvalid1)
-  intro v2
-  apply triple_hpure
-  intro hv2
-  have e2 : v2 = 2 := by
-    rw [hidx1, hitidx] at hv2; simp [view] at hv2; omega
-  apply triple_bind
-    (Iterator.moveNext.spec m1.1 t3 _ (hm1l.trans hitl) hvalid1)
-  intro m2
-  apply triple_hpure
-  rintro ⟨hm2l, hm2good, hm2next⟩
-  obtain ⟨hvalid2, hidx2⟩ :=
-    hm2next (hm2good.mpr (by rw [hidx1, hitidx]; simp))
-  apply triple_bind
-    (Iterator.value.spec m2.1 t3 _ (hm2l.trans (hm1l.trans hitl)) hvalid2)
-  intro v3
-  apply triple_hpure
-  intro hv3
-  have e3 : v3 = 3 := by
-    rw [hidx2, hidx1, hitidx] at hv3; simp [view] at hv3; omega
-  apply triple_bind
-    (Iterator.moveNext.spec m2.1 t3 _ (hm2l.trans (hm1l.trans hitl)) hvalid2)
-  intro m3
-  apply triple_hpure
-  rintro ⟨hm3l, hm3good, hm3next⟩
-  have eg : m3.2 = false := by
-    have hnot : ¬ (m3.2 = true) := by
-      rw [hm3good, hidx2, hidx1, hitidx]; simp
-    simpa using hnot
+  step with Iterator.value.spec m1.1 t3 _ (hm1l.trans hitl) hvalid1
+    as ⟨ v2, hv2 ⟩ by sl_frame
+  step with Iterator.moveNext.spec m1.1 t3 _ (hm1l.trans hitl) hvalid1
+    as ⟨ m2, hm2l, hm2good, hm2next ⟩ by sl_frame
+  obtain ⟨hvalid2, hidx2⟩ := hm2next (hm2good.mpr (by rw [hidx1, hitidx]; simp))
+  step with Iterator.value.spec m2.1 t3 _ (hm2l.trans (hm1l.trans hitl)) hvalid2
+    as ⟨ v3, hv3 ⟩ by sl_frame
+  step with Iterator.moveNext.spec m2.1 t3 _ (hm2l.trans (hm1l.trans hitl)) hvalid2
+    as ⟨ m3, hm3l, hm3good, hm3next ⟩ by sl_frame
   -- Empty the list again
-  apply triple_bind
-    (DoublyLinkedList.popBack.spec t3 [(r3, 1), (r1, 2)] r2 3)
-  intro p1
-  apply triple_hpure
-  intro ex
-  apply triple_bind (DoublyLinkedList.popFront.spec p1.1 r3 1 [(r1, 2)])
-  intro p2
-  apply triple_hpure
-  intro ey
-  apply triple_bind (DoublyLinkedList.popFront.spec p2.1 r1 2 [])
-  intro p3
-  apply triple_hpure
-  intro ez
-  apply triple_pure
-  simp only [wellFormed, nodes_nil]
-  sl_frame
+  step with DoublyLinkedList.popBack.spec t3 [(r3, 1), (r1, 2)] r2 3
+    as ⟨ p1, ex ⟩ by sl_frame
+  step with DoublyLinkedList.popFront.spec p1.1 r3 1 [(r1, 2)]
+    as ⟨ p2, ey ⟩ by sl_frame
+  step with DoublyLinkedList.popFront.spec p2.1 r1 2 [] as ⟨ p3, ez ⟩ by sl_frame
+  -- Read off the observed values
+  have e1 : v1 = 1 := by rw [hitidx] at hv1; simp [view] at hv1; omega
+  have e2 : v2 = 2 := by rw [hidx1, hitidx] at hv2; simp [view] at hv2; omega
+  have e3 : v3 = 3 := by rw [hidx2, hidx1, hitidx] at hv3; simp [view] at hv3; omega
+  have eg : m3.2 = false := by
+    have hnot : ¬ (m3.2 = true) := by rw [hm3good, hidx2, hidx1, hitidx]; simp
+    simpa using hnot
+  step* by sl_frame
 
 end Example
+
+/-! ## Frame inference through the abstract predicate
+
+`isList` is an existential, so a caller that owns it as a single opaque
+assertion exercises the frame inference of `sl_frame` on an `hexists` atom. -/
+
+namespace FrameInferenceTest
+
+open DoublyLinkedList
+
+/-- Frame inference works when the callee's precondition is an abstract
+representation predicate defined as an existential. -/
+def twoPushes (s : DoublyLinkedList Nat) : St (DoublyLinkedList Nat) := do
+  let s ← pushBack s 1
+  pushBack s 2
+
+example (s : DoublyLinkedList Nat) (vs : List Nat) :
+    ⦃ isList s vs ⦄ twoPushes s ⦃⇓ s' => isList s' (vs ++ [1] ++ [2])⦄ := by
+  unfold twoPushes
+  apply triple_step_bind (pushBack s 1) _ (pushBack.isList_spec s vs 1)
+  case hPre => sl_frame
+  case hNext =>
+    intro s1 _
+    apply triple_step_mono (pushBack s1 2) _ (pushBack.isList_spec s1 (vs ++ [1]) 2)
+    case hPre => sl_frame
+    case hPost => intro s2 _; sl_frame
+
+
+end FrameInferenceTest
+
 
 end Aeneas.SLPoC
