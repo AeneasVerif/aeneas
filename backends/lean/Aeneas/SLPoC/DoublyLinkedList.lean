@@ -1048,9 +1048,10 @@ example (s : DoublyLinkedList Nat) (vs : List Nat) :
   case hPre => sl_frame
   case hNext =>
     intro s1 _
-    apply triple_step_mono (pushBack s1 2) _ (pushBack.isList_spec s1 (vs ++ [1]) 2)
-    case hPre => sl_frame
-    case hPost => intro s2 _; sl_frame
+    -- The terminal call goes through the ramified frame rule: a single goal,
+    -- with no frame metavariable to guess.
+    exact triple_step_mono (pushBack s1 2) _ (pushBack.isList_spec s1 (vs ++ [1]) 2)
+      (by sl_frame)
 
 
 end FrameInferenceTest
