@@ -7,7 +7,7 @@ namespace Aeneas.SLPoC
 abbrev AllocId := Nat
 
 /- Cells store their Lean type and value. -/
-abbrev Cell := Σ α : Type, α
+abbrev Cell := Σ α : Type, α -- TODO: make it a list
 
 abbrev Heap := Finmap fun _ : AllocId => Cell
 
