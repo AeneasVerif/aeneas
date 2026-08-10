@@ -1,14 +1,14 @@
 import Aeneas.SLPoC.FFree
-import Aeneas.SLPoC.Heap
 import Aeneas.SLPoC.WP
 
 /-!
 # The state monad `St` and its program logic
 
-`St` is the freer monad over the heap events.  This file defines it, gives its
-denotation `theta` into the weakest-precondition monad `Wp` of
-`Aeneas.SLPoC.WP`, derives the Hoare triples from that denotation, and proves
-the specifications of the primitive heap operations.
+`St` is the freer monad over the pointer events of `Aeneas.SLPoC.RustHeap`.
+This file defines it, gives its denotation `theta` into the
+weakest-precondition monad `Wp` of `Aeneas.SLPoC.WP`, derives the Hoare triples
+from that denotation, and proves the specifications of the primitive pointer
+operations.
 -/
 
 namespace Aeneas.SLPoC
@@ -18,10 +18,10 @@ open scoped SepLogic
 /-! ## The state monad, its operations and operational semantics -/
 
 inductive StEvents : Type → Type 1 where
-  | Alloc {α : Type} (value : α) : StEvents (Ref α)
-  | Read {α : Type} (r : Ref α) : StEvents α
-  | Update {α : Type} (r : Ref α) (value : α) : StEvents Unit
-  | Free {α : Type} (r : Ref α) : StEvents Unit
+  | AllocPtr {α : Type} (value : α) : StEvents (Ptr α)
+  | ReadPtr {α : Type} (p : Ptr α) : StEvents α
+  | UpdatePtr {α : Type} (p : Ptr α) (value : α) : StEvents Unit
+  | FreePtr {α : Type} (p : Ptr α) : StEvents Unit
 
 abbrev St := FFree StEvents
 
@@ -31,80 +31,80 @@ instance St.instLawfulMonad : LawfulMonad St :=
 inductive Evaluates : St α → Heap → α → Heap → Prop where
   | ok (value : α) (h : Heap) :
       Evaluates (.ok value) h value h
-  | alloc {β : Type} {value : β} {next : Ref β → St α}
-      {h₀ h₁ h₂ : Heap} {r : Ref β} {result : α}
-      (hFresh : fresh h₀ r value h₁)
-      (hNext : Evaluates (next r) h₁ result h₂) :
-      Evaluates (.event (.Alloc value) next) h₀ result h₂
-  | read {β : Type} {r : Ref β} {next : β → St α}
+  | alloc {β : Type} {value : β} {next : Ptr β → St α}
+      {h₀ h₁ h₂ : Heap} {p : Ptr β} {result : α}
+      (hFresh : Ptr.fresh h₀ p value h₁)
+      (hNext : Evaluates (next p) h₁ result h₂) :
+      Evaluates (.event (.AllocPtr value) next) h₀ result h₂
+  | read {β : Type} {p : Ptr β} {next : β → St α}
       {h₀ h₁ : Heap} {result : α}
-      (hContains : contains h₀ r)
-      (hNext : Evaluates (next (Heap.read r h₀ hContains)) h₀ result h₁) :
-      Evaluates (.event (.Read r) next) h₀ result h₁
-  | update {β : Type} {r : Ref β} {value : β} {next : Unit → St α}
+      (hContains : Ptr.contains h₀ p)
+      (hNext : Evaluates (next (Ptr.read p h₀ hContains)) h₀ result h₁) :
+      Evaluates (.event (.ReadPtr p) next) h₀ result h₁
+  | update {β : Type} {p : Ptr β} {value : β} {next : Unit → St α}
       {h₀ h₁ : Heap} {result : α}
-      (hContains : contains h₀ r)
+      (hContains : Ptr.contains h₀ p)
       (hNext :
-        Evaluates (next ()) (Heap.update r value h₀ hContains) result h₁) :
-      Evaluates (.event (.Update r value) next) h₀ result h₁
-  | free {β : Type} {r : Ref β} {next : Unit → St α}
+        Evaluates (next ()) (Ptr.update p value h₀ hContains) result h₁) :
+      Evaluates (.event (.UpdatePtr p value) next) h₀ result h₁
+  | free {β : Type} {p : Ptr β} {next : Unit → St α}
       {h₀ h₁ : Heap} {result : α}
-      (hContains : contains h₀ r)
-      (hNext : Evaluates (next ()) (Heap.free r h₀ hContains) result h₁) :
-      Evaluates (.event (.Free r) next) h₀ result h₁
+      (hContains : Ptr.contains h₀ p)
+      (hNext : Evaluates (next ()) (Ptr.free p h₀ hContains) result h₁) :
+      Evaluates (.event (.FreePtr p) next) h₀ result h₁
 
 /-! ## Monad operations -/
 
-def alloc {α : Type} (value : α) : St (Ref α) :=
-  FFree.trigger (.Alloc value)
+def alloc {α : Type} (value : α) : St (Ptr α) :=
+  FFree.trigger (.AllocPtr value)
 
-def read {α : Type} (r : Ref α) : St α :=
-  FFree.trigger (.Read r)
+def read {α : Type} (p : Ptr α) : St α :=
+  FFree.trigger (.ReadPtr p)
 
-def update {α : Type} (r : Ref α) (value : α) : St Unit :=
-  FFree.trigger (.Update r value)
+def update {α : Type} (p : Ptr α) (value : α) : St Unit :=
+  FFree.trigger (.UpdatePtr p value)
 
-def free {α : Type} (r : Ref α) : St Unit :=
-  FFree.trigger (.Free r)
+def free {α : Type} (p : Ptr α) : St Unit :=
+  FFree.trigger (.FreePtr p)
 
-def mut_to_raw {α : Type} (value : α) : St (Ref α) :=
+def mut_to_raw {α : Type} (value : α) : St (Ptr α) :=
   alloc value
 
-def end_mut_to_raw {α : Type} (r : Ref α) : St α := do
-  let value ← read r
-  free r
+def end_mut_to_raw {α : Type} (p : Ptr α) : St α := do
+  let value ← read p
+  free p
   pure value
 
 /-! ## Denotation into the weakest-precondition monad -/
 
 def theta_ev : StEvents α → Wp α
-  | .Alloc value => {
-      -- Allocation must satisfy the postcondition for every fresh reference.
+  | .AllocPtr value => {
+      -- Allocation must satisfy the postcondition for every fresh pointer.
       run := fun Q h =>
-        ∀ r h', fresh h r value h' → Q r h'
+        ∀ p h', Ptr.fresh h p value h' → Q p h'
       monotone := by
-        intro Q₁ Q₂ hQ h hPre r h' hFresh
-        exact hQ _ _ (hPre r h' hFresh)
+        intro Q₁ Q₂ hQ h hPre p h' hFresh
+        exact hQ _ _ (hPre p h' hFresh)
     }
-  | .Read r => {
+  | .ReadPtr p => {
       run := fun Q h =>
-        ∃ hContains : contains h r, Q (Heap.read r h hContains) h
-      monotone := by
-        intro Q₁ Q₂ hQ h hPre
-        obtain ⟨hContains, hPost⟩ := hPre
-        exact ⟨hContains, hQ _ _ hPost⟩
-    }
-  | .Update r value => {
-      run := fun Q h =>
-        ∃ hContains : contains h r, Q () (Heap.update r value h hContains)
+        ∃ hContains : Ptr.contains h p, Q (Ptr.read p h hContains) h
       monotone := by
         intro Q₁ Q₂ hQ h hPre
         obtain ⟨hContains, hPost⟩ := hPre
         exact ⟨hContains, hQ _ _ hPost⟩
     }
-  | .Free r => {
+  | .UpdatePtr p value => {
       run := fun Q h =>
-        ∃ hContains : contains h r, Q () (Heap.free r h hContains)
+        ∃ hContains : Ptr.contains h p, Q () (Ptr.update p value h hContains)
+      monotone := by
+        intro Q₁ Q₂ hQ h hPre
+        obtain ⟨hContains, hPost⟩ := hPre
+        exact ⟨hContains, hQ _ _ hPost⟩
+    }
+  | .FreePtr p => {
+      run := fun Q h =>
+        ∃ hContains : Ptr.contains h p, Q () (Ptr.free p h hContains)
       monotone := by
         intro Q₁ Q₂ hQ h hPre
         obtain ⟨hContains, hPost⟩ := hPre
@@ -124,25 +124,25 @@ theorem theta_sound (m : St α) (Q : SLPost α) (h₀ : Heap)
       exact ⟨value, h₀, Evaluates.ok value h₀, hTheta⟩
   | event event next ih =>
       cases event with
-      | Alloc value =>
-          obtain ⟨r, h, hFresh⟩ := exists_fresh value h₀
+      | AllocPtr value =>
+          obtain ⟨p, h, hFresh⟩ := Ptr.exists_fresh value h₀
           obtain ⟨result, h₁, hEvaluates, hPost⟩ :=
-            ih r h (hTheta r h hFresh)
+            ih p h (hTheta p h hFresh)
           exact ⟨result, h₁, Evaluates.alloc hFresh hEvaluates, hPost⟩
-      | Read r =>
+      | ReadPtr p =>
           obtain ⟨hContains, hNext⟩ := hTheta
           obtain ⟨result, h₁, hEvaluates, hPost⟩ :=
-            ih (Heap.read r h₀ hContains) h₀ hNext
+            ih (Ptr.read p h₀ hContains) h₀ hNext
           exact ⟨result, h₁, Evaluates.read hContains hEvaluates, hPost⟩
-      | Update r value =>
+      | UpdatePtr p value =>
           obtain ⟨hContains, hNext⟩ := hTheta
           obtain ⟨result, h₁, hEvaluates, hPost⟩ :=
-            ih () (Heap.update r value h₀ hContains) hNext
+            ih () (Ptr.update p value h₀ hContains) hNext
           exact ⟨result, h₁, Evaluates.update hContains hEvaluates, hPost⟩
-      | Free r =>
+      | FreePtr p =>
           obtain ⟨hContains, hNext⟩ := hTheta
           obtain ⟨result, h₁, hEvaluates, hPost⟩ :=
-            ih () (Heap.free r h₀ hContains) hNext
+            ih () (Ptr.free p h₀ hContains) hNext
           exact ⟨result, h₁, Evaluates.free hContains hEvaluates, hPost⟩
 
 theorem theta_ev_frame (event : StEvents α) (Q : SLPost α)
@@ -152,29 +152,29 @@ theorem theta_ev_frame (event : StEvents α) (Q : SLPost α)
   rcases hPre with ⟨h₁, h₂, hDisjoint, hEq, hEvent, hH⟩
   subst h
   cases event with
-  | Alloc value =>
-      intro r h' hFresh
-      rcases fresh_frame hDisjoint hFresh with
+  | AllocPtr value =>
+      intro p h' hFresh
+      rcases Ptr.fresh_frame hDisjoint hFresh with
         ⟨h₁', hFresh₁, hDisjoint', rfl⟩
       exact ⟨h₁', h₂, hDisjoint', rfl,
-        hEvent r h₁' hFresh₁, hH⟩
-  | Read r =>
+        hEvent p h₁' hFresh₁, hH⟩
+  | ReadPtr p =>
       rcases hEvent with ⟨hContains, hPost⟩
-      refine ⟨contains_union_left hContains, ?_⟩
-      rw [read_union_left hContains]
+      refine ⟨Ptr.contains_union_left hContains, ?_⟩
+      rw [Ptr.read_union_left hContains]
       exact ⟨h₁, h₂, hDisjoint, rfl, hPost, hH⟩
-  | Update r value =>
+  | UpdatePtr p value =>
       rcases hEvent with ⟨hContains, hPost⟩
-      refine ⟨contains_union_left hContains, ?_⟩
-      rw [update_union_left r value hContains]
-      exact ⟨Heap.update r value h₁ hContains, h₂,
-        disjoint_update_left hDisjoint hContains, rfl, hPost, hH⟩
-  | Free r =>
+      refine ⟨Ptr.contains_union_left hContains, ?_⟩
+      rw [Ptr.update_union_left p value hContains]
+      exact ⟨Ptr.update p value h₁ hContains, h₂,
+        Ptr.disjoint_update_left hDisjoint hContains, rfl, hPost, hH⟩
+  | FreePtr p =>
       rcases hEvent with ⟨hContains, hPost⟩
-      refine ⟨contains_union_left hContains, ?_⟩
-      rw [free_union_left r hDisjoint hContains]
-      exact ⟨Heap.free r h₁ hContains, h₂,
-        disjoint_free_left hDisjoint hContains, rfl, hPost, hH⟩
+      refine ⟨Ptr.contains_union_left hContains, ?_⟩
+      rw [Ptr.free_union_left p hDisjoint hContains]
+      exact ⟨Ptr.free p h₁ hContains, h₂,
+        Ptr.disjoint_free_left hDisjoint hContains, rfl, hPost, hH⟩
 
 theorem theta_frame (m : St α) (Q : SLPost α) (H : SLProp) :
     theta m Q ∗ H ⊢ theta m (Q ∗+ H) := by
@@ -344,60 +344,60 @@ theorem pure.spec (value : α) :
   ok.spec value
 
 theorem alloc.spec (value : α) :
-    ⦃ emp ⦄ alloc value ⦃⇓ r => r ↦ value⦄ := by
+    ⦃ emp ⦄ alloc value ⦃⇓ p => p ↦ value⦄ := by
   apply (triple_iff _ _ _).mpr
   intro h hEmpty
   subst h
-  intro r h' hFresh
-  change (r ↦ value) h'
-  exact fresh_empty_eq_singleton hFresh
+  intro p h' hFresh
+  change (p ↦ value) h'
+  exact Ptr.fresh_empty_eq_singleton hFresh
 
-theorem read.spec (r : Ref α) (value : α) :
-    ⦃ r ↦ value ⦄ read r
-      ⦃⇓ result => ⌜result = value⌝ ∗ r ↦ value⦄ := by
+theorem read.spec (p : Ptr α) (value : α) :
+    ⦃ p ↦ value ⦄ read p
+      ⦃⇓ result => ⌜result = value⌝ ∗ p ↦ value⦄ := by
   apply (triple_iff _ _ _).mpr
   intro h hSingle
   subst h
-  have hContains := contains_singleton r value
+  have hContains := Ptr.contains_singleton p value
   refine ⟨hContains, ?_⟩
-  change (⌜Heap.read r (singleton r value) hContains = value⌝ ∗ r ↦ value)
-    (singleton r value)
+  change (⌜Ptr.read p (Ptr.singleton p value) hContains = value⌝ ∗ p ↦ value)
+    (Ptr.singleton p value)
   apply (hstar_hpure_l _ _ _).mpr
-  exact ⟨read_singleton r value hContains, rfl⟩
+  exact ⟨Ptr.read_singleton p value hContains, rfl⟩
 
-theorem update.spec (r : Ref α) (oldValue newValue : α) :
-    ⦃ r ↦ oldValue ⦄ update r newValue ⦃⇓ r ↦ newValue⦄ := by
+theorem update.spec (p : Ptr α) (oldValue newValue : α) :
+    ⦃ p ↦ oldValue ⦄ update p newValue ⦃⇓ p ↦ newValue⦄ := by
   apply (triple_iff _ _ _).mpr
   intro h hSingle
   subst h
-  have hContains := contains_singleton r oldValue
+  have hContains := Ptr.contains_singleton p oldValue
   refine ⟨hContains, ?_⟩
-  change (r ↦ newValue)
-    (Heap.update r newValue (singleton r oldValue) hContains)
-  exact update_singleton r oldValue newValue hContains
+  change (p ↦ newValue)
+    (Ptr.update p newValue (Ptr.singleton p oldValue) hContains)
+  exact Ptr.update_singleton p oldValue newValue hContains
 
-theorem free.spec (r : Ref α) (value : α) :
-    ⦃ r ↦ value ⦄ free r ⦃⇓ emp⦄ := by
+theorem free.spec (p : Ptr α) (value : α) :
+    ⦃ p ↦ value ⦄ free p ⦃⇓ emp⦄ := by
   apply (triple_iff _ _ _).mpr
   intro h hSingle
   subst h
-  have hContains := contains_singleton r value
+  have hContains := Ptr.contains_singleton p value
   refine ⟨hContains, ?_⟩
-  change emp (Heap.free r (singleton r value) hContains)
-  exact free_singleton r value hContains
+  change emp (Ptr.free p (Ptr.singleton p value) hContains)
+  exact Ptr.free_singleton p value hContains
 
 theorem mut_to_raw.spec {α : Type} (value : α) :
-    ⦃ emp ⦄ mut_to_raw value ⦃⇓ r => r ↦ value⦄ := by
+    ⦃ emp ⦄ mut_to_raw value ⦃⇓ p => p ↦ value⦄ := by
   exact alloc.spec value
 
-theorem end_mut_to_raw.spec {α : Type} {value : α} (r : Ref α) :
-    ⦃ r ↦ value ⦄ end_mut_to_raw r ⦃⇓ result => ⌜result = value⌝⦄ := by
+theorem end_mut_to_raw.spec {α : Type} {value : α} (p : Ptr α) :
+    ⦃ p ↦ value ⦄ end_mut_to_raw p ⦃⇓ result => ⌜result = value⌝⦄ := by
   unfold end_mut_to_raw
-  apply triple_bind (read.spec r value)
+  apply triple_bind (read.spec p value)
   intro result
   apply triple_hpure
   intro hResult
-  apply triple_seq (free.spec r value)
+  apply triple_seq (free.spec p value)
   apply triple_pure
   intro h hEmpty
   exact ⟨hResult, hEmpty⟩
