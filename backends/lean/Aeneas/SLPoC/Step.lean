@@ -82,10 +82,10 @@ macro "sl_step" args:Aeneas.Step.stepArgs : tactic =>
     mk_spec_bind := ``triple_step_bind
     mk_spec_bind_skip_args := 7
     mk_spec_bind_preconditions := 2
-    uncurry_elim_tactics := #[]
-    qimp_elim_tactics := #[]
+    uncurry_elim_tactics := #[] -- TODO: wire sl_pull, and sl_frame? to this
+    qimp_elim_tactics := #[] -- TODO: wire sl_pull, and sl_frame? to this
     to_mvcgen := none
-    liftings := #[]
+    liftings := #[] -- TODO: lift from Pure to SLProp
   }
 
 attribute [step]
