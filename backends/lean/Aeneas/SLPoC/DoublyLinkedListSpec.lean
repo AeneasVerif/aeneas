@@ -407,7 +407,7 @@ assertion `wellFormed s l`, and `self@` becomes `view l`. -/
 theorem new.spec :
     ⦃ emp ⦄ (new : St (DoublyLinkedList V)) ⦃⇓ s => wellFormed s []⦄ := by
   unfold new
-  step* by sl_frame
+  sl_step*
 
 /-- `pushEmptyCase` inserts one node into an empty list. -/
 theorem pushEmptyCase.spec (s : DoublyLinkedList V) (v : V) :
@@ -415,7 +415,7 @@ theorem pushEmptyCase.spec (s : DoublyLinkedList V) (v : V) :
       ⦃⇓ s' => ∃ r : Ptr (Node V), wellFormed s' [(r, v)]⦄ := by
   unfold pushEmptyCase
   sl_pull _
-  step* by sl_frame
+  sl_step*
 
 /-- `pushBack` appends `v` to the list. -/
 theorem pushBack.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
@@ -448,7 +448,7 @@ theorem pushBack.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
     subst hrt
     simp only [show ∀ r : Ptr (Node V), l' ++ [(oldTailPtr, vt)] ++ [(r, v)] =
       l' ++ [(oldTailPtr, vt), (r, v)] from by simp]
-    step* by sl_frame
+    sl_step*
 
 /-- `popBack` removes the last node and returns its payload. -/
 theorem popBack.spec (s : DoublyLinkedList V) (l : Cells V) (rt : Ptr (Node V))
@@ -462,12 +462,12 @@ theorem popBack.spec (s : DoublyLinkedList V) (l : Cells V) (rt : Ptr (Node V))
   rcases eq_nil_or_snoc l with rfl | ⟨l'', c, rfl⟩
   · -- The list had exactly one node: `head` and `tail` both become `none`
     simp only [List.nil_append] at hhead ⊢
-    step* by sl_frame
+    sl_step*
   · -- The list had at least two nodes: the penultimate one becomes the tail
     obtain ⟨rp, vp⟩ := c
     simp only [show l'' ++ [(rp, vp)] ++ [(rt, vt)] = l'' ++ [(rp, vp), (rt, vt)]
       from by simp] at hhead ⊢
-    step* by sl_frame
+    sl_step*
 
 /-- `pushFront` prepends `v` to the list. -/
 theorem pushFront.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
@@ -495,7 +495,7 @@ theorem pushFront.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
       obtain rfl : rh = oldHeadPtr := by
         rw [hsome, headPtr_cons] at hhead
         exact (Option.some.inj hhead).symm
-      step* by sl_frame
+      sl_step*
 
 /-- `popFront` removes the first node and returns its payload. -/
 theorem popFront.spec (s : DoublyLinkedList V) (rh : Ptr (Node V)) (vh : V)
@@ -509,11 +509,11 @@ theorem popFront.spec (s : DoublyLinkedList V) (rh : Ptr (Node V)) (vh : V)
   cases l with
   | nil =>
     -- The list had exactly one node: `head` and `tail` both become `none`
-    step* by sl_frame
+    sl_step*
   | cons c l' =>
     -- The list had at least two nodes: the second one becomes the head
     obtain ⟨r2, v2⟩ := c
-    step* by sl_frame
+    sl_step*
 
 /-! ## Reading an arbitrary node -/
 
@@ -548,7 +548,7 @@ theorem nodes_read (l : Cells V) (i : Nat) (r : Ptr (Node V)) (v : V)
     (h : l[i]? = some (r, v)) :
     ⦃ nodes l ⦄ read r ⦃⇓ node => ⌜node = nodeAt l i v⌝ ∗ nodes l⦄ := by
   rw [nodes_split l i r v h]
-  step* by sl_frame
+  sl_step*
 
 theorem exists_cell (l : Cells V) (i : Nat) (hi : i < l.length) :
     ∃ r v, l[i]? = some (r, v) :=
@@ -574,7 +574,7 @@ theorem getLoop.spec (l : Cells V) (i j : Nat) (r : Ptr (Node V))
       intro j r hn hji hr
       obtain rfl : j = i := by omega
       rw [getLoop, if_neg (by omega)]
-      step* by sl_frame
+      sl_step*
     | succ n ih =>
       intro j r hn hji hr
       rw [getLoop, if_pos (by omega)]
@@ -582,7 +582,7 @@ theorem getLoop.spec (l : Cells V) (i j : Nat) (r : Ptr (Node V))
       have he : some rj = some r := by rw [hj] at hr; exact hr
       obtain rfl : r = rj := (Option.some.inj he).symm
       obtain ⟨r', v', hj'⟩ := exists_cell l (j + 1) (by omega)
-      step with nodes_read l j r vj hj by sl_frame
+      sl_step with nodes_read l j r vj hj
       have hnext : (nodeAt l j vj).next = some r' := by
         simp only [nodeAt, nextOf, if_neg (show j + 1 ≠ l.length by omega), hj']
         rfl
@@ -602,14 +602,23 @@ theorem get.spec (s : DoublyLinkedList V) (l : Cells V) (i : Nat)
     rw [hhead, headPtr_eq_getElem?, h0]; rfl
   rw [hhead']
   simp only [get!_some]
-  step with getLoop.spec l i 0 r0 (by omega) hi (by rw [h0]; rfl)
-    as ⟨ r, hr ⟩ by sl_frame
+  sl_step with getLoop.spec l i 0 r0 (by omega) hi (by rw [h0]; rfl)
+    as ⟨ r, hr ⟩
   obtain ⟨ri, vi, hi'⟩ := exists_cell l i hi
   obtain rfl : r = ri := (Option.some.inj (by rw [hi'] at hr; exact hr)).symm
   have hview : (view l)[i]? = some vi := by rw [view_getElem?, hi']; rfl
   have hpay : (nodeAt l i vi).payload = vi := rfl
-  step with nodes_read l i r vi hi' by sl_frame
-  step* by sl_frame
+  sl_step with nodes_read l i r vi hi'
+  sl_step*
+
+/- Specifications `step` can apply on its own: the program term fixes the
+receiver, `sl_frame` fixes the ghost list by matching `nodes ?l`, and `sl_side?`
+discharges the remaining `Prop` arguments.  A specification is *not* registrable
+when its ghost list only occurs under `++` (`popBack.spec`), which the unifier
+will not solve, or when a `Prop` argument carries information no tactic can
+recover (`getLoop.spec`'s `l[j]?.map Prod.fst = some r`, `nodes_read`'s cell). -/
+attribute [step]
+  new.spec pushBack.spec pushFront.spec popFront.spec get.spec
 
 /-! ## Ghost-free specifications
 
@@ -715,14 +724,12 @@ theorem new.spec (t : DoublyLinkedList V) (l : Cells V) (hne : 0 < l.length) :
   sl_pull ⟨hhead, htail⟩
   have hv : valid ({ l := t, cur := t.head, index := 0 } : Iterator V) l :=
     ⟨hne, by rw [hhead, headPtr_eq_getElem?]⟩
-  step* by sl_frame
+  sl_step*
 
 /-- The iterator yields the element of the view at its index. -/
-theorem value.spec (it : Iterator V) (t : DoublyLinkedList V) (l : Cells V)
-    (hl : it.l = t) (hvalid : valid it l) :
-    ⦃ wellFormed t l ⦄ it.value
-      ⦃⇓ v => ⌜(view l)[it.index]? = some v⌝ ∗ wellFormed t l⦄ := by
-  subst hl
+theorem value.spec (it : Iterator V) (l : Cells V) (hvalid : valid it l) :
+    ⦃ wellFormed it.l l ⦄ it.value
+      ⦃⇓ v => ⌜(view l)[it.index]? = some v⌝ ∗ wellFormed it.l l⦄ := by
   unfold Iterator.value
   sl_pull ⟨hhead, htail⟩
   obtain ⟨hidx, hcur⟩ := hvalid
@@ -732,24 +739,22 @@ theorem value.spec (it : Iterator V) (t : DoublyLinkedList V) (l : Cells V)
   simp only [get!_some]
   have hview : (view l)[it.index]? = some v := by rw [view_getElem?, hcell]; rfl
   have hpay : (nodeAt l it.index v).payload = v := rfl
-  step with nodes_read l it.index r v hcell by sl_frame
-  step* by sl_frame
+  sl_step with nodes_read l it.index r v hcell
+  sl_step*
 
 /-- Advancing the iterator: it reports whether there still is an element, and
 if so it becomes valid again at the next index.  The unconditional `index` and
 the `cur` of the exhausted case are what rule out an implementation that leaves
 the iterator untouched at the last node. -/
-theorem moveNext.spec (it : Iterator V) (t : DoublyLinkedList V) (l : Cells V)
-    (hl : it.l = t) (hvalid : valid it l) :
-    ⦃ wellFormed t l ⦄ it.moveNext
+theorem moveNext.spec (it : Iterator V) (l : Cells V) (hvalid : valid it l) :
+    ⦃ wellFormed it.l l ⦄ it.moveNext
       ⦃⇓ (it', good) =>
         ⌜it'.l = it.l ∧
           it'.index = it.index + 1 ∧
           (good = true ↔ it.index + 1 < l.length) ∧
           (good = true → valid it' l) ∧
           (good = false → it'.cur = none)⌝ ∗
-        wellFormed t l⦄ := by
-  subst hl
+        wellFormed it.l l⦄ := by
   unfold Iterator.moveNext
   sl_pull ⟨hhead, htail⟩
   obtain ⟨hidx, hcur⟩ := hvalid
@@ -757,7 +762,7 @@ theorem moveNext.spec (it : Iterator V) (t : DoublyLinkedList V) (l : Cells V)
   have hcur' : it.cur = some r := by rw [hcur, hcell]; rfl
   rw [hcur']
   simp only [get!_some]
-  step with nodes_read l it.index r v hcell by sl_frame
+  sl_step with nodes_read l it.index r v hcell
   by_cases hlast : it.index + 1 = l.length
   · -- The iterator was on the last node
     simp only [nodeAt, nextOf, if_pos hlast]
@@ -769,7 +774,7 @@ theorem moveNext.spec (it : Iterator V) (t : DoublyLinkedList V) (l : Cells V)
     have hnone :
         ({ it with cur := none, index := it.index + 1 } : Iterator V).cur =
           none := rfl
-    step* by sl_frame
+    sl_step*
   · -- There is a next node
     obtain ⟨r', v', hcell'⟩ := exists_cell l (it.index + 1) (by omega)
     simp only [nodeAt, nextOf, if_neg hlast, hcell', Option.map_some]
@@ -782,7 +787,9 @@ theorem moveNext.spec (it : Iterator V) (t : DoublyLinkedList V) (l : Cells V)
           it.index + 1 := rfl
     have hl' :
         ({ it with cur := some r', index := it.index + 1 } : Iterator V).l = it.l := rfl
-    step* by sl_frame
+    sl_step*
+
+attribute [step] new.spec value.spec moveNext.spec
 
 end Iterator
 
@@ -825,33 +832,25 @@ theorem run.spec :
       v1 = 1 ∧ v2 = 2 ∧ v3 = 3 ∧ g = false ∧ x = 3 ∧ y = 1 ∧ z = 2⦄ := by
   unfold run
   -- Build the list `1, 2, 3`
-  step with DoublyLinkedList.new.spec as ⟨ t0 ⟩ by sl_frame
-  step with DoublyLinkedList.pushBack.spec t0 [] 2 as ⟨ t1, r1 ⟩ by sl_frame
-  step with DoublyLinkedList.pushBack.spec t1 [(r1, 2)] 3 as ⟨ t2, r2 ⟩ by sl_frame
-  step with DoublyLinkedList.pushFront.spec t2 [(r1, 2), (r2, 3)] 1
-    as ⟨ t3, r3 ⟩ by sl_frame
+  sl_step as ⟨ t0 ⟩
+  sl_step as ⟨ t1, r1 ⟩
+  sl_step as ⟨ t2, r2 ⟩
+  sl_step as ⟨ t3, r3 ⟩
   -- Walk the list with an iterator
-  step with Iterator.new.spec t3 [(r3, 1), (r1, 2), (r2, 3)] (by simp)
-    as ⟨ it, hitl, hitidx, hitvalid ⟩ by sl_frame
-  step with Iterator.value.spec it t3 _ hitl hitvalid as ⟨ v1, hv1 ⟩ by sl_frame
-  step with Iterator.moveNext.spec it t3 _ hitl hitvalid
-    as ⟨ m1, hm1l, hidx1, hm1good, hm1valid, _ ⟩ by sl_frame
+  sl_step as ⟨ it, hitl, hitidx, hitvalid ⟩
+  sl_step as ⟨ v1, hv1 ⟩
+  sl_step as ⟨ m1, hm1l, hidx1, hm1good, hm1valid, _ ⟩
   have hvalid1 := hm1valid (hm1good.mpr (by simp [hitidx]))
-  step with Iterator.value.spec m1.1 t3 _ (hm1l.trans hitl) hvalid1
-    as ⟨ v2, hv2 ⟩ by sl_frame
-  step with Iterator.moveNext.spec m1.1 t3 _ (hm1l.trans hitl) hvalid1
-    as ⟨ m2, hm2l, hidx2, hm2good, hm2valid, _ ⟩ by sl_frame
+  sl_step as ⟨ v2, hv2 ⟩
+  sl_step as ⟨ m2, hm2l, hidx2, hm2good, hm2valid, _ ⟩
   have hvalid2 := hm2valid (hm2good.mpr (by rw [hidx1, hitidx]; simp))
-  step with Iterator.value.spec m2.1 t3 _ (hm2l.trans (hm1l.trans hitl)) hvalid2
-    as ⟨ v3, hv3 ⟩ by sl_frame
-  step with Iterator.moveNext.spec m2.1 t3 _ (hm2l.trans (hm1l.trans hitl)) hvalid2
-    as ⟨ m3, hm3l, _, hm3good, _, _ ⟩ by sl_frame
+  sl_step as ⟨ v3, hv3 ⟩
+  sl_step as ⟨ m3, hm3l, _, hm3good, _, _ ⟩
   -- Empty the list again
-  step with DoublyLinkedList.popBack.spec t3 [(r3, 1), (r1, 2)] r2 3
-    as ⟨ p1, ex ⟩ by sl_frame
-  step with DoublyLinkedList.popFront.spec p1.1 r3 1 [(r1, 2)]
-    as ⟨ p2, ey ⟩ by sl_frame
-  step with DoublyLinkedList.popFront.spec p2.1 r1 2 [] as ⟨ p3, ez ⟩ by sl_frame
+  sl_step with DoublyLinkedList.popBack.spec t3 [(r3, 1), (r1, 2)] r2 3
+    as ⟨ p1, ex ⟩
+  sl_step as ⟨ p2, ey ⟩
+  sl_step as ⟨ p3, ez ⟩
   -- Read off the observed values
   have e1 : v1 = 1 := by rw [hitidx] at hv1; simp [view] at hv1; omega
   have e2 : v2 = 2 := by rw [hidx1, hitidx] at hv2; simp [view] at hv2; omega
@@ -859,7 +858,7 @@ theorem run.spec :
   have eg : m3.2 = false := by
     have hnot : ¬ (m3.2 = true) := by rw [hm3good, hidx2, hidx1, hitidx]; simp
     simpa using hnot
-  step* by sl_frame
+  sl_step*
 
 end Example
 
