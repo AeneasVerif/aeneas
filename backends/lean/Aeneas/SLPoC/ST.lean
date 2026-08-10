@@ -53,28 +53,6 @@ inductive Evaluates : St α → Heap → α → Heap → Prop where
       (hNext : Evaluates (next ()) (Ptr.free p h₀ hContains) result h₁) :
       Evaluates (.event (.FreePtr p) next) h₀ result h₁
 
-/-! ## Monad operations -/
-
-def alloc {α : Type} (value : α) : St (Ptr α) :=
-  FFree.trigger (.AllocPtr value)
-
-def read {α : Type} (p : Ptr α) : St α :=
-  FFree.trigger (.ReadPtr p)
-
-def update {α : Type} (p : Ptr α) (value : α) : St Unit :=
-  FFree.trigger (.UpdatePtr p value)
-
-def free {α : Type} (p : Ptr α) : St Unit :=
-  FFree.trigger (.FreePtr p)
-
-def mut_to_raw {α : Type} (value : α) : St (Ptr α) :=
-  alloc value
-
-def end_mut_to_raw {α : Type} (p : Ptr α) : St α := do
-  let value ← read p
-  free p
-  pure value
-
 /-! ## Denotation into the weakest-precondition monad -/
 
 def theta_ev : StEvents α → Wp α
@@ -343,6 +321,11 @@ theorem pure.spec (value : α) :
     ⦃ emp ⦄ (Pure.pure value : St α) ⦃⇓ result => ⌜result = value⌝⦄ :=
   ok.spec value
 
+/-! ## Specified monadic operations -/
+
+def alloc {α : Type} (value : α) : St (Ptr α) :=
+  FFree.trigger (.AllocPtr value)
+
 theorem alloc.spec (value : α) :
     ⦃ emp ⦄ alloc value ⦃⇓ p => p ↦ value⦄ := by
   apply (triple_iff _ _ _).mpr
@@ -351,6 +334,9 @@ theorem alloc.spec (value : α) :
   intro p h' hFresh
   change (p ↦ value) h'
   exact Ptr.fresh_empty_eq_singleton hFresh
+
+def read {α : Type} (p : Ptr α) : St α :=
+  FFree.trigger (.ReadPtr p)
 
 theorem read.spec (p : Ptr α) (value : α) :
     ⦃ p ↦ value ⦄ read p
@@ -365,6 +351,9 @@ theorem read.spec (p : Ptr α) (value : α) :
   apply (hstar_hpure_l _ _ _).mpr
   exact ⟨Ptr.read_singleton p value hContains, rfl⟩
 
+def update {α : Type} (p : Ptr α) (value : α) : St Unit :=
+  FFree.trigger (.UpdatePtr p value)
+
 theorem update.spec (p : Ptr α) (oldValue newValue : α) :
     ⦃ p ↦ oldValue ⦄ update p newValue ⦃⇓ p ↦ newValue⦄ := by
   apply (triple_iff _ _ _).mpr
@@ -376,6 +365,9 @@ theorem update.spec (p : Ptr α) (oldValue newValue : α) :
     (Ptr.update p newValue (Ptr.singleton p oldValue) hContains)
   exact Ptr.update_singleton p oldValue newValue hContains
 
+def free {α : Type} (p : Ptr α) : St Unit :=
+  FFree.trigger (.FreePtr p)
+
 theorem free.spec (p : Ptr α) (value : α) :
     ⦃ p ↦ value ⦄ free p ⦃⇓ emp⦄ := by
   apply (triple_iff _ _ _).mpr
@@ -386,9 +378,17 @@ theorem free.spec (p : Ptr α) (value : α) :
   change emp (Ptr.free p (Ptr.singleton p value) hContains)
   exact Ptr.free_singleton p value hContains
 
+def mut_to_raw {α : Type} (value : α) : St (Ptr α) :=
+  alloc value
+
 theorem mut_to_raw.spec {α : Type} (value : α) :
     ⦃ emp ⦄ mut_to_raw value ⦃⇓ p => p ↦ value⦄ := by
   exact alloc.spec value
+
+def end_mut_to_raw {α : Type} (p : Ptr α) : St α := do
+  let value ← read p
+  free p
+  pure value
 
 theorem end_mut_to_raw.spec {α : Type} {value : α} (p : Ptr α) :
     ⦃ p ↦ value ⦄ end_mut_to_raw p ⦃⇓ result => ⌜result = value⌝⦄ := by
