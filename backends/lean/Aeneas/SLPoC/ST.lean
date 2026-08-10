@@ -59,38 +59,68 @@ def Evaluates (m : St α) (h : Heap) (value : α) (h' : Heap) : Prop :=
 /-! ## Denotation into the weakest-precondition monad -/
 
 def theta_ev : StEvents α → Wp α
-  | .AllocPtr value => {
-      -- Allocation must satisfy the postcondition for every fresh pointer.
-      run := fun Q h =>
-        ∀ p h', Ptr.fresh h p value h' → Q p h'
-      monotone := by
-        intro Q₁ Q₂ hQ h hPre p h' hFresh
-        exact hQ _ _ (hPre p h' hFresh)
-    }
-  | .ReadPtr p => {
-      run := fun Q h =>
-        ∃ hContains : Ptr.contains h p, Q (Ptr.read p h hContains) h
-      monotone := by
-        intro Q₁ Q₂ hQ h hPre
-        obtain ⟨hContains, hPost⟩ := hPre
-        exact ⟨hContains, hQ _ _ hPost⟩
-    }
-  | .UpdatePtr p value => {
-      run := fun Q h =>
-        ∃ hContains : Ptr.contains h p, Q () (Ptr.update p value h hContains)
-      monotone := by
-        intro Q₁ Q₂ hQ h hPre
-        obtain ⟨hContains, hPost⟩ := hPre
-        exact ⟨hContains, hQ _ _ hPost⟩
-    }
-  | .FreePtr p => {
-      run := fun Q h =>
-        ∃ hContains : Ptr.contains h p, Q () (Ptr.free p h hContains)
-      monotone := by
-        intro Q₁ Q₂ hQ h hPre
-        obtain ⟨hContains, hPost⟩ := hPre
-        exact ⟨hContains, hQ _ _ hPost⟩
-    }
+  | .AllocPtr value =>
+      pp2wp emp (fun p => p ↦ value)
+  | .ReadPtr p =>
+      Wp.hexists fun value =>
+        pp2wp (p ↦ value) (fun result => iprop(⌜result = value⌝ ∗ p ↦ value))
+  | .UpdatePtr p value =>
+      Wp.hexists fun oldValue =>
+        pp2wp (p ↦ oldValue) (fun _ => p ↦ value)
+  | .FreePtr p =>
+      Wp.hexists fun value =>
+        pp2wp (p ↦ value) (fun _ => emp)
+
+theorem theta_ev_alloc_elim {value : α} {R : SLPost (Ptr α)}
+    {h h' : Heap} {p : Ptr α}
+    (hWp : theta_ev (.AllocPtr value) R h)
+    (hFresh : Ptr.fresh h p value h') :
+    R p h' := by
+  obtain ⟨h₁, h₂, hDisjoint, rfl, hEmpty, hPost⟩ := pp2wp_elim hWp
+  change h₁ = empty at hEmpty
+  subst hEmpty
+  rw [show empty ∪ h₂ = h₂ from by simp [empty]] at hFresh
+  obtain ⟨hDisjoint', rfl⟩ := Ptr.fresh_eq_singleton_union hFresh
+  exact hPost p _ rfl hDisjoint'
+
+theorem theta_ev_read_elim {p : Ptr α} {R : SLPost α} {h : Heap}
+    (hWp : theta_ev (.ReadPtr p) R h) :
+    ∃ hContains : Ptr.contains h p, R (Ptr.read p h hContains) h := by
+  obtain ⟨value, hWp⟩ := hWp
+  obtain ⟨h₁, h₂, hDisjoint, rfl, hSingle, hPost⟩ := pp2wp_elim hWp
+  change h₁ = Ptr.singleton p value at hSingle
+  subst hSingle
+  have hContains := Ptr.contains_singleton p value
+  refine ⟨Ptr.contains_union_left hContains, ?_⟩
+  rw [Ptr.read_union_left hContains, Ptr.read_singleton]
+  exact hPost value _ ((hstar_hpure_l _ _ _).mpr ⟨rfl, rfl⟩) hDisjoint
+
+theorem theta_ev_update_elim {p : Ptr α} {value : α} {R : SLPost Unit}
+    {h : Heap} (hWp : theta_ev (.UpdatePtr p value) R h) :
+    ∃ hContains : Ptr.contains h p, R () (Ptr.update p value h hContains) := by
+  obtain ⟨oldValue, hWp⟩ := hWp
+  obtain ⟨h₁, h₂, hDisjoint, rfl, hSingle, hPost⟩ := pp2wp_elim hWp
+  change h₁ = Ptr.singleton p oldValue at hSingle
+  subst hSingle
+  have hContains := Ptr.contains_singleton p oldValue
+  have hDisjoint' : Finmap.Disjoint (Ptr.singleton p value) h₂ := by
+    rw [← Ptr.update_singleton p oldValue value hContains]
+    exact Ptr.disjoint_update_left hDisjoint hContains
+  refine ⟨Ptr.contains_union_left hContains, ?_⟩
+  rw [Ptr.update_union_left p value hContains, Ptr.update_singleton]
+  exact hPost () _ rfl hDisjoint'
+
+theorem theta_ev_free_elim {p : Ptr α} {R : SLPost Unit} {h : Heap}
+    (hWp : theta_ev (.FreePtr p) R h) :
+    ∃ hContains : Ptr.contains h p, R () (Ptr.free p h hContains) := by
+  obtain ⟨value, hWp⟩ := hWp
+  obtain ⟨h₁, h₂, hDisjoint, rfl, hSingle, hPost⟩ := pp2wp_elim hWp
+  change h₁ = Ptr.singleton p value at hSingle
+  subst hSingle
+  have hContains := Ptr.contains_singleton p value
+  refine ⟨Ptr.contains_union_left hContains, ?_⟩
+  rw [Ptr.free_union_left p hDisjoint hContains, Ptr.free_singleton]
+  exact hPost () _ rfl (Finmap.disjoint_empty h₂)
 
 def theta : St α → Wp α
   | .ok value => Wp.pure value
@@ -108,21 +138,24 @@ theorem theta_adequate (m : St α) (Q : SLPost α) (h₀ : Heap)
   | ok value =>
       exact ⟨value, rfl, hTheta⟩
   | event event next ih =>
+      have hEvent : theta_ev event (fun value => theta (next value) Q) h₀ :=
+        hTheta
       cases event with
       | AllocPtr value =>
           obtain ⟨p, h, hFresh⟩ := Ptr.exists_fresh value h₀
           exact Exec.event (M := StEvents.machine)
-            ⟨p, h, .alloc hFresh, ih p h (hTheta p h hFresh)⟩
+            ⟨p, h, .alloc hFresh,
+              ih p h (theta_ev_alloc_elim hEvent hFresh)⟩
       | ReadPtr p =>
-          obtain ⟨hContains, hNext⟩ := hTheta
+          obtain ⟨hContains, hNext⟩ := theta_ev_read_elim hEvent
           exact Exec.event (M := StEvents.machine)
             ⟨_, h₀, .read hContains, ih _ h₀ hNext⟩
       | UpdatePtr p value =>
-          obtain ⟨hContains, hNext⟩ := hTheta
+          obtain ⟨hContains, hNext⟩ := theta_ev_update_elim hEvent
           exact Exec.event (M := StEvents.machine)
             ⟨(), _, .update hContains, ih () _ hNext⟩
       | FreePtr p =>
-          obtain ⟨hContains, hNext⟩ := hTheta
+          obtain ⟨hContains, hNext⟩ := theta_ev_free_elim hEvent
           exact Exec.event (M := StEvents.machine)
             ⟨(), _, .free hContains, ih () _ hNext⟩
 
@@ -137,33 +170,11 @@ theorem theta_sound (m : St α) (Q : SLPost α) (h₀ : Heap)
 theorem theta_ev_frame (event : StEvents α) (Q : SLPost α)
     (H : SLProp) :
     theta_ev event Q ∗ H ⊢ theta_ev event (Q ∗+ H) := by
-  intro h hPre
-  rcases hPre with ⟨h₁, h₂, hDisjoint, hEq, hEvent, hH⟩
-  subst h
   cases event with
-  | AllocPtr value =>
-      intro p h' hFresh
-      rcases Ptr.fresh_frame hDisjoint hFresh with
-        ⟨h₁', hFresh₁, hDisjoint', rfl⟩
-      exact ⟨h₁', h₂, hDisjoint', rfl,
-        hEvent p h₁' hFresh₁, hH⟩
-  | ReadPtr p =>
-      rcases hEvent with ⟨hContains, hPost⟩
-      refine ⟨Ptr.contains_union_left hContains, ?_⟩
-      rw [Ptr.read_union_left hContains]
-      exact ⟨h₁, h₂, hDisjoint, rfl, hPost, hH⟩
-  | UpdatePtr p value =>
-      rcases hEvent with ⟨hContains, hPost⟩
-      refine ⟨Ptr.contains_union_left hContains, ?_⟩
-      rw [Ptr.update_union_left p value hContains]
-      exact ⟨Ptr.update p value h₁ hContains, h₂,
-        Ptr.disjoint_update_left hDisjoint hContains, rfl, hPost, hH⟩
-  | FreePtr p =>
-      rcases hEvent with ⟨hContains, hPost⟩
-      refine ⟨Ptr.contains_union_left hContains, ?_⟩
-      rw [Ptr.free_union_left p hDisjoint hContains]
-      exact ⟨Ptr.free p h₁ hContains, h₂,
-        Ptr.disjoint_free_left hDisjoint hContains, rfl, hPost, hH⟩
+  | AllocPtr value => exact pp2wp_frame H
+  | ReadPtr p => exact Wp.hexists_frame H fun _ => pp2wp_frame H
+  | UpdatePtr p value => exact Wp.hexists_frame H fun _ => pp2wp_frame H
+  | FreePtr p => exact Wp.hexists_frame H fun _ => pp2wp_frame H
 
 theorem theta_frame (m : St α) (Q : SLPost α) (H : SLProp) :
     theta m Q ∗ H ⊢ theta m (Q ∗+ H) := by
@@ -196,7 +207,8 @@ def thetaMorphism : MonadMorphism St Wp where
 /-! ## Hoare triples -/
 
 /-- A Hoare triple interpreted by embedding its pre/postcondition pair into
-the ordered weakest-precondition monad. -/
+the ordered weakest-precondition monad.  Since `pp2wp` is the local encoding,
+this unfolds to a *Texan triple* — see `triple_texan`. -/
 def triple (P : SLPre) (m : St α) (Q : SLPost α) : Prop :=
   theta m ≤ pp2wp P Q
 
@@ -224,13 +236,32 @@ scoped macro_rules
 
 end SepLogic
 
+/-- The definition of `triple`, spelled out.
+
+This form is known as a **Texan triple**: it is how Iris states specifications,
+```
+{{{ P }}} e {{{ RET v; Q }}}  ≜  □ ∀ Φ, P -∗ (∀ v, Q -∗ Φ v) -∗ WP e {{ Φ }}
+```
+the postcondition being passed to the continuation `R` through a wand rather
+than asserted directly.  The name is due to the "big" `{{{ … }}}` braces.
+
+Two differences with Iris, both inessential here: the outer entailment is left
+at the meta level instead of being internalised as a second wand, and there is
+no `□`, since this model has no invariants, no step-indexing and no
+higher-order specifications to store a triple in. -/
+theorem triple_texan (P : SLPre) (m : St α) (Q : SLPost α) :
+    triple P m Q ↔ ∀ R : SLPost α, P ∗ (Q -∗∗ R) ⊢ theta m R :=
+  Iff.rfl
+
 theorem triple_iff (P : SLPre) (m : St α) (Q : SLPost α) :
     triple P m Q ↔ P ⊢ theta m Q := by
   constructor
   · intro hTriple h hP
-    exact hTriple Q h ⟨hP, fun _ _ hQ => hQ⟩
+    exact hTriple Q h (pp2wp_conseq (fun _ => himpl_refl _) h hP)
   · intro hTriple R h hPre
-    exact (theta m).monotone hPre.2 h (hTriple h hPre.1)
+    apply (theta m).monotone (qwand_cancel Q R) h
+    exact theta_frame m Q (Q -∗∗ R) h
+      (hstar_mono hTriple (himpl_refl _) h hPre)
 
 theorem triple_frame {P : SLPre} {m : St α} {Q : SLPost α}
     (hTriple : triple P m Q) (H : SLProp) :
@@ -341,10 +372,7 @@ theorem alloc.spec (value : α) :
     ⦃ emp ⦄ alloc value ⦃⇓ p => p ↦ value⦄ := by
   apply (triple_iff _ _ _).mpr
   intro h hEmpty
-  subst h
-  intro p h' hFresh
-  change (p ↦ value) h'
-  exact Ptr.fresh_empty_eq_singleton hFresh
+  exact pp2wp_conseq (Q := fun p => p ↦ value) (fun _ => himpl_refl _) h hEmpty
 
 def read {α : Type} (p : Ptr α) : St α :=
   FFree.trigger (.ReadPtr p)
@@ -354,13 +382,7 @@ theorem read.spec (p : Ptr α) (value : α) :
       ⦃⇓ result => ⌜result = value⌝ ∗ p ↦ value⦄ := by
   apply (triple_iff _ _ _).mpr
   intro h hSingle
-  subst h
-  have hContains := Ptr.contains_singleton p value
-  refine ⟨hContains, ?_⟩
-  change (⌜Ptr.read p (Ptr.singleton p value) hContains = value⌝ ∗ p ↦ value)
-    (Ptr.singleton p value)
-  apply (hstar_hpure_l _ _ _).mpr
-  exact ⟨Ptr.read_singleton p value hContains, rfl⟩
+  exact ⟨value, pp2wp_conseq (fun _ => himpl_refl _) h hSingle⟩
 
 def update {α : Type} (p : Ptr α) (value : α) : St Unit :=
   FFree.trigger (.UpdatePtr p value)
@@ -369,12 +391,7 @@ theorem update.spec (p : Ptr α) (oldValue newValue : α) :
     ⦃ p ↦ oldValue ⦄ update p newValue ⦃⇓ p ↦ newValue⦄ := by
   apply (triple_iff _ _ _).mpr
   intro h hSingle
-  subst h
-  have hContains := Ptr.contains_singleton p oldValue
-  refine ⟨hContains, ?_⟩
-  change (p ↦ newValue)
-    (Ptr.update p newValue (Ptr.singleton p oldValue) hContains)
-  exact Ptr.update_singleton p oldValue newValue hContains
+  exact ⟨oldValue, pp2wp_conseq (fun _ => himpl_refl _) h hSingle⟩
 
 def free {α : Type} (p : Ptr α) : St Unit :=
   FFree.trigger (.FreePtr p)
@@ -383,11 +400,7 @@ theorem free.spec (p : Ptr α) (value : α) :
     ⦃ p ↦ value ⦄ free p ⦃⇓ emp⦄ := by
   apply (triple_iff _ _ _).mpr
   intro h hSingle
-  subst h
-  have hContains := Ptr.contains_singleton p value
-  refine ⟨hContains, ?_⟩
-  change emp (Ptr.free p (Ptr.singleton p value) hContains)
-  exact Ptr.free_singleton p value hContains
+  exact ⟨value, pp2wp_conseq (fun _ => himpl_refl _) h hSingle⟩
 
 def mut_to_raw {α : Type} (value : α) : St (Ptr α) :=
   alloc value
