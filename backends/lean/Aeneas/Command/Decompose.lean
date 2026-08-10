@@ -178,7 +178,7 @@ namespace Aeneas.Command.Decompose
 open Lean Elab Term Meta Command
 open Aeneas.Simp (mkSimpCtx SimpArgs)
 
-initialize registerTraceClass `Decompose
+meta initialize registerTraceClass `Decompose
 
 /-- If true (default), warn when two clauses in the same `#decompose` call produce
     definitionally equal definitions under different names. -/

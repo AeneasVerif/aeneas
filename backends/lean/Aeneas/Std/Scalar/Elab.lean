@@ -8,8 +8,8 @@ namespace Aeneas.Std.ScalarElab
 open Lean Elab Command Term Meta
 
 
-initialize registerTraceClass `ScalarElabSubst
-initialize registerTraceClass `ScalarElab
+meta initialize registerTraceClass `ScalarElabSubst
+meta initialize registerTraceClass `ScalarElab
 
 /-!
 

@@ -5,6 +5,6 @@ open Lean Meta
 
 namespace Aeneas.ReduceZMod
 
-initialize registerTraceClass `ReduceZMod
+meta initialize registerTraceClass `ReduceZMod
 
 end Aeneas.ReduceZMod

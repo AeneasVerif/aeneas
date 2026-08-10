@@ -11,7 +11,7 @@ namespace Aeneas.ScalarTac
 -/
 
 -- We can't define and use trace classes in the same file
-initialize registerTraceClass `ScalarTac
+meta initialize registerTraceClass `ScalarTac
 
 /-!
 # Simp Sets

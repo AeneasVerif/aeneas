@@ -7,7 +7,7 @@ open Lean
 
 namespace Aeneas.Extract
 
-initialize registerTraceClass `Extract
+meta initialize registerTraceClass `Extract
 
 structure Field where
   rust : String

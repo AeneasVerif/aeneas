@@ -22,7 +22,7 @@ end Std
 
 namespace Discriminant
 
-initialize registerTraceClass `Discriminant
+meta initialize registerTraceClass `Discriminant
 
 inductive ScalarTy where
 | U8 | U16 | U32 | U64 | U128 | Usize

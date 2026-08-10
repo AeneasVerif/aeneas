@@ -130,7 +130,7 @@ meta initialize traitDefaultAttr : TagAttribute ←
 
 /-! ## Trace class -/
 
-initialize registerTraceClass `Aeneas.implDef
+meta initialize registerTraceClass `Aeneas.implDef
 
 /-! ## Helpers -/
 

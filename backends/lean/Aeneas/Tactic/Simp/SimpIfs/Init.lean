@@ -10,7 +10,7 @@ namespace Aeneas.SimpIfs
 -/
 
 -- We can't define and use trace classes in the same file
-initialize registerTraceClass `SimpIfs
+meta initialize registerTraceClass `SimpIfs
 
 /-!
 # Simp Ifs Simpsets

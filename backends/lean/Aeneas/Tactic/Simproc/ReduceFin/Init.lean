@@ -5,6 +5,6 @@ open Lean Meta
 
 namespace Aeneas.ReduceFin
 
-initialize registerTraceClass `ReduceFin
+meta initialize registerTraceClass `ReduceFin
 
 end Aeneas.ReduceFin

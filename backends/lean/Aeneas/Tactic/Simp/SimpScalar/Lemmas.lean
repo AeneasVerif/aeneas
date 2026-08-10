@@ -8,7 +8,7 @@ section
 
   open Aeneas Utils Lean Meta
 
-  initialize registerTraceClass `ReduceLog2
+  meta initialize registerTraceClass `ReduceLog2
 
   -- TODO: the pattern `Nat.log2 (@OfNat.ofNat _ _ _)` doesn't work
   simproc Nat.reduceLog2 (Nat.log2 _) := fun e => do
