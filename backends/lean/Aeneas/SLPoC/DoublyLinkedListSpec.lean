@@ -467,8 +467,6 @@ theorem popBack.spec (s : DoublyLinkedList V) (l : Cells V) (rt : Ptr (Node V))
     obtain ⟨rp, vp⟩ := c
     simp only [show l'' ++ [(rp, vp)] ++ [(rt, vt)] = l'' ++ [(rp, vp), (rt, vt)]
       from by simp] at hhead ⊢
-    step as ⟨ lastNode, hLastNode ⟩ by sl_frame
-    subst hLastNode
     step* by sl_frame
 
 /-- `pushFront` prepends `v` to the list. -/
@@ -515,8 +513,6 @@ theorem popFront.spec (s : DoublyLinkedList V) (rh : Ptr (Node V)) (vh : V)
   | cons c l' =>
     -- The list had at least two nodes: the second one becomes the head
     obtain ⟨r2, v2⟩ := c
-    step as ⟨ firstNode, hFirstNode ⟩ by sl_frame
-    subst hFirstNode
     step* by sl_frame
 
 /-! ## Reading an arbitrary node -/
@@ -586,12 +582,11 @@ theorem getLoop.spec (l : Cells V) (i j : Nat) (r : Ptr (Node V))
       have he : some rj = some r := by rw [hj] at hr; exact hr
       obtain rfl : r = rj := (Option.some.inj he).symm
       obtain ⟨r', v', hj'⟩ := exists_cell l (j + 1) (by omega)
-      step with nodes_read l j r vj hj as ⟨ node, hnode ⟩ by sl_frame
-      subst hnode
+      step with nodes_read l j r vj hj by sl_frame
       have hnext : (nodeAt l j vj).next = some r' := by
         simp only [nodeAt, nextOf, if_neg (show j + 1 ≠ l.length by omega), hj']
         rfl
-      simp only [hnext, get!_some, hstar_hempty_r_eq]
+      simp only [hnext, get!_some]
       exact ih (j + 1) r' (by omega) (by omega) (by rw [hj']; rfl)
   exact key (i - j) j r rfl hji hr
 
@@ -613,8 +608,7 @@ theorem get.spec (s : DoublyLinkedList V) (l : Cells V) (i : Nat)
   obtain rfl : r = ri := (Option.some.inj (by rw [hi'] at hr; exact hr)).symm
   have hview : (view l)[i]? = some vi := by rw [view_getElem?, hi']; rfl
   have hpay : (nodeAt l i vi).payload = vi := rfl
-  step with nodes_read l i r vi hi' as ⟨ node, hnode ⟩ by sl_frame
-  subst hnode
+  step with nodes_read l i r vi hi' by sl_frame
   step* by sl_frame
 
 /-! ## Ghost-free specifications
@@ -738,16 +732,13 @@ theorem value.spec (it : Iterator V) (t : DoublyLinkedList V) (l : Cells V)
   simp only [get!_some]
   have hview : (view l)[it.index]? = some v := by rw [view_getElem?, hcell]; rfl
   have hpay : (nodeAt l it.index v).payload = v := rfl
-  step with nodes_read l it.index r v hcell as ⟨ node, hnode ⟩ by sl_frame
-  subst hnode
+  step with nodes_read l it.index r v hcell by sl_frame
   step* by sl_frame
 
 /-- Advancing the iterator: it reports whether there still is an element, and
-if so it becomes valid again at the next index.  Unlike the Verus
-postcondition, this pins down the exhausted case too: the index always
-advances, and `cur` is cleared exactly when the walk is over.  Without those
-two conjuncts an implementation that left the iterator untouched at the last
-node would satisfy the specification. -/
+if so it becomes valid again at the next index.  The unconditional `index` and
+the `cur` of the exhausted case are what rule out an implementation that leaves
+the iterator untouched at the last node. -/
 theorem moveNext.spec (it : Iterator V) (t : DoublyLinkedList V) (l : Cells V)
     (hl : it.l = t) (hvalid : valid it l) :
     ⦃ wellFormed t l ⦄ it.moveNext
@@ -766,8 +757,7 @@ theorem moveNext.spec (it : Iterator V) (t : DoublyLinkedList V) (l : Cells V)
   have hcur' : it.cur = some r := by rw [hcur, hcell]; rfl
   rw [hcur']
   simp only [get!_some]
-  step with nodes_read l it.index r v hcell as ⟨ node, hnode ⟩ by sl_frame
-  subst hnode
+  step with nodes_read l it.index r v hcell by sl_frame
   by_cases hlast : it.index + 1 = l.length
   · -- The iterator was on the last node
     simp only [nodeAt, nextOf, if_pos hlast]
@@ -836,13 +826,10 @@ theorem run.spec :
   unfold run
   -- Build the list `1, 2, 3`
   step with DoublyLinkedList.new.spec as ⟨ t0 ⟩ by sl_frame
-  step with DoublyLinkedList.pushBack.spec t0 [] 2 as ⟨ t1 ⟩ by sl_frame
-  sl_pull r1
-  step with DoublyLinkedList.pushBack.spec t1 [(r1, 2)] 3 as ⟨ t2 ⟩ by sl_frame
-  sl_pull r2
+  step with DoublyLinkedList.pushBack.spec t0 [] 2 as ⟨ t1, r1 ⟩ by sl_frame
+  step with DoublyLinkedList.pushBack.spec t1 [(r1, 2)] 3 as ⟨ t2, r2 ⟩ by sl_frame
   step with DoublyLinkedList.pushFront.spec t2 [(r1, 2), (r2, 3)] 1
-    as ⟨ t3 ⟩ by sl_frame
-  sl_pull r3
+    as ⟨ t3, r3 ⟩ by sl_frame
   -- Walk the list with an iterator
   step with Iterator.new.spec t3 [(r3, 1), (r1, 2), (r2, 3)] (by simp)
     as ⟨ it, hitl, hitidx, hitvalid ⟩ by sl_frame
