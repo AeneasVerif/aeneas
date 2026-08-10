@@ -1,14 +1,14 @@
 import Aeneas.Control.OrderedMonad
-import Aeneas.SLPoC.Heap
+import Aeneas.SLPoC.RustHeap
 
 /-!
 # Separation-logic assertions and the weakest-precondition monad
 
 Heap predicates (`SLProp`) with the usual separation-logic connectives — the
-separating conjunction and the magic wand included — and the monad `Wp` of
-monotone predicate transformers they live in.  Nothing here mentions the state
-monad: its denotation into `Wp` and the Hoare triples it induces are in
-`Aeneas.SLPoC.ST`.
+separating conjunction, the points-to assertion `p ↦ value` and the magic wand
+included — and the monad `Wp` of monotone predicate transformers they live in.
+Nothing here mentions the state monad: its denotation into `Wp` and the Hoare
+triples it induces are in `Aeneas.SLPoC.ST`.
 -/
 
 namespace Aeneas.SLPoC
@@ -34,8 +34,10 @@ def hempty : SLProp :=
 def hpure (P : Prop) : SLProp :=
   fun h => P ∧ h = empty
 
-def hsingle {α : Type} (r : Ref α) (value : α) : SLProp :=
-  fun h => h = singleton r value
+/-- The points-to assertion: the heap consists of the single cell `p` points
+at, and it holds `value`. -/
+def hsingle {α : Type} (p : Ptr α) (value : α) : SLProp :=
+  fun h => h = Ptr.singleton p value
 
 def hstar (H₁ H₂ : SLProp) : SLProp :=
   fun h =>
@@ -74,7 +76,7 @@ scoped infixr:40 " ∗+ " => qstar
 scoped infix:25 " ⊢ " => himpl
 scoped infix:25 " ⊢+ " => qimpl
 scoped infix:25 " ⊣⊢ " => hequiv
-scoped notation:52 r:53 " ↦ " value:53 => hsingle r value
+scoped notation:52 p:53 " ↦ " value:53 => hsingle p value
 
 end SepLogic
 
