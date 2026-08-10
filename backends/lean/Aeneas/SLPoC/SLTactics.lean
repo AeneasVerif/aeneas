@@ -691,7 +691,7 @@ which would also hide the diagnostics of a genuine `sl_frame` failure. -/
 elab "sl_frame?" : tactic => withMainContext do
   let target ← instantiateMVars (← (← getMainGoal).getType)
   let head := target.consumeMData.getAppFn
-  if head.isConstOf ``himpl || head.isConstOf ``qimpl || head.isConstOf ``triple then
+  if head.isConstOf ``himpl || head.isConstOf ``qimpl then
     evalTactic (← `(tactic| sl_frame))
 
 /-- One step of `sl_pull`: peel a quantifier or a pure fact off the precondition

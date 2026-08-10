@@ -57,19 +57,38 @@ theorem triple_step_mono {α : Type} {P Pm : SLPre} {Q : SLPost α}
     triple P m Q :=
   triple_ramified_frame hStep hRamified
 
-/-- `step`, followed by `sl_frame` on the goals it produces.
+/-- `step` with `sl_frame` as the precondition discharger.
 
-Because the rule for a terminal call has a single premise, that premise is the
-*main* goal rather than a precondition, so `step`'s `by` tactic — which only
-applies to preconditions — does not discharge it (the same convention as
-`Std.WP.spec_mono'`).  `sl_step` closes it.  Ghost parameters of the
-specification that the entailment has yet to determine also show up as goals
-before it; `sl_frame?` skips those instead of swallowing every failure.
+The frame has to be resolved *before* `step` reshapes the continuation, hence
+`by sl_frame` rather than a `sl_frame` afterwards.  The rule for a terminal call
+has a single premise, which is the *main* goal rather than a precondition and so
+is out of reach of `by`; the trailing `sl_frame?` closes it, and `sl_side?` the
+side conditions of the specification. -/
+syntax "sl_step" Lean.Parser.Tactic.optConfig ("with" term)?
+  ("as" " ⟨ " Lean.binderIdent,* " ⟩")? : tactic
 
-`<;>` (rather than `all_goals`) keeps this from reaching the goals that were
-already open when `sl_step` was called. -/
-macro "sl_step" args:Aeneas.Step.stepArgs : tactic =>
-  `(tactic| (step $args:stepArgs <;> sl_frame?))
+/-- Discharge a side condition `step` returns for a `Prop` argument of a
+specification.  A no-op on the entailment and continuation goals, and on the
+goals for ghost parameters the entailment has yet to determine. -/
+elab "sl_side?" : tactic => withMainContext do
+  let target ← instantiateMVars (← (← getMainGoal).getType)
+  let head := target.consumeMData.getAppFn
+  if head.isConstOf ``himpl || head.isConstOf ``qimpl || head.isConstOf ``triple then
+    return
+  unless ← Meta.isProp target do return
+  evalTactic (← `(tactic| try first | assumption | (simp; done) | omega))
+
+macro_rules
+  | `(tactic| sl_step $cfg:optConfig $[with $th]? $[as ⟨ $ids,* ⟩]?) =>
+    `(tactic| ((step $cfg:optConfig $[with $th]? $[as ⟨ $ids,* ⟩]? by sl_frame) <;>
+      (sl_frame? <;> sl_side?)))
+
+/-- `step*` with `sl_frame` as the precondition discharger. -/
+syntax "sl_step" noWs "*" (num)? Lean.Parser.Tactic.optConfig : tactic
+
+macro_rules
+  | `(tactic| sl_step* $[$n]? $cfg:optConfig) =>
+    `(tactic| ((step* $[$n]? $cfg:optConfig by sl_frame) <;> (sl_frame? <;> sl_side?)))
 
 /-! ## Lemmas registered in the elimination passes of `step` -/
 
