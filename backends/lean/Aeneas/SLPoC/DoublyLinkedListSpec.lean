@@ -743,14 +743,20 @@ theorem value.spec (it : Iterator V) (t : DoublyLinkedList V) (l : Cells V)
   step* by sl_frame
 
 /-- Advancing the iterator: it reports whether there still is an element, and
-if so it becomes valid again at the next index. -/
+if so it becomes valid again at the next index.  Unlike the Verus
+postcondition, this pins down the exhausted case too: the index always
+advances, and `cur` is cleared exactly when the walk is over.  Without those
+two conjuncts an implementation that left the iterator untouched at the last
+node would satisfy the specification. -/
 theorem moveNext.spec (it : Iterator V) (t : DoublyLinkedList V) (l : Cells V)
     (hl : it.l = t) (hvalid : valid it l) :
     ⦃ wellFormed t l ⦄ it.moveNext
       ⦃⇓ (it', good) =>
         ⌜it'.l = it.l ∧
+          it'.index = it.index + 1 ∧
           (good = true ↔ it.index + 1 < l.length) ∧
-          (good = true → valid it' l ∧ it'.index = it.index + 1)⌝ ∗
+          (good = true → valid it' l) ∧
+          (good = false → it'.cur = none)⌝ ∗
         wellFormed t l⦄ := by
   subst hl
   unfold Iterator.moveNext
@@ -765,6 +771,14 @@ theorem moveNext.spec (it : Iterator V) (t : DoublyLinkedList V) (l : Cells V)
   by_cases hlast : it.index + 1 = l.length
   · -- The iterator was on the last node
     simp only [nodeAt, nextOf, if_pos hlast]
+    have hi' :
+        ({ it with cur := none, index := it.index + 1 } : Iterator V).index =
+          it.index + 1 := rfl
+    have hl' :
+        ({ it with cur := none, index := it.index + 1 } : Iterator V).l = it.l := rfl
+    have hnone :
+        ({ it with cur := none, index := it.index + 1 } : Iterator V).cur =
+          none := rfl
     step* by sl_frame
   · -- There is a next node
     obtain ⟨r', v', hcell'⟩ := exists_cell l (it.index + 1) (by omega)
@@ -834,17 +848,17 @@ theorem run.spec :
     as ⟨ it, hitl, hitidx, hitvalid ⟩ by sl_frame
   step with Iterator.value.spec it t3 _ hitl hitvalid as ⟨ v1, hv1 ⟩ by sl_frame
   step with Iterator.moveNext.spec it t3 _ hitl hitvalid
-    as ⟨ m1, hm1l, hm1good, hm1next ⟩ by sl_frame
-  obtain ⟨hvalid1, hidx1⟩ := hm1next (hm1good.mpr (by simp [hitidx]))
+    as ⟨ m1, hm1l, hidx1, hm1good, hm1valid, _ ⟩ by sl_frame
+  have hvalid1 := hm1valid (hm1good.mpr (by simp [hitidx]))
   step with Iterator.value.spec m1.1 t3 _ (hm1l.trans hitl) hvalid1
     as ⟨ v2, hv2 ⟩ by sl_frame
   step with Iterator.moveNext.spec m1.1 t3 _ (hm1l.trans hitl) hvalid1
-    as ⟨ m2, hm2l, hm2good, hm2next ⟩ by sl_frame
-  obtain ⟨hvalid2, hidx2⟩ := hm2next (hm2good.mpr (by rw [hidx1, hitidx]; simp))
+    as ⟨ m2, hm2l, hidx2, hm2good, hm2valid, _ ⟩ by sl_frame
+  have hvalid2 := hm2valid (hm2good.mpr (by rw [hidx1, hitidx]; simp))
   step with Iterator.value.spec m2.1 t3 _ (hm2l.trans (hm1l.trans hitl)) hvalid2
     as ⟨ v3, hv3 ⟩ by sl_frame
   step with Iterator.moveNext.spec m2.1 t3 _ (hm2l.trans (hm1l.trans hitl)) hvalid2
-    as ⟨ m3, hm3l, hm3good, hm3next ⟩ by sl_frame
+    as ⟨ m3, hm3l, _, hm3good, _, _ ⟩ by sl_frame
   -- Empty the list again
   step with DoublyLinkedList.popBack.spec t3 [(r3, 1), (r1, 2)] r2 3
     as ⟨ p1, ex ⟩ by sl_frame

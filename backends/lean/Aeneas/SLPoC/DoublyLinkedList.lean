@@ -18,11 +18,6 @@ representation predicate, the specifications and their proofs live in
 
 namespace Aeneas.SLPoC
 
-/-- Pointers are allocation identifiers, so they are trivially inhabited.  This
-instance is what makes the `unwrap`s of the Rust code expressible. -/
-instance instInhabitedPtr {α : Type} : Inhabited (Ptr α) :=
-  ⟨(0 : Nat)⟩
-
 /-- Single node in the list. -/
 structure Node (V : Type) where
   prev : Option (Ptr (Node V))
