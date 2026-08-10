@@ -20,20 +20,20 @@ namespace Aeneas.SLPoC
 
 /-- Pointers are allocation identifiers, so they are trivially inhabited.  This
 instance is what makes the `unwrap`s of the Rust code expressible. -/
-instance instInhabitedRef {α : Type} : Inhabited (Ref α) :=
+instance instInhabitedPtr {α : Type} : Inhabited (Ptr α) :=
   ⟨(0 : Nat)⟩
 
 /-- Single node in the list. -/
 structure Node (V : Type) where
-  prev : Option (Ref (Node V))
-  next : Option (Ref (Node V))
+  prev : Option (Ptr (Node V))
+  next : Option (Ptr (Node V))
   payload : V
 
 /-- Doubly-linked list.  Contains a head pointer and a tail pointer; the ghost
 state of the Verus version lives in the specifications instead. -/
 structure DoublyLinkedList (V : Type) where
-  head : Option (Ref (Node V))
-  tail : Option (Ref (Node V))
+  head : Option (Ptr (Node V))
+  tail : Option (Ptr (Node V))
 
 namespace DoublyLinkedList
 
@@ -125,7 +125,7 @@ def popFront (s : DoublyLinkedList V) : St (DoublyLinkedList V × V) := do
 
 /-- The `while j < i` loop of `get`, walking the list from index `j` to
 index `i`. -/
-def getLoop (i : Nat) (j : Nat) (ptr : Ref (Node V)) : St (Ref (Node V)) :=
+def getLoop (i : Nat) (j : Nat) (ptr : Ptr (Node V)) : St (Ptr (Node V)) :=
   if j < i then do
     -- Get the next node from the `next` field
     let node ← read ptr
@@ -150,7 +150,7 @@ end DoublyLinkedList
 version. -/
 structure Iterator (V : Type) where
   l : DoublyLinkedList V
-  cur : Option (Ref (Node V))
+  cur : Option (Ptr (Node V))
   index : Nat
 
 namespace Iterator
