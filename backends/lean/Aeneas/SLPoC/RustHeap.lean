@@ -121,6 +121,16 @@ theorem fresh_empty_eq_singleton {p : Ptr α} {value : α} {h : Heap}
     (hFresh : fresh empty p value h) : h = singleton p value :=
   _root_.Aeneas.SLPoC.fresh_empty_eq_singleton hFresh
 
+theorem fresh_eq_singleton_union {p : Ptr α} {value : α} {h h' : Heap}
+    (hFresh : fresh h p value h') :
+    Finmap.Disjoint (singleton p value) h ∧ h' = singleton p value ∪ h := by
+  have hUnion : empty ∪ h = h := by simp [empty]
+  have hDisjointEmpty : Finmap.Disjoint empty h := Finmap.disjoint_empty h
+  have hFreshUnion : fresh (empty ∪ h) p value h' := by rw [hUnion]; exact hFresh
+  obtain ⟨h₁, hFresh₁, hDisjoint, rfl⟩ := fresh_frame hDisjointEmpty hFreshUnion
+  obtain rfl := fresh_empty_eq_singleton hFresh₁
+  exact ⟨hDisjoint, rfl⟩
+
 theorem contains_singleton (p : Ptr α) (value : α) :
     contains (singleton p value) p :=
   _root_.Aeneas.SLPoC.contains_singleton p value
