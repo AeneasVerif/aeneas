@@ -22,6 +22,14 @@ namespace Aeneas.SLPoC
 /-- A Rust pointer to a value of type `α`. -/
 def Ptr (α : Type) := Ref α
 
+/-- Pointers are allocation identifiers, so they are trivially inhabited.  This
+instance is what makes the `unwrap`s of a translated Rust program expressible as
+`Option.get!`.  It is stated in terms of the `Ref` instance rather than of the
+representation of a pointer, so that refining `Ptr` only requires updating this
+line. -/
+instance instInhabitedPtr {α : Type} : Inhabited (Ptr α) :=
+  inferInstanceAs (Inhabited (Ref α))
+
 namespace Ptr
 
 variable {α : Type}
