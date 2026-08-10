@@ -208,6 +208,7 @@ def touchAny (p : Ptr Nat) : St Unit := do
   let value ← read p
   update p value
 
+/-- The `sl_pull` is not removable: frame inference may not open the existential. -/
 theorem touchAny.spec (p : Ptr Nat) :
     ⦃ iprop(∃ n, p ↦ n) ⦄ touchAny p ⦃⇓ iprop(∃ n, p ↦ n)⦄ := by
   unfold touchAny
@@ -371,5 +372,42 @@ example (p q : Ptr Nat) :
   refine ⟨?_, ?_⟩
   sl_step
   sl_frame
+
+/-! ## `sl_step` -/
+
+/-- `sl_step` supplies `sl_frame` as the precondition discharger, and `with`
+is unnecessary for a registered specification. -/
+example (p : Ptr Nat) (x : Nat) :
+    ⦃ iprop(⌜x = 5⌝ ∗ p ↦ x) ⦄ touchThenSet p ⦃⇓ iprop(⌜x = 5⌝ ∗ p ↦ 7)⦄ := by
+  unfold touchThenSet
+  sl_step*
+
+/-- A specification that is not registered still needs `with`; `sl_step` only
+drops the `by sl_frame`. -/
+example (p : Ptr Nat) :
+    ⦃ iprop(∃ n, p ↦ n) ⦄ touchAny p ⦃⇓ iprop(∃ n, p ↦ n)⦄ := by
+  unfold touchAny
+  sl_pull n
+  sl_step with read.spec p n
+  sl_step*
+
+/-! ### Side conditions -/
+
+def readTwice (p : Ptr Nat) : St Nat := do
+  let a ← read p
+  let b ← read p
+  pure (a + b)
+
+theorem readTwice.spec (p : Ptr Nat) (n : Nat) (hn : 0 < n) :
+    ⦃ p ↦ n ⦄ readTwice p ⦃⇓ r => iprop(⌜0 < r⌝ ∗ p ↦ n)⦄ := by
+  unfold readTwice
+  sl_step*
+
+attribute [step] readTwice.spec
+
+/-- `sl_side?` discharges the `Prop` argument of a registered specification, so
+`with` is unnecessary even though `hn` is not determined by the program. -/
+example (p : Ptr Nat) : ⦃ p ↦ 3 ⦄ readTwice p ⦃⇓ r => iprop(⌜0 < r⌝ ∗ p ↦ 3)⦄ := by
+  sl_step*
 
 end Aeneas.SLPoC
