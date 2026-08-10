@@ -5,9 +5,10 @@ import Aeneas.SLPoC.WP
 # The state monad `St` and its program logic
 
 `St` is the freer monad over the pointer events of `Aeneas.SLPoC.RustHeap`.
-This file defines it, gives its denotation `theta` into the
+This file defines it, gives it an operational semantics by a state machine in
+the sense of `Aeneas.SLPoC.StateMachine`, gives its denotation `theta` into the
 weakest-precondition monad `Wp` of `Aeneas.SLPoC.WP`, derives the Hoare triples
-from that denotation, and proves the specifications of the primitive pointer
+from that denotation, and proves the specifications of the pointer
 operations.
 -/
 
@@ -28,30 +29,32 @@ abbrev St := FFree StEvents
 instance St.instLawfulMonad : LawfulMonad St :=
   inferInstanceAs (LawfulMonad (FFree StEvents))
 
-inductive Evaluates : St α → Heap → α → Heap → Prop where
-  | ok (value : α) (h : Heap) :
-      Evaluates (.ok value) h value h
-  | alloc {β : Type} {value : β} {next : Ptr β → St α}
-      {h₀ h₁ h₂ : Heap} {p : Ptr β} {result : α}
-      (hFresh : Ptr.fresh h₀ p value h₁)
-      (hNext : Evaluates (next p) h₁ result h₂) :
-      Evaluates (.event (.AllocPtr value) next) h₀ result h₂
-  | read {β : Type} {p : Ptr β} {next : β → St α}
-      {h₀ h₁ : Heap} {result : α}
-      (hContains : Ptr.contains h₀ p)
-      (hNext : Evaluates (next (Ptr.read p h₀ hContains)) h₀ result h₁) :
-      Evaluates (.event (.ReadPtr p) next) h₀ result h₁
-  | update {β : Type} {p : Ptr β} {value : β} {next : Unit → St α}
-      {h₀ h₁ : Heap} {result : α}
-      (hContains : Ptr.contains h₀ p)
-      (hNext :
-        Evaluates (next ()) (Ptr.update p value h₀ hContains) result h₁) :
-      Evaluates (.event (.UpdatePtr p value) next) h₀ result h₁
-  | free {β : Type} {p : Ptr β} {next : Unit → St α}
-      {h₀ h₁ : Heap} {result : α}
-      (hContains : Ptr.contains h₀ p)
-      (hNext : Evaluates (next ()) (Ptr.free p h₀ hContains) result h₁) :
-      Evaluates (.event (.FreePtr p) next) h₀ result h₁
+/-- The operational semantics of `St`.
+The transitions of the pointer events: `StEvents.Step e h result h'` holds
+when the event `e`, performed on the heap `h`, may answer `result` and leave the
+heap `h'`.
+An event with no transition, such as a read through a dangling pointer, is stuck. -/
+inductive StEvents.Step : {β : Type} → StEvents β → Heap → β → Heap → Prop where
+  | alloc {β : Type} {value : β} {h h' : Heap} {p : Ptr β}
+      (hFresh : Ptr.fresh h p value h') :
+      Step (.AllocPtr value) h p h'
+  | read {β : Type} {p : Ptr β} {h : Heap} (hContains : Ptr.contains h p) :
+      Step (.ReadPtr p) h (Ptr.read p h hContains) h
+  | update {β : Type} {p : Ptr β} {value : β} {h : Heap}
+      (hContains : Ptr.contains h p) :
+      Step (.UpdatePtr p value) h () (Ptr.update p value h hContains)
+  | free {β : Type} {p : Ptr β} {h : Heap} (hContains : Ptr.contains h p) :
+      Step (.FreePtr p) h () (Ptr.free p h hContains)
+
+@[reducible]
+def StEvents.machine : StateMachine StEvents := .ofStep Heap StEvents.Step
+
+theorem StEvents.machine_resolves : StEvents.machine.Resolves :=
+  StateMachine.ofStep_resolves Heap StEvents.Step
+
+/-- Big-step relation -/
+def Evaluates (m : St α) (h : Heap) (value : α) (h' : Heap) : Prop :=
+  StEvents.machine.Evaluates m h value h'
 
 /-! ## Denotation into the weakest-precondition monad -/
 
@@ -94,34 +97,42 @@ def theta : St α → Wp α
   | .event event next =>
       Wp.bind (theta_ev event) (fun value => theta (next value))
 
-theorem theta_sound (m : St α) (Q : SLPost α) (h₀ : Heap)
+/-- Adequacy — `StateMachineAdequate` of *Program Logics à la Carte*, for the
+machine `StEvents.machine`: a program whose weakest precondition holds has an
+execution that stops on a returned value satisfying the postcondition. -/
+theorem theta_adequate (m : St α) (Q : SLPost α) (h₀ : Heap)
     (hTheta : theta m Q h₀) :
-    ∃ value h₁, Evaluates m h₀ value h₁ ∧ Q value h₁ := by
+    Exec StEvents.machine m h₀
+      fun m' h => ∃ value, m' = .ok value ∧ Q value h := by
   induction m generalizing h₀ with
   | ok value =>
-      exact ⟨value, h₀, Evaluates.ok value h₀, hTheta⟩
+      exact ⟨value, rfl, hTheta⟩
   | event event next ih =>
       cases event with
       | AllocPtr value =>
           obtain ⟨p, h, hFresh⟩ := Ptr.exists_fresh value h₀
-          obtain ⟨result, h₁, hEvaluates, hPost⟩ :=
-            ih p h (hTheta p h hFresh)
-          exact ⟨result, h₁, Evaluates.alloc hFresh hEvaluates, hPost⟩
+          exact Exec.event (M := StEvents.machine)
+            ⟨p, h, .alloc hFresh, ih p h (hTheta p h hFresh)⟩
       | ReadPtr p =>
           obtain ⟨hContains, hNext⟩ := hTheta
-          obtain ⟨result, h₁, hEvaluates, hPost⟩ :=
-            ih (Ptr.read p h₀ hContains) h₀ hNext
-          exact ⟨result, h₁, Evaluates.read hContains hEvaluates, hPost⟩
+          exact Exec.event (M := StEvents.machine)
+            ⟨_, h₀, .read hContains, ih _ h₀ hNext⟩
       | UpdatePtr p value =>
           obtain ⟨hContains, hNext⟩ := hTheta
-          obtain ⟨result, h₁, hEvaluates, hPost⟩ :=
-            ih () (Ptr.update p value h₀ hContains) hNext
-          exact ⟨result, h₁, Evaluates.update hContains hEvaluates, hPost⟩
+          exact Exec.event (M := StEvents.machine)
+            ⟨(), _, .update hContains, ih () _ hNext⟩
       | FreePtr p =>
           obtain ⟨hContains, hNext⟩ := hTheta
-          obtain ⟨result, h₁, hEvaluates, hPost⟩ :=
-            ih () (Ptr.free p h₀ hContains) hNext
-          exact ⟨result, h₁, Evaluates.free hContains hEvaluates, hPost⟩
+          exact Exec.event (M := StEvents.machine)
+            ⟨(), _, .free hContains, ih () _ hNext⟩
+
+/-- The adequacy statement above, spelled out as an evaluation. -/
+theorem theta_sound (m : St α) (Q : SLPost α) (h₀ : Heap)
+    (hTheta : theta m Q h₀) :
+    ∃ value h₁, Evaluates m h₀ value h₁ ∧ Q value h₁ := by
+  obtain ⟨m', h₁, hRuns, value, rfl, hQ⟩ :=
+    Exec.exists_stop StEvents.machine_resolves (theta_adequate m Q h₀ hTheta)
+  exact ⟨value, h₁, hRuns, hQ⟩
 
 theorem theta_ev_frame (event : StEvents α) (Q : SLPost α)
     (H : SLProp) :
