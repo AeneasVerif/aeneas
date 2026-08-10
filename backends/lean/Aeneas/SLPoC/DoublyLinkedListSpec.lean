@@ -18,7 +18,7 @@ Correspondence with the Verus development:
 
 | Verus | Here |
 |---|---|
-| `PPtr<Node<V>>` + `PointsTo<Node<V>>` | `Ref (Node V)` and the assertion `r ↦ node` |
+| `PPtr<Node<V>>` + `PointsTo<Node<V>>` | `Ptr (Node V)` and the assertion `r ↦ node` |
 | `ghost_state@.ptrs` / `points_to_map` | `Cells V`, a list of pointer/payload pairs |
 | `well_formed_node(i)` | `nodeAt l i v`, the contents `nodesFrom` requires at index `i` |
 | `well_formed()` | `wellFormed s l` |
@@ -44,23 +44,23 @@ variable {V : Type}
 /-- Ghost state of a list: the sequence of node pointers, each paired with the
 payload the node holds.  This plays the role of Verus'
 `ghost_state@.ptrs` zipped with `ghost_state@.points_to_map`. -/
-abbrev Cells (V : Type) := List (Ref (Node V) × V)
+abbrev Cells (V : Type) := List (Ptr (Node V) × V)
 
 /-- Representation of the list as a sequence, i.e. Verus' `view`. -/
 def view (l : Cells V) : List V := l.map Prod.snd
 
 /-- Pointer to the first node, if any. -/
-def headPtr (l : Cells V) : Option (Ref (Node V)) := l.head?.map Prod.fst
+def headPtr (l : Cells V) : Option (Ptr (Node V)) := l.head?.map Prod.fst
 
 /-- Pointer to the last node, if any. -/
-def lastPtr (l : Cells V) : Option (Ref (Node V)) := l.getLast?.map Prod.fst
+def lastPtr (l : Cells V) : Option (Ptr (Node V)) := l.getLast?.map Prod.fst
 
 /-- Pointer to the node of index `i - 1`, or `none` if `i` is `0`. -/
-def prevOf (l : Cells V) (i : Nat) : Option (Ref (Node V)) :=
+def prevOf (l : Cells V) (i : Nat) : Option (Ptr (Node V)) :=
   if i = 0 then none else l[i - 1]?.map Prod.fst
 
 /-- Pointer to the node of index `i + 1`, or `none` if `i` is the last index. -/
-def nextOf (l : Cells V) (i : Nat) : Option (Ref (Node V)) :=
+def nextOf (l : Cells V) (i : Nat) : Option (Ptr (Node V)) :=
   if i + 1 = l.length then none else l[i + 1]?.map Prod.fst
 
 /-- Contents of the node of index `i`, whose payload is `v`.  Verus'
@@ -93,7 +93,7 @@ def isList (s : DoublyLinkedList V) (vs : List V) : SLProp :=
 
 @[simp] theorem view_nil : view ([] : Cells V) = [] := rfl
 
-@[simp] theorem view_cons (c : Ref (Node V) × V) (l : Cells V) :
+@[simp] theorem view_cons (c : Ptr (Node V) × V) (l : Cells V) :
     view (c :: l) = c.2 :: view l := rfl
 
 @[simp] theorem view_append (l₁ l₂ : Cells V) :
@@ -109,7 +109,7 @@ theorem view_getElem? (l : Cells V) (i : Nat) :
 @[simp] theorem nodesFrom_nil (l : Cells V) (i : Nat) :
     nodesFrom l i [] = emp := rfl
 
-@[simp] theorem nodesFrom_cons (l : Cells V) (i : Nat) (r : Ref (Node V))
+@[simp] theorem nodesFrom_cons (l : Cells V) (i : Nat) (r : Ptr (Node V))
     (v : V) (rest : Cells V) :
     nodesFrom l i ((r, v) :: rest) =
       iprop((r ↦ nodeAt l i v) ∗ nodesFrom l (i + 1) rest) := rfl
@@ -166,7 +166,7 @@ theorem nodesFrom_append (l : Cells V) :
     simp only [List.cons_append, nodesFrom_cons, ih, List.length_cons, e,
       hstar_assoc_eq]
 
-@[simp] theorem nodesFrom_singleton (l : Cells V) (i : Nat) (r : Ref (Node V))
+@[simp] theorem nodesFrom_singleton (l : Cells V) (i : Nat) (r : Ptr (Node V))
     (v : V) :
     nodesFrom l i [(r, v)] = iprop(r ↦ nodeAt l i v) := by
   simp [hstar_hempty_r_eq]
@@ -190,11 +190,11 @@ theorem nextOf_append_left (l₁ l₂ : Cells V) (i : Nat) (h : i + 1 < l₁.len
   simp only [h₁, h₂, if_false]
   rw [List.getElem?_append_left h]
 
-theorem prevOf_cons_succ (c : Ref (Node V) × V) (l : Cells V) (i : Nat) :
+theorem prevOf_cons_succ (c : Ptr (Node V) × V) (l : Cells V) (i : Nat) :
     prevOf (c :: l) (i + 2) = prevOf l (i + 1) := by
   simp [prevOf]
 
-theorem nextOf_cons_succ (c : Ref (Node V) × V) (l : Cells V) (i : Nat) :
+theorem nextOf_cons_succ (c : Ptr (Node V) × V) (l : Cells V) (i : Nat) :
     nextOf (c :: l) (i + 1) = nextOf l i := by
   simp only [nextOf, List.length_cons, List.getElem?_cons_succ]
   split <;> split <;> first | rfl | omega
@@ -209,7 +209,7 @@ theorem nodesFrom_append_prefix (l₁ l₂ : Cells V) (xs : Cells V) (i : Nat)
     nextOf_append_left l₁ l₂ (i + k) (by omega)⟩
 
 /-- Prepending a node shifts all the indices by one. -/
-theorem nodesFrom_cons_shift (c : Ref (Node V) × V) (l : Cells V) (xs : Cells V)
+theorem nodesFrom_cons_shift (c : Ptr (Node V) × V) (l : Cells V) (xs : Cells V)
     (i : Nat) :
     nodesFrom (c :: l) (i + 2) xs = nodesFrom l (i + 1) xs := by
   refine nodesFrom_congr xs (i + 2) (i + 1) fun k _ => ?_
@@ -220,31 +220,31 @@ theorem nodesFrom_cons_shift (c : Ref (Node V) × V) (l : Cells V) (xs : Cells V
 
 /-! ## Decomposition of `nodes` at the two ends of the list -/
 
-@[simp] theorem headPtr_cons (c : Ref (Node V) × V) (l : Cells V) :
+@[simp] theorem headPtr_cons (c : Ptr (Node V) × V) (l : Cells V) :
     headPtr (c :: l) = some c.1 := rfl
 
-@[simp] theorem lastPtr_snoc (l : Cells V) (c : Ref (Node V) × V) :
+@[simp] theorem lastPtr_snoc (l : Cells V) (c : Ptr (Node V) × V) :
     lastPtr (l ++ [c]) = some c.1 := by
   simp [lastPtr]
 
-@[simp] theorem lastPtr_singleton (c : Ref (Node V) × V) :
+@[simp] theorem lastPtr_singleton (c : Ptr (Node V) × V) :
     lastPtr [c] = some c.1 := rfl
 
-@[sl_simps] theorem lastPtr_cons_cons (a b : Ref (Node V) × V) (l : Cells V) :
+@[sl_simps] theorem lastPtr_cons_cons (a b : Ptr (Node V) × V) (l : Cells V) :
     lastPtr (a :: b :: l) = lastPtr (b :: l) := by
   simp [lastPtr]
 
-theorem prevOf_cons_one (c : Ref (Node V) × V) (l : Cells V) :
+theorem prevOf_cons_one (c : Ptr (Node V) × V) (l : Cells V) :
     prevOf (c :: l) 1 = some c.1 := by
   simp [prevOf]
 
-theorem nextOf_cons_zero (c : Ref (Node V) × V) (l : Cells V) :
+theorem nextOf_cons_zero (c : Ptr (Node V) × V) (l : Cells V) :
     nextOf (c :: l) 0 = headPtr l := by
   cases l with
   | nil => simp [nextOf]
   | cons a l => simp [nextOf, headPtr]
 
-theorem prevOf_snoc_last (l : Cells V) (c : Ref (Node V) × V) :
+theorem prevOf_snoc_last (l : Cells V) (c : Ptr (Node V) × V) :
     prevOf (l ++ [c]) l.length = lastPtr l := by
   unfold prevOf lastPtr
   by_cases h : l.length = 0
@@ -253,30 +253,30 @@ theorem prevOf_snoc_last (l : Cells V) (c : Ref (Node V) × V) :
   · rw [if_neg h, List.getElem?_append_left (by omega),
       List.getLast?_eq_getElem?]
 
-theorem nextOf_snoc_last (l : Cells V) (c : Ref (Node V) × V) :
+theorem nextOf_snoc_last (l : Cells V) (c : Ptr (Node V) × V) :
     nextOf (l ++ [c]) l.length = none := by
   simp [nextOf]
 
-theorem nodeAt_snoc_last (l : Cells V) (r : Ref (Node V)) (v : V) :
+theorem nodeAt_snoc_last (l : Cells V) (r : Ptr (Node V)) (v : V) :
     nodeAt (l ++ [(r, v)]) l.length v =
       { prev := lastPtr l, next := none, payload := v } := by
   unfold nodeAt
   rw [prevOf_snoc_last, nextOf_snoc_last]
 
 /-- Split the ownership of the last node out of `nodes`. -/
-@[sl_simps] theorem nodes_snoc (l : Cells V) (r : Ref (Node V)) (v : V) :
+@[sl_simps] theorem nodes_snoc (l : Cells V) (r : Ptr (Node V)) (v : V) :
     nodes (l ++ [(r, v)]) =
       iprop(nodesFrom (l ++ [(r, v)]) 0 l ∗
         (r ↦ { prev := lastPtr l, next := none, payload := v })) := by
   unfold nodes
   rw [nodesFrom_append, Nat.zero_add, nodesFrom_singleton, nodeAt_snoc_last]
 
-theorem getElem?_append_two_left (l : Cells V) (a b : Ref (Node V) × V) :
+theorem getElem?_append_two_left (l : Cells V) (a b : Ptr (Node V) × V) :
     (l ++ [a, b])[l.length]? = some a := by
   rw [List.getElem?_append_right (by omega)]
   simp
 
-theorem getElem?_append_two_right (l : Cells V) (a b : Ref (Node V) × V) :
+theorem getElem?_append_two_right (l : Cells V) (a b : Ptr (Node V) × V) :
     (l ++ [a, b])[l.length + 1]? = some b := by
   rw [List.getElem?_append_right (by omega)]
   have e : l.length + 1 - l.length = 1 := by omega
@@ -285,8 +285,8 @@ theorem getElem?_append_two_right (l : Cells V) (a b : Ref (Node V) × V) :
 
 /-- Split the ownership of the last two nodes out of `nodes`.  This is the shape
 of the heap both after `pushBack` and before `popBack`. -/
-@[sl_simps high] theorem nodes_snoc_two (l : Cells V) (rt : Ref (Node V)) (vt : V)
-    (rn : Ref (Node V)) (v : V) :
+@[sl_simps high] theorem nodes_snoc_two (l : Cells V) (rt : Ptr (Node V)) (vt : V)
+    (rn : Ptr (Node V)) (v : V) :
     nodes (l ++ [(rt, vt), (rn, v)]) =
       iprop(nodesFrom (l ++ [(rt, vt)]) 0 l ∗
         (rt ↦ { prev := lastPtr l, next := some rn, payload := vt }) ∗
@@ -326,7 +326,7 @@ of the heap both after `pushBack` and before `popBack`. -/
   simp only [nodesFrom_cons, nodesFrom_nil, hstar_hempty_r_eq, hmid, hlast]
 
 /-- Split the ownership of the first node out of `nodes`. -/
-@[sl_simps] theorem nodes_cons (rh : Ref (Node V)) (vh : V) (l : Cells V) :
+@[sl_simps] theorem nodes_cons (rh : Ptr (Node V)) (vh : V) (l : Cells V) :
     nodes ((rh, vh) :: l) =
       iprop((rh ↦ { prev := none, next := headPtr l, payload := vh }) ∗
         nodesFrom ((rh, vh) :: l) 1 l) := by
@@ -337,7 +337,7 @@ of the heap both after `pushBack` and before `popBack`. -/
 
 /-- Split the ownership of the first two nodes out of `nodes`.  This is the
 shape of the heap both after `pushFront` and before `popFront`. -/
-@[sl_simps high] theorem nodes_cons_two (rn : Ref (Node V)) (v : V) (rh : Ref (Node V)) (vh : V)
+@[sl_simps high] theorem nodes_cons_two (rn : Ptr (Node V)) (v : V) (rh : Ptr (Node V)) (vh : V)
     (l : Cells V) :
     nodes ((rn, v) :: (rh, vh) :: l) =
       iprop((rn ↦ { prev := none, next := some rh, payload := v }) ∗
@@ -389,11 +389,11 @@ come from an empty list. -/
 theorem headPtr_eq_none_iff (l : Cells V) : headPtr l = none ↔ l = [] := by
   cases l <;> simp [headPtr]
 
-@[sl_simps] theorem headPtr_append_two (l : Cells V) (a b : Ref (Node V) × V) :
+@[sl_simps] theorem headPtr_append_two (l : Cells V) (a b : Ptr (Node V) × V) :
     headPtr (l ++ [a, b]) = headPtr (l ++ [a]) := by
   cases l <;> rfl
 
-@[sl_simps] theorem lastPtr_append_two (l : Cells V) (a b : Ref (Node V) × V) :
+@[sl_simps] theorem lastPtr_append_two (l : Cells V) (a b : Ptr (Node V) × V) :
     lastPtr (l ++ [a, b]) = some b.1 := by
   rw [show l ++ [a, b] = (l ++ [a]) ++ [b] by simp, lastPtr_snoc]
 
@@ -412,7 +412,7 @@ theorem new.spec :
 /-- `pushEmptyCase` inserts one node into an empty list. -/
 theorem pushEmptyCase.spec (s : DoublyLinkedList V) (v : V) :
     ⦃ wellFormed s [] ⦄ pushEmptyCase s v
-      ⦃⇓ s' => ∃ r : Ref (Node V), wellFormed s' [(r, v)]⦄ := by
+      ⦃⇓ s' => ∃ r : Ptr (Node V), wellFormed s' [(r, v)]⦄ := by
   unfold pushEmptyCase
   sl_pull _
   step* by sl_frame
@@ -420,7 +420,7 @@ theorem pushEmptyCase.spec (s : DoublyLinkedList V) (v : V) :
 /-- `pushBack` appends `v` to the list. -/
 theorem pushBack.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
     ⦃ wellFormed s l ⦄ pushBack s v
-      ⦃⇓ s' => ∃ r : Ref (Node V), wellFormed s' (l ++ [(r, v)])⦄ := by
+      ⦃⇓ s' => ∃ r : Ptr (Node V), wellFormed s' (l ++ [(r, v)])⦄ := by
   unfold pushBack
   sl_pull ⟨hhead, htail⟩
   split
@@ -446,12 +446,12 @@ theorem pushBack.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
       rw [hsome, lastPtr_snoc] at htail
       exact Option.some.inj htail
     subst hrt
-    simp only [show ∀ r : Ref (Node V), l' ++ [(oldTailPtr, vt)] ++ [(r, v)] =
+    simp only [show ∀ r : Ptr (Node V), l' ++ [(oldTailPtr, vt)] ++ [(r, v)] =
       l' ++ [(oldTailPtr, vt), (r, v)] from by simp]
     step* by sl_frame
 
 /-- `popBack` removes the last node and returns its payload. -/
-theorem popBack.spec (s : DoublyLinkedList V) (l : Cells V) (rt : Ref (Node V))
+theorem popBack.spec (s : DoublyLinkedList V) (l : Cells V) (rt : Ptr (Node V))
     (vt : V) :
     ⦃ wellFormed s (l ++ [(rt, vt)]) ⦄ popBack s
       ⦃⇓ (s', v) => ⌜v = vt⌝ ∗ wellFormed s' l⦄ := by
@@ -474,7 +474,7 @@ theorem popBack.spec (s : DoublyLinkedList V) (l : Cells V) (rt : Ref (Node V))
 /-- `pushFront` prepends `v` to the list. -/
 theorem pushFront.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
     ⦃ wellFormed s l ⦄ pushFront s v
-      ⦃⇓ s' => ∃ r : Ref (Node V), wellFormed s' ((r, v) :: l)⦄ := by
+      ⦃⇓ s' => ∃ r : Ptr (Node V), wellFormed s' ((r, v) :: l)⦄ := by
   unfold pushFront
   sl_pull ⟨hhead, htail⟩
   split
@@ -500,7 +500,7 @@ theorem pushFront.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
       step* by sl_frame
 
 /-- `popFront` removes the first node and returns its payload. -/
-theorem popFront.spec (s : DoublyLinkedList V) (rh : Ref (Node V)) (vh : V)
+theorem popFront.spec (s : DoublyLinkedList V) (rh : Ptr (Node V)) (vh : V)
     (l : Cells V) :
     ⦃ wellFormed s ((rh, vh) :: l) ⦄ popFront s
       ⦃⇓ (s', v) => ⌜v = vh⌝ ∗ wellFormed s' l⦄ := by
@@ -527,7 +527,7 @@ theorem nodes_eq_nodesFrom (l cs : Cells V) (h : cs = l) :
 
 /-- Split the ownership of the node of index `i` out of `nodes`.  This is the
 counterpart of Verus' `tracked_borrow` at index `i`. -/
-theorem nodes_split (l : Cells V) (i : Nat) (r : Ref (Node V)) (v : V)
+theorem nodes_split (l : Cells V) (i : Nat) (r : Ptr (Node V)) (v : V)
     (h : l[i]? = some (r, v)) :
     nodes l =
       iprop(nodesFrom l 0 (l.take i) ∗
@@ -548,7 +548,7 @@ theorem nodes_split (l : Cells V) (i : Nat) (r : Ref (Node V)) (v : V)
 
 /-- Reading the node of index `i` yields exactly the node the well-formedness
 invariant predicts, and leaves the list untouched. -/
-theorem nodes_read (l : Cells V) (i : Nat) (r : Ref (Node V)) (v : V)
+theorem nodes_read (l : Cells V) (i : Nat) (r : Ptr (Node V)) (v : V)
     (h : l[i]? = some (r, v)) :
     ⦃ nodes l ⦄ read r ⦃⇓ node => ⌜node = nodeAt l i v⌝ ∗ nodes l⦄ := by
   rw [nodes_split l i r v h]
@@ -565,7 +565,7 @@ theorem headPtr_eq_getElem? (l : Cells V) : headPtr l = l[0]?.map Prod.fst := by
 
 /-- The loop of `get` walks from index `j` to index `i`, keeping Verus' loop
 invariant `ptr == ptrs[j]`. -/
-theorem getLoop.spec (l : Cells V) (i j : Nat) (r : Ref (Node V))
+theorem getLoop.spec (l : Cells V) (i j : Nat) (r : Ptr (Node V))
     (hji : j ≤ i) (hi : i < l.length) (hr : l[j]?.map Prod.fst = some r) :
     ⦃ nodes l ⦄ getLoop i j r
       ⦃⇓ r' => ⌜l[i]?.map Prod.fst = some r'⌝ ∗ nodes l⦄ := by
