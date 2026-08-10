@@ -221,14 +221,11 @@ def touchThenSet (p : Ptr Nat) : St Unit := do
   update p 7
 
 /-- A pure fact that the callee does not need stays available afterwards, even
-though the callee's precondition is an existential. -/
+though the callee's precondition is an existential.  `step` pulls the
+existential the callee gives back on its own. -/
 example (p : Ptr Nat) (x : Nat) :
     ⦃ iprop(⌜x = 5⌝ ∗ p ↦ x) ⦄ touchThenSet p ⦃⇓ iprop(⌜x = 5⌝ ∗ p ↦ 7)⦄ := by
   unfold touchThenSet
-  step by sl_frame
-  -- SLF's advice: `xpull` the existential the callee gave back before going on,
-  -- otherwise the witness would have to escape the scope of the next frame.
-  sl_pull n
   step* by sl_frame
 
 /-- A framed-out existential stays intact: instantiating it here would put a
@@ -237,8 +234,6 @@ example (p q : Ptr Nat) (x : Nat) :
     ⦃ iprop(hexists (fun n => q ↦ n) ∗ p ↦ x) ⦄ touchThenSet p
       ⦃⇓ iprop(hexists (fun n => q ↦ n) ∗ p ↦ 7)⦄ := by
   unfold touchThenSet
-  step by sl_frame
-  sl_pull
   step* by sl_frame
 
 /-- The callee's precondition may be owned as one opaque existential: the frame
@@ -246,8 +241,6 @@ is then `emp`, and the existential must *not* be opened. -/
 example (p : Ptr Nat) :
     ⦃ iprop(∃ n, p ↦ n) ⦄ touchThenSet p ⦃⇓ p ↦ 7⦄ := by
   unfold touchThenSet
-  step by sl_frame
-  sl_pull
   step* by sl_frame
 
 /-- `sl_frame` leaves the other goals of the proof alone. -/
@@ -255,6 +248,22 @@ example (p : Ptr Nat) (x : Nat) : (p ↦ x ⊢ p ↦ x) ∧ 1 = 1 := by
   refine ⟨?_, ?_⟩
   · sl_frame
   · rfl
+
+/-! ## The shape of the goal `step` hands back -/
+
+def readThenWrite (p : Ptr Nat) : St Unit := do
+  let value ← read p
+  update p (value + 1)
+
+/-- The equation `read.spec` returns is substituted, the `Unit` output of
+`update` introduces no binder, and the `∗ emp` of an empty frame is gone. -/
+example (p : Ptr Nat) (value : Nat) :
+    ⦃ p ↦ value ⦄ readThenWrite p ⦃⇓ p ↦ value + 1⦄ := by
+  unfold readThenWrite
+  step by sl_frame
+  guard_target =
+    triple iprop(p ↦ value) (update p (value + 1)) (fun _ => iprop(p ↦ value + 1))
+  step* by sl_frame
 
 /-! ## Terminal `pure` -/
 
