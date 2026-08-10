@@ -1,4 +1,4 @@
-import Aeneas.SLPoC.SepLogic
+import Aeneas.SLPoC.ST
 import AeneasMeta.Simp
 import Lean.Meta.Tactic.AC
 
@@ -27,100 +27,6 @@ namespace Aeneas.SLPoC
 
 open Lean Elab Meta Tactic
 open scoped SepLogic
-
-/-! ## The magic wand
-
-`H₁ -∗ H₂` describes the heap fragments that, extended with a fragment
-satisfying `H₁`, satisfy `H₂`.  Following SLF it is *defined* in terms of the
-other connectives rather than semantically, which makes all of its properties
-provable from the algebraic laws alone. -/
-
-/-- Universal quantification over heap predicates. -/
-def hforall {ι : Sort _} (J : ι → SLProp) : SLProp :=
-  fun h => ∀ x, J x h
-
-/-- The magic wand of SLF (`\-*`). -/
-def hwand (H₁ H₂ : SLProp) : SLProp :=
-  hexists fun H₀ => iprop(H₀ ∗ ⌜H₁ ∗ H₀ ⊢ H₂⌝)
-
-/-- The magic wand between postconditions (SLF's `\--*`).  Note that it is a
-heap predicate, not a postcondition. -/
-def qwand {α : Type} (Q₁ Q₂ : SLPost α) : SLProp :=
-  hforall fun value => hwand (Q₁ value) (Q₂ value)
-
-namespace SepLogic
-
-@[inherit_doc hwand] scoped infixr:33 " -∗ " => hwand
-@[inherit_doc qwand] scoped infixr:33 " -∗∗ " => qwand
-@[inherit_doc hforall] scoped notation "∀ˢ " x ", " J => hforall (fun x => J)
-
-end SepLogic
-
-theorem hforall_intro {ι : Sort _} {H : SLProp} {J : ι → SLProp}
-    (h : ∀ x, H ⊢ J x) : H ⊢ hforall J :=
-  fun heap hH x => h x heap hH
-
-theorem hforall_specialize {ι : Sort _} {J : ι → SLProp} (x : ι) :
-    hforall J ⊢ J x :=
-  fun _ hJ => hJ x
-
-/-- SLF's `hwand_equiv`: the wand is the right adjoint of the separating
-conjunction.  Every other property of the wand follows from it. -/
-theorem hwand_equiv (H₀ H₁ H₂ : SLProp) :
-    (H₀ ⊢ H₁ -∗ H₂) ↔ (H₁ ∗ H₀ ⊢ H₂) := by
-  constructor
-  · intro h heap hStar
-    obtain ⟨h₁, h₀, hDisjoint, hEq, hH₁, hH₀⟩ := hStar
-    obtain ⟨H, hH⟩ := h h₀ hH₀
-    obtain ⟨hA, hB, hDisjoint', hEq', hHA, hPure⟩ := hH
-    have hB' : hB = empty := hPure.2
-    subst hB'
-    simp only [empty, Finmap.union_empty] at hEq'
-    subst hEq'
-    exact hPure.1 heap ⟨h₁, h₀, hDisjoint, hEq, hH₁, hHA⟩
-  · intro h heap hH₀
-    exact ⟨H₀, heap, ∅, (Finmap.disjoint_empty heap).symm, by simp, hH₀, h, rfl⟩
-
-/-- SLF's `himpl_hwand_r`, the introduction rule of the wand. -/
-theorem hwand_intro {H₀ H₁ H₂ : SLProp} (h : H₁ ∗ H₀ ⊢ H₂) : H₀ ⊢ H₁ -∗ H₂ :=
-  (hwand_equiv H₀ H₁ H₂).mpr h
-
-/-- SLF's `hwand_cancel`, the elimination rule of the wand. -/
-theorem hwand_cancel (H₁ H₂ : SLProp) : H₁ ∗ (H₁ -∗ H₂) ⊢ H₂ :=
-  (hwand_equiv (H₁ -∗ H₂) H₁ H₂).mp (himpl_refl _)
-
-theorem hwand_mono {H₁ H₁' H₂ H₂' : SLProp} (h₁ : H₁' ⊢ H₁) (h₂ : H₂ ⊢ H₂') :
-    (H₁ -∗ H₂) ⊢ (H₁' -∗ H₂') :=
-  hwand_intro (himpl_trans (hstar_mono h₁ (himpl_refl _))
-    (himpl_trans (hwand_cancel H₁ H₂) h₂))
-
-/-- SLF's `qwand_equiv`. -/
-theorem qwand_equiv {α : Type} (H : SLProp) (Q₁ Q₂ : SLPost α) :
-    (H ⊢ Q₁ -∗∗ Q₂) ↔ (Q₁ ∗+ H ⊢+ Q₂) := by
-  constructor
-  · intro h value
-    exact himpl_trans (hstar_mono (himpl_refl _)
-      (himpl_trans h (hforall_specialize value)))
-      (hwand_cancel (Q₁ value) (Q₂ value))
-  · intro h
-    exact hforall_intro fun value =>
-      hwand_intro (h value)
-
-/-- SLF's `qwand_intro`. -/
-theorem qwand_intro {α : Type} {H : SLProp} {Q₁ Q₂ : SLPost α}
-    (h : Q₁ ∗+ H ⊢+ Q₂) : H ⊢ Q₁ -∗∗ Q₂ :=
-  (qwand_equiv H Q₁ Q₂).mpr h
-
-/-- SLF's `qwand_cancel`. -/
-theorem qwand_cancel {α : Type} (Q₁ Q₂ : SLPost α) :
-    Q₁ ∗+ (Q₁ -∗∗ Q₂) ⊢+ Q₂ :=
-  (qwand_equiv (Q₁ -∗∗ Q₂) Q₁ Q₂).mp (himpl_refl _)
-
-/-- SLF's `qwand_specialize`: a postcondition wand yields a heap wand at every
-value. -/
-theorem qwand_specialize {α : Type} {Q₁ Q₂ : SLPost α} (value : α) :
-    (Q₁ -∗∗ Q₂) ⊢ (Q₁ value -∗ Q₂ value) :=
-  hforall_specialize value
 
 /-! ## The ramified frame rule
 
