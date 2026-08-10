@@ -446,13 +446,57 @@ instance : OrderedMonad Wp where
   bind_mono := Wp.bind_mono
 
 /-- Embed a precondition/postcondition pair into a weakest-precondition
-transformer. -/
+transformer.  The encoding is local: `P` is required to describe only part of
+the heap, and the postcondition is handed to the continuation through a wand,
+so that the frame is threaded automatically. -/
 def pp2wp (P : SLPre) (Q : SLPost α) : Wp α where
-  run := fun R h =>
-    P h ∧ ∀ value h', Q value h' → R value h'
+  run := fun R => P ∗ (Q -∗∗ R)
   monotone := by
-    intro R₁ R₂ hR h hPre
-    exact ⟨hPre.1, fun value h' hPost =>
-      hR value h' (hPre.2 value h' hPost)⟩
+    intro R₁ R₂ hR
+    exact hstar_mono (himpl_refl P)
+      (qwand_intro fun value =>
+        himpl_trans (qwand_cancel Q R₁ value) (hR value))
+
+def Wp.hexists {ι : Sort _} (f : ι → Wp α) : Wp α where
+  run := fun R h => ∃ x, f x R h
+  monotone := by
+    rintro R₁ R₂ hR h ⟨x, hx⟩
+    exact ⟨x, (f x).monotone hR h hx⟩
+
+theorem pp2wp_conseq {P : SLPre} {Q R : SLPost α} (hPost : Q ⊢+ R) :
+    P ⊢ pp2wp P Q R :=
+  himpl_trans (himpl_of_eq (hstar_hempty_r_eq P).symm)
+    (hstar_mono (himpl_refl P)
+      (qwand_intro fun value =>
+        himpl_trans (himpl_of_eq (hstar_hempty_r_eq (Q value))) (hPost value)))
+
+theorem pp2wp_frame {P : SLPre} {Q R : SLPost α} (H : SLProp) :
+    pp2wp P Q R ∗ H ⊢ pp2wp P Q (R ∗+ H) :=
+  himpl_trans (himpl_of_eq (hstar_assoc_eq P (Q -∗∗ R) H))
+    (hstar_mono (himpl_refl P)
+      (qwand_intro fun value =>
+        himpl_trans (himpl_of_eq (hstar_assoc_eq (Q value) (Q -∗∗ R) H).symm)
+          (hstar_mono (qwand_cancel Q R value) (himpl_refl H))))
+
+/-- The elimination principle of `pp2wp`: the heap splits into the footprint
+described by `P` and a frame, and the continuation accepts any heap the
+postcondition describes, put back next to that frame. -/
+theorem pp2wp_elim {P : SLPre} {Q R : SLPost α} {h : Heap}
+    (hWp : pp2wp P Q R h) :
+    ∃ h₁ h₂,
+      Finmap.Disjoint h₁ h₂ ∧
+      h = h₁ ∪ h₂ ∧
+      P h₁ ∧
+      ∀ value h', Q value h' → Finmap.Disjoint h' h₂ →
+        R value (h' ∪ h₂) := by
+  obtain ⟨h₁, h₂, hDisjoint, hEq, hP, hWand⟩ := hWp
+  exact ⟨h₁, h₂, hDisjoint, hEq, hP, fun value h' hQ hDisjoint' =>
+    qwand_cancel Q R value (h' ∪ h₂) ⟨h', h₂, hDisjoint', rfl, hQ, hWand⟩⟩
+
+theorem Wp.hexists_frame {ι : Sort _} {f : ι → Wp α} {Q : SLPost α}
+    (H : SLProp) (hFrame : ∀ x, f x Q ∗ H ⊢ f x (Q ∗+ H)) :
+    Wp.hexists f Q ∗ H ⊢ Wp.hexists f (Q ∗+ H) := by
+  rintro h ⟨h₁, h₂, hDisjoint, rfl, ⟨x, hx⟩, hH⟩
+  exact ⟨x, hFrame x _ ⟨h₁, h₂, hDisjoint, rfl, hx, hH⟩⟩
 
 end Aeneas.SLPoC
