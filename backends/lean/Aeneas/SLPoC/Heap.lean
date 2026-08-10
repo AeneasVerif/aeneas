@@ -15,9 +15,7 @@ def empty : Heap := ∅
 
 def Ref (_ : Type) := AllocId
 
-/-- An allocation identifier is a natural number, so references are trivially
-inhabited.  This is the only place where a default reference is produced: every
-other layer goes through this instance instead of unfolding `Ref`. -/
+/-- Allocation identifiers are natural numbers, so references are inhabited. -/
 instance instInhabitedRef {α : Type} : Inhabited (Ref α) := ⟨(0 : AllocId)⟩
 
 private def Ref.allocId {α : Type} (r : Ref α) : AllocId := r
