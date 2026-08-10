@@ -71,6 +71,35 @@ already open when `sl_step` was called. -/
 macro "sl_step" args:Aeneas.Step.stepArgs : tactic =>
   `(tactic| (step $args:stepArgs <;> sl_frame?))
 
+/-! ## Lemmas registered in the elimination passes of `step` -/
+
+theorem forall_unit {p : Unit → Prop} : (∀ value, p value) ↔ p () :=
+  ⟨fun h => h (), fun h value => match value with | () => h⟩
+
+theorem triple_hexists_iff {α : Type} {ι : Sort _} {J : ι → SLPre} {m : St α}
+    {Q : SLPost α} :
+    triple iprop(∃ x, J x) m Q ↔ ∀ x, triple (J x) m Q := by
+  constructor
+  · intro hTriple x
+    exact triple_conseq hTriple (himpl_hexists_r x (himpl_refl _))
+      (fun _ => himpl_refl _)
+  · exact triple_hexists
+
+theorem triple_hpure_iff {α : Type} {P : Prop} {H : SLPre} {m : St α}
+    {Q : SLPost α} :
+    triple iprop(⌜P⌝ ∗ H) m Q ↔ (P → triple H m Q) := by
+  constructor
+  · intro hTriple hP
+    refine triple_conseq hTriple ?_ (fun _ => himpl_refl _)
+    intro h hH
+    exact (hstar_hpure_l P H h).mpr ⟨hP, hH⟩
+  · exact triple_hpure
+
+theorem triple_hpure'_iff {α : Type} {P : Prop} {m : St α} {Q : SLPost α} :
+    triple ⌜P⌝ m Q ↔ (P → triple emp m Q) := by
+  rw [show (⌜P⌝ : SLPre) = iprop(⌜P⌝ ∗ emp) from (hstar_hempty_r_eq _).symm,
+    triple_hpure_iff]
+
 #register_spec_info {
     spec_name := ``triple
     arity := 4
@@ -82,8 +111,19 @@ macro "sl_step" args:Aeneas.Step.stepArgs : tactic =>
     mk_spec_bind := ``triple_step_bind
     mk_spec_bind_skip_args := 7
     mk_spec_bind_preconditions := 2
-    uncurry_elim_tactics := #[] -- TODO: wire sl_pull, and sl_frame? to this
-    qimp_elim_tactics := #[] -- TODO: wire sl_pull, and sl_frame? to this
+    -- Eliminate the binder of an output the specification determines, and of a `Unit` output.
+    uncurry_elim_tactics := #[
+      ``forall_eq, ``forall_eq',
+      ``forall_unit, ``true_imp_iff
+    ]
+    -- `sl_pull` the continuation's precondition: quantifiers and pure facts become
+    -- binders and hypotheses.
+    qimp_elim_tactics := #[
+      ``hstar_hempty_l_eq, ``hstar_hempty_r_eq,
+      ``hstar_hexists_l_eq, ``hstar_hexists_r_eq, ``hstar_assoc_eq,
+      ``triple_hexists_iff, ``triple_hpure_iff, ``triple_hpure'_iff,
+      ``forall_unit, ``true_imp_iff
+    ]
     to_mvcgen := none
     liftings := #[] -- TODO: lift from Pure to SLProp
   }
