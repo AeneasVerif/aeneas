@@ -463,6 +463,25 @@ theorem popBack.spec (s : DoublyLinkedList V) (l : Cells V) (rt : Ptr (Node V))
       from by simp] at hhead ⊢
     sl_step*
 
+/-- `popBack` in the shape `step` can apply on its own.
+
+`popBack.spec` mentions its ghost list under `++`, so `sl_frame` cannot recover
+it from a precondition `wellFormed s [c₀, c₁, c₂]`: that is a higher-order match
+the unifier will not solve.  Indexing the triple by the whole list instead makes
+the precondition first-order, at the cost of a `l ≠ []` side condition and of a
+postcondition phrased with `dropLast`/`getLast?` — both of which compute on a
+concrete list, so `sl_side?` and the postcondition simp set discharge them. -/
+theorem popBack.spec' (s : DoublyLinkedList V) (l : Cells V) (hne : l ≠ []) :
+    ⦃ wellFormed s l ⦄ popBack s
+      ⦃⇓ (s', v) => ⌜l.getLast?.map Prod.snd = some v⌝ ∗ wellFormed s' l.dropLast⦄ := by
+  rcases eq_nil_or_snoc l with rfl | ⟨l', c, rfl⟩
+  · simp at hne
+  · obtain ⟨rt, vt⟩ := c
+    apply triple_conseq (popBack.spec s l' rt vt) (himpl_refl _)
+    rintro ⟨s', v⟩
+    simp only [List.getLast?_concat, List.dropLast_concat, Option.map_some]
+    sl_frame
+
 /-- `pushFront` prepends `v` to the list. -/
 theorem pushFront.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
     ⦃ wellFormed s l ⦄ pushFront s v
@@ -603,11 +622,22 @@ theorem get.spec (s : DoublyLinkedList V) (l : Cells V) (i : Nat)
 /- Specifications `step` can apply on its own: the program term fixes the
 receiver, `sl_frame` fixes the ghost list by matching `nodes ?l`, and `sl_side?`
 discharges the remaining `Prop` arguments.  A specification is *not* registrable
-when its ghost list only occurs under `++` (`popBack.spec`), which the unifier
-will not solve, or when a `Prop` argument carries information no tactic can
-recover (`getLoop.spec`'s `l[j]?.map Prod.fst = some r`, `nodes_read`'s cell). -/
+when its ghost list only occurs under `++` (`popBack.spec`, hence the restated
+`popBack.spec'`), which the unifier will not solve, or when a `Prop` argument
+carries information no tactic can recover (`getLoop.spec`'s
+`l[j]?.map Prod.fst = some r`, `nodes_read`'s cell). -/
 attribute [step]
-  new.spec pushBack.spec pushFront.spec popFront.spec get.spec
+  new.spec pushBack.spec pushFront.spec popFront.spec get.spec popBack.spec'
+
+/- `pushBack`/`pushFront` grow the ghost list with `++` and `::`, and
+`popBack.spec'` shrinks it with `dropLast`.  Normalising all three keeps the
+list a literal between steps; otherwise the unifier has to `whnf` through an
+unreduced `dropLast` at the next call, which is where `run.spec` used to spend
+its whole heartbeat budget. -/
+attribute [step_post_simps]
+  List.nil_append List.cons_append List.append_assoc
+  List.dropLast_cons₂ List.dropLast_nil
+  List.getLast?_cons_cons List.getLast?_singleton Option.map_some
 
 /-! ## Ghost-free specifications
 
@@ -807,16 +837,6 @@ theorem run.spec :
     (run) ⦃⇓ (v1, v2, v3, g, x, y, z) =>
       v1 = 1 ∧ v2 = 2 ∧ v3 = 3 ∧ g = false ∧ x = 3 ∧ y = 1 ∧ z = 2⦄ := by
   unfold run
-  -- Build the list `1, 2, 3`
-  sl_step
-  sl_step as ⟨ t1, r1 ⟩
-  sl_step as ⟨ t2, r2 ⟩
-  sl_step as ⟨ t3, r3 ⟩
-  -- Walk the list with an iterator
-  sl_step*
-  -- Empty the list again
-  sl_step with DoublyLinkedList.popBack.spec t3 [(r3, 1), (r1, 2)] r2 3
-    as ⟨ p1, ex ⟩
   sl_step*
 
 end Example
