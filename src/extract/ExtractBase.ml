@@ -757,118 +757,6 @@ let id_to_string (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
 let dyn_constructor () = "Dyn.mk" (* TODO: backends other than Lean *)
 let dyn_ty = "Dyn"
 
-(** The backend's reserved syntactic keywords. *)
-let reserved_keywords () : string list =
-  match backend () with
-  | FStar ->
-      [
-        "assert";
-        "assert_norm";
-        "assume";
-        "else";
-        "end";
-        "fun";
-        "fn";
-        "FStar";
-        "FStar.Mul";
-        "if";
-        "in";
-        "include";
-        "int";
-        "let";
-        "list";
-        "match";
-        "open";
-        "rec";
-        "scalar_cast";
-        "then";
-        "type";
-        "Type0";
-        "Type";
-        "unit";
-        "val";
-        "with";
-      ]
-  | Coq ->
-      [
-        "assert";
-        "Arguments";
-        "Axiom";
-        "char_of_byte";
-        "Check";
-        "Declare";
-        "Definition";
-        "else";
-        "end";
-        "End";
-        "fun";
-        "Fixpoint";
-        "if";
-        "in";
-        "int";
-        "Inductive";
-        "Import";
-        "let";
-        "Lemma";
-        "match";
-        "Module";
-        "not";
-        "Notation";
-        "Proof";
-        "Qed";
-        "rec";
-        "Record";
-        "Require";
-        "Scope";
-        "Search";
-        "SearchPattern";
-        "Set";
-        "then";
-        (* [tt] is unit *)
-        "tt";
-        "type";
-        "Type";
-        "unit";
-        "with";
-      ]
-  | Lean ->
-      (* These are the Lean identifiers defined by Aeneas which must not collide 
-         with translated identifiers. Lean keywords are not included here since 
-         they are valid identifiers when correctly escaped (see the auto 
-         generated [LeanKeywords.lean_keywords]). *)
-      [
-        "BuiltinFn";
-        "BuiltinFnMut";
-        "BuiltinFnOnce";
-        "Pi";
-        "Std.Array.empty";
-        "opaque_defs";
-        "toStr";
-        dyn_constructor ();
-      ]
-  | HOL4 ->
-      [
-        "Axiom";
-        "case";
-        "Definition";
-        "else";
-        "End";
-        "fix";
-        "fix_exec";
-        "fn";
-        "fun";
-        "if";
-        "in";
-        "int";
-        "Inductive";
-        "let";
-        "of";
-        "Proof";
-        "QED";
-        "then";
-        "Theorem";
-      ]
-
 let lean_keywords_set : StringSet.t Lazy.t =
   lazy (StringSet.of_list LeanKeywords.lean_keywords)
 
@@ -1119,7 +1007,117 @@ let keywords () =
     List.map named_binop_name
       (List.flatten (List.map mk_binops T.all_int_types))
   in
-  List.concat [ named_unops; named_binops; reserved_keywords () ]
+  let misc =
+    match backend () with
+    | FStar ->
+        [
+          "assert";
+          "assert_norm";
+          "assume";
+          "else";
+          "end";
+          "fun";
+          "fn";
+          "FStar";
+          "FStar.Mul";
+          "if";
+          "in";
+          "include";
+          "int";
+          "let";
+          "list";
+          "match";
+          "open";
+          "rec";
+          "scalar_cast";
+          "then";
+          "type";
+          "Type0";
+          "Type";
+          "unit";
+          "val";
+          "with";
+        ]
+    | Coq ->
+        [
+          "assert";
+          "Arguments";
+          "Axiom";
+          "char_of_byte";
+          "Check";
+          "Declare";
+          "Definition";
+          "else";
+          "end";
+          "End";
+          "fun";
+          "Fixpoint";
+          "if";
+          "in";
+          "int";
+          "Inductive";
+          "Import";
+          "let";
+          "Lemma";
+          "match";
+          "Module";
+          "not";
+          "Notation";
+          "Proof";
+          "Qed";
+          "rec";
+          "Record";
+          "Require";
+          "Scope";
+          "Search";
+          "SearchPattern";
+          "Set";
+          "then";
+          (* [tt] is unit *)
+          "tt";
+          "type";
+          "Type";
+          "unit";
+          "with";
+        ]
+    | Lean ->
+        (* Identifiers defined by Aeneas' Lean library which translated
+           identifiers must not collide with. Genuine Lean keywords are handled
+           separately, by escaping them (see [is_lean_keyword]). *)
+        [
+          "BuiltinFn";
+          "BuiltinFnMut";
+          "BuiltinFnOnce";
+          "Pi";
+          "Std.Array.empty";
+          "opaque_defs";
+          "toStr";
+          dyn_constructor ();
+        ]
+    | HOL4 ->
+        [
+          "Axiom";
+          "case";
+          "Definition";
+          "else";
+          "End";
+          "fix";
+          "fix_exec";
+          "fn";
+          "fun";
+          "if";
+          "in";
+          "int";
+          "Inductive";
+          "let";
+          "of";
+          "Proof";
+          "QED";
+          "then";
+          "Theorem";
+        ]
+  in
+  List.concat [ named_unops; named_binops; misc ]
 
 let builtin_adts () : (builtin_ty * string) list =
   (* We voluntarily omit the type [Error]: it is never directly
