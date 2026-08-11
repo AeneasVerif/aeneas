@@ -14,9 +14,12 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 README = HERE / "README.md"
-LEAN_EXEC = HERE / "DoublyLinkedList.lean"
+LEAN_EXAMPLE = HERE / "DoublyLinkedList.lean"
 LEAN_LIB = HERE / "VerusStd.lean"
-LEAN_SPEC = HERE / "DoublyLinkedListSpec.lean"
+
+# `DoublyLinkedList.lean` holds the executable definitions and then the ghost
+# state, the specifications and the proofs; this header separates the two.
+LEAN_SPEC_MARKER = "/-! # Ghost state, specifications and proofs"
 
 VERUS_COMMIT = "99ae45aa8e3568ec4933d23c6573a59efcd08ca3"
 VERUS_URL = (
@@ -431,11 +434,26 @@ def format_lean_loc(executable: int, specification: int, bold: bool = False) -> 
     return f"**{value}**" if bold else value
 
 
+def split_lean_example(text: str) -> tuple[str, str]:
+    """Split the example into its executable half and its specification half."""
+    lines = text.split("\n")
+    marks = [i for i, line in enumerate(lines) if line.startswith(LEAN_SPEC_MARKER)]
+    if len(marks) != 1:
+        raise ValueError(
+            f"expected exactly one {LEAN_SPEC_MARKER!r} header in "
+            f"{LEAN_EXAMPLE.name}, found {len(marks)}"
+        )
+    return "\n".join(lines[: marks[0]]), "\n".join(lines[marks[0] :])
+
+
 def render_report(verus_text: str) -> str:
     verus_defs = rust_definitions(verus_text)
-    lean_exec_defs = lean_definitions(LEAN_EXEC.read_text(encoding="utf-8"))
+    lean_exec_text, lean_spec_text = split_lean_example(
+        LEAN_EXAMPLE.read_text(encoding="utf-8")
+    )
+    lean_exec_defs = lean_definitions(lean_exec_text)
     lean_lib_defs = lean_definitions(LEAN_LIB.read_text(encoding="utf-8"))
-    lean_spec_defs = lean_definitions(LEAN_SPEC.read_text(encoding="utf-8"))
+    lean_spec_defs = lean_definitions(lean_spec_text)
 
     verus = index_definitions(verus_defs, "Verus")
     lean_exec = index_definitions(lean_exec_defs, "Lean executable")
@@ -519,8 +537,7 @@ def render_report(verus_text: str) -> str:
             "|---|---:|---:|",
             f"| Verus | {len(verus_defs)} | {total(verus_defs)} |",
             f"| Lean executable definitions | {len(lean_exec_defs)} | {total(lean_exec_defs)} |",
-            "| Lean ghost state, specifications and proofs "
-            f"(`DoublyLinkedListSpec.lean`) | "
+            "| Lean ghost state, specifications and proofs | "
             f"{len(lean_spec_defs)} | {total(lean_spec_defs)} |",
             f"| **Lean example total** | **{len(lean_exec_defs) + len(lean_spec_defs)}** | "
             f"**{total(lean_exec_defs) + total(lean_spec_defs)}** |",

@@ -7,8 +7,7 @@ logic (SL) support.
 
 | File | Purpose |
 |---|---|
-| [`DoublyLinkedList.lean`](DoublyLinkedList.lean) | Port of the Verus doubly-linked-list example: executable definitions. |
-| [`DoublyLinkedListSpec.lean`](DoublyLinkedListSpec.lean) | Ghost state, specifications and proofs for `DoublyLinkedList.lean`. |
+| [`DoublyLinkedList.lean`](DoublyLinkedList.lean) | Port of the Verus doubly-linked-list example: executable definitions, then ghost state, specifications and proofs. |
 | [`doubly_linked_loc.py`](doubly_linked_loc.py) | Deterministically regenerates the relevant-LOC comparison with the pinned Verus example below. |
 | [`FFree.lean`](FFree.lean) | Defines the generic freer monad, and the state machines that give it an operational semantics (after "Program Logics à la Carte"): `StateMachine`, `Exec`, `Runs` and `Evaluates`. |
 | [`Heap.lean`](Heap.lean) | Defines locations, dynamically typed cells, and finite heaps. |
@@ -48,7 +47,7 @@ Pinned Verus source: [`99ae45aa8e35`](https://github.com/verus-lang/verus/blob/9
 |---|---:|---:|
 | Verus | 24 | 339 |
 | Lean executable definitions | 14 | 84 |
-| Lean ghost state, specifications and proofs (`DoublyLinkedListSpec.lean`) | 44 | 287 |
+| Lean ghost state, specifications and proofs | 44 | 287 |
 | **Lean example total** | **58** | **371** |
 | `vstd` equivalent, generic and reusable (`VerusStd.lean`) | 26 | 109 |
 | Lean grand total | 84 | 480 |
