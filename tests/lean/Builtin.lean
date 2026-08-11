@@ -27,11 +27,10 @@ def clone_u32 (x : Std.U32) : Result Std.U32 := do
 /-- [builtin::into_from]:
     Source: 'tests/src/builtin.rs', lines 14:0-16:1 -/
 def into_from
-  {T : Type} {U : Type} (coreconvertFromUTInst : core.convert.From U T) 
-  (x : T) :
+  {T : Type} {U : Type} (coreconvertFromInst : core.convert.From U T) (x : T) :
   Result U
   := do
-  core.convert.IntoFrom.into coreconvertFromUTInst x
+  core.convert.IntoFrom.into coreconvertFromInst x
 
 /-- [builtin::into_same]:
     Source: 'tests/src/builtin.rs', lines 18:0-20:1 -/
@@ -46,9 +45,7 @@ def from_same {T : Type} (x : T) : Result T := do
 /-- [builtin::copy]:
     Source: 'tests/src/builtin.rs', lines 26:0-28:1 -/
 def copy
-  {T : Type} (coremarkerCopyTInst : core.marker.Copy T) (x : T) :
-  Result T
-  := do
+  {T : Type} (coremarkerCopyInst : core.marker.Copy T) (x : T) : Result T := do
   ok x
 
 /-- [builtin::u32_from_le_bytes]:
@@ -64,7 +61,7 @@ def u32_to_le_bytes (x : Std.U32) : Result (Array Std.U8 4#usize) := do
 /-- [builtin::use_debug_clause]:
     Source: 'tests/src/builtin.rs', lines 38:0-38:49 -/
 def use_debug_clause
-  {T : Type} (corefmtDebugTInst : core.fmt.Debug T) (t : T) : Result Unit := do
+  {T : Type} (corefmtDebugInst : core.fmt.Debug T) (t : T) : Result Unit := do
   ok ()
 
 end builtin

@@ -18,7 +18,7 @@ namespace bst
 /-- [bst::{bst::TreeSet<T>}::new]:
     Source: 'src/bst.rs', lines 28:4-30:5
     Visibility: public -/
-def TreeSet.new {T : Type} (OrdTInst : Ord T) : Result (TreeSet T) := do
+def TreeSet.new {T : Type} (OrdInst : Ord T) : Result (TreeSet T) := do
   ok { root := none }
 
 /-- [bst::{bst::TreeSet<T>}::find]: loop 0:
@@ -26,17 +26,17 @@ def TreeSet.new {T : Type} (OrdTInst : Ord T) : Result (TreeSet T) := do
     Visibility: public -/
 @[rust_loop]
 def TreeSet.find_loop
-  {T : Type} (OrdTInst : Ord T) (value : T) (current_tree : Option (Node T)) :
+  {T : Type} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
   Result Bool
   := do
   match current_tree with
   | none => ok false
   | some current_node =>
-    let o ← OrdTInst.cmp current_node.value value
+    let o ← OrdInst.cmp current_node.value value
     match o with
-    | Ordering.Less => TreeSet.find_loop OrdTInst value current_node.right
+    | Ordering.Less => TreeSet.find_loop OrdInst value current_node.right
     | Ordering.Equal => ok true
-    | Ordering.Greater => TreeSet.find_loop OrdTInst value current_node.left
+    | Ordering.Greater => TreeSet.find_loop OrdInst value current_node.left
 partial_fixpoint
 
 /-- [bst::{bst::TreeSet<T>}::find]:
@@ -44,31 +44,31 @@ partial_fixpoint
     Visibility: public -/
 @[reducible]
 def TreeSet.find
-  {T : Type} (OrdTInst : Ord T) (self : TreeSet T) (value : T) :
+  {T : Type} (OrdInst : Ord T) (self : TreeSet T) (value : T) :
   Result Bool
   := do
-  TreeSet.find_loop OrdTInst value self.root
+  TreeSet.find_loop OrdInst value self.root
 
 /-- [bst::{bst::TreeSet<T>}::insert]: loop 0:
     Source: 'src/bst.rs', lines 48:8-63:5
     Visibility: public -/
 @[rust_loop]
 def TreeSet.insert_loop
-  {T : Type} (OrdTInst : Ord T) (value : T) (current_tree : Option (Node T)) :
+  {T : Type} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
   Result (Bool × (Option (Node T)))
   := do
   match current_tree with
   | none => ok (true, some (Node.mk value none none))
   | some current_node =>
-    let o ← OrdTInst.cmp current_node.value value
+    let o ← OrdInst.cmp current_node.value value
     match o with
     | Ordering.Less =>
-      let (b, back) ← TreeSet.insert_loop OrdTInst value current_node.right
+      let (b, back) ← TreeSet.insert_loop OrdInst value current_node.right
       let back1 := some (Node.mk current_node.value current_node.left back)
       ok (b, back1)
     | Ordering.Equal => ok (false, current_tree)
     | Ordering.Greater =>
-      let (b, back) ← TreeSet.insert_loop OrdTInst value current_node.left
+      let (b, back) ← TreeSet.insert_loop OrdInst value current_node.left
       let back1 := some (Node.mk current_node.value back current_node.right)
       ok (b, back1)
 partial_fixpoint
@@ -77,10 +77,10 @@ partial_fixpoint
     Source: 'src/bst.rs', lines 45:4-63:5
     Visibility: public -/
 def TreeSet.insert
-  {T : Type} (OrdTInst : Ord T) (self : TreeSet T) (value : T) :
+  {T : Type} (OrdInst : Ord T) (self : TreeSet T) (value : T) :
   Result (Bool × (TreeSet T))
   := do
-  let (b, o) ← TreeSet.insert_loop OrdTInst value self.root
+  let (b, o) ← TreeSet.insert_loop OrdInst value self.root
   ok (b, { root := o })
 
 end bst

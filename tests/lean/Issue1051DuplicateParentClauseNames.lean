@@ -110,8 +110,7 @@ axiom core.num.nonzero.NonZero (T : Type) (Clause0_NonZeroInner : Type) : Type
 @[rust_fun
   "core::num::nonzero::{core::num::nonzero::NonZero<@T, @Clause0_NonZeroInner>}::get"]
 axiom core.num.nonzero.NonZero.get
-  {T : Type} {Clause0_NonZeroInner : Type}
-  (ZeroablePrimitiveTClause0NonZeroInnerInst :
+  {T : Type} {Clause0_NonZeroInner : Type} (ZeroablePrimitiveInst :
   core.num.nonzero.ZeroablePrimitive T Clause0_NonZeroInner) :
   core.num.nonzero.NonZero T Clause0_NonZeroInner → Result T
 
@@ -136,8 +135,8 @@ structure TraitC (Self : Type) where
     Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 19:0-22:1
     Visibility: public -/
 structure TraitE (Self : Type) (Self_X : Type) (Self_Y : Type) where
-  TraitASelfXInst : TraitA Self_X
-  TraitCSelfYInst : TraitC Self_Y
+  TraitAInst : TraitA Self_X
+  TraitCInst : TraitC Self_Y
 
 /-- [issue_1051_duplicate_parent_clause_names::get_inner]:
     Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 26:0-28:1
@@ -159,8 +158,8 @@ structure Gen (Self : Type) (T : Type) where
     Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 36:0-36:40
     Visibility: public -/
 structure UsesGen (Self : Type) where
-  GenU8Inst : Gen Self Std.U8
-  GenU16Inst : Gen Self Std.U16
+  GenSelfU8Inst : Gen Self Std.U8
+  GenSelfU16Inst : Gen Self Std.U16
 
 /-- Trait declaration: [issue_1051_duplicate_parent_clause_names::GenN]
     Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 40:0-40:33
@@ -171,8 +170,8 @@ structure GenN (Self : Type) (N : Std.Usize) where
     Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 42:0-42:40
     Visibility: public -/
 structure UsesGenN (Self : Type) where
-  GenN3Inst : GenN Self 3#usize
-  GenN5Inst : GenN Self 5#usize
+  GenNSelf3Inst : GenN Self 3#usize
+  GenNSelf5Inst : GenN Self 5#usize
 
 /-- [issue_1051_duplicate_parent_clause_names::Foo]
     Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 48:0-48:15
@@ -231,7 +230,7 @@ def WithProvided.provided.default
     Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 66:0-66:57
     Visibility: public -/
 def two_clauses
-  {A : Type} {B : Type} (TraitAAInst : TraitA A) (TraitABInst : TraitA B)
+  {A : Type} {B : Type} (TraitAInst : TraitA A) (TraitAInst1 : TraitA B)
   (_a : A) (_b : B) :
   Result Unit
   := do
@@ -241,6 +240,6 @@ def two_clauses
     Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 69:0-71:1
     Visibility: public -/
 structure Producer (Self : Type) (Self_Item : Type) where
-  TraitASelfItemInst : TraitA Self_Item
+  TraitAInst : TraitA Self_Item
 
 end issue_1051_duplicate_parent_clause_names

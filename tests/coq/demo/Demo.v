@@ -201,8 +201,8 @@ Definition Usize_Insts_DemoCounter : Counter_t usize := {|
     Source: 'tests/src/demo.rs', lines 112:0-114:1
     Visibility: public *)
 Definition use_counter
-  {T : Type} (counterTInst : Counter_t T) (cnt : T) : result (usize * T) :=
-  counterTInst.(Counter_t_incr) cnt
+  {T : Type} (counterInst : Counter_t T) (cnt : T) : result (usize * T) :=
+  counterInst.(Counter_t_incr) cnt
 .
 
 (** [demo::mod_add]:

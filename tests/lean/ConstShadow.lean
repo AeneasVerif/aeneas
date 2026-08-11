@@ -47,11 +47,11 @@ def Foo.Insts.Const_shadowHasConst4 : HasConst Foo 4#usize := {
 /-- [const_shadow::use_has_const]:
     Source: 'tests/src/const-shadow.rs', lines 30:0-34:1 -/
 def use_has_const
-  {T : Type} {N : Std.Usize} (HasConstTNInst : HasConst T N) (x : T) :
+  {T : Type} {N : Std.Usize} (HasConstInst : HasConst T N) (x : T) :
   Result ((Array Std.U8 N) × Std.Usize)
   := do
-  let arr ← HasConstTNInst.get x
-  let n ← HasConstTNInst.N
+  let arr ← HasConstInst.get x
+  let n ← HasConstInst.N
   ok (arr, n)
 
 end const_shadow

@@ -20,7 +20,7 @@ namespace multi_target
 /-- Trait declaration: [multi_target::SimdTrait]
     Source: 'tests/src/multi-target.rs', lines 5:0-8:1 -/
 structure SimdTrait (Self : Type) (Self_Vec : Type) where
-  coremarkerCopySelfVecInst : core.marker.Copy Self_Vec
+  coremarkerCopyInst : core.marker.Copy Self_Vec
   add : Self_Vec → Self_Vec → Result Self_Vec
 
 /-- [multi_target::x86::Sse2]
@@ -39,7 +39,7 @@ def x86.Sse2.Insts.Multi_targetSimdTraitU128.add
     Source: 'tests/src/multi-target.rs', lines 16:4-22:5 -/
 @[reducible]
 def x86.Sse2.Insts.Multi_targetSimdTraitU128 : SimdTrait x86.Sse2 Std.U128 := {
-  coremarkerCopySelfVecInst := core.marker.CopyU128
+  coremarkerCopyInst := core.marker.CopyU128
   add := x86.Sse2.Insts.Multi_targetSimdTraitU128.add
 }
 
@@ -59,18 +59,18 @@ def arm.Neon.Insts.Multi_targetSimdTraitU128.add
     Source: 'tests/src/multi-target.rs', lines 31:4-37:5 -/
 @[reducible]
 def arm.Neon.Insts.Multi_targetSimdTraitU128 : SimdTrait arm.Neon Std.U128 := {
-  coremarkerCopySelfVecInst := core.marker.CopyU128
+  coremarkerCopyInst := core.marker.CopyU128
   add := arm.Neon.Insts.Multi_targetSimdTraitU128.add
 }
 
 /-- [multi_target::add_vec]:
     Source: 'tests/src/multi-target.rs', lines 40:0-42:1 -/
 def add_vec
-  {T : Type} {Clause0_Vec : Type} (SimdTraitTClause0VecInst : SimdTrait T
-  Clause0_Vec) (a : Clause0_Vec) (b : Clause0_Vec) :
+  {T : Type} {Clause0_Vec : Type} (SimdTraitInst : SimdTrait T Clause0_Vec)
+  (a : Clause0_Vec) (b : Clause0_Vec) :
   Result Clause0_Vec
   := do
-  SimdTraitTClause0VecInst.add a b
+  SimdTraitInst.add a b
 
 /-- [multi_target::scalar_add]:
     Source: 'tests/src/multi-target.rs', lines 44:0-46:1 -/

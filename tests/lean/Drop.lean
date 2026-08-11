@@ -18,7 +18,7 @@ namespace drop
     Source: 'tests/src/drop.rs', lines 7:4-9:5 -/
 @[rust_loop_body]
 def fill_loop.body
-  {T : Type} (corecloneCloneTInst : core.clone.Clone T) (value : T)
+  {T : Type} (corecloneCloneInst : core.clone.Clone T) (value : T)
   (iter : core.ops.range.Range Std.Usize) (s : Slice T) :
   Result (ControlFlow ((core.ops.range.Range Std.Usize) × (Slice T)) (Slice
     T))
@@ -28,7 +28,7 @@ def fill_loop.body
   match o with
   | none => ok (done s)
   | some i =>
-    let t ← corecloneCloneTInst.clone value
+    let t ← corecloneCloneInst.clone value
     let (t1, index_mut_back) ← Slice.index_mut_usize s i
     let s1 := index_mut_back t1
     let s2 ← Slice.update s1 i t
@@ -38,22 +38,22 @@ def fill_loop.body
     Source: 'tests/src/drop.rs', lines 7:4-9:5 -/
 @[rust_loop]
 def fill_loop
-  {T : Type} (corecloneCloneTInst : core.clone.Clone T)
+  {T : Type} (corecloneCloneInst : core.clone.Clone T)
   (iter : core.ops.range.Range Std.Usize) (s : Slice T) (value : T) :
   Result (Slice T)
   := do
   loop
-    (fun (iter1, s1) => fill_loop.body corecloneCloneTInst value iter1 s1)
+    (fun (iter1, s1) => fill_loop.body corecloneCloneInst value iter1 s1)
     (iter, s)
 
 /-- [drop::fill]:
     Source: 'tests/src/drop.rs', lines 3:0-10:1 -/
 def fill
-  {T : Type} (corecloneCloneTInst : core.clone.Clone T) (s : Slice T)
+  {T : Type} (corecloneCloneInst : core.clone.Clone T) (s : Slice T)
   (value : T) :
   Result (Slice T)
   := do
   let i := Slice.len s
-  fill_loop corecloneCloneTInst { start := 0#usize, «end» := i } s value
+  fill_loop corecloneCloneInst { start := 0#usize, «end» := i } s value
 
 end drop

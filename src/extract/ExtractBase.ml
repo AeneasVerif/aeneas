@@ -1942,9 +1942,10 @@ let ctx_compute_trait_decl_constructor (ctx : extraction_ctx)
     Because we want to be precise when deriving the name, we use the original
     LLBC types, that is the types from before the translation to pure, which
     simplifies types like boxes and references. *)
-let ctx_compute_trait_clause_name (ctx : extraction_ctx)
-    (current_def_name : Types.name) (params : Types.generic_params)
-    (clauses : Types.trait_param list) (clause_id : trait_clause_id) : string =
+let ctx_compute_trait_clause_name ?(keep_var_generics = false)
+    (ctx : extraction_ctx) (current_def_name : Types.name)
+    (params : Types.generic_params) (clauses : Types.trait_param list)
+    (clause_id : trait_clause_id) : string =
   (* We derive the name of the clause from the trait instance.
      For instance, if the clause gives us an instance of `Foo<u32>`,
      we generate a name along the lines of "fooU32Inst".
@@ -1976,10 +1977,11 @@ let ctx_compute_trait_clause_name (ctx : extraction_ctx)
     match TraitDeclId.Map.find_opt trait_id ctx.crate.trait_decls with
     | None -> [ "clause" ]
     | Some impl_trait_decl ->
-        (* Keep the (variable) generic arguments, they identify which trait instance this clause is. *)
+        (* When [keep_var_generics] is set we keep the (variable) generic
+           arguments: they identify which trait instance this clause is. *)
         let args = clause_trait.generics in
         trait_name_with_generics_to_simple_name ctx.trans_ctx ~prefix
-          ~keep_var_generics:true impl_trait_decl.item_meta.name params args
+          ~keep_var_generics impl_trait_decl.item_meta.name params args
   in
   String.concat "" clause
 
@@ -1997,10 +1999,10 @@ let check_builtin_arity (ctx : extraction_ctx) (trait_decl : trait_decl)
 
 (** Compute the names of the parent clauses of a trait declaration.
 
-    For a computed trait each name is [base ^ "Inst"], where the base is derived
-    from the referenced trait, including its generic arguments. A numeric suffix
-    is added only as a guard against two identical bounds (impossible in
-    well-formed Rust).
+    For a computed trait each name is [base ^ "Inst"]. The base is the
+    referenced trait's name; its generic arguments are appended only for clauses
+    whose bare name would otherwise collide (they distinguish the instances). A
+    numeric suffix is a final guard against two identical bases.
 
     For a builtin trait the names are taken verbatim from the builtin
     information (no ["Inst"] suffix added here). *)
@@ -2013,11 +2015,14 @@ let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
     if !Config.record_fields_short_names then None
     else Some (ctx_compute_trait_decl_name ctx trait_decl)
   in
-  (* The base name of a clause. *)
-  let compute_base (clause : trait_param) : string =
+  (* The base name of a clause. With [keep_var_generics] the referenced trait's
+     generic arguments are included (distinguishing instances of the same
+     trait); without it we get the short form. *)
+  let compute_base ~keep_var_generics (clause : trait_param) : string =
     let base =
-      ctx_compute_trait_clause_name ctx trait_decl.item_meta.name
-        trait_decl.llbc_generics trait_decl.llbc_parent_clauses clause.clause_id
+      ctx_compute_trait_clause_name ~keep_var_generics ctx
+        trait_decl.item_meta.name trait_decl.llbc_generics
+        trait_decl.llbc_parent_clauses clause.clause_id
     in
     match prefix with
     | None -> base
@@ -2033,20 +2038,42 @@ let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
   let names =
     match builtin_info with
     | None ->
-        (* The base already encodes each clause's trait instantiation so distinct super-traits get distinct bases by
-           construction. *)
+        (* Prefer the short base (trait name without its generic arguments).
+           Only clauses whose short base is not unique escalate to include the
+           generic arguments, which distinguish the trait instances. The numeric
+           suffix from [name_to_unique] is the final guard against two identical
+           bases (e.g. super-traits whose argument names concatenate equally). *)
+        let shorts =
+          List.map
+            (compute_base ~keep_var_generics:false)
+            trait_decl.parent_clauses
+        in
+        let ambiguous =
+          let seen = ref StringSet.empty and dup = ref StringSet.empty in
+          List.iter
+            (fun s ->
+              if StringSet.mem s !seen then dup := StringSet.add s !dup
+              else seen := StringSet.add s !seen)
+            shorts;
+          !dup
+        in
         let _, named =
           List.fold_left_map
-            (fun used c ->
-              let name = add_inst_and_normalize (compute_base c) in
+            (fun used (c, short) ->
+              let base =
+                if StringSet.mem short ambiguous then
+                  compute_base ~keep_var_generics:true c
+                else short
+              in
               let name =
                 name_to_unique
                   (fun s -> StringSet.mem s used)
                   (fun n i -> n ^ string_of_int i)
-                  name
+                  (add_inst_and_normalize base)
               in
               (StringSet.add name used, (c, name)))
-            StringSet.empty trait_decl.parent_clauses
+            StringSet.empty
+            (List.combine trait_decl.parent_clauses shorts)
         in
         named
     | Some info ->

@@ -23,9 +23,9 @@ structure Params (Self : Type) where
 /-- [constants_lean::use_params]:
     Source: 'tests/src/constants-lean.rs', lines 8:0-10:1 -/
 def use_params
-  {P : Type} (ParamsPInst : Params P) (n : Std.Usize) : Result Bool := do
-  let i ← ParamsPInst.N
-  let i1 ← ParamsPInst.M
+  {P : Type} (ParamsInst : Params P) (n : Std.Usize) : Result Bool := do
+  let i ← ParamsInst.N
+  let i1 ← ParamsInst.M
   let i2 ← i * i1
   lift (core.cmp.impls.PartialEqUsize.eq n i2)
 

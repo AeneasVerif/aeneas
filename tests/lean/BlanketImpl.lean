@@ -31,7 +31,7 @@ structure Trait2 (Self : Type) where
 /-- Trait implementation: [blanket_impl::{impl blanket_impl::Trait2 for T}]
     Source: 'tests/src/blanket_impl.rs', lines 9:0-9:31 -/
 @[reducible]
-def Trait2.Blanket {T : Type} (Trait1TInst : Trait1 T) : Trait2 T := {
+def Trait2.Blanket {T : Type} (Trait1Inst : Trait1 T) : Trait2 T := {
   foo := Trait2.foo.default T
 }
 

@@ -169,8 +169,8 @@ let usize_Insts_DemoCounter : counter_t usize = {
     Source: 'tests/src/demo.rs', lines 112:0-114:1
     Visibility: public *)
 let use_counter
-  (#t : Type0) (counterTInst : counter_t t) (cnt : t) : result (usize & t) =
-  counterTInst.incr cnt
+  (#t : Type0) (counterInst : counter_t t) (cnt : t) : result (usize & t) =
+  counterInst.incr cnt
 
 (** [demo::mod_add]:
     Source: 'tests/src/demo.rs', lines 117:0-125:1 *)

@@ -17,11 +17,11 @@ namespace vec
 /-- [vec::use_extend_from_slice]:
     Source: 'tests/src/vec.rs', lines 5:0-7:1 -/
 def use_extend_from_slice
-  {T : Type} (corecloneCloneTInst : core.clone.Clone T) (v : alloc.vec.Vec T)
+  {T : Type} (corecloneCloneInst : core.clone.Clone T) (v : alloc.vec.Vec T)
   (s : Slice T) :
   Result (alloc.vec.Vec T)
   := do
-  alloc.vec.Vec.extend_from_slice corecloneCloneTInst v s
+  alloc.vec.Vec.extend_from_slice corecloneCloneInst v s
 
 /-- [vec::use_alloc_with_capacity]:
     Source: 'tests/src/vec.rs', lines 9:0-11:1 -/
@@ -32,10 +32,10 @@ def use_alloc_with_capacity
 /-- [vec::from_elem]:
     Source: 'tests/src/vec.rs', lines 13:0-15:1 -/
 def from_elem
-  {T : Type} (corecloneCloneTInst : core.clone.Clone T) (x : T) (n : Std.Usize)
+  {T : Type} (corecloneCloneInst : core.clone.Clone T) (x : T) (n : Std.Usize)
   :
   Result (alloc.vec.Vec T)
   := do
-  alloc.vec.from_elem corecloneCloneTInst x n
+  alloc.vec.from_elem corecloneCloneInst x n
 
 end vec

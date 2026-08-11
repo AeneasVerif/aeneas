@@ -22,7 +22,7 @@ structure From (Self : Type) (T : Type) where
 /-- Trait declaration: [from_to::To]
     Source: 'tests/src/from_to.rs', lines 7:0-11:1 -/
 structure To (Self : Type) where
-  «to» : forall {T : Type} (FromPTInst : From T Self), Self → Result T
+  «to» : forall {T : Type} (FromInst : From T Self), Self → Result T
 
 /-- [from_to::{impl from_to::From<u32> for u32}::from]:
     Source: 'tests/src/from_to.rs', lines 14:4-16:5 -/

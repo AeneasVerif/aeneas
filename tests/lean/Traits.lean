@@ -82,8 +82,8 @@ def test_bool_trait_option {T : Type} (x : Option T) : Result Bool := do
     Source: 'tests/src/traits.rs', lines 37:0-39:1
     Visibility: public -/
 def test_bool_trait
-  {T : Type} (BoolTraitTInst : BoolTrait T) (x : T) : Result Bool := do
-  BoolTraitTInst.get_bool x
+  {T : Type} (BoolTraitInst : BoolTrait T) (x : T) : Result Bool := do
+  BoolTraitInst.get_bool x
 
 /-- Trait declaration: [traits::ToU64]
     Source: 'tests/src/traits.rs', lines 41:0-43:1
@@ -108,34 +108,34 @@ def U64.Insts.TraitsToU64 : ToU64 Std.U64 := {
     Source: 'tests/src/traits.rs', lines 52:4-54:5
     Visibility: public -/
 def Pair.Insts.TraitsToU64.to_u64
-  {A : Type} (ToU64AInst : ToU64 A) (self : (A × A)) : Result Std.U64 := do
+  {A : Type} (ToU64Inst : ToU64 A) (self : (A × A)) : Result Std.U64 := do
   let (t, t1) := self
-  let i ← ToU64AInst.to_u64 t
-  let i1 ← ToU64AInst.to_u64 t1
+  let i ← ToU64Inst.to_u64 t
+  let i1 ← ToU64Inst.to_u64 t1
   i + i1
 
 /-- Trait implementation: [traits::{impl traits::ToU64 for (A, A)}]
     Source: 'tests/src/traits.rs', lines 51:0-55:1 -/
 @[reducible]
-def Pair.Insts.TraitsToU64 {A : Type} (ToU64AInst : ToU64 A) : ToU64 (A × A)
+def Pair.Insts.TraitsToU64 {A : Type} (ToU64Inst : ToU64 A) : ToU64 (A × A)
   := {
-  to_u64 := Pair.Insts.TraitsToU64.to_u64 ToU64AInst
+  to_u64 := Pair.Insts.TraitsToU64.to_u64 ToU64Inst
 }
 
 /-- [traits::f]:
     Source: 'tests/src/traits.rs', lines 57:0-59:1
     Visibility: public -/
-def f {T : Type} (ToU64TInst : ToU64 T) (x : (T × T)) : Result Std.U64 := do
-  Pair.Insts.TraitsToU64.to_u64 ToU64TInst x
+def f {T : Type} (ToU64Inst : ToU64 T) (x : (T × T)) : Result Std.U64 := do
+  Pair.Insts.TraitsToU64.to_u64 ToU64Inst x
 
 /-- [traits::g]:
     Source: 'tests/src/traits.rs', lines 61:0-66:1
     Visibility: public -/
 def g
-  {T : Type} (ToU64PairTTInst : ToU64 (T × T)) (x : (T × T)) :
+  {T : Type} (ToU64PairInst : ToU64 (T × T)) (x : (T × T)) :
   Result Std.U64
   := do
-  ToU64PairTTInst.to_u64 x
+  ToU64PairInst.to_u64 x
 
 /-- [traits::h0]:
     Source: 'tests/src/traits.rs', lines 68:0-70:1
@@ -153,15 +153,15 @@ structure Wrapper (T : Type) where
     Source: 'tests/src/traits.rs', lines 77:4-79:5
     Visibility: public -/
 def Wrapper.Insts.TraitsToU64.to_u64
-  {T : Type} (ToU64TInst : ToU64 T) (self : Wrapper T) : Result Std.U64 := do
-  ToU64TInst.to_u64 self.x
+  {T : Type} (ToU64Inst : ToU64 T) (self : Wrapper T) : Result Std.U64 := do
+  ToU64Inst.to_u64 self.x
 
 /-- Trait implementation: [traits::{impl traits::ToU64 for traits::Wrapper<T>}]
     Source: 'tests/src/traits.rs', lines 76:0-80:1 -/
 @[reducible]
-def Wrapper.Insts.TraitsToU64 {T : Type} (ToU64TInst : ToU64 T) : ToU64
-  (Wrapper T) := {
-  to_u64 := Wrapper.Insts.TraitsToU64.to_u64 ToU64TInst
+def Wrapper.Insts.TraitsToU64 {T : Type} (ToU64Inst : ToU64 T) : ToU64 (Wrapper
+  T) := {
+  to_u64 := Wrapper.Insts.TraitsToU64.to_u64 ToU64Inst
 }
 
 /-- [traits::h1]:
@@ -173,8 +173,8 @@ def h1 (x : Wrapper Std.U64) : Result Std.U64 := do
 /-- [traits::h2]:
     Source: 'tests/src/traits.rs', lines 86:0-88:1
     Visibility: public -/
-def h2 {T : Type} (ToU64TInst : ToU64 T) (x : Wrapper T) : Result Std.U64 := do
-  Wrapper.Insts.TraitsToU64.to_u64 ToU64TInst x
+def h2 {T : Type} (ToU64Inst : ToU64 T) (x : Wrapper T) : Result Std.U64 := do
+  Wrapper.Insts.TraitsToU64.to_u64 ToU64Inst x
 
 /-- Trait declaration: [traits::ToType]
     Source: 'tests/src/traits.rs', lines 90:0-92:1
@@ -199,34 +199,34 @@ def U64.Insts.TraitsToTypeBool : ToType Std.U64 Bool := {
     Source: 'tests/src/traits.rs', lines 100:0-104:1
     Visibility: public -/
 structure OfType (Self : Type) where
-  of_type : forall {T : Type} (ToTypePTInst : ToType T Self), T → Result Self
+  of_type : forall {T : Type} (ToTypeInst : ToType T Self), T → Result Self
 
 /-- [traits::h3]:
     Source: 'tests/src/traits.rs', lines 106:0-108:1
     Visibility: public -/
 def h3
-  {T1 : Type} {T2 : Type} (OfTypeT1Inst : OfType T1) (ToTypeT2T1Inst : ToType
-  T2 T1) (y : T2) :
+  {T1 : Type} {T2 : Type} (OfTypeInst : OfType T1) (ToTypeInst : ToType T2 T1)
+  (y : T2) :
   Result T1
   := do
-  OfTypeT1Inst.of_type ToTypeT2T1Inst y
+  OfTypeInst.of_type ToTypeInst y
 
 /-- Trait declaration: [traits::OfTypeBis]
     Source: 'tests/src/traits.rs', lines 111:0-118:1
     Visibility: public -/
 structure OfTypeBis (Self : Type) (T : Type) where
-  ToTypeTSelfInst : ToType T Self
+  ToTypeInst : ToType T Self
   of_type : T → Result Self
 
 /-- [traits::h4]:
     Source: 'tests/src/traits.rs', lines 120:0-122:1
     Visibility: public -/
 def h4
-  {T1 : Type} {T2 : Type} (OfTypeBisT1T2Inst : OfTypeBis T1 T2) (ToTypeT2T1Inst
-  : ToType T2 T1) (y : T2) :
+  {T1 : Type} {T2 : Type} (OfTypeBisInst : OfTypeBis T1 T2) (ToTypeInst :
+  ToType T2 T1) (y : T2) :
   Result T1
   := do
-  OfTypeBisT1T2Inst.of_type y
+  OfTypeBisInst.of_type y
 
 /-- [traits::TestType]
     Source: 'tests/src/traits.rs', lines 124:0-124:26
@@ -249,10 +249,10 @@ def TestType.test.TestType1.Insts.TraitsTestTypeTestTestTrait.test
     Source: 'tests/src/traits.rs', lines 128:4-149:5
     Visibility: public -/
 def TestType.test
-  {T : Type} (ToU64TInst : ToU64 T) (self : TestType T) (x : T) :
+  {T : Type} (ToU64Inst : ToU64 T) (self : TestType T) (x : T) :
   Result Bool
   := do
-  let x1 ← ToU64TInst.to_u64 x
+  let x1 ← ToU64Inst.to_u64 x
   if x1 > 0#u64
   then TestType.test.TestType1.Insts.TraitsTestTypeTestTestTrait.test 0#u64
   else ok false
@@ -300,7 +300,7 @@ structure WithConstTy (Self : Type) (Self_V : Type) (Self_W : Type) (LEN :
   Std.Usize) where
   LEN1 : Result Std.Usize
   LEN2 : Result Std.Usize
-  ToU64SelfWInst : ToU64 Self_W
+  ToU64Inst : ToU64 Self_W
   f : Self_W → Array Std.U8 LEN → Result Self_W
 
 /-- [traits::WithConstTy::LEN2]
@@ -331,7 +331,7 @@ def Bool.Insts.TraitsWithConstTyU8U6432 : WithConstTy Bool Std.U8 Std.U64
   32#usize := {
   LEN1 := ok Bool.Insts.TraitsWithConstTyU8U6432.LEN1
   LEN2 := ok (WithConstTy.LEN2.default Bool Std.U8 Std.U64 32#usize)
-  ToU64SelfWInst := U64.Insts.TraitsToU64
+  ToU64Inst := U64.Insts.TraitsToU64
   f := Bool.Insts.TraitsWithConstTyU8U6432.f
 }
 
@@ -340,19 +340,17 @@ def Bool.Insts.TraitsWithConstTyU8U6432 : WithConstTy Bool Std.U8 Std.U64
     Visibility: public -/
 def use_with_const_ty1
   {H : Type} {Clause0_V : Type} {Clause0_W : Type} {LEN : Std.Usize}
-  (WithConstTyHClause0VClause0WLENInst : WithConstTy H Clause0_V Clause0_W LEN)
-  :
+  (WithConstTyInst : WithConstTy H Clause0_V Clause0_W LEN) :
   Result Std.Usize
   := do
-  WithConstTyHClause0VClause0WLENInst.LEN1
+  WithConstTyInst.LEN1
 
 /-- [traits::use_with_const_ty2]:
     Source: 'tests/src/traits.rs', lines 189:0-189:76
     Visibility: public -/
 def use_with_const_ty2
   {H : Type} {Clause0_V : Type} {Clause0_W : Type} {LEN : Std.Usize}
-  (WithConstTyHClause0VClause0WLENInst : WithConstTy H Clause0_V Clause0_W LEN)
-  (t : Clause0_W) :
+  (WithConstTyInst : WithConstTy H Clause0_V Clause0_W LEN) (t : Clause0_W) :
   Result Unit
   := do
   ok ()
@@ -362,11 +360,10 @@ def use_with_const_ty2
     Visibility: public -/
 def use_with_const_ty3
   {H : Type} {Clause0_V : Type} {Clause0_W : Type} {LEN : Std.Usize}
-  (WithConstTyHClause0VClause0WLENInst : WithConstTy H Clause0_V Clause0_W LEN)
-  (x : Clause0_W) :
+  (WithConstTyInst : WithConstTy H Clause0_V Clause0_W LEN) (x : Clause0_W) :
   Result Std.U64
   := do
-  WithConstTyHClause0VClause0WLENInst.ToU64SelfWInst.to_u64 x
+  WithConstTyInst.ToU64Inst.to_u64 x
 
 /-- [traits::test_where1]:
     Source: 'tests/src/traits.rs', lines 195:0-195:43
@@ -378,7 +375,7 @@ def test_where1 {T : Type} (_x : T) : Result Unit := do
     Source: 'tests/src/traits.rs', lines 196:0-196:60
     Visibility: public -/
 def test_where2
-  {T : Type} {Clause0_W : Type} (WithConstTyTU32Clause0W32Inst : WithConstTy T
+  {T : Type} {Clause0_W : Type} (WithConstTyTU32Clause0_W32Inst : WithConstTy T
   Std.U32 Clause0_W 32#usize) (_x : Std.U32) :
   Result Unit
   := do
@@ -400,36 +397,35 @@ structure ParentTrait1 (Self : Type) where
     Source: 'tests/src/traits.rs', lines 208:0-208:52
     Visibility: public -/
 structure ChildTrait (Self : Type) (Self_Clause0_W : Type) where
-  ParentTrait0SelfClause0WInst : ParentTrait0 Self Self_Clause0_W
+  ParentTrait0Inst : ParentTrait0 Self Self_Clause0_W
   ParentTrait1Inst : ParentTrait1 Self
 
 /-- [traits::test_child_trait1]:
     Source: 'tests/src/traits.rs', lines 211:0-213:1
     Visibility: public -/
 def test_child_trait1
-  {T : Type} {Clause0_Clause0_W : Type} (ChildTraitTClause0Clause0WInst :
-  ChildTrait T Clause0_Clause0_W) (x : T) :
+  {T : Type} {Clause0_Clause0_W : Type} (ChildTraitInst : ChildTrait T
+  Clause0_Clause0_W) (x : T) :
   Result String
   := do
-  ChildTraitTClause0Clause0WInst.ParentTrait0SelfClause0WInst.get_name x
+  ChildTraitInst.ParentTrait0Inst.get_name x
 
 /-- [traits::test_child_trait2]:
     Source: 'tests/src/traits.rs', lines 215:0-217:1
     Visibility: public -/
 def test_child_trait2
-  {T : Type} {Clause0_Clause0_W : Type} (ChildTraitTClause0Clause0WInst :
-  ChildTrait T Clause0_Clause0_W) (x : T) :
+  {T : Type} {Clause0_Clause0_W : Type} (ChildTraitInst : ChildTrait T
+  Clause0_Clause0_W) (x : T) :
   Result Clause0_Clause0_W
   := do
-  ChildTraitTClause0Clause0WInst.ParentTrait0SelfClause0WInst.get_w x
+  ChildTraitInst.ParentTrait0Inst.get_w x
 
 /-- [traits::order1]:
     Source: 'tests/src/traits.rs', lines 221:0-221:62
     Visibility: public -/
 def order1
-  {T : Type} {U : Type} {Clause1_W : Type} (ParentTrait0TClause1WInst :
-  ParentTrait0 T Clause1_W) (ParentTrait0UClause1WInst : ParentTrait0 U
-  Clause1_W) :
+  {T : Type} {U : Type} {Clause1_W : Type} (ParentTrait0Inst : ParentTrait0 T
+  Clause1_W) (ParentTrait0Inst1 : ParentTrait0 U Clause1_W) :
   Result Unit
   := do
   ok ()
@@ -463,7 +459,7 @@ structure Iterator (Self : Type) (Self_Item : Type) where
     Visibility: public -/
 structure IntoIterator (Self : Type) (Self_Item : Type) (Self_IntoIter : Type)
   where
-  IteratorSelfIntoIterSelfItemInst : Iterator Self_IntoIter Self_Item
+  IteratorInst : Iterator Self_IntoIter Self_Item
   into_iter : Self → Result Self_IntoIter
 
 /-- Trait declaration: [traits::FromResidual]
@@ -473,7 +469,7 @@ structure FromResidual (Self : Type) (T : Type) where
 /-- Trait declaration: [traits::Try]
     Source: 'tests/src/traits.rs', lines 248:0-250:1 -/
 structure Try (Self : Type) (Self_Residual : Type) where
-  FromResidualSelfResidualInst : FromResidual Self Self_Residual
+  FromResidualInst : FromResidual Self Self_Residual
 
 /-- Trait declaration: [traits::WithTarget]
     Source: 'tests/src/traits.rs', lines 254:0-256:1
@@ -485,15 +481,15 @@ structure WithTarget (Self : Type) (Self_Target : Type) where
     Visibility: public -/
 structure ParentTrait2 (Self : Type) (Self_U : Type) (Self_Clause0_Target :
   Type) where
-  WithTargetSelfUSelfClause0TargetInst : WithTarget Self_U Self_Clause0_Target
+  WithTargetInst : WithTarget Self_U Self_Clause0_Target
 
 /-- Trait declaration: [traits::ChildTrait2]
     Source: 'tests/src/traits.rs', lines 262:0-264:1
     Visibility: public -/
 structure ChildTrait2 (Self : Type) (Self_Clause0_U : Type)
   (Self_Clause0_Clause0_Target : Type) where
-  ParentTrait2SelfClause0USelfClause0Clause0TargetInst : ParentTrait2 Self
-    Self_Clause0_U Self_Clause0_Clause0_Target
+  ParentTrait2Inst : ParentTrait2 Self Self_Clause0_U
+    Self_Clause0_Clause0_Target
   convert : Self_Clause0_U → Result Self_Clause0_Clause0_Target
 
 /-- Trait implementation: [traits::{impl traits::WithTarget<u32> for u32}]
@@ -507,7 +503,7 @@ def U32.Insts.TraitsWithTargetU32 : WithTarget Std.U32 Std.U32 := {
 @[reducible]
 def U32.Insts.TraitsParentTrait2U32U32 : ParentTrait2 Std.U32 Std.U32 Std.U32
   := {
-  WithTargetSelfUSelfClause0TargetInst := U32.Insts.TraitsWithTargetU32
+  WithTargetInst := U32.Insts.TraitsWithTargetU32
 }
 
 /-- [traits::{impl traits::ChildTrait2<u32, u32> for u32}::convert]:
@@ -522,8 +518,7 @@ def U32.Insts.TraitsChildTrait2U32U32.convert
 @[reducible]
 def U32.Insts.TraitsChildTrait2U32U32 : ChildTrait2 Std.U32 Std.U32 Std.U32
   := {
-  ParentTrait2SelfClause0USelfClause0Clause0TargetInst :=
-    U32.Insts.TraitsParentTrait2U32U32
+  ParentTrait2Inst := U32.Insts.TraitsParentTrait2U32U32
   convert := U32.Insts.TraitsChildTrait2U32U32.convert
 }
 
@@ -537,7 +532,7 @@ structure CFnOnce (Self : Type) (Args : Type) (Self_Output : Type) where
     Source: 'tests/src/traits.rs', lines 294:0-296:1
     Visibility: public -/
 structure CFnMut (Self : Type) (Args : Type) (Self_Clause0_Output : Type) where
-  CFnOnceArgsSelfClause0OutputInst : CFnOnce Self Args Self_Clause0_Output
+  CFnOnceInst : CFnOnce Self Args Self_Clause0_Output
   call_mut : Self → Args → Result (Self_Clause0_Output × Self)
 
 /-- Trait declaration: [traits::CFn]
@@ -545,8 +540,7 @@ structure CFnMut (Self : Type) (Args : Type) (Self_Clause0_Output : Type) where
     Visibility: public -/
 structure CFn (Self : Type) (Args : Type) (Self_Clause0_Clause0_Output : Type)
   where
-  CFnMutArgsSelfClause0Clause0OutputInst : CFnMut Self Args
-    Self_Clause0_Clause0_Output
+  CFnMutInst : CFnMut Self Args Self_Clause0_Clause0_Output
   call : Self → Args → Result Self_Clause0_Clause0_Output
 
 /-- Trait declaration: [traits::GetTrait]
@@ -559,11 +553,10 @@ structure GetTrait (Self : Type) (Self_W : Type) where
     Source: 'tests/src/traits.rs', lines 307:0-309:1
     Visibility: public -/
 def test_get_trait
-  {T : Type} {Clause0_W : Type} (GetTraitTClause0WInst : GetTrait T Clause0_W)
-  (x : T) :
+  {T : Type} {Clause0_W : Type} (GetTraitInst : GetTrait T Clause0_W) (x : T) :
   Result Clause0_W
   := do
-  GetTraitTClause0WInst.get_w x
+  GetTraitInst.get_w x
 
 /-- Trait declaration: [traits::Trait]
     Source: 'tests/src/traits.rs', lines 312:0-314:1
@@ -588,23 +581,23 @@ def Array.Insts.TraitsTrait (T : Type) (N : Std.Usize) : Trait (Array T N) := {
     Source: 'tests/src/traits.rs', lines 321:4-321:25
     Visibility: public -/
 @[global_simps, irreducible]
-def Wrapper.Insts.TraitsTrait.LEN {T : Type} (TraitTInst : Trait T)
+def Wrapper.Insts.TraitsTrait.LEN {T : Type} (TraitInst : Trait T)
   : Std.Usize :=
   0#usize
 
 /-- Trait implementation: [traits::{impl traits::Trait for traits::Wrapper<T>}]
     Source: 'tests/src/traits.rs', lines 320:0-322:1 -/
 @[reducible]
-def Wrapper.Insts.TraitsTrait {T : Type} (TraitTInst : Trait T) : Trait
-  (Wrapper T) := {
-  LEN := ok (Wrapper.Insts.TraitsTrait.LEN TraitTInst)
+def Wrapper.Insts.TraitsTrait {T : Type} (TraitInst : Trait T) : Trait (Wrapper
+  T) := {
+  LEN := ok (Wrapper.Insts.TraitsTrait.LEN TraitInst)
 }
 
 /-- [traits::use_wrapper_len]:
     Source: 'tests/src/traits.rs', lines 324:0-326:1
     Visibility: public -/
-def use_wrapper_len {T : Type} (TraitTInst : Trait T) : Result Std.Usize := do
-  ok (Wrapper.Insts.TraitsTrait.LEN TraitTInst)
+def use_wrapper_len {T : Type} (TraitInst : Trait T) : Result Std.Usize := do
+  ok (Wrapper.Insts.TraitsTrait.LEN TraitInst)
 
 /-- [traits::Foo]
     Source: 'tests/src/traits.rs', lines 328:0-331:1
@@ -617,7 +610,7 @@ structure Foo (T : Type) (U : Type) where
     Source: 'tests/src/traits.rs', lines 334:4-334:43
     Visibility: public -/
 @[global_simps, irreducible]
-def Foo.FOO {T : Type} (U : Type) (TraitTInst : Trait T)
+def Foo.FOO {T : Type} (U : Type) (TraitInst : Trait T)
   : core.result.Result T Std.I32 :=
   core.result.Result.Err 0#i32
 
@@ -625,18 +618,18 @@ def Foo.FOO {T : Type} (U : Type) (TraitTInst : Trait T)
     Source: 'tests/src/traits.rs', lines 337:0-339:1
     Visibility: public -/
 def use_foo1
-  {T : Type} (U : Type) (TraitTInst : Trait T) :
+  {T : Type} (U : Type) (TraitInst : Trait T) :
   Result (core.result.Result T Std.I32)
   := do
-  ok (Foo.FOO U TraitTInst)
+  ok (Foo.FOO U TraitInst)
 
 /-- [traits::use_foo2]:
     Source: 'tests/src/traits.rs', lines 341:0-343:1
     Visibility: public -/
 def use_foo2
-  (T : Type) {U : Type} (TraitUInst : Trait U) :
+  (T : Type) {U : Type} (TraitInst : Trait U) :
   Result (core.result.Result U Std.I32)
   := do
-  ok (Foo.FOO T TraitUInst)
+  ok (Foo.FOO T TraitInst)
 
 end traits

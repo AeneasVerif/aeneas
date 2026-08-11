@@ -63,13 +63,13 @@ structure Into (Self : Type) (T : Type) where
 /-- [dyn::mk_into]:
     Source: 'tests/src/dyn.rs', lines 36:0-46:1 -/
 def mk_into
-  (U : Type) {V : Type} {T : Type} {W : Type} (IntoTVInst : Into T V)
-  (IntoWVInst : Into W V) (b : Bool) (x : T) (y : W) :
+  (U : Type) {V : Type} {T : Type} {W : Type} (IntoInst : Into T V) (IntoInst1
+  : Into W V) (b : Bool) (x : T) (y : W) :
   Result (Dyn (fun _dyn => Into _dyn V))
   := do
   if b
-  then ok (Dyn.mk _ IntoTVInst x)
-  else ok (Dyn.mk _ IntoWVInst y)
+  then ok (Dyn.mk _ IntoInst x)
+  else ok (Dyn.mk _ IntoInst1 y)
 
 /-- Trait declaration: [dyn::Trivial]
     Source: 'tests/src/dyn.rs', lines 48:0-48:16 -/
@@ -83,13 +83,13 @@ def dyn_closure.closure (T0 : Type) := Unit
 /-- [dyn::dyn_closure]:
     Source: 'tests/src/dyn.rs', lines 50:0-52:1 -/
 def dyn_closure
-  {T0 : Type} (TrivialT0Inst : Trivial T0) (t : T0) : Result Unit := do
+  {T0 : Type} (TrivialInst : Trivial T0) (t : T0) : Result Unit := do
   ok ()
 
 /-- [dyn::dyn_closure::{impl core::ops::function::Fn<(u32,), u32> for dyn::dyn_closure::closure<T0>}::call]:
     Source: 'tests/src/dyn.rs', lines 51:12-51:33 -/
 def dyn_closure.closure.Insts.CoreOpsFunctionFnTupleU32U32.call
-  {T0 : Type} (TrivialT0Inst : Trivial T0) (c : dyn_closure.closure T0)
+  {T0 : Type} (TrivialInst : Trivial T0) (c : dyn_closure.closure T0)
   (tupled_args : Std.U32) :
   Result Std.U32
   := do
@@ -98,61 +98,61 @@ def dyn_closure.closure.Insts.CoreOpsFunctionFnTupleU32U32.call
 /-- [dyn::dyn_closure::{impl core::ops::function::FnMut<(u32,), u32> for dyn::dyn_closure::closure<T0>}::call_mut]:
     Source: 'tests/src/dyn.rs', lines 51:12-51:33 -/
 def dyn_closure.closure.Insts.CoreOpsFunctionFnMutTupleU32U32.call_mut
-  {T0 : Type} (TrivialT0Inst : Trivial T0) (state : dyn_closure.closure T0)
+  {T0 : Type} (TrivialInst : Trivial T0) (state : dyn_closure.closure T0)
   (args : Std.U32) :
   Result (Std.U32 × (dyn_closure.closure T0))
   := do
   let i ←
-    dyn_closure.closure.Insts.CoreOpsFunctionFnTupleU32U32.call TrivialT0Inst
+    dyn_closure.closure.Insts.CoreOpsFunctionFnTupleU32U32.call TrivialInst
       state args
   ok (i, state)
 
 /-- [dyn::dyn_closure::{impl core::ops::function::FnOnce<(u32,), u32> for dyn::dyn_closure::closure<T0>}::call_once]:
     Source: 'tests/src/dyn.rs', lines 51:12-51:33 -/
 def dyn_closure.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32.call_once
-  {T0 : Type} (TrivialT0Inst : Trivial T0) (c : dyn_closure.closure T0)
+  {T0 : Type} (TrivialInst : Trivial T0) (c : dyn_closure.closure T0)
   (i : Std.U32) :
   Result Std.U32
   := do
   let (i1, _) ←
     dyn_closure.closure.Insts.CoreOpsFunctionFnMutTupleU32U32.call_mut
-      TrivialT0Inst c i
+      TrivialInst c i
   ok i1
 
 /-- Trait implementation: [dyn::dyn_closure::{impl core::ops::function::FnOnce<(u32,), u32> for dyn::dyn_closure::closure<T0>}]
     Source: 'tests/src/dyn.rs', lines 51:12-51:33 -/
 @[reducible]
 def dyn_closure.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32 {T0 : Type}
-  (TrivialT0Inst : Trivial T0) : core.ops.function.FnOnce (dyn_closure.closure
+  (TrivialInst : Trivial T0) : core.ops.function.FnOnce (dyn_closure.closure
   T0) Std.U32 Std.U32 := {
   call_once :=
     dyn_closure.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32.call_once
-    TrivialT0Inst
+    TrivialInst
 }
 
 /-- Trait implementation: [dyn::dyn_closure::{impl core::ops::function::FnMut<(u32,), u32> for dyn::dyn_closure::closure<T0>}]
     Source: 'tests/src/dyn.rs', lines 51:12-51:33 -/
 @[reducible]
 def dyn_closure.closure.Insts.CoreOpsFunctionFnMutTupleU32U32 {T0 : Type}
-  (TrivialT0Inst : Trivial T0) : core.ops.function.FnMut (dyn_closure.closure
-  T0) Std.U32 Std.U32 := {
+  (TrivialInst : Trivial T0) : core.ops.function.FnMut (dyn_closure.closure T0)
+  Std.U32 Std.U32 := {
   FnOnceInst := dyn_closure.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32
-    TrivialT0Inst
+    TrivialInst
   call_mut :=
     dyn_closure.closure.Insts.CoreOpsFunctionFnMutTupleU32U32.call_mut
-    TrivialT0Inst
+    TrivialInst
 }
 
 /-- Trait implementation: [dyn::dyn_closure::{impl core::ops::function::Fn<(u32,), u32> for dyn::dyn_closure::closure<T0>}]
     Source: 'tests/src/dyn.rs', lines 51:12-51:33 -/
 @[reducible]
 def dyn_closure.closure.Insts.CoreOpsFunctionFnTupleU32U32 {T0 : Type}
-  (TrivialT0Inst : Trivial T0) : core.ops.function.Fn (dyn_closure.closure T0)
+  (TrivialInst : Trivial T0) : core.ops.function.Fn (dyn_closure.closure T0)
   Std.U32 Std.U32 := {
   FnMutInst := dyn_closure.closure.Insts.CoreOpsFunctionFnMutTupleU32U32
-    TrivialT0Inst
+    TrivialInst
   call := dyn_closure.closure.Insts.CoreOpsFunctionFnTupleU32U32.call
-    TrivialT0Inst
+    TrivialInst
 }
 
 end dyn
