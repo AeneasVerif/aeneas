@@ -754,9 +754,6 @@ let id_to_string (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
       in
       trait_decl_id_to_string trait_decl_id ^ ", method name: " ^ method_name
 
-let dyn_constructor () = "Dyn.mk" (* TODO: backends other than Lean *)
-let dyn_ty = "Dyn"
-
 let lean_keywords_set : StringSet.t Lazy.t =
   lazy (StringSet.of_list LeanKeywords.lean_keywords)
 
@@ -966,6 +963,9 @@ let named_binop_name (binop : binop) : string =
   | BoolOr -> "bool_or"
   | BoolXor -> "bool_xor"
   | _ -> raise (Failure "Unreachable")
+
+let dyn_constructor () = "Dyn.mk" (* TODO: backends other than Lean *)
+let dyn_ty = "Dyn"
 
 (** A list of keywords/identifiers used by the backend and with which we want to
     check collision.
