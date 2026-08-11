@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 HERE = Path(__file__).resolve().parent
-README = HERE / "README.md"
+README = HERE.parent / "README.md"
 LEAN_EXAMPLE = HERE / "DoublyLinkedList.lean"
 LEAN_LIB = HERE / "VerusStd.lean"
 
