@@ -262,14 +262,12 @@ theorem getElem!_extract [Inhabited α] (i j k : Nat) (ls : List α)
 alias getElem!_slice := getElem!_extract
 
 @[simp, simp_lists_safe]
-theorem getElem_slice (i j k : Nat) (ls : List α)
+theorem getElem_extract (i j k : Nat) (ls : List α)
   (_ : j ≤ ls.length ∧ i + k < j) :
-  (ls.extract i j)[k] = ls[i + k] := by
-  have hk : k < (ls.extract i j).length := by simp; omega
-  have hik : i + k < ls.length := by omega
-  have h1 := getElem?_extract i j k ls (by grind)
-  rw [getElem?_eq_getElem hk, getElem?_eq_getElem hik] at h1
-  exact Option.some.inj h1
+  (ls.extract i j)[k] = ls[i + k] := by grind
+
+@[deprecated getElem_extract (since := "2026-03-27")]
+alias getElem_slice := getElem_extract
 
 @[simp, simp_lists_safe, grind =]
 theorem getElem?_take_append_beg (i j : Nat) (l0 l1 : List α)
