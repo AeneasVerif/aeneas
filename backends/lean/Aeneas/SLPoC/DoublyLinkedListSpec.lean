@@ -313,32 +313,28 @@ attribute [step] nodes_read
 /-! ## Specification of `get` -/
 
 /-- The loop of `get` walks from index `j` to index `i`, keeping Verus' loop
-invariant `ptr == ptrs[j]`. -/
+invariant `ptr == ptrs[j]`.
+
+The induction is the one `getLoop`'s own `termination_by i - j` generates: the
+cases of `getLoop.induct` are the branches of the loop, and its induction
+hypothesis is stated at the pointer the body reads, so no measure has to be
+threaded by hand. -/
 theorem getLoop.spec (l : Cells V) (i j : Nat) (r : Ptr (Node V))
     (hji : j ≤ i) (hi : i < l.length) (hr : l[j]?.map Prod.fst = some r) :
     ⦃ nodes l ⦄ getLoop i j r
       ⦃⇓ r' => ⌜l[i]?.map Prod.fst = some r'⌝ ∗ nodes l⦄ := by
-  have key : ∀ n j r, i - j = n → j ≤ i → l[j]?.map Prod.fst = some r →
-      ⦃ nodes l ⦄ getLoop i j r
-        ⦃⇓ r' => ⌜l[i]?.map Prod.fst = some r'⌝ ∗ nodes l⦄ := by
-    intro n
-    induction n with
-    | zero =>
-      intro j r hn hji hr
-      obtain rfl : j = i := by omega
-      rw [getLoop, if_neg (by omega)]
-      sl_step*
-    | succ n ih =>
-      intro j r hn hji hr
-      rw [getLoop, if_pos (by omega)]
-      obtain ⟨rj, vj, hj⟩ := exists_cell l j (by omega)
-      obtain rfl : r = rj := by grind
-      obtain ⟨r', v', hj'⟩ := exists_cell l (j + 1) (by omega)
-      sl_step
-      have hnext : (nodeAt l j vj).next = some r' := by grind
-      simp only [hnext, get!_some]
-      exact ih (j + 1) r' (by omega) (by omega) (by rw [hj']; rfl)
-  exact key (i - j) j r rfl hji hr
+  induction j, r using getLoop.induct (i := i) with
+  | case1 j r hlt ih =>
+    rw [getLoop, if_pos hlt]
+    obtain ⟨rj, vj, hj⟩ := exists_cell l j (by omega)
+    obtain ⟨r', v', hj'⟩ := exists_cell l (j + 1) (by omega)
+    obtain rfl : r = rj := by grind
+    sl_step
+    exact ih _ (by omega) (by grind)
+  | case2 j r hge =>
+    obtain rfl : j = i := by omega
+    rw [getLoop, if_neg hge]
+    sl_step*
 
 attribute [step] getLoop.spec
 
@@ -348,10 +344,6 @@ theorem get.spec (s : DoublyLinkedList V) (l : Cells V) (i : Nat)
     ⦃ wellFormed s l ⦄ get s i
       ⦃⇓ v => ⌜(view l)[i]? = some v⌝ ∗ wellFormed s l⦄ := by
   unfold get
-  sl_pull ⟨hhead, htail⟩
-  obtain ⟨r0, v0, h0⟩ := exists_cell l 0 (by omega)
-  have hhead' : s.head = some r0 := by grind
-  simp only [hhead', get!_some]
   sl_step as ⟨ r, hr ⟩
   obtain ⟨ri, vi, hi'⟩ := exists_cell l i hi
   obtain rfl : r = ri := by grind

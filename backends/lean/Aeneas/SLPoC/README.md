@@ -49,10 +49,10 @@ Pinned Verus source: [`99ae45aa8e35`](https://github.com/verus-lang/verus/blob/9
 |---|---:|---:|
 | Verus | 24 | 339 |
 | Lean executable definitions | 14 | 84 |
-| Lean ghost state, specifications and proofs (`DoublyLinkedListSpec.lean`) | 44 | 300 |
-| **Lean example total** | **58** | **384** |
+| Lean ghost state, specifications and proofs (`DoublyLinkedListSpec.lean`) | 44 | 287 |
+| **Lean example total** | **58** | **371** |
 | `vstd` equivalent, generic and reusable (`VerusStd.lean`) | 26 | 109 |
-| Lean grand total | 84 | 493 |
+| Lean grand total | 84 | 480 |
 
 | Definition or semantic group | Verus | Lean (executable, spec/proof) |
 |---|---:|---:|
@@ -70,7 +70,7 @@ Pinned Verus source: [`99ae45aa8e35`](https://github.com/verus-lang/verus/blob/9
 | `pop_back` / `popBack` | 42 | 32 (12, 20) |
 | `push_front` / `pushFront` | 46 | 31 (9, 22) |
 | `pop_front` / `popFront` | 49 | 24 (12, 12) |
-| `get` (including the Lean loop) | 27 | 60 (13, 47) |
+| `get` (including the Lean loop) | 27 | 47 (13, 34) |
 | `Iterator` | 4 | 4 (4, 0) |
 | `Iterator::list` | 2 | 0 (0, 0) |
 | `Iterator::index` | 2 | 0 (0, 0) |
@@ -81,7 +81,7 @@ Pinned Verus source: [`99ae45aa8e35`](https://github.com/verus-lang/verus/blob/9
 | `main::run` / example | 22 | 29 (0, 29) |
 | entry-point `main` | 2 | 0 (0, 0) |
 | Other example-local support declarations | - | 76 (0, 76) |
-| **Total** | **339** | **384 (84, 300)** |
+| **Total** | **339** | **371 (84, 287)** |
 
 `VerusStd.lean` (26 declarations, 109 lines) is not compared declaration by declaration: it is the generic sequence and permission-map layer that Verus obtains from `vstd`, it does not mention the doubly-linked list, and each of its declarations names its `vstd` counterpart in its doc comment.
 
