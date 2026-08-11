@@ -7,8 +7,6 @@ logic (SL) support.
 
 | File | Purpose |
 |---|---|
-| [`DoublyLinkedList.lean`](DoublyLinkedList.lean) | Port of the Verus doubly-linked-list example: executable definitions, then ghost state, specifications and proofs. |
-| [`doubly_linked_loc.py`](doubly_linked_loc.py) | Deterministically regenerates the relevant-LOC comparison with the pinned Verus example below. |
 | [`FFree.lean`](FFree.lean) | Defines the generic freer monad, and the state machines that give it an operational semantics (after "Program Logics à la Carte"): `StateMachine`, `Exec`, `Runs` and `Evaluates`. |
 | [`Heap.lean`](Heap.lean) | Defines locations, dynamically typed cells, and finite heaps. |
 | [`RustHeap.lean`](RustHeap.lean) | The Rust view of the heap: `Ptr` and the pointer operations, over `Heap.lean`. |
@@ -16,11 +14,16 @@ logic (SL) support.
 | [`ST.lean`](ST.lean) | The state monad `St`, its state machine, its denotation `theta` into `Wp`, the Hoare triples, and the specifications of the pointer operations. |
 | [`Step.lean`](Step.lean) | Wires the triples into the `step` tactic and provides `sl_frame`. |
 | [`StepTests.lean`](StepTests.lean) | Regression tests for `step` and `sl_frame`. |
-| [`VerusStd.lean`](VerusStd.lean) | The `vstd` layer: generic sequences of pointer/payload pairs and permission maps over them, with each declaration naming its `vstd` counterpart. Independent of any data structure. |
 | [`WP.lean`](WP.lean) | Separation-logic assertions, the magic wand, and the `Wp` monad of predicate transformers. |
 | `README.md` | Records the purpose and meaning of files in this directory. |
 
-Keep this table updated whenever a file is added, removed, or repurposed.
+| File in [`Examples/`](Examples) | Purpose |
+|---|---|
+| [`DoublyLinkedList.lean`](Examples/DoublyLinkedList.lean) | Port of the Verus doubly-linked-list example: executable definitions, then ghost state, specifications and proofs. |
+| [`VerusStd.lean`](Examples/VerusStd.lean) | The `vstd` layer: generic sequences of pointer/payload pairs and permission maps over them, with each declaration naming its `vstd` counterpart. Independent of any data structure. |
+| [`doubly_linked_loc.py`](Examples/doubly_linked_loc.py) | Deterministically regenerates the relevant-LOC comparison with the pinned Verus example below. |
+
+Keep these tables updated whenever a file is added, removed, or repurposed.
 
 ## Doubly-linked-list LOC comparison
 
