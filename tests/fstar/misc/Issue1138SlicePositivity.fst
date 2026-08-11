@@ -6,14 +6,14 @@ open Primitives
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [issue_1138_slice_positivity::E1]
-    Source: 'tests/src/issue-1138-slice-positivity.rs', lines 4:0-6:1 *)
+    Source: 'tests/src/issue-1138-slice-positivity.rs', lines 5:0-7:1 *)
 type e1_t = | E1_V : array e1_t 1 -> e1_t
 
 (** [issue_1138_slice_positivity::E2]
-    Source: 'tests/src/issue-1138-slice-positivity.rs', lines 8:0-10:1 *)
+    Source: 'tests/src/issue-1138-slice-positivity.rs', lines 9:0-11:1 *)
 type e2_t = | E2_V : alloc_vec_Vec e2_t -> e2_t
 
 (** [issue_1138_slice_positivity::E3]
-    Source: 'tests/src/issue-1138-slice-positivity.rs', lines 12:0-14:1 *)
+    Source: 'tests/src/issue-1138-slice-positivity.rs', lines 13:0-15:1 *)
 type e3_t = | E3_V : slice e3_t -> e3_t
 
