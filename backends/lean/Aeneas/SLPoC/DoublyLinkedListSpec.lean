@@ -141,15 +141,12 @@ theorem nodesFrom_congr {l₁ l₂ : Cells V} :
     intro i₁ i₂ h
     obtain ⟨r, v⟩ := c
     have h0 := h 0 (by simp)
-    simp only [Nat.add_zero] at h0
     have hrest : nodesFrom l₁ (i₁ + 1) cs = nodesFrom l₂ (i₂ + 1) cs := by
       refine ih (i₁ + 1) (i₂ + 1) fun k hk => ?_
       have h' := h (k + 1) (by simpa using hk)
-      have e₁ : i₁ + 1 + k = i₁ + (k + 1) := by omega
-      have e₂ : i₂ + 1 + k = i₂ + (k + 1) := by omega
-      rw [e₁, e₂]
-      exact h'
-    simp only [nodesFrom_cons, nodeAt, h0.1, h0.2, hrest]
+      grind
+    simp only [nodesFrom_cons, nodeAt, Nat.add_zero] at h0 ⊢
+    grind
 
 /-- Ownership of a concatenation splits into ownership of the two parts. -/
 theorem nodesFrom_append (l : Cells V) :
@@ -174,49 +171,31 @@ theorem nodesFrom_append (l : Cells V) :
 /-! ## How `prevOf`/`nextOf` react to `++` and `::` -/
 
 theorem prevOf_append_left (l₁ l₂ : Cells V) (i : Nat) (h : i < l₁.length) :
-    prevOf (l₁ ++ l₂) i = prevOf l₁ i := by
-  unfold prevOf
-  by_cases hi : i = 0
-  · simp [hi]
-  · simp only [hi, if_false]
-    rw [List.getElem?_append_left (by omega)]
+    prevOf (l₁ ++ l₂) i = prevOf l₁ i := by grind [prevOf]
 
 theorem nextOf_append_left (l₁ l₂ : Cells V) (i : Nat) (h : i + 1 < l₁.length) :
-    nextOf (l₁ ++ l₂) i = nextOf l₁ i := by
-  unfold nextOf
-  have h₁ : ¬ (i + 1 = (l₁ ++ l₂).length) := by
-    simp only [List.length_append]; omega
-  have h₂ : ¬ (i + 1 = l₁.length) := by omega
-  simp only [h₁, h₂, if_false]
-  rw [List.getElem?_append_left h]
+    nextOf (l₁ ++ l₂) i = nextOf l₁ i := by grind [nextOf]
 
 theorem prevOf_cons_succ (c : Ptr (Node V) × V) (l : Cells V) (i : Nat) :
     prevOf (c :: l) (i + 2) = prevOf l (i + 1) := by
   simp [prevOf]
 
 theorem nextOf_cons_succ (c : Ptr (Node V) × V) (l : Cells V) (i : Nat) :
-    nextOf (c :: l) (i + 1) = nextOf l i := by
-  simp only [nextOf, List.length_cons, List.getElem?_cons_succ]
-  split <;> split <;> first | rfl | omega
+    nextOf (c :: l) (i + 1) = nextOf l i := by grind [nextOf]
 
 /-- Appending a node at the end does not change the nodes strictly before the
 last one. -/
 theorem nodesFrom_append_prefix (l₁ l₂ : Cells V) (xs : Cells V) (i : Nat)
     (h : i + xs.length < l₁.length) :
     nodesFrom (l₁ ++ l₂) i xs = nodesFrom l₁ i xs := by
-  refine nodesFrom_congr xs i i fun k hk => ?_
-  exact ⟨prevOf_append_left l₁ l₂ (i + k) (by omega),
-    nextOf_append_left l₁ l₂ (i + k) (by omega)⟩
+  grind [nodesFrom_congr, prevOf_append_left, nextOf_append_left]
 
 /-- Prepending a node shifts all the indices by one. -/
 theorem nodesFrom_cons_shift (c : Ptr (Node V) × V) (l : Cells V) (xs : Cells V)
     (i : Nat) :
     nodesFrom (c :: l) (i + 2) xs = nodesFrom l (i + 1) xs := by
   refine nodesFrom_congr xs (i + 2) (i + 1) fun k _ => ?_
-  have e : i + 2 + k = (i + k) + 2 := by omega
-  have e' : i + 1 + k = (i + k) + 1 := by omega
-  rw [e, e', prevOf_cons_succ, nextOf_cons_succ]
-  exact ⟨rfl, rfl⟩
+  grind [prevOf, nextOf]
 
 /-! ## Decomposition of `nodes` at the two ends of the list -/
 
@@ -245,11 +224,7 @@ theorem nextOf_cons_zero (c : Ptr (Node V) × V) (l : Cells V) :
   | cons a l => simp [nextOf, headPtr]
 
 theorem prevOf_snoc_last (l : Cells V) (c : Ptr (Node V) × V) :
-    prevOf (l ++ [c]) l.length = lastPtr l := by
-  unfold prevOf lastPtr
-  by_cases h : l.length = 0
-  · grind
-  · grind
+    prevOf (l ++ [c]) l.length = lastPtr l := by grind [prevOf, lastPtr]
 
 theorem nextOf_snoc_last (l : Cells V) (c : Ptr (Node V) × V) :
     nextOf (l ++ [c]) l.length = none := by
@@ -258,8 +233,7 @@ theorem nextOf_snoc_last (l : Cells V) (c : Ptr (Node V) × V) :
 theorem nodeAt_snoc_last (l : Cells V) (r : Ptr (Node V)) (v : V) :
     nodeAt (l ++ [(r, v)]) l.length v =
       { prev := lastPtr l, next := none, payload := v } := by
-  unfold nodeAt
-  rw [prevOf_snoc_last, nextOf_snoc_last]
+  grind [nodeAt, prevOf_snoc_last, nextOf_snoc_last]
 
 /-- Split the ownership of the last node out of `nodes`. -/
 @[sl_simps] theorem nodes_snoc (l : Cells V) (r : Ptr (Node V)) (v : V) :
@@ -285,39 +259,17 @@ of the heap both after `pushBack` and before `popBack`. -/
       iprop(nodesFrom (l ++ [(rt, vt)]) 0 l ∗
         (rt ↦ { prev := lastPtr l, next := some rn, payload := vt }) ∗
         (rn ↦ { prev := some rt, next := none, payload := v })) := by
-  have hassoc : l ++ [(rt, vt), (rn, v)] = (l ++ [(rt, vt)]) ++ [(rn, v)] := by
-    simp
-  have hlen : (l ++ [(rt, vt), (rn, v)]).length = l.length + 2 := by simp
-  have hprefix :
-      nodesFrom (l ++ [(rt, vt), (rn, v)]) 0 l = nodesFrom (l ++ [(rt, vt)]) 0 l := by
-    rw [hassoc]
-    exact nodesFrom_append_prefix _ _ _ _ (by simp)
+  have hassoc : l ++ [(rt, vt), (rn, v)] = (l ++ [(rt, vt)]) ++ [(rn, v)] := by simp
+  have hprefix : nodesFrom (l ++ [(rt, vt), (rn, v)]) 0 l
+      = nodesFrom (l ++ [(rt, vt)]) 0 l := by
+    rw [hassoc]; exact nodesFrom_append_prefix _ _ _ _ (by simp)
   have hmid : nodeAt (l ++ [(rt, vt), (rn, v)]) l.length vt =
       { prev := lastPtr l, next := some rn, payload := vt } := by
-    unfold nodeAt
     have hprev : prevOf (l ++ [(rt, vt), (rn, v)]) l.length = lastPtr l := by
       rw [hassoc, prevOf_append_left _ _ _ (by simp), prevOf_snoc_last]
-    have hnext : nextOf (l ++ [(rt, vt), (rn, v)]) l.length = some rn := by
-      unfold nextOf
-      rw [hlen, if_neg (by omega), getElem?_append_two_right]
-      rfl
-    rw [hprev, hnext]
-  have hlast : nodeAt (l ++ [(rt, vt), (rn, v)]) (l.length + 1) v =
-      { prev := some rt, next := none, payload := v } := by
-    unfold nodeAt
-    have hprev : prevOf (l ++ [(rt, vt), (rn, v)]) (l.length + 1) = some rt := by
-      unfold prevOf
-      rw [if_neg (by omega)]
-      have e : l.length + 1 - 1 = l.length := by omega
-      rw [e, getElem?_append_two_left]
-      rfl
-    have hnext : nextOf (l ++ [(rt, vt), (rn, v)]) (l.length + 1) = none := by
-      unfold nextOf
-      rw [hlen, if_pos (by omega)]
-    rw [hprev, hnext]
-  unfold nodes
-  rw [nodesFrom_append, Nat.zero_add, hprefix]
-  simp only [nodesFrom_cons, nodesFrom_nil, hstar_hempty_r_eq, hmid, hlast]
+    grind [nodeAt, nextOf, getElem?_append_two_right]
+  rw [hassoc, nodes_snoc, ← hassoc, nodesFrom_append, Nat.zero_add,
+    nodesFrom_singleton, hmid, hprefix, lastPtr_snoc, hstar_assoc_eq]
 
 /-- Split the ownership of the first node out of `nodes`. -/
 @[sl_simps] theorem nodes_cons (rh : Ptr (Node V)) (vh : V) (l : Cells V) :
@@ -408,7 +360,6 @@ theorem pushEmptyCase.spec (s : DoublyLinkedList V) (v : V) :
     ⦃ wellFormed s [] ⦄ pushEmptyCase s v
       ⦃⇓ s' => ∃ r : Ptr (Node V), wellFormed s' [(r, v)]⦄ := by
   unfold pushEmptyCase
-  sl_pull _
   sl_step*
 
 /-- `pushBack` appends `v` to the list. -/
@@ -420,25 +371,17 @@ theorem pushBack.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
   split
   · -- Special case: the list is empty
     rename_i hnone
-    have hl : l = [] := (lastPtr_eq_none_iff l).mp (by rw [← htail, hnone])
-    subst hl
-    simp only [headPtr_nil, lastPtr_nil] at hhead htail
+    obtain rfl : l = [] := (lastPtr_eq_none_iff l).mp (by grind)
     apply triple_conseq (pushEmptyCase.spec s v)
-    · simp only [wellFormed, nodes_nil, headPtr_nil, lastPtr_nil]
-      sl_frame
-    · intro s'
-      simp only [wellFormed, List.nil_append]
-      exact himpl_refl _
+      (by simp only [wellFormed]; sl_frame)
+      (fun s' => by simp only [wellFormed, List.nil_append]; exact himpl_refl _)
   · rename_i oldTailPtr hsome
     -- The list is non-empty, hence of the shape `l' ++ [(oldTailPtr, vt)]`
-    obtain ⟨l', c, rfl⟩ : ∃ l' c, l = l' ++ [c] := by
-      rcases l.eq_nil_or_concat with rfl | ⟨l', c, h⟩
-      · rw [hsome] at htail; simp [lastPtr] at htail
-      · exact ⟨l', c, by simpa [List.concat_eq_append] using h⟩
-    obtain ⟨rt, vt⟩ := c
-    have hrt : oldTailPtr = rt := by
-      rw [hsome, lastPtr_snoc] at htail
-      exact Option.some.inj htail
+    obtain ⟨l', ⟨rt, vt⟩, rfl⟩ : ∃ l' c, l = l' ++ [c] := by
+      rcases eq_nil_or_snoc l with rfl | h
+      · grind [lastPtr]
+      · exact h
+    have hrt : oldTailPtr = rt := by grind [lastPtr_snoc]
     subst hrt
     simp only [show ∀ r : Ptr (Node V), l' ++ [(oldTailPtr, vt)] ++ [(r, v)] =
       l' ++ [(oldTailPtr, vt), (r, v)] from by simp]
@@ -453,12 +396,11 @@ theorem popBack.spec (s : DoublyLinkedList V) (l : Cells V) (rt : Ptr (Node V))
   sl_pull ⟨hhead, htail⟩
   simp only [lastPtr_snoc] at htail
   simp only [htail, get!_some]
-  rcases eq_nil_or_snoc l with rfl | ⟨l'', c, rfl⟩
+  rcases eq_nil_or_snoc l with rfl | ⟨l'', ⟨rp, vp⟩, rfl⟩
   · -- The list had exactly one node: `head` and `tail` both become `none`
     simp only [List.nil_append] at hhead ⊢
     sl_step*
   · -- The list had at least two nodes: the penultimate one becomes the tail
-    obtain ⟨rp, vp⟩ := c
     simp only [show l'' ++ [(rp, vp)] ++ [(rt, vt)] = l'' ++ [(rp, vp), (rt, vt)]
       from by simp] at hhead ⊢
     sl_step*
@@ -474,10 +416,9 @@ concrete list, so `sl_side?` and the postcondition simp set discharge them. -/
 theorem popBack.spec' (s : DoublyLinkedList V) (l : Cells V) (hne : l ≠ []) :
     ⦃ wellFormed s l ⦄ popBack s
       ⦃⇓ (s', v) => ⌜l.getLast?.map Prod.snd = some v⌝ ∗ wellFormed s' l.dropLast⦄ := by
-  rcases eq_nil_or_snoc l with rfl | ⟨l', c, rfl⟩
+  rcases eq_nil_or_snoc l with rfl | ⟨l', ⟨rt, vt⟩, rfl⟩
   · simp at hne
-  · obtain ⟨rt, vt⟩ := c
-    apply triple_conseq (popBack.spec s l' rt vt) (himpl_refl _)
+  · apply triple_conseq (popBack.spec s l' rt vt) (himpl_refl _)
     rintro ⟨s', v⟩
     simp only [List.getLast?_concat, List.dropLast_concat, Option.map_some]
     sl_frame
@@ -491,23 +432,16 @@ theorem pushFront.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
   split
   · -- Special case: the list is empty
     rename_i hnone
-    have hl : l = [] := (headPtr_eq_none_iff l).mp (by rw [← hhead, hnone])
-    subst hl
-    simp only [headPtr_nil, lastPtr_nil] at hhead htail
+    obtain rfl : l = [] := (headPtr_eq_none_iff l).mp (by grind)
     apply triple_conseq (pushEmptyCase.spec s v)
-    · simp only [wellFormed, nodes_nil, headPtr_nil, lastPtr_nil]
-      sl_frame
-    · intro s'
-      simp only [wellFormed]
-      exact himpl_refl _
+      (by simp only [wellFormed]; sl_frame)
+      (fun s' => by simp only [wellFormed]; exact himpl_refl _)
   · rename_i oldHeadPtr hsome
     cases l with
-    | nil => rw [hsome] at hhead; simp [headPtr] at hhead
+    | nil => grind [headPtr]
     | cons c l' =>
       obtain ⟨rh, vh⟩ := c
-      obtain rfl : rh = oldHeadPtr := by
-        rw [hsome, headPtr_cons] at hhead
-        exact (Option.some.inj hhead).symm
+      obtain rfl : rh = oldHeadPtr := by grind [headPtr]
       sl_step*
 
 /-- `popFront` removes the first node and returns its payload. -/
@@ -516,12 +450,9 @@ theorem popFront.spec (s : DoublyLinkedList V) (rh : Ptr (Node V)) (vh : V)
     ⦃ wellFormed s ((rh, vh) :: l) ⦄ popFront s
       ⦃⇓ (s', v) => ⌜v = vh⌝ ∗ wellFormed s' l⦄ := by
   unfold popFront
-  sl_pull ⟨hhead, htail⟩ -- TODO: why necessary?
-  cases l with
-  | nil => sl_step*
-  | cons c l' =>
-    obtain ⟨r2, v2⟩ := c -- TODO: why is the obtain here making a difference?
-    sl_step*
+  /- The cell has to be destructured: `nodes_cons_two`, which frame inference
+     needs to split the two first nodes out, is stated over a pair. -/
+  rcases l with _ | ⟨⟨r2, v2⟩, l'⟩ <;> sl_step*
 
 /-! ## Reading an arbitrary node -/
 
@@ -536,19 +467,12 @@ theorem nodes_split (l : Cells V) (i : Nat) (r : Ptr (Node V)) (v : V)
     nodes l =
       iprop(nodesFrom l 0 (l.take i) ∗
         ((r ↦ nodeAt l i v) ∗ nodesFrom l (i + 1) (l.drop (i + 1)))) := by
-  have hi : i < l.length := by
-    by_contra hc
-    rw [List.getElem?_eq_none (by omega)] at h
-    simp at h
-  have hget : l[i] = (r, v) :=
-    Option.some.inj ((List.getElem?_eq_getElem hi).symm.trans h)
   have hdrop : l.drop i = (r, v) :: l.drop (i + 1) := by
-    rw [List.drop_eq_getElem_cons hi, hget]
-  have hlen : (l.take i).length = i := by
-    rw [List.length_take]; omega
+    grind [List.drop_eq_getElem_cons]
   rw [nodes_eq_nodesFrom l (l.take i ++ ((r, v) :: l.drop (i + 1)))
       (by rw [← hdrop, List.take_append_drop]),
-    nodesFrom_append, hlen, Nat.zero_add, nodesFrom_cons]
+    nodesFrom_append, Nat.zero_add, nodesFrom_cons]
+  grind
 
 /-- Reading the node of index `i` yields exactly the node the well-formedness
 invariant predicts, and leaves the list untouched. -/
@@ -557,6 +481,12 @@ theorem nodes_read (l : Cells V) (i : Nat) (r : Ptr (Node V)) (v : V)
     ⦃ nodes l ⦄ read r ⦃⇓ node => ⌜node = nodeAt l i v⌝ ∗ nodes l⦄ := by
   rw [nodes_split l i r v h]
   sl_step*
+
+/- `nodes_read` is registrable even though its `Prop` argument carries the index
+and the payload, which neither the program term nor `sl_frame` determines: `step`
+infers them by matching the argument against a local assumption, and every caller
+below obtains one from `exists_cell`. -/
+attribute [step] nodes_read
 
 theorem exists_cell (l : Cells V) (i : Nat) (hi : i < l.length) :
     ∃ r v, l[i]? = some (r, v) :=
@@ -590,13 +520,15 @@ theorem getLoop.spec (l : Cells V) (i j : Nat) (r : Ptr (Node V))
       have he : some rj = some r := by rw [hj] at hr; exact hr
       obtain rfl : r = rj := (Option.some.inj he).symm
       obtain ⟨r', v', hj'⟩ := exists_cell l (j + 1) (by omega)
-      sl_step with nodes_read l j r vj hj
+      sl_step
       have hnext : (nodeAt l j vj).next = some r' := by
         simp only [nodeAt, nextOf, if_neg (show j + 1 ≠ l.length by omega), hj']
         rfl
       simp only [hnext, get!_some]
       exact ih (j + 1) r' (by omega) (by omega) (by rw [hj']; rfl)
   exact key (i - j) j r rfl hji hr
+
+attribute [step] getLoop.spec
 
 /-- `get` returns the `i`th element of the view. -/
 theorem get.spec (s : DoublyLinkedList V) (l : Cells V) (i : Nat)
@@ -610,22 +542,18 @@ theorem get.spec (s : DoublyLinkedList V) (l : Cells V) (i : Nat)
     rw [hhead, headPtr_eq_getElem?, h0]; rfl
   rw [hhead']
   simp only [get!_some]
-  sl_step with getLoop.spec l i 0 r0 (by omega) hi (by rw [h0]; rfl)
-    as ⟨ r, hr ⟩
+  sl_step as ⟨ r, hr ⟩
   obtain ⟨ri, vi, hi'⟩ := exists_cell l i hi
   obtain rfl : r = ri := (Option.some.inj (by rw [hi'] at hr; exact hr)).symm
   have hview : (view l)[i]? = some vi := by rw [view_getElem?, hi']; rfl
   have hpay : (nodeAt l i vi).payload = vi := rfl
-  sl_step with nodes_read l i r vi hi'
   sl_step*
 
 /- Specifications `step` can apply on its own: the program term fixes the
 receiver, `sl_frame` fixes the ghost list by matching `nodes ?l`, and `sl_side?`
 discharges the remaining `Prop` arguments.  A specification is *not* registrable
 when its ghost list only occurs under `++` (`popBack.spec`, hence the restated
-`popBack.spec'`), which the unifier will not solve, or when a `Prop` argument
-carries information no tactic can recover (`getLoop.spec`'s
-`l[j]?.map Prod.fst = some r`, `nodes_read`'s cell). -/
+`popBack.spec'`), which the unifier will not solve. -/
 attribute [step]
   new.spec pushBack.spec pushFront.spec popFront.spec get.spec popBack.spec'
 
@@ -648,23 +576,15 @@ predicate, and the specifications below are literal transcriptions of the Verus
 
 theorem view_eq_snoc (l : Cells V) (vs : List V) (v : V) (h : view l = vs ++ [v]) :
     ∃ l' r, l = l' ++ [(r, v)] ∧ view l' = vs := by
-  rcases eq_nil_or_snoc l with rfl | ⟨l', c, rfl⟩
+  rcases eq_nil_or_snoc l with rfl | ⟨l', ⟨r, w⟩, rfl⟩
   · simp [view] at h
-  · obtain ⟨r, w⟩ := c
-    rw [view_append] at h
+  · rw [view_append] at h
     obtain ⟨h₁, h₂⟩ := List.append_inj' h (by simp)
-    have hw : w = v := by simpa [view] using h₂
-    exact ⟨l', r, by rw [hw], h₁⟩
+    exact ⟨l', r, by simp only [view, List.map_cons] at h₂; grind, h₁⟩
 
 theorem view_eq_cons (l : Cells V) (v : V) (vs : List V) (h : view l = v :: vs) :
     ∃ r l', l = (r, v) :: l' ∧ view l' = vs := by
-  cases l with
-  | nil => simp [view] at h
-  | cons c l' =>
-    obtain ⟨r, w⟩ := c
-    rw [view_cons] at h
-    have hw : w = v := (List.cons.inj h).1
-    exact ⟨r, l', by rw [hw], (List.cons.inj h).2⟩
+  cases l <;> grind [view]
 
 /-- Verus: `ensures s.well_formed(), s@.len() == 0`. -/
 theorem new.isList_spec :
@@ -750,7 +670,6 @@ theorem value.spec (it : Iterator V) (l : Cells V) (hvalid : valid it l) :
     ⦃ wellFormed it.l l ⦄ it.value
       ⦃⇓ v => ⌜(view l)[it.index]? = some v⌝ ∗ wellFormed it.l l⦄ := by
   unfold Iterator.value
-  sl_pull ⟨hhead, htail⟩
   obtain ⟨hidx, hcur⟩ := hvalid
   obtain ⟨r, v, hcell⟩ := exists_cell l it.index hidx
   have hcur' : it.cur = some r := by rw [hcur, hcell]; rfl
@@ -758,7 +677,6 @@ theorem value.spec (it : Iterator V) (l : Cells V) (hvalid : valid it l) :
   simp only [get!_some]
   have hview : (view l)[it.index]? = some v := by rw [view_getElem?, hcell]; rfl
   have hpay : (nodeAt l it.index v).payload = v := rfl
-  sl_step with nodes_read l it.index r v hcell
   sl_step*
 
 /-- Advancing the iterator: it reports whether there still is an element, and
@@ -775,13 +693,12 @@ theorem moveNext.spec (it : Iterator V) (l : Cells V) (hvalid : valid it l) :
           (good = false → it'.cur = none)⌝ ∗
         wellFormed it.l l⦄ := by
   unfold Iterator.moveNext
-  sl_pull ⟨hhead, htail⟩
   obtain ⟨hidx, hcur⟩ := hvalid
   obtain ⟨r, v, hcell⟩ := exists_cell l it.index hidx
   have hcur' : it.cur = some r := by rw [hcur, hcell]; rfl
   rw [hcur']
   simp only [get!_some]
-  sl_step with nodes_read l it.index r v hcell
+  sl_step
   by_cases hlast : it.index + 1 = l.length
   · -- The iterator was on the last node
     simp only [nodeAt, nextOf, if_pos hlast]

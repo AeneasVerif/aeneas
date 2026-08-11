@@ -596,7 +596,12 @@ partial def solveGoal (discharger : Option Syntax.Tactic) (goal : MVarId) :
       /- Decide here whether we are inferring a frame: `floatExists` below can
          turn `Hcallee ∗ ?F` into `∃ x, Hcallee' x ∗ ?F` and hide `?F`. -/
       if ← isFrameInference goal then
-        solveHimpl discharger (← exposeGoal goal)
+        /- Expose before decomposing again: `sl_simps` has no lemma for the
+           representation predicates themselves (`wellFormed`, `isList`, …), so
+           decomposing a folded assertion is a no-op. -/
+        let goal ← exposeGoal goal
+        let goal ← if decomposing then exposeGoal (← decompose goal) else pure goal
+        solveHimpl discharger goal
       else
         let goal ← pullLeft goal
         let goal ← instantiateRightExists goal
@@ -740,7 +745,11 @@ precondition into the local context.
 
 `sl_pull` peels as many of them as it can, using inaccessible names.
 `sl_pull p₁ ... pₙ` peels exactly `n` of them, destructuring the `i`-th one with
-the `rintro` pattern `pᵢ`, e.g. `sl_pull l rfl` or `sl_pull ⟨hhead, htail⟩`. -/
+the `rintro` pattern `pᵢ`, e.g. `sl_pull l rfl` or `sl_pull ⟨hhead, htail⟩`.
+
+Pure facts are *removed* from the precondition, which is often not what a
+subsequent `sl_step` needs; use `sl_pull_keep` (which `sl_step` runs anyway) when
+only the local hypothesis is wanted. -/
 syntax (name := slPull) "sl_pull" (ppSpace colGt rintroPat)* : tactic
 
 macro_rules
@@ -751,6 +760,47 @@ macro_rules
       let steps ← ps.mapM fun p => `(tactic| (sl_pull_step; rintro $p:rintroPat))
       `(tactic| ($[$steps]*))
 
+
+/-- One step of `sl_pull_keep`: copy the leading pure fact of the precondition of
+a triple into the local context, *without* removing it from the precondition.
+
+`sl_pull_step` consumes the fact, which is what SLF's `xpull` does but is often
+the wrong thing here: the assertion has to keep it for the framing of the later
+steps (this is why `sl_pull` before a `sl_step` can turn a working proof into a
+failing one).  Copying is always sound, and it is what makes the pointer of a
+callee's precondition (`s.head.get!`, say) reducible to the one the assertion
+owns.
+
+Fails when the fact is already in the context, so that `repeat` terminates. -/
+elab "sl_pull_keep_step" : tactic => withMainContext do
+  let goal ← getMainGoal
+  let target ← instantiateMVars (← goal.getType)
+  let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
+  unless fn.isConstOf ``triple && args.size = 4 do
+    throwError "sl_pull_keep_step: the goal is not a separation-logic triple"
+  let precondition ← SLFrame.exposeConnective args[1]!
+  unless precondition.consumeMData.isAppOfArity ``hstar 2 do
+    throwError "sl_pull_keep_step: the precondition is not a separating conjunction"
+  let leading ← SLFrame.exposeConnective precondition.consumeMData.appFn!.appArg!
+  unless leading.consumeMData.isAppOfArity ``hpure 1 do
+    throwError "sl_pull_keep_step: the precondition does not start with a pure fact"
+  let proposition := leading.consumeMData.appArg!
+  if ← (← getLCtx).anyM fun decl =>
+      pure !decl.isImplementationDetail <&&> isDefEq decl.type proposition then
+    throwError "sl_pull_keep_step: this pure fact is already in the context"
+  let exposed := mkApp2 (mkConst ``hstar) leading precondition.consumeMData.appArg!
+  let goal ← goal.change (← mkAppOptM ``triple #[args[0]!, exposed, args[2]!, args[3]!])
+  let [next] ← goal.apply (← mkConstWithFreshMVarLevels ``triple_hpure_keep)
+    | throwError "sl_pull_keep_step: unexpected number of goals"
+  let (_, next) ← next.intro1P
+  /- Put the precondition back in its original, folded form: only the local
+     context should record that the step happened. -/
+  replaceMainGoal
+    [← next.change (← mkAppOptM ``triple #[args[0]!, args[1]!, args[2]!, args[3]!])]
+
+/-- Copy the pure facts of the precondition of a triple into the local context,
+leaving the precondition untouched.  See `sl_pull_keep_step`. -/
+macro "sl_pull_keep" : tactic => `(tactic| repeat (sl_pull_keep_step; rename_i _))
 
 /-- SLF's `xsimpl`.  `sl_frame` is the same tactic under the name that describes
 what `step` uses it for. -/

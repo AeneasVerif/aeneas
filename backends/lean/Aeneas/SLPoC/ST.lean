@@ -292,6 +292,18 @@ theorem triple_hpure {P : Prop} {H : SLPre} {m : St α}
   have ⟨hP, hH⟩ := (hstar_hpure_l P H h).mp hPre
   exact (triple_iff H m Q).mp (hTriple hP) h hH
 
+/-- Copy a pure fact of the precondition into the local context *without*
+consuming it.  Unlike `triple_hpure` the precondition is unchanged, so the fact
+stays available to the framing of the later steps. -/
+theorem triple_hpure_keep {P : Prop} {H : SLPre} {m : St α}
+    {Q : SLPost α}
+    (hTriple : P → triple (⌜P⌝ ∗ H) m Q) :
+    triple (⌜P⌝ ∗ H) m Q := by
+  apply (triple_iff _ _ _).mpr
+  intro h hPre
+  have ⟨hP, _⟩ := (hstar_hpure_l P H h).mp hPre
+  exact (triple_iff _ m Q).mp (hTriple hP) h hPre
+
 theorem triple_hexists {ι : Sort _} {J : ι → SLPre} {m : St α}
     {Q : SLPost α}
     (hTriple : ∀ x, triple (J x) m Q) :
