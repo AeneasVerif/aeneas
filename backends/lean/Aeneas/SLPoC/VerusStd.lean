@@ -85,8 +85,6 @@ attribute [grind] firstPtr lastPtr
 @[simp] theorem firstPtr_cons (c : Ptr α × β) (l : List (Ptr α × β)) :
     firstPtr (c :: l) = some c.1 := rfl
 
-/-- *Verus/`vstd` counterpart:* the `vstd::seq::Seq::empty()` index axiom. -/
-@[simp] theorem lastPtr_nil : lastPtr ([] : List (Ptr α × β)) = none := rfl
 
 /-- *Verus/`vstd` counterpart:* the `vstd::seq::Seq::last` axiom for
 `Seq::push`. -/
@@ -94,26 +92,9 @@ attribute [grind] firstPtr lastPtr
     lastPtr (l ++ [c]) = some c.1 := by
   simp [lastPtr]
 
-/-- *Verus/`vstd` counterpart:* `vstd::seq::Seq::last` on a one-element
-sequence. -/
-@[simp] theorem lastPtr_singleton (c : Ptr α × β) : lastPtr [c] = some c.1 := rfl
 
-/-- *Verus/`vstd` counterpart:* the `vstd::seq::Seq::last` axiom. -/
-@[sl_simps] theorem lastPtr_cons_cons (a b : Ptr α × β) (l : List (Ptr α × β)) :
-    lastPtr (a :: b :: l) = lastPtr (b :: l) := by
-  simp [lastPtr]
 
-/-- *Verus/`vstd` counterpart:* the `vstd::seq::Seq::index` axiom for
-`Seq::push`. -/
-@[sl_simps] theorem firstPtr_append_two (l : List (Ptr α × β)) (a b : Ptr α × β) :
-    firstPtr (l ++ [a, b]) = firstPtr (l ++ [a]) := by
-  cases l <;> rfl
 
-/-- *Verus/`vstd` counterpart:* the `vstd::seq::Seq::last` axiom for
-`Seq::push`. -/
-@[sl_simps] theorem lastPtr_append_two (l : List (Ptr α × β)) (a b : Ptr α × β) :
-    lastPtr (l ++ [a, b]) = some b.1 := by
-  rw [show l ++ [a, b] = (l ++ [a]) ++ [b] by simp, lastPtr_snoc]
 
 /-- Every sequence is either empty or a `push`.
 
