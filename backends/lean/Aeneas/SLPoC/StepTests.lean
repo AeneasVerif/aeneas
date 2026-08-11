@@ -410,4 +410,16 @@ attribute [step] readTwice.spec
 example (p : Ptr Nat) : ⦃ p ↦ 3 ⦄ readTwice p ⦃⇓ r => iprop(⌜0 < r⌝ ∗ p ↦ 3)⦄ := by
   sl_step*
 
+/-- `grind` is the last resort: `0 < n` follows from `hguard` only together with
+`hb`, which is out of reach of `assumption`, `simp` and `omega`. -/
+example (p : Ptr Nat) (n : Nat) (b : Bool) (hb : b = true) (hguard : b = true → 0 < n) :
+    ⦃ p ↦ n ⦄ readTwice p ⦃⇓ r => iprop(⌜0 < r⌝ ∗ p ↦ n)⦄ := by
+  sl_step*
+
+/-- `-grind` drops it, handing the side condition back tagged with its binder name. -/
+example (p : Ptr Nat) (n : Nat) (b : Bool) (hb : b = true) (hguard : b = true → 0 < n) :
+    ⦃ p ↦ n ⦄ readTwice p ⦃⇓ r => iprop(⌜0 < r⌝ ∗ p ↦ n)⦄ := by
+  sl_step* -grind
+  case hn => grind
+
 end Aeneas.SLPoC
