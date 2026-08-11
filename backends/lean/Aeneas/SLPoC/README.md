@@ -51,8 +51,8 @@ Pinned Verus source: [`99ae45aa8e35`](https://github.com/verus-lang/verus/blob/9
 | Lean executable definitions | 14 | 84 |
 | Lean ghost state, specifications and proofs (`DoublyLinkedListSpec.lean`) | 44 | 300 |
 | **Lean example total** | **58** | **384** |
-| `vstd` equivalent, generic and reusable (`VerusStd.lean`) | 31 | 120 |
-| Lean grand total | 89 | 504 |
+| `vstd` equivalent, generic and reusable (`VerusStd.lean`) | 26 | 109 |
+| Lean grand total | 84 | 493 |
 
 | Definition or semantic group | Verus | Lean (executable, spec/proof) |
 |---|---:|---:|
@@ -83,7 +83,7 @@ Pinned Verus source: [`99ae45aa8e35`](https://github.com/verus-lang/verus/blob/9
 | Other example-local support declarations | - | 76 (0, 76) |
 | **Total** | **339** | **384 (84, 300)** |
 
-`VerusStd.lean` (31 declarations, 120 lines) is not compared declaration by declaration: it is the generic sequence and permission-map layer that Verus obtains from `vstd`, it does not mention the doubly-linked list, and each of its declarations names its `vstd` counterpart in its doc comment.
+`VerusStd.lean` (26 declarations, 109 lines) is not compared declaration by declaration: it is the generic sequence and permission-map layer that Verus obtains from `vstd`, it does not mention the doubly-linked list, and each of its declarations names its `vstd` counterpart in its doc comment.
 
 "Other example-local support declarations" contains 0 Verus, 0 Lean executable, and 15 Lean specification/proof declarations not assigned to a direct cross-language correspondence above.
 
