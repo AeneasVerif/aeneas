@@ -3,8 +3,9 @@ import Aeneas
 /-!
 # Extract Lean keywords
 
-This utility collects every token that is not permitted as a standalone
-identifier in Lean and writes them to an OCaml file.
+This utility reads the parser token table of the fully-imported `Aeneas`
+environment and keeps the identifier-shaped tokens. The result is written to an
+OCaml file.
 -/
 
 open Lean Parser
