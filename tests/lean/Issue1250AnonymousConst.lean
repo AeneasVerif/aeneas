@@ -16,7 +16,7 @@ namespace issue_1250_anonymous_const
 
 /-- [issue_1250_anonymous_const::_]
     Source: 'tests/src/issue-1250-anonymous-const.rs', lines 9:0-9:17 -/
-@[global_simps, irreducible] def _ : Unit := ()
+@[global_simps, irreducible] def «_» : Unit := ()
 
 /-- [issue_1250_anonymous_const::_#1]
     Source: 'tests/src/issue-1250-anonymous-const.rs', lines 10:0-10:17 -/
