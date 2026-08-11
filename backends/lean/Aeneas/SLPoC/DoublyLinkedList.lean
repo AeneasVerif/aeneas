@@ -4,15 +4,12 @@ import Aeneas.SLPoC.ST
 # Doubly-linked list: executable definitions
 
 A port of the Verus doubly-linked-list example
-(`https://github.com/verus-lang/verus/blob/main/examples/doubly_linked.rs`)
-to the separation-logic proof of concept.
+(`https://github.com/verus-lang/verus/blob/main/examples/doubly_linked.rs`).
+Every `&mut self` method becomes a function that consumes `self` and returns the
+updated value, which is the shape a functional translation of the Rust code
+takes.
 
-The Rust code is imperative and manipulates `&mut self`; the port turns every
-method into a function that consumes `self` and returns the updated value, which
-is the shape a functional translation of the Rust code takes.
-
-This file contains the computational part only.  The ghost state, the
-representation predicate, the specifications and their proofs live in
+The ghost state, the specifications and their proofs live in
 `Aeneas.SLPoC.DoublyLinkedListSpec`.
 -/
 
@@ -42,42 +39,31 @@ def new : St (DoublyLinkedList V) :=
 
 /-- Insert one node, assuming the linked list is empty. -/
 def pushEmptyCase (s : DoublyLinkedList V) (v : V) : St (DoublyLinkedList V) := do
-  -- Allocate a node to contain the payload
   let ptr ← alloc { prev := none, next := none, payload := v }
-  -- Update head and tail pointers
   pure { s with tail := some ptr, head := some ptr }
 
 /-- Insert a value at the end of the list. -/
 def pushBack (s : DoublyLinkedList V) (v : V) : St (DoublyLinkedList V) := do
   match s.tail with
   | none =>
-    -- Special case: list is empty
     pushEmptyCase s v
   | some oldTailPtr =>
-    -- Allocate a new node to go on the end.  Its `prev` field points to the old
-    -- tail pointer.
     let newTailPtr ← alloc { prev := some oldTailPtr, next := none, payload := v }
-    -- Update the `next` pointer of the previous tail node
     let oldTailNode ← read oldTailPtr
     update oldTailPtr { oldTailNode with next := some newTailPtr }
-    -- Update `self.tail`
     pure { s with tail := some newTailPtr }
 
 /-- Take a value from the end of the list.  Requires the list to be non-empty. -/
 def popBack (s : DoublyLinkedList V) : St (DoublyLinkedList V × V) := do
-  -- Deallocate the last node in the list and get the payload.
   let lastPtr := s.tail.get!
   let lastNode ← read lastPtr
   free lastPtr
   let v := lastNode.payload
   match lastNode.prev with
+  -- No `prev`: this was the only node, so the list becomes empty.
   | none =>
-    -- If this was the *only* node in the list, we set both `head` and `tail` to
-    -- `none`.
     pure ({ s with tail := none, head := none }, v)
   | some penultimatePtr =>
-    -- Otherwise the `tail` pointer becomes the previously second-to-last
-    -- pointer, whose `next` field must be cleared.
     let penultimateNode ← read penultimatePtr
     update penultimatePtr { penultimateNode with next := none }
     pure ({ s with tail := some penultimatePtr }, v)
@@ -86,34 +72,25 @@ def popBack (s : DoublyLinkedList V) : St (DoublyLinkedList V × V) := do
 def pushFront (s : DoublyLinkedList V) (v : V) : St (DoublyLinkedList V) := do
   match s.head with
   | none =>
-    -- Special case: list is empty
     pushEmptyCase s v
   | some oldHeadPtr =>
-    -- Allocate a new node to go at the front.  Its `next` field points to the
-    -- old head pointer.
     let newHeadPtr ← alloc { prev := none, next := some oldHeadPtr, payload := v }
-    -- Update the `prev` pointer of the previous head node
     let oldHeadNode ← read oldHeadPtr
     update oldHeadPtr { oldHeadNode with prev := some newHeadPtr }
-    -- Update `self.head`
     pure { s with head := some newHeadPtr }
 
 /-- Take a value from the front of the list.  Requires the list to be
 non-empty. -/
 def popFront (s : DoublyLinkedList V) : St (DoublyLinkedList V × V) := do
-  -- Deallocate the first node in the list and get the payload.
   let firstPtr := s.head.get!
   let firstNode ← read firstPtr
   free firstPtr
   let v := firstNode.payload
   match firstNode.next with
+  -- No `next`: this was the only node, so the list becomes empty.
   | none =>
-    -- If this was the *only* node in the list, we set both `head` and `tail` to
-    -- `none`.
     pure ({ s with tail := none, head := none }, v)
   | some secondPtr =>
-    -- Otherwise the `head` pointer becomes the previously second pointer, whose
-    -- `prev` field must be cleared.
     let secondNode ← read secondPtr
     update secondPtr { secondNode with prev := none }
     pure ({ s with head := some secondPtr }, v)
@@ -122,7 +99,6 @@ def popFront (s : DoublyLinkedList V) : St (DoublyLinkedList V × V) := do
 index `i`. -/
 def getLoop (i : Nat) (j : Nat) (ptr : Ptr (Node V)) : St (Ptr (Node V)) :=
   if j < i then do
-    -- Get the next node from the `next` field
     let node ← read ptr
     let nextPtr := node.next.get!
     getLoop i (j + 1) nextPtr
@@ -133,9 +109,7 @@ decreasing_by omega
 
 /-- Get the `i`th value of the list. -/
 def get (s : DoublyLinkedList V) (i : Nat) : St V := do
-  -- Iterate the nodes from 0 to i, starting at the head node
   let ptr ← getLoop i 0 s.head.get!
-  -- Get this node's payload and return it
   let node ← read ptr
   pure node.payload
 
