@@ -90,7 +90,7 @@ viewed as a slice. -/
   "core::array::{core::iter::traits::collect::IntoIterator<&'a [@T; @N], &'a @T, core::slice::iter::Iter<'a, @T>>}::into_iter"]
 def SharedArray.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter
     {T : Type} {N : Usize} (a : Array T N) : Result (core.slice.iter.Iter T) :=
-  ok ⟨ ⟨a.val, by scalar_tac⟩, 0 ⟩
+  ok ⟨ .from a.val (by scalar_tac), 0 ⟩
 
 @[reducible, rust_trait_impl
   "core::iter::traits::collect::IntoIterator<&'a [@T; @N], &'a @T, core::slice::iter::Iter<'a, @T>>"]
@@ -199,13 +199,13 @@ def core.slice.Slice.chunks_exact {T : Type} (s : Slice T) (chunk_size : Std.Usi
   Result (core.slice.iter.ChunksExact T) :=
   if hcs : chunk_size.val > 0 then
     let result := List.toChunksExact chunk_size.val hcs s.val
-    let sliceChunks := result.1.attach.map fun ⟨c, hc⟩ => ⟨c, by
+    let sliceChunks := result.1.attach.map fun ⟨c, hc⟩ => .from c (by
         have := List.toChunksExact_chunk_length hcs s.val c hc
-        scalar_tac⟩
+        scalar_tac)
     ok { chunks := sliceChunks,
-         remainder := ⟨result.2, by
+         remainder := .from result.2 (by
            have := List.toChunksExact_remainder_length hcs s.val
-           scalar_tac⟩ }
+           grind) }
   else fail .panic
 
 
@@ -215,7 +215,7 @@ def core.slice.Slice.chunks_exact {T : Type} (s : Slice T) (chunk_size : Std.Usi
 
 private def mkSliceIter (l : List Nat) (h : l.length ≤ Usize.max := by scalar_tac) :
     core.slice.iter.Iter Nat :=
-  { slice := ⟨l, h⟩, i := 0 }
+  { slice := .from l h, i := 0 }
 
 private def collectStepBy (sbi : core.iter.adapters.step_by.StepBy (core.slice.iter.Iter Nat))
     (fuel : Nat := 100) : Result (List Nat) :=

@@ -18,7 +18,7 @@ attribute [-simp] List.getElem!_eq_getElem?_getD
 
 @[step_pure_def]
 def Array.to_slice {α : Type u} {n : Usize} (v : Array α n) : Slice α :=
-  ⟨ v.val, by scalar_tac ⟩
+  .from  v.val (by scalar_tac)
 
 def Array.from_slice {α : Type u} {n : Usize} (a : Array α n) (s : Slice α) : Array α n :=
   if h: s.val.length = n.val then
@@ -46,10 +46,10 @@ theorem Array.to_slice_mut_spec {α : Type u} {n : Usize} (a : Array α n) :
 def Array.subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) : Result (Slice α) :=
   -- TODO: not completely sure here
   if r.start.val < r.end.val ∧ r.end.val ≤ a.val.length then
-    ok ⟨ a.val.slice r.start.val r.end.val,
-          by
+    ok (.from (a.val.slice r.start.val r.end.val)
+          (by
             have := a.val.slice_length_le r.start.val r.end.val
-            scalar_tac ⟩
+            scalar_tac))
   else
     fail panic
 
@@ -60,7 +60,7 @@ theorem Array.subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array 
   s.val = a.val.slice r.start.val r.end.val ∧
   (∀ i, i + r.start.val < r.end.val → s.val[i]! = a.val[r.start.val + i]!) ⦄
   := by
-  simp only [subslice, true_and, h0, h1, ↓reduceIte, spec_ok, true_and]
+  simp only [Slice.from_val, subslice, true_and, h0, h1, ↓reduceIte, spec_ok, true_and]
   intro i _
   have := List.getElem!_slice r.start.val r.end.val i a.val (by scalar_tac)
   simp only [this]
@@ -125,12 +125,12 @@ def core.array.TryFromSliceError := Unit
 
 @[simp, simp_lists_safe, grind =, agrind =]
 theorem Array.val_to_slice {α} {n} (a : Array α n) : a.to_slice.val = a.val := by
-  simp only [Array.to_slice]
+  simp [Array.to_slice]
 
 @[simp, simp_lists_safe, simp_scalar_safe, scalar_tac a.to_slice, grind =, agrind =]
 theorem Array.length_to_slice (a : Array α n) :
   a.to_slice.length = n := by
-  simp only [Slice.length, Array.to_slice, List.Vector.length_val]
+  simp [Slice.length, Array.to_slice, List.Vector.length_val]
 
 @[rust_fun "core::array::equality::{core::cmp::PartialEq<[@T; @N], [@U; @N]>}::eq"]
 def core.array.equality.PartialEqArray.eq
@@ -335,7 +335,7 @@ def core.array.TryFromMutArraySlice.try_from
     let back (a : core.result.Result (Array T N) core.array.TryFromSliceError) : Slice T :=
       match a with
       | .Ok a =>
-        if a.length = s.length then ⟨ a.val, by scalar_tac ⟩
+        if a.length = s.length then .from a.val (by scalar_tac)
         else s
       | _ => s
     ok ((.Ok ⟨ s.val, by scalar_tac⟩, back))
@@ -343,13 +343,13 @@ def core.array.TryFromMutArraySlice.try_from
 
 @[rust_fun "core::array::{[@T; @N]}::as_slice"]
 def core.array.Array.as_slice {T : Type} {N : Usize} (a : Array T N) : Result (Slice T) :=
-  ok (⟨ a.val, by scalar_tac ⟩)
+  ok (.from a.val (by scalar_tac))
 
 /-- Model for `<[T; N] as AsRef<[T]>>::as_ref`: returns the array viewed as a slice. -/
 @[rust_fun "core::array::{core::convert::AsRef<[@T; @N], [@T]>}::as_ref"]
 def Array.Insts.CoreConvertAsRefSlice.as_ref
     {T : Type} {N : Usize} (a : Array T N) : Result (Slice T) :=
-  ok (⟨ a.val, by scalar_tac ⟩)
+  ok (.from a.val (by scalar_tac))
 
 /-- Model for `<[T; N] as AsMut<[T]>>::as_mut`: returns the array as a mutable slice
     plus a back-conversion that restores it to an array. -/
@@ -360,7 +360,7 @@ def Array.Insts.CoreConvertAsMutSlice.as_mut
   let back (s : Slice T) : Array T N :=
     if h : s.length = N then ⟨ s.val, by scalar_tac ⟩
     else a
-  ok (⟨ a.val, by scalar_tac ⟩, back)
+  ok (.from a.val (by scalar_tac), back)
 
 @[rust_fun "core::array::{[@T; @N]}::as_mut_slice"]
 def core.array.Array.as_mut_slice
@@ -369,7 +369,7 @@ def core.array.Array.as_mut_slice
   let back (s : Slice T) : Array T N :=
     if h: s.length = N then ⟨ s.val, by scalar_tac ⟩
     else a
-  ok (⟨ a.val, by scalar_tac ⟩, back)
+  ok (.from a.val (by scalar_tac), back)
 
 @[step]
 theorem Array.Insts.CoreConvertAsRefSlice.as_ref.spec
