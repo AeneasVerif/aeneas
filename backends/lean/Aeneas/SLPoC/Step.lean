@@ -69,26 +69,50 @@ syntax "sl_step" Lean.Parser.Tactic.optConfig ("with" term)?
 
 /-- Discharge a side condition `step` returns for a `Prop` argument of a
 specification.  A no-op on the entailment and continuation goals, and on the
-goals for ghost parameters the entailment has yet to determine. -/
-elab "sl_side?" : tactic => withMainContext do
+goals for ghost parameters the entailment has yet to determine.
+
+The chain is `assumption`, `simp`, `omega`, `scalar_tac`, `grind`, and obeys the
+same `aeneas.step.*` options as `step`, so `sl_step -grind` drops the last one.
+`grind` is needed because a side condition such as an iterator's `valid` is often
+available only behind a guard (`good = true → valid it' l`) whose discharge needs
+a second hypothesis.
+
+We do not reuse `step`'s own `agrind` (`evalAGrindWithPreprocess`): it fires the
+`@[agrind]` lemma set rather than `@[grind]`, and preprocesses the hypotheses with
+`scalar_tac`; both make it fail on the iterator side conditions. -/
+syntax "sl_side?" Lean.Parser.Tactic.optConfig : tactic
+
+elab_rules : tactic
+  | `(tactic| sl_side? $cfg:optConfig) => withMainContext do
   let target ← instantiateMVars (← (← getMainGoal).getType)
   let head := target.consumeMData.getAppFn
   if head.isConstOf ``himpl || head.isConstOf ``qimpl || head.isConstOf ``triple then
     return
   unless ← Meta.isProp target do return
-  evalTactic (← `(tactic| try first | assumption | (simp; done) | omega))
+  let config ← Aeneas.Step.elabPartialConfig cfg
+  let mut alts : Array (TSyntax `tactic) := #[]
+  if config.assumTac then alts := alts.push (← `(tactic| assumption))
+  alts := alts.push (← `(tactic| simp))
+  alts := alts.push (← `(tactic| omega))
+  if config.scalarTac then alts := alts.push (← `(tactic| scalar_tac))
+  if config.grind then alts := alts.push (← `(tactic| grind))
+  /- `firstTacSolve` is what `step` uses for its own chain: it moves on unless the
+     alternative leaves no goal behind. Splicing a `first` instead breaks `sl_frame`. -/
+  try Aeneas.Utils.firstTacSolve (alts.toList.map fun tac => evalTactic tac)
+  catch _ => pure ()
 
 macro_rules
   | `(tactic| sl_step $cfg:optConfig $[with $th]? $[as ⟨ $ids,* ⟩]?) =>
     `(tactic| ((step $cfg:optConfig $[with $th]? $[as ⟨ $ids,* ⟩]? by sl_frame) <;>
-      (sl_frame? <;> sl_side?)))
+      (sl_frame? <;> sl_side? $cfg:optConfig)))
 
 /-- `step*` with `sl_frame` as the precondition discharger. -/
 syntax "sl_step" noWs "*" (num)? Lean.Parser.Tactic.optConfig : tactic
 
 macro_rules
   | `(tactic| sl_step* $[$n]? $cfg:optConfig) =>
-    `(tactic| ((step* $[$n]? $cfg:optConfig by sl_frame) <;> (sl_frame? <;> sl_side?)))
+    `(tactic| ((step* $[$n]? $cfg:optConfig by sl_frame) <;>
+      (sl_frame? <;> sl_side? $cfg:optConfig)))
 
 /-! ## Lemmas registered in the elimination passes of `step` -/
 
