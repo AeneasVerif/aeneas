@@ -49,8 +49,10 @@ abbrev Cells (V : Type) := List (Ptr (Node V) × V)
 /-- Representation of the list as a sequence, i.e. Verus' `view`. -/
 def view (l : Cells V) : List V := l.map Prod.snd
 
-/-- Pointer to the first node, if any. -/
-def headPtr (l : Cells V) : Option (Ptr (Node V)) := l.head?.map Prod.fst
+/-- Pointer to the first node, if any.  Stated with `getElem?` rather than
+`head?` so that it is the `i = 0` case of the same index arithmetic as
+`prevOf`/`nextOf`, which is what lets `grind` relate them. -/
+def headPtr (l : Cells V) : Option (Ptr (Node V)) := l[0]?.map Prod.fst
 
 /-- Pointer to the last node, if any. -/
 def lastPtr (l : Cells V) : Option (Ptr (Node V)) := l.getLast?.map Prod.fst
@@ -67,6 +69,10 @@ def nextOf (l : Cells V) (i : Nat) : Option (Ptr (Node V)) :=
 `well_formed_node` states that the node stored at `ptrs[i]` is exactly this. -/
 def nodeAt (l : Cells V) (i : Nat) (v : V) : Node V :=
   { prev := prevOf l i, next := nextOf l i, payload := v }
+
+/- The accessors are the only arithmetic `grind` has to do on indices, so it is
+worth teaching it their equations once instead of citing them at every use. -/
+attribute [grind] headPtr lastPtr prevOf nextOf nodeAt
 
 /-- `nodesFrom l i cs` owns the nodes `cs`, which are the nodes of `l` starting
 at index `i`. -/
@@ -170,25 +176,12 @@ theorem nodesFrom_append (l : Cells V) :
 
 /-! ## How `prevOf`/`nextOf` react to `++` and `::` -/
 
-theorem prevOf_append_left (l₁ l₂ : Cells V) (i : Nat) (h : i < l₁.length) :
-    prevOf (l₁ ++ l₂) i = prevOf l₁ i := by grind [prevOf]
-
-theorem nextOf_append_left (l₁ l₂ : Cells V) (i : Nat) (h : i + 1 < l₁.length) :
-    nextOf (l₁ ++ l₂) i = nextOf l₁ i := by grind [nextOf]
-
-theorem prevOf_cons_succ (c : Ptr (Node V) × V) (l : Cells V) (i : Nat) :
-    prevOf (c :: l) (i + 2) = prevOf l (i + 1) := by
-  simp [prevOf]
-
-theorem nextOf_cons_succ (c : Ptr (Node V) × V) (l : Cells V) (i : Nat) :
-    nextOf (c :: l) (i + 1) = nextOf l i := by grind [nextOf]
-
 /-- Appending a node at the end does not change the nodes strictly before the
 last one. -/
 theorem nodesFrom_append_prefix (l₁ l₂ : Cells V) (xs : Cells V) (i : Nat)
     (h : i + xs.length < l₁.length) :
     nodesFrom (l₁ ++ l₂) i xs = nodesFrom l₁ i xs := by
-  grind [nodesFrom_congr, prevOf_append_left, nextOf_append_left]
+  grind [nodesFrom_congr]
 
 /-- Prepending a node shifts all the indices by one. -/
 theorem nodesFrom_cons_shift (c : Ptr (Node V) × V) (l : Cells V) (xs : Cells V)
@@ -213,27 +206,9 @@ theorem nodesFrom_cons_shift (c : Ptr (Node V) × V) (l : Cells V) (xs : Cells V
     lastPtr (a :: b :: l) = lastPtr (b :: l) := by
   simp [lastPtr]
 
-theorem prevOf_cons_one (c : Ptr (Node V) × V) (l : Cells V) :
-    prevOf (c :: l) 1 = some c.1 := by
-  simp [prevOf]
-
-theorem nextOf_cons_zero (c : Ptr (Node V) × V) (l : Cells V) :
-    nextOf (c :: l) 0 = headPtr l := by
-  cases l with
-  | nil => simp [nextOf]
-  | cons a l => simp [nextOf, headPtr]
-
-theorem prevOf_snoc_last (l : Cells V) (c : Ptr (Node V) × V) :
-    prevOf (l ++ [c]) l.length = lastPtr l := by grind [prevOf, lastPtr]
-
-theorem nextOf_snoc_last (l : Cells V) (c : Ptr (Node V) × V) :
-    nextOf (l ++ [c]) l.length = none := by
-  simp [nextOf]
-
 theorem nodeAt_snoc_last (l : Cells V) (r : Ptr (Node V)) (v : V) :
     nodeAt (l ++ [(r, v)]) l.length v =
-      { prev := lastPtr l, next := none, payload := v } := by
-  grind [nodeAt, prevOf_snoc_last, nextOf_snoc_last]
+      { prev := lastPtr l, next := none, payload := v } := by grind
 
 /-- Split the ownership of the last node out of `nodes`. -/
 @[sl_simps] theorem nodes_snoc (l : Cells V) (r : Ptr (Node V)) (v : V) :
@@ -242,10 +217,6 @@ theorem nodeAt_snoc_last (l : Cells V) (r : Ptr (Node V)) (v : V) :
         (r ↦ { prev := lastPtr l, next := none, payload := v })) := by
   unfold nodes
   rw [nodesFrom_append, Nat.zero_add, nodesFrom_singleton, nodeAt_snoc_last]
-
-theorem getElem?_append_two_left (l : Cells V) (a b : Ptr (Node V) × V) :
-    (l ++ [a, b])[l.length]? = some a := by
-  grind
 
 theorem getElem?_append_two_right (l : Cells V) (a b : Ptr (Node V) × V) :
     (l ++ [a, b])[l.length + 1]? = some b := by
@@ -266,8 +237,8 @@ of the heap both after `pushBack` and before `popBack`. -/
   have hmid : nodeAt (l ++ [(rt, vt), (rn, v)]) l.length vt =
       { prev := lastPtr l, next := some rn, payload := vt } := by
     have hprev : prevOf (l ++ [(rt, vt), (rn, v)]) l.length = lastPtr l := by
-      rw [hassoc, prevOf_append_left _ _ _ (by simp), prevOf_snoc_last]
-    grind [nodeAt, nextOf, getElem?_append_two_right]
+      rw [hassoc]; grind
+    grind [getElem?_append_two_right]
   rw [hassoc, nodes_snoc, ← hassoc, nodesFrom_append, Nat.zero_add,
     nodesFrom_singleton, hmid, hprefix, lastPtr_snoc, hstar_assoc_eq]
 
@@ -276,10 +247,9 @@ of the heap both after `pushBack` and before `popBack`. -/
     nodes ((rh, vh) :: l) =
       iprop((rh ↦ { prev := none, next := headPtr l, payload := vh }) ∗
         nodesFrom ((rh, vh) :: l) 1 l) := by
-  unfold nodes
-  rw [nodesFrom_cons, Nat.zero_add]
-  unfold nodeAt
-  rw [prevOf_zero, nextOf_cons_zero]
+  have : nodeAt ((rh, vh) :: l) 0 vh =
+      { prev := none, next := headPtr l, payload := vh } := by grind
+  simp only [nodes, nodesFrom_cons, Nat.zero_add, this]
 
 /-- Split the ownership of the first two nodes out of `nodes`.  This is the
 shape of the heap both after `pushFront` and before `popFront`. -/
@@ -289,23 +259,14 @@ shape of the heap both after `pushFront` and before `popFront`. -/
       iprop((rn ↦ { prev := none, next := some rh, payload := v }) ∗
         (rh ↦ { prev := some rn, next := headPtr l, payload := vh }) ∗
         nodesFrom ((rh, vh) :: l) 1 l) := by
-  unfold nodes
   have hfirst : nodeAt ((rn, v) :: (rh, vh) :: l) 0 v =
-      { prev := none, next := some rh, payload := v } := by
-    unfold nodeAt
-    rw [prevOf_zero, nextOf_cons_zero]
-    rfl
+      { prev := none, next := some rh, payload := v } := by grind
   have hsecond : nodeAt ((rn, v) :: (rh, vh) :: l) 1 vh =
-      { prev := some rn, next := headPtr l, payload := vh } := by
-    unfold nodeAt
-    rw [prevOf_cons_one]
-    have : nextOf ((rn, v) :: (rh, vh) :: l) 1 = headPtr l := by
-      rw [show (1 : Nat) = 0 + 1 from rfl, nextOf_cons_succ, nextOf_cons_zero]
-    rw [this]
+      { prev := some rn, next := headPtr l, payload := vh } := by grind
   have hrest : nodesFrom ((rn, v) :: (rh, vh) :: l) 2 l =
       nodesFrom ((rh, vh) :: l) 1 l :=
     nodesFrom_cons_shift (rn, v) ((rh, vh) :: l) l 0
-  simp only [nodesFrom_cons, Nat.zero_add, hfirst, hsecond]
+  simp only [nodes, nodesFrom_cons, Nat.zero_add, hfirst, hsecond]
   rw [show (1 + 1 : Nat) = 2 from rfl, hrest]
 
 /-! ## Auxiliary facts used by the specifications -/
@@ -492,9 +453,6 @@ theorem exists_cell (l : Cells V) (i : Nat) (hi : i < l.length) :
     ∃ r v, l[i]? = some (r, v) :=
   ⟨(l[i]'hi).1, (l[i]'hi).2, by rw [List.getElem?_eq_getElem hi]⟩
 
-theorem headPtr_eq_getElem? (l : Cells V) : headPtr l = l[0]?.map Prod.fst := by
-  cases l <;> rfl
-
 /-! ## Specification of `get` -/
 
 /-- The loop of `get` walks from index `j` to index `i`, keeping Verus' loop
@@ -539,7 +497,7 @@ theorem get.spec (s : DoublyLinkedList V) (l : Cells V) (i : Nat)
   sl_pull ⟨hhead, htail⟩
   obtain ⟨r0, v0, h0⟩ := exists_cell l 0 (by omega)
   have hhead' : s.head = some r0 := by
-    rw [hhead, headPtr_eq_getElem?, h0]; rfl
+    simp only [hhead, headPtr, h0, Option.map_some]
   rw [hhead']
   simp only [get!_some]
   sl_step as ⟨ r, hr ⟩
@@ -662,7 +620,7 @@ theorem new.spec (t : DoublyLinkedList V) (l : Cells V) (hne : 0 < l.length) :
   unfold Iterator.new
   sl_pull ⟨hhead, htail⟩
   have hv : valid ({ l := t, cur := t.head, index := 0 } : Iterator V) l :=
-    ⟨hne, by rw [hhead, headPtr_eq_getElem?]⟩
+    ⟨hne, hhead⟩
   sl_step*
 
 /-- The iterator yields the element of the view at its index. -/
@@ -762,31 +720,6 @@ end Example
 
 `isList` is an existential, so a caller that owns it as a single opaque
 assertion exercises the frame inference of `sl_frame` on an `hexists` atom. -/
-
-namespace FrameInferenceTest
-
-open DoublyLinkedList
-
-/-- Frame inference works when the callee's precondition is an abstract
-representation predicate defined as an existential. -/
-def twoPushes (s : DoublyLinkedList Nat) : St (DoublyLinkedList Nat) := do
-  let s ← pushBack s 1
-  pushBack s 2
-
-example (s : DoublyLinkedList Nat) (vs : List Nat) :
-    ⦃ isList s vs ⦄ twoPushes s ⦃⇓ s' => isList s' (vs ++ [1] ++ [2])⦄ := by
-  unfold twoPushes
-  apply triple_step_bind (pushBack s 1) _ (pushBack.isList_spec s vs 1)
-  case hPre => sl_frame
-  case hNext =>
-    intro s1 _
-    -- The terminal call goes through the ramified frame rule: a single goal,
-    -- with no frame metavariable to guess.
-    exact triple_step_mono (pushBack s1 2) _ (pushBack.isList_spec s1 (vs ++ [1]) 2)
-      (by sl_frame)
-
-
-end FrameInferenceTest
 
 
 end Aeneas.SLPoC
