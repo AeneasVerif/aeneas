@@ -428,10 +428,10 @@ structure Hash (Self : Type) where
     Visibility: public -/
 @[rust_loop]
 def pseudo_random_loop
-  {T : Type} (HashInst : Hash T) (state : Std.U32) : Result Std.U32 := do
+  {T : Type} (HashTInst : Hash T) (state : Std.U32) : Result Std.U32 := do
   if state < 100#u32
-  then let state1 ← HashInst.hash state
-       pseudo_random_loop HashInst state1
+  then let state1 ← HashTInst.hash state
+       pseudo_random_loop HashTInst state1
   else ok state
 partial_fixpoint
 
@@ -439,7 +439,7 @@ partial_fixpoint
     Source: 'src/lib.rs', lines 255:0-262:1
     Visibility: public -/
 @[reducible]
-def pseudo_random {T : Type} (HashInst : Hash T) : Result Std.U32 := do
-  pseudo_random_loop HashInst 0#u32
+def pseudo_random {T : Type} (HashTInst : Hash T) : Result Std.U32 := do
+  pseudo_random_loop HashTInst 0#u32
 
 end tutorial

@@ -220,6 +220,7 @@ structure WithProvided (Self : Type) where
 /-- [issue_1051_duplicate_parent_clause_names::WithProvided::provided]:
     Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 60:4-62:5
     Visibility: public -/
+@[trait_default]
 def WithProvided.provided.default
   {Self : Type} (WithProvidedInst : WithProvided Self) (self : Self) :
   Result Std.U32
