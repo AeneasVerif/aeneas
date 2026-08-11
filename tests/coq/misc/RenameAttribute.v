@@ -34,24 +34,18 @@ Definition boolTrait_retTest_default
 Definition BoolImpl_getTest (self : bool) : result bool :=
   Ok self.
 
-(** [rename_attribute::{impl rename_attribute::BoolTrait for bool}::ret_true]:
-    Source: 'tests/src/rename_attribute.rs', lines 23:0-27:1
-    Visibility: public *)
-Definition BoolImpl_retTest (self : bool) : result bool :=
-  Ok true.
-
 (** Trait implementation: [rename_attribute::{impl rename_attribute::BoolTrait for bool}]
     Source: 'tests/src/rename_attribute.rs', lines 23:0-27:1 *)
 Definition BoolImpl : BoolTest_t bool := {|
   BoolTest_t_getTest := BoolImpl_getTest;
-  BoolTest_t_retTest := BoolImpl_retTest;
+  BoolTest_t_retTest := boolTrait_retTest_default;
 |}.
 
 (** [rename_attribute::test_bool_trait]:
     Source: 'tests/src/rename_attribute.rs', lines 30:0-32:1
     Visibility: public *)
 Definition boolFn (T : Type) (x : bool) : result bool :=
-  b <- BoolImpl_getTest x; if b then BoolImpl_retTest x else Ok false
+  b <- BoolImpl_getTest x; if b then boolTrait_retTest_default x else Ok false
 .
 
 (** [rename_attribute::SimpleEnum]

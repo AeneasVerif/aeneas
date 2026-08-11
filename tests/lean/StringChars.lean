@@ -19,7 +19,8 @@ namespace string_chars
 def collect : Result Unit := do
   let c ← core.str.Str.chars (toStr "hello")
   let _ ←
-    core.str.iter.IteratorChars.collect
+    core.iter.traits.iterator.Iterator.collect.default
+      core.iter.traits.iterator.IteratorChars
       (core.iter.traits.collect.FromIteratorVec Char) c
   ok ()
 

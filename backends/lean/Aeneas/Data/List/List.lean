@@ -47,7 +47,7 @@ attribute [simp] getElem?_cons_zero getElem!_cons_zero
 @[simp_lists_safe]
 theorem getElem!_cons_nzero' {α} [Inhabited α] (x : α) (tl : List α) (i : ℕ) (hi : 0 < i) :
   (x :: tl)[i]! = tl[i - 1]! := by
-  simp only [Nat.not_eq, ne_eq, not_lt_zero', or_true, getElem!_cons_nzero, hi]
+  simp only [Nat.not_eq, ne_eq, Nat.not_lt_zero, or_true, getElem!_cons_nzero, hi]
 
 @[simp_lists_safe]
 theorem getElem!_cons_zero' {α} [Inhabited α] (x : α) (tl : List α) (i : ℕ) (hi : i = 0) :
@@ -206,7 +206,7 @@ theorem drop_length_is_le (i : Nat) (ls : List α) : (ls.drop i).length ≤ ls.l
     if h: i = 0 then by simp [*]
     else
       have := drop_length_is_le (i - 1) tl
-      by simp only [Nat.not_eq, ne_eq, not_false_eq_true, neq_imp, not_lt_zero', false_or, true_or,
+      by simp only [Nat.not_eq, ne_eq, not_false_eq_true, neq_imp, Nat.not_lt_zero, false_or, true_or,
         or_self, drop_cons_nzero, length_drop, length_cons, tsub_le_iff_right, h]; omega
 
 attribute [simp, simp_lists_safe, grind =] drop_of_length_le

@@ -2286,6 +2286,7 @@ let rec norm_proj_tys_union (span : Meta.span) ?(strict : bool = true)
               inputs = inputs1;
               output = output1;
               abi = abi1;
+              is_variadic = is_variadic1;
             };
         },
       TFnPtr
@@ -2297,9 +2298,10 @@ let rec norm_proj_tys_union (span : Meta.span) ?(strict : bool = true)
               inputs = inputs2;
               output = output2;
               abi = abi2;
+              is_variadic = is_variadic2;
             };
         } )
-    when abi1 = abi2 ->
+    when abi1 = abi2 && is_variadic1 = is_variadic2 ->
       (* TODO: general case *)
       [%sanity_check] span (binder_regions1 = []);
       [%sanity_check] span (binder_regions2 = []);
@@ -2310,6 +2312,7 @@ let rec norm_proj_tys_union (span : Meta.span) ?(strict : bool = true)
             List.map2 (norm_proj_tys_union span ~strict ctx) inputs1 inputs2;
           output = norm_proj_tys_union span ~strict ctx output1 output2;
           abi = abi1;
+          is_variadic = is_variadic1;
         }
       in
       TFnPtr { binder_regions = []; binder_value }

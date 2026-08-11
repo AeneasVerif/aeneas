@@ -452,7 +452,7 @@ def alloc.vec.FromVecArray.from
   "core::convert::From<alloc::vec::Vec<@T>, [@T; @N]>"]
 def core.convert.FromVecArray (T : Type) (N : Std.Usize) : core.convert.From
   (alloc.vec.Vec T) (Array T N) := {
-  from_ := alloc.vec.FromVecArray.from
+  «from» := alloc.vec.FromVecArray.from
 }
 
 /- Source: '/rustc/library/alloc/src/vec/mod.rs', lines 3967:4-3967:33 -/
@@ -467,7 +467,7 @@ theorem alloc.vec.FromBoxSliceVec.from_spec {T : Type} (v : alloc.vec.Vec T) :
 @[reducible, rust_trait_impl "core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>" (keepParams := [true, false])]
 def core.convert.FromBoxSliceVec (T : Type) :
   core.convert.From (Slice T) (alloc.vec.Vec T) := {
-  from_ := alloc.vec.FromBoxSliceVec.from
+  «from» := alloc.vec.FromBoxSliceVec.from
 }
 
 def alloc.vec.Vec.setSlice! {α : Type u} (s : alloc.vec.Vec α) (i : ℕ) (s' : List α) : alloc.vec.Vec α :=

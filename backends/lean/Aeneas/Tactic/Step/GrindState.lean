@@ -197,13 +197,9 @@ private def internalizeHypotheses (goal : Goal) (config : Config)
           catch e =>
             trace[Step] "addProp: Grind.add failed on hypothesis (skipping):\n  \
               type: {propType}\n  error: {e.toMessageData}"
-        /- Step 1: internalize the original type (out of precaution, so that fvars
-           referring to this hypothesis in their types also get internalized) -/
-        addProp type localDecl.toExpr
-        /- Step 2: simplify with Aeneas simpsets (scalar_tac_simps, etc.) and internalize
-           the simplified type. This is the version grind actually needs to discharge most
-           preconditions — previously `step` would do `simp [...] at *; agrind`, but here
-           we simplify on the fly to avoid modifying the user-visible context.
+        /- Simplify with Aeneas simpsets (scalar_tac_simps, etc.) and internalize
+           the result. If simplification changes the type, directly internalize the
+           simplified version. If simplification has no effect, internalize the original.
            Note: the type may differ even when `simpResult.proof?` is none (proof by
            reflection / definitional equality), so we compare expressions directly. -/
         let (simpResult, _) ← Lean.Meta.simp type simpCtx simprocs
@@ -215,6 +211,8 @@ private def internalizeHypotheses (goal : Goal) (config : Config)
             else
               localDecl.toExpr
           addProp simplifiedType simpPrf
+        else
+          addProp type localDecl.toExpr
         -- Optionally run preprocessing after THIS hypothesis
         if config.preprocessGrind then
           let goal ← get

@@ -40,4 +40,22 @@ Definition or_u32 (a : u32) (b : u32) : result u32 :=
 Definition and_u32 (a : u32) (b : u32) : result u32 :=
   Ok (u32_and a b).
 
+(** [bitwise::and_bool]:
+    Source: 'tests/src/bitwise.rs', lines 30:0-32:1
+    Visibility: public *)
+Definition and_bool (a : bool) (b : bool) : result bool :=
+  Ok (bool_and a b).
+
+(** [bitwise::or_bool]:
+    Source: 'tests/src/bitwise.rs', lines 34:0-36:1
+    Visibility: public *)
+Definition or_bool (a : bool) (b : bool) : result bool :=
+  Ok (bool_or a b).
+
+(** [bitwise::xor_bool]:
+    Source: 'tests/src/bitwise.rs', lines 38:0-40:1
+    Visibility: public *)
+Definition xor_bool (a : bool) (b : bool) : result bool :=
+  Ok (bool_xor a b).
+
 End Bitwise.

@@ -21,4 +21,51 @@ def join_nested_shared (b : Bool) : Result Unit := do
   then massert (1#i32 > 0#i32)
   else massert (2#i32 > 0#i32)
 
+/-- [join_duplicate::join_nested_shared_in_loop]: loop body 0:
+    Source: 'tests/src/join-duplicate.rs', lines 26:4-28:5 -/
+@[rust_loop_body]
+def join_nested_shared_in_loop_loop0.body
+  (n : Std.U32) (i : Std.U32) : Result (ControlFlow Std.U32 Unit) := do
+  if i < n
+  then let i1 ← i + 1#u32
+       ok (cont i1)
+  else ok (done ())
+
+/-- [join_duplicate::join_nested_shared_in_loop]: loop 0:
+    Source: 'tests/src/join-duplicate.rs', lines 26:4-28:5 -/
+@[rust_loop]
+def join_nested_shared_in_loop_loop0
+  (n : Std.U32) (i : Std.U32) : Result Unit := do
+  loop
+    (fun i1 => join_nested_shared_in_loop_loop0.body n i1)
+    i
+
+/-- [join_duplicate::join_nested_shared_in_loop]: loop body 1:
+    Source: 'tests/src/join-duplicate.rs', lines 26:4-28:5 -/
+@[rust_loop_body]
+def join_nested_shared_in_loop_loop1.body
+  (n : Std.U32) (i : Std.U32) : Result (ControlFlow Std.U32 Unit) := do
+  if i < n
+  then let i1 ← i + 1#u32
+       ok (cont i1)
+  else ok (done ())
+
+/-- [join_duplicate::join_nested_shared_in_loop]: loop 1:
+    Source: 'tests/src/join-duplicate.rs', lines 26:4-28:5 -/
+@[rust_loop]
+def join_nested_shared_in_loop_loop1
+  (n : Std.U32) (i : Std.U32) : Result Unit := do
+  loop
+    (fun i1 => join_nested_shared_in_loop_loop1.body n i1)
+    i
+
+/-- [join_duplicate::join_nested_shared_in_loop]:
+    Source: 'tests/src/join-duplicate.rs', lines 19:0-30:1 -/
+def join_nested_shared_in_loop (b : Bool) (n : Std.U32) : Result Std.I32 := do
+  if b
+  then join_nested_shared_in_loop_loop0 n 0#u32
+       ok 1#i32
+  else join_nested_shared_in_loop_loop1 n 0#u32
+       ok 2#i32
+
 end join_duplicate

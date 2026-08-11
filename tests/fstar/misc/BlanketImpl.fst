@@ -18,14 +18,9 @@ noeq type trait2_t (self : Type0) = { foo : result unit; }
 let trait2_foo_default (self : Type0) : result unit =
   Ok ()
 
-(** [blanket_impl::{impl blanket_impl::Trait2 for T}::foo]:
-    Source: 'tests/src/blanket_impl.rs', lines 9:0-9:31 *)
-let trait2_Blanket_foo (#t : Type0) (trait1Inst : trait1_t t) : result unit =
-  Ok ()
-
 (** Trait implementation: [blanket_impl::{impl blanket_impl::Trait2 for T}]
     Source: 'tests/src/blanket_impl.rs', lines 9:0-9:31 *)
 let trait2_Blanket (#t : Type0) (trait1Inst : trait1_t t) : trait2_t t = {
-  foo = trait2_Blanket_foo trait1Inst;
+  foo = trait2_foo_default t;
 }
 

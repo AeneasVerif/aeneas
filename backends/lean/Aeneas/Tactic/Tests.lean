@@ -1,4 +1,5 @@
 import Aeneas.Tactic.Solver.ScalarTac.Tests
+import Aeneas.Tactic.Solver.Grind.Tests
 import Aeneas.Tactic.Solver.BvTac.Tests
 import Aeneas.Tactic.Conv.Bvify.Tests
 import Aeneas.Tactic.Simp.SimpLists.Tests

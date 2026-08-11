@@ -65,8 +65,8 @@ theorem core.num.checked_div_IScalar_bv_spec {ty} (x y : IScalar ty) :
   . zify at *
     simp_all
   . rename_i hnz hNoOverflow
-    simp
-    have hnz' : y.val ≠ 0 := by zify at *; simp_all
+    have hnz' : y.val ≠ 0 := by
+      intro h; apply hnz; exact h
     have ⟨ z, hz ⟩ := @IScalar.div_bv_spec _ x y hnz' (by simp; tauto)
     have : x / y = x.div y := by rfl
     simp [this, IScalar.div, hnz] at hz

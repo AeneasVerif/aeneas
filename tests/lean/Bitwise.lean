@@ -46,4 +46,22 @@ def or_u32 (a : Std.U32) (b : Std.U32) : Result Std.U32 := do
 def and_u32 (a : Std.U32) (b : Std.U32) : Result Std.U32 := do
   ok (a &&& b)
 
+/-- [bitwise::and_bool]:
+    Source: 'tests/src/bitwise.rs', lines 30:0-32:1
+    Visibility: public -/
+def and_bool (a : Bool) (b : Bool) : Result Bool := do
+  ok (a && b)
+
+/-- [bitwise::or_bool]:
+    Source: 'tests/src/bitwise.rs', lines 34:0-36:1
+    Visibility: public -/
+def or_bool (a : Bool) (b : Bool) : Result Bool := do
+  ok (a || b)
+
+/-- [bitwise::xor_bool]:
+    Source: 'tests/src/bitwise.rs', lines 38:0-40:1
+    Visibility: public -/
+def xor_bool (a : Bool) (b : Bool) : Result Bool := do
+  ok (a ^^ b)
+
 end bitwise

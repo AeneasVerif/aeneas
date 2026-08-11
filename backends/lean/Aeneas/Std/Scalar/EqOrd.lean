@@ -97,4 +97,16 @@ scalar @[reducible] def core.cmp.Ord'S : core.cmp.Ord «%S» := {
   min := liftFun2 core.cmp.impls.Ord'S.min
   clamp := core.cmp.impls.Ord'S.clamp }
 
+/- Step spec for `Ord::min` at a scalar type, as called through the trait
+   default (`min.trait_default core.cmp.Ord'S`).  Reduces to the scalar
+   `impls.Ord'S.min` model so downstream reasoning (`simp [impls.Ord'S.min]`)
+   is unchanged. -/
+uscalar
+@[step]
+theorem core.cmp.Ord.min.trait_default_'S.spec (x y : «%S») :
+    core.cmp.Ord.min.trait_default core.cmp.Ord'S x y
+    ⦃ r => r = core.cmp.impls.Ord'S.min x y ⦄ := by
+  simp [trait_default, default, min_body, impls.Ord'S.min, impls.PartialOrd'S.lt, WP.spec, WP.theta]
+  split_ifs <;> simp [WP.wp_return]
+
 end Aeneas.Std

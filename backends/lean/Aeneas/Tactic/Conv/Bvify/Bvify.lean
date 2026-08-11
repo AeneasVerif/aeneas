@@ -277,12 +277,14 @@ theorem UScalar.le_equiv_bv_le {ty : UScalarTy} (x y : UScalar ty) : x ≤ y ↔
 @[bvify] theorem U32.lt_bv (x y : U32) : x < y ↔ x.bv < y.bv := by rfl
 @[bvify] theorem U64.lt_bv (x y : U64) : x < y ↔ x.bv < y.bv := by rfl
 @[bvify] theorem U128.lt_bv (x y : U128) : x < y ↔ x.bv < y.bv := by rfl
+@[bvify] theorem Usize.lt_bv (x y : Usize) : x < y ↔ x.bv < y.bv := by rfl
 
 @[bvify] theorem U8.le_bv  (x y : U8)  : x ≤ y ↔ x.bv ≤ y.bv := by rfl
 @[bvify] theorem U16.le_bv (x y : U16) : x ≤ y ↔ x.bv ≤ y.bv := by rfl
 @[bvify] theorem U32.le_bv (x y : U32) : x ≤ y ↔ x.bv ≤ y.bv := by rfl
 @[bvify] theorem U64.le_bv (x y : U64) : x ≤ y ↔ x.bv ≤ y.bv := by rfl
 @[bvify] theorem U128.le_bv (x y : U128) : x ≤ y ↔ x.bv ≤ y.bv := by rfl
+@[bvify] theorem Usize.le_bv (x y : Usize) : x ≤ y ↔ x.bv ≤ y.bv := by rfl
 
 def bvifyAddSimpThms (n : Expr) : TacticM (Array FVarId) := do
   let addThm (thName : Name) : TacticM FVarId := do

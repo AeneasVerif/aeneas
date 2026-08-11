@@ -45,3 +45,13 @@ example (a : U32) (ha : a.val < 2 * 3329)
     (i : U32) (hi2 : i.bv = res.bv >>> 16) :
     i = 0#u32 ∨ i = 65535#u32 := by
   bvify 32 at *
+
+/--
+error: unsolved goals
+a b : Usize
+h : a.bv < b.bv
+⊢ a.bv ≤ b.bv
+-/
+#guard_msgs in
+example (a b : Usize) (h : a < b) : a ≤ b := by
+  bvify System.Platform.numBits at *

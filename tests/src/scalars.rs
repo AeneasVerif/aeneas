@@ -1,4 +1,6 @@
 //@ [!lean] skip
+#![feature(register_tool)]
+#![register_tool(verify)]
 
 fn u32_use_wrapping_add(x: u32, y: u32) -> u32 {
     x.wrapping_add(y)
@@ -125,4 +127,63 @@ pub fn u32_use_bits() -> u32 {
 
 pub fn i32_use_bits() -> u32 {
     i32::BITS
+}
+
+// ============================================================================
+// is_multiple_of
+// ============================================================================
+
+#[verify::test]
+pub fn test_is_multiple_of_true() {
+    assert!(12usize.is_multiple_of(4));
+}
+
+#[verify::test]
+pub fn test_is_multiple_of_false() {
+    assert!(!7usize.is_multiple_of(3));
+}
+
+#[verify::test]
+pub fn test_is_multiple_of_zero_divisor() {
+    // Only 0 is a multiple of 0.
+    assert!(0usize.is_multiple_of(0));
+    assert!(!5usize.is_multiple_of(0));
+}
+
+// ============================================================================
+// TryFrom<...>
+// ============================================================================
+
+#[verify::test]
+pub fn test_try_from_usize_u32_ok() {
+    assert!(u32::try_from(5usize).is_ok());
+}
+
+// ============================================================================
+// `?` operator on Result (branch / from_residual)
+// ============================================================================
+
+fn checked_div(a: u32, b: u32) -> Result<u32, ()> {
+    if b == 0 {
+        return Err(());
+    }
+    Ok(a / b)
+}
+
+fn use_question_mark(a: u32, b: u32) -> Result<u32, ()> {
+    let q = checked_div(a, b)?;
+    Ok(q + 1)
+}
+
+#[verify::test]
+pub fn test_question_mark_ok() {
+    let r = use_question_mark(10, 2);
+    assert!(r.is_ok());
+    assert!(r.unwrap() == 6u32);
+}
+
+#[verify::test]
+pub fn test_question_mark_err() {
+    let r = use_question_mark(10, 0);
+    assert!(!r.is_ok());
 }

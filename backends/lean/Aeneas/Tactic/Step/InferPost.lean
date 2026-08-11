@@ -1,5 +1,7 @@
 import Lean
 import AeneasMeta.Utils
+import AeneasMeta.Simp.Simp
+import Mathlib.Tactic.Simproc.ExistsAndEq
 import Aeneas.Tactic.Solver.Grind.Init
 import Aeneas.Tactic.Step.Init
 
@@ -56,6 +58,12 @@ def inferPost (goal : MVarId) (eliminate : LocalDecl → Bool := fun _ => true) 
     -- Wrap with existentials over all escaping vars
     let existsBody ← escapingLocalDecls.foldrM (fun decl acc => do
         mkAppM ``Exists #[← mkLambdaFVars #[.fvar decl.fvarId] acc]) body
+    -- Simplify the inferred post-condition *before* it is used
+    let (ctx, simprocs) ← Aeneas.Simp.mkSimpCtx true { failIfUnchanged := false } .simp
+      { addSimpThms := #[``exists_prop, ``exists_and_left, ``exists_and_right,
+                         ``and_true, ``true_and],
+        addSimprocs := #[``ExistsAndEq.existsAndEq] }
+    let existsBody := (← Lean.Meta.simp existsBody ctx simprocs).1.expr
     mkLambdaFVars boundVars existsBody
   trace[Step] m!"inferred postcondition: {←ppExpr postExpr}"
   postMVarId.assign postExpr

@@ -203,6 +203,7 @@ theorem IScalar.cast_fromBool_bound_eq ty (b : Bool) :
     simp [this]
   . simp
 
+@[simp low, scalar_tac_simps low, simp_scalar low]
 theorem UScalar.cast_val_eq {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) :
   (cast tgt_ty x).val = x.val % 2^(tgt_ty.numBits) := by
   simp only [cast, val]
@@ -272,27 +273,71 @@ theorem UScalar.cast_val_mod_pow_greater_numBits_eq {src_ty : UScalarTy} (tgt_ty
   have := @Nat.pow_le_pow_right 2 (by simp) src_ty.numBits tgt_ty.numBits (by omega)
   omega
 
-@[simp]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem UScalar.cast_val_mod_pow_of_inBounds_eq {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) (h : x.val < 2^tgt_ty.numBits) :
   (cast tgt_ty x).val = x.val := by
   simp [UScalar.cast_val_eq]
   apply Nat.mod_eq_of_lt
   assumption
 
-@[simp]
+@[simp low, bvify low, scalar_tac_simps low, simp_scalar low]
 theorem UScalar.cast_bv_eq {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) :
   (cast tgt_ty x).bv = x.bv.setWidth tgt_ty.numBits := by
   simp [UScalar.cast]
 
+/-- Heterogeneous cast (unsigned → signed): the underlying bit-vector is
+    zero-extended/truncated. Stated on `.bv` so `bv_tac` / `simp` can compute
+    it (including on literals) without kernel `decide`/`rfl`. -/
+@[simp low, bvify low, scalar_tac_simps low, simp_scalar low]
+theorem UScalar.hcast_bv_eq {src_ty : UScalarTy} (tgt_ty : IScalarTy) (x : UScalar src_ty) :
+  (hcast tgt_ty x).bv = x.bv.setWidth tgt_ty.numBits := by
+  simp [UScalar.hcast]
+
+/-- Signed → signed cast: the underlying bit-vector is sign-extended/truncated. -/
+@[simp low, bvify low, scalar_tac_simps low, simp_scalar low]
+theorem IScalar.cast_bv_eq {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) :
+  (cast tgt_ty x).bv = x.bv.signExtend tgt_ty.numBits := by
+  simp [IScalar.cast]
+
+/-- Heterogeneous cast (signed → unsigned): the underlying bit-vector is
+    sign-extended/truncated. This is what lets `bv_tac` discharge e.g.
+    `IScalar.hcast .U32 (-3)#i32 = 4294967293#u32` without the expensive
+    `simp [show IScalar.hcast .U32 (-3)#i32 = 4294967293#u32 from rfl]`. -/
+@[simp low, bvify low, scalar_tac_simps low, simp_scalar low]
+theorem IScalar.hcast_bv_eq {src_ty : IScalarTy} (tgt_ty : UScalarTy) (x : IScalar src_ty) :
+  (hcast tgt_ty x).bv = x.bv.signExtend tgt_ty.numBits := by
+  simp [IScalar.hcast]
+
+/-- `.val` form of the unsigned → signed heterogeneous cast, stated with a
+    modulo on `x.val` directly (no `bv`/`setWidth`/`toInt`): the signed result
+    is `x.val` balanced-mod `2 ^ tgt.numBits`. Lets `simp` compute the value on
+    literals (via the `Int` simprocs) without `rfl`. -/
+@[simp low, scalar_tac_simps low, simp_scalar low]
+theorem UScalar.hcast_val_eq {src_ty : UScalarTy} (tgt_ty : IScalarTy) (x : UScalar src_ty) :
+  (hcast tgt_ty x).val = Int.bmod x.val (2 ^ tgt_ty.numBits) := by
+  simp only [UScalar.hcast, IScalar.val, BitVec.toInt_setWidth, UScalar.val]
+
+/-- `.val` form of the signed → unsigned heterogeneous cast, stated with a
+    modulo on `x.val` directly (no `bv`/`signExtend`): the unsigned result is
+    `x.val mod 2 ^ tgt.numBits` (the `Int.toNat` merely reflects that the result
+    type is `Nat`; the emod already lands in `[0, 2 ^ tgt.numBits)`). Lets `simp`
+    compute the value on literals (via the `Int` simprocs) without `rfl`. -/
+@[simp low, scalar_tac_simps low, simp_scalar low]
+theorem IScalar.hcast_val_eq {src_ty : IScalarTy} (tgt_ty : UScalarTy) (x : IScalar src_ty) :
+  (hcast tgt_ty x).val = (x.val % (2 ^ tgt_ty.numBits)).toNat := by
+  simp only [IScalar.hcast, UScalar.val, IScalar.val, BitVec.signExtend,
+             BitVec.toNat_ofInt, Nat.cast_pow, Nat.cast_ofNat]
+
 example (x : U16) : (x.cast .U32).val = x.val := by simp
 example : ((U32.ofNat 42).cast .U16).val = 42 := by simp
 
+@[simp low, scalar_tac_simps low, simp_scalar low]
 theorem IScalar.cast_val_eq {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) :
   (cast tgt_ty x).val = Int.bmod x.val (2^(Min.min tgt_ty.numBits src_ty.numBits)) := by
   simp only [cast, val]
   simp only [BitVec.toInt_signExtend]
 
-@[simp]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem IScalar.val_mod_pow_greater_numBits {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) (h : src_ty.numBits ≤ tgt_ty.numBits) :
   (cast tgt_ty x).val = x.val := by
   simp [IScalar.cast_val_eq]
@@ -303,7 +348,7 @@ theorem IScalar.val_mod_pow_greater_numBits {src_ty : IScalarTy} (tgt_ty : IScal
   rw [this]
   apply Int.bmod_pow2_eq_of_inBounds <;> omega
 
-@[simp]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem IScalar.val_mod_pow_inBounds {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty)
   (hMin : -2^(tgt_ty.numBits - 1) ≤ x.val) (hMax : x.val < 2^(tgt_ty.numBits - 1)) :
   (cast tgt_ty x).val = x.val := by

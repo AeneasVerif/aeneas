@@ -19,24 +19,19 @@ let boolTrait_retTest_default (#self : Type0) (self1 : self) : result bool =
 let boolImpl_getTest (self : bool) : result bool =
   Ok self
 
-(** [rename_attribute::{impl rename_attribute::BoolTrait for bool}::ret_true]:
-    Source: 'tests/src/rename_attribute.rs', lines 23:0-27:1
-    Visibility: public *)
-let boolImpl_retTest (self : bool) : result bool =
-  Ok true
-
 (** Trait implementation: [rename_attribute::{impl rename_attribute::BoolTrait for bool}]
     Source: 'tests/src/rename_attribute.rs', lines 23:0-27:1 *)
 let boolImpl : boolTest_t bool = {
   getTest = boolImpl_getTest;
-  retTest = boolImpl_retTest;
+  retTest = boolTrait_retTest_default;
 }
 
 (** [rename_attribute::test_bool_trait]:
     Source: 'tests/src/rename_attribute.rs', lines 30:0-32:1
     Visibility: public *)
 let boolFn (t : Type0) (x : bool) : result bool =
-  let* b = boolImpl_getTest x in if b then boolImpl_retTest x else Ok false
+  let* b = boolImpl_getTest x in
+  if b then boolTrait_retTest_default x else Ok false
 
 (** [rename_attribute::C]
     Source: 'tests/src/rename_attribute.rs', lines 52:0-52:28 *)

@@ -916,7 +916,7 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
       (* A place mention just needs to check the place projections are valid; for
          now we treat this as a no-op *)
       ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span (fun e -> e))
-  | Drop (p, _, _) ->
+  | Drop (p, _, _, _) ->
       if !Config.drop_as_no_op then
         ([ (ctx, Unit) ], cf_singleton __FILE__ __LINE__ st.span)
       else
@@ -926,10 +926,10 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
       let p = mk_place_from_var_id ctx st.span local in
       let ctx, cc = drop_value config st.span p ctx in
       ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span cc)
-  | Assert (assertion, _on_failure) ->
+  | Assert (assertion, _on_failure, _) ->
       let (ctx, res), cc = eval_assertion config st.span assertion ctx in
       ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
-  | Call call -> eval_function_call config st.span call ctx
+  | Call (call, _) -> eval_function_call config st.span call ctx
   | Abort _ ->
       (* Evaluate to a panic only if the execution is concrete, otherwise we stop
          evaluating there and synthesize a [panic] node in the symbolic AST. *)
@@ -937,6 +937,7 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
         ([ (ctx, Panic) ], cf_singleton __FILE__ __LINE__ st.span)
       else ([], cf_empty __FILE__ __LINE__ st.span SA.Panic)
   | Return -> ([ (ctx, Return) ], cf_singleton __FILE__ __LINE__ st.span)
+  | UnwindResume -> [%craise] st.span "unwinding is not supported by Aeneas"
   | Break i -> ([ (ctx, Break i) ], cf_singleton __FILE__ __LINE__ st.span)
   | Continue i -> ([ (ctx, Continue i) ], cf_singleton __FILE__ __LINE__ st.span)
   | StorageLive _ | Nop ->
