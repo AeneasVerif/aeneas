@@ -627,10 +627,12 @@ and binop =
   | BitOr of integer_type
   | Eq of ty
   | Ne of ty
-  | Lt of integer_type
-  | Le of integer_type
-  | Ge of integer_type
-  | Gt of integer_type
+  | Lt of literal_type
+      (** The comparison operations carry a [literal_type] because they can be
+          applied both to integers and booleans (with order: [false < true]). *)
+  | Le of literal_type
+  | Ge of literal_type
+  | Gt of literal_type
   | Add of overflow_mode * integer_type
   | Sub of overflow_mode * integer_type
   | Mul of overflow_mode * integer_type
@@ -642,12 +644,15 @@ and binop =
   | Shl of overflow_mode * integer_type * integer_type
   | Shr of overflow_mode * integer_type * integer_type
   | Cmp of integer_type
+  | BoolAnd
+      (** Boolean conjunction. Used to translate Rust [a & b] on booleans. *)
   | BoolOr
-      (** This doesn't exist in the MIR because && and || are elaborated to lazy
-          boolean operations. We introduce || in the pure code to be able to
-          reconstruct assertions of the shape [assert!(b0 || b1)]. Note that we
-          do not introduce && because we can translate an [assert! (b0 && b1)]
-          to [assert b0; assert b1]. *)
+      (** Boolean disjunction. Used to translate Rust [a | b] on booleans (see
+          [BoolAnd]), and also introduced by the symbolic-to-pure translation to
+          reconstruct assertions of the shape [assert!(b0 || b1)].
+          [assert!(b0 && b1)] can be translated to [assert b0; assert b1]. *)
+  | BoolXor
+      (** Boolean exclusive-or, used to translate Rust [a ^ b] on booleans. *)
 
 and builtin_impl_data =
   | BuiltinCopy

@@ -185,6 +185,11 @@ let ty_refresh_regions (span : Meta.span option)
         (* We shouldn't get there and should rather catch all the call sites *)
         [%internal_error_opt_span] span
 
+      (* The region ids in [binder_regions] (e.g. higher-ranked trait bounds or
+         arrow types) are *binding* occurrences, not uses: leave them untouched.
+         Their uses are [RVar (Bound _)], handled by [visit_RVar] below. *)
+      method! visit_region_param _ rp = rp
+
       method! visit_RVar _ var =
         match var with
         | Free rid -> RVar (Free (get_region rid))

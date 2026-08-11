@@ -83,107 +83,6 @@ theorem IScalar.neg_imp_toNat_neg_eq_neg_toInt {ty} (x : IScalar ty) (hNeg : x.v
   omega
 
 /-!
-# Misc Theorems
--/
-
-@[simp] theorem UScalar.exists_eq_left {p : UScalar ty → Prop} {a' : UScalar ty} :
-  (∃ (a : UScalar ty), a.val = a'.val ∧ p a) ↔ p a' := by
-  constructor <;> intro h
-  . replace ⟨ a, h, hp ⟩ := h
-    cases a'
-    simp_all only [val]
-    have := @BitVec.toNat_injective ty.numBits
-    have := this h
-    simp [← this]
-    apply hp
-  . exists a'
-
-@[simp] theorem IScalar.exists_eq_left {p : IScalar ty → Prop} {a' : IScalar ty} :
-  (∃ (a : IScalar ty), a.val = a'.val ∧ p a) ↔ p a' := by
-  constructor <;> intro h
-  . replace ⟨ a, h, hp ⟩ := h
-    cases a'
-    simp_all only [val, eq_comm]
-    rw [BitVec.toInt_inj] at h
-    simp [h]
-    apply hp
-  . exists a'
-
-@[simp] theorem UScalar.exists_eq_left' {p : UScalar ty → Prop} {a' : UScalar ty} :
-  (∃ (a : UScalar ty), a'.val = a.val ∧ p a) ↔ p a' := by
-  constructor <;> intro h
-  . replace ⟨ a, h, hp ⟩ := h
-    cases a'
-    simp_all only [val]
-    have := @BitVec.toNat_injective ty.numBits
-    have := this h
-    simp [this]
-    apply hp
-  . exists a'
-
-@[simp] theorem IScalar.exists_eq_left' {p : IScalar ty → Prop} {a' : IScalar ty} :
-  (∃ (a : IScalar ty), a'.val = a.val ∧ p a) ↔ p a' := by
-  constructor <;> intro h
-  . replace ⟨ a, h, hp ⟩ := h
-    cases a'
-    simp_all only [val]
-    rw [BitVec.toInt_inj] at h
-    simp [h]
-    apply hp
-  . exists a'
-
-@[simp] theorem UScalar.exists_eq_right {p : UScalar ty → Prop} {a' : UScalar ty} :
-  (∃ (a : UScalar ty), p a ∧ a.val = a'.val) ↔ p a' := by
-  constructor <;> intro h
-  . replace ⟨ a, hp, h ⟩ := h
-    cases a'
-    simp_all only [val]
-    have := @BitVec.toNat_injective ty.numBits
-    have := this h
-    simp [← this]
-    apply hp
-  . exists a'
-
-@[simp] theorem IScalar.exists_eq_right {p : IScalar ty → Prop} {a' : IScalar ty} :
-  (∃ (a : IScalar ty), p a ∧ a.val = a'.val) ↔ p a' := by
-  constructor <;> intro h
-  . replace ⟨ a, hp, h ⟩ := h
-    cases a'
-    simp_all only [val, eq_comm]
-    rw [BitVec.toInt_inj] at h
-    simp [h]
-    apply hp
-  . exists a'
-
-@[simp] theorem UScalar.exists_eq_right' {p : UScalar ty → Prop} {a' : UScalar ty} :
-  (∃ (a : UScalar ty), p a ∧ a'.val = a.val) ↔ p a' := by
-  constructor <;> intro h
-  . replace ⟨ a, hp, h ⟩ := h
-    cases a'
-    simp_all only [val]
-    have := @BitVec.toNat_injective ty.numBits
-    have := this h
-    simp [this]
-    apply hp
-  . exists a'
-
-@[simp] theorem IScalar.exists_eq_right' {p : IScalar ty → Prop} {a' : IScalar ty} :
-  (∃ (a : IScalar ty), p a ∧ a'.val = a.val) ↔ p a' := by
-  constructor <;> intro h
-  . replace ⟨ a, hp, h ⟩ := h
-    cases a'
-    simp_all only [val]
-    rw [BitVec.toInt_inj] at h
-    simp [h]
-    apply hp
-  . exists a'
-
-@[simp] theorem UScalar.exists_eq {a' : UScalar ty} : ∃ (a : UScalar ty), a.val = a'.val := by exists a'
-@[simp] theorem UScalar.exists_eq' {a' : UScalar ty} : ∃ (a : UScalar ty), a'.val = a.val := by exists a'
-@[simp] theorem IScalar.exists_eq {a' : IScalar ty} : ∃ (a : IScalar ty), a.val = a'.val := by exists a'
-@[simp] theorem IScalar.exists_eq' {a' : IScalar ty} : ∃ (a : IScalar ty), a'.val = a.val := by exists a'
-
-/-!
 # Equalities and simplification lemmas
 -/
 
@@ -279,12 +178,18 @@ theorem UScalar.ofNatCore_bv_lt_equiv {ty} (x y : Nat) (hx) (hy) :
   simp [size]; apply Int.bmod_pow2_eq_of_inBounds' <;> try scalar_tac
   simp [numBits]; cases System.Platform.numBits_eq <;> simp [*]
 
-@[simp] theorem U8.val_max_zero_eq (x : U8) : x.val ⊔ 0 = x.val := by scalar_tac
-@[simp] theorem U16.val_max_zero_eq (x : U16) : x.val ⊔ 0 = x.val := by scalar_tac
-@[simp] theorem U32.val_max_zero_eq (x : U32) : x.val ⊔ 0 = x.val := by scalar_tac
-@[simp] theorem U64.val_max_zero_eq (x : U64) : x.val ⊔ 0 = x.val := by scalar_tac
-@[simp] theorem U128.val_max_zero_eq (x : U128) : x.val ⊔ 0 = x.val := by scalar_tac
-@[simp] theorem Usize.val_max_zero_eq (x : Usize) : x.val ⊔ 0 = x.val := by scalar_tac
+@[simp, scalar_tac_simps] theorem U8.val_max_zero_eq (x : U8) : x.val ⊔ 0 = x.val := by scalar_tac
+@[simp, scalar_tac_simps] theorem U16.val_max_zero_eq (x : U16) : x.val ⊔ 0 = x.val := by scalar_tac
+@[simp, scalar_tac_simps] theorem U32.val_max_zero_eq (x : U32) : x.val ⊔ 0 = x.val := by scalar_tac
+@[simp, scalar_tac_simps] theorem U64.val_max_zero_eq (x : U64) : x.val ⊔ 0 = x.val := by scalar_tac
+@[simp, scalar_tac_simps] theorem U128.val_max_zero_eq (x : U128) : x.val ⊔ 0 = x.val := by scalar_tac
+@[simp, scalar_tac_simps] theorem Usize.val_max_zero_eq (x : Usize) : x.val ⊔ 0 = x.val := by scalar_tac
 
+@[simp, scalar_tac_simps] theorem U8.zero_max_val_eq (x : U8) : 0 ⊔ x.val = x.val := by scalar_tac
+@[simp, scalar_tac_simps] theorem U16.zero_max_val_eq (x : U16) : 0 ⊔ x.val = x.val := by scalar_tac
+@[simp, scalar_tac_simps] theorem U32.zero_max_val_eq (x : U32) : 0 ⊔ x.val = x.val := by scalar_tac
+@[simp, scalar_tac_simps] theorem U64.zero_max_val_eq (x : U64) : 0 ⊔ x.val = x.val := by scalar_tac
+@[simp, scalar_tac_simps] theorem U128.zero_max_val_eq (x : U128) : 0 ⊔ x.val = x.val := by scalar_tac
+@[simp, scalar_tac_simps] theorem Usize.zero_max_val_eq (x : Usize) : 0 ⊔ x.val = x.val := by scalar_tac
 
 end Aeneas.Std

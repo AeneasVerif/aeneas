@@ -12,7 +12,22 @@ set_option maxHeartbeats 1000000
 /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
 set_option maxRecDepth 2048
 
+/- You can remove the following line by using the CLI option `-all-computable`: -/
+noncomputable section
+
 namespace closures
+
+/-- [core::iter::traits::iterator::Iterator::map]:
+    Source: '/rustc/library/core/src/iter/traits/iterator.rs', lines 831:4-834:34
+    Name pattern: [core::iter::traits::iterator::Iterator::map]
+    Visibility: public -/
+@[trait_default, rust_fun "core::iter::traits::iterator::Iterator::map"]
+axiom core.iter.traits.iterator.Iterator.map.default
+  {Self : Type} {B : Type} {F : Type} {Clause0_Item : Type} (IteratorInst :
+  core.iter.traits.iterator.Iterator Self Clause0_Item)
+  (opsfunctionFnMutFTupleClause0_ItemBInst : core.ops.function.FnMut F
+  Clause0_Item B) :
+  Self → F → Result (core.iter.adapters.map.Map Self F)
 
 /-- [closures::call_fn_no_state::closure]
     Source: 'tests/src/closures.rs', lines 4:15-4:40 -/
@@ -336,8 +351,9 @@ def u8_id (x : Std.U8) : Result Std.U8 := do
 def map_fn_pointer (x : alloc.vec.Vec Std.U8) : Result Unit := do
   let ii ← alloc.vec.IntoIteratorVec.into_iter x
   let _ ←
-    alloc.vec.into_iter.IntoIter.Insts.CoreIterTraitsIteratorIterator.map
-      (BuiltinFnMut Std.U8 Std.U8) ii (u8_id)
+    core.iter.traits.iterator.Iterator.map.default
+      (core.iter.traits.iterator.IteratorVecIntoIter Std.U8) (BuiltinFnMut
+      Std.U8 Std.U8) ii (u8_id)
   ok ()
 
 end closures

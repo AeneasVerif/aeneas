@@ -16,13 +16,23 @@ jobs:
       runs_on: ${{ steps.select.outputs.runs_on }}
     steps:
       - id: select
+        env:
+          current_repository: ${{ github.repository }}
         run: |
           set -euo pipefail
 
-          heartbeat_repository="aeneasverif/charon"
+          heartbeat_repository="AeneasVerif/charon"
           self_hosted='["self-hosted","linux","nix"]'
           github_hosted='["ubuntu-latest"]'
           max_age_seconds=$((3 * 60 * 60))
+
+          # The self-hosted runner is only available on the main Aeneas repo.
+          # On forks (and any other repo), always fall back to GitHub-hosted.
+          if [ "$current_repository" != "AeneasVerif/aeneas" ]; then
+            echo "::notice title=Not on AeneasVerif/aeneas::Selecting GitHub-hosted runner; current repository is ${current_repository}."
+            echo "runs_on=$github_hosted" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           query_error="$(mktemp)"
           if default_branch=$(curl -fsSL "https://api.github.com/repos/${heartbeat_repository}" 2>"$query_error" | jq -r .default_branch); then

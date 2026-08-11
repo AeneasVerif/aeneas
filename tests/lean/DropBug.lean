@@ -17,22 +17,6 @@ noncomputable section
 
 namespace drop_bug
 
-/-- Trait declaration: [core::ops::drop::Drop]
-    Source: '/rustc/library/core/src/ops/drop.rs', lines 209:0-209:20
-    Name pattern: [core::ops::drop::Drop]
-    Visibility: public -/
-@[rust_trait "core::ops::drop::Drop"]
-structure core.ops.drop.Drop (Self : Type) where
-  drop : Self → Result Self
-
-/-- [core::ops::drop::Drop::drop]:
-    Source: '/rustc/library/core/src/ops/drop.rs', lines 243:4-243:22
-    Name pattern: [core::ops::drop::Drop::drop]
-    Visibility: public -/
-@[rust_fun "core::ops::drop::Drop::drop"]
-axiom core.ops.drop.Drop.drop.default
-  {Self : Type} (DropInst : core.ops.drop.Drop Self) : Self → Result Self
-
 /-- [drop_bug::wipe_slice]:
     Source: 'tests/src/drop_bug.rs', lines 20:0-24:1 -/
 axiom wipe_slice {T : Type} : Slice T → Result (Slice T)

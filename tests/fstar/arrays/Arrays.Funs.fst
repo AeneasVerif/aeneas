@@ -162,6 +162,7 @@ let update_update_array
   (s : array (array u32 32) 32) (i : usize) (j : usize) :
   result (array (array u32 32) 32)
   =
+  let* _ = array_index_usize s i in
   let* (a, index_mut_back) = array_index_mut_usize s i in
   let* a1 = array_update_usize a j 0 in
   Ok (index_mut_back a1)
@@ -418,7 +419,8 @@ let rec sum2_loop
 let sum2 (s : slice u32) (s2 : slice u32) : result u32 =
   let i = slice_len s in
   let i1 = slice_len s2 in
-  if i = i1 then sum2_loop s s2 0 0 else Fail Failure
+  let* _ = massert (i = i1) in
+  sum2_loop s s2 0 0
 
 (** [arrays::f0]:
     Source: 'tests/src/arrays.rs', lines 294:0-297:1

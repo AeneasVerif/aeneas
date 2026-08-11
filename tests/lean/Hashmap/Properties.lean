@@ -837,7 +837,6 @@ theorem try_resize_spec {α : Type} (hm : HashMap α) (hInv : hm.inv):
           simp [alloc.vec.Vec.len, inv, inv_load] at *
           -- TODO: this should be automated
           have hIneq1 : n1.val ≤ Usize.max / 2 := by simp [*]
-          simp at hIneq1
           -- TODO: this should be automated
           have hIneq2 : n2.val ≤ n1.val / hm.2.1.val := by simp [*]
           rw [Nat.le_div_iff_mul_le] at hIneq2 <;> try simp [*]

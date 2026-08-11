@@ -14,7 +14,7 @@ open InterpMatchCtxs
 (** The local logger *)
 let log = Logging.join_log
 
-(** Auxiliary helper for [reborrow_ashared_loans_symbolic_mutable_borrows] *)
+(** Auxiliary helper for [reborrow_ashared_loans_symbolic_borrows] *)
 let reborrow_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
     ~(with_abs_conts : bool) : cm_fun =
  fun ctx0 ->
@@ -41,6 +41,11 @@ let reborrow_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
      - the symbolic values have been replaced with fresh symbolic values
      - the region ids found in the value and belonging to the set [rids] have
        been substituted with [nrid]
+     - the shared borrows have been given fresh shared borrow ids: as we are
+       duplicating the shared value inside a new shared loan, the shared borrows
+       it contains (nested borrows below a shared borrow) become fresh
+       *instances* of the same loans, exactly as when copying a shared value
+       (see [InterpExpressions.copy_value])
   *)
   let mk_value_with_fresh_sids_no_shared_loans (rids : RegionId.Set.t)
       (nrid : RegionId.id) (v : tvalue) : tvalue =
@@ -57,6 +62,7 @@ let reborrow_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
             let sv = SymbolicValueId.Map.find id absl_id_maps.sids_to_values in
             sid_subst := (nid, sv) :: !sid_subst;
             nid);
+        sbsubst = (fun _ -> ctx.fresh_shared_borrow_id ());
       }
       v
   in
@@ -83,9 +89,13 @@ let reborrow_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
        x0 -> SB l1
        x1 -> SB l2
      ]}
+
+     [rty] is the type with region of the shared value, if it comes from a region
+     abstraction.
   *)
-  let push_abs_for_shared_value (abs : abs) (sv : tvalue) (lid : BorrowId.id)
-      (sid : SharedBorrowId.id) : BorrowId.id * SharedBorrowId.id =
+  let push_abs_for_shared_value (abs : abs) (sv : tvalue) (rty : ty option)
+      (lid : BorrowId.id) (sid : SharedBorrowId.id) :
+      BorrowId.id * SharedBorrowId.id =
     (* Create fresh borrows (for the reborrow) *)
     let nlid = ctx.fresh_borrow_id () in
     let nsid = ctx.fresh_shared_borrow_id () in
@@ -98,9 +108,21 @@ let reborrow_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
       mk_value_with_fresh_sids_no_shared_loans abs.regions.owned nrid sv
     in
 
-    (* Introduce the new abstraction for the shared values *)
-    [%cassert] span (ty_no_regions sv.ty) "Unimplemented";
-    let rty = sv.ty in
+    (* Introduce the new abstraction for the shared values.
+
+       If the shared value comes from a region abstraction, we reuse this type
+       directly for the projection. Otherwise, we the one that comes from the
+       symbolic value. We refresh the regions to make sure in particular that
+       erased regions disappear. *)
+    let rty =
+      let rty =
+        match rty with
+        | Some rty -> rty
+        | None -> sv.ty
+      in
+      let _, rty = ty_refresh_regions (Some span) ctx.fresh_region_id rty in
+      rty
+    in
 
     (* Create the shared loan child *)
     let child_rty = rty in
@@ -151,7 +173,10 @@ let reborrow_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
   in
 
   (* Compute the map from borrow id to shared value appearing in a region abstraction -
-     we only visit the region abstractions *)
+     we only visit the region abstractions.
+     We also store the region type of the shared value when we know it (i.e., for
+     abstract shared loans): this is needed to reborrow shared values which
+     themselves contain borrows (nested borrows below a shared borrow). *)
   let loan_to_shared_value = ref BorrowId.Map.empty in
   let visitor =
     object
@@ -159,12 +184,14 @@ let reborrow_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
 
       method! visit_VSharedLoan abs bid sv =
         loan_to_shared_value :=
-          BorrowId.Map.add bid (abs, sv) !loan_to_shared_value;
+          BorrowId.Map.add bid (abs, sv, None) !loan_to_shared_value;
         super#visit_VSharedLoan abs bid sv
 
       method! visit_ASharedLoan abs pm bid sv child =
+        (* [child] is the (ignored) region-typed projection of the shared value:
+           its type is the region type corresponding to [sv]'s erased type. *)
         loan_to_shared_value :=
-          BorrowId.Map.add bid (abs, sv) !loan_to_shared_value;
+          BorrowId.Map.add bid (abs, sv, Some child.ty) !loan_to_shared_value;
         super#visit_ASharedLoan abs pm bid sv child
     end
   in
@@ -187,10 +214,10 @@ let reborrow_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
         | None ->
             (* Do nothing *)
             super#visit_VSharedBorrow env bid sid
-        | Some (abs, sv) ->
+        | Some (abs, sv, rty) ->
             (* Check if the region abstraction is frozen *)
             if not abs.can_end then
-              let bid, sid = push_abs_for_shared_value abs sv bid sid in
+              let bid, sid = push_abs_for_shared_value abs sv rty bid sid in
               VSharedBorrow (bid, sid)
             else super#visit_VSharedBorrow env bid sid
     end

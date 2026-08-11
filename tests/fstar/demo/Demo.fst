@@ -175,15 +175,11 @@ let use_counter
 (** [demo::mod_add]:
     Source: 'tests/src/demo.rs', lines 117:0-125:1 *)
 let mod_add (a : u32) (b : u32) : result u32 =
-  if a < 3329
-  then
-    if b < 3329
-    then
-      let* sum = u32_add a b in
-      let* res = core_num_U32_wrapping_sub sum 3329 in
-      let* mask = u32_shr #I32 res 16 in
-      let q = u32_and 3329 mask in
-      core_num_U32_wrapping_add res q
-    else Fail Failure
-  else Fail Failure
+  let* _ = massert (a < 3329) in
+  let* _ = massert (b < 3329) in
+  let* sum = u32_add a b in
+  let* res = core_num_U32_wrapping_sub sum 3329 in
+  let* mask = u32_shr #I32 res 16 in
+  let q = u32_and 3329 mask in
+  core_num_U32_wrapping_add res q
 

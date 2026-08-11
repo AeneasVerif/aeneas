@@ -15,7 +15,7 @@ set_option maxRecDepth 2048
 namespace hashmap
 
 /-- [hashmap::AList]
-    Source: 'tests/src/hashmap.rs', lines 28:0-31:1
+    Source: 'tests/src/hashmap.rs', lines 24:0-27:1
     Visibility: public -/
 @[discriminant isize]
 inductive AList (T : Type) where
@@ -23,13 +23,13 @@ inductive AList (T : Type) where
 | Nil : AList T
 
 /-- [hashmap::Fraction]
-    Source: 'tests/src/hashmap.rs', lines 44:0-47:1 -/
+    Source: 'tests/src/hashmap.rs', lines 40:0-43:1 -/
 structure Fraction where
   dividend : Std.Usize
   divisor : Std.Usize
 
 /-- [hashmap::HashMap]
-    Source: 'tests/src/hashmap.rs', lines 50:0-62:1
+    Source: 'tests/src/hashmap.rs', lines 46:0-58:1
     Visibility: public -/
 structure HashMap (T : Type) where
   num_entries : Std.Usize

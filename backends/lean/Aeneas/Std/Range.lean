@@ -22,6 +22,18 @@ structure core.ops.range.RangeTo (Idx : Type u) where
   mk ::
   «end»: Idx
 
+/-- `core::ops::range::RangeInclusive` (`a..=b`).
+
+    Modelled with the three logical fields of the Rust struct: `start`, `«end»`,
+    and the `exhausted` flag (set once `a..=a` yields its single element).
+    `is_empty` is `exhausted || start > «end»`. -/
+@[rust_type "core::ops::range::RangeInclusive"]
+structure core.ops.range.RangeInclusive (Idx : Type u) where
+  mk ::
+  start : Idx
+  «end» : Idx
+  exhausted : Bool
+
 end Std
 
 end Aeneas

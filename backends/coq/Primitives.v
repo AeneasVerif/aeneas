@@ -70,6 +70,10 @@ Definition char_of_byte := Coq.Strings.Ascii.ascii_of_byte.
 
 Definition core_mem_replace {a : Type} (x : a) (y : a) : a * a := (x, x) .
 
+Definition bool_and (a b : bool) : bool := andb a b.
+Definition bool_or (a b : bool) : bool := orb a b.
+Definition bool_xor (a b : bool) : bool := xorb a b.
+
 Record mut_raw_ptr (T : Type) := { mut_raw_ptr_v : T }.
 Record const_raw_ptr (T : Type) := { const_raw_ptr_v : T }.
 
