@@ -29,12 +29,12 @@ def Slice.from {α} (l : List α) (h : l.length ≤ Usize.max) : Slice α :=
     bound := by assumption
   }
 
-@[simp, grind! ., grind .]
+@[scalar_tac_simps, simp, grind! ., grind .]
 theorem Slice.from_val {α} (l : List α) (h : l.length ≤ Usize.max)
   : (Slice.from l h).val = l := by
   simp [Slice.from, Slice.val, ListN.from_to_inverse]
 
-@[simp, grind! ., grind .]
+@[scalar_tac_simps, simp, grind! ., grind .]
 theorem Slice.val_from {α} (s : Slice α) h
   : Slice.from s.val h = s := by
   cases s

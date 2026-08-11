@@ -49,11 +49,11 @@ deriving BEq, ReflBEq, LawfulBEq, DecidableEq
 
 def Vec.val {α} (v : Vec α) : List α := (Slice.val v.slice)
 def Vec.from {α} (l : List α) (h : l.length ≤ Usize.max) : Vec α := {slice := Slice.from l h}
-@[simp, grind! ., grind .]
+@[scalar_tac_simps, simp, grind! ., grind .]
 theorem Vec.from_val {α} (l : List α) (h : l.length ≤ Usize.max)
   : (Vec.from l h).val = l := by simp [Vec.from, Vec.val]
 
-@[simp, grind! ., grind .]
+@[scalar_tac_simps, simp, grind! ., grind .]
 theorem Vec.val_from {α} (s : Vec α) h
   : Vec.from s.val h = s := by simp [Vec.from, Vec.val]
 

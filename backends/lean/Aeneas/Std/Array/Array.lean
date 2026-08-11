@@ -42,13 +42,13 @@ def Array.from {α n} (l : List α) (h : l.length = n.val) : Array α n :=
     list := cast (congrArg (ListN α) h) (.fromList l)
   }
 
-@[simp, grind! ., grind .]
+@[scalar_tac_simps, simp, grind! ., grind .]
 theorem Array.from_val {α} {n : Usize} (l : List α) (h : l.length = n.val)
   : (Array.from l h).val = l := by
   simp [Array.from, Array.val]
   grind [ListN.from_to_inverse]
 
-@[simp, grind! ., grind .]
+@[scalar_tac_simps, simp, grind! ., grind .]
 theorem Array.val_from {α n} (s : Array α n) h
   : Array.from s.val h = s := by
   rcases s with ⟨l⟩
