@@ -9,7 +9,6 @@ logic (SL) support.
 |---|---|
 | [`DoublyLinkedList.lean`](DoublyLinkedList.lean) | Port of the Verus doubly-linked-list example: executable definitions. |
 | [`DoublyLinkedListSpec.lean`](DoublyLinkedListSpec.lean) | Ghost state, specifications and proofs for `DoublyLinkedList.lean`. |
-| [`DoublyLinkedListTests.lean`](DoublyLinkedListTests.lean) | Frame-inference regression tests exercising the list specifications. |
 | [`doubly_linked_loc.py`](doubly_linked_loc.py) | Deterministically regenerates the relevant-LOC comparison with the pinned Verus example below. |
 | [`FFree.lean`](FFree.lean) | Defines the generic freer monad, and the state machines that give it an operational semantics (after "Program Logics à la Carte"): `StateMachine`, `Exec`, `Runs` and `Evaluates`. |
 | [`Heap.lean`](Heap.lean) | Defines locations, dynamically typed cells, and finite heaps. |
