@@ -198,6 +198,28 @@ example (p : Ptr Nat) (value : Nat) :
   subst_vars
   step* by sl_frame
 
+/-! ## `sl_pull_keep`
+
+Unlike `sl_pull`, this copies the pure facts of the precondition into the local
+context instead of consuming them, so the assertion stays available to the
+framing of the later steps.  `sl_step` runs it on every step. -/
+
+/-- The pointer the callee is applied to is only reducible to the one the
+assertion owns through a pure fact of that same assertion, so `sl_pull` would
+destroy what it makes usable. -/
+example (p q : Ptr Nat) (h : q = p) :
+    ⦃ iprop(⌜q = p⌝ ∗ p ↦ 1) ⦄ Examples.incr_ptr q ⦃⇓ iprop(⌜q = p⌝ ∗ p ↦ 2)⦄ := by
+  unfold Examples.incr_ptr
+  sl_step*
+
+/-- `sl_pull_keep` leaves the precondition untouched: the fact is needed both in
+the context (to rewrite the cell) and in the assertion (for the postcondition). -/
+example (p : Ptr Nat) (n : Nat) :
+    ⦃ iprop(⌜n = 1⌝ ∗ p ↦ n) ⦄ pure () ⦃⇓ iprop(⌜n = 1⌝ ∗ p ↦ 1)⦄ := by
+  sl_pull_keep
+  rename_i hn
+  exact triple_pure (by simp only [hn]; sl_frame)
+
 /-! ## Frame inference
 
 `step` asks `sl_frame` to solve `H ⊢ Hcallee ∗ ?F`.  In that mode nothing may be
