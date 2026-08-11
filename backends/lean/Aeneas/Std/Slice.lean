@@ -51,7 +51,7 @@ def Slice.new (α : Type u) : Slice α := {
 
 @[rust_fun "core::slice::{[@T]}::len" -canFail -lift]
 abbrev Slice.len {α : Type u} (v : Slice α) : Usize :=
-  Usize.ofNatCore v.val.length (by grind [Slice.property, Usize.max, Usize.numBits])
+  Usize.ofNatCore v.val.length (by grind [Usize.max, Usize.numBits])
 
 @[simp, scalar_tac_simps]
 theorem Slice.len_val {α : Type u} (v : Slice α) : (Slice.len v).val = v.length :=
@@ -119,19 +119,6 @@ def Slice.index_usize {α : Type u} (v: Slice α) (i: Usize) : Result α :=
   match v[i]? with
   | none => fail .arrayOutOfBounds
   | some x => ok x
-
-theorem Slice.eq_iff {α} (s0 s1 : Slice α) : s0 = s1 ↔ s0.val = s1.val := by
-  constructor
-  · grind
-  · intros p
-    simp [val] at p
-    have : s1.list ≍ s0.list := by
-      have := ListN.to_from_inverse (l:=s0.list)
-      have := ListN.to_from_inverse (l:=s1.list)
-      grind
-    cases s0; cases s1
-    simp at *
-    constructor <;> try grind [ListN_length]
 
 theorem Slice.ext {α} (s0 s1 : Slice α) : s0.val = s1.val → s0 = s1 := by
   apply (Slice.eq_iff s0 s1).mpr
@@ -965,7 +952,7 @@ theorem core.slice.index.SliceIndexRangeToUsizeSlice.index.step_spec
       s1.length = r.end ⦄ := by
   simp only [index]
   split
-  · simp only [spec_ok, Slice.length, true_and]
+  · simp only [spec_ok, Slice.length]
     simp; scalar_tac
   · scalar_tac
 
@@ -1003,7 +990,7 @@ theorem core.slice.index.SliceIndexRangeFromUsizeSlice.index.step_spec
       s1.length = s.length - r.start.val ⦄ := by
   simp only [index]
   split
-  · simp only [spec_ok, Slice.drop, true_and]
+  · simp only [spec_ok, Slice.drop]
     simp [Slice.length, List.length_drop]
   · scalar_tac
 

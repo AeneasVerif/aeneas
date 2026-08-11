@@ -1,38 +1,8 @@
 import Aeneas.Std.Scalar.Core
+import Aeneas.Data.ListN
 
 namespace Aeneas.Std
-
-inductive ListN.{u} (α : Type u) : Nat → Type u where
-| nil : ListN α 0
-| cons {n} : α → ListN α n → ListN α n.succ
-deriving BEq, ReflBEq, LawfulBEq, DecidableEq
-
-def ListN.toList {a n} (l : ListN a n) : List a :=
-  match l with
-  | .nil => .nil
-  | .cons a l' => .cons a l'.toList
-
-def ListN.fromList {a} (l : List a) : ListN a l.length :=
-  match l with
-  | .nil => .nil
-  | .cons a l' => .cons a (ListN.fromList l')
-
-theorem ListN.from_to_inverse {α} {l : List α}: (ListN.fromList l).toList = l := by
-  induction l <;> grind [toList, fromList]
-
-theorem ListN_length {α n} (l : ListN α n) : l.toList.length = n := by
-  induction l <;> grind [ListN.toList]
-
-theorem ListN.to_from_inverse {α n} {l : ListN α n}
-  : ListN.fromList l.toList ≍ l := by
-  induction l <;> simp [toList, fromList]
-  rename_i n a l ih
-  -- generalize hval : fromList l.toList = val at ih
-  congr -- TODO: how does this tactic work here?
-  apply ListN_length
-
-theorem ListN.toList_inj {α n} (l1 l2 : ListN α n) (h : l1.toList = l2.toList) : l1 = l2 := by
-  induction l1 <;> cases l2 <;> grind [ListN.toList]
+open Aeneas.Data.ListN
 
 -- TODO: clean this
 -- def Slice (α : Type u) := { l : List α // l.length ≤ Usize.max }
@@ -72,10 +42,26 @@ theorem Slice.val_from {α} (s : Slice α) h
   simp [ListN_length]
   apply ListN.to_from_inverse
 
+theorem Slice.eq_iff {α} (s0 s1 : Slice α) : s0 = s1 ↔ s0.val = s1.val := by
+  constructor
+  · grind
+  · intros p
+    simp [val] at p
+    have : s1.list ≍ s0.list := by
+      have := ListN.to_from_inverse (l:=s0.list)
+      have := ListN.to_from_inverse (l:=s1.list)
+      grind
+    cases s0; cases s1
+    simp at *
+    constructor <;> try grind [ListN_length]
+
 namespace Aeneas.Std.Test
 -- We need to be able to use Slice in positive positions in inductive definitions.
 -- A simple definition with subtypes doesn't work here:
 -- (See: https://github.com/AeneasVerif/aeneas/issues/1138)
+-- There are two constraints that the definition of Slice must satisfy to make lean happy:
+-- It must not use any defs, and it must not put any variables as an index to another
+-- inductive type, such as { l : List α // l.length ≤ Usize.max }
 inductive E where
 | V : Slice E → E
 end Aeneas.Std.Test

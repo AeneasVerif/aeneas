@@ -22,7 +22,7 @@ def Array.to_slice {α : Type u} {n : Usize} (v : Array α n) : Slice α :=
 
 def Array.from_slice {α : Type u} {n : Usize} (a : Array α n) (s : Slice α) : Array α n :=
   if h: s.val.length = n.val then
-    ⟨ s.val, by simp [*] ⟩
+    .from s.val (by simp [*])
   else a -- Unreachable case
 
 @[simp]
@@ -69,7 +69,7 @@ theorem Array.subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array 
 def Array.update_subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) (s : Slice α) : Result (Array α n) :=
   -- TODO: not completely sure here
   if h: r.start.val < r.end.val ∧ r.end.val ≤ a.length ∧ s.val.length = r.end.val - r.start.val then
-    ok ⟨ a.val.setSlice! r.start s.val, by scalar_tac ⟩
+    ok (.from (a.val.setSlice! r.start s.val) (by scalar_tac))
   else
     fail panic
 
@@ -130,7 +130,7 @@ theorem Array.val_to_slice {α} {n} (a : Array α n) : a.to_slice.val = a.val :=
 @[simp, simp_lists_safe, simp_scalar_safe, scalar_tac a.to_slice, grind =, agrind =]
 theorem Array.length_to_slice (a : Array α n) :
   a.to_slice.length = n := by
-  simp [Slice.length, Array.to_slice, List.Vector.length_val]
+  simp [Slice.length, Array.to_slice]
 
 @[rust_fun "core::array::equality::{core::cmp::PartialEq<[@T; @N], [@U; @N]>}::eq"]
 def core.array.equality.PartialEqArray.eq
@@ -295,7 +295,7 @@ def core.array.TryFromArrayCopySlice.try_from
   {T : Type} (N : Usize) (_copyInst : core.marker.Copy T) (s : Slice T) :
   Result (core.result.Result (Array T N) core.array.TryFromSliceError) := do
   if h0: s.length = N then
-    .ok (.Ok ⟨s.val, by scalar_tac⟩)
+    .ok (.Ok (.from s.val (by scalar_tac)))
   else .ok (.Err ())
 
 @[step]
@@ -308,13 +308,13 @@ theorem core.array.TryFromArrayCopySlice.try_from.step
         a.val = s.val ∧ a.length = N
       | .Err () => s.length ≠ N ⦄ := by
   simp only [core.array.TryFromArrayCopySlice.try_from]
-  grind only [usr Usize.cMax_bound, usr Usize.cMax_bound', = spec_ok]
+  grind only [usr Usize.cMax_bound, usr Usize.cMax_bound', = spec_ok, !Array.from_val]
 
 @[rust_fun "core::array::{core::convert::TryFrom<&'a [@T; @N], &'a [@T], core::array::TryFromSliceError>}::try_from"]
 def core.array.TryFromSharedArraySlice.try_from
   {T : Type} (N : Usize) (s : Slice T) :
   Result (core.result.Result (Array T N) core.array.TryFromSliceError) := do
-  if h: s.len = N then .ok (.Ok ⟨s.val, by scalar_tac⟩)
+  if h: s.len = N then .ok (.Ok (.from s.val (by scalar_tac)))
   else .ok (.Err ())
 
 @[reducible, rust_trait_impl
@@ -338,7 +338,7 @@ def core.array.TryFromMutArraySlice.try_from
         if a.length = s.length then .from a.val (by scalar_tac)
         else s
       | _ => s
-    ok ((.Ok ⟨ s.val, by scalar_tac⟩, back))
+    ok ((.Ok (.from s.val (by scalar_tac)), back))
   else ok ((.Err (), fun _ => s))
 
 @[rust_fun "core::array::{[@T; @N]}::as_slice"]
@@ -358,7 +358,7 @@ def Array.Insts.CoreConvertAsMutSlice.as_mut
     {T : Type} {N : Usize} (a : Array T N) :
     Result ((Slice T) × (Slice T → Array T N)) :=
   let back (s : Slice T) : Array T N :=
-    if h : s.length = N then ⟨ s.val, by scalar_tac ⟩
+    if h : s.length = N then .from  s.val (by scalar_tac)
     else a
   ok (.from a.val (by scalar_tac), back)
 
@@ -367,7 +367,7 @@ def core.array.Array.as_mut_slice
   {T : Type} {N : Usize} (a : Array T N) :
   Result (Slice T × (Slice T → Array T N)) :=
   let back (s : Slice T) : Array T N :=
-    if h: s.length = N then ⟨ s.val, by scalar_tac ⟩
+    if h: s.length = N then .from s.val (by scalar_tac)
     else a
   ok (.from a.val (by scalar_tac), back)
 
