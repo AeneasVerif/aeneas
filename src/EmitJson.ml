@@ -151,8 +151,7 @@ let init_if_enabled ~(dest_dir : string) : unit =
 (* Entry construction                                                       *)
 (* ------------------------------------------------------------------------ *)
 
-(** Add the current Lean namespace to a short name to form the full Lean name.
-*)
+(** Add the Lean namespace to a short name to form the full Lean name. *)
 let full_lean_name (basename : string) : string =
   if state.current_in_namespace then
     state.current_lean_namespace ^ "." ^ basename
