@@ -25,7 +25,7 @@ theorem ListN.to_from_inverse {α n} {l : ListN α n}
   : ListN.fromList l.toList ≍ l := by
   induction l <;> simp [toList, fromList]
   rename_i n a l ih
-  congr -- TODO: how does this tactic work here?
+  congr
   apply ListN_length
 
 theorem ListN.toList_inj {α n} (l1 l2 : ListN α n) (h : l1.toList = l2.toList) : l1 = l2 := by

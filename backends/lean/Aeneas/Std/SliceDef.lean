@@ -4,9 +4,6 @@ import Aeneas.Data.ListN
 namespace Aeneas.Std
 open Aeneas.Data.ListN
 
--- TODO: clean this
--- def Slice (α : Type u) := { l : List α // l.length ≤ Usize.max }
-
 -- This unusual definition using ListN is necessary due to positivity issues.
 -- See the test at the end of this file.
 structure Slice (α : Type u) where
@@ -57,13 +54,30 @@ theorem Slice.eq_iff {α} (s0 s1 : Slice α) : s0 = s1 ↔ s0.val = s1.val := by
 
 namespace Aeneas.Std.Test
 -- We need to be able to use Slice in positive positions in inductive definitions.
--- A simple definition with subtypes doesn't work here:
+-- A simple definition with subtypes doesn't work here.
 -- (See: https://github.com/AeneasVerif/aeneas/issues/1138)
 -- There are two constraints that the definition of Slice must satisfy to make lean happy:
--- It must not use any defs, and it must not put any variables as an index to another
--- inductive type, such as { l : List α // l.length ≤ Usize.max }
+-- It must not use any defs, and recursive references passed as an argument to another inductive
+-- must not then be passed to a third inductive, see example below
 inductive E where
 | V : Slice E → E
+
+structure Slice2 (X : Type) where
+  l : List X
+  lent : l.length ≤ Usize.max
+
+/--
+error: (kernel) application type mismatch
+  List.length l
+argument has type
+  _nested.List_2
+but function has type
+  List E2 → ℕ
+-/
+#guard_msgs in
+inductive E2 where
+| d : Slice2 E2 → E2
+
 end Aeneas.Std.Test
 
 end Aeneas.Std

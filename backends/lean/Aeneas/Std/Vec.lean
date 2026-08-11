@@ -20,32 +20,15 @@ local macro_rules
 namespace alloc.vec
 
 @[rust_type "alloc::vec::Vec"]
--- def Vec (α : Type u) := { l : List α // l.length ≤ Usize.max }
 structure Vec (α : Type u) where
   slice : Slice α
 deriving BEq, ReflBEq, LawfulBEq, DecidableEq
 
-
--- @[simp]
--- instance (α : Type u) : CoeOut (Vec α) (Slice α) where
---   coe := λ v => v.slice
-
--- @[simp]
--- instance (α : Type u) : CoeTail (Slice α) (Vec α) where
---   coe := λ s => {slice := s}
-
-
 /-- We need this to coerce vectors to lists without marking `Vec` as reducible.
     Also not that we *do not* want to mark `Vec` as reducible: it triggers issues.
 -/
--- TODO: do i need this?
--- instance (α : Type u) : CoeOut (Vec α) (List α) where
-  -- coe := λ v => v.val
-
--- TODO: clean
--- instance [BEq α] : BEq (Vec α) := SubtypeBEq _
-
--- instance [BEq α] [LawfulBEq α] : LawfulBEq (Vec α) := SubtypeLawfulBEq _
+instance (α : Type u) : CoeOut (Vec α) (List α) where
+  coe := λ v => v.slice.val
 
 def Vec.val {α} (v : Vec α) : List α := (Slice.val v.slice)
 def Vec.from {α} (l : List α) (h : l.length ≤ Usize.max) : Vec α := {slice := Slice.from l h}
@@ -235,9 +218,6 @@ def Vec.index {T I Output : Type} (inst : core.slice.index.SliceIndex I (Slice T
   (self : Vec T) (i : I) : Result Output :=
   inst.index i self.slice
 
-
--- TODO:
--- NOTE: this here is why the coerciion idea doesn't really work, i think
 @[rust_fun "alloc::vec::{core::ops::index::IndexMut<alloc::vec::Vec<@T>, @I, @O>}::index_mut"
   (keepParams := [true,true,false, true])]
 def Vec.index_mut {T I Output : Type} (inst : core.slice.index.SliceIndex I (Slice T) Output)
@@ -343,7 +323,6 @@ theorem Vec.index_Range_spec {α : Type} (v : Vec α) (r : core.ops.range.Range 
       s1.val = v.val.slice r.start r.end ∧
       s1.length = r.end - r.start ⦄ := by
   simp only [Vec.index]
-  -- TODO here with the implicit as well
   have := @core.slice.index.SliceIndexRangeUsizeSlice.index.step_spec α r v.slice h0 h1
   exact this
 
@@ -525,10 +504,6 @@ def core.convert.FromBoxSliceVec (T : Type) :
   core.convert.From (Slice T) (alloc.vec.Vec T) := {
   «from» := alloc.vec.FromBoxSliceVec.from
 }
-
--- TODO: clean this, i have an implementation above
--- def alloc.vec.Vec.setSlice! {α : Type u} (s : alloc.vec.Vec α) (i : ℕ) (s' : List α) : alloc.vec.Vec α :=
---   .from (s.val.setSlice! i s') (by simp)
 
 @[simp, scalar_tac_simps, simp_scalar_safe, simp_lists_safe, grind =, agrind =]
 theorem alloc.vec.Vec.setSlice!_length {α : Type u} (s : alloc.vec.Vec α) (i : ℕ) (s' : List α) :

@@ -17,8 +17,7 @@ local macro_rules
 # Array
 -/
 
--- def Array (α : Type u) (n : Usize) := { l : List α // l.length = n.val }
--- note that this can't be a simple def because then lean won't allow recursive
+-- Note that this can't be a simple def because then lean won't allow recursive
 -- inductives with Arrays in them (See: https://github.com/AeneasVerif/aeneas/issues/1138)
 structure Array (α : Type u) (n : Usize) where
   list : ListN α n.val
@@ -29,13 +28,6 @@ def Array.val {α n} (a : Array α n) : List α := a.list.toList
 @[simp, grind ., grind! .]
 theorem Array.property {α n} (s : Array α n) : s.val.length = n.val := by
   simp [Array.val, ListN_length]
-
--- TODO: clean up
--- def Array.from' {α} (l : List α) (h : l.length ≤ Usize.max )
---   : Array α (.ofNatCore l.length (by grind)) :=
---   {
---     list := .fromList l
---   }
 
 def Array.from {α n} (l : List α) (h : l.length = n.val) : Array α n :=
   {
