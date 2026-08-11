@@ -60,3 +60,11 @@ pub struct Struct6Fields {
     e: u32,
     f: u32,
 }
+
+pub fn refs_ne(a: &Struct6Fields, b: &Struct6Fields) -> bool {
+    a != b
+}
+
+pub fn refs_eq(a: &Struct6Fields, b: &Struct6Fields) -> bool {
+    a == b
+}

@@ -9,35 +9,41 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace discriminant
 
 /-- [discriminant::EmptyEnum]
-    Source: 'tests/src/discriminant.rs', lines 4:0-4:21 -/
+    Source: 'tests/src/discriminant.rs', lines 4:0-4:21
+    Visibility: public -/
 inductive EmptyEnum where
 
 /-- [discriminant::AlertLevel]
-    Source: 'tests/src/discriminant.rs', lines 7:0-10:1 -/
+    Source: 'tests/src/discriminant.rs', lines 7:0-10:1
+    Visibility: public -/
 @[discriminant isize]
 inductive AlertLevel where
 | Warning : AlertLevel
 | Fatal : AlertLevel
 
-/-- Trait implementation: [discriminant::{core::marker::StructuralPartialEq for discriminant::AlertLevel}]
+/-- Trait implementation: [discriminant::{impl core::marker::StructuralPartialEq for discriminant::AlertLevel}]
     Source: 'tests/src/discriminant.rs', lines 6:9-6:18 -/
 @[reducible]
 def AlertLevel.Insts.CoreMarkerStructuralPartialEq :
   core.marker.StructuralPartialEq AlertLevel := {
 }
 
-/-- [discriminant::{core::cmp::PartialEq<discriminant::AlertLevel> for discriminant::AlertLevel}::eq]:
-    Source: 'tests/src/discriminant.rs', lines 6:9-6:18 -/
+/-- [discriminant::{impl core::cmp::PartialEq<discriminant::AlertLevel> for discriminant::AlertLevel}::eq]:
+    Source: 'tests/src/discriminant.rs', lines 6:9-6:18
+    Visibility: public -/
 def AlertLevel.Insts.CoreCmpPartialEqAlertLevel.eq
   (self : AlertLevel) (other : AlertLevel) : Result Bool := do
   let self1 := read_discriminant self
   let other1 := read_discriminant other
   ok (self1 = other1)
 
-/-- Trait implementation: [discriminant::{core::cmp::PartialEq<discriminant::AlertLevel> for discriminant::AlertLevel}]
+/-- Trait implementation: [discriminant::{impl core::cmp::PartialEq<discriminant::AlertLevel> for discriminant::AlertLevel}]
     Source: 'tests/src/discriminant.rs', lines 6:9-6:18 -/
 @[reducible]
 def AlertLevel.Insts.CoreCmpPartialEqAlertLevel : core.cmp.PartialEq AlertLevel
@@ -46,28 +52,30 @@ def AlertLevel.Insts.CoreCmpPartialEqAlertLevel : core.cmp.PartialEq AlertLevel
 }
 
 /-- [discriminant::AlertLevelU8]
-    Source: 'tests/src/discriminant.rs', lines 14:0-17:1 -/
+    Source: 'tests/src/discriminant.rs', lines 14:0-17:1
+    Visibility: public -/
 @[discriminant u8 [1,2]]
 inductive AlertLevelU8 where
 | Warning : AlertLevelU8
 | Fatal : AlertLevelU8
 
-/-- Trait implementation: [discriminant::{core::marker::StructuralPartialEq for discriminant::AlertLevelU8}]
+/-- Trait implementation: [discriminant::{impl core::marker::StructuralPartialEq for discriminant::AlertLevelU8}]
     Source: 'tests/src/discriminant.rs', lines 12:9-12:18 -/
 @[reducible]
 def AlertLevelU8.Insts.CoreMarkerStructuralPartialEq :
   core.marker.StructuralPartialEq AlertLevelU8 := {
 }
 
-/-- [discriminant::{core::cmp::PartialEq<discriminant::AlertLevelU8> for discriminant::AlertLevelU8}::eq]:
-    Source: 'tests/src/discriminant.rs', lines 12:9-12:18 -/
+/-- [discriminant::{impl core::cmp::PartialEq<discriminant::AlertLevelU8> for discriminant::AlertLevelU8}::eq]:
+    Source: 'tests/src/discriminant.rs', lines 12:9-12:18
+    Visibility: public -/
 def AlertLevelU8.Insts.CoreCmpPartialEqAlertLevelU8.eq
   (self : AlertLevelU8) (other : AlertLevelU8) : Result Bool := do
   let self1 := read_discriminant self
   let other1 := read_discriminant other
   ok (self1 = other1)
 
-/-- Trait implementation: [discriminant::{core::cmp::PartialEq<discriminant::AlertLevelU8> for discriminant::AlertLevelU8}]
+/-- Trait implementation: [discriminant::{impl core::cmp::PartialEq<discriminant::AlertLevelU8> for discriminant::AlertLevelU8}]
     Source: 'tests/src/discriminant.rs', lines 12:9-12:18 -/
 @[reducible]
 def AlertLevelU8.Insts.CoreCmpPartialEqAlertLevelU8 : core.cmp.PartialEq

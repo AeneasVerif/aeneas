@@ -165,12 +165,25 @@ let translate_binder (span : span option) (translate_inside : 'a -> 'b)
     binder_llbc_generics;
   }
 
-let translate_trait_method (span : span option) (translate_ty : T.ty -> ty)
-    (bound_method : A.trait_method T.binder) : fun_decl_ref binder =
-  translate_binder span
-    (fun (m : A.trait_method) ->
-      translate_fun_decl_ref span translate_ty m.item)
-    bound_method
+let translate_trait_method (ctx : Contexts.decls_ctx) (span : span option)
+    (translate_ty : T.ty -> ty) (trait_decl : A.trait_decl)
+    (method_id : TraitMethodId.id) (bound_method : A.trait_method T.binder) :
+    trait_method =
+  let method_ = bound_method.binder_value in
+  let signature =
+    translate_trait_method_sig ctx trait_decl method_id bound_method
+  in
+  {
+    method_id;
+    item_name = method_.name;
+    item_meta = method_.item_meta;
+    signature;
+    default =
+      translate_binder span
+        (fun (m : A.trait_method) ->
+          Option.map (translate_fun_decl_ref span translate_ty) m.default)
+        bound_method;
+  }
 
 let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     : trait_decl =
@@ -181,7 +194,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     implied_clauses = llbc_parent_clauses;
     consts;
     types;
-    methods;
+    methods = _;
     vtable = _;
   } : A.trait_decl =
     trait_decl
@@ -190,7 +203,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   let opt_span = Some span in
   let translate_ty = translate_fwd_ty opt_span ctx in
   let name =
-    Print.Types.name_to_string
+    Print.name_to_string
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       item_meta.name
   in
@@ -204,7 +217,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     match_name_find_opt ctx trait_decl.item_meta.name
       (ExtractBuiltin.builtin_trait_decls_map ())
   in
-  if types <> [] && builtin_info = None then
+  if (not (T.AssocTypeId.Map.is_empty types)) && builtin_info = None then
     (* Most associated types are removed by Charon's `--remove-associated-types`. *)
     [%warn] span
       ("Found an associated type in a trait declaration; trait associated \
@@ -217,26 +230,30 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
           (IdTraitDecl trait_decl.def_id));
   let types =
     List.map
-      (fun (t : A.trait_assoc_ty T.binder) ->
+      (fun ((type_id, t) : T.AssocTypeId.id * A.trait_assoc_ty T.binder) ->
         [%cassert] span
           (t.binder_params = TypesUtils.empty_generic_params)
           "Can not extract trait associated types with parameters";
         let t = t.binder_value in
         [%cassert] span (t.implied_clauses = [])
           "Can not extract trait associated types with implied trait clauses";
-        t.name)
-      types
+        (type_id, t.name))
+      (T.AssocTypeId.Map.to_list types)
   in
   let consts =
     List.map
-      (fun (c : A.trait_assoc_const) -> (c.name, translate_ty c.ty))
-      consts
+      (fun ((const_id, c) : T.AssocConstId.id * A.trait_assoc_const) ->
+        (const_id, c.name, translate_ty c.ty))
+      (T.AssocConstId.Map.to_list consts)
+  in
+  let methods_to_extract =
+    TraitDeclId.Map.find def_id ctx.trait_methods_to_extract
   in
   let methods =
     List.map
-      (fun (m : A.trait_method T.binder) ->
-        (m.binder_value.name, translate_trait_method opt_span translate_ty m))
-      methods
+      (fun ((method_id, m) : TraitMethodId.id * A.trait_method T.binder) ->
+        translate_trait_method ctx opt_span translate_ty trait_decl method_id m)
+      (TraitMethodId.Map.to_list methods_to_extract)
   in
   {
     def_id;
@@ -259,7 +276,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   [%ltrace
     let ctx = Print.Contexts.decls_ctx_to_fmt_env ctx in
     "- trait impl: implemented trait: "
-    ^ Print.Types.trait_decl_ref_to_string ctx trait_impl.impl_trait];
+    ^ Print.trait_decl_ref_to_string ctx trait_impl.impl_trait];
   let {
     A.def_id;
     item_meta;
@@ -279,7 +296,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     (translate_trait_decl_ref span translate_ty) llbc_impl_trait
   in
   let name =
-    Print.Types.name_to_string
+    Print.name_to_string
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       item_meta.name
   in
@@ -290,18 +307,27 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   in
   let consts =
     List.map
-      (fun (name, gref) ->
-        (name, translate_global_decl_ref span translate_ty gref))
-      consts
+      (fun ((const_id, gref) : T.AssocConstId.id * _) ->
+        let name =
+          Charon.GAstUtils.get_assoc_const_name ctx.crate
+            trait_impl.impl_trait.id const_id
+        in
+        (const_id, name, translate_global_decl_ref span translate_ty gref))
+      (T.AssocConstId.Map.to_list consts)
   in
   (* We checked that there were no types in the trait declaration already. *)
   let types = [] in
   let methods =
     List.map
-      (fun ((name, m) : string * T.fun_decl_ref T.binder) ->
-        ( name,
+      (fun ((method_id, m) : TraitMethodId.id * T.fun_decl_ref T.binder) ->
+        let name =
+          Charon.GAstUtils.get_method_name ctx.crate trait_impl.impl_trait.id
+            method_id
+        in
+        ( method_id,
+          name,
           translate_binder span (translate_fun_decl_ref span translate_ty) m ))
-      methods
+      (TraitMethodId.Map.to_list methods)
   in
   (* Lookup the builtin information, if there is *)
   let builtin_info =
@@ -333,19 +359,10 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
 
 let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     global_decl =
-  let {
-    A.item_meta;
-    def_id;
-    generics = llbc_generics;
-    ty;
-    src;
-    init = body_id;
-    _;
-  } =
-    decl
-  in
+  let { A.item_meta; def_id; generics = llbc_generics; ty; src; _ } = decl in
+  let body_id = Option.get (Charon.GAstUtils.init_fun_id_of_global decl) in
   let name =
-    Print.Types.name_to_string
+    Print.name_to_string
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       item_meta.name
   in
@@ -362,7 +379,9 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     match builtin_info with
     | Some info -> info.can_fail
     | None -> (
-        match FunDeclId.Map.find_opt body_id ctx.fun_ctx.fun_infos with
+        match
+          FunsAnalysis.lookup_fun_decl_info ctx.fun_ctx.fun_infos body_id
+        with
         | None -> (* Don't know: true by default *) true
         | Some info -> info.can_fail)
   in

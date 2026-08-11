@@ -8,14 +8,14 @@ type fmt_env = Print.fmt_env
 let call_id_to_string (env : fmt_env) (call_id : call_id) : string =
   match call_id with
   | Fun (fid, call_id) ->
-      Types.fn_ptr_kind_to_string env fid ^ "@" ^ FunCallId.to_string call_id
-  | Unop unop -> Expressions.unop_to_string env unop
-  | Binop binop -> Expressions.binop_to_string binop
+      fn_ptr_kind_to_string env fid ^ "@" ^ FunCallId.to_string call_id
+  | Unop unop -> unop_to_string env unop
+  | Binop binop -> binop_to_string binop
 
 let call_to_string (env : fmt_env) (indent : string) (call : call) : string =
   let dest = Values.symbolic_value_to_string env call.dest in
   let call_id = call_id_to_string env call.call_id in
-  let generics = Types.generic_args_to_string env call.generics in
+  let generics = generic_args_to_string env call.generics in
   let args =
     if call.args = [] then ""
     else
@@ -31,8 +31,12 @@ let value_aggregate_to_string (env : fmt_env) (v : value_aggregate) : string =
   | VaArray vl ->
       "[" ^ String.concat ", " (List.map (Values.tvalue_to_string env) vl) ^ "]"
   | VaCgValue cg_id -> const_generic_db_var_to_string env (Free cg_id)
-  | VaTraitConstValue (trait_ref, item) ->
-      trait_ref_to_string env trait_ref ^ "." ^ item
+  | VaTraitConstValue (trait_ref, const_id) ->
+      let name =
+        Charon.GAstUtils.get_assoc_const_name env.crate
+          trait_ref.trait_decl_ref.binder_value.id const_id
+      in
+      trait_ref_to_string env trait_ref ^ "." ^ name
   | VaDiscriminant sv ->
       "@discriminant(" ^ Values.symbolic_value_to_string env sv ^ ")"
   | VaDynTrait (v, tr) ->
@@ -118,6 +122,24 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
   | Let lete -> let_expr_to_string env indent indent_incr lete
   | Meta (_, next) -> expr_to_string env indent indent_incr next
   | Error (_, error) -> indent ^ "ERROR(" ^ error ^ ")"
+  | TargetDispatch (input_svs, targets) ->
+      let inputs =
+        String.concat " "
+          (List.map
+             (fun (sv : symbolic_value) ->
+               Values.symbolic_value_to_string env sv)
+             input_svs)
+      in
+      let targets =
+        List.map
+          (fun (target, (fdr : Types.fun_decl_ref)) ->
+            indent ^ "  " ^ target ^ " => "
+            ^ Print.fun_decl_ref_to_string env fdr
+            ^ " " ^ inputs)
+          targets
+      in
+      indent ^ "TargetDispatch {\n" ^ String.concat "\n" targets ^ "\n" ^ indent
+      ^ "}"
 
 and loop_continue_break_to_string (env : fmt_env) (indent : string)
     (indent_incr : string) ~(is_continue : bool) _ctx (loop_id : loop_id)
@@ -194,9 +216,7 @@ and expansion_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       indent ^ "if " ^ scrut ^ " then\n" ^ e0 ^ "\n" ^ indent ^ "else\n" ^ e1
   | ExpandInt (_, branches, otherwise) ->
       let branch_to_string ((sv, branch) : scalar_value * expr) : string =
-        indent ^ "| "
-        ^ Values.scalar_value_to_string sv
-        ^ " ->\n"
+        indent ^ "| " ^ scalar_value_to_string sv ^ " ->\n"
         ^ expr_to_string env indent1 indent_incr branch
       in
       let otherwise = expr_to_string env indent1 indent_incr otherwise in

@@ -9,10 +9,14 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace loops_nested_rec
 
 /-- [loops_nested_rec::iter]: loop 1:
-    Source: 'tests/src/loops-nested-rec.rs', lines 8:8-10:9 -/
+    Source: 'tests/src/loops-nested-rec.rs', lines 8:8-10:9
+    Visibility: public -/
 @[rust_loop]
 def iter_loop0_loop0 (n : Std.U32) (j : Std.U32) : Result Unit := do
   if j < n
@@ -22,7 +26,8 @@ def iter_loop0_loop0 (n : Std.U32) (j : Std.U32) : Result Unit := do
 partial_fixpoint
 
 /-- [loops_nested_rec::iter]: loop 0:
-    Source: 'tests/src/loops-nested-rec.rs', lines 6:4-12:5 -/
+    Source: 'tests/src/loops-nested-rec.rs', lines 6:4-12:5
+    Visibility: public -/
 @[rust_loop]
 def iter_loop0 (m : Std.U32) (n : Std.U32) (i : Std.U32) : Result Unit := do
   if i < m
@@ -33,13 +38,15 @@ def iter_loop0 (m : Std.U32) (n : Std.U32) (i : Std.U32) : Result Unit := do
 partial_fixpoint
 
 /-- [loops_nested_rec::iter]:
-    Source: 'tests/src/loops-nested-rec.rs', lines 4:0-13:1 -/
+    Source: 'tests/src/loops-nested-rec.rs', lines 4:0-13:1
+    Visibility: public -/
 @[reducible]
 def iter (m : Std.U32) (n : Std.U32) : Result Unit := do
   iter_loop0 m n 0#u32
 
 /-- [loops_nested_rec::sum]: loop 1:
-    Source: 'tests/src/loops-nested-rec.rs', lines 20:8-23:9 -/
+    Source: 'tests/src/loops-nested-rec.rs', lines 20:8-23:9
+    Visibility: public -/
 @[rust_loop]
 def sum_loop0_loop0
   (n : Std.U32) (s : Std.U32) (j : Std.U32) : Result Std.U32 := do
@@ -51,7 +58,8 @@ def sum_loop0_loop0
 partial_fixpoint
 
 /-- [loops_nested_rec::sum]: loop 0:
-    Source: 'tests/src/loops-nested-rec.rs', lines 18:4-25:5 -/
+    Source: 'tests/src/loops-nested-rec.rs', lines 18:4-25:5
+    Visibility: public -/
 @[rust_loop]
 def sum_loop0
   (m : Std.U32) (n : Std.U32) (s : Std.U32) (i : Std.U32) :
@@ -66,7 +74,8 @@ def sum_loop0
 partial_fixpoint
 
 /-- [loops_nested_rec::sum]:
-    Source: 'tests/src/loops-nested-rec.rs', lines 15:0-27:1 -/
+    Source: 'tests/src/loops-nested-rec.rs', lines 15:0-27:1
+    Visibility: public -/
 @[reducible]
 def sum (m : Std.U32) (n : Std.U32) : Result Std.U32 := do
   sum_loop0 m n 0#u32 0#u32
@@ -378,7 +387,8 @@ def mul_add_as_plus_e
   let i2 ← i * 2#usize
   let _ ← alloc.vec.from_elem core.clone.CloneU8 0#u8 i2
   let iter1 ←
-    core.iter.range.IteratorRange.step_by core.iter.range.StepUsize
+    core.iter.traits.iterator.Iterator.step_by.trait_default
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize)
       { start := 0#usize, «end» := N } 8#usize
   mul_add_as_plus_e_loop0 iter1 a_row_temp
   ok out

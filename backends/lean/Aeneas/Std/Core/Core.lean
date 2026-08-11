@@ -1,6 +1,7 @@
 import Lean
 import Aeneas.Std.Primitives
 import Aeneas.Tactic.Step.Init
+import Aeneas.Tactic.Elab.TraitDefault.Init
 import Aeneas.Std.Alloc
 
 namespace Aeneas
@@ -17,18 +18,19 @@ def alloc.boxed.AsMutBox.as_mut {T : Type} (x : T) : T × (T → T) :=
 
 namespace core
 
-@[rust_trait "core::convert::From" (methodsInfo := [⟨ "from", "from_" ⟩])]
+@[rust_trait "core::convert::From"]
 structure convert.From (Self T : Type) where
-  from_ : T → Result Self
+  «from» : T → Result Self
 
 @[rust_trait "core::clone::Clone" (defaultMethods := ["clone_from"])]
 structure clone.Clone (Self : Type) where
   clone : Self → Result Self
   clone_from : Self → Self → Result Self := fun _ => clone
 
-def clone.Clone.from_from.default {Self : Type} (clone : Self → Result Self)
+@[trait_default]
+def clone.Clone.clone_from.default {Self : Type} (CloneInst : core.clone.Clone Self)
   (_self source : Self) : Result Self :=
-  clone source
+  CloneInst.clone source
 
 @[reducible, rust_trait_impl "core::clone::Clone<alloc::alloc::Global>"]
 def core.clone.CloneGlobal : core.clone.Clone Global := {
@@ -88,9 +90,14 @@ def BuiltinClone (Self : Type) : core.clone.Clone Self where
 def BuiltinCopy (Self : Type) : core.marker.Copy Self where
   cloneInst := BuiltinClone Self
 
-@[simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::unwrap"]
+@[rust_fun "core::option::{core::option::Option<@T>}::unwrap"]
 def core.option.Option.unwrap {T : Type} (x : Option T) : Result T :=
   Result.ofOption x Error.panic
+
+@[step]
+theorem core.option.Option.unwrap.spec {T : Type} (x : Option T) (h : x.isSome) :
+  unwrap x ⦃ v => x = some v ⦄ := by
+  simp only [unwrap, ofOption]; grind
 
 @[step_pure_def, rust_fun "core::option::{core::option::Option<@T>}::unwrap_or" -canFail]
 def core.option.Option.unwrap_or (self : Option T) (default : T) : T :=
@@ -109,6 +116,10 @@ def core.option.Option.take {T: Type} (self: Option T): Option T × Option T := 
 
 @[simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::is_none" -canFail -lift]
 def core.option.Option.is_none {T: Type} (self: Option T): Bool := self.isNone
+
+/-- Returns `true` if the option is `some`. -/
+@[simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::is_some" -canFail -lift]
+def core.option.Option.is_some {T: Type} (self: Option T): Bool := self.isSome
 
 @[rust_type "core::ops::range::RangeFrom"]
 structure core.ops.range.RangeFrom (Idx : Type) where

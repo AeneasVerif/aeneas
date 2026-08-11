@@ -21,6 +21,7 @@ open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 attribute [simp_lists_safe]
   add_tsub_cancel_right add_tsub_cancel_left
   zero_add add_zero
+  sub_zero Nat.sub_zero
 
 /- Adding theorems about `testBit`.
 
@@ -38,6 +39,9 @@ attribute [simp_lists_safe] List.map_map List.map_id_fun List.map_id_fun' id_eq
 attribute [simp_lists_safe] Fin.getElem!_fin
 attribute [simp_lists_safe] List.length_map List.length_flatMap
 attribute [simp_lists_safe] List.length_cons List.length_nil
+
+-- Automatically go from `getElem!` to `getElem`
+attribute [simp_lists] getElem!_pos
 
 def simpListsTac (config : ScalarTac.CondSimpTacConfig)
   (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do

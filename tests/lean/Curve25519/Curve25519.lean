@@ -9,20 +9,25 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace curve25519
 
 /-- [curve25519::Scalar52]
-    Source: 'tests/src/curve25519.rs', lines 7:0-7:34 -/
+    Source: 'tests/src/curve25519.rs', lines 7:0-7:34
+    Visibility: public -/
 @[reducible]
 def Scalar52 := Array Std.U64 5#usize
 
-/-- [curve25519::{core::ops::index::Index<usize, u64> for curve25519::Scalar52}::index]:
-    Source: 'tests/src/curve25519.rs', lines 11:4-13:5 -/
+/-- [curve25519::{impl core::ops::index::Index<usize, u64> for curve25519::Scalar52}::index]:
+    Source: 'tests/src/curve25519.rs', lines 11:4-13:5
+    Visibility: public -/
 def Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index
   (self : Scalar52) (_index : Std.Usize) : Result Std.U64 := do
   Array.index_usize self _index
 
-/-- Trait implementation: [curve25519::{core::ops::index::Index<usize, u64> for curve25519::Scalar52}]
+/-- Trait implementation: [curve25519::{impl core::ops::index::Index<usize, u64> for curve25519::Scalar52}]
     Source: 'tests/src/curve25519.rs', lines 9:0-14:1 -/
 @[reducible]
 def Scalar52.Insts.CoreOpsIndexIndexUsizeU64 : core.ops.index.Index Scalar52
@@ -38,7 +43,8 @@ def m (x : Std.U64) (y : Std.U64) : Result Std.U128 := do
   i * i1
 
 /-- [curve25519::mul_internal]:
-    Source: 'tests/src/curve25519.rs', lines 20:0-34:1 -/
+    Source: 'tests/src/curve25519.rs', lines 20:0-34:1
+    Visibility: public -/
 def mul_internal
   (a : Scalar52) (b : Scalar52) : Result (Array Std.U128 9#usize) := do
   let z := Array.repeat 9#usize 0#u128

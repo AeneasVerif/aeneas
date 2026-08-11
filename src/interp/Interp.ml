@@ -30,9 +30,7 @@ let analyze_type_declarations (crate : crate)
     (fun infos decl ->
       try analyze_type_declaration_group None crate infos decl
       with CFailure error ->
-        let fmt_env : Print.fmt_env =
-          Charon.PrintLlbcAst.Crate.crate_to_fmt_env crate
-        in
+        let fmt_env : Print.fmt_env = Charon.Print.crate_to_fmt_env crate in
         let decls = Charon.GAstUtils.g_declaration_group_to_list decl in
         let decl_id_to_string (id : TypeDeclId.id) : string =
           match TypeDeclId.Map.find_opt id crate.type_decls with
@@ -54,9 +52,7 @@ let analyze_type_declarations (crate : crate)
 let compute_contexts (crate : crate) : decls_ctx =
   let crate_graph = Deps.compute_graph_of_uses crate in
   let type_decls_list, _, _, _, _, _ = split_declarations crate.declarations in
-  let fmt_env : Print.fmt_env =
-    Charon.PrintLlbcAst.Crate.crate_to_fmt_env crate
-  in
+  let fmt_env : Print.fmt_env = Charon.Print.crate_to_fmt_env crate in
 
   (* Split the declaration groups between the declaration kinds (types, functions, etc.) *)
   let type_decls_groups, _, _, _, _, mixed_groups =
@@ -180,6 +176,64 @@ let compute_contexts (crate : crate) : decls_ctx =
       crate.trait_impls
   in
 
+  let trait_methods_to_extract =
+    let trait_method_ids = ref TraitDeclId.Map.empty in
+    let add_trait_method_id trait_decl_id method_id =
+      trait_method_ids :=
+        TraitDeclId.Map.update trait_decl_id
+          (fun opt_set ->
+            let set = Option.value opt_set ~default:TraitMethodId.Set.empty in
+            Some (TraitMethodId.Set.add method_id set))
+          !trait_method_ids
+    in
+    let visitor =
+      object
+        inherit [_] iter_crate as super
+
+        (* Include a method if an implementation of it is in the extracted functions. *)
+        method! visit_item_source env (src : item_source) =
+          (match src with
+          | TraitDeclItem (trait_ref, AssocIdMethod method_id)
+          | TraitImplItem (_, trait_ref, AssocIdMethod method_id, _) ->
+              add_trait_method_id trait_ref.id method_id
+          | _ -> ());
+          super#visit_item_source env src
+
+        (* Include a method if it is mentioned in the extracted functions. *)
+        method! visit_fn_ptr env fn_ptr =
+          (match fn_ptr.kind with
+          | TraitMethod (trait_ref, method_id) ->
+              let trait_decl_id = trait_ref.trait_decl_ref.binder_value.id in
+              add_trait_method_id trait_decl_id method_id
+          | _ -> ());
+          super#visit_fn_ptr env fn_ptr
+      end
+    in
+    List.iter
+      (visitor#visit_fun_decl ())
+      (FunDeclId.Map.values fun_ctx.to_extract);
+    List.iter
+      (visitor#visit_global_decl ())
+      (GlobalDeclId.Map.values global_decls_to_extract);
+    TraitDeclId.Map.iter
+      (fun trait_decl_id (trait_decl : trait_decl) ->
+        TraitMethodId.Map.iter
+          (fun method_id (_method : trait_method binder) ->
+            add_trait_method_id trait_decl_id method_id)
+          trait_decl.methods)
+      trait_decls_to_extract;
+
+    TraitDeclId.Map.mapi
+      (fun trait_decl_id (trait_decl : trait_decl) ->
+        match TraitDeclId.Map.find_opt trait_decl_id !trait_method_ids with
+        | None -> TraitMethodId.Map.empty
+        | Some method_ids ->
+            TraitMethodId.Map.filter
+              (fun method_id _ -> TraitMethodId.Set.mem method_id method_ids)
+              trait_decl.methods)
+      crate.trait_decls
+  in
+
   {
     crate;
     graph_of_uses = crate_graph;
@@ -187,6 +241,7 @@ let compute_contexts (crate : crate) : decls_ctx =
     fun_ctx;
     global_decls_to_extract;
     trait_decls_to_extract;
+    trait_methods_to_extract;
     trait_impls_to_extract;
   }
 
@@ -273,8 +328,8 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx)
       let inputs =
         List.map
           (fun (sv : symbolic_value) ->
-            mk_eproj_loans_value_from_symbolic_value ctx.type_ctx.type_infos
-              abs.regions.owned sv sv.sv_ty)
+            mk_eproj_loans_value_from_symbolic_value ctx.env
+              ctx.type_ctx.type_infos abs.regions.owned sv sv.sv_ty)
           input_svs
       in
       (* Note that we don't really care about the type of the input *)
@@ -292,7 +347,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx)
       inst_sg.abs_regions_hierarchy region_can_end compute_abs_avalues ctx
   in
   (* Split the variables between return var, inputs and remaining locals *)
-  let body = Option.get fdef.body in
+  let body = [%add_loc] body_as_body_exn fdef.body in
   let ret_var = List.hd body.locals.locals in
   let input_vars, local_vars =
     Collections.List.split_at (List.tl body.locals.locals) body.locals.arg_count
@@ -447,7 +502,7 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
   (* Debug *)
   let span = fdef.item_meta.span in
   let name_to_string () =
-    Print.Types.name_to_string
+    Print.name_to_string
       (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)
       fdef.item_meta.name
   in
@@ -536,9 +591,8 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
   (* Evaluate the function *)
   let symbolic =
     try
-      let ctx_resl, cc =
-        eval_function_body config (Option.get fdef.body).body ctx
-      in
+      let body = [%add_loc] body_as_body_exn fdef.body in
+      let ctx_resl, cc = eval_function_body config body.body ctx in
       let el = List.map (fun (ctx, res) -> finish res ctx) ctx_resl in
       (* Finish synthesizing *)
       if synthesize then Some (cc el) else None
@@ -570,12 +624,12 @@ module Test = struct
       (fid : FunDeclId.id) : unit =
     (* Retrieve the function declaration *)
     let fdef = FunDeclId.Map.find fid crate.fun_decls in
-    let body = Option.get fdef.body in
+    let body = [%add_loc] body_as_body_exn fdef.body in
     let span = fdef.item_meta.span in
 
     (* Debug *)
     [%ltrace
-      Print.Types.name_to_string
+      Print.name_to_string
         (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)
         fdef.item_meta.name];
 
@@ -601,7 +655,7 @@ module Test = struct
       | _ ->
           [%craise] span
             ("Unit test failed (concrete execution) on: "
-            ^ Print.Types.name_to_string
+            ^ Print.name_to_string
                 (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)
                 fdef.item_meta.name)
     in
@@ -613,7 +667,7 @@ module Test = struct
   (** Small helper: return true if the function is a *transparent* unit function
       (no parameters, no arguments) - TODO: move *)
   let fun_decl_is_transparent_unit (def : fun_decl) : bool =
-    Option.is_some def.body
+    body_is_known def.body
     && def.generics = empty_generic_params
     && def.signature.inputs = []
 

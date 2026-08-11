@@ -1,4 +1,6 @@
 //@ [!lean] skip
+#![feature(register_tool)]
+#![register_tool(verify)]
 
 fn u32_use_wrapping_add(x: u32, y: u32) -> u32 {
     x.wrapping_add(y)
@@ -30,6 +32,35 @@ fn u32_use_shift_left(x: u32) -> u32 {
 
 fn i32_use_shift_left(x: i32) -> i32 {
     x << 2
+}
+
+fn u32_use_wrapping_shl(x: u32, s: u32) -> u32 {
+    x.wrapping_shl(s)
+}
+
+fn i32_use_wrapping_shl(x: i32, s: u32) -> i32 {
+    x.wrapping_shl(s)
+}
+
+fn u32_use_wrapping_shr(x: u32, s: u32) -> u32 {
+    x.wrapping_shr(s)
+}
+
+fn i32_use_wrapping_shr(x: i32, s: u32) -> i32 {
+    x.wrapping_shr(s)
+}
+
+/// Regression test for issue #816: shifts assigned through a dereferenced pointer
+/// (here via `IndexMut`) reach Aeneas with overflow mode `OWrap` (Charon issue
+/// #1041), so the Lean extraction must route them through `Std.U64.wrapping_shr`
+/// rather than the undefined `U64.shr`.
+fn shr_into_index_mut(x: u64, out: &mut [u64; 2]) {
+    out[0] = x >> 20;
+}
+
+/// Counterpart to `shr_into_index_mut` for `<<`.
+fn shl_into_index_mut(x: u64, out: &mut [u64; 2]) {
+    out[0] = x << 20;
 }
 
 fn add_and(a: u32, b: u32) -> u32 {
@@ -88,4 +119,71 @@ fn u32_as_i16(x: u32) -> i16 {
 
 fn i16_as_u32(x: i16) -> u32 {
     x as u32
+}
+
+pub fn u32_use_bits() -> u32 {
+    u32::BITS
+}
+
+pub fn i32_use_bits() -> u32 {
+    i32::BITS
+}
+
+// ============================================================================
+// is_multiple_of
+// ============================================================================
+
+#[verify::test]
+pub fn test_is_multiple_of_true() {
+    assert!(12usize.is_multiple_of(4));
+}
+
+#[verify::test]
+pub fn test_is_multiple_of_false() {
+    assert!(!7usize.is_multiple_of(3));
+}
+
+#[verify::test]
+pub fn test_is_multiple_of_zero_divisor() {
+    // Only 0 is a multiple of 0.
+    assert!(0usize.is_multiple_of(0));
+    assert!(!5usize.is_multiple_of(0));
+}
+
+// ============================================================================
+// TryFrom<...>
+// ============================================================================
+
+#[verify::test]
+pub fn test_try_from_usize_u32_ok() {
+    assert!(u32::try_from(5usize).is_ok());
+}
+
+// ============================================================================
+// `?` operator on Result (branch / from_residual)
+// ============================================================================
+
+fn checked_div(a: u32, b: u32) -> Result<u32, ()> {
+    if b == 0 {
+        return Err(());
+    }
+    Ok(a / b)
+}
+
+fn use_question_mark(a: u32, b: u32) -> Result<u32, ()> {
+    let q = checked_div(a, b)?;
+    Ok(q + 1)
+}
+
+#[verify::test]
+pub fn test_question_mark_ok() {
+    let r = use_question_mark(10, 2);
+    assert!(r.is_ok());
+    assert!(r.unwrap() == 6u32);
+}
+
+#[verify::test]
+pub fn test_question_mark_err() {
+    let r = use_question_mark(10, 0);
+    assert!(!r.is_ok());
 }

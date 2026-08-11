@@ -109,8 +109,10 @@ example (toInt_x s2_val x_i y_i rest_y c0 c1 pow_i pow_len pow32 : Int)
     pow_i * (s2_val - x_i) + c1 * pow_len =
     pow_i * (y_i + pow32 * rest_y) + c0 * pow_i := by
   ring_eq_nf at h
-  -- The user-written goal is not in ring_nf form; normalize it to match h
-  ring_nf; exact h
+  -- The user-written goal is not in ring_nf form; normalize it to match h.
+  -- Note: ring_nf now produces subtraction in the normal form, which ring_eq_nf
+  -- doesn't cancel, so we close the remaining gap with omega.
+  ring_nf; omega
 
 -- Simpler version: cancel shared addend from both sides of a carry equation
 example (a b c d shared : Int)

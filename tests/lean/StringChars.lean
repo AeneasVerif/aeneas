@@ -9,6 +9,9 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace string_chars
 
 /-- [string_chars::collect]:
@@ -16,7 +19,8 @@ namespace string_chars
 def collect : Result Unit := do
   let c ← core.str.Str.chars (toStr "hello")
   let _ ←
-    core.str.iter.IteratorChars.collect
+    core.iter.traits.iterator.Iterator.collect.default
+      core.iter.traits.iterator.IteratorChars
       (core.iter.traits.collect.FromIteratorVec Char) c
   ok ()
 

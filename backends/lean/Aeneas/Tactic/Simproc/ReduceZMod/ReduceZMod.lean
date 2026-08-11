@@ -80,7 +80,7 @@ simproc reduceZModInv (@Inv.inv _ (ZMod.instInv _) _) := fun e => do
 simproc reduceZModPow
   (@HPow.hPow _ Nat _
       (@instHPow _ Nat
-        (@Monoid.toNatPow _
+        (@Monoid.toPow _
           (@MonoidWithZero.toMonoid _
             (@Semiring.toMonoidWithZero _
               (@CommSemiring.toSemiring _ (@CommRing.toCommSemiring _ (ZMod.commRing _)))))))

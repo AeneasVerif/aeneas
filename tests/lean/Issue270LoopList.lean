@@ -9,10 +9,14 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace issue_270_loop_list
 
 /-- [issue_270_loop_list::List]
-    Source: 'tests/src/issue-270-loop-list.rs', lines 2:0-5:1 -/
+    Source: 'tests/src/issue-270-loop-list.rs', lines 2:0-5:1
+    Visibility: public -/
 @[discriminant isize]
 inductive List (T : Type) where
 | Cons : T → List T → List T

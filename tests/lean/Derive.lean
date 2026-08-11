@@ -9,7 +9,29 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
+/- You can remove the following line by using the CLI option `-all-computable`: -/
+noncomputable section
+
 namespace derive
+
+/-- [core::cmp::impls::{impl core::cmp::PartialEq<bool> for bool}::ne]:
+    Source: '/rustc/library/core/src/cmp.rs', lines 1880:16-1880:50
+    Name pattern: [core::cmp::impls::{core::cmp::PartialEq<bool, bool>}::ne]
+    Visibility: public -/
+@[rust_fun "core::cmp::impls::{core::cmp::PartialEq<bool, bool>}::ne"]
+axiom Bool.Insts.CoreCmpPartialEqBool.ne : Bool → Bool → Result Bool
+
+/-- [alloc::boxed::{impl core::cmp::PartialEq<alloc::boxed::Box<T>> for alloc::boxed::Box<T>}::ne]:
+    Source: '/rustc/library/alloc/src/boxed.rs', lines 2127:4-2127:38
+    Name pattern: [alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::ne]
+    Visibility: public -/
+@[rust_fun "alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::ne"]
+axiom Box.Insts.CoreCmpPartialEqBox.ne
+  {T : Type} (A : Type) (corecmpPartialEqInst : core.cmp.PartialEq T T) :
+  T → T → Result Bool
 
 /-- [derive::CopyEnumOneVariant]
     Source: 'tests/src/derive.rs', lines 4:0-6:1 -/
@@ -17,13 +39,14 @@ namespace derive
 inductive CopyEnumOneVariant where
 | Variant : Bool → CopyEnumOneVariant
 
-/-- [derive::{core::clone::Clone for derive::CopyEnumOneVariant}::clone]:
-    Source: 'tests/src/derive.rs', lines 3:9-3:14 -/
+/-- [derive::{impl core::clone::Clone for derive::CopyEnumOneVariant}::clone]:
+    Source: 'tests/src/derive.rs', lines 3:9-3:14
+    Visibility: public -/
 def CopyEnumOneVariant.Insts.CoreCloneClone.clone
   (self : CopyEnumOneVariant) : Result CopyEnumOneVariant := do
   ok self
 
-/-- Trait implementation: [derive::{core::clone::Clone for derive::CopyEnumOneVariant}]
+/-- Trait implementation: [derive::{impl core::clone::Clone for derive::CopyEnumOneVariant}]
     Source: 'tests/src/derive.rs', lines 3:9-3:14 -/
 @[reducible]
 def CopyEnumOneVariant.Insts.CoreCloneClone : core.clone.Clone
@@ -31,7 +54,7 @@ def CopyEnumOneVariant.Insts.CoreCloneClone : core.clone.Clone
   clone := CopyEnumOneVariant.Insts.CoreCloneClone.clone
 }
 
-/-- Trait implementation: [derive::{core::marker::Copy for derive::CopyEnumOneVariant}]
+/-- Trait implementation: [derive::{impl core::marker::Copy for derive::CopyEnumOneVariant}]
     Source: 'tests/src/derive.rs', lines 3:16-3:20 -/
 @[reducible]
 def CopyEnumOneVariant.Insts.CoreMarkerCopy : core.marker.Copy
@@ -39,46 +62,51 @@ def CopyEnumOneVariant.Insts.CoreMarkerCopy : core.marker.Copy
   cloneInst := CopyEnumOneVariant.Insts.CoreCloneClone
 }
 
-/-- Trait implementation: [derive::{core::marker::StructuralPartialEq for derive::CopyEnumOneVariant}]
+/-- Trait implementation: [derive::{impl core::marker::StructuralPartialEq for derive::CopyEnumOneVariant}]
     Source: 'tests/src/derive.rs', lines 3:22-3:31 -/
 @[reducible]
 def CopyEnumOneVariant.Insts.CoreMarkerStructuralPartialEq :
   core.marker.StructuralPartialEq CopyEnumOneVariant := {
 }
 
-/-- [derive::{core::cmp::PartialEq<derive::CopyEnumOneVariant> for derive::CopyEnumOneVariant}::eq]:
-    Source: 'tests/src/derive.rs', lines 3:22-3:31 -/
+/-- [derive::{impl core::cmp::PartialEq<derive::CopyEnumOneVariant> for derive::CopyEnumOneVariant}::eq]:
+    Source: 'tests/src/derive.rs', lines 3:22-3:31
+    Visibility: public -/
 def CopyEnumOneVariant.Insts.CoreCmpPartialEqCopyEnumOneVariant.eq
   (self : CopyEnumOneVariant) (other : CopyEnumOneVariant) : Result Bool := do
   let ⟨ __self_0 ⟩ := self
   let ⟨ __arg1_0 ⟩ := other
   core.cmp.impls.PartialEqBool.eq __self_0 __arg1_0
 
-/-- Trait implementation: [derive::{core::cmp::PartialEq<derive::CopyEnumOneVariant> for derive::CopyEnumOneVariant}]
+/-- Trait implementation: [derive::{impl core::cmp::PartialEq<derive::CopyEnumOneVariant> for derive::CopyEnumOneVariant}]
     Source: 'tests/src/derive.rs', lines 3:22-3:31 -/
 @[reducible]
-def CopyEnumOneVariant.Insts.CoreCmpPartialEqCopyEnumOneVariant :
+impl_def CopyEnumOneVariant.Insts.CoreCmpPartialEqCopyEnumOneVariant :
   core.cmp.PartialEq CopyEnumOneVariant CopyEnumOneVariant := {
   eq := CopyEnumOneVariant.Insts.CoreCmpPartialEqCopyEnumOneVariant.eq
+  ne := core.cmp.PartialEq.ne.trait_default
+    CopyEnumOneVariant.Insts.CoreCmpPartialEqCopyEnumOneVariant
 }
 
-/-- [derive::{core::cmp::Eq for derive::CopyEnumOneVariant}::assert_receiver_is_total_eq]:
-    Source: 'tests/src/derive.rs', lines 3:33-3:35 -/
-def CopyEnumOneVariant.Insts.CoreCmpEq.assert_receiver_is_total_eq
+/-- [derive::{impl core::cmp::Eq for derive::CopyEnumOneVariant}::assert_fields_are_eq]:
+    Source: 'tests/src/derive.rs', lines 3:33-3:35
+    Visibility: public -/
+def CopyEnumOneVariant.Insts.CoreCmpEq.assert_fields_are_eq
   (self : CopyEnumOneVariant) : Result Unit := do
   ok ()
 
-/-- Trait implementation: [derive::{core::cmp::Eq for derive::CopyEnumOneVariant}]
+/-- Trait implementation: [derive::{impl core::cmp::Eq for derive::CopyEnumOneVariant}]
     Source: 'tests/src/derive.rs', lines 3:33-3:35 -/
 @[reducible]
 def CopyEnumOneVariant.Insts.CoreCmpEq : core.cmp.Eq CopyEnumOneVariant := {
   partialEqInst := CopyEnumOneVariant.Insts.CoreCmpPartialEqCopyEnumOneVariant
-  assert_receiver_is_total_eq :=
-    CopyEnumOneVariant.Insts.CoreCmpEq.assert_receiver_is_total_eq
+  assert_fields_are_eq :=
+    CopyEnumOneVariant.Insts.CoreCmpEq.assert_fields_are_eq
 }
 
-/-- [derive::{core::fmt::Debug for derive::CopyEnumOneVariant}::fmt]:
-    Source: 'tests/src/derive.rs', lines 3:37-3:42 -/
+/-- [derive::{impl core::fmt::Debug for derive::CopyEnumOneVariant}::fmt]:
+    Source: 'tests/src/derive.rs', lines 3:37-3:42
+    Visibility: public -/
 def CopyEnumOneVariant.Insts.CoreFmtDebug.fmt
   (self : CopyEnumOneVariant) (f : core.fmt.Formatter) :
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter)
@@ -87,7 +115,7 @@ def CopyEnumOneVariant.Insts.CoreFmtDebug.fmt
   let __self_01 := Dyn.mk _ (core.fmt.DebugShared core.fmt.DebugBool) __self_0
   core.fmt.Formatter.debug_tuple_field1_finish f (toStr "Variant") __self_01
 
-/-- Trait implementation: [derive::{core::fmt::Debug for derive::CopyEnumOneVariant}]
+/-- Trait implementation: [derive::{impl core::fmt::Debug for derive::CopyEnumOneVariant}]
     Source: 'tests/src/derive.rs', lines 3:37-3:42 -/
 @[reducible]
 def CopyEnumOneVariant.Insts.CoreFmtDebug : core.fmt.Debug CopyEnumOneVariant
@@ -104,66 +132,71 @@ inductive ScalarEnum where
 | Variant2 : ScalarEnum
 | Variant3 : ScalarEnum
 
-/-- [derive::{core::clone::Clone for derive::ScalarEnum}::clone]:
-    Source: 'tests/src/derive.rs', lines 8:9-8:14 -/
+/-- [derive::{impl core::clone::Clone for derive::ScalarEnum}::clone]:
+    Source: 'tests/src/derive.rs', lines 8:9-8:14
+    Visibility: public -/
 def ScalarEnum.Insts.CoreCloneClone.clone
   (self : ScalarEnum) : Result ScalarEnum := do
   ok self
 
-/-- Trait implementation: [derive::{core::clone::Clone for derive::ScalarEnum}]
+/-- Trait implementation: [derive::{impl core::clone::Clone for derive::ScalarEnum}]
     Source: 'tests/src/derive.rs', lines 8:9-8:14 -/
 @[reducible]
 def ScalarEnum.Insts.CoreCloneClone : core.clone.Clone ScalarEnum := {
   clone := ScalarEnum.Insts.CoreCloneClone.clone
 }
 
-/-- Trait implementation: [derive::{core::marker::Copy for derive::ScalarEnum}]
+/-- Trait implementation: [derive::{impl core::marker::Copy for derive::ScalarEnum}]
     Source: 'tests/src/derive.rs', lines 8:16-8:20 -/
 @[reducible]
 def ScalarEnum.Insts.CoreMarkerCopy : core.marker.Copy ScalarEnum := {
   cloneInst := ScalarEnum.Insts.CoreCloneClone
 }
 
-/-- Trait implementation: [derive::{core::marker::StructuralPartialEq for derive::ScalarEnum}]
+/-- Trait implementation: [derive::{impl core::marker::StructuralPartialEq for derive::ScalarEnum}]
     Source: 'tests/src/derive.rs', lines 8:22-8:31 -/
 @[reducible]
 def ScalarEnum.Insts.CoreMarkerStructuralPartialEq :
   core.marker.StructuralPartialEq ScalarEnum := {
 }
 
-/-- [derive::{core::cmp::PartialEq<derive::ScalarEnum> for derive::ScalarEnum}::eq]:
-    Source: 'tests/src/derive.rs', lines 8:22-8:31 -/
+/-- [derive::{impl core::cmp::PartialEq<derive::ScalarEnum> for derive::ScalarEnum}::eq]:
+    Source: 'tests/src/derive.rs', lines 8:22-8:31
+    Visibility: public -/
 def ScalarEnum.Insts.CoreCmpPartialEqScalarEnum.eq
   (self : ScalarEnum) (other : ScalarEnum) : Result Bool := do
   let self1 := read_discriminant self
   let other1 := read_discriminant other
   ok (self1 = other1)
 
-/-- Trait implementation: [derive::{core::cmp::PartialEq<derive::ScalarEnum> for derive::ScalarEnum}]
+/-- Trait implementation: [derive::{impl core::cmp::PartialEq<derive::ScalarEnum> for derive::ScalarEnum}]
     Source: 'tests/src/derive.rs', lines 8:22-8:31 -/
 @[reducible]
-def ScalarEnum.Insts.CoreCmpPartialEqScalarEnum : core.cmp.PartialEq ScalarEnum
-  ScalarEnum := {
+impl_def ScalarEnum.Insts.CoreCmpPartialEqScalarEnum : core.cmp.PartialEq
+  ScalarEnum ScalarEnum := {
   eq := ScalarEnum.Insts.CoreCmpPartialEqScalarEnum.eq
+  ne := core.cmp.PartialEq.ne.trait_default
+    ScalarEnum.Insts.CoreCmpPartialEqScalarEnum
 }
 
-/-- [derive::{core::cmp::Eq for derive::ScalarEnum}::assert_receiver_is_total_eq]:
-    Source: 'tests/src/derive.rs', lines 8:33-8:35 -/
-def ScalarEnum.Insts.CoreCmpEq.assert_receiver_is_total_eq
+/-- [derive::{impl core::cmp::Eq for derive::ScalarEnum}::assert_fields_are_eq]:
+    Source: 'tests/src/derive.rs', lines 8:33-8:35
+    Visibility: public -/
+def ScalarEnum.Insts.CoreCmpEq.assert_fields_are_eq
   (self : ScalarEnum) : Result Unit := do
   ok ()
 
-/-- Trait implementation: [derive::{core::cmp::Eq for derive::ScalarEnum}]
+/-- Trait implementation: [derive::{impl core::cmp::Eq for derive::ScalarEnum}]
     Source: 'tests/src/derive.rs', lines 8:33-8:35 -/
 @[reducible]
 def ScalarEnum.Insts.CoreCmpEq : core.cmp.Eq ScalarEnum := {
   partialEqInst := ScalarEnum.Insts.CoreCmpPartialEqScalarEnum
-  assert_receiver_is_total_eq :=
-    ScalarEnum.Insts.CoreCmpEq.assert_receiver_is_total_eq
+  assert_fields_are_eq := ScalarEnum.Insts.CoreCmpEq.assert_fields_are_eq
 }
 
-/-- [derive::{core::fmt::Debug for derive::ScalarEnum}::fmt]:
-    Source: 'tests/src/derive.rs', lines 8:37-8:42 -/
+/-- [derive::{impl core::fmt::Debug for derive::ScalarEnum}::fmt]:
+    Source: 'tests/src/derive.rs', lines 8:37-8:42
+    Visibility: public -/
 def ScalarEnum.Insts.CoreFmtDebug.fmt
   (self : ScalarEnum) (f : core.fmt.Formatter) :
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter)
@@ -174,7 +207,7 @@ def ScalarEnum.Insts.CoreFmtDebug.fmt
   | ScalarEnum.Variant2 => core.fmt.Formatter.write_str f (toStr "Variant2")
   | ScalarEnum.Variant3 => core.fmt.Formatter.write_str f (toStr "Variant3")
 
-/-- Trait implementation: [derive::{core::fmt::Debug for derive::ScalarEnum}]
+/-- Trait implementation: [derive::{impl core::fmt::Debug for derive::ScalarEnum}]
     Source: 'tests/src/derive.rs', lines 8:37-8:42 -/
 @[reducible]
 def ScalarEnum.Insts.CoreFmtDebug : core.fmt.Debug ScalarEnum := {
@@ -190,8 +223,9 @@ inductive CopyEnum (T : Type) where
 | Variant2 : Std.U32 → CopyEnum T
 | Variant3 : T → CopyEnum T
 
-/-- [derive::{core::clone::Clone for derive::CopyEnum<T>}::clone]:
-    Source: 'tests/src/derive.rs', lines 16:9-16:14 -/
+/-- [derive::{impl core::clone::Clone for derive::CopyEnum<T>}::clone]:
+    Source: 'tests/src/derive.rs', lines 16:9-16:14
+    Visibility: public -/
 def CopyEnum.Insts.CoreCloneClone.clone
   {T : Type} (corecloneCloneInst : core.clone.Clone T) (self : CopyEnum T) :
   Result (CopyEnum T)
@@ -208,7 +242,7 @@ def CopyEnum.Insts.CoreCloneClone.clone
     let t ← corecloneCloneInst.clone __self_0
     ok (CopyEnum.Variant3 t)
 
-/-- Trait implementation: [derive::{core::clone::Clone for derive::CopyEnum<T>}]
+/-- Trait implementation: [derive::{impl core::clone::Clone for derive::CopyEnum<T>}]
     Source: 'tests/src/derive.rs', lines 16:9-16:14 -/
 @[reducible]
 def CopyEnum.Insts.CoreCloneClone {T : Type} (corecloneCloneInst :
@@ -216,7 +250,7 @@ def CopyEnum.Insts.CoreCloneClone {T : Type} (corecloneCloneInst :
   clone := CopyEnum.Insts.CoreCloneClone.clone corecloneCloneInst
 }
 
-/-- Trait implementation: [derive::{core::marker::Copy for derive::CopyEnum<T>}]
+/-- Trait implementation: [derive::{impl core::marker::Copy for derive::CopyEnum<T>}]
     Source: 'tests/src/derive.rs', lines 16:16-16:20 -/
 @[reducible]
 def CopyEnum.Insts.CoreMarkerCopy {T : Type} (coremarkerCopyInst :
@@ -224,15 +258,16 @@ def CopyEnum.Insts.CoreMarkerCopy {T : Type} (coremarkerCopyInst :
   cloneInst := CopyEnum.Insts.CoreCloneClone coremarkerCopyInst.cloneInst
 }
 
-/-- Trait implementation: [derive::{core::marker::StructuralPartialEq for derive::CopyEnum<T>}]
+/-- Trait implementation: [derive::{impl core::marker::StructuralPartialEq for derive::CopyEnum<T>}]
     Source: 'tests/src/derive.rs', lines 16:22-16:31 -/
 @[reducible]
 def CopyEnum.Insts.CoreMarkerStructuralPartialEq (T : Type) :
   core.marker.StructuralPartialEq (CopyEnum T) := {
 }
 
-/-- [derive::{core::cmp::PartialEq<derive::CopyEnum<T>> for derive::CopyEnum<T>}::eq]:
-    Source: 'tests/src/derive.rs', lines 16:22-16:31 -/
+/-- [derive::{impl core::cmp::PartialEq<derive::CopyEnum<T>> for derive::CopyEnum<T>}::eq]:
+    Source: 'tests/src/derive.rs', lines 16:22-16:31
+    Visibility: public -/
 def CopyEnum.Insts.CoreCmpPartialEqCopyEnum.eq
   {T : Type} (corecmpPartialEqInst : core.cmp.PartialEq T T)
   (self : CopyEnum T) (other : CopyEnum T) :
@@ -268,35 +303,40 @@ def CopyEnum.Insts.CoreCmpPartialEqCopyEnum.eq
           __arg1_0
   else ok false
 
-/-- Trait implementation: [derive::{core::cmp::PartialEq<derive::CopyEnum<T>> for derive::CopyEnum<T>}]
+/-- Trait implementation: [derive::{impl core::cmp::PartialEq<derive::CopyEnum<T>> for derive::CopyEnum<T>}]
     Source: 'tests/src/derive.rs', lines 16:22-16:31 -/
 @[reducible]
-def CopyEnum.Insts.CoreCmpPartialEqCopyEnum {T : Type} (corecmpPartialEqInst :
-  core.cmp.PartialEq T T) : core.cmp.PartialEq (CopyEnum T) (CopyEnum T) := {
+impl_def CopyEnum.Insts.CoreCmpPartialEqCopyEnum {T : Type}
+  (corecmpPartialEqInst : core.cmp.PartialEq T T) : core.cmp.PartialEq
+  (CopyEnum T) (CopyEnum T) := {
   eq := CopyEnum.Insts.CoreCmpPartialEqCopyEnum.eq corecmpPartialEqInst
+  ne := core.cmp.PartialEq.ne.trait_default
+    (CopyEnum.Insts.CoreCmpPartialEqCopyEnum corecmpPartialEqInst)
 }
 
-/-- [derive::{core::cmp::Eq for derive::CopyEnum<T>}::assert_receiver_is_total_eq]:
-    Source: 'tests/src/derive.rs', lines 16:33-16:35 -/
-def CopyEnum.Insts.CoreCmpEq.assert_receiver_is_total_eq
+/-- [derive::{impl core::cmp::Eq for derive::CopyEnum<T>}::assert_fields_are_eq]:
+    Source: 'tests/src/derive.rs', lines 16:33-16:35
+    Visibility: public -/
+def CopyEnum.Insts.CoreCmpEq.assert_fields_are_eq
   {T : Type} (corecmpEqInst : core.cmp.Eq T) (self : CopyEnum T) :
   Result Unit
   := do
   ok ()
 
-/-- Trait implementation: [derive::{core::cmp::Eq for derive::CopyEnum<T>}]
+/-- Trait implementation: [derive::{impl core::cmp::Eq for derive::CopyEnum<T>}]
     Source: 'tests/src/derive.rs', lines 16:33-16:35 -/
 @[reducible]
 def CopyEnum.Insts.CoreCmpEq {T : Type} (corecmpEqInst : core.cmp.Eq T) :
   core.cmp.Eq (CopyEnum T) := {
   partialEqInst := CopyEnum.Insts.CoreCmpPartialEqCopyEnum
     corecmpEqInst.partialEqInst
-  assert_receiver_is_total_eq :=
-    CopyEnum.Insts.CoreCmpEq.assert_receiver_is_total_eq corecmpEqInst
+  assert_fields_are_eq := CopyEnum.Insts.CoreCmpEq.assert_fields_are_eq
+    corecmpEqInst
 }
 
-/-- [derive::{core::fmt::Debug for derive::CopyEnum<T>}::fmt]:
-    Source: 'tests/src/derive.rs', lines 16:37-16:42 -/
+/-- [derive::{impl core::fmt::Debug for derive::CopyEnum<T>}::fmt]:
+    Source: 'tests/src/derive.rs', lines 16:37-16:42
+    Visibility: public -/
 def CopyEnum.Insts.CoreFmtDebug.fmt
   {T : Type} (corefmtDebugInst : core.fmt.Debug T) (self : CopyEnum T)
   (f : core.fmt.Formatter) :
@@ -315,7 +355,7 @@ def CopyEnum.Insts.CoreFmtDebug.fmt
     let __self_01 := Dyn.mk _ (core.fmt.DebugShared corefmtDebugInst) __self_0
     core.fmt.Formatter.debug_tuple_field1_finish f (toStr "Variant3") __self_01
 
-/-- Trait implementation: [derive::{core::fmt::Debug for derive::CopyEnum<T>}]
+/-- Trait implementation: [derive::{impl core::fmt::Debug for derive::CopyEnum<T>}]
     Source: 'tests/src/derive.rs', lines 16:37-16:42 -/
 @[reducible]
 def CopyEnum.Insts.CoreFmtDebug {T : Type} (corefmtDebugInst : core.fmt.Debug
@@ -333,8 +373,9 @@ inductive Enum (T : Type) where
 | Variant3 : T → Enum T
 | Variant4 : alloc.vec.Vec T → Enum T
 
-/-- [derive::{core::clone::Clone for derive::Enum<T>}::clone]:
-    Source: 'tests/src/derive.rs', lines 24:9-24:14 -/
+/-- [derive::{impl core::clone::Clone for derive::Enum<T>}::clone]:
+    Source: 'tests/src/derive.rs', lines 24:9-24:14
+    Visibility: public -/
 def Enum.Insts.CoreCloneClone.clone
   {T : Type} (corecloneCloneInst : core.clone.Clone T) (self : Enum T) :
   Result (Enum T)
@@ -354,7 +395,7 @@ def Enum.Insts.CoreCloneClone.clone
     let v ← alloc.vec.CloneVec.clone corecloneCloneInst __self_0
     ok (Enum.Variant4 v)
 
-/-- Trait implementation: [derive::{core::clone::Clone for derive::Enum<T>}]
+/-- Trait implementation: [derive::{impl core::clone::Clone for derive::Enum<T>}]
     Source: 'tests/src/derive.rs', lines 24:9-24:14 -/
 @[reducible]
 def Enum.Insts.CoreCloneClone {T : Type} (corecloneCloneInst : core.clone.Clone
@@ -362,15 +403,16 @@ def Enum.Insts.CoreCloneClone {T : Type} (corecloneCloneInst : core.clone.Clone
   clone := Enum.Insts.CoreCloneClone.clone corecloneCloneInst
 }
 
-/-- Trait implementation: [derive::{core::marker::StructuralPartialEq for derive::Enum<T>}]
+/-- Trait implementation: [derive::{impl core::marker::StructuralPartialEq for derive::Enum<T>}]
     Source: 'tests/src/derive.rs', lines 24:16-24:25 -/
 @[reducible]
 def Enum.Insts.CoreMarkerStructuralPartialEq (T : Type) :
   core.marker.StructuralPartialEq (Enum T) := {
 }
 
-/-- [derive::{core::cmp::PartialEq<derive::Enum<T>> for derive::Enum<T>}::eq]:
-    Source: 'tests/src/derive.rs', lines 24:16-24:25 -/
+/-- [derive::{impl core::cmp::PartialEq<derive::Enum<T>> for derive::Enum<T>}::eq]:
+    Source: 'tests/src/derive.rs', lines 24:16-24:25
+    Visibility: public -/
 def Enum.Insts.CoreCmpPartialEqEnum.eq
   {T : Type} (corecmpPartialEqInst : core.cmp.PartialEq T T) (self : Enum T)
   (other : Enum T) :
@@ -418,34 +460,38 @@ def Enum.Insts.CoreCmpPartialEqEnum.eq
           __arg1_0
   else ok false
 
-/-- Trait implementation: [derive::{core::cmp::PartialEq<derive::Enum<T>> for derive::Enum<T>}]
+/-- Trait implementation: [derive::{impl core::cmp::PartialEq<derive::Enum<T>> for derive::Enum<T>}]
     Source: 'tests/src/derive.rs', lines 24:16-24:25 -/
 @[reducible]
-def Enum.Insts.CoreCmpPartialEqEnum {T : Type} (corecmpPartialEqInst :
+impl_def Enum.Insts.CoreCmpPartialEqEnum {T : Type} (corecmpPartialEqInst :
   core.cmp.PartialEq T T) : core.cmp.PartialEq (Enum T) (Enum T) := {
   eq := Enum.Insts.CoreCmpPartialEqEnum.eq corecmpPartialEqInst
+  ne := core.cmp.PartialEq.ne.trait_default (Enum.Insts.CoreCmpPartialEqEnum
+    corecmpPartialEqInst)
 }
 
-/-- [derive::{core::cmp::Eq for derive::Enum<T>}::assert_receiver_is_total_eq]:
-    Source: 'tests/src/derive.rs', lines 24:27-24:29 -/
-def Enum.Insts.CoreCmpEq.assert_receiver_is_total_eq
+/-- [derive::{impl core::cmp::Eq for derive::Enum<T>}::assert_fields_are_eq]:
+    Source: 'tests/src/derive.rs', lines 24:27-24:29
+    Visibility: public -/
+def Enum.Insts.CoreCmpEq.assert_fields_are_eq
   {T : Type} (corecmpEqInst : core.cmp.Eq T) (self : Enum T) :
   Result Unit
   := do
   ok ()
 
-/-- Trait implementation: [derive::{core::cmp::Eq for derive::Enum<T>}]
+/-- Trait implementation: [derive::{impl core::cmp::Eq for derive::Enum<T>}]
     Source: 'tests/src/derive.rs', lines 24:27-24:29 -/
 @[reducible]
 def Enum.Insts.CoreCmpEq {T : Type} (corecmpEqInst : core.cmp.Eq T) :
   core.cmp.Eq (Enum T) := {
   partialEqInst := Enum.Insts.CoreCmpPartialEqEnum corecmpEqInst.partialEqInst
-  assert_receiver_is_total_eq :=
-    Enum.Insts.CoreCmpEq.assert_receiver_is_total_eq corecmpEqInst
+  assert_fields_are_eq := Enum.Insts.CoreCmpEq.assert_fields_are_eq
+    corecmpEqInst
 }
 
-/-- [derive::{core::fmt::Debug for derive::Enum<T>}::fmt]:
-    Source: 'tests/src/derive.rs', lines 24:31-24:36 -/
+/-- [derive::{impl core::fmt::Debug for derive::Enum<T>}::fmt]:
+    Source: 'tests/src/derive.rs', lines 24:31-24:36
+    Visibility: public -/
 def Enum.Insts.CoreFmtDebug.fmt
   {T : Type} (corefmtDebugInst : core.fmt.Debug T) (self : Enum T)
   (f : core.fmt.Formatter) :
@@ -469,7 +515,7 @@ def Enum.Insts.CoreFmtDebug.fmt
         __self_0
     core.fmt.Formatter.debug_tuple_field1_finish f (toStr "Variant4") __self_01
 
-/-- Trait implementation: [derive::{core::fmt::Debug for derive::Enum<T>}]
+/-- Trait implementation: [derive::{impl core::fmt::Debug for derive::Enum<T>}]
     Source: 'tests/src/derive.rs', lines 24:31-24:36 -/
 @[reducible]
 def Enum.Insts.CoreFmtDebug {T : Type} (corefmtDebugInst : core.fmt.Debug T) :
@@ -484,8 +530,9 @@ inductive List (T : Type) where
 | Nil : List T
 | Cons : T → List T → List T
 
-/-- [derive::{core::clone::Clone for derive::List<T>}::clone]:
-    Source: 'tests/src/derive.rs', lines 34:9-34:14 -/
+/-- [derive::{impl core::clone::Clone for derive::List<T>}::clone]:
+    Source: 'tests/src/derive.rs', lines 34:9-34:14
+    Visibility: public -/
 def List.Insts.CoreCloneClone.clone
   {T : Type} (corecloneCloneInst : core.clone.Clone T) (self : List T) :
   Result (List T)
@@ -498,7 +545,7 @@ def List.Insts.CoreCloneClone.clone
     ok (List.Cons t l)
 partial_fixpoint
 
-/-- Trait implementation: [derive::{core::clone::Clone for derive::List<T>}]
+/-- Trait implementation: [derive::{impl core::clone::Clone for derive::List<T>}]
     Source: 'tests/src/derive.rs', lines 34:9-34:14 -/
 @[reducible]
 def List.Insts.CoreCloneClone {T : Type} (corecloneCloneInst : core.clone.Clone
@@ -506,15 +553,16 @@ def List.Insts.CoreCloneClone {T : Type} (corecloneCloneInst : core.clone.Clone
   clone := List.Insts.CoreCloneClone.clone corecloneCloneInst
 }
 
-/-- Trait implementation: [derive::{core::marker::StructuralPartialEq for derive::List<T>}]
+/-- Trait implementation: [derive::{impl core::marker::StructuralPartialEq for derive::List<T>}]
     Source: 'tests/src/derive.rs', lines 34:16-34:25 -/
 @[reducible]
 def List.Insts.CoreMarkerStructuralPartialEq (T : Type) :
   core.marker.StructuralPartialEq (List T) := {
 }
 
-/-- [derive::{core::cmp::PartialEq<derive::List<T>> for derive::List<T>}::eq]:
-    Source: 'tests/src/derive.rs', lines 34:16-34:25 -/
+/-- [derive::{impl core::cmp::PartialEq<derive::List<T>> for derive::List<T>}::eq]:
+    Source: 'tests/src/derive.rs', lines 34:16-34:25
+    Visibility: public -/
 def List.Insts.CoreCmpPartialEqList.eq
   {T : Type} (corecmpPartialEqInst : core.cmp.PartialEq T T) (self : List T)
   (other : List T) :
@@ -541,30 +589,33 @@ def List.Insts.CoreCmpPartialEqList.eq
   else ok false
 partial_fixpoint
 
-/-- Trait implementation: [derive::{core::cmp::PartialEq<derive::List<T>> for derive::List<T>}]
+/-- Trait implementation: [derive::{impl core::cmp::PartialEq<derive::List<T>> for derive::List<T>}]
     Source: 'tests/src/derive.rs', lines 34:16-34:25 -/
 @[reducible]
-def List.Insts.CoreCmpPartialEqList {T : Type} (corecmpPartialEqInst :
+impl_def List.Insts.CoreCmpPartialEqList {T : Type} (corecmpPartialEqInst :
   core.cmp.PartialEq T T) : core.cmp.PartialEq (List T) (List T) := {
   eq := List.Insts.CoreCmpPartialEqList.eq corecmpPartialEqInst
+  ne := core.cmp.PartialEq.ne.trait_default (List.Insts.CoreCmpPartialEqList
+    corecmpPartialEqInst)
 }
 
-/-- [derive::{core::cmp::Eq for derive::List<T>}::assert_receiver_is_total_eq]:
-    Source: 'tests/src/derive.rs', lines 34:27-34:29 -/
-def List.Insts.CoreCmpEq.assert_receiver_is_total_eq
+/-- [derive::{impl core::cmp::Eq for derive::List<T>}::assert_fields_are_eq]:
+    Source: 'tests/src/derive.rs', lines 34:27-34:29
+    Visibility: public -/
+def List.Insts.CoreCmpEq.assert_fields_are_eq
   {T : Type} (corecmpEqInst : core.cmp.Eq T) (self : List T) :
   Result Unit
   := do
   ok ()
 
-/-- Trait implementation: [derive::{core::cmp::Eq for derive::List<T>}]
+/-- Trait implementation: [derive::{impl core::cmp::Eq for derive::List<T>}]
     Source: 'tests/src/derive.rs', lines 34:27-34:29 -/
 @[reducible]
 def List.Insts.CoreCmpEq {T : Type} (corecmpEqInst : core.cmp.Eq T) :
   core.cmp.Eq (List T) := {
   partialEqInst := List.Insts.CoreCmpPartialEqList corecmpEqInst.partialEqInst
-  assert_receiver_is_total_eq :=
-    List.Insts.CoreCmpEq.assert_receiver_is_total_eq corecmpEqInst
+  assert_fields_are_eq := List.Insts.CoreCmpEq.assert_fields_are_eq
+    corecmpEqInst
 }
 
 /-- [derive::CopyStruct]
@@ -575,8 +626,9 @@ structure CopyStruct (T : Type) where
   f2 : Std.U32
   f3 : T
 
-/-- [derive::{core::clone::Clone for derive::CopyStruct<T>}::clone]:
-    Source: 'tests/src/derive.rs', lines 41:9-41:14 -/
+/-- [derive::{impl core::clone::Clone for derive::CopyStruct<T>}::clone]:
+    Source: 'tests/src/derive.rs', lines 41:9-41:14
+    Visibility: public -/
 def CopyStruct.Insts.CoreCloneClone.clone
   {T : Type} (corecloneCloneInst : core.clone.Clone T) (self : CopyStruct T) :
   Result (CopyStruct T)
@@ -587,7 +639,7 @@ def CopyStruct.Insts.CoreCloneClone.clone
   let t ← corecloneCloneInst.clone self.f3
   ok { f0 := (), f1 := b, f2 := i, f3 := t }
 
-/-- Trait implementation: [derive::{core::clone::Clone for derive::CopyStruct<T>}]
+/-- Trait implementation: [derive::{impl core::clone::Clone for derive::CopyStruct<T>}]
     Source: 'tests/src/derive.rs', lines 41:9-41:14 -/
 @[reducible]
 def CopyStruct.Insts.CoreCloneClone {T : Type} (corecloneCloneInst :
@@ -595,7 +647,7 @@ def CopyStruct.Insts.CoreCloneClone {T : Type} (corecloneCloneInst :
   clone := CopyStruct.Insts.CoreCloneClone.clone corecloneCloneInst
 }
 
-/-- Trait implementation: [derive::{core::marker::Copy for derive::CopyStruct<T>}]
+/-- Trait implementation: [derive::{impl core::marker::Copy for derive::CopyStruct<T>}]
     Source: 'tests/src/derive.rs', lines 41:16-41:20 -/
 @[reducible]
 def CopyStruct.Insts.CoreMarkerCopy {T : Type} (coremarkerCopyInst :
@@ -603,15 +655,16 @@ def CopyStruct.Insts.CoreMarkerCopy {T : Type} (coremarkerCopyInst :
   cloneInst := CopyStruct.Insts.CoreCloneClone coremarkerCopyInst.cloneInst
 }
 
-/-- Trait implementation: [derive::{core::marker::StructuralPartialEq for derive::CopyStruct<T>}]
+/-- Trait implementation: [derive::{impl core::marker::StructuralPartialEq for derive::CopyStruct<T>}]
     Source: 'tests/src/derive.rs', lines 41:22-41:31 -/
 @[reducible]
 def CopyStruct.Insts.CoreMarkerStructuralPartialEq (T : Type) :
   core.marker.StructuralPartialEq (CopyStruct T) := {
 }
 
-/-- [derive::{core::cmp::PartialEq<derive::CopyStruct<T>> for derive::CopyStruct<T>}::eq]:
-    Source: 'tests/src/derive.rs', lines 41:22-41:31 -/
+/-- [derive::{impl core::cmp::PartialEq<derive::CopyStruct<T>> for derive::CopyStruct<T>}::eq]:
+    Source: 'tests/src/derive.rs', lines 41:22-41:31
+    Visibility: public -/
 def CopyStruct.Insts.CoreCmpPartialEqCopyStruct.eq
   {T : Type} (corecmpPartialEqInst : core.cmp.PartialEq T T)
   (self : CopyStruct T) (other : CopyStruct T) :
@@ -628,36 +681,40 @@ def CopyStruct.Insts.CoreCmpPartialEqCopyStruct.eq
     else ok false
   else ok false
 
-/-- Trait implementation: [derive::{core::cmp::PartialEq<derive::CopyStruct<T>> for derive::CopyStruct<T>}]
+/-- Trait implementation: [derive::{impl core::cmp::PartialEq<derive::CopyStruct<T>> for derive::CopyStruct<T>}]
     Source: 'tests/src/derive.rs', lines 41:22-41:31 -/
 @[reducible]
-def CopyStruct.Insts.CoreCmpPartialEqCopyStruct {T : Type}
+impl_def CopyStruct.Insts.CoreCmpPartialEqCopyStruct {T : Type}
   (corecmpPartialEqInst : core.cmp.PartialEq T T) : core.cmp.PartialEq
   (CopyStruct T) (CopyStruct T) := {
   eq := CopyStruct.Insts.CoreCmpPartialEqCopyStruct.eq corecmpPartialEqInst
+  ne := core.cmp.PartialEq.ne.trait_default
+    (CopyStruct.Insts.CoreCmpPartialEqCopyStruct corecmpPartialEqInst)
 }
 
-/-- [derive::{core::cmp::Eq for derive::CopyStruct<T>}::assert_receiver_is_total_eq]:
-    Source: 'tests/src/derive.rs', lines 41:33-41:35 -/
-def CopyStruct.Insts.CoreCmpEq.assert_receiver_is_total_eq
+/-- [derive::{impl core::cmp::Eq for derive::CopyStruct<T>}::assert_fields_are_eq]:
+    Source: 'tests/src/derive.rs', lines 41:33-41:35
+    Visibility: public -/
+def CopyStruct.Insts.CoreCmpEq.assert_fields_are_eq
   {T : Type} (corecmpEqInst : core.cmp.Eq T) (self : CopyStruct T) :
   Result Unit
   := do
   ok ()
 
-/-- Trait implementation: [derive::{core::cmp::Eq for derive::CopyStruct<T>}]
+/-- Trait implementation: [derive::{impl core::cmp::Eq for derive::CopyStruct<T>}]
     Source: 'tests/src/derive.rs', lines 41:33-41:35 -/
 @[reducible]
 def CopyStruct.Insts.CoreCmpEq {T : Type} (corecmpEqInst : core.cmp.Eq T) :
   core.cmp.Eq (CopyStruct T) := {
   partialEqInst := CopyStruct.Insts.CoreCmpPartialEqCopyStruct
     corecmpEqInst.partialEqInst
-  assert_receiver_is_total_eq :=
-    CopyStruct.Insts.CoreCmpEq.assert_receiver_is_total_eq corecmpEqInst
+  assert_fields_are_eq := CopyStruct.Insts.CoreCmpEq.assert_fields_are_eq
+    corecmpEqInst
 }
 
-/-- [derive::{core::fmt::Debug for derive::CopyStruct<T>}::fmt]:
-    Source: 'tests/src/derive.rs', lines 41:37-41:42 -/
+/-- [derive::{impl core::fmt::Debug for derive::CopyStruct<T>}::fmt]:
+    Source: 'tests/src/derive.rs', lines 41:37-41:42
+    Visibility: public -/
 def CopyStruct.Insts.CoreFmtDebug.fmt
   {T : Type} (corefmtDebugInst : core.fmt.Debug T) (self : CopyStruct T)
   (f : core.fmt.Formatter) :
@@ -670,7 +727,7 @@ def CopyStruct.Insts.CoreFmtDebug.fmt
   core.fmt.Formatter.debug_struct_field4_finish f (toStr "CopyStruct") (toStr
     "f0") dyn (toStr "f1") dyn1 (toStr "f2") dyn2 (toStr "f3") dyn3
 
-/-- Trait implementation: [derive::{core::fmt::Debug for derive::CopyStruct<T>}]
+/-- Trait implementation: [derive::{impl core::fmt::Debug for derive::CopyStruct<T>}]
     Source: 'tests/src/derive.rs', lines 41:37-41:42 -/
 @[reducible]
 def CopyStruct.Insts.CoreFmtDebug {T : Type} (corefmtDebugInst : core.fmt.Debug
@@ -683,8 +740,9 @@ def CopyStruct.Insts.CoreFmtDebug {T : Type} (corefmtDebugInst : core.fmt.Debug
 structure Struct (T : Type) where
   f : alloc.vec.Vec T
 
-/-- [derive::{core::clone::Clone for derive::Struct<T>}::clone]:
-    Source: 'tests/src/derive.rs', lines 49:9-49:14 -/
+/-- [derive::{impl core::clone::Clone for derive::Struct<T>}::clone]:
+    Source: 'tests/src/derive.rs', lines 49:9-49:14
+    Visibility: public -/
 def Struct.Insts.CoreCloneClone.clone
   {T : Type} (corecloneCloneInst : core.clone.Clone T) (self : Struct T) :
   Result (Struct T)
@@ -692,7 +750,7 @@ def Struct.Insts.CoreCloneClone.clone
   let v ← alloc.vec.CloneVec.clone corecloneCloneInst self.f
   ok { f := v }
 
-/-- Trait implementation: [derive::{core::clone::Clone for derive::Struct<T>}]
+/-- Trait implementation: [derive::{impl core::clone::Clone for derive::Struct<T>}]
     Source: 'tests/src/derive.rs', lines 49:9-49:14 -/
 @[reducible]
 def Struct.Insts.CoreCloneClone {T : Type} (corecloneCloneInst :
@@ -700,15 +758,16 @@ def Struct.Insts.CoreCloneClone {T : Type} (corecloneCloneInst :
   clone := Struct.Insts.CoreCloneClone.clone corecloneCloneInst
 }
 
-/-- Trait implementation: [derive::{core::marker::StructuralPartialEq for derive::Struct<T>}]
+/-- Trait implementation: [derive::{impl core::marker::StructuralPartialEq for derive::Struct<T>}]
     Source: 'tests/src/derive.rs', lines 49:16-49:25 -/
 @[reducible]
 def Struct.Insts.CoreMarkerStructuralPartialEq (T : Type) :
   core.marker.StructuralPartialEq (Struct T) := {
 }
 
-/-- [derive::{core::cmp::PartialEq<derive::Struct<T>> for derive::Struct<T>}::eq]:
-    Source: 'tests/src/derive.rs', lines 49:16-49:25 -/
+/-- [derive::{impl core::cmp::PartialEq<derive::Struct<T>> for derive::Struct<T>}::eq]:
+    Source: 'tests/src/derive.rs', lines 49:16-49:25
+    Visibility: public -/
 def Struct.Insts.CoreCmpPartialEqStruct.eq
   {T : Type} (corecmpPartialEqInst : core.cmp.PartialEq T T) (self : Struct T)
   (other : Struct T) :
@@ -716,35 +775,39 @@ def Struct.Insts.CoreCmpPartialEqStruct.eq
   := do
   alloc.vec.partial_eq.PartialEqVec.eq corecmpPartialEqInst self.f other.f
 
-/-- Trait implementation: [derive::{core::cmp::PartialEq<derive::Struct<T>> for derive::Struct<T>}]
+/-- Trait implementation: [derive::{impl core::cmp::PartialEq<derive::Struct<T>> for derive::Struct<T>}]
     Source: 'tests/src/derive.rs', lines 49:16-49:25 -/
 @[reducible]
-def Struct.Insts.CoreCmpPartialEqStruct {T : Type} (corecmpPartialEqInst :
+impl_def Struct.Insts.CoreCmpPartialEqStruct {T : Type} (corecmpPartialEqInst :
   core.cmp.PartialEq T T) : core.cmp.PartialEq (Struct T) (Struct T) := {
   eq := Struct.Insts.CoreCmpPartialEqStruct.eq corecmpPartialEqInst
+  ne := core.cmp.PartialEq.ne.trait_default
+    (Struct.Insts.CoreCmpPartialEqStruct corecmpPartialEqInst)
 }
 
-/-- [derive::{core::cmp::Eq for derive::Struct<T>}::assert_receiver_is_total_eq]:
-    Source: 'tests/src/derive.rs', lines 49:27-49:29 -/
-def Struct.Insts.CoreCmpEq.assert_receiver_is_total_eq
+/-- [derive::{impl core::cmp::Eq for derive::Struct<T>}::assert_fields_are_eq]:
+    Source: 'tests/src/derive.rs', lines 49:27-49:29
+    Visibility: public -/
+def Struct.Insts.CoreCmpEq.assert_fields_are_eq
   {T : Type} (corecmpEqInst : core.cmp.Eq T) (self : Struct T) :
   Result Unit
   := do
   ok ()
 
-/-- Trait implementation: [derive::{core::cmp::Eq for derive::Struct<T>}]
+/-- Trait implementation: [derive::{impl core::cmp::Eq for derive::Struct<T>}]
     Source: 'tests/src/derive.rs', lines 49:27-49:29 -/
 @[reducible]
 def Struct.Insts.CoreCmpEq {T : Type} (corecmpEqInst : core.cmp.Eq T) :
   core.cmp.Eq (Struct T) := {
   partialEqInst := Struct.Insts.CoreCmpPartialEqStruct
     corecmpEqInst.partialEqInst
-  assert_receiver_is_total_eq :=
-    Struct.Insts.CoreCmpEq.assert_receiver_is_total_eq corecmpEqInst
+  assert_fields_are_eq := Struct.Insts.CoreCmpEq.assert_fields_are_eq
+    corecmpEqInst
 }
 
-/-- [derive::{core::fmt::Debug for derive::Struct<T>}::fmt]:
-    Source: 'tests/src/derive.rs', lines 49:31-49:36 -/
+/-- [derive::{impl core::fmt::Debug for derive::Struct<T>}::fmt]:
+    Source: 'tests/src/derive.rs', lines 49:31-49:36
+    Visibility: public -/
 def Struct.Insts.CoreFmtDebug.fmt
   {T : Type} (corefmtDebugInst : core.fmt.Debug T) (self : Struct T)
   (f : core.fmt.Formatter) :
@@ -755,7 +818,7 @@ def Struct.Insts.CoreFmtDebug.fmt
   core.fmt.Formatter.debug_struct_field1_finish f (toStr "Struct") (toStr "f")
     dyn
 
-/-- Trait implementation: [derive::{core::fmt::Debug for derive::Struct<T>}]
+/-- Trait implementation: [derive::{impl core::fmt::Debug for derive::Struct<T>}]
     Source: 'tests/src/derive.rs', lines 49:31-49:36 -/
 @[reducible]
 def Struct.Insts.CoreFmtDebug {T : Type} (corefmtDebugInst : core.fmt.Debug T)
@@ -764,7 +827,8 @@ def Struct.Insts.CoreFmtDebug {T : Type} (corefmtDebugInst : core.fmt.Debug T)
 }
 
 /-- [derive::Struct6Fields]
-    Source: 'tests/src/derive.rs', lines 55:0-62:1 -/
+    Source: 'tests/src/derive.rs', lines 55:0-62:1
+    Visibility: public -/
 structure Struct6Fields where
   a : Std.U32
   b : Std.U32
@@ -773,8 +837,9 @@ structure Struct6Fields where
   e : Std.U32
   f : Std.U32
 
-/-- [derive::{core::clone::Clone for derive::Struct6Fields}::clone]:
-    Source: 'tests/src/derive.rs', lines 54:9-54:14 -/
+/-- [derive::{impl core::clone::Clone for derive::Struct6Fields}::clone]:
+    Source: 'tests/src/derive.rs', lines 54:9-54:14
+    Visibility: public -/
 def Struct6Fields.Insts.CoreCloneClone.clone
   (self : Struct6Fields) : Result Struct6Fields := do
   let i ← lift (core.clone.impls.CloneU32.clone self.a)
@@ -785,22 +850,23 @@ def Struct6Fields.Insts.CoreCloneClone.clone
   let i5 ← lift (core.clone.impls.CloneU32.clone self.f)
   ok { a := i, b := i1, c := i2, d := i3, e := i4, f := i5 }
 
-/-- Trait implementation: [derive::{core::clone::Clone for derive::Struct6Fields}]
+/-- Trait implementation: [derive::{impl core::clone::Clone for derive::Struct6Fields}]
     Source: 'tests/src/derive.rs', lines 54:9-54:14 -/
 @[reducible]
 def Struct6Fields.Insts.CoreCloneClone : core.clone.Clone Struct6Fields := {
   clone := Struct6Fields.Insts.CoreCloneClone.clone
 }
 
-/-- Trait implementation: [derive::{core::marker::StructuralPartialEq for derive::Struct6Fields}]
+/-- Trait implementation: [derive::{impl core::marker::StructuralPartialEq for derive::Struct6Fields}]
     Source: 'tests/src/derive.rs', lines 54:16-54:25 -/
 @[reducible]
 def Struct6Fields.Insts.CoreMarkerStructuralPartialEq :
   core.marker.StructuralPartialEq Struct6Fields := {
 }
 
-/-- [derive::{core::cmp::PartialEq<derive::Struct6Fields> for derive::Struct6Fields}::eq]:
-    Source: 'tests/src/derive.rs', lines 54:16-54:25 -/
+/-- [derive::{impl core::cmp::PartialEq<derive::Struct6Fields> for derive::Struct6Fields}::eq]:
+    Source: 'tests/src/derive.rs', lines 54:16-54:25
+    Visibility: public -/
 def Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields.eq
   (self : Struct6Fields) (other : Struct6Fields) : Result Bool := do
   if self.a = other.a
@@ -818,31 +884,34 @@ def Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields.eq
     else ok false
   else ok false
 
-/-- Trait implementation: [derive::{core::cmp::PartialEq<derive::Struct6Fields> for derive::Struct6Fields}]
+/-- Trait implementation: [derive::{impl core::cmp::PartialEq<derive::Struct6Fields> for derive::Struct6Fields}]
     Source: 'tests/src/derive.rs', lines 54:16-54:25 -/
 @[reducible]
-def Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields : core.cmp.PartialEq
+impl_def Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields : core.cmp.PartialEq
   Struct6Fields Struct6Fields := {
   eq := Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields.eq
+  ne := core.cmp.PartialEq.ne.trait_default
+    Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields
 }
 
-/-- [derive::{core::cmp::Eq for derive::Struct6Fields}::assert_receiver_is_total_eq]:
-    Source: 'tests/src/derive.rs', lines 54:27-54:29 -/
-def Struct6Fields.Insts.CoreCmpEq.assert_receiver_is_total_eq
+/-- [derive::{impl core::cmp::Eq for derive::Struct6Fields}::assert_fields_are_eq]:
+    Source: 'tests/src/derive.rs', lines 54:27-54:29
+    Visibility: public -/
+def Struct6Fields.Insts.CoreCmpEq.assert_fields_are_eq
   (self : Struct6Fields) : Result Unit := do
   ok ()
 
-/-- Trait implementation: [derive::{core::cmp::Eq for derive::Struct6Fields}]
+/-- Trait implementation: [derive::{impl core::cmp::Eq for derive::Struct6Fields}]
     Source: 'tests/src/derive.rs', lines 54:27-54:29 -/
 @[reducible]
 def Struct6Fields.Insts.CoreCmpEq : core.cmp.Eq Struct6Fields := {
   partialEqInst := Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields
-  assert_receiver_is_total_eq :=
-    Struct6Fields.Insts.CoreCmpEq.assert_receiver_is_total_eq
+  assert_fields_are_eq := Struct6Fields.Insts.CoreCmpEq.assert_fields_are_eq
 }
 
-/-- [derive::{core::fmt::Debug for derive::Struct6Fields}::fmt]:
-    Source: 'tests/src/derive.rs', lines 54:31-54:36 -/
+/-- [derive::{impl core::fmt::Debug for derive::Struct6Fields}::fmt]:
+    Source: 'tests/src/derive.rs', lines 54:31-54:36
+    Visibility: public -/
 def Struct6Fields.Insts.CoreFmtDebug.fmt
   (self : Struct6Fields) (f : core.fmt.Formatter) :
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter)
@@ -863,11 +932,24 @@ def Struct6Fields.Insts.CoreFmtDebug.fmt
   core.fmt.Formatter.debug_struct_fields_finish f (toStr "Struct6Fields") s
     values
 
-/-- Trait implementation: [derive::{core::fmt::Debug for derive::Struct6Fields}]
+/-- Trait implementation: [derive::{impl core::fmt::Debug for derive::Struct6Fields}]
     Source: 'tests/src/derive.rs', lines 54:31-54:36 -/
 @[reducible]
 def Struct6Fields.Insts.CoreFmtDebug : core.fmt.Debug Struct6Fields := {
   fmt := Struct6Fields.Insts.CoreFmtDebug.fmt
 }
+
+/-- [derive::refs_ne]:
+    Source: 'tests/src/derive.rs', lines 64:0-66:1
+    Visibility: public -/
+def refs_ne (a : Struct6Fields) (b : Struct6Fields) : Result Bool := do
+  core.cmp.impls.PartialEqShared.ne
+    Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields a b
+
+/-- [derive::refs_eq]:
+    Source: 'tests/src/derive.rs', lines 68:0-70:1
+    Visibility: public -/
+def refs_eq (a : Struct6Fields) (b : Struct6Fields) : Result Bool := do
+  Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields.eq a b
 
 end derive

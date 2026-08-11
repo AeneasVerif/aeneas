@@ -9,6 +9,9 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace adt_borrows
 
 /-- [adt_borrows::SharedWrapper]
@@ -212,8 +215,7 @@ def MutWrapper2.id
     Source: 'tests/src/adt-borrows.rs', lines 148:0-157:1 -/
 def use_mut_wrapper2 : Result Unit := do
   let (w, create_back, create_back1) ← MutWrapper2.create 0#i32 10#i32
-  let (p, unwrap_back, unwrap_back1) ← MutWrapper2.unwrap w
-  let (px, py) := p
+  let ((px, py), unwrap_back, unwrap_back1) ← MutWrapper2.unwrap w
   let px1 ← px + 1#i32
   let py1 ← py + 1#i32
   let x := create_back { w with x := (unwrap_back px1).x }
@@ -312,13 +314,15 @@ inductive SharedList (T : Type) where
 | Cons : T → SharedList T → SharedList T
 
 /-- [adt_borrows::{adt_borrows::SharedList<'a, T>}::push]:
-    Source: 'tests/src/adt-borrows.rs', lines 214:4-216:5 -/
+    Source: 'tests/src/adt-borrows.rs', lines 214:4-216:5
+    Visibility: public -/
 def SharedList.push
   {T : Type} (self : SharedList T) (x : T) : Result (SharedList T) := do
   ok (SharedList.Cons x self)
 
 /-- [adt_borrows::{adt_borrows::SharedList<'a, T>}::pop]:
-    Source: 'tests/src/adt-borrows.rs', lines 218:4-224:5 -/
+    Source: 'tests/src/adt-borrows.rs', lines 218:4-224:5
+    Visibility: public -/
 def SharedList.pop
   {T : Type} (self : SharedList T) : Result (T × (SharedList T)) := do
   match self with
@@ -333,7 +337,8 @@ inductive MutList (T : Type) where
 | Cons : T → MutList T → MutList T
 
 /-- [adt_borrows::{adt_borrows::MutList<'a, T>}::push]:
-    Source: 'tests/src/adt-borrows.rs', lines 234:4-236:5 -/
+    Source: 'tests/src/adt-borrows.rs', lines 234:4-236:5
+    Visibility: public -/
 def MutList.push
   {T : Type} (self : MutList T) (x : T) :
   Result ((MutList T) × (MutList T → ((MutList T) × T)))
@@ -348,7 +353,8 @@ def MutList.push
   ok (MutList.Cons x self, back)
 
 /-- [adt_borrows::{adt_borrows::MutList<'a, T>}::pop]:
-    Source: 'tests/src/adt-borrows.rs', lines 238:4-244:5 -/
+    Source: 'tests/src/adt-borrows.rs', lines 238:4-244:5
+    Visibility: public -/
 def MutList.pop
   {T : Type} (self : MutList T) :
   Result ((T × (MutList T)) × ((T × (MutList T)) → MutList T))
@@ -361,12 +367,14 @@ def MutList.pop
     ok ((hd, tl), back)
 
 /-- [adt_borrows::wrap_shared_in_option]:
-    Source: 'tests/src/adt-borrows.rs', lines 247:0-249:1 -/
+    Source: 'tests/src/adt-borrows.rs', lines 247:0-249:1
+    Visibility: public -/
 def wrap_shared_in_option {T : Type} (x : T) : Result (Option T) := do
   ok (some x)
 
 /-- [adt_borrows::wrap_mut_in_option]:
-    Source: 'tests/src/adt-borrows.rs', lines 251:0-253:1 -/
+    Source: 'tests/src/adt-borrows.rs', lines 251:0-253:1
+    Visibility: public -/
 def wrap_mut_in_option
   {T : Type} (x : T) : Result ((Option T) × (Option T → T)) := do
   let back := fun o => match o with

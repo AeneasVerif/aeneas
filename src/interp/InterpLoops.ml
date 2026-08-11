@@ -247,7 +247,11 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
 
                     method! visit_abs _ abs =
                       if AbsId.Set.mem abs.abs_id output_abs then
-                        add_abs_cont_to_abs abs loop_id
+                        let abs = add_abs_cont_to_abs abs loop_id in
+                        (* Also update the kind *)
+                        match abs.kind with
+                        | Loop _ -> abs
+                        | _ -> { abs with kind = Loop loop_id }
                       else abs
                   end
                 in

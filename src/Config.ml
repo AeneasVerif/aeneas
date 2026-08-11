@@ -228,6 +228,9 @@ let generate_lib_entry_point = ref false
 (** For Lean, controls whether we generate a lakefile or not. *)
 let lean_gen_lakefile = ref false
 
+(** Only for Lean: emit a translation.json file alongside the Lean files. *)
+let emit_json = ref false
+
 (** If true, treat the unit functions (function taking no inputs and returning
     no outputs) as unit tests: evaluate them with the interpreter and check that
     they don't panic. *)
@@ -587,6 +590,10 @@ let no_recursive_loops = ref false
 (** This is for Lean: the value we should initialize `maxHeartBeats` to at the
     top of the generated files *)
 let max_heartbeats = ref 1000000
+
+(** This is for Lean: the value we should initialize `maxRecDepth` to at the top
+    of the generated files *)
+let max_recdepth = ref 2048
 
 (** If [false], evaluate [drop(p)] as [p := bottom]. Otherwise, evaluate it as a
     no-op (which means that we do not borrow-check the drops). *)

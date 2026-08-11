@@ -386,8 +386,6 @@ let gtranslate_adt_fields ~(project_borrows : bool)
             let info_fields = List.filter_map (fun x -> x) info_fields in
             if info_fields = [] then (ctx, None)
             else
-              (* Note that if there is exactly one field value,
-               * [mk_simpl_tuple_rvalue] is the identity *)
               let info, fields = List.split info_fields in
               (ctx, Some (info, mk_tuple fields))
           else
@@ -529,8 +527,10 @@ and aloan_content_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
           (* Is this unreachable? *)
           [%craise] ctx.span "Unimplemented")
   | AIgnoredSharedLoan _ ->
-      (* This case happens with nested borrows *)
-      [%craise] ctx.span "Unimplemented"
+      (* An ignored shared loan: this doesn't consume anything. Note that
+         there might be mutable borrows inside the shared value, but those
+         are frozen (immutable) under the shared context. *)
+      None
 
 and aborrow_content_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
     (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)

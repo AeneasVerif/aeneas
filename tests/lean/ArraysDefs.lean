@@ -9,10 +9,14 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace arrays_defs
 
 /-- [arrays_defs::clone_array]:
-    Source: 'tests/src/arrays_defs.rs', lines 3:0-5:1 -/
+    Source: 'tests/src/arrays_defs.rs', lines 3:0-5:1
+    Visibility: public -/
 def clone_array
   {T : Type} {N : Std.Usize} (corecloneCloneInst : core.clone.Clone T)
   (x : Array T N) :
@@ -21,12 +25,14 @@ def clone_array
   core.array.CloneArray.clone corecloneCloneInst x
 
 /-- [arrays_defs::index_slice_0]:
-    Source: 'tests/src/arrays_defs.rs', lines 7:0-9:1 -/
+    Source: 'tests/src/arrays_defs.rs', lines 7:0-9:1
+    Visibility: public -/
 def index_slice_0 {T : Type} (s : Slice T) : Result T := do
   Slice.index_usize s 0#usize
 
 /-- [arrays_defs::index_empty_array]:
-    Source: 'tests/src/arrays_defs.rs', lines 11:0-13:1 -/
+    Source: 'tests/src/arrays_defs.rs', lines 11:0-13:1
+    Visibility: public -/
 def index_empty_array : Result Unit := do
   let s ← lift (Array.to_slice (Std.Array.empty Std.U32))
   let _ ← index_slice_0 s

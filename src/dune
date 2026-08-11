@@ -27,9 +27,17 @@
    ppx_deriving.show
    ppx_deriving.eq
    ppx_deriving.ord
+   ppx_deriving_yojson
    visitors.ppx
    aeneas.ppx))
- (libraries charon core_unix ocamlgraph str progress domainslib)
+ (libraries
+  charon
+  core_unix
+  ocamlgraph
+  str
+  progress
+  domainslib
+  ppx_deriving_yojson)
  (modules
   BorrowCheck
   Builtin
@@ -52,6 +60,7 @@
   ExtractName
   ExtractTypes
   FunsAnalysis
+  GitVersion
   Identifiers
   InterpAbs
   InterpBorrowsCore
@@ -74,6 +83,7 @@
   LlbcAstUtils
   LlbcOfJson
   Logging
+  EmitJson
   Meta
   NameMatcher
   Parallel
@@ -115,6 +125,35 @@
   Utils
   Values
   ValuesUtils))
+
+;; Embed the version into the binary so that `aeneas -version` can report it.
+;; Follows the same pattern as opam (see https://github.com/ocaml/opam/blob/master/src/client/dune).
+;; Step 1: capture the version string. If the `AENEAS_VERSION` environment
+;; variable is set (e.g. by the Nix release build, which has no access to the
+;; git history inside its sandbox) we use it directly; otherwise we fall back to
+;; the git description (commit hash, with -dirty suffix if needed).
+
+(rule
+ (target git-sha)
+ (deps (universe))
+ (action
+  (ignore-stderr
+   (with-stdout-to
+    %{target}
+    (system
+     "if [ -n \"$AENEAS_VERSION\" ]; then echo \"$AENEAS_VERSION\"; else git describe --always --dirty 2>/dev/null || echo; fi")))))
+
+;; Step 2: generate GitVersion.ml from the captured hash.
+;; Produces `let commit = Some "<hash>"` or `let commit = None` if git is unavailable.
+
+(rule
+ (target GitVersion.ml)
+ (deps git-sha)
+ (action
+  (with-stdout-to
+   %{target}
+   (system
+    "read -r hash < git-sha && [ -n \"$hash\" ] && echo 'let commit = Some \"'$hash'\"' || echo 'let commit = None'"))))
 
 (documentation
  (package aeneas))

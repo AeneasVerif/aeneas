@@ -465,12 +465,12 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_print_space fmt ();
       extract_rec ~inside:false ret_ty;
       if inside then F.pp_print_string fmt ")"
-  | TTraitType (trait_ref, type_name) -> (
+  | TTraitType (trait_ref, type_id) -> (
       if !parameterize_trait_types then [%admit_raise] span "Unimplemented" fmt
       else
         let type_name =
-          ctx_get_trait_type span trait_ref.trait_decl_ref.trait_decl_id
-            type_name ctx
+          ctx_get_trait_type span trait_ref.trait_decl_ref.trait_decl_id type_id
+            ctx
         in
         let add_brackets (s : string) =
           if backend () = Coq then "(" ^ s ^ ")" else s
@@ -1234,7 +1234,7 @@ let extract_doc_comment (fmt : F.formatter) (sl : string list) : unit =
 let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
     (sl : string list) (name : Types.name option)
     ?(generics : (Types.generic_params * Types.generic_args) option = None)
-    (span : Meta.span) : unit =
+    ?(public : bool = false) (span : Meta.span) : unit =
   let name =
     match (name, generics) with
     | None, _ -> []
@@ -1253,7 +1253,8 @@ let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
         ]
   in
   let span = Errors.span_to_string span in
-  extract_doc_comment fmt (sl @ [ span ] @ name)
+  let visibility = if public then [ "Visibility: public" ] else [] in
+  extract_doc_comment fmt (sl @ [ span ] @ name @ visibility)
 
 let extract_attributes (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (name : Types.name)
@@ -1504,7 +1505,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
    in
    extract_comment_with_span ctx fmt
      [ "[" ^ name_to_string ctx def.item_meta.name ^ "]" ]
-     name span;
+     name ~public:def.item_meta.attr_info.public span;
    F.pp_print_break fmt 0 0;
    (* Extract the attributes.
 
@@ -1567,8 +1568,33 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
      | _ -> []
    in
    let attributes = reducible_attr @ discr_attr in
+   (* Compute the [mutRegions] option for the [rust_type] attribute. *)
+   let mut_regions_attr =
+     match
+       TypeDeclId.Map.find_opt def.def_id ctx.trans_ctx.type_ctx.type_infos
+     with
+     | None -> []
+     | Some info ->
+         let mut_region_ids = info.TypesAnalysis.mut_regions in
+         if T.RegionId.Set.is_empty mut_region_ids then []
+         else
+           let positions =
+             List.filter_map
+               (fun (i, (r : T.region_param)) ->
+                 if T.RegionId.Set.mem r.index mut_region_ids then Some i
+                 else None)
+               (List.mapi (fun i r -> (i, r)) def.llbc_generics.regions)
+           in
+           if positions = [] then []
+           else
+             [
+               "(mutRegions := #["
+               ^ String.concat ", " (List.map string_of_int positions)
+               ^ "])";
+             ]
+   in
    extract_attributes span ctx fmt def.item_meta.name None attributes
-     "rust_type" []
+     "rust_type" mut_regions_attr
      ~is_external:(not def.item_meta.is_local));
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line. Note however that in the case of Lean line breaks are important

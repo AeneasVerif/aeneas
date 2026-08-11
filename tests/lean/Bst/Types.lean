@@ -9,10 +9,14 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace bst
 
 /-- [bst::Ordering]
-    Source: 'src/bst.rs', lines 5:0-9:1 -/
+    Source: 'src/bst.rs', lines 5:0-9:1
+    Visibility: public -/
 @[discriminant isize]
 inductive Ordering where
 | Less : Ordering

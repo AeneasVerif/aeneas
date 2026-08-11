@@ -16,11 +16,33 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  HAS_CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN != '' }}
+
 jobs:
+  select-runner:
+    uses: ./.github/workflows/select-runner.yml
+
   nix:
-    #runs-on: ubuntu-latest
-    runs-on: [self-hosted, linux, nix]
+    needs: [select-runner]
+    runs-on: ${{ fromJSON(needs.select-runner.outputs.runs_on) }}
     steps:
+      - &install_nix # YAML anchor to reduce duplication
+        name: Install Nix
+        if: ${{ runner.environment == 'github-hosted' }}
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            extra-substituters = https://hacl.cachix.org
+            extra-trusted-public-keys = hacl.cachix.org-1:FzsZ2xsByOwKwIWNPII7yMOelJNDZ12mDAj3d1eGX0c=
+      - &setup_cachix_push
+        name: Set up Cachix push
+        if: ${{ runner.environment == 'github-hosted' && env.HAS_CACHIX_AUTH_TOKEN == 'true' }}
+        uses: cachix/cachix-action@v17
+        with:
+          name: hacl
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          skipAddingSubstituter: true
       - uses: actions/checkout@v4
       - run: nix build -L .#checks.x86_64-linux.aeneas-check-tidiness
       - run: nix build -L .#checks.x86_64-linux.check-charon-pin
@@ -28,7 +50,8 @@ jobs:
       - run: nix build -L .#checks.x86_64-linux.default
 
   diff_lean_files:
-    runs-on: [self-hosted, linux, nix]
+    needs: [select-runner]
+    runs-on: ${{ fromJSON(needs.select-runner.outputs.runs_on) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,33 +70,44 @@ jobs:
       check_lean: ${{ env.CHECK_LEAN }}
 
   lean:
-    needs: [diff_lean_files]
-    runs-on: [self-hosted, linux, nix]
+    needs: [select-runner, diff_lean_files]
+    runs-on: ${{ fromJSON(needs.select-runner.outputs.runs_on) }}
     steps:
+      - *install_nix
+      - *setup_cachix_push
       - uses: actions/checkout@v4
       - if: needs.diff_lean_files.outputs.check_lean == 'true'
         # Lean cannot run its tests in the nix sandbox because `elan` will download things
         run: nix develop --command bash -c "cd tests/lean && make"
 
   charon-pin-is-forward:
-    runs-on: [self-hosted, linux, nix]
+    needs: [select-runner]
+    runs-on: ${{ fromJSON(needs.select-runner.outputs.runs_on) }}
     steps:
+      - *install_nix
+      - *setup_cachix_push
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # deep clone in order to get access to other commits
       - run: nix develop --command ./scripts/ci-check-charon-pin-is-forward.sh
 
   charon-pin-is-merged:
-    runs-on: [self-hosted, linux, nix]
+    needs: [select-runner]
+    runs-on: ${{ fromJSON(needs.select-runner.outputs.runs_on) }}
     steps:
+      - *install_nix
+      - *setup_cachix_push
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # deep clone in order to get access to other commits
       - run: nix develop --command ./scripts/ci-check-charon-pin-is-merged.sh
 
   userdocs:
-    runs-on: [self-hosted, linux, nix]
+    needs: [select-runner]
+    runs-on: ${{ fromJSON(needs.select-runner.outputs.runs_on) }}
     steps:
+      - *install_nix
+      - *setup_cachix_push
       - uses: actions/checkout@v4
       - run: nix build '.?dir=docs/user'#book
         # TODO: test the Lean examples code via nix build '.?dir=docs/user'#test or something similar.

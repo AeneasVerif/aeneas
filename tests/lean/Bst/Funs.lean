@@ -10,15 +10,20 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace bst
 
 /-- [bst::{bst::TreeSet<T>}::new]:
-    Source: 'src/bst.rs', lines 28:4-30:5 -/
+    Source: 'src/bst.rs', lines 28:4-30:5
+    Visibility: public -/
 def TreeSet.new {T : Type} (OrdInst : Ord T) : Result (TreeSet T) := do
   ok { root := none }
 
 /-- [bst::{bst::TreeSet<T>}::find]: loop 0:
-    Source: 'src/bst.rs', lines 35:8-44:5 -/
+    Source: 'src/bst.rs', lines 35:8-44:5
+    Visibility: public -/
 @[rust_loop]
 def TreeSet.find_loop
   {T : Type} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
@@ -35,7 +40,8 @@ def TreeSet.find_loop
 partial_fixpoint
 
 /-- [bst::{bst::TreeSet<T>}::find]:
-    Source: 'src/bst.rs', lines 32:4-44:5 -/
+    Source: 'src/bst.rs', lines 32:4-44:5
+    Visibility: public -/
 @[reducible]
 def TreeSet.find
   {T : Type} (OrdInst : Ord T) (self : TreeSet T) (value : T) :
@@ -44,7 +50,8 @@ def TreeSet.find
   TreeSet.find_loop OrdInst value self.root
 
 /-- [bst::{bst::TreeSet<T>}::insert]: loop 0:
-    Source: 'src/bst.rs', lines 48:8-63:5 -/
+    Source: 'src/bst.rs', lines 48:8-63:5
+    Visibility: public -/
 @[rust_loop]
 def TreeSet.insert_loop
   {T : Type} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
@@ -67,7 +74,8 @@ def TreeSet.insert_loop
 partial_fixpoint
 
 /-- [bst::{bst::TreeSet<T>}::insert]:
-    Source: 'src/bst.rs', lines 45:4-63:5 -/
+    Source: 'src/bst.rs', lines 45:4-63:5
+    Visibility: public -/
 def TreeSet.insert
   {T : Type} (OrdInst : Ord T) (self : TreeSet T) (value : T) :
   Result (Bool × (TreeSet T))

@@ -6,7 +6,8 @@ open Primitives
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [arrays::AB]
-    Source: 'tests/src/arrays.rs', lines 8:0-11:1 *)
+    Source: 'tests/src/arrays.rs', lines 8:0-11:1
+    Visibility: public *)
 type aB_t = | AB_A : aB_t | AB_B : aB_t
 
 (** [arrays::Scalar]

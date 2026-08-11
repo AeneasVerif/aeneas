@@ -16,6 +16,11 @@ pub fn split_at_mut<T>(x: &mut [T], n: usize) -> (&mut [T], &mut [T]) {
     x.split_at_mut(n)
 }
 
+pub fn split_at_mut_and_deref<T: Copy>(x: &mut [T], n: usize) -> (T, T) {
+    let (left, right) = x.split_at_mut(n);
+    (left[0], right[0])
+}
+
 pub fn swap<T>(x: &mut [T], n: usize, m: usize) {
     x.swap(n, m)
 }

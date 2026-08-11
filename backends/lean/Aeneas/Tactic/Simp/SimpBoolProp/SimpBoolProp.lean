@@ -30,7 +30,7 @@ attribute [simp_bool_prop]
   Bool.and_self Bool.or_self
   decide_true decide_false
   and_self or_self
-  iff_false iff_true
+  eq_iff_iff true_iff false_iff iff_false iff_true
   forall_const
   exists_false
 

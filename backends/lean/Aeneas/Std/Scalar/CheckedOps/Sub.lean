@@ -44,7 +44,7 @@ theorem «%S».checked_sub_bv_spec (x y : «%S») :
   | none => x.val < y.val := by
   have := core.num.checked_sub_UScalar_bv_spec x y
   simp_all [«%S».checked_sub, «%S».bv]
-  cases h: core.num.checked_sub_UScalar x y <;> simp_all
+  cases h: core.num.checked_sub_UScalar x y <;> (simp_all; try rfl)
 
 /-!
 Signed checked sub
@@ -67,6 +67,6 @@ theorem «%S».checked_sub_bv_spec (x y : «%S») :
   | none => ¬ («%S».min ≤ x.val - y.val ∧ x.val - y.val ≤ «%S».max) := by
   have := core.num.checked_sub_IScalar_bv_spec x y
   simp_all only [IScalar.min, IScalar.max, «%S».bv, «%S».min, «%S».max, «%S».numBits]
-  cases h: core.num.checked_sub_IScalar x y <;> simp_all only <;> simp
+  cases h: core.num.checked_sub_IScalar x y <;> (simp_all; try rfl)
 
 end Aeneas.Std

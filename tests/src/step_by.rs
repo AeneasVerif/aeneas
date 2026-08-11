@@ -165,6 +165,6 @@ mod tests {
     #[should_panic]
     fn step_by_0_panics() {
         let v: [u32; 3] = [1, 2, 3];
-        v.iter().step_by(0);
+        let _ = v.iter().step_by(0);
     }
 }

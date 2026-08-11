@@ -70,6 +70,10 @@ Definition char_of_byte := Coq.Strings.Ascii.ascii_of_byte.
 
 Definition core_mem_replace {a : Type} (x : a) (y : a) : a * a := (x, x) .
 
+Definition bool_and (a b : bool) : bool := andb a b.
+Definition bool_or (a b : bool) : bool := orb a b.
+Definition bool_xor (a b : bool) : bool := xorb a b.
+
 Record mut_raw_ptr (T : Type) := { mut_raw_ptr_v : T }.
 Record const_raw_ptr (T : Type) := { const_raw_ptr_v : T }.
 
@@ -501,7 +505,7 @@ Definition core_num_I8_MIN    := i8_min %i32.
 Definition core_num_I16_MIN   := i16_min %i32.
 Definition core_num_I32_MIN   := i32_min %i32.
 Definition core_num_I64_MIN   := i64_min %i64.
-Definition core_num_I128_MIN  := i64_min %i128.
+Definition core_num_I128_MIN  := i128_min %i128.
 Axiom core_num_Isize_MIN : isize. (** TODO *)
 
 Definition core_num_U8_MAX    := u8_max %u32.
@@ -514,7 +518,7 @@ Definition core_num_I8_MAX    := i8_max %i32.
 Definition core_num_I16_MAX   := i16_max %i32.
 Definition core_num_I32_MAX   := i32_max %i32.
 Definition core_num_I64_MAX   := i64_max %i64.
-Definition core_num_I128_MAX  := i64_max %i128.
+Definition core_num_I128_MAX  := i128_max %i128.
 Axiom core_num_Isize_MAX : isize. (** TODO *)
 
 (*** core *)

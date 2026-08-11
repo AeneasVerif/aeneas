@@ -9,6 +9,9 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace builtin
 
 /-- [builtin::clone_bool]:
@@ -37,7 +40,7 @@ def into_same {T : Type} (x : T) : Result T := do
 /-- [builtin::from_same]:
     Source: 'tests/src/builtin.rs', lines 22:0-24:1 -/
 def from_same {T : Type} (x : T) : Result T := do
-  ok (core.convert.FromSame.from_ x)
+  ok (core.convert.FromSame.from x)
 
 /-- [builtin::copy]:
     Source: 'tests/src/builtin.rs', lines 26:0-28:1 -/

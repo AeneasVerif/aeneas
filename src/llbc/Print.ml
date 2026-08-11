@@ -1,24 +1,16 @@
-include Charon.PrintUtils
-include Charon.PrintTypes
-include Charon.PrintLlbcAst
 open Values
 include PrintBase
-open Charon.PrintTypes
-open Charon.PrintExpressions
-open Charon.PrintLlbcAst.Ast
 open Types
 open Expressions
 open LlbcAst
 open Contexts
-module Types = Charon.PrintTypes
-module Expressions = Charon.PrintExpressions
 
 (** Pretty-printing for contexts *)
 module Contexts = struct
   include PrintBase.Env
 
   let decls_ctx_to_fmt_env (ctx : decls_ctx) : fmt_env =
-    Crate.crate_to_fmt_env ctx.crate
+    crate_to_fmt_env ctx.crate
 
   let eval_ctx_to_fmt_env (ctx : eval_ctx) : fmt_env =
     (* Below: it is always safe to omit fields - if an id can't be found at

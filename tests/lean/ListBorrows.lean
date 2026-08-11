@@ -9,17 +9,22 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace list_borrows
 
 mutual
 
 /-- [list_borrows::LCell]
-    Source: 'tests/src/list-borrows.rs', lines 3:0-6:1 -/
+    Source: 'tests/src/list-borrows.rs', lines 3:0-6:1
+    Visibility: public -/
 inductive LCell where
 | mk : Std.I32 → List → LCell
 
 /-- [list_borrows::List]
-    Source: 'tests/src/list-borrows.rs', lines 8:0-11:1 -/
+    Source: 'tests/src/list-borrows.rs', lines 8:0-11:1
+    Visibility: public -/
 @[discriminant isize]
 inductive List where
 | Nil : List

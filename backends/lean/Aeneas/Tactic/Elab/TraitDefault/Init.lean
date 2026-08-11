@@ -197,17 +197,25 @@ def substituteProjections (e : Expr) (selfFvarId : FVarId) (structName : Name)
             return .done val
       return .continue
     | _ =>
-      -- Case 2: application-style projection (e.g., `@Trait.N selfFvar`)
+      -- Case 2: application-style projection (e.g., `@Trait.N selfFvar extraArgs…`).
+      -- The self-reference is the projection's *structure* argument, which sits at
+      -- index `numParams` of the projection function — it need not be the last
+      -- argument (e.g. a method field `eq : Self → Rhs → Result Bool` is projected
+      -- as `@Trait.eq params self extra…`). We locate it via the projection info and
+      -- re-apply the resolved field value to any trailing arguments.
       let fn := e.getAppFn
       let args := e.getAppArgs
       if let .const projName _ := fn then
-        if args.size > 0 then
+        if let some projInfo := (← getEnv).getProjectionFnInfo? projName then
           if let some fieldIdx := projMap[projName]? then
-            let lastArg := args.back!.consumeMData
-            let lastArgFn := lastArg.getAppFn
-            if lastArgFn.isFVar && lastArgFn.fvarId! == selfFvarId then
-              if let some val := resolvedFields[fieldIdx]? then
-                return .done val
+            if projInfo.numParams < args.size then
+              let structArg := args[projInfo.numParams]!.consumeMData
+              -- Note that the instance may have (type) parameters
+              let structArgFn := structArg.getAppFn
+              if structArgFn.isFVar && structArgFn.fvarId! == selfFvarId then
+                if let some val := resolvedFields[fieldIdx]? then
+                  let extraArgs := args.extract (projInfo.numParams + 1) args.size
+                  return .done (mkAppN val extraArgs)
       return .continue)
 
 /-- Resolve all fields of a structure constructor application, eliminating

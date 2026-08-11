@@ -9,6 +9,9 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace dynamic_size
 
 /-- [dynamic_size::alloc_slice]:
@@ -18,7 +21,8 @@ def alloc_slice (N : Std.Usize) : Result (Slice Std.U8) := do
   ok (Std.Array.to_slice a)
 
 /-- [dynamic_size::Wrapper]
-    Source: 'tests/src/dynamic_size.rs', lines 7:0-9:1 -/
+    Source: 'tests/src/dynamic_size.rs', lines 7:0-9:1
+    Visibility: public -/
 structure Wrapper (T : Type) where
   data : T
 

@@ -9,10 +9,14 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace demo
 
 /-- [demo::choose]:
-    Source: 'tests/src/demo.rs', lines 8:0-14:1 -/
+    Source: 'tests/src/demo.rs', lines 8:0-14:1
+    Visibility: public -/
 def choose
   {T : Type} (b : Bool) (x : T) (y : T) : Result (T × (T → (T × T))) := do
   if b
@@ -22,24 +26,28 @@ def choose
        ok (y, back)
 
 /-- [demo::mul2_add1]:
-    Source: 'tests/src/demo.rs', lines 16:0-18:1 -/
+    Source: 'tests/src/demo.rs', lines 16:0-18:1
+    Visibility: public -/
 def mul2_add1 (x : Std.U32) : Result Std.U32 := do
   let i ← x + x
   i + 1#u32
 
 /-- [demo::use_mul2_add1]:
-    Source: 'tests/src/demo.rs', lines 20:0-22:1 -/
+    Source: 'tests/src/demo.rs', lines 20:0-22:1
+    Visibility: public -/
 def use_mul2_add1 (x : Std.U32) (y : Std.U32) : Result Std.U32 := do
   let i ← mul2_add1 x
   i + y
 
 /-- [demo::incr]:
-    Source: 'tests/src/demo.rs', lines 24:0-26:1 -/
+    Source: 'tests/src/demo.rs', lines 24:0-26:1
+    Visibility: public -/
 def incr (x : Std.U32) : Result Std.U32 := do
   x + 1#u32
 
 /-- [demo::use_incr]:
-    Source: 'tests/src/demo.rs', lines 28:0-33:1 -/
+    Source: 'tests/src/demo.rs', lines 28:0-33:1
+    Visibility: public -/
 def use_incr : Result Unit := do
   let x ← incr 0#u32
   let x1 ← incr x
@@ -47,14 +55,16 @@ def use_incr : Result Unit := do
   ok ()
 
 /-- [demo::CList]
-    Source: 'tests/src/demo.rs', lines 37:0-40:1 -/
+    Source: 'tests/src/demo.rs', lines 37:0-40:1
+    Visibility: public -/
 @[discriminant isize]
 inductive CList (T : Type) where
 | CCons : T → CList T → CList T
 | CNil : CList T
 
 /-- [demo::list_nth]:
-    Source: 'tests/src/demo.rs', lines 42:0-55:1 -/
+    Source: 'tests/src/demo.rs', lines 42:0-55:1
+    Visibility: public -/
 def list_nth {T : Type} (l : CList T) (i : Std.U32) : Result T := do
   match l with
   | CList.CCons x tl =>
@@ -66,7 +76,8 @@ def list_nth {T : Type} (l : CList T) (i : Std.U32) : Result T := do
 partial_fixpoint
 
 /-- [demo::list_nth1]: loop 0:
-    Source: 'tests/src/demo.rs', lines 58:4-66:1 -/
+    Source: 'tests/src/demo.rs', lines 58:4-66:1
+    Visibility: public -/
 @[rust_loop]
 def list_nth1_loop {T : Type} (l : CList T) (i : Std.U32) : Result T := do
   match l with
@@ -79,13 +90,15 @@ def list_nth1_loop {T : Type} (l : CList T) (i : Std.U32) : Result T := do
 partial_fixpoint
 
 /-- [demo::list_nth1]:
-    Source: 'tests/src/demo.rs', lines 57:0-66:1 -/
+    Source: 'tests/src/demo.rs', lines 57:0-66:1
+    Visibility: public -/
 @[reducible]
 def list_nth1 {T : Type} (l : CList T) (i : Std.U32) : Result T := do
   list_nth1_loop l i
 
 /-- [demo::list_nth_mut]:
-    Source: 'tests/src/demo.rs', lines 68:0-81:1 -/
+    Source: 'tests/src/demo.rs', lines 68:0-81:1
+    Visibility: public -/
 def list_nth_mut
   {T : Type} (l : CList T) (i : Std.U32) : Result (T × (T → CList T)) := do
   match l with
@@ -103,7 +116,8 @@ def list_nth_mut
 partial_fixpoint
 
 /-- [demo::i32_id]:
-    Source: 'tests/src/demo.rs', lines 83:0-89:1 -/
+    Source: 'tests/src/demo.rs', lines 83:0-89:1
+    Visibility: public -/
 def i32_id (i : Std.I32) : Result Std.I32 := do
   if i = 0#i32
   then ok 0#i32
@@ -113,7 +127,8 @@ def i32_id (i : Std.I32) : Result Std.I32 := do
 partial_fixpoint
 
 /-- [demo::list_tail]:
-    Source: 'tests/src/demo.rs', lines 91:0-96:1 -/
+    Source: 'tests/src/demo.rs', lines 91:0-96:1
+    Visibility: public -/
 def list_tail
   {T : Type} (l : CList T) : Result ((CList T) × (CList T → CList T)) := do
   match l with
@@ -126,18 +141,20 @@ def list_tail
 partial_fixpoint
 
 /-- Trait declaration: [demo::Counter]
-    Source: 'tests/src/demo.rs', lines 100:0-102:1 -/
+    Source: 'tests/src/demo.rs', lines 100:0-102:1
+    Visibility: public -/
 structure Counter (Self : Type) where
   incr : Self → Result (Std.Usize × Self)
 
-/-- [demo::{demo::Counter for usize}::incr]:
-    Source: 'tests/src/demo.rs', lines 105:4-109:5 -/
+/-- [demo::{impl demo::Counter for usize}::incr]:
+    Source: 'tests/src/demo.rs', lines 105:4-109:5
+    Visibility: public -/
 def Usize.Insts.DemoCounter.incr
   (self : Std.Usize) : Result (Std.Usize × Std.Usize) := do
   let self1 ← self + 1#usize
   ok (self, self1)
 
-/-- Trait implementation: [demo::{demo::Counter for usize}]
+/-- Trait implementation: [demo::{impl demo::Counter for usize}]
     Source: 'tests/src/demo.rs', lines 104:0-110:1 -/
 @[reducible]
 def Usize.Insts.DemoCounter : Counter Std.Usize := {
@@ -145,7 +162,8 @@ def Usize.Insts.DemoCounter : Counter Std.Usize := {
 }
 
 /-- [demo::use_counter]:
-    Source: 'tests/src/demo.rs', lines 112:0-114:1 -/
+    Source: 'tests/src/demo.rs', lines 112:0-114:1
+    Visibility: public -/
 def use_counter
   {T : Type} (CounterInst : Counter T) (cnt : T) :
   Result (Std.Usize × T)

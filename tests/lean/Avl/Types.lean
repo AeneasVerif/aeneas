@@ -9,10 +9,14 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace avl
 
 /-- [avl::Ordering]
-    Source: 'src/avl.rs', lines 18:0-22:1 -/
+    Source: 'src/avl.rs', lines 18:0-22:1
+    Visibility: public -/
 @[discriminant isize]
 inductive Ordering where
 | Less : Ordering
@@ -20,7 +24,8 @@ inductive Ordering where
 | Greater : Ordering
 
 /-- Trait declaration: [avl::Ord]
-    Source: 'src/avl.rs', lines 24:0-26:1 -/
+    Source: 'src/avl.rs', lines 24:0-26:1
+    Visibility: public -/
 structure Ord (Self : Type) where
   cmp : Self → Self → Result Ordering
 
@@ -60,7 +65,8 @@ theorem Node.balance_factor._simpLemma_ {T : Type} (value : T) (left : Option
   by rfl
 
 /-- [avl::Tree]
-    Source: 'src/avl.rs', lines 35:0-37:1 -/
+    Source: 'src/avl.rs', lines 35:0-37:1
+    Visibility: public -/
 structure Tree (T : Type) where
   root : Option (Node T)
 

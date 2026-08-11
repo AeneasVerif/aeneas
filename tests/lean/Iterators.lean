@@ -9,6 +9,9 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace iterators
 
 /-- [iterators::iter_range]: loop body 0:
@@ -68,7 +71,8 @@ def iter_range_step_by_loop
     Source: 'tests/src/iterators.rs', lines 8:0-10:1 -/
 def iter_range_step_by (n : Std.Usize) : Result Unit := do
   let iter ←
-    core.iter.range.IteratorRange.step_by core.iter.range.StepUsize
+    core.iter.traits.iterator.Iterator.step_by.trait_default
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize)
       { start := 0#usize, «end» := n } 2#usize
   iter_range_step_by_loop iter
 
@@ -461,5 +465,49 @@ def copy_arrays
   Result (Array Std.U8 256#usize)
   := do
   copy_arrays_loop { start := 0#usize, «end» := 256#usize } src dst
+
+/-- [iterators::zip_iter]: loop body 0:
+    Source: 'tests/src/iterators.rs', lines 69:4-69:38
+    Visibility: public -/
+@[rust_loop_body]
+def zip_iter_loop.body
+  (iter : core.iter.adapters.zip.Zip (core.slice.iter.Iter Std.U8)
+  (core.slice.iter.Iter Std.U8)) :
+  Result (ControlFlow (core.iter.adapters.zip.Zip (core.slice.iter.Iter Std.U8)
+    (core.slice.iter.Iter Std.U8)) Unit)
+  := do
+  let (o, iter1) ←
+    core.iter.adapters.zip.Zip.Insts.CoreIterTraitsIteratorIteratorPair.next
+      (core.iter.traits.iterator.IteratorSliceIter Std.U8)
+      (core.iter.traits.iterator.IteratorSliceIter Std.U8) iter
+  match o with
+  | none => ok (done ())
+  | some _ => ok (cont iter1)
+
+/-- [iterators::zip_iter]: loop 0:
+    Source: 'tests/src/iterators.rs', lines 69:4-69:38
+    Visibility: public -/
+@[rust_loop]
+def zip_iter_loop
+  (iter : core.iter.adapters.zip.Zip (core.slice.iter.Iter Std.U8)
+  (core.slice.iter.Iter Std.U8)) :
+  Result Unit
+  := do
+  loop
+    (fun iter1 => zip_iter_loop.body iter1)
+    iter
+
+/-- [iterators::zip_iter]:
+    Source: 'tests/src/iterators.rs', lines 68:0-70:1
+    Visibility: public -/
+def zip_iter (a : Slice Std.U8) (b : Slice Std.U8) : Result Unit := do
+  let i ← core.slice.Slice.iter a
+  let i1 ← core.slice.Slice.iter b
+  let iter ←
+    core.iter.traits.iterator.Iterator.zip.trait_default
+      (core.iter.traits.iterator.IteratorSliceIter Std.U8)
+      (core.iter.traits.collect.IntoIterator.Blanket
+      (core.iter.traits.iterator.IteratorSliceIter Std.U8)) i i1
+  zip_iter_loop iter
 
 end iterators

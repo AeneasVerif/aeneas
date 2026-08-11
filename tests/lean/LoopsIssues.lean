@@ -9,45 +9,10 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
-/- You can remove the following line by using the CLI option `-all-computable`: -/
-noncomputable section
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
 
 namespace loops_issues
-
-/-- [core::iter::range::{core::iter::range::Step for i32}::backward_checked]:
-    Source: '/rustc/library/core/src/iter/range.rs', lines 340:16-340:74
-    Name pattern: [core::iter::range::{core::iter::range::Step<i32>}::backward_checked] -/
-@[rust_fun
-  "core::iter::range::{core::iter::range::Step<i32>}::backward_checked"]
-axiom I32.Insts.CoreIterRangeStep.backward_checked
-  : Std.I32 → Std.Usize → Result (Option Std.I32)
-
-/-- [core::iter::range::{core::iter::range::Step for i32}::forward_checked]:
-    Source: '/rustc/library/core/src/iter/range.rs', lines 319:16-319:73
-    Name pattern: [core::iter::range::{core::iter::range::Step<i32>}::forward_checked] -/
-@[rust_fun
-  "core::iter::range::{core::iter::range::Step<i32>}::forward_checked"]
-axiom I32.Insts.CoreIterRangeStep.forward_checked
-  : Std.I32 → Std.Usize → Result (Option Std.I32)
-
-/-- [core::iter::range::{core::iter::range::Step for i32}::steps_between]:
-    Source: '/rustc/library/core/src/iter/range.rs', lines 304:16-304:84
-    Name pattern: [core::iter::range::{core::iter::range::Step<i32>}::steps_between] -/
-@[rust_fun "core::iter::range::{core::iter::range::Step<i32>}::steps_between"]
-axiom I32.Insts.CoreIterRangeStep.steps_between
-  : Std.I32 → Std.I32 → Result (Std.Usize × (Option Std.Usize))
-
-/-- Trait implementation: [core::iter::range::{core::iter::range::Step for i32}]
-    Source: '/rustc/library/core/src/iter/range.rs', lines 299:12-299:37
-    Name pattern: [core::iter::range::Step<i32>] -/
-@[reducible, rust_trait_impl "core::iter::range::Step<i32>"]
-def I32.Insts.CoreIterRangeStep : core.iter.range.Step Std.I32 := {
-  cloneInst := core.clone.CloneI32
-  partialOrdInst := core.cmp.PartialOrdI32
-  steps_between := I32.Insts.CoreIterRangeStep.steps_between
-  forward_checked := I32.Insts.CoreIterRangeStep.forward_checked
-  backward_checked := I32.Insts.CoreIterRangeStep.backward_checked
-}
 
 /-- [loops_issues::write]:
     Source: 'tests/src/loops-issues.rs', lines 5:0-5:28 -/
@@ -183,9 +148,8 @@ def mut_loop_len_loop.body
   then
     let s ← lift (Array.to_slice buf)
     let i := Slice.len s
-    if 0#usize <= i
-    then ok (cont true)
-    else fail panic
+    massert (0#usize <= i)
+    ok (cont true)
   else ok (done ())
 
 /-- [loops_issues::mut_loop_len]: loop 0:
@@ -253,7 +217,7 @@ def loop_consume_u32_loop.body
   Result (ControlFlow (core.ops.range.Range Std.I32) Unit)
   := do
   let (o, iter1) ←
-    core.iter.range.IteratorRange.next I32.Insts.CoreIterRangeStep iter
+    core.iter.range.IteratorRange.next core.iter.range.StepI32 iter
   match o with
   | none => ok (done ())
   | some _ => consume_u32 params.x

@@ -17,37 +17,18 @@ def alloc.vec.into_iter.IteratorIntoIter.next {T : Type} (it: alloc.vec.into_ite
   | ⟨ [], _ ⟩  => ok (none, it)
   | ⟨ hd :: tl, _ ⟩ => ok (hd, ⟨ tl, by scalar_tac ⟩ )
 
-@[rust_fun
-  "alloc::vec::into_iter::{core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, @A>, @T>}::step_by"
-  (keepParams := [true, false])]
-def alloc.vec.into_iter.IteratorIntoIter.step_by {T : Type} (it: alloc.vec.into_iter.IntoIter T) (steps : Usize) :
-  Result (core.iter.adapters.step_by.StepBy (alloc.vec.into_iter.IntoIter T)) :=
-  if steps.val = 0 then .fail .panic
-  else .ok ⟨ it, steps ⟩
-
-@[rust_fun
-  "alloc::vec::into_iter::{core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, @A>, @T>}::enumerate"
-  (keepParams := [true, false])]
-def alloc.vec.into_iter.IteratorIntoIter.enumerate {T : Type} (it: alloc.vec.into_iter.IntoIter T) :
-  Result (core.iter.adapters.enumerate.Enumerate (alloc.vec.into_iter.IntoIter T)) :=
-  .ok { iter := it, count := 0#usize }
-
-@[rust_fun
-  "alloc::vec::into_iter::{core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, @A>, @T>}::take"
-  (keepParams := [true, false])]
-def alloc.vec.into_iter.IteratorIntoIter.take {T : Type} (it: alloc.vec.into_iter.IntoIter T) (n : Usize) :
-  Result (core.iter.adapters.take.Take (alloc.vec.into_iter.IntoIter T)) :=
-  .ok ⟨ it, n ⟩
-
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, @A>, @T>"
   (keepParams := [true, false])]
-def core.iter.traits.iterator.IteratorVecIntoIter (T : Type) :
+impl_def core.iter.traits.iterator.IteratorVecIntoIter (T : Type) :
   core.iter.traits.iterator.Iterator (alloc.vec.into_iter.IntoIter T) T := {
   next := alloc.vec.into_iter.IteratorIntoIter.next
-  step_by := alloc.vec.into_iter.IteratorIntoIter.step_by
-  enumerate := alloc.vec.into_iter.IteratorIntoIter.enumerate
-  take := alloc.vec.into_iter.IteratorIntoIter.take
+  step_by := core.iter.traits.iterator.Iterator.step_by.trait_default
+    (core.iter.traits.iterator.IteratorVecIntoIter T)
+  enumerate := core.iter.traits.iterator.Iterator.enumerate.trait_default
+    (core.iter.traits.iterator.IteratorVecIntoIter T)
+  take := core.iter.traits.iterator.Iterator.take.trait_default
+    (core.iter.traits.iterator.IteratorVecIntoIter T)
 }
 
 @[rust_fun
@@ -101,7 +82,7 @@ def core.iter.traits.collect.FromIteratorVec (T : Type) :
   "alloc::vec::into_iter::{core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, @A>, @T>}::map"]
 def alloc.vec.into_iter.IntoIter.Insts.CoreIterTraitsIteratorIterator.map
   {T : Type} {A : Type} {F : Type}
-  (FnMutInst : core.ops.function.FnMut F T A) :
+  (_FnMutInst : core.ops.function.FnMut F T A) :
   alloc.vec.into_iter.IntoIter T → F →
   Result (core.iter.adapters.map.Map (alloc.vec.into_iter.IntoIter T) F) :=
   fun it f => .ok ⟨ it, f ⟩

@@ -9,15 +9,20 @@ Wall in Pompei, digital image from Michael Lahanis.
 </figcaption>
 </div></p>
 
-# Aeneas [Eh-nee-as]
+# Aeneas
 
-Aeneas (pronunced [Ay-nay-as]) is a verification toolchain for Rust programs.  It relies on a translation from Rusts's MIR
-internal language to a pure lamdba calculus.  It is intended to be used in combination with
+Aeneas (pronunced [Eh-nee-as]) is a verification toolchain for Rust programs.  It relies on a translation from Rust's MIR
+internal language to a pure lambda calculus.  It is intended to be used in combination with
 [Charon](https://github.com/AeneasVerif/charon), which compiles Rust programs to an intermediate
 representation called LLBC. It currently has backends for [F\*](https://www.fstar-lang.org),
 [Coq](https://coq.inria.fr/), [HOL4](https://hol-theorem-prover.org/) and [LEAN](https://leanprover.github.io/).
 
-If you want to contribute or ask questions, we strongly encourage you to join the [Zulip](https://aeneas-verif.zulipchat.com/).
+If you want to contribute or ask questions, we strongly encourage you to join the
+[Zulip](https://aeneas-verif.zulipchat.com/). In particular, we welcome external
+contributions but ask contributors to engage with us before making deep modifications of
+the code or implementing non trivial features, as these require in-depth design
+discussions and careful reviews. If you want to contribute a new feature you should either
+discuss it on the Zulip or open the corresponding issue on github.
 
 ## Project Structure
 
@@ -42,8 +47,9 @@ opam switch create 5.3.0
 
 You can then install the dependencies with the following command:
 ```
-opam install ppx_deriving visitors easy_logging zarith yojson core_unix odoc \
-  ocamlgraph menhir ocamlformat.0.27.0 unionFind zarith progress domainslib
+opam install calendar core_unix domainslib easy_logging menhir \
+  ocamlformat.0.27.0 ocamlgraph odoc ppx_deriving ppx_deriving_yojson \
+  progress unionFind visitors yojson zarith
 ```
 
 Moreover, Aeneas uses the [Charon](https://github.com/AeneasVerif/charon) project and library.
@@ -125,6 +131,10 @@ one by one:
   are not supported yet (e.g., `'a : loop { loop { break 'a; } } `). This is a
   technical limitation, not a fundamental issue, that we plan to address in the
   near future and that we can prioritize depending on our users' needs.
+- **mutable references and generic types**: Instantiating a generic type (including `Self` through a
+  trait implementation) with a mutable reference is not supported yet (e.g., calling `id(&mut x)`
+  where `fn id<T>(x: T) -> T { x }`). We're working on addressing it and can prioritize it depending
+  on our users' needs.
 
 The following limitations will be lifted by the ongoing work on separation logic:
 - **unsafe code**

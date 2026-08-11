@@ -2,7 +2,6 @@ import Aeneas
 import Demo.Demo
 open Aeneas Std Result
 
-#setup_aeneas_simps
 
 namespace demo
 

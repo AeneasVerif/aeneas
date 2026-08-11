@@ -6,17 +6,20 @@ open Primitives
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [core::num::{u32}::wrapping_add]:
-    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2397:8-2397:58
-    Name pattern: [core::num::{u32}::wrapping_add] *)
+    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2583:8-2583:58
+    Name pattern: [core::num::{u32}::wrapping_add]
+    Visibility: public *)
 assume val core_num_U32_wrapping_add : u32 -> u32 -> result u32
 
 (** [core::num::{u32}::wrapping_sub]:
-    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2434:8-2434:58
-    Name pattern: [core::num::{u32}::wrapping_sub] *)
+    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2620:8-2620:58
+    Name pattern: [core::num::{u32}::wrapping_sub]
+    Visibility: public *)
 assume val core_num_U32_wrapping_sub : u32 -> u32 -> result u32
 
 (** [demo::choose]:
-    Source: 'tests/src/demo.rs', lines 8:0-14:1 *)
+    Source: 'tests/src/demo.rs', lines 8:0-14:1
+    Visibility: public *)
 let choose
   (#t : Type0) (b : bool) (x : t) (y : t) : result (t & (t -> (t & t))) =
   if b
@@ -24,33 +27,39 @@ let choose
   else let back = fun y1 -> (x, y1) in Ok (y, back)
 
 (** [demo::mul2_add1]:
-    Source: 'tests/src/demo.rs', lines 16:0-18:1 *)
+    Source: 'tests/src/demo.rs', lines 16:0-18:1
+    Visibility: public *)
 let mul2_add1 (x : u32) : result u32 =
   let* i = u32_add x x in u32_add i 1
 
 (** [demo::use_mul2_add1]:
-    Source: 'tests/src/demo.rs', lines 20:0-22:1 *)
+    Source: 'tests/src/demo.rs', lines 20:0-22:1
+    Visibility: public *)
 let use_mul2_add1 (x : u32) (y : u32) : result u32 =
   let* i = mul2_add1 x in u32_add i y
 
 (** [demo::incr]:
-    Source: 'tests/src/demo.rs', lines 24:0-26:1 *)
+    Source: 'tests/src/demo.rs', lines 24:0-26:1
+    Visibility: public *)
 let incr (x : u32) : result u32 =
   u32_add x 1
 
 (** [demo::use_incr]:
-    Source: 'tests/src/demo.rs', lines 28:0-33:1 *)
+    Source: 'tests/src/demo.rs', lines 28:0-33:1
+    Visibility: public *)
 let use_incr : result unit =
   let* x = incr 0 in let* x1 = incr x in let* _ = incr x1 in Ok ()
 
 (** [demo::CList]
-    Source: 'tests/src/demo.rs', lines 37:0-40:1 *)
+    Source: 'tests/src/demo.rs', lines 37:0-40:1
+    Visibility: public *)
 type cList_t (t : Type0) =
 | CList_CCons : t -> cList_t t -> cList_t t
 | CList_CNil : cList_t t
 
 (** [demo::list_nth]:
-    Source: 'tests/src/demo.rs', lines 42:0-55:1 *)
+    Source: 'tests/src/demo.rs', lines 42:0-55:1
+    Visibility: public *)
 let rec list_nth (#t : Type0) (n : nat) (l : cList_t t) (i : u32) : result t =
   if is_zero n
   then Fail OutOfFuel
@@ -63,7 +72,8 @@ let rec list_nth (#t : Type0) (n : nat) (l : cList_t t) (i : u32) : result t =
     end
 
 (** [demo::list_nth1]: loop 0:
-    Source: 'tests/src/demo.rs', lines 58:4-66:1 *)
+    Source: 'tests/src/demo.rs', lines 58:4-66:1
+    Visibility: public *)
 let rec list_nth1_loop
   (#t : Type0) (n : nat) (l : cList_t t) (i : u32) : result t =
   if is_zero n
@@ -77,12 +87,14 @@ let rec list_nth1_loop
     end
 
 (** [demo::list_nth1]:
-    Source: 'tests/src/demo.rs', lines 57:0-66:1 *)
+    Source: 'tests/src/demo.rs', lines 57:0-66:1
+    Visibility: public *)
 let list_nth1 (#t : Type0) (n : nat) (l : cList_t t) (i : u32) : result t =
   list_nth1_loop n l i
 
 (** [demo::list_nth_mut]:
-    Source: 'tests/src/demo.rs', lines 68:0-81:1 *)
+    Source: 'tests/src/demo.rs', lines 68:0-81:1
+    Visibility: public *)
 let rec list_nth_mut
   (#t : Type0) (n : nat) (l : cList_t t) (i : u32) :
   result (t & (t -> cList_t t))
@@ -106,7 +118,8 @@ let rec list_nth_mut
     end
 
 (** [demo::i32_id]:
-    Source: 'tests/src/demo.rs', lines 83:0-89:1 *)
+    Source: 'tests/src/demo.rs', lines 83:0-89:1
+    Visibility: public *)
 let rec i32_id (n : nat) (i : i32) : result i32 =
   if is_zero n
   then Fail OutOfFuel
@@ -117,7 +130,8 @@ let rec i32_id (n : nat) (i : i32) : result i32 =
     else let* i1 = i32_sub i 1 in let* i2 = i32_id n1 i1 in i32_add i2 1
 
 (** [demo::list_tail]:
-    Source: 'tests/src/demo.rs', lines 91:0-96:1 *)
+    Source: 'tests/src/demo.rs', lines 91:0-96:1
+    Visibility: public *)
 let rec list_tail
   (#t : Type0) (n : nat) (l : cList_t t) :
   result ((cList_t t) & (cList_t t -> cList_t t))
@@ -135,22 +149,25 @@ let rec list_tail
     end
 
 (** Trait declaration: [demo::Counter]
-    Source: 'tests/src/demo.rs', lines 100:0-102:1 *)
+    Source: 'tests/src/demo.rs', lines 100:0-102:1
+    Visibility: public *)
 noeq type counter_t (self : Type0) = { incr : self -> result (usize & self); }
 
-(** [demo::{demo::Counter for usize}::incr]:
-    Source: 'tests/src/demo.rs', lines 105:4-109:5 *)
+(** [demo::{impl demo::Counter for usize}::incr]:
+    Source: 'tests/src/demo.rs', lines 105:4-109:5
+    Visibility: public *)
 let usize_Insts_DemoCounter_incr (self : usize) : result (usize & usize) =
   let* self1 = usize_add self 1 in Ok (self, self1)
 
-(** Trait implementation: [demo::{demo::Counter for usize}]
+(** Trait implementation: [demo::{impl demo::Counter for usize}]
     Source: 'tests/src/demo.rs', lines 104:0-110:1 *)
 let usize_Insts_DemoCounter : counter_t usize = {
   incr = usize_Insts_DemoCounter_incr;
 }
 
 (** [demo::use_counter]:
-    Source: 'tests/src/demo.rs', lines 112:0-114:1 *)
+    Source: 'tests/src/demo.rs', lines 112:0-114:1
+    Visibility: public *)
 let use_counter
   (#t : Type0) (counterInst : counter_t t) (cnt : t) : result (usize & t) =
   counterInst.incr cnt
@@ -158,15 +175,11 @@ let use_counter
 (** [demo::mod_add]:
     Source: 'tests/src/demo.rs', lines 117:0-125:1 *)
 let mod_add (a : u32) (b : u32) : result u32 =
-  if a < 3329
-  then
-    if b < 3329
-    then
-      let* sum = u32_add a b in
-      let* res = core_num_U32_wrapping_sub sum 3329 in
-      let* mask = u32_shr #I32 res 16 in
-      let q = u32_and 3329 mask in
-      core_num_U32_wrapping_add res q
-    else Fail Failure
-  else Fail Failure
+  let* _ = massert (a < 3329) in
+  let* _ = massert (b < 3329) in
+  let* sum = u32_add a b in
+  let* res = core_num_U32_wrapping_sub sum 3329 in
+  let* mask = u32_shr #I32 res 16 in
+  let q = u32_and 3329 mask in
+  core_num_U32_wrapping_add res q
 

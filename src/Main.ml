@@ -71,9 +71,21 @@ let () =
   let print_llbc = ref false in
 
   let set_max_heartbeats = ref false in
+  let set_max_recdepth = ref false in
 
   let spec_ls =
     [
+      ( "-version",
+        Arg.Unit
+          (fun () ->
+            let v =
+              match GitVersion.commit with
+              | Some h -> h
+              | None -> "unknown"
+            in
+            print_endline ("aeneas " ^ v);
+            exit 0),
+        " Print the version (git commit) and exit" );
       ( "-print-error-emitters",
         Arg.Set print_error_emitters,
         " Whenever reporting an error, print the span of the source code of \
@@ -124,6 +136,9 @@ let () =
       ( "-lean-default-lakefile",
         Arg.Clear lean_gen_lakefile,
         " Generate a default lakefile.lean (Lean only)" );
+      ( "-emit-json",
+        Arg.Set emit_json,
+        " Emit a translation.json file alongside the Lean files (Lean only)" );
       ("-print-llbc", Arg.Set print_llbc, " Print the imported LLBC");
       ( "-abort-on-error",
         Arg.Set fail_hard,
@@ -213,6 +228,13 @@ let () =
             set_max_heartbeats := true;
             max_heartbeats := x),
         "For Lean: set the value of the `set_option maxHeartBeats ...` command \
+         at the top of the generated files" );
+      ( "-max-recdepth",
+        Arg.Int
+          (fun x ->
+            set_max_recdepth := true;
+            max_recdepth := x),
+        "For Lean: set the value of the `set_option maxRecDepth ...` command \
          at the top of the generated files" );
       ( "-eval-drops",
         Arg.Clear drop_as_no_op,
@@ -438,6 +460,11 @@ let () =
   if !set_max_heartbeats && not (backend () = Lean) then
     fail_with_error
       "The -max-heartbeats option is valid only for the Lean backend";
+  if !set_max_recdepth && not (backend () = Lean) then
+    fail_with_error
+      "The -max-recdepth option is valid only for the Lean backend";
+  if !emit_json && not (backend () = Lean) then
+    fail_with_error "The -emit-json option is valid only for the Lean backend";
 
   check_arg_implies !diagnose_detailed "-diagnose-detailed"
     !diagnose_micro_passes "-diagnose-micro-passes";
@@ -532,17 +559,18 @@ let () =
   in
 
   (* Load the module *)
-  let json = Yojson.Basic.from_file filename in
-  match crate_of_json json with
+  match crate_of_json_file filename with
   | Error s ->
       log#error "error: %s\n" s;
       exit 1
   | Ok m ->
+      (* Clear short names to make printing more deterministic. *)
+      let m = { m with short_names = [] } in
       (* Logging *)
       log#linfo (lazy ("Imported: " ^ filename));
       if !print_llbc then
-        log#linfo (lazy ("\n" ^ Print.Crate.crate_to_string m ^ "\n"))
-      else log#ldebug (lazy ("\n" ^ Print.Crate.crate_to_string m ^ "\n"));
+        log#linfo (lazy ("\n" ^ Print.crate_to_string m ^ "\n"))
+      else log#ldebug (lazy ("\n" ^ Print.crate_to_string m ^ "\n"));
 
       (* Check that Charon was called with the `--preset=aeneas` option *)
       check_no_doc
@@ -630,7 +658,7 @@ let () =
             (LlbcAst.TraitImplId.Map.values trait_impls)
         in
         (* Print *)
-        let fmt_env = Print.Crate.crate_to_fmt_env m in
+        let fmt_env = Print.crate_to_fmt_env m in
         let type_decls =
           List.map
             (fun (d : Types.type_decl) ->
@@ -655,7 +683,7 @@ let () =
                    index is sometimes out of bounds).
                    See: https://github.com/AeneasVerif/charon/issues/482
                 *)
-                try Print.Ast.fun_decl_to_string fmt_env "" "  " d
+                try Print.fun_decl_to_string fmt_env "" "  " d
                 with _ -> "UNKNOWN"
               in
               "Fun decl (pattern: [" ^ pattern ^ "]]):\n" ^ d)
@@ -669,7 +697,7 @@ let () =
                   (Some d.item_meta.span) m d.item_meta.name
               in
               "Global decl (pattern: [" ^ pattern ^ "]]):\n"
-              ^ Print.Ast.global_decl_to_string fmt_env "" "  " d)
+              ^ Print.global_decl_to_string fmt_env "" "  " d)
             (LlbcAst.GlobalDeclId.Map.values global_decls)
         in
         let trait_decls =
@@ -680,7 +708,7 @@ let () =
                   (Some d.item_meta.span) m d.item_meta.name
               in
               "Trait decl (pattern: [" ^ pattern ^ "]]):\n"
-              ^ Print.Ast.trait_decl_to_string fmt_env "" "  " d)
+              ^ Print.trait_decl_to_string fmt_env "" "  " d)
             (LlbcAst.TraitDeclId.Map.values trait_decls)
         in
         let trait_impls =
@@ -691,7 +719,7 @@ let () =
                   (Some d.item_meta.span) m trait_decl d
               in
               "Trait impl (pattern: [" ^ pattern ^ "]]):\n"
-              ^ Print.Ast.trait_impl_to_string fmt_env "" "  " d)
+              ^ Print.trait_impl_to_string fmt_env "" "  " d)
             trait_impls
         in
 

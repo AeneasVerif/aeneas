@@ -1,6 +1,7 @@
 import Aeneas.Std.Core.Core
 import Aeneas.Std.Core.Result
 import Aeneas.Std.Array.Array
+import Aeneas.Std.StringDef
 
 namespace Aeneas.Std
 
@@ -22,6 +23,17 @@ def core.result.Result.unwrap {T E : Type}
   match e with
   | .Ok x => .ok x
   | .Err _ => .fail .panic
+
+@[step]
+theorem core.result.Result.unwrap.step_spec
+    {T E : Type} (inst : core.fmt.Debug E)
+    (r : core.result.Result T E)
+    (h : ∃ v, r = core.result.Result.Ok v) :
+    core.result.Result.unwrap inst r
+    ⦃ (result : T) => r = core.result.Result.Ok result ⦄ := by
+  match r, h with
+  | .Ok v, ⟨_, rfl⟩ =>
+    simp [core.result.Result.unwrap, WP.spec_ok]
 
 -- TODO: add pattern once we support partial monomorphization
 def core.result.Result.unwrap.mut {T E : Type}
@@ -60,6 +72,13 @@ structure core.fmt.Display (Self : Type) where
 @[rust_trait "core::fmt::LowerHex"]
 structure core.fmt.LowerHex (Self : Type) where
   fmt : Self → core.fmt.Formatter → Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter)
+
+@[rust_fun "core::fmt::rt::{core::fmt::rt::Argument<'0>}::new_lower_hex"]
+def core.fmt.rt.Argument.new_lower_hex
+  {T : Type} (_LowerHexInst : core.fmt.LowerHex T) (_ : T) :
+  Result core.fmt.rt.Argument :=
+  -- TODO
+  .ok ()
 
 @[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::write_str"]
 def core.fmt.Formatter.write_str (fmt : core.fmt.Formatter) (_ : Str) :
@@ -103,26 +122,55 @@ def core.result.Result.expect {T : Type} {E : Type} (_DebugInst : core.fmt.Debug
 
 @[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field1_finish", simp]
 def core.fmt.Formatter.debug_struct_field1_finish
-  (fmt : core.fmt.Formatter) (_ : Str) (_ : Str) (_ : Dyn (fun _dyn => core.fmt.Debug _dyn)) :
+  (fmt : core.fmt.Formatter) (_ : Str) (_ : Str) (_ : Dyn (fun dyn => core.fmt.Debug dyn)) :
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
-  -- TODO: more precise model
+  -- TODO: more precise model that actually uses the `Debug` instance
+  .ok (.Ok (), fmt)
+
+@[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field2_finish", simp]
+def core.fmt.Formatter.debug_struct_field2_finish (fmt : core.fmt.Formatter) (_ : Str)
+  (_ : Str) (_ : Dyn (fun dyn => core.fmt.Debug dyn))
+  (_ : Str) (_ : Dyn (fun dyn => core.fmt.Debug dyn)) :
+  Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
+  -- TODO: more precise model that actually uses the `Debug` instance
+  .ok (.Ok (), fmt)
+
+@[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field3_finish", simp]
+def core.fmt.Formatter.debug_struct_field3_finish (fmt : core.fmt.Formatter) (_ : Str) :
+  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
+  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
+  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
+  Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
+  -- TODO: more precise model that actually uses the `Debug` instance
+  fun _ _ _ _ _ _ =>
   .ok (.Ok (), fmt)
 
 @[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field4_finish", simp]
-def core.fmt.Formatter.debug_struct_field4_finish :
-  core.fmt.Formatter → Str → Str → Dyn (fun _dyn => core.fmt.Debug _dyn)
-    → Str → Dyn (fun _dyn => core.fmt.Debug _dyn) → Str →
-    Dyn (fun _dyn => core.fmt.Debug _dyn) → Str → Dyn (fun _dyn => core.fmt.Debug _dyn)
-    → Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
-  -- TODO: more precise model
-  fun fmt _ _ _ _ _ _ _ _ _ =>
+def core.fmt.Formatter.debug_struct_field4_finish (fmt : core.fmt.Formatter) (_ : Str) :
+  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
+  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
+  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
+  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
+  Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
+  -- TODO: more precise model that actually uses the `Debug` instance
+  fun _ _ _ _ _ _ _ _ =>
   .ok (.Ok (), fmt)
 
-@[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_tuple_field1_finish"]
+@[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field5_finish", simp]
+def core.fmt.Formatter.debug_struct_field5_finish (fmt : core.fmt.Formatter) (_ : Str) :
+  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
+  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
+  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
+  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
+  Str → Dyn (fun dyn => core.fmt.Debug dyn) →
+  Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
+  fun _ _ _ _ _ _ _ _ _ _ => .ok (.Ok (), fmt)
+
+@[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_tuple_field1_finish", simp]
 def core.fmt.Formatter.debug_tuple_field1_finish :
-  core.fmt.Formatter → Str → Dyn (fun _dyn => core.fmt.Debug _dyn) →
+  core.fmt.Formatter → Str → Dyn (fun dyn => core.fmt.Debug dyn) →
     Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
-  -- TODO: more precise model
+  -- TODO: more precise model that actually uses the `Debug` instance
   fun fmt _ _ =>
   .ok (.Ok (), fmt)
 

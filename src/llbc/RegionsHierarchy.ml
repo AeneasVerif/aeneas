@@ -154,7 +154,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
         (* Continue *)
         explore_ty outer ty
     | TRawPtr (ty, _) -> explore_ty outer ty
-    | TTraitType (trait_ref, _) ->
+    | TTraitType (trait_ref, _, _) ->
         (* The trait should reference a clause, and not an implementation
            (otherwise it should have been normalized), or a special builtin
            trait (in particular, [core::marker::DiscriminantKind]) *)
@@ -194,9 +194,9 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
         ()
     | TDynTrait _ ->
         [%cassert_opt_span] span Config.type_analysis_ignore_dyn "Unimplemented"
-    | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
     | TError _ ->
         [%craise_opt_span] span "Found type error in the output of charon"
+    | _ -> [%craise_opt_span] span ("unsupported type: " ^ show_ty ty)
   and explore_generics (outer : region list) (generics : generic_args) =
     let { regions; types; const_generics = _; trait_refs = _ } = generics in
     List.iter (fun long -> add_edges ~long ~shorts:outer) regions;

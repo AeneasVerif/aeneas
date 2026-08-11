@@ -6,10 +6,13 @@ import Aeneas.Std.PrimitivesLemmas
 import Aeneas.Std.RawPtr
 import Aeneas.Std.Scalar
 import Aeneas.Std.Slice
+import Aeneas.Std.SliceDef
 import Aeneas.Std.SliceIter
 import Aeneas.Std.Std
 import Aeneas.Std.String
+import Aeneas.Std.StringDef
 import Aeneas.Std.StringIter
 import Aeneas.Std.Vec
 import Aeneas.Std.VecIter
 import Aeneas.Data.Tuples
+import Aeneas.Std.RangeIter

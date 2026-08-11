@@ -9,6 +9,9 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace defaulted_method
 
 /-- Trait declaration: [defaulted_method::Trait]
@@ -19,6 +22,7 @@ structure Trait (Self : Type) where
 
 /-- [defaulted_method::Trait::provided_method]:
     Source: 'tests/src/defaulted_method.rs', lines 3:4-5:5 -/
+@[trait_default]
 def Trait.provided_method.default
   {Self : Type} (TraitInst : Trait Self) (self : Self) : Result Std.U32 := do
   TraitInst.required_method self
@@ -28,19 +32,19 @@ def Trait.provided_method.default
 @[reducible]
 def NoOverride := Unit
 
-/-- [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}::required_method]:
+/-- [defaulted_method::{impl defaulted_method::Trait for defaulted_method::NoOverride}::required_method]:
     Source: 'tests/src/defaulted_method.rs', lines 14:4-16:5 -/
 def NoOverride.Insts.Defaulted_methodTrait.required_method
   (self : NoOverride) : Result Std.U32 := do
   ok 12#u32
 
-/-- [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}::provided_method]:
+/-- [defaulted_method::{impl defaulted_method::Trait for defaulted_method::NoOverride}::provided_method]:
     Source: 'tests/src/defaulted_method.rs', lines 11:4-13:5 -/
 def NoOverride.Insts.Defaulted_methodTrait.provided_method
   (self : NoOverride) : Result Std.U32 := do
   ok 73#u32
 
-/-- Trait implementation: [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}]
+/-- Trait implementation: [defaulted_method::{impl defaulted_method::Trait for defaulted_method::NoOverride}]
     Source: 'tests/src/defaulted_method.rs', lines 10:0-17:1 -/
 @[reducible]
 def NoOverride.Insts.Defaulted_methodTrait : Trait NoOverride := {
@@ -53,23 +57,18 @@ def NoOverride.Insts.Defaulted_methodTrait : Trait NoOverride := {
 @[reducible]
 def YesOverride := Unit
 
-/-- [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}::required_method]:
+/-- [defaulted_method::{impl defaulted_method::Trait for defaulted_method::YesOverride}::required_method]:
     Source: 'tests/src/defaulted_method.rs', lines 21:4-23:5 -/
 def YesOverride.Insts.Defaulted_methodTrait.required_method
   (self : YesOverride) : Result Std.U32 := do
   ok 42#u32
 
-/-- [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}::provided_method]:
-    Source: 'tests/src/defaulted_method.rs', lines 20:0-24:1 -/
-def YesOverride.Insts.Defaulted_methodTrait.provided_method
-  (self : YesOverride) : Result Std.U32 := do
-  YesOverride.Insts.Defaulted_methodTrait.required_method self
-
-/-- Trait implementation: [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}]
+/-- Trait implementation: [defaulted_method::{impl defaulted_method::Trait for defaulted_method::YesOverride}]
     Source: 'tests/src/defaulted_method.rs', lines 20:0-24:1 -/
 @[reducible]
-def YesOverride.Insts.Defaulted_methodTrait : Trait YesOverride := {
-  provided_method := YesOverride.Insts.Defaulted_methodTrait.provided_method
+impl_def YesOverride.Insts.Defaulted_methodTrait : Trait YesOverride := {
+  provided_method := Trait.provided_method.default
+    YesOverride.Insts.Defaulted_methodTrait
   required_method := YesOverride.Insts.Defaulted_methodTrait.required_method
 }
 
@@ -77,8 +76,9 @@ def YesOverride.Insts.Defaulted_methodTrait : Trait YesOverride := {
     Source: 'tests/src/defaulted_method.rs', lines 26:0-33:1 -/
 def main : Result Unit := do
   let _ ← NoOverride.Insts.Defaulted_methodTrait.provided_method ()
-  let _ ← YesOverride.Insts.Defaulted_methodTrait.provided_method ()
-  let n ← lift (core.cmp.impls.OrdI32.min 10#i32 1#i32)
+  let _ ←
+    Trait.provided_method.default YesOverride.Insts.Defaulted_methodTrait ()
+  let n ← core.cmp.Ord.min.trait_default core.cmp.OrdI32 10#i32 1#i32
   massert (n = 1#i32)
 
 end defaulted_method

@@ -9,7 +9,8 @@ Local Open Scope Primitives_scope.
 Module Issue270LoopList.
 
 (** [issue_270_loop_list::List]
-    Source: 'tests/src/issue-270-loop-list.rs', lines 2:0-5:1 *)
+    Source: 'tests/src/issue-270-loop-list.rs', lines 2:0-5:1
+    Visibility: public *)
 Inductive List_t (T : Type) :=
 | List_Cons : T -> List_t T -> List_t T
 | List_Nil : List_t T

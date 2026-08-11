@@ -45,14 +45,20 @@ module Sig = struct
 
   (** Region 'a of id 0 *)
   let region_param_0 : region_param =
-    { index = rvar_id_0; name = Some "'a"; mutability = LtUnknown }
+    {
+      index = rvar_id_0;
+      name = Some "'a";
+      variance = VaUnknown;
+      mutability = LtUnknown;
+    }
 
   (** Region group: [{ parent={}; regions:{'a of id 0} }] *)
   let region_group_0 : region_var_group =
     { id = rg_id_0; regions = [ rvar_id_0 ]; parents = [] }
 
   (** Type parameter [T] of id 0 *)
-  let type_param_0 : type_param = { index = tvar_id_0; name = "T" }
+  let type_param_0 : type_param =
+    { index = tvar_id_0; name = "T"; variance = VaUnknown }
 
   let usize_ty : ty = TLiteral (TUInt Usize)
 
@@ -86,7 +92,14 @@ module Sig = struct
   let mk_sig generics inputs output : bound_fun_sig =
     {
       item_binder_params = generics;
-      item_binder_value = { inputs; output; is_unsafe = false };
+      item_binder_value =
+        {
+          inputs;
+          output;
+          abi = AbiRust;
+          is_unsafe = false;
+          is_variadic = false;
+        };
     }
 
   (** [fn<T>(T) -> Box<T>] *)
@@ -217,7 +230,7 @@ type builtin_fun_info = {
 let mk_builtin_fun_info (raw : raw_builtin_fun_info) :
     builtin_fun_id * builtin_fun_info =
   let fun_id, fun_sig, can_fail, keep_types = raw in
-  let name = Charon.PrintTypes.builtin_fun_id_to_string fun_id in
+  let name = Charon.Print.builtin_fun_id_to_string fun_id in
   (fun_id, { fun_id; fun_sig; can_fail; name; keep_types })
 
 (** The list of builtin functions and all their information:

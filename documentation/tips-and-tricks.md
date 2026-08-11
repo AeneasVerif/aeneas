@@ -27,20 +27,20 @@ matures, **use `-loops-to-rec`** for any project where you need to write proofs.
 
 ## Tactic Selection Quick Guide
 
-| Goal Shape | Try First | Then Try |
-|---|---|---|
-| Monadic function call | `step` | `step with specific_theorem` |
-| Arithmetic (Nat/Int) | `scalar_tac` or `agrind` | `grind` |
-| Arithmetic (nonlinear) | `scalar_tac +nonLin` | manual `have` + `scalar_tac` |
-| Scalar bounds (UScalar/IScalar) | `scalar_tac` | `agrind` |
-| Bitwise operations | `bv_tac 32` | `bvify` + `bv_tac` |
-| Modular equivalence | `zmodify` + ring tactics | manual |
-| List get/set | `agrind` | `grind` (slower, more lemmas), or `cases` + `simp_lists` |
-| If-then-else | `simp_ifs` | `split` |
-| Conjunction goal | `split_conjs <;> try agrind` | focus on hard goals manually |
-| Boolean/prop | `simp_bool_prop` | `tauto` |
-| Concrete computation | `decide` | `native_decide` |
-| General automation | `agrind` | `simp [*]; agrind` |
+| Goal Shape                      | Try First                        | Then Try                                                 |
+|---------------------------------|----------------------------------|----------------------------------------------------------|
+| Monadic function call           | `step`                           | `step with specific_theorem`                             |
+| Arithmetic (Nat/Int)            | `scalar_tac` or `agrind`         | `grind`                                                  |
+| Arithmetic (nonlinear)          | `scalar_tac +nonLin`             | manual `have` + `scalar_tac`                             |
+| Scalar bounds (UScalar/IScalar) | `scalar_tac`                     | `agrind`                                                 |
+| Bitwise operations              | `bv_tac 32`                      | `bvify` + `bv_tac`                                       |
+| Modular equivalence             | `zmodify` + ring tactics         | manual                                                   |
+| List get/set                    | `agrind`                         | `grind` (slower, more lemmas), or `cases` + `simp_lists` |
+| If-then-else                    | `simp_ifs`                       | `split`                                                  |
+| Conjunction goal                | `split_conjs <;> try agrind`     | focus on hard goals manually                             |
+| Boolean/prop                    | `simp_bool_prop`                 | `tauto`                                                  |
+| Concrete computation            | `decide`                         | `native_decide`                                          |
+| General automation              | `agrind`                         | `simp [*]; agrind`                                       |
 
 ## Standard Library: Don't Unfold, Find Lemmas
 
@@ -363,12 +363,12 @@ Shorter proofs are easier to maintain, faster to check, and easier for others to
 
 **Expected proof times (rough guide):**
 
-| Function complexity | Expected time | Action if exceeded |
-|---|---|---|
-| Simple (3–5 monadic binds) | 0.5–2s | — |
-| Medium (10–15 binds) | 2–10s | — |
-| Complex (20+ binds) | 10–60s | Consider decomposition |
-| >60s | — | **Decompose** (fold theorems, helper lemmas) |
+| Function complexity            | Expected time | Action if exceeded                           |
+|--------------------------------|---------------|----------------------------------------------|
+| Simple (3–5 monadic binds)     | 0.5–2s        | —                                            |
+| Medium (10–15 binds)           | 2–10s         | —                                            |
+| Complex (20+ binds)            | 10–60s        | Consider decomposition                       |
+| >60s                           | —             | **Decompose** (fold theorems, helper lemmas) |
 
 **Red flags that a proof will be slow:**
 - More than ~25 `step` calls in sequence
@@ -383,18 +383,18 @@ Shorter proofs are easier to maintain, faster to check, and easier for others to
 
 ## Quick Reference: Attribute Tags
 
-| Attribute | Used by | Purpose |
-|---|---|---|
-| `@[step]` | `step` tactic | Register function specifications |
-| `@[simp_scalar_simps]` | `simp_scalar` | Register scalar simplification lemmas |
-| `@[simp_lists_simps]` | `simp_lists` | Register list simplification lemmas |
-| `@[bvify_simps]` | `bvify` | Register bit-vector lifting lemmas |
-| `@[natify_simps]` | `natify` | Register Nat conversion lemmas |
-| `@[zmodify_simps]` | `zmodify` | Register ZMod conversion lemmas |
-| `@[simp_bool_prop_simps]` | `simp_bool_prop` | Register boolean/prop lemmas |
-| `@[scalar_tac_simps]` | `scalar_tac` | Register arithmetic lemmas |
-| `@[agrind]` / `@[agrind =]` | `agrind` | Register agrind lemmas |
-| `@[simp]` | `simp` | Standard Lean simp lemmas |
+| Attribute                      | Used by          | Purpose                                   |
+|--------------------------------|------------------|-------------------------------------------|
+| `@[step]`                      | `step` tactic    | Register function specifications          |
+| `@[simp_scalar_simps]`         | `simp_scalar`    | Register scalar simplification lemmas     |
+| `@[simp_lists_simps]`          | `simp_lists`     | Register list simplification lemmas       |
+| `@[bvify_simps]`               | `bvify`          | Register bit-vector lifting lemmas        |
+| `@[natify_simps]`              | `natify`         | Register Nat conversion lemmas            |
+| `@[zmodify_simps]`             | `zmodify`        | Register ZMod conversion lemmas           |
+| `@[simp_bool_prop_simps]`      | `simp_bool_prop` | Register boolean/prop lemmas              |
+| `@[scalar_tac_simps]`          | `scalar_tac`     | Register arithmetic lemmas                |
+| `@[agrind]` / `@[agrind =]`    | `agrind`         | Register agrind lemmas                    |
+| `@[simp]`                      | `simp`           | Standard Lean simp lemmas                 |
 
 ## Reasoning About Constants and Globals
 

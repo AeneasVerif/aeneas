@@ -9,17 +9,22 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace slices
 
 /-- [slices::slice_subslice_from_shared]:
-    Source: 'tests/src/slices.rs', lines 3:0-5:1 -/
+    Source: 'tests/src/slices.rs', lines 3:0-5:1
+    Visibility: public -/
 def slice_subslice_from_shared
   (x : Slice Std.U32) : Result (Slice Std.U32) := do
   core.slice.index.Slice.index (core.slice.index.SliceIndexRangeFromUsizeSlice
     Std.U32) x { start := 0#usize }
 
 /-- [slices::slice_subslice_from_mut]:
-    Source: 'tests/src/slices.rs', lines 7:0-9:1 -/
+    Source: 'tests/src/slices.rs', lines 7:0-9:1
+    Visibility: public -/
 def slice_subslice_from_mut
   (x : Slice Std.U32) :
   Result ((Slice Std.U32) × (Slice Std.U32 → Slice Std.U32))
@@ -29,7 +34,8 @@ def slice_subslice_from_mut
     { start := 0#usize }
 
 /-- [slices::split_at]:
-    Source: 'tests/src/slices.rs', lines 11:0-13:1 -/
+    Source: 'tests/src/slices.rs', lines 11:0-13:1
+    Visibility: public -/
 def split_at
   {T : Type} (x : Slice T) (n : Std.Usize) :
   Result ((Slice T) × (Slice T))
@@ -37,17 +43,33 @@ def split_at
   core.slice.Slice.split_at x n
 
 /-- [slices::split_at_mut]:
-    Source: 'tests/src/slices.rs', lines 15:0-17:1 -/
+    Source: 'tests/src/slices.rs', lines 15:0-17:1
+    Visibility: public -/
 def split_at_mut
   {T : Type} (x : Slice T) (n : Std.Usize) :
   Result (((Slice T) × (Slice T)) × (((Slice T) × (Slice T)) → Slice T))
   := do
-  let (p, split_at_mut_back) ← core.slice.Slice.split_at_mut x n
-  let back := fun p1 => split_at_mut_back p1
-  ok (p, back)
+  let ((s, s1), split_at_mut_back) ← core.slice.Slice.split_at_mut x n
+  let back := fun p => split_at_mut_back p
+  ok ((s, s1), back)
+
+/-- [slices::split_at_mut_and_deref]:
+    Source: 'tests/src/slices.rs', lines 19:0-22:1
+    Visibility: public -/
+def split_at_mut_and_deref
+  {T : Type} (coremarkerCopyInst : core.marker.Copy T) (x : Slice T)
+  (n : Std.Usize) :
+  Result ((T × T) × (Slice T))
+  := do
+  let ((left, right), split_at_mut_back) ← core.slice.Slice.split_at_mut x n
+  let t ← Slice.index_usize left 0#usize
+  let t1 ← Slice.index_usize right 0#usize
+  let x1 := split_at_mut_back (left, right)
+  ok ((t, t1), x1)
 
 /-- [slices::swap]:
-    Source: 'tests/src/slices.rs', lines 19:0-21:1 -/
+    Source: 'tests/src/slices.rs', lines 24:0-26:1
+    Visibility: public -/
 def swap
   {T : Type} (x : Slice T) (n : Std.Usize) (m : Std.Usize) :
   Result (Slice T)
@@ -55,7 +77,8 @@ def swap
   core.slice.Slice.swap x n m
 
 /-- [slices::from_vec]:
-    Source: 'tests/src/slices.rs', lines 23:0-25:1 -/
+    Source: 'tests/src/slices.rs', lines 28:0-30:1
+    Visibility: public -/
 def from_vec {T : Type} (x : alloc.vec.Vec T) : Result (Slice T) := do
   alloc.vec.FromBoxSliceVec.from x
 

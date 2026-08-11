@@ -9,17 +9,22 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace polonius_list
 
 /-- [polonius_list::List]
-    Source: 'tests/src/polonius_list.rs', lines 5:0-8:1 -/
+    Source: 'tests/src/polonius_list.rs', lines 5:0-8:1
+    Visibility: public -/
 @[discriminant isize]
 inductive List (T : Type) where
 | Cons : T → List T → List T
 | Nil : List T
 
 /-- [polonius_list::get_list_at_x]:
-    Source: 'tests/src/polonius_list.rs', lines 15:0-29:1 -/
+    Source: 'tests/src/polonius_list.rs', lines 15:0-29:1
+    Visibility: public -/
 def get_list_at_x
   (ls : List Std.U32) (x : Std.U32) :
   Result ((List Std.U32) × (List Std.U32 → List Std.U32))

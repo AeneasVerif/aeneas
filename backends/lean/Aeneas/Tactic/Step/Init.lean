@@ -65,6 +65,8 @@ structure Config where
       that are not bound in the function call). This requires `assumTac` to
       be `true`. -/
   inferGhostVars : Bool := true
+  /-- Infer a postcondition for unresolved `?post args...` subgoals left by `progress` -/
+  inferPost : Bool := false
   /-- Use `scalar_tac` to discharge preconditions -/
   scalarTac : Bool := false
   /- Use `simp [*]` to discharge preconditions -/
@@ -76,7 +78,7 @@ structure Config where
   /--`grind` parameter: see `Lean.Grind.Config` -/
   splits : Nat := 4
   /--`grind` parameter: see `Lean.Grind.Config` -/
-  ematch : Nat := 5
+  ematch : Nat := 3
   /--`grind` parameter: see `Lean.Grind.Config` -/
   splitMatch : Bool := false
   /--`grind` parameter: see `Lean.Grind.Config` -/
@@ -88,7 +90,9 @@ structure Config where
   /--`grind` parameter: see `Lean.Grind.Config` -/
   gen : Nat  := 2
   /--`grind` parameter: see `Lean.Grind.Config` -/
-  instances : Nat  := 1000
+  genLocal : Nat := 2
+  /--`grind` parameter: see `Lean.Grind.Config` -/
+  instances : Nat  := 100
   /--`grind` parameter: see `Lean.Grind.Config` -/
   canonHeartbeats : Nat := 1000
   /-- Should we use non-linear arithmetic lemmas when calling `grind`? See `Aeneas.Grind.AGrindConfig`. -/
@@ -109,12 +113,12 @@ structure Config where
 deriving Repr
 
 def Config.toGrindConfig (cfg : Config) : Grind.Config :=
-  let { async := _, assumTac := _, inferGhostVars := _, scalarTac := _, simpStar := _,
+  let { async := _, assumTac := _, inferGhostVars := _, inferPost := _, scalarTac := _, simpStar := _,
         grind := _, withGroundSimprocs := _, nla := _,
         threadGrindState := _, grindPreprocessIters := _, grindPreprocessSplit := _,
         preprocessGrind := _,
-        splits, ematch, splitMatch, splitIte, splitIndPred, funext, gen, instances, canonHeartbeats } := cfg
-  { splits, ematch, splitMatch, splitIte, splitIndPred, funext, gen, instances, canonHeartbeats }
+        splits, ematch, splitMatch, splitIte, splitIndPred, funext, gen, genLocal, instances, canonHeartbeats } := cfg
+  { splits, ematch, splitMatch, splitIte, splitIndPred, funext, gen, genLocal, instances, canonHeartbeats }
 
 declare_option_config_elab Config elabPartialConfig aeneas.step
 
@@ -218,34 +222,50 @@ end Methods
   ```
 -/
 def getStepSpecFunArgsExpr (ty : Expr) :
-  MetaM Expr := do
+  MetaM (Expr × SpecInfo) := do
   let ty := ty.consumeMData
   unless ← isProp ty do
     throwError "Expected a proposition, got {←inferType ty}"
   -- ty == ∀ xs, spec (f x1 ... xn) P
-  let (xs, xs_bi, ty₂) ← forallMetaTelescope ty
+  let (xs, _xs_bi, ty₂) ← forallMetaTelescope ty
   trace[Step] "Universally quantified arguments and assumptions: {xs}"
   -- ty₂ == spec (f x1 ... xn) P
   let (spec?, args) := ty₂.consumeMData.withApp (fun f args => (f, args))
-  if h: spec?.isConstOf ``Std.WP.spec ∧ args.size = 3
-  then pure args[1] -- this is `f x1 ... xn`
+  let specName ← match spec? with
+    | Expr.const name _ => pure name
+    | _ => throwError "Not a constant"
+  let .some info ← specInfoLookup specName
+    | throwError "{specName} is not a supported spec statement name"
+  if _h: args.size = info.arity
+  then pure (args[info.program_index]!, info) -- this is `f x1 ... xn`
   else throwError "Expected to be a `spec (f x1 ... xn) P`, got {ty₂}"
 
+deriving instance Ord for Lean.Name
 structure Rules where
-  rules : DiscrTree Name
+  /--
+  This mapping stores theorems to be used automatically with the `step` tactic,
+  spec statement name -> program expression pattern -> step theorem name
+  -/
+  rules : Std.TreeMap Name (DiscrTree Name)
   /- We can't remove keys from a discrimination tree, so to support
      local rules we keep a set of deactivated rules (rules which have
      come out of scope) on the side -/
   deactivated : Std.HashSet Name
 deriving Inhabited
 
-def Rules.empty : Rules := ⟨ DiscrTree.empty, Std.HashSet.emptyWithCapacity ⟩
+def Rules.empty : Rules := ⟨ Std.TreeMap.empty, Std.HashSet.emptyWithCapacity ⟩
 
-def Extension := SimpleScopedEnvExtension (DiscrTreeKey × Name) Rules
+def Extension := SimpleScopedEnvExtension ((Name × DiscrTreeKey) × Name) Rules
 deriving Inhabited
 
-def Rules.insert (r : Rules) (kv : Array DiscrTree.Key × Name) : Rules :=
-  { rules := r.rules.insertKeyValue kv.fst kv.snd,
+def Rules.insert (r : Rules) (kv : (Name × Array DiscrTree.Key) × Name) : Rules :=
+  let ((specName, prog), thm) := kv
+  { rules :=
+    r.rules.insert specName ((match r.rules.get? specName with
+      | .some dt => dt
+      | .none => DiscrTree.empty
+    ).insertKeyValue prog thm)
+    ,
     deactivated := r.deactivated.erase kv.snd }
 
 def Rules.erase (r : Rules) (k : Name) : Rules :=
@@ -265,8 +285,34 @@ structure StepSpecAttr where
   ext  : Extension
   deriving Inhabited
 
-private def saveStepSpecFromThm (ext : Extension) (attrKind : AttributeKind) (thName : Name) :
-  AttrM Unit := do
+private def generateMvcgenSpec (toMvcgenThm : Name) (stx : Syntax) (attrKind : AttributeKind)
+    (thDecl : AsyncConstantInfo) : MetaM Unit := do
+  let sig := thDecl.sig.get
+  let thName := thDecl.name
+  forallTelescope sig.type fun fvars _ => do
+    -- Apply the original theorem to all fvars to get: spec (f args) Q
+    let thConst := Lean.mkConst thName (sig.levelParams.map .param)
+    let thApp := mkAppN thConst fvars
+    -- Wrap with spec_to_mvcgen to produce: Triple (f args) ⌜True⌝ post⟨...⟩
+    let proof ← mkAppM toMvcgenThm #[thApp]
+    let innerTy ← inferType proof
+    -- Re-introduce all fvars as binders
+    let proofTerm ← mkLambdaFVars fvars proof
+    let thmTy ← mkForallFVars fvars innerTy
+    let mvcgenSpecName := Name.str thName "mvcgen_spec"
+    let auxDecl : TheoremVal := {
+      name        := mvcgenSpecName
+      levelParams := sig.levelParams
+      type        := thmTy
+      value       := proofTerm
+    }
+    addDecl (.thmDecl auxDecl)
+    addDeclarationRangesFromSyntax mvcgenSpecName stx
+    -- Register with @[spec] so mvcgen can find it
+    Lean.Attribute.add mvcgenSpecName `spec .missing attrKind
+
+private def saveStepSpecFromThm (ext : Extension) (attrKind : AttributeKind) (stx : Syntax)
+    (thName : Name) : AttrM Unit := do
   -- Lookup the theorem
   let env ← getEnv
   -- Ignore some auxiliary definitions (see the comments for attrIgnoreMutRec)
@@ -275,18 +321,26 @@ private def saveStepSpecFromThm (ext : Extension) (attrKind : AttributeKind) (th
     let some thDecl := env.findAsync? thName
       | throwError "Could not find theorem {thName}"
     let type := thDecl.sig.get.type
-    let fKey ← MetaM.run' (do
+    let (fKey, info) ← MetaM.run' (do
       trace[Step] "Theorem: {type}"
       -- Normalize to eliminate the let-bindings
       let ty ← normalizeLetBindings type
       trace[Step] "Theorem after normalization (to eliminate the let bindings): {ty}"
-      let fExpr ← getStepSpecFunArgsExpr ty
+      let (fExpr, info) ← getStepSpecFunArgsExpr ty
       trace[Step] "Registering spec theorem for expr: {fExpr}"
       -- Convert the function expression to a discrimination tree key
-      DiscrTree.mkPath fExpr)
+      pure (← DiscrTree.mkPath fExpr, info))
     -- Save the entry
-    ScopedEnvExtension.add ext (fKey, thName) attrKind
+    -- TODO: use info.name to use a different discrimination tree here!
+    ScopedEnvExtension.add ext ((info.spec_name, fKey), thName) attrKind
     trace[Step] "Saved the entry"
+    -- Also generate a corresponding mvcgen (@[spec]) lemma
+    try
+      trace[Step] "Registering with mvcgen"
+      if let .some thm := info.to_mvcgen then
+        MetaM.run' (generateMvcgenSpec thm stx attrKind thDecl)
+    catch e =>
+      logWarning m!"Could not generate mvcgen spec for {thName}: {e.toMessageData}"
     pure ()
 
 /- Initiliaze the `step` attribute. -/
@@ -297,7 +351,7 @@ initialize stepAttr : StepSpecAttr ← do
     descr := "Adds theorems to the `step` database"
     add := fun thName stx attrKind => do
       Attribute.Builtin.ensureNoArgs stx
-      saveStepSpecFromThm ext attrKind thName
+      saveStepSpecFromThm ext attrKind stx thName
     erase := fun thName => do
       let s := ext.getState (← getEnv)
       let s := s.erase thName
@@ -306,9 +360,15 @@ initialize stepAttr : StepSpecAttr ← do
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl, ext := ext }
 
-def StepSpecAttr.find? (s : StepSpecAttr) (e : Expr) : MetaM (Array Name) := do
-  let state := s.ext.getState (← getEnv)
-  let rules ← state.rules.getMatch e
+def StepSpecAttr.find? (s : StepSpecAttr) (name : Name) (e : Expr) : MetaM (Array Name) := do
+  let env ← getEnv
+  let state := s.ext.getState env
+  let specState := specAttr.getState env
+  if not (specState.specInfos.contains name) then
+    throwError "no such spec statement as {name}, valid ones are {state.rules.keys}"
+  let .some dtree := state.rules.get? name
+  | pure #[] -- no spec theorems have been added for this theorem yet
+  let rules ← dtree.getMatch e
   pure (rules.filter (fun th => th ∉ state.deactivated))
 
 def StepSpecAttr.getState (s : StepSpecAttr) : MetaM Rules := do
@@ -318,8 +378,10 @@ def showStoredStepThms : MetaM Unit := do
   let st ← stepAttr.getState
   -- TODO: how can we iterate over (at least) the values stored in the tree?
   --let s := st.toList.foldl (fun s (f, th) => f!"{s}\n{f} → {th}") f!""
-  let s := f!"{st.rules}, {st.deactivated.toArray}"
-  IO.println s
+  for key in st.rules.keys do
+    let s := f!"thms for {key}: {st.rules.get! key}}"
+    IO.println s
+  IO.println "deactivated: {st.deactivated.toArray}"
 
 /-! # Attribute: `step_pure` -/
 
@@ -406,8 +468,8 @@ def reduceProdProjs (e : Expr) : MetaM Expr := do
 
 open Std.WP
 
-theorem intro_predn (p : α × β → Prop) : p = predn (fun x y => p (x, y)) := by
-  unfold predn
+theorem intro_uncurry' (p : α × β → Prop) : p = uncurry' (fun x y => p (x, y)) := by
+  unfold uncurry'
   simp only
 
 theorem lift_to_spec x (p0 p1 : α → Prop) (h0 : p0 x) (h1 : p0 = p1) : spec (Std.lift x) p1 := by
@@ -419,22 +481,22 @@ namespace Test
   theorem test_pos_triple (pos_triple : Nat × Nat × Nat) (thm : (fun (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0) pos_triple) :
     Std.lift pos_triple ⦃ x y z => x > 0 ∧ y > 0 ∧ z > 0 ⦄ := by
     --
-    have h := fun x => intro_predn (fun y => match (x, y) with | (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
+    have h := fun x => intro_uncurry' (fun y => match (x, y) with | (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
     --
-    have h' := intro_predn (fun (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
-    replace h := congrArg predn (funext h)
+    have h' := intro_uncurry' (fun (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
+    replace h := congrArg uncurry' (funext h)
     replace h := Eq.trans h' h
     clear h'
     --
     replace h := lift_to_spec pos_triple (fun (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
-      (predn fun x => predn fun x_1 y => match (x, x_1, y) with | (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
+      (uncurry' fun x => uncurry' fun x_1 y => match (x, x_1, y) with | (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
       thm h
     exact h
 
   /-- Example which uses tactics -/
   theorem test_pos_triple' (pos_triple : Nat × Nat × Nat) (thm : (fun (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0) pos_triple) :
     Std.lift pos_triple ⦃ x y z => x > 0 ∧ y > 0 ∧ z > 0 ⦄ := by
-    simp -failIfUnchanged -iota only [_root_.Aeneas.Std.lift, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.predn] at thm ⊢
+    simp -failIfUnchanged -iota only [_root_.Aeneas.Std.lift, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.uncurry'] at thm ⊢
     exact thm
 
 end Test
@@ -494,21 +556,21 @@ def liftThmType (thmTy : Expr) (pat : Option Syntax)
   /- Substitute the pattern -/
   let thmTy ← mkPred thmTy pat fvarsPat fvars
   trace[Step] "Theorem after substituting the pattern: {thmTy}"
-  /- Create the nested `predn` -/
-  let rec mkPredn (fvars : List Expr) : MetaM Expr := do
-    withTraceNode `Step (fun _ => pure m!"mkPredn: fvars: {fvars}") do
+  /- Create the nested `uncurry'` -/
+  let rec mkUncurry' (fvars : List Expr) : MetaM Expr := do
+    withTraceNode `Step (fun _ => pure m!"mkUncurry': fvars: {fvars}") do
     match fvars with
     | [] => throwError "Unexpected"
     | [x] =>
       trace[Progres] "Introducing a single lambda: x: {x}, thmTy: {thmTy}"
       mkLambdaFVars #[x] thmTy
     | x :: fvars => do
-      trace[Progres] "Introducing `predn`: x: {x}"
-      let thm ← mkPredn fvars
+      trace[Progres] "Introducing `uncurry'`: x: {x}"
+      let thm ← mkUncurry' fvars
       trace[Progres] "thm: {thm}"
-      mkAppM ``predn #[← mkLambdaFVars #[x] thm]
-  let thmTy ← mkPredn patFVars.toList
-  trace[Step] "result of mkPredn: {thmTy}"
+      mkAppM ``uncurry' #[← mkLambdaFVars #[x] thm]
+  let thmTy ← mkUncurry' patFVars.toList
+  trace[Step] "result of mkUncurry': {thmTy}"
   /- Add the `spec` -/
   let liftExpr ← mkAppM ``Std.lift #[pat]
   trace[Step] "liftExpr: {liftExpr}"
@@ -547,7 +609,7 @@ def liftThm (stx : Syntax) (name : Name) (pat : Option (TSyntax `term))
     | none =>
       `(tactic|
         simp -failIfUnchanged -iota only
-          [_root_.Aeneas.Std.lift, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.predn] <;>
+          [_root_.Aeneas.Std.lift, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.uncurry'] <;>
         exact $(mkIdent name))
     | some stx => pure stx
   let (goals, _) ← runTactic mvar.mvarId! tacticStx
@@ -820,7 +882,7 @@ initialize stepPureAttribute : StepPureSpecAttr ← do
         -- Introduce the lifted theorem
         let liftedThmName ← MetaM.run' (liftThm stx thName pat)
         -- Save the lifted theorem to the `step` database
-        saveStepSpecFromThm stepAttr.ext attrKind liftedThmName
+        saveStepSpecFromThm stepAttr.ext attrKind stx liftedThmName
   }
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl }
@@ -890,7 +952,7 @@ def mkStepPureDefThm (stx : Syntax) (pat : Option (TSyntax `term)) (n : Name)
   let tacticStx ←
     `(tactic|
         simp only
-          [_root_.Aeneas.Std.lift, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.predn, _root_.implies_true])
+          [_root_.Aeneas.Std.lift, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.uncurry', _root_.implies_true])
   liftThm stx n pat mkPat mkPred suffix (tacticStx := some tacticStx)
 
 local elab "#step_pure_def" id:ident pat:(term)? : command => do
@@ -961,11 +1023,17 @@ initialize stepPureDefAttribute : StepPureDefSpecAttr ← do
         -- Introduce the lifted theorem
         let thmName ← MetaM.run' (mkStepPureDefThm stx pat declName)
         -- Save the lifted theorem to the `step` database
-        saveStepSpecFromThm stepAttr.ext attrKind thmName
+        saveStepSpecFromThm stepAttr.ext attrKind stx thmName
   }
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl }
 
+open Tactic
+
+/-! # Logging Utils -/
+def traceGoalWithNode (msg : String) : TacticM Unit := Utils.traceGoalWithNode `Step msg
+
 end Step
+
 
 end Aeneas

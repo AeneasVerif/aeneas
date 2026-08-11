@@ -6,6 +6,7 @@
 open Types
 open Values
 open Contexts
+open Utils
 open TypesUtils
 open ValuesUtils
 open Cps
@@ -294,10 +295,10 @@ let rec match_types (span : Meta.span) ~(recover : bool) (ctx0 : eval_ctx)
       TAdt { id = id1; generics = generics1 } ) ->
       [%cassert_recover] recover span (id0 = id1) "Not the same ADT ids";
       [%cassert_recover] recover span
-        (generics0.const_generics = generics1.const_generics)
+        (phys_eq generics0.const_generics generics1.const_generics)
         "Not the same const generics";
       [%cassert_recover] recover span
-        (generics0.trait_refs = generics1.trait_refs)
+        (phys_eq generics0.trait_refs generics1.trait_refs)
         "Not the same trait refs";
       let id = id0 in
       let const_generics = generics1.const_generics in
@@ -397,16 +398,18 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
               (* If we get here, either there is a typing inconsistency, or we are
                  trying to match a reserved borrow, which shouldn't happen because
                  reserved borrow should be eliminated very quickly - they are introduced
-                 just before function calls which activate them *)
-              [%craise] M.span "Unexpected"
+                 just before function calls which activate them. *)
+              [%craise_recover] M.recover M.span "Unexpected"
         in
         { value = VBorrow bc; ty }
     | VLoan lc0, VLoan lc1 -> begin
         match (lc0, lc1) with
         | VSharedLoan (id0, sv0), VSharedLoan (id1, sv1) ->
             let sv = match_rec sv0 sv1 in
+            (* If the two loans have the same id it is simple. Otherwise we abort -
+               in theory we would need to introduce a fresh abstraction. *)
             [%cassert_recover] M.recover M.span
-              (not (value_has_borrows sv.value))
+              (id0 = id1 || not (value_has_borrows sv.value))
               "The join of nested borrows is not supported yet";
             M.match_shared_loans match_rec ctx0 ctx1 ty id0 id1 sv
         | VMutLoan id0, VMutLoan id1 ->
@@ -527,8 +530,8 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
                    there are no nested borrows *)
                 v0
             | _ ->
-                (* We should get there only if there are nested borrows *)
-                [%craise_recover] M.recover M.span "Unexpected")
+                (* We get there when there are nested borrows *)
+                M.match_aproj_shared_borrows ctx0 ctx1 v0.ty asb0 v1.ty asb1 ty)
         | _ ->
             (* TODO: getting there is not necessarily inconsistent (it may
                just be because the environments don't match) so we may want
@@ -622,13 +625,13 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     sv
 
   let match_etys _ _ ty0 ty1 =
-    [%sanity_check_recover] S.recover span (ty0 = ty1);
+    [%sanity_check_recover] S.recover span (phys_eq ty0 ty1);
     ty0
 
   let match_rtys _ _ ty0 ty1 =
     (* The types must be equal - in effect, this forbids to match symbolic
        values containing borrows *)
-    [%sanity_check_recover] S.recover span (ty0 = ty1);
+    [%sanity_check_recover] S.recover span (phys_eq ty0 ty1);
     ty0
 
   let match_distinct_literals (_ : tvalue_matcher) (ctx0 : eval_ctx)
@@ -860,7 +863,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           { value; ty = ref_ty }
         in
         let output : tevalue =
-          let value = EBorrow (EMutBorrow (PNone, lid, mk_eignored ty)) in
+          let value = EBorrow (EMutBorrow (PNone, lid, mk_eignored None ty)) in
           { value; ty = ref_ty }
         in
         let input : tevalue =
@@ -1095,7 +1098,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let cont : abs_cont option =
         if S.with_abs_conts then
           let input : tevalue =
-            let loan = EMutLoan (PNone, bid2, mk_eignored bv_ty) in
+            let loan = EMutLoan (PNone, bid2, mk_eignored None bv_ty) in
             (* Note that an eloan has a borrow type *)
             let loan : tevalue = { value = ELoan loan; ty = borrow_ty } in
 
@@ -1111,7 +1114,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
               let bv_ty = bv.ty in
               [%cassert_recover] S.recover span (ty_no_regions bv_ty)
                 "Nested borrows are not supported yet";
-              let value = EBorrow (EMutBorrow (pm, bid, mk_eignored bv_ty)) in
+              let value =
+                EBorrow (EMutBorrow (pm, bid, mk_eignored None bv_ty))
+              in
               { value; ty = borrow_ty }
             in
             mk_etuple ~borrow_proj:true
@@ -1259,7 +1264,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         if S.with_abs_conts then
           let input : tevalue =
             let mk_loan pm lid =
-              let loan = EMutLoan (pm, lid, mk_eignored bv_ty) in
+              let loan = EMutLoan (pm, lid, mk_eignored None bv_ty) in
               (* Note that an eloan has a borrow type *)
               { value = ELoan loan; ty = borrow_ty }
             in
@@ -1269,7 +1274,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             { value = v; ty = borrow_ty }
           in
           let output : tevalue =
-            let value = EBorrow (EMutBorrow (PNone, nbid, mk_eignored bv_ty)) in
+            let value =
+              EBorrow (EMutBorrow (PNone, nbid, mk_eignored None bv_ty))
+            in
             { value; ty = borrow_ty }
           in
           Some { output = Some output; input = Some input }
@@ -1495,8 +1502,11 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             other.value))
       "Unimplemented";
 
-    (* Join the inner value *)
-    let joined_value = match_rec shared_value other in
+    (* Join the inner value. *)
+    let joined_value =
+      if loan_is_left then match_rec shared_value other
+      else match_rec other shared_value
+    in
 
     (* We need to introduce a fresh shared loan. *)
     let rid = ctx0.fresh_region_id () in
@@ -1612,7 +1622,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       if S.with_abs_conts then
         let input : tevalue =
           let loan : tevalue =
-            let loan = EMutLoan (loan_pm, lid, mk_eignored bv_ty) in
+            let loan = EMutLoan (loan_pm, lid, mk_eignored None bv_ty) in
             (* Note that an eloan has a borrow type *)
             { value = ELoan loan; ty = borrow_ty }
           in
@@ -1627,7 +1637,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           { value = v; ty = borrow_ty }
         in
         let output : tevalue =
-          let value = EBorrow (EMutBorrow (PNone, nbid, mk_eignored bv_ty)) in
+          let value =
+            EBorrow (EMutBorrow (PNone, nbid, mk_eignored None bv_ty))
+          in
           { value; ty = borrow_ty }
         in
         Some { output = Some output; input = Some input }
@@ -1699,6 +1711,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
   let match_aproj_borrows _ _ _ _ _ _ _ _ _ _ =
     [%craise_recover] S.recover span "Unreachable"
+
+  let match_aproj_shared_borrows _ _ _ _ _ _ _ =
+    [%craise_recover] S.recover span "Unimplemented"
 
   let match_aproj_loans _ _ _ _ _ _ _ _ _ _ =
     [%craise_recover] S.recover span "Unreachable"
@@ -1798,7 +1813,7 @@ struct
 
   (** *)
   let match_etys (_ : eval_ctx) (_ : eval_ctx) ty0 ty1 =
-    if ty0 <> ty1 then raise (Distinct "match_etys") else ty0
+    if phys_neq ty0 ty1 then raise (Distinct "match_etys") else ty0
 
   let match_rtys (ctx0 : eval_ctx) (ctx1 : eval_ctx) ty0 ty1 =
     let match_distinct_types ty0 ty1 =
@@ -1927,7 +1942,7 @@ struct
          instead of relying on [add_strict_or_unchanged], whose [Assert_failure]
          would bypass [try_match_ctxs]'s recovery mechanism. *)
       (match SymbolicValueId.Map.find_opt id0 !S.sid_to_value_map with
-      | Some sv1' when sv1 <> sv1' ->
+      | Some sv1' when phys_neq sv1 sv1' ->
           raise (Distinct "match_symbolic_values: incoherent value mapping")
       | _ -> ());
       S.sid_to_value_map :=
@@ -1951,7 +1966,7 @@ struct
          See the comment in [match_symbolic_values] for why we avoid
          [add_strict_or_unchanged] and check consistency explicitly. *)
       (match SymbolicValueId.Map.find_opt id !S.sid_to_value_map with
-      | Some v' when v <> v' ->
+      | Some v' when phys_neq v v' ->
           raise (Distinct "match_symbolic_with_other: incoherent value mapping")
       | _ -> ());
       S.sid_to_value_map := SymbolicValueId.Map.add id v !S.sid_to_value_map;
@@ -2102,6 +2117,30 @@ struct
     let proj : symbolic_proj = { sv_id; proj_ty } in
     let proj = AProjLoans { proj; consumed = []; borrows = [] } in
     { value = ASymbolic (PNone, proj); ty }
+
+  let match_aproj_shared_borrows (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0
+      (asb0 : abstract_shared_borrows) _ty1 (asb1 : abstract_shared_borrows) ty
+      : tavalue =
+    (* We are checking whether two environments are equivalent: for now we
+       do something simple by matching the abstract shared borrows two by two. *)
+    if List.length asb0 <> List.length asb1 then
+      raise (Distinct "match_aproj_shared_borrows: not the same length");
+    let match_asb (asb0 : abstract_shared_borrow)
+        (asb1 : abstract_shared_borrow) : abstract_shared_borrow =
+      match (asb0, asb1) with
+      | AsbBorrow (bid0, _sid0), AsbBorrow (bid1, _sid1) ->
+          let bid = match_borrow_id bid0 bid1 in
+          (* It's always safer to refresh shared borrow ids *)
+          let sid = ctx0.fresh_shared_borrow_id () in
+          AsbBorrow (bid, sid)
+      | AsbProjReborrows proj0, AsbProjReborrows proj1 ->
+          let sv_id = match_symbolic_value_ids proj0.sv_id proj1.sv_id in
+          let proj_ty = match_rtys ctx0 ctx1 proj0.proj_ty proj1.proj_ty in
+          AsbProjReborrows { sv_id; proj_ty }
+      | _ -> raise (Distinct "match_aproj_shared_borrows: distinct borrows")
+    in
+    let asb = List.map2 match_asb asb0 asb1 in
+    { value = ABorrow (AProjSharedBorrow asb); ty }
 
   let match_avalues (_ : tvalue_matcher) (ctx0 : eval_ctx) (ctx1 : eval_ctx) v0
       v1 =
@@ -2457,7 +2496,7 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
           if DummyVarId.Set.mem b0 fixed_ids.dids then (
             let v1, env1' = pop_dummy b0 env1 in
             (* Fixed values: the values must be equal *)
-            [%sanity_check_recover] S.recover span (v0 = v1);
+            [%sanity_check_recover] S.recover span (equal_tvalue v0 v1);
             (* The ids present in the left value must be fixed *)
             let ids, _ = compute_tvalue_ids v0 in
             [%sanity_check_recover] S.recover span
@@ -2481,7 +2520,7 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
           [%ldebug "match_envs: matching abs: fixed abs"];
           let abs1, env1' = pop_abs abs0.abs_id env1 in
           (* Still in the prefix: the abstractions must be the same *)
-          [%sanity_check_recover] S.recover span (abs0 = abs1);
+          [%sanity_check_recover] S.recover span (equal_abs abs0 abs1);
           (* Their ids must be fixed *)
           let ids, _ = compute_abs_ids abs0 in
           [%sanity_check_recover] S.recover span
