@@ -283,6 +283,16 @@ LEAN_DECLARATION = re.compile(
 )
 
 
+ATTRIBUTE_BLOCK = "<attributes:"
+
+
+def declaration_count(definitions: list[Definition]) -> int:
+    """Number of actual declarations, ignoring the `attribute` block entries."""
+    return sum(
+        1 for definition in definitions if not definition.name.startswith(ATTRIBUTE_BLOCK)
+    )
+
+
 def lean_definitions(text: str) -> list[Definition]:
     lines = strip_comments(text, "--")
     namespaces: list[str] = []
@@ -297,6 +307,14 @@ def lean_definitions(text: str) -> list[Definition]:
         if re.match(r"^end(?:\s+\S+)?\s*$", stripped):
             if namespaces:
                 namespaces.pop()
+            continue
+
+        # An `attribute` command belongs to no declaration in particular: it
+        # configures the automation for the whole development.  Give it an entry
+        # of its own so that it lands in the unmapped support bucket instead of
+        # inflating whichever declaration happens to precede it.
+        if stripped.startswith("attribute"):
+            starts.append((index, f"{ATTRIBUTE_BLOCK}{index + 1}>"))
             continue
 
         declaration = LEAN_DECLARATION.match(line)
@@ -510,13 +528,13 @@ def render_report(verus_text: str) -> str:
         mapped: set[str],
     ) -> tuple[int, int]:
         remaining = [definition for name, definition in definitions.items() if name not in mapped]
-        return len(remaining), total(remaining)
+        return declaration_count(remaining), total(remaining)
 
     verus_unmapped = unmapped(verus, mapped_verus)
     exec_unmapped = unmapped(lean_exec, mapped_exec)
     spec_unmapped = unmapped(lean_spec, mapped_spec)
     rows.append(
-        "| Other example-local support declarations | "
+        "| Other support declarations | "
         f"{format_number(verus_unmapped[1])} | "
         f"{format_lean_loc(exec_unmapped[1], spec_unmapped[1])} |"
     )
@@ -539,33 +557,36 @@ def render_report(verus_text: str) -> str:
             "",
             "| Source | Declarations | Relevant LOC |",
             "|---|---:|---:|",
-            f"| Verus | {len(verus_defs)} | {total(verus_defs)} |",
-            f"| Lean executable definitions | {len(lean_exec_defs)} | {total(lean_exec_defs)} |",
+            f"| Verus | {declaration_count(verus_defs)} | {total(verus_defs)} |",
+            f"| Lean executable definitions | {declaration_count(lean_exec_defs)} | "
+            f"{total(lean_exec_defs)} |",
             "| Lean ghost state, specifications and proofs | "
-            f"{len(lean_spec_defs)} | {total(lean_spec_defs)} |",
-            f"| **Lean example total** | **{len(lean_exec_defs) + len(lean_spec_defs)}** | "
+            f"{declaration_count(lean_spec_defs)} | {total(lean_spec_defs)} |",
+            f"| **Lean example total** | "
+            f"**{declaration_count(lean_exec_defs) + declaration_count(lean_spec_defs)}** | "
             f"**{total(lean_exec_defs) + total(lean_spec_defs)}** |",
             f"| `vstd` equivalent, generic and reusable (`VerusStd.lean`) | "
-            f"{len(lean_lib_defs)} | {total(lean_lib_defs)} |",
+            f"{declaration_count(lean_lib_defs)} | {total(lean_lib_defs)} |",
             f"| Lean grand total | "
-            f"{len(lean_exec_defs) + len(lean_spec_defs) + len(lean_lib_defs)} | "
+            f"{declaration_count(lean_exec_defs) + declaration_count(lean_spec_defs) + declaration_count(lean_lib_defs)} | "
             f"{total(lean_exec_defs) + total(lean_spec_defs) + total(lean_lib_defs)} |",
             "",
             "| Definition or semantic group | Verus | Lean (executable, spec/proof) |",
             "|---|---:|---:|",
             *rows,
             "",
-            f"`VerusStd.lean` ({len(lean_lib_defs)} declarations, "
+            f"`VerusStd.lean` ({declaration_count(lean_lib_defs)} declarations, "
             f"{total(lean_lib_defs)} lines) is not compared declaration by "
             "declaration: it is the generic sequence and permission-map layer "
             "that Verus obtains from `vstd`, it does not mention the "
             "doubly-linked list, and each of its declarations names its `vstd` "
             "counterpart in its doc comment.",
             "",
-            '"Other example-local support declarations" contains '
+            '"Other support declarations" contains '
             f"{verus_unmapped[0]} Verus, {exec_unmapped[0]} Lean executable, and "
             f"{spec_unmapped[0]} Lean specification/proof declarations not assigned "
-            "to a direct cross-language correspondence above.",
+            "to a direct cross-language correspondence above, together with the "
+            "`attribute` commands that configure the automation.",
             "",
             REPORT_END,
         )
