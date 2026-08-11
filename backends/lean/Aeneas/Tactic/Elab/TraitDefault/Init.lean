@@ -389,4 +389,8 @@ elab mods:declModifiers "impl_def " id:declId sig:optDeclSig val:declVal : comma
         let docCtx := (← getLCtx, ← getLocalInstances)
         addAndCompileNonRec docCtx preDef
 
+        -- Register LSP info for the introduced name.
+        Elab.addDeclarationRangesFromSyntax declName (← getRef) id
+        Term.addTermInfo' id (← mkConstWithLevelParams declName) (isBinder := true)
+
 end Aeneas.TraitDefault
