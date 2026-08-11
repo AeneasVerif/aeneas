@@ -1,4 +1,4 @@
-import Aeneas.SLPoC.VerusStd
+import Aeneas.SLPoC.Examples.VerusStd
 
 /-!
 # Doubly-linked list
@@ -11,7 +11,7 @@ takes.
 
 The executable definitions come first; the ghost state, the specifications and
 their proofs follow, in the same namespaces.  The sequence and permission-map
-reasoning Verus inherits from `vstd` lives in `Aeneas.SLPoC.VerusStd`.  The
+reasoning Verus inherits from `vstd` lives in `Aeneas.SLPoC.Examples.VerusStd`.  The
 `*.spec` theorems state the Verus `requires`/`ensures` clauses over the explicit
 ghost state; the `*.isList_spec` theorems restate them over the abstract
 predicate.
