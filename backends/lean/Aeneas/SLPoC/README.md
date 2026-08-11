@@ -47,10 +47,10 @@ Pinned Verus source: [`99ae45aa8e35`](https://github.com/verus-lang/verus/blob/9
 |---|---:|---:|
 | Verus | 24 | 339 |
 | Lean executable definitions | 14 | 84 |
-| Lean ghost state, specifications and proofs | 44 | 287 |
-| **Lean example total** | **58** | **371** |
-| `vstd` equivalent, generic and reusable (`VerusStd.lean`) | 26 | 109 |
-| Lean grand total | 84 | 480 |
+| Lean ghost state, specifications and proofs | 44 | 293 |
+| **Lean example total** | **58** | **377** |
+| `vstd` equivalent, generic and reusable (`VerusStd.lean`) | 26 | 110 |
+| Lean grand total | 84 | 487 |
 
 | Definition or semantic group | Verus | Lean (executable, spec/proof) |
 |---|---:|---:|
@@ -59,7 +59,7 @@ Pinned Verus source: [`99ae45aa8e35`](https://github.com/verus-lang/verus/blob/9
 | ghost state / `Cells` | 3 | 1 (0, 1) |
 | `prev_of` / `prevOf` | 5 | 2 (0, 2) |
 | `next_of` / `nextOf` | 5 | 2 (0, 2) |
-| `well_formed_node` / `nodeAt` | 5 | 2 (0, 2) |
+| `well_formed_node` / `nodeAt` | 5 | 3 (0, 3) |
 | `well_formed` / representation predicates | 7 | 6 (0, 6) |
 | `view` | 4 | 1 (0, 1) |
 | `new` | 10 | 9 (2, 7) |
@@ -67,21 +67,21 @@ Pinned Verus source: [`99ae45aa8e35`](https://github.com/verus-lang/verus/blob/9
 | `push_back` / `pushBack` | 36 | 34 (9, 25) |
 | `pop_back` / `popBack` | 42 | 32 (12, 20) |
 | `push_front` / `pushFront` | 46 | 31 (9, 22) |
-| `pop_front` / `popFront` | 49 | 24 (12, 12) |
-| `get` (including the Lean loop) | 27 | 47 (13, 34) |
+| `pop_front` / `popFront` | 49 | 25 (12, 13) |
+| `get` (including the Lean loop) | 27 | 50 (13, 37) |
 | `Iterator` | 4 | 4 (4, 0) |
 | `Iterator::list` | 2 | 0 (0, 0) |
 | `Iterator::index` | 2 | 0 (0, 0) |
 | `Iterator::valid` | 4 | 2 (0, 2) |
 | `Iterator::new` | 9 | 10 (2, 8) |
 | `Iterator::value` | 10 | 13 (4, 9) |
-| `Iterator::move_next` / `moveNext` | 20 | 31 (7, 24) |
+| `Iterator::move_next` / `moveNext` | 20 | 32 (7, 25) |
 | `main::run` / example | 22 | 29 (0, 29) |
 | entry-point `main` | 2 | 0 (0, 0) |
 | Other example-local support declarations | - | 76 (0, 76) |
-| **Total** | **339** | **371 (84, 287)** |
+| **Total** | **339** | **377 (84, 293)** |
 
-`VerusStd.lean` (26 declarations, 109 lines) is not compared declaration by declaration: it is the generic sequence and permission-map layer that Verus obtains from `vstd`, it does not mention the doubly-linked list, and each of its declarations names its `vstd` counterpart in its doc comment.
+`VerusStd.lean` (26 declarations, 110 lines) is not compared declaration by declaration: it is the generic sequence and permission-map layer that Verus obtains from `vstd`, it does not mention the doubly-linked list, and each of its declarations names its `vstd` counterpart in its doc comment.
 
 "Other example-local support declarations" contains 0 Verus, 0 Lean executable, and 15 Lean specification/proof declarations not assigned to a direct cross-language correspondence above.
 

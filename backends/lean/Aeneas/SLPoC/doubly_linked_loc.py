@@ -254,8 +254,12 @@ def strip_comments(text: str, line_marker: str) -> list[str]:
 
 
 PURE_DELIMITERS = re.compile(r"^[\s,;:.(){}\[\]]+$")
+# Only the boilerplate that has a Rust counterpart in `RUST_NON_CODE` is
+# ignored.  `attribute` is *not*: registering a lemma with the automation is
+# proof engineering, and its Verus counterparts (`#[verifier::…]`,
+# `broadcast use`) are counted too.
 LEAN_NON_CODE = re.compile(
-    r"^(?:import|namespace|end|open|variable|variables|attribute|"
+    r"^(?:import|namespace|end|open|variable|variables|"
     r"section|set_option)\b"
 )
 RUST_NON_CODE = re.compile(r"^(?:use|mod|impl|verus)\b|^#!")
