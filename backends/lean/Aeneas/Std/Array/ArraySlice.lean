@@ -404,7 +404,7 @@ theorem Array.index_SliceIndexRangeUsizeSlice.step {T : Type} {N : Usize} [Inhab
     core.array.Array.index (core.ops.index.IndexSlice
       (core.slice.index.SliceIndexRangeUsizeSlice T)) a r
     ⦃ (s : Slice T) =>
-      s.val = a.val.slice r.start r.end ∧
+      s.val = a.val.extract r.start r.end ∧
       s.length = r.end.val - r.start.val ⦄ := by
   simp only [Array.index_SliceIndexRangeUsizeSlice]
   have hts : a.to_slice.length = N := by simp [Array.to_slice, Slice.length]
@@ -420,7 +420,7 @@ theorem Array.index_mut_SliceIndexRangeUsizeSlice.step {T : Type} {N : Usize} [I
     core.array.Array.index_mut (core.ops.index.IndexMutSlice
       (core.slice.index.SliceIndexRangeUsizeSlice T)) a r
     ⦃ (s : Slice T) (back : Slice T → Array T N) =>
-      s.val = a.val.slice r.start r.end ∧
+      s.val = a.val.extract r.start r.end ∧
       s.length = r.end.val - r.start.val ∧
       ∀ s', (back s').val = a.val.setSlice! r.start.val s'.val ⦄ := by
   simp only [core.array.Array.index_mut, core.ops.index.IndexMutSlice,

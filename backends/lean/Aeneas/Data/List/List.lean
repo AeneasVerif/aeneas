@@ -264,10 +264,10 @@ alias getElem!_slice := getElem!_extract
 @[simp, simp_lists_safe]
 theorem getElem_slice (i j k : Nat) (ls : List α)
   (_ : j ≤ ls.length ∧ i + k < j) :
-  (ls.slice i j)[k] = ls[i + k] := by
-  have hk : k < (ls.slice i j).length := by simp [slice_length]; omega
+  (ls.extract i j)[k] = ls[i + k] := by
+  have hk : k < (ls.extract i j).length := by simp; omega
   have hik : i + k < ls.length := by omega
-  have h1 := getElem?_slice i j k ls (by grind)
+  have h1 := getElem?_extract i j k ls (by grind)
   rw [getElem?_eq_getElem hk, getElem?_eq_getElem hik] at h1
   exact Option.some.inj h1
 
