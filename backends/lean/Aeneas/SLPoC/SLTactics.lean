@@ -921,4 +921,10 @@ macro_rules
     | none => `(tactic| ($apply; sl_xsimpl))
     | some tac => `(tactic| ($apply; sl_xsimpl by $tac))
 
+/-- Re-state an already-proved triple under a weaker (usually more abstract)
+postcondition: `sl_conseq thm` keeps the precondition as is and discharges the
+new postcondition with `sl_frame` for every result value. -/
+macro "sl_conseq " thm:term : tactic =>
+  `(tactic| (apply triple_conseq $thm (himpl_refl _) <;> (intro _ <;> sl_frame)))
+
 end Aeneas.SLPoC
