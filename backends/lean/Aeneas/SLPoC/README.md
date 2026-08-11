@@ -80,11 +80,10 @@ Pinned Verus source: [`99ae45aa8e35`](https://github.com/verus-lang/verus/blob/9
 | `Iterator::move_next` / `moveNext` | 20 | 31 (7, 24) |
 | `main::run` / example | 22 | 29 (0, 29) |
 | entry-point `main` | 2 | 0 (0, 0) |
-| Support corresponding to Verus library primitives<br>1. `VerusStd.payloads`<br>2. `VerusStd.firstPtr`<br>3. `VerusStd.lastPtr`<br>4. `VerusStd.payloads_nil`<br>5. `VerusStd.payloads_cons`<br>6. `VerusStd.payloads_append`<br>7. `VerusStd.payloads_length`<br>8. `VerusStd.payloads_getElem?`<br>9. `VerusStd.firstPtr_nil`<br>10. `VerusStd.firstPtr_cons`<br>11. `VerusStd.lastPtr_nil`<br>12. `VerusStd.lastPtr_snoc`<br>13. `VerusStd.lastPtr_singleton`<br>14. `VerusStd.lastPtr_cons_cons`<br>15. `VerusStd.firstPtr_append_two`<br>16. `VerusStd.lastPtr_append_two`<br>17. `VerusStd.eq_nil_or_snoc`<br>18. `VerusStd.lastPtr_eq_none_iff`<br>19. `VerusStd.firstPtr_eq_none_iff`<br>20. `VerusStd.exists_cell`<br>21. `VerusStd.payloads_eq_snoc`<br>22. `VerusStd.payloads_eq_cons`<br>23. `VerusStd.get!_some`<br>24. `VerusStd.cellsFrom`<br>25. `VerusStd.cellsFrom_nil`<br>26. `VerusStd.cellsFrom_cons`<br>27. `VerusStd.cellsFrom_singleton`<br>28. `VerusStd.cellsFrom_congr`<br>29. `VerusStd.cellsFrom_append`<br>30. `VerusStd.cellsFrom_split`<br>31. `VerusStd.cellsFrom_read` | - | 120 (0, 120) |
 | Other example-local support declarations | - | 76 (0, 76) |
-| **Total** | **339** | **504 (84, 420)** |
+| **Total** | **339** | **384 (84, 300)** |
 
-"Support corresponding to Verus library primitives" is exactly the set of 31 declarations of `VerusStd.lean`: generic sequence/index reasoning and permission-map lookup/splitting that Verus obtains from `vstd`.  That module does not mention the doubly-linked list, and each of its declarations carries a doc comment naming the `vstd` counterpart.
+`VerusStd.lean` (31 declarations, 120 lines) is not compared declaration by declaration: it is the generic sequence and permission-map layer that Verus obtains from `vstd`, it does not mention the doubly-linked list, and each of its declarations names its `vstd` counterpart in its doc comment.
 
 "Other example-local support declarations" contains 0 Verus, 0 Lean executable, and 15 Lean specification/proof declarations not assigned to a direct cross-language correspondence above.
 
