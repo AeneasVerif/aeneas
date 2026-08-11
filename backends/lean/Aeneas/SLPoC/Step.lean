@@ -103,16 +103,18 @@ elab_rules : tactic
 
 macro_rules
   | `(tactic| sl_step $cfg:optConfig $[with $th]? $[as ⟨ $ids,* ⟩]?) =>
-    `(tactic| ((step $cfg:optConfig $[with $th]? $[as ⟨ $ids,* ⟩]? by sl_frame) <;>
-      (sl_frame? <;> sl_side? $cfg:optConfig)))
+    `(tactic| (sl_pull_keep <;>
+      ((step $cfg:optConfig $[with $th]? $[as ⟨ $ids,* ⟩]? by sl_frame) <;>
+      (sl_frame? <;> sl_side? $cfg:optConfig))))
 
 /-- `step*` with `sl_frame` as the precondition discharger. -/
 syntax "sl_step" noWs "*" (num)? Lean.Parser.Tactic.optConfig : tactic
 
 macro_rules
   | `(tactic| sl_step* $[$n]? $cfg:optConfig) =>
-    `(tactic| ((step* $[$n]? $cfg:optConfig by sl_frame) <;>
-      (sl_frame? <;> sl_side? $cfg:optConfig)))
+    `(tactic| (sl_pull_keep <;>
+      ((step* $[$n]? $cfg:optConfig by sl_frame) <;>
+      (sl_frame? <;> sl_side? $cfg:optConfig))))
 
 /-! ## Lemmas registered in the elimination passes of `step` -/
 
