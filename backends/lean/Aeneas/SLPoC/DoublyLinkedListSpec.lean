@@ -1,4 +1,5 @@
-import Aeneas.SLPoC.DoublyLinkedListLib
+import Aeneas.SLPoC.DoublyLinkedList
+import Aeneas.SLPoC.VerusStd
 
 /-!
 # Doubly-linked list: specifications and proofs
@@ -7,8 +8,9 @@ Specifications and proofs for the executable definitions of
 `Aeneas.SLPoC.DoublyLinkedList`, a port of the Verus doubly-linked-list example
 (`https://github.com/verus-lang/verus/blob/main/examples/doubly_linked.rs`).
 
-The ghost state and the `vstd`-equivalent lemmas it needs live in
-`Aeneas.SLPoC.DoublyLinkedListLib`.
+The sequence and permission-map reasoning that Verus inherits from `vstd` lives
+in `Aeneas.SLPoC.VerusStd`; what remains here is the ghost state of this
+particular data structure and the specifications themselves.
 
 The `*.spec` theorems state the Verus `requires`/`ensures` clauses over the
 explicit ghost state; the `*.isList_spec` theorems restate them over the
@@ -18,10 +20,176 @@ abstract predicate, matching the Verus signatures literally.
 namespace Aeneas.SLPoC
 
 open scoped SepLogic
+open VerusStd
+
+/-! ## Ghost state and the representation predicate
+
+Verus tracks the pointers and their `PointsTo` permissions in ghost state stored
+inside the list.  Here the permissions live in the separation-logic
+precondition, and the ghost sequence of pointers is an ordinary parameter of the
+specifications.
+
+| Verus | Here |
+|---|---|
+| `PPtr<Node<V>>` + `PointsTo<Node<V>>` | `Ptr (Node V)` and the assertion `r ↦ node` |
+| `ghost_state@.ptrs` / `points_to_map` | `Cells V`, a list of pointer/payload pairs |
+| `well_formed_node(i)` | `nodeAt l i v`, the contents `nodesFrom` requires at index `i` |
+| `well_formed()` | `wellFormed s l` |
+| `self@` (`view`) | `view l` |
+| `well_formed()` with the ghost state hidden | `isList s vs` |
+| `Iterator::valid()` | `Iterator.valid it l` plus `wellFormed t l` in the precondition |
+-/
 
 namespace DoublyLinkedList
 
 variable {V : Type}
+
+/-- Ghost state of a list: the sequence of node pointers, each paired with the
+payload the node holds.  This plays the role of Verus'
+`ghost_state@.ptrs` zipped with `ghost_state@.points_to_map`. -/
+abbrev Cells (V : Type) := List (Ptr (Node V) × V)
+
+/-- Representation of the list as a sequence, i.e. Verus' `view`. -/
+abbrev view (l : Cells V) : List V := payloads l
+
+/-- Pointer to the node of index `i - 1`, or `none` if `i` is `0`. -/
+def prevOf (l : Cells V) (i : Nat) : Option (Ptr (Node V)) :=
+  if i = 0 then none else l[i - 1]?.map Prod.fst
+
+/-- Pointer to the node of index `i + 1`, or `none` if `i` is the last index. -/
+def nextOf (l : Cells V) (i : Nat) : Option (Ptr (Node V)) :=
+  if i + 1 = l.length then none else l[i + 1]?.map Prod.fst
+
+/-- Contents of the node of index `i`, whose payload is `v`.  Verus'
+`well_formed_node` states that the node stored at `ptrs[i]` is exactly this. -/
+def nodeAt (l : Cells V) (i : Nat) (v : V) : Node V :=
+  { prev := prevOf l i, next := nextOf l i, payload := v }
+
+/- The accessors are the only arithmetic `grind` has to do on indices, so it is
+worth teaching it their equations once instead of citing them at every use. -/
+attribute [grind] prevOf nextOf nodeAt
+
+/-- `nodesFrom l i cs` owns the nodes `cs`, which are the nodes of `l` starting
+at index `i`: the permission map of `Aeneas.SLPoC.VerusStd` under the invariant
+`nodeAt l`. -/
+abbrev nodesFrom (l : Cells V) : Nat → Cells V → SLProp := cellsFrom (nodeAt l)
+
+/-- Ownership of every node of the list, each of them well-formed.  This is the
+separation-logic counterpart of the first conjunct of Verus'
+`well_formed`. -/
+def nodes (l : Cells V) : SLProp := nodesFrom l 0 l
+
+/-- Linked list is well-formed: every node is well-formed, and the `head`/`tail`
+pointers agree with the ghost state. -/
+def wellFormed (s : DoublyLinkedList V) (l : Cells V) : SLProp :=
+  iprop(⌜s.head = firstPtr l ∧ s.tail = lastPtr l⌝ ∗ nodes l)
+
+/-- Abstract representation predicate: `s` is a well-formed list whose view is
+`vs`.  The ghost state is hidden, as it is in Verus. -/
+def isList (s : DoublyLinkedList V) (vs : List V) : SLProp :=
+  iprop(∃ l : Cells V, ⌜view l = vs⌝ ∗ wellFormed s l)
+
+@[simp] theorem nodes_nil : nodes ([] : Cells V) = emp := rfl
+
+@[simp] theorem prevOf_zero (l : Cells V) : prevOf l 0 = none := by
+  simp [prevOf]
+
+/-! ## Structural lemmas about `nodesFrom` -/
+
+/-- Ownership of a concatenation splits into ownership of the two parts. -/
+theorem nodesFrom_append (l : Cells V) (xs ys : Cells V) (i : Nat) :
+    nodesFrom l i (xs ++ ys) =
+      iprop(nodesFrom l i xs ∗ nodesFrom l (i + xs.length) ys) :=
+  cellsFrom_append (nodeAt l) xs ys i
+
+@[simp] theorem nodesFrom_singleton (l : Cells V) (i : Nat) (r : Ptr (Node V))
+    (v : V) : nodesFrom l i [(r, v)] = iprop(r ↦ nodeAt l i v) :=
+  cellsFrom_singleton (nodeAt l) i r v
+
+/-- `nodesFrom` only depends on the `prev`/`next` pointers of the nodes it owns.
+This lemma replaces the pointwise `well_formed_node` triggers of the Verus
+proof. -/
+theorem nodesFrom_congr {l₁ l₂ : Cells V} (cs : Cells V) (i₁ i₂ : Nat)
+    (h : ∀ k, k < cs.length →
+      prevOf l₁ (i₁ + k) = prevOf l₂ (i₂ + k) ∧
+      nextOf l₁ (i₁ + k) = nextOf l₂ (i₂ + k)) :
+    nodesFrom l₁ i₁ cs = nodesFrom l₂ i₂ cs :=
+  cellsFrom_congr cs i₁ i₂ fun k hk => by funext v; grind
+
+/-- Appending a node at the end does not change the nodes strictly before the
+last one. -/
+theorem nodesFrom_append_prefix (l₁ l₂ : Cells V) (xs : Cells V) (i : Nat)
+    (h : i + xs.length < l₁.length) :
+    nodesFrom (l₁ ++ l₂) i xs = nodesFrom l₁ i xs := by
+  grind [nodesFrom_congr]
+
+/-- Prepending a node shifts all the indices by one. -/
+theorem nodesFrom_cons_shift (c : Ptr (Node V) × V) (l : Cells V) (xs : Cells V)
+    (i : Nat) :
+    nodesFrom (c :: l) (i + 2) xs = nodesFrom l (i + 1) xs :=
+  nodesFrom_congr xs (i + 2) (i + 1) fun k _ => by grind
+
+/-! ## Decomposition of `nodes` at the two ends of the list -/
+
+theorem nodeAt_snoc_last (l : Cells V) (r : Ptr (Node V)) (v : V) :
+    nodeAt (l ++ [(r, v)]) l.length v =
+      { prev := lastPtr l, next := none, payload := v } := by grind
+
+/-- Split the ownership of the last node out of `nodes`. -/
+@[sl_simps] theorem nodes_snoc (l : Cells V) (r : Ptr (Node V)) (v : V) :
+    nodes (l ++ [(r, v)]) =
+      iprop(nodesFrom (l ++ [(r, v)]) 0 l ∗
+        (r ↦ { prev := lastPtr l, next := none, payload := v })) := by
+  unfold nodes
+  rw [nodesFrom_append, Nat.zero_add, nodesFrom_singleton, nodeAt_snoc_last]
+
+/-- Split the ownership of the last two nodes out of `nodes`.  This is the shape
+of the heap both after `pushBack` and before `popBack`. -/
+@[sl_simps high] theorem nodes_snoc_two (l : Cells V) (rt : Ptr (Node V)) (vt : V)
+    (rn : Ptr (Node V)) (v : V) :
+    nodes (l ++ [(rt, vt), (rn, v)]) =
+      iprop(nodesFrom (l ++ [(rt, vt)]) 0 l ∗
+        (rt ↦ { prev := lastPtr l, next := some rn, payload := vt }) ∗
+        (rn ↦ { prev := some rt, next := none, payload := v })) := by
+  have hassoc : l ++ [(rt, vt), (rn, v)] = (l ++ [(rt, vt)]) ++ [(rn, v)] := by simp
+  have hprefix : nodesFrom (l ++ [(rt, vt), (rn, v)]) 0 l
+      = nodesFrom (l ++ [(rt, vt)]) 0 l := by
+    rw [hassoc]; exact nodesFrom_append_prefix _ _ _ _ (by simp)
+  have hmid : nodeAt (l ++ [(rt, vt), (rn, v)]) l.length vt =
+      { prev := lastPtr l, next := some rn, payload := vt } := by
+    have hprev : prevOf (l ++ [(rt, vt), (rn, v)]) l.length = lastPtr l := by
+      rw [hassoc]; grind
+    grind
+  rw [hassoc, nodes_snoc, ← hassoc, nodesFrom_append, Nat.zero_add,
+    nodesFrom_singleton, hmid, hprefix, lastPtr_snoc, hstar_assoc_eq]
+
+/-- Split the ownership of the first node out of `nodes`. -/
+@[sl_simps] theorem nodes_cons (rh : Ptr (Node V)) (vh : V) (l : Cells V) :
+    nodes ((rh, vh) :: l) =
+      iprop((rh ↦ { prev := none, next := firstPtr l, payload := vh }) ∗
+        nodesFrom ((rh, vh) :: l) 1 l) := by
+  have : nodeAt ((rh, vh) :: l) 0 vh =
+      { prev := none, next := firstPtr l, payload := vh } := by grind
+  simp only [nodes, nodesFrom, cellsFrom_cons, Nat.zero_add, this]
+
+/-- The second node of a list, as `nodesFrom` describes it. -/
+@[sl_simps] theorem nodeAt_cons_one (a b : Ptr (Node V) × V) (l : Cells V) (v : V) :
+    nodeAt (a :: b :: l) 1 v =
+      { prev := some a.1, next := firstPtr l, payload := v } := by grind
+
+/-- Peeling the first node off `nodes` leaves the rest indexed from `1`; peeling
+the second one leaves it indexed from `2`, which is the same as the rest of the
+tail indexed from `1`. -/
+@[sl_simps] theorem nodesFrom_cons_two (a b : Ptr (Node V) × V) (l xs : Cells V) :
+    nodesFrom (a :: b :: l) 2 xs = nodesFrom (b :: l) 1 xs :=
+  nodesFrom_cons_shift a (b :: l) xs 0
+
+/-- Reading the node of index `i` yields exactly the node the well-formedness
+invariant predicts, and leaves the list untouched. -/
+theorem nodes_read (l : Cells V) (i : Nat) (r : Ptr (Node V)) (v : V)
+    (h : l[i]? = some (r, v)) :
+    ⦃ nodes l ⦄ read r ⦃⇓ node => ⌜node = nodeAt l i v⌝ ∗ nodes l⦄ :=
+  cellsFrom_read (nodeAt l) l i r v h
 
 /-! ## Specifications
 
@@ -59,7 +227,7 @@ theorem pushBack.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
     -- The list is non-empty, hence of the shape `l' ++ [(oldTailPtr, vt)]`
     obtain ⟨l', ⟨rt, vt⟩, rfl⟩ : ∃ l' c, l = l' ++ [c] := by
       rcases eq_nil_or_snoc l with rfl | h
-      · grind [lastPtr]
+      · grind
       · exact h
     have hrt : oldTailPtr = rt := by grind [lastPtr_snoc]
     subst hrt
@@ -112,16 +280,16 @@ theorem pushFront.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
   split
   · -- Special case: the list is empty
     rename_i hnone
-    obtain rfl : l = [] := (headPtr_eq_none_iff l).mp (by grind)
+    obtain rfl : l = [] := (firstPtr_eq_none_iff l).mp (by grind)
     apply triple_conseq (pushEmptyCase.spec s v)
       (by simp only [wellFormed]; sl_frame)
       (fun s' => by simp only [wellFormed]; exact himpl_refl _)
   · rename_i oldHeadPtr hsome
     cases l with
-    | nil => grind [headPtr]
+    | nil => grind
     | cons c l' =>
       obtain ⟨rh, vh⟩ := c
-      obtain rfl : rh = oldHeadPtr := by grind [headPtr]
+      obtain rfl : rh = oldHeadPtr := by grind
       sl_step*
 
 /-- `popFront` removes the first node and returns its payload. -/
@@ -237,7 +405,7 @@ theorem popBack.isList_spec (s : DoublyLinkedList V) (vs : List V) (v : V) :
     ⦃ isList s (vs ++ [v]) ⦄ popBack s
       ⦃⇓ (s', w) => ⌜w = v⌝ ∗ isList s' vs⦄ := by
   sl_pull l hview
-  obtain ⟨l', r, rfl, hl'⟩ := view_eq_snoc l vs v hview
+  obtain ⟨l', r, rfl, hl'⟩ := payloads_eq_snoc l vs v hview
   sl_conseq (popBack.spec s l' r v)
 
 /-- Verus: `requires old(self)@.len() > 0`,
@@ -246,7 +414,7 @@ theorem popFront.isList_spec (s : DoublyLinkedList V) (v : V) (vs : List V) :
     ⦃ isList s (v :: vs) ⦄ popFront s
       ⦃⇓ (s', w) => ⌜w = v⌝ ∗ isList s' vs⦄ := by
   sl_pull l hview
-  obtain ⟨r, l', rfl, hl'⟩ := view_eq_cons l v vs hview
+  obtain ⟨r, l', rfl, hl'⟩ := payloads_eq_cons l v vs hview
   sl_conseq (popFront.spec s r v l')
 
 /-- Verus: `requires 0 <= i < self@.len()`, `ensures *v == self@[i as int]`. -/
