@@ -248,10 +248,8 @@ theorem prevOf_snoc_last (l : Cells V) (c : Ptr (Node V) × V) :
     prevOf (l ++ [c]) l.length = lastPtr l := by
   unfold prevOf lastPtr
   by_cases h : l.length = 0
-  · rw [h]
-    simp [List.eq_nil_of_length_eq_zero h]
-  · rw [if_neg h, List.getElem?_append_left (by omega),
-      List.getLast?_eq_getElem?]
+  · grind
+  · grind
 
 theorem nextOf_snoc_last (l : Cells V) (c : Ptr (Node V) × V) :
     nextOf (l ++ [c]) l.length = none := by
@@ -273,15 +271,11 @@ theorem nodeAt_snoc_last (l : Cells V) (r : Ptr (Node V)) (v : V) :
 
 theorem getElem?_append_two_left (l : Cells V) (a b : Ptr (Node V) × V) :
     (l ++ [a, b])[l.length]? = some a := by
-  rw [List.getElem?_append_right (by omega)]
-  simp
+  grind
 
 theorem getElem?_append_two_right (l : Cells V) (a b : Ptr (Node V) × V) :
     (l ++ [a, b])[l.length + 1]? = some b := by
-  rw [List.getElem?_append_right (by omega)]
-  have e : l.length + 1 - l.length = 1 := by omega
-  rw [e]
-  simp
+  grind
 
 /-- Split the ownership of the last two nodes out of `nodes`.  This is the shape
 of the heap both after `pushBack` and before `popBack`. -/
@@ -503,16 +497,11 @@ theorem popFront.spec (s : DoublyLinkedList V) (rh : Ptr (Node V)) (vh : V)
     ⦃ wellFormed s ((rh, vh) :: l) ⦄ popFront s
       ⦃⇓ (s', v) => ⌜v = vh⌝ ∗ wellFormed s' l⦄ := by
   unfold popFront
-  sl_pull ⟨hhead, htail⟩
-  simp only [headPtr_cons] at hhead
-  simp only [hhead, get!_some]
+  sl_pull ⟨hhead, htail⟩ -- TODO: why necessary?
   cases l with
-  | nil =>
-    -- The list had exactly one node: `head` and `tail` both become `none`
-    sl_step*
+  | nil => sl_step*
   | cons c l' =>
-    -- The list had at least two nodes: the second one becomes the head
-    obtain ⟨r2, v2⟩ := c
+    obtain ⟨r2, v2⟩ := c -- TODO: why is the obtain here making a difference?
     sl_step*
 
 /-! ## Reading an arbitrary node -/
@@ -766,14 +755,6 @@ theorem moveNext.spec (it : Iterator V) (l : Cells V) (hvalid : valid it l) :
   by_cases hlast : it.index + 1 = l.length
   · -- The iterator was on the last node
     simp only [nodeAt, nextOf, if_pos hlast]
-    have hi' :
-        ({ it with cur := none, index := it.index + 1 } : Iterator V).index =
-          it.index + 1 := rfl
-    have hl' :
-        ({ it with cur := none, index := it.index + 1 } : Iterator V).l = it.l := rfl
-    have hnone :
-        ({ it with cur := none, index := it.index + 1 } : Iterator V).cur =
-          none := rfl
     sl_step*
   · -- There is a next node
     obtain ⟨r', v', hcell'⟩ := exists_cell l (it.index + 1) (by omega)
@@ -782,11 +763,6 @@ theorem moveNext.spec (it : Iterator V) (l : Cells V) (hvalid : valid it l) :
     have hv :
         valid ({ it with cur := some r', index := it.index + 1 } : Iterator V) l :=
       ⟨hidx', by rw [hcell']; rfl⟩
-    have hi' :
-        ({ it with cur := some r', index := it.index + 1 } : Iterator V).index =
-          it.index + 1 := rfl
-    have hl' :
-        ({ it with cur := some r', index := it.index + 1 } : Iterator V).l = it.l := rfl
     sl_step*
 
 attribute [step] new.spec value.spec moveNext.spec
@@ -832,32 +808,15 @@ theorem run.spec :
       v1 = 1 ∧ v2 = 2 ∧ v3 = 3 ∧ g = false ∧ x = 3 ∧ y = 1 ∧ z = 2⦄ := by
   unfold run
   -- Build the list `1, 2, 3`
-  sl_step as ⟨ t0 ⟩
+  sl_step
   sl_step as ⟨ t1, r1 ⟩
   sl_step as ⟨ t2, r2 ⟩
   sl_step as ⟨ t3, r3 ⟩
   -- Walk the list with an iterator
-  sl_step as ⟨ it, hitl, hitidx, hitvalid ⟩
-  sl_step as ⟨ v1, hv1 ⟩
-  sl_step as ⟨ m1, hm1l, hidx1, hm1good, hm1valid, _ ⟩
-  have hvalid1 := hm1valid (hm1good.mpr (by simp [hitidx]))
-  sl_step as ⟨ v2, hv2 ⟩
-  sl_step as ⟨ m2, hm2l, hidx2, hm2good, hm2valid, _ ⟩
-  have hvalid2 := hm2valid (hm2good.mpr (by rw [hidx1, hitidx]; simp))
-  sl_step as ⟨ v3, hv3 ⟩
-  sl_step as ⟨ m3, hm3l, _, hm3good, _, _ ⟩
+  sl_step*
   -- Empty the list again
   sl_step with DoublyLinkedList.popBack.spec t3 [(r3, 1), (r1, 2)] r2 3
     as ⟨ p1, ex ⟩
-  sl_step as ⟨ p2, ey ⟩
-  sl_step as ⟨ p3, ez ⟩
-  -- Read off the observed values
-  have e1 : v1 = 1 := by rw [hitidx] at hv1; simp [view] at hv1; omega
-  have e2 : v2 = 2 := by rw [hidx1, hitidx] at hv2; simp [view] at hv2; omega
-  have e3 : v3 = 3 := by rw [hidx2, hidx1, hitidx] at hv3; simp [view] at hv3; omega
-  have eg : m3.2 = false := by
-    have hnot : ¬ (m3.2 = true) := by rw [hm3good, hidx2, hidx1, hitidx]; simp
-    simpa using hnot
   sl_step*
 
 end Example
