@@ -8,13 +8,10 @@ Specifications and proofs for the executable definitions of
 `Aeneas.SLPoC.DoublyLinkedList`, a port of the Verus doubly-linked-list example
 (`https://github.com/verus-lang/verus/blob/main/examples/doubly_linked.rs`).
 
-The sequence and permission-map reasoning that Verus inherits from `vstd` lives
-in `Aeneas.SLPoC.VerusStd`; what remains here is the ghost state of this
-particular data structure and the specifications themselves.
-
-The `*.spec` theorems state the Verus `requires`/`ensures` clauses over the
-explicit ghost state; the `*.isList_spec` theorems restate them over the
-abstract predicate, matching the Verus signatures literally.
+The sequence and permission-map reasoning Verus inherits from `vstd` lives in
+`Aeneas.SLPoC.VerusStd`.  The `*.spec` theorems state the Verus
+`requires`/`ensures` clauses over the explicit ghost state; the `*.isList_spec`
+theorems restate them over the abstract predicate.
 -/
 
 namespace Aeneas.SLPoC
@@ -24,10 +21,9 @@ open VerusStd
 
 /-! ## Ghost state and the representation predicate
 
-Verus tracks the pointers and their `PointsTo` permissions in ghost state stored
-inside the list.  Here the permissions live in the separation-logic
-precondition, and the ghost sequence of pointers is an ordinary parameter of the
-specifications.
+Verus keeps the pointers and their `PointsTo` permissions in ghost state inside
+the list; here the permissions live in the precondition and the sequence of
+pointers is an ordinary parameter of the specifications.
 
 | Verus | Here |
 |---|---|
@@ -44,9 +40,7 @@ namespace DoublyLinkedList
 
 variable {V : Type}
 
-/-- Ghost state of a list: the sequence of node pointers, each paired with the
-payload the node holds.  This plays the role of Verus'
-`ghost_state@.ptrs` zipped with `ghost_state@.points_to_map`. -/
+/-- Verus' `ghost_state@.ptrs` zipped with `ghost_state@.points_to_map`. -/
 abbrev Cells (V : Type) := List (Ptr (Node V) × V)
 
 /-- Representation of the list as a sequence, i.e. Verus' `view`. -/
@@ -60,22 +54,18 @@ def prevOf (l : Cells V) (i : Nat) : Option (Ptr (Node V)) :=
 def nextOf (l : Cells V) (i : Nat) : Option (Ptr (Node V)) :=
   if i + 1 = l.length then none else l[i + 1]?.map Prod.fst
 
-/-- Contents of the node of index `i`, whose payload is `v`.  Verus'
-`well_formed_node` states that the node stored at `ptrs[i]` is exactly this. -/
+/-- Contents of the node of index `i`, i.e. Verus' `well_formed_node`. -/
 def nodeAt (l : Cells V) (i : Nat) (v : V) : Node V :=
   { prev := prevOf l i, next := nextOf l i, payload := v }
 
-/- The accessors are the only arithmetic `grind` has to do on indices, so it is
-worth teaching it their equations once instead of citing them at every use. -/
+-- Index arithmetic is all `grind` has to do here, so teach it the accessors once.
 attribute [grind] prevOf nextOf nodeAt
 
-/-- `nodesFrom l i cs` owns the nodes `cs`, which are the nodes of `l` starting
-at index `i`: the permission map of `Aeneas.SLPoC.VerusStd` under the invariant
-`nodeAt l`. -/
+/-- Owns the nodes `cs` of `l` starting at index `i`: `VerusStd`'s permission
+map under the invariant `nodeAt l`. -/
 abbrev nodesFrom (l : Cells V) : Nat → Cells V → SLProp := cellsFrom (nodeAt l)
 
-/-- Ownership of every node of the list, each of them well-formed.  This is the
-separation-logic counterpart of the first conjunct of Verus'
+/-- Ownership of every node, each well-formed: the first conjunct of Verus'
 `well_formed`. -/
 def nodes (l : Cells V) : SLProp := nodesFrom l 0 l
 
@@ -107,8 +97,7 @@ theorem nodesFrom_append (l : Cells V) (xs ys : Cells V) (i : Nat) :
   cellsFrom_singleton (nodeAt l) i r v
 
 /-- `nodesFrom` only depends on the `prev`/`next` pointers of the nodes it owns.
-This lemma replaces the pointwise `well_formed_node` triggers of the Verus
-proof. -/
+Replaces the pointwise `well_formed_node` triggers of the Verus proof. -/
 theorem nodesFrom_congr {l₁ l₂ : Cells V} (cs : Cells V) (i₁ i₂ : Nat)
     (h : ∀ k, k < cs.length →
       prevOf l₁ (i₁ + k) = prevOf l₂ (i₂ + k) ∧
@@ -177,15 +166,13 @@ of the heap both after `pushBack` and before `popBack`. -/
     nodeAt (a :: b :: l) 1 v =
       { prev := some a.1, next := firstPtr l, payload := v } := by grind
 
-/-- Peeling the first node off `nodes` leaves the rest indexed from `1`; peeling
-the second one leaves it indexed from `2`, which is the same as the rest of the
-tail indexed from `1`. -/
+/-- Peeling two nodes off leaves the rest indexed from `2`, which is the tail
+indexed from `1`. -/
 @[sl_simps] theorem nodesFrom_cons_two (a b : Ptr (Node V) × V) (l xs : Cells V) :
     nodesFrom (a :: b :: l) 2 xs = nodesFrom (b :: l) 1 xs :=
   nodesFrom_cons_shift a (b :: l) xs 0
 
-/-- Reading the node of index `i` yields exactly the node the well-formedness
-invariant predicts, and leaves the list untouched. -/
+/-- Reading the node of index `i` yields the node the invariant predicts. -/
 theorem nodes_read (l : Cells V) (i : Nat) (r : Ptr (Node V)) (v : V)
     (h : l[i]? = some (r, v)) :
     ⦃ nodes l ⦄ read r ⦃⇓ node => ⌜node = nodeAt l i v⌝ ∗ nodes l⦄ :=
@@ -193,9 +180,8 @@ theorem nodes_read (l : Cells V) (i : Nat) (r : Ptr (Node V)) (v : V)
 
 /-! ## Specifications
 
-Each specification mirrors the `requires`/`ensures` clauses of the corresponding
-Verus method.  Verus' `self.well_formed()` becomes the separation-logic
-assertion `wellFormed s l`, and `self@` becomes `view l`. -/
+Verus' `self.well_formed()` becomes `wellFormed s l`, and `self@` becomes
+`view l`. -/
 
 /-- `new` returns a well-formed list whose view is empty. -/
 theorem new.spec :
@@ -217,14 +203,12 @@ theorem pushBack.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
   unfold pushBack
   sl_pull ⟨hhead, htail⟩
   split
-  · -- Special case: the list is empty
-    rename_i hnone
+  · rename_i hnone
     obtain rfl : l = [] := (lastPtr_eq_none_iff l).mp (by grind)
     apply triple_conseq (pushEmptyCase.spec s v)
       (by simp only [wellFormed]; sl_frame)
       (fun s' => by simp only [wellFormed, List.nil_append]; exact himpl_refl _)
   · rename_i oldTailPtr hsome
-    -- The list is non-empty, hence of the shape `l' ++ [(oldTailPtr, vt)]`
     obtain ⟨l', ⟨rt, vt⟩, rfl⟩ : ∃ l' c, l = l' ++ [c] := by
       rcases eq_nil_or_snoc l with rfl | h
       · grind
@@ -245,22 +229,16 @@ theorem popBack.spec (s : DoublyLinkedList V) (l : Cells V) (rt : Ptr (Node V))
   simp only [lastPtr_snoc] at htail
   simp only [htail, get!_some]
   rcases eq_nil_or_snoc l with rfl | ⟨l'', ⟨rp, vp⟩, rfl⟩
-  · -- The list had exactly one node: `head` and `tail` both become `none`
-    simp only [List.nil_append] at hhead ⊢
+  · simp only [List.nil_append] at hhead ⊢
     sl_step*
-  · -- The list had at least two nodes: the penultimate one becomes the tail
-    simp only [show l'' ++ [(rp, vp)] ++ [(rt, vt)] = l'' ++ [(rp, vp), (rt, vt)]
+  · simp only [show l'' ++ [(rp, vp)] ++ [(rt, vt)] = l'' ++ [(rp, vp), (rt, vt)]
       from by simp] at hhead ⊢
     sl_step*
 
-/-- `popBack` in the shape `step` can apply on its own.
-
-`popBack.spec` mentions its ghost list under `++`, so `sl_frame` cannot recover
-it from a precondition `wellFormed s [c₀, c₁, c₂]`: that is a higher-order match
-the unifier will not solve.  Indexing the triple by the whole list instead makes
-the precondition first-order, at the cost of a `l ≠ []` side condition and of a
-postcondition phrased with `dropLast`/`getLast?` — both of which compute on a
-concrete list, so `sl_side?` and the postcondition simp set discharge them. -/
+/-- `popBack` in the shape `step` can apply on its own: `popBack.spec` mentions
+its ghost list under `++`, which `sl_frame` cannot recover from a concrete
+precondition.  Indexing by the whole list is first-order, at the cost of side
+conditions that compute once the list is a literal. -/
 theorem popBack.spec' (s : DoublyLinkedList V) (l : Cells V) (hne : l ≠ []) :
     ⦃ wellFormed s l ⦄ popBack s
       ⦃⇓ (s', v) => ⌜l.getLast?.map Prod.snd = some v⌝ ∗ wellFormed s' l.dropLast⦄ := by
@@ -278,8 +256,7 @@ theorem pushFront.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
   unfold pushFront
   sl_pull ⟨hhead, htail⟩
   split
-  · -- Special case: the list is empty
-    rename_i hnone
+  · rename_i hnone
     obtain rfl : l = [] := (firstPtr_eq_none_iff l).mp (by grind)
     apply triple_conseq (pushEmptyCase.spec s v)
       (by simp only [wellFormed]; sl_frame)
@@ -298,27 +275,20 @@ theorem popFront.spec (s : DoublyLinkedList V) (rh : Ptr (Node V)) (vh : V)
     ⦃ wellFormed s ((rh, vh) :: l) ⦄ popFront s
       ⦃⇓ (s', v) => ⌜v = vh⌝ ∗ wellFormed s' l⦄ := by
   unfold popFront
-  /- The cell has to be destructured: `nodes_cons_two`, which frame inference
-     needs to split the two first nodes out, is stated over a pair. -/
+  -- `nodes_cons_two`, which splits the two first nodes out, is stated over a pair.
   rcases l with _ | ⟨⟨r2, v2⟩, l'⟩ <;> sl_step*
 
-/- `nodes_read` is registrable even though its `Prop` argument carries the index
-and the payload, which neither the program term nor `sl_frame` determines: `step`
-infers them by matching the argument against a local assumption, and every caller
-below obtains one from `exists_cell`.  It is only enabled here, after the
-specifications above: they own whole nodes rather than reading through the ghost
-index, so letting `step` try it earlier leaves the index unconstrained. -/
+/- `step` infers the index and the payload by matching `nodes_read`'s `Prop`
+argument against a local assumption, which every caller below gets from
+`exists_cell`.  Enabled only here: the specifications above own whole nodes, so
+letting `step` try it earlier leaves the index unconstrained. -/
 attribute [step] nodes_read
 
 /-! ## Specification of `get` -/
 
 /-- The loop of `get` walks from index `j` to index `i`, keeping Verus' loop
-invariant `ptr == ptrs[j]`.
-
-The induction is the one `getLoop`'s own `termination_by i - j` generates: the
-cases of `getLoop.induct` are the branches of the loop, and its induction
-hypothesis is stated at the pointer the body reads, so no measure has to be
-threaded by hand. -/
+invariant `ptr == ptrs[j]`.  The induction is the one `getLoop`'s own
+`termination_by` generates, so no measure has to be threaded by hand. -/
 theorem getLoop.spec (l : Cells V) (i j : Nat) (r : Ptr (Node V))
     (hji : j ≤ i) (hi : i < l.length) (hr : l[j]?.map Prod.fst = some r) :
     ⦃ nodes l ⦄ getLoop i j r
@@ -351,17 +321,13 @@ theorem get.spec (s : DoublyLinkedList V) (l : Cells V) (i : Nat)
 
 /- Specifications `step` can apply on its own: the program term fixes the
 receiver, `sl_frame` fixes the ghost list by matching `nodes ?l`, and `sl_side?`
-discharges the remaining `Prop` arguments.  A specification is *not* registrable
-when its ghost list only occurs under `++` (`popBack.spec`, hence the restated
-`popBack.spec'`), which the unifier will not solve. -/
+discharges the remaining `Prop` arguments. -/
 attribute [step]
   new.spec pushBack.spec pushFront.spec popFront.spec get.spec popBack.spec'
 
-/- `pushBack`/`pushFront` grow the ghost list with `++` and `::`, and
-`popBack.spec'` shrinks it with `dropLast`.  Normalising all three keeps the
-list a literal between steps; otherwise the unifier has to `whnf` through an
-unreduced `dropLast` at the next call, which is where `run.spec` used to spend
-its whole heartbeat budget. -/
+/- Keep the ghost list a literal between steps: otherwise the unifier has to
+`whnf` through an unreduced `dropLast` at the next call, which is where
+`run.spec` used to spend its whole heartbeat budget. -/
 attribute [step_post_simps]
   List.nil_append List.cons_append List.append_assoc
   List.dropLast_cons₂ List.dropLast_nil
@@ -369,10 +335,9 @@ attribute [step_post_simps]
 
 /-! ## Ghost-free specifications
 
-Verus' `well_formed` and `view` are `closed` specification functions: clients
-only see the sequence of payloads.  `isList s vs` is the corresponding abstract
-predicate, and the specifications below are literal transcriptions of the Verus
-`requires`/`ensures` clauses. -/
+Verus' `well_formed` and `view` are `closed`: clients only see the sequence of
+payloads.  These are literal transcriptions of the Verus clauses over the
+corresponding abstract predicate `isList`. -/
 
 /-- Verus: `ensures s.well_formed(), s@.len() == 0`. -/
 theorem new.isList_spec :
@@ -452,10 +417,10 @@ theorem value.spec (it : Iterator V) (l : Cells V) (hvalid : valid it l) :
   simp only [hcur', get!_some]
   sl_step*
 
-/-- Advancing the iterator: it reports whether there still is an element, and
-if so it becomes valid again at the next index.  The unconditional `index` and
-the `cur` of the exhausted case are what rule out an implementation that leaves
-the iterator untouched at the last node. -/
+/-- Advancing the iterator: it reports whether there still is an element, and if
+so it becomes valid again at the next index.  The unconditional `index` and the
+`cur` of the exhausted case rule out an implementation that stalls at the last
+node. -/
 theorem moveNext.spec (it : Iterator V) (l : Cells V) (hvalid : valid it l) :
     ⦃ wellFormed it.l l ⦄ it.moveNext
       ⦃⇓ (it', good) =>
@@ -472,11 +437,9 @@ theorem moveNext.spec (it : Iterator V) (l : Cells V) (hvalid : valid it l) :
   simp only [hcur', get!_some]
   sl_step
   by_cases hlast : it.index + 1 = l.length
-  · -- The iterator was on the last node
-    simp only [nodeAt, nextOf, if_pos hlast]
+  · simp only [nodeAt, nextOf, if_pos hlast]
     sl_step*
-  · -- There is a next node
-    obtain ⟨r', v', hcell'⟩ := exists_cell l (it.index + 1) (by omega)
+  · obtain ⟨r', v', hcell'⟩ := exists_cell l (it.index + 1) (by omega)
     simp only [nodeAt, nextOf, if_neg hlast, hcell', Option.map_some]
     have hv :
         valid ({ it with cur := some r', index := it.index + 1 } : Iterator V) l :=
@@ -528,11 +491,5 @@ theorem run.spec :
   sl_step*
 
 end Example
-
-/-! ## Frame inference through the abstract predicate
-
-`isList` is an existential, so a caller that owns it as a single opaque
-assertion exercises the frame inference of `sl_frame` on an `hexists` atom. -/
-
 
 end Aeneas.SLPoC
