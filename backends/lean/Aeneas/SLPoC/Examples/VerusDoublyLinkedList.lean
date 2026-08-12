@@ -300,24 +300,20 @@ indexed from `1`. -/
     nodesFrom (a :: b :: l) 2 xs = nodesFrom (b :: l) 1 xs :=
   nodesFrom_cons_shift a (b :: l) xs 0
 
-/-- Reading the node of index `i` yields the node the invariant predicts. -/
-theorem nodes_read (l : Cells V) (i : Nat) (r : Ptr (Node V)) (v : V)
-    (h : l[i]? = some (r, v)) :
-    ⦃ nodes l ⦄ read r ⦃⇓ node => ⌜node = nodeAt l i v⌝ ∗ nodes l⦄ :=
-  cellsFrom_read (nodeAt l) l i r v h
-
 /-! ## Specifications
 
 Verus' `self.well_formed()` becomes `wellFormed s l`, and `self@` becomes
 `view l`. -/
 
 /-- `new` returns a well-formed list whose view is empty. -/
+@[step]
 theorem new.spec :
     ⦃ emp ⦄ (new : St (DoublyLinkedList V)) ⦃⇓ s => wellFormed s []⦄ := by
   unfold new
   sl_step*
 
 /-- `pushEmptyCase` inserts one node into an empty list. -/
+@[step]
 theorem pushEmptyCase.spec (s : DoublyLinkedList V) (v : V) :
     ⦃ wellFormed s [] ⦄ pushEmptyCase s v
       ⦃⇓ s' => ∃ r : Ptr (Node V), wellFormed s' [(r, v)]⦄ := by
@@ -325,98 +321,83 @@ theorem pushEmptyCase.spec (s : DoublyLinkedList V) (v : V) :
   sl_step*
 
 /-- `pushBack` appends `v` to the list. -/
+@[step]
 theorem pushBack.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
     ⦃ wellFormed s l ⦄ pushBack s v
       ⦃⇓ s' => ∃ r : Ptr (Node V), wellFormed s' (l ++ [(r, v)])⦄ := by
   unfold pushBack
-  sl_pull ⟨hhead, htail⟩
   split
-  · rename_i hnone
+  next =>
+    sl_pull -- needs the pure part of the precondition to prove `l = []`
     obtain rfl : l = [] := (lastPtr_eq_none_iff l).mp (by grind)
-    apply triple_conseq (pushEmptyCase.spec s v)
-      (by simp only [wellFormed]; sl_frame)
-      (fun s' => by simp only [wellFormed, List.nil_append]; exact himpl_refl _)
-  · rename_i oldTailPtr hsome
-    obtain ⟨l', ⟨rt, vt⟩, rfl⟩ : ∃ l' c, l = l' ++ [c] := by
-      rcases eq_nil_or_snoc l with rfl | h
-      · grind
-      · exact h
-    have hrt : oldTailPtr = rt := by grind [lastPtr_snoc]
-    subst hrt
-    simp only [show ∀ r : Ptr (Node V), l' ++ [(oldTailPtr, vt)] ++ [(r, v)] =
-      l' ++ [(oldTailPtr, vt), (r, v)] from by simp]
+    sl_step*
+  next oldTailPtr _ =>
+    sl_pull -- needs the pure part of the precondition to prove `l ≠ []`
+    have hne : l ≠ [] := mt (lastPtr_eq_none_iff l).mpr (by grind)
+    obtain ⟨l', ⟨rt, vt⟩, rfl⟩ := (eq_nil_or_snoc l).resolve_left hne
+    obtain rfl : oldTailPtr = rt := by grind [lastPtr_snoc]
     sl_step*
 
-/-- `popBack` removes the last node and returns its payload. -/
-theorem popBack.spec (s : DoublyLinkedList V) (l : Cells V) (rt : Ptr (Node V))
-    (vt : V) :
-    ⦃ wellFormed s (l ++ [(rt, vt)]) ⦄ popBack s
-      ⦃⇓ (s', v) => ⌜v = vt⌝ ∗ wellFormed s' l⦄ := by
-  unfold popBack
-  sl_pull ⟨hhead, htail⟩
-  simp only [lastPtr_snoc] at htail
-  simp only [htail, get!_some]
-  rcases eq_nil_or_snoc l with rfl | ⟨l'', ⟨rp, vp⟩, rfl⟩
-  · simp only [List.nil_append] at hhead ⊢
-    sl_step*
-  · simp only [show l'' ++ [(rp, vp)] ++ [(rt, vt)] = l'' ++ [(rp, vp), (rt, vt)]
-      from by simp] at hhead ⊢
-    sl_step*
-
-/-- `popBack` in the shape `step` can apply on its own: `popBack.spec` mentions
-its ghost list under `++`, which `sl_frame` cannot recover from a concrete
-precondition.  Indexing by the whole list is first-order, at the cost of side
-conditions that compute once the list is a literal. -/
-theorem popBack.spec' (s : DoublyLinkedList V) (l : Cells V) (hne : l ≠ []) :
+/-- `popBack` removes the last node and returns its payload. Indexing by the
+whole list lets `step` recover the ghost list from a concrete precondition. -/
+@[step]
+theorem popBack.spec (s : DoublyLinkedList V) (l : Cells V) (hne : l ≠ []) :
     ⦃ wellFormed s l ⦄ popBack s
       ⦃⇓ (s', v) => ⌜l.getLast?.map Prod.snd = some v⌝ ∗ wellFormed s' l.dropLast⦄ := by
-  rcases eq_nil_or_snoc l with rfl | ⟨l', ⟨rt, vt⟩, rfl⟩
-  · simp at hne
-  · apply triple_conseq (popBack.spec s l' rt vt) (himpl_refl _)
-    rintro ⟨s', v⟩
-    simp only [List.getLast?_concat, List.dropLast_concat, Option.map_some]
-    sl_frame
+  obtain ⟨l', ⟨_, _⟩, rfl⟩ := (eq_nil_or_snoc l).resolve_left hne
+  rcases eq_nil_or_snoc l' with rfl | ⟨_, ⟨_, _⟩, rfl⟩
+  <;> unfold popBack
+  <;> sl_pull ⟨_, htail⟩
+  <;> simp only [lastPtr_snoc] at htail
+  <;> sl_step*
 
 /-- `pushFront` prepends `v` to the list. -/
+@[step]
 theorem pushFront.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
     ⦃ wellFormed s l ⦄ pushFront s v
       ⦃⇓ s' => ∃ r : Ptr (Node V), wellFormed s' ((r, v) :: l)⦄ := by
   unfold pushFront
-  sl_pull ⟨hhead, htail⟩
   split
-  · rename_i hnone
+  next =>
+    sl_pull
     obtain rfl : l = [] := (firstPtr_eq_none_iff l).mp (by grind)
-    apply triple_conseq (pushEmptyCase.spec s v)
-      (by simp only [wellFormed]; sl_frame)
-      (fun s' => by simp only [wellFormed]; exact himpl_refl _)
-  · rename_i oldHeadPtr hsome
-    cases l with
-    | nil => grind
-    | cons c l' =>
-      obtain ⟨rh, vh⟩ := c
+    sl_step*
+  next oldHeadPtr hsome =>
+    rcases l with _ | ⟨⟨rh, _⟩, _⟩
+    · sl_pull ⟨hhead, _⟩
+      exfalso
+      change s.head = none at hhead
+      simp_all
+    · sl_pull
       obtain rfl : rh = oldHeadPtr := by grind
       sl_step*
 
 /-- `popFront` removes the first node and returns its payload. -/
+@[step]
 theorem popFront.spec (s : DoublyLinkedList V) (rh : Ptr (Node V)) (vh : V)
     (l : Cells V) :
     ⦃ wellFormed s ((rh, vh) :: l) ⦄ popFront s
       ⦃⇓ (s', v) => ⌜v = vh⌝ ∗ wellFormed s' l⦄ := by
   unfold popFront
   -- `nodes_cons_two`, which splits the two first nodes out, is stated over a pair.
-  rcases l with _ | ⟨⟨r2, v2⟩, l'⟩ <;> sl_step*
+  rcases l with _ | ⟨⟨_, _⟩, _⟩ <;> sl_step*
 
-/- `step` infers the index and the payload by matching `nodes_read`'s `Prop`
+/- `step` infers the index and payload by matching `nodes_read`'s `Prop`
 argument against a local assumption, which every caller below gets from
-`exists_cell`.  Enabled only here: the specifications above own whole nodes, so
-letting `step` try it earlier leaves the index unconstrained. -/
-attribute [step] nodes_read
+`exists_cell`.  The theorem is declared here because enabling it above would
+leave the index unconstrained while proving the whole-node specifications. -/
+@[step]
+theorem nodes_read (l : Cells V) (i : Nat) (r : Ptr (Node V)) (v : V)
+    (h : l[i]? = some (r, v)) :
+    ⦃ nodes l ⦄ read r ⦃⇓ node => ⌜node = nodeAt l i v⌝ ∗ nodes l⦄ :=
+  cellsFrom_read (nodeAt l) l i r v h
 
 /-! ## Specification of `get` -/
 
 /-- The loop of `get` walks from index `j` to index `i`, keeping Verus' loop
 invariant `ptr == ptrs[j]`.  The induction is the one `getLoop`'s own
 `termination_by` generates, so no measure has to be threaded by hand. -/
+@[step]
 theorem getLoop.spec (l : Cells V) (i j : Nat) (r : Ptr (Node V))
     (hji : j ≤ i) (hi : i < l.length) (hr : l[j]?.map Prod.fst = some r) :
     ⦃ nodes l ⦄ getLoop i j r
@@ -427,31 +408,23 @@ theorem getLoop.spec (l : Cells V) (i j : Nat) (r : Ptr (Node V))
     obtain ⟨rj, vj, hj⟩ := exists_cell l j (by omega)
     obtain ⟨r', v', hj'⟩ := exists_cell l (j + 1) (by omega)
     obtain rfl : r = rj := by grind
-    sl_step
-    exact ih _ (by omega) (by grind)
+    sl_step*
   | case2 j r hge =>
     obtain rfl : j = i := by omega
     rw [getLoop, if_neg hge]
     sl_step*
 
-attribute [step] getLoop.spec
-
 /-- `get` returns the `i`th element of the view. -/
+@[step]
 theorem get.spec (s : DoublyLinkedList V) (l : Cells V) (i : Nat)
     (hi : i < l.length) :
     ⦃ wellFormed s l ⦄ get s i
       ⦃⇓ v => ⌜(view l)[i]? = some v⌝ ∗ wellFormed s l⦄ := by
   unfold get
-  sl_step as ⟨ r, hr ⟩
-  obtain ⟨ri, vi, hi'⟩ := exists_cell l i hi
+  sl_step as ⟨ r, _ ⟩
+  obtain ⟨ri, _, _⟩ := exists_cell l i hi
   obtain rfl : r = ri := by grind
   sl_step*
-
-/- Specifications `step` can apply on its own: the program term fixes the
-receiver, `sl_frame` fixes the ghost list by matching `nodes ?l`, and `sl_side?`
-discharges the remaining `Prop` arguments. -/
-attribute [step]
-  new.spec pushBack.spec pushFront.spec popFront.spec get.spec popBack.spec'
 
 /- Keep the ghost list a literal between steps: otherwise the unifier has to
 `whnf` through an unreduced `dropLast` at the next call, which is where
@@ -477,30 +450,30 @@ def valid (it : Iterator V) (l : Cells V) : Prop :=
   it.index < l.length ∧ it.cur = l[it.index]?.map Prod.fst
 
 /-- A fresh iterator is valid and positioned at index `0`. -/
+@[step]
 theorem new.spec (t : DoublyLinkedList V) (l : Cells V) (hne : 0 < l.length) :
     ⦃ wellFormed t l ⦄ Iterator.new t
       ⦃⇓ it => ⌜it.l = t ∧ it.index = 0 ∧ valid it l⌝ ∗ wellFormed t l⦄ := by
   unfold Iterator.new
-  sl_pull ⟨hhead, htail⟩
-  have hv : valid ({ l := t, cur := t.head, index := 0 } : Iterator V) l :=
-    ⟨hne, hhead⟩
+  simp only [valid]
   sl_step*
 
 /-- The iterator yields the element of the view at its index. -/
+@[step]
 theorem value.spec (it : Iterator V) (l : Cells V) (hvalid : valid it l) :
     ⦃ wellFormed it.l l ⦄ it.value
       ⦃⇓ v => ⌜(view l)[it.index]? = some v⌝ ∗ wellFormed it.l l⦄ := by
   unfold Iterator.value
   obtain ⟨hidx, hcur⟩ := hvalid
   obtain ⟨r, v, hcell⟩ := exists_cell l it.index hidx
-  have hcur' : it.cur = some r := by grind
-  simp only [hcur', get!_some]
+  simp only [show it.cur = some r from by grind, get!_some]
   sl_step*
 
 /-- Advancing the iterator: it reports whether there still is an element, and if
 so it becomes valid again at the next index.  The unconditional `index` and the
 `cur` of the exhausted case rule out an implementation that stalls at the last
 node. -/
+@[step]
 theorem moveNext.spec (it : Iterator V) (l : Cells V) (hvalid : valid it l) :
     ⦃ wellFormed it.l l ⦄ it.moveNext
       ⦃⇓ (it', good) =>
@@ -513,20 +486,13 @@ theorem moveNext.spec (it : Iterator V) (l : Cells V) (hvalid : valid it l) :
   unfold Iterator.moveNext
   obtain ⟨hidx, hcur⟩ := hvalid
   obtain ⟨r, v, hcell⟩ := exists_cell l it.index hidx
-  have hcur' : it.cur = some r := by grind
-  simp only [hcur', get!_some]
+  simp only [show it.cur = some r from by grind, get!_some]
   sl_step
   by_cases hlast : it.index + 1 = l.length
-  · simp only [nodeAt, nextOf, if_pos hlast]
-    sl_step*
+  · sl_step*
   · obtain ⟨r', v', hcell'⟩ := exists_cell l (it.index + 1) (by omega)
-    simp only [nodeAt, nextOf, if_neg hlast, hcell', Option.map_some]
-    have hv :
-        valid ({ it with cur := some r', index := it.index + 1 } : Iterator V) l :=
-      ⟨show it.index + 1 < l.length by omega, by grind⟩
+    simp only [nodeAt, nextOf, if_neg hlast, hcell', Option.map_some, valid]
     sl_step*
-
-attribute [step] new.spec value.spec moveNext.spec
 
 end Iterator
 

@@ -35,16 +35,15 @@ theorem read.spec' {α : Type} {relation : EqOrDisj α}
         ⌜result = relation.read⌝ ∗ isEqOrDisj left right relation⦄ := by
   cases relation <;>
     simp only [isEqOrDisj, EqOrDisj.read] <;>
-    step* by sl_frame
+    sl_step*
 
 theorem update.spec' {α : Type} {relation : EqOrDisj α}
     (left right : Ptr α) (value : α) :
     ⦃ isEqOrDisj left right relation ⦄ update right value
       ⦃⇓ isEqOrDisj left right (relation.write value)⦄ := by
   cases relation <;>
-    simp only [isEqOrDisj, EqOrDisj.write]
-  · sl_step*
-  · sl_step*
+    simp only [isEqOrDisj, EqOrDisj.write] <;>
+    sl_step*
 
 end Examples
 
@@ -56,18 +55,14 @@ example {α : Type} {relation : Examples.EqOrDisj α}
           Examples.isEqOrDisj left right relation⦄ := by
   cases relation <;>
     simp only [Examples.isEqOrDisj, Examples.EqOrDisj.read] <;>
-    step* by sl_frame
+    sl_step*
 
 example {α : Type} {relation : Examples.EqOrDisj α}
     (left right : Ptr α) (value : α) :
     ⦃ Examples.isEqOrDisj left right relation ⦄ update right value
       ⦃⇓ Examples.isEqOrDisj left right (relation.write value)⦄ := by
   cases relation <;>
-    simp only [Examples.isEqOrDisj, Examples.EqOrDisj.write]
-  · apply triple_hpure
-    intro hEq
-    subst right
-    step* by sl_frame
-  · step* by sl_frame
+    simp only [Examples.isEqOrDisj, Examples.EqOrDisj.write] <;>
+    sl_step*
 
 end Aeneas.SLPoC
