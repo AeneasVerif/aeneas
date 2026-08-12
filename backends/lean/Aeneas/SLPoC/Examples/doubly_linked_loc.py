@@ -81,7 +81,6 @@ COMPARISONS = (
             "DoublyLinkedList.nodesFrom",
             "DoublyLinkedList.nodes",
             "DoublyLinkedList.wellFormed",
-            "DoublyLinkedList.isList",
         ),
     ),
     Comparison(
@@ -93,10 +92,7 @@ COMPARISONS = (
         "`new`",
         ("doubly_linked_list::DoublyLinkedList::new",),
         ("DoublyLinkedList.new",),
-        (
-            "DoublyLinkedList.new.spec",
-            "DoublyLinkedList.new.isList_spec",
-        ),
+        ("DoublyLinkedList.new.spec",),
     ),
     Comparison(
         "`push_empty_case` / `pushEmptyCase`",
@@ -108,37 +104,25 @@ COMPARISONS = (
         "`push_back` / `pushBack`",
         ("doubly_linked_list::DoublyLinkedList::push_back",),
         ("DoublyLinkedList.pushBack",),
-        (
-            "DoublyLinkedList.pushBack.spec",
-            "DoublyLinkedList.pushBack.isList_spec",
-        ),
+        ("DoublyLinkedList.pushBack.spec",),
     ),
     Comparison(
         "`pop_back` / `popBack`",
         ("doubly_linked_list::DoublyLinkedList::pop_back",),
         ("DoublyLinkedList.popBack",),
-        (
-            "DoublyLinkedList.popBack.spec",
-            "DoublyLinkedList.popBack.isList_spec",
-        ),
+        ("DoublyLinkedList.popBack.spec",),
     ),
     Comparison(
         "`push_front` / `pushFront`",
         ("doubly_linked_list::DoublyLinkedList::push_front",),
         ("DoublyLinkedList.pushFront",),
-        (
-            "DoublyLinkedList.pushFront.spec",
-            "DoublyLinkedList.pushFront.isList_spec",
-        ),
+        ("DoublyLinkedList.pushFront.spec",),
     ),
     Comparison(
         "`pop_front` / `popFront`",
         ("doubly_linked_list::DoublyLinkedList::pop_front",),
         ("DoublyLinkedList.popFront",),
-        (
-            "DoublyLinkedList.popFront.spec",
-            "DoublyLinkedList.popFront.isList_spec",
-        ),
+        ("DoublyLinkedList.popFront.spec",),
     ),
     Comparison(
         "`get` (including the Lean loop)",
@@ -150,7 +134,6 @@ COMPARISONS = (
         (
             "DoublyLinkedList.getLoop.spec",
             "DoublyLinkedList.get.spec",
-            "DoublyLinkedList.get.isList_spec",
         ),
     ),
     Comparison(
