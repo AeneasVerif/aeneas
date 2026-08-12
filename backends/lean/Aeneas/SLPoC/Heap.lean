@@ -6,10 +6,10 @@ namespace Aeneas.SLPoC
    counter, not a concrete address in machine memory. -/
 abbrev AllocId := Nat
 
-/- Cells store their Lean type and value. -/
-abbrev Cell := Σ α : Type, α -- TODO: make it a list
+/- Heap entries store their Lean type and value. -/
+abbrev HeapCell := Σ α : Type, α -- TODO: make it a list
 
-abbrev Heap := Finmap fun _ : AllocId => Cell
+abbrev Heap := Finmap fun _ : AllocId => HeapCell
 
 def empty : Heap := ∅
 
@@ -101,7 +101,7 @@ theorem read_union_left {α : Type} {h₁ h₂ : Heap} {r : Ref α}
       simp [contains, hLookup₁] at hContains
     · rename_i β₁ value₁ hLookup₁
       have hCells :
-          (⟨β, value⟩ : Cell) = ⟨β₁, value₁⟩ := by
+          (⟨β, value⟩ : HeapCell) = ⟨β₁, value₁⟩ := by
         apply Option.some.inj
         exact hLookup.symm.trans
           ((Finmap.lookup_union_left hMem).trans hLookup₁)
