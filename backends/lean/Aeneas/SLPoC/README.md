@@ -13,13 +13,15 @@ logic (SL) support.
 | [`SLTactics.lean`](SLTactics.lean) | Port of the SLF tactics: `sl_frame`, `sl_pull`, `sl_xchange`, … |
 | [`ST.lean`](ST.lean) | The state monad `St`, its state machine, its denotation `theta` into `Wp`, the Hoare triples, and the specifications of the pointer operations. |
 | [`Step.lean`](Step.lean) | Wires the triples into the `step` tactic and provides `sl_frame`. |
-| [`StepTests.lean`](StepTests.lean) | Regression tests for `step` and `sl_frame`. |
 | [`WP.lean`](WP.lean) | Separation-logic assertions, the magic wand, and the `Wp` monad of predicate transformers. |
 | `README.md` | Records the purpose and meaning of files in this directory. |
 
 | File in [`Examples/`](Examples) | Purpose |
 |---|---|
+| [`Basic.lean`](Examples/Basic.lean) | Basic programs and specifications exercising `step` over pure computations and pointers. |
 | [`DoublyLinkedList.lean`](Examples/DoublyLinkedList.lean) | Port of the Verus doubly-linked-list example: executable definitions, then ghost state, specifications and proofs. |
+| [`EqOrDisj.lean`](Examples/EqOrDisj.lean) | Pointer specifications that account for possible aliasing using equal-or-disjoint ghost state. |
+| [`UnitTest.lean`](Examples/UnitTest.lean) | Regression tests for `step`, `sl_step`, and the separation-logic tactics. |
 | [`VerusStd.lean`](Examples/VerusStd.lean) | The `vstd` layer: generic sequences of pointer/payload pairs and permission maps over them, with each declaration naming its `vstd` counterpart. Independent of any data structure. |
 | [`doubly_linked_loc.py`](Examples/doubly_linked_loc.py) | Deterministically regenerates the relevant-LOC comparison with the pinned Verus example below. |
 
