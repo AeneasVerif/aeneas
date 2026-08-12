@@ -53,7 +53,7 @@ introduce the existentials and the pure facts of `P` (SLF's `xpull`), which it
 must not do when a frame metavariable is in play. -/
 theorem triple_step_mono {α : Type} {P Pm : SLPre} {Q : SLPost α}
     (m : St α) (Qm : SLPost α) (hStep : triple Pm m Qm)
-    (hRamified : P ⊢ Pm ∗ (Qm -∗∗ Q)) :
+    (hRamified : P ⊢ Pm ∗ (Qm -∗∗ (Q ∗+ GC))) :
     triple P m Q :=
   triple_ramified_frame hStep hRamified
 
