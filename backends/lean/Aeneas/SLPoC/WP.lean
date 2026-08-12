@@ -327,7 +327,7 @@ def qwand {α : Type} (Q₁ Q₂ : SLPost α) : SLProp :=
 namespace SepLogic
 
 @[inherit_doc hwand] scoped infixr:33 " -∗ " => hwand
-@[inherit_doc qwand] scoped infixr:33 " -∗∗ " => qwand
+@[inherit_doc qwand] scoped infixr:33 " -∗+ " => qwand
 @[inherit_doc hforall] scoped notation "∀ˢ " x ", " J => hforall (fun x => J)
 
 end SepLogic
@@ -372,7 +372,7 @@ theorem hwand_mono {H₁ H₁' H₂ H₂' : SLProp} (h₁ : H₁' ⊢ H₁) (h�
 
 /-- SLF's `qwand_equiv`. -/
 theorem qwand_equiv {α : Type} (H : SLProp) (Q₁ Q₂ : SLPost α) :
-    (H ⊢ Q₁ -∗∗ Q₂) ↔ (Q₁ ∗+ H ⊢+ Q₂) := by
+    (H ⊢ Q₁ -∗+ Q₂) ↔ (Q₁ ∗+ H ⊢+ Q₂) := by
   constructor
   · intro h value
     exact himpl_trans (hstar_mono (himpl_refl _)
@@ -384,18 +384,18 @@ theorem qwand_equiv {α : Type} (H : SLProp) (Q₁ Q₂ : SLPost α) :
 
 /-- SLF's `qwand_intro`. -/
 theorem qwand_intro {α : Type} {H : SLProp} {Q₁ Q₂ : SLPost α}
-    (h : Q₁ ∗+ H ⊢+ Q₂) : H ⊢ Q₁ -∗∗ Q₂ :=
+    (h : Q₁ ∗+ H ⊢+ Q₂) : H ⊢ Q₁ -∗+ Q₂ :=
   (qwand_equiv H Q₁ Q₂).mpr h
 
 /-- SLF's `qwand_cancel`. -/
 theorem qwand_cancel {α : Type} (Q₁ Q₂ : SLPost α) :
-    Q₁ ∗+ (Q₁ -∗∗ Q₂) ⊢+ Q₂ :=
-  (qwand_equiv (Q₁ -∗∗ Q₂) Q₁ Q₂).mp (himpl_refl _)
+    Q₁ ∗+ (Q₁ -∗+ Q₂) ⊢+ Q₂ :=
+  (qwand_equiv (Q₁ -∗+ Q₂) Q₁ Q₂).mp (himpl_refl _)
 
 /-- SLF's `qwand_specialize`: a postcondition wand yields a heap wand at every
 value. -/
 theorem qwand_specialize {α : Type} {Q₁ Q₂ : SLPost α} (value : α) :
-    (Q₁ -∗∗ Q₂) ⊢ (Q₁ value -∗ Q₂ value) :=
+    (Q₁ -∗+ Q₂) ⊢ (Q₁ value -∗ Q₂ value) :=
   hforall_specialize value
 
 /-- Monotone predicate transformers, corresponding to `Wᴾᵘʳᵉ` in
@@ -487,7 +487,7 @@ transformer.  The encoding is local: `P` is required to describe only part of
 the heap, and the postcondition is handed to the continuation through a wand,
 so that the frame is threaded automatically. -/
 def pp2wp (P : SLPre) (Q : SLPost α) : Wp α where
-  run := fun R => P ∗ (Q -∗∗ R)
+  run := fun R => P ∗ (Q -∗+ R)
   monotone := by
     intro R₁ R₂ hR
     exact hstar_mono (himpl_refl P)
@@ -509,10 +509,10 @@ theorem pp2wp_conseq {P : SLPre} {Q R : SLPost α} (hPost : Q ⊢+ R) :
 
 theorem pp2wp_frame {P : SLPre} {Q R : SLPost α} (H : SLProp) :
     pp2wp P Q R ∗ H ⊢ pp2wp P Q (R ∗+ H) :=
-  himpl_trans (himpl_of_eq (hstar_assoc_eq P (Q -∗∗ R) H))
+  himpl_trans (himpl_of_eq (hstar_assoc_eq P (Q -∗+ R) H))
     (hstar_mono (himpl_refl P)
       (qwand_intro fun value =>
-        himpl_trans (himpl_of_eq (hstar_assoc_eq (Q value) (Q -∗∗ R) H).symm)
+        himpl_trans (himpl_of_eq (hstar_assoc_eq (Q value) (Q -∗+ R) H).symm)
           (hstar_mono (qwand_cancel Q R value) (himpl_refl H))))
 
 /-- The elimination principle of `pp2wp`: the heap splits into the footprint
