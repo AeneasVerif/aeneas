@@ -319,12 +319,7 @@ let unsafe_names_map_add (id : id) (name : string) (nm : unsafe_names_map) :
     unsafe_names_map =
   { id_to_name = IdMap.add id name nm.id_to_name }
 
-(** Make a (variable) name unique (by adding an index).
-
-    We do this in an inefficient manner (by testing all indices starting from 0)
-    but it shouldn't be a bottleneck.
-
-    [append]: function to append an index to a string *)
+(** Make [name] unique by appending an index (1, 2, …) on collision. *)
 let name_to_unique (collision : string -> bool)
     (append : string -> int -> string) (name : string) : string =
   let rec gen (i : int) : string =
@@ -1977,8 +1972,7 @@ let ctx_compute_trait_clause_name ?(keep_var_generics = false)
     match TraitDeclId.Map.find_opt trait_id ctx.crate.trait_decls with
     | None -> [ "clause" ]
     | Some impl_trait_decl ->
-        (* When [keep_var_generics] is set we keep the (variable) generic
-           arguments: they identify which trait instance this clause is. *)
+        (* [keep_var_generics]: keep the generic args. *)
         let args = clause_trait.generics in
         trait_name_with_generics_to_simple_name ctx.trans_ctx ~prefix
           ~keep_var_generics impl_trait_decl.item_meta.name params args
@@ -1997,27 +1991,21 @@ let check_builtin_arity (ctx : extraction_ctx) (trait_decl : trait_decl)
     ^ " parent clauses, found "
     ^ string_of_int (List.length info.parent_clauses))
 
-(** Compute the names of the parent clauses of a trait declaration.
+(** Names for a trait's parent clauses.
 
-    For a computed trait each name is [base ^ "Inst"]. The base is the
-    referenced trait's name; its generic arguments are appended only for clauses
-    whose bare name would otherwise collide (they distinguish the instances). A
-    numeric suffix is a final guard against two identical bases.
-
-    For a builtin trait the names are taken verbatim from the builtin
-    information (no ["Inst"] suffix added here). *)
+    Computed: [base ^ "Inst"], base = referenced trait name plus its generic
+    args, the latter added only to break a collision; a numeric suffix is the
+    last guard. Builtin: names taken verbatim. *)
 let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
     (trait_decl : trait_decl)
     (builtin_info : Pure.builtin_trait_decl_info option) :
     (trait_param * string) list =
-  (* The trait-decl name prefix is the same for each clause. *)
+  (* Prefix shared by all clauses. *)
   let prefix =
     if !Config.record_fields_short_names then None
     else Some (ctx_compute_trait_decl_name ctx trait_decl)
   in
-  (* The base name of a clause. With [keep_var_generics] the referenced trait's
-     generic arguments are included (distinguishing instances of the same
-     trait); without it we get the short form. *)
+  (* Clause base name; [keep_var_generics] includes the trait's generic args. *)
   let compute_base ~keep_var_generics (clause : trait_param) : string =
     let base =
       ctx_compute_trait_clause_name ~keep_var_generics ctx
@@ -2038,24 +2026,22 @@ let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
   let names =
     match builtin_info with
     | None ->
-        (* Prefer the short base (trait name without its generic arguments).
-           Only clauses whose short base is not unique escalate to include the
-           generic arguments, which distinguish the trait instances. The numeric
-           suffix from [name_to_unique] is the final guard against two identical
-           bases (e.g. super-traits whose argument names concatenate equally). *)
+        (* Short base by default; escalate to include the generic args only when
+           the short base collides. [name_to_unique]'s suffix is the last guard. *)
         let shorts =
           List.map
             (compute_base ~keep_var_generics:false)
             trait_decl.parent_clauses
         in
+        (* The short names occurring more than once. *)
         let ambiguous =
-          let seen = ref StringSet.empty and dup = ref StringSet.empty in
-          List.iter
-            (fun s ->
-              if StringSet.mem s !seen then dup := StringSet.add s !dup
-              else seen := StringSet.add s !seen)
-            shorts;
-          !dup
+          snd
+            (List.fold_left
+               (fun (seen, dup) s ->
+                 if StringSet.mem s seen then (seen, StringSet.add s dup)
+                 else (StringSet.add s seen, dup))
+               (StringSet.empty, StringSet.empty)
+               shorts)
         in
         let _, named =
           List.fold_left_map
