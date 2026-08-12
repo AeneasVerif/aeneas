@@ -251,7 +251,7 @@ no `□`, since this model has no invariants, no step-indexing and no
 higher-order specifications to store a triple in. -/
 theorem triple_texan (P : SLPre) (m : St α) (Q : SLPost α) :
     triple P m Q ↔
-      ∀ R : SLPost α, P ∗ ((Q ∗+ GC) -∗∗ R) ⊢ theta m R :=
+      ∀ R : SLPost α, P ∗ ((Q ∗+ GC) -∗+ R) ⊢ theta m R :=
   Iff.rfl
 
 theorem triple_iff (P : SLPre) (m : St α) (Q : SLPost α) :
@@ -262,7 +262,7 @@ theorem triple_iff (P : SLPre) (m : St α) (Q : SLPost α) :
       (pp2wp_conseq (fun _ => himpl_refl _) h hP)
   · intro hTriple R h hPre
     apply (theta m).monotone (qwand_cancel (Q ∗+ GC) R) h
-    exact theta_frame m (Q ∗+ GC) ((Q ∗+ GC) -∗∗ R) h
+    exact theta_frame m (Q ∗+ GC) ((Q ∗+ GC) -∗+ R) h
       (hstar_mono hTriple (himpl_refl _) h hPre)
 
 /-- Discard resources from the declared postcondition. -/
