@@ -2703,8 +2703,7 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
 let extract_trait_decl_register_parent_clause_names (ctx : extraction_ctx)
     (trait_decl : trait_decl)
     (builtin_info : Pure.builtin_trait_decl_info option) : extraction_ctx =
-  (* The clause names are computed (and deduplicated) all at once: see
-     {!ctx_compute_trait_parent_clause_names}. *)
+  (* Compute the clause names *)
   let clause_names =
     ctx_compute_trait_parent_clause_names ctx trait_decl builtin_info
   in
