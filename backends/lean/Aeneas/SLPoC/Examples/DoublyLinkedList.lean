@@ -13,8 +13,7 @@ The executable definitions come first; the ghost state, the specifications and
 their proofs follow, in the same namespaces.  The sequence and permission-map
 reasoning Verus inherits from `vstd` lives in `Aeneas.SLPoC.Examples.VerusStd`.  The
 `*.spec` theorems state the Verus `requires`/`ensures` clauses over the explicit
-ghost state; the `*.isList_spec` theorems restate them over the abstract
-predicate.
+ghost state.
 -/
 
 namespace Aeneas.SLPoC
@@ -167,7 +166,6 @@ pointers is an ordinary parameter of the specifications.
 | `well_formed_node(i)` | `nodeAt l i v`, the contents `nodesFrom` requires at index `i` |
 | `well_formed()` | `wellFormed s l` |
 | `self@` (`view`) | `view l` |
-| `well_formed()` with the ghost state hidden | `isList s vs` |
 | `Iterator::valid()` | `Iterator.valid it l` plus `wellFormed t l` in the precondition |
 -/
 
@@ -208,11 +206,6 @@ def nodes (l : Cells V) : SLProp := nodesFrom l 0 l
 pointers agree with the ghost state. -/
 def wellFormed (s : DoublyLinkedList V) (l : Cells V) : SLProp :=
   iprop(⌜s.head = firstPtr l ∧ s.tail = lastPtr l⌝ ∗ nodes l)
-
-/-- Abstract representation predicate: `s` is a well-formed list whose view is
-`vs`.  The ghost state is hidden, as it is in Verus. -/
-def isList (s : DoublyLinkedList V) (vs : List V) : SLProp :=
-  iprop(∃ l : Cells V, ⌜view l = vs⌝ ∗ wellFormed s l)
 
 @[simp] theorem nodes_nil : nodes ([] : Cells V) = emp := rfl
 
@@ -467,54 +460,6 @@ attribute [step_post_simps]
   List.nil_append List.cons_append List.append_assoc
   List.dropLast_cons₂ List.dropLast_nil
   List.getLast?_cons_cons List.getLast?_singleton Option.map_some
-
-/-! ## Ghost-free specifications
-
-Verus' `well_formed` and `view` are `closed`: clients only see the sequence of
-payloads.  These are literal transcriptions of the Verus clauses over the
-corresponding abstract predicate `isList`. -/
-
-/-- Verus: `ensures s.well_formed(), s@.len() == 0`. -/
-theorem new.isList_spec :
-    ⦃ emp ⦄ (new : St (DoublyLinkedList V)) ⦃⇓ s => isList s []⦄ := by
-  sl_conseq new.spec
-
-/-- Verus: `ensures final(self).well_formed(), final(self)@ == old(self)@.push(v)`. -/
-theorem pushBack.isList_spec (s : DoublyLinkedList V) (vs : List V) (v : V) :
-    ⦃ isList s vs ⦄ pushBack s v ⦃⇓ s' => isList s' (vs ++ [v])⦄ := by
-  sl_pull l rfl
-  sl_conseq (pushBack.spec s l v)
-
-/-- Verus: `ensures final(self).well_formed(), final(self)@ == seq![v].add(old(self)@)`. -/
-theorem pushFront.isList_spec (s : DoublyLinkedList V) (vs : List V) (v : V) :
-    ⦃ isList s vs ⦄ pushFront s v ⦃⇓ s' => isList s' (v :: vs)⦄ := by
-  sl_pull l rfl
-  sl_conseq (pushFront.spec s l v)
-
-/-- Verus: `requires old(self)@.len() > 0`,
-`ensures final(self)@ == old(self)@.drop_last(), v == old(self)@[len - 1]`. -/
-theorem popBack.isList_spec (s : DoublyLinkedList V) (vs : List V) (v : V) :
-    ⦃ isList s (vs ++ [v]) ⦄ popBack s
-      ⦃⇓ (s', w) => ⌜w = v⌝ ∗ isList s' vs⦄ := by
-  sl_pull l hview
-  obtain ⟨l', r, rfl, hl'⟩ := payloads_eq_snoc l vs v hview
-  sl_conseq (popBack.spec s l' r v)
-
-/-- Verus: `requires old(self)@.len() > 0`,
-`ensures final(self)@ == old(self)@.subrange(1, len), v == old(self)@[0]`. -/
-theorem popFront.isList_spec (s : DoublyLinkedList V) (v : V) (vs : List V) :
-    ⦃ isList s (v :: vs) ⦄ popFront s
-      ⦃⇓ (s', w) => ⌜w = v⌝ ∗ isList s' vs⦄ := by
-  sl_pull l hview
-  obtain ⟨r, l', rfl, hl'⟩ := payloads_eq_cons l v vs hview
-  sl_conseq (popFront.spec s r v l')
-
-/-- Verus: `requires 0 <= i < self@.len()`, `ensures *v == self@[i as int]`. -/
-theorem get.isList_spec (s : DoublyLinkedList V) (vs : List V) (i : Nat)
-    (hi : i < vs.length) :
-    ⦃ isList s vs ⦄ get s i ⦃⇓ w => ⌜vs[i]? = some w⌝ ∗ isList s vs⦄ := by
-  sl_pull l rfl
-  sl_conseq (get.spec s l i (by simpa using hi))
 
 end DoublyLinkedList
 
