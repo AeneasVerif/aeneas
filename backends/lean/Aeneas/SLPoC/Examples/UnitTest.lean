@@ -6,6 +6,13 @@ open scoped SepLogic
 
 /-! ## `sl_frame` as an `xsimpl` -/
 
+example (P Q:SLProp) : emp ⊢ P ∗ P -∗ Q -∗ Q := by
+  sorry
+
+example (p q : Ptr Nat) (x y : Nat) :
+    p ↦ x ∗ q ↦ y ⊢ q ↦ y ∗ p ↦ x := by
+  sl_frame
+
 /-- An existential of the right-hand side is instantiated by the cancellation. -/
 example (p : Ptr Nat) (value : Nat) :
     p ↦ value ⊢ iprop(∃ w, ⌜w = value⌝ ∗ p ↦ w) := by
@@ -41,7 +48,7 @@ example (p : Ptr Nat) :
     ⦃ iprop(∃ n, ⌜n = 1⌝ ∗ p ↦ n) ⦄ Examples.incr_ptr p ⦃⇓ p ↦ 2⦄ := by
   unfold Examples.incr_ptr
   sl_pull n rfl
-  step* by sl_frame
+  sl_step*
 
 /-- Without arguments it peels as much as it can. -/
 example (p : Ptr Nat) (value : Nat) :
@@ -49,7 +56,7 @@ example (p : Ptr Nat) (value : Nat) :
   unfold Examples.incr_ptr
   sl_pull
   subst_vars
-  step* by sl_frame
+  sl_step*
 
 /-! ## `sl_pull_keep`
 
@@ -84,13 +91,12 @@ def touchAny (p : Ptr Nat) : St Unit := do
   update p value
 
 /-- The `sl_pull` is not removable: frame inference may not open the existential. -/
+@[step]
 theorem touchAny.spec (p : Ptr Nat) :
     ⦃ iprop(∃ n, p ↦ n) ⦄ touchAny p ⦃⇓ iprop(∃ n, p ↦ n)⦄ := by
   unfold touchAny
   sl_pull n
-  step* by sl_frame
-
-attribute [step] touchAny.spec
+  sl_step*
 
 def touchThenSet (p : Ptr Nat) : St Unit := do
   touchAny p
@@ -102,7 +108,7 @@ existential the callee gives back on its own. -/
 example (p : Ptr Nat) (x : Nat) :
     ⦃ iprop(⌜x = 5⌝ ∗ p ↦ x) ⦄ touchThenSet p ⦃⇓ iprop(⌜x = 5⌝ ∗ p ↦ 7)⦄ := by
   unfold touchThenSet
-  step* by sl_frame
+  sl_step*
 
 /-- A framed-out existential stays intact: instantiating it here would put a
 variable out of the scope of the frame metavariable. -/
@@ -110,14 +116,14 @@ example (p q : Ptr Nat) (x : Nat) :
     ⦃ iprop(hexists (fun n => q ↦ n) ∗ p ↦ x) ⦄ touchThenSet p
       ⦃⇓ iprop(hexists (fun n => q ↦ n) ∗ p ↦ 7)⦄ := by
   unfold touchThenSet
-  step* by sl_frame
+  sl_step*
 
 /-- The callee's precondition may be owned as one opaque existential: the frame
 is then `emp`, and the existential must *not* be opened. -/
 example (p : Ptr Nat) :
     ⦃ iprop(∃ n, p ↦ n) ⦄ touchThenSet p ⦃⇓ p ↦ 7⦄ := by
   unfold touchThenSet
-  step* by sl_frame
+  sl_step*
 
 /-- `sl_frame` leaves the other goals of the proof alone. -/
 example (p : Ptr Nat) (x : Nat) : (p ↦ x ⊢ p ↦ x) ∧ 1 = 1 := by
@@ -136,10 +142,10 @@ def readThenWrite (p : Ptr Nat) : St Unit := do
 example (p : Ptr Nat) (value : Nat) :
     ⦃ p ↦ value ⦄ readThenWrite p ⦃⇓ p ↦ value + 1⦄ := by
   unfold readThenWrite
-  step by sl_frame
+  sl_step
   guard_target =
     triple iprop(p ↦ value) (update p (value + 1)) (fun _ => iprop(p ↦ value + 1))
-  step* by sl_frame
+  sl_step*
 
 /-! ## Terminal `pure` -/
 
@@ -152,7 +158,7 @@ def readAndFree (p : Ptr Nat) : St Nat := do
 example (p : Ptr Nat) (value : Nat) :
     ⦃ p ↦ value ⦄ readAndFree p ⦃⇓ result => ⌜result = value + 1⌝⦄ := by
   unfold readAndFree
-  step* by sl_frame
+  sl_step*
 
 /-! ## The tactics ported from Separation Logic Foundations
 
@@ -189,7 +195,7 @@ example (p q : Ptr Nat) :
     ⦃ iprop((p ↦ 1 ∗ q ↦ 2) ∗ emp) ⦄ Examples.incr_ptr q ⦃⇓ iprop(q ↦ 3 ∗ p ↦ 1)⦄ := by
   unfold Examples.incr_ptr
   sl_xchange (swapEq p q)
-  step* by sl_frame
+  sl_step*
 
 -- sl_xval
 example (p : Ptr Nat) : ⦃ p ↦ 1 ⦄ (pure 5 : St Nat) ⦃⇓ v => ⌜v = 5⌝ ∗ p ↦ 1⦄ := by
@@ -216,7 +222,7 @@ metavariable to keep it out of.  The explicit frame rule cannot do this. -/
 example (q : Ptr Nat) :
     ⦃ hexists (fun n => iprop(q ↦ n)) ⦄ alloc 5
       ⦃⇓ r => iprop(r ↦ 5 ∗ hexists (fun n => iprop(q ↦ n)))⦄ := by
-  step* by sl_frame
+  sl_step*
 
 /-- `sl_xpull` must refuse a frame-inference goal: introducing the existential of
 the left-hand side would put a variable out of the scope of the frame `?F`.  The
@@ -232,7 +238,7 @@ example (p q : Ptr Nat) (x : Nat) :
   case hNext =>
     intro _ _
     sl_pull
-    step* by sl_frame
+    sl_step*
 
 /-- A wand on the right is cancelled against an identical one on the left before
 being used to absorb the residual resources. -/
@@ -273,12 +279,11 @@ def readTwice (p : Ptr Nat) : St Nat := do
   let b ← read p
   pure (a + b)
 
+@[step]
 theorem readTwice.spec (p : Ptr Nat) (n : Nat) (hn : 0 < n) :
     ⦃ p ↦ n ⦄ readTwice p ⦃⇓ r => iprop(⌜0 < r⌝ ∗ p ↦ n)⦄ := by
   unfold readTwice
   sl_step*
-
-attribute [step] readTwice.spec
 
 /-- `sl_side?` discharges the `Prop` argument of a registered specification, so
 `with` is unnecessary even though `hn` is not determined by the program. -/
