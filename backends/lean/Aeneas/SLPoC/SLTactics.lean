@@ -10,7 +10,7 @@ Logic Foundations* (`https://softwarefoundations.cis.upenn.edu/slf-current/`).
 
 | SLF | Here |
 |---|---|
-| `\-*` / `\--*` | `-∗` (`hwand`) / `-∗∗` (`qwand`) |
+| `\-*` / `\--*` | `-∗` (`hwand`) / `-∗+` (`qwand`) |
 | `triple_ramified_frame` | `triple_ramified_frame` |
 | `xsimpl` | `sl_xsimpl` (also available as `sl_frame`) |
 | `\GC` | `GC` (`hgc`) |
@@ -42,7 +42,7 @@ nothing is left to guess. -/
 /-- SLF's `triple_ramified_frame`. -/
 theorem triple_ramified_frame {α : Type} {P Pm : SLPre} {Q Qm : SLPost α}
     {m : St α} (hStep : triple Pm m Qm)
-    (hPre : P ⊢ Pm ∗ (Qm -∗∗ (Q ∗+ GC))) :
+    (hPre : P ⊢ Pm ∗ (Qm -∗+ (Q ∗+ GC))) :
     triple P m Q :=
   triple_hgc_post
     (triple_conseq_frame hStep hPre (qwand_cancel Qm (Q ∗+ GC)))
