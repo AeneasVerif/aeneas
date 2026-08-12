@@ -134,28 +134,6 @@ theorem exists_cell (l : List (Ptr α × β)) (i : Nat) (hi : i < l.length) :
     ∃ r v, l[i]? = some (r, v) :=
   ⟨(l[i]'hi).1, (l[i]'hi).2, by rw [List.getElem?_eq_getElem hi]⟩
 
-/-- Reading back a payload sequence that ends with `v`.
-
-*Verus/`vstd` counterpart:* `vstd::seq_lib::lemma_seq_properties` together with
-`vstd::seq::Seq::drop_last`. -/
-theorem payloads_eq_snoc (l : List (Ptr α × β)) (vs : List β) (v : β)
-    (h : payloads l = vs ++ [v]) :
-    ∃ l' r, l = l' ++ [(r, v)] ∧ payloads l' = vs := by
-  rcases eq_nil_or_snoc l with rfl | ⟨l', ⟨r, w⟩, rfl⟩
-  · simp [payloads] at h
-  · rw [payloads_append] at h
-    obtain ⟨h₁, h₂⟩ := List.append_inj' h (by simp)
-    exact ⟨l', r, by simp only [payloads, List.map_cons] at h₂; grind, h₁⟩
-
-/-- Reading back a payload sequence that starts with `v`.
-
-*Verus/`vstd` counterpart:* `vstd::seq_lib::lemma_seq_properties` together with
-`vstd::seq::Seq::subrange`. -/
-theorem payloads_eq_cons (l : List (Ptr α × β)) (v : β) (vs : List β)
-    (h : payloads l = v :: vs) :
-    ∃ r l', l = (r, v) :: l' ∧ payloads l' = vs := by
-  cases l <;> grind [payloads]
-
 /-- *Verus/`vstd` counterpart:* Verus' built-in `Option::get_Some_0`. -/
 @[simp] theorem get!_some {γ : Type} [Inhabited γ] (a : γ) : (some a).get! = a := rfl
 
