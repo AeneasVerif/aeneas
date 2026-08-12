@@ -1993,14 +1993,13 @@ let ctx_compute_trait_clause_name ?(keep_var_generics = false)
     match TraitDeclId.Map.find_opt trait_id ctx.crate.trait_decls with
     | None -> [ "clause" ]
     | Some impl_trait_decl ->
-        (* [keep_var_generics]: keep the generic args. *)
         let args = clause_trait.generics in
         trait_name_with_generics_to_simple_name ctx.trans_ctx ~prefix
           ~keep_var_generics impl_trait_decl.item_meta.name params args
   in
   String.concat "" clause
 
-(* Builtin information must describe exactly the trait's parent clauses. *)
+(* Builtin information describes the trait's parent clauses. *)
 let check_builtin_arity (ctx : extraction_ctx) (trait_decl : trait_decl)
     (info : Pure.builtin_trait_decl_info) : unit =
   [%cassert] trait_decl.item_meta.span
@@ -2047,8 +2046,7 @@ let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
   let names =
     match builtin_info with
     | None ->
-        (* Short base by default; escalate to include the generic args only when
-           the short base collides. [name_to_unique]'s suffix is the last guard. *)
+        (* Short base by default; escalate when the short base collides. *)
         let shorts =
           List.map
             (compute_base ~keep_var_generics:false)
