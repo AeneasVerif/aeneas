@@ -289,10 +289,11 @@ def parClientSequential : St (Ptr Int × Ptr Int × Int) := do
 
 theorem par_client_sequential_spec :
     ⦃ emp ⦄ parClientSequential
-      ⦃⇓ (l₁, l₂, life) =>
-        iprop(⌜life = 42⌝ ∗ l₁ ↦ 21 ∗ l₂ ↦ 2)⦄ := by
+      ⦃⇓ result =>
+        iprop(⌜result.2.2 = 42⌝ ∗
+          result.1 ↦ 21 ∗ result.2.1 ↦ 2)⦄ := by
   unfold parClientSequential
-  sl_step*
+  sl_step* 6
   apply triple_pure
   sl_frame
 
