@@ -13,6 +13,7 @@ Logic Foundations* (`https://softwarefoundations.cis.upenn.edu/slf-current/`).
 | `\-*` / `\--*` | `-∗` (`hwand`) / `-∗∗` (`qwand`) |
 | `triple_ramified_frame` | `triple_ramified_frame` |
 | `xsimpl` | `sl_xsimpl` (also available as `sl_frame`) |
+| `\GC` | `GC` (`hgc`) |
 | `xpull` | `sl_xpull` on an entailment, `sl_pull` on a triple |
 | `xchange` | `sl_xchange` |
 | `xval` | `sl_xval` |
@@ -40,9 +41,11 @@ nothing is left to guess. -/
 
 /-- SLF's `triple_ramified_frame`. -/
 theorem triple_ramified_frame {α : Type} {P Pm : SLPre} {Q Qm : SLPost α}
-    {m : St α} (hStep : triple Pm m Qm) (hPre : P ⊢ Pm ∗ (Qm -∗∗ Q)) :
+    {m : St α} (hStep : triple Pm m Qm)
+    (hPre : P ⊢ Pm ∗ (Qm -∗∗ (Q ∗+ GC))) :
     triple P m Q :=
-  triple_conseq_frame hStep hPre (qwand_cancel Qm Q)
+  triple_hgc_post
+    (triple_conseq_frame hStep hPre (qwand_cancel Qm (Q ∗+ GC)))
 
 /-- The ramified frame rule, for a call followed by a continuation.  Unlike
 `triple_ramified_frame` this one still mentions the resources `F` that the
@@ -509,7 +512,7 @@ partial def solveHimpl (discharger : Option Syntax.Tactic) (goal : MVarId) :
        rule puts on the right in place of a frame metavariable; there can be only
        one of them. -/
     let mut deferredPure : Array Expr := #[]
-    let mut absorbing : Option Expr := none
+    let mut absorbing : Option (Expr × Bool) := none
     for expected in destinationAtoms do
       let mut found := none
       for h : i in [:remaining.size] do
@@ -528,7 +531,12 @@ partial def solveHimpl (discharger : Option Syntax.Tactic) (goal : MVarId) :
         if absorbing.isSome then
           throwError "cannot handle more than one magic wand on the right-hand \
             side\ndestination: {destination}"
-        absorbing := some expected
+        absorbing := some (expected, true)
+      else if expected.consumeMData.isConstOf ``hgc then
+        if absorbing.isSome then
+          throwError "cannot handle more than one absorbing assertion on the \
+            right-hand side\ndestination: {destination}"
+        absorbing := some (expected, false)
       else
         throwError "required spatial assertions are not present\
           \nsource: {source}\ndestination: {destination}\nmissing: {expected}"
@@ -542,14 +550,18 @@ partial def solveHimpl (discharger : Option Syntax.Tactic) (goal : MVarId) :
        and `emp` otherwise (the residual resources must then be discardable). -/
     let (matchedAssertion, sourceToMatched) ←
       match absorbing with
-      | some wandAtom =>
+      | some (absorbingAtom, isWand) =>
         let residual := mkStar remaining
         let reordered := mkApp2 (mkConst ``hstar) matchedAssertion residual
         let reorderProof ← mkAppM ``himpl_of_eq #[← proveEqAC source reordered]
-        let residualToWand ← proveWand discharger residual wandAtom
+        let residualToAbsorber ←
+          if isWand then
+            proveWand discharger residual absorbingAtom
+          else
+            mkAppM ``himpl_hgc_r #[residual]
         let absorbProof ← mkAppM ``hstar_mono
-          #[← mkAppM ``himpl_refl #[matchedAssertion], residualToWand]
-        pure (mkApp2 (mkConst ``hstar) matchedAssertion wandAtom,
+          #[← mkAppM ``himpl_refl #[matchedAssertion], residualToAbsorber]
+        pure (mkApp2 (mkConst ``hstar) matchedAssertion absorbingAtom,
           ← mkAppM ``himpl_trans #[reorderProof, absorbProof])
       | none =>
         let discardedAtoms := remaining
