@@ -14,11 +14,11 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 README = HERE.parent / "README.md"
-LEAN_EXAMPLE = HERE / "DoublyLinkedList.lean"
+LEAN_EXAMPLE = HERE / "VerusDoublyLinkedList.lean"
 LEAN_LIB = HERE / "VerusStd.lean"
 
-# `DoublyLinkedList.lean` holds the executable definitions and then the ghost
-# state, the specifications and the proofs; this header separates the two.
+# `VerusDoublyLinkedList.lean` holds the executable definitions and then the
+# ghost state, specifications and proofs; this header separates the two.
 LEAN_SPEC_MARKER = "/-! # Ghost state, specifications and proofs"
 
 VERUS_COMMIT = "99ae45aa8e3568ec4933d23c6573a59efcd08ca3"
