@@ -231,7 +231,7 @@ theorem nodesFrom_congr {l₁ l₂ : Cells V} (cs : Cells V) (i₁ i₂ : Nat)
       prevOf l₁ (i₁ + k) = prevOf l₂ (i₂ + k) ∧
       nextOf l₁ (i₁ + k) = nextOf l₂ (i₂ + k)) :
     nodesFrom l₁ i₁ cs = nodesFrom l₂ i₂ cs :=
-  cellsFrom_congr cs i₁ i₂ fun k hk => by funext v; grind
+  cellsFrom_congr cs i₁ i₂ fun k hk => by grind [nodeAt]
 
 /-- Appending a node at the end does not change the nodes strictly before the
 last one. -/
