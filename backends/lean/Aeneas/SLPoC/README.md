@@ -14,6 +14,7 @@ logic (SL) support.
 | [`ST.lean`](ST.lean) | The state monad `St`, its state machine, its denotation `theta` into `Wp`, affine Hoare triples, and the specifications of the pointer operations. |
 | [`Step.lean`](Step.lean) | Wires the triples into the `step` tactic and provides `sl_frame`. |
 | [`WP.lean`](WP.lean) | Separation-logic assertions, fully affine `GC`, the magic wand, and the `Wp` monad of predicate transformers. |
+| [`ProofScore.lean`](ProofScore.lean) | Engineering tool, not part of the library: measures how close the proofs of the triples are to the ideal proof, i.e. how much separation logic the automation still leaves to the user. Writes [`proof-score.md`](proof-score.md). |
 | `README.md` | Records the purpose and meaning of files in this directory. |
 
 | File in [`Examples/`](Examples) | Purpose |
@@ -33,6 +34,30 @@ There is no linear or partially affine mode: `GC` accepts every heap, and every
 triple implicitly extends its postcondition with `GC`. Consequently, any unused
 heap resources may be discarded from either a triple's precondition or
 postcondition.
+
+## How ideal are the proofs?
+
+The point of the automation is that a triple should be proved by unfolding the
+program and calling `sl_step*`, with only pure reasoning and `sl_pull` in
+between, and one such block per branch of the program.  Run
+
+```
+lake env lean --run Aeneas/SLPoC/ProofScore.lean
+```
+
+from `backends/lean` to measure how far the proofs are from that, in
+[`proof-score.md`](proof-score.md): every proof of a triple is split into
+*spots* — one straight-line block before the first branch, then one per branch
+body, recursively — and a spot counts as ideal when no step of it steers the
+separation logic by hand.  The report names the offending step and says what
+gave it away, so it doubles as a to-do list for the automation.
+
+The tool parses with Lean's own parser but elaborates nothing except the
+commands that open a namespace, so it takes about a second and also works on a
+file that does not compile; a file whose module has been built is additionally
+imported, which makes the notation it defines available.  Pass file paths to
+score files other than those of [`Examples/`](Examples), and `-o` to write the
+report elsewhere.
 
 ## Doubly-linked-list LOC comparison
 
