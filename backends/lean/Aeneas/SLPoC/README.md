@@ -10,10 +10,10 @@ logic (SL) support.
 | [`FFree.lean`](FFree.lean) | Defines the generic freer monad, and the state machines that give it an operational semantics (after "Program Logics à la Carte"): `StateMachine`, `Exec`, `Runs` and `Evaluates`. |
 | [`Heap.lean`](Heap.lean) | Defines locations, dynamically typed cells, and finite heaps. |
 | [`RustHeap.lean`](RustHeap.lean) | The Rust view of the heap: `Ptr` and the pointer operations, over `Heap.lean`. |
-| [`SLTactics.lean`](SLTactics.lean) | Port of the SLF tactics: `sl_frame`, `sl_pull`, `sl_xchange`, … |
-| [`ST.lean`](ST.lean) | The state monad `St`, its state machine, its denotation `theta` into `Wp`, the Hoare triples, and the specifications of the pointer operations. |
+| [`SLTactics.lean`](SLTactics.lean) | Port of the SLF tactics: `sl_frame`, `sl_pull`, `sl_xchange`, …, including affine `GC` absorption. |
+| [`ST.lean`](ST.lean) | The state monad `St`, its state machine, its denotation `theta` into `Wp`, affine Hoare triples, and the specifications of the pointer operations. |
 | [`Step.lean`](Step.lean) | Wires the triples into the `step` tactic and provides `sl_frame`. |
-| [`WP.lean`](WP.lean) | Separation-logic assertions, the magic wand, and the `Wp` monad of predicate transformers. |
+| [`WP.lean`](WP.lean) | Separation-logic assertions, fully affine `GC`, the magic wand, and the `Wp` monad of predicate transformers. |
 | `README.md` | Records the purpose and meaning of files in this directory. |
 
 | File in [`Examples/`](Examples) | Purpose |
@@ -26,6 +26,13 @@ logic (SL) support.
 | [`doubly_linked_loc.py`](Examples/doubly_linked_loc.py) | Deterministically regenerates the relevant-LOC comparison with the pinned Verus example below. |
 
 Keep these tables updated whenever a file is added, removed, or repurposed.
+
+The logic is affine, following SLF's
+[Affine Separation Logic](https://softwarefoundations.cis.upenn.edu/slf-current/Affine.html).
+There is no linear or partially affine mode: `GC` accepts every heap, and every
+triple implicitly extends its postcondition with `GC`. Consequently, any unused
+heap resources may be discarded from either a triple's precondition or
+postcondition.
 
 ## Doubly-linked-list LOC comparison
 

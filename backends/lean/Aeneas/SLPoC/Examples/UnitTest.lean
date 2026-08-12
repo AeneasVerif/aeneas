@@ -160,6 +160,31 @@ example (p : Ptr Nat) (value : Nat) :
   unfold readAndFree
   sl_step*
 
+/-! ## Affine resource discard -/
+
+example (p : Ptr Nat) (value : Nat) :
+    p ↦ value ⊢ GC := by
+  sl_frame
+
+example (p q : Ptr Nat) (left right : Nat) :
+    p ↦ left ∗ q ↦ right ⊢ p ↦ left ∗ GC := by
+  sl_frame
+
+def allocAndForget (value : Nat) : St Unit := do
+  let _ ← alloc value
+  pure ()
+
+/-- A freshly allocated cell need not be exposed in the postcondition. -/
+example (value : Nat) :
+    ⦃ emp ⦄ allocAndForget value ⦃⇓ emp⦄ := by
+  unfold allocAndForget
+  sl_step*
+
+/-- Resources owned by the caller may be discarded before a computation. -/
+example (p : Ptr Nat) (value : Nat) :
+    ⦃ p ↦ value ⦄ (pure () : St Unit) ⦃⇓ emp⦄ := by
+  sl_step*
+
 /-! ## The tactics ported from Separation Logic Foundations
 
 `SLTactics.lean` ports SLF's magic wand, ramified frame rule, `xsimpl`, `xpull`,

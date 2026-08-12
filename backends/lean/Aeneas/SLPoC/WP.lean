@@ -34,6 +34,11 @@ def hempty : SLProp :=
 def hpure (P : Prop) : SLProp :=
   fun h => P ∧ h = empty
 
+/-- SLF's affine-top predicate `\GC`.  This logic is unconditionally affine,
+so `GC` holds of every heap. -/
+def hgc : SLProp :=
+  fun _ => True
+
 /-- The points-to assertion: the heap consists of the single cell `p` points
 at, and it holds `value`. -/
 def hsingle {α : Type} (p : Ptr α) (value : α) : SLProp :=
@@ -64,6 +69,7 @@ scoped notation "emp" => hempty
 scoped syntax "⌜" term "⌝" : term
 scoped macro_rules
   | `(⌜$P⌝) => `(hpure $P)
+scoped notation "GC" => hgc
 scoped macro_rules
   | `(iprop(∃ $x:ident, $H)) => `(hexists fun $x => iprop($H))
   | `(iprop(∃ $x:ident : $type, $H)) =>
@@ -191,6 +197,37 @@ theorem hstar_hempty_r_eq (H : SLProp) :
 instance : Std.LawfulIdentity hstar hempty where
   left_id := hstar_hempty_l_eq
   right_id := hstar_hempty_r_eq
+
+/-- Every heap predicate can be absorbed by `GC`. -/
+theorem himpl_hgc_r (H : SLProp) : H ⊢ GC :=
+  fun _ _ => True.intro
+
+theorem hstar_hgc_hgc : GC ∗ GC ⊢ GC :=
+  himpl_hgc_r _
+
+theorem hstar_hgc_intro (H : SLProp) : H ⊢ H ∗ GC := by
+  intro h hH
+  exact ⟨h, empty, (Finmap.disjoint_empty h).symm,
+    by simp [empty], hH, True.intro⟩
+
+theorem hstar_hgc_frame (H₁ H₂ : SLProp) :
+    (H₁ ∗ GC) ∗ H₂ ⊢ (H₁ ∗ H₂) ∗ GC :=
+  himpl_trans (fun h => (hstar_assoc H₁ GC H₂ h).mp)
+    (himpl_trans
+      (hstar_mono (himpl_refl H₁) (fun h => (hstar_comm GC H₂ h).mp))
+      (fun h => (hstar_assoc H₁ H₂ GC h).mpr))
+
+theorem hstar_hgc_idem (H : SLProp) :
+    (H ∗ GC) ∗ GC ⊢ H ∗ GC :=
+  himpl_trans (fun h => (hstar_assoc H GC GC h).mp)
+    (hstar_mono (himpl_refl H) hstar_hgc_hgc)
+
+theorem qimpl_hgc_intro (Q : SLPost α) : Q ⊢+ Q ∗+ GC :=
+  fun _ => hstar_hgc_intro _
+
+theorem qstar_hgc_idem (Q : SLPost α) :
+    (Q ∗+ GC) ∗+ GC ⊢+ Q ∗+ GC :=
+  fun _ => hstar_hgc_idem _
 
 theorem hstar_hexists {α : Sort _} (J : α → SLProp) (H : SLProp) :
     iprop(∃ x, J x) ∗ H ⊣⊢ iprop(∃ x, J x ∗ H) := by
