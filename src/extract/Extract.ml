@@ -1774,6 +1774,12 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
     ctx_add_generic_params def.item_meta.span def.item_meta.name Item
       def.signature.llbc_generics def.signature.generics ctx
   in
+  (* Compute the notations of the trait clauses in scope (for the
+     [trait_inst_notation] option) *)
+  let ctx =
+    ExtractTraitInst.ctx_add_trait_clause_notations ctx def.item_meta.span
+      def.signature.generics
+  in
   (* Print the generics *)
   (* Open a box for the generics *)
   F.pp_open_hovbox fmt 0;
@@ -3485,6 +3491,14 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     ctx_add_generic_params span impl.item_meta.name Item impl.llbc_generics
       impl.generics ctx
   in
+  (* Compute the notations of the trait clauses in scope (for the
+     [trait_inst_notation] option), and remember that we are extracting this
+     implementation (references to the implementation inside its own
+     definition must not use the notation) *)
+  let ctx =
+    ExtractTraitInst.ctx_add_trait_clause_notations ctx span impl.generics
+  in
+  let ctx = { ctx with current_trait_impl = Some impl.def_id } in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)

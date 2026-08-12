@@ -619,79 +619,104 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
           F.pp_print_space fmt ();
           F.pp_print_string fmt "/- Unexpected occurrence of Self -/"
       | _ -> F.pp_print_string fmt "ERROR(\"Unexpected Self\")")
-  | TraitImpl (id, generics) ->
-      let name = ctx_get_trait_impl span id ctx in
-      (* Lookup the the information about the explicit/implicit parameters. *)
-      let explicit =
-        match TraitImplId.Map.find_opt id ctx.trans_trait_impls with
-        | None ->
-            (* The declaration might be missing if there was an error *) None
-        | Some d -> Some d.explicit_info
-      in
-      (* We may need to filter the parameters if the trait is builtin.
+  | TraitImpl (id, generics) -> (
+      (* With the [trait_inst_notation] option: refer to the implementation
+         with the [({Trait<Args> for Self})] notation when possible. The Lean
+         elaborator resolves it to the implementation applied to its
+         arguments, so there is nothing else to print. *)
+      match
+        if ctx.current_trait_impl = Some id then None
+        else
+          ExtractTraitInst.trait_impl_notation ctx span
+            ~is_local:(TraitImplId.Map.mem id ctx.trans_trait_impls)
+            trait_ref
+      with
+      | Some s -> F.pp_print_string fmt s
+      | None ->
+          let name = ctx_get_trait_impl span id ctx in
+          (* Lookup the the information about the explicit/implicit parameters. *)
+          let explicit =
+            match TraitImplId.Map.find_opt id ctx.trans_trait_impls with
+            | None ->
+                (* The declaration might be missing if there was an error *)
+                None
+            | Some d -> Some d.explicit_info
+          in
+          (* We may need to filter the parameters if the trait is builtin.
          Also lookup the information about the explicit/implicit parameters. *)
-      let generics, explicit =
-        match
-          TraitImplId.Map.find_opt id ctx.trait_impls_filter_type_args_map
-        with
-        | None -> (generics, explicit)
-        | Some filter ->
-            let filter_types : 'a. 'a list -> 'a list =
-             fun l ->
-              List.filter_map
-                (fun (b, x) -> if b then Some x else None)
-                (List.combine filter l)
-            in
-            let types = filter_types generics.types in
-            let generics = { generics with types } in
-            let explicit =
-              Option.map
-                (fun e ->
-                  { e with explicit_types = filter_types e.explicit_types })
-                explicit
-            in
-            (generics, explicit)
-      in
-      let generics =
-        match
-          TraitImplId.Map.find_opt id ctx.trait_impls_filter_trait_clauses_map
-        with
-        | None -> generics
-        | Some filter ->
-            if List.length filter = List.length generics.trait_refs then
-              let trait_refs =
-                List.filter_map
-                  (fun (b, x) -> if b then Some x else None)
-                  (List.combine filter generics.trait_refs)
-              in
-              { generics with trait_refs }
-            else (
-              [%save_error] span
-                ("Incorrect parameter filtering information: incorrect number \
-                  of trait clauses: the trait declaration has "
-                ^ string_of_int (List.length generics.trait_refs)
-                ^ ", the filtering information has: "
-                ^ string_of_int (List.length filter)
-                ^ "\nImplemented trait ref: "
-                ^ trait_decl_ref_to_string ctx trait_ref
-                ^ "\nExtracted trait name: " ^ name);
-              generics)
-      in
-      let use_brackets = generics <> empty_generic_args && inside in
-      if use_brackets then F.pp_print_string fmt "(";
-      F.pp_print_string fmt name;
-      extract_generic_args span ctx fmt no_params_tys ~explicit generics;
-      if use_brackets then F.pp_print_string fmt ")"
-  | Clause var ->
-      let origin, id = origin_from_de_bruijn_var var in
-      let name = ctx_get_local_trait_clause span origin id ctx in
-      F.pp_print_string fmt name
-  | ParentClause (inst_id, decl_id, clause_id) ->
-      (* Use the trait decl id to lookup the name *)
-      let name = ctx_get_trait_parent_clause span decl_id clause_id ctx in
-      extract_trait_instance_id_if_not_self span ctx fmt no_params_tys
-        ~inside:true trait_ref inst_id;
-      F.pp_print_string fmt (add_brackets name)
+          let generics, explicit =
+            match
+              TraitImplId.Map.find_opt id ctx.trait_impls_filter_type_args_map
+            with
+            | None -> (generics, explicit)
+            | Some filter ->
+                let filter_types : 'a. 'a list -> 'a list =
+                 fun l ->
+                  List.filter_map
+                    (fun (b, x) -> if b then Some x else None)
+                    (List.combine filter l)
+                in
+                let types = filter_types generics.types in
+                let generics = { generics with types } in
+                let explicit =
+                  Option.map
+                    (fun e ->
+                      { e with explicit_types = filter_types e.explicit_types })
+                    explicit
+                in
+                (generics, explicit)
+          in
+          let generics =
+            match
+              TraitImplId.Map.find_opt id
+                ctx.trait_impls_filter_trait_clauses_map
+            with
+            | None -> generics
+            | Some filter ->
+                if List.length filter = List.length generics.trait_refs then
+                  let trait_refs =
+                    List.filter_map
+                      (fun (b, x) -> if b then Some x else None)
+                      (List.combine filter generics.trait_refs)
+                  in
+                  { generics with trait_refs }
+                else (
+                  [%save_error] span
+                    ("Incorrect parameter filtering information: incorrect \
+                      number of trait clauses: the trait declaration has "
+                    ^ string_of_int (List.length generics.trait_refs)
+                    ^ ", the filtering information has: "
+                    ^ string_of_int (List.length filter)
+                    ^ "\nImplemented trait ref: "
+                    ^ trait_decl_ref_to_string ctx trait_ref
+                    ^ "\nExtracted trait name: " ^ name);
+                  generics)
+          in
+          let use_brackets = generics <> empty_generic_args && inside in
+          if use_brackets then F.pp_print_string fmt "(";
+          F.pp_print_string fmt name;
+          extract_generic_args span ctx fmt no_params_tys ~explicit generics;
+          if use_brackets then F.pp_print_string fmt ")")
+  | Clause var -> (
+      (* With the [trait_inst_notation] option: refer to the clause with the
+         [({Trait<Args> for Self})] notation when it is unambiguous (the Lean
+         elaborator searches the local context for the instance). *)
+      match ExtractTraitInst.trait_clause_notation ctx span trait_ref with
+      | Some s -> F.pp_print_string fmt s
+      | None ->
+          let origin, id = origin_from_de_bruijn_var var in
+          let name = ctx_get_local_trait_clause span origin id ctx in
+          F.pp_print_string fmt name)
+  | ParentClause (inst_id, decl_id, clause_id) -> (
+      (* Same as for [Clause]: use the notation when it is unambiguous *)
+      match ExtractTraitInst.trait_clause_notation ctx span trait_ref with
+      | Some s -> F.pp_print_string fmt s
+      | None ->
+          (* Use the trait decl id to lookup the name *)
+          let name = ctx_get_trait_parent_clause span decl_id clause_id ctx in
+          extract_trait_instance_id_if_not_self span ctx fmt no_params_tys
+            ~inside:true trait_ref inst_id;
+          F.pp_print_string fmt (add_brackets name))
   | BuiltinOrAuto data ->
       let generics = trait_ref.decl_generics in
       (* For BuiltinFn* traits: the first type is the type of the function,
