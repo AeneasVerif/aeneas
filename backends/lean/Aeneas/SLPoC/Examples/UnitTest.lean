@@ -192,7 +192,7 @@ example (p : Ptr Nat) (value : Nat) :
 
 -- wand laws
 example (H1 H2 : SLProp) : H1 ∗ (H1 -∗ H2) ⊢ H2 := hwand_cancel H1 H2
-example (Q1 Q2 : SLPost Nat) : Q1 ∗+ (Q1 -∗∗ Q2) ⊢+ Q2 := qwand_cancel Q1 Q2
+example (Q1 Q2 : SLPost Nat) : Q1 ∗+ (Q1 -∗+ Q2) ⊢+ Q2 := qwand_cancel Q1 Q2
 
 -- sl_xpull: SLF's canonical example where the RHS witness depends on the LHS one
 example (p : Ptr Nat) :
@@ -268,7 +268,7 @@ example (p q : Ptr Nat) (x : Nat) :
 /-- A wand on the right is cancelled against an identical one on the left before
 being used to absorb the residual resources. -/
 example (Q₁ Q₂ : SLPost Nat) (H : SLProp) :
-    iprop(H ∗ (Q₁ -∗∗ Q₂)) ⊢ iprop(H ∗ (Q₁ -∗∗ Q₂)) := by
+    iprop(H ∗ (Q₁ -∗+ Q₂)) ⊢ iprop(H ∗ (Q₁ -∗+ Q₂)) := by
   sl_frame
 
 /-- `sl_step` only touches the goals `step` produces. -/
