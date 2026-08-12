@@ -206,11 +206,11 @@ def thetaMorphism : MonadMorphism St Wp where
 
 /-! ## Hoare triples -/
 
-/-- A Hoare triple interpreted by embedding its pre/postcondition pair into
-the ordered weakest-precondition monad.  Since `pp2wp` is the local encoding,
-this unfolds to a *Texan triple* — see `triple_texan`. -/
+/-- An affine Hoare triple interpreted by embedding its precondition and its
+postcondition extended with `GC` into the ordered weakest-precondition monad.
+The implicit `GC` may absorb any resources left over by the computation. -/
 def triple (P : SLPre) (m : St α) (Q : SLPost α) : Prop :=
-  theta m ≤ pp2wp P Q
+  theta m ≤ pp2wp P (Q ∗+ GC)
 
 namespace SepLogic
 
@@ -250,18 +250,29 @@ at the meta level instead of being internalised as a second wand, and there is
 no `□`, since this model has no invariants, no step-indexing and no
 higher-order specifications to store a triple in. -/
 theorem triple_texan (P : SLPre) (m : St α) (Q : SLPost α) :
-    triple P m Q ↔ ∀ R : SLPost α, P ∗ (Q -∗∗ R) ⊢ theta m R :=
+    triple P m Q ↔
+      ∀ R : SLPost α, P ∗ ((Q ∗+ GC) -∗∗ R) ⊢ theta m R :=
   Iff.rfl
 
 theorem triple_iff (P : SLPre) (m : St α) (Q : SLPost α) :
-    triple P m Q ↔ P ⊢ theta m Q := by
+    triple P m Q ↔ P ⊢ theta m (Q ∗+ GC) := by
   constructor
   · intro hTriple h hP
-    exact hTriple Q h (pp2wp_conseq (fun _ => himpl_refl _) h hP)
+    exact hTriple (Q ∗+ GC) h
+      (pp2wp_conseq (fun _ => himpl_refl _) h hP)
   · intro hTriple R h hPre
-    apply (theta m).monotone (qwand_cancel Q R) h
-    exact theta_frame m Q (Q -∗∗ R) h
+    apply (theta m).monotone (qwand_cancel (Q ∗+ GC) R) h
+    exact theta_frame m (Q ∗+ GC) ((Q ∗+ GC) -∗∗ R) h
       (hstar_mono hTriple (himpl_refl _) h hPre)
+
+/-- Discard resources from the declared postcondition. -/
+theorem triple_hgc_post {P : SLPre} {m : St α} {Q : SLPost α}
+    (hTriple : triple P m (Q ∗+ GC)) :
+    triple P m Q := by
+  apply (triple_iff _ _ _).mpr
+  intro h hP
+  apply (theta m).monotone (qstar_hgc_idem Q) h
+  exact (triple_iff P m (Q ∗+ GC)).mp hTriple h hP
 
 theorem triple_frame {P : SLPre} {m : St α} {Q : SLPost α}
     (hTriple : triple P m Q) (H : SLProp) :
@@ -269,9 +280,17 @@ theorem triple_frame {P : SLPre} {m : St α} {Q : SLPost α}
   apply (triple_iff _ _ _).mpr
   intro h hPre
   rcases hPre with ⟨h₁, h₂, hDisjoint, hEq, hP, hH⟩
-  apply theta_frame m Q H h
+  apply (theta m).monotone
+    (fun value => hstar_hgc_frame (Q value) H) h
+  apply theta_frame m (Q ∗+ GC) H h
   exact ⟨h₁, h₂, hDisjoint, hEq,
     (triple_iff P m Q).mp hTriple h₁ hP, hH⟩
+
+/-- Discard resources from the precondition. -/
+theorem triple_hgc_pre {P : SLPre} {m : St α} {Q : SLPost α}
+    (hTriple : triple P m Q) :
+    triple (P ∗ GC) m Q :=
+  triple_hgc_post (triple_frame hTriple GC)
 
 theorem triple_conseq {P' P : SLPre} {m : St α}
     {Q' Q : SLPost α}
@@ -280,8 +299,24 @@ theorem triple_conseq {P' P : SLPre} {m : St α}
     triple P m Q := by
   apply (triple_iff _ _ _).mpr
   intro h hPre
-  apply (theta m).monotone hQ h
+  apply (theta m).monotone
+    (fun value => hstar_mono (hQ value) (himpl_refl GC)) h
   exact (triple_iff P' m Q').mp hTriple h (hP h hPre)
+
+/-- An arbitrary postcondition resource may be discarded. -/
+theorem triple_hany_post {P H : SLPre} {m : St α} {Q : SLPost α}
+    (hTriple : triple P m (Q ∗+ H)) :
+    triple P m Q :=
+  triple_hgc_post (triple_conseq hTriple (himpl_refl P)
+    (fun value => hstar_mono (himpl_refl (Q value)) (himpl_hgc_r H)))
+
+/-- An arbitrary precondition resource may be discarded. -/
+theorem triple_hany_pre {P H : SLPre} {m : St α} {Q : SLPost α}
+    (hTriple : triple P m Q) :
+    triple (P ∗ H) m Q :=
+  triple_conseq (triple_hgc_pre hTriple)
+    (hstar_mono (himpl_refl P) (himpl_hgc_r H))
+    (fun _ => himpl_refl _)
 
 theorem triple_hpure {P : Prop} {H : SLPre} {m : St α}
     {Q : SLPost α}
@@ -333,8 +368,8 @@ theorem triple_pure {P : SLPre} {Q : SLPost α} {value : α}
     (hPost : P ⊢ Q value) :
     triple P (pure value : St α) Q := by
   apply (triple_iff _ _ _).mpr
-  change P ⊢ Q value
-  exact hPost
+  change P ⊢ Q value ∗ GC
+  exact himpl_trans hPost (hstar_hgc_intro _)
 
 theorem triple_bind {P : SLPre} {Q₁ : SLPost α}
     {Q : SLPost β} {m : St α} {next : α → St β}
@@ -344,14 +379,17 @@ theorem triple_bind {P : SLPre} {Q₁ : SLPost α}
   apply (triple_iff _ _ _).mpr
   intro h hPre
   have hFirst' := (triple_iff P m Q₁).mp hFirst h hPre
+  have hNext' (value : α) :
+      triple (Q₁ value ∗ GC) (next value) Q :=
+    triple_hgc_pre (hNext value)
   have hBind :
-      Wp.bind (theta m) (fun value => theta (next value)) Q h := by
+      Wp.bind (theta m) (fun value => theta (next value)) (Q ∗+ GC) h := by
     apply (theta m).monotone
-      (fun value => (triple_iff (Q₁ value) (next value) Q).mp
-        (hNext value))
+      (fun value => (triple_iff (Q₁ value ∗ GC) (next value) Q).mp
+        (hNext' value))
       h
     exact hFirst'
-  exact (thetaMorphism.map_bind m next).1 Q h hBind
+  exact (thetaMorphism.map_bind m next).1 (Q ∗+ GC) h hBind
 
 theorem triple_seq {P H : SLPre} {Q : SLPost β}
     {m₁ : St α} {m₂ : St β}
@@ -384,7 +422,8 @@ theorem alloc.spec (value : α) :
     ⦃ emp ⦄ alloc value ⦃⇓ p => p ↦ value⦄ := by
   apply (triple_iff _ _ _).mpr
   intro h hEmpty
-  exact pp2wp_conseq (Q := fun p => p ↦ value) (fun _ => himpl_refl _) h hEmpty
+  exact pp2wp_conseq (Q := fun p => p ↦ value)
+    (qimpl_hgc_intro _) h hEmpty
 
 def read {α : Type} (p : Ptr α) : St α :=
   FFree.trigger (.ReadPtr p)
@@ -394,7 +433,7 @@ theorem read.spec (p : Ptr α) (value : α) :
       ⦃⇓ result => ⌜result = value⌝ ∗ p ↦ value⦄ := by
   apply (triple_iff _ _ _).mpr
   intro h hSingle
-  exact ⟨value, pp2wp_conseq (fun _ => himpl_refl _) h hSingle⟩
+  exact ⟨value, pp2wp_conseq (qimpl_hgc_intro _) h hSingle⟩
 
 def update {α : Type} (p : Ptr α) (value : α) : St Unit :=
   FFree.trigger (.UpdatePtr p value)
@@ -403,7 +442,7 @@ theorem update.spec (p : Ptr α) (oldValue newValue : α) :
     ⦃ p ↦ oldValue ⦄ update p newValue ⦃⇓ p ↦ newValue⦄ := by
   apply (triple_iff _ _ _).mpr
   intro h hSingle
-  exact ⟨oldValue, pp2wp_conseq (fun _ => himpl_refl _) h hSingle⟩
+  exact ⟨oldValue, pp2wp_conseq (qimpl_hgc_intro _) h hSingle⟩
 
 def free {α : Type} (p : Ptr α) : St Unit :=
   FFree.trigger (.FreePtr p)
@@ -412,7 +451,7 @@ theorem free.spec (p : Ptr α) (value : α) :
     ⦃ p ↦ value ⦄ free p ⦃⇓ emp⦄ := by
   apply (triple_iff _ _ _).mpr
   intro h hSingle
-  exact ⟨value, pp2wp_conseq (fun _ => himpl_refl _) h hSingle⟩
+  exact ⟨value, pp2wp_conseq (qimpl_hgc_intro _) h hSingle⟩
 
 def mut_to_raw {α : Type} (value : α) : St (Ptr α) :=
   alloc value
