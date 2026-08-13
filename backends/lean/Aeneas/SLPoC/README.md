@@ -14,7 +14,7 @@ logic (SL) support.
 | [`ST.lean`](ST.lean) | The state monad `St`, its state machine, its denotation `theta` into `Wp`, affine Hoare triples, and the specifications of the pointer operations. |
 | [`Step.lean`](Step.lean) | Wires triples into `sl_step`/`sl_step*` and provides `sl_pure` for exposing the entailment of a syntactic terminal return. |
 | [`WP.lean`](WP.lean) | Separation-logic assertions, fully affine `GC`, the magic wand, and the `Wp` monad of predicate transformers. |
-| [`ProofScore.lean`](ProofScore.lean) | Engineering tool, not part of the library: measures how close the proofs of the triples are to the ideal proof, i.e. how much separation logic the automation still leaves to the user. Writes [`proof-score.md`](proof-score.md). |
+| [`ProofScore.lean`](ProofScore.lean) | Engineering tool, not part of the library: measures how close the proofs of the triples are to the ideal proof, i.e. how much separation logic the automation still leaves to the user. Writes [`proof-score.html`](proof-score.html). |
 | [`benchmark-report.md`](benchmark-report.md) | Report on the eleven external benchmark ports, their interfaces and specifications, proof-score improvements, and remaining automation gaps. |
 | `README.md` | Records the purpose and meaning of files in this directory. |
 
@@ -60,11 +60,18 @@ lake env lean --run Aeneas/SLPoC/ProofScore.lean
 ```
 
 from `backends/lean` to measure how far the proofs are from that, in
-[`proof-score.md`](proof-score.md): every proof of a triple is split into
+[`proof-score.html`](proof-score.html): every proof of a triple is split into
 *spots* — one straight-line block before the first branch, then one per branch
 body, recursively — and a spot counts as ideal when no step of it steers the
 separation logic by hand.  The report names the offending step and says what
 gave it away, so it doubles as a to-do list for the automation.
+
+The page is standalone, and fetches nothing from anywhere.  Every proof is a
+collapsible section listing its spots, each with its number of lines of code
+and its own code — the nested blocks elided as `…`, the comments left out —
+highlighted and framed in green or red according to the verdict, with the
+offending lines shaded.  The toggle at the top switches between all the spots,
+only the ideal ones, and only those that are not.
 
 The tool parses with Lean's own parser but elaborates nothing except the
 commands that open a namespace, so it takes about a second and also works on a
