@@ -9,11 +9,11 @@ separation logic the automation still leaves to the user.
 Run it from `backends/lean` with
 
 ```
-lake env lean --run Aeneas/SLPoC/ProofScore.lean [-o REPORT.md] [FILE.lean …]
+lake env lean --run Aeneas/SLPoC/ProofScore.lean [-o REPORT.html] [FILE.lean …]
 ```
 
 With no file arguments it scores every file of `Aeneas/SLPoC/Examples`, and
-writes `Aeneas/SLPoC/proof-score.md`.
+writes `Aeneas/SLPoC/proof-score.html`.
 
 ## What is measured
 
@@ -50,6 +50,17 @@ Only declarations whose statement is a triple are scored.  The separation-logic
 lemmas a development proves on the side (`nodes_snoc`, `nodesFrom_append`, …)
 are not scored, but a triple proof that *uses* one is charged for it.
 
+## The report
+
+A standalone HTML page — no script, style or font is fetched from anywhere.
+Under the summary tables, every proof is a collapsible section listing its
+spots, each with its number of lines of code and its code, highlighted, framed
+in green when the spot is ideal and in red when it is not, with the offending
+lines shaded and named underneath.  A spot shows its own code only: the nested
+blocks are elided as `…` because they are spots of their own, and the comments
+are left out.  The toggle at the top of the page switches between all the
+spots, only the ideal ones, and only those that are not.
+
 ## How it works
 
 The file is parsed with Lean's own parser, using the environment its `import`s
@@ -59,6 +70,12 @@ text.  Only the commands that change the scope (`namespace`, `section`, `end`,
 scoped notation of `SepLogic` to parse — and declarations are never elaborated.
 Scoring a file therefore costs about a second and works even on a file that
 does not compile.
+
+The highlighting is a by-product: the report renders the *tokens* the parser
+produced, so what it colours is what Lean itself saw — an identifier is red
+exactly when it resolves to a separation-logic declaration.  What lies between
+two tokens is whitespace, comments, and the little syntax a tactic block holds
+together with (`<;>`, `;`), of which the comments are dropped.
 -/
 
 namespace Aeneas.SLPoC.ProofScore
@@ -400,15 +417,35 @@ def Verdict.isIdeal : Verdict → Bool
   | .ideal => true
   | .manual _ => false
 
+/-- A token of the source, as the parser saw it, with the class it is
+highlighted with. -/
+structure Token where
+  start : String.Pos.Raw
+  stop : String.Pos.Raw
+  cls : String
+  deriving Inhabited
+
 structure Step where
   line : Nat
+  /-- First line of the step, for the list of what made a spot manual. -/
   text : String
   verdict : Verdict
+  start : String.Pos.Raw
+  stop : String.Pos.Raw
+  /-- Ranges of the nested blocks, which are spots of their own and are elided
+  from the code of this one. -/
+  holes : Array (String.Pos.Raw × String.Pos.Raw)
+  tokens : Array Token
   deriving Inhabited
 
 structure Spot where
   line : Nat
   steps : Array Step
+  /-- The code of the spot, highlighted, one `<div>` per line. -/
+  html : String := ""
+  /-- Lines of code: the lines the spot's own steps span, without the nested
+  blocks, the comments and the blank lines. -/
+  loc : Nat := 0
   deriving Inhabited
 
 def Spot.isIdeal (spot : Spot) : Bool := spot.steps.all (·.verdict.isIdeal)
@@ -468,10 +505,183 @@ def Context.classify (ctx : Context) (stx : Syntax) : Verdict :=
     | some reason => .manual s!"mentions {reason}"
     | none => .ideal
 
+/-- The leaves of a piece of syntax, in source order, each with the class it is
+highlighted with.  Only what the parser consumed is kept, so the comments — which
+are trivia — never reach the report. -/
+partial def leafTokens (r : Resolver) (stx : Syntax) : Array Token :=
+  match stx with
+  | .node _ _ args => args.flatMap (leafTokens r)
+  | .atom _ val =>
+    match stx.getRange? with
+    | none => #[]
+    | some ⟨start, stop⟩ =>
+      let val := val.trimAscii.toString
+      let cls :=
+        if slAtoms.contains val then "sl"
+        else match val.toList.head? with
+          | none => "op"
+          | some c =>
+            if c == '"' then "str"
+            else if c.isDigit then "lit"
+            else if c.isAlpha || c == '_' then "kw"
+            else "op"
+      #[{ start, stop, cls }]
+  | .ident _ _ n _ =>
+    match stx.getRange? with
+    | none => #[]
+    | some ⟨start, stop⟩ => #[{ start, stop, cls := if r.isSL n then "sl" else "id" }]
+  | .missing => #[]
+
 def Context.mkStep (ctx : Context) (stx : Syntax) : Step :=
+  let ⟨start, stop⟩ := stx.getRange?.getD ⟨0, 0⟩
+  let holes := (subBlocks stx).filterMap fun block => do
+    let first ← block[0]?
+    let last ← block.back?
+    let ⟨start, _⟩ ← first.getRange?
+    let ⟨_, stop⟩ ← last.getRange?
+    return (start, stop)
   { line := ctx.fileMap.toPosition (stx.getPos?.getD 0) |>.line
     text := ctx.stepText stx
-    verdict := ctx.classify stx }
+    verdict := ctx.classify stx
+    start, stop, holes
+    tokens := (leafTokens ctx.resolver stx).filter fun tok =>
+      !holes.any fun (from', to') => from' ≤ tok.start && tok.stop ≤ to' }
+
+/-! ## The code of a spot, highlighted
+
+Rendering walks the tokens the parser produced rather than the source text: what
+lies between two tokens is whitespace and comments, of which only the line
+breaks are kept.  The nested blocks are elided, since they are spots of their
+own. -/
+
+def escapeHtml (s : String) : String :=
+  s |>.replace "&" "&amp;" |>.replace "<" "&lt;" |>.replace ">" "&gt;"
+
+/-- One line of the rendered code. -/
+structure RenderedLine where
+  lineNo : Nat
+  /-- Indentation, in columns, before the first token of the line. -/
+  indent : Nat := 0
+  html : String := ""
+  /-- Whether a token or an elision was emitted on this line. -/
+  content : Bool := false
+  /-- Whether a step the score holds against the spot reaches this line. -/
+  manual : Bool := false
+  deriving Inhabited
+
+structure Renderer where
+  lines : Array RenderedLine := #[]
+  cur : RenderedLine
+  /-- Whitespace waiting to be written, so that what a skipped comment leaves
+  behind does not become trailing space. -/
+  pending : Nat := 0
+  deriving Inhabited
+
+def Renderer.newline (r : Renderer) : Renderer :=
+  { lines := r.lines.push r.cur, cur := { lineNo := r.cur.lineNo + 1 }, pending := 0 }
+
+def Renderer.space (r : Renderer) : Renderer := { r with pending := r.pending + 1 }
+
+def Renderer.fragment (r : Renderer) (html : String) (manual : Bool) : Renderer :=
+  let r := if r.cur.content then { r with cur.html := r.cur.html ++ "".pushn ' ' r.pending }
+    else { r with cur.indent := r.cur.indent + r.pending }
+  { r with pending := 0, cur.html := r.cur.html ++ html, cur.content := true
+           cur.manual := r.cur.manual || manual }
+
+/-- Put back on the previous line what a line break separated from it: an
+elision belongs to the line of the branch it stands for. -/
+def Renderer.rejoin (r : Renderer) : Renderer :=
+  if r.cur.content then r
+  else match r.lines.back? with
+    | none => r
+    | some last => { lines := r.lines.pop, cur := last, pending := 1 }
+
+def Renderer.finish (r : Renderer) : Renderer :=
+  { r with lines := r.lines.push r.cur, cur := { lineNo := r.cur.lineNo + 1 } }
+
+/-- Emit what lies between two tokens: the line breaks, the indentation, and the
+code the tactic's own syntax tree does not contain — `<;>`, `;` — but none of
+the comments. -/
+def Context.gap (ctx : Context) (r : Renderer) (from' to' : String.Pos.Raw)
+    (manual : Bool) : Renderer := Id.run do
+  let text := (String.Pos.Raw.extract ctx.input from' to').toList.toArray
+  let mut r := r
+  let mut buf := ""
+  let mut i := 0
+  let mut depth := 0      -- nesting of `/- … -/`
+  let mut lineComment := false
+  while h : i < text.size do
+    let c := text[i]
+    let next? := text[i + 1]?
+    let flush := !buf.isEmpty
+    if lineComment then
+      if c == '\n' then lineComment := false; r := r.newline
+      i := i + 1
+    else if depth > 0 then
+      if c == '-' && next? == some '/' then depth := depth - 1; i := i + 2
+      else if c == '/' && next? == some '-' then depth := depth + 1; i := i + 2
+      else
+        if c == '\n' then r := r.newline
+        i := i + 1
+    else if c == '-' && next? == some '-' then
+      lineComment := true; i := i + 2
+    else if c == '/' && next? == some '-' then
+      depth := depth + 1; i := i + 2
+    else if c.isWhitespace then
+      if flush then r := r.fragment s!"<span class='op'>{escapeHtml buf}</span>" manual
+      buf := ""
+      r := if c == '\n' then r.newline else r.space
+      i := i + 1
+    else
+      buf := buf.push c
+      i := i + 1
+  unless buf.isEmpty do
+    r := r.fragment s!"<span class='op'>{escapeHtml buf}</span>" manual
+  return r
+
+/-- The code of a spot: its steps, with the nested blocks elided. -/
+def Context.renderSpot (ctx : Context) (steps : Array Step) : String × Nat := Id.run do
+  let some first := steps[0]? | return ("", 0)
+  let mut r : Renderer :=
+    { cur := { lineNo := (ctx.fileMap.toPosition first.start).line
+               indent := (ctx.fileMap.toPosition first.start).column } }
+  let mut pos := first.start
+  for step in steps do
+    let manual := !step.verdict.isIdeal
+    r := ctx.gap r pos step.start manual
+    pos := step.start
+    -- The tokens and the elisions of this step, in source order.
+    let events : Array (String.Pos.Raw × String.Pos.Raw × Option String) :=
+      step.tokens.map (fun tok => (tok.start, tok.stop, some tok.cls)) ++
+        step.holes.map (fun (from', to') => (from', to', none))
+    for (start, stop, cls?) in events.qsort (fun a b => a.1 < b.1) do
+      if start < pos then continue
+      r := ctx.gap r pos start manual
+      r := match cls? with
+        | some cls =>
+          let text := escapeHtml (String.Pos.Raw.extract ctx.input start stop)
+          r.fragment s!"<span class='{cls}'>{text}</span>" manual
+        | none => r.rejoin.fragment "<span class='elided'>…</span>" manual
+      pos := stop
+    r := ctx.gap r pos step.stop manual
+    pos := max pos step.stop
+  let lines := r.finish.lines.filter (·.content)
+  -- A proof given as a term starts at the `:=` that closes the statement, far to
+  -- the right of the lines that follow: do not let it set the indentation.
+  let lines := match lines[0]?, lines[1:].foldl (fun d line => min d line.indent) 1000 with
+    | some first, restIndent => lines.set! 0 { first with indent := min first.indent restIndent }
+    | none, _ => lines
+  let dedent := lines.foldl (fun d line => min d line.indent) 1000
+  let html := String.join <| lines.toList.map fun line =>
+    let cls := if line.manual then "line manual" else "line"
+    let indent := "".pushn ' ' (line.indent - dedent)
+    s!"<div class='{cls}'><span class='lno'>{line.lineNo}</span>\
+      <code>{indent}{line.html}</code></div>"
+  return (html, lines.size)
+
+def Context.mkSpot (ctx : Context) (steps : Array Step) : Spot :=
+  let (html, loc) := ctx.renderSpot steps
+  { line := steps[0]?.map (·.line) |>.getD 0, steps, html, loc }
 
 /-- One spot for this block, plus the spots of the blocks nested in it. -/
 partial def Context.analyzeBlock (ctx : Context) (steps : Array Syntax) : Array Spot := Id.run do
@@ -482,8 +692,7 @@ partial def Context.analyzeBlock (ctx : Context) (steps : Array Syntax) : Array 
       here := here.push (ctx.mkStep atomic)
       for block in subBlocks atomic do
         nested := nested ++ ctx.analyzeBlock block
-  let line := here[0]?.map (·.line) |>.getD 0
-  return #[{ line, steps := here }] ++ nested
+  return #[ctx.mkSpot here] ++ nested
 
 structure Score where
   name : Name
@@ -503,9 +712,15 @@ def Context.scoreDecl (ctx : Context) (decl : ParsedDecl) : Score :=
     | some byStx => ctx.analyzeBlock (seqSteps byStx[1])
     | none =>
       match decl.value? with
-      | some value => #[{ line := decl.line, steps := #[ctx.mkStep value] }]
+      | some value => #[ctx.mkSpot #[ctx.mkStep value]]
       | none => #[]
   { name := decl.shortName, line := decl.line, spots }
+
+/-! ## Score of a declaration, of a file -/
+
+def Score.loc (s : Score) : Nat := s.spots.foldl (· + ·.loc) 0
+def Score.idealLoc (s : Score) : Nat :=
+  s.spots.foldl (fun n spot => if spot.isIdeal then n + spot.loc else n) 0
 
 structure FileScore where
   path : System.FilePath
@@ -515,6 +730,8 @@ structure FileScore where
 def FileScore.spots (f : FileScore) : Nat := f.scores.foldl (· + ·.total) 0
 def FileScore.idealSpots (f : FileScore) : Nat := f.scores.foldl (· + ·.ideal) 0
 def FileScore.idealProofs (f : FileScore) : Nat := f.scores.countP (·.isIdeal)
+def FileScore.loc (f : FileScore) : Nat := f.scores.foldl (· + ·.loc) 0
+def FileScore.idealLoc (f : FileScore) : Nat := f.scores.foldl (· + ·.idealLoc) 0
 
 def scoreFile (imported : NameSet) (file : ParsedFile) : FileScore :=
   let slNames := localSLNames file imported
@@ -534,90 +751,195 @@ def percent (num den : Nat) : String :=
     let permille := (2000 * num + den) / (2 * den)
     s!"{permille / 10}.{permille % 10}%"
 
-def escape (s : String) : String := s.replace "|" "\\|"
-
 def codeList (items : Array String) : String :=
-  ", ".intercalate (items.toList.map fun i => s!"`{escape i}`")
+  ", ".intercalate (items.toList.map fun i => s!"<code>{escapeHtml i}</code>")
+
+def plural (n : Nat) (one many : String) : String := if n == 1 then one else many
+
+def style : String := "
+  :root { --good: #1a7f37; --goodbg: #eaf6ec; --bad: #b3261e; --badbg: #fdecea;
+          --line: #d8dee4; --dim: #6e7781; }
+  * { box-sizing: border-box; }
+  body { margin: 0 auto; padding: 2rem 1.5rem 6rem; max-width: 68rem; color: #1f2328;
+         font: 15px/1.6 -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+  h1 { font-size: 1.7rem; margin: 0 0 .5rem; }
+  h2 { font-size: 1.25rem; margin: 2.5rem 0 .75rem; padding-bottom: .3rem;
+       border-bottom: 1px solid var(--line); }
+  p, li { max-width: 60rem; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 92%; }
+  table { border-collapse: collapse; margin: .5rem 0 1rem; width: 100%; }
+  th, td { border-bottom: 1px solid var(--line); padding: .3rem .6rem; text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+  thead th { background: #f6f8fa; }
+  tbody tr.imperfect td:first-child { border-left: 3px solid var(--bad); }
+  tbody tr.perfect td:first-child { border-left: 3px solid var(--good); }
+  tfoot td { font-weight: 600; background: #f6f8fa; }
+  .controls { position: sticky; top: 0; z-index: 2; display: flex; gap: 1.2rem;
+              align-items: center; flex-wrap: wrap; margin: 1.5rem 0;
+              padding: .7rem 1rem; border: 1px solid var(--line); border-radius: 8px;
+              background: #f6f8fa; }
+  .controls label { cursor: pointer; }
+  details.decl { border: 1px solid var(--line); border-radius: 8px; margin: .5rem 0;
+                 padding: .2rem .8rem; }
+  details.decl > summary { cursor: pointer; padding: .45rem 0; font-weight: 600; }
+  details.decl > summary .sub { font-weight: 400; color: var(--dim); }
+  .spot { border-radius: 6px; margin: .7rem 0 1rem; padding: .5rem .8rem;
+          border-left: 4px solid var(--good); background: var(--goodbg); }
+  .spot.notideal { border-left-color: var(--bad); background: var(--badbg); }
+  .spot > .head { font-size: .85rem; color: var(--dim); margin-bottom: .4rem; }
+  .verdict { font-weight: 600; color: var(--good); }
+  .spot.notideal .verdict { color: var(--bad); }
+  div.code { padding: .5rem .2rem; overflow-x: auto; background: #fff;
+             border: 1px solid var(--line); border-radius: 6px;
+             font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+             font-size: 13px; line-height: 1.5; }
+  div.code .line { white-space: pre; }
+  div.code .line.manual { background: #fbe9e7; }
+  div.code .lno { display: inline-block; width: 3.4rem; padding-right: .8rem;
+                  text-align: right; color: var(--dim); user-select: none; }
+  .kw { color: #8250df; }
+  .op { color: #57606a; }
+  .id { color: #1f2328; }
+  .lit { color: #0550ae; }
+  .str { color: #0a3069; }
+  .sl { color: #b3261e; font-weight: 600; }
+  .elided { color: var(--dim); }
+  ul.why { margin: .5rem 0 .2rem; padding-left: 1.2rem; font-size: .9rem; }
+  ul.why .lno { color: var(--dim); }
+  .warn { border-left: 4px solid #bf8700; background: #fff8e5; padding: .6rem .8rem;
+          border-radius: 6px; }
+  body[data-filter=ideal] .spot.notideal, body[data-filter=notideal] .spot.ideal,
+  body[data-filter=ideal] details.decl[data-ideal='0'],
+  body[data-filter=notideal] details.decl[data-notideal='0'],
+  body[data-filter=ideal] section.file[data-ideal='0'],
+  body[data-filter=notideal] section.file[data-notideal='0'] { display: none; }
+"
+
+def script : String := "
+  const body = document.body;
+  function apply(filter) {
+    body.dataset.filter = filter;
+    for (const d of document.querySelectorAll('details.decl'))
+      d.open = filter === 'all' ? d.dataset.notideal !== '0' : true;
+  }
+  for (const input of document.querySelectorAll('input[name=filter]'))
+    input.addEventListener('change', () => apply(input.value));
+  apply('all');
+"
+
+def renderSpot (spot : Spot) : String := Id.run do
+  let cls := if spot.isIdeal then "ideal" else "notideal"
+  let verdict := if spot.isIdeal then "ideal" else "not ideal"
+  let mut out := s!"<div class='spot {cls}'>\
+    <div class='head'>Spot at line {spot.line} — <span class='verdict'>{verdict}</span> — \
+    {spot.loc} {plural spot.loc "line" "lines"} of code</div>\
+    <div class='code'>{spot.html}</div>"
+  let manual := spot.steps.filter (!·.verdict.isIdeal)
+  unless manual.isEmpty do
+    out := out ++ "<ul class='why'>"
+    for step in manual do
+      let reason := match step.verdict with | .ideal => "" | .manual reason => reason
+      out := out ++ s!"<li><span class='lno'>{step.line}</span> \
+        <code>{escapeHtml step.text}</code> — {reason}</li>"
+    out := out ++ "</ul>"
+  return out ++ "</div>"
 
 def renderFile (f : FileScore) : String := Id.run do
-  let mut out := s!"## `{f.path}`\n\n"
+  let notIdealSpots := f.spots - f.idealSpots
+  let mut out := s!"<section class='file' id='{f.path}' data-ideal='{f.idealSpots}' \
+    data-notideal='{notIdealSpots}'><h2><code>{f.path}</code></h2>"
   unless f.parseErrors.isEmpty do
-    out := out ++ s!"⚠ {f.parseErrors.size} parse errors, listed at the end of this section: \
-      the file defines notation of its own and has not been built, so some of its \
-      declarations are missing here.\n\n"
+    out := out ++ s!"<p class='warn'>{f.parseErrors.size} parse \
+      {plural f.parseErrors.size "error" "errors"}: the file defines notation of its own and \
+      has not been built, so some of its declarations are missing here \
+      ({escapeHtml (", ".intercalate f.parseErrors.toList)}).</p>"
   if f.scores.isEmpty then
-    out := out ++ "No triple to score in this file.\n\n"
-  else
-    out := out ++ "| Declaration | Line | Spots | Ideal | Score |\n"
-    out := out ++ "|---|---:|---:|---:|---:|\n"
-    for s in f.scores do
-      out := out ++ s!"| `{s.name}` | {s.line} | {s.total} | {s.ideal} | \
-        {percent s.ideal s.total} |\n"
-    out := out ++ s!"| **Total** | | **{f.spots}** | **{f.idealSpots}** | \
-      **{percent f.idealSpots f.spots}** |\n\n"
-    out := out ++ s!"{f.idealProofs} of {f.scores.size} proofs are ideal throughout.\n\n"
-    out := out ++ "### Proofs, spot by spot\n\n"
-    for s in f.scores do
-      out := out ++ s!"#### `{s.name}` (line {s.line}) — {s.ideal}/{s.total} spots ideal\n\n"
-      for spot in s.spots.qsort (·.line < ·.line) do
-        let verdict := if spot.isIdeal then "ideal" else "not ideal"
-        out := out ++ s!"Spot at line {spot.line} — {verdict}:\n\n"
-        out := out ++ "| Line | Step | Verdict |\n|---:|---|---|\n"
-        for step in spot.steps do
-          let verdict := match step.verdict with
-            | .ideal => "ideal"
-            | .manual reason => s!"**manual**: {escape reason}"
-          out := out ++ s!"| {step.line} | `{escape step.text}` | {verdict} |\n"
-        out := out ++ "\n"
-  unless f.parseErrors.isEmpty do
-    out := out ++ "### Parse errors\n\n"
-    for e in f.parseErrors do
-      out := out ++ s!"- {escape e}\n"
-    out := out ++ "\n"
-  return out
+    return out ++ "<p>No triple to score in this file.</p></section>"
+  out := out ++ "<table><thead><tr><th>Declaration</th><th>Line</th><th>Spots</th>\
+    <th>Ideal</th><th>Score</th><th>LOC</th><th>Ideal LOC</th></tr></thead><tbody>"
+  for s in f.scores do
+    let cls := if s.isIdeal then "perfect" else "imperfect"
+    out := out ++ s!"<tr class='{cls}'><td><code>{escapeHtml s.name.toString}</code></td>\
+      <td>{s.line}</td><td>{s.total}</td><td>{s.ideal}</td>\
+      <td>{percent s.ideal s.total}</td><td>{s.loc}</td><td>{s.idealLoc}</td></tr>"
+  out := out ++ s!"</tbody><tfoot><tr><td>{f.idealProofs} of {f.scores.size} proofs ideal \
+    throughout</td><td></td><td>{f.spots}</td><td>{f.idealSpots}</td>\
+    <td>{percent f.idealSpots f.spots}</td><td>{f.loc}</td><td>{f.idealLoc}</td></tr>\
+    </tfoot></table>"
+  for s in f.scores do
+    let notIdeal := s.total - s.ideal
+    -- Open by default the proofs that have something to fix, so that the page
+    -- is useful before its script runs.
+    let open' := if notIdeal == 0 then "" else " open"
+    out := out ++ s!"<details class='decl' data-ideal='{s.ideal}' \
+      data-notideal='{notIdeal}'{open'}>\
+      <summary><code>{escapeHtml s.name.toString}</code> \
+      <span class='sub'>— line {s.line}, {s.ideal}/{s.total} spots ideal, \
+      {s.loc} {plural s.loc "line" "lines"} of code</span></summary>"
+    for spot in s.spots.qsort (·.line < ·.line) do
+      out := out ++ renderSpot spot
+    out := out ++ "</details>"
+  return out ++ "</section>"
 
 def renderReport (files : Array FileScore) : String := Id.run do
-  let mut out := "# Ideal separation-logic proof score\n\n"
-  out := out ++ "Regenerate with `lake env lean --run Aeneas/SLPoC/ProofScore.lean` from \
-    `backends/lean`.  A *spot* is one straight-line block of a proof: the block before the \
-    first branch, then one per branch body, recursively.  A spot is ideal when it steers the \
-    separation logic nowhere by hand — only `sl_step`, `sl_pure`, `sl_pull`, and pure reasoning.  See the \
-    module docstring of `Aeneas/SLPoC/ProofScore.lean` for the details.\n\n"
-  out := out ++ "## Rules\n\n"
-  out := out ++ s!"- free: {codeList idealTactics}, pure reasoning, and `unfold` of a \
-    program;\n"
-  out := out ++ s!"- manual: {codeList manualTactics};\n"
-  out := out ++ s!"- manual: any other step mentioning a separation-logic connective \
+  let spots := files.foldl (· + ·.spots) 0
+  let idealSpots := files.foldl (· + ·.idealSpots) 0
+  let mut out := s!"<!DOCTYPE html>\n<html lang='en'><head><meta charset='utf-8'>\
+    <meta name='viewport' content='width=device-width, initial-scale=1'>\
+    <title>Ideal separation-logic proof score</title><style>{style}</style></head>\
+    <body data-filter='all'><h1>Ideal separation-logic proof score</h1>"
+  out := out ++ "<p>Regenerate with <code>lake env lean --run \
+    Aeneas/SLPoC/ProofScore.lean</code> from <code>backends/lean</code>.  A <em>spot</em> is one \
+    straight-line block of a proof: the block before the first branch, then one per branch body, \
+    recursively.  A spot is ideal when it steers the separation logic nowhere by hand — only \
+    <code>sl_step</code>, <code>sl_pull</code>, and pure reasoning.  The code below is the \
+    spot's own, with the nested blocks elided as <span class='elided'>…</span> because they are \
+    spots of their own, and without the comments.  See the module docstring of \
+    <code>Aeneas/SLPoC/ProofScore.lean</code> for the details.</p>"
+  out := out ++ s!"<h2>Rules</h2><ul>\
+    <li>free: {codeList idealTactics}, pure reasoning, and <code>unfold</code> of a program;</li>\
+    <li>manual: {codeList manualTactics};</li>\
+    <li>manual: any other step mentioning a separation-logic connective \
     ({codeList slAtoms}), a simp set of the automation ({codeList slAttrNames}), or a \
-    declaration whose statement is about `SLProp`.\n\n"
-  out := out ++ "## Summary\n\n"
-  out := out ++ "| File | Triples | Ideal proofs | Spots | Ideal spots | Score |\n"
-  out := out ++ "|---|---:|---:|---:|---:|---:|\n"
-  let mut spots := 0
-  let mut idealSpots := 0
+    declaration whose statement is about <code>SLProp</code>.</li></ul>"
+  out := out ++ "<h2>Summary</h2><table><thead><tr><th>File</th><th>Triples</th>\
+    <th>Ideal proofs</th><th>Spots</th><th>Ideal spots</th><th>Score</th><th>LOC</th>\
+    <th>Ideal LOC</th></tr></thead><tbody>"
   let mut proofs := 0
   let mut idealProofs := 0
+  let mut loc := 0
+  let mut idealLoc := 0
   for f in files do
-    out := out ++ s!"| `{f.path}` | {f.scores.size} | {f.idealProofs} | {f.spots} | \
-      {f.idealSpots} | {percent f.idealSpots f.spots} |\n"
-    spots := spots + f.spots
-    idealSpots := idealSpots + f.idealSpots
+    out := out ++ s!"<tr><td><a href='#{f.path}'><code>{f.path}</code></a></td>\
+      <td>{f.scores.size}</td><td>{f.idealProofs}</td><td>{f.spots}</td>\
+      <td>{f.idealSpots}</td><td>{percent f.idealSpots f.spots}</td><td>{f.loc}</td>\
+      <td>{f.idealLoc}</td></tr>"
     proofs := proofs + f.scores.size
     idealProofs := idealProofs + f.idealProofs
-  out := out ++ s!"| **Total** | **{proofs}** | **{idealProofs}** | **{spots}** | \
-    **{idealSpots}** | **{percent idealSpots spots}** |\n\n"
+    loc := loc + f.loc
+    idealLoc := idealLoc + f.idealLoc
+  out := out ++ s!"</tbody><tfoot><tr><td>Total</td><td>{proofs}</td><td>{idealProofs}</td>\
+    <td>{spots}</td><td>{idealSpots}</td><td>{percent idealSpots spots}</td><td>{loc}</td>\
+    <td>{idealLoc}</td></tr></tfoot></table>"
+  out := out ++ s!"<div class='controls'><strong>Show</strong>\
+    <label><input type='radio' name='filter' value='all' checked> every spot \
+    ({spots})</label>\
+    <label><input type='radio' name='filter' value='ideal'> only the ideal ones \
+    ({idealSpots})</label>\
+    <label><input type='radio' name='filter' value='notideal'> only those that are not \
+    ({spots - idealSpots})</label></div>"
   for f in files do
     out := out ++ renderFile f
-  return out
+  return out ++ s!"<script>{script}</script></body></html>\n"
 
 /-! ## Entry point -/
 
 structure Options where
   files : Array System.FilePath := #[]
-  out : System.FilePath := "Aeneas/SLPoC/proof-score.md"
+  out : System.FilePath := "Aeneas/SLPoC/proof-score.html"
 
 def usage : String :=
-  "usage: lake env lean --run Aeneas/SLPoC/ProofScore.lean [-o REPORT.md] [FILE.lean …]"
+  "usage: lake env lean --run Aeneas/SLPoC/ProofScore.lean [-o REPORT.html] [FILE.lean …]"
 
 partial def parseArgs (args : List String) (opts : Options := {}) : Except String Options :=
   match args with
