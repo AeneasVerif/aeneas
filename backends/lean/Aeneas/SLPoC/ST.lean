@@ -405,10 +405,9 @@ theorem ok.spec (value : α) :
     ⦃ emp ⦄ (FFree.ok value : St α) ⦃⇓ result => ⌜result = value⌝⦄ :=
   triple_pure fun _ hEmpty => ⟨rfl, hEmpty⟩
 
-/-- `ok.spec` again, stated through `Pure.pure`.  Both statements are needed:
-`step` indexes its database by the head symbol of the program, and a `pure` in
-the source is only unfolded to `FFree.ok` once it has been pushed through a
-`bind` by a previous step. -/
+/-- `ok.spec` again, stated through `Pure.pure`.  Both it and `ok.spec` remain
+registered for calls in binds and ordinary ramified-frame automation.
+`sl_pure` is the direct terminal rule for a syntactic return. -/
 theorem pure.spec (value : α) :
     ⦃ emp ⦄ (Pure.pure value : St α) ⦃⇓ result => ⌜result = value⌝⦄ :=
   ok.spec value
