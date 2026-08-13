@@ -76,9 +76,44 @@ example (p q : Ptr Nat) (h : q = p) :
 the context (to rewrite the cell) and in the assertion (for the postcondition). -/
 example (p : Ptr Nat) (n : Nat) :
     ⦃ iprop(⌜n = 1⌝ ∗ p ↦ n) ⦄ pure () ⦃⇓ iprop(⌜n = 1⌝ ∗ p ↦ 1)⦄ := by
-  sl_pull_keep
-  rename_i hn
-  exact triple_pure (by simp only [hn]; sl_frame)
+  sl_pure
+  apply himpl_hpure_l
+  intro hn
+  simp only [hn]
+  sl_frame
+
+/-- `sl_pure` reduces match/let noise around a terminal return. -/
+example (n : Nat) :
+    ⦃ emp ⦄ (Prod.rec (fun value _ => pure value) (n, true) : St Nat)
+      ⦃⇓ result => ⌜result = n⌝⦄ := by
+  sl_pure
+  sl_frame
+
+def namedPure (n : Nat) : St Nat :=
+  pure n
+
+@[step]
+theorem namedPure.spec (n : Nat) :
+    ⦃ emp ⦄ namedPure n ⦃⇓ result => ⌜result = n⌝⦄ := by
+  unfold namedPure
+  sl_pure
+  sl_frame
+
+/-- The direct terminal rule does not unfold named wrappers and bypass their
+registered specifications. -/
+example (n : Nat) :
+    ⦃ emp ⦄ namedPure n ⦃⇓ result => ⌜result = n⌝⦄ := by
+  fail_if_success sl_pure
+  sl_step
+
+/-- Normalization inside `sl_pure` stays focused on its original goal. -/
+example (n : Nat) :
+    True ∧ triple emp (pure n : St Nat) (fun result => ⌜result = n⌝) := by
+  constructor
+  fail_if_success all_goals sl_pure
+  · trivial
+  · sl_pure
+    sl_frame
 
 /-! ## Frame inference
 
