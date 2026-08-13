@@ -3,10 +3,12 @@ import Aeneas.Data.List
 import Aeneas.Tactic.Step.Init
 import Aeneas.Std.Array.Core
 import Aeneas.Std.Core.Default
+import Aeneas.Data.ListN
 
 namespace Aeneas.Std
 
 open Result Error WP
+open Aeneas.Data.ListN
 
 local macro_rules
 | `(tactic| get_elem_tactic) => `(tactic| grind)
@@ -15,7 +17,48 @@ local macro_rules
 # Array
 -/
 
-def Array (α : Type u) (n : Usize) := { l : List α // l.length = n.val }
+-- Note that this can't be a simple def because then lean won't allow recursive
+-- inductives with Arrays in them (See: https://github.com/AeneasVerif/aeneas/issues/1138)
+structure Array (α : Type u) (n : Usize) where
+  list : ListN α n.val
+deriving BEq, ReflBEq, LawfulBEq, DecidableEq
+
+@[coe]
+def Array.val {α n} (a : Array α n) : List α := a.list.toList
+
+@[simp, grind ., grind! .]
+theorem Array.property {α n} (s : Array α n) : s.val.length = n.val := by
+  simp [Array.val, ListN_length]
+
+def Array.from {α n} (l : List α) (h : l.length = n.val) : Array α n :=
+  {
+    list := cast (congrArg (ListN α) h) (.fromList l)
+  }
+
+@[scalar_tac_simps, simp, grind! ., grind .]
+theorem Array.from_val {α} {n : Usize} (l : List α) (h : l.length = n.val)
+  : (Array.from l h).val = l := by
+  simp [Array.from, Array.val]
+  grind [ListN.from_to_inverse]
+
+@[scalar_tac_simps, simp, grind! ., grind .]
+theorem Array.val_from {α n} (s : Array α n) h
+  : Array.from s.val h = s := by
+  rcases s with ⟨l⟩
+  simp [val, Array.from] at *
+  grind [ListN.to_from_inverse (l:=l)]
+
+theorem Array.eq_iff {α n} (s0 s1 : Array α n) : s0 = s1 ↔ s0.val = s1.val := by
+  constructor
+  · grind
+  · intros p
+    simp [val] at p
+    have : s1.list ≍ s0.list := by
+      have := ListN.to_from_inverse (l:=s0.list)
+      have := ListN.to_from_inverse (l:=s1.list)
+      grind
+    cases s0; cases s1
+    grind
 
 /-- We need this to coerce arrays to lists without marking `Array` as reducible.
     Also not that we *do not* want to mark `Array` as reducible: it triggers issues.
@@ -23,14 +66,11 @@ def Array (α : Type u) (n : Usize) := { l : List α // l.length = n.val }
 instance (α : Type u) (n : Usize) : CoeOut (Array α n) (List α) where
   coe := λ v => v.val
 
-instance [BEq α] : BEq (Array α n) := SubtypeBEq _
-
-instance [BEq α] [LawfulBEq α] : LawfulBEq (Array α n) := SubtypeLawfulBEq _
 
 instance {α : Type u} {n : Usize} [Inhabited α] : Inhabited (Array α n) :=
-  ⟨ ⟨ List.replicate n.val default, by simp ⟩ ⟩
+  ⟨ .from (List.replicate n.val default) (by simp) ⟩
 
-def Array.empty (α : Type u) : Array α (Usize.ofNat 0) := ⟨ [], by simp ⟩
+def Array.empty (α : Type u) : Array α (Usize.ofNat 0) := .from [] (by simp)
 
 /- Registering some theorems for `scalar_tac` -/
 @[scalar_tac_simps, grind =, agrind =]
@@ -47,7 +87,7 @@ example {α: Type u} {n : Usize} (v : Array α n) : v.length ≤ Usize.max := by
   scalar_tac
 
 def Array.make {α : Type u} (n : Usize) (init : List α) (hl : init.length = n.val := by simp) :
-  Array α n := ⟨ init, by apply hl ⟩
+  Array α n := .from init (by apply hl)
 
 example : Array Int (Usize.ofNat 2) := Array.make (Usize.ofNat 2) [0, 1] (by simp)
 
@@ -109,11 +149,11 @@ def Array.index_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) : Res
 
 -- For initialization
 def Array.repeat {α : Type u} (n : Usize) (x : α) : Array α n :=
-  ⟨ List.replicate n.val x, by simp_all ⟩
+  .from (List.replicate n.val x) (by simp_all)
 
 @[simp]
 theorem Array.repeat_val (n : Usize) (x : α) : (Array.repeat n x).val = List.replicate n.val x := by
-  simp only [Array.repeat]
+  simp [Array.repeat]
 
 @[step]
 theorem Array.index_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize)
@@ -122,10 +162,10 @@ theorem Array.index_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usi
   grind [index_usize]
 
 def Array.set {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) : Array α n :=
-  ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
+  .from (v.val.set i.val x) (by have := v.property; simp [*])
 
 def Array.set_opt {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: Option α) : Array α n :=
-  ⟨ v.val.set_opt i.val x, by have := v.property; simp [*] ⟩
+  .from (v.val.set_opt i.val x) (by have := v.property; simp [*])
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_safe, grind =, agrind =]
 theorem Array.set_val_eq {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) :
@@ -212,7 +252,7 @@ def Array.update {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) : 
   match v[i]? with
   | none => fail .arrayOutOfBounds
   | some _ =>
-    ok ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
+    ok (.from (v.val.set i.val x) (by have := v.property; simp [*]))
 
 @[step]
 theorem Array.update_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x : α)
@@ -240,7 +280,7 @@ theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i:
 theorem Array.set_getElem!_eq {α} {n : Usize} [Inhabited α] (x : Array α n) (i : Usize) :
   x.set i (x.val[i.val]!) = x := by
   have := @List.set_getElem_self _ x.val i.val
-  simp only [Array, Subtype.ext_iff, set_val_eq, List.set_getElem!]
+  simp only [Array.eq_iff, set_val_eq, List.set_getElem!]
 
 @[simp]
 theorem Array.set_getElem_eq {α} {n : Usize} (x : Array α n) (i : Usize) (h : i.val < x.length) :
@@ -249,15 +289,15 @@ theorem Array.set_getElem_eq {α} {n : Usize} (x : Array α n) (i : Usize) (h : 
     simpa using h
   have hself : x.val.set i.val x.val[i.val] = x.val :=
     List.set_getElem_self (as := x.val) (i := i.val) (h := h')
-  simp only [Array, Subtype.ext_iff, set_val_eq] at hself ⊢
+  simp only [Array.eq_iff, set_val_eq] at hself ⊢
   exact hself
 
 @[simp↓, simp_lists_safe↓]
 theorem Array.getElem_set_eq {α} {n : Usize} (v : Array α n) (i : Usize) (x : α) (h : i.val < (v.set i x).length) :
   (v.set i x)[i]'h = x := by
   cases v
-  unfold set getElem instGetElemArrayUsizeLtNatValLengthValListEq
-  simp only [List.getElem_set_self]
+  unfold set getElem instGetElemArrayUsizeLtNatValLengthVal
+  simp [List.getElem_set_self]
 
 @[simp↓, simp_lists_safe↓]
 theorem Array.getElem_set_eq' {α} {n : Usize} (v : Array α n) (i j : Usize) (x : α) (h : j.val < (v.set i x).length)
@@ -270,14 +310,14 @@ theorem Array.getElem_set_neq {α} {n : Usize} (v : Array α n) (i j : Usize) (x
   (h : j.val < (v.set i x).length) (h' : i ≠ j) :
   (v.set i x)[j]'h = v[j] := by
   cases v
-  unfold set getElem instGetElemArrayUsizeLtNatValLengthValListEq
-  simp only [ne_eq, UScalar.neq_to_neq_val] at *
+  unfold set getElem instGetElemArrayUsizeLtNatValLengthVal
+  simp [ne_eq, UScalar.neq_to_neq_val] at *
   simp_lists [List.getElem_set_ne]
 
 /-- Small helper (this function doesn't model a specific Rust function) -/
 def Array.clone {α : Type u} {n : Usize} (clone : α → Result α) (s : Array α n) : Result (Array α n) := do
   let s' ← List.clone clone s.val
-  ok ⟨ s', by have:= s'.property; scalar_tac ⟩
+  ok (.from s' (by have:= s'.property; scalar_tac))
 
 theorem Array.clone_length {α : Type u} {n : Usize} (clone : α → Result α) (s s' : Array α n) (h : Array.clone clone s = ok s') :
   s'.length = s.length := by
@@ -326,13 +366,13 @@ def core.clone.CloneArray {T : Type} (N : Usize)
 }
 
 def Array.setSlice! {α : Type u} {n} (s : Array α n) (i : ℕ) (s' : List α) : Array α n :=
-  ⟨s.val.setSlice! i s', by scalar_tac⟩
+  .from (s.val.setSlice! i s') (by scalar_tac)
 
 @[simp_lists_safe]
 theorem Array.setSlice!_getElem!_prefix {α} {n} [Inhabited α]
   (s : Array α n) (s' : List α) (i j : ℕ) (h : j < i) :
   (s.setSlice! i s')[j]! = s[j]! := by
-  simp only [Array.setSlice!, Array.getElem!_Nat_eq]
+  simp [Array.setSlice!, Array.getElem!_Nat_eq]
   simp_lists
 
 @[simp_lists_safe]
@@ -341,7 +381,7 @@ theorem Array.setSlice!_getElem_prefix {α} {n}
   (s.setSlice! i s')[j] = s[j] := by
   have hj' : j < (s.setSlice! i s').length := by scalar_tac
   have h1 : (s.setSlice! i s')[j]? = s[j]? := by
-    simp only [Array.getElem?_Nat_eq, Array.setSlice!]
+    simp [Array.getElem?_Nat_eq, Array.setSlice!]
     simp_lists [List.setSlice!_getElem?_prefix]
   simp only [Array.getElem?_Nat_eq, List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2,
     Option.some.injEq] at h1
@@ -351,7 +391,7 @@ theorem Array.setSlice!_getElem_prefix {α} {n}
 theorem Array.setSlice!_getElem!_middle {α} {n} [Inhabited α]
   (s : Array α n) (s' : List α) (i j : ℕ) (h : i ≤ j ∧ j - i < s'.length ∧ j < s.length) :
   (s.setSlice! i s')[j]! = s'[j - i]! := by
-  simp only [Array.setSlice!, Array.getElem!_Nat_eq]
+  simp [Array.setSlice!, Array.getElem!_Nat_eq]
   simp_lists
 
 @[simp_lists_safe]
@@ -362,7 +402,7 @@ theorem Array.setSlice!_getElem_middle {α} {n}
     scalar_tac
   have hji : j - i < s'.length := h.2.1
   have h1 : (s.setSlice! i s')[j]? = s'[j - i]? := by
-    simp only [Array.getElem?_Nat_eq, Array.setSlice!]
+    simp [Array.getElem?_Nat_eq, Array.setSlice!]
     simp_lists [List.setSlice!_getElem?_middle]
   simp only [Array.getElem?_Nat_eq, List.getElem?_eq_getElem hj', List.getElem?_eq_getElem hji,
     Option.some.injEq] at h1
@@ -371,7 +411,7 @@ theorem Array.setSlice!_getElem_middle {α} {n}
 theorem Array.setSlice!_getElem!_suffix {α} {n} [Inhabited α]
   (s : Array α n) (s' : List α) (i j : ℕ) (h : i + s'.length ≤ j) :
   (s.setSlice! i s')[j]! = s[j]! := by
-  simp only [Array.setSlice!, Array.getElem!_Nat_eq]
+  simp [Array.setSlice!, Array.getElem!_Nat_eq]
   simp_lists
 
 theorem Array.setSlice!_getElem_suffix {α} {n}
@@ -379,7 +419,7 @@ theorem Array.setSlice!_getElem_suffix {α} {n}
   (s.setSlice! i s')[j] = s[j] := by
   have hj' : j < (s.setSlice! i s').length := by scalar_tac
   have h1 : (s.setSlice! i s')[j]? = s[j]? := by
-    simp only [Array.getElem?_Nat_eq, Array.setSlice!]
+    simp [Array.getElem?_Nat_eq, Array.setSlice!]
     simp_lists [List.setSlice!_getElem?_suffix]
   simp only [Array.getElem?_Nat_eq, List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2,
     Option.some.injEq] at h1
@@ -403,7 +443,7 @@ def core.default.DefaultArray {T : Type} (N : Usize)
 
 @[rust_fun "core::array::{core::default::Default<[@T; 0]>}::default"]
 def core.default.DefaultArrayEmpty.default (T : Type) : Result (Array T (Usize.ofNat 0)) :=
-  ok ⟨ [], by scalar_tac ⟩
+  ok (.from []  (by scalar_tac))
 
 /- See the comments for `core.default.DefaultArray` -/
 @[reducible, rust_trait_impl "core::default::Default<[@T; 0]>"]
