@@ -17,83 +17,49 @@ noncomputable section
 
 namespace issue_1043_iterator_methods
 
-/-- [core::iter::adapters::enumerate::{impl core::iter::traits::iterator::Iterator<(usize, Clause0_Item)> for core::iter::adapters::enumerate::Enumerate<I>}::collect]:
-    Source: '/rustc/library/core/src/iter/adapters/enumerate.rs', lines 62:0-64:16
-    Name pattern: [core::iter::adapters::enumerate::{core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, (usize, @Clause0_Item)>}::collect]
-    Visibility: public -/
-@[rust_fun
-  "core::iter::adapters::enumerate::{core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, (usize, @Clause0_Item)>}::collect"]
-axiom
-  core.iter.adapters.enumerate.Enumerate.Insts.CoreIterTraitsIteratorIteratorPairUsizeClause0_Item.collect
-  {I : Type} {B : Type} {Clause0_Item : Type} (traitsiteratorIteratorInst :
-  core.iter.traits.iterator.Iterator I Clause0_Item)
-  (traitscollectFromIteratorBPairUsizeClause0_ItemInst :
-  core.iter.traits.collect.FromIterator B (Std.Usize × Clause0_Item)) :
-  core.iter.adapters.enumerate.Enumerate I → Result B
-
-/-- [core::iter::adapters::enumerate::{impl core::iter::traits::iterator::Iterator<(usize, Clause0_Item)> for core::iter::adapters::enumerate::Enumerate<I>}::map]:
-    Source: '/rustc/library/core/src/iter/adapters/enumerate.rs', lines 62:0-64:16
-    Name pattern: [core::iter::adapters::enumerate::{core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, (usize, @Clause0_Item)>}::map]
-    Visibility: public -/
-@[rust_fun
-  "core::iter::adapters::enumerate::{core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, (usize, @Clause0_Item)>}::map"]
-axiom
-  core.iter.adapters.enumerate.Enumerate.Insts.CoreIterTraitsIteratorIteratorPairUsizeClause0_Item.map
-  {I : Type} {B : Type} {F : Type} {Clause0_Item : Type}
-  (traitsiteratorIteratorInst : core.iter.traits.iterator.Iterator I
-  Clause0_Item) (opsfunctionFnMutFTuplePairUsizeClause0_ItemBInst :
-  core.ops.function.FnMut F (Std.Usize × Clause0_Item) B) :
-  core.iter.adapters.enumerate.Enumerate I → F → Result
-    (core.iter.adapters.map.Map (core.iter.adapters.enumerate.Enumerate I) F)
-
-/-- [core::iter::adapters::map::{impl core::iter::traits::iterator::Iterator<B> for core::iter::adapters::map::Map<I, F>}::collect]:
-    Source: '/rustc/library/core/src/iter/adapters/map.rs', lines 99:0-101:27
-    Name pattern: [core::iter::adapters::map::{core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, @F>, @B>}::collect]
-    Visibility: public -/
-@[rust_fun
-  "core::iter::adapters::map::{core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, @F>, @B>}::collect"]
-axiom core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.collect
-  {B : Type} {I : Type} {F : Type} {B1 : Type} {Clause0_Item : Type}
-  (traitsiteratorIteratorInst : core.iter.traits.iterator.Iterator I
-  Clause0_Item) (opsfunctionFnMutFTupleClause0_ItemBInst :
-  core.ops.function.FnMut F Clause0_Item B) (traitscollectFromIteratorInst :
-  core.iter.traits.collect.FromIterator B1 B) :
-  core.iter.adapters.map.Map I F → Result B1
-
-/-- [core::iter::range::{impl core::iter::traits::iterator::Iterator<A> for core::ops::range::Range<A>}::collect]:
-    Source: '/rustc/library/core/src/iter/range.rs', lines 980:0-980:40
-    Name pattern: [core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>}::collect]
-    Visibility: public -/
-@[rust_fun
-  "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>}::collect"]
-axiom core.ops.range.Range.Insts.CoreIterTraitsIteratorIterator.collect
-  {A : Type} {B : Type} (StepInst : core.iter.range.Step A)
-  (traitscollectFromIteratorInst : core.iter.traits.collect.FromIterator B A) :
-  core.ops.range.Range A → Result B
-
-/-- [core::iter::range::{impl core::iter::traits::iterator::Iterator<A> for core::ops::range::Range<A>}::map]:
-    Source: '/rustc/library/core/src/iter/range.rs', lines 980:0-980:40
-    Name pattern: [core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>}::map]
-    Visibility: public -/
-@[rust_fun
-  "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>}::map"]
-axiom core.ops.range.Range.Insts.CoreIterTraitsIteratorIterator.map
-  {A : Type} {B : Type} {F : Type} (StepInst : core.iter.range.Step A)
-  (opsfunctionFnMutFTupleABInst : core.ops.function.FnMut F A B) :
-  core.ops.range.Range A → F → Result (core.iter.adapters.map.Map
-    (core.ops.range.Range A) F)
-
 /-- [core::iter::traits::iterator::Iterator::map]:
     Source: '/rustc/library/core/src/iter/traits/iterator.rs', lines 831:4-834:34
     Name pattern: [core::iter::traits::iterator::Iterator::map]
     Visibility: public -/
-@[rust_fun "core::iter::traits::iterator::Iterator::map"]
+@[trait_default, rust_fun "core::iter::traits::iterator::Iterator::map"]
 axiom core.iter.traits.iterator.Iterator.map.default
   {Self : Type} {B : Type} {F : Type} {Clause0_Item : Type} (IteratorInst :
   core.iter.traits.iterator.Iterator Self Clause0_Item)
   (opsfunctionFnMutFTupleClause0_ItemBInst : core.ops.function.FnMut F
   Clause0_Item B) :
   Self → F → Result (core.iter.adapters.map.Map Self F)
+
+/-- [core::iter::adapters::map::{impl core::iter::traits::iterator::Iterator<B> for core::iter::adapters::map::Map<I, F>}::next]:
+    Source: '/rustc/library/core/src/iter/adapters/map.rs', lines 106:4-106:35
+    Name pattern: [core::iter::adapters::map::{core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, @F>, @B>}::next]
+    Visibility: public -/
+@[rust_fun
+  "core::iter::adapters::map::{core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, @F>, @B>}::next"]
+axiom core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.next
+  {B : Type} {I : Type} {F : Type} {Clause0_Item : Type}
+  (traitsiteratorIteratorInst : core.iter.traits.iterator.Iterator I
+  Clause0_Item) (opsfunctionFnMutFTupleClause0_ItemBInst :
+  core.ops.function.FnMut F Clause0_Item B) :
+  core.iter.adapters.map.Map I F → Result ((Option B) ×
+    (core.iter.adapters.map.Map I F))
+
+/-- Trait implementation: [core::iter::adapters::map::{impl core::iter::traits::iterator::Iterator<B> for core::iter::adapters::map::Map<I, F>}]
+    Source: '/rustc/library/core/src/iter/adapters/map.rs', lines 99:0-101:27
+    Name pattern: [core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, @F>, @B>] -/
+@[reducible, rust_trait_impl
+  "core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, @F>, @B>"]
+impl_def core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator {B :
+  Type} {I : Type} {F : Type} {Clause0_Item : Type} (traitsiteratorIteratorInst
+  : core.iter.traits.iterator.Iterator I Clause0_Item)
+  (opsfunctionFnMutFTupleClause0_ItemBInst : core.ops.function.FnMut F
+  Clause0_Item B) : core.iter.traits.iterator.Iterator
+  (core.iter.adapters.map.Map I F) B := {
+  next := core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.next
+    traitsiteratorIteratorInst opsfunctionFnMutFTupleClause0_ItemBInst
+  enumerate := core.iter.traits.iterator.Iterator.enumerate.trait_default
+    (core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator
+    traitsiteratorIteratorInst opsfunctionFnMutFTupleClause0_ItemBInst)
+}
 
 /-- [issue_1043_iterator_methods::indexed_squares::closure]
     Source: 'tests/src/issue-1043-iterator-methods.rs', lines 9:25-9:46 -/
@@ -165,15 +131,17 @@ def indexed_squares
   := do
   let e ← coreitertraitsiteratorIteratorIU32Inst.enumerate iter
   let m ←
-    core.iter.adapters.enumerate.Enumerate.Insts.CoreIterTraitsIteratorIteratorPairUsizeClause0_Item.map
-      coreitertraitsiteratorIteratorIU32Inst
+    core.iter.traits.iterator.Iterator.map.default
+      (core.iter.traits.iterator.IteratorEnumerate
+      coreitertraitsiteratorIteratorIU32Inst)
       (indexed_squares.closure.Insts.CoreOpsFunctionFnMutTuplePairUsizeU32U32
       coreitertraitsiteratorIteratorIU32Inst) e ()
-  core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.collect
+  core.iter.traits.iterator.Iterator.collect.default
+    (core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator
     (core.iter.traits.iterator.IteratorEnumerate
     coreitertraitsiteratorIteratorIU32Inst)
     (indexed_squares.closure.Insts.CoreOpsFunctionFnMutTuplePairUsizeU32U32
-    coreitertraitsiteratorIteratorIU32Inst)
+    coreitertraitsiteratorIteratorIU32Inst))
     (core.iter.traits.collect.FromIteratorVec Std.U32) m
 
 /-- [issue_1043_iterator_methods::call_it]:
