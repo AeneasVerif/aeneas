@@ -294,7 +294,7 @@ theorem par_client_sequential_spec :
           result.1 ↦ 21 ∗ result.2.1 ↦ 2)⦄ := by
   unfold parClientSequential
   sl_step* 6
-  apply triple_pure
+  sl_pure
   sl_frame
 
 def raceLeftThenRightSequential (p : Ptr Int) : St Unit := do
@@ -435,7 +435,7 @@ theorem append_spec (l₁ l₂ : Link α) (xs ys : List α) :
   | nil =>
       cases l₁
       · simp only [isList, append, List.nil_append]
-        apply triple_pure
+        sl_pure
         sl_frame
       · simp only [isList]
         sl_pull
@@ -452,7 +452,7 @@ theorem append_spec (l₁ l₂ : Link α) (xs ys : List α) :
           sl_step
           sl_step with ih (l₁ := next) (l₂ := l₂) (ys := ys)
           sl_step
-          apply triple_pure
+          sl_pure
           exact isList_cons p x result (xs ++ ys)
 
 def reverseAppend : List α → Link α → Link α → St (Link α)
@@ -471,7 +471,7 @@ theorem reverse_append_spec (l acc : Link α) (xs ys : List α) :
   | nil =>
       cases l
       · simp only [isList, reverseAppend, List.reverse_nil, List.nil_append]
-        apply triple_pure
+        sl_pure
         sl_frame
       · simp only [isList]
         sl_pull
@@ -531,7 +531,7 @@ theorem fold_right_spec (P : α → SLProp) (I : List α → β → SLProp)
   | nil =>
       cases l
       · simp only [isList, bigSep, foldRight]
-        apply triple_pure
+        sl_pure
         sl_frame
       · simp only [isList]
         sl_pull
@@ -561,7 +561,7 @@ theorem sum_list_spec (l : Link Int) (xs : List Int) :
         (pure (x + acc) : St Int)
         ⦃⇓ result => ⌜result = (x :: ys).foldr (· + ·) 0⌝⦄ := by
     intro x acc ys
-    apply triple_pure
+    sl_pure
     sl_frame
   unfold sumList
   apply triple_conseq
