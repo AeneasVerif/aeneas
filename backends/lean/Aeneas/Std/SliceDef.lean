@@ -12,6 +12,7 @@ structure Slice (α : Type u) where
   bound : leng ≤ Usize.max
 deriving BEq, ReflBEq, LawfulBEq, DecidableEq
 
+@[coe]
 def Slice.val {α} (s : Slice α) : List α := s.list.toList
 
 @[simp, grind ., grind! .]

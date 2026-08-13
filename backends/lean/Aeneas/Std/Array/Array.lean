@@ -23,6 +23,7 @@ structure Array (α : Type u) (n : Usize) where
   list : ListN α n.val
 deriving BEq, ReflBEq, LawfulBEq, DecidableEq
 
+@[coe]
 def Array.val {α n} (a : Array α n) : List α := a.list.toList
 
 @[simp, grind ., grind! .]

@@ -24,13 +24,15 @@ structure Vec (α : Type u) where
   slice : Slice α
 deriving BEq, ReflBEq, LawfulBEq, DecidableEq
 
+@[coe]
+def Vec.val {α} (v : Vec α) : List α := (Slice.val v.slice)
+
 /-- We need this to coerce vectors to lists without marking `Vec` as reducible.
     Also not that we *do not* want to mark `Vec` as reducible: it triggers issues.
 -/
 instance (α : Type u) : CoeOut (Vec α) (List α) where
-  coe := λ v => v.slice.val
+  coe := λ v => v.val
 
-def Vec.val {α} (v : Vec α) : List α := (Slice.val v.slice)
 def Vec.from {α} (l : List α) (h : l.length ≤ Usize.max) : Vec α := {slice := Slice.from l h}
 @[scalar_tac_simps, simp, grind! ., grind .]
 theorem Vec.from_val {α} (l : List α) (h : l.length ≤ Usize.max)

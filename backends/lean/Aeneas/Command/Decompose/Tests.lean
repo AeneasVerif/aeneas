@@ -840,7 +840,7 @@ def test23 (n : Nat) (x : U32) (s : Slice U8) (b : Bool) : Result U32 := do
 info: def Aeneas.Command.Decompose.Tests.test23_prefix : U32 → Slice U8 → Bool → Result (ℕ × UScalar UScalarTy.U32) :=
 fun x s b => do
   let a ← x + 1#u32
-  let len : ℕ := s.val.length
+  let len : ℕ := (↑s).length
   let c ← if b = true then x + 2#u32 else pure a
   pure (len, c)
 -/
