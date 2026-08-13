@@ -26,6 +26,7 @@ inductive Ordering where
 /-- Trait declaration: [avl::Ord]
     Source: 'src/avl.rs', lines 24:0-26:1
     Visibility: public -/
+@[trait_decl]
 structure Ord (Self : Type) where
   cmp : Self → Self → Result Ordering
 

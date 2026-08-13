@@ -17,6 +17,7 @@ namespace static
 /-- Trait declaration: [static::WithSlice]
     Source: 'tests/src/static.rs', lines 3:0-5:1
     Visibility: public -/
+@[trait_decl]
 structure WithSlice (Self : Type) where
   SLICE : Result (Slice Std.U16)
 

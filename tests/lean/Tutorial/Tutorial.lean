@@ -153,6 +153,7 @@ end
 /-- Trait declaration: [tutorial::Counter]
     Source: 'src/lib.rs', lines 105:0-107:1
     Visibility: public -/
+@[trait_decl]
 structure Counter (Self : Type) where
   incr : Self → Result (Std.Usize × Self)
 
@@ -166,7 +167,7 @@ def Usize.Insts.TutorialCounter.incr
 
 /-- Trait implementation: [tutorial::{impl tutorial::Counter for usize}]
     Source: 'src/lib.rs', lines 109:0-115:1 -/
-@[reducible]
+@[reducible, trait_inst {Counter for Std.Usize}]
 def Usize.Insts.TutorialCounter : Counter Std.Usize := {
   incr := Usize.Insts.TutorialCounter.incr
 }
@@ -420,6 +421,7 @@ def add
 
 /-- Trait declaration: [tutorial::Hash]
     Source: 'src/lib.rs', lines 250:0-252:1 -/
+@[trait_decl]
 structure Hash (Self : Type) where
   hash : Std.U32 → Result Std.U32
 

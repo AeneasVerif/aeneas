@@ -16,10 +16,12 @@ namespace blanket_impl
 
 /-- Trait declaration: [blanket_impl::Trait1]
     Source: 'tests/src/blanket_impl.rs', lines 3:0-3:15 -/
+@[trait_decl]
 structure Trait1 (Self : Type) where
 
 /-- Trait declaration: [blanket_impl::Trait2]
     Source: 'tests/src/blanket_impl.rs', lines 4:0-6:1 -/
+@[trait_decl]
 structure Trait2 (Self : Type) where
   foo : Result Unit
 
@@ -30,7 +32,7 @@ structure Trait2 (Self : Type) where
 
 /-- Trait implementation: [blanket_impl::{impl blanket_impl::Trait2 for T}]
     Source: 'tests/src/blanket_impl.rs', lines 9:0-9:31 -/
-@[reducible]
+@[reducible, trait_inst {Trait2 for T}]
 def Trait2.Blanket {T : Type} (Trait1Inst : Trait1 T) : Trait2 T := {
   foo := Trait2.foo.default T
 }

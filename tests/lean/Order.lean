@@ -44,7 +44,7 @@ def Wrap := Std.U64
 
 /-- Trait implementation: [order::{impl core::marker::StructuralPartialEq for order::Wrap}]
     Source: 'tests/src/order.rs', lines 21:9-21:18 -/
-@[reducible]
+@[reducible, trait_inst {core.marker.StructuralPartialEq for Wrap}]
 def Wrap.Insts.CoreMarkerStructuralPartialEq : core.marker.StructuralPartialEq
   Wrap := {
 }
@@ -58,7 +58,7 @@ def Wrap.Insts.CoreCmpPartialEqWrap.eq
 
 /-- Trait implementation: [order::{impl core::cmp::PartialEq<order::Wrap> for order::Wrap}]
     Source: 'tests/src/order.rs', lines 21:9-21:18 -/
-@[reducible]
+@[reducible, trait_inst {core.cmp.PartialEq<Wrap> for Wrap}]
 def Wrap.Insts.CoreCmpPartialEqWrap : core.cmp.PartialEq Wrap Wrap := {
   eq := Wrap.Insts.CoreCmpPartialEqWrap.eq
 }
@@ -71,7 +71,7 @@ def Wrap.Insts.CoreCmpEq.assert_fields_are_eq (self : Wrap) : Result Unit := do
 
 /-- Trait implementation: [order::{impl core::cmp::Eq for order::Wrap}]
     Source: 'tests/src/order.rs', lines 21:20-21:22 -/
-@[reducible]
+@[reducible, trait_inst {core.cmp.Eq for Wrap}]
 def Wrap.Insts.CoreCmpEq : core.cmp.Eq Wrap := {
   partialEqInst := Wrap.Insts.CoreCmpPartialEqWrap
   assert_fields_are_eq := Wrap.Insts.CoreCmpEq.assert_fields_are_eq
@@ -94,7 +94,7 @@ def Wrap.Insts.CoreCmpPartialOrdWrap.partial_cmp
 
 /-- Trait implementation: [order::{impl core::cmp::PartialOrd<order::Wrap> for order::Wrap}]
     Source: 'tests/src/order.rs', lines 21:24-21:34 -/
-@[reducible]
+@[reducible, trait_inst {core.cmp.PartialOrd<Wrap> for Wrap}]
 def Wrap.Insts.CoreCmpPartialOrdWrap : core.cmp.PartialOrd Wrap Wrap := {
   partialEqInst := Wrap.Insts.CoreCmpPartialEqWrap
   partial_cmp := Wrap.Insts.CoreCmpPartialOrdWrap.partial_cmp
@@ -102,7 +102,7 @@ def Wrap.Insts.CoreCmpPartialOrdWrap : core.cmp.PartialOrd Wrap Wrap := {
 
 /-- Trait implementation: [order::{impl core::cmp::Ord for order::Wrap}]
     Source: 'tests/src/order.rs', lines 21:36-21:39 -/
-@[reducible]
+@[reducible, trait_inst {core.cmp.Ord for Wrap}]
 def Wrap.Insts.CoreCmpOrd : core.cmp.Ord Wrap := {
   eqInst := Wrap.Insts.CoreCmpEq
   partialOrdInst := Wrap.Insts.CoreCmpPartialOrdWrap

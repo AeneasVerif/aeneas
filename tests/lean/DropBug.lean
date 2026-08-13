@@ -37,7 +37,7 @@ def Inner.Insts.CoreOpsDropDrop.drop (self : Inner) : Result Inner := do
 
 /-- Trait implementation: [drop_bug::{impl core::ops::drop::Drop for drop_bug::Inner}]
     Source: 'tests/src/drop_bug.rs', lines 30:0-34:1 -/
-@[reducible]
+@[reducible, trait_inst {core.ops.drop.Drop for Inner}]
 def Inner.Insts.CoreOpsDropDrop : core.ops.drop.Drop Inner := {
   drop := Inner.Insts.CoreOpsDropDrop.drop
 }

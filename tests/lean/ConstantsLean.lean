@@ -16,6 +16,7 @@ namespace constants_lean
 
 /-- Trait declaration: [constants_lean::Params]
     Source: 'tests/src/constants-lean.rs', lines 3:0-6:1 -/
+@[trait_decl]
 structure Params (Self : Type) where
   N : Result Std.Usize
   M : Result Std.Usize
@@ -53,6 +54,7 @@ def Wrapper.NM (N1 : Std.Usize) (M1 : Std.Usize) : Result Std.Usize := N1 * M1
 
 /-- Trait declaration: [constants_lean::Trait]
     Source: 'tests/src/constants-lean.rs', lines 22:0-24:1 -/
+@[trait_decl]
 structure Trait (Self : Type) where
   NM : Result Std.Usize
 
@@ -65,7 +67,7 @@ def Wrapper.Insts.Constants_leanTrait.NM (N1 : Std.Usize) (M1 : Std.Usize)
 
 /-- Trait implementation: [constants_lean::{impl constants_lean::Trait for constants_lean::Wrapper<N, M>}]
     Source: 'tests/src/constants-lean.rs', lines 26:0-28:1 -/
-@[reducible]
+@[reducible, trait_inst {Trait for Wrapper<N1, M1>}]
 def Wrapper.Insts.Constants_leanTrait (N1 : Std.Usize) (M1 : Std.Usize) : Trait
   (Wrapper N1 M1) := {
   NM := Wrapper.Insts.Constants_leanTrait.NM N1 M1
@@ -73,6 +75,7 @@ def Wrapper.Insts.Constants_leanTrait (N1 : Std.Usize) (M1 : Std.Usize) : Trait
 
 /-- Trait declaration: [constants_lean::Trait1]
     Source: 'tests/src/constants-lean.rs', lines 30:0-34:1 -/
+@[trait_decl]
 structure Trait1 (Self : Type) where
   N : Result Std.Usize
   M : Result Std.Usize
@@ -99,7 +102,7 @@ def Bool.Insts.Constants_leanTrait1.N : Std.Usize := 0#usize
 
 /-- Trait implementation: [constants_lean::{impl constants_lean::Trait1 for bool}]
     Source: 'tests/src/constants-lean.rs', lines 36:0-39:1 -/
-@[reducible]
+@[reducible, trait_inst {Trait1 for Bool}]
 impl_def Bool.Insts.Constants_leanTrait1 : Trait1 Bool := {
   N := ok Bool.Insts.Constants_leanTrait1.N
   M := ok Bool.Insts.Constants_leanTrait1.M
@@ -108,6 +111,7 @@ impl_def Bool.Insts.Constants_leanTrait1 : Trait1 Bool := {
 
 /-- Trait declaration: [constants_lean::Params1]
     Source: 'tests/src/constants-lean.rs', lines 41:0-47:1 -/
+@[trait_decl]
 structure Params1 (Self : Type) where
   N : Result Std.Usize
   LOGQ : Result Std.Usize

@@ -16,6 +16,7 @@ namespace dyn
 
 /-- Trait declaration: [dyn::Trait]
     Source: 'tests/src/dyn.rs', lines 3:0-5:1 -/
+@[trait_decl]
 structure Trait (Self : Type) where
   get : Self → Result Std.U32
 
@@ -26,7 +27,7 @@ def U32.Insts.DynTrait.get (self : Std.U32) : Result Std.U32 := do
 
 /-- Trait implementation: [dyn::{impl dyn::Trait for u32}]
     Source: 'tests/src/dyn.rs', lines 7:0-11:1 -/
-@[reducible]
+@[reducible, trait_inst {Trait for Std.U32}]
 def U32.Insts.DynTrait : Trait Std.U32 := {
   get := U32.Insts.DynTrait.get
 }
@@ -38,7 +39,7 @@ def Bool.Insts.DynTrait.get (self : Bool) : Result Std.U32 := do
 
 /-- Trait implementation: [dyn::{impl dyn::Trait for bool}]
     Source: 'tests/src/dyn.rs', lines 13:0-17:1 -/
-@[reducible]
+@[reducible, trait_inst {Trait for Bool}]
 def Bool.Insts.DynTrait : Trait Bool := {
   get := Bool.Insts.DynTrait.get
 }
@@ -57,6 +58,7 @@ def mk_trait (b : Bool) : Result (Dyn (fun _dyn => Trait _dyn)) := do
 
 /-- Trait declaration: [dyn::Into]
     Source: 'tests/src/dyn.rs', lines 31:0-33:1 -/
+@[trait_decl]
 structure Into (Self : Type) (T : Type) where
   into : Self → Result T
 
@@ -73,6 +75,7 @@ def mk_into
 
 /-- Trait declaration: [dyn::Trivial]
     Source: 'tests/src/dyn.rs', lines 48:0-48:16 -/
+@[trait_decl]
 structure Trivial (Self : Type) where
 
 /-- [dyn::dyn_closure::closure]
@@ -121,7 +124,8 @@ def dyn_closure.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32.call_once
 
 /-- Trait implementation: [dyn::dyn_closure::{impl core::ops::function::FnOnce<(u32,), u32> for dyn::dyn_closure::closure<T0>}]
     Source: 'tests/src/dyn.rs', lines 51:12-51:33 -/
-@[reducible]
+@[reducible,
+  trait_inst {core.ops.function.FnOnce<Std.U32, Std.U32> for dyn_closure.closure<T0>}]
 def dyn_closure.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32 {T0 : Type}
   (TrivialInst : Trivial T0) : core.ops.function.FnOnce (dyn_closure.closure
   T0) Std.U32 Std.U32 := {
@@ -132,7 +136,8 @@ def dyn_closure.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32 {T0 : Type}
 
 /-- Trait implementation: [dyn::dyn_closure::{impl core::ops::function::FnMut<(u32,), u32> for dyn::dyn_closure::closure<T0>}]
     Source: 'tests/src/dyn.rs', lines 51:12-51:33 -/
-@[reducible]
+@[reducible,
+  trait_inst {core.ops.function.FnMut<Std.U32, Std.U32> for dyn_closure.closure<T0>}]
 def dyn_closure.closure.Insts.CoreOpsFunctionFnMutTupleU32U32 {T0 : Type}
   (TrivialInst : Trivial T0) : core.ops.function.FnMut (dyn_closure.closure T0)
   Std.U32 Std.U32 := {
@@ -145,7 +150,8 @@ def dyn_closure.closure.Insts.CoreOpsFunctionFnMutTupleU32U32 {T0 : Type}
 
 /-- Trait implementation: [dyn::dyn_closure::{impl core::ops::function::Fn<(u32,), u32> for dyn::dyn_closure::closure<T0>}]
     Source: 'tests/src/dyn.rs', lines 51:12-51:33 -/
-@[reducible]
+@[reducible,
+  trait_inst {core.ops.function.Fn<Std.U32, Std.U32> for dyn_closure.closure<T0>}]
 def dyn_closure.closure.Insts.CoreOpsFunctionFnTupleU32U32 {T0 : Type}
   (TrivialInst : Trivial T0) : core.ops.function.Fn (dyn_closure.closure T0)
   Std.U32 Std.U32 := {
