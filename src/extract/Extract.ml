@@ -971,8 +971,20 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
              true
          ]}
       *)
-      (match fun_id with
-      | FromLlbc (TraitMethod (trait_ref, method_name), lp_id) ->
+      (* With the [trait_inst_notation] option: if the function is a method of
+         a (local) trait implementation, refer to it as
+         [({Trait<Args> for Self}.method)] and only print the generics which
+         are specific to the method (the arguments of the implementation are
+         reconstructed by the Lean elaborator). *)
+      let impl_method_notation =
+        match fun_id with
+        | FromLlbc (FunId (FRegular fun_decl_id), None) ->
+            ExtractTraitInst.impl_method_notation ctx span fun_decl_id generics
+        | _ -> None
+      in
+      (match (fun_id, impl_method_notation) with
+      | _, Some (s, _, _) -> F.pp_print_string fmt s
+      | FromLlbc (TraitMethod (trait_ref, method_name), lp_id), _ ->
           let trait_decl_id = trait_ref.trait_decl_ref.trait_decl_id in
           let trait_decl =
             TraitDeclId.Map.find trait_decl_id ctx.trans_trait_decls
@@ -989,7 +1001,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
             if backend () = Coq then "(" ^ s ^ ")" else s
           in
           F.pp_print_string fmt ("." ^ add_brackets fun_name)
-      | _ ->
+      | _, None ->
           let fun_name = ctx_get_function span fun_id ctx in
           F.pp_print_string fmt fun_name);
 
@@ -1057,6 +1069,26 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
           (* Fallback if, for instance, we could not lookup the declaration *)
           [%save_error] span "Internal error";
           None
+      in
+      (* With the [trait_inst_notation] option, when calling an impl method
+         through the notation: only print the generics (and the corresponding
+         explicit-parameter information) which are specific to the method *)
+      let generics, explicit =
+        match impl_method_notation with
+        | Some (_, method_generics, (n_ty, n_cg)) ->
+            let drop n l = List.filteri (fun i _ -> i >= n) l in
+            let explicit =
+              Option.map
+                (fun (e : explicit_info) ->
+                  {
+                    explicit_types = drop n_ty e.explicit_types;
+                    explicit_const_generics =
+                      drop n_cg e.explicit_const_generics;
+                  })
+                explicit
+            in
+            (method_generics, explicit)
+        | None -> (generics, explicit)
       in
       (* Filter the generics.
 
