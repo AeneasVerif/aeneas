@@ -6,7 +6,10 @@ import Aeneas.Tactic.Step.StepStar
 
 `step`/`step*` walk a monadic program one call at a time.  For every call they
 apply one of the two rules below and hand the resulting entailment to the
-tactic given after `by` — in practice `sl_frame`.
+tactic given after `by` — in practice `sl_frame`.  Registered `pure.spec` and
+`ok.spec` calls therefore use the same bind and ramified-frame automation as
+other registered specifications.  `sl_pure` is the direct rule for a syntactic
+terminal return when its entailment should be proved explicitly.
 -/
 
 namespace Aeneas.SLPoC
@@ -66,6 +69,32 @@ is out of reach of `by`; the trailing `sl_frame?` closes it, and `sl_side?` the
 side conditions of the specification. -/
 syntax "sl_step" Lean.Parser.Tactic.optConfig ("with" term)?
   ("as" " ⟨ " Lean.binderIdent,* " ⟩")? : tactic
+
+/-- Normalize only beta/iota/zeta/projection redexes, then apply `triple_pure`
+when the program in the goal is syntactically a terminal return.  The resulting
+entailment is left exposed.  In particular this does not unfold a named pure
+wrapper and bypass its registered specification. -/
+syntax "sl_pure" : tactic
+
+syntax "sl_pure_core" : tactic
+
+elab_rules : tactic
+  | `(tactic| sl_pure_core) => withMainContext do
+      let goal ← getMainGoal
+      let target ← instantiateMVars (← goal.getType)
+      let (head, args) := target.consumeMData.withApp fun head args => (head, args)
+      unless head.isConstOf ``triple && args.size = 4 do
+        throwError "sl_pure expected a separation-logic triple"
+      let program := args[2]!.consumeMData
+      let programHead := program.getAppFn
+      unless programHead.isConstOf ``Pure.pure ||
+          programHead.isConstOf ``FFree.ok do
+        throwError "sl_pure expected a syntactic terminal return"
+      evalTactic (← `(tactic| apply triple_pure))
+
+macro_rules
+  | `(tactic| sl_pure) =>
+    `(tactic| focus ((try simp only); sl_pure_core))
 
 /-- Discharge a side condition `step` returns for a `Prop` argument of a
 specification.  A no-op on the entailment and continuation goals, and on the
@@ -170,7 +199,9 @@ theorem triple_hpure'_iff {α : Type} {P : Prop} {m : St α} {Q : SLPost α} :
       ``forall_unit, ``true_imp_iff
     ]
     to_mvcgen := none
-    liftings := #[] -- TODO: lift from Pure to SLProp
+    -- Liftings convert between differently stated registered specifications;
+    -- they do not provide a terminal rule for `triple`.
+    liftings := #[]
   }
 
 attribute [step]
