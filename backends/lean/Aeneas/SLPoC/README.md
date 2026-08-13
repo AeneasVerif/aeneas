@@ -12,18 +12,31 @@ logic (SL) support.
 | [`RustHeap.lean`](RustHeap.lean) | The Rust view of the heap: `Ptr` and the pointer operations, over `Heap.lean`. |
 | [`SLTactics.lean`](SLTactics.lean) | Port of the SLF tactics: `sl_frame`, `sl_pull`, `sl_xchange`, …, including affine `GC` absorption. |
 | [`ST.lean`](ST.lean) | The state monad `St`, its state machine, its denotation `theta` into `Wp`, affine Hoare triples, and the specifications of the pointer operations. |
-| [`Step.lean`](Step.lean) | Wires the triples into the `step` tactic and provides `sl_frame`. |
+| [`Step.lean`](Step.lean) | Wires triples into `sl_step`/`sl_step*` and provides `sl_pure` for exposing the entailment of a syntactic terminal return. |
 | [`WP.lean`](WP.lean) | Separation-logic assertions, fully affine `GC`, the magic wand, and the `Wp` monad of predicate transformers. |
 | [`ProofScore.lean`](ProofScore.lean) | Engineering tool, not part of the library: measures how close the proofs of the triples are to the ideal proof, i.e. how much separation logic the automation still leaves to the user. Writes [`proof-score.md`](proof-score.md). |
+| [`benchmark-report.md`](benchmark-report.md) | Report on the eleven external benchmark ports, their interfaces and specifications, proof-score improvements, and remaining automation gaps. |
 | `README.md` | Records the purpose and meaning of files in this directory. |
 
 | File in [`Examples/`](Examples) | Purpose |
 |---|---|
+| [`AsterinasIntrusiveFrameList.lean`](Examples/AsterinasIntrusiveFrameList.lean) | Port of Asterinas's intrusive frame list: allocation-free push/pop and cursor removal with exclusive detached-frame ownership. |
 | [`Basic.lean`](Examples/Basic.lean) | Basic programs and specifications exercising `step` over pure computations and pointers. |
-| [`VerusDoublyLinkedList.lean`](Examples/VerusDoublyLinkedList.lean) | Port of the Verus doubly-linked-list example: executable definitions, then ghost state, specifications and proofs. |
+| [`CreusotListReversalLasso.lean`](Examples/CreusotListReversalLasso.lean) | Port of Creusot's cyclic-list reversal over an explicit first-order memory, with exact traversal and rewiring results. |
 | [`EqOrDisj.lean`](Examples/EqOrDisj.lean) | Pointer specifications that account for possible aliasing using equal-or-disjoint ghost state. |
+| [`IrisTutorial.lean`](Examples/IrisTutorial.lean) | Sequential ports of Iris tutorial proof-mode, pointer, and linked-list examples. |
+| [`PulseArrayTests.lean`](Examples/PulseArrayTests.lean) | Cell-wise array model and ports of Pulse allocation/free, indexed access, fill, and exact comparison examples. |
+| [`PulseInsertionSort.lean`](Examples/PulseInsertionSort.lean) | In-place Pulse insertion sort with sortedness and permutation proofs. |
+| [`PulseLinkedList.lean`](Examples/PulseLinkedList.lean) | Sequential Pulse linked-list operations over a recursive ownership predicate, including append, split, insertion, and reversal. |
+| [`PulseResizableVec.lean`](Examples/PulseResizableVec.lean) | Pulse bounded resizable vector with separate size/capacity cells and initialized-prefix ownership. |
+| [`PulseRingBuffer.lean`](Examples/PulseRingBuffer.lean) | Pulse fixed-capacity FIFO ring buffer with circular-layout and wrap-around proofs. |
 | [`UnitTest.lean`](Examples/UnitTest.lean) | Regression tests for `step`, `sl_step`, and the separation-logic tactics. |
+| [`VerusBitmap.lean`](Examples/VerusBitmap.lean) | Verus bitmap over 64-bit-style words, including exact get/set and pointwise OR refinement proofs. |
+| [`VerusDoublyLinkedList.lean`](Examples/VerusDoublyLinkedList.lean) | Port of the Verus doubly-linked-list example: executable definitions, then ghost state, specifications and proofs. |
+| [`VerusMimallocLinkedList.lean`](Examples/VerusMimallocLinkedList.lean) | Port of mimalloc's free-list kernel with typed header/padding split and whole-block ownership transfer. |
+| [`VerusPageTable.lean`](Examples/VerusPageTable.lean) | Uniform-leaf, exact-key subset of verified-pt map/query/unmap/prune with recursive table ownership and explicit allocation/free operations. |
 | [`VerusStd.lean`](Examples/VerusStd.lean) | The `vstd` layer: generic sequences of pointer/payload pairs and permission maps over them, with each declaration naming its `vstd` counterpart. Independent of any data structure. |
+| [`VerusVerifiedVec.lean`](Examples/VerusVerifiedVec.lean) | Fixed-capacity adaptation of Verus's initialized-prefix vector, using typed `Option` cells for the abstract raw suffix. |
 | [`doubly_linked_loc.py`](Examples/doubly_linked_loc.py) | Deterministically regenerates the relevant-LOC comparison with the pinned Verus example below. |
 
 Keep these tables updated whenever a file is added, removed, or repurposed.
@@ -38,8 +51,9 @@ postcondition.
 ## How ideal are the proofs?
 
 The point of the automation is that a triple should be proved by unfolding the
-program and calling `sl_step*`, with only pure reasoning and `sl_pull` in
-between, and one such block per branch of the program.  Run
+program and calling `sl_step*`, with only pure reasoning, `sl_pull`, and
+`sl_pure` for a terminal return whose entailment needs manual pure reasoning,
+and one such block per branch of the program.  Run
 
 ```
 lake env lean --run Aeneas/SLPoC/ProofScore.lean
