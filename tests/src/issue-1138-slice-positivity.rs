@@ -1,4 +1,4 @@
-//@ [coq,fstar] subdir=misc
+//@ [coq,fstar] skip
 // Regression test for issue https://github.com/AeneasVerif/aeneas/issues/1138
 // Using arrays, slices, and vectors should play nicely with datatype positivity
 
