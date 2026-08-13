@@ -18,8 +18,9 @@ writes `Aeneas/SLPoC/proof-score.md`.
 ## What is measured
 
 The ideal proof of a triple never mentions the separation logic: it unfolds the
-program and calls `sl_step*`, with pure reasoning (`obtain`, `have`, `simp`, …)
-and `sl_pull` in between, and one such block per branch of the program:
+program and calls `sl_step*` or the guarded terminal `sl_pure`, with pure
+reasoning (`obtain`, `have`, `simp`, …) and `sl_pull` in between, and one such
+block per branch of the program:
 
 ```lean
 unfold f
@@ -42,8 +43,8 @@ tactics (`sl_frame`, `sl_xchange`, `sl_xpull`, `sl_xsimpl`, `sl_xapp`,
 `sl_conseq`, …), or when it mentions separation-logic vocabulary: a connective
 (`∗`, `↦`, `⊢`, `-∗`, `emp`, `GC`, `iprop(…)`), or a lemma or definition whose
 statement is about `SLProp` (`unfold wellFormed`, `simp [nodes_snoc]`,
-`exact triple_pure …`).  `sl_step`, `sl_step*` and `sl_pull` are the automation
-itself and are free; so is any pure reasoning.
+`exact triple_pure …`).  `sl_step`, `sl_step*`, `sl_pure`, and `sl_pull` are
+the automation itself and are free; so is any pure reasoning.
 
 Only declarations whose statement is a triple are scored.  The separation-logic
 lemmas a development proves on the side (`nodes_snoc`, `nodesFrom_append`, …)
@@ -95,7 +96,7 @@ def manualTactics : Array String :=
     "sl_side?", "step", "step*"]
 
 /-- Tactics that *are* the automation: the ideal proof is made of these. -/
-def idealTactics : Array String := #["sl_step", "sl_pull"]
+def idealTactics : Array String := #["sl_step", "sl_pure", "sl_pull"]
 
 /-- Combinators that do not split the goal: like `<;>`, what they run belongs to
 the block that runs them, not to a block of its own. -/
@@ -580,7 +581,7 @@ def renderReport (files : Array FileScore) : String := Id.run do
   out := out ++ "Regenerate with `lake env lean --run Aeneas/SLPoC/ProofScore.lean` from \
     `backends/lean`.  A *spot* is one straight-line block of a proof: the block before the \
     first branch, then one per branch body, recursively.  A spot is ideal when it steers the \
-    separation logic nowhere by hand — only `sl_step`, `sl_pull`, and pure reasoning.  See the \
+    separation logic nowhere by hand — only `sl_step`, `sl_pure`, `sl_pull`, and pure reasoning.  See the \
     module docstring of `Aeneas/SLPoC/ProofScore.lean` for the details.\n\n"
   out := out ++ "## Rules\n\n"
   out := out ++ s!"- free: {codeList idealTactics}, pure reasoning, and `unfold` of a \
