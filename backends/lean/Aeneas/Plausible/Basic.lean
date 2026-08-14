@@ -24,7 +24,7 @@ private def genUScalar (ty : UScalarTy) : Gen Nat := do
   let ⟨m, _⟩ ← Gen.choose Nat 0 (UScalar.max ty) (Nat.zero_le _)
   pure m
 
-instance {ty : UScalarTy} : SampleableExt (UScalar ty) where
+instance UScalar.sampleableExt {ty : UScalarTy} : SampleableExt (UScalar ty) where
   proxy := Nat
   sample := ⟨genUScalar ty⟩
   interp n := ⟨BitVec.ofNat _ n⟩
@@ -37,7 +37,7 @@ private def genIScalar (ty : IScalarTy) : Gen Int := do
   let ⟨m, _⟩ ← Gen.choose Int (IScalar.min ty) (IScalar.max ty) h
   pure m
 
-instance {ty : IScalarTy} : SampleableExt (IScalar ty) where
+instance IScalar.sampleableExt {ty : IScalarTy} : SampleableExt (IScalar ty) where
   proxy := Int
   sample := ⟨genIScalar ty⟩
   interp z := ⟨BitVec.ofInt _ z⟩
@@ -50,12 +50,13 @@ private def interpBoundedList {α : Type u} [SampleableExt α]
   let l' := l.map SampleableExt.interp
   if h : l'.length ≤ Usize.max then ⟨l', h⟩ else ⟨[], Nat.zero_le _⟩
 
-instance {α : Type u} [SampleableExt α] : SampleableExt (Slice α) where
+instance Slice.sampleableExt {α : Type u} [SampleableExt α] : SampleableExt (Slice α) where
   proxy := List (SampleableExt.proxy α)
   sample := inferInstance
   interp := interpBoundedList
 
-instance {α : Type u} [SampleableExt α] : SampleableExt (alloc.vec.Vec α) where
+instance alloc.vec.Vec.sampleableExt {α : Type u} [SampleableExt α] :
+    SampleableExt (alloc.vec.Vec α) where
   proxy := List (SampleableExt.proxy α)
   sample := inferInstance
   interp := interpBoundedList
@@ -78,7 +79,8 @@ private def shrinkFixedList {β : Type u} [Shrinkable β] {m : Nat}
     (Shrinkable.shrink (x.val.get ⟨i, hi⟩)).map fun x' =>
       ⟨x.val.set i x', by simp [x.property]⟩
 
-instance {α : Type u} {n : Usize} [SampleableExt α] : SampleableExt (Array α n) where
+instance Array.sampleableExt {α : Type u} {n : Usize} [SampleableExt α] :
+    SampleableExt (Array α n) where
   proxy := { l : List (SampleableExt.proxy α) // l.length = n.val }
   proxyRepr := ⟨fun x prec => reprPrec x.val prec⟩
   shrink := ⟨shrinkFixedList⟩
@@ -87,14 +89,14 @@ instance {α : Type u} {n : Usize} [SampleableExt α] : SampleableExt (Array α 
 
 /-! ## `Result` / `Error` -/
 
-instance : Shrinkable Error where shrink _ := []
+instance Error.shrinkable : Shrinkable Error where shrink _ := []
 
-instance : Arbitrary Error where
+instance Error.Arbitrary : Arbitrary Error where
   arbitrary := Gen.elements
     [.assertionFailure, .integerOverflow, .divisionByZero, .arrayOutOfBounds,
      .maximumSizeExceeded, .panic, .undef] (by decide)
 
-instance {α : Type u} [SampleableExt α] : SampleableExt (Result α) where
+instance Result.sampleableExt {α : Type u} [SampleableExt α] : SampleableExt (Result α) where
   proxy := Result (SampleableExt.proxy α)
   shrink := ⟨fun _ => []⟩
   sample := ⟨do
@@ -107,21 +109,26 @@ instance {α : Type u} [SampleableExt α] : SampleableExt (Result α) where
     | .fail e => .fail e
     | .div => .div
 
-/-! ## Deciding goals so `plausible` can evaluate specs -/
+/-! ## Deciding hypotheses & goals so `plausible` can evaluate specs -/
 
--- Strip a `NamedBinder` wrapper.
-instance {s : String} {P : Prop} [Decidable P] : Decidable (NamedBinder s P) := ‹Decidable P›
-
--- The shape `plausible` generates for a bounded-∀ hypothesis `∀ i < n, Q i`.
-instance {n : Nat} {Q : Nat → Prop} [DecidablePred Q] {s : String} :
-    Decidable (∀ i : Nat, NamedBinder s (i < n → Q i)) :=
-  decidable_of_iff (∀ j : Fin n, Q j.val)
-    ⟨fun h i hi => h ⟨i, hi⟩, fun h j => h j.val j.isLt⟩
-
--- `WP.spec x p = theta x p`: `ok v` reduces to `p v`, `fail`/`div` to `False`.
-instance {α : Type u} {x : Result α} {p : WP.Post α} [∀ a, Decidable (p a)] :
+/- `WP.spec x p = theta x p`: `ok v` reduces to `p v`, `fail`/`div` to `False`. -/
+instance WP.decidableSpec {α : Type u} {x : Result α} {p : WP.Post α} [∀ a, Decidable (p a)] :
     Decidable (WP.spec x p) := by
   unfold WP.spec WP.theta WP.wp_return
   split <;> infer_instance
+
+/- `plausible` wraps quantifiers in `NamedBinder` so a bounded `∀` with `Nat` index hypothesis needs
+the following two instances. -/
+
+/- Strip a `NamedBinder` wrapper. -/
+instance NamedBinder.decidable {s : String} {P : Prop} [Decidable P] :
+    Decidable (NamedBinder s P) := ‹Decidable P›
+
+/- The shape `plausible` generates for a bounded-∀ hypothesis `∀ i < n, Q i`. The wrapped body
+hides the bound, so core's `Nat.decidableBallLT` can't fire directly; reduce to `Fin n`. -/
+instance NamedBinder.decidableBallLT {n : Nat} {Q : Nat → Prop} [DecidablePred Q] {s : String} :
+    Decidable (∀ i : Nat, NamedBinder s (i < n → Q i)) :=
+  decidable_of_iff (∀ j : Fin n, Q j.val) ⟨fun h i hi => h ⟨i, hi⟩, fun h j => h j.val j.isLt⟩
+
 
 end Aeneas.Std
