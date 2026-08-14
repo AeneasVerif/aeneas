@@ -17,6 +17,7 @@ logic (SL) support.
 | [`ProofScore.lean`](ProofScore.lean) | Engineering tool, not part of the library: measures how close the proofs of the triples are to the ideal proof, i.e. how much separation logic the automation still leaves to the user. Writes [`proof-score.html`](proof-score.html). |
 | [`proof_simplify.py`](proof_simplify.py) | Compilation-guided proof simplifier: compresses consecutive `sl_step` calls and removes unused `sl_pull` names, retaining only rewrites accepted by Lean. |
 | [`benchmark-report.md`](benchmark-report.md) | Report on the eleven external benchmark ports, their interfaces and specifications, proof-score improvements, and remaining automation gaps. |
+| [`automation-report.md`](automation-report.md) | Maps ideas from Dardinier's thesis on automated separation-logic verifiers to a prioritized design for more SLPoC proof-mode automation. |
 | `README.md` | Records the purpose and meaning of files in this directory. |
 
 | File in [`Examples/`](Examples) | Purpose |
@@ -24,6 +25,7 @@ logic (SL) support.
 | [`AsterinasIntrusiveFrameList.lean`](Examples/AsterinasIntrusiveFrameList.lean) | Port of Asterinas's intrusive frame list: allocation-free push/pop and cursor removal with exclusive detached-frame ownership. |
 | [`Basic.lean`](Examples/Basic.lean) | Basic programs and specifications exercising `step` over pure computations and pointers. |
 | [`CreusotListReversalLasso.lean`](Examples/CreusotListReversalLasso.lean) | Port of Creusot's cyclic-list reversal over an explicit first-order memory, with exact traversal and rewiring results. |
+| [`DardinierMagicWands.lean`](Examples/DardinierMagicWands.lean) | Ports Dardinier's leftmost-leaf wand-packaging example and the uniform-footprint counterexample from *Sound Automation of Magic Wands*. |
 | [`EqOrDisj.lean`](Examples/EqOrDisj.lean) | Pointer specifications that account for possible aliasing using equal-or-disjoint ghost state. |
 | [`IrisTutorial.lean`](Examples/IrisTutorial.lean) | Sequential ports of Iris tutorial proof-mode, pointer, and linked-list examples. |
 | [`PulseArrayTests.lean`](Examples/PulseArrayTests.lean) | Cell-wise array model and ports of Pulse allocation/free, indexed access, fill, and exact comparison examples. |

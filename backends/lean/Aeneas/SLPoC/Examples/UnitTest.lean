@@ -6,8 +6,10 @@ open scoped SepLogic
 
 /-! ## `sl_frame` as an `xsimpl` -/
 
-example (P Q:SLProp) : emp ⊢ P ∗ P -∗ Q -∗ Q := by
-  sorry
+example (P Q : SLProp) : emp ⊢ (P ∗ (P -∗ Q)) -∗ Q := by
+  apply hwand_intro
+  sl_xchange (hwand_cancel P Q)
+  sl_frame
 
 example (p q : Ptr Nat) (x y : Nat) :
     p ↦ x ∗ q ↦ y ⊢ q ↦ y ∗ p ↦ x := by
