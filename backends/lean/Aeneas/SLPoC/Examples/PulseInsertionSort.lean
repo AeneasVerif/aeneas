@@ -214,16 +214,14 @@ theorem insertCells.spec [LinearOrder α] (current : Ptr α)
           contradiction
       | cons value values =>
           simp only [insertCells]
-          sl_step
-          sl_step
+          sl_step* 2
           split
           · rename_i horder
             simp only [orderedInsert, horder]
             sl_step*
           · rename_i horder
             simp only [orderedInsert, horder]
-            sl_step
-            sl_step
+            sl_step* 2
             sl_step with ih next key values
 
 /--

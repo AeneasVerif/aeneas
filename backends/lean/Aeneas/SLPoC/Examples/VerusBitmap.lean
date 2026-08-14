@@ -503,9 +503,7 @@ theorem orCells.disjoint_spec (leftCells rightCells : List (Ptr Word))
                     List.zip_cons_cons, List.map_cons]
                   have htail : leftWords.length = rightWords.length := by
                     simpa using hlength
-                  sl_step
-                  sl_step
-                  sl_step
+                  sl_step* 3
                   sl_step with ih rightCells leftWords rightWords htail
                   sl_pure
                   simp only [PulseArray.ownsCells_cons]
@@ -541,9 +539,7 @@ theorem orCells.self_spec (cells : List (Ptr Word)) (words : List Word) :
       | cons word words =>
           simp only [PulseArray.ownsCells_cons, orCells, orWords,
             List.zip_cons_cons, List.map_cons]
-          sl_step
-          sl_step
-          sl_step
+          sl_step* 3
           sl_step with ih words
           sl_pure
           simp only [PulseArray.ownsCells_cons]
@@ -578,8 +574,7 @@ theorem orSelfCells.spec (cells : List (Ptr Word)) (words : List Word) :
       | cons word words =>
           simp only [PulseArray.ownsCells_cons, orSelfCells, orSelfWords,
             List.map_cons]
-          sl_step
-          sl_step
+          sl_step* 2
           sl_step with ih words
           sl_pure
           simp only [PulseArray.ownsCells_cons]

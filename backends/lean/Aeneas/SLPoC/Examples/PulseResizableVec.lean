@@ -314,15 +314,13 @@ theorem push.spec (v : ResizableVec α) (contents : List α) (cap : Nat)
         owns v (if contents.length < cap then contents ++ [value] else contents) cap⦄ := by
   unfold push length capacity
   sl_pull buffer hInv
-  sl_step
-  sl_step
+  sl_step* 2
   split
   · rename_i hroom
     have hindex : contents.length < buffer.length := by
       rw [hInv.1]
       exact hroom
-    sl_step
-    sl_step
+    sl_step*
     have hnewInv := bufferInv_push (value := value) hInv hroom
     simp only [hroom, decide_true]
     sl_step*
