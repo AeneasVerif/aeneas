@@ -42,6 +42,24 @@ instance IScalar.sampleableExt {ty : IScalarTy} : SampleableExt (IScalar ty) whe
   sample := ⟨genIScalar ty⟩
   interp z := ⟨BitVec.ofInt _ z⟩
 
+/-- A `SampleableExt` for any upper-bounded `UScalar` subtype, sampling *in range* over
+`[0, bound)`. This lets a spec quantify over `{x : U64 // x.val < 2^54}` and be tested
+effectively — no per-bound instance, and no wasted draws (unlike filtering the bound with a
+precondition, which uniform sampling rarely satisfies). -/
+instance UScalar.boundedSampleableExt {ty : UScalarTy} {bound : Nat} [NeZero bound] :
+    SampleableExt {x : UScalar ty // x.val < bound} where
+  proxy := {m : Nat // m < bound}
+  proxyRepr := ⟨fun m prec => reprPrec m.val prec⟩
+  sample := ⟨do
+    let ⟨m, _, hm⟩ ← Gen.choose Nat 0 (bound - 1) (Nat.zero_le _)
+    pure ⟨m, by have := NeZero.pos bound; omega⟩⟩
+  shrink := ⟨fun m => (Nat.shrink m.val).filterMap fun k => if h : k < bound then some ⟨k, h⟩ else none⟩
+  interp m := ⟨⟨BitVec.ofNat _ m.val⟩, by
+    have h1 : (BitVec.ofNat ty.numBits m.val).toNat ≤ m.val := by
+      rw [BitVec.toNat_ofNat]; exact Nat.mod_le _ _
+    have h2 := m.property
+    simp only [UScalar.val]; omega⟩
+
 /-! ## `Slice` / `Vec` -/
 
 /-- Interpret a proxy list as a length-bounded `Slice`/`Vec`. -/
