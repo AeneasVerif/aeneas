@@ -206,7 +206,7 @@ theorem head.spec (x : Link α) (v : α) (xs : List α) (hne : x ≠ none) :
   | none => contradiction
   | some p =>
       simp only [head]
-      sl_pull next
+      sl_pull
       sl_step*
 
 /-- `pop` frees the first cell and returns its exact tail and value. -/
@@ -218,7 +218,7 @@ theorem pop.spec (x : Link α) (v : α) (xs : List α) (hne : x ≠ none) :
   | none => contradiction
   | some p =>
       simp only [pop, isList]
-      sl_pull next
+      sl_pull
       sl_step
       sl_step
       sl_pure
@@ -316,7 +316,7 @@ theorem appendAtLastCell.spec (x y : Link α) (v : α) (ys : List α)
   | none => contradiction
   | some p =>
       simp only [appendAtLastCell, isList]
-      sl_pull next
+      sl_pull
       sl_step*
 
 /-- `detachNext` turns the first cell into a singleton and returns the exact
@@ -329,7 +329,7 @@ theorem detachNext.spec (x : Link α) (v : α) (xs : List α) (hne : x ≠ none)
   | none => contradiction
   | some p =>
       simp only [detachNext, isList]
-      sl_pull next
+      sl_pull
       sl_step
       sl_step
       sl_pure

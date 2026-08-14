@@ -236,7 +236,7 @@ theorem length.spec (v : ResizableVec α) (contents : List α) (cap : Nat) :
     ⦃ owns v contents cap ⦄ length v
       ⦃⇓ n => ⌜n = contents.length⌝ ∗ owns v contents cap⦄ := by
   unfold length
-  sl_pull buffer hInv
+  sl_pull
   sl_step*
 
 /-- Capacity returns the exact fixed capacity and preserves complete ownership. -/
@@ -245,7 +245,7 @@ theorem capacity.spec (v : ResizableVec α) (contents : List α) (cap : Nat) :
     ⦃ owns v contents cap ⦄ capacity v
       ⦃⇓ n => ⌜n = cap⌝ ∗ owns v contents cap⦄ := by
   unfold capacity
-  sl_pull buffer hInv
+  sl_pull
   sl_step*
 
 /-- The room test is exact and preserves complete ownership. -/
@@ -265,7 +265,7 @@ theorem get.spec (v : ResizableVec α) (contents : List α) (cap i : Nat) :
     ⦃ owns v contents cap ⦄ get v i
       ⦃⇓ result => ⌜result = contents[i]?⌝ ∗ owns v contents cap⦄ := by
   unfold get length
-  sl_pull buffer hInv
+  sl_pull _ hInv
   sl_step
   split
   · rename_i hi
@@ -287,7 +287,7 @@ theorem set.spec (v : ResizableVec α) (contents : List α) (cap i : Nat)
         ⌜written = decide (i < contents.length)⌝ ∗
         owns v (contents.set i value) cap⦄ := by
   unfold set length
-  sl_pull buffer hInv
+  sl_pull _ hInv
   sl_step
   split
   · rename_i hi
@@ -338,7 +338,7 @@ theorem pop.spec (v : ResizableVec α) (contents : List α) (cap : Nat) :
       ⦃⇓ result =>
         ⌜result = contents.getLast?⌝ ∗ owns v contents.dropLast cap⦄ := by
   unfold pop length
-  sl_pull buffer hInv
+  sl_pull _ hInv
   sl_step
   split
   · rename_i hEmpty
@@ -365,7 +365,7 @@ theorem pop.spec (v : ResizableVec α) (contents : List α) (cap : Nat) :
 theorem free.spec (v : ResizableVec α) (contents : List α) (cap : Nat) :
     ⦃ owns v contents cap ⦄ free v ⦃⇓ emp⦄ := by
   unfold free
-  sl_pull buffer hInv
+  sl_pull
   sl_step*
 
 end PulseResizableVec

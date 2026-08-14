@@ -15,6 +15,7 @@ logic (SL) support.
 | [`Step.lean`](Step.lean) | Wires triples into `sl_step`/`sl_step*` and provides `sl_pure` for exposing the entailment of a syntactic terminal return. |
 | [`WP.lean`](WP.lean) | Separation-logic assertions, fully affine `GC`, the magic wand, and the `Wp` monad of predicate transformers. |
 | [`ProofScore.lean`](ProofScore.lean) | Engineering tool, not part of the library: measures how close the proofs of the triples are to the ideal proof, i.e. how much separation logic the automation still leaves to the user. Writes [`proof-score.html`](proof-score.html). |
+| [`proof_simplify.py`](proof_simplify.py) | Compilation-guided proof simplifier: compresses consecutive `sl_step` calls and removes unused `sl_pull` names, retaining only rewrites accepted by Lean. |
 | [`benchmark-report.md`](benchmark-report.md) | Report on the eleven external benchmark ports, their interfaces and specifications, proof-score improvements, and remaining automation gaps. |
 | `README.md` | Records the purpose and meaning of files in this directory. |
 
@@ -79,6 +80,22 @@ file that does not compile; a file whose module has been built is additionally
 imported, which makes the notation it defines available.  Pass file paths to
 score files other than those of [`Examples/`](Examples), and `-o` to write the
 report elsewhere.
+
+## Simplifying proofs
+
+Run the compilation-guided simplifier from `backends/lean`:
+
+```
+python3 Aeneas/SLPoC/proof_simplify.py FILE.lean
+python3 Aeneas/SLPoC/proof_simplify.py --in-place FILE.lean
+```
+
+The default mode prints a unified diff.  `--in-place` applies it, and `--check`
+exits with status 1 when a file can be simplified.  The tool tries to replace
+consecutive plain `sl_step` calls with `sl_step*`, to drop all explicit
+`sl_pull` patterns, and then to replace individually unused simple names with
+`_`.  Each proposed rewrite is retained only when `lake env lean --stdin`
+accepts the complete resulting file.
 
 ## Doubly-linked-list LOC comparison
 
