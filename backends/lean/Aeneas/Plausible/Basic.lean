@@ -117,7 +117,7 @@ instance WP.decidableSpec {α : Type u} {x : Result α} {p : WP.Post α} [∀ a,
   unfold WP.spec WP.theta WP.wp_return
   split <;> infer_instance
 
-/- `plausible` wraps quantifiers in `NamedBinder` so a bounded `∀` with `Nat` index hypothesis needs
+/- `plausible` wraps quantifiers in `NamedBinder` so a bounded `∀` hypothesis with `Nat` index needs
 the following two instances. -/
 
 /- Strip a `NamedBinder` wrapper. -/
