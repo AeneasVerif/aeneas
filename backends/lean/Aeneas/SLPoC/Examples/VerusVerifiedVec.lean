@@ -265,7 +265,7 @@ theorem length.spec (v : Vector α) (contents : List α) (cap : Nat) :
     ⦃ owns v contents cap ⦄ length v
       ⦃⇓ size => ⌜size = contents.length⌝ ∗ owns v contents cap⦄ := by
   unfold length
-  sl_pull initCells suffix hcells hprefix htotal hcapacity
+  sl_pull
   sl_step*
 
 /-- Capacity returns the exact allocation capacity and preserves ownership. -/
@@ -274,7 +274,7 @@ theorem capacity.spec (v : Vector α) (contents : List α) (cap : Nat) :
     ⦃ owns v contents cap ⦄ capacity v
       ⦃⇓ result => ⌜result = cap⌝ ∗ owns v contents cap⦄ := by
   unfold capacity
-  sl_pull initCells suffix hcells hprefix htotal hcapacity
+  sl_pull _ _ _ _ _ hcapacity
   simp only [hcapacity]
   sl_step*
 
@@ -285,7 +285,7 @@ theorem readValue.spec (v : Vector α) (contents : List α) (cap i : Nat) :
     ⦃ owns v contents cap ⦄ readValue v i
       ⦃⇓ result => ⌜result = contents[i]?⌝ ∗ owns v contents cap⦄ := by
   unfold readValue length
-  sl_pull initCells suffix hcells hprefix htotal hcapacity
+  sl_pull initCells suffix hcells _ _ _
   sl_step
   split
   · rename_i hi
