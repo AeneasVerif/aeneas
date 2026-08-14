@@ -8,8 +8,7 @@ import Aeneas.Std.WP
 /-! # `Plausible` instances for Aeneas `Std` types
 
 `SampleableExt`/`Decidable` instances so `plausible` can property-test spec theorems over
-Aeneas-extracted types. Counter-examples are printed via each type's `SampleableExt.proxy`
-`Repr`. -/
+Aeneas types. Counter-examples are printed via each type's `SampleableExt.proxy` `Repr`. -/
 
 open Plausible
 
@@ -24,6 +23,7 @@ private def genUScalar (ty : UScalarTy) : Gen Nat := do
   let ⟨m, _⟩ ← Gen.choose Nat 0 (UScalar.max ty) (Nat.zero_le _)
   pure m
 
+/-- Sample a `UScalar` uniformly over `[0, UScalar.max ty]`. -/
 instance UScalar.sampleableExt {ty : UScalarTy} : SampleableExt (UScalar ty) where
   proxy := Nat
   sample := ⟨genUScalar ty⟩
@@ -32,20 +32,18 @@ instance UScalar.sampleableExt {ty : UScalarTy} : SampleableExt (UScalar ty) whe
 /-- Sample an `IScalar` uniformly over `[IScalar.min ty, IScalar.max ty]`. -/
 private def genIScalar (ty : IScalarTy) : Gen Int := do
   have h : IScalar.min ty ≤ IScalar.max ty := by
-    have : (0 : Int) < 2 ^ (ty.numBits - 1) := by positivity
-    grind [IScalar.min, IScalar.max]
+    grind [show 0 < 2 ^ (ty.numBits - 1) by positivity, IScalar.min, IScalar.max]
   let ⟨m, _⟩ ← Gen.choose Int (IScalar.min ty) (IScalar.max ty) h
   pure m
 
+/-- Sample an `IScalar` uniformly over `[IScalar.min ty, IScalar.max ty]`. -/
 instance IScalar.sampleableExt {ty : IScalarTy} : SampleableExt (IScalar ty) where
   proxy := Int
   sample := ⟨genIScalar ty⟩
   interp z := ⟨BitVec.ofInt _ z⟩
 
-/-- A `SampleableExt` for any upper-bounded `UScalar` subtype, sampling *in range* over
-`[0, bound)`. This lets a spec quantify over `{x : U64 // x.val < 2^54}` and be tested
-effectively — no per-bound instance, and no wasted draws (unlike filtering the bound with a
-precondition, which uniform sampling rarely satisfies). -/
+/-- A `SampleableExt` for any upper-bounded `UScalar` subtype, sampling in range over `[0, bound)`.
+This lets a spec quantify over, e.g., `{x : U64 // x.val < 2^54}` and be tested effectively. -/
 instance UScalar.boundedSampleableExt {ty : UScalarTy} {bound : Nat} [NeZero bound] :
     SampleableExt {x : UScalar ty // x.val < bound} where
   proxy := {m : Nat // m < bound}
@@ -55,9 +53,8 @@ instance UScalar.boundedSampleableExt {ty : UScalarTy} {bound : Nat} [NeZero bou
     pure ⟨m, by have := NeZero.pos bound; omega⟩⟩
   shrink := ⟨fun m => (Nat.shrink m.val).filterMap fun k => if h : k < bound then some ⟨k, h⟩ else none⟩
   interp m := ⟨⟨BitVec.ofNat _ m.val⟩, by
-    have h1 : (BitVec.ofNat ty.numBits m.val).toNat ≤ m.val := by
+    have : (BitVec.ofNat ty.numBits m.val).toNat ≤ m.val := by
       rw [BitVec.toNat_ofNat]; exact Nat.mod_le _ _
-    have h2 := m.property
     simp only [UScalar.val]; omega⟩
 
 /-! ## `Slice` / `Vec` -/
@@ -68,11 +65,13 @@ private def interpBoundedList {α : Type u} [SampleableExt α]
   let l' := l.map SampleableExt.interp
   if h : l'.length ≤ Usize.max then ⟨l', h⟩ else ⟨[], Nat.zero_le _⟩
 
+/-- Sample a `Slice` uniformly in each element. -/
 instance Slice.sampleableExt {α : Type u} [SampleableExt α] : SampleableExt (Slice α) where
   proxy := List (SampleableExt.proxy α)
   sample := inferInstance
   interp := interpBoundedList
 
+/-- Sample a `Vec` uniformly in each element. -/
 instance alloc.vec.Vec.sampleableExt {α : Type u} [SampleableExt α] :
     SampleableExt (alloc.vec.Vec α) where
   proxy := List (SampleableExt.proxy α)
@@ -82,8 +81,7 @@ instance alloc.vec.Vec.sampleableExt {α : Type u} [SampleableExt α] :
 /-! ## `Array α n` -/
 
 /-- Generate a list of `m` independently sampled elements. -/
-private def genFixedList {β : Type u} [Arbitrary β] :
-    (m : Nat) → Gen { l : List β // l.length = m }
+private def genFixedList {β : Type u} [Arbitrary β] : (m : Nat) → Gen { l : List β // l.length = m }
   | 0 => pure ⟨[], rfl⟩
   | m + 1 => do
     let x ← Arbitrary.arbitrary
