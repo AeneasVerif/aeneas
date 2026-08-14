@@ -3,13 +3,14 @@ import Aeneas.Std.Scalar.Notations
 
 /-! # Tests / usage examples for the `Plausible` instances
 
-Each test is a spec theorem in the usual Aeneas shape — a `Result`-monad function defined with
-`do`, and a `WP.spec` postcondition written with `⦃ ⦄` — probed by `plausible`. They double as
-usage examples.
+Each test is a spec theorem in the usual Aeneas shape: a `Result`-monad function defined with
+`do`, and a `WP.spec` postcondition. They double as usage examples for `plausible`.
 
-`plausible` *tests*, it does not prove: a true spec is *admitted* (hence the `sorry` warning),
-a false one yields a readable counter-example. `randomSeed` is fixed so the results are
-reproducible; the counter-example checks use `substring` so they don't pin the shrink count. -/
+Note that `plausible` tests, it does not prove. This means that a true spec is admitted (a `sorry`),
+a false one yields a counter-example. To make the tests `randomSeed` is fixed so the results are
+reproducible; the counter-example checks use `substring` so they don't pin the shrink count.
+
+TODO: This test file is kept separate so it could be moved to an `AeneasTest` lean lib. -/
 
 open Plausible
 
@@ -101,6 +102,53 @@ example (a b : Array {x : U64 // x.val < 2^54} 2#usize) :
     let a' := a.map (·.val); let b' := b.map (·.val)
     add64 a' b' ⦃ (r : Array U64 2#usize) =>
       (∀ i < 2, r[i]!.val = a'[i]!.val + b'[i]!.val) ∧ (∀ i < 2, r[i]!.val < 2^55) ⦄ := by
+  plausible (config := { randomSeed := some 0 })
+
+/-! ### The same, two other ways to sample in range -/
+
+/-- Lift a `Fin (2^54)` value to a `U64` (it is `< 2^54 < 2^64`, so no wraparound). -/
+private def mk54 (i : Fin (2^54)) : U64 := ⟨BitVec.ofNat _ i.val⟩
+
+private theorem mk54_lt (i : Fin (2^54)) : (mk54 i).val < 2^54 := by
+  have h : (mk54 i).val ≤ i.val := by
+    simp only [mk54, UScalar.val, BitVec.toNat_ofNat]; exact Nat.mod_le _ _
+  have := i.isLt; omega
+
+-- (a) Over `Array (Fin (2^54))`: `plausible` samples `Fin (2^54)` directly, so this needs *no*
+-- `SampleableExt` instance at all (unlike the bounded subtype above); lift the limbs with `map`.
+/--
+info: Unable to find a counter-example
+---
+warning: declaration uses `sorry`
+-/
+#guard_msgs in
+example (a b : Array (Fin (2^54)) 2#usize) :
+    let a' := a.map mk54; let b' := b.map mk54
+    add64 a' b' ⦃ (r : Array U64 2#usize) =>
+      (∀ i < 2, r[i]!.val = a'[i]!.val + b'[i]!.val) ∧ (∀ i < 2, r[i]!.val < 2^55) ⦄ := by
+  plausible (config := { randomSeed := some 0 })
+
+-- (b) Over a subtype of the *array* with per-limb bounds. This works too, but — unlike the
+-- element subtype, which reuses the general instance — it needs a bespoke `SampleableExt` per
+-- array shape (sample the limbs, build the array, discharge the bounds), so the element form
+-- above is usually preferable.
+instance : SampleableExt {a : Array U64 2#usize // a[0]!.val < 2^54 ∧ a[1]!.val < 2^54} where
+  proxy := Fin (2^54) × Fin (2^54)
+  interp p := ⟨Array.make 2#usize [mk54 p.1, mk54 p.2], by
+    refine ⟨?_, ?_⟩
+    · show (Array.make 2#usize [mk54 p.1, mk54 p.2])[0]!.val < 2^54
+      simp only [Array.make, Array.getElem!_Nat_eq]; exact mk54_lt p.1
+    · show (Array.make 2#usize [mk54 p.1, mk54 p.2])[1]!.val < 2^54
+      simp only [Array.make, Array.getElem!_Nat_eq]; exact mk54_lt p.2⟩
+
+/--
+info: Unable to find a counter-example
+---
+warning: declaration uses `sorry`
+-/
+#guard_msgs in
+example (a b : {a : Array U64 2#usize // a[0]!.val < 2^54 ∧ a[1]!.val < 2^54}) :
+    add64 a.val b.val ⦃ (r : Array U64 2#usize) => ∀ i < 2, r[i]!.val < 2^55 ⦄ := by
   plausible (config := { randomSeed := some 0 })
 
 /-! ## A signed limb
