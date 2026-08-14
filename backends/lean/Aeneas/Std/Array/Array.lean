@@ -290,6 +290,10 @@ theorem Array.getElem_set_neq {α} {n : Usize} (v : Array α n) (i j : Usize) (x
   simp only [ne_eq, UScalar.neq_to_neq_val] at *
   simp_lists [List.getElem_set_ne]
 
+/-- Map a function over an `Array`, preserving the length. -/
+def Array.map {α : Type u} {β : Type v} {n : Usize} (f : α → β) (a : Array α n) : Array β n :=
+  ⟨a.val.map f, by simp [a.property]⟩
+
 /-- Small helper (this function doesn't model a specific Rust function) -/
 def Array.clone {α : Type u} {n : Usize} (clone : α → Result α) (s : Array α n) : Result (Array α n) := do
   let s' ← List.clone clone s.val
