@@ -210,7 +210,7 @@ theorem insertBlock.spec (s : FreeList) (entries : Entries R)
   rw [hstar_assoc_eq]
   sl_pull hfirst
   unfold blockOwn
-  sl_pull oldNext
+  sl_pull
   rw [hfirst]
   sl_step*
 
