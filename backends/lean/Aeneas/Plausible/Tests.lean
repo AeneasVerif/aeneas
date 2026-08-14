@@ -1,14 +1,13 @@
 import Aeneas.Plausible.Basic
 import Aeneas.Std.Scalar.Notations
 
-/-! # Tests / usage examples for the `Plausible` instances
+/-! # Tests / usage examples for `Plausible`
 
-Each test is a spec theorem in the usual Aeneas shape: a `Result`-monad function defined with
-`do`, and a `WP.spec` postcondition. They double as usage examples for `plausible`.
+Each test is a spec theorem in the usual Aeneas shape: a `Result`-monad function defined with `do`, \and a `WP.spec` postcondition.
 
 Note that `plausible` tests, it does not prove. This means that a true spec is admitted (a `sorry`),
-a false one yields a counter-example. To make the tests `randomSeed` is fixed so the results are
-reproducible; the counter-example checks use `substring` so they don't pin the shrink count.
+a false one yields a counter-example. Here `randomSeed` is often fixed so the results are
+reproducible. In typical use this isn't desired.
 
 TODO: This test file is kept separate so it could be moved to an `AeneasTest` lean lib. -/
 
@@ -18,66 +17,13 @@ namespace Aeneas.Std
 
 open Result
 
-/-! ## Element-wise addition on a 2-limb array (a `FieldElement51`-style limb op)
+/-! ## Element-wise addition on a 2-limb `U64` array (a `FieldElement51`-style limb op)
 
-Exercises: sampling `Array U8 _` (with `U8` elements shown as decimal lists), bounded-∀
-pre/postconditions decided as guards, and `WP.spec`. -/
+Sampling arrays and `U64` limbs, bounded-∀ pre/postconditions decided as guards, `WP.spec`, and, for
+a tight limb bound, sampling in range rather than filtering. -/
 
-/-- Add two 2-limb arrays element-wise, in the `Result` monad (fails on limb overflow). -/
-def add (a b : Array U8 2#usize) : Result (Array U8 2#usize) := do
-  let a0 ← a.index_usize 0#usize
-  let a1 ← a.index_usize 1#usize
-  let b0 ← b.index_usize 0#usize
-  let b1 ← b.index_usize 1#usize
-  let c0 ← a0 + b0
-  let c1 ← a1 + b1
-  ok (Array.make 2#usize [c0, c1])
-
--- Correct: the `< 128` limb bounds rule out overflow, so `add` succeeds and adds element-wise.
-/--
-info: Unable to find a counter-example
----
-warning: declaration uses `sorry`
--/
-#guard_msgs in
-example (a b : Array U8 2#usize) (ha : ∀ i < 2, a[i]!.val < 128) (hb : ∀ i < 2, b[i]!.val < 128) :
-    add a b ⦃ (r : Array U8 2#usize) =>
-      (∀ i < 2, r[i]!.val = a[i]!.val + b[i]!.val) ∧ (∀ i < 2, r[i]!.val < 256) ⦄ := by
-  plausible (config := { randomSeed := some 0 })
-
--- Wrong: the naive spec overflows, and `plausible` reports a readable counter-example.
-/-- Found a counter-example!
-a := [0, 221]
-b := [0, 64] -/
-#guard_msgs (substring := true) in
-example (a b : Array U8 2#usize) :
-    add a b ⦃ (r : Array U8 2#usize) => ∀ i < 2, r[i]!.val = a[i]!.val + b[i]!.val ⦄ := by
-  plausible (config := { randomSeed := some 0 })
-
--- Pitfall: if the bound is too tight for uniform sampling to hit (here `< 16`, met by only
--- `(1/16)⁴ ≈ 1/65536` of draws), `plausible` never generates a valid input and *gives up*,
--- admitting the goal — even though this spec is blatantly false. "Gave up" means *not tested*,
--- not proved. (Bound-aware sampling — drawing limbs directly in range — would fix this.)
-/--
-warning: Gave up after failing to generate values that fulfill the preconditions 100 times.
----
-warning: declaration uses `sorry`
--/
-#guard_msgs in
-example (a b : Array U8 2#usize) (ha : ∀ i < 2, a[i]!.val < 16) (hb : ∀ i < 2, b[i]!.val < 16) :
-    add a b ⦃ _ => false ⦄ := by
-  plausible (config := { randomSeed := some 0 })
-
-/-! ## Realistic tight bound: `U64` limbs `< 2^54`, tested via a bounded subtype
-
-Field-element limbs are `U64` bounded well below the type max (e.g. `< 2^54`). Uniform `U64`
-sampling meets that only ~`2⁻¹⁰` of the time, so — as in the pitfall above — a filtered
-precondition would make `plausible` give up. Instead we quantify over the bounded subtype
-`{x : U64 // x.val < 2^54}`, which `UScalar.boundedSampleableExt` samples *in range* (no
-per-bound boilerplate), and lift to the `U64` array; every sample is then valid. -/
-
-/-- Add two 2-limb `U64` arrays element-wise (fails on limb overflow). -/
-def add64 (a b : Array U64 2#usize) : Result (Array U64 2#usize) := do
+/-- Add two 2-limb arrays element-wise, fails on limb overflow. -/
+def add (a b : Array U64 2#usize) : Result (Array U64 2#usize) := do
   let a0 ← a.index_usize 0#usize
   let a1 ← a.index_usize 1#usize
   let b0 ← b.index_usize 0#usize
@@ -91,88 +37,61 @@ def add64 (a b : Array U64 2#usize) : Result (Array U64 2#usize) := do
 def Array.map {α : Type u} {β : Type v} {n : Usize} (f : α → β) (a : Array α n) : Array β n :=
   ⟨a.val.map f, by simp [a.property]⟩
 
--- With limbs `< 2^54`, `add64` adds without overflow and every result limb is `< 2^55`.
-/--
-info: Unable to find a counter-example
----
-warning: declaration uses `sorry`
--/
-#guard_msgs in
+-- Wrong: the naive spec overflows, so `plausible` finds a counter-example.
+/-- Found a counter-example!
+a := [127, 3441359099766425339]
+b := [0, 17677279364608779445] -/
+#guard_msgs (substring := true) in
+example (a b : Array U64 2#usize) :
+    add a b ⦃ (r : Array U64 2#usize) => ∀ i < 2, r[i]!.val = a[i]!.val + b[i]!.val ⦄ := by
+  plausible (config := { randomSeed := some 0 })
+
+-- Here `plausible` has a hard time finding valid test data and so admits a blatantly false spec.
+/-- warning: Gave up after failing to generate values that fulfill the preconditions 100 times. -/
+#guard_msgs  (substring := true) in
+example (a b : Array U64 2#usize) (ha : ∀ i < 2, a[i]!.val < 2^54) (hb : ∀ i < 2, b[i]!.val < 2^54) :
+    add a b ⦃ _ => false ⦄ := by
+  plausible (config := { randomSeed := some 0 })
+
+-- Sample in range via the bounded subtype `{x : U64 // x.val < 2^54}` to more reliably test.
+/-- info: Unable to find a counter-example -/
+#guard_msgs (substring := true)  in
 example (a b : Array {x : U64 // x.val < 2^54} 2#usize) :
     let a' := a.map (·.val); let b' := b.map (·.val)
-    add64 a' b' ⦃ (r : Array U64 2#usize) =>
+    add a' b' ⦃ (r : Array U64 2#usize) =>
       (∀ i < 2, r[i]!.val = a'[i]!.val + b'[i]!.val) ∧ (∀ i < 2, r[i]!.val < 2^55) ⦄ := by
-  plausible (config := { randomSeed := some 0 })
+  plausible
 
-/-! ### The same, two other ways to sample in range -/
-
-/-- Lift a `Fin (2^54)` value to a `U64` (it is `< 2^54 < 2^64`, so no wraparound). -/
-private def mk54 (i : Fin (2^54)) : U64 := ⟨BitVec.ofNat _ i.val⟩
-
-private theorem mk54_lt (i : Fin (2^54)) : (mk54 i).val < 2^54 := by
-  have h : (mk54 i).val ≤ i.val := by
-    simp only [mk54, UScalar.val, BitVec.toNat_ofNat]; exact Nat.mod_le _ _
-  have := i.isLt; omega
-
--- (a) Over `Array (Fin (2^54))`: `plausible` samples `Fin (2^54)` directly, so this needs *no*
--- `SampleableExt` instance at all (unlike the bounded subtype above); lift the limbs with `map`.
-/--
-info: Unable to find a counter-example
----
-warning: declaration uses `sorry`
--/
-#guard_msgs in
+-- Sample in range, similar to the above, but using `Array (Fin n)`.
+/-- info: Unable to find a counter-example -/
+#guard_msgs (substring := true)  in
 example (a b : Array (Fin (2^54)) 2#usize) :
-    let a' := a.map mk54; let b' := b.map mk54
-    add64 a' b' ⦃ (r : Array U64 2#usize) =>
+    let a' := a.map (⟨BitVec.ofNat _ ·.val⟩); let b' := b.map (⟨BitVec.ofNat _ ·.val⟩)
+    add a' b' ⦃ (r : Array U64 2#usize) =>
       (∀ i < 2, r[i]!.val = a'[i]!.val + b'[i]!.val) ∧ (∀ i < 2, r[i]!.val < 2^55) ⦄ := by
-  plausible (config := { randomSeed := some 0 })
-
--- (b) Over a subtype of the *array* with per-limb bounds. This works too, but — unlike the
--- element subtype, which reuses the general instance — it needs a bespoke `SampleableExt` per
--- array shape (sample the limbs, build the array, discharge the bounds), so the element form
--- above is usually preferable.
-instance : SampleableExt {a : Array U64 2#usize // a[0]!.val < 2^54 ∧ a[1]!.val < 2^54} where
-  proxy := Fin (2^54) × Fin (2^54)
-  interp p := ⟨Array.make 2#usize [mk54 p.1, mk54 p.2], by
-    refine ⟨?_, ?_⟩
-    · show (Array.make 2#usize [mk54 p.1, mk54 p.2])[0]!.val < 2^54
-      simp only [Array.make, Array.getElem!_Nat_eq]; exact mk54_lt p.1
-    · show (Array.make 2#usize [mk54 p.1, mk54 p.2])[1]!.val < 2^54
-      simp only [Array.make, Array.getElem!_Nat_eq]; exact mk54_lt p.2⟩
-
-/--
-info: Unable to find a counter-example
----
-warning: declaration uses `sorry`
--/
-#guard_msgs in
-example (a b : {a : Array U64 2#usize // a[0]!.val < 2^54 ∧ a[1]!.val < 2^54}) :
-    add64 a.val b.val ⦃ (r : Array U64 2#usize) => ∀ i < 2, r[i]!.val < 2^55 ⦄ := by
-  plausible (config := { randomSeed := some 0 })
+  plausible
 
 /-! ## A signed limb
 
-Exercises: sampling `I8` (shown as a signed `Int`, not a bitvector). -/
+Sampling `I8` (shown as a signed `Int`, not a bitvector). -/
 
 /-- Double a signed limb (fails on overflow). -/
 def dbl (x : I8) : Result I8 := do
   let y ← x + x
   ok y
 
--- Wrong: the naive doubling spec overflows for large `|x|`; the counter-example is a signed
--- value (e.g. `x := -125`, since `-125 + -125 = -250 < -128`).
-/-- Found a counter-example! -/
+-- The naive doubling spec overflows for large `|x|`.
+/-- Found a counter-example!
+x := -125 -/
 #guard_msgs (substring := true) in
 example (x : I8) : dbl x ⦃ y => y.val = 2 * x.val ⦄ := by
   plausible (config := { randomSeed := some 0 })
 
 /-! ## Variable-length collections
 
-Exercises: sampling `Slice` and `Vec` (as lists), with a length precondition decided as a
-guard. -/
+Sampling `Slice` and `Vec` (as lists), with a length precondition decided as a guard. -/
 
-/-- Double the head element of a slice (fails if empty or on overflow). -/
+/-- Double the head element of a slice (fails if empty or overflows). -/
 def sliceHead (s : Slice U8) : Result U8 := do
   let x ← s.index_usize 0#usize
   let y ← x + x
@@ -185,45 +104,31 @@ def vecHead (v : alloc.vec.Vec U8) : Result U8 := do
   ok y
 
 -- Correct: a non-empty slice whose head is `< 128` has its head doubled without overflow.
-/--
-info: Unable to find a counter-example
----
-warning: declaration uses `sorry`
--/
-#guard_msgs in
+/-- info: Unable to find a counter-example -/
+#guard_msgs (substring := true) in
 example (s : Slice U8) (hlen : 1 ≤ s.length) (hd : s[0]!.val < 128) :
     sliceHead s ⦃ y => y.val = 2 * s[0]!.val ⦄ := by
   plausible (config := { randomSeed := some 0 })
 
 -- The same for `Vec` (an independent instance with the same behaviour).
-/--
-info: Unable to find a counter-example
----
-warning: declaration uses `sorry`
--/
-#guard_msgs in
+/-- info: Unable to find a counter-example -/
+#guard_msgs (substring := true) in
 example (v : alloc.vec.Vec U8) (hlen : 1 ≤ v.val.length) (hd : v.val[0]!.val < 128) :
     vecHead v ⦃ y => y.val = 2 * v.val[0]!.val ⦄ := by
   plausible (config := { randomSeed := some 0 })
 
-/-! ## A postcondition quantifying over a whole scalar type
+/-! ## A postcondition quantifying over a scalar type
 
-Exercises: a `∀ i : U8, …` postcondition, decided by enumeration via the scalar `Fintype`
-instance (rather than the bounded-∀ bridge, which handles `∀ i < n`). -/
+A `∀ i : U8, …` postcondition, decided by enumeration via the scalar `Fintype` instance. -/
 
-/-- Return the maximal byte. -/
-def maxByte (x : U8) : Result U8 := do
-  let _ ← x + 0#u8
-  ok 255#u8
+/-- Saturate a byte to the maximum by OR-ing with `0xFF`. -/
+def saturate (x : U8) : Result U8 := do
+  let y := x ||| 255#u8
+  ok y
 
--- Correct: `255` dominates every byte, a `∀ i : U8` postcondition over all 256 values.
-/--
-info: Unable to find a counter-example
----
-warning: declaration uses `sorry`
--/
-#guard_msgs in
-example (x : U8) : maxByte x ⦃ y => ∀ i : U8, i.val ≤ y.val ⦄ := by
-  plausible (config := { randomSeed := some 0 })
+/-- info: Unable to find a counter-example -/
+#guard_msgs (substring := true) in
+example (x : U8) : saturate x ⦃ y => ∀ i : U8, i.val ≤ y.val ⦄ := by
+  plausible
 
 end Aeneas.Std
