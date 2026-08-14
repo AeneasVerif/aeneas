@@ -780,15 +780,15 @@ theorem queryAux.spec (pointer : Ptr Table) (model : ModelTable)
             sl_frame
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · rename_i concreteFrame modelFrame
             sl_xchange (pure_middle_front (concreteFrame = modelFrame)
@@ -807,15 +807,15 @@ theorem queryAux.spec (pointer : Ptr Table) (model : ModelTable)
             sl_frame
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
@@ -833,15 +833,15 @@ theorem queryAux.spec (pointer : Ptr Table) (model : ModelTable)
             sl_frame
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · rename_i concreteFrame modelFrame
             sl_xchange (pure_middle_front (concreteFrame = modelFrame)
@@ -860,15 +860,15 @@ theorem queryAux.spec (pointer : Ptr Table) (model : ModelTable)
             sl_frame
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · rename_i child childModel
             sl_step with ih child childModel
@@ -920,15 +920,15 @@ theorem mapAux.spec (pointer : Ptr Table) (model : ModelTable)
             sl_frame
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
@@ -937,15 +937,15 @@ theorem mapAux.spec (pointer : Ptr Table) (model : ModelTable)
             sl_frame
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
@@ -967,15 +967,15 @@ theorem mapAux.spec (pointer : Ptr Table) (model : ModelTable)
             sl_frame
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
@@ -984,15 +984,15 @@ theorem mapAux.spec (pointer : Ptr Table) (model : ModelTable)
             sl_frame
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · rename_i child childModel
             sl_step with ih child childModel
@@ -1045,15 +1045,15 @@ theorem removeAux.spec (pointer : Ptr Table) (model : ModelTable)
             sl_frame
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · rename_i concreteFrame modelFrame
             sl_xchange (pure_middle_front (concreteFrame = modelFrame)
@@ -1064,15 +1064,15 @@ theorem removeAux.spec (pointer : Ptr Table) (model : ModelTable)
             sl_step*
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
@@ -1090,15 +1090,15 @@ theorem removeAux.spec (pointer : Ptr Table) (model : ModelTable)
             sl_frame
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
@@ -1107,15 +1107,15 @@ theorem removeAux.spec (pointer : Ptr Table) (model : ModelTable)
             sl_frame
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · rename_i child childModel
             sl_step with ih child childModel
@@ -1247,15 +1247,15 @@ theorem pruneAux.spec (pointer : Ptr Table) (model : ModelTable)
             sl_frame
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · have hRelation :=
               selectedEntries_isEmpty index concrete model
@@ -1280,15 +1280,15 @@ theorem pruneAux.spec (pointer : Ptr Table) (model : ModelTable)
             sl_frame
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · sl_xchange (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull hFalse
+            sl_pull
             contradiction
           · rename_i child childModel
             sl_step with ih child childModel
