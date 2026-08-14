@@ -4,7 +4,7 @@
 
 cp lakefile.lean-template lakefile.lean
 
-printf "/- File created by tests/lean/script.sh. -/\n\n" >> lakefile.lean
+printf "/- File created by \`tests/lean/script.sh\`. -/\n\n" >> lakefile.lean
 
 for entry in $(printf '%s\n' *.lean | LC_ALL=C sort -f)
 do
