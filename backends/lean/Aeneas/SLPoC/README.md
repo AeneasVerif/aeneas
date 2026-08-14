@@ -38,7 +38,7 @@ git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_se
 | [`Basic.lean`](Examples/Basic.lean) | Basic programs and specifications exercising `step` over pure computations and pointers. |
 | [`CreusotListReversalLasso.lean`](Examples/CreusotListReversalLasso.lean) | Port of Creusot's cyclic-list reversal over an explicit first-order memory, with exact traversal and rewiring results. |
 | [`DardinierMagicWands.lean`](Examples/DardinierMagicWands.lean) | Ports Dardinier's leftmost-leaf wand-packaging example and the uniform-footprint counterexample from *Sound Automation of Magic Wands*. |
-| [`EqOrDisj.lean`](Examples/EqOrDisj.lean) | Pointer specifications that account for possible aliasing using equal-or-disjoint ghost state. |
+| [`EqOrDisj.lean`](Examples/EqOrDisj.lean) | The `InPlaceOrDisjointBuffer` interface of [SymCRust](https://github.com/microsoft/VCR) — a read/write view pair that either aliases or is separated — specified in full against equal-or-disjoint ghost state. |
 | [`IrisTutorial.lean`](Examples/IrisTutorial.lean) | Sequential ports of Iris tutorial proof-mode, pointer, and linked-list examples. |
 | [`PulseArrayTests.lean`](Examples/PulseArrayTests.lean) | Cell-wise array model and ports of Pulse allocation/free, indexed access, fill, and exact comparison examples. |
 | [`PulseInsertionSort.lean`](Examples/PulseInsertionSort.lean) | In-place Pulse insertion sort with sortedness and permutation proofs. |
