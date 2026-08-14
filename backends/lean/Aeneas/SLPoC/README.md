@@ -73,12 +73,12 @@ body, recursively — and a spot counts as ideal when no step of it steers the
 separation logic by hand.  The report names the offending step and says what
 gave it away, so it doubles as a to-do list for the automation.
 
-The page is standalone, and fetches nothing from anywhere.  Every proof is a
-collapsible section listing its spots, each with its number of lines of code
-and its own code — the nested blocks elided as `…`, the comments left out —
-highlighted and framed in green or red according to the verdict, with the
-offending lines shaded.  The toggle at the top switches between all the spots,
-only the ideal ones, and only those that are not.
+The page is standalone, and fetches nothing from anywhere.  Every file is a
+collapsible section listing its proofs and spots. Each spot includes its number
+of lines of code and its own code — the nested blocks elided as `…`, the
+comments left out — highlighted and framed in green or red according to the
+verdict, with the offending lines shaded.  The toggle at the top switches
+between all the spots, only the ideal ones, and only those that are not.
 
 The tool parses with Lean's own parser but elaborates nothing except the
 commands that open a namespace, so it takes about a second and also works on a
@@ -97,19 +97,20 @@ python3 Aeneas/SLPoC/proof_simplify.py --in-place FILE.lean
 ```
 
 The default mode prints a unified diff.  `--in-place` applies it, and `--check`
-exits with status 1 when a file can be simplified.  The tool tries to replace
-adjacent `sl_pure`/step pairs first, then tries to drop explicit `sl_pull`
-patterns and replace individually unused simple names with `_`.  Compressing
-consecutive plain `sl_step` calls is the final stage: it validates `sl_step* N`,
-then immediately tries to remove each newly created bound.  Bounds already
-present in the input are not retried.  Each proposed rewrite is retained only
-when `lake env lean --stdin` accepts the complete resulting file.
+exits with status 1 when a file can be simplified.  The tool first tries to
+replace each `sl_pure` with `sl_step`.  For replacements Lean rejects, it then
+tries to merge an adjacent `sl_pure`/step pair.  Next it tries to drop explicit
+`sl_pull` patterns and replace individually unused simple names with `_`.
+Compressing consecutive plain `sl_step` calls is the final stage: it validates
+`sl_step* N`, then immediately tries to remove each newly created bound.
+Bounds already present in the input are not retried.  Each proposed rewrite is
+retained only when `lake env lean --stdin` accepts the complete resulting file.
 
 To keep compiler use bounded, step-run and binder rewrite classes are validated
 as batches; `sl_pull` names are first checked for lexical use in their tactic
-scope.  Mixed successful and unsuccessful `sl_pure`/step pairs are bisected
-separately.  No Lean invocation is made when lexical analysis finds nothing to
-rewrite.
+scope.  Mixed successful and unsuccessful `sl_pure` replacements and step pairs are
+bisected separately.  No Lean invocation is made when lexical analysis finds
+nothing to rewrite.
 
 Rejected candidates are reported on standard error with their source line,
 proposed replacement, batch size, and the first error returned by Lean.  This

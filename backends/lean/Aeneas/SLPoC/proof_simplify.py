@@ -280,6 +280,26 @@ def sl_pure_step_candidates(source: str) -> list[Edit]:
     )
 
 
+def sl_pure_to_step_candidates(source: str) -> list[Edit]:
+    candidates: list[Edit] = []
+    for line in re.finditer(r".*(?:\r?\n|$)", source):
+        match = PLAIN_SL_PURE.fullmatch(line.group())
+        if match is None:
+            continue
+        newline = "\r\n" if line.group().endswith("\r\n") else "\n"
+        if not line.group().endswith(("\n", "\r")):
+            newline = ""
+        candidates.append(
+            Edit(
+                line.start(),
+                line.end(),
+                f"{match['indent']}sl_step{newline}",
+                "sl_pure to sl_step",
+            )
+        )
+    return candidates
+
+
 def sl_pull_drop_candidates(source: str) -> list[Edit]:
     candidates: list[Edit] = []
     for line in re.finditer(r".*(?:\r?\n|$)", source):
@@ -332,6 +352,7 @@ def simplify(
     source: str, checker: LeanChecker
 ) -> tuple[str, list[Edit], list[RejectedEdit]]:
     candidate_finders = (
+        sl_pure_to_step_candidates,
         sl_step_pure_candidates,
         sl_pure_step_candidates,
         sl_pull_drop_candidates,
@@ -347,6 +368,12 @@ def simplify(
 
     all_accepted: list[Edit] = []
     all_rejected: list[RejectedEdit] = []
+    candidates = sl_pure_to_step_candidates(source)
+    accepted, rejected = accepted_selectively(source, candidates, checker)
+    source = apply_edits(source, accepted)
+    all_accepted.extend(accepted)
+    all_rejected.extend(rejected)
+
     for find_candidates in (sl_step_pure_candidates, sl_pure_step_candidates):
         candidates = find_candidates(source)
         accepted, rejected = accepted_selectively(source, candidates, checker)
@@ -463,6 +490,7 @@ def main(args: list[str]) -> int:
             for kind in (
                 "bounded sl_step run",
                 "sl_step bound",
+                "sl_pure to sl_step",
                 "sl_pure/sl_step pair",
                 "sl_pull arguments",
                 "unused sl_pull name",
