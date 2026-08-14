@@ -197,6 +197,7 @@ def update_update_array
   :
   Result (Array (Array Std.U32 32#usize) 32#usize)
   := do
+  let _ ← Array.index_usize s i
   let (a, index_mut_back) ← Array.index_mut_usize s i
   let a1 ← Array.update a j 0#u32
   ok (index_mut_back a1)
