@@ -414,8 +414,7 @@ theorem inc_spec (l : Link Int) (xs : List Int) :
       | some p =>
           simp only [isList, inc, List.map_cons]
           sl_pull next
-          sl_step
-          sl_step
+          sl_step* 2
           sl_step with ih next
 
 def append : List α → Link α → Link α → St (Link α)
@@ -486,8 +485,7 @@ theorem reverse_append_spec (l acc : Link α) (xs ys : List α) :
           simp only [isList, reverseAppend, List.reverse_cons, List.append_assoc,
             List.singleton_append]
           sl_pull next
-          sl_step
-          sl_step
+          sl_step* 2
           sl_step with ih (l := next) (acc := some p) (ys := x :: ys)
 
 def reverse (xs : List α) (l : Link α) : St (Link α) :=

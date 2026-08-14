@@ -43,11 +43,13 @@ example (p : Ptr Nat) :
 
 /-! ## `sl_pull` -/
 
-/-- `sl_pull` peels the quantifiers and the pure facts of a precondition. -/
+/-- `sl_step` cannot open a leading existential before frame inference.
+Pulling only its witness exposes the pure fact for `sl_step`'s `sl_pull_keep`. -/
 example (p : Ptr Nat) :
     ⦃ iprop(∃ n, ⌜n = 1⌝ ∗ p ↦ n) ⦄ Examples.incr_ptr p ⦃⇓ p ↦ 2⦄ := by
   unfold Examples.incr_ptr
-  sl_pull n rfl
+  fail_if_success sl_step
+  sl_pull n
   sl_step*
 
 /-- Without arguments it peels as much as it can. -/
@@ -55,7 +57,6 @@ example (p : Ptr Nat) (value : Nat) :
     ⦃ iprop(⌜value = 1⌝ ∗ p ↦ value) ⦄ Examples.incr_ptr p ⦃⇓ p ↦ 2⦄ := by
   unfold Examples.incr_ptr
   sl_pull
-  subst_vars
   sl_step*
 
 /-! ## `sl_pull_keep`
@@ -64,10 +65,10 @@ Unlike `sl_pull`, this copies the pure facts of the precondition into the local
 context instead of consuming them, so the assertion stays available to the
 framing of the later steps.  `sl_step` runs it on every step. -/
 
-/-- The pointer the callee is applied to is only reducible to the one the
-assertion owns through a pure fact of that same assertion, so `sl_pull` would
-destroy what it makes usable. -/
-example (p q : Ptr Nat) (h : q = p) :
+/-- The pointer passed to the callee is reducible to the owned pointer only
+through a pure fact in the precondition.  `sl_step` copies the fact into the
+context while preserving it for the postcondition. -/
+example (p q : Ptr Nat) :
     ⦃ iprop(⌜q = p⌝ ∗ p ↦ 1) ⦄ Examples.incr_ptr q ⦃⇓ iprop(⌜q = p⌝ ∗ p ↦ 2)⦄ := by
   unfold Examples.incr_ptr
   sl_step*
@@ -76,10 +77,8 @@ example (p q : Ptr Nat) (h : q = p) :
 the context (to rewrite the cell) and in the assertion (for the postcondition). -/
 example (p : Ptr Nat) (n : Nat) :
     ⦃ iprop(⌜n = 1⌝ ∗ p ↦ n) ⦄ pure () ⦃⇓ iprop(⌜n = 1⌝ ∗ p ↦ 1)⦄ := by
+  sl_pull_keep
   sl_pure
-  apply himpl_hpure_l
-  intro hn
-  simp only [hn]
   sl_frame
 
 /-- `sl_pure` reduces match/let noise around a terminal return. -/
@@ -130,6 +129,7 @@ def touchAny (p : Ptr Nat) : St Unit := do
 theorem touchAny.spec (p : Ptr Nat) :
     ⦃ iprop(∃ n, p ↦ n) ⦄ touchAny p ⦃⇓ iprop(∃ n, p ↦ n)⦄ := by
   unfold touchAny
+  fail_if_success sl_step
   sl_pull n
   sl_step*
 
@@ -195,7 +195,7 @@ example (p : Ptr Nat) (value : Nat) :
   unfold readAndFree
   sl_step*
 
-/-! ### `sl_step*` is not a drop-in replacement for a finite `sl_step` block -/
+/-! ### Unbounded and bounded `sl_step*` -/
 
 def opaqueStepResult (actual expected : Nat) : Prop :=
   actual = expected
@@ -205,16 +205,13 @@ def readFreeReturn (p : Ptr Nat) : St Nat := do
   free p
   pure (value + 1)
 
-/-- An unbounded `sl_step*` reaches the terminal entailment and fails when it
-needs manual pure reasoning.  Two `sl_step`s stop before that entailment. -/
+/-- If final framing fails after successful traversal, `sl_step*` keeps the
+resulting entailment instead of rolling the entire tactic back. -/
 example (p : Ptr Nat) (value : Nat) :
     ⦃ p ↦ value ⦄ readFreeReturn p
       ⦃⇓ result => ⌜opaqueStepResult result (value + 1)⌝⦄ := by
   unfold readFreeReturn
-  fail_if_success sl_step*
-  sl_step
-  sl_step
-  sl_pure
+  sl_step*
   simp only [opaqueStepResult]
   sl_frame
 

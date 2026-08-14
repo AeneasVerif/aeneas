@@ -497,8 +497,7 @@ theorem reverseAux.spec (memory : Ptr Memory) (m : Memory)
   | cons m p previous ps final tail ih =>
       simp only [List.length_cons]
       unfold reverseAux
-      sl_step
-      sl_step
+      sl_step* 2
       exact ih
 
 /-- Exact functional correctness for Creusot's lasso reversal.  The returned

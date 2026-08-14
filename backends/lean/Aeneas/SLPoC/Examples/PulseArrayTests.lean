@@ -379,8 +379,7 @@ theorem compareCells.disjoint_spec [DecidableEq α]
                   contradiction
               | cons rightValue rightValues =>
                   simp only [ownsCells_cons, compareCells]
-                  sl_step
-                  sl_step
+                  sl_step* 2
                   split
                   · rename_i heq
                     subst rightValue
@@ -413,8 +412,7 @@ theorem compareCells.self_spec [DecidableEq α]
           contradiction
       | cons value values =>
           simp only [compareCells]
-          sl_step
-          sl_step
+          sl_step* 2
           rw [if_pos True.intro]
           sl_step with ih values
 
