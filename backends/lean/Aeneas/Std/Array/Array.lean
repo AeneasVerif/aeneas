@@ -294,6 +294,15 @@ theorem Array.getElem_set_neq {α} {n : Usize} (v : Array α n) (i j : Usize) (x
 def Array.map {α : Type u} {β : Type v} {n : Usize} (f : α → β) (a : Array α n) : Array β n :=
   ⟨a.val.map f, by simp [a.property]⟩
 
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_safe, grind =, agrind =]
+theorem Array.val_map {α β} {n : Usize} (f : α → β) (a : Array α n) :
+    (Array.map f a).val = a.val.map f := rfl
+
+theorem Array.getElem!_map {α β} [Inhabited α] [Inhabited β] {n : Usize} (f : α → β)
+    (a : Array α n) (i : Nat) (h : i < n.val) : (Array.map f a)[i]! = f (a[i]!) := by
+  have h' : i < a.val.length := by simp [h]
+  simp [List.getElem?_eq_getElem h']
+
 /-- Small helper (this function doesn't model a specific Rust function) -/
 def Array.clone {α : Type u} {n : Usize} (clone : α → Result α) (s : Array α n) : Result (Array α n) := do
   let s' ← List.clone clone s.val
