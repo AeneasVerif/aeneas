@@ -329,7 +329,7 @@ theorem new.spec (capacity : Nat) (hcapacity : 0 < capacity) :
 theorem length.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
     ⦃ isRingBuffer rb items cap ⦄ length rb
       ⦃⇓ n => ⌜n = items.length⌝ ∗ isRingBuffer rb items cap⦄ := by
-  sl_pull cells head tail count h
+  sl_pull
   unfold length
   sl_step
 
@@ -338,7 +338,7 @@ theorem length.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
 theorem capacity.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
     ⦃ isRingBuffer rb items cap ⦄ capacity rb
       ⦃⇓ n => ⌜n = cap⌝ ∗ isRingBuffer rb items cap⦄ := by
-  sl_pull cells head tail count h
+  sl_pull
   unfold capacity
   sl_step*
 
@@ -348,7 +348,7 @@ theorem isEmpty.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
     ⦃ isRingBuffer rb items cap ⦄ isEmpty rb
       ⦃⇓ empty =>
         ⌜empty = decide (items = [])⌝ ∗ isRingBuffer rb items cap⦄ := by
-  sl_pull cells head tail count h
+  sl_pull
   unfold isEmpty
   sl_step
   split <;> sl_step
@@ -360,7 +360,7 @@ theorem isFull.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
       ⦃⇓ full =>
         ⌜full = decide (items.length = cap)⌝ ∗
         isRingBuffer rb items cap⦄ := by
-  sl_pull cells head tail count h
+  sl_pull
   unfold isFull
   sl_step
   split <;> sl_step
@@ -473,7 +473,7 @@ theorem peekFront.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
     ⦃ isRingBuffer rb items cap ⦄ peekFront rb
       ⦃⇓ result =>
         ⌜result = items.head?⌝ ∗ isRingBuffer rb items cap⦄ := by
-  sl_pull cells head tail count h
+  sl_pull cells head _ count h
   unfold peekFront
   sl_step
   split
@@ -514,7 +514,7 @@ theorem peekFront.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
 @[step]
 theorem free.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
     ⦃ isRingBuffer rb items cap ⦄ free rb ⦃⇓ emp⦄ := by
-  sl_pull cells head tail count h
+  sl_pull
   unfold free
   sl_step*
 

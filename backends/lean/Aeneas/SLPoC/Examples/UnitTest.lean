@@ -195,6 +195,54 @@ example (p : Ptr Nat) (value : Nat) :
   unfold readAndFree
   sl_step*
 
+/-! ### `sl_step*` is not a drop-in replacement for a finite `sl_step` block -/
+
+def opaqueStepResult (actual expected : Nat) : Prop :=
+  actual = expected
+
+def readFreeReturn (p : Ptr Nat) : St Nat := do
+  let value ← read p
+  free p
+  pure (value + 1)
+
+/-- An unbounded `sl_step*` reaches the terminal entailment and fails when it
+needs manual pure reasoning.  Two `sl_step`s stop before that entailment. -/
+example (p : Ptr Nat) (value : Nat) :
+    ⦃ p ↦ value ⦄ readFreeReturn p
+      ⦃⇓ result => ⌜opaqueStepResult result (value + 1)⌝⦄ := by
+  unfold readFreeReturn
+  fail_if_success sl_step*
+  sl_step
+  sl_step
+  sl_pure
+  simp only [opaqueStepResult]
+  sl_frame
+
+/-- A bounded `sl_step*` can represent the finite block without entering the
+terminal entailment. -/
+example (p : Ptr Nat) (value : Nat) :
+    ⦃ p ↦ value ⦄ readFreeReturn p
+      ⦃⇓ result => ⌜opaqueStepResult result (value + 1)⌝⦄ := by
+  unfold readFreeReturn
+  sl_step* 2
+  sl_pure
+  simp only [opaqueStepResult]
+  sl_frame
+
+/-- Conversely, unbounded `sl_step*` may solve the terminal entailment, making
+the tactics after the original finite block fail with no goals. -/
+example (p : Ptr Nat) (value : Nat) :
+    ⦃ p ↦ value ⦄ readFreeReturn p
+      ⦃⇓ result => ⌜result = value + 1⌝⦄ := by
+  unfold readFreeReturn
+  fail_if_success
+    sl_step*
+    sl_pure
+  sl_step
+  sl_step
+  sl_pure
+  sl_frame
+
 /-! ## Affine resource discard -/
 
 example (p : Ptr Nat) (value : Nat) :
