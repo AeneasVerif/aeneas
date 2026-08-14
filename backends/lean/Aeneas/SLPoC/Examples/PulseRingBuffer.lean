@@ -382,10 +382,7 @@ theorem pushBack.spec (rb : RingBuffer α) (items : List α) (cap : Nat)
   · rename_i hfull
     sl_step
   · rename_i hnotfull
-    sl_step
-    sl_step
-    sl_step
-    sl_step
+    sl_step*
     have hcountlt : count < cap := by omega
     have hnewTail :
         nextIndex tail rb.cap = circularIndex head (count + 1) cap := by
@@ -426,10 +423,7 @@ theorem popFront.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
     | nil =>
         simp_all
     | cons front rest =>
-        sl_step
-        sl_step
-        sl_step
-        sl_step
+        sl_step*
         have hcount : count = rest.length + 1 := by
           simpa using h.2.2.2.2.2.2.1
         have hrestBound : rest.length + 1 ≤ cap := by omega
@@ -488,8 +482,7 @@ theorem peekFront.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
     | nil =>
         simp_all
     | cons front rest =>
-        sl_step
-        sl_step
+        sl_step*
         have hcount : count = rest.length + 1 := by
           simpa using h.2.2.2.2.2.2.1
         have hrestBound : rest.length + 1 ≤ cap := by omega

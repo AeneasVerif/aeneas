@@ -219,8 +219,7 @@ theorem pop.spec (x : Link α) (v : α) (xs : List α) (hne : x ≠ none) :
   | some p =>
       simp only [pop, isList]
       sl_pull
-      sl_step
-      sl_step
+      sl_step* 2
       sl_pure
       sl_frame
 
@@ -330,8 +329,7 @@ theorem detachNext.spec (x : Link α) (v : α) (xs : List α) (hne : x ≠ none)
   | some p =>
       simp only [detachNext, isList]
       sl_pull
-      sl_step
-      sl_step
+      sl_step* 2
       sl_pure
       refine himpl_hexists_r none ?_
       simp only [isList]
@@ -358,8 +356,7 @@ theorem split.spec (n : Nat) (x : Link α) (xs : List α)
             cases n with
             | zero =>
                 simp only [split, List.take, List.drop]
-                sl_step
-                sl_step
+                sl_step* 2
                 sl_pure
                 apply hstar_mono
                 · refine himpl_hexists_r (none : Link α) ?_
@@ -419,8 +416,7 @@ theorem reverseAppend.spec (x acc : Link α) (xs ys : List α) :
           simp only [isList, reverseAppend, List.reverse_cons, List.append_assoc,
             List.singleton_append]
           sl_pull next
-          sl_step
-          sl_step
+          sl_step* 2
           sl_step with ih (x := next) (acc := some p) (ys := v :: ys)
 
 /-- `reverse` consumes the original orientation and returns exact ownership in

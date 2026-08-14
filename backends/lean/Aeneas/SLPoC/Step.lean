@@ -143,7 +143,8 @@ macro_rules
   | `(tactic| sl_step* $[$n]? $cfg:optConfig) =>
     `(tactic| (sl_pull_keep <;>
       ((step* $[$n]? $cfg:optConfig by sl_frame) <;>
-      (sl_frame? <;> sl_side? $cfg:optConfig))))
+      -- Keep the progress made by `step*` when its final entailment needs manual proof.
+      ((try sl_frame?) <;> sl_side? $cfg:optConfig))))
 
 /-! ## Lemmas registered in the elimination passes of `step` -/
 
