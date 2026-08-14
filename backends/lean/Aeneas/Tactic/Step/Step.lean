@@ -24,7 +24,8 @@ a bug and doesn't give the proper arguments: this way we make sure tactics like 
 will not crash if there is a bug in the code which adds the pretty equality (this is only useful
 information for the user).
 -/
-@[irreducible] def prettyMonadEq {α : Type u} {β : Type v} (_ : Std.Result α) (_ : β) : Type := Unit
+@[irreducible] def prettyMonadEq {m : Type u → Type w} {α : Type u} {β : Type v}
+  (_ : m α) (_ : β) : Type := Unit
 
 macro:max "[> " "let" y:term " ← " x:term " <]"   : term => `(prettyMonadEq $x $y)
 
@@ -33,7 +34,8 @@ def unexpPrettyMonadEqofNat : Lean.PrettyPrinter.Unexpander | `($_ $x $y) => `([
 
 example (x y z : Std.U32) (_ : [> let z ← x + y <]) : True := by simp
 
-def eq_imp_prettyMonadEq {α : Type u} {β : Type v} (x : Std.Result α) (y : β) : prettyMonadEq x y := by
+def eq_imp_prettyMonadEq {m : Type u → Type w} {α : Type u} {β : Type v}
+  (x : m α) (y : β) : prettyMonadEq x y := by
   unfold prettyMonadEq
   constructor
 
@@ -222,6 +224,27 @@ structure Args where
   /- Syntax of the tactic provided by the user to solve the remaining proof obligations -/
   byTacSyntax : Option Syntax
 
+/-- Decompose a registered specification statement -/
+def getSpecInfoArgs (ty : Expr) : MetaM (SpecInfo × Array Expr) :=
+  ty.consumeMData.withApp fun spec? args => do
+    let some specName := spec?.constName?
+      | throwError "{spec?} is not a spec statement"
+    let some info ← specInfoLookup specName
+      | throwError "{specName} is not a supported spec statement"
+    unless args.size = info.arity do
+      throwError "Not a fully applied specification statement: {ty}"
+    return (info, args)
+
+/-- The program mentioned by a registered specification statement. -/
+def getSpecProgram (ty : Expr) : MetaM Expr := do
+  let (info, args) ← getSpecInfoArgs ty
+  return args[info.program_index]!
+
+/-- The post-condition of a registered specification statement. -/
+def getSpecPost (ty : Expr) : MetaM Expr := do
+  let (info, args) ← getSpecInfoArgs ty
+  return args[info.post_index]!
+
 /- Analyze a goal comp
 
    If comp = bind m k then return true and m
@@ -231,17 +254,10 @@ structure Args where
    and returns the corresponding SpecInfo
 -/
 def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr × SpecInfo) := do
-  forallTelescope goalTy fun nvars goalTy => do
+  forallTelescope goalTy fun _ goalTy => do
 
-  let (spec?, args) := goalTy.consumeMData.withApp (fun f args => (f, args))
-  let name ← match spec? with
-    | Expr.const name _ => pure name
-    | _ => throwError "{spec?} is not a spec statement"
-  let .some info ← specInfoLookup name
-    | throwError "{name} is not a supported spec statement"
-  let compTy ← if h: args.size = info.arity
-               then pure (args[info.program_index]!)
-               else throwError "Goal is not a fully applied `spec m P`"
+  let (info, args) ← getSpecInfoArgs goalTy
+  let compTy := args[info.program_index]!
 
   trace[Step] "compTy: {compTy}"
 
@@ -408,10 +424,9 @@ def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
 def getBindVarNames : TacticM (Array (Option Name)) := do
   try
     withMainContext do
-    let goalTy ← (← getMainGoal).getType
-    let goalTy ← instantiateMVars goalTy
+    let goalTy ← getMainTarget
     forallTelescope goalTy fun _ goalTy => do
-    let_expr Std.WP.spec _ m _ := goalTy | return #[]
+    let m ← getSpecProgram goalTy
     let_expr Bind.bind _ _ _ _ _ cont := m | return #[]
     getPostNames cont
   catch _ => pure #[]
@@ -420,17 +435,7 @@ def getBindVarNames : TacticM (Array (Option Name)) := do
     The goal should be a valid spec statement, such as `spec program post`. -/
 def getPostNamesFromGoal : TacticM (Array (Option Name)) := do
   try
-    let goalTy ← (← getMainGoal).getType
-    let goalTy ← instantiateMVars goalTy
-    goalTy.consumeMData.withApp fun spec? args => do
-    let specname ← match spec? with
-      | Expr.const name _ => pure name
-      | _ => throwError "{spec?} is not a spec statement"
-    let .some info ← specInfoLookup specname
-      | throwError "{specname} is not a supported spec statement"
-    if args.size = info.arity then
-      getPostNames args[info.post_index]!
-    else pure #[]
+    getPostNames (← getSpecPost (← getMainTarget))
   catch _ => pure #[]
 
 /-- Extract variable names from the current goal for naming `step` outputs.
@@ -472,6 +477,12 @@ def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) := do
     else
       trace[Step] "Could not decompose application"
       pure mvar
+
+/-- The number of leading `∀`/`→` binders of an expression. -/
+private partial def countLeadingForalls (e : Expr) : Nat :=
+  match e.consumeMData with
+  | .forallE _ _ body _ => 1 + countLeadingForalls body
+  | _ => 0
 
 /-- Attempt to match a given theorem with the monadic call in the target.
 The resulting target should be of the shape:
@@ -544,9 +555,11 @@ def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th
   let specMonoBindTy ← inferType specMonoBind
   trace[Step] "Applied specMonoBind with theorem: {specMonoBind}: {specMonoBindTy}"
 
-  let (specMonoBindMVars, _, specMonoBindTy) ← forallMetaBoundedTelescope specMonoBindTy 1
-  if (specMonoBindMVars.size ≠ 1) then throwError "Unreachable"
-  let ngoal := specMonoBindMVars[0]!.mvarId!
+  let (specMonoBindMVars, _, specMonoBindTy) ←
+    forallMetaBoundedTelescope specMonoBindTy (countLeadingForalls specMonoBindTy)
+  if (specMonoBindMVars.size == 0) then
+    throwError "The specMonoBind theorem should have at least one premise"
+  let ngoal := specMonoBindMVars.back!.mvarId!
   let specMonoBind ← mkAppOptM' specMonoBind (specMonoBindMVars.map some)
   trace[Step] "Applied specMonoBind with theorem: {specMonoBind}: {specMonoBindTy}"
 
@@ -565,7 +578,8 @@ def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th
   mgoal.assign specMonoBind
   trace[Step] "New goal: {ngoal}"
 
-  let mvarsIds := mvars.map Expr.mvarId!
+  let extraPreconditions := specMonoBindMVars.pop.map Expr.mvarId!
+  let mvarsIds := mvars.map Expr.mvarId! ++ extraPreconditions
   let mvarsIds ← mvarsIds.filterM (fun mvar => do pure (not (← mvar.isAssigned)))
 
   -- Attempt to resolve the typeclass instances
@@ -589,8 +603,10 @@ def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) 
   -- Construct the tuple of outputs
   let pat ← mkProdsVal outputFVars.toList
   trace[Step] "Constructed the pattern: {pat}"
-  -- Create the equality
-  let e ← mkAppM ``eq_imp_prettyMonadEq #[fExpr, pat]
+  -- Create the equality.
+  let some e ← observing? (mkAppM ``eq_imp_prettyMonadEq #[fExpr, pat])
+    | trace[Step] "Skipping the pretty equality: could not apply `eq_imp_prettyMonadEq`"
+      return
   trace[Step] "Created the equality expression: {e}"
   -- Introduce it
   Utils.addDeclTac name e (← inferType e) (asLet := false) fun e => do
