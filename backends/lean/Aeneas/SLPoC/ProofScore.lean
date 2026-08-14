@@ -57,8 +57,8 @@ are not scored, but a triple proof that *uses* one is charged for it.
 ## The report
 
 A standalone HTML page — no script, style or font is fetched from anywhere.
-Under the summary tables, every proof is a collapsible section listing its
-spots, each with its number of lines of code and its code, highlighted, framed
+Under the summary tables, every file is a collapsible section listing its
+proofs and spots. Each spot has its number of lines of code and its code, highlighted, framed
 in green when the spot is ideal and in red when it is not, with the offending
 lines shaded and named underneath.  A spot shows its own code only: the nested
 blocks are elided as `…` because they are spots of their own, and the comments
@@ -156,10 +156,27 @@ def resolutionCandidates (currNamespace : Name) (opens : Array Name) (n : Name) 
         result := result.push (prefix' ++ opened ++ n)
     return result.push n
 
-def exprMentionsSL (e : Expr) : Bool :=
+/-- Whether an elaborated type mentions the separation logic, including through
+reducible type aliases. -/
+partial def exprMentionsSL (env : Environment) (e : Expr)
+    (seen : NameSet := {}) : Bool :=
   (e.find? fun sub =>
     match sub with
-    | .const n _ => slCoreNames.contains (lastComponent n)
+    | .const n levels =>
+      if slCoreNames.contains (lastComponent n) then
+        true
+      else if seen.contains n then
+        false
+      else
+        match env.find? n with
+        | some (.defnInfo info) =>
+          match info.hints with
+          | .abbrev =>
+            exprMentionsSL env
+              (info.value.instantiateLevelParams info.levelParams levels)
+              (seen.insert n)
+          | _ => false
+        | _ => false
     | _ => false).isSome
 
 partial def syntaxFind? (stx : Syntax) (p : Syntax → Bool) : Option Syntax :=
@@ -211,6 +228,8 @@ structure ParsedDecl where
   signature? : Option Syntax
   /-- The proof, i.e. everything after `:=`. -/
   value? : Option Syntax
+  /-- Whether this is an `abbrev`; its value may reveal an aliased `SLProp`. -/
+  isAbbrev : Bool := false
   /-- Namespace the declaration is written in. -/
   currNamespace : Name
   /-- Namespaces opened above it, as an over-approximation: `section`s are
@@ -343,6 +362,7 @@ where
       shortName, line
       signature? := syntaxFind? decl fun s => declSigKinds.contains s.getKind
       value? := syntaxFind? decl fun s => declValKinds.contains s.getKind
+      isAbbrev := decl.getKind == ``Lean.Parser.Command.abbrev
       currNamespace, opens
     }
 
@@ -386,7 +406,7 @@ def importedSLNames (env : Environment) : NameSet := Id.run do
   let mut names := {}
   for (n, info) in env.constants.toList do
     if n.isInternal || n.getRoot != `Aeneas then continue
-    if slCoreNames.contains (lastComponent n) || exprMentionsSL info.type then
+    if slCoreNames.contains (lastComponent n) || exprMentionsSL env info.type then
       names := names.insert n
   return names
 
@@ -395,10 +415,13 @@ does not know about when the file is not built (or does not build). -/
 def localSLNames (file : ParsedFile) (imported : NameSet) : NameSet := Id.run do
   let mut names := imported
   for decl in file.decls do
-    let some sig := decl.signature? | continue
     let r : Resolver :=
-      { slNames := imported, currNamespace := decl.currNamespace, opens := decl.opens }
-    if (syntaxMentionsSL r sig).isSome then
+      { slNames := names, currNamespace := decl.currNamespace, opens := decl.opens }
+    let signatureMentionsSL :=
+      decl.signature?.any (syntaxMentionsSL r · |>.isSome)
+    let aliasMentionsSL :=
+      decl.isAbbrev && decl.value?.any (syntaxMentionsSL r · |>.isSome)
+    if signatureMentionsSL || aliasMentionsSL then
       names := names.insert decl.name
   return names
 
@@ -758,8 +781,16 @@ structure FileScore where
 def FileScore.spots (f : FileScore) : Nat := f.scores.foldl (· + ·.total) 0
 def FileScore.idealSpots (f : FileScore) : Nat := f.scores.foldl (· + ·.ideal) 0
 def FileScore.idealProofs (f : FileScore) : Nat := f.scores.countP (·.isIdeal)
+def FileScore.nonidealProofs (f : FileScore) : Nat := f.scores.size - f.idealProofs
 def FileScore.loc (f : FileScore) : Nat := f.scores.foldl (· + ·.loc) 0
 def FileScore.idealLoc (f : FileScore) : Nat := f.scores.foldl (· + ·.idealLoc) 0
+def FileScore.nonidealLoc (f : FileScore) : Nat := f.loc - f.idealLoc
+def FileScore.idealProofLoc (f : FileScore) : Nat :=
+  f.scores.foldl (fun n score => if score.isIdeal then n + score.loc else n) 0
+def FileScore.nonidealProofLoc (f : FileScore) : Nat :=
+  f.scores.foldl (fun n score => if score.isIdeal then n else n + score.loc) 0
+def FileScore.fileName (f : FileScore) : String :=
+  f.path.fileName.getD f.path.toString
 
 def scoreFile (imported : NameSet) (file : ParsedFile) : FileScore :=
   let slNames := localSLNames file imported
@@ -778,6 +809,12 @@ def percent (num den : Nat) : String :=
   else
     let permille := (2000 * num + den) / (2 * den)
     s!"{permille / 10}.{permille % 10}%"
+
+def average (total count : Nat) : String :=
+  if count == 0 then "n/a"
+  else
+    let tenths := (20 * total + count) / (2 * count)
+    s!"{tenths / 10}.{tenths % 10}"
 
 def codeList (items : Array String) : String :=
   ", ".intercalate (items.toList.map fun i => s!"<code>{escapeHtml i}</code>")
@@ -799,18 +836,42 @@ def style : String := "
   th, td { border-bottom: 1px solid var(--line); padding: .3rem .6rem; text-align: right; }
   th:first-child, td:first-child { text-align: left; }
   thead th { background: #f6f8fa; }
+  thead th.sortable { cursor: pointer; user-select: none; }
+  thead th.sortable::after { content: ' ↕'; color: var(--dim); }
+  thead th.sortable[aria-sort='ascending']::after { content: ' ↑'; color: inherit; }
+  thead th.sortable[aria-sort='descending']::after { content: ' ↓'; color: inherit; }
+  thead th.sortable:focus-visible { outline: 2px solid #0969da; outline-offset: -2px; }
   tbody tr.imperfect td:first-child { border-left: 3px solid var(--bad); }
   tbody tr.perfect td:first-child { border-left: 3px solid var(--good); }
   tfoot td { font-weight: 600; background: #f6f8fa; }
+  table.summary-table th:nth-child(5), table.summary-table td:nth-child(5),
+  table.summary-table th:last-child, table.summary-table td:last-child {
+    background: #fff8c5; font-weight: 700;
+  }
+  .score-example { max-width: 60rem; margin: 1rem 0 1.5rem; padding: .8rem 1rem;
+                   border: 1px solid var(--line); border-radius: 8px; }
+  .example-proof { margin: .7rem 0; border: 1px solid var(--line); border-radius: 6px;
+                   overflow: hidden; }
+  .example-spot { padding: .5rem .7rem; border-left: 4px solid var(--good);
+                  background: var(--goodbg); }
+  .example-spot + .example-spot { border-top: 1px solid var(--line); }
+  .example-spot.notideal { border-left-color: var(--bad); background: var(--badbg); }
+  .example-spot .spot-label { float: right; margin-left: 1rem; color: var(--good);
+                              font-weight: 600; font-family: inherit; }
+  .example-spot.notideal .spot-label { color: var(--bad); }
+  .example-spot pre { margin: 0; line-height: 1.4; overflow-x: auto; }
   .controls { position: sticky; top: 0; z-index: 2; display: flex; gap: 1.2rem;
               align-items: center; flex-wrap: wrap; margin: 1.5rem 0;
               padding: .7rem 1rem; border: 1px solid var(--line); border-radius: 8px;
               background: #f6f8fa; }
   .controls label { cursor: pointer; }
-  details.decl { border: 1px solid var(--line); border-radius: 8px; margin: .5rem 0;
-                 padding: .2rem .8rem; }
-  details.decl > summary { cursor: pointer; padding: .45rem 0; font-weight: 600; }
-  details.decl > summary .sub { font-weight: 400; color: var(--dim); }
+  details.file { margin: 2rem 0; }
+  details.file > summary { cursor: pointer; padding: .35rem 0; font-size: 1.25rem;
+                           font-weight: 600; border-bottom: 1px solid var(--line); }
+  .decl { border: 1px solid var(--line); border-radius: 8px; margin: .5rem 0;
+          padding: .2rem .8rem; }
+  .decl > .decl-head { padding: .45rem 0; font-weight: 600; }
+  .decl > .decl-head .sub { font-weight: 400; color: var(--dim); }
   .spot { border-radius: 6px; margin: .7rem 0 1rem; padding: .5rem .8rem;
           border-left: 4px solid var(--good); background: var(--goodbg); }
   .spot.notideal { border-left-color: var(--bad); background: var(--badbg); }
@@ -837,21 +898,80 @@ def style : String := "
   .warn { border-left: 4px solid #bf8700; background: #fff8e5; padding: .6rem .8rem;
           border-radius: 6px; }
   body[data-filter=ideal] .spot.notideal, body[data-filter=notideal] .spot.ideal,
-  body[data-filter=ideal] details.decl[data-ideal='0'],
-  body[data-filter=notideal] details.decl[data-notideal='0'],
-  body[data-filter=ideal] section.file[data-ideal='0'],
-  body[data-filter=notideal] section.file[data-notideal='0'] { display: none; }
+  body[data-filter=ideal] .decl[data-ideal='0'],
+  body[data-filter=notideal] .decl[data-notideal='0'],
+  body[data-filter=ideal] details.file[data-ideal='0'],
+  body[data-filter=notideal] details.file[data-notideal='0'] { display: none; }
 "
 
 def script : String := "
   const body = document.body;
   function apply(filter) {
     body.dataset.filter = filter;
-    for (const d of document.querySelectorAll('details.decl'))
-      d.open = filter === 'all' ? d.dataset.notideal !== '0' : true;
   }
   for (const input of document.querySelectorAll('input[name=filter]'))
     input.addEventListener('change', () => apply(input.value));
+
+  function cellValue(row, column) {
+    const text = row.cells[column].textContent.trim();
+    const missing = text.toLowerCase() === 'n/a';
+    const numeric = /^-?[0-9]+(?:[.][0-9]+)?%?$/.test(text);
+    return {
+      text,
+      missing,
+      number: numeric ? Number(text.replace('%', '')) : null
+    };
+  }
+  function sortTable(header, column) {
+    const table = header.closest('table');
+    const tbody = table.tBodies[0];
+    const ascending = header.getAttribute('aria-sort') !== 'ascending';
+    for (const other of table.tHead.rows[0].cells)
+      other.setAttribute('aria-sort', 'none');
+    header.setAttribute('aria-sort', ascending ? 'ascending' : 'descending');
+    const rows = Array.from(tbody.rows, (row, order) => ({row, order}));
+    rows.sort((left, right) => {
+      const a = cellValue(left.row, column);
+      const b = cellValue(right.row, column);
+      if (a.missing !== b.missing)
+        return a.missing ? 1 : -1;
+      let result;
+      if (a.number !== null && b.number !== null)
+        result = a.number - b.number;
+      else
+        result = a.text.localeCompare(b.text, undefined,
+          {numeric: true, sensitivity: 'base'});
+      if (result === 0)
+        return left.order - right.order;
+      return ascending ? result : -result;
+    });
+    tbody.append(...rows.map(entry => entry.row));
+  }
+  for (const table of document.querySelectorAll('table')) {
+    const headers = table.tHead?.rows[0]?.cells ?? [];
+    Array.from(headers).forEach((header, column) => {
+      header.classList.add('sortable');
+      header.tabIndex = 0;
+      header.setAttribute('aria-sort', 'none');
+      header.title = 'Sort by this column';
+      header.addEventListener('click', () => sortTable(header, column));
+      header.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          sortTable(header, column);
+        }
+      });
+    });
+  }
+  function openFileReport(hash) {
+    if (!hash) return;
+    const target = document.getElementById(decodeURIComponent(hash.slice(1)));
+    if (target?.matches('details.file'))
+      target.open = true;
+  }
+  for (const link of document.querySelectorAll(\"a[href^='#']\"))
+    link.addEventListener('click', () => openFileReport(link.hash));
+  openFileReport(location.hash);
   apply('all');
 "
 
@@ -874,15 +994,15 @@ def renderSpot (spot : Spot) : String := Id.run do
 
 def renderFile (f : FileScore) : String := Id.run do
   let notIdealSpots := f.spots - f.idealSpots
-  let mut out := s!"<section class='file' id='{f.path}' data-ideal='{f.idealSpots}' \
-    data-notideal='{notIdealSpots}'><h2><code>{f.path}</code></h2>"
+  let mut out := s!"<details class='file' id='{f.path}' data-ideal='{f.idealSpots}' \
+    data-notideal='{notIdealSpots}'><summary><code>{escapeHtml f.fileName}</code></summary>"
   unless f.parseErrors.isEmpty do
     out := out ++ s!"<p class='warn'>{f.parseErrors.size} parse \
       {plural f.parseErrors.size "error" "errors"}: the file defines notation of its own and \
       has not been built, so some of its declarations are missing here \
       ({escapeHtml (", ".intercalate f.parseErrors.toList)}).</p>"
   if f.scores.isEmpty then
-    return out ++ "<p>No triple to score in this file.</p></section>"
+    return out ++ "<p>No triple to score in this file.</p></details>"
   out := out ++ "<table><thead><tr><th>Declaration</th><th>Line</th><th>Spots</th>\
     <th>Ideal</th><th>Score</th><th>LOC</th><th>Ideal LOC</th></tr></thead><tbody>"
   for s in f.scores do
@@ -896,18 +1016,15 @@ def renderFile (f : FileScore) : String := Id.run do
     </tfoot></table>"
   for s in f.scores do
     let notIdeal := s.total - s.ideal
-    -- Open by default the proofs that have something to fix, so that the page
-    -- is useful before its script runs.
-    let open' := if notIdeal == 0 then "" else " open"
-    out := out ++ s!"<details class='decl' data-ideal='{s.ideal}' \
-      data-notideal='{notIdeal}'{open'}>\
-      <summary><code>{escapeHtml s.name.toString}</code> \
+    out := out ++ s!"<div class='decl' data-ideal='{s.ideal}' \
+      data-notideal='{notIdeal}'>\
+      <div class='decl-head'><code>{escapeHtml s.name.toString}</code> \
       <span class='sub'>— line {s.line}, {s.ideal}/{s.total} spots ideal, \
-      {s.loc} {plural s.loc "line" "lines"} of code</span></summary>"
+      {s.loc} {plural s.loc "line" "lines"} of code</span></div>"
     for spot in s.spots.qsort (·.line < ·.line) do
       out := out ++ renderSpot spot
-    out := out ++ "</details>"
-  return out ++ "</section>"
+    out := out ++ "</div>"
+  return out ++ "</details>"
 
 def renderReport (files : Array FileScore) : String := Id.run do
   let spots := files.foldl (· + ·.spots) 0
@@ -930,25 +1047,52 @@ def renderReport (files : Array FileScore) : String := Id.run do
     <li>manual: any other step mentioning a separation-logic connective \
     ({codeList slAtoms}), a simp set of the automation ({codeList slAttrNames}), or a \
     declaration whose statement is about <code>SLProp</code>.</li></ul>"
-  out := out ++ "<h2>Summary</h2><table><thead><tr><th>File</th><th>Triples</th>\
-    <th>Ideal proofs</th><th>Spots</th><th>Ideal spots</th><th>Score</th><th>LOC</th>\
-    <th>Ideal LOC</th></tr></thead><tbody>"
+  out := out ++ "<div class='score-example'><strong>One branching proof, split into \
+    3 spots</strong><div class='example-proof'>\
+    <div class='example-spot'><span class='spot-label'>Spot 1 — ideal</span>\
+    <pre><code>unfold f\nsl_step*\nsplit</code></pre></div>\
+    <div class='example-spot'><span class='spot-label'>Spot 2 — ideal</span>\
+    <pre><code>· have h : n = n := rfl\n  simp only [h]\n  sl_step*</code></pre></div>\
+    <div class='example-spot notideal'><span class='spot-label'>Spot 3 — not ideal</span>\
+    <pre><code>· sl_xchange h\n  sl_step*</code></pre></div></div>\
+    The prefix before <code>split</code> is one spot, and each branch is another: \
+    <strong>3 spots total</strong>. <strong>Pure reasoning is allowed:</strong> the \
+    <code>have</code> and <code>simp</code> in Spot 2 do not lower its score. The manual \
+    <code>sl_xchange</code> makes Spot 3 nonideal, giving a spot score of \
+    <strong>2 / 3 = 66.7%</strong>; the whole proof is not an ideal proof.</div>"
+  out := out ++ "<h2>Summary</h2><table class='summary-table'><thead><tr>\
+    <th>File</th><th>Triples</th>\
+    <th>Spots</th><th>Ideal spots</th><th>Score</th>\
+    <th>Avg Ideal Spot LOC</th><th>Avg Nonideal Spot LOC</th><th>Ideal Proofs</th>\
+    <th>Avg Ideal Proof LOC</th><th>Avg Nonideal Proof LOC</th>\
+    <th>Avg Proof LOC</th></tr></thead><tbody>"
   let mut proofs := 0
   let mut idealProofs := 0
-  let mut loc := 0
-  let mut idealLoc := 0
+  let mut idealProofLoc := 0
+  let mut nonidealProofLoc := 0
   for f in files do
-    out := out ++ s!"<tr><td><a href='#{f.path}'><code>{f.path}</code></a></td>\
-      <td>{f.scores.size}</td><td>{f.idealProofs}</td><td>{f.spots}</td>\
-      <td>{f.idealSpots}</td><td>{percent f.idealSpots f.spots}</td><td>{f.loc}</td>\
-      <td>{f.idealLoc}</td></tr>"
+    out := out ++ s!"<tr><td><a href='#{f.path}'><code>{escapeHtml f.fileName}</code></a></td>\
+      <td>{f.scores.size}</td><td>{f.spots}</td><td>{f.idealSpots}</td>\
+      <td>{percent f.idealSpots f.spots}</td>\
+      <td>{average f.idealLoc f.idealSpots}</td>\
+      <td>{average f.nonidealLoc (f.spots - f.idealSpots)}</td>\
+      <td>{f.idealProofs}</td>\
+      <td>{average f.idealProofLoc f.idealProofs}</td>\
+      <td>{average f.nonidealProofLoc f.nonidealProofs}</td>\
+      <td>{average f.loc f.scores.size}</td></tr>"
     proofs := proofs + f.scores.size
     idealProofs := idealProofs + f.idealProofs
-    loc := loc + f.loc
-    idealLoc := idealLoc + f.idealLoc
-  out := out ++ s!"</tbody><tfoot><tr><td>Total</td><td>{proofs}</td><td>{idealProofs}</td>\
-    <td>{spots}</td><td>{idealSpots}</td><td>{percent idealSpots spots}</td><td>{loc}</td>\
-    <td>{idealLoc}</td></tr></tfoot></table>"
+    idealProofLoc := idealProofLoc + f.idealProofLoc
+    nonidealProofLoc := nonidealProofLoc + f.nonidealProofLoc
+  out := out ++ s!"</tbody><tfoot><tr><td>Total</td><td>{proofs}</td><td>{spots}</td>\
+    <td>{idealSpots}</td><td>{percent idealSpots spots}</td>\
+    <td>{average (files.foldl (· + ·.idealLoc) 0) idealSpots}</td>\
+    <td>{average (files.foldl (· + ·.nonidealLoc) 0) (spots - idealSpots)}</td>\
+    <td>{idealProofs}</td>\
+    <td>{average idealProofLoc idealProofs}</td>\
+    <td>{average nonidealProofLoc (proofs - idealProofs)}</td>\
+    <td>{average (files.foldl (· + ·.loc) 0) proofs}</td>\
+    </tr></tfoot></table>"
   out := out ++ s!"<div class='controls'><strong>Show</strong>\
     <label><input type='radio' name='filter' value='all' checked> every spot \
     ({spots})</label>\
