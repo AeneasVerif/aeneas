@@ -343,8 +343,7 @@ theorem pushFront.spec (s : LinkedList M) (entries : List (Entry M))
       sl_pull hlist
       simp only [hlist.2.1]
       simp only [detachedValue]
-      sl_step
-      sl_step
+      sl_step* 2
       sl_pure
       simp_all [linkedValue]
       sl_frame
@@ -355,10 +354,7 @@ theorem pushFront.spec (s : LinkedList M) (entries : List (Entry M))
       sl_pull hlist
       simp only [hlist.2.1]
       simp only [linkedValue, detachedValue]
-      sl_step
-      sl_step
-      sl_step
-      sl_step
+      sl_step* 4
       sl_pure
       simp_all
       sl_frame
@@ -399,22 +395,14 @@ theorem takeCurrent.cons.spec (cursor : Cursor M) (frame : Frame M)
   cases rest with
   | nil =>
       simp only [firstSlot_nil, ownedFrom_nil]
-      sl_step
-      sl_step
-      sl_step
-      sl_step
+      sl_step* 4
       sl_pure
       simp_all
       sl_frame
   | cons next rest' =>
       rcases next with ⟨nextFrame, nextPayload⟩
       simp only [firstSlot_cons, ownedFrom_cons]
-      sl_step
-      sl_step
-      sl_step
-      sl_step
-      sl_step
-      sl_step
+      sl_step* 6
       sl_pure
       simp [linkedValue]
       simp only [lastSlot_cons_cons] at hlist
