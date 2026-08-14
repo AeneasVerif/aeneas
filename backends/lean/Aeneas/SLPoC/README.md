@@ -3,6 +3,18 @@
 This directory contains the proof-of-concept work for extending the separation
 logic (SL) support.
 
+## Updating the stacked branches
+
+`cezar/firstorder_seplogic` is stacked on `cezar/tactic-step`. After committing
+in the `tactic-step` worktree, update both remote branches and replay the SLPoC
+commits on the new tactic commit:
+
+```bash
+git push origin cezar/tactic-step
+git -C ../firstorder_seplogic rebase cezar/tactic-step
+git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_seplogic
+```
+
 ## Files
 
 | File | Purpose |
