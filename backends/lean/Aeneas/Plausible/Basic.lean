@@ -87,28 +87,6 @@ instance Array.sampleableExt {α : Type u} {n : Usize} [SampleableExt α] :
   sample := ⟨genFixedList n.val⟩
   interp x := ⟨x.val.map SampleableExt.interp, by simp [x.property]⟩
 
-/-! ## `Result` / `Error` -/
-
-instance Error.shrinkable : Shrinkable Error where shrink _ := []
-
-instance Error.Arbitrary : Arbitrary Error where
-  arbitrary := Gen.elements
-    [.assertionFailure, .integerOverflow, .divisionByZero, .arrayOutOfBounds,
-     .maximumSizeExceeded, .panic, .undef] (by decide)
-
-instance Result.sampleableExt {α : Type u} [SampleableExt α] : SampleableExt (Result α) where
-  proxy := Result (SampleableExt.proxy α)
-  shrink := ⟨fun _ => []⟩
-  sample := ⟨do
-    match ← Gen.choose Nat 0 2 (by omega) with
-    | ⟨0, _⟩ => .ok <$> Arbitrary.arbitrary
-    | ⟨1, _⟩ => .fail <$> Arbitrary.arbitrary
-    | _      => pure .div⟩
-  interp
-    | .ok x => .ok (SampleableExt.interp x)
-    | .fail e => .fail e
-    | .div => .div
-
 /-! ## Deciding hypotheses & goals so `plausible` can evaluate specs -/
 
 /- `WP.spec x p = theta x p`: `ok v` reduces to `p v`, `fail`/`div` to `False`. -/
