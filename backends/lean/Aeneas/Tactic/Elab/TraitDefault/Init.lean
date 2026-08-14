@@ -391,6 +391,5 @@ elab mods:declModifiers "impl_def " id:declId sig:optDeclSig val:declVal : comma
 
         -- Register LSP info for the introduced name.
         Elab.addDeclarationRangesFromSyntax declName (← getRef) id
-        Term.addTermInfo' id (← mkConstWithLevelParams declName) (isBinder := true)
 
 end Aeneas.TraitDefault
