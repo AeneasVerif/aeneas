@@ -85,9 +85,10 @@ def add64 (a b : Array U64 2#usize) : Result (Array U64 2#usize) := do
   let c1 ← a1 + b1
   ok (Array.make 2#usize [c0, c1])
 
-/-- Lift an array of bounded limbs to a plain `U64` array. -/
-def ofBounded {bound : Nat} (a : Array {x : U64 // x.val < bound} 2#usize) : Array U64 2#usize :=
-  ⟨a.val.map Subtype.val, by simp [a.property]⟩
+-- TODO: `Array.map` belongs in `Aeneas.Std` (PR #1237, "add api for slice/vec/array").
+/-- Map a function over an `Array`, preserving the length. -/
+def Array.map {α : Type u} {β : Type v} {n : Usize} (f : α → β) (a : Array α n) : Array β n :=
+  ⟨a.val.map f, by simp [a.property]⟩
 
 -- With limbs `< 2^54`, `add64` adds without overflow and every result limb is `< 2^55`.
 /--
@@ -97,7 +98,7 @@ warning: declaration uses `sorry`
 -/
 #guard_msgs in
 example (a b : Array {x : U64 // x.val < 2^54} 2#usize) :
-    let a' := ofBounded a; let b' := ofBounded b
+    let a' := a.map (·.val); let b' := b.map (·.val)
     add64 a' b' ⦃ (r : Array U64 2#usize) =>
       (∀ i < 2, r[i]!.val = a'[i]!.val + b'[i]!.val) ∧ (∀ i < 2, r[i]!.val < 2^55) ⦄ := by
   plausible (config := { randomSeed := some 0 })
