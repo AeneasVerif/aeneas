@@ -55,9 +55,12 @@ postcondition.
 ## How ideal are the proofs?
 
 The point of the automation is that a triple should be proved by unfolding the
-program and calling `sl_step*`, with only pure reasoning, `sl_pull`, and
-`sl_pure` for a terminal return whose entailment needs manual pure reasoning,
-and one such block per branch of the program.  Run
+program and calling `sl_step*`, `step`, or `step*`, with only pure reasoning and
+`sl_pull` in between, and one such block per branch of the program.  A manual
+`sl_pure` is not ideal: stepping should handle the terminal return.  Similarly,
+`sl_step with some.spec` is not ideal whenever the named declaration states a
+triple, regardless of whether it is registered with `@[step]`; local induction
+hypotheses remain ideal.  Run
 
 ```
 lake env lean --run Aeneas/SLPoC/ProofScore.lean
@@ -95,10 +98,23 @@ python3 Aeneas/SLPoC/proof_simplify.py --in-place FILE.lean
 
 The default mode prints a unified diff.  `--in-place` applies it, and `--check`
 exits with status 1 when a file can be simplified.  The tool tries to replace
-consecutive plain `sl_step` calls with `sl_step*`, to drop all explicit
-`sl_pull` patterns, and then to replace individually unused simple names with
-`_`.  Each proposed rewrite is retained only when `lake env lean --stdin`
-accepts the complete resulting file.
+adjacent `sl_pure`/step pairs first, then tries to drop explicit `sl_pull`
+patterns and replace individually unused simple names with `_`.  Compressing
+consecutive plain `sl_step` calls is the final stage: it validates `sl_step* N`,
+then immediately tries to remove each newly created bound.  Bounds already
+present in the input are not retried.  Each proposed rewrite is retained only
+when `lake env lean --stdin` accepts the complete resulting file.
+
+To keep compiler use bounded, step-run and binder rewrite classes are validated
+as batches; `sl_pull` names are first checked for lexical use in their tactic
+scope.  Mixed successful and unsuccessful `sl_pure`/step pairs are bisected
+separately.  No Lean invocation is made when lexical analysis finds nothing to
+rewrite.
+
+Rejected candidates are reported on standard error with their source line,
+proposed replacement, batch size, and the first error returned by Lean.  This
+distinguishes a fully simplified file from one where potential rewrites were
+tried but did not compile.
 
 ## Doubly-linked-list LOC comparison
 

@@ -17,10 +17,10 @@ writes `Aeneas/SLPoC/proof-score.html`.
 
 ## What is measured
 
-The ideal proof of a triple never mentions the separation logic: it unfolds the
-program and calls `sl_step*` or the guarded terminal `sl_pure`, with pure
-reasoning (`obtain`, `have`, `simp`, …) and `sl_pull` in between, and one such
-block per branch of the program:
+The ideal proof of a triple never handles the separation logic manually: it
+unfolds the program and uses `sl_step`, `sl_step*`, `step`, or `step*`, with
+pure reasoning (`obtain`, `have`, `simp`, …) and `sl_pull` in between, and one
+such block per branch of the program:
 
 ```lean
 unfold f
@@ -43,8 +43,12 @@ tactics (`sl_frame`, `sl_xchange`, `sl_xpull`, `sl_xsimpl`, `sl_xapp`,
 `sl_conseq`, …), or when it mentions separation-logic vocabulary: a connective
 (`∗`, `↦`, `⊢`, `-∗`, `emp`, `GC`, `iprop(…)`), or a lemma or definition whose
 statement is about `SLProp` (`unfold wellFormed`, `simp [nodes_snoc]`,
-`exact triple_pure …`).  `sl_step`, `sl_step*`, `sl_pure`, and `sl_pull` are
-the automation itself and are free; so is any pure reasoning.
+`exact triple_pure …`).  `sl_step`, `sl_step*`, `step`, `step*`, and `sl_pull`
+are the automation itself and are free; so is any pure reasoning.  A manual
+`sl_pure` is not free: an ideal proof lets stepping handle the terminal return.
+Nor is `sl_step with some.spec`: explicitly naming any declaration whose
+statement is about a triple steers automation manually.  A local hypothesis such
+as an induction hypothesis remains free.
 
 Only declarations whose statement is a triple are scored.  The separation-logic
 lemmas a development proves on the side (`nodes_snoc`, `nodesFrom_append`, …)
@@ -110,10 +114,11 @@ def slAttrNames : Array String := #["sl_simps", "step_simps", "step_post_simps"]
 def manualTactics : Array String :=
   #["sl_frame", "sl_frame?", "sl_xsimpl", "sl_xpull", "sl_xchange", "sl_xapp",
     "sl_xval", "sl_conseq", "sl_pull_step", "sl_pull_keep", "sl_pull_keep_step",
-    "sl_side?", "step", "step*"]
+    "sl_side?", "sl_pure"]
 
 /-- Tactics that *are* the automation: the ideal proof is made of these. -/
-def idealTactics : Array String := #["sl_step", "sl_pure", "sl_pull"]
+def idealTactics : Array String :=
+  #["sl_step", "sl_step*", "step", "step*", "sl_pull"]
 
 /-- Combinators that do not split the goal: like `<;>`, what they run belongs to
 the block that runs them, not to a block of its own. -/
@@ -485,6 +490,24 @@ partial def scanStep (r : Resolver) (stx : Syntax) : Option String :=
     | .node _ _ args => args.findSome? (scanStep r)
     | other => syntaxMentionsSL r other
 
+partial def syntaxAfterAtom? (wanted : String) (stx : Syntax) : Option Syntax :=
+  match stx with
+  | .node _ _ args =>
+    let direct := Id.run do
+      for i in [0:args.size] do
+        if let .atom _ value := args[i]! then
+          if value.trimAscii.toString == wanted then
+            return args[i + 1]?
+      return none
+    direct.orElse fun _ => args.findSome? (syntaxAfterAtom? wanted)
+  | _ => none
+
+def explicitStepTheorem? (stx : Syntax) : Option Name := do
+  guard (firstAtom stx == "sl_step")
+  let term ← syntaxAfterAtom? "with" stx
+  let ident ← syntaxFind? term (·.isIdent)
+  return ident.getId
+
 def Context.stepText (ctx : Context) (stx : Syntax) : String := Id.run do
   let some ⟨start, stop⟩ := stx.getRange? | return ""
   let text : String := (String.Pos.Raw.extract ctx.input start stop).trimAscii.toString
@@ -499,6 +522,11 @@ def Context.classify (ctx : Context) (stx : Syntax) : Verdict :=
   let head := firstAtom stx
   if manualTactics.contains head then
     .manual s!"`{head}` steers the separation logic by hand"
+  else if let some theoremName := explicitStepTheorem? stx then
+    if ctx.resolver.isSL theoremName then
+      .manual s!"`sl_step with {theoremName}` names a triple lemma"
+    else
+      .ideal
   else if idealTactics.contains head then
     .ideal
   else match scanStep ctx.resolver stx with
