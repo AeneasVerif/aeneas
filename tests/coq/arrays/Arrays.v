@@ -198,6 +198,7 @@ Definition update_update_array
   (s : array (array u32 32%usize) 32%usize) (i : usize) (j : usize) :
   result (array (array u32 32%usize) 32%usize)
   :=
+  _ <- array_index_usize s i;
   p <- array_index_mut_usize s i;
   let (a, index_mut_back) := p in
   a1 <- array_update_usize a j 0%u32;

@@ -162,6 +162,7 @@ let update_update_array
   (s : array (array u32 32) 32) (i : usize) (j : usize) :
   result (array (array u32 32) 32)
   =
+  let* _ = array_index_usize s i in
   let* (a, index_mut_back) = array_index_mut_usize s i in
   let* a1 = array_update_usize a j 0 in
   Ok (index_mut_back a1)
