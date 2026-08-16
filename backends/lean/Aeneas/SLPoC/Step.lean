@@ -182,10 +182,8 @@ theorem triple_hpure'_iff {α : Type} {P : Prop} {m : St α} {Q : SLPost α} :
     post_index := 3
     mk_spec_mono := ``triple_step_mono
     mk_spec_mono_skip_args := 4
-    mk_spec_mono_preconditions := 0
     mk_spec_bind := ``triple_step_bind
     mk_spec_bind_skip_args := 7
-    mk_spec_bind_preconditions := 2
     -- Eliminate the binder of an output the specification determines, and of a `Unit` output.
     uncurry_elim_tactics := #[
       ``forall_eq, ``forall_eq',
