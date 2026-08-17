@@ -114,7 +114,7 @@ def slAttrNames : Array String := #["sl_simps", "step_simps", "step_post_simps"]
 def manualTactics : Array String :=
   #["sl_frame", "sl_frame?", "sl_xsimpl", "sl_xpull", "sl_xchange", "sl_xapp",
     "sl_xval", "sl_conseq", "sl_pull_step", "sl_pull_keep", "sl_pull_keep_step",
-    "sl_side?", "sl_pure"]
+    "sl_norm", "sl_pull_shallow", "sl_side?", "sl_pure"]
 
 /-- Tactics that *are* the automation: the ideal proof is made of these. -/
 def idealTactics : Array String :=
