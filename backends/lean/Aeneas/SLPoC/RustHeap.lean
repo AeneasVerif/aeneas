@@ -79,6 +79,19 @@ theorem contains_union_left {h₁ h₂ : Heap} {p : Ptr α}
     (hContains : contains h₁ p) : contains (h₁ ∪ h₂) p :=
   _root_.Aeneas.SLPoC.contains_union_left hContains
 
+/-- A heap that extends the cell `p` contains it: this is what an affine
+points-to assertion gives, the cells it does not describe being unconstrained. -/
+theorem contains_of_sub {p : Ptr α} {value : α} {h : Heap}
+    (hSub : Heap.Sub (singleton p value) h) : contains h p := by
+  obtain ⟨rest, _, rfl⟩ := hSub
+  exact contains_union_left (contains_singleton p value)
+
+/-- Two disjoint heaps cannot both own the cell `p`. -/
+theorem disjoint_contains_false {h₁ h₂ : Heap} {p : Ptr α}
+    (hDisjoint : Finmap.Disjoint h₁ h₂) (hContains₁ : contains h₁ p)
+    (hContains₂ : contains h₂ p) : False :=
+  _root_.Aeneas.SLPoC.disjoint_contains_false hDisjoint hContains₁ hContains₂
+
 theorem read_union_left {h₁ h₂ : Heap} {p : Ptr α}
     (hContains : contains h₁ p) :
     read p (h₁ ∪ h₂) (contains_union_left hContains) =
