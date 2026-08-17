@@ -121,10 +121,10 @@ theorem ownsCells.length_eq {α : Type} {cells : List (Ptr α)}
   | nil =>
       cases values with
       | nil => rfl
-      | cons value values => exact hOwns.1.elim
+      | cons value values => exact hOwns.elim
   | cons p cells ih =>
       cases values with
-      | nil => exact hOwns.1.elim
+      | nil => exact hOwns.elim
       | cons value values =>
           obtain ⟨h₁, h₂, _, _, _, hTail⟩ := hOwns
           simp only [List.length_cons, ih hTail]
@@ -337,12 +337,13 @@ theorem InPlaceOrDisjointBuffer.len.spec {α : Type}
   cases relation with
   | equal values =>
       simp only [owns] at hBuffer
-      obtain ⟨h₁, h₂, _, _, ⟨hSame, _⟩, hOwns⟩ := hBuffer
-      simp only [EqOrDisj.read, EqOrDisj.written, hSame, and_true]
+      obtain ⟨h₁, h₂, _, _, hSame, hOwns⟩ := hBuffer
+      have hSameCells : buffer.srcCells = buffer.dstCells := hSame
+      simp only [EqOrDisj.read, EqOrDisj.written, hSameCells, and_true]
       exact ownsCells.length_eq hOwns
   | disjoint srcValues dstValues =>
       simp only [owns] at hBuffer
-      obtain ⟨h₁, h₂, _, _, ⟨hLength, _⟩, hViews⟩ := hBuffer
+      obtain ⟨h₁, h₂, _, _, hLength, hViews⟩ := hBuffer
       obtain ⟨h₃, h₄, _, _, hSrc, _⟩ := hViews
       exact ⟨ownsCells.length_eq hSrc, hLength⟩
 
