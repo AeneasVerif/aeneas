@@ -85,6 +85,20 @@ let subdir : string option ref = ref None
 
 let set_subdir (s : string) : unit = subdir := Some s
 
+(** Additional modules to include at the top of every generated file.
+
+    Those are treated exactly like the includes we generate ourselves (e.g., the
+    include of [Types] inside [Funs]): [import] for Lean, [include] for F*, etc.
+*)
+let extra_includes : string list ref = ref []
+
+(** Add a comma-separated list of modules to {!extra_includes}. *)
+let add_extra_includes (includes : string) : unit =
+  let includes =
+    List.filter (fun s -> s <> "") (String.split_on_char ',' includes)
+  in
+  extra_includes := !extra_includes @ includes
+
 (** If [true], we do not generate code and simply borrow-check the program
     instead. This allows us to relax some sanity checks which are present in the
     symbolic execution only to make sure we will be able to generate the pure

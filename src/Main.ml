@@ -215,6 +215,11 @@ let () =
          collisions with field projectors. Example: the `len` method in `impl \
          Struct { fn len(&self) -> usize { ... } }` would be named \
          `Struct.impl.len`." );
+      ( "-extra-includes",
+        Arg.String add_extra_includes,
+        " Include additional modules at the top of every generated file. It is \
+         possible to specify a list of modules if they are separated by commas \
+         without spaces; for instance: '-extra-includes=Foo,Bar.Baz'" );
       ( "-core-models-lib",
         Arg.Set core_models_lib,
         " For Lean: disable the Rust core library overrides from \
