@@ -281,6 +281,44 @@ partial def elabDecomposePat : Syntax → Except String DecomposePattern
 
 syntax decompose_clause := decompose_pat " => " ident
 
+/--
+`#decompose` extracts subexpressions of a function into auxiliary definitions and proves that the
+function can be rewritten in terms of these parts. It is meant to break up functions with large
+bodies into independent pieces that can be verified individually.
+
+## Usage
+
+```
+#decompose originalFn eqThm
+  pattern₁ => auxName₁
+  pattern₂ => auxName₂
+  ...
+```
+
+Matches on the patterns `pattern₁`, `pattern₂`, ..., introduces the definitions `auxName₁`,
+`auxName₂`, ... and provides the theorem `eqThm` grouping them all together into `originalFn`.
+
+## Available Patterns
+
+A pattern navigates to a position in the body; the extraction happens there.
+
+- `letRange start count`: extract `count` consecutive let/bind bindings starting at index
+  `start` (0-indexed).
+- `full`: extract the whole expression at the current position.
+- `letAt i (pat)`: navigate to the value of binding `i`, then apply `pat`. When `i` points
+  past all bindings, `pat` applies to the terminal expression instead.
+- `afterLets (pat)`: navigate past all leading let/bind bindings to the terminal expression,
+  then apply `pat` (`letAt N` without having to know `N`).
+- `branch i (pat)`: navigate into branch `i` of an `if-then-else`, `dite` or `match`
+  (0 is `then` / the first alternative), then apply `pat`. Match-pattern lambdas are opened
+  automatically.
+- `lam n (pat)`: open `n` lambda binders, then apply `pat`.
+- `appFun (pat)` / `argArg i (pat)`: navigate into the function, resp. argument `i`, of an
+  application.
+
+Full documentation can be found in the module docstring at
+[`Aeneas/Command/Decompose.lean`](https://github.com/AeneasVerif/aeneas/blob/main/backends/lean/Aeneas/Command/Decompose.lean).
+-/
 syntax (name := decomposeCmd) "#decompose " ident ident (ppLine decompose_clause)* : command
 
 -- ============================================================================
