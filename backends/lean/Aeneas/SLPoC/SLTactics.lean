@@ -711,6 +711,16 @@ elab "sl_frame?" : tactic => withMainContext do
   if head.isConstOf ``himpl || head.isConstOf ``qimpl then
     evalTactic (← `(tactic| sl_frame))
 
+/-- Normalize the separating conjunctions of the goal: float the existentials out of them, drop
+the `emp`s, and reassociate to the right. -/
+elab "sl_norm" : tactic => withMainContext do
+  let _ ← Simp.simpAt true
+    { dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1 }
+    { addSimpThms :=
+        #[``hstar_hempty_l_eq, ``hstar_hempty_r_eq,
+          ``hstar_hexists_l_eq, ``hstar_hexists_r_eq, ``hstar_assoc_eq] }
+    (.targets #[] true)
+
 /-- One step of `sl_pull`: peel a quantifier or a pure fact off the precondition
 of a triple.  Fails when the precondition is purely spatial.
 
@@ -760,8 +770,8 @@ precondition into the local context.
 the `rintro` pattern `pᵢ`, e.g. `sl_pull l rfl` or `sl_pull ⟨hhead, htail⟩`.
 
 Pure facts are *removed* from the precondition, which is often not what a
-subsequent `sl_step` needs; use `sl_pull_keep` (which `sl_step` runs anyway) when
-only the local hypothesis is wanted. -/
+subsequent `sl_step` needs; use `sl_pull_keep` (which `step` runs on the goal of
+every continuation) when only the local hypothesis is wanted. -/
 syntax (name := slPull) "sl_pull" (ppSpace colGt rintroPat)* : tactic
 
 macro_rules
@@ -772,6 +782,32 @@ macro_rules
       let steps ← ps.mapM fun p => `(tactic| (sl_pull_step; rintro $p:rintroPat))
       `(tactic| ($[$steps]*))
 
+/-- Whether a quantifier or a pure fact can be peeled off `pre` without unfolding it: an opened
+representation predicate is one the frame inference of a later `step` can no longer match. -/
+private def isPullable (pre : Expr) : Bool :=
+  let pre := pre.consumeMData
+  if pre.isAppOfArity ``hexists 2 || pre.isAppOfArity ``hpure 1 then true
+  else if pre.isAppOfArity ``hstar 2 then
+    pre.appFn!.appArg!.consumeMData.isAppOfArity ``hpure 1
+  else false
+
+private partial def pullPrecondition (goal : MVarId) : TacticM MVarId := goal.withContext do
+  let target := (← instantiateMVars (← goal.getType)).consumeMData
+  unless target.isAppOfArity ``triple 4 && isPullable target.getAppArgs[1]! do return goal
+  setGoals [goal]
+  let state ← saveState
+  try
+    evalTactic (← `(tactic| sl_pull_step))
+  catch _ =>
+    state.restore
+    return goal
+  let (_, goal) ← (← getMainGoal).intro1P
+  pullPrecondition goal
+
+/-- `sl_pull` restricted to what the precondition exposes without being unfolded; see
+`isPullable`. -/
+elab "sl_pull_shallow" : tactic => withMainContext do
+  setGoals [← pullPrecondition (← getMainGoal)]
 
 /-- One step of `sl_pull_keep`: copy the leading pure fact of the precondition of
 a triple into the local context, *without* removing it from the precondition.
