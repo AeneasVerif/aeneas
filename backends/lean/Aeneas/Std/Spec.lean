@@ -26,6 +26,9 @@ structure SpecInfo where
   mk_spec_bind_skip_args : Nat
 
   uncurry_elim_tactics : Array Lean.Name
+  /-- Name of a tactic run on the goal.
+  It may transform or solve the goal, but must not create multiple goals. -/
+  intro_tactic : Option Lean.Name := none
   qimp_elim_tactics : Array Lean.Name
 
   to_mvcgen: Option Name
