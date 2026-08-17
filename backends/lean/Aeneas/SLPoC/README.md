@@ -20,12 +20,12 @@ git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_se
 | File | Purpose |
 |---|---|
 | [`FFree.lean`](FFree.lean) | Defines the generic freer monad, and the state machines that give it an operational semantics (after "Program Logics à la Carte"): `StateMachine`, `Exec`, `Runs` and `Evaluates`. |
-| [`Heap.lean`](Heap.lean) | Defines locations, dynamically typed cells, and finite heaps. |
+| [`Heap.lean`](Heap.lean) | Defines locations, dynamically typed cells, finite heaps, and the sub-heap order the affine assertions are closed under. |
 | [`RustHeap.lean`](RustHeap.lean) | The Rust view of the heap: `Ptr` and the pointer operations, over `Heap.lean`. |
-| [`SLTactics.lean`](SLTactics.lean) | Port of the SLF tactics: `sl_frame`, `sl_pull`, `sl_xchange`, …, including affine `GC` absorption. |
-| [`ST.lean`](ST.lean) | The state monad `St`, its state machine, its denotation `theta` into `Wp`, affine Hoare triples, and the specifications of the pointer operations. |
+| [`SLTactics.lean`](SLTactics.lean) | Port of the SLF tactics: `sl_frame`, `sl_pull`, `sl_xchange`, …, including the affine discard of whatever a cancellation leaves over. |
+| [`ST.lean`](ST.lean) | The state monad `St`, its state machine, its denotation `theta` into `Wp`, the Hoare triples it induces, and the specifications of the pointer operations. |
 | [`Step.lean`](Step.lean) | Wires triples into `sl_step`/`sl_step*` and provides `sl_pure` for exposing the entailment of a syntactic terminal return. |
-| [`WP.lean`](WP.lean) | Separation-logic assertions, fully affine `GC`, the magic wand, and the `Wp` monad of predicate transformers. |
+| [`WP.lean`](WP.lean) | Affine separation-logic assertions (`SLProp`, closed under heap extension like Iris's `uPred`), the magic wand, and the `Wp` monad of predicate transformers. |
 | [`ProofScore.lean`](ProofScore.lean) | Engineering tool, not part of the library: measures how close the proofs of the triples are to the ideal proof, i.e. how much separation logic the automation still leaves to the user. Writes [`proof-score.html`](proof-score.html). |
 | [`proof_simplify.py`](proof_simplify.py) | Compilation-guided proof simplifier: compresses consecutive `sl_step` calls and removes unused `sl_pull` names, retaining only rewrites accepted by Lean. |
 | [`benchmark-report.md`](benchmark-report.md) | Report on the eleven external benchmark ports, their interfaces and specifications, proof-score improvements, and remaining automation gaps. |
@@ -57,12 +57,23 @@ git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_se
 
 Keep these tables updated whenever a file is added, removed, or repurposed.
 
-The logic is affine, following SLF's
-[Affine Separation Logic](https://softwarefoundations.cis.upenn.edu/slf-current/Affine.html).
-There is no linear or partially affine mode: `GC` accepts every heap, and every
-triple implicitly extends its postcondition with `GC`. Consequently, any unused
-heap resources may be discarded from either a triple's precondition or
-postcondition.
+The logic is affine the way Iris's is, rather than the way SLF's
+[Affine Separation Logic](https://softwarefoundations.cis.upenn.edu/slf-current/Affine.html)
+is: affinity is a property of the *model*, not an extra `GC` written into the
+triples. An `SLProp` is closed under heap extension — it owns the cells it
+describes and says nothing about the others — exactly like Iris's `uPred`.
+Consequently:
+
+* the entailment weakens: `H ⊢ emp` for every `H`, so `sl_frame`/`sl_xsimpl`
+  drop whatever a cancellation leaves over;
+* `emp`, `GC` and `⌜True⌝` all hold of every heap — `GC` is *definitionally*
+  `emp`, and is kept only so that SLF-shaped statements keep parsing;
+* `triple P m Q` is `theta m ≤ pp2wp P Q`, with no `∗+ GC` in the
+  postcondition, and unused resources may still be discarded from either side.
+
+What affinity does *not* change: separation is still separation, so `p ↦ v ∗ p ↦
+w ⊢ ⌜False⌝`, and a specification still has to own what it reads or writes.
+Leak-freedom claims are out of scope, as they already were.
 
 ## How ideal are the proofs?
 
