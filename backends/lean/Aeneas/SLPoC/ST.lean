@@ -87,63 +87,108 @@ theorem theta_ev_alloc_elim {value : α} {R : SLPost (Ptr α)}
       ⟨hDisjoint₁, Finmap.Disjoint.symm _ _ hDisjoint⟩
   · rw [Finmap.union_assoc, Finmap.union_comm_of_disjoint hDisjoint]
 
-theorem theta_ev_read_elim {p : Ptr α} {R : SLPost α} {h : Heap}
-    (hWp : theta_ev (.ReadPtr p) R h) :
-    ∃ hContains : Ptr.contains h p, R (Ptr.read p h hContains) h := by
+/-- The weakest precondition of a read owns the cell, so the read is safe.
+
+The witness is stated apart from the postcondition below, rather than packaged
+with it in an existential, so that `Aeneas.SLPoC.Run` may *compute* with it: a
+proof cannot be extracted from a `Prop`-existential without choice. -/
+theorem theta_ev_read_contains {p : Ptr α} {R : SLPost α} {h : Heap}
+    (hWp : theta_ev (.ReadPtr p) R h) : Ptr.contains h p := by
+  obtain ⟨value, hWp⟩ := hWp
+  obtain ⟨h₁, h₂, _, rfl, hSingle, -⟩ := pp2wp_elim hWp
+  exact Ptr.contains_union_left (Ptr.contains_of_sub hSingle)
+
+theorem theta_ev_read_post {p : Ptr α} {R : SLPost α} {h : Heap}
+    (hWp : theta_ev (.ReadPtr p) R h) (hContains : Ptr.contains h p) :
+    R (Ptr.read p h hContains) h := by
   obtain ⟨value, hWp⟩ := hWp
   obtain ⟨h₁, h₂, hDisjoint, rfl, hSingle, hPost⟩ := pp2wp_elim hWp
   obtain ⟨rest, hDisjointRest, rfl⟩ := hSingle
-  have hContains := Ptr.contains_singleton p value
-  refine ⟨Ptr.contains_union_left (Ptr.contains_union_left hContains), ?_⟩
-  rw [Ptr.read_union_left (Ptr.contains_union_left hContains),
-    Ptr.read_union_left hContains, Ptr.read_singleton]
+  have hContainsCell := Ptr.contains_singleton p value
+  rw [show (hContains :
+        Ptr.contains ((Ptr.singleton p value ∪ rest) ∪ h₂) p) =
+      Ptr.contains_union_left (Ptr.contains_union_left hContainsCell) from rfl,
+    Ptr.read_union_left (Ptr.contains_union_left hContainsCell),
+    Ptr.read_union_left hContainsCell, Ptr.read_singleton]
   exact hPost value (Ptr.singleton p value ∪ rest)
     ((hstar_hpure_l _ _ _).mpr ⟨rfl, Heap.Sub.union_left hDisjointRest⟩)
     hDisjoint
 
-theorem theta_ev_update_elim {p : Ptr α} {value : α} {R : SLPost Unit}
-    {h : Heap} (hWp : theta_ev (.UpdatePtr p value) R h) :
-    ∃ hContains : Ptr.contains h p, R () (Ptr.update p value h hContains) := by
+theorem theta_ev_read_elim {p : Ptr α} {R : SLPost α} {h : Heap}
+    (hWp : theta_ev (.ReadPtr p) R h) :
+    ∃ hContains : Ptr.contains h p, R (Ptr.read p h hContains) h :=
+  ⟨theta_ev_read_contains hWp, theta_ev_read_post hWp _⟩
+
+theorem theta_ev_update_contains {p : Ptr α} {value : α} {R : SLPost Unit}
+    {h : Heap} (hWp : theta_ev (.UpdatePtr p value) R h) : Ptr.contains h p := by
+  obtain ⟨oldValue, hWp⟩ := hWp
+  obtain ⟨h₁, h₂, _, rfl, hSingle, -⟩ := pp2wp_elim hWp
+  exact Ptr.contains_union_left (Ptr.contains_of_sub hSingle)
+
+theorem theta_ev_update_post {p : Ptr α} {value : α} {R : SLPost Unit}
+    {h : Heap} (hWp : theta_ev (.UpdatePtr p value) R h)
+    (hContains : Ptr.contains h p) :
+    R () (Ptr.update p value h hContains) := by
   obtain ⟨oldValue, hWp⟩ := hWp
   obtain ⟨h₁, h₂, hDisjoint, rfl, hSingle, hPost⟩ := pp2wp_elim hWp
   obtain ⟨rest, hDisjointRest, rfl⟩ := hSingle
-  have hContains := Ptr.contains_singleton p oldValue
-  have hContainsUnion := Ptr.contains_union_left (h₂ := rest) hContains
+  have hContainsCell := Ptr.contains_singleton p oldValue
+  have hContainsUnion := Ptr.contains_union_left (h₂ := rest) hContainsCell
   /- Updating the cell turns the footprint into `p ↦ value`, and leaves both the
      unrelated cells the assertion owns and the frame untouched. -/
   have hUpdated :
       Ptr.update p value (Ptr.singleton p oldValue ∪ rest) hContainsUnion =
         Ptr.singleton p value ∪ rest := by
-    rw [Ptr.update_union_left p value hContains, Ptr.update_singleton]
+    rw [Ptr.update_union_left p value hContainsCell, Ptr.update_singleton]
   have hDisjointUpdated : Finmap.Disjoint (Ptr.singleton p value ∪ rest) h₂ := by
     rw [← hUpdated]
     exact Ptr.disjoint_update_left hDisjoint hContainsUnion
   have hDisjointRest' : Finmap.Disjoint (Ptr.singleton p value) rest := by
-    have := Ptr.disjoint_update_left (value := value) hDisjointRest hContains
+    have := Ptr.disjoint_update_left (value := value) hDisjointRest hContainsCell
     rwa [Ptr.update_singleton] at this
-  refine ⟨Ptr.contains_union_left hContainsUnion, ?_⟩
-  rw [Ptr.update_union_left p value hContainsUnion, hUpdated]
+  rw [show (hContains :
+        Ptr.contains ((Ptr.singleton p oldValue ∪ rest) ∪ h₂) p) =
+      Ptr.contains_union_left hContainsUnion from rfl,
+    Ptr.update_union_left p value hContainsUnion, hUpdated]
   exact hPost () (Ptr.singleton p value ∪ rest)
     (Heap.Sub.union_left hDisjointRest') hDisjointUpdated
 
-theorem theta_ev_free_elim {p : Ptr α} {R : SLPost Unit} {h : Heap}
-    (hWp : theta_ev (.FreePtr p) R h) :
-    ∃ hContains : Ptr.contains h p, R () (Ptr.free p h hContains) := by
+theorem theta_ev_update_elim {p : Ptr α} {value : α} {R : SLPost Unit}
+    {h : Heap} (hWp : theta_ev (.UpdatePtr p value) R h) :
+    ∃ hContains : Ptr.contains h p, R () (Ptr.update p value h hContains) :=
+  ⟨theta_ev_update_contains hWp, theta_ev_update_post hWp _⟩
+
+theorem theta_ev_free_contains {p : Ptr α} {R : SLPost Unit} {h : Heap}
+    (hWp : theta_ev (.FreePtr p) R h) : Ptr.contains h p := by
+  obtain ⟨value, hWp⟩ := hWp
+  obtain ⟨h₁, h₂, _, rfl, hSingle, -⟩ := pp2wp_elim hWp
+  exact Ptr.contains_union_left (Ptr.contains_of_sub hSingle)
+
+theorem theta_ev_free_post {p : Ptr α} {R : SLPost Unit} {h : Heap}
+    (hWp : theta_ev (.FreePtr p) R h) (hContains : Ptr.contains h p) :
+    R () (Ptr.free p h hContains) := by
   obtain ⟨value, hWp⟩ := hWp
   obtain ⟨h₁, h₂, hDisjoint, rfl, hSingle, hPost⟩ := pp2wp_elim hWp
   obtain ⟨rest, hDisjointRest, rfl⟩ := hSingle
-  have hContains := Ptr.contains_singleton p value
-  have hContainsUnion := Ptr.contains_union_left (h₂ := rest) hContains
+  have hContainsCell := Ptr.contains_singleton p value
+  have hContainsUnion := Ptr.contains_union_left (h₂ := rest) hContainsCell
   have hFreed :
       Ptr.free p (Ptr.singleton p value ∪ rest) hContainsUnion = rest := by
-    rw [Ptr.free_union_left p hDisjointRest hContains, Ptr.free_singleton]
+    rw [Ptr.free_union_left p hDisjointRest hContainsCell, Ptr.free_singleton]
     simp [empty]
   have hDisjointFreed : Finmap.Disjoint rest h₂ := by
     rw [← hFreed]
     exact Ptr.disjoint_free_left hDisjoint hContainsUnion
-  refine ⟨Ptr.contains_union_left hContainsUnion, ?_⟩
-  rw [Ptr.free_union_left p hDisjoint hContainsUnion, hFreed]
+  rw [show (hContains :
+        Ptr.contains ((Ptr.singleton p value ∪ rest) ∪ h₂) p) =
+      Ptr.contains_union_left hContainsUnion from rfl,
+    Ptr.free_union_left p hDisjoint hContainsUnion, hFreed]
   exact hPost () rest trivial hDisjointFreed
+
+theorem theta_ev_free_elim {p : Ptr α} {R : SLPost Unit} {h : Heap}
+    (hWp : theta_ev (.FreePtr p) R h) :
+    ∃ hContains : Ptr.contains h p, R () (Ptr.free p h hContains) :=
+  ⟨theta_ev_free_contains hWp, theta_ev_free_post hWp _⟩
 
 def theta : St α → Wp α
   | .ok value => Wp.pure value
