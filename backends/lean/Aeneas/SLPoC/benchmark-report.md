@@ -12,7 +12,8 @@ sorting, cyclic structures, ownership transfer, and recursive trees.
 
 ## Scope and interpretation
 
-SLPoC is affine: an unused heap resource can be absorbed by `GC`. The
+SLPoC is affine the way Iris is: assertions are closed under heap extension, so
+an unused heap resource is simply dropped — `H ⊢ emp` for every `H`. The
 specifications below prove functional results and preservation or transfer of
 the ownership predicates explicitly present in their postconditions. A triple
 alone does not prove a global no-leak property or an exact heap-allocation

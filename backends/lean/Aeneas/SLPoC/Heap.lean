@@ -47,6 +47,78 @@ theorem exists_fresh {α : Type} (value : α) (h : Heap) :
     Finset.le_sup (f := fun x : Nat => x) hMemKeys
   exact Nat.not_succ_le_self _ hLe
 
+/-! ## Sub-heaps
+
+The assertions of `Aeneas.SLPoC.WP` are *affine*: they own the cells they
+describe and say nothing about the rest of the heap.  Semantically that means
+they are closed under the extension order below, the way Iris's `uPred` is
+monotone in its resource. -/
+
+/-- `Heap.Sub h h'`: `h'` is `h` extended with cells that `h` does not own. -/
+def Heap.Sub (h h' : Heap) : Prop :=
+  ∃ rest, Finmap.Disjoint h rest ∧ h' = h ∪ rest
+
+namespace Heap.Sub
+
+@[refl]
+theorem refl (h : Heap) : Heap.Sub h h :=
+  ⟨∅, Finmap.Disjoint.symm _ _ (Finmap.disjoint_empty h), Finmap.union_empty.symm⟩
+
+theorem trans {h₁ h₂ h₃ : Heap} (hSub₁₂ : Heap.Sub h₁ h₂)
+    (hSub₂₃ : Heap.Sub h₂ h₃) : Heap.Sub h₁ h₃ := by
+  obtain ⟨rest₁, hDisjoint₁, rfl⟩ := hSub₁₂
+  obtain ⟨rest₂, hDisjoint₂, rfl⟩ := hSub₂₃
+  obtain ⟨hDisjoint₁₂, hDisjoint₂₂⟩ :=
+    (Finmap.disjoint_union_left h₁ rest₁ rest₂).mp hDisjoint₂
+  exact ⟨rest₁ ∪ rest₂,
+    (Finmap.disjoint_union_right h₁ rest₁ rest₂).mpr ⟨hDisjoint₁, hDisjoint₁₂⟩,
+    Finmap.union_assoc⟩
+
+theorem of_empty (h : Heap) : Heap.Sub empty h :=
+  ⟨h, Finmap.disjoint_empty h, Finmap.empty_union.symm⟩
+
+theorem union_left {h₁ h₂ : Heap} (hDisjoint : Finmap.Disjoint h₁ h₂) :
+    Heap.Sub h₁ (h₁ ∪ h₂) :=
+  ⟨h₂, hDisjoint, rfl⟩
+
+theorem union_right {h₁ h₂ : Heap} (hDisjoint : Finmap.Disjoint h₁ h₂) :
+    Heap.Sub h₂ (h₁ ∪ h₂) :=
+  ⟨h₁, Finmap.Disjoint.symm _ _ hDisjoint,
+    Finmap.union_comm_of_disjoint hDisjoint⟩
+
+/-- An extension of a split heap splits the same way, the extra cells going to
+the right-hand side. -/
+theorem split {h₁ h₂ h' : Heap} (hDisjoint : Finmap.Disjoint h₁ h₂)
+    (hSub : Heap.Sub (h₁ ∪ h₂) h') :
+    ∃ h₂', Finmap.Disjoint h₁ h₂' ∧ h' = h₁ ∪ h₂' ∧ Heap.Sub h₂ h₂' := by
+  obtain ⟨rest, hDisjointRest, rfl⟩ := hSub
+  obtain ⟨hDisjoint₁, hDisjoint₂⟩ :=
+    (Finmap.disjoint_union_left h₁ h₂ rest).mp hDisjointRest
+  exact ⟨h₂ ∪ rest,
+    (Finmap.disjoint_union_right h₁ h₂ rest).mpr ⟨hDisjoint, hDisjoint₁⟩,
+    Finmap.union_assoc, ⟨rest, hDisjoint₂, rfl⟩⟩
+
+/-- A heap disjoint from an extension is disjoint from the heap extended. -/
+theorem disjoint_of_sub {h h' frame : Heap} (hSub : Heap.Sub h h')
+    (hDisjoint : Finmap.Disjoint h' frame) : Finmap.Disjoint h frame := by
+  obtain ⟨rest, _, rfl⟩ := hSub
+  exact ((Finmap.disjoint_union_left h rest frame).mp hDisjoint).left
+
+/-- Extending on one side of a union extends the union. -/
+theorem union_mono_left {h h' frame : Heap} (hSub : Heap.Sub h h')
+    (hDisjoint : Finmap.Disjoint h' frame) :
+    Heap.Sub (h ∪ frame) (h' ∪ frame) := by
+  obtain ⟨rest, hDisjointRest, rfl⟩ := hSub
+  obtain ⟨_, hDisjointFrame⟩ :=
+    (Finmap.disjoint_union_left h rest frame).mp hDisjoint
+  refine ⟨rest, ?_, ?_⟩
+  · exact (Finmap.disjoint_union_left h frame rest).mpr
+      ⟨hDisjointRest, Finmap.Disjoint.symm _ _ hDisjointFrame⟩
+  · rw [Finmap.union_assoc, Finmap.union_assoc,
+      Finmap.union_comm_of_disjoint (Finmap.Disjoint.symm _ _ hDisjointFrame)]
+
+end Heap.Sub
+
 namespace Heap
 
 def read {α : Type} (r : Ref α) (h : Heap)
@@ -68,14 +140,24 @@ def free {α : Type} (r : Ref α) (h : Heap)
 
 end Heap
 
+/-- A heap that contains a cell has its allocation identifier as a key. -/
+theorem mem_of_contains {α : Type} {h : Heap} {r : Ref α}
+    (hContains : contains h r) : r.allocId ∈ h := by
+  unfold contains at hContains
+  split at hContains
+  · contradiction
+  · rename_i cell hLookup
+    exact Finmap.mem_of_lookup_eq_some hLookup
+
+/-- Two heaps that both contain the cell `r` are not disjoint. -/
+theorem disjoint_contains_false {α : Type} {h₁ h₂ : Heap} {r : Ref α}
+    (hDisjoint : Finmap.Disjoint h₁ h₂) (hContains₁ : contains h₁ r)
+    (hContains₂ : contains h₂ r) : False :=
+  hDisjoint r.allocId (mem_of_contains hContains₁) (mem_of_contains hContains₂)
+
 theorem contains_union_left {α : Type} {h₁ h₂ : Heap} {r : Ref α}
     (hContains : contains h₁ r) : contains (h₁ ∪ h₂) r := by
-  have hMem : r.allocId ∈ h₁ := by
-    unfold contains at hContains
-    split at hContains
-    · contradiction
-    · rename_i cell hLookup
-      exact Finmap.mem_of_lookup_eq_some hLookup
+  have hMem : r.allocId ∈ h₁ := mem_of_contains hContains
   unfold contains at hContains ⊢
   rw [Finmap.lookup_union_left hMem]
   exact hContains
