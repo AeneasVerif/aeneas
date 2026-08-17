@@ -88,7 +88,7 @@ example (value : Nat) :
       (fun (current, next) result =>
         current = value ∧ next = value + 1 ∧ result = value) := by
   step by simp [Pre.entails]
-  simp_all
+  assumption
 
 /- The let-step syntax works for a computation living outside `Std.Result`, and still
 introduces the pretty equality that records where the outputs come from. -/
@@ -109,7 +109,7 @@ example (value : Nat) :
   let* ⟨ state, result, hPost ⟩ ← setAndReturn_spec by
     simp [Pre.entails]
   trace_state
-  simp_all
+  exact hPost
 
 noncomputable def setTwice (first second : Nat) : TestM Nat := do
   let _ ← setAndReturn first

@@ -658,6 +658,22 @@ def extractCallSiteTree (goalTy : Expr) : MetaM (Option NameTree) := do
   | Std.WP.qimp _ _ Q => return some (← getContInput Q)
   | _ => return none
 
+/-- Run `tac` under the leading binders of the goal, reverting what it introduces. -/
+def runTacUnderBinders (tac : TSyntax `tactic) : TacticM Unit := do
+  withTraceNode `Step (fun _ => pure m!"intro_tactic: {tac.raw}") do
+  let goal ← getMainGoal
+  let last? := (← goal.getDecl).lctx.lastDecl.map LocalDecl.fvarId
+  setGoals [(← goal.intros).2]
+  evalTactic tac
+  match ← getUnsolvedGoals with
+  | [] => return
+  | [goal] =>
+    let goal ← match last? with
+      | some last => Prod.snd <$> goal.revertAfter last
+      | none => Prod.snd <$> goal.revert (← goal.withContext do pure (← getLCtx).getFVarIds)
+    setGoals [goal]
+  | _ => throwError "`intro_tactic` must not create multiple goals"
+
 /-- Introduce the outputs (variables and postconditions) into the context after applying
     the step theorem.
 
@@ -702,6 +718,11 @@ def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState : Ste
             (.targets #[] true)
     | trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after monadic preprocessing"
+
+  if let some tac := info.intro_tactic then
+    runTacUnderBinders tac
+    if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
+    traceGoalWithNode "goal after running `intro_tactic`"
 
   /- Eliminate `qimp_spec`/`qimp` to reveal a single `∀ x, imp (P x) (...)`.
      `Std.WP.uncurry'_eq` rewrites the leftover `(uncurry' f) x` into the nicer

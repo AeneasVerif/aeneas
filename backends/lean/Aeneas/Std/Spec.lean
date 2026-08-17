@@ -25,13 +25,20 @@ structure SpecInfo where
   mk_spec_bind : Name
   mk_spec_bind_skip_args : Nat
 
-  uncurry_elim_tactics : Array Lean.Name
-  qimp_elim_tactics : Array Lean.Name
+  uncurry_elim_tactics : Array Lean.Name := #[]
+  /-- Tactic run on the goal.
+  It may transform or solve the goal, but must not create multiple goals. -/
+  intro_tactic : Option (TSyntax `tactic) := none
+  qimp_elim_tactics : Array Lean.Name := #[]
 
   to_mvcgen: Option Name
 
   liftings : Array LiftingInfo
   deriving Inhabited
+
+/-- Store a tactic in a `SpecInfo`: ``intro_tactic := SpecInfo.tac `(tactic| my_tactic)``. -/
+def SpecInfo.tac (tac : Unhygienic (TSyntax `tactic)) : Option (TSyntax `tactic) :=
+  some (Unhygienic.run tac)
 
 structure SpecInfoExtensionState where
   specInfos : Std.HashMap Name SpecInfo
