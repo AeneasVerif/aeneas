@@ -255,7 +255,24 @@ example (p : Ptr Nat) (value : Nat) :
   sl_pure
   sl_frame
 
-/-! ## Affine resource discard -/
+/-! ## Affine resource discard
+
+The entailment itself is affine, as Iris's is: `H ⊢ emp` for every `H`, so
+resources are dropped without an explicit `GC` — which is `emp` here. -/
+
+example (p : Ptr Nat) (value : Nat) :
+    p ↦ value ⊢ emp := by
+  sl_frame
+
+example (p q : Ptr Nat) (left right : Nat) :
+    p ↦ left ∗ q ↦ right ⊢ p ↦ left := by
+  sl_frame
+
+/-- A pure fact needs no resources of its own, so it follows from anything. -/
+example (P : SLProp) : P ⊢ ⌜8 = 8⌝ := by
+  sl_frame
+
+example : (GC : SLProp) = emp := rfl
 
 example (p : Ptr Nat) (value : Nat) :
     p ↦ value ⊢ GC := by
@@ -264,6 +281,35 @@ example (p : Ptr Nat) (value : Nat) :
 example (p q : Ptr Nat) (left right : Nat) :
     p ↦ left ∗ q ↦ right ⊢ p ↦ left ∗ GC := by
   sl_frame
+
+/-- Discarding is *not* forgetting: separated cells stay separated, so a cell
+still cannot be owned twice. -/
+example (p : Ptr Nat) (x y : Nat) :
+    p ↦ x ∗ p ↦ y ⊢ ⌜False⌝ :=
+  hsingle_exclusive p x y
+
+/-- Nor is discarding conjuring: `sl_frame` drops the cell the right-hand side
+does not ask for, but still refuses one the left-hand side does not own. -/
+example (p q : Ptr Nat) (x y : Nat) : p ↦ x ∗ q ↦ y ⊢ q ↦ y := by
+  fail_if_success
+    (have : p ↦ x ⊢ q ↦ y := by sl_frame)
+  sl_frame
+
+/-- Affinity weakens; it does not fabricate resources. -/
+example (p : Ptr Nat) (value : Nat) : ¬ (emp ⊢ p ↦ value) := by
+  intro hImpl
+  have hContains := Ptr.contains_of_sub (hImpl ∅ trivial)
+  simp [Ptr.contains, contains] at hContains
+
+/-- Nor does it excuse a specification from owning what it reads. -/
+example (p : Ptr Nat) : ¬ (⦃ emp ⦄ read p ⦃⇓ _ => emp⦄) := by
+  intro hTriple
+  have hTheta :
+      theta_ev (.ReadPtr p)
+        (fun value => theta (FFree.ok value) (fun _ => emp)) ∅ :=
+    (triple_iff _ _ _).mp hTriple ∅ trivial
+  obtain ⟨hContains, -⟩ := theta_ev_read_elim hTheta
+  simp [Ptr.contains, contains] at hContains
 
 def allocAndForget (value : Nat) : St Unit := do
   let _ ← alloc value

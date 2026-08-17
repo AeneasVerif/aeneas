@@ -247,11 +247,11 @@ def selectedCell (x : Ptr (Ptr Nat)) (y z : Ptr Nat)
   hexists fun chooseY : Bool =>
     iprop(
       x ↦ (if chooseY then y else z) ∗
-      (if chooseY then y ↦ yValue else z ↦ zValue) ∗
-      GC)
+      (if chooseY then y ↦ yValue else z ↦ zValue))
 
 /-- The sound, uniform footprint contains both possible selected cells. The
-unused cell is absorbed by `GC` after the branch is known. -/
+unused cell is discarded once the branch is known — the logic being affine, that
+needs no explicit `GC`. -/
 theorem packageSelected (x : Ptr (Ptr Nat)) (y z : Ptr Nat)
     (yValue zValue : Nat) :
     y ↦ yValue ∗ z ↦ zValue ⊢
