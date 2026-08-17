@@ -1335,6 +1335,10 @@ type extract_file_info = {
 
 let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
     : unit =
+  (* Add the user-provided extra includes *)
+  let fi =
+    { fi with custom_includes = fi.custom_includes @ !Config.extra_includes }
+  in
   (* Open the file and create the formatter *)
   let out = open_out fi.filename in
   let fmt = Format.formatter_of_out_channel out in
