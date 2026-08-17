@@ -65,6 +65,19 @@ def free (p : Ptr α) (h : Heap) (hContains : contains h p) : Heap :=
 
 /-! ## Allocation -/
 
+/-- The pointer the next allocation returns.  Allocation is deterministic, so a
+program can be run and not only related to its outcomes. -/
+def freshPtr (α : Type) (h : Heap) : Ptr α :=
+  _root_.Aeneas.SLPoC.freshRef α h
+
+/-- The heap `freshPtr` allocates into. -/
+def freshHeap {α : Type} (h : Heap) (value : α) : Heap :=
+  _root_.Aeneas.SLPoC.freshHeap h value
+
+theorem fresh_freshPtr (value : α) (h : Heap) :
+    fresh h (freshPtr α h) value (freshHeap h value) :=
+  _root_.Aeneas.SLPoC.fresh_freshRef value h
+
 theorem exists_fresh (value : α) (h : Heap) :
     ∃ p h', fresh h p value h' :=
   _root_.Aeneas.SLPoC.exists_fresh value h
@@ -152,6 +165,11 @@ theorem fresh_eq_singleton_union {p : Ptr α} {value : α} {h h' : Heap}
 theorem contains_singleton (p : Ptr α) (value : α) :
     contains (singleton p value) p :=
   _root_.Aeneas.SLPoC.contains_singleton p value
+
+/-- Two cells at different pointers are disjoint. -/
+theorem disjoint_singleton {p q : Ptr α} {value₁ value₂ : α} (hNe : p ≠ q) :
+    Finmap.Disjoint (singleton p value₁) (singleton q value₂) :=
+  _root_.Aeneas.SLPoC.disjoint_singleton hNe
 
 theorem read_singleton (p : Ptr α) (value : α)
     (hContains : contains (singleton p value) p) :
