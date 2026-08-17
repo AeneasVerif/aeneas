@@ -379,6 +379,7 @@ theorem popFront.spec (s : DoublyLinkedList V) (rh : Ptr (Node V)) (vh : V)
     ⦃ wellFormed s ((rh, vh) :: l) ⦄ popFront s
       ⦃⇓ (s', v) => ⌜v = vh⌝ ∗ wellFormed s' l⦄ := by
   unfold popFront
+  sl_pull_keep
   -- `nodes_cons_two`, which splits the two first nodes out, is stated over a pair.
   rcases l with _ | ⟨⟨_, _⟩, _⟩ <;> sl_step*
 
@@ -421,6 +422,7 @@ theorem get.spec (s : DoublyLinkedList V) (l : Cells V) (i : Nat)
     ⦃ wellFormed s l ⦄ get s i
       ⦃⇓ v => ⌜(view l)[i]? = some v⌝ ∗ wellFormed s l⦄ := by
   unfold get
+  sl_pull_keep
   sl_step as ⟨ r, _ ⟩
   obtain ⟨ri, _, _⟩ := exists_cell l i hi
   obtain rfl : r = ri := by grind

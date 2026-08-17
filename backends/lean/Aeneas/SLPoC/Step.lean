@@ -132,48 +132,26 @@ elab_rules : tactic
 
 macro_rules
   | `(tactic| sl_step $cfg:optConfig $[with $th]? $[as ⟨ $ids,* ⟩]?) =>
-    `(tactic| (sl_pull_keep <;>
-      ((step $cfg:optConfig $[with $th]? $[as ⟨ $ids,* ⟩]? by sl_frame) <;>
-      (sl_frame? <;> sl_side? $cfg:optConfig))))
+    `(tactic| ((step $cfg:optConfig $[with $th]? $[as ⟨ $ids,* ⟩]? by sl_frame) <;>
+      (sl_frame? <;> sl_side? $cfg:optConfig)))
 
 /-- `step*` with `sl_frame` as the precondition discharger. -/
 syntax "sl_step" noWs "*" (num)? Lean.Parser.Tactic.optConfig : tactic
 
 macro_rules
   | `(tactic| sl_step* $[$n]? $cfg:optConfig) =>
-    `(tactic| (sl_pull_keep <;>
-      ((step* $[$n]? $cfg:optConfig by sl_frame) <;>
+    `(tactic| ((step* $[$n]? $cfg:optConfig by sl_frame) <;>
       -- Keep the progress made by `step*` when its final entailment needs manual proof.
-      ((try sl_frame?) <;> sl_side? $cfg:optConfig))))
+      ((try sl_frame?) <;> sl_side? $cfg:optConfig)))
 
-/-! ## Lemmas registered in the elimination passes of `step` -/
+/-! ## Elimination passes of `step` -/
 
 theorem forall_unit {p : Unit → Prop} : (∀ value, p value) ↔ p () :=
   ⟨fun h => h (), fun h value => match value with | () => h⟩
 
-theorem triple_hexists_iff {α : Type} {ι : Sort _} {J : ι → SLPre} {m : St α}
-    {Q : SLPost α} :
-    triple iprop(∃ x, J x) m Q ↔ ∀ x, triple (J x) m Q := by
-  constructor
-  · intro hTriple x
-    exact triple_conseq hTriple (himpl_hexists_r x (himpl_refl _))
-      (fun _ => himpl_refl _)
-  · exact triple_hexists
-
-theorem triple_hpure_iff {α : Type} {P : Prop} {H : SLPre} {m : St α}
-    {Q : SLPost α} :
-    triple iprop(⌜P⌝ ∗ H) m Q ↔ (P → triple H m Q) := by
-  constructor
-  · intro hTriple hP
-    refine triple_conseq hTriple ?_ (fun _ => himpl_refl _)
-    intro h hH
-    exact (hstar_hpure_l P H h).mpr ⟨hP, hH⟩
-  · exact triple_hpure
-
-theorem triple_hpure'_iff {α : Type} {P : Prop} {m : St α} {Q : SLPost α} :
-    triple ⌜P⌝ m Q ↔ (P → triple emp m Q) := by
-  rw [show (⌜P⌝ : SLPre) = iprop(⌜P⌝ ∗ emp) from (hstar_hempty_r_eq _).symm,
-    triple_hpure_iff]
+/-- The tactic `step` runs on the goals it prepares. A no-op on a goal which is not a triple. -/
+macro "intro_triple" : tactic =>
+  `(tactic| (sl_norm; sl_pull_shallow; sl_pull_keep))
 
 #register_spec_info {
     spec_name := ``triple
@@ -185,18 +163,11 @@ theorem triple_hpure'_iff {α : Type} {P : Prop} {m : St α} {Q : SLPost α} :
     mk_spec_bind := ``triple_step_bind
     mk_spec_bind_skip_args := 7
     -- Eliminate the binder of an output the specification determines, and of a `Unit` output.
-    uncurry_elim_tactics := #[
+    qimp_elim_tactics := #[
       ``forall_eq, ``forall_eq',
       ``forall_unit, ``true_imp_iff
     ]
-    -- `sl_pull` the continuation's precondition: quantifiers and pure facts become
-    -- binders and hypotheses.
-    qimp_elim_tactics := #[
-      ``hstar_hempty_l_eq, ``hstar_hempty_r_eq,
-      ``hstar_hexists_l_eq, ``hstar_hexists_r_eq, ``hstar_assoc_eq,
-      ``triple_hexists_iff, ``triple_hpure_iff, ``triple_hpure'_iff,
-      ``forall_unit, ``true_imp_iff
-    ]
+    intro_tactic := SpecInfo.tac `(tactic| intro_triple)
     to_mvcgen := none
     -- Liftings convert between differently stated registered specifications;
     -- they do not provide a terminal rule for `triple`.
