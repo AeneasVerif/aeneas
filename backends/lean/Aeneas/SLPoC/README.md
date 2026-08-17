@@ -26,6 +26,7 @@ git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_se
 | [`ST.lean`](ST.lean) | The state monad `St`, its state machine, its denotation `theta` into `Wp`, the Hoare triples it induces, and the specifications of the pointer operations. |
 | [`Step.lean`](Step.lean) | Wires triples into `sl_step`/`sl_step*` and provides `sl_pure` for exposing the entailment of a syntactic terminal return. |
 | [`WP.lean`](WP.lean) | Affine separation-logic assertions (`SLProp`, closed under heap extension like Iris's `uPred`), the magic wand, and the `Wp` monad of predicate transformers. |
+| [`Run.lean`](Run.lean) | The certified interpreter: runs a program whose weakest precondition is proved, reading the ownership witnesses every read, write and deallocation needs off that proof. |
 | [`ProofScore.lean`](ProofScore.lean) | Engineering tool, not part of the library: measures how close the proofs of the triples are to the ideal proof, i.e. how much separation logic the automation still leaves to the user. Writes [`proof-score.html`](proof-score.html). |
 | [`proof_simplify.py`](proof_simplify.py) | Compilation-guided proof simplifier: compresses consecutive `sl_step` calls and removes unused `sl_pull` names, retaining only rewrites accepted by Lean. |
 | [`benchmark-report.md`](benchmark-report.md) | Report on the eleven external benchmark ports, their interfaces and specifications, proof-score improvements, and remaining automation gaps. |
@@ -45,6 +46,7 @@ git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_se
 | [`PulseLinkedList.lean`](Examples/PulseLinkedList.lean) | Sequential Pulse linked-list operations over a recursive ownership predicate, including append, split, insertion, and reversal. |
 | [`PulseResizableVec.lean`](Examples/PulseResizableVec.lean) | Pulse bounded resizable vector with separate size/capacity cells and initialized-prefix ownership. |
 | [`PulseRingBuffer.lean`](Examples/PulseRingBuffer.lean) | Pulse fixed-capacity FIFO ring buffer with circular-layout and wrap-around proofs. |
+| [`Run.lean`](Tests/Run.lean) | Regression tests for the interpreter: running verified programs, and what execution shows that an affine triple cannot. |
 | [`UnitTest.lean`](Tests/UnitTest.lean) | Regression tests for `step`, `sl_step`, and the separation-logic tactics. |
 | [`YOLOCancel.lean`](Examples/YOLOCancel.lean) | Memory-bounded, downscaled ports of YOLO's synthetic shuffled-atom cancellation benchmarks. |
 | [`VerusBitmap.lean`](Examples/VerusBitmap.lean) | Verus bitmap over 64-bit-style words, including exact get/set and pointwise OR refinement proofs. |
@@ -74,6 +76,36 @@ Consequently:
 What affinity does *not* change: separation is still separation, so `p ↦ v ∗ p ↦
 w ⊢ ⌜False⌝`, and a specification still has to own what it reads or writes.
 Leak-freedom claims are out of scope, as they already were.
+
+## Three semantics for `St`
+
+A program has an *operational* semantics (`StEvents.Step`, lifted to the
+big-step `Evaluates` of `FFree.lean`), a *denotational* one (`theta`, into the
+weakest-precondition monad), and — in [`Run.lean`](Run.lean) — an *executable*
+one.
+
+`St` cannot be interpreted unconditionally: a heap cell stores its own Lean type
+(`HeapCell = Σ α : Type, α`), so `Ptr.contains h p` is not decidable and a read
+through a dangling or mistyped pointer is stuck rather than erroneous. The
+program logic supplies what is missing, so `run` takes the weakest precondition
+as an argument and reads the ownership witnesses off it. Proofs are erased at
+run time, so this computes:
+
+```lean
+theorem roundTrip.spec : (roundTrip) ⦃⇓ result => result = 42⦄ := by
+  unfold roundTrip; sl_step*
+
+#eval (execClosed roundTrip roundTrip.spec).1  -- 42
+```
+
+`run` is certified: it returns the postcondition and the `Evaluates` derivation
+alongside the answer, so `(execClosed roundTrip roundTrip.spec).1 = 42` is
+`execClosed_post`, with nothing executed and nothing re-proved.
+
+Execution also shows what an affine triple cannot state. `⦃emp⦄ m ⦃⇓ emp⦄` holds
+of a program that frees what it allocates *and* of one that leaks it; running a
+closed program tells the two apart, and `by rfl` proves the difference — see
+[`Tests/Run.lean`](Tests/Run.lean).
 
 ## How ideal are the proofs?
 

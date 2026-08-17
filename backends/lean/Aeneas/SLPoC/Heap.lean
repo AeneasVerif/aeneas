@@ -35,17 +35,29 @@ def contains {α : Type} (h : Heap) (r : Ref α) : Prop :=
   | none => False
   | some ⟨β, _⟩ => β = α
 
-theorem exists_fresh {α : Type} (value : α) (h : Heap) :
-    ∃ r h', fresh h r value h' := by
-  let r : Ref α := h.keys.sup id + 1
-  let h' := h.insert r.allocId ⟨α, value⟩
-  refine ⟨r, h', ?_, rfl⟩
+/-- The allocation identifier this heap will hand out next: one past every
+identifier it uses.  Allocation is deterministic, which is what lets a program
+be *run* and not only related to its outcomes. -/
+def freshRef (α : Type) (h : Heap) : Ref α :=
+  h.keys.sup id + 1
+
+/-- The heap `freshRef` allocates into. -/
+def freshHeap {α : Type} (h : Heap) (value : α) : Heap :=
+  h.insert (freshRef α h).allocId ⟨α, value⟩
+
+theorem fresh_freshRef {α : Type} (value : α) (h : Heap) :
+    fresh h (freshRef α h) value (freshHeap h value) := by
+  refine ⟨?_, rfl⟩
   intro hMem
   have hMemKeys : h.keys.sup id + 1 ∈ h.keys :=
     Finmap.mem_keys.mpr hMem
   have hLe : h.keys.sup id + 1 ≤ h.keys.sup id :=
     Finset.le_sup (f := fun x : Nat => x) hMemKeys
   exact Nat.not_succ_le_self _ hLe
+
+theorem exists_fresh {α : Type} (value : α) (h : Heap) :
+    ∃ r h', fresh h r value h' :=
+  ⟨freshRef α h, freshHeap h value, fresh_freshRef value h⟩
 
 /-! ## Sub-heaps
 
@@ -291,6 +303,15 @@ theorem fresh_empty_eq_singleton {α : Type} {r : Ref α} {value : α}
     change allocationId ∉
       Finmap.singleton r.allocId ⟨α, value⟩
     rwa [Finmap.mem_singleton]
+
+/-- Two cells at different references are disjoint. -/
+theorem disjoint_singleton {α : Type} {r s : Ref α} {value₁ value₂ : α}
+    (hNe : r ≠ s) :
+    Finmap.Disjoint (singleton r value₁) (singleton s value₂) := by
+  intro allocationId hMem₁ hMem₂
+  rw [singleton, Finmap.mem_singleton] at hMem₁
+  rw [singleton, Finmap.mem_singleton] at hMem₂
+  exact hNe (hMem₁.symm.trans hMem₂)
 
 theorem contains_singleton {α : Type} (r : Ref α) (value : α) :
     contains (singleton r value) r := by
