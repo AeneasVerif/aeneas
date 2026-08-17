@@ -9,12 +9,35 @@ separating conjunction, the points-to assertion `p ↦ value` and the magic wand
 included — and the monad `Wp` of monotone predicate transformers they live in.
 Nothing here mentions the state monad: its denotation into `Wp` and the Hoare
 triples it induces are in `Aeneas.SLPoC.ST`.
+
+The logic is *affine*, as Iris's is: an assertion owns the cells it describes
+and says nothing about the rest of the heap, so `emp` and the affine top `GC`
+coincide and the entailment `⊢` weakens — `H ⊢ emp` for every `H`.  Resources
+may therefore be discarded anywhere, not only where an explicit `GC` was
+written.  Following Iris's `uPred`, affinity is a property of the *model*:
+`SLProp` bundles closure under `Heap.Sub`, which is what makes `emp ∗ H ⊣⊢ H`
+provable once `emp` holds of every heap.
 -/
 
 namespace Aeneas.SLPoC
 
-/- Heap predicates describe heap fragments. -/
-abbrev SLProp := Heap → Prop
+/-- Heap predicates describe heap fragments.  Like Iris's `uPred`, an assertion
+is closed under heap extension: it constrains the cells it owns, and says
+nothing about the others. -/
+structure SLProp where
+  holds : Heap → Prop
+  up_closed : ∀ {h h' : Heap}, holds h → Heap.Sub h h' → holds h'
+
+instance : CoeFun SLProp (fun _ => Heap → Prop) :=
+  ⟨SLProp.holds⟩
+
+@[ext]
+theorem SLProp.ext {H₁ H₂ : SLProp} (hIff : ∀ h, H₁ h ↔ H₂ h) : H₁ = H₂ := by
+  obtain ⟨holds₁, _⟩ := H₁
+  obtain ⟨holds₂, _⟩ := H₂
+  have hEq : holds₁ = holds₂ := funext fun h => propext (hIff h)
+  subst hEq
+  rfl
 
 /- Preconditions are separation-logic propositions. -/
 abbrev SLPre := SLProp
@@ -28,32 +51,44 @@ def himpl (H₁ H₂ : SLProp) : Prop :=
 def hequiv (H₁ H₂ : SLProp) : Prop :=
   ∀ h, H₁ h ↔ H₂ h
 
-def hempty : SLProp :=
-  fun h => h = empty
+/-- The empty assertion owns nothing.  Being affine it holds of *every* heap,
+exactly like Iris's `emp`, which coincides with `True` there. -/
+def hempty : SLProp where
+  holds _ := True
+  up_closed := fun _ _ => trivial
 
-def hpure (P : Prop) : SLProp :=
-  fun h => P ∧ h = empty
+/-- A pure fact owns nothing, so — unlike SLF's `\[P]` and like Iris's `⌜P⌝` —
+it says nothing about the heap it is asserted of. -/
+def hpure (P : Prop) : SLProp where
+  holds _ := P
+  up_closed := fun hP _ => hP
 
-/-- SLF's affine-top predicate `\GC`.  This logic is unconditionally affine,
-so `GC` holds of every heap. -/
+/-- SLF's affine-top predicate `\GC`.  Since the logic is affine it *is* `emp`;
+the name is kept because the ramified frame rule and `xsimpl` mention it. -/
 def hgc : SLProp :=
-  fun _ => True
+  hempty
 
-/-- The points-to assertion: the heap consists of the single cell `p` points
-at, and it holds `value`. -/
-def hsingle {α : Type} (p : Ptr α) (value : α) : SLProp :=
-  fun h => h = Ptr.singleton p value
+/-- The points-to assertion: the heap owns the cell `p` points at, and it holds
+`value`. -/
+def hsingle {α : Type} (p : Ptr α) (value : α) : SLProp where
+  holds h := Heap.Sub (Ptr.singleton p value) h
+  up_closed := fun hSub hExtend => hSub.trans hExtend
 
-def hstar (H₁ H₂ : SLProp) : SLProp :=
-  fun h =>
+def hstar (H₁ H₂ : SLProp) : SLProp where
+  holds h :=
     ∃ h₁ h₂,
       Finmap.Disjoint h₁ h₂ ∧
       h = h₁ ∪ h₂ ∧
       H₁ h₁ ∧
       H₂ h₂
+  up_closed := by
+    rintro h h' ⟨h₁, h₂, hDisjoint, rfl, hH₁, hH₂⟩ hExtend
+    obtain ⟨h₂', hDisjoint', rfl, hExtend'⟩ := Heap.Sub.split hDisjoint hExtend
+    exact ⟨h₁, h₂', hDisjoint', rfl, hH₁, H₂.up_closed hH₂ hExtend'⟩
 
-def hexists {α : Sort _} (J : α → SLProp) : SLProp :=
-  fun h => ∃ x, J x h
+def hexists {α : Sort _} (J : α → SLProp) : SLProp where
+  holds h := ∃ x, J x h
+  up_closed := fun ⟨x, hJ⟩ hExtend => ⟨x, (J x).up_closed hJ hExtend⟩
 
 def qstar {α : Type} (Q : SLPost α) (H : SLProp) :
     SLPost α :=
@@ -99,9 +134,8 @@ theorem himpl_of_eq {P Q : SLProp} (hEq : P = Q) : P ⊢ Q := by
   subst Q
   exact himpl_refl P
 
-theorem hequiv_eq {P Q : SLProp} (hEquiv : P ⊣⊢ Q) : P = Q := by
-  funext h
-  exact propext (hEquiv h)
+theorem hequiv_eq {P Q : SLProp} (hEquiv : P ⊣⊢ Q) : P = Q :=
+  SLProp.ext hEquiv
 
 theorem hstar_assoc (H₁ H₂ H₃ : SLProp) :
     (H₁ ∗ H₂) ∗ H₃ ⊣⊢ H₁ ∗ (H₂ ∗ H₃) := by
@@ -172,14 +206,10 @@ theorem hstar_hempty_l (H : SLProp) :
     emp ∗ H ⊣⊢ H := by
   intro h
   constructor
-  · rintro ⟨h₁, h₂, _, hEq, hEmpty, hH⟩
-    change h₁ = empty at hEmpty
-    subst h₁
-    simp only [empty, Finmap.empty_union] at hEq
-    subst h
-    exact hH
+  · rintro ⟨h₁, h₂, hDisjoint, rfl, -, hH⟩
+    exact H.up_closed hH (Heap.Sub.union_right hDisjoint)
   · intro hH
-    exact ⟨∅, h, Finmap.disjoint_empty h, by simp, rfl, hH⟩
+    exact ⟨∅, h, Finmap.disjoint_empty h, Finmap.empty_union.symm, trivial, hH⟩
 
 theorem hstar_hempty_r (H : SLProp) :
     H ∗ emp ⊣⊢ H := by
@@ -198,17 +228,22 @@ instance : Std.LawfulIdentity hstar hempty where
   left_id := hstar_hempty_l_eq
   right_id := hstar_hempty_r_eq
 
+/-- Affinity: every assertion may be discarded.  This is the rule the exact
+logic of SLF lacks, and the reason `GC` is `emp` here. -/
+theorem himpl_hempty_r (H : SLProp) : H ⊢ emp :=
+  fun _ _ => trivial
+
 /-- Every heap predicate can be absorbed by `GC`. -/
 theorem himpl_hgc_r (H : SLProp) : H ⊢ GC :=
-  fun _ _ => True.intro
+  fun _ _ => trivial
 
 theorem hstar_hgc_hgc : GC ∗ GC ⊢ GC :=
   himpl_hgc_r _
 
 theorem hstar_hgc_intro (H : SLProp) : H ⊢ H ∗ GC := by
   intro h hH
-  exact ⟨h, empty, (Finmap.disjoint_empty h).symm,
-    by simp [empty], hH, True.intro⟩
+  exact ⟨h, ∅, Finmap.Disjoint.symm _ _ (Finmap.disjoint_empty h),
+    Finmap.union_empty.symm, hH, trivial⟩
 
 theorem hstar_hgc_frame (H₁ H₂ : SLProp) :
     (H₁ ∗ GC) ∗ H₂ ⊢ (H₁ ∗ H₂) ∗ GC :=
@@ -229,6 +264,45 @@ theorem qstar_hgc_idem (Q : SLPost α) :
     (Q ∗+ GC) ∗+ GC ⊢+ Q ∗+ GC :=
   fun _ => hstar_hgc_idem _
 
+/-! ### The model, spelled out
+
+`H h` reduces to the right-hand sides below by `rfl`; these lemmas let `simp`
+and `rw` see through the `SLProp` structure when a proof does go down to the
+heap. -/
+
+@[simp]
+theorem hempty_holds (h : Heap) : (emp : SLProp) h ↔ True :=
+  Iff.rfl
+
+@[simp]
+theorem hgc_holds (h : Heap) : (GC : SLProp) h ↔ True :=
+  Iff.rfl
+
+@[simp]
+theorem hpure_holds {P : Prop} (h : Heap) : (⌜P⌝ : SLProp) h ↔ P :=
+  Iff.rfl
+
+theorem hsingle_holds {α : Type} (p : Ptr α) (value : α) (h : Heap) :
+    (p ↦ value) h ↔ Heap.Sub (Ptr.singleton p value) h :=
+  Iff.rfl
+
+/-- Points-to is exclusive: affinity lets resources be *dropped*, never
+duplicated, so a cell still cannot be owned twice. -/
+theorem hsingle_exclusive {α : Type} (p : Ptr α) (value₁ value₂ : α) :
+    p ↦ value₁ ∗ p ↦ value₂ ⊢ ⌜False⌝ := by
+  rintro h ⟨h₁, h₂, hDisjoint, -, hSingle₁, hSingle₂⟩
+  exact Ptr.disjoint_contains_false hDisjoint
+    (Ptr.contains_of_sub hSingle₁) (Ptr.contains_of_sub hSingle₂)
+
+theorem hstar_holds (H₁ H₂ : SLProp) (h : Heap) :
+    (H₁ ∗ H₂) h ↔
+      ∃ h₁ h₂, Finmap.Disjoint h₁ h₂ ∧ h = h₁ ∪ h₂ ∧ H₁ h₁ ∧ H₂ h₂ :=
+  Iff.rfl
+
+theorem hexists_holds {ι : Sort _} (J : ι → SLProp) (h : Heap) :
+    hexists J h ↔ ∃ x, J x h :=
+  Iff.rfl
+
 theorem hstar_hexists {α : Sort _} (J : α → SLProp) (H : SLProp) :
     iprop(∃ x, J x) ∗ H ⊣⊢ iprop(∃ x, J x ∗ H) := by
   intro h
@@ -238,23 +312,20 @@ theorem hstar_hexists {α : Sort _} (J : α → SLProp) (H : SLProp) :
   · rintro ⟨x, h₁, h₂, hDisjoint, hEq, hJ, hH⟩
     exact ⟨h₁, h₂, hDisjoint, hEq, ⟨x, hJ⟩, hH⟩
 
-theorem hstar_hpure_l (P : Prop) (H : SLProp) :
-    ⌜P⌝ ∗ H ⊣⊢ fun h => P ∧ H h := by
-  intro h
+/-- A pure fact on the left of a separating conjunction: since pure facts own
+nothing, they can be read off, and put back, without touching the heap. -/
+theorem hstar_hpure_l (P : Prop) (H : SLProp) (h : Heap) :
+    (⌜P⌝ ∗ H) h ↔ P ∧ H h := by
   constructor
-  · rintro ⟨h₁, h₂, _, hEq, ⟨hP, hEmpty⟩, hH⟩
-    change h₁ = empty at hEmpty
-    subst h₁
-    simp only [empty, Finmap.empty_union] at hEq
-    subst h
-    exact ⟨hP, hH⟩
+  · rintro ⟨h₁, h₂, hDisjoint, rfl, hP, hH⟩
+    exact ⟨hP, H.up_closed hH (Heap.Sub.union_right hDisjoint)⟩
   · rintro ⟨hP, hH⟩
-    exact ⟨∅, h, Finmap.disjoint_empty h, by simp, ⟨hP, rfl⟩, hH⟩
+    exact ⟨∅, h, Finmap.disjoint_empty h, Finmap.empty_union.symm, hP, hH⟩
 
 theorem hpure_hstar_intro {P : Prop} (H : SLProp) (hP : P) :
     H ⊢ ⌜P⌝ ∗ H := by
   intro h hH
-  exact ⟨∅, h, Finmap.disjoint_empty h, by simp, ⟨hP, rfl⟩, hH⟩
+  exact (hstar_hpure_l P H h).mpr ⟨hP, hH⟩
 
 /-- Extraction of a pure fact from the left-hand side of an entailment.  This is
 SLF's `himpl_hstar_hpure_l`, the workhorse of `xpull`. -/
@@ -289,35 +360,46 @@ theorem hstar_hexists_r_eq {ι : Sort _} (H : SLProp) (J : ι → SLProp) :
   exact hequiv_eq fun _ => ⟨fun ⟨x, hx⟩ => ⟨x, (hstar_comm _ _ _).mp hx⟩,
     fun ⟨x, hx⟩ => ⟨x, (hstar_comm _ _ _).mp hx⟩⟩
 
+/-- SLF discards a pure fact by turning it into `emp`; here every assertion can
+be, so this is a special case of `himpl_hempty_r`. -/
 theorem hpure_elim (P : Prop) :
     ⌜P⌝ ⊢ emp :=
-  fun _ hP => hP.2
+  himpl_hempty_r _
 
-theorem hstar_to_emp {P Q : SLProp}
-    (hP : P ⊢ emp) (hQ : Q ⊢ emp) :
-    P ∗ Q ⊢ emp :=
-  himpl_trans (hstar_mono hP hQ)
-    (fun h => (hstar_hempty_l emp h).mp)
-
-theorem hstar_elim_right {P F : SLProp} (hF : F ⊢ emp) :
+/-- Drop the right factor of a separating conjunction.  SLF requires it to be
+discardable (`F ⊢ emp`); affinity makes that hypothesis vacuous. -/
+theorem hstar_elim_right (P F : SLProp) :
     P ∗ F ⊢ P :=
-  himpl_trans (hstar_mono (himpl_refl P) hF)
+  himpl_trans (hstar_mono (himpl_refl P) (himpl_hempty_r F))
     (fun h => (hstar_hempty_r P h).mp)
+
+/-- Drop the left factor of a separating conjunction. -/
+theorem hstar_elim_left (P F : SLProp) :
+    F ∗ P ⊢ P :=
+  himpl_trans (fun h => (hstar_comm F P h).mp) (hstar_elim_right P F)
 
 /-! ## The magic wand
 
-`H₁ -∗ H₂` describes the heap fragments that, extended with a fragment
-satisfying `H₁`, satisfy `H₂`.  Following SLF it is *defined* in terms of the
-other connectives rather than semantically, which makes all of its properties
-provable from the algebraic laws alone. -/
+`H₁ -∗ H₂` describes the heap fragments that, extended with a disjoint fragment
+satisfying `H₁`, satisfy `H₂`.  In the affine model this Kripke-style reading is
+the right adjoint of the separating conjunction, so — unlike in SLF, where the
+wand is *encoded* as `∃ H₀, H₀ ∗ ⌜H₁ ∗ H₀ ⊢ H₂⌝` to avoid a semantic definition
+— it may be defined directly. -/
 
 /-- Universal quantification over heap predicates. -/
-def hforall {ι : Sort _} (J : ι → SLProp) : SLProp :=
-  fun h => ∀ x, J x h
+def hforall {ι : Sort _} (J : ι → SLProp) : SLProp where
+  holds h := ∀ x, J x h
+  up_closed := fun hJ hExtend x => (J x).up_closed (hJ x) hExtend
 
 /-- The magic wand of SLF (`\-*`). -/
-def hwand (H₁ H₂ : SLProp) : SLProp :=
-  hexists fun H₀ => iprop(H₀ ∗ ⌜H₁ ∗ H₀ ⊢ H₂⌝)
+def hwand (H₁ H₂ : SLProp) : SLProp where
+  holds h := ∀ h', Finmap.Disjoint h h' → H₁ h' → H₂ (h ∪ h')
+  up_closed := by
+    intro h hBig hWand hExtend h' hDisjoint hH₁
+    have hDisjoint' : Finmap.Disjoint h h' :=
+      Heap.Sub.disjoint_of_sub hExtend hDisjoint
+    exact H₂.up_closed (hWand h' hDisjoint' hH₁)
+      (Heap.Sub.union_mono_left hExtend hDisjoint)
 
 /-- The magic wand between postconditions (SLF's `\--*`).  Note that it is a
 heap predicate, not a postcondition. -/
@@ -345,17 +427,15 @@ conjunction.  Every other property of the wand follows from it. -/
 theorem hwand_equiv (H₀ H₁ H₂ : SLProp) :
     (H₀ ⊢ H₁ -∗ H₂) ↔ (H₁ ∗ H₀ ⊢ H₂) := by
   constructor
-  · intro h heap hStar
-    obtain ⟨h₁, h₀, hDisjoint, hEq, hH₁, hH₀⟩ := hStar
-    obtain ⟨H, hH⟩ := h h₀ hH₀
-    obtain ⟨hA, hB, hDisjoint', hEq', hHA, hPure⟩ := hH
-    have hB' : hB = empty := hPure.2
-    subst hB'
-    simp only [empty, Finmap.union_empty] at hEq'
-    subst hEq'
-    exact hPure.1 heap ⟨h₁, h₀, hDisjoint, hEq, hH₁, hHA⟩
-  · intro h heap hH₀
-    exact ⟨H₀, heap, ∅, (Finmap.disjoint_empty heap).symm, by simp, hH₀, h, rfl⟩
+  · rintro hWand heap ⟨h₁, h₀, hDisjoint, rfl, hH₁, hH₀⟩
+    have hApplied :=
+      hWand h₀ hH₀ h₁ (Finmap.Disjoint.symm _ _ hDisjoint) hH₁
+    rwa [Finmap.union_comm_of_disjoint (Finmap.Disjoint.symm _ _ hDisjoint)]
+      at hApplied
+  · intro hStar h₀ hH₀ h₁ hDisjoint hH₁
+    exact hStar (h₀ ∪ h₁)
+      ⟨h₁, h₀, Finmap.Disjoint.symm _ _ hDisjoint,
+        Finmap.union_comm_of_disjoint hDisjoint, hH₁, hH₀⟩
 
 /-- SLF's `himpl_hwand_r`, the introduction rule of the wand. -/
 theorem hwand_intro {H₀ H₁ H₂ : SLProp} (h : H₁ ∗ H₀ ⊢ H₂) : H₀ ⊢ H₁ -∗ H₂ :=
@@ -495,7 +575,7 @@ def pp2wp (P : SLPre) (Q : SLPost α) : Wp α where
         himpl_trans (qwand_cancel Q R₁ value) (hR value))
 
 def Wp.hexists {ι : Sort _} (f : ι → Wp α) : Wp α where
-  run := fun R h => ∃ x, f x R h
+  run := fun R => _root_.Aeneas.SLPoC.hexists (fun x => f x R)
   monotone := by
     rintro R₁ R₂ hR h ⟨x, hx⟩
     exact ⟨x, (f x).monotone hR h hx⟩

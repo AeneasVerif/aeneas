@@ -75,7 +75,7 @@ theorem or_comm (P Q : SLProp) : Q ∨ₐ P ⊢ P ∨ₐ Q := by
     sl_frame
 
 theorem or_elim (P Q R : SLProp) :
-    (P -∗ R) ∗ (Q -∗ R) ∗ (P ∨ₐ Q) ⊢ R ∗ GC := by
+    (P -∗ R) ∗ (Q -∗ R) ∗ (P ∨ₐ Q) ⊢ R := by
   unfold aor
   sl_xpull
   cases x
@@ -130,7 +130,9 @@ end Basics
 
 namespace Pure
 
-/- Nothing was omitted; `abstr_not_pure` exposes the garbage that Iris discards implicitly. -/
+/- Nothing is omitted, and — the logic being affine, as Iris's is — nothing has
+to be absorbed by an explicit `GC` either: `abstr_not_pure` is stated exactly as
+Iris states it. -/
 
 theorem asm_pure (φ : Prop) : ⌜φ⌝ ⊢ ⌜φ⌝ := by
   sl_frame
@@ -163,7 +165,7 @@ theorem wand_pure {A : Type} (x y : A) :
   sl_frame
 
 theorem abstr_not_pure (P : SLProp) :
-    P ⊢ ⌜8 = 8⌝ ∗ GC := by
+    P ⊢ ⌜8 = 8⌝ := by
   sl_frame
 
 theorem pure_adj1 (φ : Prop) (hφ : φ) : emp ⊢ ⌜φ⌝ := by
@@ -215,14 +217,8 @@ theorem prog_spec :
   sl_step*
 
 theorem pt_not_dupl {α : Type} (p : Ptr α) (v v' : α) :
-    p ↦ v ∗ p ↦ v' ⊢ ⌜False⌝ := by
-  rintro h ⟨h₁, h₂, hd, _, rfl, rfl⟩
-  exfalso
-  apply hd p
-  · simp [Ptr.singleton, singleton]
-    rfl
-  · simp [Ptr.singleton, singleton]
-    rfl
+    p ↦ v ∗ p ↦ v' ⊢ ⌜False⌝ :=
+  hsingle_exclusive p v v'
 
 def compareAndSetSequential (p : Ptr Int) (expected replacement : Int) :
     St Bool := do

@@ -13,7 +13,7 @@ Logic Foundations* (`https://softwarefoundations.cis.upenn.edu/slf-current/`).
 | `\-*` / `\--*` | `-∗` (`hwand`) / `-∗+` (`qwand`) |
 | `triple_ramified_frame` | `triple_ramified_frame` |
 | `xsimpl` | `sl_xsimpl` (also available as `sl_frame`) |
-| `\GC` | `GC` (`hgc`) |
+| `\GC` | `GC` (`hgc`), which is `emp` in this affine logic |
 | `xpull` | `sl_xpull` on an entailment, `sl_pull` on a triple |
 | `xchange` | `sl_xchange` |
 | `xval` | `sl_xval` |
@@ -39,13 +39,14 @@ internalizes "what the leftover resources must do to the callee's
 postcondition", and the whole obligation becomes a single entailment in which
 nothing is left to guess. -/
 
-/-- SLF's `triple_ramified_frame`. -/
+/-- SLF's `triple_ramified_frame`.  SLF puts `Q ∗+ GC` on the right of the wand
+so that the leftovers may be discarded; here the wand's own conclusion is
+affine, so `Q` alone will do. -/
 theorem triple_ramified_frame {α : Type} {P Pm : SLPre} {Q Qm : SLPost α}
     {m : St α} (hStep : triple Pm m Qm)
-    (hPre : P ⊢ Pm ∗ (Qm -∗+ (Q ∗+ GC))) :
+    (hPre : P ⊢ Pm ∗ (Qm -∗+ Q)) :
     triple P m Q :=
-  triple_hgc_post
-    (triple_conseq_frame hStep hPre (qwand_cancel Qm (Q ∗+ GC)))
+  triple_conseq_frame hStep hPre (qwand_cancel Qm Q)
 
 /-- The ramified frame rule, for a call followed by a continuation.  Unlike
 `triple_ramified_frame` this one still mentions the resources `F` that the
@@ -241,19 +242,6 @@ private def provePure (discharger : Option Syntax.Tactic) (proposition : Expr) :
   unless goals.isEmpty do
     throwError "could not prove pure assertion {proposition}"
   return proof
-
-private partial def proveToEmp (atoms : Array Expr) : MetaM Expr := do
-  if atoms.isEmpty then
-    return ← mkAppM ``himpl_refl #[mkConst ``hempty]
-  let atom := atoms[0]!
-  let (fn, args) := atom.consumeMData.withApp fun fn args => (fn, args)
-  unless fn.isConstOf ``hpure && args.size = 1 do
-    throwError "cannot discard spatial assertion {atom}; only pure assertions may be discarded"
-  let atomProof ← mkAppM ``hpure_elim #[args[0]!]
-  if atoms.size = 1 then
-    return atomProof
-  let restProof ← proveToEmp (atoms.extract 1 atoms.size)
-  mkAppM ``hstar_to_emp #[atomProof, restProof]
 
 /-- Is `destination` a frame-inference destination, i.e. of the shape
 `Hcallee ∗ ?F` for an unassigned metavariable `?F`?
@@ -572,9 +560,10 @@ partial def solveHimpl (discharger : Option Syntax.Tactic) (goal : MVarId) :
             let discarded := mkStar discardedAtoms
             let reordered := mkApp2 (mkConst ``hstar) matchedAssertion discarded
             let reorderProof ← mkAppM ``himpl_of_eq #[← proveEqAC source reordered]
-            let discardProof ← proveToEmp discardedAtoms
-            let eliminateProof ← mkAppOptM ``hstar_elim_right
-              #[some matchedAssertion, some discarded, some discardProof]
+            /- The logic is affine, so whatever the cancellation leaves over is
+               discardable — unlike in SLF, where only the pure atoms are. -/
+            let eliminateProof ← mkAppM ``hstar_elim_right
+              #[matchedAssertion, discarded]
             mkAppM ``himpl_trans #[reorderProof, eliminateProof]
         pure (matchedAssertion, proof)
     let mut current := matchedAssertion
