@@ -45,13 +45,14 @@ example (p : Ptr Nat) :
 
 /-! ## `sl_pull` -/
 
-/-- `sl_step` cannot open a leading existential before frame inference.
-Pulling only its witness exposes the pure fact for `sl_step`'s `sl_pull_keep`. -/
+/-- `sl_step` cannot open a leading existential before frame inference. Pulling its witness
+exposes the pure fact, which `sl_pull_keep` then copies into the context. -/
 example (p : Ptr Nat) :
     ⦃ iprop(∃ n, ⌜n = 1⌝ ∗ p ↦ n) ⦄ Examples.incr_ptr p ⦃⇓ p ↦ 2⦄ := by
   unfold Examples.incr_ptr
   fail_if_success sl_step
   sl_pull n
+  sl_pull_keep
   sl_step*
 
 /-- Without arguments it peels as much as it can. -/
@@ -65,14 +66,16 @@ example (p : Ptr Nat) (value : Nat) :
 
 Unlike `sl_pull`, this copies the pure facts of the precondition into the local
 context instead of consuming them, so the assertion stays available to the
-framing of the later steps.  `sl_step` runs it on every step. -/
+framing of the later steps.  `step` runs it on the goal of every continuation;
+the goal a proof starts from needs it explicitly. -/
 
 /-- The pointer passed to the callee is reducible to the owned pointer only
-through a pure fact in the precondition.  `sl_step` copies the fact into the
-context while preserving it for the postcondition. -/
+through a pure fact in the precondition, which has to be copied into the context
+while the postcondition keeps it. -/
 example (p q : Ptr Nat) :
     ⦃ iprop(⌜q = p⌝ ∗ p ↦ 1) ⦄ Examples.incr_ptr q ⦃⇓ iprop(⌜q = p⌝ ∗ p ↦ 2)⦄ := by
   unfold Examples.incr_ptr
+  sl_pull_keep
   sl_step*
 
 /-- `sl_pull_keep` leaves the precondition untouched: the fact is needed both in
@@ -138,6 +141,16 @@ theorem touchAny.spec (p : Ptr Nat) :
 def touchThenSet (p : Ptr Nat) : St Unit := do
   touchAny p
   update p 7
+
+/-- The witness `step` peels off the precondition of the continuation takes the name given for
+it, like an output. -/
+example (p : Ptr Nat) (x : Nat) :
+    ⦃ iprop(⌜x = 5⌝ ∗ p ↦ x) ⦄ touchThenSet p ⦃⇓ iprop(⌜x = 5⌝ ∗ p ↦ 7)⦄ := by
+  unfold touchThenSet
+  sl_pull_keep
+  sl_step as ⟨ pulled ⟩
+  guard_hyp pulled : Nat
+  sl_step*
 
 /-- A pure fact that the callee does not need stays available afterwards, even
 though the callee's precondition is an existential.  `step` pulls the

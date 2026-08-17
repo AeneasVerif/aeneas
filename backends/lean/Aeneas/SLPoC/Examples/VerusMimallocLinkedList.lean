@@ -228,6 +228,7 @@ theorem popBlock.spec (s : FreeList) (b : Block R) (payload : R)
       blockOwn b payload ∗
       freeListRep s' rest⦄ := by
   unfold popBlock
+  sl_pull_keep
   sl_step*
 
 end FreeList
