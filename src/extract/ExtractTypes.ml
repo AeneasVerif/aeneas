@@ -1231,10 +1231,36 @@ let extract_doc_comment (fmt : F.formatter) (sl : string list) : unit =
   in
   extract_comment_block fmt delimiters sl
 
+(** Whether we record the span of the Rust items in a [@[rust_source ...]]
+    attribute rather than in the doc comment. See [-rust-source-links]. *)
+let use_rust_source_attribute () : bool =
+  !Config.rust_source_links && backend () = Lean
+
+(** The [rust_source ...] attribute recording which Rust item a declaration was
+    extracted from.
+
+    Lean only accepts a single [@[...]] group per declaration so we return the
+    attribute rather than printing it, and the callers can merge merge it with
+    the other attributes of the declaration. *)
+let rust_source_attribute (span : Meta.span) : string =
+  let file =
+    match span.data.file.name with
+    | Virtual s | Local s | NotReal s -> s
+  in
+  Printf.sprintf "rust_source \"%s\" %d %d %d %d" (String.escaped file)
+    span.data.beg_loc.line span.data.beg_loc.col span.data.end_loc.line
+    span.data.end_loc.col
+
+(** [span_in_attribute] tells whether the caller attaches the span to the
+    declaration as a [rust_source] attribute - in which case we leave it out of
+    the comment. It defaults to [false] so that a comment whose declaration gets
+    no attribute (or which is not even in front of a declaration, like the one
+    we generate for the [decreases_by] tactics) keeps mentioning its span. *)
 let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
     (sl : string list) (name : Types.name option)
     ?(generics : (Types.generic_params * Types.generic_args) option = None)
-    ?(public : bool = false) (span : Meta.span) : unit =
+    ?(public : bool = false) ?(span_in_attribute : bool = false)
+    (span : Meta.span) : unit =
   let name =
     match (name, generics) with
     | None, _ -> []
@@ -1252,9 +1278,13 @@ let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
           ^ "]";
         ]
   in
-  let span = Errors.span_to_string span in
+  (* The span goes either in the comment, or in the attributes of the declaration *)
+  let span_comment =
+    if use_rust_source_attribute () && span_in_attribute then []
+    else [ Errors.span_to_string span ]
+  in
   let visibility = if public then [ "Visibility: public" ] else [] in
-  extract_doc_comment fmt (sl @ [ span ] @ name @ visibility)
+  extract_doc_comment fmt (sl @ span_comment @ name @ visibility)
 
 let extract_attributes (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (name : Types.name)
@@ -1287,6 +1317,11 @@ let extract_attributes (span : Meta.span) (ctx : extraction_ctx)
               @ rust_model_attr_options;
             ]
       else []
+    in
+    let attributes =
+      if use_rust_source_attribute () then
+        rust_source_attribute span :: attributes
+      else attributes
     in
     let attributes =
       if attributes = [] then name_pattern
@@ -1505,7 +1540,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
    in
    extract_comment_with_span ctx fmt
      [ "[" ^ name_to_string ctx def.item_meta.name ^ "]" ]
-     name ~public:def.item_meta.attr_info.public span;
+     name ~public:def.item_meta.attr_info.public ~span_in_attribute:true span;
    F.pp_print_break fmt 0 0;
    (* Extract the attributes.
 
