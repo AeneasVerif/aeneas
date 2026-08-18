@@ -32,7 +32,7 @@ theorem modus_ponens (P Q : SLProp) :
     emp ⊢ P -∗ (P -∗ Q) -∗ Q := by
   apply hwand_intro
   apply hwand_intro
-  sl_xchange (hwand_cancel P Q)
+  sl_change (hwand_cancel P Q)
   sl_frame
 
 theorem sep_assoc_1 (P Q R : SLProp) :
@@ -44,28 +44,28 @@ theorem sep_comm_v2 (P Q : SLProp) : P ∗ Q ⊢ Q ∗ P :=
 
 theorem wand_adj_1 (P Q R : SLProp) :
     (P -∗ Q -∗ R) ∗ P ∗ Q ⊢ R := by
-  sl_xchange (hwand_cancel P (Q -∗ R))
-  sl_xchange (hwand_cancel Q R)
+  sl_change (hwand_cancel P (Q -∗ R))
+  sl_change (hwand_cancel Q R)
   sl_frame
 
 theorem wand_adj (P Q R : SLProp) :
     (P -∗ Q -∗ R) ⊣⊢ (P ∗ Q -∗ R) := by
   have hForward : (P -∗ Q -∗ R) ⊢ (P ∗ Q -∗ R) :=
     hwand_intro (by
-      sl_xchange (hwand_cancel P (Q -∗ R))
-      sl_xchange (hwand_cancel Q R)
+      sl_change (hwand_cancel P (Q -∗ R))
+      sl_change (hwand_cancel Q R)
       sl_frame)
   have hBackward : (P ∗ Q -∗ R) ⊢ (P -∗ Q -∗ R) := by
     apply hwand_intro
     apply hwand_intro
-    sl_xchange (hwand_cancel (P ∗ Q) R)
+    sl_change (hwand_cancel (P ∗ Q) R)
     sl_frame
   intro h
   exact ⟨hForward h, hBackward h⟩
 
 theorem or_comm (P Q : SLProp) : Q ∨ₐ P ⊢ P ∨ₐ Q := by
   unfold aor
-  sl_xpull
+  sl_pull_entail
   cases x
   · refine himpl_hexists_r true ?_
     simp
@@ -77,20 +77,20 @@ theorem or_comm (P Q : SLProp) : Q ∨ₐ P ⊢ P ∨ₐ Q := by
 theorem or_elim (P Q R : SLProp) :
     (P -∗ R) ∗ (Q -∗ R) ∗ (P ∨ₐ Q) ⊢ R := by
   unfold aor
-  sl_xpull
+  sl_pull_entail
   cases x
   · simp
-    sl_xchange (hwand_cancel Q R)
+    sl_change (hwand_cancel Q R)
     sl_frame
   · simp
-    sl_xchange (hwand_cancel P R)
+    sl_change (hwand_cancel P R)
     sl_frame
 
 theorem sep_or_distr (P Q R : SLProp) :
     P ∗ (Q ∨ₐ R) ⊣⊢ (P ∗ Q) ∨ₐ (P ∗ R) := by
   have hForward : P ∗ (Q ∨ₐ R) ⊢ (P ∗ Q) ∨ₐ (P ∗ R) := by
     unfold aor
-    sl_xpull
+    sl_pull_entail
     cases x
     · refine himpl_hexists_r false ?_
       simp
@@ -100,7 +100,7 @@ theorem sep_or_distr (P Q R : SLProp) :
       sl_frame
   have hBackward : (P ∗ Q) ∨ₐ (P ∗ R) ⊢ P ∗ (Q ∨ₐ R) := by
     unfold aor
-    sl_xpull
+    sl_pull_entail
     cases x
     · refine himpl_hexists_r false ?_
       simp
@@ -142,7 +142,7 @@ theorem eq_5_5 : emp ⊢ ⌜5 = 5⌝ := by
 
 theorem eq_elm {A : Type} (P : A → SLProp) (x y : A) :
     ⌜x = y⌝ ∗ P x ⊢ P y := by
-  sl_xpull
+  sl_pull_entail
   subst y
   sl_frame
 
@@ -160,7 +160,7 @@ theorem sep_pure : emp ⊢ ⌜5 = 5⌝ ∗ ⌜8 = 8⌝ := by
 
 theorem wand_pure {A : Type} (x y : A) :
     ⌜x = y⌝ ⊢ ⌜y = x⌝ := by
-  sl_xpull
+  sl_pull_entail
   subst y
   sl_frame
 
@@ -174,7 +174,7 @@ theorem pure_adj1 (φ : Prop) (hφ : φ) : emp ⊢ ⌜φ⌝ := by
 theorem pure_adj2 (P : SLProp) :
     emp ⊢ ⌜emp ⊢ P⌝ -∗ P := by
   apply hwand_intro
-  sl_xpull
+  sl_pull_entail
   exact h
 
 end Pure
