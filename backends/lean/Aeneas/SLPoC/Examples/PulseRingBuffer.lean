@@ -317,7 +317,7 @@ theorem new.spec (capacity : Nat) (hcapacity : 0 < capacity) :
   sl_step as ⟨ head ⟩
   sl_step as ⟨ tail ⟩
   sl_step as ⟨ count ⟩
-  sl_pure
+  sl_step
   have hcontents :
       contentsOfBuffer (List.replicate capacity (none : Option α))
         0 capacity 0 = [] := rfl

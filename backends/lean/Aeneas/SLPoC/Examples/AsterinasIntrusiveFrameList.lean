@@ -344,9 +344,7 @@ theorem pushFront.spec (s : LinkedList M) (entries : List (Entry M))
       simp only [hlist.2.1]
       simp only [detachedValue]
       sl_step* 2
-      sl_pure
-      simp_all [linkedValue]
-      sl_frame
+      sl_step
   | cons head rest =>
       rcases head with ⟨oldFrame, oldPayload⟩
       simp only [listRep, firstSlot_cons, ownedFrom_cons, List.length_cons]
@@ -355,9 +353,7 @@ theorem pushFront.spec (s : LinkedList M) (entries : List (Entry M))
       simp only [hlist.2.1]
       simp only [linkedValue, detachedValue]
       sl_step* 4
-      sl_pure
-      simp_all
-      sl_frame
+      sl_step
 
 /-- Empty cursor removal reports `none` and preserves the exact empty
 ownership. -/
@@ -370,9 +366,7 @@ theorem takeCurrent.empty.spec (cursor : Cursor M) :
   simp only [firstSlot_nil, lastSlot_nil, ownedFrom_nil, List.length_nil]
   sl_pull hcursor hlist
   simp only [hcursor, hlist.2.1]
-  sl_pure
-  simp_all
-  sl_frame
+  sl_step
 
 /-- Exact split/recombine theorem for cursor removal.  It consumes the current
 head cell plus its suffix view, clears and returns that same frame, advances
@@ -396,17 +390,12 @@ theorem takeCurrent.cons.spec (cursor : Cursor M) (frame : Frame M)
   | nil =>
       simp only [firstSlot_nil, ownedFrom_nil]
       sl_step* 4
-      sl_pure
-      simp_all
-      sl_frame
+      sl_step
   | cons next rest' =>
       rcases next with ⟨nextFrame, nextPayload⟩
       simp only [firstSlot_cons, ownedFrom_cons]
       sl_step* 6
-      sl_pure
-      simp [linkedValue]
-      simp only [lastSlot_cons_cons] at hlist
-      sl_frame
+      sl_step
 
 /-- Public empty pop reports empty and preserves the list exactly. -/
 @[step]
@@ -428,9 +417,7 @@ theorem popFront.empty.spec (s : LinkedList M) :
       exact himpl_refl _
   refine triple_bind htake ?_
   rintro ⟨cursor, result⟩
-  sl_pure
-  unfold initial frontCursorRep
-  sl_frame
+  sl_step
 
 /-- Public nonempty pop returns/removes exactly the pure head and transfers its
 detached unique ownership back to the caller. -/
@@ -457,10 +444,7 @@ theorem popFront.cons.spec (s : LinkedList M) (frame : Frame M)
       exact himpl_refl _
   refine triple_bind htake ?_
   rintro ⟨cursor, result⟩
-  sl_pure
-  unfold frontCursorRep
-  simp_all
-  sl_frame
+  sl_step
 
 end AsterinasIntrusiveFrameList
 
