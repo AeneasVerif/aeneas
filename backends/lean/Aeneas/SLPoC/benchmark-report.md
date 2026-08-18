@@ -37,7 +37,7 @@ correctness issue after the final fixes.
 The proof-score audit preserved every executable definition and theorem
 statement. It removed unnecessary manual predicate exposure and terminal
 framing, taught automation a small number of representation equalities, and
-rephrased pure consequences so that `sl_step` could finish them.
+rephrased pure consequences so that `step` could finish them.
 
 | File | Triples | Spots | Before | After | Ideal-spot gain |
 |---|---:|---:|---:|---:|---:|
@@ -218,7 +218,7 @@ The score measures proof-mode ergonomics, not theorem strength or
 correctness. A spot is non-ideal when any step in one straight-line proof
 block manually handles separation logic. One necessary transformation marks
 the whole spot non-ideal even if every other command in that block is pure
-reasoning or `sl_step`.
+reasoning or `step`.
 
 The remaining 129 non-ideal spots have these main causes:
 
@@ -230,7 +230,7 @@ The remaining 129 non-ideal spots have these main causes:
 
 2. **Result-dependent terminal posts.** After a pure return, the spatial
    postcondition may contain the returned pointer, tuple projection, or a
-   representation folded around it. The current `sl_step` result matching
+   representation folded around it. The current `step` result matching
    cannot always use the pure result equality before spatial matching, so a
    consequence or framing step remains necessary.
 

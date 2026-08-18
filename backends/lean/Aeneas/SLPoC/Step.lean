@@ -5,12 +5,12 @@ import Aeneas.Tactic.Step.StepStar
 # Wiring of the `step` tactic to separation-logic triples
 
 `step`/`step*` walk a monadic program one call at a time.  For every call they
-apply one of the two rules below and hand the resulting entailment to the
-tactic given after `by` — in practice `sl_frame`.  Registered `pure.spec` and
-`ok.spec` calls therefore use the same bind and ramified-frame automation as
-other registered specifications.  `sl_step` takes the mono case of a syntactic
-terminal return directly, through `triple_pure`, and leaves its entailment as the
-goal when `sl_frame` cannot close it.
+apply one of the two rules below and hand the resulting entailment to `sl_frame`,
+which is registered as the `discharge_tactic` of the `triple` specification
+statement.  Registered `pure.spec` and `ok.spec` calls therefore use the same bind
+and ramified-frame automation as other registered specifications, terminal returns
+included: `himpl_qwand_hpure_eq` collapses the wand their abstract result leaves
+behind, so no separate rule is needed for them.
 -/
 
 namespace Aeneas.SLPoC
@@ -42,114 +42,6 @@ theorem triple_step_mono {α : Type} {P Pm : SLPre} {Q : SLPost α}
     triple P m Q :=
   triple_ramified_frame hStep hRamified
 
-/-- `step` with `sl_frame` as the precondition discharger.
-
-The frame has to be resolved *before* `step` reshapes the continuation, hence
-`by sl_frame` rather than a `sl_frame` afterwards.  The rule for a terminal call
-has a single premise, which is the *main* goal rather than a precondition and so
-is out of reach of `by`; the trailing `sl_frame?` closes it, and `sl_side?` the
-side conditions of the specification.
-
-On a syntactic terminal return the mono case is taken directly, by
-`sl_terminal_return`, and the entailment `P ⊢ Q v` it produces is handed to
-`sl_frame`; when `sl_frame` cannot close it — because the postcondition has to be
-opened by hand first — it is left as the goal, as `sl_step*` does with its own
-final entailment.  An explicit `sl_step with thm` always uses `thm`. -/
-syntax "sl_step" Lean.Parser.Tactic.optConfig ("with" term)?
-  ("as" " ⟨ " Lean.binderIdent,* " ⟩")? : tactic
-
-/-- The rule `sl_step` uses for a syntactic terminal return: apply `triple_pure`,
-leaving the entailment exposed.
-
-Going through `pure.spec` and the ramified frame rule instead would state the
-obligation in terms of the *abstract* result of the specification: the goal
-becomes `P ⊢ emp ∗ (fun result => ⌜result = v⌝) -∗+ Q`, and cancelling that wand
-needs the pure fact it introduces to be substituted back into the spatial part —
-which is precisely what `sl_frame` does not do.  `triple_pure` names the returned
-value directly, so the obligation is the far simpler `P ⊢ Q v`.
-
-The program has to be a return *syntactically*: a named pure wrapper keeps going
-through its registered specification. -/
-syntax "sl_terminal_return_core" : tactic
-
-elab_rules : tactic
-  | `(tactic| sl_terminal_return_core) => withMainContext do
-      let goal ← getMainGoal
-      let target ← instantiateMVars (← goal.getType)
-      let (head, args) := target.consumeMData.withApp fun head args => (head, args)
-      unless head.isConstOf ``triple && args.size = 4 do
-        throwError "sl_step: the terminal-return rule expected a separation-logic triple"
-      let program := args[2]!.consumeMData
-      let programHead := program.getAppFn
-      unless programHead.isConstOf ``Pure.pure ||
-          programHead.isConstOf ``FFree.ok do
-        throwError "sl_step: the terminal-return rule expected a syntactic terminal return"
-      evalTactic (← `(tactic| apply triple_pure))
-
-/-- `sl_terminal_return_core` after a normalization of the beta/iota/zeta and
-projection redexes a terminal return is often buried under (`match`/`let`
-noise). -/
-syntax "sl_terminal_return" : tactic
-
-macro_rules
-  | `(tactic| sl_terminal_return) =>
-    `(tactic| focus ((try simp only); sl_terminal_return_core))
-
-/-- Discharge a side condition `step` returns for a `Prop` argument of a
-specification.  A no-op on the entailment and continuation goals, and on the
-goals for ghost parameters the entailment has yet to determine.
-
-The chain is `assumption`, `simp`, `omega`, `scalar_tac`, `grind`, and obeys the
-same `aeneas.step.*` options as `step`, so `sl_step -grind` drops the last one.
-`grind` is needed because a side condition such as an iterator's `valid` is often
-available only behind a guard (`good = true → valid it' l`) whose discharge needs
-a second hypothesis.
-
-We do not reuse `step`'s own `agrind` (`evalAGrindWithPreprocess`): it fires the
-`@[agrind]` lemma set rather than `@[grind]`, and preprocesses the hypotheses with
-`scalar_tac`; both make it fail on the iterator side conditions. -/
-syntax "sl_side?" Lean.Parser.Tactic.optConfig : tactic
-
-elab_rules : tactic
-  | `(tactic| sl_side? $cfg:optConfig) => withMainContext do
-  let target ← instantiateMVars (← (← getMainGoal).getType)
-  let head := target.consumeMData.getAppFn
-  if head.isConstOf ``himpl || head.isConstOf ``qimpl || head.isConstOf ``triple then
-    return
-  unless ← Meta.isProp target do return
-  let config ← Aeneas.Step.elabPartialConfig cfg
-  let mut alts : Array (TSyntax `tactic) := #[]
-  if config.assumTac then alts := alts.push (← `(tactic| assumption))
-  alts := alts.push (← `(tactic| simp))
-  alts := alts.push (← `(tactic| omega))
-  if config.scalarTac then alts := alts.push (← `(tactic| scalar_tac))
-  if config.grind then alts := alts.push (← `(tactic| grind))
-  /- `firstTacSolve` is what `step` uses for its own chain: it moves on unless the
-     alternative leaves no goal behind. Splicing a `first` instead breaks `sl_frame`. -/
-  try Aeneas.Utils.firstTacSolve (alts.toList.map fun tac => evalTactic tac)
-  catch _ => pure ()
-
-macro_rules
-  | `(tactic| sl_step $cfg:optConfig $[with $th]? $[as ⟨ $ids,* ⟩]?) => do
-    let stepping ←
-      `(tactic| ((step $cfg:optConfig $[with $th]? $[as ⟨ $ids,* ⟩]? by sl_frame) <;>
-        (sl_frame? <;> sl_side? $cfg:optConfig)))
-    if th.isSome then
-      return stepping
-    `(tactic| first
-      | (sl_terminal_return; sl_frame?)
-      | sl_terminal_return
-      | $stepping:tactic)
-
-/-- `step*` with `sl_frame` as the precondition discharger. -/
-syntax "sl_step" noWs "*" (num)? Lean.Parser.Tactic.optConfig : tactic
-
-macro_rules
-  | `(tactic| sl_step* $[$n]? $cfg:optConfig) =>
-    `(tactic| ((step* $[$n]? $cfg:optConfig by sl_frame) <;>
-      -- Keep the progress made by `step*` when its final entailment needs manual proof.
-      ((try sl_frame?) <;> sl_side? $cfg:optConfig)))
-
 /-! ## Elimination passes of `step` -/
 
 theorem forall_unit {p : Unit → Prop} : (∀ value, p value) ↔ p () :=
@@ -174,6 +66,8 @@ macro "intro_triple" : tactic =>
       ``forall_unit, ``true_imp_iff
     ]
     intro_tactic := SpecInfo.tac `(tactic| intro_triple)
+    -- Frame inference: proves `hPre` of the bind rule and `hRamified` of the mono rule.
+    discharge_tactic := SpecInfo.tac `(tactic| sl_frame)
     to_mvcgen := none
     -- Liftings convert between differently stated registered specifications;
     -- they do not provide a terminal rule for `triple`.
