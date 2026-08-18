@@ -510,4 +510,50 @@ def zip_iter (a : Slice Std.U8) (b : Slice Std.U8) : Result Unit := do
       (core.iter.traits.iterator.IteratorSliceIter Std.U8)) i i1
   zip_iter_loop iter
 
+/-- [iterators::arrays_zip_iter]: loop body 0:
+    Source: 'tests/src/iterators.rs', lines 75:4-75:38
+    Visibility: public -/
+@[rust_loop_body]
+def arrays_zip_iter_loop.body
+  (iter : core.iter.adapters.zip.Zip (core.slice.iter.Iter Std.U32)
+  (core.slice.iter.Iter Std.U32)) :
+  Result (ControlFlow (core.iter.adapters.zip.Zip (core.slice.iter.Iter
+    Std.U32) (core.slice.iter.Iter Std.U32)) Unit)
+  := do
+  let (o, iter1) ←
+    core.iter.adapters.zip.Zip.Insts.CoreIterTraitsIteratorIteratorPair.next
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32)
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32) iter
+  match o with
+  | none => ok (done ())
+  | some _ => ok (cont iter1)
+
+/-- [iterators::arrays_zip_iter]: loop 0:
+    Source: 'tests/src/iterators.rs', lines 75:4-75:38
+    Visibility: public -/
+@[rust_loop]
+def arrays_zip_iter_loop
+  (iter : core.iter.adapters.zip.Zip (core.slice.iter.Iter Std.U32)
+  (core.slice.iter.Iter Std.U32)) :
+  Result Unit
+  := do
+  loop
+    (fun iter1 => arrays_zip_iter_loop.body iter1)
+    iter
+
+/-- [iterators::arrays_zip_iter]:
+    Source: 'tests/src/iterators.rs', lines 72:0-76:1
+    Visibility: public -/
+def arrays_zip_iter : Result Unit := do
+  let s ← lift (Array.to_slice (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ]))
+  let i ← core.slice.Slice.iter s
+  let s1 ←
+    lift (Array.to_slice (Array.make 3#usize [ 9#u32, 17#u32, 10#u32 ]))
+  let i1 ← core.slice.Slice.iter s1
+  let iter ←
+    core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.zip
+      (core.iter.traits.collect.IntoIterator.Blanket
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32)) i i1
+  arrays_zip_iter_loop iter
+
 end iterators
