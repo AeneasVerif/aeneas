@@ -256,7 +256,7 @@ theorem newFixed.spec (capacity : Nat) :
     ({ buffer, lengthCell, fixedCapacity := capacity } : Vector α)
     [] capacity [] buffer.cells rfl rfl htotal rfl
   simp only [initializedOwn_nil, List.length_nil] at hOwn
-  sl_xchange hOwn
+  sl_change hOwn
   sl_frame
 
 /-- Length returns the exact initialized-prefix length and preserves ownership. -/
@@ -351,7 +351,7 @@ theorem pushNoResize.spec
     subst suffix
     simp only [hfull, decide_false]
     sl_pure
-    sl_xchange (partition_entails_owns v contents cap initCells []
+    sl_change (partition_entails_owns v contents cap initCells []
       hcells hprefix htotal hcapacity)
     sl_frame
 

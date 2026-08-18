@@ -8,7 +8,7 @@ open scoped SepLogic
 
 example (P Q : SLProp) : emp ⊢ (P ∗ (P -∗ Q)) -∗ Q := by
   apply hwand_intro
-  sl_xchange (hwand_cancel P Q)
+  sl_change (hwand_cancel P Q)
   sl_frame
 
 example (p q : Ptr Nat) (x y : Nat) :
@@ -329,43 +329,43 @@ example (p : Ptr Nat) (value : Nat) :
 example (H1 H2 : SLProp) : H1 ∗ (H1 -∗ H2) ⊢ H2 := hwand_cancel H1 H2
 example (Q1 Q2 : SLPost Nat) : Q1 ∗+ (Q1 -∗+ Q2) ⊢+ Q2 := qwand_cancel Q1 Q2
 
--- sl_xpull: SLF's canonical example where the RHS witness depends on the LHS one
+-- sl_pull_entail: SLF's canonical example where the RHS witness depends on the LHS one
 example (p : Ptr Nat) :
     iprop(∃ n, ⌜0 < n⌝ ∗ p ↦ n) ⊢ iprop(∃ m, p ↦ (m + 1)) := by
-  sl_xpull
-  -- `sl_xpull` names the variables it introduces `x` and the facts `h`.
+  sl_pull_entail
+  -- `sl_pull_entail` names the variables it introduces `x` and the facts `h`.
   refine himpl_hexists_r (x - 1) ?_
   rw [show x - 1 + 1 = x by omega]
-  sl_xsimpl
+  sl_simpl
 
--- sl_xchange with an entailment
+-- sl_change with an entailment
 theorem cellPair (p q : Ptr Nat) : iprop(p ↦ 1 ∗ q ↦ 2) ⊢ iprop(∃ n, p ↦ n ∗ q ↦ 2) :=
   himpl_hexists_r 1 (himpl_refl _)
 
 example (p q r : Ptr Nat) :
     iprop(r ↦ 0 ∗ (p ↦ 1 ∗ q ↦ 2)) ⊢ iprop(∃ n, r ↦ 0 ∗ (p ↦ n ∗ q ↦ 2)) := by
-  sl_xchange (cellPair p q)
-  sl_xsimpl
+  sl_change (cellPair p q)
+  sl_simpl
 
--- sl_xchange with an equality, on a triple precondition
+-- sl_change with an equality, on a triple precondition
 theorem swapEq (p q : Ptr Nat) : iprop(p ↦ 1 ∗ q ↦ 2) = iprop(q ↦ 2 ∗ p ↦ 1) :=
   hstar_comm_eq _ _
 
 example (p q : Ptr Nat) :
     ⦃ iprop((p ↦ 1 ∗ q ↦ 2) ∗ emp) ⦄ Examples.incr_ptr q ⦃⇓ iprop(q ↦ 3 ∗ p ↦ 1)⦄ := by
   unfold Examples.incr_ptr
-  sl_xchange (swapEq p q)
+  sl_change (swapEq p q)
   sl_step*
 
--- sl_xval
+-- sl_val
 example (p : Ptr Nat) : ⦃ p ↦ 1 ⦄ (pure 5 : St Nat) ⦃⇓ v => ⌜v = 5⌝ ∗ p ↦ 1⦄ := by
-  sl_xval
-  sl_xsimpl
+  sl_val
+  sl_simpl
 
--- sl_xapp: terminal call through the ramified frame rule
+-- sl_app: terminal call through the ramified frame rule
 example (p q : Ptr Nat) (x : Nat) :
     ⦃ iprop(p ↦ x ∗ q ↦ 9) ⦄ Examples.incr_ptr p ⦃⇓ iprop(q ↦ 9 ∗ p ↦ (x + 1))⦄ := by
-  sl_xapp (Examples.incr_ptr.spec p x)
+  sl_app (Examples.incr_ptr.spec p x)
 
 
 /-! ### The ramified frame rule in `step` -/
@@ -384,7 +384,7 @@ example (q : Ptr Nat) :
       ⦃⇓ r => iprop(r ↦ 5 ∗ hexists (fun n => iprop(q ↦ n)))⦄ := by
   sl_step*
 
-/-- `sl_xpull` must refuse a frame-inference goal: introducing the existential of
+/-- `sl_pull_entail` must refuse a frame-inference goal: introducing the existential of
 the left-hand side would put a variable out of the scope of the frame `?F`.  The
 `hPre` premise of the bind rule is exactly such a goal. -/
 example (p q : Ptr Nat) (x : Nat) :
@@ -393,7 +393,7 @@ example (p q : Ptr Nat) (x : Nat) :
   unfold touchThenSet
   apply triple_step_bind (touchAny p) _ (touchAny.spec p)
   case hPre =>
-    fail_if_success sl_xpull
+    fail_if_success sl_pull_entail
     sl_frame
   case hNext =>
     intro _

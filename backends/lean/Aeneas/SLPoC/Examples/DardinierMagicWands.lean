@@ -134,8 +134,8 @@ theorem Tree.applyLeft (pointer : Ptr Node) (value : Nat)
 theorem wand_trans {A B C : SLProp} :
     (A -∗ B) ∗ (B -∗ C) ⊢ A -∗ C := by
   apply hwand_intro
-  sl_xchange (hwand_cancel A B)
-  sl_xchange (hwand_cancel B C)
+  sl_change (hwand_cancel A B)
+  sl_change (hwand_cancel B C)
   sl_frame
 
 /-- Repeated packaging produces exactly the invariant used by `leftLeaf`: the
@@ -149,9 +149,9 @@ theorem Tree.packageLeftmost (tree : Tree) :
       sl_frame
   | branch pointer value left right leftIH _ =>
       simp only [Tree.leftmost]
-      sl_xchange (Tree.selectLeft pointer value left right)
-      sl_xchange leftIH
-      sl_xchange (wand_trans
+      sl_change (Tree.selectLeft pointer value left right)
+      sl_change leftIH
+      sl_change (wand_trans
         (A := left.leftmost.owns)
         (B := left.owns)
         (C := (Tree.branch pointer value left right).owns))
@@ -215,7 +215,7 @@ theorem leftLeaf.cursor_spec (tree : Tree) :
   apply triple_conseq (leftLeaf.preserves_spec tree)
   · exact himpl_refl _
   · intro result
-    sl_xchange tree.packageLeftmost
+    sl_change tree.packageLeftmost
     sl_frame
 
 /-- The paper's final `apply` operation consumes the current subtree and its
@@ -226,7 +226,7 @@ theorem leftLeaf.spec (tree : Tree) :
   apply triple_conseq (leftLeaf.cursor_spec tree)
   · exact himpl_refl _
   · intro result
-    sl_xchange (hwand_cancel tree.leftmost.owns tree.owns)
+    sl_change (hwand_cancel tree.leftmost.owns tree.owns)
     sl_frame
 
 /-! ## Uniform footprints across alternatives
