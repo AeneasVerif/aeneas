@@ -39,7 +39,7 @@ is ideal when none of its steps handles the separation logic by hand, and the
 score of a file is the fraction of its spots that are ideal.
 
 A step handles the separation logic by hand when it is one of the manual
-tactics (`sl_frame`, `sl_xchange`, `sl_xpull`, `sl_xsimpl`, `sl_xapp`,
+tactics (`sl_frame`, `sl_change`, `sl_pull_entail`, `sl_simpl`, `sl_app`,
 `sl_conseq`, …), or when it mentions separation-logic vocabulary: a connective
 (`∗`, `↦`, `⊢`, `-∗`, `emp`, `iprop(…)`), or a lemma or definition whose
 statement is about `SLProp` (`unfold wellFormed`, `simp [nodes_snoc]`,
@@ -112,8 +112,8 @@ def slAttrNames : Array String := #["sl_simps", "step_simps", "step_post_simps"]
 
 /-- Tactics that handle the separation logic by hand. -/
 def manualTactics : Array String :=
-  #["sl_frame", "sl_frame?", "sl_xsimpl", "sl_xpull", "sl_xchange", "sl_xapp",
-    "sl_xval", "sl_conseq", "sl_pull_step", "sl_pull_keep", "sl_pull_keep_step",
+  #["sl_frame", "sl_frame?", "sl_simpl", "sl_pull_entail", "sl_change", "sl_app",
+    "sl_val", "sl_conseq", "sl_pull_step", "sl_pull_keep", "sl_pull_keep_step",
     "sl_norm", "sl_pull_shallow", "sl_side?", "sl_pure"]
 
 /-- Tactics that *are* the automation: the ideal proof is made of these. -/
@@ -1054,11 +1054,11 @@ def renderReport (files : Array FileScore) : String := Id.run do
     <div class='example-spot'><span class='spot-label'>Spot 2 — ideal</span>\
     <pre><code>· have h : n = n := rfl\n  simp only [h]\n  sl_step*</code></pre></div>\
     <div class='example-spot notideal'><span class='spot-label'>Spot 3 — not ideal</span>\
-    <pre><code>· sl_xchange h\n  sl_step*</code></pre></div></div>\
+    <pre><code>· sl_change h\n  sl_step*</code></pre></div></div>\
     The prefix before <code>split</code> is one spot, and each branch is another: \
     <strong>3 spots total</strong>. <strong>Pure reasoning is allowed:</strong> the \
     <code>have</code> and <code>simp</code> in Spot 2 do not lower its score. The manual \
-    <code>sl_xchange</code> makes Spot 3 nonideal, giving a spot score of \
+    <code>sl_change</code> makes Spot 3 nonideal, giving a spot score of \
     <strong>2 / 3 = 66.7%</strong>; the whole proof is not an ideal proof.</div>"
   out := out ++ "<h2>Summary</h2><table class='summary-table'><thead><tr>\
     <th>File</th><th>Triples</th>\
