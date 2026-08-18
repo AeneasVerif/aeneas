@@ -197,12 +197,12 @@ theorem readInitialized.spec
           | zero =>
               simp only [List.cons_append,
                 PulseArray.readCells, List.getElem?_cons_zero, Option.map_some]
-              sl_step*
+              step*
           | succ i =>
               simp only [List.length_cons, Nat.succ_lt_succ_iff] at hi
               simp only [List.cons_append]
               rw [PulseArray.readCells, List.getElem?_cons_succ]
-              sl_step with ih values i hi
+              step with ih values i hi
 
 /-- A successful write transfers one typed-uninitialized cell to the
 initialized prefix. -/
@@ -222,7 +222,7 @@ theorem initializeNext.spec
       | nil =>
           simp only [List.nil_append, List.length_nil,
             PulseArray.writeCells, List.nil_append]
-          sl_step*
+          step*
       | cons old contents =>
           sl_pull
           contradiction
@@ -234,7 +234,7 @@ theorem initializeNext.spec
       | cons old contents =>
           simp only [List.cons_append, List.length_cons,
             PulseArray.writeCells]
-          sl_step with ih contents
+          step with ih contents
 
 /-! ## Construction and observations -/
 
@@ -244,9 +244,9 @@ theorem newFixed.spec (capacity : Nat) :
     ⦃ emp ⦄ newFixed (α := α) capacity
       ⦃⇓ v => owns v [] capacity⦄ := by
   unfold newFixed
-  sl_step as ⟨ buffer, hlength ⟩
-  sl_step as ⟨ lengthCell ⟩
-  sl_step
+  step as ⟨ buffer, hlength ⟩
+  step as ⟨ lengthCell ⟩
+  step
   unfold PulseArray.owns
   rw [← hlength, ownsCells_replicate_none]
   have htotal :
@@ -266,7 +266,7 @@ theorem length.spec (v : Vector α) (contents : List α) (cap : Nat) :
       ⦃⇓ size => ⌜size = contents.length⌝ ∗ owns v contents cap⦄ := by
   unfold length
   sl_pull
-  sl_step*
+  step*
 
 /-- Capacity returns the exact allocation capacity and preserves ownership. -/
 @[step]
@@ -276,7 +276,7 @@ theorem capacity.spec (v : Vector α) (contents : List α) (cap : Nat) :
   unfold capacity
   sl_pull _ _ _ _ _ hcapacity
   simp only [hcapacity]
-  sl_step*
+  step*
 
 /-- Exact value observation for the abstraction: in-bounds indices return the
 logical element, out-of-bounds indices return `none`, and ownership is preserved. -/
@@ -286,18 +286,18 @@ theorem readValue.spec (v : Vector α) (contents : List α) (cap i : Nat) :
       ⦃⇓ result => ⌜result = contents[i]?⌝ ∗ owns v contents cap⦄ := by
   unfold readValue length
   sl_pull initCells suffix hcells _ _ _
-  sl_step
+  step
   split
   · rename_i hi
     unfold PulseArray.readAt
     rw [hcells]
-    sl_step with readInitialized.spec initCells suffix contents i hi
+    step with readInitialized.spec initCells suffix contents i hi
     simp_all only [join_map_some]
-    sl_step*
+    step*
   · rename_i hi
     have hout : contents[i]? = none := List.getElem?_eq_none (by omega)
     simp only [hout]
-    sl_step*
+    step*
 
 /-! ## Post-resize fixed-capacity append kernel -/
 
@@ -315,9 +315,9 @@ theorem pushNoResize.spec
           cap⦄ := by
   unfold pushNoResize length capacity
   sl_pull initCells suffix hcells hprefix htotal hcapacity
-  sl_step
+  step
   simp only [hcapacity]
-  sl_step
+  step
   split
   · rename_i hroom
     have hsuffix : suffix ≠ [] := by
@@ -330,8 +330,8 @@ theorem pushNoResize.spec
     | cons next suffix =>
         unfold PulseArray.writeAt
         rw [hcells]
-        sl_step with initializeNext.spec initCells suffix next contents value
-        sl_step
+        step with initializeNext.spec initCells suffix next contents value
+        step
         have hcells' :
             v.buffer.cells = (initCells ++ [next]) ++ suffix := by
           simpa only [List.append_assoc, List.singleton_append] using hcells
@@ -344,13 +344,13 @@ theorem pushNoResize.spec
           simp only [List.length_append, List.length_cons, List.length_nil]
           omega
         simp only [hroom, decide_true]
-        sl_step*
+        step*
   · rename_i hfull
     have hsuffixLength : suffix.length = 0 := by omega
     have hsuffix : suffix = [] := List.eq_nil_of_length_eq_zero hsuffixLength
     subst suffix
     simp only [hfull, decide_false]
-    sl_step
+    step
     sl_change (partition_entails_owns v contents cap initCells []
       hcells hprefix htotal hcapacity)
     sl_frame

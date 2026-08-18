@@ -18,7 +18,7 @@ writes `Aeneas/SLPoC/proof-score.html`.
 ## What is measured
 
 The ideal proof of a triple never handles the separation logic manually: it
-unfolds the program and uses `sl_step`, `sl_step*`, `step`, or `step*`, with
+unfolds the program and uses `step` or `step*`, with
 pure reasoning (`obtain`, `have`, `simp`, …) and `sl_pull` in between, and one
 such block per branch of the program:
 
@@ -26,7 +26,7 @@ such block per branch of the program:
 unfold f
 sl_pull ⟨h, _⟩
 obtain rfl : … := …
-sl_step*
+step*
 split
 next => …ideal…
 next => …ideal…
@@ -43,9 +43,9 @@ tactics (`sl_frame`, `sl_change`, `sl_pull_entail`, `sl_simpl`, `sl_app`,
 `sl_conseq`, …), or when it mentions separation-logic vocabulary: a connective
 (`∗`, `↦`, `⊢`, `-∗`, `emp`, `iprop(…)`), or a lemma or definition whose
 statement is about `SLProp` (`unfold wellFormed`, `simp [nodes_snoc]`,
-`exact triple_pure …`).  `sl_step`, `sl_step*`, `step`, `step*`, and `sl_pull`
+`exact triple_pure …`).  `step`, `step*`, and `sl_pull`
 are the automation itself and are free; so is any pure reasoning.  A
-`sl_step with some.spec` is not: explicitly naming any declaration whose
+`step with some.spec` is not: explicitly naming any declaration whose
 statement is about a triple steers automation manually.  A local hypothesis such
 as an induction hypothesis remains free.
 
@@ -67,7 +67,7 @@ spots, only the ideal ones, and only those that are not.
 ## How it works
 
 The file is parsed with Lean's own parser, using the environment its `import`s
-produce, so `⦃ … ⦄`, `sl_step*` and the rest are real syntax nodes rather than
+produce, so `⦃ … ⦄`, `step*` and the rest are real syntax nodes rather than
 text.  Only the commands that change the scope (`namespace`, `section`, `end`,
 `open`, `universe`, `variable`, `set_option`) are elaborated — enough for the
 scoped notation of `SepLogic` to parse — and declarations are never elaborated.
@@ -111,13 +111,13 @@ def slAttrNames : Array String := #["sl_simps", "step_simps", "step_post_simps"]
 
 /-- Tactics that handle the separation logic by hand. -/
 def manualTactics : Array String :=
-  #["sl_frame", "sl_frame?", "sl_simpl", "sl_pull_entail", "sl_change", "sl_app",
+  #["sl_frame", "sl_simpl", "sl_pull_entail", "sl_change", "sl_app",
     "sl_val", "sl_conseq", "sl_pull_step", "sl_pull_keep", "sl_pull_keep_step",
-    "sl_norm", "sl_pull_shallow", "sl_side?"]
+    "sl_norm", "sl_pull_shallow"]
 
 /-- Tactics that *are* the automation: the ideal proof is made of these. -/
 def idealTactics : Array String :=
-  #["sl_step", "sl_step*", "step", "step*", "sl_pull"]
+  #["step", "step*", "sl_pull"]
 
 /-- Combinators that do not split the goal: like `<;>`, what they run belongs to
 the block that runs them, not to a block of its own. -/
@@ -525,7 +525,7 @@ partial def syntaxAfterAtom? (wanted : String) (stx : Syntax) : Option Syntax :=
   | _ => none
 
 def explicitStepTheorem? (stx : Syntax) : Option Name := do
-  guard (firstAtom stx == "sl_step")
+  guard (firstAtom stx == "step")
   let term ← syntaxAfterAtom? "with" stx
   let ident ← syntaxFind? term (·.isIdent)
   return ident.getId
@@ -546,7 +546,7 @@ def Context.classify (ctx : Context) (stx : Syntax) : Verdict :=
     .manual s!"`{head}` steers the separation logic by hand"
   else if let some theoremName := explicitStepTheorem? stx then
     if ctx.resolver.isSL theoremName then
-      .manual s!"`sl_step with {theoremName}` names a triple lemma"
+      .manual s!"`step with {theoremName}` names a triple lemma"
     else
       .ideal
   else if idealTactics.contains head then
@@ -1036,7 +1036,7 @@ def renderReport (files : Array FileScore) : String := Id.run do
     Aeneas/SLPoC/ProofScore.lean</code> from <code>backends/lean</code>.  A <em>spot</em> is one \
     straight-line block of a proof: the block before the first branch, then one per branch body, \
     recursively.  A spot is ideal when it steers the separation logic nowhere by hand — only \
-    <code>sl_step</code>, <code>sl_pull</code>, and pure reasoning.  The code below is the \
+    <code>step</code>, <code>sl_pull</code>, and pure reasoning.  The code below is the \
     spot's own, with the nested blocks elided as <span class='elided'>…</span> because they are \
     spots of their own, and without the comments.  See the module docstring of \
     <code>Aeneas/SLPoC/ProofScore.lean</code> for the details.</p>"
@@ -1049,11 +1049,11 @@ def renderReport (files : Array FileScore) : String := Id.run do
   out := out ++ "<div class='score-example'><strong>One branching proof, split into \
     3 spots</strong><div class='example-proof'>\
     <div class='example-spot'><span class='spot-label'>Spot 1 — ideal</span>\
-    <pre><code>unfold f\nsl_step*\nsplit</code></pre></div>\
+    <pre><code>unfold f\nstep*\nsplit</code></pre></div>\
     <div class='example-spot'><span class='spot-label'>Spot 2 — ideal</span>\
-    <pre><code>· have h : n = n := rfl\n  simp only [h]\n  sl_step*</code></pre></div>\
+    <pre><code>· have h : n = n := rfl\n  simp only [h]\n  step*</code></pre></div>\
     <div class='example-spot notideal'><span class='spot-label'>Spot 3 — not ideal</span>\
-    <pre><code>· sl_change h\n  sl_step*</code></pre></div></div>\
+    <pre><code>· sl_change h\n  step*</code></pre></div></div>\
     The prefix before <code>split</code> is one spot, and each branch is another: \
     <strong>3 spots total</strong>. <strong>Pure reasoning is allowed:</strong> the \
     <code>have</code> and <code>simp</code> in Spot 2 do not lower its score. The manual \

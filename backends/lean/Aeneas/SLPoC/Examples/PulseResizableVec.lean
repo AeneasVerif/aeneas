@@ -222,10 +222,10 @@ theorem new.spec (cap : Nat) (hcap : 0 < cap) :
     ⦃ emp ⦄ new (α := α) cap
       ⦃⇓ v => owns v [] cap⦄ := by
   unfold new
-  sl_step as ⟨ buffer, hlength ⟩
-  sl_step as ⟨ sizeCell ⟩
-  sl_step as ⟨ capacityCell ⟩
-  sl_step
+  step as ⟨ buffer, hlength ⟩
+  step as ⟨ sizeCell ⟩
+  step as ⟨ capacityCell ⟩
+  step
 
 /-- Length returns the exact logical length and preserves complete ownership. -/
 @[step]
@@ -234,7 +234,7 @@ theorem length.spec (v : ResizableVec α) (contents : List α) (cap : Nat) :
       ⦃⇓ n => ⌜n = contents.length⌝ ∗ owns v contents cap⦄ := by
   unfold length
   sl_pull
-  sl_step*
+  step*
 
 /-- Capacity returns the exact fixed capacity and preserves complete ownership. -/
 @[step]
@@ -243,7 +243,7 @@ theorem capacity.spec (v : ResizableVec α) (contents : List α) (cap : Nat) :
       ⦃⇓ n => ⌜n = cap⌝ ∗ owns v contents cap⦄ := by
   unfold capacity
   sl_pull
-  sl_step*
+  step*
 
 /-- The room test is exact and preserves complete ownership. -/
 @[step]
@@ -252,7 +252,7 @@ theorem hasRoom.spec (v : ResizableVec α) (contents : List α) (cap : Nat) :
       ⦃⇓ room =>
         ⌜room = decide (contents.length < cap)⌝ ∗ owns v contents cap⦄ := by
   unfold hasRoom
-  sl_step*
+  step*
 
 /-! ## Indexed access -/
 
@@ -263,17 +263,17 @@ theorem get.spec (v : ResizableVec α) (contents : List α) (cap i : Nat) :
       ⦃⇓ result => ⌜result = contents[i]?⌝ ∗ owns v contents cap⦄ := by
   unfold get length
   sl_pull _ hInv
-  sl_step
+  step
   split
   · rename_i hi
-    sl_step
+    step
     have hslot := bufferInv_get hInv hi
     simp only [hslot, join_map_some]
-    sl_step*
+    step*
   · rename_i hi
     have hout : contents[i]? = none := List.getElem?_eq_none (by omega)
     simp only [hout]
-    sl_step*
+    step*
 
 /-- `set` reports the exact bounds test and updates exactly the selected logical element. -/
 @[step]
@@ -285,18 +285,18 @@ theorem set.spec (v : ResizableVec α) (contents : List α) (cap i : Nat)
         owns v (contents.set i value) cap⦄ := by
   unfold set length
   sl_pull _ hInv
-  sl_step
+  step
   split
   · rename_i hi
-    sl_step
+    step
     have hnewInv := bufferInv_set (i := i) (value := value) hInv
     simp only [hi, decide_true]
-    sl_step*
+    step*
   · rename_i hi
     have hset : contents.set i value = contents :=
       list_set_eq_self_of_length_le contents i value (by omega)
     simp only [hi, decide_false, hset]
-    sl_step*
+    step*
 
 /-! ## Stack operations -/
 
@@ -311,19 +311,19 @@ theorem push.spec (v : ResizableVec α) (contents : List α) (cap : Nat)
         owns v (if contents.length < cap then contents ++ [value] else contents) cap⦄ := by
   unfold push length capacity
   sl_pull buffer hInv
-  sl_step* 2
+  step* 2
   split
   · rename_i hroom
     have hindex : contents.length < buffer.length := by
       rw [hInv.1]
       exact hroom
-    sl_step*
+    step*
     have hnewInv := bufferInv_push (value := value) hInv hroom
     simp only [hroom, decide_true]
-    sl_step*
+    sl_frame
   · rename_i hfull
     simp only [hfull, decide_false]
-    sl_step*
+    step*
 
 /-- `pop` returns the exact last element, removes exactly that element, and
 preserves capacity and complete ownership. -/
@@ -334,24 +334,24 @@ theorem pop.spec (v : ResizableVec α) (contents : List α) (cap : Nat) :
         ⌜result = contents.getLast?⌝ ∗ owns v contents.dropLast cap⦄ := by
   unfold pop length
   sl_pull _ hInv
-  sl_step
+  step
   split
   · rename_i hEmpty
     have hnil : contents = [] := List.eq_nil_of_length_eq_zero hEmpty
     subst contents
     simp only [List.getLast?_nil, List.dropLast_nil]
-    sl_step*
+    step*
   · rename_i hnonempty
     have hlast : contents.length - 1 < contents.length := by omega
-    sl_step
+    step
     have hslot := bufferInv_get hInv hlast
-    sl_step
+    step
     simp only [hslot, join_map_some]
     have hlastValue : contents[contents.length - 1]? = contents.getLast? := by
       exact List.getLast?_eq_getElem?.symm
     rw [hlastValue]
     have hnewInv := bufferInv_pop hInv
-    sl_step*
+    step*
 
 /-! ## Deallocation -/
 
@@ -361,7 +361,7 @@ theorem free.spec (v : ResizableVec α) (contents : List α) (cap : Nat) :
     ⦃ owns v contents cap ⦄ free v ⦃⇓ emp⦄ := by
   unfold free
   sl_pull
-  sl_step*
+  step*
 
 end PulseResizableVec
 

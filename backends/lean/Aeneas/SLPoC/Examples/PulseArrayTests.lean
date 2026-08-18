@@ -145,12 +145,12 @@ theorem allocCells.spec (n : Nat) (value : α) :
   induction n with
   | zero =>
       simp only [allocCells, List.replicate_zero]
-      sl_step
+      step
   | succ n ih =>
       rw [allocCells]
-      sl_step as ⟨ p ⟩
-      sl_step with ih as ⟨ cells, hlength ⟩
-      sl_step
+      step as ⟨ p ⟩
+      step with ih as ⟨ cells, hlength ⟩
+      step
 
 /-- Allocation returns `n` initialized cells and exposes their exact length. -/
 @[step]
@@ -159,8 +159,8 @@ theorem alloc.spec (n : Nat) (value : α) :
       ⦃⇓ a =>
         ⌜a.cells.length = n⌝ ∗ owns a (List.replicate n value)⦄ := by
   unfold alloc
-  sl_step as ⟨ cells, hlength ⟩
-  sl_step
+  step as ⟨ cells, hlength ⟩
+  step
 
 /-- Recursive deallocation invariant: every owned cell is consumed exactly once. -/
 @[step]
@@ -171,7 +171,7 @@ theorem freeCells.spec (cells : List (Ptr α)) (values : List α) :
       cases values with
       | nil =>
           simp only [freeCells]
-          sl_step*
+          step*
       | cons value values =>
           sl_pull
           contradiction
@@ -182,15 +182,15 @@ theorem freeCells.spec (cells : List (Ptr α)) (values : List α) :
           contradiction
       | cons value values =>
           simp only [freeCells]
-          sl_step
-          sl_step with ih values
+          step
+          step with ih values
 
 /-- Free consumes the complete array ownership predicate. -/
 @[step]
 theorem free.spec (a : Array α) (values : List α) :
     ⦃ owns a values ⦄ free a ⦃⇓ emp⦄ := by
   unfold free
-  sl_step*
+  step*
 
 /-! ## Indexed reads and writes -/
 
@@ -204,7 +204,7 @@ theorem readCells.spec (cells : List (Ptr α)) (values : List α) (i : Nat) :
       cases values with
       | nil =>
           simp only [readCells, List.getElem?_nil]
-          sl_step*
+          step*
       | cons value values =>
           sl_pull
           contradiction
@@ -217,10 +217,10 @@ theorem readCells.spec (cells : List (Ptr α)) (values : List α) (i : Nat) :
           cases i with
           | zero =>
               simp only [readCells, List.getElem?_cons_zero]
-              sl_step*
+              step*
           | succ i =>
               simp only [readCells, List.getElem?_cons_succ]
-              sl_step with ih values i
+              step with ih values i
 
 /-- Exact public read specification. -/
 @[step]
@@ -228,7 +228,7 @@ theorem readAt.spec (a : Array α) (values : List α) (i : Nat) :
     ⦃ owns a values ⦄ readAt a i
       ⦃⇓ result => ⌜result = values[i]?⌝ ∗ owns a values⦄ := by
   unfold readAt
-  sl_step*
+  step*
 
 /-- Recursive write invariant: only the selected logical element changes. -/
 @[step]
@@ -244,7 +244,7 @@ theorem writeCells.spec (cells : List (Ptr α)) (values : List α)
       | nil =>
           simp only [writeCells, List.length_nil, Nat.not_lt_zero,
             decide_false, List.set_nil]
-          sl_step*
+          step*
       | cons old values =>
           sl_pull
           contradiction
@@ -258,11 +258,11 @@ theorem writeCells.spec (cells : List (Ptr α)) (values : List α)
           | zero =>
               simp only [writeCells, List.length_cons, Nat.zero_lt_succ,
                 decide_true, List.set_cons_zero]
-              sl_step*
+              step*
           | succ i =>
               simp only [writeCells, List.length_cons, Nat.succ_lt_succ_iff,
                 List.set_cons_succ]
-              sl_step with ih values i
+              step with ih values i
 
 /-- Exact public write specification, including its bounds result. -/
 @[step]
@@ -272,7 +272,7 @@ theorem writeAt.spec (a : Array α) (values : List α) (i : Nat) (value : α) :
         ⌜written = decide (i < values.length)⌝ ∗
         owns a (values.set i value)⦄ := by
   unfold writeAt
-  sl_step*
+  step*
 
 /-! ## Fill and compare -/
 
@@ -286,7 +286,7 @@ theorem fillCells.spec (cells : List (Ptr α)) (values : List α) (value : α) :
       cases values with
       | nil =>
           simp only [fillCells, List.length_nil, List.replicate_zero]
-          sl_step*
+          step*
       | cons old values =>
           sl_pull
           contradiction
@@ -297,8 +297,8 @@ theorem fillCells.spec (cells : List (Ptr α)) (values : List α) (value : α) :
           contradiction
       | cons old values =>
           simp only [fillCells, List.length_cons, List.replicate_succ]
-          sl_step
-          sl_step with ih values
+          step
+          step with ih values
 
 /-- Pulse `fill_array`: every logical element becomes `value`, with ownership preserved. -/
 @[step]
@@ -306,7 +306,7 @@ theorem fill.spec (a : Array α) (values : List α) (value : α) :
     ⦃ owns a values ⦄ fill a value
       ⦃⇓ owns a (List.replicate values.length value)⦄ := by
   unfold fill
-  sl_step*
+  step*
 
 /-- Recursive comparison invariant for spatially disjoint inputs: both ownership
 predicates are preserved exactly. -/
@@ -330,7 +330,7 @@ theorem compareCells.disjoint_spec [DecidableEq α]
               cases rightValues with
               | nil =>
                   simp only [ownsCells_nil, compareCells, decide_true]
-                  sl_step*
+                  step*
               | cons value values =>
                   simp only [ownsCells]
                   sl_pull
@@ -343,7 +343,7 @@ theorem compareCells.disjoint_spec [DecidableEq α]
                   contradiction
               | cons rightValue rightValues =>
                   simp only [ownsCells_nil, ownsCells_cons, compareCells]
-                  sl_step*
+                  step*
   | cons p leftCells ih =>
       cases leftValues with
       | nil =>
@@ -356,7 +356,7 @@ theorem compareCells.disjoint_spec [DecidableEq α]
               | nil =>
                   simp only [ownsCells_cons, ownsCells_nil, compareCells,
                     List.cons_ne_nil, decide_false]
-                  sl_step*
+                  step*
               | cons value values =>
                   simp only [ownsCells]
                   rw [hstar_comm_eq _ (⌜False⌝)]
@@ -373,15 +373,15 @@ theorem compareCells.disjoint_spec [DecidableEq α]
                   contradiction
               | cons rightValue rightValues =>
                   simp only [ownsCells_cons, compareCells]
-                  sl_step* 2
+                  step* 2
                   split
                   · rename_i heq
                     subst rightValue
                     simp only [List.cons.injEq, true_and]
-                    sl_step with ih rightCells leftValues rightValues
+                    step with ih rightCells leftValues rightValues
                   · rename_i hne
                     simp only [List.cons.injEq, hne, false_and, decide_false]
-                    sl_step*
+                    step*
 
 /-- Comparing a cell list with itself needs only one ownership predicate.
 Each pair of immutable reads returns the same owned value, and recursion
@@ -395,7 +395,7 @@ theorem compareCells.self_spec [DecidableEq α]
       cases values with
       | nil =>
           simp only [compareCells]
-          sl_step*
+          step*
       | cons value values =>
           sl_pull
           contradiction
@@ -406,9 +406,9 @@ theorem compareCells.self_spec [DecidableEq α]
           contradiction
       | cons value values =>
           simp only [compareCells]
-          sl_step* 2
+          step* 2
           rw [if_pos True.intro]
-          sl_step with ih values
+          step with ih values
 
 /-- Disjoint-input form of Pulse `compare`: the result exactly characterizes
 logical equality and both independent ownership predicates are preserved.
@@ -424,7 +424,7 @@ theorem compare.disjoint_spec [DecidableEq α]
         ⌜equal = decide (leftValues = rightValues)⌝ ∗
         owns left leftValues ∗ owns right rightValues⦄ := by
   unfold compare
-  sl_step*
+  step*
 
 /-- Exact-self-alias form of Pulse `compare`: the actual program
 `compare a a` returns `true` while preserving the array's single ownership
@@ -434,14 +434,14 @@ theorem compare.self_spec [DecidableEq α] (a : Array α) (values : List α) :
     ⦃ owns a values ⦄ compare a a
       ⦃⇓ equal => ⌜equal = true⌝ ∗ owns a values⦄ := by
   unfold compare
-  sl_step with compareCells.self_spec a.cells values
+  step with compareCells.self_spec a.cells values
 
 /-- The Vec allocation smoke test allocates initialized cells and frees all of them. -/
 @[step]
 theorem vecAllocSmoke.spec :
     ⦃ emp ⦄ vecAllocSmoke ⦃⇓ emp⦄ := by
   unfold vecAllocSmoke
-  sl_step*
+  step*
 
 end PulseArray
 
