@@ -131,8 +131,8 @@ end Basics
 namespace Pure
 
 /- Nothing is omitted, and — the logic being affine, as Iris's is — nothing has
-to be absorbed by an explicit `GC` either: `abstr_not_pure` is stated exactly as
-Iris states it. -/
+to be absorbed by an explicit affine top either: `abstr_not_pure` is stated
+exactly as Iris states it. -/
 
 theorem asm_pure (φ : Prop) : ⌜φ⌝ ⊢ ⌜φ⌝ := by
   sl_frame
@@ -146,7 +146,7 @@ theorem eq_elm {A : Type} (P : A → SLProp) (x y : A) :
   subst y
   sl_frame
 
-theorem true_intro : emp ⊢ GC := by
+theorem true_intro : emp ⊢ ⌜True⌝ := by
   sl_frame
 
 theorem and_pure : emp ⊢ (⌜5 = 5⌝ ∧ₐ ⌜8 = 8⌝) := by

@@ -41,7 +41,7 @@ score of a file is the fraction of its spots that are ideal.
 A step handles the separation logic by hand when it is one of the manual
 tactics (`sl_frame`, `sl_xchange`, `sl_xpull`, `sl_xsimpl`, `sl_xapp`,
 `sl_conseq`, …), or when it mentions separation-logic vocabulary: a connective
-(`∗`, `↦`, `⊢`, `-∗`, `emp`, `GC`, `iprop(…)`), or a lemma or definition whose
+(`∗`, `↦`, `⊢`, `-∗`, `emp`, `iprop(…)`), or a lemma or definition whose
 statement is about `SLProp` (`unfold wellFormed`, `simp [nodes_snoc]`,
 `exact triple_pure …`).  `sl_step`, `sl_step*`, `step`, `step*`, and `sl_pull`
 are the automation itself and are free; so is any pure reasoning.  A manual
@@ -91,13 +91,13 @@ open Lean Elab
 /-- Tokens that only occur in a separation-logic statement. -/
 def slAtoms : Array String :=
   #["∗", "∗+", "↦", "⊢", "⊢+", "⊣⊢", "-∗", "-∗+", "iprop(", "⌜", "⌝",
-    "emp", "GC", "∀ˢ", "⦃", "⦄"]
+    "emp", "∀ˢ", "⦃", "⦄"]
 
 /-- Last components of the constants at the core of the logic.  A declaration
 whose statement mentions one of them is a separation-logic declaration. -/
 def slCoreNames : Array String :=
   #["SLProp", "SLPre", "SLPost", "himpl", "qimpl", "hequiv", "hempty", "hpure",
-    "hgc", "hsingle", "hstar", "hexists", "hforall", "hwand", "qstar", "qwand",
+    "hsingle", "hstar", "hexists", "hforall", "hwand", "qstar", "qwand",
     "triple", "Wp", "theta"]
 
 /-- The `⦃ P ⦄ m ⦃⇓ v => Q ⦄` notations of `ST.lean`: a declaration that uses one
