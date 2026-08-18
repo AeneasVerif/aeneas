@@ -44,9 +44,8 @@ tactics (`sl_frame`, `sl_change`, `sl_pull_entail`, `sl_simpl`, `sl_app`,
 (`∗`, `↦`, `⊢`, `-∗`, `emp`, `iprop(…)`), or a lemma or definition whose
 statement is about `SLProp` (`unfold wellFormed`, `simp [nodes_snoc]`,
 `exact triple_pure …`).  `sl_step`, `sl_step*`, `step`, `step*`, and `sl_pull`
-are the automation itself and are free; so is any pure reasoning.  A manual
-`sl_pure` is not free: an ideal proof lets stepping handle the terminal return.
-Nor is `sl_step with some.spec`: explicitly naming any declaration whose
+are the automation itself and are free; so is any pure reasoning.  A
+`sl_step with some.spec` is not: explicitly naming any declaration whose
 statement is about a triple steers automation manually.  A local hypothesis such
 as an induction hypothesis remains free.
 
@@ -114,7 +113,7 @@ def slAttrNames : Array String := #["sl_simps", "step_simps", "step_post_simps"]
 def manualTactics : Array String :=
   #["sl_frame", "sl_frame?", "sl_simpl", "sl_pull_entail", "sl_change", "sl_app",
     "sl_val", "sl_conseq", "sl_pull_step", "sl_pull_keep", "sl_pull_keep_step",
-    "sl_norm", "sl_pull_shallow", "sl_side?", "sl_pure"]
+    "sl_norm", "sl_pull_shallow", "sl_side?"]
 
 /-- Tactics that *are* the automation: the ideal proof is made of these. -/
 def idealTactics : Array String :=

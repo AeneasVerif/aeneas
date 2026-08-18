@@ -8,8 +8,9 @@ import Aeneas.Tactic.Step.StepStar
 apply one of the two rules below and hand the resulting entailment to the
 tactic given after `by` — in practice `sl_frame`.  Registered `pure.spec` and
 `ok.spec` calls therefore use the same bind and ramified-frame automation as
-other registered specifications.  `sl_pure` is the direct rule for a syntactic
-terminal return when its entailment should be proved explicitly.
+other registered specifications.  `sl_step` takes the mono case of a syntactic
+terminal return directly, through `triple_pure`, and leaves its entailment as the
+goal when `sl_frame` cannot close it.
 -/
 
 namespace Aeneas.SLPoC
@@ -47,35 +48,52 @@ The frame has to be resolved *before* `step` reshapes the continuation, hence
 `by sl_frame` rather than a `sl_frame` afterwards.  The rule for a terminal call
 has a single premise, which is the *main* goal rather than a precondition and so
 is out of reach of `by`; the trailing `sl_frame?` closes it, and `sl_side?` the
-side conditions of the specification. -/
+side conditions of the specification.
+
+On a syntactic terminal return the mono case is taken directly, by
+`sl_terminal_return`, and the entailment `P ⊢ Q v` it produces is handed to
+`sl_frame`; when `sl_frame` cannot close it — because the postcondition has to be
+opened by hand first — it is left as the goal, as `sl_step*` does with its own
+final entailment.  An explicit `sl_step with thm` always uses `thm`. -/
 syntax "sl_step" Lean.Parser.Tactic.optConfig ("with" term)?
   ("as" " ⟨ " Lean.binderIdent,* " ⟩")? : tactic
 
-/-- Normalize only beta/iota/zeta/projection redexes, then apply `triple_pure`
-when the program in the goal is syntactically a terminal return.  The resulting
-entailment is left exposed.  In particular this does not unfold a named pure
-wrapper and bypass its registered specification. -/
-syntax "sl_pure" : tactic
+/-- The rule `sl_step` uses for a syntactic terminal return: apply `triple_pure`,
+leaving the entailment exposed.
 
-syntax "sl_pure_core" : tactic
+Going through `pure.spec` and the ramified frame rule instead would state the
+obligation in terms of the *abstract* result of the specification: the goal
+becomes `P ⊢ emp ∗ (fun result => ⌜result = v⌝) -∗+ Q`, and cancelling that wand
+needs the pure fact it introduces to be substituted back into the spatial part —
+which is precisely what `sl_frame` does not do.  `triple_pure` names the returned
+value directly, so the obligation is the far simpler `P ⊢ Q v`.
+
+The program has to be a return *syntactically*: a named pure wrapper keeps going
+through its registered specification. -/
+syntax "sl_terminal_return_core" : tactic
 
 elab_rules : tactic
-  | `(tactic| sl_pure_core) => withMainContext do
+  | `(tactic| sl_terminal_return_core) => withMainContext do
       let goal ← getMainGoal
       let target ← instantiateMVars (← goal.getType)
       let (head, args) := target.consumeMData.withApp fun head args => (head, args)
       unless head.isConstOf ``triple && args.size = 4 do
-        throwError "sl_pure expected a separation-logic triple"
+        throwError "sl_step: the terminal-return rule expected a separation-logic triple"
       let program := args[2]!.consumeMData
       let programHead := program.getAppFn
       unless programHead.isConstOf ``Pure.pure ||
           programHead.isConstOf ``FFree.ok do
-        throwError "sl_pure expected a syntactic terminal return"
+        throwError "sl_step: the terminal-return rule expected a syntactic terminal return"
       evalTactic (← `(tactic| apply triple_pure))
 
+/-- `sl_terminal_return_core` after a normalization of the beta/iota/zeta and
+projection redexes a terminal return is often buried under (`match`/`let`
+noise). -/
+syntax "sl_terminal_return" : tactic
+
 macro_rules
-  | `(tactic| sl_pure) =>
-    `(tactic| focus ((try simp only); sl_pure_core))
+  | `(tactic| sl_terminal_return) =>
+    `(tactic| focus ((try simp only); sl_terminal_return_core))
 
 /-- Discharge a side condition `step` returns for a `Prop` argument of a
 specification.  A no-op on the entailment and continuation goals, and on the
@@ -112,9 +130,16 @@ elab_rules : tactic
   catch _ => pure ()
 
 macro_rules
-  | `(tactic| sl_step $cfg:optConfig $[with $th]? $[as ⟨ $ids,* ⟩]?) =>
-    `(tactic| ((step $cfg:optConfig $[with $th]? $[as ⟨ $ids,* ⟩]? by sl_frame) <;>
-      (sl_frame? <;> sl_side? $cfg:optConfig)))
+  | `(tactic| sl_step $cfg:optConfig $[with $th]? $[as ⟨ $ids,* ⟩]?) => do
+    let stepping ←
+      `(tactic| ((step $cfg:optConfig $[with $th]? $[as ⟨ $ids,* ⟩]? by sl_frame) <;>
+        (sl_frame? <;> sl_side? $cfg:optConfig)))
+    if th.isSome then
+      return stepping
+    `(tactic| first
+      | (sl_terminal_return; sl_frame?)
+      | sl_terminal_return
+      | $stepping:tactic)
 
 /-- `step*` with `sl_frame` as the precondition discharger. -/
 syntax "sl_step" noWs "*" (num)? Lean.Parser.Tactic.optConfig : tactic

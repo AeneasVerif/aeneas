@@ -24,7 +24,7 @@ git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_se
 | [`RustHeap.lean`](RustHeap.lean) | The Rust view of the heap: `Ptr` and the pointer operations, over `Heap.lean`. |
 | [`SLTactics.lean`](SLTactics.lean) | Port of the SLF tactics: `sl_frame`, `sl_pull`, `sl_change`, …, including the affine discard of whatever a cancellation leaves over. |
 | [`ST.lean`](ST.lean) | The state monad `St`, its state machine, its denotation `theta` into `Wp`, the Hoare triples it induces, and the specifications of the pointer operations. |
-| [`Step.lean`](Step.lean) | Wires triples into `sl_step`/`sl_step*` and provides `sl_pure` for exposing the entailment of a syntactic terminal return. |
+| [`Step.lean`](Step.lean) | Wires triples into `sl_step`/`sl_step*`, including the direct terminal rule for a syntactic return, whose entailment is left as the goal when `sl_frame` cannot close it. |
 | [`WP.lean`](WP.lean) | Affine separation-logic assertions (`SLProp`, closed under heap extension like Iris's `uPred`), the magic wand, and the `Wp` monad of predicate transformers. |
 | [`Run.lean`](Run.lean) | The certified interpreter: runs a program whose weakest precondition is proved, reading the ownership witnesses every read, write and deallocation needs off that proof. |
 | [`ProofScore.lean`](ProofScore.lean) | Engineering tool, not part of the library: measures how close the proofs of the triples are to the ideal proof, i.e. how much separation logic the automation still leaves to the user. Writes [`proof-score.html`](proof-score.html). |
@@ -111,8 +111,7 @@ closed program tells the two apart, and `by rfl` proves the difference — see
 
 The point of the automation is that a triple should be proved by unfolding the
 program and calling `sl_step*`, `step`, or `step*`, with only pure reasoning and
-`sl_pull` in between, and one such block per branch of the program.  A manual
-`sl_pure` is not ideal: stepping should handle the terminal return.  Similarly,
+`sl_pull` in between, and one such block per branch of the program.
 `sl_step with some.spec` is not ideal whenever the named declaration states a
 triple, regardless of whether it is registered with `@[step]`; local induction
 hypotheses remain ideal.  Run
@@ -153,9 +152,9 @@ python3 Aeneas/SLPoC/proof_simplify.py --in-place FILE.lean
 
 The default mode prints a unified diff.  `--in-place` applies it, and `--check`
 exits with status 1 when a file can be simplified.  The tool first tries to
-replace each `sl_pure` with `sl_step`.  For replacements Lean rejects, it then
-tries to merge an adjacent `sl_pure`/step pair.  Next it tries to drop explicit
-`sl_pull` patterns and replace individually unused simple names with `_`.
+merge an adjacent `sl_step`/`sl_step*` pair into a single star.  Next it tries
+to drop explicit `sl_pull` patterns and replace individually unused simple names
+with `_`.
 Compressing consecutive plain `sl_step` calls is the final stage: it validates
 `sl_step* N`, then immediately tries to remove each newly created bound.
 Bounds already present in the input are not retried.  Each proposed rewrite is
@@ -163,8 +162,7 @@ retained only when `lake env lean --stdin` accepts the complete resulting file.
 
 To keep compiler use bounded, step-run and binder rewrite classes are validated
 as batches; `sl_pull` names are first checked for lexical use in their tactic
-scope.  Mixed successful and unsuccessful `sl_pure` replacements and step pairs are
-bisected separately.  No Lean invocation is made when lexical analysis finds
+scope.  Mixed successful and unsuccessful step pairs are bisected separately.  No Lean invocation is made when lexical analysis finds
 nothing to rewrite.
 
 Rejected candidates are reported on standard error with their source line,
