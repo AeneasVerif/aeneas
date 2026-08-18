@@ -84,7 +84,7 @@ Page references below give the PDF page followed by the printed thesis page.
 | Thesis idea | Source | SLPoC interpretation |
 |---|---|---|
 | Treat verification as manipulation of a symbolic state containing a store, path condition, and heap chunks. | §2.4.1, PDF pp. 59-60 (pp. 37-38) | Introduce an internal resource state instead of repeatedly flattening raw expressions. Lean expressions remain the symbolic terms and proof terms remain the certificate. |
-| Separate resource production from resource consumption (`inhale`/`exhale`). Procedure calls consume a precondition and produce a postcondition. | §2.2.1, PDF pp. 44-46 (pp. 22-24) | Give `sl_step` explicit consume/produce phases: consume the callee precondition, retain the frame, then add the callee postcondition before solving the continuation. |
+| Separate resource production from resource consumption (`inhale`/`exhale`). Procedure calls consume a precondition and produce a postcondition. | §2.2.1, PDF pp. 44-46 (pp. 22-24) | Give `step` explicit consume/produce phases: consume the callee precondition, retain the frame, then add the callee postcondition before solving the continuation. |
 | Algorithmic choices are angelic: several sound choices may exist, and success requires finding one that makes the remainder verify. | §2.2.3, PDF pp. 47-48 (pp. 25-26) | Backtrack over matches, existential witnesses, and predicate views instead of committing to the first definitionally equal atom. Every successful branch constructs a kernel-checked proof term. |
 | State consolidation is a replaceable, semantically constrained phase rather than one fixed eager algorithm. | §2.4.1, PDF p. 60 (p. 38) | Add a bounded normalization hook after producing resources. Keep recursive predicates folded by default, canonicalize only cheap facts, and allow specialized normalizers without baking them into the core matcher. |
 | Prove the generic exhale/havoc/inhale call pattern once, then reuse it for many front-end constructs. | §§2.2.4 and 2.5, PDF pp. 50-51 and 67 (pp. 28-29 and 45) | Preserve the generic `triple_step_bind`/`triple_step_mono` and specification-registration architecture. Improve the shared resource discharger rather than adding per-operation tactic cases. |
@@ -178,7 +178,7 @@ The goal is not to infer arbitrary inductive definitions. It is to automate
 application of developer-proved views while preserving abstraction and
 termination.
 
-### 4. Explicit consume/produce in `sl_step`
+### 4. Explicit consume/produce in `step`
 
 Model a specification application as:
 
@@ -198,7 +198,7 @@ after spatial matching has already failed.
 
 Initially this can be implemented inside the tactic while retaining
 `triple_step_bind` and `triple_step_mono`. A later refactor may expose the
-resource transition as a reusable API for `sl_frame`, `sl_step`, and
+resource transition as a reusable API for `sl_frame`, `step`, and
 `sl_change`.
 
 ### 5. Pure constraints and witness synthesis
@@ -275,7 +275,7 @@ but it shows where the leverage is.
 
 ### Phase 3: Shared consume/produce engine
 
-- Reuse the resource state in `sl_step`, terminal-post matching, and local
+- Reuse the resource state in `step`, terminal-post matching, and local
   triple composition.
 - Normalize produced posts with their result equalities before matching.
 - Add explicit witness queues and conservative hint support.

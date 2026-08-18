@@ -323,7 +323,7 @@ theorem new.spec (listId : Nat) (hnonzero : listId ≠ 0) :
     ⦃ emp ⦄ (new listId : St (LinkedList M))
       ⦃⇓ s => listRep s []⦄ := by
   unfold new
-  sl_step*
+  step*
 
 /-- Exact ownership-transfer and sequence specification for public
 `push_front`: the supplied independent frame becomes precisely the new head.
@@ -343,8 +343,8 @@ theorem pushFront.spec (s : LinkedList M) (entries : List (Entry M))
       sl_pull hlist
       simp only [hlist.2.1]
       simp only [detachedValue]
-      sl_step* 2
-      sl_step
+      step* 2
+      step
   | cons head rest =>
       rcases head with ⟨oldFrame, oldPayload⟩
       simp only [listRep, firstSlot_cons, ownedFrom_cons, List.length_cons]
@@ -352,8 +352,8 @@ theorem pushFront.spec (s : LinkedList M) (entries : List (Entry M))
       sl_pull hlist
       simp only [hlist.2.1]
       simp only [linkedValue, detachedValue]
-      sl_step* 4
-      sl_step
+      step* 4
+      step
 
 /-- Empty cursor removal reports `none` and preserves the exact empty
 ownership. -/
@@ -366,7 +366,7 @@ theorem takeCurrent.empty.spec (cursor : Cursor M) :
   simp only [firstSlot_nil, lastSlot_nil, ownedFrom_nil, List.length_nil]
   sl_pull hcursor hlist
   simp only [hcursor, hlist.2.1]
-  sl_step
+  step
 
 /-- Exact split/recombine theorem for cursor removal.  It consumes the current
 head cell plus its suffix view, clears and returns that same frame, advances
@@ -389,13 +389,13 @@ theorem takeCurrent.cons.spec (cursor : Cursor M) (frame : Frame M)
   cases rest with
   | nil =>
       simp only [firstSlot_nil, ownedFrom_nil]
-      sl_step* 4
-      sl_step
+      step* 4
+      step
   | cons next rest' =>
       rcases next with ⟨nextFrame, nextPayload⟩
       simp only [firstSlot_cons, ownedFrom_cons]
-      sl_step* 6
-      sl_step
+      step* 6
+      step
 
 /-- Public empty pop reports empty and preserves the list exactly. -/
 @[step]
@@ -417,7 +417,7 @@ theorem popFront.empty.spec (s : LinkedList M) :
       exact himpl_refl _
   refine triple_bind htake ?_
   rintro ⟨cursor, result⟩
-  sl_step
+  step
 
 /-- Public nonempty pop returns/removes exactly the pure head and transfers its
 detached unique ownership back to the caller. -/
@@ -444,7 +444,7 @@ theorem popFront.cons.spec (s : LinkedList M) (frame : Frame M)
       exact himpl_refl _
   refine triple_bind htake ?_
   rintro ⟨cursor, result⟩
-  sl_step
+  step
 
 end AsterinasIntrusiveFrameList
 

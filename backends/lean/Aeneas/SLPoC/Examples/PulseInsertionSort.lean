@@ -197,7 +197,7 @@ theorem insertCells.spec [LinearOrder α] (current : Ptr α)
       cases values with
       | nil =>
           simp only [insertCells, orderedInsert]
-          sl_step*
+          step*
       | cons value values =>
           simp only [PulseArray.ownsCells]
           rw [hstar_comm_eq _ (⌜False⌝)]
@@ -214,15 +214,15 @@ theorem insertCells.spec [LinearOrder α] (current : Ptr α)
           contradiction
       | cons value values =>
           simp only [insertCells]
-          sl_step* 2
+          step* 2
           split
           · rename_i horder
             simp only [orderedInsert, horder]
-            sl_step*
+            step*
           · rename_i horder
             simp only [orderedInsert, horder]
-            sl_step* 2
-            sl_step with ih next key values
+            step* 2
+            step with ih next key values
 
 /--
 The outer-loop invariant: the recursively processed suffix has precisely the
@@ -239,7 +239,7 @@ theorem sortCells.spec [LinearOrder α] (cells : List (Ptr α))
       cases values with
       | nil =>
           simp only [sortCells, sortedContents]
-          sl_step*
+          step*
       | cons value values =>
           sl_pull
           contradiction
@@ -250,8 +250,8 @@ theorem sortCells.spec [LinearOrder α] (cells : List (Ptr α))
           contradiction
       | cons key values =>
           simp only [sortCells, sortedContents]
-          sl_step with ih values
-          sl_step with insertCells.spec current cells key (sortedContents values)
+          step with ih values
+          step with insertCells.spec current cells key (sortedContents values)
 
 /--
 Complete Pulse-style correctness theorem.  The original array retains exact
@@ -271,7 +271,7 @@ theorem insertionSort.spec [LinearOrder α] (array : PulseArray.Array α)
       Permutation values (sortedContents values) :=
     ⟨sortedContents_sorted values, sortedContents_perm values⟩
   unfold insertionSort
-  sl_step with sortCells.spec array.cells values
+  step with sortCells.spec array.cells values
 
 end PulseInsertionSort
 

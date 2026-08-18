@@ -634,25 +634,19 @@ elab_rules : tactic
     SLFrame.solveGoal discharger goal
     replaceMainGoal []
 
-/-- `sl_frame`, but a no-op on a goal that is not a separation-logic entailment.
-
-`step` hands back the ghost parameters it could not determine as extra goals; a
-follow-up tactic has to skip those rather than swallow every failure with `try`,
-which would also hide the diagnostics of a genuine `sl_frame` failure. -/
-elab "sl_frame?" : tactic => withMainContext do
-  let target ← instantiateMVars (← (← getMainGoal).getType)
-  let head := target.consumeMData.getAppFn
-  if head.isConstOf ``himpl || head.isConstOf ``qimpl then
-    evalTactic (← `(tactic| sl_frame))
-
 /-- Normalize the separating conjunctions of the goal: float the existentials out of them, drop
-the `emp`s, and reassociate to the right. -/
+the `emp`s, and reassociate to the right.
+
+Also collapses a ramified wand whose antecedent is a pure equality
+(`himpl_qwand_hpure_eq`): that is the shape a terminal return leaves behind, and
+frame inference cannot cancel it on its own. -/
 elab "sl_norm" : tactic => withMainContext do
   let _ ← Simp.simpAt true
     { dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1 }
     { addSimpThms :=
         #[``hstar_hempty_l_eq, ``hstar_hempty_r_eq,
-          ``hstar_hexists_l_eq, ``hstar_hexists_r_eq, ``hstar_assoc_eq] }
+          ``hstar_hexists_l_eq, ``hstar_hexists_r_eq, ``hstar_assoc_eq,
+          ``himpl_qwand_hpure_eq] }
     (.targets #[] true)
 
 /-- One step of `sl_pull`: peel a quantifier or a pure fact off the precondition
@@ -702,7 +696,7 @@ precondition into the local context.
 the `rintro` pattern `pᵢ`, e.g. `sl_pull l rfl` or `sl_pull ⟨hhead, htail⟩`.
 
 Pure facts are *removed* from the precondition, which is often not what a
-subsequent `sl_step` needs; use `sl_pull_keep` (which `step` runs on the goal of
+subsequent `step` needs; use `sl_pull_keep` (which `step` runs on the goal of
 every continuation) when only the local hypothesis is wanted. -/
 syntax (name := slPull) "sl_pull" (ppSpace colGt rintroPat)* : tactic
 
@@ -746,7 +740,7 @@ a triple into the local context, *without* removing it from the precondition.
 
 `sl_pull_step` consumes the fact, which is what SLF's `xpull` does but is often
 the wrong thing here: the assertion has to keep it for the framing of the later
-steps (this is why `sl_pull` before a `sl_step` can turn a working proof into a
+steps (this is why `sl_pull` before a `step` can turn a working proof into a
 failing one).  Copying is always sound, and it is what makes the pointer of a
 callee's precondition (`s.head.get!`, say) reducible to the one the assertion
 owns.
