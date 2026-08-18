@@ -775,7 +775,7 @@ theorem queryAux.spec (pointer : Ptr Table) (model : ModelTable)
             simp only [entryOwn]
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_pure
+            sl_step
             sl_change hFold
             sl_frame
           · sl_change (pure_middle_front False
@@ -799,7 +799,7 @@ theorem queryAux.spec (pointer : Ptr Table) (model : ModelTable)
             subst concreteFrame
             have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_pure
+            sl_step
             simp only [eq_self]
             sl_change (pure_front_middle True
               (pointer ↦ concrete) (entriesExcept index concrete model))
@@ -819,7 +819,7 @@ theorem queryAux.spec (pointer : Ptr Table) (model : ModelTable)
             contradiction
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_pure
+            sl_step
             sl_change hFold
             sl_frame
       | cons next rest =>
@@ -828,7 +828,7 @@ theorem queryAux.spec (pointer : Ptr Table) (model : ModelTable)
             simp only [entryOwn]
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_pure
+            sl_step
             sl_change hFold
             sl_frame
           · sl_change (pure_middle_front False
@@ -852,7 +852,7 @@ theorem queryAux.spec (pointer : Ptr Table) (model : ModelTable)
             subst concreteFrame
             have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_pure
+            sl_step
             simp only [eq_self]
             sl_change (pure_front_middle True
               (pointer ↦ concrete) (entriesExcept index concrete model))
@@ -874,7 +874,7 @@ theorem queryAux.spec (pointer : Ptr Table) (model : ModelTable)
             sl_step with ih child childModel
             have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_pure
+            sl_step
             sl_change hFold
             sl_frame
 
@@ -914,7 +914,7 @@ theorem mapAux.spec (pointer : Ptr Table) (model : ModelTable)
             cases hModel : model.get index <;>
             simp only [entryOwn]
           · sl_step
-            sl_pure
+            sl_step
             sl_change
               (tableOwn_replace_leaf pointer index concrete model frame)
             sl_frame
@@ -932,7 +932,7 @@ theorem mapAux.spec (pointer : Ptr Table) (model : ModelTable)
             contradiction
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_pure
+            sl_step
             sl_change hFold
             sl_frame
           · sl_change (pure_middle_front False
@@ -949,7 +949,7 @@ theorem mapAux.spec (pointer : Ptr Table) (model : ModelTable)
             contradiction
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_pure
+            sl_step
             sl_change hFold
             sl_frame
       | cons next rest =>
@@ -960,7 +960,7 @@ theorem mapAux.spec (pointer : Ptr Table) (model : ModelTable)
             sl_change (empty_tableOwn child)
             sl_step
             sl_step with ih child ModelTable.empty
-            sl_pure
+            sl_step
             sl_change (tableOwn_replace pointer index concrete model
               (.table child)
               (.table (ModelTable.empty.insert (next :: rest) frame).1))
@@ -979,7 +979,7 @@ theorem mapAux.spec (pointer : Ptr Table) (model : ModelTable)
             contradiction
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_pure
+            sl_step
             sl_change hFold
             sl_frame
           · sl_change (pure_middle_front False
@@ -996,7 +996,7 @@ theorem mapAux.spec (pointer : Ptr Table) (model : ModelTable)
             contradiction
           · rename_i child childModel
             sl_step with ih child childModel
-            sl_pure
+            sl_step
             sl_change (tableOwn_replace_of_get pointer index concrete model
               (.table child)
               (.table (childModel.insert (next :: rest) frame).1)
@@ -1040,7 +1040,7 @@ theorem removeAux.spec (pointer : Ptr Table) (model : ModelTable)
             simp only [entryOwn]
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_pure
+            sl_step
             sl_change hFold
             sl_frame
           · sl_change (pure_middle_front False
@@ -1076,7 +1076,7 @@ theorem removeAux.spec (pointer : Ptr Table) (model : ModelTable)
             contradiction
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_pure
+            sl_step
             sl_change hFold
             sl_frame
       | cons next rest =>
@@ -1085,7 +1085,7 @@ theorem removeAux.spec (pointer : Ptr Table) (model : ModelTable)
             simp only [entryOwn]
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_pure
+            sl_step
             sl_change hFold
             sl_frame
           · sl_change (pure_middle_front False
@@ -1102,7 +1102,7 @@ theorem removeAux.spec (pointer : Ptr Table) (model : ModelTable)
             contradiction
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_pure
+            sl_step
             sl_change hFold
             sl_frame
           · sl_change (pure_middle_front False
@@ -1119,7 +1119,7 @@ theorem removeAux.spec (pointer : Ptr Table) (model : ModelTable)
             contradiction
           · rename_i child childModel
             sl_step with ih child childModel
-            sl_pure
+            sl_step
             sl_change (tableOwn_replace_of_get pointer index concrete model
               (.table child)
               (.table (childModel.remove (next :: rest)).1)
@@ -1148,7 +1148,7 @@ theorem isTableEmpty.spec (pointer : Ptr Table) (model : ModelTable) :
   simp only [hstar_hempty_r_eq]
   sl_pull_keep
   rename_i hEmpty
-  sl_pure
+  sl_step
   sl_change (tableOwn_unselect pointer .i0 concrete model)
   simp only [hEmpty]
   sl_frame
@@ -1241,7 +1241,7 @@ theorem pruneAux.spec (pointer : Ptr Table) (model : ModelTable)
             rename_i hEmpty
             have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_pure
+            sl_step
             sl_change hFold
             simp only [hEmpty]
             sl_frame
@@ -1274,7 +1274,7 @@ theorem pruneAux.spec (pointer : Ptr Table) (model : ModelTable)
             rename_i hEmpty
             have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_pure
+            sl_step
             sl_change hFold
             simp only [hEmpty]
             sl_frame
@@ -1319,7 +1319,7 @@ theorem pruneAux.spec (pointer : Ptr Table) (model : ModelTable)
               simp only [hstar_hempty_r_eq]
               sl_pull_keep
               rename_i hParentEmpty
-              sl_pure
+              sl_step
               sl_change
                 (tableOwn_replace_empty pointer index concrete model)
               simp_all
@@ -1340,7 +1340,7 @@ theorem pruneAux.spec (pointer : Ptr Table) (model : ModelTable)
               simp only [hstar_hempty_r_eq]
               sl_pull_keep
               rename_i hParentEmpty
-              sl_pure
+              sl_step
               sl_change (tableOwn_replace_of_get pointer index concrete model
                 (.table child) (.table child') hConcrete)
               simp_all [child']
