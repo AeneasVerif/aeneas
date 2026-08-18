@@ -2070,8 +2070,11 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
       Some def.item_meta.name
     else None
   in
+  (* The Lean path (`extract_fun_decl_gen`) attaches the span to the declaration with an
+     attribute; the only other caller is the HOL4 one, for which we do not do this. *)
   extract_comment_with_span ctx fmt comment name
-    ~public:def.item_meta.attr_info.public def.item_meta.span
+    ~public:def.item_meta.attr_info.public ~span_in_attribute:true
+    def.item_meta.span
 
 (** Extract a function declaration.
 
@@ -2649,9 +2652,11 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
       Some global.item_meta.name
     else None
   in
+  (* The attributes are extracted by `extract_global_decl_body_gen`, below *)
   extract_comment_with_span ctx fmt
     [ "[" ^ name_to_string ctx global.item_meta.name ^ "]" ]
-    name ~public:global.item_meta.attr_info.public global.span;
+    name ~public:global.item_meta.attr_info.public ~span_in_attribute:true
+    global.span;
   F.pp_print_space fmt ();
 
   let decl_name = ctx_get_global span global.def_id ctx in
@@ -3096,7 +3101,8 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
    in
    extract_comment_with_span ctx fmt
      [ "Trait declaration: [" ^ name_to_string ctx decl.item_meta.name ^ "]" ]
-     name ~public:decl.item_meta.attr_info.public decl.item_meta.span);
+     name ~public:decl.item_meta.attr_info.public ~span_in_attribute:true
+     decl.item_meta.span);
   F.pp_print_break fmt 0 0;
   (* Extract the attributes *)
   ((* We need to list the extract options *)
@@ -3472,7 +3478,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
        ]
        (* TODO: why option option for the generics? Looks like a bug in OCaml!? *)
        name ?generics:(Some generics) ~public:impl.item_meta.attr_info.public
-       span);
+       ~span_in_attribute:true span);
     F.pp_print_break fmt 0 0;
     (* Extract the attributes *)
     let attributes = if backend () = Lean then [ "reducible" ] else [] in
