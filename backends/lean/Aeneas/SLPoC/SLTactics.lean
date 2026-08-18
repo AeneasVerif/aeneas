@@ -12,11 +12,11 @@ Logic Foundations* (`https://softwarefoundations.cis.upenn.edu/slf-current/`).
 |---|---|
 | `\-*` / `\--*` | `-∗` (`hwand`) / `-∗+` (`qwand`) |
 | `triple_ramified_frame` | `triple_ramified_frame` |
-| `xsimpl` | `sl_xsimpl` (also available as `sl_frame`) |
-| `xpull` | `sl_xpull` on an entailment, `sl_pull` on a triple |
-| `xchange` | `sl_xchange` |
-| `xval` | `sl_xval` |
-| `xapp` | `sl_xapp`, and the `step`/`step*` tactics |
+| `xsimpl` | `sl_simpl` (also available as `sl_frame`) |
+| `xpull` | `sl_pull_entail` on an entailment, `sl_pull` on a triple |
+| `xchange` | `sl_change` |
+| `xval` | `sl_val` |
+| `xapp` | `sl_app`, and the `step`/`step*` tactics |
 
 The book's `xwp`/`wpgen`/`xlet`/`xseq`/`xif`/`xfun` have no counterpart: they
 build a characteristic formula out of a deeply embedded program, whereas here the
@@ -61,7 +61,7 @@ theorem triple_ramified_bind {α β : Type} {P Pm F : SLPre} {Qm : SLPost α}
 
 /-! ## The `xsimpl` engine
 
-`sl_xsimpl` is a port of SLF's `xsimpl`; see its documentation below for the
+`sl_simpl` is a port of SLF's `xsimpl`; see its documentation below for the
 phases it goes through. -/
 
 namespace SLFrame
@@ -570,7 +570,7 @@ partial def solveGoal (discharger : Option Syntax.Tactic) (goal : MVarId) :
 /-- SLF's `xpull`, on an entailment: only the left-hand side is touched. -/
 partial def pullGoal (goal : MVarId) : TacticM MVarId := do
   if ← isFrameInference goal then
-    throwError "sl_xpull: this is a frame-inference goal.  Extracting anything \
+    throwError "sl_pull_entail: this is a frame-inference goal.  Extracting anything \
       from its left-hand side would lose it from the frame, which was created in \
       an outer context; pull at the level of the triple instead, with `sl_pull`."
   let target ← instantiateMVars (← goal.getType)
@@ -784,26 +784,26 @@ macro "sl_pull_keep" : tactic => `(tactic| repeat (sl_pull_keep_step; rename_i _
 
 /-- SLF's `xsimpl`.  `sl_frame` is the same tactic under the name that describes
 what `step` uses it for. -/
-syntax "sl_xsimpl" (" by " tacticSeq)? : tactic
+syntax "sl_simpl" (" by " tacticSeq)? : tactic
 
 macro_rules
-  | `(tactic| sl_xsimpl) => `(tactic| sl_frame)
-  | `(tactic| sl_xsimpl by $tac) => `(tactic| sl_frame by $tac)
+  | `(tactic| sl_simpl) => `(tactic| sl_frame)
+  | `(tactic| sl_simpl by $tac) => `(tactic| sl_frame by $tac)
 
 /-- SLF's `xpull`, on an entailment `H₁ ⊢ H₂` or `Q₁ ⊢+ Q₂`: introduce the
 existentials of the left-hand side and move its pure facts into the local
 context, leaving the right-hand side alone.
 
 Use it when the witness the right-hand side needs depends on a variable bound on
-the left: `sl_xsimpl` would otherwise pick the metavariable for the right-hand
+the left: `sl_simpl` would otherwise pick the metavariable for the right-hand
 side *before* that variable exists.  This is SLF's canonical
 `(∃ n, p ↦ n) ⊢ (∃ m, p ↦ (m + 1))` example. -/
-elab "sl_xpull" : tactic => Tactic.focus do withMainContext do
+elab "sl_pull_entail" : tactic => Tactic.focus do withMainContext do
   replaceMainGoal [← SLFrame.pullGoal (← getMainGoal)]
 
 /-! ## `xchange` -/
 
-/-- The rule behind `sl_xchange`: rewrite a part of the left-hand side of an
+/-- The rule behind `sl_change`: rewrite a part of the left-hand side of an
 entailment with an entailment of its own. -/
 theorem himpl_xchange {H₁ H₂ H₃ H₄ : SLProp} (hPart : H₁ ⊢ H₂)
     (hRest : H₂ ∗ H₃ ⊢ H₄) : H₁ ∗ H₃ ⊢ H₄ :=
@@ -831,13 +831,13 @@ def xchangeAssertion (assertion : Expr) (rule : Expr) : TacticM (Expr × Expr) :
     else if let some (_, lhs, rhs) := ruleType.consumeMData.eq? then
       pure (lhs, rhs, ← mkAppM ``himpl_of_eq #[rule])
     else
-      throwError "sl_xchange expects an entailment `A ⊢ B` or an equality \
+      throwError "sl_change expects an entailment `A ⊢ B` or an equality \
         `A = B`, got {ruleType}"
   let atoms ← flatten assertion
   /- The rewritten part may be a separating conjunction of several atoms, which
      do not have to be adjacent in `assertion`. -/
   let some restAtoms ← removeMatches atoms (← flatten lhs)
-    | throwError "sl_xchange: {lhs}\nis not part of\n{assertion}"
+    | throwError "sl_change: {lhs}\nis not part of\n{assertion}"
   let rest := mkStar restAtoms
   let reordered := mkApp2 (mkConst ``hstar) (← instantiateMVars lhs) rest
   let reorder ← mkAppM ``himpl_of_eq #[← proveEqAC assertion reordered]
@@ -849,14 +849,14 @@ end SLFrame
 
 /-- SLF's `xchange`: rewrite part of the current resources with an entailment.
 
-`sl_xchange M`, for `M : A ⊢ B` (or `M : A = B`), replaces the assertion `A` by
+`sl_change M`, for `M : A ⊢ B` (or `M : A = B`), replaces the assertion `A` by
 `B` in the left-hand side of the entailment, or in the precondition of the
 triple, that the goal states.  This is how a representation predicate is opened
 or closed when plain cancellation cannot see through it.
 
 Unlike `rw`, `M` need not be an equality and `A` need not occur syntactically:
 it only has to be one of the `∗`-separated atoms, up to unification. -/
-elab "sl_xchange" rule:term : tactic => Tactic.focus do withMainContext do
+elab "sl_change" rule:term : tactic => Tactic.focus do withMainContext do
   let rule ← Tactic.elabTerm rule none
   let goal ← getMainGoal
   let target ← instantiateMVars (← goal.getType)
@@ -875,31 +875,31 @@ elab "sl_xchange" rule:term : tactic => Tactic.focus do withMainContext do
     goal.assign (← mkAppM ``triple_conseq #[next, proof, qrefl])
     replaceMainGoal [next.mvarId!]
   else
-    throwError "sl_xchange expects an entailment or a triple, got\n{target}"
+    throwError "sl_change expects an entailment or a triple, got\n{target}"
 
 /-! ## `xval` and `xapp` -/
 
 /-- SLF's `xval`: reduce a triple about a terminal `pure v` to the entailment
 `P ⊢ Q v`. -/
-macro "sl_xval" : tactic => `(tactic| apply triple_pure)
+macro "sl_val" : tactic => `(tactic| apply triple_pure)
 
 /-- SLF's `xapp`: apply a specification to the goal, framing the resources it
 does not need through the ramified frame rule, and discharge the resulting
-entailment with `sl_xsimpl`.
+entailment with `sl_simpl`.
 
-`sl_xapp thm` handles a terminal call; use `step with thm` for a call followed by
+`sl_app thm` handles a terminal call; use `step with thm` for a call followed by
 a continuation. -/
-syntax "sl_xapp" (ppSpace colGt term)? (" by " tacticSeq)? : tactic
+syntax "sl_app" (ppSpace colGt term)? (" by " tacticSeq)? : tactic
 
 macro_rules
-  | `(tactic| sl_xapp $[$thm?]? $[by $tac?]?) => do
+  | `(tactic| sl_app $[$thm?]? $[by $tac?]?) => do
     let apply ←
       match thm? with
       | some thm => `(tactic| refine triple_ramified_frame $thm ?_)
       | none => `(tactic| refine triple_ramified_frame (by assumption) ?_)
     match tac? with
-    | none => `(tactic| ($apply; sl_xsimpl))
-    | some tac => `(tactic| ($apply; sl_xsimpl by $tac))
+    | none => `(tactic| ($apply; sl_simpl))
+    | some tac => `(tactic| ($apply; sl_simpl by $tac))
 
 /-- Re-state an already-proved triple under a weaker (usually more abstract)
 postcondition: `sl_conseq thm` keeps the precondition as is and discharges the
