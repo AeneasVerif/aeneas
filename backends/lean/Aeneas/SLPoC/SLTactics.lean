@@ -13,7 +13,6 @@ Logic Foundations* (`https://softwarefoundations.cis.upenn.edu/slf-current/`).
 | `\-*` / `\--*` | `-∗` (`hwand`) / `-∗+` (`qwand`) |
 | `triple_ramified_frame` | `triple_ramified_frame` |
 | `xsimpl` | `sl_xsimpl` (also available as `sl_frame`) |
-| `\GC` | `GC` (`hgc`), which is `emp` in this affine logic |
 | `xpull` | `sl_xpull` on an entailment, `sl_pull` on a triple |
 | `xchange` | `sl_xchange` |
 | `xval` | `sl_xval` |
@@ -39,8 +38,8 @@ internalizes "what the leftover resources must do to the callee's
 postcondition", and the whole obligation becomes a single entailment in which
 nothing is left to guess. -/
 
-/-- SLF's `triple_ramified_frame`.  SLF puts `Q ∗+ GC` on the right of the wand
-so that the leftovers may be discarded; here the wand's own conclusion is
+/-- SLF's `triple_ramified_frame`.  SLF puts an affine top on the right of the
+wand so that the leftovers may be discarded; here the wand's own conclusion is
 affine, so `Q` alone will do. -/
 theorem triple_ramified_frame {α : Type} {P Pm : SLPre} {Q Qm : SLPost α}
     {m : St α} (hStep : triple Pm m Qm)
@@ -59,49 +58,6 @@ theorem triple_ramified_bind {α β : Type} {P Pm F : SLPre} {Qm : SLPost α}
     triple P (m >>= next) Q :=
   triple_bind (triple_conseq (triple_frame hStep F) hPre (fun _ => himpl_refl _))
     hNext
-
-/-! ## Decomposing a postcondition
-
-`step` needs to expose the pure part of a specification's postcondition as an
-ordinary Lean hypothesis; `Decomp` is how it is found. -/
-
-namespace SLPost
-
-/-- Decompose a postcondition into a pure fact and the spatial resources that
-remain after introducing that fact. -/
-class Decomp {α : Type} (Q : SLPost α) where
-  pure : α → Prop
-  spatial : SLPost α
-  eq : Q = fun value => ⌜pure value⌝ ∗ spatial value
-
-instance (priority := high) (P : α → Prop) (Q : SLPost α) :
-    Decomp (fun value => ⌜P value⌝ ∗ Q value) where
-  pure := P
-  spatial := Q
-  eq := rfl
-
-instance (priority := high) (P : α → Prop) :
-    Decomp (fun value => ⌜P value⌝) where
-  pure := P
-  spatial := fun _ => emp
-  eq := by
-    funext value
-    exact (hstar_hempty_r_eq _).symm
-
-instance (priority := low) (Q : SLPost α) : Decomp Q where
-  pure := fun _ => True
-  spatial := Q
-  eq := by
-    funext value
-    apply hequiv_eq
-    intro h
-    constructor
-    · intro hQ
-      exact (hstar_hpure_l True (Q value) h).mpr ⟨True.intro, hQ⟩
-    · intro hStar
-      exact (hstar_hpure_l True (Q value) h).mp hStar |>.2
-
-end SLPost
 
 /-! ## The `xsimpl` engine
 
@@ -500,7 +456,7 @@ partial def solveHimpl (discharger : Option Syntax.Tactic) (goal : MVarId) :
        rule puts on the right in place of a frame metavariable; there can be only
        one of them. -/
     let mut deferredPure : Array Expr := #[]
-    let mut absorbing : Option (Expr × Bool) := none
+    let mut absorbing : Option Expr := none
     for expected in destinationAtoms do
       let mut found := none
       for h : i in [:remaining.size] do
@@ -519,12 +475,7 @@ partial def solveHimpl (discharger : Option Syntax.Tactic) (goal : MVarId) :
         if absorbing.isSome then
           throwError "cannot handle more than one magic wand on the right-hand \
             side\ndestination: {destination}"
-        absorbing := some (expected, true)
-      else if expected.consumeMData.isConstOf ``hgc then
-        if absorbing.isSome then
-          throwError "cannot handle more than one absorbing assertion on the \
-            right-hand side\ndestination: {destination}"
-        absorbing := some (expected, false)
+        absorbing := some expected
       else
         throwError "required spatial assertions are not present\
           \nsource: {source}\ndestination: {destination}\nmissing: {expected}"
@@ -538,15 +489,11 @@ partial def solveHimpl (discharger : Option Syntax.Tactic) (goal : MVarId) :
        and `emp` otherwise (the residual resources must then be discardable). -/
     let (matchedAssertion, sourceToMatched) ←
       match absorbing with
-      | some (absorbingAtom, isWand) =>
+      | some absorbingAtom =>
         let residual := mkStar remaining
         let reordered := mkApp2 (mkConst ``hstar) matchedAssertion residual
         let reorderProof ← mkAppM ``himpl_of_eq #[← proveEqAC source reordered]
-        let residualToAbsorber ←
-          if isWand then
-            proveWand discharger residual absorbingAtom
-          else
-            mkAppM ``himpl_hgc_r #[residual]
+        let residualToAbsorber ← proveWand discharger residual absorbingAtom
         let absorbProof ← mkAppM ``hstar_mono
           #[← mkAppM ``himpl_refl #[matchedAssertion], residualToAbsorber]
         pure (mkApp2 (mkConst ``hstar) matchedAssertion absorbingAtom,
@@ -680,9 +627,7 @@ elab_rules : tactic
     (← (← getLCtx).getAssumptions).map LocalDecl.fvarId |>.toArray
   let _ ← Simp.simpAt true
     { dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1 }
-    { hypsToUse := localAsms,
-      -- `step` states its postcondition goals through `SLPost.Decomp`.
-      declsToUnfold := #[``SLPost.Decomp.pure, ``SLPost.Decomp.spatial] }
+    { hypsToUse := localAsms }
     (.targets #[] true)
   if !(← getGoals).isEmpty then
     let goal ← getMainGoal
@@ -725,9 +670,7 @@ elab "sl_pull_step" : tactic => withMainContext do
     { dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1 }
     { addSimpThms :=
         #[``hstar_hexists_l_eq, ``hstar_hexists_r_eq,
-          ``hstar_hempty_l_eq, ``hstar_hempty_r_eq],
-      -- `step` states its continuation goals through `SLPost.Decomp`.
-      declsToUnfold := #[``SLPost.Decomp.pure, ``SLPost.Decomp.spatial] }
+          ``hstar_hempty_l_eq, ``hstar_hempty_r_eq] }
     (.targets #[] true)
   let goal ← getMainGoal
   let target ← instantiateMVars (← goal.getType)

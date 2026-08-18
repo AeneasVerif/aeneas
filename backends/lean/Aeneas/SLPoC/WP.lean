@@ -11,10 +11,10 @@ Nothing here mentions the state monad: its denotation into `Wp` and the Hoare
 triples it induces are in `Aeneas.SLPoC.ST`.
 
 The logic is *affine*, as Iris's is: an assertion owns the cells it describes
-and says nothing about the rest of the heap, so `emp` and the affine top `GC`
-coincide and the entailment `⊢` weakens — `H ⊢ emp` for every `H`.  Resources
-may therefore be discarded anywhere, not only where an explicit `GC` was
-written.  Following Iris's `uPred`, affinity is a property of the *model*:
+and says nothing about the rest of the heap, so `emp` is the affine top and the
+entailment `⊢` weakens — `H ⊢ emp` for every `H`.  Resources may therefore be
+discarded anywhere.  Following Iris's `uPred`, affinity is a property of the
+*model*:
 `SLProp` bundles closure under `Heap.Sub`, which is what makes `emp ∗ H ⊣⊢ H`
 provable once `emp` holds of every heap.
 -/
@@ -63,11 +63,6 @@ def hpure (P : Prop) : SLProp where
   holds _ := P
   up_closed := fun hP _ => hP
 
-/-- SLF's affine-top predicate `\GC`.  Since the logic is affine it *is* `emp`;
-the name is kept because the ramified frame rule and `xsimpl` mention it. -/
-def hgc : SLProp :=
-  hempty
-
 /-- The points-to assertion: the heap owns the cell `p` points at, and it holds
 `value`. -/
 def hsingle {α : Type} (p : Ptr α) (value : α) : SLProp where
@@ -104,7 +99,6 @@ scoped notation "emp" => hempty
 scoped syntax "⌜" term "⌝" : term
 scoped macro_rules
   | `(⌜$P⌝) => `(hpure $P)
-scoped notation "GC" => hgc
 scoped macro_rules
   | `(iprop(∃ $x:ident, $H)) => `(hexists fun $x => iprop($H))
   | `(iprop(∃ $x:ident : $type, $H)) =>
@@ -229,40 +223,9 @@ instance : Std.LawfulIdentity hstar hempty where
   right_id := hstar_hempty_r_eq
 
 /-- Affinity: every assertion may be discarded.  This is the rule the exact
-logic of SLF lacks, and the reason `GC` is `emp` here. -/
+logic of SLF lacks, and the reason its affine top is simply `emp` here. -/
 theorem himpl_hempty_r (H : SLProp) : H ⊢ emp :=
   fun _ _ => trivial
-
-/-- Every heap predicate can be absorbed by `GC`. -/
-theorem himpl_hgc_r (H : SLProp) : H ⊢ GC :=
-  fun _ _ => trivial
-
-theorem hstar_hgc_hgc : GC ∗ GC ⊢ GC :=
-  himpl_hgc_r _
-
-theorem hstar_hgc_intro (H : SLProp) : H ⊢ H ∗ GC := by
-  intro h hH
-  exact ⟨h, ∅, Finmap.Disjoint.symm _ _ (Finmap.disjoint_empty h),
-    Finmap.union_empty.symm, hH, trivial⟩
-
-theorem hstar_hgc_frame (H₁ H₂ : SLProp) :
-    (H₁ ∗ GC) ∗ H₂ ⊢ (H₁ ∗ H₂) ∗ GC :=
-  himpl_trans (fun h => (hstar_assoc H₁ GC H₂ h).mp)
-    (himpl_trans
-      (hstar_mono (himpl_refl H₁) (fun h => (hstar_comm GC H₂ h).mp))
-      (fun h => (hstar_assoc H₁ H₂ GC h).mpr))
-
-theorem hstar_hgc_idem (H : SLProp) :
-    (H ∗ GC) ∗ GC ⊢ H ∗ GC :=
-  himpl_trans (fun h => (hstar_assoc H GC GC h).mp)
-    (hstar_mono (himpl_refl H) hstar_hgc_hgc)
-
-theorem qimpl_hgc_intro (Q : SLPost α) : Q ⊢+ Q ∗+ GC :=
-  fun _ => hstar_hgc_intro _
-
-theorem qstar_hgc_idem (Q : SLPost α) :
-    (Q ∗+ GC) ∗+ GC ⊢+ Q ∗+ GC :=
-  fun _ => hstar_hgc_idem _
 
 /-! ### The model, spelled out
 
@@ -272,10 +235,6 @@ heap. -/
 
 @[simp]
 theorem hempty_holds (h : Heap) : (emp : SLProp) h ↔ True :=
-  Iff.rfl
-
-@[simp]
-theorem hgc_holds (h : Heap) : (GC : SLProp) h ↔ True :=
   Iff.rfl
 
 @[simp]
