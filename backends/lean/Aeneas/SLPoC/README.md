@@ -24,11 +24,11 @@ git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_se
 | [`RustHeap.lean`](RustHeap.lean) | The Rust view of the heap: `Ptr` and the pointer operations, over `Heap.lean`. |
 | [`SLTactics.lean`](SLTactics.lean) | Port of the SLF tactics: `sl_frame`, `sl_pull`, `sl_change`, …, including the affine discard of whatever a cancellation leaves over. |
 | [`ST.lean`](ST.lean) | The state monad `St`, its state machine, its denotation `theta` into `Wp`, the Hoare triples it induces, and the specifications of the pointer operations. |
-| [`Step.lean`](Step.lean) | Wires triples into `sl_step`/`sl_step*`, including the direct terminal rule for a syntactic return, whose entailment is left as the goal when `sl_frame` cannot close it. |
+| [`Step.lean`](Step.lean) | Wires triples into `step`/`step*`, including the direct terminal rule for a syntactic return, whose entailment is left as the goal when `sl_frame` cannot close it. |
 | [`WP.lean`](WP.lean) | Affine separation-logic assertions (`SLProp`, closed under heap extension like Iris's `uPred`), the magic wand, and the `Wp` monad of predicate transformers. |
 | [`Run.lean`](Run.lean) | The certified interpreter: runs a program whose weakest precondition is proved, reading the ownership witnesses every read, write and deallocation needs off that proof. |
 | [`ProofScore.lean`](ProofScore.lean) | Engineering tool, not part of the library: measures how close the proofs of the triples are to the ideal proof, i.e. how much separation logic the automation still leaves to the user. Writes [`proof-score.html`](proof-score.html). |
-| [`proof_simplify.py`](proof_simplify.py) | Compilation-guided proof simplifier: compresses consecutive `sl_step` calls and removes unused `sl_pull` names, retaining only rewrites accepted by Lean. |
+| [`proof_simplify.py`](proof_simplify.py) | Compilation-guided proof simplifier: compresses consecutive `step` calls and removes unused `sl_pull` names, retaining only rewrites accepted by Lean. |
 | [`benchmark-report.md`](benchmark-report.md) | Report on the eleven external benchmark ports, their interfaces and specifications, proof-score improvements, and remaining automation gaps. |
 | [`automation-report.md`](automation-report.md) | Maps ideas from Dardinier's thesis on automated separation-logic verifiers to a prioritized design for more SLPoC proof-mode automation. |
 | `README.md` | Records the purpose and meaning of files in this directory. |
@@ -47,7 +47,7 @@ git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_se
 | [`PulseResizableVec.lean`](Examples/PulseResizableVec.lean) | Pulse bounded resizable vector with separate size/capacity cells and initialized-prefix ownership. |
 | [`PulseRingBuffer.lean`](Examples/PulseRingBuffer.lean) | Pulse fixed-capacity FIFO ring buffer with circular-layout and wrap-around proofs. |
 | [`Run.lean`](Tests/Run.lean) | Regression tests for the interpreter: running verified programs, and what execution shows that an affine triple cannot. |
-| [`UnitTest.lean`](Tests/UnitTest.lean) | Regression tests for `step`, `sl_step`, and the separation-logic tactics. |
+| [`UnitTest.lean`](Tests/UnitTest.lean) | Regression tests for `step`, `step`, and the separation-logic tactics. |
 | [`YOLOCancel.lean`](Examples/YOLOCancel.lean) | Memory-bounded, downscaled ports of YOLO's synthetic shuffled-atom cancellation benchmarks. |
 | [`VerusBitmap.lean`](Examples/VerusBitmap.lean) | Verus bitmap over 64-bit-style words, including exact get/set and pointwise OR refinement proofs. |
 | [`VerusDoublyLinkedList.lean`](Examples/VerusDoublyLinkedList.lean) | Port of the Verus doubly-linked-list example: executable definitions, then ghost state, specifications and proofs. |
@@ -93,7 +93,7 @@ run time, so this computes:
 
 ```lean
 theorem roundTrip.spec : (roundTrip) ⦃⇓ result => result = 42⦄ := by
-  unfold roundTrip; sl_step*
+  unfold roundTrip; step*
 
 #eval (execClosed roundTrip roundTrip.spec).1  -- 42
 ```
@@ -110,9 +110,9 @@ closed program tells the two apart, and `by rfl` proves the difference — see
 ## How ideal are the proofs?
 
 The point of the automation is that a triple should be proved by unfolding the
-program and calling `sl_step*`, `step`, or `step*`, with only pure reasoning and
+program and calling `step*`, `step`, or `step*`, with only pure reasoning and
 `sl_pull` in between, and one such block per branch of the program.
-`sl_step with some.spec` is not ideal whenever the named declaration states a
+`step with some.spec` is not ideal whenever the named declaration states a
 triple, regardless of whether it is registered with `@[step]`; local induction
 hypotheses remain ideal.  Run
 
@@ -152,11 +152,11 @@ python3 Aeneas/SLPoC/proof_simplify.py --in-place FILE.lean
 
 The default mode prints a unified diff.  `--in-place` applies it, and `--check`
 exits with status 1 when a file can be simplified.  The tool first tries to
-merge an adjacent `sl_step`/`sl_step*` pair into a single star.  Next it tries
+merge an adjacent `step`/`step*` pair into a single star.  Next it tries
 to drop explicit `sl_pull` patterns and replace individually unused simple names
 with `_`.
-Compressing consecutive plain `sl_step` calls is the final stage: it validates
-`sl_step* N`, then immediately tries to remove each newly created bound.
+Compressing consecutive plain `step` calls is the final stage: it validates
+`step* N`, then immediately tries to remove each newly created bound.
 Bounds already present in the input are not retried.  Each proposed rewrite is
 retained only when `lake env lean --stdin` accepts the complete resulting file.
 
