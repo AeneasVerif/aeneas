@@ -42,9 +42,9 @@ of the 170 non-ideal spots: only 18 of its 94 spots are ideal. Its proofs
 repeatedly perform:
 
 ```lean
-sl_xchange (tableOwn_select ...)
+sl_change (tableOwn_select ...)
 ...
-sl_xchange (tableOwn_unselect ...)
+sl_change (tableOwn_unselect ...)
 ```
 
 or the corresponding replacement transformation. This is representative, not
@@ -199,7 +199,7 @@ after spatial matching has already failed.
 Initially this can be implemented inside the tactic while retaining
 `triple_step_bind` and `triple_step_mono`. A later refactor may expose the
 resource transition as a reusable API for `sl_frame`, `sl_step`, and
-`sl_xchange`.
+`sl_change`.
 
 ### 5. Pure constraints and witness synthesis
 
@@ -266,7 +266,7 @@ angelic-choice ideas without changing the logic.
 
 - Add the view registry and cycle-bounded view search.
 - Register the page-table select/unselect/replace lemmas.
-- Remove the corresponding `sl_xchange` calls only after the automated proofs
+- Remove the corresponding `sl_change` calls only after the automated proofs
   compile unchanged.
 
 This is the highest-impact phase. If all 76 non-ideal page-table spots became
@@ -308,7 +308,7 @@ Each phase should satisfy all of the following:
 
 For Phase 2, a useful go/no-go experiment is to convert one complete recursive
 page-table proof to registered views. Proceed with the generic mechanism only
-if it removes its select/unselect/replace `sl_xchange` calls without
+if it removes its select/unselect/replace `sl_change` calls without
 benchmark-specific matcher code and without more than a small constant-factor
 slowdown on the full proof-score corpus.
 

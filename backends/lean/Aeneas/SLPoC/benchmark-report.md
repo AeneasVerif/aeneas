@@ -245,7 +245,7 @@ The remaining 129 non-ideal spots have these main causes:
    replacement lemmas move between whole-table ownership and one selected
    slot plus recursively owned siblings. These are entailments rather than
    simplification equalities, so recursive branches require explicit
-   `sl_xchange`. This is the clearest high-value target for future proof-mode
+   `sl_change`. This is the clearest high-value target for future proof-mode
    automation.
 
 5. **Local triple composition.** The intrusive-list cursor and public pop
@@ -269,7 +269,7 @@ The remaining 129 non-ideal spots have these main causes:
 
 The first priority is a generic selected-child transformation for recursive
 record ownership, aimed at replacing the page table's repeated
-select/unselect/replace `sl_xchange` sequence. Next, terminal result matching
+select/unselect/replace `sl_change` sequence. Next, terminal result matching
 should rewrite pure return equalities before matching spatial posts. Finally,
 `sl_pull` could gain bounded reassociation/search for pure facts and
 existentials, and framing could infer the simple precondition conversions used
