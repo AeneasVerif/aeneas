@@ -83,15 +83,13 @@ the context (to rewrite the cell) and in the assertion (for the postcondition). 
 example (p : Ptr Nat) (n : Nat) :
     ⦃ iprop(⌜n = 1⌝ ∗ p ↦ n) ⦄ pure () ⦃⇓ iprop(⌜n = 1⌝ ∗ p ↦ 1)⦄ := by
   sl_pull_keep
-  sl_pure
-  sl_frame
+  sl_step
 
-/-- `sl_pure` reduces match/let noise around a terminal return. -/
+/-- `sl_step` reduces match/let noise around a terminal return. -/
 example (n : Nat) :
     ⦃ emp ⦄ (Prod.rec (fun value _ => pure value) (n, true) : St Nat)
       ⦃⇓ result => ⌜result = n⌝⦄ := by
-  sl_pure
-  sl_frame
+  sl_step
 
 def namedPure (n : Nat) : St Nat :=
   pure n
@@ -100,24 +98,22 @@ def namedPure (n : Nat) : St Nat :=
 theorem namedPure.spec (n : Nat) :
     ⦃ emp ⦄ namedPure n ⦃⇓ result => ⌜result = n⌝⦄ := by
   unfold namedPure
-  sl_pure
-  sl_frame
-
-/-- The direct terminal rule does not unfold named wrappers and bypass their
-registered specifications. -/
-example (n : Nat) :
-    ⦃ emp ⦄ namedPure n ⦃⇓ result => ⌜result = n⌝⦄ := by
-  fail_if_success sl_pure
   sl_step
 
-/-- Normalization inside `sl_pure` stays focused on its original goal. -/
+/-- The direct terminal rule does not unfold named wrappers and bypass their
+registered specifications: `sl_step` goes through `namedPure.spec`, which closes
+the goal instead of leaving the entailment a terminal return would. -/
+example (n : Nat) :
+    ⦃ emp ⦄ namedPure n ⦃⇓ result => ⌜result = n⌝⦄ := by
+  sl_step
+
+/-- Normalization inside `sl_step` stays focused on its original goal. -/
 example (n : Nat) :
     True ∧ ⦃ emp ⦄ (pure n : St Nat) ⦃⇓ result => ⌜result = n⌝⦄ := by
   constructor
-  fail_if_success all_goals sl_pure
+  fail_if_success all_goals sl_step
   · trivial
-  · sl_pure
-    sl_frame
+  · sl_step
 
 /-! ## Frame inference
 
@@ -237,7 +233,7 @@ example (p : Ptr Nat) (value : Nat) :
       ⦃⇓ result => ⌜opaqueStepResult result (value + 1)⌝⦄ := by
   unfold readFreeReturn
   sl_step* 2
-  sl_pure
+  sl_step
   simp only [opaqueStepResult]
   sl_frame
 
@@ -249,11 +245,10 @@ example (p : Ptr Nat) (value : Nat) :
   unfold readFreeReturn
   fail_if_success
     sl_step*
-    sl_pure
+    sl_step
   sl_step
   sl_step
-  sl_pure
-  sl_frame
+  sl_step
 
 /-! ## Affine resource discard
 

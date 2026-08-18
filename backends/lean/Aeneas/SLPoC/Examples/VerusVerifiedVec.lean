@@ -246,7 +246,7 @@ theorem newFixed.spec (capacity : Nat) :
   unfold newFixed
   sl_step as ⟨ buffer, hlength ⟩
   sl_step as ⟨ lengthCell ⟩
-  sl_pure
+  sl_step
   unfold PulseArray.owns
   rw [← hlength, ownsCells_replicate_none]
   have htotal :
@@ -350,7 +350,7 @@ theorem pushNoResize.spec
     have hsuffix : suffix = [] := List.eq_nil_of_length_eq_zero hsuffixLength
     subst suffix
     simp only [hfull, decide_false]
-    sl_pure
+    sl_step
     sl_change (partition_entails_owns v contents cap initCells []
       hcells hprefix htotal hcapacity)
     sl_frame

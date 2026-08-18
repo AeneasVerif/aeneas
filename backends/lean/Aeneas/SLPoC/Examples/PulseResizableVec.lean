@@ -225,10 +225,7 @@ theorem new.spec (cap : Nat) (hcap : 0 < cap) :
   sl_step as ⟨ buffer, hlength ⟩
   sl_step as ⟨ sizeCell ⟩
   sl_step as ⟨ capacityCell ⟩
-  sl_pure
-  unfold owns
-  have hInv := bufferInv_empty (α := α) cap hcap
-  sl_frame
+  sl_step
 
 /-- Length returns the exact logical length and preserves complete ownership. -/
 @[step]

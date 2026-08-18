@@ -6,10 +6,11 @@ open scoped SepLogic
 
 /-! ## A result-dependent spatial postcondition
 
-This is the small version of the bounded `sl_step*; sl_pure` proofs in
-`PulseLinkedList`, `IrisTutorial`, and `VerusBitmap`. `sl_step` uses
-`pure.spec`, whose abstract result leaves a postcondition wand that
-`sl_frame` cannot cancel.
+This is the small version of the bounded `sl_step*; sl_step` proofs in
+`PulseLinkedList`, `IrisTutorial`, and `VerusBitmap`. Going through
+`pure.spec` would leave a postcondition wand stated in terms of the abstract
+result of the specification, which `sl_frame` cannot cancel; `sl_step` takes
+the terminal rule directly and states the obligation about the returned value.
 -/
 
 def allocAndReturn : St (Ptr Nat) := do
@@ -22,13 +23,11 @@ example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => p ↦ 1⦄ := by
     sl_step*
     done
   sl_step* 1
-  fail_if_success sl_step
-  sl_pure
-  sl_frame
+  sl_step
 
 /-! ## Manual work on the terminal entailment
 
-This is the reason for the bounds before `sl_pure` in `UnitTest`,
+This is the reason for the bounds before the terminal `sl_step` in `UnitTest`,
 `AsterinasIntrusiveFrameList`, and several data-structure examples. An
 unbounded `sl_step*` reaches an entailment that only becomes frameable after
 the user unfolds or simplifies the postcondition.
@@ -50,10 +49,54 @@ example (p : Ptr Nat) (value : Nat) :
     sl_step*
     done
   sl_step* 2
-  fail_if_success sl_step
-  sl_pure
+  sl_step
   simp only [opaqueStepResult]
   sl_frame
+
+/-! ## The terminal return
+
+`sl_step` takes the mono case of a syntactic terminal return directly, through
+`triple_pure`, and hands the resulting `P ⊢ Q v` to `sl_frame`.  Going through
+the registered `pure.spec` instead would state that obligation about the
+*abstract* result of the specification — `P ⊢ emp ∗ ((fun result => ⌜result =
+v⌝) -∗+ Q)` — and cancelling that wand needs the pure fact it introduces to be
+substituted back into the spatial part, which `sl_frame` does not do.
+-/
+
+/-- What `sl_frame` cannot close is left as the goal, stated about the returned
+value: the assertion the entailment starts from and the one its postcondition
+asks for are the *same*, which is what `hpure_hstar_intro` needs here. -/
+example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => iprop(⌜opaqueStepResult 1 1⌝ ∗ p ↦ 1)⦄ := by
+  unfold allocAndReturn
+  sl_step* 1
+  sl_step
+  exact hpure_hstar_intro _ rfl
+
+/-- `FFree.ok`, the constructor `pure` unfolds to, is a terminal return too. -/
+example (n : Nat) : ⦃ emp ⦄ (FFree.ok n : St Nat) ⦃⇓ result => ⌜result = n⌝⦄ := by
+  sl_step
+
+/-- A `Unit` result is no different. -/
+example (p : Ptr Nat) : ⦃ p ↦ 0 ⦄ (pure () : St Unit) ⦃⇓ p ↦ 0⦄ := by
+  sl_step
+
+def namedReturn (n : Nat) : St Nat :=
+  pure n
+
+@[step]
+theorem namedReturn.spec (n : Nat) :
+    ⦃ emp ⦄ namedReturn n ⦃⇓ result => ⌜result = n⌝⦄ := by
+  unfold namedReturn
+  sl_step
+
+/-- A named pure wrapper is not a *syntactic* return: the terminal rule does not
+unfold it, so the step goes through its registered specification. -/
+example (n : Nat) : ⦃ emp ⦄ namedReturn n ⦃⇓ result => ⌜result = n⌝⦄ := by
+  sl_step
+
+/-- An explicitly named specification wins over the terminal rule. -/
+example (n : Nat) : ⦃ emp ⦄ (pure n : St Nat) ⦃⇓ result => ⌜result = n⌝⦄ := by
+  sl_step with pure.spec
 
 /-! ## An unbounded star consumes the whole goal
 
@@ -110,8 +153,7 @@ def ghostHelper (_p : Ptr Nat) : St Unit :=
 theorem ghostHelper.spec (p : Ptr Nat) (_witness : NeedsWitness) :
     ⦃ p ↦ 0 ⦄ ghostHelper p ⦃⇓ p ↦ 0⦄ := by
   unfold ghostHelper
-  sl_pure
-  sl_frame
+  sl_step
 
 def ghostCaller (p : Ptr Nat) : St Unit := do
   ghostHelper p
@@ -124,8 +166,7 @@ example (p : Ptr Nat) :
     sl_step*
     done
   sl_step with ghostHelper.spec p (NeedsWitness.mk { f := id })
-  sl_pure
-  sl_frame
+  sl_step
 
 /-! ## The required specification is not registered
 
