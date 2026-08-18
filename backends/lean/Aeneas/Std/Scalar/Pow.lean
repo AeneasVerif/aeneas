@@ -2,10 +2,10 @@ import Aeneas.Std.Scalar.Core
 
 namespace Aeneas.Std
 
-open Result
+open RustM
 
 @[rust_fun "core::num::{usize}::is_power_of_two"]
-def core.num.Usize.is_power_of_two (x : Std.Usize) : Result Bool :=
+def core.num.Usize.is_power_of_two (x : Std.Usize) : RustM Bool :=
   ok x.val.isPowerOfTwo
 
 @[step]

@@ -107,12 +107,12 @@ error: unsolved goals
 case h1
 b : Bool
 h : b = true
-⊢ Std.Result.ok 0 ⦃ x✝ => True ⦄
+⊢ Std.RustM.ok 0 ⦃ x✝ => True ⦄
 
 case h2
 b : Bool
 h : ¬b = true
-⊢ Std.Result.ok 1 ⦃ x✝ => True ⦄
+⊢ Std.RustM.ok 1 ⦃ x✝ => True ⦄
 -/
 #guard_msgs in
 example (b : Bool) : Std.WP.spec (if b then .ok 0 else .ok 1) (fun _ => True) := by
@@ -123,12 +123,12 @@ error: unsolved goals
 case h1
 b : Bool
 h : b = true
-⊢ Std.Result.ok 0 ⦃ x✝ => True ⦄
+⊢ Std.RustM.ok 0 ⦃ x✝ => True ⦄
 
 case h2
 b : Bool
 h : ¬b = true
-⊢ Std.Result.ok 1 ⦃ x✝ => True ⦄
+⊢ Std.RustM.ok 1 ⦃ x✝ => True ⦄
 -/
 #guard_msgs in
 example (b : Bool) : Std.WP.spec (if h: b then .ok 0 else .ok 1) (fun _ => True) := by
@@ -918,9 +918,9 @@ info: Try this:
 #guard_msgs in
 example : True := by step*?
 
-open Std Result
+open Std RustM
 
-def add1 (x0 x1 : U32) : Std.Result U32 := do
+def add1 (x0 x1 : U32) : Std.RustM U32 := do
   let x2 ← x0 + x1
   let x3 ← x2 + x2
   x3 + 4#u32
@@ -1008,7 +1008,7 @@ example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
   unfold add1
   step*?
 
-def add2 (b : Bool) (x0 x1 : U32) : Std.Result U32 := do
+def add2 (b : Bool) (x0 x1 : U32) : Std.RustM U32 := do
   if b then
     let x2 ← x0 + x1
     let x3 ← x2 + x2
@@ -1231,13 +1231,13 @@ error: unsolved goals
 case inst
 α : Type
 x : α
-f : α → Result Unit
+f : α → RustM Unit
 f_spec : ∀ (x : α) [Inhabited α], f x ⦃ x✝ => True ⦄
 ⊢ Inhabited α
 
 α : Type
 x : α
-f : α → Result Unit
+f : α → RustM Unit
 f_spec : ∀ (x : α) [Inhabited α], f x ⦃ x✝ => True ⦄
 _ : [> let PUnit.unit ← f x <]
 ⊢ (do
@@ -1248,7 +1248,7 @@ _ : [> let PUnit.unit ← f x <]
 #guard_msgs in
 example {α : Type}
   (x : α)
-  (f : α → Result Unit) (f_spec : ∀ x, [Inhabited α] → f x ⦃ _ => True ⦄) : --(a : Std.Array α 16#usize) :
+  (f : α → RustM Unit) (f_spec : ∀ x, [Inhabited α] → f x ⦃ _ => True ⦄) : --(a : Std.Array α 16#usize) :
   (do
     let () ← f x
     let () ← f x
@@ -1258,7 +1258,7 @@ example {α : Type}
 
 /--
 error: unsolved goals
-f : Result (Bool × Bool)
+f : RustM (Bool × Bool)
 f_spec : f ⦃ x✝ x✝¹ => True ⦄
 x _✝ : Bool
 _ : [> let(x, _✝) ← f <]
@@ -1266,7 +1266,7 @@ _ : [> let(x, _✝) ← f <]
 -/
 #guard_msgs in
 example
-  (f : Result (Bool × Bool))
+  (f : RustM (Bool × Bool))
   (f_spec : f ⦃ _ _ => True ⦄) :
   (do
     let (x, _) ← f
@@ -1288,7 +1288,7 @@ example (x : U32) (h : x.val < 32) :
     detected contradicting hypotheses (h : a = b from context + ¬a = b from
     the else branch). The fix uses a fresh mvar during internalization and
     closes the goal explicitly when a contradiction is found. -/
-private def grindContradictionFn (a b : U32) : Result U32 := do
+private def grindContradictionFn (a b : U32) : RustM U32 := do
   if a = b then a + b
   else fail .panic
 
@@ -1328,7 +1328,7 @@ example (a b : U32) (h : a = b) (hbnd : a.val + b.val ≤ U32.max) :
 /-- Test: contradiction after a match (explicit match on an inductive type).
     The `none` branch leads to `fail`, which contradicts the postcondition.
     With `h : x = some v` in context, the `none` branch is contradictory. -/
-private def matchContradictionFn (x : Option U32) : Result U32 :=
+private def matchContradictionFn (x : Option U32) : RustM U32 :=
   match x with
   | some v => .ok v
   | none => fail .panic
@@ -1345,7 +1345,7 @@ example (v : U32) (h : x = some v) :
     the branch plus any accumulated facts. With `h : a = b` in scope, this contradicts.
     The contradiction is detected after the let-binding step introduces `c` and its
     postcondition, and then the if-split creates the contradicting branch. -/
-private def letBindContradictionFn (a b : U32) : Result U32 := do
+private def letBindContradictionFn (a b : U32) : RustM U32 := do
   let c ← a + b
   if a = b then
     .ok c
@@ -1359,7 +1359,7 @@ example (a b : U32) (h : a = b) (hbnd : a.val + b.val ≤ U32.max) :
   step*
 
 /- This is a regression test: at some point `step*` would get stuck on `match p with | (o, k) => match o with ...` -/
-example (f : Usize → Result Unit) (p : Option Usize × Usize) (h : p.1 = some 0#usize)
+example (f : Usize → RustM Unit) (p : Option Usize × Usize) (h : p.1 = some 0#usize)
     (hf : ∀ j, f j ⦃ _ => True ⦄) :
     (let (o, _) := p
      match o with

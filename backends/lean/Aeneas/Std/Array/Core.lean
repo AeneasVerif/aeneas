@@ -4,7 +4,7 @@ import Aeneas.Data.List.List
 
 namespace Aeneas.Std
 
-open Result WP
+open RustM WP
 
 /-!
 # Notations for `List`
@@ -18,7 +18,7 @@ instance {α : Type u} : GetElem? (List α) Usize α (fun l i => i < l.length) w
 /-
 # Theorems
 -/
-theorem List.mapM_clone_eq {T : Type u} {clone : T → Result T} {l : List T}
+theorem List.mapM_clone_eq {T : Type u} {clone : T → RustM T} {l : List T}
   (h : ∀ x ∈ l, clone x = ok x) :
   List.mapM clone l = ok l := by
   have hind (l acc : List T) (h : ∀ x ∈ l, clone x = ok x) :
@@ -33,14 +33,14 @@ theorem List.mapM_clone_eq {T : Type u} {clone : T → Result T} {l : List T}
   apply hind
   apply h
 
-def List.clone (clone : α → Result α) (l : List α) : Result ({ l' : List α // l'.length = l.length}) :=
+def List.clone (clone : α → RustM α) (l : List α) : RustM ({ l' : List α // l'.length = l.length}) :=
   match h :List.mapM clone l with
-  | ok v => ok ⟨ v, by have := List.mapM_Result_length h; scalar_tac ⟩
+  | ok v => ok ⟨ v, by have := List.mapM_RustM_length h; scalar_tac ⟩
   | fail e => fail e
   | div => div
 
 @[step]
-def List.clone_spec {clone : α → Result α} {l : List α} (h : ∀ x ∈ l, clone x = ok x) :
+def List.clone_spec {clone : α → RustM α} {l : List α} (h : ∀ x ∈ l, clone x = ok x) :
   List.clone clone l ⦃ l' => l'.val = l ∧ l'.val.length = l.length ⦄ := by
   simp only [List.clone]
   have := List.mapM_clone_eq h

@@ -5,22 +5,22 @@ import Aeneas.Std
 namespace Do
 namespace Tests
 
-open Aeneas Std Result ControlFlow Error
+open Aeneas Std RustM ControlFlow Error
 
-def test1 : Result Nat := do
+def test1 : RustM Nat := do
   ok 42
 /--
-info: def Do.Tests.test1 : Result ℕ :=
+info: def Do.Tests.test1 : RustM ℕ :=
 ok 42
 -/
 #guard_msgs in
 #print test1
 
-def test2 : Result Nat := do
+def test2 : RustM Nat := do
   let x ← ok 1
   ok x
 /--
-info: def Do.Tests.test2 : Result ℕ :=
+info: def Do.Tests.test2 : RustM ℕ :=
 do
   let x ← ok 1
   ok x
@@ -28,12 +28,12 @@ do
 #guard_msgs in
 #print test2
 
-def test3 : Result Nat := do
+def test3 : RustM Nat := do
   let x ← ok 1
   let y ← ok 2
   ok (x + y)
 /--
-info: def Do.Tests.test3 : Result ℕ :=
+info: def Do.Tests.test3 : RustM ℕ :=
 do
   let x ← ok 1
   let y ← ok 2
@@ -42,11 +42,11 @@ do
 #guard_msgs in
 #print test3
 
-def test4 : Result Nat := do
+def test4 : RustM Nat := do
   let x : Nat ← ok 1
   ok (x + 1)
 /--
-info: def Do.Tests.test4 : Result ℕ :=
+info: def Do.Tests.test4 : RustM ℕ :=
 do
   let x ← ok 1
   ok (x + 1)
@@ -54,23 +54,23 @@ do
 #guard_msgs in
 #print test4
 
-def test5 : Result Nat := do
+def test5 : RustM Nat := do
   let x := 1
   ok (x + 2)
 /--
-info: def Do.Tests.test5 : Result ℕ :=
+info: def Do.Tests.test5 : RustM ℕ :=
 have x := 1;
 ok (x + 2)
 -/
 #guard_msgs in
 #print test5
 
-def test6 : Result Nat := do
+def test6 : RustM Nat := do
   let x : Nat := 1
   let y ← ok 2
   ok (x + y)
 /--
-info: def Do.Tests.test6 : Result ℕ :=
+info: def Do.Tests.test6 : RustM ℕ :=
 have x := 1;
 do
 let y ← ok 2
@@ -79,11 +79,11 @@ ok (x + y)
 #guard_msgs in
 #print test6
 
-def test7 : Result Nat := do
+def test7 : RustM Nat := do
   let x ← ok 1
   if x > 0 then ok x else ok 0
 /--
-info: def Do.Tests.test7 : Result ℕ :=
+info: def Do.Tests.test7 : RustM ℕ :=
 do
   let x ← ok 1
   if x > 0 then ok x else ok 0
@@ -91,11 +91,11 @@ do
 #guard_msgs in
 #print test7
 
-def test8 : Result Nat := do
+def test8 : RustM Nat := do
   let x ← ok 1
   if x > 0 then ok 10 else ok 20
 /--
-info: def Do.Tests.test8 : Result ℕ :=
+info: def Do.Tests.test8 : RustM ℕ :=
 do
   let x ← ok 1
   if x > 0 then ok 10 else ok 20
@@ -103,13 +103,13 @@ do
 #guard_msgs in
 #print test8
 
-def test9 : Result Nat := do
+def test9 : RustM Nat := do
   let x ← ok 2
   let y ← do
     if x > 1 then ok 1 else ok 0
   ok y
 /--
-info: def Do.Tests.test9 : Result ℕ :=
+info: def Do.Tests.test9 : RustM ℕ :=
 do
   let x ← ok 2
   let y ← if x > 1 then ok 1 else ok 0
@@ -118,12 +118,12 @@ do
 #guard_msgs in
 #print test9
 
-def test10 : Result Nat := do
+def test10 : RustM Nat := do
   let x ← ok 2
   let y ← if x > 1 then ok 1 else ok 0
   ok y
 /--
-info: def Do.Tests.test10 : Result ℕ :=
+info: def Do.Tests.test10 : RustM ℕ :=
 do
   let x ← ok 2
   let y ← if x > 1 then ok 1 else ok 0
@@ -132,15 +132,15 @@ do
 #guard_msgs in
 #print test10
 
-def test11_body (max i : Nat) : Result (ControlFlow Nat Nat) :=
+def test11_body (max i : Nat) : RustM (ControlFlow Nat Nat) :=
   if i < max then ok (ControlFlow.cont (i + 1))
   else ok (ControlFlow.done i)
 
-def test11 : Result Nat := do
+def test11 : RustM Nat := do
   let max ← ok 10
   loop (test11_body max) 0
 /--
-info: def Do.Tests.test11 : Result ℕ :=
+info: def Do.Tests.test11 : RustM ℕ :=
 do
   let max ← ok 10
   loop (test11_body max) 0
@@ -148,11 +148,11 @@ do
 #guard_msgs in
 #print test11
 
-def test12 : Result Nat := do
+def test12 : RustM Nat := do
   let (a, b) ← ok (1, 2)
   ok (a + b)
 /--
-info: def Do.Tests.test12 : Result ℕ :=
+info: def Do.Tests.test12 : RustM ℕ :=
 do
   let (a, b) ← ok (1, 2)
   ok (a + b)
@@ -160,11 +160,11 @@ do
 #guard_msgs in
 #print test12
 
-def test13 : Result Nat := do
+def test13 : RustM Nat := do
   let (_, b) ← ok (1, 2)
   ok b
 /--
-info: def Do.Tests.test13 : Result ℕ :=
+info: def Do.Tests.test13 : RustM ℕ :=
 do
   let (_, b) ← ok (1, 2)
   ok b
@@ -172,24 +172,24 @@ do
 #guard_msgs in
 #print test13
 
-def test14 : Result Nat := do
+def test14 : RustM Nat := do
   let (a, b) := (1, 2)
   ok (a + b)
 /--
-info: def Do.Tests.test14 : Result ℕ :=
+info: def Do.Tests.test14 : RustM ℕ :=
 let (a, b) := (1, 2)
 ok (a + b)
 -/
 #guard_msgs in
 #print test14
 
-def test15 : Result Nat := do
+def test15 : RustM Nat := do
   let x ← ok 1
   match x with
   | 0 => ok 10
   | _ => ok 20
 /--
-info: def Do.Tests.test15 : Result ℕ :=
+info: def Do.Tests.test15 : RustM ℕ :=
 do
   let x ← ok 1
   match x with
@@ -199,14 +199,14 @@ do
 #guard_msgs in
 #print test15
 
-def test16 : Result Nat := do
+def test16 : RustM Nat := do
   let x ← ok 1
   let y ← match x with
     | 0 => ok 10
     | _ => ok 20
   ok (y + 1)
 /--
-info: def Do.Tests.test16 : Result ℕ :=
+info: def Do.Tests.test16 : RustM ℕ :=
 do
   let x ← ok 1
   let y ←
@@ -218,7 +218,7 @@ do
 #guard_msgs in
 #print test16
 
-def massert_test : Result Unit := do
+def massert_test : RustM Unit := do
   let s ←
     lift (Array.to_slice
       (Array.make 5#usize [ 0#u32, 1#u32, 2#u32, 3#u32, 4#u32 ]))
@@ -235,7 +235,7 @@ def massert_test : Result Unit := do
   let i2 ← core.option.Option.unwrap o1
   massert (i2 = 1#u32)
 /--
-info: def Do.Tests.massert_test : Result Unit :=
+info: def Do.Tests.massert_test : RustM Unit :=
 do
   let s ← lift (Array.make 5#usize [0#u32, 1#u32, 2#u32, 3#u32, 4#u32] massert_test._proof_7).to_slice
   let i ← core.slice.Slice.iter s
@@ -250,13 +250,13 @@ do
 #guard_msgs in
 #print massert_test
 
-def bool_test (x : Bool) : Result Bool := do
+def bool_test (x : Bool) : RustM Bool := do
   let b ← ok x
   if b
   then ok true
   else ok false
 /--
-info: def Do.Tests.bool_test : Bool → Result Bool :=
+info: def Do.Tests.bool_test : Bool → RustM Bool :=
 fun x => do
   let b ← ok x
   if b = true then ok true else ok false
@@ -264,16 +264,16 @@ fun x => do
 #guard_msgs in
 #print bool_test
 
-opaque core.mem.drop {T : Type} : T → Result Unit
+opaque core.mem.drop {T : Type} : T → RustM Unit
 
-def do_nested_test (b1 : Bool) : Result Unit := do
+def do_nested_test (b1 : Bool) : RustM Unit := do
   let _ ←
     if b1
     then ok (true, 2#u32)
     else ok (false, 0#u32)
   ok ()
 /--
-info: def Do.Tests.do_nested_test : Bool → Result Unit :=
+info: def Do.Tests.do_nested_test : Bool → RustM Unit :=
 fun b1 => do
   let _ ← if b1 = true then ok (true, 2#u32) else ok (false, 0#u32)
   ok ()
@@ -281,11 +281,11 @@ fun b1 => do
 #guard_msgs in
 #print do_nested_test
 
-def if_then_add_test (b : Bool) (x : Std.U32) : Result Std.U32 := do
+def if_then_add_test (b : Bool) (x : Std.U32) : RustM Std.U32 := do
   let y ← if b then ok 1#u32 else ok 0#u32
   x + y
 /--
-info: def Do.Tests.if_then_add_test : Bool → U32 → Result U32 :=
+info: def Do.Tests.if_then_add_test : Bool → U32 → RustM U32 :=
 fun b x => do
   let y ← if b = true then ok 1#u32 else ok 0#u32
   x + y
@@ -293,7 +293,7 @@ fun b x => do
 #guard_msgs in
 #print if_then_add_test
 
-def match_add_test (a : Std.U32) (x : Std.U32) : Result Std.U32 := do
+def match_add_test (a : Std.U32) (x : Std.U32) : RustM Std.U32 := do
   let y ←
     match a with
     | 0#uscalar => ok 0#u32
@@ -301,7 +301,7 @@ def match_add_test (a : Std.U32) (x : Std.U32) : Result Std.U32 := do
     | _ => ok 2#u32
   x + y
 /--
-info: def Do.Tests.match_add_test : U32 → U32 → Result U32 :=
+info: def Do.Tests.match_add_test : U32 → U32 → RustM U32 :=
 fun a x => do
   let y ←
     match a with
@@ -313,22 +313,22 @@ fun a x => do
 #guard_msgs in
 #print match_add_test
 
-def make2nats (x y : Nat) : Result (Nat × Nat) := do
+def make2nats (x y : Nat) : RustM (Nat × Nat) := do
   ok (x, y)
 
-def make3nats (x y z : Nat) : Result ((Nat × Nat) × Nat) := do
+def make3nats (x y z : Nat) : RustM ((Nat × Nat) × Nat) := do
   ok ((x, y), z)
 
-def make4nats (x y z w : Nat) : Result ((Nat × Nat) × (Nat × Nat)) := do
+def make4nats (x y z w : Nat) : RustM ((Nat × Nat) × (Nat × Nat)) := do
   ok ((x, y), z, w)
 
-def nested_pat_test : Result Nat := do
+def nested_pat_test : RustM Nat := do
   let (a, b) ← make2nats 1 2
   let ((c, d), e) ← make3nats 3 4 5
   let ((f, g), (h, i)) ← make4nats 6 7 8 9
   ok (a + b + c + d + e + f + g + h + i)
 /--
-info: def Do.Tests.nested_pat_test : Result ℕ :=
+info: def Do.Tests.nested_pat_test : RustM ℕ :=
 do
   let (a, b) ← make2nats 1 2
   let ((c, d), e) ← make3nats 3 4 5
@@ -346,19 +346,19 @@ structure FourNatsWrapped where
   z : TwoNatsWrapped
   w : TwoNatsWrapped
 
-def make2natswrapped (x y : Nat) : Result TwoNatsWrapped := do
+def make2natswrapped (x y : Nat) : RustM TwoNatsWrapped := do
   ok { x, y }
 
-def make4natswrapped (w₁ w₂ : TwoNatsWrapped) : Result FourNatsWrapped := do
+def make4natswrapped (w₁ w₂ : TwoNatsWrapped) : RustM FourNatsWrapped := do
   ok ⟨w₁, w₂⟩
 
-def nested_wrapped_pat_test : Result Nat := do
+def nested_wrapped_pat_test : RustM Nat := do
   let w₁ ← make2natswrapped 1 2
   let w₂ ← make2natswrapped 3 4
   let ⟨⟨x, y⟩, ⟨z, w⟩⟩ ← make4natswrapped w₁ w₂
   ok (x + y + z + w)
 /--
-info: def Do.Tests.nested_wrapped_pat_test : Result ℕ :=
+info: def Do.Tests.nested_wrapped_pat_test : RustM ℕ :=
 do
   let w₁ ← make2natswrapped 1 2
   let w₂ ← make2natswrapped 3 4
@@ -368,12 +368,12 @@ do
 #guard_msgs in
 #print nested_wrapped_pat_test
 
-def big_pat_test : Result Nat := do
+def big_pat_test : RustM Nat := do
   let (x, y, z, w) := (1,2,3,4)
   let (a, b, c, d) ← ok (5, 6, 7, 8)
   ok (x + y + z + w + a + b + c + d)
 /--
-info: def Do.Tests.big_pat_test : Result ℕ :=
+info: def Do.Tests.big_pat_test : RustM ℕ :=
 let (x, y, z, w) := (1, 2, 3, 4)
 do
 let (a, b, c, d) ← ok (5, 6, 7, 8)
@@ -386,16 +386,16 @@ structure Wrapper (T : Type) where
   x : T
 
 def make_wrapper {T : Type} (x : T) :
-  Result ((Wrapper T) × (Wrapper T → Wrapper T)) := do
+  RustM ((Wrapper T) × (Wrapper T → Wrapper T)) := do
   ok ({ x }, fun w => w)
 
 def universe_test {T : Type} (w : Wrapper T) :
-  Result ((Wrapper T) × (Wrapper T → Wrapper T)) := do
+  RustM ((Wrapper T) × (Wrapper T → Wrapper T)) := do
   let (inner, back) ← make_wrapper w.x
   let back2 := fun w1 => back { w with x := w1.x }
   ok (inner, back2)
 /--
-info: def Do.Tests.universe_test : {T : Type} → Wrapper T → Result (Wrapper T × (Wrapper T → Wrapper T)) :=
+info: def Do.Tests.universe_test : {T : Type} → Wrapper T → RustM (Wrapper T × (Wrapper T → Wrapper T)) :=
 fun {T} w => do
   let (inner, back) ← make_wrapper w.x
   have back2 : Wrapper T → Wrapper T := fun w1 => back { x := w1.x }
@@ -405,11 +405,11 @@ fun {T} w => do
 #print universe_test
 
 def make_pair {T : Type} (x y : T) :
-  Result (T × T × (T → List T) × (T → List T)) := do
+  RustM (T × T × (T → List T) × (T → List T)) := do
   ok (x, y, fun t => [t], fun t => [t])
 
 def universe_tuple_test {T : Type} (x y : T) :
-  Result ((T × T) × ((T × T) → (List T × List T))) := do
+  RustM ((T × T) × ((T × T) → (List T × List T))) := do
   let (a, b, back, back1) ← make_pair x y
   let back2 :=
     fun p =>
@@ -417,7 +417,7 @@ def universe_tuple_test {T : Type} (x y : T) :
       (back t1, back1 t2)
   ok ((a, b), back2)
 /--
-info: def Do.Tests.universe_tuple_test : {T : Type} → T → T → Result ((T × T) × (T × T → List T × List T)) :=
+info: def Do.Tests.universe_tuple_test : {T : Type} → T → T → RustM ((T × T) × (T × T → List T × List T)) :=
 fun {T} x y => do
   let (a, b, back, back1) ← make_pair x y
   have back2 : T × T → List T × List T := fun p =>
@@ -429,12 +429,12 @@ fun {T} x y => do
 #print universe_tuple_test
 
 def get_and_update (xs : alloc.vec.Vec U32) (i : Usize) :
-  Result (U32 × (U32 → alloc.vec.Vec U32)) := do
+  RustM (U32 × (U32 → alloc.vec.Vec U32)) := do
   let x ← alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice U32) xs i
   ok (x, fun _v => xs)
 
 def mono_loop_test (xs : alloc.vec.Vec U32) (i : Usize) :
-  Result (alloc.vec.Vec U32) := do
+  RustM (alloc.vec.Vec U32) := do
   let i1 := alloc.vec.Vec.len xs
   if i < i1
   then
@@ -445,7 +445,7 @@ def mono_loop_test (xs : alloc.vec.Vec U32) (i : Usize) :
   else ok xs
 partial_fixpoint
 /--
-info: @[irreducible] def Do.Tests.mono_loop_test : alloc.vec.Vec U32 → Usize → Result (alloc.vec.Vec U32) :=
+info: @[irreducible] def Do.Tests.mono_loop_test : alloc.vec.Vec U32 → Usize → RustM (alloc.vec.Vec U32) :=
 Lean.Order.fix
   (fun f xs i =>
     let i1 := xs.len;
@@ -460,12 +460,12 @@ Lean.Order.fix
 #guard_msgs in
 #print mono_loop_test
 
-def doIf_pat_test (b : Bool) : Result (Nat × Nat) := do
+def doIf_pat_test (b : Bool) : RustM (Nat × Nat) := do
   let (x, y) ←
     if b then ok (1, 2) else ok (3, 4)
   ok (x, y)
 /--
-info: def Do.Tests.doIf_pat_test : Bool → Result (ℕ × ℕ) :=
+info: def Do.Tests.doIf_pat_test : Bool → RustM (ℕ × ℕ) :=
 fun b => do
   let (x, y) ← if b = true then ok (1, 2) else ok (3, 4)
   ok (x, y)
@@ -473,14 +473,14 @@ fun b => do
 #guard_msgs in
 #print doIf_pat_test
 
-def match_pat_test (n : Nat) : Result (Nat × Nat) := do
+def match_pat_test (n : Nat) : RustM (Nat × Nat) := do
   let (x, y) ←
     match n with
     | 0 => ok (1, 2)
     | _ => ok (3, 4)
   ok (x, y)
 /--
-info: def Do.Tests.match_pat_test : ℕ → Result (ℕ × ℕ) :=
+info: def Do.Tests.match_pat_test : ℕ → RustM (ℕ × ℕ) :=
 fun n => do
   let (x, y) ←
     match n with
@@ -491,14 +491,14 @@ fun n => do
 #guard_msgs in
 #print match_pat_test
 
-def else_if_test (x y : Nat) : Result Ordering := do
+def else_if_test (x y : Nat) : RustM Ordering := do
   if x < y
   then ok Ordering.lt
   else if x = y
   then ok Ordering.eq
   else ok Ordering.gt
 /--
-info: def Do.Tests.else_if_test : ℕ → ℕ → Result Ordering :=
+info: def Do.Tests.else_if_test : ℕ → ℕ → RustM Ordering :=
 fun x y => if x < y then ok Ordering.lt else if x = y then ok Ordering.eq else ok Ordering.gt
 -/
 #guard_msgs in
@@ -507,11 +507,11 @@ fun x y => if x < y then ok Ordering.lt else if x = y then ok Ordering.eq else o
 inductive Wrap where
   | mk : Nat → Wrap
 
-def anon_ctor_test (w : Wrap) : Result Nat := do
+def anon_ctor_test (w : Wrap) : RustM Nat := do
   let ⟨ n ⟩ := w
   ok (n + 1)
 /--
-info: def Do.Tests.anon_ctor_test : Wrap → Result ℕ :=
+info: def Do.Tests.anon_ctor_test : Wrap → RustM ℕ :=
 fun w =>
   let ⟨n⟩ := w
   ok (n + 1)
@@ -519,11 +519,11 @@ fun w =>
 #guard_msgs in
 #print anon_ctor_test
 
-def anon_ctor_monadic_test (w : Wrap) : Result Nat := do
+def anon_ctor_monadic_test (w : Wrap) : RustM Nat := do
   let ⟨ n ⟩ ← ok w
   ok (n + 1)
 /--
-info: def Do.Tests.anon_ctor_monadic_test : Wrap → Result ℕ :=
+info: def Do.Tests.anon_ctor_monadic_test : Wrap → RustM ℕ :=
 fun w => do
   let ⟨n⟩ ← ok w
   ok (n + 1)
@@ -537,32 +537,32 @@ structure ExBox (Inst : Type → Type) where
   val : ty
 
 structure Into2 (Self : Type) (T : Type) where
-  into : Self → Result T
+  into : Self → RustM T
 
 def exbox_lambda_test {V T W : Type}
     (inst1 : Into2 T V) (inst2 : Into2 W V)
     (b : Bool) (x : T) (y : W) :
-    Result (ExBox (fun _dyn => Into2 _dyn V)) := do
+    RustM (ExBox (fun _dyn => Into2 _dyn V)) := do
   if b
   then ok (ExBox.mk _ inst1 x)
   else ok (ExBox.mk _ inst2 y)
 /--
 info: def Do.Tests.exbox_lambda_test : {V T W : Type} →
-  Into2 T V → Into2 W V → Bool → T → W → Result (ExBox fun _dyn => Into2 _dyn V) :=
+  Into2 T V → Into2 W V → Bool → T → W → RustM (ExBox fun _dyn => Into2 _dyn V) :=
 fun {V T W} inst1 inst2 b x y =>
   if b = true then ok { ty := T, inst := inst1, val := x } else ok { ty := W, inst := inst2, val := y }
 -/
 #guard_msgs in
 #print exbox_lambda_test
 
-def do_if_rest_test : Result Nat := do
+def do_if_rest_test : RustM Nat := do
   let b ← ok true
   if b then ok () else ok ()
   if b then ok () else ok ()
   if b then ok () else ok ()
   ok 1
 /--
-info: def Do.Tests.do_if_rest_test : Result ℕ :=
+info: def Do.Tests.do_if_rest_test : RustM ℕ :=
 do
   let b ← ok true
   if b = true then ok () else ok ()
@@ -575,7 +575,7 @@ do
 
 inductive MatchTest | A | B | C
 
-def do_match_rest_test (m : MatchTest) : Result Nat := do
+def do_match_rest_test (m : MatchTest) : RustM Nat := do
   let n ← ok 3
   match m with
   | .A => ok ()
@@ -587,7 +587,7 @@ def do_match_rest_test (m : MatchTest) : Result Nat := do
   | .C => ok ()
   pure n
 /--
-info: def Do.Tests.do_match_rest_test : MatchTest → Result ℕ :=
+info: def Do.Tests.do_match_rest_test : MatchTest → RustM ℕ :=
 fun m => do
   let n ← ok 3
   match m with
@@ -606,7 +606,7 @@ fun m => do
 /-! Unused var linter tests -/
 
 #guard_msgs in
-def do_match_pat_var_used (n : Nat) : Result Nat := do
+def do_match_pat_var_used (n : Nat) : RustM Nat := do
   match n with
   | 0 => ok 42
   | k + 1 =>
@@ -618,7 +618,7 @@ def do_match_pat_var_used (n : Nat) : Result Nat := do
 inductive Two | A (n : Nat) | B (n : Nat)
 
 #guard_msgs in
-def do_match_cross_arm_used (t : Two) : Result Nat := do
+def do_match_cross_arm_used (t : Two) : RustM Nat := do
   match t with
   | .A n => ok n
   | .B n => ok n
@@ -635,13 +635,13 @@ The binding can be removed (if unused) or named `_` (if used implicitly).
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false` -/
 #guard_msgs in
-def do_match_cross_arm_unused (t : Two) : Result Nat := do
+def do_match_cross_arm_unused (t : Two) : RustM Nat := do
   match t with
   | .A n => ok 0
   | .B n => ok 0
 
 #guard_msgs in
-def do_let_arrow_id_used : Result Nat := do
+def do_let_arrow_id_used : RustM Nat := do
   let x ← ok 1
   ok (x + 1)
 
@@ -651,17 +651,17 @@ The binding can be removed (if unused) or named `_` (if used implicitly).
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false` -/
 #guard_msgs in
-def do_let_arrow_id_unused : Result Nat := do
+def do_let_arrow_id_unused : RustM Nat := do
   let x ← ok 1
   ok 42
 
 #guard_msgs in
-def do_let_id_used : Result Nat := do
+def do_let_id_used : RustM Nat := do
   let x := 1
   ok (x + 1)
 
 #guard_msgs in
-def do_let_arrow_pat_used : Result Nat := do
+def do_let_arrow_pat_used : RustM Nat := do
   let (a, b) ← ok (1, 2)
   ok (a + b)
 
@@ -691,7 +691,7 @@ The binding can be removed (if unused) or named `_` (if used implicitly).
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 -/
 #guard_msgs in
-def do_let_arrow_pat_unused : Result Nat := do
+def do_let_arrow_pat_unused : RustM Nat := do
   let ((a, b, c), d) ← ok ((1, 2, 3), 4)
   ok 42
 
@@ -722,11 +722,11 @@ The binding can be removed (if unused) or named `_` (if used implicitly).
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 -/
 #guard_msgs in
-def do_let_pat_unused : Result Nat := do
+def do_let_pat_unused : RustM Nat := do
   let ((a, b, c), d) := ((1, 2, 3), 4)
   ok 42
 
-def unit_bind : Result Nat := do
+def unit_bind : RustM Nat := do
   let () ← ok ()
   ok 1
 
@@ -741,22 +741,22 @@ subsequent `match` on `Option` may carry unresolved metavars.  The holed match
 pattern `none` can be elaborated. -/
 namespace MetavarTests
 
-open Aeneas Std Result ControlFlow Error
+open Aeneas Std RustM ControlFlow Error
 
 structure TestIter (I : Type) (Item : Type) where
-  next : I → Result (Option Item × I)
+  next : I → RustM (Option Item × I)
   extra : I → Nat
   deriving Nonempty
 
 noncomputable opaque testEnumNext
   {I : Type} {Item : Type} (inst : TestIter I Item) (e : Nat) :
-  Result (Option (Nat × Item) × Nat)
+  RustM (Option (Nat × Item) × Nat)
 
 noncomputable opaque testIterInst : TestIter (List Nat) Nat
 
 #guard_msgs in
 noncomputable def option_match_metavar_test
-  (e : Nat) (acc : Nat) : Result Nat := do
+  (e : Nat) (acc : Nat) : RustM Nat := do
   let (o, _e1) ← testEnumNext testIterInst e
   match o with
   | none => ok acc
@@ -764,7 +764,7 @@ noncomputable def option_match_metavar_test
     let (_i, x) := p
     ok (acc + x)
 /--
-info: def Do.MetavarTests.option_match_metavar_test : ℕ → ℕ → Result ℕ :=
+info: def Do.MetavarTests.option_match_metavar_test : ℕ → ℕ → RustM ℕ :=
 fun e acc => do
   let (o, _e1) ← testEnumNext testIterInst e
   match o with
@@ -778,7 +778,7 @@ fun e acc => do
 
 #guard_msgs in
 noncomputable def option_match_metavar_loop_test
-  (e : Nat) (acc : Nat) : Result Nat := do
+  (e : Nat) (acc : Nat) : RustM Nat := do
   let (o, e1) ← testEnumNext testIterInst e
   match o with
   | none => ok acc
@@ -787,7 +787,7 @@ noncomputable def option_match_metavar_loop_test
     option_match_metavar_loop_test e1 (acc + x)
 partial_fixpoint
 /--
-info: @[irreducible] def Do.MetavarTests.option_match_metavar_loop_test : ℕ → ℕ → Result ℕ :=
+info: @[irreducible] def Do.MetavarTests.option_match_metavar_loop_test : ℕ → ℕ → RustM ℕ :=
 Lean.Order.fix
   (fun f e acc => do
     let (o, e1) ← testEnumNext testIterInst e
@@ -805,7 +805,7 @@ end MetavarTests
 
 namespace CapturedSynthMVarTests
 
-open Aeneas Std Result ControlFlow Error
+open Aeneas Std RustM ControlFlow Error
 
 /-! Regression tests for synthetic mvars captured across `do` binders.
 
@@ -815,50 +815,50 @@ synthetic mvar discharged by tactics. If the literal is elaborated under a
 gets captured as `?proof c`, making the bind continuation's body type
 syntactically depend on `c` and breaking `Bind.bind` unification. -/
 
-opaque f_dep (N : Usize) : Result (Std.Array U64 N)
+opaque f_dep (N : Usize) : RustM (Std.Array U64 N)
 
 /-- `let _ : Type ← _`: the originally reported regression. -/
-def dep_return_let_arrow_id : Result (Std.Array U64 25#usize) := do
+def dep_return_let_arrow_id : RustM (Std.Array U64 25#usize) := do
   let _c : Usize ← pure 0#usize
   f_dep 25#usize
 
 /-- `let _ : _ := _`. -/
-def dep_return_let_id : Result (Std.Array U64 25#usize) := do
+def dep_return_let_id : RustM (Std.Array U64 25#usize) := do
   let _c : Usize := 0#usize
   f_dep 25#usize
 
 /-- `let pat ← _` (pattern, monadic). -/
-def dep_return_let_arrow_pat : Result (Std.Array U64 25#usize) := do
-  let (_a, _b) ← (pure (0, 0) : Result (Nat × Nat))
+def dep_return_let_arrow_pat : RustM (Std.Array U64 25#usize) := do
+  let (_a, _b) ← (pure (0, 0) : RustM (Nat × Nat))
   f_dep 25#usize
 
 /-- `let pat := _` (pattern, pure). -/
-def dep_return_let_pat : Result (Std.Array U64 25#usize) := do
+def dep_return_let_pat : RustM (Std.Array U64 25#usize) := do
   let (_a, _b) := ((0, 0) : Nat × Nat)
   f_dep 25#usize
 
 /-- Stacked bindings exercising every let form. -/
-def dep_return_stacked : Result (Std.Array U64 25#usize) := do
+def dep_return_stacked : RustM (Std.Array U64 25#usize) := do
   let _x : Usize ← pure 0#usize
   let _y : Nat := 0
-  let (_a, _b) ← (pure (1, 2) : Result (Nat × Nat))
+  let (_a, _b) ← (pure (1, 2) : RustM (Nat × Nat))
   f_dep 25#usize
 
 /-- Match arm body returning a dependent type (`assignArmMVar` path). -/
-def dep_return_match (b : Bool) : Result (Std.Array U64 25#usize) := do
+def dep_return_match (b : Bool) : RustM (Std.Array U64 25#usize) := do
   match b with
   | true => f_dep 25#usize
   | false => f_dep 25#usize
 
 /-- Match with pattern-bound fvars in the arm context (non-trivial
     `assignArmMVar` path). -/
-def dep_return_match_pat (o : Option Nat) : Result (Std.Array U64 25#usize) := do
+def dep_return_match_pat (o : Option Nat) : RustM (Std.Array U64 25#usize) := do
   match o with
   | some _x => f_dep 25#usize
   | none => f_dep 25#usize
 
 /-- If branches with rest = [] (`elabMonadicAsDoElem` leaf path). -/
-def dep_return_if (b : Bool) : Result (Std.Array U64 25#usize) := do
+def dep_return_if (b : Bool) : RustM (Std.Array U64 25#usize) := do
   if b then
     f_dep 25#usize
   else
@@ -866,7 +866,7 @@ def dep_return_if (b : Bool) : Result (Std.Array U64 25#usize) := do
 
 /-- Non-bound monadic statement before a dependent return
     (`elabMonadicAsDoElem` rest ≠ [] path). -/
-def dep_return_seq : Result (Std.Array U64 25#usize) := do
+def dep_return_seq : RustM (Std.Array U64 25#usize) := do
   let _x : Usize ← pure 0#usize
   pure ()
   f_dep 25#usize

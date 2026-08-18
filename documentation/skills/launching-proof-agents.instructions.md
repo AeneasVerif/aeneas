@@ -388,7 +388,7 @@ Launch agents to write theorem statements with `sorry` proofs. Each agent:
    Example output structure:
    ```lean
    -- Auxiliary function: extracted from lines 15-25 of the main function
-   private def setup_phase (params : U32) (buf : Slice U16) : Result (Slice U16) := do
+   private def setup_phase (params : U32) (buf : Slice U16) : RustM (Slice U16) := do
      ...
 
    -- Fold theorem (to be proved)
@@ -957,8 +957,8 @@ These cannot be reliably grepped — the reviewer must read the proof:
 - **Do fold theorems use curried continuations?** (Rule: "Fold theorem continuation
   must use curried arguments, not tuples")
   When the fold helper returns a tuple, the continuation `f` must take separate
-  curried arguments (`f : A → B → C → Result α` with `f a b c`), NOT a single
-  tuple (`f : A × B × C → Result α` with `f (a, b, c)`). The tuple form silently
+  curried arguments (`f : A → B → C → RustM α` with `f a b c`), NOT a single
+  tuple (`f : A × B × C → RustM α` with `f (a, b, c)`). The tuple form silently
   breaks `simp` matching — the theorem type-checks and proves but does nothing
   when applied inside a parent function.
 

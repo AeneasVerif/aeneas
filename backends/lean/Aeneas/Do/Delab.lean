@@ -110,14 +110,14 @@ where
 
 open Parser Term
 
-/-- Top-level `do`-block delab, restricted to the `Std.Result` monad. -/
+/-- Top-level `do`-block delab, restricted to the `Std.RustM` monad. -/
 @[delab app.Bind.bind]
 def aeneasDelabDo : Delab := whenNotPPOption getPPExplicit <| whenPPOption getPPNotation do
   unless Aeneas.customDoElab.get (← getOptions) do failure
   let e ← getExpr
-  -- only use the new `do` delaborator for `Result _` do blocks
+  -- only use the new `do` delaborator for `RustM _` do blocks
   unless e.isAppOfArity ``Bind.bind 6 do failure
-  unless e.getAppArgs[0]!.isConstOf ``Aeneas.Std.Result do failure
+  unless e.getAppArgs[0]!.isConstOf ``Aeneas.Std.RustM do failure
   let elems ← aeneasDelabDoElems
   let items ← elems.toArray.mapM (`(doSeqItem|$(·):doElem))
   `(do $items:doSeqItem*)

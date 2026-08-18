@@ -4,7 +4,7 @@ import Aeneas
 import ExtraIncludes.Types
 import Lean
 import Aeneas.Std.Alloc
-open Aeneas Aeneas.Std Result ControlFlow Error
+open Aeneas Aeneas.Std RustM ControlFlow Error
 set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false
@@ -20,7 +20,7 @@ namespace extra_includes
 /-- [extra_includes::sum]:
     Source: 'tests/src/extra-includes.rs', lines 12:0-14:1
     Visibility: public -/
-def sum (p : Pair) : Result Std.U32 := do
+def sum (p : Pair) : RustM Std.U32 := do
   ok (core.num.U32.wrapping_add p.x p.y)
 
 end extra_includes

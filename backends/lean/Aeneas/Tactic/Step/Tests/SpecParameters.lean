@@ -1,31 +1,31 @@
 import Aeneas.Tactic.Step
 
-open Aeneas Aeneas.Std Result
+open Aeneas Aeneas.Std RustM
 
 namespace Aeneas.Tactic.Step.Tests.SpecParameters
 
 /- A custom spec with an extra parameter that must be shared across binds. -/
-@[irreducible] def paramSpec {α : Type} (tag : Nat) (x : Result α) (Q : α → Prop) : Prop :=
+@[irreducible] def paramSpec {α : Type} (tag : Nat) (x : RustM α) (Q : α → Prop) : Prop :=
   tag = tag ∧ Std.WP.spec x Q
 
-theorem paramSpec_mono' {α : Type} {tag : Nat} {P₁ : α → Prop} {m : Result α}
+theorem paramSpec_mono' {α : Type} {tag : Nat} {P₁ : α → Prop} {m : RustM α}
     {P₀ : α → Prop} (h : paramSpec tag m P₀) :
     Std.WP.qimp P₀ P₁ → paramSpec tag m P₁ := by
   intro hq
   unfold paramSpec at h ⊢
   exact ⟨rfl, Std.WP.spec_mono' h.2 hq⟩
 
-def qimpParam {α β : Type} (tag : Nat) (Pₘ : α → Prop) (k : α → Result β)
+def qimpParam {α β : Type} (tag : Nat) (Pₘ : α → Prop) (k : α → RustM β)
     (Pₖ : β → Prop) : Prop :=
   ∀ x, Pₘ x → paramSpec tag (k x) Pₖ
 
 theorem qimpParam_iff {α β : Type} (tag : Nat) (Pₘ : α → Prop)
-    (k : α → Result β) (Pₖ : β → Prop) :
+    (k : α → RustM β) (Pₖ : β → Prop) :
     qimpParam tag Pₘ k Pₖ ↔ ∀ x, Pₘ x → paramSpec tag (k x) Pₖ :=
   Iff.rfl
 
-theorem paramSpec_bind' {α β : Type} {k : α → Result β} {Pₖ : β → Prop}
-    {tag : Nat} {m : Result α} {Pₘ : α → Prop} :
+theorem paramSpec_bind' {α β : Type} {k : α → RustM β} {Pₖ : β → Prop}
+    {tag : Nat} {m : RustM α} {Pₘ : α → Prop} :
     paramSpec tag m Pₘ →
     qimpParam tag Pₘ k Pₖ →
     paramSpec tag (Std.bind m k) Pₖ := by
@@ -60,14 +60,14 @@ theorem paramSpec_bind' {α β : Type} {k : α → Result β} {Pₖ : β → Pro
     liftings := #[]
   }
 
-def op (n : Nat) : Result Nat := ok n
+def op (n : Nat) : RustM Nat := ok n
 
 @[step]
 theorem op_spec (n tag : Nat) :
     paramSpec tag (op n) (fun r => r = n) := by
   simp [paramSpec, op, Std.WP.spec_ok]
 
-def prog (a b : Nat) : Result Nat := do
+def prog (a b : Nat) : RustM Nat := do
   let x ← op a
   let y ← op b
   ok (x + y)

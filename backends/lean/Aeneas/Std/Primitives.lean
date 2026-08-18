@@ -61,18 +61,18 @@ deriving Repr, BEq
 
 open Error
 
-inductive Result (α : Type u) where
-  | ok (v: α): Result α
-  | fail (e: Error): Result α
+inductive RustM (α : Type u) where
+  | ok (v: α): RustM α
+  | fail (e: Error): RustM α
   | div
 deriving Repr, BEq
 
-open Result
+open RustM
 
-instance Result_Inhabited (α : Type u) : Inhabited (Result α) :=
+instance RustM_Inhabited (α : Type u) : Inhabited (RustM α) :=
   Inhabited.mk (fail panic)
 
-instance Result_Nonempty (α : Type u) : Nonempty (Result α) :=
+instance RustM_Nonempty (α : Type u) : Nonempty (RustM α) :=
   Nonempty.intro div
 
 /-!
@@ -80,83 +80,83 @@ instance Result_Nonempty (α : Type u) : Nonempty (Result α) :=
 -/
 
 @[global_simps]
-def ok? {α: Type u} (r: Result α): Bool :=
+def ok? {α: Type u} (r: RustM α): Bool :=
   match r with
   | ok _ => true
   | fail _ | div => false
 
-def div? {α: Type u} (r: Result α): Bool :=
+def div? {α: Type u} (r: RustM α): Bool :=
   match r with
   | div => true
   | ok _ | fail _ => false
 
-def massert (b : Prop) [Decidable b] : Result Unit :=
+def massert (b : Prop) [Decidable b] : RustM Unit :=
   if b then ok () else fail assertionFailure
 
 macro "prove_eval_global" : tactic => `(tactic| simp (failIfUnchanged := false) only [global_simps] <;> first | apply Eq.refl | decide)
 
 @[global_simps]
-def eval_global {α: Type u} (x: Result α) (_: ok? x := by prove_eval_global) : α :=
+def eval_global {α: Type u} (x: RustM α) (_: ok? x := by prove_eval_global) : α :=
   match x with
   | fail _ | div => by contradiction
   | ok x => x
 
 @[simp]
-def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
+def RustM.ofOption {a : Type u} (x : Option a) (e : Error) : RustM a :=
   match x with
   | some x => ok x
   | none => fail e
 
-@[simp] abbrev liftFun1 {α β} (f : α → β) : α → Result β := fun x => ok (f x)
-@[simp] abbrev liftFun2 {α β γ : Type} (f : α → β → γ) : α → β → Result γ := fun x y => ok (f x y)
-@[simp] abbrev liftFun3 {α β γ δ} (f : α → β → γ → δ) : α → β → γ → Result δ := fun x y z => ok (f x y z)
-@[simp] abbrev liftFun4 {α β γ δ ε} (f : α → β → γ → δ → ε) : α → β → γ → δ → Result ε := fun x y z a => ok (f x y z a)
+@[simp] abbrev liftFun1 {α β} (f : α → β) : α → RustM β := fun x => ok (f x)
+@[simp] abbrev liftFun2 {α β γ : Type} (f : α → β → γ) : α → β → RustM γ := fun x y => ok (f x y)
+@[simp] abbrev liftFun3 {α β γ δ} (f : α → β → γ → δ) : α → β → γ → RustM δ := fun x y z => ok (f x y z)
+@[simp] abbrev liftFun4 {α β γ δ ε} (f : α → β → γ → δ → ε) : α → β → γ → δ → RustM ε := fun x y z a => ok (f x y z a)
 
 /-!
 # Do-DSL Support
 -/
 
-def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
+def bind {α : Type u} {β : Type v} (x: RustM α) (f: α → RustM β) : RustM β :=
   match x with
   | ok v  => f v
   | fail v => fail v
   | div => div
 
--- Allows using Result in do-blocks
-instance : Bind Result where
+-- Allows using RustM in do-blocks
+instance : Bind RustM where
   bind := bind
 
 -- Allows using pure x in do-blocks
-instance : Pure Result where
+instance : Pure RustM where
   pure := fun x => ok x
 
-@[simp] theorem bind_ok (x : α) (f : α → Result β) : bind (.ok x) f = f x := by simp [bind]
-@[simp] theorem bind_fail (x : Error) (f : α → Result β) : bind (.fail x) f = .fail x := by simp [bind]
-@[simp] theorem bind_div (f : α → Result β) : bind .div f = .div := by simp [bind]
+@[simp] theorem bind_ok (x : α) (f : α → RustM β) : bind (.ok x) f = f x := by simp [bind]
+@[simp] theorem bind_fail (x : Error) (f : α → RustM β) : bind (.fail x) f = .fail x := by simp [bind]
+@[simp] theorem bind_div (f : α → RustM β) : bind .div f = .div := by simp [bind]
 
-@[simp] theorem bind_tc_ok (x : α) (f : α → Result β) :
+@[simp] theorem bind_tc_ok (x : α) (f : α → RustM β) :
   (do let y ← .ok x; f y) = f x := by simp [Bind.bind, bind]
 
-@[simp] theorem bind_tc_fail (x : Error) (f : α → Result β) :
+@[simp] theorem bind_tc_fail (x : Error) (f : α → RustM β) :
   (do let y ← fail x; f y) = fail x := by simp [Bind.bind, bind]
 
-@[simp] theorem bind_tc_div (f : α → Result β) :
+@[simp] theorem bind_tc_div (f : α → RustM β) :
   (do let y ← div; f y) = div := by simp [Bind.bind, bind]
 
 @[simp] theorem bind_assoc_eq {a b c : Type u}
-  (e : Result a) (g :  a → Result b) (h : b → Result c) :
+  (e : RustM a) (g :  a → RustM b) (h : b → RustM c) :
   (Bind.bind (Bind.bind e g) h) =
   (Bind.bind e (λ x => Bind.bind (g x) h)) := by
   simp [Bind.bind]
   cases e <;> simp
 
 @[simp]
-def bind_eq_iff (x : Result α) (y y' : α → Result β) :
+def bind_eq_iff (x : RustM α) (y y' : α → RustM β) :
   ((Bind.bind x y) = (Bind.bind x y')) ↔
   ∀ v, x = ok v → y v = y' v := by
   cases x <;> simp_all
 
-instance : Monad Result where
+instance : Monad RustM where
 
 /-!
 # Partial Fixpoint
@@ -166,16 +166,16 @@ section Order
 
 open Lean.Order
 
-instance : PartialOrder (Result α) := inferInstanceAs (PartialOrder (FlatOrder .div))
-noncomputable instance : CCPO (Result α) where
-  has_csup hc := FlatOrder.instCCPO (b := Result.div).has_csup hc
-noncomputable instance : MonoBind Result where
+instance : PartialOrder (RustM α) := inferInstanceAs (PartialOrder (FlatOrder .div))
+noncomputable instance : CCPO (RustM α) where
+  has_csup hc := FlatOrder.instCCPO (b := RustM.div).has_csup hc
+noncomputable instance : MonoBind RustM where
   bind_mono_left h := by
     cases h
     · exact FlatOrder.rel.bot
     · exact FlatOrder.rel.refl
   bind_mono_right h := by
-    cases ‹Result _›
+    cases ‹RustM _›
     · exact h _
     · exact FlatOrder.rel.refl
     · exact FlatOrder.rel.refl
@@ -265,21 +265,21 @@ attribute [simp, grind =] Function.uncurry_apply_pair
 
     The downside is that using `lift` forces users to write `step` theorems for pure expressions
     which appear inside a `lift`. As only a specific set of functions from the standard library are
-    purified (i.e., don't live in `Result`), this should not be a big issue in practice.
+    purified (i.e., don't live in `RustM`), this should not be a big issue in practice.
   -/
-def lift {α : Type u} (x : α) : Result α := Result.ok x
+def lift {α : Type u} (x : α) : RustM α := RustM.ok x
 
 /-!
-# Register `Result` for `mvcgen`'s `WP` type class
+# Register `RustM` for `mvcgen`'s `WP` type class
 -/
 
 section
 open Std.Do
 
-abbrev Result.postShape : PostShape := (.except (ULift Error) (.except PUnit .pure))
+abbrev RustM.postShape : PostShape := (.except (ULift Error) (.except PUnit .pure))
 
-/-- WP interpretation of the `Result` monad in terms of `Std.Do`, used by `mvcgen`. -/
-instance Result.instWP : WP Result.{u} postShape where
+/-- WP interpretation of the `RustM` monad in terms of `Std.Do`, used by `mvcgen`. -/
+instance RustM.instWP : WP RustM.{u} postShape where
   wp x := {
     trans Q := match x with | .ok a => Q.1 a | .fail e => Q.2.1 (ULift.up e) | .div => Q.2.2.1 .unit
     conjunctiveRaw Q₁ Q₂ := by
@@ -287,25 +287,25 @@ instance Result.instWP : WP Result.{u} postShape where
       cases x <;> simp
   }
 
-abbrev PostCond.okAssertion {α : Type u} (Q : PostCond α Result.postShape) (r : α) :
+abbrev PostCond.okAssertion {α : Type u} (Q : PostCond α RustM.postShape) (r : α) :
     Assertion postShape :=
   Q.1 r
 
-abbrev PostCond.ok {α : Type u} (Q : PostCond α Result.postShape) (r : α) : Prop :=
+abbrev PostCond.ok {α : Type u} (Q : PostCond α RustM.postShape) (r : α) : Prop :=
   (Q.1 r).down
 
-abbrev PostCond.failAssertion {α : Type u} (Q : PostCond α Result.postShape) (e : ULift Error) :
+abbrev PostCond.failAssertion {α : Type u} (Q : PostCond α RustM.postShape) (e : ULift Error) :
     Assertion postShape :=
   Q.2.1 e
 
-abbrev PostCond.fail {α : Type u} (Q : PostCond α Result.postShape) (e : Error) : Prop :=
+abbrev PostCond.fail {α : Type u} (Q : PostCond α RustM.postShape) (e : Error) : Prop :=
   (Q.2.1 (.up e)).down
 
-abbrev PostCond.divAssertion {α : Type u} (Q : PostCond α Result.postShape) :
+abbrev PostCond.divAssertion {α : Type u} (Q : PostCond α RustM.postShape) :
     PUnit → Assertion postShape :=
   Q.2.2.1
 
-abbrev PostCond.div {α : Type u} (Q : PostCond α Result.postShape) : Prop :=
+abbrev PostCond.div {α : Type u} (Q : PostCond α RustM.postShape) : Prop :=
   (Q.2.2.1 .unit).down
 
 end
@@ -319,7 +319,7 @@ inductive ControlFlow (α : Type u) (β : Type v) where
   | done (v : β) -- break
 deriving Repr, BEq
 
-def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) (x : α) : Result β := do
+def loop {α : Type u} {β : Type v} (body : α → RustM (ControlFlow α β)) (x : α) : RustM β := do
   match body x with
   | ok r =>
     match r with
@@ -342,7 +342,7 @@ postcondition or continues (`.cont`) preserving the invariant while decreasing t
 theorem loop_spec
   {α β γ : Type}
   {P : PostCond β (PostShape.except (ULift Error) (PostShape.except PUnit.{1} PostShape.pure))}
-  {body : α → Result (ControlFlow α β)} {init : α}
+  {body : α → RustM (ControlFlow α β)} {init : α}
   (inv : α → Prop)
   (rel : γ → γ → Prop)
   (termination : α → γ)
@@ -368,7 +368,7 @@ theorem loop_spec
       intro y
       apply Lean.Order.admissible_pi
       intro _
-      apply Lean.Order.admissible_apply (β := fun _ => Result β)
+      apply Lean.Order.admissible_apply (β := fun _ => RustM β)
         (P := fun y r => (wp⟦r⟧ P).down) y
       exact Lean.Order.admissible_flatOrder _ hdiv
     · intro g IH y hinvy
@@ -419,7 +419,7 @@ instance SubtypeLawfulBEq [BEq α] (p : α → Prop) [LawfulBEq α] : LawfulBEq 
 
 /- A helper function that converts failure to none and success to some
    TODO: move up to Core module? -/
-def Option.ofResult {a : Type u} (x : Result a) :
+def Option.ofRustM {a : Type u} (x : RustM a) :
   Option a :=
   match x with
   | ok x => some x

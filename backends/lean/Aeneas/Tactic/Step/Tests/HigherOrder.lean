@@ -1,14 +1,14 @@
 import Aeneas.Std.Slice
 import Aeneas.Tactic.Step
 
-open Aeneas Aeneas.Std Result ControlFlow Error
+open Aeneas Aeneas.Std RustM ControlFlow Error
 
 namespace higher_order
 
-def applyF (f : U32 → Result U32) (x : U32) : Result U32 := f x
+def applyF (f : U32 → RustM U32) (x : U32) : RustM U32 := f x
 
 @[step]
-theorem applyF_spec (f : U32 → Result U32) (x : U32)
+theorem applyF_spec (f : U32 → RustM U32) (x : U32)
     (post : U32 → Prop)
     (hf : f x ⦃ post ⦄) :
     applyF f x ⦃ post ⦄ := by
@@ -32,13 +32,13 @@ example (a : U32) (h : a.val + 1 ≤ U32.max) :
   trace_state
 
 -- Higher-order in 2 functions, operates on a pair of inputs/outputs
-def callPair (f : U32 → Result U32) (g : U32 → Result U32) (xy : U32 × U32) : Result (U32 × U32) := do
+def callPair (f : U32 → RustM U32) (g : U32 → RustM U32) (xy : U32 × U32) : RustM (U32 × U32) := do
   let a ← f xy.1
   let b ← g xy.2
   pure (a, b)
 
 @[step]
-theorem callPair_spec (f g : U32 → Result U32) (xy : U32 × U32)
+theorem callPair_spec (f g : U32 → RustM U32) (xy : U32 × U32)
     (postF : U32 → Prop) (postG : U32 → Prop)
     (hf : f xy.1 ⦃ postF ⦄) (hg : g xy.2 ⦃ postG ⦄) :
     callPair f g xy ⦃ fun p => postF p.1 ∧ postG p.2 ⦄ := by
@@ -67,12 +67,12 @@ example (x y : U32) (hx : x.val + 1 ≤ U32.max) (hy : y.val + 2 ≤ U32.max) :
   trace_state
 
 -- Calls f then g in sequence
-def callFThenG (f g : U32 → Result U32) (x : U32) : Result U32 := do
+def callFThenG (f g : U32 → RustM U32) (x : U32) : RustM U32 := do
   let y ← f x
   g y
 
 @[step]
-theorem callFThenG_spec (f g : U32 → Result U32) (x : U32)
+theorem callFThenG_spec (f g : U32 → RustM U32) (x : U32)
     (mid post : U32 → Prop)
     (hf : f x ⦃ mid ⦄)
     (hg : ∀ y, mid y → g y ⦃ post ⦄) :
@@ -101,7 +101,7 @@ example (x : U32) (h1 : x.val + 1 ≤ U32.max) (h2 : x.val + 2 ≤ U32.max) :
   step*? +inferPost
   trace_state
 
-def callSlicemapM (x : Slice U32) : Result (Slice U32) := do
+def callSlicemapM (x : Slice U32) : RustM (Slice U32) := do
   let y ← x.mapM (fun x => x + 1#u32)
   pure y
 
@@ -140,7 +140,7 @@ example (s : Slice U32) (h : ∀ i (hi : i < s.len), s[i] < U32.max) :
     agrind (instances := 20) (ematch := 1)
   agrind (instances := 40) (ematch := 2)
 
-def callSlicemapMTwice (x : Slice U32) : Result (Slice U32) := do
+def callSlicemapMTwice (x : Slice U32) : RustM (Slice U32) := do
   let y ← x.mapM (fun x => x + 1#u32)
   let z ← y.mapM (fun x => x * x)
   pure z

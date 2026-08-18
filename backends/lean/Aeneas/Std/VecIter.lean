@@ -3,7 +3,7 @@ import Aeneas.Std.Vec
 
 namespace Aeneas.Std
 
-open Result
+open RustM
 
 @[rust_type "alloc::vec::into_iter::IntoIter" (keepParams := [true, false])]
 def alloc.vec.into_iter.IntoIter (T : Type) : Type := alloc.vec.Vec T
@@ -12,7 +12,7 @@ def alloc.vec.into_iter.IntoIter (T : Type) : Type := alloc.vec.Vec T
   "alloc::vec::into_iter::{core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, @A>, @T>}::next"
   (keepParams := [true, false])]
 def alloc.vec.into_iter.IteratorIntoIter.next {T : Type} (it: alloc.vec.into_iter.IntoIter T) :
-  Result ((Option T) × (alloc.vec.into_iter.IntoIter T)) :=
+  RustM ((Option T) × (alloc.vec.into_iter.IntoIter T)) :=
   match it with
   | ⟨ [], _ ⟩  => ok (none, it)
   | ⟨ hd :: tl, _ ⟩ => ok (hd, ⟨ tl, by scalar_tac ⟩ )
@@ -34,7 +34,7 @@ impl_def core.iter.traits.iterator.IteratorVecIntoIter (T : Type) :
 @[rust_fun
   "alloc::vec::{core::iter::traits::collect::IntoIterator<alloc::vec::Vec<@T>, @T, alloc::vec::into_iter::IntoIter<@T, @A>>}::into_iter"
   (keepParams := [true, false])]
-def alloc.vec.IntoIteratorVec.into_iter {T : Type} (v: alloc.vec.Vec T) : Result (alloc.vec.into_iter.IntoIter T) := ok v
+def alloc.vec.IntoIteratorVec.into_iter {T : Type} (v: alloc.vec.Vec T) : RustM (alloc.vec.into_iter.IntoIter T) := ok v
 
 @[reducible, rust_trait_impl
   "core::iter::traits::collect::IntoIterator<alloc::vec::Vec<@T>, @T, alloc::vec::into_iter::IntoIter<@T, @A>>"
@@ -50,7 +50,7 @@ def core.iter.traits.collect.IntoIteratorVec (T : Type) :
 def alloc.vec.FromIteratorVec.iterToList
     {T : Type} {IntoIter : Type}
     (iterInst : core.iter.traits.iterator.Iterator IntoIter T)
-    (iter : IntoIter) (acc : List T) : Result (List T) := do
+    (iter : IntoIter) (acc : List T) : RustM (List T) := do
   let (opt, iter) ← iterInst.next iter
   match opt with
   | none => .ok acc.reverse
@@ -62,7 +62,7 @@ partial_fixpoint
 def alloc.vec.FromIteratorVec.from_iter
   {T : Type} {I : Type} {IntoIter : Type}
   (IntoIteratorInst : core.iter.traits.collect.IntoIterator I T IntoIter) :
-  I → Result (alloc.vec.Vec T) :=
+  I → RustM (alloc.vec.Vec T) :=
   fun input => do
     let iter ← IntoIteratorInst.into_iter input
     let list ← alloc.vec.FromIteratorVec.iterToList IntoIteratorInst.iteratorInst iter []
@@ -84,7 +84,7 @@ def alloc.vec.into_iter.IntoIter.Insts.CoreIterTraitsIteratorIterator.map
   {T : Type} {A : Type} {F : Type}
   (_FnMutInst : core.ops.function.FnMut F T A) :
   alloc.vec.into_iter.IntoIter T → F →
-  Result (core.iter.adapters.map.Map (alloc.vec.into_iter.IntoIter T) F) :=
+  RustM (core.iter.adapters.map.Map (alloc.vec.into_iter.IntoIter T) F) :=
   fun it f => .ok ⟨ it, f ⟩
 
 

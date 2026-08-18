@@ -4,11 +4,11 @@ import Aeneas.Tactic.Step
 
 /-! # `introOutputs` tests -/
 
-open Aeneas Aeneas.Std Result
+open Aeneas Aeneas.Std RustM
 
 namespace Aeneas.Tactic.Step.Tests.IntroOutputs
 
-def pairProg : Result (Nat × Nat) := ok (1, 2)
+def pairProg : RustM (Nat × Nat) := ok (1, 2)
 
 @[step]
 theorem pairProg_spec : pairProg ⦃ p => p.1 = 1 ∧ p.2 = 2 ⦄ := by
@@ -34,7 +34,7 @@ info: Try this:
 example : (do let p ← pairProg; ok p) ⦃ p => p.1 = 1 ∧ p.2 = 2 ⦄ := by
   step*?
 
-def threeProg : Result (Nat × Nat × Nat) := ok (1, 2, 3)
+def threeProg : RustM (Nat × Nat × Nat) := ok (1, 2, 3)
 
 @[step]
 theorem threeProg_spec : threeProg ⦃ a b c => a = 1 ∧ b = 2 ∧ c = 3 ⦄ := by
@@ -60,7 +60,7 @@ info: Try this:
 example : (do let (x, y) ← threeProg; ok (x + y.1 + y.2)) ⦃ r => r = 6 ⦄ := by
   step*?
 
-def nestedProg : Result ((Nat × Nat) × Nat) := ok ((5, 6), 7)
+def nestedProg : RustM ((Nat × Nat) × Nat) := ok ((5, 6), 7)
 
 @[step]
 theorem nestedProg_spec : nestedProg ⦃ ((a, b), c) => a = 5 ∧ b = 6 ∧ c = 7 ⦄ := by
@@ -100,7 +100,7 @@ info: Try this:
 example : (do let (x, y) ← nestedProg; ok (x, y)) ⦃ a b => a.1 = 5 ∧ a.2 = 6 ∧ b = 7⦄ := by
   step*?
 
-def quadProg : Result ((Nat × Nat) × (Nat × Nat)) := ok ((8, 9), (10, 11))
+def quadProg : RustM ((Nat × Nat) × (Nat × Nat)) := ok ((8, 9), (10, 11))
 
 /-! ## `quadProg_spec` shape × bind-pattern matrix
 
@@ -425,7 +425,7 @@ example : (do let ((a, b), (c, d)) ← quadProg
 end SpecProjection
 
 -- tests for ∃ in postcondition
-def existentialProg : Result (Nat × Nat) := ok (1, 2)
+def existentialProg : RustM (Nat × Nat) := ok (1, 2)
 
 @[step]
 theorem existentialProg_spec : existentialProg ⦃ x y => x = 1 ∧ ∃ z, z > 0 ∧ y = z + 1 ⦄ := by
@@ -448,7 +448,7 @@ example : (do let (x, y) ← existentialProg; ok (x + y)) ⦃ res => res > 2 ⦄
 /- A *nested*-tuple result combined with a *leading* existential in the post.
    The post's `∃` only becomes visible after the output is destructured, so it
    must be split by the post-destructure cleanup pass. -/
-def nestedExistentialProg : Result ((Nat × Nat) × Nat) := ok ((1, 2), 3)
+def nestedExistentialProg : RustM ((Nat × Nat) × Nat) := ok ((1, 2), 3)
 
 @[step]
 theorem nestedExistentialProg_spec :

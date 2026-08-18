@@ -17,7 +17,7 @@ namespace Aeneas
 
 namespace Std
 
-open Result Error ScalarElab WP
+open RustM Error ScalarElab WP
 
 namespace core.convert
 
@@ -665,40 +665,40 @@ theorem core.num.«%S».from_be_bytes.step_spec (x : Array I8 (%Size)#usize) :
 -/
 
 @[rust_fun "core::num::{u8}::cast_signed"]
-def core.num.U8.cast_signed (x : U8) : Result I8 := ok ⟨x.bv⟩
+def core.num.U8.cast_signed (x : U8) : RustM I8 := ok ⟨x.bv⟩
 
 @[rust_fun "core::num::{i8}::cast_unsigned"]
-def core.num.I8.cast_unsigned (x : I8) : Result U8 := ok ⟨x.bv⟩
+def core.num.I8.cast_unsigned (x : I8) : RustM U8 := ok ⟨x.bv⟩
 
 @[rust_fun "core::num::{u16}::cast_signed"]
-def core.num.U16.cast_signed (x : U16) : Result I16 := ok ⟨x.bv⟩
+def core.num.U16.cast_signed (x : U16) : RustM I16 := ok ⟨x.bv⟩
 
 @[rust_fun "core::num::{i16}::cast_unsigned"]
-def core.num.I16.cast_unsigned (x : I16) : Result U16 := ok ⟨x.bv⟩
+def core.num.I16.cast_unsigned (x : I16) : RustM U16 := ok ⟨x.bv⟩
 
 @[rust_fun "core::num::{u32}::cast_signed"]
-def core.num.U32.cast_signed (x : U32) : Result I32 := ok ⟨x.bv⟩
+def core.num.U32.cast_signed (x : U32) : RustM I32 := ok ⟨x.bv⟩
 
 @[rust_fun "core::num::{i32}::cast_unsigned"]
-def core.num.I32.cast_unsigned (x : I32) : Result U32 := ok ⟨x.bv⟩
+def core.num.I32.cast_unsigned (x : I32) : RustM U32 := ok ⟨x.bv⟩
 
 @[rust_fun "core::num::{u64}::cast_signed"]
-def core.num.U64.cast_signed (x : U64) : Result I64 := ok ⟨x.bv⟩
+def core.num.U64.cast_signed (x : U64) : RustM I64 := ok ⟨x.bv⟩
 
 @[rust_fun "core::num::{i64}::cast_unsigned"]
-def core.num.I64.cast_unsigned (x : I64) : Result U64 := ok ⟨x.bv⟩
+def core.num.I64.cast_unsigned (x : I64) : RustM U64 := ok ⟨x.bv⟩
 
 @[rust_fun "core::num::{u128}::cast_signed"]
-def core.num.U128.cast_signed (x : U128) : Result I128 := ok ⟨x.bv⟩
+def core.num.U128.cast_signed (x : U128) : RustM I128 := ok ⟨x.bv⟩
 
 @[rust_fun "core::num::{i128}::cast_unsigned"]
-def core.num.I128.cast_unsigned (x : I128) : Result U128 := ok ⟨x.bv⟩
+def core.num.I128.cast_unsigned (x : I128) : RustM U128 := ok ⟨x.bv⟩
 
 @[rust_fun "core::num::{usize}::cast_signed"]
-def core.num.Usize.cast_signed (x : Usize) : Result Isize := ok ⟨x.bv⟩
+def core.num.Usize.cast_signed (x : Usize) : RustM Isize := ok ⟨x.bv⟩
 
 @[rust_fun "core::num::{isize}::cast_unsigned"]
-def core.num.Isize.cast_unsigned (x : Isize) : Result Usize := ok ⟨x.bv⟩
+def core.num.Isize.cast_unsigned (x : Isize) : RustM Usize := ok ⟨x.bv⟩
 
 @[step]
 theorem core.num.U8.cast_signed.step_spec (x : U8) :
@@ -766,26 +766,26 @@ theorem core.num.Isize.cast_unsigned.step_spec (x : Isize) :
 Note that with `Nat` we have: `x % 0 = x`, meaning `x % 0 = 0 ↔ x = 0`,
 which matches Rust's definition of `is_multiple_of`. -/
 
-def UScalar.is_multiple_of (n m : UScalar ty) : Result Bool :=
+def UScalar.is_multiple_of (n m : UScalar ty) : RustM Bool :=
   ok (n.val % m.val == 0)
 
 @[rust_fun "core::num::{u8}::is_multiple_of"]
-def core.num.U8.is_multiple_of (n m : U8) : Result Bool := UScalar.is_multiple_of n m
+def core.num.U8.is_multiple_of (n m : U8) : RustM Bool := UScalar.is_multiple_of n m
 
 @[rust_fun "core::num::{u16}::is_multiple_of"]
-def core.num.U16.is_multiple_of (n m : U16) : Result Bool := UScalar.is_multiple_of n m
+def core.num.U16.is_multiple_of (n m : U16) : RustM Bool := UScalar.is_multiple_of n m
 
 @[rust_fun "core::num::{u32}::is_multiple_of"]
-def core.num.U32.is_multiple_of (n m : U32) : Result Bool := UScalar.is_multiple_of n m
+def core.num.U32.is_multiple_of (n m : U32) : RustM Bool := UScalar.is_multiple_of n m
 
 @[rust_fun "core::num::{u64}::is_multiple_of"]
-def core.num.U64.is_multiple_of (n m : U64) : Result Bool := UScalar.is_multiple_of n m
+def core.num.U64.is_multiple_of (n m : U64) : RustM Bool := UScalar.is_multiple_of n m
 
 @[rust_fun "core::num::{u128}::is_multiple_of"]
-def core.num.U128.is_multiple_of (n m : U128) : Result Bool := UScalar.is_multiple_of n m
+def core.num.U128.is_multiple_of (n m : U128) : RustM Bool := UScalar.is_multiple_of n m
 
 @[rust_fun "core::num::{usize}::is_multiple_of"]
-def core.num.Usize.is_multiple_of (n m : Usize) : Result Bool := UScalar.is_multiple_of n m
+def core.num.Usize.is_multiple_of (n m : Usize) : RustM Bool := UScalar.is_multiple_of n m
 
 /-! ## `TryFrom` between integer types -/
 
@@ -805,7 +805,7 @@ def core.num.error.TryFromIntError : Type := Unit
 
 /-- General fallible conversion between unsigned scalar types. -/
 def core.num.tryFromUScalar {srcTy : UScalarTy} (tgtTy : UScalarTy) (i : UScalar srcTy) :
-  Result (core.result.Result (UScalar tgtTy) core.num.error.TryFromIntError) :=
+  RustM (core.result.Result (UScalar tgtTy) core.num.error.TryFromIntError) :=
   if i.val ≤ UScalar.max tgtTy then
     ok (.Ok (UScalar.cast tgtTy i))
   else
@@ -814,7 +814,7 @@ def core.num.tryFromUScalar {srcTy : UScalarTy} (tgtTy : UScalarTy) (i : UScalar
 -- TODO: define for all scalar pairs
 @[rust_fun "core::convert::num::ptr_try_from_impls::{core::convert::TryFrom<u32, usize, core::num::error::TryFromIntError>}::try_from"]
 def core.convert.num.ptr_try_from_impls.TryFromU32Usize.try_from (i : Usize) :
-  Result (core.result.Result U32 core.num.error.TryFromIntError) :=
+  RustM (core.result.Result U32 core.num.error.TryFromIntError) :=
   core.num.tryFromUScalar .U32 i
 
 -- TODO: define for all scalar pairs

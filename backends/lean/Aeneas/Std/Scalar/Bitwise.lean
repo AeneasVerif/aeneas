@@ -5,7 +5,7 @@ import Mathlib.Data.BitVec
 
 namespace Aeneas.Std
 
-open Result Error Arith ScalarElab WP
+open RustM Error Arith ScalarElab WP
 
 /-!
 # Bitwise Operations: Definitions
@@ -15,91 +15,91 @@ open Result Error Arith ScalarElab WP
 Bit shifts
 -/
 def UScalar.shiftLeft {ty : UScalarTy} (x : UScalar ty) (s : Nat) :
-  Result (UScalar ty) :=
+  RustM (UScalar ty) :=
   if s < ty.numBits then
     ok ⟨ x.bv.shiftLeft s ⟩
   else fail .integerOverflow
 
 def UScalar.shiftRight {ty : UScalarTy} (x : UScalar ty) (s : Nat) :
-  Result (UScalar ty) :=
+  RustM (UScalar ty) :=
   if s < ty.numBits then
     ok ⟨ x.bv.ushiftRight s ⟩
   else fail .integerOverflow
 
 def UScalar.shiftLeft_UScalar {ty tys} (x : UScalar ty) (s : UScalar tys) :
-  Result (UScalar ty) :=
+  RustM (UScalar ty) :=
   x.shiftLeft s.val
 
 def UScalar.shiftRight_UScalar {ty tys} (x : UScalar ty) (s : UScalar tys) :
-  Result (UScalar ty) :=
+  RustM (UScalar ty) :=
   x.shiftRight s.val
 
 def UScalar.shiftLeft_IScalar {ty tys} (x : UScalar ty) (s : IScalar tys) :
-  Result (UScalar ty) :=
+  RustM (UScalar ty) :=
   if s.val ≥ 0 then
     x.shiftLeft s.toNat
   else fail .integerOverflow
 
 def UScalar.shiftRight_IScalar {ty tys} (x : UScalar ty) (s : IScalar tys) :
-  Result (UScalar ty) :=
+  RustM (UScalar ty) :=
   if s.val ≥ 0 then
     x.shiftRight s.toNat
   else fail .integerOverflow
 
 def IScalar.shiftLeft {ty : IScalarTy} (x : IScalar ty) (s : Nat) :
-  Result (IScalar ty) :=
+  RustM (IScalar ty) :=
   if s < ty.numBits then
     ok ⟨ x.bv.shiftLeft s ⟩
   else fail .integerOverflow
 
 def IScalar.shiftRight {ty : IScalarTy} (x : IScalar ty) (s : Nat) :
-  Result (IScalar ty) :=
+  RustM (IScalar ty) :=
   if s < ty.numBits then
     ok ⟨ x.bv.sshiftRight s ⟩
   else fail .integerOverflow
 
 def IScalar.shiftLeft_UScalar {ty tys} (x : IScalar ty) (s : UScalar tys) :
-  Result (IScalar ty) :=
+  RustM (IScalar ty) :=
   x.shiftLeft s.val
 
 def IScalar.shiftRight_UScalar {ty tys} (x : IScalar ty) (s : UScalar tys) :
-  Result (IScalar ty) :=
+  RustM (IScalar ty) :=
   x.shiftRight s.val
 
 def IScalar.shiftLeft_IScalar {ty tys} (x : IScalar ty) (s : IScalar tys) :
-  Result (IScalar ty) :=
+  RustM (IScalar ty) :=
   if s.val ≥ 0 then
     x.shiftLeft s.toNat
   else fail .integerOverflow
 
 def IScalar.shiftRight_IScalar {ty tys} (x : IScalar ty) (s : IScalar tys) :
-  Result (IScalar ty) :=
+  RustM (IScalar ty) :=
   if s.val ≥ 0 then
     x.shiftRight s.toNat
   else fail .integerOverflow
 
-instance {ty0 ty1} : HShiftLeft (UScalar ty0) (UScalar ty1) (Result (UScalar ty0)) where
+instance {ty0 ty1} : HShiftLeft (UScalar ty0) (UScalar ty1) (RustM (UScalar ty0)) where
   hShiftLeft x y := UScalar.shiftLeft_UScalar x y
 
-instance {ty0 ty1} : HShiftLeft (UScalar ty0) (IScalar ty1) (Result (UScalar ty0)) where
+instance {ty0 ty1} : HShiftLeft (UScalar ty0) (IScalar ty1) (RustM (UScalar ty0)) where
   hShiftLeft x y := UScalar.shiftLeft_IScalar x y
 
-instance {ty0 ty1} : HShiftLeft (IScalar ty0) (UScalar ty1) (Result (IScalar ty0)) where
+instance {ty0 ty1} : HShiftLeft (IScalar ty0) (UScalar ty1) (RustM (IScalar ty0)) where
   hShiftLeft x y := IScalar.shiftLeft_UScalar x y
 
-instance {ty0 ty1} : HShiftLeft (IScalar ty0) (IScalar ty1) (Result (IScalar ty0)) where
+instance {ty0 ty1} : HShiftLeft (IScalar ty0) (IScalar ty1) (RustM (IScalar ty0)) where
   hShiftLeft x y := IScalar.shiftLeft_IScalar x y
 
-instance {ty0 ty1} : HShiftRight (UScalar ty0) (UScalar ty1) (Result (UScalar ty0)) where
+instance {ty0 ty1} : HShiftRight (UScalar ty0) (UScalar ty1) (RustM (UScalar ty0)) where
   hShiftRight x y := UScalar.shiftRight_UScalar x y
 
-instance {ty0 ty1} : HShiftRight (UScalar ty0) (IScalar ty1) (Result (UScalar ty0)) where
+instance {ty0 ty1} : HShiftRight (UScalar ty0) (IScalar ty1) (RustM (UScalar ty0)) where
   hShiftRight x y := UScalar.shiftRight_IScalar x y
 
-instance {ty0 ty1} : HShiftRight (IScalar ty0) (UScalar ty1) (Result (IScalar ty0)) where
+instance {ty0 ty1} : HShiftRight (IScalar ty0) (UScalar ty1) (RustM (IScalar ty0)) where
   hShiftRight x y := IScalar.shiftRight_UScalar x y
 
-instance {ty0 ty1} : HShiftRight (IScalar ty0) (IScalar ty1) (Result (IScalar ty0)) where
+instance {ty0 ty1} : HShiftRight (IScalar ty0) (IScalar ty1) (RustM (IScalar ty0)) where
   hShiftRight x y := IScalar.shiftRight_IScalar x y
 
 /-!

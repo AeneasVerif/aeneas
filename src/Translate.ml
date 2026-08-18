@@ -1419,10 +1419,9 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
       if !Config.core_models_lib then begin
         Printf.fprintf out "open CoreModels Aeneas\n";
         Printf.fprintf out "open Aeneas.Std hiding namespace core alloc\n";
-        Printf.fprintf out "open Result ControlFlow Error\n"
+        Printf.fprintf out "open RustM ControlFlow Error\n"
       end
-      else
-        Printf.fprintf out "open Aeneas Aeneas.Std Result ControlFlow Error\n";
+      else Printf.fprintf out "open Aeneas Aeneas.Std RustM ControlFlow Error\n";
       (* In Mvcgen mode, we need to open Std.Do *)
       (match Config.spec_backend () with
       | Some Config.Mvcgen -> Printf.fprintf out "open Std.Do\n"
