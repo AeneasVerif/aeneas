@@ -17,7 +17,6 @@ from typing import Iterable
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 SIMPLE_NAME = r"(?:[^\W\d]|_)[\w']*"
 PLAIN_SL_STEP = re.compile(r"^(?P<indent>[ \t]*)sl_step[ \t]*(?:\r?\n|$)")
-PLAIN_SL_PURE = re.compile(r"^(?P<indent>[ \t]*)sl_pure[ \t]*(?:\r?\n|$)")
 PLAIN_SL_STEP_STAR = re.compile(
     r"^(?P<indent>[ \t]*)sl_step\*(?:[ \t]+[0-9]+)?[ \t]*(?:\r?\n|$)"
 )
@@ -261,43 +260,21 @@ def tactic_pair_candidates(
                 lines[index].start(),
                 lines[index + 1].end(),
                 f"{first['indent']}sl_step*{newline}",
-                "sl_pure/sl_step pair",
+                "sl_step/sl_step* pair",
             )
         )
         index += 2
     return candidates
 
 
-def sl_step_pure_candidates(source: str) -> list[Edit]:
+def star_then_step_candidates(source: str) -> list[Edit]:
     return tactic_pair_candidates(
-        source, (PLAIN_SL_STEP, PLAIN_SL_STEP_STAR), (PLAIN_SL_PURE,)
+        source, (PLAIN_SL_STEP_STAR,), (PLAIN_SL_STEP, PLAIN_SL_STEP_STAR)
     )
 
 
-def sl_pure_step_candidates(source: str) -> list[Edit]:
-    return tactic_pair_candidates(
-        source, (PLAIN_SL_PURE,), (PLAIN_SL_STEP, PLAIN_SL_STEP_STAR)
-    )
-
-
-def sl_pure_to_step_candidates(source: str) -> list[Edit]:
-    candidates: list[Edit] = []
-    for line in re.finditer(r".*(?:\r?\n|$)", source):
-        match = PLAIN_SL_PURE.fullmatch(line.group())
-        if match is None:
-            continue
-        newline = "\r\n" if line.group().endswith("\r\n") else "\n"
-        if not line.group().endswith(("\n", "\r")):
-            newline = ""
-        candidates.append(
-            Edit(
-                line.start(),
-                line.end(),
-                f"{match['indent']}sl_step{newline}",
-                "sl_pure to sl_step",
-            )
-        )
-    return candidates
+def step_then_star_candidates(source: str) -> list[Edit]:
+    return tactic_pair_candidates(source, (PLAIN_SL_STEP,), (PLAIN_SL_STEP_STAR,))
 
 
 def sl_pull_drop_candidates(source: str) -> list[Edit]:
@@ -352,9 +329,8 @@ def simplify(
     source: str, checker: LeanChecker
 ) -> tuple[str, list[Edit], list[RejectedEdit]]:
     candidate_finders = (
-        sl_pure_to_step_candidates,
-        sl_step_pure_candidates,
-        sl_pure_step_candidates,
+        star_then_step_candidates,
+        step_then_star_candidates,
         sl_pull_drop_candidates,
         sl_pull_anonymous_candidates,
         bounded_sl_step_candidates,
@@ -368,13 +344,7 @@ def simplify(
 
     all_accepted: list[Edit] = []
     all_rejected: list[RejectedEdit] = []
-    candidates = sl_pure_to_step_candidates(source)
-    accepted, rejected = accepted_selectively(source, candidates, checker)
-    source = apply_edits(source, accepted)
-    all_accepted.extend(accepted)
-    all_rejected.extend(rejected)
-
-    for find_candidates in (sl_step_pure_candidates, sl_pure_step_candidates):
+    for find_candidates in (star_then_step_candidates, step_then_star_candidates):
         candidates = find_candidates(source)
         accepted, rejected = accepted_selectively(source, candidates, checker)
         source = apply_edits(source, accepted)
@@ -490,8 +460,7 @@ def main(args: list[str]) -> int:
             for kind in (
                 "bounded sl_step run",
                 "sl_step bound",
-                "sl_pure to sl_step",
-                "sl_pure/sl_step pair",
+                "sl_step/sl_step* pair",
                 "sl_pull arguments",
                 "unused sl_pull name",
             )
