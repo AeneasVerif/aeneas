@@ -235,7 +235,7 @@ theorem cellsFrom_read (f : Nat → β → α) (l : List (Ptr α × β)) (i : Na
     (r : Ptr α) (v : β) (h : l[i]? = some (r, v)) :
     ⦃ cellsFrom f 0 l ⦄ read r ⦃⇓ node => ⌜node = f i v⌝ ∗ cellsFrom f 0 l⦄ := by
   rw [cellsFrom_split f l i r v h]
-  sl_step*
+  step*
 
 end VerusStd
 
