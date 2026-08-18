@@ -1,6 +1,6 @@
 import Aeneas
 import Demo.Demo
-open Aeneas Std Result
+open Aeneas Std RustM
 
 
 namespace demo

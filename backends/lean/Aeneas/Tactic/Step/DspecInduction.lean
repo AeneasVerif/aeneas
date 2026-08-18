@@ -26,7 +26,7 @@ namespace DspecInduction
 open Lean Elab Term Meta Tactic
 open Utils
 open Lean.Order
-open Std Result
+open Std RustM
 
 theorem curry_admissible (a1 a2 a3) (P : (a1 → a2 → a3) → Prop) [CCPO a3]
   (h : Order.admissible fun (f : (a1 × a2) → a3) => P (fun x y => f (x, y)))
@@ -91,7 +91,7 @@ theorem curry_admissible (a1 a2 a3) (P : (a1 → a2 → a3) → Prop) [CCPO a3]
   apply h
 
 theorem WP_func_admissible (α β : Type) (arg) (post)
-  : Order.admissible fun (f : α → Result β) => WP.dspec (f arg) post := by
+  : Order.admissible fun (f : α → RustM β) => WP.dspec (f arg) post := by
   apply Lean.Order.admissible_apply (fun _ fx => WP.dspec fx _)
   apply Lean.Order.admissible_flatOrder
   simp only [WP.dspec]
@@ -186,9 +186,9 @@ elab "dspec_induction" func:ident : tactic => do
 
 namespace Test
 
-open Std Result Aeneas.Step
+open Std RustM Aeneas.Step
 
-def simple_diverge (x : Std.I32) : Result Std.I32 := do
+def simple_diverge (x : Std.I32) : RustM Std.I32 := do
   if x = 0#i32
   then ok 10#i32
   else
@@ -232,7 +232,7 @@ theorem test_div_tactic (x : Std.I32) : Std.WP.dspec (simple_diverge x) (fun res
       step
       simp [*]
 
-def simple_diverge_2' (x y : Std.I32) : Result Std.I32 := do
+def simple_diverge_2' (x y : Std.I32) : RustM Std.I32 := do
   if x = y#i32
   then ok 10#i32
   else
@@ -268,7 +268,7 @@ theorem test_div_2_tactic (x y : Std.I32) : Std.WP.dspec (simple_diverge_2' x y)
       simp [*]
 
 
-def dummy_hash (_i : Std.U32) : Result Std.U32 := do
+def dummy_hash (_i : Std.U32) : RustM Std.U32 := do
   ok 1000#u32
 
 open ControlFlow
@@ -277,7 +277,7 @@ open ControlFlow
     Source: 'src/lib.rs', lines 258:2-260:3
     Visibility: public -/
 def pseudo_random_loop.body
-  (state : Std.U32) : Result (ControlFlow Std.U32 Std.U32) := do
+  (state : Std.U32) : RustM (ControlFlow Std.U32 Std.U32) := do
   if state < 100#u32
   then let state1 ← dummy_hash state
        ok (cont state1)
@@ -286,7 +286,7 @@ def pseudo_random_loop.body
 /-- [tutorial::pseudo_random]: loop 0:
     Source: 'src/lib.rs', lines 258:2-260:3
     Visibility: public -/
-def pseudo_random_loop (state : Std.U32) : Result Std.U32 := do
+def pseudo_random_loop (state : Std.U32) : RustM Std.U32 := do
   loop
     (fun state1 => pseudo_random_loop.body state1)
     state
@@ -294,7 +294,7 @@ def pseudo_random_loop (state : Std.U32) : Result Std.U32 := do
 /-- [tutorial::pseudo_random]:
     Source: 'src/lib.rs', lines 255:0-262:1
     Visibility: public -/
-@[reducible] def pseudo_random : Result Std.U32 := do
+@[reducible] def pseudo_random : RustM Std.U32 := do
                pseudo_random_loop 0#u32
 
 
@@ -324,12 +324,12 @@ theorem pseudo_random_spec :
     grind
 
 -- these two examples demonstrate how .fixpoint_induct theorems can take various forms.
-def first_arg_const (x y : Nat) : Result Nat :=
+def first_arg_const (x y : Nat) : RustM Nat :=
   if x = 0 then .ok 0
   else first_arg_const x (y + 1)
 partial_fixpoint
 
-def second_arg_const (x y : Nat) : Result Nat :=
+def second_arg_const (x y : Nat) : RustM Nat :=
   if y = 0 then .ok 0
   else second_arg_const (x + 1) y
 partial_fixpoint

@@ -2,7 +2,7 @@ import Aeneas.Std.Scalar
 import Aeneas.Std.Array
 import Aeneas.Tactic.Step
 
-open Aeneas Aeneas.Std Result Std.Do
+open Aeneas Aeneas.Std RustM Std.Do
 set_option mvcgen.warning false
 
 /-!

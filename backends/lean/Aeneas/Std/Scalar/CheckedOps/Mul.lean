@@ -3,7 +3,7 @@ import Aeneas.Std.Scalar.Elab
 
 namespace Aeneas.Std
 
-open Result Error Arith ScalarElab
+open RustM Error Arith ScalarElab
 
 /-!
 # Checked Multiplication: Definitions
@@ -11,13 +11,13 @@ open Result Error Arith ScalarElab
 
 /- [core::num::{T}::checked_mul] -/
 def core.num.checked_mul_UScalar {ty} (x y : UScalar ty) : Option (UScalar ty) :=
-  Option.ofResult (UScalar.mul x y)
+  Option.ofRustM (UScalar.mul x y)
 
 uscalar def «%S».checked_mul (x y : «%S») : Option «%S» := core.num.checked_mul_UScalar x y
 
 /- [core::num::{T}::checked_mul] -/
 def core.num.checked_mul_IScalar {ty} (x y : IScalar ty) : Option (IScalar ty) :=
-  Option.ofResult (IScalar.mul x y)
+  Option.ofRustM (IScalar.mul x y)
 
 iscalar def «%S».checked_mul (x y : «%S») : Option «%S» := core.num.checked_mul_IScalar x y
 
@@ -34,7 +34,7 @@ theorem core.num.checked_mul_UScalar_bv_spec {ty} (x y : UScalar ty) :
   | none => UScalar.max ty < x.val * y.val := by
   have h := UScalar.mul_equiv x y
   simp [checked_mul_UScalar]
-  cases hEq : UScalar.mul x y <;> simp_all [Option.ofResult]
+  cases hEq : UScalar.mul x y <;> simp_all [Option.ofRustM]
 
 uscalar @[step_pure «%S».checked_mul x y]
 theorem «%S».checked_mul_bv_spec (x y : «%S») :
@@ -54,7 +54,7 @@ theorem core.num.checked_mul_IScalar_bv_spec {ty} (x y : IScalar ty) :
   | none => ¬ (IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty) := by
   have h := IScalar.mul_equiv x y
   simp [checked_mul_IScalar]
-  cases hEq : IScalar.mul x y <;> simp_all [Option.ofResult]
+  cases hEq : IScalar.mul x y <;> simp_all [Option.ofRustM]
 
 iscalar @[step_pure «%S».checked_mul x y]
 theorem «%S».checked_mul_bv_spec (x y : «%S») :

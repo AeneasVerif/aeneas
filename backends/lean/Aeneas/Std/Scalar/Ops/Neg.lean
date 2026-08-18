@@ -6,12 +6,12 @@ import Mathlib.Data.BitVec
 
 namespace Aeneas.Std
 
-open Result Error Arith WP
+open RustM Error Arith WP
 
 /-!
 # Negation: Definitions
 -/
-def IScalar.neg {ty : IScalarTy} (x : IScalar ty) : Result (IScalar ty) := IScalar.tryMk ty (- x.val)
+def IScalar.neg {ty : IScalarTy} (x : IScalar ty) : RustM (IScalar ty) := IScalar.tryMk ty (- x.val)
 
 @[step]
 theorem IScalar.neg_step {ty} (x: IScalar ty) :
@@ -19,7 +19,7 @@ theorem IScalar.neg_step {ty} (x: IScalar ty) :
       (fun r => r = -x.val)
       (fun | .integerOverflow => (x : Int) = IScalar.min ty | _ => False)
       False := by
-  simp only [neg, tryMk, Result.ofOption]
+  simp only [neg, tryMk, RustM.ofOption]
   have h := tryMkOpt_eq ty (-x.val)
   simp [inBounds] at h
   cases hopt : tryMkOpt ty (-x.val) <;> simp_all [partialSpec]
@@ -60,11 +60,11 @@ prefix:75  "-."   => HNeg.hNeg
 -/
 attribute [match_pattern] HNeg.hNeg
 
-instance {ty} : HNeg (IScalar ty) (Result (IScalar ty)) where hNeg x := IScalar.neg x
+instance {ty} : HNeg (IScalar ty) (RustM (IScalar ty)) where hNeg x := IScalar.neg x
 
 @[step]
 theorem HNeg.hNeg.step {ty} (x: IScalar ty) :
-    partialSpec (HNeg.hNeg x : Result (IScalar ty))
+    partialSpec (HNeg.hNeg x : RustM (IScalar ty))
       (fun r => r = -x.val)
       (fun | .integerOverflow => (x : Int) = IScalar.min ty | _ => False)
       False := by

@@ -400,11 +400,11 @@ Shorter proofs are easier to maintain, faster to check, and easier for others to
 
 When working with Rust constants/globals translated by Aeneas:
 
-- **Pure constants** (not in the `Result` monad): Mark them with appropriate attributes so automation can use them:
+- **Pure constants** (not in the `RustM` monad): Mark them with appropriate attributes so automation can use them:
   - `@[simp]`, `@[agrind]`, `@[scalar_tac_simps]`, `@[bvify_simps]`
   - `@[simp_lists_simps]` if they involve lists/arrays
 
-- **Monadic constants** (in the `Result` monad): Treat them like functions and prove a `@[step]` theorem.
+- **Monadic constants** (in the `RustM` monad): Treat them like functions and prove a `@[step]` theorem.
   - First prove a raw equation: `theorem MyConst_eq : MyConst = ok value := by native_decide`
   - Then prove the step form: `@[step] theorem MyConst : MyConst ⦃ fun res => res = value ⦄ := by rw [MyConst_eq]; simp [WP.spec_ok]`
   - Now `step` (and `step*`) will handle the constant automatically.

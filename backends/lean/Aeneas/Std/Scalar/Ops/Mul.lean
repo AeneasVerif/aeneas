@@ -7,28 +7,28 @@ import Mathlib.Data.Int.Init
 
 namespace Aeneas.Std
 
-open Result Error Arith ScalarElab WP
+open RustM Error Arith ScalarElab WP
 
 /-!
 # Multiplication: Definitions
 -/
 
-def UScalar.mul {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
+def UScalar.mul {ty : UScalarTy} (x y : UScalar ty) : RustM (UScalar ty) :=
   UScalar.tryMk ty (x.val * y.val)
 
-def IScalar.mul {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
+def IScalar.mul {ty : IScalarTy} (x y : IScalar ty) : RustM (IScalar ty) :=
   IScalar.tryMk ty (x.val * y.val)
 
 def UScalar.try_mul {ty : UScalarTy} (x y : UScalar ty) : Option (UScalar ty) :=
-  Option.ofResult (mul x y)
+  Option.ofRustM (mul x y)
 
 def IScalar.try_mul {ty : IScalarTy} (x y : IScalar ty) : Option (IScalar ty) :=
-  Option.ofResult (mul x y)
+  Option.ofRustM (mul x y)
 
-instance {ty} : HMul (UScalar ty) (UScalar ty) (Result (UScalar ty)) where
+instance {ty} : HMul (UScalar ty) (UScalar ty) (RustM (UScalar ty)) where
   hMul x y := UScalar.mul x y
 
-instance {ty} : HMul (IScalar ty) (IScalar ty) (Result (IScalar ty)) where
+instance {ty} : HMul (IScalar ty) (IScalar ty) (RustM (IScalar ty)) where
   hMul x y := IScalar.mul x y
 
 /-!
@@ -48,7 +48,7 @@ theorem UScalar.mul_equiv {ty} (x y : UScalar ty) :
   have := tryMk_eq ty (x.val * y.val)
   have hfail : ∀ e, mul x y = fail e → e = .integerOverflow := by
     intro e he
-    simp only [mul, tryMk, Result.ofOption] at he
+    simp only [mul, tryMk, RustM.ofOption] at he
     split at he <;> simp_all
   split <;> simp_all only [inBounds, true_and, not_lt]
   · simp_all only [tryMk, ofOption, tryMkOpt, check_bounds, decide_true, dite_true, ok.injEq]

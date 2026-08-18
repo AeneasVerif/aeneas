@@ -1,6 +1,6 @@
 import Aeneas
 import Tutorial.Tutorial
-open Aeneas Std Result
+open Aeneas Std RustM
 
 local macro_rules
 | `(tactic| get_elem_tactic) => `(tactic| grind)

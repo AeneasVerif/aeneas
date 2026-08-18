@@ -98,7 +98,7 @@ structure FunInfo where
   -/
   keepTraitClauses : Option (List Bool) := none
   canFail : Bool := true
-  /-- If the function can not fail, should we still lift it to the [Result]
+  /-- If the function can not fail, should we still lift it to the [RustM]
       monad? This can make reasonings easier, as we can then use [step]
       to do proofs in a Hoare-Logic style, rather than equational reasonings. -/
   lift : Bool := true
@@ -648,12 +648,12 @@ The additional options are used to fill the fields of `Aeneas.Extract.FunInfo`.
 The options are:
 - `keepParams`: see the comment for the `rust_type` attribute. This allows to indicate that some
   type parameters in Rust are ignored in the Lean model.
-- `canFail`: `true` by default, indicates whether the function lives in the `Result` monad or not.
-- `lift`: `true` by default, indicates whether the function should be lifted to the `Result` monad
+- `canFail`: `true` by default, indicates whether the function lives in the `RustM` monad or not.
+- `lift`: `true` by default, indicates whether the function should be lifted to the `RustM` monad
   in the generated code, if the function can not fail (i.e., `canFail = false`).
   If we lift the function, Aeneas generates code like this:
   ```
-  let y ← (↑(foo x) : Result ...)
+  let y ← (↑(foo x) : RustM ...)
   ...
   ```
 -/

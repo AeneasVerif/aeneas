@@ -6,7 +6,7 @@ import Aeneas.Std.Spec
 
 namespace Aeneas.Std.WP
 
-open Std Result
+open Std RustM
 
 def Post α := (α -> Prop)
 def Pre := Prop
@@ -15,22 +15,22 @@ def Wp α := Post α → Pre
 
 def wp_return (x:α) : Wp α := fun p => p x
 
-def theta (m:Result α) : Wp α :=
+def theta (m:RustM α) : Wp α :=
   match m with
   | ok x => wp_return x
   | fail _ => fun _ => False
   | div => fun _ => False
 
-def spec {α} (x:Result α) (p:Post α) :=
+def spec {α} (x:RustM α) (p:Post α) :=
   theta x p
 
-def dspec {α} (x:Result α) (p:Post α) :=
+def dspec {α} (x:RustM α) (p:Post α) :=
   match x with
   | ok x => p x
   | fail _ => False
   | div => True
 
-theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p := by
+theorem spec_dspec (α) (x : RustM α) (p: Post α) : spec x p → dspec x p := by
   intros s
   simp [spec, dspec] at *
   cases x <;> simp at * <;> assumption
@@ -81,14 +81,14 @@ theorem spec_fail_pair (e : Error) (f : α → β → Prop) :
 theorem spec_div_pair (f : α → β → Prop) :
     spec div (uncurry f) ↔ False := by simp
 
-theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
+theorem spec_mono {α} {P₁ : Post α} {m : RustM α} {P₀ : Post α} (h : spec m P₀):
   (∀ x, P₀ x → P₁ x) → spec m P₁ := by
   intros HMonPost
   revert h
   unfold spec theta wp_return
   cases m <;> grind
 
-theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
+theorem spec_bind {α β} {k : α -> RustM β} {Pₖ : Post β} {m : RustM α} {Pₘ : Post α} :
   spec m Pₘ →
   (forall x, Pₘ x → spec (k x) Pₖ) →
   spec (Std.bind m k) Pₖ := by
@@ -124,7 +124,7 @@ def qimp_uncurry' {α₀ α₁} (P : α₀ → α₁ → Prop) (Q : α₀ × α�
 theorem qimp_iff {α} (P₀ P₁ : Post α) : qimp P₀ P₁ ↔ ∀ x, imp (P₀ x) (P₁ x) := by simp [qimp, imp]
 
 /-- Alternative to `spec_mono`: we control the introduction of universal quantifiers by introducing `imp`. -/
-theorem spec_mono' {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
+theorem spec_mono' {α} {P₁ : Post α} {m : RustM α} {P₀ : Post α} (h : spec m P₀):
   qimp P₀ P₁ → spec m P₁ := by
   intros HMonPost
   revert h
@@ -132,11 +132,11 @@ theorem spec_mono' {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : s
   cases m <;> grind [qimp]
 
 /-- Implication of a `spec` predicate with quantifier -/
-def qimp_spec {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) : Prop :=
+def qimp_spec {α β} (P : α → Prop) (k : α → RustM β) (Q : β → Prop) : Prop :=
   ∀ x, P x → spec (k x) Q
 
 /-- This alternative to `spec_bind` controls the introduction of universal quantifiers with `imp_spec`. -/
-theorem spec_bind' {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
+theorem spec_bind' {α β} {k : α -> RustM β} {Pₖ : Post β} {m : RustM α} {Pₘ : Post α} :
   spec m Pₘ →
   (qimp_spec Pₘ k Pₖ) →
   spec (Std.bind m k) Pₖ := by
@@ -152,12 +152,12 @@ theorem spec_bind' {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α
 
 /-- We use this lemma to decompose nested `uncurry'` predicates into a sequence of universal quantifiers. -/
 @[simp]
-def qimp_spec_uncurry' {α₀ α₁ β} (P : α₀ → α₁ → Prop) (k : α₀ × α₁ → Result β) (Q : β → Prop) :
+def qimp_spec_uncurry' {α₀ α₁ β} (P : α₀ → α₁ → Prop) (k : α₀ × α₁ → RustM β) (Q : β → Prop) :
   qimp_spec (uncurry' P) k Q ↔ ∀ x, qimp_spec (P x) (curry k x) Q := by
   simp [qimp_spec, curry]
 
 /-- We use this lemma to eliminate `imp_spec` after we decomposed the nested `uncurry'` -/
-def qimp_spec_iff {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) :
+def qimp_spec_iff {α β} (P : α → Prop) (k : α → RustM β) (Q : β → Prop) :
   qimp_spec P k Q ↔ ∀ x, imp (P x) (spec (k x) Q) := by
   simp [qimp_spec, imp]
 
@@ -175,24 +175,24 @@ theorem qimp_exists {α β} (P₀ : β → Post α) (P₁ : Post α) :
   simp only [qimp, forall_exists_index]; grind
 
 @[simp]
-theorem qimp_spec_exists {α β γ} (P : γ → α → Prop) (k : α → Result β) (Q : β → Prop) :
+theorem qimp_spec_exists {α β γ} (P : γ → α → Prop) (k : α → RustM β) (Q : β → Prop) :
   qimp_spec (fun x => ∃ y, P y x) k Q ↔ ∀ x, qimp_spec (P x) k Q := by
   simp only [qimp_spec, forall_exists_index]; grind
 
-theorem spec_equiv_exists (m:Result α) (P:Post α) :
+theorem spec_equiv_exists (m:RustM α) (P:Post α) :
   spec m P ↔ (∃ y, m = ok y ∧ P y) := by
   cases m <;> simp [spec, theta, wp_return]
 
-theorem spec_imp_exists {m:Result α} {P:Post α} :
+theorem spec_imp_exists {m:RustM α} {P:Post α} :
   spec m P → (∃ y, m = ok y ∧ P y) := by
   exact (spec_equiv_exists m P).1
 
-theorem exists_imp_spec {m:Result α} {P:Post α} :
+theorem exists_imp_spec {m:RustM α} {P:Post α} :
   (∃ y, m = ok y ∧ P y) → spec m P := by
   exact (spec_equiv_exists m P).2
 
 -- `dspec` theorems
-theorem dspec_mono' {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : dspec m P₀):
+theorem dspec_mono' {α} {P₁ : Post α} {m : RustM α} {P₀ : Post α} (h : dspec m P₀):
   qimp P₀ P₁ → dspec m P₁ := by
   intros HMonPost
   revert h
@@ -200,10 +200,10 @@ theorem dspec_mono' {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : 
   cases m <;> grind [qimp]
 
 /-- Implication of a `dspec` predicate with quantifier -/
-def qimp_dspec {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) : Prop :=
+def qimp_dspec {α β} (P : α → Prop) (k : α → RustM β) (Q : β → Prop) : Prop :=
   ∀ x, P x → dspec (k x) Q
 
-theorem dspec_bind' {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
+theorem dspec_bind' {α β} {k : α -> RustM β} {Pₖ : Post β} {m : RustM α} {Pₘ : Post α} :
   dspec m Pₘ →
   (qimp_dspec Pₘ k Pₖ) →
   dspec (Std.bind m k) Pₖ := by
@@ -218,28 +218,28 @@ theorem dspec_bind' {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result �
     apply Hm
 
 @[simp]
-def qimp_dspec_uncurry' {α₀ α₁ β} (P : α₀ → α₁ → Prop) (k : α₀ × α₁ → Result β) (Q : β → Prop) :
+def qimp_dspec_uncurry' {α₀ α₁ β} (P : α₀ → α₁ → Prop) (k : α₀ × α₁ → RustM β) (Q : β → Prop) :
   qimp_dspec (uncurry' P) k Q ↔ ∀ x, qimp_dspec (P x) (curry k x) Q := by
   simp [qimp_dspec, curry]
 
 @[simp]
-theorem qimp_dspec_unit {α} (P : Unit → Prop) (k : Unit → Result α) (Q : α → Prop) :
+theorem qimp_dspec_unit {α} (P : Unit → Prop) (k : Unit → RustM α) (Q : α → Prop) :
   qimp_dspec P k Q ↔ (P () → dspec (k ()) Q) := by
   grind [qimp_dspec]
 
 @[simp]
-theorem qimp_dspec_exists {α β γ} (P : γ → α → Prop) (k : α → Result β) (Q : β → Prop) :
+theorem qimp_dspec_exists {α β γ} (P : γ → α → Prop) (k : α → RustM β) (Q : β → Prop) :
   qimp_dspec (fun x => ∃ y, P y x) k Q ↔ ∀ x, qimp_dspec (P x) k Q := by
   simp only [qimp_dspec, forall_exists_index]; grind
 
-def qimp_dspec_iff {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) :
+def qimp_dspec_iff {α β} (P : α → Prop) (k : α → RustM β) (Q : β → Prop) :
   qimp_dspec P k Q ↔ ∀ x, imp (P x) (dspec (k x) Q) := by
   simp [qimp_dspec, imp]
 
 @[simp, grind =, agrind =]
 theorem dspec_ok (x : α) : dspec (ok x) p ↔ p x := by simp [dspec]
 
-theorem dspec_imp_forall {m:Result α} {P:Post α} :
+theorem dspec_imp_forall {m:RustM α} {P:Post α} :
   dspec m P → (∀ y, m = ok y → P y) := by
   grind only [= dspec_ok]
 
@@ -248,7 +248,7 @@ theorem dspec_imp_forall {m:Result α} {P:Post α} :
 `partialSpec x p_ok p_fail p_div` reads as: "if `x` reduces to `ok a` then `p_ok a` holds; if it
 reduces to `fail e` then `p_fail e` holds; if it diverges then `p_div` holds". Unlike `spec`, it
 does not assume the program terminates without exception. -/
-def partialSpec {α} (x : Result α)
+def partialSpec {α} (x : RustM α)
     (p_ok : α → Prop) (p_fail : Error → Prop) (p_div : Prop) : Prop :=
   match x with
   | ok a   => p_ok a
@@ -273,7 +273,7 @@ theorem partialSpec_div (p_ok : α → Prop) p_fail p_div :
 /-- Derive a total-correctness `spec` from `partialSpec` by ruling out the failure and divergence
 cases. Used by `@[step]` to generate a step-tactic lemma from a `partialSpec` theorem. -/
 theorem spec_of_partialSpec
-    {α} {x : Result α} {p_ok : α → Prop} {p_fail : Error → Prop} {p_div : Prop}
+    {α} {x : RustM α} {p_ok : α → Prop} {p_fail : Error → Prop} {p_div : Prop}
     (h : partialSpec x p_ok p_fail p_div)
     (h_fail : ∀ e, ¬ p_fail e) (h_div : ¬ p_div) :
     spec x p_ok := by
@@ -287,7 +287,7 @@ TODO: use https://github.com/leanprover/lean4/pull/11355
 -/
 namespace Aeneas
 
-open Std WP Result
+open Std WP RustM
 
 /-!
 # Hoare triple notation and elaboration
@@ -665,7 +665,7 @@ end Aeneas
 namespace Aeneas.Std.WP
 
 section
-  variable (U32 : Type) [HAdd U32 U32 (Result U32)]
+  variable (U32 : Type) [HAdd U32 U32 (RustM U32)]
   variable (x y : U32)
 
   #elab x + y ⦃ _ => True ⦄
@@ -673,12 +673,12 @@ section
   #elab True ∧ x + y ⦃ _ => True ⦄
 
   -- Checking what happpens if we put post-conditions inside post-conditions
-  example (f : Nat → Result (Nat × (Nat → Result Nat)))
+  example (f : Nat → RustM (Nat × (Nat → RustM Nat)))
           (_ : ∀ x, f x ⦃ (y, g) => y > 0 ∧ ∀ x, g x ⦃ z => z > y ⦄ ⦄ ∧ True)
    : True := by simp only
 end
 
-def add1 (x : Nat) := Result.ok (x + 1)
+def add1 (x : Nat) := RustM.ok (x + 1)
 theorem  add1_spec (x : Nat) : add1 x ⦃ y => y = x + 1⦄ :=
   by simp [add1]
 
@@ -715,7 +715,7 @@ example (x : Nat) :
     --
     grind
 
-def add2 (x : Nat) := Result.ok (x + 1, x + 2)
+def add2 (x : Nat) := RustM.ok (x + 1, x + 2)
 
 theorem  add2_spec (x : Nat) : add2 x ⦃ (y, z) => y = x + 1 ∧ z = x + 2⦄ :=
   by simp [add2]
@@ -767,7 +767,7 @@ private theorem massert_spec' (b : Prop) [Decidable b] (h : b) :
   grind [massert]
 
 @[simp]
-theorem qimp_spec_unit {α} (P : Unit → Prop) (k : Unit → Result α) (Q : α → Prop) :
+theorem qimp_spec_unit {α} (P : Unit → Prop) (k : Unit → RustM α) (Q : α → Prop) :
   qimp_spec P k Q ↔ (P () → k () ⦃ Q ⦄) := by
   grind [qimp_spec]
 
@@ -798,7 +798,7 @@ example :
   simp -failIfUnchanged only [qimp_unit, forall_const]
 
 /- Example with a post-condition manipulating an ∃ -/
-example (zero : List Nat → Result (List Nat))
+example (zero : List Nat → RustM (List Nat))
     (zero_spec : ∀ s, zero s ⦃ s' =>
       ∃ (h : s'.length = s.length),
       (∀ i, (_ : i < s.length) → s'[i]'(by grind) = 0) ⦄)
@@ -822,10 +822,10 @@ namespace Aeneas.Std.WP
 # mvcgen
 -/
 
-open Std Result
+open Std RustM
 open Std.Do
 
-instance : LawfulMonad Result where
+instance : LawfulMonad RustM where
     map_const := by intros; rfl
     id_map := by intros _ x; cases x <;> rfl
     seqLeft_eq := by intros _ _ x y; cases x <;> cases y <;> rfl
@@ -836,11 +836,11 @@ instance : LawfulMonad Result where
     bind_map := by intros; rfl
     bind_assoc := by intros _ _ _ x _ _; cases x <;> rfl
 
-instance Result.instWPMonad : WPMonad Result (.except (ULift Error) (.except PUnit .pure)) where
+instance RustM.instWPMonad : WPMonad RustM (.except (ULift Error) (.except PUnit .pure)) where
   wp_pure a := by apply PredTrans.ext; intro Q; simp [PredTrans.apply, wp, WP.wp]; rfl
   wp_bind x f := by apply PredTrans.ext; intro Q; simp [PredTrans.apply, wp, WP.wp]; cases x <;> rfl
 
-theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
+theorem RustM.of_wp {α : Type u} {x : RustM α} (P : RustM α → Prop) :
     (⊢ₛ wp⟦x⟧ (fun a => ⌜P (.ok a)⌝,
                   fun e => ⌜P (.fail e.down)⌝,
                   fun .unit => ⌜P .div⌝, .unit)) → P x := by
@@ -849,24 +849,24 @@ theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
   split at hspec <;> simp_all
 
 /-- Lift an Aeneas step spec to an mvcgen-compatible `Triple`. -/
-theorem spec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
+theorem spec_to_mvcgen {α : Type u} {x : RustM α} {Q : α → Prop}
     (h : spec x Q) :
     ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
   obtain ⟨v, hx, hQv⟩ := spec_imp_exists h
   subst hx
   simp [Triple, WP.wp, PredTrans.apply, hQv]
 
-theorem dspec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
+theorem dspec_to_mvcgen {α : Type u} {x : RustM α} {Q : α → Prop}
     (h : dspec x Q) :
     ⦃ ⌜ ¬ x = .div ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
   simp [Triple, WP.wp, PredTrans.apply, SPred.pure]
   cases x <;> simp [*, dspec] at * <;> trivial
 
 /-- Lift an Aeneas partial-correctness spec to an mvcgen-compatible `Triple`. -/
-theorem partialSpec_to_mvcgen {α : Type u} {x : Result α}
+theorem partialSpec_to_mvcgen {α : Type u} {x : RustM α}
     {p_ok : α → Prop} {p_fail : Error → Prop} {p_div : Prop}
     (h : partialSpec x p_ok p_fail p_div)
-    {Q : PostCond α Result.postShape}
+    {Q : PostCond α RustM.postShape}
     (h_ok   : ∀ r, p_ok r → PostCond.ok Q r)
     (h_fail : ∀ e, p_fail e → PostCond.fail Q e)
     (h_div  : p_div → PostCond.div Q) :
@@ -876,38 +876,38 @@ theorem partialSpec_to_mvcgen {α : Type u} {x : Result α}
     <;> simp [Triple, WP.wp, PredTrans.apply, h_ok, h_fail, h_div, h]
 
 @[spec]
-theorem Result.ok_spec {α : Type} {a : α} {Q} (hQ : (Q.1 a).down) :
-  ⦃ ⌜ True ⌝ ⦄ Result.ok a ⦃ Q ⦄ := by simpa [Triple]
+theorem RustM.ok_spec {α : Type} {a : α} {Q} (hQ : (Q.1 a).down) :
+  ⦃ ⌜ True ⌝ ⦄ RustM.ok a ⦃ Q ⦄ := by simpa [Triple]
 
 @[spec]
-theorem Result.fail_spec {α : Type} {e : Error} {Q} (hQ : (Q.2.1 (ULift.up e)).down) :
-  ⦃ ⌜ True ⌝ ⦄ (Result.fail e : Result α) ⦃ Q ⦄ := by simpa [Triple]
+theorem RustM.fail_spec {α : Type} {e : Error} {Q} (hQ : (Q.2.1 (ULift.up e)).down) :
+  ⦃ ⌜ True ⌝ ⦄ (RustM.fail e : RustM α) ⦃ Q ⦄ := by simpa [Triple]
 
 /-- A triple with postcondition `r = v` is equivalent to the program being `.ok v`. -/
-theorem triple_post_eq_iff_eq {α : Type} {x : Result α} {v : α} :
+theorem triple_post_eq_iff_eq {α : Type} {x : RustM α} {v : α} :
     ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ r = v ⌝ ⦄ ↔ x = .ok v := by
   cases x <;> simp_all [Triple, WP.wp, PredTrans.apply]
 
 /-- If the program equals `.ok v`, then a triple is equivalent to its postcondition on `.ok v`.  -/
-theorem triple_iff_post_of_eq_ok {α : Type} {x : Result α} {v : α} {P : α → Prop}
+theorem triple_iff_post_of_eq_ok {α : Type} {x : RustM α} {v : α} {P : α → Prop}
     (hx : x = .ok v) : ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ P r ⌝ ⦄ ↔ P v := by
   simp_all [Triple, WP.wp, PredTrans.apply]
 
 /-- A triple is equivalent to the existence of a value `a` such that the program is `.ok a`
 and the postcondition holds on `a`. -/
-theorem triple_iff_exists_ok {α : Type} {x : Result α} {P : α → Prop} :
+theorem triple_iff_exists_ok {α : Type} {x : RustM α} {P : α → Prop} :
     ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ P r ⌝ ⦄ ↔ ∃ a, x = .ok a ∧ P a := by
   cases x <;> simp_all [Triple, WP.wp, PredTrans.apply]
 
 /-- Enrich triple's postcondition to contain a triple stating which program produced the value. -/
-theorem triple_with_self {α : Type} {x : Result α} {P : α → Prop}
+theorem triple_with_self {α : Type} {x : RustM α} {P : α → Prop}
     (h : ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ P r ⌝ ⦄) :
     ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ P r ∧ ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r' => ⌜ r' = r ⌝ ⦄ ⌝ ⦄ := by
   obtain ⟨a, hx, hPa⟩ := triple_iff_exists_ok.1 h
   exact (triple_iff_post_of_eq_ok hx).2 ⟨hPa, triple_post_eq_iff_eq.2 hx⟩
 
 /- Modus-ponens-like reasoning on a `noThrow` and a `mayThrow` triple -/
-theorem triple_in_hypothesis {f : Result α} {Q : α → Assertion _} (p : Prop)
+theorem triple_in_hypothesis {f : RustM α} {Q : α → Assertion _} (p : Prop)
     (h : ⦃ ⌜ True ⌝ ⦄ f ⦃ ⇓ r => Q r ⦄)
     (hp : ⦃ ⌜ True ⌝ ⦄ f ⦃ ⇓? r => Q r → ⌜ p ⌝ ⦄) :
     p := by
@@ -931,7 +931,7 @@ theorem loop.spec {α : Type u} {β : Type v} {γ : Type w}
   [wf : WellFoundedRelation γ]
   (inv : α → Prop)
   (post : β → Prop)
-  (body : α → Result (ControlFlow α β)) (x : α)
+  (body : α → RustM (ControlFlow α β)) (x : α)
   (hBody :
     ∀ x, inv x → body x ⦃ r =>
       match r with
@@ -950,7 +950,7 @@ theorem loop.spec_decr_nat {α : Type u} {β : Type v}
   (measure : α → Nat)
   (inv : α → Prop)
   (post : β → Prop)
-  (body : α → Result (ControlFlow α β)) (x : α)
+  (body : α → RustM (ControlFlow α β)) (x : α)
   (hBody :
     ∀ x, inv x → body x ⦃ r =>
       match r with

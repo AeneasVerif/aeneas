@@ -6,27 +6,27 @@ import Mathlib.Data.BitVec
 
 namespace Aeneas.Std
 
-open Result Error Arith ScalarElab WP
+open RustM Error Arith ScalarElab WP
 
 /-!
 # Addition: Definitions
 -/
-def UScalar.add {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
+def UScalar.add {ty : UScalarTy} (x y : UScalar ty) : RustM (UScalar ty) :=
   UScalar.tryMk ty (x.val + y.val)
 
-def IScalar.add {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
+def IScalar.add {ty : IScalarTy} (x y : IScalar ty) : RustM (IScalar ty) :=
   IScalar.tryMk ty (x.val + y.val)
 
 def UScalar.try_add {ty : UScalarTy} (x y : UScalar ty) : Option (UScalar ty) :=
-  Option.ofResult (add x y)
+  Option.ofRustM (add x y)
 
 def IScalar.try_add {ty : IScalarTy} (x y : IScalar ty) : Option (IScalar ty) :=
-  Option.ofResult (add x y)
+  Option.ofRustM (add x y)
 
-instance {ty} : HAdd (UScalar ty) (UScalar ty) (Result (UScalar ty)) where
+instance {ty} : HAdd (UScalar ty) (UScalar ty) (RustM (UScalar ty)) where
   hAdd x y := UScalar.add x y
 
-instance {ty} : HAdd (IScalar ty) (IScalar ty) (Result (IScalar ty)) where
+instance {ty} : HAdd (IScalar ty) (IScalar ty) (RustM (IScalar ty)) where
   hAdd x y := IScalar.add x y
 
 
@@ -43,7 +43,7 @@ theorem UScalar.add_equiv {ty} (x y : UScalar ty) :
   | _ => ⊥ := by
   have : x + y = add x y := by rfl
   rw [this]
-  simp [add, tryMk, Result.ofOption]
+  simp [add, tryMk, RustM.ofOption]
   have h := tryMkOpt_eq ty (↑x + ↑y)
   simp [inBounds] at h
   cases hopt : tryMkOpt ty (↑x + ↑y) <;> simp_all
@@ -62,7 +62,7 @@ theorem IScalar.add_equiv {ty} (x y : IScalar ty) :
   | _ => ⊥ := by
   have : x + y = add x y := by rfl
   rw [this]
-  simp [add, tryMk, Result.ofOption]
+  simp [add, tryMk, RustM.ofOption]
   have h := tryMkOpt_eq ty (↑x + ↑y)
   simp [inBounds] at h
   cases hopt : tryMkOpt ty (↑x + ↑y) <;> simp_all

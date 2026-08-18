@@ -4,23 +4,23 @@
 
 **Aeneas** — A tool that translates Rust programs to pure Lean code via the LLBC intermediate representation, enabling formal verification of Rust code in the Lean proof assistant.
 
-**Backward continuation** — A function returned alongside a borrowed value that propagates updates back to the original owner. Generated when Rust code uses mutable borrows (`&mut T`). In the generated Lean code, appears as an extra return value: `Result (T × (T → Result OriginalType))`.
+**Backward continuation** — A function returned alongside a borrowed value that propagates updates back to the original owner. Generated when Rust code uses mutable borrows (`&mut T`). In the generated Lean code, appears as an extra return value: `RustM (T × (T → RustM OriginalType))`.
 
 **Charon** — The Rust compiler frontend used by Aeneas. Extracts Rust MIR and produces LLBC. The `charon` binary and `charon-pin` file in the repo manage this.
 
 **LLBC (Low-Level Borrow Calculus)** — Intermediate representation between Rust MIR and Lean. Captures ownership, borrowing, and lifetime information in a form suitable for translation to pure functional code.
 
-**`Result` monad** — The error monad used in all Aeneas-generated code: `ok v` for success, `fail` for errors (panic, overflow, out-of-bounds). All generated functions return `Result T`.
+**`RustM` monad** — The error monad used in all Aeneas-generated code: `ok v` for success, `fail` for errors (panic, overflow, out-of-bounds). All generated functions return `RustM T`.
 
 **`ControlFlow`** — Inductive type used in loop translation: `ControlFlow.cont x` to continue the loop with new state, `ControlFlow.done y` to break with a result.
 
-**`loop` (fixed-point operator)** — The combinator used to translate Rust loops: `loop (body : α → Result (ControlFlow α β)) (x : α) : Result β`. Reason about it with `loop.spec` or `loop.spec_decr_nat`.
+**`loop` (fixed-point operator)** — The combinator used to translate Rust loops: `loop (body : α → RustM (ControlFlow α β)) (x : α) : RustM β`. Reason about it with `loop.spec` or `loop.spec_decr_nat`.
 
 ## Specification Terms
 
 **Progress theorem** — A theorem tagged with `@[step]` that specifies the behavior of a function. The `step` tactic searches these to step through monadic code.
 
-**Auxiliary spec** — An intermediate specification that mirrors the code structure but is pure (no Result monad). Used as a bridge between a high-level mathematical spec and the Aeneas-generated code. Also called "intermediate spec."
+**Auxiliary spec** — An intermediate specification that mirrors the code structure but is pure (no RustM monad). Used as a bridge between a high-level mathematical spec and the Aeneas-generated code. Also called "intermediate spec."
 
 **Weakest-precondition notation (`⦃ ⦄`)** — The notation `f x ⦃ r => P r ⦄` means "`f x` succeeds and the result `r` satisfies `P r`." Used in all Aeneas spec statements.
 

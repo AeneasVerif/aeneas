@@ -36,7 +36,7 @@ The manifest describes **what Aeneas did**: the Lean declarations it produced an
 | `is_local` | yes | `true` if defined in the current crate, `false` if external |
 | `source` | yes | Rust source location: `{ "file": "...", "begin_line": N, "end_line": M }` |
 | `is_opaque` | yes | Extracted as an axiom |
-| `can_fail` | yes | Return type wrapped in `Result` (function can panic) |
+| `can_fail` | yes | Return type wrapped in `RustM` (function can panic) |
 | `can_diverge` | yes | May not terminate |
 | `is_rec` | yes | Part of a mutually recursive group |
 | `reducible` | yes | Marked as reducible by Aeneas |

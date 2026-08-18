@@ -518,7 +518,7 @@ We convert a `partialSpec` theorem into a `Triple` theorem for `mvcgen` as follo
   look nicer. For instance, we rewrite `¬a ≤ b` into `b < a`.
 -/
 section
-open Aeneas.Std WP Result
+open Aeneas.Std WP RustM
 
 private theorem mvcgen_fail_failEq_iff {α : Type u} {Q : Std.Do.PostCond α postShape}
     {c : Error} {P : Prop} :
@@ -657,7 +657,7 @@ namespace Test
   /-!
   Making some tests here as models to guide the automation generation of proof terms when lifting theorems in `step_pure`
   -/
-  open Std Result
+  open Std RustM
   def pos_pair : Int × Int := (0, 1)
 
   theorem pos_pair_is_pos :

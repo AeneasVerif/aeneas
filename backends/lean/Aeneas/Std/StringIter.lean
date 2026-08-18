@@ -9,7 +9,7 @@ structure core.str.iter.Chars where
   iter : core.slice.iter.Iter U8
 
 @[rust_fun "core::str::iter::{core::iter::traits::iterator::Iterator<core::str::iter::Chars<'a>, char>}::next"]
-def core.str.iter.IteratorChars.next (it : core.str.iter.Chars) : Result ((Option Char) × core.str.iter.Chars) := do
+def core.str.iter.IteratorChars.next (it : core.str.iter.Chars) : RustM ((Option Char) × core.str.iter.Chars) := do
   let (r, iter) ← core.slice.iter.IteratorSliceIter.next it.iter
   .ok (r.map Char.ofNat, ⟨iter⟩)
 
@@ -17,7 +17,7 @@ def core.str.iter.IteratorChars.next (it : core.str.iter.Chars) : Result ((Optio
 noncomputable opaque core.str.iter.IteratorChars.collect
   {B : Type} (itertraitscollectFromIteratorBCharInst :
   core.iter.traits.collect.FromIterator B Char) :
-  core.str.iter.Chars → Result B
+  core.str.iter.Chars → RustM B
 
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::str::iter::Chars<'a>, char>"]
@@ -27,7 +27,7 @@ def core.iter.traits.iterator.IteratorChars :
 }
 
 @[rust_fun "core::str::{str}::chars"]
-def core.str.Str.chars (s : Str) : Result core.str.iter.Chars :=
+def core.str.Str.chars (s : Str) : RustM core.str.iter.Chars :=
   .ok { iter := { slice := s, i := 0 } }
 
 end Aeneas.Std
