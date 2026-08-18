@@ -279,7 +279,7 @@ postcondition into the ordered weakest-precondition monad.
 
 The triple is affine because the *assertions* are: a postcondition holds of any
 heap that extends the resources it describes, so a computation may leak.  No
-explicit `GC` is needed for that, unlike in SLF. -/
+explicit affine top is needed for that, unlike in SLF. -/
 def triple (P : SLPre) (m : St α) (Q : SLPost α) : Prop :=
   theta m ≤ pp2wp P Q
 
@@ -335,17 +335,6 @@ theorem triple_iff (P : SLPre) (m : St α) (Q : SLPost α) :
     exact theta_frame m Q (Q -∗+ R) h
       (hstar_mono hTriple (himpl_refl _) h hPre)
 
-/-- Discard resources from the declared postcondition.  Since the logic is
-affine this is an instance of the rule of consequence. -/
-theorem triple_hgc_post {P : SLPre} {m : St α} {Q : SLPost α}
-    (hTriple : triple P m (Q ∗+ GC)) :
-    triple P m Q := by
-  apply (triple_iff _ _ _).mpr
-  intro h hP
-  apply (theta m).monotone
-    (fun value h => (hstar_hempty_r (Q value) h).mp) h
-  exact (triple_iff P m (Q ∗+ GC)).mp hTriple h hP
-
 theorem triple_frame {P : SLPre} {m : St α} {Q : SLPost α}
     (hTriple : triple P m Q) (H : SLProp) :
     triple (P ∗ H) m (Q ∗+ H) := by
@@ -355,12 +344,6 @@ theorem triple_frame {P : SLPre} {m : St α} {Q : SLPost α}
   apply theta_frame m Q H h
   exact ⟨h₁, h₂, hDisjoint, hEq,
     (triple_iff P m Q).mp hTriple h₁ hP, hH⟩
-
-/-- Discard resources from the precondition. -/
-theorem triple_hgc_pre {P : SLPre} {m : St α} {Q : SLPost α}
-    (hTriple : triple P m Q) :
-    triple (P ∗ GC) m Q :=
-  triple_hgc_post (triple_frame hTriple GC)
 
 theorem triple_conseq {P' P : SLPre} {m : St α}
     {Q' Q : SLPost α}
@@ -372,20 +355,19 @@ theorem triple_conseq {P' P : SLPre} {m : St α}
   apply (theta m).monotone hQ h
   exact (triple_iff P' m Q').mp hTriple h (hP h hPre)
 
-/-- An arbitrary postcondition resource may be discarded. -/
+/-- An arbitrary postcondition resource may be discarded.  Since the logic is
+affine this is an instance of the rule of consequence. -/
 theorem triple_hany_post {P H : SLPre} {m : St α} {Q : SLPost α}
     (hTriple : triple P m (Q ∗+ H)) :
     triple P m Q :=
-  triple_hgc_post (triple_conseq hTriple (himpl_refl P)
-    (fun value => hstar_mono (himpl_refl (Q value)) (himpl_hgc_r H)))
+  triple_conseq hTriple (himpl_refl P)
+    (fun value => hstar_elim_right (Q value) H)
 
 /-- An arbitrary precondition resource may be discarded. -/
 theorem triple_hany_pre {P H : SLPre} {m : St α} {Q : SLPost α}
     (hTriple : triple P m Q) :
     triple (P ∗ H) m Q :=
-  triple_conseq (triple_hgc_pre hTriple)
-    (hstar_mono (himpl_refl P) (himpl_hgc_r H))
-    (fun _ => himpl_refl _)
+  triple_hany_post (triple_frame hTriple H)
 
 theorem triple_hpure {P : Prop} {H : SLPre} {m : St α}
     {Q : SLPost α}
