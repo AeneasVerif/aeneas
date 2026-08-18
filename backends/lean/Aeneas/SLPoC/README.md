@@ -61,16 +61,16 @@ Keep these tables updated whenever a file is added, removed, or repurposed.
 
 The logic is affine the way Iris's is, rather than the way SLF's
 [Affine Separation Logic](https://softwarefoundations.cis.upenn.edu/slf-current/Affine.html)
-is: affinity is a property of the *model*, not an extra `GC` written into the
-triples. An `SLProp` is closed under heap extension — it owns the cells it
+is: affinity is a property of the *model*, not an extra affine top written into
+the triples. An `SLProp` is closed under heap extension — it owns the cells it
 describes and says nothing about the others — exactly like Iris's `uPred`.
 Consequently:
 
 * the entailment weakens: `H ⊢ emp` for every `H`, so `sl_frame`/`sl_xsimpl`
   drop whatever a cancellation leaves over;
-* `emp`, `GC` and `⌜True⌝` all hold of every heap — `GC` is *definitionally*
-  `emp`, and is kept only so that SLF-shaped statements keep parsing;
-* `triple P m Q` is `theta m ≤ pp2wp P Q`, with no `∗+ GC` in the
+* `emp` and `⌜True⌝` both hold of every heap, so `emp` *is* the affine top and
+  no separate predicate for it is needed;
+* `triple P m Q` is `theta m ≤ pp2wp P Q`, with nothing absorbing in the
   postcondition, and unused resources may still be discarded from either side.
 
 What affinity does *not* change: separation is still separation, so `p ↦ v ∗ p ↦

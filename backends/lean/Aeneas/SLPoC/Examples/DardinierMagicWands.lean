@@ -251,7 +251,7 @@ def selectedCell (x : Ptr (Ptr Nat)) (y z : Ptr Nat)
 
 /-- The sound, uniform footprint contains both possible selected cells. The
 unused cell is discarded once the branch is known — the logic being affine, that
-needs no explicit `GC`. -/
+needs no explicit absorbing assertion. -/
 theorem packageSelected (x : Ptr (Ptr Nat)) (y z : Ptr Nat)
     (yValue zValue : Nat) :
     y ↦ yValue ∗ z ↦ zValue ⊢
