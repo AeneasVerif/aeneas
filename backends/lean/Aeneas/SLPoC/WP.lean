@@ -437,6 +437,15 @@ theorem qwand_specialize {α : Type} {Q₁ Q₂ : SLPost α} (value : α) :
     (Q₁ -∗+ Q₂) ⊢ (Q₁ value -∗ Q₂ value) :=
   hforall_specialize value
 
+theorem himpl_qwand_hpure_eq {α : Type} (H : SLProp) (value : α) (Q : SLPost α) :
+    (H ⊢ (fun result => ⌜result = value⌝) -∗+ Q) ↔ (H ⊢ Q value) := by
+  rw [qwand_equiv]
+  constructor
+  · intro h
+    exact himpl_trans (hpure_hstar_intro (P := value = value) H rfl) (h value)
+  · intro h _
+    exact himpl_hpure_l fun hEq => hEq ▸ h
+
 /-- Monotone predicate transformers, corresponding to `Wᴾᵘʳᵉ` in
 "Dijkstra Monads for All". -/
 structure Wp (α : Type) where

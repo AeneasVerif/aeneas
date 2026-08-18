@@ -762,12 +762,12 @@ theorem queryAux.spec (pointer : Ptr Table) (model : ModelTable)
   induction path generalizing pointer model with
   | nil =>
       simp only [queryAux, ModelTable.lookup]
-      sl_step*
+      step*
   | cons index rest ih =>
       simp only [queryAux, ModelTable.lookup]
       sl_change (tableOwn_select pointer index model)
       sl_pull concrete
-      sl_step
+      step
       cases rest with
       | nil =>
           cases hConcrete : concrete.get index <;>
@@ -775,7 +775,7 @@ theorem queryAux.spec (pointer : Ptr Table) (model : ModelTable)
             simp only [entryOwn]
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_step
+            step
             sl_change hFold
             sl_frame
           · sl_change (pure_middle_front False
@@ -799,8 +799,7 @@ theorem queryAux.spec (pointer : Ptr Table) (model : ModelTable)
             subst concreteFrame
             have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_step
-            simp only [eq_self]
+            step
             sl_change (pure_front_middle True
               (pointer ↦ concrete) (entriesExcept index concrete model))
             sl_change hFold
@@ -819,7 +818,7 @@ theorem queryAux.spec (pointer : Ptr Table) (model : ModelTable)
             contradiction
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_step
+            step
             sl_change hFold
             sl_frame
       | cons next rest =>
@@ -828,7 +827,7 @@ theorem queryAux.spec (pointer : Ptr Table) (model : ModelTable)
             simp only [entryOwn]
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_step
+            step
             sl_change hFold
             sl_frame
           · sl_change (pure_middle_front False
@@ -852,8 +851,7 @@ theorem queryAux.spec (pointer : Ptr Table) (model : ModelTable)
             subst concreteFrame
             have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_step
-            simp only [eq_self]
+            step
             sl_change (pure_front_middle True
               (pointer ↦ concrete) (entriesExcept index concrete model))
             sl_change hFold
@@ -871,10 +869,10 @@ theorem queryAux.spec (pointer : Ptr Table) (model : ModelTable)
             sl_pull
             contradiction
           · rename_i child childModel
-            sl_step with ih child childModel
+            step with ih child childModel
             have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_step
+            step
             sl_change hFold
             sl_frame
 
@@ -886,7 +884,7 @@ theorem query.spec (root : Ptr Table) (model : ModelTable) (path : Path) :
         ⌜result = model.lookup path⌝ ∗
         tableOwn root model⦄ := by
   unfold query
-  sl_step*
+  step*
 
 /-- `mapAux` exactly implements pure insertion: its Boolean is the pure
 success flag, and recursive ownership tracks every reachable table in the
@@ -902,19 +900,19 @@ theorem mapAux.spec (pointer : Ptr Table) (model : ModelTable)
   induction path generalizing pointer model with
   | nil =>
       simp only [mapAux, ModelTable.insert]
-      sl_step*
+      step*
   | cons index rest ih =>
       simp only [mapAux, ModelTable.insert]
       sl_change (tableOwn_select pointer index model)
       sl_pull concrete
-      sl_step
+      step
       cases rest with
       | nil =>
           cases hConcrete : concrete.get index <;>
             cases hModel : model.get index <;>
             simp only [entryOwn]
-          · sl_step
-            sl_step
+          · step
+            step
             sl_change
               (tableOwn_replace_leaf pointer index concrete model frame)
             sl_frame
@@ -932,7 +930,7 @@ theorem mapAux.spec (pointer : Ptr Table) (model : ModelTable)
             contradiction
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_step
+            step
             sl_change hFold
             sl_frame
           · sl_change (pure_middle_front False
@@ -949,18 +947,18 @@ theorem mapAux.spec (pointer : Ptr Table) (model : ModelTable)
             contradiction
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_step
+            step
             sl_change hFold
             sl_frame
       | cons next rest =>
           cases hConcrete : concrete.get index <;>
             cases hModel : model.get index <;>
             simp only [entryOwn]
-          · sl_step as ⟨ child ⟩
+          · step as ⟨ child ⟩
             sl_change (empty_tableOwn child)
-            sl_step
-            sl_step with ih child ModelTable.empty
-            sl_step
+            step
+            step with ih child ModelTable.empty
+            step
             sl_change (tableOwn_replace pointer index concrete model
               (.table child)
               (.table (ModelTable.empty.insert (next :: rest) frame).1))
@@ -979,7 +977,7 @@ theorem mapAux.spec (pointer : Ptr Table) (model : ModelTable)
             contradiction
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_step
+            step
             sl_change hFold
             sl_frame
           · sl_change (pure_middle_front False
@@ -995,8 +993,8 @@ theorem mapAux.spec (pointer : Ptr Table) (model : ModelTable)
             sl_pull
             contradiction
           · rename_i child childModel
-            sl_step with ih child childModel
-            sl_step
+            step with ih child childModel
+            step
             sl_change (tableOwn_replace_of_get pointer index concrete model
               (.table child)
               (.table (childModel.insert (next :: rest) frame).1)
@@ -1013,7 +1011,7 @@ theorem map.spec (root : Ptr Table) (model : ModelTable)
         ⌜inserted = (model.insert path frame).2⌝ ∗
         tableOwn root (model.insert path frame).1⦄ := by
   unfold map
-  sl_step*
+  step*
 
 /-- Recursive removal returns exactly the removed frame and preserves recursive
 ownership related to the pure tree with that final leaf cleared. -/
@@ -1027,12 +1025,12 @@ theorem removeAux.spec (pointer : Ptr Table) (model : ModelTable)
   induction path generalizing pointer model with
   | nil =>
       simp only [removeAux, ModelTable.remove]
-      sl_step*
+      step*
   | cons index rest ih =>
       simp only [removeAux, ModelTable.remove]
       sl_change (tableOwn_select pointer index model)
       sl_pull concrete
-      sl_step
+      step
       cases rest with
       | nil =>
           cases hConcrete : concrete.get index <;>
@@ -1040,7 +1038,7 @@ theorem removeAux.spec (pointer : Ptr Table) (model : ModelTable)
             simp only [entryOwn]
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_step
+            step
             sl_change hFold
             sl_frame
           · sl_change (pure_middle_front False
@@ -1058,10 +1056,10 @@ theorem removeAux.spec (pointer : Ptr Table) (model : ModelTable)
           · rename_i concreteFrame modelFrame
             sl_change (pure_middle_front (concreteFrame = modelFrame)
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_step
+            step
             sl_change
               (tableOwn_replace_empty pointer index concrete model)
-            sl_step*
+            step*
           · sl_change (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
             sl_pull
@@ -1076,7 +1074,7 @@ theorem removeAux.spec (pointer : Ptr Table) (model : ModelTable)
             contradiction
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_step
+            step
             sl_change hFold
             sl_frame
       | cons next rest =>
@@ -1085,7 +1083,7 @@ theorem removeAux.spec (pointer : Ptr Table) (model : ModelTable)
             simp only [entryOwn]
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_step
+            step
             sl_change hFold
             sl_frame
           · sl_change (pure_middle_front False
@@ -1102,7 +1100,7 @@ theorem removeAux.spec (pointer : Ptr Table) (model : ModelTable)
             contradiction
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_step
+            step
             sl_change hFold
             sl_frame
           · sl_change (pure_middle_front False
@@ -1118,8 +1116,8 @@ theorem removeAux.spec (pointer : Ptr Table) (model : ModelTable)
             sl_pull
             contradiction
           · rename_i child childModel
-            sl_step with ih child childModel
-            sl_step
+            step with ih child childModel
+            step
             sl_change (tableOwn_replace_of_get pointer index concrete model
               (.table child)
               (.table (childModel.remove (next :: rest)).1)
@@ -1137,7 +1135,7 @@ theorem isTableEmpty.spec (pointer : Ptr Table) (model : ModelTable) :
   unfold isTableEmpty
   sl_change (tableOwn_select pointer .i0 model)
   sl_pull concrete
-  sl_step
+  step
   sl_change (selectedEntries_isEmpty .i0 concrete model)
   sl_change (pure_middle_front
     (concrete.isEmpty = model.isEmpty)
@@ -1148,7 +1146,7 @@ theorem isTableEmpty.spec (pointer : Ptr Table) (model : ModelTable) :
   simp only [hstar_hempty_r_eq]
   sl_pull_keep
   rename_i hEmpty
-  sl_step
+  step
   sl_change (tableOwn_unselect pointer .i0 concrete model)
   simp only [hEmpty]
   sl_frame
@@ -1194,7 +1192,7 @@ theorem freeModelEmpty.spec (pointer : Ptr Table) (model : ModelTable)
   subst model
   simp only [Table.empty, ModelTable.empty, Table.get, ModelTable.get,
     entriesExcept, entryOwn, hstar_hempty_r_eq]
-  sl_step*
+  step*
 
 /-- `pruneAux` exactly follows the pure bottom-up prune model.  The executable
 true branch performs `free`, while the postcondition tracks only children still
@@ -1210,17 +1208,17 @@ theorem pruneAux.spec (pointer : Ptr Table) (model : ModelTable)
   induction path generalizing pointer model with
   | nil =>
       simp only [pruneAux, ModelTable.prune]
-      sl_step*
+      step*
   | cons index rest ih =>
       cases rest with
       | nil =>
           simp only [pruneAux, ModelTable.prune]
-          sl_step*
+          step*
       | cons next rest =>
           simp only [pruneAux, ModelTable.prune]
           sl_change (tableOwn_select pointer index model)
           sl_pull concrete
-          sl_step
+          step
           cases hConcrete : concrete.get index <;>
             cases hModel : model.get index <;>
             simp only [entryOwn]
@@ -1241,7 +1239,7 @@ theorem pruneAux.spec (pointer : Ptr Table) (model : ModelTable)
             rename_i hEmpty
             have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_step
+            step
             sl_change hFold
             simp only [hEmpty]
             sl_frame
@@ -1274,7 +1272,7 @@ theorem pruneAux.spec (pointer : Ptr Table) (model : ModelTable)
             rename_i hEmpty
             have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
-            sl_step
+            step
             sl_change hFold
             simp only [hEmpty]
             sl_frame
@@ -1291,7 +1289,7 @@ theorem pruneAux.spec (pointer : Ptr Table) (model : ModelTable)
             sl_pull
             contradiction
           · rename_i child childModel
-            sl_step with ih child childModel
+            step with ih child childModel
             split
             · rename_i hChildEmpty
               let child' :=
@@ -1301,8 +1299,8 @@ theorem pruneAux.spec (pointer : Ptr Table) (model : ModelTable)
                 rw [← ModelTable.prune_result_isEmpty childModel
                   (next :: rest)]
                 exact hChildEmpty
-              sl_step with freeModelEmpty.spec child child' hPrunedEmpty
-              sl_step
+              step with freeModelEmpty.spec child child' hPrunedEmpty
+              step
               have hRelation := replacedEntries_isEmpty index concrete model
                 .empty .empty
               simp only [entryOwn, hstar_hempty_l_eq] at hRelation
@@ -1319,7 +1317,7 @@ theorem pruneAux.spec (pointer : Ptr Table) (model : ModelTable)
               simp only [hstar_hempty_r_eq]
               sl_pull_keep
               rename_i hParentEmpty
-              sl_step
+              step
               sl_change
                 (tableOwn_replace_empty pointer index concrete model)
               simp_all
@@ -1340,7 +1338,7 @@ theorem pruneAux.spec (pointer : Ptr Table) (model : ModelTable)
               simp only [hstar_hempty_r_eq]
               sl_pull_keep
               rename_i hParentEmpty
-              sl_step
+              step
               sl_change (tableOwn_replace_of_get pointer index concrete model
                 (.table child) (.table child') hConcrete)
               simp_all [child']
@@ -1353,7 +1351,7 @@ theorem prune.spec (root : Ptr Table) (model : ModelTable) (path : Path) :
     ⦃ tableOwn root model ⦄ prune root path
       ⦃⇓ tableOwn root (model.prune path).1⦄ := by
   unfold prune
-  sl_step*
+  step*
 
 /-- High-level leaf-only unmap returns exactly the exact-key removed frame,
 clears that mapping, and retains recursive ownership related to the pure
@@ -1365,18 +1363,18 @@ theorem unmap.spec (root : Ptr Table) (model : ModelTable) (path : Path) :
         ⌜removed = (model.unmap path).2⌝ ∗
         tableOwn root (model.unmap path).1⦄ := by
   unfold unmap ModelTable.unmap
-  sl_step with removeAux.spec root model path
+  step with removeAux.spec root model path
   cases hRemove : model.remove path with
   | mk model' removed =>
       cases removed with
       | none =>
           simp only [Option.isSome_none, Bool.false_eq_true,
             ↓reduceIte]
-          sl_step*
+          step*
       | some frame =>
           simp only [Option.isSome_some, ↓reduceIte]
-          sl_step
-          sl_step*
+          step
+          step*
 
 /-! ## Pure functional consequences -/
 
