@@ -220,8 +220,7 @@ theorem pop.spec (x : Link α) (v : α) (xs : List α) (hne : x ≠ none) :
       simp only [pop, isList]
       sl_pull
       sl_step* 2
-      sl_pure
-      sl_frame
+      sl_step
 
 /-- Recursive `length` preserves every cell and computes the pure-list length. -/
 @[step]
@@ -252,9 +251,7 @@ theorem length.spec (x : Link α) (xs : List α) :
 theorem create.spec :
     ⦃ emp ⦄ create α ⦃⇓ x => isList x []⦄ := by
   unfold create
-  sl_pure
-  change emp ⊢ emp
-  sl_frame
+  sl_step
 
 /-- `cons` allocates one cell and prepends its value to the exact view. -/
 @[step]
@@ -263,8 +260,7 @@ theorem cons.spec (v : α) (x : Link α) (xs : List α) :
       ⦃⇓ y => isList y (v :: xs)⦄ := by
   unfold cons
   sl_step
-  sl_pure
-  exact isList_fold _ v x xs
+  sl_step
 
 /-- `append` preserves the head link `x` and mutates its last cell so that its
 exact view becomes `xs ++ ys`. -/
@@ -330,7 +326,7 @@ theorem detachNext.spec (x : Link α) (v : α) (xs : List α) (hne : x ≠ none)
       simp only [detachNext, isList]
       sl_pull
       sl_step* 2
-      sl_pure
+      sl_step
       refine himpl_hexists_r none ?_
       simp only [isList]
       sl_frame
@@ -357,7 +353,7 @@ theorem split.spec (n : Nat) (x : Link α) (xs : List α)
             | zero =>
                 simp only [split, List.take, List.drop]
                 sl_step* 2
-                sl_pure
+                sl_step
                 apply hstar_mono
                 · refine himpl_hexists_r (none : Link α) ?_
                   simp only [isList]
@@ -403,8 +399,7 @@ theorem reverseAppend.spec (x acc : Link α) (xs ys : List α) :
   | nil =>
       cases x
       · simp only [isList, reverseAppend, List.reverse_nil, List.nil_append]
-        sl_pure
-        sl_frame
+        sl_step
       · sl_pull
         contradiction
   | cons v xs ih =>

@@ -451,7 +451,7 @@ theorem ok.spec (value : α) :
 
 /-- `ok.spec` again, stated through `Pure.pure`.  Both it and `ok.spec` remain
 registered for calls in binds and ordinary ramified-frame automation.
-`sl_pure` is the direct terminal rule for a syntactic return. -/
+`sl_step` applies the direct terminal rule for a syntactic return instead. -/
 theorem pure.spec (value : α) :
     ⦃ emp ⦄ (Pure.pure value : St α) ⦃⇓ result => ⌜result = value⌝⦄ :=
   ok.spec value

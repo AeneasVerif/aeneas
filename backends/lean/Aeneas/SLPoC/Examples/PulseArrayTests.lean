@@ -145,16 +145,12 @@ theorem allocCells.spec (n : Nat) (value : α) :
   induction n with
   | zero =>
       simp only [allocCells, List.replicate_zero]
-      sl_pure
-      simp only [List.length_nil, ownsCells_nil]
-      sl_frame
+      sl_step
   | succ n ih =>
       rw [allocCells]
       sl_step as ⟨ p ⟩
       sl_step with ih as ⟨ cells, hlength ⟩
-      sl_pure
-      simp only [List.length_cons, hlength, List.replicate_succ, ownsCells_cons]
-      sl_frame
+      sl_step
 
 /-- Allocation returns `n` initialized cells and exposes their exact length. -/
 @[step]
@@ -164,9 +160,7 @@ theorem alloc.spec (n : Nat) (value : α) :
         ⌜a.cells.length = n⌝ ∗ owns a (List.replicate n value)⦄ := by
   unfold alloc
   sl_step as ⟨ cells, hlength ⟩
-  sl_pure
-  simp only [hlength, owns]
-  sl_frame
+  sl_step
 
 /-- Recursive deallocation invariant: every owned cell is consumed exactly once. -/
 @[step]
