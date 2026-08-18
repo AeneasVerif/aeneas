@@ -167,11 +167,11 @@ theorem leftLeaf.preserves_spec (tree : Tree) :
   | leaf pointer value =>
       simp only [Tree.owns, Tree.leftDepth, Tree.root, leftLeaf,
         Tree.leftmost]
-      sl_step*
+      step*
   | branch pointer value left right leftIH _ =>
       simp only [Tree.owns, Tree.leftDepth, Tree.root, Tree.leftmost]
       rw [leftLeaf]
-      sl_step
+      step
       let frame : SLProp :=
         iprop(
           pointer ↦ {

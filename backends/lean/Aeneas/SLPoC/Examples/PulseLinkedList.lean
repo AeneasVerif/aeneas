@@ -185,7 +185,7 @@ theorem isEmpty.spec (x : Link α) (xs : List α) :
   cases xs with
   | nil =>
       cases x
-      · sl_step*
+      · step*
       · sl_pull
         contradiction
   | cons v vs =>
@@ -195,7 +195,7 @@ theorem isEmpty.spec (x : Link α) (xs : List α) :
           contradiction
       | some p =>
           simp only [Option.isNone_some, List.cons_ne_nil, decide_false]
-          sl_step*
+          step*
 
 /-- `head` preserves ownership and returns the exact first value. -/
 @[step]
@@ -207,7 +207,7 @@ theorem head.spec (x : Link α) (v : α) (xs : List α) (hne : x ≠ none) :
   | some p =>
       simp only [head]
       sl_pull
-      sl_step*
+      step*
 
 /-- `pop` frees the first cell and returns its exact tail and value. -/
 @[step]
@@ -219,8 +219,8 @@ theorem pop.spec (x : Link α) (v : α) (xs : List α) (hne : x ≠ none) :
   | some p =>
       simp only [pop, isList]
       sl_pull
-      sl_step* 2
-      sl_step
+      step* 2
+      step
 
 /-- Recursive `length` preserves every cell and computes the pure-list length. -/
 @[step]
@@ -231,7 +231,7 @@ theorem length.spec (x : Link α) (xs : List α) :
   | nil =>
       cases x
       · simp only [length, List.length_nil]
-        sl_step*
+        step*
       · sl_pull
         contradiction
   | cons v xs ih =>
@@ -242,16 +242,16 @@ theorem length.spec (x : Link α) (xs : List α) :
       | some p =>
           simp only [length, List.length_cons]
           sl_pull next
-          sl_step
-          sl_step with ih next
-          sl_step*
+          step
+          step with ih next
+          step*
 
 /-- `create` returns the uniquely represented empty list. -/
 @[step]
 theorem create.spec :
     ⦃ emp ⦄ create α ⦃⇓ x => isList x []⦄ := by
   unfold create
-  sl_step
+  step
 
 /-- `cons` allocates one cell and prepends its value to the exact view. -/
 @[step]
@@ -259,8 +259,8 @@ theorem cons.spec (v : α) (x : Link α) (xs : List α) :
     ⦃ isList x xs ⦄ cons v x
       ⦃⇓ y => isList y (v :: xs)⦄ := by
   unfold cons
-  sl_step
-  sl_step
+  step
+  step
 
 /-- `append` preserves the head link `x` and mutates its last cell so that its
 exact view becomes `xs ++ ys`. -/
@@ -281,11 +281,11 @@ theorem append.spec (x y : Link α) (xs ys : List α) (hne : xs ≠ []) :
           cases xs with
           | nil =>
               simp only [append, List.singleton_append]
-              sl_step*
+              step*
           | cons w ws =>
               simp only [append, List.cons_append]
-              sl_step
-              sl_step with ih (x := next) (y := y) (ys := ys) (by simp)
+              step
+              step with ih (x := next) (y := y) (ys := ys) (by simp)
 
 /-- `isLastCell` preserves ownership and exactly characterizes a singleton. -/
 @[step]
@@ -298,8 +298,8 @@ theorem isLastCell.spec (x : Link α) (v : α) (xs : List α)
   | some p =>
       simp only [isLastCell]
       sl_pull next
-      sl_step
-      sl_step with isEmpty.spec next xs
+      step
+      step with isEmpty.spec next xs
 
 /-- `appendAtLastCell` implements Pulse's singleton-specialized append helper. -/
 @[step]
@@ -312,7 +312,7 @@ theorem appendAtLastCell.spec (x y : Link α) (v : α) (ys : List α)
   | some p =>
       simp only [appendAtLastCell, isList]
       sl_pull
-      sl_step*
+      step*
 
 /-- `detachNext` turns the first cell into a singleton and returns the exact
 detached tail. -/
@@ -325,8 +325,8 @@ theorem detachNext.spec (x : Link α) (v : α) (xs : List α) (hne : x ≠ none)
   | some p =>
       simp only [detachNext, isList]
       sl_pull
-      sl_step* 2
-      sl_step
+      step* 2
+      step
       refine himpl_hexists_r none ?_
       simp only [isList]
       sl_frame
@@ -352,8 +352,8 @@ theorem split.spec (n : Nat) (x : Link α) (xs : List α)
             cases n with
             | zero =>
                 simp only [split, List.take, List.drop]
-                sl_step* 2
-                sl_step
+                step* 2
+                step
                 apply hstar_mono
                 · refine himpl_hexists_r (none : Link α) ?_
                   simp only [isList]
@@ -361,8 +361,8 @@ theorem split.spec (n : Nat) (x : Link α) (xs : List α)
                 · sl_frame
             | succ n =>
                 simp only [split, List.take, List.drop]
-                sl_step
-                sl_step with ih (x := next) (xs := xs) (by omega) (by simpa using hle)
+                step
+                step with ih (x := next) (xs := xs) (by omega) (by simpa using hle)
 
 /-- `insert` splits the exact view and inserts `item` at index `n`. -/
 @[step]
@@ -376,9 +376,9 @@ theorem insert.spec (n : Nat) (x : Link α) (xs : List α) (item : α)
     | succ n =>
         cases xs <;> simp_all
   unfold insert
-  sl_step with split.spec n x xs hpos (Nat.le_of_lt hlt)
-  sl_step with cons.spec item tail (xs.drop n)
-  sl_step with append.spec x inserted (xs.take n) (item :: xs.drop n) htake
+  step with split.spec n x xs hpos (Nat.le_of_lt hlt)
+  step with cons.spec item tail (xs.drop n)
+  step with append.spec x inserted (xs.take n) (item :: xs.drop n) htake
 
 /-- Pulse's current `delete` body is insertion; its exact specification records
 that behavior rather than claiming removal. -/
@@ -388,7 +388,7 @@ theorem delete.spec (n : Nat) (x : Link α) (xs : List α) (item : α)
     ⦃ isList x xs ⦄ delete xs x item n
       ⦃⇓ isList x (xs.take n ++ item :: xs.drop n)⦄ := by
   unfold delete
-  sl_step with insert.spec n x xs item hpos hlt
+  step with insert.spec n x xs item hpos hlt
 
 /-- Accumulator form of reversal: the result has view `xs.reverse ++ ys`. -/
 @[step]
@@ -399,7 +399,7 @@ theorem reverseAppend.spec (x acc : Link α) (xs ys : List α) :
   | nil =>
       cases x
       · simp only [isList, reverseAppend, List.reverse_nil, List.nil_append]
-        sl_step
+        step
       · sl_pull
         contradiction
   | cons v xs ih =>
@@ -411,8 +411,8 @@ theorem reverseAppend.spec (x acc : Link α) (xs ys : List α) :
           simp only [isList, reverseAppend, List.reverse_cons, List.append_assoc,
             List.singleton_append]
           sl_pull next
-          sl_step* 2
-          sl_step with ih (x := next) (acc := some p) (ys := v :: ys)
+          step* 2
+          step with ih (x := next) (acc := some p) (ys := v :: ys)
 
 /-- `reverse` consumes the original orientation and returns exact ownership in
 reverse pure-list order. -/
@@ -421,7 +421,7 @@ theorem reverse.spec (x : Link α) (xs : List α) :
     ⦃ isList x xs ⦄ reverse xs x
       ⦃⇓ result => isList result xs.reverse⦄ := by
   unfold reverse
-  sl_step with reverseAppend.spec x none xs []
+  step with reverseAppend.spec x none xs []
 
 end PulseLinkedList
 

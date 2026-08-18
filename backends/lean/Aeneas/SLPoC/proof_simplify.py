@@ -16,9 +16,9 @@ from typing import Iterable
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 SIMPLE_NAME = r"(?:[^\W\d]|_)[\w']*"
-PLAIN_SL_STEP = re.compile(r"^(?P<indent>[ \t]*)sl_step[ \t]*(?:\r?\n|$)")
-PLAIN_SL_STEP_STAR = re.compile(
-    r"^(?P<indent>[ \t]*)sl_step\*(?:[ \t]+[0-9]+)?[ \t]*(?:\r?\n|$)"
+PLAIN_STEP = re.compile(r"^(?P<indent>[ \t]*)step[ \t]*(?:\r?\n|$)")
+PLAIN_STEP_STAR = re.compile(
+    r"^(?P<indent>[ \t]*)step\*(?:[ \t]+[0-9]+)?[ \t]*(?:\r?\n|$)"
 )
 PLAIN_SL_PULL = re.compile(
     r"^(?P<indent>[ \t]*)sl_pull[ \t]+"
@@ -178,18 +178,18 @@ def unused_pull_names(
     }
 
 
-def bounded_sl_step_candidates(source: str) -> list[Edit]:
+def bounded_step_candidates(source: str) -> list[Edit]:
     lines = list(re.finditer(r".*(?:\r?\n|$)", source))
     candidates: list[Edit] = []
     index = 0
     while index < len(lines):
-        first = PLAIN_SL_STEP.fullmatch(lines[index].group())
+        first = PLAIN_STEP.fullmatch(lines[index].group())
         if first is None:
             index += 1
             continue
         stop_index = index + 1
         while stop_index < len(lines):
-            following = PLAIN_SL_STEP.fullmatch(lines[stop_index].group())
+            following = PLAIN_STEP.fullmatch(lines[stop_index].group())
             if following is None or following["indent"] != first["indent"]:
                 break
             stop_index += 1
@@ -202,8 +202,8 @@ def bounded_sl_step_candidates(source: str) -> list[Edit]:
                 Edit(
                     lines[index].start(),
                     lines[stop_index - 1].end(),
-                    f"{first['indent']}sl_step* {count}{newline}",
-                    "bounded sl_step run",
+                    f"{first['indent']}step* {count}{newline}",
+                    "bounded step run",
                 )
             )
         index = stop_index
@@ -217,7 +217,7 @@ def generated_bound_candidates(accepted: list[Edit]) -> list[Edit]:
         start = edit.start + shift
         stop = start + len(edit.replacement)
         replacement = re.sub(r"\*[ \t]+[0-9]+", "*", edit.replacement, count=1)
-        candidates.append(Edit(start, stop, replacement, "sl_step bound"))
+        candidates.append(Edit(start, stop, replacement, "step bound"))
         shift += len(edit.replacement) - (edit.stop - edit.start)
     return candidates
 
@@ -259,8 +259,8 @@ def tactic_pair_candidates(
             Edit(
                 lines[index].start(),
                 lines[index + 1].end(),
-                f"{first['indent']}sl_step*{newline}",
-                "sl_step/sl_step* pair",
+                f"{first['indent']}step*{newline}",
+                "step/step* pair",
             )
         )
         index += 2
@@ -269,12 +269,12 @@ def tactic_pair_candidates(
 
 def star_then_step_candidates(source: str) -> list[Edit]:
     return tactic_pair_candidates(
-        source, (PLAIN_SL_STEP_STAR,), (PLAIN_SL_STEP, PLAIN_SL_STEP_STAR)
+        source, (PLAIN_STEP_STAR,), (PLAIN_STEP, PLAIN_STEP_STAR)
     )
 
 
 def step_then_star_candidates(source: str) -> list[Edit]:
-    return tactic_pair_candidates(source, (PLAIN_SL_STEP,), (PLAIN_SL_STEP_STAR,))
+    return tactic_pair_candidates(source, (PLAIN_STEP,), (PLAIN_STEP_STAR,))
 
 
 def sl_pull_drop_candidates(source: str) -> list[Edit]:
@@ -333,7 +333,7 @@ def simplify(
         step_then_star_candidates,
         sl_pull_drop_candidates,
         sl_pull_anonymous_candidates,
-        bounded_sl_step_candidates,
+        bounded_step_candidates,
     )
     if not any(find_candidates(source) for find_candidates in candidate_finders):
         return source, [], []
@@ -357,7 +357,7 @@ def simplify(
         all_accepted.extend(accepted)
         all_rejected.extend(rejected)
 
-    candidates = bounded_sl_step_candidates(source)
+    candidates = bounded_step_candidates(source)
     accepted, rejected = accepted_batch(source, candidates, checker)
     source = apply_edits(source, accepted)
     all_accepted.extend(accepted)
@@ -400,7 +400,7 @@ def read_source(path: Path) -> str:
 def parse_args(args: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Simplify sl_step and sl_pull proof scripts, retaining only changes "
+            "Simplify step and sl_pull proof scripts, retaining only changes "
             "accepted by Lean."
         )
     )
@@ -458,9 +458,9 @@ def main(args: list[str]) -> int:
         summary = ", ".join(
             f"{sum(edit.kind == kind for edit in edits)} {kind}"
             for kind in (
-                "bounded sl_step run",
-                "sl_step bound",
-                "sl_step/sl_step* pair",
+                "bounded step run",
+                "step bound",
+                "step/step* pair",
                 "sl_pull arguments",
                 "unused sl_pull name",
             )

@@ -212,7 +212,7 @@ theorem insertBlock.spec (s : FreeList) (entries : Entries R)
   unfold blockOwn
   sl_pull
   rw [hfirst]
-  sl_step*
+  step*
 
 /-- Exact pop specification.  It removes precisely the first ghost entry,
 returns that entry's header pointer, preserves the rest of the list, and joins
@@ -229,7 +229,7 @@ theorem popBlock.spec (s : FreeList) (b : Block R) (payload : R)
       freeListRep s' rest⦄ := by
   unfold popBlock
   sl_pull_keep
-  sl_step*
+  step*
 
 end FreeList
 

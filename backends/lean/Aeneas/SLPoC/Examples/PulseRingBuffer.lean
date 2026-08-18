@@ -313,11 +313,11 @@ theorem new.spec (capacity : Nat) (hcapacity : 0 < capacity) :
     ⦃ emp ⦄ (new capacity hcapacity : St (RingBuffer α))
       ⦃⇓ rb => isRingBuffer rb [] capacity⦄ := by
   unfold new
-  sl_step as ⟨ buffer, hlength ⟩
-  sl_step as ⟨ head ⟩
-  sl_step as ⟨ tail ⟩
-  sl_step as ⟨ count ⟩
-  sl_step
+  step as ⟨ buffer, hlength ⟩
+  step as ⟨ head ⟩
+  step as ⟨ tail ⟩
+  step as ⟨ count ⟩
+  step
   have hcontents :
       contentsOfBuffer (List.replicate capacity (none : Option α))
         0 capacity 0 = [] := rfl
@@ -331,7 +331,7 @@ theorem length.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
       ⦃⇓ n => ⌜n = items.length⌝ ∗ isRingBuffer rb items cap⦄ := by
   sl_pull
   unfold length
-  sl_step
+  step
 
 /-- Capacity is immutable and returned exactly, with all ownership preserved. -/
 @[step]
@@ -340,7 +340,7 @@ theorem capacity.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
       ⦃⇓ n => ⌜n = cap⌝ ∗ isRingBuffer rb items cap⦄ := by
   sl_pull
   unfold capacity
-  sl_step*
+  step*
 
 /-- Emptiness is characterized exactly by the logical FIFO sequence. -/
 @[step]
@@ -350,8 +350,8 @@ theorem isEmpty.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
         ⌜empty = decide (items = [])⌝ ∗ isRingBuffer rb items cap⦄ := by
   sl_pull
   unfold isEmpty
-  sl_step
-  split <;> sl_step
+  step
+  split <;> step
 
 /-- Fullness is characterized exactly by logical length equaling capacity. -/
 @[step]
@@ -362,8 +362,8 @@ theorem isFull.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
         isRingBuffer rb items cap⦄ := by
   sl_pull
   unfold isFull
-  sl_step
-  split <;> sl_step
+  step
+  split <;> step
 
 /-! ## Mutation -/
 
@@ -377,12 +377,12 @@ theorem pushBack.spec (rb : RingBuffer α) (items : List α) (cap : Nat)
         ⌜success = decide (items.length < cap)⌝⦄ := by
   sl_pull cells head tail count h
   unfold pushBack
-  sl_step
+  step
   split
   · rename_i hfull
-    sl_step
+    step
   · rename_i hnotfull
-    sl_step*
+    step*
     have hcountlt : count < cap := by omega
     have hnewTail :
         nextIndex tail rb.cap = circularIndex head (count + 1) cap := by
@@ -399,7 +399,7 @@ theorem pushBack.spec (rb : RingBuffer α) (items : List α) (cap : Nat)
         h.2.2.2.1 hcountlt h.2.2.1]
       rw [h.2.2.2.2.2.2.2.2]
       simp
-    sl_step*
+    sl_frame
 
 /-- Pop reports empty without mutation, or returns and removes exactly the FIFO front. -/
 @[step]
@@ -410,20 +410,20 @@ theorem popFront.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
         ⌜result = items.head?⌝⦄ := by
   sl_pull cells head tail count h
   unfold popFront
-  sl_step
+  step
   split
   · rename_i hEmpty
     have hitems : items = [] := by
       apply List.eq_nil_of_length_eq_zero
       omega
     subst items
-    sl_step
+    step
   · rename_i hnonempty
     cases items with
     | nil =>
         simp_all
     | cons front rest =>
-        sl_step*
+        step*
         have hcount : count = rest.length + 1 := by
           simpa using h.2.2.2.2.2.2.1
         have hrestBound : rest.length + 1 ≤ cap := by omega
@@ -459,7 +459,7 @@ theorem popFront.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
               (circularIndex_nextIndex h.2.1 h.2.2.2.1 hrestBound).symm
             _ = circularIndex (nextIndex head rb.cap) (count - 1) cap := by
               rw [h.1, hcount, Nat.add_sub_cancel]
-        sl_step*
+        sl_frame
 
 /-- Peek is total, returns exactly the logical front, and preserves all ownership. -/
 @[step]
@@ -469,20 +469,20 @@ theorem peekFront.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
         ⌜result = items.head?⌝ ∗ isRingBuffer rb items cap⦄ := by
   sl_pull cells head _ count h
   unfold peekFront
-  sl_step
+  step
   split
   · rename_i hEmpty
     have hitems : items = [] := by
       apply List.eq_nil_of_length_eq_zero
       omega
     subst items
-    sl_step
+    step
   · rename_i hnonempty
     cases items with
     | nil =>
         simp_all
     | cons front rest =>
-        sl_step*
+        step*
         have hcount : count = rest.length + 1 := by
           simpa using h.2.2.2.2.2.2.1
         have hrestBound : rest.length + 1 ≤ cap := by omega
@@ -501,7 +501,7 @@ theorem peekFront.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
           have hheadBound : head < cells.length := by omega
           rw [← hfirst]
           simp [cellAt, hheadBound]
-        sl_step*
+        sl_frame
 
 /-- Free consumes the backing array and each metadata allocation exactly once. -/
 @[step]
@@ -509,7 +509,7 @@ theorem free.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
     ⦃ isRingBuffer rb items cap ⦄ free rb ⦃⇓ emp⦄ := by
   sl_pull
   unfold free
-  sl_step*
+  step*
 
 end PulseRingBuffer
 

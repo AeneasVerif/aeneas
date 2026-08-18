@@ -6,11 +6,12 @@ open scoped SepLogic
 
 /-! ## A result-dependent spatial postcondition
 
-This is the small version of the bounded `sl_step*; sl_step` proofs in
-`PulseLinkedList`, `IrisTutorial`, and `VerusBitmap`. Going through
-`pure.spec` would leave a postcondition wand stated in terms of the abstract
-result of the specification, which `sl_frame` cannot cancel; `sl_step` takes
-the terminal rule directly and states the obligation about the returned value.
+This is the small version of the terminal `step` proofs in `PulseLinkedList`,
+`IrisTutorial`, and `VerusBitmap`. Going through `pure.spec` leaves a
+postcondition wand stated in terms of the abstract result of the specification;
+`himpl_qwand_hpure_eq` collapses it, which restates the obligation about the
+returned value and makes it framable — so an unbounded `step*` closes this on
+its own.
 -/
 
 def allocAndReturn : St (Ptr Nat) := do
@@ -19,17 +20,19 @@ def allocAndReturn : St (Ptr Nat) := do
 
 example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => p ↦ 1⦄ := by
   unfold allocAndReturn
-  fail_if_success
-    sl_step*
-    done
-  sl_step* 1
-  sl_step
+  step*
+
+/-- The same goal reached one step at a time. -/
+example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => p ↦ 1⦄ := by
+  unfold allocAndReturn
+  step* 1
+  step
 
 /-! ## Manual work on the terminal entailment
 
-This is the reason for the bounds before the terminal `sl_step` in `UnitTest`,
+This is the reason for the bounds before the terminal `step` in `UnitTest`,
 `AsterinasIntrusiveFrameList`, and several data-structure examples. An
-unbounded `sl_step*` reaches an entailment that only becomes frameable after
+unbounded `step*` reaches an entailment that only becomes frameable after
 the user unfolds or simplifies the postcondition.
 -/
 
@@ -46,16 +49,16 @@ example (p : Ptr Nat) (value : Nat) :
       ⦃⇓ result => ⌜opaqueStepResult result (value + 1)⌝⦄ := by
   unfold readFreeReturn
   fail_if_success
-    sl_step*
+    step*
     done
-  sl_step* 2
-  sl_step
+  step* 2
+  step
   simp only [opaqueStepResult]
   sl_frame
 
 /-! ## The terminal return
 
-`sl_step` takes the mono case of a syntactic terminal return directly, through
+`step` takes the mono case of a syntactic terminal return directly, through
 `triple_pure`, and hands the resulting `P ⊢ Q v` to `sl_frame`.  Going through
 the registered `pure.spec` instead would state that obligation about the
 *abstract* result of the specification — `P ⊢ emp ∗ ((fun result => ⌜result =
@@ -68,17 +71,17 @@ value: the assertion the entailment starts from and the one its postcondition
 asks for are the *same*, which is what `hpure_hstar_intro` needs here. -/
 example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => iprop(⌜opaqueStepResult 1 1⌝ ∗ p ↦ 1)⦄ := by
   unfold allocAndReturn
-  sl_step* 1
-  sl_step
+  step* 1
+  step
   exact hpure_hstar_intro _ rfl
 
 /-- `FFree.ok`, the constructor `pure` unfolds to, is a terminal return too. -/
 example (n : Nat) : ⦃ emp ⦄ (FFree.ok n : St Nat) ⦃⇓ result => ⌜result = n⌝⦄ := by
-  sl_step
+  step
 
 /-- A `Unit` result is no different. -/
 example (p : Ptr Nat) : ⦃ p ↦ 0 ⦄ (pure () : St Unit) ⦃⇓ p ↦ 0⦄ := by
-  sl_step
+  step
 
 def namedReturn (n : Nat) : St Nat :=
   pure n
@@ -87,20 +90,20 @@ def namedReturn (n : Nat) : St Nat :=
 theorem namedReturn.spec (n : Nat) :
     ⦃ emp ⦄ namedReturn n ⦃⇓ result => ⌜result = n⌝⦄ := by
   unfold namedReturn
-  sl_step
+  step
 
 /-- A named pure wrapper is not a *syntactic* return: the terminal rule does not
 unfold it, so the step goes through its registered specification. -/
 example (n : Nat) : ⦃ emp ⦄ namedReturn n ⦃⇓ result => ⌜result = n⌝⦄ := by
-  sl_step
+  step
 
 /-- An explicitly named specification wins over the terminal rule. -/
 example (n : Nat) : ⦃ emp ⦄ (pure n : St Nat) ⦃⇓ result => ⌜result = n⌝⦄ := by
-  sl_step with pure.spec
+  step with pure.spec
 
 /-! ## An unbounded star consumes the whole goal
 
-The finite sequence in `UnitTest` cannot be replaced in-place by `sl_step*`:
+The finite sequence in `UnitTest` cannot be replaced in-place by `step*`:
 the star also proves the terminal entailment, so the following tactic fails
 with no goals.
 -/
@@ -109,7 +112,7 @@ example (p : Ptr Nat) (value : Nat) :
     ⦃ p ↦ value ⦄ readFreeReturn p
       ⦃⇓ result => ⌜result = value + 1⌝⦄ := by
   unfold readFreeReturn
-  sl_step*
+  step*
 
 /-! ## The proof must branch before stepping further
 
@@ -128,10 +131,10 @@ example (p : Ptr Nat) (value : Nat) :
         iprop(⌜result = if value = 0 then 1 else 2⌝ ∗ p ↦ value)⦄ := by
   unfold branchAfterRead
   fail_if_success
-    sl_step*
+    step*
     by_cases h : value = 0
-  sl_step* 1
-  by_cases h : value = 0 <;> simp only [h, ↓reduceIte] <;> sl_step
+  step* 1
+  by_cases h : value = 0 <;> simp only [h, ↓reduceIte] <;> step
 
 /-! ## A specification argument is not inferable
 
@@ -153,7 +156,7 @@ def ghostHelper (_p : Ptr Nat) : St Unit :=
 theorem ghostHelper.spec (p : Ptr Nat) (_witness : NeedsWitness) :
     ⦃ p ↦ 0 ⦄ ghostHelper p ⦃⇓ p ↦ 0⦄ := by
   unfold ghostHelper
-  sl_step
+  step
 
 def ghostCaller (p : Ptr Nat) : St Unit := do
   ghostHelper p
@@ -163,15 +166,15 @@ example (p : Ptr Nat) :
     ⦃ p ↦ 0 ⦄ ghostCaller p ⦃⇓ p ↦ 0⦄ := by
   unfold ghostCaller
   fail_if_success
-    sl_step*
+    step*
     done
-  sl_step with ghostHelper.spec p (NeedsWitness.mk { f := id })
-  sl_step
+  step with ghostHelper.spec p (NeedsWitness.mk { f := id })
+  step
 
 /-! ## The required specification is not registered
 
 This minimizes the explicit steps in `UnitTest`,
-`CreusotListReversalLasso`, and `VerusPageTable`. No length of `sl_step*` can
+`CreusotListReversalLasso`, and `VerusPageTable`. No length of `step*` can
 select a theorem absent from the step database.
 -/
 
@@ -182,7 +185,7 @@ def unregisteredHelper (p : Ptr Nat) : St Unit :=
 theorem unregisteredHelper.spec (p : Ptr Nat) (value : Nat) :
     ⦃ p ↦ value ⦄ unregisteredHelper p ⦃⇓ p ↦ value + 1⦄ := by
   unfold unregisteredHelper
-  sl_step*
+  step*
 
 def unregisteredCaller (p : Ptr Nat) : St Unit := do
   unregisteredHelper p
@@ -191,6 +194,6 @@ def unregisteredCaller (p : Ptr Nat) : St Unit := do
 example (p : Ptr Nat) (value : Nat) :
     ⦃ p ↦ value ⦄ unregisteredCaller p ⦃⇓ p ↦ value + 1⦄ := by
   unfold unregisteredCaller
-  sl_step*
+  step*
 
 end Aeneas.SLPoC.Tests.Step

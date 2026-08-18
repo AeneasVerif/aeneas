@@ -393,12 +393,12 @@ theorem getBit.spec (bitmap : Bitmap) (words : List Word) (index : Nat)
     ⦃ rep bitmap words ⦄ getBit bitmap index
       ⦃⇓ bit => ⌜bit = bitView words index⌝ ∗ rep bitmap words⦄ := by
   unfold getBit
-  sl_step with PulseArray.readAt.spec bitmap.bits words (bucketIndex index)
+  step with PulseArray.readAt.spec bitmap.bits words (bucketIndex index)
   
   have hin := bucketIndex_lt_length words index hindex
   simp only [List.getElem?_eq_getElem hin, Option.getD_some]
   rw [bitView_eq_getElem words index hindex]
-  sl_step*
+  step*
 
 /-- Exact source `set_bit` specification.  Ownership is preserved at every
 cell, with precisely the selected word replaced by the concrete mask update;
@@ -414,10 +414,10 @@ theorem setBit.spec (bitmap : Bitmap) (words : List Word) (index : Nat)
               if other = index then bit else bitView words other⌝ ∗
         rep bitmap (setWords words index bit)⦄ := by
   unfold setBit
-  sl_step with PulseArray.readAt.spec bitmap.bits words (bucketIndex index)
+  step with PulseArray.readAt.spec bitmap.bits words (bucketIndex index)
   
   have hin := bucketIndex_lt_length words index hindex
-  sl_step
+  step
   have hPure :
       bitLength (setWords words index bit) = bitLength words ∧
         ∀ other, other < bitLength words →
@@ -434,7 +434,7 @@ theorem setBit.spec (bitmap : Bitmap) (words : List Word) (index : Nat)
         setWords words index bit := by
     rfl
   rw [hsetWords]
-  sl_step*
+  step*
 
 /-- Recursive disjoint OR specification.  Both input cell lists remain owned
 and unchanged, while every returned pointer is freshly allocated and owns the
@@ -464,7 +464,7 @@ theorem orCells.disjoint_spec (leftCells rightCells : List (Ptr Word))
               cases rightCells with
               | nil =>
                   simp only [orCells]
-                  sl_step
+                  step
               | cons right rights =>
                   simp only [PulseArray.ownsCells]
                   rw [hstar_comm_eq _ (⌜False⌝)]
@@ -501,9 +501,9 @@ theorem orCells.disjoint_spec (leftCells rightCells : List (Ptr Word))
                     List.zip_cons_cons, List.map_cons]
                   have htail : leftWords.length = rightWords.length := by
                     simpa using hlength
-                  sl_step* 3
-                  sl_step with ih rightCells leftWords rightWords htail
-                  sl_step
+                  step* 3
+                  step with ih rightCells leftWords rightWords htail
+                  step
 
 /-- Actual exact-self execution of `orCells cells cells` under one ownership
 resource.  Each step reads the same pointer twice sequentially, retains its
@@ -522,7 +522,7 @@ theorem orCells.self_spec (cells : List (Ptr Word)) (words : List Word) :
       cases words with
       | nil =>
           simp only [orCells, orWords, List.zip, PulseArray.ownsCells_nil]
-          sl_step
+          step
       | cons word words =>
           sl_pull
           contradiction
@@ -534,9 +534,9 @@ theorem orCells.self_spec (cells : List (Ptr Word)) (words : List Word) :
       | cons word words =>
           simp only [PulseArray.ownsCells_cons, orCells, orWords,
             List.zip_cons_cons, List.map_cons]
-          sl_step* 3
-          sl_step with ih words
-          sl_step
+          step* 3
+          step with ih words
+          step
 
 /-- Recursive specification for the optional optimized self-OR helper.  One ownership resource suffices:
 the input list remains owned and each returned pointer is freshly allocated
@@ -554,7 +554,7 @@ theorem orSelfCells.spec (cells : List (Ptr Word)) (words : List Word) :
       | nil =>
           simp only [orSelfCells, orSelfWords, List.map_nil,
             PulseArray.ownsCells_nil]
-          sl_step
+          step
       | cons word words =>
           sl_pull
           contradiction
@@ -566,9 +566,9 @@ theorem orSelfCells.spec (cells : List (Ptr Word)) (words : List Word) :
       | cons word words =>
           simp only [PulseArray.ownsCells_cons, orSelfCells, orSelfWords,
             List.map_cons]
-          sl_step* 2
-          sl_step with ih words
-          sl_step
+          step* 2
+          step with ih words
+          step
 
 /-- Complete specification for the optional optimized self-OR helper.  It uses
 one ownership resource, preserves the input, and returns the same logical words
@@ -585,7 +585,7 @@ theorem bitmapOrSelf.spec (bitmap : Bitmap) (words : List Word) :
             (bitView words index || bitView words index)⌝ ∗
       rep bitmap words ∗ rep result (orSelfWords words)⦄ := by
   unfold bitmapOrSelf rep
-  sl_step with orSelfCells.spec bitmap.bits.cells words
+  step with orSelfCells.spec bitmap.bits.cells words
   have hpure :
       orSelfWords words = orWords words words ∧
         bitLength (orSelfWords words) = bitLength words ∧
@@ -596,7 +596,7 @@ theorem bitmapOrSelf.spec (bitmap : Bitmap) (words : List Word) :
     · simp [bitLength, bitLengthFromWordCount]
     · intro index hindex
       exact bitView_orSelfWords words index hindex
-  sl_step
+  step
 
 /-- Complete exact specification of the legal source call
 `bitmapOr bitmap bitmap`.  The executable is the original two-read OR:
@@ -616,7 +616,7 @@ theorem bitmapOr.self_spec (bitmap : Bitmap) (words : List Word) :
             (bitView words index || bitView words index)⌝ ∗
       rep bitmap words ∗ rep result (orWords words words)⦄ := by
   unfold bitmapOr rep
-  sl_step with orCells.self_spec bitmap.bits.cells words
+  step with orCells.self_spec bitmap.bits.cells words
   have hpure :
       bitLength (orWords words words) = bitLength words ∧
         ∀ index, index < bitLength words →
@@ -626,7 +626,7 @@ theorem bitmapOr.self_spec (bitmap : Bitmap) (words : List Word) :
     · simp [bitLength, bitLengthFromWordCount, length_orWords]
     · intro index hindex
       exact bitView_orWords words words rfl index hindex
-  sl_step
+  step
 
 /-- Complete exact source `or` specification for the disjoint case.  Its two
 input ownership resources require separate heap footprints; it preserves both
@@ -647,7 +647,7 @@ theorem bitmapOr.disjoint_spec (left right : Bitmap)
       rep left leftWords ∗ rep right rightWords ∗
       rep result (orWords leftWords rightWords)⦄ := by
   unfold bitmapOr rep
-  sl_step with orCells.disjoint_spec left.bits.cells right.bits.cells
+  step with orCells.disjoint_spec left.bits.cells right.bits.cells
     leftWords rightWords hlength
   have hpure :
       bitLength (orWords leftWords rightWords) = bitLength leftWords ∧
@@ -658,7 +658,7 @@ theorem bitmapOr.disjoint_spec (left right : Bitmap)
     · simp [bitLength, bitLengthFromWordCount, length_orWords _ _ hlength]
     · intro index hindex
       exact bitView_orWords leftWords rightWords hlength index hindex
-  sl_step
+  step
 
 end VerusBitmap
 

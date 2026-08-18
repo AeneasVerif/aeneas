@@ -493,11 +493,11 @@ theorem reverseAux.spec (memory : Ptr Memory) (m : Memory)
   | nil =>
       simp only [List.length_nil]
       unfold reverseAux
-      sl_step*
+      step*
   | cons m p previous ps final tail ih =>
       simp only [List.length_cons]
       unfold reverseAux
-      sl_step* 2
+      step* 2
       exact ih
 
 /-- Exact functional correctness for Creusot's lasso reversal.  The returned
@@ -534,7 +534,7 @@ theorem reverse.spec (memory : Ptr Memory) (m : Memory)
     · intro p hp
       exact Segment.rewire_next_of_not_mem _ _ _ _ hp
   unfold reverse
-  sl_step with reverseAux.spec memory m head none none
+  step with reverseAux.spec memory m head none none
     (traversal stem cycle) hlasso.invariant
 
 end CreusotListReversalLasso

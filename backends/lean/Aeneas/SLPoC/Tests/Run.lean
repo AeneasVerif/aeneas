@@ -25,7 +25,7 @@ def roundTrip : St Nat := do
 
 theorem roundTrip.spec : (roundTrip) ⦃⇓ result => result = 42⦄ := by
   unfold roundTrip
-  sl_step*
+  step*
 
 -- The interpreter runs it.
 #guard (execClosed roundTrip roundTrip.spec).1 = 42
@@ -52,7 +52,7 @@ def leaky : St Unit := do
 
 theorem leaky.spec : ⦃ emp ⦄ leaky ⦃⇓ emp⦄ := by
   unfold leaky
-  sl_step*
+  step*
 
 /-- The same specification, and a cell left behind: affinity is exactly the gap
 between the two semantics. -/

@@ -190,7 +190,7 @@ def arith : St Int :=
 theorem arith_spec :
     (arith) ⦃⇓ v => v = 16⦄ := by
   unfold arith
-  sl_step*
+  step*
 
 def lambda : St Int :=
   let add5 := fun x : Int => x + 5
@@ -202,7 +202,7 @@ def lambda : St Int :=
 theorem lambda_spec :
     (lambda) ⦃⇓ v => v = 20⦄ := by
   unfold lambda
-  sl_step*
+  step*
 
 def prog : St Int := do
   let x ← alloc (1 : Int)
@@ -214,7 +214,7 @@ def prog : St Int := do
 theorem prog_spec :
     (prog) ⦃⇓ v => v = 3⦄ := by
   unfold prog
-  sl_step*
+  step*
 
 theorem pt_not_dupl {α : Type} (p : Ptr α) (v v' : α) :
     p ↦ v ∗ p ↦ v' ⊢ ⌜False⌝ :=
@@ -237,12 +237,12 @@ theorem compareAndSetSequential_spec (p : Ptr Int)
         iprop(⌜success = decide (value = expected)⌝ ∗
           if value = expected then p ↦ replacement else p ↦ value)⦄ := by
   unfold compareAndSetSequential
-  sl_step
+  step
   by_cases h : value = expected
   · simp only [h, ↓reduceIte, decide_true]
-    sl_step*
+    step*
   · simp only [h, ↓reduceIte, decide_false]
-    sl_step*
+    step*
 
 def cmpXchg0To10Sequential (p : Ptr Int) : St Bool :=
   compareAndSetSequential p 0 10
@@ -253,7 +253,7 @@ theorem cmpXchg_0_to_10_sequential_spec (p : Ptr Int) (value : Int) :
         iprop(⌜success = decide (value = 0)⌝ ∗
           if value = 0 then p ↦ 10 else p ↦ value)⦄ := by
   unfold cmpXchg0To10Sequential
-  sl_step*
+  step*
 
 def casSequential : St (Option (Int × Int)) := do
   let p ← alloc (5 : Int)
@@ -272,7 +272,7 @@ def casSequential : St (Option (Int × Int)) := do
 theorem cas_sequential_spec :
     (casSequential) ⦃⇓ result => result = some (5, 7)⦄ := by
   unfold casSequential
-  sl_step*
+  step*
 
 def parClientSequential : St (Ptr Int × Ptr Int × Int) := do
   let l₁ ← alloc (0 : Int)
@@ -289,8 +289,8 @@ theorem par_client_sequential_spec :
         iprop(⌜result.2.2 = 42⌝ ∗
           result.1 ↦ 21 ∗ result.2.1 ↦ 2)⦄ := by
   unfold parClientSequential
-  sl_step* 6
-  sl_step
+  step* 6
+  step
 
 def raceLeftThenRightSequential (p : Ptr Int) : St Unit := do
   update p 1
@@ -300,7 +300,7 @@ theorem race_left_then_right_sequential_spec (p : Ptr Int) (value : Int) :
     ⦃ p ↦ value ⦄ raceLeftThenRightSequential p
       ⦃⇓ p ↦ 2⦄ := by
   unfold raceLeftThenRightSequential
-  sl_step*
+  step*
 
 def raceRightThenLeftSequential (p : Ptr Int) : St Unit := do
   update p 2
@@ -310,7 +310,7 @@ theorem race_right_then_left_sequential_spec (p : Ptr Int) (value : Int) :
     ⦃ p ↦ value ⦄ raceRightThenLeftSequential p
       ⦃⇓ p ↦ 1⦄ := by
   unfold raceRightThenLeftSequential
-  sl_step*
+  step*
 
 def progAdd2 : St Int := do
   let value ← prog
@@ -319,13 +319,13 @@ def progAdd2 : St Int := do
 theorem prog_add_2_spec :
     (progAdd2) ⦃⇓ v => v = 5⦄ := by
   unfold progAdd2
-  sl_step*
+  step*
 
 theorem prog_add_2_spec' :
     (progAdd2) ⦃⇓ v => v = 5⦄ := by
   unfold progAdd2
-  sl_step with prog_spec
-  sl_step*
+  step with prog_spec
+  step*
 
 theorem prog_add_2_spec'' :
     (progAdd2) ⦃⇓ v => v = 5⦄ :=
@@ -346,13 +346,13 @@ theorem swap_spec (x y : Ptr α) (value other : α) :
     ⦃ x ↦ value ∗ y ↦ other ⦄ swap x y
       ⦃⇓ x ↦ other ∗ y ↦ value⦄ := by
   unfold swap
-  sl_step*
+  step*
 
 theorem swap_swap_spec (x y : Ptr α) (value other : α) :
     ⦃ x ↦ value ∗ y ↦ other ⦄ swapTwice x y
       ⦃⇓ x ↦ value ∗ y ↦ other⦄ := by
   unfold swapTwice
-  sl_step*
+  step*
 
 end Specifications
 
@@ -396,7 +396,7 @@ theorem inc_spec (l : Link Int) (xs : List Int) :
   | nil =>
       cases l
       · simp only [isList, inc, List.map_nil]
-        sl_step*
+        step*
       · simp only [isList]
         sl_pull
         contradiction
@@ -409,8 +409,8 @@ theorem inc_spec (l : Link Int) (xs : List Int) :
       | some p =>
           simp only [isList, inc, List.map_cons]
           sl_pull next
-          sl_step* 2
-          sl_step with ih next
+          step* 2
+          step with ih next
 
 def append : List α → Link α → Link α → St (Link α)
   | [], _, l₂ => pure l₂
@@ -429,7 +429,7 @@ theorem append_spec (l₁ l₂ : Link α) (xs ys : List α) :
   | nil =>
       cases l₁
       · simp only [isList, append, List.nil_append]
-        sl_step
+        step
       · simp only [isList]
         sl_pull
         contradiction
@@ -442,10 +442,10 @@ theorem append_spec (l₁ l₂ : Link α) (xs ys : List α) :
       | some p =>
           simp only [isList, append, List.cons_append]
           sl_pull next
-          sl_step
-          sl_step with ih (l₁ := next) (l₂ := l₂) (ys := ys)
-          sl_step
-          sl_step
+          step
+          step with ih (l₁ := next) (l₂ := l₂) (ys := ys)
+          step
+          step
 
 def reverseAppend : List α → Link α → Link α → St (Link α)
   | [], _, acc => pure acc
@@ -463,7 +463,7 @@ theorem reverse_append_spec (l acc : Link α) (xs ys : List α) :
   | nil =>
       cases l
       · simp only [isList, reverseAppend, List.reverse_nil, List.nil_append]
-        sl_step
+        step
       · simp only [isList]
         sl_pull
         contradiction
@@ -477,8 +477,8 @@ theorem reverse_append_spec (l acc : Link α) (xs ys : List α) :
           simp only [isList, reverseAppend, List.reverse_cons, List.append_assoc,
             List.singleton_append]
           sl_pull next
-          sl_step* 2
-          sl_step with ih (l := next) (acc := some p) (ys := x :: ys)
+          step* 2
+          step with ih (l := next) (acc := some p) (ys := x :: ys)
 
 def reverse (xs : List α) (l : Link α) : St (Link α) :=
   reverseAppend xs l none
@@ -487,7 +487,7 @@ theorem reverse_spec (l : Link α) (xs : List α) :
     ⦃ isList l xs ⦄ reverse xs l
       ⦃⇓ result => isList result xs.reverse⦄ := by
   unfold reverse
-  sl_step with reverse_append_spec l none xs []
+  step with reverse_append_spec l none xs []
 
 def bigSep (P : α → SLProp) : List α → SLProp
   | [] => emp
@@ -521,7 +521,7 @@ theorem fold_right_spec (P : α → SLProp) (I : List α → β → SLProp)
   | nil =>
       cases l
       · simp only [isList, bigSep, foldRight]
-        sl_step
+        step
       · simp only [isList]
         sl_pull
         contradiction
@@ -534,9 +534,9 @@ theorem fold_right_spec (P : α → SLProp) (I : List α → β → SLProp)
       | some p =>
           simp only [isList, bigSep, foldRight]
           sl_pull next
-          sl_step
-          sl_step with ih (l := next) (acc := acc)
-          sl_step with hf x
+          step
+          step with ih (l := next) (acc := acc)
+          step with hf x
 
 def sumList (xs : List Int) (l : Link Int) : St Int :=
   foldRight (fun x acc => pure (x + acc)) xs l 0
@@ -550,7 +550,7 @@ theorem sum_list_spec (l : Link Int) (xs : List Int) :
         (pure (x + acc) : St Int)
         ⦃⇓ result => ⌜result = (x :: ys).foldr (· + ·) 0⌝⦄ := by
     intro x acc ys
-    sl_step
+    step
   unfold sumList
   apply triple_conseq
     (fold_right_spec (fun _ : Int => emp)

@@ -310,7 +310,7 @@ Verus' `self.well_formed()` becomes `wellFormed s l`, and `self@` becomes
 theorem new.spec :
     ⦃ emp ⦄ (new : St (DoublyLinkedList V)) ⦃⇓ s => wellFormed s []⦄ := by
   unfold new
-  sl_step*
+  step*
 
 /-- `pushEmptyCase` inserts one node into an empty list. -/
 @[step]
@@ -318,7 +318,7 @@ theorem pushEmptyCase.spec (s : DoublyLinkedList V) (v : V) :
     ⦃ wellFormed s [] ⦄ pushEmptyCase s v
       ⦃⇓ s' => ∃ r : Ptr (Node V), wellFormed s' [(r, v)]⦄ := by
   unfold pushEmptyCase
-  sl_step*
+  step*
 
 /-- `pushBack` appends `v` to the list. -/
 @[step]
@@ -330,13 +330,13 @@ theorem pushBack.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
   next =>
     sl_pull -- needs the pure part of the precondition to prove `l = []`
     obtain rfl : l = [] := (lastPtr_eq_none_iff l).mp (by grind)
-    sl_step*
+    step*
   next oldTailPtr _ =>
     sl_pull -- needs the pure part of the precondition to prove `l ≠ []`
     have hne : l ≠ [] := mt (lastPtr_eq_none_iff l).mpr (by grind)
     obtain ⟨l', ⟨rt, vt⟩, rfl⟩ := (eq_nil_or_snoc l).resolve_left hne
     obtain rfl : oldTailPtr = rt := by grind [lastPtr_snoc]
-    sl_step*
+    step*
 
 /-- `popBack` removes the last node and returns its payload. Indexing by the
 whole list lets `step` recover the ghost list from a concrete precondition. -/
@@ -349,7 +349,7 @@ theorem popBack.spec (s : DoublyLinkedList V) (l : Cells V) (hne : l ≠ []) :
   <;> unfold popBack
   <;> sl_pull ⟨_, htail⟩
   <;> simp only [lastPtr_snoc] at htail
-  <;> sl_step*
+  <;> step*
 
 /-- `pushFront` prepends `v` to the list. -/
 @[step]
@@ -361,7 +361,7 @@ theorem pushFront.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
   next =>
     sl_pull
     obtain rfl : l = [] := (firstPtr_eq_none_iff l).mp (by grind)
-    sl_step*
+    step*
   next oldHeadPtr hsome =>
     rcases l with _ | ⟨⟨rh, _⟩, _⟩
     · sl_pull ⟨hhead, _⟩
@@ -370,7 +370,7 @@ theorem pushFront.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
       simp_all
     · sl_pull
       obtain rfl : rh = oldHeadPtr := by grind
-      sl_step*
+      step*
 
 /-- `popFront` removes the first node and returns its payload. -/
 @[step]
@@ -381,7 +381,7 @@ theorem popFront.spec (s : DoublyLinkedList V) (rh : Ptr (Node V)) (vh : V)
   unfold popFront
   sl_pull_keep
   -- `nodes_cons_two`, which splits the two first nodes out, is stated over a pair.
-  rcases l with _ | ⟨⟨_, _⟩, _⟩ <;> sl_step*
+  rcases l with _ | ⟨⟨_, _⟩, _⟩ <;> step*
 
 /- `step` infers the index and payload by matching `nodes_read`'s `Prop`
 argument against a local assumption, which every caller below gets from
@@ -409,11 +409,12 @@ theorem getLoop.spec (l : Cells V) (i j : Nat) (r : Ptr (Node V))
     obtain ⟨rj, vj, hj⟩ := exists_cell l j (by omega)
     obtain ⟨r', v', hj'⟩ := exists_cell l (j + 1) (by omega)
     obtain rfl : r = rj := by grind
-    sl_step*
+    step*
+    case hr => grind
   | case2 j r hge =>
     obtain rfl : j = i := by omega
     rw [getLoop, if_neg hge]
-    sl_step*
+    step*
 
 /-- `get` returns the `i`th element of the view. -/
 @[step]
@@ -423,10 +424,11 @@ theorem get.spec (s : DoublyLinkedList V) (l : Cells V) (i : Nat)
       ⦃⇓ v => ⌜(view l)[i]? = some v⌝ ∗ wellFormed s l⦄ := by
   unfold get
   sl_pull_keep
-  sl_step as ⟨ r, _ ⟩
+  step as ⟨ r, _ ⟩
+  case hr => grind
   obtain ⟨ri, _, _⟩ := exists_cell l i hi
   obtain rfl : r = ri := by grind
-  sl_step*
+  step*
 
 /- Keep the ghost list a literal between steps: otherwise the unifier has to
 `whnf` through an unreduced `dropLast` at the next call, which is where
@@ -458,7 +460,7 @@ theorem new.spec (t : DoublyLinkedList V) (l : Cells V) (hne : 0 < l.length) :
       ⦃⇓ it => ⌜it.l = t ∧ it.index = 0 ∧ valid it l⌝ ∗ wellFormed t l⦄ := by
   unfold Iterator.new
   simp only [valid]
-  sl_step*
+  step*
 
 /-- The iterator yields the element of the view at its index. -/
 @[step]
@@ -469,7 +471,7 @@ theorem value.spec (it : Iterator V) (l : Cells V) (hvalid : valid it l) :
   obtain ⟨hidx, hcur⟩ := hvalid
   obtain ⟨r, v, hcell⟩ := exists_cell l it.index hidx
   simp only [show it.cur = some r from by grind, get!_some]
-  sl_step*
+  step*
 
 /-- Advancing the iterator: it reports whether there still is an element, and if
 so it becomes valid again at the next index.  The unconditional `index` and the
@@ -489,12 +491,12 @@ theorem moveNext.spec (it : Iterator V) (l : Cells V) (hvalid : valid it l) :
   obtain ⟨hidx, hcur⟩ := hvalid
   obtain ⟨r, v, hcell⟩ := exists_cell l it.index hidx
   simp only [show it.cur = some r from by grind, get!_some]
-  sl_step
+  step
   by_cases hlast : it.index + 1 = l.length
-  · sl_step*
+  · step*
   · obtain ⟨r', v', hcell'⟩ := exists_cell l (it.index + 1) (by omega)
     simp only [nodeAt, nextOf, if_neg hlast, hcell', Option.map_some, valid]
-    sl_step*
+    step*
 
 end Iterator
 
@@ -536,7 +538,15 @@ theorem run.spec :
     (run) ⦃⇓ (v1, v2, v3, g, x, y, z) =>
       v1 = 1 ∧ v2 = 2 ∧ v3 = 3 ∧ g = false ∧ x = 3 ∧ y = 1 ∧ z = 2⦄ := by
   unfold run
-  sl_step*
+  step*
+  /- The `Prop` arguments of the iterator specifications: `valid` is only available
+     behind the guard the previous `moveNext` returned, which is what needs `grind`. -/
+  case hne => grind
+  case hvalid => grind
+  case hvalid => grind
+  case hvalid => grind
+  case hvalid => grind
+  case hne => grind
 
 end Example
 

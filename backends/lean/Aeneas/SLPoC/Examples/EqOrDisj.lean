@@ -24,7 +24,7 @@ the ten entries of its interface — `new_in_place`, `new_disjoint`,
 `new_disjoint_from_slices`, `unsafe from_raw_parts`, `len`, `unsafe
 loadu_si128_src`, `unsafe loadu_si128_dst`, `unsafe storeu_si128`, `src` and
 `dst`.  Every entry is specified by a Hoare triple, so the specifications
-compose with `sl_step`, and the pure entries — the constructors, `len`, `src`
+compose with `step`, and the pure entries — the constructors, `len`, `src`
 and `dst` — are calls returning in `St` like the rest.  Every declaration that
 has a Rust counterpart carries its Rust name;
 the rest (`owns`, `ownsCells`, `readCells`, `writeCells`, `borrow_intro`, …) is
@@ -153,7 +153,7 @@ theorem readCells.spec {α : Type} (cells : List (Ptr α))
       cases values with
       | nil =>
           simp only [readCells, List.getElem?_nil]
-          sl_step*
+          step*
       | cons value values =>
           sl_pull
           contradiction
@@ -166,10 +166,10 @@ theorem readCells.spec {α : Type} (cells : List (Ptr α))
           cases i with
           | zero =>
               simp only [readCells, List.getElem?_cons_zero]
-              sl_step*
+              step*
           | succ i =>
               simp only [readCells, List.getElem?_cons_succ]
-              sl_step with ih values i
+              step with ih values i
 
 @[step]
 theorem writeCells.spec {α : Type} (cells : List (Ptr α))
@@ -181,7 +181,7 @@ theorem writeCells.spec {α : Type} (cells : List (Ptr α))
       cases values with
       | nil =>
           simp only [writeCells, List.set_nil]
-          sl_step*
+          step*
       | cons value values =>
           sl_pull
           contradiction
@@ -194,10 +194,10 @@ theorem writeCells.spec {α : Type} (cells : List (Ptr α))
           cases i with
           | zero =>
               simp only [writeCells, List.set_cons_zero]
-              sl_step*
+              step*
           | succ i =>
               simp only [writeCells, List.set_cons_succ]
-              sl_step with ih values i
+              step with ih values i
 
 /-! ## The buffer -/
 
@@ -261,7 +261,7 @@ theorem InPlaceOrDisjointBuffer.new_in_place.spec {α : Type}
     ⦃ ownsCells cells values ⦄ InPlaceOrDisjointBuffer.new_in_place cells
       ⦃⇓ buffer => owns buffer (.equal values)⦄ := by
   simp only [InPlaceOrDisjointBuffer.new_in_place, owns]
-  sl_step
+  step
 
 /-- `&[T; N]` and `&mut [T; N]` cannot alias and have the same length, so the
 caller owes only the two views. -/
@@ -273,7 +273,7 @@ theorem InPlaceOrDisjointBuffer.new_disjoint.spec {α : Type} (n : Nat)
       InPlaceOrDisjointBuffer.new_disjoint src dst
     ⦃⇓ buffer => owns buffer (.disjoint srcValues dstValues)⦄ := by
   simp only [InPlaceOrDisjointBuffer.new_disjoint, owns]
-  sl_step
+  step
 
 /-- Same, with the length equality the Rust code asserts at run time. -/
 @[step]
@@ -284,7 +284,7 @@ theorem InPlaceOrDisjointBuffer.new_disjoint_from_slices.spec {α : Type}
       InPlaceOrDisjointBuffer.new_disjoint_from_slices src dst
     ⦃⇓ buffer => owns buffer (.disjoint srcValues dstValues)⦄ := by
   simp only [InPlaceOrDisjointBuffer.new_disjoint_from_slices, owns]
-  sl_step
+  step
 
 /-- `from_raw_parts` with two pointers to the same memory.  The caller owns one
 view and gets the aliased case. -/
@@ -294,7 +294,7 @@ theorem InPlaceOrDisjointBuffer.from_raw_parts.equal_spec {α : Type}
       InPlaceOrDisjointBuffer.from_raw_parts cells cells
     ⦃⇓ buffer => owns buffer (.equal values)⦄ := by
   simp only [InPlaceOrDisjointBuffer.from_raw_parts, owns]
-  sl_step
+  step
 
 /-- `from_raw_parts` with two pointers to separated memory.  Owning the two
 views separately *is* the disjointness half of the `unsafe` contract; the
@@ -306,7 +306,7 @@ theorem InPlaceOrDisjointBuffer.from_raw_parts.disjoint_spec {α : Type}
       InPlaceOrDisjointBuffer.from_raw_parts src dst
     ⦃⇓ buffer => owns buffer (.disjoint srcValues dstValues)⦄ := by
   simp only [InPlaceOrDisjointBuffer.from_raw_parts, owns]
-  sl_step
+  step
 
 /-! ### Length -/
 
@@ -326,7 +326,7 @@ theorem InPlaceOrDisjointBuffer.len.spec {α : Type}
           relation.read.length = relation.written.length⌝ ∗
         owns buffer relation⦄ := by
   simp only [InPlaceOrDisjointBuffer.len]
-  sl_step
+  step
   intro h hBuffer
   refine hpure_hstar_intro _ ?_ h hBuffer
   cases relation with
@@ -375,10 +375,10 @@ theorem InPlaceOrDisjointBuffer.loadu_si128_src.spec {α : Type}
       simp only [owns, InPlaceOrDisjointBuffer.loadu_si128_src, EqOrDisj.read]
       sl_pull hSame
       rw [hSame]
-      sl_step*
+      step*
   | disjoint srcValues dstValues =>
       simp only [owns, InPlaceOrDisjointBuffer.loadu_si128_src, EqOrDisj.read]
-      sl_step*
+      step*
 
 @[step]
 theorem InPlaceOrDisjointBuffer.loadu_si128_dst.spec {α : Type}
@@ -390,7 +390,7 @@ theorem InPlaceOrDisjointBuffer.loadu_si128_dst.spec {α : Type}
   cases relation <;>
     simp only [owns, InPlaceOrDisjointBuffer.loadu_si128_dst,
       EqOrDisj.written] <;>
-    sl_step*
+    step*
 
 /-- The store law.  Nothing else is needed to know what the read view holds
 afterwards: `EqOrDisj.write` keeps a single list in the aliased case, so the two
@@ -405,7 +405,7 @@ theorem InPlaceOrDisjointBuffer.storeu_si128.spec {α : Type}
   cases relation <;>
     simp only [owns, InPlaceOrDisjointBuffer.storeu_si128, EqOrDisj.write,
       EqOrDisj.written, List.length_set] <;>
-    sl_step*
+    step*
 
 /-! ### The whole-view borrows
 
@@ -458,8 +458,8 @@ theorem InPlaceOrDisjointBuffer.src.spec {α : Type}
         ownsCells cells relation.read ∗
           (ownsCells cells relation.read -∗ owns buffer relation)⦄ := by
   simp only [InPlaceOrDisjointBuffer.src]
-  sl_step
-  refine himpl_trans ?_ (hpure_hstar_intro _ rfl)
+  step
+  refine himpl_trans ?_ (hpure_hstar_intro _ trivial)
   cases relation with
   | equal values =>
       simp only [owns, EqOrDisj.read]
@@ -491,8 +491,8 @@ theorem InPlaceOrDisjointBuffer.dst.spec {α : Type}
                 ownsCells cells values -∗
               owns buffer (relation.write values))⦄ := by
   simp only [InPlaceOrDisjointBuffer.dst]
-  sl_step
-  refine himpl_trans ?_ (hpure_hstar_intro _ rfl)
+  step
+  refine himpl_trans ?_ (hpure_hstar_intro _ trivial)
   cases relation with
   | equal values =>
       simp only [owns, EqOrDisj.written, EqOrDisj.write]
@@ -537,7 +537,7 @@ theorem InPlaceOrDisjointBuffer.src.roundTrip {α : Type}
       ⦃⇓ result =>
         ⌜result = relation.read[i]?⌝ ∗ owns buffer relation⦄ := by
   simp only [load_through_src]
-  sl_step
+  step
   refine triple_conseq_frame
     (H₂ := iprop(ownsCells buffer.srcCells relation.read -∗
       owns buffer relation))
@@ -557,7 +557,7 @@ theorem InPlaceOrDisjointBuffer.dst.roundTrip {α : Type}
       ⦃⇓ owns buffer
           (relation.write (relation.written.set i value))⦄ := by
   simp only [store_through_dst]
-  sl_step
+  step
   refine triple_conseq_frame
     (H₂ := iprop(∀ˢ values,
       ⌜values.length = relation.written.length⌝ ∗
@@ -602,7 +602,7 @@ theorem storeThenLoadSrc.spec {α : Type} (buffer : InPlaceOrDisjointBuffer α)
         owns buffer
           (relation.write (relation.written.set i value))⦄ := by
   simp only [storeThenLoadSrc]
-  sl_step*
+  step*
 
 /-- The read-back returns the stored value in both cases. -/
 theorem storeThenLoadDst.spec {α : Type} (buffer : InPlaceOrDisjointBuffer α)
@@ -613,7 +613,7 @@ theorem storeThenLoadDst.spec {α : Type} (buffer : InPlaceOrDisjointBuffer α)
         owns buffer
           (relation.write (relation.written.set i value))⦄ := by
   simp only [storeThenLoadDst]
-  sl_step*
+  step*
 
 /-- Aliased: the store *is* visible through the read view — the plaintext the
 buffer came in with is gone.  A model that gives a buffer two independent views
@@ -669,7 +669,7 @@ theorem InPlaceOrDisjointBuffer.m128_loadu_src.spec
       ⦃⇓ result =>
         ⌜result = relation.read[i]?⌝ ∗ owns buffer relation⦄ := by
   simp only [InPlaceOrDisjointBuffer.m128_loadu_src]
-  sl_step*
+  step*
 
 @[step]
 theorem InPlaceOrDisjointBuffer.m128_loadu_dst.spec
@@ -679,7 +679,7 @@ theorem InPlaceOrDisjointBuffer.m128_loadu_dst.spec
       ⦃⇓ result =>
         ⌜result = relation.written[i]?⌝ ∗ owns buffer relation⦄ := by
   simp only [InPlaceOrDisjointBuffer.m128_loadu_dst]
-  sl_step*
+  step*
 
 @[step]
 theorem InPlaceOrDisjointBuffer.m128_storeu.spec
@@ -689,7 +689,7 @@ theorem InPlaceOrDisjointBuffer.m128_storeu.spec
       ⦃⇓ owns buffer
           (relation.write (relation.written.set i value))⦄ := by
   simp only [InPlaceOrDisjointBuffer.m128_storeu]
-  sl_step*
+  step*
 
 /-- The lane at a stored offset reads back as the stored lane, through the write
 view, in both cases — the read-back the stitched kernel relies on. -/
