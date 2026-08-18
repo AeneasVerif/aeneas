@@ -22,7 +22,7 @@ git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_se
 | [`FFree.lean`](FFree.lean) | Defines the generic freer monad, and the state machines that give it an operational semantics (after "Program Logics à la Carte"): `StateMachine`, `Exec`, `Runs` and `Evaluates`. |
 | [`Heap.lean`](Heap.lean) | Defines locations, dynamically typed cells, finite heaps, and the sub-heap order the affine assertions are closed under. |
 | [`RustHeap.lean`](RustHeap.lean) | The Rust view of the heap: `Ptr` and the pointer operations, over `Heap.lean`. |
-| [`SLTactics.lean`](SLTactics.lean) | Port of the SLF tactics: `sl_frame`, `sl_pull`, `sl_xchange`, …, including the affine discard of whatever a cancellation leaves over. |
+| [`SLTactics.lean`](SLTactics.lean) | Port of the SLF tactics: `sl_frame`, `sl_pull`, `sl_change`, …, including the affine discard of whatever a cancellation leaves over. |
 | [`ST.lean`](ST.lean) | The state monad `St`, its state machine, its denotation `theta` into `Wp`, the Hoare triples it induces, and the specifications of the pointer operations. |
 | [`Step.lean`](Step.lean) | Wires triples into `sl_step`/`sl_step*` and provides `sl_pure` for exposing the entailment of a syntactic terminal return. |
 | [`WP.lean`](WP.lean) | Affine separation-logic assertions (`SLProp`, closed under heap extension like Iris's `uPred`), the magic wand, and the `Wp` monad of predicate transformers. |
@@ -66,7 +66,7 @@ the triples. An `SLProp` is closed under heap extension — it owns the cells it
 describes and says nothing about the others — exactly like Iris's `uPred`.
 Consequently:
 
-* the entailment weakens: `H ⊢ emp` for every `H`, so `sl_frame`/`sl_xsimpl`
+* the entailment weakens: `H ⊢ emp` for every `H`, so `sl_frame`/`sl_simpl`
   drop whatever a cancellation leaves over;
 * `emp` and `⌜True⌝` both hold of every heap, so `emp` *is* the affine top and
   no separate predicate for it is needed;
