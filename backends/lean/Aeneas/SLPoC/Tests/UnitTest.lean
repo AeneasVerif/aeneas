@@ -112,7 +112,7 @@ example (n : Nat) :
 
 /-- Normalization inside `sl_pure` stays focused on its original goal. -/
 example (n : Nat) :
-    True ∧ triple emp (pure n : St Nat) (fun result => ⌜result = n⌝) := by
+    True ∧ ⦃ emp ⦄ (pure n : St Nat) ⦃⇓ result => ⌜result = n⌝⦄ := by
   constructor
   fail_if_success all_goals sl_pure
   · trivial
@@ -194,7 +194,7 @@ example (p : Ptr Nat) (value : Nat) :
   unfold readThenWrite
   sl_step
   guard_target =
-    triple iprop(p ↦ value) (update p (value + 1)) (fun _ => iprop(p ↦ value + 1))
+    ⦃ p ↦ value ⦄ update p (value + 1) ⦃⇓ p ↦ value + 1⦄
   sl_step*
 
 /-! ## Terminal `pure` -/
@@ -258,7 +258,7 @@ example (p : Ptr Nat) (value : Nat) :
 /-! ## Affine resource discard
 
 The entailment itself is affine, as Iris's is: `H ⊢ emp` for every `H`, so
-resources are dropped without an explicit `GC` — which is `emp` here. -/
+resources are dropped without any explicit absorbing assertion. -/
 
 example (p : Ptr Nat) (value : Nat) :
     p ↦ value ⊢ emp := by
@@ -272,14 +272,8 @@ example (p q : Ptr Nat) (left right : Nat) :
 example (P : SLProp) : P ⊢ ⌜8 = 8⌝ := by
   sl_frame
 
-example : (GC : SLProp) = emp := rfl
-
-example (p : Ptr Nat) (value : Nat) :
-    p ↦ value ⊢ GC := by
-  sl_frame
-
 example (p q : Ptr Nat) (left right : Nat) :
-    p ↦ left ∗ q ↦ right ⊢ p ↦ left ∗ GC := by
+    p ↦ left ∗ q ↦ right ⊢ p ↦ left ∗ emp := by
   sl_frame
 
 /-- Discarding is *not* forgetting: separated cells stay separated, so a cell
@@ -402,7 +396,7 @@ example (p q : Ptr Nat) (x : Nat) :
     fail_if_success sl_xpull
     sl_frame
   case hNext =>
-    intro _ _
+    intro _
     sl_pull
     sl_step*
 
