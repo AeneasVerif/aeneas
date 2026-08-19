@@ -1786,7 +1786,8 @@ type fun_body = {
 }
 [@@deriving show]
 
-type item_source = T.item_source [@@deriving show]
+type fun_source = A.fun_source [@@deriving show]
+type global_source = A.global_source [@@deriving show]
 
 (** Attributes to add to the generated code *)
 type backend_attributes = {
@@ -1811,7 +1812,7 @@ type fun_decl = {
   def_id : FunDeclId.id;
   item_meta : T.item_meta;
   builtin_info : builtin_fun_info option;
-  src : item_source;
+  src : fun_source;
   backend_attributes : backend_attributes;
   num_loops : int;
       (** The number of loops in the parent forward function (basically the
@@ -1868,7 +1869,7 @@ type global_decl = {
           wrapped inside [Result]) *)
   output_ty : ty;  (** The pure type of the global (without [Result]) *)
   can_fail : bool;  (** [true] if the global can fail *)
-  src : item_source;
+  src : global_source;
   body_id : FunDeclId.id;
 }
 [@@deriving show]

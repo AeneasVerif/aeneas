@@ -243,7 +243,7 @@ let translate_generic_params (span : Meta.span option)
   ({ types; const_generics; trait_clauses }, { trait_type_constraints })
 
 let translate_field (span : Meta.span) (f : T.field) : field =
-  let field_name = f.field_name in
+  let field_name = if f.is_positional then None else Some f.field_name in
   let field_ty = translate_sty (Some span) f.field_ty in
   let field_attr_info = f.attr_info in
   { field_name; field_ty; field_attr_info }

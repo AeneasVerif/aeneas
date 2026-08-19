@@ -1,5 +1,54 @@
-include Charon.Logging
 open Collections
+module L = Easy_logging.Logging
+module H = Easy_logging.Handlers
+
+let _ = L.make_logger "MainLogger" Debug [ Cli Debug ]
+let main_log = L.get_logger "MainLogger"
+
+let level_color (lvl : L.level) : string =
+  let code =
+    match lvl with
+    | L.Flash -> 95 (* light magenta *)
+    | Error -> 91 (* light red *)
+    | Warning -> 93 (* light yellow *)
+    | Info -> 92 (* light green *)
+    | Trace -> 36 (* cyan *)
+    | Debug -> 94 (* light blue *)
+    | NoLevel -> 39 (* default *)
+  in
+  Printf.sprintf "\027[%dm" code
+
+let show_level : L.level -> string = function
+  | Debug -> "Debug"
+  | Trace -> "Trace"
+  | Info -> "Info"
+  | Warning -> "Warn"
+  | Error -> "Error"
+  | Flash -> "Flash"
+  | NoLevel -> "NoLevel"
+
+let format_tags (tags : string list) : string =
+  match tags with
+  | [] -> ""
+  | _ -> "[" ^ String.concat " | " tags ^ "] "
+
+(** The handler of the main logger; [Main] uses it to filter out everything
+    below a given level. *)
+let main_logger_handler =
+  let formatter (item : L.log_item) : string =
+    let level =
+      Printf.sprintf "%s%s\027[39m" (level_color item.level)
+        (show_level item.level)
+    in
+    Format.pp_set_max_indent Format.str_formatter 200;
+    Format.sprintf "@[[%-15s] %s%s@]" level (format_tags item.tags) item.msg
+  in
+  (* There should be exactly one handler *)
+  match main_log#get_handlers with
+  | [ handler ] ->
+      H.set_formatter handler formatter;
+      handler
+  | _ -> raise (Failure "Unexpected")
 
 (** Below, we create loggers for various (sub-)modules, so that we can precisely
     toggle logging on/off, depending on which information we need *)
@@ -16,7 +65,7 @@ let to_log_msg (f : string) (line : int) (msg : string) : string =
   let line = ", line " ^ string_of_int line in
   if msg = "" then f ^ line ^ "\n" else f ^ line ^ ":\n" ^ msg ^ "\n"
 
-(** The main logger - this one is created in Charon *)
+(** Register the main logger *)
 let () =
   loggers := StringMap.add "MainLogger" main_log !loggers;
   main_log#set_level Info
