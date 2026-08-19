@@ -421,7 +421,7 @@ theorem append_spec (l₁ l₂ : Link α) (xs ys : List α) :
   | nil =>
       cases l₁
       · simp only [isList, append, List.nil_append]
-        step
+        step*
       · simp only [isList]
         sl_pull
         contradiction
@@ -452,7 +452,7 @@ theorem reverse_append_spec (l acc : Link α) (xs ys : List α) :
   | nil =>
       cases l
       · simp only [isList, reverseAppend, List.reverse_nil, List.nil_append]
-        step
+        step*
       · simp only [isList]
         sl_pull
         contradiction
@@ -468,6 +468,7 @@ theorem reverse_append_spec (l acc : Link α) (xs ys : List α) :
           sl_pull next
           step* 2
           step with ih (l := next) (acc := some p) (ys := x :: ys)
+          sl_frame
 
 def reverse (xs : List α) (l : Link α) : St (Link α) :=
   reverseAppend xs l none
@@ -477,6 +478,7 @@ theorem reverse_spec (l : Link α) (xs : List α) :
       ⦃⇓ result => isList result xs.reverse⦄ := by
   unfold reverse
   step with reverse_append_spec l none xs []
+  sl_frame
 
 def bigSep (P : α → SLProp) : List α → SLProp
   | [] => emp
@@ -510,7 +512,7 @@ theorem fold_right_spec (P : α → SLProp) (I : List α → β → SLProp)
   | nil =>
       cases l
       · simp only [isList, bigSep, foldRight]
-        step
+        step*
       · simp only [isList]
         sl_pull
         contradiction
@@ -537,7 +539,7 @@ theorem sum_list_spec (l : Link Int) (xs : List Int) :
         (pure (x + acc) : St Int)
         ⦃⇓ result => ⌜result = (x :: ys).foldr (· + ·) 0⌝⦄ := by
     intro x acc ys
-    step
+    step*
   unfold sumList
   apply triple_conseq
     (fold_right_spec (fun _ : Int => emp)
