@@ -10,7 +10,7 @@ open RustM WP
 theorem massert_spec (b : Prop) [Decidable b] :
     partialSpec (massert b)
       (fun _ => b)
-      (fun | .assertionFailure => ¬ b | _ => False)
+      (fun | .panic => ¬ b | _ => False)
       False := by
   unfold massert
   split <;> simp_all [partialSpec]
@@ -24,6 +24,6 @@ theorem spec_massert (b : Prop) [Decidable b] : Std.WP.spec (massert b) P ↔ (b
   split <;> simp <;> grind
 
 @[simp, global_simps] theorem massert_True : massert True = ok () := by simp [massert]
-@[simp, global_simps] theorem massert_False : massert False = fail .assertionFailure := by simp [massert]
+@[simp, global_simps] theorem massert_False : massert False = fail .panic := by simp [massert]
 
 end Aeneas.Std

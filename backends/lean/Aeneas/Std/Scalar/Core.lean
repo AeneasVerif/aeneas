@@ -593,7 +593,7 @@ def UScalar.tryMkOpt (ty : UScalarTy) (x : Nat) : Option (UScalar ty) :=
   else none
 
 def UScalar.tryMk (ty : UScalarTy) (x : Nat) : RustM (UScalar ty) :=
-  RustM.ofOption (tryMkOpt ty x) integerOverflow
+  RustM.ofOption (tryMkOpt ty x) panic
 
 def IScalar.tryMkOpt (ty : IScalarTy) (x : Int) : Option (IScalar ty) :=
   if h:IScalar.check_bounds ty x then
@@ -601,7 +601,7 @@ def IScalar.tryMkOpt (ty : IScalarTy) (x : Int) : Option (IScalar ty) :=
   else none
 
 def IScalar.tryMk (ty : IScalarTy) (x : Int) : RustM (IScalar ty) :=
-  RustM.ofOption (tryMkOpt ty x) integerOverflow
+  RustM.ofOption (tryMkOpt ty x) panic
 
 theorem UScalar.tryMkOpt_eq (ty : UScalarTy) (x : Nat) :
   match tryMkOpt ty x with

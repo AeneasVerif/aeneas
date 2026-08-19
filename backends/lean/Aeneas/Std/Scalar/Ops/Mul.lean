@@ -42,11 +42,11 @@ Theorems with a specification which use integers and bit-vectors
 theorem UScalar.mul_equiv {ty} (x y : UScalar ty) :
   match mul x y with
   | ok z => x.val * y.val ≤ UScalar.max ty ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv
-  | fail e => e = .integerOverflow ∧ UScalar.max ty < x.val * y.val
+  | fail e => e = .panic ∧ UScalar.max ty < x.val * y.val
   | .div => False := by
   simp only [mul]
   have := tryMk_eq ty (x.val * y.val)
-  have hfail : ∀ e, mul x y = fail e → e = .integerOverflow := by
+  have hfail : ∀ e, mul x y = fail e → e = .panic := by
     intro e he
     simp only [mul, tryMk, RustM.ofOption] at he
     split at he <;> simp_all
@@ -78,7 +78,7 @@ theorem UScalar.mul_bv_spec {ty} {x y : UScalar ty}
 theorem IScalar.mul_equiv {ty} (x y : IScalar ty) :
   match mul x y with
   | ok z => IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
-  | fail e => e = .integerOverflow ∧ ¬(IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty)
+  | fail e => e = .panic ∧ ¬(IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty)
   | .div => False := by
   simp only [mul, not_and, not_le]
   have := tryMk_eq ty (x.val * y.val)
@@ -159,7 +159,7 @@ theorem IScalar.mul_spec {ty} {x y : IScalar ty}
 uscalar @[step] theorem «%S».mul_spec {x y : «%S»} :
     partialSpec (x * y)
       (fun z => (↑z : Nat) = ↑x * ↑y)
-      (fun | .integerOverflow => ↑x * ↑y > «%S».max | _ => False)
+      (fun | .panic => ↑x * ↑y > «%S».max | _ => False)
       False := by
   have h := UScalar.mul_equiv x y
   show partialSpec (UScalar.mul x y) _ _ _
@@ -169,7 +169,7 @@ uscalar @[step] theorem «%S».mul_spec {x y : «%S»} :
 iscalar @[step] theorem «%S».mul_spec {x y : «%S»} :
     partialSpec (x * y)
       (fun z => (↑z : Int) = ↑x * ↑y)
-      (fun | .integerOverflow => ↑x * ↑y < «%S».min ∨ ↑x * ↑y > «%S».max | _ => False)
+      (fun | .panic => ↑x * ↑y < «%S».min ∨ ↑x * ↑y > «%S».max | _ => False)
       False := by
   have h := IScalar.mul_equiv x y
   show partialSpec (IScalar.mul x y) _ _ _

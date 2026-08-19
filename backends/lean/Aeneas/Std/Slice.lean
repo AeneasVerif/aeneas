@@ -114,7 +114,7 @@ abbrev Slice.slice {α : Type u} [Inhabited α] (s : Slice α) (i j : Nat) : Lis
 
 def Slice.index_usize {α : Type u} (v: Slice α) (i: Usize) : RustM α :=
   match v[i]? with
-  | none => fail .arrayOutOfBounds
+  | none => fail .panic
   | some x => ok x
 
 theorem Slice.eq_iff {α} (s0 s1 : Slice α) : s0 = s1 ↔ s0.val = s1.val := by
@@ -133,7 +133,7 @@ theorem core.slice.Slice.is_empty_spec {T : Type} (s : Slice T) :
 theorem Slice.index_usize_spec {α : Type u} (v: Slice α) (i: Usize) :
     partialSpec (v.index_usize i)
       (fun x => ∃ _ : i.val < v.length, x = v.val[i.val])
-      (fun | .arrayOutOfBounds => i.val ≥ v.length | _ => False)
+      (fun | .panic => i.val ≥ v.length | _ => False)
       False := by
   grind [index_usize]
 
@@ -262,7 +262,7 @@ theorem Slice.getElem_Nat_setAtNat_ne
 
 def Slice.update {α : Type u} (v: Slice α) (i: Usize) (x: α) : RustM (Slice α) :=
   match v.val[i.val]? with
-  | none => fail .arrayOutOfBounds
+  | none => fail .panic
   | some _ =>
     ok ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
 
@@ -270,7 +270,7 @@ def Slice.update {α : Type u} (v: Slice α) (i: Usize) (x: α) : RustM (Slice �
 theorem Slice.update_spec {α : Type u} (v: Slice α) (i: Usize) (x : α) :
     partialSpec (v.update i x)
       (fun nv => i.val < v.length ∧ nv = v.set i x)
-      (fun | .arrayOutOfBounds => i.val ≥ v.length | _ => False)
+      (fun | .panic => i.val ≥ v.length | _ => False)
       False := by
   grind [partialSpec, update, set, setAtNat]
 
@@ -283,7 +283,7 @@ def Slice.index_mut_usize {α : Type u} (v: Slice α) (i: Usize) :
 theorem Slice.index_mut_usize_spec {α : Type u} (v: Slice α) (i: Usize) :
     partialSpec (v.index_mut_usize i)
       (uncurry' fun x back => ∃ _ : i.val < v.length, x = v.val[i.val] ∧ back = Slice.set v i)
-      (fun | .arrayOutOfBounds => i.val ≥ v.length | _ => False)
+      (fun | .panic => i.val ≥ v.length | _ => False)
       False := by
   have h := index_usize_spec v i
   simp only [partialSpec, index_mut_usize, Bind.bind, bind, uncurry'] at h ⊢

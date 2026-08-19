@@ -55,7 +55,7 @@ info: Aeneas.Step.SpecPartialTests.myDiv_partialSpec.mvcgen_spec (x y : U32) (Q 
 #guard_msgs in
 #check myDiv_partialSpec.mvcgen_spec
 
-/- ## Mock addition: panics on overflow, specifies `Error.integerOverflow` -/
+/- ## Mock addition: panics on overflow, specifies `Error.panic` -/
 
 opaque myAdd (x y : U32) : RustM U32
 
@@ -63,7 +63,7 @@ opaque myAdd (x y : U32) : RustM U32
 axiom myAdd_partialSpec (x y : U32) :
   partialSpec (myAdd x y)
     (fun z => z.val = x.val + y.val)
-    (fun | .integerOverflow => x.val + y.val > U32.max | _ => False)
+    (fun | .panic => x.val + y.val > U32.max | _ => False)
     False
 
 -- Pushing `¬` through `>` should produce `≤`.
@@ -76,8 +76,8 @@ info: Aeneas.Step.SpecPartialTests.myAdd_partialSpec.step_spec (x y : U32) (h_fa
 
 /--
 info: Aeneas.Step.SpecPartialTests.myAdd_partialSpec.mvcgen_spec (x y : U32) (Q : PostCond U32 postShape)
-  (h_ok : ∀ (r : U32), ↑r = ↑x + ↑y → PostCond.ok Q r)
-  (h_fail : U32.max < ↑x + ↑y → PostCond.fail Q Error.integerOverflow) : ⦃⌜True⌝⦄ myAdd x y ⦃Q⦄
+  (h_ok : ∀ (r : U32), ↑r = ↑x + ↑y → PostCond.ok Q r) (h_fail : U32.max < ↑x + ↑y → PostCond.fail Q Error.panic) :
+  ⦃⌜True⌝⦄ myAdd x y ⦃Q⦄
 -/
 #guard_msgs in
 #check myAdd_partialSpec.mvcgen_spec
@@ -91,7 +91,7 @@ opaque myAddSigned (x y : I32) : RustM I32
 axiom myAddSigned_partialSpec (x y : I32) :
   partialSpec (myAddSigned x y)
     (fun z => z.val = x.val + y.val)
-    (fun | .integerOverflow => (x.val + y.val > I32.max ∨ x.val + y.val < I32.min) | _ => False)
+    (fun | .panic => (x.val + y.val > I32.max ∨ x.val + y.val < I32.min) | _ => False)
     False
 
 /--
@@ -103,9 +103,8 @@ info: Aeneas.Step.SpecPartialTests.myAddSigned_partialSpec.step_spec (x y : I32)
 
 /--
 info: Aeneas.Step.SpecPartialTests.myAddSigned_partialSpec.mvcgen_spec (x y : I32) (Q : PostCond I32 postShape)
-  (h_ok : ∀ (r : I32), ↑r = ↑x + ↑y → PostCond.ok Q r)
-  (h_fail_1 : I32.max < ↑x + ↑y → PostCond.fail Q Error.integerOverflow)
-  (h_fail_2 : ↑x + ↑y < I32.min → PostCond.fail Q Error.integerOverflow) : ⦃⌜True⌝⦄ myAddSigned x y ⦃Q⦄
+  (h_ok : ∀ (r : I32), ↑r = ↑x + ↑y → PostCond.ok Q r) (h_fail_1 : I32.max < ↑x + ↑y → PostCond.fail Q Error.panic)
+  (h_fail_2 : ↑x + ↑y < I32.min → PostCond.fail Q Error.panic) : ⦃⌜True⌝⦄ myAddSigned x y ⦃Q⦄
 -/
 #guard_msgs in
 #check myAddSigned_partialSpec.mvcgen_spec

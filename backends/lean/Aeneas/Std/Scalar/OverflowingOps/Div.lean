@@ -11,11 +11,11 @@ open RustM Error ScalarElab
 -/
 
 def UScalar.overflowing_div {ty} (x y : UScalar ty) : RustM (UScalar ty × Bool) :=
-  if y.bv != 0 then ok (⟨ BitVec.udiv x.bv y.bv ⟩, false) else fail divisionByZero
+  if y.bv != 0 then ok (⟨ BitVec.udiv x.bv y.bv ⟩, false) else fail panic
 
 def IScalar.overflowing_div {ty} (x y : IScalar ty) : RustM (IScalar ty × Bool) :=
   if y.val != 0 then ok (⟨ BitVec.sdiv x.bv y.bv ⟩, BitVec.sdivOverflow x.bv y.bv)
-  else fail divisionByZero
+  else fail panic
 
 uscalar @[step_pure_def]
 def «%S».overflowing_div (x y : «%S») : RustM («%S» × Bool) := @UScalar.overflowing_div .«%S» x y
