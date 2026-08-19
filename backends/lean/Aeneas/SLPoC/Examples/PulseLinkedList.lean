@@ -248,7 +248,7 @@ theorem length.spec (x : Link α) (xs : List α) :
 theorem create.spec :
     ⦃ emp ⦄ create α ⦃⇓ x => isList x []⦄ := by
   unfold create
-  step
+  step*
 
 /-- `cons` allocates one cell and prepends its value to the exact view. -/
 @[step]
@@ -355,6 +355,7 @@ theorem split.spec (n : Nat) (x : Link α) (xs : List α)
                 simp only [split, List.take, List.drop]
                 step
                 step with ih (x := next) (xs := xs) (by omega) (by simpa using hle)
+                sl_frame
 
 /-- `insert` splits the exact view and inserts `item` at index `n`. -/
 @[step]
@@ -380,6 +381,7 @@ theorem delete.spec (n : Nat) (x : Link α) (xs : List α) (item : α)
       ⦃⇓ isList x (xs.take n ++ item :: xs.drop n)⦄ := by
   unfold delete
   step with insert.spec n x xs item hpos hlt
+  sl_frame
 
 /-- Accumulator form of reversal: the result has view `xs.reverse ++ ys`. -/
 @[step]
@@ -390,7 +392,7 @@ theorem reverseAppend.spec (x acc : Link α) (xs ys : List α) :
   | nil =>
       cases x
       · simp only [isList, reverseAppend, List.reverse_nil, List.nil_append]
-        step
+        step*
       · sl_pull
         contradiction
   | cons v xs ih =>
@@ -404,6 +406,7 @@ theorem reverseAppend.spec (x acc : Link α) (xs ys : List α) :
           sl_pull next
           step* 2
           step with ih (x := next) (acc := some p) (ys := v :: ys)
+          sl_frame
 
 /-- `reverse` consumes the original orientation and returns exact ownership in
 reverse pure-list order. -/
@@ -413,6 +416,7 @@ theorem reverse.spec (x : Link α) (xs : List α) :
       ⦃⇓ result => isList result xs.reverse⦄ := by
   unfold reverse
   step with reverseAppend.spec x none xs []
+  sl_frame
 
 end PulseLinkedList
 

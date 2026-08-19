@@ -225,7 +225,7 @@ theorem new.spec (cap : Nat) (hcap : 0 < cap) :
   step as ⟨ buffer, hlength ⟩
   step as ⟨ sizeCell ⟩
   step as ⟨ capacityCell ⟩
-  step
+  step*
 
 /-- Length returns the exact logical length and preserves complete ownership. -/
 @[step]
