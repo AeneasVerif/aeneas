@@ -798,8 +798,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
              backend is Lean, we escape the name with French quotes. *)
           let mk_field_name (name : string) =
             match backend () with
-            | Lean when names_maps_is_keyword ctx.names_maps name ->
-                "«" ^ name ^ "»"
+            | Lean when is_lean_keyword name -> "«" ^ name ^ "»"
             | _ -> name
           in
           (* Compute the names *)
