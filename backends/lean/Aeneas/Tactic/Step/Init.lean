@@ -304,10 +304,10 @@ the statement about `partialSpec` into a statement about `spec`. We use the foll
 to do that:
 
 - A `partialSpec` theorem may use match-syntax of the form
-  `fun | .integerOverflow => ↑x + ↑y > UScalar.max ty | _ => False`
-  to distinguish various kinds of panics.
+  `fun | .panic => ↑x + ↑y > UScalar.max ty | _ => False`
+  to distinguish different kinds of `Error`s.
   We canoncialize this syntax into an expression like
-  `fun e => e = integerOverflow ∧ ↑x + ↑y > UScalar.max ty`.
+  `fun e => e = panic ∧ ↑x + ↑y > UScalar.max ty`.
 
 - We apply the lemma `spec_of_partialSpec` to replace the `partialSpec` statement with an
   corresponding statement using the `spec` predicate
@@ -377,13 +377,8 @@ private def commonSimpLemmas : Array Name :=
 It's used in `canonicalizeFailPostcond` below.  -/
 private theorem error_pred_eq_disj (p : Aeneas.Std.Error → Prop) :
     p = fun e =>
-      (e = .assertionFailure    ∧ p .assertionFailure)    ∨
-      (e = .integerOverflow     ∧ p .integerOverflow)     ∨
-      (e = .divisionByZero      ∧ p .divisionByZero)      ∨
-      (e = .arrayOutOfBounds    ∧ p .arrayOutOfBounds)    ∨
-      (e = .maximumSizeExceeded ∧ p .maximumSizeExceeded) ∨
-      (e = .panic               ∧ p .panic)               ∨
-      (e = .undef               ∧ p .undef) := by
+      (e = .panic ∧ p .panic) ∨
+      (e = .undef ∧ p .undef) := by
   funext e; cases e <;> simp
 
 /-- If the failure postcondition `p_fail` of `partialSpec` is written as a `match`
@@ -506,10 +501,10 @@ The `mvcgen` tactic cannot process spec theorems that use the `partialSpec` pred
 We convert a `partialSpec` theorem into a `Triple` theorem for `mvcgen` as follows:
 
 - A `partialSpec` theorem may use match-syntax of the form
-  `fun | .integerOverflow => ↑x + ↑y > UScalar.max ty | _ => False`
-  to distinguish various kinds of panics.
+  `fun | .panic => ↑x + ↑y > UScalar.max ty | _ => False`
+  to distinguish different kinds of `Error`s.
   We canoncialize this syntax into an expression like
-  `fun e => e = integerOverflow ∧ ↑x + ↑y > UScalar.max ty`.
+  `fun e => e = panic ∧ ↑x + ↑y > UScalar.max ty`.
 
 - We apply the lemma `partialSpec_to_mvcgen` to replace the `partialSpec` statement with an
   corresponding statement using the `Triple` predicate

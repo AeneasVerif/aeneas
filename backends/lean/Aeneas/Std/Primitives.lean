@@ -50,11 +50,6 @@ def elabImpl : CommandElab := fun (stx: Syntax) => do
 -/
 
 inductive Error where
-   | assertionFailure: Error
-   | integerOverflow: Error
-   | divisionByZero: Error
-   | arrayOutOfBounds: Error
-   | maximumSizeExceeded: Error
    | panic: Error
    | undef: Error
 deriving Repr, BEq
@@ -91,7 +86,7 @@ def div? {α: Type u} (r: RustM α): Bool :=
   | ok _ | fail _ => false
 
 def massert (b : Prop) [Decidable b] : RustM Unit :=
-  if b then ok () else fail assertionFailure
+  if b then ok () else fail panic
 
 macro "prove_eval_global" : tactic => `(tactic| simp (failIfUnchanged := false) only [global_simps] <;> first | apply Eq.refl | decide)
 

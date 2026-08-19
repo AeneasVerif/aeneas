@@ -13,7 +13,7 @@ open RustM Error Arith ScalarElab WP
 -/
 
 def UScalar.sub {ty : UScalarTy} (x y : UScalar ty) : RustM (UScalar ty) :=
-  if x.val < y.val then fail .integerOverflow
+  if x.val < y.val then fail .panic
   else ok ⟨ BitVec.ofNat _ (x.val - y.val) ⟩
 
 def IScalar.sub {ty : IScalarTy} (x y : IScalar ty) : RustM (IScalar ty) :=
@@ -42,7 +42,7 @@ theorem UScalar.sub_equiv {ty} (x y : UScalar ty) :
     y.val ≤ x.val ∧
     x.val = z.val + y.val ∧
     z.bv = x.bv - y.bv
-  | fail e => e = .integerOverflow ∧ x.val < y.val
+  | fail e => e = .panic ∧ x.val < y.val
   | _ => ⊥ := by
   have : x - y = sub x y := by rfl
   simp [this, sub]
@@ -86,7 +86,7 @@ theorem IScalar.sub_equiv {ty} (x y : IScalar ty) :
     IScalar.inBounds ty (x.val - y.val) ∧
     z.val = x.val - y.val ∧
     z.bv = x.bv - y.bv
-  | fail e => e = .integerOverflow ∧ ¬ (IScalar.inBounds ty (x.val - y.val))
+  | fail e => e = .panic ∧ ¬ (IScalar.inBounds ty (x.val - y.val))
   | _ => ⊥ := by
   have : x - y = sub x y := by rfl
   simp [this, sub, tryMk, RustM.ofOption]
@@ -137,7 +137,7 @@ Theorems with a specification which only uses integers
 theorem UScalar.sub_spec {ty} {x y : UScalar ty} :
     partialSpec (x - y)
       (fun z => z.val = x.val - y.val ∧ y.val ≤ x.val)
-      (fun | .integerOverflow => x.val < y.val | _ => False)
+      (fun | .panic => x.val < y.val | _ => False)
       False := by
   have h := @sub_equiv ty x y
   simp only [partialSpec]
@@ -148,7 +148,7 @@ theorem UScalar.sub_spec {ty} {x y : UScalar ty} :
 theorem IScalar.sub_spec {ty} {x y : IScalar ty} :
     partialSpec (x - y)
       (fun z => (↑z : Int) = ↑x - ↑y)
-      (fun | .integerOverflow => ↑x - ↑y < IScalar.min ty ∨ ↑x - ↑y > IScalar.max ty | _ => False)
+      (fun | .panic => ↑x - ↑y < IScalar.min ty ∨ ↑x - ↑y > IScalar.max ty | _ => False)
       False := by
   have h := @sub_equiv ty x y
   simp only [partialSpec]
@@ -158,14 +158,14 @@ theorem IScalar.sub_spec {ty} {x y : IScalar ty} :
 uscalar @[step] theorem «%S».sub_spec {x y : «%S»} :
     partialSpec (x - y)
       (fun z => z.val = x.val - y.val ∧ y.val ≤ x.val)
-      (fun | .integerOverflow => x.val < y.val | _ => False)
+      (fun | .panic => x.val < y.val | _ => False)
       False :=
   @UScalar.sub_spec _ x y
 
 iscalar @[step] theorem «%S».sub_spec {x y : «%S»} :
     partialSpec (x - y)
       (fun z => (↑z : Int) = ↑x - ↑y)
-      (fun | .integerOverflow => ↑x - ↑y < «%S».min ∨ ↑x - ↑y > «%S».max | _ => False)
+      (fun | .panic => ↑x - ↑y < «%S».min ∨ ↑x - ↑y > «%S».max | _ => False)
       False := by
   convert @IScalar.sub_spec _ x y <;> scalar_tac
 

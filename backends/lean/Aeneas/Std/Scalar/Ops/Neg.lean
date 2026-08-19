@@ -17,7 +17,7 @@ def IScalar.neg {ty : IScalarTy} (x : IScalar ty) : RustM (IScalar ty) := IScala
 theorem IScalar.neg_step {ty} (x: IScalar ty) :
     partialSpec (IScalar.neg x)
       (fun r => r = -x.val)
-      (fun | .integerOverflow => (x : Int) = IScalar.min ty | _ => False)
+      (fun | .panic => (x : Int) = IScalar.min ty | _ => False)
       False := by
   simp only [neg, tryMk, RustM.ofOption]
   have h := tryMkOpt_eq ty (-x.val)
@@ -66,7 +66,7 @@ instance {ty} : HNeg (IScalar ty) (RustM (IScalar ty)) where hNeg x := IScalar.n
 theorem HNeg.hNeg.step {ty} (x: IScalar ty) :
     partialSpec (HNeg.hNeg x : RustM (IScalar ty))
       (fun r => r = -x.val)
-      (fun | .integerOverflow => (x : Int) = IScalar.min ty | _ => False)
+      (fun | .panic => (x : Int) = IScalar.min ty | _ => False)
       False := by
   show partialSpec (IScalar.neg x) _ _ _
   exact IScalar.neg_step x
