@@ -1,17 +1,19 @@
-import Lean
-import Lean.Meta.Tactic.Simp
-import Init.Data.List.Basic
-import Mathlib.Tactic.Linarith
-import Aeneas.Std.Scalar.Core
-import Aeneas.Std.Scalar.Notations
-import Aeneas.Std.Scalar.Elab
-import Aeneas.Std.Scalar.Casts
-import Aeneas.Std.Core.Result
-import Aeneas.Std.Array.Array
-import Aeneas.Tactic.Solver.ScalarTac
-import Aeneas.Tactic.Step.Init
-import Aeneas.Tactic.Solver.Arith.Lemmas
-import Aeneas.Data.BitVec
+module
+public import Lean
+public import Lean.Meta.Tactic.Simp
+public import Init.Data.List.Basic
+public import Mathlib.Tactic.Linarith
+public import Aeneas.Std.Scalar.Core
+public import Aeneas.Std.Scalar.Notations
+public import Aeneas.Std.Scalar.Elab
+public import Aeneas.Std.Scalar.Casts
+public import Aeneas.Std.Core.Result
+public import Aeneas.Std.Array.Array
+public import Aeneas.Tactic.Solver.ScalarTac
+public import Aeneas.Tactic.Step.Init
+public import Aeneas.Tactic.Solver.Arith.Lemmas
+public import Aeneas.Data.BitVec
+public section
 
 namespace Aeneas
 
@@ -800,7 +802,7 @@ theorem core.num.«%S».is_multiple_of.spec (a b : «%S») :
     core.num.«%S».is_multiple_of a b
     ⦃ (r : Bool) => r = (a.val % b.val = 0) ⦄ := UScalar.is_multiple_of.spec a b
 
-@[reducible, rust_type "core::num::error::TryFromIntError"]
+@[reducible, expose, rust_type "core::num::error::TryFromIntError"]
 def core.num.error.TryFromIntError : Type := Unit
 
 /-- General fallible conversion between unsigned scalar types. -/

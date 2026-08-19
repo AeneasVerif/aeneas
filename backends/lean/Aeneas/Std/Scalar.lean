@@ -1,20 +1,21 @@
-import Aeneas.Std.Scalar.Bitwise
-import Aeneas.Std.Scalar.BvComp
-import Aeneas.Std.Scalar.Casts
-import Aeneas.Std.Scalar.CheckedOps
-import Aeneas.Std.Scalar.CloneCopy
-import Aeneas.Std.Scalar.Core
-import Aeneas.Std.Scalar.CoreConvertNum
-import Aeneas.Std.Scalar.Default
-import Aeneas.Std.Scalar.Display
-import Aeneas.Std.Scalar.EqOrd
-import Aeneas.Std.Scalar.Fmt
-import Aeneas.Std.Scalar.LeadingZeros
-import Aeneas.Std.Scalar.Misc
-import Aeneas.Std.Scalar.Notations
-import Aeneas.Std.Scalar.Ops
-import Aeneas.Std.Scalar.OverflowingOps
-import Aeneas.Std.Scalar.Pow
-import Aeneas.Std.Scalar.Rotate
-import Aeneas.Std.Scalar.SaturatingOps
-import Aeneas.Std.Scalar.WrappingOps
+module
+public import Aeneas.Std.Scalar.Bitwise
+public import Aeneas.Std.Scalar.BvComp
+public import Aeneas.Std.Scalar.Casts
+public import Aeneas.Std.Scalar.CheckedOps
+public import Aeneas.Std.Scalar.CloneCopy
+public import Aeneas.Std.Scalar.Core
+public import Aeneas.Std.Scalar.CoreConvertNum
+public import Aeneas.Std.Scalar.Default
+public import Aeneas.Std.Scalar.Display
+public import Aeneas.Std.Scalar.EqOrd
+public import Aeneas.Std.Scalar.Fmt
+public import Aeneas.Std.Scalar.LeadingZeros
+public import Aeneas.Std.Scalar.Misc
+public import Aeneas.Std.Scalar.Notations
+public import Aeneas.Std.Scalar.Ops
+public import Aeneas.Std.Scalar.OverflowingOps
+public import Aeneas.Std.Scalar.Pow
+public import Aeneas.Std.Scalar.Rotate
+public import Aeneas.Std.Scalar.SaturatingOps
+public import Aeneas.Std.Scalar.WrappingOps

@@ -1,8 +1,10 @@
-import Aeneas.Std.Scalar.Core
-import Aeneas.Std.Scalar.Misc
-import Aeneas.Std.Scalar.Elab
-import Aeneas.Tactic.Solver.ScalarTac
-import Mathlib.Data.BitVec
+module
+public import Aeneas.Std.Scalar.Core
+public import Aeneas.Std.Scalar.Misc
+public import Aeneas.Std.Scalar.Elab
+public import Aeneas.Tactic.Solver.ScalarTac
+public import Mathlib.Data.BitVec
+public section
 
 namespace Aeneas.Std
 
@@ -11,10 +13,10 @@ open Result Error Arith ScalarElab WP
 /-!
 # Remainder: Definitions
 -/
-def UScalar.rem {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
+@[expose] def UScalar.rem {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
   if y.val != 0 then ok ⟨ BitVec.umod x.bv y.bv ⟩ else fail divisionByZero
 
-def IScalar.rem {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
+@[expose] def IScalar.rem {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
   if y.val != 0 then ok ⟨ BitVec.srem x.bv y.bv ⟩
   else fail divisionByZero
 

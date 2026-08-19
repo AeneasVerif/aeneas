@@ -1,10 +1,12 @@
 /-
 Big tests for the #decompose command (performance/stress tests)
 -/
-import Aeneas.Command.Decompose
-import Aeneas.Std
-import Aeneas.Do.Elab
-import Aeneas.Do.Delab
+module
+public import Aeneas.Command.Decompose
+public import Aeneas.Std
+public import Aeneas.Do.Elab
+public import Aeneas.Do.Delab
+public section
 
 open Aeneas.Std
 open Aeneas.Command.Decompose

@@ -1,18 +1,19 @@
-import Aeneas.Std.Alloc
-import Aeneas.Std.Array
-import Aeneas.Std.Core
-import Aeneas.Std.Primitives
-import Aeneas.Std.PrimitivesLemmas
-import Aeneas.Std.RawPtr
-import Aeneas.Std.Scalar
-import Aeneas.Std.Slice
-import Aeneas.Std.SliceDef
-import Aeneas.Std.SliceIter
-import Aeneas.Std.Std
-import Aeneas.Std.String
-import Aeneas.Std.StringDef
-import Aeneas.Std.StringIter
-import Aeneas.Std.Vec
-import Aeneas.Std.VecIter
-import Aeneas.Data.Tuples
-import Aeneas.Std.RangeIter
+module
+public import Aeneas.Std.Alloc
+public import Aeneas.Std.Array
+public import Aeneas.Std.Core
+public import Aeneas.Std.Primitives
+public import Aeneas.Std.PrimitivesLemmas
+public import Aeneas.Std.RawPtr
+public import Aeneas.Std.Scalar
+public import Aeneas.Std.Slice
+public import Aeneas.Std.SliceDef
+public import Aeneas.Std.SliceIter
+public import Aeneas.Std.Std
+public import Aeneas.Std.String
+public import Aeneas.Std.StringDef
+public import Aeneas.Std.StringIter
+public import Aeneas.Std.Vec
+public import Aeneas.Std.VecIter
+public import Aeneas.Data.Tuples
+public import Aeneas.Std.RangeIter

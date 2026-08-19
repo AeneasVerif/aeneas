@@ -1,7 +1,9 @@
-import Lean
-import Aeneas.Std.Global
-import Aeneas.Extract
-import AeneasMeta.BvEnumToBitVec
+module
+public import Lean
+public meta import Aeneas.Std.Global
+public import Aeneas.Extract
+public import AeneasMeta.BvEnumToBitVec
+public section
 
 namespace Aeneas
 
@@ -13,10 +15,20 @@ namespace Std
 
 open Lean Elab Command Term Meta
 
+/-- `#assert e` checks that the boolean expression `e` evaluates to `true`, raising an error
+otherwise (like a Rust `assert!`). It is emitted by the extraction engine for functions marked
+`#[verify::test]`.
+
+**Note:** `#assert` *compiles and runs* `e` (via `evalTerm`), so it needs the compiled/native code
+of every function `e` transitively calls. Consequently:
+
+* In the IDE (Lean server): always works, both with the module system or without.
+* In files which don't use the module system: works.
+* In a file which uses the module system, built using `lake build`: **does not work**. -/
 syntax (name := assert) "#assert" term: command
 
 @[command_elab assert]
-unsafe
+meta unsafe
 def assertImpl : CommandElab := fun (stx: Syntax) => do
   runTermElabM (fun _ => do
     let r ← evalTerm Bool (mkConst ``Bool) stx[1]
@@ -35,7 +47,7 @@ info: true
 syntax (name := elabSyntax) "#elab" term: command
 
 @[command_elab elabSyntax]
-unsafe
+meta unsafe
 def elabImpl : CommandElab := fun (stx: Syntax) => do
   runTermElabM (fun _ => do
     /- Simply elaborate the syntax to check that it is correct -/
@@ -89,7 +101,7 @@ def div? {α: Type u} (r: Result α): Bool :=
   | div => true
   | ok _ | fail _ => false
 
-def massert (b : Prop) [Decidable b] : Result Unit :=
+@[expose] def massert (b : Prop) [Decidable b] : Result Unit :=
   if b then ok () else fail assertionFailure
 
 macro "prove_eval_global" : tactic => `(tactic| simp (failIfUnchanged := false) only [global_simps] <;> first | apply Eq.refl | decide)
@@ -100,7 +112,7 @@ def eval_global {α: Type u} (x: Result α) (_: ok? x := by prove_eval_global) :
   | fail _ | div => by contradiction
   | ok x => x
 
-@[simp]
+@[simp, expose]
 def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
   match x with
   | some x => ok x
@@ -115,7 +127,7 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
 # Do-DSL Support
 -/
 
-def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
+@[expose] def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
   match x with
   | ok v  => f v
   | fail v => fail v
@@ -188,7 +200,7 @@ directly.
 
 `uncurry` is purely internal to Aeneas' elaboration pipeline and should never
 be directly manipulated by the user. -/
-@[inline] def uncurry {α β γ} (f : α → β → γ) : α × β → γ :=
+@[inline, expose] def uncurry {α β γ} (f : α → β → γ) : α × β → γ :=
   fun (a, b) => f a b
 
 @[simp, grind =] theorem uncurry_apply_pair {α β γ} (f : α → β → γ) (a : α) (b : β) :
@@ -266,7 +278,7 @@ attribute [simp, grind =] Function.uncurry_apply_pair
     which appear inside a `lift`. As only a specific set of functions from the standard library are
     purified (i.e., don't live in `Result`), this should not be a big issue in practice.
   -/
-def lift {α : Type u} (x : α) : Result α := Result.ok x
+@[expose] def lift {α : Type u} (x : α) : Result α := Result.ok x
 
 /-!
 # Loops
@@ -277,7 +289,7 @@ inductive ControlFlow (α : Type u) (β : Type v) where
   | done (v : β) -- break
 deriving Repr, BEq
 
-def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) (x : α) : Result β := do
+@[expose] def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) (x : α) : Result β := do
   match body x with
   | ok r =>
     match r with
@@ -303,7 +315,7 @@ instance SubtypeLawfulBEq [BEq α] (p : α → Prop) [LawfulBEq α] : LawfulBEq 
 
 /- A helper function that converts failure to none and success to some
    TODO: move up to Core module? -/
-def Option.ofResult {a : Type u} (x : Result a) :
+@[expose] def Option.ofResult {a : Type u} (x : Result a) :
   Option a :=
   match x with
   | ok x => some x

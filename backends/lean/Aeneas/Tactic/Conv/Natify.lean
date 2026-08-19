@@ -1,1 +1,2 @@
-import Aeneas.Tactic.Conv.Natify.Natify
+module
+public import Aeneas.Tactic.Conv.Natify.Natify

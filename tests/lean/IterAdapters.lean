@@ -15,7 +15,7 @@ set_option maxRecDepth 2048
 namespace iter_adapters
 
 /-- [iter_adapters::test_enumerate_slice]:
-    Source: 'tests/src/iter_adapters.rs', lines 14:0-24:1
+    Source: 'tests/src/iter_adapters.rs', lines 15:0-25:1
     Visibility: public -/
 def test_enumerate_slice : Result Unit := do
   let s ←
@@ -52,7 +52,7 @@ def test_enumerate_slice : Result Unit := do
 #assert (test_enumerate_slice == ok ())
 
 /-- [iter_adapters::test_enumerate_empty]:
-    Source: 'tests/src/iter_adapters.rs', lines 28:0-32:1
+    Source: 'tests/src/iter_adapters.rs', lines 29:0-33:1
     Visibility: public -/
 def test_enumerate_empty : Result Unit := do
   let s ← lift (Array.to_slice (Std.Array.empty Std.U32))
@@ -70,7 +70,7 @@ def test_enumerate_empty : Result Unit := do
 #assert (test_enumerate_empty == ok ())
 
 /-- [iter_adapters::test_take_2]:
-    Source: 'tests/src/iter_adapters.rs', lines 40:0-46:1
+    Source: 'tests/src/iter_adapters.rs', lines 41:0-47:1
     Visibility: public -/
 def test_take_2 : Result Unit := do
   let s ←
@@ -100,7 +100,7 @@ def test_take_2 : Result Unit := do
 #assert (test_take_2 == ok ())
 
 /-- [iter_adapters::test_take_0]:
-    Source: 'tests/src/iter_adapters.rs', lines 50:0-54:1
+    Source: 'tests/src/iter_adapters.rs', lines 51:0-55:1
     Visibility: public -/
 def test_take_0 : Result Unit := do
   let s ←
@@ -119,7 +119,7 @@ def test_take_0 : Result Unit := do
 #assert (test_take_0 == ok ())
 
 /-- [iter_adapters::test_take_more_than_available]:
-    Source: 'tests/src/iter_adapters.rs', lines 58:0-65:1
+    Source: 'tests/src/iter_adapters.rs', lines 59:0-66:1
     Visibility: public -/
 def test_take_more_than_available : Result Unit := do
   let s ← lift (Array.to_slice (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ]))
@@ -152,7 +152,7 @@ def test_take_more_than_available : Result Unit := do
 #assert (test_take_more_than_available == ok ())
 
 /-- [iter_adapters::test_range_u8]: loop body 0:
-    Source: 'tests/src/iter_adapters.rs', lines 75:4-77:5
+    Source: 'tests/src/iter_adapters.rs', lines 76:4-78:5
     Visibility: public -/
 @[rust_loop_body]
 def test_range_u8_loop.body
@@ -167,7 +167,7 @@ def test_range_u8_loop.body
               ok (cont (iter1, count1))
 
 /-- [iter_adapters::test_range_u8]: loop 0:
-    Source: 'tests/src/iter_adapters.rs', lines 75:4-77:5
+    Source: 'tests/src/iter_adapters.rs', lines 76:4-78:5
     Visibility: public -/
 @[rust_loop]
 def test_range_u8_loop
@@ -177,7 +177,7 @@ def test_range_u8_loop
     (iter, count)
 
 /-- [iter_adapters::test_range_u8]:
-    Source: 'tests/src/iter_adapters.rs', lines 73:0-79:1
+    Source: 'tests/src/iter_adapters.rs', lines 74:0-80:1
     Visibility: public -/
 def test_range_u8 : Result Unit := do
   let count ← test_range_u8_loop { start := 0#u8, «end» := 5#u8 } 0#u32
@@ -187,7 +187,7 @@ def test_range_u8 : Result Unit := do
 #assert (test_range_u8 == ok ())
 
 /-- [iter_adapters::test_range_u16]: loop body 0:
-    Source: 'tests/src/iter_adapters.rs', lines 85:4-87:5
+    Source: 'tests/src/iter_adapters.rs', lines 86:4-88:5
     Visibility: public -/
 @[rust_loop_body]
 def test_range_u16_loop.body
@@ -202,7 +202,7 @@ def test_range_u16_loop.body
               ok (cont (iter1, count1))
 
 /-- [iter_adapters::test_range_u16]: loop 0:
-    Source: 'tests/src/iter_adapters.rs', lines 85:4-87:5
+    Source: 'tests/src/iter_adapters.rs', lines 86:4-88:5
     Visibility: public -/
 @[rust_loop]
 def test_range_u16_loop
@@ -214,7 +214,7 @@ def test_range_u16_loop
     (iter, count)
 
 /-- [iter_adapters::test_range_u16]:
-    Source: 'tests/src/iter_adapters.rs', lines 83:0-89:1
+    Source: 'tests/src/iter_adapters.rs', lines 84:0-90:1
     Visibility: public -/
 def test_range_u16 : Result Unit := do
   let count ← test_range_u16_loop { start := 0#u16, «end» := 4#u16 } 0#u32
@@ -224,7 +224,7 @@ def test_range_u16 : Result Unit := do
 #assert (test_range_u16 == ok ())
 
 /-- [iter_adapters::test_range_u32]: loop body 0:
-    Source: 'tests/src/iter_adapters.rs', lines 95:4-97:5
+    Source: 'tests/src/iter_adapters.rs', lines 96:4-98:5
     Visibility: public -/
 @[rust_loop_body]
 def test_range_u32_loop.body
@@ -239,7 +239,7 @@ def test_range_u32_loop.body
               ok (cont (iter1, count1))
 
 /-- [iter_adapters::test_range_u32]: loop 0:
-    Source: 'tests/src/iter_adapters.rs', lines 95:4-97:5
+    Source: 'tests/src/iter_adapters.rs', lines 96:4-98:5
     Visibility: public -/
 @[rust_loop]
 def test_range_u32_loop
@@ -251,7 +251,7 @@ def test_range_u32_loop
     (iter, count)
 
 /-- [iter_adapters::test_range_u32]:
-    Source: 'tests/src/iter_adapters.rs', lines 93:0-99:1
+    Source: 'tests/src/iter_adapters.rs', lines 94:0-100:1
     Visibility: public -/
 def test_range_u32 : Result Unit := do
   let count ← test_range_u32_loop { start := 0#u32, «end» := 3#u32 } 0#u32
@@ -261,7 +261,7 @@ def test_range_u32 : Result Unit := do
 #assert (test_range_u32 == ok ())
 
 /-- [iter_adapters::test_range_u64]: loop body 0:
-    Source: 'tests/src/iter_adapters.rs', lines 105:4-107:5
+    Source: 'tests/src/iter_adapters.rs', lines 106:4-108:5
     Visibility: public -/
 @[rust_loop_body]
 def test_range_u64_loop.body
@@ -276,7 +276,7 @@ def test_range_u64_loop.body
               ok (cont (iter1, count1))
 
 /-- [iter_adapters::test_range_u64]: loop 0:
-    Source: 'tests/src/iter_adapters.rs', lines 105:4-107:5
+    Source: 'tests/src/iter_adapters.rs', lines 106:4-108:5
     Visibility: public -/
 @[rust_loop]
 def test_range_u64_loop
@@ -288,7 +288,7 @@ def test_range_u64_loop
     (iter, count)
 
 /-- [iter_adapters::test_range_u64]:
-    Source: 'tests/src/iter_adapters.rs', lines 103:0-109:1
+    Source: 'tests/src/iter_adapters.rs', lines 104:0-110:1
     Visibility: public -/
 def test_range_u64 : Result Unit := do
   let count ← test_range_u64_loop { start := 0#u64, «end» := 4#u64 } 0#u64
@@ -298,7 +298,7 @@ def test_range_u64 : Result Unit := do
 #assert (test_range_u64 == ok ())
 
 /-- [iter_adapters::test_range_usize]: loop body 0:
-    Source: 'tests/src/iter_adapters.rs', lines 115:4-117:5
+    Source: 'tests/src/iter_adapters.rs', lines 116:4-118:5
     Visibility: public -/
 @[rust_loop_body]
 def test_range_usize_loop.body
@@ -314,7 +314,7 @@ def test_range_usize_loop.body
               ok (cont (iter1, count1))
 
 /-- [iter_adapters::test_range_usize]: loop 0:
-    Source: 'tests/src/iter_adapters.rs', lines 115:4-117:5
+    Source: 'tests/src/iter_adapters.rs', lines 116:4-118:5
     Visibility: public -/
 @[rust_loop]
 def test_range_usize_loop
@@ -326,7 +326,7 @@ def test_range_usize_loop
     (iter, count)
 
 /-- [iter_adapters::test_range_usize]:
-    Source: 'tests/src/iter_adapters.rs', lines 113:0-119:1
+    Source: 'tests/src/iter_adapters.rs', lines 114:0-120:1
     Visibility: public -/
 def test_range_usize : Result Unit := do
   let count ←
@@ -337,7 +337,7 @@ def test_range_usize : Result Unit := do
 #assert (test_range_usize == ok ())
 
 /-- [iter_adapters::test_range_empty]: loop body 0:
-    Source: 'tests/src/iter_adapters.rs', lines 125:4-127:5
+    Source: 'tests/src/iter_adapters.rs', lines 126:4-128:5
     Visibility: public -/
 @[rust_loop_body]
 def test_range_empty_loop.body
@@ -352,7 +352,7 @@ def test_range_empty_loop.body
               ok (cont (iter1, count1))
 
 /-- [iter_adapters::test_range_empty]: loop 0:
-    Source: 'tests/src/iter_adapters.rs', lines 125:4-127:5
+    Source: 'tests/src/iter_adapters.rs', lines 126:4-128:5
     Visibility: public -/
 @[rust_loop]
 def test_range_empty_loop
@@ -362,7 +362,7 @@ def test_range_empty_loop
     (iter, count)
 
 /-- [iter_adapters::test_range_empty]:
-    Source: 'tests/src/iter_adapters.rs', lines 123:0-129:1
+    Source: 'tests/src/iter_adapters.rs', lines 124:0-130:1
     Visibility: public -/
 def test_range_empty : Result Unit := do
   let count ← test_range_empty_loop { start := 5#u8, «end» := 5#u8 } 0#u32
@@ -372,7 +372,7 @@ def test_range_empty : Result Unit := do
 #assert (test_range_empty == ok ())
 
 /-- [iter_adapters::test_array_into_iter]:
-    Source: 'tests/src/iter_adapters.rs', lines 137:0-144:1
+    Source: 'tests/src/iter_adapters.rs', lines 138:0-145:1
     Visibility: public -/
 def test_array_into_iter : Result Unit := do
   let s ←
@@ -395,7 +395,7 @@ def test_array_into_iter : Result Unit := do
 #assert (test_array_into_iter == ok ())
 
 /-- [iter_adapters::test_slice_into_iter]:
-    Source: 'tests/src/iter_adapters.rs', lines 148:0-157:1
+    Source: 'tests/src/iter_adapters.rs', lines 149:0-158:1
     Visibility: public -/
 def test_slice_into_iter : Result Unit := do
   let s ←
@@ -421,7 +421,7 @@ def test_slice_into_iter : Result Unit := do
 #assert (test_slice_into_iter == ok ())
 
 /-- [iter_adapters::test_enumerate_step_by]:
-    Source: 'tests/src/iter_adapters.rs', lines 165:0-172:1
+    Source: 'tests/src/iter_adapters.rs', lines 166:0-173:1
     Visibility: public -/
 def test_enumerate_step_by : Result Unit := do
   let s ←
@@ -454,7 +454,7 @@ def test_enumerate_step_by : Result Unit := do
 #assert (test_enumerate_step_by == ok ())
 
 /-- [iter_adapters::test_enumerate_take]:
-    Source: 'tests/src/iter_adapters.rs', lines 176:0-184:1
+    Source: 'tests/src/iter_adapters.rs', lines 177:0-185:1
     Visibility: public -/
 def test_enumerate_take : Result Unit := do
   let s ←
@@ -493,7 +493,7 @@ def test_enumerate_take : Result Unit := do
 #assert (test_enumerate_take == ok ())
 
 /-- [iter_adapters::test_take_exhausted_then_next]:
-    Source: 'tests/src/iter_adapters.rs', lines 188:0-197:1
+    Source: 'tests/src/iter_adapters.rs', lines 189:0-198:1
     Visibility: public -/
 def test_take_exhausted_then_next : Result Unit := do
   let s ← lift (Array.to_slice (Array.make 1#usize [ 42#u32 ]))
@@ -521,7 +521,7 @@ def test_take_exhausted_then_next : Result Unit := do
 #assert (test_take_exhausted_then_next == ok ())
 
 /-- [iter_adapters::test_range_single_element]:
-    Source: 'tests/src/iter_adapters.rs', lines 206:0-210:1
+    Source: 'tests/src/iter_adapters.rs', lines 207:0-211:1
     Visibility: public -/
 def test_range_single_element : Result Unit := do
   let (o, it) ←
@@ -537,7 +537,7 @@ def test_range_single_element : Result Unit := do
 #assert (test_range_single_element == ok ())
 
 /-- [iter_adapters::test_range_u8_near_max]:
-    Source: 'tests/src/iter_adapters.rs', lines 214:0-218:1
+    Source: 'tests/src/iter_adapters.rs', lines 215:0-219:1
     Visibility: public -/
 def test_range_u8_near_max : Result Unit := do
   let (o, it) ←
@@ -553,7 +553,7 @@ def test_range_u8_near_max : Result Unit := do
 #assert (test_range_u8_near_max == ok ())
 
 /-- [iter_adapters::test_range_u8_start_gt_end]:
-    Source: 'tests/src/iter_adapters.rs', lines 222:0-225:1
+    Source: 'tests/src/iter_adapters.rs', lines 223:0-226:1
     Visibility: public -/
 def test_range_u8_start_gt_end : Result Unit := do
   let (o, _) ←
@@ -566,7 +566,7 @@ def test_range_u8_start_gt_end : Result Unit := do
 #assert (test_range_u8_start_gt_end == ok ())
 
 /-- [iter_adapters::test_range_u8_start_eq_end]:
-    Source: 'tests/src/iter_adapters.rs', lines 229:0-232:1
+    Source: 'tests/src/iter_adapters.rs', lines 230:0-233:1
     Visibility: public -/
 def test_range_u8_start_eq_end : Result Unit := do
   let (o, _) ←
@@ -579,7 +579,7 @@ def test_range_u8_start_eq_end : Result Unit := do
 #assert (test_range_u8_start_eq_end == ok ())
 
 /-- [iter_adapters::test_range_u16_boundary]:
-    Source: 'tests/src/iter_adapters.rs', lines 236:0-242:1
+    Source: 'tests/src/iter_adapters.rs', lines 237:0-243:1
     Visibility: public -/
 def test_range_u16_boundary : Result Unit := do
   let (o, it) ←
@@ -604,7 +604,7 @@ def test_range_u16_boundary : Result Unit := do
 #assert (test_range_u16_boundary == ok ())
 
 /-- [iter_adapters::test_range_u32_boundary]:
-    Source: 'tests/src/iter_adapters.rs', lines 246:0-251:1
+    Source: 'tests/src/iter_adapters.rs', lines 247:0-252:1
     Visibility: public -/
 def test_range_u32_boundary : Result Unit := do
   let (o, it) ←
@@ -625,7 +625,7 @@ def test_range_u32_boundary : Result Unit := do
 #assert (test_range_u32_boundary == ok ())
 
 /-- [iter_adapters::test_range_u64_boundary]:
-    Source: 'tests/src/iter_adapters.rs', lines 255:0-261:1
+    Source: 'tests/src/iter_adapters.rs', lines 256:0-262:1
     Visibility: public -/
 def test_range_u64_boundary : Result Unit := do
   let (o, it) ←
@@ -650,7 +650,7 @@ def test_range_u64_boundary : Result Unit := do
 #assert (test_range_u64_boundary == ok ())
 
 /-- [iter_adapters::test_range_usize_start_gt_end]:
-    Source: 'tests/src/iter_adapters.rs', lines 265:0-268:1
+    Source: 'tests/src/iter_adapters.rs', lines 266:0-269:1
     Visibility: public -/
 def test_range_usize_start_gt_end : Result Unit := do
   let (o, _) ←
@@ -663,7 +663,7 @@ def test_range_usize_start_gt_end : Result Unit := do
 #assert (test_range_usize_start_gt_end == ok ())
 
 /-- [iter_adapters::test_step_by_larger_than_range]:
-    Source: 'tests/src/iter_adapters.rs', lines 272:0-276:1
+    Source: 'tests/src/iter_adapters.rs', lines 273:0-277:1
     Visibility: public -/
 def test_step_by_larger_than_range : Result Unit := do
   let it ←
@@ -685,7 +685,7 @@ def test_step_by_larger_than_range : Result Unit := do
 #assert (test_step_by_larger_than_range == ok ())
 
 /-- [iter_adapters::test_step_by_exact_range]:
-    Source: 'tests/src/iter_adapters.rs', lines 280:0-284:1
+    Source: 'tests/src/iter_adapters.rs', lines 281:0-285:1
     Visibility: public -/
 def test_step_by_exact_range : Result Unit := do
   let it ←
@@ -707,7 +707,7 @@ def test_step_by_exact_range : Result Unit := do
 #assert (test_step_by_exact_range == ok ())
 
 /-- [iter_adapters::test_step_by_one]:
-    Source: 'tests/src/iter_adapters.rs', lines 288:0-295:1
+    Source: 'tests/src/iter_adapters.rs', lines 289:0-296:1
     Visibility: public -/
 def test_step_by_one : Result Unit := do
   let it ←
@@ -744,7 +744,7 @@ def test_step_by_one : Result Unit := do
 #assert (test_step_by_one == ok ())
 
 /-- [iter_adapters::test_step_by_empty]:
-    Source: 'tests/src/iter_adapters.rs', lines 299:0-302:1
+    Source: 'tests/src/iter_adapters.rs', lines 300:0-303:1
     Visibility: public -/
 def test_step_by_empty : Result Unit := do
   let it ←
@@ -761,7 +761,7 @@ def test_step_by_empty : Result Unit := do
 #assert (test_step_by_empty == ok ())
 
 /-- [iter_adapters::test_step_by_odd_range]:
-    Source: 'tests/src/iter_adapters.rs', lines 306:0-312:1
+    Source: 'tests/src/iter_adapters.rs', lines 307:0-313:1
     Visibility: public -/
 def test_step_by_odd_range : Result Unit := do
   let it ←
@@ -793,7 +793,7 @@ def test_step_by_odd_range : Result Unit := do
 #assert (test_step_by_odd_range == ok ())
 
 /-- [iter_adapters::test_step_by_u8_near_max]:
-    Source: 'tests/src/iter_adapters.rs', lines 316:0-322:1
+    Source: 'tests/src/iter_adapters.rs', lines 317:0-323:1
     Visibility: public -/
 def test_step_by_u8_near_max : Result Unit := do
   let it ←
@@ -825,7 +825,7 @@ def test_step_by_u8_near_max : Result Unit := do
 #assert (test_step_by_u8_near_max == ok ())
 
 /-- [iter_adapters::test_range_inclusive_basic]:
-    Source: 'tests/src/iter_adapters.rs', lines 330:0-336:1
+    Source: 'tests/src/iter_adapters.rs', lines 331:0-337:1
     Visibility: public -/
 def test_range_inclusive_basic : Result Unit := do
   let it ← core.ops.range.RangeInclusive.new 1#usize 3#usize
@@ -854,7 +854,7 @@ def test_range_inclusive_basic : Result Unit := do
 #assert (test_range_inclusive_basic == ok ())
 
 /-- [iter_adapters::test_range_inclusive_singleton]:
-    Source: 'tests/src/iter_adapters.rs', lines 340:0-344:1
+    Source: 'tests/src/iter_adapters.rs', lines 341:0-345:1
     Visibility: public -/
 def test_range_inclusive_singleton : Result Unit := do
   let it ← core.ops.range.RangeInclusive.new 7#usize 7#usize
@@ -873,7 +873,7 @@ def test_range_inclusive_singleton : Result Unit := do
 #assert (test_range_inclusive_singleton == ok ())
 
 /-- [iter_adapters::test_range_inclusive_empty]:
-    Source: 'tests/src/iter_adapters.rs', lines 348:0-351:1
+    Source: 'tests/src/iter_adapters.rs', lines 349:0-352:1
     Visibility: public -/
 def test_range_inclusive_empty : Result Unit := do
   let it ← core.ops.range.RangeInclusive.new 5#usize 3#usize

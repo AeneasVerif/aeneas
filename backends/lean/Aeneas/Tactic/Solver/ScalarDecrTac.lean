@@ -1,8 +1,10 @@
 /- Some utilities to prove termination -/
-import Lean
-import Mathlib.Tactic.Core
-import AeneasMeta.Utils
-import Aeneas.Tactic.Solver.ScalarTac
+module
+public import Lean
+public import Mathlib.Tactic.Core
+public import AeneasMeta.Utils
+public import Aeneas.Tactic.Solver.ScalarTac
+public section
 
 namespace Aeneas
 
@@ -18,7 +20,7 @@ open Lean Lean.Elab Command Term Lean.Meta Tactic
    proofs, and if we simplify those assumptions they tend to trigger extremely expensive
    reductions.
 -/
-def removeInvImageAssumptions : TacticM Unit := do
+meta def removeInvImageAssumptions : TacticM Unit := do
   withMainContext do
   -- Get the local declarations
   let ctx ← Lean.MonadLCtx.getLCtx
@@ -48,7 +50,7 @@ elab "decreasing_by_preprocess" : tactic =>
 elab "remove_invImage_assumptions" : tactic =>
   removeInvImageAssumptions
 
-def clearUnusedDeclsOnePass : TacticM Unit := do
+meta def clearUnusedDeclsOnePass : TacticM Unit := do
   withMainContext do
   let lctx ← getLCtx
   let decls ← lctx.getDecls
@@ -66,7 +68,7 @@ elab "clear_unused_decls_one_pass" : tactic =>
   clearUnusedDeclsOnePass
 
 /- We clear from the end to the beginning -/
-def clearRedundantHyps : TacticM Unit := do
+meta def clearRedundantHyps : TacticM Unit := do
   withTraceNode `ScalarTac (fun _ => pure m!"clearRedundantHyps") do
   withMainContext do
   let lctx ← getLCtx

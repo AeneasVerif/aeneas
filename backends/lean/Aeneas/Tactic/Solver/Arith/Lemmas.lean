@@ -1,7 +1,9 @@
-import Aeneas.Tactic.Solver.ScalarTac.ScalarTac
-import Mathlib.Algebra.Algebra.ZMod
-import Mathlib.RingTheory.Int.Basic
-import Init.Data.BitVec.Lemmas
+module
+public import Aeneas.Tactic.Solver.ScalarTac.ScalarTac
+public import Mathlib.Algebra.Algebra.ZMod
+public import Mathlib.RingTheory.Int.Basic
+public import Init.Data.BitVec.Lemmas
+public section
 
 namespace Aeneas.Arith
 

@@ -2,7 +2,9 @@
 Copyright (c) 2024 Aeneas contributors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
-import Aeneas.Tactic.Simp.RingEqNF.Tactic
+module
+public import Aeneas.Tactic.Simp.RingEqNF.Tactic
+public section
 
 /-!
 # Tests for `ring_eq_nf`

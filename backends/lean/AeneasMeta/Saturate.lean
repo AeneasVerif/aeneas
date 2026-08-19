@@ -1,1 +1,2 @@
-import AeneasMeta.Saturate.Tactic
+module
+public import AeneasMeta.Saturate.Tactic

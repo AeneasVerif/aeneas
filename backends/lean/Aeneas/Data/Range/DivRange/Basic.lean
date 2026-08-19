@@ -1,6 +1,8 @@
-import Mathlib.Data.Nat.Basic
-import Mathlib.Algebra.Group.Basic
-import AeneasMeta.Utils
+module
+public import Mathlib.Data.Nat.Basic
+public import Mathlib.Algebra.Group.Basic
+public import AeneasMeta.Utils
+public section
 
 namespace Aeneas
 
@@ -27,7 +29,7 @@ instance : Membership Nat DivRange where
 namespace DivRange
 universe u v
 
-@[inline] protected def forIn' [Monad m] (range : DivRange) (init : β)
+@[inline, expose] protected def forIn' [Monad m] (range : DivRange) (init : β)
     (f : (i : Nat) → i ∈ range → β → m (ForInStep β)) : m β :=
   let rec @[specialize] loop (maxSteps : Nat) (b : β) (i : Nat)
       (hs : ∃ k, i = range.start / range.divisor ^ k)
@@ -66,7 +68,7 @@ We now introduce a convenient `DivRange` definition
 -/
 
 -- TODO: don't use a fuel
-def divRange (start stop div : Nat) : List Nat :=
+@[expose] def divRange (start stop div : Nat) : List Nat :=
   let rec loop (fuel i : Nat) :=
     match fuel with
     | 0 => []
@@ -79,7 +81,7 @@ def divRange (start stop div : Nat) : List Nat :=
 namespace DivRange
 
 /-- A convenient utility for the proofs -/
-def foldWhile' {α : Type u} (r : DivRange) (f : α → (a : Nat) → (a ∈ r) → α) (i : Nat) (init : α)
+@[expose] def foldWhile' {α : Type u} (r : DivRange) (f : α → (a : Nat) → (a ∈ r) → α) (i : Nat) (init : α)
   (hi : i ≤ r.start ∧ ∃ k, i = r.start / r.divisor ^ k) : α :=
   if h: r.stop < i then
     foldWhile' r f (i / r.divisor)
@@ -94,7 +96,7 @@ termination_by i
 decreasing_by apply Nat.div_lt_self; omega; apply r.divisor_pos
 
 /-- A convenient utility for the proofs -/
-def foldWhile {α : Type u} (stop divisor : Nat) (hDiv : 1 < divisor)
+@[expose] def foldWhile {α : Type u} (stop divisor : Nat) (hDiv : 1 < divisor)
   (f : α → (a : Nat) → α) (i : Nat) (init : α) : α :=
 if stop < i then
     foldWhile stop divisor hDiv f (i / divisor) (f init i)

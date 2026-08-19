@@ -1,6 +1,8 @@
-import Lean
-import Lean.Elab.Tactic.Config
-import Lean.Elab.Eval
+module
+public meta import Lean.Meta.Reduce
+public meta import Lean.Elab.Tactic.Config
+public import Lean.Elab.Eval
+public section
 
 namespace Aeneas.Meta.OptionConfig
 
@@ -13,7 +15,7 @@ open Lean Elab Command Term Meta PrettyPrinter
 /-- Decompose a `Lean.Parser.Tactic.optConfig` into an array of (fieldName, valueSyntax) pairs.
 
 For instance: with input `+b (value := 3) -c`, it outputs: `#[("b", true), (value, 3), ("c", false)]` -/
-partial def decomposeOptConfig (cfg : TSyntax `Lean.Parser.Tactic.optConfig) : Array (Name × Syntax) :=
+meta partial def decomposeOptConfig (cfg : TSyntax `Lean.Parser.Tactic.optConfig) : Array (Name × Syntax) :=
   go cfg.raw #[]
 where
   go (s : Syntax) (acc : Array (Name × Syntax)) : Array (Name × Syntax) :=
@@ -88,7 +90,7 @@ The command `declare_partial_config_elab Config elabConfig optionPrefix` generat
 /--
 Given a structure name, output the array (fieldName, fieldType, defaultValue)
 -/
-private def collectFieldInfo (structName : Name) :
+private meta def collectFieldInfo (structName : Name) :
     MetaM (Array (Name × Expr × Expr)) := do
   let env ← getEnv
   let some si := getStructureInfo? env structName
@@ -126,7 +128,7 @@ elab_rules : command
       let defSx : Term ← liftTermElabM (delab defVal)
       let descr := "Default value for field " ++ structName.toString ++ "." ++ field.toString
       elabCommand (← `(command|
-        initialize $(mkIdent optName) : Lean.Option $tySx ←
+        meta initialize $(mkIdent optName) : Lean.Option $tySx ←
           Lean.Option.register $(Lean.quote optName)
             { defValue := $defSx, descr := $(Lean.quote descr) }))
 
@@ -210,11 +212,11 @@ elab_rules : command
       ```
      -/
     elabCommand (← `(command|
-      private unsafe def $(mkIdent implName)
+      private meta unsafe def $(mkIdent implName)
           (cfg : $optConfigTy) : $helperTy := $implBody))
     elabCommand (← `(command|
       @[implemented_by $(mkIdent implName)]
-      opaque $(mkIdent elabFnName)
+      meta opaque $(mkIdent elabFnName)
           (cfg : $optConfigTy) : $helperTy))
 
 /-!
@@ -230,13 +232,13 @@ structure Config where
 declare_option_config_elab Config elabConfig exampleOptionPrefix
 
 /--
-info: opaque Aeneas.Meta.OptionConfig.Example.elabConfig : TSyntax `Lean.Parser.Tactic.optConfig → TermElabM Config
+info: meta opaque Aeneas.Meta.OptionConfig.Example.elabConfig : TSyntax `Lean.Parser.Tactic.optConfig → TermElabM Config
 -/
 #guard_msgs in
 #print elabConfig
 
 /--
-info: unsafe private def Aeneas.Meta.OptionConfig.Example.elabConfig.impl : TSyntax `Lean.Parser.Tactic.optConfig →
+info: unsafe private meta def Aeneas.Meta.OptionConfig.Example.elabConfig.impl : TSyntax `Lean.Parser.Tactic.optConfig →
   TermElabM Config :=
 fun cfg =>
   let pairs := decomposeOptConfig cfg;

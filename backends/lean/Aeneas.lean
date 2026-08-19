@@ -1,6 +1,7 @@
-import Aeneas.Command
-import Aeneas.Data
-import Aeneas.Do
-import Aeneas.Extract
-import Aeneas.Std
-import Aeneas.Tactic
+module
+public import Aeneas.Command
+public import Aeneas.Data
+public import Aeneas.Do
+public import Aeneas.Extract
+public import Aeneas.Std
+public import Aeneas.Tactic

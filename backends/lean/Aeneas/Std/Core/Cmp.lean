@@ -1,8 +1,10 @@
-import Aeneas.Extract
-import Aeneas.Std.Primitives
-import Aeneas.Std.WP
-import Aeneas.Tactic.Step.Init
-import Aeneas.Tactic.Elab.TraitDefault.Init
+module
+public import Aeneas.Extract
+public import Aeneas.Std.Primitives
+public import Aeneas.Std.WP
+public import Aeneas.Tactic.Step.Init
+public import Aeneas.Tactic.Elab.TraitDefault.Init
+public section
 
 namespace Aeneas.Std
 
@@ -28,7 +30,7 @@ def core.cmp.PartialEq.ne.default {Self Rhs : Type} (eq : Self → Rhs → Resul
   (self : Self) (other : Rhs) : Result Bool := do
   ok (¬ (← eq self other))
 
-@[trait_default, rust_fun "core::cmp::PartialEq::ne"]
+@[expose, trait_default, rust_fun "core::cmp::PartialEq::ne"]
 def core.cmp.PartialEq.ne.trait_default {Self Rhs : Type}
   (PartialEqInst : core.cmp.PartialEq Self Rhs)
   (self : Self) (other : Rhs) : Result Bool :=
@@ -128,7 +130,7 @@ def core.cmp.Ord.max_body {Self : Type} (lt : Self → Self → Result Bool)
   (x y : Self) : Result Self := do
   if ← lt x y then ok y else ok x
 
-def core.cmp.Ord.min_body {Self : Type} (lt : Self → Self → Result Bool)
+@[expose] def core.cmp.Ord.min_body {Self : Type} (lt : Self → Self → Result Bool)
   (x y : Self) : Result Self := do
   if ← lt x y then ok x else ok y
 
@@ -157,11 +159,11 @@ def core.cmp.Ord.max.default {Self : Type} (lt : Self → Self → Result Bool)
   (x y : Self) : Result Self :=
   core.cmp.Ord.max_body lt x y
 
-def core.cmp.Ord.min.default {Self : Type} (lt : Self → Self → Result Bool)
+@[expose] def core.cmp.Ord.min.default {Self : Type} (lt : Self → Self → Result Bool)
   (x y : Self) : Result Self :=
   core.cmp.Ord.min_body lt x y
 
-@[trait_default, rust_fun "core::cmp::Ord::min"]
+@[expose, trait_default, rust_fun "core::cmp::Ord::min"]
 def core.cmp.Ord.min.trait_default {Self : Type} (OrdInst : core.cmp.Ord Self)
   (x y : Self) : Result Self :=
   core.cmp.Ord.min.default OrdInst.partialOrdInst.lt x y

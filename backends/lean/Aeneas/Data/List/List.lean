@@ -1,15 +1,17 @@
 /- Complementary functions and lemmas for the `List` type -/
+module
 
-import Mathlib.Data.List.GetD
-import Aeneas.Tactic.Solver.ScalarTac
-import AeneasMeta.Utils
-import Aeneas.Tactic.Simp.SimpLemmas
-import Aeneas.Data.Nat
-import Aeneas.Tactic.Simp.SimpLists.Init
-import Aeneas.Std.Primitives
-import Aeneas.Tactic.Simp.SimpLists.SimpLists
-import Aeneas.Tactic.Simp.SimpScalar.SimpScalar
-import Aeneas.Tactic.Solver.Grind.Init
+public import Mathlib.Data.List.GetD
+public import Aeneas.Tactic.Solver.ScalarTac
+public import AeneasMeta.Utils
+public import Aeneas.Tactic.Simp.SimpLemmas
+public import Aeneas.Data.Nat
+public import Aeneas.Tactic.Simp.SimpLists.Init
+public import Aeneas.Std.Primitives
+public import Aeneas.Tactic.Simp.SimpLists.SimpLists
+public import Aeneas.Tactic.Simp.SimpScalar.SimpScalar
+public import Aeneas.Tactic.Solver.Grind.Init
+public section
 
 namespace List -- We do not use the `Aeneas` namespace on purpose
 

@@ -1,11 +1,13 @@
-import Aeneas.Std.Core.Iter
-import Aeneas.Std.Vec
+module
+public import Aeneas.Std.Core.Iter
+public import Aeneas.Std.Vec
+public section
 
 namespace Aeneas.Std
 
 open Result
 
-@[rust_type "alloc::vec::into_iter::IntoIter" (keepParams := [true, false])]
+@[rust_type "alloc::vec::into_iter::IntoIter" (keepParams := [true, false]), expose]
 def alloc.vec.into_iter.IntoIter (T : Type) : Type := alloc.vec.Vec T
 
 @[rust_fun

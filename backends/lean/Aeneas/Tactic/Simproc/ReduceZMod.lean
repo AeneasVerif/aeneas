@@ -1,1 +1,2 @@
-import Aeneas.Tactic.Simproc.ReduceZMod.ReduceZMod
+module
+public import Aeneas.Tactic.Simproc.ReduceZMod.ReduceZMod

@@ -1,5 +1,8 @@
-import Aeneas.Tactic.Conv.Bvify.Bvify
-import Aeneas.Tactic.Simp.SimpScalar
+module
+public import Aeneas.Tactic.Conv.Bvify.Bvify
+public import Aeneas.Tactic.Simp.SimpScalar
+import all Init.Data.Nat.Power2.Basic
+public section
 
 @[bvify]
 theorem BitVec.ofNat_mod_two_pow (n a k : Nat) :

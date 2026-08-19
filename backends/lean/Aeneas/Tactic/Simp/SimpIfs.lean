@@ -1,1 +1,2 @@
-import Aeneas.Tactic.Simp.SimpIfs.SimpIfs
+module
+public import Aeneas.Tactic.Simp.SimpIfs.SimpIfs

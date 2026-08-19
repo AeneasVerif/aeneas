@@ -105,6 +105,10 @@ let () =
         Arg.String set_subdir,
         " Extract the files in a sub-folder; this option has an impact on the \
          import paths of the generated files" );
+      ( "-use-lean-modules",
+        Arg.Bool (fun b -> use_lean_modules := b),
+        " Emit Lean files using the module system (default: true). Pass \
+         `-use-lean-modules false` to emit non-module files." );
       ( "-test-units",
         Arg.Set test_unit_functions,
         " Test the unit functions with the concrete (i.e., not symbolic) \

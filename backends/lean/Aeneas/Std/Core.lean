@@ -1,18 +1,19 @@
-import Aeneas.Std.Core.Atomic
-import Aeneas.Std.Core.Cmp
-import Aeneas.Std.Core.Convert
-import Aeneas.Std.Core.Core
-import Aeneas.Std.Core.CoreOption
-import Aeneas.Std.Core.Default
-import Aeneas.Std.Core.Discriminant
-import Aeneas.Std.Core.Error
-import Aeneas.Std.Core.Fmt
-import Aeneas.Std.Core.FmtWithSlice
-import Aeneas.Std.Core.Hash
-import Aeneas.Std.Core.Iter
-import Aeneas.Std.Core.Marker
-import Aeneas.Std.Core.Ops
-import Aeneas.Std.Core.Panic
-import Aeneas.Std.Core.Pin
-import Aeneas.Std.Core.Ptr
-import Aeneas.Std.Core.Result
+module
+public import Aeneas.Std.Core.Atomic
+public import Aeneas.Std.Core.Cmp
+public import Aeneas.Std.Core.Convert
+public import Aeneas.Std.Core.Core
+public import Aeneas.Std.Core.CoreOption
+public import Aeneas.Std.Core.Default
+public import Aeneas.Std.Core.Discriminant
+public import Aeneas.Std.Core.Error
+public import Aeneas.Std.Core.Fmt
+public import Aeneas.Std.Core.FmtWithSlice
+public import Aeneas.Std.Core.Hash
+public import Aeneas.Std.Core.Iter
+public import Aeneas.Std.Core.Marker
+public import Aeneas.Std.Core.Ops
+public import Aeneas.Std.Core.Panic
+public import Aeneas.Std.Core.Pin
+public import Aeneas.Std.Core.Ptr
+public import Aeneas.Std.Core.Result

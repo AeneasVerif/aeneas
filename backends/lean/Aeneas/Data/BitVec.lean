@@ -1,20 +1,22 @@
-import Init.Data.List.OfFn
-import Init.Data.BitVec.Lemmas
-import Batteries.Data.BitVec.Lemmas
-import Mathlib.Data.Nat.Basic
-import Mathlib.Data.Fin.Basic
-import Mathlib.Data.Nat.Cast.Basic
-import Mathlib.Data.BitVec
-import Mathlib.Tactic.Ring
-import Mathlib.Data.Nat.Bitwise
-import Aeneas.Data.Byte
-import Aeneas.Tactic.Conv.Bvify.Init
-import Aeneas.Tactic.Simp.SimpLists.SimpLists
-import Aeneas.Tactic.Conv.Natify.Natify
-import Aeneas.Tactic.Conv.ZModify.ZModify
-import Aeneas.Data.List
-import Aeneas.Tactic.Simp.SimpScalar
-import Aeneas.Tactic.Solver.Grind.Init
+module
+public import Init.Data.List.OfFn
+public import Init.Data.BitVec.Lemmas
+public import Batteries.Data.BitVec.Lemmas
+public import Mathlib.Data.Nat.Basic
+public import Mathlib.Data.Fin.Basic
+public import Mathlib.Data.Nat.Cast.Basic
+public import Mathlib.Data.BitVec
+public import Mathlib.Tactic.Ring
+public import Mathlib.Data.Nat.Bitwise
+public import Aeneas.Data.Byte
+public import Aeneas.Tactic.Conv.Bvify.Init
+public import Aeneas.Tactic.Simp.SimpLists.SimpLists
+public import Aeneas.Tactic.Conv.Natify.Natify
+public import Aeneas.Tactic.Conv.ZModify.ZModify
+public import Aeneas.Data.List
+public import Aeneas.Tactic.Simp.SimpScalar
+public import Aeneas.Tactic.Solver.Grind.Init
+public section
 
 open Lean
 

@@ -1,6 +1,8 @@
-import Aeneas.Do.Elab
-import Aeneas.Do.Delab
-import Aeneas.Std
+module
+public import Aeneas.Do.Elab
+public import Aeneas.Do.Delab
+public import Aeneas.Std
+public section
 
 namespace Do
 namespace Tests

@@ -1,1 +1,2 @@
-import Aeneas.Tactic.Conv.ZModify.ZModify
+module
+public import Aeneas.Tactic.Conv.ZModify.ZModify

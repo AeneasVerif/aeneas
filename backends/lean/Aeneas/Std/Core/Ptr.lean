@@ -1,5 +1,7 @@
-import Aeneas.Std.Core.Core
-import Aeneas.Std.RawPtr
+module
+public import Aeneas.Std.Core.Core
+public import Aeneas.Std.RawPtr
+public section
 
 namespace Aeneas.Std
 

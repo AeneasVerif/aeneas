@@ -1,1 +1,2 @@
-import Aeneas.Extract.Extract
+module
+public import Aeneas.Extract.Extract

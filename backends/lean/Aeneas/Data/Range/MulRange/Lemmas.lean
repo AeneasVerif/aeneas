@@ -1,8 +1,10 @@
-import Mathlib.Data.Nat.Log
-import Mathlib.Algebra.Order.Ring.Canonical
-import Mathlib.Tactic.Ring.RingNF
-import Aeneas.Data.Range.MulRange.Basic
-import Aeneas.Data.Range.DivRange.Lemmas
+module
+public import Mathlib.Data.Nat.Log
+public import Mathlib.Algebra.Order.Ring.Canonical
+public import Mathlib.Tactic.Ring.RingNF
+public import Aeneas.Data.Range.MulRange.Basic
+public import Aeneas.Data.Range.DivRange.Lemmas
+public section
 
 namespace Aeneas
 
@@ -63,7 +65,7 @@ decreasing_by
   have : i < i * mul := by rw [Nat.lt_mul_iff_one_lt_right] <;> omega
   omega
 
-private theorem mem_of_mem_MulRange (r : MulRange) (a : Nat)
+theorem mem_of_mem_MulRange (r : MulRange) (a : Nat)
   (h : a ∈ mulRange r.stop r.mul r.mul_pos r.start r.start_pos) : a ∈ r := by
   apply mem_of_mem_MulRange_aux r.stop r.mul r.start r.mul_pos r.start
     (by

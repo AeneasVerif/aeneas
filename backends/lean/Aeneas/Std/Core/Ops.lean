@@ -1,5 +1,7 @@
-import Lean
-import Aeneas.Std.Alloc
+module
+public import Lean
+public import Aeneas.Std.Alloc
+public section
 
 namespace Aeneas
 

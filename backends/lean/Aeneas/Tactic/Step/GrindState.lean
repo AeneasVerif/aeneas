@@ -3,10 +3,13 @@ Copyright (c) 2025 Aeneas contributors
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Son Ho
 -/
-import Lean
-import Aeneas.Tactic.Solver.ScalarTac
-import Aeneas.Tactic.Step.Init
-import Aeneas.Tactic.Solver.Grind.Init
+module
+public import Lean
+public import Lean.Meta.Tactic.Grind.Solve
+public import Aeneas.Tactic.Solver.ScalarTac
+public import Aeneas.Tactic.Step.Init
+public import Aeneas.Tactic.Solver.Grind.Init
+public section
 
 /-!
 # Grind State Threading for `step` / `step*`
@@ -59,7 +62,7 @@ open Lean.Meta.Grind (GrindM GoalM Goal GoalState)
     We set `clean := false` and `revert := false` to prevent `mkGoalCore` from mutating the
     proof goal's MVarId (via `exposeNames` / `revertAll`). Our use of grind is purely for
     building a knowledge base, not for solving the goal directly. -/
-private def mkGrindParams (config : Config) : MetaM Grind.Params := do
+private meta def mkGrindParams (config : Config) : MetaM Grind.Params := do
   let grindConfig := { config.toGrindConfig with clean := false, revert := false }
   Aeneas.Grind.mkParams grindConfig
     (← Aeneas.Grind.getAgrindExtensions config.nla) config.withGroundSimprocs
@@ -72,7 +75,7 @@ private def mkGrindParams (config : Config) : MetaM Grind.Params := do
    so that internalized hypotheses are normalized identically to how `threadedGrindTac`
    and `evalAGrindWithPreprocess` normalize them before calling grind. Using a different
    simpset (e.g., the full `@[simp]` set) would cause form mismatches in the e-graph. -/
-private def mkPreprocessSimpCtx : MetaM (Simp.Context × Simp.SimprocsArray) := do
+private meta def mkPreprocessSimpCtx : MetaM (Simp.Context × Simp.SimprocsArray) := do
   let simpArgs ← ScalarTac.getSimpArgs
   let congrTheorems ← getSimpCongrTheorems
   let ctx ← Simp.mkContext
@@ -83,7 +86,7 @@ private def mkPreprocessSimpCtx : MetaM (Simp.Context × Simp.SimprocsArray) := 
 
 /-- Run a `GrindM` action with a fresh monad stack (via `GrindM.run`).
     Used for initialization — reads out all contexts and states for subsequent reuse. -/
-def runGrindFresh {α} (params : Grind.Params)
+meta def runGrindFresh {α} (params : Grind.Params)
     (action : GrindM α) : MetaM (α × Grind.State × Lean.Meta.Sym.State × Lean.Meta.Sym.Context × Grind.Context × Grind.MethodsRef) :=
   Grind.GrindM.run (params := params) do
     let result ← action
@@ -97,7 +100,7 @@ def runGrindFresh {α} (params : Grind.Params)
 /-- Run a `GrindM` action reusing saved contexts and states from a previous run.
     Preserves pointer identity of all contexts (`Sym.Context`, `Grind.Context`,
     `MethodsRef`) to avoid PANICs in the e-graph's proof reconstruction. -/
-def runGrindWithState {α} (state : StepGrindState) (action : GrindM α)
+meta def runGrindWithState {α} (state : StepGrindState) (action : GrindM α)
     : MetaM (α × Grind.State × Lean.Meta.Sym.State) := do
   let wrappedAction : GrindM (α × Grind.State × Lean.Meta.Sym.State) := do
     let result ← action
@@ -144,7 +147,7 @@ def runGrindWithState {α} (state : StepGrindState) (action : GrindM α)
       2. Simplify with Aeneas simpsets and, if the simplified type differs, internalize
          the simplified fact too.
       3. Optionally run the preprocessing loop (`assertAll >> solvers.loop`). -/
-private def internalizeHypotheses (goal : Goal) (config : Config)
+private meta def internalizeHypotheses (goal : Goal) (config : Config)
     (simpCtx : Simp.Context) (simprocs : Simp.SimprocsArray)
     : GrindM (Goal × Bool) := do
   -- Build the preprocessing action (solvers + instantiate) once
@@ -247,7 +250,7 @@ private def internalizeHypotheses (goal : Goal) (config : Config)
 
     The grind state (`Grind.State`, `Sym.State`, `GoalState`) is extracted as return
     values before `withNewMCtxDepth` restores the old mctx, so it persists across calls. -/
-private def withProtectedGrind {α} (mvarId : MVarId)
+private meta def withProtectedGrind {α} (mvarId : MVarId)
     (action : MVarId → MetaM (α × Bool))
     : MetaM (α × Bool × Option Expr) :=
   withNewMCtxDepth (allowLevelAssignments := true) do
@@ -263,7 +266,7 @@ private def withProtectedGrind {α} (mvarId : MVarId)
     pure (result, contradiction, contradictionProof?)
 
 /-- Close a goal using a proof of `False`. -/
-def closeGoalWithFalse (mvarId : MVarId) (falseProof : Expr) : MetaM Unit := do
+meta def closeGoalWithFalse (mvarId : MVarId) (falseProof : Expr) : MetaM Unit := do
   let target ← mvarId.getType
   let level ← getLevel target
   mvarId.assign (mkApp (mkApp (mkConst ``False.elim [level]) target) falseProof)
@@ -271,7 +274,7 @@ def closeGoalWithFalse (mvarId : MVarId) (falseProof : Expr) : MetaM Unit := do
 /-- Initialize the grind state from the current proof context.
     Creates a fresh `GoalState` and internalizes all current local hypotheses.
     Runs inside `withProtectedGrind` (see its docstring for the protection rationale). -/
-def initStepGrindState (config : Config) (mvarId : MVarId) : MetaM StepGrindState := do
+meta def initStepGrindState (config : Config) (mvarId : MVarId) : MetaM StepGrindState := do
   let params ← mkGrindParams config
   let (simpCtx, simprocs) ← mkPreprocessSimpCtx
   let ((goalState, grindState, symState, symCtx, grindCtx, methodsRef), contradiction, contradictionProof?) ←
@@ -287,7 +290,7 @@ def initStepGrindState (config : Config) (mvarId : MVarId) : MetaM StepGrindStat
 /-- Update the grind state after new fvars have been introduced (by `introOutputs` or
     case splits). Only processes fvars with index ≥ `nextDeclIdx` (incremental).
     Runs inside `withProtectedGrind` (see its docstring for the protection rationale). -/
-def updateStepGrindState (state : StepGrindState) (config : Config) (mvarId : MVarId)
+meta def updateStepGrindState (state : StepGrindState) (config : Config) (mvarId : MVarId)
     : MetaM StepGrindState := do
   let ((goalState, grindState, symState), contradiction, contradictionProof?) ←
     withProtectedGrind mvarId fun freshMVarId => do
@@ -323,7 +326,7 @@ def updateStepGrindState (state : StepGrindState) (config : Config) (mvarId : MV
 
     Returns `true` if the precondition was solved, `false` otherwise.
     On failure, all MetaM state changes are reverted (via `observing?`). -/
-def dischargeWithGrindState (state : StepGrindState) (config : Config)
+meta def dischargeWithGrindState (state : StepGrindState) (config : Config)
     (precondMVarId : MVarId) : MetaM Bool := do
   let result ← observing? do
     /- First, internalize any fvars the e-graph hasn't seen yet. -/
@@ -354,7 +357,7 @@ def dischargeWithGrindState (state : StepGrindState) (config : Config)
 
 /-- Update the step state by internalizing new hypotheses from the given goal.
     No-op if grind state threading is disabled (`grindState? = none`). -/
-def StepState.update (state : StepState) (config : Config) (mvarId : MVarId) : MetaM StepState :=
+meta def StepState.update (state : StepState) (config : Config) (mvarId : MVarId) : MetaM StepState :=
   match state.grindState? with
   | some gs => do
     let gs' ← updateStepGrindState gs config mvarId

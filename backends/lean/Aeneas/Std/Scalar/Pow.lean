@@ -1,4 +1,6 @@
-import Aeneas.Std.Scalar.Core
+module
+public import Aeneas.Std.Scalar.Core
+public section
 
 namespace Aeneas.Std
 

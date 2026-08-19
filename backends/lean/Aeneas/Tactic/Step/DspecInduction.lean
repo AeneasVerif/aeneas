@@ -1,13 +1,16 @@
-import Lean
-import Aeneas.Tactic.Solver.ScalarTac
-import Aeneas.Tactic.Step.Init
-import Aeneas.Tactic.Step.GrindState
-import Aeneas.Std
-import Aeneas.Tactic.Simp.SimpLemmas
-import AeneasMeta.Async
-import Aeneas.Tactic.Solver.Grind.Init
-import Aeneas.Tactic.Step.InferPost
-import Aeneas.Tactic.Step.Step
+module
+public import Lean
+public import Aeneas.Tactic.Solver.ScalarTac
+public import Aeneas.Tactic.Step.Init
+public import Aeneas.Tactic.Step.GrindState
+public import Aeneas.Std
+public import Aeneas.Tactic.Simp.SimpLemmas
+public import AeneasMeta.Async
+public import Aeneas.Tactic.Solver.Grind.Init
+public import Aeneas.Tactic.Step.InferPost
+public import Aeneas.Tactic.Step.Step
+import all Init.Internal.Order.Basic
+public section
 
 /- Tactic for unfolding partial_fixpoint definitions with fixpoint_induct.
    Normally you would use the normal unfold tactic, but that requires the proof to be terminating.
@@ -96,14 +99,14 @@ theorem WP_func_admissible (α β : Type) (arg) (post)
   apply Lean.Order.admissible_flatOrder
   simp only [WP.dspec]
 
-def getParamNames (ty : Expr) : MetaM (Array Name) := do
+meta def getParamNames (ty : Expr) : MetaM (Array Name) := do
   forallTelescope ty fun xs _ => do
     xs.mapM fun x => do
       let localDecl ← x.fvarId!.getDecl
       return localDecl.userName
 
 -- given a function type, return list of input types
-def getInputTypes (ty : Expr) : List Expr :=
+meta def getInputTypes (ty : Expr) : List Expr :=
   match ty with
   | .forallE _ ty body _ => .cons ty (getInputTypes body)
   | _ => []
