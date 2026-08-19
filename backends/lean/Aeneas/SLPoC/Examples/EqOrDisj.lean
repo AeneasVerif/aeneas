@@ -170,6 +170,7 @@ theorem readCells.spec {α : Type} (cells : List (Ptr α))
           | succ i =>
               simp only [readCells, List.getElem?_cons_succ]
               step with ih values i
+              sl_frame
 
 @[step]
 theorem writeCells.spec {α : Type} (cells : List (Ptr α))
@@ -198,6 +199,7 @@ theorem writeCells.spec {α : Type} (cells : List (Ptr α))
           | succ i =>
               simp only [writeCells, List.set_cons_succ]
               step with ih values i
+              sl_frame
 
 /-! ## The buffer -/
 
@@ -261,7 +263,7 @@ theorem InPlaceOrDisjointBuffer.new_in_place.spec {α : Type}
     ⦃ ownsCells cells values ⦄ InPlaceOrDisjointBuffer.new_in_place cells
       ⦃⇓ buffer => owns buffer (.equal values)⦄ := by
   simp only [InPlaceOrDisjointBuffer.new_in_place, owns]
-  step
+  step*
 
 /-- `&[T; N]` and `&mut [T; N]` cannot alias and have the same length, so the
 caller owes only the two views. -/
@@ -273,7 +275,7 @@ theorem InPlaceOrDisjointBuffer.new_disjoint.spec {α : Type} (n : Nat)
       InPlaceOrDisjointBuffer.new_disjoint src dst
     ⦃⇓ buffer => owns buffer (.disjoint srcValues dstValues)⦄ := by
   simp only [InPlaceOrDisjointBuffer.new_disjoint, owns]
-  step
+  step*
 
 /-- Same, with the length equality the Rust code asserts at run time. -/
 @[step]
@@ -284,7 +286,7 @@ theorem InPlaceOrDisjointBuffer.new_disjoint_from_slices.spec {α : Type}
       InPlaceOrDisjointBuffer.new_disjoint_from_slices src dst
     ⦃⇓ buffer => owns buffer (.disjoint srcValues dstValues)⦄ := by
   simp only [InPlaceOrDisjointBuffer.new_disjoint_from_slices, owns]
-  step
+  step*
 
 /-- `from_raw_parts` with two pointers to the same memory.  The caller owns one
 view and gets the aliased case. -/
@@ -294,7 +296,7 @@ theorem InPlaceOrDisjointBuffer.from_raw_parts.equal_spec {α : Type}
       InPlaceOrDisjointBuffer.from_raw_parts cells cells
     ⦃⇓ buffer => owns buffer (.equal values)⦄ := by
   simp only [InPlaceOrDisjointBuffer.from_raw_parts, owns]
-  step
+  step*
 
 /-- `from_raw_parts` with two pointers to separated memory.  Owning the two
 views separately *is* the disjointness half of the `unsafe` contract; the
@@ -306,7 +308,7 @@ theorem InPlaceOrDisjointBuffer.from_raw_parts.disjoint_spec {α : Type}
       InPlaceOrDisjointBuffer.from_raw_parts src dst
     ⦃⇓ buffer => owns buffer (.disjoint srcValues dstValues)⦄ := by
   simp only [InPlaceOrDisjointBuffer.from_raw_parts, owns]
-  step
+  step*
 
 /-! ### Length -/
 
