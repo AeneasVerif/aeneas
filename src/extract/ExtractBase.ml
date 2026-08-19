@@ -386,11 +386,6 @@ type names_maps = {
           ]} *)
 }
 
-let names_maps_is_keyword (nm : names_maps) (x : string) : bool =
-  match StringMap.find_opt x nm.strict_names_map.name_to_id with
-  | Some (KeywordId, _) -> true
-  | _ -> false
-
 (** Return [true] if we are strict on collisions for this id (i.e., we forbid
     collisions even with the ids in the unsafe names map) *)
 let strict_collisions (id : id) : bool =
@@ -759,13 +754,20 @@ let id_to_string (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
       in
       trait_decl_id_to_string trait_decl_id ^ ", method name: " ^ method_name
 
+let lean_keywords_set : StringSet.t Lazy.t =
+  lazy (StringSet.of_list LeanKeywords.lean_keywords)
+
+(** [true] if [s] is a Lean keyword. These need to be escaped with [«...»]. *)
+let is_lean_keyword (s : string) : bool =
+  StringSet.mem s (Lazy.force lean_keywords_set)
+
 let ctx_add (span : Meta.span) (id : id) (name : string) (ctx : extraction_ctx)
     : extraction_ctx =
   (* In Lean, identifiers cannot contain "-". We wrap any dot-separated
      component that contains a hyphen in French quotes (« ... »). *)
   let name =
     match backend () with
-    | Lean ->
+    | Lean -> (
         let parts = String.split_on_char '.' name in
         let parts =
           List.map
@@ -780,7 +782,10 @@ let ctx_add (span : Meta.span) (id : id) (name : string) (ctx : extraction_ctx)
               else s)
             parts
         in
-        String.concat "." parts
+        (* A reserved keyword is illegal only as a bare name. *)
+        match parts with
+        | [ s ] when is_lean_keyword s -> "«" ^ s ^ "»"
+        | _ -> String.concat "." parts)
     | _ -> name
   in
   (* Actually add the name *)
@@ -1076,114 +1081,17 @@ let keywords () =
           "with";
         ]
     | Lean ->
+        (* Identifiers defined by Aeneas' Lean library which translated
+           identifiers must not collide with. Genuine Lean keywords are handled
+           separately, by escaping them (see [is_lean_keyword]). *)
         [
-          "Pi";
-          "Prop";
-          "Sort";
-          "Type";
-          "abbrev";
-          "alias";
-          "as";
-          "at";
-          "attribute";
-          "axiom";
-          "axioms";
-          "begin";
-          "break";
-          "by";
           "BuiltinFn";
           "BuiltinFnMut";
           "BuiltinFnOnce";
-          "calc";
-          "catch";
-          "class";
-          "const";
-          "constant";
-          "constants";
-          "continue";
-          "decreasing_by";
-          "def";
-          "definition";
-          "deriving";
-          "do";
-          "else";
-          "end";
-          "example";
-          "exists";
-          "export";
-          "extends";
-          "for";
-          "forall";
-          "from";
-          "fun";
-          "have";
-          "hiding";
-          "if";
-          "import";
-          "in";
-          "include";
-          "inductive";
-          "infix";
-          "infixl";
-          "infixr";
-          "instance";
-          "lemma";
-          "let";
-          "local";
-          "macro";
-          "macro_rules";
-          "match";
-          "mut";
-          "mutual";
-          "name";
-          "namespace";
-          "noncomputable";
-          "notation";
-          "omit";
-          "opaque";
-          "opaque_defs";
-          "open";
-          "override";
-          "parameter";
-          "parameters";
-          "partial";
-          "postfix";
-          "precedence";
-          "prefix";
-          "prelude";
-          "private";
-          "protected";
-          "public";
-          "raw";
-          "record";
-          "reduce";
-          "renaming";
-          "replacing";
-          "reserve";
-          "run_cmd";
-          "seal";
-          "section";
-          "set_option";
-          "simp";
+          "Pi";
           "Std.Array.empty";
-          "structure";
-          "syntax";
-          "termination_by";
-          "then";
-          "theorem";
-          "theory";
-          "to";
+          "opaque_defs";
           "toStr";
-          "universe";
-          "universes";
-          "unless";
-          "unsafe";
-          "using";
-          "using_well_founded";
-          "variable";
-          "variables";
-          "where";
-          "with";
           dyn_constructor ();
         ]
     | HOL4 ->

@@ -2893,8 +2893,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
        *)
       let fun_name =
         match backend () with
-        | Lean when names_maps_is_keyword ctx.names_maps fun_name ->
-            "«" ^ fun_name ^ "»"
+        | Lean when is_lean_keyword fun_name -> "«" ^ fun_name ^ "»"
         | _ -> fun_name
       in
       let ctx =

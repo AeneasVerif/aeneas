@@ -80,6 +80,7 @@
   InterpStatements
   InterpUtils
   Invariants
+  LeanKeywords
   LlbcAst
   LlbcAstUtils
   LlbcOfJson
