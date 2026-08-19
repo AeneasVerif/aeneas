@@ -338,7 +338,6 @@ theorem length.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
 theorem capacity.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
     ⦃ isRingBuffer rb items cap ⦄ capacity rb
       ⦃⇓ n => ⌜n = cap⌝ ∗ isRingBuffer rb items cap⦄ := by
-  sl_pull
   unfold capacity
   step*
 
@@ -350,8 +349,7 @@ theorem isEmpty.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
         ⌜empty = decide (items = [])⌝ ∗ isRingBuffer rb items cap⦄ := by
   sl_pull
   unfold isEmpty
-  step
-  split <;> step
+  step*
 
 /-- Fullness is characterized exactly by logical length equaling capacity. -/
 @[step]
@@ -362,8 +360,7 @@ theorem isFull.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
         isRingBuffer rb items cap⦄ := by
   sl_pull
   unfold isFull
-  step
-  split <;> step
+  step*
 
 /-! ## Mutation -/
 
@@ -377,29 +374,24 @@ theorem pushBack.spec (rb : RingBuffer α) (items : List α) (cap : Nat)
         ⌜success = decide (items.length < cap)⌝⦄ := by
   sl_pull cells head tail count h
   unfold pushBack
-  step
-  split
-  · rename_i hfull
-    step
-  · rename_i hnotfull
-    step*
-    have hcountlt : count < cap := by omega
-    have hnewTail :
-        nextIndex tail rb.cap = circularIndex head (count + 1) cap := by
-      rw [h.1, h.2.2.2.2.2.2.2.1]
-      exact nextIndex_circularIndex h.2.1 h.2.2.2.1 hcountlt
-    have hnewTailLt : nextIndex tail rb.cap < cap := by
-      rw [h.1]
-      exact nextIndex_lt h.2.1 h.2.2.2.2.1
-    have hcontents :
-        contentsOfBuffer (cells.set tail (some value)) head cap (count + 1) =
-          (items ++ [value]).map some := by
-      rw [h.2.2.2.2.2.2.2.1]
-      rw [contentsOfBuffer_push cells head cap count value
-        h.2.2.2.1 hcountlt h.2.2.1]
-      rw [h.2.2.2.2.2.2.2.2]
-      simp
-    sl_frame
+  step*
+  have hcountlt : count < cap := by omega
+  have hnewTail :
+      nextIndex tail rb.cap = circularIndex head (count + 1) cap := by
+    rw [h.1, h.2.2.2.2.2.2.2.1]
+    exact nextIndex_circularIndex h.2.1 h.2.2.2.1 hcountlt
+  have hnewTailLt : nextIndex tail rb.cap < cap := by
+    rw [h.1]
+    exact nextIndex_lt h.2.1 h.2.2.2.2.1
+  have hcontents :
+      contentsOfBuffer (cells.set tail (some value)) head cap (count + 1) =
+        (items ++ [value]).map some := by
+    rw [h.2.2.2.2.2.2.2.1]
+    rw [contentsOfBuffer_push cells head cap count value
+      h.2.2.2.1 hcountlt h.2.2.1]
+    rw [h.2.2.2.2.2.2.2.2]
+    simp
+  sl_frame
 
 /-- Pop reports empty without mutation, or returns and removes exactly the FIFO front. -/
 @[step]
@@ -410,56 +402,47 @@ theorem popFront.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
         ⌜result = items.head?⌝⦄ := by
   sl_pull cells head tail count h
   unfold popFront
-  step
-  split
-  · rename_i hEmpty
-    have hitems : items = [] := by
-      apply List.eq_nil_of_length_eq_zero
-      omega
-    subst items
-    step
-  · rename_i hnonempty
-    cases items with
-    | nil =>
-        simp_all
-    | cons front rest =>
-        step*
-        have hcount : count = rest.length + 1 := by
-          simpa using h.2.2.2.2.2.2.1
-        have hrestBound : rest.length + 1 ≤ cap := by omega
-        have hheadContents :
-            cellAt cells head = some front ∧
-            contentsOfBuffer cells (nextIndex head cap) cap rest.length =
-              rest.map some := by
-          have hpop := contentsOfBuffer_pop cells head cap rest.length
-            h.2.1 h.2.2.2.1 hrestBound
-          rw [← hcount] at hpop
-          rw [h.2.2.2.2.2.2.2.2] at hpop
-          have hpairs :
-              some front = cellAt cells head ∧
-              rest.map some =
-                contentsOfBuffer cells (nextIndex head cap) cap rest.length := by
-            simpa using hpop
-          exact ⟨hpairs.1.symm, hpairs.2.symm⟩
-        have hphysicalHead : cells[head] = some front := by
-          have hheadBound : head < cells.length := by omega
-          rw [← hheadContents.1]
-          simp [cellAt, hheadBound]
-        have hnewHeadLt : nextIndex head rb.cap < cap := by
-          rw [h.1]
-          exact nextIndex_lt h.2.1 h.2.2.2.1
-        have htail :
-            tail =
-              circularIndex (nextIndex head rb.cap) (count - 1) cap := by
-          calc
-            tail = circularIndex head count cap :=
-              h.2.2.2.2.2.2.2.1
-            _ = circularIndex head (rest.length + 1) cap := by rw [hcount]
-            _ = circularIndex (nextIndex head cap) rest.length cap :=
-              (circularIndex_nextIndex h.2.1 h.2.2.2.1 hrestBound).symm
-            _ = circularIndex (nextIndex head rb.cap) (count - 1) cap := by
-              rw [h.1, hcount, Nat.add_sub_cancel]
-        sl_frame
+  step*
+  cases items with
+  | nil =>
+      simp_all
+  | cons front rest =>
+      have hcount : count = rest.length + 1 := by
+        simpa using h.2.2.2.2.2.2.1
+      have hrestBound : rest.length + 1 ≤ cap := by omega
+      have hheadContents :
+          cellAt cells head = some front ∧
+          contentsOfBuffer cells (nextIndex head cap) cap rest.length =
+            rest.map some := by
+        have hpop := contentsOfBuffer_pop cells head cap rest.length
+          h.2.1 h.2.2.2.1 hrestBound
+        rw [← hcount] at hpop
+        rw [h.2.2.2.2.2.2.2.2] at hpop
+        have hpairs :
+            some front = cellAt cells head ∧
+            rest.map some =
+              contentsOfBuffer cells (nextIndex head cap) cap rest.length := by
+          simpa using hpop
+        exact ⟨hpairs.1.symm, hpairs.2.symm⟩
+      have hphysicalHead : cells[head] = some front := by
+        have hheadBound : head < cells.length := by omega
+        rw [← hheadContents.1]
+        simp [cellAt, hheadBound]
+      have hnewHeadLt : nextIndex head rb.cap < cap := by
+        rw [h.1]
+        exact nextIndex_lt h.2.1 h.2.2.2.1
+      have htail :
+          tail =
+            circularIndex (nextIndex head rb.cap) (count - 1) cap := by
+        calc
+          tail = circularIndex head count cap :=
+            h.2.2.2.2.2.2.2.1
+          _ = circularIndex head (rest.length + 1) cap := by rw [hcount]
+          _ = circularIndex (nextIndex head cap) rest.length cap :=
+            (circularIndex_nextIndex h.2.1 h.2.2.2.1 hrestBound).symm
+          _ = circularIndex (nextIndex head rb.cap) (count - 1) cap := by
+            rw [h.1, hcount, Nat.add_sub_cancel]
+      sl_frame
 
 /-- Peek is total, returns exactly the logical front, and preserves all ownership. -/
 @[step]
@@ -469,39 +452,30 @@ theorem peekFront.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
         ⌜result = items.head?⌝ ∗ isRingBuffer rb items cap⦄ := by
   sl_pull cells head _ count h
   unfold peekFront
-  step
-  split
-  · rename_i hEmpty
-    have hitems : items = [] := by
-      apply List.eq_nil_of_length_eq_zero
-      omega
-    subst items
-    step
-  · rename_i hnonempty
-    cases items with
-    | nil =>
-        simp_all
-    | cons front rest =>
-        step*
-        have hcount : count = rest.length + 1 := by
-          simpa using h.2.2.2.2.2.2.1
-        have hrestBound : rest.length + 1 ≤ cap := by omega
-        have hfirst : cellAt cells head = some front := by
-          have hpop := contentsOfBuffer_pop cells head cap rest.length
-            h.2.1 h.2.2.2.1 hrestBound
-          rw [← hcount] at hpop
-          rw [h.2.2.2.2.2.2.2.2] at hpop
-          have hpairs :
-              some front = cellAt cells head ∧
-              rest.map some =
-                contentsOfBuffer cells (nextIndex head cap) cap rest.length := by
-            simpa using hpop
-          exact hpairs.1.symm
-        have hphysicalHead : cells[head] = some front := by
-          have hheadBound : head < cells.length := by omega
-          rw [← hfirst]
-          simp [cellAt, hheadBound]
-        sl_frame
+  step*
+  cases items with
+  | nil =>
+      simp_all
+  | cons front rest =>
+      have hcount : count = rest.length + 1 := by
+        simpa using h.2.2.2.2.2.2.1
+      have hrestBound : rest.length + 1 ≤ cap := by omega
+      have hfirst : cellAt cells head = some front := by
+        have hpop := contentsOfBuffer_pop cells head cap rest.length
+          h.2.1 h.2.2.2.1 hrestBound
+        rw [← hcount] at hpop
+        rw [h.2.2.2.2.2.2.2.2] at hpop
+        have hpairs :
+            some front = cellAt cells head ∧
+            rest.map some =
+              contentsOfBuffer cells (nextIndex head cap) cap rest.length := by
+          simpa using hpop
+        exact hpairs.1.symm
+      have hphysicalHead : cells[head] = some front := by
+        have hheadBound : head < cells.length := by omega
+        rw [← hfirst]
+        simp [cellAt, hheadBound]
+      sl_frame
 
 /-- Free consumes the backing array and each metadata allocation exactly once. -/
 @[step]

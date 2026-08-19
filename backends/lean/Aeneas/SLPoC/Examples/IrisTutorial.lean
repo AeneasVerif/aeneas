@@ -401,7 +401,7 @@ theorem inc_spec (l : Link Int) (xs : List Int) :
           contradiction
       | some p =>
           simp only [isList, inc, List.map_cons]
-          sl_pull next
+          sl_pull
           step*
 
 def append : List α → Link α → Link α → St (Link α)
@@ -433,7 +433,7 @@ theorem append_spec (l₁ l₂ : Link α) (xs ys : List α) :
           contradiction
       | some p =>
           simp only [isList, append, List.cons_append]
-          sl_pull next
+          sl_pull
           step*
 
 def reverseAppend : List α → Link α → Link α → St (Link α)
@@ -522,7 +522,7 @@ theorem fold_right_spec (P : α → SLProp) (I : List α → β → SLProp)
           contradiction
       | some p =>
           simp only [isList, bigSep, foldRight]
-          sl_pull next
+          sl_pull
           step*
 
 def sumList (xs : List Int) (l : Link Int) : St Int :=
