@@ -38,6 +38,14 @@ let body_is_target_dispatch (b : body) : bool =
 let body_is_translatable (b : body) : bool =
   body_is_known b || body_is_target_dispatch b
 
+let fun_decl_global_initializer (f : fun_decl) : global_decl_ref option =
+  match f.src with
+  | GlobalInitializerFun global -> Some global
+  | _ -> None
+
+let fun_decl_is_global_initializer (f : fun_decl) : bool =
+  Option.is_some (fun_decl_global_initializer f)
+
 let lookup_fun_sig (fun_id : fun_id) (fun_decls : fun_decl FunDeclId.Map.t) :
     bound_fun_sig =
   match fun_id with
