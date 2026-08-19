@@ -49,7 +49,7 @@ theorem forall_unit {p : Unit → Prop} : (∀ value, p value) ↔ p () :=
 
 /-- The tactic `step` runs on the goals it prepares. A no-op on a goal which is not a triple. -/
 macro "intro_triple" : tactic =>
-  `(tactic| (sl_norm; sl_pull_shallow; sl_pull_keep))
+  `(tactic| (sl_norm; sl_pull_shallow))
 
 #register_spec_info {
     spec_name := ``triple

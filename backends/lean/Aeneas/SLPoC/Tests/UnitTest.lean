@@ -68,8 +68,7 @@ example (p : Ptr Nat) (value : Nat) :
 
 Unlike `sl_pull`, this copies the pure facts of the precondition into the local
 context instead of consuming them, so the assertion stays available to the
-framing of the later steps.  `step` runs it on the goal of every continuation;
-the goal a proof starts from needs it explicitly. -/
+framing of later steps. -/
 
 /-- The pointer passed to the callee is reducible to the owned pointer only
 through a pure fact in the precondition, which has to be copied into the context
