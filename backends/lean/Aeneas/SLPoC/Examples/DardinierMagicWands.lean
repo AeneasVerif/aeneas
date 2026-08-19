@@ -165,42 +165,24 @@ theorem leftLeaf.preserves_spec (tree : Tree) :
       ⦃⇓ result => ⌜result = tree.leftmost.root⌝ ∗ tree.owns⦄ := by
   induction tree with
   | leaf pointer value =>
-      simp only [Tree.owns, Tree.leftDepth, Tree.root, leftLeaf,
-        Tree.leftmost]
+      simp only [Tree.owns, Tree.root, Tree.leftmost]
+      rw [leftLeaf]
       step*
   | branch pointer value left right leftIH _ =>
-      simp only [Tree.owns, Tree.leftDepth, Tree.root, Tree.leftmost]
+      simp only [Tree.owns]
       rw [leftLeaf]
       step
-      let frame : SLProp :=
+      apply triple_conseq (triple_frame leftIH
         iprop(
           pointer ↦ {
             value
             left := some left.root
             right := some right.root
           } ∗
-          right.owns)
-      apply triple_conseq (triple_frame leftIH frame)
-      · dsimp only [frame]
-        sl_frame
+          right.owns))
+      · sl_frame
       · intro result
-        dsimp only [frame]
-        change iprop(
-          (⌜result = left.leftmost.root⌝ ∗ left.owns) ∗
-          (pointer ↦ {
-            value
-            left := some left.root
-            right := some right.root
-          } ∗ right.owns)) ⊢
-          iprop(
-            ⌜result = left.leftmost.root⌝ ∗
-            pointer ↦ {
-              value
-              left := some left.root
-              right := some right.root
-            } ∗
-            left.owns ∗
-            right.owns)
+        simp only [qstar]
         exact himpl_of_eq (by ac_rfl)
 
 /-- The traversal result stated in the paper's loop-invariant form. The
