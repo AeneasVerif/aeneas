@@ -148,9 +148,7 @@ theorem allocCells.spec (n : Nat) (value : α) :
       step
   | succ n ih =>
       rw [allocCells]
-      step as ⟨ p ⟩
-      step with ih as ⟨ cells, hlength ⟩
-      step
+      step*
 
 /-- Allocation returns `n` initialized cells and exposes their exact length. -/
 @[step]
@@ -159,8 +157,7 @@ theorem alloc.spec (n : Nat) (value : α) :
       ⦃⇓ a =>
         ⌜a.cells.length = n⌝ ∗ owns a (List.replicate n value)⦄ := by
   unfold alloc
-  step as ⟨ cells, hlength ⟩
-  step
+  step*
 
 /-- Recursive deallocation invariant: every owned cell is consumed exactly once. -/
 @[step]
@@ -182,8 +179,7 @@ theorem freeCells.spec (cells : List (Ptr α)) (values : List α) :
           contradiction
       | cons value values =>
           simp only [freeCells]
-          step
-          step with ih values
+          step*
 
 /-- Free consumes the complete array ownership predicate. -/
 @[step]
@@ -220,7 +216,7 @@ theorem readCells.spec (cells : List (Ptr α)) (values : List α) (i : Nat) :
               step*
           | succ i =>
               simp only [readCells, List.getElem?_cons_succ]
-              step with ih values i
+              step*
 
 /-- Exact public read specification. -/
 @[step]
@@ -262,7 +258,7 @@ theorem writeCells.spec (cells : List (Ptr α)) (values : List α)
           | succ i =>
               simp only [writeCells, List.length_cons, Nat.succ_lt_succ_iff,
                 List.set_cons_succ]
-              step with ih values i
+              step*
 
 /-- Exact public write specification, including its bounds result. -/
 @[step]
@@ -297,8 +293,7 @@ theorem fillCells.spec (cells : List (Ptr α)) (values : List α) (value : α) :
           contradiction
       | cons old values =>
           simp only [fillCells, List.length_cons, List.replicate_succ]
-          step
-          step with ih values
+          step*
 
 /-- Pulse `fill_array`: every logical element becomes `value`, with ownership preserved. -/
 @[step]
