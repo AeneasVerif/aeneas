@@ -2258,6 +2258,41 @@ let ctx_add_adt_projector_names (decl_name : string) (field_names : string list)
   in
   { ctx with names_maps }
 
+(** The part of a function or global's provenance that affects its extracted
+    name. *)
+type extractable_item_source =
+  | TraitImplSource of
+      T.trait_impl_ref * T.trait_decl_ref * Charon.GAstUtils.assoc_item_id
+  | TraitDefaultSource
+  | OtherSource
+
+let extractable_global_source (src : global_source) : extractable_item_source =
+  match src with
+  | TraitImplGlobal (impl_ref, trait_ref, const_id, _) ->
+      TraitImplSource
+        (impl_ref, trait_ref, Charon.GAstUtils.AssocIdConst const_id)
+  | TraitDefaultGlobal _ -> TraitDefaultSource
+  | _ -> OtherSource
+
+let extractable_fun_source (ctx : extraction_ctx) (src : fun_source) :
+    extractable_item_source =
+  match src with
+  | TraitImplFun (impl_ref, trait_ref, method_id, _) ->
+      TraitImplSource
+        (impl_ref, trait_ref, Charon.GAstUtils.AssocIdMethod method_id)
+  | TraitDefaultFun _ -> TraitDefaultSource
+  | GlobalInitializerFun global -> (
+      match GlobalDeclId.Map.find_opt global.id ctx.trans_globals with
+      | Some global -> extractable_global_source global.src
+      | None -> OtherSource)
+  | _ -> OtherSource
+
+let fun_source_is_trait_default (ctx : extraction_ctx) (src : fun_source) : bool
+    =
+  match extractable_fun_source ctx src with
+  | TraitDefaultSource -> true
+  | _ -> false
+
 (** This helper factors out the logic to generate global decls and function
     names. The subtlety comes from trait implementations: if the declaration
     comes from a trait implementation, we want to prefix the name with the name
@@ -2268,8 +2303,8 @@ let ctx_add_adt_projector_names (decl_name : string) (field_names : string list)
       trait declaration, [false] if we are computing the name of a function
       declaration. *)
 let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
-    (src : item_source) ~(is_trait_decl_field : bool) (ctx : extraction_ctx) :
-    string =
+    (src : extractable_item_source) ~(is_trait_decl_field : bool)
+    (ctx : extraction_ctx) : string =
   let span = item_meta.span in
   (* Extract target suffix from the function's own name before any overriding *)
   let _, target_suffix = LlbcAstUtils.extract_target_suffix item_meta.name in
@@ -2286,7 +2321,7 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
      we keep this one.
   *)
   match src with
-  | TraitImplItem (trait_impl_ref, trait_decl_ref, item_id, _) ->
+  | TraitImplSource (trait_impl_ref, trait_decl_ref, item_id) ->
       let item_meta =
         if Option.is_some item_meta.attr_info.rename then item_meta
         else
@@ -2299,7 +2334,7 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
             | None -> None
             | Some trait_decl -> (
                 match item_id with
-                | AssocIdMethod method_id -> (
+                | Charon.GAstUtils.AssocIdMethod method_id -> (
                     match
                       List.find_opt
                         (fun meth -> meth.method_id = method_id)
@@ -2307,10 +2342,10 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
                     with
                     | None -> None
                     | Some meth -> Some meth.item_meta)
-                | AssocIdConst _ ->
+                | Charon.GAstUtils.AssocIdConst _ ->
                     (* TODO: missing item meta information *)
                     None
-                | AssocIdType _ -> None))
+                | Charon.GAstUtils.AssocIdType _ -> None))
             (* We use the decl meta info as a default value *)
             ~default:item_meta
       in
@@ -2346,7 +2381,7 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
         if is_trait_decl_field then llbc_name
         else
           match src with
-          | TraitDeclItem _ ->
+          | TraitDefaultSource ->
               llbc_name @ [ PeIdent ("default", Disambiguator.zero) ]
           | _ -> llbc_name
       in
@@ -2380,6 +2415,18 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
           ctx_fun_global_name_to_extract_string item_meta ctx llbc_name
         else name
 
+let ctx_compute_fun_name_no_suffix (item_meta : T.item_meta) (src : fun_source)
+    ~(is_trait_decl_field : bool) (ctx : extraction_ctx) : string =
+  ctx_compute_fun_global_name_no_suffix item_meta
+    (extractable_fun_source ctx src)
+    ~is_trait_decl_field ctx
+
+let ctx_compute_global_name_no_suffix (item_meta : T.item_meta)
+    (src : global_source) (ctx : extraction_ctx) : string =
+  ctx_compute_fun_global_name_no_suffix item_meta
+    (extractable_global_source src)
+    ~is_trait_decl_field:false ctx
+
 (** Register the name of a global declaration.
 
     Note that we only register the name of the global itself, not the name of
@@ -2389,17 +2436,14 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
     their names registered through {!ctx_add_fun_decl}. *)
 let ctx_add_global_decl (def : global_decl) (ctx : extraction_ctx) :
     extraction_ctx =
-  let name =
-    ctx_compute_fun_global_name_no_suffix def.item_meta def.src ctx
-      ~is_trait_decl_field:false
-  in
+  let name = ctx_compute_global_name_no_suffix def.item_meta def.src ctx in
   ctx_add def.item_meta.span (GlobalId def.def_id) name ctx
 
 let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
     (ctx : extraction_ctx) : string =
   let fname =
-    ctx_compute_fun_global_name_no_suffix def.item_meta def.src
-      ~is_trait_decl_field ctx
+    ctx_compute_fun_name_no_suffix def.item_meta def.src ~is_trait_decl_field
+      ctx
   in
   (* Compute the suffix *)
   let suffix = default_fun_suffix def.num_loops def.loop_id def.loop_pos in
@@ -2422,7 +2466,7 @@ let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
 let ctx_compute_termination_measure_name (decl : fun_decl)
     (ctx : extraction_ctx) : string =
   let fname =
-    ctx_compute_fun_global_name_no_suffix decl.item_meta decl.src
+    ctx_compute_fun_name_no_suffix decl.item_meta decl.src
       ~is_trait_decl_field:false ctx
   in
   let lp_suffix =
@@ -2454,7 +2498,7 @@ let ctx_compute_termination_measure_name (decl : fun_decl)
 let ctx_compute_decreases_proof_name (decl : fun_decl) (ctx : extraction_ctx) :
     string =
   let fname =
-    ctx_compute_fun_global_name_no_suffix decl.item_meta decl.src
+    ctx_compute_fun_name_no_suffix decl.item_meta decl.src
       ~is_trait_decl_field:false ctx
   in
   let lp_suffix =
