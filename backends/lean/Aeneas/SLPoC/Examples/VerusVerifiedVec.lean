@@ -202,7 +202,7 @@ theorem readInitialized.spec
               simp only [List.length_cons, Nat.succ_lt_succ_iff] at hi
               simp only [List.cons_append]
               rw [PulseArray.readCells, List.getElem?_cons_succ]
-              step with ih values i hi
+              step*
 
 /-- A successful write transfers one typed-uninitialized cell to the
 initialized prefix. -/
@@ -234,7 +234,7 @@ theorem initializeNext.spec
       | cons old contents =>
           simp only [List.cons_append, List.length_cons,
             PulseArray.writeCells]
-          step with ih contents
+          step*
 
 /-! ## Construction and observations -/
 
@@ -265,7 +265,6 @@ theorem length.spec (v : Vector α) (contents : List α) (cap : Nat) :
     ⦃ owns v contents cap ⦄ length v
       ⦃⇓ size => ⌜size = contents.length⌝ ∗ owns v contents cap⦄ := by
   unfold length
-  sl_pull
   step*
 
 /-- Capacity returns the exact allocation capacity and preserves ownership. -/
@@ -274,8 +273,6 @@ theorem capacity.spec (v : Vector α) (contents : List α) (cap : Nat) :
     ⦃ owns v contents cap ⦄ capacity v
       ⦃⇓ result => ⌜result = cap⌝ ∗ owns v contents cap⦄ := by
   unfold capacity
-  sl_pull _ _ _ _ _ hcapacity
-  simp only [hcapacity]
   step*
 
 /-- Exact value observation for the abstraction: in-bounds indices return the
