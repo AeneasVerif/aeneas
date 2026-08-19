@@ -20,7 +20,7 @@ let _ =
   (* Set the level for the Charon loggers (for the ones internal to Aeneas,
      the level was set up at creation time) *)
   main_log#set_level EL.Info;
-  llbc_of_json_logger#set_level EL.Info
+  Logs.Src.set_level Charon.Logging.llbc_of_json_logger (Some Logs.Info)
 
 (* This is necessary to have a backtrace when raising exceptions - for some
  * reason, the -g option doesn't work.
