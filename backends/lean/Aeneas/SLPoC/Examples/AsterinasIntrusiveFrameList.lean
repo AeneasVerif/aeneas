@@ -364,7 +364,7 @@ theorem takeCurrent.empty.spec (cursor : Cursor M) :
   simp only [firstSlot_nil, lastSlot_nil, ownedFrom_nil, List.length_nil]
   sl_pull hcursor hlist
   simp only [hcursor, hlist.2.1]
-  step
+  step*
 
 /-- Exact split/recombine theorem for cursor removal.  It consumes the current
 head cell plus its suffix view, clears and returns that same frame, advances
@@ -413,7 +413,7 @@ theorem popFront.empty.spec (s : LinkedList M) :
       exact himpl_refl _
   refine triple_bind htake ?_
   rintro ⟨cursor, result⟩
-  step
+  step*
 
 /-- Public nonempty pop returns/removes exactly the pure head and transfers its
 detached unique ownership back to the caller. -/
@@ -440,7 +440,7 @@ theorem popFront.cons.spec (s : LinkedList M) (frame : Frame M)
       exact himpl_refl _
   refine triple_bind htake ?_
   rintro ⟨cursor, result⟩
-  step
+  step*
 
 end AsterinasIntrusiveFrameList
 

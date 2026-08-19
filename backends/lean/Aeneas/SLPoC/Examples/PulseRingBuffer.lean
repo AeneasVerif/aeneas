@@ -329,9 +329,10 @@ theorem new.spec (capacity : Nat) (hcapacity : 0 < capacity) :
 theorem length.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
     ⦃ isRingBuffer rb items cap ⦄ length rb
       ⦃⇓ n => ⌜n = items.length⌝ ∗ isRingBuffer rb items cap⦄ := by
-  sl_pull
+  sl_pull cells head tail count h
   unfold length
-  step
+  step with read.spec rb.count count
+  sl_frame
 
 /-- Capacity is immutable and returned exactly, with all ownership preserved. -/
 @[step]
