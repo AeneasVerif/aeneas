@@ -452,6 +452,39 @@ partial def getMVarIds (e : Expr) (hs : Std.HashSet MVarId := Std.HashSet.emptyW
     if e.isMVar then pure (hs.insert e.mvarId!) else pure hs)
     hs e
 
+private def getGoalMVars (mvarId : MVarId) : TacticM (Std.HashSet MVarId) := do
+  let target ← instantiateMVars (← mvarId.getType)
+  getMVarIds target
+
+/-- Run a tactic on all current goals, then retry only failed goals whose target
+    contains fewer metavariables than before the previous attempt. The initial
+    metavariable sets can be reused from an earlier traversal of the targets. -/
+partial def retryGoalsWhileMVarsDecrease
+    (goals : List (Std.HashSet MVarId × MVarId)) (tac : TacticM Unit) : TacticM Unit := do
+  loop goals (goals.map Prod.snd)
+where
+  loop (goals : List (Std.HashSet MVarId × MVarId)) (active : List MVarId) :
+      TacticM Unit := do
+    setGoals active
+    tac
+    let states ← goals.filterMapM fun (before, mvarId) => do
+      if ← mvarId.isAssigned then
+        pure none
+      else
+        let dependencyAssigned ← before.toList.anyM MVarId.isAssigned
+        if dependencyAssigned then
+          let after ← getGoalMVars mvarId
+          pure (some (after, mvarId, decide (after.size < before.size)))
+        else
+          pure (some (before, mvarId, false))
+    let goals := states.map fun (mvars, mvarId, _) => (mvars, mvarId)
+    let active := states.filterMap fun (_, mvarId, decreased) =>
+      if decreased then some mvarId else none
+    if active.isEmpty then
+      setGoals (goals.map Prod.snd)
+    else
+      loop goals active
+
 -- Taken from Lean.Elab.evalAssumption
 def assumptionTac : TacticM Unit :=
   liftMetaTactic fun mvarId => do mvarId.assumption; pure []

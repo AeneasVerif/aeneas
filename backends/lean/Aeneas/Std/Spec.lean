@@ -25,6 +25,10 @@ structure SpecInfo where
   mk_spec_bind : Name
   mk_spec_bind_skip_args : Nat
 
+  /-- Applied on mono's and bind's preconditions in `step` and mono's final goal in `step*`.
+      Failure leaves the precondition/goal unchanged. -/
+  discharge_tactic : Option (TSyntax `tactic) := none
+
   uncurry_elim_tactics : Array Lean.Name := #[]
   /-- Tactic run on the goal.
   It may transform or solve the goal, but must not create multiple goals. -/

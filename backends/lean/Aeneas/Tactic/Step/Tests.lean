@@ -1,3 +1,4 @@
+import Aeneas.Tactic.Step.Tests.DischargeTactic
 import Aeneas.Tactic.Step.Tests.HigherOrder
 import Aeneas.Tactic.Step.Tests.IntroOutputs
 import Aeneas.Tactic.Step.Tests.IntroTactic
