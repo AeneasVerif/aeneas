@@ -223,6 +223,7 @@ theorem insertCells.spec [LinearOrder α] (current : Ptr α)
             simp only [orderedInsert, horder]
             step* 2
             step with ih next key values
+            sl_frame
 
 /--
 The outer-loop invariant: the recursively processed suffix has precisely the
@@ -252,6 +253,7 @@ theorem sortCells.spec [LinearOrder α] (cells : List (Ptr α))
           simp only [sortCells, sortedContents]
           step with ih values
           step with insertCells.spec current cells key (sortedContents values)
+          sl_frame
 
 /--
 Complete Pulse-style correctness theorem.  The original array retains exact
@@ -272,6 +274,7 @@ theorem insertionSort.spec [LinearOrder α] (array : PulseArray.Array α)
     ⟨sortedContents_sorted values, sortedContents_perm values⟩
   unfold insertionSort
   step with sortCells.spec array.cells values
+  sl_frame
 
 end PulseInsertionSort
 

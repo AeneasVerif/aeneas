@@ -145,7 +145,7 @@ theorem allocCells.spec (n : Nat) (value : α) :
   induction n with
   | zero =>
       simp only [allocCells, List.replicate_zero]
-      step
+      step*
   | succ n ih =>
       rw [allocCells]
       step*
@@ -374,6 +374,7 @@ theorem compareCells.disjoint_spec [DecidableEq α]
                     subst rightValue
                     simp only [List.cons.injEq, true_and]
                     step with ih rightCells leftValues rightValues
+                    sl_frame
                   · rename_i hne
                     simp only [List.cons.injEq, hne, false_and, decide_false]
                     step*
@@ -404,6 +405,7 @@ theorem compareCells.self_spec [DecidableEq α]
           step* 2
           rw [if_pos True.intro]
           step with ih values
+          sl_frame
 
 /-- Disjoint-input form of Pulse `compare`: the result exactly characterizes
 logical equality and both independent ownership predicates are preserved.
@@ -430,6 +432,7 @@ theorem compare.self_spec [DecidableEq α] (a : Array α) (values : List α) :
       ⦃⇓ equal => ⌜equal = true⌝ ∗ owns a values⦄ := by
   unfold compare
   step with compareCells.self_spec a.cells values
+  sl_frame
 
 /-- The Vec allocation smoke test allocates initialized cells and frees all of them. -/
 @[step]
