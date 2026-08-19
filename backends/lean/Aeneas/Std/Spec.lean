@@ -25,6 +25,11 @@ structure SpecInfo where
   mk_spec_bind : Name
   mk_spec_bind_skip_args : Nat
 
+  /-- Name of a zero-argument tactic applied on mono's and bind's preconditions in `step`
+      and mono's final goal in `step*`, provided as its raw `Name`.
+      Failure leaves the precondition/goal unchanged. -/
+  discharge_tactic : Option Name := none
+
   uncurry_elim_tactics : Array Lean.Name := #[]
   /-- Tactic run on the goal.
   It may transform or solve the goal, but must not create multiple goals. -/
@@ -36,7 +41,8 @@ structure SpecInfo where
   liftings : Array LiftingInfo
   deriving Inhabited
 
-/-- Store a tactic in a `SpecInfo`: ``intro_tactic := SpecInfo.tac `(tactic| my_tactic)``. -/
+/-- Store tactic syntax in a `SpecInfo`, for example:
+    ``intro_tactic := SpecInfo.tac `(tactic| my_tactic)``. -/
 def SpecInfo.tac (tac : Unhygienic (TSyntax `tactic)) : Option (TSyntax `tactic) :=
   some (Unhygienic.run tac)
 
@@ -66,6 +72,11 @@ unsafe def register_spec_info : Lean.Elab.Command.CommandElab := fun stx => do
     elabTerm info (some (mkConst ``SpecInfo))
   let value ← Lean.Elab.Command.liftTermElabM do
     Lean.Meta.evalExpr SpecInfo (mkConst ``SpecInfo) expr
+  if let some tacticName := value.discharge_tactic then
+    match Parser.runParserCategory (← getEnv) `tactic tacticName.toString with
+    | .ok _ => pure ()
+    | .error error => throwErrorAt info
+        "Could not parse registered discharge tactic `{tacticName}`: {error}"
   specAttr.add value
 
 def specInfoLookup (n : Name) : MetaM (Option SpecInfo) := do
