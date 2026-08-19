@@ -501,9 +501,8 @@ theorem orCells.disjoint_spec (leftCells rightCells : List (Ptr Word))
                     List.zip_cons_cons, List.map_cons]
                   have htail : leftWords.length = rightWords.length := by
                     simpa using hlength
-                  step* 3
-                  step with ih rightCells leftWords rightWords htail
-                  step
+                  step*
+                  assumption
 
 /-- Actual exact-self execution of `orCells cells cells` under one ownership
 resource.  Each step reads the same pointer twice sequentially, retains its
@@ -534,9 +533,7 @@ theorem orCells.self_spec (cells : List (Ptr Word)) (words : List Word) :
       | cons word words =>
           simp only [PulseArray.ownsCells_cons, orCells, orWords,
             List.zip_cons_cons, List.map_cons]
-          step* 3
-          step with ih words
-          step
+          step*
 
 /-- Recursive specification for the optional optimized self-OR helper.  One ownership resource suffices:
 the input list remains owned and each returned pointer is freshly allocated
@@ -566,9 +563,7 @@ theorem orSelfCells.spec (cells : List (Ptr Word)) (words : List Word) :
       | cons word words =>
           simp only [PulseArray.ownsCells_cons, orSelfCells, orSelfWords,
             List.map_cons]
-          step* 2
-          step with ih words
-          step
+          step*
 
 /-- Complete specification for the optional optimized self-OR helper.  It uses
 one ownership resource, preserves the input, and returns the same logical words
