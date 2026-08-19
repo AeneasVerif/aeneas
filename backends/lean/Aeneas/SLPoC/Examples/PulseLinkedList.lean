@@ -219,8 +219,7 @@ theorem pop.spec (x : Link α) (v : α) (xs : List α) (hne : x ≠ none) :
   | some p =>
       simp only [pop, isList]
       sl_pull
-      step* 2
-      step
+      step*
 
 /-- Recursive `length` preserves every cell and computes the pure-list length. -/
 @[step]
@@ -241,9 +240,7 @@ theorem length.spec (x : Link α) (xs : List α) :
           contradiction
       | some p =>
           simp only [length, List.length_cons]
-          sl_pull next
-          step
-          step with ih next
+          sl_pull
           step*
 
 /-- `create` returns the uniquely represented empty list. -/
@@ -259,8 +256,7 @@ theorem cons.spec (v : α) (x : Link α) (xs : List α) :
     ⦃ isList x xs ⦄ cons v x
       ⦃⇓ y => isList y (v :: xs)⦄ := by
   unfold cons
-  step
-  step
+  step*
 
 /-- `append` preserves the head link `x` and mutates its last cell so that its
 exact view becomes `xs ++ ys`. -/
@@ -277,15 +273,14 @@ theorem append.spec (x y : Link α) (xs ys : List α) (hne : xs ≠ []) :
           contradiction
       | some p =>
           simp only [isList]
-          sl_pull next
+          sl_pull
           cases xs with
           | nil =>
               simp only [append, List.singleton_append]
               step*
           | cons w ws =>
               simp only [append, List.cons_append]
-              step
-              step with ih (x := next) (y := y) (ys := ys) (by simp)
+              step*
 
 /-- `isLastCell` preserves ownership and exactly characterizes a singleton. -/
 @[step]
@@ -297,9 +292,8 @@ theorem isLastCell.spec (x : Link α) (v : α) (xs : List α)
   | none => contradiction
   | some p =>
       simp only [isLastCell]
-      sl_pull next
-      step
-      step with isEmpty.spec next xs
+      sl_pull
+      step*
 
 /-- `appendAtLastCell` implements Pulse's singleton-specialized append helper. -/
 @[step]
@@ -325,8 +319,7 @@ theorem detachNext.spec (x : Link α) (v : α) (xs : List α) (hne : x ≠ none)
   | some p =>
       simp only [detachNext, isList]
       sl_pull
-      step* 2
-      step
+      step*
       refine himpl_hexists_r none ?_
       simp only [isList]
       sl_frame
@@ -352,8 +345,7 @@ theorem split.spec (n : Nat) (x : Link α) (xs : List α)
             cases n with
             | zero =>
                 simp only [split, List.take, List.drop]
-                step* 2
-                step
+                step*
                 apply hstar_mono
                 · refine himpl_hexists_r (none : Link α) ?_
                   simp only [isList]
@@ -376,9 +368,8 @@ theorem insert.spec (n : Nat) (x : Link α) (xs : List α) (item : α)
     | succ n =>
         cases xs <;> simp_all
   unfold insert
-  step with split.spec n x xs hpos (Nat.le_of_lt hlt)
-  step with cons.spec item tail (xs.drop n)
-  step with append.spec x inserted (xs.take n) (item :: xs.drop n) htake
+  have hle := Nat.le_of_lt hlt
+  step*
 
 /-- Pulse's current `delete` body is insertion; its exact specification records
 that behavior rather than claiming removal. -/

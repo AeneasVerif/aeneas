@@ -911,8 +911,7 @@ theorem mapAux.spec (pointer : Ptr Table) (model : ModelTable)
           cases hConcrete : concrete.get index <;>
             cases hModel : model.get index <;>
             simp only [entryOwn]
-          · step
-            step
+          · step*
             sl_change
               (tableOwn_replace_leaf pointer index concrete model frame)
             sl_frame
@@ -1144,11 +1143,8 @@ theorem isTableEmpty.spec (pointer : Ptr Table) (model : ModelTable) :
       entryOwn (concrete.get .i0) (model.get .i0) ∗
       entriesExcept .i0 concrete model)))
   simp only [hstar_hempty_r_eq]
-  sl_pull_keep
-  rename_i hEmpty
   step
   sl_change (tableOwn_unselect pointer .i0 concrete model)
-  simp only [hEmpty]
   sl_frame
 
 theorem Table.eq_empty_of_isEmpty (table : Table)
@@ -1235,13 +1231,10 @@ theorem pruneAux.spec (pointer : Ptr Table) (model : ModelTable)
             simp only [hConcrete, hModel, entryOwn] at hFront
             sl_change hFront
             simp only [hstar_hempty_r_eq]
-            sl_pull_keep
-            rename_i hEmpty
             have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
             step
             sl_change hFold
-            simp only [hEmpty]
             sl_frame
           · sl_change (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
@@ -1268,13 +1261,10 @@ theorem pruneAux.spec (pointer : Ptr Table) (model : ModelTable)
             simp only [hConcrete, hModel, entryOwn] at hFront
             sl_change hFront
             simp only [hstar_hempty_r_eq]
-            sl_pull_keep
-            rename_i hEmpty
             have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
             step
             sl_change hFold
-            simp only [hEmpty]
             sl_frame
           · sl_change (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
@@ -1315,12 +1305,9 @@ theorem pruneAux.spec (pointer : Ptr Table) (model : ModelTable)
               simp only [entryOwn, hstar_hempty_l_eq] at hFront
               sl_change hFront
               simp only [hstar_hempty_r_eq]
-              sl_pull_keep
-              rename_i hParentEmpty
               step
               sl_change
                 (tableOwn_replace_empty pointer index concrete model)
-              simp_all
               sl_frame
             · rename_i hChildNonempty
               let child' :=
@@ -1336,12 +1323,9 @@ theorem pruneAux.spec (pointer : Ptr Table) (model : ModelTable)
                   entryOwn (.table child) (.table child') ∗
                   entriesExcept index concrete model)))
               simp only [hstar_hempty_r_eq]
-              sl_pull_keep
-              rename_i hParentEmpty
               step
               sl_change (tableOwn_replace_of_get pointer index concrete model
                 (.table child) (.table child') hConcrete)
-              simp_all [child']
               sl_frame
 
 /-- Public prune keeps recursive ownership of the root and all children
@@ -1373,7 +1357,6 @@ theorem unmap.spec (root : Ptr Table) (model : ModelTable) (path : Path) :
           step*
       | some frame =>
           simp only [Option.isSome_some, ↓reduceIte]
-          step
           step*
 
 /-! ## Pure functional consequences -/

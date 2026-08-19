@@ -343,8 +343,7 @@ theorem pushFront.spec (s : LinkedList M) (entries : List (Entry M))
       sl_pull hlist
       simp only [hlist.2.1]
       simp only [detachedValue]
-      step* 2
-      step
+      step*
   | cons head rest =>
       rcases head with ⟨oldFrame, oldPayload⟩
       simp only [listRep, firstSlot_cons, ownedFrom_cons, List.length_cons]
@@ -352,8 +351,7 @@ theorem pushFront.spec (s : LinkedList M) (entries : List (Entry M))
       sl_pull hlist
       simp only [hlist.2.1]
       simp only [linkedValue, detachedValue]
-      step* 4
-      step
+      step*
 
 /-- Empty cursor removal reports `none` and preserves the exact empty
 ownership. -/
@@ -389,13 +387,11 @@ theorem takeCurrent.cons.spec (cursor : Cursor M) (frame : Frame M)
   cases rest with
   | nil =>
       simp only [firstSlot_nil, ownedFrom_nil]
-      step* 4
-      step
+      step*
   | cons next rest' =>
       rcases next with ⟨nextFrame, nextPayload⟩
       simp only [firstSlot_cons, ownedFrom_cons]
-      step* 6
-      step
+      step*
 
 /-- Public empty pop reports empty and preserves the list exactly. -/
 @[step]
