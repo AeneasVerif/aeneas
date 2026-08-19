@@ -104,7 +104,7 @@ abbrev Array.slice {α : Type u} {n : Usize} [Inhabited α] (v : Array α n) (i 
 
 def Array.index_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) : Result α :=
   match v[i]? with
-  | none => fail .arrayOutOfBounds
+  | none => fail .panic
   | some x => ok x
 
 -- For initialization
@@ -210,7 +210,7 @@ theorem Array.set_length {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x
 
 def Array.update {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) : Result (Array α n) :=
   match v[i]? with
-  | none => fail .arrayOutOfBounds
+  | none => fail .panic
   | some _ =>
     ok ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
 

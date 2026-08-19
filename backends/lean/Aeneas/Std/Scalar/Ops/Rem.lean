@@ -12,11 +12,11 @@ open Result Error Arith ScalarElab WP
 # Remainder: Definitions
 -/
 def UScalar.rem {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
-  if y.val != 0 then ok ⟨ BitVec.umod x.bv y.bv ⟩ else fail divisionByZero
+  if y.val != 0 then ok ⟨ BitVec.umod x.bv y.bv ⟩ else fail panic
 
 def IScalar.rem {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
   if y.val != 0 then ok ⟨ BitVec.srem x.bv y.bv ⟩
-  else fail divisionByZero
+  else fail panic
 
 def UScalar.try_rem {ty : UScalarTy} (x y : UScalar ty) : Option (UScalar ty) :=
   Option.ofResult (rem x y)
