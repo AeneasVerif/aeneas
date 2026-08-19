@@ -536,6 +536,7 @@ theorem reverse.spec (memory : Ptr Memory) (m : Memory)
   unfold reverse
   step with reverseAux.spec memory m head none none
     (traversal stem cycle) hlasso.invariant
+  sl_frame
 
 end CreusotListReversalLasso
 

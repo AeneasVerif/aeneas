@@ -464,7 +464,7 @@ theorem orCells.disjoint_spec (leftCells rightCells : List (Ptr Word))
               cases rightCells with
               | nil =>
                   simp only [orCells]
-                  step
+                  step*
               | cons right rights =>
                   simp only [PulseArray.ownsCells]
                   rw [hstar_comm_eq _ (⌜False⌝)]
@@ -521,7 +521,7 @@ theorem orCells.self_spec (cells : List (Ptr Word)) (words : List Word) :
       cases words with
       | nil =>
           simp only [orCells, orWords, List.zip, PulseArray.ownsCells_nil]
-          step
+          step*
       | cons word words =>
           sl_pull
           contradiction
@@ -551,7 +551,7 @@ theorem orSelfCells.spec (cells : List (Ptr Word)) (words : List Word) :
       | nil =>
           simp only [orSelfCells, orSelfWords, List.map_nil,
             PulseArray.ownsCells_nil]
-          step
+          step*
       | cons word words =>
           sl_pull
           contradiction
@@ -591,7 +591,7 @@ theorem bitmapOrSelf.spec (bitmap : Bitmap) (words : List Word) :
     · simp [bitLength, bitLengthFromWordCount]
     · intro index hindex
       exact bitView_orSelfWords words index hindex
-  step
+  step*
 
 /-- Complete exact specification of the legal source call
 `bitmapOr bitmap bitmap`.  The executable is the original two-read OR:
@@ -621,7 +621,7 @@ theorem bitmapOr.self_spec (bitmap : Bitmap) (words : List Word) :
     · simp [bitLength, bitLengthFromWordCount, length_orWords]
     · intro index hindex
       exact bitView_orWords words words rfl index hindex
-  step
+  step*
 
 /-- Complete exact source `or` specification for the disjoint case.  Its two
 input ownership resources require separate heap footprints; it preserves both
@@ -653,7 +653,7 @@ theorem bitmapOr.disjoint_spec (left right : Bitmap)
     · simp [bitLength, bitLengthFromWordCount, length_orWords _ _ hlength]
     · intro index hindex
       exact bitView_orWords leftWords rightWords hlength index hindex
-  step
+  step*
 
 end VerusBitmap
 
