@@ -72,14 +72,14 @@ let type_borrows_info_init : type_borrows_info =
     contains_nested_mut = false;
   }
 
-(** Return true if a type declaration is a structure with unnamed fields.
+(** Return true if a type declaration is a structure with positional fields.
 
     Note that there are two possibilities:
-    - either all the fields are named
-    - or none of the fields are named *)
+    - either all the fields are positional
+    - or none of the fields are positional *)
 let type_decl_is_tuple_struct (x : type_decl) : bool =
   match x.kind with
-  | Struct fields -> List.for_all (fun f -> f.field_name = None) fields
+  | Struct fields -> List.for_all (fun f -> f.is_positional) fields
   | _ -> false
 
 let initialize_g_type_info (is_tuple_struct : bool) ~(is_rec : bool)
