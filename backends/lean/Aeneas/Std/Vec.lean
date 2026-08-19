@@ -182,6 +182,7 @@ def Vec.index_mut_usize {α : Type u} (v: Vec α) (i: Usize) :
   | ok x =>
     ok (x, Vec.set v i)
   | fail e => fail e
+  | ub => ub
   | div => div
 
 @[step]
@@ -357,6 +358,7 @@ def alloc.vec.Vec.extend_from_slice {T : Type} (cloneInst : core.clone.Clone T)
     | ok s' =>
       ok ⟨ v.val ++ s'.val , by have := Slice.clone_length h'; scalar_tac ⟩
     | fail e => fail e
+    | ub => ub
     | div => div
   else fail .panic
 

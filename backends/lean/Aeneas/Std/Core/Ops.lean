@@ -77,6 +77,7 @@ def BuiltinFnMut (Inputs : Type u) (Outputs : Type v) : core.ops.function.FnMut 
     match f x with
     | ok y => ok (y, f)
     | fail e => fail e
+    | ub => ub
     | div => div
 }
 
