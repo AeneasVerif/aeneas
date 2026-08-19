@@ -696,8 +696,8 @@ precondition into the local context.
 the `rintro` pattern `pᵢ`, e.g. `sl_pull l rfl` or `sl_pull ⟨hhead, htail⟩`.
 
 Pure facts are *removed* from the precondition, which is often not what a
-subsequent `step` needs; use `sl_pull_keep` (which `step` runs on the goal of
-every continuation) when only the local hypothesis is wanted. -/
+subsequent `step` needs; use `sl_pull_keep` when only the local hypothesis is
+wanted. -/
 syntax (name := slPull) "sl_pull" (ppSpace colGt rintroPat)* : tactic
 
 macro_rules
