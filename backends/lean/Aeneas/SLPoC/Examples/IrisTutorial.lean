@@ -237,12 +237,7 @@ theorem compareAndSetSequential_spec (p : Ptr Int)
         iprop(⌜success = decide (value = expected)⌝ ∗
           if value = expected then p ↦ replacement else p ↦ value)⦄ := by
   unfold compareAndSetSequential
-  step
-  by_cases h : value = expected
-  · simp only [h, ↓reduceIte, decide_true]
-    step*
-  · simp only [h, ↓reduceIte, decide_false]
-    step*
+  step*
 
 def cmpXchg0To10Sequential (p : Ptr Int) : St Bool :=
   compareAndSetSequential p 0 10
@@ -289,8 +284,7 @@ theorem par_client_sequential_spec :
         iprop(⌜result.2.2 = 42⌝ ∗
           result.1 ↦ 21 ∗ result.2.1 ↦ 2)⦄ := by
   unfold parClientSequential
-  step* 6
-  step
+  step*
 
 def raceLeftThenRightSequential (p : Ptr Int) : St Unit := do
   update p 1
@@ -324,7 +318,6 @@ theorem prog_add_2_spec :
 theorem prog_add_2_spec' :
     (progAdd2) ⦃⇓ v => v = 5⦄ := by
   unfold progAdd2
-  step with prog_spec
   step*
 
 theorem prog_add_2_spec'' :
@@ -409,8 +402,7 @@ theorem inc_spec (l : Link Int) (xs : List Int) :
       | some p =>
           simp only [isList, inc, List.map_cons]
           sl_pull next
-          step* 2
-          step with ih next
+          step*
 
 def append : List α → Link α → Link α → St (Link α)
   | [], _, l₂ => pure l₂
@@ -442,10 +434,7 @@ theorem append_spec (l₁ l₂ : Link α) (xs ys : List α) :
       | some p =>
           simp only [isList, append, List.cons_append]
           sl_pull next
-          step
-          step with ih (l₁ := next) (l₂ := l₂) (ys := ys)
-          step
-          step
+          step*
 
 def reverseAppend : List α → Link α → Link α → St (Link α)
   | [], _, acc => pure acc
@@ -534,9 +523,7 @@ theorem fold_right_spec (P : α → SLProp) (I : List α → β → SLProp)
       | some p =>
           simp only [isList, bigSep, foldRight]
           sl_pull next
-          step
-          step with ih (l := next) (acc := acc)
-          step with hf x
+          step*
 
 def sumList (xs : List Int) (l : Link Int) : St Int :=
   foldRight (fun x acc => pure (x + acc)) xs l 0
@@ -556,10 +543,8 @@ theorem sum_list_spec (l : Link Int) (xs : List Int) :
     (fold_right_spec (fun _ : Int => emp)
       (fun ys acc => ⌜acc = ys.foldr (· + ·) 0⌝)
       (fun x acc => pure (x + acc)) 0 l xs hf)
-  · simp only [bigSep_emp, hstar_hempty_l_eq]
-    sl_frame
-  · intro result
-    sl_frame
+  · sl_frame
+  · sl_frame
 
 end LinkedList
 
