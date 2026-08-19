@@ -16,6 +16,7 @@ namespace issue_801_hrtb
 
 /-- Trait declaration: [issue_801_hrtb::T]
     Source: 'tests/src/issue-801-hrtb.rs', lines 4:0-6:1 -/
+@[trait_decl]
 structure T (Self : Type) (X : Type) where
   dummy : Result X
 

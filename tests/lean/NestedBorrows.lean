@@ -16,6 +16,7 @@ namespace nested_borrows
 
 /-- Trait declaration: [nested_borrows::Trait1]
     Source: 'tests/src/nested-borrows.rs', lines 6:0-8:1 -/
+@[trait_decl]
 structure Trait1 (Self : Type) where
   f : Std.U32 → Result Unit
 

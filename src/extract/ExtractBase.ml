@@ -623,6 +623,19 @@ type extraction_ctx = {
       (** Set to true if at some point we extract a definition which is opaque,
           meaning we generate an axiom. If yes, and in case the user does not
           use the option [-split-files] we suggest it to the user. *)
+  trait_clause_notations : int Collections.StringMap.t;
+      (** For Lean, when the [trait_inst_notation] option is on: the multiset of
+          the [{Trait<Args> for Type}] notation strings of the trait clauses
+          currently in scope (including their parent clauses, transitively).
+          Used to decide whether a trait instance reference can be printed with
+          the notation: the Lean elaborator resolves the notation by searching
+          the local context first, so we only print it when the resolution is
+          unambiguous. See {!ExtractTraitInst}. *)
+  current_trait_impl : trait_impl_id option;
+      (** The trait implementation currently being extracted, if any. A
+          (recursive) reference to the implementation inside its own definition
+          must not use the [{Trait for Type}] notation: the implementation only
+          gets registered *after* its definition is type-checked. *)
 }
 
 let extraction_ctx_to_fmt_env (ctx : extraction_ctx) : PrintPure.fmt_env =

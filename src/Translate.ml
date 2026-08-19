@@ -1543,6 +1543,8 @@ let extract_translated_crate (filename : string) (dest_dir : string)
       trait_impls_filter_type_args_map = Pure.TraitImplId.Map.empty;
       trait_impls_filter_trait_clauses_map = Pure.TraitImplId.Map.empty;
       extracted_opaque;
+      trait_clause_notations = Collections.StringMap.empty;
+      current_trait_impl = None;
     }
   in
   (* Initialize EmitJson. *)

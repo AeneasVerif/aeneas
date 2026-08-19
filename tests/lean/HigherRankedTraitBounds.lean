@@ -16,6 +16,7 @@ namespace higher_ranked_trait_bounds
 
 /-- Trait declaration: [higher_ranked_trait_bounds::RefTrait]
     Source: 'tests/src/higher_ranked_trait_bounds.rs', lines 4:0-6:1 -/
+@[trait_decl]
 structure RefTrait (Self : Type) (X : Type) where
   get : Self → Result X
 

@@ -971,8 +971,20 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
              true
          ]}
       *)
-      (match fun_id with
-      | FromLlbc (TraitMethod (trait_ref, method_name), lp_id) ->
+      (* With the [trait_inst_notation] option: if the function is a method of
+         a (local) trait implementation, refer to it as
+         [({Trait<Args> for Self}.method)] and only print the generics which
+         are specific to the method (the arguments of the implementation are
+         reconstructed by the Lean elaborator). *)
+      let impl_method_notation =
+        match fun_id with
+        | FromLlbc (FunId (FRegular fun_decl_id), None) ->
+            ExtractTraitInst.impl_method_notation ctx span fun_decl_id generics
+        | _ -> None
+      in
+      (match (fun_id, impl_method_notation) with
+      | _, Some (s, _, _) -> F.pp_print_string fmt s
+      | FromLlbc (TraitMethod (trait_ref, method_name), lp_id), _ ->
           let trait_decl_id = trait_ref.trait_decl_ref.trait_decl_id in
           let trait_decl =
             TraitDeclId.Map.find trait_decl_id ctx.trans_trait_decls
@@ -989,7 +1001,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
             if backend () = Coq then "(" ^ s ^ ")" else s
           in
           F.pp_print_string fmt ("." ^ add_brackets fun_name)
-      | _ ->
+      | _, None ->
           let fun_name = ctx_get_function span fun_id ctx in
           F.pp_print_string fmt fun_name);
 
@@ -1057,6 +1069,26 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
           (* Fallback if, for instance, we could not lookup the declaration *)
           [%save_error] span "Internal error";
           None
+      in
+      (* With the [trait_inst_notation] option, when calling an impl method
+         through the notation: only print the generics (and the corresponding
+         explicit-parameter information) which are specific to the method *)
+      let generics, explicit =
+        match impl_method_notation with
+        | Some (_, method_generics, (n_ty, n_cg)) ->
+            let drop n l = List.filteri (fun i _ -> i >= n) l in
+            let explicit =
+              Option.map
+                (fun (e : explicit_info) ->
+                  {
+                    explicit_types = drop n_ty e.explicit_types;
+                    explicit_const_generics =
+                      drop n_cg e.explicit_const_generics;
+                  })
+                explicit
+            in
+            (method_generics, explicit)
+        | None -> (generics, explicit)
       in
       (* Filter the generics.
 
@@ -1773,6 +1805,12 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
   let ctx, type_params, cg_params, trait_clauses =
     ctx_add_generic_params def.item_meta.span def.item_meta.name Item
       def.signature.llbc_generics def.signature.generics ctx
+  in
+  (* Compute the notations of the trait clauses in scope (for the
+     [trait_inst_notation] option) *)
+  let ctx =
+    ExtractTraitInst.ctx_add_trait_clause_notations ctx def.item_meta.span
+      def.signature.generics
   in
   (* Print the generics *)
   (* Open a box for the generics *)
@@ -3152,8 +3190,12 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
      else [ "(consts := [" ^ String.concat ", " (add_quotes consts) ^ "])" ]
    in
    (* TODO: default methods *)
-   extract_attributes decl.item_meta.span ctx fmt decl.item_meta.name None []
-     "rust_trait"
+   (* For Lean: mark the structure as modeling a trait declaration, so that
+      the `{Trait for Type}` notation can search the local context for
+      instances (in particular through the parent clause fields) *)
+   let attributes = if backend () = Lean then [ "trait_decl" ] else [] in
+   extract_attributes decl.item_meta.span ctx fmt decl.item_meta.name None
+     attributes "rust_trait"
      (parent_clauses @ types @ consts)
      ~is_external:(not decl.item_meta.is_local));
   (* Open two outer boxes for the definition, so that whenever possible it gets printed on
@@ -3450,6 +3492,45 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   let span = impl.item_meta.span in
   (* Retrieve the impl name *)
   let impl_name = ctx_get_trait_impl span impl.def_id ctx in
+  (* Add the type and const generic params - note that we need those bindings only for the
+   * body translation (they are not top-level). We add them before extracting the
+   * attributes, because the [trait_inst] attribute needs to print the type
+   * variables with the names they are given in the generated definition. *)
+  (* First, reserve the trait decl field names (constants, types, methods, parent
+     clauses) so that generic parameter names are made fresh w.r.t. them.
+     See the comment in {!extract_trait_decl}. *)
+  let ctx =
+    let decl_id = impl.impl_trait.trait_decl_id in
+    let trait_decl = TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
+    let field_names =
+      List.map
+        (fun (const_id, _, _) -> ctx_get_trait_const span decl_id const_id ctx)
+        trait_decl.consts
+      @ List.map
+          (fun (type_id, _) -> ctx_get_trait_type span decl_id type_id ctx)
+          trait_decl.types
+      @ List.map
+          (fun meth -> ctx_get_trait_method span decl_id meth.method_id ctx)
+          trait_decl.methods
+      @ List.map
+          (fun (clause : trait_param) ->
+            ctx_get_trait_parent_clause span decl_id clause.clause_id ctx)
+          trait_decl.parent_clauses
+    in
+    ctx_reserve_names field_names ctx
+  in
+  let ctx, type_params, cg_params, trait_clauses =
+    ctx_add_generic_params span impl.item_meta.name Item impl.llbc_generics
+      impl.generics ctx
+  in
+  (* Compute the notations of the trait clauses in scope (for the
+     [trait_inst_notation] option), and remember that we are extracting this
+     implementation (references to the implementation inside its own
+     definition must not use the notation) *)
+  let ctx =
+    ExtractTraitInst.ctx_add_trait_clause_notations ctx span impl.generics
+  in
+  let ctx = { ctx with current_trait_impl = Some impl.def_id } in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
@@ -3486,8 +3567,21 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
        name ?generics:(Some generics) ~public:impl.item_meta.attr_info.public
        span);
     F.pp_print_break fmt 0 0;
-    (* Extract the attributes *)
-    let attributes = if backend () = Lean then [ "reducible" ] else [] in
+    (* Extract the attributes. For Lean, we register the implementation in the
+       trait instance registry with the [trait_inst] attribute, so that it can
+       be referred to with the [{Trait for Type}] notation (if the types are
+       expressible in the notation). *)
+    let attributes =
+      if backend () = Lean then
+        "reducible"
+        ::
+        (match
+           ExtractTraitInst.trait_decl_ref_to_notation ctx span impl.impl_trait
+         with
+        | Some s -> [ "trait_inst " ^ s ]
+        | None -> [])
+      else []
+    in
     extract_attributes span ctx fmt name (Some generics) attributes
       "rust_trait_impl" []
       ~is_external:(not impl.item_meta.is_local)
@@ -3521,36 +3615,8 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
      | None -> ());
   F.pp_print_string fmt impl_name;
 
-  (* Print the generics *)
-  (* Add the type and const generic params - note that we need those bindings only for the
-   * body translation (they are not top-level) *)
-  (* First, reserve the trait decl field names (constants, types, methods, parent
-     clauses) so that generic parameter names are made fresh w.r.t. them.
-     See the comment in {!extract_trait_decl}. *)
-  let ctx =
-    let decl_id = impl.impl_trait.trait_decl_id in
-    let trait_decl = TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
-    let field_names =
-      List.map
-        (fun (const_id, _, _) -> ctx_get_trait_const span decl_id const_id ctx)
-        trait_decl.consts
-      @ List.map
-          (fun (type_id, _) -> ctx_get_trait_type span decl_id type_id ctx)
-          trait_decl.types
-      @ List.map
-          (fun meth -> ctx_get_trait_method span decl_id meth.method_id ctx)
-          trait_decl.methods
-      @ List.map
-          (fun (clause : trait_param) ->
-            ctx_get_trait_parent_clause span decl_id clause.clause_id ctx)
-          trait_decl.parent_clauses
-    in
-    ctx_reserve_names field_names ctx
-  in
-  let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params span impl.item_meta.name Item impl.llbc_generics
-      impl.generics ctx
-  in
+  (* Print the generics - note that we added the bindings for the type and
+     const generic params before extracting the attributes above *)
   extract_generic_params span ctx fmt TypeDeclId.Set.empty Item impl.generics
     (Some impl.explicit_info) type_params cg_params trait_clauses;
 

@@ -31,7 +31,7 @@ def Key.Insts.CoreDefaultDefault.default : Result Key := do
 
 /-- Trait implementation: [issue_charon_1172::{impl core::default::Default for issue_charon_1172::Key}]
     Source: 'tests/src/issue-charon-1172.rs', lines 3:9-3:16 -/
-@[reducible]
+@[reducible, trait_inst {core.default.Default for Key}]
 def Key.Insts.CoreDefaultDefault : core.default.Default Key := {
   default := Key.Insts.CoreDefaultDefault.default
 }

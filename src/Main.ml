@@ -205,6 +205,11 @@ let () =
       ( "-print-error-diagnostics",
         Arg.Set print_error_diagnostics,
         " Print additional diagnostics about the kind of errors encountered" );
+      ( "-trait-inst-notation",
+        Arg.Set trait_inst_notation,
+        " For Lean: refer to trait implementations and trait clauses with the \
+         `({Trait<Args> for Type})` notation instead of their (mangled) names."
+      );
       ( "-impl-namespace",
         Arg.Set method_names_in_impl_namespace,
         " For Lean: always prefix method names with \"impl\" to avoid \

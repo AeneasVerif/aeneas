@@ -25,6 +25,7 @@ inductive Ordering where
 
 /-- Trait declaration: [bst::Ord]
     Source: 'src/bst.rs', lines 11:0-13:1 -/
+@[trait_decl]
 structure Ord (Self : Type) where
   cmp : Self → Self → Result Ordering
 

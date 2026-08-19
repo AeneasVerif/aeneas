@@ -16,6 +16,7 @@ namespace const_shadow
 
 /-- Trait declaration: [const_shadow::HasConst]
     Source: 'tests/src/const-shadow.rs', lines 11:0-15:1 -/
+@[trait_decl]
 structure HasConst (Self : Type) (N1 : Std.Usize) where
   N : Result Std.Usize
   get : Self → Result (Array Std.U8 N1)
@@ -38,7 +39,7 @@ def Foo.Insts.Const_shadowHasConst4.N : Std.Usize := 42#usize
 
 /-- Trait implementation: [const_shadow::{impl const_shadow::HasConst<4usize> for const_shadow::Foo}]
     Source: 'tests/src/const-shadow.rs', lines 20:0-26:1 -/
-@[reducible]
+@[reducible, trait_inst {HasConst<4> for Foo}]
 def Foo.Insts.Const_shadowHasConst4 : HasConst Foo 4#usize := {
   N := ok Foo.Insts.Const_shadowHasConst4.N
   get := Foo.Insts.Const_shadowHasConst4.get

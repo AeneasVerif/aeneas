@@ -1,4 +1,5 @@
 import AeneasMeta.Extensions
+import Aeneas.Tactic.Elab.TraitInst.Init
 /-! Helpers to provide informations about the models for the Rust standard library -/
 
 open Lean
@@ -582,6 +583,11 @@ def processTraitDecl (declName : Name) (_pat : String) (info : TraitDecl) : Attr
       pure (← (removeNamePrefix declName)).toString
   let info : TraitDecl := { info with extract := extractName }
 
+  -- Mark the structure as modeling a Rust trait declaration (used by the
+  -- `{Trait for Type}` notation to search the local context for instances)
+  if isStructure env declName then
+    modifyEnv fun env => TraitInst.registerTraitDecl env declName
+
   /- First, merge the fields `consts`/`constsInfo`, `types`/`typesInfo` and `methods`/`methodsInfo` while
      performing sanity checks -/
   let info : TraitDecl :=
@@ -728,7 +734,9 @@ def processTraitImpl (declName : Name) (_pat : String) (info : TraitImpl) : Attr
     | none =>
       trace[Extract] "Generating the extraction name"
       pure (← (removeNamePrefix declName)).toString
-  --
+  -- Register the impl in the trait instance registry (for the `{Trait for Type}`
+  -- notation), by reflection on its type. An explicit `@[trait_inst]` wins.
+  (TraitInst.autoRegister declName).run'
   pure { info with extract }
 
 initialize rustTraitImpls : Attribute TraitImpl ← do

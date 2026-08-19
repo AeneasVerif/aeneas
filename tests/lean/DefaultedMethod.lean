@@ -16,6 +16,7 @@ namespace defaulted_method
 
 /-- Trait declaration: [defaulted_method::Trait]
     Source: 'tests/src/defaulted_method.rs', lines 2:0-7:1 -/
+@[trait_decl]
 structure Trait (Self : Type) where
   provided_method : Self → Result Std.U32
   required_method : Self → Result Std.U32
@@ -46,7 +47,7 @@ def NoOverride.Insts.Defaulted_methodTrait.provided_method
 
 /-- Trait implementation: [defaulted_method::{impl defaulted_method::Trait for defaulted_method::NoOverride}]
     Source: 'tests/src/defaulted_method.rs', lines 10:0-17:1 -/
-@[reducible]
+@[reducible, trait_inst {Trait for NoOverride}]
 def NoOverride.Insts.Defaulted_methodTrait : Trait NoOverride := {
   provided_method := NoOverride.Insts.Defaulted_methodTrait.provided_method
   required_method := NoOverride.Insts.Defaulted_methodTrait.required_method
@@ -65,7 +66,7 @@ def YesOverride.Insts.Defaulted_methodTrait.required_method
 
 /-- Trait implementation: [defaulted_method::{impl defaulted_method::Trait for defaulted_method::YesOverride}]
     Source: 'tests/src/defaulted_method.rs', lines 20:0-24:1 -/
-@[reducible]
+@[reducible, trait_inst {Trait for YesOverride}]
 impl_def YesOverride.Insts.Defaulted_methodTrait : Trait YesOverride := {
   provided_method := Trait.provided_method.default
     YesOverride.Insts.Defaulted_methodTrait

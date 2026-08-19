@@ -59,6 +59,7 @@
   ExtractBuiltinLean
   ExtractErrors
   ExtractName
+  ExtractTraitInst
   ExtractTypes
   FunsAnalysis
   GitVersion

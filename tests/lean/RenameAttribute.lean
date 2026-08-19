@@ -17,6 +17,7 @@ namespace rename_attribute
 /-- Trait declaration: [rename_attribute::BoolTrait]
     Source: 'tests/src/rename_attribute.rs', lines 10:0-20:1
     Visibility: public -/
+@[trait_decl]
 structure BoolTest (Self : Type) where
   getTest : Self → Result Bool
   retTest : Self → Result Bool
@@ -36,7 +37,7 @@ def BoolImpl.getTest (self : Bool) : Result Bool := do
 
 /-- Trait implementation: [rename_attribute::{impl rename_attribute::BoolTrait for bool}]
     Source: 'tests/src/rename_attribute.rs', lines 23:0-27:1 -/
-@[reducible]
+@[reducible, trait_inst {BoolTest for Bool}]
 def BoolImpl : BoolTest Bool := {
   getTest := BoolImpl.getTest
   retTest := BoolTrait.retTest.default
