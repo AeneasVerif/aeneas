@@ -619,7 +619,7 @@ let () =
               (* We also ignore the trait method declarations *)
               &&
               match d.src with
-              | TraitDeclItem _ -> false
+              | TraitDefaultFun _ -> false
               | _ -> true)
             fun_decls
         in
