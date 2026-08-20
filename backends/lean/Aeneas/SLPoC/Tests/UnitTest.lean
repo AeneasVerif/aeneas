@@ -51,10 +51,9 @@ example (p : Ptr Nat) :
     ⦃ iprop(∃ n, ⌜n = 1⌝ ∗ p ↦ n) ⦄ Examples.incr_ptr p ⦃⇓ p ↦ 2⦄ := by
   unfold Examples.incr_ptr
   fail_if_success
-    step*
+    step
     done
-  sl_pull n
-  sl_pull_keep
+  sl_pull_shallow
   step*
 
 /-- Without arguments it peels as much as it can. -/
@@ -76,21 +75,26 @@ while the postcondition keeps it. -/
 example (p q : Ptr Nat) :
     ⦃ iprop(⌜q = p⌝ ∗ p ↦ 1) ⦄ Examples.incr_ptr q ⦃⇓ iprop(⌜q = p⌝ ∗ p ↦ 2)⦄ := by
   unfold Examples.incr_ptr
-  sl_pull_keep
+  sl_pull_shallow
   step*
 
 /-- `sl_pull_keep` leaves the precondition untouched: the fact is needed both in
 the context (to rewrite the cell) and in the assertion (for the postcondition). -/
 example (p : Ptr Nat) (n : Nat) :
     ⦃ iprop(⌜n = 1⌝ ∗ p ↦ n) ⦄ pure () ⦃⇓ iprop(⌜n = 1⌝ ∗ p ↦ 1)⦄ := by
-  sl_pull_keep
+  sl_pull_shallow
   step
+  case hRamified =>
+    apply qwand_intro
+    intro _
+    sl_frame
 
 /-- `step` reduces match/let noise around a terminal return. -/
 example (n : Nat) :
     ⦃ emp ⦄ (Prod.rec (fun value _ => pure value) (n, true) : St Nat)
       ⦃⇓ result => ⌜result = n⌝⦄ := by
   step
+  simp [himpl, hpure]
 
 def namedPure (n : Nat) : St Nat :=
   pure n
@@ -100,13 +104,15 @@ theorem namedPure.spec (n : Nat) :
     ⦃ emp ⦄ namedPure n ⦃⇓ result => ⌜result = n⌝⦄ := by
   unfold namedPure
   step
+  simp [himpl, hpure]
 
 /-- The direct terminal rule does not unfold named wrappers and bypass their
-registered specifications: `step` goes through `namedPure.spec`, which closes
-the goal instead of leaving the entailment a terminal return would. -/
+registered specifications: `step` goes through `namedPure.spec` and exposes
+the final ramified-frame goal. -/
 example (n : Nat) :
     ⦃ emp ⦄ namedPure n ⦃⇓ result => ⌜result = n⌝⦄ := by
   step
+  simp [himpl, hpure]
 
 /-- Normalization inside `step` stays focused on its original goal. -/
 example (n : Nat) :
@@ -115,6 +121,7 @@ example (n : Nat) :
   fail_if_success all_goals step
   · trivial
   · step
+    simp [himpl, hpure]
 
 /-! ## Frame inference
 
@@ -146,7 +153,6 @@ it, like an output. -/
 example (p : Ptr Nat) (x : Nat) :
     ⦃ iprop(⌜x = 5⌝ ∗ p ↦ x) ⦄ touchThenSet p ⦃⇓ iprop(⌜x = 5⌝ ∗ p ↦ 7)⦄ := by
   unfold touchThenSet
-  sl_pull_keep
   step as ⟨ pulled ⟩
   guard_hyp pulled : Nat
   step*
@@ -252,6 +258,7 @@ example (p : Ptr Nat) (value : Nat) :
   step
   step
   step
+  simp [himpl, hempty, hpure]
 
 /-! ## Affine resource discard
 
@@ -368,11 +375,11 @@ example (p q : Ptr Nat) (x : Nat) :
 
 /-! ### The ramified frame rule in `step` -/
 
-/-- `step` finishes a terminal call: its obligation is the *main* goal, which
-`step`'s own `by` tactic does not reach. -/
+/-- `step` exposes a terminal call's ramified-frame obligation for the caller. -/
 example (p q : Ptr Nat) :
     ⦃ iprop(p ↦ 3 ∗ q ↦ 7) ⦄ read p ⦃⇓ r => iprop(⌜r = 3⌝ ∗ (p ↦ 3 ∗ q ↦ 7))⦄ := by
-  step
+  step with read.spec p 3
+  sl_frame
 
 /-- What the ramified frame rule buys: the precondition of the *caller* may be an
 existential, and `sl_frame` is free to open it because there is no frame
@@ -404,12 +411,13 @@ example (Q₁ Q₂ : SLPost Nat) (H : SLProp) :
     iprop(H ∗ (Q₁ -∗+ Q₂)) ⊢ iprop(H ∗ (Q₁ -∗+ Q₂)) := by
   sl_frame
 
-/-- `step` only touches the goals `step` produces. -/
+/-- `step` only touches the goal it steps, leaving sibling goals alone. -/
 example (p q : Ptr Nat) :
     (⦃ iprop(p ↦ 3 ∗ q ↦ 7) ⦄ read p ⦃⇓ r => iprop(⌜r = 3⌝ ∗ (p ↦ 3 ∗ q ↦ 7))⦄)
     ∧ (iprop(p ↦ 3 ∗ q ↦ 7) ⊢ iprop(q ↦ 7 ∗ p ↦ 3)) := by
   refine ⟨?_, ?_⟩
-  step
+  step with read.spec p 3
+  sl_frame
   sl_frame
 
 /-! ## `step` -/
