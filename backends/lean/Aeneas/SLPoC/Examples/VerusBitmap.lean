@@ -502,7 +502,6 @@ theorem orCells.disjoint_spec (leftCells rightCells : List (Ptr Word))
                   have htail : leftWords.length = rightWords.length := by
                     simpa using hlength
                   step*
-                  assumption
 
 /-- Actual exact-self execution of `orCells cells cells` under one ownership
 resource.  Each step reads the same pointer twice sequentially, retains its
