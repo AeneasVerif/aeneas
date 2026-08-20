@@ -1,0 +1,4 @@
+This definition of coinductive types in lean and definition of ITrees is adapted from https://github.com/ISTA-PLV/coinductive/tree/main
+The original version was written by Michael Sammler.
+
+Compared to the original version, I've changed ITree to not have a tau constructor since we are not using corecursion. Instead, it has simple bottom element called div. I've also added some simp theorems for computing with ITrees.

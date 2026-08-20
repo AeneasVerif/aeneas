@@ -187,7 +187,7 @@ def test_is_multiple_of_true : Result Unit := do
   massert b
 
 /- Unit test for [scalars::test_is_multiple_of_true] -/
-#assert (test_is_multiple_of_true == ok ())
+#assert ((test_is_multiple_of_true ).is_ok ())
 
 /-- [scalars::test_is_multiple_of_false]:
     Source: 'tests/src/scalars.rs', lines 142:0-144:1
@@ -197,7 +197,7 @@ def test_is_multiple_of_false : Result Unit := do
   massert (¬ b)
 
 /- Unit test for [scalars::test_is_multiple_of_false] -/
-#assert (test_is_multiple_of_false == ok ())
+#assert ((test_is_multiple_of_false ).is_ok ())
 
 /-- [scalars::test_is_multiple_of_zero_divisor]:
     Source: 'tests/src/scalars.rs', lines 147:0-151:1
@@ -209,7 +209,7 @@ def test_is_multiple_of_zero_divisor : Result Unit := do
   massert (¬ b1)
 
 /- Unit test for [scalars::test_is_multiple_of_zero_divisor] -/
-#assert (test_is_multiple_of_zero_divisor == ok ())
+#assert ((test_is_multiple_of_zero_divisor ).is_ok ())
 
 /-- [scalars::test_try_from_usize_u32_ok]:
     Source: 'tests/src/scalars.rs', lines 158:0-160:1
@@ -221,7 +221,7 @@ def test_try_from_usize_u32_ok : Result Unit := do
   massert b
 
 /- Unit test for [scalars::test_try_from_usize_u32_ok] -/
-#assert (test_try_from_usize_u32_ok == ok ())
+#assert ((test_try_from_usize_u32_ok ).is_ok ())
 
 /-- [scalars::checked_div]:
     Source: 'tests/src/scalars.rs', lines 166:0-171:1 -/
@@ -257,7 +257,7 @@ def test_question_mark_ok : Result Unit := do
   massert (i = 6#u32)
 
 /- Unit test for [scalars::test_question_mark_ok] -/
-#assert (test_question_mark_ok == ok ())
+#assert ((test_question_mark_ok ).is_ok ())
 
 /-- [scalars::test_question_mark_err]:
     Source: 'tests/src/scalars.rs', lines 186:0-189:1
@@ -268,6 +268,6 @@ def test_question_mark_err : Result Unit := do
   massert (¬ b)
 
 /- Unit test for [scalars::test_question_mark_err] -/
-#assert (test_question_mark_err == ok ())
+#assert ((test_question_mark_err ).is_ok ())
 
 end scalars

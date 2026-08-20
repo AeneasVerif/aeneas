@@ -457,10 +457,8 @@ theorem Array.index_mut_SliceIndexRangeToUsizeSlice {T : Type} {N : Usize}
   have hts : a.to_slice.length = N := by simp [Array.to_slice, Slice.length]
   simp only [core.slice.index.SliceIndexRangeToUsizeSlice.index_mut,
     show (r.end : Usize) ≤ a.to_slice.length from by scalar_tac]
-  refine ⟨?_, ?_, ?_⟩
-  · simp [Array.to_slice]
-  · simp [Slice.length]; scalar_tac
-  · intro s'; simp [Array.from_slice, Array.to_slice]
+  simp
+  assumption
 
 -- Array index/index_mut with RangeFrom
 
@@ -487,10 +485,7 @@ theorem Array.index_mut_SliceIndexRangeFromUsizeSlice {T : Type} {N : Usize}
   simp only [core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut,
     Slice.drop,
     show (r.start : Usize) ≤ a.to_slice.length from by scalar_tac]
-  refine ⟨?_, ?_, ?_⟩
-  · simp [Array.to_slice]
-  · simp [Slice.length, List.length_drop]
-  · intro s'; simp [Array.from_slice, Array.to_slice]
+  simp
 
 @[reducible, rust_trait_impl "core::convert::AsRef<[@T; @N], [@T]>"]
 def Array.Insts.CoreConvertAsRefSlice (T : Type) (N : Std.Usize) :
