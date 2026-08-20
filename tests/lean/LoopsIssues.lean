@@ -12,7 +12,28 @@ set_option maxHeartbeats 1000000
 /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
 set_option maxRecDepth 2048
 
+/- You can remove the following line by using the CLI option `-all-computable`: -/
+noncomputable section
+
 namespace loops_issues
+
+/-- [core::iter::range::{impl core::iter::range::Step for i32}::backward_overflowing]:
+    Source: '/rustc/library/core/src/iter/range.rs', lines 442:16-442:78
+    Name pattern: [core::iter::range::{core::iter::range::Step<i32>}::backward_overflowing]
+    Visibility: public -/
+@[rust_fun
+  "core::iter::range::{core::iter::range::Step<i32>}::backward_overflowing"]
+axiom I32.Insts.CoreIterRangeStep.backward_overflowing
+  : Std.I32 → Std.Usize → Result (Std.I32 × Bool)
+
+/-- [core::iter::range::{impl core::iter::range::Step for i32}::forward_overflowing]:
+    Source: '/rustc/library/core/src/iter/range.rs', lines 431:16-431:77
+    Name pattern: [core::iter::range::{core::iter::range::Step<i32>}::forward_overflowing]
+    Visibility: public -/
+@[rust_fun
+  "core::iter::range::{core::iter::range::Step<i32>}::forward_overflowing"]
+axiom I32.Insts.CoreIterRangeStep.forward_overflowing
+  : Std.I32 → Std.Usize → Result (Std.I32 × Bool)
 
 /-- [loops_issues::write]:
     Source: 'tests/src/loops-issues.rs', lines 5:0-5:28 -/
