@@ -1063,11 +1063,16 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
                     let ptr_size = get_target_ptr_size span ctx.crate in
                     mk_scalar ptr_size sv1_int_ty (Z.div sv1_value sv2_value)
               | Rem OPanic ->
-                  (* See [https://github.com/ocaml/Zarith/blob/master/z.mli] *)
-                  if sv2_value = Z.zero then Error ()
-                  else
-                    let ptr_size = get_target_ptr_size span ctx.crate in
-                    mk_scalar ptr_size sv1_int_ty (Z.rem sv1_value sv2_value)
+                  (* See [https://github.com/ocaml/Zarith/blob/master/z.mli].
+                     [MIN % -1] panics in Rust (like [MIN / -1]): the result
+                     is in bounds (it is [0]) so [mk_scalar] doesn't catch it. *)
+                  let ptr_size = get_target_ptr_size span ctx.crate in
+                  if
+                    sv2_value = Z.zero
+                    || sv1_value = scalar_min ptr_size sv1_int_ty
+                       && sv2_value = Z.minus_one
+                  then Error ()
+                  else mk_scalar ptr_size sv1_int_ty (Z.rem sv1_value sv2_value)
               | Add OPanic ->
                   let ptr_size = get_target_ptr_size span ctx.crate in
                   mk_scalar ptr_size sv1_int_ty (Z.add sv1_value sv2_value)

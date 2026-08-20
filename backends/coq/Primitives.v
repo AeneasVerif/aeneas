@@ -255,7 +255,12 @@ Definition scalar_div {ty} (x y: scalar ty) : result (scalar ty) :=
   if to_Z y =? 0 then Fail_ Failure else
   mk_scalar ty (to_Z x / to_Z y).
 
-Definition scalar_rem {ty} (x y: scalar ty) : result (scalar ty) := mk_scalar ty (Z.rem (to_Z x) (to_Z y)).
+Definition scalar_rem {ty} (x y: scalar ty) : result (scalar ty) :=
+  if to_Z y =? 0 then Fail_ Failure else
+  (* There can be an overflow if [x] is equal to the lower bound and [y] to [-1]:
+     the remainder is then in bounds (it is [0]) but the operation panics in Rust *)
+  if andb (to_Z x =? scalar_min ty) (to_Z y =? (-1)) then Fail_ Failure else
+  mk_scalar ty (Z.rem (to_Z x) (to_Z y)).
   
 Definition scalar_neg {ty} (x: scalar ty) : result (scalar ty) := mk_scalar ty (-(to_Z x)).
 

@@ -165,7 +165,16 @@ let _ = assert_norm(int_rem 1 (-2) = 1)
 let _ = assert_norm(int_rem (-1) (-2) = -1)
 
 let scalar_rem (#ty : scalar_ty) (x : scalar ty) (y : scalar ty) : result (scalar ty) =
-  if y <> 0 then mk_scalar ty (int_rem x y) else Fail Failure
+  if y <> 0 then
+    (* There can be an overflow if [x] is equal to the lower bound and [y] to [-1]:
+       the remainder is then in bounds (it is [0]) but the operation panics in Rust *)
+    if x = scalar_min ty && y = -1 then Fail Failure
+    else mk_scalar ty (int_rem x y)
+  else Fail Failure
+
+(* Checking consistency with Rust: [MIN % -1] panics, [MIN % 1] doesn't *)
+let _ = assert_norm(scalar_rem #I32 (-0x80000000) (-1) = Fail Failure)
+let _ = assert_norm(scalar_rem #I32 (-0x80000000) 1 = Ok 0)
 
 let scalar_add (#ty : scalar_ty) (x : scalar ty) (y : scalar ty) : result (scalar ty) =
   mk_scalar ty (x + y)
