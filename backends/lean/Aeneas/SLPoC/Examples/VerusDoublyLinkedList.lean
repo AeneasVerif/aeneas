@@ -539,14 +539,6 @@ theorem run.spec :
       v1 = 1 ∧ v2 = 2 ∧ v3 = 3 ∧ g = false ∧ x = 3 ∧ y = 1 ∧ z = 2⦄ := by
   unfold run
   step*
-  /- The `Prop` arguments of the iterator specifications: `valid` is only available
-     behind the guard the previous `moveNext` returned, which is what needs `grind`. -/
-  case hne => grind
-  case hvalid => grind
-  case hvalid => grind
-  case hvalid => grind
-  case hvalid => grind
-  case hne => grind
 
 end Example
 
