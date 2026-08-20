@@ -15,7 +15,10 @@ def UScalar.rem {ty : UScalarTy} (x y : UScalar ty) : RustM (UScalar ty) :=
   if y.val != 0 then ok ⟨ BitVec.umod x.bv y.bv ⟩ else fail panic
 
 def IScalar.rem {ty : IScalarTy} (x y : IScalar ty) : RustM (IScalar ty) :=
-  if y.val != 0 then ok ⟨ BitVec.srem x.bv y.bv ⟩
+  if y.val != 0 then
+    -- There can be an overflow if `x` is equal to the lower bound and `y` to `-1`
+    if ¬ (x.val = IScalar.min ty && y.val = -1) then ok ⟨ BitVec.srem x.bv y.bv ⟩
+    else fail panic
   else fail panic
 
 def UScalar.try_rem {ty : UScalarTy} (x y : UScalar ty) : Option (UScalar ty) :=
@@ -62,6 +65,23 @@ namespace Tests
   #assert bv_srem (-7) 3 = -1
   #assert bv_srem 7 (-3) = 1
   #assert bv_srem (-7) (-3) = -1
+
+  -- Checking that `MIN % -1` panics (like `MIN / -1`) while `MIN % 1` succeeds
+  #assert (IScalar.rem (I8.ofInt (-2^7)) (I8.ofInt (-1)) == fail panic)
+  #assert (IScalar.rem (I16.ofInt (-2^15)) (I16.ofInt (-1)) == fail panic)
+  #assert (IScalar.rem (I32.ofInt (-2^31)) (I32.ofInt (-1)) == fail panic)
+  #assert (IScalar.rem (I64.ofInt (-2^63)) (I64.ofInt (-1)) == fail panic)
+  #assert (IScalar.rem (I128.ofInt (-2^127)) (I128.ofInt (-1)) == fail panic)
+  #assert (IScalar.rem (I8.ofInt (-2^7)) (I8.ofInt 1) == ok (I8.ofInt 0))
+  #assert (IScalar.rem (I16.ofInt (-2^15)) (I16.ofInt 1) == ok (I16.ofInt 0))
+  #assert (IScalar.rem (I32.ofInt (-2^31)) (I32.ofInt 1) == ok (I32.ofInt 0))
+  #assert (IScalar.rem (I64.ofInt (-2^63)) (I64.ofInt 1) == ok (I64.ofInt 0))
+  #assert (IScalar.rem (I128.ofInt (-2^127)) (I128.ofInt 1) == ok (I128.ofInt 0))
+  #assert (IScalar.rem (I32.ofInt (-7)) (I32.ofInt (-1)) == ok (I32.ofInt 0))
+  #assert (IScalar.rem (I32.ofInt 7) (I32.ofInt 3) == ok (I32.ofInt 1))
+  #assert (IScalar.rem (I32.ofInt 7) (I32.ofInt 0) == fail panic)
+  #assert (UScalar.rem (U32.ofNat 7) (U32.ofNat 3) == ok (U32.ofNat 1))
+  #assert (UScalar.rem (U32.ofNat 7) (U32.ofNat 0) == fail panic)
 end Tests
 
 /-!
@@ -81,10 +101,12 @@ theorem UScalar.rem_bv_spec {ty} (x : UScalar ty) {y : UScalar ty} (hzero : y.va
   simp
 
 /-- Generic theorem - shouldn't be used much -/
-theorem IScalar.rem_bv_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.val ≠ 0) :
+theorem IScalar.rem_bv_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.val ≠ 0)
+  (hNoOverflow : ¬ (x.val = IScalar.min ty ∧ y.val = -1)) :
   x % y ⦃ z => (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv ⦄ := by
   conv => arg 1; simp [HMod.hMod]
-  simp only [spec_ok, rem, bne_iff_ne, ne_eq, hzero, not_false_eq_true, ↓reduceIte]
+  simp only [spec_ok, rem, bne_iff_ne, ne_eq, hzero, not_false_eq_true, ↓reduceIte,
+    Int.reduceNeg, Bool.and_eq_true, decide_eq_true_eq, hNoOverflow]
   simp only [val]
   simp only [BitVec.toInt_srem, bv_toInt_eq, and_true]
 
@@ -93,9 +115,10 @@ uscalar theorem «%S».rem_bv_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0)
   x % y ⦃ z => (↑z : Nat) = ↑x % ↑y ∧ z.bv = x.bv % y.bv ⦄ :=
   UScalar.rem_bv_spec x hnz
 
-iscalar theorem «%S».rem_bv_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0) :
+iscalar theorem «%S».rem_bv_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0)
+  (hNoOverflow : ¬ (x.val = «%S».min ∧ y.val = -1)) :
   x % y ⦃ z => (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv ⦄ :=
-  IScalar.rem_bv_spec x hnz
+  IScalar.rem_bv_spec x hnz (by scalar_tac)
 
 /-!
 Theorems with a specification which only uses integers
@@ -110,10 +133,11 @@ theorem UScalar.rem_spec {ty} (x : UScalar ty) {y : UScalar ty} (hzero : y.val �
     exact h.1
 
 /-- Generic theorem - shouldn't be used much -/
-theorem IScalar.rem_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.val ≠ 0) :
+theorem IScalar.rem_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.val ≠ 0)
+  (hNoOverflow : ¬ (x.val = IScalar.min ty ∧ y.val = -1)) :
   x % y ⦃ z => (↑z : Int) = Int.tmod ↑x ↑y ⦄ := by
   apply spec_mono
-  · apply rem_bv_spec x hzero
+  · apply rem_bv_spec x hzero hNoOverflow
   · intros x' h
     exact h.1
 
@@ -134,15 +158,19 @@ uscalar @[step] theorem «%S».rem_spec (x : «%S») {y : «%S»} :
 iscalar @[step] theorem «%S».rem_spec (x : «%S») {y : «%S»} :
     partialSpec (x % y)
       (fun z => (↑z : Int) = Int.tmod ↑x ↑y)
-      (fun | .panic => (↑y : Int) = 0 | _ => False)
+      (fun | .panic => ((↑y : Int) = 0) ∨ ((↑x : Int) = «%S».min ∧ (↑y : Int) = -1)
+           | _ => False)
       False := by
   have hxy : (x % y : RustM _) = IScalar.rem x y := rfl
   rw [hxy]
   by_cases hy : y.val = 0
   · simp [partialSpec, IScalar.rem, hy]
-  · have h := IScalar.rem_spec x hy
-    rw [hxy] at h
-    simp_all [partialSpec]
-    split <;> simp_all
+  · by_cases ho : x.val = IScalar.min (IScalarTy.«%S») ∧ y.val = -1
+    · simp [partialSpec, IScalar.rem, ho.1, ho.2]
+      try scalar_tac
+    · have h := IScalar.rem_spec x hy ho
+      rw [hxy] at h
+      simp_all [partialSpec]
+      split <;> simp_all
 
 end Aeneas.Std
