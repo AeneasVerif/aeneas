@@ -1511,7 +1511,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value) (scrutinee : texpr)
       [%add_loc] mk_closed_checked_let ctx monadic lv
         (mk_opt_mplace_texpr scrutinee_mplace scrutinee)
         branch
-  | TTuple ->
+  | TBuiltin TTuple ->
       let vars = List.map (fun x -> mk_tpat_from_fvar None x) vars in
       let monadic = false in
       [%add_loc] mk_closed_checked_let ctx monadic (mk_simpl_tuple_pat vars)
