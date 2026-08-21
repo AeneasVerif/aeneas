@@ -12,7 +12,100 @@ set_option maxHeartbeats 1000000
 /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
 set_option maxRecDepth 2048
 
+/- You can remove the following line by using the CLI option `-all-computable`: -/
+noncomputable section
+
 namespace iter_adapters
+
+/-- [core::iter::range::{impl core::iter::range::Step for u8}::backward_overflowing]:
+    Source: '/rustc/library/core/src/iter/range.rs', lines 357:16-357:78
+    Name pattern: [core::iter::range::{core::iter::range::Step<u8>}::backward_overflowing]
+    Visibility: public -/
+@[rust_fun
+  "core::iter::range::{core::iter::range::Step<u8>}::backward_overflowing"]
+axiom U8.Insts.CoreIterRangeStep.backward_overflowing
+  : Std.U8 → Std.Usize → Result (Std.U8 × Bool)
+
+/-- [core::iter::range::{impl core::iter::range::Step for u8}::forward_overflowing]:
+    Source: '/rustc/library/core/src/iter/range.rs', lines 348:16-348:77
+    Name pattern: [core::iter::range::{core::iter::range::Step<u8>}::forward_overflowing]
+    Visibility: public -/
+@[rust_fun
+  "core::iter::range::{core::iter::range::Step<u8>}::forward_overflowing"]
+axiom U8.Insts.CoreIterRangeStep.forward_overflowing
+  : Std.U8 → Std.Usize → Result (Std.U8 × Bool)
+
+/-- [core::iter::range::{impl core::iter::range::Step for u16}::backward_overflowing]:
+    Source: '/rustc/library/core/src/iter/range.rs', lines 357:16-357:78
+    Name pattern: [core::iter::range::{core::iter::range::Step<u16>}::backward_overflowing]
+    Visibility: public -/
+@[rust_fun
+  "core::iter::range::{core::iter::range::Step<u16>}::backward_overflowing"]
+axiom U16.Insts.CoreIterRangeStep.backward_overflowing
+  : Std.U16 → Std.Usize → Result (Std.U16 × Bool)
+
+/-- [core::iter::range::{impl core::iter::range::Step for u16}::forward_overflowing]:
+    Source: '/rustc/library/core/src/iter/range.rs', lines 348:16-348:77
+    Name pattern: [core::iter::range::{core::iter::range::Step<u16>}::forward_overflowing]
+    Visibility: public -/
+@[rust_fun
+  "core::iter::range::{core::iter::range::Step<u16>}::forward_overflowing"]
+axiom U16.Insts.CoreIterRangeStep.forward_overflowing
+  : Std.U16 → Std.Usize → Result (Std.U16 × Bool)
+
+/-- [core::iter::range::{impl core::iter::range::Step for u32}::backward_overflowing]:
+    Source: '/rustc/library/core/src/iter/range.rs', lines 357:16-357:78
+    Name pattern: [core::iter::range::{core::iter::range::Step<u32>}::backward_overflowing]
+    Visibility: public -/
+@[rust_fun
+  "core::iter::range::{core::iter::range::Step<u32>}::backward_overflowing"]
+axiom U32.Insts.CoreIterRangeStep.backward_overflowing
+  : Std.U32 → Std.Usize → Result (Std.U32 × Bool)
+
+/-- [core::iter::range::{impl core::iter::range::Step for u32}::forward_overflowing]:
+    Source: '/rustc/library/core/src/iter/range.rs', lines 348:16-348:77
+    Name pattern: [core::iter::range::{core::iter::range::Step<u32>}::forward_overflowing]
+    Visibility: public -/
+@[rust_fun
+  "core::iter::range::{core::iter::range::Step<u32>}::forward_overflowing"]
+axiom U32.Insts.CoreIterRangeStep.forward_overflowing
+  : Std.U32 → Std.Usize → Result (Std.U32 × Bool)
+
+/-- [core::iter::range::{impl core::iter::range::Step for u64}::backward_overflowing]:
+    Source: '/rustc/library/core/src/iter/range.rs', lines 357:16-357:78
+    Name pattern: [core::iter::range::{core::iter::range::Step<u64>}::backward_overflowing]
+    Visibility: public -/
+@[rust_fun
+  "core::iter::range::{core::iter::range::Step<u64>}::backward_overflowing"]
+axiom U64.Insts.CoreIterRangeStep.backward_overflowing
+  : Std.U64 → Std.Usize → Result (Std.U64 × Bool)
+
+/-- [core::iter::range::{impl core::iter::range::Step for u64}::forward_overflowing]:
+    Source: '/rustc/library/core/src/iter/range.rs', lines 348:16-348:77
+    Name pattern: [core::iter::range::{core::iter::range::Step<u64>}::forward_overflowing]
+    Visibility: public -/
+@[rust_fun
+  "core::iter::range::{core::iter::range::Step<u64>}::forward_overflowing"]
+axiom U64.Insts.CoreIterRangeStep.forward_overflowing
+  : Std.U64 → Std.Usize → Result (Std.U64 × Bool)
+
+/-- [core::iter::range::{impl core::iter::range::Step for usize}::backward_overflowing]:
+    Source: '/rustc/library/core/src/iter/range.rs', lines 357:16-357:78
+    Name pattern: [core::iter::range::{core::iter::range::Step<usize>}::backward_overflowing]
+    Visibility: public -/
+@[rust_fun
+  "core::iter::range::{core::iter::range::Step<usize>}::backward_overflowing"]
+axiom Usize.Insts.CoreIterRangeStep.backward_overflowing
+  : Std.Usize → Std.Usize → Result (Std.Usize × Bool)
+
+/-- [core::iter::range::{impl core::iter::range::Step for usize}::forward_overflowing]:
+    Source: '/rustc/library/core/src/iter/range.rs', lines 348:16-348:77
+    Name pattern: [core::iter::range::{core::iter::range::Step<usize>}::forward_overflowing]
+    Visibility: public -/
+@[rust_fun
+  "core::iter::range::{core::iter::range::Step<usize>}::forward_overflowing"]
+axiom Usize.Insts.CoreIterRangeStep.forward_overflowing
+  : Std.Usize → Std.Usize → Result (Std.Usize × Bool)
 
 /-- [iter_adapters::test_enumerate_slice]:
     Source: 'tests/src/iter_adapters.rs', lines 14:0-24:1

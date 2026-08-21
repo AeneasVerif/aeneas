@@ -927,15 +927,15 @@ and type_decl = {
       polymorphic = false;
     }]
 
-type field_proj_kind = E.field_proj_kind [@@deriving show, ord]
 type field_id = FieldId.id [@@deriving show, ord]
 
-(* TODO: we might want to redefine field_proj_kind here, to prevent field accesses
- * on enumerations.
- * Also: tuples...
- * Rmk: projections are actually only used as span-data.
- *)
-type mprojection_elem = { pkind : field_proj_kind; field_id : field_id }
+(** Field projections used as span data. The source type is retained because
+    meta-places otherwise erase the type carried by LLBC places. *)
+type mprojection_elem = {
+  type_id : type_id;
+  variant_id : VariantId.id option;
+  field_id : field_id;
+}
 [@@deriving show, ord]
 
 (** "Meta" place.
