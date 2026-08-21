@@ -341,13 +341,13 @@ let unsafe_names_map_add (id : id) (name : string) (nm : unsafe_names_map) :
     useful to generate code where all variable names are assigned at most once.
 
     [append]: function to append an index to a string *)
-let basename_to_unique_aux (collision : string -> bool)
-    (append : string -> int -> string) (basename : string) : string =
+let name_to_unique (collision : string -> bool)
+    (append : string -> int -> string) (name : string) : string =
   let rec gen (i : int) : string =
-    let s = append basename i in
+    let s = append name i in
     if collision s then gen (i + 1) else s
   in
-  if collision basename then gen 1 else basename
+  if collision name then gen 1 else name
 
 type names_maps = {
   names_map : names_map;
@@ -1866,9 +1866,10 @@ let ctx_compute_trait_decl_constructor (ctx : extraction_ctx)
     Because we want to be precise when deriving the name, we use the original
     LLBC types, that is the types from before the translation to pure, which
     simplifies types like boxes and references. *)
-let ctx_compute_trait_clause_name (ctx : extraction_ctx)
-    (current_def_name : Types.name) (params : Types.generic_params)
-    (clauses : Types.trait_param list) (clause_id : trait_clause_id) : string =
+let ctx_compute_trait_clause_name ?(keep_var_generics = false)
+    (ctx : extraction_ctx) (current_def_name : Types.name)
+    (params : Types.generic_params) (clauses : Types.trait_param list)
+    (clause_id : trait_clause_id) : string =
   (* We derive the name of the clause from the trait instance.
      For instance, if the clause gives us an instance of `Foo<u32>`,
      we generate a name along the lines of "fooU32Inst".
@@ -1902,31 +1903,97 @@ let ctx_compute_trait_clause_name (ctx : extraction_ctx)
     | Some impl_trait_decl ->
         let args = clause_trait.generics in
         trait_name_with_generics_to_simple_name ctx.trans_ctx ~prefix
-          impl_trait_decl.item_meta.name params args
+          ~keep_var_generics impl_trait_decl.item_meta.name params args
   in
   String.concat "" clause
 
-let ctx_compute_trait_parent_clause_name (ctx : extraction_ctx)
-    (trait_decl : trait_decl) (clause : trait_param) : string =
-  (* We derive the name of the clause from the trait instance.
-     For instance, if the clause gives us an instance of `Foo<u32>`,
-     we generate a name along the lines of "fooU32Inst".
-  *)
-  (* We need to lookup the LLBC definitions, to have the original instantiation *)
-  let clause =
-    let current_def_name = trait_decl.item_meta.name in
-    let params = trait_decl.llbc_generics in
-    ctx_compute_trait_clause_name ctx current_def_name params
-      trait_decl.llbc_parent_clauses clause.clause_id
+(* Builtin information describes the trait's parent clauses. *)
+let check_builtin_arity (ctx : extraction_ctx) (trait_decl : trait_decl)
+    (info : Pure.builtin_trait_decl_info) : unit =
+  [%cassert] trait_decl.item_meta.span
+    (List.length trait_decl.parent_clauses = List.length info.parent_clauses)
+    ("Invalid builtin information for trait decl: "
+    ^ name_to_string ctx trait_decl.item_meta.name
+    ^ "; expected "
+    ^ string_of_int (List.length trait_decl.parent_clauses)
+    ^ " parent clauses, found "
+    ^ string_of_int (List.length info.parent_clauses))
+
+(** Names for a trait's parent clauses.
+
+    Computed: [base ^ "Inst"], base = referenced trait name plus its generic
+    args, the latter added only to break a collision; a numeric suffix is the
+    last guard. Builtin: names taken verbatim. *)
+let ctx_compute_trait_parent_clause_names (ctx : extraction_ctx)
+    (trait_decl : trait_decl)
+    (builtin_info : Pure.builtin_trait_decl_info option) :
+    (trait_param * string) list =
+  (* Prefix shared by all clauses. *)
+  let prefix =
+    if !Config.record_fields_short_names then None
+    else Some (ctx_compute_trait_decl_name ctx trait_decl)
   in
-  let clause =
-    if !Config.record_fields_short_names then clause
-    else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ clause
+  (* Clause base name; [keep_var_generics] includes the trait's generic args. *)
+  let compute_base ~keep_var_generics (clause : trait_param) : string =
+    let base =
+      ctx_compute_trait_clause_name ~keep_var_generics ctx
+        trait_decl.item_meta.name trait_decl.llbc_generics
+        trait_decl.llbc_parent_clauses clause.clause_id
+    in
+    match prefix with
+    | None -> base
+    | Some p -> p ^ "_" ^ base
   in
-  let clause = clause ^ "Inst" in
-  match backend () with
-  | FStar -> StringUtils.lowercase_first_letter clause
-  | Coq | HOL4 | Lean -> clause
+  let add_inst_and_normalize (name : string) : string =
+    let name = name ^ "Inst" in
+    match backend () with
+    | FStar -> StringUtils.lowercase_first_letter name
+    | Coq | HOL4 | Lean -> name
+  in
+  (* Compute a name for each parent clause. *)
+  let names =
+    match builtin_info with
+    | None ->
+        (* Short base by default; escalate when the short base collides. *)
+        let shorts =
+          List.map
+            (compute_base ~keep_var_generics:false)
+            trait_decl.parent_clauses
+        in
+        (* The short names occurring more than once. *)
+        let ambiguous =
+          snd
+            (List.fold_left
+               (fun (seen, dup) s ->
+                 if StringSet.mem s seen then (seen, StringSet.add s dup)
+                 else (StringSet.add s seen, dup))
+               (StringSet.empty, StringSet.empty)
+               shorts)
+        in
+        let _, named =
+          List.fold_left_map
+            (fun used (c, short) ->
+              let base =
+                if StringSet.mem short ambiguous then
+                  compute_base ~keep_var_generics:true c
+                else short
+              in
+              let name =
+                name_to_unique
+                  (fun s -> StringSet.mem s used)
+                  (fun n i -> n ^ string_of_int i)
+                  (add_inst_and_normalize base)
+              in
+              (StringSet.add name used, (c, name)))
+            StringSet.empty
+            (List.combine trait_decl.parent_clauses shorts)
+        in
+        named
+    | Some info ->
+        check_builtin_arity ctx trait_decl info;
+        List.combine trait_decl.parent_clauses info.parent_clauses
+  in
+  names
 
 let ctx_compute_trait_type_name (ctx : extraction_ctx) (trait_decl : trait_decl)
     (item : string) : string =
@@ -2088,7 +2155,7 @@ let ctx_compute_const_generic_var_basename (_ctx : extraction_ctx)
 let ctx_compute_trait_clause_basename (ctx : extraction_ctx)
     (current_def_name : Types.name) (params : Types.generic_params)
     (clause_id : trait_clause_id) : string =
-  (* This is similar to {!ctx_compute_trait_parent_clause_name}: we
+  (* This is similar to {!ctx_compute_trait_parent_clause_names}: we
      derive the name from the trait reference (i.e., from the type) *)
   let clause =
     ctx_compute_trait_clause_name ctx current_def_name params
@@ -2117,7 +2184,7 @@ let basename_to_unique (ctx : extraction_ctx) (name : string) =
     || StringSet.mem s ctx.names_maps.strict_names_map.names_set
   in
 
-  basename_to_unique_aux collision name_append_index name
+  name_to_unique collision name_append_index name
 
 (** Generate a unique type variable name and add it to the context *)
 let ctx_add_type_var (span : Meta.span) (origin : generic_origin)
