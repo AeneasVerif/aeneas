@@ -807,12 +807,12 @@ def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState : Ste
      the post-conditions and existential variables to introduce).
 
      We prefer user-provided names, and for non-Props we generate fresh names. For Props we
-     analyze the type of the hypothesis: if it is of the form `<id> <binrel> _` then we
-     prefer using `<id>_post<idx>`, so that each post-condition is named after the output
+     analyze the type of the hypothesis: if it is of the form `<id> <binrel> _` (or `_<binrel><id>`)
+     then we prefer using `<id>_post<idx>`, so that each post-condition is named after the output
      it constrains. We compute the names here, while the binders' types are still at hand,
      and use them further below when actually introducing the binders. -/
   let goal ← getMainGoal
-  let (outputIsProp, postsIdsArr) ← goal.withContext do
+  let (postsIsProp, postsIdsArr) ← goal.withContext do
     let type ← instantiateMVars (← goal.getType)
     forallTelescope type.consumeMData fun fvars _ => do
       let typesAndProps : Array (Expr × Bool) ← fvars.mapM fun fv => do
@@ -853,14 +853,14 @@ def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState : Ste
             | none => mkFreshAnonPropUserName
             | some (nameRoot, baseName) =>
               let suffixNum := postCounts.getD baseName 0
-              let suffixStr := if 0 < suffixNum then s!"{suffixNum}" else ""
+              let suffixStr := if suffixNum == 0 then "" else s!"{suffixNum}"
               postCounts := postCounts.insert baseName (suffixNum + 1)
               pure (Name.str nameRoot s!"{baseName}_post{suffixStr}")
         postsIds := postsIds.push n
-      pure (typesAndProps.map (fun (p : Expr × Bool) => p.2), postsIds)
+      pure (typesAndProps.map (·.2), postsIds)
 
   /- The postfix length: the remaining binders (post-condition and existential variables). -/
-  let postfixLength := outputIsProp.size
+  let postfixLength := postsIsProp.size
   trace[Step] "Prefix length (outputs): {prefixLength}, postfix length (post-conditions): {postfixLength}"
   trace[Step] "output ids: {outputIds}, post ids: {postsIdsArr}"
 
@@ -892,7 +892,7 @@ def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState : Ste
   let outputInfos := outputFVars.mapIdx fun i fv =>
     { fvarId := fv, name? := mkName? (outputIds.getD i `_), isProp := false : Output }
   let postInfos := posts.mapIdx fun i fv =>
-    { fvarId := fv, name? := mkName? (postsIds.getD i `_), isProp := outputIsProp.getD i true : Output }
+    { fvarId := fv, name? := mkName? (postsIds.getD i `_), isProp := postsIsProp.getD i true : Output }
   let introducedVars := outputInfos ++ postInfos
 
   pure (some { goal := ← getMainGoal, outputs := introducedVars, stepState })
