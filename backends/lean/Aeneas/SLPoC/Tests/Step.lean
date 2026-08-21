@@ -25,8 +25,7 @@ example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => p ↦ 1⦄ := by
 /-- The same goal reached one step at a time. -/
 example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => p ↦ 1⦄ := by
   unfold allocAndReturn
-  step* 1
-  step
+  step*
 
 /-! ## Manual work on the terminal entailment
 
@@ -170,6 +169,21 @@ example (p : Ptr Nat) :
     done
   step with ghostHelper.spec p (NeedsWitness.mk { f := id })
   step
+
+/-! ## A failed discharge leaves inference metavariables unsolved -/
+
+/-- `sl_frame` can infer the value argument of `read.spec` by matching the
+points-to assertions, but then fails to prove the opaque pure fact. Its failure
+rolls back that assignment, so `step` leaves the `Nat` metavariable as the first
+goal. -/
+example (p : Ptr Nat) (value : Nat) :
+    ⦃ p ↦ value ⦄ read p
+      ⦃⇓ result => iprop(⌜opaqueStepResult result value⌝ ∗ p ↦ value)⦄ := by
+  step
+  · guard_target = Nat
+    exact value
+  · simp only [opaqueStepResult]
+    sl_frame
 
 /-! ## The required specification is not registered
 
