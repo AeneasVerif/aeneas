@@ -148,6 +148,8 @@ If the bodies differ, an error is raised with a detailed message showing both bo
 A warning is emitted when two clauses produce identical definitions under different
 names, suggesting to reuse the same name instead.
 
+See the tests in `Aeneas/Command/Decompose/` for more usage examples.
+
 ## Using existing definitions
 
 Name reuse also works with definitions that already exist in the environment (e.g.,
@@ -303,12 +305,11 @@ Matches on the patterns `pattern₁`, `pattern₂`, ..., introduces the definiti
 A pattern navigates to a position in the body; the extraction happens there.
 
 - `letRange start count`: extract `count` consecutive let/bind bindings starting at index
-  `start` (0-indexed).
+  `start` (starting at 0).
 - `full`: extract the whole expression at the current position.
-- `letAt i (pat)`: navigate to the value of binding `i`, then apply `pat`. When `i` points
-  past all bindings, `pat` applies to the terminal expression instead.
+- `letAt i (pat)`: navigate to the value of binding `i`, then apply `pat`.
 - `afterLets (pat)`: navigate past all leading let/bind bindings to the terminal expression,
-  then apply `pat` (`letAt N` without having to know `N`).
+  then apply `pat`.
 - `branch i (pat)`: navigate into branch `i` of an `if-then-else`, `dite` or `match`
   (0 is `then` / the first alternative), then apply `pat`. Match-pattern lambdas are opened
   automatically.
@@ -316,8 +317,7 @@ A pattern navigates to a position in the body; the extraction happens there.
 - `appFun (pat)` / `argArg i (pat)`: navigate into the function, resp. argument `i`, of an
   application.
 
-Full documentation can be found in the module docstring at
-[`Aeneas/Command/Decompose.lean`](https://github.com/AeneasVerif/aeneas/blob/main/backends/lean/Aeneas/Command/Decompose.lean).
+Full documentation can be found in the module docstring of the command.
 -/
 syntax (name := decomposeCmd) "#decompose " ident ident (ppLine decompose_clause)* : command
 
