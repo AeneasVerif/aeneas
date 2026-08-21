@@ -361,7 +361,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
     | TArray (ty, _) | TSlice ty ->
         (* Nothing to update: just explore the type parameters *)
         analyze span expl_info ty_info ty
-    | TAdt { id = TTuple | TBuiltin (TBox | TStr); generics } ->
+    | TAdt { id = TBuiltin (TTuple | TBox | TStr); generics } ->
         (* Nothing to update: just explore the type parameters *)
         List.fold_left
           (fun ty_info ty -> analyze span expl_info ty_info ty)
@@ -799,10 +799,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
                     let ty, r = pred.binder_value in
                     outlive_visitor#visit_ty r ty)
                   types_outlive
-            | TTuple -> super#visit_ty outer ty
-            | TBuiltin builtin_ty -> (
-                match builtin_ty with
-                | TBox | TStr -> super#visit_ty outer ty)
+            | TBuiltin (TTuple | TBox | TStr) -> super#visit_ty outer ty
           end
         | TArray _ | TSlice _ -> super#visit_ty outer ty
         | TVar _ | TLiteral _ | TNever -> ()

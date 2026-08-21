@@ -143,7 +143,7 @@ module Values = struct
     | TArray _ ->
         (* Happens when we aggregate values *)
         "@Array[" ^ String.concat ", " fields ^ "]"
-    | TAdt { id = TTuple; _ } ->
+    | TAdt { id = TBuiltin TTuple; _ } ->
         (* Tuple *)
         "(" ^ String.concat ", " fields ^ ")"
     | TAdt { id = TAdtId def_id; _ } ->
