@@ -12,7 +12,28 @@ set_option maxHeartbeats 1000000
 /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
 set_option maxRecDepth 2048
 
+/- You can remove the following line by using the CLI option `-all-computable`: -/
+noncomputable section
+
 namespace loops_nested
+
+/-- [core::iter::range::{impl core::iter::range::Step for usize}::backward_overflowing]:
+    Source: '/rustc/library/core/src/iter/range.rs', lines 357:16-357:78
+    Name pattern: [core::iter::range::{core::iter::range::Step<usize>}::backward_overflowing]
+    Visibility: public -/
+@[rust_fun
+  "core::iter::range::{core::iter::range::Step<usize>}::backward_overflowing"]
+axiom Usize.Insts.CoreIterRangeStep.backward_overflowing
+  : Std.Usize → Std.Usize → Result (Std.Usize × Bool)
+
+/-- [core::iter::range::{impl core::iter::range::Step for usize}::forward_overflowing]:
+    Source: '/rustc/library/core/src/iter/range.rs', lines 348:16-348:77
+    Name pattern: [core::iter::range::{core::iter::range::Step<usize>}::forward_overflowing]
+    Visibility: public -/
+@[rust_fun
+  "core::iter::range::{core::iter::range::Step<usize>}::forward_overflowing"]
+axiom Usize.Insts.CoreIterRangeStep.forward_overflowing
+  : Std.Usize → Std.Usize → Result (Std.Usize × Bool)
 
 /-- [loops_nested::iter]: loop body 1:
     Source: 'tests/src/loops-nested.rs', lines 7:8-9:9

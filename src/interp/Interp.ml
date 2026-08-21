@@ -191,13 +191,13 @@ let compute_contexts (crate : crate) : decls_ctx =
         inherit [_] iter_crate as super
 
         (* Include a method if an implementation of it is in the extracted functions. *)
-        method! visit_item_source env (src : item_source) =
+        method! visit_fun_source env (src : fun_source) =
           (match src with
-          | TraitDeclItem (trait_ref, AssocIdMethod method_id)
-          | TraitImplItem (_, trait_ref, AssocIdMethod method_id, _) ->
+          | TraitDefaultFun (trait_ref, method_id)
+          | TraitImplFun (_, trait_ref, method_id, _) ->
               add_trait_method_id trait_ref.id method_id
           | _ -> ());
-          super#visit_item_source env src
+          super#visit_fun_source env src
 
         (* Include a method if it is mentioned in the extracted functions. *)
         method! visit_fn_ptr env fn_ptr =
@@ -250,7 +250,7 @@ let compute_contexts (crate : crate) : decls_ctx =
     We return a new context because we compute and add the type normalization
     map in the same step. *)
 let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
-    (sg : bound_fun_sig) (_kind : item_source) : eval_ctx * inst_fun_sig =
+    (sg : bound_fun_sig) (_kind : fun_source) : eval_ctx * inst_fun_sig =
   let tr_self = UnknownTrait "symbolic_instantiate_fun_sig" in
   let generics =
     Substitute.generic_args_of_params_erase_regions (Some span)
@@ -547,7 +547,7 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
            is false *)
           let pop_locals =
             if !Config.borrow_check_globals then true
-            else not (Option.is_some fdef.is_global_initializer)
+            else not (fun_decl_is_global_initializer fdef)
           in
           pop_frame config span ~pop_locals ~pop_return_value:true ctx
         in

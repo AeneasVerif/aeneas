@@ -460,7 +460,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
             (fun ((v, ty) : tvalue * ty) -> [%sanity_check] span (v.ty = ty))
             fields_with_types
       (* Tuple case *)
-      | VAdt av, TAdt { id = TTuple; generics } ->
+      | VAdt av, TAdt { id = TBuiltin TTuple; generics } ->
           [%sanity_check] span (generics.regions = []);
           [%sanity_check] span (generics.const_generics = []);
           [%sanity_check] span (av.variant_id = None);
@@ -587,7 +587,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
             (fun ((v, ty) : tavalue * ty) -> [%sanity_check] span (v.ty = ty))
             fields_with_types
       (* Tuple case *)
-      | AAdt av, TAdt { id = TTuple; generics } ->
+      | AAdt av, TAdt { id = TBuiltin TTuple; generics } ->
           [%sanity_check] span (generics.regions = []);
           [%sanity_check] span (generics.const_generics = []);
           [%sanity_check] span (av.variant_id = None);
