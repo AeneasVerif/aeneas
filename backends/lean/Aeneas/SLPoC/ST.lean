@@ -227,13 +227,30 @@ theorem theta_adequate (m : St α) (Q : SLPost α) (h₀ : Heap)
           exact Exec.event (M := StEvents.machine)
             ⟨(), _, .free hContains, ih () _ hNext⟩
 
-/-- The adequacy statement above, spelled out as an evaluation. -/
+/-- Every terminating evaluation satisfies the postcondition. -/
 theorem theta_sound (m : St α) (Q : SLPost α) (h₀ : Heap)
     (hTheta : theta m Q h₀) :
-    ∃ value h₁, Evaluates m h₀ value h₁ ∧ Q value h₁ := by
-  obtain ⟨m', h₁, hRuns, value, rfl, hQ⟩ :=
-    Exec.exists_stop StEvents.machine_resolves (theta_adequate m Q h₀ hTheta)
-  exact ⟨value, h₁, hRuns, hQ⟩
+    ∀ value h₁, Evaluates m h₀ value h₁ → Q value h₁ := by
+  induction m generalizing h₀ with
+  | ok result =>
+      rintro value h₁ ⟨hValue, hHeap⟩
+      cases hValue
+      cases hHeap
+      exact hTheta
+  | event event next ih =>
+      change theta_ev event (fun result => theta (next result) Q) h₀ at hTheta
+      intro value h₁ hEval
+      rcases hEval with hStop | ⟨result, h, hStep, hEval⟩
+      · simp at hStop
+      · cases hStep with
+        | alloc hFresh =>
+            exact ih _ _ (theta_ev_alloc_elim hTheta hFresh) _ _ hEval
+        | read hContains =>
+            exact ih _ _ (theta_ev_read_post hTheta hContains) _ _ hEval
+        | update hContains =>
+            exact ih _ _ (theta_ev_update_post hTheta hContains) _ _ hEval
+        | free hContains =>
+            exact ih _ _ (theta_ev_free_post hTheta hContains) _ _ hEval
 
 theorem theta_ev_frame (event : StEvents α) (Q : SLPost α)
     (H : SLProp) :
