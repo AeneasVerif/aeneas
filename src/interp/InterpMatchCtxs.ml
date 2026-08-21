@@ -215,10 +215,18 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
         | ASharedBorrow (npm, bid, sid) ->
             (* Add the current marker when visiting the borrow id *)
             register_borrow_id abs npm bid (Some sid)
-        | AProjSharedBorrow _ ->
+        | AProjSharedBorrow asb ->
             [%sanity_check] span (pm = PNone);
-            (* Process those normally *)
-            super#visit_aborrow_content (abs, pm) bc
+            (* Register the concrete shared borrows nested inside the projection.
+               We can't call super here because it would trigger visit_borrow_id
+               (which raises an internal error) for the AsbBorrow entries. *)
+            List.iter
+              (fun ab ->
+                match ab with
+                | AsbBorrow (bid, sid) ->
+                    register_borrow_id abs PNone bid (Some sid)
+                | AsbProjReborrows _ -> ())
+              asb
         | AIgnoredMutBorrow (_, child)
         | AEndedIgnoredMutBorrow { child; given_back = _; given_back_meta = _ }
           ->
@@ -226,6 +234,13 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
             (* Ignore the id of the borrow, if there is *)
             self#visit_tavalue (abs, pm) child
         | AEndedMutBorrow _ | AEndedSharedBorrow -> [%craise] span "Unreachable"
+
+      (** Ignore concrete borrows inside shared loan values (e.g., the shared
+          value [sv] of [ASharedLoan (_, _, sv, _)] can contain concrete borrows
+          when the type has nested references). These borrows are already
+          tracked via [ASharedBorrow] entries in the corresponding borrow
+          abstractions. *)
+      method! visit_borrow_content _ _ = ()
 
       method! visit_borrow_id _ _ = [%internal_error] span
       method! visit_loan_id (abs, pm) lid = register_loan_id abs pm lid
@@ -469,12 +484,15 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
       ^ tavalue_to_string ~span:(Some M.span) ctx1 v1
       ^ "\n- ty1: " ^ ty_to_string ctx1 v1.ty];
 
-    (* Using ValuesUtils.value_has_borrows on purpose here: we want
+    (* Using ValuesUtils.value_has_mut_borrows on purpose here: we want
        to make explicit the fact that, though we have to pick
-       one of the two contexts (ctx0 here) to call value_has_borrows,
-       it doesn't matter here. *)
-    let value_has_borrows =
-      ValuesUtils.value_has_borrows (Some span) ctx0.type_ctx.type_infos
+       one of the two contexts (ctx0 here) to call value_has_mut_borrows,
+       it doesn't matter here.
+       Note: we use value_has_mut_borrows (not value_has_borrows) because
+       since PR #1187, shared values inside ASharedLoan can contain nested
+       VSharedBorrow entries. *)
+    let value_has_mut_borrows =
+      ValuesUtils.value_has_mut_borrows (Some span) ctx0.type_ctx.type_infos
     in
 
     let match_rec = match_tvalues ctx0 ctx1 in
@@ -549,7 +567,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             let sv = match_rec sv0 sv1 in
             let av = match_arec av0 av1 in
             [%sanity_check_recover] M.recover M.span
-              (not (value_has_borrows sv.value));
+              (not (value_has_mut_borrows sv.value));
             M.match_ashared_loans match_rec ctx0 ctx1 v0.ty pm0 id0 sv0 av0
               v1.ty pm1 id1 sv1 av1 ty sv av
         | AMutLoan (pm0, id0, av0), AMutLoan (pm1, id1, av1) ->
