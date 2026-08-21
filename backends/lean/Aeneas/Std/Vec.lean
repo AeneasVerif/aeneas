@@ -365,6 +365,14 @@ def alloc.vec.Vec.extend_from_slice {T : Type} (cloneInst : core.clone.Clone T)
 def alloc.vec.Vec.deref {T : Type} (v : alloc.vec.Vec T) : Slice T :=
   ⟨ v.val, v.property ⟩
 
+@[simp, grind =]
+theorem alloc.vec.Vec.deref_val {T : Type} (v : alloc.vec.Vec T) :
+    (alloc.vec.Vec.deref v).val = v.val := rfl
+
+@[simp, scalar_tac_simps, grind =]
+theorem alloc.vec.Vec.deref_length {T : Type} (v : alloc.vec.Vec T) :
+    (alloc.vec.Vec.deref v).length = v.length := rfl
+
 @[reducible, rust_trait_impl "core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>" (keepParams := [true, false])]
 def core.ops.deref.DerefVec {T : Type} : core.ops.deref.Deref (alloc.vec.Vec T) (Slice T) := {
   deref := fun v => ok (alloc.vec.Vec.deref v)

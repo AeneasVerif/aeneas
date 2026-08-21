@@ -61,6 +61,22 @@ example : Result (Array Int (Usize.ofNat 2)) := do
   let y ← ok 1
   ok (Array.make (Usize.ofNat 2) [x, y])
 
+@[simp, grind =]
+theorem Array.val_make {α : Type u} (n : Usize) (l : List α) (h : l.length = n) :
+    (Array.make n l h).val = l := rfl
+
+@[scalar_tac Array.make n l h, grind =]
+theorem Array.length_make {α : Type u} (n : Usize) (l : List α) (h : l.length = n) :
+    (Array.make n l h).length = n.val := h
+
+@[simp, grind =]
+theorem Array.make_val {α : Type u} {n : Usize} (a : Array α n) (h : a.length = n) :
+    Array.make n a.val h = a := rfl
+
+theorem Array.make_inj {α : Type u} {n : Usize} (l₁ l₂ : List α) (h₁ : l₁.length = n)
+    (h₂ : l₂.length = n) : Array.make n l₁ h₁ = Array.make n l₂ h₂ ↔ l₁ = l₂ :=
+  Subtype.ext_iff
+
 instance {α : Type u} {n : Usize} : GetElem (Array α n) Nat α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i h
 
@@ -273,6 +289,19 @@ theorem Array.getElem_set_neq {α} {n : Usize} (v : Array α n) (i j : Usize) (x
   unfold set getElem instGetElemArrayUsizeLtNatValLengthValListEq
   simp only [ne_eq, UScalar.neq_to_neq_val] at *
   simp_lists [List.getElem_set_ne]
+
+/-- Map a function over an `Array`, preserving the length. -/
+def Array.map {α : Type u} {β : Type v} {n : Usize} (f : α → β) (a : Array α n) : Array β n :=
+  ⟨a.val.map f, by simp [a.property]⟩
+
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_safe, grind =, agrind =]
+theorem Array.val_map {α β} {n : Usize} (f : α → β) (a : Array α n) :
+    (Array.map f a).val = a.val.map f := rfl
+
+theorem Array.getElem!_map {α β} [Inhabited α] [Inhabited β] {n : Usize} (f : α → β)
+    (a : Array α n) (i : Nat) (h : i < n.val) : (Array.map f a)[i]! = f (a[i]!) := by
+  have h' : i < a.val.length := by simp [h]
+  simp [List.getElem?_eq_getElem h']
 
 /-- Small helper (this function doesn't model a specific Rust function) -/
 def Array.clone {α : Type u} {n : Usize} (clone : α → Result α) (s : Array α n) : Result (Array α n) := do
