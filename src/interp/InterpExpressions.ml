@@ -163,7 +163,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
           [%craise] span "Can't copy an builtin value other than Option"
       | TAdt { id = TAdtId _; _ } as ty ->
           [%sanity_check] span (allow_adt_copy || ty_is_copyable ty)
-      | TAdt { id = TTuple; _ } -> () (* Ok *)
+      | TAdt { id = TBuiltin TTuple; _ } -> () (* Ok *)
       | TArray (ty, _) | TSlice ty ->
           [%cassert] span (ty_is_copyable ty)
             "The type is not primitively copyable"
@@ -1275,11 +1275,11 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
         (* The opt_field_id is Some only for unions, that we don't support *)
         [%sanity_check] span (opt_field_id = None);
         match type_id with
-        | TTuple ->
+        | TBuiltin TTuple ->
             let tys = List.map (fun (v : tvalue) -> v.ty) values in
             let v = VAdt { variant_id = None; fields = values } in
             let generics = mk_generic_args [] tys [] [] in
-            let ty = TAdt { id = TTuple; generics } in
+            let ty = TAdt { id = TBuiltin TTuple; generics } in
             let aggregated : tvalue = { value = v; ty } in
             (aggregated, fun e -> e)
         | TAdtId def_id ->
@@ -1367,7 +1367,7 @@ let eval_discriminant (config : config) (span : Meta.span) (p : place)
     | TAdt { id; generics } -> (
         match id with
         | TAdtId id -> (id, generics)
-        | TTuple ->
+        | TBuiltin TTuple ->
             [%craise] span
               ("Attempting to read the discriminant of a tuple: ("
              ^ tvalue_to_string ctx v ^ " : " ^ ty_to_string ctx v.ty ^ ")")

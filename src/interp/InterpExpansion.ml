@@ -337,7 +337,7 @@ let compute_expanded_symbolic_adt_value (span : Meta.span)
   | TAdtId def_id, _, _ ->
       compute_expanded_symbolic_non_builtin_adt_value span expand_enumerations
         def_id generics ctx
-  | TTuple, [], _ ->
+  | TBuiltin TTuple, [], _ ->
       [ compute_expanded_symbolic_tuple_value span ctx generics.types ]
   | TBuiltin TBox, [], [ boxed_ty ] ->
       [ compute_expanded_symbolic_box_value span ctx boxed_ty ]
@@ -721,7 +721,7 @@ let greedy_expand_symbolics_with_borrows (span : Meta.span) : cm_fun =
             end;
             (* *)
             expand_symbolic_value_no_branching span sv None ctx
-        | TAdt { id = TTuple | TBuiltin TBox; _ } | TRef (_, _, _) ->
+        | TAdt { id = TBuiltin (TTuple | TBox); _ } | TRef (_, _, _) ->
             (* Ok *)
             expand_symbolic_value_no_branching span sv None ctx
         | TArray _ | TSlice _ | TAdt { id = TBuiltin TStr; _ } ->
