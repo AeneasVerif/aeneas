@@ -55,13 +55,13 @@ let mk_etuple ~(borrow_proj : bool) (vl : tevalue list) : tevalue =
   let generics = mk_generic_args_from_types tys in
   {
     value = EAdt { borrow_proj; variant_id = None; fields = vl };
-    ty = TAdt { id = TTuple; generics };
+    ty = TAdt { id = TBuiltin TTuple; generics };
   }
 
 let mk_epat_tuple (vl : tepat list) : tepat =
   let tys = List.map (fun (v : tepat) -> v.ty) vl in
   let generics = mk_generic_args_from_types tys in
-  { pat = PAdt (None, vl); ty = TAdt { id = TTuple; generics } }
+  { pat = PAdt (None, vl); ty = TAdt { id = TBuiltin TTuple; generics } }
 
 let mk_simpl_etuple ~(borrow_proj : bool) (vl : tevalue list) : tevalue =
   match vl with
