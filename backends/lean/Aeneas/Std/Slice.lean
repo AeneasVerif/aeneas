@@ -110,7 +110,7 @@ theorem Slice.getElem!_val_drop {T} (s : Slice T) (i : Usize) :
 
 @[simp]
 abbrev Slice.slice {α : Type u} [Inhabited α] (s : Slice α) (i j : Nat) : List α :=
-  s.val.slice i j
+  s.val.extract i j
 
 def Slice.index_usize {α : Type u} (v: Slice α) (i: Usize) : Result α :=
   match v[i]? with
@@ -293,9 +293,9 @@ theorem Slice.update_index_eq α [Inhabited α] (x : Slice α) (i : Usize) (h : 
 def Slice.subslice {α : Type u} (s : Slice α) (r : Range Usize) : Result (Slice α) :=
   -- TODO: not completely sure here
   if r.start.val < r.end.val ∧ r.end.val ≤ s.length then
-    ok ⟨ s.val.slice r.start.val r.end.val,
+    ok ⟨ s.val.extract r.start.val r.end.val,
           by
-            have := s.val.slice_length_le r.start.val r.end.val
+            have := s.val.extract_length_le r.start.val r.end.val
             scalar_tac ⟩
   else
     fail panic
@@ -306,9 +306,9 @@ theorem Slice.subslice_spec {α : Type u} [Inhabited α] (s : Slice α) (r : Ran
   subslice s r ⦃ ns => ns.val = s.slice r.start.val r.end.val ∧
   (∀ i, i + r.start.val < r.end.val → ns[i]! = s[r.start.val + i]!) ⦄
   := by
-  simp_all only [subslice, length, and_self, ite_true, slice, spec_ok, true_and]
+  simp_all only [subslice, length, and_self, ite_true, spec_ok, true_and]
   intro i _
-  have := List.getElem!_slice r.start.val r.end.val i s.val (by scalar_tac)
+  have := List.getElem!_extract r.start.val r.end.val i s.val (by scalar_tac)
   simp only [List.getElem!_eq_getElem?_getD, getElem!_Nat_eq] at *
   apply this
 
@@ -373,14 +373,14 @@ def core.slice.Slice.get_mut
 def core.slice.index.SliceIndexRangeUsizeSlice.get {T : Type} (r : Range Usize) (s : Slice T) :
   Result (Option (Slice T)) :=
   if r.start ≤ r.end ∧ r.end ≤ s.length then
-    ok (some ⟨ s.val.slice r.start r.end, by scalar_tac⟩)
+    ok (some ⟨ s.val.extract r.start r.end, by scalar_tac⟩)
   else ok none
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], [@T]>}::get_mut"]
 def core.slice.index.SliceIndexRangeUsizeSlice.get_mut
   {T : Type} (r : Range Usize) (s : Slice T) : Result (Option (Slice T) × (Option (Slice T) → Slice T)) :=
   if r.start ≤ r.end ∧ r.end ≤ s.length then
-    ok (some ⟨ s.val.slice r.start r.end, by scalar_tac⟩,
+    ok (some ⟨ s.val.extract r.start r.end, by scalar_tac⟩,
         fun s' =>
         match s' with
         | none => s
@@ -405,14 +405,14 @@ def core.slice.index.SliceIndexRangeUsizeSlice.get_unchecked_mut {T : Type} :
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], [@T]>}::index"]
 def core.slice.index.SliceIndexRangeUsizeSlice.index {T : Type} (r : Range Usize) (s : Slice T) : Result (Slice T) :=
   if r.start ≤ r.end ∧ r.end ≤ s.length then
-    ok (⟨ s.val.slice r.start r.end, by scalar_tac⟩)
+    ok (⟨ s.val.extract r.start r.end, by scalar_tac⟩)
   else fail .panic
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], [@T]>}::index_mut"]
 def core.slice.index.SliceIndexRangeUsizeSlice.index_mut {T : Type} (r : Range Usize) (s : Slice T) :
   Result (Slice T × (Slice T → Slice T)) :=
   if r.start ≤ r.end ∧ r.end ≤ s.length then
-    ok (⟨ s.val.slice r.start r.end, by scalar_tac⟩,
+    ok (⟨ s.val.extract r.start r.end, by scalar_tac⟩,
         /- The back function expects a slice of the same length as the returned subslice.
            We don't enforce this with a guard because we want totality; `setSlice!` handles
            any length gracefully. The model is correct when this condition holds, which is
@@ -442,7 +442,7 @@ def core.slice.index.SliceIndexRangeUsizeSlice (T : Type) :
 def core.slice.index.SliceIndexRangeToUsizeSlice.get
   {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) : Result (Option (Slice T)) :=
   if r.end ≤ s.length then
-    ok (some ⟨ s.val.slice 0 r.end, by scalar_tac⟩)
+    ok (some ⟨ s.val.extract 0 r.end, by scalar_tac⟩)
   else ok none
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get_mut"]
@@ -450,7 +450,7 @@ def core.slice.index.SliceIndexRangeToUsizeSlice.get_mut
   {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) :
   Result ((Option (Slice T)) × (Option (Slice T) → Slice T)) :=
   if r.end ≤ s.length then
-    ok (some ⟨ s.val.slice 0 r.end, by scalar_tac⟩,
+    ok (some ⟨ s.val.extract 0 r.end, by scalar_tac⟩,
         fun s' =>
         match s' with
         | none => s
@@ -477,7 +477,7 @@ def core.slice.index.SliceIndexRangeToUsizeSlice.get_unchecked_mut
 def core.slice.index.SliceIndexRangeToUsizeSlice.index
   {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) : Result (Slice T) :=
   if r.end ≤ s.length then
-    ok (⟨ s.val.slice 0 r.end, by scalar_tac⟩)
+    ok (⟨ s.val.extract 0 r.end, by scalar_tac⟩)
   else fail .panic
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::index_mut"]
@@ -485,7 +485,7 @@ def core.slice.index.SliceIndexRangeToUsizeSlice.index_mut
   {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) :
   Result ((Slice T) × (Slice T → Slice T)) :=
   if r.end ≤ s.length then
-    ok (⟨ s.val.slice 0 r.end, by scalar_tac⟩,
+    ok (⟨ s.val.extract 0 r.end, by scalar_tac⟩,
         /- The back function expects a slice of the same length as the returned subslice.
            We don't enforce this with a guard because we want totality; `setSlice!` handles
            any length gracefully. The model is correct when this condition holds, which is
@@ -710,8 +710,7 @@ theorem core.slice.Slice.split_at.spec {T : Type} (s : Slice T) (n : Usize)
         s0.val = s.val.take n.val ∧ s1.val = s.val.drop n.val ⦄ := by
   unfold core.slice.Slice.split_at
   simp only [h, ↓reduceDIte, WP.spec_ok, uncurry'_pair]
-  refine ⟨?_, ?_, ?_, ?_⟩ <;>
-  simp only [Slice.length, List.splitAt_eq, List.length_take, inf_eq_left, List.length_drop, *]
+  refine ⟨?_, ?_, ?_, ?_⟩ <;> simp [Slice.length, List.splitAt_eq]; scalar_tac
 
 /-- **Spec theorem for `core::slice::{[@T]}::split_at_mut`** -/
 -- TODO: ideally the postcondition binder would decompose the result pair as
@@ -769,14 +768,12 @@ theorem core.slice.Slice.swap_spec {T : Type} [Inhabited T] (s : Slice T) (a b :
   rw [hs1.2] at hs'
   simp only [hs', spec_ok]
   refine ⟨?_, ?_, ?_, ?_⟩
-  · simp only [Slice.length, Slice.set_val_eq, List.length_set]
+  · simp
   · by_cases hab : (↑a : ℕ) = ↑b
-    · simp only [Slice.set_val_eq, hab]; grind
-    · simp only [Slice.set_val_eq]
-      grind
-  · simp only [Slice.set_val_eq]; grind
+    · grind
+    · grind
+  · grind
   · intro i hia hib
-    simp only [Slice.set_val_eq]
     grind
 
 @[simp, step_simps]
@@ -864,29 +861,25 @@ theorem Slice.setSlice!_val (s : Slice α) (i : ℕ) (s' : List α) :
 @[step]
 theorem core.slice.index.SliceIndexRangeUsizeSlice.index_mut.step_spec (r : core.ops.range.Range Usize) (s : Slice α)
   (h0 : r.start ≤ r.end) (h1 : r.end ≤ s.length) :
-  core.slice.index.SliceIndexRangeUsizeSlice.index_mut r s ⦃ (s1 : Slice α) (index_mut_back : Slice α → Slice α) =>
-  s1.val = s.val.slice r.start r.end ∧
+  core.slice.index.SliceIndexRangeUsizeSlice.index_mut r s ⦃ (s1, index_mut_back) =>
+  s1.val = s.val.extract r.start r.end ∧
   s1.length = r.end - r.start ∧
   ∀ s2, index_mut_back s2 = s.setSlice! r.start.val s2 ⦄ := by
   simp only [index_mut, UScalar.le_equiv, Slice.length]
   split
-  . simp only [spec_ok, Std.WP.uncurry', true_and]
-    simp_lists
-    simp_scalar
-    simp_lists [Slice.eq_iff]
+  . simp (discharger := scalar_tac) [Slice.eq_iff]
   . scalar_tac
 
 @[step]
 theorem core.slice.index.SliceIndexRangeUsizeSlice.index.step_spec {α : Type}
     (r : core.ops.range.Range Usize) (s : Slice α) (h0 : r.start ≤ r.end) (h1 : r.end ≤ s.length) :
     core.slice.index.SliceIndexRangeUsizeSlice.index r s ⦃ (s1 : Slice α) =>
-      s1.val = s.val.slice r.start r.end ∧
+      s1.val = s.val.extract r.start r.end ∧
       s1.length = r.end - r.start ⦄ := by
   simp only [core.slice.index.SliceIndexRangeUsizeSlice.index, UScalar.le_equiv, Slice.length]
   split
-  · simp only [spec_ok, true_and]
-    simp_lists
-    omega
+  · simp_lists [spec_ok, true_and]
+    grind
   · simp only [spec_fail]
     scalar_tac
 
@@ -907,7 +900,7 @@ theorem core.slice.index.SliceIndexRangeToUsizeSlice.index_mut.step_spec
     (r : core.ops.range.RangeTo Usize) (s : Slice α) (h : r.end ≤ s.length) :
   core.slice.index.SliceIndexRangeToUsizeSlice.index_mut r s
     ⦃ (s1 : Slice α) (back : Slice α → Slice α) =>
-      s1.val = s.val.slice 0 r.end ∧
+      s1.val = s.val.extract 0 r.end ∧
       s1.length = r.«end» ∧
       ∀ s', (back s').val = s.val.setSlice! 0 s'.val ⦄ := by
   simp only [index_mut]
@@ -923,7 +916,7 @@ theorem core.slice.index.SliceIndexRangeToUsizeSlice.index.step_spec
     (r : core.ops.range.RangeTo Usize) (s : Slice α) (h : r.end ≤ s.length) :
   core.slice.index.SliceIndexRangeToUsizeSlice.index r s
     ⦃ s1 =>
-      s1.val = s.val.slice 0 r.end ∧
+      s1.val = s.val.extract 0 r.end ∧
       s1.length = r.end ⦄ := by
   simp only [index]
   split

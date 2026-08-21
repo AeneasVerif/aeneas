@@ -46,9 +46,9 @@ theorem Array.to_slice_mut_spec {α : Type u} {n : Usize} (a : Array α n) :
 def Array.subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) : Result (Slice α) :=
   -- TODO: not completely sure here
   if r.start.val < r.end.val ∧ r.end.val ≤ a.val.length then
-    ok ⟨ a.val.slice r.start.val r.end.val,
+    ok ⟨ a.val.extract r.start.val r.end.val,
           by
-            have := a.val.slice_length_le r.start.val r.end.val
+            have := a.val.extract_length_le r.start.val r.end.val
             scalar_tac ⟩
   else
     fail panic
@@ -57,12 +57,12 @@ def Array.subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) 
 theorem Array.subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize)
   (h0 : r.start.val < r.end.val) (h1 : r.end.val ≤ a.val.length) :
   subslice a r ⦃ s =>
-  s.val = a.val.slice r.start.val r.end.val ∧
+  s.val = a.val.extract r.start.val r.end.val ∧
   (∀ i, i + r.start.val < r.end.val → s.val[i]! = a.val[r.start.val + i]!) ⦄
   := by
   simp only [subslice, true_and, h0, h1, ↓reduceIte, spec_ok, true_and]
   intro i _
-  have := List.getElem!_slice r.start.val r.end.val i a.val (by scalar_tac)
+  have := List.getElem!_extract r.start.val r.end.val i a.val (by scalar_tac)
   simp only [this]
 
 
@@ -404,7 +404,7 @@ theorem Array.index_SliceIndexRangeUsizeSlice.step {T : Type} {N : Usize} [Inhab
     core.array.Array.index (core.ops.index.IndexSlice
       (core.slice.index.SliceIndexRangeUsizeSlice T)) a r
     ⦃ (s : Slice T) =>
-      s.val = a.val.slice r.start r.end ∧
+      s.val = a.val.extract r.start r.end ∧
       s.length = r.end.val - r.start.val ⦄ := by
   simp only [Array.index_SliceIndexRangeUsizeSlice]
   have hts : a.to_slice.length = N := by simp [Array.to_slice, Slice.length]
@@ -420,7 +420,7 @@ theorem Array.index_mut_SliceIndexRangeUsizeSlice.step {T : Type} {N : Usize} [I
     core.array.Array.index_mut (core.ops.index.IndexMutSlice
       (core.slice.index.SliceIndexRangeUsizeSlice T)) a r
     ⦃ (s : Slice T) (back : Slice T → Array T N) =>
-      s.val = a.val.slice r.start r.end ∧
+      s.val = a.val.extract r.start r.end ∧
       s.length = r.end.val - r.start.val ∧
       ∀ s', (back s').val = a.val.setSlice! r.start.val s'.val ⦄ := by
   simp only [core.array.Array.index_mut, core.ops.index.IndexMutSlice,
@@ -449,7 +449,7 @@ theorem Array.index_mut_SliceIndexRangeToUsizeSlice {T : Type} {N : Usize}
     core.array.Array.index_mut (core.ops.index.IndexMutSlice
       (core.slice.index.SliceIndexRangeToUsizeSlice T)) a r
     ⦃ (s : Slice T) (back : Slice T → Array T N) =>
-      s.val = a.val.slice 0 r.end ∧
+      s.val = a.val.extract 0 r.end ∧
       s.length = r.end.val ∧
       ∀ s', (back s').val = a.val.setSlice! 0 s'.val ⦄ := by
   simp only [core.array.Array.index_mut, core.ops.index.IndexMutSlice,
