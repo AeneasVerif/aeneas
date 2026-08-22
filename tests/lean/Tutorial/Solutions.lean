@@ -137,26 +137,17 @@ theorem list_nth_mut1_spec'' {T: Type} [Inhabited T] (l : CList T) (i : U32)
       encounters a branching. Note that one can automatically generate the corresponding
       proof script by using `step*?`.
 
-      TODO(lean4.33): `step*` currently closes the `i = 0` base case via `grind`
-      (through the `agrind` lemmas above), and `grind` emits a `decide`-based proof
-      term that the Lean 4.33 kernel rejects (`eq_false_of_decide (eagerReduce …)`).
-      Until that `grind` regression is fixed we fall back to the explicit script
-      (identical to `list_nth_mut1_spec'`). -/
-  split
-  · rename_i hd tl
-    split
-    · simp
-      split_conjs
-      · simp_all
-      · intro x; simp_all
-    · simp at *
-      step as ⟨ i1, _, hi ⟩
-      step as ⟨ tl1, back ⟩
-      simp
-      split_conjs
-      · simp_lists [*]
-      · intro x'; simp [*]
-  · simp at h
+      We pass `threadGrindState := false` to sidestep an upstream `grind` bug on Lean
+      4.33.1: with the threaded grind e-graph, `grind`'s contradiction detection
+      false-positives on the `i = 0` base case and emits an ill-typed proof of `False`
+      (`eq_false_of_decide (eagerReduce (Eq.refl false))`, i.e. it claims
+      `decide (0 = 0) = false`) that the kernel (correctly) rejects. Disabling threading
+      falls back to a fresh `grind` per step, which is unaffected. This is not a soundness
+      issue (the kernel catches the bad term); drop the config once `grind` is fixed
+      upstream. -/
+  step* (threadGrindState := false)
+  simp
+  simp_lists [*]
 
 /-- Theorem about `list_tail_loop`: verbose version -/
 @[step]
