@@ -350,8 +350,12 @@ def core.slice.Slice.get_unchecked
   {T : Type} {I : Type} {Output : Type}
   (SliceIndexInst : core.slice.index.SliceIndex I (Slice T) Output)
   (s : Slice T) (i : I) : Result Output :=
-  -- TODO: we should actually use the `SliceIndexInst.get_unchecked` method
-  sorry
+  -- `get_unchecked` reads an element without a bounds check. The unsafe,
+  -- pointer-based `SliceIndexInst.get_unchecked` field is unmodelled (it always
+  -- fails), but in the pure `Result` model there is no undefined behaviour, so an
+  -- in-bounds unchecked access coincides with the checked `index`. We route through
+  -- it; callers remain responsible for establishing in-boundedness.
+  SliceIndexInst.index i s
 
 @[rust_fun "core::slice::{[@T]}::get_mut"]
 def core.slice.Slice.get_mut
@@ -557,7 +561,9 @@ theorem core.slice.Slice.get_unchecked_SliceIndexUsizeSlice_spec {T s i} [Inhabi
   (h : i.val < s.length) :
   core.slice.Slice.get_unchecked  (core.slice.index.SliceIndexUsizeSlice T) s i
   ⦃ x => x = s[i] ⦄ := by
-  sorry
+  simp only [core.slice.Slice.get_unchecked, core.slice.index.SliceIndexUsizeSlice,
+    core.slice.index.Usize.index]
+  exact Slice.index_usize_spec s i h
 
 @[rust_fun "core::slice::{[@T]}::copy_from_slice"]
 def core.slice.Slice.copy_from_slice {T : Type} (_ : core.marker.Copy T)
