@@ -81,7 +81,7 @@ theorem getElem_setSlice!_same {α} (s : Array α) (s' : List α) (i j : ℕ)
   (s.setSlice! i s')[j] = s[j] := by
   cases h.1 <;> simp_lists [getElem_setSlice!_prefix, getElem_setSlice!_suffix]
 
-def Inhabited_getElem_eq_getElem! {α} [Inhabited α] (l : Array α) (i : ℕ) (hi : i < l.size) :
+theorem Inhabited_getElem_eq_getElem! {α} [Inhabited α] (l : Array α) (i : ℕ) (hi : i < l.size) :
   l[i] = l[i]! := by
   have : l.toList[i] = l.toList[i]! :=
     List.Inhabited_getElem_eq_getElem! l.toList i (by simpa using hi)
@@ -108,13 +108,9 @@ theorem getElem_set! {α : Type u}
   simp only [set!_eq_setIfInBounds, ← getElem_toList, toList_setIfInBounds]
   simp_lists
 
-@[simp, simp_lists_safe]
-theorem getElem!_set!_ne {α : Type u}
-  [Inhabited α] {i j : ℕ} {x : α} {xs : Array α}
-  (h : i ≠ j) :
-  (xs.set! i x)[j]! = xs[j]! := by
-  simp only [set!_eq_setIfInBounds, ← getElem!_toList, toList_setIfInBounds]
-  simp_lists
+-- `Array.getElem!_set!_ne` is provided by the Lean core library since v4.33; we only
+-- register it with Aeneas' simp sets (previously this file declared its own copy).
+attribute [simp, simp_lists_safe] getElem!_set!_ne
 
 @[simp, simp_lists_safe]
 theorem getElem_set!_ne {α : Type u}

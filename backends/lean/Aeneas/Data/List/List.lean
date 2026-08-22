@@ -746,7 +746,7 @@ theorem setSlice!_drop {α} (l : List α) (i : ℕ) :
   by_cases h1: j < l.length <;> simp_lists
   simp_scalar
 
-def Inhabited_getElem_eq_getElem! {α} [Inhabited α] (l : List α) (i : ℕ) (hi : i < l.length) :
+theorem Inhabited_getElem_eq_getElem! {α} [Inhabited α] (l : List α) (i : ℕ) (hi : i < l.length) :
   l[i] = l[i]! := by
   simp only [List.getElem!_eq_getElem?_getD, List.getElem?_eq_getElem, Option.getD_some, hi]
 

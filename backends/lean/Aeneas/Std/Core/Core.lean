@@ -105,10 +105,10 @@ def core.option.Option.unwrap_or (self : Option T) (default : T) : T :=
   | none => default
   | some self => self
 
-@[simp] def core.option.Option.unwrap_or_some (self default : T) :
+@[simp] theorem core.option.Option.unwrap_or_some (self default : T) :
   core.option.Option.unwrap_or (some self) default = self := by simp [unwrap_or]
 
-@[simp] def core.option.Option.unwrap_or_none (default : T) :
+@[simp] theorem core.option.Option.unwrap_or_none (default : T) :
   core.option.Option.unwrap_or none default = default := by simp [unwrap_or]
 
 @[simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::take" -canFail -lift]

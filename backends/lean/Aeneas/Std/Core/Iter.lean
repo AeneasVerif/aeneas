@@ -8,6 +8,9 @@ import Aeneas.Std.Scalar.EqOrd
 import Aeneas.Std.Scalar.CheckedOps
 import Aeneas.Std.Core.Core
 
+-- Rust-mirrored names (e.g. `core.iter.*.iter`) legitimately repeat a namespace component.
+set_option linter.dupNamespace false
+
 namespace Aeneas.Std
 
 @[rust_trait "core::iter::range::Step"

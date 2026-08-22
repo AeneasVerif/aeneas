@@ -389,7 +389,7 @@ namespace Test
   /-!
   Making some tests here as models to guide the automation generation of proof terms when lifting theorems in `step_pure`
   -/
-  open Std Result
+  open _root_.Aeneas.Std Result
   def pos_pair : Int × Int := (0, 1)
 
   theorem pos_pair_is_pos :
@@ -663,6 +663,7 @@ info: Aeneas.Step.Test.pos_triple_is_pos.step_spec :
   #guard_msgs in
   #check pos_triple_is_pos.step_spec
 
+  set_option linter.defProp false in
   def pos_triple_is_pos' := pos_triple_is_pos
   #step_pure_lift_thm pos_triple_is_pos' (∃ z, pos_triple = z)
 

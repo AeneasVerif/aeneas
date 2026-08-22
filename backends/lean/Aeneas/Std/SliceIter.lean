@@ -3,6 +3,9 @@ import Aeneas.Std.Slice
 import Aeneas.Std.Array.Array
 import Aeneas.Std.Core.Iter
 
+-- Rust-mirrored names legitimately repeat a namespace component.
+set_option linter.dupNamespace false
+
 namespace Aeneas.Std
 
 open Result Error core.ops.range WP

@@ -17,7 +17,7 @@ This tactic is adapted from `zify`.
 namespace Aeneas.Bvify
 
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
-open Arith Std
+open Arith _root_.Aeneas.Std
 
 structure Config where
   nonLin : Bool := true -- We use the non linear lemmas by default
