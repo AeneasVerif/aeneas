@@ -154,7 +154,7 @@ private theorem pow_ineq (r: DivRange) :
   . apply pow_ineq
 
 @[simp]
-def foldWhile'_step {α : Type u} (r : DivRange) (f : α → (a : Nat) → a ∈ r → α) (i : Nat) (init : α)
+theorem foldWhile'_step {α : Type u} (r : DivRange) (f : α → (a : Nat) → a ∈ r → α) (i : Nat) (init : α)
   (hi : i ≤ r.start ∧ ∃ k, i = r.start / r.divisor ^ k)
   (h : r.stop < i) :
   foldWhile' r f i init hi =
@@ -170,7 +170,7 @@ def foldWhile'_step {α : Type u} (r : DivRange) (f : α → (a : Nat) → a ∈
   simp [*]
 
 @[simp]
-def foldWhile'_id {α : Type u} (r : DivRange) (f : α → (a : Nat) → a ∈ r → α) (i : Nat) (init : α)
+theorem foldWhile'_id {α : Type u} (r : DivRange) (f : α → (a : Nat) → a ∈ r → α) (i : Nat) (init : α)
   (hi : i ≤ r.start ∧ ∃ k, i = r.start / r.divisor ^ k)
   (h : ¬ r.stop < i) :
   foldWhile' r f i init hi = init
@@ -179,14 +179,14 @@ def foldWhile'_id {α : Type u} (r : DivRange) (f : α → (a : Nat) → a ∈ r
   simp [*]
 
 @[simp]
-def foldWhile_step {α : Type u} (stop divisor : Nat) (hDiv : 1 < divisor)
+theorem foldWhile_step {α : Type u} (stop divisor : Nat) (hDiv : 1 < divisor)
   (f : α → Nat → α) (i : Nat) (init : α) (h : stop < i) :
   foldWhile stop divisor hDiv f i init = foldWhile stop divisor hDiv f (i / divisor) (f init i) := by
   conv => lhs; unfold foldWhile
   simp [*]
 
 @[simp]
-def foldWhile_id {α : Type u} (stop divisor : Nat) (hDiv : 1 < divisor)
+theorem foldWhile_id {α : Type u} (stop divisor : Nat) (hDiv : 1 < divisor)
   (f : α → Nat → α) (i : Nat) (init : α) (h : ¬ stop < i) :
   foldWhile stop divisor hDiv f i init = init := by
   conv => lhs; unfold foldWhile

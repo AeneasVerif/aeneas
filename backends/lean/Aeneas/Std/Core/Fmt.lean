@@ -3,6 +3,9 @@ import Aeneas.Std.Core.Result
 import Aeneas.Std.Array.Array
 import Aeneas.Std.StringDef
 
+-- Rust-mirrored names (e.g. `core.fmt.Debug.fmt`) legitimately repeat a namespace component.
+set_option linter.dupNamespace false
+
 namespace Aeneas.Std
 
 @[reducible, rust_type "core::fmt::Error"]

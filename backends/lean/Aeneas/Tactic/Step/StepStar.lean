@@ -463,7 +463,7 @@ where
       {simpThms := #[← Step.stepSimpExt.getTheorems]}
       (.targets #[] true)
     /- We may have proven the goal already -/
-    let tac : Array Syntax.Tactic ← do
+    let tac : Array (TaskOrDone (Option Syntax.Tactic)) ← do
       let genSimp : Bool ← do
         if r.isNone then pure true
         else do
@@ -918,7 +918,7 @@ info: Try this:
 #guard_msgs in
 example : True := by step*?
 
-open Std Result
+open _root_.Aeneas.Std Result
 
 def add1 (x0 x1 : U32) : Std.Result U32 := do
   let x2 ← x0 + x1

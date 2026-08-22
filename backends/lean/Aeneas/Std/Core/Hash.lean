@@ -1,6 +1,9 @@
 import Aeneas.Std.Core.Core
 import Aeneas.Std.Slice
 
+-- Rust-mirrored names (e.g. `core.hash.*.hash`) legitimately repeat a namespace component.
+set_option linter.dupNamespace false
+
 namespace Aeneas.Std
 
 @[rust_trait "core::hash::Hasher"]

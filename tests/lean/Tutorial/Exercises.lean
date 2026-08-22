@@ -2,7 +2,7 @@ import Aeneas
 open Aeneas Std Result
 
 local macro_rules
-| `(tactic| get_elem_tactic) => `(tactic| grind)
+| `(tactic| get_elem_tactic) => `(tactic| scalar_tac)
 
 set_option maxHeartbeats 1000000
 

@@ -12,7 +12,7 @@ def goal1 (x y bound count : Nat) : Prop :=
 /- Note that when measuring time the variance is quite big -/
 --set_option trace.profiler true in
 set_option maxRecDepth 2048 in
-def test1 (x y : Nat) (h : x < 10) (h : y < 20) : goal1 x y 200 200
+theorem test1 (x y : Nat) (h : x < 10) (h : y < 20) : goal1 x y 200 200
   := by
   simp only [goal1, Nat.add_one_ne_zero, ↓reduceIte, Nat.reduceAdd, Nat.add_one_sub_one,
     Nat.sub_self, and_true]
@@ -29,7 +29,7 @@ def goal2 (length count : Nat) : Prop :=
 
 --set_option trace.profiler true in
 set_option maxRecDepth 2048 in
-def test2 : goal2 600 20
+theorem test2 : goal2 600 20
   := by
   simp only [goal2, Nat.add_one_ne_zero, ↓reduceIte, Nat.add_one_sub_one, Nat.sub_self, and_true]
   --split_conjs <;> simp -- 4.9s for 16 goals, 6.11s for 20 goals

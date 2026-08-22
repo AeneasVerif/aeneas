@@ -1000,7 +1000,11 @@ theorem get_mut_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) :
     -- TODO: tactic to automate this
     have hSlotsEq :
       hm.slots.set hash_mod ((hm.slots.val)[(key.val % (hm.slots.val).length)]) = hm.slots := by
-      simp_all [alloc.vec.Vec.set]
+      apply Subtype.ext
+      simp only [alloc.vec.Vec.set_val_eq]
+      have hidx : hash_mod.val = key.val % (hm.slots.val).length := by scalar_tac
+      rw [hidx]
+      exact List.set_getElem_self (by scalar_tac)
     simp_all
   · grind
 

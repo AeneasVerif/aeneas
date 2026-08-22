@@ -1,6 +1,9 @@
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Core.Fmt
 
+-- Rust-mirrored names (e.g. `core.fmt.Display.fmt`) legitimately repeat a namespace component.
+set_option linter.dupNamespace false
+
 namespace Aeneas.Std
 
 @[rust_fun "core::fmt::num::imp::{core::fmt::Display<u8>}::fmt", simp]

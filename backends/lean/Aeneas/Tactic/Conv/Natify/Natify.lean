@@ -21,7 +21,7 @@ open Lean
 open Lean.Meta
 open Lean.Parser.Tactic
 open Lean.Elab.Tactic
-open Arith Std
+open Arith _root_.Aeneas.Std
 
 /--
 The `natify` ("nat-ify") tactic is used to convert propositions about, e.g., `ZMod`, `ℤ`,

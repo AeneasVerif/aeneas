@@ -183,7 +183,13 @@ initialize discriminantAttribute : AttributeImpl ← do
 
 namespace Test
 
-  open Std
+  -- `generateReadDiscriminant` builds a declaration from the enum's fully-qualified
+  -- path; invoking it here inside `namespace Test` prepends the namespace again,
+  -- doubling it. In real use the generator runs at the root, so this repeat is a
+  -- test-harness artifact only.
+  set_option linter.dupNamespace false
+
+  open _root_.Aeneas.Std
 
   mutual
 

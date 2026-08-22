@@ -16,7 +16,7 @@ private def threeNats : Result (Nat × Nat × Nat) :=
 private theorem twoNats_spec : twoNats ⦃ a b => a = 1 ∧ b = 2⦄ := by unfold twoNats; step*
 
 @[local step]
-private def threeNats_spec : threeNats ⦃ a b c => a = 1 ∧ b = 2 ∧ c = 3⦄ := by unfold threeNats; step*
+private theorem threeNats_spec : threeNats ⦃ a b c => a = 1 ∧ b = 2 ∧ c = 3⦄ := by unfold threeNats; step*
 
 private def fourNats : Result ((Nat × Nat) × (Nat × Nat)) :=
   ok ((3, 4), (5, 6))
@@ -35,49 +35,57 @@ private theorem sixNats_spec : sixNats ⦃ ((a, b), c) ((d, e), f) => a = 3 ∧ 
 /--
 warning: Variable name `a` is not explicitly referenced.
 
-The binding can be removed (if unused) or named `_` (if used implicitly).
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _a
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ---
 warning: Variable name `b` is not explicitly referenced.
 
-The binding can be removed (if unused) or named `_` (if used implicitly).
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _b
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ---
 warning: Variable name `c` is not explicitly referenced.
 
-The binding can be removed (if unused) or named `_` (if used implicitly).
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _c
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ---
 warning: Variable name `d` is not explicitly referenced.
 
-The binding can be removed (if unused) or named `_` (if used implicitly).
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _d
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ---
 warning: Variable name `b` is not explicitly referenced.
 
-The binding can be removed (if unused) or named `_` (if used implicitly).
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _b
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ---
 warning: Variable name `c` is not explicitly referenced.
 
-The binding can be removed (if unused) or named `_` (if used implicitly).
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _c
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ---
 warning: Variable name `e` is not explicitly referenced.
 
-The binding can be removed (if unused) or named `_` (if used implicitly).
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _e
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ---
 warning: Variable name `h` is not explicitly referenced.
 
-The binding can be removed (if unused) or named `_` (if used implicitly).
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _h
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 -/

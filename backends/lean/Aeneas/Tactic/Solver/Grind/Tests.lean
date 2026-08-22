@@ -6,7 +6,7 @@ import Aeneas.Tactic.Solver.ScalarTac.Lemmas
 
 namespace Aeneas.Grind.Tests
 
-open Aeneas Std
+open Aeneas _root_.Aeneas.Std
 
 /-!
 ## Regression test — `.val` must not be used as an e-match pattern head, as it

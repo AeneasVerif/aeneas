@@ -1,6 +1,9 @@
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.Elab
 
+-- Rust-mirrored names (e.g. `core.clone.Clone.clone`) legitimately repeat a namespace component.
+set_option linter.dupNamespace false
+
 namespace Aeneas.Std
 
 open Result Error ScalarElab

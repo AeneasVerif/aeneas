@@ -143,7 +143,10 @@ def Vec.insert {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
 theorem Vec.insert_spec {α : Type u} (v: Vec α) (i: Usize) (x: α)
   (hbound : i.val < v.length) :
   v.insert i x ⦃ nv => nv.val = v.val.set i x ⦄ := by
-  simp [insert, *]
+  simp only [insert]
+  split
+  · rfl
+  · exfalso; scalar_tac
 
 def Vec.index_usize {α : Type u} (v: Vec α) (i: Usize) : Result α :=
   match v[i.val]? with
@@ -169,8 +172,9 @@ theorem Vec.update_spec {α : Type u} (v: Vec α) (i: Usize) (x : α)
   (hbound : i.val < v.length) :
   v.update i x ⦃ nv => nv = v.set i x ⦄ := by
   simp only [update, set]
-  simp at *
-  split <;> simp_all
+  split
+  · simp_all
+  · exact Subtype.ext rfl
 
 @[scalar_tac_simps, grind =, agrind =]
 theorem Vec.set_length {α : Type u} (v: Vec α) (i: Usize) (x: α) :
@@ -343,8 +347,10 @@ theorem alloc.vec.from_elem_spec {T : Type} (cloneInst : core.clone.Clone T)
   v.val = List.replicate n.val x ∧
   v.length = n.val ⦄ := by
   unfold from_elem
-  have ⟨ l, h ⟩ := spec_imp_exists (@List.clone_spec _ cloneInst.clone (List.replicate n.val x) (by intros; simp_all))
-  simp [h]
+  obtain ⟨ l, hcl, hval, _ ⟩ := spec_imp_exists (@List.clone_spec _ cloneInst.clone (List.replicate n.val x) (by intros; simp_all))
+  rw [hcl]
+  refine ⟨hval, ?_⟩
+  simp only [Vec.length, hval, List.length_replicate]
 
 @[rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::with_capacity" -canFail -lift]
 def alloc.vec.Vec.with_capacity (T : Type) (_ : Usize) : alloc.vec.Vec T := Vec.new T
@@ -400,24 +406,22 @@ theorem alloc.vec.Vec.resize_spec {T} (cloneInst : core.clone.Clone T)
     nv.val = v.val.resize new_len value ⦄ := by
   rw [resize]
   split
-  . simp
-  . simp [*]
+  · rfl
+  · rw [hClone]; rfl
 
 @[simp↓, scalar_tac_simps↓, grind =, agrind =]
 theorem alloc.vec.Vec.set_getElem!_eq α [Inhabited α] (x : alloc.vec.Vec α) (i : Usize) :
   x.set i x[i]! = x := by
-  simp only [getElem!_Usize_eq]
-  simp only [Vec, set_val_eq, Subtype.ext_iff, List.set_getElem!]
+  apply Subtype.ext
+  simp only [set_val_eq, getElem!_Usize_eq]
+  simp_lists
 
 @[simp↓, scalar_tac_simps, simp_lists_safe, grind =, agrind =]
 theorem alloc.vec.Vec.set_getElem_eq α (x : alloc.vec.Vec α) (i : Usize) (h : i.val < x.length) :
   x.set i x[i] = x := by
-  have h' : i.val < x.val.length := by
-    simpa using h
-  have hself : x.val.set i.val x.val[i.val] = x.val :=
-    List.set_getElem_self (as := x.val) (i := i.val) (h := h')
-  simp only [alloc.vec.Vec, Subtype.ext_iff, set_val_eq] at hself ⊢
-  exact hself
+  apply Subtype.ext
+  simp only [set_val_eq, getElem_Usize_eq]
+  simp_lists
 
 @[simp_lists_safe↓]
 theorem alloc.vec.Vec.set_getElem_eq' α (x : alloc.vec.Vec α) (i j : Usize) (h : j.val < x.length) (hEq : i = j) :
@@ -462,7 +466,8 @@ def alloc.vec.FromBoxSliceVec.from {T : Type} (v : alloc.vec.Vec T) : Result (Sl
 @[step]
 theorem alloc.vec.FromBoxSliceVec.from_spec {T : Type} (v : alloc.vec.Vec T) :
   alloc.vec.FromBoxSliceVec.from v ⦃ s => s.length = v.length ∧ s.val = v.val⦄ := by
-  simp [alloc.vec.FromBoxSliceVec.from]
+  simp only [alloc.vec.FromBoxSliceVec.from]
+  exact ⟨rfl, rfl⟩
 
 @[reducible, rust_trait_impl "core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>" (keepParams := [true, false])]
 def core.convert.FromBoxSliceVec (T : Type) :
@@ -482,7 +487,8 @@ theorem alloc.vec.Vec.setSlice!_length {α : Type u} (s : alloc.vec.Vec α) (i :
 theorem alloc.vec.Vec.setSlice!_getElem!_prefix {α} [Inhabited α]
   (s : alloc.vec.Vec α) (s' : List α) (i j : ℕ) (h : j < i) :
   (s.setSlice! i s')[j]! = s[j]! := by
-  simp only [Vec.setSlice!, Vec.getElem!_Nat_eq]
+  simp only [Vec.getElem!_Nat_eq]
+  simp only [Vec.setSlice!]
   simp_lists
 
 @[simp_lists_safe, grind =, agrind =]
@@ -492,7 +498,8 @@ theorem alloc.vec.Vec.setSlice!_getElem_prefix {α}
   have hj' : j < (s.setSlice! i s').length := by
     simpa [Vec.setSlice!_length] using h.2
   have h1 : (s.setSlice! i s')[j]? = s[j]? := by
-    simp only [Vec.getElem?_Nat_eq, Vec.setSlice!]
+    simp only [Vec.getElem?_Nat_eq]
+    simp only [Vec.setSlice!]
     simp_lists [List.setSlice!_getElem?_prefix]
   simpa [Vec.getElem?_Nat_eq, Vec.getElem_Nat_eq,
     List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2] using h1
@@ -501,7 +508,8 @@ theorem alloc.vec.Vec.setSlice!_getElem_prefix {α}
 theorem alloc.vec.Vec.setSlice!_getElem!_middle {α} [Inhabited α]
   (s : alloc.vec.Vec α) (s' : List α) (i j : ℕ) (h : i ≤ j ∧ j - i < s'.length ∧ j < s.length) :
   (s.setSlice! i s')[j]! = s'[j - i]! := by
-  simp only [Vec.setSlice!, Vec.getElem!_Nat_eq]
+  simp only [Vec.getElem!_Nat_eq]
+  simp only [Vec.setSlice!]
   simp_lists
 
 @[simp_lists_safe, grind =, agrind =]
@@ -512,7 +520,8 @@ theorem alloc.vec.Vec.setSlice!_getElem_middle {α}
     simpa [Vec.setSlice!_length] using h.2.2
   have hji : j - i < s'.length := h.2.1
   have h1 : (s.setSlice! i s')[j]? = s'[j - i]? := by
-    simp only [Vec.getElem?_Nat_eq, Vec.setSlice!]
+    simp only [Vec.getElem?_Nat_eq]
+    simp only [Vec.setSlice!]
     simp_lists [List.setSlice!_getElem?_middle]
   simpa [Vec.getElem?_Nat_eq, Vec.getElem_Nat_eq,
     List.getElem?_eq_getElem hj', List.getElem?_eq_getElem hji] using h1
@@ -520,7 +529,8 @@ theorem alloc.vec.Vec.setSlice!_getElem_middle {α}
 theorem alloc.vec.Vec.setSlice!_getElem!_suffix {α} [Inhabited α]
   (s : alloc.vec.Vec α) (s' : List α) (i j : ℕ) (h : i + s'.length ≤ j) :
   (s.setSlice! i s')[j]! = s[j]! := by
-  simp only [Vec.setSlice!, Vec.getElem!_Nat_eq]
+  simp only [Vec.getElem!_Nat_eq]
+  simp only [Vec.setSlice!]
   simp_lists
 
 theorem alloc.vec.Vec.setSlice!_getElem_suffix {α}
@@ -529,7 +539,8 @@ theorem alloc.vec.Vec.setSlice!_getElem_suffix {α}
   have hj' : j < (s.setSlice! i s').length := by
     simpa [Vec.setSlice!_length] using h.2
   have h1 : (s.setSlice! i s')[j]? = s[j]? := by
-    simp only [Vec.getElem?_Nat_eq, Vec.setSlice!]
+    simp only [Vec.getElem?_Nat_eq]
+    simp only [Vec.setSlice!]
     simp_lists [List.setSlice!_getElem?_suffix]
   simpa [Vec.getElem?_Nat_eq, Vec.getElem_Nat_eq,
     List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2] using h1
