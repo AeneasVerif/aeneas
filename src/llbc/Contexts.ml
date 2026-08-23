@@ -654,13 +654,13 @@ let ctx_adt_get_instantiated_field_types (span : Meta.span) (ctx : eval_ctx)
   | TAdtId id ->
       (* Retrieve the types of the fields *)
       ctx_type_get_instantiated_field_types span ctx id variant_id generics
-  | TTuple ->
-      [%cassert] span (variant_id = None) "Tuples don't have variants";
-      [%cassert] span (generics.regions = [])
-        "Tuples don't have region parameters";
-      generics.types
   | TBuiltin aty -> (
       match aty with
+      | TTuple ->
+          [%cassert] span (variant_id = None) "Tuples don't have variants";
+          [%cassert] span (generics.regions = [])
+            "Tuples don't have region parameters";
+          generics.types
       | TBox ->
           [%cassert] span (variant_id = None) "Boxes don't have variants";
           [%sanity_check] span (generics.regions = []);

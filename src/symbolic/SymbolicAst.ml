@@ -18,13 +18,20 @@ type symbolic_expr_id = Contexts.symbolic_expr_id [@@deriving show, eq, ord]
     about the origin of the values (this place information comes from assignment
     information, etc.). We later use this place information to generate
     meaningful name, to prettify the generated code. *)
+type mprojection_elem = {
+  type_id : type_id;
+  variant_id : variant_id option;
+  field_id : field_id;
+}
+[@@deriving show]
+
 type mplace =
   | PlaceLocal of real_var_binder
       (** It is important that we store the binder, and not just the variable
           id, because the most important information in a place is the name of
           the variable! *)
   | PlaceGlobal of global_decl_ref
-  | PlaceProjection of mplace * projection_elem
+  | PlaceProjection of mplace * mprojection_elem
 [@@deriving show]
 
 type call_id =
