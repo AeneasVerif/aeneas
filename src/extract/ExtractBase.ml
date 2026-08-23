@@ -1464,6 +1464,18 @@ let fun_decl_kind_to_post_qualif (kind : decl_kind) : string option =
       | SingleRec | MutRecFirst | MutRecInner | MutRecLast ->
           Some "partial_fixpoint")
 
+(** If [def] is the constructor for a type declaration, return the given type.
+
+    A struct constructor used as a first-class value (e.g. [x.map(Point)]) is
+    emitted by Charon as a standalone function whose name coincides with the
+    type's. We use this at extraction time to give it a non-clashing name. *)
+let fun_decl_constructor_target (item_meta : T.item_meta) (ctx : extraction_ctx)
+    : Types.type_decl option =
+  let check_item (ty_decl : Types.type_decl) : bool =
+    ty_decl.item_meta.is_local && item_meta.name = ty_decl.item_meta.name
+  in
+  ctx.crate.type_decls |> TypeDeclId.Map.values |> List.find_opt check_item
+
 (** The type of types.
 
     TODO: move inside the formatter? *)
@@ -2417,9 +2429,24 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
 
 let ctx_compute_fun_name_no_suffix (item_meta : T.item_meta) (src : fun_source)
     ~(is_trait_decl_field : bool) (ctx : extraction_ctx) : string =
-  ctx_compute_fun_global_name_no_suffix item_meta
-    (extractable_fun_source ctx src)
-    ~is_trait_decl_field ctx
+  match backend () with
+  | Lean -> (
+      match fun_decl_constructor_target item_meta ctx with
+      | Some tdecl ->
+          (* emit new name for Struct constructor, see `fun_decl_constructor_target` *)
+          let tname =
+            ctx_compute_type_name tdecl.item_meta ctx tdecl.item_meta.name
+          in
+          let cons_name = tname ^ ".constructor" in
+          basename_to_unique ctx cons_name
+      | _ ->
+          ctx_compute_fun_global_name_no_suffix item_meta
+            (extractable_fun_source ctx src)
+            ~is_trait_decl_field ctx)
+  | _ ->
+      ctx_compute_fun_global_name_no_suffix item_meta
+        (extractable_fun_source ctx src)
+        ~is_trait_decl_field ctx
 
 let ctx_compute_global_name_no_suffix (item_meta : T.item_meta)
     (src : global_source) (ctx : extraction_ctx) : string =
