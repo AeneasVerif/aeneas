@@ -599,10 +599,8 @@ def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) 
   -- Construct the tuple of outputs
   let pat ← mkProdsVal outputFVars.toList
   trace[Step] "Constructed the pattern: {pat}"
-  -- Create the equality.
-  let some e ← observing? (mkAppM ``eq_imp_prettyMonadEq #[fExpr, pat])
-    | trace[Step] "Skipping the pretty equality: could not apply `eq_imp_prettyMonadEq`"
-      return
+  -- Create the equality
+  let e ← mkAppM ``eq_imp_prettyMonadEq #[fExpr, pat]
   trace[Step] "Created the equality expression: {e}"
   -- Introduce it
   Utils.addDeclTac name e (← inferType e) (asLet := false) fun e => do
