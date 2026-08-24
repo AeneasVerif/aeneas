@@ -549,7 +549,7 @@ def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th
   let specMonoBindTy ← inferType specMonoBind
   trace[Step] "Applied specMonoBind with theorem: {specMonoBind}: {specMonoBindTy}"
 
-  /- Introduce meta-variables for the premises -/
+  /- Introduce meta-variables for the premises and the new goal (the very last mvar). -/
   let (specMonoBindMVars, _, specMonoBindTy) ← forallMetaTelescope specMonoBindTy
   if (specMonoBindMVars.size == 0) then
     throwError "The specMonoBind theorem should have at least one premise"
@@ -557,6 +557,12 @@ def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th
   let specMonoBind ← mkAppOptM' specMonoBind (specMonoBindMVars.map some)
   trace[Step] "Applied specMonoBind with theorem: {specMonoBind}: {specMonoBindTy}"
 
+  /- Retrieve the premises (we pop the last mvar, which is the new goal) -/
+  let extraPreconditions := specMonoBindMVars.pop.map Expr.mvarId!
+  let mvarsIds := mvars.map Expr.mvarId! ++ extraPreconditions
+  let mvarsIds ← mvarsIds.filterM (fun mvar => do pure (not (← mvar.isAssigned)))
+
+  /- Check that the program in the goal is defeq to the program in the lookup up spec -/
   let mgoal ← Tactic.getMainGoal
   let specMonoBindTy ← inferType specMonoBind
   let goalTy ← mgoal.getType
@@ -571,10 +577,6 @@ def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th
 
   mgoal.assign specMonoBind
   trace[Step] "New goal: {ngoal}"
-
-  let extraPreconditions := specMonoBindMVars.pop.map Expr.mvarId!
-  let mvarsIds := mvars.map Expr.mvarId! ++ extraPreconditions
-  let mvarsIds ← mvarsIds.filterM (fun mvar => do pure (not (← mvar.isAssigned)))
 
   -- Attempt to resolve the typeclass instances
   let mvarsIds ← trySolveTypeclasses mvarsIds.toList
