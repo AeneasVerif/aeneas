@@ -1,5 +1,9 @@
 import Aeneas.Tactic.Step
 
+/-!
+This file tests the use of a custom triple with `#register_spec_info`
+-/
+
 open Aeneas
 
 namespace Aeneas.Tactic.Step.Tests.Triple
@@ -21,19 +25,26 @@ theorem Post.entails_iff (P Q : Post α) :
     Post.entails P Q ↔ ∀ state value, P state value → Q state value :=
   Iff.rfl
 
-axiom TestM : Type → Type
-axiom instMonadTestM : Monad TestM
-attribute [instance] instMonadTestM
+/- A simple state monad manipulating pairs of natural numbers. -/
+def TestM (α : Type) := State → α × State
 
-axiom triple (P : Pre) (m : TestM α) (Q : Post α) : Prop
+instance : Monad TestM where
+  pure value := fun state => (value, state)
+  bind m next := fun state => next (m state).1 (m state).2
 
-axiom triple_step_mono {P Pm : Pre} {Q : Post α}
+/- The precondition constrains the initial state, while the postcondition constrains
+the final state together with the returned value. -/
+def triple (P : Pre) (m : TestM α) (Q : Post α) : Prop :=
+  ∀ state, P state → Q (m state).2 (m state).1
+
+theorem triple_step_mono {P Pm : Pre} {Q : Post α}
     (m : TestM α) (Qm : Post α) (hStep : triple Pm m Qm)
     (hPre : Pre.entails P Pm)
     (hPost : Post.entails Qm Q) :
-    triple P m Q
+    triple P m Q :=
+  fun state hP => hPost _ _ (hStep state (hPre state hP))
 
-axiom triple_step_bind {P Pm : Pre} {next : α → TestM β}
+theorem triple_step_bind {P Pm : Pre} {next : α → TestM β}
     {Q : Post β}
     (m : TestM α) (Qm : Post α) (hStep : triple Pm m Qm)
     [Post.Admissible Qm]
@@ -42,7 +53,9 @@ axiom triple_step_bind {P Pm : Pre} {next : α → TestM β}
       ∀ state value,
         Qm state value →
         triple (fun state' => state' = state) (next value) Q) :
-    triple P (m >>= next) Q
+    triple P (m >>= next) Q :=
+  fun state hP =>
+    hNext (m state).2 (m state).1 (hStep state (hPre state hP)) (m state).2 rfl
 
 #register_spec_info {
     spec_name := ``triple
@@ -60,28 +73,32 @@ axiom triple_step_bind {P Pm : Pre} {next : α → TestM β}
   }
 
 @[step]
-axiom pure_spec (value : α) :
+theorem pure_spec (value : α) :
     triple (fun _ => True) (pure value : TestM α)
-      (fun _ result => result = value)
+      (fun _ result => result = value) :=
+  fun _ _ => rfl
 
 example (value : Nat) :
     triple (fun _ => True) (pure value : TestM Nat)
       (fun _ result => result = value) := by
   step* by simp [Pre.entails]
 
-axiom setAndReturn (value : Nat) : TestM Nat
+/- Stores `value` in the first component and `value + 1` in the second one. -/
+def setAndReturn (value : Nat) : TestM Nat :=
+  fun _ => (value, (value, value + 1))
 
-axiom setAndReturn_admissible (value : Nat) :
+instance setAndReturn_admissible (value : Nat) :
     Post.Admissible
       (fun (current, next) result =>
-        current = value ∧ next = value + 1 ∧ result = value)
-attribute [instance] setAndReturn_admissible
+        current = value ∧ next = value + 1 ∧ result = value) :=
+  ⟨trivial⟩
 
 @[step]
-axiom setAndReturn_spec (value : Nat) :
+theorem setAndReturn_spec (value : Nat) :
     triple (fun _ => True) (setAndReturn value)
       (fun (current, next) result =>
-        current = value ∧ next = value + 1 ∧ result = value)
+        current = value ∧ next = value + 1 ∧ result = value) :=
+  fun _ _ => ⟨rfl, rfl, rfl⟩
 
 example (value : Nat) :
     triple (fun state => state = (0, 0)) (setAndReturn value)
@@ -111,7 +128,7 @@ example (value : Nat) :
   trace_state
   simp_all
 
-noncomputable def setTwice (first second : Nat) : TestM Nat := do
+def setTwice (first second : Nat) : TestM Nat := do
   let _ ← setAndReturn first
   setAndReturn second
 
@@ -123,23 +140,26 @@ example (first second : Nat) :
   unfold setTwice
   step* by simp [Pre.entails]
 
-axiom setAndReturnPair (left right : Nat) : TestM (Nat × Nat)
+/- Stores the pair `(left, right)` in the state and returns it. -/
+def setAndReturnPair (left right : Nat) : TestM (Nat × Nat) :=
+  fun _ => ((left, right), (left, right))
 
-axiom setAndReturnPair_admissible (left right : Nat) :
+instance setAndReturnPair_admissible (left right : Nat) :
     Post.Admissible
       (fun (stateLeft, stateRight) (leftResult, rightResult) =>
         stateLeft = left ∧ stateRight = right ∧
-        leftResult = left ∧ rightResult = right)
-attribute [instance] setAndReturnPair_admissible
+        leftResult = left ∧ rightResult = right) :=
+  ⟨trivial⟩
 
 @[step]
-axiom setAndReturnPair_spec (left right : Nat) :
+theorem setAndReturnPair_spec (left right : Nat) :
     triple (fun _ => True) (setAndReturnPair left right)
       (fun (stateLeft, stateRight) (leftResult, rightResult) =>
         stateLeft = left ∧ stateRight = right ∧
-        leftResult = left ∧ rightResult = right)
+        leftResult = left ∧ rightResult = right) :=
+  fun _ _ => ⟨rfl, rfl, rfl, rfl⟩
 
-noncomputable def setPairThenSum (left right : Nat) : TestM Nat := do
+def setPairThenSum (left right : Nat) : TestM Nat := do
   let (leftResult, rightResult) ← setAndReturnPair left right
   setAndReturn (leftResult + rightResult)
 
@@ -152,7 +172,7 @@ example (left right : Nat) :
   unfold setPairThenSum
   step* by simp [Pre.entails]
 
-noncomputable def setFromBool (condition : Bool) (onTrue onFalse : Nat) : TestM Nat :=
+def setFromBool (condition : Bool) (onTrue onFalse : Nat) : TestM Nat :=
   if condition then setAndReturn onTrue else setAndReturn onFalse
 
 /- `step*` must split conditionals under any registered specification predicate. -/
@@ -162,7 +182,7 @@ example (condition : Bool) (onTrue onFalse : Nat) :
   unfold setFromBool
   step* by simp [Pre.entails]
 
-noncomputable def setFromOption (value : Option Nat) : TestM Nat :=
+def setFromOption (value : Option Nat) : TestM Nat :=
   match value with
   | some value => setAndReturn value
   | none => setAndReturn 0
@@ -177,7 +197,7 @@ example (value : Option Nat) :
 /- A tactic such as `by_cases` leaves the goal's type as an assigned metavariable
 rather than a syntactic application. `step*` must instantiate it before analyzing
 the target, otherwise it treats the branch below as a terminal call and stops. -/
-noncomputable def bindThenIf (condition : Bool) (onTrue onFalse : Nat) : TestM Nat := do
+def bindThenIf (condition : Bool) (onTrue onFalse : Nat) : TestM Nat := do
   let _ ← setAndReturn 0
   if condition then setAndReturn onTrue else setAndReturn onFalse
 
@@ -190,7 +210,7 @@ example (condition : Bool) (onTrue onFalse : Nat) :
   · step* by simp [Pre.entails]
   · step* by simp [Pre.entails]
 
-noncomputable def bindThenMatch (value : Option Nat) : TestM Nat := do
+def bindThenMatch (value : Option Nat) : TestM Nat := do
   let _ ← setAndReturn 0
   match value with
   | some value => setAndReturn value
