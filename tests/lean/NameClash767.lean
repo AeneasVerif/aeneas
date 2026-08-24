@@ -38,49 +38,14 @@ def Wrapper := Array Std.U8 32#usize
 def Wrapper.constructor (a : Array Std.U8 32#usize) : Result Wrapper := do
   ok a
 
-/-- [name_clash_767::make_wrapper_broken]:
-    Source: 'tests/src/name_clash_767.rs', lines 10:0-12:1
+/-- [name_clash_767::make_wrapper]:
+    Source: 'tests/src/name_clash_767.rs', lines 9:0-11:1
     Visibility: public -/
-def make_wrapper_broken
+def make_wrapper
   (x : core.result.Result (Array Std.U8 32#usize) Unit) :
   Result (core.result.Result Wrapper Unit)
   := do
   core.result.Result.map (BuiltinFnOnce (Array Std.U8 32#usize) Wrapper) x
     (Wrapper.constructor)
-
-/-- [name_clash_767::make_wrapper_fixed::closure]
-    Source: 'tests/src/name_clash_767.rs', lines 16:10-16:24 -/
-@[reducible]
-def make_wrapper_fixed.closure := Unit
-
-/-- [name_clash_767::make_wrapper_fixed::{impl core::ops::function::FnOnce<([u8; 32usize],), name_clash_767::Wrapper> for name_clash_767::make_wrapper_fixed::closure}::call_once]:
-    Source: 'tests/src/name_clash_767.rs', lines 16:10-16:24 -/
-def
-  make_wrapper_fixed.closure.Insts.CoreOpsFunctionFnOnceTupleArrayU832Wrapper.call_once
-  (c : make_wrapper_fixed.closure) (tupled_args : Array Std.U8 32#usize) :
-  Result Wrapper
-  := do
-  ok tupled_args
-
-/-- Trait implementation: [name_clash_767::make_wrapper_fixed::{impl core::ops::function::FnOnce<([u8; 32usize],), name_clash_767::Wrapper> for name_clash_767::make_wrapper_fixed::closure}]
-    Source: 'tests/src/name_clash_767.rs', lines 16:10-16:24 -/
-@[reducible]
-def make_wrapper_fixed.closure.Insts.CoreOpsFunctionFnOnceTupleArrayU832Wrapper
-  : core.ops.function.FnOnce make_wrapper_fixed.closure (Array Std.U8 32#usize)
-  Wrapper := {
-  call_once :=
-    make_wrapper_fixed.closure.Insts.CoreOpsFunctionFnOnceTupleArrayU832Wrapper.call_once
-}
-
-/-- [name_clash_767::make_wrapper_fixed]:
-    Source: 'tests/src/name_clash_767.rs', lines 15:0-17:1
-    Visibility: public -/
-def make_wrapper_fixed
-  (x : core.result.Result (Array Std.U8 32#usize) Unit) :
-  Result (core.result.Result Wrapper Unit)
-  := do
-  core.result.Result.map
-    make_wrapper_fixed.closure.Insts.CoreOpsFunctionFnOnceTupleArrayU832Wrapper
-    x ()
 
 end name_clash_767
