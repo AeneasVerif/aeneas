@@ -710,7 +710,7 @@ let remove_useless_joins (crate : crate) (f : fun_decl) : fun_decl =
           ^ Print.list_to_string ~sep:"\n" (statement_to_string crate) ls];
         let can_inline, ls = update_statements to_inline ls in
         match st.kind with
-        | Nop | StorageLive _ | StorageDead _ | PlaceMention _
+        | Nop | StorageLive _ | StorageDead _ | PlaceMention _ | Borrowck _
         | Drop (_, _, _, _) -> (can_inline, st :: ls)
         | Abort _ | Return | UnwindResume | Break _ | Continue _ ->
             (true, [ st ])
@@ -821,7 +821,7 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
 
     let filter_storage (st : statement) : statement list =
       match st.kind with
-      | StorageLive _ -> []
+      | StorageLive _ | Borrowck _ -> []
       | StorageDead loc
         when LocalId.Set.mem loc !filtered
              || LocalId.Set.mem loc argument_locals -> []
@@ -881,7 +881,7 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
     disambiguate items that exist for multiple targets.
 
     For functions: if the function is not behind a target dispatch (its [src] is
-    NOT [TargetDependentItem]), there is no ambiguity (the function is not used
+    NOT [TargetDependentFun]), there is no ambiguity (the function is not used
     for several targets), so we remove the suffix.
 
     For types there is no notion of dispatch, meaning we can't use the item
@@ -927,7 +927,7 @@ let strip_unnecessary_target_suffixes (crate : crate) : crate =
     FunDeclId.Map.fold
       (fun _ (f : fun_decl) acc ->
         match f.src with
-        | TargetDependentItem _ -> acc
+        | TargetDependentFun _ -> acc
         | _ -> add_name acc f.item_meta.name)
       crate.fun_decls NameMap.empty
   in
@@ -935,7 +935,7 @@ let strip_unnecessary_target_suffixes (crate : crate) : crate =
     FunDeclId.Map.map
       (fun (f : fun_decl) ->
         match f.src with
-        | TargetDependentItem _ -> f
+        | TargetDependentFun _ -> f
         | _ ->
             let name = get_name fun_base_counts f.item_meta.name in
             { f with item_meta = { f.item_meta with name } })
@@ -1041,10 +1041,18 @@ let filter_marker_traits (crate : crate) : crate =
           else acc)
         crate.trait_impls TraitImplId.Set.empty
     in
-    let item_source_is_filtered (src : item_source) : bool =
+    let fun_source_is_filtered (src : fun_source) : bool =
       match src with
-      | TraitDeclItem (trait_ref, _) -> is_filtered_id trait_ref.id
-      | TraitImplItem (impl_ref, trait_ref, _, _) ->
+      | TraitDefaultFun (trait_ref, _) -> is_filtered_id trait_ref.id
+      | TraitImplFun (impl_ref, trait_ref, _, _) ->
+          TraitImplId.Set.mem impl_ref.id filtered_impl_ids
+          || is_filtered_id trait_ref.id
+      | _ -> false
+    in
+    let global_source_is_filtered (src : global_source) : bool =
+      match src with
+      | TraitDefaultGlobal (trait_ref, _) -> is_filtered_id trait_ref.id
+      | TraitImplGlobal (impl_ref, trait_ref, _, _) ->
           TraitImplId.Set.mem impl_ref.id filtered_impl_ids
           || is_filtered_id trait_ref.id
       | _ -> false
@@ -1052,19 +1060,19 @@ let filter_marker_traits (crate : crate) : crate =
     let filtered_global_ids =
       GlobalDeclId.Map.fold
         (fun id (decl : global_decl) acc ->
-          if item_source_is_filtered decl.src then GlobalDeclId.Set.add id acc
+          if global_source_is_filtered decl.src then GlobalDeclId.Set.add id acc
           else acc)
         crate.global_decls GlobalDeclId.Set.empty
     in
     let filtered_fun_ids =
       FunDeclId.Map.fold
         (fun id (decl : fun_decl) acc ->
-          let init_is_filtered =
-            match decl.is_global_initializer with
+          let initializer_is_filtered =
+            match fun_decl_global_initializer decl with
             | None -> false
-            | Some id -> GlobalDeclId.Set.mem id filtered_global_ids
+            | Some global -> GlobalDeclId.Set.mem global.id filtered_global_ids
           in
-          if item_source_is_filtered decl.src || init_is_filtered then
+          if fun_source_is_filtered decl.src || initializer_is_filtered then
             FunDeclId.Set.add id acc
           else acc)
         crate.fun_decls FunDeclId.Set.empty
@@ -1712,6 +1720,7 @@ let replace_static (crate : crate) : crate =
               {
                 index = RegionId.of_int 1;
                 name = Some "'b";
+                variance = VaUnknown;
                 mutability = LtUnknown;
               };
             ];
@@ -1775,9 +1784,23 @@ let replace_static (crate : crate) : crate =
     presence of those declarations leads to mutually recursive groups of traits
     and types. This micro-pass filters these definitions. *)
 let remove_vtables (crate : crate) : crate =
-  let src_is_vtable (src : item_source) : bool =
+  let global_src_is_vtable (src : global_source) : bool =
     match src with
-    | VTableInstanceItem _ | VTableTyItem _ | VTableMethodShimItem -> true
+    | VTableInstanceGlobal _ -> true
+    | _ -> false
+  in
+  let fun_src_is_vtable (src : fun_source) : bool =
+    match src with
+    | VTableShimFun -> true
+    | GlobalInitializerFun global -> (
+        match GlobalDeclId.Map.find_opt global.id crate.global_decls with
+        | Some global -> global_src_is_vtable global.src
+        | None -> false)
+    | _ -> false
+  in
+  let type_src_is_vtable (src : type_source) : bool =
+    match src with
+    | VTableType _ -> true
     | _ -> false
   in
 
@@ -1797,7 +1820,7 @@ let remove_vtables (crate : crate) : crate =
             let keep (id : global_decl_id) : bool =
               match GlobalDeclId.Map.find_opt id crate.global_decls with
               | None -> true
-              | Some d -> not (src_is_vtable d.src)
+              | Some d -> not (global_src_is_vtable d.src)
             in
             match g with
             | RecGroup ids ->
@@ -1810,7 +1833,7 @@ let remove_vtables (crate : crate) : crate =
             let keep (id : fun_decl_id) : bool =
               match FunDeclId.Map.find_opt id crate.fun_decls with
               | None -> true
-              | Some d -> not (src_is_vtable d.src)
+              | Some d -> not (fun_src_is_vtable d.src)
             in
             match g with
             | RecGroup ids ->
@@ -1823,7 +1846,7 @@ let remove_vtables (crate : crate) : crate =
             let keep (id : type_decl_id) : bool =
               match TypeDeclId.Map.find_opt id crate.type_decls with
               | None -> true
-              | Some d -> not (src_is_vtable d.src)
+              | Some d -> not (type_src_is_vtable d.src)
             in
             match g with
             | RecGroup ids ->
@@ -1842,7 +1865,7 @@ let remove_vtables (crate : crate) : crate =
                 let keep (id : type_decl_id) : bool =
                   match TypeDeclId.Map.find_opt id crate.type_decls with
                   | None -> true
-                  | Some d -> not (src_is_vtable d.src)
+                  | Some d -> not (type_src_is_vtable d.src)
                 in
                 let ids =
                   List.filter
@@ -1916,19 +1939,19 @@ let remove_vtables (crate : crate) : crate =
   (* *)
   let type_decls =
     TypeDeclId.Map.filter
-      (fun _ (d : type_decl) -> not (src_is_vtable d.src))
+      (fun _ (d : type_decl) -> not (type_src_is_vtable d.src))
       crate.type_decls
   in
 
   let global_decls =
     GlobalDeclId.Map.filter
-      (fun _ (d : global_decl) -> not (src_is_vtable d.src))
+      (fun _ (d : global_decl) -> not (global_src_is_vtable d.src))
       crate.global_decls
   in
 
   let fun_decls =
     FunDeclId.Map.filter
-      (fun _ (d : fun_decl) -> not (src_is_vtable d.src))
+      (fun _ (d : fun_decl) -> not (fun_src_is_vtable d.src))
       crate.fun_decls
   in
 
@@ -2243,7 +2266,7 @@ let fix_closure_lifetimes (crate : crate) (f : fun_decl) : fun_decl =
         match TypeDeclId.Map.find_opt id crate.type_decls with
         | Some decl -> (
             match decl.src with
-            | ClosureItem _ -> Some rid
+            | ClosureType _ -> Some rid
             | _ -> None)
         | None -> None)
     | _ -> None

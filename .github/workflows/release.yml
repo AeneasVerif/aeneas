@@ -59,10 +59,6 @@ jobs:
             artifact_name: aeneas-linux-aarch64
             nix_attr: aeneas-static-release
             nix_machine: false
-          - os: macos-15-intel
-            artifact_name: aeneas-macos-x86_64
-            nix_attr: aeneas-release
-            nix_machine: false
           - os: macos-latest
             artifact_name: aeneas-macos-aarch64
             nix_attr: aeneas-release
@@ -184,8 +180,8 @@ jobs:
 
   notify:
     name: Notify Zulip
-    needs: [prepare, build, select-runner]
-    runs-on: ${{ fromJSON(needs.select-runner.outputs.runs_on) }}
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
     if: ${{ github.repository == 'AeneasVerif/aeneas' && (success() || failure()) }}
     permissions:
       actions: read
