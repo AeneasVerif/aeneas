@@ -59,10 +59,6 @@ jobs:
             artifact_name: aeneas-linux-aarch64
             nix_attr: aeneas-static-release
             nix_machine: false
-          - os: macos-15-intel
-            artifact_name: aeneas-macos-x86_64
-            nix_attr: aeneas-release
-            nix_machine: false
           - os: macos-latest
             artifact_name: aeneas-macos-aarch64
             nix_attr: aeneas-release
