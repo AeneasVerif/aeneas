@@ -6,7 +6,10 @@
     # arguments to `outputs` below!
     charon.url = "github:aeneasverif/charon";
     flake-utils.follows = "charon/flake-utils";
-    nixpkgs.follows = "charon/nixpkgs";
+    # Keep Aeneas on OCaml 5.2 for now. Newer nixpkgs revisions mark the
+    # matching ocaml-lsp 1.21 package broken, and it indeed fails to compile.
+    # Whenever we move to OCaml 5.4, we can go back to reusing Charon's nixpkgs.
+    nixpkgs.url = "github:NixOS/nixpkgs/b3d51a0365f6695e7dd5cdf3e180604530ed33b4";
     fstar.url = "github:FStarLang/fstar";
   };
 

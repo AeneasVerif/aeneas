@@ -5,6 +5,8 @@ require aeneas from "../../backends/lean"
 
 package «tests» {}
 
+/- File created by `tests/lean/script.sh`. -/
+
 @[default_target] lean_lib Adt
 @[default_target] lean_lib AdtBorrows
 @[default_target] lean_lib Arrays
@@ -95,6 +97,7 @@ package «tests» {}
 @[default_target] lean_lib StepBy
 @[default_target] lean_lib StringChars
 @[default_target] lean_lib SwitchTest
+@[default_target] lean_lib TargetFeatures
 @[default_target] lean_lib Traits
 @[default_target] lean_lib Tutorial
 @[default_target] lean_lib Vec

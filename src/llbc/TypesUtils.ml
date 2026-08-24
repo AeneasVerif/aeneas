@@ -111,7 +111,7 @@ let ty_has_adt_with_borrows span (infos : TypesAnalysis.type_infos) (ty : ty) :
 
       method! visit_ty env ty =
         match ty with
-        | TAdt { id; _ } when id <> TTuple ->
+        | TAdt { id; _ } when id <> TBuiltin TTuple ->
             let info = TypesAnalysis.analyze_ty span infos ty in
             if info.TypesAnalysis.contains_borrow then raise Found
             else super#visit_ty env ty
@@ -257,7 +257,7 @@ let ty_has_mut_borrow_for_region_in_pred (infos : TypesAnalysis.type_infos)
         (* Lookup the information for this ADT *)
         begin
           match tref.id with
-          | TTuple | TBuiltin (TBox | TStr) -> ()
+          | TBuiltin (TTuple | TBox | TStr) -> ()
           | TAdtId adt_id ->
               let info = TypeDeclId.Map.find adt_id infos in
               RegionId.iteri
@@ -306,7 +306,7 @@ let ty_get_mutable_regions (infos : TypesAnalysis.type_infos)
         (* Lookup the information for this ADT *)
         begin
           match tref.id with
-          | TTuple | TBuiltin (TBox | TStr) -> ()
+          | TBuiltin (TTuple | TBox | TStr) -> ()
           | TAdtId adt_id ->
               (* Check which region parameters are mutable *)
               let info = TypeDeclId.Map.find adt_id infos in
@@ -479,7 +479,7 @@ let type_decl_from_decl_id_is_tuple_struct (ctx : TypesAnalysis.type_infos)
 let type_decl_from_type_id_is_tuple_struct (ctx : TypesAnalysis.type_infos)
     (id : type_id) : bool =
   match id with
-  | TTuple -> true
+  | TBuiltin TTuple -> true
   | TAdtId id ->
       let info = TypeDeclId.Map.find id ctx in
       info.is_tuple_struct

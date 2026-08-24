@@ -18,14 +18,14 @@ noncomputable section
 namespace derive
 
 /-- [core::cmp::impls::{impl core::cmp::PartialEq<bool> for bool}::ne]:
-    Source: '/rustc/library/core/src/cmp.rs', lines 1880:16-1880:50
+    Source: '/rustc/library/core/src/cmp.rs', lines 2156:16-2156:50
     Name pattern: [core::cmp::impls::{core::cmp::PartialEq<bool, bool>}::ne]
     Visibility: public -/
 @[rust_fun "core::cmp::impls::{core::cmp::PartialEq<bool, bool>}::ne"]
 axiom Bool.Insts.CoreCmpPartialEqBool.ne : Bool → Bool → Result Bool
 
 /-- [alloc::boxed::{impl core::cmp::PartialEq<alloc::boxed::Box<T>> for alloc::boxed::Box<T>}::ne]:
-    Source: '/rustc/library/alloc/src/boxed.rs', lines 2127:4-2127:38
+    Source: '/rustc/library/alloc/src/boxed.rs', lines 2170:4-2170:38
     Name pattern: [alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::ne]
     Visibility: public -/
 @[rust_fun "alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::ne"]
@@ -261,7 +261,8 @@ def CopyEnum.Insts.CoreMarkerCopy {T : Type} (coremarkerCopyInst :
 /-- Trait implementation: [derive::{impl core::marker::StructuralPartialEq for derive::CopyEnum<T>}]
     Source: 'tests/src/derive.rs', lines 16:22-16:31 -/
 @[reducible]
-def CopyEnum.Insts.CoreMarkerStructuralPartialEq (T : Type) :
+def CopyEnum.Insts.CoreMarkerStructuralPartialEq {T : Type}
+  (corecmpPartialEqInst : core.cmp.PartialEq T T) :
   core.marker.StructuralPartialEq (CopyEnum T) := {
 }
 
@@ -406,8 +407,8 @@ def Enum.Insts.CoreCloneClone {T : Type} (corecloneCloneInst : core.clone.Clone
 /-- Trait implementation: [derive::{impl core::marker::StructuralPartialEq for derive::Enum<T>}]
     Source: 'tests/src/derive.rs', lines 24:16-24:25 -/
 @[reducible]
-def Enum.Insts.CoreMarkerStructuralPartialEq (T : Type) :
-  core.marker.StructuralPartialEq (Enum T) := {
+def Enum.Insts.CoreMarkerStructuralPartialEq {T : Type} (corecmpPartialEqInst :
+  core.cmp.PartialEq T T) : core.marker.StructuralPartialEq (Enum T) := {
 }
 
 /-- [derive::{impl core::cmp::PartialEq<derive::Enum<T>> for derive::Enum<T>}::eq]:
@@ -556,8 +557,8 @@ def List.Insts.CoreCloneClone {T : Type} (corecloneCloneInst : core.clone.Clone
 /-- Trait implementation: [derive::{impl core::marker::StructuralPartialEq for derive::List<T>}]
     Source: 'tests/src/derive.rs', lines 34:16-34:25 -/
 @[reducible]
-def List.Insts.CoreMarkerStructuralPartialEq (T : Type) :
-  core.marker.StructuralPartialEq (List T) := {
+def List.Insts.CoreMarkerStructuralPartialEq {T : Type} (corecmpPartialEqInst :
+  core.cmp.PartialEq T T) : core.marker.StructuralPartialEq (List T) := {
 }
 
 /-- [derive::{impl core::cmp::PartialEq<derive::List<T>> for derive::List<T>}::eq]:
@@ -658,7 +659,8 @@ def CopyStruct.Insts.CoreMarkerCopy {T : Type} (coremarkerCopyInst :
 /-- Trait implementation: [derive::{impl core::marker::StructuralPartialEq for derive::CopyStruct<T>}]
     Source: 'tests/src/derive.rs', lines 41:22-41:31 -/
 @[reducible]
-def CopyStruct.Insts.CoreMarkerStructuralPartialEq (T : Type) :
+def CopyStruct.Insts.CoreMarkerStructuralPartialEq {T : Type}
+  (corecmpPartialEqInst : core.cmp.PartialEq T T) :
   core.marker.StructuralPartialEq (CopyStruct T) := {
 }
 
@@ -761,8 +763,8 @@ def Struct.Insts.CoreCloneClone {T : Type} (corecloneCloneInst :
 /-- Trait implementation: [derive::{impl core::marker::StructuralPartialEq for derive::Struct<T>}]
     Source: 'tests/src/derive.rs', lines 49:16-49:25 -/
 @[reducible]
-def Struct.Insts.CoreMarkerStructuralPartialEq (T : Type) :
-  core.marker.StructuralPartialEq (Struct T) := {
+def Struct.Insts.CoreMarkerStructuralPartialEq {T : Type} (corecmpPartialEqInst
+  : core.cmp.PartialEq T T) : core.marker.StructuralPartialEq (Struct T) := {
 }
 
 /-- [derive::{impl core::cmp::PartialEq<derive::Struct<T>> for derive::Struct<T>}::eq]:
