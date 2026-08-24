@@ -478,12 +478,6 @@ def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) := do
       trace[Step] "Could not decompose application"
       pure mvar
 
-/-- The number of leading `∀`/`→` binders of an expression. -/
-private partial def countLeadingForalls (e : Expr) : Nat :=
-  match e.consumeMData with
-  | .forallE _ _ body _ => 1 + countLeadingForalls body
-  | _ => 0
-
 /-- Attempt to match a given theorem with the monadic call in the target.
 The resulting target should be of the shape:
 `qimp_spec P k Q` (or `qimp P Q`)
@@ -555,8 +549,8 @@ def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th
   let specMonoBindTy ← inferType specMonoBind
   trace[Step] "Applied specMonoBind with theorem: {specMonoBind}: {specMonoBindTy}"
 
-  let (specMonoBindMVars, _, specMonoBindTy) ←
-    forallMetaBoundedTelescope specMonoBindTy (countLeadingForalls specMonoBindTy)
+  /- Introduce meta-variables for the premises -/
+  let (specMonoBindMVars, _, specMonoBindTy) ← forallMetaTelescope specMonoBindTy
   if (specMonoBindMVars.size == 0) then
     throwError "The specMonoBind theorem should have at least one premise"
   let ngoal := specMonoBindMVars.back!.mvarId!
