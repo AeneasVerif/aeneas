@@ -380,12 +380,13 @@ def analyzeTarget : TacticM TargetKind := do
   withTraceNode `Step (fun _ => do pure m!"analyzeTarget") do
   try
     let goalTy ← getMainTarget
-    -- Dive into a registered specification statement.
+    -- Dive into a registered specification
     let some program ← observing? (Step.getSpecProgram goalTy)
       | trace[Step] "not an application of a registered specification statement: {goalTy}"
         return .result
     trace[Step] "application of a registered specification statement about: {program}"
     let e ← Utils.normalizeLetBindings program
+    -- Check whether this is a bind
     if let .const ``Bind.bind .. := e.getAppFn then
       let #[_m, _self, _α, _β, _value, cont] := e.getAppArgs
         | throwError "Expected bind to have 6 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
@@ -394,6 +395,7 @@ def analyzeTarget : TacticM TargetKind := do
     else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
       pure (.switch bfInfo)
     else
+      trace[Step] "not a registered spec"
       pure .result
   catch _ =>
     trace[Step] "exception caught"
