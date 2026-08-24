@@ -29,15 +29,7 @@ let remove_meta (ctx : ctx) (def : fun_decl) : fun_decl =
     assertions. *)
 let intro_massert_visitor (_ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
-  let mk_massert scrut =
-    let massert =
-      Qualif { id = FunOrOp (Fun (Pure Assert)); generics = empty_generic_args }
-    in
-    let massert =
-      { e = massert; ty = mk_arrow mk_bool_ty (mk_result_ty mk_unit_ty) }
-    in
-    [%add_loc] mk_app span massert scrut
-  in
+  let mk_massert scrut = mk_massert_texpr span scrut in
   (* Check if an expression is a [massert] application, and if so return the
      argument *)
   let get_massert_arg (e : texpr) : texpr option =
@@ -2739,6 +2731,58 @@ let decompose_monadic_let_bindings (ctx : ctx) (def : fun_decl) : fun_decl =
     See the explanations in {!val:Config.decompose_nested_let_patterns} *)
 let decompose_nested_let_patterns (ctx : ctx) (def : fun_decl) : fun_decl =
   decompose_let_bindings false true ctx def
+
+(** Introduce assertions checking that the target features required by a
+    function are enabled.
+
+    A function annotated with [#[target_feature(enable = "avx2")]] becomes:
+    {[
+      massert (target_feature_enabled "avx2");
+      ...
+    ]}
+
+    See the explanations in {!val:Config.feature_gates} *)
+let intro_target_feature_asserts (ctx : ctx) (def : fun_decl) : fun_decl =
+  let span = def.item_meta.span in
+  (* Retrieve the features required by the function, in the order in which
+     they appear in the attributes *)
+  let features =
+    List.concat_map
+      (fun (attr : Meta.attribute) ->
+        match attr with
+        | AttrBuiltin (RustcAttributeKindTargetFeature (features, _, _)) ->
+            List.map fst features
+        | _ -> [])
+      def.item_meta.attr_info.attributes
+  in
+  if features = [] then def
+  else
+    lift_map_fun_decl_body
+      (fun _ctx _def (body : fun_body) ->
+        (* Sanity check: we can only introduce the assertions if the body lives
+           in the error monad. This should always be the case, as the functions
+           which use the [#[target_feature]] attribute are regular functions
+           (in particular, they are not global bodies). *)
+        if not (is_result_ty body.body.ty) then begin
+          [%save_error] span
+            "Can't introduce the assertions for the `#[target_feature]` \
+             attribute: the body of the function is monadic";
+          body
+        end
+        else
+          let body_e =
+            List.fold_right
+              (fun feature next ->
+                let assertion =
+                  mk_massert_texpr span
+                    (mk_target_feature_enabled_texpr span feature)
+                in
+                let pat = mk_ignored_pat mk_unit_ty in
+                { e = Let (true, pat, assertion, next); ty = next.ty })
+              features body.body
+          in
+          { body with body = body_e })
+      ctx def
 
 (** Unfold the monadic let-bindings to explicit matches. *)
 let unfold_monadic_let_bindings_visitors (ctx : ctx) (def : fun_decl) =

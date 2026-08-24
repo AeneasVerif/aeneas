@@ -1265,6 +1265,7 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (ToResult, "lift");
         (ResultUnwrapMut, "core.result.Result.unwrap.mut");
         (GetTarget, "get_target");
+        (TargetFeatureEnabled, "target_feature_enabled");
       ]
   | HOL4 ->
       (* We don't provide [FuelDecrease] and [FuelEqZero] on purpose *)
