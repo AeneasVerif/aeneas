@@ -227,6 +227,14 @@ let dest_result_ty span (ty : ty) : ty =
 
 let is_result_ty (ty : ty) : bool = Option.is_some (opt_dest_result_ty ty)
 
+(** [true] if the type is the type of a monadic expression, i.e., an expression
+    which may appear as the body of a monadic let-binding: the error monad
+    ([Result]) or the loop monad ([LoopResult]). *)
+let is_monadic_ty (ty : ty) : bool =
+  match ty with
+  | TAdt (TBuiltin (TResult | TLoopResult), _) -> true
+  | _ -> false
+
 let dest_arrow_ty (span : Meta.span) (ty : ty) : ty * ty =
   match opt_dest_arrow_ty ty with
   | Some (arg_ty, ret_ty) -> (arg_ty, ret_ty)
