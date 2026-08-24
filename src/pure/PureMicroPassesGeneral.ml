@@ -2870,11 +2870,13 @@ let lift_pure_function_calls_visitor (ctx : ctx) (def : fun_decl) =
           if lifted then app else [%add_loc] mk_app span to_result_expr app
       | { e = Let (monadic, pat, bound, next); ty }, [] ->
           let next = self#visit_texpr env next in
-          (* Attempt to lift only if the let-expression is not already monadic. *)
+          (* Attempt to lift only if the let-expression is not already monadic,
+             and if the let-expression itself lives in a monad *)
           let lifted, bound =
             if monadic then (true, self#visit_texpr env bound)
-            else
+            else if is_monadic_ty ty then
               try_lift_expr (super#visit_texpr env) (self#visit_texpr env) bound
+            else (false, self#visit_texpr env bound)
           in
           { e = Let (lifted, pat, bound, next); ty }
       | f, args ->
