@@ -69,3 +69,16 @@ pub fn two_clauses<A: TraitA, B: TraitA>(_a: A, _b: B) {}
 pub trait Producer {
     type Item: TraitA;
 }
+
+// Example 10: https://github.com/AeneasVerif/aeneas/issues/1245
+pub trait Pair {
+    type Left: Copy;
+    type Right: Copy;
+}
+
+pub struct PairImpl;
+
+impl Pair for PairImpl {
+    type Left = bool;
+    type Right = u8;
+}

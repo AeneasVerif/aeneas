@@ -242,4 +242,26 @@ def two_clauses
 structure Producer (Self : Type) (Self_Item : Type) where
   TraitAInst : TraitA Self_Item
 
+/-- Trait declaration: [issue_1051_duplicate_parent_clause_names::Pair]
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 74:0-77:1
+    Visibility: public -/
+structure Pair (Self : Type) (Self_Left : Type) (Self_Right : Type) where
+  coremarkerCopySelfLeftInst : core.marker.Copy Self_Left
+  coremarkerCopySelfRightInst : core.marker.Copy Self_Right
+
+/-- [issue_1051_duplicate_parent_clause_names::PairImpl]
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 79:0-79:20
+    Visibility: public -/
+@[reducible]
+def PairImpl := Unit
+
+/-- Trait implementation: [issue_1051_duplicate_parent_clause_names::{impl issue_1051_duplicate_parent_clause_names::Pair<bool, u8> for issue_1051_duplicate_parent_clause_names::PairImpl}]
+    Source: 'tests/src/issue-1051-duplicate-parent-clause-names.rs', lines 81:0-84:1 -/
+@[reducible]
+def PairImpl.Insts.Issue_1051_duplicate_parent_clause_namesPairBoolU8 : Pair
+  PairImpl Bool Std.U8 := {
+  coremarkerCopySelfLeftInst := core.core.marker.CopyBool
+  coremarkerCopySelfRightInst := core.marker.CopyU8
+}
+
 end issue_1051_duplicate_parent_clause_names
