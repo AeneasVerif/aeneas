@@ -570,7 +570,7 @@ theorem eq_iff_forall_eq_getElem! {α} [Inhabited α] (l0 l1 : List α) :
       simp only [hi, getElem?_length_le, none_eq_getElem?_iff]
       simp only [← h0, hi]
 
-theorem mapM_Result_length {α : Type w} {β : Type u} {f : α → Std.Result β} {l : List α} {l' : List β}
+theorem mapM_RustM_length {α : Type w} {β : Type u} {f : α → Std.RustM β} {l : List α} {l' : List β}
   (h : List.mapM f l = .ok l') :
   l'.length = l.length := by
   have hind (l : List α) (l' acc : List β) (h : List.mapM.loop f l acc = .ok l') : l'.length = l.length + acc.length
@@ -587,9 +587,9 @@ theorem mapM_Result_length {α : Type w} {β : Type u} {f : α → Std.Result β
   have := hind l l' [] h
   simp [this]
 
-theorem mapM_Result_ok {α β} {l : List α} {l' : List β} {f : α → Std.Result β}
+theorem mapM_RustM_ok {α β} {l : List α} {l' : List β} {f : α → Std.RustM β}
     (hok : l.mapM f = .ok l') :
-    ∀ i (hi : i < l.length), f l[i] = .ok (l'[i]'(by have := List.mapM_Result_length hok; omega)) := by
+    ∀ i (hi : i < l.length), f l[i] = .ok (l'[i]'(by have := List.mapM_RustM_length hok; omega)) := by
   induction l generalizing l' with
   | nil => intro i hi; contradiction
   | cons a t ih =>

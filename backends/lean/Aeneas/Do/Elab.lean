@@ -550,7 +550,7 @@ register_option Aeneas.customDoElab : Bool := {
   }
 
 /-- `do`-notation elaborator. Dispatches to the new `ElabM`-based elaborator for
-    `Aeneas.Std.Result _` blocks when `Aeneas.newDoElab` is set; otherwise falls
+    `Aeneas.Std.RustM _` blocks when `Aeneas.newDoElab` is set; otherwise falls
     back to Lean's default. -/
 @[term_elab «do»]
 def elabDo : TermElab := fun stx expectedType? => do
@@ -558,7 +558,7 @@ def elabDo : TermElab := fun stx expectedType? => do
     let some expectedType := expectedType? | pure false
     let expectedType ← instantiateMVars =<< whnf expectedType
     match_expr expectedType with
-    | Aeneas.Std.Result _ => pure (Aeneas.customDoElab.get (← getOptions))
+    | Aeneas.Std.RustM _ => pure (Aeneas.customDoElab.get (← getOptions))
     | _ => pure false
   if useNewElab then
     let `(do $doSeq) := stx | throwUnsupportedSyntax

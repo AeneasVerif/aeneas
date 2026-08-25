@@ -1,5 +1,5 @@
 import Aeneas
-open Aeneas Std Result
+open Aeneas Std RustM
 
 local macro_rules
 | `(tactic| get_elem_tactic) => `(tactic| grind)
@@ -11,7 +11,7 @@ namespace Tutorial.Solutions
 
 /- [tutorial::mul2_add1]:
    Source: 'src/lib.rs', lines 11:0-11:31 -/
-def mul2_add1 (x : U32) : Result U32 :=
+def mul2_add1 (x : U32) : RustM U32 :=
   do
   let i ← x + x
   i + 1#u32
@@ -30,7 +30,7 @@ theorem mul2_add1_spec (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
 
 /- [tutorial::mul2_add1_add]:
    Source: 'src/lib.rs', lines 15:0-15:43 -/
-def mul2_add1_add (x : U32) (y : U32) : Result U32 :=
+def mul2_add1_add (x : U32) (y : U32) : RustM U32 :=
   do
   let i ← mul2_add1 x
   i + y
@@ -64,15 +64,15 @@ def CList.toList {α : Type} (x : CList α) : List α :=
 
 /- [tutorial::list_nth]:
    Source: 'src/lib.rs', lines 37:0-37:56 -/
-def list_nth {T : Type} (l : CList T) (i : U32) : Result T :=
+def list_nth {T : Type} (l : CList T) (i : U32) : RustM T :=
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
-    then Result.ok x
+    then RustM.ok x
     else do
          let i1 ← i - 1#u32
          list_nth tl i1
-  | CList.CNil => Result.fail .panic
+  | CList.CNil => RustM.fail .panic
 partial_fixpoint
 
 /-- Theorem about `list_nth` -/
@@ -91,9 +91,9 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
 
 /- [tutorial::i32_id]:
    Source: 'src/lib.rs', lines 78:0-78:29 -/
-def i32_id (i : I32) : Result I32 :=
+def i32_id (i : I32) : RustM I32 :=
   if i = 0#i32
-  then Result.ok 0#i32
+  then RustM.ok 0#i32
   else do
        let i1 ← i - 1#i32
        let i2 ← i32_id i1
@@ -121,9 +121,9 @@ decreasing_by
 
 /- [tutorial::even]:
    Source: 'src/lib.rs', lines 87:0-87:28 -/
-mutual def even (i : U32) : Result Bool :=
+mutual def even (i : U32) : RustM Bool :=
   if i = 0#u32
-  then Result.ok true
+  then RustM.ok true
   else do
        let i1 ← i - 1#u32
        odd i1
@@ -131,9 +131,9 @@ partial_fixpoint
 
 /- [tutorial::odd]:
    Source: 'src/lib.rs', lines 96:0-96:27 -/
-def odd (i : U32) : Result Bool :=
+def odd (i : U32) : RustM Bool :=
   if i = 0#u32
-  then Result.ok false
+  then RustM.ok false
   else do
        let i1 ← i - 1#u32
        even i1
@@ -173,22 +173,22 @@ end
    Source: 'src/lib.rs', lines 107:0-116:1 -/
 def list_nth_mut1_loop
   {T : Type} (l : CList T) (i : U32) :
-  Result (T × (T → CList T))
+  RustM (T × (T → CList T))
   :=
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
     then
       let back := fun ret => CList.CCons ret tl
-      Result.ok (x, back)
+      RustM.ok (x, back)
     else
       do
       let i1 ← i - 1#u32
       let (t, back) ← list_nth_mut1_loop tl i1
       let back1 :=
         fun ret => CList.CCons x (back ret)
-      Result.ok (t, back1)
-  | CList.CNil => Result.fail .panic
+      RustM.ok (t, back1)
+  | CList.CNil => RustM.fail .panic
 partial_fixpoint
 
 /- [tutorial::list_nth_mut1]:
@@ -196,7 +196,7 @@ partial_fixpoint
 @[reducible]
 def list_nth_mut1
   {T : Type} (l : CList T) (i : U32) :
-  Result (T × (T → CList T))
+  RustM (T × (T → CList T))
   :=
   list_nth_mut1_loop l i
 
@@ -449,7 +449,7 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
    Source: 'src/lib.rs', lines 118:0-123:1 -/
 def list_tail_loop
   {T : Type} (l : CList T) :
-  Result ((CList T) × (CList T → CList T))
+  RustM ((CList T) × (CList T → CList T))
   :=
   match l with
   | CList.CCons t tl =>
@@ -457,8 +457,8 @@ def list_tail_loop
     let (c, back) ← list_tail_loop tl
     let back1 :=
       fun ret => CList.CCons t (back ret)
-    Result.ok (c, back1)
-  | CList.CNil => Result.ok (CList.CNil, fun ret => ret)
+    RustM.ok (c, back1)
+  | CList.CNil => RustM.ok (CList.CNil, fun ret => ret)
 partial_fixpoint
 
 /- [tutorial::list_tail]:
@@ -466,17 +466,17 @@ partial_fixpoint
 @[reducible]
 def list_tail
   {T : Type} (l : CList T) :
-  Result ((CList T) × (CList T → CList T))
+  RustM ((CList T) × (CList T → CList T))
   :=
   list_tail_loop l
 
 /- [tutorial::append_in_place]:
    Source: 'src/lib.rs', lines 125:0-125:67 -/
 def append_in_place
-  {T : Type} (l0 : CList T) (l1 : CList T) : Result (CList T) :=
+  {T : Type} (l0 : CList T) (l1 : CList T) : RustM (CList T) :=
   do
   let (_, list_tail_back) ← list_tail l0
-  Result.ok (list_tail_back l1)
+  RustM.ok (list_tail_back l1)
 
 
 /-- Theorem about `list_tail`: exercise -/
@@ -498,10 +498,10 @@ theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
 /- [tutorial::reverse]: loop 0:
    Source: 'src/lib.rs', lines 147:4-154:1 -/
 def reverse_loop
-  {T : Type} (l : CList T) (out : CList T) : Result (CList T) :=
+  {T : Type} (l : CList T) (out : CList T) : RustM (CList T) :=
   match l with
   | CList.CCons hd tl => reverse_loop tl (CList.CCons hd out)
-  | CList.CNil => Result.ok out
+  | CList.CNil => RustM.ok out
 partial_fixpoint
 
 @[step]
@@ -515,7 +515,7 @@ theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
 
 /- [tutorial::reverse]:
    Source: 'src/lib.rs', lines 146:0-154:1 -/
-def reverse {T : Type} (l : CList T) : Result (CList T) :=
+def reverse {T : Type} (l : CList T) : RustM (CList T) :=
   reverse_loop l CList.CNil
 
 theorem reverse_spec {T : Type} (l : CList T) :
@@ -542,7 +542,7 @@ attribute [-simp] Int.reducePow Nat.reducePow
 /- [tutorial::zero]: loop 0:
    Source: 'src/lib.rs', lines 6:4-11:1 -/
 def zero_loop
-  (x : alloc.vec.Vec U32) (i : Usize) : Result (alloc.vec.Vec U32) :=
+  (x : alloc.vec.Vec U32) (i : Usize) : RustM (alloc.vec.Vec U32) :=
   let i1 := alloc.vec.Vec.len x
   if i < i1
   then
@@ -552,7 +552,7 @@ def zero_loop
     let i2 ← i + 1#usize
     let x1 := index_mut_back 0#u32
     zero_loop x1 i2
-  else Result.ok x
+  else RustM.ok x
 partial_fixpoint
 
 /-- Auxiliary definitions to interpret a vector of u32 as a mathematical integer -/
@@ -587,7 +587,7 @@ theorem zero_loop_spec
 
 /- [tutorial::zero]:
    Source: 'src/lib.rs', lines 5:0-5:28 -/
-def zero (x : alloc.vec.Vec U32) : Result (alloc.vec.Vec U32) :=
+def zero (x : alloc.vec.Vec U32) : RustM (alloc.vec.Vec U32) :=
   zero_loop x 0#usize
 
 /-- You will need this lemma for the proof of `zero_spec`
@@ -631,7 +631,7 @@ theorem zero_spec (x : alloc.vec.Vec U32) :
    Source: 'src/lib.rs', lines 19:4-24:1 -/
 def add_no_overflow_loop
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (i : Usize) :
-  Result (alloc.vec.Vec U32)
+  RustM (alloc.vec.Vec U32)
   :=
   let i1 := alloc.vec.Vec.len x
   if i < i1
@@ -645,7 +645,7 @@ def add_no_overflow_loop
     let i5 ← i + 1#usize
     let x1 := index_mut_back i4
     add_no_overflow_loop x1 y i5
-  else Result.ok x
+  else RustM.ok x
 partial_fixpoint
 
 /-- You will need this lemma for the proof of `add_no_overflow_loop_spec`.
@@ -703,7 +703,7 @@ theorem add_no_overflow_loop_spec
    Source: 'src/lib.rs', lines 18:0-18:50 -/
 def add_no_overflow
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) :
-  Result (alloc.vec.Vec U32)
+  RustM (alloc.vec.Vec U32)
   :=
   add_no_overflow_loop x y 0#usize
 
@@ -721,7 +721,7 @@ theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
    Source: 'src/lib.rs', lines 39:4-50:1 -/
 def add_with_carry_loop
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (c0 : U8) (i : Usize) :
-  Result (U8 × (alloc.vec.Vec U32))
+  RustM (U8 × (alloc.vec.Vec U32))
   :=
   let i1 := alloc.vec.Vec.len x
   if i < i1
@@ -745,7 +745,7 @@ def add_with_carry_loop
     let i7 ← i + 1#usize
     let x1 := index_mut_back sum1
     add_with_carry_loop x1 y c01 i7
-  else Result.ok (c0, x)
+  else RustM.ok (c0, x)
 partial_fixpoint
 
 /-- The proof about `add_with_carry_loop` -/
@@ -768,7 +768,7 @@ theorem add_with_carry_loop_spec
    Source: 'src/lib.rs', lines 37:0-37:55 -/
 def add_with_carry
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) :
-  Result (U8 × (alloc.vec.Vec U32))
+  RustM (U8 × (alloc.vec.Vec U32))
   :=
   add_with_carry_loop x y 0#u8 0#usize
 
@@ -789,26 +789,26 @@ theorem add_with_carry_spec
 
 /- [tutorial::max]:
    Source: 'src/lib.rs', lines 26:0-26:37 -/
-def max (x : Usize) (y : Usize) : Result Usize :=
+def max (x : Usize) (y : Usize) : RustM Usize :=
   if x > y
-  then Result.ok x
-  else Result.ok y
+  then RustM.ok x
+  else RustM.ok y
 
 /- [tutorial::get_or_zero]:
    Source: 'src/lib.rs', lines 30:0-30:45 -/
-def get_or_zero (y : alloc.vec.Vec U32) (i : Usize) : Result U32 :=
+def get_or_zero (y : alloc.vec.Vec U32) (i : Usize) : RustM U32 :=
   let i1 := alloc.vec.Vec.len y
   if i < i1
   then
     alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice U32) y i
-  else Result.ok 0#u32
+  else RustM.ok 0#u32
 
 /- [tutorial::add]: loop 0:
    Source: 'src/lib.rs', lines 60:4-76:1 -/
 def add_loop
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (max1 : Usize) (c0 : U8)
   (i : Usize) :
-  Result (alloc.vec.Vec U32)
+  RustM (alloc.vec.Vec U32)
   :=
   if i < max1
   then
@@ -834,14 +834,14 @@ def add_loop
     then do
          let i1 := UScalar.cast .U32 c0
          alloc.vec.Vec.push x i1
-    else Result.ok x
+    else RustM.ok x
 partial_fixpoint
 
 /- [tutorial::add]:
    Source: 'src/lib.rs', lines 55:0-55:38 -/
 def add
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) :
-  Result (alloc.vec.Vec U32)
+  RustM (alloc.vec.Vec U32)
   :=
   do
   let i := alloc.vec.Vec.len x
@@ -854,14 +854,14 @@ open ControlFlow
 /-- Trait declaration: [tutorial::Hash]
     Source: 'src/lib.rs', lines 250:0-252:1 -/
 structure Hash (Self : Type) where
-  hash : Std.U32 → Result Std.U32
+  hash : Std.U32 → RustM Std.U32
 
 /-- [tutorial::pseudo_random]: loop 0:
     Source: 'src/lib.rs', lines 258:2-260:3
     Visibility: public -/
 @[rust_loop]
 def pseudo_random_loop
-  {T : Type} (HashInst : Hash T) (state : Std.U32) : Result Std.U32 := do
+  {T : Type} (HashInst : Hash T) (state : Std.U32) : RustM Std.U32 := do
   if state < 100#u32
   then let state1 ← HashInst.hash state
        pseudo_random_loop HashInst state1
@@ -872,7 +872,7 @@ partial_fixpoint
     Source: 'src/lib.rs', lines 255:0-262:1
     Visibility: public -/
 @[reducible]
-def pseudo_random {T : Type} (HashInst : Hash T) : Result Std.U32 := do
+def pseudo_random {T : Type} (HashInst : Hash T) : RustM Std.U32 := do
   pseudo_random_loop HashInst 0#u32
 
 /- Exercise about dspec.

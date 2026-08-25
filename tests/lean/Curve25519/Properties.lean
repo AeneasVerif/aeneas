@@ -1,6 +1,6 @@
 import Curve25519.Curve25519
 
-open Aeneas Std Result
+open Aeneas Std RustM
 
 namespace curve25519
 

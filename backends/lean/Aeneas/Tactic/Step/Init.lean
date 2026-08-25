@@ -389,7 +389,7 @@ namespace Test
   /-!
   Making some tests here as models to guide the automation generation of proof terms when lifting theorems in `step_pure`
   -/
-  open Std Result
+  open Std RustM
   def pos_pair : Int × Int := (0, 1)
 
   theorem pos_pair_is_pos :

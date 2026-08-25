@@ -38,7 +38,7 @@ When the continuation needs multiple variables from the range, the auxiliary
 function returns a tuple.
 
 ```
-def f (x : U32) : Result U32 := do
+def f (x : U32) : RustM U32 := do
   let a ← x + 1#u32       -- binding 0
   let b ← a + 1#u32       -- binding 1
   let c ← b + 1#u32       -- binding 2
@@ -46,7 +46,7 @@ def f (x : U32) : Result U32 := do
 
 #decompose f f_eq
   letRange 0 3 => f_prefix  -- extracts bindings 0,1,2
--- f_prefix : U32 → Result U32
+-- f_prefix : U32 → RustM U32
 -- f_eq : f x = f_prefix x >>= fun c => c + 10#u32
 ```
 
@@ -66,7 +66,7 @@ Branch 0 is `then`/first alternative, branch 1 is `else`/second alternative, etc
 For matches, automatically opens the pattern-variable lambdas.
 
 ```
-def g (b : Bool) (x : U32) : Result U32 := do
+def g (b : Bool) (x : U32) : RustM U32 := do
   if b then
     let a ← x + 1#u32
     a + 2#u32
@@ -85,7 +85,7 @@ full expression at that point. This allows `letAt N` to designate the expression
 after `N` bindings:
 
 ```
-def f (x : U32) : Result U32 := do
+def f (x : U32) : RustM U32 := do
   let a ← x + 1#u32       -- binding 0
   let b ← a + 1#u32       -- binding 1
   b + 10#u32               -- terminal: letAt 2 reaches here
@@ -100,7 +100,7 @@ then apply `inner` to it. Equivalent to `letAt N` where N is the number of
 bindings, but without needing to know N in advance.
 
 ```
-def f (x : U32) : Result U32 := do
+def f (x : U32) : RustM U32 := do
   let a ← x + 1#u32
   let b ← a + 2#u32
   b + 3#u32               -- afterLets reaches here
@@ -125,7 +125,7 @@ is created.
 This is useful when the same operation appears at multiple positions:
 
 ```
-def f (x y : U32) : Result U32 := do
+def f (x y : U32) : RustM U32 := do
   let x1 ← x + 1#u32
   let x2 ← x1 + 1#u32
   let x3 ← x2 + 1#u32

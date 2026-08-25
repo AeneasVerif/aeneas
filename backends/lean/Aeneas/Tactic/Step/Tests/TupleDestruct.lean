@@ -2,14 +2,14 @@ import Aeneas.Do
 import Aeneas.Std.Slice
 import Aeneas.Tactic.Step
 
-open Aeneas Aeneas.Std Result
+open Aeneas Aeneas.Std RustM
 
 namespace Aeneas.Tactic.Step.Tests.TupleDestruct
 
-private def twoNats : Result (Nat × Nat) :=
+private def twoNats : RustM (Nat × Nat) :=
   ok (1, 2)
 
-private def threeNats : Result (Nat × Nat × Nat) :=
+private def threeNats : RustM (Nat × Nat × Nat) :=
   ok (1, 2, 3)
 
 @[local step]
@@ -18,14 +18,14 @@ private theorem twoNats_spec : twoNats ⦃ a b => a = 1 ∧ b = 2⦄ := by unfol
 @[local step]
 private def threeNats_spec : threeNats ⦃ a b c => a = 1 ∧ b = 2 ∧ c = 3⦄ := by unfold threeNats; step*
 
-private def fourNats : Result ((Nat × Nat) × (Nat × Nat)) :=
+private def fourNats : RustM ((Nat × Nat) × (Nat × Nat)) :=
   ok ((3, 4), (5, 6))
 
 @[local step]
 private theorem fourNats_spec : fourNats ⦃ (a, b) (c,d) => a = 3 ∧ b = 4 ∧ c = 5 ∧ d = 6⦄ := by
   unfold fourNats; step*
 
-private def sixNats : Result (((Nat × Nat) × Nat) × ((Nat × Nat) × Nat)) :=
+private def sixNats : RustM (((Nat × Nat) × Nat) × ((Nat × Nat) × Nat)) :=
   ok (((3, 4), 5), ((6, 7), 8))
 
 @[local step]
@@ -82,7 +82,7 @@ The binding can be removed (if unused) or named `_` (if used implicitly).
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 -/
 #guard_msgs in
-private def testTuples : Result Nat := do
+private def testTuples : RustM Nat := do
   let (a, b) ← twoNats
   let (c, d) ← twoNats
   let ((a, b), (c, d)) ← fourNats
@@ -103,7 +103,7 @@ example : testTuples ⦃ res => res = 18⦄ := by
   unfold testTuples
   step*?
 
-private def testTuples1 : Result Nat := do
+private def testTuples1 : RustM Nat := do
   let (a, b, c) ← threeNats
   let (e, f, g) ← threeNats
   ok (a + b + c + e + f + g)
@@ -120,7 +120,7 @@ example : testTuples1 ⦃ res => res = 12⦄ := by
   unfold testTuples1
   step*?
 
-private def testTuples2 : Result Nat := do
+private def testTuples2 : RustM Nat := do
   let (((a, b), c), ((d, e), f)) ← sixNats
   ok (a + b + c + d + e + f)
 
@@ -141,7 +141,7 @@ Several names sharing one type ascription — `(a b c : Nat)` — expand to one
 product component per name, exactly as if the binders were written separately.
 Arity is irrelevant, and tuple *pattern* binders `(⟨…⟩ : T)` are unaffected. -/
 
-private def fiveNats : Result (Nat × Nat × Nat × Nat × Nat) :=
+private def fiveNats : RustM (Nat × Nat × Nat × Nat × Nat) :=
   ok (1, 2, 3, 4, 5)
 
 /-- A single grouped binder covering every component. -/
@@ -166,7 +166,7 @@ example :
       a = 1 ∧ b = 2 ∧ c = 3 ∧ d = 4 ∧ e = 5 ⦄ := by
   unfold fiveNats; step*
 
-private def natsAndBools : Result (Nat × Nat × Bool × Bool) :=
+private def natsAndBools : RustM (Nat × Nat × Bool × Bool) :=
   ok (1, 2, true, false)
 
 /-- A single grouped binder covering every component. -/

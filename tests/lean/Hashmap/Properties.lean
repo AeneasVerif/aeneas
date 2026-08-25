@@ -1,6 +1,6 @@
 import Hashmap.Funs
 
-open Aeneas Std Result
+open Aeneas Std RustM
 
 local macro_rules
 | `(tactic| get_elem_tactic) => `(tactic| grind)
@@ -316,7 +316,7 @@ theorem insert_in_list_spec {α : Type} (l : Nat) (key: Usize) (value: α) (l0: 
 -- Remark: α and β must live in the same universe, otherwise the
 -- bind doesn't work
 theorem if_update_eq
-  {α β : Type u} (b : Bool) (y : α) (e : Result α) (f : α → Result β) :
+  {α β : Type u} (b : Bool) (y : α) (e : RustM α) (f : α → RustM β) :
   (if b then Bind.bind e f else f y) = Bind.bind (if b then e else pure y) f
   := by
   split <;> simp [Pure.pure]

@@ -5,7 +5,7 @@ import Aeneas.Std.Core.Iter
 
 namespace Aeneas.Std
 
-open Result Error core.ops.range WP
+open RustM Error core.ops.range WP
 
 attribute [-simp] List.getElem!_eq_getElem?_getD
 
@@ -25,12 +25,12 @@ structure core.slice.iter.IterMut (T : Type) where
   i : Nat := 0
 
 @[rust_fun "core::slice::{[@T]}::iter"]
-def core.slice.Slice.iter {T : Type} (s : Slice T) : Result (core.slice.iter.Iter T) :=
+def core.slice.Slice.iter {T : Type} (s : Slice T) : RustM (core.slice.iter.Iter T) :=
   ok ⟨ s, 0 ⟩
 
 @[rust_fun "core::slice::{[@T]}::contains"]
 def core.slice.Slice.contains {T : Type} (partialEqInst : core.cmp.PartialEq T T)
-  (s : Slice T) (x : T) : Result Bool :=
+  (s : Slice T) (x : T) : RustM Bool :=
   List.anyM (partialEqInst.eq x) s.val
 
 @[rust_fun
@@ -38,7 +38,7 @@ def core.slice.Slice.contains {T : Type} (partialEqInst : core.cmp.PartialEq T T
 def core.slice.iter.IteratorIterMut.next
   {T : Type}
   (it : core.slice.iter.IterMut T) :
-  Result ((Option T) × (core.slice.iter.IterMut T) ×
+  RustM ((Option T) × (core.slice.iter.IterMut T) ×
           (core.slice.iter.IterMut T → Option T → core.slice.iter.IterMut T)) :=
   if h: it.i < it.slice.len then
     let x := it.slice[it.i]
@@ -53,13 +53,13 @@ def core.slice.iter.IteratorIterMut.next
 
 @[rust_fun "core::slice::{[@T]}::iter_mut"]
 def core.slice.Slice.iter_mut {T : Type} (slice : Slice T) :
-  Result ((core.slice.iter.IterMut T) × (core.slice.iter.IterMut T → Slice T)) :=
+  RustM ((core.slice.iter.IterMut T) × (core.slice.iter.IterMut T → Slice T)) :=
   ok ({slice}, fun it => it.slice)
 
 @[rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::next"]
 def core.slice.iter.IteratorSliceIter.next
-  {T : Type} (it : core.slice.iter.Iter T) : Result ((Option T) × (core.slice.iter.Iter T)) :=
+  {T : Type} (it : core.slice.iter.Iter T) : RustM ((Option T) × (core.slice.iter.Iter T)) :=
   if h : it.i < it.slice.len then
     let x := it.slice[it.i]
     let it := { it with i := it.i + 1}
@@ -89,7 +89,7 @@ viewed as a slice. -/
 @[rust_fun
   "core::array::{core::iter::traits::collect::IntoIterator<&'a [@T; @N], &'a @T, core::slice::iter::Iter<'a, @T>>}::into_iter"]
 def SharedArray.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter
-    {T : Type} {N : Usize} (a : Array T N) : Result (core.slice.iter.Iter T) :=
+    {T : Type} {N : Usize} (a : Array T N) : RustM (core.slice.iter.Iter T) :=
   ok ⟨ ⟨a.val, by scalar_tac⟩, 0 ⟩
 
 @[reducible, rust_trait_impl
@@ -110,7 +110,7 @@ Mirrors Rust: `(&[T]).into_iter()` returns an `Iter<T>` starting at index 0. -/
 @[rust_fun
   "core::slice::iter::{core::iter::traits::collect::IntoIterator<&'a [@T], &'a @T, core::slice::iter::Iter<'a, @T>>}::into_iter"]
 def SharedSlice.Insts.CoreIterTraitsCollectIntoIteratorSharedIter.into_iter
-    {T : Type} (s : Slice T) : Result (core.slice.iter.Iter T) :=
+    {T : Type} (s : Slice T) : RustM (core.slice.iter.Iter T) :=
   ok ⟨ s, 0 ⟩
 
 @[reducible, rust_trait_impl
@@ -130,14 +130,14 @@ structure core.slice.iter.ChunksExact (T : Type) where
 @[rust_fun
   "core::slice::iter::{core::slice::iter::ChunksExact<'a, @T>}::remainder"]
 def core.slice.iter.ChunksExact.getRemainder
-  {T : Type} (self : core.slice.iter.ChunksExact T) : Result (Slice T) :=
+  {T : Type} (self : core.slice.iter.ChunksExact T) : RustM (Slice T) :=
   ok self.remainder
 
 @[rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>}::next"]
 def core.slice.iter.IteratorChunksExact.next
   {T : Type} (self : core.slice.iter.ChunksExact T) :
-  Result ((Option (Slice T)) × (core.slice.iter.ChunksExact T)) :=
+  RustM ((Option (Slice T)) × (core.slice.iter.ChunksExact T)) :=
   match self.chunks with
   | [] => ok (none, self)
   | chunk :: chunks => ok (some chunk, { chunks, remainder := self.remainder })
@@ -196,7 +196,7 @@ decreasing_by simp [List.length_drop]; omega
 
 @[rust_fun "core::slice::{[@T]}::chunks_exact"]
 def core.slice.Slice.chunks_exact {T : Type} (s : Slice T) (chunk_size : Std.Usize) :
-  Result (core.slice.iter.ChunksExact T) :=
+  RustM (core.slice.iter.ChunksExact T) :=
   if hcs : chunk_size.val > 0 then
     let result := List.toChunksExact chunk_size.val hcs s.val
     let sliceChunks := result.1.attach.map fun ⟨c, hc⟩ => ⟨c, by
@@ -218,7 +218,7 @@ private def mkSliceIter (l : List Nat) (h : l.length ≤ Usize.max := by scalar_
   { slice := ⟨l, h⟩, i := 0 }
 
 private def collectStepBy (sbi : core.iter.adapters.step_by.StepBy (core.slice.iter.Iter Nat))
-    (fuel : Nat := 100) : Result (List Nat) :=
+    (fuel : Nat := 100) : RustM (List Nat) :=
   match fuel with
   | 0 => .ok []
   | fuel + 1 => do
@@ -308,7 +308,7 @@ private def collectStepBy (sbi : core.iter.adapters.step_by.StepBy (core.slice.i
 private def collectNestedStepBy
     (sbi : core.iter.adapters.step_by.StepBy
       (core.iter.adapters.step_by.StepBy (core.slice.iter.Iter Nat)))
-    (fuel : Nat := 100) : Result (List Nat) :=
+    (fuel : Nat := 100) : RustM (List Nat) :=
   match fuel with
   | 0 => .ok []
   | fuel + 1 => do

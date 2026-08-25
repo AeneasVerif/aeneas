@@ -25,7 +25,7 @@ Each level has a specific role:
 The mathematical specification from the standard (e.g., FIPS 203). Written directly in Lean as pure mathematical definitions. Example: polynomials as `Vector (ZMod q) 256`, compress/decompress as mathematical functions.
 
 ### Level 2: Lean Specification
-A direct Lean translation of the NIST spec. **Specifications are always pure** — they never live in the `Result` error monad. They may use monadic notation (via the `Id` monad) for readability, but semantically they are pure functions.
+A direct Lean translation of the NIST spec. **Specifications are always pure** — they never live in the `RustM` error monad. They may use monadic notation (via the `Id` monad) for readability, but semantically they are pure functions.
 
 ### Level 3: Auxiliary Specification (optional)
 An intermediate specification that closely follows the implementation structure but remains pure. This is the key bridge between the mathematical spec and the Aeneas-generated code.
@@ -33,7 +33,7 @@ An intermediate specification that closely follows the implementation structure 
 **Why this level exists:** The Aeneas translation follows the Rust code structure (loops, array indexing, bit-packing), which may differ significantly from the NIST spec. The auxiliary spec mirrors the code structure but in pure math, making the refinement proof tractable.
 
 ### Level 4: Aeneas Translation
-The automatically generated Lean code from the Rust implementation. This code lives in the `Result` monad (it may fail on overflow, out-of-bounds, etc.).
+The automatically generated Lean code from the Rust implementation. This code lives in the `RustM` monad (it may fail on overflow, out-of-bounds, etc.).
 
 ### Proving equivalences between levels
 
@@ -45,7 +45,7 @@ Prove equivalences between adjacent levels separately. Each proof is simpler bec
 `Nist spec ⟷₁ Lean spec ⟷₂ Auxiliary spec ⟷₃ Aeneas translation`
   - `Nist spec` corresponds to (4.7) (Compress) and Algorithm 5 (ByteEncode).
   - `Lean spec` corresponds to `Symcrust.Spec.compress` and `Symcrust.Spec.byteEncode`
-    (pure definitions — may use monadic notation via Id monad, but not Result).
+    (pure definitions — may use monadic notation via Id monad, but not RustM).
   - `Auxiliary spec` corresponds to `Symcrust.SpecAux.compress` and `Stream.encode`.
   - `Aeneas translation` corresponds to `Symcrust.ntt.poly_element_compress_and_encode`.
   - `⟷₂` corresponds to `compress_eq` and `Stream.encode.spec`.
@@ -89,7 +89,7 @@ Crypto implementations often have large functions with many sequential operation
 
 Step 1 — Define a helper:
 ```lean
-private def reduce_add_mont_reduce (a : U32) : Result U32 := do
+private def reduce_add_mont_reduce (a : U32) : RustM U32 := do
   let i2 ← lift (core.num.U32.wrapping_mul a ntt.NEG_Q_INV_MOD_R)
   let inv ← lift (i2 &&& ntt.RMASK)
   let i3 ← inv * ntt.Q
@@ -100,7 +100,7 @@ private def reduce_add_mont_reduce (a : U32) : Result U32 := do
 
 Step 2 — Prove a fold theorem:
 ```lean
-private theorem fold_reduce_add_mont_reduce (a : U32) (f : U32 → Result α) :
+private theorem fold_reduce_add_mont_reduce (a : U32) (f : U32 → RustM α) :
   (do
     let i2 ← lift (core.num.U32.wrapping_mul a ntt.NEG_Q_INV_MOD_R)
     -- ... inline operations ...

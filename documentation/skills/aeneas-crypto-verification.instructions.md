@@ -19,7 +19,7 @@ import MyProject.Code
 import MyProject.Spec
 import MyProject.Properties.Basic
 
-open Aeneas Std Result
+open Aeneas Std RustM
 
 #setup_aeneas_simps
 
@@ -43,7 +43,7 @@ NIST spec ⟷₁ Lean spec ⟷₂ Auxiliary spec ⟷₃ Aeneas code
 - **Always have:** NIST spec (pure math) + Aeneas code (auto-generated)
 - **Add auxiliary spec when:** The code structure differs significantly from the mathematical spec (loops vs. closed-form, array indexing vs. polynomial operations, bit-packing vs. abstract operations)
 - **For loops:** Use `loop.spec_decr_nat` with a loop invariant and a `Nat` termination measure (or `loop.spec` for general well-founded measures)
-- **Specs are always pure:** They may use monadic notation (Id monad) but never the Result monad
+- **Specs are always pure:** They may use monadic notation (Id monad) but never the RustM monad
 - **The auxiliary spec:** Also pure, closely follows code structure
 
 ### Proving equivalences:
@@ -68,9 +68,9 @@ vacuity test.
 /-!
 `Nist spec ⟷₁ Lean spec ⟷₂ Auxiliary spec ⟷₃ Aeneas translation`
   - `Nist spec`: [reference to standard section]
-  - `Lean spec`: [Lean definition name] (always pure — may use Id monad notation, never Result)
+  - `Lean spec`: [Lean definition name] (always pure — may use Id monad notation, never RustM)
   - `Auxiliary spec`: [Lean definition name] (also pure)
-  - `Aeneas translation`: [generated function name] (lives in Result monad)
+  - `Aeneas translation`: [generated function name] (lives in RustM monad)
 -/
 ```
 
@@ -134,12 +134,12 @@ lines of code.
 
 ```lean
 -- 1. Extract helper
-private def helper_name (a : U32) (b : Slice U16) : Result U32 := do
+private def helper_name (a : U32) (b : Slice U16) : RustM U32 := do
   -- copy the relevant subsequence of monadic operations
   ...
 
 -- 2. Fold theorem (proves inline = helper call)
-private theorem fold_helper_name (a : U32) (b : Slice U16) (f : U32 → Result α) :
+private theorem fold_helper_name (a : U32) (b : Slice U16) (f : U32 → RustM α) :
   (do /- ...inline operations... -/ f result) =
   (do let r ← helper_name a b; f r)
   := by simp only [helper_name, bind_assoc_eq, bind_tc_ok, pure]

@@ -6,7 +6,7 @@ import Aeneas.Std.SliceIter
 
 namespace Aeneas.Std
 
-open Result core.ops.range WP ScalarElab
+open RustM core.ops.range WP ScalarElab
 
 -- ============================================================================
 -- Generic UScalar Range/StepBy iterator specs

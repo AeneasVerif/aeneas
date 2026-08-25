@@ -105,7 +105,7 @@ open MyCrate
 #setup_aeneas_simps
 
 -- Suppose the generated code contains:
---   def add_overflow (a : U32) (b : U32) : Result U32 := a + b
+--   def add_overflow (a : U32) (b : U32) : RustM U32 := a + b
 
 @[step]
 theorem add_overflow_spec (a b : U32) (h : a.val + b.val ≤ U32.max) :

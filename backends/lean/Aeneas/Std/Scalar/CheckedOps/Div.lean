@@ -3,7 +3,7 @@ import Aeneas.Std.Scalar.Elab
 
 namespace Aeneas.Std
 
-open Result Error Arith ScalarElab
+open RustM Error Arith ScalarElab
 
 /-!
 # Checked Division: Definitions
@@ -11,13 +11,13 @@ open Result Error Arith ScalarElab
 
 /- [core::num::{T}::checked_div] -/
 def core.num.checked_div_UScalar {ty} (x y : UScalar ty) : Option (UScalar ty) :=
-  Option.ofResult (UScalar.div x y)
+  Option.ofRustM (UScalar.div x y)
 
 uscalar def «%S».checked_div (x y : «%S») : Option «%S» := core.num.checked_div_UScalar x y
 
 /- [core::num::{T}::checked_div] -/
 def core.num.checked_div_IScalar {ty} (x y : IScalar ty) : Option (IScalar ty) :=
-  Option.ofResult (IScalar.div x y)
+  Option.ofRustM (IScalar.div x y)
 
 iscalar def «%S».checked_div (x y : «%S») : Option «%S» := core.num.checked_div_IScalar x y
 
@@ -32,7 +32,7 @@ theorem core.num.checked_div_UScalar_bv_spec {ty} (x y : UScalar ty) :
   match core.num.checked_div_UScalar x y with
   | some z => y.val ≠ 0 ∧ z.val = x.val / y.val ∧ z.bv = x.bv / y.bv
   | none => y.val = 0 := by
-  simp [checked_div_UScalar, Option.ofResult, UScalar.div]
+  simp [checked_div_UScalar, Option.ofRustM, UScalar.div]
   split_ifs
   . zify at *
     simp_all
@@ -60,7 +60,7 @@ theorem core.num.checked_div_IScalar_bv_spec {ty} (x y : IScalar ty) :
   match core.num.checked_div_IScalar x y with
   | some z => y.val ≠ 0 ∧ ¬ (x.val = IScalar.min ty ∧ y.val = -1) ∧ z.val = Int.tdiv x.val y.val ∧ z.bv = BitVec.sdiv x.bv y.bv
   | none => y.val = 0 ∨ (x.val = IScalar.min ty ∧ y.val = -1) := by
-  simp [checked_div_IScalar, Option.ofResult, IScalar.div]
+  simp [checked_div_IScalar, Option.ofRustM, IScalar.div]
   split_ifs
   . zify at *
     simp_all

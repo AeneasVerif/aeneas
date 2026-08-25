@@ -2,13 +2,13 @@ import Aeneas.Std.Slice
 import Aeneas.Tactic.Step
 import Aeneas.Do
 
-open Aeneas Aeneas.Std Result
+open Aeneas Aeneas.Std RustM
 
 namespace Aeneas.Tactic.Step.Tests.UncurryBind
 
 /-- A toy "indexed read with a setter" that returns a pair, mirroring
     `Array.index_mut_usize`. -/
-def readPair (xs : List Nat) (i : Nat) : Result (Nat × (Nat → List Nat)) :=
+def readPair (xs : List Nat) (i : Nat) : RustM (Nat × (Nat → List Nat)) :=
   ok (xs.getD i 0, fun y => xs.set i y)
 
 @[step]
@@ -16,7 +16,7 @@ theorem readPair_spec (xs : List Nat) (i : Nat) :
     readPair xs i ⦃ x y => x = xs.getD i 0 ∧ y = (fun y => xs.set i y) ⦄ := by
   unfold readPair; simp [WP.spec_ok, Std.WP.uncurry']
 
-def readSingle (xs : List Nat) (i : Nat) : Result Nat :=
+def readSingle (xs : List Nat) (i : Nat) : RustM Nat :=
   ok (xs.getD i 0)
 
 @[step]
@@ -25,7 +25,7 @@ theorem readSingle_spec (xs : List Nat) (i : Nat) :
   unfold readSingle; simp [WP.spec_ok]
 
 /-- a `do` block alternating tuple-destructuring binds with single binds. -/
-def prog (xs : List Nat) : Result (List Nat × Nat) := do
+def prog (xs : List Nat) : RustM (List Nat × Nat) := do
   let (a, setA) ← readPair xs 0
   let b ← readSingle xs 1
   let (c, setC) ← readPair (setA b) 2
@@ -54,7 +54,7 @@ example (xs : List Nat) :
 
 /-- Nested-tuple bind followed by another bind. Checks that `introOutputs`
   properly reduces a nested `Std.uncurry` chain. -/
-def readNested (xs : List Nat) : Result ((Nat × Nat) × Nat) :=
+def readNested (xs : List Nat) : RustM ((Nat × Nat) × Nat) :=
   ok ((xs.getD 0 0, xs.getD 1 0), xs.getD 2 0)
 
 @[step]
@@ -62,7 +62,7 @@ theorem readNested_spec (xs : List Nat) :
     readNested xs ⦃ r => r = ((xs.getD 0 0, xs.getD 1 0), xs.getD 2 0) ⦄ := by
   unfold readNested; step*
 
-def progNested (xs : List Nat) : Result Nat := do
+def progNested (xs : List Nat) : RustM Nat := do
   let ((a, b), c) ← readNested xs
   let d ← readSingle xs 3
   ok (a + b + c + d)
@@ -100,7 +100,7 @@ example (xs : List Nat) :
         ok (a + b)) ⦃ res => 0 ≤ res ⦄ := by
   step*?
 
-def mkTriple (x : Nat) : Result ((Nat × Nat) × Nat) :=
+def mkTriple (x : Nat) : RustM ((Nat × Nat) × Nat) :=
   ok ((x, x + 1), x + 2)
 
 /- delabing the postcondition -/
