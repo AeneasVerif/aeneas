@@ -865,6 +865,7 @@ let pure_builtin_fun_id_to_string (fid : pure_builtin_fun_id) : string =
   | Discriminant -> "@discriminant"
   | ResultUnwrapMut -> "@resultUnwrapMut"
   | GetTarget -> "@getTarget"
+  | TargetFeatureEnabled -> "@targetFeatureEnabled"
 
 let regular_fun_id_to_string (env : fmt_env) (fun_id : fun_id) : string =
   match fun_id with

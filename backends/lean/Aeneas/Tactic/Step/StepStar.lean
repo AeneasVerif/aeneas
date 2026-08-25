@@ -11,9 +11,7 @@ def esplitMatchAtSpec (h : Name) (names : Option (List (List (Option Name)))) :
   withTraceNode `Utils (fun _ => do pure m!"esplitMatchAtSpec") do
   focus do withMainContext do
   let tgt ← getMainTarget
-  tgt.consumeMData.withApp fun spec? args => do
-  if ¬ (spec?.isConstOf ``Std.WP.spec) ∨ args.size ≠ 3 then throwError "Not a valid spec goal"
-  let prog := args[1]!
+  let prog ← Step.getSpecProgram tgt
   -- Check that we have a matcher
   let some ma ← Meta.matchMatcherApp? prog (alsoCasesOn := true)
     | throwError "not a matcher: {prog}"
@@ -63,9 +61,7 @@ theorem dite_false : (dite False t e) = e (by simp) := by simp
 def esplitIteAtSpec (h : Name) : TacticM (List (FVarId × MVarId)) := do
   focus do withMainContext do
   let tgt ← getMainTarget
-  tgt.consumeMData.withApp fun spec? args => do
-  if ¬ (spec?.isConstOf ``Std.WP.spec) ∨ args.size ≠ 3 then throwError "Not a valid spec goal"
-  let prog := args[1]!
+  let prog ← Step.getSpecProgram tgt
   -- Check that we have an if then else
   prog.withApp fun ite? args => do
   trace[Utils] "ite?: {ite?}, args: {args}"
@@ -140,9 +136,7 @@ def esplitAtSpec (h : Name) (names : Option (List (List (Option Name)))) : Tacti
   withTraceNode `Utils (fun _ => do pure m!"esplitAtSpec") do
   focus do withMainContext do
   let tgt ← getMainTarget
-  tgt.consumeMData.withApp fun spec? args => do
-  if ¬ (spec?.isConstOf ``Std.WP.spec) ∨ args.size ≠ 3 then throwError "Not a valid spec goal"
-  let prog := args[1]!
+  let prog ← Step.getSpecProgram tgt
   -- Check whether we have a matcher
   let ma ← Meta.matchMatcherApp? prog (alsoCasesOn := true)
   if ma.isSome
@@ -385,25 +379,23 @@ inductive TargetKind where
 def analyzeTarget : TacticM TargetKind := do
   withTraceNode `Step (fun _ => do pure m!"analyzeTarget") do
   try
-    let goalTy ← (← getMainGoal).getType
-    -- Dive into the `spec program post`
-    goalTy.consumeMData.withApp fun spec? args => do
-    if h: spec?.isConstOf ``Std.WP.spec ∧ args.size = 3 then
-      trace[Step] "application of `spec` with arity 3"
-      let program := args[1]
-      -- Check if this is a bind
-      let e ← Utils.normalizeLetBindings program
-      if let .const ``Bind.bind .. := e.getAppFn then
-        let #[_m, _self, _α, _β, _value, cont] := e.getAppArgs
-          | throwError "Expected bind to have 6 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
-        let names ← Step.getPostNames cont
-        pure (.bind names)
-      else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
-        pure (.switch bfInfo)
-      else
-        pure .result
+    let goalTy ← getMainTarget
+    -- Dive into a registered specification
+    let some program ← observing? (Step.getSpecProgram goalTy)
+      | trace[Step] "not an application of a registered specification statement: {goalTy}"
+        return .result
+    trace[Step] "application of a registered specification statement about: {program}"
+    let e ← Utils.normalizeLetBindings program
+    -- Check whether this is a bind
+    if let .const ``Bind.bind .. := e.getAppFn then
+      let #[_m, _self, _α, _β, _value, cont] := e.getAppArgs
+        | throwError "Expected bind to have 6 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
+      let names ← Step.getPostNames cont
+      pure (.bind names)
+    else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
+      pure (.switch bfInfo)
     else
-      trace[Step] "not an application of `spec` with arity 3"
+      trace[Step] "not a registered spec"
       pure .result
   catch _ =>
     trace[Step] "exception caught"
@@ -601,7 +593,6 @@ where
       -- TODO: use global options
       let grindTac : TacticM Unit :=
         Step.evalAGrindWithPreprocess cfg.stepConfig.withGroundSimprocs cfg.stepConfig.toGrindConfig cfg.stepConfig.nla
-      -- TODO: add the tactic given by the user
       let tacStx : IO.Promise Syntax.Tactic ← IO.Promise.new
       let rec tryFinish (tacl : List (String × Syntax.Tactic × TacticM Unit)) : TacticM Unit := do
         match tacl with
@@ -623,9 +614,14 @@ where
             trace[Step] "goal solved"
             tacStx.resolve stx
           | none => tryFinish tacl
+      let finishTactics :=
+        [("grind", ← `(tactic| agrind), grindTac)] ++
+        match cfg.preconditionTac with
+        | none => []
+        | some tac => [("user tactic", tac, evalTactic tac)]
       let info' ← do
         if cfg.stepConfig.async then
-          let proof ← Async.asyncRunTactic (tryFinish [("grind", ← `(tactic| agrind), grindTac)])
+          let proof ← Async.asyncRunTactic (tryFinish finishTactics)
           let proof := proof.result?.map (fun x => match x with | none | some none => none | some (some x) => some x)
           let info' : Info ← pure
             { script := .tacs #[.task tacStx.result?],
@@ -633,7 +629,7 @@ where
               subgoals := #[(mvarId, some (TaskOrDone.task proof))] }
           pure info'
         else
-          tryFinish [("grind", ← `(tactic| agrind), grindTac)]
+          tryFinish finishTactics
           let info' : Info ← pure
             { script := .tacs #[.task tacStx.result?],
               unassignedVars := #[],
@@ -670,9 +666,7 @@ where
             | .forallE _ _ body _ => stripForall body
             | e => e
           let innerTy := stripForall precTy
-          let isSpec := innerTy.consumeMData.withApp fun f args =>
-            f.isConstOf ``Std.WP.spec && args.size == 3
-          if isSpec then
+          if isSpec : (← observing? (Step.getSpecProgram innerTy)).isSome then
             let tag ← mvarId.getTag
             let (subInfo, introNames) ← commitIfNoEx do
               setGoals [mvarId]
