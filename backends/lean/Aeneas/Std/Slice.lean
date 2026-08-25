@@ -114,7 +114,7 @@ abbrev Slice.slice {α : Type u} [Inhabited α] (s : Slice α) (i j : Nat) : Lis
 
 def Slice.index_usize {α : Type u} (v: Slice α) (i: Usize) : Result α :=
   match v[i]? with
-  | none => fail .arrayOutOfBounds
+  | none => fail .panic
   | some x => ok x
 
 theorem Slice.eq_iff {α} (s0 s1 : Slice α) : s0 = s1 ↔ s0.val = s1.val := by
@@ -260,7 +260,7 @@ theorem Slice.getElem_Nat_setAtNat_ne
 
 def Slice.update {α : Type u} (v: Slice α) (i: Usize) (x: α) : Result (Slice α) :=
   match v.val[i.val]? with
-  | none => fail .arrayOutOfBounds
+  | none => fail .panic
   | some _ =>
     ok ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
 
