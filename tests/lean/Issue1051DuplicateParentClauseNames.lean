@@ -55,35 +55,19 @@ def core.num.niche_types.NonZeroU8Inner.Insts.CoreMarkerCopy : core.marker.Copy
   cloneInst := core.num.niche_types.NonZeroU8Inner.Insts.CoreCloneClone
 }
 
-/-- Trait declaration: [core::num::nonzero::private::Sealed]
-    Source: '/rustc/library/core/src/num/nonzero.rs', lines 47:12-47:28
-    Name pattern: [core::num::nonzero::private::Sealed]
-    Visibility: public -/
-@[rust_trait "core::num::nonzero::private::Sealed"]
-structure core.num.nonzero.private.Sealed (Self : Type) where
-
 /-- Trait declaration: [core::num::nonzero::ZeroablePrimitive]
-    Source: '/rustc/library/core/src/num/nonzero.rs', lines 34:0-34:66
+    Source: '/rustc/library/core/src/num/nonzero.rs', lines 34:0-34:59
     Name pattern: [core::num::nonzero::ZeroablePrimitive]
     Visibility: public -/
 @[rust_trait "core::num::nonzero::ZeroablePrimitive"
-  (parentClauses := ["markerCopyInst", "privateSealedInst", "markerCopySelfNonZeroInnerInst"])]
+  (parentClauses := ["markerCopyInst", "markerCopySelfNonZeroInnerInst"])]
 structure core.num.nonzero.ZeroablePrimitive (Self : Type) (Self_NonZeroInner :
   Type) where
   markerCopyInst : core.marker.Copy Self
-  privateSealedInst : core.num.nonzero.private.Sealed Self
   markerCopySelfNonZeroInnerInst : core.marker.Copy Self_NonZeroInner
 
-/-- Trait implementation: [core::num::nonzero::{impl core::num::nonzero::private::Sealed for u8}]
-    Source: '/rustc/library/core/src/num/nonzero.rs', lines 56:12-56:47
-    Name pattern: [core::num::nonzero::private::Sealed<u8>] -/
-@[reducible, rust_trait_impl "core::num::nonzero::private::Sealed<u8>"]
-def U8.Insts.CoreNumNonzeroPrivateSealed : core.num.nonzero.private.Sealed
-  Std.U8 := {
-}
-
 /-- Trait implementation: [core::num::nonzero::{impl core::num::nonzero::ZeroablePrimitive<core::num::niche_types::NonZeroU8Inner> for u8}]
-    Source: '/rustc/library/core/src/num/nonzero.rs', lines 63:12-63:56
+    Source: '/rustc/library/core/src/num/nonzero.rs', lines 47:12-47:56
     Name pattern: [core::num::nonzero::ZeroablePrimitive<u8, core::num::niche_types::NonZeroU8Inner>] -/
 @[reducible, rust_trait_impl
   "core::num::nonzero::ZeroablePrimitive<u8, core::num::niche_types::NonZeroU8Inner>"]
@@ -91,20 +75,19 @@ def U8.Insts.CoreNumNonzeroZeroablePrimitiveNonZeroU8Inner :
   core.num.nonzero.ZeroablePrimitive Std.U8 core.num.niche_types.NonZeroU8Inner
   := {
   markerCopyInst := core.marker.CopyU8
-  privateSealedInst := U8.Insts.CoreNumNonzeroPrivateSealed
   markerCopySelfNonZeroInnerInst :=
     core.num.niche_types.NonZeroU8Inner.Insts.CoreMarkerCopy
 }
 
 /-- [core::num::nonzero::NonZero]
-    Source: '/rustc/library/core/src/num/nonzero.rs', lines 128:0-128:40
+    Source: '/rustc/library/core/src/num/nonzero.rs', lines 112:0-112:40
     Name pattern: [core::num::nonzero::NonZero]
     Visibility: public -/
 @[rust_type "core::num::nonzero::NonZero"]
 axiom core.num.nonzero.NonZero (T : Type) (Clause0_NonZeroInner : Type) : Type
 
 /-- [core::num::nonzero::{core::num::nonzero::NonZero<T, Clause0_NonZeroInner>}::get]:
-    Source: '/rustc/library/core/src/num/nonzero.rs', lines 483:4-483:31
+    Source: '/rustc/library/core/src/num/nonzero.rs', lines 467:4-467:31
     Name pattern: [core::num::nonzero::{core::num::nonzero::NonZero<@T, @Clause0_NonZeroInner>}::get]
     Visibility: public -/
 @[rust_fun
