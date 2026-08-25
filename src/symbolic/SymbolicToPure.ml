@@ -120,7 +120,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expr option) : fun_decl =
       loop_pos = [];
       name;
       signature;
-      is_global_decl_body = Option.is_some def.is_global_initializer;
+      is_global_decl_body = LlbcAstUtils.fun_decl_is_global_initializer def;
       body;
     }
   in
@@ -190,6 +190,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   let {
     def_id;
     item_meta;
+    src = _;
     generics = llbc_generics;
     implied_clauses = llbc_parent_clauses;
     consts;
@@ -280,6 +281,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   let {
     A.def_id;
     item_meta;
+    src = _;
     impl_trait = llbc_impl_trait;
     generics = llbc_generics;
     implied_trait_refs;
@@ -303,7 +305,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   let generics, preds = translate_generic_params span llbc_generics in
   let explicit_info = compute_explicit_info generics [] in
   let parent_trait_refs =
-    List.map (translate_strait_ref span) implied_trait_refs
+    List.map (translate_fwd_trait_ref span ctx) implied_trait_refs
   in
   let consts =
     List.map

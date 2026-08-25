@@ -2126,10 +2126,8 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
      [trait_default] attribute so that the [impl_def] command can unfold it when
      resolving self-referential trait-impl fields (see the TraitDefault elab). *)
   let trait_default =
-    if backend () = Lean then
-      match def.src with
-      | TraitDeclItem _ -> [ "trait_default" ]
-      | _ -> []
+    if backend () = Lean && fun_source_is_trait_default ctx def.src then
+      [ "trait_default" ]
     else []
   in
   let attributes = rust_attributes @ reduc_attribute @ trait_default in
@@ -2498,7 +2496,7 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
   in
   let trait_default =
     match decl.src with
-    | TraitDeclItem _ -> [ "trait_default" ]
+    | TraitDefaultGlobal _ -> [ "trait_default" ]
     | _ -> []
   in
   let attributes = attributes @ trait_default in
@@ -2814,7 +2812,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
     [%ldebug
       "compute_item_name: llbc_name=" ^ name_to_string ctx item_meta.name];
     let name =
-      ctx_compute_fun_global_name_no_suffix item_meta TopLevelItem
+      ctx_compute_fun_name_no_suffix item_meta NormalFun
         ~is_trait_decl_field:true ctx
     in
     (* Add a prefix if necessary *)
@@ -2871,8 +2869,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
        *)
       let fun_name =
         match backend () with
-        | Lean when names_maps_is_keyword ctx.names_maps fun_name ->
-            "«" ^ fun_name ^ "»"
+        | Lean when is_lean_keyword fun_name -> "«" ^ fun_name ^ "»"
         | _ -> fun_name
       in
       let ctx =

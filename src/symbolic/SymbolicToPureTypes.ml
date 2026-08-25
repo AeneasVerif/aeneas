@@ -136,11 +136,11 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
       let generics = translate_sgeneric_args span generics in
       match id with
       | T.TAdtId adt_id -> TAdt (TAdtId adt_id, generics)
-      | T.TTuple ->
-          [%sanity_check_opt_span] span (generics.const_generics = []);
-          mk_simpl_tuple_ty generics.types
       | T.TBuiltin aty -> (
           match aty with
+          | T.TTuple ->
+              [%sanity_check_opt_span] span (generics.const_generics = []);
+              mk_simpl_tuple_ty generics.types
           | T.TBox -> (
               (* Eliminate the boxes *)
               match generics.types with
@@ -243,7 +243,7 @@ let translate_generic_params (span : Meta.span option)
   ({ types; const_generics; trait_clauses }, { trait_type_constraints })
 
 let translate_field (span : Meta.span) (f : T.field) : field =
-  let field_name = f.field_name in
+  let field_name = if f.is_positional then None else Some f.field_name in
   let field_ty = translate_sty (Some span) f.field_ty in
   let field_attr_info = f.attr_info in
   { field_name; field_ty; field_attr_info }
@@ -326,17 +326,11 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
 let translate_type_id (span : Meta.span option) (id : T.type_id) : type_id =
   match id with
   | TAdtId adt_id -> TAdtId adt_id
-  | TBuiltin aty ->
-      let aty =
-        match aty with
-        | T.TStr -> TStr
-        | T.TBox ->
-            (* Boxes have to be eliminated: this type id shouldn't
-               be translated *)
-            [%craise_opt_span] span "Unexpected box type"
-      in
-      TBuiltin aty
-  | TTuple -> TTuple
+  | TBuiltin T.TTuple -> TTuple
+  | TBuiltin T.TStr -> TBuiltin TStr
+  | TBuiltin T.TBox ->
+      (* Boxes have to be eliminated: this type id shouldn't be translated *)
+      [%craise_opt_span] span "Unexpected box type"
 
 (** Translate a type, seen as an input/output of a forward function (preserve
     all borrows, etc.).
@@ -356,7 +350,7 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
       | TAdtId _ | TBuiltin TStr ->
           let id = translate_type_id span id in
           TAdt (id, t_generics)
-      | TTuple ->
+      | TBuiltin TTuple ->
           (* Note that if there is exactly one type, [mk_simpl_tuple_ty] is the
              identity *)
           mk_simpl_tuple_ty t_generics.types
@@ -492,7 +486,7 @@ and compute_back_ty_num_levels (span : Meta.span option)
             | _ ->
                 [%craise_opt_span] span
                   "Unreachable: boxes receive exactly one type parameter")
-        | TTuple -> List.iter (explore outer_regions) generics.types)
+        | TBuiltin TTuple -> List.iter (explore outer_regions) generics.types)
     | T.TArray (ty, _) | T.TSlice ty -> explore outer_regions ty
     | TVar _ | TNever | TLiteral _ -> save_count outer_regions
     | TRef (r, rty, rkind) -> (
@@ -597,7 +591,7 @@ and translate_back_ty_aux (span : Meta.span option) (decls_ctx : C.decls_ctx)
       "Exploring: " ^ Print.ty_to_string ctx ty ^ "\n- outer_regions: "
       ^ T.RegionGroupId.Set.to_string None outer_regions];
     match ty with
-    | T.TAdt { id = TTuple; generics } -> (
+    | T.TAdt { id = TBuiltin TTuple; generics } -> (
         (* Tuples can contain borrows (which we eliminate).
 
          Note that no borrow gets eliminated if we are already inside a
@@ -625,7 +619,7 @@ and translate_back_ty_aux (span : Meta.span option) (decls_ctx : C.decls_ctx)
             | _ ->
                 [%craise_opt_span] span
                   "Unreachable: boxes receive exactly one type parameter")
-        | TTuple -> [%internal_error_opt_span] span)
+        | TBuiltin TTuple -> [%internal_error_opt_span] span)
     | T.TAdt _ -> None
     | T.TArray _ | T.TSlice _ ->
         if keep_adt outer_regions ty then

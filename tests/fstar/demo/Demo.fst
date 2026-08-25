@@ -6,13 +6,13 @@ open Primitives
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [core::num::{u32}::wrapping_add]:
-    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2583:8-2583:58
+    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2651:8-2651:58
     Name pattern: [core::num::{u32}::wrapping_add]
     Visibility: public *)
 assume val core_num_U32_wrapping_add : u32 -> u32 -> result u32
 
 (** [core::num::{u32}::wrapping_sub]:
-    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2620:8-2620:58
+    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2688:8-2688:58
     Name pattern: [core::num::{u32}::wrapping_sub]
     Visibility: public *)
 assume val core_num_U32_wrapping_sub : u32 -> u32 -> result u32

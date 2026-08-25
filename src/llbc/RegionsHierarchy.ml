@@ -138,10 +138,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
             List.iter
               (add_edges_from_region_binder add_edges_from_types_outlive)
               predicates.types_outlive
-        | TTuple -> (* No clauses for tuples *) ()
-        | TBuiltin aid -> (
-            match aid with
-            | TBox | TStr -> (* No clauses for those *) ()));
+        | TBuiltin (TTuple | TBox | TStr) -> (* No clauses for those *) ());
         (* Explore the generics *)
         explore_generics outer generics
     | TArray _ | TSlice _ -> (* No clauses for those *) ()

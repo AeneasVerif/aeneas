@@ -386,11 +386,6 @@ type names_maps = {
           ]} *)
 }
 
-let names_maps_is_keyword (nm : names_maps) (x : string) : bool =
-  match StringMap.find_opt x nm.strict_names_map.name_to_id with
-  | Some (KeywordId, _) -> true
-  | _ -> false
-
 (** Return [true] if we are strict on collisions for this id (i.e., we forbid
     collisions even with the ids in the unsafe names map) *)
 let strict_collisions (id : id) : bool =
@@ -759,13 +754,20 @@ let id_to_string (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
       in
       trait_decl_id_to_string trait_decl_id ^ ", method name: " ^ method_name
 
+let lean_keywords_set : StringSet.t Lazy.t =
+  lazy (StringSet.of_list LeanKeywords.lean_keywords)
+
+(** [true] if [s] is a Lean keyword. These need to be escaped with [«...»]. *)
+let is_lean_keyword (s : string) : bool =
+  StringSet.mem s (Lazy.force lean_keywords_set)
+
 let ctx_add (span : Meta.span) (id : id) (name : string) (ctx : extraction_ctx)
     : extraction_ctx =
   (* In Lean, identifiers cannot contain "-". We wrap any dot-separated
      component that contains a hyphen in French quotes (« ... »). *)
   let name =
     match backend () with
-    | Lean ->
+    | Lean -> (
         let parts = String.split_on_char '.' name in
         let parts =
           List.map
@@ -780,7 +782,10 @@ let ctx_add (span : Meta.span) (id : id) (name : string) (ctx : extraction_ctx)
               else s)
             parts
         in
-        String.concat "." parts
+        (* A reserved keyword is illegal only as a bare name. *)
+        match parts with
+        | [ s ] when is_lean_keyword s -> "«" ^ s ^ "»"
+        | _ -> String.concat "." parts)
     | _ -> name
   in
   (* Actually add the name *)
@@ -1076,114 +1081,17 @@ let keywords () =
           "with";
         ]
     | Lean ->
+        (* Identifiers defined by Aeneas' Lean library which translated
+           identifiers must not collide with. Genuine Lean keywords are handled
+           separately, by escaping them (see [is_lean_keyword]). *)
         [
-          "Pi";
-          "Prop";
-          "Sort";
-          "Type";
-          "abbrev";
-          "alias";
-          "as";
-          "at";
-          "attribute";
-          "axiom";
-          "axioms";
-          "begin";
-          "break";
-          "by";
           "BuiltinFn";
           "BuiltinFnMut";
           "BuiltinFnOnce";
-          "calc";
-          "catch";
-          "class";
-          "const";
-          "constant";
-          "constants";
-          "continue";
-          "decreasing_by";
-          "def";
-          "definition";
-          "deriving";
-          "do";
-          "else";
-          "end";
-          "example";
-          "exists";
-          "export";
-          "extends";
-          "for";
-          "forall";
-          "from";
-          "fun";
-          "have";
-          "hiding";
-          "if";
-          "import";
-          "in";
-          "include";
-          "inductive";
-          "infix";
-          "infixl";
-          "infixr";
-          "instance";
-          "lemma";
-          "let";
-          "local";
-          "macro";
-          "macro_rules";
-          "match";
-          "mut";
-          "mutual";
-          "name";
-          "namespace";
-          "noncomputable";
-          "notation";
-          "omit";
-          "opaque";
-          "opaque_defs";
-          "open";
-          "override";
-          "parameter";
-          "parameters";
-          "partial";
-          "postfix";
-          "precedence";
-          "prefix";
-          "prelude";
-          "private";
-          "protected";
-          "public";
-          "raw";
-          "record";
-          "reduce";
-          "renaming";
-          "replacing";
-          "reserve";
-          "run_cmd";
-          "seal";
-          "section";
-          "set_option";
-          "simp";
+          "Pi";
           "Std.Array.empty";
-          "structure";
-          "syntax";
-          "termination_by";
-          "then";
-          "theorem";
-          "theory";
-          "to";
+          "opaque_defs";
           "toStr";
-          "universe";
-          "universes";
-          "unless";
-          "unsafe";
-          "using";
-          "using_well_founded";
-          "variable";
-          "variables";
-          "where";
-          "with";
           dyn_constructor ();
         ]
     | HOL4 ->
@@ -1357,6 +1265,7 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (ToResult, "lift");
         (ResultUnwrapMut, "core.result.Result.unwrap.mut");
         (GetTarget, "get_target");
+        (TargetFeatureEnabled, "target_feature_enabled");
       ]
   | HOL4 ->
       (* We don't provide [FuelDecrease] and [FuelEqZero] on purpose *)
@@ -2417,6 +2326,38 @@ let ctx_add_adt_projector_names (decl_name : string) (field_names : string list)
   in
   { ctx with names_maps }
 
+(** The part of a function or global's provenance that affects its extracted
+    name. *)
+type extractable_item_source =
+  | TraitImplSource of T.trait_impl_ref * T.trait_decl_ref * T.assoc_item_id
+  | TraitDefaultSource
+  | OtherSource
+
+let extractable_global_source (src : global_source) : extractable_item_source =
+  match src with
+  | TraitImplGlobal (impl_ref, trait_ref, const_id, _) ->
+      TraitImplSource (impl_ref, trait_ref, T.AssocIdConst const_id)
+  | TraitDefaultGlobal _ -> TraitDefaultSource
+  | _ -> OtherSource
+
+let extractable_fun_source (ctx : extraction_ctx) (src : fun_source) :
+    extractable_item_source =
+  match src with
+  | TraitImplFun (impl_ref, trait_ref, method_id, _) ->
+      TraitImplSource (impl_ref, trait_ref, T.AssocIdMethod method_id)
+  | TraitDefaultFun _ -> TraitDefaultSource
+  | GlobalInitializerFun global -> (
+      match GlobalDeclId.Map.find_opt global.id ctx.trans_globals with
+      | Some global -> extractable_global_source global.src
+      | None -> OtherSource)
+  | _ -> OtherSource
+
+let fun_source_is_trait_default (ctx : extraction_ctx) (src : fun_source) : bool
+    =
+  match extractable_fun_source ctx src with
+  | TraitDefaultSource -> true
+  | _ -> false
+
 (** This helper factors out the logic to generate global decls and function
     names. The subtlety comes from trait implementations: if the declaration
     comes from a trait implementation, we want to prefix the name with the name
@@ -2427,8 +2368,8 @@ let ctx_add_adt_projector_names (decl_name : string) (field_names : string list)
       trait declaration, [false] if we are computing the name of a function
       declaration. *)
 let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
-    (src : item_source) ~(is_trait_decl_field : bool) (ctx : extraction_ctx) :
-    string =
+    (src : extractable_item_source) ~(is_trait_decl_field : bool)
+    (ctx : extraction_ctx) : string =
   let span = item_meta.span in
   (* Extract target suffix from the function's own name before any overriding *)
   let _, target_suffix = LlbcAstUtils.extract_target_suffix item_meta.name in
@@ -2445,7 +2386,7 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
      we keep this one.
   *)
   match src with
-  | TraitImplItem (trait_impl_ref, trait_decl_ref, item_id, _) ->
+  | TraitImplSource (trait_impl_ref, trait_decl_ref, item_id) ->
       let item_meta =
         if Option.is_some item_meta.attr_info.rename then item_meta
         else
@@ -2458,7 +2399,7 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
             | None -> None
             | Some trait_decl -> (
                 match item_id with
-                | AssocIdMethod method_id -> (
+                | T.AssocIdMethod method_id -> (
                     match
                       List.find_opt
                         (fun meth -> meth.method_id = method_id)
@@ -2466,10 +2407,10 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
                     with
                     | None -> None
                     | Some meth -> Some meth.item_meta)
-                | AssocIdConst _ ->
+                | T.AssocIdConst _ ->
                     (* TODO: missing item meta information *)
                     None
-                | AssocIdType _ -> None))
+                | T.AssocIdType _ -> None))
             (* We use the decl meta info as a default value *)
             ~default:item_meta
       in
@@ -2505,7 +2446,7 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
         if is_trait_decl_field then llbc_name
         else
           match src with
-          | TraitDeclItem _ ->
+          | TraitDefaultSource ->
               llbc_name @ [ PeIdent ("default", Disambiguator.zero) ]
           | _ -> llbc_name
       in
@@ -2539,6 +2480,18 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
           ctx_fun_global_name_to_extract_string item_meta ctx llbc_name
         else name
 
+let ctx_compute_fun_name_no_suffix (item_meta : T.item_meta) (src : fun_source)
+    ~(is_trait_decl_field : bool) (ctx : extraction_ctx) : string =
+  ctx_compute_fun_global_name_no_suffix item_meta
+    (extractable_fun_source ctx src)
+    ~is_trait_decl_field ctx
+
+let ctx_compute_global_name_no_suffix (item_meta : T.item_meta)
+    (src : global_source) (ctx : extraction_ctx) : string =
+  ctx_compute_fun_global_name_no_suffix item_meta
+    (extractable_global_source src)
+    ~is_trait_decl_field:false ctx
+
 (** Register the name of a global declaration.
 
     Note that we only register the name of the global itself, not the name of
@@ -2548,17 +2501,14 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
     their names registered through {!ctx_add_fun_decl}. *)
 let ctx_add_global_decl (def : global_decl) (ctx : extraction_ctx) :
     extraction_ctx =
-  let name =
-    ctx_compute_fun_global_name_no_suffix def.item_meta def.src ctx
-      ~is_trait_decl_field:false
-  in
+  let name = ctx_compute_global_name_no_suffix def.item_meta def.src ctx in
   ctx_add def.item_meta.span (GlobalId def.def_id) name ctx
 
 let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
     (ctx : extraction_ctx) : string =
   let fname =
-    ctx_compute_fun_global_name_no_suffix def.item_meta def.src
-      ~is_trait_decl_field ctx
+    ctx_compute_fun_name_no_suffix def.item_meta def.src ~is_trait_decl_field
+      ctx
   in
   (* Compute the suffix *)
   let suffix = default_fun_suffix def.num_loops def.loop_id def.loop_pos in
@@ -2581,7 +2531,7 @@ let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
 let ctx_compute_termination_measure_name (decl : fun_decl)
     (ctx : extraction_ctx) : string =
   let fname =
-    ctx_compute_fun_global_name_no_suffix decl.item_meta decl.src
+    ctx_compute_fun_name_no_suffix decl.item_meta decl.src
       ~is_trait_decl_field:false ctx
   in
   let lp_suffix =
@@ -2613,7 +2563,7 @@ let ctx_compute_termination_measure_name (decl : fun_decl)
 let ctx_compute_decreases_proof_name (decl : fun_decl) (ctx : extraction_ctx) :
     string =
   let fname =
-    ctx_compute_fun_global_name_no_suffix decl.item_meta decl.src
+    ctx_compute_fun_name_no_suffix decl.item_meta decl.src
       ~is_trait_decl_field:false ctx
   in
   let lp_suffix =
