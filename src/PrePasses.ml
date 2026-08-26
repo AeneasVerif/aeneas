@@ -1190,7 +1190,7 @@ let filter_marker_traits (crate : crate) : crate =
 
         method! visit_trait_ref_kind env (kind : trait_ref_kind) =
           match kind with
-          | BuiltinOrAuto (data, parent_refs, types) ->
+          | BuiltinOrAuto (data, parent_refs, types, vtable) ->
               let parent_refs =
                 List.filter (fun tr -> not (is_filtered_ref tr)) parent_refs
               in
@@ -1202,7 +1202,8 @@ let filter_marker_traits (crate : crate) : crate =
                   (fun t -> self#visit_trait_assoc_ty_impl env t)
                   types
               in
-              BuiltinOrAuto (data, parent_refs, types)
+              let vtable = Option.map (self#visit_global_decl_ref env) vtable in
+              BuiltinOrAuto (data, parent_refs, types, vtable)
           | _ -> super#visit_trait_ref_kind env kind
 
         method! visit_trait_decl env (decl : trait_decl) =

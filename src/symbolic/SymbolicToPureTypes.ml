@@ -98,7 +98,7 @@ and translate_trait_ref_kind (span : Meta.span option)
         translate_generic_args span translate_ty impl_ref.generics
       in
       TraitImpl (impl_ref.id, generics)
-  | BuiltinOrAuto (data, _, _) ->
+  | BuiltinOrAuto (data, _, _, _) ->
       let data =
         match data with
         | BuiltinClone -> BuiltinClone
