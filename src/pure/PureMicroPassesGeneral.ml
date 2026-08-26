@@ -2158,7 +2158,7 @@ let unit_vars_to_unit (ctx : ctx) (def : fun_decl) : fun_decl =
     at the same time is that we would need to eliminate them in two different
     places: when translating function calls, and when translating end
     abstractions. Here, we can do something simpler, in one micro-pass. *)
-let eliminate_box_functions_visitor (_ctx : ctx) (def : fun_decl) =
+let eliminate_box_functions_visitor (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
 
   (* The map visitor *)
@@ -2172,16 +2172,11 @@ let eliminate_box_functions_visitor (_ctx : ctx) (def : fun_decl) =
              general case, where functions could be boxed (meaning we
              could have: [box_new f x]) *)
           match fun_id with
-          | Fun (FromLlbc (FunId (FBuiltin aid), _lp_id)) -> (
-              match aid with
-              | BoxNew ->
-                  let arg, args = Collections.List.pop args in
-                  [%add_loc] mk_apps span arg args
-              | Index _
-              | ArrayToSliceShared
-              | ArrayToSliceMut
-              | ArrayRepeat
-              | PtrFromParts _ -> super#visit_texpr env e)
+          | Fun (FromLlbc (FunId (FRegular fid), _lp_id))
+            when (FunDeclId.Map.find fid ctx.fun_decls).item_meta
+                   .diagnostic_item = Some "box_new" ->
+              let arg, args = Collections.List.pop args in
+              [%add_loc] mk_apps span arg args
           | _ -> super#visit_texpr env e)
       | _ -> super#visit_texpr env e
   end
