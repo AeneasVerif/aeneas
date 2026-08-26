@@ -227,6 +227,14 @@ let dest_result_ty span (ty : ty) : ty =
 
 let is_result_ty (ty : ty) : bool = Option.is_some (opt_dest_result_ty ty)
 
+(** [true] if the type is the type of a monadic expression, i.e., an expression
+    which may appear as the body of a monadic let-binding: the error monad
+    ([Result]) or the loop monad ([LoopResult]). *)
+let is_monadic_ty (ty : ty) : bool =
+  match ty with
+  | TAdt (TBuiltin (TResult | TLoopResult), _) -> true
+  | _ -> false
+
 let dest_arrow_ty (span : Meta.span) (ty : ty) : ty * ty =
   match opt_dest_arrow_ty ty with
   | Some (arg_ty, ret_ty) -> (arg_ty, ret_ty)
@@ -1637,6 +1645,24 @@ let mk_to_result_texpr (span : Meta.span) (e : texpr) : texpr =
   let qualif_ty = mk_arrow e.ty ty in
   let qualif = { e = qualif; ty = qualif_ty } in
   [%add_loc] mk_app span qualif e
+
+(** Create a call to [massert]: [massert scrut] has type [Result ()]. *)
+let mk_massert_texpr (span : Meta.span) (scrut : texpr) : texpr =
+  let id = FunOrOp (Fun (Pure Assert)) in
+  let qualif = Qualif { id; generics = empty_generic_args } in
+  let qualif_ty = mk_arrow mk_bool_ty (mk_result_ty mk_unit_ty) in
+  let qualif = { e = qualif; ty = qualif_ty } in
+  [%add_loc] mk_app span qualif scrut
+
+(** Create a call to [target_feature_enabled]: [target_feature_enabled feature]
+    has type [bool], where [feature] is a target feature such as ["avx2"]. *)
+let mk_target_feature_enabled_texpr (span : Meta.span) (feature : string) :
+    texpr =
+  let str_ty = TAdt (TBuiltin TStr, empty_generic_args) in
+  let id = FunOrOp (Fun (Pure TargetFeatureEnabled)) in
+  let qualif = Qualif { id; generics = empty_generic_args } in
+  let qualif = { e = qualif; ty = mk_arrow str_ty mk_bool_ty } in
+  [%add_loc] mk_app span qualif { e = Const (VStr feature); ty = str_ty }
 
 let append_generic_args (g0 : generic_args) (g1 : generic_args) : generic_args =
   {

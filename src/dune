@@ -15,6 +15,8 @@
 
 ;; TODO: change to qualified
 
+(vendored_dirs charon)
+
 (include_subdirs unqualified)
 
 ;; Scan all subdirectories for OCaml files
@@ -32,6 +34,7 @@
    aeneas.ppx))
  (libraries
   charon
+  easy_logging
   core_unix
   ocamlgraph
   str
@@ -79,6 +82,7 @@
   InterpStatements
   InterpUtils
   Invariants
+  LeanKeywords
   LlbcAst
   LlbcAstUtils
   LlbcOfJson

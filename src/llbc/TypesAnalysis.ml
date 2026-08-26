@@ -72,14 +72,14 @@ let type_borrows_info_init : type_borrows_info =
     contains_nested_mut = false;
   }
 
-(** Return true if a type declaration is a structure with unnamed fields.
+(** Return true if a type declaration is a structure with positional fields.
 
     Note that there are two possibilities:
-    - either all the fields are named
-    - or none of the fields are named *)
+    - either all the fields are positional
+    - or none of the fields are positional *)
 let type_decl_is_tuple_struct (x : type_decl) : bool =
   match x.kind with
-  | Struct fields -> List.for_all (fun f -> f.field_name = None) fields
+  | Struct fields -> List.for_all (fun f -> f.is_positional) fields
   | _ -> false
 
 let initialize_g_type_info (is_tuple_struct : bool) ~(is_rec : bool)
@@ -361,7 +361,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
     | TArray (ty, _) | TSlice ty ->
         (* Nothing to update: just explore the type parameters *)
         analyze span expl_info ty_info ty
-    | TAdt { id = TTuple | TBuiltin (TBox | TStr); generics } ->
+    | TAdt { id = TBuiltin (TTuple | TBox | TStr); generics } ->
         (* Nothing to update: just explore the type parameters *)
         List.fold_left
           (fun ty_info ty -> analyze span expl_info ty_info ty)
@@ -799,10 +799,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
                     let ty, r = pred.binder_value in
                     outlive_visitor#visit_ty r ty)
                   types_outlive
-            | TTuple -> super#visit_ty outer ty
-            | TBuiltin builtin_ty -> (
-                match builtin_ty with
-                | TBox | TStr -> super#visit_ty outer ty)
+            | TBuiltin (TTuple | TBox | TStr) -> super#visit_ty outer ty
           end
         | TArray _ | TSlice _ -> super#visit_ty outer ty
         | TVar _ | TLiteral _ | TNever -> ()

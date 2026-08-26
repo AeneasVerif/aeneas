@@ -7,6 +7,7 @@
       translate it) *)
 
 open LlbcAst
+open LlbcAstUtils
 open ExpressionsUtils
 open Charon.GAstUtils
 open Errors
@@ -208,7 +209,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
       in
       (* Sanity check: global bodies don't contain stateful calls *)
       [%cassert] f.item_meta.span
-        (Option.is_none f.is_global_initializer || not !stateful)
+        ((not (fun_decl_is_global_initializer f)) || not !stateful)
         "Global definition containing a stateful call in its body";
       let builtin_info = get_builtin_info f in
       let has_builtin_info = builtin_info <> None in
@@ -234,9 +235,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     List.iter visit_fun d;
     (* We need to know if the declaration group contains a global - note that
      * groups containing globals contain exactly one declaration *)
-    let is_global_decl_body =
-      List.exists (fun f -> Option.is_some f.is_global_initializer) d
-    in
+    let is_global_decl_body = List.exists fun_decl_is_global_initializer d in
     [%cassert] (List.hd d).item_meta.span
       ((not is_global_decl_body) || List.length d = 1)
       "This global definition is in a group of mutually recursive definitions";
