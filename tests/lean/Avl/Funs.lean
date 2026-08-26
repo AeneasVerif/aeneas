@@ -2,7 +2,7 @@
 -- [avl]: function definitions
 import Aeneas
 import Avl.Types
-open Aeneas Aeneas.Std Result ControlFlow Error
+open Aeneas Aeneas.Std RustM ControlFlow Error
 set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false
@@ -19,7 +19,7 @@ namespace avl
     Source: 'src/avl.rs', lines 7:4-15:5
     Visibility: public -/
 def I32.Insts.AvlOrd.cmp
-  (self : Std.I32) (other : Std.I32) : Result Ordering := do
+  (self : Std.I32) (other : Std.I32) : RustM Ordering := do
   if self < other
   then ok Ordering.Less
   else if self = other
@@ -36,7 +36,7 @@ def I32.Insts.AvlOrd : Ord Std.I32 := {
 /-- [avl::{avl::Node<T>}::rotate_left]:
     Source: 'src/avl.rs', lines 40:4-87:5 -/
 def Node.rotate_left
-  {T : Type} (root : Node T) (z : Node T) : Result (Node T) := do
+  {T : Type} (root : Node T) (z : Node T) : RustM (Node T) := do
   let (b, o) := core.mem.replace z.left none
   let (x, root1) :=
     core.mem.replace (Node.mk root.value root.left b root.balance_factor)
@@ -52,7 +52,7 @@ def Node.rotate_left
 /-- [avl::{avl::Node<T>}::rotate_right]:
     Source: 'src/avl.rs', lines 89:4-131:5 -/
 def Node.rotate_right
-  {T : Type} (root : Node T) (z : Node T) : Result (Node T) := do
+  {T : Type} (root : Node T) (z : Node T) : RustM (Node T) := do
   let (b, o) := core.mem.replace z.right none
   let (x, root1) :=
     core.mem.replace (Node.mk root.value b root.right root.balance_factor)
@@ -68,7 +68,7 @@ def Node.rotate_right
 /-- [avl::{avl::Node<T>}::rotate_left_right]:
     Source: 'src/avl.rs', lines 133:4-181:5 -/
 def Node.rotate_left_right
-  {T : Type} (root : Node T) (z : Node T) : Result (Node T) := do
+  {T : Type} (root : Node T) (z : Node T) : RustM (Node T) := do
   let (o, _) := core.mem.replace z.right none
   let y ← core.option.Option.unwrap o
   let (a, o1) := core.mem.replace y.left none
@@ -92,7 +92,7 @@ def Node.rotate_left_right
 /-- [avl::{avl::Node<T>}::rotate_right_left]:
     Source: 'src/avl.rs', lines 183:4-231:5 -/
 def Node.rotate_right_left
-  {T : Type} (root : Node T) (z : Node T) : Result (Node T) := do
+  {T : Type} (root : Node T) (z : Node T) : RustM (Node T) := do
   let (o, _) := core.mem.replace z.left none
   let y ← core.option.Option.unwrap o
   let (b, o1) := core.mem.replace y.left none
@@ -119,7 +119,7 @@ mutual
     Source: 'src/avl.rs', lines 235:4-267:5 -/
 def Node.insert_in_left
   {T : Type} (OrdInst : Ord T) (node : Node T) (value : T) :
-  Result (Bool × (Node T))
+  RustM (Bool × (Node T))
   := do
   let (b, o) ← Tree.insert_in_opt_node OrdInst node.left value
   if b
@@ -146,7 +146,7 @@ partial_fixpoint
     Source: 'src/avl.rs', lines 269:4-304:5 -/
 def Node.insert_in_right
   {T : Type} (OrdInst : Ord T) (node : Node T) (value : T) :
-  Result (Bool × (Node T))
+  RustM (Bool × (Node T))
   := do
   let (b, o) ← Tree.insert_in_opt_node OrdInst node.right value
   if b
@@ -173,7 +173,7 @@ partial_fixpoint
     Source: 'src/avl.rs', lines 307:4-319:5 -/
 def Node.insert
   {T : Type} (OrdInst : Ord T) (node : Node T) (value : T) :
-  Result (Bool × (Node T))
+  RustM (Bool × (Node T))
   := do
   let ordering ← OrdInst.cmp value node.value
   match ordering with
@@ -186,7 +186,7 @@ partial_fixpoint
     Source: 'src/avl.rs', lines 341:4-354:5 -/
 def Tree.insert_in_opt_node
   {T : Type} (OrdInst : Ord T) (node : Option (Node T)) (value : T) :
-  Result (Bool × (Option (Node T)))
+  RustM (Bool × (Option (Node T)))
   := do
   match node with
   | none => ok (true, some (Node.mk value none none 0#i8))
@@ -200,7 +200,7 @@ end
 /-- [avl::{avl::Tree<T>}::new]:
     Source: 'src/avl.rs', lines 323:4-325:5
     Visibility: public -/
-def Tree.new {T : Type} (OrdInst : Ord T) : Result (Tree T) := do
+def Tree.new {T : Type} (OrdInst : Ord T) : RustM (Tree T) := do
   ok { root := none }
 
 /-- [avl::{avl::Tree<T>}::find]: loop 0:
@@ -209,7 +209,7 @@ def Tree.new {T : Type} (OrdInst : Ord T) : Result (Tree T) := do
 @[rust_loop]
 def Tree.find_loop
   {T : Type} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
-  Result Bool
+  RustM Bool
   := do
   match current_tree with
   | none => ok false
@@ -226,7 +226,7 @@ partial_fixpoint
     Visibility: public -/
 @[reducible]
 def Tree.find
-  {T : Type} (OrdInst : Ord T) (self : Tree T) (value : T) : Result Bool := do
+  {T : Type} (OrdInst : Ord T) (self : Tree T) (value : T) : RustM Bool := do
   Tree.find_loop OrdInst value self.root
 
 /-- [avl::{avl::Tree<T>}::insert]:
@@ -234,7 +234,7 @@ def Tree.find
     Visibility: public -/
 def Tree.insert
   {T : Type} (OrdInst : Ord T) (self : Tree T) (value : T) :
-  Result (Bool × (Tree T))
+  RustM (Bool × (Tree T))
   := do
   let (b, o) ← Tree.insert_in_opt_node OrdInst self.root value
   ok (b, { root := o })

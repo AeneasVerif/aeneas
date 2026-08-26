@@ -4,7 +4,7 @@ import Aeneas.Std.Core.Cmp
 
 namespace Aeneas.Std
 
-open Result ScalarElab
+open RustM ScalarElab
 
 /-!
 # PartialEq, Eq, PartialOrd, Ord
@@ -72,20 +72,20 @@ scalar @[step_pure_def] def core.cmp.impls.Ord'S.max (x y : «%S») : «%S» := 
 scalar @[simp, scalar_tac_simps] theorem core.cmp.impls.Ord'S.max_val (x y : «%S») : (max x y).val = Max.max x.val y.val := by simp [max]; split <;> simp <;> omega
 
 /- Name pattern: core::cmp::impls::{core::cmp::Ord<SCALAR>}::clamp -/
-def UScalar.clamp {ty} (self min max : UScalar ty) : Result (UScalar ty) := do
+def UScalar.clamp {ty} (self min max : UScalar ty) : RustM (UScalar ty) := do
   massert (min.val ≤ max.val)
   if self.val < min.val then ok min
   else if self.val > max.val then ok max
   else ok self
 
-def IScalar.clamp {ty} (self min max : IScalar ty) : Result (IScalar ty) := do
+def IScalar.clamp {ty} (self min max : IScalar ty) : RustM (IScalar ty) := do
   massert (min.val ≤ max.val)
   if self.val < min.val then ok min
   else if self.val > max.val then ok max
   else ok self
 
-uscalar def core.cmp.impls.Ord'S.clamp (self min max : «%S») : Result «%S» := UScalar.clamp self min max
-iscalar def core.cmp.impls.Ord'S.clamp (self min max : «%S») : Result «%S» := IScalar.clamp self min max
+uscalar def core.cmp.impls.Ord'S.clamp (self min max : «%S») : RustM «%S» := UScalar.clamp self min max
+iscalar def core.cmp.impls.Ord'S.clamp (self min max : «%S») : RustM «%S» := IScalar.clamp self min max
 
 /- Trait implementation: [core::cmp::impls::{core::cmp::Ord for u8}]
    Name pattern: core::cmp::Ord<u8> -/

@@ -16,7 +16,7 @@ namespace Aeneas.Command.Decompose.Tests
 -- (regression test for https://github.com/AeneasVerif/aeneas/issues/1023)
 -- ============================================================================
 
-def test0 (branch : U32) (full : U32) : Result U32 := do
+def test0 (branch : U32) (full : U32) : RustM U32 := do
   let x ← branch + 1#u32
   let y ← full + 1#u32
   x + y
@@ -25,7 +25,7 @@ def test0 (branch : U32) (full : U32) : Result U32 := do
 -- Test 1: Simple letRange — extract first 3 bindings
 -- ============================================================================
 
-def test1 (x y : U32) : Result U32 := do
+def test1 (x y : U32) : RustM U32 := do
   let x1 ← x + 1#u32
   let x2 ← x1 + 1#u32
   let x3 ← x2 + 1#u32
@@ -43,7 +43,7 @@ warning: #decompose: 'Aeneas.Command.Decompose.Tests.test1_y' has the same defin
   letRange 1 3 => test1_y
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test1_x : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test1_x : U32 → RustM (UScalar UScalarTy.U32) :=
 fun x => do
   let x1 ← x + 1#u32
   let x2 ← x1 + 1#u32
@@ -52,7 +52,7 @@ fun x => do
 #guard_msgs in
 #print test1_x
 /--
-info: def Aeneas.Command.Decompose.Tests.test1_y : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test1_y : U32 → RustM (UScalar UScalarTy.U32) :=
 fun y => do
   let y1 ← y + 1#u32
   let y2 ← y1 + 1#u32
@@ -89,7 +89,7 @@ info: 'Aeneas.Command.Decompose.Tests.test1_eq' depends on axioms: [propext, Cla
 -- Test 2: Tuple return — continuation needs multiple variables
 -- ============================================================================
 
-def test2 (x : U32) : Result U32 := do
+def test2 (x : U32) : RustM U32 := do
   let a ← x + 1#u32
   let b ← 2#u32 * x
   a + b
@@ -98,7 +98,7 @@ def test2 (x : U32) : Result U32 := do
   letRange 0 2 => test2_aux
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test2_aux : U32 → Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test2_aux : U32 → RustM (UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
 fun x => do
   let a ← x + 1#u32
   let b ← 2#u32 * x
@@ -124,7 +124,7 @@ info: 'Aeneas.Command.Decompose.Tests.test2_eq' depends on axioms: [propext, Cla
 -- Test 3: Branch + letRange + full
 -- ============================================================================
 
-def test3 (b : Bool) (x y : U32) : Result U32 := do
+def test3 (b : Bool) (x y : U32) : RustM U32 := do
   if b then
     let x1 ← x + 1#u32
     let x2 ← x1 + 1#u32
@@ -146,7 +146,7 @@ warning: #decompose: 'Aeneas.Command.Decompose.Tests.test3_y' has the same defin
   branch 0 full => test3_then
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test3_x : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test3_x : U32 → RustM (UScalar UScalarTy.U32) :=
 fun x => do
   let x1 ← x + 1#u32
   let x2 ← x1 + 1#u32
@@ -155,7 +155,7 @@ fun x => do
 #guard_msgs in
 #print test3_x
 /--
-info: def Aeneas.Command.Decompose.Tests.test3_y : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test3_y : U32 → RustM (UScalar UScalarTy.U32) :=
 fun y => do
   let y1 ← y + 1#u32
   let y2 ← y1 + 1#u32
@@ -164,7 +164,7 @@ fun y => do
 #guard_msgs in
 #print test3_y
 /--
-info: def Aeneas.Command.Decompose.Tests.test3_then : U32 → U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test3_then : U32 → U32 → RustM (UScalar UScalarTy.U32) :=
 fun x y => do
   let x3 ← test3_x x
   let y3 ← test3_y y
@@ -187,7 +187,7 @@ info: 'Aeneas.Command.Decompose.Tests.test3_eq' depends on axioms: [propext, Cla
 -- Test 4: Full extraction (proof by rfl)
 -- ============================================================================
 
-def test4 (x y : U32) : Result U32 := do
+def test4 (x y : U32) : RustM U32 := do
   let z ← x + y
   z + 1#u32
 
@@ -195,7 +195,7 @@ def test4 (x y : U32) : Result U32 := do
   full => test4_body
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test4_body : U32 → U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test4_body : U32 → U32 → RustM (UScalar UScalarTy.U32) :=
 fun x y => do
   let z ← x + y
   z + 1#u32
@@ -217,7 +217,7 @@ info: 'Aeneas.Command.Decompose.Tests.test4_eq' depends on axioms: [propext, Cla
 -- Test 5: letRange including terminal (proof by rfl)
 -- ============================================================================
 
-def test5 (x : U32) : Result U32 := do
+def test5 (x : U32) : RustM U32 := do
   let a ← x + 1#u32
   let b ← a + 1#u32
   b + 1#u32
@@ -226,7 +226,7 @@ def test5 (x : U32) : Result U32 := do
   letRange 0 3 => test5_all
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test5_all : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test5_all : U32 → RustM (UScalar UScalarTy.U32) :=
 fun x => do
   let a ← x + 1#u32
   let b ← a + 1#u32
@@ -285,9 +285,9 @@ info: 'Aeneas.Command.Decompose.Tests.test6_eq' depends on axioms: [propext]
 -- Test 7: Noncomputable functions
 -- ============================================================================
 
-noncomputable opaque wipeSlice : Slice U8 → Result Unit
+noncomputable opaque wipeSlice : Slice U8 → RustM Unit
 
-noncomputable def test7 (x : U32) (s : Slice U8) : Result U32 := do
+noncomputable def test7 (x : U32) (s : Slice U8) : RustM U32 := do
   let a ← x + 1#u32
   let _ ← wipeSlice s
   a + 2#u32
@@ -306,10 +306,10 @@ info: 'Aeneas.Command.Decompose.Tests.test7_eq' depends on axioms: [propext, Cla
 -- Test 8: Side-effect only range (monadic, continuation uses no range variables)
 -- ============================================================================
 
-noncomputable opaque sideEffect1 : U32 → Result Unit
-noncomputable opaque sideEffect2 : U32 → Result Unit
+noncomputable opaque sideEffect1 : U32 → RustM Unit
+noncomputable opaque sideEffect2 : U32 → RustM Unit
 
-noncomputable def test8 (x y : U32) : Result U32 := do
+noncomputable def test8 (x y : U32) : RustM U32 := do
   let _ ← sideEffect1 x
   let _ ← sideEffect2 y
   pure 42#u32
@@ -319,7 +319,7 @@ noncomputable def test8 (x y : U32) : Result U32 := do
   letRange 0 2 => test8_effects
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test8_effects : U32 → U32 → Result Unit :=
+info: def Aeneas.Command.Decompose.Tests.test8_effects : U32 → U32 → RustM Unit :=
 fun x y => do
   sideEffect1 x
   sideEffect2 y
@@ -345,7 +345,7 @@ info: 'Aeneas.Command.Decompose.Tests.test8_eq' depends on axioms: [propext, Cla
 -- Test 9: Single binding extraction
 -- ============================================================================
 
-def test9 (x y : U32) : Result U32 := do
+def test9 (x y : U32) : RustM U32 := do
   let a ← x + 1#u32
   let b ← y + 1#u32
   a + b
@@ -355,7 +355,7 @@ def test9 (x y : U32) : Result U32 := do
   letRange 0 1 => test9_first
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test9_first : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test9_first : U32 → RustM (UScalar UScalarTy.U32) :=
 fun x => x + 1#u32
 -/
 #guard_msgs in
@@ -379,7 +379,7 @@ info: 'Aeneas.Command.Decompose.Tests.test9_eq' depends on axioms: [propext, Cla
 -- Test 10: Triple tuple return (continuation needs 3 variables)
 -- ============================================================================
 
-def test10 (x : U32) : Result U32 := do
+def test10 (x : U32) : RustM U32 := do
   let a ← x + 1#u32
   let b ← x + 2#u32
   let c ← x + 3#u32
@@ -391,7 +391,7 @@ def test10 (x : U32) : Result U32 := do
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test10_triple : U32 →
-  Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
+  RustM (UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
 fun x => do
   let a ← x + 1#u32
   let b ← x + 2#u32
@@ -419,7 +419,7 @@ info: 'Aeneas.Command.Decompose.Tests.test10_eq' depends on axioms: [propext, Cl
 -- Test 11: Quad tuple return (4 variables needed)
 -- ============================================================================
 
-def test11 (x : U32) : Result U32 := do
+def test11 (x : U32) : RustM U32 := do
   let a ← x + 1#u32
   let b ← x + 2#u32
   let c ← x + 3#u32
@@ -433,7 +433,7 @@ def test11 (x : U32) : Result U32 := do
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test11_quad : U32 →
-  Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
+  RustM (UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
 fun x => do
   let a ← x + 1#u32
   let b ← x + 2#u32
@@ -463,7 +463,7 @@ info: 'Aeneas.Command.Decompose.Tests.test11_eq' depends on axioms: [propext, Cl
 -- Test 12: Mixed pure and monadic bindings
 -- ============================================================================
 
-def test12 (x : U32) : Result U32 := do
+def test12 (x : U32) : RustM U32 := do
   let a := x.val     -- pure
   let b ← x + 1#u32  -- monadic
   let c := a + 1      -- pure
@@ -476,7 +476,7 @@ def test12 (x : U32) : Result U32 := do
   letRange 1 2 => test12_mixed2
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test12_mixed1 : U32 → Result (ℕ × UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test12_mixed1 : U32 → RustM (ℕ × UScalar UScalarTy.U32) :=
 fun x =>
   let a := ↑x;
   do
@@ -486,7 +486,7 @@ fun x =>
 #guard_msgs in
 #print test12_mixed1
 /--
-info: def Aeneas.Command.Decompose.Tests.test12_mixed2 : ℕ → UScalar UScalarTy.U32 → Result (ℕ × UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test12_mixed2 : ℕ → UScalar UScalarTy.U32 → RustM (ℕ × UScalar UScalarTy.U32) :=
 fun a b =>
   let c := a + 1;
   do
@@ -514,7 +514,7 @@ info: 'Aeneas.Command.Decompose.Tests.test12_eq' depends on axioms: [propext, Cl
 -- Test 15: Deep pattern composition — branch+branch+letRange
 -- ============================================================================
 
-def test15 (b1 b2 : Bool) (x : U32) : Result U32 := do
+def test15 (b1 b2 : Bool) (x : U32) : RustM U32 := do
   if b1 then
     if b2 then
       let a ← x + 1#u32
@@ -530,7 +530,7 @@ def test15 (b1 b2 : Bool) (x : U32) : Result U32 := do
   branch 0 (branch 0 (letRange 0 3)) => test15_inner
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test15_inner : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test15_inner : U32 → RustM (UScalar UScalarTy.U32) :=
 fun x => do
   let a ← x + 1#u32
   let b ← a + 2#u32
@@ -596,12 +596,12 @@ info: 'Aeneas.Command.Decompose.Tests.test16_eq' depends on axioms: [propext]
 -- Test 17: letAt pattern — extract from inside a binding's value
 -- ============================================================================
 
-def test17_helper (x : U32) : Result U32 := do
+def test17_helper (x : U32) : RustM U32 := do
   let a ← x + 1#u32
   let b ← a + 2#u32
   b + 3#u32
 
-def test17 (x y : U32) : Result U32 := do
+def test17 (x y : U32) : RustM U32 := do
   let z ← test17_helper x  -- binding 0
   let w ← y + z             -- binding 1
   w + 1#u32                  -- terminal
@@ -612,7 +612,7 @@ def test17 (x y : U32) : Result U32 := do
   letAt 0 (full) => test17_inner
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test17_inner : U32 → Result U32 :=
+info: def Aeneas.Command.Decompose.Tests.test17_inner : U32 → RustM U32 :=
 fun x => test17_helper x
 -/
 #guard_msgs in
@@ -666,17 +666,17 @@ info: 'Aeneas.Command.Decompose.Tests.test18_eq' depends on axioms: [propext]
 -- Test 19: appFun pattern — modify the function part of an application
 -- ============================================================================
 
-def test19_inner (x : U32) : Result U32 := do
+def test19_inner (x : U32) : RustM U32 := do
   let a ← x + 1#u32
   let b ← a + 1#u32
   b + 1#u32
 
 -- We use appFun to reach the function part.
 -- test19_fn wraps a pure function that directly calls test19_inner.
-def test19_fn (f : U32 → Result U32) (x : U32) : Result U32 :=
+def test19_fn (f : U32 → RustM U32) (x : U32) : RustM U32 :=
   f x
 
-def test19 (x : U32) : Result U32 :=
+def test19 (x : U32) : RustM U32 :=
   test19_fn test19_inner x
 
 -- argArg 0 full: replace the first argument (test19_inner) of test19_fn
@@ -684,7 +684,7 @@ def test19 (x : U32) : Result U32 :=
   argArg 0 full => test19_extracted
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test19_extracted : U32 → Result U32 :=
+info: def Aeneas.Command.Decompose.Tests.test19_extracted : U32 → RustM U32 :=
 test19_inner
 -/
 #guard_msgs in
@@ -705,9 +705,9 @@ info: 'Aeneas.Command.Decompose.Tests.test19_eq' depends on axioms: [propext, Cl
 -- ============================================================================
 
 -- We create a function whose body is a lambda
-def test20_apply (f : U32 → Result U32) (x : U32) : Result U32 := f x
+def test20_apply (f : U32 → RustM U32) (x : U32) : RustM U32 := f x
 
-def test20 (x : U32) : Result U32 :=
+def test20 (x : U32) : RustM U32 :=
   test20_apply (fun y => do let z ← y + x; z + 1#u32) x
 
 -- Navigate into the lambda argument with argArg 0 (lam 1 ...)
@@ -715,7 +715,7 @@ def test20 (x : U32) : Result U32 :=
   argArg 0 (lam 1 full) => test20_body
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test20_body : U32 → U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test20_body : U32 → U32 → RustM (UScalar UScalarTy.U32) :=
 fun x y => do
   let z ← y + x
   z + 1#u32
@@ -789,9 +789,9 @@ info: 'Aeneas.Command.Decompose.Tests.test21_eq' depends on axioms: [propext]
 -- Test 22: Side-effect only with interleaved monadic+pure
 -- ============================================================================
 
-noncomputable opaque log : String → Result Unit
+noncomputable opaque log : String → RustM Unit
 
-noncomputable def test22 (x : U32) : Result U32 := do
+noncomputable def test22 (x : U32) : RustM U32 := do
   let _ ← log "start"
   let _ ← log "middle"
   x + 1#u32
@@ -801,7 +801,7 @@ noncomputable def test22 (x : U32) : Result U32 := do
   letRange 0 2 => test22_prefix
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test22_prefix : Result Unit :=
+info: def Aeneas.Command.Decompose.Tests.test22_prefix : RustM Unit :=
 do
   log "start"
   log "middle"
@@ -827,7 +827,7 @@ info: 'Aeneas.Command.Decompose.Tests.test22_eq' depends on axioms: [propext, Cl
 -- Test 23: Multiple parameters with various types
 -- ============================================================================
 
-def test23 (n : Nat) (x : U32) (s : Slice U8) (b : Bool) : Result U32 := do
+def test23 (n : Nat) (x : U32) (s : Slice U8) (b : Bool) : RustM U32 := do
   let a ← x + 1#u32
   let len : Nat := s.val.length
   let c ← if b then x + 2#u32 else pure a
@@ -837,7 +837,7 @@ def test23 (n : Nat) (x : U32) (s : Slice U8) (b : Bool) : Result U32 := do
   letRange 0 3 => test23_prefix
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test23_prefix : U32 → Slice U8 → Bool → Result (ℕ × UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test23_prefix : U32 → Slice U8 → Bool → RustM (ℕ × UScalar UScalarTy.U32) :=
 fun x s b => do
   let a ← x + 1#u32
   let len : ℕ := (↑s).length
@@ -864,7 +864,7 @@ info: 'Aeneas.Command.Decompose.Tests.test23_eq' depends on axioms: [propext, Cl
 -- Test 24: Bigger stress test — 30 bindings, 6 decomposition steps
 -- ============================================================================
 
-def test24 (x : U32) : Result U32 := do
+def test24 (x : U32) : RustM U32 := do
   let a0 ← x + 1#u32
   let a1 ← a0 + 1#u32
   let a2 ← a1 + 1#u32
@@ -933,7 +933,7 @@ info: 'Aeneas.Command.Decompose.Tests.test24_eq' depends on axioms: [propext, Cl
 -- Test 25: letRange starting in the middle — tests that outer bindings are captured
 -- ============================================================================
 
-def test25 (x : U32) : Result U32 := do
+def test25 (x : U32) : RustM U32 := do
   let a ← x + 1#u32     -- binding 0
   let b ← a + 2#u32     -- binding 1
   let c ← b + 3#u32     -- binding 2
@@ -947,7 +947,7 @@ def test25 (x : U32) : Result U32 := do
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test25_middle : UScalar UScalarTy.U32 →
-  UScalar UScalarTy.U32 → Result (UScalar UScalarTy.U32) :=
+  UScalar UScalarTy.U32 → RustM (UScalar UScalarTy.U32) :=
 fun a b => do
   let c ← b + 3#u32
   let d ← c + a
@@ -975,15 +975,15 @@ info: 'Aeneas.Command.Decompose.Tests.test25_eq' depends on axioms: [propext, Cl
 -- Test 26: letAt navigating to binding 1's value (deeper navigation)
 -- ============================================================================
 
-def test26_aux1 (x : U32) : Result U32 := do
+def test26_aux1 (x : U32) : RustM U32 := do
   let a ← x + 1#u32
   a + 2#u32
 
-def test26_aux2 (y : U32) : Result U32 := do
+def test26_aux2 (y : U32) : RustM U32 := do
   let b ← y + 10#u32
   b + 20#u32
 
-def test26 (x y : U32) : Result U32 := do
+def test26 (x y : U32) : RustM U32 := do
   let p ← test26_aux1 x    -- binding 0
   let q ← test26_aux2 y    -- binding 1 (we will navigate into this)
   p + q
@@ -993,7 +993,7 @@ def test26 (x y : U32) : Result U32 := do
   letAt 1 (full) => test26_extracted
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test26_extracted : U32 → Result U32 :=
+info: def Aeneas.Command.Decompose.Tests.test26_extracted : U32 → RustM U32 :=
 fun y => test26_aux2 y
 -/
 #guard_msgs in
@@ -1120,7 +1120,7 @@ info: 'Aeneas.Command.Decompose.Tests.test29_eq' depends on axioms: [propext]
 -- Test 30: Branch followed by letRange on both branches
 -- ============================================================================
 
-def test30 (b : Bool) (x y : U32) : Result U32 := do
+def test30 (b : Bool) (x y : U32) : RustM U32 := do
   if b then
     let a ← x + 1#u32
     let r ← a + 2#u32
@@ -1135,7 +1135,7 @@ def test30 (b : Bool) (x y : U32) : Result U32 := do
   branch 1 (letRange 0 2) => test30_else_prefix
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test30_then_prefix : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test30_then_prefix : U32 → RustM (UScalar UScalarTy.U32) :=
 fun x => do
   let a ← x + 1#u32
   a + 2#u32
@@ -1143,7 +1143,7 @@ fun x => do
 #guard_msgs in
 #print test30_then_prefix
 /--
-info: def Aeneas.Command.Decompose.Tests.test30_else_prefix : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test30_else_prefix : U32 → RustM (UScalar UScalarTy.U32) :=
 fun y => do
   let c ← y + 10#u32
   c + 20#u32
@@ -1535,10 +1535,10 @@ info: 'Aeneas.Command.Decompose.Tests.test38_eq' depends on axioms: [propext]
 #print axioms test38_eq
 
 -- ============================================================================
--- Test 39: Monadic match — match in the Result monad
+-- Test 39: Monadic match — match in the RustM monad
 -- ============================================================================
 
-def test39 (n : Nat) : Result Nat := do
+def test39 (n : Nat) : RustM Nat := do
   match n with
   | 0 => .ok 42
   | k + 1 =>
@@ -1551,10 +1551,10 @@ def test39 (n : Nat) : Result Nat := do
   branch 1 (letRange 0 2) => test39_succ_comp
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test39_succ_comp : ℕ → Result ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test39_succ_comp : ℕ → RustM ℕ :=
 fun k => do
-  let a ← Result.ok (k + 10)
-  Result.ok (a + 1)
+  let a ← RustM.ok (k + 10)
+  RustM.ok (a + 1)
 -/
 #guard_msgs in
 #print test39_succ_comp
@@ -1562,10 +1562,10 @@ fun k => do
 info: test39_eq : ∀ (n : ℕ),
   test39 n =
     match n with
-    | 0 => Result.ok 42
+    | 0 => RustM.ok 42
     | k.succ => do
       let b ← test39_succ_comp k
-      Result.ok b
+      RustM.ok b
 -/
 #guard_msgs in
 #check @test39_eq
@@ -1861,16 +1861,16 @@ info: 'Aeneas.Command.Decompose.Tests.test46_eq' depends on axioms: [propext]
 -- ============================================================================
 
 
-def test47 (x : U32) : Result U32 := do
+def test47 (x : U32) : RustM U32 := do
   let a ← x + 1#u32
-  let (b, c) ← Result.ok (a, a)
+  let (b, c) ← RustM.ok (a, a)
   b + c
 
 #decompose test47 test47_eq
   letRange 0 1 => test47_prefix
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test47_prefix : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test47_prefix : U32 → RustM (UScalar UScalarTy.U32) :=
 fun x => x + 1#u32
 -/
 #guard_msgs in
@@ -1879,7 +1879,7 @@ fun x => x + 1#u32
 info: test47_eq : ∀ (x : U32),
   test47 x = do
     let a ← test47_prefix x
-    let (b, c) ← Result.ok (a, a)
+    let (b, c) ← RustM.ok (a, a)
     b + c
 -/
 #guard_msgs in
@@ -1894,8 +1894,8 @@ info: 'Aeneas.Command.Decompose.Tests.test47_eq' depends on axioms: [propext, Cl
 -- Test 48: Tuple bind — extracting the range AFTER the tuple bind
 -- ============================================================================
 
-def test48 (x : U32) : Result U32 := do
-  let (a, b) ← Result.ok (x, x)
+def test48 (x : U32) : RustM U32 := do
+  let (a, b) ← RustM.ok (x, x)
   let c ← a + 1#u32
   let d ← b + 2#u32
   c + d
@@ -1904,7 +1904,7 @@ def test48 (x : U32) : Result U32 := do
   letRange 1 3 => test48_suffix
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test48_suffix : U32 → U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test48_suffix : U32 → U32 → RustM (UScalar UScalarTy.U32) :=
 fun a b => do
   let c ← a + 1#u32
   let d ← b + 2#u32
@@ -1915,7 +1915,7 @@ fun a b => do
 /--
 info: test48_eq : ∀ (x : U32),
   test48 x = do
-    let (a, b) ← Result.ok (x, x)
+    let (a, b) ← RustM.ok (x, x)
     test48_suffix a b
 -/
 #guard_msgs in
@@ -1930,9 +1930,9 @@ info: 'Aeneas.Command.Decompose.Tests.test48_eq' depends on axioms: [propext, Cl
 -- Test 49: Triple tuple bind — 3-component destructuring
 -- ============================================================================
 
-def test49 (x : U32) : Result U32 := do
+def test49 (x : U32) : RustM U32 := do
   let a ← x + 1#u32
-  let (b, c, d) ← Result.ok (a, a, a)
+  let (b, c, d) ← RustM.ok (a, a, a)
   let r ← b + c
   r + d
 
@@ -1940,7 +1940,7 @@ def test49 (x : U32) : Result U32 := do
   letRange 0 1 => test49_prefix
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test49_prefix : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test49_prefix : U32 → RustM (UScalar UScalarTy.U32) :=
 fun x => x + 1#u32
 -/
 #guard_msgs in
@@ -1949,7 +1949,7 @@ fun x => x + 1#u32
 info: test49_eq : ∀ (x : U32),
   test49 x = do
     let a ← test49_prefix x
-    let (b, c, d) ← Result.ok (a, a, a)
+    let (b, c, d) ← RustM.ok (a, a, a)
     let r ← b + c
     r + d
 -/
@@ -1965,9 +1965,9 @@ info: 'Aeneas.Command.Decompose.Tests.test49_eq' depends on axioms: [propext, Cl
 -- Test 50: Tuple bind — extracting including the tuple bind itself
 -- ============================================================================
 
-def test50 (x : U32) : Result U32 := do
+def test50 (x : U32) : RustM U32 := do
   let a ← x + 1#u32
-  let (b, c) ← Result.ok (a, a)
+  let (b, c) ← RustM.ok (a, a)
   let r ← b + c
   r + 1#u32
 
@@ -1976,10 +1976,10 @@ def test50 (x : U32) : Result U32 := do
   letRange 0 2 => test50_prefix
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test50_prefix : U32 → Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test50_prefix : U32 → RustM (UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
 fun x => do
   let a ← x + 1#u32
-  let (b, c) ← Result.ok (a, a)
+  let (b, c) ← RustM.ok (a, a)
   pure (b, c)
 -/
 #guard_msgs in
@@ -2003,9 +2003,9 @@ info: 'Aeneas.Command.Decompose.Tests.test50_eq' depends on axioms: [propext, Cl
 -- Test 51: Tuple bind with subsequent extraction — both before and after
 -- ============================================================================
 
-def test51 (x y : U32) : Result U32 := do
+def test51 (x y : U32) : RustM U32 := do
   let a ← x + 1#u32
-  let (b, c) ← Result.ok (a, y)
+  let (b, c) ← RustM.ok (a, y)
   let d ← b + c
   let e ← d + 1#u32
   e + 2#u32
@@ -2015,7 +2015,7 @@ def test51 (x y : U32) : Result U32 := do
   letRange 2 3 => test51_suffix
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test51_suffix : UScalar UScalarTy.U32 → U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test51_suffix : UScalar UScalarTy.U32 → U32 → RustM (UScalar UScalarTy.U32) :=
 fun b c => do
   let d ← b + c
   let e ← d + 1#u32
@@ -2027,7 +2027,7 @@ fun b c => do
 info: test51_eq : ∀ (x y : U32),
   test51 x y = do
     let a ← x + 1#u32
-    let (b, c) ← Result.ok (a, y)
+    let (b, c) ← RustM.ok (a, y)
     test51_suffix b c
 -/
 #guard_msgs in
@@ -2042,7 +2042,7 @@ info: 'Aeneas.Command.Decompose.Tests.test51_eq' depends on axioms: [propext, Cl
 -- Test 52: Name reuse — same extraction applied to two symmetric ranges
 -- ============================================================================
 
-def test52 (x y : U32) : Result U32 := do
+def test52 (x y : U32) : RustM U32 := do
   let x1 ← x + 1#u32
   let x2 ← x1 + 1#u32
   let x3 ← x2 + 1#u32
@@ -2057,7 +2057,7 @@ def test52 (x y : U32) : Result U32 := do
   letRange 1 3 => test52_add3
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test52_add3 : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test52_add3 : U32 → RustM (UScalar UScalarTy.U32) :=
 fun x => do
   let x1 ← x + 1#u32
   let x2 ← x1 + 1#u32
@@ -2084,7 +2084,7 @@ info: 'Aeneas.Command.Decompose.Tests.test52_eq' depends on axioms: [propext, Cl
 -- Test 53: Name reuse failure — different extractions with same name should error
 -- ============================================================================
 
-def test53 (x y : U32) : Result U32 := do
+def test53 (x y : U32) : RustM U32 := do
   let x1 ← x + 1#u32
   let y1 ← y + 2#u32
   x1 + y1
@@ -2105,7 +2105,7 @@ which is not definitionally equal (at reducible transparency)
 -- Test 54: Duplicate definition warning — different names, same body
 -- ============================================================================
 
-def test54 (x y : U32) : Result U32 := do
+def test54 (x y : U32) : RustM U32 := do
   let x1 ← x + 1#u32
   let x2 ← x1 + 1#u32
   let x3 ← x2 + 1#u32
@@ -2129,18 +2129,18 @@ warning: #decompose: 'Aeneas.Command.Decompose.Tests.test54_add3b' has the same 
 -- ============================================================================
 
 namespace test55_ns
-open Aeneas Aeneas.Std Result
+open Aeneas Aeneas.Std RustM
 
 def loop (o : Option Usize)
     (pa_src : Array U32 256#usize)
     (pe_dst : Array U16 256#usize) :
-    Result (Array U32 256#usize × Array U16 256#usize) :=
+    RustM (Array U32 256#usize × Array U16 256#usize) :=
   match o with
   | none => ok (pa_src, pe_dst)
   | some i => do
       let a   ← Array.index_usize pa_src i
-      let i1  ← (5#u32 + 0#u32 : Result U32)
-      let i2  ← (5#u32 + 0#u32 : Result U32)
+      let i1  ← (5#u32 + 0#u32 : RustM U32)
+      let i2  ← (5#u32 + 0#u32 : RustM U32)
       let i3  ← i1 + i2
       let i4  ← 4#u32 * i3
       massert (a ≤ i4)
@@ -2168,10 +2168,10 @@ end test55_ns
 -- ============================================================================
 
 namespace test56_ns
-open Aeneas Aeneas.Std Result
+open Aeneas Aeneas.Std RustM
 
 /-- A function with a tuple-destructuring monadic bind. -/
-def f (x : U32) : Result U32 := do
+def f (x : U32) : RustM U32 := do
   let (a, b) ← (do let v ← x + 1#u32; ok (v, v))
   let c ← b + 1#u32
   c + a
@@ -2190,7 +2190,7 @@ info: f_prefix_eq : ∀ (x : U32),
 #guard_msgs in
 #check @f_prefix_eq
 /--
-info: def Aeneas.Command.Decompose.Tests.test56_ns.f_prefix : U32 → Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test56_ns.f_prefix : U32 → RustM (UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
 fun x => do
   let (a, b) ←
     do
@@ -2219,7 +2219,7 @@ info: f_letat1_eq : ∀ (x : U32),
 #guard_msgs in
 #check @f_letat1_eq
 /--
-info: def Aeneas.Command.Decompose.Tests.test56_ns.f_second_value : UScalar UScalarTy.U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test56_ns.f_second_value : UScalar UScalarTy.U32 → RustM (UScalar UScalarTy.U32) :=
 fun b => b + 1#u32
 -/
 #guard_msgs in
@@ -2232,10 +2232,10 @@ end test56_ns
 -- ============================================================================
 
 namespace test57_ns
-open Aeneas Aeneas.Std Result
+open Aeneas Aeneas.Std RustM
 
 /-- A function with a nested tuple-destructuring monadic bind. -/
-def g (x : U32) : Result U32 := do
+def g (x : U32) : RustM U32 := do
   let ((a, b), (c, d)) ← (do
     let v ← x + 1#u32
     let w ← x + 2#u32
@@ -2260,7 +2260,7 @@ info: g_prefix_eq : ∀ (x : U32),
 #check @g_prefix_eq
 /--
 info: def Aeneas.Command.Decompose.Tests.test57_ns.g_prefix : U32 →
-  Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
+  RustM (UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
 fun x => do
   let ((a, b), (c, d)) ←
     do
@@ -2279,9 +2279,9 @@ end test57_ns
 -- ============================================================================
 
 namespace test57b_ns
-open Aeneas Aeneas.Std Result
+open Aeneas Aeneas.Std RustM
 
-def g (x : U32) : Result U32 := do
+def g (x : U32) : RustM U32 := do
   let ((a, b), (c, d), (e, f)) ← (do
     let v ← x + 1#u32
     let w ← x + 2#u32
@@ -2298,7 +2298,7 @@ def g (x : U32) : Result U32 := do
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test57b_ns.g_prefix : U32 →
-  Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
+  RustM (UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
 fun x => do
   let ((a, b), ((c, d), (e, f))) ←
     do
@@ -2335,9 +2335,9 @@ end test57b_ns
 -- ============================================================================
 
 namespace test57c_ns
-open Aeneas Aeneas.Std Result
+open Aeneas Aeneas.Std RustM
 
-def g (x : U32) : Result U32 := do
+def g (x : U32) : RustM U32 := do
   let (((a, b), (c, d)), ((e, f), (g, h))) ← (do
     let v ← x + 1#u32
     let w ← x + 2#u32
@@ -2357,7 +2357,7 @@ def g (x : U32) : Result U32 := do
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test57c_ns.g_prefix : U32 →
-  Result
+  RustM
     (UScalar UScalarTy.U32 ×
       UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
 fun x => do
@@ -2395,12 +2395,12 @@ info: 'Aeneas.Command.Decompose.Tests.test57c_ns.g_prefix_eq' depends on axioms:
 end test57c_ns
 
 namespace test58
-open Aeneas Aeneas.Std Result
+open Aeneas Aeneas.Std RustM
 
-def nested_return (x : U32) : Result ((U32 × U32 × U32) × U32) :=
+def nested_return (x : U32) : RustM ((U32 × U32 × U32) × U32) :=
   ok ((x, x, x), x)
 
-def caller (x : U32) : Result U32 := do
+def caller (x : U32) : RustM U32 := do
   let y ← x + 1#u32
   let (t, fn) ← nested_return y
   let (a, b, c) := t
@@ -2419,11 +2419,11 @@ end test58
 -- ============================================================================
 
 namespace test59
-open Aeneas Aeneas.Std Result
+open Aeneas Aeneas.Std RustM
 
 /-- Function with a nested tuple destructuring (`let ((b0, b1), back) ← ...`)
     in the continuation after the first letRange extraction. -/
-def test59_fn (pk : Slice U8) : Result U8 := do
+def test59_fn (pk : Slice U8) : RustM U8 := do
   let a0 ← Slice.index_usize pk 0#usize         -- 0
   let a1 ← Slice.index_usize pk 1#usize         -- 1
   -- Range 1 (bindings 2-4)
@@ -2449,7 +2449,7 @@ def test59_fn (pk : Slice U8) : Result U8 := do
   letRange 3 2 => test59_f2
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test59.test59_f1 : U8 → U8 → Result (UScalar UScalarTy.U8) :=
+info: def Aeneas.Command.Decompose.Tests.test59.test59_f1 : U8 → U8 → RustM (UScalar UScalarTy.U8) :=
 fun a0 a1 => do
   let a2 ← a0 + a1
   let a3 ← a2 + 1#u8
@@ -2462,7 +2462,7 @@ fun a0 a1 => do
 -- continuation, f2 returns (b0, b1, back) — the fvars needed by the continuation.
 /--
 info: def Aeneas.Command.Decompose.Tests.test59.test59_f2 : Slice U8 →
-  Result (Slice U8 × Slice U8 × (Slice U8 × Slice U8 → Slice U8)) :=
+  RustM (Slice U8 × Slice U8 × (Slice U8 × Slice U8 → Slice U8)) :=
 fun pk => do
   let ((b0, b1), back) ← core.slice.Slice.split_at_mut pk 2#usize
   let _ ← b0.index_usize 0#usize
@@ -2498,7 +2498,7 @@ end test59
 -- Test 60: letAt with idx past all bindings (terminal access)
 -- ============================================================================
 
-def test60 (x y : U32) : Result U32 := do
+def test60 (x y : U32) : RustM U32 := do
   let z ← x + y
   let w ← z + 1#u32
   w + 2#u32
@@ -2508,7 +2508,7 @@ def test60 (x y : U32) : Result U32 := do
   letAt 2 (full) => test60_terminal
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test60_terminal : UScalar UScalarTy.U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test60_terminal : UScalar UScalarTy.U32 → RustM (UScalar UScalarTy.U32) :=
 fun w => w + 2#u32
 -/
 #guard_msgs in
@@ -2527,7 +2527,7 @@ info: test60_eq : ∀ (x y : U32),
 -- Test 61: afterLets pattern — navigate past all bindings to the terminal
 -- ============================================================================
 
-def test61 (x y : U32) : Result U32 := do
+def test61 (x y : U32) : RustM U32 := do
   let a ← x + 1#u32
   let b ← a + y
   let c ← b + 2#u32
@@ -2538,7 +2538,7 @@ def test61 (x y : U32) : Result U32 := do
   afterLets (full) => test61_tail
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test61_tail : UScalar UScalarTy.U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test61_tail : UScalar UScalarTy.U32 → RustM (UScalar UScalarTy.U32) :=
 fun c => c + 3#u32
 -/
 #guard_msgs in
@@ -2558,7 +2558,7 @@ info: test61_eq : ∀ (x y : U32),
 -- Test 62: afterLets inside a letAt (nested navigation)
 -- ============================================================================
 
-def test62 (x : U32) : Result U32 := do
+def test62 (x : U32) : RustM U32 := do
   let z ← (do
     let a ← x + 1#u32
     let b ← a + 2#u32
@@ -2570,7 +2570,7 @@ def test62 (x : U32) : Result U32 := do
   letAt 0 (afterLets (full)) => test62_inner_tail
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test62_inner_tail : UScalar UScalarTy.U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test62_inner_tail : UScalar UScalarTy.U32 → RustM (UScalar UScalarTy.U32) :=
 fun b => b + 3#u32
 -/
 #guard_msgs in
@@ -2592,7 +2592,7 @@ info: test62_eq : ∀ (x : U32),
 -- Test 63: letAt 0 on a non-let/bind expression (terminal) — operates on full
 -- ============================================================================
 
-def test63 (x : U32) : Result U32 := do
+def test63 (x : U32) : RustM U32 := do
   x + 1#u32
 
 -- letAt 0 on a single terminal expression (no lets)
@@ -2600,7 +2600,7 @@ def test63 (x : U32) : Result U32 := do
   letAt 0 (full) => test63_body
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test63_body : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test63_body : U32 → RustM (UScalar UScalarTy.U32) :=
 fun x => x + 1#u32
 -/
 #guard_msgs in
@@ -2615,7 +2615,7 @@ info: test63_eq : ∀ (x : U32), test63 x = test63_body x
 -- Test 64: Error message — pattern fails at top level
 -- ============================================================================
 
-def test64 (x : U32) : Result U32 := do
+def test64 (x : U32) : RustM U32 := do
   let z ← x + 1#u32
   z + 2#u32
 
@@ -2635,15 +2635,15 @@ Underlying error: letAt 4: reached terminal before binding
 -- Test 65: Error message — pattern fails with non-empty prefix
 -- ============================================================================
 
-def test65 (b : Bool) (x y : U32) : Result U32 := do
+def test65 (b : Bool) (x y : U32) : RustM U32 := do
   let z ← (do
-    let z' ← if b then Result.ok x else x + y
+    let z' ← if b then RustM.ok x else x + y
     Pure.pure z')
   z + 1#u32
 
 /--
 error: Can not apply `branch 2 _` to expression:
-if b = true then Result.ok x else x + y
+if b = true then RustM.ok x else x + y
 that results from applying the partial pattern `letAt 0 (letAt 0 (_))` to the function body
 
 Underlying error: branch 2: ite has only branches 0 (then) and 1 (else)
@@ -2656,14 +2656,14 @@ Underlying error: branch 2: ite has only branches 0 (then) and 1 (else)
 -- Test 66: afterLets on a single expression (no bindings) — same as full
 -- ============================================================================
 
-def test66 (x : U32) : Result U32 :=
+def test66 (x : U32) : RustM U32 :=
   x + 1#u32
 
 #decompose test66 test66_eq
   afterLets (full) => test66_body
 
 /--
-info: def Aeneas.Command.Decompose.Tests.test66_body : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test66_body : U32 → RustM (UScalar UScalarTy.U32) :=
 fun x => x + 1#u32
 -/
 #guard_msgs in

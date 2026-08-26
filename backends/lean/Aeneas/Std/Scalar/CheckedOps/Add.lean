@@ -3,7 +3,7 @@ import Aeneas.Std.Scalar.Elab
 
 namespace Aeneas.Std
 
-open Result Error Arith ScalarElab
+open RustM Error Arith ScalarElab
 
 /-!
 # Checked Addition: Definitions
@@ -11,13 +11,13 @@ open Result Error Arith ScalarElab
 
 /- [core::num::{T}::checked_add] -/
 def core.num.checked_add_UScalar {ty} (x y : UScalar ty) : Option (UScalar ty) :=
-  Option.ofResult (x + y)
+  Option.ofRustM (x + y)
 
 uscalar def «%S».checked_add (x y : «%S») : Option «%S» := core.num.checked_add_UScalar x y
 
 /- [core::num::{T}::checked_add] -/
 def core.num.checked_add_IScalar {ty} (x y : IScalar ty) : Option (IScalar ty) :=
-  Option.ofResult (x + y)
+  Option.ofRustM (x + y)
 
 iscalar def «%S».checked_add (x y : «%S») : Option «%S» := core.num.checked_add_IScalar x y
 
@@ -35,7 +35,7 @@ theorem core.num.checked_add_UScalar_bv_spec {ty} (x y : UScalar ty) :
   have h := UScalar.add_equiv x y
   have hAdd : x + y = UScalar.add x y := by rfl
   rw [hAdd] at h
-  cases hEq : UScalar.add x y <;> simp_all [Option.ofResult, checked_add_UScalar, UScalar.max] <;>
+  cases hEq : UScalar.add x y <;> simp_all [Option.ofRustM, checked_add_UScalar, UScalar.max] <;>
   (have : 0 < 2^ty.numBits := by simp) <;>
   omega
 
@@ -58,7 +58,7 @@ theorem core.num.checked_add_IScalar_bv_spec {ty} (x y : IScalar ty) :
   have h := IScalar.add_equiv x y
   have hAdd : x + y = IScalar.add x y := by rfl
   rw [hAdd] at h
-  cases hEq : IScalar.add x y <;> simp_all [Option.ofResult, checked_add_IScalar, IScalar.min, IScalar.max] <;>
+  cases hEq : IScalar.add x y <;> simp_all [Option.ofRustM, checked_add_IScalar, IScalar.min, IScalar.max] <;>
   omega
 
 iscalar @[step_pure «%S».checked_add x y]

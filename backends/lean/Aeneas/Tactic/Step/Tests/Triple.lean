@@ -107,7 +107,7 @@ example (value : Nat) :
   step by simp [Pre.entails]
   simp_all
 
-/- The let-step syntax works for a computation living outside `Std.Result`, and still
+/- The let-step syntax works for a computation living outside `Std.RustM`, and still
 introduces the pretty equality that records where the outputs come from. -/
 /--
 trace: value : ℕ

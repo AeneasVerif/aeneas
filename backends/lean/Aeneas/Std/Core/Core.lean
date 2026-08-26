@@ -8,7 +8,7 @@ namespace Aeneas
 
 namespace Std
 
-open Result
+open RustM
 
 attribute [rust_type "core::option::Option" -prefixVariantNames] Option
 
@@ -20,16 +20,16 @@ namespace core
 
 @[rust_trait "core::convert::From"]
 structure convert.From (Self T : Type) where
-  «from» : T → Result Self
+  «from» : T → RustM Self
 
 @[rust_trait "core::clone::Clone" (defaultMethods := ["clone_from"])]
 structure clone.Clone (Self : Type) where
-  clone : Self → Result Self
-  clone_from : Self → Self → Result Self := fun _ => clone
+  clone : Self → RustM Self
+  clone_from : Self → Self → RustM Self := fun _ => clone
 
 @[trait_default]
 def clone.Clone.clone_from.default {Self : Type} (CloneInst : core.clone.Clone Self)
-  (_self source : Self) : Result Self :=
+  (_self source : Self) : RustM Self :=
   CloneInst.clone source
 
 @[reducible, rust_trait_impl "core::clone::Clone<alloc::alloc::Global>"]
@@ -49,7 +49,7 @@ def clone.CloneBool : clone.Clone Bool := {
 
 @[rust_fun "alloc::boxed::{core::clone::Clone<Box<@T>>}::clone"
     (keepParams := [true, false]) (keepTraitClauses := [true, false])]
-def alloc.boxed.CloneBox.clone {T : Type} (cloneInst : core.clone.Clone T) : T → Result T :=
+def alloc.boxed.CloneBox.clone {T : Type} (cloneInst : core.clone.Clone T) : T → RustM T :=
   cloneInst.clone
 
 @[reducible, rust_trait_impl "core::clone::Clone<Box<@T>>"
@@ -91,8 +91,8 @@ def BuiltinCopy (Self : Type) : core.marker.Copy Self where
   cloneInst := BuiltinClone Self
 
 @[rust_fun "core::option::{core::option::Option<@T>}::unwrap"]
-def core.option.Option.unwrap {T : Type} (x : Option T) : Result T :=
-  Result.ofOption x Error.panic
+def core.option.Option.unwrap {T : Type} (x : Option T) : RustM T :=
+  RustM.ofOption x Error.panic
 
 @[step]
 theorem core.option.Option.unwrap.spec {T : Type} (x : Option T) (h : x.isSome) :
@@ -132,7 +132,7 @@ inductive core.panicking.AssertKind where
 | Match : core.panicking.AssertKind
 
 @[rust_fun "core::clone::impls::{core::clone::Clone<&'0 @T>}::clone"]
-def core.clone.impls.CloneShared.clone {T : Type} (x : T) : Result T := .ok x
+def core.clone.impls.CloneShared.clone {T : Type} (x : T) : RustM T := .ok x
 
 end Std
 

@@ -4,7 +4,7 @@ import Avl.OrderSpec
 
 namespace avl
 
-open Aeneas Std Result
+open Aeneas Std RustM
 
 -- TODO: move
 @[simp]

@@ -13,7 +13,7 @@ theorem my_function_spec (x : U32) (h : precondition) :
   -- finish remaining goals
 ```
 
-The `⦃ result => postcondition ⦄` notation is the weakest-precondition spec notation. For functions returning `Result T`, it means "the function succeeds and the result satisfies the postcondition."
+The `⦃ result => postcondition ⦄` notation is the weakest-precondition spec notation. For functions returning `RustM T`, it means "the function succeeds and the result satisfies the postcondition."
 
 For functions with backward continuations:
 ```lean
@@ -58,10 +58,10 @@ theorem list_nth_mut1_spec'' {T: Type} [Inhabited T] (l : CList T) (i : U32)
 
 ## Dealing with Monadic Code
 
-Aeneas-generated code uses the `Result` error monad with `do` notation:
+Aeneas-generated code uses the `RustM` error monad with `do` notation:
 
 ```lean
-def my_function (x : U32) (y : U32) : Result U32 := do
+def my_function (x : U32) (y : U32) : RustM U32 := do
   let z ← x + y          -- monadic bind; may fail on overflow
   let w ← z * 2#u32      -- another potentially-failing operation
   ok w                    -- explicit success
@@ -136,7 +136,7 @@ theorem loop.spec_decr_nat
   (measure : α → Nat)
   (inv : α → Prop)
   (post : β → Prop)
-  (body : α → Result (ControlFlow α β)) (x : α)
+  (body : α → RustM (ControlFlow α β)) (x : α)
   (hBody : ∀ x, inv x → body x ⦃ r =>
     match r with
     | .done y => post y
@@ -162,7 +162,7 @@ When a Rust function is large, the Aeneas-generated Lean code may contain long s
 
 1. Define a helper function that captures a subsequence of operations:
 ```lean
-private def reduce_add_mont_reduce (a : U32) : Result U32 := do
+private def reduce_add_mont_reduce (a : U32) : RustM U32 := do
   let i2 ← lift (core.num.U32.wrapping_mul a ntt.NEG_Q_INV_MOD_R)
   let inv ← lift (i2 &&& ntt.RMASK)
   let i3 ← inv * ntt.Q
@@ -173,7 +173,7 @@ private def reduce_add_mont_reduce (a : U32) : Result U32 := do
 
 2. Prove a "fold" theorem that shows the inlined version equals the helper:
 ```lean
-private theorem fold_reduce_add_mont_reduce (a : U32) (f : U32 → Result α) :
+private theorem fold_reduce_add_mont_reduce (a : U32) (f : U32 → RustM α) :
   (do
     let i2 ← lift (core.num.U32.wrapping_mul a ntt.NEG_Q_INV_MOD_R)
     let inv ← lift (i2 &&& ntt.RMASK)
@@ -194,7 +194,7 @@ The `simp only [helper_def, bind_assoc_eq, bind_tc_ok, pure]` pattern works beca
 
 - **`bind_assoc_eq`** — monadic bind is associative: `(x >>= f) >>= g = x >>= (fun a => f a >>= g)`. This re-associates nested binds so the helper definition can be matched.
 - **`bind_tc_ok`** — `(do let y ← .ok x; f y) = f x`. This eliminates trivial `ok` binds that appear when unfolding the helper definition.
-- **`pure`** — unfolds `pure` in the `Result` monad.
+- **`pure`** — unfolds `pure` in the `RustM` monad.
 
 Together, these three lemmas normalize the monadic expression so that `simp` can recognize the helper definition as a subterm.
 
@@ -250,9 +250,9 @@ Nist spec ⟷₁ Lean spec ⟷₂ Auxiliary spec ⟷₃ Aeneas translation
 
 Where:
 - **Nist spec** = the mathematical specification (e.g., FIPS 203)
-- **Lean spec** = direct Lean translation of the Nist spec. Always pure — may use monadic notation (Id monad) but never the Result monad.
+- **Lean spec** = direct Lean translation of the Nist spec. Always pure — may use monadic notation (Id monad) but never the RustM monad.
 - **Auxiliary spec** = intermediate spec that mirrors the code structure, also pure
-- **Aeneas translation** = the generated Lean code (lives in the Result monad)
+- **Aeneas translation** = the generated Lean code (lives in the RustM monad)
 
 Prove equivalences between adjacent levels separately. Each proof is simpler because the specs are structurally similar at each level.
 

@@ -1,5 +1,5 @@
 import Avl.Funs
-open Aeneas Std Result
+open Aeneas Std RustM
 
 namespace avl
 

@@ -6,12 +6,12 @@ import Mathlib.Data.BitVec
 
 namespace Aeneas.Std
 
-open Result Error Arith
+open RustM Error Arith
 
 /-!
 # Negation: Definitions
 -/
-def IScalar.neg {ty : IScalarTy} (x : IScalar ty) : Result (IScalar ty) := IScalar.tryMk ty (- x.val)
+def IScalar.neg {ty : IScalarTy} (x : IScalar ty) : RustM (IScalar ty) := IScalar.tryMk ty (- x.val)
 
 @[step]
 theorem IScalar.neg_step {ty} (x: IScalar ty) (h: x ≠ IScalar.min ty): IScalar.neg x ⦃ r => r = -x.val ⦄ := by
@@ -56,7 +56,7 @@ prefix:75  "-."   => HNeg.hNeg
 -/
 attribute [match_pattern] HNeg.hNeg
 
-instance {ty} : HNeg (IScalar ty) (Result (IScalar ty)) where hNeg x := IScalar.neg x
+instance {ty} : HNeg (IScalar ty) (RustM (IScalar ty)) where hNeg x := IScalar.neg x
 
 @[step]
 theorem HNeg.hNeg.step {ty} (x: IScalar ty) (h: x ≠ IScalar.min ty): HNeg.hNeg x ⦃ r => r = -x.val ⦄ := by

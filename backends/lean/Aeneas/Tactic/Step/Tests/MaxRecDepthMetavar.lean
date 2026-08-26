@@ -2,7 +2,7 @@ import Aeneas.Do
 import Aeneas.Std.Slice
 import Aeneas.Tactic.Step
 
-open Aeneas Aeneas.Std Result
+open Aeneas Aeneas.Std RustM
 
 /-!
 # Regression test — `step*` and metavariable preconditions that triggered
@@ -23,7 +23,7 @@ private def conv (h : Array U64 8#usize) : MyHash :=
 private def convEq (h : Array U64 8#usize) (iv : MyHash) : Prop := conv h = iv
 
 /-- Trivial monadic function to `step` over (mirrors `append_bulk`). -/
-private def myFn (h : Array U64 8#usize) : Result (Array U64 8#usize) := ok h
+private def myFn (h : Array U64 8#usize) : RustM (Array U64 8#usize) := ok h
 
 /-- The helper's precondition `convEq h iv` has `iv` undetermined by the
     call argument `h`, so `step` turns it into a metavariable. -/

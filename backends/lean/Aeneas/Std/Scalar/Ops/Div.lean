@@ -6,16 +6,16 @@ import Mathlib.Data.BitVec
 
 namespace Aeneas.Std
 
-open Result Error Arith ScalarElab WP
+open RustM Error Arith ScalarElab WP
 
 /-!
 # Division: Definitions
 -/
 
-def UScalar.div {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
+def UScalar.div {ty : UScalarTy} (x y : UScalar ty) : RustM (UScalar ty) :=
   if y.bv != 0 then ok ⟨ BitVec.udiv x.bv y.bv ⟩ else fail divisionByZero
 
-def IScalar.div {ty : IScalarTy} (x y : IScalar ty): Result (IScalar ty) :=
+def IScalar.div {ty : IScalarTy} (x y : IScalar ty): RustM (IScalar ty) :=
   if y.val != 0 then
     -- There can be an overflow if `x` is equal to the lower bound and `y` to `-1`
     if ¬ (x.val = IScalar.min ty && y.val = -1) then ok ⟨ BitVec.sdiv x.bv y.bv ⟩
@@ -23,15 +23,15 @@ def IScalar.div {ty : IScalarTy} (x y : IScalar ty): Result (IScalar ty) :=
   else fail divisionByZero
 
 def UScalar.try_div {ty : UScalarTy} (x y : UScalar ty) : Option (UScalar ty) :=
-  Option.ofResult (div x y)
+  Option.ofRustM (div x y)
 
 def IScalar.try_div {ty : IScalarTy} (x y : IScalar ty): Option (IScalar ty) :=
-  Option.ofResult (div x y)
+  Option.ofRustM (div x y)
 
-instance {ty} : HDiv (UScalar ty) (UScalar ty) (Result (UScalar ty)) where
+instance {ty} : HDiv (UScalar ty) (UScalar ty) (RustM (UScalar ty)) where
   hDiv x y := UScalar.div x y
 
-instance {ty} : HDiv (IScalar ty) (IScalar ty) (Result (IScalar ty)) where
+instance {ty} : HDiv (IScalar ty) (IScalar ty) (RustM (IScalar ty)) where
   hDiv x y := IScalar.div x y
 
 /-!

@@ -114,7 +114,7 @@ and id =
           Example:
           {[
             def CONST.val := 32#u32
-            def CONST : Result u32 := ok CONST.val
+            def CONST : RustM u32 := ok CONST.val
           ]} *)
   | FunId of fun_id
   | TerminationMeasureId of (A.fun_id * (LoopId.id * bool) option)
@@ -1126,7 +1126,7 @@ let builtin_adts () : (builtin_ty * string) list =
   match backend () with
   | Lean ->
       [
-        (TResult, "Result");
+        (TResult, "RustM");
         (TLoopResult, "ControlFlow");
         (TFuel, "Nat");
         (TArray, "Array");

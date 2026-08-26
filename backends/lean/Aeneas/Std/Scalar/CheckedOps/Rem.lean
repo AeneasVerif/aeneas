@@ -3,7 +3,7 @@ import Aeneas.Std.Scalar.Elab
 
 namespace Aeneas.Std
 
-open Result Error Arith ScalarElab WP
+open RustM Error Arith ScalarElab WP
 
 /-!
 # Checked Remainder: Definitions
@@ -11,13 +11,13 @@ open Result Error Arith ScalarElab WP
 
 /- [core::num::{T}::checked_rem] -/
 def core.num.checked_rem_UScalar {ty} (x y : UScalar ty) : Option (UScalar ty) :=
-  Option.ofResult (UScalar.rem x y)
+  Option.ofRustM (UScalar.rem x y)
 
 uscalar def «%S».checked_rem (x y : «%S») : Option «%S» := core.num.checked_rem_UScalar x y
 
 /- [core::num::{T}::checked_rem] -/
 def core.num.checked_rem_IScalar {ty} (x y : IScalar ty) : Option (IScalar ty) :=
-  Option.ofResult (IScalar.rem x y)
+  Option.ofRustM (IScalar.rem x y)
 
 iscalar def «%S».checked_rem (x y : «%S») : Option «%S» := core.num.checked_rem_IScalar x y
 
@@ -32,7 +32,7 @@ theorem core.num.checked_rem_UScalar_bv_spec {ty} (x y : UScalar ty) :
   match core.num.checked_rem_UScalar x y with
   | some z => y.val ≠ 0 ∧ z.val = x.val % y.val ∧ z.bv = x.bv % y.bv
   | none => y.val = 0 := by
-  simp [checked_rem_UScalar, Option.ofResult, UScalar.rem]
+  simp [checked_rem_UScalar, Option.ofRustM, UScalar.rem]
   split_ifs
   . zify at *
     simp_all
@@ -60,7 +60,7 @@ theorem core.num.checked_rem_IScalar_bv_spec {ty} (x y : IScalar ty) :
   match core.num.checked_rem_IScalar x y with
   | some z => y.val ≠ 0 ∧ z.val = Int.tmod x.val y.val ∧ z.bv = BitVec.srem x.bv y.bv
   | none => y.val = 0 := by
-  simp [checked_rem_IScalar, Option.ofResult, IScalar.rem]
+  simp [checked_rem_IScalar, Option.ofRustM, IScalar.rem]
   split_ifs
   . zify at *
     simp_all

@@ -561,7 +561,7 @@ If (and only if) the return type is not inhabited — which is rare in cryptogra
 specs — wrap the output type in `Option`:
 ```lean
 @[partial_fixpoint]
-def foo (x : Nat) : Option Result := do
+def foo (x : Nat) : Option RustM := do
   ...
 ```
 
