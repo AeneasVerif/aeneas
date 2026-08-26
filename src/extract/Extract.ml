@@ -1203,7 +1203,7 @@ and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
                     if field_id + 1 = Option.get num_fields then twos_prefix
                     else twos_prefix ^ ".1"
                 else "#" ^ string_of_int field_id
-          else ctx_get_field span proj.adt_id proj.field_id ctx
+          else ctx_get_field ~qualified:true span proj.adt_id proj.field_id ctx
         in
         (* Open a box *)
         F.pp_open_hovbox fmt ctx.indent_incr;

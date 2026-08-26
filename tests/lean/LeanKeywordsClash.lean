@@ -32,13 +32,13 @@ def clash (end1 : Std.U32) : Result Std.U32 := do
 inductive Rec where
 | mk : Option Rec → Std.U32 → Rec
 
-def Rec.«end» (x : Rec) := match x with | Rec.mk x1 _ => x1
+def Rec.end (x : Rec) := match x with | Rec.mk x1 _ => x1
 
 def Rec.v (x : Rec) := match x with | Rec.mk _ x1 => x1
 
 @[simp]
-theorem Rec.«end»._simpLemma_ (end1 : Option Rec) (v : Std.U32) :
-  (Rec.mk end1 v).«end» = end1 := by rfl
+theorem Rec.end._simpLemma_ (end1 : Option Rec) (v : Std.U32) :
+  (Rec.mk end1 v).end = end1 := by rfl
 
 @[simp]
 theorem Rec.v._simpLemma_ (end1 : Option Rec) (v : Std.U32) :

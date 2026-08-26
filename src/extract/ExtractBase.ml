@@ -768,15 +768,20 @@ let is_quoted_name (s : string) : bool =
 
 (** Escape a name so that it is a valid identifier for the current backend.
 
-    In Lean, identifiers cannot contain "-", and reserved keywords are illegal
-    as bare names: in both cases we wrap the offending dot-separated component
-    in French quotes (« ... »). Note that a keyword is only escaped when the
-    name has a single component: [A.end] is a perfectly valid Lean name. *)
-let escape_name (name : string) : string =
+    In Lean, we escape a dot-separated component with French quotes («...») if:
+    - it contains a ['-'], which is not a legal character in a Lean identifier;
+    - or it is a keyword *used as a full name*: a keyword is illegal only when
+      it is the whole identifier, so we escape [end] but not [Foo.end].
+
+    [qualified] must be [true] when the name is printed as a component of a
+    qualified name, that is, right after a ['.'] (for instance, the [end] in
+    [x.end] or in [def Foo.end]). In this position a keyword is legal, so we
+    don't escape it. *)
+let escape_name ?(qualified : bool = false) (name : string) : string =
   match backend () with
   | Lean ->
       let parts = String.split_on_char '.' name in
-      let escape_keywords = List.length parts = 1 in
+      let escape_keywords = (not qualified) && List.length parts = 1 in
       let escape_part (s : string) : string =
         if is_quoted_name s then s
         else if String.contains s '-' || (escape_keywords && is_lean_keyword s)
@@ -802,10 +807,10 @@ let ctx_get_raw (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
   names_maps_get span id_to_string id ctx.names_maps
 
 (** Retrieve a name from the names maps, escaped if needed: the result is meant
-    to be printed. *)
-let ctx_get (span : Meta.span option) (id : id) (ctx : extraction_ctx) : string
-    =
-  escape_name (ctx_get_raw span id ctx)
+    to be printed. See {!escape_name} for the meaning of [qualified]. *)
+let ctx_get ?(qualified : bool = false) (span : Meta.span option) (id : id)
+    (ctx : extraction_ctx) : string =
+  escape_name ~qualified (ctx_get_raw span id ctx)
 
 let ctx_get_global (span : Meta.span) (id : A.GlobalDeclId.id)
     (ctx : extraction_ctx) : string =
@@ -889,9 +894,10 @@ let ctx_get_local_trait_clause (span : Meta.span) (origin : generic_origin)
     (id : TraitClauseId.id) (ctx : extraction_ctx) : string =
   ctx_get (Some span) (LocalTraitClauseId (origin, id)) ctx
 
-let ctx_get_field (span : Meta.span) (type_id : type_id) (field_id : FieldId.id)
-    (ctx : extraction_ctx) : string =
-  ctx_get (Some span) (FieldId (type_id, field_id)) ctx
+let ctx_get_field ?(qualified : bool = false) (span : Meta.span)
+    (type_id : type_id) (field_id : FieldId.id) (ctx : extraction_ctx) : string
+    =
+  ctx_get ~qualified (Some span) (FieldId (type_id, field_id)) ctx
 
 let ctx_get_struct (span : Meta.span) (def_id : type_id) (ctx : extraction_ctx)
     : string =
