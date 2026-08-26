@@ -29,51 +29,73 @@ inductive Enum where
 | Variant : Std.U32 → Enum
 | Other : Std.U32 → Enum
 
+/-- [lean_keywords::Keyword]
+    Source: 'tests/src/lean-keywords.rs', lines 24:0-27:1
+    Visibility: public -/
+@[discriminant isize]
+inductive Keyword where
+| «end» : Std.U32 → Keyword
+| Other : Std.U32 → Keyword
+
 /-- [lean_keywords::parameter]:
-    Source: 'tests/src/lean-keywords.rs', lines 21:0-23:1
+    Source: 'tests/src/lean-keywords.rs', lines 30:0-32:1
     Visibility: public -/
 def parameter («end» : Std.U32) : Result Std.U32 := do
   ok «end»
 
 /-- [lean_keywords::pattern]:
-    Source: 'tests/src/lean-keywords.rs', lines 26:0-31:1
+    Source: 'tests/src/lean-keywords.rs', lines 35:0-40:1
     Visibility: public -/
 def pattern (e : Enum) : Result Std.U32 := do
   match e with
   | Enum.Variant «end» => ok «end»
   | Enum.Other other => ok other
 
+/-- [lean_keywords::variant]:
+    Source: 'tests/src/lean-keywords.rs', lines 43:0-48:1
+    Visibility: public -/
+def variant (k : Keyword) : Result Std.U32 := do
+  match k with
+  | Keyword.end x => ok x
+  | Keyword.Other x => ok x
+
+/-- [lean_keywords::make_variant]:
+    Source: 'tests/src/lean-keywords.rs', lines 50:0-52:1
+    Visibility: public -/
+def make_variant (x : Std.U32) : Result Keyword := do
+  ok (Keyword.end x)
+
 /-- [lean_keywords::type_variable]:
-    Source: 'tests/src/lean-keywords.rs', lines 35:0-37:1
+    Source: 'tests/src/lean-keywords.rs', lines 56:0-58:1
     Visibility: public -/
 def type_variable {«end» : Type} (x : «end») : Result «end» := do
   ok x
 
 /-- [lean_keywords::field]:
-    Source: 'tests/src/lean-keywords.rs', lines 39:0-41:1
+    Source: 'tests/src/lean-keywords.rs', lines 60:0-62:1
     Visibility: public -/
 def field (s : Struct) : Result Std.U32 := do
-  ok s.«end»
+  ok s.end
 
 /-- [lean_keywords::{lean_keywords::Struct}::end]:
-    Source: 'tests/src/lean-keywords.rs', lines 44:4-46:5
+    Source: 'tests/src/lean-keywords.rs', lines 65:4-67:5
     Visibility: public -/
 def Struct.impl.end (self : Struct) : Result Std.U32 := do
   ok self.start
 
 /-- [lean_keywords::Rec]
-    Source: 'tests/src/lean-keywords.rs', lines 51:0-54:1
+    Source: 'tests/src/lean-keywords.rs', lines 72:0-75:1
     Visibility: public -/
 inductive Rec where
 | mk : Option Rec → Std.U32 → Rec
 
-def Rec.«end» (x : Rec) := match x with | Rec.mk x1 _ => x1
+def Rec.end (x : Rec) := match x with | Rec.mk x1 _ => x1
 
 def Rec.v (x : Rec) := match x with | Rec.mk _ x1 => x1
 
 @[simp]
-theorem Rec.«end»._simpLemma_ («end» : Option Rec) (v : Std.U32) :
-  (Rec.mk «end» v).«end» = «end» := by rfl
+theorem Rec.end._simpLemma_ («end» : Option Rec) (v : Std.U32) :
+  (Rec.mk «end» v).end = «end» := by rfl
 
 @[simp]
 theorem Rec.v._simpLemma_ («end» : Option Rec) (v : Std.U32) :

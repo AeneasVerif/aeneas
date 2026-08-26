@@ -1008,8 +1008,9 @@ let extract_type_decl_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
   *)
   let print_variant _variant_id (v : variant) =
     (* We don't lookup the name, because it may have a prefix for the type
-       id (in the case of Lean) *)
-    let cons_name = ctx_compute_variant_name ctx def v in
+       id (in the case of Lean). As we print the name on its own (it is not
+       prefixed by the name of the type here), we have to escape it. *)
+    let cons_name = escape_name (ctx_compute_variant_name ctx def v) in
     let fields = v.fields in
     extract_type_decl_variant def.item_meta.span ctx fmt type_decl_group
       def_name type_params cg_params cons_name fields
@@ -1874,7 +1875,11 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
              allow us to call x.proj for any x of type ADT. In Coq,
              we will have to introduce a notation for the projector. *)
           let field_name =
-            ctx_get_field decl.item_meta.span (TAdtId decl.def_id) field_id ctx
+            (* In Lean the name is printed after the name of the ADT, so it
+               doesn't need to be escaped if it is a keyword *)
+            ctx_get_field
+              ~qualified:(backend () = Lean)
+              decl.item_meta.span (TAdtId decl.def_id) field_id ctx
           in
           if backend () = Lean then (
             F.pp_print_string fmt def_name;
@@ -2062,7 +2067,9 @@ let extract_type_decl_record_field_projectors_simp_lemmas (ctx : extraction_ctx)
 
           (* Print the theorem name. *)
           let field_name =
-            ctx_get_field span (TAdtId decl.def_id) field_id ctx
+            (* The name is printed after a ".", both in the name of the theorem
+               and in its statement: no need to escape it if it is a keyword *)
+            ctx_get_field ~qualified:true span (TAdtId decl.def_id) field_id ctx
           in
           (* TODO: check for name collisions *)
           F.pp_print_string fmt (def_name ^ "." ^ field_name ^ "._simpLemma_");

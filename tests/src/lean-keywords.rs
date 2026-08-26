@@ -17,6 +17,15 @@ pub enum Enum {
     Other(u32),
 }
 
+/// A variant named after a keyword. The variant declaration prints the name on
+/// its own, so it must be escaped; the uses are qualified (`Keyword.end`) and
+/// must *not* be escaped.
+#[allow(non_camel_case_types)]
+pub enum Keyword {
+    end(u32),
+    Other(u32),
+}
+
 /// The binder and the occurrence must agree.
 pub fn parameter(end: u32) -> u32 {
     end
@@ -28,6 +37,18 @@ pub fn pattern(e: Enum) -> u32 {
         Enum::Variant { end } => end,
         Enum::Other(other) => other,
     }
+}
+
+/// Building and matching on a variant named after a keyword.
+pub fn variant(k: Keyword) -> u32 {
+    match k {
+        Keyword::end(x) => x,
+        Keyword::Other(x) => x,
+    }
+}
+
+pub fn make_variant(x: u32) -> Keyword {
+    Keyword::end(x)
 }
 
 /// Same for a type variable.
