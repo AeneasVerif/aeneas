@@ -766,44 +766,51 @@ let lean_keywords_set : StringSet.t Lazy.t =
 let is_lean_keyword (s : string) : bool =
   StringSet.mem s (Lazy.force lean_keywords_set)
 
+(** [true] if [s] is a name escaped with French quotes ([«...»]). *)
+let is_quoted_name (s : string) : bool =
+  let len = String.length s in
+  len >= 4 && String.sub s 0 2 = "«" && String.sub s (len - 2) 2 = "»"
+
+(** Escape a name so that it is a valid identifier for the current backend.
+
+    In Lean, identifiers cannot contain "-", and reserved keywords are illegal
+    as bare names: in both cases we wrap the offending dot-separated component
+    in French quotes (« ... »). Note that a keyword is only escaped when the
+    name has a single component: [A.end] is a perfectly valid Lean name. *)
+let escape_name (name : string) : string =
+  match backend () with
+  | Lean ->
+      let parts = String.split_on_char '.' name in
+      let escape_keywords = List.length parts = 1 in
+      let escape_part (s : string) : string =
+        if is_quoted_name s then s
+        else if String.contains s '-' || (escape_keywords && is_lean_keyword s)
+        then "«" ^ s ^ "»"
+        else s
+      in
+      String.concat "." (List.map escape_part parts)
+  | FStar | Coq | HOL4 -> name
+
 let ctx_add (span : Meta.span) (id : id) (name : string) (ctx : extraction_ctx)
     : extraction_ctx =
-  (* In Lean, identifiers cannot contain "-". We wrap any dot-separated
-     component that contains a hyphen in French quotes (« ... »). *)
-  let name =
-    match backend () with
-    | Lean -> (
-        let parts = String.split_on_char '.' name in
-        let parts =
-          List.map
-            (fun s ->
-              let len = String.length s in
-              let already_quoted =
-                len >= 4
-                && String.sub s 0 2 = "«"
-                && String.sub s (len - 2) 2 = "»"
-              in
-              if String.contains s '-' && not already_quoted then "«" ^ s ^ "»"
-              else s)
-            parts
-        in
-        (* A reserved keyword is illegal only as a bare name. *)
-        match parts with
-        | [ s ] when is_lean_keyword s -> "«" ^ s ^ "»"
-        | _ -> String.concat "." parts)
-    | _ -> name
-  in
-  (* Actually add the name *)
   let id_to_string (id : id) : string = id_to_string (Some span) id ctx in
   let names_maps =
     names_maps_add id_to_string id (Some span) name ctx.names_maps
   in
   { ctx with names_maps }
 
-let ctx_get (span : Meta.span option) (id : id) (ctx : extraction_ctx) : string
-    =
+(** Retrieve a name from the names maps, unescaped. Use {!ctx_get} instead if
+    you want to print the string into a Lean file. *)
+let ctx_get_raw (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
+    string =
   let id_to_string (id : id) : string = id_to_string span id ctx in
   names_maps_get span id_to_string id ctx.names_maps
+
+(** Retrieve a name from the names maps, escaped if needed: the result is meant
+    to be printed. *)
+let ctx_get (span : Meta.span option) (id : id) (ctx : extraction_ctx) : string
+    =
+  escape_name (ctx_get_raw span id ctx)
 
 let ctx_get_global (span : Meta.span) (id : A.GlobalDeclId.id)
     (ctx : extraction_ctx) : string =
@@ -2140,7 +2147,6 @@ let basename_to_unique (ctx : extraction_ctx) (name : string) =
     StringSet.mem s ctx.names_maps.names_map.names_set
     || StringSet.mem s ctx.names_maps.strict_names_map.names_set
   in
-
   basename_to_unique_aux collision name_append_index name
 
 (** Generate a unique type variable name and add it to the context *)
@@ -2150,7 +2156,7 @@ let ctx_add_type_var (span : Meta.span) (origin : generic_origin)
   let name = ctx_compute_type_var_basename ctx basename in
   let name = basename_to_unique ctx name in
   let ctx = ctx_add span (TypeVarId (origin, id)) name ctx in
-  (ctx, name)
+  (ctx, escape_name name)
 
 (** Generate a unique const generic variable name and add it to the context *)
 let ctx_add_const_generic_var (span : Meta.span) (origin : generic_origin)
@@ -2159,7 +2165,7 @@ let ctx_add_const_generic_var (span : Meta.span) (origin : generic_origin)
   let name = ctx_compute_const_generic_var_basename ctx basename in
   let name = basename_to_unique ctx name in
   let ctx = ctx_add span (ConstGenericVarId (origin, id)) name ctx in
-  (ctx, name)
+  (ctx, escape_name name)
 
 (** See {!ctx_add_type_var} *)
 let ctx_add_type_vars (span : Meta.span) (origin : generic_origin)
@@ -2174,7 +2180,7 @@ let ctx_add_var (span : Meta.span) (basename : string) (id : FVarId.id)
     (ctx : extraction_ctx) : extraction_ctx * string =
   let name = basename_to_unique ctx basename in
   let ctx = ctx_add span (FVarId id) name ctx in
-  (ctx, name)
+  (ctx, escape_name name)
 
 (** Generate a unique trait clause name and add it to the context *)
 let ctx_add_local_trait_clause (span : Meta.span) (origin : generic_origin)
@@ -2182,7 +2188,7 @@ let ctx_add_local_trait_clause (span : Meta.span) (origin : generic_origin)
     extraction_ctx * string =
   let name = basename_to_unique ctx basename in
   let ctx = ctx_add span (LocalTraitClauseId (origin, id)) name ctx in
-  (ctx, name)
+  (ctx, escape_name name)
 
 (** See {!ctx_add_var} *)
 let ctx_add_vars (span : Meta.span) (vars : fvar list) (ctx : extraction_ctx) :

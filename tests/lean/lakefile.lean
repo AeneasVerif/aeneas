@@ -48,6 +48,7 @@ package «tests» {}
 @[default_target] lean_lib Issue1044OpaqueTuple
 @[default_target] lean_lib Issue1140GlobalLoop
 @[default_target] lean_lib Issue1141ImplFnRef
+@[default_target] lean_lib Issue1250AnonymousConst
 @[default_target] lean_lib Issue134LoopSharedBorrows
 @[default_target] lean_lib Issue194RecursiveStructProjector
 @[default_target] lean_lib Issue270LoopList
@@ -65,6 +66,8 @@ package «tests» {}
 @[default_target] lean_lib IteratorsScalar
 @[default_target] lean_lib JoinDuplicate
 @[default_target] lean_lib Joins
+@[default_target] lean_lib LeanKeywords
+@[default_target] lean_lib LeanKeywordsClash
 @[default_target] lean_lib ListBorrows
 @[default_target] lean_lib Loops
 @[default_target] lean_lib LoopsAdts
