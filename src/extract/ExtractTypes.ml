@@ -793,14 +793,6 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
             in
             (field_names, cons_name)
           in
-          (* Small helper to convert a Rust field name to a Lean field name.
-             We do something special: if the field name is a keyword and the
-             backend is Lean, we escape the name with French quotes. *)
-          let mk_field_name (name : string) =
-            match backend () with
-            | Lean when is_lean_keyword name -> "«" ^ name ^ "»"
-            | _ -> name
-          in
           (* Compute the names *)
           let field_names, cons_name =
             match def.builtin_info with
@@ -824,7 +816,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                               ^ name_to_string ctx def.item_meta.name
                               ^ "'; the " ^ backend_name ()
                               ^ " model is probably incorrect.");
-                            mk_field_name rust_name
+                            rust_name
                       in
                       (fid, name))
                     fields
@@ -845,9 +837,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
           let ctx =
             List.fold_left
               (fun ctx (fid, name) ->
-                ctx_add span
-                  (FieldId (TAdtId def.def_id, fid))
-                  (mk_field_name name) ctx)
+                ctx_add span (FieldId (TAdtId def.def_id, fid)) name ctx)
               ctx field_names
           in
           (* In the case of Lean, also add the fully qualified projector names
@@ -2087,7 +2077,9 @@ let extract_type_decl_record_field_projectors_simp_lemmas (ctx : extraction_ctx)
               (f : field) : extraction_ctx * string =
             let id = FVarId.of_int (FieldId.to_int field_id) in
             let field_name =
-              ctx_get_field span (TAdtId decl.def_id) field_id ctx
+              ctx_get_raw (Some span)
+                (FieldId (TAdtId decl.def_id, field_id))
+                ctx
             in
             let ctx, vname = ctx_add_var span field_name id ctx in
             F.pp_print_space fmt ();
@@ -2099,7 +2091,7 @@ let extract_type_decl_record_field_projectors_simp_lemmas (ctx : extraction_ctx)
             extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:false
               f.field_ty;
             F.pp_print_string fmt ")";
-            (ctx, field_name)
+            (ctx, vname)
           in
           let _, field_names =
             List.fold_left_map
