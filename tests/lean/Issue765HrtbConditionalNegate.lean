@@ -26,33 +26,33 @@ structure core.ops.arith.Neg (Self : Type) (Self_Output : Type) where
   neg : Self → Result Self_Output
 
 /-- [issue_765_hrtb_conditional_negate::Choice]
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 21:0-21:22
+    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 13:0-13:22
     Visibility: public -/
 @[reducible]
 def Choice := Std.U8
 
 /-- [issue_765_hrtb_conditional_negate::{impl core::clone::Clone for issue_765_hrtb_conditional_negate::Choice}::clone]:
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 20:9-20:14
+    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 12:9-12:14
     Visibility: public -/
 def Choice.Insts.CoreCloneClone.clone (self : Choice) : Result Choice := do
   ok self
 
 /-- Trait implementation: [issue_765_hrtb_conditional_negate::{impl core::clone::Clone for issue_765_hrtb_conditional_negate::Choice}]
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 20:9-20:14 -/
+    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 12:9-12:14 -/
 @[reducible]
 def Choice.Insts.CoreCloneClone : core.clone.Clone Choice := {
   clone := Choice.Insts.CoreCloneClone.clone
 }
 
 /-- Trait implementation: [issue_765_hrtb_conditional_negate::{impl core::marker::Copy for issue_765_hrtb_conditional_negate::Choice}]
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 20:16-20:20 -/
+    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 12:16-12:20 -/
 @[reducible]
 def Choice.Insts.CoreMarkerCopy : core.marker.Copy Choice := {
   cloneInst := Choice.Insts.CoreCloneClone
 }
 
 /-- Trait declaration: [issue_765_hrtb_conditional_negate::ConditionallySelectable]
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 23:0-29:1
+    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 15:0-21:1
     Visibility: public -/
 structure ConditionallySelectable (Self : Type) where
   coremarkerCopyInst : core.marker.Copy Self
@@ -60,7 +60,7 @@ structure ConditionallySelectable (Self : Type) where
   conditional_assign : Self → Self → Choice → Result Self
 
 /-- [issue_765_hrtb_conditional_negate::ConditionallySelectable::conditional_assign]:
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 26:4-28:5
+    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 18:4-20:5
     Visibility: public -/
 @[trait_default]
 def ConditionallySelectable.conditional_assign.default
@@ -71,33 +71,33 @@ def ConditionallySelectable.conditional_assign.default
   ConditionallySelectableInst.conditional_select self other choice
 
 /-- [issue_765_hrtb_conditional_negate::F]
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 32:0-32:13
+    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 24:0-24:13
     Visibility: public -/
 @[reducible]
 def F := Unit
 
 /-- [issue_765_hrtb_conditional_negate::{impl core::clone::Clone for issue_765_hrtb_conditional_negate::F}::clone]:
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 31:9-31:14
+    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 23:9-23:14
     Visibility: public -/
 def F.Insts.CoreCloneClone.clone (self : F) : Result F := do
   ok self
 
 /-- Trait implementation: [issue_765_hrtb_conditional_negate::{impl core::clone::Clone for issue_765_hrtb_conditional_negate::F}]
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 31:9-31:14 -/
+    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 23:9-23:14 -/
 @[reducible]
 def F.Insts.CoreCloneClone : core.clone.Clone F := {
   clone := F.Insts.CoreCloneClone.clone
 }
 
 /-- Trait implementation: [issue_765_hrtb_conditional_negate::{impl core::marker::Copy for issue_765_hrtb_conditional_negate::F}]
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 31:16-31:20 -/
+    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 23:16-23:20 -/
 @[reducible]
 def F.Insts.CoreMarkerCopy : core.marker.Copy F := {
   cloneInst := F.Insts.CoreCloneClone
 }
 
 /-- [issue_765_hrtb_conditional_negate::{impl issue_765_hrtb_conditional_negate::ConditionallySelectable for issue_765_hrtb_conditional_negate::F}::conditional_select]:
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 35:4-37:5
+    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 27:4-29:5
     Visibility: public -/
 def
   F.Insts.Issue_765_hrtb_conditional_negateConditionallySelectable.conditional_select
@@ -105,7 +105,7 @@ def
   ok a
 
 /-- Trait implementation: [issue_765_hrtb_conditional_negate::{impl issue_765_hrtb_conditional_negate::ConditionallySelectable for issue_765_hrtb_conditional_negate::F}]
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 34:0-38:1 -/
+    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 26:0-30:1 -/
 @[reducible]
 impl_def F.Insts.Issue_765_hrtb_conditional_negateConditionallySelectable :
   ConditionallySelectable F := {
@@ -117,26 +117,26 @@ impl_def F.Insts.Issue_765_hrtb_conditional_negateConditionallySelectable :
 }
 
 /-- [issue_765_hrtb_conditional_negate::{impl core::ops::arith::Neg<issue_765_hrtb_conditional_negate::F> for &'a issue_765_hrtb_conditional_negate::F}::neg]:
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 43:4-45:5
+    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 35:4-37:5
     Visibility: public -/
 def SharedAF.Insts.CoreOpsArithNegF.neg (self : F) : Result F := do
   ok ()
 
 /-- Trait implementation: [issue_765_hrtb_conditional_negate::{impl core::ops::arith::Neg<issue_765_hrtb_conditional_negate::F> for &'a issue_765_hrtb_conditional_negate::F}]
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 40:0-46:1 -/
+    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 32:0-38:1 -/
 @[reducible]
 def SharedAF.Insts.CoreOpsArithNegF : core.ops.arith.Neg F F := {
   neg := SharedAF.Insts.CoreOpsArithNegF.neg
 }
 
 /-- Trait declaration: [issue_765_hrtb_conditional_negate::ext::ConditionallyNegatable]
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 53:4-55:5
+    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 45:4-47:5
     Visibility: public -/
 structure ext.ConditionallyNegatable (Self : Type) where
   conditional_negate : Self → Choice → Result Self
 
 /-- [issue_765_hrtb_conditional_negate::ext::{impl issue_765_hrtb_conditional_negate::ext::ConditionallyNegatable for T}::conditional_negate]:
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 62:8-65:9
+    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 54:8-57:9
     Visibility: public -/
 axiom ext.ConditionallyNegatable.Blanket.conditional_negate
   {T : Type} (ConditionallySelectableInst : ConditionallySelectable T)
@@ -144,7 +144,7 @@ axiom ext.ConditionallyNegatable.Blanket.conditional_negate
   T → Choice → Result T
 
 /-- Trait implementation: [issue_765_hrtb_conditional_negate::ext::{impl issue_765_hrtb_conditional_negate::ext::ConditionallyNegatable for T}]
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 57:4-66:5 -/
+    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 49:4-58:5 -/
 @[reducible]
 def ext.ConditionallyNegatable.Blanket {T : Type} (ConditionallySelectableInst
   : ConditionallySelectable T) (coreopsarithNegSharedTTInst :
@@ -154,13 +154,13 @@ def ext.ConditionallyNegatable.Blanket {T : Type} (ConditionallySelectableInst
 }
 
 /-- Trait declaration: [issue_765_hrtb_conditional_negate::local::ConditionallyNegatable]
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 74:4-76:5
+    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 66:4-68:5
     Visibility: public -/
 structure local.ConditionallyNegatable (Self : Type) where
   conditional_negate : Self → Choice → Result Self
 
 /-- [issue_765_hrtb_conditional_negate::local::{impl issue_765_hrtb_conditional_negate::local::ConditionallyNegatable for T}::conditional_negate]:
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 83:8-86:9
+    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 75:8-78:9
     Visibility: public -/
 def local.ConditionallyNegatable.Blanket.conditional_negate
   {T : Type} (ConditionallySelectableInst : ConditionallySelectable T)
@@ -172,7 +172,7 @@ def local.ConditionallyNegatable.Blanket.conditional_negate
   ConditionallySelectableInst.conditional_assign self self_neg choice
 
 /-- Trait implementation: [issue_765_hrtb_conditional_negate::local::{impl issue_765_hrtb_conditional_negate::local::ConditionallyNegatable for T}]
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 78:4-87:5 -/
+    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 70:4-79:5 -/
 @[reducible]
 def local.ConditionallyNegatable.Blanket {T : Type}
   (ConditionallySelectableInst : ConditionallySelectable T)
@@ -183,7 +183,7 @@ def local.ConditionallyNegatable.Blanket {T : Type}
 }
 
 /-- [issue_765_hrtb_conditional_negate::call_opaque_blanket_impl]:
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 90:0-95:1
+    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 82:0-87:1
     Visibility: public -/
 def call_opaque_blanket_impl (choice : Choice) : Result F := do
   ext.ConditionallyNegatable.Blanket.conditional_negate
@@ -191,7 +191,7 @@ def call_opaque_blanket_impl (choice : Choice) : Result F := do
     SharedAF.Insts.CoreOpsArithNegF () choice
 
 /-- [issue_765_hrtb_conditional_negate::call_transparent_blanket_impl]:
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 97:0-102:1
+    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 89:0-94:1
     Visibility: public -/
 def call_transparent_blanket_impl (choice : Choice) : Result F := do
   local.ConditionallyNegatable.Blanket.conditional_negate
