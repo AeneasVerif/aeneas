@@ -3652,15 +3652,22 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
         extract_trait_impl_item ctx fmt item_name ty)
       (List.combine trait_decl.implied_clauses impl.parent_trait_refs);
 
-    (* The methods *)
-    let pure_trait_decl =
-      TraitDeclId.Map.find trait_decl_id ctx.trans_trait_decls
-    in
+    (* The methods.
+
+       If the [filter_trait_impl_methods] option is on, we skip the methods
+       which are absent from the model of the trait declaration. *)
     let keep_method (item_name : string) : bool =
-      match pure_trait_decl.builtin_info with
-      | None -> true
-      | Some info ->
-          List.exists (fun (name, _) -> name = item_name) info.methods
+      if not !filter_trait_impl_methods then true
+      else
+        let pure_trait_decl =
+          [%unwrap_with_span] span
+            (TraitDeclId.Map.find_opt trait_decl_id ctx.trans_trait_decls)
+            "Could not lookup the translated trait declaration"
+        in
+        match pure_trait_decl.builtin_info with
+        | None -> true
+        | Some info ->
+            List.exists (fun (name, _) -> name = item_name) info.methods
     in
     List.iter
       (fun (method_id, name, bound_fn) ->

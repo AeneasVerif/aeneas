@@ -1,4 +1,5 @@
 //@ [!lean] skip
+//@ [lean] aeneas-args=-filter-trait-methods
 
 //! Regression test for issue https://github.com/AeneasVerif/aeneas/issues/1043
 //! `.enumerate().map(...).collect()` used to extract to an invalid `Iterator`

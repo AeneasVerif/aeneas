@@ -211,6 +211,11 @@ let () =
          collisions with field projectors. Example: the `len` method in `impl \
          Struct { fn len(&self) -> usize { ... } }` would be named \
          `Struct.impl.len`." );
+      ( "-filter-trait-methods",
+        Arg.Set filter_trait_impl_methods,
+        " When extracting a trait impl, filter out the methods which are \
+         absent from the model of the trait declaration. Trait declarations \
+         which have no model are not affected." );
       ( "-all-computable",
         Arg.Set all_computable,
         " For Lean: do not insert `noncomputable section` at the top of the \
