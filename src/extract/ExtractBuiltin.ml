@@ -632,6 +632,12 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
       (fun ty ->
         "core.num." ^ StringUtils.capitalize_first_letter ty ^ ".from_be_bytes")
       ~can_fail:false ()
+  (* Box::new is erased together with the builtin Box type. *)
+  @ [
+      mk_fun "alloc::boxed::{Box<@T>}::new"
+        ~extract_name:(Some "alloc.boxed.Box.new") ~can_fail:false ~lift:false
+        ();
+    ]
   (* Clone<bool> *)
   @ mk_funs
       (fun fn -> "core::clone::impls::{core::clone::Clone<bool>}::" ^ fn)
