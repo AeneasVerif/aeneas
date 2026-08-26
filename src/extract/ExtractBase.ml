@@ -761,34 +761,43 @@ let lean_keywords_set : StringSet.t Lazy.t =
 let is_lean_keyword (s : string) : bool =
   StringSet.mem s (Lazy.force lean_keywords_set)
 
+(** Apply the backend-specific escaping to a name.
+
+    In Lean, identifiers cannot contain "-": we wrap any dot-separated component
+    that contains a hyphen in French quotes (« ... »). Reserved keywords are
+    escaped the same way (they are illegal only as a bare name: «by» is a valid
+    name).
+
+    A name must be escaped *before* being handed to {!ctx_add}: [ctx_add] simply
+    registers the name it is given. *)
+let escape_name (name : string) : string =
+  match backend () with
+  | Lean -> (
+      let parts = String.split_on_char '.' name in
+      let parts =
+        List.map
+          (fun s ->
+            let len = String.length s in
+            let already_quoted =
+              len >= 4
+              && String.sub s 0 2 = "«"
+              && String.sub s (len - 2) 2 = "»"
+            in
+            if String.contains s '-' && not already_quoted then "«" ^ s ^ "»"
+            else s)
+          parts
+      in
+      (* A reserved keyword is illegal only as a bare name. *)
+      match parts with
+      | [ s ] when is_lean_keyword s -> "«" ^ s ^ "»"
+      | _ -> String.concat "." parts)
+  | _ -> name
+
+(** Register a name for an id.
+
+    The name must already be escaped (see {!escape_name}). *)
 let ctx_add (span : Meta.span) (id : id) (name : string) (ctx : extraction_ctx)
     : extraction_ctx =
-  (* In Lean, identifiers cannot contain "-". We wrap any dot-separated
-     component that contains a hyphen in French quotes (« ... »). *)
-  let name =
-    match backend () with
-    | Lean -> (
-        let parts = String.split_on_char '.' name in
-        let parts =
-          List.map
-            (fun s ->
-              let len = String.length s in
-              let already_quoted =
-                len >= 4
-                && String.sub s 0 2 = "«"
-                && String.sub s (len - 2) 2 = "»"
-              in
-              if String.contains s '-' && not already_quoted then "«" ^ s ^ "»"
-              else s)
-            parts
-        in
-        (* A reserved keyword is illegal only as a bare name. *)
-        match parts with
-        | [ s ] when is_lean_keyword s -> "«" ^ s ^ "»"
-        | _ -> String.concat "." parts)
-    | _ -> name
-  in
-  (* Actually add the name *)
   let id_to_string (id : id) : string = id_to_string (Some span) id ctx in
   let names_maps =
     names_maps_add id_to_string id (Some span) name ctx.names_maps
@@ -2109,8 +2118,18 @@ let trait_self_clause_basename = "self_clause"
 let name_append_index (basename : string) (i : int) : string =
   basename ^ string_of_int i
 
+(** Generate a unique name from [name].
+
+    The returned name is already escaped (see {!escape_name}): it is meant to be
+    handed to {!ctx_add} and printed as-is. Note that we escape the *candidates*
+    rather than the basename, so that appending an index yields a valid
+    identifier: [prefix] (a Lean keyword) gives [«prefix»], then [prefix1],
+    rather than the ill-formed [«prefix»1]. *)
 let basename_to_unique (ctx : extraction_ctx) (name : string) =
   let collision s =
+    (* We check the collisions on the *escaped* name: this is the name which
+       will actually be registered, and printed. *)
+    let s = escape_name s in
     (* Note that we ignore the "unsafe" names which contain in particular
        field names: we want to allow using field names for variables if
        the backend allows such collisions *)
@@ -2118,7 +2137,7 @@ let basename_to_unique (ctx : extraction_ctx) (name : string) =
     || StringSet.mem s ctx.names_maps.strict_names_map.names_set
   in
 
-  basename_to_unique_aux collision name_append_index name
+  escape_name (basename_to_unique_aux collision name_append_index name)
 
 (** Generate a unique type variable name and add it to the context *)
 let ctx_add_type_var (span : Meta.span) (origin : generic_origin)
@@ -2435,7 +2454,7 @@ let ctx_compute_global_name_no_suffix (item_meta : T.item_meta)
 let ctx_add_global_decl (def : global_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let name = ctx_compute_global_name_no_suffix def.item_meta def.src ctx in
-  ctx_add def.item_meta.span (GlobalId def.def_id) name ctx
+  ctx_add def.item_meta.span (GlobalId def.def_id) (escape_name name) ctx
 
 let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
     (ctx : extraction_ctx) : string =
@@ -2516,14 +2535,14 @@ let ctx_add_decreases_proof (def : fun_decl) (ctx : extraction_ctx) :
   let name = ctx_compute_decreases_proof_name def ctx in
   ctx_add def.item_meta.span
     (DecreasesProofId (FRegular def.def_id, def.loop_id))
-    name ctx
+    (escape_name name) ctx
 
 let ctx_add_termination_measure (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let name = ctx_compute_termination_measure_name def ctx in
   ctx_add def.item_meta.span
     (TerminationMeasureId (FRegular def.def_id, def.loop_id))
-    name ctx
+    (escape_name name) ctx
 
 (* TODO: move to Extract *)
 let ctx_add_fun_decl (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
@@ -2538,7 +2557,8 @@ let ctx_add_fun_decl (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
     (* Add the function name *)
     let def_name = ctx_compute_fun_name def false ctx in
     let fun_id = (Pure.FunId (FRegular def_id), def.loop_id) in
-    ctx_add def.item_meta.span (FunId (FromLlbc fun_id)) def_name ctx
+    ctx_add def.item_meta.span (FunId (FromLlbc fun_id)) (escape_name def_name)
+      ctx
 
 let ctx_compute_type_decl_name (ctx : extraction_ctx) (def : type_decl) : string
     =

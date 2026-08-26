@@ -765,7 +765,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
     | None -> ctx_compute_type_decl_name ctx def
     | Some info -> info.extract_name
   in
-  let ctx = ctx_add span (TypeId (TAdtId def.def_id)) def_name ctx in
+  let ctx = ctx_add span (TypeId (TAdtId def.def_id)) (escape_name def_name) ctx in
   (* Compute and register:
    * - the variant names, if this is an enumeration
    * - the field names, if this is a structure
@@ -847,7 +847,8 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
               (fun ctx (fid, name) ->
                 ctx_add span
                   (FieldId (TAdtId def.def_id, fid))
-                  (mk_field_name name) ctx)
+                  (escape_name (mk_field_name name))
+                  ctx)
               ctx field_names
           in
           (* In the case of Lean, also add the fully qualified projector names
@@ -860,7 +861,9 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
             | _ -> ctx
           in
           (* Add the constructor name *)
-          ctx_add span (StructId (TAdtId def.def_id)) cons_name ctx
+          ctx_add span
+            (StructId (TAdtId def.def_id))
+            (escape_name cons_name) ctx
       | Enum variants ->
           let variant_names =
             match def.builtin_info with
@@ -899,7 +902,9 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
           in
           List.fold_left
             (fun ctx (vid, vname) ->
-              ctx_add span (VariantId (TAdtId def.def_id, vid)) vname ctx)
+              ctx_add span
+                (VariantId (TAdtId def.def_id, vid))
+                (escape_name vname) ctx)
             ctx variant_names
       | Opaque ->
           (* Nothing to do *)

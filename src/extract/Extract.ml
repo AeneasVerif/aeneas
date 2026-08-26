@@ -56,7 +56,9 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
       in
       let f = def.f in
       let fun_id = (Pure.FunId (FRegular f.def_id), f.loop_id) in
-      ctx_add f.item_meta.span (FunId (FromLlbc fun_id)) info.extract_name ctx
+      ctx_add f.item_meta.span
+        (FunId (FromLlbc fun_id))
+        (escape_name info.extract_name) ctx
   | None ->
       (* Not builtin *)
       (* Register the decrease clauses, if necessary *)
@@ -2734,7 +2736,7 @@ let extract_trait_decl_register_parent_clause_names (ctx : extraction_ctx)
     (fun ctx (cid, cname) ->
       ctx_add trait_decl.item_meta.span
         (TraitParentClauseId (trait_decl.def_id, cid))
-        cname ctx)
+        (escape_name cname) ctx)
     ctx clause_names
 
 (** Similar to {!extract_trait_decl_register_names} *)
@@ -2768,7 +2770,7 @@ let extract_trait_decl_register_constant_names (ctx : extraction_ctx)
     (fun ctx (const_id, name) ->
       ctx_add trait_decl.item_meta.span
         (TraitConstId (trait_decl.def_id, const_id))
-        name ctx)
+        (escape_name name) ctx)
     ctx constant_names
 
 (** Similar to {!extract_trait_decl_register_names} *)
@@ -2813,7 +2815,7 @@ let extract_trait_decl_type_names (ctx : extraction_ctx)
     (fun ctx (type_id, type_name) ->
       ctx_add trait_decl.item_meta.span
         (TraitTypeId (trait_decl.def_id, type_id))
-        type_name ctx)
+        (escape_name type_name) ctx)
     ctx type_names
 
 (** Similar to {!extract_trait_decl_register_names} *)
@@ -2886,20 +2888,11 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
   (* Register the names *)
   List.fold_left
     (fun ctx (method_id, default_id, fun_name) ->
-      (* Register the method name.
-
-          Similarly as with structure fields, in the case of Lean check
-          whether we collide with keywords. If it is the case, add french quotes.
-       *)
-      let fun_name =
-        match backend () with
-        | Lean when is_lean_keyword fun_name -> "«" ^ fun_name ^ "»"
-        | _ -> fun_name
-      in
+      (* Register the method name. *)
       let ctx =
         ctx_add trait_decl.item_meta.span
           (TraitMethodId (trait_decl.def_id, method_id))
-          fun_name ctx
+          (escape_name fun_name) ctx
       in
       (* We do not register the default_id: it is registered when registering
          the default method itself. *)
@@ -2920,11 +2913,12 @@ let extract_trait_decl_register_names (ctx : extraction_ctx)
     in
     let ctx =
       ctx_add trait_decl.item_meta.span (TraitDeclId trait_decl.def_id)
-        trait_name ctx
+        (escape_name trait_name) ctx
     in
     let ctx =
       ctx_add trait_decl.item_meta.span
-        (TraitDeclConstructorId trait_decl.def_id) trait_constructor ctx
+        (TraitDeclConstructorId trait_decl.def_id)
+        (escape_name trait_constructor) ctx
     in
     (ctx, trait_name)
   in
@@ -2988,7 +2982,9 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
     | None -> ctx_compute_trait_impl_name ctx trait_impl
     | Some info -> info.extract_name
   in
-  ctx_add trait_impl.item_meta.span (TraitImplId trait_impl.def_id) name ctx
+  ctx_add trait_impl.item_meta.span
+    (TraitImplId trait_impl.def_id)
+    (escape_name name) ctx
 
 (** Small helper.
 
