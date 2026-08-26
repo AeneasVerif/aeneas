@@ -112,6 +112,10 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     ty_to_string env t
 
+  let interp_ty_to_string (ctx : eval_ctx) (t : interp_ty) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    interp_ty_to_string env t
+
   let constant_expr_to_string (ctx : eval_ctx) (c : constant_expr) : string =
     let env = eval_ctx_to_fmt_env ctx in
     constant_expr_to_string env c
@@ -164,7 +168,7 @@ module EvalCtx = struct
     aborrow_content_to_string ~span env bc
 
   let eborrow_content_to_string ?(span : Meta.span option = None)
-      (ctx : eval_ctx) (ty : ty) (bc : eborrow_content) : string =
+      (ctx : eval_ctx) (ty : interp_ty) (bc : eborrow_content) : string =
     let env = eval_ctx_to_fmt_env ctx in
     let aenv = empty_evalue_env in
     eborrow_content_to_string ~span env aenv "" "  " ty bc
@@ -189,7 +193,7 @@ module EvalCtx = struct
     aloan_content_to_string ~span env lc
 
   let eloan_content_to_string ?(span : Meta.span option = None) (ctx : eval_ctx)
-      (ty : ty) (lc : eloan_content) : string =
+      (ty : interp_ty) (lc : eloan_content) : string =
     let env = eval_ctx_to_fmt_env ctx in
     let aenv = empty_evalue_env in
     eloan_content_to_string ~span env aenv "" "  " ty lc

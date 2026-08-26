@@ -250,7 +250,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
                    to pure) so we can simply ignore them. *)
                 {
                   input = Some (mk_eignored None mk_unit_ty);
-                  output = Some { value = EIgnored None; ty };
+                  output = Some { value = EIgnored None; ty = TCharon ty };
                 }
               in
 

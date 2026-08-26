@@ -79,6 +79,7 @@ let operand_to_string = Print.EvalCtx.operand_to_string
 let fun_sig_to_string = Print.EvalCtx.fun_sig_to_string
 let inst_fun_sig_to_string = Print.EvalCtx.inst_fun_sig_to_string
 let ty_to_string = Print.EvalCtx.ty_to_string
+let interp_ty_to_string = Print.EvalCtx.interp_ty_to_string
 let constant_expr_to_string = Print.EvalCtx.constant_expr_to_string
 let unop_to_string = Print.EvalCtx.unop_to_string
 let binop_to_string = Print.binop_to_string
@@ -230,12 +231,12 @@ let mk_eproj_loans_value_from_symbolic_value env
               borrows = [];
             } )
     in
-    let av : tevalue = { value = av; ty = svalue.sv_ty } in
+    let av : tevalue = { value = av; ty = TCharon svalue.sv_ty } in
     av
   else
     {
       value = EIgnored (Some (env, mk_tvalue_from_symbolic_value svalue));
-      ty = svalue.sv_ty;
+      ty = TCharon svalue.sv_ty;
     }
 
 (** Create a borrows projector from a symbolic value *)
@@ -320,7 +321,7 @@ exception FoundGBorrowContent of g_borrow_content
 exception FoundGLoanContent of g_loan_content
 
 (** Utility exception *)
-exception FoundEBorrowContent of eborrow_content
+exception FoundEBorrowContent of ty * eborrow_content
 
 (** Utility exception *)
 exception FoundAProjBorrows of aproj_borrows

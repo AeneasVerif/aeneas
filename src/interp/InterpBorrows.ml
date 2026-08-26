@@ -429,11 +429,11 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
       (** Similar to [visit_tevalue] *)
       method! visit_tevalue opt_abs (av : tevalue) : tevalue =
         match av.value with
-        | ELoan lc ->
-            let value = self#visit_typed_ELoan opt_abs av.ty lc in
+        | ELoan (ty, lc) ->
+            let value = self#visit_typed_ELoan opt_abs ty lc in
             ({ av with value } : tevalue)
-        | EBorrow bc ->
-            let value = self#visit_typed_EBorrow opt_abs av.ty bc in
+        | EBorrow (ty, bc) ->
+            let value = self#visit_typed_EBorrow opt_abs ty bc in
             ({ av with value } : tevalue)
         | _ -> super#visit_tevalue opt_abs av
 
@@ -572,15 +572,16 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
                   let child = super#visit_tevalue opt_abs child in
                   (* Return *)
                   EBorrow
-                    (EEndedIgnoredMutBorrow
-                       { given_back; child; given_back_meta })
+                    ( ty,
+                      EEndedIgnoredMutBorrow
+                        { given_back; child; given_back_meta } )
               | _ -> [%craise] span "Unreachable"
             else
               (* Continue exploring *)
-              EBorrow (super#visit_EIgnoredMutBorrow opt_abs bid' child)
+              EBorrow (ty, super#visit_EIgnoredMutBorrow opt_abs bid' child)
         | _ ->
             (* Continue exploring *)
-            super#visit_EBorrow opt_abs bc
+            super#visit_EBorrow opt_abs ty bc
 
       (** We are not specializing an already existing method, but adding a new
           method (for projections, we need type information) *)
@@ -617,12 +618,12 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
               (* Continue giving back in the child value *)
               let child = super#visit_tevalue opt_abs child in
               (* Return the new value *)
-              ELoan (EEndedMutLoan { child; given_back; given_back_meta }))
+              ELoan (ty, EEndedMutLoan { child; given_back; given_back_meta }))
             else (* Continue exploring *)
-              super#visit_ELoan opt_abs lc
+              super#visit_ELoan opt_abs ty lc
         | EEndedMutLoan { child = _; given_back = _; given_back_meta = _ } ->
             (* Nothing special to do *)
-            super#visit_ELoan opt_abs lc
+            super#visit_ELoan opt_abs ty lc
         | EIgnoredMutLoan (opt_bid, child) ->
             (* This loan is ignored, but we may have to project on a subvalue
              * of the value which is given back *)
@@ -640,12 +641,12 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
               (* Continue giving back in the child value *)
               let child = super#visit_tevalue opt_abs child in
               ELoan
-                (EEndedIgnoredMutLoan { given_back; child; given_back_meta })
-            else super#visit_ELoan opt_abs lc
+                (ty, EEndedIgnoredMutLoan { given_back; child; given_back_meta })
+            else super#visit_ELoan opt_abs ty lc
         | EEndedIgnoredMutLoan
             { given_back = _; child = _; given_back_meta = _ } ->
             (* Nothing special to do *)
-            super#visit_ELoan opt_abs lc
+            super#visit_ELoan opt_abs ty lc
 
       method! visit_EAbs opt_abs abs =
         (* We remember in which abstraction we are before diving -
@@ -1440,12 +1441,12 @@ and end_abs_borrows (config : config) (span : Meta.span) ~(snapshots : bool)
             let ended_eborrow =
               match lookup_eborrow_opt span ek_all bid ctx with
               | None -> None
-              | Some (EMutBorrow (pm, bid, av)) ->
+              | Some (ty, EMutBorrow (pm, bid, av)) ->
                   [%sanity_check] span (pm = PNone);
                   let meta : eended_mut_borrow_meta =
                     { bid; given_back = sv }
                   in
-                  Some (EBorrow (EEndedMutBorrow (meta, av)))
+                  Some (EBorrow (ty, EEndedMutBorrow (meta, av)))
               | Some _ -> [%internal_error] span
             in
             let ctx =

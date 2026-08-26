@@ -713,7 +713,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
                 ESymbolic
                   (PNone, EProjLoans { proj; consumed = []; borrows = [] })
               in
-              let input = { value; ty = ty_with_regions } in
+              let input = { value; ty = TCharon ty_with_regions } in
 
               (* Create the let-binding *)
               let fvar = mk_fresh_abs_fvar ty_with_regions in
@@ -863,13 +863,15 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           { value; ty = ref_ty }
         in
         let output : tevalue =
-          let value = EBorrow (EMutBorrow (PNone, lid, mk_eignored None ty)) in
-          { value; ty = ref_ty }
+          let value =
+            EBorrow (ref_ty, EMutBorrow (PNone, lid, mk_eignored None ty))
+          in
+          { value; ty = TCharon ref_ty }
         in
         let input : tevalue =
           (* We need this to make sure no values are filtered when translating *)
           let wrap (v : tevalue) : tevalue =
-            { value = EMutBorrowInput v; ty = ref_ty }
+            { value = EMutBorrowInput (ref_ty, v); ty = TCharon ref_ty }
           in
           let value = EJoinMarkers (wrap input0, wrap input1) in
           let ty = input0.ty in
@@ -1100,7 +1102,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           let input : tevalue =
             let loan = EMutLoan (PNone, bid2, mk_eignored None bv_ty) in
             (* Note that an eloan has a borrow type *)
-            let loan : tevalue = { value = ELoan loan; ty = borrow_ty } in
+            let loan : tevalue =
+              { value = ELoan (borrow_ty, loan); ty = TCharon borrow_ty }
+            in
 
             (* Create the let-binding *)
             let fvar = mk_fresh_abs_fvar borrow_ty in
@@ -1115,9 +1119,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
               [%cassert_recover] S.recover span (ty_no_regions bv_ty)
                 "Nested borrows are not supported yet";
               let value =
-                EBorrow (EMutBorrow (pm, bid, mk_eignored None bv_ty))
+                EBorrow (borrow_ty, EMutBorrow (pm, bid, mk_eignored None bv_ty))
               in
-              { value; ty = borrow_ty }
+              { value; ty = TCharon borrow_ty }
             in
             mk_etuple ~borrow_proj:true
               [ mk_output PLeft bid0 bv0; mk_output PRight bid1 bv1 ]
@@ -1266,18 +1270,19 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             let mk_loan pm lid =
               let loan = EMutLoan (pm, lid, mk_eignored None bv_ty) in
               (* Note that an eloan has a borrow type *)
-              { value = ELoan loan; ty = borrow_ty }
+              { value = ELoan (borrow_ty, loan); ty = TCharon borrow_ty }
             in
             let lv = mk_loan PLeft id0 in
             let rv = mk_loan PRight id1 in
             let v = EJoinMarkers (lv, rv) in
-            { value = v; ty = borrow_ty }
+            { value = v; ty = TCharon borrow_ty }
           in
           let output : tevalue =
             let value =
-              EBorrow (EMutBorrow (PNone, nbid, mk_eignored None bv_ty))
+              EBorrow
+                (borrow_ty, EMutBorrow (PNone, nbid, mk_eignored None bv_ty))
             in
-            { value; ty = borrow_ty }
+            { value; ty = TCharon borrow_ty }
           in
           Some { output = Some output; input = Some input }
         else None
@@ -1624,23 +1629,26 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           let loan : tevalue =
             let loan = EMutLoan (loan_pm, lid, mk_eignored None bv_ty) in
             (* Note that an eloan has a borrow type *)
-            { value = ELoan loan; ty = borrow_ty }
+            { value = ELoan (borrow_ty, loan); ty = TCharon borrow_ty }
           in
           let other_input : tevalue =
             (* We need this to make sure no values are filtered when translating *)
-            { value = EMutBorrowInput other_input; ty = borrow_ty }
+            {
+              value = EMutBorrowInput (borrow_ty, other_input);
+              ty = TCharon borrow_ty;
+            }
           in
           let lv, rv =
             if loan_is_left then (loan, other_input) else (other_input, loan)
           in
           let v = EJoinMarkers (lv, rv) in
-          { value = v; ty = borrow_ty }
+          { value = v; ty = TCharon borrow_ty }
         in
         let output : tevalue =
           let value =
-            EBorrow (EMutBorrow (PNone, nbid, mk_eignored None bv_ty))
+            EBorrow (borrow_ty, EMutBorrow (PNone, nbid, mk_eignored None bv_ty))
           in
-          { value; ty = borrow_ty }
+          { value; ty = TCharon borrow_ty }
         in
         Some { output = Some output; input = Some input }
       else None

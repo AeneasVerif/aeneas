@@ -3,6 +3,19 @@ open Types
 open Expressions
 include Charon.Values
 
+(** Types carried by values synthesized by the interpreter.
+
+    Most such values directly represent an LLBC value and retain its Charon
+    type. Tuples assembled by Aeneas itself are represented explicitly: they are
+    not Rust tuples and need not have a counterpart in Charon's type language.
+*)
+type interp_ty = TCharon of ty | Tuple of interp_ty list
+[@@deriving show, eq, ord]
+
+let rec interp_ty_exists f = function
+  | TCharon ty -> f ty
+  | Tuple tys -> List.exists (interp_ty_exists f) tys
+
 (* TODO(SH): I often write "abstract" (value, borrow content, etc.) while I should
  * write "abstraction" (because those values are not abstract, they simply are
  * inside abstractions) *)
@@ -31,6 +44,11 @@ class ['self] iter_tvalue_base =
   object (self : 'self)
     inherit [_] iter_ty
 
+    method visit_interp_ty env =
+      function
+      | TCharon ty -> self#visit_ty env ty
+      | Tuple tys -> List.iter (self#visit_interp_ty env) tys
+
     method visit_symbolic_value_id : 'env -> symbolic_value_id -> unit =
       fun _ _ -> ()
 
@@ -52,6 +70,11 @@ class ['self] iter_tvalue_base =
 class ['self] map_tvalue_base =
   object (self : 'self)
     inherit [_] map_ty
+
+    method visit_interp_ty env =
+      function
+      | TCharon ty -> TCharon (self#visit_ty env ty)
+      | Tuple tys -> Tuple (List.map (self#visit_interp_ty env) tys)
 
     method visit_symbolic_value_id :
         'env -> symbolic_value_id -> symbolic_value_id =
@@ -1133,8 +1156,12 @@ and evalue =
           abstractions containing nested borrows *)
   | EAdt of adt_evalue
   | EBottom (* TODO: remove once we change the way internal borrows are ended *)
-  | ELoan of eloan_content
-  | EBorrow of eborrow_content
+  | ELoan of ty * eloan_content
+      (** A source-level loan together with its Charon type. The type is
+          deliberately stored here so source-level transformations need not
+          recover it from the enclosing [interp_ty]. *)
+  | EBorrow of ty * eborrow_content
+      (** A source-level borrow together with its Charon type. See [ELoan]. *)
   | ESymbolic of proj_marker * eproj
   | EValue of menv * mvalue
       (** A concrete value, that we remember as a meta-value (together with the
@@ -1150,8 +1177,11 @@ and evalue =
           ]}
           this means that when ending borrow [l] we should output exactly the
           value [0]. *)
-  | EMutBorrowInput of tevalue
+  | EMutBorrowInput of ty * tevalue
       (** This is the input of a mut loan.
+
+          The Charon type is stored explicitly for the same reason as in
+          [ELoan], and is the type of the mutable borrow.
 
           This happens when we convert a value like [MB l0 (ML l1 v, 0)] to a
           region abstraction: we need to remember that [(ML l1 v, 0)] will be
@@ -1171,7 +1201,10 @@ and epat =
   | PAdt of variant_id option * tepat list
   | PIgnored
 
-and tepat = { pat : epat; ty : ty  (** The type should have been normalized *) }
+and tepat = {
+  pat : epat;
+  ty : interp_ty;  (** The type should have been normalized *)
+}
 
 and adt_evalue = {
   borrow_proj : bool;
@@ -1436,7 +1469,7 @@ and eended_ignored_mut_borrow = {
     shared aloan has type [& (mut) T] instead of [T]). *)
 and tevalue = {
   value : evalue;
-  ty : ty;  (** This should be a type with regions *)
+  ty : interp_ty;  (** This should be a type with regions *)
 }
 
 (** The continuation representing the computation that has to be performed when

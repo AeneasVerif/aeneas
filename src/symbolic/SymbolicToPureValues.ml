@@ -41,19 +41,13 @@ let fresh_named_vars_for_symbolic_values
     (fun ctx (name, sv) -> fresh_named_var_for_symbolic_value name sv ctx)
     ctx svl
 
-(** Translate a symbolic value.
-
-    Because we do not necessarily introduce variables for the symbolic values of
-    (translated) type unit, it is important that we do not lookup variables in
-    case the symbolic value has type unit. *)
-let symbolic_value_to_texpr (ctx : bs_ctx) (sv : V.symbolic_value) : texpr =
-  (* Translate the type *)
-  let ty = ctx_translate_fwd_ty ctx sv.sv_ty in
+let symbolic_value_id_to_texpr (ctx : bs_ctx) (sv_id : V.SymbolicValueId.id)
+    (ty : ty) : texpr =
   (* If the type is unit, directly return unit *)
   if ty_is_unit ty then mk_unit_texpr
   else
     (* Otherwise lookup the variable *)
-    match lookup_var_for_symbolic_value sv.sv_id ctx with
+    match lookup_var_for_symbolic_value sv_id ctx with
     | Some var -> mk_texpr_from_fvar var
     | None ->
         {
@@ -61,9 +55,17 @@ let symbolic_value_to_texpr (ctx : bs_ctx) (sv : V.symbolic_value) : texpr =
             EError
               ( None,
                 "Could not find var for symbolic value: "
-                ^ V.SymbolicValueId.to_string sv.sv_id );
+                ^ V.SymbolicValueId.to_string sv_id );
           ty;
         }
+
+(** Translate a symbolic value.
+
+    Because we do not necessarily introduce variables for the symbolic values of
+    (translated) type unit, it is important that we do not lookup variables in
+    case the symbolic value has type unit. *)
+let symbolic_value_to_texpr (ctx : bs_ctx) (sv : V.symbolic_value) : texpr =
+  symbolic_value_id_to_texpr ctx sv.sv_id (ctx_translate_fwd_ty ctx sv.sv_ty)
 
 (** Translate a typed value.
 
@@ -298,6 +300,19 @@ let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
   else if !has_loans then LoanProj (to_borrow_kind !has_mut_loans)
   else UnknownProj
 
+type translated_adt_kind = RegularAdt | Tuple | Box | Str [@@deriving show]
+
+let translated_adt_kind_of_charon_ty ty =
+  match fst (TypesUtils.ty_as_adt ty) with
+  | TAdtId _ -> RegularAdt
+  | TBuiltin TTuple -> Tuple
+  | TBuiltin TBox -> Box
+  | TBuiltin TStr -> Str
+
+let translated_adt_kind_of_interp_ty = function
+  | V.Tuple _ -> Tuple
+  | V.TCharon ty -> translated_adt_kind_of_charon_ty ty
+
 (** A smaller helper which allows us to isolate the logic by which we handle
     ADTs. *)
 let gtranslate_adt_fields ~(project_borrows : bool)
@@ -305,17 +320,16 @@ let gtranslate_adt_fields ~(project_borrows : bool)
     (translate : filter:bool -> bs_ctx -> 'v -> bs_ctx * ('info * 'o) option)
     (compute_proj_kind : 'v -> proj_kind) (mk_adt : 'o list -> 'o)
     (mk_tuple : 'o list -> 'o) ~(filter : bool) (ctx : bs_ctx) (av : 'v)
-    (av_ty : T.ty) (fields : 'v list) : bs_ctx * ('info list * 'o) option =
+    (adt_kind : translated_adt_kind) (fields : 'v list) :
+    bs_ctx * ('info list * 'o) option =
   let span = ctx.span in
-  (* We do not do the same thing depending on whether we visit a tuple
-     or a "regular" ADT *)
-  let adt_id, _ = TypesUtils.ty_as_adt av_ty in
   (* Check if the ADT contains borrows *)
   let proj_kind = compute_proj_kind av in
   [%ldebug
     "- filter: " ^ string_of_bool filter ^ "\n- av: " ^ input_to_string av
-    ^ "\n- av_ty: " ^ ty_to_string ctx av_ty ^ "\n- proj_kind: "
-    ^ show_proj_kind proj_kind];
+    ^ "\n- adt_kind: "
+    ^ show_translated_adt_kind adt_kind
+    ^ "\n- proj_kind: " ^ show_proj_kind proj_kind];
   match proj_kind with
   | UnknownProj when filter ->
       [%ldebug "UnknownProj && filter"];
@@ -335,9 +349,9 @@ let gtranslate_adt_fields ~(project_borrows : bool)
       let filter_fields =
         filter
         &&
-        match adt_id with
-        | TBuiltin (TTuple | TBox) -> true
-        | TBuiltin _ | TAdtId _ -> (
+        match adt_kind with
+        | Tuple | Box -> true
+        | Str | RegularAdt -> (
             match proj_kind with
             | UnknownProj | BorrowProj BShared | LoanProj BShared -> true
             | _ -> false)
@@ -355,8 +369,8 @@ let gtranslate_adt_fields ~(project_borrows : bool)
             (List.map
                (Print.option_to_string (fun (_, x) -> output_to_string x))
                info_fields)];
-      match adt_id with
-      | TAdtId _ ->
+      match adt_kind with
+      | RegularAdt ->
           if filter_fields then (
             [%sanity_check] span (List.for_all Option.is_none info_fields);
             (ctx, None))
@@ -367,19 +381,19 @@ let gtranslate_adt_fields ~(project_borrows : bool)
             in
             let pat = mk_adt fields in
             (ctx, Some (infos, pat))
-      | TBuiltin TBox -> begin
+      | Box -> begin
           (* The box type becomes the identity in the translation *)
           match info_fields with
           | [ None ] -> (ctx, None)
           | [ Some (info, v) ] -> (ctx, Some ([ info ], v))
           | _ -> [%craise] span "Unreachable"
         end
-      | TBuiltin TStr ->
+      | Str ->
           (* This case is unreachable:
              - for strings: the [str] is not polymorphic.
           *)
           [%craise] span "Unreachable"
-      | TBuiltin TTuple ->
+      | Tuple ->
           (* If the filtering is activated, we ignore the fields which do not
              consume values (i.e., which do not contain ended mutable borrows). *)
           if filter then
@@ -470,7 +484,9 @@ and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
         let ty = translate_fwd_ty (Some ctx.span) ctx.decls_ctx av.ty in
         mk_adt_texpr ctx.span ty adt_v.variant_id fields)
       (mk_simpl_tuple_texpr ctx.span)
-      ~filter ctx av av.ty adt_v.fields
+      ~filter ctx av
+      (translated_adt_kind_of_charon_ty av.ty)
+      adt_v.fields
   in
   Option.map snd out
 
@@ -774,7 +790,9 @@ and adt_avalue_to_given_back_aux ~(filter : bool)
       (fun fields ->
         let ty = translate_fwd_ty (Some ctx.span) ctx.decls_ctx av.ty in
         mk_adt_pat ty adt_v.variant_id fields)
-      mk_simpl_tuple_pat ~filter ctx av av.ty adt_v.fields
+      mk_simpl_tuple_pat ~filter ctx av
+      (translated_adt_kind_of_charon_ty av.ty)
+      adt_v.fields
   in
   (ctx, Option.map snd out)
 

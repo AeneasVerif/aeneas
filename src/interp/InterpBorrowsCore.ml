@@ -374,8 +374,8 @@ class virtual ['self] iter_eval_ctx_with_abs_levels =
 
     method! visit_EEmpty _ = ()
 
-    method! visit_EMutBorrowInput state av =
-      super#visit_EMutBorrowInput state av
+    method! visit_EMutBorrowInput state ty av =
+      super#visit_EMutBorrowInput state ty av
   end
 
 class virtual ['self] iter_abs_with_levels =
@@ -829,21 +829,21 @@ let lookup_borrow (span : Meta.span) (ek : exploration_kind)
     Note that abstraction expressions only track *mutable* borrows, which is why
     we identify the borrow with a [borrow_id] and not a [unique_borrow_id]. *)
 let lookup_eborrow_opt (span : Meta.span) (ek : exploration_kind)
-    (l : borrow_id) (ctx : eval_ctx) : eborrow_content option =
+    (l : borrow_id) (ctx : eval_ctx) : (ty * eborrow_content) option =
   let obj =
     object
       inherit [_] iter_eval_ctx as super
 
-      method! visit_eborrow_content env bc =
+      method! visit_EBorrow env ty bc =
         match bc with
-        | EMutBorrow (pm, bid, av) ->
+        | EMutBorrow (pm, bid, _av) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
             [%sanity_check] span (pm = PNone);
-            if bid = l then raise (FoundEBorrowContent bc)
-            else super#visit_EMutBorrow env pm bid av
+            if bid = l then raise (FoundEBorrowContent (ty, bc))
+            else super#visit_EBorrow env ty bc
         | EIgnoredMutBorrow (_, _)
         | EEndedMutBorrow _ | EEndedIgnoredMutBorrow _ ->
-            super#visit_eborrow_content env bc
+            super#visit_EBorrow env ty bc
 
       method! visit_abs env abs =
         if ek.enter_abs then super#visit_abs env abs else ()
@@ -853,13 +853,13 @@ let lookup_eborrow_opt (span : Meta.span) (ek : exploration_kind)
   try
     obj#visit_eval_ctx () ctx;
     None
-  with FoundEBorrowContent bc -> Some bc
+  with FoundEBorrowContent (ty, bc) -> Some (ty, bc)
 
 (** Lookup a borrow content appearing in an abstraction expression.
 
     Raise an exception if no borrow was found *)
 let lookup_eborrow (span : Meta.span) (ek : exploration_kind) (l : borrow_id)
-    (ctx : eval_ctx) : eborrow_content =
+    (ctx : eval_ctx) : ty * eborrow_content =
   match lookup_eborrow_opt span ek l ctx with
   | None -> [%craise] span "Unreachable"
   | Some lc -> lc
@@ -1000,15 +1000,15 @@ let update_aborrow (span : Meta.span) (ek : exploration_kind)
                 else ABorrow (super#visit_AProjSharedBorrow env asb)
             | UMut _ -> super#visit_ABorrow env bc)
 
-      method! visit_EBorrow env bc =
+      method! visit_EBorrow env source_ty bc =
         match bc with
         | EMutBorrow (pm, bid, av) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
             [%sanity_check] span (pm = PNone);
             if UMut bid = l then update_evalue ()
-            else EBorrow (super#visit_EMutBorrow env pm bid av)
+            else EBorrow (source_ty, super#visit_EMutBorrow env pm bid av)
         | EIgnoredMutBorrow _ | EEndedMutBorrow _ | EEndedIgnoredMutBorrow _ ->
-            super#visit_EBorrow env bc
+            super#visit_EBorrow env source_ty bc
 
       method! visit_abs env abs =
         if ek.enter_abs then super#visit_abs env abs else abs

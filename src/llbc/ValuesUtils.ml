@@ -28,19 +28,20 @@ let mk_bottom (span : Meta.span) (ty : ty) : tvalue =
   [%sanity_check] span (ty_is_ety ty);
   { value = VBottom; ty }
 
-let mk_ebottom (ty : ty) : tevalue = { value = EBottom; ty }
+let mk_ebottom (ty : ty) : tevalue = { value = EBottom; ty = TCharon ty }
 
 let mk_aignored (span : Meta.span) (ty : ty) (v : tvalue option) : tavalue =
   [%sanity_check] span (ty_is_rty ty);
   { value = AIgnored v; ty }
 
-let mk_eignored (ev : (env * tvalue) option) ty : tevalue =
+let mk_eignored_ty (ev : (env * tvalue) option) ty : tevalue =
   { value = EIgnored ev; ty }
 
-let mk_epat_ignored (ty : ty) : tepat = { pat = PIgnored; ty }
+let mk_eignored ev ty = mk_eignored_ty ev (TCharon ty)
+let mk_epat_ignored ty : tepat = { pat = PIgnored; ty }
 
 let mk_evalue (env : env) (ty : ty) (v : tvalue) : tevalue =
-  { value = EValue (env, v); ty }
+  { value = EValue (env, v); ty = TCharon ty }
 
 let value_as_symbolic (span : Meta.span) (v : value) : symbolic_value =
   match v with
@@ -52,16 +53,14 @@ let tvalue_as_symbolic (span : Meta.span) (v : tvalue) : symbolic_value =
 
 let mk_etuple ~(borrow_proj : bool) (vl : tevalue list) : tevalue =
   let tys = List.map (fun (v : tevalue) -> v.ty) vl in
-  let generics = mk_generic_args_from_types tys in
   {
     value = EAdt { borrow_proj; variant_id = None; fields = vl };
-    ty = TAdt { id = TBuiltin TTuple; generics };
+    ty = Tuple tys;
   }
 
 let mk_epat_tuple (vl : tepat list) : tepat =
   let tys = List.map (fun (v : tepat) -> v.ty) vl in
-  let generics = mk_generic_args_from_types tys in
-  { pat = PAdt (None, vl); ty = TAdt { id = TBuiltin TTuple; generics } }
+  { pat = PAdt (None, vl); ty = Tuple tys }
 
 let mk_simpl_etuple ~(borrow_proj : bool) (vl : tevalue list) : tevalue =
   match vl with
@@ -152,7 +151,7 @@ let mk_eproj_borrows (pm : proj_marker) (sv_id : symbolic_value_id)
   {
     value =
       ESymbolic (pm, EProjBorrows { proj = { sv_id; proj_ty }; loans = [] });
-    ty = proj_ty;
+    ty = TCharon proj_ty;
   }
 
 let mk_eproj_loans (pm : proj_marker) (sv_id : symbolic_value_id) (proj_ty : ty)
@@ -163,7 +162,7 @@ let mk_eproj_loans (pm : proj_marker) (sv_id : symbolic_value_id) (proj_ty : ty)
         ( pm,
           EProjLoans { proj = { sv_id; proj_ty }; consumed = []; borrows = [] }
         );
-    ty = proj_ty;
+    ty = TCharon proj_ty;
   }
 
 let proj_markers_intersect (pm0 : proj_marker) (pm1 : proj_marker) : bool =
@@ -628,7 +627,7 @@ let close_binder (span : Meta.span) (pat : tepat) (e : tevalue) :
 
 let mk_fresh_abs_fvar (ty : ty) : tevalue =
   let id = fresh_abs_fvar_id () in
-  { value = EFVar id; ty }
+  { value = EFVar id; ty = TCharon ty }
 
 let mk_epat_from_fvar (fv : tevalue) : tepat =
   match fv.value with

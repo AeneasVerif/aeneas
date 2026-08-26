@@ -13,6 +13,8 @@ open Contexts
 open Errors
 module SA = SymbolicAst
 
+type ty = interp_ty
+
 (** The local logger *)
 let log = Logging.interp_log
 
@@ -334,7 +336,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx)
       in
       (* Note that we don't really care about the type of the input *)
       let input =
-        { value = EApp (EInputAbs rg_id, [ inputs ]); ty = mk_unit_ty }
+        { value = EApp (EInputAbs rg_id, [ inputs ]); ty = TCharon mk_unit_ty }
       in
       { output = None; input = Some input }
     in
@@ -429,7 +431,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
             ret_value ret_rty
         in
         let input = EApp (EOutputAbs rg_id, []) in
-        let input = { value = input; ty = ret_rty } in
+        let input = { value = input; ty = TCharon ret_rty } in
         { output = Some output; input = Some input }
       in
       ([ avalue ], Some cont)

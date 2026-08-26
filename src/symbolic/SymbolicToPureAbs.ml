@@ -52,7 +52,9 @@ and adt_avalue_to_consumed_ty_aux ~(filter : bool) (ctx : bs_ctx)
       (compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
          abs_level current_level)
       (fun _ -> translate_fwd_ty (Some ctx.span) ctx.decls_ctx av.ty)
-      mk_simpl_tuple_ty ~filter ctx av av.ty adt_v.fields
+      mk_simpl_tuple_ty ~filter ctx av
+      (translated_adt_kind_of_charon_ty av.ty)
+      adt_v.fields
   in
   Option.map snd out
 
@@ -148,7 +150,9 @@ and adt_avalue_to_given_back_ty_aux ~(filter : bool)
       (compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
          abs_level current_level)
       (fun _ -> translate_fwd_ty (Some ctx.span) ctx.decls_ctx av.ty)
-      mk_simpl_tuple_ty ~filter ctx av av.ty adt_v.fields
+      mk_simpl_tuple_ty ~filter ctx av
+      (translated_adt_kind_of_charon_ty av.ty)
+      adt_v.fields
   in
   Option.map snd out
 
@@ -262,7 +266,8 @@ let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
     | _ -> false
   in
   let ty_has_mut_region =
-    TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos keep_region
+    V.interp_ty_exists
+      (TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos keep_region)
   in
   let visitor =
     object (self)
@@ -283,7 +288,7 @@ let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
           else set_has_mut_loans level;
         super#visit_adt_evalue (level, ty) av
 
-      method! visit_ELoan (level, ty) lc =
+      method! visit_ELoan (level, ty) source_ty lc =
         set_has_loans level;
         begin
           match lc with
@@ -291,9 +296,9 @@ let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
           | EMutLoan _ | EEndedMutLoan _ -> set_has_mut_loans level
         end;
         (* Continue exploring as a sanity check: we want to make sure we don't find borrows *)
-        super#visit_ELoan (level, ty) lc
+        super#visit_ELoan (level, ty) source_ty lc
 
-      method! visit_EBorrow (level, ty) bc =
+      method! visit_EBorrow (level, ty) source_ty bc =
         set_has_borrows level;
         begin
           match bc with
@@ -301,7 +306,7 @@ let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
           | EMutBorrow _ | EEndedMutBorrow _ -> set_has_mut_borrows level
         end;
         (* Continue exploring as a sanity check: we want to make sure we don't find loans *)
-        super#visit_EBorrow (level, ty) bc
+        super#visit_EBorrow (level, ty) source_ty bc
 
       method! visit_EFVar (level, ty) _ =
         if ty_has_mut_region ty then (
@@ -347,12 +352,12 @@ let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
             (* Continue exploring (same reasons as above) *)
             super#visit_ESymbolic (level, ty) pm eproj
 
-      method! visit_EMutBorrowInput (level, ty) x =
-        let r, _, _ = TypesUtils.ty_get_ref ty in
+      method! visit_EMutBorrowInput (level, _) source_ty x =
+        let r, _, _ = TypesUtils.ty_get_ref source_ty in
         if keep_region r then (
           set_has_loans level;
           set_has_mut_loans level);
-        self#visit_tevalue (level, ty) x
+        self#visit_tevalue (level, x.ty) x
     end
   in
   visitor#visit_tevalue (current_level, ev.ty) ev;
@@ -364,16 +369,16 @@ let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
 
 let abs_fvar_id_to_tpat (ctx : bs_ctx)
     (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref) (rids : T.RegionId.Set.t)
-    ~(filter : bool) (fid : V.abs_fvar_id) (ty : T.ty) : bs_ctx * tpat option =
+    ~(filter : bool) (fid : V.abs_fvar_id) (ty : V.interp_ty) :
+    bs_ctx * tpat option =
   let type_infos = ctx.type_ctx.type_infos in
   let keep_region (r : T.region) =
     match r with
     | T.RVar (Free rid) -> T.RegionId.Set.mem rid rids
     | _ -> false
   in
-  if TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos keep_region ty
-  then (
-    let ctx, fvar = fresh_var_llbc_ty None ty ctx in
+  if interp_ty_has_mut_borrow_for_region_in_pred type_infos keep_region ty then (
+    let ctx, fvar = fresh_var None (ctx_translate_interp_ty ctx ty) ctx in
     fvar_to_texpr :=
       V.AbsFVarId.Map.add fid (mk_texpr_from_fvar fvar) !fvar_to_texpr;
     (ctx, Some (mk_tpat_from_fvar None fvar)))
@@ -384,7 +389,7 @@ let abs_fvar_id_to_tpat (ctx : bs_ctx)
       end
       else begin
         fvar_to_texpr := V.AbsFVarId.Map.add fid mk_unit_texpr !fvar_to_texpr;
-        let ty = ctx_translate_fwd_ty ctx ty in
+        let ty = ctx_translate_interp_ty ctx ty in
         Some (mk_ignored_pat ty)
       end
     in
@@ -441,8 +446,10 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
     symbolic := NormSymbProjMap.add { sv_id; norm_proj_ty } e !symbolic;
     (ctx, pat)
   in
-  let add_concrete ctx (bid : V.BorrowId.id) (ty : T.ty) : bs_ctx * tpat =
-    let ctx, e, pat = fresh_fvar ctx ty in
+  let add_concrete ctx (bid : V.BorrowId.id) (ty : V.interp_ty) : bs_ctx * tpat
+      =
+    let ctx, fvar = fresh_var None (ctx_translate_interp_ty ctx ty) ctx in
+    let e, pat = (mk_texpr_from_fvar fvar, mk_tpat_from_fvar None fvar) in
     concrete := V.BorrowId.Map.add bid e !concrete;
     (ctx, pat)
   in
@@ -459,7 +466,7 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
     | V.EMutBorrowInput _ -> [%internal_error] span
     | V.EFVar afid ->
         abs_fvar_id_to_tpat ctx fvar_to_texpr rids ~filter afid output.ty
-    | V.EBorrow bc -> (
+    | V.EBorrow (_, bc) -> (
         match bc with
         | V.EIgnoredMutBorrow _
         | V.EEndedMutBorrow _
@@ -482,16 +489,16 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
               (* Case disjunction depending on whether we actually need to give back
                  something or not *)
               if
-                TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
+                interp_ty_has_mut_borrow_for_region_in_pred type_infos
                   keep_region output.ty
               then
-                let ctx, e = add_symbolic ctx proj.sv_id output.ty in
+                let ctx, e = add_symbolic ctx proj.sv_id proj.proj_ty in
                 (ctx, Some e)
               else
                 let pat =
                   if filter then None
                   else
-                    let ty = ctx_translate_fwd_ty ctx output.ty in
+                    let ty = ctx_translate_interp_ty ctx output.ty in
                     Some (mk_ignored_pat ty)
                 in
                 (ctx, pat)
@@ -509,11 +516,11 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
             (compute_tevalue_proj_kind ctx.span ctx.type_ctx.type_infos rids
                abs_level current_level)
             (fun fields ->
-              let ty =
-                translate_fwd_ty (Some ctx.span) ctx.decls_ctx output.ty
-              in
+              let ty = ctx_translate_interp_ty ctx output.ty in
               mk_adt_pat ty variant_id fields)
-            mk_simpl_tuple_pat ~filter ctx output output.ty fields
+            mk_simpl_tuple_pat ~filter ctx output
+            (translated_adt_kind_of_interp_ty output.ty)
+            fields
         in
         (ctx, Option.map snd out)
       end
@@ -522,11 +529,11 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
         if
           filter
           && not
-               (TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
+               (interp_ty_has_mut_borrow_for_region_in_pred type_infos
                   keep_region ty)
         then (ctx, None)
         else
-          let ty = ctx_translate_fwd_ty ctx ty in
+          let ty = ctx_translate_interp_ty ctx ty in
           (ctx, Some (mk_ignored_pat ty))
   in
   let ctx, pat = to_pat ~filter:true 0 ctx output in
@@ -560,8 +567,8 @@ let tepat_to_tpat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
         let project_borrows = true in
         let compute_proj_kind (pat : V.tepat) : proj_kind =
           if
-            TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
-              keep_region pat.ty
+            interp_ty_has_mut_borrow_for_region_in_pred type_infos keep_region
+              pat.ty
           then BorrowProj BMut
           else BorrowProj BShared
         in
@@ -573,9 +580,11 @@ let tepat_to_tpat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
               (ctx, Option.map (fun x -> ((), x)) pat))
             compute_proj_kind
             (fun fields ->
-              let ty = translate_fwd_ty (Some ctx.span) ctx.decls_ctx pat.ty in
+              let ty = ctx_translate_interp_ty ctx pat.ty in
               mk_adt_pat ty variant_id fields)
-            mk_simpl_tuple_pat ~filter ctx pat pat.ty fields
+            mk_simpl_tuple_pat ~filter ctx pat
+            (translated_adt_kind_of_interp_ty pat.ty)
+            fields
         in
         let out = Option.map snd out in
         (ctx, out)
@@ -585,11 +594,11 @@ let tepat_to_tpat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
         if
           filter
           && not
-               (TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
+               (interp_ty_has_mut_borrow_for_region_in_pred type_infos
                   keep_region ty)
         then (ctx, None)
         else
-          let ty = ctx_translate_fwd_ty ctx ty in
+          let ty = ctx_translate_interp_ty ctx ty in
           (ctx, Some (mk_ignored_pat ty))
   in
   let ctx, pat = to_pat ~filter:true ctx pat in
@@ -635,14 +644,14 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
               { input with value = ELet (rids', pat, bound, next) }];
         [%ldebug
           "- pat: " ^ tepat_to_string ctx pat ^ "\n- pat.ty: "
-          ^ InterpUtils.ty_to_string ectx pat.ty];
+          ^ InterpUtils.interp_ty_to_string ectx pat.ty];
         (* Translate *)
         let ctx, bound_can_fail, bound = to_texpr ~filter rids' ctx bound in
         let llbc_pat = pat in
         let ctx, pat = tepat_to_tpat ctx fvar_to_texpr rids' pat in
         [%ldebug
           "Let-binding:\n- pat: " ^ tpat_to_string ctx pat ^ "\n- LLBC pat.ty: "
-          ^ InterpUtils.ty_to_string ectx llbc_pat.ty
+          ^ InterpUtils.interp_ty_to_string ectx llbc_pat.ty
           ^ "\n- bound: "
           ^ Print.option_to_string (texpr_to_string ctx) bound];
         let ctx, next_can_fail, next = to_texpr ~filter rids ctx next in
@@ -752,12 +761,12 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
             (compute_tevalue_proj_kind ctx.span ctx.type_ctx.type_infos rids
                abs_level current_level)
             (fun fields ->
-              let ty =
-                translate_fwd_ty (Some ctx.span) ctx.decls_ctx input.ty
-              in
+              let ty = ctx_translate_interp_ty ctx input.ty in
               mk_adt_texpr span ty variant_id fields)
             (mk_simpl_tuple_texpr span)
-            ~filter ctx input input.ty fields
+            ~filter ctx input
+            (translated_adt_kind_of_interp_ty input.ty)
+            fields
         in
         match out with
         | None -> (ctx, false, None)
@@ -765,7 +774,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
             [%sanity_check] span (List.for_all (fun x -> not x) can_fail);
             (ctx, false, Some x)
       end
-    | V.ELoan lc -> (
+    | V.ELoan (_, lc) -> (
         [%ldebug "loan"];
         match lc with
         | V.EMutLoan (pm, lid, child) ->
@@ -806,8 +815,8 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
 
                We're using the projection type as the type of the symbolic value -
                it doesn't really matter. *)
-            let msv : V.symbolic_value = { sv_id = msv; sv_ty = input.ty } in
-            let out = Some (symbolic_value_to_texpr ctx msv) in
+            let ty = ctx_translate_interp_ty ctx input.ty in
+            let out = Some (symbolic_value_id_to_texpr ctx msv ty) in
             (ctx, false, out)
         | V.EEndedProjLoans
             { proj = _; consumed = [ (mnv, child_aproj) ]; borrows = [] } ->
@@ -821,16 +830,16 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
             *)
             [%sanity_check] ctx.span
               (not
-                 (TypesUtils.ty_has_nested_borrows (Some ctx.span)
-                    ctx.type_ctx.type_infos input.ty));
+                 (V.interp_ty_exists
+                    (TypesUtils.ty_has_nested_borrows (Some ctx.span)
+                       ctx.type_ctx.type_infos)
+                    input.ty));
             (* The symbolic value was updated.
 
                We're using the projection type as the type of the symbolic value -
                it doesn't really matter. *)
-            let mnv : V.symbolic_value =
-              { sv_id = mnv.sv_id; sv_ty = input.ty }
-            in
-            let out = Some (symbolic_value_to_texpr ctx mnv) in
+            let ty = ctx_translate_interp_ty ctx input.ty in
+            let out = Some (symbolic_value_id_to_texpr ctx mnv.sv_id ty) in
             (ctx, false, out)
         | V.EEndedProjLoans _ ->
             (* The symbolic value was updated, and the given back values come from several
@@ -855,8 +864,8 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
     | V.EBottom ->
         [%ldebug "bottom"];
         [%internal_error] span
-    | V.EMutBorrowInput inner ->
-        let r, _, _ = TypesUtils.ty_as_ref input.ty in
+    | V.EMutBorrowInput (source_ty, inner) ->
+        let r, _, _ = TypesUtils.ty_as_ref source_ty in
         let keep_region (r : T.region) =
           match r with
           | T.RVar (Free rid) -> T.RegionId.Set.mem rid rids
@@ -1120,9 +1129,9 @@ let rec tevalue_to_given_back_aux ~(filter : bool)
     | ELoan _ ->
         (* The evalue should have been generated by a borrow projector: this case is unreachable *)
         [%craise] ctx.span "Unreachable"
-    | EBorrow bc ->
+    | EBorrow (_, bc) ->
         eborrow_content_to_given_back_aux ~filter abs_level current_level mp bc
-          ev.ty ctx
+          ctx
     | ESymbolic (pm, eproj) ->
         [%sanity_check] ctx.span (pm = PNone);
         eproj_to_given_back_aux abs_level current_level mp eproj ev.ty ctx
@@ -1130,7 +1139,7 @@ let rec tevalue_to_given_back_aux ~(filter : bool)
         (* If we do not filter, we have to create an ignored pattern *)
         if filter then (ctx, None)
         else
-          let ty = translate_fwd_ty (Some ctx.span) ctx.decls_ctx ev.ty in
+          let ty = ctx_translate_interp_ty ctx ev.ty in
           (ctx, Some (mk_ignored_pat ty))
     | EBottom -> (ctx, None)
     | ELet _
@@ -1167,15 +1176,17 @@ and adt_evalue_to_given_back_aux ~(filter : bool)
       (compute_tevalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
          abs_level current_level)
       (fun fields ->
-        let ty = translate_fwd_ty (Some ctx.span) ctx.decls_ctx av.ty in
+        let ty = ctx_translate_interp_ty ctx av.ty in
         mk_adt_pat ty adt_v.variant_id fields)
-      mk_simpl_tuple_pat ~filter ctx av av.ty adt_v.fields
+      mk_simpl_tuple_pat ~filter ctx av
+      (translated_adt_kind_of_interp_ty av.ty)
+      adt_v.fields
   in
   (ctx, Option.map snd out)
 
 and eborrow_content_to_given_back_aux ~(filter : bool) (_abs_level : abs_level)
     (_current_level : abs_level) (mp : mplace option) (bc : V.eborrow_content)
-    (_ty : T.ty) (ctx : bs_ctx) : bs_ctx * tpat option =
+    (ctx : bs_ctx) : bs_ctx * tpat option =
   let _ = filter in
   match bc with
   | V.EMutBorrow _ | EIgnoredMutBorrow _ ->
@@ -1207,7 +1218,7 @@ and eborrow_content_to_given_back_aux ~(filter : bool) (_abs_level : abs_level)
 
 and eproj_to_given_back_aux (_abs_level : abs_level)
     (_current_level : abs_level) (mp : mplace option) (eproj : V.eproj)
-    (ty : T.ty) (ctx : bs_ctx) : bs_ctx * tpat option =
+    (ty : V.interp_ty) (ctx : bs_ctx) : bs_ctx * tpat option =
   match eproj with
   | V.EEndedProjLoans _ -> [%craise] ctx.span "Unreachable"
   | EEndedProjBorrows { mvalues = mv; loans } ->
@@ -1219,12 +1230,12 @@ and eproj_to_given_back_aux (_abs_level : abs_level)
       let ctx =
         (* Using the projection type as the type of the symbolic value - it
            doesn't really matter *)
-        let sv : V.symbolic_value = { sv_id = mv.consumed; sv_ty = ty } in
+        let ty = ctx_translate_interp_ty ctx ty in
         {
           ctx with
           var_id_to_default =
             FVarId.Map.add var.id
-              (symbolic_value_to_texpr ctx sv)
+              (symbolic_value_id_to_texpr ctx mv.consumed ty)
               ctx.var_id_to_default;
         }
       in

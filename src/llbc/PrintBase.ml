@@ -7,6 +7,11 @@ open ValuesUtils
 open Expressions
 open LlbcAst
 
+let rec interp_ty_to_string env = function
+  | TCharon ty -> ty_to_string env ty
+  | Tuple tys ->
+      "(" ^ String.concat ", " (List.map (interp_ty_to_string env) tys) ^ ")"
+
 (** Helper to make a function which colorizes text *)
 let mk_colorize ((r, g, b) : int * int * int) : string -> string =
   (* ANSI escape sequence for 24-bit RGB foreground color *)
@@ -178,6 +183,11 @@ module Values = struct
     | _ ->
         [%craise_opt_span] span
           ("Inconsistently typed value: " ^ value_to_debug_string ())
+
+  let interp_adt_to_string span env show ty variant_id fields =
+    match ty with
+    | TCharon ty -> adt_to_string span env show ty variant_id fields
+    | Tuple _ -> "(" ^ String.concat ", " fields ^ ")"
 
   (* TODO: it may be a good idea to try to factorize this function with
    * tavalue_to_string. At some point we had done it, because [tvalue]
@@ -523,7 +533,7 @@ module Values = struct
 
       Only call this between [evalue_env_start_stack] and
       [evalue_env_push_stack]. *)
-  let evalue_env_push_var (env : evalue_env) (_ty : ty) :
+  let evalue_env_push_var (env : evalue_env) (_ty : interp_ty) :
       evalue_env * abs_bvar_id * string =
     let bvars_stack = Option.get env.bvars_stack in
     let uid = env.bvar_id_counter in
@@ -668,9 +678,15 @@ module Values = struct
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr right
         ^ ")"
     | EBVar bv ->
-        "(" ^ evalue_env_get_bvar aenv bv ^ " : " ^ ty_to_string env v.ty ^ ")"
+        "("
+        ^ evalue_env_get_bvar aenv bv
+        ^ " : "
+        ^ interp_ty_to_string env v.ty
+        ^ ")"
     | EFVar fvid ->
-        "(@" ^ AbsFVarId.to_string fvid ^ " : " ^ ty_to_string env v.ty ^ ")"
+        "(@" ^ AbsFVarId.to_string fvid ^ " : "
+        ^ interp_ty_to_string env v.ty
+        ^ ")"
     | EApp (f, args) ->
         let tevalues_to_string =
           List.map
@@ -691,34 +707,34 @@ module Values = struct
             (tevalue_to_string ~span ~with_ended env aenv indent indent_incr)
             av.fields
         in
-        adt_to_string span env
+        interp_adt_to_string span env
           (fun () -> show_tevalue v)
           v.ty av.variant_id fields
-    | EBottom -> "⊥ : " ^ ty_to_string env v.ty
-    | EBorrow bc ->
+    | EBottom -> "⊥ : " ^ interp_ty_to_string env v.ty
+    | EBorrow (_, bc) ->
         eborrow_content_to_string ~span ~with_ended env aenv indent indent_incr
           v.ty bc
-    | ELoan lc ->
+    | ELoan (_, lc) ->
         eloan_content_to_string ~span ~with_ended env aenv indent indent_incr
           v.ty lc
     | ESymbolic (pm, proj) ->
         eproj_to_string ~with_ended env proj |> add_proj_marker pm
     | EValue (_, mv) -> "@mvalue(" ^ tvalue_to_string ~span env mv ^ ")"
-    | EIgnored _ -> "(_ : " ^ ty_to_string env v.ty ^ ")"
-    | EMutBorrowInput x ->
+    | EIgnored _ -> "(_ : " ^ interp_ty_to_string env v.ty ^ ")"
+    | EMutBorrowInput (_, x) ->
         "@mut_input("
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr x
         ^ ")"
 
   and eloan_content_to_string ?(span : Meta.span option = None)
       ?(with_ended : bool = false) (env : fmt_env) (aenv : evalue_env)
-      (indent : string) (indent_incr : string) (ty : ty) (lc : eloan_content) :
-      string =
+      (indent : string) (indent_incr : string) (ty : interp_ty)
+      (lc : eloan_content) : string =
     match lc with
     | EMutLoan (pm, bid, av) ->
         "@mut_loan(" ^ BorrowId.to_string bid ^ ", "
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr av
-        ^ ") : " ^ ty_to_string env ty
+        ^ ") : " ^ interp_ty_to_string env ty
         |> add_proj_marker pm
     | EEndedMutLoan ml ->
         let consumed =
@@ -755,11 +771,12 @@ module Values = struct
     match pat.pat with
     | PBound ->
         let aenv, _, s = evalue_env_push_var aenv pat.ty in
-        (aenv, "(" ^ s ^ " : " ^ ty_to_string env pat.ty ^ ")")
+        (aenv, "(" ^ s ^ " : " ^ interp_ty_to_string env pat.ty ^ ")")
     | POpen bid ->
         ( aenv,
-          "(@" ^ AbsFVarId.to_string bid ^ " : " ^ ty_to_string env pat.ty ^ ")"
-        )
+          "(@" ^ AbsFVarId.to_string bid ^ " : "
+          ^ interp_ty_to_string env pat.ty
+          ^ ")" )
     | PAdt (variant_id, fields) ->
         let aenv, fields =
           List.fold_left_map
@@ -768,10 +785,10 @@ module Values = struct
             aenv fields
         in
         ( aenv,
-          adt_to_string span env
+          interp_adt_to_string span env
             (fun () -> show_tepat pat)
             pat.ty variant_id fields )
-    | PIgnored -> (aenv, "(_ : " ^ ty_to_string env pat.ty ^ ")")
+    | PIgnored -> (aenv, "(_ : " ^ interp_ty_to_string env pat.ty ^ ")")
 
   and tepat_to_string ?(span : Meta.span option = None) (env : fmt_env)
       (aenv : evalue_env) (indent : string) (indent_incr : string) (pat : tepat)
@@ -785,13 +802,13 @@ module Values = struct
 
   and eborrow_content_to_string ?(span : Meta.span option = None)
       ?(with_ended : bool = false) (env : fmt_env) (aenv : evalue_env)
-      (indent : string) (indent_incr : string) (ty : ty) (bc : eborrow_content)
-      : string =
+      (indent : string) (indent_incr : string) (ty : interp_ty)
+      (bc : eborrow_content) : string =
     match bc with
     | EMutBorrow (pm, bid, av) ->
         "@mb(" ^ BorrowId.to_string bid ^ ", "
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr av
-        ^ ") : " ^ ty_to_string env ty
+        ^ ") : " ^ interp_ty_to_string env ty
         |> add_proj_marker pm
     | EIgnoredMutBorrow (opt_bid, av) ->
         "@ignored_mut_borrow("

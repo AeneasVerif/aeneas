@@ -1266,6 +1266,17 @@ and get_fun_effect_info (ctx : bs_ctx) (fun_id : fn_ptr_kind)
 let ctx_translate_fwd_ty (ctx : bs_ctx) (ty : T.ty) : ty =
   translate_fwd_ty (Some ctx.span) ctx.decls_ctx ty
 
+let rec ctx_translate_interp_ty (ctx : bs_ctx) (ty : V.interp_ty) : ty =
+  match ty with
+  | V.TCharon ty -> ctx_translate_fwd_ty ctx ty
+  | V.Tuple tys ->
+      mk_simpl_tuple_ty (List.map (ctx_translate_interp_ty ctx) tys)
+
+let interp_ty_has_mut_borrow_for_region_in_pred type_infos keep_region ty =
+  V.interp_ty_exists
+    (TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos keep_region)
+    ty
+
 (** Simply calls [translate_fwd_generic_args] *)
 let ctx_translate_fwd_generic_args (ctx : bs_ctx) (generics : T.generic_args) :
     generic_args =

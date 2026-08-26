@@ -264,7 +264,7 @@ let rec apply_eproj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
   [%sanity_check] span (ty_is_rty ty && ety = v.ty);
   (* Project - if there are no regions from the abstraction in the type, return [_] *)
   if not (ty_has_regions_in_set regions ty) then
-    { value = EIgnored (Some (ctx.env, v)); ty }
+    { value = EIgnored (Some (ctx.env, v)); ty = TCharon ty }
   else
     let value : evalue =
       match (v.value, ty) with
@@ -319,7 +319,7 @@ let rec apply_eproj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
                   apply_eproj_borrows span check_symbolic_no_ended ctx regions
                     bv ref_ty
                 in
-                EBorrow (EMutBorrow (PNone, bid, bv'))
+                EBorrow (ty, EMutBorrow (PNone, bid, bv'))
             | VSharedBorrow (_, _), RShared ->
                 (* We do not need to track shared borrows *)
                 EIgnored (Some (ctx.env, v))
@@ -345,7 +345,7 @@ let rec apply_eproj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
                   else None
                 in
                 (* Return *)
-                EBorrow (EIgnoredMutBorrow (opt_bid, bv))
+                EBorrow (ty, EIgnoredMutBorrow (opt_bid, bv))
             | VSharedBorrow (_, _), RShared ->
                 (* We ignore shared borrows *)
                 EIgnored (Some (ctx.env, v))
@@ -387,7 +387,7 @@ let rec apply_eproj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
             ^ "\n- proj rty: " ^ ty_to_string ctx ty];
           [%internal_error] span
     in
-    { value; ty }
+    { value; ty = TCharon ty }
 
 let symbolic_expansion_non_borrow_to_value (span : Meta.span)
     (sv : symbolic_value) (see : symbolic_expansion) : tvalue =
@@ -521,7 +521,7 @@ let apply_eproj_loans_on_symbolic_expansion (span : Meta.span)
          * we never project over static regions) *)
         if region_in_set r regions then
           (* In the set: keep *)
-          (ELoan (EMutLoan (PNone, bid, child_av)), ref_ty)
+          (ELoan (proj_ty, EMutLoan (PNone, bid, child_av)), ref_ty)
         else
           (* Not in the set: ignore *)
           (* If the type of the referenced value contains the region, we still
@@ -529,13 +529,13 @@ let apply_eproj_loans_on_symbolic_expansion (span : Meta.span)
           let opt_bid =
             if ty_has_regions_in_set regions ref_ty then Some bid else None
           in
-          (ELoan (EIgnoredMutLoan (opt_bid, child_av)), ref_ty)
+          (ELoan (proj_ty, EIgnoredMutLoan (opt_bid, child_av)), ref_ty)
     | SeSharedRef (_, sv), TRef (_, _, RShared) ->
         (* We ignore shared borrows/loans in the abstraction expressions *)
         (EIgnored (Some (ctx.env, mk_tvalue_from_symbolic_value sv)), proj_ty)
     | _ -> [%craise] span "Unreachable"
   in
-  { value; ty }
+  { value; ty = TCharon ty }
 
 (** [ty] shouldn't have erased regions *)
 let apply_proj_borrows_on_input_value (span : Meta.span) (ctx : eval_ctx)

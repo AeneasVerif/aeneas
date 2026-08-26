@@ -346,7 +346,7 @@ let reborrow_symbolic_borrows (span : Meta.span) (loop_id : LoopId.id option)
                 EProjBorrows
                   { proj = { sv_id = sv.sv_id; proj_ty = rty }; loans = [] }
               in
-              { value = ESymbolic (PNone, value); ty = rty }
+              { value = ESymbolic (PNone, value); ty = TCharon rty }
             in
 
             (* Create the symbolic loan *)
@@ -359,7 +359,7 @@ let reborrow_symbolic_borrows (span : Meta.span) (loop_id : LoopId.id option)
                 }
             in
             let loan : tevalue =
-              { value = ESymbolic (PNone, value); ty = rty }
+              { value = ESymbolic (PNone, value); ty = TCharon rty }
             in
             Some { output = Some borrow; input = Some loan }
           else

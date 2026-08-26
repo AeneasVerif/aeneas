@@ -89,13 +89,13 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
   (* We only call this on values inside mutable borrows *)
   let rec to_inputs (rid : RegionId.id) (v : tvalue) : tavalue list * tevalue =
     match v.value with
-    | VLiteral _ -> ([], { value = EValue (ctx.env, v); ty = v.ty })
+    | VLiteral _ -> ([], { value = EValue (ctx.env, v); ty = TCharon v.ty })
     | VAdt { variant_id; fields } ->
         [%cassert] span (ty_no_regions v.ty)
           "Nested borrows are not supported yet";
         let avll, fields = List.split (List.map (to_inputs rid) fields) in
         let value = EAdt { borrow_proj = false; variant_id; fields } in
-        let value : tevalue = { value; ty = v.ty } in
+        let value : tevalue = { value; ty = TCharon v.ty } in
         (List.flatten avll, value)
     | VBottom ->
         [%cassert] span (ty_no_regions v.ty)
@@ -108,7 +108,9 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             [%cassert] span (ty_no_regions v.ty)
               "Nested borrows are not supported yet";
             let avl, _ = decompose_shared_value span PNone rid v in
-            let ev : tevalue = { value = EValue (ctx.env, v); ty = v.ty } in
+            let ev : tevalue =
+              { value = EValue (ctx.env, v); ty = TCharon v.ty }
+            in
             (avl, ev)
         | VMutLoan bid ->
             (* Push the avalue *)
@@ -126,9 +128,9 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             (* Create the input expression *)
             let input : tevalue =
               let value =
-                ELoan (EMutLoan (PNone, bid, mk_eignored None inner_ty))
+                ELoan (ty, EMutLoan (PNone, bid, mk_eignored None inner_ty))
               in
-              { value; ty }
+              { value; ty = TCharon ty }
             in
             (* *)
             ([ av ], input))
@@ -137,7 +139,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
            can't be an input value and we're in a case of nested borrows) *)
         [%cassert] span (ty_no_regions v.ty)
           "Nested borrows are not supported yet";
-        ([], { value = EValue (ctx.env, v); ty = v.ty })
+        ([], { value = EValue (ctx.env, v); ty = TCharon v.ty })
   in
 
   (* Convert a value to abstractions *)
@@ -175,8 +177,8 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             (* Create the output expression *)
             let output : tevalue =
               let ignored = mk_eignored None ref_ty in
-              let value = EBorrow (EMutBorrow (PNone, bid, ignored)) in
-              { value; ty }
+              let value = EBorrow (ty, EMutBorrow (PNone, bid, ignored)) in
+              { value; ty = TCharon ty }
             in
             (* Recursively explore the expression to look for shared loans
                and create the input expression *)
@@ -198,7 +200,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
                 input,
                 mk_etuple ~borrow_proj:true [] )
           in
-          { value; ty = mk_unit_ty }
+          { value; ty = TCharon mk_unit_ty }
         in
         (* *)
         let output = mk_eignored None mk_unit_ty in
@@ -225,8 +227,8 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
                   EProjBorrows
                     { proj = { sv_id = sv.sv_id; proj_ty = ty }; loans = [] } )
             in
-            let output = { value = output; ty } in
-            let input = { value = EValue (ctx.env, v); ty } in
+            let output = { value = output; ty = TCharon ty } in
+            let input = { value = EValue (ctx.env, v); ty = TCharon ty } in
             (* *)
             push_abs rid [ nv ] (Some output) (Some input))
           regions
@@ -282,7 +284,7 @@ let convert_value_to_output_avalues (span : Meta.span) (ctx : eval_ctx)
         ( List.flatten avalues,
           {
             value = EAdt { borrow_proj = true; variant_id; fields = outputs };
-            ty = proj_ty;
+            ty = TCharon proj_ty;
           } )
     | VBorrow bc, TRef (rid, ref_ty, kind) ->
         [%cassert] span (ty_no_regions ref_ty)
@@ -311,8 +313,8 @@ let convert_value_to_output_avalues (span : Meta.span) (ctx : eval_ctx)
               (* Create the output expression *)
               let output : tevalue =
                 let ignored = mk_eignored (Some (ctx.env, v)) ref_ty in
-                let value = EBorrow (EMutBorrow (pm, bid, ignored)) in
-                { value; ty = proj_ty }
+                let value = EBorrow (proj_ty, EMutBorrow (pm, bid, ignored)) in
+                { value; ty = TCharon proj_ty }
               in
               (* Check the borrowed value *)
               check_inputs bv ref_ty;
@@ -345,7 +347,7 @@ let convert_value_to_output_avalues (span : Meta.span) (ctx : eval_ctx)
                 EProjBorrows
                   { proj = { sv_id = sv.sv_id; proj_ty }; loans = [] } )
           in
-          let output = { value = output; ty = proj_ty } in
+          let output = { value = output; ty = TCharon proj_ty } in
           (* *)
           ([ nv ], output)
         else ([], mk_eignored (Some (ctx.env, v)) proj_ty)
@@ -370,7 +372,7 @@ let convert_value_to_input_avalues (span : Meta.span) (ctx : eval_ctx)
         ( List.flatten avalues,
           {
             value = EAdt { borrow_proj = false; variant_id; fields = outputs };
-            ty = v.ty;
+            ty = TCharon v.ty;
           } )
     | VBorrow _ -> [%craise] span "Not implemented yet"
     | VLoan lc -> (
@@ -394,9 +396,11 @@ let convert_value_to_input_avalues (span : Meta.span) (ctx : eval_ctx)
             let input : tevalue =
               let value =
                 ELoan
-                  (EMutLoan (pm, bid, mk_eignored (Some (ctx.env, v)) inner_ty))
+                  ( ty,
+                    EMutLoan (pm, bid, mk_eignored (Some (ctx.env, v)) inner_ty)
+                  )
               in
-              { value; ty }
+              { value; ty = TCharon ty }
             in
             (* *)
             ([ av ], input))
@@ -433,7 +437,7 @@ let convert_value_to_input_avalues (span : Meta.span) (ctx : eval_ctx)
                     borrows = [];
                   } )
           in
-          let output = { value = output; ty = proj_ty } in
+          let output = { value = output; ty = TCharon proj_ty } in
           (* *)
           ([ nv ], output)
   in
@@ -1165,7 +1169,7 @@ let bound_inputs_outputs_update_input_loan (span : Meta.span)
         | Some (fid, pml, ty') ->
             (fid, BorrowId.Map.add bid (fid, pm :: pml, ty') out.input_loans)
       in
-      let v : tevalue = { value = EFVar fid; ty } in
+      let v : tevalue = { value = EFVar fid; ty = TCharon ty } in
       let out =
         {
           out with
@@ -1183,19 +1187,22 @@ let bound_inputs_outputs_update_input_loan (span : Meta.span)
       in
       let bound, value =
         match (pm, bound) with
-        | PLeft, [ (PLeft, fvid, ty) ] -> ([], { value = EFVar fvid; ty })
-        | PRight, [ (PRight, fvid, ty) ] -> ([], { value = EFVar fvid; ty })
+        | PLeft, [ (PLeft, fvid, ty) ] ->
+            ([], { value = EFVar fvid; ty = TCharon ty })
+        | PRight, [ (PRight, fvid, ty) ] ->
+            ([], { value = EFVar fvid; ty = TCharon ty })
         | PLeft, [ (PNone, fvid, ty) ] ->
-            ([ (PRight, fvid, ty) ], { value = EFVar fvid; ty })
+            ([ (PRight, fvid, ty) ], { value = EFVar fvid; ty = TCharon ty })
         | PRight, [ (PNone, fvid, ty) ] ->
-            ([ (PLeft, fvid, ty) ], { value = EFVar fvid; ty })
-        | PNone, [ (PNone, fvid, ty) ] -> ([], { value = EFVar fvid; ty })
+            ([ (PLeft, fvid, ty) ], { value = EFVar fvid; ty = TCharon ty })
+        | PNone, [ (PNone, fvid, ty) ] ->
+            ([], { value = EFVar fvid; ty = TCharon ty })
         | ( PNone,
             ( [ (PLeft, fvidl, tyl); (PRight, fvidr, tyr) ]
             | [ (PRight, fvidr, tyr); (PLeft, fvidl, tyl) ] ) ) ->
-            let lv : tevalue = { value = EFVar fvidl; ty = tyl } in
-            let rv : tevalue = { value = EFVar fvidr; ty = tyr } in
-            ([], { value = EJoinMarkers (lv, rv); ty = tyl })
+            let lv : tevalue = { value = EFVar fvidl; ty = TCharon tyl } in
+            let rv : tevalue = { value = EFVar fvidr; ty = TCharon tyr } in
+            ([], { value = EJoinMarkers (lv, rv); ty = TCharon tyl })
         | _ ->
             [%ldebug
               "- pm: " ^ show_proj_marker pm ^ "\n- bound:\n"
@@ -1252,7 +1259,7 @@ let bound_inputs_outputs_update_input_symbolic (span : Meta.span)
                 (fid, pm :: pml, proj_ty', ty')
                 out.input_symbolic )
       in
-      let v : tevalue = { value = EFVar fid; ty } in
+      let v : tevalue = { value = EFVar fid; ty = TCharon ty } in
       let out =
         {
           out with
@@ -1276,28 +1283,30 @@ let bound_inputs_outputs_update_input_symbolic (span : Meta.span)
         match (pm, bound) with
         | PLeft, [ (PLeft, proj_ty', fvid, ty) ] ->
             [%cassert] span (proj_ty' = proj_ty) "Unimplemented";
-            ([], { value = EFVar fvid; ty })
+            ([], { value = EFVar fvid; ty = TCharon ty })
         | PLeft, [ (PNone, proj_ty', fvid, ty) ] ->
             [%cassert] span (proj_ty' = proj_ty) "Unimplemented";
-            ([ (PRight, proj_ty', fvid, ty) ], { value = EFVar fvid; ty })
+            ( [ (PRight, proj_ty', fvid, ty) ],
+              { value = EFVar fvid; ty = TCharon ty } )
         | PRight, [ (PRight, proj_ty', fvid, ty) ] ->
             [%cassert] span (proj_ty' = proj_ty) "Unimplemented";
-            ([], { value = EFVar fvid; ty })
+            ([], { value = EFVar fvid; ty = TCharon ty })
         | PRight, [ (PNone, proj_ty', fvid, ty) ] ->
             [%cassert] span (proj_ty' = proj_ty) "Unimplemented";
-            ([ (PLeft, proj_ty', fvid, ty) ], { value = EFVar fvid; ty })
+            ( [ (PLeft, proj_ty', fvid, ty) ],
+              { value = EFVar fvid; ty = TCharon ty } )
         | PNone, [ (PNone, proj_ty', fvid, ty') ] ->
             [%cassert] span (proj_ty' = proj_ty) "Unimplemented";
-            ([], { value = EFVar fvid; ty = ty' })
+            ([], { value = EFVar fvid; ty = TCharon ty' })
         | ( PNone,
             ( [ (PLeft, proj_tyl, fvidl, tyl); (PRight, proj_tyr, fvidr, tyr) ]
             | [ (PRight, proj_tyr, fvidr, tyr); (PLeft, proj_tyl, fvidl, tyl) ]
               ) ) ->
             [%cassert] span (proj_tyl = proj_ty) "Unimplemented";
             [%cassert] span (proj_tyr = proj_ty) "Unimplemented";
-            let lv : tevalue = { value = EFVar fvidl; ty = tyl } in
-            let rv : tevalue = { value = EFVar fvidr; ty = tyr } in
-            ([], { value = EJoinMarkers (lv, rv); ty = tyl })
+            let lv : tevalue = { value = EFVar fvidl; ty = TCharon tyl } in
+            let rv : tevalue = { value = EFVar fvidr; ty = TCharon tyr } in
+            ([], { value = EJoinMarkers (lv, rv); ty = TCharon tyl })
         | _ -> [%internal_error] span
       in
       let out =
@@ -1362,14 +1371,14 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
               };
           ty = input.ty;
         }
-    | ELoan loan ->
+    | ELoan (source_ty, loan) ->
         (* Check if this loan was previously bound *)
         begin
           match loan with
           | EMutLoan (pm, bid, child) ->
               [%cassert] span (is_eignored child.value) "Unimplemented";
               let bound', e =
-                bound_inputs_outputs_update_input_loan span bid input.ty pm
+                bound_inputs_outputs_update_input_loan span bid source_ty pm
                   !bound
               in
               bound := bound';
@@ -1412,8 +1421,11 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
       end
     | EBorrow _ ->
         [%craise] span "Nested borrows are not supported yet in this case"
-    | EMutBorrowInput x ->
-        { input with value = EMutBorrowInput (update_input regions x) }
+    | EMutBorrowInput (source_ty, x) ->
+        {
+          input with
+          value = EMutBorrowInput (source_ty, update_input regions x);
+        }
     | EValue _ | EIgnored _ -> input
   in
   let rec bind_output (regions : RegionId.Set.t) (output : tevalue) : tepat =
@@ -1432,7 +1444,7 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
     | ELoan _ ->
         (* We shouldn't reach a loan which is not itself inside a borrow *)
         [%craise] span "Unexpected"
-    | EBorrow borrow ->
+    | EBorrow (source_ty, borrow) ->
         (* Two cases depending on whether we are inside a loan or not *)
         begin
           match borrow with
@@ -1443,7 +1455,7 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
               let pat : tepat = { pat = POpen fid; ty = output.ty } in
               (* We need to register the binding *)
               bound :=
-                bound_inputs_outputs_add_borrow span bid pm fid output.ty !bound;
+                bound_inputs_outputs_add_borrow span bid pm fid source_ty !bound;
               (* *)
               pat
           | EEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
@@ -1456,7 +1468,10 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
               if is_eignored child.value && is_eignored given_back.value then
                 { pat = PIgnored; ty = output.ty }
               else if
-                not (ty_has_mut_borrows ctx.type_ctx.type_infos given_back.ty)
+                not
+                  (interp_ty_exists
+                     (ty_has_mut_borrows ctx.type_ctx.type_infos)
+                     given_back.ty)
               then bind_output regions child
               else [%craise] span "Unimplemented"
           | EIgnoredMutBorrow _ -> [%craise] span "Unimplemented"
@@ -1535,12 +1550,12 @@ let project_output_at_level span (level : int) (v : tevalue) : tevalue =
     | EAdt { borrow_proj; variant_id; fields } ->
         let fields = List.map (project level) fields in
         { v with value = EAdt { borrow_proj; variant_id; fields } }
-    | ELoan lc -> (
+    | ELoan (source_ty, lc) -> (
         match lc with
         | EMutLoan (pm, lid, child) ->
             let child = project level child in
             if level = 0 then
-              { v with value = ELoan (EMutLoan (pm, lid, child)) }
+              { v with value = ELoan (source_ty, EMutLoan (pm, lid, child)) }
             else child
         | EEndedMutLoan { child; given_back; given_back_meta = _ } ->
             if level = 0 then project level child
@@ -1549,18 +1564,24 @@ let project_output_at_level span (level : int) (v : tevalue) : tevalue =
         | EEndedIgnoredMutLoan { child; given_back; given_back_meta = _ } ->
             if level = 0 then project level child
             else project (level - 1) given_back)
-    | EBorrow bc -> (
+    | EBorrow (source_ty, bc) -> (
         match bc with
         | EMutBorrow (pm, bid, child) ->
             let child = project level child in
             if level = 0 then
-              { v with value = EBorrow (EMutBorrow (pm, bid, child)) }
+              {
+                v with
+                value = EBorrow (source_ty, EMutBorrow (pm, bid, child));
+              }
             else child
         | EIgnoredMutBorrow _ -> [%craise] span "Unimplemented"
         | EEndedMutBorrow (mv, child) ->
             let child = project level child in
             if level = 0 then
-              { v with value = EBorrow (EEndedMutBorrow (mv, child)) }
+              {
+                v with
+                value = EBorrow (source_ty, EEndedMutBorrow (mv, child));
+              }
             else child
         | EEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
             if level = 0 then project level child
@@ -1715,24 +1736,31 @@ let merge_abs_conts_generate_output (span : Meta.span) (_ctx : eval_ctx)
                   let output : tevalue =
                     {
                       value =
-                        EBorrow (EMutBorrow (pm, bid, mk_eignored None ty));
-                      ty;
+                        EBorrow (ty, EMutBorrow (pm, bid, mk_eignored None ty));
+                      ty = TCharon ty;
                     }
                   in
-                  let input : tevalue = { value = EFVar fid; ty } in
+                  let input : tevalue =
+                    { value = EFVar fid; ty = TCharon ty }
+                  in
                   (output, input)
               | [ (PLeft, fidl, tyl); (PRight, fidr, tyr) ]
               | [ (PRight, fidr, tyr); (PLeft, fidl, tyl) ] ->
-                  let inputl : tevalue = { value = EFVar fidl; ty = tyl } in
-                  let inputr : tevalue = { value = EFVar fidr; ty = tyr } in
+                  let inputl : tevalue =
+                    { value = EFVar fidl; ty = TCharon tyl }
+                  in
+                  let inputr : tevalue =
+                    { value = EFVar fidr; ty = TCharon tyr }
+                  in
                   let input : tevalue =
-                    { value = EJoinMarkers (inputl, inputr); ty = tyl }
+                    { value = EJoinMarkers (inputl, inputr); ty = TCharon tyl }
                   in
                   let output =
                     {
                       value =
-                        EBorrow (EMutBorrow (PNone, bid, mk_eignored None tyl));
-                      ty = tyl;
+                        EBorrow
+                          (tyl, EMutBorrow (PNone, bid, mk_eignored None tyl));
+                      ty = TCharon tyl;
                     }
                   in
                   (output, input)
@@ -1749,7 +1777,9 @@ let merge_abs_conts_generate_output (span : Meta.span) (_ctx : eval_ctx)
             let (output, input) : tevalue * tevalue =
               match values with
               | [ (pm, _norm_proj_ty, fid, ty) ] ->
-                  let input : tevalue = { value = EFVar fid; ty } in
+                  let input : tevalue =
+                    { value = EFVar fid; ty = TCharon ty }
+                  in
                   let output : tevalue =
                     {
                       value =
@@ -1757,7 +1787,7 @@ let merge_abs_conts_generate_output (span : Meta.span) (_ctx : eval_ctx)
                           ( pm,
                             EProjBorrows
                               { proj = { sv_id; proj_ty = ty }; loans = [] } );
-                      ty;
+                      ty = TCharon ty;
                     }
                   in
                   (output, input)
@@ -1765,10 +1795,14 @@ let merge_abs_conts_generate_output (span : Meta.span) (_ctx : eval_ctx)
               | [ (PRight, proj_tyr, fidr, tyr); (PLeft, proj_tyl, fidl, tyl) ]
                 ->
                   [%sanity_check] span (proj_tyl = proj_tyr);
-                  let inputl : tevalue = { value = EFVar fidl; ty = tyl } in
-                  let inputr : tevalue = { value = EFVar fidr; ty = tyr } in
+                  let inputl : tevalue =
+                    { value = EFVar fidl; ty = TCharon tyl }
+                  in
+                  let inputr : tevalue =
+                    { value = EFVar fidr; ty = TCharon tyr }
+                  in
                   let input : tevalue =
-                    { value = EJoinMarkers (inputl, inputr); ty = tyl }
+                    { value = EJoinMarkers (inputl, inputr); ty = TCharon tyl }
                   in
                   let output : tevalue =
                     {
@@ -1777,7 +1811,7 @@ let merge_abs_conts_generate_output (span : Meta.span) (_ctx : eval_ctx)
                           ( PNone,
                             EProjBorrows
                               { proj = { sv_id; proj_ty = tyl }; loans = [] } );
-                      ty = tyl;
+                      ty = TCharon tyl;
                     }
                   in
                   (output, input)
@@ -1815,9 +1849,12 @@ let merge_abs_conts_generate_input (span : Meta.span) (ctx : eval_ctx)
               | [ PLeft; PRight ] | [ PRight; PLeft ] -> PNone
               | _ -> [%internal_error] span
             in
-            let pat : tepat = { pat = POpen fid; ty } in
+            let pat : tepat = { pat = POpen fid; ty = TCharon ty } in
             let input : tevalue =
-              { value = ELoan (EMutLoan (pm, bid, mk_eignored None ty)); ty }
+              {
+                value = ELoan (ty, EMutLoan (pm, bid, mk_eignored None ty));
+                ty = TCharon ty;
+              }
             in
             loans := BorrowId.Map.remove bid !loans;
             pats := pat :: !pats;
@@ -1836,7 +1873,7 @@ let merge_abs_conts_generate_input (span : Meta.span) (ctx : eval_ctx)
                     "Unexpected:\n" ^ input_symbolic_to_string ctx (sv_id, bsymb)];
                   [%internal_error] span
             in
-            let pat : tepat = { pat = POpen fid; ty } in
+            let pat : tepat = { pat = POpen fid; ty = TCharon ty } in
             let input : tevalue =
               {
                 value =
@@ -1848,7 +1885,7 @@ let merge_abs_conts_generate_input (span : Meta.span) (ctx : eval_ctx)
                           consumed = [];
                           borrows = [];
                         } );
-                ty;
+                ty = TCharon ty;
               }
             in
             symbolic := SymbolicValueId.Map.remove sv_id !symbolic;
@@ -2597,31 +2634,31 @@ let project_context (span : Meta.span) (fixed_aids : AbsId.Set.t)
               [%internal_error] span
           | EEmpty -> EIgnored None
 
-      method! visit_ELoan env lc =
+      method! visit_ELoan env source_ty lc =
         match lc with
         | EMutLoan (pm, lid, child) ->
             if preserve pm then
               let child = self#visit_tevalue env child in
-              ELoan (EMutLoan (PNone, lid, child))
+              ELoan (source_ty, EMutLoan (PNone, lid, child))
             else (
               [%cassert] span (is_eignored child.value) "Not implemented";
               EBottom)
         | EEndedMutLoan _ | EIgnoredMutLoan _ | EEndedIgnoredMutLoan _ ->
             (* Those do not have projection markers *)
-            super#visit_ELoan env lc
+            super#visit_ELoan env source_ty lc
 
-      method! visit_EBorrow env lc =
+      method! visit_EBorrow env source_ty lc =
         match lc with
         | EMutBorrow (pm, bid, child) ->
             if preserve pm then
               let child = self#visit_tevalue env child in
-              EBorrow (EMutBorrow (PNone, bid, child))
+              EBorrow (source_ty, EMutBorrow (PNone, bid, child))
             else (
               [%cassert] span (is_eignored child.value) "Not implemented";
               if env.inside_output then EIgnored None else EBottom)
         | EIgnoredMutBorrow _ | EEndedMutBorrow _ | EEndedIgnoredMutBorrow _ ->
             (* Those do not have projection markers *)
-            super#visit_EBorrow env lc
+            super#visit_EBorrow env source_ty lc
 
       method! visit_abs_cont env abs =
         let { output; input } = abs in
@@ -2674,9 +2711,9 @@ let add_abs_cont_to_abs span (ctx : eval_ctx) (abs : abs) (abs_fun : abs_fun) :
         | AMutLoan (pm, bid, child) ->
             [%sanity_check] span (is_aignored child.value);
             let value : evalue =
-              ELoan (EMutLoan (pm, bid, mk_eignored None child.ty))
+              ELoan (ty, EMutLoan (pm, bid, mk_eignored None child.ty))
             in
-            loans := { value; ty } :: !loans
+            loans := { value; ty = TCharon ty } :: !loans
         | ASharedLoan _ ->
             (* We ignore shared loans *)
             ()
@@ -2690,9 +2727,9 @@ let add_abs_cont_to_abs span (ctx : eval_ctx) (abs : abs) (abs_fun : abs_fun) :
         | AMutBorrow (pm, bid, child) ->
             [%sanity_check] span (is_aignored child.value);
             let value : evalue =
-              EBorrow (EMutBorrow (pm, bid, mk_eignored None child.ty))
+              EBorrow (ty, EMutBorrow (pm, bid, mk_eignored None child.ty))
             in
-            borrows := { value; ty } :: !borrows
+            borrows := { value; ty = TCharon ty } :: !borrows
         | ASharedBorrow _ -> (* We ignore shared borrows *) ()
         | AIgnoredMutBorrow _
         | AEndedMutBorrow _
@@ -2715,7 +2752,7 @@ let add_abs_cont_to_abs span (ctx : eval_ctx) (abs : abs) (abs_fun : abs_fun) :
                       { proj = { sv_id; proj_ty }; consumed = []; borrows = [] }
                   )
               in
-              loans := { value; ty } :: !loans)
+              loans := { value; ty = TCharon ty } :: !loans)
         | AProjBorrows { proj = { sv_id; proj_ty }; loans } ->
             if
               TypesUtils.ty_has_mut_borrow_for_region_in_set
@@ -2726,7 +2763,7 @@ let add_abs_cont_to_abs span (ctx : eval_ctx) (abs : abs) (abs_fun : abs_fun) :
                 ESymbolic
                   (pm, EProjBorrows { proj = { sv_id; proj_ty }; loans = [] })
               in
-              borrows := { value; ty } :: !borrows)
+              borrows := { value; ty = TCharon ty } :: !borrows)
         | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
             [%internal_error] span)
     | AAdt _ | AIgnored _ -> [%internal_error] span
