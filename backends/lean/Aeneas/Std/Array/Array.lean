@@ -19,7 +19,7 @@ local macro_rules
 
 -- Note that we can't define `Array` as a subtype of `List` (that is:
 -- `{ l : List α // l.length = n.val }`): Lean would then reject the inductive definitions
--- which use `Array` in a positive position, because of positivity issues.
+-- which use `Array` in a positive position.
 -- See the explanations in `Aeneas/Data/ListN.lean`, as well as the github issue:
 -- https://github.com/AeneasVerif/aeneas/issues/1138.
 structure Array (α : Type u) (n : Usize) where
