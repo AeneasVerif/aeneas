@@ -195,6 +195,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
           | UpdateAtIndex _ -> (known_f_ty, known_args_tys, false)
           | ResultUnwrapMut -> (hole, mk_holes (), false)
           | GetTarget -> (f.ty, mk_known (), false)
+          | TargetFeatureEnabled -> (f.ty, mk_known (), false)
         end
       | FromLlbc (fid, lp_id) -> begin
           (* Lookup the signature *)

@@ -60,7 +60,7 @@ let lean_builtin_types =
       ~kind:(KEnum [ ("Continue", Some "Continue"); ("Break", Some "Break") ]);
     (* file: "Aeneas/Std/Range.lean", line: 14 *)
     mk_type "core::ops::range::Range" "core.ops.range.Range"
-      ~kind:(KStruct [ ("start", Some "start"); ("end", Some "«end»") ]);
+      ~kind:(KStruct [ ("start", Some "start"); ("end", Some "end") ]);
     (* file: "Aeneas/Std/Core/Core.lean", line: 124 *)
     mk_type "core::ops::range::RangeFrom" "core.ops.range.RangeFrom"
       ~kind:(KStruct [ ("start", Some "start") ]);
@@ -70,12 +70,12 @@ let lean_builtin_types =
         (KStruct
            [
              ("start", Some "start");
-             ("end", Some "«end»");
+             ("end", Some "end");
              ("exhausted", Some "exhausted");
            ]);
     (* file: "Aeneas/Std/Range.lean", line: 20 *)
     mk_type "core::ops::range::RangeTo" "core.ops.range.RangeTo"
-      ~kind:(KStruct [ ("end", Some "«end»") ]);
+      ~kind:(KStruct [ ("end", Some "end") ]);
     (* file: "Aeneas/Std/Core/Core.lean", line: 13 *)
     mk_type "core::option::Option" "Option" ~prefix_variant_names:false
       ~kind:(KEnum [ ("None", Some "none"); ("Some", Some "some") ]);
@@ -1167,7 +1167,7 @@ let lean_builtin_trait_decls =
       ~methods:[ ("as_ref", "as_ref") ];
     (* file: "Aeneas/Std/Core/Core.lean", line: 21 *)
     mk_trait_decl "core::convert::From" "core.convert.From"
-      ~methods:[ ("from", "«from»") ];
+      ~methods:[ ("from", "from") ];
     (* file: "Aeneas/Std/Core/Convert.lean", line: 13 *)
     mk_trait_decl "core::convert::Into" "core.convert.Into"
       ~methods:[ ("into", "into") ];

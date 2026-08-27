@@ -102,19 +102,6 @@ module Sig = struct
         };
     }
 
-  (** [fn<T>(T) -> Box<T>] *)
-  let box_new_sig : bound_fun_sig =
-    let generics =
-      mk_generic_params [] [ type_param_0 ] []
-      (* <T> *)
-    in
-    let inputs = [ tvar_0 (* T *) ] in
-    let output =
-      mk_box_ty tvar_0
-      (* Box<T> *)
-    in
-    mk_sig generics inputs output
-
   (** [fn<T>(Box<T>) -> ()] *)
   let box_free_sig : bound_fun_sig =
     let generics =
@@ -212,26 +199,20 @@ module Sig = struct
     mk_sig generics inputs output
 end
 
-type raw_builtin_fun_info =
-  builtin_fun_id * bound_fun_sig * bool * bool list option
+type raw_builtin_fun_info = builtin_fun_id * bound_fun_sig * bool
 
 type builtin_fun_info = {
   fun_id : builtin_fun_id;
   fun_sig : bound_fun_sig;
   can_fail : bool;
   name : string;
-  keep_types : bool list option;
-      (** We may want to filter some type arguments.
-
-          For instance, all the `Vec` functions (and the `Vec` type itself) take
-          an `Allocator` type as argument, that we ignore. *)
 }
 
 let mk_builtin_fun_info (raw : raw_builtin_fun_info) :
     builtin_fun_id * builtin_fun_info =
-  let fun_id, fun_sig, can_fail, keep_types = raw in
+  let fun_id, fun_sig, can_fail = raw in
   let name = Charon.Print.builtin_fun_id_to_string fun_id in
-  (fun_id, { fun_id; fun_sig; can_fail; name; keep_types })
+  (fun_id, { fun_id; fun_sig; can_fail; name })
 
 (** The list of builtin functions and all their information:
     - their signature
@@ -246,31 +227,24 @@ let mk_builtin_fun_info (raw : raw_builtin_fun_info) :
     a consequence, [Vec::push] is monadic. *)
 let raw_builtin_fun_infos : raw_builtin_fun_info list =
   [
-    (* TODO: the names are not correct ("Box" should be an impl elem for instance)
-       but it's not important) *)
-    (BoxNew, Sig.box_new_sig, false, Some [ true; false ]);
     (* Array to slice*)
-    (ArrayToSliceShared, Sig.array_to_slice_sig false, false, None);
-    (ArrayToSliceMut, Sig.array_to_slice_sig true, false, None);
+    (ArrayToSliceShared, Sig.array_to_slice_sig false, false);
+    (ArrayToSliceMut, Sig.array_to_slice_sig true, false);
     (* Array Repeat *)
-    (ArrayRepeat, Sig.array_repeat_sig, false, None);
+    (ArrayRepeat, Sig.array_repeat_sig, false);
     (* Indexing *)
     ( Index { is_array = true; mutability = RShared; is_range = false },
       Sig.array_index_sig false,
-      true,
-      None );
+      true );
     ( Index { is_array = true; mutability = RMut; is_range = false },
       Sig.array_index_sig true,
-      true,
-      None );
+      true );
     ( Index { is_array = false; mutability = RShared; is_range = false },
       Sig.slice_index_sig false,
-      true,
-      None );
+      true );
     ( Index { is_array = false; mutability = RMut; is_range = false },
       Sig.slice_index_sig true,
-      true,
-      None );
+      true );
   ]
 
 module OrderedBuiltinFunId :
