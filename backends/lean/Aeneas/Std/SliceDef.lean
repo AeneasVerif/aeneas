@@ -6,7 +6,7 @@ open Aeneas.Data.ListN
 
 -- Note that we can't define `Slice` as a subtype of `List` (that is:
 -- `{ l : List α // l.length ≤ Usize.max }`): Lean would then reject the inductive
--- definitions which use `Slice` in a positive position, because of a positivity issue.
+-- definitions which use `Slice` in a positive position.
 -- See the explanations in `Aeneas/Data/ListN.lean`, as well as the corresponding
 -- github issue: https://github.com/AeneasVerif/aeneas/issues/1138.
 structure Slice (α : Type u) where
