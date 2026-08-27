@@ -2169,6 +2169,11 @@ let simplify_trait_calls (crate : crate) : crate =
       if f.item_meta.is_local then visitor#visit_fun_decl_id () f.def_id;
       match f.body with
       | StructuredBody body -> visitor#visit_block () body.body
+      | TargetDispatchBody targets ->
+          List.iter
+            (fun ((_ : string), (fdr : Types.fun_decl_ref)) ->
+              visitor#visit_fun_decl_id () fdr.id)
+            targets
       | _ -> ())
     crate.fun_decls;
 
