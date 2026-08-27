@@ -44,7 +44,6 @@ theorem Array.to_slice_mut_spec {α : Type u} {n : Usize} (a : Array α n) :
   simp [lift, to_slice_mut, to_slice, WP.spec_ok]
 
 def Array.subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) : Result (Slice α) :=
-  -- TODO: not completely sure here
   if r.start.val < r.end.val ∧ r.end.val ≤ a.val.length then
     ok (.from (a.val.slice r.start.val r.end.val)
           (by
