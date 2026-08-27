@@ -714,28 +714,13 @@ let remove_useless_joins (crate : crate) (f : fun_decl) : fun_decl =
         | Drop (_, _, _, _) -> (can_inline, st :: ls)
         | Abort _ | Return | UnwindResume | Break _ | Continue _ ->
             (true, [ st ])
-        | Switch switch ->
+        | Switch (data, branches) ->
             [%ldebug "Switch: can_inline: " ^ Print.bool_to_string can_inline];
             (* Attempt to inline inside the body *)
             let to_inline, ls = if can_inline then (ls, []) else ([], ls) in
             let update b = snd (update_block to_inline b) in
-            let switch =
-              match switch with
-              | If (scrut, st0, st1) -> If (scrut, update st0, update st1)
-              | SwitchInt (op, ty, branches, otherwise) ->
-                  let branches =
-                    List.map (fun (pats, br) -> (pats, update br)) branches
-                  in
-                  let otherwise = update otherwise in
-                  SwitchInt (op, ty, branches, otherwise)
-              | Match (scrut, branches, otherwise) ->
-                  let branches =
-                    List.map (fun (id, br) -> (id, update br)) branches
-                  in
-                  let otherwise = Option.map update otherwise in
-                  Match (scrut, branches, otherwise)
-            in
-            let ls = { st with kind = Switch switch } :: ls in
+            let branches = List.map update branches in
+            let ls = { st with kind = Switch (data, branches) } :: ls in
             [%ldebug
               "after updating the switch:\n"
               ^ Print.list_to_string ~sep:"\n" (statement_to_string crate) ls];
