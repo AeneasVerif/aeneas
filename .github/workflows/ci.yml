@@ -66,8 +66,23 @@ jobs:
               echo 'lean files were changed in this PR.'
               echo "CHECK_LEAN=true" >> "$GITHUB_ENV"
           fi
+          # Two OCaml files are derivatives of the Lean code so we check if they were changed.
+          if git diff origin/main --quiet -- src/extract/ExtractBuiltinLean.ml; then
+              echo "CHECK_EXTRACT_BUILTIN=false" >> "$GITHUB_ENV"
+          else
+              echo 'ExtractBuiltinLean.ml was changed in this PR'
+              echo "CHECK_EXTRACT_BUILTIN=true" >> "$GITHUB_ENV"
+          fi
+          if git diff origin/main --quiet -- src/extract/LeanKeywords.ml; then
+              echo "CHECK_LEAN_KEYWORDS=false" >> "$GITHUB_ENV"
+          else
+              echo 'LeanKeywords.ml was changed in this PR'
+              echo "CHECK_LEAN_KEYWORDS=true" >> "$GITHUB_ENV"
+          fi
     outputs:
       check_lean: ${{ env.CHECK_LEAN }}
+      check_extract_builtin: ${{ env.CHECK_EXTRACT_BUILTIN }}
+      check_lean_keywords: ${{ env.CHECK_LEAN_KEYWORDS }}
 
   lean:
     needs: [select-runner, diff_lean_files]
@@ -79,16 +94,30 @@ jobs:
       - if: needs.diff_lean_files.outputs.check_lean == 'true'
         # Lean cannot run its tests in the nix sandbox because `elan` will download things
         run: nix develop --command bash -c "cd tests/lean && make"
-      - if: needs.diff_lean_files.outputs.check_lean == 'true'
+      - if: >-
+          needs.diff_lean_files.outputs.check_lean == 'true' ||
+          needs.diff_lean_files.outputs.check_extract_builtin == 'true'
         # Confirm that ExtractBuiltinLean.ml is up-to-date.
         run: |
           nix develop --command bash -c "make extract-lean-std"
-          git diff --exit-code -- src/extract/ExtractBuiltinLean.ml || { echo "ERROR: ExtractBuiltinLean.ml is out of date. Run 'make extract-lean-std'."; exit 1; }
-      - if: needs.diff_lean_files.outputs.check_lean == 'true'
+          if git diff --exit-code -- src/extract/ExtractBuiltinLean.ml; then
+            echo "ExtractBuiltinLean.ml is up to date."
+          else
+            echo "ERROR: ExtractBuiltinLean.ml is out of date. Run 'make extract-lean-std'."
+            exit 1
+          fi
+      - if: >-
+          needs.diff_lean_files.outputs.check_lean == 'true' ||
+          needs.diff_lean_files.outputs.check_lean_keywords == 'true'
         # Confirm that LeanKeywords.ml is up-to-date.
         run: |
           nix develop --command bash -c "make extract-lean-keywords"
-          git diff --exit-code -- src/extract/LeanKeywords.ml || { echo "ERROR: LeanKeywords.ml is out of date. Run 'make extract-lean-keywords'."; exit 1; }
+          if git diff --exit-code -- src/extract/LeanKeywords.ml; then
+            echo "LeanKeywords.ml is up to date."
+          else
+            echo "ERROR: LeanKeywords.ml is out of date. Run 'make extract-lean-keywords'."
+            exit 1
+          fi
 
   charon-pin-is-forward:
     needs: [select-runner]
