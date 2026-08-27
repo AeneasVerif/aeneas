@@ -143,7 +143,14 @@ let compute_contexts (crate : crate) : decls_ctx =
   let type_decls = crate.type_decls in
   let to_extract =
     TypeDeclId.Map.filter
-      (fun id _ -> TypeDeclId.Set.mem id !type_decl_ids)
+      (fun id (d : type_decl) ->
+        (* Charon introduces declarations for the builtin types (tuples, [Box],
+           [str]): we handle those separately, and don't extract them *)
+        TypeDeclId.Set.mem id !type_decl_ids
+        &&
+        match d.src with
+        | BuiltinType _ -> false
+        | _ -> true)
       type_decls
   in
   let type_infos = analyze_type_declarations crate type_decls_list in
