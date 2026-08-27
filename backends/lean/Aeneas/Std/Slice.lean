@@ -394,13 +394,13 @@ def core.slice.index.SliceIndexRangeUsizeSlice.get_mut
 def core.slice.index.SliceIndexRangeUsizeSlice.get_unchecked {T : Type} :
   Range Usize → ConstRawPtr (Slice T) → Result (ConstRawPtr (Slice T)) :=
   -- Don't know what the model should be - for now we always fail
-  fun _ _ => fail .undef
+  fun _ _ => fail .ub
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], [@T]>}::get_unchecked_mut"]
 def core.slice.index.SliceIndexRangeUsizeSlice.get_unchecked_mut {T : Type} :
   Range Usize → MutRawPtr (Slice T) → Result (MutRawPtr (Slice T)) :=
   -- Don't know what the model should be - for now we always fail
-  fun _ _ => fail .undef
+  fun _ _ => fail .ub
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], [@T]>}::index"]
 def core.slice.index.SliceIndexRangeUsizeSlice.index {T : Type} (r : Range Usize) (s : Slice T) : Result (Slice T) :=
@@ -464,14 +464,14 @@ def core.slice.index.SliceIndexRangeToUsizeSlice.get_mut
 def core.slice.index.SliceIndexRangeToUsizeSlice.get_unchecked
   {T : Type} (_ : core.ops.range.RangeTo Usize) (_ : ConstRawPtr (Slice T)) : Result (ConstRawPtr (Slice T)) :=
   -- TODO: update once we make the model of computation more stateful (for now we just fail)
-  fail .undef
+  fail .ub
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get_unchecked_mut"]
 def core.slice.index.SliceIndexRangeToUsizeSlice.get_unchecked_mut
   {T : Type} (_ : core.ops.range.RangeTo Usize) (_ : MutRawPtr (Slice T)) :
   Result (MutRawPtr (Slice T)) :=
   -- TODO: update once we make the model of computation more stateful (for now we just fail)
-  fail .undef
+  fail .ub
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::index"]
 def core.slice.index.SliceIndexRangeToUsizeSlice.index
@@ -524,13 +524,13 @@ def core.slice.index.SliceIndexRangeFullSlice.get_mut
 opaque core.slice.index.SliceIndexRangeFullSlice.get_unchecked
   {T : Type} (_ : core.ops.range.RangeFull) (s : ConstRawPtr (Slice T)) :
   Result (ConstRawPtr (Slice T)) :=
-  fail .undef -- TODO: not sure what it should be
+  fail .ub -- TODO: not sure what it should be
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::get_unchecked_mut"]
 opaque core.slice.index.SliceIndexRangeFullSlice.get_unchecked_mut
   {T : Type} (_ : core.ops.range.RangeFull) (s : MutRawPtr (Slice T)) :
   Result (MutRawPtr (Slice T)) :=
-  fail .undef -- TODO: not sure what it should be
+  fail .ub -- TODO: not sure what it should be
 
 @[simp, step_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::index"]
 def core.slice.index.SliceIndexRangeFullSlice.index
@@ -583,13 +583,13 @@ abbrev core.slice.index.Usize.get_mut
 def core.slice.index.Usize.get_unchecked
   {T : Type} : Usize → ConstRawPtr (Slice T) → Result (ConstRawPtr T) :=
   -- We don't have a model for now
-  fun _ _ => fail .undef
+  fun _ _ => fail .ub
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], @T>}::get_unchecked_mut"]
 def core.slice.index.Usize.get_unchecked_mut
   {T : Type} : Usize → MutRawPtr (Slice T) → Result (MutRawPtr T) :=
   -- We don't have a model for now
-  fun _ _ => fail .undef
+  fun _ _ => fail .ub
 
 @[simp, step_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], @T>}::index"]
 abbrev core.slice.index.Usize.index {T : Type} (i : Usize) (s : Slice T) : Result T :=
@@ -648,20 +648,20 @@ def core.slice.index.SliceIndexRangeFromUsizeSlice.get_mut
 def core.slice.index.SliceIndexRangeFromUsizeSlice.get_unchecked {T : Type} :
   core.ops.range.RangeFrom Usize → ConstRawPtr (Slice T) → Result (ConstRawPtr (Slice T)) :=
   -- We don't have a model for now
-  fun _ _ => fail .undef
+  fun _ _ => fail .ub
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, [@T], [@T]>}::get_unchecked_mut"]
 def core.slice.index.SliceIndexRangeFromUsizeSlice.get_unchecked_mut {T : Type} :
   core.ops.range.RangeFrom Usize → MutRawPtr (Slice T) → Result (MutRawPtr (Slice T)) :=
   -- We don't have a model for now
-  fun _ _ => fail .undef
+  fun _ _ => fail .ub
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, [@T], [@T]>}::index"]
 def core.slice.index.SliceIndexRangeFromUsizeSlice.index {T : Type}
   (r : core.ops.range.RangeFrom Usize) (s : Slice T) : Result (Slice T) :=
   if r.start.val ≤ s.length then
     ok (s.drop r.start)
-  else fail .undef
+  else fail .ub
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, [@T], [@T]>}::index_mut"]
 def core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut {T : Type}

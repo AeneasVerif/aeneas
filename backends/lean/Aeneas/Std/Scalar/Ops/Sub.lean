@@ -13,7 +13,7 @@ open Result Error Arith ScalarElab WP
 -/
 
 def UScalar.sub {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
-  if x.val < y.val then fail .undef
+  if x.val < y.val then fail .ub
   else ok ⟨ BitVec.ofNat _ (x.val - y.val) ⟩
 
 def IScalar.sub {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
