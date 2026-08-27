@@ -38,6 +38,24 @@ def Wrapper := Array Std.U8 32#usize
 def Wrapper.constructor (a : Array Std.U8 32#usize) : Result Wrapper := do
   ok a
 
+/-- [name_clash_767::{impl core::ops::function::FnOnce<([u8; 32usize],), name_clash_767::Wrapper> for name_clash_767::Wrapper}::call_once]:
+    Source: 'tests/src/name_clash_767.rs', lines 7:0-7:33 -/
+def P.Insts.CoreOpsFunctionFnOnceTupleArrayU832Wrapper.call_once
+  (state : Array Std.U8 32#usize → Result Wrapper)
+  (args : Array Std.U8 32#usize) :
+  Result Wrapper
+  := do
+  Wrapper.constructor args
+
+/-- Trait implementation: [name_clash_767::{impl core::ops::function::FnOnce<([u8; 32usize],), name_clash_767::Wrapper> for name_clash_767::Wrapper}]
+    Source: 'tests/src/name_clash_767.rs', lines 7:0-7:33 -/
+@[reducible]
+def P.Insts.CoreOpsFunctionFnOnceTupleArrayU832Wrapper :
+  core.ops.function.FnOnce (Array Std.U8 32#usize → Result Wrapper) (Array
+  Std.U8 32#usize) Wrapper := {
+  call_once := P.Insts.CoreOpsFunctionFnOnceTupleArrayU832Wrapper.call_once
+}
+
 /-- [name_clash_767::make_wrapper]:
     Source: 'tests/src/name_clash_767.rs', lines 9:0-11:1
     Visibility: public -/
@@ -45,7 +63,7 @@ def make_wrapper
   (x : core.result.Result (Array Std.U8 32#usize) Unit) :
   Result (core.result.Result Wrapper Unit)
   := do
-  core.result.Result.map (BuiltinFnOnce (Array Std.U8 32#usize) Wrapper) x
+  core.result.Result.map P.Insts.CoreOpsFunctionFnOnceTupleArrayU832Wrapper x
     (Wrapper.constructor)
 
 end name_clash_767

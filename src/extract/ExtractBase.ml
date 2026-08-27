@@ -23,6 +23,12 @@ type region_group_info = {
 module StringSet = Collections.StringSet
 module StringMap = Collections.StringMap
 
+module NameMap = Map.Make (struct
+  type t = Types.name
+
+  let compare = Types.compare_name
+end)
+
 (** Characterizes a declaration.
 
     Is in particular useful to derive the proper keywords to introduce the
@@ -1478,18 +1484,6 @@ let fun_decl_kind_to_post_qualif (kind : decl_kind) : string option =
       | SingleRec | MutRecFirst | MutRecInner | MutRecLast ->
           Some "partial_fixpoint")
 
-(** If [def] is the constructor for a type declaration, return the given type.
-
-    A struct constructor used as a first-class value (e.g. [x.map(Point)]) is
-    emitted by Charon as a standalone function whose name coincides with the
-    type's. We use this at extraction time to give it a non-clashing name. *)
-let fun_decl_constructor_target (item_meta : T.item_meta) (ctx : extraction_ctx)
-    : Types.type_decl option =
-  let check_item (ty_decl : Types.type_decl) : bool =
-    ty_decl.item_meta.is_local && item_meta.name = ty_decl.item_meta.name
-  in
-  ctx.crate.type_decls |> TypeDeclId.Map.values |> List.find_opt check_item
-
 (** The type of types.
 
     TODO: move inside the formatter? *)
@@ -2439,17 +2433,29 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
 
 let ctx_compute_fun_name_no_suffix (item_meta : T.item_meta) (src : fun_source)
     ~(is_trait_decl_field : bool) (ctx : extraction_ctx) : string =
+  (* A struct constructor used as a first-class value (e.g. [x.map(Point)]) is
+    emitted by Charon as a standalone function whose name coincides with the
+     type's name in lean as that backend doesn't add a type suffix
+     (see: ctx_compute_type_name). *)
+  let local_type_decls_by_name =
+    TypeDeclId.Map.values ctx.crate.type_decls
+    |> List.filter (fun (td : Types.type_decl) -> td.item_meta.is_local)
+    |> List.fold_left
+         (fun m (td : Types.type_decl) -> NameMap.add td.item_meta.name td m)
+         NameMap.empty
+  in
+  let mk_lean_standalone_constructor_fn name = name ^ ".constructor" in
   match backend () with
   | Lean -> (
-      match fun_decl_constructor_target item_meta ctx with
+      match NameMap.find_opt item_meta.name local_type_decls_by_name with
       | Some tdecl ->
           (* emit new name for Struct constructor, see `fun_decl_constructor_target` *)
           let tname =
             ctx_compute_type_name tdecl.item_meta ctx tdecl.item_meta.name
           in
-          let cons_name = tname ^ ".constructor" in
+          let cons_name = mk_lean_standalone_constructor_fn tname in
           basename_to_unique ctx cons_name
-      | _ ->
+      | None ->
           ctx_compute_fun_global_name_no_suffix item_meta
             (extractable_fun_source ctx src)
             ~is_trait_decl_field ctx)
