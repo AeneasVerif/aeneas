@@ -97,7 +97,7 @@ jobs:
       - if: >-
           needs.diff_lean_files.outputs.check_lean == 'true' ||
           needs.diff_lean_files.outputs.check_extract_builtin == 'true'
-        # Confirm that ExtractBuiltinLean.ml is up-to-date.
+        # Confirm that ExtractBuiltinLean.ml is up to date.
         run: |
           nix develop --command bash -c "make extract-lean-std"
           if git diff --exit-code -- src/extract/ExtractBuiltinLean.ml; then
