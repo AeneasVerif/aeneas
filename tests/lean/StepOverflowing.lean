@@ -15,7 +15,7 @@ set_option maxRecDepth 2048
 namespace step_overflowing
 
 /-- [step_overflowing::test_usize_forward_no_overflow]:
-    Source: 'tests/src/step_overflowing.rs', lines 25:0-29:1
+    Source: 'tests/src/step_overflowing.rs', lines 19:0-23:1
     Visibility: public -/
 def test_usize_forward_no_overflow : Result Unit := do
   let (v, o) ← core.iter.range.StepUsize.forward_overflowing 10#usize 5#usize
@@ -26,7 +26,7 @@ def test_usize_forward_no_overflow : Result Unit := do
 #assert (test_usize_forward_no_overflow == ok ())
 
 /-- [step_overflowing::test_usize_forward_zero]:
-    Source: 'tests/src/step_overflowing.rs', lines 33:0-37:1
+    Source: 'tests/src/step_overflowing.rs', lines 27:0-31:1
     Visibility: public -/
 def test_usize_forward_zero : Result Unit := do
   let (v, o) ← core.iter.range.StepUsize.forward_overflowing 7#usize 0#usize
@@ -37,7 +37,7 @@ def test_usize_forward_zero : Result Unit := do
 #assert (test_usize_forward_zero == ok ())
 
 /-- [step_overflowing::test_usize_forward_overflow_wraps_to_zero]:
-    Source: 'tests/src/step_overflowing.rs', lines 40:0-44:1
+    Source: 'tests/src/step_overflowing.rs', lines 34:0-38:1
     Visibility: public -/
 def test_usize_forward_overflow_wraps_to_zero : Result Unit := do
   let (v, o) ←
@@ -49,7 +49,7 @@ def test_usize_forward_overflow_wraps_to_zero : Result Unit := do
 #assert (test_usize_forward_overflow_wraps_to_zero == ok ())
 
 /-- [step_overflowing::test_usize_forward_overflow_max_count]:
-    Source: 'tests/src/step_overflowing.rs', lines 47:0-51:1
+    Source: 'tests/src/step_overflowing.rs', lines 41:0-45:1
     Visibility: public -/
 def test_usize_forward_overflow_max_count : Result Unit := do
   let (v, o) ←
@@ -61,7 +61,7 @@ def test_usize_forward_overflow_max_count : Result Unit := do
 #assert (test_usize_forward_overflow_max_count == ok ())
 
 /-- [step_overflowing::test_usize_backward_no_overflow]:
-    Source: 'tests/src/step_overflowing.rs', lines 54:0-58:1
+    Source: 'tests/src/step_overflowing.rs', lines 48:0-52:1
     Visibility: public -/
 def test_usize_backward_no_overflow : Result Unit := do
   let (v, o) ←
@@ -73,7 +73,7 @@ def test_usize_backward_no_overflow : Result Unit := do
 #assert (test_usize_backward_no_overflow == ok ())
 
 /-- [step_overflowing::test_usize_backward_overflow]:
-    Source: 'tests/src/step_overflowing.rs', lines 61:0-65:1
+    Source: 'tests/src/step_overflowing.rs', lines 55:0-59:1
     Visibility: public -/
 def test_usize_backward_overflow : Result Unit := do
   let (v, o) ← core.iter.range.StepUsize.backward_overflowing 0#usize 1#usize
@@ -84,7 +84,7 @@ def test_usize_backward_overflow : Result Unit := do
 #assert (test_usize_backward_overflow == ok ())
 
 /-- [step_overflowing::test_u8_forward_no_overflow]:
-    Source: 'tests/src/step_overflowing.rs', lines 73:0-77:1
+    Source: 'tests/src/step_overflowing.rs', lines 67:0-71:1
     Visibility: public -/
 def test_u8_forward_no_overflow : Result Unit := do
   let (v, o) ← core.iter.range.StepU8.forward_overflowing 1#u8 2#usize
@@ -95,7 +95,7 @@ def test_u8_forward_no_overflow : Result Unit := do
 #assert (test_u8_forward_no_overflow == ok ())
 
 /-- [step_overflowing::test_u8_forward_overflow_count_fits]:
-    Source: 'tests/src/step_overflowing.rs', lines 81:0-85:1
+    Source: 'tests/src/step_overflowing.rs', lines 75:0-79:1
     Visibility: public -/
 def test_u8_forward_overflow_count_fits : Result Unit := do
   let (v, o) ← core.iter.range.StepU8.forward_overflowing 200#u8 100#usize
@@ -106,7 +106,7 @@ def test_u8_forward_overflow_count_fits : Result Unit := do
 #assert (test_u8_forward_overflow_count_fits == ok ())
 
 /-- [step_overflowing::test_u8_forward_count_too_large]:
-    Source: 'tests/src/step_overflowing.rs', lines 90:0-94:1
+    Source: 'tests/src/step_overflowing.rs', lines 84:0-88:1
     Visibility: public -/
 def test_u8_forward_count_too_large : Result Unit := do
   let (v, o) ← core.iter.range.StepU8.forward_overflowing 0#u8 300#usize
@@ -117,7 +117,7 @@ def test_u8_forward_count_too_large : Result Unit := do
 #assert (test_u8_forward_count_too_large == ok ())
 
 /-- [step_overflowing::test_u8_backward_no_overflow]:
-    Source: 'tests/src/step_overflowing.rs', lines 97:0-101:1
+    Source: 'tests/src/step_overflowing.rs', lines 91:0-95:1
     Visibility: public -/
 def test_u8_backward_no_overflow : Result Unit := do
   let (v, o) ← core.iter.range.StepU8.backward_overflowing 10#u8 3#usize
@@ -128,7 +128,7 @@ def test_u8_backward_no_overflow : Result Unit := do
 #assert (test_u8_backward_no_overflow == ok ())
 
 /-- [step_overflowing::test_u8_backward_overflow_count_fits]:
-    Source: 'tests/src/step_overflowing.rs', lines 104:0-108:1
+    Source: 'tests/src/step_overflowing.rs', lines 98:0-102:1
     Visibility: public -/
 def test_u8_backward_overflow_count_fits : Result Unit := do
   let (v, o) ← core.iter.range.StepU8.backward_overflowing 3#u8 5#usize
@@ -139,7 +139,7 @@ def test_u8_backward_overflow_count_fits : Result Unit := do
 #assert (test_u8_backward_overflow_count_fits == ok ())
 
 /-- [step_overflowing::test_u8_backward_count_too_large]:
-    Source: 'tests/src/step_overflowing.rs', lines 113:0-117:1
+    Source: 'tests/src/step_overflowing.rs', lines 107:0-111:1
     Visibility: public -/
 def test_u8_backward_count_too_large : Result Unit := do
   let (v, o) ← core.iter.range.StepU8.backward_overflowing 5#u8 300#usize
@@ -150,7 +150,7 @@ def test_u8_backward_count_too_large : Result Unit := do
 #assert (test_u8_backward_count_too_large == ok ())
 
 /-- [step_overflowing::test_i32_forward_negative_no_overflow]:
-    Source: 'tests/src/step_overflowing.rs', lines 126:0-130:1
+    Source: 'tests/src/step_overflowing.rs', lines 120:0-124:1
     Visibility: public -/
 def test_i32_forward_negative_no_overflow : Result Unit := do
   let (v, o) ← core.iter.range.StepI32.forward_overflowing (-5)#i32 3#usize
@@ -161,7 +161,7 @@ def test_i32_forward_negative_no_overflow : Result Unit := do
 #assert (test_i32_forward_negative_no_overflow == ok ())
 
 /-- [step_overflowing::test_i32_forward_overflow]:
-    Source: 'tests/src/step_overflowing.rs', lines 133:0-137:1
+    Source: 'tests/src/step_overflowing.rs', lines 127:0-131:1
     Visibility: public -/
 def test_i32_forward_overflow : Result Unit := do
   let (v, o) ←
@@ -173,7 +173,7 @@ def test_i32_forward_overflow : Result Unit := do
 #assert (test_i32_forward_overflow == ok ())
 
 /-- [step_overflowing::test_i32_forward_count_max]:
-    Source: 'tests/src/step_overflowing.rs', lines 143:0-147:1
+    Source: 'tests/src/step_overflowing.rs', lines 137:0-141:1
     Visibility: public -/
 def test_i32_forward_count_max : Result Unit := do
   let (v, o) ←
@@ -185,7 +185,7 @@ def test_i32_forward_count_max : Result Unit := do
 #assert (test_i32_forward_count_max == ok ())
 
 /-- [step_overflowing::test_i32_backward_negative_no_overflow]:
-    Source: 'tests/src/step_overflowing.rs', lines 150:0-154:1
+    Source: 'tests/src/step_overflowing.rs', lines 144:0-148:1
     Visibility: public -/
 def test_i32_backward_negative_no_overflow : Result Unit := do
   let (v, o) ← core.iter.range.StepI32.backward_overflowing (-5)#i32 3#usize
@@ -196,7 +196,7 @@ def test_i32_backward_negative_no_overflow : Result Unit := do
 #assert (test_i32_backward_negative_no_overflow == ok ())
 
 /-- [step_overflowing::test_i32_backward_overflow]:
-    Source: 'tests/src/step_overflowing.rs', lines 157:0-161:1
+    Source: 'tests/src/step_overflowing.rs', lines 151:0-155:1
     Visibility: public -/
 def test_i32_backward_overflow : Result Unit := do
   let (v, o) ←
@@ -208,7 +208,7 @@ def test_i32_backward_overflow : Result Unit := do
 #assert (test_i32_backward_overflow == ok ())
 
 /-- [step_overflowing::test_i32_backward_count_max]:
-    Source: 'tests/src/step_overflowing.rs', lines 164:0-168:1
+    Source: 'tests/src/step_overflowing.rs', lines 158:0-162:1
     Visibility: public -/
 def test_i32_backward_count_max : Result Unit := do
   let (v, o) ←
@@ -220,7 +220,7 @@ def test_i32_backward_count_max : Result Unit := do
 #assert (test_i32_backward_count_max == ok ())
 
 /-- [step_overflowing::test_i8_forward_overflow]:
-    Source: 'tests/src/step_overflowing.rs', lines 176:0-180:1
+    Source: 'tests/src/step_overflowing.rs', lines 170:0-174:1
     Visibility: public -/
 def test_i8_forward_overflow : Result Unit := do
   let (v, o) ← core.iter.range.StepI8.forward_overflowing 120#i8 10#usize
@@ -231,7 +231,7 @@ def test_i8_forward_overflow : Result Unit := do
 #assert (test_i8_forward_overflow == ok ())
 
 /-- [step_overflowing::test_i8_backward_overflow]:
-    Source: 'tests/src/step_overflowing.rs', lines 183:0-187:1
+    Source: 'tests/src/step_overflowing.rs', lines 177:0-181:1
     Visibility: public -/
 def test_i8_backward_overflow : Result Unit := do
   let (v, o) ← core.iter.range.StepI8.backward_overflowing (-120)#i8 10#usize
@@ -242,7 +242,7 @@ def test_i8_backward_overflow : Result Unit := do
 #assert (test_i8_backward_overflow == ok ())
 
 /-- [step_overflowing::test_u128_forward_no_overflow]:
-    Source: 'tests/src/step_overflowing.rs', lines 195:0-199:1
+    Source: 'tests/src/step_overflowing.rs', lines 189:0-193:1
     Visibility: public -/
 def test_u128_forward_no_overflow : Result Unit := do
   let (v, o) ←
@@ -256,7 +256,7 @@ def test_u128_forward_no_overflow : Result Unit := do
 #assert (test_u128_forward_no_overflow == ok ())
 
 /-- [step_overflowing::test_u128_forward_overflow]:
-    Source: 'tests/src/step_overflowing.rs', lines 202:0-206:1
+    Source: 'tests/src/step_overflowing.rs', lines 196:0-200:1
     Visibility: public -/
 def test_u128_forward_overflow : Result Unit := do
   let (v, o) ←
@@ -268,7 +268,7 @@ def test_u128_forward_overflow : Result Unit := do
 #assert (test_u128_forward_overflow == ok ())
 
 /-- [step_overflowing::test_i128_backward_overflow]:
-    Source: 'tests/src/step_overflowing.rs', lines 209:0-213:1
+    Source: 'tests/src/step_overflowing.rs', lines 203:0-207:1
     Visibility: public -/
 def test_i128_backward_overflow : Result Unit := do
   let (v, o) ←
