@@ -26,11 +26,6 @@ attribute [-simp] List.getElem!_eq_getElem?_getD
 instance (α : Type u) : CoeOut (Slice α) (List α) where
   coe := λ v => v.val
 
--- TODO: clean
--- instance [BEq α] : BEq (Slice α) := SubtypeBEq _
--- instance [BEq α] [LawfulBEq α] : LawfulBEq (Slice α) := SubtypeLawfulBEq _
--- instance [DecidableEq α] : DecidableEq (Slice α) := inferInstanceAs (DecidableEq { _l : List α // _ })
-
 theorem Slice.length_ineq {α : Type u} (s : Slice α) : s.val.length ≤ Usize.max := by
   cases s; simp[*]
 
@@ -51,9 +46,9 @@ def Slice.new (α : Type u) : Slice α := {
 
 @[rust_fun "core::slice::{[@T]}::len" -canFail -lift]
 abbrev Slice.len {α : Type u} (v : Slice α) : Usize :=
-  Usize.ofNatCore v.val.length (by grind [Usize.max, Usize.numBits])
+  Usize.ofNatCore v.val.length (by scalar_tac)
 
-@[simp, scalar_tac_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe, simp_lists_safe, grind =, agrind =]
 theorem Slice.len_val {α : Type u} (v : Slice α) : (Slice.len v).val = v.length :=
   by simp
 
@@ -104,7 +99,7 @@ def Slice.set_opt {α : Type u} (v: Slice α) (i: Usize) (x: Option α) : Slice 
   .from (v.val.set_opt i.val x) (by have := v.property; simp [*])
 
 def Slice.drop {α} (s : Slice α) (i : Usize) : Slice α :=
-  .from (s.val.drop i.val) (by simp; grind)
+  .from (s.val.drop i.val) (by scalar_tac)
 
 @[simp, simp_lists_safe]
 theorem Slice.getElem!_val_drop {T} (s : Slice T) (i : Usize) :
@@ -119,9 +114,6 @@ def Slice.index_usize {α : Type u} (v: Slice α) (i: Usize) : Result α :=
   match v[i]? with
   | none => fail .arrayOutOfBounds
   | some x => ok x
-
-theorem Slice.ext {α} (s0 s1 : Slice α) : s0.val = s1.val → s0 = s1 := by
-  apply (Slice.eq_iff s0 s1).mpr
 
 @[rust_fun "core::slice::{[@T]}::is_empty", simp]
 def core.slice.Slice.is_empty {T : Type} (s : Slice T) : Result Bool := ok (s.length = 0)
@@ -329,7 +321,7 @@ theorem Slice.update_subslice_spec {α : Type u} [Inhabited α] (a : Slice α) (
     (∀ i, i < r.start.val → na[i]! = a[i]!) ∧
     (∀ i, r.start.val ≤ i → i < r.end.val → na[i]! = ss[i - r.start.val]!) ∧
     (∀ i, r.end.val ≤ i → i < a.length → na[i]! = a[i]!) ⦄ := by
-  simp [update_subslice, length, and_self, ↓reduceDIte, getElem!_Nat_eq,
+  simp only [update_subslice, length, and_self, ↓reduceDIte, getElem!_Nat_eq,
     spec_ok, *]
   simp_lists
 
@@ -679,8 +671,8 @@ def core.slice.Slice.split_at {T : Type} (s : Slice T) (n : Usize) :
   if h0 : n ≤ s.length then
     let s0 := (s.val.splitAt n.val).fst
     let s1 := (s.val.splitAt n.val).snd
-    let s0 : Slice T := .from s0 (by have := List.splitAt_length n.val s.val; have := s.property; simp +zetaDelta at *)
-    let s1 : Slice T := .from s1 (by have := List.splitAt_length n.val s.val; have := s.property; simp +zetaDelta at *; grind)
+    let s0 : Slice T := .from s0 (by scalar_tac)
+    let s1 : Slice T := .from s1 (by scalar_tac)
     ok (s0, s1)
   else fail .panic
 
@@ -697,8 +689,8 @@ def core.slice.Slice.split_at_mut {T : Type} (s : Slice T) (n : Usize) :
         -- TODO: scalar_tac is super slow below
         .from (s0'.val ++ s1'.val) (by have := List.splitAt_length n.val s.val; have := s.property; simp +zetaDelta at *; grind)
       else s
-    let s0 : Slice T := .from s0 (by have := List.splitAt_length n.val s.val; have := s.property; simp +zetaDelta at *)
-    let s1 : Slice T := .from s1 (by have := List.splitAt_length n.val s.val; have := s.property; simp +zetaDelta at *; grind)
+    let s0 : Slice T := .from s0 (by scalar_tac)
+    let s1 : Slice T := .from s1 (by scalar_tac)
     ok ((s0, s1), back)
   else fail .panic
 
@@ -1005,13 +997,13 @@ theorem Slice.mapM_spec {α β} {f : α → Result β} {s : Slice α} {post : Na
   obtain ⟨l', hl'⟩ := hmapM_ok
   split
   case h_1 xs heq =>
-    simp [UScalar.lt_equiv, Usize.ofNatCore_val_eq, spec_ok]
+    simp only [UScalar.lt_equiv, Usize.ofNatCore_val_eq, spec_ok]
     refine ⟨by grind [List.mapM_Result_length], fun i hi => ?_⟩
     have hlen : i < s.len := by have := List.mapM_Result_length heq; simp [Slice.len] at *; omega
     have hthis := List.mapM_Result_ok heq (↑i) (by scalar_tac)
     specialize hf i hlen; simp only [spec, theta] at hf
     erw [hthis] at hf
-    simp only [wp_return] at hf ⊢
+    simp only [wp_return, Slice.getElem_Usize_eq, Slice.from_val] at hf ⊢
     exact hf
   case h_2 e heq => simp [hl'] at heq
   case h_3 heq => simp [hl'] at heq

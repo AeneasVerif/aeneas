@@ -19,6 +19,11 @@ local macro_rules
 
 namespace alloc.vec
 
+-- Note that `Vec` has to be a `structure` wrapping a `Slice`: defining it as an alias
+-- (`def Vec (α : Type u) := Slice α`, or even an `abbrev`) introduces positivity
+-- issue, because the kernel does not unfold the alias when checking that a recursive
+-- occurrence is legal. See the explanations in `Aeneas/Data/ListN.lean`, as well
+-- as https://github.com/AeneasVerif/aeneas/issues/1138.
 @[rust_type "alloc::vec::Vec"]
 structure Vec (α : Type u) where
   slice : Slice α
@@ -34,17 +39,21 @@ instance (α : Type u) : CoeOut (Vec α) (List α) where
   coe := λ v => v.val
 
 def Vec.from {α} (l : List α) (h : l.length ≤ Usize.max) : Vec α := {slice := Slice.from l h}
-@[scalar_tac_simps, simp, grind! ., grind .]
+
+@[simp, simp_lists_safe, grind =, agrind =]
 theorem Vec.from_val {α} (l : List α) (h : l.length ≤ Usize.max)
   : (Vec.from l h).val = l := by simp [Vec.from, Vec.val]
 
-@[scalar_tac_simps, simp, grind! ., grind .]
+@[simp, simp_lists_safe, grind =, agrind =]
 theorem Vec.val_from {α} (s : Vec α) h
   : Vec.from s.val h = s := by simp [Vec.from, Vec.val]
 
-@[simp, grind ., grind! .]
+@[simp, scalar_tac s.val]
 theorem Vec.property {α} (s : Vec α) : s.val.length ≤ Usize.max := by
   simp [Vec.val]
+
+grind_pattern Vec.property => s.val
+grind_pattern [agrind] Vec.property => s.val
 
 theorem Vec.len_ineq {α : Type u} (v : Vec α) : v.val.length ≤ Usize.max := by
   cases v; simp[*]
@@ -53,8 +62,9 @@ theorem Vec.eq_iff {α} (s0 s1 : Vec α) : s0 = s1 ↔ s0.val = s1.val := by
   cases s0; cases s1
   simp [Vec.val, Slice.eq_iff]
 
-instance (α : Type u) : CoeOut (Vec α) (List α) where
-  coe := λ v => v.val
+@[ext, grind ext, agrind ext]
+theorem Vec.ext {α} (s0 s1 : Vec α) (h : s0.val = s1.val) : s0 = s1 :=
+  (Vec.eq_iff s0 s1).mpr h
 
 @[simp, scalar_tac_simps, simp_scalar_safe, simp_lists_safe, grind, agrind]
 abbrev Vec.length {α : Type u} (v : Vec α) : Nat := v.val.length
@@ -76,7 +86,7 @@ instance (α : Type u) : Inhabited (Vec α) := by
 abbrev Vec.len {α : Type u} (v : Vec α) : Usize :=
   Usize.ofNatCore v.val.length (by grind)
 
-@[simp, scalar_tac_simps]
+@[simp, scalar_tac_simps, simp_lists_safe, grind =, agrind =]
 theorem Vec.len_val {α : Type u} (v : Vec α) : (Vec.len v).val = v.length :=
   by simp
 
@@ -357,7 +367,7 @@ def alloc.slice.Slice.to_vec
 @[step]
 theorem alloc.slice.Slice.to_vec_spec {T : Type} (cloneInst : core.clone.Clone T) (s : Slice T)
   (h : ∀ x ∈ s.val, cloneInst.clone x = ok x) :
-  alloc.slice.Slice.to_vec cloneInst s ⦃ s' => s = s'.slice⦄ := by
+  alloc.slice.Slice.to_vec cloneInst s ⦃ s' => s = s'.slice ⦄ := by
   simp only [to_vec]
   apply Std.WP.spec_bind (Slice.clone_spec h)
   grind
@@ -444,7 +454,7 @@ theorem alloc.vec.Vec.resize_spec {T} (cloneInst : core.clone.Clone T)
 theorem alloc.vec.Vec.set_getElem!_eq α [Inhabited α] (x : alloc.vec.Vec α) (i : Usize) :
   x.set i x[i]! = x := by
   simp only [getElem!_Usize_eq]
-  simp only [Vec, set_val_eq, Vec.eq_iff, List.set_getElem!]
+  simp only [set_val_eq, Vec.eq_iff, List.set_getElem!]
 
 @[simp↓, scalar_tac_simps, simp_lists_safe, grind =, agrind =]
 theorem alloc.vec.Vec.set_getElem_eq α (x : alloc.vec.Vec α) (i : Usize) (h : i.val < x.length) :

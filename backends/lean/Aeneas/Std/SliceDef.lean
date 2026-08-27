@@ -4,8 +4,11 @@ import Aeneas.Data.ListN
 namespace Aeneas.Std
 open Aeneas.Data.ListN
 
--- This unusual definition using ListN is necessary due to positivity issues.
--- See the test at the end of this file.
+-- Note that we can't define `Slice` as a subtype of `List` (that is:
+-- `{ l : List α // l.length ≤ Usize.max }`): Lean would then reject the inductive
+-- definitions which use `Slice` in a positive position, because of a positivity issue.
+-- See the explanations in `Aeneas/Data/ListN.lean`, as well as the corresponding
+-- github issue: https://github.com/AeneasVerif/aeneas/issues/1138.
 structure Slice (α : Type u) where
   leng : Nat
   list : ListN α leng
@@ -15,10 +18,13 @@ deriving BEq, ReflBEq, LawfulBEq, DecidableEq
 @[coe]
 def Slice.val {α} (s : Slice α) : List α := s.list.toList
 
-@[simp, grind ., grind! .]
+@[simp, scalar_tac s.val]
 theorem Slice.property {α} (s : Slice α) : s.val.length ≤ Usize.max := by
   simp [Slice.val, ListN_length]
   apply s.bound
+
+grind_pattern Slice.property => s.val
+grind_pattern [agrind] Slice.property => s.val
 
 def Slice.from {α} (l : List α) (h : l.length ≤ Usize.max) : Slice α :=
   {
@@ -27,12 +33,12 @@ def Slice.from {α} (l : List α) (h : l.length ≤ Usize.max) : Slice α :=
     bound := by assumption
   }
 
-@[scalar_tac_simps, simp, grind! ., grind .]
+@[simp, simp_lists_safe, grind =, agrind =]
 theorem Slice.from_val {α} (l : List α) (h : l.length ≤ Usize.max)
   : (Slice.from l h).val = l := by
   simp [Slice.from, Slice.val, ListN.from_to_inverse]
 
-@[scalar_tac_simps, simp, grind! ., grind .]
+@[simp, simp_lists_safe, grind =, agrind =]
 theorem Slice.val_from {α} (s : Slice α) h
   : Slice.from s.val h = s := by
   cases s
@@ -53,32 +59,8 @@ theorem Slice.eq_iff {α} (s0 s1 : Slice α) : s0 = s1 ↔ s0.val = s1.val := by
     simp at *
     constructor <;> try grind [ListN_length]
 
-namespace Aeneas.Std.Test
--- We need to be able to use Slice in positive positions in inductive definitions.
--- A simple definition with subtypes doesn't work here.
--- (See: https://github.com/AeneasVerif/aeneas/issues/1138)
--- There are two constraints that the definition of Slice must satisfy to make lean happy:
--- It must not use any defs, and recursive references passed as an argument to another inductive
--- must not then be passed to a third inductive, see example below
-inductive E where
-| V : Slice E → E
-
-structure Slice2 (X : Type) where
-  l : List X
-  lent : l.length ≤ Usize.max
-
-/--
-error: (kernel) application type mismatch
-  List.length l
-argument has type
-  _nested.List_2
-but function has type
-  List E2 → ℕ
--/
-#guard_msgs in
-inductive E2 where
-| d : Slice2 E2 → E2
-
-end Aeneas.Std.Test
+@[ext, grind ext, agrind ext]
+theorem Slice.ext {α} (s0 s1 : Slice α) (h : s0.val = s1.val) : s0 = s1 :=
+  (Slice.eq_iff s0 s1).mpr h
 
 end Aeneas.Std

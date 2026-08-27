@@ -17,8 +17,11 @@ local macro_rules
 # Array
 -/
 
--- Note that this can't be a simple def because then lean won't allow recursive
--- inductives with Arrays in them (See: https://github.com/AeneasVerif/aeneas/issues/1138)
+-- Note that we can't define `Array` as a subtype of `List` (that is:
+-- `{ l : List α // l.length = n.val }`): Lean would then reject the inductive definitions
+-- which use `Array` in a positive position, because of positivity issues.
+-- See the explanations in `Aeneas/Data/ListN.lean`, as well as the github issue:
+-- https://github.com/AeneasVerif/aeneas/issues/1138.
 structure Array (α : Type u) (n : Usize) where
   list : ListN α n.val
 deriving BEq, ReflBEq, LawfulBEq, DecidableEq
@@ -26,7 +29,7 @@ deriving BEq, ReflBEq, LawfulBEq, DecidableEq
 @[coe]
 def Array.val {α n} (a : Array α n) : List α := a.list.toList
 
-@[simp, grind ., grind! .]
+@[simp, scalar_tac_simps, simp_scalar_safe, simp_lists_safe, grind =, agrind =]
 theorem Array.property {α n} (s : Array α n) : s.val.length = n.val := by
   simp [Array.val, ListN_length]
 
@@ -35,13 +38,13 @@ def Array.from {α n} (l : List α) (h : l.length = n.val) : Array α n :=
     list := cast (congrArg (ListN α) h) (.fromList l)
   }
 
-@[scalar_tac_simps, simp, grind! ., grind .]
+@[simp, simp_lists_safe, grind =, agrind =]
 theorem Array.from_val {α} {n : Usize} (l : List α) (h : l.length = n.val)
   : (Array.from l h).val = l := by
   simp [Array.from, Array.val]
   grind [ListN.from_to_inverse]
 
-@[scalar_tac_simps, simp, grind! ., grind .]
+@[simp, simp_lists_safe, grind =, agrind =]
 theorem Array.val_from {α n} (s : Array α n) h
   : Array.from s.val h = s := by
   rcases s with ⟨l⟩
@@ -60,12 +63,15 @@ theorem Array.eq_iff {α n} (s0 s1 : Array α n) : s0 = s1 ↔ s0.val = s1.val :
     cases s0; cases s1
     grind
 
+@[ext, grind ext, agrind ext]
+theorem Array.ext {α n} (s0 s1 : Array α n) (h : s0.val = s1.val) : s0 = s1 :=
+  (Array.eq_iff s0 s1).mpr h
+
 /-- We need this to coerce arrays to lists without marking `Array` as reducible.
     Also not that we *do not* want to mark `Array` as reducible: it triggers issues.
 -/
 instance (α : Type u) (n : Usize) : CoeOut (Array α n) (List α) where
   coe := λ v => v.val
-
 
 instance {α : Type u} {n : Usize} [Inhabited α] : Inhabited (Array α n) :=
   ⟨ .from (List.replicate n.val default) (by simp) ⟩
@@ -153,7 +159,7 @@ def Array.repeat {α : Type u} (n : Usize) (x : α) : Array α n :=
 
 @[simp]
 theorem Array.repeat_val (n : Usize) (x : α) : (Array.repeat n x).val = List.replicate n.val x := by
-  simp [Array.repeat]
+  simp only [Array.repeat, Array.from_val]
 
 @[step]
 theorem Array.index_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize)
@@ -297,7 +303,7 @@ theorem Array.getElem_set_eq {α} {n : Usize} (v : Array α n) (i : Usize) (x : 
   (v.set i x)[i]'h = x := by
   cases v
   unfold set getElem instGetElemArrayUsizeLtNatValLengthVal
-  simp [List.getElem_set_self]
+  simp only [Array.from_val, List.getElem_set_self]
 
 @[simp↓, simp_lists_safe↓]
 theorem Array.getElem_set_eq' {α} {n : Usize} (v : Array α n) (i j : Usize) (x : α) (h : j.val < (v.set i x).length)
@@ -311,7 +317,7 @@ theorem Array.getElem_set_neq {α} {n : Usize} (v : Array α n) (i j : Usize) (x
   (v.set i x)[j]'h = v[j] := by
   cases v
   unfold set getElem instGetElemArrayUsizeLtNatValLengthVal
-  simp [ne_eq, UScalar.neq_to_neq_val] at *
+  simp only [ne_eq, UScalar.neq_to_neq_val] at *
   simp_lists [List.getElem_set_ne]
 
 /-- Small helper (this function doesn't model a specific Rust function) -/
@@ -372,7 +378,7 @@ def Array.setSlice! {α : Type u} {n} (s : Array α n) (i : ℕ) (s' : List α) 
 theorem Array.setSlice!_getElem!_prefix {α} {n} [Inhabited α]
   (s : Array α n) (s' : List α) (i j : ℕ) (h : j < i) :
   (s.setSlice! i s')[j]! = s[j]! := by
-  simp [Array.setSlice!, Array.getElem!_Nat_eq]
+  simp only [Array.setSlice!, Array.from_val, Array.getElem!_Nat_eq]
   simp_lists
 
 @[simp_lists_safe]
@@ -381,7 +387,7 @@ theorem Array.setSlice!_getElem_prefix {α} {n}
   (s.setSlice! i s')[j] = s[j] := by
   have hj' : j < (s.setSlice! i s').length := by scalar_tac
   have h1 : (s.setSlice! i s')[j]? = s[j]? := by
-    simp [Array.getElem?_Nat_eq, Array.setSlice!]
+    simp only [Array.getElem?_Nat_eq, Array.setSlice!, Array.from_val]
     simp_lists [List.setSlice!_getElem?_prefix]
   simp only [Array.getElem?_Nat_eq, List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2,
     Option.some.injEq] at h1
@@ -391,7 +397,7 @@ theorem Array.setSlice!_getElem_prefix {α} {n}
 theorem Array.setSlice!_getElem!_middle {α} {n} [Inhabited α]
   (s : Array α n) (s' : List α) (i j : ℕ) (h : i ≤ j ∧ j - i < s'.length ∧ j < s.length) :
   (s.setSlice! i s')[j]! = s'[j - i]! := by
-  simp [Array.setSlice!, Array.getElem!_Nat_eq]
+  simp only [Array.setSlice!, Array.from_val, Array.getElem!_Nat_eq]
   simp_lists
 
 @[simp_lists_safe]
@@ -402,7 +408,7 @@ theorem Array.setSlice!_getElem_middle {α} {n}
     scalar_tac
   have hji : j - i < s'.length := h.2.1
   have h1 : (s.setSlice! i s')[j]? = s'[j - i]? := by
-    simp [Array.getElem?_Nat_eq, Array.setSlice!]
+    simp only [Array.getElem?_Nat_eq, Array.setSlice!, Array.from_val]
     simp_lists [List.setSlice!_getElem?_middle]
   simp only [Array.getElem?_Nat_eq, List.getElem?_eq_getElem hj', List.getElem?_eq_getElem hji,
     Option.some.injEq] at h1
@@ -411,7 +417,7 @@ theorem Array.setSlice!_getElem_middle {α} {n}
 theorem Array.setSlice!_getElem!_suffix {α} {n} [Inhabited α]
   (s : Array α n) (s' : List α) (i j : ℕ) (h : i + s'.length ≤ j) :
   (s.setSlice! i s')[j]! = s[j]! := by
-  simp [Array.setSlice!, Array.getElem!_Nat_eq]
+  simp only [Array.setSlice!, Array.from_val, Array.getElem!_Nat_eq]
   simp_lists
 
 theorem Array.setSlice!_getElem_suffix {α} {n}
@@ -419,7 +425,7 @@ theorem Array.setSlice!_getElem_suffix {α} {n}
   (s.setSlice! i s')[j] = s[j] := by
   have hj' : j < (s.setSlice! i s').length := by scalar_tac
   have h1 : (s.setSlice! i s')[j]? = s[j]? := by
-    simp [Array.getElem?_Nat_eq, Array.setSlice!]
+    simp only [Array.getElem?_Nat_eq, Array.setSlice!, Array.from_val]
     simp_lists [List.setSlice!_getElem?_suffix]
   simp only [Array.getElem?_Nat_eq, List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2,
     Option.some.injEq] at h1
