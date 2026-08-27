@@ -12,8 +12,8 @@ let mk_mplace (span : Meta.span) (p : place) (ctx : Contexts.eval_ctx) : mplace
     | PlaceLocal var_id ->
         PlaceLocal (Contexts.ctx_lookup_real_var_binder span ctx var_id)
     | PlaceProjection (subplace, Field (variant_id, field_id)) ->
-        let type_id, _ = TypesUtils.ty_as_adt subplace.ty in
-        let pe = { type_id; variant_id; field_id } in
+        let type_ref = TypesUtils.ty_as_adt subplace.ty in
+        let pe = { type_ref; variant_id; field_id } in
         PlaceProjection (place_to_mplace subplace, pe)
     | PlaceProjection (subplace, (Deref | ProjIndex _ | Subslice _)) ->
         place_to_mplace subplace

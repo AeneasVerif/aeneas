@@ -62,11 +62,6 @@ let remove_dummy_var (span : Meta.span) (vid : DummyVarId.id) (ctx : eval_ctx) :
   let ctx, v = ctx_remove_dummy_var span ctx vid in
   (v, ctx)
 
-(** Push an uninitialized variable to the environment *)
-let push_uninitialized_var (span : Meta.span) (var : local) (ctx : eval_ctx) :
-    eval_ctx =
-  ctx_push_uninitialized_var span ctx var
-
 (** Push a list of uninitialized variables to the environment *)
 let push_uninitialized_vars (span : Meta.span) (vars : local list)
     (ctx : eval_ctx) : eval_ctx =
@@ -211,7 +206,7 @@ let set_discriminant (config : config) (span : Meta.span) (p : place)
   let v, ctx, cc = comp2 cc (prepare_lplace config span p ctx) in
   (* Update the value *)
   match (v.ty, v.value) with
-  | TAdt { id = TAdtId _ as type_id; generics }, VAdt av -> (
+  | TAdt { id = def_id; generics; builtin = None }, VAdt av -> (
       (* There are two situations:
          - either the discriminant is already the proper one (in which case we
            don't do anything)
@@ -226,23 +221,17 @@ let set_discriminant (config : config) (span : Meta.span) (p : place)
           else
             (* Replace the value *)
             let bottom_v =
-              match type_id with
-              | TAdtId def_id ->
-                  compute_expanded_bottom_adt_value span ctx def_id
-                    (Some variant_id) generics
-              | _ -> [%craise] span "Unreachable"
+              compute_expanded_bottom_adt_value span ctx def_id
+                (Some variant_id) generics
             in
             let ctx, cc =
               comp cc (assign_to_place config span bottom_v p ctx)
             in
             ((ctx, Unit), cc))
-  | TAdt { id = TAdtId _ as type_id; generics }, VBottom ->
+  | TAdt { id = def_id; generics; builtin = None }, VBottom ->
       let bottom_v =
-        match type_id with
-        | TAdtId def_id ->
-            compute_expanded_bottom_adt_value span ctx def_id (Some variant_id)
-              generics
-        | _ -> [%craise] span "Unreachable"
+        compute_expanded_bottom_adt_value span ctx def_id (Some variant_id)
+          generics
       in
       let ctx, cc = comp cc (assign_to_place config span bottom_v p ctx) in
       ((ctx, Unit), cc)
@@ -265,21 +254,6 @@ let ctx_push_frame (ctx : eval_ctx) : eval_ctx =
 
 (** Push a frame delimiter in the context's environment *)
 let push_frame (ctx : eval_ctx) : eval_ctx = ctx_push_frame ctx
-
-(** Small helper: compute the type of the return value for a specific
-    instantiation of an builtin function. *)
-let get_builtin_function_return_type (span : Meta.span) (fid : builtin_fun_id)
-    (generics : generic_args) : ety =
-  [%sanity_check] span (generics.trait_refs = []);
-  (* Retrieve the function's signature *)
-  let sg = Builtin.get_builtin_fun_sig fid in
-  (* Instantiate the return type  *)
-  let generics = Subst.generic_args_erase_regions generics in
-  let subst =
-    [%add_loc] Subst.make_subst_from_generics (Some span) sg.item_binder_params
-      generics Self
-  in
-  Subst.erase_regions_substitute_types subst sg.item_binder_value.output
 
 let move_return_value (config : config) (span : Meta.span)
     (pop_return_value : bool) (ctx : eval_ctx) :
@@ -374,105 +348,30 @@ let pop_frame_assign (config : config) (span : Meta.span) (dest : place) :
   in
   comp cc (assign_to_place config span (Option.get v) dest ctx)
 
-(** Auxiliary function - see {!eval_builtin_function_call} *)
+(** Evaluate [Box::new] in concrete mode. *)
 let eval_box_new_concrete (config : config) (span : Meta.span)
-    (generics : generic_args) : cm_fun =
+    (generics : generic_args) (call : call) : cm_fun =
  fun ctx ->
   (* Check and retrieve the arguments *)
   match
-    (generics.regions, generics.types, generics.const_generics, ctx.env)
+    (generics.regions, generics.types, generics.const_generics, call.args)
   with
-  | ( [],
-      [ boxed_ty ],
-      [],
-      EBinding (BVar input_var, input_value)
-      :: EBinding (_ret_var, _)
-      :: EFrame :: _ ) ->
-      (* Required type checking *)
-      [%cassert] span
-        (input_value.ty = boxed_ty)
+  | [], [ boxed_ty ], [], [ input ] ->
+      (* Move the input value *)
+      let v, ctx, cc = eval_operand config span input ctx in
+      [%cassert] span (v.ty = boxed_ty)
         "The input given to Box::new doesn't have the proper type";
 
-      (* Move the input value *)
-      let v, ctx, cc =
-        eval_operand config span
-          (Move (mk_place_from_var_id ctx span input_var.index))
-          ctx
-      in
-
-      (* Create the new box *)
-      (* Create the box value *)
-      let generics = TypesUtils.mk_generic_args_from_types [ boxed_ty ] in
-      let box_ty = TAdt { id = TBuiltin TBox; generics } in
+      (* Create the new box. We use the type of the destination: this saves us
+         from having to look up the id of the declaration of [Box]. *)
+      let box_ty = call.dest.ty in
+      [%cassert] span
+        (ty_as_opt_box box_ty = Some boxed_ty)
+        "The destination of Box::new doesn't have the proper type";
       let box_v = VAdt { variant_id = None; fields = [ v ] } in
       let box_v = mk_tvalue span box_ty box_v in
-
-      (* Move this value to the return variable *)
-      let dest = mk_place_from_var_id ctx span LocalId.zero in
-      comp cc (assign_to_place config span box_v dest ctx)
+      comp cc (assign_to_place config span box_v call.dest ctx)
   | _ -> [%craise] span "Inconsistent state"
-
-(** Evaluate a non-local function call in concrete mode *)
-let eval_builtin_function_call_concrete (config : config) (span : Meta.span)
-    (fid : builtin_fun_id) (call : call) : cm_fun =
- fun ctx ->
-  let args = call.args in
-  let dest = call.dest in
-  match call.func with
-  | FnOpDynamic _ ->
-      (* Function pointer case: TODO *)
-      [%craise] span "Function pointers are not supported yet"
-  | FnOpRegular func ->
-      let generics = func.generics in
-      (* Sanity check: we don't fully handle the const generic vars environment
-         in concrete mode yet *)
-      [%sanity_check] span (generics.const_generics = []);
-
-      (* Evaluate the operands *)
-      (*      let ctx, args_vl = eval_operands config ctx args in *)
-      let args_vl, ctx, cc = eval_operands config span args ctx in
-
-      (* Evaluate the call
-       *
-       * Style note: at some point we used {!comp_transmit} to
-       * transmit the result of {!eval_operands} above down to {!push_vars}
-       * below, without having to introduce an intermediary function call,
-       * but it made it less clear where the computed values came from,
-       * so we reversed the modifications. *)
-      (* Push the stack frame: we initialize the frame with the return variable,
-         and one variable per input argument *)
-      let ctx = push_frame ctx in
-
-      (* Create and push the return variable *)
-      let ret_vid = LocalId.zero in
-      let ret_ty = get_builtin_function_return_type span fid generics in
-      let ret_var = mk_var ret_vid (Some "@return") ret_ty span in
-      let ctx = push_uninitialized_var span ret_var ctx in
-
-      (* Create and push the input variables *)
-      let input_vars =
-        LocalId.mapi_from1
-          (fun id (v : tvalue) -> (mk_var id None v.ty span, v))
-          args_vl
-      in
-      let ctx = push_vars span input_vars ctx in
-
-      (* "Execute" the function body. As the functions are builtin, here we call
-       * custom functions to perform the proper manipulations: we don't have
-       * access to a body. *)
-      let ctx, cf_eval_body =
-        match fid with
-        | BoxNew -> eval_box_new_concrete config span generics ctx
-        | Index _
-        | ArrayToSliceShared
-        | ArrayToSliceMut
-        | ArrayRepeat
-        | PtrFromParts _ -> [%craise] span "Unimplemented"
-      in
-      let cc = cc_comp cc cf_eval_body in
-
-      (* Pop the frame *)
-      comp cc (pop_frame_assign config span dest ctx)
 
 (** Helper
 
@@ -654,29 +553,16 @@ let eval_function_call_symbolic_inst (span : Meta.span) (func : fn_ptr)
          correctly instantiated signatures, and delegate the work to an
          auxiliary function *)
       let sg = Builtin.get_builtin_fun_sig fid in
-      (* Sanity check: make sure the type parameters don't contain regions -
-         this is a current limitation of our synthesis, *except if the function
-         is [Box::new] (TODO: the case [Box::new] is a hack) *)
-      if fid = BoxNew then
-        (* Sanity check: check that we are not using nested borrows *)
-        [%classert] span
-          (List.for_all
-             (fun ty ->
-               not
-                 (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos ty))
-             func.generics.types)
-          (lazy
-            ("Instantiating [Box::new] with nested borrows is not allowed for \
-              now (" ^ fn_ptr_to_string ctx func ^ ")"))
-      else
-        [%classert] span
-          (List.for_all
-             (fun ty -> not (ty_has_mut_borrows ctx.type_ctx.type_infos ty))
-             func.generics.types)
-          (lazy
-            ("Instantiating the type parameters of a function with types \
-              containing mutable borrows is currently not allowed ("
-           ^ fn_ptr_to_string ctx func ^ ")"));
+      (* Sanity check: make sure the type parameters don't contain mutable
+         borrows, which is a current limitation of our synthesis. *)
+      [%classert] span
+        (List.for_all
+           (fun ty -> not (ty_has_mut_borrows ctx.type_ctx.type_infos ty))
+           func.generics.types)
+        (lazy
+          ("Instantiating the type parameters of a function with types \
+            containing mutable borrows is currently not allowed ("
+         ^ fn_ptr_to_string ctx func ^ ")"));
 
       (* There shouldn't be any reference to Self *)
       let tr_self = UnknownTrait __FUNCTION__ in
@@ -1379,16 +1265,14 @@ and eval_function_call_concrete (config : config) (span : Meta.span)
   | FnOpRegular func -> (
       match func.kind with
       | FunId (FRegular fid) ->
-          eval_non_builtin_function_call_concrete config span fid call ctx
-      | FunId (FBuiltin fid) ->
-          (* Continue - note that we do as if the function call has been successful,
-           * by giving {!Unit} to the continuation, because we place us in the case
-           * where we haven't panicked. Of course, the translation needs to take the
-           * panic case into account... *)
-          let ctx, cc =
-            eval_builtin_function_call_concrete config span fid call ctx
-          in
-          ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span cc)
+          let def = ctx_lookup_fun_decl span ctx fid in
+          if def.item_meta.diagnostic_item = Some "box_new" then
+            let ctx, cc =
+              eval_box_new_concrete config span func.generics call ctx
+            in
+            ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span cc)
+          else eval_non_builtin_function_call_concrete config span fid call ctx
+      | FunId (FBuiltin _) -> [%craise] span "Unimplemented"
       | TraitMethod _ -> [%craise] span "Unimplemented")
 
 and eval_function_call_symbolic (config : config) (span : Meta.span)
