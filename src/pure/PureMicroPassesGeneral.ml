@@ -170,8 +170,8 @@ let simplify_decompose_struct_visitor (ctx : ctx) (def : fun_decl) =
                  like Lean have projectors for tuples (like so: `x.3`), but others
                  like Coq don't, in which case we have to deconstruct the whole ADT
                  at once (`let (a, b, c) = x in`) *)
-            || TypesUtils.type_decl_from_type_id_is_tuple_struct
-                 ctx.trans_ctx.type_ctx.type_infos (T.TAdtId adt_id)
+            || TypesUtils.type_decl_from_decl_id_is_tuple_struct
+                 ctx.trans_ctx.type_ctx.type_infos adt_id
                && not !Config.use_tuple_projectors
           in
           if use_let_with_cons then
@@ -1164,6 +1164,11 @@ let filter_useless (ctx : ctx) (def : fun_decl) : fun_decl =
                 (e.e, used)
               else if texpr_cannot_fail re then
                 (* Monadic let-binding that always succeeds: safe to remove *)
+                (e.e, used)
+              else if texpr_failure_subsumed_by_cont re e then
+                (* Monadic let-binding whose outputs are unused ([all_dummies])
+                   and whose failure is subsumed by the expression which
+                   immediately follows it: safe to remove *)
                 (e.e, used)
               else
                 (* Monadic let-binding and the bound expression may fail: can't filter *)

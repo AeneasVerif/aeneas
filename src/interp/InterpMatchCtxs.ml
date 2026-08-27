@@ -291,8 +291,9 @@ let rec match_types (span : Meta.span) ~(recover : bool) (ctx0 : eval_ctx)
     match_types span ~recover ctx0 ctx1 match_distinct_types match_regions
   in
   match (ty0, ty1) with
-  | ( TAdt { id = id0; generics = generics0 },
-      TAdt { id = id1; generics = generics1 } ) ->
+  | TAdt ({ id = id0; generics = generics0; _ } as tref0), TAdt tref1 ->
+      let id1 = tref1.id in
+      let generics1 = tref1.generics in
       [%cassert_recover] recover span (id0 = id1) "Not the same ADT ids";
       [%cassert_recover] recover span
         (phys_eq generics0.const_generics generics1.const_generics)
@@ -314,7 +315,7 @@ let rec match_types (span : Meta.span) ~(recover : bool) (ctx0 : eval_ctx)
           (List.combine generics0.types generics1.types)
       in
       let generics = { regions; types; const_generics; trait_refs } in
-      TAdt { id; generics }
+      TAdt { tref0 with id; generics }
   | TArray (ty0, len0), TArray (ty1, len1) ->
       [%cassert_recover] recover span (len0 = len1)
         "Arrays with different lengths";

@@ -1819,7 +1819,7 @@ let ctx_compute_trait_impl_name_raw (ctx : extraction_ctx)
             let nm_ctx = Charon.NameMatcher.ctx_from_crate ctx.crate in
             let self_name =
               match self with
-              | TAdt { id = TAdtId id; generics } -> (
+              | TAdt { id; generics; builtin = None } -> (
                   (* Lookup the ADT *)
                   match TypeDeclId.Map.find_opt id ctx.crate.type_decls with
                   | None ->

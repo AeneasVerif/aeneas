@@ -52,6 +52,7 @@ package «tests» {}
 @[default_target] lean_lib Issue194RecursiveStructProjector
 @[default_target] lean_lib Issue270LoopList
 @[default_target] lean_lib Issue440TypeError
+@[default_target] lean_lib Issue765HrtbConditionalNegate
 @[default_target] lean_lib Issue789LoopCtxMatch
 @[default_target] lean_lib Issue801Hrtb
 @[default_target] lean_lib Issue803SelfInArray
@@ -98,6 +99,7 @@ package «tests» {}
 @[default_target] lean_lib Slices
 @[default_target] lean_lib Static
 @[default_target] lean_lib StepBy
+@[default_target] lean_lib StepOverflowing
 @[default_target] lean_lib StringChars
 @[default_target] lean_lib SwitchTest
 @[default_target] lean_lib TargetFeatures
