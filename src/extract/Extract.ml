@@ -1203,7 +1203,7 @@ and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
                     if field_id + 1 = Option.get num_fields then twos_prefix
                     else twos_prefix ^ ".1"
                 else "#" ^ string_of_int field_id
-          else ctx_get_field span proj.adt_id proj.field_id ctx
+          else ctx_get_field ~qualified:true span proj.adt_id proj.field_id ctx
         in
         (* Open a box *)
         F.pp_open_hovbox fmt ctx.indent_incr;
@@ -2126,10 +2126,8 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
      [trait_default] attribute so that the [impl_def] command can unfold it when
      resolving self-referential trait-impl fields (see the TraitDefault elab). *)
   let trait_default =
-    if backend () = Lean then
-      match def.src with
-      | TraitDeclItem _ -> [ "trait_default" ]
-      | _ -> []
+    if backend () = Lean && fun_source_is_trait_default ctx def.src then
+      [ "trait_default" ]
     else []
   in
   let attributes = rust_attributes @ reduc_attribute @ trait_default in
@@ -2498,7 +2496,7 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
   in
   let trait_default =
     match decl.src with
-    | TraitDeclItem _ -> [ "trait_default" ]
+    | TraitDefaultGlobal _ -> [ "trait_default" ]
     | _ -> []
   in
   let attributes = attributes @ trait_default in
@@ -2838,7 +2836,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
     [%ldebug
       "compute_item_name: llbc_name=" ^ name_to_string ctx item_meta.name];
     let name =
-      ctx_compute_fun_global_name_no_suffix item_meta TopLevelItem
+      ctx_compute_fun_name_no_suffix item_meta NormalFun
         ~is_trait_decl_field:true ctx
     in
     (* Add a prefix if necessary *)
@@ -2888,17 +2886,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
   (* Register the names *)
   List.fold_left
     (fun ctx (method_id, default_id, fun_name) ->
-      (* Register the method name.
-
-          Similarly as with structure fields, in the case of Lean check
-          whether we collide with keywords. If it is the case, add french quotes.
-       *)
-      let fun_name =
-        match backend () with
-        | Lean when names_maps_is_keyword ctx.names_maps fun_name ->
-            "«" ^ fun_name ^ "»"
-        | _ -> fun_name
-      in
+      (* Register the method name *)
       let ctx =
         ctx_add trait_decl.item_meta.span
           (TraitMethodId (trait_decl.def_id, method_id))

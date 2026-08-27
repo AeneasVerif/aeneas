@@ -400,7 +400,6 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               match fid with
               | FunId (FBuiltin fid) -> begin
                   match fid with
-                  | BoxNew -> "box_new"
                   | ArrayRepeat -> "array_repeat"
                   | ArrayToSliceShared -> "to_slice_shared"
                   | ArrayToSliceMut -> "to_slice_mut"
@@ -687,7 +686,9 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
   *)
   let ctx, call_e =
     match call.call_id with
-    | S.Fun (FunId (FBuiltin BoxNew), _) ->
+    | S.Fun (FunId (FRegular fid), _)
+      when (FunDeclId.Map.find fid ctx.fun_ctx.llbc_fun_decls).item_meta
+             .diagnostic_item = Some "box_new" ->
         let ctx, back_funs_bodies =
           List.fold_left_map
             (fun ctx (f : tpat) ->
@@ -1511,7 +1512,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value) (scrutinee : texpr)
       [%add_loc] mk_closed_checked_let ctx monadic lv
         (mk_opt_mplace_texpr scrutinee_mplace scrutinee)
         branch
-  | TTuple ->
+  | TBuiltin TTuple ->
       let vars = List.map (fun x -> mk_tpat_from_fvar None x) vars in
       let monadic = false in
       [%add_loc] mk_closed_checked_let ctx monadic (mk_simpl_tuple_pat vars)

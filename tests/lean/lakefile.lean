@@ -5,6 +5,8 @@ require aeneas from "../../backends/lean"
 
 package «tests» {}
 
+/- File created by `tests/lean/script.sh`. -/
+
 @[default_target] lean_lib Adt
 @[default_target] lean_lib AdtBorrows
 @[default_target] lean_lib ArraySliceIndex
@@ -46,6 +48,7 @@ package «tests» {}
 @[default_target] lean_lib Issue1138SlicePositivity
 @[default_target] lean_lib Issue1140GlobalLoop
 @[default_target] lean_lib Issue1141ImplFnRef
+@[default_target] lean_lib Issue1250AnonymousConst
 @[default_target] lean_lib Issue134LoopSharedBorrows
 @[default_target] lean_lib Issue194RecursiveStructProjector
 @[default_target] lean_lib Issue270LoopList
@@ -63,6 +66,8 @@ package «tests» {}
 @[default_target] lean_lib IteratorsScalar
 @[default_target] lean_lib JoinDuplicate
 @[default_target] lean_lib Joins
+@[default_target] lean_lib LeanKeywords
+@[default_target] lean_lib LeanKeywordsClash
 @[default_target] lean_lib ListBorrows
 @[default_target] lean_lib LoopSharedBorrowProj
 @[default_target] lean_lib LoopSharedLoanInJoin
@@ -94,8 +99,10 @@ package «tests» {}
 @[default_target] lean_lib Slices
 @[default_target] lean_lib Static
 @[default_target] lean_lib StepBy
+@[default_target] lean_lib StepOverflowing
 @[default_target] lean_lib StringChars
 @[default_target] lean_lib SwitchTest
+@[default_target] lean_lib TargetFeatures
 @[default_target] lean_lib Traits
 @[default_target] lean_lib Tutorial
 @[default_target] lean_lib Vec

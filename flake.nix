@@ -6,7 +6,10 @@
     # arguments to `outputs` below!
     charon.url = "github:aeneasverif/charon";
     flake-utils.follows = "charon/flake-utils";
-    nixpkgs.follows = "charon/nixpkgs";
+    # Keep Aeneas on OCaml 5.2 for now. Newer nixpkgs revisions mark the
+    # matching ocaml-lsp 1.21 package broken, and it indeed fails to compile.
+    # Whenever we move to OCaml 5.4, we can go back to reusing Charon's nixpkgs.
+    nixpkgs.url = "github:NixOS/nixpkgs/b3d51a0365f6695e7dd5cdf3e180604530ed33b4";
     fstar.url = "github:FStarLang/fstar";
   };
 
@@ -186,11 +189,18 @@
             inputs.charon.packages.${system}.rustToolchain
           ];
           buildPhase = ''
+            # Check that the OCaml code is formatted
             make format
             rm -rf ./src/_build
             rm -rf ./tests/test_runner/_build
-            if ! diff --no-dereference -ru . ${src}; then
+            if ! diff --no-dereference -ru ${src} .; then
               echo 'ERROR: Code is not formatted. Run `make format` to format the project files.'
+              exit 1
+            fi
+            # Check that `tests/lean/lakefile.lean` is up to date.
+            make -C tests/lean lakefile.lean
+            if ! diff --no-dereference -u ${src}/tests/lean/lakefile.lean tests/lean/lakefile.lean; then
+              echo 'ERROR: tests/lean/lakefile.lean is out of date. Run `make -C tests/lean lakefile.lean`.'
               exit 1
             fi
           '';

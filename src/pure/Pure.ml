@@ -142,6 +142,14 @@ type pure_builtin_fun_id =
           bodies generate a call to [get_target] and dispatch on the result. The
           function is fallible and axiomatized; nothing can be deduced from its
           output. *)
+  | TargetFeatureEnabled
+      (** [target_feature_enabled feature] is [true] if the target feature
+          [feature] (e.g., ["avx2"]) is available on the machine executing the
+          code.
+
+          Used by the [-feature-gates] option: the functions annotated with
+          [#[target_feature(enable = "...")]] get an assertion introduced at the
+          beginning of their body. *)
 [@@deriving show, ord]
 
 (* Builtin declarations coming from external libraries.
@@ -927,15 +935,15 @@ and type_decl = {
       polymorphic = false;
     }]
 
-type field_proj_kind = E.field_proj_kind [@@deriving show, ord]
 type field_id = FieldId.id [@@deriving show, ord]
 
-(* TODO: we might want to redefine field_proj_kind here, to prevent field accesses
- * on enumerations.
- * Also: tuples...
- * Rmk: projections are actually only used as span-data.
- *)
-type mprojection_elem = { pkind : field_proj_kind; field_id : field_id }
+(** Field projections used as span data. The source type is retained because
+    meta-places otherwise erase the type carried by LLBC places. *)
+type mprojection_elem = {
+  type_id : type_id;
+  variant_id : VariantId.id option;
+  field_id : field_id;
+}
 [@@deriving show, ord]
 
 (** "Meta" place.
@@ -1786,7 +1794,8 @@ type fun_body = {
 }
 [@@deriving show]
 
-type item_source = T.item_source [@@deriving show]
+type fun_source = A.fun_source [@@deriving show]
+type global_source = A.global_source [@@deriving show]
 
 (** Attributes to add to the generated code *)
 type backend_attributes = {
@@ -1811,7 +1820,7 @@ type fun_decl = {
   def_id : FunDeclId.id;
   item_meta : T.item_meta;
   builtin_info : builtin_fun_info option;
-  src : item_source;
+  src : fun_source;
   backend_attributes : backend_attributes;
   num_loops : int;
       (** The number of loops in the parent forward function (basically the
@@ -1868,7 +1877,7 @@ type global_decl = {
           wrapped inside [Result]) *)
   output_ty : ty;  (** The pure type of the global (without [Result]) *)
   can_fail : bool;  (** [true] if the global can fail *)
-  src : item_source;
+  src : global_source;
   body_id : FunDeclId.id;
 }
 [@@deriving show]

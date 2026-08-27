@@ -460,21 +460,22 @@ let var_to_string (env : fmt_env) (v : var) : string =
 
 let mprojection_elem_to_string (env : fmt_env) (inside : string)
     (pe : mprojection_elem) : string =
-  match pe.pkind with
-  | E.ProjTuple _ -> "(" ^ inside ^ ")." ^ T.FieldId.to_string pe.field_id
-  | E.ProjAdt (adt_id, opt_variant_id) -> (
+  match pe.type_id with
+  | TTuple -> "(" ^ inside ^ ")." ^ T.FieldId.to_string pe.field_id
+  | TAdtId adt_id -> (
       let field_name =
-        match adt_field_to_string env adt_id opt_variant_id pe.field_id with
+        match adt_field_to_string env adt_id pe.variant_id pe.field_id with
         | Some field_name -> field_name
         | None -> T.FieldId.to_string pe.field_id
       in
-      match opt_variant_id with
+      match pe.variant_id with
       | None -> "(" ^ inside ^ ")." ^ field_name
       | Some variant_id ->
           let variant_name =
             adt_variant_from_type_decl_id_to_string env adt_id variant_id
           in
           "(" ^ inside ^ " as " ^ variant_name ^ ")." ^ field_name)
+  | TBuiltin _ -> failwith "Unexpected field projection"
 
 let rec mplace_to_string (env : fmt_env) (p : mplace) : string =
   match p with
@@ -864,6 +865,7 @@ let pure_builtin_fun_id_to_string (fid : pure_builtin_fun_id) : string =
   | Discriminant -> "@discriminant"
   | ResultUnwrapMut -> "@resultUnwrapMut"
   | GetTarget -> "@getTarget"
+  | TargetFeatureEnabled -> "@targetFeatureEnabled"
 
 let regular_fun_id_to_string (env : fmt_env) (fun_id : fun_id) : string =
   match fun_id with
