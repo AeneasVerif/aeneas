@@ -102,19 +102,6 @@ module Sig = struct
         };
     }
 
-  (** [fn<T>(Box<T>) -> ()] *)
-  let box_free_sig : bound_fun_sig =
-    let generics =
-      mk_generic_params [] [ type_param_0 ] []
-      (* <T> *)
-    in
-    let inputs = [ mk_box_ty tvar_0 (* Box<T> *) ] in
-    let output =
-      mk_unit_ty
-      (* () *)
-    in
-    mk_sig generics inputs output
-
   (** Array/slice functions *)
 
   (** Small helper.

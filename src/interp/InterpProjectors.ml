@@ -27,12 +27,11 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
     | VLiteral _, TLiteral _ ->
         [%ldebug "literals"];
         []
-    | VAdt adt, TAdt { id; generics } ->
+    | VAdt adt, TAdt tref ->
         [%ldebug "adts"];
         (* Retrieve the types of the fields *)
         let field_types =
-          ctx_adt_get_instantiated_field_types span ctx id adt.variant_id
-            generics
+          ctx_adt_get_instantiated_field_types span ctx tref adt.variant_id
         in
 
         (* Project over the field values *)
@@ -115,11 +114,10 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
     let value : avalue =
       match (v.value, ty) with
       | VLiteral _, TLiteral _ -> AIgnored (Some v)
-      | VAdt adt, TAdt { id; generics } ->
+      | VAdt adt, TAdt tref ->
           (* Retrieve the types of the fields *)
           let field_types =
-            ctx_adt_get_instantiated_field_types span ctx id adt.variant_id
-              generics
+            ctx_adt_get_instantiated_field_types span ctx tref adt.variant_id
           in
           (* Project over the field values *)
           let fields_types = List.combine adt.fields field_types in
@@ -269,11 +267,10 @@ let rec apply_eproj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
     let value : evalue =
       match (v.value, ty) with
       | VLiteral _, TLiteral _ -> EIgnored (Some (ctx.env, v))
-      | VAdt adt, TAdt { id; generics } ->
+      | VAdt adt, TAdt tref ->
           (* Retrieve the types of the fields *)
           let field_types =
-            ctx_adt_get_instantiated_field_types span ctx id adt.variant_id
-              generics
+            ctx_adt_get_instantiated_field_types span ctx tref adt.variant_id
           in
           (* Project over the field values *)
           let fields_types = List.combine adt.fields field_types in
@@ -432,11 +429,10 @@ let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
     | SeLiteral lit, TLiteral _ ->
         ( AIgnored (Some { value = VLiteral lit; ty = original_sv_ty }),
           original_sv_ty )
-    | SeAdt (variant_id, fields), TAdt { id = adt_id; generics } ->
+    | SeAdt (variant_id, fields), TAdt tref ->
         (* Project over the field values *)
         let field_types =
-          ctx_adt_get_instantiated_field_types span ctx adt_id variant_id
-            generics
+          ctx_adt_get_instantiated_field_types span ctx tref variant_id
         in
         let fields =
           List.map2
@@ -497,11 +493,10 @@ let apply_eproj_loans_on_symbolic_expansion (span : Meta.span)
     | SeLiteral lit, TLiteral _ ->
         ( EIgnored (Some (ctx.env, { value = VLiteral lit; ty = proj_ty })),
           original_sv_ty )
-    | SeAdt (variant_id, fields), TAdt { id = adt_id; generics } ->
+    | SeAdt (variant_id, fields), TAdt tref ->
         (* Project over the field values *)
         let field_types =
-          ctx_adt_get_instantiated_field_types span ctx adt_id variant_id
-            generics
+          ctx_adt_get_instantiated_field_types span ctx tref variant_id
         in
         let fields =
           List.map2
