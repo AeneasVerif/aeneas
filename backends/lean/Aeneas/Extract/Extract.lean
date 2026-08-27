@@ -295,54 +295,20 @@ def leanNameToRust (n0 : Name) : AttrM String := do
     | _ => throwError "Ill-formed name: `{n0}`"
   toRust n0
 
-/-- Does a name need escaping with `« ... »`?
+/- Remark: the names we generate below are *not* escaped with French quotes (`« ... »`), even
+   when they are Lean keywords (e.g., `end`, `from`). Aeneas stores the unescaped names,
+   and escapes them only when generating the extracted code. -/
 
-We do it the naive way by formatting the name and checking whether it is equal to the name directly
-converted to a string.
--/
-def needsEscape (n : Name) : AttrM Bool := do
-  let s := toMessageData (mkIdent n)
-  let s := Format.pretty (← s.format (some {env := (← getEnv), opts := (← getOptions), mctx := {}, lctx := {}}))
-  let n := n.toString
-  pure (n ≠ s)
-
-/--
-info: true
--/
-#guard_msgs in
-#eval needsEscape `let
-
-/--
-info: true
--/
-#guard_msgs in
-#eval needsEscape `if
-
-/--
-info: false
--/
-#guard_msgs in
-#eval needsEscape `bool
-
-/--
-info: false
--/
-#guard_msgs in
-#eval needsEscape `Bool
-
-def maybeEscape (n : Name) : AttrM String := do
-  if (← needsEscape n) then pure s!"«{n}»" else pure n.toString
-
-def fieldNameToString (toLean : Bool) (n : Name) : AttrM String := do
+def fieldNameToString (_toLean : Bool) (n : Name) : AttrM String := do
   match n with
-  | .str .anonymous _ => if toLean then maybeEscape n else pure n.toString
+  | .str .anonymous field => pure field
   | _ => throwError "Ill-formed field name: `{n}`"
 
 def variantNameToString (declName : Name) (toLean : Bool) (n : Name) : AttrM String := do
   match n with
   | .str pre variant =>
     if pre ≠ declName then throwError "Ill-formed variant name: `{n}`"
-    if toLean then maybeEscape (.str .anonymous variant) else pure variant.capitalize
+    if toLean then pure variant else pure variant.capitalize
   | _ => throwError "Ill-formed field name: `{n}`"
 
 /-!
@@ -402,11 +368,6 @@ def elabTypeNameInfo (stx : Syntax) : AttrM (String × TypeInfo) :=
       let info ← liftCommandElabM (elabRustTypeInfo config)
       pure (pat, info)
     | _ => Lean.Elab.throwUnsupportedSyntax
-
-def needsFrenchQuotes (s : String) : Bool :=
-  -- Convert to Name and back with escape=false to see if it needs escaping
-  let name := s.toName
-  name.toString (escape := false) != s
 
 structure ElemInfo where
   rust : String

@@ -65,6 +65,8 @@ package «tests» {}
 @[default_target] lean_lib IteratorsScalar
 @[default_target] lean_lib JoinDuplicate
 @[default_target] lean_lib Joins
+@[default_target] lean_lib LeanKeywords
+@[default_target] lean_lib LeanKeywordsClash
 @[default_target] lean_lib ListBorrows
 @[default_target] lean_lib Loops
 @[default_target] lean_lib LoopsAdts
