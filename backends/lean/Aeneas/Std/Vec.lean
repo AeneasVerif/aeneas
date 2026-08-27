@@ -137,7 +137,7 @@ def Vec.insert {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
   if i.val < v.length then
     if h : v.length < Usize.max then
       ok ⟨ v.val.insertIdx i x,
-        List.length_insertIdx_le_succ.trans (Nat.succ_le_of_lt h) ⟩
+           List.length_insertIdx_le_succ.trans (Nat.succ_le_of_lt h) ⟩
     else
       fail maximumSizeExceeded
   else
