@@ -1165,6 +1165,11 @@ let filter_useless (ctx : ctx) (def : fun_decl) : fun_decl =
               else if texpr_cannot_fail re then
                 (* Monadic let-binding that always succeeds: safe to remove *)
                 (e.e, used)
+              else if texpr_failure_subsumed_by_cont re e then
+                (* Monadic let-binding whose outputs are unused ([all_dummies])
+                   and whose failure is subsumed by the expression which
+                   immediately follows it: safe to remove *)
+                (e.e, used)
               else
                 (* Monadic let-binding and the bound expression may fail: can't filter *)
                 dont_filter ()
