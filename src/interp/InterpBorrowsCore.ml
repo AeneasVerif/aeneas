@@ -2251,7 +2251,7 @@ let rec norm_proj_tys_union (span : Meta.span) ?(strict : bool = true)
       [%sanity_check] span (tref1.id = tref2.id);
       TAdt
         {
-          id = tref1.id;
+          tref1 with
           generics =
             norm_proj_generic_args_union span ~strict ctx tref1.generics
               tref2.generics;

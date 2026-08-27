@@ -170,8 +170,8 @@ let simplify_decompose_struct_visitor (ctx : ctx) (def : fun_decl) =
                  like Lean have projectors for tuples (like so: `x.3`), but others
                  like Coq don't, in which case we have to deconstruct the whole ADT
                  at once (`let (a, b, c) = x in`) *)
-            || TypesUtils.type_decl_from_type_id_is_tuple_struct
-                 ctx.trans_ctx.type_ctx.type_infos (T.TAdtId adt_id)
+            || TypesUtils.type_decl_from_decl_id_is_tuple_struct
+                 ctx.trans_ctx.type_ctx.type_infos adt_id
                && not !Config.use_tuple_projectors
           in
           if use_let_with_cons then
