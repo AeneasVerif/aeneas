@@ -206,7 +206,7 @@ let set_discriminant (config : config) (span : Meta.span) (p : place)
   let v, ctx, cc = comp2 cc (prepare_lplace config span p ctx) in
   (* Update the value *)
   match (v.ty, v.value) with
-  | TAdt { id = TAdtId _ as type_id; generics }, VAdt av -> (
+  | TAdt { id = def_id; generics; builtin = None }, VAdt av -> (
       (* There are two situations:
          - either the discriminant is already the proper one (in which case we
            don't do anything)
@@ -221,23 +221,17 @@ let set_discriminant (config : config) (span : Meta.span) (p : place)
           else
             (* Replace the value *)
             let bottom_v =
-              match type_id with
-              | TAdtId def_id ->
-                  compute_expanded_bottom_adt_value span ctx def_id
-                    (Some variant_id) generics
-              | _ -> [%craise] span "Unreachable"
+              compute_expanded_bottom_adt_value span ctx def_id
+                (Some variant_id) generics
             in
             let ctx, cc =
               comp cc (assign_to_place config span bottom_v p ctx)
             in
             ((ctx, Unit), cc))
-  | TAdt { id = TAdtId _ as type_id; generics }, VBottom ->
+  | TAdt { id = def_id; generics; builtin = None }, VBottom ->
       let bottom_v =
-        match type_id with
-        | TAdtId def_id ->
-            compute_expanded_bottom_adt_value span ctx def_id (Some variant_id)
-              generics
-        | _ -> [%craise] span "Unreachable"
+        compute_expanded_bottom_adt_value span ctx def_id (Some variant_id)
+          generics
       in
       let ctx, cc = comp cc (assign_to_place config span bottom_v p ctx) in
       ((ctx, Unit), cc)
@@ -368,9 +362,12 @@ let eval_box_new_concrete (config : config) (span : Meta.span)
       [%cassert] span (v.ty = boxed_ty)
         "The input given to Box::new doesn't have the proper type";
 
-      (* Create the new box *)
-      let generics = TypesUtils.mk_generic_args_from_types [ boxed_ty ] in
-      let box_ty = TAdt { id = TBuiltin TBox; generics } in
+      (* Create the new box. We use the type of the destination: this saves us
+         from having to look up the id of the declaration of [Box]. *)
+      let box_ty = call.dest.ty in
+      [%cassert] span
+        (ty_as_opt_box box_ty = Some boxed_ty)
+        "The destination of Box::new doesn't have the proper type";
       let box_v = VAdt { variant_id = None; fields = [ v ] } in
       let box_v = mk_tvalue span box_ty box_v in
       comp cc (assign_to_place config span box_v call.dest ctx)

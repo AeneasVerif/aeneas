@@ -143,10 +143,10 @@ module Values = struct
     | TArray _ ->
         (* Happens when we aggregate values *)
         "@Array[" ^ String.concat ", " fields ^ "]"
-    | TAdt { id = TBuiltin TTuple; _ } ->
+    | TAdt { builtin = Some TTuple; _ } ->
         (* Tuple *)
         "(" ^ String.concat ", " fields ^ ")"
-    | TAdt { id = TAdtId def_id; _ } ->
+    | TAdt { id = def_id; builtin = None; _ } ->
         (* "Regular" ADT *)
         let adt_ident =
           match variant_id with
@@ -168,7 +168,7 @@ module Values = struct
               let fields = String.concat " " fields in
               adt_ident ^ " { " ^ fields ^ " }"
         else adt_ident
-    | TAdt { id = TBuiltin aty; _ } -> (
+    | TAdt { builtin = Some aty; _ } -> (
         (* Builtin type *)
         match (aty, fields) with
         | TBox, [ bv ] -> "@Box(" ^ bv ^ ")"
