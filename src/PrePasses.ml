@@ -1190,7 +1190,7 @@ let filter_marker_traits (crate : crate) : crate =
 
         method! visit_trait_ref_kind env (kind : trait_ref_kind) =
           match kind with
-          | BuiltinOrAuto (data, parent_refs, types) ->
+          | BuiltinOrAuto (data, parent_refs, types, vtable) ->
               let parent_refs =
                 List.filter (fun tr -> not (is_filtered_ref tr)) parent_refs
               in
@@ -1202,7 +1202,8 @@ let filter_marker_traits (crate : crate) : crate =
                   (fun t -> self#visit_trait_assoc_ty_impl env t)
                   types
               in
-              BuiltinOrAuto (data, parent_refs, types)
+              let vtable = Option.map (self#visit_global_decl_ref env) vtable in
+              BuiltinOrAuto (data, parent_refs, types, vtable)
           | _ -> super#visit_trait_ref_kind env kind
 
         method! visit_trait_decl env (decl : trait_decl) =
@@ -1316,7 +1317,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
                 match (cv.kind, cv.ty) with
                 | ( CLiteral (VStr str),
                     TRef
-                      (_, (TAdt { id = TBuiltin TStr; _ } as str_ty), ref_kind)
+                      (_, (TAdt { builtin = Some TStr; _ } as str_ty), ref_kind)
                   ) ->
                     (* We need to introduce intermediate assignments *)
                     (* First the string initialization *)
@@ -2168,6 +2169,11 @@ let simplify_trait_calls (crate : crate) : crate =
       if f.item_meta.is_local then visitor#visit_fun_decl_id () f.def_id;
       match f.body with
       | StructuredBody body -> visitor#visit_block () body.body
+      | TargetDispatchBody targets ->
+          List.iter
+            (fun ((_ : string), (fdr : Types.fun_decl_ref)) ->
+              visitor#visit_fun_decl_id () fdr.id)
+            targets
       | _ -> ())
     crate.fun_decls;
 
@@ -2259,10 +2265,11 @@ let fix_closure_lifetimes (crate : crate) (f : fun_decl) : fun_decl =
      We do the update only if the state is inside a reference. *)
   let find_input_region (ty : ty) =
     match ty with
-    | TAdt { id = TAdtId id; generics = { regions = [ RVar rid ]; _ } }
+    | TAdt { id; generics = { regions = [ RVar rid ]; _ }; builtin = None }
     | TRef
-        (_, TAdt { id = TAdtId id; generics = { regions = [ RVar rid ]; _ } }, _)
-      -> (
+        ( _,
+          TAdt { id; generics = { regions = [ RVar rid ]; _ }; builtin = None },
+          _ ) -> (
         match TypeDeclId.Map.find_opt id crate.type_decls with
         | Some decl -> (
             match decl.src with

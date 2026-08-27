@@ -19,7 +19,7 @@ type symbolic_expr_id = Contexts.symbolic_expr_id [@@deriving show, eq, ord]
     information, etc.). We later use this place information to generate
     meaningful name, to prettify the generated code. *)
 type mprojection_elem = {
-  type_id : type_id;
+  type_ref : type_decl_ref;
   variant_id : variant_id option;
   field_id : field_id;
 }

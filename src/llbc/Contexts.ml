@@ -648,13 +648,12 @@ let ctx_type_get_instantiated_field_etypes (span : Meta.span) (ctx : eval_ctx)
 (** Return the types of the properly instantiated ADT value (note that here, ADT
     is understood in its broad meaning: ADT, builtin value or tuple). *)
 let ctx_adt_get_instantiated_field_types (span : Meta.span) (ctx : eval_ctx)
-    (id : type_id) (variant_id : variant_id option) (generics : generic_args) :
-    ty list =
-  match id with
-  | TAdtId id ->
-      (* Retrieve the types of the fields *)
-      ctx_type_get_instantiated_field_types span ctx id variant_id generics
-  | TBuiltin aty -> (
+    (tref : type_decl_ref) (variant_id : variant_id option) : ty list =
+  let generics = tref.generics in
+  match tref.builtin with
+  | None ->
+      ctx_type_get_instantiated_field_types span ctx tref.id variant_id generics
+  | Some aty -> (
       match aty with
       | TTuple ->
           [%cassert] span (variant_id = None) "Tuples don't have variants";
