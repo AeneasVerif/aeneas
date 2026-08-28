@@ -6,8 +6,7 @@ namespace Aeneas.Std
 open Result
 
 /-- Pure model of `Result::map_err`: leaves `Ok` untouched and maps the payload
-    of `Err` through `fnOnce`. The mapping call itself lives in the `Result`
-    monad, so `map_err` can fail whenever `fnOnce` does. -/
+    of `Err` through `fnOnce`. -/
 @[rust_fun "core::result::{core::result::Result<@T, @E>}::map_err"]
 def core.result.Result.map_err
   {T E F O : Type} (fnOnce : core.ops.function.FnOnce O E F)
