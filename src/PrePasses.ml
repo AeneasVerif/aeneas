@@ -242,7 +242,9 @@ let update_array_default (crate : crate) : crate =
           TraitImplId.Set.add_in_place id decl_ids
       end
     in
-    List.iter (collect_visitor#visit_declaration_group ()) crate.declarations;
+    List.iter
+      (collect_visitor#visit_declaration_group ())
+      (Option.get crate.declarations);
     let impls_in_decls =
       TraitImplId.Map.filter
         (fun id _ -> TraitImplId.Set.mem id !decl_ids)
@@ -361,7 +363,9 @@ let update_array_default (crate : crate) : crate =
         crate with
         fun_decls = FunDeclId.Map.filter_map visit_fun crate.fun_decls;
         declarations =
-          filter_ids_visitor#visit_declaration_groups () crate.declarations;
+          Some
+            (filter_ids_visitor#visit_declaration_groups ()
+               (Option.get crate.declarations));
       }
     in
 
@@ -1117,7 +1121,7 @@ let filter_marker_traits (crate : crate) : crate =
                   in
                   if ids <> [] then Some (MixedGroup (RecGroup ids)) else None)
           | _ -> Some g)
-        crate.declarations
+        (Option.get crate.declarations)
     in
     let trait_decls =
       TraitDeclId.Map.filter
@@ -1142,7 +1146,7 @@ let filter_marker_traits (crate : crate) : crate =
     let crate =
       {
         crate with
-        declarations;
+        declarations = Some declarations;
         trait_decls;
         trait_impls;
         global_decls;
@@ -1246,9 +1250,10 @@ let filter_type_aliases (crate : crate) : crate =
         (fun _id ty -> not (type_decl_is_alias ty))
         crate.type_decls;
     declarations =
-      List.filter
-        (fun decl -> not (decl_group_is_single_alias decl))
-        crate.declarations;
+      Some
+        (List.filter
+           (fun decl -> not (decl_group_is_single_alias decl))
+           (Option.get crate.declarations));
   }
 
 (** Whenever we write a string literal in Rust, rustc actually introduces a
@@ -1919,7 +1924,7 @@ let remove_vtables (crate : crate) : crate =
                 else Some (MixedGroup (RecGroup ids))
             | _ -> Some (MixedGroup g))
         | _ -> Some g)
-      crate.declarations
+      (Option.get crate.declarations)
   in
 
   (* *)
@@ -1949,7 +1954,14 @@ let remove_vtables (crate : crate) : crate =
       crate.trait_decls
   in
 
-  { crate with declarations; type_decls; global_decls; fun_decls; trait_decls }
+  {
+    crate with
+    declarations = Some declarations;
+    type_decls;
+    global_decls;
+    fun_decls;
+    trait_decls;
+  }
 
 let name_is_valid (n : string) : bool =
   let is_valid_char c =
@@ -2213,7 +2225,9 @@ let simplify_trait_calls (crate : crate) : crate =
         else false
     | _ -> true
   in
-  let declarations = List.filter keep_group crate.declarations in
+  let declarations =
+    Some (List.filter keep_group (Option.get crate.declarations))
+  in
 
   (* *)
   { crate with declarations }
