@@ -162,9 +162,10 @@ let update_update_array
   (s : array (array u32 32) 32) (i : usize) (j : usize) :
   result (array (array u32 32) 32)
   =
-  let* (a, index_mut_back) = array_index_mut_usize s i in
+  let* (a, core_slice_index_slice_index_mut_back) = array_index_mut_usize s i
+  in
   let* a1 = array_update_usize a j 0 in
-  Ok (index_mut_back a1)
+  Ok (core_slice_index_slice_index_mut_back a1)
 
 (** [arrays::update_update_slice]:
     Source: 'tests/src/arrays.rs', lines 125:0-127:1
@@ -173,9 +174,10 @@ let update_update_slice
   (s : slice (array u32 32)) (i : usize) (j : usize) :
   result (slice (array u32 32))
   =
-  let* (a, index_mut_back) = slice_index_mut_usize s i in
+  let* (a, core_slice_index_slice_index_mut_back) = slice_index_mut_usize s i
+  in
   let* a1 = array_update_usize a j 0 in
-  Ok (index_mut_back a1)
+  Ok (core_slice_index_slice_index_mut_back a1)
 
 (** [arrays::update_update_slice_shifted]:
     Source: 'tests/src/arrays.rs', lines 131:0-133:1
@@ -187,9 +189,10 @@ let update_update_slice_shifted
   let* i1 = usize_add i 1 in
   let* a = slice_index_usize s i1 in
   let* i2 = array_index_usize a j in
-  let* (a1, index_mut_back) = slice_index_mut_usize s i in
+  let* (a1, core_slice_index_slice_index_mut_back) = slice_index_mut_usize s i
+  in
   let* a2 = array_update_usize a1 j i2 in
-  Ok (index_mut_back a2)
+  Ok (core_slice_index_slice_index_mut_back a2)
 
 (** [arrays::array_local_deep_copy]:
     Source: 'tests/src/arrays.rs', lines 135:0-137:1
@@ -258,7 +261,7 @@ let const_array : result (array u32 2) =
     Source: 'tests/src/arrays.rs', lines 165:0-168:1
     Visibility: public *)
 let const_slice : result u32 =
-  let a = array_repeat 2 0 in let s = array_to_slice a in slice_index_usize s 0
+  let a = array_repeat 2 0 in array_index_usize a 0
 
 (** [arrays::take_all]:
     Source: 'tests/src/arrays.rs', lines 176:0-188:1
@@ -450,9 +453,7 @@ let sum2 (s : slice u32) (s2 : slice u32) : result u32 =
     Source: 'tests/src/arrays.rs', lines 306:0-309:1
     Visibility: public *)
 let f0 : result unit =
-  let (s, _) = array_to_slice_mut (mk_array 2 [ 1; 2 ]) in
-  let* _ = slice_index_mut_usize s 0 in
-  Ok ()
+  let* _ = array_index_mut_usize (mk_array 2 [ 1; 2 ]) 0 in Ok ()
 
 (** [arrays::f1]:
     Source: 'tests/src/arrays.rs', lines 311:0-314:1

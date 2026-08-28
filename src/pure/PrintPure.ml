@@ -838,13 +838,9 @@ let fun_suffix (lp_id : (LoopId.id * bool) option) : string =
   in
   lp_suff
 
-let llbc_builtin_fun_id_to_string (fid : A.builtin_fun_id) : string =
-  Charon.Print.builtin_fun_id_to_string fid
-
 let llbc_fun_id_to_string (env : fmt_env) (fid : A.fun_id) : string =
-  match fid with
-  | FRegular fid -> fun_decl_id_to_string env fid
-  | FBuiltin fid -> llbc_builtin_fun_id_to_string fid
+  let (FRegular fid) = fid in
+  fun_decl_id_to_string env fid
 
 let pure_builtin_fun_id_to_string (fid : pure_builtin_fun_id) : string =
   match fid with
@@ -862,6 +858,16 @@ let pure_builtin_fun_id_to_string (fid : pure_builtin_fun_id) : string =
       | Array -> "@arrayUpdate"
       | Slice -> "@sliceUpdate"
     end
+  | IndexAtIndex array_or_slice -> begin
+      match array_or_slice with
+      | Array -> "@arrayIndex"
+      | Slice -> "@sliceIndex"
+    end
+  | IndexMutAtIndex array_or_slice -> begin
+      match array_or_slice with
+      | Array -> "@arrayIndexMut"
+      | Slice -> "@sliceIndexMut"
+    end
   | Discriminant -> "@discriminant"
   | ResultUnwrapMut -> "@resultUnwrapMut"
   | GetTarget -> "@getTarget"
@@ -873,7 +879,6 @@ let regular_fun_id_to_string (env : fmt_env) (fun_id : fun_id) : string =
       let f =
         match fid with
         | FunId (FRegular fid) -> fun_decl_id_to_string env fid
-        | FunId (FBuiltin fid) -> llbc_builtin_fun_id_to_string fid
         | TraitMethod (trait_ref, method_id) ->
             let method_name =
               Charon.GAstUtils.get_method_name env.crate

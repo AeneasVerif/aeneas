@@ -92,7 +92,7 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
              (projections_intersect span ctx ctx.ended_regions s.sv_ty regions
                 ty));
         [ AsbProjReborrows { sv_id = s.sv_id; proj_ty = ty } ]
-    | VAdt adt, TArray (ty, _) ->
+    | VAdt adt, TArray (ty, _, _) ->
         List.flatten
           (List.map
              (fun v ->
@@ -134,7 +134,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
               variant_id = adt.variant_id;
               fields = proj_fields;
             }
-      | VAdt adt, TArray (elem_ty, _) ->
+      | VAdt adt, TArray (elem_ty, _, _) ->
           let proj_fields =
             List.map
               (fun fv ->
@@ -287,7 +287,7 @@ let rec apply_eproj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
               variant_id = adt.variant_id;
               fields = proj_fields;
             }
-      | VAdt adt, TArray (elem_ty, _) ->
+      | VAdt adt, TArray (elem_ty, _, _) ->
           let proj_fields =
             List.map
               (fun fv ->

@@ -655,6 +655,12 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
   (* Definitions not for Lean *)
   @ mk_not_lean
       [
+        mk_fun "core::array::repeat" ~extract_name:(Some "array_repeat")
+          ~keep_trait_clauses:(Some [ false ]) ~can_fail:false ~lift:false ();
+        mk_fun "core::array::{[@T; @N]}::as_slice"
+          ~extract_name:(Some "array_to_slice") ~can_fail:false ();
+        mk_fun "core::array::{[@T; @N]}::as_mut_slice"
+          ~extract_name:(Some "array_to_slice_mut") ~can_fail:false ();
         mk_fun "core::mem::replace" ~can_fail:false ~lift:false ();
         mk_fun "core::mem::take" ~can_fail:false ~lift:false ();
         mk_fun "core::option::{core::option::Option<@T>}::unwrap"

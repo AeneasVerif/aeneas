@@ -716,8 +716,6 @@ let lift_fun (ctx : ctx) (fun_id : fun_id) : bool =
           | None -> false
           | Some info -> info.lift)
     end
-  | FromLlbc (FunId (FBuiltin (ArrayToSliceShared | ArrayToSliceMut)), _) ->
-      true
   | _ -> false
 
 (** A helper predicate *)
@@ -2370,6 +2368,324 @@ let apply_beta_reduction_visitor (ctx : ctx) (def : fun_decl) =
 let apply_beta_reduction =
   lift_expr_map_visitor_with_state apply_beta_reduction_visitor FVarId.Map.empty
 
+(** Return whether a translated function matches [pattern]. *)
+let fun_matches_name (ctx : ctx) (fid : FunDeclId.id) pattern : bool =
+  let decl = FunDeclId.Map.find fid ctx.fun_decls in
+  let mctx = NameMatcher.ctx_from_crate ctx.crate in
+  NameMatcher.match_name mctx ExtractName.default_match_config pattern
+    decl.item_meta.name
+
+let destruct_matching_call (ctx : ctx) pattern (e : texpr) :
+    (generic_args * texpr list) option =
+  match opt_destruct_function_call e with
+  | Some (Fun (FromLlbc (FunId (FRegular fid), None)), generics, args)
+    when fun_matches_name ctx fid pattern -> Some (generics, args)
+  | _ -> None
+
+let mk_pure_call (span : Meta.span) (id : pure_builtin_fun_id)
+    (generics : generic_args) (args : texpr list) (ty : ty) : texpr =
+  let qualif = { id = FunOrOp (Fun (Pure id)); generics } in
+  let qualif =
+    {
+      e = Qualif qualif;
+      ty = mk_arrows (List.map (fun (e : texpr) -> e.ty) args) ty;
+    }
+  in
+  [%add_loc] mk_apps span qualif args
+
+type array_view = { array : texpr; generics : generic_args }
+
+(** Recover [array_index_usize a i] from the standard-library lowering
+    [SliceIndex<usize>::index i (a.as_slice())]. *)
+let recover_array_index_usize_visitor (ctx : ctx) (def : fun_decl) =
+  let span = def.item_meta.span in
+  let as_slice =
+    NameMatcher.parse_pattern "core::array::{[@T; @N]}::as_slice"
+  in
+  let index =
+    NameMatcher.parse_pattern
+      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
+       @T>}::index"
+  in
+  object (self)
+    inherit [_] map_expr as super
+
+    method! visit_Let env monadic pat bound next =
+      let bound = self#visit_texpr env bound in
+      match (pat.pat, destruct_matching_call ctx as_slice bound) with
+      | POpen (slice, _), Some (generics, [ array ]) ->
+          let env = FVarId.Map.add slice.id { array; generics } env in
+          let next = self#visit_texpr env next in
+          if FVarId.Set.mem slice.id (texpr_get_fvars next) then
+            Let (monadic, pat, bound, next)
+          else next.e
+      | _ ->
+          let next = self#visit_texpr env next in
+          Let (monadic, pat, bound, next)
+
+    method! visit_texpr env e =
+      match destruct_matching_call ctx index e with
+      | Some (_, [ i; { e = FVar slice; _ } ]) -> begin
+          match FVarId.Map.find_opt slice env with
+          | Some { array; generics } ->
+              mk_pure_call span (IndexAtIndex Array) generics
+                [ array; self#visit_texpr env i ]
+                e.ty
+          | None -> super#visit_texpr env e
+        end
+      | _ -> super#visit_texpr env e
+  end
+
+let recover_array_index_usize =
+  lift_expr_map_visitor_with_state recover_array_index_usize_visitor
+    FVarId.Map.empty
+
+type mut_array_view = {
+  array : texpr;
+  generics : generic_args;
+  array_back : fvar option;
+}
+
+let count_fvar_uses (fid : FVarId.id) (e : texpr) : int =
+  let count = ref 0 in
+  let visitor =
+    object
+      inherit [_] iter_expr
+      method! visit_fvar_id _ fid' = if fid = fid' then incr count
+    end
+  in
+  visitor#visit_texpr () e;
+  !count
+
+(** Replace every generated composition [array_back (index_back x)] with the
+    backward function returned by [array_index_mut_usize]. *)
+let rewrite_index_backs (span : Meta.span) (slice_back : fvar)
+    (index_back : fvar) (array_index_back : fvar) (e : texpr) : texpr * int =
+  let rewritten = ref 0 in
+  let is_call_to (fid : FVarId.id) (e : texpr) : texpr option =
+    let e = unmeta e in
+    let f, args = destruct_apps e in
+    match (f.e, args) with
+    | FVar fid', [ arg ] when fid = fid' -> Some arg
+    | _ -> None
+  in
+  let mk_back_call arg =
+    let back = mk_texpr_from_fvar array_index_back in
+    [%add_loc] mk_apps span back [ arg ]
+  in
+  let visitor =
+    object (self)
+      inherit [_] map_expr as super
+
+      method! visit_Let env monadic pat bound next =
+        match (pat.pat, is_call_to index_back.id bound) with
+        | POpen (tmp, _), Some arg ->
+            let next = self#visit_texpr env next in
+            let replacements = ref 0 in
+            let replace_slice_back =
+              object
+                inherit [_] map_expr as super
+
+                method! visit_texpr env e =
+                  match is_call_to slice_back.id e with
+                  | Some { e = FVar tmp'; _ } when tmp.id = tmp' ->
+                      incr replacements;
+                      mk_back_call (self#visit_texpr env arg)
+                  | _ -> super#visit_texpr env e
+              end
+            in
+            let next' = replace_slice_back#visit_texpr env next in
+            if !replacements > 0 && !replacements = count_fvar_uses tmp.id next
+            then (
+              rewritten := !rewritten + !replacements;
+              next'.e)
+            else
+              let bound = self#visit_texpr env bound in
+              Let (monadic, pat, bound, next)
+        | _ -> super#visit_Let env monadic pat bound next
+
+      method! visit_texpr env e =
+        match is_call_to slice_back.id e with
+        | Some inner -> begin
+            match is_call_to index_back.id inner with
+            | Some arg ->
+                incr rewritten;
+                mk_back_call (self#visit_texpr env arg)
+            | None -> super#visit_texpr env e
+          end
+        | None -> super#visit_texpr env e
+    end
+  in
+  let e = visitor#visit_texpr () e in
+  (e, !rewritten)
+
+(** Recover [array_index_mut_usize a i] and its composed backward function from
+    [a.as_mut_slice()] followed by [SliceIndex<usize>::index_mut]. *)
+let recover_array_index_mut_usize_visitor (ctx : ctx) (def : fun_decl) =
+  let span = def.item_meta.span in
+  let as_mut_slice =
+    NameMatcher.parse_pattern "core::array::{[@T; @N]}::as_mut_slice"
+  in
+  let index_mut =
+    NameMatcher.parse_pattern
+      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
+       @T>}::index_mut"
+  in
+  object (self)
+    inherit [_] map_expr
+
+    method! visit_Let env monadic pat bound next =
+      let bound = self#visit_texpr env bound in
+      match
+        ( pat.pat,
+          destruct_matching_call ctx as_mut_slice bound,
+          destruct_matching_call ctx index_mut bound )
+      with
+      | ( PAdt
+            {
+              variant_id = None;
+              fields = [ { pat = POpen (slice, _); _ }; back_pat ];
+            },
+          Some (generics, [ array ]),
+          _ ) ->
+          let array_back =
+            match back_pat.pat with
+            | POpen (back, _) -> Some back
+            | _ -> None
+          in
+          let env =
+            FVarId.Map.add slice.id { array; generics; array_back } env
+          in
+          let next = self#visit_texpr env next in
+          let used fid = FVarId.Set.mem fid (texpr_get_fvars next) in
+          let array_back_is_unused =
+            match array_back with
+            | None -> true
+            | Some back -> not (used back.id)
+          in
+          if (not (used slice.id)) && array_back_is_unused then next.e
+          else Let (monadic, pat, bound, next)
+      | PIgnored, _, Some (_, [ i; ({ e = FVar slice; _ } as slice_expr) ]) ->
+      begin
+          match FVarId.Map.find_opt slice env with
+          | None ->
+              let next = self#visit_texpr env next in
+              Let (monadic, pat, bound, next)
+          | Some { array; generics; _ } ->
+              let elem_ty = ty_as_slice span slice_expr.ty in
+              let output_ty =
+                mk_simpl_tuple_ty [ elem_ty; TArrow (elem_ty, array.ty) ]
+              in
+              let pat = mk_ignored_pat output_ty in
+              let call =
+                mk_pure_call span (IndexMutAtIndex Array) generics
+                  [ array; self#visit_texpr env i ]
+                  (mk_result_ty output_ty)
+              in
+              let next = self#visit_texpr env next in
+              Let (monadic, pat, call, next)
+        end
+      | ( PAdt { variant_id = None; fields = [ value_pat; index_back_pat ] },
+          _,
+          Some (_, [ i; { e = FVar slice; _ } ]) ) -> begin
+          match FVarId.Map.find_opt slice env with
+          | None ->
+              let next = self#visit_texpr env next in
+              Let (monadic, pat, bound, next)
+          | Some { array; generics; array_back } ->
+              let recover_with_back (index_back : fvar) (array_back : fvar) =
+                let array_index_back =
+                  { index_back with ty = TArrow (value_pat.ty, array.ty) }
+                in
+                let next', rewritten =
+                  rewrite_index_backs span array_back index_back
+                    array_index_back next
+                in
+                let expected = count_fvar_uses array_back.id next in
+                if
+                  expected = rewritten
+                  && expected = count_fvar_uses index_back.id next
+                then Some (array_index_back, next')
+                else None
+              in
+              let recovered =
+                match (index_back_pat.pat, array_back) with
+                | POpen (index_back, mp), Some array_back ->
+                    Option.map
+                      (fun (array_index_back, next) ->
+                        ( mk_tpat_from_fvar mp array_index_back,
+                          self#visit_texpr env next ))
+                      (recover_with_back index_back array_back)
+                | PIgnored, _ ->
+                    Some
+                      ( mk_ignored_pat (TArrow (value_pat.ty, array.ty)),
+                        self#visit_texpr env next )
+                | _ -> None
+              in
+              begin
+                match recovered with
+                | None ->
+                    let next = self#visit_texpr env next in
+                    Let (monadic, pat, bound, next)
+                | Some (array_index_back_pat, next) ->
+                    let pat =
+                      mk_simpl_tuple_pat [ value_pat; array_index_back_pat ]
+                    in
+                    let call =
+                      mk_pure_call span (IndexMutAtIndex Array) generics
+                        [ array; self#visit_texpr env i ]
+                        (mk_result_ty pat.ty)
+                    in
+                    Let (monadic, pat, call, next)
+              end
+        end
+      | _ ->
+          let next = self#visit_texpr env next in
+          Let (monadic, pat, bound, next)
+  end
+
+let recover_array_index_mut_usize =
+  lift_expr_map_visitor_with_state recover_array_index_mut_usize_visitor
+    FVarId.Map.empty
+
+(** Recover the old slice indexing primitives from the corresponding standard
+    library calls. The standard functions take the index first, unlike the
+    primitives exposed by the backends. *)
+let recover_slice_index_usize_visitor (ctx : ctx) (def : fun_decl) =
+  let span = def.item_meta.span in
+  let index =
+    NameMatcher.parse_pattern
+      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
+       @T>}::index"
+  in
+  let index_mut =
+    NameMatcher.parse_pattern
+      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
+       @T>}::index_mut"
+  in
+  object (self)
+    inherit [_] map_expr as super
+
+    method! visit_texpr env e =
+      let recover id = function
+        | generics, [ i; slice ] ->
+            mk_pure_call span id generics
+              [ self#visit_texpr env slice; self#visit_texpr env i ]
+              e.ty
+        | _ -> super#visit_texpr env e
+      in
+      match destruct_matching_call ctx index e with
+      | Some call -> recover (IndexAtIndex Slice) call
+      | None -> begin
+          match destruct_matching_call ctx index_mut e with
+          | Some call -> recover (IndexMutAtIndex Slice) call
+          | None -> super#visit_texpr env e
+        end
+  end
+
+let recover_slice_index_usize =
+  lift_expr_map_visitor recover_slice_index_usize_visitor
+
 (** This pass simplifies uses of array/slice index operations.
 
     We perform the following transformations:
@@ -2537,6 +2853,15 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
           mk_opened_let true back_pat (mk_call_to_update back_v) next
   in
 
+  let usize_slice_index_mut =
+    NameMatcher.parse_pattern
+      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
+       @T>}::index_mut"
+  in
+  let is_usize_slice_index_mut (fid : FunDeclId.id) : bool =
+    fun_matches_name ctx fid usize_slice_index_mut
+  in
+
   object (self)
     inherit [_] map_expr
 
@@ -2547,6 +2872,19 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
       let e2 = self#visit_texpr env e2 in
       (* Check if the current let-binding is a call to an index function *)
       let e1_app, e1_args = destruct_apps e1 in
+      let simplify (back_var : fvar) is_array index_generics a i =
+        [%ldebug
+          "identified a pattern to simplify:\n"
+          ^ texpr_to_string ctx { e = Let (monadic, pat, e1, e2); ty = e2.ty }];
+
+        (* We first check that there is only a single use of the backward
+           function. TODO: generalize *)
+        let count = count_fvar_uses back_var.id e2 in
+        if count = 1 then
+          (try_simplify monadic pat e1 e2 back_var is_array index_generics a i)
+            .e
+        else (mk_opened_let monadic pat e1 e2).e
+      in
       match (pat.pat, e1_app.e, e1_args) with
       | ( (* let (_, back) = ... *)
           PAdt
@@ -2555,48 +2893,28 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
               fields =
                 [ { pat = PIgnored; _ }; { pat = POpen (back_var, _); _ } ];
             },
-          (* ... = Array.index_mut_usize a i *)
+          (* ... = SliceIndex<usize>::index_mut i a *)
           Qualif
             {
-              id =
-                FunOrOp
-                  (Fun
-                     (FromLlbc
-                        ( FunId
-                            (FBuiltin
-                               (Index
-                                  {
-                                    is_array;
-                                    mutability = RMut;
-                                    is_range = false;
-                                  })),
-                          None )));
+              id = FunOrOp (Fun (FromLlbc (FunId (FRegular fid), None)));
+              generics = index_generics;
+            },
+          [ i; a ] )
+        when is_usize_slice_index_mut fid ->
+          simplify back_var false index_generics a i
+      | ( PAdt
+            {
+              variant_id = None;
+              fields =
+                [ { pat = PIgnored; _ }; { pat = POpen (back_var, _); _ } ];
+            },
+          Qualif
+            {
+              id = FunOrOp (Fun (Pure (IndexMutAtIndex array_or_slice)));
               generics = index_generics;
             },
           [ a; i ] ) ->
-          [%ldebug
-            "identified a pattern to simplify:\n"
-            ^ texpr_to_string ctx { e = Let (monadic, pat, e1, e2); ty = e2.ty }];
-
-          (* Attempt to simplify the let-binding.
-
-             We first check that there is only a single use of the backward
-             function. TODO: generalize
-          *)
-          let count = ref 0 in
-          let count_visitor =
-            object
-              inherit [_] iter_expr
-
-              method! visit_fvar_id _ fid =
-                if fid = back_var.id then count := !count + 1 else ()
-            end
-          in
-          count_visitor#visit_texpr () e2;
-          if !count = 1 then
-            (try_simplify monadic pat e1 e2 back_var is_array index_generics a i)
-              .e
-          else (mk_opened_let monadic pat e1 e2).e
+          simplify back_var (array_or_slice = Array) index_generics a i
       | _ -> (mk_opened_let monadic pat e1 e2).e
   end
 

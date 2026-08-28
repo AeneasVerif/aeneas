@@ -402,15 +402,16 @@ let allow_collisions (id : id) : bool =
   | TraitTypeId _
   | TraitConstId _
   | TraitMethodId _ -> !Config.record_fields_short_names
-  | FunId (Pure _ | FromLlbc (FunId (FBuiltin _), _)) ->
+  | FunId (Pure _) ->
       (* We map several builtin functions to the same id *)
       true
   | _ -> false
 
 (** The [id_to_string] function to print nice debugging messages if there are
     collisions *)
-let names_maps_add (id_to_string : id -> string) (id : id)
-    (span : Meta.span option) (name : string) (nm : names_maps) : names_maps =
+let names_maps_add ?(allow_collision = false) (id_to_string : id -> string)
+    (id : id) (span : Meta.span option) (name : string) (nm : names_maps) :
+    names_maps =
   (* We do not use the same name map if we allow/disallow collisions.
      We notably use it for field names: some backends like Lean can use the
      type information to disambiguate field projections.
@@ -423,7 +424,10 @@ let names_maps_add (id_to_string : id -> string) (id : id)
      between fields), but still checking collisions between those ids and the
      others (ex.: fields and keywords).
   *)
-  if allow_collisions id then (
+  if allow_collision then (
+    names_map_check_collision id_to_string id span name nm.strict_names_map;
+    { nm with names_map = names_map_add_unchecked (id, span) name nm.names_map })
+  else if allow_collisions id then (
     (* Check with the ids which are considered to be strict on collisions *)
     names_map_check_collision id_to_string id span name nm.strict_names_map;
     {
@@ -486,7 +490,6 @@ type names_map_init = {
   builtin_adts : (builtin_ty * string) list;
   builtin_structs : (builtin_ty * string) list;
   builtin_variants : (builtin_ty * VariantId.id * string) list;
-  builtin_llbc_functions : (A.builtin_fun_id * string) list;
   builtin_pure_functions : (pure_builtin_fun_id * string) list;
 }
 
@@ -593,7 +596,6 @@ type extraction_ctx = {
   trans_types : Pure.type_decl Pure.TypeDeclId.Map.t;
   trans_funs : pure_fun_translation A.FunDeclId.Map.t;
   trans_globals : Pure.global_decl Pure.GlobalDeclId.Map.t;
-  builtin_sigs : Pure.fun_sig Builtin.BuiltinFunIdMap.t;
   functions_with_decreases_clause : PureUtils.FunLoopIdSet.t;
   trans_trait_decls : Pure.trait_decl Pure.TraitDeclId.Map.t;
   trans_trait_impls : Pure.trait_impl Pure.TraitImplId.Map.t;
@@ -791,11 +793,12 @@ let escape_name ?(qualified : bool = false) (name : string) : string =
       String.concat "." (List.map escape_part parts)
   | FStar | Coq | HOL4 -> name
 
-let ctx_add (span : Meta.span) (id : id) (name : string) (ctx : extraction_ctx)
-    : extraction_ctx =
+let ctx_add ?(allow_collision = false) (span : Meta.span) (id : id)
+    (name : string) (ctx : extraction_ctx) : extraction_ctx =
   let id_to_string (id : id) : string = id_to_string (Some span) id ctx in
   let names_maps =
-    names_maps_add id_to_string id (Some span) name ctx.names_maps
+    names_maps_add ~allow_collision id_to_string id (Some span) name
+      ctx.names_maps
   in
   { ctx with names_maps }
 
@@ -1212,37 +1215,6 @@ let builtin_variants () : (builtin_ty * VariantId.id * string) list =
         (* No Fuel::Succ on purpose *)
       ]
 
-let builtin_llbc_functions () : (A.builtin_fun_id * string) list =
-  match backend () with
-  | FStar | Coq | HOL4 ->
-      [
-        (ArrayToSliceShared, "array_to_slice");
-        (ArrayToSliceMut, "array_to_slice_mut");
-        (ArrayRepeat, "array_repeat");
-        ( Index { is_array = true; mutability = RShared; is_range = false },
-          "array_index_usize" );
-        ( Index { is_array = true; mutability = RMut; is_range = false },
-          "array_index_mut_usize" );
-        ( Index { is_array = false; mutability = RShared; is_range = false },
-          "slice_index_usize" );
-        ( Index { is_array = false; mutability = RMut; is_range = false },
-          "slice_index_mut_usize" );
-      ]
-  | Lean ->
-      [
-        (ArrayToSliceShared, "Array.to_slice");
-        (ArrayToSliceMut, "Array.to_slice_mut");
-        (ArrayRepeat, "Array.repeat");
-        ( Index { is_array = true; mutability = RShared; is_range = false },
-          "Array.index_usize" );
-        ( Index { is_array = true; mutability = RMut; is_range = false },
-          "Array.index_mut_usize" );
-        ( Index { is_array = false; mutability = RShared; is_range = false },
-          "Slice.index_usize" );
-        ( Index { is_array = false; mutability = RMut; is_range = false },
-          "Slice.index_mut_usize" );
-      ]
-
 let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
   match backend () with
   | FStar ->
@@ -1254,6 +1226,10 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (FuelEqZero, "is_zero");
         (UpdateAtIndex Slice, "slice_update_usize");
         (UpdateAtIndex Array, "array_update_usize");
+        (IndexAtIndex Slice, "slice_index_usize");
+        (IndexAtIndex Array, "array_index_usize");
+        (IndexMutAtIndex Slice, "slice_index_mut_usize");
+        (IndexMutAtIndex Array, "array_index_mut_usize");
         (ToResult, "return");
       ]
   | Coq ->
@@ -1264,6 +1240,10 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (Assert, "massert");
         (UpdateAtIndex Slice, "slice_update_usize");
         (UpdateAtIndex Array, "array_update_usize");
+        (IndexAtIndex Slice, "slice_index_usize");
+        (IndexAtIndex Array, "array_index_usize");
+        (IndexMutAtIndex Slice, "slice_index_mut_usize");
+        (IndexMutAtIndex Array, "array_index_mut_usize");
         (ToResult, "return_");
       ]
   | Lean ->
@@ -1275,6 +1255,10 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (Discriminant, "read_discriminant");
         (UpdateAtIndex Slice, "Slice.update");
         (UpdateAtIndex Array, "Array.update");
+        (IndexAtIndex Slice, "Slice.index_usize");
+        (IndexAtIndex Array, "Array.index_usize");
+        (IndexMutAtIndex Slice, "Slice.index_mut_usize");
+        (IndexMutAtIndex Array, "Array.index_mut_usize");
         (ToResult, "lift");
         (ResultUnwrapMut, "core.result.Result.unwrap.mut");
         (GetTarget, "get_target");
@@ -1288,6 +1272,10 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (Assert, "massert");
         (UpdateAtIndex Slice, "slice_update_usize");
         (UpdateAtIndex Array, "array_update_usize");
+        (IndexAtIndex Slice, "slice_index_usize");
+        (IndexAtIndex Array, "array_index_usize");
+        (IndexMutAtIndex Slice, "slice_index_mut_usize");
+        (IndexMutAtIndex Array, "array_index_mut_usize");
         (ToResult, "return");
       ]
 
@@ -1297,7 +1285,6 @@ let names_map_init () : names_map_init =
     builtin_adts = builtin_adts ();
     builtin_structs = builtin_struct_constructors ();
     builtin_variants = builtin_variants ();
-    builtin_llbc_functions = builtin_llbc_functions ();
     builtin_pure_functions = builtin_pure_functions ();
   }
 
@@ -1368,12 +1355,8 @@ let initialize_names_maps () : names_maps =
   in
   let builtin_functions =
     List.map
-      (fun (fid, name) ->
-        ((FromLlbc (Pure.FunId (FBuiltin fid), None), None), name))
-      init.builtin_llbc_functions
-    @ List.map
-        (fun (fid, name) -> ((Pure fid, None), name))
-        init.builtin_pure_functions
+      (fun (fid, name) -> ((Pure fid, None), name))
+      init.builtin_pure_functions
   in
   let nm =
     List.fold_left

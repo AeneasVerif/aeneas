@@ -1555,17 +1555,14 @@ let rec texpr_cannot_fail (e : texpr) : bool =
   | Let (false, _, _, cont) -> texpr_cannot_fail cont
   | _ -> false
 
-(** Destruct a call to one of the builtin functions which Charon introduces in
-    place of the array/slice indexing operations (see
-    [--index-to-function-calls]).
-
-    Returns the index operation, the generic arguments of the call and its
-    arguments. *)
-let opt_destruct_builtin_index_call (e : texpr) :
-    (T.builtin_index_op * generic_args * texpr list) option =
+(** Destruct a recovered call to array/slice indexing by [usize]. *)
+let opt_destruct_index_call (e : texpr) :
+    (array_or_slice * ref_kind * generic_args * texpr list) option =
   match opt_destruct_function_call e with
-  | Some (Fun (FromLlbc (FunId (FBuiltin (Index op)), None)), generics, args) ->
-      Some (op, generics, args)
+  | Some (Fun (Pure (IndexAtIndex kind)), generics, args) ->
+      Some (kind, RShared, generics, args)
+  | Some (Fun (Pure (IndexMutAtIndex kind)), generics, args) ->
+      Some (kind, RMut, generics, args)
   | _ -> None
 
 (** Check whether the failure of the *monadic* expression [e], which is
@@ -1577,10 +1574,9 @@ let opt_destruct_builtin_index_call (e : texpr) :
     Checking that the outputs of [e] are unused is the responsibility of the
     caller (see [filter_useless]).
 
-    We currently only detect one pattern, which is by far the most common: a
-    *shared* indexing operation immediately followed by the *same* indexing
-    operation, but mutable. Both perform the same bounds check on the same
-    array/slice and the same index, so the first one is redundant:
+    We detect a shared indexing operation immediately followed by the same
+    shared or mutable indexing operation. Both perform the same bounds check on
+    the same array/slice and the same index, so the first one is redundant:
     {[
       let _ ← Slice.index_usize v i;
       let (x, back) ← Slice.index_mut_usize v i;
@@ -1604,13 +1600,12 @@ let texpr_failure_subsumed_by_cont (e : texpr) (cont : texpr) : bool =
     | Let (true, _, rhs, _) -> rhs
     | _ -> cont
   in
-  match opt_destruct_builtin_index_call e with
-  | Some ({ is_array; mutability = RShared; is_range }, generics, args) -> begin
-      match opt_destruct_builtin_index_call next with
-      | Some (op', generics', args') ->
-          op' = { is_array; mutability = RMut; is_range }
-          && generics' = generics && args' = args
-      | None -> false
+  match opt_destruct_index_call e with
+  | Some (kind, RShared, generics, args) -> begin
+      match opt_destruct_index_call next with
+      | Some (kind', (RShared | RMut), generics', args') ->
+          kind' = kind && generics'.types = generics.types && args' = args
+      | _ -> false
     end
   | _ -> false
 

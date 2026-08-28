@@ -452,12 +452,12 @@ let rec compare_rtys ?(allow_erased = false) (span : Meta.span) (ctx : eval_ctx)
       in
       (* Combine *)
       combine params_b tys_b
-  | TArray (ty1, len1), TArray (ty2, len2) ->
+  | TArray (ty1, len1, _), TArray (ty2, len2, _) ->
       (* There are no regions in the const generics, so we ignore them,
          but we still check they are the same, for sanity *)
       [%sanity_check] span (len1 = len2);
       compare ty1 ty2
-  | TSlice ty1, TSlice ty2 -> compare ty1 ty2
+  | TSlice (ty1, _), TSlice (ty2, _) -> compare ty1 ty2
   | TRef (r1, ty1, kind1), TRef (r2, ty2, kind2) ->
       (* Sanity check *)
       [%sanity_check] span (kind1 = kind2);
@@ -2316,11 +2316,11 @@ let rec norm_proj_tys_union (span : Meta.span) ?(strict : bool = true)
         }
       in
       TFnPtr { binder_regions = []; binder_value }
-  | TArray (ty0, len0), TArray (ty1, len1) ->
+  | TArray (ty0, len0, _), TArray (ty1, len1, _) ->
       [%sanity_check] span (len0 = len1);
-      TArray (norm_proj_tys_union span ~strict ctx ty0 ty1, len0)
-  | TSlice ty0, TSlice ty1 ->
-      TSlice (norm_proj_tys_union span ~strict ctx ty0 ty1)
+      TArray (norm_proj_tys_union span ~strict ctx ty0 ty1, len0, None)
+  | TSlice (ty0, _), TSlice (ty1, _) ->
+      TSlice (norm_proj_tys_union span ~strict ctx ty0 ty1, None)
   | _ ->
       [%ltrace
         "- ty1: " ^ ty_to_string ctx ty1 ^ "\n- ty2: " ^ ty_to_string ctx ty2];

@@ -149,13 +149,13 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
                   [%craise_opt_span] span
                     "Box/vec/option type with incorrect number of arguments")
           | T.TStr -> TAdt (TBuiltin TStr, generics)))
-  | T.TArray (ty, len) ->
+  | T.TArray (ty, len, _) ->
       let ty = translate span ty in
       let len = translate_constant_expr_kind span len.kind in
       TAdt
         ( TBuiltin TArray,
           { types = [ ty ]; const_generics = [ len ]; trait_refs = [] } )
-  | T.TSlice ty ->
+  | T.TSlice (ty, _) ->
       let ty = translate span ty in
       TAdt
         ( TBuiltin TSlice,
@@ -363,13 +363,13 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
               [%craise_opt_span] span
                 "Unreachable: box/vec/option receives exactly one type \
                  parameter"))
-  | T.TArray (ty, len) ->
+  | T.TArray (ty, len, _) ->
       let ty = translate ty in
       let len = translate_constant_expr_kind span len.kind in
       TAdt
         ( TBuiltin TArray,
           { types = [ ty ]; const_generics = [ len ]; trait_refs = [] } )
-  | T.TSlice ty ->
+  | T.TSlice (ty, _) ->
       let ty = translate ty in
       TAdt
         ( TBuiltin TSlice,
@@ -397,7 +397,6 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
       [%cassert_opt_span] span (binder_regions = []) "Unimplemented";
       let generics = translate_fwd_generic_args span decls_ctx generics in
       match kind with
-      | T.FunId (FBuiltin _) -> [%craise_opt_span] span "Unimplemented"
       | T.FunId (FRegular fid) ->
           let fdecl =
             [%unwrap_opt_span] span
@@ -488,7 +487,7 @@ and compute_back_ty_num_levels (span : Meta.span option)
                 [%craise_opt_span] span
                   "Unreachable: boxes receive exactly one type parameter")
         | Some TTuple -> List.iter (explore outer_regions) generics.types)
-    | T.TArray (ty, _) | T.TSlice ty -> explore outer_regions ty
+    | T.TArray (ty, _, _) | T.TSlice (ty, _) -> explore outer_regions ty
     | TVar _ | TNever | TLiteral _ -> save_count outer_regions
     | TRef (r, rty, rkind) -> (
         match rkind with
@@ -729,13 +728,6 @@ and compute_raw_fun_effect_info (span : Meta.span option)
         can_fail = info.can_fail && gid = None;
         can_diverge = info.can_diverge;
         is_rec = info.is_rec && gid = None;
-      }
-  | FunId (FBuiltin aid) ->
-      {
-        (* Note that backward functions can't fail *)
-        can_fail = Builtin.builtin_fun_can_fail aid && gid = None;
-        can_diverge = false;
-        is_rec = false;
       }
 
 (** Translate an instantiated function signature to a decomposed function
@@ -1259,9 +1251,6 @@ and get_fun_effect_info (ctx : bs_ctx) (fun_id : fn_ptr_kind)
         | Some gid -> (RegionGroupId.Map.find gid sg.fun_ty.back_sg).effect_info
       in
       { info with is_rec = info.is_rec && gid = None }
-  | FunId (FBuiltin _) ->
-      compute_raw_fun_effect_info (Some ctx.span) ctx.fun_ctx.fun_infos fun_id
-        gid
 
 (** Simply calls [translate_fwd_ty] *)
 let ctx_translate_fwd_ty (ctx : bs_ctx) (ty : T.ty) : ty =

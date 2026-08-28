@@ -303,8 +303,7 @@ def const_array : Result (Array Std.U32 2#usize) := do
     Visibility: public -/
 def const_slice : Result Std.U32 := do
   let a := Array.repeat 2#usize 0#u32
-  let s ← lift (Array.to_slice a)
-  Slice.index_usize s 0#usize
+  Array.index_usize a 0#usize
 
 /-- [arrays::take_all]:
     Source: 'tests/src/arrays.rs', lines 176:0-188:1
@@ -529,16 +528,18 @@ def sum2 (s : Slice Std.U32) (s2 : Slice Std.U32) : Result Std.U32 := do
     Source: 'tests/src/arrays.rs', lines 306:0-309:1
     Visibility: public -/
 def f0 : Result Unit := do
-  let (s, _) ←
-    lift (Array.to_slice_mut (Array.make 2#usize [ 1#u32, 2#u32 ]))
-  let _ ← Slice.index_mut_usize s 0#usize
+  let _ ←
+    Array.index_mut_usize (Array.make 2#usize [ 1#u32, 2#u32 ] : Array Std.U32
+      2#usize) 0#usize
   ok ()
 
 /-- [arrays::f1]:
     Source: 'tests/src/arrays.rs', lines 311:0-314:1
     Visibility: public -/
 def f1 : Result Unit := do
-  let _ ← Array.index_mut_usize (Array.make 2#usize [ 1#u32, 2#u32 ]) 0#usize
+  let _ ←
+    Array.index_mut_usize (Array.make 2#usize [ 1#u32, 2#u32 ] : Array Std.U32
+      2#usize) 0#usize
   ok ()
 
 /-- [arrays::f2]:
@@ -562,7 +563,9 @@ def f4
     Source: 'tests/src/arrays.rs', lines 318:0-323:1
     Visibility: public -/
 def f3 : Result Std.U32 := do
-  let i ← Array.index_usize (Array.make 2#usize [ 1#u32, 2#u32 ]) 0#usize
+  let i ←
+    Array.index_usize (Array.make 2#usize [ 1#u32, 2#u32 ] : Array Std.U32
+      2#usize) 0#usize
   f2 i
   let b := Array.repeat 32#usize 0#u32
   let s ← lift (Array.to_slice (Array.make 2#usize [ 1#u32, 2#u32 ]))

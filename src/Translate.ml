@@ -3,7 +3,6 @@ open Types
 open Values
 open LlbcAst
 open Contexts
-open Builtin
 module SA = SymbolicAst
 module Micro = PureMicroPasses
 open TranslateCore
@@ -306,7 +305,6 @@ let translate_function_to_pure (trans_ctx : trans_ctx) (marked_ids : marked_ids)
 
 type translated_crate = {
   type_decls : Pure.type_decl list;
-  builtin_fun_sigs : Pure.fun_sig BuiltinFunIdMap.t;
   fun_decls : pure_fun_translation list;
   global_decls : Pure.global_decl list;
   trait_decls : Pure.trait_decl list;
@@ -429,16 +427,6 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
 
     FunOrMethodId.Map.of_list
       (FunOrMethodId.Map.bindings method_sigs @ fun_decl_sigs)
-  in
-
-  (* Translate the signatures of the builtin functions *)
-  let builtin_fun_sigs =
-    BuiltinFunIdMap.map
-      (fun (info : builtin_fun_info) ->
-        SymbolicToPureTypes.translate_fun_sig trans_ctx
-          (Pure.FunId (FBuiltin info.fun_id)) info.fun_sig
-          (List.map (fun _ -> None) info.fun_sig.item_binder_value.inputs))
-      builtin_fun_infos
   in
 
   (* Translate all the functions.
@@ -605,15 +593,14 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
 
   (* Apply the micro-passes *)
   let pure_translations =
-    Micro.apply_passes_to_pure_fun_translations crate trans_ctx builtin_fun_sigs
-      type_decls trait_impls pure_translations
+    Micro.apply_passes_to_pure_fun_translations crate trans_ctx type_decls
+      trait_impls pure_translations
   in
 
   (* Return *)
   ( trans_ctx,
     {
       type_decls;
-      builtin_fun_sigs;
       fun_decls = pure_translations;
       global_decls;
       trait_decls;
@@ -1457,7 +1444,6 @@ let extract_translated_crate (filename : string) (dest_dir : string)
     (trans_crate : translated_crate) (extracted_opaque : bool ref) : unit =
   let {
     type_decls = trans_types;
-    builtin_fun_sigs = builtin_sigs;
     fun_decls = trans_funs;
     global_decls = trans_globals;
     trait_decls = trans_trait_decls;
@@ -1535,7 +1521,6 @@ let extract_translated_crate (filename : string) (dest_dir : string)
       trans_trait_impls;
       trans_types;
       trans_funs;
-      builtin_sigs;
       trans_globals;
       functions_with_decreases_clause = rec_functions;
       types_filter_type_args_map = Pure.TypeDeclId.Map.empty;

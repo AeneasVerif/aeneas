@@ -108,6 +108,7 @@ def Array.index_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) : Res
   | some x => ok x
 
 -- For initialization
+@[rust_fun "core::array::repeat" -canFail -lift (keepTraitClauses := [false])]
 def Array.repeat {α : Type u} (n : Usize) (x : α) : Array α n :=
   ⟨ List.replicate n.val x, by simp_all ⟩
 
