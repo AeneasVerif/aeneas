@@ -19,9 +19,6 @@ def core.result.Result.map_err
       let mapped ← fnOnce.call_once f error
       ok (.Err mapped)
 
-/-! The two equations below expose the model to `simp` before `step` processes
-    the surrounding control flow. -/
-
 @[simp]
 theorem core.result.Result.map_err_ok
   {T E F O : Type} (fnOnce : core.ops.function.FnOnce O E F) (value : T) (f : O) :
