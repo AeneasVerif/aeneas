@@ -2294,6 +2294,84 @@ let fix_closure_lifetimes (crate : crate) (f : fun_decl) : fun_decl =
           f
       | _, _ -> f)
 
+(** Fill in the erased lifetime arguments which Charon leaves on closure types
+    appearing in a function signature.
+
+    Charon does not resolve the lifetime arguments of closure types in
+    signatures, so a function returning [impl Trait + '_] over a closure which
+    captures a reference comes out as:
+    {[
+      make<'a>(x : &'a u8) -> closure<'_>
+    ]}
+    where the return type should be [closure<'a>]. The same happens when the
+    closure sits inside another type ([Map<Range<i32>, closure<'_>>]), at any
+    depth. Aeneas requires signatures to be free of erased regions so such a
+    function cannot be translated, and neither can its callers.
+
+    We have no way of recovering the right region, so we guess, and only when
+    the guess is forced: if the signature binds exactly one region parameter,
+    every erased region argument of a closure type must be that one. This covers
+    the [impl Trait + '_] shape, where Rust requires the captured lifetime to be
+    unambiguous anyway. With several region parameters we cannot tell which
+    lifetime the closure captured, so we leave the signature alone and the
+    translation fails as it does today.
+
+    This complements [fix_closure_lifetimes], which patches the signatures of
+    the closure's own methods rather than that of the function creating it.
+
+    See https://github.com/AeneasVerif/charon/issues/1040 and
+    https://github.com/AeneasVerif/aeneas/issues/1207.
+
+    TODO: remove once the Charon issue is fixed. *)
+let fix_closure_signature_regions (crate : crate) (f : fun_decl) : fun_decl =
+  match f.generics.regions with
+  | [ rp ] ->
+      let r : region = RVar (Free rp.index) in
+      let updated = ref false in
+      let is_closure_ty (id : type_id) : bool =
+        match id with
+        | TAdtId id -> (
+            match TypeDeclId.Map.find_opt id crate.type_decls with
+            | Some { src = ClosureType _; _ } -> true
+            | _ -> false)
+        | _ -> false
+      in
+      let visitor =
+        object
+          inherit [_] map_ty as super
+
+          method! visit_TAdt env tref =
+            let tref =
+              if is_closure_ty tref.id then
+                let regions =
+                  List.map
+                    (fun r0 ->
+                      match r0 with
+                      | RErased ->
+                          updated := true;
+                          r
+                      | _ -> r0)
+                    tref.generics.regions
+                in
+                { tref with generics = { tref.generics with regions } }
+              else tref
+            in
+            super#visit_TAdt env tref
+        end
+      in
+      let inputs = List.map (visitor#visit_ty ()) f.signature.inputs in
+      let output = visitor#visit_ty () f.signature.output in
+      if !updated then begin
+        let signature = { f.signature with inputs; output } in
+        let f = { f with signature } in
+        [%ltrace
+          let env = Print.crate_to_fmt_env crate in
+          "Updated: " ^ Print.fun_decl_to_string env "" " " f];
+        f
+      end
+      else f
+  | _ -> f
+
 let apply_passes (crate : crate) : crate =
   (* Passes that apply to the whole crate *)
   let crate = update_array_default crate in
@@ -2301,6 +2379,7 @@ let apply_passes (crate : crate) : crate =
   let function_passes =
     [
       ("fix_closure_lifetimes", fix_closure_lifetimes);
+      ("fix_closure_signature_regions", fix_closure_signature_regions);
       ("erase_body_regions", erase_body_regions);
       ("remove_unreachable", remove_unreachable);
       ("update_loop", update_loops);
