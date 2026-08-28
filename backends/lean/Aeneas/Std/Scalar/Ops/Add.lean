@@ -138,4 +138,51 @@ iscalar @[step] theorem «%S».add_spec {x y : «%S»}
   x + y ⦃ z => (↑z : Int) = ↑x + ↑y ⦄ :=
   IScalar.add_spec (by scalar_tac) (by scalar_tac)
 
+/-!
+# Addition through a shared reference
+
+Rust's `impl Add<usize> for &usize` is a *different* trait impl from
+`impl Add<usize> for usize`, so Charon emits a distinct call for it and it needs
+its own model. Taking the left operand by shared reference changes nothing
+observable, so the value semantics are exactly those of ordinary checked
+addition.
+
+The generic model is stated once over `UScalar`; the per-type specializations
+below are what the `rust_fun` patterns are registered against, one per unsigned
+Rust integer type.
+-/
+
+def SharedUScalar.Insts.CoreOpsArithAddUScalarUScalar.add
+  {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
+  x + y
+
+/-- Generic theorem - shouldn't be used much -/
+@[step]
+theorem SharedUScalar.Insts.CoreOpsArithAddUScalarUScalar.add_spec
+  {ty} {x y : UScalar ty} (hmax : ↑x + ↑y ≤ UScalar.max ty) :
+  SharedUScalar.Insts.CoreOpsArithAddUScalarUScalar.add x y
+    ⦃ z => (↑z : Nat) = ↑x + ↑y ⦄ :=
+  UScalar.add_spec hmax
+
+uscalar def «Shared'S».Insts.«CoreOpsArithAdd'S'S».add (x y : «%S») : Result «%S» :=
+  SharedUScalar.Insts.CoreOpsArithAddUScalarUScalar.add x y
+
+uscalar @[step] theorem «Shared'S».Insts.«CoreOpsArithAdd'S'S».add_spec
+  {x y : «%S»} (hmax : x.val + y.val ≤ «%S».max) :
+  «Shared'S».Insts.«CoreOpsArithAdd'S'S».add x y ⦃ z => (↑z : Nat) = ↑x + ↑y ⦄ :=
+  SharedUScalar.Insts.CoreOpsArithAddUScalarUScalar.add_spec (by scalar_tac)
+
+attribute [rust_fun "core::ops::arith::{core::ops::arith::Add<&'0 u8, u8, u8>}::add"]
+  SharedU8.Insts.CoreOpsArithAddU8U8.add
+attribute [rust_fun "core::ops::arith::{core::ops::arith::Add<&'0 u16, u16, u16>}::add"]
+  SharedU16.Insts.CoreOpsArithAddU16U16.add
+attribute [rust_fun "core::ops::arith::{core::ops::arith::Add<&'0 u32, u32, u32>}::add"]
+  SharedU32.Insts.CoreOpsArithAddU32U32.add
+attribute [rust_fun "core::ops::arith::{core::ops::arith::Add<&'0 u64, u64, u64>}::add"]
+  SharedU64.Insts.CoreOpsArithAddU64U64.add
+attribute [rust_fun "core::ops::arith::{core::ops::arith::Add<&'0 u128, u128, u128>}::add"]
+  SharedU128.Insts.CoreOpsArithAddU128U128.add
+attribute [rust_fun "core::ops::arith::{core::ops::arith::Add<&'0 usize, usize, usize>}::add"]
+  SharedUsize.Insts.CoreOpsArithAddUsizeUsize.add
+
 end Aeneas.Std
