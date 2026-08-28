@@ -140,16 +140,6 @@ iscalar @[step] theorem «%S».add_spec {x y : «%S»}
 
 /-!
 # Addition through a shared reference
-
-Rust's `impl Add<usize> for &usize` is a *different* trait impl from
-`impl Add<usize> for usize`, so Charon emits a distinct call for it and it needs
-its own model. Taking the left operand by shared reference changes nothing
-observable, so the value semantics are exactly those of ordinary checked
-addition.
-
-The generic model is stated once over `UScalar`; the per-type specializations
-below are what the `rust_fun` patterns are registered against, one per unsigned
-Rust integer type.
 -/
 
 def SharedUScalar.Insts.CoreOpsArithAddUScalarUScalar.add
