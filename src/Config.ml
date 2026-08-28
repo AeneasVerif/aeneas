@@ -235,7 +235,7 @@ let emit_json = ref false
     to that declaration, with a [@[rust_source ...]] attribute. This is what
     allows "go to definition" on a generated declaration to jump to the Rust
     code it was extracted from. *)
-let rust_source_links = ref false
+let rust_source_spans = ref false
 
 (** If true, treat the unit functions (function taking no inputs and returning
     no outputs) as unit tests: evaluate them with the interpreter and check that

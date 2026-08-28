@@ -1,6 +1,6 @@
 //@ [!lean] skip
-//@ [lean] aeneas-args=-rust-source-links
-//! Checks the `-rust-source-links` option works
+//@ [lean] aeneas-args=-rust-source-spans
+//! Checks the `-rust-source-spans` option works
 //!
 //! We want one declaration of each kind the extraction can produce, and
 //! declarations which already carry other attributes.

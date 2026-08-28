@@ -16,14 +16,14 @@ namespace rust_source
 
 /-- [rust_source::Pair]
     Visibility: public -/
-@[rust_source "tests/src/rust_source.rs" 9 0 12 1]
+@[rust_source "tests/src/rust_source.rs" lines 9:0-12:1]
 structure Pair where
   x : Std.U32
   y : Std.U32
 
 /-- [rust_source::Sign]
     Visibility: public -/
-@[rust_source "tests/src/rust_source.rs" 15 0 19 1, discriminant isize]
+@[rust_source "tests/src/rust_source.rs" lines 15:0-19:1, discriminant isize]
 inductive Sign where
 | Neg : Sign
 | Zero : Sign
@@ -31,28 +31,30 @@ inductive Sign where
 
 /-- [rust_source::Empty]
     Visibility: public -/
-@[rust_source "tests/src/rust_source.rs" 23 0 23 17, reducible]
+@[rust_source "tests/src/rust_source.rs" lines 23:0-23:17, reducible]
 def Empty := Unit
 
 /-- [rust_source::ZERO]
     Visibility: public -/
-@[rust_source "tests/src/rust_source.rs" 26 0 26 24, global_simps, irreducible]
+@[rust_source "tests/src/rust_source.rs" lines 26:0-26:24, global_simps,
+  irreducible]
 def ZERO : Std.U32 := 0#u32
 
 /-- [rust_source::ONE]
     Visibility: public -/
-@[rust_source "tests/src/rust_source.rs" 28 0 28 24, global_simps, irreducible]
+@[rust_source "tests/src/rust_source.rs" lines 28:0-28:24, global_simps,
+  irreducible]
 def ONE : Std.U32 := 1#u32
 
 /-- [rust_source::add]:
     Visibility: public -/
-@[rust_source "tests/src/rust_source.rs" 31 0 33 1]
+@[rust_source "tests/src/rust_source.rs" lines 31:0-33:1]
 def add (x : Std.U32) (y : Std.U32) : Result Std.U32 := do
   x + y
 
 /-- [rust_source::sum_to]: loop body 0:
     Visibility: public -/
-@[rust_source "tests/src/rust_source.rs" 40 4 43 5, rust_loop_body]
+@[rust_source "tests/src/rust_source.rs" lines 40:4-43:5, rust_loop_body]
 def sum_to_loop.body
   (n : Std.U32) (i : Std.U32) (sum : Std.U32) :
   Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
@@ -65,7 +67,7 @@ def sum_to_loop.body
 
 /-- [rust_source::sum_to]: loop 0:
     Visibility: public -/
-@[rust_source "tests/src/rust_source.rs" 40 4 43 5, rust_loop]
+@[rust_source "tests/src/rust_source.rs" lines 40:4-43:5, rust_loop]
 def sum_to_loop
   (n : Std.U32) (i : Std.U32) (sum : Std.U32) : Result Std.U32 := do
   loop
@@ -74,13 +76,13 @@ def sum_to_loop
 
 /-- [rust_source::sum_to]:
     Visibility: public -/
-@[rust_source "tests/src/rust_source.rs" 37 0 45 1, reducible]
+@[rust_source "tests/src/rust_source.rs" lines 37:0-45:1, reducible]
 def sum_to (n : Std.U32) : Result Std.U32 := do
   sum_to_loop n 0#u32 0#u32
 
 /-- [rust_source::depth]:
     Visibility: public -/
-@[rust_source "tests/src/rust_source.rs" 48 0 53 1]
+@[rust_source "tests/src/rust_source.rs" lines 48:0-53:1]
 def depth (s : Sign) (acc : Std.U32) : Result Std.U32 := do
   match s with
   | Sign.Neg => let i ← acc + 1#u32
@@ -92,30 +94,31 @@ partial_fixpoint
 
 /-- [rust_source::{rust_source::Pair}::sum]:
     Visibility: public -/
-@[rust_source "tests/src/rust_source.rs" 57 4 59 5]
+@[rust_source "tests/src/rust_source.rs" lines 57:4-59:5]
 def Pair.sum (self : Pair) : Result Std.U32 := do
   self.x + self.y
 
 /-- Trait declaration: [rust_source::Container]
     Visibility: public -/
-@[rust_source "tests/src/rust_source.rs" 63 0 67 1]
+@[rust_source "tests/src/rust_source.rs" lines 63:0-67:1]
 structure Container (Self : Type) (Self_Item : Type) where
   NAME : Result Std.U32
   get : Self → Result Self_Item
 
 /-- [rust_source::{impl rust_source::Container<u32> for rust_source::Pair}::get]:
     Visibility: public -/
-@[rust_source "tests/src/rust_source.rs" 73 4 75 5]
+@[rust_source "tests/src/rust_source.rs" lines 73:4-75:5]
 def Pair.Insts.Rust_sourceContainerU32.get (self : Pair) : Result Std.U32 := do
   ok self.x
 
 /-- [rust_source::{impl rust_source::Container<u32> for rust_source::Pair}::NAME]
     Visibility: public -/
-@[rust_source "tests/src/rust_source.rs" 72 4 72 25, global_simps, irreducible]
+@[rust_source "tests/src/rust_source.rs" lines 72:4-72:25, global_simps,
+  irreducible]
 def Pair.Insts.Rust_sourceContainerU32.NAME : Std.U32 := 42#u32
 
 /-- Trait implementation: [rust_source::{impl rust_source::Container<u32> for rust_source::Pair}] -/
-@[rust_source "tests/src/rust_source.rs" 70 0 76 1, reducible]
+@[rust_source "tests/src/rust_source.rs" lines 70:0-76:1, reducible]
 def Pair.Insts.Rust_sourceContainerU32 : Container Pair Std.U32 := {
   NAME := ok Pair.Insts.Rust_sourceContainerU32.NAME
   get := Pair.Insts.Rust_sourceContainerU32.get

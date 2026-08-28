@@ -1,6 +1,4 @@
 import AeneasMeta.Extensions
-/- We need to import this here so it's available in extracted files with `import Aeneas` -/
-import AeneasMeta.RustSource.GoToDef
 /-! Helpers to provide informations about the models for the Rust standard library -/
 
 open Lean

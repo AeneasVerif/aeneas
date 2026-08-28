@@ -1,4 +1,4 @@
-import AeneasMeta.RustSource
+import AeneasMeta.RustSource.RustSource
 import Lean.Server.Requests
 import Lean.Server.GoTo
 

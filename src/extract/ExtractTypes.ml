@@ -1222,22 +1222,26 @@ let extract_doc_comment (fmt : F.formatter) (sl : string list) : unit =
   extract_comment_block fmt delimiters sl
 
 (** Whether we record the span of the Rust items in a [@[rust_source ...]]
-    attribute rather than in the doc comment. See [-rust-source-links]. *)
+    attribute rather than in the doc comment. See [-rust-source-spans]. *)
 let use_rust_source_attribute () : bool =
-  !Config.rust_source_links && backend () = Lean
+  !Config.rust_source_spans && backend () = Lean
 
 (** The [rust_source ...] attribute recording which Rust item a declaration was
     extracted from.
 
+    We mirror the way spans are rendered in the doc comments (see
+    [Errors.span_data_to_string]), so that the attribute reads as
+    [rust_source "f.rs" lines 9:0-12:1].
+
     Lean only accepts a single [@[...]] group per declaration so we return the
-    attribute rather than printing it, and the callers can merge merge it with
-    the other attributes of the declaration. *)
+    attribute rather than printing it, and the callers can merge it with the
+    other attributes of the declaration. *)
 let rust_source_attribute (span : Meta.span) : string =
   let file =
     match span.data.file.name with
     | Virtual s | Local s | NotReal s -> s
   in
-  Printf.sprintf "rust_source \"%s\" %d %d %d %d" (String.escaped file)
+  Printf.sprintf "rust_source \"%s\" lines %d:%d-%d:%d" (String.escaped file)
     span.data.beg_loc.line span.data.beg_loc.col span.data.end_loc.line
     span.data.end_loc.col
 
