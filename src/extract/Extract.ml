@@ -1027,17 +1027,17 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
               let explicit = meth.signature.explicit_info in
               Some (adjust_explicit_info explicit true generics)
             end
-          | FromLlbc (FunId (FBuiltin aid), _) ->
-              Some
-                (Builtin.BuiltinFunIdMap.find aid ctx.builtin_sigs)
-                  .explicit_info
-          | Pure (UpdateAtIndex Array) ->
+          | Pure
+              (UpdateAtIndex Array | IndexAtIndex Array | IndexMutAtIndex Array)
+            ->
               Some
                 {
                   explicit_types = [ Implicit ];
                   explicit_const_generics = [ Implicit ];
                 }
-          | Pure (UpdateAtIndex Slice) ->
+          | Pure
+              (UpdateAtIndex Slice | IndexAtIndex Slice | IndexMutAtIndex Slice)
+            ->
               Some
                 { explicit_types = [ Implicit ]; explicit_const_generics = [] }
           | Pure Discriminant ->

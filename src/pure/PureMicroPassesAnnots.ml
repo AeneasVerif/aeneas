@@ -10,7 +10,6 @@ open PureMicroPassesBase
     Note that we use the context only for printing. *)
 let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
     (trans_funs : pure_fun_translation FunDeclId.Map.t)
-    (builtin_sigs : fun_sig Builtin.BuiltinFunIdMap.t)
     (type_decls : type_decl TypeDeclId.Map.t) (def : fun_decl) : fun_decl =
   let fmt = trans_ctx_to_pure_fmt_env trans_ctx in
   [%ldebug PrintPure.fun_decl_to_string fmt def];
@@ -192,7 +191,8 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
           | Discriminant -> (hole, mk_holes (), false)
           | Fail | Assert | FuelDecrease | FuelEqZero ->
               (f.ty, mk_known (), false)
-          | UpdateAtIndex _ -> (known_f_ty, known_args_tys, false)
+          | UpdateAtIndex _ | IndexAtIndex _ | IndexMutAtIndex _ ->
+              (known_f_ty, known_args_tys, false)
           | ResultUnwrapMut -> (hole, mk_holes (), false)
           | GetTarget -> (f.ty, mk_known (), false)
           | TargetFeatureEnabled -> (f.ty, mk_known (), false)
@@ -231,8 +231,6 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
                    be a way to translate these signatures earlier. *)
                 SymbolicToPureTypes.translate_fun_sig trans_ctx fid method_sig
                   (List.map (fun _ -> None) method_sig.item_binder_value.inputs)
-            | FunId (FBuiltin aid) ->
-                Builtin.BuiltinFunIdMap.find aid builtin_sigs
           in
           [%ldebug "signature: " ^ fun_sig_to_string sg];
           (* In case this is a trait method, we need to concatenate the generics
@@ -399,7 +397,6 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
     Note that we use the context only for printing. *)
 let add_type_annotations (trans_ctx : trans_ctx)
     (trans_funs : pure_fun_translation list)
-    (builtin_sigs : fun_sig Builtin.BuiltinFunIdMap.t)
     (type_decls : type_decl TypeDeclId.Map.t) : pure_fun_translation list =
   let trans_funs_map =
     FunDeclId.Map.of_list
@@ -414,8 +411,8 @@ let add_type_annotations (trans_ctx : trans_ctx)
         "About to add type annotations to:\n\n"
         ^ PrintPure.fun_decl_to_string fmt decl];
       let decl =
-        add_type_annotations_to_fun_decl trans_ctx trans_funs_map builtin_sigs
-          type_decls decl
+        add_type_annotations_to_fun_decl trans_ctx trans_funs_map type_decls
+          decl
       in
       [%ltrace
         let fmt = trans_ctx_to_pure_fmt_env trans_ctx in

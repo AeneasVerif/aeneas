@@ -655,6 +655,12 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
   (* Definitions not for Lean *)
   @ mk_not_lean
       [
+        mk_fun "core::array::repeat" ~extract_name:(Some "array_repeat")
+          ~keep_trait_clauses:(Some [ false ]) ~can_fail:false ~lift:false ();
+        mk_fun "core::array::{[@T; @N]}::as_slice"
+          ~extract_name:(Some "array_to_slice") ~can_fail:false ();
+        mk_fun "core::array::{[@T; @N]}::as_mut_slice"
+          ~extract_name:(Some "array_to_slice_mut") ~can_fail:false ();
         mk_fun "core::mem::replace" ~can_fail:false ~lift:false ();
         mk_fun "core::mem::take" ~can_fail:false ~lift:false ();
         mk_fun "core::option::{core::option::Option<@T>}::unwrap"
@@ -760,14 +766,22 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
           "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
            @T>}::get_unchecked_mut"
           ();
+        (* Remark: contrary to [Index<[@T], @I, @O>::index] above, those two
+           index a slice with a [usize], and take the index as their first
+           argument: they must thus not be given the same name. Note that the
+           micro-pass [recover_builtin_index_functions] systematically turns
+           the calls to
+           those functions into calls to
+           [slice_index_usize]/[slice_index_mut_usize], meaning those names
+           should not appear in the generated code. *)
         mk_fun
           "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
            @T>}::index"
-          ~extract_name:(Some "core_slice_index_Slice_index") ();
+          ~extract_name:(Some "core.slice.index.SliceIndexUsize.index") ();
         mk_fun
           "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
            @T>}::index_mut"
-          ~extract_name:(Some "core_slice_index_Slice_index_mut") ();
+          ~extract_name:(Some "core.slice.index.SliceIndexUsize.index_mut") ();
         mk_fun "alloc::slice::{[@T]}::to_vec"
           ~extract_name:(Some "alloc.slice.Slice.to_vec") ();
         mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::with_capacity"

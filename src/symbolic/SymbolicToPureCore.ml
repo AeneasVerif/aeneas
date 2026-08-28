@@ -343,7 +343,6 @@ let fun_or_method_id_of_pure_fn_ptr (kind : fn_ptr_kind) :
       Some
         (A.FunOrMethodId.Method
            (trait_ref.trait_decl_ref.trait_decl_id, method_id))
-  | FunId (FBuiltin _) -> None
 
 let lookup_pure_fn_ptr_sig (ctx : bs_ctx) (kind : fn_ptr_kind) : fun_sigs option
     =
