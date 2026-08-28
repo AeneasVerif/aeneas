@@ -27,9 +27,6 @@ def core.option.Option.ok_or {T E : Type} (x : Option T) (e : E) :
   | some value => ok (.Ok value)
   | none => ok (.Err e)
 
-/-! The two equations below expose the model to `simp` before `step` processes
-    the surrounding control flow. -/
-
 @[simp]
 theorem core.option.Option.ok_or_some {T E : Type} (value : T) (error : E) :
   core.option.Option.ok_or (some value) error = ok (.Ok value) := rfl
