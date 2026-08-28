@@ -18,8 +18,6 @@ theorem core.option.Option.expect.spec {T : Type} (x : Option T) (msg: Str) (h :
   expect x msg ⦃ v => x = some v ⦄ := by
   simp only [expect, Result.ofOption]; grind
 
-/-- Pure model of `Option::ok_or`: transforms `Option T` into
-    `core.result.Result T E`, using `e` as the error on `none`. -/
 @[rust_fun "core::option::{core::option::Option<@T>}::ok_or"]
 def core.option.Option.ok_or {T E : Type} (x : Option T) (e : E) :
   Result (core.result.Result T E) :=
