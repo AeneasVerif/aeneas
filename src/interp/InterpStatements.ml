@@ -547,28 +547,6 @@ let eval_function_call_symbolic_inst (span : Meta.span) (func : fn_ptr)
       mk_symbolic_fun_call_inst span ctx ~call_kind:func.kind
         ~call_generics:func.generics ~call_span:def.item_meta.span
         ~inst_generics:func.generics ~tr_self signature
-  | FunId (FBuiltin fid) ->
-      (* In symbolic mode, the behavior of a function call is completely
-         defined by the signature of the function: we thus simply generate
-         correctly instantiated signatures, and delegate the work to an
-         auxiliary function *)
-      let sg = Builtin.get_builtin_fun_sig fid in
-      (* Sanity check: make sure the type parameters don't contain mutable
-         borrows, which is a current limitation of our synthesis. *)
-      [%classert] span
-        (List.for_all
-           (fun ty -> not (ty_has_mut_borrows ctx.type_ctx.type_infos ty))
-           func.generics.types)
-        (lazy
-          ("Instantiating the type parameters of a function with types \
-            containing mutable borrows is currently not allowed ("
-         ^ fn_ptr_to_string ctx func ^ ")"));
-
-      (* There shouldn't be any reference to Self *)
-      let tr_self = UnknownTrait __FUNCTION__ in
-      mk_symbolic_fun_call_inst span ctx ~call_kind:func.kind
-        ~call_generics:func.generics ~call_span:span
-        ~inst_generics:func.generics ~tr_self sg
   | TraitMethod (trait_ref, method_id) ->
       (* Check that there are no bound regions *)
       [%cassert] span
@@ -1273,7 +1251,6 @@ and eval_function_call_concrete (config : config) (span : Meta.span)
             in
             ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span cc)
           else eval_non_builtin_function_call_concrete config span fid call ctx
-      | FunId (FBuiltin _) -> [%craise] span "Unimplemented"
       | TraitMethod _ -> [%craise] span "Unimplemented")
 
 and eval_function_call_symbolic (config : config) (span : Meta.span)

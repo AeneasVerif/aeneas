@@ -49,9 +49,7 @@ def split_at_mut
   {T : Type} (x : Slice T) (n : Std.Usize) :
   Result (((Slice T) × (Slice T)) × (((Slice T) × (Slice T)) → Slice T))
   := do
-  let ((s, s1), split_at_mut_back) ← core.slice.Slice.split_at_mut x n
-  let back := fun p => split_at_mut_back p
-  ok ((s, s1), back)
+  core.slice.Slice.split_at_mut x n
 
 /-- [slices::split_at_mut_and_deref]:
     Source: 'tests/src/slices.rs', lines 19:0-22:1

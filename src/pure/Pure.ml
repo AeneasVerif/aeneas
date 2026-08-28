@@ -125,6 +125,11 @@ type pure_builtin_fun_id =
           an element in an array/slice, we create a mutable borrow to this
           element, then use the borrow to perform the update. The update
           functions are introduced in the pure code by a micro-pass. *)
+  | IndexAtIndex of array_or_slice
+      (** Index an array or slice with a [usize]. Introduced by micro-passes
+          which recognize lower-level standard library calls. *)
+  | IndexMutAtIndex of array_or_slice
+      (** Mutably index an array or slice with a [usize]. *)
   | ToResult
       (** Lifts a pure expression to a monadic expression.
 

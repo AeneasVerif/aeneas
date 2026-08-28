@@ -191,7 +191,8 @@ let update_array_default (crate : crate) : crate =
            TArray
              ( TVar (Free _),
                ({ kind = CLiteral (VScalar (UnsignedScalar (Usize, nv))); _ } as
-                n) );
+                n),
+               _ );
          ];
        const_generics = [];
        trait_refs = _;
@@ -273,13 +274,13 @@ let update_array_default (crate : crate) : crate =
       in
       let elem_ty =
         match merged_impl.impl_trait.generics.types with
-        | [ TArray ((TVar (Free _) as elem_ty), _) ] -> elem_ty
+        | [ TArray ((TVar (Free _) as elem_ty), _, _) ] -> elem_ty
         | _ -> [%internal_error] merged_impl.item_meta.span
       in
       let generics =
         {
           merged_impl.impl_trait.generics with
-          types = [ TArray (elem_ty, cg) ];
+          types = [ TArray (elem_ty, cg, None) ];
         }
       in
       let impl_trait = { merged_impl.impl_trait with generics } in
@@ -322,7 +323,7 @@ let update_array_default (crate : crate) : crate =
             let sg = fdecl.signature in
             [%sanity_check_opt_span] None (sg.inputs = []);
             match sg.output with
-            | TArray ((TVar (Free _) as elem_ty), _) ->
+            | TArray ((TVar (Free _) as elem_ty), _, _) ->
                 let generics =
                   {
                     fdecl.generics with
@@ -336,7 +337,7 @@ let update_array_default (crate : crate) : crate =
                       ];
                   }
                 in
-                let sg = { sg with output = TArray (elem_ty, cg) } in
+                let sg = { sg with output = TArray (elem_ty, cg, None) } in
                 let fdecl = { fdecl with signature = sg; generics } in
                 Some fdecl
             | _ -> [%internal_error] fdecl.item_meta.span)

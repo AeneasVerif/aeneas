@@ -199,9 +199,9 @@ Definition update_update_array
   result (array (array u32 32%usize) 32%usize)
   :=
   p <- array_index_mut_usize s i;
-  let (a, index_mut_back) := p in
+  let (a, core_slice_index_slice_index_mut_back) := p in
   a1 <- array_update_usize a j 0%u32;
-  Ok (index_mut_back a1)
+  Ok (core_slice_index_slice_index_mut_back a1)
 .
 
 (** [arrays::update_update_slice]:
@@ -212,9 +212,9 @@ Definition update_update_slice
   result (slice (array u32 32%usize))
   :=
   p <- slice_index_mut_usize s i;
-  let (a, index_mut_back) := p in
+  let (a, core_slice_index_slice_index_mut_back) := p in
   a1 <- array_update_usize a j 0%u32;
-  Ok (index_mut_back a1)
+  Ok (core_slice_index_slice_index_mut_back a1)
 .
 
 (** [arrays::update_update_slice_shifted]:
@@ -228,9 +228,9 @@ Definition update_update_slice_shifted
   a <- slice_index_usize s i1;
   i2 <- array_index_usize a j;
   p <- slice_index_mut_usize s i;
-  let (a1, index_mut_back) := p in
+  let (a1, core_slice_index_slice_index_mut_back) := p in
   a2 <- array_update_usize a1 j i2;
-  Ok (index_mut_back a2)
+  Ok (core_slice_index_slice_index_mut_back a2)
 .
 
 (** [arrays::array_local_deep_copy]:
@@ -306,9 +306,7 @@ Definition const_array : result (array u32 2%usize) :=
     Source: 'tests/src/arrays.rs', lines 165:0-168:1
     Visibility: public *)
 Definition const_slice : result u32 :=
-  let a := array_repeat 2%usize 0%u32 in
-  let s := array_to_slice a in
-  slice_index_usize s 0%usize
+  let a := array_repeat 2%usize 0%u32 in array_index_usize a 0%usize
 .
 
 (** [arrays::take_all]:
@@ -534,9 +532,7 @@ Definition sum2 (n : nat) (s : slice u32) (s2 : slice u32) : result u32 :=
     Source: 'tests/src/arrays.rs', lines 306:0-309:1
     Visibility: public *)
 Definition f0 : result unit :=
-  let (s, _) := array_to_slice_mut (mk_array 2%usize [ 1%u32; 2%u32 ]) in
-  _ <- slice_index_mut_usize s 0%usize;
-  Ok tt
+  _ <- array_index_mut_usize (mk_array 2%usize [ 1%u32; 2%u32 ]) 0%usize; Ok tt
 .
 
 (** [arrays::f1]:

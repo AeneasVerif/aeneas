@@ -341,7 +341,8 @@ def core.array.TryFromMutArraySlice.try_from
     ok ((.Ok ⟨ s.val, by scalar_tac⟩, back))
   else ok ((.Err (), fun _ => s))
 
-@[rust_fun "core::array::{[@T; @N]}::as_slice"]
+@[rust_fun "core::array::{[@T; @N]}::as_slice" -canFail
+  (extract := "Array.to_slice")]
 def core.array.Array.as_slice {T : Type} {N : Usize} (a : Array T N) : Result (Slice T) :=
   ok (⟨ a.val, by scalar_tac ⟩)
 
@@ -362,7 +363,8 @@ def Array.Insts.CoreConvertAsMutSlice.as_mut
     else a
   ok (⟨ a.val, by scalar_tac ⟩, back)
 
-@[rust_fun "core::array::{[@T; @N]}::as_mut_slice"]
+@[rust_fun "core::array::{[@T; @N]}::as_mut_slice" -canFail
+  (extract := "Array.to_slice_mut")]
 def core.array.Array.as_mut_slice
   {T : Type} {N : Usize} (a : Array T N) :
   Result (Slice T × (Slice T → Array T N)) :=

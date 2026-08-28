@@ -329,11 +329,14 @@ let lean_builtin_funs =
     mk_fun
       "core::array::equality::{core::cmp::PartialEq<[@T; @N], [@U; @N]>}::ne"
       "core.array.equality.PartialEqArray.ne";
+    (* file: "Aeneas/Std/Array/Array.lean", line: 112 *)
+    mk_fun "core::array::repeat" "Array.repeat"
+      ~keep_trait_clauses:(Some [ false ]) ~can_fail:false ~lift:false;
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 365 *)
-    mk_fun "core::array::{[@T; @N]}::as_mut_slice"
-      "core.array.Array.as_mut_slice";
+    mk_fun "core::array::{[@T; @N]}::as_mut_slice" "Array.to_slice_mut"
+      ~can_fail:false;
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 344 *)
-    mk_fun "core::array::{[@T; @N]}::as_slice" "core.array.Array.as_slice";
+    mk_fun "core::array::{[@T; @N]}::as_slice" "Array.to_slice" ~can_fail:false;
     (* file: "Aeneas/Std/Array/Array.lean", line: 295 *)
     mk_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone"
       "core.array.CloneArray.clone";

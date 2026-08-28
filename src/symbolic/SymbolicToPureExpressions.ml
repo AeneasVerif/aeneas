@@ -398,38 +398,28 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
           let back_fun_name =
             let name =
               match fid with
-              | FunId (FBuiltin fid) -> begin
-                  match fid with
-                  | ArrayRepeat -> "array_repeat"
-                  | ArrayToSliceShared -> "to_slice_shared"
-                  | ArrayToSliceMut -> "to_slice_mut"
-                  | Index { is_array = _; mutability = RMut; is_range = false }
-                    -> "index_mut"
-                  | Index
-                      { is_array = _; mutability = RShared; is_range = false }
-                    -> "index_shared"
-                  | Index { is_array = _; mutability = RMut; is_range = true }
-                    -> "subslice_mut"
-                  | Index
-                      { is_array = _; mutability = RShared; is_range = true } ->
-                      "subslice_shared"
-                  | PtrFromParts RMut -> "ptr_from_parts_mut"
-                  | PtrFromParts RShared -> "ptr_from_parts_shared"
-                end
               | FunId (FRegular fid) -> (
                   let decl =
                     FunDeclId.Map.find fid ctx.fun_ctx.llbc_fun_decls
                   in
-                  let name =
-                    LlbcAstUtils.strip_target_or_instantiated_suffix
-                      decl.item_meta.name
-                  in
-                  match Collections.List.last name with
-                  | PeIdent (s, _) -> s
-                  | PeImpl _ -> "impl"
-                  | _ ->
-                      (* We shouldn't get there *)
-                      [%craise] decl.item_meta.span "Unexpected")
+                  match
+                    match_name_find_opt ctx.decls_ctx decl.item_meta.name
+                      (ExtractBuiltin.builtin_funs_map ())
+                  with
+                  | Some info ->
+                      Collections.List.last
+                        (String.split_on_char '.' info.extract_name)
+                  | None -> (
+                      let name =
+                        LlbcAstUtils.strip_target_or_instantiated_suffix
+                          decl.item_meta.name
+                      in
+                      match Collections.List.last name with
+                      | PeIdent (s, _) -> s
+                      | PeImpl _ -> "impl"
+                      | _ ->
+                          (* We shouldn't get there *)
+                          [%craise] decl.item_meta.span "Unexpected"))
               | TraitMethod (trait_ref, method_id) ->
                   Charon.GAstUtils.get_method_name ctx.decls_ctx.crate
                     trait_ref.trait_decl_ref.binder_value.id method_id
@@ -1609,7 +1599,6 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         let qualif = Qualif { id = FunOrOp func; generics } in
         let ty =
           match kind with
-          | T.FunId (FBuiltin _) -> [%craise] ctx.span "Unimplemented"
           | T.FunId (FRegular _) ->
               let sg =
                 [%unwrap_with_span] ctx.span
