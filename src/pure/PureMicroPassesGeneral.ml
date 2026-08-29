@@ -2648,7 +2648,7 @@ let recover_array_index_mut_usize =
   lift_expr_map_visitor_with_state recover_array_index_mut_usize_visitor
     FVarId.Map.empty
 
-(** Recover the old slice indexing primitives from the corresponding standard
+(** Recover the slice indexing primitives from the corresponding standard
     library calls. The standard functions take the index first, unlike the
     primitives exposed by the backends. *)
 let recover_slice_index_usize_visitor (ctx : ctx) (def : fun_decl) =
