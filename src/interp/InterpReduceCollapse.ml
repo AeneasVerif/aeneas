@@ -1183,17 +1183,9 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     { value; ty }
   in
 
-  let merge_ashared_borrows id ty0 _pm0 _ ty1 _pm1 _ : tavalue =
-    (* Sanity checks *)
-    let _ =
-      let _, ty0, _ = ty_as_ref ty0 in
-      let _, ty1, _ = ty_as_ref ty1 in
-      [%sanity_check] span
-        (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty0));
-      [%sanity_check] span
-        (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty1))
-    in
-
+  let merge_ashared_borrows id ty0 _pm0 _ _ty1 _pm1 _ : tavalue =
+    (* Note that the pointee type may contain (frozen) borrows: nested borrows
+       below a shared borrow. *)
     (* Same remarks as for [merge_amut_borrows] *)
     let ty = ty0 in
     let value =
