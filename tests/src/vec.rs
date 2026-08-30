@@ -13,3 +13,7 @@ fn use_alloc_with_capacity<T>(n: usize) -> Vec<T> {
 fn from_elem<T: Clone>(x: T, n: usize) -> Vec<T> {
     std::vec::from_elem(x, n)
 }
+
+fn singleton<T>(x: T) -> Vec<T> {
+    vec![x]
+}
