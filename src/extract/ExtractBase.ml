@@ -2433,23 +2433,24 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
 
 let ctx_compute_fun_name_no_suffix (item_meta : T.item_meta) (src : fun_source)
     ~(is_trait_decl_field : bool) (ctx : extraction_ctx) : string =
-  (* A struct constructor used as a first-class value (e.g. [x.map(Point)]) is
-    emitted by Charon as a standalone function whose name coincides with the
-     type's name in lean as that backend doesn't add a type suffix
-     (see: ctx_compute_type_name). *)
-  let local_type_decls_by_name =
-    TypeDeclId.Map.values ctx.crate.type_decls
-    |> List.filter (fun (td : Types.type_decl) -> td.item_meta.is_local)
-    |> List.fold_left
-         (fun m (td : Types.type_decl) -> NameMap.add td.item_meta.name td m)
-         NameMap.empty
-  in
-  let mk_lean_standalone_constructor_fn name = name ^ ".constructor" in
   match backend () with
   | Lean -> (
+      (* A struct constructor used as a first-class value (e.g. [x.map(Point)])
+         is emitted by Charon as a standalone function whose name coincides with
+         the type's name in lean as that backend doesn't add a type suffix (see
+         ctx_compute_type_name). *)
+      let local_type_decls_by_name =
+        TypeDeclId.Map.values ctx.crate.type_decls
+        |> List.filter (fun (td : Types.type_decl) -> td.item_meta.is_local)
+        |> List.fold_left
+             (fun m (td : Types.type_decl) ->
+               NameMap.add td.item_meta.name td m)
+             NameMap.empty
+      in
+      let mk_lean_standalone_constructor_fn name = name ^ ".constructor" in
       match NameMap.find_opt item_meta.name local_type_decls_by_name with
       | Some tdecl ->
-          (* emit new name for Struct constructor, see `fun_decl_constructor_target` *)
+          (* emit new name for Struct constructor *)
           let tname =
             ctx_compute_type_name tdecl.item_meta ctx tdecl.item_meta.name
           in
