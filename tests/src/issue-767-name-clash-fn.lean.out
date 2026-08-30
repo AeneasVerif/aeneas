@@ -1,0 +1,50 @@
+[[92mInfo[39m ] Imported: tests/llbc/issue_767_name_clash_fn.llbc
+[[91mError[39m] Name clash detected: the following identifiers are bound to the same name "Foo" (the generated code will be incorrect):
+- type name: issue_767_name_clash_fn::Foo
+  Source: 'tests/src/issue-767-name-clash-fn.rs', lines 12:0-14:1
+- issue_767_name_clash_fn::Foo
+  Source: 'tests/src/issue-767-name-clash-fn.rs', lines 16:0-18:1
+
+You may want to rename some of your definitions, or report an issue.
+Note that you can change the name used in the generated code by using the attribute #[aeneas::rename("NAME")] or #[charon::rename("NAME")]. For instance:
+
+```
+#![feature(register_tool)]
+#![register_tool(aeneas)]
+
+#[aeneas::rename("Bar")]
+type Foo = i32;
+```
+
+Those attributes can be applied to type definitions, functions, methods, trait
+declarations or trait implementations. For more examples, see:
+https://github.com/AeneasVerif/aeneas/blob/main/tests/src/rename_attribute.rs
+
+
+
+Compiler source: extract/ExtractBase.ml, line 275
+[[91mError[39m] Name clash detected: the following identifiers are bound to the same name "Foo" (the generated code will be incorrect):
+- type name: issue_767_name_clash_fn::Foo
+  Source: 'tests/src/issue-767-name-clash-fn.rs', lines 12:0-14:1
+- issue_767_name_clash_fn::Foo
+  Source: 'tests/src/issue-767-name-clash-fn.rs', lines 16:0-18:1
+
+You may want to rename some of your definitions, or report an issue.
+Note that you can change the name used in the generated code by using the attribute #[aeneas::rename("NAME")] or #[charon::rename("NAME")]. For instance:
+
+```
+#![feature(register_tool)]
+#![register_tool(aeneas)]
+
+#[aeneas::rename("Bar")]
+type Foo = i32;
+```
+
+Those attributes can be applied to type definitions, functions, methods, trait
+declarations or trait implementations. For more examples, see:
+https://github.com/AeneasVerif/aeneas/blob/main/tests/src/rename_attribute.rs
+
+
+
+Compiler source: extract/ExtractBase.ml, line 275
+
