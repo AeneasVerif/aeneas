@@ -11,6 +11,7 @@ import Aeneas.Std.Core.Fmt
 import Aeneas.Std.Core.FmtWithSlice
 import Aeneas.Std.Core.Hash
 import Aeneas.Std.Core.Iter
+import Aeneas.Std.Core.IterSpec
 import Aeneas.Std.Core.Marker
 import Aeneas.Std.Core.Ops
 import Aeneas.Std.Core.Panic
