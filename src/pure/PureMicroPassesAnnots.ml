@@ -35,23 +35,116 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
     PrintPure.fun_sig_to_string fmt sg
   in
 
-  (* The map visitor.
+  (* The map visitor tracks each sub-expression's "expected type" as a type
+     possibly containing holes — unknown positions encoded as [TVar (Free id)]
+     with a negative id. [-1] is the "universal" hole. Negative ids strictly
+     less than [-1] are "fresh tags" allocated per call to the visitor: they
+     mark which type parameter of the callee a hole came from, which lets us
+     unify against the args' actual types to recover the callee's type-
+     parameter substitution (used for sibling propagation between args and
+     for the application-level annotation decision).
 
-     For every sub-expression we track a "type with holes", where the holes
-     are types which are not explicitly known (either because we can't directly
-     know the type from the context, or because some type variables are implicit).
-
-     If at some point the type is not known and the type of the expression is
-     ambiguous, we introduce a type annotation.
-
-     We encode types with holes in a simple manner: the unknown holes are type
-     variables with id = -1.
-  *)
+     When the expected type at a sub-expression still has holes that prevent
+     the elaborator from determining a callee's implicit type parameter, we
+     introduce a type annotation. *)
   let hole : ty = TVar (T.Free (TypeVarId.of_int (-1))) in
-  (* The const generic holes are not really useful, but while we're at it we
-     can keep track of them *)
   let cg_hole : const_generic =
     CgVar (T.Free (ConstGenericVarId.of_int (-1)))
+  in
+
+  let fresh_hole_counter = ref (-2) in
+  let alloc_fresh_ty_id () : TypeVarId.id =
+    let id = TypeVarId.of_int !fresh_hole_counter in
+    decr fresh_hole_counter;
+    id
+  in
+  let alloc_fresh_cg_id () : ConstGenericVarId.id =
+    let id = ConstGenericVarId.of_int !fresh_hole_counter in
+    decr fresh_hole_counter;
+    id
+  in
+  let is_fresh_ty_id (id : TypeVarId.id) : bool = TypeVarId.to_int id < -1 in
+  let is_fresh_cg_id (id : ConstGenericVarId.id) : bool =
+    ConstGenericVarId.to_int id < -1
+  in
+
+  (* Check whether a type or const generic contains the universal hole [-1]. *)
+  let cg_is_universal_hole (cg : const_generic) : bool =
+    match cg with
+    | CgVar (T.Free id) -> ConstGenericVarId.to_int id = -1
+    | _ -> false
+  in
+  let rec ty_has_hole (t : ty) : bool =
+    match t with
+    | TVar (T.Free id) -> TypeVarId.to_int id = -1
+    | TVar (T.Bound _) -> false
+    | TLiteral _ | TNever | TError -> false
+    | TAdt (_, generics) -> generics_has_hole generics
+    | TArrow (t1, t2) -> ty_has_hole t1 || ty_has_hole t2
+    | TTraitType _ | TDynTrait _ -> false
+  and generics_has_hole (g : generic_args) : bool =
+    List.exists ty_has_hole g.types
+    || List.exists cg_is_universal_hole g.const_generics
+  in
+
+  (* Fresh-tag substitution: maps fresh tag IDs to the concrete types/cgs
+     they have been resolved to. Tags are allocated per call and never
+     reused, so the substitution can safely grow across the whole pass. *)
+  let ty_subst = ref TypeVarId.Map.empty in
+  let cg_subst = ref ConstGenericVarId.Map.empty in
+
+  (* Apply the current substitution: replace resolved fresh tags with their
+     value; replace unresolved fresh tags with the universal hole. *)
+  let rec apply_subst (t : ty) : ty =
+    match t with
+    | TVar (T.Free id) when is_fresh_ty_id id -> (
+        match TypeVarId.Map.find_opt id !ty_subst with
+        | Some t' -> apply_subst t'
+        | None -> hole)
+    | TAdt (id, g) -> TAdt (id, apply_subst_generics g)
+    | TArrow (t1, t2) -> TArrow (apply_subst t1, apply_subst t2)
+    | _ -> t
+  and apply_subst_cg (cg : const_generic) : const_generic =
+    match cg with
+    | CgVar (T.Free id) when is_fresh_cg_id id -> (
+        match ConstGenericVarId.Map.find_opt id !cg_subst with
+        | Some cg' -> apply_subst_cg cg'
+        | None -> cg_hole)
+    | _ -> cg
+  and apply_subst_generics (g : generic_args) : generic_args =
+    {
+      g with
+      types = List.map apply_subst g.types;
+      const_generics = List.map apply_subst_cg g.const_generics;
+    }
+  in
+
+  (* Unify a template (possibly containing fresh tags) against an actual
+     (concrete) type, recording the implied tag -> ty bindings. We never
+     learn a binding to a value containing a hole. *)
+  let rec unify_against (template : ty) (actual : ty) : unit =
+    match (template, actual) with
+    | TVar (T.Free id), _ when is_fresh_ty_id id ->
+        if (not (TypeVarId.Map.mem id !ty_subst)) && not (ty_has_hole actual)
+        then ty_subst := TypeVarId.Map.add id actual !ty_subst
+    | TAdt (id1, g1), TAdt (id2, g2) when id1 = id2 ->
+        if List.length g1.types = List.length g2.types then
+          List.iter2 unify_against g1.types g2.types;
+        if List.length g1.const_generics = List.length g2.const_generics then
+          List.iter2 unify_cg_against g1.const_generics g2.const_generics
+    | TArrow (t1a, t2a), TArrow (t1b, t2b) ->
+        unify_against t1a t1b;
+        unify_against t2a t2b
+    | _ -> ()
+  and unify_cg_against (template : const_generic) (actual : const_generic) :
+      unit =
+    match template with
+    | CgVar (T.Free id) when is_fresh_cg_id id ->
+        if
+          (not (ConstGenericVarId.Map.mem id !cg_subst))
+          && not (cg_is_universal_hole actual)
+        then cg_subst := ConstGenericVarId.Map.add id actual !cg_subst
+    | _ -> ()
   in
 
   (* Small helper to add a type annotation *)
@@ -62,7 +155,21 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
   let rec visit (ty : ty) (e : texpr) : texpr =
     [%ldebug "visit:\n- ty: " ^ ty_to_string ty ^ "\n- e: " ^ texpr_to_string e];
     match e.e with
-    | FVar _ | CVar _ | Const _ | EError _ | Qualif _ -> e
+    | FVar _ | CVar _ | Const _ | EError _ -> e
+    | Qualif q -> begin
+        match q.id with
+        | AdtCons adt_cons_id ->
+            (* A bare ADT constructor is a 0-arg application; the same
+               annotation logic as for [App] applies. *)
+            visit_adt_cons_app ty e [] adt_cons_id q.generics
+        | FunOrOp _
+        | Global _
+        | Proj _
+        | ScalarValProj _
+        | TraitConst _
+        | MkDynTrait _
+        | LoopOp -> e
+      end
     | BVar _ -> [%internal_error] span
     | App _ -> visit_App ty e
     | Lambda (pat, e') ->
@@ -74,13 +181,15 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
         in
         { e with e = Lambda (pat, visit ty' e') }
     | Let (monadic, pat, bound, next) ->
-        (* The type of the bound expression is considered as unknown *)
-        let bound = visit hole bound in
+        (* Pass the bound's actual type as the expected type. This lets
+           sibling propagation skip annotating constructors when context
+           already fully determines their type (e.g. match arms whose
+           result type is fixed by the surrounding [let ←]). *)
+        let bound = visit bound.ty bound in
         let next = visit ty next in
         { e with e = Let (monadic, pat, bound, next) }
     | Switch (discr, body) ->
-        (* We consider that the type of the discriminant is unknown *)
-        let discr = visit hole discr in
+        let discr = visit discr.ty discr in
         let body = visit_switch_body ty body in
         { e with e = Switch (discr, body) }
     | Loop _ ->
@@ -155,6 +264,14 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
       "visit_App:\n- ty: " ^ ty_to_string ty ^ "\n- e: " ^ texpr_to_string e];
     (* Deconstruct the app *)
     let f, args = destruct_apps e in
+    (* AdtCons applications go through a separate path which propagates type
+       info between sibling args and decides annotation at the App level. *)
+    match f.e with
+    | Qualif { id = AdtCons adt_cons_id; generics = q_generics } ->
+        visit_adt_cons_app ty f args adt_cons_id q_generics
+    | _ -> visit_App_other ty e f args
+  and visit_App_other (ty : ty) (_e : texpr) (f : texpr) (args : texpr list) :
+      texpr =
     (* Compute the types of the arguments: it depends on the function *)
     let mk_holes () = List.map (fun _ -> hole) args in
     let mk_known () = List.map (fun (e : texpr) -> e.ty) args in
@@ -254,13 +371,18 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
              Note that we assume that all the trait refs are there, meaning
              we can use them to infer some implicit variables.
           *)
+          (* Replace each "unknown" type/const-generic argument with a fresh
+             tag (rather than the universal hole). This lets us learn its
+             value via unification with concrete sibling arg types — which is
+             what enables [List.Cons 3#i32 List.Nil]-style sibling
+             propagation to skip unnecessary annotations on [List.Nil]. *)
           let known = sg.known_from_trait_refs in
           let types =
             List.map
               (fun (known, ty) ->
                 match known with
                 | Known -> ty
-                | Unknown -> hole)
+                | Unknown -> TVar (T.Free (alloc_fresh_ty_id ())))
               (List.combine known.known_types generics.types)
           in
           let const_generics =
@@ -268,7 +390,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
               (fun (known, cg) ->
                 match known with
                 | Known -> cg
-                | Unknown -> cg_hole)
+                | Unknown -> CgVar (T.Free (alloc_fresh_cg_id ())))
               (List.combine known.known_const_generics generics.const_generics)
           in
           let generics = { qualif.generics with types; const_generics } in
@@ -300,48 +422,10 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
               | Binop _ -> (known_f_ty, known_args_tys, false)
             end
           | Global _ -> (f.ty, mk_known (), false)
-          | AdtCons adt_cons_id -> begin
-              (* We extract the type of the arguments from the known type *)
-              match ty with
-              | TAdt (TBuiltin (TArray | TSlice), _) ->
-                  (hole, mk_holes (), false)
-              | TAdt (adt_id, generics)
-              (* TODO: there are type-checking errors that we need to take into account (otherwise
-                 [get_adt_field_types] sometimes crashes) *)
-                when adt_id = adt_cons_id.adt_id ->
-                  (* The type is known: let's compute the type of the fields and recurse *)
-                  let field_tys =
-                    PureTypeCheck.get_adt_field_types span type_decls adt_id
-                      adt_cons_id.variant_id generics
-                  in
-                  (* We shouldn't need to know the type of the constructor - just leaving
-                     a hole for now *)
-                  (hole, field_tys, false)
-              | _ ->
-                  (* The type is unknown, but if the constructor is an enumeration
-                     constructor, we can retrieve information from it *)
-                  if Option.is_some adt_cons_id.variant_id then
-                    let args_tys =
-                      match e.ty with
-                      | TAdt (adt_id, generics) ->
-                          (* Replace the generic arguments with holes *)
-                          let generics =
-                            {
-                              generics with
-                              types = List.map (fun _ -> hole) generics.types;
-                              const_generics =
-                                List.map
-                                  (fun _ -> cg_hole)
-                                  generics.const_generics;
-                            }
-                          in
-                          PureTypeCheck.get_adt_field_types span type_decls
-                            adt_id adt_cons_id.variant_id generics
-                      | _ -> mk_holes ()
-                    in
-                    (hole, args_tys, false)
-                  else (hole, mk_holes (), false)
-            end
+          | AdtCons _ ->
+              (* AdtCons applications are handled earlier in [visit_App] via
+                 [visit_adt_cons_app], so this branch is unreachable. *)
+              [%internal_error] span
           | MkDynTrait _ ->
               (* The type is statically known because of the trait ref *)
               [%sanity_check] span (List.length known_args_tys = 1);
@@ -365,12 +449,108 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
     let num_args = List.length args in
     [%sanity_check] span (num_args <= List.length args_tys);
     let args_tys = Collections.List.prefix num_args args_tys in
+    (* Sibling propagation: as we recurse on each arg, refine the remaining
+       expected types using what we learned from already-processed siblings.
+       For args_tys without fresh tags this collapses to the old behavior. *)
     let args =
-      List.map (fun (ty, arg) -> visit ty arg) (List.combine args_tys args)
+      List.map2
+        (fun template arg ->
+          let expected = apply_subst template in
+          let visited = visit expected arg in
+          unify_against template visited.ty;
+          visited)
+        args_tys args
     in
     let f = visit f_ty f in
     let e = [%add_loc] mk_apps span f args in
     if need_annot then mk_type_annot e else e
+  and visit_adt_cons_app (ty : ty) (f : texpr) (args : texpr list)
+      (adt_cons_id : adt_cons_id) (q_generics : generic_args) : texpr =
+    (* Process an application of an ADT constructor (possibly 0-ary) per the
+       design principle: if any of the constructor's type parameters cannot
+       be inferred from the args we passed AND the expected outer type still
+       has holes, annotate the whole application.
+
+       To compute "inferable from args" precisely (so we don't over-annotate
+       e.g. [List.Cons 3#i32 List.Nil] where Lean infers [T = i32] from the
+       first arg), we tag the constructor's type parameters with fresh IDs,
+       propagate concrete types between siblings via unification, and check
+       at the end which tags remain unresolved. *)
+    match adt_cons_id.adt_id with
+    | TBuiltin (TArray | TSlice) ->
+        (* Arrays/slices: keep the legacy conservative behavior — no
+           sibling propagation, no constructor-level annotation. *)
+        let args = List.map (visit hole) args in
+        [%add_loc] mk_apps span f args
+    | _ ->
+        let fresh_ty_ids =
+          List.map (fun _ -> alloc_fresh_ty_id ()) q_generics.types
+        in
+        let fresh_cg_ids =
+          List.map (fun _ -> alloc_fresh_cg_id ()) q_generics.const_generics
+        in
+        let fresh_generics =
+          {
+            types = List.map (fun id -> TVar (T.Free id)) fresh_ty_ids;
+            const_generics = List.map (fun id -> CgVar (T.Free id)) fresh_cg_ids;
+            trait_refs = [];
+          }
+        in
+        let template_field_tys =
+          PureTypeCheck.get_adt_field_types span type_decls adt_cons_id.adt_id
+            adt_cons_id.variant_id fresh_generics
+        in
+        (* Pre-seed substitution from the expected outer type when it matches
+           and provides concrete info at some positions. *)
+        (match ty with
+        | TAdt (id, g)
+          when id = adt_cons_id.adt_id
+               && List.length g.types = List.length fresh_ty_ids
+               && List.length g.const_generics = List.length fresh_cg_ids ->
+            List.iter2
+              (fun fid concrete ->
+                if not (ty_has_hole concrete) then
+                  ty_subst := TypeVarId.Map.add fid concrete !ty_subst)
+              fresh_ty_ids g.types;
+            List.iter2
+              (fun fid concrete ->
+                if not (cg_is_universal_hole concrete) then
+                  cg_subst := ConstGenericVarId.Map.add fid concrete !cg_subst)
+              fresh_cg_ids g.const_generics
+        | _ -> ());
+        (* Iterate args left-to-right, propagating concrete info from
+           already-processed siblings. *)
+        let num_args = List.length args in
+        if num_args > List.length template_field_tys then [%internal_error] span;
+        let template_prefix =
+          Collections.List.prefix num_args template_field_tys
+        in
+        let visited_args =
+          List.map2
+            (fun template arg ->
+              let expected = apply_subst template in
+              let visited = visit expected arg in
+              unify_against template visited.ty;
+              visited)
+            template_prefix args
+        in
+        let e' = [%add_loc] mk_apps span f visited_args in
+        let some_ty_param_unconstrained =
+          List.exists
+            (fun id -> not (TypeVarId.Map.mem id !ty_subst))
+            fresh_ty_ids
+        in
+        let some_cg_param_unconstrained =
+          List.exists
+            (fun id -> not (ConstGenericVarId.Map.mem id !cg_subst))
+            fresh_cg_ids
+        in
+        if
+          Config.backend () = Lean
+          && (some_ty_param_unconstrained || some_cg_param_unconstrained)
+          && ty_has_hole ty
+        then mk_type_annot e'
+        else e'
   and visit_switch_body (ty : ty) (body : switch_body) : switch_body =
     match body with
     | If (e1, e2) -> If (visit ty e1, visit ty e2)

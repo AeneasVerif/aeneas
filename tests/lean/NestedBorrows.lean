@@ -95,7 +95,7 @@ def IterMut.next
         match replace_option_mut_back self1.v o2 with
         | (o4, none) => o4
         | _ => self.v
-      ({ v := o3 } : IterMut T)
+      { v := o3 }
   ok (o, { v := o1 }, back'a)
 
 /-- [nested_borrows::call_iter_mut_next]:
@@ -224,7 +224,7 @@ def ListIterMut.next
     let back'a :=
       fun self1 o2 =>
         let o3 := take_option_mut_back self1.current none
-        ({ current := o3 } : ListIterMut T)
+        { current := o3 }
     ok (none, { current := o1 }, back'a)
   | some l =>
     match l with
@@ -232,7 +232,7 @@ def ListIterMut.next
       let back'a :=
         fun self1 o2 =>
           let o3 := take_option_mut_back self1.current o
-          ({ current := o3 } : ListIterMut T)
+          { current := o3 }
       ok (none, { current := o1 }, back'a)
     | List.Cons value next =>
       let back'a :=
@@ -244,7 +244,7 @@ def ListIterMut.next
                    | some t1 => t1
                    | _ => value
           let o3 := take_option_mut_back o1 (some (List.Cons t l1))
-          ({ current := o3 } : ListIterMut T)
+          { current := o3 }
       ok (some value, { current := (some next) }, back'a)
 
 /-- [nested_borrows::incr_list]: loop body 0:
