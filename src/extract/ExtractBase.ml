@@ -620,6 +620,11 @@ type extraction_ctx = {
       (** Same as {!types_filter_type_args_map}, but for trait implementations
       *)
   trait_impls_filter_trait_clauses_map : bool list TraitImplId.Map.t;
+  local_tuple_struct_decls_by_name : Types.type_decl NameMap.t;
+      (** Local tuple-struct type decls, keyed by name. Used (only by Lean) to
+          detect when a function is actually a struct-constructor shim and
+          rename it to [<Type>.constructor]. See
+          {!ctx_compute_fun_name_no_suffix}. *)
   extracted_opaque : bool ref;
       (** Set to true if at some point we extract a definition which is opaque,
           meaning we generate an axiom. If yes, and in case the user does not
@@ -2431,31 +2436,35 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
           ctx_fun_global_name_to_extract_string item_meta ctx llbc_name
         else name
 
+(* A struct constructor used as a first-class value (e.g. [x.map(Point)]) is
+   emitted by Charon as a standalone function whose name coincides with the
+   type's name in lean as that backend doesn't add a type suffix (see
+   ctx_compute_type_name). *)
+let mk_local_tuple_struct_decls_by_name (crate : A.crate)
+    (trans_ctx : trans_ctx) : Types.type_decl NameMap.t =
+  TypeDeclId.Map.values crate.type_decls
+  |> List.filter (fun (td : Types.type_decl) ->
+         td.item_meta.is_local
+         (* only tuple structs occupy Rust's value namespace *)
+         && TypesUtils.type_decl_from_decl_id_is_tuple_struct
+              trans_ctx.type_ctx.type_infos td.def_id)
+  |> List.fold_left
+       (fun m (td : Types.type_decl) -> NameMap.add td.item_meta.name td m)
+       NameMap.empty
+
 let ctx_compute_fun_name_no_suffix (item_meta : T.item_meta) (src : fun_source)
     ~(is_trait_decl_field : bool) (ctx : extraction_ctx) : string =
   match backend () with
   | Lean -> (
-      (* A struct constructor used as a first-class value (e.g. [x.map(Point)])
-         is emitted by Charon as a standalone function whose name coincides with
-         the type's name in lean as that backend doesn't add a type suffix (see
-         ctx_compute_type_name). *)
-      let local_type_decls_by_name =
-        TypeDeclId.Map.values ctx.crate.type_decls
-        |> List.filter (fun (td : Types.type_decl) -> td.item_meta.is_local)
-        |> List.fold_left
-             (fun m (td : Types.type_decl) ->
-               NameMap.add td.item_meta.name td m)
-             NameMap.empty
-      in
-      let mk_lean_standalone_constructor_fn name = name ^ ".constructor" in
-      match NameMap.find_opt item_meta.name local_type_decls_by_name with
+      match
+        NameMap.find_opt item_meta.name ctx.local_tuple_struct_decls_by_name
+      with
       | Some tdecl ->
-          (* emit new name for Struct constructor *)
+          (* emit new name for the tuple-struct constructor shim *)
           let tname =
             ctx_compute_type_name tdecl.item_meta ctx tdecl.item_meta.name
           in
-          let cons_name = mk_lean_standalone_constructor_fn tname in
-          basename_to_unique ctx cons_name
+          basename_to_unique ctx (tname ^ ".constructor")
       | None ->
           ctx_compute_fun_global_name_no_suffix item_meta
             (extractable_fun_source ctx src)

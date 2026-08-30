@@ -1543,6 +1543,8 @@ let extract_translated_crate (filename : string) (dest_dir : string)
       funs_filter_trait_clauses_map = Pure.FunDeclId.Map.empty;
       trait_impls_filter_type_args_map = Pure.TraitImplId.Map.empty;
       trait_impls_filter_trait_clauses_map = Pure.TraitImplId.Map.empty;
+      local_tuple_struct_decls_by_name =
+        ExtractBase.mk_local_tuple_struct_decls_by_name crate trans_ctx;
       extracted_opaque;
     }
   in
