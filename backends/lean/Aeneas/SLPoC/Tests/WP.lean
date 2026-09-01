@@ -27,8 +27,8 @@ example (P Q R : IProp) (h : P ⊢ Q) : P ∗ R ⊢ Q ∗ R := by
   irewrite h
   iframe
 
-example {α : Type} (r : Aeneas.SLPoC.Ref α) (value : α) :
-    r ↦ value ⊢ r ↦ value := by
+example {α : Type} {p : Aeneas.SLPoC.PCM α} (r : Aeneas.SLPoC.Ref α p)
+    (x : α) : r ↦ x ⊢ r ↦ x := by
   iframe
 
 example {α : Type} (w : Wp α) : w.wp = Wp.wp w :=

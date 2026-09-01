@@ -66,11 +66,21 @@ def ipure (P : Prop) : IProp where
   holds _ := P
   up_closed := fun hP _ => hP
 
-/-- The points-to assertion: the heap owns the cell `p` points at, and it holds
-`value`. -/
-def pointsTo {α : Type} (r : Ref α) (value : α) : IProp where
-  holds h := Heap.Sub (singleton r value) h
+/-- The points-to assertion of a PCM reference: the heap owns the fragment `x`
+of the cell `r` names.  Being affine it says nothing about the rest of that
+cell, which other assertions may own fragments of. -/
+def Ref.pointsTo {α : Type} {p : PCM α} (r : Ref α p) (x : α) : IProp where
+  holds h := Heap.Sub (singleton r x) h
   up_closed := fun hSub hExtend => hSub.trans hExtend
+
+/-- What `↦` means, overloaded: a reference points to a fragment of its own
+PCM, a pointer to the value it addresses, and a buffer to the values it
+spans. -/
+class PointsTo (ρ : Type u) (β : outParam (Type v)) where
+  pointsTo : ρ → β → IProp
+
+instance instPointsToRef {α : Type} {p : PCM α} : PointsTo (Ref α p) α :=
+  ⟨Ref.pointsTo⟩
 
 def sep (H₁ H₂ : IProp) : IProp where
   holds h :=
@@ -116,7 +126,7 @@ macro_rules
   | `($P ⊢ $Q) => `(Entails $P $Q)
   | `($P ⊢+ $Q) => `(postEntails $P $Q)
   | `($P ⊣⊢ $Q) => `(BiEntails $P $Q)
-notation:50 p:50 " ↦ " value:50 => pointsTo p value
+notation:50 r:50 " ↦ " value:50 => PointsTo.pointsTo r value
 
 theorem entails_refl (H : IProp) : H ⊢ H :=
   fun _ hH => hH
@@ -252,20 +262,46 @@ theorem emp_holds (h : Heap) : (emp : IProp) h ↔ True :=
 theorem pure_holds {P : Prop} (h : Heap) : (⌜P⌝ : IProp) h ↔ P :=
   Iff.rfl
 
-theorem pointsTo_holds {α : Type} (r : Ref α) (value : α) (h : Heap) :
-    (r ↦ value) h ↔ Heap.Sub (singleton r value) h :=
+theorem Ref.pointsTo_holds {α : Type} {p : PCM α} (r : Ref α p) (x : α)
+    (h : Heap) : (r ↦ x) h ↔ Heap.Sub (singleton r x) h :=
   Iff.rfl
 
-/-- Points-to is exclusive: affinity lets resources be *dropped*, never
-duplicated, so a cell still cannot be owned twice. -/
-theorem pointsTo_exclusive {α : Type} (r : Ref α) (value₁ value₂ : α) :
-    r ↦ value₁ ∗ r ↦ value₂ ⊢ ⌜False⌝ := by
-  rintro h ⟨h₁, h₂, hDisjoint, -, hSingle₁, hSingle₂⟩
-  apply disjoint_contains_false hDisjoint
-  · obtain ⟨rest, _, rfl⟩ := hSingle₁
-    exact contains_union_left (contains_singleton r value₁)
-  · obtain ⟨rest, _, rfl⟩ := hSingle₂
-    exact contains_union_left (contains_singleton r value₂)
+/-- Points-to is exclusive exactly as far as its PCM is: affinity lets
+resources be *dropped*, never duplicated, so two fragments that do not compose
+cannot both be owned. -/
+theorem Ref.pointsTo_exclusive {α : Type} {p : PCM α} (r : Ref α p) (x y : α)
+    (hNotComposable : ¬ p.Composable x y) :
+    r ↦ x ∗ r ↦ y ⊢ ⌜False⌝ := by
+  rintro h ⟨h₁, h₂, hCompatible, -, hSingle₁, hSingle₂⟩
+  exact not_composable_incompatible hCompatible hSingle₁ hSingle₂
+    hNotComposable
+
+/-- Splitting and joining a cell: owning `p.op x y` is owning `x` and owning
+`y` separately.  This is what PCM references are for — one allocation, several
+disjoint owners. -/
+theorem Ref.pointsTo_op {α : Type} {p : PCM α} (r : Ref α p) (x y : α)
+    (hComposable : p.Composable x y) :
+    r ↦ p.op x y ⊣⊢ r ↦ x ∗ r ↦ y := by
+  have hCompatibleSingle := compatible_singleton_self (r := r) hComposable
+  constructor
+  · rintro h ⟨rest, hCompatible, rfl⟩
+    rw [← singleton_union_singleton hComposable] at hCompatible ⊢
+    obtain ⟨hCompatibleRest, hCompatibleRight⟩ :=
+      (PartialCommMonoid.compatible_assoc (singleton r x) (singleton r y)
+        rest).mp ⟨hCompatibleSingle, hCompatible⟩
+    exact ⟨singleton r x, singleton r y ∪ rest, hCompatibleRight,
+      PartialCommMonoid.union_assoc hCompatibleSingle hCompatible,
+      Heap.Sub.refl _, Heap.Sub.union_left hCompatibleRest⟩
+  · rintro h ⟨h₁, h₂, hCompatible, rfl, hSub₁, hSub₂⟩
+    show Heap.Sub (singleton r (p.op x y)) (h₁ ∪ h₂)
+    rw [← singleton_union_singleton hComposable]
+    exact Heap.Sub.union_mono hSub₁ hSub₂ hCompatible
+
+/-- Reading through a points-to assertion sees a value the owned fragment is a
+fragment of: Pulse's `read` contract. -/
+theorem Ref.compatible_of_pointsTo {α : Type} {p : PCM α} {r : Ref α p} {x : α}
+    {h : Heap} (hPointsTo : (r ↦ x) h) : p.Compatible x (h.get r) :=
+  compatible_get_of_sub hPointsTo
 
 theorem sep_holds (H₁ H₂ : IProp) (h : Heap) :
     (H₁ ∗ H₂) h ↔
