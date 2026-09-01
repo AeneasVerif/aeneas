@@ -243,7 +243,7 @@ theorem Vec.index_RangeTo_spec {α : Type} (v : Vec α) (r : core.ops.range.Rang
     (h : r.end ≤ v.length) :
     Vec.index (core.slice.index.SliceIndexRangeToUsizeSlice α) v r
     ⦃ s1 =>
-      s1.val = v.val.slice 0 r.end ∧
+      s1.val = v.val.extract 0 r.end ∧
       s1.length = r.end ⦄ := by
   simp only [Vec.index]
   have := core.slice.index.SliceIndexRangeToUsizeSlice.index.step_spec r v h
@@ -254,7 +254,7 @@ theorem Vec.index_mut_RangeTo_spec {α : Type} (v : Vec α) (r : core.ops.range.
     (h : r.end ≤ v.length) :
     Vec.index_mut (core.slice.index.SliceIndexRangeToUsizeSlice α) v r
     ⦃ (s1 : Slice α) (back : Slice α → Vec α) =>
-      s1.val = v.val.slice 0 r.end ∧
+      s1.val = v.val.extract 0 r.end ∧
       s1.length = r.«end» ∧
       ∀ s', (back s').val = v.val.setSlice! 0 s'.val ⦄ := by
   simp only [Vec.index_mut]
@@ -293,7 +293,7 @@ theorem Vec.index_Range_spec {α : Type} (v : Vec α) (r : core.ops.range.Range 
     (h0 : r.start ≤ r.end) (h1 : r.end ≤ v.length) :
     Vec.index (core.slice.index.SliceIndexRangeUsizeSlice α) v r
     ⦃ s1 =>
-      s1.val = v.val.slice r.start r.end ∧
+      s1.val = v.val.extract r.start r.end ∧
       s1.length = r.end - r.start ⦄ := by
   simp only [Vec.index]
   have := core.slice.index.SliceIndexRangeUsizeSlice.index.step_spec r v h0 h1
@@ -304,7 +304,7 @@ theorem Vec.index_mut_Range_spec {α : Type} (v : Vec α) (r : core.ops.range.Ra
     (h0 : r.start ≤ r.end) (h1 : r.end ≤ v.length) :
     Vec.index_mut (core.slice.index.SliceIndexRangeUsizeSlice α) v r
     ⦃ (s1 : Slice α) (back : Slice α → Vec α) =>
-      s1.val = v.val.slice r.start r.end ∧
+      s1.val = v.val.extract r.start r.end ∧
       s1.length = r.end - r.start ∧
       ∀ s2, back s2 = Slice.setSlice! v r.start.val s2 ⦄ := by
   simp only [Vec.index_mut]
