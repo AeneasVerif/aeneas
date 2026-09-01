@@ -312,6 +312,6 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
           ^ "]")
   in
 
-  analyze_decl_groups m.declarations;
+  analyze_decl_groups (Option.get m.declarations);
 
   !infos
