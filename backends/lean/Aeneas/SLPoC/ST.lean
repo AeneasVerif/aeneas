@@ -6,8 +6,8 @@ import Aeneas.Tactic.Step.StepStar
 # The state monad `St` and its program logic
 
 `St` is the freer monad over heap events. This file defines it, gives it an
-operational semantics, derives its separation-logic triples, and wires those
-triples to the `step`/`step*` tactics.
+operational semantics and a certified interpreter, derives its
+separation-logic triples, and wires those triples to the `step`/`step*` tactics.
 -/
 
 namespace Aeneas.SLPoC
@@ -108,47 +108,6 @@ def theta : St α → Wp α
   | .ok value => Wp.pure value
   | .event event next =>
       Wp.bind (theta_ev event) (fun value => theta (next value))
-
-/-- Adequacy — `StateMachineAdequate` of *Program Logics à la Carte*, for the
-machine `StEvents.machine`: a program whose weakest precondition holds has an
-execution that stops on a returned value satisfying the postcondition. -/
-theorem theta_adequate (m : St α) (Q : SLPost α) (h₀ : Heap)
-    (hTheta : theta m Q h₀) :
-    Exec StEvents.machine m h₀
-      fun m' h => ∃ value, m' = .ok value ∧ Q value h := by
-  induction m generalizing h₀ with
-  | ok value =>
-      exact ⟨value, rfl, hTheta⟩
-  | event event next ih =>
-      have hEvent : theta_ev event (fun value => theta (next value) Q) h₀ :=
-        hTheta
-      cases event with
-      | GuardedModify pre modify =>
-          obtain ⟨hPre, hNext⟩ := theta_ev_elim hEvent
-          exact Exec.event (M := StEvents.machine)
-            ⟨_, _, .guardedModify hPre, ih _ _ hNext⟩
-
-/-- Every terminating evaluation satisfies the postcondition. -/
-theorem theta_sound (m : St α) (Q : SLPost α) (h₀ : Heap)
-    (hTheta : theta m Q h₀) :
-    ∀ value h₁, Evaluates m h₀ value h₁ → Q value h₁ := by
-  induction m generalizing h₀ with
-  | ok result =>
-      rintro value h₁ ⟨hValue, hHeap⟩
-      cases hValue
-      cases hHeap
-      exact hTheta
-  | event event next ih =>
-      change theta_ev event (fun result => theta (next result) Q) h₀ at hTheta
-      intro value h₁ hEval
-      rcases hEval with hStop | ⟨result, h, hStep, hEval⟩
-      · simp at hStop
-      · cases hStep with
-        | guardedModify hPre =>
-            obtain ⟨hPre', hNext⟩ := theta_ev_elim hTheta
-            have hProof : hPre' = hPre := Subsingleton.elim _ _
-            subst hPre'
-            exact ih _ _ hNext _ _ hEval
 
 theorem theta_ev_frame (event : StEvents Heap α) (Q : SLPost α)
     (H : SLProp) :
@@ -396,18 +355,6 @@ theorem triple_xchange {α : Type} {H₁ H₂ H₃ : SLPre} {Q : SLPost α} {m :
     (hPart : H₁ ⊢ H₂) (hRest : triple (H₂ ∗ H₃) m Q) : triple (H₁ ∗ H₃) m Q :=
   triple_conseq hRest (hstar_mono hPart (himpl_refl H₃)) (fun _ => himpl_refl _)
 
-/-- Terminal `pure`, i.e. SLF's `xval`. Registering it as a `step` lemma is what
-lets `step*` walk all the way to the `return` of a monadic function instead of
-stopping just before it. -/
-theorem ok.spec (value : α) :
-    ⦃ emp ⦄ (FFree.ok value : St α) ⦃⇓ result => ⌜result = value⌝⦄ :=
-  triple_pure fun _ _ => rfl
-
-/-- `ok.spec` again, stated through `Pure.pure`. -/
-theorem pure.spec (value : α) :
-    ⦃ emp ⦄ (Pure.pure value : St α) ⦃⇓ result => ⌜result = value⌝⦄ :=
-  ok.spec value
-
 /-! ## Wiring of `step` to separation-logic triples -/
 
 open Lean Elab Meta Tactic
@@ -456,6 +403,90 @@ macro "intro_triple" : tactic =>
     liftings := #[]
   }
 
-attribute [step] ok.spec pure.spec
+@[step]
+theorem ok.spec (value : α) :
+    ⦃ emp ⦄ (FFree.ok value : St α) ⦃⇓ result => ⌜result = value⌝⦄ :=
+  triple_pure fun _ _ => rfl
+
+@[step]
+theorem pure.spec (value : α) :
+    ⦃ emp ⦄ (Pure.pure value : St α) ⦃⇓ result => ⌜result = value⌝⦄ :=
+  ok.spec value
+
+/-! ## Certified execution -/
+
+/-- What running `m` from `h` produces: the returned value and final heap,
+together with the postcondition they satisfy and the evaluation that reaches
+them. -/
+def Outcome (m : St α) (Q : SLPost α) (h : Heap) : Type 1 :=
+  { outcome : α × Heap //
+      Q outcome.1 outcome.2 ∧ Evaluates m h outcome.1 outcome.2 }
+
+/-- Run `m` from `h`. The weakest-precondition proof supplies the guard of each
+event and guarantees the postcondition. -/
+def run : (m : St α) → (h : Heap) → (Q : SLPost α) → theta m Q h → Outcome m Q h
+  | .ok value, h, _, hWp =>
+      ⟨(value, h), hWp,
+        StateMachine.Evaluates.ok (M := StEvents.machine) value h⟩
+  | .event event next, h, Q, hWp =>
+      have hEvent : theta_ev event (fun result => theta (next result) Q) h := hWp
+      match event, hEvent with
+      | .GuardedModify _ modify, hWp =>
+          let hPre := (theta_ev_elim hWp).choose
+          let result := (modify h hPre).1
+          let modified := (modify h hPre).2
+          let outcome :=
+            run (next result) modified Q (theta_ev_elim hWp).choose_spec
+          ⟨outcome.val, outcome.property.1,
+            StateMachine.Evaluates.step (.guardedModify hPre) outcome.property.2⟩
+
+/-- The value and heap produced by `run`. -/
+def exec (m : St α) (h : Heap) (Q : SLPost α) (hWp : theta m Q h) : α × Heap :=
+  (run m h Q hWp).val
+
+theorem exec_post (m : St α) (h : Heap) (Q : SLPost α) (hWp : theta m Q h) :
+    Q (exec m h Q hWp).1 (exec m h Q hWp).2 :=
+  (run m h Q hWp).property.1
+
+theorem exec_evaluates (m : St α) (h : Heap) (Q : SLPost α)
+    (hWp : theta m Q h) :
+    Evaluates m h (exec m h Q hWp).1 (exec m h Q hWp).2 :=
+  (run m h Q hWp).property.2
+
+/-! ## Executing a specified program -/
+
+/-- Run a program from a heap satisfying the precondition of a proved triple. -/
+def runTriple {P : SLPre} {Q : SLPost α} (m : St α) (h : Heap)
+    (hTriple : triple P m Q) (hPre : P h) : Outcome m Q h :=
+  run m h Q ((triple_iff P m Q).mp hTriple h hPre)
+
+/-- The value and heap produced by a specified program. -/
+def execTriple {P : SLPre} {Q : SLPost α} (m : St α) (h : Heap)
+    (hTriple : triple P m Q) (hPre : P h) : α × Heap :=
+  (runTriple m h hTriple hPre).val
+
+theorem execTriple_post {P : SLPre} {Q : SLPost α} (m : St α) (h : Heap)
+    (hTriple : triple P m Q) (hPre : P h) :
+    Q (execTriple m h hTriple hPre).1 (execTriple m h hTriple hPre).2 :=
+  (runTriple m h hTriple hPre).property.1
+
+theorem execTriple_evaluates {P : SLPre} {Q : SLPost α} (m : St α) (h : Heap)
+    (hTriple : triple P m Q) (hPre : P h) :
+    Evaluates m h (execTriple m h hTriple hPre).1
+      (execTriple m h hTriple hPre).2 :=
+  (runTriple m h hTriple hPre).property.2
+
+/-- Run a program proved from `emp` on the empty heap. -/
+def execClosed {Q : SLPost α} (m : St α) (hTriple : triple emp m Q) : α × Heap :=
+  execTriple m empty hTriple trivial
+
+theorem execClosed_post {Q : SLPost α} (m : St α) (hTriple : triple emp m Q) :
+    Q (execClosed m hTriple).1 (execClosed m hTriple).2 :=
+  execTriple_post m empty hTriple trivial
+
+theorem execClosed_evaluates {Q : SLPost α} (m : St α)
+    (hTriple : triple emp m Q) :
+    Evaluates m empty (execClosed m hTriple).1 (execClosed m hTriple).2 :=
+  execTriple_evaluates m empty hTriple trivial
 
 end Aeneas.SLPoC
