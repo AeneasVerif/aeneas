@@ -1,26 +1,18 @@
-import Aeneas.SLPoC.Heap
+import Aeneas.SLPoC.ST
 
 /-!
 # The Rust view of the heap
 
 A translated Rust program manipulates *pointers*, not the allocation
-identifiers of `Aeneas.SLPoC.Heap`.  This file introduces `Ptr α`, the pointer
-to a value of type `α` such a program uses, together with the heap operations
-it supports — allocation, read, write and deallocation — and the lemmas the
-program logic of `Aeneas.SLPoC.ST` needs about them.
-
-`Ptr α` is for now a definitional alias of `Ref α`, so a pointer *is* an
-allocation identifier and every operation below is a renaming of its
-counterpart in `Heap.lean`.  The point of the indirection is that the program
-logic of `Aeneas.SLPoC.ST` is written against `Ptr` only: other Rust memory
-notions (`Box`, `&mut`, …) can be added, and the representation of a pointer
-refined, without touching it.
+identifiers of `Aeneas.SLPoC.Heap`. This file introduces `Ptr α`, the pointer
+to a value of type `α` such a program uses, together with its heap operations
+and their separation-logic specifications.
 -/
 
 namespace Aeneas.SLPoC
 
 /-- A Rust pointer to a value of type `α`. -/
-def Ptr (α : Type) := Ref α
+abbrev Ptr (α : Type) := Ref α
 
 /-- Pointers are inhabited, which is what makes the `unwrap`s of a translated
 Rust program expressible as `Option.get!`. -/
@@ -34,7 +26,7 @@ variable {α : Type}
 /-! ## Operations -/
 
 /-- The heap made of the single cell `p`, holding `value`. -/
-def singleton (p : Ptr α) (value : α) : Heap :=
+abbrev singleton (p : Ptr α) (value : α) : Heap :=
   _root_.Aeneas.SLPoC.singleton p value
 
 /-- `p` points to no cell of `h`. -/
@@ -65,7 +57,7 @@ def free (p : Ptr α) (h : Heap) (hContains : contains h p) : Heap :=
 
 /-! ## Allocation -/
 
-/-- The pointer the next allocation returns.  Allocation is deterministic, so a
+/-- The pointer the next allocation returns. Allocation is deterministic, so a
 program can be run and not only related to its outcomes. -/
 def freshPtr (α : Type) (h : Heap) : Ptr α :=
   _root_.Aeneas.SLPoC.freshRef α h
@@ -145,8 +137,7 @@ theorem disjoint_free_left {p : Ptr α} {h₁ h₂ : Heap}
 /-! ## The operations on the heap of a single cell
 
 These describe the effect of each operation on exactly the resources its
-specification owns, which is what the specifications in `ST.lean` are proved
-from. -/
+specification owns. -/
 
 theorem fresh_empty_eq_singleton {p : Ptr α} {value : α} {h : Heap}
     (hFresh : fresh empty p value h) : h = singleton p value :=
@@ -188,5 +179,140 @@ theorem free_singleton (p : Ptr α) (value : α)
   _root_.Aeneas.SLPoC.free_singleton p value hContains
 
 end Ptr
+
+open scoped SepLogic
+
+/-! ## Specified monadic operations -/
+
+def guardedModify {α : Type} (pre : Heap → Prop)
+    (modify : (h : Heap) → pre h → α × Heap) : St α :=
+  FFree.trigger (.GuardedModify pre modify)
+
+def alloc {α : Type} (value : α) : St (Ptr α) :=
+  guardedModify (fun _ => True) fun h _ =>
+    (Ptr.freshPtr α h, Ptr.freshHeap h value)
+
+theorem alloc.spec (value : α) :
+    ⦃ emp ⦄ alloc value ⦃⇓ p => p ↦ value⦄ := by
+  apply (triple_iff _ _ _).mpr
+  intro h _ frame hDisjoint
+  let p := Ptr.freshPtr α (h ∪ frame)
+  have hFresh := Ptr.fresh_freshPtr value (h ∪ frame)
+  obtain ⟨hDisjointFresh, hFreshHeap⟩ :=
+    Ptr.fresh_eq_singleton_union hFresh
+  obtain ⟨hDisjointFreshH, hDisjointFreshFrame⟩ :=
+    (Finmap.disjoint_union_right (Ptr.singleton p value) h frame).mp
+      hDisjointFresh
+  exact ⟨trivial, Ptr.singleton p value ∪ h,
+    (Finmap.disjoint_union_left (Ptr.singleton p value) h frame).mpr
+      ⟨hDisjointFreshFrame, hDisjoint⟩,
+    hFreshHeap.trans Finmap.union_assoc.symm,
+    Heap.Sub.union_left hDisjointFreshH⟩
+
+def read {α : Type} (p : Ptr α) : St α :=
+  guardedModify (fun h => Ptr.contains h p) fun h hContains =>
+    (Ptr.read p h hContains, h)
+
+theorem read.spec (p : Ptr α) (value : α) :
+    ⦃ p ↦ value ⦄ read p
+      ⦃⇓ result => ⌜result = value⌝ ∗ p ↦ value⦄ := by
+  apply (triple_iff _ _ _).mpr
+  intro h hSingle
+  have hContains := Ptr.contains_of_sub hSingle
+  intro frame hDisjoint
+  have hContainsFrame := Ptr.contains_union_left (h₂ := frame) hContains
+  have hReadFrame :
+      Ptr.read p (h ∪ frame) hContainsFrame = value := by
+    rw [Ptr.read_union_left hContains]
+    obtain ⟨rest, hDisjointRest, rfl⟩ := hSingle
+    have hContainsCell := Ptr.contains_singleton p value
+    rw [show (hContains :
+          Ptr.contains (Ptr.singleton p value ∪ rest) p) =
+        Ptr.contains_union_left hContainsCell from Subsingleton.elim _ _,
+      Ptr.read_union_left hContainsCell, Ptr.read_singleton]
+  refine ⟨hContainsFrame, h, hDisjoint, rfl, ?_⟩
+  exact (hstar_hpure_l _ _ h).mpr ⟨hReadFrame, hSingle⟩
+
+def update {α : Type} (p : Ptr α) (value : α) : St Unit :=
+  guardedModify (fun h => Ptr.contains h p) fun h hContains =>
+    ((), Ptr.update p value h hContains)
+
+theorem update.spec (p : Ptr α) (oldValue newValue : α) :
+    ⦃ p ↦ oldValue ⦄ update p newValue ⦃⇓ p ↦ newValue⦄ := by
+  apply (triple_iff _ _ _).mpr
+  intro h hSingle
+  have hContains := Ptr.contains_of_sub hSingle
+  intro frame hDisjoint
+  have hContainsFrame := Ptr.contains_union_left (h₂ := frame) hContains
+  have hUpdateFrame :
+      Ptr.update p newValue (h ∪ frame) hContainsFrame =
+        Ptr.update p newValue h hContains ∪ frame := by
+    simpa only [Ptr.update_union_left] using
+      Ptr.update_union_left (h₂ := frame) p newValue hContains
+  have hDisjointUpdated :
+      Finmap.Disjoint (Ptr.update p newValue h hContains) frame :=
+    Ptr.disjoint_update_left hDisjoint hContains
+  obtain ⟨rest, hDisjointRest, rfl⟩ := hSingle
+  have hContainsCell := Ptr.contains_singleton p oldValue
+  have hContainsUnion := Ptr.contains_union_left (h₂ := rest) hContainsCell
+  have hUpdated :
+      Ptr.update p newValue (Ptr.singleton p oldValue ∪ rest) hContainsUnion =
+        Ptr.singleton p newValue ∪ rest := by
+    rw [Ptr.update_union_left p newValue hContainsCell, Ptr.update_singleton]
+  have hDisjointRest' : Finmap.Disjoint (Ptr.singleton p newValue) rest := by
+    have := Ptr.disjoint_update_left (value := newValue) hDisjointRest hContainsCell
+    rwa [Ptr.update_singleton] at this
+  refine ⟨hContainsFrame,
+    Ptr.update p newValue (Ptr.singleton p oldValue ∪ rest) hContainsUnion,
+    ?_, ?_, ?_⟩
+  · exact Ptr.disjoint_update_left hDisjoint hContainsUnion
+  · simpa only [show hContainsFrame =
+        Ptr.contains_union_left hContainsUnion from Subsingleton.elim _ _,
+      show hContains = hContainsUnion from Subsingleton.elim _ _] using hUpdateFrame
+  · rw [hUpdated]
+    exact Heap.Sub.union_left hDisjointRest'
+
+def free {α : Type} (p : Ptr α) : St Unit :=
+  guardedModify (fun h => Ptr.contains h p) fun h hContains =>
+    ((), Ptr.free p h hContains)
+
+theorem free.spec (p : Ptr α) (value : α) :
+    ⦃ p ↦ value ⦄ free p ⦃⇓ emp⦄ := by
+  apply (triple_iff _ _ _).mpr
+  intro h hSingle
+  have hContains := Ptr.contains_of_sub hSingle
+  intro frame hDisjoint
+  have hContainsFrame := Ptr.contains_union_left (h₂ := frame) hContains
+  refine ⟨hContainsFrame, Ptr.free p h hContains,
+    Ptr.disjoint_free_left hDisjoint hContains, ?_, trivial⟩
+  simpa only [show hContainsFrame =
+      Ptr.contains_union_left hContains from Subsingleton.elim _ _] using
+    Ptr.free_union_left p hDisjoint hContains
+
+def mut_to_raw {α : Type} (value : α) : St (Ptr α) :=
+  alloc value
+
+theorem mut_to_raw.spec {α : Type} (value : α) :
+    ⦃ emp ⦄ mut_to_raw value ⦃⇓ p => p ↦ value⦄ := by
+  exact alloc.spec value
+
+def end_mut_to_raw {α : Type} (p : Ptr α) : St α := do
+  let value ← read p
+  free p
+  pure value
+
+theorem end_mut_to_raw.spec {α : Type} {value : α} (p : Ptr α) :
+    ⦃ p ↦ value ⦄ end_mut_to_raw p ⦃⇓ result => ⌜result = value⌝⦄ := by
+  unfold end_mut_to_raw
+  apply triple_bind (read.spec p value)
+  intro result
+  apply triple_hpure
+  intro hResult
+  apply triple_seq (free.spec p value)
+  exact triple_pure fun _ _ => hResult
+
+attribute [step]
+  alloc.spec read.spec update.spec free.spec
+  mut_to_raw.spec end_mut_to_raw.spec
 
 end Aeneas.SLPoC

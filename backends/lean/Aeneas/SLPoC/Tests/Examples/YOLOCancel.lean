@@ -1,4 +1,4 @@
-import Aeneas.SLPoC.SLTactics
+import Aeneas.SLPoC.WP
 
 /-!
 # Downscaled YOLO synthetic cancellation benchmarks
