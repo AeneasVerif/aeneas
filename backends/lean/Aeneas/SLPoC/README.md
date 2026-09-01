@@ -20,7 +20,8 @@ git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_se
 | File | Purpose |
 |---|---|
 | [`FFree.lean`](FFree.lean) | Defines the generic freer monad, and the state machines that give it an operational semantics (after "Program Logics à la Carte"): `StateMachine`, `Exec`, `Runs` and `Evaluates`. |
-| [`Heap.lean`](Heap.lean) | Defines locations, dynamically typed cells, finite heaps, and the sub-heap order the affine assertions are closed under. |
+| [`Heap.lean`](Heap.lean) | Defines locations, dynamically typed cells, finite heaps, their PCM instance, and the sub-heap order the affine assertions are closed under. |
+| [`PCM.lean`](PCM.lean) | Defines the partial commutative monoid interface used by the heap model. |
 | [`RustHeap.lean`](RustHeap.lean) | The Rust view of the heap: `Ptr` and the pointer operations, over `Heap.lean`. |
 | [`SLTactics.lean`](SLTactics.lean) | Port of the SLF tactics: `sl_frame`, `sl_pull`, `sl_change`, …, including the affine discard of whatever a cancellation leaves over. |
 | [`ST.lean`](ST.lean) | The state monad `St`, its state machine, its denotation `theta` into `Wp`, the Hoare triples it induces, and the specifications of the pointer operations. |

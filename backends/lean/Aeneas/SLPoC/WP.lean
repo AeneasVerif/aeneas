@@ -74,7 +74,7 @@ def hsingle {α : Type} (r : Ref α) (value : α) : SLProp where
 def hstar (H₁ H₂ : SLProp) : SLProp where
   holds h :=
     ∃ h₁ h₂,
-      Finmap.Disjoint h₁ h₂ ∧
+      PartialCommMonoid.Compatible h₁ h₂ ∧
       h = h₁ ∪ h₂ ∧
       H₁ h₁ ∧
       H₂ h₂
@@ -139,31 +139,35 @@ theorem hstar_assoc (H₁ H₂ H₃ : SLProp) :
   constructor
   · rintro ⟨h₁₂, h₃, hDisjoint₁₂₃, hEq, hStar₁₂, hH₃⟩
     rcases hStar₁₂ with ⟨h₁, h₂, hDisjoint₁₂, hEq₁₂, hH₁, hH₂⟩
-    have hDisjoint₁₂₃' : Finmap.Disjoint (h₁ ∪ h₂) h₃ := by
+    have hDisjoint₁₂₃' :
+        PartialCommMonoid.Compatible (h₁ ∪ h₂) h₃ := by
       simpa [hEq₁₂] using hDisjoint₁₂₃
-    have ⟨hDisjoint₁₃, hDisjoint₂₃⟩ :=
-      (Finmap.disjoint_union_left h₁ h₂ h₃).mp hDisjoint₁₂₃'
+    have ⟨hDisjoint₂₃, hDisjoint₁₂₃''⟩ :=
+      (PartialCommMonoid.compatible_assoc h₁ h₂ h₃).mp
+        ⟨hDisjoint₁₂, hDisjoint₁₂₃'⟩
     refine ⟨h₁, h₂ ∪ h₃, ?_, ?_, hH₁, ?_⟩
-    · exact (Finmap.disjoint_union_right h₁ h₂ h₃).mpr
-        ⟨hDisjoint₁₂, hDisjoint₁₃⟩
+    · exact hDisjoint₁₂₃''
     · calc
         h = h₁₂ ∪ h₃ := hEq
         _ = (h₁ ∪ h₂) ∪ h₃ := congrArg (· ∪ h₃) hEq₁₂
-        _ = h₁ ∪ (h₂ ∪ h₃) := Finmap.union_assoc
+        _ = h₁ ∪ (h₂ ∪ h₃) :=
+          PartialCommMonoid.union_assoc hDisjoint₁₂ hDisjoint₁₂₃'
     · exact ⟨h₂, h₃, hDisjoint₂₃, rfl, hH₂, hH₃⟩
   · rintro ⟨h₁, h₂₃, hDisjoint₁₂₃, hEq, hH₁, hStar₂₃⟩
     rcases hStar₂₃ with ⟨h₂, h₃, hDisjoint₂₃, hEq₂₃, hH₂, hH₃⟩
-    have hDisjoint₁₂₃' : Finmap.Disjoint h₁ (h₂ ∪ h₃) := by
+    have hDisjoint₁₂₃' :
+        PartialCommMonoid.Compatible h₁ (h₂ ∪ h₃) := by
       simpa [hEq₂₃] using hDisjoint₁₂₃
-    have ⟨hDisjoint₁₂, hDisjoint₁₃⟩ :=
-      (Finmap.disjoint_union_right h₁ h₂ h₃).mp hDisjoint₁₂₃'
-    refine ⟨h₁ ∪ h₂, h₃, ?_, ?_, ?_, hH₃⟩
-    · exact (Finmap.disjoint_union_left h₁ h₂ h₃).mpr
-        ⟨hDisjoint₁₃, hDisjoint₂₃⟩
+    have ⟨hDisjoint₁₂, hDisjoint₁₂₃''⟩ :=
+      (PartialCommMonoid.compatible_assoc h₁ h₂ h₃).mpr
+        ⟨hDisjoint₂₃, hDisjoint₁₂₃'⟩
+    refine ⟨h₁ ∪ h₂, h₃, hDisjoint₁₂₃'', ?_, ?_, hH₃⟩
     · calc
         h = h₁ ∪ h₂₃ := hEq
         _ = h₁ ∪ (h₂ ∪ h₃) := congrArg (h₁ ∪ ·) hEq₂₃
-        _ = (h₁ ∪ h₂) ∪ h₃ := Finmap.union_assoc.symm
+        _ = (h₁ ∪ h₂) ∪ h₃ :=
+          (PartialCommMonoid.union_assoc
+            hDisjoint₁₂ hDisjoint₁₂₃'').symm
     · exact ⟨h₁, h₂, hDisjoint₁₂, rfl, hH₁, hH₂⟩
 
 theorem hstar_comm (H₁ H₂ : SLProp) :
@@ -171,11 +175,13 @@ theorem hstar_comm (H₁ H₂ : SLProp) :
   intro h
   constructor
   · rintro ⟨h₁, h₂, hDisjoint, hEq, hH₁, hH₂⟩
-    exact ⟨h₂, h₁, Finmap.Disjoint.symm h₁ h₂ hDisjoint,
-      hEq.trans (Finmap.union_comm_of_disjoint hDisjoint), hH₂, hH₁⟩
+    exact ⟨h₂, h₁, PartialCommMonoid.compatible_comm hDisjoint,
+      hEq.trans (PartialCommMonoid.union_comm_of_compatible hDisjoint),
+      hH₂, hH₁⟩
   · rintro ⟨h₂, h₁, hDisjoint, hEq, hH₂, hH₁⟩
-    exact ⟨h₁, h₂, Finmap.Disjoint.symm h₂ h₁ hDisjoint,
-      hEq.trans (Finmap.union_comm_of_disjoint hDisjoint), hH₁, hH₂⟩
+    exact ⟨h₁, h₂, PartialCommMonoid.compatible_comm hDisjoint,
+      hEq.trans (PartialCommMonoid.union_comm_of_compatible hDisjoint),
+      hH₁, hH₂⟩
 
 theorem hstar_assoc_eq (H₁ H₂ H₃ : SLProp) :
     ((H₁ ∗ H₂) ∗ H₃) = (H₁ ∗ (H₂ ∗ H₃)) :=
@@ -205,7 +211,8 @@ theorem hstar_hempty_l (H : SLProp) :
   · rintro ⟨h₁, h₂, hDisjoint, rfl, -, hH⟩
     exact H.up_closed hH (Heap.Sub.union_right hDisjoint)
   · intro hH
-    exact ⟨∅, h, Finmap.disjoint_empty h, Finmap.empty_union.symm, trivial, hH⟩
+    exact ⟨∅, h, PartialCommMonoid.compatible_empty_left h,
+      (PartialCommMonoid.empty_union h).symm, trivial, hH⟩
 
 theorem hstar_hempty_r (H : SLProp) :
     H ∗ emp ⊣⊢ H := by
@@ -260,7 +267,8 @@ theorem hsingle_exclusive {α : Type} (r : Ref α) (value₁ value₂ : α) :
 
 theorem hstar_holds (H₁ H₂ : SLProp) (h : Heap) :
     (H₁ ∗ H₂) h ↔
-      ∃ h₁ h₂, Finmap.Disjoint h₁ h₂ ∧ h = h₁ ∪ h₂ ∧ H₁ h₁ ∧ H₂ h₂ :=
+      ∃ h₁ h₂, PartialCommMonoid.Compatible h₁ h₂ ∧
+        h = h₁ ∪ h₂ ∧ H₁ h₁ ∧ H₂ h₂ :=
   Iff.rfl
 
 theorem hexists_holds {ι : Sort _} (J : ι → SLProp) (h : Heap) :
@@ -284,7 +292,8 @@ theorem hstar_hpure_l (P : Prop) (H : SLProp) (h : Heap) :
   · rintro ⟨h₁, h₂, hDisjoint, rfl, hP, hH⟩
     exact ⟨hP, H.up_closed hH (Heap.Sub.union_right hDisjoint)⟩
   · rintro ⟨hP, hH⟩
-    exact ⟨∅, h, Finmap.disjoint_empty h, Finmap.empty_union.symm, hP, hH⟩
+    exact ⟨∅, h, PartialCommMonoid.compatible_empty_left h,
+      (PartialCommMonoid.empty_union h).symm, hP, hH⟩
 
 theorem hpure_hstar_intro {P : Prop} (H : SLProp) (hP : P) :
     H ⊢ ⌜P⌝ ∗ H := by
@@ -357,10 +366,11 @@ def hforall {ι : Sort _} (J : ι → SLProp) : SLProp where
 
 /-- The magic wand of SLF (`\-*`). -/
 def hwand (H₁ H₂ : SLProp) : SLProp where
-  holds h := ∀ h', Finmap.Disjoint h h' → H₁ h' → H₂ (h ∪ h')
+  holds h :=
+    ∀ h', PartialCommMonoid.Compatible h h' → H₁ h' → H₂ (h ∪ h')
   up_closed := by
     intro h hBig hWand hExtend h' hDisjoint hH₁
-    have hDisjoint' : Finmap.Disjoint h h' :=
+    have hDisjoint' : PartialCommMonoid.Compatible h h' :=
       Heap.Sub.disjoint_of_sub hExtend hDisjoint
     exact H₂.up_closed (hWand h' hDisjoint' hH₁)
       (Heap.Sub.union_mono_left hExtend hDisjoint)
@@ -393,13 +403,14 @@ theorem hwand_equiv (H₀ H₁ H₂ : SLProp) :
   constructor
   · rintro hWand heap ⟨h₁, h₀, hDisjoint, rfl, hH₁, hH₀⟩
     have hApplied :=
-      hWand h₀ hH₀ h₁ (Finmap.Disjoint.symm _ _ hDisjoint) hH₁
-    rwa [Finmap.union_comm_of_disjoint (Finmap.Disjoint.symm _ _ hDisjoint)]
-      at hApplied
+      hWand h₀ hH₀ h₁
+        (PartialCommMonoid.compatible_comm hDisjoint) hH₁
+    rwa [PartialCommMonoid.union_comm_of_compatible
+      (PartialCommMonoid.compatible_comm hDisjoint)] at hApplied
   · intro hStar h₀ hH₀ h₁ hDisjoint hH₁
     exact hStar (h₀ ∪ h₁)
-      ⟨h₁, h₀, Finmap.Disjoint.symm _ _ hDisjoint,
-        Finmap.union_comm_of_disjoint hDisjoint, hH₁, hH₀⟩
+      ⟨h₁, h₀, PartialCommMonoid.compatible_comm hDisjoint,
+        PartialCommMonoid.union_comm_of_compatible hDisjoint, hH₁, hH₀⟩
 
 /-- SLF's `himpl_hwand_r`, the introduction rule of the wand. -/
 theorem hwand_intro {H₀ H₁ H₂ : SLProp} (h : H₁ ∗ H₀ ⊢ H₂) : H₀ ⊢ H₁ -∗ H₂ :=
@@ -574,10 +585,11 @@ postcondition describes, put back next to that frame. -/
 theorem pp2wp_elim {P : SLPre} {Q R : SLPost α} {h : Heap}
     (hWp : pp2wp P Q R h) :
     ∃ h₁ h₂,
-      Finmap.Disjoint h₁ h₂ ∧
+      PartialCommMonoid.Compatible h₁ h₂ ∧
       h = h₁ ∪ h₂ ∧
       P h₁ ∧
-      ∀ value h', Q value h' → Finmap.Disjoint h' h₂ →
+      ∀ value h', Q value h' →
+        PartialCommMonoid.Compatible h' h₂ →
         R value (h' ∪ h₂) := by
   obtain ⟨h₁, h₂, hDisjoint, hEq, hP, hWand⟩ := hWp
   exact ⟨h₁, h₂, hDisjoint, hEq, hP, fun value h' hQ hDisjoint' =>
