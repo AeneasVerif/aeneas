@@ -98,7 +98,7 @@ whose statement mentions one of them is a separation-logic declaration. -/
 def slCoreNames : Array String :=
   #["IProp", "IPre", "IPost", "Entails", "postEntails", "BiEntails", "emp", "ipure",
     "pointsTo", "sep", "iexists", "iforall", "wand", "postSep", "postWand",
-    "triple", "Wp", "theta"]
+    "triple", "Wp"]
 
 /-- The `⦃ P ⦄ m ⦃⇓ v => Q ⦄` notations of `ST.lean`: a declaration that uses one
 of them states a triple. -/

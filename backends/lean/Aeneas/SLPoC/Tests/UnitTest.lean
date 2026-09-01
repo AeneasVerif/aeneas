@@ -302,12 +302,10 @@ example (p : Ptr Nat) (value : Nat) : ¬ (emp ⊢ p ↦ value) := by
 /-- Nor does it excuse a specification from owning what it reads. -/
 example (p : Ptr Nat) : ¬ (⦃ emp ⦄ read p ⦃⇓ _ => emp⦄) := by
   intro hTriple
-  have hTheta :
-      theta (read p) (fun _ => emp) ∅ :=
-    (triple_iff _ _ _).mp hTriple ∅ trivial
-  simp only [read, guardedModify] at hTheta
-  rw [theta_trigger_eq] at hTheta
-  obtain ⟨hContains, -⟩ := theta_ev_elim hTheta
+  have hSpec : spec (read p) (fun _ => emp) ∅ :=
+    triple_apply hTriple trivial
+  simp only [read, guardedModify] at hSpec
+  obtain ⟨hContains, -⟩ := TotalSpec.vis_view hSpec
   exact not_contains_empty p hContains
 
 def allocAndForget (value : Nat) : St Unit := do

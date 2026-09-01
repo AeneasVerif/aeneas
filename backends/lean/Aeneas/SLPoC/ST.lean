@@ -69,16 +69,15 @@ theorem StEvents.machine_resolves (Heap : Type u) :
 def Evaluates (m : St α) (h : Heap) (value : α) (h' : Heap) : Prop :=
   (StEvents.machine Heap).Evaluates m h value h'
 
-/-! ## Denotation into the weakest-precondition monad -/
+/-! ## Local event specifications -/
 
 /-- A guarded modification is local when, for every disjoint frame, its guard
 holds and its output can be split into an owned result and the unchanged frame.
 Quantifying over frames here makes the denotation upward-closed and validates
 the frame rule for arbitrary guarded modifications.
 
-This is the raw form of the denotation `theta_ev` of an event, on plain heap
-predicates rather than on assertions: it is what the fixed point defining
-`theta` below is built from. -/
+This is the raw form of the local specification `theta_ev` of an event, on
+plain heap predicates rather than assertions. -/
 def theta_evP (event : StEvent Heap) (Q : event.Result → Heap → Prop) (h : Heap) :
     Prop :=
   ∀ frame, PartialCommMonoid.Compatible h frame →
@@ -170,284 +169,137 @@ theorem theta_ev_frame (event : StEvent Heap) (Q : IPost event.Result) (H : IPro
   rintro h ⟨h₁, h₂, hDisjoint, rfl, hWp, hH⟩
   exact theta_evP_frame (Q := fun value => (Q value).holds) hDisjoint hWp hH
 
-/-! ### The weakest precondition of a program
+/-! ### Total correctness
 
-An interaction tree is coinductive, so the denotation of a program cannot be a
-structural recursion over it.  It is instead the **least** fixed point of the
-one-step unfolding `ThetaF`, written impredicatively as the intersection of the
-pre-fixed points of `ThetaF`, exactly as `Exec` is in `Aeneas.SLPoC.Exec`.
+As for `Aeneas.Std.WP.spec`, total correctness is an inductive judgment. A proof
+contains a finite execution ending in `ret`; there is deliberately no
+constructor for `ITree.div`. Locality is imposed by `triple`, which quantifies
+over arbitrary frames, rather than by the execution judgment itself. -/
 
-Least, not greatest: `ITree.div`, the bottom element of the tree order and what
-an unproductive recursion denotes, gets the precondition `False`.  A program
-therefore only satisfies a triple when it terminates, which is what makes the
-triples of this file total-correctness triples. -/
+inductive TotalSpec (Q : α → Heap → Prop) : St α → Heap → Prop where
+  | ret {value : α} {h : Heap} (hPost : Q value h) :
+      TotalSpec Q (.ret value) h
+  | vis {event : StEvent Heap} {k : (StEvents Heap).O event → St α}
+      {h : Heap} (hPre : event.pre h)
+      (hNext : TotalSpec Q
+        (k (.up (event.modify h hPre).1)) (event.modify h hPre).2) :
+      TotalSpec Q (.vis event k) h
 
-/-- One step of `theta`: the weakest precondition of a program in terms of those
-of its continuations.  A `ret` node hands the heap to the postcondition, a `vis`
-node hands it to the denotation of its event, and the divergent tree has no
-precondition at all. -/
-def ThetaF (Q : α → Heap → Prop) (X : St α → Heap → Prop) (m : St α)
-    (h : Heap) : Prop :=
-  match m.unfold with
-  | .ret value => Q value h
-  | .div => False
-  | .vis event k => theta_evP event (fun answer h' => X (k (.up answer)) h') h
+/-- Total correctness of `m` on the exact heap `h`. -/
+abbrev spec (m : St α) (Q : IPost α) (h : Heap) : Prop :=
+  TotalSpec (fun value h' => Q value h') m h
 
-/-- The weakest precondition of a program as a raw heap predicate: the least
-fixed point of `ThetaF`.
+theorem TotalSpec.mono {Q Q' : α → Heap → Prop}
+    (hQ : ∀ value h, Q value h → Q' value h)
+    {m : St α} {h : Heap} (hSpec : TotalSpec Q m h) :
+    TotalSpec Q' m h := by
+  induction hSpec with
+  | ret hPost => exact .ret (hQ _ _ hPost)
+  | vis hPre _ ih => exact .vis hPre ih
 
-Instantiating the definition with `thetaP Q` itself gives the introduction rule
-`thetaP_fold`, and instantiating it with an arbitrary predicate gives the
-induction principle `thetaP_induction`; together they give the fixed-point
-equation `thetaP_unfold`. -/
-def thetaP (Q : α → Heap → Prop) (m : St α) (h : Heap) : Prop :=
-  ∀ X : St α → Heap → Prop, (∀ m' h', ThetaF Q X m' h' → X m' h') → X m h
+theorem spec_mono {Q Q' : IPost α} {m : St α} {h : Heap}
+    (hSpec : spec m Q h) (hQ : Q ⊢+ Q') : spec m Q' h :=
+  hSpec.mono fun value h' => hQ value h'
 
-theorem ThetaF_mono {Q Q' : α → Heap → Prop} {X X' : St α → Heap → Prop}
-    (hQ : ∀ value h', Q value h' → Q' value h')
-    (hX : ∀ m' h', X m' h' → X' m' h') {m : St α} {h : Heap}
-    (hStep : ThetaF Q X m h) : ThetaF Q' X' m h := by
-  revert hStep
-  cases m using ITree.cases with
-  | ret value => simp only [ThetaF, unfold_pure]; exact hQ value h
-  | div => simp only [ThetaF, unfold_tau]; exact id
-  | vis event k =>
-      simp only [ThetaF, unfold_vis]
-      exact theta_evP_mono fun answer h' => hX (k (.up answer)) h'
+theorem TotalSpec.bind {Q₁ : α → Heap → Prop} {Q₂ : β → Heap → Prop}
+    {m : St α} {next : α → St β} {h : Heap}
+    (hFirst : TotalSpec Q₁ m h)
+    (hNext : ∀ value h', Q₁ value h' → TotalSpec Q₂ (next value) h') :
+    TotalSpec Q₂ (m >>= next) h := by
+  induction hFirst with
+  | ret hPost => simpa only [Bind.bind, itree_ret_bind] using hNext _ _ hPost
+  | vis hPre _ ih =>
+      rw [vis_bind]
+      exact .vis hPre ih
 
-theorem thetaP_induction {Q : α → Heap → Prop} {X : St α → Heap → Prop}
-    (hClosed : ∀ m' h', ThetaF Q X m' h' → X m' h') {m : St α} {h : Heap}
-    (hWp : thetaP Q m h) : X m h :=
-  hWp X hClosed
+theorem spec_bind {Q₁ : IPost α} {Q₂ : IPost β}
+    {m : St α} {next : α → St β} {h : Heap}
+    (hFirst : spec m Q₁ h)
+    (hNext : ∀ value h', Q₁ value h' → spec (next value) Q₂ h') :
+    spec (m >>= next) Q₂ h :=
+  TotalSpec.bind hFirst hNext
 
-theorem thetaP_fold {Q : α → Heap → Prop} {m : St α} {h : Heap}
-    (hStep : ThetaF Q (thetaP Q) m h) : thetaP Q m h :=
-  fun _X hClosed =>
-    hClosed m h (ThetaF_mono (fun _ _ hQ => hQ)
-      (fun _ _ hWp => thetaP_induction hClosed hWp) hStep)
+/-- The one-layer view of total correctness. -/
+def TotalSpec.view (Q : α → Heap → Prop) (m : St α) (h : Heap) : Prop :=
+  ITree.cases
+    (motive := fun _ => Prop)
+    (fun value => Q value h)
+    False
+    (fun (event : StEvent Heap) (k : (StEvents Heap).O event → St α) =>
+      ∃ hPre : event.pre h,
+        TotalSpec Q
+          (k (.up (event.modify h hPre).1)) (event.modify h hPre).2)
+    m
 
-theorem thetaP_unfold {Q : α → Heap → Prop} {m : St α} {h : Heap}
-    (hWp : thetaP Q m h) : ThetaF Q (thetaP Q) m h :=
-  thetaP_induction (X := ThetaF Q (thetaP Q))
-    (fun _ _ hStep =>
-      ThetaF_mono (fun _ _ hQ => hQ) (fun _ _ => thetaP_fold) hStep) hWp
+theorem TotalSpec.view_of {Q : α → Heap → Prop} {m : St α} {h : Heap}
+    (hSpec : TotalSpec Q m h) : TotalSpec.view Q m h := by
+  induction hSpec with
+  | ret hPost =>
+      rw [TotalSpec.view, ITree.cases.ret]
+      exact hPost
+  | vis hPre hNext _ =>
+      rw [TotalSpec.view, ITree.cases.vis]
+      exact ⟨hPre, hNext⟩
 
-theorem thetaP_mono {Q Q' : α → Heap → Prop}
-    (hQ : ∀ value h', Q value h' → Q' value h') {m : St α} {h : Heap}
-    (hWp : thetaP Q m h) : thetaP Q' m h :=
-  thetaP_induction (X := thetaP Q')
-    (fun _ _ hStep => thetaP_fold (ThetaF_mono hQ (fun _ _ hX => hX) hStep)) hWp
+theorem TotalSpec.ret_post {Q : α → Heap → Prop} {value : α} {h : Heap}
+    (hSpec : TotalSpec Q (.ret value) h) : Q value h := by
+  simpa only [TotalSpec.view, ITree.cases.ret] using hSpec.view_of
 
-theorem thetaP_up_closed {Q : α → Heap → Prop}
-    (hQ : ∀ value h h', Q value h → Heap.Sub h h' → Q value h')
-    {m : St α} {h hBig : Heap} (hWp : thetaP Q m h) (hSub : Heap.Sub h hBig) :
-    thetaP Q m hBig := by
-  refine thetaP_induction
-    (X := fun m' h' => ∀ h'', Heap.Sub h' h'' → thetaP Q m' h'') ?_ hWp hBig hSub
-  clear hWp hSub m h hBig
-  intro m h hStep hBig hSub
-  refine thetaP_fold ?_
-  revert hStep
-  cases m using ITree.cases with
-  | ret value =>
-      simp only [ThetaF, unfold_pure]
-      exact fun hPost => hQ value h hBig hPost hSub
-  | div => simp only [ThetaF, unfold_tau]; exact False.elim
-  | vis event k =>
-      simp only [ThetaF, unfold_vis]
-      intro hEvent
-      have hEventBig : theta_evP event
-          (fun answer h' =>
-            ∀ h'', Heap.Sub h' h'' → thetaP Q (k (.up answer)) h'') hBig :=
-        theta_evP_up_closed
-          (fun _ _ _ hNext hSub' h'' hSub'' => hNext h'' (hSub'.trans hSub''))
-          hEvent hSub
-      exact theta_evP_mono (fun _ h' hNext => hNext h' (Heap.Sub.refl h'))
-        hEventBig
+theorem TotalSpec.div_false {Q : α → Heap → Prop} {h : Heap}
+    (hSpec : TotalSpec Q (.div : St α) h) : False := by
+  simpa only [TotalSpec.view, ITree.cases.div] using hSpec.view_of
 
-/-- The denotation of a program into the weakest-precondition monad. -/
-def theta (m : St α) : Wp α where
-  wp Q := {
-    holds := thetaP (fun value => (Q value).holds) m
-    up_closed := fun hWp hSub =>
-      thetaP_up_closed
-        (fun value _ _ hPost hSub' => (Q value).up_closed hPost hSub') hWp hSub }
-  monotone hQ _ hWp := thetaP_mono (fun value h' => hQ value h') hWp
+theorem TotalSpec.vis_view {Q : α → Heap → Prop}
+    {event : StEvent Heap} {k : (StEvents Heap).O event → St α} {h : Heap}
+    (hSpec : TotalSpec Q (.vis event k) h) :
+    ∃ hPre : event.pre h,
+      TotalSpec Q
+        (k (.up (event.modify h hPre).1)) (event.modify h hPre).2 := by
+  simpa only [TotalSpec.view, ITree.cases.vis] using hSpec.view_of
 
-/-! ### The equations of `theta` -/
+theorem spec_ret (value : α) (Q : IPost α) (h : Heap) :
+    spec (ITree.ret value : St α) Q h ↔ Q value h :=
+  ⟨TotalSpec.ret_post, fun hPost => .ret hPost⟩
 
-theorem theta_ret_eq (value : α) (Q : IPost α) :
-    theta (ITree.ret value : St α) Q = Q value :=
-  IProp.ext fun _ =>
-    ⟨fun hWp => by simpa only [ThetaF, unfold_ret] using thetaP_unfold hWp,
-      fun hPost => thetaP_fold (by simpa only [ThetaF, unfold_ret] using hPost)⟩
+theorem spec_pure (value : α) (Q : IPost α) (h : Heap) :
+    spec (Pure.pure value : St α) Q h ↔ Q value h :=
+  spec_ret value Q h
 
-theorem theta_pure_eq (value : α) (Q : IPost α) :
-    theta (Pure.pure value : St α) Q = Q value :=
-  theta_ret_eq value Q
-
-/-- A divergent program has no weakest precondition: no heap and no
-postcondition make it work.  This is what makes the triples of this file
-total-correctness triples. -/
-theorem theta_div (Q : IPost α) (h : Heap) :
-    ¬ theta (ITree.div : St α) Q h :=
-  fun hWp => by simpa only [ThetaF, unfold_tau] using thetaP_unfold hWp
-
-theorem theta_vis_eq (event : StEvent Heap)
-    (k : (StEvents Heap).O event → St α)
-    (Q : IPost α) :
-    theta (ITree.vis event k : St α) Q =
-      theta_ev event fun answer => theta (k (.up answer)) Q :=
-  IProp.ext fun h => by
-    show thetaP (fun value => (Q value).holds) (ITree.vis event k) h ↔
-      theta_evP event
-        (fun answer h' =>
-          thetaP (fun value => (Q value).holds) (k (.up answer)) h') h
-    exact ⟨fun hWp => by simpa only [ThetaF, unfold_vis] using thetaP_unfold hWp,
-      fun hEvent => thetaP_fold (by simpa only [ThetaF, unfold_vis] using hEvent)⟩
-
-theorem theta_trigger_eq (event : StEvent Heap) (Q : IPost event.Result) :
-    theta (trigger event) Q = theta_ev event Q := by
-  simp only [trigger, theta_vis_eq, theta_ret_eq]
+/-- Divergence cannot satisfy a total-correctness specification. -/
+theorem spec_div (Q : IPost α) (h : Heap) :
+    ¬ spec (ITree.div : St α) Q h :=
+  TotalSpec.div_false
 
 open Lean.Order in
-/-- `theta` is monotone in the order on interaction trees: a tree refined by
-another one — the tree order being the approximation order `partial_fixpoint`
-takes its fixed points in, with `ITree.div` at the bottom — has at most the
-preconditions of that other one.
-
-This is what makes the weakest precondition of a program defined by
-`partial_fixpoint` accessible from those of its finite approximations, and it
-says again that divergence is the strongest specification of all. -/
-theorem thetaP_mono_le {Q : α → Heap → Prop} {m m' : St α} {h : Heap}
-    (hLe : m ⊑ m') (hWp : thetaP Q m h) : thetaP Q m' h := by
-  refine thetaP_induction
-    (X := fun t h' => ∀ t', t ⊑ t' → thetaP Q t' h') ?_ hWp m' hLe
-  clear hWp hLe m m' h
-  intro m h hStep m' hLe
-  rw [ITree.le_unfold] at hLe
-  revert hStep
-  cases m using ITree.cases with
-  | ret value =>
-      simp only [ThetaF, unfold_pure]
-      intro hPost
+/-- Total correctness is monotone in the interaction-tree approximation order. -/
+theorem spec_mono_le {m m' : St α} (hLe : m ⊑ m') (Q : IPost α)
+    {h : Heap} (hSpec : spec m Q h) : spec m' Q h := by
+  revert m'
+  induction hSpec with
+  | ret hPost =>
+      intro m' hLe
+      rw [ITree.le_unfold] at hLe
       obtain hDiv | ⟨value', hRet, rfl⟩ | ⟨_, _, _, hVis, _, _⟩ := hLe
       · exact absurd hDiv not_ret_div
       · obtain rfl := ret_inj.mp hRet
-        exact thetaP_fold (by simpa only [ThetaF, unfold_ret] using hPost)
+        exact .ret hPost
       · exact absurd hVis not_vis_ret
-  | div => simp only [ThetaF, unfold_tau]; exact False.elim
-  | vis event k =>
-      simp only [ThetaF, unfold_vis]
-      intro hEvent
+  | @vis event k h hPre hNext ih =>
+      intro m' hLe
+      rw [ITree.le_unfold] at hLe
       obtain hDiv | ⟨_, hRet, _⟩ | ⟨_, k₁, k₂, hVis, rfl, hLe'⟩ := hLe
       · exact absurd hDiv.symm not_div_vis
       · exact absurd hRet.symm not_vis_ret
       · obtain ⟨rfl, hCont⟩ := vis_inj hVis
         obtain rfl := eq_of_heq hCont
-        refine thetaP_fold ?_
-        simp only [ThetaF, unfold_vis]
-        exact theta_evP_mono
-          (fun answer _ hNext => hNext (k₂ (.up answer)) (hLe' _)) hEvent
-
-open Lean.Order in
-theorem theta_mono_le {m m' : St α} (hLe : m ⊑ m') (Q : IPost α) :
-    theta m Q ⊢ theta m' Q :=
-  fun _ hWp => thetaP_mono_le hLe hWp
-
-theorem theta_frame (m : St α) (Q : IPost α) (H : IProp) :
-    theta m Q ∗ H ⊢ theta m (Q ∗+ H) := by
-  rintro h ⟨h₁, h₂, hDisjoint, rfl, hWp, hH⟩
-  refine thetaP_induction
-    (X := fun m' u₁ => ∀ u₂, PartialCommMonoid.Compatible u₁ u₂ → H u₂ →
-      thetaP (fun value => (iprop(Q value ∗ H)).holds) m' (u₁ ∪ u₂))
-    ?_ hWp h₂ hDisjoint hH
-  clear hWp hDisjoint hH m h₁ h₂
-  intro m h hStep h₂ hDisjoint hH
-  refine thetaP_fold ?_
-  revert hStep
-  cases m using ITree.cases with
-  | ret value =>
-      simp only [ThetaF, unfold_pure]
-      exact fun hPost => ⟨h, h₂, hDisjoint, rfl, hPost, hH⟩
-  | div => simp only [ThetaF, unfold_tau]; exact False.elim
-  | vis event k =>
-      simp only [ThetaF, unfold_vis]
-      intro hEvent
-      refine theta_evP_mono ?_ (theta_evP_frame hDisjoint hEvent hH)
-      rintro _ _ ⟨u₁, u₂, hDisjoint', rfl, hNext, hH'⟩
-      exact hNext u₂ hDisjoint' hH'
-
-/-! ### `theta` is a monad morphism -/
-
-theorem thetaP_bind_le {Q : β → Heap → Prop} (m : St α) (next : α → St β)
-    {h : Heap}
-    (hWp : thetaP (fun value h' => thetaP Q (next value) h') m h) :
-    thetaP Q (m >>= next) h := by
-  refine thetaP_induction (X := fun m' h' => thetaP Q (m' >>= next) h') ?_ hWp
-  clear hWp m h
-  intro m h hStep
-  revert hStep
-  cases m using ITree.cases with
-  | ret value => simp only [ThetaF, unfold_pure, pure_bind]; exact id
-  | div => simp only [ThetaF, unfold_tau]; exact False.elim
-  | vis event k =>
-      simp only [ThetaF, unfold_vis, vis_bind]
-      intro hEvent
-      exact thetaP_fold (by simpa only [ThetaF, unfold_vis] using hEvent)
-
-theorem thetaP_bind_ge {Q : β → Heap → Prop} (m : St α) (next : α → St β)
-    {h : Heap} (hWp : thetaP Q (m >>= next) h) :
-    thetaP (fun value h' => thetaP Q (next value) h') m h := by
-  refine (thetaP_induction
-    (X := fun t h' => thetaP Q t h' ∧ ∀ m', t = m' >>= next →
-      thetaP (fun value u => thetaP Q (next value) u) m' h')
-    ?_ hWp).2 m rfl
-  clear hWp m h
-  intro t h hStep
-  have hSelf : thetaP Q t h :=
-    thetaP_fold (ThetaF_mono (fun _ _ hPost => hPost) (fun _ _ hX => hX.1) hStep)
-  refine ⟨hSelf, ?_⟩
-  rintro m rfl
-  revert hSelf hStep
-  cases m using ITree.cases with
-  | ret value =>
-      simp only [pure_bind, ThetaF]
-      exact fun _ hSelf => thetaP_fold hSelf
-  | div =>
-      simp only [div_bind, ThetaF, unfold_tau]
-      exact fun hFalse _ => hFalse.elim
-  | vis event k =>
-      simp only [vis_bind, ThetaF, unfold_vis]
-      intro hEvent _
-      refine thetaP_fold ?_
-      simp only [ThetaF, unfold_vis]
-      exact theta_evP_mono (fun _ _ hNext => hNext.2 _ rfl) hEvent
-
-/-- `theta` preserves the monad operations up to `Wp` equivalence. -/
-def thetaMorphism : MonadMorphism St Wp where
-  toFun := theta
-  map_pure := by
-    intro α value
-    refine ⟨fun Q h hPost => ?_, fun Q h hWp => ?_⟩
-    · rw [theta_pure_eq]; exact hPost
-    · rw [theta_pure_eq] at hWp; exact hWp
-  map_bind := by
-    intro α β m next
-    exact ⟨fun Q h hWp => thetaP_bind_le m next hWp,
-      fun Q h hWp => thetaP_bind_ge m next hWp⟩
-
+        exact .vis hPre (ih (hLe' _))
 
 /-! ## Hoare triples -/
 
-/-- A Hoare triple interpreted by embedding its precondition and its
-postcondition into the ordered weakest-precondition monad.
-
-The triple is affine because the *assertions* are: a postcondition holds of any
-heap that extends the resources it describes, so a computation may leak. No
-explicit affine top is needed. -/
+/-- A total-correctness separation triple. The quantified `F` is an arbitrary
+frame that the computation must preserve. -/
 def triple (P : IPre) (m : St α) (Q : IPost α) : Prop :=
-  theta m ≤ pp2wp P Q
+  ∀ F h, (P ∗ F) h → spec m (Q ∗+ F) h
 
 syntax:lead (name := specSyntax)
   "(" term:lead ")" " ⦃" "⇓ " Lean.Parser.Term.funBinder " => " term " ⦄" : term
@@ -469,53 +321,33 @@ macro_rules
   | `(⦃$P⦄ $m ⦃⇓ $Q⦄) =>
       `(triple iprop($P) $m (fun _ => iprop($Q)))
 
-/-- The definition of `triple`, spelled out.
-
-This form is known as a **Texan triple**: it is how Iris states specifications,
-```
-{{{ P }}} e {{{ RET v; Q }}}  ≜  □ ∀ Φ, P -∗ (∀ v, Q -∗ Φ v) -∗ WP e {{ Φ }}
-```
-the postcondition being passed to the continuation `R` through a wand rather
-than asserted directly.  The name is due to the "big" `{{{ … }}}` braces.
-
-Two differences with Iris, both inessential here: the outer entailment is left
-at the meta level instead of being internalised as a second wand, and there is
-no `□`, since this model has no invariants, no step-indexing and no
-higher-order specifications to store a triple in. -/
-theorem triple_texan (P : IPre) (m : St α) (Q : IPost α) :
-    triple P m Q ↔
-      ∀ R : IPost α, P ∗ (Q -∗+ R) ⊢ theta m R :=
+theorem triple_iff (P : IPre) (m : St α) (Q : IPost α) :
+    triple P m Q ↔ ∀ F h, (P ∗ F) h → spec m (Q ∗+ F) h :=
   Iff.rfl
 
-theorem triple_iff (P : IPre) (m : St α) (Q : IPost α) :
-    triple P m Q ↔ P ⊢ theta m Q := by
-  constructor
-  · intro hTriple h hP
-    exact hTriple Q h (pp2wp_conseq (fun _ => entails_refl _) h hP)
-  · intro hTriple R h hPre
-    apply (theta m).monotone (postWand_cancel Q R) h
-    exact theta_frame m Q (Q -∗+ R) h
-      (sep_mono hTriple (entails_refl _) h hPre)
+theorem triple_apply {P : IPre} {m : St α} {Q : IPost α}
+    (hTriple : triple P m Q) {h : Heap} (hPre : P h) :
+    spec m Q h := by
+  have hSpec := hTriple emp h ((sep_emp_r P).mpr h hPre)
+  exact spec_mono hSpec fun value => sep_elim_right (Q value) emp
 
 theorem triple_frame {P : IPre} {m : St α} {Q : IPost α}
     (hTriple : triple P m Q) (H : IProp) :
     triple (P ∗ H) m (Q ∗+ H) := by
-  apply (triple_iff _ _ _).mpr
-  intro h hPre
-  rcases hPre with ⟨h₁, h₂, hDisjoint, hEq, hP, hH⟩
-  apply theta_frame m Q H h
-  exact ⟨h₁, h₂, hDisjoint, hEq,
-    (triple_iff P m Q).mp hTriple h₁ hP, hH⟩
+  intro F h hPre
+  have hSpec := hTriple (H ∗ F) h ((sep_assoc P H F).mp h hPre)
+  exact spec_mono hSpec fun value heap =>
+    (sep_assoc (Q value) H F).mpr heap
 
 theorem triple_conseq {P' P : IPre} {m : St α}
     {Q' Q : IPost α}
     (hTriple : triple P' m Q') (hP : P ⊢ P')
     (hQ : Q' ⊢+ Q) :
     triple P m Q := by
-  apply (triple_iff _ _ _).mpr
-  intro h hPre
-  apply (theta m).monotone hQ h
-  exact (triple_iff P' m Q').mp hTriple h (hP h hPre)
+  intro F h hPre
+  have hSpec := hTriple F h (sep_mono hP (entails_refl F) h hPre)
+  exact spec_mono hSpec fun value =>
+    sep_mono (hQ value) (entails_refl F)
 
 /-- An arbitrary postcondition resource may be discarded.  Since the logic is
 affine this is an instance of the rule of consequence. -/
@@ -535,10 +367,10 @@ theorem triple_ipure {P : Prop} {H : IPre} {m : St α}
     {Q : IPost α}
     (hTriple : P → triple H m Q) :
     triple (⌜P⌝ ∗ H) m Q := by
-  apply (triple_iff _ _ _).mpr
-  intro h hPre
-  have ⟨hP, hH⟩ := (sep_pure_l P H h).mp hPre
-  exact (triple_iff H m Q).mp (hTriple hP) h hH
+  intro F h hPre
+  have ⟨hP, hHF⟩ :=
+    (sep_pure_l P (H ∗ F) h).mp ((sep_assoc _ _ _).mp h hPre)
+  exact hTriple hP F h hHF
 
 /-- Copy a pure fact of the precondition into the local context *without*
 consuming it.  Unlike `triple_ipure` the precondition is unchanged, so the fact
@@ -547,19 +379,18 @@ theorem triple_ipure_keep {P : Prop} {H : IPre} {m : St α}
     {Q : IPost α}
     (hTriple : P → triple (⌜P⌝ ∗ H) m Q) :
     triple (⌜P⌝ ∗ H) m Q := by
-  apply (triple_iff _ _ _).mpr
-  intro h hPre
-  have ⟨hP, _⟩ := (sep_pure_l P H h).mp hPre
-  exact (triple_iff _ m Q).mp (hTriple hP) h hPre
+  intro F h hPre
+  have ⟨hP, _⟩ :=
+    (sep_pure_l P (H ∗ F) h).mp ((sep_assoc _ _ _).mp h hPre)
+  exact hTriple hP F h hPre
 
 theorem triple_exists {ι : Sort _} {J : ι → IPre} {m : St α}
     {Q : IPost α}
     (hTriple : ∀ x, triple (J x) m Q) :
     triple iprop(∃ x, J x) m Q := by
-  apply (triple_iff _ _ _).mpr
-  intro h hPre
-  rcases hPre with ⟨x, hJ⟩
-  exact (triple_iff (J x) m Q).mp (hTriple x) h hJ
+  intro F h hPre
+  obtain ⟨h₁, h₂, hDisjoint, rfl, ⟨x, hJ⟩, hF⟩ := hPre
+  exact hTriple x F _ ⟨h₁, h₂, hDisjoint, rfl, hJ, hF⟩
 
 theorem triple_conseq_frame {H₂ : IProp} {H₁ H : IPre}
     {Q₁ Q : IPost α}
@@ -573,34 +404,35 @@ theorem triple_conseq_frame {H₂ : IProp} {H₁ H : IPre}
 theorem triple_ipure' {P : Prop} {m : St α} {Q : IPost α}
     (hTriple : P → triple emp m Q) :
     triple ⌜P⌝ m Q := by
-  apply (triple_iff _ _ _).mpr
-  intro h hPre
-  exact (triple_iff emp m Q).mp (hTriple hPre) h trivial
+  intro F h hPre
+  have ⟨hP, hF⟩ := (sep_pure_l P F h).mp hPre
+  exact hTriple hP F h ((sep_emp_l F).mpr h hF)
 
 theorem triple_pure {P : IPre} {Q : IPost α} {value : α}
     (hPost : P ⊢ Q value) :
-    triple P (pure value : St α) Q :=
-  (triple_iff _ _ _).mpr (by rw [theta_pure_eq]; exact hPost)
+    triple P (pure value : St α) Q := by
+  intro F h hPre
+  exact .ret (sep_mono hPost (entails_refl F) h hPre)
 
 /-- The specification of a single event is what its denotation says. -/
 theorem triple_trigger {event : StEvent Heap} {P : IPre} {Q : IPost event.Result}
-    (hWp : P ⊢ theta_ev event Q) : triple P (trigger event) Q :=
-  (triple_iff _ _ _).mpr (by rw [theta_trigger_eq]; exact hWp)
+    (hWp : P ⊢ theta_ev event Q) : triple P (trigger event) Q := by
+  intro F h hPre
+  have hEvent : theta_ev event (Q ∗+ F) h :=
+    theta_ev_frame event Q F h
+      (sep_mono hWp (entails_refl F) h hPre)
+  obtain ⟨hGuard, hPost⟩ := theta_ev_elim hEvent
+  exact .vis hGuard (.ret hPost)
 
 theorem triple_bind {P : IPre} {Q₁ : IPost α}
     {Q : IPost β} {m : St α} {next : α → St β}
     (hFirst : triple P m Q₁)
     (hNext : ∀ value, triple (Q₁ value) (next value) Q) :
     triple P (m >>= next) Q := by
-  apply (triple_iff _ _ _).mpr
-  intro h hPre
-  have hBind :
-      Wp.bind (theta m) (fun value => theta (next value)) Q h := by
-    apply (theta m).monotone
-      (fun value => (triple_iff (Q₁ value) (next value) Q).mp (hNext value))
-      h
-    exact (triple_iff P m Q₁).mp hFirst h hPre
-  exact (thetaMorphism.map_bind m next).1 Q h hBind
+  intro F h hPre
+  apply spec_bind (hFirst F h hPre)
+  intro value h' hPost
+  exact hNext value F h' hPost
 
 theorem triple_seq {P H : IPre} {Q : IPost β}
     {m₁ : St α} {m₂ : St β}
@@ -737,81 +569,78 @@ theorem eq_vis_of_unfold {m : St α} {event : StEvent Heap}
     m = ITree.vis event k :=
   eq_of_unfold hm
 
-/-- At a `vis` node the weakest precondition supplies the guard of the event,
-and the weakest precondition of the continuation on the modified heap. -/
-theorem theta_unfold_vis {m : St α} {event : StEvent Heap}
+/-- At a `vis` node total correctness supplies the guard of the event and total
+correctness of the continuation on the modified heap. -/
+theorem spec_unfold_vis {m : St α} {event : StEvent Heap}
     {k : (StEvents Heap).O event → St α} {Q : IPost α} {h : Heap}
-    (hm : m.unfold = .vis event k) (hWp : theta m Q h) :
+    (hm : m.unfold = .vis event k) (hSpec : spec m Q h) :
     ∃ hPre : event.pre h,
-      theta (k (.up (event.modify h hPre).1)) Q (event.modify h hPre).2 :=
-  theta_evP_elim (by simpa only [ThetaF, hm] using thetaP_unfold hWp)
+      spec (k (.up (event.modify h hPre).1)) Q (event.modify h hPre).2 :=
+  by
+    rw [eq_vis_of_unfold hm] at hSpec
+    exact TotalSpec.vis_view hSpec
 
-/-- Run `m` from `h`. The weakest-precondition proof supplies the guard of each
+/-- Run `m` from `h`. The total-correctness proof supplies the guard of each
 event, so nothing has to be decided: the guard of an event of `St` is an
 arbitrary proposition, and a read through a dangling or mistyped pointer is
 stuck rather than erroneous.  Proofs are erased at run time, so this computes.
 
 An interaction tree is coinductive, so this is a partial fixed point rather than
 a structural recursion, and it must answer something on a tree with no `ret` in
-sight: `runOpt_spec` shows that `none` is unreachable under a weakest
-precondition, `theta ITree.div` being `False`. -/
-def runOpt (m : St α) (h : Heap) (Q : IPost α) (hWp : theta m Q h) :
+sight: `runOpt_spec` shows that `none` is unreachable under total correctness,
+because `TotalSpec` has no constructor for `ITree.div`. -/
+def runOpt (m : St α) (h : Heap) (Q : IPost α) (hSpec : spec m Q h) :
     Option (α × Heap) :=
   match hm : m.unfold with
   | .ret value => some (value, h)
   | .div => none
   | .vis event k =>
-      let hNext := theta_unfold_vis hm hWp
+      let hNext := spec_unfold_vis hm hSpec
       runOpt (k (.up (event.modify h hNext.choose).1))
         (event.modify h hNext.choose).2 Q hNext.choose_spec
 partial_fixpoint
 
 /-- The interpreter answers, its answer satisfies the postcondition, and it is
 reached by an evaluation of the machine of `Aeneas.SLPoC.ST`. -/
-theorem runOpt_spec (Q : IPost α) (m : St α) (h : Heap) (hWp : theta m Q h) :
-    ∃ outcome : α × Heap, runOpt m h Q hWp = some outcome ∧
+theorem runOpt_spec (Q : IPost α) (m : St α) (h : Heap) (hSpec : spec m Q h) :
+    ∃ outcome : α × Heap, runOpt m h Q hSpec = some outcome ∧
       Q outcome.1 outcome.2 ∧ Evaluates m h outcome.1 outcome.2 := by
-  refine thetaP_induction
-    (X := fun m' h' => ∀ hWp' : theta m' Q h', ∃ outcome : α × Heap,
-      runOpt m' h' Q hWp' = some outcome ∧ Q outcome.1 outcome.2 ∧
-        Evaluates m' h' outcome.1 outcome.2)
-    ?_ hWp hWp
-  clear hWp m h
-  intro m h hStep hWp
-  rw [runOpt.eq_def]
-  split
-  · rename_i value hm
-    simp only [ThetaF, hm] at hStep
-    exact ⟨(value, h), rfl, hStep,
-      Exec.stop ⟨eq_ret_of_unfold hm, rfl⟩⟩
-  · rename_i hm
-    -- `theta ITree.div` is `False`, so this branch is unreachable: the
-    -- simplification below closes the goal.
-    simp only [ThetaF, hm] at hStep
-  · rename_i event k hm
-    simp only [ThetaF, hm] at hStep
-    obtain ⟨hPre, hNext⟩ := theta_evP_elim hStep
-    obtain ⟨outcome, hRun, hPost, hEvaluates⟩ :=
-      hNext (theta_unfold_vis hm hWp).choose_spec
-    refine ⟨outcome, hRun, hPost, ?_⟩
-    rw [eq_vis_of_unfold hm]
-    exact StateMachine.Evaluates.step (StEvents.Step.guardedModify hPre)
-      hEvaluates
+  induction hSpec with
+  | ret hPost =>
+      rw [runOpt.eq_def]
+      exact ⟨(_, _), rfl, hPost, StateMachine.Evaluates.pure _ _⟩
+  | vis hPre hNext ih =>
+      rw [runOpt.eq_def]
+      split
+      · rename_i value hm
+        simp only [unfold_vis] at hm
+        cases hm
+      · rename_i hm
+        simp only [unfold_vis] at hm
+        cases hm
+      · rename_i event k hm
+        simp only [unfold_vis] at hm
+        cases hm
+        obtain ⟨outcome, hRun, hPost, hEvaluates⟩ := ih
+        refine ⟨outcome, ?_, hPost, ?_⟩
+        · simpa using hRun
+        · exact StateMachine.Evaluates.step (StEvents.Step.guardedModify hPre)
+            hEvaluates
 
 theorem runOpt_isSome (Q : IPost α) (m : St α) (h : Heap)
-    (hWp : theta m Q h) : (runOpt m h Q hWp).isSome := by
-  obtain ⟨outcome, hRun, -⟩ := runOpt_spec Q m h hWp
+    (hSpec : spec m Q h) : (runOpt m h Q hSpec).isSome := by
+  obtain ⟨outcome, hRun, -⟩ := runOpt_spec Q m h hSpec
   rw [hRun]
   rfl
 
 theorem runOpt_get_spec (Q : IPost α) (m : St α) (h : Heap)
-    (hWp : theta m Q h) :
-    Q ((runOpt m h Q hWp).get (runOpt_isSome Q m h hWp)).1
-        ((runOpt m h Q hWp).get (runOpt_isSome Q m h hWp)).2 ∧
-      Evaluates m h ((runOpt m h Q hWp).get (runOpt_isSome Q m h hWp)).1
-        ((runOpt m h Q hWp).get (runOpt_isSome Q m h hWp)).2 := by
-  obtain ⟨outcome, hRun, hPost, hEvaluates⟩ := runOpt_spec Q m h hWp
-  have hGet : (runOpt m h Q hWp).get (runOpt_isSome Q m h hWp) = outcome :=
+    (hSpec : spec m Q h) :
+    Q ((runOpt m h Q hSpec).get (runOpt_isSome Q m h hSpec)).1
+        ((runOpt m h Q hSpec).get (runOpt_isSome Q m h hSpec)).2 ∧
+      Evaluates m h ((runOpt m h Q hSpec).get (runOpt_isSome Q m h hSpec)).1
+        ((runOpt m h Q hSpec).get (runOpt_isSome Q m h hSpec)).2 := by
+  obtain ⟨outcome, hRun, hPost, hEvaluates⟩ := runOpt_spec Q m h hSpec
+  have hGet : (runOpt m h Q hSpec).get (runOpt_isSome Q m h hSpec) = outcome :=
     Option.some.inj (by
       rw [Option.some_get]
       exact hRun)
@@ -820,29 +649,30 @@ theorem runOpt_get_spec (Q : IPost α) (m : St α) (h : Heap)
 
 /-- Run `m` from `h`, certified: the value and heap come with the postcondition
 they satisfy and with the evaluation that reaches them. -/
-def run (m : St α) (h : Heap) (Q : IPost α) (hWp : theta m Q h) :
+def run (m : St α) (h : Heap) (Q : IPost α) (hSpec : spec m Q h) :
     Outcome m Q h :=
-  ⟨(runOpt m h Q hWp).get (runOpt_isSome Q m h hWp), runOpt_get_spec Q m h hWp⟩
+  ⟨(runOpt m h Q hSpec).get (runOpt_isSome Q m h hSpec),
+    runOpt_get_spec Q m h hSpec⟩
 
 /-- The value and heap produced by `run`. -/
-def exec (m : St α) (h : Heap) (Q : IPost α) (hWp : theta m Q h) : α × Heap :=
-  (run m h Q hWp).val
+def exec (m : St α) (h : Heap) (Q : IPost α) (hSpec : spec m Q h) : α × Heap :=
+  (run m h Q hSpec).val
 
-theorem exec_post (m : St α) (h : Heap) (Q : IPost α) (hWp : theta m Q h) :
-    Q (exec m h Q hWp).1 (exec m h Q hWp).2 :=
-  (run m h Q hWp).property.1
+theorem exec_post (m : St α) (h : Heap) (Q : IPost α) (hSpec : spec m Q h) :
+    Q (exec m h Q hSpec).1 (exec m h Q hSpec).2 :=
+  (run m h Q hSpec).property.1
 
 theorem exec_evaluates (m : St α) (h : Heap) (Q : IPost α)
-    (hWp : theta m Q h) :
-    Evaluates m h (exec m h Q hWp).1 (exec m h Q hWp).2 :=
-  (run m h Q hWp).property.2
+    (hSpec : spec m Q h) :
+    Evaluates m h (exec m h Q hSpec).1 (exec m h Q hSpec).2 :=
+  (run m h Q hSpec).property.2
 
 /-! ## Executing a specified program -/
 
 /-- Run a program from a heap satisfying the precondition of a proved triple. -/
 def runTriple {P : IPre} {Q : IPost α} (m : St α) (h : Heap)
     (hTriple : triple P m Q) (hPre : P h) : Outcome m Q h :=
-  run m h Q ((triple_iff P m Q).mp hTriple h hPre)
+  run m h Q (triple_apply hTriple hPre)
 
 /-- The value and heap produced by a specified program. -/
 def execTriple {P : IPre} {Q : IPost α} (m : St α) (h : Heap)
