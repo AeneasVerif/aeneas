@@ -305,10 +305,8 @@ example (p : Ptr Nat) : ¬ (⦃ emp ⦄ read p ⦃⇓ _ => emp⦄) := by
   have hTheta :
       theta (read p) (fun _ => emp) ∅ :=
     (triple_iff _ _ _).mp hTriple ∅ trivial
-  change theta_ev
-    (.GuardedModify (fun h => Ptr.contains h p)
-      (fun h hContains => (Ptr.read p h hContains, h)))
-    (fun _ => emp) ∅ at hTheta
+  simp only [read, guardedModify] at hTheta
+  rw [theta_trigger_eq] at hTheta
   obtain ⟨hContains, -⟩ := theta_ev_elim hTheta
   exact not_contains_empty p hContains
 

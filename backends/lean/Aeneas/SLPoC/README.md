@@ -19,7 +19,7 @@ git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_se
 
 | File | Purpose |
 |---|---|
-| [`FFree.lean`](FFree.lean) | Defines the generic freer monad, and the state machines that give it an operational semantics (after "Program Logics à la Carte"): `StateMachine`, `Exec`, `Runs` and `Evaluates`. |
+| [`Exec.lean`](Exec.lean) | The state machines that give the interaction trees of [`Aeneas.Data.Coinductive.ITree`](../Data/Coinductive/ITree.lean) an operational semantics (after "Program Logics à la Carte"): `StateMachine`, `Exec`, `Runs` and `Evaluates`. |
 | [`Heap.lean`](Heap.lean) | Defines locations, dynamically typed cells, finite heaps, their PCM instance, and the sub-heap order the affine assertions are closed under. |
 | [`PCM.lean`](PCM.lean) | Defines the partial commutative monoid interface used by the heap model. |
 | [`RustHeap.lean`](RustHeap.lean) | The Rust view of the heap: `Ptr` and the pointer operations, over `Heap.lean`. |
@@ -81,17 +81,32 @@ Leak-freedom claims are out of scope, as they already were.
 
 ## Three semantics for `St`
 
-A program has an *operational* semantics (`StEvents.Step`, lifted to the
-big-step `Evaluates` of `FFree.lean`), a *denotational* one (`theta`, into the
-weakest-precondition monad), and — in [`Run.lean`](Run.lean) — an *executable*
-one.
+A program of `St` is an **interaction tree**
+([`Aeneas.Data.Coinductive.ITree`](../Data/Coinductive/ITree.lean)) over the
+heap- and universe-polymorphic event signature `StEvents Heap`.  It has an
+*operational* semantics
+(`StEvents.Step`, lifted to the big-step `Evaluates` of [`Exec.lean`](Exec.lean)),
+a *denotational* one (`theta`, into the weakest-precondition monad), and — in
+[`ST.lean`](ST.lean) — an *executable* one.
 
-`St` cannot be interpreted unconditionally: a heap cell stores its own Lean type
-(`HeapCell = Σ α : Type, α`), so `Ptr.contains h p` is not decidable and a read
-through a dangling or mistyped pointer is stuck rather than erroneous. The
-program logic supplies what is missing, so `run` takes the weakest precondition
-as an argument and reads the ownership witnesses off it. Proofs are erased at
-run time, so this computes:
+An interaction tree is coinductive, so neither `Exec` nor `theta` can be a
+structural recursion over the program: both are the **least** fixed point of
+their one-step unfolding, written impredicatively as the intersection of its
+pre-fixed points.  Least, not greatest: an execution is a finite sequence of
+transitions, and `theta ITree.div`, the denotation of the bottom element of the
+tree order — what an unproductive recursion denotes — is `False`.  A triple is
+therefore a total-correctness triple, as it was when programs were finite trees.
+`theta_mono_le` states the other half of that picture: `theta` is monotone in
+the tree order, so the weakest precondition of a program defined by
+`partial_fixpoint` is reachable from those of its finite approximations.
+
+`St` cannot be interpreted unconditionally either: a heap cell stores its own
+Lean type (`HeapCell = Σ α : Type, α`), so `Ptr.contains h p` is not decidable
+and a read through a dangling or mistyped pointer is stuck rather than
+erroneous. The program logic supplies what is missing, so `run` takes the
+weakest precondition as an argument and reads the ownership witnesses off it —
+the interpreter `runOpt` it is built from is a `partial_fixpoint` of the tree,
+not a structural recursion.  Proofs are erased at run time, so this computes:
 
 ```lean
 theorem roundTrip.spec : (roundTrip) ⦃⇓ result => result = 42⦄ := by
