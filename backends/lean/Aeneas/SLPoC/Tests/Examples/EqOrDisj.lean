@@ -1,4 +1,4 @@
-import Aeneas.SLPoC.Step
+import Aeneas.SLPoC.RustHeap
 
 /-!
 # `InPlaceOrDisjointBuffer`, specified against `EqOrDisj`

@@ -1,4 +1,4 @@
-import Aeneas.SLPoC.Step
+import Aeneas.SLPoC.RustHeap
 
 /-!
 # Dardinier's magic-wand automation examples
