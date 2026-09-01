@@ -13,7 +13,7 @@ relative order.
 Run safely from `backends/lean` with a three-GiB Lean heap and one worker:
 
 ```
-lake env lean -M3072 -j1 Aeneas/SLPoC/Examples/YOLOCancel.lean
+lake env lean -M3072 -j1 Aeneas/SLPoC/Tests/Examples/YOLOCancel.lean
 ```
 
 `-M` is in MiB.  `trace.profiler` reports declaration and `sl_frame` time.

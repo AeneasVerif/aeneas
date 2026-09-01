@@ -13,9 +13,9 @@ from pathlib import Path
 
 
 HERE = Path(__file__).resolve().parent
-README = HERE.parent / "README.md"
-LEAN_EXAMPLE = HERE / "VerusDoublyLinkedList.lean"
-LEAN_LIB = HERE / "VerusStd.lean"
+README = HERE.parents[2] / "README.md"
+LEAN_EXAMPLE = HERE.parent / "VerusDoublyLinkedList.lean"
+LEAN_LIB = HERE.parent / "VerusStd.lean"
 
 # `VerusDoublyLinkedList.lean` holds the executable definitions and then the
 # ghost state, specifications and proofs; this header separates the two.
