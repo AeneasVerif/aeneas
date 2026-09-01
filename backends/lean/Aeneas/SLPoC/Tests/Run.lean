@@ -1,10 +1,10 @@
-import Aeneas.SLPoC.Run
+import Aeneas.SLPoC.RustHeap
 import Aeneas.SLPoC.Tests.Examples.Basic
 
 /-!
 # Running verified programs
 
-`Aeneas.SLPoC.Run` turns a proved triple into an execution.  These are the tests
+`Aeneas.SLPoC.ST` turns a proved triple into an execution.  These are the tests
 that it really executes, that what it computes agrees with what the triple
 predicts, and that the proof it carries is available without running anything.
 -/
