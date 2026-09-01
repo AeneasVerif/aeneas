@@ -304,10 +304,13 @@ example (p : Ptr Nat) (value : Nat) : ¬ (emp ⊢ p ↦ value) := by
 example (p : Ptr Nat) : ¬ (⦃ emp ⦄ read p ⦃⇓ _ => emp⦄) := by
   intro hTriple
   have hTheta :
-      theta_ev (.ReadPtr p)
-        (fun value => theta (FFree.ok value) (fun _ => emp)) ∅ :=
+      theta (read p) (fun _ => emp) ∅ :=
     (triple_iff _ _ _).mp hTriple ∅ trivial
-  obtain ⟨hContains, -⟩ := theta_ev_read_elim hTheta
+  change theta_ev
+    (.GuardedModify (fun h => Ptr.contains h p)
+      (fun h hContains => (Ptr.read p h hContains, h)))
+    (fun _ => emp) ∅ at hTheta
+  obtain ⟨hContains, -⟩ := theta_ev_elim hTheta
   simp [Ptr.contains, contains] at hContains
 
 def allocAndForget (value : Nat) : St Unit := do
