@@ -1,4 +1,4 @@
-import Aeneas.SLPoC.Examples.PulseArrayTests
+import Aeneas.SLPoC.Tests.Examples.PulseArrayTests
 
 /-!
 # Verus bitmap
