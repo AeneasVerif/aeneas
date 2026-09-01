@@ -41,7 +41,6 @@ whereas this bounded abstraction keeps every suffix marker equal to `none`.
 
 namespace Aeneas.SLPoC
 
-open scoped SepLogic
 
 namespace VerusVerifiedVec
 
@@ -90,14 +89,14 @@ def pushNoResize (v : Vector α) (value : α) : St Bool := do
 /-! # Ghost state, specifications and proofs -/
 
 /-- Ownership of the initialized prefix: each cell contains its exact value. -/
-def initializedOwn : List (Ptr (Option α)) → List α → SLProp
+def initializedOwn : List (Ptr (Option α)) → List α → IProp
   | [], [] => emp
   | cell :: cells, value :: values =>
       iprop(cell ↦ some value ∗ initializedOwn cells values)
   | _, _ => ⌜False⌝
 
 /-- Ownership of the typed-uninitialized suffix: every marker is `none`. -/
-def uninitializedOwn : List (Ptr (Option α)) → SLProp
+def uninitializedOwn : List (Ptr (Option α)) → IProp
   | [] => emp
   | cell :: cells => iprop(cell ↦ none ∗ uninitializedOwn cells)
 
@@ -107,9 +106,9 @@ def uninitializedOwn : List (Ptr (Option α)) → SLProp
 record the initialized length and fixed allocation capacity, while their
 separate spatial predicates abstract the source's `elems` map and `rest`
 range.  This predicate makes no contiguous-layout or deallocation-token claim. -/
-def owns (v : Vector α) (contents : List α) (cap : Nat) : SLProp :=
-  hexists fun initCells : List (Ptr (Option α)) =>
-    hexists fun suffix : List (Ptr (Option α)) =>
+def owns (v : Vector α) (contents : List α) (cap : Nat) : IProp :=
+  iexists fun initCells : List (Ptr (Option α)) =>
+    iexists fun suffix : List (Ptr (Option α)) =>
       iprop(
         ⌜v.buffer.cells = initCells ++ suffix⌝ ∗
         ⌜initCells.length = contents.length⌝ ∗
@@ -133,23 +132,23 @@ theorem partition_entails_owns
       v.lengthCell ↦ contents.length) ⊢
       owns v contents cap := by
   unfold owns
-  refine himpl_hexists_r initCells ?_
-  refine himpl_hexists_r suffix ?_
-  sl_frame
+  refine entails_exists_r initCells ?_
+  refine entails_exists_r suffix ?_
+  iframe
 
-@[simp, sl_simps] theorem initializedOwn_nil :
+@[simp, iris_simps] theorem initializedOwn_nil :
     initializedOwn ([] : List (Ptr (Option α))) ([] : List α) = emp := rfl
 
-@[simp, sl_simps] theorem initializedOwn_cons
+@[simp, iris_simps] theorem initializedOwn_cons
     (cell : Ptr (Option α)) (cells : List (Ptr (Option α)))
     (value : α) (values : List α) :
     initializedOwn (cell :: cells) (value :: values) =
       iprop(cell ↦ some value ∗ initializedOwn cells values) := rfl
 
-@[simp, sl_simps] theorem uninitializedOwn_nil :
+@[simp, iris_simps] theorem uninitializedOwn_nil :
     uninitializedOwn ([] : List (Ptr (Option α))) = emp := rfl
 
-@[simp, sl_simps] theorem uninitializedOwn_cons
+@[simp, iris_simps] theorem uninitializedOwn_cons
     (cell : Ptr (Option α)) (cells : List (Ptr (Option α))) :
     uninitializedOwn (cell :: cells) =
       iprop(cell ↦ none ∗ uninitializedOwn cells) := rfl
@@ -185,12 +184,12 @@ theorem readInitialized.spec
       cases contents with
       | nil => simp at hi
       | cons value values =>
-          sl_pull
+          iintro
           contradiction
   | cons cell initCells ih =>
       cases contents with
       | nil =>
-          sl_pull
+          iintro
           contradiction
       | cons value values =>
           cases i with
@@ -224,12 +223,12 @@ theorem initializeNext.spec
             PulseArray.writeCells, List.nil_append]
           step*
       | cons old contents =>
-          sl_pull
+          iintro
           contradiction
   | cons cell initCells ih =>
       cases contents with
       | nil =>
-          sl_pull
+          iintro
           contradiction
       | cons old contents =>
           simp only [List.cons_append, List.length_cons,
@@ -256,8 +255,8 @@ theorem newFixed.spec (capacity : Nat) :
     ({ buffer, lengthCell, fixedCapacity := capacity } : Vector α)
     [] capacity [] buffer.cells rfl rfl htotal rfl
   simp only [initializedOwn_nil, List.length_nil] at hOwn
-  sl_change hOwn
-  sl_frame
+  irewrite hOwn
+  iframe
 
 /-- Length returns the exact initialized-prefix length and preserves ownership. -/
 @[step]
@@ -282,7 +281,7 @@ theorem readValue.spec (v : Vector α) (contents : List α) (cap i : Nat) :
     ⦃ owns v contents cap ⦄ readValue v i
       ⦃⇓ result => ⌜result = contents[i]?⌝ ∗ owns v contents cap⦄ := by
   unfold readValue length
-  sl_pull initCells suffix hcells _ _ _
+  iintro initCells suffix hcells _ _ _
   step
   split
   · rename_i hi
@@ -311,7 +310,7 @@ theorem pushNoResize.spec
           (if contents.length < cap then contents ++ [value] else contents)
           cap⦄ := by
   unfold pushNoResize length capacity
-  sl_pull initCells suffix hcells hprefix htotal hcapacity
+  iintro initCells suffix hcells hprefix htotal hcapacity
   step
   simp only [hcapacity]
   step
@@ -348,9 +347,9 @@ theorem pushNoResize.spec
     subst suffix
     simp only [hfull, decide_false]
     step
-    sl_change (partition_entails_owns v contents cap initCells []
+    irewrite (partition_entails_owns v contents cap initCells []
       hcells hprefix htotal hcapacity)
-    sl_frame
+    iframe
 
 end VerusVerifiedVec
 

@@ -187,7 +187,6 @@ theorem free_singleton (p : Ptr α) (value : α)
 
 end Ptr
 
-open scoped SepLogic
 
 /-! ## Specified monadic operations -/
 
@@ -242,7 +241,7 @@ theorem read.spec (p : Ptr α) (value : α) :
         Ptr.contains_union_left hContainsCell from Subsingleton.elim _ _,
       Ptr.read_union_left hContainsCell, Ptr.read_singleton]
   refine ⟨hContainsFrame, h, hDisjoint, rfl, ?_⟩
-  exact (hstar_hpure_l _ _ h).mpr ⟨hReadFrame, hSingle⟩
+  exact (sep_pure_l _ _ h).mpr ⟨hReadFrame, hSingle⟩
 
 def update {α : Type} (p : Ptr α) (value : α) : St Unit :=
   guardedModify (fun h => Ptr.contains h p) fun h hContains =>
@@ -323,7 +322,7 @@ theorem end_mut_to_raw.spec {α : Type} {value : α} (p : Ptr α) :
   unfold end_mut_to_raw
   apply triple_bind (read.spec p value)
   intro result
-  apply triple_hpure
+  apply triple_ipure
   intro hResult
   apply triple_seq (free.spec p value)
   exact triple_pure fun _ _ => hResult

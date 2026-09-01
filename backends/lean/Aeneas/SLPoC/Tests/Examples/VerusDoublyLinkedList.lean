@@ -18,7 +18,6 @@ ghost state.
 
 namespace Aeneas.SLPoC
 
-open scoped SepLogic
 open VerusStd
 
 /-! # Executable definitions -/
@@ -196,15 +195,15 @@ attribute [grind] prevOf nextOf nodeAt
 
 /-- Owns the nodes `cs` of `l` starting at index `i`: `VerusStd`'s permission
 map under the invariant `nodeAt l`. -/
-abbrev nodesFrom (l : Cells V) : Nat → Cells V → SLProp := cellsFrom (nodeAt l)
+abbrev nodesFrom (l : Cells V) : Nat → Cells V → IProp := cellsFrom (nodeAt l)
 
 /-- Ownership of every node, each well-formed: the first conjunct of Verus'
 `well_formed`. -/
-def nodes (l : Cells V) : SLProp := nodesFrom l 0 l
+def nodes (l : Cells V) : IProp := nodesFrom l 0 l
 
 /-- Linked list is well-formed: every node is well-formed, and the `head`/`tail`
 pointers agree with the ghost state. -/
-def wellFormed (s : DoublyLinkedList V) (l : Cells V) : SLProp :=
+def wellFormed (s : DoublyLinkedList V) (l : Cells V) : IProp :=
   iprop(⌜s.head = firstPtr l ∧ s.tail = lastPtr l⌝ ∗ nodes l)
 
 @[simp] theorem nodes_nil : nodes ([] : Cells V) = emp := rfl
@@ -253,7 +252,7 @@ theorem nodeAt_snoc_last (l : Cells V) (r : Ptr (Node V)) (v : V) :
       { prev := lastPtr l, next := none, payload := v } := by grind
 
 /-- Split the ownership of the last node out of `nodes`. -/
-@[sl_simps] theorem nodes_snoc (l : Cells V) (r : Ptr (Node V)) (v : V) :
+@[iris_simps] theorem nodes_snoc (l : Cells V) (r : Ptr (Node V)) (v : V) :
     nodes (l ++ [(r, v)]) =
       iprop(nodesFrom (l ++ [(r, v)]) 0 l ∗
         (r ↦ { prev := lastPtr l, next := none, payload := v })) := by
@@ -262,7 +261,7 @@ theorem nodeAt_snoc_last (l : Cells V) (r : Ptr (Node V)) (v : V) :
 
 /-- Split the ownership of the last two nodes out of `nodes`.  This is the shape
 of the heap both after `pushBack` and before `popBack`. -/
-@[sl_simps high] theorem nodes_snoc_two (l : Cells V) (rt : Ptr (Node V)) (vt : V)
+@[iris_simps high] theorem nodes_snoc_two (l : Cells V) (rt : Ptr (Node V)) (vt : V)
     (rn : Ptr (Node V)) (v : V) :
     nodes (l ++ [(rt, vt), (rn, v)]) =
       iprop(nodesFrom (l ++ [(rt, vt)]) 0 l ∗
@@ -278,10 +277,10 @@ of the heap both after `pushBack` and before `popBack`. -/
       rw [hassoc]; grind
     grind
   rw [hassoc, nodes_snoc, ← hassoc, nodesFrom_append, Nat.zero_add,
-    nodesFrom_singleton, hmid, hprefix, lastPtr_snoc, hstar_assoc_eq]
+    nodesFrom_singleton, hmid, hprefix, lastPtr_snoc, sep_assoc_eq]
 
 /-- Split the ownership of the first node out of `nodes`. -/
-@[sl_simps] theorem nodes_cons (rh : Ptr (Node V)) (vh : V) (l : Cells V) :
+@[iris_simps] theorem nodes_cons (rh : Ptr (Node V)) (vh : V) (l : Cells V) :
     nodes ((rh, vh) :: l) =
       iprop((rh ↦ { prev := none, next := firstPtr l, payload := vh }) ∗
         nodesFrom ((rh, vh) :: l) 1 l) := by
@@ -290,13 +289,13 @@ of the heap both after `pushBack` and before `popBack`. -/
   simp only [nodes, nodesFrom, cellsFrom_cons, Nat.zero_add, this]
 
 /-- The second node of a list, as `nodesFrom` describes it. -/
-@[sl_simps] theorem nodeAt_cons_one (a b : Ptr (Node V) × V) (l : Cells V) (v : V) :
+@[iris_simps] theorem nodeAt_cons_one (a b : Ptr (Node V) × V) (l : Cells V) (v : V) :
     nodeAt (a :: b :: l) 1 v =
       { prev := some a.1, next := firstPtr l, payload := v } := by grind
 
 /-- Peeling two nodes off leaves the rest indexed from `2`, which is the tail
 indexed from `1`. -/
-@[sl_simps] theorem nodesFrom_cons_two (a b : Ptr (Node V) × V) (l xs : Cells V) :
+@[iris_simps] theorem nodesFrom_cons_two (a b : Ptr (Node V) × V) (l xs : Cells V) :
     nodesFrom (a :: b :: l) 2 xs = nodesFrom (b :: l) 1 xs :=
   nodesFrom_cons_shift a (b :: l) xs 0
 
@@ -328,11 +327,11 @@ theorem pushBack.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
   unfold pushBack
   split
   next =>
-    sl_pull -- needs the pure part of the precondition to prove `l = []`
+    iintro -- needs the pure part of the precondition to prove `l = []`
     obtain rfl : l = [] := (lastPtr_eq_none_iff l).mp (by grind)
     step*
   next oldTailPtr _ =>
-    sl_pull -- needs the pure part of the precondition to prove `l ≠ []`
+    iintro -- needs the pure part of the precondition to prove `l ≠ []`
     have hne : l ≠ [] := mt (lastPtr_eq_none_iff l).mpr (by grind)
     obtain ⟨l', ⟨rt, vt⟩, rfl⟩ := (eq_nil_or_snoc l).resolve_left hne
     obtain rfl : oldTailPtr = rt := by grind [lastPtr_snoc]
@@ -347,7 +346,7 @@ theorem popBack.spec (s : DoublyLinkedList V) (l : Cells V) (hne : l ≠ []) :
   obtain ⟨l', ⟨_, _⟩, rfl⟩ := (eq_nil_or_snoc l).resolve_left hne
   rcases eq_nil_or_snoc l' with rfl | ⟨_, ⟨_, _⟩, rfl⟩
   <;> unfold popBack
-  <;> sl_pull ⟨_, htail⟩
+  <;> iintro ⟨_, htail⟩
   <;> simp only [lastPtr_snoc] at htail
   <;> step*
 
@@ -359,16 +358,16 @@ theorem pushFront.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
   unfold pushFront
   split
   next =>
-    sl_pull
+    iintro
     obtain rfl : l = [] := (firstPtr_eq_none_iff l).mp (by grind)
     step*
   next oldHeadPtr hsome =>
     rcases l with _ | ⟨⟨rh, _⟩, _⟩
-    · sl_pull ⟨hhead, _⟩
+    · iintro ⟨hhead, _⟩
       exfalso
       change s.head = none at hhead
       simp_all
-    · sl_pull
+    · iintro
       obtain rfl : rh = oldHeadPtr := by grind
       step*
 
@@ -379,7 +378,7 @@ theorem popFront.spec (s : DoublyLinkedList V) (rh : Ptr (Node V)) (vh : V)
     ⦃ wellFormed s ((rh, vh) :: l) ⦄ popFront s
       ⦃⇓ (s', v) => ⌜v = vh⌝ ∗ wellFormed s' l⦄ := by
   unfold popFront
-  sl_pull_keep
+  iintro_keep
   -- `nodes_cons_two`, which splits the two first nodes out, is stated over a pair.
   rcases l with _ | ⟨⟨_, _⟩, _⟩ <;> step*
 
@@ -423,7 +422,7 @@ theorem get.spec (s : DoublyLinkedList V) (l : Cells V) (i : Nat)
     ⦃ wellFormed s l ⦄ get s i
       ⦃⇓ v => ⌜(view l)[i]? = some v⌝ ∗ wellFormed s l⦄ := by
   unfold get
-  sl_pull_keep
+  iintro_keep
   step as ⟨ r, _ ⟩
   case hr => grind
   obtain ⟨ri, _, _⟩ := exists_cell l i hi

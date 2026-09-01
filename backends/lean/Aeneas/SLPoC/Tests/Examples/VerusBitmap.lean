@@ -27,7 +27,6 @@ its result is logically equal, but it is not used to justify source aliasing.
 
 namespace Aeneas.SLPoC
 
-open scoped SepLogic
 
 namespace VerusBitmap
 
@@ -182,7 +181,7 @@ def bitLength (words : List Word) : Nat :=
   bitLengthFromWordCount words.length
 
 /-- Exact ownership of every word cell in a bitmap. -/
-def rep (bitmap : Bitmap) (words : List Word) : SLProp :=
+def rep (bitmap : Bitmap) (words : List Word) : IProp :=
   PulseArray.owns bitmap.bits words
 
 @[simp] theorem wordWidth_pos : 0 < wordWidth := by
@@ -454,7 +453,7 @@ theorem orCells.disjoint_spec (leftCells rightCells : List (Ptr Word))
   | nil =>
       cases leftWords with
       | cons word words =>
-          sl_pull
+          iintro
           contradiction
       | nil =>
           cases rightWords with
@@ -467,14 +466,14 @@ theorem orCells.disjoint_spec (leftCells rightCells : List (Ptr Word))
                   step*
               | cons right rights =>
                   simp only [PulseArray.ownsCells]
-                  rw [hstar_comm_eq _ (⌜False⌝)]
-                  apply triple_hpure
+                  rw [sep_comm_eq _ (⌜False⌝)]
+                  apply triple_ipure
                   intro hfalse
                   contradiction
   | cons left leftCells ih =>
       cases leftWords with
       | nil =>
-          sl_pull
+          iintro
           contradiction
       | cons leftWord leftWords =>
           cases rightCells with
@@ -484,16 +483,16 @@ theorem orCells.disjoint_spec (leftCells rightCells : List (Ptr Word))
                   simp at hlength
               | cons rightWord rightWords =>
                   simp only [PulseArray.ownsCells]
-                  rw [hstar_comm_eq _ (⌜False⌝)]
-                  apply triple_hpure
+                  rw [sep_comm_eq _ (⌜False⌝)]
+                  apply triple_ipure
                   intro hfalse
                   contradiction
           | cons right rightCells =>
               cases rightWords with
               | nil =>
                   simp only [PulseArray.ownsCells]
-                  rw [hstar_comm_eq _ (⌜False⌝)]
-                  apply triple_hpure
+                  rw [sep_comm_eq _ (⌜False⌝)]
+                  apply triple_ipure
                   intro hfalse
                   contradiction
               | cons rightWord rightWords =>
@@ -522,12 +521,12 @@ theorem orCells.self_spec (cells : List (Ptr Word)) (words : List Word) :
           simp only [orCells, orWords, List.zip, PulseArray.ownsCells_nil]
           step*
       | cons word words =>
-          sl_pull
+          iintro
           contradiction
   | cons cell cells ih =>
       cases words with
       | nil =>
-          sl_pull
+          iintro
           contradiction
       | cons word words =>
           simp only [PulseArray.ownsCells_cons, orCells, orWords,
@@ -552,12 +551,12 @@ theorem orSelfCells.spec (cells : List (Ptr Word)) (words : List Word) :
             PulseArray.ownsCells_nil]
           step*
       | cons word words =>
-          sl_pull
+          iintro
           contradiction
   | cons cell cells ih =>
       cases words with
       | nil =>
-          sl_pull
+          iintro
           contradiction
       | cons word words =>
           simp only [PulseArray.ownsCells_cons, orSelfCells, orSelfWords,
@@ -580,7 +579,7 @@ theorem bitmapOrSelf.spec (bitmap : Bitmap) (words : List Word) :
       rep bitmap words ∗ rep result (orSelfWords words)⦄ := by
   unfold bitmapOrSelf rep
   step with orSelfCells.spec bitmap.bits.cells words
-  have hpure :
+  have ipure :
       orSelfWords words = orWords words words ∧
         bitLength (orSelfWords words) = bitLength words ∧
         ∀ index, index < bitLength words →
@@ -611,7 +610,7 @@ theorem bitmapOr.self_spec (bitmap : Bitmap) (words : List Word) :
       rep bitmap words ∗ rep result (orWords words words)⦄ := by
   unfold bitmapOr rep
   step with orCells.self_spec bitmap.bits.cells words
-  have hpure :
+  have ipure :
       bitLength (orWords words words) = bitLength words ∧
         ∀ index, index < bitLength words →
           bitView (orWords words words) index =
@@ -643,7 +642,7 @@ theorem bitmapOr.disjoint_spec (left right : Bitmap)
   unfold bitmapOr rep
   step with orCells.disjoint_spec left.bits.cells right.bits.cells
     leftWords rightWords hlength
-  have hpure :
+  have ipure :
       bitLength (orWords leftWords rightWords) = bitLength leftWords ∧
         ∀ index, index < bitLength leftWords →
           bitView (orWords leftWords rightWords) index =

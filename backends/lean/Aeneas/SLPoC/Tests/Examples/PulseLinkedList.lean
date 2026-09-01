@@ -14,7 +14,6 @@ iterative-append fragments are intentionally outside this first-order scope.
 
 namespace Aeneas.SLPoC
 
-open scoped SepLogic
 
 namespace PulseLinkedList
 
@@ -145,10 +144,10 @@ def reverse (xs : List α) (x : Link α) : St (Link α) :=
 /-! # Ghost state, specifications and proofs -/
 
 /-- Exact ownership of a linked list with pure view `xs`. -/
-def isList : Link α → List α → SLProp
+def isList : Link α → List α → IProp
   | none, [] => emp
   | some p, x :: xs =>
-      hexists fun next =>
+      iexists fun next =>
         iprop(p ↦ { head := x, tail := next } ∗ isList next xs)
   | _, _ => ⌜False⌝
 
@@ -163,18 +162,18 @@ def isList : Link α → List α → SLProp
 /-- Unfold one owned cell. -/
 theorem isList_unfold (p : Ptr (Node α)) (x : α) (xs : List α) :
     isList (some p) (x :: xs) ⊢
-      hexists fun next =>
+      iexists fun next =>
         iprop(p ↦ { head := x, tail := next } ∗ isList next xs) := by
-  sl_frame
+  iframe
 
 /-- Fold one owned cell. -/
 theorem isList_fold (p : Ptr (Node α)) (x : α) (next : Link α)
     (xs : List α) :
     p ↦ { head := x, tail := next } ∗ isList next xs ⊢
       isList (some p) (x :: xs) := by
-  change _ ⊢ hexists fun next' =>
+  change _ ⊢ iexists fun next' =>
     iprop(p ↦ { head := x, tail := next' } ∗ isList next' xs)
-  exact himpl_hexists_r next (himpl_refl _)
+  exact entails_exists_r next (entails_refl _)
 
 /-- A list is empty exactly when its link is null. -/
 @[step]
@@ -186,12 +185,12 @@ theorem isEmpty.spec (x : Link α) (xs : List α) :
   | nil =>
       cases x
       · step*
-      · sl_pull
+      · iintro
         contradiction
   | cons v vs =>
       cases x with
       | none =>
-          sl_pull
+          iintro
           contradiction
       | some p =>
           simp only [Option.isNone_some, List.cons_ne_nil, decide_false]
@@ -206,7 +205,7 @@ theorem head.spec (x : Link α) (v : α) (xs : List α) (hne : x ≠ none) :
   | none => contradiction
   | some p =>
       simp only [head]
-      sl_pull
+      iintro
       step*
 
 /-- `pop` frees the first cell and returns its exact tail and value. -/
@@ -218,7 +217,7 @@ theorem pop.spec (x : Link α) (v : α) (xs : List α) (hne : x ≠ none) :
   | none => contradiction
   | some p =>
       simp only [pop, isList]
-      sl_pull
+      iintro
       step*
 
 /-- Recursive `length` preserves every cell and computes the pure-list length. -/
@@ -231,16 +230,16 @@ theorem length.spec (x : Link α) (xs : List α) :
       cases x
       · simp only [length, List.length_nil]
         step*
-      · sl_pull
+      · iintro
         contradiction
   | cons v xs ih =>
       cases x with
       | none =>
-          sl_pull
+          iintro
           contradiction
       | some p =>
           simp only [length, List.length_cons]
-          sl_pull
+          iintro
           step*
 
 /-- `create` returns the uniquely represented empty list. -/
@@ -269,11 +268,11 @@ theorem append.spec (x y : Link α) (xs ys : List α) (hne : xs ≠ []) :
   | cons v xs ih =>
       cases x with
       | none =>
-          sl_pull
+          iintro
           contradiction
       | some p =>
           simp only [isList]
-          sl_pull
+          iintro
           cases xs with
           | nil =>
               simp only [append, List.singleton_append]
@@ -292,7 +291,7 @@ theorem isLastCell.spec (x : Link α) (v : α) (xs : List α)
   | none => contradiction
   | some p =>
       simp only [isLastCell]
-      sl_pull
+      iintro
       step*
 
 /-- `appendAtLastCell` implements Pulse's singleton-specialized append helper. -/
@@ -305,7 +304,7 @@ theorem appendAtLastCell.spec (x y : Link α) (v : α) (ys : List α)
   | none => contradiction
   | some p =>
       simp only [appendAtLastCell, isList]
-      sl_pull
+      iintro
       step*
 
 /-- `detachNext` turns the first cell into a singleton and returns the exact
@@ -318,11 +317,11 @@ theorem detachNext.spec (x : Link α) (v : α) (xs : List α) (hne : x ≠ none)
   | none => contradiction
   | some p =>
       simp only [detachNext, isList]
-      sl_pull
+      iintro
       step*
-      refine himpl_hexists_r none ?_
+      refine entails_exists_r none ?_
       simp only [isList]
-      sl_frame
+      iframe
 
 /-- `split n` leaves the first `n` values under the original head link and
 returns ownership of the exact suffix. -/
@@ -338,24 +337,24 @@ theorem split.spec (n : Nat) (x : Link α) (xs : List α)
       · simp at hle
       · cases x with
         | none =>
-            sl_pull
+            iintro
             contradiction
         | some p =>
-            sl_pull next
+            iintro next
             cases n with
             | zero =>
                 simp only [split, List.take, List.drop]
                 step*
-                apply hstar_mono
-                · refine himpl_hexists_r (none : Link α) ?_
+                apply sep_mono
+                · refine entails_exists_r (none : Link α) ?_
                   simp only [isList]
-                  sl_frame
-                · sl_frame
+                  iframe
+                · iframe
             | succ n =>
                 simp only [split, List.take, List.drop]
                 step
                 step with ih (x := next) (xs := xs) (by omega) (by simpa using hle)
-                sl_frame
+                iframe
 
 /-- `insert` splits the exact view and inserts `item` at index `n`. -/
 @[step]
@@ -381,7 +380,7 @@ theorem delete.spec (n : Nat) (x : Link α) (xs : List α) (item : α)
       ⦃⇓ isList x (xs.take n ++ item :: xs.drop n)⦄ := by
   unfold delete
   step with insert.spec n x xs item hpos hlt
-  sl_frame
+  iframe
 
 /-- Accumulator form of reversal: the result has view `xs.reverse ++ ys`. -/
 @[step]
@@ -393,20 +392,20 @@ theorem reverseAppend.spec (x acc : Link α) (xs ys : List α) :
       cases x
       · simp only [isList, reverseAppend, List.reverse_nil, List.nil_append]
         step*
-      · sl_pull
+      · iintro
         contradiction
   | cons v xs ih =>
       cases x with
       | none =>
-          sl_pull
+          iintro
           contradiction
       | some p =>
           simp only [isList, reverseAppend, List.reverse_cons, List.append_assoc,
             List.singleton_append]
-          sl_pull next
+          iintro next
           step* 2
           step with ih (x := next) (acc := some p) (ys := v :: ys)
-          sl_frame
+          iframe
 
 /-- `reverse` consumes the original orientation and returns exact ownership in
 reverse pure-list order. -/
@@ -416,7 +415,7 @@ theorem reverse.spec (x : Link α) (xs : List α) :
       ⦃⇓ result => isList result xs.reverse⦄ := by
   unfold reverse
   step with reverseAppend.spec x none xs []
-  sl_frame
+  iframe
 
 end PulseLinkedList
 

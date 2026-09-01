@@ -2,7 +2,6 @@ import Aeneas.SLPoC.RustHeap
 
 namespace Aeneas.SLPoC
 
-open scoped SepLogic
 
 namespace Examples
 

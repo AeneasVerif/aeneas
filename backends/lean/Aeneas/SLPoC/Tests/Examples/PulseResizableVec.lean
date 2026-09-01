@@ -21,7 +21,6 @@ fixed-capacity behavior rather than assuming successful resizing.
 
 namespace Aeneas.SLPoC
 
-open scoped SepLogic
 
 namespace PulseResizableVec
 
@@ -114,8 +113,8 @@ def bufferInv (contents : List α) (cap : Nat) (buffer : List (Option α)) : Pro
     buffer[i]? = contents[i]?.map some
 
 /-- Full composite ownership of the buffer and both metadata cells. -/
-def owns (v : ResizableVec α) (contents : List α) (cap : Nat) : SLProp :=
-  hexists fun buffer =>
+def owns (v : ResizableVec α) (contents : List α) (cap : Nat) : IProp :=
+  iexists fun buffer =>
     iprop(
       ⌜bufferInv contents cap buffer⌝ ∗
       PulseArray.owns v.buffer buffer ∗
@@ -260,11 +259,11 @@ theorem get.spec (v : ResizableVec α) (contents : List α) (cap i : Nat) :
     ⦃ owns v contents cap ⦄ get v i
       ⦃⇓ result => ⌜result = contents[i]?⌝ ∗ owns v contents cap⦄ := by
   unfold get length
-  sl_pull _ hInv
+  iintro _ hInv
   step*
   · have hslot := bufferInv_get hInv (by omega)
     simp only [hslot, join_map_some]
-    sl_frame
+    iframe
 
 /-- `set` reports the exact bounds test and updates exactly the selected logical element. -/
 @[step]
@@ -275,15 +274,15 @@ theorem set.spec (v : ResizableVec α) (contents : List α) (cap i : Nat)
         ⌜written = decide (i < contents.length)⌝ ∗
         owns v (contents.set i value) cap⦄ := by
   unfold set length
-  sl_pull _ hInv
+  iintro _ hInv
   step*
   · have hnewInv := bufferInv_set (i := i) (value := value) hInv
     simp only [decide_true]
-    sl_frame
+    iframe
   · have hset : contents.set i value = contents :=
       list_set_eq_self_of_length_le contents i value (by omega)
     simp only [decide_false, hset]
-    sl_frame
+    iframe
 
 /-! ## Stack operations -/
 
@@ -297,11 +296,11 @@ theorem push.spec (v : ResizableVec α) (contents : List α) (cap : Nat)
         ⌜pushed = decide (contents.length < cap)⌝ ∗
         owns v (if contents.length < cap then contents ++ [value] else contents) cap⦄ := by
   unfold push length capacity
-  sl_pull _ hInv
+  iintro _ hInv
   step*
   have hnewInv := bufferInv_push (value := value) hInv (by omega)
   simp only [decide_true]
-  sl_frame
+  iframe
 
 /-- `pop` returns the exact last element, removes exactly that element, and
 preserves capacity and complete ownership. -/
@@ -311,19 +310,19 @@ theorem pop.spec (v : ResizableVec α) (contents : List α) (cap : Nat) :
       ⦃⇓ result =>
         ⌜result = contents.getLast?⌝ ∗ owns v contents.dropLast cap⦄ := by
   unfold pop length
-  sl_pull _ hInv
+  iintro _ hInv
   step*
   · have hnil : contents = [] := List.eq_nil_of_length_eq_zero (by omega)
     subst contents
     simp only [List.getLast?_nil, List.dropLast_nil]
-    sl_frame
+    iframe
   · have hslot := bufferInv_get (i := contents.length - 1) hInv (by omega)
     simp only [hslot, join_map_some]
     have hlastValue : contents[contents.length - 1]? = contents.getLast? := by
       exact List.getLast?_eq_getElem?.symm
     rw [hlastValue]
     have hnewInv := bufferInv_pop hInv
-    sl_frame
+    iframe
 
 /-! ## Deallocation -/
 
@@ -332,7 +331,7 @@ theorem pop.spec (v : ResizableVec α) (contents : List α) (cap : Nat) :
 theorem free.spec (v : ResizableVec α) (contents : List α) (cap : Nat) :
     ⦃ owns v contents cap ⦄ free v ⦃⇓ emp⦄ := by
   unfold free
-  sl_pull
+  iintro
   step*
 
 end PulseResizableVec
