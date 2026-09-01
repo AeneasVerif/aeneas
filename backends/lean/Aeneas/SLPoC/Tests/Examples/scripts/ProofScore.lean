@@ -20,12 +20,12 @@ writes `Aeneas/SLPoC/Tests/Examples/reports/proof-score.html`.
 
 The ideal proof of a triple never handles the separation logic manually: it
 unfolds the program and uses `step` or `step*`, with
-pure reasoning (`obtain`, `have`, `simp`, …) and `sl_pull` in between, and one
+pure reasoning (`obtain`, `have`, `simp`, …) and `iintro` in between, and one
 such block per branch of the program:
 
 ```lean
 unfold f
-sl_pull ⟨h, _⟩
+iintro ⟨h, _⟩
 obtain rfl : … := …
 step*
 split
@@ -40,11 +40,11 @@ is ideal when none of its steps handles the separation logic by hand, and the
 score of a file is the fraction of its spots that are ideal.
 
 A step handles the separation logic by hand when it is one of the manual
-tactics (`sl_frame`, `sl_change`, `sl_pull_entail`, `sl_simpl`, `sl_app`,
-`sl_conseq`, …), or when it mentions separation-logic vocabulary: a connective
+tactics (`iframe`, `irewrite`, `iintro_entail`, `isimpl`, `wp_apply`,
+`wp_mono`, …), or when it mentions separation-logic vocabulary: a connective
 (`∗`, `↦`, `⊢`, `-∗`, `emp`, `iprop(…)`), or a lemma or definition whose
-statement is about `SLProp` (`unfold wellFormed`, `simp [nodes_snoc]`,
-`exact triple_pure …`).  `step`, `step*`, and `sl_pull`
+statement is about `IProp` (`unfold wellFormed`, `simp [nodes_snoc]`,
+`exact triple_pure …`).  `step`, `step*`, and `iintro`
 are the automation itself and are free; so is any pure reasoning.  A
 `step with some.spec` is not: explicitly naming any declaration whose
 statement is about a triple steers automation manually.  A local hypothesis such
@@ -91,13 +91,13 @@ open Lean Elab
 /-- Tokens that only occur in a separation-logic statement. -/
 def slAtoms : Array String :=
   #["∗", "∗+", "↦", "⊢", "⊢+", "⊣⊢", "-∗", "-∗+", "iprop(", "⌜", "⌝",
-    "emp", "∀ˢ", "⦃", "⦄"]
+    "emp", "∀", "⦃", "⦄"]
 
 /-- Last components of the constants at the core of the logic.  A declaration
 whose statement mentions one of them is a separation-logic declaration. -/
 def slCoreNames : Array String :=
-  #["SLProp", "SLPre", "SLPost", "himpl", "qimpl", "hequiv", "hempty", "hpure",
-    "hsingle", "hstar", "hexists", "hforall", "hwand", "qstar", "qwand",
+  #["IProp", "IPre", "IPost", "Entails", "postEntails", "BiEntails", "emp", "ipure",
+    "pointsTo", "sep", "iexists", "iforall", "wand", "postSep", "postWand",
     "triple", "Wp", "theta"]
 
 /-- The `⦃ P ⦄ m ⦃⇓ v => Q ⦄` notations of `ST.lean`: a declaration that uses one
@@ -108,17 +108,17 @@ def specSyntaxKinds : Array Name :=
 
 /-- Simp sets that configure the automation: tuning them inside a proof is
 separation-logic work too. -/
-def slAttrNames : Array String := #["sl_simps", "step_simps", "step_post_simps"]
+def slAttrNames : Array String := #["iris_simps", "step_simps", "step_post_simps"]
 
 /-- Tactics that handle the separation logic by hand. -/
 def manualTactics : Array String :=
-  #["sl_frame", "sl_simpl", "sl_pull_entail", "sl_change", "sl_app",
-    "sl_val", "sl_conseq", "sl_pull_step", "sl_pull_keep", "sl_pull_keep_step",
-    "sl_norm", "sl_pull_shallow"]
+  #["iframe", "isimpl", "iintro_entail", "irewrite", "wp_apply",
+    "wp_pures", "wp_mono", "iintro_step", "iintro_keep", "iintro_keep_step",
+    "isimp", "iintro_shallow"]
 
 /-- Tactics that *are* the automation: the ideal proof is made of these. -/
 def idealTactics : Array String :=
-  #["step", "step*", "sl_pull"]
+  #["step", "step*", "iintro"]
 
 /-- Combinators that do not split the goal: like `<;>`, what they run belongs to
 the block that runs them, not to a block of its own. -/
@@ -228,7 +228,7 @@ structure ParsedDecl where
   signature? : Option Syntax
   /-- The proof, i.e. everything after `:=`. -/
   value? : Option Syntax
-  /-- Whether this is an `abbrev`; its value may reveal an aliased `SLProp`. -/
+  /-- Whether this is an `abbrev`; its value may reveal an aliased `IProp`. -/
   isAbbrev : Bool := false
   /-- Namespace the declaration is written in. -/
   currNamespace : Name
@@ -1038,7 +1038,7 @@ def renderReport (files : Array FileScore) : String := Id.run do
     <code>backends/lean</code>.  A <em>spot</em> is one \
     straight-line block of a proof: the block before the first branch, then one per branch body, \
     recursively.  A spot is ideal when it steers the separation logic nowhere by hand — only \
-    <code>step</code>, <code>sl_pull</code>, and pure reasoning.  The code below is the \
+    <code>step</code>, <code>iintro</code>, and pure reasoning.  The code below is the \
     spot's own, with the nested blocks elided as <span class='elided'>…</span> because they are \
     spots of their own, and without the comments.  See the module docstring of \
     <code>Aeneas/SLPoC/Tests/Examples/scripts/ProofScore.lean</code> for the details.</p>"
@@ -1047,7 +1047,7 @@ def renderReport (files : Array FileScore) : String := Id.run do
     <li>manual: {codeList manualTactics};</li>\
     <li>manual: any other step mentioning a separation-logic connective \
     ({codeList slAtoms}), a simp set of the automation ({codeList slAttrNames}), or a \
-    declaration whose statement is about <code>SLProp</code>.</li></ul>"
+    declaration whose statement is about <code>IProp</code>.</li></ul>"
   out := out ++ "<div class='score-example'><strong>One branching proof, split into \
     3 spots</strong><div class='example-proof'>\
     <div class='example-spot'><span class='spot-label'>Spot 1 — ideal</span>\
@@ -1055,11 +1055,11 @@ def renderReport (files : Array FileScore) : String := Id.run do
     <div class='example-spot'><span class='spot-label'>Spot 2 — ideal</span>\
     <pre><code>· have h : n = n := rfl\n  simp only [h]\n  step*</code></pre></div>\
     <div class='example-spot notideal'><span class='spot-label'>Spot 3 — not ideal</span>\
-    <pre><code>· sl_change h\n  step*</code></pre></div></div>\
+    <pre><code>· irewrite h\n  step*</code></pre></div></div>\
     The prefix before <code>split</code> is one spot, and each branch is another: \
     <strong>3 spots total</strong>. <strong>Pure reasoning is allowed:</strong> the \
     <code>have</code> and <code>simp</code> in Spot 2 do not lower its score. The manual \
-    <code>sl_change</code> makes Spot 3 nonideal, giving a spot score of \
+    <code>irewrite</code> makes Spot 3 nonideal, giving a spot score of \
     <strong>2 / 3 = 66.7%</strong>; the whole proof is not an ideal proof.</div>"
   out := out ++ "<h2>Summary</h2><table class='summary-table'><thead><tr>\
     <th>File</th><th>Triples</th>\

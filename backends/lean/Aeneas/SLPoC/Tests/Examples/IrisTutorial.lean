@@ -2,15 +2,14 @@ import Aeneas.SLPoC.RustHeap
 
 namespace Aeneas.SLPoC
 
-open scoped SepLogic
 
 namespace IrisTutorial
 
-def aand (P Q : SLProp) : SLProp :=
-  hforall fun b : Bool => if b then P else Q
+def aand (P Q : IProp) : IProp :=
+  iforall fun b : Bool => if b then P else Q
 
-def aor (P Q : SLProp) : SLProp :=
-  hexists fun b : Bool => if b then P else Q
+def aor (P Q : IProp) : IProp :=
+  iexists fun b : Bool => if b then P else Q
 
 infixr:36 " ∧ₐ " => aand
 infixr:35 " ∨ₐ " => aor
@@ -19,112 +18,109 @@ namespace Basics
 
 /- The intentionally failing connective-scope example was omitted; `or_elim` exposes the garbage that Iris discards implicitly. -/
 
-def and_success (P Q : SLProp) : SLProp :=
+def and_success (P Q : IProp) : IProp :=
   P ∧ₐ Q
 
-theorem asm (P : SLProp) : P ⊢ P := by
-  sl_frame
+theorem asm (P : IProp) : P ⊢ P := by
+  iframe
 
-theorem sep_comm (P Q : SLProp) : P ∗ Q ⊢ Q ∗ P := by
-  sl_frame
+theorem sep_comm (P Q : IProp) : P ∗ Q ⊢ Q ∗ P := by
+  iframe
 
-theorem modus_ponens (P Q : SLProp) :
+theorem modus_ponens (P Q : IProp) :
     emp ⊢ P -∗ (P -∗ Q) -∗ Q := by
-  apply hwand_intro
-  apply hwand_intro
-  sl_change (hwand_cancel P Q)
-  sl_frame
+  apply wand_intro
+  apply wand_intro
+  irewrite (wand_cancel P Q)
+  iframe
 
-theorem sep_assoc_1 (P Q R : SLProp) :
+theorem sep_assoc_1 (P Q R : IProp) :
     P ∗ Q ∗ R ⊢ (P ∗ Q) ∗ R := by
-  sl_frame
+  iframe
 
-theorem sep_comm_v2 (P Q : SLProp) : P ∗ Q ⊢ Q ∗ P :=
+theorem sep_comm_v2 (P Q : IProp) : P ∗ Q ⊢ Q ∗ P :=
   sep_comm P Q
 
-theorem wand_adj_1 (P Q R : SLProp) :
+theorem wand_adj_1 (P Q R : IProp) :
     (P -∗ Q -∗ R) ∗ P ∗ Q ⊢ R := by
-  sl_change (hwand_cancel P (Q -∗ R))
-  sl_change (hwand_cancel Q R)
-  sl_frame
+  irewrite (wand_cancel P (Q -∗ R))
+  irewrite (wand_cancel Q R)
+  iframe
 
-theorem wand_adj (P Q R : SLProp) :
+theorem wand_adj (P Q R : IProp) :
     (P -∗ Q -∗ R) ⊣⊢ (P ∗ Q -∗ R) := by
   have hForward : (P -∗ Q -∗ R) ⊢ (P ∗ Q -∗ R) :=
-    hwand_intro (by
-      sl_change (hwand_cancel P (Q -∗ R))
-      sl_change (hwand_cancel Q R)
-      sl_frame)
+    wand_intro (by
+      irewrite (wand_cancel P (Q -∗ R))
+      irewrite (wand_cancel Q R)
+      iframe)
   have hBackward : (P ∗ Q -∗ R) ⊢ (P -∗ Q -∗ R) := by
-    apply hwand_intro
-    apply hwand_intro
-    sl_change (hwand_cancel (P ∗ Q) R)
-    sl_frame
-  intro h
-  exact ⟨hForward h, hBackward h⟩
+    apply wand_intro
+    apply wand_intro
+    irewrite (wand_cancel (P ∗ Q) R)
+    iframe
+  exact ⟨hForward, hBackward⟩
 
-theorem or_comm (P Q : SLProp) : Q ∨ₐ P ⊢ P ∨ₐ Q := by
+theorem or_comm (P Q : IProp) : Q ∨ₐ P ⊢ P ∨ₐ Q := by
   unfold aor
-  sl_pull_entail
+  iintro_entail
   cases x
-  · refine himpl_hexists_r true ?_
+  · refine entails_exists_r true ?_
     simp
-    sl_frame
-  · refine himpl_hexists_r false ?_
+    iframe
+  · refine entails_exists_r false ?_
     simp
-    sl_frame
+    iframe
 
-theorem or_elim (P Q R : SLProp) :
+theorem or_elim (P Q R : IProp) :
     (P -∗ R) ∗ (Q -∗ R) ∗ (P ∨ₐ Q) ⊢ R := by
   unfold aor
-  sl_pull_entail
+  iintro_entail
   cases x
   · simp
-    sl_change (hwand_cancel Q R)
-    sl_frame
+    irewrite (wand_cancel Q R)
+    iframe
   · simp
-    sl_change (hwand_cancel P R)
-    sl_frame
+    irewrite (wand_cancel P R)
+    iframe
 
-theorem sep_or_distr (P Q R : SLProp) :
+theorem sep_or_distr (P Q R : IProp) :
     P ∗ (Q ∨ₐ R) ⊣⊢ (P ∗ Q) ∨ₐ (P ∗ R) := by
   have hForward : P ∗ (Q ∨ₐ R) ⊢ (P ∗ Q) ∨ₐ (P ∗ R) := by
     unfold aor
-    sl_pull_entail
+    iintro_entail
     cases x
-    · refine himpl_hexists_r false ?_
+    · refine entails_exists_r false ?_
       simp
-      sl_frame
-    · refine himpl_hexists_r true ?_
+      iframe
+    · refine entails_exists_r true ?_
       simp
-      sl_frame
+      iframe
   have hBackward : (P ∗ Q) ∨ₐ (P ∗ R) ⊢ P ∗ (Q ∨ₐ R) := by
     unfold aor
-    sl_pull_entail
+    iintro_entail
     cases x
-    · refine himpl_hexists_r false ?_
+    · refine entails_exists_r false ?_
       simp
-      sl_frame
-    · refine himpl_hexists_r true ?_
+      iframe
+    · refine entails_exists_r true ?_
       simp
-      sl_frame
-  intro h
-  exact ⟨hForward h, hBackward h⟩
+      iframe
+  exact ⟨hForward, hBackward⟩
 
-theorem sep_ex_distr {A : Sort _} (P : SLProp) (Φ : A → SLProp) :
-    P ∗ hexists Φ ⊣⊢ hexists fun x => P ∗ Φ x := by
-  have hForward : P ∗ hexists Φ ⊢ hexists fun x => P ∗ Φ x := by
-    sl_frame
-  have hBackward : hexists (fun x => P ∗ Φ x) ⊢ P ∗ hexists Φ := by
-    sl_frame
-  intro h
-  exact ⟨hForward h, hBackward h⟩
+theorem sep_ex_distr {A : Sort _} (P : IProp) (Φ : A → IProp) :
+    P ∗ iexists Φ ⊣⊢ iexists fun x => P ∗ Φ x := by
+  have hForward : P ∗ iexists Φ ⊢ iexists fun x => P ∗ Φ x := by
+    iframe
+  have hBackward : iexists (fun x => P ∗ Φ x) ⊢ P ∗ iexists Φ := by
+    iframe
+  exact ⟨hForward, hBackward⟩
 
-theorem sep_all_distr {A : Sort _} (P Q : A → SLProp) :
-    hforall P ∗ hforall Q ⊢ hforall fun x => P x ∗ Q x := by
-  apply hforall_intro
+theorem sep_all_distr {A : Sort _} (P Q : A → IProp) :
+    iforall P ∗ iforall Q ⊢ iforall fun x => P x ∗ Q x := by
+  apply forall_intro
   intro x
-  exact hstar_mono (hforall_specialize x) (hforall_specialize x)
+  exact sep_mono (forall_specialize x) (forall_specialize x)
 
 end Basics
 
@@ -135,46 +131,46 @@ to be absorbed by an explicit affine top either: `abstr_not_pure` is stated
 exactly as Iris states it. -/
 
 theorem asm_pure (φ : Prop) : ⌜φ⌝ ⊢ ⌜φ⌝ := by
-  sl_frame
+  iframe
 
 theorem eq_5_5 : emp ⊢ ⌜5 = 5⌝ := by
-  sl_frame
+  iframe
 
-theorem eq_elm {A : Type} (P : A → SLProp) (x y : A) :
+theorem eq_elm {A : Type} (P : A → IProp) (x y : A) :
     ⌜x = y⌝ ∗ P x ⊢ P y := by
-  sl_pull_entail
+  iintro_entail
   subst y
-  sl_frame
+  iframe
 
 theorem true_intro : emp ⊢ ⌜True⌝ := by
-  sl_frame
+  iframe
 
 theorem and_pure : emp ⊢ (⌜5 = 5⌝ ∧ₐ ⌜8 = 8⌝) := by
   unfold aand
-  apply hforall_intro
+  apply forall_intro
   intro b
-  cases b <;> simp <;> sl_frame
+  cases b <;> simp <;> iframe
 
 theorem sep_pure : emp ⊢ ⌜5 = 5⌝ ∗ ⌜8 = 8⌝ := by
-  sl_frame
+  iframe
 
 theorem wand_pure {A : Type} (x y : A) :
     ⌜x = y⌝ ⊢ ⌜y = x⌝ := by
-  sl_pull_entail
+  iintro_entail
   subst y
-  sl_frame
+  iframe
 
-theorem abstr_not_pure (P : SLProp) :
+theorem abstr_not_pure (P : IProp) :
     P ⊢ ⌜8 = 8⌝ := by
-  sl_frame
+  iframe
 
 theorem pure_adj1 (φ : Prop) (hφ : φ) : emp ⊢ ⌜φ⌝ := by
-  sl_frame
+  iframe
 
-theorem pure_adj2 (P : SLProp) :
+theorem pure_adj2 (P : IProp) :
     emp ⊢ ⌜emp ⊢ P⌝ -∗ P := by
-  apply hwand_intro
-  sl_pull_entail
+  apply wand_intro
+  iintro_entail
   exact h
 
 end Pure
@@ -218,7 +214,7 @@ theorem prog_spec :
 
 theorem pt_not_dupl {α : Type} (p : Ptr α) (v v' : α) :
     p ↦ v ∗ p ↦ v' ⊢ ⌜False⌝ :=
-  hsingle_exclusive p v v'
+  pointsTo_exclusive p v v'
 
 def compareAndSetSequential (p : Ptr Int) (expected replacement : Int) :
     St Bool := do
@@ -360,18 +356,18 @@ structure Node (α : Type) where
 abbrev Link (α : Type) :=
   Option (Ptr (Node α))
 
-def isList : Link α → List α → SLProp
+def isList : Link α → List α → IProp
   | none, [] => emp
   | some p, x :: xs =>
-      hexists fun next => iprop(p ↦ { value := x, next := next } ∗ isList next xs)
+      iexists fun next => iprop(p ↦ { value := x, next := next } ∗ isList next xs)
   | _, _ => ⌜False⌝
 
 theorem isList_cons (p : Ptr (Node α)) (x : α) (next : Link α) (xs : List α) :
     p ↦ { value := x, next := next } ∗ isList next xs ⊢
       isList (some p) (x :: xs) := by
-  change _ ⊢ hexists fun next' =>
+  change _ ⊢ iexists fun next' =>
     iprop(p ↦ { value := x, next := next' } ∗ isList next' xs)
-  exact himpl_hexists_r next (himpl_refl _)
+  exact entails_exists_r next (entails_refl _)
 
 def inc : List Int → Link Int → St Unit
   | [], _ => pure ()
@@ -391,17 +387,17 @@ theorem inc_spec (l : Link Int) (xs : List Int) :
       · simp only [isList, inc, List.map_nil]
         step*
       · simp only [isList]
-        sl_pull
+        iintro
         contradiction
   | cons x xs ih =>
       cases l with
       | none =>
           simp only [isList]
-          sl_pull
+          iintro
           contradiction
       | some p =>
           simp only [isList, inc, List.map_cons]
-          sl_pull
+          iintro
           step*
 
 def append : List α → Link α → Link α → St (Link α)
@@ -423,17 +419,17 @@ theorem append_spec (l₁ l₂ : Link α) (xs ys : List α) :
       · simp only [isList, append, List.nil_append]
         step*
       · simp only [isList]
-        sl_pull
+        iintro
         contradiction
   | cons x xs ih =>
       cases l₁ with
       | none =>
           simp only [isList]
-          sl_pull
+          iintro
           contradiction
       | some p =>
           simp only [isList, append, List.cons_append]
-          sl_pull
+          iintro
           step*
 
 def reverseAppend : List α → Link α → Link α → St (Link α)
@@ -454,21 +450,21 @@ theorem reverse_append_spec (l acc : Link α) (xs ys : List α) :
       · simp only [isList, reverseAppend, List.reverse_nil, List.nil_append]
         step*
       · simp only [isList]
-        sl_pull
+        iintro
         contradiction
   | cons x xs ih =>
       cases l with
       | none =>
           simp only [isList]
-          sl_pull
+          iintro
           contradiction
       | some p =>
           simp only [isList, reverseAppend, List.reverse_cons, List.append_assoc,
             List.singleton_append]
-          sl_pull next
+          iintro next
           step* 2
           step with ih (l := next) (acc := some p) (ys := x :: ys)
-          sl_frame
+          iframe
 
 def reverse (xs : List α) (l : Link α) : St (Link α) :=
   reverseAppend xs l none
@@ -478,9 +474,9 @@ theorem reverse_spec (l : Link α) (xs : List α) :
       ⦃⇓ result => isList result xs.reverse⦄ := by
   unfold reverse
   step with reverse_append_spec l none xs []
-  sl_frame
+  iframe
 
-def bigSep (P : α → SLProp) : List α → SLProp
+def bigSep (P : α → IProp) : List α → IProp
   | [] => emp
   | x :: xs => iprop(P x ∗ bigSep P xs)
 
@@ -490,7 +486,7 @@ theorem bigSep_emp (xs : List α) :
   induction xs with
   | nil => rfl
   | cons x xs ih =>
-      simp only [bigSep, ih, hstar_hempty_l_eq]
+      simp only [bigSep, ih, sep_emp_l_eq]
 
 def foldRight (f : α → β → St β) : List α → Link α → β → St β
   | [], _, acc => pure acc
@@ -501,7 +497,7 @@ def foldRight (f : α → β → St β) : List α → Link α → β → St β
       f node.value result
 
 @[step]
-theorem fold_right_spec (P : α → SLProp) (I : List α → β → SLProp)
+theorem fold_right_spec (P : α → IProp) (I : List α → β → IProp)
     (f : α → β → St β) (acc : β) (l : Link α) (xs : List α)
     (hf : ∀ x acc' ys,
       ⦃ P x ∗ I ys acc' ⦄ f x acc'
@@ -514,17 +510,17 @@ theorem fold_right_spec (P : α → SLProp) (I : List α → β → SLProp)
       · simp only [isList, bigSep, foldRight]
         step*
       · simp only [isList]
-        sl_pull
+        iintro
         contradiction
   | cons x xs ih =>
       cases l with
       | none =>
           simp only [isList]
-          sl_pull
+          iintro
           contradiction
       | some p =>
           simp only [isList, bigSep, foldRight]
-          sl_pull
+          iintro
           step*
 
 def sumList (xs : List Int) (l : Link Int) : St Int :=
@@ -545,8 +541,8 @@ theorem sum_list_spec (l : Link Int) (xs : List Int) :
     (fold_right_spec (fun _ : Int => emp)
       (fun ys acc => ⌜acc = ys.foldr (· + ·) 0⌝)
       (fun x acc => pure (x + acc)) 0 l xs hf)
-  · sl_frame
-  · sl_frame
+  · iframe
+  · iframe
 
 end LinkedList
 

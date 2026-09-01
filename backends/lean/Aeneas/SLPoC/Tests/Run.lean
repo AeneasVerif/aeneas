@@ -11,7 +11,6 @@ predicts, and that the proof it carries is available without running anything.
 
 namespace Aeneas.SLPoC
 
-open scoped SepLogic
 
 /-! ## A closed program -/
 
