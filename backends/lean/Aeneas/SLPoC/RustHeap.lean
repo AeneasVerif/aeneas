@@ -93,7 +93,8 @@ theorem contains_of_sub {p : Ptr α} {value : α} {h : Heap}
 
 /-- Two disjoint heaps cannot both own the cell `p`. -/
 theorem disjoint_contains_false {h₁ h₂ : Heap} {p : Ptr α}
-    (hDisjoint : Finmap.Disjoint h₁ h₂) (hContains₁ : contains h₁ p)
+    (hDisjoint : PartialCommMonoid.Compatible h₁ h₂)
+    (hContains₁ : contains h₁ p)
     (hContains₂ : contains h₂ p) : False :=
   _root_.Aeneas.SLPoC.disjoint_contains_false hDisjoint hContains₁ hContains₂
 
@@ -110,28 +111,31 @@ theorem update_union_left {h₁ h₂ : Heap} (p : Ptr α) (value : α)
   _root_.Aeneas.SLPoC.update_union_left p value hContains
 
 theorem free_union_left {h₁ h₂ : Heap} (p : Ptr α)
-    (hDisjoint : Finmap.Disjoint h₁ h₂) (hContains : contains h₁ p) :
+    (hDisjoint : PartialCommMonoid.Compatible h₁ h₂)
+    (hContains : contains h₁ p) :
     free p (h₁ ∪ h₂) (contains_union_left hContains) =
       free p h₁ hContains ∪ h₂ :=
   _root_.Aeneas.SLPoC.free_union_left p hDisjoint hContains
 
 theorem fresh_frame {p : Ptr α} {value : α} {h₁ h₂ h : Heap}
-    (hDisjoint : Finmap.Disjoint h₁ h₂)
+    (hDisjoint : PartialCommMonoid.Compatible h₁ h₂)
     (hFresh : fresh (h₁ ∪ h₂) p value h) :
     ∃ h₁',
       fresh h₁ p value h₁' ∧
-      Finmap.Disjoint h₁' h₂ ∧
+      PartialCommMonoid.Compatible h₁' h₂ ∧
       h = h₁' ∪ h₂ :=
   _root_.Aeneas.SLPoC.fresh_frame hDisjoint hFresh
 
 theorem disjoint_update_left {p : Ptr α} {value : α} {h₁ h₂ : Heap}
-    (hDisjoint : Finmap.Disjoint h₁ h₂) (hContains : contains h₁ p) :
-    Finmap.Disjoint (update p value h₁ hContains) h₂ :=
+    (hDisjoint : PartialCommMonoid.Compatible h₁ h₂)
+    (hContains : contains h₁ p) :
+    PartialCommMonoid.Compatible (update p value h₁ hContains) h₂ :=
   _root_.Aeneas.SLPoC.disjoint_update_left hDisjoint hContains
 
 theorem disjoint_free_left {p : Ptr α} {h₁ h₂ : Heap}
-    (hDisjoint : Finmap.Disjoint h₁ h₂) (hContains : contains h₁ p) :
-    Finmap.Disjoint (free p h₁ hContains) h₂ :=
+    (hDisjoint : PartialCommMonoid.Compatible h₁ h₂)
+    (hContains : contains h₁ p) :
+    PartialCommMonoid.Compatible (free p h₁ hContains) h₂ :=
   _root_.Aeneas.SLPoC.disjoint_free_left hDisjoint hContains
 
 /-! ## The operations on the heap of a single cell
@@ -145,9 +149,11 @@ theorem fresh_empty_eq_singleton {p : Ptr α} {value : α} {h : Heap}
 
 theorem fresh_eq_singleton_union {p : Ptr α} {value : α} {h h' : Heap}
     (hFresh : fresh h p value h') :
-    Finmap.Disjoint (singleton p value) h ∧ h' = singleton p value ∪ h := by
-  have hUnion : empty ∪ h = h := by simp [empty]
-  have hDisjointEmpty : Finmap.Disjoint empty h := Finmap.disjoint_empty h
+    PartialCommMonoid.Compatible (singleton p value) h ∧
+      h' = singleton p value ∪ h := by
+  have hUnion : empty ∪ h = h := Heap.empty_union h
+  have hDisjointEmpty : PartialCommMonoid.Compatible empty h :=
+    PartialCommMonoid.compatible_empty_left h
   have hFreshUnion : fresh (empty ∪ h) p value h' := by rw [hUnion]; exact hFresh
   obtain ⟨h₁, hFresh₁, hDisjoint, rfl⟩ := fresh_frame hDisjointEmpty hFreshUnion
   obtain rfl := fresh_empty_eq_singleton hFresh₁
@@ -159,7 +165,8 @@ theorem contains_singleton (p : Ptr α) (value : α) :
 
 /-- Two cells at different pointers are disjoint. -/
 theorem disjoint_singleton {p q : Ptr α} {value₁ value₂ : α} (hNe : p ≠ q) :
-    Finmap.Disjoint (singleton p value₁) (singleton q value₂) :=
+    PartialCommMonoid.Compatible
+      (singleton p value₁) (singleton q value₂) :=
   _root_.Aeneas.SLPoC.disjoint_singleton hNe
 
 theorem read_singleton (p : Ptr α) (value : α)
@@ -202,12 +209,14 @@ theorem alloc.spec (value : α) :
   obtain ⟨hDisjointFresh, hFreshHeap⟩ :=
     Ptr.fresh_eq_singleton_union hFresh
   obtain ⟨hDisjointFreshH, hDisjointFreshFrame⟩ :=
-    (Finmap.disjoint_union_right (Ptr.singleton p value) h frame).mp
-      hDisjointFresh
+    (PartialCommMonoid.compatible_assoc
+      (Ptr.singleton p value) h frame).mpr
+        ⟨hDisjoint, hDisjointFresh⟩
   exact ⟨trivial, Ptr.singleton p value ∪ h,
-    (Finmap.disjoint_union_left (Ptr.singleton p value) h frame).mpr
-      ⟨hDisjointFreshFrame, hDisjoint⟩,
-    hFreshHeap.trans Finmap.union_assoc.symm,
+    hDisjointFreshFrame,
+    hFreshHeap.trans
+      (PartialCommMonoid.union_assoc
+        hDisjointFreshH hDisjointFreshFrame).symm,
     Heap.Sub.union_left hDisjointFreshH⟩
 
 def read {α : Type} (p : Ptr α) : St α :=
@@ -253,7 +262,8 @@ theorem update.spec (p : Ptr α) (oldValue newValue : α) :
     simpa only [Ptr.update_union_left] using
       Ptr.update_union_left (h₂ := frame) p newValue hContains
   have hDisjointUpdated :
-      Finmap.Disjoint (Ptr.update p newValue h hContains) frame :=
+      PartialCommMonoid.Compatible
+        (Ptr.update p newValue h hContains) frame :=
     Ptr.disjoint_update_left hDisjoint hContains
   obtain ⟨rest, hDisjointRest, rfl⟩ := hSingle
   have hContainsCell := Ptr.contains_singleton p oldValue
@@ -262,7 +272,8 @@ theorem update.spec (p : Ptr α) (oldValue newValue : α) :
       Ptr.update p newValue (Ptr.singleton p oldValue ∪ rest) hContainsUnion =
         Ptr.singleton p newValue ∪ rest := by
     rw [Ptr.update_union_left p newValue hContainsCell, Ptr.update_singleton]
-  have hDisjointRest' : Finmap.Disjoint (Ptr.singleton p newValue) rest := by
+  have hDisjointRest' :
+      PartialCommMonoid.Compatible (Ptr.singleton p newValue) rest := by
     have := Ptr.disjoint_update_left (value := newValue) hDisjointRest hContainsCell
     rwa [Ptr.update_singleton] at this
   refine ⟨hContainsFrame,
