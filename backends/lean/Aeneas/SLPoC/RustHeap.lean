@@ -192,7 +192,14 @@ end Ptr
 
 def guardedModify {α : Type} (pre : Heap → Prop)
     (modify : (h : Heap) → pre h → α × Heap) : St α :=
-  FFree.trigger (.GuardedModify pre modify)
+  trigger ⟨α, pre, modify⟩
+
+/-- The specification of a guarded modification is what its denotation says. -/
+theorem triple_guardedModify {α : Type} {pre : Heap → Prop}
+    {modify : (h : Heap) → pre h → α × Heap} {P : IPre} {Q : IPost α}
+    (hWp : P ⊢ theta_ev ⟨α, pre, modify⟩ Q) :
+    triple P (guardedModify pre modify) Q :=
+  triple_trigger hWp
 
 def alloc {α : Type} (value : α) : St (Ptr α) :=
   guardedModify (fun _ => True) fun h _ =>
@@ -201,7 +208,7 @@ def alloc {α : Type} (value : α) : St (Ptr α) :=
 @[step]
 theorem alloc.spec (value : α) :
     ⦃ emp ⦄ alloc value ⦃⇓ p => p ↦ value⦄ := by
-  apply (triple_iff _ _ _).mpr
+  apply triple_guardedModify
   intro h _ frame hDisjoint
   let p := Ptr.freshPtr α (h ∪ frame)
   have hFresh := Ptr.fresh_freshPtr value (h ∪ frame)
@@ -226,7 +233,7 @@ def read {α : Type} (p : Ptr α) : St α :=
 theorem read.spec (p : Ptr α) (value : α) :
     ⦃ p ↦ value ⦄ read p
       ⦃⇓ result => ⌜result = value⌝ ∗ p ↦ value⦄ := by
-  apply (triple_iff _ _ _).mpr
+  apply triple_guardedModify
   intro h hSingle
   have hContains := Ptr.contains_of_sub hSingle
   intro frame hDisjoint
@@ -250,7 +257,7 @@ def update {α : Type} (p : Ptr α) (value : α) : St Unit :=
 @[step]
 theorem update.spec (p : Ptr α) (oldValue newValue : α) :
     ⦃ p ↦ oldValue ⦄ update p newValue ⦃⇓ p ↦ newValue⦄ := by
-  apply (triple_iff _ _ _).mpr
+  apply triple_guardedModify
   intro h hSingle
   have hContains := Ptr.contains_of_sub hSingle
   intro frame hDisjoint
@@ -292,7 +299,7 @@ def free {α : Type} (p : Ptr α) : St Unit :=
 @[step]
 theorem free.spec (p : Ptr α) (value : α) :
     ⦃ p ↦ value ⦄ free p ⦃⇓ emp⦄ := by
-  apply (triple_iff _ _ _).mpr
+  apply triple_guardedModify
   intro h hSingle
   have hContains := Ptr.contains_of_sub hSingle
   intro frame hDisjoint
