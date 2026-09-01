@@ -4,6 +4,9 @@ import Aeneas.Tactic.Step.Init
 import Aeneas.Std.Array.Core
 import Aeneas.Std.Core.Default
 
+-- Rust-mirrored names legitimately repeat a namespace component.
+set_option linter.dupNamespace false
+
 namespace Aeneas.Std
 
 open Result Error WP
@@ -220,8 +223,9 @@ theorem Array.update_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (
   v.update i x ⦃ nv => nv = v.set i x ⦄
   := by
   simp only [update, set]
-  simp at *
-  split <;> simp_all
+  split
+  · simp_all
+  · exact Subtype.ext rfl
 
 def Array.index_mut_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) :
   Result (α × (α -> Array α n)) := do
@@ -239,25 +243,22 @@ theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i:
 @[simp]
 theorem Array.set_getElem!_eq {α} {n : Usize} [Inhabited α] (x : Array α n) (i : Usize) :
   x.set i (x.val[i.val]!) = x := by
-  have := @List.set_getElem_self _ x.val i.val
-  simp only [Array, Subtype.ext_iff, set_val_eq, List.set_getElem!]
+  apply Subtype.ext
+  simp only [set_val_eq]
+  simp_lists
 
 @[simp]
 theorem Array.set_getElem_eq {α} {n : Usize} (x : Array α n) (i : Usize) (h : i.val < x.length) :
   x.set i x[i] = x := by
-  have h' : i.val < x.val.length := by
-    simpa using h
-  have hself : x.val.set i.val x.val[i.val] = x.val :=
-    List.set_getElem_self (as := x.val) (i := i.val) (h := h')
-  simp only [Array, Subtype.ext_iff, set_val_eq] at hself ⊢
-  exact hself
+  apply Subtype.ext
+  simp only [set_val_eq, getElem_Usize_eq]
+  simp_lists
 
 @[simp↓, simp_lists_safe↓]
 theorem Array.getElem_set_eq {α} {n : Usize} (v : Array α n) (i : Usize) (x : α) (h : i.val < (v.set i x).length) :
   (v.set i x)[i]'h = x := by
-  cases v
-  unfold set getElem instGetElemArrayUsizeLtNatValLengthValListEq
-  simp only [List.getElem_set_self]
+  simp only [getElem_Usize_eq, set_val_eq]
+  simp_lists
 
 @[simp↓, simp_lists_safe↓]
 theorem Array.getElem_set_eq' {α} {n : Usize} (v : Array α n) (i j : Usize) (x : α) (h : j.val < (v.set i x).length)
@@ -269,28 +270,26 @@ theorem Array.getElem_set_eq' {α} {n : Usize} (v : Array α n) (i j : Usize) (x
 theorem Array.getElem_set_neq {α} {n : Usize} (v : Array α n) (i j : Usize) (x : α)
   (h : j.val < (v.set i x).length) (h' : i ≠ j) :
   (v.set i x)[j]'h = v[j] := by
-  cases v
-  unfold set getElem instGetElemArrayUsizeLtNatValLengthValListEq
-  simp only [ne_eq, UScalar.neq_to_neq_val] at *
-  simp_lists [List.getElem_set_ne]
+  simp only [getElem_Usize_eq, set_val_eq]
+  simp only [ne_eq, UScalar.neq_to_neq_val] at h'
+  simp_lists
 
 /-- Small helper (this function doesn't model a specific Rust function) -/
 def Array.clone {α : Type u} {n : Usize} (clone : α → Result α) (s : Array α n) : Result (Array α n) := do
   let s' ← List.clone clone s.val
   ok ⟨ s', by have:= s'.property; scalar_tac ⟩
 
-theorem Array.clone_length {α : Type u} {n : Usize} (clone : α → Result α) (s s' : Array α n) (h : Array.clone clone s = ok s') :
+theorem Array.clone_length {α : Type u} {n : Usize} (clone : α → Result α) (s s' : Array α n) (_h : Array.clone clone s = ok s') :
   s'.length = s.length := by
-  simp [Array.clone] at h
-  simp [List.clone] at h
-  split at h <;> simp_all
+  scalar_tac
 
 @[step]
 theorem Array.clone_spec {α : Type u} {n : Usize} {clone : α → Result α} {s : Array α n} (h : ∀ x ∈ s.val, clone x = ok x) :
   Array.clone clone s ⦃ s' => s' = s ⦄ := by
   simp only [Array.clone]
-  have ⟨ l', h ⟩ := spec_imp_exists (List.clone_spec h)
-  simp [h]
+  obtain ⟨ l', hcl, hval, _ ⟩ := spec_imp_exists (List.clone_spec h)
+  rw [hcl]
+  exact Subtype.ext hval
 
 @[rust_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone"]
 def core.array.CloneArray.clone
@@ -332,7 +331,8 @@ def Array.setSlice! {α : Type u} {n} (s : Array α n) (i : ℕ) (s' : List α) 
 theorem Array.setSlice!_getElem!_prefix {α} {n} [Inhabited α]
   (s : Array α n) (s' : List α) (i j : ℕ) (h : j < i) :
   (s.setSlice! i s')[j]! = s[j]! := by
-  simp only [Array.setSlice!, Array.getElem!_Nat_eq]
+  simp only [Array.getElem!_Nat_eq]
+  simp only [Array.setSlice!]
   simp_lists
 
 @[simp_lists_safe]
@@ -341,7 +341,8 @@ theorem Array.setSlice!_getElem_prefix {α} {n}
   (s.setSlice! i s')[j] = s[j] := by
   have hj' : j < (s.setSlice! i s').length := by scalar_tac
   have h1 : (s.setSlice! i s')[j]? = s[j]? := by
-    simp only [Array.getElem?_Nat_eq, Array.setSlice!]
+    simp only [Array.getElem?_Nat_eq]
+    simp only [Array.setSlice!]
     simp_lists [List.setSlice!_getElem?_prefix]
   simp only [Array.getElem?_Nat_eq, List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2,
     Option.some.injEq] at h1
@@ -351,7 +352,8 @@ theorem Array.setSlice!_getElem_prefix {α} {n}
 theorem Array.setSlice!_getElem!_middle {α} {n} [Inhabited α]
   (s : Array α n) (s' : List α) (i j : ℕ) (h : i ≤ j ∧ j - i < s'.length ∧ j < s.length) :
   (s.setSlice! i s')[j]! = s'[j - i]! := by
-  simp only [Array.setSlice!, Array.getElem!_Nat_eq]
+  simp only [Array.getElem!_Nat_eq]
+  simp only [Array.setSlice!]
   simp_lists
 
 @[simp_lists_safe]
@@ -362,7 +364,8 @@ theorem Array.setSlice!_getElem_middle {α} {n}
     scalar_tac
   have hji : j - i < s'.length := h.2.1
   have h1 : (s.setSlice! i s')[j]? = s'[j - i]? := by
-    simp only [Array.getElem?_Nat_eq, Array.setSlice!]
+    simp only [Array.getElem?_Nat_eq]
+    simp only [Array.setSlice!]
     simp_lists [List.setSlice!_getElem?_middle]
   simp only [Array.getElem?_Nat_eq, List.getElem?_eq_getElem hj', List.getElem?_eq_getElem hji,
     Option.some.injEq] at h1
@@ -371,7 +374,8 @@ theorem Array.setSlice!_getElem_middle {α} {n}
 theorem Array.setSlice!_getElem!_suffix {α} {n} [Inhabited α]
   (s : Array α n) (s' : List α) (i j : ℕ) (h : i + s'.length ≤ j) :
   (s.setSlice! i s')[j]! = s[j]! := by
-  simp only [Array.setSlice!, Array.getElem!_Nat_eq]
+  simp only [Array.getElem!_Nat_eq]
+  simp only [Array.setSlice!]
   simp_lists
 
 theorem Array.setSlice!_getElem_suffix {α} {n}
@@ -379,7 +383,8 @@ theorem Array.setSlice!_getElem_suffix {α} {n}
   (s.setSlice! i s')[j] = s[j] := by
   have hj' : j < (s.setSlice! i s').length := by scalar_tac
   have h1 : (s.setSlice! i s')[j]? = s[j]? := by
-    simp only [Array.getElem?_Nat_eq, Array.setSlice!]
+    simp only [Array.getElem?_Nat_eq]
+    simp only [Array.setSlice!]
     simp_lists [List.setSlice!_getElem?_suffix]
   simp only [Array.getElem?_Nat_eq, List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2,
     Option.some.injEq] at h1

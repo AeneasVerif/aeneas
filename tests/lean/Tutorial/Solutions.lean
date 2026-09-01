@@ -3,7 +3,7 @@ import Tutorial.Tutorial
 open Aeneas Std Result
 
 local macro_rules
-| `(tactic| get_elem_tactic) => `(tactic| grind)
+| `(tactic| get_elem_tactic) => `(tactic| scalar_tac)
 
 set_option maxHeartbeats 1000000
 
@@ -135,8 +135,17 @@ theorem list_nth_mut1_spec'' {T: Type} [Inhabited T] (l : CList T) (i : U32)
   unfold list_nth_mut1 list_nth_mut1_loop
   /- `step*` repeatedly applies `step`, while doing a case disjunction whenever it
       encounters a branching. Note that one can automatically generate the corresponding
-      proof script by using `step*?`. -/
-  step*
+      proof script by using `step*?`.
+
+      We pass `threadGrindState := false` to sidestep an upstream `grind` bug on Lean
+      4.33.1: with the threaded grind e-graph, `grind`'s contradiction detection
+      false-positives on the `i = 0` base case and emits an ill-typed proof of `False`
+      (`eq_false_of_decide (eagerReduce (Eq.refl false))`, i.e. it claims
+      `decide (0 = 0) = false`) that the kernel (correctly) rejects. Disabling threading
+      falls back to a fresh `grind` per step, which is unaffected. This is not a soundness
+      issue (the kernel catches the bad term); drop the config once `grind` is fixed
+      upstream. -/
+  step* (threadGrindState := false)
   simp
   simp_lists [*]
 

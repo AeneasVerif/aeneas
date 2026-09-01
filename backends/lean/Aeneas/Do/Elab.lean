@@ -36,6 +36,15 @@ instance [Monad m] [MonadQuotation m] : MonadQuotation (ContT r m) where
   getContext := fun k => do let ctx ← MonadQuotation.getContext; k ctx
   withFreshMacroScope x := fun k => withFreshMacroScope (x k)
 
+-- Registered at the root so the option's name is `Aeneas.customDoElab` (not the
+-- namespace-doubled `Aeneas.Do.Aeneas.customDoElab` that `register_option` would
+-- produce inside `namespace Aeneas.Do`, since it prepends the current namespace).
+/-- Option to toggle the new Aeneas `do` elaborator -/
+register_option Aeneas.customDoElab : Bool := {
+    defValue := true
+    descr  := "Use the custom Aeneas `do` elaborator"
+  }
+
 namespace Aeneas
 namespace Do
 
@@ -542,12 +551,6 @@ end
 
 def elabDoSeq (doSeq : TSyntax ``doSeq) : ElabM Expr :=
   getDoElems doSeq >>= fun elems => elabDoSeqCore elems
-
-/-- Option to toggle the new Aeneas `do` elaborator -/
-register_option Aeneas.customDoElab : Bool := {
-    defValue := true
-    descr  := "Use the custom Aeneas `do` elaborator"
-  }
 
 /-- `do`-notation elaborator. Dispatches to the new `ElabM`-based elaborator for
     `Aeneas.Std.Result _` blocks when `Aeneas.newDoElab` is set; otherwise falls

@@ -26,7 +26,7 @@ namespace DspecInduction
 open Lean Elab Term Meta Tactic
 open Utils
 open Lean.Order
-open Std Result
+open _root_.Aeneas.Std Result
 
 theorem curry_admissible (a1 a2 a3) (P : (a1 → a2 → a3) → Prop) [CCPO a3]
   (h : Order.admissible fun (f : (a1 × a2) → a3) => P (fun x y => f (x, y)))
@@ -94,7 +94,7 @@ theorem WP_func_admissible (α β : Type) (arg) (post)
   : Order.admissible fun (f : α → Result β) => WP.dspec (f arg) post := by
   apply Lean.Order.admissible_apply (fun _ fx => WP.dspec fx _)
   apply Lean.Order.admissible_flatOrder
-  simp only [WP.dspec]
+  simp only [WP.dspec, Lean.Order.FlatOrder.mk]
 
 def getParamNames (ty : Expr) : MetaM (Array Name) := do
   forallTelescope ty fun xs _ => do
@@ -186,7 +186,7 @@ elab "dspec_induction" func:ident : tactic => do
 
 namespace Test
 
-open Std Result Aeneas.Step
+open _root_.Aeneas.Std Result Aeneas.Step
 
 def simple_diverge (x : Std.I32) : Result Std.I32 := do
   if x = 0#i32

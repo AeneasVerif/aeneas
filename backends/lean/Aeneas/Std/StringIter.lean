@@ -2,6 +2,9 @@ import Aeneas.Std.String
 import Aeneas.Std.Core.Iter
 import Aeneas.Std.SliceIter
 
+-- Rust-mirrored names legitimately repeat a namespace component.
+set_option linter.dupNamespace false
+
 namespace Aeneas.Std
 
 @[rust_type "core::str::iter::Chars" (body := .opaque)]

@@ -3,6 +3,9 @@ import Aeneas.Std.Scalar.Elab
 import Aeneas.Std.Core.Default
 import Aeneas.Std.Scalar.Notations
 
+-- Rust-mirrored names (e.g. `core.default.Default.default`) legitimately repeat a namespace component.
+set_option linter.dupNamespace false
+
 namespace Aeneas.Std
 
 open Result ScalarElab

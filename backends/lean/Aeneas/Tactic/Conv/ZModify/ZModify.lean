@@ -21,7 +21,7 @@ open Lean
 open Lean.Meta
 open Lean.Parser.Tactic
 open Lean.Elab.Tactic
-open Arith Std
+open Arith _root_.Aeneas.Std
 
 structure Config where
   nonLin : Bool := true -- We use the non linear lemmas by default

@@ -17,15 +17,19 @@ counterparts.
 Set `set_option Aeneas.Deprecated.progressWarning false` to silence the warnings.
 -/
 
-namespace Aeneas.Deprecated
-
-open Lean Elab Meta Tactic
-
+-- Registered at the root so the option's name is `Aeneas.Deprecated.progressWarning`
+-- (matching the documented `set_option` above) rather than the namespace-doubled
+-- `Aeneas.Deprecated.Aeneas.Deprecated.progressWarning` that `register_option` would
+-- produce inside `namespace Aeneas.Deprecated`, since it prepends the current namespace.
 /-- When `true` (default), using the deprecated `progress` syntax emits a warning. -/
 register_option Aeneas.Deprecated.progressWarning : Bool := {
   defValue := true
   descr := "Emit warnings when using the deprecated `progress` syntax (renamed to `step`)"
 }
+
+namespace Aeneas.Deprecated
+
+open Lean Elab Meta Tactic
 
 private def emitProgressWarning (what : String) : CoreM Unit := do
   if Aeneas.Deprecated.progressWarning.get (← getOptions) then

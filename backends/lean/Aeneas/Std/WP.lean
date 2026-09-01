@@ -6,12 +6,17 @@ import Aeneas.Std.Spec
 
 namespace Aeneas.Std.WP
 
-open Std Result
+open _root_.Aeneas.Std Result
 
-def Post α := (α -> Prop)
-def Pre := Prop
+/- These are reducible (`abbrev`) so that `Post α` is definitionally transparent to
+   `α → Prop` during unification. Since Lean 4.33 (`backward.isDefEq.respectTransparency.types`,
+   lean4#13895/#13637) types are compared at `implicit` transparency, so a semireducible
+   `def Post α := α → Prop` no longer unifies with `α → Prop` when e.g. a raw `uncurry f`
+   or `qimp` predicate is passed where a `Post` is expected. -/
+abbrev Post α := (α -> Prop)
+abbrev Pre := Prop
 
-def Wp α := Post α → Pre
+abbrev Wp α := Post α → Pre
 
 def wp_return (x:α) : Wp α := fun p => p x
 
@@ -37,7 +42,10 @@ theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p :=
 theorem dspec_admissible {α} (p : Post α )
   : Lean.Order.admissible (fun x => dspec x p) := by
   apply Lean.Order.admissible_flatOrder
-  simp [dspec]
+  -- Since Lean 4.33 `admissible_flatOrder` leaves the bottom element wrapped as
+  -- `FlatOrder.mk div div`; unfold `FlatOrder.mk` (a non-reducible `def`, so `simp`
+  -- won't touch it on its own) to expose the `div` scrutinee and reduce the match.
+  simp [dspec, Lean.Order.FlatOrder.mk]
 
 /-- Variant of `uncurry` used to decompose tuples in post-conditions.
 
@@ -116,7 +124,7 @@ def qimp {α} (P₀ P₁ : Post α) : Prop := ∀ x, P₀ x → P₁ x
 
 /-- We use this lemma to decompose nested `uncurry'` predicates into a sequence of universal quantifiers. -/
 @[simp]
-def qimp_uncurry' {α₀ α₁} (P : α₀ → α₁ → Prop) (Q : α₀ × α₁ → Prop) :
+theorem qimp_uncurry' {α₀ α₁} (P : α₀ → α₁ → Prop) (Q : α₀ × α₁ → Prop) :
   qimp (uncurry' P) Q ↔ ∀ x, qimp (P x) (curry Q x) := by
   simp [qimp, curry]
 
@@ -152,12 +160,12 @@ theorem spec_bind' {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α
 
 /-- We use this lemma to decompose nested `uncurry'` predicates into a sequence of universal quantifiers. -/
 @[simp]
-def qimp_spec_uncurry' {α₀ α₁ β} (P : α₀ → α₁ → Prop) (k : α₀ × α₁ → Result β) (Q : β → Prop) :
+theorem qimp_spec_uncurry' {α₀ α₁ β} (P : α₀ → α₁ → Prop) (k : α₀ × α₁ → Result β) (Q : β → Prop) :
   qimp_spec (uncurry' P) k Q ↔ ∀ x, qimp_spec (P x) (curry k x) Q := by
   simp [qimp_spec, curry]
 
 /-- We use this lemma to eliminate `imp_spec` after we decomposed the nested `uncurry'` -/
-def qimp_spec_iff {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) :
+theorem qimp_spec_iff {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) :
   qimp_spec P k Q ↔ ∀ x, imp (P x) (spec (k x) Q) := by
   simp [qimp_spec, imp]
 
@@ -218,7 +226,7 @@ theorem dspec_bind' {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result �
     apply Hm
 
 @[simp]
-def qimp_dspec_uncurry' {α₀ α₁ β} (P : α₀ → α₁ → Prop) (k : α₀ × α₁ → Result β) (Q : β → Prop) :
+theorem qimp_dspec_uncurry' {α₀ α₁ β} (P : α₀ → α₁ → Prop) (k : α₀ × α₁ → Result β) (Q : β → Prop) :
   qimp_dspec (uncurry' P) k Q ↔ ∀ x, qimp_dspec (P x) (curry k x) Q := by
   simp [qimp_dspec, curry]
 
@@ -232,7 +240,7 @@ theorem qimp_dspec_exists {α β γ} (P : γ → α → Prop) (k : α → Result
   qimp_dspec (fun x => ∃ y, P y x) k Q ↔ ∀ x, qimp_dspec (P x) k Q := by
   simp only [qimp_dspec, forall_exists_index]; grind
 
-def qimp_dspec_iff {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) :
+theorem qimp_dspec_iff {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) :
   qimp_dspec P k Q ↔ ∀ x, imp (P x) (dspec (k x) Q) := by
   simp [qimp_dspec, imp]
 
@@ -251,7 +259,7 @@ TODO: use https://github.com/leanprover/lean4/pull/11355
 -/
 namespace Aeneas
 
-open Std WP Result
+open _root_.Aeneas.Std WP Result
 
 /-!
 # Hoare triple notation and elaboration
@@ -786,7 +794,7 @@ namespace Aeneas.Std.WP
 # mvcgen
 -/
 
-open Std Result
+open _root_.Aeneas.Std Result
 open Std.Do
 
 instance Result.instWP : WP Result.{u} (.except (ULift Error) (.except PUnit .pure)) where

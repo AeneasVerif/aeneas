@@ -1,6 +1,9 @@
 import Aeneas.Std.Core.Core
 import Aeneas.Std.RawPtr
 
+-- Rust-mirrored names legitimately repeat a namespace component.
+set_option linter.dupNamespace false
+
 namespace Aeneas.Std
 
 /- TODO: this is the definition of `AlignmentEnum` for 64 bit architectures -/

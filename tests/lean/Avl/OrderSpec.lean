@@ -100,8 +100,7 @@ theorem ltOfRustOrder
   [LO: LinearOrder T]
   [Spec: OrdSpec H]:
   ∀ a b, H.cmp a b = .ok .Less -> a < b := by
-  intros a b
-  intro Hcmp
+  intro a b Hcmp
   -- why the typeclass search doesn't work here?
   refine' (@compare_lt_iff_lt T LO).1 _
   obtain ⟨ o, ⟨ Hcmp', Hcompare ⟩ ⟩ := WP.spec_imp_exists (Spec.infallible a b)
@@ -112,8 +111,7 @@ theorem gtOfRustOrder
   [LinearOrder T]
   [Spec: OrdSpecSymmetry H]:
   ∀ a b, H.cmp a b = .ok .Greater -> b < a := by
-  intros a b
-  intro Hcmp
+  intro a b Hcmp
   refine' @ltOfRustOrder _ H _ Spec.toOrdSpec _ _ _
   rewrite [oppositeRustOrder]
   simp [Hcmp]

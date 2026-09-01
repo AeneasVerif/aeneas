@@ -114,7 +114,7 @@ theorem UScalar.cast_inBounds_spec {src_ty : UScalarTy}
   apply Nat.mod_eq_of_lt; omega
 
 /-- This theorem allows us not to use bit-vectors when reasoning about casts, if there are no overflows -/
-def UScalar.hcast_inBounds_spec {src_ty : UScalarTy}
+theorem UScalar.hcast_inBounds_spec {src_ty : UScalarTy}
   (tgt_ty : IScalarTy) (x : UScalar src_ty)
   (h : x.val ≤ IScalar.max tgt_ty) :
   lift (UScalar.hcast tgt_ty x) ⦃ y => y.val = x.val ⦄ := by
@@ -128,7 +128,7 @@ def UScalar.hcast_inBounds_spec {src_ty : UScalarTy}
   . scalar_tac
 
 /-- This theorem allows us not to use bit-vectors when reasoning about casts, if there are no overflows -/
-def IScalar.cast_inBounds_spec {src_ty : IScalarTy}
+theorem IScalar.cast_inBounds_spec {src_ty : IScalarTy}
   (tgt_ty : IScalarTy) (x : IScalar src_ty) (h : IScalar.min tgt_ty ≤ x.val ∧ x.val ≤ IScalar.max tgt_ty) :
   lift (IScalar.cast tgt_ty x) ⦃ y => y.val = x.val ⦄
   := by
@@ -141,7 +141,7 @@ def IScalar.cast_inBounds_spec {src_ty : IScalarTy}
   . scalar_tac
 
 /-- This theorem allows us not to use bit-vectors when reasoning about casts, if there are no overflows -/
-def IScalar.hcast_inBounds_spec {src_ty : IScalarTy}
+theorem IScalar.hcast_inBounds_spec {src_ty : IScalarTy}
   (tgt_ty : UScalarTy) (x : IScalar src_ty) (h : 0 ≤ x.val ∧ x.val ≤ UScalar.max tgt_ty) :
   lift (IScalar.hcast tgt_ty x) ⦃ y => y.val = x.val ⦄ := by
   simp only [lift, hcast, BitVec.signExtend, bv_toInt_eq, WP.spec_ok]
