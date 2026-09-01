@@ -59,7 +59,7 @@ The detailed spot-by-spot report is generated outside the source tree for this
 benchmark set with:
 
 ```text
-lake env lean --run Aeneas/SLPoC/ProofScore.lean -o REPORT.md FILE.lean ...
+lake env lean --run Aeneas/SLPoC/Tests/Examples/scripts/ProofScore.lean -o REPORT.md FILE.lean ...
 ```
 
 ## Ported files

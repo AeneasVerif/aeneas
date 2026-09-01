@@ -34,7 +34,7 @@ The analysis was run on 2026-08-14 on the working tree based on revision
 `9bebda3b`. Running
 
 ```text
-lake env lean --run Aeneas/SLPoC/ProofScore.lean -o REPORT.html
+lake env lean --run Aeneas/SLPoC/Tests/Examples/scripts/ProofScore.lean -o REPORT.html
 ```
 
 found 311 of 481 proof spots ideal (64.7%). `VerusPageTable.lean` alone has 76
