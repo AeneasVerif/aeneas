@@ -1,5 +1,7 @@
 import Aeneas.SLPoC.Tests.Examples.Basic
 
+open Aeneas.Data.Coinductive
+
 namespace Aeneas.SLPoC.Tests.Step
 
 
@@ -71,8 +73,8 @@ example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => iprop(⌜opaqueStepResult 1 1�
   step
   exact pure_sep_intro _ rfl
 
-/-- `FFree.ok`, the constructor `pure` unfolds to, is a terminal return too. -/
-example (n : Nat) : ⦃ emp ⦄ (FFree.ok n : St Nat) ⦃⇓ result => ⌜result = n⌝⦄ := by
+/-- `ITree.ret`, the constructor `pure` unfolds to, is a terminal return too. -/
+example (n : Nat) : ⦃ emp ⦄ (ITree.ret n : St Nat) ⦃⇓ result => ⌜result = n⌝⦄ := by
   step
   iframe
 
