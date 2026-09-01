@@ -142,6 +142,14 @@ type pure_builtin_fun_id =
           bodies generate a call to [get_target] and dispatch on the result. The
           function is fallible and axiomatized; nothing can be deduced from its
           output. *)
+  | TargetFeatureEnabled
+      (** [target_feature_enabled feature] is [true] if the target feature
+          [feature] (e.g., ["avx2"]) is available on the machine executing the
+          code.
+
+          Used by the [-feature-gates] option: the functions annotated with
+          [#[target_feature(enable = "...")]] get an assertion introduced at the
+          beginning of their body. *)
 [@@deriving show, ord]
 
 (* Builtin declarations coming from external libraries.

@@ -1275,7 +1275,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
       with CFailure _ ->
         (* An exception was raised: ignore it *)
         ())
-    ctx.crate.declarations
+    (Option.get ctx.crate.declarations)
 
 type extract_file_info = {
   filename : string;
