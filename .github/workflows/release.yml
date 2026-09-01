@@ -59,10 +59,6 @@ jobs:
             artifact_name: aeneas-linux-aarch64
             nix_attr: aeneas-static-release
             nix_machine: false
-          - os: macos-15-intel
-            artifact_name: aeneas-macos-x86_64
-            nix_attr: aeneas-release
-            nix_machine: false
           - os: macos-latest
             artifact_name: aeneas-macos-aarch64
             nix_attr: aeneas-release
@@ -113,7 +109,7 @@ jobs:
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
 
       - name: Cache Lean dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: dist_staging/backends/lean/.lake
           key: ${{ matrix.os }}-lean-${{ hashFiles('dist_staging/backends/lean/lake-manifest.json') }}

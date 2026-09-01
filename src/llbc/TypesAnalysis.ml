@@ -361,12 +361,12 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
     | TArray (ty, _) | TSlice ty ->
         (* Nothing to update: just explore the type parameters *)
         analyze span expl_info ty_info ty
-    | TAdt { id = TTuple | TBuiltin (TBox | TStr); generics } ->
+    | TAdt { generics; builtin = Some (TTuple | TBox | TStr); _ } ->
         (* Nothing to update: just explore the type parameters *)
         List.fold_left
           (fun ty_info ty -> analyze span expl_info ty_info ty)
           ty_info generics.types
-    | TAdt { id = TAdtId adt_id; generics } ->
+    | TAdt { id = adt_id; generics; builtin = None } ->
         (* Lookup the information for this type definition *)
         let adt_info =
           [%silent_unwrap_opt_span] span (TypeDeclId.Map.find_opt adt_id infos)
@@ -722,8 +722,9 @@ let compute_outlive_proj_ty (span : Meta.span option)
         | TAdt adt -> begin
             (* TODO: we need to handle those *)
             [%sanity_check_opt_span] span (adt.generics.trait_refs = []);
-            match adt.id with
-            | TAdtId id ->
+            match adt.builtin with
+            | None ->
+                let id = adt.id in
                 (* Lookup the declaration and use the region constraints
                    to check which regions outlive the projected regions. *)
                 let decl =
@@ -799,10 +800,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
                     let ty, r = pred.binder_value in
                     outlive_visitor#visit_ty r ty)
                   types_outlive
-            | TTuple -> super#visit_ty outer ty
-            | TBuiltin builtin_ty -> (
-                match builtin_ty with
-                | TBox | TStr -> super#visit_ty outer ty)
+            | Some (TTuple | TBox | TStr) -> super#visit_ty outer ty
           end
         | TArray _ | TSlice _ -> super#visit_ty outer ty
         | TVar _ | TLiteral _ | TNever -> ()
@@ -1001,11 +999,11 @@ let check_no_bound_free_implied_bounds (span : Meta.span option)
                is shorter than the lifetimes appearing in the referent), as well
                as the outer borrow regions: we record [r] and dive in. *)
             self#visit_ty (r :: outer) ref_ty
-        | TAdt { id; generics = adt_generics } ->
+        | TAdt { id; generics = adt_generics; builtin } ->
             (* The implied bounds coming from the ADT's own declaration
                (constraints between its lifetime/type parameters). *)
-            (match id with
-            | TAdtId id -> (
+            (match builtin with
+            | None -> (
                 match TypeDeclId.Map.find_opt id type_decls with
                 | None -> ()
                 | Some decl ->

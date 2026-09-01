@@ -9,7 +9,7 @@ Local Open Scope Primitives_scope.
 Module Traits.
 
 (** [core::result::Result]
-    Source: '/rustc/library/core/src/result.rs', lines 557:0-557:21
+    Source: '/rustc/library/core/src/result.rs', lines 558:0-558:21
     Name pattern: [core::result::Result]
     Visibility: public *)
 Inductive core_result_Result_t (T : Type) (E : Type) :=
