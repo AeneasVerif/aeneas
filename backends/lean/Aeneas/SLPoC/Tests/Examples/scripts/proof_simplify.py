@@ -14,7 +14,7 @@ import sys
 from typing import Iterable
 
 
-BACKEND_ROOT = Path(__file__).resolve().parents[2]
+BACKEND_ROOT = Path(__file__).resolve().parents[5]
 SIMPLE_NAME = r"(?:[^\W\d]|_)[\w']*"
 PLAIN_STEP = re.compile(r"^(?P<indent>[ \t]*)step[ \t]*(?:\r?\n|$)")
 PLAIN_STEP_STAR = re.compile(

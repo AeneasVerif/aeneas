@@ -9,11 +9,12 @@ separation logic the automation still leaves to the user.
 Run it from `backends/lean` with
 
 ```
-lake env lean --run Aeneas/SLPoC/ProofScore.lean [-o REPORT.html] [FILE.lean …]
+lake env lean --run Aeneas/SLPoC/Tests/Examples/scripts/ProofScore.lean \
+  [-o REPORT.html] [FILE.lean …]
 ```
 
-With no file arguments it scores every file of `Aeneas/SLPoC/Examples`, and
-writes `Aeneas/SLPoC/proof-score.html`.
+With no file arguments it scores every file of `Aeneas/SLPoC/Tests/Examples`, and
+writes `Aeneas/SLPoC/Tests/Examples/reports/proof-score.html`.
 
 ## What is measured
 
@@ -1033,13 +1034,14 @@ def renderReport (files : Array FileScore) : String := Id.run do
     <title>Ideal separation-logic proof score</title><style>{style}</style></head>\
     <body data-filter='all'><h1>Ideal separation-logic proof score</h1>"
   out := out ++ "<p>Regenerate with <code>lake env lean --run \
-    Aeneas/SLPoC/ProofScore.lean</code> from <code>backends/lean</code>.  A <em>spot</em> is one \
+    Aeneas/SLPoC/Tests/Examples/scripts/ProofScore.lean</code> from \
+    <code>backends/lean</code>.  A <em>spot</em> is one \
     straight-line block of a proof: the block before the first branch, then one per branch body, \
     recursively.  A spot is ideal when it steers the separation logic nowhere by hand — only \
     <code>step</code>, <code>sl_pull</code>, and pure reasoning.  The code below is the \
     spot's own, with the nested blocks elided as <span class='elided'>…</span> because they are \
     spots of their own, and without the comments.  See the module docstring of \
-    <code>Aeneas/SLPoC/ProofScore.lean</code> for the details.</p>"
+    <code>Aeneas/SLPoC/Tests/Examples/scripts/ProofScore.lean</code> for the details.</p>"
   out := out ++ s!"<h2>Rules</h2><ul>\
     <li>free: {codeList idealTactics}, pure reasoning, and <code>unfold</code> of a program;</li>\
     <li>manual: {codeList manualTactics};</li>\
@@ -1107,10 +1109,11 @@ def renderReport (files : Array FileScore) : String := Id.run do
 
 structure Options where
   files : Array System.FilePath := #[]
-  out : System.FilePath := "Aeneas/SLPoC/proof-score.html"
+  out : System.FilePath := "Aeneas/SLPoC/Tests/Examples/reports/proof-score.html"
 
 def usage : String :=
-  "usage: lake env lean --run Aeneas/SLPoC/ProofScore.lean [-o REPORT.html] [FILE.lean …]"
+  "usage: lake env lean --run Aeneas/SLPoC/Tests/Examples/scripts/ProofScore.lean \
+    [-o REPORT.html] [FILE.lean …]"
 
 partial def parseArgs (args : List String) (opts : Options := {}) : Except String Options :=
   match args with
@@ -1124,7 +1127,7 @@ partial def parseArgs (args : List String) (opts : Options := {}) : Except Strin
     else parseArgs rest { opts with files := opts.files.push arg }
 
 def defaultFiles : IO (Array System.FilePath) := do
-  let dir : System.FilePath := "Aeneas/SLPoC/Examples"
+  let dir : System.FilePath := "Aeneas/SLPoC/Tests/Examples"
   let entries ← dir.readDir
   let files := entries.filterMap fun e =>
     if e.fileName.endsWith ".lean" then some e.path else none

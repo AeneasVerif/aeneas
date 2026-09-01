@@ -1,4 +1,4 @@
-import Aeneas.SLPoC.Examples.Basic
+import Aeneas.SLPoC.Tests.Examples.Basic
 
 namespace Aeneas.SLPoC
 
