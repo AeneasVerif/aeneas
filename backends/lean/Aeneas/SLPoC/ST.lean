@@ -1,15 +1,13 @@
 import Aeneas.SLPoC.FFree
 import Aeneas.SLPoC.WP
+import Aeneas.Tactic.Step.StepStar
 
 /-!
 # The state monad `St` and its program logic
 
-`St` is the freer monad over the pointer events of `Aeneas.SLPoC.RustHeap`.
-This file defines it, gives it an operational semantics by a state machine in
-the sense of `Aeneas.SLPoC.StateMachine`, gives its denotation `theta` into the
-weakest-precondition monad `Wp` of `Aeneas.SLPoC.WP`, derives the Hoare triples
-from that denotation, and proves the specifications of the pointer
-operations.
+`St` is the freer monad over heap events. This file defines it, gives it an
+operational semantics, derives its separation-logic triples, and wires those
+triples to the `step`/`step*` tactics.
 -/
 
 namespace Aeneas.SLPoC
@@ -373,147 +371,91 @@ theorem triple_seq {P H : SLPre} {Q : SLPost β}
     triple P (m₁ >>= fun _ => m₂) Q :=
   triple_bind hFirst (fun _ => hSecond)
 
-/-- Terminal `pure`, i.e. SLF's `xval`.  Registering it as a `step` lemma is what
+/-! ## Ramified rules -/
+
+/-- SLF's `triple_ramified_frame`. SLF puts an affine top on the right of the
+wand so that the leftovers may be discarded; here the wand's own conclusion is
+affine, so `Q` alone will do. -/
+theorem triple_ramified_frame {α : Type} {P Pm : SLPre} {Q Qm : SLPost α}
+    {m : St α} (hStep : triple Pm m Qm)
+    (hPre : P ⊢ Pm ∗ (Qm -∗+ Q)) :
+    triple P m Q :=
+  triple_conseq_frame hStep hPre (qwand_cancel Qm Q)
+
+/-- The ramified frame rule for a call followed by a continuation. -/
+theorem triple_ramified_bind {α β : Type} {P Pm F : SLPre} {Qm : SLPost α}
+    {next : α → St β} {Q : SLPost β} {m : St α}
+    (hStep : triple Pm m Qm) (hPre : P ⊢ Pm ∗ F)
+    (hNext : ∀ value, triple (Qm value ∗ F) (next value) Q) :
+    triple P (m >>= next) Q :=
+  triple_bind (triple_conseq (triple_frame hStep F) hPre (fun _ => himpl_refl _))
+    hNext
+
+/-- Rewrite part of a triple's precondition using an entailment. -/
+theorem triple_xchange {α : Type} {H₁ H₂ H₃ : SLPre} {Q : SLPost α} {m : St α}
+    (hPart : H₁ ⊢ H₂) (hRest : triple (H₂ ∗ H₃) m Q) : triple (H₁ ∗ H₃) m Q :=
+  triple_conseq hRest (hstar_mono hPart (himpl_refl H₃)) (fun _ => himpl_refl _)
+
+/-- Terminal `pure`, i.e. SLF's `xval`. Registering it as a `step` lemma is what
 lets `step*` walk all the way to the `return` of a monadic function instead of
 stopping just before it. -/
 theorem ok.spec (value : α) :
     ⦃ emp ⦄ (FFree.ok value : St α) ⦃⇓ result => ⌜result = value⌝⦄ :=
   triple_pure fun _ _ => rfl
 
-/-- `ok.spec` again, stated through `Pure.pure`.  Both it and `ok.spec` remain
-registered for calls in binds and ordinary ramified-frame automation.
-`step` applies the direct terminal rule for a syntactic return instead. -/
+/-- `ok.spec` again, stated through `Pure.pure`. -/
 theorem pure.spec (value : α) :
     ⦃ emp ⦄ (Pure.pure value : St α) ⦃⇓ result => ⌜result = value⌝⦄ :=
   ok.spec value
 
-/-! ## Specified monadic operations -/
+/-! ## Wiring of `step` to separation-logic triples -/
 
-def guardedModify {α : Type} (pre : Heap → Prop)
-    (modify : (h : Heap) → pre h → α × Heap) : St α :=
-  FFree.trigger (.GuardedModify pre modify)
+open Lean Elab Meta Tactic
 
-def alloc {α : Type} (value : α) : St (Ptr α) :=
-  guardedModify (fun _ => True) fun h _ =>
-    (Ptr.freshPtr α h, Ptr.freshHeap h value)
+/-- Bind rule used by `step`. It infers a spatial frame and leaves the callee's
+postcondition, framed, as the precondition of the continuation. -/
+theorem triple_step_bind {α β : Type} {P Pm F : SLPre}
+    {next : α → St β} {Q : SLPost β}
+    (m : St α) (Qm : SLPost α) (hStep : triple Pm m Qm)
+    (hPre : P ⊢ Pm ∗ F)
+    (hNext : ∀ value, triple (Qm value ∗ F) (next value) Q) :
+    triple P (m >>= next) Q :=
+  triple_ramified_bind hStep hPre hNext
 
-theorem alloc.spec (value : α) :
-    ⦃ emp ⦄ alloc value ⦃⇓ p => p ↦ value⦄ := by
-  apply (triple_iff _ _ _).mpr
-  intro h _ frame hDisjoint
-  let p := Ptr.freshPtr α (h ∪ frame)
-  have hFresh := Ptr.fresh_freshPtr value (h ∪ frame)
-  obtain ⟨hDisjointFresh, hFreshHeap⟩ :=
-    Ptr.fresh_eq_singleton_union hFresh
-  obtain ⟨hDisjointFreshH, hDisjointFreshFrame⟩ :=
-    (Finmap.disjoint_union_right (Ptr.singleton p value) h frame).mp
-      hDisjointFresh
-  exact ⟨trivial, Ptr.singleton p value ∪ h,
-    (Finmap.disjoint_union_left (Ptr.singleton p value) h frame).mpr
-      ⟨hDisjointFreshFrame, hDisjoint⟩,
-    hFreshHeap.trans Finmap.union_assoc.symm,
-    Heap.Sub.union_left hDisjointFreshH⟩
+/-- Rule used by `step` for a terminal monadic call. -/
+theorem triple_step_mono {α : Type} {P Pm : SLPre} {Q : SLPost α}
+    (m : St α) (Qm : SLPost α) (hStep : triple Pm m Qm)
+    (hRamified : P ⊢ Pm ∗ (Qm -∗+ Q)) :
+    triple P m Q :=
+  triple_ramified_frame hStep hRamified
 
-def read {α : Type} (p : Ptr α) : St α :=
-  guardedModify (fun h => Ptr.contains h p) fun h hContains =>
-    (Ptr.read p h hContains, h)
+theorem forall_unit {p : Unit → Prop} : (∀ value, p value) ↔ p () :=
+  ⟨fun h => h (), fun h value => match value with | () => h⟩
 
-theorem read.spec (p : Ptr α) (value : α) :
-    ⦃ p ↦ value ⦄ read p
-      ⦃⇓ result => ⌜result = value⌝ ∗ p ↦ value⦄ := by
-  apply (triple_iff _ _ _).mpr
-  intro h hSingle
-  have hContains := Ptr.contains_of_sub hSingle
-  intro frame hDisjoint
-  have hContainsFrame := Ptr.contains_union_left (h₂ := frame) hContains
-  have hReadFrame :
-      Ptr.read p (h ∪ frame) hContainsFrame = value := by
-    rw [Ptr.read_union_left hContains]
-    obtain ⟨rest, hDisjointRest, rfl⟩ := hSingle
-    have hContainsCell := Ptr.contains_singleton p value
-    rw [show (hContains :
-          Ptr.contains (Ptr.singleton p value ∪ rest) p) =
-        Ptr.contains_union_left hContainsCell from Subsingleton.elim _ _,
-      Ptr.read_union_left hContainsCell, Ptr.read_singleton]
-  refine ⟨hContainsFrame, h, hDisjoint, rfl, ?_⟩
-  exact (hstar_hpure_l _ _ h).mpr ⟨hReadFrame, hSingle⟩
+/-- The tactic `step` runs on the goals it prepares. A no-op on a goal which is
+not a triple. -/
+macro "intro_triple" : tactic =>
+  `(tactic| (sl_norm; sl_pull_shallow))
 
-def update {α : Type} (p : Ptr α) (value : α) : St Unit :=
-  guardedModify (fun h => Ptr.contains h p) fun h hContains =>
-    ((), Ptr.update p value h hContains)
+#register_spec_info {
+    spec_name := ``triple
+    arity := 4
+    program_index := 2
+    post_index := 3
+    mk_spec_mono := ``triple_step_mono
+    mk_spec_mono_skip_args := 4
+    mk_spec_bind := ``triple_step_bind
+    mk_spec_bind_skip_args := 7
+    qimp_elim_tactics := #[
+      ``forall_eq, ``forall_eq',
+      ``forall_unit, ``true_imp_iff
+    ]
+    intro_tactic := SpecInfo.tac `(tactic| intro_triple)
+    discharge_tactic := SpecInfo.tac `(tactic| sl_frame)
+    to_mvcgen := none
+    liftings := #[]
+  }
 
-theorem update.spec (p : Ptr α) (oldValue newValue : α) :
-    ⦃ p ↦ oldValue ⦄ update p newValue ⦃⇓ p ↦ newValue⦄ := by
-  apply (triple_iff _ _ _).mpr
-  intro h hSingle
-  have hContains := Ptr.contains_of_sub hSingle
-  intro frame hDisjoint
-  have hContainsFrame := Ptr.contains_union_left (h₂ := frame) hContains
-  have hUpdateFrame :
-      Ptr.update p newValue (h ∪ frame) hContainsFrame =
-        Ptr.update p newValue h hContains ∪ frame := by
-    simpa only [Ptr.update_union_left] using
-      Ptr.update_union_left (h₂ := frame) p newValue hContains
-  have hDisjointUpdated :
-      Finmap.Disjoint (Ptr.update p newValue h hContains) frame :=
-    Ptr.disjoint_update_left hDisjoint hContains
-  obtain ⟨rest, hDisjointRest, rfl⟩ := hSingle
-  have hContainsCell := Ptr.contains_singleton p oldValue
-  have hContainsUnion := Ptr.contains_union_left (h₂ := rest) hContainsCell
-  have hUpdated :
-      Ptr.update p newValue (Ptr.singleton p oldValue ∪ rest) hContainsUnion =
-        Ptr.singleton p newValue ∪ rest := by
-    rw [Ptr.update_union_left p newValue hContainsCell, Ptr.update_singleton]
-  have hDisjointRest' : Finmap.Disjoint (Ptr.singleton p newValue) rest := by
-    have := Ptr.disjoint_update_left (value := newValue) hDisjointRest hContainsCell
-    rwa [Ptr.update_singleton] at this
-  refine ⟨hContainsFrame,
-    Ptr.update p newValue (Ptr.singleton p oldValue ∪ rest) hContainsUnion,
-    ?_, ?_, ?_⟩
-  · exact Ptr.disjoint_update_left hDisjoint hContainsUnion
-  · simpa only [show hContainsFrame =
-        Ptr.contains_union_left hContainsUnion from Subsingleton.elim _ _,
-      show hContains = hContainsUnion from Subsingleton.elim _ _] using hUpdateFrame
-  · rw [hUpdated]
-    exact Heap.Sub.union_left hDisjointRest'
-
-def free {α : Type} (p : Ptr α) : St Unit :=
-  guardedModify (fun h => Ptr.contains h p) fun h hContains =>
-    ((), Ptr.free p h hContains)
-
-theorem free.spec (p : Ptr α) (value : α) :
-    ⦃ p ↦ value ⦄ free p ⦃⇓ emp⦄ := by
-  apply (triple_iff _ _ _).mpr
-  intro h hSingle
-  have hContains := Ptr.contains_of_sub hSingle
-  intro frame hDisjoint
-  have hContainsFrame := Ptr.contains_union_left (h₂ := frame) hContains
-  refine ⟨hContainsFrame, Ptr.free p h hContains,
-    Ptr.disjoint_free_left hDisjoint hContains, ?_, trivial⟩
-  simpa only [show hContainsFrame =
-      Ptr.contains_union_left hContains from Subsingleton.elim _ _] using
-    Ptr.free_union_left p hDisjoint hContains
-
-def mut_to_raw {α : Type} (value : α) : St (Ptr α) :=
-  alloc value
-
-theorem mut_to_raw.spec {α : Type} (value : α) :
-    ⦃ emp ⦄ mut_to_raw value ⦃⇓ p => p ↦ value⦄ := by
-  exact alloc.spec value
-
-def end_mut_to_raw {α : Type} (p : Ptr α) : St α := do
-  let value ← read p
-  free p
-  pure value
-
-theorem end_mut_to_raw.spec {α : Type} {value : α} (p : Ptr α) :
-    ⦃ p ↦ value ⦄ end_mut_to_raw p ⦃⇓ result => ⌜result = value⌝⦄ := by
-  unfold end_mut_to_raw
-  apply triple_bind (read.spec p value)
-  intro result
-  apply triple_hpure
-  intro hResult
-  apply triple_seq (free.spec p value)
-  exact triple_pure fun _ _ => hResult
+attribute [step] ok.spec pure.spec
 
 end Aeneas.SLPoC
