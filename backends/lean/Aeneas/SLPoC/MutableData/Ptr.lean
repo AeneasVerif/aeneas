@@ -144,6 +144,25 @@ theorem pointsToRange_split (q : Ptr α) (values : List α) (i : Nat) :
   conv_lhs => rw [← List.take_append_drop i values]
   exact pointsToRange_append q (values.take i) (values.drop i)
 
+/-- Carve the slot at `i` out of a range, keeping what is before and after it.
+Stated as an equation so that it rewrites in either direction: this is both the
+split that hands one slot to a read or a write, and the join that gives the
+range back. -/
+theorem pointsToRange_eq_take_get_drop {q : Ptr α} {values : List α} {i : Nat}
+    (hIndex : i < values.length) :
+    (q ↦* values) =
+      iprop(q ↦* values.take i ∗
+        ((q.add i) ↦ values[i] ∗ (q.add (i + 1)) ↦* values.drop (i + 1))) := by
+  have hTake : (values.take i).length = i := by simp; omega
+  have hSplit := bientails_eq (pointsToRange_split q values i)
+  rw [hTake] at hSplit
+  rw [hSplit, List.drop_eq_getElem_cons hIndex,
+    show values[i] :: values.drop (i + 1)
+      = [values[i]] ++ values.drop (i + 1) from rfl,
+    bientails_eq
+      (pointsToRange_append (q.add i) [values[i]] (values.drop (i + 1)))]
+  rfl
+
 /-- One range cannot be owned twice. -/
 theorem not_composable_frag (q : Ptr α) (values₁ values₂ : List α)
     (hNonempty₁ : 0 < values₁.length) (hNonempty₂ : 0 < values₂.length) :
