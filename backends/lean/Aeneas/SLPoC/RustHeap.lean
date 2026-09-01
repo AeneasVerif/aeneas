@@ -192,6 +192,7 @@ def alloc {α : Type} (value : α) : St (Ptr α) :=
   guardedModify (fun _ => True) fun h _ =>
     (Ptr.freshPtr α h, Ptr.freshHeap h value)
 
+@[step]
 theorem alloc.spec (value : α) :
     ⦃ emp ⦄ alloc value ⦃⇓ p => p ↦ value⦄ := by
   apply (triple_iff _ _ _).mpr
@@ -213,6 +214,7 @@ def read {α : Type} (p : Ptr α) : St α :=
   guardedModify (fun h => Ptr.contains h p) fun h hContains =>
     (Ptr.read p h hContains, h)
 
+@[step]
 theorem read.spec (p : Ptr α) (value : α) :
     ⦃ p ↦ value ⦄ read p
       ⦃⇓ result => ⌜result = value⌝ ∗ p ↦ value⦄ := by
@@ -237,6 +239,7 @@ def update {α : Type} (p : Ptr α) (value : α) : St Unit :=
   guardedModify (fun h => Ptr.contains h p) fun h hContains =>
     ((), Ptr.update p value h hContains)
 
+@[step]
 theorem update.spec (p : Ptr α) (oldValue newValue : α) :
     ⦃ p ↦ oldValue ⦄ update p newValue ⦃⇓ p ↦ newValue⦄ := by
   apply (triple_iff _ _ _).mpr
@@ -276,6 +279,7 @@ def free {α : Type} (p : Ptr α) : St Unit :=
   guardedModify (fun h => Ptr.contains h p) fun h hContains =>
     ((), Ptr.free p h hContains)
 
+@[step]
 theorem free.spec (p : Ptr α) (value : α) :
     ⦃ p ↦ value ⦄ free p ⦃⇓ emp⦄ := by
   apply (triple_iff _ _ _).mpr
@@ -292,6 +296,7 @@ theorem free.spec (p : Ptr α) (value : α) :
 def mut_to_raw {α : Type} (value : α) : St (Ptr α) :=
   alloc value
 
+@[step]
 theorem mut_to_raw.spec {α : Type} (value : α) :
     ⦃ emp ⦄ mut_to_raw value ⦃⇓ p => p ↦ value⦄ := by
   exact alloc.spec value
@@ -301,6 +306,7 @@ def end_mut_to_raw {α : Type} (p : Ptr α) : St α := do
   free p
   pure value
 
+@[step]
 theorem end_mut_to_raw.spec {α : Type} {value : α} (p : Ptr α) :
     ⦃ p ↦ value ⦄ end_mut_to_raw p ⦃⇓ result => ⌜result = value⌝⦄ := by
   unfold end_mut_to_raw
@@ -310,9 +316,5 @@ theorem end_mut_to_raw.spec {α : Type} {value : α} (p : Ptr α) :
   intro hResult
   apply triple_seq (free.spec p value)
   exact triple_pure fun _ _ => hResult
-
-attribute [step]
-  alloc.spec read.spec update.spec free.spec
-  mut_to_raw.spec end_mut_to_raw.spec
 
 end Aeneas.SLPoC
