@@ -2,70 +2,69 @@ import Aeneas.SLPoC.Tests.Examples.Basic
 
 namespace Aeneas.SLPoC
 
-open scoped SepLogic
 
-/-! ## `sl_frame` as an `xsimpl` -/
+/-! ## Entailment framing -/
 
-example (P Q : SLProp) : emp ⊢ (P ∗ (P -∗ Q)) -∗ Q := by
-  apply hwand_intro
-  sl_change (hwand_cancel P Q)
-  sl_frame
+example (P Q : IProp) : emp ⊢ (P ∗ (P -∗ Q)) -∗ Q := by
+  apply wand_intro
+  irewrite (wand_cancel P Q)
+  iframe
 
 example (p q : Ptr Nat) (x y : Nat) :
     p ↦ x ∗ q ↦ y ⊢ q ↦ y ∗ p ↦ x := by
-  sl_frame
+  iframe
 
 /-- An existential of the right-hand side is instantiated by the cancellation. -/
 example (p : Ptr Nat) (value : Nat) :
     p ↦ value ⊢ iprop(∃ w, ⌜w = value⌝ ∗ p ↦ w) := by
-  sl_frame
+  iframe
 
 /-- A pure fact of the left-hand side is available when proving the pure facts
 of the right-hand side, even though it is consumed by the entailment. -/
 example (p : Ptr Nat) (value w : Nat) :
     iprop(⌜w = value + 1⌝ ∗ p ↦ value) ⊢ iprop(⌜0 < w⌝ ∗ p ↦ value) := by
-  sl_frame
+  iframe
 
 /-- An existential of the left-hand side is introduced before the one of the
 right-hand side, so the witness may depend on it. -/
 example (p : Ptr Nat) :
     iprop(∃ n, ⌜0 < n⌝ ∗ p ↦ n) ⊢ iprop(∃ m, p ↦ m) := by
-  sl_frame
+  iframe
 
 /-- Cancellation happens up to associativity and commutativity. -/
 example (p q r : Ptr Nat) (x y z : Nat) :
     iprop((p ↦ x ∗ q ↦ y) ∗ r ↦ z) ⊢ iprop(r ↦ z ∗ (q ↦ y ∗ p ↦ x)) := by
-  sl_frame
+  iframe
 
 /-- The pure side-goals are proved *after* the cancellation, so they see the
 witness that the cancellation chose. -/
 example (p : Ptr Nat) :
     p ↦ 3 ⊢ iprop(∃ n, ⌜0 < n⌝ ∗ p ↦ n) := by
-  sl_frame
+  iframe
 
-/-! ## `sl_pull` -/
+/-! ## `iintro` -/
 
 /-- `step` cannot open a leading existential before frame inference. Pulling its witness
-exposes the pure fact, which `sl_pull_keep` then copies into the context. -/
+exposes the pure fact, which `iintro_keep` then copies into the context. -/
 example (p : Ptr Nat) :
     ⦃ iprop(∃ n, ⌜n = 1⌝ ∗ p ↦ n) ⦄ Examples.incr_ptr p ⦃⇓ p ↦ 2⦄ := by
   unfold Examples.incr_ptr
   fail_if_success
     step
     done
-  sl_pull_shallow
+  iintro_shallow
   step*
 
 /-- Without arguments it peels as much as it can. -/
 example (p : Ptr Nat) (value : Nat) :
     ⦃ iprop(⌜value = 1⌝ ∗ p ↦ value) ⦄ Examples.incr_ptr p ⦃⇓ p ↦ 2⦄ := by
   unfold Examples.incr_ptr
-  sl_pull
+  iintro
   step*
 
-/-! ## `sl_pull_keep`
+/-! ## `iintro_keep`
 
-Unlike `sl_pull`, this copies the pure facts of the precondition into the local
+Unlike `iintro`, this copies the pure facts of the precondition into the local
 context instead of consuming them, so the assertion stays available to the
 framing of later steps. -/
 
@@ -75,26 +74,26 @@ while the postcondition keeps it. -/
 example (p q : Ptr Nat) :
     ⦃ iprop(⌜q = p⌝ ∗ p ↦ 1) ⦄ Examples.incr_ptr q ⦃⇓ iprop(⌜q = p⌝ ∗ p ↦ 2)⦄ := by
   unfold Examples.incr_ptr
-  sl_pull_shallow
+  iintro_shallow
   step*
 
-/-- `sl_pull_keep` leaves the precondition untouched: the fact is needed both in
+/-- `iintro_keep` leaves the precondition untouched: the fact is needed both in
 the context (to rewrite the cell) and in the assertion (for the postcondition). -/
 example (p : Ptr Nat) (n : Nat) :
     ⦃ iprop(⌜n = 1⌝ ∗ p ↦ n) ⦄ pure () ⦃⇓ iprop(⌜n = 1⌝ ∗ p ↦ 1)⦄ := by
-  sl_pull_shallow
+  iintro_shallow
   step
   case hRamified =>
-    apply qwand_intro
+    apply postWand_intro
     intro _
-    sl_frame
+    iframe
 
 /-- `step` reduces match/let noise around a terminal return. -/
 example (n : Nat) :
     ⦃ emp ⦄ (Prod.rec (fun value _ => pure value) (n, true) : St Nat)
       ⦃⇓ result => ⌜result = n⌝⦄ := by
   step
-  simp [himpl, hpure]
+  simp [Entails, ipure]
 
 def namedPure (n : Nat) : St Nat :=
   pure n
@@ -104,7 +103,7 @@ theorem namedPure.spec (n : Nat) :
     ⦃ emp ⦄ namedPure n ⦃⇓ result => ⌜result = n⌝⦄ := by
   unfold namedPure
   step
-  simp [himpl, hpure]
+  simp [Entails, ipure]
 
 /-- The direct terminal rule does not unfold named wrappers and bypass their
 registered specifications: `step` goes through `namedPure.spec` and exposes
@@ -112,7 +111,7 @@ the final ramified-frame goal. -/
 example (n : Nat) :
     ⦃ emp ⦄ namedPure n ⦃⇓ result => ⌜result = n⌝⦄ := by
   step
-  simp [himpl, hpure]
+  simp [Entails, ipure]
 
 /-- Normalization inside `step` stays focused on its original goal. -/
 example (n : Nat) :
@@ -121,11 +120,11 @@ example (n : Nat) :
   fail_if_success all_goals step
   · trivial
   · step
-    simp [himpl, hpure]
+    simp [Entails, ipure]
 
 /-! ## Frame inference
 
-`step` asks `sl_frame` to solve `H ⊢ Hcallee ∗ ?F`.  In that mode nothing may be
+`step` asks `iframe` to solve `H ⊢ Hcallee ∗ ?F`.  In that mode nothing may be
 extracted from `H`: whatever is not required by the callee has to end up in `?F`,
 and `?F` cannot mention anything introduced by the entailment. -/
 
@@ -133,7 +132,7 @@ def touchAny (p : Ptr Nat) : St Unit := do
   let value ← read p
   update p value
 
-/-- The `sl_pull` is not removable: frame inference may not open the existential. -/
+/-- The `iintro` is not removable: frame inference may not open the existential. -/
 @[step]
 theorem touchAny.spec (p : Ptr Nat) :
     ⦃ iprop(∃ n, p ↦ n) ⦄ touchAny p ⦃⇓ iprop(∃ n, p ↦ n)⦄ := by
@@ -141,7 +140,7 @@ theorem touchAny.spec (p : Ptr Nat) :
   fail_if_success
     step*
     done
-  sl_pull n
+  iintro n
   step*
 
 def touchThenSet (p : Ptr Nat) : St Unit := do
@@ -168,8 +167,8 @@ example (p : Ptr Nat) (x : Nat) :
 /-- A framed-out existential stays intact: instantiating it here would put a
 variable out of the scope of the frame metavariable. -/
 example (p q : Ptr Nat) (x : Nat) :
-    ⦃ iprop(hexists (fun n => q ↦ n) ∗ p ↦ x) ⦄ touchThenSet p
-      ⦃⇓ iprop(hexists (fun n => q ↦ n) ∗ p ↦ 7)⦄ := by
+    ⦃ iprop(iexists (fun n => q ↦ n) ∗ p ↦ x) ⦄ touchThenSet p
+      ⦃⇓ iprop(iexists (fun n => q ↦ n) ∗ p ↦ 7)⦄ := by
   unfold touchThenSet
   step*
 
@@ -180,10 +179,10 @@ example (p : Ptr Nat) :
   unfold touchThenSet
   step*
 
-/-- `sl_frame` leaves the other goals of the proof alone. -/
+/-- `iframe` leaves the other goals of the proof alone. -/
 example (p : Ptr Nat) (x : Nat) : (p ↦ x ⊢ p ↦ x) ∧ 1 = 1 := by
   refine ⟨?_, ?_⟩
-  · sl_frame
+  · iframe
   · rfl
 
 /-! ## The shape of the goal `step` hands back -/
@@ -233,7 +232,7 @@ example (p : Ptr Nat) (value : Nat) :
   unfold readFreeReturn
   step*
   simp only [opaqueStepResult]
-  sl_frame
+  iframe
 
 /-- A bounded `step*` can represent the finite block without entering the
 terminal entailment. -/
@@ -244,7 +243,7 @@ example (p : Ptr Nat) (value : Nat) :
   step* 2
   step
   simp only [opaqueStepResult]
-  sl_frame
+  iframe
 
 /-- Conversely, unbounded `step*` may solve the terminal entailment, making
 the tactics after the original finite block fail with no goals. -/
@@ -258,7 +257,7 @@ example (p : Ptr Nat) (value : Nat) :
   step
   step
   step
-  simp [himpl, hempty, hpure]
+  simp [Entails, Aeneas.SLPoC.emp, ipure]
 
 /-! ## Affine resource discard
 
@@ -267,38 +266,38 @@ resources are dropped without any explicit absorbing assertion. -/
 
 example (p : Ptr Nat) (value : Nat) :
     p ↦ value ⊢ emp := by
-  sl_frame
+  iframe
 
 example (p q : Ptr Nat) (left right : Nat) :
     p ↦ left ∗ q ↦ right ⊢ p ↦ left := by
-  sl_frame
+  iframe
 
 /-- A pure fact needs no resources of its own, so it follows from anything. -/
-example (P : SLProp) : P ⊢ ⌜8 = 8⌝ := by
-  sl_frame
+example (P : IProp) : P ⊢ ⌜8 = 8⌝ := by
+  iframe
 
 example (p q : Ptr Nat) (left right : Nat) :
     p ↦ left ∗ q ↦ right ⊢ p ↦ left ∗ emp := by
-  sl_frame
+  iframe
 
 /-- Discarding is *not* forgetting: separated cells stay separated, so a cell
 still cannot be owned twice. -/
 example (p : Ptr Nat) (x y : Nat) :
     p ↦ x ∗ p ↦ y ⊢ ⌜False⌝ :=
-  hsingle_exclusive p x y
+  pointsTo_exclusive p x y
 
-/-- Nor is discarding conjuring: `sl_frame` drops the cell the right-hand side
+/-- Nor is discarding conjuring: `iframe` drops the cell the right-hand side
 does not ask for, but still refuses one the left-hand side does not own. -/
 example (p q : Ptr Nat) (x y : Nat) : p ↦ x ∗ q ↦ y ⊢ q ↦ y := by
   fail_if_success
-    (have : p ↦ x ⊢ q ↦ y := by sl_frame)
-  sl_frame
+    (have : p ↦ x ⊢ q ↦ y := by iframe)
+  iframe
 
 /-- Affinity weakens; it does not fabricate resources. -/
 example (p : Ptr Nat) (value : Nat) : ¬ (emp ⊢ p ↦ value) := by
   intro hImpl
   have hContains := Ptr.contains_of_sub (hImpl ∅ trivial)
-  simp [Ptr.contains, contains] at hContains
+  exact not_contains_empty p hContains
 
 /-- Nor does it excuse a specification from owning what it reads. -/
 example (p : Ptr Nat) : ¬ (⦃ emp ⦄ read p ⦃⇓ _ => emp⦄) := by
@@ -311,7 +310,7 @@ example (p : Ptr Nat) : ¬ (⦃ emp ⦄ read p ⦃⇓ _ => emp⦄) := by
       (fun h hContains => (Ptr.read p h hContains, h)))
     (fun _ => emp) ∅ at hTheta
   obtain ⟨hContains, -⟩ := theta_ev_elim hTheta
-  simp [Ptr.contains, contains] at hContains
+  exact not_contains_empty p hContains
 
 def allocAndForget (value : Nat) : St Unit := do
   let _ ← alloc value
@@ -328,52 +327,49 @@ example (p : Ptr Nat) (value : Nat) :
     ⦃ p ↦ value ⦄ (pure () : St Unit) ⦃⇓ emp⦄ := by
   step*
 
-/-! ## The tactics ported from Separation Logic Foundations
-
-`SLTactics.lean` ports SLF's magic wand, ramified frame rule, `xsimpl`, `xpull`,
-`xchange`, `xval` and `xapp`. -/
+/-! ## Separation-logic tactics -/
 
 -- wand laws
-example (H1 H2 : SLProp) : H1 ∗ (H1 -∗ H2) ⊢ H2 := hwand_cancel H1 H2
-example (Q1 Q2 : SLPost Nat) : Q1 ∗+ (Q1 -∗+ Q2) ⊢+ Q2 := qwand_cancel Q1 Q2
+example (H1 H2 : IProp) : H1 ∗ (H1 -∗ H2) ⊢ H2 := wand_cancel H1 H2
+example (Q1 Q2 : IPost Nat) : Q1 ∗+ (Q1 -∗+ Q2) ⊢+ Q2 := postWand_cancel Q1 Q2
 
--- sl_pull_entail: SLF's canonical example where the RHS witness depends on the LHS one
+-- The RHS witness depends on the LHS witness.
 example (p : Ptr Nat) :
     iprop(∃ n, ⌜0 < n⌝ ∗ p ↦ n) ⊢ iprop(∃ m, p ↦ (m + 1)) := by
-  sl_pull_entail
-  -- `sl_pull_entail` names the variables it introduces `x` and the facts `h`.
-  refine himpl_hexists_r (x - 1) ?_
+  iintro_entail
+  -- `iintro_entail` names the variables it introduces `x` and the facts `h`.
+  refine entails_exists_r (x - 1) ?_
   rw [show x - 1 + 1 = x by omega]
-  sl_simpl
+  isimpl
 
--- sl_change with an entailment
+-- irewrite with an entailment
 theorem cellPair (p q : Ptr Nat) : iprop(p ↦ 1 ∗ q ↦ 2) ⊢ iprop(∃ n, p ↦ n ∗ q ↦ 2) :=
-  himpl_hexists_r 1 (himpl_refl _)
+  entails_exists_r 1 (entails_refl _)
 
 example (p q r : Ptr Nat) :
     iprop(r ↦ 0 ∗ (p ↦ 1 ∗ q ↦ 2)) ⊢ iprop(∃ n, r ↦ 0 ∗ (p ↦ n ∗ q ↦ 2)) := by
-  sl_change (cellPair p q)
-  sl_simpl
+  irewrite (cellPair p q)
+  isimpl
 
--- sl_change with an equality, on a triple precondition
+-- irewrite with an equality, on a triple precondition
 theorem swapEq (p q : Ptr Nat) : iprop(p ↦ 1 ∗ q ↦ 2) = iprop(q ↦ 2 ∗ p ↦ 1) :=
-  hstar_comm_eq _ _
+  sep_comm_eq _ _
 
 example (p q : Ptr Nat) :
     ⦃ iprop((p ↦ 1 ∗ q ↦ 2) ∗ emp) ⦄ Examples.incr_ptr q ⦃⇓ iprop(q ↦ 3 ∗ p ↦ 1)⦄ := by
   unfold Examples.incr_ptr
-  sl_change (swapEq p q)
+  irewrite (swapEq p q)
   step*
 
--- sl_val
+-- wp_pures
 example (p : Ptr Nat) : ⦃ p ↦ 1 ⦄ (pure 5 : St Nat) ⦃⇓ v => ⌜v = 5⌝ ∗ p ↦ 1⦄ := by
-  sl_val
-  sl_simpl
+  wp_pures
+  isimpl
 
--- sl_app: terminal call through the ramified frame rule
+-- wp_apply: terminal call through the ramified frame rule
 example (p q : Ptr Nat) (x : Nat) :
     ⦃ iprop(p ↦ x ∗ q ↦ 9) ⦄ Examples.incr_ptr p ⦃⇓ iprop(q ↦ 9 ∗ p ↦ (x + 1))⦄ := by
-  sl_app (Examples.incr_ptr.spec p x)
+  wp_apply (Examples.incr_ptr.spec p x)
 
 
 /-! ### The ramified frame rule in `step` -/
@@ -382,37 +378,37 @@ example (p q : Ptr Nat) (x : Nat) :
 example (p q : Ptr Nat) :
     ⦃ iprop(p ↦ 3 ∗ q ↦ 7) ⦄ read p ⦃⇓ r => iprop(⌜r = 3⌝ ∗ (p ↦ 3 ∗ q ↦ 7))⦄ := by
   step with read.spec p 3
-  sl_frame
+  iframe
 
 /-- What the ramified frame rule buys: the precondition of the *caller* may be an
-existential, and `sl_frame` is free to open it because there is no frame
+existential, and `iframe` is free to open it because there is no frame
 metavariable to keep it out of.  The explicit frame rule cannot do this. -/
 example (q : Ptr Nat) :
-    ⦃ hexists (fun n => iprop(q ↦ n)) ⦄ alloc 5
-      ⦃⇓ r => iprop(r ↦ 5 ∗ hexists (fun n => iprop(q ↦ n)))⦄ := by
+    ⦃ iexists (fun n => iprop(q ↦ n)) ⦄ alloc 5
+      ⦃⇓ r => iprop(r ↦ 5 ∗ iexists (fun n => iprop(q ↦ n)))⦄ := by
   step*
 
-/-- `sl_pull_entail` must refuse a frame-inference goal: introducing the existential of
+/-- `iintro_entail` must refuse a frame-inference goal: introducing the existential of
 the left-hand side would put a variable out of the scope of the frame `?F`.  The
 `hPre` premise of the bind rule is exactly such a goal. -/
 example (p q : Ptr Nat) (x : Nat) :
-    ⦃ iprop(hexists (fun n => iprop(q ↦ n)) ∗ p ↦ x) ⦄ touchThenSet p
-      ⦃⇓ iprop(hexists (fun n => iprop(q ↦ n)) ∗ p ↦ 7)⦄ := by
+    ⦃ iprop(iexists (fun n => iprop(q ↦ n)) ∗ p ↦ x) ⦄ touchThenSet p
+      ⦃⇓ iprop(iexists (fun n => iprop(q ↦ n)) ∗ p ↦ 7)⦄ := by
   unfold touchThenSet
   apply triple_step_bind (touchAny p) _ (touchAny.spec p)
   case hPre =>
-    fail_if_success sl_pull_entail
-    sl_frame
+    fail_if_success iintro_entail
+    iframe
   case hNext =>
     intro _
-    sl_pull
+    iintro
     step*
 
 /-- A wand on the right is cancelled against an identical one on the left before
 being used to absorb the residual resources. -/
-example (Q₁ Q₂ : SLPost Nat) (H : SLProp) :
+example (Q₁ Q₂ : IPost Nat) (H : IProp) :
     iprop(H ∗ (Q₁ -∗+ Q₂)) ⊢ iprop(H ∗ (Q₁ -∗+ Q₂)) := by
-  sl_frame
+  iframe
 
 /-- `step` only touches the goal it steps, leaving sibling goals alone. -/
 example (p q : Ptr Nat) :
@@ -420,12 +416,12 @@ example (p q : Ptr Nat) :
     ∧ (iprop(p ↦ 3 ∗ q ↦ 7) ⊢ iprop(q ↦ 7 ∗ p ↦ 3)) := by
   refine ⟨?_, ?_⟩
   step with read.spec p 3
-  sl_frame
-  sl_frame
+  iframe
+  iframe
 
 /-! ## `step` -/
 
-/-- `step` supplies `sl_frame` as the precondition discharger, and `with`
+/-- `step` supplies `iframe` as the precondition discharger, and `with`
 is unnecessary for a registered specification. -/
 example (p : Ptr Nat) (x : Nat) :
     ⦃ iprop(⌜x = 5⌝ ∗ p ↦ x) ⦄ touchThenSet p ⦃⇓ iprop(⌜x = 5⌝ ∗ p ↦ 7)⦄ := by
@@ -433,11 +429,11 @@ example (p : Ptr Nat) (x : Nat) :
   step*
 
 /-- A specification that is not registered still needs `with`; `step` only
-drops the `by sl_frame`. -/
+drops the `by iframe`. -/
 example (p : Ptr Nat) :
     ⦃ iprop(∃ n, p ↦ n) ⦄ touchAny p ⦃⇓ iprop(∃ n, p ↦ n)⦄ := by
   unfold touchAny
-  sl_pull n
+  iintro n
   step with read.spec p n
   step*
 

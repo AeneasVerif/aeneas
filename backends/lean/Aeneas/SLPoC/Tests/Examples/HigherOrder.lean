@@ -10,7 +10,6 @@ The callback's specification describes how it transforms an owned cell, and
 
 namespace Aeneas.SLPoC
 
-open scoped SepLogic
 
 namespace HigherOrder
 
@@ -80,7 +79,7 @@ example (x : Nat) :
     done
   step with applyF.spec (fun y => pure (y + 1)) x (fun y => y = x + 1)
   case hf => step*
-  case hRamified => simp [himpl, hempty, hpure]
+  case hRamified => simp [Entails, Aeneas.SLPoC.emp, ipure]
 
 def callPair (f g : Nat → St Nat) (xy : Nat × Nat) : St (Nat × Nat) := do
   let a ← f xy.1
@@ -108,9 +107,9 @@ example (x y : Nat) :
   case hf => step*
   case hg => step*
   case hRamified =>
-    apply qwand_intro
+    apply postWand_intro
     intro result
-    sl_frame
+    iframe
 
 def callFThenG (f g : Nat → St Nat) (x : Nat) : St Nat := do
   let y ← f x
@@ -138,7 +137,7 @@ example (x : Nat) :
   case hg =>
     intro y hy
     step*
-  case hRamified => simp [himpl, hempty, hpure]
+  case hRamified => simp [Entails, Aeneas.SLPoC.emp, ipure]
 
 end ResultStyle
 

@@ -51,7 +51,6 @@ instantiates the buffer at `Std.U128` cells and lane offsets.
 
 namespace Aeneas.SLPoC
 
-open scoped SepLogic
 
 namespace Examples
 
@@ -100,7 +99,7 @@ this single pair of equations is the whole pattern. -/
 
 /-- Ownership of one view: the `i`-th cell of `cells` holds the `i`-th value of
 `values`.  Same model as `PulseArray.ownsCells`. -/
-def ownsCells {α : Type} : List (Ptr α) → List α → SLProp
+def ownsCells {α : Type} : List (Ptr α) → List α → IProp
   | [], [] => emp
   | p :: ps, value :: values => iprop(p ↦ value ∗ ownsCells ps values)
   | _, _ => ⌜False⌝
@@ -155,12 +154,12 @@ theorem readCells.spec {α : Type} (cells : List (Ptr α))
           simp only [readCells, List.getElem?_nil]
           step*
       | cons value values =>
-          sl_pull
+          iintro
           contradiction
   | cons p cells ih =>
       cases values with
       | nil =>
-          sl_pull
+          iintro
           contradiction
       | cons value values =>
           cases i with
@@ -170,7 +169,7 @@ theorem readCells.spec {α : Type} (cells : List (Ptr α))
           | succ i =>
               simp only [readCells, List.getElem?_cons_succ]
               step with ih values i
-              sl_frame
+              iframe
 
 @[step]
 theorem writeCells.spec {α : Type} (cells : List (Ptr α))
@@ -184,12 +183,12 @@ theorem writeCells.spec {α : Type} (cells : List (Ptr α))
           simp only [writeCells, List.set_nil]
           step*
       | cons value values =>
-          sl_pull
+          iintro
           contradiction
   | cons p cells ih =>
       cases values with
       | nil =>
-          sl_pull
+          iintro
           contradiction
       | cons old values =>
           cases i with
@@ -199,7 +198,7 @@ theorem writeCells.spec {α : Type} (cells : List (Ptr α))
           | succ i =>
               simp only [writeCells, List.set_cons_succ]
               step with ih values i
-              sl_frame
+              iframe
 
 /-! ## The buffer -/
 
@@ -215,7 +214,7 @@ the two are the same cells; the separated case owns two views of equal length �
 `new_disjoint_from_slices` asserts that equality, and the Aeneas model states it
 as the axiom `Buffer.length_eq`. -/
 def owns {α : Type} (buffer : InPlaceOrDisjointBuffer α)
-    (relation : EqOrDisj (List α)) : SLProp :=
+    (relation : EqOrDisj (List α)) : IProp :=
   match relation with
   | .equal values =>
       iprop(⌜buffer.srcCells = buffer.dstCells⌝ ∗
@@ -330,7 +329,7 @@ theorem InPlaceOrDisjointBuffer.len.spec {α : Type}
   simp only [InPlaceOrDisjointBuffer.len]
   step
   intro h hBuffer
-  refine hpure_hstar_intro _ ?_ h hBuffer
+  refine pure_sep_intro _ ?_ h hBuffer
   cases relation with
   | equal values =>
       simp only [owns] at hBuffer
@@ -375,7 +374,7 @@ theorem InPlaceOrDisjointBuffer.loadu_si128_src.spec {α : Type}
   cases relation with
   | equal values =>
       simp only [owns, InPlaceOrDisjointBuffer.loadu_si128_src, EqOrDisj.read]
-      sl_pull hSame
+      iintro hSame
       rw [hSame]
       step*
   | disjoint srcValues dstValues =>
@@ -427,18 +426,18 @@ giving it back; the wand plays the role of the back-function Aeneas gives
 `dst`. -/
 
 /-- Lend `lent`, keep `frame`, and take the loan back to restore `restored`. -/
-theorem borrow_intro {lent frame loan restored : SLProp}
+theorem borrow_intro {lent frame loan restored : IProp}
     (hBack : loan ∗ frame ⊢ restored) :
     lent ∗ frame ⊢ lent ∗ (loan -∗ restored) :=
-  hstar_mono (himpl_refl lent) (hwand_intro hBack)
+  sep_mono (entails_refl lent) (wand_intro hBack)
 
 /-- The same, for a loan given back holding different contents `x`. -/
-theorem borrow_intro_forall {ι : Sort _} {lent frame : SLProp}
-    {loan restored : ι → SLProp}
+theorem borrow_intro_forall {ι : Sort _} {lent frame : IProp}
+    {loan restored : ι → IProp}
     (hBack : ∀ x, loan x ∗ frame ⊢ restored x) :
-    lent ∗ frame ⊢ lent ∗ (∀ˢ x, loan x -∗ restored x) :=
-  hstar_mono (himpl_refl lent)
-    (hforall_intro fun x => hwand_intro (hBack x))
+    lent ∗ frame ⊢ lent ∗ iprop(∀ x, loan x -∗ restored x) :=
+  sep_mono (entails_refl lent)
+    (forall_intro fun x => wand_intro (hBack x))
 
 /-- `src(&self) -> &[T]`. -/
 def InPlaceOrDisjointBuffer.src {α : Type}
@@ -461,22 +460,22 @@ theorem InPlaceOrDisjointBuffer.src.spec {α : Type}
           (ownsCells cells relation.read -∗ owns buffer relation)⦄ := by
   simp only [InPlaceOrDisjointBuffer.src]
   step
-  refine himpl_trans ?_ (hpure_hstar_intro _ trivial)
+  refine entails_trans ?_ (pure_sep_intro _ trivial)
   cases relation with
   | equal values =>
       simp only [owns, EqOrDisj.read]
-      apply himpl_hpure_l
+      apply entails_pure_l
       intro hSame
       rw [hSame]
-      refine himpl_trans (himpl_of_eq (hstar_hempty_r_eq _).symm)
+      refine entails_trans (entails_of_eq (sep_emp_r_eq _).symm)
         (borrow_intro ?_)
-      exact himpl_trans (himpl_of_eq (hstar_hempty_r_eq _))
-        (hpure_hstar_intro _ rfl)
+      exact entails_trans (entails_of_eq (sep_emp_r_eq _))
+        (pure_sep_intro _ rfl)
   | disjoint srcValues dstValues =>
       simp only [owns, EqOrDisj.read]
-      apply himpl_hpure_l
+      apply entails_pure_l
       intro hLength
-      exact borrow_intro (hpure_hstar_intro _ hLength)
+      exact borrow_intro (pure_sep_intro _ hLength)
 
 /-- `dst` lends the write view.  Giving it back holding `values` moves the ghost
 state by `EqOrDisj.write`, so the aliased case records that the read view has
@@ -488,35 +487,35 @@ theorem InPlaceOrDisjointBuffer.dst.spec {α : Type}
       ⦃⇓ cells =>
         ⌜cells = buffer.dstCells⌝ ∗
         ownsCells cells relation.written ∗
-          (∀ˢ values,
+          iprop(∀ values,
             ⌜values.length = relation.written.length⌝ ∗
                 ownsCells cells values -∗
               owns buffer (relation.write values))⦄ := by
   simp only [InPlaceOrDisjointBuffer.dst]
   step
-  refine himpl_trans ?_ (hpure_hstar_intro _ trivial)
+  refine entails_trans ?_ (pure_sep_intro _ trivial)
   cases relation with
   | equal values =>
       simp only [owns, EqOrDisj.written, EqOrDisj.write]
-      apply himpl_hpure_l
+      apply entails_pure_l
       intro hSame
-      refine himpl_trans (himpl_of_eq (hstar_hempty_r_eq _).symm)
+      refine entails_trans (entails_of_eq (sep_emp_r_eq _).symm)
         (borrow_intro_forall fun newValues => ?_)
-      refine himpl_trans (himpl_of_eq (hstar_hempty_r_eq _)) ?_
-      apply himpl_hpure_l
+      refine entails_trans (entails_of_eq (sep_emp_r_eq _)) ?_
+      apply entails_pure_l
       intro _
-      exact hpure_hstar_intro _ hSame
+      exact pure_sep_intro _ hSame
   | disjoint srcValues dstValues =>
       simp only [owns, EqOrDisj.written, EqOrDisj.write]
-      apply himpl_hpure_l
+      apply entails_pure_l
       intro hLength
-      refine himpl_trans (himpl_of_eq (hstar_comm_eq _ _))
+      refine entails_trans (entails_of_eq (sep_comm_eq _ _))
         (borrow_intro_forall fun newValues => ?_)
-      refine himpl_trans (himpl_of_eq (hstar_assoc_eq _ _ _)) ?_
-      apply himpl_hpure_l
+      refine entails_trans (entails_of_eq (sep_assoc_eq _ _ _)) ?_
+      apply entails_pure_l
       intro hNew
-      exact himpl_trans (himpl_of_eq (hstar_comm_eq _ _))
-        (hpure_hstar_intro _ (hLength.trans hNew.symm))
+      exact entails_trans (entails_of_eq (sep_comm_eq _ _))
+        (pure_sep_intro _ (hLength.trans hNew.symm))
 
 /-- `ghash_append(&buffer.src()[..])`: take the read view out and read it. -/
 def load_through_src {α : Type} (buffer : InPlaceOrDisjointBuffer α)
@@ -543,10 +542,10 @@ theorem InPlaceOrDisjointBuffer.src.roundTrip {α : Type}
   refine triple_conseq_frame
     (H₂ := iprop(ownsCells buffer.srcCells relation.read -∗
       owns buffer relation))
-    (readCells.spec buffer.srcCells relation.read i) (himpl_refl _) ?_
+    (readCells.spec buffer.srcCells relation.read i) (entails_refl _) ?_
   intro result
-  exact himpl_trans (himpl_of_eq (hstar_assoc_eq _ _ _))
-    (hstar_mono (himpl_refl _) (hwand_cancel _ _))
+  exact entails_trans (entails_of_eq (sep_assoc_eq _ _ _))
+    (sep_mono (entails_refl _) (wand_cancel _ _))
 
 /-- Writing through the borrowed write view agrees with `storeu_si128`.  The two
 specifications are proved independently — `storeu_si128.spec` by case analysis,
@@ -561,21 +560,21 @@ theorem InPlaceOrDisjointBuffer.dst.roundTrip {α : Type}
   simp only [store_through_dst]
   step
   refine triple_conseq_frame
-    (H₂ := iprop(∀ˢ values,
+    (H₂ := iprop(∀ values,
       ⌜values.length = relation.written.length⌝ ∗
           ownsCells buffer.dstCells values -∗
         owns buffer (relation.write values)))
     (writeCells.spec buffer.dstCells relation.written i value)
-    (himpl_refl _) ?_
+    (entails_refl _) ?_
   intro _
   have hLength :
       (relation.written.set i value).length = relation.written.length := by
     simp
-  refine himpl_trans (hstar_mono
-    (hpure_hstar_intro
+  refine entails_trans (sep_mono
+    (pure_sep_intro
       (ownsCells buffer.dstCells (relation.written.set i value)) hLength)
-    (hforall_specialize (relation.written.set i value))) ?_
-  exact hwand_cancel _ _
+    (forall_specialize (relation.written.set i value))) ?_
+  exact wand_cancel _ _
 
 /-! ## What the pattern is about
 
@@ -705,11 +704,11 @@ example (buffer : InPlaceOrDisjointBuffer Std.U128)
         owns buffer
           (relation.write (relation.written.set i value))⦄ := by
   refine triple_conseq (storeThenLoadDst.spec buffer relation i value)
-    (himpl_refl _) ?_
+    (entails_refl _) ?_
   intro result
-  apply himpl_hpure_l
+  apply entails_pure_l
   intro hResult
-  refine hpure_hstar_intro _ ?_
+  refine pure_sep_intro _ ?_
   rw [hResult]
   simp [hBound]
 

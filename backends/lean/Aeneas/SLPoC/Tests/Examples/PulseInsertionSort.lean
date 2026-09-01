@@ -19,7 +19,6 @@ original array, proves them sorted, and proves them a permutation of the input.
 
 namespace Aeneas.SLPoC
 
-open scoped SepLogic
 
 namespace PulseInsertionSort
 
@@ -200,16 +199,16 @@ theorem insertCells.spec [LinearOrder α] (current : Ptr α)
           step*
       | cons value values =>
           simp only [PulseArray.ownsCells]
-          rw [hstar_comm_eq _ (⌜False⌝)]
-          apply triple_hpure
+          rw [sep_comm_eq _ (⌜False⌝)]
+          apply triple_ipure
           intro hfalse
           contradiction
   | cons next cells ih =>
       cases values with
       | nil =>
           simp only [PulseArray.ownsCells]
-          rw [hstar_comm_eq _ (⌜False⌝)]
-          apply triple_hpure
+          rw [sep_comm_eq _ (⌜False⌝)]
+          apply triple_ipure
           intro hfalse
           contradiction
       | cons value values =>
@@ -223,7 +222,7 @@ theorem insertCells.spec [LinearOrder α] (current : Ptr α)
             simp only [orderedInsert, horder]
             step* 2
             step with ih next key values
-            sl_frame
+            iframe
 
 /--
 The outer-loop invariant: the recursively processed suffix has precisely the
@@ -242,18 +241,18 @@ theorem sortCells.spec [LinearOrder α] (cells : List (Ptr α))
           simp only [sortCells, sortedContents]
           step*
       | cons value values =>
-          sl_pull
+          iintro
           contradiction
   | cons current cells ih =>
       cases values with
       | nil =>
-          sl_pull
+          iintro
           contradiction
       | cons key values =>
           simp only [sortCells, sortedContents]
           step with ih values
           step with insertCells.spec current cells key (sortedContents values)
-          sl_frame
+          iframe
 
 /--
 Complete Pulse-style correctness theorem.  The original array retains exact
@@ -274,7 +273,7 @@ theorem insertionSort.spec [LinearOrder α] (array : PulseArray.Array α)
     ⟨sortedContents_sorted values, sortedContents_perm values⟩
   unfold insertionSort
   step with sortCells.spec array.cells values
-  sl_frame
+  iframe
 
 end PulseInsertionSort
 

@@ -159,6 +159,14 @@ def contains {α : Type} (h : Heap) (r : Ref α) : Prop :=
   | none => False
   | some ⟨β, _⟩ => β = α
 
+@[simp]
+theorem not_contains_empty {α : Type} (r : Ref α) :
+    ¬ contains (∅ : Heap) r := by
+  change ¬ match Finmap.lookup r.allocId (∅ : HeapImpl) with
+    | none => False
+    | some ⟨β, _⟩ => β = α
+  simp
+
 /-- The allocation identifier this heap will hand out next: one past every
 identifier it uses.  Allocation is deterministic, which is what lets a program
 be *run* and not only related to its outcomes. -/
