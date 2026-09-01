@@ -21,7 +21,6 @@ from it) that makes the corresponding step free on the Verus side.
 
 namespace Aeneas.SLPoC
 
-open scoped SepLogic
 
 namespace VerusStd
 
@@ -149,7 +148,7 @@ contents its index prescribes.
 
 *Verus/`vstd` counterpart:* a `tracked` `vstd::map::Map<nat, PointsTo<T>>`
 together with the pointwise invariant relating it to `ptrs`. -/
-def cellsFrom (f : Nat → β → α) : Nat → List (Ptr α × β) → SLProp
+def cellsFrom (f : Nat → β → α) : Nat → List (Ptr α × β) → IProp
   | _, [] => emp
   | i, (r, v) :: rest => iprop((r ↦ f i v) ∗ cellsFrom f (i + 1) rest)
 
@@ -166,7 +165,7 @@ def cellsFrom (f : Nat → β → α) : Nat → List (Ptr α × β) → SLProp
 /-- *Verus/`vstd` counterpart:* `vstd::map::Map::singleton`. -/
 @[simp] theorem cellsFrom_singleton (f : Nat → β → α) (i : Nat) (r : Ptr α) (v : β) :
     cellsFrom f i [(r, v)] = iprop(r ↦ f i v) := by
-  simp [hstar_hempty_r_eq]
+  simp [sep_emp_r_eq]
 
 /-- `cellsFrom` only depends on the contents its index function prescribes, so
 two invariants that agree on the relevant range own the same permissions.  This
@@ -201,13 +200,13 @@ theorem cellsFrom_append (f : Nat → β → α) :
         iprop(cellsFrom f i xs ∗ cellsFrom f (i + xs.length) ys) := by
   intro xs
   induction xs with
-  | nil => intro ys i; simp [hstar_hempty_l_eq]
+  | nil => intro ys i; simp [sep_emp_l_eq]
   | cons c xs ih =>
     intro ys i
     obtain ⟨r, v⟩ := c
     have e : i + 1 + xs.length = i + (xs.length + 1) := by omega
     simp only [List.cons_append, cellsFrom_cons, ih, List.length_cons, e,
-      hstar_assoc_eq]
+      sep_assoc_eq]
 
 /-- Split the permission of the cell of index `i` out of a full permission map.
 

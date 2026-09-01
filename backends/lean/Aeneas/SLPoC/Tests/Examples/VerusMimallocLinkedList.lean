@@ -37,7 +37,6 @@ ownership and metadata.
 
 namespace Aeneas.SLPoC
 
-open scoped SepLogic
 
 /-! # Executable definitions -/
 
@@ -108,10 +107,10 @@ def paddingValue (b : Block R) (payload : R) : PaddingCell R :=
 
 The hidden `oldNext` is the typed abstraction of arbitrary/uninitialized bytes
 in the header range.  Both the header and padding cells are owned. -/
-def blockOwn (b : Block R) (payload : R) : SLProp :=
+def blockOwn (b : Block R) (payload : R) : IProp :=
   iprop(
     ⌜blockValid b⌝ ∗
-    hexists fun oldNext : Option (Ptr FreeNode) =>
+    iexists fun oldNext : Option (Ptr FreeNode) =>
       iprop(
         b.header ↦ { next := oldNext } ∗
         b.padding ↦ paddingValue b payload))
@@ -126,7 +125,7 @@ def firstHeader : Entries R → Option (Ptr FreeNode)
 
 /-- Ownership of every header and every padding/resource cell in a free list.
 Each header contains the pointer of the following ghost entry. -/
-def freeBlocks : Entries R → SLProp
+def freeBlocks : Entries R → IProp
   | [] => emp
   | (b, payload) :: rest =>
       iprop(
@@ -137,7 +136,7 @@ def freeBlocks : Entries R → SLProp
 
 /-- Full list representation: the concrete head agrees with the ghost list,
 and the list owns both typed pieces of every block. -/
-def freeListRep (s : FreeList) (entries : Entries R) : SLProp :=
+def freeListRep (s : FreeList) (entries : Entries R) : IProp :=
   iprop(⌜s.first = firstHeader entries⌝ ∗ freeBlocks entries)
 
 @[simp] theorem firstHeader_nil :
@@ -150,16 +149,16 @@ def freeListRep (s : FreeList) (entries : Entries R) : SLProp :=
 @[simp] theorem freeBlocks_nil :
     freeBlocks ([] : Entries R) = emp := rfl
 
-@[sl_simps] theorem blockOwn_eq (b : Block R) (payload : R) :
+@[iris_simps] theorem blockOwn_eq (b : Block R) (payload : R) :
     blockOwn b payload =
       iprop(
         ⌜blockValid b⌝ ∗
-        hexists fun oldNext : Option (Ptr FreeNode) =>
+        iexists fun oldNext : Option (Ptr FreeNode) =>
           iprop(
             b.header ↦ { next := oldNext } ∗
             b.padding ↦ paddingValue b payload)) := rfl
 
-@[sl_simps] theorem freeListRep_eq (s : FreeList) (entries : Entries R) :
+@[iris_simps] theorem freeListRep_eq (s : FreeList) (entries : Entries R) :
     freeListRep s entries =
       iprop(⌜s.first = firstHeader entries⌝ ∗ freeBlocks entries) := rfl
 
@@ -175,7 +174,7 @@ def freeListRep (s : FreeList) (entries : Entries R) : SLProp :=
 /-- Split the newly inserted block's two cells from the remainder of the free
 list.  This is the typed counterpart of the source permission-map entry
 `(PointsTo<Node>, PointsToRaw, Mim::block, IsExposed)`. -/
-@[sl_simps] theorem freeListRep_cons (s : FreeList) (b : Block R)
+@[iris_simps] theorem freeListRep_cons (s : FreeList) (b : Block R)
     (payload : R) (rest : Entries R) :
     freeListRep s ((b, payload) :: rest) =
       iprop(
@@ -194,7 +193,7 @@ theorem blockOwn_join (b : Block R) (payload : R)
       b.padding ↦ paddingValue b payload) ⊢
     blockOwn b payload := by
   unfold blockOwn
-  sl_frame
+  iframe
 
 /-- Exact insertion specification.  It consumes whole-block ownership, writes
 the current head into the header, and transfers both header and padding into a
@@ -207,10 +206,10 @@ theorem insertBlock.spec (s : FreeList) (entries : Entries R)
     ⦃⇓ s' => freeListRep s' ((b, payload) :: entries)⦄ := by
   unfold insertBlock freeListRep
   simp only [firstHeader_cons, freeBlocks_cons]
-  rw [hstar_assoc_eq]
-  sl_pull hfirst
+  rw [sep_assoc_eq]
+  iintro hfirst
   unfold blockOwn
-  sl_pull
+  iintro
   rw [hfirst]
   step*
 
@@ -228,7 +227,7 @@ theorem popBlock.spec (s : FreeList) (b : Block R) (payload : R)
       blockOwn b payload ∗
       freeListRep s' rest⦄ := by
   unfold popBlock
-  sl_pull_keep
+  iintro_keep
   step*
 
 end FreeList

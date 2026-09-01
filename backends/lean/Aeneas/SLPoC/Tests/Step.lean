@@ -2,14 +2,13 @@ import Aeneas.SLPoC.Tests.Examples.Basic
 
 namespace Aeneas.SLPoC.Tests.Step
 
-open scoped SepLogic
 
 /-! ## A result-dependent spatial postcondition
 
 This is the small version of the terminal `step` proofs in `PulseLinkedList`,
 `IrisTutorial`, and `VerusBitmap`. Going through `pure.spec` leaves a
 postcondition wand stated in terms of the abstract result of the specification;
-`himpl_qwand_hpure_eq` collapses it, which restates the obligation about the
+`entails_postWand_pure_eq` collapses it, which restates the obligation about the
 returned value and makes it framable — so an unbounded `step*` closes this on
 its own.
 -/
@@ -53,34 +52,34 @@ example (p : Ptr Nat) (value : Nat) :
   step* 2
   step
   simp only [opaqueStepResult]
-  sl_frame
+  iframe
 
 /-! ## The terminal return
 
 `step` uses the registered `pure.spec` and leaves its ramified-frame entailment
 as the mono goal. The simplification passes collapse its result-equality wand,
-after which an explicit `sl_frame` closes routine terminal goals. `step*` runs
+after which an explicit `iframe` closes routine terminal goals. `step*` runs
 that registered final discharger itself.
 -/
 
-/-- What `sl_frame` cannot close is left as the goal, stated about the returned
+/-- What `iframe` cannot close is left as the goal, stated about the returned
 value: the assertion the entailment starts from and the one its postcondition
-asks for are the *same*, which is what `hpure_hstar_intro` needs here. -/
+asks for are the *same*, which is what `pure_sep_intro` needs here. -/
 example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => iprop(⌜opaqueStepResult 1 1⌝ ∗ p ↦ 1)⦄ := by
   unfold allocAndReturn
   step* 1
   step
-  exact hpure_hstar_intro _ rfl
+  exact pure_sep_intro _ rfl
 
 /-- `FFree.ok`, the constructor `pure` unfolds to, is a terminal return too. -/
 example (n : Nat) : ⦃ emp ⦄ (FFree.ok n : St Nat) ⦃⇓ result => ⌜result = n⌝⦄ := by
   step
-  sl_frame
+  iframe
 
 /-- A `Unit` result is no different. -/
 example (p : Ptr Nat) : ⦃ p ↦ 0 ⦄ (pure () : St Unit) ⦃⇓ p ↦ 0⦄ := by
   step
-  sl_frame
+  iframe
 
 def namedReturn (n : Nat) : St Nat :=
   pure n
@@ -90,18 +89,18 @@ theorem namedReturn.spec (n : Nat) :
     ⦃ emp ⦄ namedReturn n ⦃⇓ result => ⌜result = n⌝⦄ := by
   unfold namedReturn
   step
-  sl_frame
+  iframe
 
 /-- A named pure wrapper is not a *syntactic* return: the terminal rule does not
 unfold it, so the step goes through its registered specification. -/
 example (n : Nat) : ⦃ emp ⦄ namedReturn n ⦃⇓ result => ⌜result = n⌝⦄ := by
   step
-  sl_frame
+  iframe
 
 /-- An explicitly named specification wins over the terminal rule. -/
 example (n : Nat) : ⦃ emp ⦄ (pure n : St Nat) ⦃⇓ result => ⌜result = n⌝⦄ := by
   step with pure.spec
-  sl_frame
+  iframe
 
 /-! ## An unbounded star consumes the whole goal
 
@@ -136,7 +135,7 @@ example (p : Ptr Nat) (value : Nat) :
     step*
     by_cases h : value = 0
   step* 1
-  by_cases h : value = 0 <;> simp only [h, ↓reduceIte] <;> step <;> sl_frame
+  by_cases h : value = 0 <;> simp only [h, ↓reduceIte] <;> step <;> iframe
 
 /-! ## A specification argument is not inferable
 
@@ -159,7 +158,7 @@ theorem ghostHelper.spec (p : Ptr Nat) (_witness : NeedsWitness) :
     ⦃ p ↦ 0 ⦄ ghostHelper p ⦃⇓ p ↦ 0⦄ := by
   unfold ghostHelper
   step
-  sl_frame
+  iframe
 
 def ghostCaller (p : Ptr Nat) : St Unit := do
   ghostHelper p
@@ -173,11 +172,11 @@ example (p : Ptr Nat) :
     done
   step with ghostHelper.spec p (NeedsWitness.mk { f := id })
   step
-  sl_frame
+  iframe
 
 /-! ## A failed discharge leaves inference metavariables unsolved -/
 
-/-- `sl_frame` can infer the value argument of `read.spec` by matching the
+/-- `iframe` can infer the value argument of `read.spec` by matching the
 points-to assertions, but then fails to prove the opaque pure fact. Its failure
 rolls back that assignment, so `step` leaves the `Nat` metavariable as the first
 goal. -/
@@ -188,7 +187,7 @@ example (p : Ptr Nat) (value : Nat) :
   · guard_target = Nat
     exact value
   · simp only [opaqueStepResult]
-    sl_frame
+    iframe
 
 /-! ## The required specification is not registered
 
