@@ -60,28 +60,28 @@ def theta_ev : StEvents Heap α → Wp α
   | .GuardedModify pre modify =>
       { run := fun Q =>
           { holds := fun h =>
-              ∀ frame, Finmap.Disjoint h frame →
+              ∀ frame, PartialCommMonoid.Compatible h frame →
                 ∃ hPre : pre (h ∪ frame), ∃ h',
-                  Finmap.Disjoint h' frame ∧
+                  PartialCommMonoid.Compatible h' frame ∧
                   (modify (h ∪ frame) hPre).2 = h' ∪ frame ∧
                   Q (modify (h ∪ frame) hPre).1 h'
             up_closed := by
               rintro h hBig hWp ⟨rest, hDisjointRest, rfl⟩ frame hDisjointFrame
-              obtain ⟨hDisjointHFrame, hDisjointRestFrame⟩ :=
-                (Finmap.disjoint_union_left h rest frame).mp hDisjointFrame
-              have hDisjointCombined : Finmap.Disjoint h (rest ∪ frame) :=
-                (Finmap.disjoint_union_right h rest frame).mpr
-                  ⟨hDisjointRest, hDisjointHFrame⟩
+              obtain ⟨hDisjointRestFrame, hDisjointCombined⟩ :=
+                (PartialCommMonoid.compatible_assoc h rest frame).mp
+                  ⟨hDisjointRest, hDisjointFrame⟩
               have hWp' := hWp (rest ∪ frame) hDisjointCombined
-              rw [← Finmap.union_assoc] at hWp'
+              rw [← PartialCommMonoid.union_assoc
+                hDisjointRest hDisjointFrame] at hWp'
               obtain ⟨hPre, h', hDisjoint', hModify, hQ⟩ := hWp'
               obtain ⟨hDisjoint'Rest, hDisjoint'Frame⟩ :=
-                (Finmap.disjoint_union_right h' rest frame).mp hDisjoint'
+                (PartialCommMonoid.compatible_assoc h' rest frame).mpr
+                  ⟨hDisjointRestFrame, hDisjoint'⟩
               refine ⟨?_, h' ∪ rest, ?_, ?_, ?_⟩
-              · simpa [Finmap.union_assoc] using hPre
-              · exact (Finmap.disjoint_union_left h' rest frame).mpr
-                  ⟨hDisjoint'Frame, hDisjointRestFrame⟩
-              · simpa [Finmap.union_assoc] using hModify
+              · exact hPre
+              · exact hDisjoint'Frame
+              · simpa only [PartialCommMonoid.union_assoc
+                  hDisjoint'Rest hDisjoint'Frame] using hModify
               · exact (Q _).up_closed hQ (Heap.Sub.union_left hDisjoint'Rest)
           }
         monotone := by
@@ -98,9 +98,10 @@ theorem theta_ev_elim {pre : Heap → Prop}
     (hWp : theta_ev (.GuardedModify pre modify) R h) :
     ∃ hPre : pre h,
       R (modify h hPre).1 (modify h hPre).2 := by
-  obtain ⟨hPre, h', -, hModify, hPost⟩ :=
-    hWp empty (Finmap.Disjoint.symm _ _ (Finmap.disjoint_empty h))
-  simp [empty] at hPre hModify hPost
+  have hWp' := hWp empty (PartialCommMonoid.compatible_comm
+    (PartialCommMonoid.compatible_empty_left h))
+  simp only [Heap.union_empty] at hWp'
+  obtain ⟨hPre, h', -, hModify, hPost⟩ := hWp'
   subst h'
   exact ⟨hPre, hPost⟩
 
@@ -115,21 +116,21 @@ theorem theta_ev_frame (event : StEvents Heap α) (Q : SLPost α)
   cases event with
   | GuardedModify pre modify =>
       rintro h ⟨h₁, h₂, hDisjoint, rfl, hWp, hH⟩ frame hDisjointFrame
-      obtain ⟨hDisjoint₁Frame, hDisjoint₂Frame⟩ :=
-        (Finmap.disjoint_union_left h₁ h₂ frame).mp hDisjointFrame
-      have hDisjointCombined : Finmap.Disjoint h₁ (h₂ ∪ frame) :=
-        (Finmap.disjoint_union_right h₁ h₂ frame).mpr
-          ⟨hDisjoint, hDisjoint₁Frame⟩
+      obtain ⟨hDisjoint₂Frame, hDisjointCombined⟩ :=
+        (PartialCommMonoid.compatible_assoc h₁ h₂ frame).mp
+          ⟨hDisjoint, hDisjointFrame⟩
       have hWp' := hWp (h₂ ∪ frame) hDisjointCombined
-      rw [← Finmap.union_assoc] at hWp'
+      rw [← PartialCommMonoid.union_assoc
+        hDisjoint hDisjointFrame] at hWp'
       obtain ⟨hPre, h', hDisjoint', hModify, hQ⟩ := hWp'
       obtain ⟨hDisjoint'H₂, hDisjoint'Frame⟩ :=
-        (Finmap.disjoint_union_right h' h₂ frame).mp hDisjoint'
+        (PartialCommMonoid.compatible_assoc h' h₂ frame).mpr
+          ⟨hDisjoint₂Frame, hDisjoint'⟩
       refine ⟨?_, h' ∪ h₂, ?_, ?_, ?_⟩
-      · simpa [Finmap.union_assoc] using hPre
-      · exact (Finmap.disjoint_union_left h' h₂ frame).mpr
-          ⟨hDisjoint'Frame, hDisjoint₂Frame⟩
-      · simpa [Finmap.union_assoc] using hModify
+      · exact hPre
+      · exact hDisjoint'Frame
+      · simpa only [PartialCommMonoid.union_assoc
+          hDisjoint'H₂ hDisjoint'Frame] using hModify
       · exact ⟨h', h₂, hDisjoint'H₂, rfl, hQ, hH⟩
 
 theorem theta_frame (m : St α) (Q : SLPost α) (H : SLProp) :
