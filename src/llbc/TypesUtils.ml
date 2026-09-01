@@ -2,6 +2,15 @@ open Types
 open Utils
 include Charon.TypesUtils
 
+(** Create a tuple type. *)
+let mk_tuple_ty (tys : ty list) : ty =
+  TAdt
+    {
+      id = unit_type_decl_id;
+      generics = mk_generic_args_from_types tys;
+      builtin = Some TTuple;
+    }
+
 let concat_generic_args (generics1 : generic_args) (generics2 : generic_args) :
     generic_args =
   {
@@ -111,7 +120,7 @@ let ty_has_adt_with_borrows span (infos : TypesAnalysis.type_infos) (ty : ty) :
 
       method! visit_ty env ty =
         match ty with
-        | TAdt { id; _ } when id <> TBuiltin TTuple ->
+        | TAdt { builtin; _ } when builtin <> Some TTuple ->
             let info = TypesAnalysis.analyze_ty span infos ty in
             if info.TypesAnalysis.contains_borrow then raise Found
             else super#visit_ty env ty
@@ -220,7 +229,7 @@ let type_decl_has_nested_borrows (span : Meta.span option)
   let generics =
     Substitute.generic_args_of_params_erase_regions span type_decl.generics
   in
-  let ty = TAdt { id = TAdtId type_decl.def_id; generics } in
+  let ty = TAdt { id = type_decl.def_id; generics; builtin = None } in
   ty_has_nested_borrows span infos ty
 
 let type_decl_has_nested_mut_borrows (span : Meta.span option)
@@ -228,7 +237,7 @@ let type_decl_has_nested_mut_borrows (span : Meta.span option)
   let generics =
     Substitute.generic_args_of_params_erase_regions span type_decl.generics
   in
-  let ty = TAdt { id = TAdtId type_decl.def_id; generics } in
+  let ty = TAdt { id = type_decl.def_id; generics; builtin = None } in
   ty_has_nested_mut_borrows span infos ty
 
 (** Retuns true if the type contains a borrow under a mutable borrow *)
@@ -256,10 +265,10 @@ let ty_has_mut_borrow_for_region_in_pred (infos : TypesAnalysis.type_infos)
       method! visit_TAdt env tref =
         (* Lookup the information for this ADT *)
         begin
-          match tref.id with
-          | TBuiltin (TTuple | TBox | TStr) -> ()
-          | TAdtId adt_id ->
-              let info = TypeDeclId.Map.find adt_id infos in
+          match tref.builtin with
+          | Some (TTuple | TBox | TStr) -> ()
+          | None ->
+              let info = TypeDeclId.Map.find tref.id infos in
               RegionId.iteri
                 (fun adt_rid r ->
                   if RegionId.Set.mem adt_rid info.mut_regions && pred r then
@@ -305,11 +314,11 @@ let ty_get_mutable_regions (infos : TypesAnalysis.type_infos)
       method! visit_TAdt env tref =
         (* Lookup the information for this ADT *)
         begin
-          match tref.id with
-          | TBuiltin (TTuple | TBox | TStr) -> ()
-          | TAdtId adt_id ->
+          match tref.builtin with
+          | Some (TTuple | TBox | TStr) -> ()
+          | None ->
               (* Check which region parameters are mutable *)
-              let info = TypeDeclId.Map.find adt_id infos in
+              let info = TypeDeclId.Map.find tref.id infos in
               RegionId.iteri
                 (fun adt_rid r ->
                   if RegionId.Set.mem adt_rid info.mut_regions then add_region r)
@@ -473,17 +482,6 @@ let type_decl_from_decl_id_is_tuple_struct (ctx : TypesAnalysis.type_infos)
     (id : TypeDeclId.id) : bool =
   let info = TypeDeclId.Map.find id ctx in
   info.is_tuple_struct
-
-(** Return true if a type declaration should be extracted as a tuple, because it
-    is a non-recursive structure with unnamed fields. *)
-let type_decl_from_type_id_is_tuple_struct (ctx : TypesAnalysis.type_infos)
-    (id : type_id) : bool =
-  match id with
-  | TBuiltin TTuple -> true
-  | TAdtId id ->
-      let info = TypeDeclId.Map.find id ctx in
-      info.is_tuple_struct
-  | TBuiltin _ -> false
 
 (** A trait instance id refers to a local clause if it only uses the variants:
     [Self], [Clause], [ParentClause] *)

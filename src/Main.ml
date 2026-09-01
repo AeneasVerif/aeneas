@@ -597,7 +597,7 @@ let () =
              (function
                | Aeneas.LlbcAst.FunGroup (RecGroup (_ :: _)) -> true
                | _ -> false)
-             m.declarations
+             (Option.get m.declarations)
       then (
         log#error
           "The Lean backend doesn't support the use of \

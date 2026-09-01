@@ -42,20 +42,17 @@ val expand_symbolic_bool :
   eval_ctx ->
   (eval_ctx * eval_ctx) * (SA.expr * SA.expr -> SA.expr)
 
-(** Symbolic integers are expanded upon evaluating a [SwitchInt].
+(** Symbolic integers are expanded upon evaluating a switch over a value.
 
-    When expanding a boolean upon evaluating an [if ... then ... else ...], or
-    an enumeration just before matching over it, we can simply expand the
-    boolean/enumeration (generating a list of contexts from which to execute)
-    then retry evaluating the [if ... then ... else ...] or the [match]: as the
-    scrutinee will then have a concrete value, the interpreter will switch to
-    the proper branch.
+    Boolean and enumeration switches can simply expand their scrutinee
+    (generating a list of contexts from which to execute), then retry the
+    switch: the scrutinee will have a concrete value, so the interpreter will
+    select the proper branch.
 
     When expanding a "regular" integer for a switch there is always an
-    *otherwise* branch. We treat it separately: for this reason we return a pair
-    of a list of evaluation contexts (for the branches which are not the
-    otherwise branch) and an additional evaluation context for the otherwise
-    branch. *)
+    *fallback* branch. We treat it separately: for this reason we return a pair
+    of a list of evaluation contexts (for the explicit branches) and an
+    additional evaluation context for the fallback branch. *)
 val expand_symbolic_int :
   Meta.span ->
   symbolic_value ->

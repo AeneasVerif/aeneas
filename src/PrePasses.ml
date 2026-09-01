@@ -242,7 +242,9 @@ let update_array_default (crate : crate) : crate =
           TraitImplId.Set.add_in_place id decl_ids
       end
     in
-    List.iter (collect_visitor#visit_declaration_group ()) crate.declarations;
+    List.iter
+      (collect_visitor#visit_declaration_group ())
+      (Option.get crate.declarations);
     let impls_in_decls =
       TraitImplId.Map.filter
         (fun id _ -> TraitImplId.Set.mem id !decl_ids)
@@ -361,7 +363,9 @@ let update_array_default (crate : crate) : crate =
         crate with
         fun_decls = FunDeclId.Map.filter_map visit_fun crate.fun_decls;
         declarations =
-          filter_ids_visitor#visit_declaration_groups () crate.declarations;
+          Some
+            (filter_ids_visitor#visit_declaration_groups ()
+               (Option.get crate.declarations));
       }
     in
 
@@ -714,28 +718,13 @@ let remove_useless_joins (crate : crate) (f : fun_decl) : fun_decl =
         | Drop (_, _, _, _) -> (can_inline, st :: ls)
         | Abort _ | Return | UnwindResume | Break _ | Continue _ ->
             (true, [ st ])
-        | Switch switch ->
+        | Switch (data, branches) ->
             [%ldebug "Switch: can_inline: " ^ Print.bool_to_string can_inline];
             (* Attempt to inline inside the body *)
             let to_inline, ls = if can_inline then (ls, []) else ([], ls) in
             let update b = snd (update_block to_inline b) in
-            let switch =
-              match switch with
-              | If (scrut, st0, st1) -> If (scrut, update st0, update st1)
-              | SwitchInt (op, ty, branches, otherwise) ->
-                  let branches =
-                    List.map (fun (pats, br) -> (pats, update br)) branches
-                  in
-                  let otherwise = update otherwise in
-                  SwitchInt (op, ty, branches, otherwise)
-              | Match (scrut, branches, otherwise) ->
-                  let branches =
-                    List.map (fun (id, br) -> (id, update br)) branches
-                  in
-                  let otherwise = Option.map update otherwise in
-                  Match (scrut, branches, otherwise)
-            in
-            let ls = { st with kind = Switch switch } :: ls in
+            let branches = List.map update branches in
+            let ls = { st with kind = Switch (data, branches) } :: ls in
             [%ldebug
               "after updating the switch:\n"
               ^ Print.list_to_string ~sep:"\n" (statement_to_string crate) ls];
@@ -1132,7 +1121,7 @@ let filter_marker_traits (crate : crate) : crate =
                   in
                   if ids <> [] then Some (MixedGroup (RecGroup ids)) else None)
           | _ -> Some g)
-        crate.declarations
+        (Option.get crate.declarations)
     in
     let trait_decls =
       TraitDeclId.Map.filter
@@ -1157,7 +1146,7 @@ let filter_marker_traits (crate : crate) : crate =
     let crate =
       {
         crate with
-        declarations;
+        declarations = Some declarations;
         trait_decls;
         trait_impls;
         global_decls;
@@ -1190,7 +1179,7 @@ let filter_marker_traits (crate : crate) : crate =
 
         method! visit_trait_ref_kind env (kind : trait_ref_kind) =
           match kind with
-          | BuiltinOrAuto (data, parent_refs, types) ->
+          | BuiltinOrAuto (data, parent_refs, types, vtable) ->
               let parent_refs =
                 List.filter (fun tr -> not (is_filtered_ref tr)) parent_refs
               in
@@ -1202,7 +1191,8 @@ let filter_marker_traits (crate : crate) : crate =
                   (fun t -> self#visit_trait_assoc_ty_impl env t)
                   types
               in
-              BuiltinOrAuto (data, parent_refs, types)
+              let vtable = Option.map (self#visit_global_decl_ref env) vtable in
+              BuiltinOrAuto (data, parent_refs, types, vtable)
           | _ -> super#visit_trait_ref_kind env kind
 
         method! visit_trait_decl env (decl : trait_decl) =
@@ -1260,9 +1250,10 @@ let filter_type_aliases (crate : crate) : crate =
         (fun _id ty -> not (type_decl_is_alias ty))
         crate.type_decls;
     declarations =
-      List.filter
-        (fun decl -> not (decl_group_is_single_alias decl))
-        crate.declarations;
+      Some
+        (List.filter
+           (fun decl -> not (decl_group_is_single_alias decl))
+           (Option.get crate.declarations));
   }
 
 (** Whenever we write a string literal in Rust, rustc actually introduces a
@@ -1316,7 +1307,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
                 match (cv.kind, cv.ty) with
                 | ( CLiteral (VStr str),
                     TRef
-                      (_, (TAdt { id = TBuiltin TStr; _ } as str_ty), ref_kind)
+                      (_, (TAdt { builtin = Some TStr; _ } as str_ty), ref_kind)
                   ) ->
                     (* We need to introduce intermediate assignments *)
                     (* First the string initialization *)
@@ -1933,7 +1924,7 @@ let remove_vtables (crate : crate) : crate =
                 else Some (MixedGroup (RecGroup ids))
             | _ -> Some (MixedGroup g))
         | _ -> Some g)
-      crate.declarations
+      (Option.get crate.declarations)
   in
 
   (* *)
@@ -1963,7 +1954,14 @@ let remove_vtables (crate : crate) : crate =
       crate.trait_decls
   in
 
-  { crate with declarations; type_decls; global_decls; fun_decls; trait_decls }
+  {
+    crate with
+    declarations = Some declarations;
+    type_decls;
+    global_decls;
+    fun_decls;
+    trait_decls;
+  }
 
 let name_is_valid (n : string) : bool =
   let is_valid_char c =
@@ -2168,6 +2166,11 @@ let simplify_trait_calls (crate : crate) : crate =
       if f.item_meta.is_local then visitor#visit_fun_decl_id () f.def_id;
       match f.body with
       | StructuredBody body -> visitor#visit_block () body.body
+      | TargetDispatchBody targets ->
+          List.iter
+            (fun ((_ : string), (fdr : Types.fun_decl_ref)) ->
+              visitor#visit_fun_decl_id () fdr.id)
+            targets
       | _ -> ())
     crate.fun_decls;
 
@@ -2222,7 +2225,9 @@ let simplify_trait_calls (crate : crate) : crate =
         else false
     | _ -> true
   in
-  let declarations = List.filter keep_group crate.declarations in
+  let declarations =
+    Some (List.filter keep_group (Option.get crate.declarations))
+  in
 
   (* *)
   { crate with declarations }
@@ -2259,10 +2264,11 @@ let fix_closure_lifetimes (crate : crate) (f : fun_decl) : fun_decl =
      We do the update only if the state is inside a reference. *)
   let find_input_region (ty : ty) =
     match ty with
-    | TAdt { id = TAdtId id; generics = { regions = [ RVar rid ]; _ } }
+    | TAdt { id; generics = { regions = [ RVar rid ]; _ }; builtin = None }
     | TRef
-        (_, TAdt { id = TAdtId id; generics = { regions = [ RVar rid ]; _ } }, _)
-      -> (
+        ( _,
+          TAdt { id; generics = { regions = [ RVar rid ]; _ }; builtin = None },
+          _ ) -> (
         match TypeDeclId.Map.find_opt id crate.type_decls with
         | Some decl -> (
             match decl.src with

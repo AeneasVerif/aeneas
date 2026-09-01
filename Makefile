@@ -85,12 +85,12 @@ build-bin-dir: build-bin build-lib build-runner
 
 .PHONY: extract-lean-std
 extract-lean-std:
-	cd backends/lean && lake exe extract
+	cd backends/lean && lake exe cache get && lake exe extract
 	cd src && dune fmt || true
 
 .PHONY: extract-lean-keywords
 extract-lean-keywords:
-	cd backends/lean && lake exe extract_lean_keywords
+	cd backends/lean && lake exe cache get && lake exe extract_lean_keywords
 	cd src && dune fmt || true
 
 # TODO: using ppx (in aeneas-ppx) breaks this command

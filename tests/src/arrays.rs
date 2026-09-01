@@ -120,6 +120,18 @@ pub fn update_update_array(mut s: &mut [[u32; 32]; 32], i: usize, j: usize) {
     s[i][j] = 0;
 }
 
+/// Same as [update_update_array], but on a slice: the shared bounds check which
+/// rustc inserts for the borrow checker must be removed here as well.
+pub fn update_update_slice(s: &mut [[u32; 32]], i: usize, j: usize) {
+    s[i][j] = 0;
+}
+
+/// Similar, but with an additional *used* shared access, on a different index:
+/// only the redundant bounds check on [s[i]] must disappear.
+pub fn update_update_slice_shifted(s: &mut [[u32; 32]], i: usize, j: usize) {
+    s[i][j] = s[i + 1][j];
+}
+
 pub fn array_local_deep_copy(x: &[u32; 32]) {
     let _y = *x;
 }
