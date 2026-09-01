@@ -1,4 +1,4 @@
-import Aeneas.SLPoC.RustHeap
+import Aeneas.SLPoC.MutableData.Ptr
 
 /-!
 # Creusot's list-reversal lasso
