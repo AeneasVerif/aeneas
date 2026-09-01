@@ -63,6 +63,7 @@ open Error
 inductive Result (α : Type u) where
   | ok (v: α): Result α
   | fail (e: Error): Result α
+  | ub
   | div
 deriving Repr, BEq
 
@@ -82,12 +83,12 @@ instance Result_Nonempty (α : Type u) : Nonempty (Result α) :=
 def ok? {α: Type u} (r: Result α): Bool :=
   match r with
   | ok _ => true
-  | fail _ | div => false
+  | fail _ | ub | div => false
 
 def div? {α: Type u} (r: Result α): Bool :=
   match r with
   | div => true
-  | ok _ | fail _ => false
+  | ok _ | fail _ | ub => false
 
 def massert (b : Prop) [Decidable b] : Result Unit :=
   if b then ok () else fail assertionFailure
@@ -119,6 +120,7 @@ def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Resu
   match x with
   | ok v  => f v
   | fail v => fail v
+  | ub => ub
   | div => div
 
 -- Allows using Result in do-blocks
@@ -131,6 +133,7 @@ instance : Pure Result where
 
 @[simp] theorem bind_ok (x : α) (f : α → Result β) : bind (.ok x) f = f x := by simp [bind]
 @[simp] theorem bind_fail (x : Error) (f : α → Result β) : bind (.fail x) f = .fail x := by simp [bind]
+@[simp] theorem bind_ub (f : α → Result β) : bind .ub f = .ub := by simp [bind]
 @[simp] theorem bind_div (f : α → Result β) : bind .div f = .div := by simp [bind]
 
 @[simp] theorem bind_tc_ok (x : α) (f : α → Result β) :
@@ -138,6 +141,9 @@ instance : Pure Result where
 
 @[simp] theorem bind_tc_fail (x : Error) (f : α → Result β) :
   (do let y ← fail x; f y) = fail x := by simp [Bind.bind, bind]
+
+@[simp] theorem bind_tc_ub (f : α → Result β) :
+  (do let y ← ub; f y) = ub := by simp [Bind.bind, bind]
 
 @[simp] theorem bind_tc_div (f : α → Result β) :
   (do let y ← div; f y) = div := by simp [Bind.bind, bind]
@@ -178,6 +184,7 @@ noncomputable instance : MonoBind Result where
     · exact h _
     · exact FlatOrder.rel.refl
     · exact FlatOrder.rel.refl
+    . exact FlatOrder.rel.refl
 
 end Order
 
@@ -284,6 +291,7 @@ def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) 
     | ControlFlow.cont x => loop body x
     | ControlFlow.done x => ok x
   | fail e => fail e
+  | ub => ub
   | div => div
 partial_fixpoint
 
