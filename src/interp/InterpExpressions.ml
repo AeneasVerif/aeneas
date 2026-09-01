@@ -159,11 +159,11 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
   | VAdt av ->
       (* Sanity check *)
       (match v.ty with
-      | TAdt { id = TBuiltin TBox; _ } ->
+      | TAdt { builtin = Some TBox; _ } ->
           [%craise] span "Can't copy an builtin value other than Option"
-      | TAdt { id = TAdtId _; _ } as ty ->
+      | TAdt { builtin = None; _ } as ty ->
           [%sanity_check] span (allow_adt_copy || ty_is_copyable ty)
-      | TAdt { id = TTuple; _ } -> () (* Ok *)
+      | TAdt { builtin = Some TTuple; _ } -> () (* Ok *)
       | TArray (ty, _) | TSlice ty ->
           [%cassert] span (ty_is_copyable ty)
             "The type is not primitively copyable"
@@ -375,12 +375,12 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
           [%ldebug "literal constant"];
           (* FIXME: the str type is not in [literal_type] *)
           match cv.ty with
-          | TAdt { id = TBuiltin TStr; _ } ->
+          | TAdt { builtin = Some TStr; _ } ->
               let v : tvalue = { value = VLiteral lit; ty = cv.ty } in
               (v, ctx, fun e -> e)
           | TLiteral lit_ty ->
               (literal_to_tvalue span lit_ty lit ctx, ctx, fun e -> e)
-          | TRef (RErased, (TAdt { id = TBuiltin TStr; _ } as str_ty), RShared)
+          | TRef (RErased, (TAdt { builtin = Some TStr; _ } as str_ty), RShared)
             ->
               (* Reference to a string *)
               (* Generate a fresh symbolic value for the string. In the translation,
@@ -777,7 +777,7 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
          We have to treat the shared borrow case separately from the box case.
       *)
       match (ty1, v.value) with
-      | TAdt { id = TBuiltin TBox; _ }, _ ->
+      | TAdt { builtin = Some TBox; _ }, _ ->
           [%cassert] span
             (not (tvalue_has_borrows (Some span) ctx v))
             "Unimplemented use of dynamic traits";
@@ -1270,19 +1270,18 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
   let v, cf_compute =
     (* Match on the aggregate kind *)
     match aggregate_kind with
-    | AggregatedAdt ({ id = type_id; generics }, opt_variant_id, opt_field_id)
-      -> (
+    | AggregatedAdt (tref, opt_variant_id, opt_field_id) -> (
+        let generics = tref.generics in
         (* The opt_field_id is Some only for unions, that we don't support *)
         [%sanity_check] span (opt_field_id = None);
-        match type_id with
-        | TTuple ->
-            let tys = List.map (fun (v : tvalue) -> v.ty) values in
+        match tref.builtin with
+        | Some TTuple ->
             let v = VAdt { variant_id = None; fields = values } in
-            let generics = mk_generic_args [] tys [] [] in
-            let ty = TAdt { id = TTuple; generics } in
+            let ty = TAdt tref in
             let aggregated : tvalue = { value = v; ty } in
             (aggregated, fun e -> e)
-        | TAdtId def_id ->
+        | None ->
+            let def_id = tref.id in
             (* Sanity checks *)
             let type_decl = ctx_lookup_type_decl span ctx def_id in
             [%sanity_check] span
@@ -1298,11 +1297,11 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
             let av : adt_value =
               { variant_id = opt_variant_id; fields = values }
             in
-            let aty = TAdt { id = TAdtId def_id; generics } in
+            let aty = TAdt tref in
             let aggregated : tvalue = { value = VAdt av; ty = aty } in
             (* Call the continuation *)
             (aggregated, fun e -> e)
-        | TBuiltin _ -> [%craise] span "Unreachable")
+        | Some _ -> [%craise] span "Unreachable")
     | AggregatedArray (ety, cg) ->
         (* Sanity check: all the values have the proper type *)
         [%classert] span
@@ -1364,14 +1363,14 @@ let eval_discriminant (config : config) (span : Meta.span) (p : place)
 
   let adt_id, _generics =
     match v.ty with
-    | TAdt { id; generics } -> (
-        match id with
-        | TAdtId id -> (id, generics)
-        | TTuple ->
+    | TAdt { id; generics; builtin } -> (
+        match builtin with
+        | None -> (id, generics)
+        | Some TTuple ->
             [%craise] span
               ("Attempting to read the discriminant of a tuple: ("
              ^ tvalue_to_string ctx v ^ " : " ^ ty_to_string ctx v.ty ^ ")")
-        | TBuiltin _ ->
+        | Some _ ->
             [%craise] span
               ("Attempting to read the discriminant of a builtin type: ("
              ^ tvalue_to_string ctx v ^ " : " ^ ty_to_string ctx v.ty ^ ")"))

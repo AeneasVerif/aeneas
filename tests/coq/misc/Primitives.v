@@ -875,12 +875,8 @@ Definition alloc_vec_Vec_index_mut_usize {T : Type} (v: alloc_vec_Vec T) (i: usi
   | Fail_ e => Fail_ e
   end.
 
-(* Trait declaration: [core::slice::index::private_slice_index::Sealed] *)
-Definition core_slice_index_private_slice_index_Sealed (self : Type) := unit.
-
 (* Trait declaration: [core::slice::index::SliceIndex] *)
 Record core_slice_index_SliceIndex (Self T Output : Type) := mk_core_slice_index_SliceIndex {
-  core_slice_index_SliceIndex_sealedInst : core_slice_index_private_slice_index_Sealed Self;
   core_slice_index_SliceIndex_get : Self -> T -> result (option Output);
   core_slice_index_SliceIndex_get_mut :
     Self -> T -> result (option Output * (option Output -> T));
@@ -891,7 +887,6 @@ Record core_slice_index_SliceIndex (Self T Output : Type) := mk_core_slice_index
     Self -> T -> result (Output * (Output -> T));
 }.
 Arguments mk_core_slice_index_SliceIndex {_ _ _}.
-Arguments core_slice_index_SliceIndex_sealedInst {_ _ _}.
 Arguments core_slice_index_SliceIndex_get {_ _ _}.
 Arguments core_slice_index_SliceIndex_get_mut {_ _ _}.
 Arguments core_slice_index_SliceIndex_get_unchecked {_ _ _}.
@@ -958,14 +953,9 @@ Axiom core_array_Array_index_mut :
   (a : array T N) (i : Idx),
   result (Output * (Output -> array T N)).
 
-(* Trait implementation: [core::slice::index::private_slice_index::Range] *)
-Definition core_slice_index_private_slice_index_SealedRangeUsizeInst
-  : core_slice_index_private_slice_index_Sealed (core_ops_range_Range usize) := tt.
-
 (* Trait implementation: [core::slice::index::Range] *)
 Definition core_slice_index_SliceIndexRangeUsizeSliceInst (T : Type) :
   core_slice_index_SliceIndex (core_ops_range_Range usize) (slice T) (slice T) := {|
-  core_slice_index_SliceIndex_sealedInst := core_slice_index_private_slice_index_SealedRangeUsizeInst;
   core_slice_index_SliceIndex_get := core_slice_index_SliceIndexRangeUsizeSlice_get;
   core_slice_index_SliceIndex_get_mut := core_slice_index_SliceIndexRangeUsizeSlice_get_mut;
   core_slice_index_SliceIndex_get_unchecked := core_slice_index_SliceIndexRangeUsizeSlice_get_unchecked;
@@ -1026,14 +1016,9 @@ Axiom core_slice_index_usize_index : forall {T : Type}, usize -> slice T -> resu
 Axiom core_slice_index_usize_index_mut :
   forall {T : Type}, usize -> slice T -> result (T * (T -> slice T)).
 
-(* Trait implementation: [core::slice::index::private_slice_index::usize] *)
-Definition core_slice_index_private_slice_index_SealedUsizeInst
-  : core_slice_index_private_slice_index_Sealed usize := tt.
-
 (* Trait implementation: [core::slice::index::usize] *)
 Definition core_slice_index_SliceIndexUsizeSliceInst (T : Type) :
   core_slice_index_SliceIndex usize (slice T) T := {|
-  core_slice_index_SliceIndex_sealedInst := core_slice_index_private_slice_index_SealedUsizeInst;
   core_slice_index_SliceIndex_get := core_slice_index_usize_get;
   core_slice_index_SliceIndex_get_mut := core_slice_index_usize_get_mut;
   core_slice_index_SliceIndex_get_unchecked := core_slice_index_usize_get_unchecked;

@@ -62,11 +62,6 @@ let remove_dummy_var (span : Meta.span) (vid : DummyVarId.id) (ctx : eval_ctx) :
   let ctx, v = ctx_remove_dummy_var span ctx vid in
   (v, ctx)
 
-(** Push an uninitialized variable to the environment *)
-let push_uninitialized_var (span : Meta.span) (var : local) (ctx : eval_ctx) :
-    eval_ctx =
-  ctx_push_uninitialized_var span ctx var
-
 (** Push a list of uninitialized variables to the environment *)
 let push_uninitialized_vars (span : Meta.span) (vars : local list)
     (ctx : eval_ctx) : eval_ctx =
@@ -211,7 +206,7 @@ let set_discriminant (config : config) (span : Meta.span) (p : place)
   let v, ctx, cc = comp2 cc (prepare_lplace config span p ctx) in
   (* Update the value *)
   match (v.ty, v.value) with
-  | TAdt { id = TAdtId _ as type_id; generics }, VAdt av -> (
+  | TAdt { id = def_id; generics; builtin = None }, VAdt av -> (
       (* There are two situations:
          - either the discriminant is already the proper one (in which case we
            don't do anything)
@@ -226,23 +221,17 @@ let set_discriminant (config : config) (span : Meta.span) (p : place)
           else
             (* Replace the value *)
             let bottom_v =
-              match type_id with
-              | TAdtId def_id ->
-                  compute_expanded_bottom_adt_value span ctx def_id
-                    (Some variant_id) generics
-              | _ -> [%craise] span "Unreachable"
+              compute_expanded_bottom_adt_value span ctx def_id
+                (Some variant_id) generics
             in
             let ctx, cc =
               comp cc (assign_to_place config span bottom_v p ctx)
             in
             ((ctx, Unit), cc))
-  | TAdt { id = TAdtId _ as type_id; generics }, VBottom ->
+  | TAdt { id = def_id; generics; builtin = None }, VBottom ->
       let bottom_v =
-        match type_id with
-        | TAdtId def_id ->
-            compute_expanded_bottom_adt_value span ctx def_id (Some variant_id)
-              generics
-        | _ -> [%craise] span "Unreachable"
+        compute_expanded_bottom_adt_value span ctx def_id (Some variant_id)
+          generics
       in
       let ctx, cc = comp cc (assign_to_place config span bottom_v p ctx) in
       ((ctx, Unit), cc)
@@ -265,21 +254,6 @@ let ctx_push_frame (ctx : eval_ctx) : eval_ctx =
 
 (** Push a frame delimiter in the context's environment *)
 let push_frame (ctx : eval_ctx) : eval_ctx = ctx_push_frame ctx
-
-(** Small helper: compute the type of the return value for a specific
-    instantiation of an builtin function. *)
-let get_builtin_function_return_type (span : Meta.span) (fid : builtin_fun_id)
-    (generics : generic_args) : ety =
-  [%sanity_check] span (generics.trait_refs = []);
-  (* Retrieve the function's signature *)
-  let sg = Builtin.get_builtin_fun_sig fid in
-  (* Instantiate the return type  *)
-  let generics = Subst.generic_args_erase_regions generics in
-  let subst =
-    [%add_loc] Subst.make_subst_from_generics (Some span) sg.item_binder_params
-      generics Self
-  in
-  Subst.erase_regions_substitute_types subst sg.item_binder_value.output
 
 let move_return_value (config : config) (span : Meta.span)
     (pop_return_value : bool) (ctx : eval_ctx) :
@@ -374,105 +348,30 @@ let pop_frame_assign (config : config) (span : Meta.span) (dest : place) :
   in
   comp cc (assign_to_place config span (Option.get v) dest ctx)
 
-(** Auxiliary function - see {!eval_builtin_function_call} *)
+(** Evaluate [Box::new] in concrete mode. *)
 let eval_box_new_concrete (config : config) (span : Meta.span)
-    (generics : generic_args) : cm_fun =
+    (generics : generic_args) (call : call) : cm_fun =
  fun ctx ->
   (* Check and retrieve the arguments *)
   match
-    (generics.regions, generics.types, generics.const_generics, ctx.env)
+    (generics.regions, generics.types, generics.const_generics, call.args)
   with
-  | ( [],
-      [ boxed_ty ],
-      [],
-      EBinding (BVar input_var, input_value)
-      :: EBinding (_ret_var, _)
-      :: EFrame :: _ ) ->
-      (* Required type checking *)
-      [%cassert] span
-        (input_value.ty = boxed_ty)
+  | [], [ boxed_ty ], [], [ input ] ->
+      (* Move the input value *)
+      let v, ctx, cc = eval_operand config span input ctx in
+      [%cassert] span (v.ty = boxed_ty)
         "The input given to Box::new doesn't have the proper type";
 
-      (* Move the input value *)
-      let v, ctx, cc =
-        eval_operand config span
-          (Move (mk_place_from_var_id ctx span input_var.index))
-          ctx
-      in
-
-      (* Create the new box *)
-      (* Create the box value *)
-      let generics = TypesUtils.mk_generic_args_from_types [ boxed_ty ] in
-      let box_ty = TAdt { id = TBuiltin TBox; generics } in
+      (* Create the new box. We use the type of the destination: this saves us
+         from having to look up the id of the declaration of [Box]. *)
+      let box_ty = call.dest.ty in
+      [%cassert] span
+        (ty_as_opt_box box_ty = Some boxed_ty)
+        "The destination of Box::new doesn't have the proper type";
       let box_v = VAdt { variant_id = None; fields = [ v ] } in
       let box_v = mk_tvalue span box_ty box_v in
-
-      (* Move this value to the return variable *)
-      let dest = mk_place_from_var_id ctx span LocalId.zero in
-      comp cc (assign_to_place config span box_v dest ctx)
+      comp cc (assign_to_place config span box_v call.dest ctx)
   | _ -> [%craise] span "Inconsistent state"
-
-(** Evaluate a non-local function call in concrete mode *)
-let eval_builtin_function_call_concrete (config : config) (span : Meta.span)
-    (fid : builtin_fun_id) (call : call) : cm_fun =
- fun ctx ->
-  let args = call.args in
-  let dest = call.dest in
-  match call.func with
-  | FnOpDynamic _ ->
-      (* Function pointer case: TODO *)
-      [%craise] span "Function pointers are not supported yet"
-  | FnOpRegular func ->
-      let generics = func.generics in
-      (* Sanity check: we don't fully handle the const generic vars environment
-         in concrete mode yet *)
-      [%sanity_check] span (generics.const_generics = []);
-
-      (* Evaluate the operands *)
-      (*      let ctx, args_vl = eval_operands config ctx args in *)
-      let args_vl, ctx, cc = eval_operands config span args ctx in
-
-      (* Evaluate the call
-       *
-       * Style note: at some point we used {!comp_transmit} to
-       * transmit the result of {!eval_operands} above down to {!push_vars}
-       * below, without having to introduce an intermediary function call,
-       * but it made it less clear where the computed values came from,
-       * so we reversed the modifications. *)
-      (* Push the stack frame: we initialize the frame with the return variable,
-         and one variable per input argument *)
-      let ctx = push_frame ctx in
-
-      (* Create and push the return variable *)
-      let ret_vid = LocalId.zero in
-      let ret_ty = get_builtin_function_return_type span fid generics in
-      let ret_var = mk_var ret_vid (Some "@return") ret_ty span in
-      let ctx = push_uninitialized_var span ret_var ctx in
-
-      (* Create and push the input variables *)
-      let input_vars =
-        LocalId.mapi_from1
-          (fun id (v : tvalue) -> (mk_var id None v.ty span, v))
-          args_vl
-      in
-      let ctx = push_vars span input_vars ctx in
-
-      (* "Execute" the function body. As the functions are builtin, here we call
-       * custom functions to perform the proper manipulations: we don't have
-       * access to a body. *)
-      let ctx, cf_eval_body =
-        match fid with
-        | BoxNew -> eval_box_new_concrete config span generics ctx
-        | Index _
-        | ArrayToSliceShared
-        | ArrayToSliceMut
-        | ArrayRepeat
-        | PtrFromParts _ -> [%craise] span "Unimplemented"
-      in
-      let cc = cc_comp cc cf_eval_body in
-
-      (* Pop the frame *)
-      comp cc (pop_frame_assign config span dest ctx)
 
 (** Helper
 
@@ -654,29 +553,16 @@ let eval_function_call_symbolic_inst (span : Meta.span) (func : fn_ptr)
          correctly instantiated signatures, and delegate the work to an
          auxiliary function *)
       let sg = Builtin.get_builtin_fun_sig fid in
-      (* Sanity check: make sure the type parameters don't contain regions -
-         this is a current limitation of our synthesis, *except if the function
-         is [Box::new] (TODO: the case [Box::new] is a hack) *)
-      if fid = BoxNew then
-        (* Sanity check: check that we are not using nested borrows *)
-        [%classert] span
-          (List.for_all
-             (fun ty ->
-               not
-                 (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos ty))
-             func.generics.types)
-          (lazy
-            ("Instantiating [Box::new] with nested borrows is not allowed for \
-              now (" ^ fn_ptr_to_string ctx func ^ ")"))
-      else
-        [%classert] span
-          (List.for_all
-             (fun ty -> not (ty_has_mut_borrows ctx.type_ctx.type_infos ty))
-             func.generics.types)
-          (lazy
-            ("Instantiating the type parameters of a function with types \
-              containing mutable borrows is currently not allowed ("
-           ^ fn_ptr_to_string ctx func ^ ")"));
+      (* Sanity check: make sure the type parameters don't contain mutable
+         borrows, which is a current limitation of our synthesis. *)
+      [%classert] span
+        (List.for_all
+           (fun ty -> not (ty_has_mut_borrows ctx.type_ctx.type_infos ty))
+           func.generics.types)
+        (lazy
+          ("Instantiating the type parameters of a function with types \
+            containing mutable borrows is currently not allowed ("
+         ^ fn_ptr_to_string ctx func ^ ")"));
 
       (* There shouldn't be any reference to Self *)
       let tr_self = UnknownTrait __FUNCTION__ in
@@ -945,7 +831,7 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
   | Loop loop_body ->
       let eval_loop_body = eval_block config loop_body in
       InterpLoops.eval_loop config st.span eval_loop_body ctx
-  | Switch switch -> eval_switch config st.span switch ctx
+  | Switch (data, branches) -> eval_switch config st.span data branches ctx
   | Error s -> [%craise] st.span s
   | _ ->
       [%craise] st.span ("unsupported statement: " ^ show_statement_kind st.kind)
@@ -985,11 +871,11 @@ and eval_global_ref (config : config) (span : Meta.span) (dest : place)
       ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span (cc_comp cf cc))
 
 (** Evaluate a switch *)
-and eval_switch (config : config) (span : Meta.span) (switch : switch) :
-    stl_cm_fun =
+and eval_switch (config : config) (span : Meta.span) (data : switch_data)
+    (branches : block list) : stl_cm_fun =
  fun ctx ->
-  let ctx, cc = eval_switch_prepare config span switch ctx in
-  comp cc (eval_switch_raw config span switch ctx)
+  let ctx, cc = eval_switch_prepare span ctx in
+  comp cc (eval_switch_raw config span data branches ctx)
 
 (** Prepare the context before evaluating a switch.
 
@@ -997,14 +883,13 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
     that we may symbolically expand some shared values which are in frozen
     region abstractions (and which we thus want to remain the same in the left
     and right branches). *)
-and eval_switch_prepare (_config : config) (span : Meta.span) (_switch : switch)
-    : cm_fun =
+and eval_switch_prepare (span : Meta.span) : cm_fun =
  fun ctx ->
   InterpJoin.reborrow_ashared_loans_symbolic_borrows span None
     ~with_abs_conts:true ctx
 
-and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
-    stl_cm_fun =
+and eval_switch_raw (config : config) (span : Meta.span) (data : switch_data)
+    (branches : block list) : stl_cm_fun =
  fun ctx ->
   (* We evaluate the scrutinee in two steps:
      first we prepare it, then we check if its value is concrete or
@@ -1013,22 +898,38 @@ and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
      Note that we can't fully evaluate the operand *then* expand the
      value if it is symbolic, because the value may have been moved
      (and would thus floating in thin air...)! *)
-  (* Match on the targets *)
-  match (switch : LlbcAst.switch) with
-  | If (op, true_block, false_block) ->
+  let branch (id : branch_id) : block =
+    [%unwrap_with_span] span
+      (List.nth_opt branches (BranchId.to_int id))
+      "Switch branch index out of bounds"
+  in
+  let branch_for_case (matches : constant_expr -> bool) : block =
+    match List.find_opt (fun (case, _) -> matches case) data.branches with
+    | Some (_, id) -> branch id
+    | None ->
+        branch ([%unwrap_with_span] span data.fallback "No fallback branch")
+  in
+  match data.scrutinee with
+  | SwitchValue op ->
       (* Evaluate the operand *)
       let op_v, ctx, cf_eval_op = eval_operand config span op ctx in
       let ctx0 = ctx in
-      (* Switch on the value *)
-      let ctx_resl, cf_if =
-        match op_v.value with
-        | VLiteral (VBool b) ->
-            (* Branch *)
-            if b then eval_block config true_block ctx
-            else eval_block config false_block ctx
-        | VSymbolic sv ->
+      let ctx_resl, cf_switch =
+        match (op_v.value, op_v.ty) with
+        | VLiteral (VBool b), TLiteral TBool ->
+            let target =
+              branch_for_case (fun case -> case.kind = CLiteral (VBool b))
+            in
+            eval_block config target ctx
+        | VSymbolic sv, TLiteral TBool ->
             (* Expand the symbolic boolean, and continue by evaluating
                the branches *)
+            let true_block =
+              branch_for_case (fun case -> case.kind = CLiteral (VBool true))
+            in
+            let false_block =
+              branch_for_case (fun case -> case.kind = CLiteral (VBool false))
+            in
             let (true_ctx, false_ctx), cf_bool =
               expand_symbolic_bool span sv
                 (S.mk_opt_place_from_op span op ctx)
@@ -1056,58 +957,48 @@ and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
                    and simply duplicate the code *)
                 (ctx_resl, cc)
             else (ctx_resl, cc)
-        | _ -> [%craise] span "Inconsistent state"
-      in
-      (* Compose *)
-      (ctx_resl, cc_comp cf_eval_op cf_if)
-  | SwitchInt (op, (int_ty : literal_type), stgts, otherwise) ->
-      (* Evaluate the operand *)
-      let op_v, ctx, cf_eval_op = eval_operand config span op ctx in
-      let ctx0 = ctx in
-      (* Switch on the value *)
-      let ctx_resl, cf_switch =
-        match (op_v.value, int_ty) with
-        | VLiteral (VScalar sv), (TInt _ | TUInt _) -> (
+        | VLiteral (VScalar sv), TLiteral ((TInt _ | TUInt _) as int_ty) ->
             (* Sanity check *)
             [%sanity_check] span (Scalars.get_ty sv = literal_as_integer int_ty);
             (* Find the branch *)
-            match
-              List.find_opt (fun (svl, _) -> List.mem (VScalar sv) svl) stgts
-            with
-            | None -> eval_block config otherwise ctx
-            | Some (_, tgt) -> eval_block config tgt ctx)
-        | VSymbolic sv, _ ->
-            (* Several branches may be grouped together: every branch is described
-               by a pair (list of values, branch expression).
-               In order to do a symbolic evaluation, we make this "flat" by
-               de-grouping the branches. *)
-            let values, branches =
+            let target =
+              branch_for_case (fun case -> case.kind = CLiteral (VScalar sv))
+            in
+            eval_block config target ctx
+        | VSymbolic sv, TLiteral ((TInt _ | TUInt _) as int_ty) ->
+            let values, target_blocks =
               List.split
-                (List.concat
-                   (List.map
-                      (fun (vl, st) -> List.map (fun v -> (v, st)) vl)
-                      stgts))
+                (List.map
+                   (fun (case, branch_id) ->
+                     ( literal_as_scalar
+                         (TypesUtils.constant_expr_as_literal case),
+                       branch branch_id ))
+                   data.branches)
+            in
+            let otherwise =
+              branch
+                ([%unwrap_with_span] span data.fallback
+                   "Integer switch has no fallback branch")
             in
             (* Expand the symbolic value *)
             let (ctx_branches, ctx_otherwise), cf_int =
               expand_symbolic_int span sv
                 (S.mk_opt_place_from_op span op ctx)
                 (literal_as_integer int_ty)
-                (List.map literal_as_scalar values)
-                ctx
+                values ctx
             in
             (* Evaluate the branches: first the "regular" branches *)
             let resl_branches =
               List.map
                 (fun (ctx, branch) -> eval_block config branch ctx)
-                (List.combine ctx_branches branches)
+                (List.combine ctx_branches target_blocks)
             in
             (* Then evaluate the "otherwise" branch *)
             let resl_otherwise = eval_block config otherwise ctx_otherwise in
 
             (* Should we join the contexts after the switch? *)
             let join =
-              (not (List.exists block_has_break_continue_return branches))
+              (not (List.exists block_has_break_continue_return target_blocks))
               && not (block_has_break_continue_return otherwise)
             in
             let resl, cf =
@@ -1129,11 +1020,11 @@ and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
             else
               (* Do not join the contexts: compose the continuations and continue *)
               (resl, cf)
-        | _ -> [%craise] span "Inconsistent state"
+        | _ -> [%craise] span "Unsupported switch scrutinee"
       in
       (* Compose *)
       (ctx_resl, cc_comp cf_eval_op cf_switch)
-  | Match (p, stgts, otherwise) ->
+  | SwitchDiscriminant p ->
       (* Access the place *)
       let access = Read in
       let expand_prim_copy = false in
@@ -1149,16 +1040,17 @@ and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
         let p_v = value_strip_shared_loans p_v in
         (* Match *)
         match p_v.value with
-        | VAdt adt -> (
+        | VAdt adt ->
             (* Evaluate the discriminant *)
             let dv = Option.get adt.variant_id in
             (* Find the branch, evaluate and continue *)
-            match List.find_opt (fun (svl, _) -> List.mem dv svl) stgts with
-            | None -> (
-                match otherwise with
-                | None -> [%craise] span "No otherwise branch"
-                | Some otherwise -> eval_block config otherwise ctx)
-            | Some (_, tgt) -> eval_block config tgt ctx)
+            let target =
+              branch_for_case (fun case ->
+                  match case.kind with
+                  | CDiscriminant (_, variant_id) -> variant_id = dv
+                  | _ -> false)
+            in
+            eval_block config target ctx
         | VSymbolic sv ->
             (* Expand the symbolic value - may lead to branching *)
             let ctxl, cf_expand =
@@ -1167,18 +1059,13 @@ and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
             (* Re-evaluate the switch - the value is not symbolic anymore,
                which means we will go to the other branch *)
             let resl =
-              List.map (fun ctx -> (eval_switch config span switch) ctx) ctxl
+              List.map
+                (fun ctx -> (eval_switch config span data branches) ctx)
+                ctxl
             in
             (* Should we join the contexts after the match? *)
             let join =
-              (not
-                 (List.exists
-                    (fun (_, b) -> block_has_break_continue_return b)
-                    stgts))
-              &&
-              match otherwise with
-              | None -> true
-              | Some block -> not (block_has_break_continue_return block)
+              not (List.exists block_has_break_continue_return branches)
             in
             let ctx_resl, cf = comp_seqs __FILE__ __LINE__ span resl in
             let cc = cc_comp cf_expand cf in
@@ -1379,16 +1266,14 @@ and eval_function_call_concrete (config : config) (span : Meta.span)
   | FnOpRegular func -> (
       match func.kind with
       | FunId (FRegular fid) ->
-          eval_non_builtin_function_call_concrete config span fid call ctx
-      | FunId (FBuiltin fid) ->
-          (* Continue - note that we do as if the function call has been successful,
-           * by giving {!Unit} to the continuation, because we place us in the case
-           * where we haven't panicked. Of course, the translation needs to take the
-           * panic case into account... *)
-          let ctx, cc =
-            eval_builtin_function_call_concrete config span fid call ctx
-          in
-          ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span cc)
+          let def = ctx_lookup_fun_decl span ctx fid in
+          if def.item_meta.diagnostic_item = Some "box_new" then
+            let ctx, cc =
+              eval_box_new_concrete config span func.generics call ctx
+            in
+            ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span cc)
+          else eval_non_builtin_function_call_concrete config span fid call ctx
+      | FunId (FBuiltin _) -> [%craise] span "Unimplemented"
       | TraitMethod _ -> [%craise] span "Unimplemented")
 
 and eval_function_call_symbolic (config : config) (span : Meta.span)

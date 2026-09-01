@@ -131,4 +131,28 @@ def Params1.CT1_LEN.default {Self : Type} (Params1Inst : Params1 Self)
   : Result Std.Usize :=
   Params1Inst.PACKED_LEN
 
+/-- [constants_lean::FEATURE_A]
+    Source: 'tests/src/constants-lean.rs', lines 52:0-52:28 -/
+@[global_simps, irreducible] def FEATURE_A : Std.U32 := 2#u32
+
+/-- [constants_lean::FEATURE_B]
+    Source: 'tests/src/constants-lean.rs', lines 53:0-53:28 -/
+@[global_simps, irreducible] def FEATURE_B : Std.U32 := 8#u32
+
+/-- [constants_lean::FEATURE_C]
+    Source: 'tests/src/constants-lean.rs', lines 54:0-54:28 -/
+@[global_simps, irreducible] def FEATURE_C : Std.U32 := 32#u32
+
+/-- [constants_lean::TWO_FEATURES]
+    Source: 'tests/src/constants-lean.rs', lines 56:0-56:48 -/
+@[global_simps, irreducible]
+def TWO_FEATURES : Std.U32 := FEATURE_A ||| FEATURE_B
+
+/-- [constants_lean::THREE_FEATURES]
+    Source: 'tests/src/constants-lean.rs', lines 57:0-57:62 -/
+@[global_simps, irreducible]
+def THREE_FEATURES : Std.U32 :=
+  let i := FEATURE_A ||| FEATURE_B
+  i ||| FEATURE_C
+
 end constants_lean
