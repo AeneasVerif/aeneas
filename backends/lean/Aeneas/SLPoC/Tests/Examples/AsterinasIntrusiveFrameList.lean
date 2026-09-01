@@ -29,7 +29,6 @@ split used by public `pop_front`.
 
 namespace Aeneas.SLPoC
 
-open scoped SepLogic
 
 namespace AsterinasIntrusiveFrameList
 
@@ -176,7 +175,7 @@ def detachedValue (frame : Frame M) (payload : M) : FrameSlot M :=
 /-- Recursive ownership of an intrusive suffix.  The explicit predecessor
 parameter makes every stored back-link part of the representation. -/
 def ownedFrom (listId : Nat) :
-    Option (Ptr (FrameSlot M)) → List (Entry M) → SLProp
+    Option (Ptr (FrameSlot M)) → List (Entry M) → IProp
   | _, [] => emp
   | prev, (frame, payload) :: rest =>
       iprop(
@@ -185,14 +184,14 @@ def ownedFrom (listId : Nat) :
         ownedFrom listId (some frame.slot) rest)
 
 /-- Exclusive ownership of a frame outside every list. -/
-def detachedFrame (frame : Frame M) (payload : M) : SLProp :=
+def detachedFrame (frame : Frame M) (payload : M) : IProp :=
   frame.slot ↦ detachedValue frame payload
 
 /-- Full recursive list representation tied to the pure frame sequence.
 Repeated slot pointers cannot satisfy this assertion because `↦` is exclusive;
 that is the typed counterpart of the source's unique-frame/representation
 permissions. -/
-def listRep (s : LinkedList M) (entries : List (Entry M)) : SLProp :=
+def listRep (s : LinkedList M) (entries : List (Entry M)) : IProp :=
   iprop(
     ⌜s.listId ≠ 0 ∧
       s.front = firstSlot entries ∧
@@ -201,7 +200,7 @@ def listRep (s : LinkedList M) (entries : List (Entry M)) : SLProp :=
     ownedFrom s.listId none entries)
 
 /-- A cursor owns the list it mutably borrows and identifies its front. -/
-def frontCursorRep (cursor : Cursor M) (entries : List (Entry M)) : SLProp :=
+def frontCursorRep (cursor : Cursor M) (entries : List (Entry M)) : IProp :=
   iprop(⌜cursor.current = cursor.list.front⌝ ∗ listRep cursor.list entries)
 
 attribute [step_post_simps]
@@ -254,11 +253,11 @@ theorem frontCursorRep_cons_split (cursor : Cursor M)
         ownedFrom cursor.list.listId (some frame.slot) rest) := by
   unfold frontCursorRep listRep
   simp only [firstSlot_cons, ownedFrom_cons, List.length_cons]
-  apply himpl_hpure_l
+  apply entails_pure_l
   intro hcursor
-  apply himpl_hpure_l
+  apply entails_pure_l
   intro hlist
-  sl_frame
+  iframe
 
 /-- Recombine the exact cursor split into the recursive list representation. -/
 theorem frontCursorRep_cons_recombine (cursor : Cursor M)
@@ -275,9 +274,9 @@ theorem frontCursorRep_cons_recombine (cursor : Cursor M)
     frontCursorRep cursor ((frame, payload) :: rest) := by
   unfold frontCursorRep listRep
   simp only [firstSlot_cons, ownedFrom_cons, List.length_cons]
-  apply himpl_hpure_l
+  apply entails_pure_l
   intro h
-  sl_frame
+  iframe
 
 /-- The empty cursor/list view exposes both null ends and size. -/
 theorem frontCursorRep_nil_split (cursor : Cursor M) :
@@ -290,11 +289,11 @@ theorem frontCursorRep_nil_split (cursor : Cursor M) :
           cursor.list.size = 0⌝) := by
   unfold frontCursorRep listRep
   simp only [firstSlot_nil, lastSlot_nil, ownedFrom_nil, List.length_nil]
-  apply himpl_hpure_l
+  apply entails_pure_l
   intro hcursor
-  apply himpl_hpure_l
+  apply entails_pure_l
   intro hlist
-  sl_frame
+  iframe
 
 /-- Creating the explicit front cursor is ownership-neutral. -/
 @[step]
@@ -308,14 +307,14 @@ theorem cursorFront.spec (s : LinkedList M) (entries : List (Entry M)) :
     (triple_frame
       (pure.spec ({ list := s, current := s.front } : Cursor M))
       (listRep s entries)) ?_ ?_
-  · rw [hstar_hempty_l_eq]
-    exact himpl_refl _
+  · rw [sep_emp_l_eq]
+    exact entails_refl _
   · intro cursor
-    apply himpl_hpure_l
+    apply entails_pure_l
     intro hcursor
     subst cursor
     unfold frontCursorRep
-    sl_frame
+    iframe
 
 /-- `new` owns no frame cells and represents the empty pure sequence. -/
 @[step]
@@ -340,15 +339,15 @@ theorem pushFront.spec (s : LinkedList M) (entries : List (Entry M))
   | nil =>
       simp only [listRep, firstSlot_nil, lastSlot_nil, ownedFrom_nil,
         List.length_nil]
-      sl_pull hlist
+      iintro hlist
       simp only [hlist.2.1]
       simp only [detachedValue]
       step*
   | cons head rest =>
       rcases head with ⟨oldFrame, oldPayload⟩
       simp only [listRep, firstSlot_cons, ownedFrom_cons, List.length_cons]
-      rw [hstar_assoc_eq]
-      sl_pull hlist
+      rw [sep_assoc_eq]
+      iintro hlist
       simp only [hlist.2.1]
       simp only [linkedValue, detachedValue]
       step*
@@ -362,7 +361,7 @@ theorem takeCurrent.empty.spec (cursor : Cursor M) :
       ⌜cursor' = cursor ∧ result = none⌝ ∗ frontCursorRep cursor' []⦄ := by
   unfold takeCurrent frontCursorRep listRep
   simp only [firstSlot_nil, lastSlot_nil, ownedFrom_nil, List.length_nil]
-  sl_pull hcursor hlist
+  iintro hcursor hlist
   simp only [hcursor, hlist.2.1]
   step*
 
@@ -381,7 +380,7 @@ theorem takeCurrent.cons.spec (cursor : Cursor M) (frame : Frame M)
       frontCursorRep cursor' rest⦄ := by
   unfold takeCurrent detachedFrame frontCursorRep listRep
   simp only [firstSlot_cons, ownedFrom_cons, List.length_cons]
-  sl_pull hcursor hlist
+  iintro hcursor hlist
   simp only [hcursor, hlist.2.1]
   simp only [linkedValue, detachedValue]
   cases rest with
@@ -408,9 +407,9 @@ theorem popFront.empty.spec (s : LinkedList M) :
         frontCursorRep cursor []⦄ := by
     apply triple_conseq (takeCurrent.empty.spec initial)
     · unfold initial frontCursorRep
-      sl_frame
+      iframe
     · intro result
-      exact himpl_refl _
+      exact entails_refl _
   refine triple_bind htake ?_
   rintro ⟨cursor, result⟩
   step*
@@ -435,9 +434,9 @@ theorem popFront.cons.spec (s : LinkedList M) (frame : Frame M)
         frontCursorRep cursor rest⦄ := by
     apply triple_conseq (takeCurrent.cons.spec initial frame payload rest)
     · unfold initial frontCursorRep
-      sl_frame
+      iframe
     · intro result
-      exact himpl_refl _
+      exact entails_refl _
   refine triple_bind htake ?_
   rintro ⟨cursor, result⟩
   step*
