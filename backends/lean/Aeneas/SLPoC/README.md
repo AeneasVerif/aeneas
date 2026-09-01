@@ -23,11 +23,8 @@ git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_se
 | [`Heap.lean`](Heap.lean) | Defines locations, dynamically typed cells, finite heaps, their PCM instance, and the sub-heap order the affine assertions are closed under. |
 | [`PCM.lean`](PCM.lean) | Defines the partial commutative monoid interface used by the heap model. |
 | [`RustHeap.lean`](RustHeap.lean) | The Rust view of the heap: `Ptr` and the pointer operations, over `Heap.lean`. |
-| [`SLTactics.lean`](SLTactics.lean) | Port of the SLF tactics: `sl_frame`, `sl_pull`, `sl_change`, …, including the affine discard of whatever a cancellation leaves over. |
-| [`ST.lean`](ST.lean) | The state monad `St`, its state machine, its denotation `theta` into `Wp`, the Hoare triples it induces, and the specifications of the pointer operations. |
-| [`Step.lean`](Step.lean) | Wires triples into `step`/`step*`, including the direct terminal rule for a syntactic return, whose entailment is left as the goal when `sl_frame` cannot close it. |
-| [`WP.lean`](WP.lean) | Affine separation-logic assertions (`SLProp`, closed under heap extension like Iris's `uPred`), the magic wand, and the `Wp` monad of predicate transformers. |
-| [`Run.lean`](Run.lean) | The certified interpreter: runs a program whose weakest precondition is proved, reading the ownership witnesses every read, write and deallocation needs off that proof. |
+| [`ST.lean`](ST.lean) | The state monad `St`, its inductive total-correctness judgment, state machine, Hoare triples, `step` integration, and certified interpreter. |
+| [`WP.lean`](WP.lean) | Affine separation-logic assertions (`SLProp`, closed under heap extension like Iris's `uPred`), the magic wand, local predicate transformers for individual events, and separation-logic tactics. |
 | [`ProofScore.lean`](Tests/Examples/scripts/ProofScore.lean) | Engineering tool, not part of the library: measures how close the proofs of the triples are to the ideal proof, i.e. how much separation logic the automation still leaves to the user. Writes [`proof-score.html`](Tests/Examples/reports/proof-score.html). |
 | [`proof_simplify.py`](Tests/Examples/scripts/proof_simplify.py) | Compilation-guided proof simplifier: compresses consecutive `step` calls and removes unused `sl_pull` names, retaining only rewrites accepted by Lean. |
 | [`benchmark-report.md`](Tests/Examples/reports/benchmark-report.md) | Report on the eleven external benchmark ports, their interfaces and specifications, proof-score improvements, and remaining automation gaps. |
@@ -72,7 +69,7 @@ Consequently:
   drop whatever a cancellation leaves over;
 * `emp` and `⌜True⌝` both hold of every heap, so `emp` *is* the affine top and
   no separate predicate for it is needed;
-* `triple P m Q` is `theta m ≤ pp2wp P Q`, with nothing absorbing in the
+* `triple P m Q` quantifies over every frame, with nothing absorbing in the
   postcondition, and unused resources may still be discarded from either side.
 
 What affinity does *not* change: separation is still separation, so `p ↦ v ∗ p ↦
@@ -86,19 +83,14 @@ A program of `St` is an **interaction tree**
 heap- and universe-polymorphic event signature `StEvents Heap`.  It has an
 *operational* semantics
 (`StEvents.Step`, lifted to the big-step `Evaluates` of [`Exec.lean`](Exec.lean)),
-a *denotational* one (`theta`, into the weakest-precondition monad), and — in
-[`ST.lean`](ST.lean) — an *executable* one.
+an inductive total-correctness semantics (`TotalSpec`, exposed as `spec`), and
+— in [`ST.lean`](ST.lean) — an *executable* one.
 
-An interaction tree is coinductive, so neither `Exec` nor `theta` can be a
-structural recursion over the program: both are the **least** fixed point of
-their one-step unfolding, written impredicatively as the intersection of its
-pre-fixed points.  Least, not greatest: an execution is a finite sequence of
-transitions, and `theta ITree.div`, the denotation of the bottom element of the
-tree order — what an unproductive recursion denotes — is `False`.  A triple is
-therefore a total-correctness triple, as it was when programs were finite trees.
-`theta_mono_le` states the other half of that picture: `theta` is monotone in
-the tree order, so the weakest precondition of a program defined by
-`partial_fixpoint` is reachable from those of its finite approximations.
+As in `Aeneas.Std.WP.spec`, a proof of total correctness is a finite derivation:
+`ret` establishes the postcondition and `vis` proves the guard and the
+continuation. There is no constructor for `ITree.div`, so every proved program
+terminates. `spec_mono_le` connects this judgment to the interaction-tree
+approximation order used by `partial_fixpoint`.
 
 `St` cannot be interpreted unconditionally either: a heap cell stores its own
 Lean type (`HeapCell = Σ α : Type, α`), so `Ptr.contains h p` is not decidable
