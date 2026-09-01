@@ -2139,6 +2139,15 @@ let trait_self_clause_basename = "self_clause"
 let name_append_index (basename : string) (i : int) : string =
   basename ^ string_of_int i
 
+(** Return [true] if [name] is the first component of a qualified name of
+    [names], that is if [names] contains a name of the shape [name ^ "." ^ ...].
+*)
+let is_qualified_name_prefix (name : string) (names : StringSet.t) : bool =
+  let prefix = name ^ "." in
+  match StringSet.find_first_opt (fun s -> s >= prefix) names with
+  | Some s -> String.starts_with ~prefix s
+  | None -> false
+
 let basename_to_unique (ctx : extraction_ctx) (name : string) =
   let collision s =
     (* Note that we ignore the "unsafe" names which contain in particular
@@ -2146,6 +2155,12 @@ let basename_to_unique (ctx : extraction_ctx) (name : string) =
        the backend allows such collisions *)
     StringSet.mem s ctx.names_maps.names_map.names_set
     || StringSet.mem s ctx.names_maps.strict_names_map.names_set
+    (* We also need to avoid shadowing the namespaces (only Lean uses
+       qualified names) *)
+    || backend () = Lean
+       && (is_qualified_name_prefix s ctx.names_maps.names_map.names_set
+          || is_qualified_name_prefix s
+               ctx.names_maps.strict_names_map.names_set)
   in
   basename_to_unique_aux collision name_append_index name
 

@@ -82,6 +82,7 @@ package «tests» {}
 @[default_target] lean_lib MultiTarget
 @[default_target] lean_lib MutBorrowInSharedBorrow
 @[default_target] lean_lib Names
+@[default_target] lean_lib NamespaceShadow
 @[default_target] lean_lib NestedBorrows
 @[default_target] lean_lib NestedSharedBorrows
 @[default_target] lean_lib NoNestedBorrows
