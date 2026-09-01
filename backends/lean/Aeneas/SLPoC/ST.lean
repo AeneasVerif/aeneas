@@ -18,36 +18,32 @@ open scoped SepLogic
 
 /-! ## The state monad, its operations and operational semantics -/
 
-inductive StEvents : Type → Type 1 where
-  | AllocPtr {α : Type} (value : α) : StEvents (Ptr α)
-  | ReadPtr {α : Type} (p : Ptr α) : StEvents α
-  | UpdatePtr {α : Type} (p : Ptr α) (value : α) : StEvents Unit
-  | FreePtr {α : Type} (p : Ptr α) : StEvents Unit
+universe u v
 
-abbrev St := FFree StEvents
+/-! The type of partially defined stateful operations. -/
+inductive StEvents (Heap : Type u) : Type v → Type (max u v) where
+  | GuardedModify {α : Type v} (pre : Heap → Prop)
+      (modify : (h : Heap) → pre h → α × Heap) : StEvents Heap α
+
+abbrev St := FFree (StEvents Heap)
 
 instance St.instLawfulMonad : LawfulMonad St :=
-  inferInstanceAs (LawfulMonad (FFree StEvents))
+  inferInstanceAs (LawfulMonad (FFree (StEvents Heap)))
 
 /-- The operational semantics of `St`.
-The transitions of the pointer events: `StEvents.Step e h result h'` holds
-when the event `e`, performed on the heap `h`, may answer `result` and leave the
-heap `h'`.
-An event with no transition, such as a read through a dangling pointer, is stuck. -/
-inductive StEvents.Step : {β : Type} → StEvents β → Heap → β → Heap → Prop where
-  | alloc {β : Type} {value : β} {h h' : Heap} {p : Ptr β}
-      (hFresh : Ptr.fresh h p value h') :
-      Step (.AllocPtr value) h p h'
-  | read {β : Type} {p : Ptr β} {h : Heap} (hContains : Ptr.contains h p) :
-      Step (.ReadPtr p) h (Ptr.read p h hContains) h
-  | update {β : Type} {p : Ptr β} {value : β} {h : Heap}
-      (hContains : Ptr.contains h p) :
-      Step (.UpdatePtr p value) h () (Ptr.update p value h hContains)
-  | free {β : Type} {p : Ptr β} {h : Heap} (hContains : Ptr.contains h p) :
-      Step (.FreePtr p) h () (Ptr.free p h hContains)
+`StEvents.Step e h result h'` holds when the guard of `e` holds on `h`, and its
+modifier returns `result` and `h'`.  An event whose guard does not hold is
+stuck. -/
+inductive StEvents.Step :
+    {β : Type} → StEvents Heap β → Heap → β → Heap → Prop where
+  | guardedModify {β : Type} {pre : Heap → Prop}
+      {modify : (h : Heap) → pre h → β × Heap} {h : Heap}
+      (hPre : pre h) :
+      Step (.GuardedModify pre modify) h (modify h hPre).1 (modify h hPre).2
 
 @[reducible]
-def StEvents.machine : StateMachine StEvents := .ofStep Heap StEvents.Step
+def StEvents.machine : StateMachine (StEvents Heap) :=
+  .ofStep Heap StEvents.Step
 
 theorem StEvents.machine_resolves : StEvents.machine.Resolves :=
   StateMachine.ofStep_resolves Heap StEvents.Step
@@ -58,137 +54,57 @@ def Evaluates (m : St α) (h : Heap) (value : α) (h' : Heap) : Prop :=
 
 /-! ## Denotation into the weakest-precondition monad -/
 
-def theta_ev : StEvents α → Wp α
-  | .AllocPtr value =>
-      pp2wp emp (fun p => p ↦ value)
-  | .ReadPtr p =>
-      Wp.hexists fun value =>
-        pp2wp (p ↦ value) (fun result => iprop(⌜result = value⌝ ∗ p ↦ value))
-  | .UpdatePtr p value =>
-      Wp.hexists fun oldValue =>
-        pp2wp (p ↦ oldValue) (fun _ => p ↦ value)
-  | .FreePtr p =>
-      Wp.hexists fun value =>
-        pp2wp (p ↦ value) (fun _ => emp)
+/-- A guarded modification is local when, for every disjoint frame, its guard
+holds and its output can be split into an owned result and the unchanged frame.
+Quantifying over frames here makes the denotation upward-closed and validates
+the frame rule for arbitrary guarded modifications. -/
+def theta_ev : StEvents Heap α → Wp α
+  | .GuardedModify pre modify =>
+      { run := fun Q =>
+          { holds := fun h =>
+              ∀ frame, Finmap.Disjoint h frame →
+                ∃ hPre : pre (h ∪ frame), ∃ h',
+                  Finmap.Disjoint h' frame ∧
+                  (modify (h ∪ frame) hPre).2 = h' ∪ frame ∧
+                  Q (modify (h ∪ frame) hPre).1 h'
+            up_closed := by
+              rintro h hBig hWp ⟨rest, hDisjointRest, rfl⟩ frame hDisjointFrame
+              obtain ⟨hDisjointHFrame, hDisjointRestFrame⟩ :=
+                (Finmap.disjoint_union_left h rest frame).mp hDisjointFrame
+              have hDisjointCombined : Finmap.Disjoint h (rest ∪ frame) :=
+                (Finmap.disjoint_union_right h rest frame).mpr
+                  ⟨hDisjointRest, hDisjointHFrame⟩
+              have hWp' := hWp (rest ∪ frame) hDisjointCombined
+              rw [← Finmap.union_assoc] at hWp'
+              obtain ⟨hPre, h', hDisjoint', hModify, hQ⟩ := hWp'
+              obtain ⟨hDisjoint'Rest, hDisjoint'Frame⟩ :=
+                (Finmap.disjoint_union_right h' rest frame).mp hDisjoint'
+              refine ⟨?_, h' ∪ rest, ?_, ?_, ?_⟩
+              · simpa [Finmap.union_assoc] using hPre
+              · exact (Finmap.disjoint_union_left h' rest frame).mpr
+                  ⟨hDisjoint'Frame, hDisjointRestFrame⟩
+              · simpa [Finmap.union_assoc] using hModify
+              · exact (Q _).up_closed hQ (Heap.Sub.union_left hDisjoint'Rest)
+          }
+        monotone := by
+          intro Q₁ Q₂ hQ h hWp frame hDisjoint
+          obtain ⟨hPre, h', hDisjoint', hModify, hPost⟩ :=
+            hWp frame hDisjoint
+          exact ⟨hPre, h', hDisjoint', hModify,
+            hQ _ h' hPost⟩
+      }
 
-theorem theta_ev_alloc_elim {value : α} {R : SLPost (Ptr α)}
-    {h h' : Heap} {p : Ptr α}
-    (hWp : theta_ev (.AllocPtr value) R h)
-    (hFresh : Ptr.fresh h p value h') :
-    R p h' := by
-  obtain ⟨h₁, h₂, hDisjoint, rfl, -, hPost⟩ := pp2wp_elim hWp
-  obtain ⟨hDisjointFresh, rfl⟩ := Ptr.fresh_eq_singleton_union hFresh
-  obtain ⟨hDisjoint₁, hDisjoint₂⟩ :=
-    (Finmap.disjoint_union_right (Ptr.singleton p value) h₁ h₂).mp hDisjointFresh
-  have hApplied :=
-    hPost p (Ptr.singleton p value) (Heap.Sub.refl _) hDisjoint₂
-  refine (R p).up_closed hApplied ⟨h₁, ?_, ?_⟩
-  · exact (Finmap.disjoint_union_left (Ptr.singleton p value) h₂ h₁).mpr
-      ⟨hDisjoint₁, Finmap.Disjoint.symm _ _ hDisjoint⟩
-  · rw [Finmap.union_assoc, Finmap.union_comm_of_disjoint hDisjoint]
-
-/-- The weakest precondition of a read owns the cell, so the read is safe.
-
-The witness is stated apart from the postcondition below, rather than packaged
-with it in an existential, so that `Aeneas.SLPoC.Run` may *compute* with it: a
-proof cannot be extracted from a `Prop`-existential without choice. -/
-theorem theta_ev_read_contains {p : Ptr α} {R : SLPost α} {h : Heap}
-    (hWp : theta_ev (.ReadPtr p) R h) : Ptr.contains h p := by
-  obtain ⟨value, hWp⟩ := hWp
-  obtain ⟨h₁, h₂, _, rfl, hSingle, -⟩ := pp2wp_elim hWp
-  exact Ptr.contains_union_left (Ptr.contains_of_sub hSingle)
-
-theorem theta_ev_read_post {p : Ptr α} {R : SLPost α} {h : Heap}
-    (hWp : theta_ev (.ReadPtr p) R h) (hContains : Ptr.contains h p) :
-    R (Ptr.read p h hContains) h := by
-  obtain ⟨value, hWp⟩ := hWp
-  obtain ⟨h₁, h₂, hDisjoint, rfl, hSingle, hPost⟩ := pp2wp_elim hWp
-  obtain ⟨rest, hDisjointRest, rfl⟩ := hSingle
-  have hContainsCell := Ptr.contains_singleton p value
-  rw [show (hContains :
-        Ptr.contains ((Ptr.singleton p value ∪ rest) ∪ h₂) p) =
-      Ptr.contains_union_left (Ptr.contains_union_left hContainsCell) from rfl,
-    Ptr.read_union_left (Ptr.contains_union_left hContainsCell),
-    Ptr.read_union_left hContainsCell, Ptr.read_singleton]
-  exact hPost value (Ptr.singleton p value ∪ rest)
-    ((hstar_hpure_l _ _ _).mpr ⟨rfl, Heap.Sub.union_left hDisjointRest⟩)
-    hDisjoint
-
-theorem theta_ev_read_elim {p : Ptr α} {R : SLPost α} {h : Heap}
-    (hWp : theta_ev (.ReadPtr p) R h) :
-    ∃ hContains : Ptr.contains h p, R (Ptr.read p h hContains) h :=
-  ⟨theta_ev_read_contains hWp, theta_ev_read_post hWp _⟩
-
-theorem theta_ev_update_contains {p : Ptr α} {value : α} {R : SLPost Unit}
-    {h : Heap} (hWp : theta_ev (.UpdatePtr p value) R h) : Ptr.contains h p := by
-  obtain ⟨oldValue, hWp⟩ := hWp
-  obtain ⟨h₁, h₂, _, rfl, hSingle, -⟩ := pp2wp_elim hWp
-  exact Ptr.contains_union_left (Ptr.contains_of_sub hSingle)
-
-theorem theta_ev_update_post {p : Ptr α} {value : α} {R : SLPost Unit}
-    {h : Heap} (hWp : theta_ev (.UpdatePtr p value) R h)
-    (hContains : Ptr.contains h p) :
-    R () (Ptr.update p value h hContains) := by
-  obtain ⟨oldValue, hWp⟩ := hWp
-  obtain ⟨h₁, h₂, hDisjoint, rfl, hSingle, hPost⟩ := pp2wp_elim hWp
-  obtain ⟨rest, hDisjointRest, rfl⟩ := hSingle
-  have hContainsCell := Ptr.contains_singleton p oldValue
-  have hContainsUnion := Ptr.contains_union_left (h₂ := rest) hContainsCell
-  /- Updating the cell turns the footprint into `p ↦ value`, and leaves both the
-     unrelated cells the assertion owns and the frame untouched. -/
-  have hUpdated :
-      Ptr.update p value (Ptr.singleton p oldValue ∪ rest) hContainsUnion =
-        Ptr.singleton p value ∪ rest := by
-    rw [Ptr.update_union_left p value hContainsCell, Ptr.update_singleton]
-  have hDisjointUpdated : Finmap.Disjoint (Ptr.singleton p value ∪ rest) h₂ := by
-    rw [← hUpdated]
-    exact Ptr.disjoint_update_left hDisjoint hContainsUnion
-  have hDisjointRest' : Finmap.Disjoint (Ptr.singleton p value) rest := by
-    have := Ptr.disjoint_update_left (value := value) hDisjointRest hContainsCell
-    rwa [Ptr.update_singleton] at this
-  rw [show (hContains :
-        Ptr.contains ((Ptr.singleton p oldValue ∪ rest) ∪ h₂) p) =
-      Ptr.contains_union_left hContainsUnion from rfl,
-    Ptr.update_union_left p value hContainsUnion, hUpdated]
-  exact hPost () (Ptr.singleton p value ∪ rest)
-    (Heap.Sub.union_left hDisjointRest') hDisjointUpdated
-
-theorem theta_ev_update_elim {p : Ptr α} {value : α} {R : SLPost Unit}
-    {h : Heap} (hWp : theta_ev (.UpdatePtr p value) R h) :
-    ∃ hContains : Ptr.contains h p, R () (Ptr.update p value h hContains) :=
-  ⟨theta_ev_update_contains hWp, theta_ev_update_post hWp _⟩
-
-theorem theta_ev_free_contains {p : Ptr α} {R : SLPost Unit} {h : Heap}
-    (hWp : theta_ev (.FreePtr p) R h) : Ptr.contains h p := by
-  obtain ⟨value, hWp⟩ := hWp
-  obtain ⟨h₁, h₂, _, rfl, hSingle, -⟩ := pp2wp_elim hWp
-  exact Ptr.contains_union_left (Ptr.contains_of_sub hSingle)
-
-theorem theta_ev_free_post {p : Ptr α} {R : SLPost Unit} {h : Heap}
-    (hWp : theta_ev (.FreePtr p) R h) (hContains : Ptr.contains h p) :
-    R () (Ptr.free p h hContains) := by
-  obtain ⟨value, hWp⟩ := hWp
-  obtain ⟨h₁, h₂, hDisjoint, rfl, hSingle, hPost⟩ := pp2wp_elim hWp
-  obtain ⟨rest, hDisjointRest, rfl⟩ := hSingle
-  have hContainsCell := Ptr.contains_singleton p value
-  have hContainsUnion := Ptr.contains_union_left (h₂ := rest) hContainsCell
-  have hFreed :
-      Ptr.free p (Ptr.singleton p value ∪ rest) hContainsUnion = rest := by
-    rw [Ptr.free_union_left p hDisjointRest hContainsCell, Ptr.free_singleton]
-    simp [empty]
-  have hDisjointFreed : Finmap.Disjoint rest h₂ := by
-    rw [← hFreed]
-    exact Ptr.disjoint_free_left hDisjoint hContainsUnion
-  rw [show (hContains :
-        Ptr.contains ((Ptr.singleton p value ∪ rest) ∪ h₂) p) =
-      Ptr.contains_union_left hContainsUnion from rfl,
-    Ptr.free_union_left p hDisjoint hContainsUnion, hFreed]
-  exact hPost () rest trivial hDisjointFreed
-
-theorem theta_ev_free_elim {p : Ptr α} {R : SLPost Unit} {h : Heap}
-    (hWp : theta_ev (.FreePtr p) R h) :
-    ∃ hContains : Ptr.contains h p, R () (Ptr.free p h hContains) :=
-  ⟨theta_ev_free_contains hWp, theta_ev_free_post hWp _⟩
+theorem theta_ev_elim {pre : Heap → Prop}
+    {modify : (h : Heap) → pre h → α × Heap}
+    {R : SLPost α} {h : Heap}
+    (hWp : theta_ev (.GuardedModify pre modify) R h) :
+    ∃ hPre : pre h,
+      R (modify h hPre).1 (modify h hPre).2 := by
+  obtain ⟨hPre, h', -, hModify, hPost⟩ :=
+    hWp empty (Finmap.Disjoint.symm _ _ (Finmap.disjoint_empty h))
+  simp [empty] at hPre hModify hPost
+  subst h'
+  exact ⟨hPre, hPost⟩
 
 def theta : St α → Wp α
   | .ok value => Wp.pure value
@@ -209,23 +125,10 @@ theorem theta_adequate (m : St α) (Q : SLPost α) (h₀ : Heap)
       have hEvent : theta_ev event (fun value => theta (next value) Q) h₀ :=
         hTheta
       cases event with
-      | AllocPtr value =>
-          obtain ⟨p, h, hFresh⟩ := Ptr.exists_fresh value h₀
+      | GuardedModify pre modify =>
+          obtain ⟨hPre, hNext⟩ := theta_ev_elim hEvent
           exact Exec.event (M := StEvents.machine)
-            ⟨p, h, .alloc hFresh,
-              ih p h (theta_ev_alloc_elim hEvent hFresh)⟩
-      | ReadPtr p =>
-          obtain ⟨hContains, hNext⟩ := theta_ev_read_elim hEvent
-          exact Exec.event (M := StEvents.machine)
-            ⟨_, h₀, .read hContains, ih _ h₀ hNext⟩
-      | UpdatePtr p value =>
-          obtain ⟨hContains, hNext⟩ := theta_ev_update_elim hEvent
-          exact Exec.event (M := StEvents.machine)
-            ⟨(), _, .update hContains, ih () _ hNext⟩
-      | FreePtr p =>
-          obtain ⟨hContains, hNext⟩ := theta_ev_free_elim hEvent
-          exact Exec.event (M := StEvents.machine)
-            ⟨(), _, .free hContains, ih () _ hNext⟩
+            ⟨_, _, .guardedModify hPre, ih _ _ hNext⟩
 
 /-- Every terminating evaluation satisfies the postcondition. -/
 theorem theta_sound (m : St α) (Q : SLPost α) (h₀ : Heap)
@@ -243,23 +146,34 @@ theorem theta_sound (m : St α) (Q : SLPost α) (h₀ : Heap)
       rcases hEval with hStop | ⟨result, h, hStep, hEval⟩
       · simp at hStop
       · cases hStep with
-        | alloc hFresh =>
-            exact ih _ _ (theta_ev_alloc_elim hTheta hFresh) _ _ hEval
-        | read hContains =>
-            exact ih _ _ (theta_ev_read_post hTheta hContains) _ _ hEval
-        | update hContains =>
-            exact ih _ _ (theta_ev_update_post hTheta hContains) _ _ hEval
-        | free hContains =>
-            exact ih _ _ (theta_ev_free_post hTheta hContains) _ _ hEval
+        | guardedModify hPre =>
+            obtain ⟨hPre', hNext⟩ := theta_ev_elim hTheta
+            have hProof : hPre' = hPre := Subsingleton.elim _ _
+            subst hPre'
+            exact ih _ _ hNext _ _ hEval
 
-theorem theta_ev_frame (event : StEvents α) (Q : SLPost α)
+theorem theta_ev_frame (event : StEvents Heap α) (Q : SLPost α)
     (H : SLProp) :
     theta_ev event Q ∗ H ⊢ theta_ev event (Q ∗+ H) := by
   cases event with
-  | AllocPtr value => exact pp2wp_frame H
-  | ReadPtr p => exact Wp.hexists_frame H fun _ => pp2wp_frame H
-  | UpdatePtr p value => exact Wp.hexists_frame H fun _ => pp2wp_frame H
-  | FreePtr p => exact Wp.hexists_frame H fun _ => pp2wp_frame H
+  | GuardedModify pre modify =>
+      rintro h ⟨h₁, h₂, hDisjoint, rfl, hWp, hH⟩ frame hDisjointFrame
+      obtain ⟨hDisjoint₁Frame, hDisjoint₂Frame⟩ :=
+        (Finmap.disjoint_union_left h₁ h₂ frame).mp hDisjointFrame
+      have hDisjointCombined : Finmap.Disjoint h₁ (h₂ ∪ frame) :=
+        (Finmap.disjoint_union_right h₁ h₂ frame).mpr
+          ⟨hDisjoint, hDisjoint₁Frame⟩
+      have hWp' := hWp (h₂ ∪ frame) hDisjointCombined
+      rw [← Finmap.union_assoc] at hWp'
+      obtain ⟨hPre, h', hDisjoint', hModify, hQ⟩ := hWp'
+      obtain ⟨hDisjoint'H₂, hDisjoint'Frame⟩ :=
+        (Finmap.disjoint_union_right h' h₂ frame).mp hDisjoint'
+      refine ⟨?_, h' ∪ h₂, ?_, ?_, ?_⟩
+      · simpa [Finmap.union_assoc] using hPre
+      · exact (Finmap.disjoint_union_left h' h₂ frame).mpr
+          ⟨hDisjoint'Frame, hDisjoint₂Frame⟩
+      · simpa [Finmap.union_assoc] using hModify
+      · exact ⟨h', h₂, hDisjoint'H₂, rfl, hQ, hH⟩
 
 theorem theta_frame (m : St α) (Q : SLPost α) (H : SLProp) :
     theta m Q ∗ H ⊢ theta m (Q ∗+ H) := by
@@ -475,43 +389,110 @@ theorem pure.spec (value : α) :
 
 /-! ## Specified monadic operations -/
 
+def guardedModify {α : Type} (pre : Heap → Prop)
+    (modify : (h : Heap) → pre h → α × Heap) : St α :=
+  FFree.trigger (.GuardedModify pre modify)
+
 def alloc {α : Type} (value : α) : St (Ptr α) :=
-  FFree.trigger (.AllocPtr value)
+  guardedModify (fun _ => True) fun h _ =>
+    (Ptr.freshPtr α h, Ptr.freshHeap h value)
 
 theorem alloc.spec (value : α) :
     ⦃ emp ⦄ alloc value ⦃⇓ p => p ↦ value⦄ := by
   apply (triple_iff _ _ _).mpr
-  intro h hEmpty
-  exact pp2wp_conseq (Q := fun p => p ↦ value)
-    (fun _ => himpl_refl _) h hEmpty
+  intro h _ frame hDisjoint
+  let p := Ptr.freshPtr α (h ∪ frame)
+  have hFresh := Ptr.fresh_freshPtr value (h ∪ frame)
+  obtain ⟨hDisjointFresh, hFreshHeap⟩ :=
+    Ptr.fresh_eq_singleton_union hFresh
+  obtain ⟨hDisjointFreshH, hDisjointFreshFrame⟩ :=
+    (Finmap.disjoint_union_right (Ptr.singleton p value) h frame).mp
+      hDisjointFresh
+  exact ⟨trivial, Ptr.singleton p value ∪ h,
+    (Finmap.disjoint_union_left (Ptr.singleton p value) h frame).mpr
+      ⟨hDisjointFreshFrame, hDisjoint⟩,
+    hFreshHeap.trans Finmap.union_assoc.symm,
+    Heap.Sub.union_left hDisjointFreshH⟩
 
 def read {α : Type} (p : Ptr α) : St α :=
-  FFree.trigger (.ReadPtr p)
+  guardedModify (fun h => Ptr.contains h p) fun h hContains =>
+    (Ptr.read p h hContains, h)
 
 theorem read.spec (p : Ptr α) (value : α) :
     ⦃ p ↦ value ⦄ read p
       ⦃⇓ result => ⌜result = value⌝ ∗ p ↦ value⦄ := by
   apply (triple_iff _ _ _).mpr
   intro h hSingle
-  exact ⟨value, pp2wp_conseq (fun _ => himpl_refl _) h hSingle⟩
+  have hContains := Ptr.contains_of_sub hSingle
+  intro frame hDisjoint
+  have hContainsFrame := Ptr.contains_union_left (h₂ := frame) hContains
+  have hReadFrame :
+      Ptr.read p (h ∪ frame) hContainsFrame = value := by
+    rw [Ptr.read_union_left hContains]
+    obtain ⟨rest, hDisjointRest, rfl⟩ := hSingle
+    have hContainsCell := Ptr.contains_singleton p value
+    rw [show (hContains :
+          Ptr.contains (Ptr.singleton p value ∪ rest) p) =
+        Ptr.contains_union_left hContainsCell from Subsingleton.elim _ _,
+      Ptr.read_union_left hContainsCell, Ptr.read_singleton]
+  refine ⟨hContainsFrame, h, hDisjoint, rfl, ?_⟩
+  exact (hstar_hpure_l _ _ h).mpr ⟨hReadFrame, hSingle⟩
 
 def update {α : Type} (p : Ptr α) (value : α) : St Unit :=
-  FFree.trigger (.UpdatePtr p value)
+  guardedModify (fun h => Ptr.contains h p) fun h hContains =>
+    ((), Ptr.update p value h hContains)
 
 theorem update.spec (p : Ptr α) (oldValue newValue : α) :
     ⦃ p ↦ oldValue ⦄ update p newValue ⦃⇓ p ↦ newValue⦄ := by
   apply (triple_iff _ _ _).mpr
   intro h hSingle
-  exact ⟨oldValue, pp2wp_conseq (fun _ => himpl_refl _) h hSingle⟩
+  have hContains := Ptr.contains_of_sub hSingle
+  intro frame hDisjoint
+  have hContainsFrame := Ptr.contains_union_left (h₂ := frame) hContains
+  have hUpdateFrame :
+      Ptr.update p newValue (h ∪ frame) hContainsFrame =
+        Ptr.update p newValue h hContains ∪ frame := by
+    simpa only [Ptr.update_union_left] using
+      Ptr.update_union_left (h₂ := frame) p newValue hContains
+  have hDisjointUpdated :
+      Finmap.Disjoint (Ptr.update p newValue h hContains) frame :=
+    Ptr.disjoint_update_left hDisjoint hContains
+  obtain ⟨rest, hDisjointRest, rfl⟩ := hSingle
+  have hContainsCell := Ptr.contains_singleton p oldValue
+  have hContainsUnion := Ptr.contains_union_left (h₂ := rest) hContainsCell
+  have hUpdated :
+      Ptr.update p newValue (Ptr.singleton p oldValue ∪ rest) hContainsUnion =
+        Ptr.singleton p newValue ∪ rest := by
+    rw [Ptr.update_union_left p newValue hContainsCell, Ptr.update_singleton]
+  have hDisjointRest' : Finmap.Disjoint (Ptr.singleton p newValue) rest := by
+    have := Ptr.disjoint_update_left (value := newValue) hDisjointRest hContainsCell
+    rwa [Ptr.update_singleton] at this
+  refine ⟨hContainsFrame,
+    Ptr.update p newValue (Ptr.singleton p oldValue ∪ rest) hContainsUnion,
+    ?_, ?_, ?_⟩
+  · exact Ptr.disjoint_update_left hDisjoint hContainsUnion
+  · simpa only [show hContainsFrame =
+        Ptr.contains_union_left hContainsUnion from Subsingleton.elim _ _,
+      show hContains = hContainsUnion from Subsingleton.elim _ _] using hUpdateFrame
+  · rw [hUpdated]
+    exact Heap.Sub.union_left hDisjointRest'
 
 def free {α : Type} (p : Ptr α) : St Unit :=
-  FFree.trigger (.FreePtr p)
+  guardedModify (fun h => Ptr.contains h p) fun h hContains =>
+    ((), Ptr.free p h hContains)
 
 theorem free.spec (p : Ptr α) (value : α) :
     ⦃ p ↦ value ⦄ free p ⦃⇓ emp⦄ := by
   apply (triple_iff _ _ _).mpr
   intro h hSingle
-  exact ⟨value, pp2wp_conseq (fun _ => himpl_refl _) h hSingle⟩
+  have hContains := Ptr.contains_of_sub hSingle
+  intro frame hDisjoint
+  have hContainsFrame := Ptr.contains_union_left (h₂ := frame) hContains
+  refine ⟨hContainsFrame, Ptr.free p h hContains,
+    Ptr.disjoint_free_left hDisjoint hContains, ?_, trivial⟩
+  simpa only [show hContainsFrame =
+      Ptr.contains_union_left hContains from Subsingleton.elim _ _] using
+    Ptr.free_union_left p hDisjoint hContains
 
 def mut_to_raw {α : Type} (value : α) : St (Ptr α) :=
   alloc value
