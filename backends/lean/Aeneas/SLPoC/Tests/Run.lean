@@ -1,5 +1,5 @@
 import Aeneas.SLPoC.Run
-import Aeneas.SLPoC.Examples.Basic
+import Aeneas.SLPoC.Tests.Examples.Basic
 
 /-!
 # Running verified programs

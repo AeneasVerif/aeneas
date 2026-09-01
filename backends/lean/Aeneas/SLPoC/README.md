@@ -27,35 +27,36 @@ git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_se
 | [`Step.lean`](Step.lean) | Wires triples into `step`/`step*`, including the direct terminal rule for a syntactic return, whose entailment is left as the goal when `sl_frame` cannot close it. |
 | [`WP.lean`](WP.lean) | Affine separation-logic assertions (`SLProp`, closed under heap extension like Iris's `uPred`), the magic wand, and the `Wp` monad of predicate transformers. |
 | [`Run.lean`](Run.lean) | The certified interpreter: runs a program whose weakest precondition is proved, reading the ownership witnesses every read, write and deallocation needs off that proof. |
-| [`ProofScore.lean`](ProofScore.lean) | Engineering tool, not part of the library: measures how close the proofs of the triples are to the ideal proof, i.e. how much separation logic the automation still leaves to the user. Writes [`proof-score.html`](proof-score.html). |
-| [`proof_simplify.py`](proof_simplify.py) | Compilation-guided proof simplifier: compresses consecutive `step` calls and removes unused `sl_pull` names, retaining only rewrites accepted by Lean. |
-| [`benchmark-report.md`](benchmark-report.md) | Report on the eleven external benchmark ports, their interfaces and specifications, proof-score improvements, and remaining automation gaps. |
-| [`automation-report.md`](automation-report.md) | Maps ideas from Dardinier's thesis on automated separation-logic verifiers to a prioritized design for more SLPoC proof-mode automation. |
+| [`ProofScore.lean`](Tests/Examples/scripts/ProofScore.lean) | Engineering tool, not part of the library: measures how close the proofs of the triples are to the ideal proof, i.e. how much separation logic the automation still leaves to the user. Writes [`proof-score.html`](Tests/Examples/reports/proof-score.html). |
+| [`proof_simplify.py`](Tests/Examples/scripts/proof_simplify.py) | Compilation-guided proof simplifier: compresses consecutive `step` calls and removes unused `sl_pull` names, retaining only rewrites accepted by Lean. |
+| [`benchmark-report.md`](Tests/Examples/reports/benchmark-report.md) | Report on the eleven external benchmark ports, their interfaces and specifications, proof-score improvements, and remaining automation gaps. |
+| [`automation-report.md`](Tests/Examples/reports/automation-report.md) | Maps ideas from Dardinier's thesis on automated separation-logic verifiers to a prioritized design for more SLPoC proof-mode automation. |
 | `README.md` | Records the purpose and meaning of files in this directory. |
 
-| File in [`Examples/`](Examples) | Purpose |
+| File under [`Tests/`](Tests) | Purpose |
 |---|---|
-| [`AsterinasIntrusiveFrameList.lean`](Examples/AsterinasIntrusiveFrameList.lean) | Port of Asterinas's intrusive frame list: allocation-free push/pop and cursor removal with exclusive detached-frame ownership. |
-| [`Basic.lean`](Examples/Basic.lean) | Basic programs and specifications exercising `step` over pure computations and pointers. |
-| [`CreusotListReversalLasso.lean`](Examples/CreusotListReversalLasso.lean) | Port of Creusot's cyclic-list reversal over an explicit first-order memory, with exact traversal and rewiring results. |
-| [`DardinierMagicWands.lean`](Examples/DardinierMagicWands.lean) | Ports Dardinier's leftmost-leaf wand-packaging example and the uniform-footprint counterexample from *Sound Automation of Magic Wands*. |
-| [`EqOrDisj.lean`](Examples/EqOrDisj.lean) | The `InPlaceOrDisjointBuffer` interface of [SymCRust](https://github.com/microsoft/VCR) — a read/write view pair that either aliases or is separated — specified in full against equal-or-disjoint ghost state. |
-| [`IrisTutorial.lean`](Examples/IrisTutorial.lean) | Sequential ports of Iris tutorial proof-mode, pointer, and linked-list examples. |
-| [`PulseArrayTests.lean`](Examples/PulseArrayTests.lean) | Cell-wise array model and ports of Pulse allocation/free, indexed access, fill, and exact comparison examples. |
-| [`PulseInsertionSort.lean`](Examples/PulseInsertionSort.lean) | In-place Pulse insertion sort with sortedness and permutation proofs. |
-| [`PulseLinkedList.lean`](Examples/PulseLinkedList.lean) | Sequential Pulse linked-list operations over a recursive ownership predicate, including append, split, insertion, and reversal. |
-| [`PulseResizableVec.lean`](Examples/PulseResizableVec.lean) | Pulse bounded resizable vector with separate size/capacity cells and initialized-prefix ownership. |
-| [`PulseRingBuffer.lean`](Examples/PulseRingBuffer.lean) | Pulse fixed-capacity FIFO ring buffer with circular-layout and wrap-around proofs. |
+| [`AsterinasIntrusiveFrameList.lean`](Tests/Examples/AsterinasIntrusiveFrameList.lean) | Port of Asterinas's intrusive frame list: allocation-free push/pop and cursor removal with exclusive detached-frame ownership. |
+| [`Basic.lean`](Tests/Examples/Basic.lean) | Basic programs and specifications exercising `step` over pure computations and pointers. |
+| [`CreusotListReversalLasso.lean`](Tests/Examples/CreusotListReversalLasso.lean) | Port of Creusot's cyclic-list reversal over an explicit first-order memory, with exact traversal and rewiring results. |
+| [`DardinierMagicWands.lean`](Tests/Examples/DardinierMagicWands.lean) | Ports Dardinier's leftmost-leaf wand-packaging example and the uniform-footprint counterexample from *Sound Automation of Magic Wands*. |
+| [`EqOrDisj.lean`](Tests/Examples/EqOrDisj.lean) | The `InPlaceOrDisjointBuffer` interface of [SymCRust](https://github.com/microsoft/VCR) — a read/write view pair that either aliases or is separated — specified in full against equal-or-disjoint ghost state. |
+| [`IrisTutorial.lean`](Tests/Examples/IrisTutorial.lean) | Sequential ports of Iris tutorial proof-mode, pointer, and linked-list examples. |
+| [`PulseArrayTests.lean`](Tests/Examples/PulseArrayTests.lean) | Cell-wise array model and ports of Pulse allocation/free, indexed access, fill, and exact comparison examples. |
+| [`PulseInsertionSort.lean`](Tests/Examples/PulseInsertionSort.lean) | In-place Pulse insertion sort with sortedness and permutation proofs. |
+| [`PulseLinkedList.lean`](Tests/Examples/PulseLinkedList.lean) | Sequential Pulse linked-list operations over a recursive ownership predicate, including append, split, insertion, and reversal. |
+| [`PulseResizableVec.lean`](Tests/Examples/PulseResizableVec.lean) | Pulse bounded resizable vector with separate size/capacity cells and initialized-prefix ownership. |
+| [`PulseRingBuffer.lean`](Tests/Examples/PulseRingBuffer.lean) | Pulse fixed-capacity FIFO ring buffer with circular-layout and wrap-around proofs. |
 | [`Run.lean`](Tests/Run.lean) | Regression tests for the interpreter: running verified programs, and what execution shows that an affine triple cannot. |
+| [`Step.lean`](Tests/Step.lean) | Regression tests for the `step` tactic. |
 | [`UnitTest.lean`](Tests/UnitTest.lean) | Regression tests for `step`, `step`, and the separation-logic tactics. |
-| [`YOLOCancel.lean`](Examples/YOLOCancel.lean) | Memory-bounded, downscaled ports of YOLO's synthetic shuffled-atom cancellation benchmarks. |
-| [`VerusBitmap.lean`](Examples/VerusBitmap.lean) | Verus bitmap over 64-bit-style words, including exact get/set and pointwise OR refinement proofs. |
-| [`VerusDoublyLinkedList.lean`](Examples/VerusDoublyLinkedList.lean) | Port of the Verus doubly-linked-list example: executable definitions, then ghost state, specifications and proofs. |
-| [`VerusMimallocLinkedList.lean`](Examples/VerusMimallocLinkedList.lean) | Port of mimalloc's free-list kernel with typed header/padding split and whole-block ownership transfer. |
-| [`VerusPageTable.lean`](Examples/VerusPageTable.lean) | Uniform-leaf, exact-key subset of verified-pt map/query/unmap/prune with recursive table ownership and explicit allocation/free operations. |
-| [`VerusStd.lean`](Examples/VerusStd.lean) | The `vstd` layer: generic sequences of pointer/payload pairs and permission maps over them, with each declaration naming its `vstd` counterpart. Independent of any data structure. |
-| [`VerusVerifiedVec.lean`](Examples/VerusVerifiedVec.lean) | Fixed-capacity adaptation of Verus's initialized-prefix vector, using typed `Option` cells for the abstract raw suffix. |
-| [`doubly_linked_loc.py`](Examples/doubly_linked_loc.py) | Deterministically regenerates the relevant-LOC comparison with the pinned Verus example below. |
+| [`YOLOCancel.lean`](Tests/Examples/YOLOCancel.lean) | Memory-bounded, downscaled ports of YOLO's synthetic shuffled-atom cancellation benchmarks. |
+| [`VerusBitmap.lean`](Tests/Examples/VerusBitmap.lean) | Verus bitmap over 64-bit-style words, including exact get/set and pointwise OR refinement proofs. |
+| [`VerusDoublyLinkedList.lean`](Tests/Examples/VerusDoublyLinkedList.lean) | Port of the Verus doubly-linked-list example: executable definitions, then ghost state, specifications and proofs. |
+| [`VerusMimallocLinkedList.lean`](Tests/Examples/VerusMimallocLinkedList.lean) | Port of mimalloc's free-list kernel with typed header/padding split and whole-block ownership transfer. |
+| [`VerusPageTable.lean`](Tests/Examples/VerusPageTable.lean) | Uniform-leaf, exact-key subset of verified-pt map/query/unmap/prune with recursive table ownership and explicit allocation/free operations. |
+| [`VerusStd.lean`](Tests/Examples/VerusStd.lean) | The `vstd` layer: generic sequences of pointer/payload pairs and permission maps over them, with each declaration naming its `vstd` counterpart. Independent of any data structure. |
+| [`VerusVerifiedVec.lean`](Tests/Examples/VerusVerifiedVec.lean) | Fixed-capacity adaptation of Verus's initialized-prefix vector, using typed `Option` cells for the abstract raw suffix. |
+| [`doubly_linked_loc.py`](Tests/Examples/scripts/doubly_linked_loc.py) | Deterministically regenerates the relevant-LOC comparison with the pinned Verus example below. |
 
 Keep these tables updated whenever a file is added, removed, or repurposed.
 
@@ -117,11 +118,11 @@ triple, regardless of whether it is registered with `@[step]`; local induction
 hypotheses remain ideal.  Run
 
 ```
-lake env lean --run Aeneas/SLPoC/ProofScore.lean
+lake env lean --run Aeneas/SLPoC/Tests/Examples/scripts/ProofScore.lean
 ```
 
 from `backends/lean` to measure how far the proofs are from that, in
-[`proof-score.html`](proof-score.html): every proof of a triple is split into
+[`proof-score.html`](Tests/Examples/reports/proof-score.html): every proof of a triple is split into
 *spots* — one straight-line block before the first branch, then one per branch
 body, recursively — and a spot counts as ideal when no step of it steers the
 separation logic by hand.  The report names the offending step and says what
@@ -138,7 +139,7 @@ The tool parses with Lean's own parser but elaborates nothing except the
 commands that open a namespace, so it takes about a second and also works on a
 file that does not compile; a file whose module has been built is additionally
 imported, which makes the notation it defines available.  Pass file paths to
-score files other than those of [`Examples/`](Examples), and `-o` to write the
+score files other than those of [`Tests/Examples/`](Tests/Examples), and `-o` to write the
 report elsewhere.
 
 ## Simplifying proofs
@@ -146,8 +147,8 @@ report elsewhere.
 Run the compilation-guided simplifier from `backends/lean`:
 
 ```
-python3 Aeneas/SLPoC/proof_simplify.py FILE.lean
-python3 Aeneas/SLPoC/proof_simplify.py --in-place FILE.lean
+python3 Aeneas/SLPoC/Tests/Examples/scripts/proof_simplify.py FILE.lean
+python3 Aeneas/SLPoC/Tests/Examples/scripts/proof_simplify.py --in-place FILE.lean
 ```
 
 The default mode prints a unified diff.  `--in-place` applies it, and `--check`
@@ -172,7 +173,8 @@ tried but did not compile.
 
 ## Doubly-linked-list LOC comparison
 
-Run `python3 Aeneas/SLPoC/doubly_linked_loc.py` from `backends/lean` to
+Run `python3 Aeneas/SLPoC/Tests/Examples/scripts/doubly_linked_loc.py` from
+`backends/lean` to
 regenerate this report, or pass `--check` to verify that it is current. The
 script fetches an exact Verus commit and verifies its SHA-256 checksum before
 counting. It counts declaration lines and body lines after removing comments,
@@ -195,10 +197,10 @@ Pinned Verus source: [`99ae45aa8e35`](https://github.com/verus-lang/verus/blob/9
 |---|---:|---:|
 | Verus | 24 | 339 |
 | Lean executable definitions | 14 | 84 |
-| Lean ghost state, specifications and proofs | 36 | 241 |
-| **Lean example total** | **50** | **325** |
+| Lean ghost state, specifications and proofs | 36 | 245 |
+| **Lean example total** | **50** | **329** |
 | `vstd` equivalent, generic and reusable (`VerusStd.lean`) | 24 | 98 |
-| Lean grand total | 74 | 423 |
+| Lean grand total | 74 | 427 |
 
 | Definition or semantic group | Verus | Lean (executable, spec/proof) |
 |---|---:|---:|
@@ -215,8 +217,8 @@ Pinned Verus source: [`99ae45aa8e35`](https://github.com/verus-lang/verus/blob/9
 | `push_back` / `pushBack` | 36 | 25 (9, 16) |
 | `pop_back` / `popBack` | 42 | 22 (12, 10) |
 | `push_front` / `pushFront` | 46 | 28 (9, 19) |
-| `pop_front` / `popFront` | 49 | 19 (12, 7) |
-| `get` (including the Lean loop) | 27 | 38 (13, 25) |
+| `pop_front` / `popFront` | 49 | 20 (12, 8) |
+| `get` (including the Lean loop) | 27 | 41 (13, 28) |
 | `Iterator` | 4 | 4 (4, 0) |
 | `Iterator::list` | 2 | 0 (0, 0) |
 | `Iterator::index` | 2 | 0 (0, 0) |
@@ -227,7 +229,7 @@ Pinned Verus source: [`99ae45aa8e35`](https://github.com/verus-lang/verus/blob/9
 | `main::run` / example | 22 | 29 (0, 29) |
 | entry-point `main` | 2 | 0 (0, 0) |
 | Other support declarations | - | 74 (0, 74) |
-| **Total** | **339** | **325 (84, 241)** |
+| **Total** | **339** | **329 (84, 245)** |
 
 `VerusStd.lean` (24 declarations, 98 lines) is not compared declaration by declaration: it is the generic sequence and permission-map layer that Verus obtains from `vstd`, it does not mention the doubly-linked list, and each of its declarations names its `vstd` counterpart in its doc comment.
 
