@@ -20,10 +20,12 @@ git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_se
 | File | Purpose |
 |---|---|
 | [`Exec.lean`](Exec.lean) | The state machines that give the interaction trees of [`Aeneas.Data.Coinductive.ITree`](../Data/Coinductive/ITree.lean) an operational semantics (after "Program Logics à la Carte"): `StateMachine`, `Exec`, `Runs` and `Evaluates`. |
-| [`Heap.lean`](Heap.lean) | Defines locations, dynamically typed cells, finite heaps, their PCM instance, and the sub-heap order the affine assertions are closed under. |
-| [`PCM.lean`](PCM.lean) | Defines the partial commutative monoid interface used by the heap model. |
-| [`RustHeap.lean`](RustHeap.lean) | The Rust view of the heap: `Ptr` and the pointer operations, over `Heap.lean`. |
-| [`ST.lean`](ST.lean) | The state monad `St`, its inductive total-correctness judgment, state machine, Hoare triples, `step` integration, and certified interpreter. |
+| [`Heap.lean`](Heap.lean) | Defines addresses, cells carrying their own PCM, finite heaps composed cell by cell, their PCM instance, PCM-indexed references, and the sub-heap order the affine assertions are closed under. |
+| [`PCM.lean`](PCM.lean) | The partial commutative monoids: the class the heap is an instance of, the bundled `PCM` a cell carries, and the constructors `Exclusive`, `InitState` and `Frags` an allocation is made with. |
+| [`MutableData/Array.lean`](MutableData/Array.lean) | The Rust view of the heap, first layer: the PCM one allocation is made with, and allocation itself. |
+| [`MutableData/Ptr.lean`](MutableData/Ptr.lean) | Interior pointers `Ptr α` over that allocation: pointer arithmetic, range and slot ownership, splitting and joining, read, write, free, and the raw-pointer borrow. |
+| [`MutableData/Buffer.lean`](MutableData/Buffer.lean) | Bounded views `Buffer α`: `sub`, `split`, `join`, indexed access, allocation of `n` slots (initialized or not), and how ownership follows the views. |
+| [`ST.lean`](ST.lean) | The state monad `St`, its inductive total-correctness judgment, state machine, Hoare triples, `guardedModify` and its rule, `step` integration, and certified interpreter. |
 | [`WP.lean`](WP.lean) | Affine separation-logic assertions (`SLProp`, closed under heap extension like Iris's `uPred`), the magic wand, local predicate transformers for individual events, and separation-logic tactics. |
 | [`ProofScore.lean`](Tests/Examples/scripts/ProofScore.lean) | Engineering tool, not part of the library: measures how close the proofs of the triples are to the ideal proof, i.e. how much separation logic the automation still leaves to the user. Writes [`proof-score.html`](Tests/Examples/reports/proof-score.html). |
 | [`proof_simplify.py`](Tests/Examples/scripts/proof_simplify.py) | Compilation-guided proof simplifier: compresses consecutive `step` calls and removes unused `sl_pull` names, retaining only rewrites accepted by Lean. |
@@ -75,6 +77,50 @@ Consequently:
 What affinity does *not* change: separation is still separation, so `p ↦ v ∗ p ↦
 w ⊢ ⌜False⌝`, and a specification still has to own what it reads or writes.
 Leak-freedom claims are out of scope, as they already were.
+
+## The memory model: PCM references, Pulse style
+
+Following Pulse, a heap cell stores a *partial commutative monoid* as data
+together with a value of its carrier, and two heaps compose by composing the
+cells they share:
+
+```text
+Cell = (Carrier : Type) × (pcm : PCM Carrier) × Carrier
+Heap = AllocId → Option Cell        (finitely supported)
+```
+
+A reference `Ref α p` is a bare address; `α` and `p` are phantom indices that
+constrain specifications only.  `r ↦ x` says that the heap owns the *fragment*
+`x` of the cell `r` names — the cell may hold more, owned by somebody else —
+so one allocation splits into disjoint structural fragments:
+
+```text
+Ref.pointsTo_op : r ↦ p.op x y ⊣⊢ r ↦ x ∗ r ↦ y      (given x # y)
+```
+
+[`MutableData/`](MutableData) builds one allocation on that: a cell whose
+carrier is a finitely supported map from indices to exclusively owned,
+possibly uninitialized slots (`Frags (InitState α)`).  `Ptr α` is an interior
+pointer — a base address and an offset, carrying neither length nor permission
+— and `Buffer α` is a bounded view.  Range ownership splits and joins:
+
+```text
+Ptr.pointsToRange_append : q ↦* xs ++ ys ⊣⊢ q ↦* xs ∗ q.add xs.length ↦* ys
+```
+
+None of the pointer or buffer operations has a precondition: pointer
+arithmetic, buffer views, allocation, reads, writes and deallocation are total
+functions of their arguments.  What may go wrong is caught by the separation
+logic and by the *definedness guard* of the event an operation triggers: a read
+through a dangling, unowned or uninitialized pointer is stuck, not erroneous,
+exactly as before.
+
+Deallocation is a frame-preserving update that *releases* the fragment its
+argument owns; as in Pulse nothing removes an address.  `Heap.size` therefore
+counts the cells that still own something, which is what tells a leak from a
+clean run.  `Heap.union` has to decide whether the carrier types of two cells
+agree, so it does not compute; `Heap.disjointUnion` agrees with it on disjoint
+addresses and does, and every operation a program performs computes.
 
 ## Three semantics for `St`
 

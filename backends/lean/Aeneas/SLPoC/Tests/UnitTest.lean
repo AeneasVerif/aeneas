@@ -1,3 +1,4 @@
+import Aeneas.SLPoC.MutableData.Buffer
 import Aeneas.SLPoC.Tests.Examples.Basic
 
 namespace Aeneas.SLPoC
@@ -296,8 +297,8 @@ example (p q : Ptr Nat) (x y : Nat) : p ↦ x ∗ q ↦ y ⊢ q ↦ y := by
 /-- Affinity weakens; it does not fabricate resources. -/
 example (p : Ptr Nat) (value : Nat) : ¬ (emp ⊢ p ↦ value) := by
   intro hImpl
-  have hContains := Ptr.contains_of_sub (hImpl ∅ trivial)
-  exact not_contains_empty p hContains
+  have hContains := contains_of_sub (hImpl ∅ trivial)
+  exact not_contains_empty p.baseRef hContains
 
 /-- Nor does it excuse a specification from owning what it reads. -/
 example (p : Ptr Nat) : ¬ (⦃ emp ⦄ read p ⦃⇓ _ => emp⦄) := by
@@ -305,8 +306,8 @@ example (p : Ptr Nat) : ¬ (⦃ emp ⦄ read p ⦃⇓ _ => emp⦄) := by
   have hSpec : spec (read p) (fun _ => emp) ∅ :=
     triple_apply hTriple trivial
   simp only [read, guardedModify] at hSpec
-  obtain ⟨hContains, -⟩ := TotalSpec.vis_view hSpec
-  exact not_contains_empty p hContains
+  obtain ⟨hReadable, -⟩ := TotalSpec.vis_view hSpec
+  exact not_contains_empty p.baseRef hReadable.contains
 
 def allocAndForget (value : Nat) : St Unit := do
   let _ ← alloc value
@@ -465,5 +466,53 @@ example (p : Ptr Nat) (n : Nat) (b : Bool) (hb : b = true) (hguard : b = true �
     ⦃ p ↦ n ⦄ readTwice p ⦃⇓ r => iprop(⌜0 < r⌝ ∗ p ↦ n)⦄ := by
   step* -grind
   case hn => grind
+
+/-! ## Buffers and interior pointers
+
+A pointer is a base address and an offset, and ownership of one allocation
+splits along its indices: both halves of a split range name the *same* cell. -/
+
+/-- Splitting and joining a range. -/
+example (q : Ptr Nat) (x y : Nat) :
+    q ↦* [x, y] ⊣⊢ q ↦ x ∗ (q.add 1) ↦ y :=
+  Ptr.pointsToRange_append q [x] [y]
+
+/-- Splitting does not move the pointer: the halves are interior to the same
+allocation. -/
+example (q : Ptr Nat) (i : Nat) : (q.add i).base = q.base := rfl
+
+/-- Owning nothing is owning the empty range. -/
+example (q : Ptr Nat) :
+    (q ↦* ([] : List Nat)) = Ref.pointsTo q.baseRef Frags.one := by
+  rw [Ptr.pointsToRange, Ptr.frag_nil]
+
+/-- A slot still cannot be owned twice. -/
+example (q : Ptr Nat) (x y : Nat) : q ↦ x ∗ q ↦ y ⊢ ⌜False⌝ :=
+  pointsTo_exclusive q x y
+
+/-- Two slots of one allocation are owned separately. -/
+example (q : Ptr Nat) (x y : Nat) : q ↦ x ∗ (q.add 1) ↦ y ⊢ q ↦* [x, y] :=
+  (Ptr.pointsToRange_append q [x] [y]).mpr
+
+def bufferOne : St Nat := do
+  let b ← Buffer.alloc 1 (0 : Nat)
+  b.write 0 42
+  let value ← b.read 0
+  free (b.ptrAt 0)
+  pure value
+
+/-- Allocating a buffer, writing to a slot, reading it back and releasing it,
+run end to end. -/
+theorem bufferOne.spec : ⦃ emp ⦄ bufferOne ⦃⇓ result => ⌜result = 42⌝⦄ := by
+  unfold bufferOne
+  apply triple_bind (Buffer.alloc.spec 1 (0 : Nat))
+  intro b
+  refine triple_conseq ?_ (Buffer.pointsTo_entails_range b _)
+    (fun _ => entails_refl _)
+  step*
+
+-- The interpreter runs it, and the released buffer leaves nothing behind.
+#guard (execClosed bufferOne bufferOne.spec).1 = 42
+#guard (execClosed bufferOne bufferOne.spec).2.size = 0
 
 end Aeneas.SLPoC

@@ -424,6 +424,17 @@ theorem triple_trigger {event : StEvent Heap} {P : IPre} {Q : IPost event.Result
   obtain ⟨hGuard, hPost⟩ := theta_ev_elim hEvent
   exact .vis hGuard (.ret hPost)
 
+def guardedModify {α : Type} (pre : Heap → Prop)
+    (modify : (h : Heap) → pre h → α × Heap) : St α :=
+  trigger ⟨α, pre, modify⟩
+
+/-- The specification of a guarded modification is what its denotation says. -/
+theorem triple_guardedModify {α : Type} {pre : Heap → Prop}
+    {modify : (h : Heap) → pre h → α × Heap} {P : IPre} {Q : IPost α}
+    (hWp : P ⊢ theta_ev ⟨α, pre, modify⟩ Q) :
+    triple P (guardedModify pre modify) Q :=
+  triple_trigger hWp
+
 theorem triple_bind {P : IPre} {Q₁ : IPost α}
     {Q : IPost β} {m : St α} {next : α → St β}
     (hFirst : triple P m Q₁)
