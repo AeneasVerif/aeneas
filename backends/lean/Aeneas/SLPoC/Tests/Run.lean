@@ -44,7 +44,8 @@ example :
 /-- What running a closed program shows and the affine logic cannot: this run
 leaks nothing.  A triple only says what its postcondition owns, so the empty
 final heap is a fact about the execution, not about the specification. -/
-example : (execClosed roundTrip roundTrip.spec).2.keys.card = 0 := by rfl
+example : (execClosed roundTrip roundTrip.spec).2.size = 0 := by
+  native_decide
 
 def leaky : St Unit := do
   let _ ← alloc (1 : Nat)
@@ -56,7 +57,8 @@ theorem leaky.spec : ⦃ emp ⦄ leaky ⦃⇓ emp⦄ := by
 
 /-- The same specification, and a cell left behind: affinity is exactly the gap
 between the two semantics. -/
-example : (execClosed leaky leaky.spec).2.keys.card = 1 := by rfl
+example : (execClosed leaky leaky.spec).2.size = 1 := by
+  native_decide
 
 /-! ## A program run on a heap it does not own entirely
 
@@ -75,7 +77,8 @@ private theorem source_ne_spare : source ≠ spare :=
   fun hEq => Nat.succ_ne_zero 0 hEq.symm
 
 private theorem initial_disjoint :
-    Finmap.Disjoint (Ptr.singleton source 1) (Ptr.singleton spare 7) :=
+    PartialCommMonoid.Compatible
+      (Ptr.singleton source 1) (Ptr.singleton spare 7) :=
   Ptr.disjoint_singleton source_ne_spare
 
 private theorem initial_pre : (source ↦ 1) initial :=
@@ -84,7 +87,7 @@ private theorem initial_pre : (source ↦ 1) initial :=
 -- The frame is carried along: the run leaves both cells behind.
 #guard
   (execTriple (Examples.incr_ptr source) initial
-    (Examples.incr_ptr.spec source 1) initial_pre).2.keys.card = 2
+    (Examples.incr_ptr.spec source 1) initial_pre).2.size = 2
 
 /-- And the owned cell was incremented, by the postcondition of the triple. -/
 example :

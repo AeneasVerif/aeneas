@@ -1,5 +1,9 @@
+module
+
 import Mathlib.Data.Finmap
-import Aeneas.SLPoC.PCM
+public import Aeneas.SLPoC.PCM
+
+public section
 
 namespace Aeneas.SLPoC
 
@@ -10,36 +14,138 @@ abbrev AllocId := Nat
 /- Heap entries store their Lean type and value. -/
 abbrev HeapCell := Σ α : Type, α -- TODO: make it a list
 
-abbrev Heap := Finmap fun _ : AllocId => HeapCell
+private abbrev HeapImpl := Finmap fun _ : AllocId => HeapCell
 
-def empty : Heap := ∅
+/-- A finite collection of dynamically typed heap cells. -/
+structure Heap where
+  private mk ::
+  private impl : HeapImpl
+
+private instance : Coe Heap HeapImpl := ⟨Heap.impl⟩
+private instance : Coe HeapImpl Heap := ⟨Heap.mk⟩
+
+private def Heap.lookup (h : Heap) (allocationId : AllocId) :
+    Option HeapCell :=
+  h.impl.lookup allocationId
+
+private def Heap.insert (h : Heap) (allocationId : AllocId)
+    (cell : HeapCell) : Heap :=
+  ⟨h.impl.insert allocationId cell⟩
+
+private def Heap.erase (h : Heap) (allocationId : AllocId) : Heap :=
+  ⟨h.impl.erase allocationId⟩
+
+private def Heap.keys (h : Heap) :=
+  h.impl.keys
+
+private theorem Heap.ext_impl {h₁ h₂ : Heap}
+    (hEq : h₁.impl = h₂.impl) : h₁ = h₂ := by
+  cases h₁
+  cases h₂
+  cases hEq
+  rfl
+
+def empty : Heap := ⟨∅⟩
+
+instance Heap.instEmptyCollection : EmptyCollection Heap := ⟨empty⟩
+
+def Heap.union (h₁ h₂ : Heap) : Heap := ⟨h₁.impl ∪ h₂.impl⟩
+
+instance Heap.instUnion : Union Heap := ⟨Heap.union⟩
+
+def Heap.mem (allocationId : AllocId) (h : Heap) : Prop :=
+  allocationId ∈ h.impl
+
+instance Heap.instMembership : Membership AllocId Heap :=
+  ⟨fun h allocationId => Heap.mem allocationId h⟩
+
+/-- The number of allocated cells. -/
+def Heap.size (h : Heap) : Nat :=
+  h.impl.keys.card
+
+def Heap.compatible (h₁ h₂ : Heap) : Prop :=
+  Finmap.Disjoint h₁.impl h₂.impl
+
+private theorem Heap.mem_union {allocationId : AllocId} {h₁ h₂ : Heap} :
+    allocationId ∈ h₁ ∪ h₂ ↔ allocationId ∈ h₁ ∨ allocationId ∈ h₂ :=
+  Finmap.mem_union
+
+private theorem Heap.lookup_union_left {allocationId : AllocId}
+    {h₁ h₂ : Heap} (hMem : allocationId ∈ h₁) :
+    (h₁ ∪ h₂).lookup allocationId = h₁.lookup allocationId :=
+  Finmap.lookup_union_left hMem
+
+private theorem Heap.mem_insert {allocationId insertedId : AllocId}
+    {cell : HeapCell} {h : Heap} :
+    allocationId ∈ h.insert insertedId cell ↔
+      allocationId = insertedId ∨ allocationId ∈ h :=
+  Finmap.mem_insert
+
+private theorem Heap.mem_erase {allocationId erasedId : AllocId} {h : Heap} :
+    allocationId ∈ h.erase erasedId ↔
+      allocationId ≠ erasedId ∧ allocationId ∈ h :=
+  Finmap.mem_erase
+
+private theorem Heap.insert_union {allocationId : AllocId}
+    {cell : HeapCell} {h₁ h₂ : Heap} :
+    (h₁ ∪ h₂).insert allocationId cell =
+      h₁.insert allocationId cell ∪ h₂ := by
+  apply Heap.ext_impl
+  exact Finmap.insert_union
+
+@[simp]
+theorem Heap.empty_union (h : Heap) : empty ∪ h = h := by
+  apply Heap.ext_impl
+  exact Finmap.empty_union
+
+@[simp]
+theorem Heap.union_empty (h : Heap) : h ∪ empty = h := by
+  apply Heap.ext_impl
+  exact Finmap.union_empty
 
 /-- Heaps form a PCM under disjoint union. -/
 instance Heap.instPartialCommMonoid : PartialCommMonoid Heap where
-  Compatible := Finmap.Disjoint
-  compatible_comm := Finmap.Disjoint.symm _ _
-  compatible_empty_left := Finmap.disjoint_empty
+  Compatible := Heap.compatible
+  compatible_comm hCompatible := by
+    exact Finmap.Disjoint.symm _ _ hCompatible
+  compatible_empty_left h := by
+    exact Finmap.disjoint_empty h.impl
   compatible_assoc a b c := by
+    change
+      Finmap.Disjoint a.impl b.impl ∧
+          Finmap.Disjoint (a.impl ∪ b.impl) c.impl ↔
+        Finmap.Disjoint b.impl c.impl ∧
+          Finmap.Disjoint a.impl (b.impl ∪ c.impl)
     rw [Finmap.disjoint_union_left, Finmap.disjoint_union_right]
     constructor
     · rintro ⟨hab, hac, hbc⟩
       exact ⟨hbc, hab, hac⟩
     · rintro ⟨hbc, hab, hac⟩
       exact ⟨hab, hac, hbc⟩
-  union_assoc _ _ := Finmap.union_assoc
-  empty_union _ := Finmap.empty_union
-  union_empty _ := Finmap.union_empty
-  union_comm_of_compatible := Finmap.union_comm_of_disjoint
+  union_assoc _ _ := by
+    apply Heap.ext_impl
+    exact Finmap.union_assoc
+  empty_union _ := by
+    apply Heap.ext_impl
+    exact Finmap.empty_union
+  union_empty _ := by
+    apply Heap.ext_impl
+    exact Finmap.union_empty
+  union_comm_of_compatible hCompatible := by
+    apply Heap.ext_impl
+    exact Finmap.union_comm_of_disjoint hCompatible
 
+@[expose]
 def Ref (_ : Type) := AllocId
 
 /-- Allocation identifiers are natural numbers, so references are inhabited. -/
 instance instInhabitedRef {α : Type} : Inhabited (Ref α) := ⟨(0 : AllocId)⟩
 
-private def Ref.allocId {α : Type} (r : Ref α) : AllocId := r
+@[expose]
+def Ref.allocId {α : Type} (r : Ref α) : AllocId := r
 
 def singleton {α : Type} (r : Ref α) (value : α) : Heap :=
-  Finmap.singleton r.allocId ⟨α, value⟩
+  ⟨Finmap.singleton r.allocId ⟨α, value⟩⟩
 
 def unallocated {α : Type} (h : Heap) (r : Ref α) : Prop :=
   r.allocId ∉ h
@@ -92,20 +198,24 @@ namespace Heap.Sub
 
 @[refl]
 theorem refl (h : Heap) : Heap.Sub h h :=
-  ⟨∅, Finmap.Disjoint.symm _ _ (Finmap.disjoint_empty h), Finmap.union_empty.symm⟩
+  ⟨∅,
+    PartialCommMonoid.compatible_comm
+      (PartialCommMonoid.compatible_empty_left h),
+    (PartialCommMonoid.union_empty h).symm⟩
 
 theorem trans {h₁ h₂ h₃ : Heap} (hSub₁₂ : Heap.Sub h₁ h₂)
     (hSub₂₃ : Heap.Sub h₂ h₃) : Heap.Sub h₁ h₃ := by
-  obtain ⟨rest₁, hDisjoint₁, rfl⟩ := hSub₁₂
-  obtain ⟨rest₂, hDisjoint₂, rfl⟩ := hSub₂₃
-  obtain ⟨hDisjoint₁₂, hDisjoint₂₂⟩ :=
-    (Finmap.disjoint_union_left h₁ rest₁ rest₂).mp hDisjoint₂
-  exact ⟨rest₁ ∪ rest₂,
-    (Finmap.disjoint_union_right h₁ rest₁ rest₂).mpr ⟨hDisjoint₁, hDisjoint₁₂⟩,
-    Finmap.union_assoc⟩
+  obtain ⟨rest₁, hCompatible₁, rfl⟩ := hSub₁₂
+  obtain ⟨rest₂, hCompatible₂, rfl⟩ := hSub₂₃
+  have ⟨_, hCompatible⟩ :=
+    (PartialCommMonoid.compatible_assoc h₁ rest₁ rest₂).mp
+      ⟨hCompatible₁, hCompatible₂⟩
+  exact ⟨rest₁ ∪ rest₂, hCompatible,
+    PartialCommMonoid.union_assoc hCompatible₁ hCompatible₂⟩
 
 theorem of_empty (h : Heap) : Heap.Sub empty h :=
-  ⟨h, Finmap.disjoint_empty h, Finmap.empty_union.symm⟩
+  ⟨h, PartialCommMonoid.compatible_empty_left h,
+    (PartialCommMonoid.empty_union h).symm⟩
 
 theorem union_left {h₁ h₂ : Heap}
     (hCompatible : PartialCommMonoid.Compatible h₁ h₂) :
@@ -125,32 +235,53 @@ theorem split {h₁ h₂ h' : Heap}
     (hSub : Heap.Sub (h₁ ∪ h₂) h') :
     ∃ h₂', PartialCommMonoid.Compatible h₁ h₂' ∧
       h' = h₁ ∪ h₂' ∧ Heap.Sub h₂ h₂' := by
-  obtain ⟨rest, hDisjointRest, rfl⟩ := hSub
-  obtain ⟨hDisjoint₁, hDisjoint₂⟩ :=
-    (Finmap.disjoint_union_left h₁ h₂ rest).mp hDisjointRest
-  exact ⟨h₂ ∪ rest,
-    (Finmap.disjoint_union_right h₁ h₂ rest).mpr ⟨hCompatible, hDisjoint₁⟩,
-    Finmap.union_assoc, ⟨rest, hDisjoint₂, rfl⟩⟩
+  obtain ⟨rest, hCompatibleRest, rfl⟩ := hSub
+  have ⟨hCompatible₂, hCompatible₁⟩ :=
+    (PartialCommMonoid.compatible_assoc h₁ h₂ rest).mp
+      ⟨hCompatible, hCompatibleRest⟩
+  exact ⟨h₂ ∪ rest, hCompatible₁,
+    PartialCommMonoid.union_assoc hCompatible hCompatibleRest,
+    ⟨rest, hCompatible₂, rfl⟩⟩
 
 /-- A heap disjoint from an extension is disjoint from the heap extended. -/
 theorem disjoint_of_sub {h h' frame : Heap} (hSub : Heap.Sub h h')
     (hCompatible : PartialCommMonoid.Compatible h' frame) :
     PartialCommMonoid.Compatible h frame := by
-  obtain ⟨rest, _, rfl⟩ := hSub
-  exact ((Finmap.disjoint_union_left h rest frame).mp hCompatible).left
+  obtain ⟨rest, hCompatibleRest, rfl⟩ := hSub
+  have ⟨hRestFrame, hRestFrame'⟩ :=
+    (PartialCommMonoid.compatible_assoc h rest frame).mp
+      ⟨hCompatibleRest, hCompatible⟩
+  have ⟨hFrame, _⟩ :=
+    (PartialCommMonoid.compatible_assoc rest frame h).mp
+      ⟨hRestFrame,
+        PartialCommMonoid.compatible_comm hRestFrame'⟩
+  exact PartialCommMonoid.compatible_comm hFrame
 
 /-- Extending on one side of a union extends the union. -/
 theorem union_mono_left {h h' frame : Heap} (hSub : Heap.Sub h h')
     (hCompatible : PartialCommMonoid.Compatible h' frame) :
     Heap.Sub (h ∪ frame) (h' ∪ frame) := by
-  obtain ⟨rest, hDisjointRest, rfl⟩ := hSub
-  obtain ⟨_, hDisjointFrame⟩ :=
-    (Finmap.disjoint_union_left h rest frame).mp hCompatible
-  refine ⟨rest, ?_, ?_⟩
-  · exact (Finmap.disjoint_union_left h frame rest).mpr
-      ⟨hDisjointRest, Finmap.Disjoint.symm _ _ hDisjointFrame⟩
-  · rw [Finmap.union_assoc, Finmap.union_assoc,
-      Finmap.union_comm_of_disjoint (Finmap.Disjoint.symm _ _ hDisjointFrame)]
+  obtain ⟨rest, hCompatibleRest, rfl⟩ := hSub
+  have ⟨hRestFrame, hRestFrame'⟩ :=
+    (PartialCommMonoid.compatible_assoc h rest frame).mp
+      ⟨hCompatibleRest, hCompatible⟩
+  have hFrameRest := PartialCommMonoid.compatible_comm hRestFrame
+  have hFrameRest' :
+      PartialCommMonoid.Compatible h (frame ∪ rest) := by
+    rw [← PartialCommMonoid.union_comm_of_compatible hRestFrame]
+    exact hRestFrame'
+  have ⟨hCompatibleFrame, hCompatibleCombined⟩ :=
+    (PartialCommMonoid.compatible_assoc h frame rest).mpr
+      ⟨hFrameRest, hFrameRest'⟩
+  refine ⟨rest, hCompatibleCombined, ?_⟩
+  calc
+    (h ∪ rest) ∪ frame = h ∪ (rest ∪ frame) :=
+      PartialCommMonoid.union_assoc hCompatibleRest hCompatible
+    _ = h ∪ (frame ∪ rest) := congrArg (h ∪ ·)
+      (PartialCommMonoid.union_comm_of_compatible hRestFrame)
+    _ = (h ∪ frame) ∪ rest :=
+      (PartialCommMonoid.union_assoc
+        hCompatibleFrame hCompatibleCombined).symm
 
 end Heap.Sub
 
@@ -186,15 +317,17 @@ theorem mem_of_contains {α : Type} {h : Heap} {r : Ref α}
 
 /-- Two heaps that both contain the cell `r` are not disjoint. -/
 theorem disjoint_contains_false {α : Type} {h₁ h₂ : Heap} {r : Ref α}
-    (hDisjoint : Finmap.Disjoint h₁ h₂) (hContains₁ : contains h₁ r)
+    (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
+    (hContains₁ : contains h₁ r)
     (hContains₂ : contains h₂ r) : False :=
-  hDisjoint r.allocId (mem_of_contains hContains₁) (mem_of_contains hContains₂)
+  hCompatible r.allocId (mem_of_contains hContains₁)
+    (mem_of_contains hContains₂)
 
 theorem contains_union_left {α : Type} {h₁ h₂ : Heap} {r : Ref α}
     (hContains : contains h₁ r) : contains (h₁ ∪ h₂) r := by
   have hMem : r.allocId ∈ h₁ := mem_of_contains hContains
   unfold contains at hContains ⊢
-  rw [Finmap.lookup_union_left hMem]
+  rw [Heap.lookup_union_left hMem]
   exact hContains
 
 theorem read_union_left {α : Type} {h₁ h₂ : Heap} {r : Ref α}
@@ -229,60 +362,66 @@ theorem update_union_left {α : Type} {h₁ h₂ : Heap}
     (r : Ref α) (value : α) (hContains : contains h₁ r) :
     Heap.update r value (h₁ ∪ h₂) (contains_union_left hContains) =
       Heap.update r value h₁ hContains ∪ h₂ := by
-  exact Finmap.insert_union
+  exact Heap.insert_union
 
 theorem fresh_frame {α : Type} {r : Ref α} {value : α}
-    {h₁ h₂ h : Heap} (hDisjoint : Finmap.Disjoint h₁ h₂)
+    {h₁ h₂ h : Heap}
+    (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
     (hFresh : fresh (h₁ ∪ h₂) r value h) :
     ∃ h₁',
       fresh h₁ r value h₁' ∧
-      Finmap.Disjoint h₁' h₂ ∧
+      PartialCommMonoid.Compatible h₁' h₂ ∧
       h = h₁' ∪ h₂ := by
   rcases hFresh with ⟨hUnallocated, rfl⟩
   have hUnallocated₁ : unallocated h₁ r := by
     intro hMem
-    exact hUnallocated (Finmap.mem_union.mpr (Or.inl hMem))
+    exact hUnallocated (Heap.mem_union.mpr (Or.inl hMem))
   have hUnallocated₂ : unallocated h₂ r := by
     intro hMem
-    exact hUnallocated (Finmap.mem_union.mpr (Or.inr hMem))
+    exact hUnallocated (Heap.mem_union.mpr (Or.inr hMem))
   let h₁' := h₁.insert r.allocId ⟨α, value⟩
   refine ⟨h₁', ⟨hUnallocated₁, rfl⟩, ?_, ?_⟩
   · intro allocationId hMem₁ hMem₂
     dsimp [h₁'] at hMem₁
-    rw [Finmap.mem_insert] at hMem₁
+    change allocationId ∈ h₁.insert r.allocId ⟨α, value⟩ at hMem₁
+    rw [Heap.mem_insert] at hMem₁
     rcases hMem₁ with hEq | hMem₁
     · exact hUnallocated₂ (hEq ▸ hMem₂)
-    · exact hDisjoint allocationId hMem₁ hMem₂
-  · exact Finmap.insert_union
+    · exact hCompatible allocationId hMem₁ hMem₂
+  · exact Heap.insert_union
 
 theorem disjoint_update_left {α : Type} {r : Ref α} {value : α}
-    {h₁ h₂ : Heap} (hDisjoint : Finmap.Disjoint h₁ h₂)
+    {h₁ h₂ : Heap}
+    (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
     (hContains : contains h₁ r) :
-    Finmap.Disjoint (Heap.update r value h₁ hContains) h₂ := by
+    PartialCommMonoid.Compatible
+      (Heap.update r value h₁ hContains) h₂ := by
   have hUnallocated : unallocated h₂ r := by
     intro hMem₂
     unfold contains at hContains
     split at hContains
     · contradiction
     · rename_i cell hLookup
-      exact hDisjoint r.allocId
+      exact hCompatible r.allocId
         (Finmap.mem_of_lookup_eq_some hLookup) hMem₂
   intro allocationId hMem₁ hMem₂
-  unfold Heap.update at hMem₁
-  rw [Finmap.mem_insert] at hMem₁
+  change allocationId ∈ h₁.insert r.allocId ⟨α, value⟩ at hMem₁
+  rw [Heap.mem_insert] at hMem₁
   rcases hMem₁ with hEq | hMem₁
   · exact hUnallocated (hEq ▸ hMem₂)
-  · exact hDisjoint allocationId hMem₁ hMem₂
+  · exact hCompatible allocationId hMem₁ hMem₂
 
 theorem disjoint_free_left {α : Type} {r : Ref α}
-    {h₁ h₂ : Heap} (hDisjoint : Finmap.Disjoint h₁ h₂)
+    {h₁ h₂ : Heap}
+    (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
     (hContains : contains h₁ r) :
-    Finmap.Disjoint (Heap.free r h₁ hContains) h₂ := by
+    PartialCommMonoid.Compatible (Heap.free r h₁ hContains) h₂ := by
   intro allocationId hMem₁ hMem₂
-  exact hDisjoint allocationId (Finmap.mem_erase.mp hMem₁).right hMem₂
+  change allocationId ∈ h₁.erase r.allocId at hMem₁
+  exact hCompatible allocationId (Heap.mem_erase.mp hMem₁).right hMem₂
 
 theorem free_union_left {α : Type} {h₁ h₂ : Heap}
-    (r : Ref α) (hDisjoint : Finmap.Disjoint h₁ h₂)
+    (r : Ref α) (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
     (hContains : contains h₁ r) :
     Heap.free r (h₁ ∪ h₂) (contains_union_left hContains) =
       Heap.free r h₁ hContains ∪ h₂ := by
@@ -293,10 +432,14 @@ theorem free_union_left {α : Type} {h₁ h₂ : Heap}
     · rename_i cell hLookup
       exact Finmap.mem_of_lookup_eq_some hLookup
   have hNotMem : r.allocId ∉ h₂ :=
-    fun hMem₂ => hDisjoint r.allocId hMem hMem₂
+    fun hMem₂ => hCompatible r.allocId hMem hMem₂
   unfold Heap.free
+  apply Heap.ext_impl
   apply Finmap.ext_lookup
   intro allocationId
+  change
+    Finmap.lookup allocationId (h₁.impl ∪ h₂.impl |>.erase r.allocId) =
+      Finmap.lookup allocationId (h₁.impl.erase r.allocId ∪ h₂.impl)
   by_cases hEq : allocationId = r.allocId
   · subst allocationId
     rw [Finmap.lookup_erase, Finmap.lookup_union_right
@@ -315,30 +458,39 @@ theorem fresh_empty_eq_singleton {α : Type} {r : Ref α} {value : α}
     {h : Heap} (hFresh : fresh empty r value h) :
     h = singleton r value := by
   rcases hFresh with ⟨_, rfl⟩
+  apply Heap.ext_impl
   apply Finmap.ext_lookup
   intro allocationId
+  change
+    Finmap.lookup allocationId
+        ((∅ : HeapImpl).insert r.allocId ⟨α, value⟩) =
+      Finmap.lookup allocationId
+        (Finmap.singleton r.allocId ⟨α, value⟩ : HeapImpl)
   by_cases hEq : allocationId = r.allocId
   · subst allocationId
-    simp [empty, singleton]
+    simp
   · rw [Finmap.lookup_insert_of_ne _ hEq]
     symm
     apply Finmap.lookup_eq_none.mpr
-    change allocationId ∉
-      Finmap.singleton r.allocId ⟨α, value⟩
     rwa [Finmap.mem_singleton]
 
 /-- Two cells at different references are disjoint. -/
 theorem disjoint_singleton {α : Type} {r s : Ref α} {value₁ value₂ : α}
     (hNe : r ≠ s) :
-    Finmap.Disjoint (singleton r value₁) (singleton s value₂) := by
+    PartialCommMonoid.Compatible
+      (singleton r value₁) (singleton s value₂) := by
   intro allocationId hMem₁ hMem₂
-  rw [singleton, Finmap.mem_singleton] at hMem₁
-  rw [singleton, Finmap.mem_singleton] at hMem₂
+  change allocationId ∈
+    (Finmap.singleton r.allocId ⟨α, value₁⟩ : HeapImpl) at hMem₁
+  change allocationId ∈
+    (Finmap.singleton s.allocId ⟨α, value₂⟩ : HeapImpl) at hMem₂
+  rw [Finmap.mem_singleton] at hMem₁
+  rw [Finmap.mem_singleton] at hMem₂
   exact hNe (hMem₁.symm.trans hMem₂)
 
 theorem contains_singleton {α : Type} (r : Ref α) (value : α) :
     contains (singleton r value) r := by
-  simp [contains, singleton]
+  simp [contains, singleton, Heap.lookup]
 
 theorem read_singleton {α : Type} (r : Ref α) (value : α)
     (hContains : contains (singleton r value) r) :
@@ -346,11 +498,17 @@ theorem read_singleton {α : Type} (r : Ref α) (value : α)
   unfold Heap.read
   split
   · rename_i hLookup
-    unfold singleton at hLookup
+    change
+      Finmap.lookup r.allocId
+          (Finmap.singleton r.allocId ⟨α, value⟩ : HeapImpl) =
+        none at hLookup
     rw [Finmap.lookup_singleton_eq] at hLookup
     contradiction
   · rename_i β stored hLookup
-    unfold singleton at hLookup
+    change
+      Finmap.lookup r.allocId
+          (Finmap.singleton r.allocId ⟨α, value⟩ : HeapImpl) =
+        some (⟨β, stored⟩ : HeapCell) at hLookup
     rw [Finmap.lookup_singleton_eq] at hLookup
     cases hLookup
     rfl
@@ -360,19 +518,26 @@ theorem update_singleton {α : Type} (r : Ref α)
     (hContains : contains (singleton r oldValue) r) :
     Heap.update r newValue (singleton r oldValue) hContains =
       singleton r newValue := by
-  simp [Heap.update, singleton]
+  apply Heap.ext_impl
+  simp [Heap.update, singleton, Heap.insert]
 
 theorem free_singleton {α : Type} (r : Ref α) (value : α)
     (hContains : contains (singleton r value) r) :
     Heap.free r (singleton r value) hContains = empty := by
   unfold Heap.free
+  apply Heap.ext_impl
   apply Finmap.ext_lookup
   intro allocationId
+  change
+    Finmap.lookup allocationId
+        ((Finmap.singleton r.allocId ⟨α, value⟩ : HeapImpl).erase
+          r.allocId) =
+      Finmap.lookup allocationId (∅ : HeapImpl)
   by_cases hEq : allocationId = r.allocId
   · subst allocationId
-    simp [empty]
+    simp
   · rw [Finmap.lookup_erase_ne hEq]
-    simp only [empty, Finmap.lookup_empty]
+    simp only [Finmap.lookup_empty]
     apply Finmap.lookup_eq_none.mpr
     simpa [singleton, Finmap.mem_singleton] using hEq
 
