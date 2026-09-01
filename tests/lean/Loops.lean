@@ -1213,9 +1213,8 @@ def as_radix_minimized_loop.body
         do
         let i1 ← Array.index_usize scalar i
         let i2 ← i1 >>> 1#i32
-        let i3 ← Array.index_usize scalar i
-        let i4 ← i3 <<< 63#i32
-        ok (i2 ||| i4)
+        let i3 ← i1 <<< 63#i32
+        ok (i2 ||| i3)
     let i1 ← i + 1#usize
     ok (cont i1)
   else ok (done ())

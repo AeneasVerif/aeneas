@@ -56,9 +56,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
       in
       let f = def.f in
       let fun_id = (Pure.FunId (FRegular f.def_id), f.loop_id) in
-      (* Several Rust declarations can intentionally share the same backend model. *)
-      ctx_add ~allow_collision:true f.item_meta.span (FunId (FromLlbc fun_id))
-        info.extract_name ctx
+      ctx_add f.item_meta.span (FunId (FromLlbc fun_id)) info.extract_name ctx
   | None ->
       (* Not builtin *)
       (* Register the decrease clauses, if necessary *)

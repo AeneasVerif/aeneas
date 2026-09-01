@@ -1574,9 +1574,10 @@ let opt_destruct_index_call (e : texpr) :
     Checking that the outputs of [e] are unused is the responsibility of the
     caller (see [filter_useless]).
 
-    We currently only detect a shared indexing operation immediately followed by the same
-    shared or mutable indexing operation. Both perform the same bounds check on
-    the same array/slice and the same index, so the first one is redundant:
+    We currently only detect a shared indexing operation immediately followed by
+    the same shared or mutable indexing operation. Both perform the same bounds
+    check on the same array/slice and the same index, so the first one is
+    redundant:
     {[
       let _ ← Slice.index_usize v i;
       let (x, back) ← Slice.index_mut_usize v i;

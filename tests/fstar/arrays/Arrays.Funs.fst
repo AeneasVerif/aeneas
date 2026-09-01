@@ -162,10 +162,9 @@ let update_update_array
   (s : array (array u32 32) 32) (i : usize) (j : usize) :
   result (array (array u32 32) 32)
   =
-  let* (a, core_slice_index_slice_index_mut_back) = array_index_mut_usize s i
-  in
+  let* (a, index_mut_back) = array_index_mut_usize s i in
   let* a1 = array_update_usize a j 0 in
-  Ok (core_slice_index_slice_index_mut_back a1)
+  Ok (index_mut_back a1)
 
 (** [arrays::update_update_slice]:
     Source: 'tests/src/arrays.rs', lines 125:0-127:1
@@ -174,10 +173,9 @@ let update_update_slice
   (s : slice (array u32 32)) (i : usize) (j : usize) :
   result (slice (array u32 32))
   =
-  let* (a, core_slice_index_slice_index_mut_back) = slice_index_mut_usize s i
-  in
+  let* (a, index_mut_back) = slice_index_mut_usize s i in
   let* a1 = array_update_usize a j 0 in
-  Ok (core_slice_index_slice_index_mut_back a1)
+  Ok (index_mut_back a1)
 
 (** [arrays::update_update_slice_shifted]:
     Source: 'tests/src/arrays.rs', lines 131:0-133:1
@@ -189,10 +187,9 @@ let update_update_slice_shifted
   let* i1 = usize_add i 1 in
   let* a = slice_index_usize s i1 in
   let* i2 = array_index_usize a j in
-  let* (a1, core_slice_index_slice_index_mut_back) = slice_index_mut_usize s i
-  in
+  let* (a1, index_mut_back) = slice_index_mut_usize s i in
   let* a2 = array_update_usize a1 j i2 in
-  Ok (core_slice_index_slice_index_mut_back a2)
+  Ok (index_mut_back a2)
 
 (** [arrays::array_local_deep_copy]:
     Source: 'tests/src/arrays.rs', lines 135:0-137:1

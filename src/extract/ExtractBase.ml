@@ -409,9 +409,8 @@ let allow_collisions (id : id) : bool =
 
 (** The [id_to_string] function to print nice debugging messages if there are
     collisions *)
-let names_maps_add ?(allow_collision = false) (id_to_string : id -> string)
-    (id : id) (span : Meta.span option) (name : string) (nm : names_maps) :
-    names_maps =
+let names_maps_add (id_to_string : id -> string) (id : id)
+    (span : Meta.span option) (name : string) (nm : names_maps) : names_maps =
   (* We do not use the same name map if we allow/disallow collisions.
      We notably use it for field names: some backends like Lean can use the
      type information to disambiguate field projections.
@@ -424,10 +423,7 @@ let names_maps_add ?(allow_collision = false) (id_to_string : id -> string)
      between fields), but still checking collisions between those ids and the
      others (ex.: fields and keywords).
   *)
-  if allow_collision then (
-    names_map_check_collision id_to_string id span name nm.strict_names_map;
-    { nm with names_map = names_map_add_unchecked (id, span) name nm.names_map })
-  else if allow_collisions id then (
+  if allow_collisions id then (
     (* Check with the ids which are considered to be strict on collisions *)
     names_map_check_collision id_to_string id span name nm.strict_names_map;
     {
@@ -793,12 +789,11 @@ let escape_name ?(qualified : bool = false) (name : string) : string =
       String.concat "." (List.map escape_part parts)
   | FStar | Coq | HOL4 -> name
 
-let ctx_add ?(allow_collision = false) (span : Meta.span) (id : id)
-    (name : string) (ctx : extraction_ctx) : extraction_ctx =
+let ctx_add (span : Meta.span) (id : id) (name : string) (ctx : extraction_ctx)
+    : extraction_ctx =
   let id_to_string (id : id) : string = id_to_string (Some span) id ctx in
   let names_maps =
-    names_maps_add ~allow_collision id_to_string id (Some span) name
-      ctx.names_maps
+    names_maps_add id_to_string id (Some span) name ctx.names_maps
   in
   { ctx with names_maps }
 

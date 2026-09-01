@@ -199,9 +199,9 @@ Definition update_update_array
   result (array (array u32 32%usize) 32%usize)
   :=
   p <- array_index_mut_usize s i;
-  let (a, core_slice_index_slice_index_mut_back) := p in
+  let (a, index_mut_back) := p in
   a1 <- array_update_usize a j 0%u32;
-  Ok (core_slice_index_slice_index_mut_back a1)
+  Ok (index_mut_back a1)
 .
 
 (** [arrays::update_update_slice]:
@@ -212,9 +212,9 @@ Definition update_update_slice
   result (slice (array u32 32%usize))
   :=
   p <- slice_index_mut_usize s i;
-  let (a, core_slice_index_slice_index_mut_back) := p in
+  let (a, index_mut_back) := p in
   a1 <- array_update_usize a j 0%u32;
-  Ok (core_slice_index_slice_index_mut_back a1)
+  Ok (index_mut_back a1)
 .
 
 (** [arrays::update_update_slice_shifted]:
@@ -228,9 +228,9 @@ Definition update_update_slice_shifted
   a <- slice_index_usize s i1;
   i2 <- array_index_usize a j;
   p <- slice_index_mut_usize s i;
-  let (a1, core_slice_index_slice_index_mut_back) := p in
+  let (a1, index_mut_back) := p in
   a2 <- array_update_usize a1 j i2;
-  Ok (core_slice_index_slice_index_mut_back a2)
+  Ok (index_mut_back a2)
 .
 
 (** [arrays::array_local_deep_copy]:

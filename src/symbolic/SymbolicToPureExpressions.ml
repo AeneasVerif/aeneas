@@ -180,6 +180,45 @@ let decompose_let_match (ctx : bs_ctx) (pat : tpat) (bound : texpr) :
   in
   (!ctx, (pat, bound))
 
+(** Compute the base name to use for the backward functions introduced by a call
+    to [decl].
+
+    We derive it from the name of the *model* of [decl], if it has one, as this
+    is the name which appears in the generated code: for instance, we model
+    [core::array::{[@T; @N]}::as_mut_slice] with [Array.to_slice_mut], and thus
+    name the backward function [to_slice_mut_back] rather than
+    [as_mut_slice_back]. We fall back to the last identifier of the Rust name if
+    [decl] has no model.
+
+    Remark: we can only look at the model name for the backends which use
+    qualified names (i.e., Lean). The other backends flatten the paths by using
+    [_] as a separator (e.g., the model above is called [array_to_slice_mut] in
+    Coq), meaning we can not identify its last identifier. *)
+let compute_back_fun_name (ctx : bs_ctx) (decl : LlbcAst.fun_decl) : string =
+  let model_name =
+    if Config.backend () <> Lean then None
+    else
+      match
+        match_name_find_opt ctx.decls_ctx decl.item_meta.name
+          (ExtractBuiltin.builtin_funs_map ())
+      with
+      | Some { extract_name; _ } ->
+          Some (Collections.List.last (String.split_on_char '.' extract_name))
+      | None -> None
+  in
+  match model_name with
+  | Some name -> name
+  | None -> (
+      let name =
+        LlbcAstUtils.strip_target_or_instantiated_suffix decl.item_meta.name
+      in
+      match Collections.List.last name with
+      | PeIdent (s, _) -> s
+      | PeImpl _ -> "impl"
+      | _ ->
+          (* We shouldn't get there *)
+          [%craise] decl.item_meta.span "Unexpected")
+
 let rec translate_expr (e : S.expr) (ctx : bs_ctx) : texpr =
   [%ldebug "e:\n" ^ bs_ctx_expr_to_string ctx e];
   match e with
@@ -398,28 +437,9 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
           let back_fun_name =
             let name =
               match fid with
-              | FunId (FRegular fid) -> (
-                  let decl =
-                    FunDeclId.Map.find fid ctx.fun_ctx.llbc_fun_decls
-                  in
-                  match
-                    match_name_find_opt ctx.decls_ctx decl.item_meta.name
-                      (ExtractBuiltin.builtin_funs_map ())
-                  with
-                  | Some info ->
-                      Collections.List.last
-                        (String.split_on_char '.' info.extract_name)
-                  | None -> (
-                      let name =
-                        LlbcAstUtils.strip_target_or_instantiated_suffix
-                          decl.item_meta.name
-                      in
-                      match Collections.List.last name with
-                      | PeIdent (s, _) -> s
-                      | PeImpl _ -> "impl"
-                      | _ ->
-                          (* We shouldn't get there *)
-                          [%craise] decl.item_meta.span "Unexpected"))
+              | FunId (FRegular fid) ->
+                  compute_back_fun_name ctx
+                    (FunDeclId.Map.find fid ctx.fun_ctx.llbc_fun_decls)
               | TraitMethod (trait_ref, method_id) ->
                   Charon.GAstUtils.get_method_name ctx.decls_ctx.crate
                     trait_ref.trait_decl_ref.binder_value.id method_id
