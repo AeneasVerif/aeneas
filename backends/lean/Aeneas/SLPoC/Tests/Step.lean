@@ -57,12 +57,10 @@ example (p : Ptr Nat) (value : Nat) :
 
 /-! ## The terminal return
 
-`step` takes the mono case of a syntactic terminal return directly, through
-`triple_pure`, and hands the resulting `P ⊢ Q v` to `sl_frame`.  Going through
-the registered `pure.spec` instead would state that obligation about the
-*abstract* result of the specification — `P ⊢ emp ∗ ((fun result => ⌜result =
-v⌝) -∗+ Q)` — and cancelling that wand needs the pure fact it introduces to be
-substituted back into the spatial part, which `sl_frame` does not do.
+`step` uses the registered `pure.spec` and leaves its ramified-frame entailment
+as the mono goal. The simplification passes collapse its result-equality wand,
+after which an explicit `sl_frame` closes routine terminal goals. `step*` runs
+that registered final discharger itself.
 -/
 
 /-- What `sl_frame` cannot close is left as the goal, stated about the returned
@@ -77,10 +75,12 @@ example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => iprop(⌜opaqueStepResult 1 1�
 /-- `FFree.ok`, the constructor `pure` unfolds to, is a terminal return too. -/
 example (n : Nat) : ⦃ emp ⦄ (FFree.ok n : St Nat) ⦃⇓ result => ⌜result = n⌝⦄ := by
   step
+  sl_frame
 
 /-- A `Unit` result is no different. -/
 example (p : Ptr Nat) : ⦃ p ↦ 0 ⦄ (pure () : St Unit) ⦃⇓ p ↦ 0⦄ := by
   step
+  sl_frame
 
 def namedReturn (n : Nat) : St Nat :=
   pure n
@@ -90,15 +90,18 @@ theorem namedReturn.spec (n : Nat) :
     ⦃ emp ⦄ namedReturn n ⦃⇓ result => ⌜result = n⌝⦄ := by
   unfold namedReturn
   step
+  sl_frame
 
 /-- A named pure wrapper is not a *syntactic* return: the terminal rule does not
 unfold it, so the step goes through its registered specification. -/
 example (n : Nat) : ⦃ emp ⦄ namedReturn n ⦃⇓ result => ⌜result = n⌝⦄ := by
   step
+  sl_frame
 
 /-- An explicitly named specification wins over the terminal rule. -/
 example (n : Nat) : ⦃ emp ⦄ (pure n : St Nat) ⦃⇓ result => ⌜result = n⌝⦄ := by
   step with pure.spec
+  sl_frame
 
 /-! ## An unbounded star consumes the whole goal
 
@@ -133,7 +136,7 @@ example (p : Ptr Nat) (value : Nat) :
     step*
     by_cases h : value = 0
   step* 1
-  by_cases h : value = 0 <;> simp only [h, ↓reduceIte] <;> step
+  by_cases h : value = 0 <;> simp only [h, ↓reduceIte] <;> step <;> sl_frame
 
 /-! ## A specification argument is not inferable
 
@@ -156,6 +159,7 @@ theorem ghostHelper.spec (p : Ptr Nat) (_witness : NeedsWitness) :
     ⦃ p ↦ 0 ⦄ ghostHelper p ⦃⇓ p ↦ 0⦄ := by
   unfold ghostHelper
   step
+  sl_frame
 
 def ghostCaller (p : Ptr Nat) : St Unit := do
   ghostHelper p
@@ -169,6 +173,7 @@ example (p : Ptr Nat) :
     done
   step with ghostHelper.spec p (NeedsWitness.mk { f := id })
   step
+  sl_frame
 
 /-! ## A failed discharge leaves inference metavariables unsolved -/
 

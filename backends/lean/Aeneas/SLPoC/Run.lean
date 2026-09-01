@@ -8,18 +8,13 @@ performing one: the transition relation `StEvents.Step`, lifted to the big-step
 `Evaluates`, and the denotation `theta` into the weakest-precondition monad.
 This file adds the third: an interpreter that *runs* a program.
 
-`St` cannot be interpreted unconditionally.  A heap cell stores its own Lean
-type (`HeapCell = Σ α : Type, α`), so `Ptr.contains h p` — "the cell `p` points
-at exists and holds an `α`" — is not decidable, and a read through a dangling or
-mistyped pointer is stuck rather than erroneous.
+`St` cannot be interpreted unconditionally: the guard of an event is an
+arbitrary proposition about the current heap.
 
 The program logic supplies exactly what is missing.  `run` therefore takes the
-weakest precondition as an argument and reads the witnesses it needs off it:
-`theta_ev_read_contains` and friends turn `theta m Q h` into the very
-`Ptr.contains` proofs `Ptr.read`, `Ptr.update` and `Ptr.free` ask for, and
-`Ptr.freshPtr` makes allocation deterministic.  Proofs are erased at run time,
-so `run` computes; what it computes with is the guarantee that a verified
-program never gets stuck.
+weakest precondition as an argument and obtains the guard proof from it.
+Proofs are erased at run time, so `run` computes; what it computes with is the
+guarantee that a verified program never gets stuck.
 
 The interpreter is *certified*: it returns the postcondition and the evaluation
 that produced its answer alongside the answer, so nothing has to be re-proved
@@ -43,8 +38,8 @@ def Outcome (m : St α) (Q : SLPost α) (h : Heap) : Type 1 :=
 /-- Run `m` on the heap `h`, given a proof that its weakest precondition holds
 there.
 
-The proof is what makes the function total: it is consulted for the ownership
-witnesses of every read, write and deallocation, and for nothing else. -/
+The proof is what makes the function total: it supplies the guard of every
+event. -/
 def run : (m : St α) → (h : Heap) → (Q : SLPost α) → theta m Q h → Outcome m Q h
   | .ok value, h, _, hWp =>
       ⟨(value, h), hWp,
@@ -55,35 +50,14 @@ def run : (m : St α) → (h : Heap) → (Q : SLPost α) → theta m Q h → Out
          lemmas of `Aeneas.SLPoC.ST` apply. -/
       have hEvent : theta_ev event (fun result => theta (next result) Q) h := hWp
       match event, hEvent with
-      | .AllocPtr value, hWp =>
-          let pointer := Ptr.freshPtr _ h
-          let allocated := Ptr.freshHeap h value
-          let hFresh := Ptr.fresh_freshPtr value h
+      | .GuardedModify _ modify, hWp =>
+          let hPre := (theta_ev_elim hWp).choose
+          let result := (modify h hPre).1
+          let modified := (modify h hPre).2
           let outcome :=
-            run (next pointer) allocated Q (theta_ev_alloc_elim hWp hFresh)
+            run (next result) modified Q (theta_ev_elim hWp).choose_spec
           ⟨outcome.val, outcome.property.1,
-            StateMachine.Evaluates.step (.alloc hFresh) outcome.property.2⟩
-      | .ReadPtr pointer, hWp =>
-          let hContains := theta_ev_read_contains hWp
-          let outcome :=
-            run (next (Ptr.read pointer h hContains)) h Q
-              (theta_ev_read_post hWp hContains)
-          ⟨outcome.val, outcome.property.1,
-            StateMachine.Evaluates.step (.read hContains) outcome.property.2⟩
-      | .UpdatePtr pointer value, hWp =>
-          let hContains := theta_ev_update_contains hWp
-          let outcome :=
-            run (next ()) (Ptr.update pointer value h hContains) Q
-              (theta_ev_update_post hWp hContains)
-          ⟨outcome.val, outcome.property.1,
-            StateMachine.Evaluates.step (.update hContains) outcome.property.2⟩
-      | .FreePtr pointer, hWp =>
-          let hContains := theta_ev_free_contains hWp
-          let outcome :=
-            run (next ()) (Ptr.free pointer h hContains) Q
-              (theta_ev_free_post hWp hContains)
-          ⟨outcome.val, outcome.property.1,
-            StateMachine.Evaluates.step (.free hContains) outcome.property.2⟩
+            StateMachine.Evaluates.step (.guardedModify hPre) outcome.property.2⟩
 
 /-- The value and the heap `run` produces. -/
 def exec (m : St α) (h : Heap) (Q : SLPost α) (hWp : theta m Q h) : α × Heap :=
