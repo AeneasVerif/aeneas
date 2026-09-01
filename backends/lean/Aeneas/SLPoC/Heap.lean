@@ -1,4 +1,5 @@
 import Mathlib.Data.Finmap
+import Aeneas.SLPoC.PCM
 
 namespace Aeneas.SLPoC
 
@@ -12,6 +13,23 @@ abbrev HeapCell := Σ α : Type, α -- TODO: make it a list
 abbrev Heap := Finmap fun _ : AllocId => HeapCell
 
 def empty : Heap := ∅
+
+/-- Heaps form a PCM under disjoint union. -/
+instance Heap.instPartialCommMonoid : PartialCommMonoid Heap where
+  Compatible := Finmap.Disjoint
+  compatible_comm := Finmap.Disjoint.symm _ _
+  compatible_empty_left := Finmap.disjoint_empty
+  compatible_assoc a b c := by
+    rw [Finmap.disjoint_union_left, Finmap.disjoint_union_right]
+    constructor
+    · rintro ⟨hab, hac, hbc⟩
+      exact ⟨hbc, hab, hac⟩
+    · rintro ⟨hbc, hab, hac⟩
+      exact ⟨hab, hac, hbc⟩
+  union_assoc _ _ := Finmap.union_assoc
+  empty_union _ := Finmap.empty_union
+  union_empty _ := Finmap.union_empty
+  union_comm_of_compatible := Finmap.union_comm_of_disjoint
 
 def Ref (_ : Type) := AllocId
 
@@ -68,7 +86,7 @@ monotone in its resource. -/
 
 /-- `Heap.Sub h h'`: `h'` is `h` extended with cells that `h` does not own. -/
 def Heap.Sub (h h' : Heap) : Prop :=
-  ∃ rest, Finmap.Disjoint h rest ∧ h' = h ∪ rest
+  ∃ rest, PartialCommMonoid.Compatible h rest ∧ h' = h ∪ rest
 
 namespace Heap.Sub
 
@@ -89,40 +107,45 @@ theorem trans {h₁ h₂ h₃ : Heap} (hSub₁₂ : Heap.Sub h₁ h₂)
 theorem of_empty (h : Heap) : Heap.Sub empty h :=
   ⟨h, Finmap.disjoint_empty h, Finmap.empty_union.symm⟩
 
-theorem union_left {h₁ h₂ : Heap} (hDisjoint : Finmap.Disjoint h₁ h₂) :
+theorem union_left {h₁ h₂ : Heap}
+    (hCompatible : PartialCommMonoid.Compatible h₁ h₂) :
     Heap.Sub h₁ (h₁ ∪ h₂) :=
-  ⟨h₂, hDisjoint, rfl⟩
+  ⟨h₂, hCompatible, rfl⟩
 
-theorem union_right {h₁ h₂ : Heap} (hDisjoint : Finmap.Disjoint h₁ h₂) :
+theorem union_right {h₁ h₂ : Heap}
+    (hCompatible : PartialCommMonoid.Compatible h₁ h₂) :
     Heap.Sub h₂ (h₁ ∪ h₂) :=
-  ⟨h₁, Finmap.Disjoint.symm _ _ hDisjoint,
-    Finmap.union_comm_of_disjoint hDisjoint⟩
+  ⟨h₁, PartialCommMonoid.compatible_comm hCompatible,
+    PartialCommMonoid.union_comm_of_compatible hCompatible⟩
 
 /-- An extension of a split heap splits the same way, the extra cells going to
 the right-hand side. -/
-theorem split {h₁ h₂ h' : Heap} (hDisjoint : Finmap.Disjoint h₁ h₂)
+theorem split {h₁ h₂ h' : Heap}
+    (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
     (hSub : Heap.Sub (h₁ ∪ h₂) h') :
-    ∃ h₂', Finmap.Disjoint h₁ h₂' ∧ h' = h₁ ∪ h₂' ∧ Heap.Sub h₂ h₂' := by
+    ∃ h₂', PartialCommMonoid.Compatible h₁ h₂' ∧
+      h' = h₁ ∪ h₂' ∧ Heap.Sub h₂ h₂' := by
   obtain ⟨rest, hDisjointRest, rfl⟩ := hSub
   obtain ⟨hDisjoint₁, hDisjoint₂⟩ :=
     (Finmap.disjoint_union_left h₁ h₂ rest).mp hDisjointRest
   exact ⟨h₂ ∪ rest,
-    (Finmap.disjoint_union_right h₁ h₂ rest).mpr ⟨hDisjoint, hDisjoint₁⟩,
+    (Finmap.disjoint_union_right h₁ h₂ rest).mpr ⟨hCompatible, hDisjoint₁⟩,
     Finmap.union_assoc, ⟨rest, hDisjoint₂, rfl⟩⟩
 
 /-- A heap disjoint from an extension is disjoint from the heap extended. -/
 theorem disjoint_of_sub {h h' frame : Heap} (hSub : Heap.Sub h h')
-    (hDisjoint : Finmap.Disjoint h' frame) : Finmap.Disjoint h frame := by
+    (hCompatible : PartialCommMonoid.Compatible h' frame) :
+    PartialCommMonoid.Compatible h frame := by
   obtain ⟨rest, _, rfl⟩ := hSub
-  exact ((Finmap.disjoint_union_left h rest frame).mp hDisjoint).left
+  exact ((Finmap.disjoint_union_left h rest frame).mp hCompatible).left
 
 /-- Extending on one side of a union extends the union. -/
 theorem union_mono_left {h h' frame : Heap} (hSub : Heap.Sub h h')
-    (hDisjoint : Finmap.Disjoint h' frame) :
+    (hCompatible : PartialCommMonoid.Compatible h' frame) :
     Heap.Sub (h ∪ frame) (h' ∪ frame) := by
   obtain ⟨rest, hDisjointRest, rfl⟩ := hSub
   obtain ⟨_, hDisjointFrame⟩ :=
-    (Finmap.disjoint_union_left h rest frame).mp hDisjoint
+    (Finmap.disjoint_union_left h rest frame).mp hCompatible
   refine ⟨rest, ?_, ?_⟩
   · exact (Finmap.disjoint_union_left h frame rest).mpr
       ⟨hDisjointRest, Finmap.Disjoint.symm _ _ hDisjointFrame⟩
