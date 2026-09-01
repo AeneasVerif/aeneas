@@ -1,4 +1,4 @@
-import Aeneas.SLPoC.Step
+import Aeneas.SLPoC.RustHeap
 
 /-!
 # Verus mimalloc free-list kernel

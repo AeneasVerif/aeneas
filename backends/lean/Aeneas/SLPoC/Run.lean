@@ -1,4 +1,4 @@
-import Aeneas.SLPoC.ST
+import Aeneas.SLPoC.RustHeap
 
 /-!
 # Executing a program the logic has proved
