@@ -4,20 +4,20 @@ import AeneasMeta.Simp
 import Lean.Meta.Tactic.AC
 
 /-!
-# Separation-logic assertions and the weakest-precondition monad
+# Iris-compatible first-order separation logic and weakest preconditions
 
-Heap predicates (`SLProp`) with the usual separation-logic connectives — the
-separating conjunction, the points-to assertion `p ↦ value` and the magic wand
-included — and the monad `Wp` of monotone predicate transformers they live in.
-Nothing here mentions the state monad: its denotation into `Wp` and the Hoare
-triples it induces are in `Aeneas.SLPoC.ST`.
+This is a standalone copy of `Aeneas.SLPoC.WP` whose public vocabulary and
+notation follow Iris-Lean. It deliberately does not import Iris-Lean or
+instantiate Iris-Lean with Aeneas's model. A client can switch implementations
+by changing its import while continuing to use the `IProp`, `Wp`,
+`iprop(...)`, `∗`, `-∗`, `⊢`, `⊣⊢`, and `↦` surface.
 
 The logic is *affine*, as Iris's is: an assertion owns the cells it describes
 and says nothing about the rest of the heap, so `emp` is the affine top and the
 entailment `⊢` weakens — `H ⊢ emp` for every `H`.  Resources may therefore be
 discarded anywhere.  Following Iris's `uPred`, affinity is a property of the
 *model*:
-`SLProp` bundles closure under `Heap.Sub`, which is what makes `emp ∗ H ⊣⊢ H`
+`IProp` bundles closure under `Heap.Sub`, which is what makes `emp ∗ H ⊣⊢ H`
 provable once `emp` holds of every heap.
 -/
 
@@ -26,15 +26,15 @@ namespace Aeneas.SLPoC
 /-- Heap predicates describe heap fragments.  Like Iris's `uPred`, an assertion
 is closed under heap extension: it constrains the cells it owns, and says
 nothing about the others. -/
-structure SLProp where
+structure IProp where
   holds : Heap → Prop
   up_closed : ∀ {h h' : Heap}, holds h → Heap.Sub h h' → holds h'
 
-instance : CoeFun SLProp (fun _ => Heap → Prop) :=
-  ⟨SLProp.holds⟩
+instance : CoeFun IProp (fun _ => Heap → Prop) :=
+  ⟨IProp.holds⟩
 
 @[ext]
-theorem SLProp.ext {H₁ H₂ : SLProp} (hIff : ∀ h, H₁ h ↔ H₂ h) : H₁ = H₂ := by
+theorem IProp.ext {H₁ H₂ : IProp} (hIff : ∀ h, H₁ h ↔ H₂ h) : H₁ = H₂ := by
   obtain ⟨holds₁, _⟩ := H₁
   obtain ⟨holds₂, _⟩ := H₂
   have hEq : holds₁ = holds₂ := funext fun h => propext (hIff h)
@@ -42,36 +42,37 @@ theorem SLProp.ext {H₁ H₂ : SLProp} (hIff : ∀ h, H₁ h ↔ H₂ h) : H₁
   rfl
 
 /- Preconditions are separation-logic propositions. -/
-abbrev SLPre := SLProp
+abbrev IPre := IProp
 
 /- Postconditions describe both a returned value and a heap fragment. -/
-abbrev SLPost (α : Type) := α → SLProp
+abbrev IPost (α : Type) := α → IProp
 
-def himpl (H₁ H₂ : SLProp) : Prop :=
+def Entails (H₁ H₂ : IProp) : Prop :=
   ∀ h, H₁ h → H₂ h
 
-def hequiv (H₁ H₂ : SLProp) : Prop :=
-  ∀ h, H₁ h ↔ H₂ h
+structure BiEntails (H₁ H₂ : IProp) : Prop where
+  mp : Entails H₁ H₂
+  mpr : Entails H₂ H₁
 
 /-- The empty assertion owns nothing.  Being affine it holds of *every* heap,
 exactly like Iris's `emp`, which coincides with `True` there. -/
-def hempty : SLProp where
+def emp : IProp where
   holds _ := True
   up_closed := fun _ _ => trivial
 
-/-- A pure fact owns nothing, so — unlike SLF's `\[P]` and like Iris's `⌜P⌝` —
-it says nothing about the heap it is asserted of. -/
-def hpure (P : Prop) : SLProp where
+/-- A pure fact owns nothing, so it says nothing about the heap it is asserted
+of. -/
+def ipure (P : Prop) : IProp where
   holds _ := P
   up_closed := fun hP _ => hP
 
 /-- The points-to assertion: the heap owns the cell `p` points at, and it holds
 `value`. -/
-def hsingle {α : Type} (r : Ref α) (value : α) : SLProp where
+def pointsTo {α : Type} (r : Ref α) (value : α) : IProp where
   holds h := Heap.Sub (singleton r value) h
   up_closed := fun hSub hExtend => hSub.trans hExtend
 
-def hstar (H₁ H₂ : SLProp) : SLProp where
+def sep (H₁ H₂ : IProp) : IProp where
   holds h :=
     ∃ h₁ h₂,
       PartialCommMonoid.Compatible h₁ h₂ ∧
@@ -83,61 +84,59 @@ def hstar (H₁ H₂ : SLProp) : SLProp where
     obtain ⟨h₂', hDisjoint', rfl, hExtend'⟩ := Heap.Sub.split hDisjoint hExtend
     exact ⟨h₁, h₂', hDisjoint', rfl, hH₁, H₂.up_closed hH₂ hExtend'⟩
 
-def hexists {α : Sort _} (J : α → SLProp) : SLProp where
+def iexists {α : Sort _} (J : α → IProp) : IProp where
   holds h := ∃ x, J x h
   up_closed := fun ⟨x, hJ⟩ hExtend => ⟨x, (J x).up_closed hJ hExtend⟩
 
-def qstar {α : Type} (Q : SLPost α) (H : SLProp) :
-    SLPost α :=
-  fun value => hstar (Q value) H
+def postSep {α : Type} (Q : IPost α) (H : IProp) :
+    IPost α :=
+  fun value => sep (Q value) H
 
-def qimpl {α : Type} (Q₁ Q₂ : SLPost α) : Prop :=
-  ∀ value, himpl (Q₁ value) (Q₂ value)
+def postEntails {α : Type} (Q₁ Q₂ : IPost α) : Prop :=
+  ∀ value, Entails (Q₁ value) (Q₂ value)
 
-namespace SepLogic
-
-scoped syntax:max "iprop(" term ")" : term
-scoped notation "emp" => hempty
-scoped syntax "⌜" term "⌝" : term
-scoped macro_rules
-  | `(⌜$P⌝) => `(hpure $P)
-scoped macro_rules
-  | `(iprop(∃ $x:ident, $H)) => `(hexists fun $x => iprop($H))
+syntax:max "iprop(" term ")" : term
+notation "emp" => emp
+syntax "⌜" term "⌝" : term
+macro_rules
+  | `(⌜$P⌝) => `(ipure $P)
+macro_rules
+  | `(iprop(∃ $x:ident, $H)) => `(iexists fun $x => iprop($H))
   | `(iprop(∃ $x:ident : $type, $H)) =>
-      `(hexists fun ($x : $type) => iprop($H))
+      `(iexists fun ($x : $type) => iprop($H))
   | `(iprop(∃ ($x:ident : $type), $H)) =>
-      `(hexists fun ($x : $type) => iprop($H))
+      `(iexists fun ($x : $type) => iprop($H))
   | `(iprop($H)) => `($H)
-scoped infixr:35 " ∗ " => hstar
-scoped infixr:40 " ∗+ " => qstar
-scoped infix:25 " ⊢ " => himpl
-scoped infix:25 " ⊢+ " => qimpl
-scoped infix:25 " ⊣⊢ " => hequiv
-scoped notation:52 p:53 " ↦ " value:53 => hsingle p value
+infixr:35 " ∗ " => sep
+infixr:40 " ∗+ " => postSep
+syntax:25 term:29 " ⊢ " term:25 : term
+syntax:25 term:29 " ⊢+ " term:25 : term
+syntax:25 term:29 " ⊣⊢ " term:29 : term
+macro_rules
+  | `($P ⊢ $Q) => `(Entails $P $Q)
+  | `($P ⊢+ $Q) => `(postEntails $P $Q)
+  | `($P ⊣⊢ $Q) => `(BiEntails $P $Q)
+notation:50 p:50 " ↦ " value:50 => pointsTo p value
 
-end SepLogic
-
-open scoped SepLogic
-
-theorem himpl_refl (H : SLProp) : H ⊢ H :=
+theorem entails_refl (H : IProp) : H ⊢ H :=
   fun _ hH => hH
 
-theorem himpl_trans {P Q R : SLProp} (hPQ : P ⊢ Q) (hQR : Q ⊢ R) :
+theorem entails_trans {P Q R : IProp} (hPQ : P ⊢ Q) (hQR : Q ⊢ R) :
     P ⊢ R :=
   fun h hP => hQR h (hPQ h hP)
 
-theorem himpl_of_eq {P Q : SLProp} (hEq : P = Q) : P ⊢ Q := by
+theorem entails_of_eq {P Q : IProp} (hEq : P = Q) : P ⊢ Q := by
   subst Q
-  exact himpl_refl P
+  exact entails_refl P
 
-theorem hequiv_eq {P Q : SLProp} (hEquiv : P ⊣⊢ Q) : P = Q :=
-  SLProp.ext hEquiv
+theorem bientails_eq {P Q : IProp} (hEquiv : P ⊣⊢ Q) : P = Q :=
+  IProp.ext fun h => ⟨hEquiv.mp h, hEquiv.mpr h⟩
 
-theorem hstar_assoc (H₁ H₂ H₃ : SLProp) :
+theorem sep_assoc (H₁ H₂ H₃ : IProp) :
     (H₁ ∗ H₂) ∗ H₃ ⊣⊢ H₁ ∗ (H₂ ∗ H₃) := by
-  intro h
   constructor
-  · rintro ⟨h₁₂, h₃, hDisjoint₁₂₃, hEq, hStar₁₂, hH₃⟩
+  · intro h
+    rintro ⟨h₁₂, h₃, hDisjoint₁₂₃, hEq, hStar₁₂, hH₃⟩
     rcases hStar₁₂ with ⟨h₁, h₂, hDisjoint₁₂, hEq₁₂, hH₁, hH₂⟩
     have hDisjoint₁₂₃' :
         PartialCommMonoid.Compatible (h₁ ∪ h₂) h₃ := by
@@ -153,7 +152,8 @@ theorem hstar_assoc (H₁ H₂ H₃ : SLProp) :
         _ = h₁ ∪ (h₂ ∪ h₃) :=
           PartialCommMonoid.union_assoc hDisjoint₁₂ hDisjoint₁₂₃'
     · exact ⟨h₂, h₃, hDisjoint₂₃, rfl, hH₂, hH₃⟩
-  · rintro ⟨h₁, h₂₃, hDisjoint₁₂₃, hEq, hH₁, hStar₂₃⟩
+  · intro h
+    rintro ⟨h₁, h₂₃, hDisjoint₁₂₃, hEq, hH₁, hStar₂₃⟩
     rcases hStar₂₃ with ⟨h₂, h₃, hDisjoint₂₃, hEq₂₃, hH₂, hH₃⟩
     have hDisjoint₁₂₃' :
         PartialCommMonoid.Compatible h₁ (h₂ ∪ h₃) := by
@@ -170,93 +170,95 @@ theorem hstar_assoc (H₁ H₂ H₃ : SLProp) :
             hDisjoint₁₂ hDisjoint₁₂₃'').symm
     · exact ⟨h₁, h₂, hDisjoint₁₂, rfl, hH₁, hH₂⟩
 
-theorem hstar_comm (H₁ H₂ : SLProp) :
+theorem sep_comm (H₁ H₂ : IProp) :
     H₁ ∗ H₂ ⊣⊢ H₂ ∗ H₁ := by
-  intro h
   constructor
-  · rintro ⟨h₁, h₂, hDisjoint, hEq, hH₁, hH₂⟩
+  · intro h
+    rintro ⟨h₁, h₂, hDisjoint, hEq, hH₁, hH₂⟩
     exact ⟨h₂, h₁, PartialCommMonoid.compatible_comm hDisjoint,
       hEq.trans (PartialCommMonoid.union_comm_of_compatible hDisjoint),
       hH₂, hH₁⟩
-  · rintro ⟨h₂, h₁, hDisjoint, hEq, hH₂, hH₁⟩
+  · intro h
+    rintro ⟨h₂, h₁, hDisjoint, hEq, hH₂, hH₁⟩
     exact ⟨h₁, h₂, PartialCommMonoid.compatible_comm hDisjoint,
       hEq.trans (PartialCommMonoid.union_comm_of_compatible hDisjoint),
       hH₁, hH₂⟩
 
-theorem hstar_assoc_eq (H₁ H₂ H₃ : SLProp) :
+theorem sep_assoc_eq (H₁ H₂ H₃ : IProp) :
     ((H₁ ∗ H₂) ∗ H₃) = (H₁ ∗ (H₂ ∗ H₃)) :=
-  hequiv_eq (hstar_assoc H₁ H₂ H₃)
+  bientails_eq (sep_assoc H₁ H₂ H₃)
 
-theorem hstar_comm_eq (H₁ H₂ : SLProp) :
+theorem sep_comm_eq (H₁ H₂ : IProp) :
     (H₁ ∗ H₂) = (H₂ ∗ H₁) :=
-  hequiv_eq (hstar_comm H₁ H₂)
+  bientails_eq (sep_comm H₁ H₂)
 
-instance : Std.Associative hstar where
-  assoc := hstar_assoc_eq
+instance : Std.Associative sep where
+  assoc := sep_assoc_eq
 
-instance : Std.Commutative hstar where
-  comm := hstar_comm_eq
+instance : Std.Commutative sep where
+  comm := sep_comm_eq
 
-theorem hstar_mono {P₁ P₂ Q₁ Q₂ : SLProp}
+theorem sep_mono {P₁ P₂ Q₁ Q₂ : IProp}
     (hP : P₁ ⊢ P₂) (hQ : Q₁ ⊢ Q₂) :
     P₁ ∗ Q₁ ⊢ P₂ ∗ Q₂ := by
   intro h
   rintro ⟨h₁, h₂, hDisjoint, hEq, hP₁, hQ₁⟩
   exact ⟨h₁, h₂, hDisjoint, hEq, hP h₁ hP₁, hQ h₂ hQ₁⟩
 
-theorem hstar_hempty_l (H : SLProp) :
+theorem sep_emp_l (H : IProp) :
     emp ∗ H ⊣⊢ H := by
-  intro h
   constructor
-  · rintro ⟨h₁, h₂, hDisjoint, rfl, -, hH⟩
+  · intro h
+    rintro ⟨h₁, h₂, hDisjoint, rfl, -, hH⟩
     exact H.up_closed hH (Heap.Sub.union_right hDisjoint)
-  · intro hH
+  · intro h hH
     exact ⟨∅, h, PartialCommMonoid.compatible_empty_left h,
       (PartialCommMonoid.empty_union h).symm, trivial, hH⟩
 
-theorem hstar_hempty_r (H : SLProp) :
+theorem sep_emp_r (H : IProp) :
     H ∗ emp ⊣⊢ H := by
-  intro h
-  exact (hstar_comm H emp h).trans (hstar_hempty_l H h)
+  exact ⟨
+    entails_trans (sep_comm H emp).mp (sep_emp_l H).mp,
+    entails_trans (sep_emp_l H).mpr (sep_comm H emp).mpr⟩
 
-theorem hstar_hempty_l_eq (H : SLProp) :
+theorem sep_emp_l_eq (H : IProp) :
     (emp ∗ H) = H :=
-  hequiv_eq (hstar_hempty_l H)
+  bientails_eq (sep_emp_l H)
 
-theorem hstar_hempty_r_eq (H : SLProp) :
+theorem sep_emp_r_eq (H : IProp) :
     (H ∗ emp) = H :=
-  hequiv_eq (hstar_hempty_r H)
+  bientails_eq (sep_emp_r H)
 
-instance : Std.LawfulIdentity hstar hempty where
-  left_id := hstar_hempty_l_eq
-  right_id := hstar_hempty_r_eq
+instance : Std.LawfulIdentity sep emp where
+  left_id := sep_emp_l_eq
+  right_id := sep_emp_r_eq
 
-/-- Affinity: every assertion may be discarded.  This is the rule the exact
-logic of SLF lacks, and the reason its affine top is simply `emp` here. -/
-theorem himpl_hempty_r (H : SLProp) : H ⊢ emp :=
+/-- Affinity: every assertion may be discarded, so the affine top is simply
+`emp` here. -/
+theorem entails_emp_r (H : IProp) : H ⊢ emp :=
   fun _ _ => trivial
 
 /-! ### The model, spelled out
 
 `H h` reduces to the right-hand sides below by `rfl`; these lemmas let `simp`
-and `rw` see through the `SLProp` structure when a proof does go down to the
+and `rw` see through the `IProp` structure when a proof does go down to the
 heap. -/
 
 @[simp]
-theorem hempty_holds (h : Heap) : (emp : SLProp) h ↔ True :=
+theorem emp_holds (h : Heap) : (emp : IProp) h ↔ True :=
   Iff.rfl
 
 @[simp]
-theorem hpure_holds {P : Prop} (h : Heap) : (⌜P⌝ : SLProp) h ↔ P :=
+theorem pure_holds {P : Prop} (h : Heap) : (⌜P⌝ : IProp) h ↔ P :=
   Iff.rfl
 
-theorem hsingle_holds {α : Type} (r : Ref α) (value : α) (h : Heap) :
+theorem pointsTo_holds {α : Type} (r : Ref α) (value : α) (h : Heap) :
     (r ↦ value) h ↔ Heap.Sub (singleton r value) h :=
   Iff.rfl
 
 /-- Points-to is exclusive: affinity lets resources be *dropped*, never
 duplicated, so a cell still cannot be owned twice. -/
-theorem hsingle_exclusive {α : Type} (r : Ref α) (value₁ value₂ : α) :
+theorem pointsTo_exclusive {α : Type} (r : Ref α) (value₁ value₂ : α) :
     r ↦ value₁ ∗ r ↦ value₂ ⊢ ⌜False⌝ := by
   rintro h ⟨h₁, h₂, hDisjoint, -, hSingle₁, hSingle₂⟩
   apply disjoint_contains_false hDisjoint
@@ -265,28 +267,29 @@ theorem hsingle_exclusive {α : Type} (r : Ref α) (value₁ value₂ : α) :
   · obtain ⟨rest, _, rfl⟩ := hSingle₂
     exact contains_union_left (contains_singleton r value₂)
 
-theorem hstar_holds (H₁ H₂ : SLProp) (h : Heap) :
+theorem sep_holds (H₁ H₂ : IProp) (h : Heap) :
     (H₁ ∗ H₂) h ↔
       ∃ h₁ h₂, PartialCommMonoid.Compatible h₁ h₂ ∧
         h = h₁ ∪ h₂ ∧ H₁ h₁ ∧ H₂ h₂ :=
   Iff.rfl
 
-theorem hexists_holds {ι : Sort _} (J : ι → SLProp) (h : Heap) :
-    hexists J h ↔ ∃ x, J x h :=
+theorem exists_holds {ι : Sort _} (J : ι → IProp) (h : Heap) :
+    iexists J h ↔ ∃ x, J x h :=
   Iff.rfl
 
-theorem hstar_hexists {α : Sort _} (J : α → SLProp) (H : SLProp) :
+theorem sep_exists {α : Sort _} (J : α → IProp) (H : IProp) :
     iprop(∃ x, J x) ∗ H ⊣⊢ iprop(∃ x, J x ∗ H) := by
-  intro h
   constructor
-  · rintro ⟨h₁, h₂, hDisjoint, hEq, ⟨x, hJ⟩, hH⟩
+  · intro h
+    rintro ⟨h₁, h₂, hDisjoint, hEq, ⟨x, hJ⟩, hH⟩
     exact ⟨x, h₁, h₂, hDisjoint, hEq, hJ, hH⟩
-  · rintro ⟨x, h₁, h₂, hDisjoint, hEq, hJ, hH⟩
+  · intro h
+    rintro ⟨x, h₁, h₂, hDisjoint, hEq, hJ, hH⟩
     exact ⟨h₁, h₂, hDisjoint, hEq, ⟨x, hJ⟩, hH⟩
 
 /-- A pure fact on the left of a separating conjunction: since pure facts own
 nothing, they can be read off, and put back, without touching the heap. -/
-theorem hstar_hpure_l (P : Prop) (H : SLProp) (h : Heap) :
+theorem sep_pure_l (P : Prop) (H : IProp) (h : Heap) :
     (⌜P⌝ ∗ H) h ↔ P ∧ H h := by
   constructor
   · rintro ⟨h₁, h₂, hDisjoint, rfl, hP, hH⟩
@@ -295,77 +298,74 @@ theorem hstar_hpure_l (P : Prop) (H : SLProp) (h : Heap) :
     exact ⟨∅, h, PartialCommMonoid.compatible_empty_left h,
       (PartialCommMonoid.empty_union h).symm, hP, hH⟩
 
-theorem hpure_hstar_intro {P : Prop} (H : SLProp) (hP : P) :
+theorem pure_sep_intro {P : Prop} (H : IProp) (hP : P) :
     H ⊢ ⌜P⌝ ∗ H := by
   intro h hH
-  exact (hstar_hpure_l P H h).mpr ⟨hP, hH⟩
+  exact (sep_pure_l P H h).mpr ⟨hP, hH⟩
 
-/-- Extraction of a pure fact from the left-hand side of an entailment.  This is
-SLF's `himpl_hstar_hpure_l`, the workhorse of `xpull`. -/
-theorem himpl_hpure_l {P : Prop} {H H' : SLProp} (h : P → H ⊢ H') :
+/-- Extraction of a pure fact from the left-hand side of an entailment. -/
+theorem entails_pure_l {P : Prop} {H H' : IProp} (h : P → H ⊢ H') :
     ⌜P⌝ ∗ H ⊢ H' := by
   intro heap hStar
-  have ⟨hP, hH⟩ := (hstar_hpure_l P H heap).mp hStar
+  have ⟨hP, hH⟩ := (sep_pure_l P H heap).mp hStar
   exact h hP heap hH
 
 /-- Introduction of an existential quantifier on the left-hand side of an
-entailment (SLF's `himpl_hexists_l`). -/
-theorem himpl_hexists_l {ι : Sort _} {H : SLProp} {J : ι → SLProp}
-    (h : ∀ x, J x ⊢ H) : hexists J ⊢ H :=
+entailment. -/
+theorem entails_exists_l {ι : Sort _} {H : IProp} {J : ι → IProp}
+    (h : ∀ x, J x ⊢ H) : iexists J ⊢ H :=
   fun heap hJ => h hJ.choose heap hJ.choose_spec
 
 /-- Instantiation of an existential quantifier on the right-hand side of an
-entailment (SLF's `himpl_hexists_r`).  `xsimpl` uses it with a metavariable for
-`x`, which the cancellation phase then instantiates by unification. -/
-theorem himpl_hexists_r {ι : Sort _} {H : SLProp} {J : ι → SLProp} (x : ι)
-    (h : H ⊢ J x) : H ⊢ hexists J :=
+entailment. `isimpl` uses it with a metavariable for `x`, which the cancellation
+phase then instantiates by unification. -/
+theorem entails_exists_r {ι : Sort _} {H : IProp} {J : ι → IProp} (x : ι)
+    (h : H ⊢ J x) : H ⊢ iexists J :=
   fun heap hH => ⟨x, h heap hH⟩
 
 /-- Float an existential out of the left factor of a separating conjunction. -/
-theorem hstar_hexists_l_eq {ι : Sort _} (J : ι → SLProp) (H : SLProp) :
-    (hexists J ∗ H) = iprop(∃ x, J x ∗ H) :=
-  hequiv_eq (hstar_hexists J H)
+theorem sep_exists_l_eq {ι : Sort _} (J : ι → IProp) (H : IProp) :
+    (iexists J ∗ H) = iprop(∃ x, J x ∗ H) :=
+  bientails_eq (sep_exists J H)
 
 /-- Float an existential out of the right factor of a separating conjunction. -/
-theorem hstar_hexists_r_eq {ι : Sort _} (H : SLProp) (J : ι → SLProp) :
-    (H ∗ hexists J) = iprop(∃ x, H ∗ J x) := by
-  rw [hstar_comm_eq, hstar_hexists_l_eq]
-  exact hequiv_eq fun _ => ⟨fun ⟨x, hx⟩ => ⟨x, (hstar_comm _ _ _).mp hx⟩,
-    fun ⟨x, hx⟩ => ⟨x, (hstar_comm _ _ _).mp hx⟩⟩
+theorem sep_exists_r_eq {ι : Sort _} (H : IProp) (J : ι → IProp) :
+    (H ∗ iexists J) = iprop(∃ x, H ∗ J x) := by
+  rw [sep_comm_eq, sep_exists_l_eq]
+  exact bientails_eq ⟨
+    fun heap ⟨x, hx⟩ => ⟨x, (sep_comm (J x) H).mp heap hx⟩,
+    fun heap ⟨x, hx⟩ => ⟨x, (sep_comm (J x) H).mpr heap hx⟩⟩
 
-/-- SLF discards a pure fact by turning it into `emp`; here every assertion can
-be, so this is a special case of `himpl_hempty_r`. -/
-theorem hpure_elim (P : Prop) :
+/-- Discard a pure fact. This is a special case of `entails_emp_r`. -/
+theorem pure_elim (P : Prop) :
     ⌜P⌝ ⊢ emp :=
-  himpl_hempty_r _
+  entails_emp_r _
 
-/-- Drop the right factor of a separating conjunction.  SLF requires it to be
-discardable (`F ⊢ emp`); affinity makes that hypothesis vacuous. -/
-theorem hstar_elim_right (P F : SLProp) :
+/-- Drop the right factor of a separating conjunction. Affinity makes the
+discardability hypothesis (`F ⊢ emp`) vacuous. -/
+theorem sep_elim_right (P F : IProp) :
     P ∗ F ⊢ P :=
-  himpl_trans (hstar_mono (himpl_refl P) (himpl_hempty_r F))
-    (fun h => (hstar_hempty_r P h).mp)
+  entails_trans (sep_mono (entails_refl P) (entails_emp_r F))
+    (sep_emp_r P).mp
 
 /-- Drop the left factor of a separating conjunction. -/
-theorem hstar_elim_left (P F : SLProp) :
+theorem sep_elim_left (P F : IProp) :
     F ∗ P ⊢ P :=
-  himpl_trans (fun h => (hstar_comm F P h).mp) (hstar_elim_right P F)
+  entails_trans (sep_comm F P).mp (sep_elim_right P F)
 
 /-! ## The magic wand
 
 `H₁ -∗ H₂` describes the heap fragments that, extended with a disjoint fragment
-satisfying `H₁`, satisfy `H₂`.  In the affine model this Kripke-style reading is
-the right adjoint of the separating conjunction, so — unlike in SLF, where the
-wand is *encoded* as `∃ H₀, H₀ ∗ ⌜H₁ ∗ H₀ ⊢ H₂⌝` to avoid a semantic definition
-— it may be defined directly. -/
+satisfying `H₁`, satisfy `H₂`. In the affine model this Kripke-style reading is
+the right adjoint of the separating conjunction. -/
 
 /-- Universal quantification over heap predicates. -/
-def hforall {ι : Sort _} (J : ι → SLProp) : SLProp where
+def iforall {ι : Sort _} (J : ι → IProp) : IProp where
   holds h := ∀ x, J x h
   up_closed := fun hJ hExtend x => (J x).up_closed (hJ x) hExtend
 
-/-- The magic wand of SLF (`\-*`). -/
-def hwand (H₁ H₂ : SLProp) : SLProp where
+/-- Separating implication, or magic wand. -/
+def wand (H₁ H₂ : IProp) : IProp where
   holds h :=
     ∀ h', PartialCommMonoid.Compatible h h' → H₁ h' → H₂ (h ∪ h')
   up_closed := by
@@ -375,30 +375,31 @@ def hwand (H₁ H₂ : SLProp) : SLProp where
     exact H₂.up_closed (hWand h' hDisjoint' hH₁)
       (Heap.Sub.union_mono_left hExtend hDisjoint)
 
-/-- The magic wand between postconditions (SLF's `\--*`).  Note that it is a
-heap predicate, not a postcondition. -/
-def qwand {α : Type} (Q₁ Q₂ : SLPost α) : SLProp :=
-  hforall fun value => hwand (Q₁ value) (Q₂ value)
+/-- The magic wand between postconditions. Note that it is a heap predicate,
+not a postcondition. -/
+def postWand {α : Type} (Q₁ Q₂ : IPost α) : IProp :=
+  iforall fun value => wand (Q₁ value) (Q₂ value)
 
-namespace SepLogic
+@[inherit_doc wand] infixr:25 " -∗ " => wand
+@[inherit_doc postWand] infixr:25 " -∗+ " => postWand
+macro_rules
+  | `(iprop(∀ $x:ident, $H)) => `(iforall fun $x => iprop($H))
+  | `(iprop(∀ $x:ident : $type, $H)) =>
+      `(iforall fun ($x : $type) => iprop($H))
+  | `(iprop(∀ ($x:ident : $type), $H)) =>
+      `(iforall fun ($x : $type) => iprop($H))
 
-@[inherit_doc hwand] scoped infixr:33 " -∗ " => hwand
-@[inherit_doc qwand] scoped infixr:33 " -∗+ " => qwand
-@[inherit_doc hforall] scoped notation "∀ˢ " x ", " J => hforall (fun x => J)
-
-end SepLogic
-
-theorem hforall_intro {ι : Sort _} {H : SLProp} {J : ι → SLProp}
-    (h : ∀ x, H ⊢ J x) : H ⊢ hforall J :=
+theorem forall_intro {ι : Sort _} {H : IProp} {J : ι → IProp}
+    (h : ∀ x, H ⊢ J x) : H ⊢ iforall J :=
   fun heap hH x => h x heap hH
 
-theorem hforall_specialize {ι : Sort _} {J : ι → SLProp} (x : ι) :
-    hforall J ⊢ J x :=
+theorem forall_specialize {ι : Sort _} {J : ι → IProp} (x : ι) :
+    iforall J ⊢ J x :=
   fun _ hJ => hJ x
 
-/-- SLF's `hwand_equiv`: the wand is the right adjoint of the separating
-conjunction.  Every other property of the wand follows from it. -/
-theorem hwand_equiv (H₀ H₁ H₂ : SLProp) :
+/-- The wand is the right adjoint of the separating conjunction. Every other
+property of the wand follows from it. -/
+theorem wand_equiv (H₀ H₁ H₂ : IProp) :
     (H₀ ⊢ H₁ -∗ H₂) ↔ (H₁ ∗ H₀ ⊢ H₂) := by
   constructor
   · rintro hWand heap ⟨h₁, h₀, hDisjoint, rfl, hH₁, hH₀⟩
@@ -412,69 +413,68 @@ theorem hwand_equiv (H₀ H₁ H₂ : SLProp) :
       ⟨h₁, h₀, PartialCommMonoid.compatible_comm hDisjoint,
         PartialCommMonoid.union_comm_of_compatible hDisjoint, hH₁, hH₀⟩
 
-/-- SLF's `himpl_hwand_r`, the introduction rule of the wand. -/
-theorem hwand_intro {H₀ H₁ H₂ : SLProp} (h : H₁ ∗ H₀ ⊢ H₂) : H₀ ⊢ H₁ -∗ H₂ :=
-  (hwand_equiv H₀ H₁ H₂).mpr h
+/-- Introduction rule for the wand. -/
+theorem wand_intro {H₀ H₁ H₂ : IProp} (h : H₁ ∗ H₀ ⊢ H₂) : H₀ ⊢ H₁ -∗ H₂ :=
+  (wand_equiv H₀ H₁ H₂).mpr h
 
-/-- SLF's `hwand_cancel`, the elimination rule of the wand. -/
-theorem hwand_cancel (H₁ H₂ : SLProp) : H₁ ∗ (H₁ -∗ H₂) ⊢ H₂ :=
-  (hwand_equiv (H₁ -∗ H₂) H₁ H₂).mp (himpl_refl _)
+/-- Elimination rule for the wand. -/
+theorem wand_cancel (H₁ H₂ : IProp) : H₁ ∗ (H₁ -∗ H₂) ⊢ H₂ :=
+  (wand_equiv (H₁ -∗ H₂) H₁ H₂).mp (entails_refl _)
 
-theorem hwand_mono {H₁ H₁' H₂ H₂' : SLProp} (h₁ : H₁' ⊢ H₁) (h₂ : H₂ ⊢ H₂') :
+theorem wand_mono {H₁ H₁' H₂ H₂' : IProp} (h₁ : H₁' ⊢ H₁) (h₂ : H₂ ⊢ H₂') :
     (H₁ -∗ H₂) ⊢ (H₁' -∗ H₂') :=
-  hwand_intro (himpl_trans (hstar_mono h₁ (himpl_refl _))
-    (himpl_trans (hwand_cancel H₁ H₂) h₂))
+  wand_intro (entails_trans (sep_mono h₁ (entails_refl _))
+    (entails_trans (wand_cancel H₁ H₂) h₂))
 
-/-- SLF's `qwand_equiv`. -/
-theorem qwand_equiv {α : Type} (H : SLProp) (Q₁ Q₂ : SLPost α) :
+/-- The postcondition wand is right adjoint to postcondition separation. -/
+theorem postWand_equiv {α : Type} (H : IProp) (Q₁ Q₂ : IPost α) :
     (H ⊢ Q₁ -∗+ Q₂) ↔ (Q₁ ∗+ H ⊢+ Q₂) := by
   constructor
   · intro h value
-    exact himpl_trans (hstar_mono (himpl_refl _)
-      (himpl_trans h (hforall_specialize value)))
-      (hwand_cancel (Q₁ value) (Q₂ value))
+    exact entails_trans (sep_mono (entails_refl _)
+      (entails_trans h (forall_specialize value)))
+      (wand_cancel (Q₁ value) (Q₂ value))
   · intro h
-    exact hforall_intro fun value =>
-      hwand_intro (h value)
+    exact forall_intro fun value =>
+      wand_intro (h value)
 
-/-- SLF's `qwand_intro`. -/
-theorem qwand_intro {α : Type} {H : SLProp} {Q₁ Q₂ : SLPost α}
+/-- Introduction rule for a postcondition wand. -/
+theorem postWand_intro {α : Type} {H : IProp} {Q₁ Q₂ : IPost α}
     (h : Q₁ ∗+ H ⊢+ Q₂) : H ⊢ Q₁ -∗+ Q₂ :=
-  (qwand_equiv H Q₁ Q₂).mpr h
+  (postWand_equiv H Q₁ Q₂).mpr h
 
-/-- SLF's `qwand_cancel`. -/
-theorem qwand_cancel {α : Type} (Q₁ Q₂ : SLPost α) :
+/-- Elimination rule for a postcondition wand. -/
+theorem postWand_cancel {α : Type} (Q₁ Q₂ : IPost α) :
     Q₁ ∗+ (Q₁ -∗+ Q₂) ⊢+ Q₂ :=
-  (qwand_equiv (Q₁ -∗+ Q₂) Q₁ Q₂).mp (himpl_refl _)
+  (postWand_equiv (Q₁ -∗+ Q₂) Q₁ Q₂).mp (entails_refl _)
 
-/-- SLF's `qwand_specialize`: a postcondition wand yields a heap wand at every
-value. -/
-theorem qwand_specialize {α : Type} {Q₁ Q₂ : SLPost α} (value : α) :
+/-- A postcondition wand yields a heap wand at every value. -/
+theorem postWand_specialize {α : Type} {Q₁ Q₂ : IPost α} (value : α) :
     (Q₁ -∗+ Q₂) ⊢ (Q₁ value -∗ Q₂ value) :=
-  hforall_specialize value
+  forall_specialize value
 
-theorem himpl_qwand_hpure_eq {α : Type} (H : SLProp) (value : α) (Q : SLPost α) :
+theorem entails_postWand_pure_eq {α : Type} (H : IProp) (value : α) (Q : IPost α) :
     (H ⊢ (fun result => ⌜result = value⌝) -∗+ Q) ↔ (H ⊢ Q value) := by
-  rw [qwand_equiv]
+  rw [postWand_equiv]
   constructor
   · intro h
-    exact himpl_trans (hpure_hstar_intro (P := value = value) H rfl) (h value)
+    exact entails_trans (pure_sep_intro (P := value = value) H rfl) (h value)
   · intro h _
-    exact himpl_hpure_l fun hEq => hEq ▸ h
+    exact entails_pure_l fun hEq => hEq ▸ h
 
 /-- Monotone predicate transformers, corresponding to `Wᴾᵘʳᵉ` in
 "Dijkstra Monads for All". -/
 structure Wp (α : Type) where
-  run : SLPost α → SLPre
+  wp : IPost α → IPre
   monotone :
-    ∀ {Q₁ Q₂ : SLPost α},
-      (∀ value, himpl (Q₁ value) (Q₂ value)) →
-      himpl (run Q₁) (run Q₂)
+    ∀ {Q₁ Q₂ : IPost α},
+      (∀ value, Entails (Q₁ value) (Q₂ value)) →
+      Entails (wp Q₁) (wp Q₂)
 
 namespace Wp
 
-instance : CoeFun (Wp α) (fun _ => SLPost α → SLPre) :=
-  ⟨Wp.run⟩
+instance : CoeFun (Wp α) (fun _ => IPost α → IPre) :=
+  ⟨Wp.wp⟩
 
 def pure (value : α) : Wp α :=
   ⟨fun Q => Q value, fun hQ => hQ value⟩
@@ -485,7 +485,7 @@ def bind (m : Wp α) (next : α → Wp β) : Wp β :=
 
 /-- Specification weakening is reverse implication between preconditions. -/
 instance : LE (Wp α) where
-  le w₁ w₂ := ∀ Q, himpl (w₂ Q) (w₁ Q)
+  le w₁ w₂ := ∀ Q, Entails (w₂ Q) (w₁ Q)
 
 instance : Preorder (Wp α) where
   le_refl w Q h hPre := hPre
@@ -543,46 +543,46 @@ instance : LawfulMonad Wp where
   bind_pure_comp := by intros; rfl
   bind_map := by intros; rfl
 
-instance : OrderedMonad Wp where
+instance : Aeneas.OrderedMonad Wp where
   bind_mono := Wp.bind_mono
 
 /-- Embed a precondition/postcondition pair into a weakest-precondition
 transformer.  The encoding is local: `P` is required to describe only part of
 the heap, and the postcondition is handed to the continuation through a wand,
 so that the frame is threaded automatically. -/
-def pp2wp (P : SLPre) (Q : SLPost α) : Wp α where
-  run := fun R => P ∗ (Q -∗+ R)
+def pp2wp (P : IPre) (Q : IPost α) : Wp α where
+  wp := fun R => P ∗ (Q -∗+ R)
   monotone := by
     intro R₁ R₂ hR
-    exact hstar_mono (himpl_refl P)
-      (qwand_intro fun value =>
-        himpl_trans (qwand_cancel Q R₁ value) (hR value))
+    exact sep_mono (entails_refl P)
+      (postWand_intro fun value =>
+        entails_trans (postWand_cancel Q R₁ value) (hR value))
 
-def Wp.hexists {ι : Sort _} (f : ι → Wp α) : Wp α where
-  run := fun R => _root_.Aeneas.SLPoC.hexists (fun x => f x R)
+def Wp.exists {ι : Sort _} (f : ι → Wp α) : Wp α where
+  wp := fun R => iexists (fun x => f x R)
   monotone := by
     rintro R₁ R₂ hR h ⟨x, hx⟩
     exact ⟨x, (f x).monotone hR h hx⟩
 
-theorem pp2wp_conseq {P : SLPre} {Q R : SLPost α} (hPost : Q ⊢+ R) :
+theorem pp2wp_conseq {P : IPre} {Q R : IPost α} (hPost : Q ⊢+ R) :
     P ⊢ pp2wp P Q R :=
-  himpl_trans (himpl_of_eq (hstar_hempty_r_eq P).symm)
-    (hstar_mono (himpl_refl P)
-      (qwand_intro fun value =>
-        himpl_trans (himpl_of_eq (hstar_hempty_r_eq (Q value))) (hPost value)))
+  entails_trans (entails_of_eq (sep_emp_r_eq P).symm)
+    (sep_mono (entails_refl P)
+      (postWand_intro fun value =>
+        entails_trans (entails_of_eq (sep_emp_r_eq (Q value))) (hPost value)))
 
-theorem pp2wp_frame {P : SLPre} {Q R : SLPost α} (H : SLProp) :
+theorem pp2wp_frame {P : IPre} {Q R : IPost α} (H : IProp) :
     pp2wp P Q R ∗ H ⊢ pp2wp P Q (R ∗+ H) :=
-  himpl_trans (himpl_of_eq (hstar_assoc_eq P (Q -∗+ R) H))
-    (hstar_mono (himpl_refl P)
-      (qwand_intro fun value =>
-        himpl_trans (himpl_of_eq (hstar_assoc_eq (Q value) (Q -∗+ R) H).symm)
-          (hstar_mono (qwand_cancel Q R value) (himpl_refl H))))
+  entails_trans (entails_of_eq (sep_assoc_eq P (Q -∗+ R) H))
+    (sep_mono (entails_refl P)
+      (postWand_intro fun value =>
+        entails_trans (entails_of_eq (sep_assoc_eq (Q value) (Q -∗+ R) H).symm)
+          (sep_mono (postWand_cancel Q R value) (entails_refl H))))
 
 /-- The elimination principle of `pp2wp`: the heap splits into the footprint
 described by `P` and a frame, and the continuation accepts any heap the
 postcondition describes, put back next to that frame. -/
-theorem pp2wp_elim {P : SLPre} {Q R : SLPost α} {h : Heap}
+theorem pp2wp_elim {P : IPre} {Q R : IPost α} {h : Heap}
     (hWp : pp2wp P Q R h) :
     ∃ h₁ h₂,
       PartialCommMonoid.Compatible h₁ h₂ ∧
@@ -593,11 +593,11 @@ theorem pp2wp_elim {P : SLPre} {Q R : SLPost α} {h : Heap}
         R value (h' ∪ h₂) := by
   obtain ⟨h₁, h₂, hDisjoint, hEq, hP, hWand⟩ := hWp
   exact ⟨h₁, h₂, hDisjoint, hEq, hP, fun value h' hQ hDisjoint' =>
-    qwand_cancel Q R value (h' ∪ h₂) ⟨h', h₂, hDisjoint', rfl, hQ, hWand⟩⟩
+    postWand_cancel Q R value (h' ∪ h₂) ⟨h', h₂, hDisjoint', rfl, hQ, hWand⟩⟩
 
-theorem Wp.hexists_frame {ι : Sort _} {f : ι → Wp α} {Q : SLPost α}
-    (H : SLProp) (hFrame : ∀ x, f x Q ∗ H ⊢ f x (Q ∗+ H)) :
-    Wp.hexists f Q ∗ H ⊢ Wp.hexists f (Q ∗+ H) := by
+theorem Wp.exists_frame {ι : Sort _} {f : ι → Wp α} {Q : IPost α}
+    (H : IProp) (hFrame : ∀ x, f x Q ∗ H ⊢ f x (Q ∗+ H)) :
+    Wp.exists f Q ∗ H ⊢ Wp.exists f (Q ∗+ H) := by
   rintro h ⟨h₁, h₂, hDisjoint, rfl, ⟨x, hx⟩, hH⟩
   exact ⟨x, hFrame x _ ⟨h₁, h₂, hDisjoint, rfl, hx, hH⟩⟩
 
@@ -606,68 +606,51 @@ end Aeneas.SLPoC
 /-!
 # Separation-logic tactics
 
-A port of the tactic automation of *Software Foundations, Volume 6: Separation
-Logic Foundations* (`https://softwarefoundations.cis.upenn.edu/slf-current/`).
-
-| SLF | Here |
-|---|---|
-| `\-*` / `\--*` | `-∗` (`hwand`) / `-∗+` (`qwand`) |
-| `triple_ramified_frame` | `triple_ramified_frame` |
-| `xsimpl` | `sl_simpl` (also available as `sl_frame`) |
-| `xpull` | `sl_pull_entail` on an entailment, `sl_pull` on a triple |
-| `xchange` | `sl_change` |
-| `xval` | `sl_val` |
-| `xapp` | `sl_app`, and the `step`/`step*` tactics |
-
-The book's `xwp`/`wpgen`/`xlet`/`xseq`/`xif`/`xfun` have no counterpart: they
-build a characteristic formula out of a deeply embedded program, whereas here the
-programs are shallowly embedded monadic terms and `step` walks them directly.
+The tactic layer provides `iframe`, `isimpl`, `iintro`, `irewrite`,
+`wp_pures`, and `wp_apply`.
 -/
 
 namespace Aeneas.SLPoC
 
-open Lean Elab Meta Tactic
-open scoped SepLogic
+open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic
 
-/-! ## The `xsimpl` engine
+/-! ## The `isimpl` engine
 
-`sl_simpl` is a port of SLF's `xsimpl`; see its documentation below for the
-phases it goes through. -/
+See the `isimpl` documentation below for the phases it goes through. -/
 
-namespace SLFrame
+namespace IFrame
 
-/-- The `sl_simps` simp attribute.  `sl_frame` and `sl_pull` use it to normalize
+/-- The `iris_simps` simp attribute.  `iframe` and `iintro` use it to normalize
 separation-logic assertions before extracting/cancelling them: it is where the
 lemmas that unfold or fold representation predicates belong (`nodes_cons`,
-`nodes_snoc`, …).  This plays the role of SLF's `xchange`, except that the
-rewriting is declarative instead of being spelled out at every call site. -/
-initialize slSimpExt : SimpExtension ←
-  registerSimpAttr `sl_simps "\
-    The `sl_simps` attribute registers simp lemmas used by `sl_frame` and \
-    `sl_pull` to normalize separation-logic assertions (typically, lemmas that \
+`nodes_snoc`, …), making their rewriting declarative. -/
+initialize irisSimpExt : SimpExtension ←
+  registerSimpAttr `iris_simps "\
+    The `iris_simps` attribute registers simp lemmas used by `iframe` and \
+    `iintro` to normalize separation-logic assertions (typically, lemmas that \
     decompose a representation predicate into the cells it owns)."
 
 private def isConnective (e : Expr) : Bool :=
   let head := e.consumeMData.getAppFn
-  head.isConstOf ``hstar || head.isConstOf ``hpure ||
-    head.isConstOf ``hexists || head.isConstOf ``hempty ||
-    -- `hwand` is *defined* as an existential; unfolding it would be a disaster.
-    head.isConstOf ``hwand || head.isConstOf ``qwand || head.isConstOf ``hforall
+  head.isConstOf ``sep || head.isConstOf ``ipure ||
+    head.isConstOf ``iexists || head.isConstOf `Aeneas.SLPoC.emp ||
+    -- `wand` is *defined* as an existential; unfolding it would be a disaster.
+    head.isConstOf ``wand || head.isConstOf ``postWand || head.isConstOf ``iforall
 
 /-- Is `e` a magic wand?  Returns whether it is a postcondition wand. -/
 private def wand? (e : Expr) : Option Bool :=
   let e := e.consumeMData
-  if e.isAppOfArity ``qwand 3 then some true
-  else if e.isAppOfArity ``hwand 2 then some false
+  if e.isAppOfArity ``postWand 3 then some true
+  else if e.isAppOfArity ``wand 2 then some false
   else none
 
-/-- Expose the head connective (`hstar`, `hpure`, `hexists` or `hempty`) of a
+/-- Expose the head connective (`sep`, `ipure`, `iexists` or `emp`) of a
 separation-logic assertion, by unfolding a definition that is a mere wrapper
 around one — `wellFormed s l` is `⌜…⌝ ∗ nodes l`, `isList s vs` is `∃ l, …`.
 
 Exactly one unfolding is performed, and only when it does reveal a connective.
 Representation predicates that *compute*, such as `nodes`, are deliberately left
-alone: decomposing them is the job of the `sl_simps` lemmas, which would
+alone: decomposing them is the job of the `iris_simps` lemmas, which would
 otherwise never get a chance to fire.  Returns `none` when no connective can be
 reached, so that callers keep the original assertion. -/
 def exposeConnective? (e : Expr) : MetaM (Option Expr) := do
@@ -685,25 +668,25 @@ private def reducePostApplication (e : Expr) : MetaM Expr := do
   let e ← instantiateMVars e
   let e ← Lean.Core.betaReduce e
   let (fn, args) := e.consumeMData.withApp fun fn args => (fn, args)
-  if fn.isConstOf ``qstar && args.size = 4 then
-    return mkApp2 (mkConst ``hstar) (mkApp args[1]! args[3]!) args[2]!
+  if fn.isConstOf ``postSep && args.size = 4 then
+    return mkApp2 (mkConst ``sep) (mkApp args[1]! args[3]!) args[2]!
   return e
 
 private partial def flatten (e : Expr) : MetaM (Array Expr) := do
   let e ← reducePostApplication e
   let (fn, args) := e.consumeMData.withApp fun fn args => (fn, args)
-  if fn.isConstOf ``hstar && args.size = 2 then
+  if fn.isConstOf ``sep && args.size = 2 then
     return (← flatten args[0]!) ++ (← flatten args[1]!)
-  if fn.isConstOf ``hempty then
+  if fn.isConstOf `Aeneas.SLPoC.emp then
     return #[]
   return #[e]
 
 private def mkStar (atoms : Array Expr) : Expr :=
   match atoms.back? with
-  | none => mkConst ``hempty
+  | none => mkConst `Aeneas.SLPoC.emp
   | some last =>
     atoms.pop.foldr (init := last) fun atom rest =>
-      mkApp2 (mkConst ``hstar) atom rest
+      mkApp2 (mkConst ``sep) atom rest
 
 private def removeMatches (available required : Array Expr) :
     MetaM (Option (Array Expr)) := do
@@ -732,7 +715,7 @@ private def proveEqAC (lhs rhs : Expr) : TacticM Expr := do
     first
       | rfl
       | ac_rfl
-      | (simp only [hstar_hempty_l_eq, hstar_hempty_r_eq] <;>
+      | (simp only [sep_emp_l_eq, sep_emp_r_eq] <;>
           first | rfl | ac_rfl))
   let (goals, _) ← runTactic proofId tactic
   unless goals.isEmpty do
@@ -760,8 +743,8 @@ private def provePure (discharger : Option Syntax.Tactic) (proposition : Expr) :
       `(tactic|
         first
           | grind
-          | (simp only [sl_simps, *]; done)
-          | (simp only [sl_simps, *]; grind)
+          | (simp only [iris_simps, *]; done)
+          | (simp only [iris_simps, *]; grind)
           | (simp_all; done)
           | (simp_all; grind))
   let (goals, _) ← runTactic proofId tactic
@@ -774,9 +757,8 @@ private def provePure (discharger : Option Syntax.Tactic) (proposition : Expr) :
 
 In that mode neither side of the entailment may be reorganized: anything we
 extracted from the left-hand side would be lost from the frame `?F`, and could
-not even be mentioned by it, since `?F` was created in an outer context.  This
-is exactly the limitation of the plain frame rule that SLF's ramified frame rule
-works around.
+not even be mentioned by it, since `?F` was created in an outer context. This
+is exactly the limitation that the ramified frame rule works around.
 
 `Hcallee` may itself be an existential, in which case floating that existential
 out would turn the destination into `∃ x, Hcallee' x ∗ ?F` and hide the frame:
@@ -784,7 +766,7 @@ the decision must therefore be taken *before* any normalization. -/
 private def frameMVar? (destination : Expr) : MetaM (Option MVarId) := do
   let (destFn, destArgs) :=
     destination.consumeMData.withApp fun fn args => (fn, args)
-  unless destFn.isConstOf ``hstar && destArgs.size = 2 do return none
+  unless destFn.isConstOf ``sep && destArgs.size = 2 do return none
   match (← instantiateMVars destArgs[1]!).consumeMData with
   | .mvar mvarId => if ← mvarId.isAssigned then pure none else pure (some mvarId)
   | _ => pure none
@@ -793,17 +775,17 @@ private def frameMVar? (destination : Expr) : MetaM (Option MVarId) := do
 private def isFrameInference (goal : MVarId) : MetaM Bool := goal.withContext do
   let target ← instantiateMVars (← goal.getType)
   let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
-  unless fn.isConstOf ``himpl && args.size = 2 do return false
+  unless fn.isConstOf ``Entails && args.size = 2 do return false
   return (← frameMVar? (← reducePostApplication args[1]!)).isSome
 
 private def simpEntailment (goal : MVarId) (simpOnly : Bool)
-    (args : Simp.SimpArgs) : TacticM MVarId := do
+    (args : Aeneas.Simp.SimpArgs) : TacticM MVarId := do
   /- Restore the goals we are not working on: `Simp.simpAt` acts on the main
      goal, and dropping the others would silently remove them from the state. -/
   let saved ← getGoals
   try
     setGoals [goal]
-    let _ ← Simp.simpAt simpOnly
+    let _ ← Aeneas.Simp.simpAt simpOnly
       { dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1 }
       args (.targets #[] true)
     match ← getGoals with
@@ -820,14 +802,14 @@ private def floatExists (goal : MVarId) : TacticM MVarId :=
   simpEntailment goal true
     { addSimpThms :=
         -- Erase the `emp`s first, so that they do not get pushed under a binder.
-        #[``hstar_hempty_l_eq, ``hstar_hempty_r_eq,
-          ``hstar_hexists_l_eq, ``hstar_hexists_r_eq] }
+        #[``sep_emp_l_eq, ``sep_emp_r_eq,
+          ``sep_exists_l_eq, ``sep_exists_r_eq] }
 
 /-- Decompose the representation predicates of an entailment into the cells they
-own, using the `sl_simps` set.  Unlike `floatExists` this is not always
-desirable, so `sl_frame` only resorts to it when the plain cancellation fails. -/
+own, using the `iris_simps` set.  Unlike `floatExists` this is not always
+desirable, so `iframe` only resorts to it when the plain cancellation fails. -/
 private def decompose (goal : MVarId) : TacticM MVarId := do
-  simpEntailment goal false { simpThms := #[← slSimpExt.getTheorems] }
+  simpEntailment goal false { simpThms := #[← irisSimpExt.getTheorems] }
 
 /-- Rewrite an assertion into an equivalent one whose connectives are all
 visible, by unfolding definitions such as `wellFormed` or `isList` through the
@@ -837,21 +819,21 @@ private partial def exposeAll (e : Expr) : MetaM Expr := do
   let e ← reducePostApplication e
   let e := (← exposeConnective? e).getD e
   let (fn, args) := e.consumeMData.withApp fun fn args => (fn, args)
-  if fn.isConstOf ``hstar && args.size = 2 then
-    return mkApp2 (mkConst ``hstar) (← exposeAll args[0]!) (← exposeAll args[1]!)
+  if fn.isConstOf ``sep && args.size = 2 then
+    return mkApp2 (mkConst ``sep) (← exposeAll args[0]!) (← exposeAll args[1]!)
   return e
 
 /-- Put the entailment of `goal` in the exposed form computed by `exposeAll`. -/
 private def exposeGoal (goal : MVarId) : TacticM MVarId := goal.withContext do
   let target ← instantiateMVars (← goal.getType)
   let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
-  unless fn.isConstOf ``himpl && args.size = 2 do return goal
-  let exposed ← mkAppM ``himpl #[← exposeAll args[0]!, ← exposeAll args[1]!]
+  unless fn.isConstOf ``Entails && args.size = 2 do return goal
+  let exposed ← mkAppM ``Entails #[← exposeAll args[0]!, ← exposeAll args[1]!]
   if exposed == target then return goal
   try goal.change exposed catch _ => pure goal
 
-/-- SLF's `xpull`: introduce the existentials of the left-hand side and move its
-pure facts into the local context.  Returns the residual goal. -/
+/-- Introduce the existentials of the left-hand side and move its pure facts
+into the local context. Returns the residual goal. -/
 private partial def pullLeft (goal : MVarId) : TacticM MVarId := do
   /- In frame-inference mode the left-hand side must be preserved verbatim.  The
      decision has to be taken *before* `floatExists`, which could otherwise turn
@@ -864,43 +846,42 @@ private partial def pullLeft (goal : MVarId) : TacticM MVarId := do
   goal.withContext do
   let target ← instantiateMVars (← goal.getType)
   let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
-  unless fn.isConstOf ``himpl && args.size = 2 do return goal
+  unless fn.isConstOf ``Entails && args.size = 2 do return goal
   let source ← reducePostApplication args[0]!
   let destination ← reducePostApplication args[1]!
   let (sourceFn, sourceArgs) :=
     source.consumeMData.withApp fun fn args => (fn, args)
-  if sourceFn.isConstOf ``hexists && sourceArgs.size = 2 then
+  if sourceFn.isConstOf ``iexists && sourceArgs.size = 2 then
     let some u := sourceFn.constLevels!.head?
       | throwError "could not determine the universe of {source}"
     let ι := sourceArgs[0]!
     let J := sourceArgs[1]!
     let newType ← withLocalDeclD `x ι fun x => do
-      mkForallFVars #[x] (← mkAppM ``himpl #[← Core.betaReduce (mkApp J x), destination])
+      mkForallFVars #[x] (← mkAppM ``Entails #[← Core.betaReduce (mkApp J x), destination])
     let newGoal ← mkFreshExprSyntheticOpaqueMVar newType
-    goal.assign (mkAppN (mkConst ``himpl_hexists_l [u]) #[ι, destination, J, newGoal])
+    goal.assign (mkAppN (mkConst ``entails_exists_l [u]) #[ι, destination, J, newGoal])
     let (_, next) ← newGoal.mvarId!.intro1P
     return ← pullLeft next
   let atoms ← flatten source
   let some i := atoms.findIdx? fun atom =>
-      atom.consumeMData.isAppOfArity ``hpure 1
+      atom.consumeMData.isAppOfArity ``ipure 1
     | return goal
   let atom := atoms[i]!
   let proposition := atom.consumeMData.appArg!
   let rest := mkStar (atoms.eraseIdx! i)
   let newType ← withLocalDeclD `h proposition fun h => do
-    mkForallFVars #[h] (← mkAppM ``himpl #[rest, destination])
+    mkForallFVars #[h] (← mkAppM ``Entails #[rest, destination])
   let newGoal ← mkFreshExprSyntheticOpaqueMVar newType
-  let extract := mkAppN (mkConst ``himpl_hpure_l)
+  let extract := mkAppN (mkConst ``entails_pure_l)
     #[proposition, rest, destination, newGoal]
-  let reordered := mkApp2 (mkConst ``hstar) atom rest
-  let reorder ← mkAppM ``himpl_of_eq #[← proveEqAC source reordered]
-  goal.assign (← mkAppM ``himpl_trans #[reorder, extract])
+  let reordered := mkApp2 (mkConst ``sep) atom rest
+  let reorder ← mkAppM ``entails_of_eq #[← proveEqAC source reordered]
+  goal.assign (← mkAppM ``entails_trans #[reorder, extract])
   let (_, next) ← newGoal.mvarId!.intro1P
   pullLeft next
 
-/-- SLF's right-hand-side existential instantiation: replace `∃ x, J x` by
-`J ?x` for a fresh metavariable `?x`, to be determined by the cancellation
-phase. -/
+/-- Replace a right-hand-side `∃ x, J x` by `J ?x` for a fresh metavariable
+`?x`, to be determined by the cancellation phase. -/
 private partial def instantiateRightExists (goal : MVarId) : TacticM MVarId := do
   if ← isFrameInference goal then return goal
   let goal ← floatExists (← exposeGoal goal)
@@ -908,20 +889,20 @@ private partial def instantiateRightExists (goal : MVarId) : TacticM MVarId := d
   goal.withContext do
   let target ← instantiateMVars (← goal.getType)
   let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
-  unless fn.isConstOf ``himpl && args.size = 2 do return goal
+  unless fn.isConstOf ``Entails && args.size = 2 do return goal
   let source := args[0]!
   let destination ← reducePostApplication args[1]!
   let (destFn, destArgs) :=
     destination.consumeMData.withApp fun fn args => (fn, args)
-  unless destFn.isConstOf ``hexists && destArgs.size = 2 do return goal
+  unless destFn.isConstOf ``iexists && destArgs.size = 2 do return goal
   let some u := destFn.constLevels!.head?
     | throwError "could not determine the universe of {destination}"
   let ι := destArgs[0]!
   let J := destArgs[1]!
   let witness ← mkFreshExprMVar ι
-  let newType ← mkAppM ``himpl #[source, ← Core.betaReduce (mkApp J witness)]
+  let newType ← mkAppM ``Entails #[source, ← Core.betaReduce (mkApp J witness)]
   let newGoal ← mkFreshExprSyntheticOpaqueMVar newType
-  goal.assign (mkAppN (mkConst ``himpl_hexists_r [u]) #[ι, source, J, witness, newGoal])
+  goal.assign (mkAppN (mkConst ``entails_exists_r [u]) #[ι, source, J, witness, newGoal])
   instantiateRightExists newGoal.mvarId!
 
 /-- Replace the top-level existentials of the callee precondition of a
@@ -936,8 +917,8 @@ private partial def peelRequiredExists (required : Expr) :
     MetaM (Expr × Expr × Array MVarId) := do
   let required ← reducePostApplication required
   let (fn, args) := required.consumeMData.withApp fun fn args => (fn, args)
-  unless fn.isConstOf ``hexists && args.size = 2 do
-    return (required, ← mkAppM ``himpl_refl #[required], #[])
+  unless fn.isConstOf ``iexists && args.size = 2 do
+    return (required, ← mkAppM ``entails_refl #[required], #[])
   let some u := fn.constLevels!.head?
     | throwError "could not determine the universe of {required}"
   let ι := args[0]!
@@ -945,10 +926,10 @@ private partial def peelRequiredExists (required : Expr) :
   let witness ← mkFreshExprMVar ι
   let body ← Core.betaReduce (mkApp J witness)
   let (peeled, peeledEntailsBody, witnesses) ← peelRequiredExists body
-  let bodyEntailsRequired := mkAppN (mkConst ``himpl_hexists_r [u])
-    #[ι, body, J, witness, ← mkAppM ``himpl_refl #[body]]
+  let bodyEntailsRequired := mkAppN (mkConst ``entails_exists_r [u])
+    #[ι, body, J, witness, ← mkAppM ``entails_refl #[body]]
   return (peeled,
-    ← mkAppM ``himpl_trans #[peeledEntailsBody, bodyEntailsRequired],
+    ← mkAppM ``entails_trans #[peeledEntailsBody, bodyEntailsRequired],
     witnesses.push witness.mvarId!)
 
 mutual
@@ -962,11 +943,11 @@ partial def proveWand (discharger : Option Syntax.Tactic)
   let args := wand.consumeMData.getAppArgs
   let (lemmaName, premise) ←
     if isPostcondition then
-      pure (``qwand_intro,
-        ← mkAppM ``qimpl #[← mkAppM ``qstar #[args[1]!, residual], args[2]!])
+      pure (``postWand_intro,
+        ← mkAppM ``postEntails #[← mkAppM ``postSep #[args[1]!, residual], args[2]!])
     else
-      pure (``hwand_intro,
-        ← mkAppM ``himpl #[mkApp2 (mkConst ``hstar) args[0]! residual, args[1]!])
+      pure (``wand_intro,
+        ← mkAppM ``Entails #[mkApp2 (mkConst ``sep) args[0]! residual, args[1]!])
   let premiseGoal ← mkFreshExprSyntheticOpaqueMVar premise
   solveGoal discharger premiseGoal.mvarId!
   mkAppM lemmaName #[premiseGoal]
@@ -975,7 +956,7 @@ partial def solveHimpl (discharger : Option Syntax.Tactic) (goal : MVarId) :
     TacticM Unit := goal.withContext do
   let target ← instantiateMVars (← goal.getType)
   let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
-  unless fn.isConstOf ``himpl && args.size = 2 do
+  unless fn.isConstOf ``Entails && args.size = 2 do
     throwError "expected a separation-logic entailment"
   let source ← reducePostApplication args[0]!
   let destination ← reducePostApplication args[1]!
@@ -997,17 +978,17 @@ partial def solveHimpl (discharger : Option Syntax.Tactic) (goal : MVarId) :
         unless ← witness.isAssigned do return false
       let frame := mkStar frameAtoms
       frameMVar.assign frame
-      let cancelled := mkApp2 (mkConst ``hstar) (← instantiateMVars required) frame
-      let reorder ← mkAppM ``himpl_of_eq #[← proveEqAC source cancelled]
-      let weaken ← mkAppM ``hstar_mono
-        #[← instantiateMVars weakening, ← mkAppM ``himpl_refl #[frame]]
-      goal.assign (← mkAppM ``himpl_trans #[reorder, weaken])
+      let cancelled := mkApp2 (mkConst ``sep) (← instantiateMVars required) frame
+      let reorder ← mkAppM ``entails_of_eq #[← proveEqAC source cancelled]
+      let weaken ← mkAppM ``sep_mono
+        #[← instantiateMVars weakening, ← mkAppM ``entails_refl #[frame]]
+      goal.assign (← mkAppM ``entails_trans #[reorder, weaken])
       return true
     let state ← saveState
     /- First try the callee precondition as it stands: it may well be owned as a
        single opaque assertion (an `isList`, say) by the caller.  Only if that
        fails do we open its existentials. -/
-    unless ← solveWith original (← mkAppM ``himpl_refl #[original]) #[] do
+    unless ← solveWith original (← mkAppM ``entails_refl #[original]) #[] do
       state.restore
       let (peeled, weakening, witnesses) ← peelRequiredExists original
       unless ← solveWith peeled weakening witnesses do
@@ -1037,7 +1018,7 @@ partial def solveHimpl (discharger : Option Syntax.Tactic) (goal : MVarId) :
         matched := matched.push expected
         remaining :=
           remaining.extract 0 i ++ remaining.extract (i + 1) remaining.size
-      else if expected.consumeMData.isAppOfArity ``hpure 1 then
+      else if expected.consumeMData.isAppOfArity ``ipure 1 then
         deferredPure := deferredPure.push expected
       else if (wand? expected).isSome then
         /- Note that we get here only when the wand could *not* be cancelled
@@ -1061,45 +1042,45 @@ partial def solveHimpl (discharger : Option Syntax.Tactic) (goal : MVarId) :
       match absorbing with
       | some absorbingAtom =>
         let residual := mkStar remaining
-        let reordered := mkApp2 (mkConst ``hstar) matchedAssertion residual
-        let reorderProof ← mkAppM ``himpl_of_eq #[← proveEqAC source reordered]
+        let reordered := mkApp2 (mkConst ``sep) matchedAssertion residual
+        let reorderProof ← mkAppM ``entails_of_eq #[← proveEqAC source reordered]
         let residualToAbsorber ← proveWand discharger residual absorbingAtom
-        let absorbProof ← mkAppM ``hstar_mono
-          #[← mkAppM ``himpl_refl #[matchedAssertion], residualToAbsorber]
-        pure (mkApp2 (mkConst ``hstar) matchedAssertion absorbingAtom,
-          ← mkAppM ``himpl_trans #[reorderProof, absorbProof])
+        let absorbProof ← mkAppM ``sep_mono
+          #[← mkAppM ``entails_refl #[matchedAssertion], residualToAbsorber]
+        pure (mkApp2 (mkConst ``sep) matchedAssertion absorbingAtom,
+          ← mkAppM ``entails_trans #[reorderProof, absorbProof])
       | none =>
         let discardedAtoms := remaining
         let proof ←
           if discardedAtoms.isEmpty then
-            mkAppM ``himpl_of_eq #[← proveEqAC source matchedAssertion]
+            mkAppM ``entails_of_eq #[← proveEqAC source matchedAssertion]
           else
             let discarded := mkStar discardedAtoms
-            let reordered := mkApp2 (mkConst ``hstar) matchedAssertion discarded
-            let reorderProof ← mkAppM ``himpl_of_eq #[← proveEqAC source reordered]
+            let reordered := mkApp2 (mkConst ``sep) matchedAssertion discarded
+            let reorderProof ← mkAppM ``entails_of_eq #[← proveEqAC source reordered]
             /- The logic is affine, so whatever the cancellation leaves over is
-               discardable — unlike in SLF, where only the pure atoms are. -/
-            let eliminateProof ← mkAppM ``hstar_elim_right
+               discardable. -/
+            let eliminateProof ← mkAppM ``sep_elim_right
               #[matchedAssertion, discarded]
-            mkAppM ``himpl_trans #[reorderProof, eliminateProof]
+            mkAppM ``entails_trans #[reorderProof, eliminateProof]
         pure (matchedAssertion, proof)
     let mut current := matchedAssertion
-    let mut insertionProof ← mkAppM ``himpl_refl #[current]
+    let mut insertionProof ← mkAppM ``entails_refl #[current]
     for (pureAtom, pureProof) in generatedPure do
-      let insertProof ← mkAppM ``hpure_hstar_intro #[current, pureProof]
-      insertionProof ← mkAppM ``himpl_trans #[insertionProof, insertProof]
-      current := mkApp2 (mkConst ``hstar) pureAtom current
+      let insertProof ← mkAppM ``pure_sep_intro #[current, pureProof]
+      insertionProof ← mkAppM ``entails_trans #[insertionProof, insertProof]
+      current := mkApp2 (mkConst ``sep) pureAtom current
     let destination ← instantiateMVars destination
     let eqProof ← proveEqAC current destination
-    let reorderProof ← mkAppM ``himpl_of_eq #[eqProof]
-    let matchedToDestination ← mkAppM ``himpl_trans #[insertionProof, reorderProof]
-    goal.assign (← mkAppM ``himpl_trans #[sourceToMatched, matchedToDestination])
+    let reorderProof ← mkAppM ``entails_of_eq #[eqProof]
+    let matchedToDestination ← mkAppM ``entails_trans #[insertionProof, reorderProof]
+    goal.assign (← mkAppM ``entails_trans #[sourceToMatched, matchedToDestination])
 
 partial def solveGoal (discharger : Option Syntax.Tactic) (goal : MVarId) :
     TacticM Unit := do
   let target ← instantiateMVars (← goal.getType)
   let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
-  if fn.isConstOf ``qimpl && args.size = 3 then
+  if fn.isConstOf ``postEntails && args.size = 3 then
     let (_, nextGoal) ← goal.intro1P
     solveGoal discharger nextGoal
   else
@@ -1107,14 +1088,14 @@ partial def solveGoal (discharger : Option Syntax.Tactic) (goal : MVarId) :
        that succeeds when the assertion to produce is a representation predicate
        applied to a metavariable, which no rewriting could ever match.  The
        second one additionally decomposes the representation predicates with the
-       `sl_simps` set, which is what is needed when the two sides of the
+       `iris_simps` set, which is what is needed when the two sides of the
        entailment own the same cells but describe them differently. -/
     let pass (decomposing : Bool) : TacticM Unit := do
       let goal ← if decomposing then decompose goal else pure goal
       /- Decide here whether we are inferring a frame: `floatExists` below can
          turn `Hcallee ∗ ?F` into `∃ x, Hcallee' x ∗ ?F` and hide `?F`. -/
       if ← isFrameInference goal then
-        /- Expose before decomposing again: `sl_simps` has no lemma for the
+        /- Expose before decomposing again: `iris_simps` has no lemma for the
            representation predicates themselves (`wellFormed`, `isList`, …), so
            decomposing a folded assertion is a no-op. -/
         let goal ← exposeGoal goal
@@ -1132,19 +1113,19 @@ partial def solveGoal (discharger : Option Syntax.Tactic) (goal : MVarId) :
       state.restore
       try pass true
       catch secondError =>
-        throwError "sl_frame failed.\n\
+        throwError "iframe failed.\n\
           {firstError.toMessageData}\n\
-          and, after decomposing the assertions with `sl_simps`:\n\
+          and, after decomposing the assertions with `iris_simps`:\n\
           {secondError.toMessageData}"
 
-/-- SLF's `xpull`, on an entailment: only the left-hand side is touched. -/
+/-- Pull quantifiers and pure facts from an entailment's left-hand side. -/
 partial def pullGoal (goal : MVarId) : TacticM MVarId := do
   if ← isFrameInference goal then
-    throwError "sl_pull_entail: this is a frame-inference goal.  Extracting anything \
+    throwError "iintro_entail: this is a frame-inference goal.  Extracting anything \
       from its left-hand side would lose it from the frame, which was created in \
-      an outer context; pull at the level of the triple instead, with `sl_pull`."
+      an outer context; pull at the level of the triple instead, with `iintro`."
   let target ← instantiateMVars (← goal.getType)
-  if target.consumeMData.isAppOfArity ``qimpl 3 then
+  if target.consumeMData.isAppOfArity ``postEntails 3 then
     let (_, next) ← goal.intro1P
     pullLeft next
   else
@@ -1152,13 +1133,13 @@ partial def pullGoal (goal : MVarId) : TacticM MVarId := do
 
 end
 
-end SLFrame
+end IFrame
 
 /-- Prove a separation-logic entailment `H₁ ⊢ H₂` (or a postcondition entailment
-`Q₁ ⊢+ Q₂`), in the style of SLF's `xsimpl`:
+`Q₁ ⊢+ Q₂`):
 
 1. the existentials of the left-hand side are introduced and its pure facts are
-   moved into the local context (SLF's `xpull`);
+   moved into the local context;
 2. the existentials of the right-hand side are replaced by metavariables;
 3. the spatial assertions of the right-hand side are cancelled against those of
    the left-hand side, up to associativity/commutativity, which is what
@@ -1174,7 +1155,7 @@ metavariable `?F` (frame inference, as generated by `step`), steps 1 and 2 are
 skipped: the residual resources have to end up in the frame rather than in the
 local context.
 
-`sl_frame by tac` uses `tac` instead of the default chain to discharge the pure
+`iframe by tac` uses `tac` instead of the default chain to discharge the pure
 side-goals of step 4.  Lean's `sym => …` symbolic-simulation mode is a good
 choice when the default chain is too slow or too unpredictable, since it makes
 the normalization explicit instead of relying on backtracking:
@@ -1185,107 +1166,107 @@ register_sym_simp slPure where
     lastPtr_singleton, lastPtr_snoc] with self
 
 example … := by
-  sl_frame by sym => first ((simp slPure); finish) (simp slPure) (finish)
+  iframe by sym => first ((simp slPure); finish) (simp slPure) (finish)
 ```
 -/
-syntax (name := slFrame) "sl_frame" (" by " tacticSeq)? : tactic
+syntax (name := iFrame) "iframe" (" by " tacticSeq)? : tactic
 
 elab_rules : tactic
-  | `(tactic| sl_frame $[by $tac?]?) => Tactic.focus do withMainContext do
+  | `(tactic| iframe $[by $tac?]?) => Tactic.focus do withMainContext do
   let discharger : Option Syntax.Tactic := tac?.map fun tac => ⟨tac.raw⟩
   let localAsms :=
     (← (← getLCtx).getAssumptions).map LocalDecl.fvarId |>.toArray
-  let _ ← Simp.simpAt true
+  let _ ← Aeneas.Simp.simpAt true
     { dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1 }
     { hypsToUse := localAsms }
     (.targets #[] true)
   if !(← getGoals).isEmpty then
     let goal ← getMainGoal
-    SLFrame.solveGoal discharger goal
+    IFrame.solveGoal discharger goal
     replaceMainGoal []
 
 /-- Normalize the separating conjunctions of the goal: float the existentials out of them, drop
 the `emp`s, and reassociate to the right.
 
 Also collapses a ramified wand whose antecedent is a pure equality
-(`himpl_qwand_hpure_eq`): that is the shape a terminal return leaves behind, and
+(`entails_postWand_pure_eq`): that is the shape a terminal return leaves behind, and
 frame inference cannot cancel it on its own. -/
-elab "sl_norm" : tactic => withMainContext do
-  let _ ← Simp.simpAt true
+elab "isimp" : tactic => withMainContext do
+  let _ ← Aeneas.Simp.simpAt true
     { dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1 }
     { addSimpThms :=
-        #[``hstar_hempty_l_eq, ``hstar_hempty_r_eq,
-          ``hstar_hexists_l_eq, ``hstar_hexists_r_eq, ``hstar_assoc_eq,
-          ``himpl_qwand_hpure_eq] }
+        #[``sep_emp_l_eq, ``sep_emp_r_eq,
+          ``sep_exists_l_eq, ``sep_exists_r_eq, ``sep_assoc_eq,
+          ``entails_postWand_pure_eq] }
     (.targets #[] true)
 
-/-- One step of `sl_pull`: peel a quantifier or a pure fact off the precondition
+/-- One step of `iintro`: peel a quantifier or a pure fact off the precondition
 of a triple.  Fails when the precondition is purely spatial.
 
 The precondition is unfolded (`wellFormed`, `isList`, …) only as far as needed to
-expose its head connective: applying `triple_hexists` or `triple_hpure` blindly
-would let the unifier see through `hstar`/`hpure` down to the raw heap predicate
+expose its head connective: applying `triple_exists` or `triple_ipure` blindly
+would let the unifier see through `sep`/`ipure` down to the raw heap predicate
 and peel a quantifier of the *model* instead. -/
-elab "sl_pull_step" : tactic => withMainContext do
+elab "iintro_step" : tactic => withMainContext do
   /- Float the existentials out of the separating conjunctions and drop the
      `emp`s left behind by previous steps, so that the head connective of the
      precondition is the one we want to peel. -/
-  let _ ← Simp.simpAt true
+  let _ ← Aeneas.Simp.simpAt true
     { dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1 }
     { addSimpThms :=
-        #[``hstar_hexists_l_eq, ``hstar_hexists_r_eq,
-          ``hstar_hempty_l_eq, ``hstar_hempty_r_eq] }
+        #[``sep_exists_l_eq, ``sep_exists_r_eq,
+          ``sep_emp_l_eq, ``sep_emp_r_eq] }
     (.targets #[] true)
   let goal ← getMainGoal
   let target ← instantiateMVars (← goal.getType)
   let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
   unless fn.isConstOf `Aeneas.SLPoC.triple && args.size = 4 do
-    throwError "sl_pull_step: the goal is not a separation-logic triple"
-  let precondition ← SLFrame.exposeConnective args[1]!
+    throwError "iintro_step: the goal is not a separation-logic triple"
+  let precondition ← IFrame.exposeConnective args[1]!
   let head := precondition.consumeMData.getAppFn
   let leadingPure ←
-    if precondition.consumeMData.isAppOfArity ``hstar 2 then
-      pure ((← SLFrame.exposeConnective precondition.consumeMData.appFn!.appArg!)
-        |>.consumeMData.isAppOfArity ``hpure 1)
+    if precondition.consumeMData.isAppOfArity ``sep 2 then
+      pure ((← IFrame.exposeConnective precondition.consumeMData.appFn!.appArg!)
+        |>.consumeMData.isAppOfArity ``ipure 1)
     else pure false
   let lemmaName ←
-    if head.isConstOf ``hexists then pure `Aeneas.SLPoC.triple_hexists
-    else if head.isConstOf ``hpure then pure `Aeneas.SLPoC.triple_hpure'
-    else if leadingPure then pure `Aeneas.SLPoC.triple_hpure
+    if head.isConstOf ``iexists then pure `Aeneas.SLPoC.triple_exists
+    else if head.isConstOf ``ipure then pure `Aeneas.SLPoC.triple_ipure'
+    else if leadingPure then pure `Aeneas.SLPoC.triple_ipure
     else
-      throwError "sl_pull_step: the precondition has no quantifier or pure fact \
+      throwError "iintro_step: the precondition has no quantifier or pure fact \
         left to extract:\n{precondition}"
   let goal ← goal.change
     (← mkAppOptM `Aeneas.SLPoC.triple #[args[0]!, precondition, args[2]!, args[3]!])
   replaceMainGoal (← goal.apply (← mkConstWithFreshMVarLevels lemmaName))
 
-/-- SLF's `xpull`, for triples: move the existentials and the pure facts of the
-precondition into the local context.
+/-- Move the existentials and pure facts of a triple's precondition into the
+local context.
 
-`sl_pull` peels as many of them as it can, using inaccessible names.
-`sl_pull p₁ ... pₙ` peels exactly `n` of them, destructuring the `i`-th one with
-the `rintro` pattern `pᵢ`, e.g. `sl_pull l rfl` or `sl_pull ⟨hhead, htail⟩`.
+`iintro` peels as many of them as it can, using inaccessible names.
+`iintro p₁ ... pₙ` peels exactly `n` of them, destructuring the `i`-th one with
+the `rintro` pattern `pᵢ`, e.g. `iintro l rfl` or `iintro ⟨hhead, htail⟩`.
 
 Pure facts are *removed* from the precondition, which is often not what a
-subsequent `step` needs; use `sl_pull_keep` when only the local hypothesis is
+subsequent `step` needs; use `iintro_keep` when only the local hypothesis is
 wanted. -/
-syntax (name := slPull) "sl_pull" (ppSpace colGt rintroPat)* : tactic
+syntax (name := iIntro) "iintro" (ppSpace colGt rintroPat)* : tactic
 
 macro_rules
-  | `(tactic| sl_pull $ps:rintroPat*) => do
+  | `(tactic| iintro $ps:rintroPat*) => do
     if ps.isEmpty then
-      `(tactic| repeat (sl_pull_step; rintro _))
+      `(tactic| repeat (iintro_step; rintro _))
     else
-      let steps ← ps.mapM fun p => `(tactic| (sl_pull_step; rintro $p:rintroPat))
+      let steps ← ps.mapM fun p => `(tactic| (iintro_step; rintro $p:rintroPat))
       `(tactic| ($[$steps]*))
 
 /-- Whether a quantifier or a pure fact can be peeled off `pre` without unfolding it: an opened
 representation predicate is one the frame inference of a later `step` can no longer match. -/
 private def isPullable (pre : Expr) : Bool :=
   let pre := pre.consumeMData
-  if pre.isAppOfArity ``hexists 2 || pre.isAppOfArity ``hpure 1 then true
-  else if pre.isAppOfArity ``hstar 2 then
-    pre.appFn!.appArg!.consumeMData.isAppOfArity ``hpure 1
+  if pre.isAppOfArity ``iexists 2 || pre.isAppOfArity ``ipure 1 then true
+  else if pre.isAppOfArity ``sep 2 then
+    pre.appFn!.appArg!.consumeMData.isAppOfArity ``ipure 1
   else false
 
 private partial def pullPrecondition (goal : MVarId) : TacticM MVarId := goal.withContext do
@@ -1295,51 +1276,51 @@ private partial def pullPrecondition (goal : MVarId) : TacticM MVarId := goal.wi
   setGoals [goal]
   let state ← saveState
   try
-    evalTactic (← `(tactic| sl_pull_step))
+    evalTactic (← `(tactic| iintro_step))
   catch _ =>
     state.restore
     return goal
   let (_, goal) ← (← getMainGoal).intro1P
   pullPrecondition goal
 
-/-- `sl_pull` restricted to what the precondition exposes without being unfolded; see
+/-- `iintro` restricted to what the precondition exposes without being unfolded; see
 `isPullable`. -/
-elab "sl_pull_shallow" : tactic => withMainContext do
+elab "iintro_shallow" : tactic => withMainContext do
   setGoals [← pullPrecondition (← getMainGoal)]
 
-/-- One step of `sl_pull_keep`: copy the leading pure fact of the precondition of
+/-- One step of `iintro_keep`: copy the leading pure fact of the precondition of
 a triple into the local context, *without* removing it from the precondition.
 
-`sl_pull_step` consumes the fact, which is what SLF's `xpull` does but is often
-the wrong thing here: the assertion has to keep it for the framing of the later
-steps (this is why `sl_pull` before a `step` can turn a working proof into a
+`iintro_step` consumes the fact, but that is often the wrong thing here: the
+assertion has to keep it for the framing of the later
+steps (this is why `iintro` before a `step` can turn a working proof into a
 failing one).  Copying is always sound, and it is what makes the pointer of a
 callee's precondition (`s.head.get!`, say) reducible to the one the assertion
 owns.
 
 Fails when the fact is already in the context, so that `repeat` terminates. -/
-elab "sl_pull_keep_step" : tactic => withMainContext do
+elab "iintro_keep_step" : tactic => withMainContext do
   let goal ← getMainGoal
   let target ← instantiateMVars (← goal.getType)
   let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
   unless fn.isConstOf `Aeneas.SLPoC.triple && args.size = 4 do
-    throwError "sl_pull_keep_step: the goal is not a separation-logic triple"
-  let precondition ← SLFrame.exposeConnective args[1]!
-  unless precondition.consumeMData.isAppOfArity ``hstar 2 do
-    throwError "sl_pull_keep_step: the precondition is not a separating conjunction"
-  let leading ← SLFrame.exposeConnective precondition.consumeMData.appFn!.appArg!
-  unless leading.consumeMData.isAppOfArity ``hpure 1 do
-    throwError "sl_pull_keep_step: the precondition does not start with a pure fact"
+    throwError "iintro_keep_step: the goal is not a separation-logic triple"
+  let precondition ← IFrame.exposeConnective args[1]!
+  unless precondition.consumeMData.isAppOfArity ``sep 2 do
+    throwError "iintro_keep_step: the precondition is not a separating conjunction"
+  let leading ← IFrame.exposeConnective precondition.consumeMData.appFn!.appArg!
+  unless leading.consumeMData.isAppOfArity ``ipure 1 do
+    throwError "iintro_keep_step: the precondition does not start with a pure fact"
   let proposition := leading.consumeMData.appArg!
   if ← (← getLCtx).anyM fun decl =>
       pure !decl.isImplementationDetail <&&> isDefEq decl.type proposition then
-    throwError "sl_pull_keep_step: this pure fact is already in the context"
-  let exposed := mkApp2 (mkConst ``hstar) leading precondition.consumeMData.appArg!
+    throwError "iintro_keep_step: this pure fact is already in the context"
+  let exposed := mkApp2 (mkConst ``sep) leading precondition.consumeMData.appArg!
   let goal ← goal.change
     (← mkAppOptM `Aeneas.SLPoC.triple #[args[0]!, exposed, args[2]!, args[3]!])
   let [next] ← goal.apply
-    (← mkConstWithFreshMVarLevels `Aeneas.SLPoC.triple_hpure_keep)
-    | throwError "sl_pull_keep_step: unexpected number of goals"
+    (← mkConstWithFreshMVarLevels `Aeneas.SLPoC.triple_ipure_keep)
+    | throwError "iintro_keep_step: unexpected number of goals"
   let (_, next) ← next.intro1P
   /- Put the precondition back in its original, folded form: only the local
      context should record that the step happened. -/
@@ -1348,127 +1329,95 @@ elab "sl_pull_keep_step" : tactic => withMainContext do
       (← mkAppOptM `Aeneas.SLPoC.triple #[args[0]!, args[1]!, args[2]!, args[3]!])]
 
 /-- Copy the pure facts of the precondition of a triple into the local context,
-leaving the precondition untouched.  See `sl_pull_keep_step`. -/
-macro "sl_pull_keep" : tactic => `(tactic| repeat (sl_pull_keep_step; rename_i _))
+leaving the precondition untouched.  See `iintro_keep_step`. -/
+macro "iintro_keep" : tactic => `(tactic| repeat (iintro_keep_step; rename_i _))
 
-/-- SLF's `xsimpl`.  `sl_frame` is the same tactic under the name that describes
-what `step` uses it for. -/
-syntax "sl_simpl" (" by " tacticSeq)? : tactic
+/-- `iframe` under the name used for entailment simplification. -/
+syntax "isimpl" (" by " tacticSeq)? : tactic
 
 macro_rules
-  | `(tactic| sl_simpl) => `(tactic| sl_frame)
-  | `(tactic| sl_simpl by $tac) => `(tactic| sl_frame by $tac)
+  | `(tactic| isimpl) => `(tactic| iframe)
+  | `(tactic| isimpl by $tac) => `(tactic| iframe by $tac)
 
-/-- SLF's `xpull`, on an entailment `H₁ ⊢ H₂` or `Q₁ ⊢+ Q₂`: introduce the
-existentials of the left-hand side and move its pure facts into the local
-context, leaving the right-hand side alone.
+/-- On an entailment `H₁ ⊢ H₂` or `Q₁ ⊢+ Q₂`, introduce the existentials of
+the left-hand side and move its pure facts into the local context, leaving the
+right-hand side alone.
 
 Use it when the witness the right-hand side needs depends on a variable bound on
-the left: `sl_simpl` would otherwise pick the metavariable for the right-hand
-side *before* that variable exists.  This is SLF's canonical
-`(∃ n, p ↦ n) ⊢ (∃ m, p ↦ (m + 1))` example. -/
-elab "sl_pull_entail" : tactic => Tactic.focus do withMainContext do
-  replaceMainGoal [← SLFrame.pullGoal (← getMainGoal)]
+the left: `isimpl` would otherwise pick the metavariable for the right-hand
+side *before* that variable exists. -/
+elab "iintro_entail" : tactic => Tactic.focus do withMainContext do
+  replaceMainGoal [← IFrame.pullGoal (← getMainGoal)]
 
-/-! ## `xchange` -/
+/-! ## `irewrite` -/
 
-/-- The rule behind `sl_change`: rewrite a part of the left-hand side of an
+/-- The rule behind `irewrite`: rewrite a part of the left-hand side of an
 entailment with an entailment of its own. -/
-theorem himpl_xchange {H₁ H₂ H₃ H₄ : SLProp} (hPart : H₁ ⊢ H₂)
+theorem entails_rewrite {H₁ H₂ H₃ H₄ : IProp} (hPart : H₁ ⊢ H₂)
     (hRest : H₂ ∗ H₃ ⊢ H₄) : H₁ ∗ H₃ ⊢ H₄ :=
-  himpl_trans (hstar_mono hPart (himpl_refl H₃)) hRest
+  entails_trans (sep_mono hPart (entails_refl H₃)) hRest
 
-namespace SLFrame
+namespace IFrame
 
 /-- Rewrite the assertion `H` (the left-hand side of an entailment, or the
 precondition of a triple) using `lemma : A ⊢ B` or `lemma : A = B`, replacing the
 atom `A` of `H` by `B`.  Returns the rewritten assertion and a proof of
 `H ⊢ rewritten`. -/
-def xchangeAssertion (assertion : Expr) (rule : Expr) : TacticM (Expr × Expr) := do
+def rewriteAssertion (assertion : Expr) (rule : Expr) : TacticM (Expr × Expr) := do
   let ruleType ← instantiateMVars (← inferType rule)
   /- Accept both an entailment and an equality, in either direction for the
-     latter (SLF's `xchange` does the same). -/
+     latter. -/
   let (lhs, rhs, entailment) ←
-    if ruleType.consumeMData.isAppOfArity ``himpl 2 then
+    if ruleType.consumeMData.isAppOfArity ``Entails 2 then
       let args := ruleType.consumeMData.getAppArgs
       pure (args[0]!, args[1]!, rule)
     else if let some (_, lhs, rhs) := ruleType.consumeMData.eq? then
-      pure (lhs, rhs, ← mkAppM ``himpl_of_eq #[rule])
+      pure (lhs, rhs, ← mkAppM ``entails_of_eq #[rule])
     else
-      throwError "sl_change expects an entailment `A ⊢ B` or an equality \
+      throwError "irewrite expects an entailment `A ⊢ B` or an equality \
         `A = B`, got {ruleType}"
   let atoms ← flatten assertion
   /- The rewritten part may be a separating conjunction of several atoms, which
      do not have to be adjacent in `assertion`. -/
   let some restAtoms ← removeMatches atoms (← flatten lhs)
-    | throwError "sl_change: {lhs}\nis not part of\n{assertion}"
+    | throwError "irewrite: {lhs}\nis not part of\n{assertion}"
   let rest := mkStar restAtoms
-  let reordered := mkApp2 (mkConst ``hstar) (← instantiateMVars lhs) rest
-  let reorder ← mkAppM ``himpl_of_eq #[← proveEqAC assertion reordered]
-  let rewritten := mkApp2 (mkConst ``hstar) (← instantiateMVars rhs) rest
-  let change ← mkAppM ``hstar_mono #[entailment, ← mkAppM ``himpl_refl #[rest]]
-  return (rewritten, ← mkAppM ``himpl_trans #[reorder, change])
+  let reordered := mkApp2 (mkConst ``sep) (← instantiateMVars lhs) rest
+  let reorder ← mkAppM ``entails_of_eq #[← proveEqAC assertion reordered]
+  let rewritten := mkApp2 (mkConst ``sep) (← instantiateMVars rhs) rest
+  let change ← mkAppM ``sep_mono #[entailment, ← mkAppM ``entails_refl #[rest]]
+  return (rewritten, ← mkAppM ``entails_trans #[reorder, change])
 
-end SLFrame
+end IFrame
 
-/-- SLF's `xchange`: rewrite part of the current resources with an entailment.
+/-- Rewrite part of the current resources with an entailment.
 
-`sl_change M`, for `M : A ⊢ B` (or `M : A = B`), replaces the assertion `A` by
+`irewrite M`, for `M : A ⊢ B` (or `M : A = B`), replaces the assertion `A` by
 `B` in the left-hand side of the entailment, or in the precondition of the
 triple, that the goal states.  This is how a representation predicate is opened
 or closed when plain cancellation cannot see through it.
 
 Unlike `rw`, `M` need not be an equality and `A` need not occur syntactically:
 it only has to be one of the `∗`-separated atoms, up to unification. -/
-elab "sl_change" rule:term : tactic => Tactic.focus do withMainContext do
+elab "irewrite" rule:term : tactic => Tactic.focus do withMainContext do
   let rule ← Tactic.elabTerm rule none
   let goal ← getMainGoal
   let target ← instantiateMVars (← goal.getType)
   let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
-  if fn.isConstOf ``himpl && args.size = 2 then
-    let (rewritten, proof) ← SLFrame.xchangeAssertion args[0]! rule
-    let next ← mkFreshExprSyntheticOpaqueMVar (← mkAppM ``himpl #[rewritten, args[1]!])
-    goal.assign (← mkAppM ``himpl_trans #[proof, next])
+  if fn.isConstOf ``Entails && args.size = 2 then
+    let (rewritten, proof) ← IFrame.rewriteAssertion args[0]! rule
+    let next ← mkFreshExprSyntheticOpaqueMVar (← mkAppM ``Entails #[rewritten, args[1]!])
+    goal.assign (← mkAppM ``entails_trans #[proof, next])
     replaceMainGoal [next.mvarId!]
   else if fn.isConstOf `Aeneas.SLPoC.triple && args.size = 4 then
-    let (rewritten, proof) ← SLFrame.xchangeAssertion args[1]! rule
+    let (rewritten, proof) ← IFrame.rewriteAssertion args[1]! rule
     let next ← mkFreshExprSyntheticOpaqueMVar
       (← mkAppOptM `Aeneas.SLPoC.triple #[args[0]!, rewritten, args[2]!, args[3]!])
     let qrefl ← withLocalDeclD `value args[0]! fun value => do
-      mkLambdaFVars #[value] (← mkAppM ``himpl_refl #[mkApp args[3]! value])
+      mkLambdaFVars #[value] (← mkAppM ``entails_refl #[mkApp args[3]! value])
     goal.assign (← mkAppM `Aeneas.SLPoC.triple_conseq #[next, proof, qrefl])
     replaceMainGoal [next.mvarId!]
   else
-    throwError "sl_change expects an entailment or a triple, got\n{target}"
-
-/-! ## `xval` and `xapp` -/
-
-/-- SLF's `xval`: reduce a triple about a terminal `pure v` to the entailment
-`P ⊢ Q v`. -/
-macro "sl_val" : tactic => `(tactic| apply triple_pure)
-
-/-- SLF's `xapp`: apply a specification to the goal, framing the resources it
-does not need through the ramified frame rule, and discharge the resulting
-entailment with `sl_simpl`.
-
-`sl_app thm` handles a terminal call; use `step with thm` for a call followed by
-a continuation. -/
-syntax "sl_app" (ppSpace colGt term)? (" by " tacticSeq)? : tactic
-
-macro_rules
-  | `(tactic| sl_app $[$thm?]? $[by $tac?]?) => do
-    let apply ←
-      match thm? with
-      | some thm => `(tactic| refine triple_ramified_frame $thm ?_)
-      | none => `(tactic| refine triple_ramified_frame (by assumption) ?_)
-    match tac? with
-    | none => `(tactic| ($apply; sl_simpl))
-    | some tac => `(tactic| ($apply; sl_simpl by $tac))
-
-/-- Re-state an already-proved triple under a weaker (usually more abstract)
-postcondition: `sl_conseq thm` keeps the precondition as is and discharges the
-new postcondition with `sl_frame` for every result value. -/
-macro "sl_conseq " thm:term : tactic =>
-  `(tactic| (apply triple_conseq $thm (himpl_refl _) <;> (intro _ <;> sl_frame)))
+    throwError "irewrite expects an entailment or a triple, got\n{target}"
 
 end Aeneas.SLPoC

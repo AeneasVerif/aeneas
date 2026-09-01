@@ -24,7 +24,6 @@ unchanged, and identifies the returned pointer as the original head.
 
 namespace Aeneas.SLPoC
 
-open scoped SepLogic
 
 namespace CreusotListReversalLasso
 
@@ -536,7 +535,7 @@ theorem reverse.spec (memory : Ptr Memory) (m : Memory)
   unfold reverse
   step with reverseAux.spec memory m head none none
     (traversal stem cycle) hlasso.invariant
-  sl_frame
+  iframe
 
 end CreusotListReversalLasso
 

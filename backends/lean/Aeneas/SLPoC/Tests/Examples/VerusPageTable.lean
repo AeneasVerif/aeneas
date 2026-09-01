@@ -32,7 +32,6 @@ logic.  Structural recursion on the finite path supplies Lean termination.
 
 namespace Aeneas.SLPoC
 
-open scoped SepLogic
 
 namespace VerusPageTable
 
@@ -326,7 +325,7 @@ end ModelTable
 mutual
   /-- Ownership relation for one concrete/model entry pair.  A table entry
 recursively owns the separately allocated child table it points to. -/
-  def entryOwn : Entry → ModelEntry → SLProp
+  def entryOwn : Entry → ModelEntry → IProp
     | .empty, .empty => emp
     | .leaf concrete, .leaf model => ⌜concrete = model⌝
     | .table child, .table model => tableOwn child model
@@ -336,9 +335,9 @@ recursively owns the separately allocated child table it points to. -/
   tables.  Because triples are affine, this predicate describes the resources
   retained by the proof rather than excluding unrelated or leaked cells from
   the global heap. -/
-  def tableOwn (pointer : Ptr Table) : ModelTable → SLProp
+  def tableOwn (pointer : Ptr Table) : ModelTable → IProp
     | ⟨model0, model1, model2, model3⟩ =>
-        hexists fun concrete : Table =>
+        iexists fun concrete : Table =>
           iprop(
             pointer ↦ concrete ∗
             entryOwn concrete.slot0 model0 ∗
@@ -348,7 +347,7 @@ recursively owns the separately allocated child table it points to. -/
 end
 
 /-- Ownership of the four entries, excluding the table cell itself. -/
-def entriesOwn (concrete : Table) (model : ModelTable) : SLProp :=
+def entriesOwn (concrete : Table) (model : ModelTable) : IProp :=
   iprop(
     entryOwn concrete.slot0 model.slot0 ∗
     entryOwn concrete.slot1 model.slot1 ∗
@@ -357,7 +356,7 @@ def entriesOwn (concrete : Table) (model : ModelTable) : SLProp :=
 
 /-- The unselected three-entry frame used while operating on one slot. -/
 def entriesExcept (index : Index) (concrete : Table)
-    (model : ModelTable) : SLProp :=
+    (model : ModelTable) : IProp :=
   match index with
   | .i0 =>
       iprop(
@@ -386,11 +385,11 @@ def entriesExcept (index : Index) (concrete : Table)
 entry resources. -/
 theorem tableOwn_unfold (pointer : Ptr Table) (model : ModelTable) :
     tableOwn pointer model ⊢
-      hexists fun concrete : Table =>
+      iexists fun concrete : Table =>
         iprop(pointer ↦ concrete ∗ entriesOwn concrete model) := by
   cases model
   unfold tableOwn entriesOwn
-  sl_frame
+  iframe
 
 /-- Fold a concrete table cell and its four related entries into recursive
 ownership. -/
@@ -400,7 +399,7 @@ theorem tableOwn_fold (pointer : Ptr Table) (concrete : Table)
       tableOwn pointer model := by
   cases model
   unfold tableOwn entriesOwn
-  sl_frame
+  iframe
 
 /-- Select one entry while framing the other three. -/
 theorem entriesOwn_select (index : Index) (concrete : Table)
@@ -410,7 +409,7 @@ theorem entriesOwn_select (index : Index) (concrete : Table)
         entryOwn (concrete.get index) (model.get index) ∗
         entriesExcept index concrete model) := by
   cases index <;> unfold entriesOwn entriesExcept Table.get ModelTable.get <;>
-    sl_frame
+    iframe
 
 /-- Put an unchanged selected entry back with its three-entry frame. -/
 theorem entriesOwn_unselect (index : Index) (concrete : Table)
@@ -420,7 +419,7 @@ theorem entriesOwn_unselect (index : Index) (concrete : Table)
       entriesExcept index concrete model) ⊢
     entriesOwn concrete model := by
   cases index <;> unfold entriesOwn entriesExcept Table.get ModelTable.get <;>
-    sl_frame
+    iframe
 
 /-- Reassemble all four entries after replacing the selected concrete/model
 pair. -/
@@ -433,24 +432,24 @@ theorem entriesOwn_replace (index : Index) (concrete : Table)
       (model.set index newModel) := by
   cases index <;>
     unfold entriesOwn entriesExcept Table.set ModelTable.set <;>
-    sl_frame
+    iframe
 
 /-- Slot-oriented unfold lemma used by the executable proofs. -/
 theorem tableOwn_select (pointer : Ptr Table) (index : Index)
     (model : ModelTable) :
     tableOwn pointer model ⊢
-      hexists fun concrete : Table =>
+      iexists fun concrete : Table =>
         iprop(
           pointer ↦ concrete ∗
           entryOwn (concrete.get index) (model.get index) ∗
           entriesExcept index concrete model) := by
   cases model
   unfold tableOwn
-  sl_pull_entail
-  refine himpl_hexists_r x ?_
+  iintro_entail
+  refine entails_exists_r x ?_
   cases index <;>
     unfold Table.get ModelTable.get entriesExcept <;>
-    sl_frame
+    iframe
 
 /-- Fold an unchanged selected slot back into recursive ownership. -/
 theorem tableOwn_unselect (pointer : Ptr Table) (index : Index)
@@ -462,10 +461,10 @@ theorem tableOwn_unselect (pointer : Ptr Table) (index : Index)
     tableOwn pointer model := by
   cases model
   unfold tableOwn
-  refine himpl_hexists_r concrete ?_
+  refine entails_exists_r concrete ?_
   cases index <;>
     unfold Table.get ModelTable.get entriesExcept <;>
-    sl_frame
+    iframe
 
 /-- Fold a table whose selected concrete/model slot was replaced. -/
 theorem tableOwn_replace (pointer : Ptr Table) (index : Index)
@@ -481,26 +480,26 @@ theorem tableOwn_replace (pointer : Ptr Table) (index : Index)
       cases model
       unfold tableOwn entriesExcept
       simp only [Table.set, ModelTable.set]
-      refine himpl_hexists_r { concrete with slot0 := newConcrete } ?_
-      sl_frame
+      refine entails_exists_r { concrete with slot0 := newConcrete } ?_
+      iframe
   | i1 =>
       cases model
       unfold tableOwn entriesExcept
       simp only [Table.set, ModelTable.set]
-      refine himpl_hexists_r { concrete with slot1 := newConcrete } ?_
-      sl_frame
+      refine entails_exists_r { concrete with slot1 := newConcrete } ?_
+      iframe
   | i2 =>
       cases model
       unfold tableOwn entriesExcept
       simp only [Table.set, ModelTable.set]
-      refine himpl_hexists_r { concrete with slot2 := newConcrete } ?_
-      sl_frame
+      refine entails_exists_r { concrete with slot2 := newConcrete } ?_
+      iframe
   | i3 =>
       cases model
       unfold tableOwn entriesExcept
       simp only [Table.set, ModelTable.set]
-      refine himpl_hexists_r { concrete with slot3 := newConcrete } ?_
-      sl_frame
+      refine entails_exists_r { concrete with slot3 := newConcrete } ?_
+      iframe
 
 @[simp] theorem Table.set_get (table : Table) (index : Index) :
     table.set index (table.get index) = table := by
@@ -571,14 +570,14 @@ theorem tableOwn_replace_leaf (pointer : Ptr Table) (index : Index)
       pointer ↦ concrete.set index (.leaf frame) ∗
       entriesExcept index concrete model) ⊢
     tableOwn pointer (model.set index (.leaf frame)) := by
-  refine himpl_trans
+  refine entails_trans
     (Q := iprop(
       pointer ↦ concrete.set index (.leaf frame) ∗
       entryOwn (.leaf frame) (.leaf frame) ∗
       entriesExcept index concrete model)) ?_
     (tableOwn_replace pointer index concrete model _ _)
   · simp only [entryOwn]
-    sl_frame
+    iframe
 
 /-- Replacing a slot with empty needs no additional spatial resource. -/
 theorem tableOwn_replace_empty (pointer : Ptr Table) (index : Index)
@@ -587,26 +586,26 @@ theorem tableOwn_replace_empty (pointer : Ptr Table) (index : Index)
       pointer ↦ concrete.set index .empty ∗
       entriesExcept index concrete model) ⊢
     tableOwn pointer (model.set index .empty) := by
-  refine himpl_trans
+  refine entails_trans
     (Q := iprop(
       pointer ↦ concrete.set index .empty ∗
       entryOwn .empty .empty ∗
       entriesExcept index concrete model)) ?_
     (tableOwn_replace pointer index concrete model _ _)
   · simp only [entryOwn]
-    sl_frame
+    iframe
 
 /-- An empty concrete table owns the empty pure tree without owning any child
 allocation. -/
 theorem empty_tableOwn (pointer : Ptr Table) :
     pointer ↦ Table.empty ⊢ tableOwn pointer ModelTable.empty := by
-  refine himpl_trans
+  refine entails_trans
     (Q := iprop(
       pointer ↦ Table.empty ∗
       entriesOwn Table.empty ModelTable.empty)) ?_
     (tableOwn_fold pointer Table.empty ModelTable.empty)
   · simp only [entriesOwn, Table.empty, ModelTable.empty, entryOwn]
-    sl_frame
+    iframe
 
 /-- Related entries agree on whether they are empty. -/
 theorem entryOwn_isEmpty (concrete : Entry) (model : ModelEntry) :
@@ -616,7 +615,7 @@ theorem entryOwn_isEmpty (concrete : Entry) (model : ModelEntry) :
         entryOwn concrete model) := by
   cases concrete <;> cases model <;>
     simp only [entryOwn, Entry.isEmpty, ModelEntry.isEmpty] <;>
-    sl_frame
+    iframe
 
 /-- Related table entries compute the same emptiness test. -/
 theorem entriesOwn_isEmpty (concrete : Table) (model : ModelTable) :
@@ -625,13 +624,13 @@ theorem entriesOwn_isEmpty (concrete : Table) (model : ModelTable) :
         ⌜concrete.isEmpty = model.isEmpty⌝ ∗
         entriesOwn concrete model) := by
   unfold entriesOwn
-  sl_change (entryOwn_isEmpty concrete.slot0 model.slot0)
-  sl_change (entryOwn_isEmpty concrete.slot1 model.slot1)
-  sl_change (entryOwn_isEmpty concrete.slot2 model.slot2)
-  sl_change (entryOwn_isEmpty concrete.slot3 model.slot3)
-  sl_pull_entail
+  irewrite (entryOwn_isEmpty concrete.slot0 model.slot0)
+  irewrite (entryOwn_isEmpty concrete.slot1 model.slot1)
+  irewrite (entryOwn_isEmpty concrete.slot2 model.slot2)
+  irewrite (entryOwn_isEmpty concrete.slot3 model.slot3)
+  iintro_entail
   simp only [Table.isEmpty, ModelTable.isEmpty, *]
-  sl_frame
+  iframe
 
 /-- The same emptiness relation in the slot-oriented decomposition used by
 the recursive algorithms. -/
@@ -649,13 +648,13 @@ theorem selectedEntries_isEmpty (index : Index) (concrete : Table)
       ModelTable.isEmpty
   all_goals
     simp only
-    sl_change (entryOwn_isEmpty concrete.slot0 model.slot0)
-    sl_change (entryOwn_isEmpty concrete.slot1 model.slot1)
-    sl_change (entryOwn_isEmpty concrete.slot2 model.slot2)
-    sl_change (entryOwn_isEmpty concrete.slot3 model.slot3)
-    sl_pull_entail
+    irewrite (entryOwn_isEmpty concrete.slot0 model.slot0)
+    irewrite (entryOwn_isEmpty concrete.slot1 model.slot1)
+    irewrite (entryOwn_isEmpty concrete.slot2 model.slot2)
+    irewrite (entryOwn_isEmpty concrete.slot3 model.slot3)
+    iintro_entail
     simp_all
-    sl_frame
+    iframe
 
 /-- Emptiness relation after replacing the selected entry while framing the
 unchanged three entries. -/
@@ -674,46 +673,46 @@ theorem replacedEntries_isEmpty (index : Index) (concrete : Table)
       unfold Table.set ModelTable.set entriesExcept Table.isEmpty
         ModelTable.isEmpty
       simp only
-      sl_change (entryOwn_isEmpty newConcrete newModel)
-      sl_change (entryOwn_isEmpty concrete.slot1 model.slot1)
-      sl_change (entryOwn_isEmpty concrete.slot2 model.slot2)
-      sl_change (entryOwn_isEmpty concrete.slot3 model.slot3)
-      sl_pull_entail
+      irewrite (entryOwn_isEmpty newConcrete newModel)
+      irewrite (entryOwn_isEmpty concrete.slot1 model.slot1)
+      irewrite (entryOwn_isEmpty concrete.slot2 model.slot2)
+      irewrite (entryOwn_isEmpty concrete.slot3 model.slot3)
+      iintro_entail
       simp_all
-      sl_frame
+      iframe
   | i1 =>
       unfold Table.set ModelTable.set entriesExcept Table.isEmpty
         ModelTable.isEmpty
       simp only
-      sl_change (entryOwn_isEmpty newConcrete newModel)
-      sl_change (entryOwn_isEmpty concrete.slot0 model.slot0)
-      sl_change (entryOwn_isEmpty concrete.slot2 model.slot2)
-      sl_change (entryOwn_isEmpty concrete.slot3 model.slot3)
-      sl_pull_entail
+      irewrite (entryOwn_isEmpty newConcrete newModel)
+      irewrite (entryOwn_isEmpty concrete.slot0 model.slot0)
+      irewrite (entryOwn_isEmpty concrete.slot2 model.slot2)
+      irewrite (entryOwn_isEmpty concrete.slot3 model.slot3)
+      iintro_entail
       simp_all
-      sl_frame
+      iframe
   | i2 =>
       unfold Table.set ModelTable.set entriesExcept Table.isEmpty
         ModelTable.isEmpty
       simp only
-      sl_change (entryOwn_isEmpty newConcrete newModel)
-      sl_change (entryOwn_isEmpty concrete.slot0 model.slot0)
-      sl_change (entryOwn_isEmpty concrete.slot1 model.slot1)
-      sl_change (entryOwn_isEmpty concrete.slot3 model.slot3)
-      sl_pull_entail
+      irewrite (entryOwn_isEmpty newConcrete newModel)
+      irewrite (entryOwn_isEmpty concrete.slot0 model.slot0)
+      irewrite (entryOwn_isEmpty concrete.slot1 model.slot1)
+      irewrite (entryOwn_isEmpty concrete.slot3 model.slot3)
+      iintro_entail
       simp_all
-      sl_frame
+      iframe
   | i3 =>
       unfold Table.set ModelTable.set entriesExcept Table.isEmpty
         ModelTable.isEmpty
       simp only
-      sl_change (entryOwn_isEmpty newConcrete newModel)
-      sl_change (entryOwn_isEmpty concrete.slot0 model.slot0)
-      sl_change (entryOwn_isEmpty concrete.slot1 model.slot1)
-      sl_change (entryOwn_isEmpty concrete.slot2 model.slot2)
-      sl_pull_entail
+      irewrite (entryOwn_isEmpty newConcrete newModel)
+      irewrite (entryOwn_isEmpty concrete.slot0 model.slot0)
+      irewrite (entryOwn_isEmpty concrete.slot1 model.slot1)
+      irewrite (entryOwn_isEmpty concrete.slot2 model.slot2)
+      iintro_entail
       simp_all
-      sl_frame
+      iframe
 
 theorem replacedEntries_isEmpty_of_get (index : Index) (concrete : Table)
     (model : ModelTable) (newConcrete : Entry) (newModel : ModelEntry)
@@ -733,15 +732,15 @@ theorem replacedEntries_isEmpty_of_get (index : Index) (concrete : Table)
 
 /-- Move a pure fact in the middle of a spatial assertion to the front so it
 can be introduced as an ordinary Lean hypothesis. -/
-theorem pure_middle_front (fact : Prop) (left right : SLProp) :
+theorem pure_middle_front (fact : Prop) (left right : IProp) :
     iprop(left ∗ ⌜fact⌝ ∗ right) ⊢
       iprop(⌜fact⌝ ∗ left ∗ right) := by
-  sl_frame
+  iframe
 
-theorem pure_front_middle (fact : Prop) (left right : SLProp) :
+theorem pure_front_middle (fact : Prop) (left right : IProp) :
     iprop(⌜fact⌝ ∗ left ∗ right) ⊢
       iprop(left ∗ ⌜fact⌝ ∗ right) := by
-  sl_frame
+  iframe
 
 /-! ## Exact functional specifications
 
@@ -765,8 +764,8 @@ theorem queryAux.spec (pointer : Ptr Table) (model : ModelTable)
       step*
   | cons index rest ih =>
       simp only [queryAux, ModelTable.lookup]
-      sl_change (tableOwn_select pointer index model)
-      sl_pull concrete
+      irewrite (tableOwn_select pointer index model)
+      iintro concrete
       step
       cases rest with
       | nil =>
@@ -776,51 +775,51 @@ theorem queryAux.spec (pointer : Ptr Table) (model : ModelTable)
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
             step
-            sl_change hFold
-            sl_frame
-          · sl_change (pure_middle_front False
+            irewrite hFold
+            iframe
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
           · rename_i concreteFrame modelFrame
-            sl_change (pure_middle_front (concreteFrame = modelFrame)
+            irewrite (pure_middle_front (concreteFrame = modelFrame)
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            simp only [hstar_hempty_r_eq]
-            sl_pull_keep
+            simp only [sep_emp_r_eq]
+            iintro_keep
             rename_i hFrame
             subst concreteFrame
             have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
             step
-            sl_change (pure_front_middle True
+            irewrite (pure_front_middle True
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_change hFold
-            sl_frame
-          · sl_change (pure_middle_front False
+            irewrite hFold
+            iframe
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
             step
-            sl_change hFold
-            sl_frame
+            irewrite hFold
+            iframe
       | cons next rest =>
           cases hConcrete : concrete.get index <;>
             cases hModel : model.get index <;>
@@ -828,53 +827,53 @@ theorem queryAux.spec (pointer : Ptr Table) (model : ModelTable)
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
             step
-            sl_change hFold
-            sl_frame
-          · sl_change (pure_middle_front False
+            irewrite hFold
+            iframe
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
           · rename_i concreteFrame modelFrame
-            sl_change (pure_middle_front (concreteFrame = modelFrame)
+            irewrite (pure_middle_front (concreteFrame = modelFrame)
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            simp only [hstar_hempty_r_eq]
-            sl_pull_keep
+            simp only [sep_emp_r_eq]
+            iintro_keep
             rename_i hFrame
             subst concreteFrame
             have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
             step
-            sl_change (pure_front_middle True
+            irewrite (pure_front_middle True
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_change hFold
-            sl_frame
-          · sl_change (pure_middle_front False
+            irewrite hFold
+            iframe
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
           · rename_i child childModel
             step with ih child childModel
             have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
             step
-            sl_change hFold
-            sl_frame
+            irewrite hFold
+            iframe
 
 /-- Public query has the same exact lookup equation. -/
 @[step]
@@ -903,8 +902,8 @@ theorem mapAux.spec (pointer : Ptr Table) (model : ModelTable)
       step*
   | cons index rest ih =>
       simp only [mapAux, ModelTable.insert]
-      sl_change (tableOwn_select pointer index model)
-      sl_pull concrete
+      irewrite (tableOwn_select pointer index model)
+      iintro concrete
       step
       cases rest with
       | nil =>
@@ -912,93 +911,93 @@ theorem mapAux.spec (pointer : Ptr Table) (model : ModelTable)
             cases hModel : model.get index <;>
             simp only [entryOwn]
           · step*
-            sl_change
+            irewrite
               (tableOwn_replace_leaf pointer index concrete model frame)
-            sl_frame
-          · sl_change (pure_middle_front False
+            iframe
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
-            contradiction
-          · have hFold := tableOwn_unselect pointer index concrete model
-            simp only [hConcrete, hModel, entryOwn] at hFold
-            step
-            sl_change hFold
-            sl_frame
-          · sl_change (pure_middle_front False
-              (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
-            contradiction
-          · sl_change (pure_middle_front False
-              (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
-            contradiction
-          · sl_change (pure_middle_front False
-              (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
             step
-            sl_change hFold
-            sl_frame
+            irewrite hFold
+            iframe
+          · irewrite (pure_middle_front False
+              (pointer ↦ concrete) (entriesExcept index concrete model))
+            iintro
+            contradiction
+          · irewrite (pure_middle_front False
+              (pointer ↦ concrete) (entriesExcept index concrete model))
+            iintro
+            contradiction
+          · irewrite (pure_middle_front False
+              (pointer ↦ concrete) (entriesExcept index concrete model))
+            iintro
+            contradiction
+          · have hFold := tableOwn_unselect pointer index concrete model
+            simp only [hConcrete, hModel, entryOwn] at hFold
+            step
+            irewrite hFold
+            iframe
       | cons next rest =>
           cases hConcrete : concrete.get index <;>
             cases hModel : model.get index <;>
             simp only [entryOwn]
           · step as ⟨ child ⟩
-            sl_change (empty_tableOwn child)
+            irewrite (empty_tableOwn child)
             step
             step with ih child ModelTable.empty
             step
-            sl_change (tableOwn_replace pointer index concrete model
+            irewrite (tableOwn_replace pointer index concrete model
               (.table child)
               (.table (ModelTable.empty.insert (next :: rest) frame).1))
-            sl_frame
-          · sl_change (pure_middle_front False
+            iframe
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
             step
-            sl_change hFold
-            sl_frame
-          · sl_change (pure_middle_front False
+            irewrite hFold
+            iframe
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
           · rename_i child childModel
             step with ih child childModel
             step
-            sl_change (tableOwn_replace_of_get pointer index concrete model
+            irewrite (tableOwn_replace_of_get pointer index concrete model
               (.table child)
               (.table (childModel.insert (next :: rest) frame).1)
               hConcrete)
-            sl_frame
+            iframe
 
 /-- Public map has the same exact functional specification for the leaf-only
 subset. -/
@@ -1027,8 +1026,8 @@ theorem removeAux.spec (pointer : Ptr Table) (model : ModelTable)
       step*
   | cons index rest ih =>
       simp only [removeAux, ModelTable.remove]
-      sl_change (tableOwn_select pointer index model)
-      sl_pull concrete
+      irewrite (tableOwn_select pointer index model)
+      iintro concrete
       step
       cases rest with
       | nil =>
@@ -1038,44 +1037,44 @@ theorem removeAux.spec (pointer : Ptr Table) (model : ModelTable)
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
             step
-            sl_change hFold
-            sl_frame
-          · sl_change (pure_middle_front False
+            irewrite hFold
+            iframe
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
           · rename_i concreteFrame modelFrame
-            sl_change (pure_middle_front (concreteFrame = modelFrame)
+            irewrite (pure_middle_front (concreteFrame = modelFrame)
               (pointer ↦ concrete) (entriesExcept index concrete model))
             step
-            sl_change
+            irewrite
               (tableOwn_replace_empty pointer index concrete model)
             step*
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
             step
-            sl_change hFold
-            sl_frame
+            irewrite hFold
+            iframe
       | cons next rest =>
           cases hConcrete : concrete.get index <;>
             cases hModel : model.get index <;>
@@ -1083,45 +1082,45 @@ theorem removeAux.spec (pointer : Ptr Table) (model : ModelTable)
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
             step
-            sl_change hFold
-            sl_frame
-          · sl_change (pure_middle_front False
+            irewrite hFold
+            iframe
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
           · have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
             step
-            sl_change hFold
-            sl_frame
-          · sl_change (pure_middle_front False
+            irewrite hFold
+            iframe
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
           · rename_i child childModel
             step with ih child childModel
             step
-            sl_change (tableOwn_replace_of_get pointer index concrete model
+            irewrite (tableOwn_replace_of_get pointer index concrete model
               (.table child)
               (.table (childModel.remove (next :: rest)).1)
               hConcrete)
-            sl_frame
+            iframe
 
 /-- The executable table-emptiness scan is exact and preserves the complete
 recursive ownership predicate. -/
@@ -1132,20 +1131,20 @@ theorem isTableEmpty.spec (pointer : Ptr Table) (model : ModelTable) :
         ⌜empty = model.isEmpty⌝ ∗
         tableOwn pointer model⦄ := by
   unfold isTableEmpty
-  sl_change (tableOwn_select pointer .i0 model)
-  sl_pull concrete
+  irewrite (tableOwn_select pointer .i0 model)
+  iintro concrete
   step
-  sl_change (selectedEntries_isEmpty .i0 concrete model)
-  sl_change (pure_middle_front
+  irewrite (selectedEntries_isEmpty .i0 concrete model)
+  irewrite (pure_middle_front
     (concrete.isEmpty = model.isEmpty)
     (pointer ↦ concrete)
     (iprop(
       entryOwn (concrete.get .i0) (model.get .i0) ∗
       entriesExcept .i0 concrete model)))
-  simp only [hstar_hempty_r_eq]
+  simp only [sep_emp_r_eq]
   step
-  sl_change (tableOwn_unselect pointer .i0 concrete model)
-  sl_frame
+  irewrite (tableOwn_unselect pointer .i0 concrete model)
+  iframe
 
 theorem Table.eq_empty_of_isEmpty (table : Table)
     (h : table.isEmpty = true) :
@@ -1169,17 +1168,17 @@ not characterize the complete global heap delta. -/
 theorem freeModelEmpty.spec (pointer : Ptr Table) (model : ModelTable)
     (hModelEmpty : model.isEmpty = true) :
     ⦃ tableOwn pointer model ⦄ free pointer ⦃⇓ emp⦄ := by
-  sl_change (tableOwn_select pointer .i0 model)
-  sl_pull concrete
-  sl_change (selectedEntries_isEmpty .i0 concrete model)
-  sl_change (pure_middle_front
+  irewrite (tableOwn_select pointer .i0 model)
+  iintro concrete
+  irewrite (selectedEntries_isEmpty .i0 concrete model)
+  irewrite (pure_middle_front
     (concrete.isEmpty = model.isEmpty)
     (pointer ↦ concrete)
     (iprop(
       entryOwn (concrete.get .i0) (model.get .i0) ∗
       entriesExcept .i0 concrete model)))
-  simp only [hstar_hempty_r_eq]
-  sl_pull hEmpty
+  simp only [sep_emp_r_eq]
+  iintro hEmpty
   have hConcreteEmpty : concrete.isEmpty = true := by
     rw [hEmpty, hModelEmpty]
   have hConcrete := Table.eq_empty_of_isEmpty concrete hConcreteEmpty
@@ -1187,7 +1186,7 @@ theorem freeModelEmpty.spec (pointer : Ptr Table) (model : ModelTable)
   subst concrete
   subst model
   simp only [Table.empty, ModelTable.empty, Table.get, ModelTable.get,
-    entriesExcept, entryOwn, hstar_hempty_r_eq]
+    entriesExcept, entryOwn, sep_emp_r_eq]
   step*
 
 /-- `pruneAux` exactly follows the pure bottom-up prune model.  The executable
@@ -1212,8 +1211,8 @@ theorem pruneAux.spec (pointer : Ptr Table) (model : ModelTable)
           step*
       | cons next rest =>
           simp only [pruneAux, ModelTable.prune]
-          sl_change (tableOwn_select pointer index model)
-          sl_pull concrete
+          irewrite (tableOwn_select pointer index model)
+          iintro concrete
           step
           cases hConcrete : concrete.get index <;>
             cases hModel : model.get index <;>
@@ -1221,7 +1220,7 @@ theorem pruneAux.spec (pointer : Ptr Table) (model : ModelTable)
           · have hRelation :=
               selectedEntries_isEmpty index concrete model
             simp only [hConcrete, hModel, entryOwn] at hRelation
-            sl_change hRelation
+            irewrite hRelation
             have hFront := pure_middle_front
               (concrete.isEmpty = model.isEmpty)
               (pointer ↦ concrete)
@@ -1229,29 +1228,29 @@ theorem pruneAux.spec (pointer : Ptr Table) (model : ModelTable)
                 entryOwn (concrete.get index) (model.get index) ∗
                 entriesExcept index concrete model))
             simp only [hConcrete, hModel, entryOwn] at hFront
-            sl_change hFront
-            simp only [hstar_hempty_r_eq]
+            irewrite hFront
+            simp only [sep_emp_r_eq]
             have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
             step
-            sl_change hFold
-            sl_frame
-          · sl_change (pure_middle_front False
+            irewrite hFold
+            iframe
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
           · have hRelation :=
               selectedEntries_isEmpty index concrete model
             simp only [hConcrete, hModel, entryOwn] at hRelation
-            sl_change hRelation
+            irewrite hRelation
             have hFront := pure_middle_front
               (concrete.isEmpty = model.isEmpty)
               (pointer ↦ concrete)
@@ -1259,24 +1258,24 @@ theorem pruneAux.spec (pointer : Ptr Table) (model : ModelTable)
                 entryOwn (concrete.get index) (model.get index) ∗
                 entriesExcept index concrete model))
             simp only [hConcrete, hModel, entryOwn] at hFront
-            sl_change hFront
-            simp only [hstar_hempty_r_eq]
+            irewrite hFront
+            simp only [sep_emp_r_eq]
             have hFold := tableOwn_unselect pointer index concrete model
             simp only [hConcrete, hModel, entryOwn] at hFold
             step
-            sl_change hFold
-            sl_frame
-          · sl_change (pure_middle_front False
+            irewrite hFold
+            iframe
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
-          · sl_change (pure_middle_front False
+          · irewrite (pure_middle_front False
               (pointer ↦ concrete) (entriesExcept index concrete model))
-            sl_pull
+            iintro
             contradiction
           · rename_i child childModel
             step with ih child childModel
@@ -1293,8 +1292,8 @@ theorem pruneAux.spec (pointer : Ptr Table) (model : ModelTable)
               step
               have hRelation := replacedEntries_isEmpty index concrete model
                 .empty .empty
-              simp only [entryOwn, hstar_hempty_l_eq] at hRelation
-              sl_change hRelation
+              simp only [entryOwn, sep_emp_l_eq] at hRelation
+              irewrite hRelation
               have hFront := pure_middle_front
                 ((concrete.set index .empty).isEmpty =
                   (model.set index .empty).isEmpty)
@@ -1302,31 +1301,31 @@ theorem pruneAux.spec (pointer : Ptr Table) (model : ModelTable)
                 (iprop(
                   entryOwn .empty .empty ∗
                   entriesExcept index concrete model))
-              simp only [entryOwn, hstar_hempty_l_eq] at hFront
-              sl_change hFront
-              simp only [hstar_hempty_r_eq]
+              simp only [entryOwn, sep_emp_l_eq] at hFront
+              irewrite hFront
+              simp only [sep_emp_r_eq]
               step
-              sl_change
+              irewrite
                 (tableOwn_replace_empty pointer index concrete model)
-              sl_frame
+              iframe
             · rename_i hChildNonempty
               let child' :=
                 (childModel.prune (next :: rest)).1
               have hRelation := replacedEntries_isEmpty_of_get index
                 concrete model (.table child) (.table child') hConcrete
-              sl_change hRelation
-              sl_change (pure_middle_front
+              irewrite hRelation
+              irewrite (pure_middle_front
                 (concrete.isEmpty =
                   (model.set index (.table child')).isEmpty)
                 (pointer ↦ concrete)
                 (iprop(
                   entryOwn (.table child) (.table child') ∗
                   entriesExcept index concrete model)))
-              simp only [hstar_hempty_r_eq]
+              simp only [sep_emp_r_eq]
               step
-              sl_change (tableOwn_replace_of_get pointer index concrete model
+              irewrite (tableOwn_replace_of_get pointer index concrete model
                 (.table child) (.table child') hConcrete)
-              sl_frame
+              iframe
 
 /-- Public prune keeps recursive ownership of the root and all children
 reachable in the pure pruned tree. -/

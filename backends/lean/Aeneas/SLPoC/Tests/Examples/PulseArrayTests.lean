@@ -18,7 +18,6 @@ fills, and comparisons reusable by later data-structure ports.
 
 namespace Aeneas.SLPoC
 
-open scoped SepLogic
 
 namespace PulseArray
 
@@ -114,13 +113,13 @@ def vecAllocSmoke : St Unit := do
 /-! # Ghost state, specifications and proofs -/
 
 /-- Recursive ownership of cell pointers and their corresponding logical values. -/
-def ownsCells : List (Ptr α) → List α → SLProp
+def ownsCells : List (Ptr α) → List α → IProp
   | [], [] => emp
   | p :: ps, value :: values => iprop(p ↦ value ∗ ownsCells ps values)
   | _, _ => ⌜False⌝
 
 /-- Full ownership of an executable array with logical contents `values`. -/
-def owns (a : Array α) (values : List α) : SLProp :=
+def owns (a : Array α) (values : List α) : IProp :=
   ownsCells a.cells values
 
 @[simp] theorem ownsCells_nil :
@@ -170,12 +169,12 @@ theorem freeCells.spec (cells : List (Ptr α)) (values : List α) :
           simp only [freeCells]
           step*
       | cons value values =>
-          sl_pull
+          iintro
           contradiction
   | cons p cells ih =>
       cases values with
       | nil =>
-          sl_pull
+          iintro
           contradiction
       | cons value values =>
           simp only [freeCells]
@@ -202,12 +201,12 @@ theorem readCells.spec (cells : List (Ptr α)) (values : List α) (i : Nat) :
           simp only [readCells, List.getElem?_nil]
           step*
       | cons value values =>
-          sl_pull
+          iintro
           contradiction
   | cons p cells ih =>
       cases values with
       | nil =>
-          sl_pull
+          iintro
           contradiction
       | cons value values =>
           cases i with
@@ -242,12 +241,12 @@ theorem writeCells.spec (cells : List (Ptr α)) (values : List α)
             decide_false, List.set_nil]
           step*
       | cons old values =>
-          sl_pull
+          iintro
           contradiction
   | cons p cells ih =>
       cases values with
       | nil =>
-          sl_pull
+          iintro
           contradiction
       | cons old values =>
           cases i with
@@ -284,12 +283,12 @@ theorem fillCells.spec (cells : List (Ptr α)) (values : List α) (value : α) :
           simp only [fillCells, List.length_nil, List.replicate_zero]
           step*
       | cons old values =>
-          sl_pull
+          iintro
           contradiction
   | cons p cells ih =>
       cases values with
       | nil =>
-          sl_pull
+          iintro
           contradiction
       | cons old values =>
           simp only [fillCells, List.length_cons, List.replicate_succ]
@@ -317,7 +316,7 @@ theorem compareCells.disjoint_spec [DecidableEq α]
   | nil =>
       cases leftValues with
       | cons value values =>
-          sl_pull
+          iintro
           contradiction
       | nil =>
           cases rightCells with
@@ -328,13 +327,13 @@ theorem compareCells.disjoint_spec [DecidableEq α]
                   step*
               | cons value values =>
                   simp only [ownsCells]
-                  sl_pull
+                  iintro
                   contradiction
           | cons q rightCells =>
               cases rightValues with
               | nil =>
                   simp only [ownsCells]
-                  sl_pull
+                  iintro
                   contradiction
               | cons rightValue rightValues =>
                   simp only [ownsCells_nil, ownsCells_cons, compareCells]
@@ -342,7 +341,7 @@ theorem compareCells.disjoint_spec [DecidableEq α]
   | cons p leftCells ih =>
       cases leftValues with
       | nil =>
-          sl_pull
+          iintro
           contradiction
       | cons leftValue leftValues =>
           cases rightCells with
@@ -354,16 +353,16 @@ theorem compareCells.disjoint_spec [DecidableEq α]
                   step*
               | cons value values =>
                   simp only [ownsCells]
-                  rw [hstar_comm_eq _ (⌜False⌝)]
-                  apply triple_hpure
+                  rw [sep_comm_eq _ (⌜False⌝)]
+                  apply triple_ipure
                   intro hfalse
                   contradiction
           | cons q rightCells =>
               cases rightValues with
               | nil =>
                   simp only [ownsCells]
-                  rw [hstar_comm_eq _ (⌜False⌝)]
-                  apply triple_hpure
+                  rw [sep_comm_eq _ (⌜False⌝)]
+                  apply triple_ipure
                   intro hfalse
                   contradiction
               | cons rightValue rightValues =>
@@ -374,7 +373,7 @@ theorem compareCells.disjoint_spec [DecidableEq α]
                     subst rightValue
                     simp only [List.cons.injEq, true_and]
                     step with ih rightCells leftValues rightValues
-                    sl_frame
+                    iframe
                   · rename_i hne
                     simp only [List.cons.injEq, hne, false_and, decide_false]
                     step*
@@ -393,19 +392,19 @@ theorem compareCells.self_spec [DecidableEq α]
           simp only [compareCells]
           step*
       | cons value values =>
-          sl_pull
+          iintro
           contradiction
   | cons p cells ih =>
       cases values with
       | nil =>
-          sl_pull
+          iintro
           contradiction
       | cons value values =>
           simp only [compareCells]
           step* 2
           rw [if_pos True.intro]
           step with ih values
-          sl_frame
+          iframe
 
 /-- Disjoint-input form of Pulse `compare`: the result exactly characterizes
 logical equality and both independent ownership predicates are preserved.
@@ -432,7 +431,7 @@ theorem compare.self_spec [DecidableEq α] (a : Array α) (values : List α) :
       ⦃⇓ equal => ⌜equal = true⌝ ∗ owns a values⦄ := by
   unfold compare
   step with compareCells.self_spec a.cells values
-  sl_frame
+  iframe
 
 /-- The Vec allocation smoke test allocates initialized cells and frees all of them. -/
 @[step]

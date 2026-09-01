@@ -31,7 +31,6 @@ Sources:
 
 namespace Aeneas.SLPoC
 
-open scoped SepLogic
 
 namespace DardinierMagicWands
 
@@ -65,7 +64,7 @@ def leftDepth : Tree → Nat
 
 /-- Exact ownership of the binary tree. This is the SL counterpart of the
 paper's recursive `Tree(x)` predicate. -/
-def owns : Tree → SLProp
+def owns : Tree → IProp
   | .leaf pointer value =>
       pointer ↦ { value, left := none, right := none }
   | .branch pointer value left right =>
@@ -108,9 +107,9 @@ theorem Tree.packageLeft (pointer : Ptr Node) (value : Nat)
       } ∗
       right.owns) ⊢
     left.owns -∗ (Tree.branch pointer value left right).owns := by
-  apply hwand_intro
+  apply wand_intro
   simp only [Tree.owns]
-  sl_frame
+  iframe
 
 /-- Automatic footprint selection for one descent: keep the left subtree and
 package the parent cell plus the right subtree into a wand. -/
@@ -120,7 +119,7 @@ theorem Tree.selectLeft (pointer : Ptr Node) (value : Nat)
       iprop(left.owns ∗
         (left.owns -∗ (Tree.branch pointer value left right).owns)) := by
   simp only [Tree.owns]
-  sl_frame
+  iframe
 
 /-- Applying the packaged wand restores the original tree. -/
 theorem Tree.applyLeft (pointer : Ptr Node) (value : Nat)
@@ -128,15 +127,15 @@ theorem Tree.applyLeft (pointer : Ptr Node) (value : Nat)
     iprop(left.owns ∗
       (left.owns -∗ (Tree.branch pointer value left right).owns)) ⊢
     (Tree.branch pointer value left right).owns :=
-  hwand_cancel _ _
+  wand_cancel _ _
 
 /-- Compose the remainder of two traversal steps. -/
-theorem wand_trans {A B C : SLProp} :
+theorem wand_trans {A B C : IProp} :
     (A -∗ B) ∗ (B -∗ C) ⊢ A -∗ C := by
-  apply hwand_intro
-  sl_change (hwand_cancel A B)
-  sl_change (hwand_cancel B C)
-  sl_frame
+  apply wand_intro
+  irewrite (wand_cancel A B)
+  irewrite (wand_cancel B C)
+  iframe
 
 /-- Repeated packaging produces exactly the invariant used by `leftLeaf`: the
 current leftmost subtree and a wand back to the complete input tree. -/
@@ -146,16 +145,16 @@ theorem Tree.packageLeftmost (tree : Tree) :
   induction tree with
   | leaf pointer value =>
       simp only [Tree.leftmost]
-      sl_frame
+      iframe
   | branch pointer value left right leftIH _ =>
       simp only [Tree.leftmost]
-      sl_change (Tree.selectLeft pointer value left right)
-      sl_change leftIH
-      sl_change (wand_trans
+      irewrite (Tree.selectLeft pointer value left right)
+      irewrite leftIH
+      irewrite (wand_trans
         (A := left.leftmost.owns)
         (B := left.owns)
         (C := (Tree.branch pointer value left right).owns))
-      sl_frame
+      iframe
 
 /-- Direct functional proof of the executable traversal. It preserves the
 complete tree and returns the concrete pointer of its leftmost leaf. -/
@@ -180,10 +179,10 @@ theorem leftLeaf.preserves_spec (tree : Tree) :
             right := some right.root
           } ∗
           right.owns))
-      · sl_frame
+      · iframe
       · intro result
-        simp only [qstar]
-        exact himpl_of_eq (by ac_rfl)
+        simp only [postSep]
+        exact entails_of_eq (by ac_rfl)
 
 /-- The traversal result stated in the paper's loop-invariant form. The
 remaining resources have been packaged into a wand back to the input tree. -/
@@ -195,10 +194,10 @@ theorem leftLeaf.cursor_spec (tree : Tree) :
           tree.leftmost.owns ∗
           (tree.leftmost.owns -∗ tree.owns))⦄ := by
   apply triple_conseq (leftLeaf.preserves_spec tree)
-  · exact himpl_refl _
+  · exact entails_refl _
   · intro result
-    sl_change tree.packageLeftmost
-    sl_frame
+    irewrite tree.packageLeftmost
+    iframe
 
 /-- The paper's final `apply` operation consumes the current subtree and its
 wand, recovering ownership of the original tree. -/
@@ -206,10 +205,10 @@ theorem leftLeaf.spec (tree : Tree) :
     ⦃ tree.owns ⦄ leftLeaf (tree.leftDepth + 1) tree.root
       ⦃⇓ result => ⌜result = tree.leftmost.root⌝ ∗ tree.owns⦄ := by
   apply triple_conseq (leftLeaf.cursor_spec tree)
-  · exact himpl_refl _
+  · exact entails_refl _
   · intro result
-    sl_change (hwand_cancel tree.leftmost.owns tree.owns)
-    sl_frame
+    irewrite (wand_cancel tree.leftmost.owns tree.owns)
+    iframe
 
 /-! ## Uniform footprints across alternatives
 
@@ -220,13 +219,13 @@ case and the `z` footprint in the other. A sound package operation must instead
 choose a single footprint that covers both cases.
 -/
 
-def selected (x : Ptr (Ptr Nat)) (y z : Ptr Nat) : SLProp :=
-  hexists fun chooseY : Bool =>
+def selected (x : Ptr (Ptr Nat)) (y z : Ptr Nat) : IProp :=
+  iexists fun chooseY : Bool =>
     x ↦ if chooseY then y else z
 
 def selectedCell (x : Ptr (Ptr Nat)) (y z : Ptr Nat)
-    (yValue zValue : Nat) : SLProp :=
-  hexists fun chooseY : Bool =>
+    (yValue zValue : Nat) : IProp :=
+  iexists fun chooseY : Bool =>
     iprop(
       x ↦ (if chooseY then y else z) ∗
       (if chooseY then y ↦ yValue else z ↦ zValue))
@@ -238,29 +237,29 @@ theorem packageSelected (x : Ptr (Ptr Nat)) (y z : Ptr Nat)
     (yValue zValue : Nat) :
     y ↦ yValue ∗ z ↦ zValue ⊢
       selected x y z -∗ selectedCell x y z yValue zValue := by
-  apply hwand_intro
+  apply wand_intro
   unfold selected selectedCell
-  rw [hstar_hexists_l_eq]
-  apply himpl_hexists_l
+  rw [sep_exists_l_eq]
+  apply entails_exists_l
   intro chooseY
   cases chooseY
-  · refine himpl_hexists_r false ?_
+  · refine entails_exists_r false ?_
     simp only [Bool.false_eq_true, ↓reduceIte]
-    sl_frame
-  · refine himpl_hexists_r true ?_
+    iframe
+  · refine entails_exists_r true ?_
     simp only [↓reduceIte]
-    sl_frame
+    iframe
 
 /-- Once the `y` branch is fixed, the smaller `y`-only footprint is valid. -/
 theorem packageSelectedY (x : Ptr (Ptr Nat)) (y z : Ptr Nat)
     (yValue zValue : Nat) :
     y ↦ yValue ⊢
       x ↦ y -∗ selectedCell x y z yValue zValue := by
-  apply hwand_intro
+  apply wand_intro
   unfold selectedCell
-  refine himpl_hexists_r true ?_
+  refine entails_exists_r true ?_
   simp only [↓reduceIte]
-  sl_frame
+  iframe
 
 /-- Once the `z` branch is fixed, the smaller `z`-only footprint is valid.
 It cannot be reused for the disjunctive `selected` precondition. -/
@@ -268,11 +267,11 @@ theorem packageSelectedZ (x : Ptr (Ptr Nat)) (y z : Ptr Nat)
     (yValue zValue : Nat) :
     z ↦ zValue ⊢
       x ↦ z -∗ selectedCell x y z yValue zValue := by
-  apply hwand_intro
+  apply wand_intro
   unfold selectedCell
-  refine himpl_hexists_r false ?_
+  refine entails_exists_r false ?_
   simp only [Bool.false_eq_true, ↓reduceIte]
-  sl_frame
+  iframe
 
 /-- The corresponding sound `apply` step. -/
 theorem applySelected (x : Ptr (Ptr Nat)) (y z : Ptr Nat)
@@ -280,7 +279,7 @@ theorem applySelected (x : Ptr (Ptr Nat)) (y z : Ptr Nat)
     selected x y z ∗
       (selected x y z -∗ selectedCell x y z yValue zValue) ⊢
     selectedCell x y z yValue zValue :=
-  hwand_cancel _ _
+  wand_cancel _ _
 
 end DardinierMagicWands
 
