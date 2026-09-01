@@ -1275,7 +1275,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
       with CFailure _ ->
         (* An exception was raised: ignore it *)
         ())
-    ctx.crate.declarations
+    (Option.get ctx.crate.declarations)
 
 type extract_file_info = {
   filename : string;
@@ -1300,7 +1300,8 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
   let fmt = Format.formatter_of_out_channel out in
 
   (* Tell EmitJson file/namespace for the upcoming declarations. *)
-  EmitJson.begin_file_if_enabled ~filename:fi.filename ~namespace:fi.namespace;
+  EmitJson.begin_file_if_enabled ~filename:fi.filename ~namespace:fi.namespace
+    ~in_namespace:fi.in_namespace;
 
   (* Print the headers.
    * Note that we don't use the OCaml formatter for purpose: we want to control

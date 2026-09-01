@@ -342,6 +342,22 @@ let lift_pure_function_calls = ref false
     ]} *)
 let intro_massert = ref true
 
+(** Introduce assertions checking that the target features required by a
+    function are available.
+
+    If the option is [true], a function annotated with, e.g.,
+    [#[target_feature(enable = "avx2")]] gets an assertion introduced at the
+    beginning of its body:
+    {[
+      massert (target_feature_enabled "avx2");
+      ...
+    ]}
+
+    This makes the (implicit) safety requirement of [#[target_feature]]
+    functions explicit in the extracted code: the caller has to prove that the
+    feature is available before calling the function. *)
+let feature_gates = ref false
+
 (** Simplify the forward/backward functions, in case we merge them (i.e., the
     forward functions return the backward functions).
 

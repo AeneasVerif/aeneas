@@ -334,12 +334,8 @@ theorem Slice.update_subslice_spec {α : Type u} [Inhabited α] (a : Slice α) (
 def core.slice.Slice.reverse {T : Type} (s : Slice T) : Slice T :=
   ⟨ s.val.reverse, by scalar_tac ⟩
 
-@[rust_trait "core::slice::index::private_slice_index::Sealed"]
-structure core.slice.index.private_slice_index.Sealed (Self : Type) where
-
-@[rust_trait "core::slice::index::SliceIndex" (parentClauses := ["sealedInst"])]
+@[rust_trait "core::slice::index::SliceIndex"]
 structure core.slice.index.SliceIndex (Self T Output : Type) where
-  sealedInst : core.slice.index.private_slice_index.Sealed Self
   get : Self → T → Result (Option Output)
   get_mut : Self → T → Result (Option Output × (Option Output → T))
   get_unchecked : Self → ConstRawPtr T → Result (ConstRawPtr Output)
@@ -431,14 +427,9 @@ def core.slice.index.Slice.index_mut
   (s : Slice T) (i : I) : Result (Output × (Output → Slice T)) :=
   inst.index_mut i s
 
-@[rust_trait_impl "core::slice::index::private_slice_index::Sealed<core::ops::range::Range<usize>>"]
-def core.slice.index.private_slice_index.SealedRangeUsize
-  : core.slice.index.private_slice_index.Sealed (Range Usize) := {}
-
 @[reducible, rust_trait_impl "core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], [@T]>"]
 def core.slice.index.SliceIndexRangeUsizeSlice (T : Type) :
   core.slice.index.SliceIndex (Range Usize) (Slice T) (Slice T) := {
-  sealedInst := core.slice.index.private_slice_index.SealedRangeUsize
   get := core.slice.index.SliceIndexRangeUsizeSlice.get
   get_mut := core.slice.index.SliceIndexRangeUsizeSlice.get_mut
   get_unchecked := core.slice.index.SliceIndexRangeUsizeSlice.get_unchecked
@@ -446,11 +437,6 @@ def core.slice.index.SliceIndexRangeUsizeSlice (T : Type) :
   index := core.slice.index.SliceIndexRangeUsizeSlice.index
   index_mut := core.slice.index.SliceIndexRangeUsizeSlice.index_mut
 }
-
-@[reducible, rust_trait_impl "core::slice::index::private_slice_index::Sealed<core::ops::range::RangeTo<usize>>"]
-def core.slice.index.private_slice_index.SealedRangeToUsize :
-  core.slice.index.private_slice_index.Sealed (core.ops.range.RangeTo Usize)
-  := {}
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get"]
 def core.slice.index.SliceIndexRangeToUsizeSlice.get
@@ -511,13 +497,61 @@ def core.slice.index.SliceIndexRangeToUsizeSlice.index_mut
 def core.slice.index.SliceIndexRangeToUsizeSlice (T : Type) :
   core.slice.index.SliceIndex (core.ops.range.RangeTo Usize) (Slice T) (Slice
   T) := {
-  sealedInst := core.slice.index.private_slice_index.SealedRangeToUsize
   get := core.slice.index.SliceIndexRangeToUsizeSlice.get
   get_mut := core.slice.index.SliceIndexRangeToUsizeSlice.get_mut
   get_unchecked := core.slice.index.SliceIndexRangeToUsizeSlice.get_unchecked
   get_unchecked_mut := core.slice.index.SliceIndexRangeToUsizeSlice.get_unchecked_mut
   index := core.slice.index.SliceIndexRangeToUsizeSlice.index
   index_mut := core.slice.index.SliceIndexRangeToUsizeSlice.index_mut
+}
+
+/-! ## `SliceIndex<RangeFull, [T]>`
+
+Indexing a slice with `RangeFull` yields the whole slice. -/
+
+@[simp, step_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::get"]
+abbrev core.slice.index.SliceIndexRangeFullSlice.get
+  {T : Type} (_ : core.ops.range.RangeFull) (s : Slice T) : Result (Option (Slice T)) :=
+  ok (some s)
+
+@[simp, step_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::get_mut"]
+def core.slice.index.SliceIndexRangeFullSlice.get_mut
+  {T : Type} (_ : core.ops.range.RangeFull) (s : Slice T) :
+  Result (Option (Slice T) × (Option (Slice T) → Slice T)) :=
+  ok (some s, fun s' => match s' with | some updated => updated | none => s)
+
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::get_unchecked"]
+opaque core.slice.index.SliceIndexRangeFullSlice.get_unchecked
+  {T : Type} (_ : core.ops.range.RangeFull) (s : ConstRawPtr (Slice T)) :
+  Result (ConstRawPtr (Slice T)) :=
+  fail .undef -- TODO: not sure what it should be
+
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::get_unchecked_mut"]
+opaque core.slice.index.SliceIndexRangeFullSlice.get_unchecked_mut
+  {T : Type} (_ : core.ops.range.RangeFull) (s : MutRawPtr (Slice T)) :
+  Result (MutRawPtr (Slice T)) :=
+  fail .undef -- TODO: not sure what it should be
+
+@[simp, step_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::index"]
+def core.slice.index.SliceIndexRangeFullSlice.index
+  {T : Type} (_ : core.ops.range.RangeFull) (s : Slice T) : Result (Slice T) :=
+  ok s
+
+@[simp, step_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::index_mut"]
+def core.slice.index.SliceIndexRangeFullSlice.index_mut
+  {T : Type} (_ : core.ops.range.RangeFull) (s : Slice T) :
+  Result (Slice T × (Slice T → Slice T)) :=
+  ok (s, fun updated => updated)
+
+@[reducible, rust_trait_impl "core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>"]
+def core.slice.index.SliceIndexRangeFullSlice (T : Type) :
+  core.slice.index.SliceIndex core.ops.range.RangeFull (Slice T) (Slice T) := {
+  get := core.slice.index.SliceIndexRangeFullSlice.get
+  get_mut := core.slice.index.SliceIndexRangeFullSlice.get_mut
+  get_unchecked := core.slice.index.SliceIndexRangeFullSlice.get_unchecked
+  get_unchecked_mut := core.slice.index.SliceIndexRangeFullSlice.get_unchecked_mut
+  index := core.slice.index.SliceIndexRangeFullSlice.index
+  index_mut := core.slice.index.SliceIndexRangeFullSlice.index_mut
 }
 
 @[rust_trait_impl "core::ops::index::Index<[@T], @I, @O>"]
@@ -566,14 +600,9 @@ abbrev core.slice.index.Usize.index_mut {T : Type}
   (i : Usize) (s : Slice T) : Result (T × (T → (Slice T))) :=
   Slice.index_mut_usize s i
 
-@[rust_trait_impl "core::slice::index::private_slice_index::Sealed<usize>"]
-def core.slice.index.private_slice_index.SealedUsize
-  : core.slice.index.private_slice_index.Sealed Usize := {}
-
 @[reducible, rust_trait_impl "core::slice::index::SliceIndex<usize, [@T], @T>"]
 def core.slice.index.SliceIndexUsizeSlice (T : Type) :
   core.slice.index.SliceIndex Usize (Slice T) T := {
-  sealedInst := core.slice.index.private_slice_index.SealedUsize
   get := core.slice.index.Usize.get
   get_mut := core.slice.index.Usize.get_mut
   get_unchecked := core.slice.index.Usize.get_unchecked
@@ -655,16 +684,9 @@ theorem _SliceIndexRangeFromUsizeSlice.index_mut.test {T} (s : Slice T) (r : cor
   unfold core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut
   simp [h]
 
-@[reducible, rust_trait_impl "core::slice::index::private_slice_index::Sealed<core::ops::range::RangeFrom<usize>>"]
-def core.slice.index.private_slice_index.SealedRangeFromUsize :
-  core.slice.index.private_slice_index.Sealed (core.ops.range.RangeFrom Usize)
-  := {}
-
 @[reducible, rust_trait_impl "core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, [@T], [@T]>"]
 def core.slice.index.SliceIndexRangeFromUsizeSlice (T : Type) :
   core.slice.index.SliceIndex (core.ops.range.RangeFrom Usize) (Slice T) (Slice T) := {
-  sealedInst :=
-    core.slice.index.private_slice_index.SealedRangeFromUsize
   get := core.slice.index.SliceIndexRangeFromUsizeSlice.get
   get_mut := core.slice.index.SliceIndexRangeFromUsizeSlice.get_mut
   get_unchecked :=
