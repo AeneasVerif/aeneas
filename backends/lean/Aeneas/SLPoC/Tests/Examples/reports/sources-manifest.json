@@ -1,0 +1,663 @@
+{
+  "version": 1,
+  "description": "Maps every file of `Aeneas/SLPoC/Tests/Examples` to the upstream artifact it ports. Each source is pinned to a commit so that the line counts are reproducible; `sha256` is the digest of the raw bytes at that commit. Consumed by `scripts/SourceLoc.lean`, which downloads the sources and writes `reports/source-loc.json`.",
+  "pinnedAt": "2026-09-01",
+  "repositories": {
+    "asterinas": {
+      "repository": "asterinas/asterinas",
+      "commit": "29b0f4bcf111efb590ee14768c624ecf1e81bbd7"
+    },
+    "creusot": {
+      "repository": "creusot-rs/creusot",
+      "commit": "7b3a2133cf233991ad2dc4e12c9b1cc4e8b0bc57"
+    },
+    "fstar": {
+      "repository": "FStarLang/FStar",
+      "commit": "3a7b92b441251526bfc5e309503f71ba9926fd51"
+    },
+    "iris-tutorial": {
+      "repository": "logsem/iris-tutorial",
+      "commit": "1d54516d9f2ea90abb06d0b4488306cd868d717d"
+    },
+    "verified-pt": {
+      "repository": "syswonder/verified-pt",
+      "commit": "0dcf1ec8c18cb07b157a0eff063c020133f62c82"
+    },
+    "verus": {
+      "repository": "verus-lang/verus",
+      "commit": "5f97dc22e001ab953408c6b008f406e610118a3d"
+    },
+    "verus-mimalloc": {
+      "repository": "verus-lang/verified-memory-allocator",
+      "commit": "9f99d4c22e26024be4e3e2d40b7501daab570860"
+    },
+    "yolo": {
+      "repository": "verse-lab/yolo",
+      "commit": "c127d4205a1594d9398dd4a115a444eca0a56d2f"
+    },
+    "rust": {
+      "repository": "rust-lang/rust",
+      "commit": "a4330234a776684c36428d001721d0320d24dd77"
+    },
+    "too-many-lists": {
+      "repository": "rust-unofficial/too-many-lists",
+      "commit": "1b0b264d9a64d436aaed361a360cb738be88c4c6"
+    },
+    "the-algorithms-rust": {
+      "repository": "TheAlgorithms/Rust",
+      "commit": "2345c668b05ecb6fa074138bdbc5a1cbf2afaec8"
+    },
+    "fixedbitset": {
+      "repository": "petgraph/fixedbitset",
+      "commit": "111fb2552130f6f4c06a4a1a2e0de7ea6e28b922"
+    },
+    "intrusive-rs": {
+      "repository": "Amanieu/intrusive-rs",
+      "commit": "0a895642801c9a75521f93f6605c7cc707e61f73"
+    },
+    "buddy-system-allocator": {
+      "repository": "rcore-os/buddy_system_allocator",
+      "commit": "da68b6d0bd74e539116898f21d44552417966afc"
+    },
+    "x86-64": {
+      "repository": "rust-osdev/x86_64",
+      "commit": "72ff415d2252528042782e5fc3559d74996c5e9a"
+    },
+    "rustcrypto-utils": {
+      "repository": "RustCrypto/utils",
+      "commit": "03a330e50928b7155f5da2bfde4c59c722838f5d"
+    }
+  },
+  "entries": [
+    {
+      "lean": "AsterinasIntrusiveFrameList.lean",
+      "project": "Asterinas",
+      "note": "Sequential kernel of `LinkedList::push_front`/`pop_front` and `CursorMut::take_current`.",
+      "safeRust": {
+        "verdict": "no",
+        "reason": "The links are intrusive: `prev`/`next` live in a frame's own metadata slot and point at frames the list does not own, so a node is reachable both from the list and from whoever holds the frame. Safe Rust cannot express that sharing; the safe encoding replaces the links by indices into an arena, and loses the O(1) unlink of a frame one already holds."
+      },
+      "coverage": {
+        "verdict": "fragment",
+        "note": "The source is the whole `LinkedList` API — `push_back`, `pop_back`, `size`, `contains`, three cursor constructors, iterators; the port answers `push_front`, `pop_front` and `CursorMut::take_current`."
+      },
+      "references": [
+        {
+          "repo": "intrusive-rs",
+          "path": "src/linked_list.rs",
+          "language": "rust",
+          "sha256": "ce4290aa8abc7de100d268e85af571eccfd6972bc6af1d0799202c2c4ba53c81",
+          "safe": false,
+          "note": "The reference intrusive list for Rust: a safe API over `unsafe` raw links, where an `Adapter` plays the part of the metadata slot."
+        }
+      ],
+      "sources": [
+        {
+          "repo": "asterinas",
+          "path": "ostd/src/mm/frame/linked_list.rs",
+          "language": "rust",
+          "sha256": "a30c29aa6d96e22e13acb4dd2d6370a36043dcfad56d27550390ed4ff9be82b4"
+        }
+      ]
+    },
+    {
+      "lean": "Basic.lean",
+      "project": "SLPoC",
+      "note": "Original smoke test of the `step` automation; no upstream artifact.",
+      "safeRust": {
+        "verdict": "yes",
+        "reason": "Arithmetic and a single owned cell: `Box<T>` and `&mut T`."
+      },
+      "coverage": {
+        "verdict": "n/a",
+        "note": "Nothing is counted on the other side."
+      },
+      "references": [],
+      "sources": []
+    },
+    {
+      "lean": "CreusotListReversalLasso.lean",
+      "project": "Creusot",
+      "note": "Port of Creusot's list-reversal lasso test.",
+      "safeRust": {
+        "verdict": "yes",
+        "reason": "The upstream Creusot test is already safe Rust: node addresses are indices into a `Vec<usize>` and `usize::MAX` is the null sentinel, so a cyclic structure needs no pointer. This is the standard way to make a cycle safe, and the source doubles as the reference implementation."
+      },
+      "coverage": {
+        "verdict": "fragment",
+        "note": "The source holds four reversal variants, the `Index`/`IndexMut` instances behind them, and the pigeonhole lemma; the port answers the lasso one."
+      },
+      "references": [],
+      "sources": [
+        {
+          "repo": "creusot",
+          "path": "tests/should_succeed/list_reversal_lasso.rs",
+          "language": "rust",
+          "sha256": "9b89a572e332272580cb8347f6c665d1d3f1ea51dc47582848746e3c2d1dc938"
+        }
+      ]
+    },
+    {
+      "lean": "DardinierMagicWands.lean",
+      "project": "Viper",
+      "note": "Dardinier et al., *Sound Automation of Magic Wands* (CAV 2022), Fig. 1 and Appendices B, I, J, and Chapter 4 of Dardinier's thesis. The artifact is a Zenodo archive of Viper input files, not a source file addressable by URL, so it is not downloaded or counted.",
+      "safeRust": {
+        "verdict": "n/a",
+        "reason": "The tree is safe Rust (`Option<Box<Node>>`), but the paper's iterative leftmost-leaf traversal keeps a `&mut` derived inside a loop — NLL problem case #3 — which today's borrow checker rejects and which Polonius is meant to accept. The safe workarounds are recursion or an index path."
+      },
+      "coverage": {
+        "verdict": "n/a",
+        "note": "Nothing is counted on the other side."
+      },
+      "references": [
+        {
+          "url": "https://github.com/rust-lang/rfcs/blob/master/text/2094-nll.md",
+          "language": "rust",
+          "downloadable": false,
+          "safe": true,
+          "note": "RFC 2094, problem case #3: `&mut` traversal of a recursive structure in a loop.",
+          "reason": "Prose, not an implementation."
+        }
+      ],
+      "sources": [
+        {
+          "url": "https://doi.org/10.5281/zenodo.6525310",
+          "language": "viper",
+          "downloadable": false,
+          "reason": "Zenodo artifact archive; no stable per-file raw URL."
+        }
+      ]
+    },
+    {
+      "lean": "EqOrDisj.lean",
+      "project": "SymCRust",
+      "note": "Port of `InPlaceOrDisjointBuffer<'a, T>`.",
+      "safeRust": {
+        "verdict": "no",
+        "reason": "The type is a pair of raw pointers whose safety condition is exactly `src == dst` or `src` and `dst` disjoint, and its `unsafe` constructor asks the caller for it. Safe Rust can encode the two shapes as an enum — `&mut [T]` in place, `(&[T], &mut [T])` disjoint — but the aliasing choice then becomes a run-time tag matched at every call site, instead of the ghost state this file makes it."
+      },
+      "coverage": {
+        "verdict": "n/a",
+        "note": "Nothing is counted on the other side."
+      },
+      "references": [
+        {
+          "repo": "rustcrypto-utils",
+          "path": "inout/src/inout_buf.rs",
+          "language": "rust",
+          "sha256": "b17690758395eefefff4d8d4f5016113bf5e6661b1f156b727e66ca7f1dfc29e",
+          "safe": false,
+          "note": "`InOutBuf<'inp, 'out, T>`: the same in-place-or-disjoint buffer pair, in production cryptographic Rust, with a safe API over raw pointers."
+        }
+      ],
+      "sources": [
+        {
+          "url": "https://github.com/microsoft/VCR/blob/main/SymCRust/src/common.rs",
+          "language": "rust",
+          "downloadable": false,
+          "reason": "`microsoft/VCR` is not publicly readable."
+        }
+      ]
+    },
+    {
+      "lean": "HigherOrder.lean",
+      "project": "SLPoC",
+      "note": "Original higher-order callback example; no upstream artifact.",
+      "safeRust": {
+        "verdict": "yes",
+        "reason": "`FnMut(&mut T)` applied twice to an owned cell."
+      },
+      "coverage": {
+        "verdict": "n/a",
+        "note": "Nothing is counted on the other side."
+      },
+      "references": [],
+      "sources": []
+    },
+    {
+      "lean": "IrisTutorial.lean",
+      "project": "Iris",
+      "note": "Ports the `Basics`, `Pure`, `Specifications` and `LinkedList` chapters of the Iris tutorial. The `theories/` versions are the solved ones; `exercises/` holds the same files with the proofs removed.",
+      "safeRust": {
+        "verdict": "n/a",
+        "reason": "The pointer and linked-list chapters are safe Rust (`Box`, `Option<Box<Node>>`). The tutorial's concurrency material — `par`, compare-and-set, the deliberately racy programs — has no sequential Rust counterpart, and was ported as sequential code."
+      },
+      "coverage": {
+        "verdict": "full",
+        "note": "Every example of the four chapters is answered. The concurrent ones are answered by their sequential reading, which the port states, and one example that exists only to fail is left out."
+      },
+      "references": [
+        {
+          "repo": "too-many-lists",
+          "path": "lists/src/second.rs",
+          "language": "rust",
+          "sha256": "2015427cffa454016ca43b9fb315f0ecb11be97d75b19efbe3e7aa1ad4bb33fb",
+          "safe": true,
+          "note": "The fully safe `Option<Box<Node<T>>>` list of *Learning Rust With Entirely Too Many Linked Lists*."
+        }
+      ],
+      "sources": [
+        {
+          "repo": "iris-tutorial",
+          "path": "theories/basics.v",
+          "language": "coq",
+          "sha256": "8786d924076c6a3d34103615cabaf8eae45157460691035d0585a72ac5e28f65"
+        },
+        {
+          "repo": "iris-tutorial",
+          "path": "theories/pure.v",
+          "language": "coq",
+          "sha256": "b30dc5ec70b0db79620abeb708fc3fd27d1905bff29f9bfd034f65ca8a5a845b"
+        },
+        {
+          "repo": "iris-tutorial",
+          "path": "theories/specifications.v",
+          "language": "coq",
+          "sha256": "4807201a31b82017e04b5239cb78a243c83cda62e6a18d3f74aed3620a606dcd"
+        },
+        {
+          "repo": "iris-tutorial",
+          "path": "theories/linked_lists.v",
+          "language": "coq",
+          "sha256": "80896feae2a6596315a219d4c25c3eb43b63b336624dfd11690fba933db6e60c"
+        }
+      ]
+    },
+    {
+      "lean": "PulseArrayTests.lean",
+      "project": "Pulse",
+      "note": "Ports the array tests, the array interface, and the vector-allocation test.",
+      "safeRust": {
+        "verdict": "yes",
+        "reason": "`Vec<T>` and `&mut [T]`: allocation, indexed read and write, `fill`, and `==`. The port's cell-wise model is a modelling choice, not a Rust constraint."
+      },
+      "coverage": {
+        "verdict": "fragment",
+        "note": "The array interface and the tests are answered as an API, but the source's seven `read_at_offset` variants exist to exercise F* refinement and implicit-argument typing, and have no counterpart to port."
+      },
+      "references": [],
+      "sources": [
+        {
+          "repo": "fstar",
+          "path": "pulse/test/ArrayTests.fst",
+          "language": "fstar",
+          "sha256": "1895a57cdc22901abf346f18783972b393b625503e8517eaeb94480acbcb5022"
+        },
+        {
+          "repo": "fstar",
+          "path": "pulse/lib/pulse/lib/Pulse.Lib.Array.fsti",
+          "language": "fstar",
+          "sha256": "4e858fe5281b36d51594f75b8d0ef5bc9890eee74c8a22fea894dd548d902abf"
+        },
+        {
+          "repo": "fstar",
+          "path": "pulse/test/VecAlloc.fst",
+          "language": "fstar",
+          "sha256": "011dba8d4b6bac3c3b7b0b002d11a8776fa521ab6a96c7e790f4548a2d0d8718"
+        }
+      ]
+    },
+    {
+      "lean": "PulseInsertionSort.lean",
+      "project": "Pulse",
+      "safeRust": {
+        "verdict": "yes",
+        "reason": "In-place insertion sort over `&mut [T]` with `swap`; no aliasing at all."
+      },
+      "coverage": {
+        "verdict": "full",
+        "note": "The whole module: the algorithm, its sortedness and permutation results, and the invariants they need, redecomposed around structural recursion instead of two loops."
+      },
+      "references": [
+        {
+          "repo": "the-algorithms-rust",
+          "path": "src/sorting/insertion_sort.rs",
+          "language": "rust",
+          "sha256": "8fa948ea4ae4d3e20179a731bde54bfe41eb55a16ca0216bfd1a34fa5b82fc50",
+          "safe": true,
+          "note": "Insertion sort over `&mut [T]`, in safe Rust, with the same swap-leftwards inner loop."
+        }
+      ],
+      "sources": [
+        {
+          "repo": "fstar",
+          "path": "pulse/lib/pulse/lib/Pulse.Lib.InsertionSort.fst",
+          "language": "fstar",
+          "sha256": "25b82ad804b5ff8ea0830145c79932ea5dec426c68f8bb68d5618896b725495c"
+        }
+      ]
+    },
+    {
+      "lean": "PulseLinkedList.lean",
+      "project": "Pulse",
+      "note": "Sequential first-order fragment of the Pulse linked lists and their interface.",
+      "safeRust": {
+        "verdict": "yes",
+        "reason": "A singly linked list is the one list shape safe Rust owns directly: `Option<Box<Node<T>>>`, with a `&mut` cursor for `append`, `split`, `insert` and `delete`. Only the wand-based cursor and iterator fragments Pulse also has — deliberately outside this port — would need more."
+      },
+      "coverage": {
+        "verdict": "fragment",
+        "note": "The port states it: the wand-based cursor, the iterator, the length loop and the iterative append are outside its first-order scope."
+      },
+      "references": [
+        {
+          "repo": "too-many-lists",
+          "path": "lists/src/second.rs",
+          "language": "rust",
+          "sha256": "2015427cffa454016ca43b9fb315f0ecb11be97d75b19efbe3e7aa1ad4bb33fb",
+          "safe": true,
+          "note": "The safe `Option<Box<Node<T>>>` list: `push`, `pop`, `peek`, and its iterators."
+        }
+      ],
+      "sources": [
+        {
+          "repo": "fstar",
+          "path": "pulse/lib/pulse/lib/Pulse.Lib.LinkedList.fst",
+          "language": "fstar",
+          "sha256": "4329a4688fc71b5a74377ca78556e7d99821b3545fd69fb0b3eff519b89a7903"
+        },
+        {
+          "repo": "fstar",
+          "path": "pulse/lib/pulse/lib/Pulse.Lib.LinkedList.fsti",
+          "language": "fstar",
+          "sha256": "af5add8452c2204e9c391e7bbd8df06e998ca0a7d5679dfe5b01ebc2b5e99080"
+        }
+      ]
+    },
+    {
+      "lean": "PulseResizableVec.lean",
+      "project": "Pulse",
+      "safeRust": {
+        "verdict": "yes",
+        "reason": "`Vec<T>` with `push`/`pop`, or `Vec<Option<T>>` to keep the initialized-prefix invariant explicit as the port does. What upstream writes with raw allocation is what `Vec` encapsulates."
+      },
+      "coverage": {
+        "verdict": "full",
+        "note": "The whole module and its interface, including the bound the upstream name does not suggest: it exposes no growth operation."
+      },
+      "references": [
+        {
+          "repo": "rust",
+          "path": "library/alloc/src/vec/mod.rs",
+          "language": "rust",
+          "sha256": "8608a506b8c90d1929bccc6291f9f7c2c078c5a237b7e2e5cfb7abc712b8487d",
+          "safe": false,
+          "note": "`std`'s growable vector: a safe API whose internals are `RawVec` and `unsafe`. A user-level `Vec<Option<T>>` over it is entirely safe."
+        }
+      ],
+      "sources": [
+        {
+          "repo": "fstar",
+          "path": "pulse/lib/pulse/lib/Pulse.Lib.ResizableVec.fst",
+          "language": "fstar",
+          "sha256": "674ed79ee76d90eead8224b803d6c85f86dccba33c13e4db85be9475a57e960a"
+        },
+        {
+          "repo": "fstar",
+          "path": "pulse/lib/pulse/lib/Pulse.Lib.ResizableVec.fsti",
+          "language": "fstar",
+          "sha256": "bd96405d6872a3a079454d2d6180b127f8fa9f26b58fcf70463e958fed50c5eb"
+        }
+      ]
+    },
+    {
+      "lean": "PulseRingBuffer.lean",
+      "project": "Pulse",
+      "safeRust": {
+        "verdict": "yes",
+        "reason": "`VecDeque<T>`, or a `Vec<Option<T>>` with head, tail and count indices as in the port: the wrap-around arithmetic needs no pointer."
+      },
+      "coverage": {
+        "verdict": "full",
+        "note": "The whole module and its interface. The three modelling differences the port documents — `Option` cells rather than an initialiser, and totalised `pop_front`/`peek_front` — change the shape of an operation, not which ones exist."
+      },
+      "references": [
+        {
+          "repo": "rust",
+          "path": "library/alloc/src/collections/vec_deque/mod.rs",
+          "language": "rust",
+          "sha256": "c9c53d678ab373bb38e9371996513a4922455421e094aadf712924578780a3ab",
+          "safe": false,
+          "note": "`std`'s ring buffer, with the same head/len circular layout, over an `unsafe` `RawVec`."
+        }
+      ],
+      "sources": [
+        {
+          "repo": "fstar",
+          "path": "pulse/lib/pulse/lib/Pulse.Lib.RingBuffer.fst",
+          "language": "fstar",
+          "sha256": "1b56320bf5c822cb6ce7252725e0c1d510e46d04328c0b67d20751fdcacb1e51"
+        },
+        {
+          "repo": "fstar",
+          "path": "pulse/lib/pulse/lib/Pulse.Lib.RingBuffer.fsti",
+          "language": "fstar",
+          "sha256": "a5599942232665012fbaf38836a5f4d0075ef8d34eb825893c15d9cf589fefea"
+        }
+      ]
+    },
+    {
+      "lean": "VerusBitmap.lean",
+      "project": "Verus",
+      "safeRust": {
+        "verdict": "yes",
+        "reason": "`Vec<u64>` with shifts, `|` and `^`. The two `&self` arguments of `BitMap::or` may alias, which shared references allow."
+      },
+      "coverage": {
+        "verdict": "full",
+        "note": "The whole example: `u64_view`, `from`, `get_bit`, `set_bit`, `or`, and the three word-level bit-vector proofs. The source's `get_bit64`/`set_bit64` macros are those same operations spelled twice."
+      },
+      "references": [
+        {
+          "repo": "fixedbitset",
+          "path": "src/lib.rs",
+          "language": "rust",
+          "sha256": "003806d28110ec676319327f94057d95b916b8b111e15b188deec31512ff581a",
+          "safe": true,
+          "note": "A bit set over a `Vec` of words, in safe Rust, with the same word-index/bit-offset arithmetic and word-wise `|`."
+        }
+      ],
+      "sources": [
+        {
+          "repo": "verus",
+          "path": "examples/bitmap.rs",
+          "language": "rust",
+          "sha256": "0a5a8eee4703a73062e5eee86a43560396a56835c568919a7d699040b11b2f91"
+        }
+      ]
+    },
+    {
+      "lean": "VerusDoublyLinkedList.lean",
+      "project": "Verus",
+      "safeRust": {
+        "verdict": "no",
+        "reason": "Every node is pointed at by its predecessor's `next` and its successor's `prev`, so ownership cannot be a tree. Safe Rust needs either `Rc<RefCell<…>>`, paying run-time borrow checks and leaking the cycle, or an arena of indices; `std` chooses raw pointers behind a safe API."
+      },
+      "coverage": {
+        "verdict": "full",
+        "note": "The whole example, list and iterator alike; only the `main` that demonstrates it is left out."
+      },
+      "references": [
+        {
+          "repo": "rust",
+          "path": "library/alloc/src/collections/linked_list.rs",
+          "language": "rust",
+          "sha256": "bc77e469492cd883e8e9d61814ef4872896f0588dddb2742546e0f7cc0933a14",
+          "safe": false,
+          "note": "`std::collections::LinkedList`: the same doubly-linked list, with `Option<NonNull<Node<T>>>` links and `unsafe` throughout."
+        }
+      ],
+      "sources": [
+        {
+          "repo": "verus",
+          "path": "examples/doubly_linked.rs",
+          "language": "rust",
+          "sha256": "52abe834f0d6596bbaebcabb92330476707df184bb5456aeaf7c573ac01394c3"
+        }
+      ]
+    },
+    {
+      "lean": "VerusMimallocLinkedList.lean",
+      "project": "Verus",
+      "note": "Ownership transfer performed by `LL::insert_block` and `LL::pop_block`.",
+      "safeRust": {
+        "verdict": "no",
+        "reason": "A free list threads its links through memory that is by definition owned by nothing: the block being freed is raw bytes, and its first word is reinterpreted as a `Node`. That is the archetypal use of `unsafe`."
+      },
+      "coverage": {
+        "verdict": "fragment",
+        "note": "Sixty-five declarations of allocator upstream, against the ownership transfer of `insert_block` and `pop_block`."
+      },
+      "references": [
+        {
+          "repo": "buddy-system-allocator",
+          "path": "src/linked_list.rs",
+          "language": "rust",
+          "sha256": "7f7d4c91bba51e1f094764783b0947fe231d02738bca70a41e1291019e7ddfe0",
+          "safe": false,
+          "note": "A small, self-contained free list of exactly this shape: `*mut usize` links written into the freed blocks themselves."
+        }
+      ],
+      "sources": [
+        {
+          "repo": "verus-mimalloc",
+          "path": "verus-mimalloc/linked_list.rs",
+          "language": "rust",
+          "sha256": "e12549f07e45081630294c1b8bbeeca707b25e6d023c165fd8b74b17355b4aa6"
+        }
+      ]
+    },
+    {
+      "lean": "VerusPageTable.lean",
+      "project": "Verus",
+      "note": "Exact-key, leaf-only subset of the extractable sequential page-table kernel.",
+      "safeRust": {
+        "verdict": "no",
+        "reason": "The tables are physical frames reached through raw addresses in a hardware-defined layout, and the executable side reads and writes entries in memory the type system does not own. The recursive `PTTreeNode` model above it is pure, and would be safe Rust."
+      },
+      "coverage": {
+        "verdict": "fragment",
+        "note": "The port states it: an exact-key, uniform leaf-only subset, without huge pages, alignment, architecture traits or frame ownership."
+      },
+      "references": [
+        {
+          "repo": "x86-64",
+          "path": "src/structures/paging/mapper/mapped_page_table.rs",
+          "language": "rust",
+          "sha256": "e250c729f0588d1ce129c1c68ab43337f2f44328d2b38fe896cbeeacc1bc4ff2",
+          "safe": false,
+          "note": "A four-level x86-64 page-table walker in Rust: the same walk/map/unmap operations, `unsafe` because the frames are physical memory."
+        }
+      ],
+      "sources": [
+        {
+          "repo": "verified-pt",
+          "path": "src/imp/paging/pt_exec.rs",
+          "language": "rust",
+          "sha256": "68ae0e6d8cc72faaa51a78120e0b11ee68e98966aeb3ebdb15b8ad8b2520db63"
+        },
+        {
+          "repo": "verified-pt",
+          "path": "src/imp/tree/node.rs",
+          "language": "rust",
+          "sha256": "a7b33df16f16925ed9b401e095ee818a0f45de436f538636441683f7a3a2a681"
+        }
+      ]
+    },
+    {
+      "lean": "VerusStd.lean",
+      "project": "Verus",
+      "note": "The `vstd` layer a Verus development gets for free: sequences plus the manipulation of `PointsTo` permissions. Counted so that a Lean-versus-Verus comparison is not charged twice for the same library.",
+      "safeRust": {
+        "verdict": "n/a",
+        "reason": "This module has no program: it is the ghost permission layer Verus needs because the code it verifies uses raw pointers. Safe Rust needs no such layer — a `Vec<T>` and an index give the same reasoning for free — which is exactly why it is kept separate here."
+      },
+      "coverage": {
+        "verdict": "fragment",
+        "note": "`simple_pptr` and `seq` are general libraries; the port carries only the sequence-plus-permission-map pattern the doubly-linked list uses."
+      },
+      "references": [],
+      "sources": [
+        {
+          "repo": "verus",
+          "path": "source/vstd/simple_pptr.rs",
+          "language": "rust",
+          "sha256": "05583dea10db5a5d3dc2e85928e12d870b70a2230c2f495d589e8523d6e6ce26"
+        },
+        {
+          "repo": "verus",
+          "path": "source/vstd/seq.rs",
+          "language": "rust",
+          "sha256": "69e792cd1c8df0f3ce87e71ae9b07b833b606315e94eb4e23d78adba2f788663"
+        }
+      ]
+    },
+    {
+      "lean": "VerusVerifiedVec.lean",
+      "project": "Verus",
+      "note": "Post-resize, fixed-capacity kernel of the verified-vector example.",
+      "safeRust": {
+        "verdict": "yes",
+        "reason": "`Vec<T>` with an explicit capacity check, or `Vec<Option<T>>` to make the initialized prefix visible as the port does. Upstream's raw allocation, alignment and `PointsToRaw::into_typed` are what `Vec` hides."
+      },
+      "coverage": {
+        "verdict": "fragment",
+        "note": "The port states it: the post-resize, fixed-capacity kernel, not the source's full `push` or its unfinished `resize`."
+      },
+      "references": [
+        {
+          "repo": "rust",
+          "path": "library/alloc/src/vec/mod.rs",
+          "language": "rust",
+          "sha256": "8608a506b8c90d1929bccc6291f9f7c2c078c5a237b7e2e5cfb7abc712b8487d",
+          "safe": false,
+          "note": "`std`'s vector: `len`/`capacity`, the initialized prefix, and `push` on a full buffer."
+        }
+      ],
+      "sources": [
+        {
+          "repo": "verus",
+          "path": "examples/verified_vec.rs",
+          "language": "rust",
+          "sha256": "1b0d9c000003f9c97499a91ec9097faf240de64dc4bbc405d961340f17e9e57c"
+        }
+      ]
+    },
+    {
+      "lean": "YOLOCancel.lean",
+      "project": "YOLO",
+      "note": "Downscaled version of the shuffled-entailment cancellation benchmark: the upstream 100-atom case filtered to 10 through 40 atoms.",
+      "safeRust": {
+        "verdict": "n/a",
+        "reason": "A synthetic entailment benchmark over opaque atoms: there is no program."
+      },
+      "coverage": {
+        "verdict": "fragment",
+        "note": "Deliberately downscaled: the upstream benchmark shuffles 100 atoms, this one 10 to 40."
+      },
+      "references": [],
+      "sources": [
+        {
+          "repo": "yolo",
+          "path": "SPLean/Experiments/cancel100.lean",
+          "language": "lean",
+          "sha256": "06b31624c11ff10b59aef76996c97722460ca51e87a28ad6237f1b696cc47ea4"
+        }
+      ]
+    }
+  ],
+  "safeRustVerdicts": {
+    "description": "Whether the example's *program* can be written in safe Rust, which is the fragment Aeneas translates. It is a property of the data structure and its aliasing, not of the proof: `spec`/`proof` material never runs and is never `unsafe`.",
+    "yes": "The program is expressible in safe Rust, possibly by replacing a raw pointer with an index, a `Box`, or a `&mut`.",
+    "no": "The aliasing the example is about — intrusive links, a doubly-linked list, a free list threaded through freed memory, hardware page tables — is exactly what safe Rust forbids.",
+    "n/a": "No single answer applies: the file holds no program at all, or part of it is safe Rust and the rest needs `unsafe`, a borrow checker that does not exist yet, or has no sequential Rust counterpart."
+  },
+  "references": "Each entry's `references` are unverified Rust implementations of roughly the same data structure, given so that the port can be read against real Rust rather than against a verifier's encoding. `safe` says whether that implementation itself is safe Rust: a `false` here on a std collection means the safe *API* is built on `unsafe` internals. They are counted, but a reference is the whole upstream file and never a line-for-line counterpart.",
+  "coverage": {
+    "description": "Whether the port answers the whole of the upstream files it is counted against. A ratio between the two sides only means something when it does; where it does not, the artifact is a larger module of which the port covers a part, and only the two figures side by side are meaningful.",
+    "provenance": "The verdict is the port's own documented scope: each Lean file states in its header what it answers and what it leaves out, and that statement is the evidence here. It is not machine-checked. A declaration-by-declaration mapping was considered and rejected: ports rename systematically (`u64_view` to `bitView`, `cas` to `casSequential`) and re-decompose deliberately (Pulse's two loop invariants are answered by structural recursion, not by any one declaration), so name matching pairs only about two thirds of the declarations even after folding camelCase and the `.spec` suffix, and the residue is a matter of judgement rather than data. Recording that residue as a mapping would encode guesses as fact, in a file whose whole purpose is that the numbers be trustworthy. If a mapping is ever wanted, it should be written by whoever did the port.",
+    "full": "The port answers the upstream file as a whole. Renaming, a different decomposition into lemmas, and the modelling differences the port documents are expected; what matters is that nothing of the source is left unanswered.",
+    "fragment": "The port deliberately covers part of a larger file, and says so in its header. Summing or dividing the two sides would compare a kernel against a library.",
+    "n/a": "Nothing is counted on the other side."
+  }
+}
