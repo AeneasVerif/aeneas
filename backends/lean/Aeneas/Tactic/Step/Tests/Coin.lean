@@ -1,26 +1,23 @@
-import Aeneas.Std.Primitives
-import Aeneas.Std.Delab
-import Std.Do
-import Aeneas.Std.Spec
-import Aeneas.Std.WP
-import Aeneas.Data.Coinductive.ITree
-import Aeneas.Data.Coinductive.Effect
 import Aeneas.Std
-import Std
 import Aeneas.Tactic.Step
-import Aeneas
+
+/-! # Coinductive specifications over `ITree`s
+
+This file shows how to build coinductive predicates over `ITree`s, and how to register them with
+the `step` tactic (see `#register_spec_info` below).
+-/
 
 open Aeneas
 open Std Result WP Data Coinductive Effect Lean.Order
 
--- This file shows how to build coinductive predicates over ITrees.
+namespace Aeneas.Tactic.Step.Tests.Coin
 
-def Coin : Effect := {
+def CoinEffect : Effect := {
    I := Unit
    O := fun _ => Bool
 }
 
-def ITreeC := ITree Coin
+def ITreeC := ITree CoinEffect
 
 -- can just use coinductive props!
 coinductive coinSpec {α} (p : Post α) : (x : ITreeC α) → Prop where
@@ -162,17 +159,4 @@ instance {T} : Lean.Order.PartialOrder (ITreeC T) := instPartialOrderCoIndOfInha
 noncomputable instance {T} : Lean.Order.CCPO (ITreeC T) := instCCPOCoIndOfInhabitedPUnit _
 instance : MonoBind ITreeC := instMonoBindITree
 
--- Currently, step does not support other monads.
-
--- theorem test : coinSpec (fun z => z.val == 6)
---   (do let x ← 1#i32 + 2#i32
---       let y ← x + x
---       ITree.vis () fun (b : Bool) =>
---       if b then ITree.ret y else ITree.ret 6#i32)  := by
---   step
---   step
---   apply coinSpec.vis
---   intros b
---   cases b
---   · simp [*]
---   · simp [*]
+end Aeneas.Tactic.Step.Tests.Coin

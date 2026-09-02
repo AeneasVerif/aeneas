@@ -614,9 +614,9 @@ theorem UScalar.tryMkOpt_eq (ty : UScalarTy) (x : Nat) :
 
 theorem UScalar.tryMk_eq (ty : UScalarTy) (x : Nat) :
   match (tryMk ty x).match with
-    | .ok y => y.val = x ∧ inBounds ty x
-    | .vis (.fail _e) _k => ¬ (inBounds ty x)
-    | _ => False
+  | .ok y => y.val = x ∧ inBounds ty x
+  | .vis (.fail _e) _k => ¬ (inBounds ty x)
+  | _ => False
   := by
   have := UScalar.tryMkOpt_eq ty x
   simp [tryMk, ofOption]

@@ -120,10 +120,14 @@ theorem spec_ok (x : α) : spec (ok x) p ↔ p x := by
     assumption
 
 @[simp, grind =, agrind =]
-theorem spec_vis (e k) : spec (.vis e k) p ↔ False := by grind
+theorem spec_vis (e k) : spec (.vis e k) p ↔ False := by grind [ok_not_vis, vis_not_ok]
 
 @[simp, grind =, agrind =]
-theorem spec_div : spec div p ↔ False := by grind
+theorem spec_fail (e : Error) : spec (fail e) p ↔ False := by
+  simp [Result.fail_eq_vis]
+
+@[simp, grind =, agrind =]
+theorem spec_div : spec div p ↔ False := by grind [ok_not_div, div_not_ok]
 
 /-! ### `spec_*` for tuple posts
 
@@ -303,6 +307,18 @@ theorem dspec_ok (x : α) : dspec (ok x) p ↔ p x := by
   · intros px
     constructor
     assumption
+
+@[simp, grind =, agrind =]
+theorem dspec_vis (e k) : dspec (.vis e k) p ↔ False := by
+  constructor
+  · intros s
+    generalize h : Result.vis e k = v at s
+    cases s <;> simp at *
+  · intros; contradiction
+
+@[simp, grind =, agrind =]
+theorem dspec_fail (e : Error) : dspec (fail e) p ↔ False := by
+  simp [Result.fail_eq_vis]
 
 theorem dspec_imp_forall {m:Result α} {P:Post α} :
   dspec m P → (∀ y, m = ok y → P y) := by
@@ -855,7 +871,7 @@ open Std Result
 open Std.Do
 
 -- mvcgen does not support all types of effects, and currently this implementation only works with fail and div.
--- This option is set here so that this same code works for any extension to RustEffect.I
+-- This option is set here so that this same code works for any extension to RustEffect.Input
 set_option match.ignoreUnusedAlts true
 -- There are three types of exceptions in the type: the Error from Result.fail,
 -- a dummy exception thrown when any other effect is used, and Result.div.
@@ -893,7 +909,7 @@ instance Result.instWPMonad : WPMonad Result (.except (ULift Error) (.except PUn
 theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
     (⊢ₛ wp⟦x⟧ (fun a => ⌜P (.ok a)⌝,
                   fun e => ⌜P (.fail e.down)⌝,
-                  fun _ => ⌜False⌝, -- if other effects are used, this provides no information.
+                  fun _ => ⌜False⌝, -- unreachable: `RustEffect` currently only has the `fail` effect.
                   fun .unit => ⌜P .div⌝, .unit)) → P x := by
     intro hspec
     simp only [WP.wp, PredTrans.apply] at hspec
@@ -919,10 +935,7 @@ theorem dspec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
     ⦃ ⌜ ¬ x = .div ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
   simp [Triple, WP.wp, PredTrans.apply, SPred.pure]
   cases x <;> simp [*] at *
-  · trivial
-  · rename_i i k
-    generalize hval : vis i k = val at h
-    cases h <;> simp at hval
+  trivial
 
 end Aeneas.Std.WP
 

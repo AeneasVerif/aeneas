@@ -3751,7 +3751,7 @@ let extract_unit_test_if_marked (ctx : extraction_ctx) (fmt : F.formatter)
       | Lean ->
           F.pp_print_string fmt "#assert";
           F.pp_print_space fmt ();
-          F.pp_print_string fmt "((";
+          F.pp_print_string fmt "(";
           let fun_name =
             ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
           in
@@ -3759,10 +3759,9 @@ let extract_unit_test_if_marked (ctx : extraction_ctx) (fmt : F.formatter)
           if sg.inputs <> [] then (
             F.pp_print_space fmt ();
             F.pp_print_string fmt "()");
+          F.pp_print_string fmt ").reducesTo";
           F.pp_print_space fmt ();
-          F.pp_print_string fmt ").is_ok";
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt "())"
+          F.pp_print_string fmt "()"
       | HOL4 ->
           F.pp_print_string fmt "val _ = assert_ok (";
           F.pp_print_string fmt "“";

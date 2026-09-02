@@ -240,63 +240,63 @@ private def collectStepBy (sbi : core.iter.adapters.step_by.StepBy (core.slice.i
 -- step_by(1) returns all elements
 #assert (do
   let sbi ← core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [0, 1, 2, 3, 4]) 1#usize
-  collectStepBy sbi).is_ok [0, 1, 2, 3, 4]
+  collectStepBy sbi).reducesTo [0, 1, 2, 3, 4]
 
 -- step_by(2) returns every other element
 #assert (do
   let sbi ← core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [0, 1, 2, 3, 4]) 2#usize
-  collectStepBy sbi).is_ok [0, 2, 4]
+  collectStepBy sbi).reducesTo [0, 2, 4]
 
 -- step_by(3)
 #assert (do
   let sbi ← core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [0, 1, 2, 3, 4, 5, 6]) 3#usize
-  collectStepBy sbi).is_ok [0, 3, 6]
+  collectStepBy sbi).reducesTo [0, 3, 6]
 
 -- step_by larger than collection: returns only first element
 #assert (do
   let sbi ← core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [0, 1, 2]) 10#usize
-  collectStepBy sbi).is_ok [0]
+  collectStepBy sbi).reducesTo [0]
 
 -- step_by on empty iterator
 #assert (do
   let sbi ← core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter []) 2#usize
-  collectStepBy sbi).is_ok []
+  collectStepBy sbi).reducesTo []
 
 -- step_by(1) on single element
 #assert (do
   let sbi ← core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [42]) 1#usize
-  collectStepBy sbi).is_ok [42]
+  collectStepBy sbi).reducesTo [42]
 
 -- step_by(2) on single element
 #assert (do
   let sbi ← core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [42]) 2#usize
-  collectStepBy sbi).is_ok [42]
+  collectStepBy sbi).reducesTo [42]
 
 -- step_by equal to length: returns only first element
 #assert (do
   let sbi ← core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [0, 1, 2]) 3#usize
-  collectStepBy sbi).is_ok [0]
+  collectStepBy sbi).reducesTo [0]
 
 -- step_by = length - 1
 #assert (do
   let sbi ← core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [0, 1, 2]) 2#usize
-  collectStepBy sbi).is_ok [0, 2]
+  collectStepBy sbi).reducesTo [0, 2]
 
 -- step_by(2) on two elements: returns only first
 #assert (do
   let sbi ← core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [0, 1]) 2#usize
-  collectStepBy sbi).is_ok [0]
+  collectStepBy sbi).reducesTo [0]
 
 -- step_by(2) on three elements: returns first and third
 #assert (do
   let sbi ← core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [0, 1, 2]) 2#usize
-  collectStepBy sbi).is_ok [0, 2]
+  collectStepBy sbi).reducesTo [0, 2]
 
 -- step_by(4) on longer sequence
 #assert (do
   let sbi ← core.iter.traits.iterator.Iterator.step_by.default
     (mkSliceIter [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]) 4#usize
-  collectStepBy sbi).is_ok [0, 4, 8]
+  collectStepBy sbi).reducesTo [0, 4, 8]
 
 -- Verify that step_by(0) on the generic Iterator.step_by.default also panics
 #assert
@@ -326,7 +326,7 @@ private def collectNestedStepBy
   let sbi ← core.iter.traits.iterator.Iterator.step_by.default
     (mkSliceIter [0, 1, 2, 3, 4, 5, 6, 7]) 2#usize
   let sbi2 ← core.iter.traits.iterator.Iterator.step_by.default sbi 2#usize
-  collectNestedStepBy sbi2).is_ok [0, 4]
+  collectNestedStepBy sbi2).reducesTo [0, 4]
 
 -- ============================================================================
 -- Step specs for SharedArray.into_iter and SharedSlice.into_iter

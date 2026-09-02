@@ -290,40 +290,42 @@ partial_fixpoint
 -- NOTE: the original library had a function ITree.interp, which could handle converting an ITree from
 -- on set of Effects to another. If we need this, recover it from the original library.
 
--- These simp theorems are not present in the original library
-@[simp, grind .]
-theorem not_vis_ret {E} {α} {x : α} {e k} : ¬ ITree.ret (E := E) x = ITree.vis e k := by
-  intros eq
-  have eq := congrArg (fun i => i.approx 1) eq
-  simp at eq
+/-!
+`ITree` is a coinductive type, so `grind` has no constructor facts for it. We recover them from a
+single *injectivity* statement: every constructor is `ITree.fold` applied to an `ITreeF` (which
+*is* an inductive type), and `ITree.fold` is injective because `ITree.unfold` inverts it. Marking
+it `@[grind inj]` — together with the unfolding equations for the constructors — lets `grind`
+derive the disequality and injectivity facts below on its own.
+-/
 
-@[simp, grind .]
-theorem not_ret_div {E} {α} {x : α} : ¬ ITree.ret (E := E) x = ITree.div := by
-  intros eq
-  have eq := congrArg (fun i => i.approx 1) eq
-  simp at eq
+/-- `ITree.fold` is injective: `ITree.unfold` is a left inverse. -/
+@[grind inj]
+theorem ITree.fold_injective : Function.Injective (ITree.fold (E := E) (R := R)) := by
+  intro a b h
+  have := congrArg (ITree.unfold (E := E) (R := R)) h
+  simpa [ITree.fold, ITree.unfold] using this
 
-@[simp, grind .]
-theorem not_div_vis {E} {α} {e k} : ¬  @ITree.div α E = ITree.vis e k := by
-  intros eq
-  have eq := congrArg (fun i => i.approx 1) eq
-  simp at eq
+attribute [grind =] ITree.ret ITree.div ITree.vis
 
-@[simp, grind .]
-theorem ret_inj {E} {α} {x y} : (@ITree.ret α E x = ITree.ret y) ↔ (x = y) := by
-  constructor
-  · intros eq
-    have eq := congrArg (fun i => i.approx 1) eq
-    simp at eq
-    grind only
-  · grind only
+-- These simp theorems are not present in the original library.
+-- Their proofs all go through `ITree.fold_injective` above.
+@[simp]
+theorem not_vis_ret {E : Effect} {α : Type _} {x : α} {e k} :
+  ¬ ITree.ret (E := E) x = ITree.vis e k := by grind
+
+@[simp]
+theorem not_ret_div {E : Effect} {α : Type _} {x : α} :
+  ¬ ITree.ret (E := E) x = ITree.div := by grind
+
+@[simp]
+theorem not_div_vis {E : Effect} {α : Type _} {e k} :
+  ¬ (ITree.div : ITree E α) = ITree.vis e k := by grind
+
+@[simp]
+theorem ret_inj {E} {α} {x y} : (@ITree.ret α E x = ITree.ret y) ↔ (x = y) := by grind
 
 theorem vis_inj_effect {E} {α} {e1 e2 k1 k2} : @ITree.vis α E e1 k1 = ITree.vis e2 k2
-  → e1 = e2 := by
-  intros eq
-  have eq := congrArg (fun i => i.approx 1) eq
-  simp at eq
-  grind
+  → e1 = e2 := by grind
 
 -- Theorems to make ITree.cases compute:
 @[simp]
