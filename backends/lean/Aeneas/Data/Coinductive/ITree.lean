@@ -352,6 +352,11 @@ theorem ITree.cases.div {E R motive r d v}
 theorem ITree.cases.vis {E R motive r d v e k}
   : @ITree.cases E R motive r d v (.vis e k) = v e k := by cbv
 
+/-- `ITree.cases.ret` as the binder of `ITree.cases` writes it. -/
+@[simp]
+theorem ITree.cases.pure {E R motive r d v x}
+  : @ITree.cases E R motive r d v (Pure.pure x) = r x := ITree.cases.ret
+
 theorem ITree.le_div_is_div
   (t : ITree E R)
   (h : t ⊑ div)
