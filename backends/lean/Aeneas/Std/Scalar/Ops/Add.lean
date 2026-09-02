@@ -39,14 +39,14 @@ theorem UScalar.add_equiv {ty} (x y : UScalar ty) :
   | ok z => x.val + y.val < 2^ty.numBits ∧
     z.val = x.val + y.val ∧
     z.bv = x.bv + y.bv
-  | fail _ => ¬ (UScalar.inBounds ty (x.val + y.val))
+  | fail e => e = .integerOverflow ∧ ¬ (UScalar.inBounds ty (x.val + y.val))
   | _ => ⊥ := by
   have : x + y = add x y := by rfl
   rw [this]
-  simp [add]
-  have h := tryMk_eq ty (↑x + ↑y)
+  simp [add, tryMk, Result.ofOption]
+  have h := tryMkOpt_eq ty (↑x + ↑y)
   simp [inBounds] at h
-  split at h <;> simp_all
+  cases hopt : tryMkOpt ty (↑x + ↑y) <;> simp_all
   zify; simp
   zify at h
   have := @Int.emod_eq_of_lt (x.val + y.val) (2^ty.numBits) (by omega) (by omega)
@@ -58,14 +58,14 @@ theorem IScalar.add_equiv {ty} (x y : IScalar ty) :
     IScalar.inBounds ty (x.val + y.val) ∧
     z.val = x.val + y.val ∧
     z.bv = x.bv + y.bv
-  | fail _ => ¬ (IScalar.inBounds ty (x.val + y.val))
+  | fail e => e = .integerOverflow ∧ ¬ (IScalar.inBounds ty (x.val + y.val))
   | _ => ⊥ := by
   have : x + y = add x y := by rfl
   rw [this]
-  simp [add]
-  have h := tryMk_eq ty (↑x + ↑y)
+  simp [add, tryMk, Result.ofOption]
+  have h := tryMkOpt_eq ty (↑x + ↑y)
   simp [inBounds] at h
-  split at h <;> simp_all
+  cases hopt : tryMkOpt ty (↑x + ↑y) <;> simp_all
   apply BitVec.eq_of_toInt_eq
   simp
   have := bmod_pow_numBits_eq_of_lt ty (x.val + y.val) (by omega) (by omega)
@@ -111,32 +111,42 @@ only integers. Those are the most common to use, so we mark them with the
 
 /-- Generic theorem - shouldn't be used much -/
 @[step]
-theorem UScalar.add_spec {ty} {x y : UScalar ty}
-  (hmax : ↑x + ↑y ≤ UScalar.max ty) :
-  x + y ⦃ z => (↑z : Nat) = ↑x + ↑y ⦄ := by
+theorem UScalar.add_spec {ty} {x y : UScalar ty} :
+    partialSpec (x + y)
+      (fun z => (↑z : Nat) = ↑x + ↑y)
+      (fun | .integerOverflow => ↑x + ↑y > UScalar.max ty | _ => False)
+      False := by
   have h := @add_equiv ty x y
-  split at h <;> simp_all [max]
+  simp only [partialSpec]
+  split <;> simp_all [max]
   have : 0 < 2^ty.numBits := by simp
   omega
 
 /-- Generic theorem - shouldn't be used much -/
 @[step]
-theorem IScalar.add_spec {ty} {x y : IScalar ty}
-  (hmin : IScalar.min ty ≤ ↑x + ↑y)
-  (hmax : ↑x + ↑y ≤ IScalar.max ty) :
-  x + y ⦃ z => (↑z : Int) = ↑x + ↑y ⦄ := by
+theorem IScalar.add_spec {ty} {x y : IScalar ty} :
+    partialSpec (x + y)
+      (fun z => (↑z : Int) = ↑x + ↑y)
+      (fun | .integerOverflow => ↑x + ↑y < IScalar.min ty ∨ ↑x + ↑y > IScalar.max ty | _ => False)
+      False := by
   have h := @add_equiv ty x y
-  split at h <;> simp_all [min, max]
+  simp only [partialSpec]
+  split <;> simp_all [min, max, inBounds]
   omega
 
-uscalar @[step] theorem «%S».add_spec {x y : «%S»} (hmax : x.val + y.val ≤ «%S».max) :
-  x + y ⦃ z => (↑z : Nat) = ↑x + ↑y ⦄ :=
-  UScalar.add_spec (by scalar_tac)
+uscalar @[step] theorem «%S».add_spec {x y : «%S»} :
+    partialSpec (x + y)
+      (fun z => (↑z : Nat) = ↑x + ↑y)
+      (fun | .integerOverflow => ↑x + ↑y > «%S».max | _ => False)
+      False := by
+  convert @UScalar.add_spec _ x y; scalar_tac
 
-iscalar @[step] theorem «%S».add_spec {x y : «%S»}
-  (hmin : «%S».min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ «%S».max) :
-  x + y ⦃ z => (↑z : Int) = ↑x + ↑y ⦄ :=
-  IScalar.add_spec (by scalar_tac) (by scalar_tac)
+iscalar @[step] theorem «%S».add_spec {x y : «%S»} :
+    partialSpec (x + y)
+      (fun z => (↑z : Int) = ↑x + ↑y)
+      (fun | .integerOverflow => ↑x + ↑y < «%S».min ∨ ↑x + ↑y > «%S».max | _ => False)
+      False := by
+  convert @IScalar.add_spec _ x y <;> scalar_tac
 
 /-!
 # Addition through a shared reference

@@ -922,9 +922,9 @@ def add1 (x0 x1 : U32) : Std.Result U32 := do
 /--
 info: Try this:
 
-  [apply]     let* ⟨ x2, x2_post ⟩ ← U32.add_spec
-    let* ⟨ x3, x3_post ⟩ ← U32.add_spec
-    let* ⟨ ⟩ ← U32.add_spec
+  [apply]     let* ⟨ x2, x2_post ⟩ ← U32.add_spec.step_spec
+    let* ⟨ x3, x3_post ⟩ ← U32.add_spec.step_spec
+    let* ⟨ ⟩ ← U32.add_spec.step_spec
 -/
 #guard_msgs in
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
@@ -935,9 +935,9 @@ example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
 /--
 info: Try this:
 
-  [apply]     let* ⟨ x2, x2_post ⟩ ← [ +scalarTac -grind ] U32.add_spec
-    let* ⟨ x3, x3_post ⟩ ← [ +scalarTac -grind ] U32.add_spec
-    let* ⟨ ⟩ ← [ +scalarTac -grind ] U32.add_spec
+  [apply]     let* ⟨ x2, x2_post ⟩ ← [ +scalarTac -grind ] U32.add_spec.step_spec
+    let* ⟨ x3, x3_post ⟩ ← [ +scalarTac -grind ] U32.add_spec.step_spec
+    let* ⟨ ⟩ ← [ +scalarTac -grind ] U32.add_spec.step_spec
 -/
 #guard_msgs in
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
@@ -966,8 +966,8 @@ example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
 /--
 info: Try this:
 
-  [apply]     let* ⟨ x2, x2_post ⟩ ← U32.add_spec
-    let* ⟨ x3, x3_post ⟩ ← U32.add_spec
+  [apply]     let* ⟨ x2, x2_post ⟩ ← U32.add_spec.step_spec
+    let* ⟨ x3, x3_post ⟩ ← U32.add_spec.step_spec
 ---
 error: unsolved goals
 x y : U32
@@ -990,9 +990,9 @@ example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
 info: Try this:
 
   [apply]     simp only [step_simps]
-    let* ⟨ x2, x2_post ⟩ ← U32.add_spec
-    let* ⟨ x3, x3_post ⟩ ← U32.add_spec
-    let* ⟨ z, z_post ⟩ ← U32.add_spec
+    let* ⟨ x2, x2_post ⟩ ← U32.add_spec.step_spec
+    let* ⟨ x3, x3_post ⟩ ← U32.add_spec.step_spec
+    let* ⟨ z, z_post ⟩ ← U32.add_spec.step_spec
     agrind
 -/
 #guard_msgs in
@@ -1015,11 +1015,11 @@ def add2 (b : Bool) (x0 x1 : U32) : Std.Result U32 := do
 info: Try this:
 
   [apply]     spec_split
-    · let* ⟨ x2, x2_post ⟩ ← U32.add_spec
-      let* ⟨ x3, x3_post ⟩ ← U32.add_spec
-      let* ⟨ ⟩ ← U32.add_spec
-    · let* ⟨ y, y_post ⟩ ← U32.add_spec
-      let* ⟨ ⟩ ← U32.add_spec
+    · let* ⟨ x2, x2_post ⟩ ← U32.add_spec.step_spec
+      let* ⟨ x3, x3_post ⟩ ← U32.add_spec.step_spec
+      let* ⟨ ⟩ ← U32.add_spec.step_spec
+    · let* ⟨ y, y_post ⟩ ← U32.add_spec.step_spec
+      let* ⟨ ⟩ ← U32.add_spec.step_spec
 -/
 #guard_msgs in
 example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
@@ -1031,10 +1031,10 @@ example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
 info: Try this:
 
   [apply]     spec_split
-    · let* ⟨ x2, x2_post ⟩ ← U32.add_spec
-      let* ⟨ x3, x3_post ⟩ ← U32.add_spec
-    · let* ⟨ y, y_post ⟩ ← U32.add_spec
-      let* ⟨ ⟩ ← U32.add_spec
+    · let* ⟨ x2, x2_post ⟩ ← U32.add_spec.step_spec
+      let* ⟨ x3, x3_post ⟩ ← U32.add_spec.step_spec
+    · let* ⟨ y, y_post ⟩ ← U32.add_spec.step_spec
+      let* ⟨ ⟩ ← U32.add_spec.step_spec
 ---
 error: unsolved goals
 b : Bool
@@ -1059,25 +1059,25 @@ example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
 info: Try this:
 
   [apply]     spec_split
-    · let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+    · let* ⟨ x2, x2_post ⟩ ← U32.add_spec.step_spec
       · sorry
-      let* ⟨ x3, x3_post ⟩ ← U32.add_spec
+      let* ⟨ x3, x3_post ⟩ ← U32.add_spec.step_spec
       · sorry
-      let* ⟨ ⟩ ← U32.add_spec
+      let* ⟨ ⟩ ← U32.add_spec.step_spec
       · sorry
-    · let* ⟨ y, y_post ⟩ ← U32.add_spec
+    · let* ⟨ y, y_post ⟩ ← U32.add_spec.step_spec
       · sorry
-      let* ⟨ ⟩ ← U32.add_spec
+      let* ⟨ ⟩ ← U32.add_spec.step_spec
       · sorry
 ---
 error: unsolved goals
-case hmax
+case h_fail
 b : Bool
 x y : U32
 h✝ : b = true
 ⊢ ↑x + ↑y ≤ U32.max
 
-case hmax
+case h_fail
 b : Bool
 x y : U32
 h✝ : b = true
@@ -1086,7 +1086,7 @@ _ : [> let x2 ← x + y <]
 x2_post : ↑x2 = ↑x + ↑y
 ⊢ ↑x2 + ↑x2 ≤ U32.max
 
-case hmax
+case h_fail
 b : Bool
 x y : U32
 h✝ : b = true
@@ -1098,13 +1098,13 @@ _ : [> let x3 ← x2 + x2 <]
 x3_post : ↑x3 = ↑x2 + ↑x2
 ⊢ ↑x3 + ↑4#u32 ≤ U32.max
 
-case hmax
+case h_fail
 b : Bool
 x y : U32
 h✝ : ¬b = true
 ⊢ ↑x + ↑y ≤ U32.max
 
-case hmax
+case h_fail
 b : Bool
 x y✝ : U32
 h✝ : ¬b = true
@@ -1124,9 +1124,9 @@ example b (x y : U32) :
 /--
 info: Try this:
 
-  [apply]     let* ⟨ x2, x2_post ⟩ ← U32.add_spec
-    let* ⟨ x3, x3_post ⟩ ← U32.add_spec
-    let* ⟨ _, _ ⟩ ← U32.add_spec
+  [apply]     let* ⟨ x2, x2_post ⟩ ← U32.add_spec.step_spec
+    let* ⟨ x3, x3_post ⟩ ← U32.add_spec.step_spec
+    let* ⟨ _, _ ⟩ ← U32.add_spec.step_spec
     sorry
 ---
 error: unsolved goals
@@ -1298,7 +1298,7 @@ example (a b : U32) (h : a = b) (hbnd : a.val + b.val ≤ U32.max) :
 info: Try this:
 
   [apply]     spec_split
-    · let* ⟨ c, c_post ⟩ ← U32.add_spec
+    · let* ⟨ c, c_post ⟩ ← U32.add_spec.step_spec
       agrind
     · agrind
 -/
@@ -1315,7 +1315,7 @@ example (a b : U32) (h : a = b) (hbnd : a.val + b.val ≤ U32.max) :
     grindContradictionFn a b ⦃ c => c.val = a.val + b.val ⦄ := by
   unfold grindContradictionFn
   spec_split
-  · let* ⟨ c, c_post ⟩ ← U32.add_spec
+  · let* ⟨ c, c_post ⟩ ← U32.add_spec.step_spec
     agrind
   · agrind
 
