@@ -25,7 +25,7 @@ git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_se
 | [`MutableData/Array.lean`](MutableData/Array.lean) | The Rust view of the heap, first layer: the PCM one allocation is made with, and allocation itself. |
 | [`MutableData/Ptr.lean`](MutableData/Ptr.lean) | Interior pointers `Ptr α` over that allocation: pointer arithmetic, range and slot ownership, splitting and joining, read, write, free, and the raw-pointer borrow. |
 | [`MutableData/Buffer.lean`](MutableData/Buffer.lean) | Bounded views `Buffer α`: `sub`, `split`, `join`, indexed access, allocation of `n` slots (initialized or not), and how ownership follows the views. |
-| [`ST.lean`](ST.lean) | The state monad `St`, its inductive total-correctness judgment, state machine, Hoare triples, `guardedModify` and its rule, `step` integration, and certified interpreter. |
+| [`ST.lean`](ST.lean) | The state monad `St`, its state machine, its inductive total-correctness judgment and its coinductive partial-correctness one (`spec` and `dspec`, after `Aeneas.Std.WP`), the triples `triple` and `dtriple` built on them, `guardedModify` and its rule, the loop rule, `step` integration, and certified interpreter. |
 | [`WP.lean`](WP.lean) | Affine separation-logic assertions (`SLProp`, closed under heap extension like Iris's `uPred`), the magic wand, local predicate transformers for individual events, and separation-logic tactics. |
 | [`ProofScore.lean`](Tests/Examples/scripts/ProofScore.lean) | Engineering tool, not part of the library: measures how close the proofs of the triples are to the ideal proof, i.e. how much separation logic the automation still leaves to the user. Writes [`proof-score.html`](Tests/Examples/reports/proof-score.html). |
 | [`SourceLoc.lean`](Tests/Examples/scripts/SourceLoc.lean) | Engineering tool, not part of the library: downloads the artifacts every example ports, and unverified Rust implementations of the same data structures, and counts the relevant lines of all three, per file and per declaration, split into computational code, specification/annotation, and proof. Writes [`source-loc.json`](Tests/Examples/reports/source-loc.json), and a standalone `source-loc.html` that draws it (generated on demand, not committed). |
@@ -43,6 +43,7 @@ git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_se
 | [`DardinierMagicWands.lean`](Tests/Examples/DardinierMagicWands.lean) | Ports Dardinier's leftmost-leaf wand-packaging example and the uniform-footprint counterexample from *Sound Automation of Magic Wands*. |
 | [`EqOrDisj.lean`](Tests/Examples/EqOrDisj.lean) | Port of the `InPlaceOrDisjointBuffer` of [SymCRust](https://github.com/microsoft/VCR) over `Ptr`/`Buffer` — a read/write view pair that either aliases or is separated — with its constructors, views and element accessors specified in full against equal-or-disjoint ghost state. |
 | [`IrisTutorial.lean`](Tests/Examples/IrisTutorial.lean) | Sequential ports of Iris tutorial proof-mode, pointer, and linked-list examples. |
+| [`Partial.lean`](Tests/Partial.lean) | Regression tests for partial correctness: the automation on a `dtriple` goal, what a partial triple still owes, and the loops only it proves. |
 | [`PulseArrayTests.lean`](Tests/Examples/PulseArrayTests.lean) | Cell-wise array model and ports of Pulse allocation/free, indexed access, fill, and exact comparison examples. |
 | [`PulseInsertionSort.lean`](Tests/Examples/PulseInsertionSort.lean) | In-place Pulse insertion sort with sortedness and permutation proofs. |
 | [`PulseLinkedList.lean`](Tests/Examples/PulseLinkedList.lean) | Sequential Pulse linked-list operations over a recursive ownership predicate, including append, split, insertion, and reversal. |
@@ -123,15 +124,16 @@ clean run.  `Heap.union` has to decide whether the carrier types of two cells
 agree, so it does not compute; `Heap.disjointUnion` agrees with it on disjoint
 addresses and does, and every operation a program performs computes.
 
-## Three semantics for `St`
+## Four semantics for `St`
 
 A program of `St` is an **interaction tree**
 ([`Aeneas.Data.Coinductive.ITree`](../Data/Coinductive/ITree.lean)) over the
 heap- and universe-polymorphic event signature `StEvents Heap`.  It has an
 *operational* semantics
 (`StEvents.Step`, lifted to the big-step `Evaluates` of [`Exec.lean`](Exec.lean)),
-an inductive total-correctness semantics (`TotalSpec`, exposed as `spec`), and
-— in [`ST.lean`](ST.lean) — an *executable* one.
+an inductive total-correctness semantics (`TotalSpec`, exposed as `spec`), a
+coinductive partial-correctness one (`PartialSpec`, exposed as `dspec`), and an
+*executable* one — the last three all in [`ST.lean`](ST.lean).
 
 As in `Aeneas.Std.WP.spec`, a proof of total correctness is a finite derivation:
 `ret` establishes the postcondition and `vis` proves the guard and the
@@ -162,6 +164,54 @@ Execution also shows what an affine triple cannot state. `⦃emp⦄ m ⦃⇓ emp
 of a program that frees what it allocates *and* of one that leaks it; running a
 closed program tells the two apart, and `by rfl` proves the difference — see
 [`Tests/Run.lean`](Tests/Run.lean).
+
+## Partial correctness
+
+[`ST.lean`](ST.lean) states the divergence-tolerant triple `dtriple`, written
+`⦃P⦄ m ⦃⇓ x => Q⦄div`, beside the total `triple` — the two judgments and the two
+triples are declared side by side, and registered with `step` back to back, the
+way `Aeneas.Std.WP` lays out `spec` and `dspec`.  `dtriple` quantifies over
+frames exactly as `triple` does and says what the total triple says of a run
+that *stops*, while still requiring every event the program reaches to be
+defined: divergence is permitted, being stuck is not.
+
+`Aeneas.Std.WP.dspec` is `spec` plus a constructor for `Result.div`, and that
+suffices there because the only event of `Result` is `fail`, which has no
+continuation.  A program of `St` performs arbitrarily many events, so an
+infinite run is an infinite `vis` tree that no inductive judgment accepts:
+`PartialSpec` is therefore the *greatest* fixed point of its one-layer
+condition, spelled out as the union of the post-fixed points, dually to the way
+`Exec` is the least fixed point of `ExecF`.  `PartialSpec.coinduction` is its
+introduction rule and `PartialSpec.ret`, `.div` and `.vis` recover the
+constructors an inductive definition would have offered, so a straight-line
+proof reads like a total one, and `step` drives a partial goal
+through the lifting `triple_dtriple` — every `@[step]` specification states
+total correctness and is applied to a partial goal as it stands, exactly as
+`spec_dspec` is used for `Result`.
+
+What a partial triple owes is proved against the same machine as the total one:
+`PartialSpec.reaches` carries it along every run, so a terminating run
+establishes the postcondition (`dtriple_evaluates`) and every event reached is
+defined on the heap it is reached with (`dtriple_pre_of_reaches`).
+
+Being a greatest fixed point, it is also *admissible* (`dspec_admissible`,
+`dtriple_admissible`), which is what `fixpoint_induct` asks of a property proved
+of a `partial_fixpoint`.  That proof rests on the facts about suprema of chains
+of trees — a supremum has the shape of the elements it is taken over, and its
+children are the suprema of theirs — which are ordinary interaction-tree order
+theory and live with the rest of it in
+[`ITree.lean`](../Data/Coinductive/ITree.lean), where
+`Aeneas.Std.WP.dspec_admissible` finds the ones it needs too.  On top of that,
+`dtriple_iter` is the loop rule an invariant alone discharges:
+
+```lean
+theorem incrForever.spec (p : Ptr Nat) (value : Nat) :
+    ⦃ p ↦ value ⦄ incrForever p ⦃⇓ emp⦄div
+```
+
+for a loop that increments `p` and never leaves — a triple no total judgment
+can state, since `spec_div` says divergence satisfies none.  See
+[`Tests/Partial.lean`](Tests/Partial.lean).
 
 ## How ideal are the proofs?
 
