@@ -251,7 +251,7 @@ def fromRawParts (src dst : Ptr α) (len : Nat) :
 @[step]
 theorem fromRawParts.spec (src dst : Ptr α) (len : Nat) :
     ⦃ emp ⦄ fromRawParts src dst len
-      ⦃⇓ b => ⌜b = mkFromRawParts src dst len⌝⦄ :=
+      ⦃⇓ b => ⌜b = mkFromRawParts src dst len⌝⦄ := -- TODO: strengthen
   by
   simp only [fromRawParts, mkFromRawParts]
   step*
