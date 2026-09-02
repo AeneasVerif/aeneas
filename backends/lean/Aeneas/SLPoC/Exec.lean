@@ -108,15 +108,6 @@ end StateMachine
 
 /-! ## The multi-step relation -/
 
-/-- The continuations of two equal `vis` nodes are equal. -/
-theorem vis_inj {R : Type w} {i i' : E.I} {k : E.O i → ITree E R}
-    {k' : E.O i' → ITree E R} (hEq : ITree.vis i k = ITree.vis i' k') :
-    i = i' ∧ HEq k k' := by
-  have hUnfold := congrArg ITree.unfold hEq
-  simp only [unfold_vis] at hUnfold
-  injection hUnfold with hEvent hCont
-  exact ⟨hEvent, hCont⟩
-
 /-- One step of `Exec`: either the execution stops where it stands — that is the
 variant `ExecStop` of the paper — or the tree is a `vis` node whose event the
 machine answers, the execution continuing in `X`.
