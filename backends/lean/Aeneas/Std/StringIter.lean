@@ -9,13 +9,15 @@ structure core.str.iter.Chars where
   iter : core.slice.iter.Iter U8
 
 @[rust_fun "core::str::iter::{core::iter::traits::iterator::Iterator<core::str::iter::Chars<'a>, char>}::next"]
-def core.str.iter.IteratorChars.next (_iter : core.str.iter.Chars) : Result ((Option Char) × core.str.iter.Chars) := sorry
+def core.str.iter.IteratorChars.next (it : core.str.iter.Chars) : Result ((Option Char) × core.str.iter.Chars) := do
+  let (r, iter) ← core.slice.iter.IteratorSliceIter.next it.iter
+  .ok (r.map Char.ofNat, ⟨iter⟩)
 
 @[rust_fun "core::str::iter::{core::iter::traits::iterator::Iterator<core::str::iter::Chars<'a>, char>}::collect"]
-def core.str.iter.IteratorChars.collect
+noncomputable opaque core.str.iter.IteratorChars.collect
   {B : Type} (itertraitscollectFromIteratorBCharInst :
   core.iter.traits.collect.FromIterator B Char) :
-  core.str.iter.Chars → Result B := sorry
+  core.str.iter.Chars → Result B
 
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::str::iter::Chars<'a>, char>"]

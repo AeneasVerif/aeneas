@@ -356,12 +356,11 @@ def core.slice.Slice.get
   inst.get i s
 
 @[rust_fun "core::slice::{[@T]}::get_unchecked"]
-def core.slice.Slice.get_unchecked
+noncomputable opaque core.slice.Slice.get_unchecked
   {T : Type} {I : Type} {Output : Type}
   (SliceIndexInst : core.slice.index.SliceIndex I (Slice T) Output)
-  (s : Slice T) (i : I) : Result Output :=
+  (s : Slice T) (i : I) : Result Output
   -- TODO: we should actually use the `SliceIndexInst.get_unchecked` method
-  sorry
 
 @[rust_fun "core::slice::{[@T]}::get_mut"]
 def core.slice.Slice.get_mut
@@ -612,11 +611,10 @@ def core.slice.index.SliceIndexUsizeSlice (T : Type) :
 }
 
 @[step]
-theorem core.slice.Slice.get_unchecked_SliceIndexUsizeSlice_spec {T s i} [Inhabited T]
+axiom core.slice.Slice.get_unchecked_SliceIndexUsizeSlice_spec {T s i} [Inhabited T]
   (h : i.val < s.length) :
   core.slice.Slice.get_unchecked  (core.slice.index.SliceIndexUsizeSlice T) s i
-  ⦃ x => x = s[i] ⦄ := by
-  sorry
+  ⦃ x => x = s[i] ⦄
 
 @[rust_fun "core::slice::{[@T]}::copy_from_slice"]
 def core.slice.Slice.copy_from_slice {T : Type} (_ : core.marker.Copy T)
