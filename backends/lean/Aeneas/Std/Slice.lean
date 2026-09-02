@@ -44,6 +44,9 @@ def Slice.new (α : Type u) : Slice α := {
   bound := by simp
 }
 
+@[simp, simp_lists_safe, scalar_tac_simps, grind =, agrind =]
+theorem Slice.new_val (α : Type u) : (Slice.new α).val = [] := rfl
+
 @[rust_fun "core::slice::{[@T]}::len" -canFail -lift]
 abbrev Slice.len {α : Type u} (v : Slice α) : Usize :=
   Usize.ofNatCore v.val.length (by scalar_tac)

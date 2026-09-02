@@ -95,6 +95,11 @@ example {α: Type u} {n : Usize} (v : Array α n) : v.length ≤ Usize.max := by
 def Array.make {α : Type u} (n : Usize) (init : List α) (hl : init.length = n.val := by simp) :
   Array α n := .from init (by apply hl)
 
+@[simp, simp_lists_safe, grind =, agrind =]
+theorem Array.make_val {α : Type u} (n : Usize) (init : List α) (hl : init.length = n.val) :
+  (Array.make n init hl).val = init := by
+  simp [Array.make]
+
 example : Array Int (Usize.ofNat 2) := Array.make (Usize.ofNat 2) [0, 1] (by simp)
 
 example : Array Int (Usize.ofNat 2) :=
@@ -373,6 +378,11 @@ def core.clone.CloneArray {T : Type} (N : Usize)
 
 def Array.setSlice! {α : Type u} {n} (s : Array α n) (i : ℕ) (s' : List α) : Array α n :=
   .from (s.val.setSlice! i s') (by scalar_tac)
+
+@[simp, simp_lists_safe, grind =, agrind =]
+theorem Array.setSlice!_val {α : Type u} {n} (s : Array α n) (i : ℕ) (s' : List α) :
+  (s.setSlice! i s').val = s.val.setSlice! i s' := by
+  simp [Array.setSlice!]
 
 @[simp_lists_safe]
 theorem Array.setSlice!_getElem!_prefix {α} {n} [Inhabited α]
