@@ -28,6 +28,8 @@ git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_se
 | [`ST.lean`](ST.lean) | The state monad `St`, its inductive total-correctness judgment, state machine, Hoare triples, `guardedModify` and its rule, `step` integration, and certified interpreter. |
 | [`WP.lean`](WP.lean) | Affine separation-logic assertions (`SLProp`, closed under heap extension like Iris's `uPred`), the magic wand, local predicate transformers for individual events, and separation-logic tactics. |
 | [`ProofScore.lean`](Tests/Examples/scripts/ProofScore.lean) | Engineering tool, not part of the library: measures how close the proofs of the triples are to the ideal proof, i.e. how much separation logic the automation still leaves to the user. Writes [`proof-score.html`](Tests/Examples/reports/proof-score.html). |
+| [`SourceLoc.lean`](Tests/Examples/scripts/SourceLoc.lean) | Engineering tool, not part of the library: downloads the artifacts every example ports, and unverified Rust implementations of the same data structures, and counts the relevant lines of all three, per file and per declaration, split into computational code, specification/annotation, and proof. Writes [`source-loc.json`](Tests/Examples/reports/source-loc.json), and a standalone `source-loc.html` that draws it (generated on demand, not committed). |
+| [`sources-manifest.json`](Tests/Examples/reports/sources-manifest.json) | Maps every file of `Tests/Examples` to the upstream artifact it ports, pinned to a commit and a SHA-256, says whether the example is expressible in safe Rust and why, and lists unverified Rust implementations of the same data structure. Read by `SourceLoc.lean`. |
 | [`proof_simplify.py`](Tests/Examples/scripts/proof_simplify.py) | Compilation-guided proof simplifier: compresses consecutive `step` calls and removes unused `sl_pull` names, retaining only rewrites accepted by Lean. |
 | [`benchmark-report.md`](Tests/Examples/reports/benchmark-report.md) | Report on the eleven external benchmark ports, their interfaces and specifications, proof-score improvements, and remaining automation gaps. |
 | [`automation-report.md`](Tests/Examples/reports/automation-report.md) | Maps ideas from Dardinier's thesis on automated separation-logic verifiers to a prioritized design for more SLPoC proof-mode automation. |
@@ -56,7 +58,6 @@ git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_se
 | [`VerusPageTable.lean`](Tests/Examples/VerusPageTable.lean) | Uniform-leaf, exact-key subset of verified-pt map/query/unmap/prune with recursive table ownership and explicit allocation/free operations. |
 | [`VerusStd.lean`](Tests/Examples/VerusStd.lean) | The `vstd` layer: generic sequences of pointer/payload pairs and permission maps over them, with each declaration naming its `vstd` counterpart. Independent of any data structure. |
 | [`VerusVerifiedVec.lean`](Tests/Examples/VerusVerifiedVec.lean) | Fixed-capacity adaptation of Verus's initialized-prefix vector, using typed `Option` cells for the abstract raw suffix. |
-| [`doubly_linked_loc.py`](Tests/Examples/scripts/doubly_linked_loc.py) | Deterministically regenerates the relevant-LOC comparison with the pinned Verus example below. |
 
 Keep these tables updated whenever a file is added, removed, or repurposed.
 
@@ -225,68 +226,119 @@ proposed replacement, batch size, and the first error returned by Lean.  This
 distinguishes a fully simplified file from one where potential rewrites were
 tried but did not compile.
 
-## Doubly-linked-list LOC comparison
+## Lines of code against the original artifacts
 
-Run `python3 Aeneas/SLPoC/Tests/Examples/scripts/doubly_linked_loc.py` from
-`backends/lean` to
-regenerate this report, or pass `--check` to verify that it is current. The
-script fetches an exact Verus commit and verifies its SHA-256 checksum before
-counting. It counts declaration lines and body lines after removing comments,
-blank lines, imports/uses, namespaces/modules, standalone delimiters, and
-other non-definition scaffolding. Language-level markers such as `by`, `do`,
-`proof`, `requires`, `ensures`, `invariant`, and `decreases` are counted.
+Almost every file of [`Tests/Examples`](Tests/Examples) ports an artifact from
+another project.  [`reports/sources-manifest.json`](Tests/Examples/reports/sources-manifest.json)
+records which one, pinned to a commit and to the SHA-256 of the file at that
+commit, and [`SourceLoc.lean`](Tests/Examples/scripts/SourceLoc.lean) downloads
+them and counts both sides:
 
-Verus imports `vstd`, so its sequence, map and permission reasoning costs it no
-lines here.  The Lean side has to build that layer, which is why it is kept in
-`VerusStd.lean` and reported separately: that module is generic, knows nothing
-about doubly-linked lists, and is reusable by any development using the same
-"ghost sequence of pointers plus permission map" pattern.  The figure comparable
-with Verus is therefore the "Lean example total".
+```
+lake env lean --run Aeneas/SLPoC/Tests/Examples/scripts/SourceLoc.lean
+```
 
-<!-- BEGIN GENERATED DOUBLY LINKED LOC REPORT -->
+It writes the counts twice: [`reports/source-loc.json`](Tests/Examples/reports/source-loc.json)
+holds them per file *and per declaration*, and `reports/source-loc.html` draws
+them as a standalone page — every example one row of three stacked bars, on a
+scale common to the whole table, sortable by size or by share of specification
+and proof, filterable by safe-Rust verdict, and expandable to the files, the
+declarations, and the twenty declarations that cost the most proof.  Nothing on
+that page is fetched from anywhere.  It is regenerated on demand and is not
+committed, so open it from a local run.  Downloads are cached under
+`.lake/source-loc-cache`, so a first run takes about half a minute and later
+ones about eight seconds.  Pass `--offline` to count only what is already
+cached, `-o FILE` or `--html FILE` to write elsewhere.
 
-Pinned Verus source: [`99ae45aa8e35`](https://github.com/verus-lang/verus/blob/99ae45aa8e3568ec4933d23c6573a59efcd08ca3/examples/doubly_linked.rs) (SHA-256 `52abe834f0d6596bbaebcabb92330476707df184bb5456aeaf7c573ac01394c3`).
+A line counts when what is left of it after comment removal is at least four
+characters wide and is neither delimiters alone nor import, module or scope
+boilerplate.  Each counted line is charged to `code` (what runs), `spec` (what
+the program is claimed to do, and the annotations a verifier needs: pre- and
+postconditions, invariants, representation predicates, theorem statements,
+ghost state, attributes) or `proof` (tactic scripts, `proof { … }` blocks,
+`assert`s and ghost steps, `Proof. … Qed.`, Pulse's `fold`/`unfold`/`rewrite`).
+The classification is a documented heuristic — see the module doc comment of the
+script for the rule used in each language — and is deliberately generous to
+`code`, so it understates rather than overstates verification overhead.
 
-| Source | Declarations | Relevant LOC |
-|---|---:|---:|
-| Verus | 24 | 339 |
-| Lean executable definitions | 14 | 84 |
-| Lean ghost state, specifications and proofs | 36 | 245 |
-| **Lean example total** | **50** | **329** |
-| `vstd` equivalent, generic and reusable (`VerusStd.lean`) | 24 | 98 |
-| Lean grand total | 74 | 427 |
+Two entries of the manifest are recorded but not counted: Dardinier's Viper
+artifact, which is a Zenodo archive rather than a file, and SymCRust's
+`common.rs`, which is not publicly readable.
 
-| Definition or semantic group | Verus | Lean (executable, spec/proof) |
-|---|---:|---:|
-| `Node` | 4 | 4 (4, 0) |
-| `DoublyLinkedList` | 4 | 3 (3, 0) |
-| ghost state / `Cells` | 3 | 1 (0, 1) |
-| `prev_of` / `prevOf` | 5 | 2 (0, 2) |
-| `next_of` / `nextOf` | 5 | 2 (0, 2) |
-| `well_formed_node` / `nodeAt` | 5 | 2 (0, 2) |
-| `well_formed` / representation predicates | 7 | 4 (0, 4) |
-| `view` | 4 | 1 (0, 1) |
-| `new` | 10 | 7 (2, 5) |
-| `push_empty_case` / `pushEmptyCase` | 17 | 9 (3, 6) |
-| `push_back` / `pushBack` | 36 | 25 (9, 16) |
-| `pop_back` / `popBack` | 42 | 22 (12, 10) |
-| `push_front` / `pushFront` | 46 | 28 (9, 19) |
-| `pop_front` / `popFront` | 49 | 20 (12, 8) |
-| `get` (including the Lean loop) | 27 | 41 (13, 28) |
-| `Iterator` | 4 | 4 (4, 0) |
-| `Iterator::list` | 2 | 0 (0, 0) |
-| `Iterator::index` | 2 | 0 (0, 0) |
-| `Iterator::valid` | 4 | 3 (0, 3) |
-| `Iterator::new` | 9 | 9 (2, 7) |
-| `Iterator::value` | 10 | 13 (4, 9) |
-| `Iterator::move_next` / `moveNext` | 20 | 26 (7, 19) |
-| `main::run` / example | 22 | 29 (0, 29) |
-| entry-point `main` | 2 | 0 (0, 0) |
-| Other support declarations | - | 74 (0, 74) |
-| **Total** | **339** | **329 (84, 245)** |
+### Can it be written in safe Rust?
 
-`VerusStd.lean` (24 declarations, 98 lines) is not compared declaration by declaration: it is the generic sequence and permission-map layer that Verus obtains from `vstd`, it does not mention the doubly-linked list, and each of its declarations names its `vstd` counterpart in its doc comment.
+Aeneas translates *safe* Rust, so for each example the manifest also records
+whether its program could be written in that fragment at all — a property of
+the aliasing the example is about, not of its proof, since `spec` and `proof`
+material never runs:
 
-"Other support declarations" contains 0 Verus, 0 Lean executable, and 14 Lean specification/proof declarations not assigned to a direct cross-language correspondence above, together with the `attribute` commands that configure the automation.
+* **yes** (10 examples) — expressible in safe Rust, at worst by replacing a raw
+  pointer with an index, a `Box`, or a `&mut`;
+* **no** (5) — the aliasing *is* the point: intrusive links, a doubly-linked
+  list, a free list threaded through freed memory, hardware page tables;
+* **n/a** (4) — no single answer applies: the file holds no program at all, or
+  part of it is safe and the rest needs `unsafe`, a borrow checker that does not
+  exist yet (the leftmost-leaf `&mut` traversal is NLL problem case #3), or has
+  no sequential Rust counterpart.
 
-<!-- END GENERATED DOUBLY LINKED LOC REPORT -->
+Each entry also lists `references`: unverified Rust implementations of roughly
+the same data structure — `std::collections::LinkedList`, `VecDeque`, `Vec`,
+`fixedbitset`, `intrusive-collections`, RustCrypto's `InOutBuf`, a buddy
+allocator's free list, an x86-64 page-table walker — so that a port can be read
+against real Rust and not only against a verifier's encoding.  Their `safe`
+field says whether the implementation itself is safe Rust; `false` on a `std`
+collection means a safe *API* over `unsafe` internals, which is precisely the
+gap a verified port has to close.  Being unverified, a reference costs `code`
+lines and no `spec` or `proof` line at all — the 5710 lines below are all
+computational.
+
+### Is the comparison a ratio, or only two figures?
+
+A port may be divided by the artifact it answers only when it answers the whole
+of it.  Nine of them deliberately do not: they take the kernel out of a library
+(`vstd`'s sequences, mimalloc's free list, a leaf-only subset of the page
+table), and one is a downscaled benchmark.  Each entry records which it is, and
+why, so the sums that follow are taken over the 6 comparable examples alone —
+adding the rest in would compare a kernel against a library and flatter whichever
+side happens to be a fragment.
+
+Over those 6, the port costs **×1.29** the artifact it answers: **×0.86** on
+what runs, and **×1.49** on specification and proof.  It spends 78.4% of its
+lines on verification, the artifact 67.7%.
+
+Relevant lines, as `total (code, spec + proof)`:
+
+| Example | Safe Rust | Original artifact | Aeneas+SL | Port ÷ artifact | Rust reference |
+|---|---|---:|---:|---:|---:|
+| [`AsterinasIntrusiveFrameList.lean`](Tests/Examples/AsterinasIntrusiveFrameList.lean) | no | 186 (186, 0) | 314 (93, 221) | fragment | 1123 (1123, 0) |
+| [`Basic.lean`](Tests/Examples/Basic.lean) | yes | — | 52 (13, 39) | — | — |
+| [`CreusotListReversalLasso.lean`](Tests/Examples/CreusotListReversalLasso.lean) | yes | 181 (53, 128) | 380 (53, 327) | fragment | — |
+| [`DardinierMagicWands.lean`](Tests/Examples/DardinierMagicWands.lean) | n/a | — | 180 (25, 155) | — | — |
+| [`EqOrDisj.lean`](Tests/Examples/EqOrDisj.lean) | no | — | 262 (55, 207) | — | 143 (143, 0) |
+| [`HigherOrder.lean`](Tests/Examples/HigherOrder.lean) | yes | — | 97 (15, 82) | — | — |
+| [`IrisTutorial.lean`](Tests/Examples/IrisTutorial.lean) | n/a | 459 (87, 372) | 444 (100, 344) | ×0.97 | 98 (98, 0) |
+| [`PulseArrayTests.lean`](Tests/Examples/PulseArrayTests.lean) | yes | 329 (179, 150) | 333 (59, 274) | fragment | — |
+| [`PulseInsertionSort.lean`](Tests/Examples/PulseInsertionSort.lean) | yes | 182 (75, 107) | 188 (29, 159) | ×1.03 | 38 (38, 0) |
+| [`PulseLinkedList.lean`](Tests/Examples/PulseLinkedList.lean) | yes | 601 (263, 338) | 313 (83, 230) | fragment | 98 (98, 0) |
+| [`PulseResizableVec.lean`](Tests/Examples/PulseResizableVec.lean) | yes | 180 (69, 111) | 244 (53, 191) | ×1.36 | 663 (663, 0) |
+| [`PulseRingBuffer.lean`](Tests/Examples/PulseRingBuffer.lean) | yes | 310 (125, 185) | 366 (67, 299) | ×1.18 | 1051 (1051, 0) |
+| [`VerusBitmap.lean`](Tests/Examples/VerusBitmap.lean) | yes | 105 (46, 59) | 457 (75, 382) | ×4.35 | 697 (697, 0) |
+| [`VerusDoublyLinkedList.lean`](Tests/Examples/VerusDoublyLinkedList.lean) | no | 338 (106, 232) | 329 (114, 215) | ×0.97 | 558 (558, 0) |
+| [`VerusMimallocLinkedList.lean`](Tests/Examples/VerusMimallocLinkedList.lean) | no | 1378 (248, 1130) | 118 (30, 88) | fragment | 68 (68, 0) |
+| [`VerusPageTable.lean`](Tests/Examples/VerusPageTable.lean) | no | 1512 (111, 1401) | 1267 (184, 1083) | fragment | 510 (510, 0) |
+| [`VerusStd.lean`](Tests/Examples/VerusStd.lean) | n/a | 1407 (280, 1127) | 98 (3, 95) | fragment | — |
+| [`VerusVerifiedVec.lean`](Tests/Examples/VerusVerifiedVec.lean) | yes | 118 (29, 89) | 248 (28, 220) | fragment | 663 (663, 0) |
+| [`YOLOCancel.lean`](Tests/Examples/YOLOCancel.lean) | n/a | 37 (12, 25) | 28 (0, 28) | fragment | — |
+| **Total over the 6 comparable** | | **1574 (508, 1066)** | **2028 (438, 1590)** | **×1.29** | |
+
+The artifact column is the *whole* upstream file, which for a library such as
+`vstd`, mimalloc's `linked_list.rs` or Pulse's `LinkedList.fst` is much larger
+than the fragment a port covers — which is exactly why those rows carry no
+ratio; the manifest's `coverage` field records what was left out.  Conversely, Verus obtains its sequence and permission-map reasoning
+from `vstd` for free, so the Lean side keeps that layer separate in
+[`VerusStd.lean`](Tests/Examples/VerusStd.lean): the figure comparable with a
+Verus example excludes it.  The reference column carries the same caveat twice
+over: it is a whole `std` module or crate file, and it implements a data
+structure that only resembles the one that was ported.  What it is good for is
+the shape of the numbers — an unverified implementation is all `code`, and the
+two other columns show what proving it costs.
