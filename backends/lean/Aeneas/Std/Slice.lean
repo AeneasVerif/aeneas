@@ -291,8 +291,7 @@ theorem Slice.update_index_eq α [Inhabited α] (x : Slice α) (i : Usize) (h : 
   simp only [Slice, Subtype.ext_iff, set_val_eq, List.set_getElem_self]
 
 def Slice.subslice {α : Type u} (s : Slice α) (r : Range Usize) : Result (Slice α) :=
-  -- TODO: not completely sure here
-  if r.start.val < r.end.val ∧ r.end.val ≤ s.length then
+  if r.start.val ≤ r.end.val ∧ r.end.val ≤ s.length then
     ok ⟨ s.val.slice r.start.val r.end.val,
           by
             have := s.val.slice_length_le r.start.val r.end.val
@@ -302,7 +301,7 @@ def Slice.subslice {α : Type u} (s : Slice α) (r : Range Usize) : Result (Slic
 
 @[step]
 theorem Slice.subslice_spec {α : Type u} [Inhabited α] (s : Slice α) (r : Range Usize)
-  (h0 : r.start.val < r.end.val) (h1 : r.end.val ≤ s.val.length) :
+  (h0 : r.start.val ≤ r.end.val) (h1 : r.end.val ≤ s.val.length) :
   subslice s r ⦃ ns => ns.val = s.slice r.start.val r.end.val ∧
   (∀ i, i + r.start.val < r.end.val → ns[i]! = s[r.start.val + i]!) ⦄
   := by
@@ -313,15 +312,14 @@ theorem Slice.subslice_spec {α : Type u} [Inhabited α] (s : Slice α) (r : Ran
   apply this
 
 def Slice.update_subslice {α : Type u} (s : Slice α) (r : Range Usize) (ss : Slice α) : Result (Slice α) :=
-  -- TODO: not completely sure here
-  if h: r.start.val < r.end.val ∧ r.end.val ≤ s.length ∧ ss.val.length = r.end.val - r.start.val then
+  if h: r.start.val ≤ r.end.val ∧ r.end.val ≤ s.length ∧ ss.val.length = r.end.val - r.start.val then
     ok ⟨ s.val.setSlice! r.start.val ss.val, by scalar_tac ⟩
   else
     fail panic
 
 @[step]
 theorem Slice.update_subslice_spec {α : Type u} [Inhabited α] (a : Slice α) (r : Range Usize) (ss : Slice α)
-  (_ : r.start.val < r.end.val) (_ : r.end.val ≤ a.length) (_ : ss.length = r.end.val - r.start.val) :
+  (_ : r.start.val ≤ r.end.val) (_ : r.end.val ≤ a.length) (_ : ss.length = r.end.val - r.start.val) :
   update_subslice a r ss ⦃ na =>
     (∀ i, i < r.start.val → na[i]! = a[i]!) ∧
     (∀ i, r.start.val ≤ i → i < r.end.val → na[i]! = ss[i - r.start.val]!) ∧
