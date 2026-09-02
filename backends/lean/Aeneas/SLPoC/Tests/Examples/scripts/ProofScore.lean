@@ -113,7 +113,8 @@ def slAttrNames : Array String := #["iris_simps", "step_simps", "step_post_simps
 /-- Tactics that handle the separation logic by hand. -/
 def manualTactics : Array String :=
   #["iframe", "isimpl", "iintro_entail", "irewrite", "wp_apply",
-    "wp_pures", "wp_mono", "iintro_step", "iintro_keep", "iintro_keep_step",
+    "wp_pures", "wp_mono", "dwp_apply", "dwp_pures", "dwp_mono",
+    "iintro_step", "iintro_keep", "iintro_keep_step",
     "isimp", "iintro_shallow"]
 
 /-- Tactics that *are* the automation: the ideal proof is made of these. -/
