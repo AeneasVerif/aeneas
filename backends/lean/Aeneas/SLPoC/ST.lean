@@ -1,5 +1,6 @@
 import Aeneas.Data.Coinductive.StateMachine
 import Aeneas.SLPoC.WP
+import Aeneas.Std.Primitives
 import Aeneas.Tactic.Step.StepStar
 
 /-!
@@ -28,15 +29,29 @@ structure StEvent (Heap : Type u) : Type (max u (v + 1)) where
   /-- The answer and the new heap the operation produces. -/
   modify : (h : Heap) → pre h → Result × Heap
 
-/-- The event signature of stateful computations over `Heap`: one event per
-partially defined operation, answered by the value that operation returns.
+/-- The inputs of stateful computations over `Heap`: either a partially defined
+heap operation or a Rust failure. -/
+inductive StEvents.I (Heap : Type u) : Type (max u (v + 1)) where
+  | state : StEvent.{u, v} Heap → StEvents.I Heap
+  | fail : Std.Error → StEvents.I Heap
+
+/-- The output of a stateful event. Heap operations return their answer, lifted
+to the event universe, while failure has no continuation. -/
+def StEvents.O {Heap : Type u} (event : StEvents.I.{u, v} Heap) :
+    Type (max u (v + 1)) :=
+  match event with
+  | .state event => ULift.{max u (v + 1), v} event.Result
+  | .fail _ => PEmpty
+
+/-- The event signature of stateful computations over `Heap`: partially defined
+heap operations together with Rust failures.
 
 The effect universe dominates both the heap universe and the universe
 containing the result type stored by an event. Answers are lifted into that
 common universe; an interaction tree's final result may live elsewhere. -/
 def StEvents (Heap : Type u) : Effect.{max u (v + 1)} where
-  I := StEvent.{u, v} Heap
-  O event := ULift.{max u (v + 1), v} event.Result
+  I := StEvents.I.{u, v} Heap
+  O := StEvents.O
 
 abbrev St := ITree (StEvents Heap)
 
@@ -45,17 +60,24 @@ instance St.instLawfulMonad : LawfulMonad St :=
 
 /-- The program that performs one event and returns its answer. -/
 def trigger (event : StEvent Heap) : St event.Result :=
-  ITree.vis (E := StEvents Heap) event fun answer => ITree.ret answer.down
+  ITree.vis (E := StEvents Heap) (.state event) fun answer =>
+    ITree.ret answer.down
+
+/-- The program that fails with a Rust error. -/
+@[simp]
+def fail {α} (error : Std.Error) : St α :=
+  ITree.vis (E := StEvents Heap) (.fail error) PEmpty.elim
 
 /-- The operational semantics of `St`.
-`StEvents.Step e h answer h'` holds when the guard of `e` holds on `h`, and its
-modifier returns `answer` and `h'`.  An event whose guard does not hold is
-stuck. -/
+`StEvents.Step e h answer h'` holds for a heap event when its guard holds on
+`h`, and its modifier returns `answer` and `h'`. An event whose guard does not
+hold is stuck, and a failure event has no transition. -/
 inductive StEvents.Step {Heap : Type u} :
     (event : (StEvents.{u, v} Heap).I) → Heap →
       (StEvents.{u, v} Heap).O event → Heap → Prop where
   | guardedModify {event : StEvent.{u, v} Heap} {h : Heap} (hPre : event.pre h) :
-      Step event h (.up (event.modify h hPre).1) (event.modify h hPre).2
+      Step (.state event) h (.up (event.modify h hPre).1)
+        (event.modify h hPre).2
 
 @[reducible]
 def StEvents.machine (Heap : Type u) : StateMachine (StEvents.{u, v} Heap) :=
@@ -187,9 +209,10 @@ divergence is permitted, being stuck is not.
 `Aeneas.Std.WP.dspec` is `spec` plus one constructor for `Result.div`, and that
 suffices there because the only event of `Result` is `fail`, which has no
 continuation: a computation that neither returns nor fails *is* `div`, in one
-step. A program of `St` performs arbitrarily many events, so an infinite run is
-an infinite `vis` tree and no inductive judgment accepts it. `PartialSpec` is
-therefore the **greatest** fixed point of the one-layer condition
+step. A program of `St` may perform arbitrarily many heap events before
+returning or failing, so an infinite run is an infinite `vis` tree and no
+inductive judgment accepts it. `PartialSpec` is therefore the **greatest**
+fixed point of the one-layer condition
 `PartialSpecF`, written impredicatively as the union of the post-fixed points,
 dually to the way `Exec` of `Aeneas.Data.Coinductive.StateMachine` is the least fixed point of
 `ExecF`. Consequently the two judgments open differently: `TotalSpec` gets its
@@ -204,16 +227,17 @@ frames, rather than by either judgment itself. -/
 inductive TotalSpec (Q : α → Heap → Prop) : St α → Heap → Prop where
   | ret {value : α} {h : Heap} (hPost : Q value h) :
       TotalSpec Q (.ret value) h
-  | vis {event : StEvent Heap} {k : (StEvents Heap).O event → St α}
+  | vis {event : StEvent Heap}
+      {k : (StEvents Heap).O (StEvents.I.state event) → St α}
       {h : Heap} (hPre : event.pre h)
       (hNext : TotalSpec Q
         (k (.up (event.modify h hPre).1)) (event.modify h hPre).2) :
-      TotalSpec Q (.vis event k) h
+      TotalSpec Q (.vis (StEvents.I.state event) k) h
 
 /-- One layer of partial correctness, with the rest of the run left to `X`: a
-returned value satisfies the postcondition, a divergent tree owes nothing, and
-an event must be defined on the heap it is performed on, the continuation being
-run on the heap it produces.
+returned value satisfies the postcondition, a divergent tree owes nothing, a
+heap event must be defined on the heap it is performed on, and failure is
+rejected. The continuation of a heap event runs on the heap it produces.
 
 This is the functional whose greatest fixed point is `PartialSpec`; the same
 layer with `X` a `Prop`-valued *induction* hypothesis would be `TotalSpec`, up
@@ -224,9 +248,13 @@ def PartialSpecF (Q : α → Heap → Prop) (X : St α → Heap → Prop) (m : S
     (motive := fun _ => Prop)
     (fun value => Q value h)
     True
-    (fun (event : StEvent Heap) (k : (StEvents Heap).O event → St α) =>
-      ∃ hPre : event.pre h,
-        X (k (.up (event.modify h hPre).1)) (event.modify h hPre).2)
+    (fun (event : (StEvents Heap).I)
+        (k : (StEvents Heap).O event → St α) =>
+      match event with
+      | StEvents.I.state event =>
+          ∃ hPre : event.pre h,
+            X (k (.up (event.modify h hPre).1)) (event.modify h hPre).2
+      | StEvents.I.fail _ => False)
     m
 
 theorem PartialSpecF.mono {Q : α → Heap → Prop} {X X' : St α → Heap → Prop}
@@ -237,9 +265,15 @@ theorem PartialSpecF.mono {Q : α → Heap → Prop} {X X' : St α → Heap → 
   | ret value => simp only [PartialSpecF, ITree.cases.pure, imp_self]
   | div => simp only [PartialSpecF, ITree.cases.div, imp_self]
   | vis event k =>
-      simp only [PartialSpecF, ITree.cases.vis]
-      rintro ⟨hPre, hNext⟩
-      exact ⟨hPre, hX _ _ hNext⟩
+      cases event with
+      | state event =>
+          simp only [PartialSpecF, ITree.cases.vis]
+          rintro ⟨hPre, hNext⟩
+          exact ⟨hPre, hX _ _ hNext⟩
+      | fail error =>
+          simp only [PartialSpecF, ITree.cases.vis]
+          intro hFalse
+          exact hFalse
 
 /-- Partial correctness of `m` on the exact heap `h`: the greatest fixed point of
 `PartialSpecF`, spelled out as the union of its post-fixed points.  A witness is
@@ -302,10 +336,11 @@ theorem PartialSpec.div {Q : α → Heap → Prop} {h : Heap} :
   intro (by simp only [PartialSpecF, ITree.cases.div])
 
 theorem PartialSpec.vis {Q : α → Heap → Prop} {event : StEvent Heap}
-    {k : (StEvents Heap).O event → St α} {h : Heap} (hPre : event.pre h)
+    {k : (StEvents Heap).O (StEvents.I.state event) → St α} {h : Heap}
+    (hPre : event.pre h)
     (hNext : PartialSpec Q
       (k (.up (event.modify h hPre).1)) (event.modify h hPre).2) :
-    PartialSpec Q (.vis event k) h :=
+    PartialSpec Q (.vis (StEvents.I.state event) k) h :=
   intro (by simpa only [PartialSpecF, ITree.cases.vis] using ⟨hPre, hNext⟩)
 
 theorem PartialSpec.ret_post {Q : α → Heap → Prop} {value : α} {h : Heap}
@@ -313,12 +348,21 @@ theorem PartialSpec.ret_post {Q : α → Heap → Prop} {value : α} {h : Heap}
   simpa only [PartialSpecF, ITree.cases.ret] using hSpec.step
 
 theorem PartialSpec.vis_view {Q : α → Heap → Prop} {event : StEvent Heap}
-    {k : (StEvents Heap).O event → St α} {h : Heap}
-    (hSpec : PartialSpec Q (.vis event k) h) :
+    {k : (StEvents Heap).O (StEvents.I.state event) → St α} {h : Heap}
+    (hSpec : PartialSpec Q (.vis (StEvents.I.state event) k) h) :
     ∃ hPre : event.pre h,
       PartialSpec Q
         (k (.up (event.modify h hPre).1)) (event.modify h hPre).2 := by
   simpa only [PartialSpecF, ITree.cases.vis] using hSpec.step
+
+theorem PartialSpec.fail_vis_false {Q : α → Heap → Prop} {error : Std.Error}
+    {k : (StEvents Heap).O (StEvents.I.fail error) → St α} {h : Heap}
+    (hSpec : PartialSpec Q (.vis (StEvents.I.fail error) k) h) : False := by
+  simpa only [PartialSpecF, ITree.cases.vis] using hSpec.step
+
+theorem PartialSpec.fail_false {Q : α → Heap → Prop} {error : Std.Error}
+    {h : Heap} (hSpec : PartialSpec Q (fail error) h) : False :=
+  hSpec.fail_vis_false
 
 @[simp]
 theorem dspec_ret (value : α) (Q : IPost α) (h : Heap) :
@@ -335,6 +379,18 @@ theorem dspec_pure (value : α) (Q : IPost α) (h : Heap) :
 @[simp]
 theorem dspec_div (Q : IPost α) (h : Heap) : dspec (ITree.div : St α) Q h :=
   PartialSpec.div
+
+@[simp]
+theorem dspec_fail (error : Std.Error) (Q : IPost α) (h : Heap) :
+    ¬ dspec (fail error) Q h :=
+  PartialSpec.fail_false
+
+@[simp]
+theorem dspec_fail_vis (error : Std.Error)
+    (k : (StEvents Heap).O (StEvents.I.fail error) → St α)
+    (Q : IPost α) (h : Heap) :
+    ¬ dspec (.vis (StEvents.I.fail error) k) Q h :=
+  PartialSpec.fail_vis_false
 
 /-- Total correctness is partial correctness: the counterpart of
 `Aeneas.Std.WP.spec_dspec`, and what lets `step` use an `@[step]` triple inside
@@ -370,17 +426,25 @@ theorem PartialSpec.admissible (Q : α → Heap → Prop) (h : Heap) :
       exact (hAll' _ (ITree.csup_ret_mem hc' hEq)).ret_post
   | div => simp only [PartialSpecF, ITree.cases.div]
   | vis event k =>
-      simp only [PartialSpecF, ITree.cases.vis]
-      obtain ⟨k', hMem⟩ := ITree.csup_vis_mem hc' hEq
-      obtain ⟨hPre, -⟩ := (hAll' _ hMem).vis_view
-      refine ⟨hPre, ITree.visChain c' event (.up (event.modify u hPre).1),
-        ITree.visChain_chain hc' event _, ?_, ?_⟩
-      · rintro _ ⟨k'', hMem'', rfl⟩
-        exact (hAll' _ hMem'').vis_view.choose_spec
-      · rw [ITree.csup_vis hc' hMem] at hEq
-        obtain ⟨-, hHEq⟩ := vis_inj hEq
-        obtain rfl := eq_of_heq hHEq
-        rfl
+      cases event with
+      | state event =>
+          simp only [PartialSpecF, ITree.cases.vis]
+          obtain ⟨k', hMem⟩ := ITree.csup_vis_mem hc' hEq
+          obtain ⟨hPre, -⟩ := (hAll' _ hMem).vis_view
+          refine ⟨hPre,
+            ITree.visChain c' (StEvents.I.state event)
+              (.up (event.modify u hPre).1),
+            ITree.visChain_chain hc' (StEvents.I.state event) _, ?_, ?_⟩
+          · rintro _ ⟨k'', hMem'', rfl⟩
+            exact (hAll' _ hMem'').vis_view.choose_spec
+          · rw [ITree.csup_vis hc' hMem] at hEq
+            obtain ⟨-, hHEq⟩ := vis_inj hEq
+            obtain rfl := eq_of_heq hHEq
+            rfl
+      | fail error =>
+          simp only [PartialSpecF, ITree.cases.vis]
+          obtain ⟨_, hMem⟩ := ITree.csup_vis_mem hc' hEq
+          exact (hAll' _ hMem).fail_vis_false
 
 theorem dspec_admissible (Q : IPost α) (h : Heap) :
     Lean.Order.admissible (fun m : St α => dspec m Q h) :=
@@ -424,10 +488,14 @@ def TotalSpec.view (Q : α → Heap → Prop) (m : St α) (h : Heap) : Prop :=
     (motive := fun _ => Prop)
     (fun value => Q value h)
     False
-    (fun (event : StEvent Heap) (k : (StEvents Heap).O event → St α) =>
-      ∃ hPre : event.pre h,
-        TotalSpec Q
-          (k (.up (event.modify h hPre).1)) (event.modify h hPre).2)
+    (fun (event : (StEvents Heap).I)
+        (k : (StEvents Heap).O event → St α) =>
+      match event with
+      | StEvents.I.state event =>
+          ∃ hPre : event.pre h,
+            TotalSpec Q
+              (k (.up (event.modify h hPre).1)) (event.modify h hPre).2
+      | StEvents.I.fail _ => False)
     m
 
 theorem TotalSpec.view_of {Q : α → Heap → Prop} {m : St α} {h : Heap}
@@ -449,12 +517,22 @@ theorem TotalSpec.div_false {Q : α → Heap → Prop} {h : Heap}
   simpa only [TotalSpec.view, ITree.cases.div] using hSpec.view_of
 
 theorem TotalSpec.vis_view {Q : α → Heap → Prop}
-    {event : StEvent Heap} {k : (StEvents Heap).O event → St α} {h : Heap}
-    (hSpec : TotalSpec Q (.vis event k) h) :
+    {event : StEvent Heap}
+    {k : (StEvents Heap).O (StEvents.I.state event) → St α} {h : Heap}
+    (hSpec : TotalSpec Q (.vis (StEvents.I.state event) k) h) :
     ∃ hPre : event.pre h,
       TotalSpec Q
         (k (.up (event.modify h hPre).1)) (event.modify h hPre).2 := by
   simpa only [TotalSpec.view, ITree.cases.vis] using hSpec.view_of
+
+theorem TotalSpec.fail_vis_false {Q : α → Heap → Prop} {error : Std.Error}
+    {k : (StEvents Heap).O (StEvents.I.fail error) → St α} {h : Heap}
+    (hSpec : TotalSpec Q (.vis (StEvents.I.fail error) k) h) : False := by
+  simpa only [TotalSpec.view, ITree.cases.vis] using hSpec.view_of
+
+theorem TotalSpec.fail_false {Q : α → Heap → Prop} {error : Std.Error}
+    {h : Heap} (hSpec : TotalSpec Q (fail error) h) : False :=
+  hSpec.fail_vis_false
 
 theorem spec_ret (value : α) (Q : IPost α) (h : Heap) :
     spec (ITree.ret value : St α) Q h ↔ Q value h :=
@@ -468,6 +546,18 @@ theorem spec_pure (value : α) (Q : IPost α) (h : Heap) :
 theorem spec_div (Q : IPost α) (h : Heap) :
     ¬ spec (ITree.div : St α) Q h :=
   TotalSpec.div_false
+
+@[simp]
+theorem spec_fail (error : Std.Error) (Q : IPost α) (h : Heap) :
+    ¬ spec (fail error) Q h :=
+  TotalSpec.fail_false
+
+@[simp]
+theorem spec_fail_vis (error : Std.Error)
+    (k : (StEvents Heap).O (StEvents.I.fail error) → St α)
+    (Q : IPost α) (h : Heap) :
+    ¬ spec (.vis (StEvents.I.fail error) k) Q h :=
+  TotalSpec.fail_vis_false
 
 open Lean.Order in
 /-- Total correctness is monotone in the interaction-tree approximation order. -/
@@ -506,8 +596,13 @@ theorem PartialSpec.mono {Q Q' : α → Heap → Prop}
       exact fun hSpec' => hQ _ _ hSpec'.ret_post
   | div => simp only [PartialSpecF, ITree.cases.div, implies_true]
   | vis event k =>
-      simp only [PartialSpecF, ITree.cases.vis]
-      exact fun hSpec' => hSpec'.vis_view
+      cases event with
+      | state event =>
+          simp only [PartialSpecF, ITree.cases.vis]
+          exact fun hSpec' => hSpec'.vis_view
+      | fail error =>
+          simp only [PartialSpecF, ITree.cases.vis]
+          exact fun hSpec' => hSpec'.fail_vis_false
 
 theorem dspec_mono {Q Q' : IPost α} {m : St α} {h : Heap}
     (hSpec : dspec m Q h) (hQ : Q ⊢+ Q') : dspec m Q' h :=
@@ -531,10 +626,15 @@ theorem PartialSpec.bind {Q₁ : α → Heap → Prop} {Q₂ : β → Heap → P
         exact ((hNext value h' hSpec.ret_post).step).mono fun _ _ => Or.inr
     | div => simp only [div_bind, PartialSpecF, ITree.cases.div, implies_true]
     | vis event k =>
-        simp only [vis_bind, PartialSpecF, ITree.cases.vis]
-        rintro hSpec
-        obtain ⟨hPre, hNext'⟩ := hSpec.vis_view
-        exact ⟨hPre, Or.inl ⟨_, rfl, hNext'⟩⟩
+        cases event with
+        | state event =>
+            simp only [vis_bind, PartialSpecF, ITree.cases.vis]
+            rintro hSpec
+            obtain ⟨hPre, hNext'⟩ := hSpec.vis_view
+            exact ⟨hPre, Or.inl ⟨_, rfl, hNext'⟩⟩
+        | fail error =>
+            simp only [vis_bind, PartialSpecF, ITree.cases.vis]
+            exact fun hSpec => hSpec.fail_vis_false
   · exact hSpec.step.mono fun _ _ => Or.inr
 
 theorem dspec_bind {Q₁ : IPost α} {Q₂ : IPost β} {m : St α} {next : α → St β}
@@ -557,9 +657,14 @@ theorem PartialSpec.mono_le {m m' : St α} (hLe : m ⊑ m') {Q : α → Heap →
   obtain rfl | ⟨value, rfl, rfl⟩ | ⟨event, k, k', rfl, rfl, hCont⟩ := hLe'
   · simp only [PartialSpecF, ITree.cases.div]
   · simpa only [PartialSpecF, ITree.cases.ret] using hSpec'.ret_post
-  · simp only [PartialSpecF, ITree.cases.vis]
-    obtain ⟨hPre, hNext⟩ := hSpec'.vis_view
-    exact ⟨hPre, _, hCont _, hNext⟩
+  · cases event with
+    | state event =>
+        simp only [PartialSpecF, ITree.cases.vis]
+        obtain ⟨hPre, hNext⟩ := hSpec'.vis_view
+        exact ⟨hPre, _, hCont _, hNext⟩
+    | fail error =>
+        simp only [PartialSpecF, ITree.cases.vis]
+        exact hSpec'.fail_vis_false
 
 /-! ### Adequacy of `dspec`
 
@@ -592,11 +697,14 @@ theorem PartialSpec.evaluates {Q : α → Heap → Prop} {m : St α} {h : Heap}
     (hEval : Evaluates m h value h') : Q value h' :=
   (hSpec.reaches hEval).ret_post
 
-/-- Every event a proved program reaches is defined on the heap it is reached
-with: partial correctness permits divergence, not stuckness. -/
+/-- Every heap event a proved program reaches is defined on the heap it is
+reached with; a proved program cannot reach failure. Partial correctness permits
+divergence, not stuckness. -/
 theorem PartialSpec.pre_of_reaches {Q : α → Heap → Prop} {m : St α} {h : Heap}
-    {event : StEvent Heap} {k : (StEvents Heap).O event → St α} {h' : Heap}
-    (hSpec : PartialSpec Q m h) (hReaches : Reaches m h (.vis event k) h') :
+    {event : StEvent Heap}
+    {k : (StEvents Heap).O (StEvents.I.state event) → St α} {h' : Heap}
+    (hSpec : PartialSpec Q m h)
+    (hReaches : Reaches m h (.vis (StEvents.I.state event) k) h') :
     event.pre h' :=
   (hSpec.reaches hReaches).vis_view.choose
 
@@ -832,8 +940,9 @@ theorem dtriple_evaluates {P : IPre} {m : St α} {Q : IPost α}
 defined. -/
 theorem dtriple_pre_of_reaches {P : IPre} {m : St α} {Q : IPost α}
     (hTriple : dtriple P m Q) {h : Heap} (hPre : P h) {event : StEvent Heap}
-    {k : (StEvents Heap).O event → St α} {h' : Heap}
-    (hReaches : Reaches m h (.vis event k) h') : event.pre h' :=
+    {k : (StEvents Heap).O (StEvents.I.state event) → St α} {h' : Heap}
+    (hReaches : Reaches m h (.vis (StEvents.I.state event) k) h') :
+    event.pre h' :=
   (dtriple_apply hTriple hPre).pre_of_reaches hReaches
 
 theorem dtriple_frame {P : IPre} {m : St α} {Q : IPost α}
@@ -1172,7 +1281,7 @@ theorem eq_ret_of_unfold {m : St α} {value : α} (hm : m.unfold = .ret value) :
     m = ITree.ret value :=
   eq_of_unfold hm
 
-theorem eq_vis_of_unfold {m : St α} {event : StEvent Heap}
+theorem eq_vis_of_unfold {m : St α} {event : (StEvents Heap).I}
     {k : (StEvents Heap).O event → St α} (hm : m.unfold = .vis event k) :
     m = ITree.vis event k :=
   eq_of_unfold hm
@@ -1180,18 +1289,28 @@ theorem eq_vis_of_unfold {m : St α} {event : StEvent Heap}
 /-- At a `vis` node total correctness supplies the guard of the event and total
 correctness of the continuation on the modified heap. -/
 theorem spec_unfold_vis {m : St α} {event : StEvent Heap}
-    {k : (StEvents Heap).O event → St α} {Q : IPost α} {h : Heap}
-    (hm : m.unfold = .vis event k) (hSpec : spec m Q h) :
+    {k : (StEvents Heap).O (StEvents.I.state event) → St α}
+    {Q : IPost α} {h : Heap}
+    (hm : m.unfold = .vis (StEvents.I.state event) k) (hSpec : spec m Q h) :
     ∃ hPre : event.pre h,
       spec (k (.up (event.modify h hPre).1)) Q (event.modify h hPre).2 :=
   by
     rw [eq_vis_of_unfold hm] at hSpec
     exact TotalSpec.vis_view hSpec
 
+theorem spec_unfold_fail_false {m : St α} {error : Std.Error}
+    {k : (StEvents Heap).O (StEvents.I.fail error) → St α}
+    {Q : IPost α} {h : Heap}
+    (hm : m.unfold = .vis (StEvents.I.fail error) k)
+    (hSpec : spec m Q h) : False := by
+  rw [eq_vis_of_unfold hm] at hSpec
+  exact hSpec.fail_vis_false
+
 /-- Run `m` from `h`. The total-correctness proof supplies the guard of each
-event, so nothing has to be decided: the guard of an event of `St` is an
-arbitrary proposition, and a read through a dangling or mistyped pointer is
-stuck rather than erroneous.  Proofs are erased at run time, so this computes.
+heap event and rules out failure, so nothing has to be decided: the guard of a
+heap event of `St` is an arbitrary proposition, and a read through a dangling
+or mistyped pointer is stuck rather than erroneous. Proofs are erased at run
+time, so this computes.
 
 An interaction tree is coinductive, so this is a partial fixed point rather than
 a structural recursion, and it must answer something on a tree with no `ret` in
@@ -1202,10 +1321,12 @@ def runOpt (m : St α) (h : Heap) (Q : IPost α) (hSpec : spec m Q h) :
   match hm : m.unfold with
   | .ret value => some (value, h)
   | .div => none
-  | .vis event k =>
+  | .vis (StEvents.I.state event) k =>
       let hNext := spec_unfold_vis hm hSpec
       runOpt (k (.up (event.modify h hNext.choose).1))
         (event.modify h hNext.choose).2 Q hNext.choose_spec
+  | .vis (StEvents.I.fail _error) _k =>
+      False.elim (spec_unfold_fail_false hm hSpec)
 partial_fixpoint
 
 /-- The interpreter answers, its answer satisfies the postcondition, and it is
@@ -1234,6 +1355,9 @@ theorem runOpt_spec (Q : IPost α) (m : St α) (h : Heap) (hSpec : spec m Q h) :
         · simpa using hRun
         · exact StateMachine.Evaluates.step (StEvents.Step.guardedModify hPre)
             hEvaluates
+      · rename_i error k hm
+        simp only [unfold_vis] at hm
+        cases hm
 
 theorem runOpt_isSome (Q : IPost α) (m : St α) (h : Heap)
     (hSpec : spec m Q h) : (runOpt m h Q hSpec).isSome := by
