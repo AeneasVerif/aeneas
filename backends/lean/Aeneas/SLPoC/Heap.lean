@@ -1,7 +1,7 @@
 module
 
 import Mathlib.Data.Finmap
-public import Aeneas.SLPoC.PCM
+public import Aeneas.Data.PartialCommMonoid
 
 public section
 
