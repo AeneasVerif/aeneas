@@ -26,12 +26,6 @@ attribute [-simp] List.getElem!_eq_getElem?_getD
 instance (α : Type u) : CoeOut (Slice α) (List α) where
   coe := λ v => v.val
 
-instance [BEq α] : BEq (Slice α) := SubtypeBEq _
-
-instance [BEq α] [LawfulBEq α] : LawfulBEq (Slice α) := SubtypeLawfulBEq _
-
-instance [DecidableEq α] : DecidableEq (Slice α) := inferInstanceAs (DecidableEq { _l : List α // _ })
-
 theorem Slice.length_ineq {α : Type u} (s : Slice α) : s.val.length ≤ Usize.max := by
   cases s; simp[*]
 
@@ -42,15 +36,22 @@ abbrev Slice.length {α : Type u} (v : Slice α) : Nat := v.val.length
 abbrev Slice.v {α : Type u} (v : Slice α) : List α := v.val
 
 example {a: Type u} (v : Slice a) : v.length ≤ Usize.max := by
-  scalar_tac
+  simp
 
-def Slice.new (α : Type u) : Slice α := ⟨ [], by simp ⟩
+def Slice.new (α : Type u) : Slice α := {
+  leng := 0
+  list := .nil
+  bound := by simp
+}
+
+@[simp, simp_lists_safe, scalar_tac_simps, grind =, agrind =]
+theorem Slice.new_val (α : Type u) : (Slice.new α).val = [] := rfl
 
 @[rust_fun "core::slice::{[@T]}::len" -canFail -lift]
 abbrev Slice.len {α : Type u} (v : Slice α) : Usize :=
   Usize.ofNatCore v.val.length (by scalar_tac)
 
-@[simp, scalar_tac_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe, simp_lists_safe, grind =, agrind =]
 theorem Slice.len_val {α : Type u} (v : Slice α) : (Slice.len v).val = v.length :=
   by simp
 
@@ -92,16 +93,16 @@ theorem Slice.getElem!_Usize_eq {α : Type u} [Inhabited α] (v : Slice α) (i :
 @[simp, scalar_tac_simps, simp_lists_hyps_simps] abbrev Slice.get! {α : Type u} [Inhabited α] (v : Slice α) (i : Nat) : α := getElem! v i
 
 def Slice.setAtNat {α : Type u} (v: Slice α) (i: Nat) (x: α) : Slice α :=
-  ⟨ v.val.set i x, by have := v.property; simp [*] ⟩
+  .from (v.val.set i x) (by have := v.property; simp [*])
 
 def Slice.set {α : Type u} (v: Slice α) (i: Usize) (x: α) : Slice α :=
   Slice.setAtNat v i.val x
 
 def Slice.set_opt {α : Type u} (v: Slice α) (i: Usize) (x: Option α) : Slice α :=
-  ⟨ v.val.set_opt i.val x, by have := v.property; simp [*] ⟩
+  .from (v.val.set_opt i.val x) (by have := v.property; simp [*])
 
 def Slice.drop {α} (s : Slice α) (i : Usize) : Slice α :=
-  ⟨ s.val.drop i.val, by scalar_tac ⟩
+  .from (s.val.drop i.val) (by scalar_tac)
 
 @[simp, simp_lists_safe]
 theorem Slice.getElem!_val_drop {T} (s : Slice T) (i : Usize) :
@@ -116,9 +117,6 @@ def Slice.index_usize {α : Type u} (v: Slice α) (i: Usize) : Result α :=
   match v[i]? with
   | none => fail .arrayOutOfBounds
   | some x => ok x
-
-theorem Slice.eq_iff {α} (s0 s1 : Slice α) : s0 = s1 ↔ s0.val = s1.val := by
-  simp only [Slice, Subtype.ext_iff]
 
 @[rust_fun "core::slice::{[@T]}::is_empty", simp]
 def core.slice.Slice.is_empty {T : Type} (s : Slice T) : Result Bool := ok (s.length = 0)
@@ -221,7 +219,7 @@ theorem Slice.ext_getElem {α} {s1 s2 : Slice α}
     (hlen : s1.length = s2.length)
     (hget : ∀ (i : Nat) (_ : i < s1.length) (_ : i < s2.length), s1[i] = s2[i]) :
     s1 = s2 := by
-  apply Subtype.ext
+  apply Slice.ext
   exact List.ext_getElem (by simp_all) fun i h1 h2 => hget i h1 h2
 
 @[simp, scalar_tac_simps, simp_lists_safe, grind =, agrind =]
@@ -262,7 +260,7 @@ def Slice.update {α : Type u} (v: Slice α) (i: Usize) (x: α) : Result (Slice 
   match v.val[i.val]? with
   | none => fail .arrayOutOfBounds
   | some _ =>
-    ok ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
+    ok (.from (v.val.set i.val x) (by have := v.property; simp [*]))
 
 @[step]
 theorem Slice.update_spec {α : Type u} (v: Slice α) (i: Usize) (x : α)
@@ -288,15 +286,15 @@ theorem Slice.index_mut_usize_spec {α : Type u} (v: Slice α) (i: Usize)
 @[simp, simp_lists_safe]
 theorem Slice.update_index_eq α [Inhabited α] (x : Slice α) (i : Usize) (h : i.val < x.val.length) :
   x.set i (x.val[i.val]'h) = x := by
-  simp only [Slice, Subtype.ext_iff, set_val_eq, List.set_getElem_self]
+  simp only [Slice.eq_iff, set_val_eq, List.set_getElem_self]
 
 def Slice.subslice {α : Type u} (s : Slice α) (r : Range Usize) : Result (Slice α) :=
   -- TODO: not completely sure here
   if r.start.val < r.end.val ∧ r.end.val ≤ s.length then
-    ok ⟨ s.val.slice r.start.val r.end.val,
-          by
+    ok (.from ( s.val.slice r.start.val r.end.val)
+          (by
             have := s.val.slice_length_le r.start.val r.end.val
-            scalar_tac ⟩
+            scalar_tac))
   else
     fail panic
 
@@ -306,16 +304,16 @@ theorem Slice.subslice_spec {α : Type u} [Inhabited α] (s : Slice α) (r : Ran
   subslice s r ⦃ ns => ns.val = s.slice r.start.val r.end.val ∧
   (∀ i, i + r.start.val < r.end.val → ns[i]! = s[r.start.val + i]!) ⦄
   := by
-  simp_all only [subslice, length, and_self, ite_true, slice, spec_ok, true_and]
+  simp_all [subslice, length, and_self, slice, spec_ok, true_and]
   intro i _
   have := List.getElem!_slice r.start.val r.end.val i s.val (by scalar_tac)
-  simp only [List.getElem!_eq_getElem?_getD, getElem!_Nat_eq] at *
+  simp only [List.getElem!_eq_getElem?_getD] at *
   apply this
 
 def Slice.update_subslice {α : Type u} (s : Slice α) (r : Range Usize) (ss : Slice α) : Result (Slice α) :=
   -- TODO: not completely sure here
   if h: r.start.val < r.end.val ∧ r.end.val ≤ s.length ∧ ss.val.length = r.end.val - r.start.val then
-    ok ⟨ s.val.setSlice! r.start.val ss.val, by scalar_tac ⟩
+    ok (.from ( s.val.setSlice! r.start.val ss.val) (by simp))
   else
     fail panic
 
@@ -332,7 +330,7 @@ theorem Slice.update_subslice_spec {α : Type u} [Inhabited α] (a : Slice α) (
 
 @[rust_fun "core::slice::{[@T]}::reverse" -canFail]
 def core.slice.Slice.reverse {T : Type} (s : Slice T) : Slice T :=
-  ⟨ s.val.reverse, by scalar_tac ⟩
+  .from (s.val.reverse) (by simp)
 
 @[rust_trait "core::slice::index::SliceIndex"]
 structure core.slice.index.SliceIndex (Self T Output : Type) where
@@ -356,12 +354,11 @@ def core.slice.Slice.get
   inst.get i s
 
 @[rust_fun "core::slice::{[@T]}::get_unchecked"]
-def core.slice.Slice.get_unchecked
+opaque core.slice.Slice.get_unchecked
   {T : Type} {I : Type} {Output : Type}
   (SliceIndexInst : core.slice.index.SliceIndex I (Slice T) Output)
-  (s : Slice T) (i : I) : Result Output :=
-  -- TODO: we should actually use the `SliceIndexInst.get_unchecked` method
-  sorry
+  (s : Slice T) (i : I) : Result Output
+  -- TODO: we need to model the heap to call `SliceIndexInst.get_unchecked`
 
 @[rust_fun "core::slice::{[@T]}::get_mut"]
 def core.slice.Slice.get_mut
@@ -373,20 +370,20 @@ def core.slice.Slice.get_mut
 def core.slice.index.SliceIndexRangeUsizeSlice.get {T : Type} (r : Range Usize) (s : Slice T) :
   Result (Option (Slice T)) :=
   if r.start ≤ r.end ∧ r.end ≤ s.length then
-    ok (some ⟨ s.val.slice r.start r.end, by scalar_tac⟩)
+    ok (some (.from (s.val.slice r.start r.end) (by scalar_tac)))
   else ok none
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], [@T]>}::get_mut"]
 def core.slice.index.SliceIndexRangeUsizeSlice.get_mut
   {T : Type} (r : Range Usize) (s : Slice T) : Result (Option (Slice T) × (Option (Slice T) → Slice T)) :=
   if r.start ≤ r.end ∧ r.end ≤ s.length then
-    ok (some ⟨ s.val.slice r.start r.end, by scalar_tac⟩,
+    ok (some (.from ( s.val.slice r.start r.end) (by scalar_tac)),
         fun s' =>
         match s' with
         | none => s
         | some s' =>
           if h: s'.length = r.end - r.start then
-            ⟨ List.setSlice! s.val r.start s'.val, by scalar_tac ⟩
+            .from (List.setSlice! s.val r.start s'.val) (by simp)
           else s )
   else ok (none, fun _ => s)
 
@@ -405,19 +402,19 @@ def core.slice.index.SliceIndexRangeUsizeSlice.get_unchecked_mut {T : Type} :
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], [@T]>}::index"]
 def core.slice.index.SliceIndexRangeUsizeSlice.index {T : Type} (r : Range Usize) (s : Slice T) : Result (Slice T) :=
   if r.start ≤ r.end ∧ r.end ≤ s.length then
-    ok (⟨ s.val.slice r.start r.end, by scalar_tac⟩)
+    ok (.from (s.val.slice r.start r.end) (by scalar_tac))
   else fail .panic
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], [@T]>}::index_mut"]
 def core.slice.index.SliceIndexRangeUsizeSlice.index_mut {T : Type} (r : Range Usize) (s : Slice T) :
   Result (Slice T × (Slice T → Slice T)) :=
   if r.start ≤ r.end ∧ r.end ≤ s.length then
-    ok (⟨ s.val.slice r.start r.end, by scalar_tac⟩,
+    ok (.from (s.val.slice r.start r.end) (by scalar_tac),
         /- The back function expects a slice of the same length as the returned subslice.
            We don't enforce this with a guard because we want totality; `setSlice!` handles
            any length gracefully. The model is correct when this condition holds, which is
            always the case for code generated by Aeneas. -/
-        fun s' => ⟨ List.setSlice! s.val r.start s', by scalar_tac ⟩)
+        fun s' => .from (List.setSlice! s.val r.start s') (by simp))
   else fail .panic
 
 /- [core::slice::index::[T]::index_mut] -/
@@ -442,7 +439,7 @@ def core.slice.index.SliceIndexRangeUsizeSlice (T : Type) :
 def core.slice.index.SliceIndexRangeToUsizeSlice.get
   {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) : Result (Option (Slice T)) :=
   if r.end ≤ s.length then
-    ok (some ⟨ s.val.slice 0 r.end, by scalar_tac⟩)
+    ok (some (.from (s.val.slice 0 r.end) (by scalar_tac)))
   else ok none
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get_mut"]
@@ -450,13 +447,13 @@ def core.slice.index.SliceIndexRangeToUsizeSlice.get_mut
   {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) :
   Result ((Option (Slice T)) × (Option (Slice T) → Slice T)) :=
   if r.end ≤ s.length then
-    ok (some ⟨ s.val.slice 0 r.end, by scalar_tac⟩,
+    ok (some (.from (s.val.slice 0 r.end) (by scalar_tac)),
         fun s' =>
         match s' with
         | none => s
         | some s' =>
           if h: s'.length = r.end then
-            ⟨ List.setSlice! s.val 0 s'.val, by scalar_tac ⟩
+            .from (List.setSlice! s.val 0 s'.val) (by simp)
           else s )
   else ok (none, fun _ => s)
 
@@ -477,7 +474,7 @@ def core.slice.index.SliceIndexRangeToUsizeSlice.get_unchecked_mut
 def core.slice.index.SliceIndexRangeToUsizeSlice.index
   {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) : Result (Slice T) :=
   if r.end ≤ s.length then
-    ok (⟨ s.val.slice 0 r.end, by scalar_tac⟩)
+    ok (.from (s.val.slice 0 r.end) (by scalar_tac))
   else fail .panic
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::index_mut"]
@@ -485,12 +482,12 @@ def core.slice.index.SliceIndexRangeToUsizeSlice.index_mut
   {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) :
   Result ((Slice T) × (Slice T → Slice T)) :=
   if r.end ≤ s.length then
-    ok (⟨ s.val.slice 0 r.end, by scalar_tac⟩,
+    ok (.from (s.val.slice 0 r.end) (by scalar_tac),
         /- The back function expects a slice of the same length as the returned subslice.
            We don't enforce this with a guard because we want totality; `setSlice!` handles
            any length gracefully. The model is correct when this condition holds, which is
            always the case for code generated by Aeneas. -/
-        fun s' => ⟨ List.setSlice! s.val 0 s'.val, by scalar_tac ⟩)
+        fun s' => .from (List.setSlice! s.val 0 s'.val) (by simp))
   else fail .panic
 
 @[reducible, rust_trait_impl "core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>"]
@@ -503,6 +500,55 @@ def core.slice.index.SliceIndexRangeToUsizeSlice (T : Type) :
   get_unchecked_mut := core.slice.index.SliceIndexRangeToUsizeSlice.get_unchecked_mut
   index := core.slice.index.SliceIndexRangeToUsizeSlice.index
   index_mut := core.slice.index.SliceIndexRangeToUsizeSlice.index_mut
+}
+
+/-! ## `SliceIndex<RangeFull, [T]>`
+
+Indexing a slice with `RangeFull` yields the whole slice. -/
+
+@[simp, step_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::get"]
+abbrev core.slice.index.SliceIndexRangeFullSlice.get
+  {T : Type} (_ : core.ops.range.RangeFull) (s : Slice T) : Result (Option (Slice T)) :=
+  ok (some s)
+
+@[simp, step_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::get_mut"]
+def core.slice.index.SliceIndexRangeFullSlice.get_mut
+  {T : Type} (_ : core.ops.range.RangeFull) (s : Slice T) :
+  Result (Option (Slice T) × (Option (Slice T) → Slice T)) :=
+  ok (some s, fun s' => match s' with | some updated => updated | none => s)
+
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::get_unchecked"]
+opaque core.slice.index.SliceIndexRangeFullSlice.get_unchecked
+  {T : Type} (_ : core.ops.range.RangeFull) (s : ConstRawPtr (Slice T)) :
+  Result (ConstRawPtr (Slice T)) :=
+  fail .undef -- TODO: not sure what it should be
+
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::get_unchecked_mut"]
+opaque core.slice.index.SliceIndexRangeFullSlice.get_unchecked_mut
+  {T : Type} (_ : core.ops.range.RangeFull) (s : MutRawPtr (Slice T)) :
+  Result (MutRawPtr (Slice T)) :=
+  fail .undef -- TODO: not sure what it should be
+
+@[simp, step_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::index"]
+def core.slice.index.SliceIndexRangeFullSlice.index
+  {T : Type} (_ : core.ops.range.RangeFull) (s : Slice T) : Result (Slice T) :=
+  ok s
+
+@[simp, step_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::index_mut"]
+def core.slice.index.SliceIndexRangeFullSlice.index_mut
+  {T : Type} (_ : core.ops.range.RangeFull) (s : Slice T) :
+  Result (Slice T × (Slice T → Slice T)) :=
+  ok (s, fun updated => updated)
+
+@[reducible, rust_trait_impl "core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>"]
+def core.slice.index.SliceIndexRangeFullSlice (T : Type) :
+  core.slice.index.SliceIndex core.ops.range.RangeFull (Slice T) (Slice T) := {
+  get := core.slice.index.SliceIndexRangeFullSlice.get
+  get_mut := core.slice.index.SliceIndexRangeFullSlice.get_mut
+  get_unchecked := core.slice.index.SliceIndexRangeFullSlice.get_unchecked
+  get_unchecked_mut := core.slice.index.SliceIndexRangeFullSlice.get_unchecked_mut
+  index := core.slice.index.SliceIndexRangeFullSlice.index
+  index_mut := core.slice.index.SliceIndexRangeFullSlice.index_mut
 }
 
 @[rust_trait_impl "core::ops::index::Index<[@T], @I, @O>"]
@@ -563,11 +609,11 @@ def core.slice.index.SliceIndexUsizeSlice (T : Type) :
 }
 
 @[step]
-theorem core.slice.Slice.get_unchecked_SliceIndexUsizeSlice_spec {T s i} [Inhabited T]
+axiom core.slice.Slice.get_unchecked_SliceIndexUsizeSlice_spec {T s i} [Inhabited T]
   (h : i.val < s.length) :
   core.slice.Slice.get_unchecked  (core.slice.index.SliceIndexUsizeSlice T) s i
-  ⦃ x => x = s[i] ⦄ := by
-  sorry
+  ⦃ x => x = s[i] ⦄
+  -- TODO: awaiting a full definition for `core.slice.Slice.get_unchecked`
 
 @[rust_fun "core::slice::{[@T]}::copy_from_slice"]
 def core.slice.Slice.copy_from_slice {T : Type} (_ : core.marker.Copy T)
@@ -591,7 +637,7 @@ def core.slice.index.SliceIndexRangeFromUsizeSlice.get_mut
         | none => s
         | some s' =>
           if h: s'.length + s.length - r.start.val ≤ Usize.max then
-            ⟨ s'.val ++ s.val.drop r.start.val, by scalar_tac ⟩
+            .from (s'.val ++ s.val.drop r.start.val) (by grind)
           else s)
   else ok (none, fun _ => s)
 
@@ -624,7 +670,7 @@ def core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut {T : Type}
             We don't enforce this with a guard because we want totality; `setSlice!` handles
             any length gracefully. The model is correct when this condition holds, which is
             always the case for code generated by Aeneas. -/
-         fun s2 => ⟨ s.val.setSlice! r.start s2, by scalar_tac ⟩)
+         fun s2 => .from (s.val.setSlice! r.start s2) (by simp))
   else fail .panic
 
 theorem _SliceIndexRangeFromUsizeSlice.index_mut.test {T} (s : Slice T) (r : core.ops.range.RangeFrom Usize) (h : r.start ≤ s.length) :
@@ -652,7 +698,7 @@ def core.slice.index.SliceIndexRangeFromUsizeSlice (T : Type) :
 /-- Small helper (this function doesn't model a specific Rust function) -/
 def Slice.clone {T : Type} (clone : T → Result T) (s : Slice T) : Result (Slice T) := do
   let s' ← List.clone clone s.val
-  ok ⟨ s', by scalar_tac ⟩
+  ok (.from s' (by simp))
 
 theorem Slice.clone_length {T : Type} {clone : T → Result T} {s s' : Slice T} (h : Slice.clone clone s = ok s') :
   s'.length = s.length := by
@@ -661,8 +707,7 @@ theorem Slice.clone_length {T : Type} {clone : T → Result T} {s s' : Slice T} 
   split at h <;> simp_all
   rename_i heq
   have := List.mapM_Result_length heq
-  cases s'; simp_all
-  cases h; simp_all
+  grind
 
 @[step]
 theorem Slice.clone_spec {T : Type} {clone : T → Result T} {s : Slice T} (h : ∀ x ∈ s.val, clone x = ok x) :
@@ -677,8 +722,8 @@ def core.slice.Slice.split_at {T : Type} (s : Slice T) (n : Usize) :
   if h0 : n ≤ s.length then
     let s0 := (s.val.splitAt n.val).fst
     let s1 := (s.val.splitAt n.val).snd
-    let s0 : Slice T := ⟨ s0, by have := List.splitAt_length n.val s.val; have := s.property; simp +zetaDelta at *; omega  ⟩
-    let s1 : Slice T := ⟨ s1, by have := List.splitAt_length n.val s.val; have := s.property; simp +zetaDelta at *; omega  ⟩
+    let s0 : Slice T := .from s0 (by scalar_tac)
+    let s1 : Slice T := .from s1 (by scalar_tac)
     ok (s0, s1)
   else fail .panic
 
@@ -693,10 +738,10 @@ def core.slice.Slice.split_at_mut {T : Type} (s : Slice T) (n : Usize) :
       let s1' := s'.snd
       if h1 : s0'.length = s0.length ∧ s1'.length = s1.length then
         -- TODO: scalar_tac is super slow below
-        ⟨ s0'.val ++ s1'.val, by have := List.splitAt_length n.val s.val; have := s.property; simp +zetaDelta at *; omega ⟩
+        .from (s0'.val ++ s1'.val) (by have := List.splitAt_length n.val s.val; have := s.property; simp +zetaDelta at *; grind)
       else s
-    let s0 : Slice T := ⟨ s0, by have := List.splitAt_length n.val s.val; have := s.property; simp +zetaDelta at *; omega  ⟩
-    let s1 : Slice T := ⟨ s1, by have := List.splitAt_length n.val s.val; have := s.property; simp +zetaDelta at *; omega  ⟩
+    let s0 : Slice T := .from s0 (by scalar_tac)
+    let s1 : Slice T := .from s1 (by scalar_tac)
     ok ((s0, s1), back)
   else fail .panic
 
@@ -711,7 +756,7 @@ theorem core.slice.Slice.split_at.spec {T : Type} (s : Slice T) (n : Usize)
   unfold core.slice.Slice.split_at
   simp only [h, ↓reduceDIte, WP.spec_ok, uncurry'_pair]
   refine ⟨?_, ?_, ?_, ?_⟩ <;>
-  simp only [Slice.length, List.splitAt_eq, List.length_take, inf_eq_left, List.length_drop, *]
+  simp [Slice.length, List.splitAt_eq, List.length_take, List.length_drop, *]
 
 /-- **Spec theorem for `core::slice::{[@T]}::split_at_mut`** -/
 -- TODO: ideally the postcondition binder would decompose the result pair as
@@ -737,7 +782,7 @@ theorem core.slice.Slice.split_at_mut.spec {T : Type} (s : Slice T) (n : Usize)
   · simp [List.splitAt_eq]
   · simp [List.splitAt_eq]
   · split_ifs with hcond
-    · exact ⟨rfl, by simp [Slice.length, List.length_append]; scalar_tac⟩
+    · exact ⟨by grind, by simp [Slice.length, List.length_append]; scalar_tac⟩
     · exfalso; apply hcond
       simp [Slice.length, List.splitAt_eq] at *
       exact ⟨by scalar_tac, by scalar_tac⟩
@@ -790,18 +835,18 @@ theorem Slice.index_SliceIndexRangeUsizeSliceInst (s : Slice α) (r : core.ops.r
   rfl
 
 def Slice.setSlice! {α : Type u} (s : Slice α) (i : ℕ) (s' : List α) : Slice α :=
-  ⟨s.val.setSlice! i s', by scalar_tac⟩
+  .from (s.val.setSlice! i s') (by simp)
 
 @[simp, scalar_tac_simps, simp_scalar_safe, simp_lists_safe, grind =, agrind =]
 theorem Slice.setSlice!_length {α : Type u} (s : Slice α) (i : ℕ) (s' : List α) :
   (s.setSlice! i s').length = s.length := by
-  simp only [Slice.length, Slice.setSlice!, List.length_setSlice!]
+  simp [Slice.length, Slice.setSlice!, List.length_setSlice!]
 
 @[simp_lists_safe]
 theorem Slice.setSlice!_getElem!_prefix {α} [Inhabited α]
   (s : Slice α) (s' : List α) (i j : ℕ) (h : j < i) :
   (s.setSlice! i s')[j]! = s[j]! := by
-  simp only [Slice.setSlice!, Slice.getElem!_Nat_eq]
+  simp [Slice.setSlice!, Slice.getElem!_Nat_eq]
   simp_lists
 
 @[simp_lists_safe]
@@ -811,7 +856,7 @@ theorem Slice.setSlice!_getElem_prefix {α}
   have hj' : j < (s.setSlice! i s').length := by
     simpa [Slice.setSlice!_length] using h.2
   have h1 : (s.setSlice! i s')[j]? = s[j]? := by
-    simp only [Slice.getElem?_Nat_eq, Slice.setSlice!]
+    simp [Slice.getElem?_Nat_eq, Slice.setSlice!]
     simp_lists [List.setSlice!_getElem?_prefix]
   simp only [Slice.getElem?_Nat_eq, List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2,
     Option.some.injEq] at h1
@@ -821,7 +866,7 @@ theorem Slice.setSlice!_getElem_prefix {α}
 theorem Slice.setSlice!_getElem!_middle {α} [Inhabited α]
   (s : Slice α) (s' : List α) (i j : ℕ) (h : i ≤ j ∧ j - i < s'.length ∧ j < s.length) :
   (s.setSlice! i s')[j]! = s'[j - i]! := by
-  simp only [Slice.setSlice!, Slice.getElem!_Nat_eq]
+  simp [Slice.setSlice!, Slice.getElem!_Nat_eq]
   simp_lists
 
 @[simp_lists_safe]
@@ -832,7 +877,7 @@ theorem Slice.setSlice!_getElem_middle {α}
     simpa [Slice.setSlice!_length] using h.2.2
   have hji : j - i < s'.length := h.2.1
   have h1 : (s.setSlice! i s')[j]? = s'[j - i]? := by
-    simp only [Slice.getElem?_Nat_eq, Slice.setSlice!]
+    simp [Slice.getElem?_Nat_eq, Slice.setSlice!]
     simp_lists [List.setSlice!_getElem?_middle]
   simp only [Slice.getElem?_Nat_eq, List.getElem?_eq_getElem hj', List.getElem?_eq_getElem hji,
     Option.some.injEq] at h1
@@ -841,7 +886,7 @@ theorem Slice.setSlice!_getElem_middle {α}
 theorem Slice.setSlice!_getElem!_suffix {α} [Inhabited α]
   (s : Slice α) (s' : List α) (i j : ℕ) (h : i + s'.length ≤ j) :
   (s.setSlice! i s')[j]! = s[j]! := by
-  simp only [Slice.setSlice!, Slice.getElem!_Nat_eq]
+  simp [Slice.setSlice!, Slice.getElem!_Nat_eq]
   simp_lists
 
 theorem Slice.setSlice!_getElem_suffix {α}
@@ -850,7 +895,7 @@ theorem Slice.setSlice!_getElem_suffix {α}
   have hj' : j < (s.setSlice! i s').length := by
     simpa [Slice.setSlice!_length] using h.2
   have h1 : (s.setSlice! i s')[j]? = s[j]? := by
-    simp only [Slice.getElem?_Nat_eq, Slice.setSlice!]
+    simp [Slice.getElem?_Nat_eq, Slice.setSlice!]
     simp_lists [List.setSlice!_getElem?_suffix]
   simp only [Slice.getElem?_Nat_eq, List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2,
     Option.some.injEq] at h1
@@ -859,7 +904,7 @@ theorem Slice.setSlice!_getElem_suffix {α}
 @[simp, simp_lists_safe]
 theorem Slice.setSlice!_val (s : Slice α) (i : ℕ) (s' : List α) :
   (s.setSlice! i s').val = s.val.setSlice! i s' := by
-  simp only [setSlice!]
+  simp [setSlice!]
 
 @[step]
 theorem core.slice.index.SliceIndexRangeUsizeSlice.index_mut.step_spec (r : core.ops.range.Range Usize) (s : Slice α)
@@ -868,12 +913,11 @@ theorem core.slice.index.SliceIndexRangeUsizeSlice.index_mut.step_spec (r : core
   s1.val = s.val.slice r.start r.end ∧
   s1.length = r.end - r.start ∧
   ∀ s2, index_mut_back s2 = s.setSlice! r.start.val s2 ⦄ := by
-  simp only [index_mut, UScalar.le_equiv, Slice.length]
+  simp [index_mut, UScalar.le_equiv, Slice.length]
   split
-  . simp only [spec_ok, Std.WP.uncurry', true_and]
-    simp_lists
-    simp_scalar
+  . simp [spec_ok, Std.WP.uncurry', true_and]
     simp_lists [Slice.eq_iff]
+    grind
   . scalar_tac
 
 @[step]
@@ -884,9 +928,9 @@ theorem core.slice.index.SliceIndexRangeUsizeSlice.index.step_spec {α : Type}
       s1.length = r.end - r.start ⦄ := by
   simp only [core.slice.index.SliceIndexRangeUsizeSlice.index, UScalar.le_equiv, Slice.length]
   split
-  · simp only [spec_ok, true_and]
+  · simp only [spec_ok]
     simp_lists
-    omega
+    grind
   · simp only [spec_fail]
     scalar_tac
 
@@ -912,10 +956,7 @@ theorem core.slice.index.SliceIndexRangeToUsizeSlice.index_mut.step_spec
       ∀ s', (back s').val = s.val.setSlice! 0 s'.val ⦄ := by
   simp only [index_mut]
   split
-  · simp only [spec_ok, Std.WP.uncurry']
-    refine ⟨trivial, ?_, ?_⟩
-    · simp [Slice.length]; scalar_tac
-    · intro s'; simp
+  · grind [Std.WP.uncurry']
   · scalar_tac
 
 @[step]
@@ -927,7 +968,7 @@ theorem core.slice.index.SliceIndexRangeToUsizeSlice.index.step_spec
       s1.length = r.end ⦄ := by
   simp only [index]
   split
-  · simp only [spec_ok, Slice.length, true_and]
+  · simp only [spec_ok, Slice.length]
     simp; scalar_tac
   · scalar_tac
 
@@ -953,10 +994,7 @@ theorem core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.step_spec
       ∀ s', (back s').val = s.val.setSlice! r.start.val s'.val ⦄ := by
   simp only [index_mut, Slice.drop]
   split
-  · simp only [spec_ok, Std.WP.uncurry']
-    refine ⟨trivial, ?_, ?_⟩
-    · simp [Slice.length, List.length_drop]
-    · intro s'; simp
+  · simp [spec_ok, Std.WP.uncurry']
   · scalar_tac
 
 @[step]
@@ -968,7 +1006,7 @@ theorem core.slice.index.SliceIndexRangeFromUsizeSlice.index.step_spec
       s1.length = s.length - r.start.val ⦄ := by
   simp only [index]
   split
-  · simp only [spec_ok, Slice.drop, true_and]
+  · simp only [spec_ok, Slice.drop]
     simp [Slice.length, List.length_drop]
   · scalar_tac
 
@@ -983,7 +1021,7 @@ theorem core.slice.Slice.copy_from_slice.step_spec (copyInst : core.marker.Copy 
 
 def Slice.mapM  {α β} (f : α → Result β) (x : Slice α) : Result (Slice β) :=
   match h : x.val.mapM f with
-  | ok xs  => ok ⟨xs, List.mapM_Result_length h ▸ x.prop⟩
+  | ok xs  => ok (.from xs (List.mapM_Result_length h ▸ x.property))
   | fail e => fail e
   | div    => div
 
@@ -995,7 +1033,7 @@ theorem Slice.mapM_spec {α β} {f : α → Result β} {s : Slice α} {post : Na
   have hmapM_ok : ∃ l', List.mapM f s.val = ok l' := by
     suffices ∀ (l : List α), (∀ i (hi : i < l.length), ∃ b, f l[i] = ok b) → ∃ l', l.mapM f = ok l' by
       apply this; intro i hi
-      let i' : Usize := Usize.ofNatCore i (by scalar_tac)
+      let i' : Usize := Usize.ofNatCore i (by grind)
       have hf' := hf i' (by scalar_tac)
       simp [spec, theta] at hf'
       show ∃ b, f s[i'] = ok b
@@ -1016,7 +1054,7 @@ theorem Slice.mapM_spec {α β} {f : α → Result β} {s : Slice α} {post : Na
     have hthis := List.mapM_Result_ok heq (↑i) (by scalar_tac)
     specialize hf i hlen; simp only [spec, theta] at hf
     erw [hthis] at hf
-    simp only [wp_return] at hf ⊢
+    simp only [wp_return, Slice.getElem_Usize_eq, Slice.from_val] at hf ⊢
     exact hf
   case h_2 e heq => simp [hl'] at heq
   case h_3 heq => simp [hl'] at heq
@@ -1031,7 +1069,7 @@ theorem Slice.mapM_spec {α β} {f : α → Result β} {s : Slice α} {post : Na
 def core.slice.Slice.fill {T : Type} (cloneInst : core.clone.Clone T)
     (s : Slice T) (v : T) : Result (Slice T) :=
   match h : s.val.mapM (fun _ => cloneInst.clone v) with
-  | .ok val => .ok ⟨val, List.mapM_Result_length h ▸ s.property⟩
+  | .ok val => .ok (.from val (List.mapM_Result_length h ▸ s.property))
   | .fail e => .fail e
   | .div => .div
 
