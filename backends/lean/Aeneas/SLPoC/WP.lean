@@ -66,20 +66,24 @@ def ipure (P : Prop) : IProp where
   holds _ := P
   up_closed := fun hP _ => hP
 
-/-- The points-to assertion of a PCM reference: the heap owns the fragment `x`
-of the cell `r` names.  Being affine it says nothing about the rest of that
-cell, which other assertions may own fragments of. -/
-def Ref.pointsTo {α : Type} {p : PCM α} (r : Ref α p) (x : α) : IProp where
-  holds h := Heap.Sub (singleton r x) h
+/-- The assertion that owns the heap fragment `A`.  Being affine it says
+nothing about the slots `A` does not describe, which is exactly closure under
+`Heap.Sub`. -/
+def owns (A : Heap) : IProp where
+  holds h := Heap.Sub A h
   up_closed := fun hSub hExtend => hSub.trans hExtend
 
-/-- What `↦` means, overloaded: a reference points to a fragment of its own
-PCM, a pointer to the value it addresses, and a buffer to the values it
-spans. -/
+/-- The points-to assertion of a reference: the heap owns the slot `r`, and it
+holds `value`. -/
+def Ref.pointsTo {α : Type} (r : Ref α) (value : α) : IProp :=
+  owns (singleton r value)
+
+/-- What `↦` means, overloaded: a reference points to the slot it names, a
+pointer to the value it addresses, and a buffer to the values it spans. -/
 class PointsTo (ρ : Type u) (β : outParam (Type v)) where
   pointsTo : ρ → β → IProp
 
-instance instPointsToRef {α : Type} {p : PCM α} : PointsTo (Ref α p) α :=
+instance instPointsToRef {α : Type} : PointsTo (Ref α) α :=
   ⟨Ref.pointsTo⟩
 
 def sep (H₁ H₂ : IProp) : IProp where
@@ -262,46 +266,34 @@ theorem emp_holds (h : Heap) : (emp : IProp) h ↔ True :=
 theorem pure_holds {P : Prop} (h : Heap) : (⌜P⌝ : IProp) h ↔ P :=
   Iff.rfl
 
-theorem Ref.pointsTo_holds {α : Type} {p : PCM α} (r : Ref α p) (x : α)
-    (h : Heap) : (r ↦ x) h ↔ Heap.Sub (singleton r x) h :=
+theorem Ref.pointsTo_holds {α : Type} (r : Ref α) (value : α)
+    (h : Heap) : (r ↦ value) h ↔ Heap.Sub (singleton r value) h :=
   Iff.rfl
 
-/-- Points-to is exclusive exactly as far as its PCM is: affinity lets
-resources be *dropped*, never duplicated, so two fragments that do not compose
-cannot both be owned. -/
-theorem Ref.pointsTo_exclusive {α : Type} {p : PCM α} (r : Ref α p) (x y : α)
-    (hNotComposable : ¬ p.Composable x y) :
-    r ↦ x ∗ r ↦ y ⊢ ⌜False⌝ := by
-  rintro h ⟨h₁, h₂, hCompatible, -, hSingle₁, hSingle₂⟩
-  exact not_composable_incompatible hCompatible hSingle₁ hSingle₂
-    hNotComposable
-
-/-- Splitting and joining a cell: owning `p.op x y` is owning `x` and owning
-`y` separately.  This is what PCM references are for — one allocation, several
-disjoint owners. -/
-theorem Ref.pointsTo_op {α : Type} {p : PCM α} (r : Ref α p) (x y : α)
-    (hComposable : p.Composable x y) :
-    r ↦ p.op x y ⊣⊢ r ↦ x ∗ r ↦ y := by
-  have hCompatibleSingle := compatible_singleton_self (r := r) hComposable
+/-- Splitting and joining a heap fragment: owning two compatible fragments is
+owning their union.  Every range-splitting lemma of `MutableData/` is this one
+applied to a run of slots. -/
+theorem owns_union (A B : Heap)
+    (hCompatible : PartialCommMonoid.Compatible A B) :
+    owns (A ∪ B) ⊣⊢ owns A ∗ owns B := by
   constructor
-  · rintro h ⟨rest, hCompatible, rfl⟩
-    rw [← singleton_union_singleton hComposable] at hCompatible ⊢
-    obtain ⟨hCompatibleRest, hCompatibleRight⟩ :=
-      (PartialCommMonoid.compatible_assoc (singleton r x) (singleton r y)
-        rest).mp ⟨hCompatibleSingle, hCompatible⟩
-    exact ⟨singleton r x, singleton r y ∪ rest, hCompatibleRight,
-      PartialCommMonoid.union_assoc hCompatibleSingle hCompatible,
-      Heap.Sub.refl _, Heap.Sub.union_left hCompatibleRest⟩
-  · rintro h ⟨h₁, h₂, hCompatible, rfl, hSub₁, hSub₂⟩
-    show Heap.Sub (singleton r (p.op x y)) (h₁ ∪ h₂)
-    rw [← singleton_union_singleton hComposable]
-    exact Heap.Sub.union_mono hSub₁ hSub₂ hCompatible
+  · rintro h ⟨rest, hCompatibleRest, rfl⟩
+    obtain ⟨hCompatibleBRest, hCompatibleARest⟩ :=
+      (PartialCommMonoid.compatible_assoc A B rest).mp
+        ⟨hCompatible, hCompatibleRest⟩
+    exact ⟨A, B ∪ rest, hCompatibleARest,
+      PartialCommMonoid.union_assoc hCompatible hCompatibleRest,
+      Heap.Sub.refl _, Heap.Sub.union_left hCompatibleBRest⟩
+  · rintro h ⟨h₁, h₂, hCompatibleHeaps, rfl, hSub₁, hSub₂⟩
+    exact Heap.Sub.union_mono hSub₁ hSub₂ hCompatibleHeaps
 
-/-- Reading through a points-to assertion sees a value the owned fragment is a
-fragment of: Pulse's `read` contract. -/
-theorem Ref.compatible_of_pointsTo {α : Type} {p : PCM α} {r : Ref α p} {x : α}
-    {h : Heap} (hPointsTo : (r ↦ x) h) : p.Compatible x (h.get r) :=
-  compatible_get_of_sub hPointsTo
+/-- Points-to is exclusive: affinity lets resources be *dropped*, never
+duplicated, so a slot still cannot be owned twice. -/
+theorem Ref.pointsTo_exclusive {α : Type} (r : Ref α) (value₁ value₂ : α) :
+    r ↦ value₁ ∗ r ↦ value₂ ⊢ ⌜False⌝ := by
+  rintro h ⟨h₁, h₂, hCompatible, -, hSingle₁, hSingle₂⟩
+  exact disjoint_contains_false hCompatible (contains_of_sub hSingle₁)
+    (contains_of_sub hSingle₂)
 
 theorem sep_holds (H₁ H₂ : IProp) (h : Heap) :
     (H₁ ∗ H₂) h ↔

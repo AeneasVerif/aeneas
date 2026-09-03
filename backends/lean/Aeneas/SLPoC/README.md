@@ -20,11 +20,11 @@ git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_se
 | File | Purpose |
 |---|---|
 | [`Exec.lean`](Exec.lean) | The state machines that give the interaction trees of [`Aeneas.Data.Coinductive.ITree`](../Data/Coinductive/ITree.lean) an operational semantics (after "Program Logics à la Carte"): `StateMachine`, `Exec`, `Runs` and `Evaluates`. |
-| [`Heap.lean`](Heap.lean) | Defines addresses, cells carrying their own PCM, finite heaps composed cell by cell, their PCM instance, PCM-indexed references, and the sub-heap order the affine assertions are closed under. |
-| [`PCM.lean`](PCM.lean) | The partial commutative monoids: the class the heap is an instance of, the bundled `PCM` a cell carries, and the constructors `Exclusive`, `InitState` and `Frags` an allocation is made with. |
-| [`MutableData/Array.lean`](MutableData/Array.lean) | The Rust view of the heap, first layer: the PCM one allocation is made with, and allocation itself. |
-| [`MutableData/Ptr.lean`](MutableData/Ptr.lean) | Interior pointers `Ptr α` over that allocation: pointer arithmetic, range and slot ownership, splitting and joining, read, write, free, and the raw-pointer borrow. |
-| [`MutableData/Buffer.lean`](MutableData/Buffer.lean) | Bounded views `Buffer α`: `sub`, `split`, `join`, indexed access, allocation of `n` slots (initialized or not), and how ownership follows the views. |
+| [`Heap.lean`](Heap.lean) | Defines addresses (`AllocId × Nat`), finite heaps of slots under disjoint union, their PCM instance, references and their arithmetic, the heap of a run of slots, allocation, and the sub-heap order the affine assertions are closed under. |
+| [`PCM.lean`](PCM.lean) | The `PartialCommMonoid` class the heap is an instance of: a total union selected by a compatibility relation. |
+| [`MutableData/Array.lean`](MutableData/Array.lean) | Arrays `Array α n`, the Rust `[α; n]`: the length lives in the type.  `toBuffer` is the coercion to a slice, and every operation and specification is the buffer one with `n` for the length. |
+| [`MutableData/Ptr.lean`](MutableData/Ptr.lean) | The first layer: allocation of a run of slots, interior pointers `Ptr α`, pointer arithmetic, range and slot ownership, splitting and joining, read, write and free of one slot, the range operations `freeRange`/`fillRange`/`copyRange`/`compareRange`, and the raw-pointer borrow.  A `Ref` never escapes this directory. |
+| [`MutableData/Buffer.lean`](MutableData/Buffer.lean) | Slices `Buffer α`, the Rust `&mut [T]`: `sub`, `split`, `join`, slot-level and array-level indexed access, `alloc`/`ofList`/`free`/`fill`/`copy`/`compare`/`swap`, and how ownership follows the views. |
 | [`ST.lean`](ST.lean) | The state monad `St`, its state machine, its inductive total-correctness judgment and its coinductive partial-correctness one (`spec` and `dspec`, after `Aeneas.Std.WP`), the triples `triple` and `dtriple` built on them, `guardedModify` and its rule, the loop rule, `step` integration, and certified interpreter. |
 | [`WP.lean`](WP.lean) | Affine separation-logic assertions (`SLProp`, closed under heap extension like Iris's `uPred`), the magic wand, local predicate transformers for individual events, and separation-logic tactics. |
 | [`ProofScore.lean`](Tests/Examples/scripts/ProofScore.lean) | Engineering tool, not part of the library: measures how close the proofs of the triples are to the ideal proof, i.e. how much separation logic the automation still leaves to the user. Writes [`proof-score.html`](Tests/Examples/reports/proof-score.html). |
@@ -49,6 +49,7 @@ git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_se
 | [`PulseLinkedList.lean`](Tests/Examples/PulseLinkedList.lean) | Sequential Pulse linked-list operations over a recursive ownership predicate, including append, split, insertion, and reversal. |
 | [`PulseResizableVec.lean`](Tests/Examples/PulseResizableVec.lean) | Pulse bounded resizable vector with separate size/capacity cells and initialized-prefix ownership. |
 | [`PulseRingBuffer.lean`](Tests/Examples/PulseRingBuffer.lean) | Pulse fixed-capacity FIFO ring buffer with circular-layout and wrap-around proofs. |
+| [`Array.lean`](Tests/Array.lean) | Regression tests for the array interface: every operation run end to end by the interpreter, and the lemmas relating an array to the slice and the range underneath it. |
 | [`Run.lean`](Tests/Run.lean) | Regression tests for the interpreter: running verified programs, and what execution shows that an affine triple cannot. |
 | [`Step.lean`](Tests/Step.lean) | Regression tests for the `step` tactic. |
 | [`UnitTest.lean`](Tests/UnitTest.lean) | Regression tests for `step`, `step`, and the separation-logic tactics. |
@@ -80,49 +81,77 @@ What affinity does *not* change: separation is still separation, so `p ↦ v ∗
 w ⊢ ⌜False⌝`, and a specification still has to own what it reads or writes.
 Leak-freedom claims are out of scope, as they already were.
 
-## The memory model: PCM references, Pulse style
+## The memory model: a slot at a time
 
-Following Pulse, a heap cell stores a *partial commutative monoid* as data
-together with a value of its carrier, and two heaps compose by composing the
-cells they share:
-
-```text
-Cell = (Carrier : Type) × (pcm : PCM Carrier) × Carrier
-Heap = AllocId → Option Cell        (finitely supported)
-```
-
-A reference `Ref α p` is a bare address; `α` and `p` are phantom indices that
-constrain specifications only.  `r ↦ x` says that the heap owns the *fragment*
-`x` of the cell `r` names — the cell may hold more, owned by somebody else —
-so one allocation splits into disjoint structural fragments:
+An **address** is an allocation identifier together with a slot index into that
+allocation, and a heap is a finite map from addresses to the values they hold:
 
 ```text
-Ref.pointsTo_op : r ↦ p.op x y ⊣⊢ r ↦ x ∗ r ↦ y      (given x # y)
+Loc      = AllocId × Nat
+HeapCell = (α : Type) × α
+Heap     = Loc ⇀ HeapCell            (finitely supported)
 ```
 
-[`MutableData/`](MutableData) builds one allocation on that: a cell whose
-carrier is a finitely supported map from indices to exclusively owned,
-possibly uninitialized slots (`Frags (InitState α)`).  `Ptr α` is an interior
-pointer — a base address and an offset, carrying neither length nor permission
-— and `Buffer α` is a bounded view.  Range ownership splits and joins:
+Two heaps compose when the addresses they use are disjoint, so `∪` is a plain
+disjoint union — no PCM, and no type equality to decide.  Ownership is
+*slot-granular*, which is what lets one allocation be owned a part at a time:
+the `(α : Type) × List α` view of an allocation is `Ptr.pointsToRange`, the
+values at consecutive addresses, and it splits and joins by regrouping a
+separating conjunction.  One lemma does all of it:
 
 ```text
-Ptr.pointsToRange_append : q ↦* xs ++ ys ⊣⊢ q ↦* xs ∗ q.add xs.length ↦* ys
+owns_union : Compatible A B → owns (A ∪ B) ⊣⊢ owns A ∗ owns B
 ```
+
+[`MutableData/`](MutableData) builds the Rust view on that, and is the only
+place a `Ref` is visible:
+
+* [`Ptr.lean`](MutableData/Ptr.lean) — `Ptr α`, an interior pointer: a base
+  address and an offset, carrying neither length nor permission.  `q ↦ value`
+  owns the slot it addresses and `q ↦* values` the run from it on, and ranges
+  split and join:
+
+  ```text
+  Ptr.pointsToRange_append : q ↦* xs ++ ys ⊣⊢ q ↦* xs ∗ q.add xs.length ↦* ys
+  ```
+
+  Two interior pointers may alias; their assertions compose exactly when the
+  intervals they own are disjoint.  Allocation of a run lives here, as do the
+  operations that walk one: `freeRange`, `fillRange`, `copyRange` and
+  `compareRange`;
+* [`Buffer.lean`](MutableData/Buffer.lean) — `Buffer α`, the Rust `&mut [T]`: a
+  bounded view with `sub`, `split` and `join`.  The views are values; the
+  lemmas beside them say how ownership follows;
+* [`Array.lean`](MutableData/Array.lean) — `Array α n`, the Rust `[α; n]`.
+
+The three layers differ only in where a length lives — nowhere for a pointer,
+in a field for a slice, in the type for an array — so `a ↦ values` and
+`a.toBuffer ↦ values` are *the same assertion* and ownership crosses the
+coercion for free.
+
+Each of `Array` and `Buffer` has the whole interface: `alloc`, `ofList`,
+`read`, `write`, `swap`, `fill`, `copy`, `compare` and `free`.  A slot-level
+specification and an array-level one are both available for a buffer's `read`
+and `write`, the array-level ones owning the whole view and giving it back:
+
+```text
+Buffer.read.spec_array  : ⦃b ↦ values⦄ b.read i ⦃⇓ r => ⌜r = values[i]⌝ ∗ b ↦ values⦄
+Buffer.write.spec_array : ⦃b ↦ values⦄ b.write i v ⦃⇓ b ↦ values.set i v⦄
+```
+
+Only the slot-level ones are registered with `step`; registering both would
+make it ambiguous.
 
 None of the pointer or buffer operations has a precondition: pointer
 arithmetic, buffer views, allocation, reads, writes and deallocation are total
 functions of their arguments.  What may go wrong is caught by the separation
 logic and by the *definedness guard* of the event an operation triggers: a read
-through a dangling, unowned or uninitialized pointer is stuck, not erroneous,
-exactly as before.
+through a dangling or unowned pointer is stuck, not erroneous.
 
-Deallocation is a frame-preserving update that *releases* the fragment its
-argument owns; as in Pulse nothing removes an address.  `Heap.size` therefore
-counts the cells that still own something, which is what tells a leak from a
-clean run.  `Heap.union` has to decide whether the carrier types of two cells
-agree, so it does not compute; `Heap.disjointUnion` agrees with it on disjoint
-addresses and does, and every operation a program performs computes.
+Deallocation releases the slots it owns — `Buffer.free` is `Ptr.freeRange` over
+the range the view spans — so freeing part of an allocation is expressible and
+frame-preserving.  `Heap.size` counts the slots a heap still holds, which is
+what tells a leak from a clean run.
 
 ## Four semantics for `St`
 

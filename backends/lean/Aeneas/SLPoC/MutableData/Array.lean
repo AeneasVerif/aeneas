@@ -1,78 +1,240 @@
-import Aeneas.SLPoC.ST
+import Aeneas.SLPoC.MutableData.Buffer
+import Aeneas.Std.Array.Array
 
 /-!
-# Allocations
+# Arrays
 
-A translated Rust program manipulates *pointers* and *buffers*, not the PCM
-references of `Aeneas.SLPoC.Heap`.  Following Pulse, both are built on a single
-kind of allocation, defined here: **one** PCM reference whose carrier is a
-finitely supported map from indices to exclusively owned, possibly
-uninitialized slots.
+`Array α n` is the Rust array `[α; n]`: `n` consecutive slots of the allocation
+of [`Ptr.lean`](Ptr.lean), reached through one pointer.  What distinguishes it
+from the `Buffer α` of [`Buffer.lean`](Buffer.lean) is where the length lives —
+in the *type* of an array, in a *field* of a buffer — which is exactly the
+difference between `[T; N]` and `&mut [T]`.
 
-Making an allocation one cell rather than one cell per element is what lets its
-ownership split along its indices: two owners of disjoint index ranges hold
-*composable fragments of the same cell*, and rejoin them without the heap ever
-being told.
-
-Every operation of this directory is one `guardedModify` of
-`Aeneas.SLPoC.ST`, whose guard is a *definedness* condition and never a
-precondition on the caller: none of them asks for a proof.
-
-[`Ptr.lean`](Ptr.lean) builds interior pointers on this, and
-[`Buffer.lean`](Buffer.lean) bounded views.
+`Array.toBuffer` is that coercion, and it costs nothing: `a ↦ values` and
+`a.toBuffer ↦ values` are the same assertion.  Operations reuse the
+corresponding buffer implementation, with cell-local primitive specifications
+and whole-array derived specifications where appropriate.
 -/
 
 namespace Aeneas.SLPoC
 
-variable {α : Type}
+variable {α : Type} {n : Nat}
 
-/-! ## The PCM an allocation is made with -/
+/-- A Rust array `[α; n]`: `n` consecutive slots reached through `ptr`. -/
+structure Array (α : Type) (n : Nat) where
+  ptr : Ptr α
+  /- As for `Ptr` and `Buffer`, being inhabited is what makes the `unwrap`s of
+     a translated Rust program expressible as `Option.get!`. -/
+  deriving Inhabited, DecidableEq
 
-/-- The carrier of the PCM of an allocation. -/
-abbrev ArrayCarrier (α : Type) := Frags (InitState α)
+namespace Array
 
-/-- The PCM of an allocation: exclusive ownership, index by index. -/
-def arrayPCM (α : Type) : PCM (ArrayCarrier α) := PCM.frags (InitState α)
+/-- The pointer to the slot at index `i`. -/
+def ptrAt (a : Array α n) (i : Nat) : Ptr α := a.ptr.add i
 
-/-- The reference an allocation is reached through. -/
-abbrev ArrayBase (α : Type) := Ref (ArrayCarrier α) (arrayPCM α)
+/-- The slice spanning the whole array: `[T; N]` seen as `&mut [T]`. -/
+def toBuffer (a : Array α n) : Buffer α := ⟨a.ptr.base, a.ptr.offset, n⟩
 
-@[simp] theorem arrayPCM_op (x y : ArrayCarrier α) :
-    (arrayPCM α).op x y = Frags.op x y := rfl
+/-- How many slots the array spans.  It is a fact about the type, not a read
+from memory. -/
+def length (_ : Array α n) : Nat := n
 
-@[simp] theorem arrayPCM_composable (x y : ArrayCarrier α) :
-    (arrayPCM α).Composable x y ↔ Frags.Composable x y := Iff.rfl
+/-- `a` owns its `n` slots, holding `values`. -/
+def pointsTo (a : Array α n) (values : List α) : IProp :=
+  iprop(⌜values.length = n⌝ ∗ a.ptr ↦* values)
 
-@[simp] theorem arrayPCM_one : (arrayPCM α).one = Frags.one := rfl
+end Array
 
-/-! ## Allocation
+instance instPointsToArray {α : Type} {n : Nat} :
+    PointsTo (Array α n) (List α) := ⟨Array.pointsTo⟩
 
-Allocation makes one cell of the array PCM and hands its address back in
-whatever wrapper the caller asks for: a pointer to the first slot, or a buffer
-spanning all of them. -/
+namespace Array
 
-/-- Allocate one array cell holding `x`, and wrap its address. -/
-def allocArray {β : Type} (x : ArrayCarrier α) (mk : ArrayBase α → β) : St β :=
-  guardedModify (fun _ => True) fun h _ =>
-    (mk (freshRef (ArrayCarrier α) (arrayPCM α) h),
-      freshHeap (p := arrayPCM α) h x)
+@[simp] theorem length_toBuffer (a : Array α n) : a.toBuffer.length = n := rfl
 
-theorem allocArray.spec {β : Type} (x : ArrayCarrier α) (mk : ArrayBase α → β)
-    (post : β → IProp)
-    (hPost : ∀ r : ArrayBase α, Ref.pointsTo r x ⊢ post (mk r)) :
-    ⦃ emp ⦄ allocArray x mk ⦃⇓ result => post result⦄ := by
-  apply triple_guardedModify
-  intro h _ frame hCompatible
-  have hFresh := fresh_freshRef (p := arrayPCM α) x (h ∪ frame)
-  obtain ⟨hCompatibleFresh, hFreshHeap⟩ := fresh_eq_singleton_union hFresh
-  obtain ⟨hCompatibleFreshH, hCompatibleFreshFrame⟩ :=
-    (PartialCommMonoid.compatible_assoc
-      (singleton (freshRef (ArrayCarrier α) (arrayPCM α) (h ∪ frame)) x)
-      h frame).mpr ⟨hCompatible, hCompatibleFresh⟩
-  exact ⟨trivial, _, hCompatibleFreshFrame,
-    hFreshHeap.trans
-      (PartialCommMonoid.union_assoc
-        hCompatibleFreshH hCompatibleFreshFrame).symm,
-    hPost _ _ (Heap.Sub.union_left hCompatibleFreshH)⟩
+@[simp] theorem ptr_toBuffer (a : Array α n) : a.toBuffer.ptr = a.ptr := rfl
+
+/-- Owning an array is owning the slice that spans it.  The two assertions are
+literally the same, so ownership crosses the coercion for free. -/
+theorem pointsTo_eq_buffer (a : Array α n) (values : List α) :
+    (a ↦ values) = (a.toBuffer ↦ values) := rfl
+
+/-- An array holds exactly `n` values. -/
+theorem length_of_pointsTo {a : Array α n} {values : List α} {h : Heap}
+    (hPointsTo : (a ↦ values) h) : values.length = n :=
+  Buffer.length_of_pointsTo (b := a.toBuffer) hPointsTo
+
+/-- Forget the length the type records and keep the range the array owns. -/
+theorem pointsTo_entails_range (a : Array α n) (values : List α) :
+    a ↦ values ⊢ a.ptr ↦* values :=
+  Buffer.pointsTo_entails_range a.toBuffer values
+
+/-- Own an array of a range of the right length. -/
+theorem range_entails_pointsTo {a : Array α n} {values : List α}
+    (hLength : values.length = n) : a.ptr ↦* values ⊢ a ↦ values :=
+  Buffer.range_entails_pointsTo (b := a.toBuffer) hLength
+
+/-! ## Allocation and deallocation -/
+
+/-- Allocate an array of `n` slots, each holding `value`. -/
+def alloc (α : Type) (n : Nat) (value : α) : St (Array α n) :=
+  allocArray (List.replicate n value) fun r => ⟨⟨r.base, r.offset⟩⟩
+
+@[step]
+theorem alloc.spec (α : Type) (n : Nat) (value : α) :
+    ⦃ emp ⦄ Array.alloc α n value
+      ⦃⇓ a => a ↦ List.replicate n value⦄ := by
+  refine allocArray.spec _ _ _ fun r h hOwns => ?_
+  exact (sep_pure_l _ _ h).mpr ⟨by simp, hOwns⟩
+
+/-- Allocate an array holding exactly `values`. -/
+def ofList (values : List α) : St (Array α values.length) :=
+  allocArray values fun r => ⟨⟨r.base, r.offset⟩⟩
+
+@[step]
+theorem ofList.spec (values : List α) :
+    ⦃ emp ⦄ Array.ofList values ⦃⇓ a => a ↦ values⦄ := by
+  refine allocArray.spec _ _ _ fun r h hOwns => ?_
+  exact (sep_pure_l _ _ h).mpr ⟨rfl, hOwns⟩
+
+/-- Release every slot of the array. -/
+def free (a : Array α n) : St Unit := a.toBuffer.free
+
+@[step]
+theorem free.spec (a : Array α n) (values : List α) :
+    ⦃ a ↦ values ⦄ a.free ⦃⇓ emp⦄ :=
+  Buffer.free.spec a.toBuffer values
+
+/-! ## Indexed access
+
+The primitive specifications own only the slot they access.  The array-level
+specifications below derive that ownership from the complete array and
+reassemble it afterward. -/
+
+/-- Read the value at index `i`. -/
+def read (a : Array α n) (i : Nat) : St α := a.toBuffer.read i
+
+@[step]
+theorem read.spec (a : Array α n) (i : Nat) (value : α) :
+    ⦃ a.ptrAt i ↦ value ⦄ a.read i
+      ⦃⇓ result => ⌜result = value⌝ ∗ a.ptrAt i ↦ value⦄ :=
+  Buffer.read.spec a.toBuffer i value
+
+theorem read.spec_array (a : Array α n) (values : List α) (i : Nat)
+    (hIndex : i < values.length) :
+    ⦃ a ↦ values ⦄ a.read i
+      ⦃⇓ result => ⌜result = values[i]⌝ ∗ a ↦ values⦄ :=
+  Buffer.read.spec_array a.toBuffer values i hIndex
+
+/-- Write `value` at index `i`. -/
+def write (a : Array α n) (i : Nat) (value : α) : St Unit :=
+  a.toBuffer.write i value
+
+@[step]
+theorem write.spec (a : Array α n) (i : Nat) (oldValue newValue : α) :
+    ⦃ a.ptrAt i ↦ oldValue ⦄ a.write i newValue
+      ⦃⇓ a.ptrAt i ↦ newValue⦄ :=
+  Buffer.write.spec a.toBuffer i oldValue newValue
+
+theorem write.spec_array (a : Array α n) (values : List α) (i : Nat)
+    (value : α) (hIndex : i < values.length) :
+    ⦃ a ↦ values ⦄ a.write i value ⦃⇓ a ↦ values.set i value⦄ :=
+  Buffer.write.spec_array a.toBuffer values i value hIndex
+
+/-- Exchange the values at indices `i` and `j`. -/
+def swap (a : Array α n) (i j : Nat) : St Unit := a.toBuffer.swap i j
+
+theorem swap.spec (a : Array α n) (values : List α) (i j : Nat)
+    (hi : i < values.length) (hj : j < values.length) :
+    ⦃ a ↦ values ⦄ a.swap i j
+      ⦃⇓ a ↦ (values.set i values[j]).set j values[i]⦄ :=
+  Buffer.swap.spec a.toBuffer values i j hi hj
+
+/-! ## Bulk operations -/
+
+/-- Overwrite every slot with `value`. -/
+def fill (a : Array α n) (value : α) : St Unit := a.toBuffer.fill value
+
+@[step]
+theorem fill.spec (a : Array α n) (values : List α) (value : α) :
+    ⦃ a ↦ values ⦄ a.fill value ⦃⇓ a ↦ List.replicate n value⦄ :=
+  Buffer.fill.spec a.toBuffer values value
+
+/-- Copy every slot of `src` into `dst`.  Both arrays have `n` slots by their
+type, so nothing has to be checked. -/
+def copy (dst src : Array α n) : St Unit := dst.toBuffer.copy src.toBuffer
+
+@[step]
+theorem copy.spec (dst src : Array α n) (dstValues srcValues : List α) :
+    ⦃ dst ↦ dstValues ∗ src ↦ srcValues ⦄ dst.copy src
+      ⦃⇓ dst ↦ srcValues ∗ src ↦ srcValues⦄ :=
+  Buffer.copy.spec dst.toBuffer src.toBuffer dstValues srcValues rfl
+
+/-- Whether two arrays hold the same values. -/
+def compare [DecidableEq α] (left right : Array α n) : St Bool :=
+  Buffer.compare left.toBuffer right.toBuffer
+
+@[step]
+theorem compare.spec [DecidableEq α] (left right : Array α n)
+    (leftValues rightValues : List α) :
+    ⦃ left ↦ leftValues ∗ right ↦ rightValues ⦄ Array.compare left right
+      ⦃⇓ result => ⌜result = decide (leftValues = rightValues)⌝ ∗
+        (left ↦ leftValues ∗ right ↦ rightValues)⦄ :=
+  Buffer.compare.spec left.toBuffer right.toBuffer leftValues rightValues rfl
+
+end Array
+
+/-! ## Slices of statically known length -/
+
+/-- Read a slice back as an array of the length its type records. -/
+def Buffer.toArray (b : Buffer α) (n : Nat) : Array α n := ⟨b.ptr⟩
+
+theorem Buffer.pointsTo_toArray {b : Buffer α} {values : List α}
+    (hLength : values.length = n) : b ↦ values ⊢ (b.toArray n) ↦ values :=
+  entails_trans (Buffer.pointsTo_entails_range b values)
+    (Array.range_entails_pointsTo (a := b.toArray n) hLength)
+
+namespace Array
+
+/-! ## Turning a functional mutable array into memory and back -/
+
+/-- Materialize a functional array as a fresh mutable memory array. -/
+def mut_to_raw {N : Aeneas.Std.Usize} (value : Aeneas.Std.Array α N) :
+    St (Array α N.val) :=
+  allocArray value.val fun r => ⟨⟨r.base, r.offset⟩⟩
+
+@[step]
+theorem mut_to_raw.spec {N : Aeneas.Std.Usize} (value : Aeneas.Std.Array α N) :
+    ⦃ emp ⦄ mut_to_raw value ⦃⇓ a => a ↦ value.val⦄ := by
+  refine allocArray.spec _ _ _ fun r h hOwns => ?_
+  exact (sep_pure_l _ _ h).mpr ⟨value.property, hOwns⟩
+
+/-- Refunctionalize a mutable array, consuming all of its memory ownership. -/
+def end_mut_to_raw {N : Aeneas.Std.Usize} (original : Aeneas.Std.Array α N)
+    (a : Array α N.val) :
+    St (Aeneas.Std.Array α N) := do
+  let values ← takeRange a.ptr N.val
+  pure (original.setSlice! 0 values)
+
+@[step]
+theorem end_mut_to_raw.spec {N : Aeneas.Std.Usize}
+    (original : Aeneas.Std.Array α N) (a : Array α N.val) (values : List α) :
+    ⦃ a ↦ values ⦄ end_mut_to_raw original a
+      ⦃⇓ result => ⌜result.val = values⌝⦄ := by
+  unfold end_mut_to_raw
+  apply triple_ipure
+  intro hLength
+  have hTake :
+      ⦃ a.ptr ↦* values ⦄ takeRange a.ptr N.val
+        ⦃⇓ result => ⌜result = values⌝⦄ := by
+    exact takeRange.spec_of_length a.ptr values N.val hLength
+  apply triple_bind hTake
+  intro result
+  exact triple_pure fun _ hResult => by
+    rw [hResult]
+    simp only [Aeneas.Std.Array.setSlice!]
+    simp [List.setSlice!, hLength, original.property]
+
+end Array
 
 end Aeneas.SLPoC
