@@ -349,10 +349,7 @@ Arguments WithConstTy_t_f { _ } { _ } { _ } { _ } _.
 (** [traits::WithConstTy::LEN2]
     Source: 'tests/src/traits.rs', lines 166:4-166:27
     Visibility: public *)
-Definition withConstTy_LEN2_default (Self : Type) (Clause0_V : Type) (Clause0_W
-  : Type) (LEN : usize) : usize :=
-  32%usize
-.
+Definition withConstTy_LEN2_default : usize := 32%usize.
 
 (** [traits::{impl traits::WithConstTy<u8, u64, 32usize> for bool}::f]:
     Source: 'tests/src/traits.rs', lines 182:4-182:42
@@ -373,8 +370,7 @@ Definition Bool_Insts_TraitsWithConstTyU8U6432 : WithConstTy_t bool u8 u64
   32%usize := {|
   WithConstTy_tWithConstTy_t_LEN1 := Ok
     Bool_Insts_TraitsWithConstTyU8U6432_LEN1;
-  WithConstTy_tWithConstTy_t_LEN2 := Ok (withConstTy_LEN2_default bool u8 u64
-    32%usize);
+  WithConstTy_tWithConstTy_t_LEN2 := Ok withConstTy_LEN2_default;
   WithConstTy_tWithConstTy_t_ToU64Inst := U64_Insts_TraitsToU64;
   WithConstTy_t_f := Bool_Insts_TraitsWithConstTyU8U6432_f;
 |}.
@@ -684,35 +680,32 @@ Arguments Trait_tTrait_t_LEN { _ } _.
 (** [traits::{impl traits::Trait for [T; N]}::LEN]
     Source: 'tests/src/traits.rs', lines 317:4-317:25
     Visibility: public *)
-Definition Array_Insts_TraitsTrait_LEN (T : Type) (N : usize) : usize := N.
+Definition Array_Insts_TraitsTrait_LEN (N : usize) : usize := N.
 
 (** Trait implementation: [traits::{impl traits::Trait for [T; N]}]
     Source: 'tests/src/traits.rs', lines 316:0-318:1 *)
 Definition Array_Insts_TraitsTrait (T : Type) (N : usize) : Trait_t (array T N)
   := {|
-  Trait_tTrait_t_LEN := Ok (Array_Insts_TraitsTrait_LEN T N);
+  Trait_tTrait_t_LEN := Ok (Array_Insts_TraitsTrait_LEN N);
 |}.
 
 (** [traits::{impl traits::Trait for traits::Wrapper<T>}::LEN]
     Source: 'tests/src/traits.rs', lines 321:4-321:25
     Visibility: public *)
-Definition Wrapper_Insts_TraitsTrait_LEN {T : Type} (traitInst : Trait_t T)
-  : usize :=
-  0%usize
-.
+Definition Wrapper_Insts_TraitsTrait_LEN : usize := 0%usize.
 
 (** Trait implementation: [traits::{impl traits::Trait for traits::Wrapper<T>}]
     Source: 'tests/src/traits.rs', lines 320:0-322:1 *)
 Definition Wrapper_Insts_TraitsTrait {T : Type} (traitInst : Trait_t T) :
   Trait_t (Wrapper_t T) := {|
-  Trait_tTrait_t_LEN := Ok (Wrapper_Insts_TraitsTrait_LEN traitInst);
+  Trait_tTrait_t_LEN := Ok Wrapper_Insts_TraitsTrait_LEN;
 |}.
 
 (** [traits::use_wrapper_len]:
     Source: 'tests/src/traits.rs', lines 324:0-326:1
     Visibility: public *)
 Definition use_wrapper_len {T : Type} (traitInst : Trait_t T) : result usize :=
-  Ok (Wrapper_Insts_TraitsTrait_LEN traitInst)
+  Ok Wrapper_Insts_TraitsTrait_LEN
 .
 
 (** [traits::Foo]
@@ -727,8 +720,7 @@ Arguments foo_y { _ } { _ }.
 (** [traits::{traits::Foo<T, U>}::FOO]
     Source: 'tests/src/traits.rs', lines 334:4-334:43
     Visibility: public *)
-Definition foo_FOO {T : Type} (U : Type) (traitInst : Trait_t T)
-  : core_result_Result_t T i32 :=
+Definition foo_FOO (T : Type) : core_result_Result_t T i32 :=
   Core_result_Result_Err 0%i32
 .
 
@@ -739,7 +731,7 @@ Definition use_foo1
   {T : Type} (U : Type) (traitInst : Trait_t T) :
   result (core_result_Result_t T i32)
   :=
-  Ok (foo_FOO U traitInst)
+  Ok (foo_FOO T)
 .
 
 (** [traits::use_foo2]:
@@ -749,7 +741,7 @@ Definition use_foo2
   (T : Type) {U : Type} (traitInst : Trait_t U) :
   result (core_result_Result_t U i32)
   :=
-  Ok (foo_FOO T traitInst)
+  Ok (foo_FOO U)
 .
 
 End Traits.
