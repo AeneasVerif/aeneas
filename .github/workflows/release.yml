@@ -109,7 +109,7 @@ jobs:
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
 
       - name: Cache Lean dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: dist_staging/backends/lean/.lake
           key: ${{ matrix.os }}-lean-${{ hashFiles('dist_staging/backends/lean/lake-manifest.json') }}
