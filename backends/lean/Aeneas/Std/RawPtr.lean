@@ -28,6 +28,6 @@ instance {ty} : IsScalar (IScalar ty) where
 -- TODO: we can properly define this once we have separation logic
 def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability) [IsScalar T] [IsScalar T'] (_ : RawPtr T M) :
   Result (RawPtr T' M') :=
-  .fail .undef
+  .fail .ub
 
 end Aeneas.Std

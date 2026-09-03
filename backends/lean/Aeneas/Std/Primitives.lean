@@ -49,13 +49,8 @@ def elabImpl : CommandElab := fun (stx: Syntax) => do
 -/
 
 inductive Error where
-   | assertionFailure: Error
-   | integerOverflow: Error
-   | divisionByZero: Error
-   | arrayOutOfBounds: Error
-   | maximumSizeExceeded: Error
    | panic: Error
-   | undef: Error
+   | ub: Error
 deriving Repr, BEq
 
 open Error
@@ -90,7 +85,7 @@ def div? {α: Type u} (r: Result α): Bool :=
   | ok _ | fail _ => false
 
 def massert (b : Prop) [Decidable b] : Result Unit :=
-  if b then ok () else fail assertionFailure
+  if b then ok () else fail ub
 
 macro "prove_eval_global" : tactic => `(tactic| simp (failIfUnchanged := false) only [global_simps] <;> first | apply Eq.refl | decide)
 
