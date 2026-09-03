@@ -69,37 +69,22 @@ along. -/
 private def source : Ptr Nat := ⟨0, 0⟩
 private def spare : Ptr Nat := ⟨1, 0⟩
 
-/-- The heap of the single allocation `q` is interior to, holding `value`. -/
-private def cell (q : Ptr Nat) (value : Nat) : Heap :=
-  singleton q.baseRef (q.frag [value])
+/-- The heap of the single slot `q` addresses, holding `value`. -/
+private def cell (q : Ptr Nat) (value : Nat) : Heap := q.singleton value
 
-/-- Composing cells is what `∪` does, so it has to decide whether two carrier
-types agree and does not compute; on disjoint addresses `disjointUnion` agrees
-with it and does. -/
+/-- Ownership is slot-granular and slots compose by disjoint union, so this
+computes. -/
 private def initial : Heap :=
-  (cell source 1).disjointUnion (cell spare 7)
+  cell source 1 ∪ cell spare 7
 
-private theorem source_ne_spare : source.baseRef ≠ spare.baseRef :=
-  fun hEq => Nat.succ_ne_zero 0 hEq.symm
+private theorem source_ne_spare : source ≠ spare := by decide
 
 private theorem initial_disjoint :
     PartialCommMonoid.Compatible (cell source 1) (cell spare 7) :=
-  disjoint_singleton source_ne_spare
+  Ptr.disjoint_singleton source_ne_spare
 
-private theorem initial_eq : initial = cell source 1 ∪ cell spare 7 := by
-  apply Heap.disjointUnion_eq_union
-  intro a hMem hMem'
-  have hSource : a = 0 := by
-    by_contra hNe
-    simp [Heap.mem_iff, cell, Ref.addr, Ptr.baseRef, source, hNe] at hMem
-  have hSpare : a = 1 := by
-    by_contra hNe
-    simp [Heap.mem_iff, cell, Ref.addr, Ptr.baseRef, spare, hNe] at hMem'
-  exact Nat.noConfusion (hSource.symm.trans hSpare)
-
-private theorem initial_pre : (source ↦ 1) initial := by
-  rw [initial_eq]
-  exact Heap.Sub.union_left initial_disjoint
+private theorem initial_pre : (source ↦ 1) initial :=
+  Heap.Sub.union_left initial_disjoint
 
 -- The frame is carried along: the run leaves both cells behind.
 #guard
