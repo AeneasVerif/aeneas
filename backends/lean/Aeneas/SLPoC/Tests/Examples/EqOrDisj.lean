@@ -266,7 +266,18 @@ pub fn len(&self) -> usize {
 }
 ```
 -/
-def length (b : InPlaceOrDisjointBuffer α) : Nat := b.len
+def length (b : InPlaceOrDisjointBuffer α) : St Nat :=
+  pure b.len
+
+@[step]
+theorem length.spec (b : InPlaceOrDisjointBuffer α) :
+    ⦃ emp ⦄ b.length ⦃⇓ result => ⌜result = b.len⌝⦄ := by
+  unfold length
+  step*
+
+/-- The value `srcSlice` returns. -/
+def mkSrcSlice (b : InPlaceOrDisjointBuffer α) : Buffer α :=
+  ⟨b.src.base, b.src.offset, b.len⟩
 
 /-- `src`: the read view as a slice.
 
@@ -276,8 +287,19 @@ pub fn src(&self) -> &[T] {
 }
 ```
 -/
-def srcSlice (b : InPlaceOrDisjointBuffer α) : Buffer α :=
-  ⟨b.src.base, b.src.offset, b.len⟩
+def srcSlice (b : InPlaceOrDisjointBuffer α) : St (Buffer α) :=
+  pure (mkSrcSlice b)
+
+@[step]
+theorem srcSlice.spec (b : InPlaceOrDisjointBuffer α) :
+    ⦃ emp ⦄ b.srcSlice
+      ⦃⇓ result => ⌜result = mkSrcSlice b⌝⦄ := by
+  unfold srcSlice
+  step*
+
+/-- The value `dstSlice` returns. -/
+def mkDstSlice (b : InPlaceOrDisjointBuffer α) : Buffer α :=
+  ⟨b.dst.base, b.dst.offset, b.len⟩
 
 /-- `dst`: the write view as a mutable slice.
 
@@ -287,25 +309,32 @@ pub fn dst(&mut self) -> &mut [T] {
 }
 ```
 -/
-def dstSlice (b : InPlaceOrDisjointBuffer α) : Buffer α :=
-  ⟨b.dst.base, b.dst.offset, b.len⟩
+def dstSlice (b : InPlaceOrDisjointBuffer α) : St (Buffer α) :=
+  pure (mkDstSlice b)
+
+@[step]
+theorem dstSlice.spec (b : InPlaceOrDisjointBuffer α) :
+    ⦃ emp ⦄ b.dstSlice
+      ⦃⇓ result => ⌜result = mkDstSlice b⌝⦄ := by
+  unfold dstSlice
+  step*
 
 @[simp] theorem ptr_srcSlice (b : InPlaceOrDisjointBuffer α) :
-    b.srcSlice.ptr = b.src := rfl
+    (mkSrcSlice b).ptr = b.src := rfl
 
 @[simp] theorem ptr_dstSlice (b : InPlaceOrDisjointBuffer α) :
-    b.dstSlice.ptr = b.dst := rfl
+    (mkDstSlice b).ptr = b.dst := rfl
 
 /-- In place the two views are literally the same slice: this is why `dst`
 takes `&mut self` in Rust, and why one range is all the pair owns. -/
 theorem srcSlice_eq_dstSlice (b : InPlaceOrDisjointBuffer α)
-    (hSame : b.src = b.dst) : b.srcSlice = b.dstSlice := by
-  simp [srcSlice, dstSlice, hSame]
+    (hSame : b.src = b.dst) : mkSrcSlice b = mkDstSlice b := by
+  simp [mkSrcSlice, mkDstSlice, hSame]
 
 /-- In place, that one slice is what the pair owns. -/
 theorem pointsTo_dstSlice_equal (b : InPlaceOrDisjointBuffer α)
     (values : List α) :
-    b.pointsTo (.equal values) ⊢ b.dstSlice ↦ values := by
+    b.pointsTo (.equal values) ⊢ mkDstSlice b ↦ values := by
   intro h hPointsTo
   obtain ⟨⟨-, hLength⟩, hRange⟩ := (sep_pure_l _ _ h).mp hPointsTo
   exact (sep_pure_l _ _ h).mpr ⟨hLength, hRange⟩
@@ -313,24 +342,26 @@ theorem pointsTo_dstSlice_equal (b : InPlaceOrDisjointBuffer α)
 /-- `src()` hands back the read view. -/
 theorem pointsTo_srcSlice_disjoint (b : InPlaceOrDisjointBuffer α)
     (srcValues dstValues : List α) :
-    b.pointsTo (.disjoint srcValues dstValues) ⊢ b.srcSlice ↦ srcValues := by
+    b.pointsTo (.disjoint srcValues dstValues) ⊢
+      mkSrcSlice b ↦ srcValues := by
   intro h hPointsTo
   obtain ⟨⟨hLength, -⟩, hRanges⟩ := (sep_pure_l _ _ h).mp hPointsTo
   obtain ⟨h₁, h₂, hCompatible, rfl, hSrc, -⟩ := hRanges
   exact (sep_pure_l _ _ _).mpr
-    ⟨hLength, (b.srcSlice.ptr ↦* srcValues).up_closed hSrc
+    ⟨hLength, ((mkSrcSlice b).ptr ↦* srcValues).up_closed hSrc
       (Heap.Sub.union_left hCompatible)⟩
 
 /-- `dst()` hands back the write view, and the range it owns is the one the
 pair owned. -/
 theorem pointsTo_dstSlice_disjoint (b : InPlaceOrDisjointBuffer α)
     (srcValues dstValues : List α) :
-    b.pointsTo (.disjoint srcValues dstValues) ⊢ b.dstSlice ↦ dstValues := by
+    b.pointsTo (.disjoint srcValues dstValues) ⊢
+      mkDstSlice b ↦ dstValues := by
   intro h hPointsTo
   obtain ⟨⟨-, hLength⟩, hRanges⟩ := (sep_pure_l _ _ h).mp hPointsTo
   obtain ⟨h₁, h₂, hCompatible, rfl, -, hDst⟩ := hRanges
   exact (sep_pure_l _ _ _).mpr
-    ⟨hLength, (b.dstSlice.ptr ↦* dstValues).up_closed hDst
+    ⟨hLength, ((mkDstSlice b).ptr ↦* dstValues).up_closed hDst
       (Heap.Sub.union_right hCompatible)⟩
 
 /-! ## Element access
