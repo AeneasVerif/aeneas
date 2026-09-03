@@ -3,6 +3,19 @@ import Aeneas.SLPoC.Tests.Examples.Basic
 
 namespace Aeneas.SLPoC
 
+open Aeneas.Data.Coinductive
+
+/-! ## Failure effect -/
+
+example : (fail .panic : St Nat) =
+    ITree.vis (StEvents.I.fail .panic) PEmpty.elim :=
+  rfl
+
+example (Q : IPost Nat) (h : Heap) : ¬ spec (fail .panic) Q h := by
+  simp
+
+example (Q : IPost Nat) (h : Heap) : ¬ dspec (fail .panic) Q h := by
+  simp
 
 /-! ## Entailment framing -/
 
