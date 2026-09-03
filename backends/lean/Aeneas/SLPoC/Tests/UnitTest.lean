@@ -297,8 +297,8 @@ example (p q : Ptr Nat) (x y : Nat) : p ↦ x ∗ q ↦ y ⊢ q ↦ y := by
 /-- Affinity weakens; it does not fabricate resources. -/
 example (p : Ptr Nat) (value : Nat) : ¬ (emp ⊢ p ↦ value) := by
   intro hImpl
-  have hContains := contains_of_sub (hImpl ∅ trivial)
-  exact not_contains_empty p.baseRef hContains
+  have hContains := Ptr.contains_of_pointsTo (hImpl ∅ trivial)
+  exact Ptr.not_contains_empty p hContains
 
 /-- Nor does it excuse a specification from owning what it reads. -/
 example (p : Ptr Nat) : ¬ (⦃ emp ⦄ read p ⦃⇓ _ => emp⦄) := by
@@ -307,7 +307,7 @@ example (p : Ptr Nat) : ¬ (⦃ emp ⦄ read p ⦃⇓ _ => emp⦄) := by
     triple_apply hTriple trivial
   simp only [read, guardedModify] at hSpec
   obtain ⟨hReadable, -⟩ := TotalSpec.vis_view hSpec
-  exact not_contains_empty p.baseRef hReadable.contains
+  exact Ptr.not_contains_empty p hReadable.contains
 
 def allocAndForget (value : Nat) : St Unit := do
   let _ ← alloc value
@@ -482,9 +482,8 @@ allocation. -/
 example (q : Ptr Nat) (i : Nat) : (q.add i).base = q.base := rfl
 
 /-- Owning nothing is owning the empty range. -/
-example (q : Ptr Nat) :
-    (q ↦* ([] : List Nat)) = Ref.pointsTo q.baseRef Frags.one := by
-  rw [Ptr.pointsToRange, Ptr.frag_nil]
+example (q : Ptr Nat) : (q ↦* ([] : List Nat)) = emp :=
+  Ptr.pointsToRange_nil q
 
 /-- A slot still cannot be owned twice. -/
 example (q : Ptr Nat) (x y : Nat) : q ↦ x ∗ q ↦ y ⊢ ⌜False⌝ :=
