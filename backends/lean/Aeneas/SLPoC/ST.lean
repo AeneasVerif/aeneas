@@ -688,6 +688,20 @@ theorem triple_frame {P : IPre} {m : St α} {Q : IPost α}
   exact spec_mono hSpec fun value heap =>
     (sep_assoc (Q value) H F).mpr heap
 
+/-- The frame rule, framing on the left.  `triple_frame` adds its resource on
+the right; a program that walks a data structure usually has to keep what it is
+already past on the left. -/
+theorem triple_frame_left {P : IPre} {m : St α} {Q : IPost α}
+    (hTriple : triple P m Q) (H : IProp) :
+    triple (H ∗ P) m (fun value => H ∗ Q value) := by
+  intro F h hPre
+  have hSwapped : (P ∗ (H ∗ F)) h :=
+    (sep_assoc P H F).mp h
+      ((sep_mono (sep_comm H P).mp (entails_refl F)) h hPre)
+  refine spec_mono (hTriple (H ∗ F) h hSwapped) fun value heap hPost => ?_
+  exact (sep_mono (sep_comm (Q value) H).mp (entails_refl F)) heap
+    ((sep_assoc (Q value) H F).mpr heap hPost)
+
 theorem triple_conseq {P' P : IPre} {m : St α}
     {Q' Q : IPost α}
     (hTriple : triple P' m Q') (hP : P ⊢ P')
