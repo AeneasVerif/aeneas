@@ -3656,8 +3656,8 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
 
        If the [filter_trait_impl_methods] option is on, we skip the methods
        which are absent from the model of the trait declaration. *)
-    let keep_method (item_name : string) : bool =
-      if not !filter_trait_impl_methods then true
+    let keep_method : string -> bool =
+      if not !filter_trait_impl_methods then fun _ -> true
       else
         let pure_trait_decl =
           [%unwrap_with_span] span
@@ -3665,9 +3665,12 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
             "Could not lookup the translated trait declaration"
         in
         match pure_trait_decl.builtin_info with
-        | None -> true
+        | None -> fun _ -> true
         | Some info ->
-            List.exists (fun (name, _) -> name = item_name) info.methods
+            let method_names =
+              Collections.StringSet.of_list (List.map fst info.methods)
+            in
+            fun item_name -> Collections.StringSet.mem item_name method_names
     in
     List.iter
       (fun (method_id, name, bound_fn) ->
