@@ -2,7 +2,7 @@ module
 
 public section
 
-namespace Aeneas.SLPoC
+namespace Aeneas
 
 /-!
 # Partial commutative monoids
@@ -30,4 +30,4 @@ class PartialCommMonoid (α : Type u) [EmptyCollection α] [Union α] where
   union_comm_of_compatible {a b : α} :
     Compatible a b → a ∪ b = b ∪ a
 
-end Aeneas.SLPoC
+end Aeneas

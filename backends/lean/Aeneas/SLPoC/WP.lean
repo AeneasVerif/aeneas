@@ -1,4 +1,4 @@
-import Aeneas.Control.OrderedMonad
+import Aeneas.Data.OrderedMonad
 import Aeneas.SLPoC.Heap
 import AeneasMeta.Simp
 import Lean.Meta.Tactic.AC

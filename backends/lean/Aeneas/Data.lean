@@ -6,6 +6,8 @@ import Aeneas.Data.Fin
 import Aeneas.Data.Int
 import Aeneas.Data.List
 import Aeneas.Data.Nat
+import Aeneas.Data.OrderedMonad
+import Aeneas.Data.PartialCommMonoid
 import Aeneas.Data.Range
 import Aeneas.Data.Tuples
 import Aeneas.Data.Vector

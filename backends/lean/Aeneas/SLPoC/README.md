@@ -19,9 +19,9 @@ git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_se
 
 | File | Purpose |
 |---|---|
-| [`Exec.lean`](Exec.lean) | The state machines that give the interaction trees of [`Aeneas.Data.Coinductive.ITree`](../Data/Coinductive/ITree.lean) an operational semantics (after "Program Logics à la Carte"): `StateMachine`, `Exec`, `Runs` and `Evaluates`. |
+| [`StateMachine.lean`](../Data/Coinductive/StateMachine.lean) | The state machines that give the interaction trees of [`Aeneas.Data.Coinductive.ITree`](../Data/Coinductive/ITree.lean) an operational semantics (after "Program Logics à la Carte"): `StateMachine`, `Exec`, `Runs` and `Evaluates`. |
 | [`Heap.lean`](Heap.lean) | Defines addresses (`AllocId × Nat`), finite heaps of slots under disjoint union, their PCM instance, references and their arithmetic, the heap of a run of slots, allocation, and the sub-heap order the affine assertions are closed under. |
-| [`PCM.lean`](PCM.lean) | The `PartialCommMonoid` class the heap is an instance of: a total union selected by a compatibility relation. |
+| [`PartialCommMonoid.lean`](../Data/PartialCommMonoid.lean) | The `PartialCommMonoid` class the heap is an instance of: a total union selected by a compatibility relation. |
 | [`MutableData/Array.lean`](MutableData/Array.lean) | Arrays `Array α n`, the Rust `[α; n]`: the length lives in the type.  `toBuffer` is the coercion to a slice, and every operation and specification is the buffer one with `n` for the length. |
 | [`MutableData/Ptr.lean`](MutableData/Ptr.lean) | The first layer: allocation of a run of slots, interior pointers `Ptr α`, pointer arithmetic, range and slot ownership, splitting and joining, read, write and free of one slot, the range operations `freeRange`/`fillRange`/`copyRange`/`compareRange`, and the raw-pointer borrow.  A `Ref` never escapes this directory. |
 | [`MutableData/Buffer.lean`](MutableData/Buffer.lean) | Slices `Buffer α`, the Rust `&mut [T]`: `sub`, `split`, `join`, slot-level and array-level indexed access, `alloc`/`ofList`/`free`/`fill`/`copy`/`compare`/`swap`, and how ownership follows the views. |
@@ -159,7 +159,7 @@ A program of `St` is an **interaction tree**
 ([`Aeneas.Data.Coinductive.ITree`](../Data/Coinductive/ITree.lean)) over the
 heap- and universe-polymorphic event signature `StEvents Heap`.  It has an
 *operational* semantics
-(`StEvents.Step`, lifted to the big-step `Evaluates` of [`Exec.lean`](Exec.lean)),
+(`StEvents.Step`, lifted to the big-step `Evaluates` of [`StateMachine.lean`](../Data/Coinductive/StateMachine.lean)),
 an inductive total-correctness semantics (`TotalSpec`, exposed as `spec`), a
 coinductive partial-correctness one (`PartialSpec`, exposed as `dspec`), and an
 *executable* one — the last three all in [`ST.lean`](ST.lean).
