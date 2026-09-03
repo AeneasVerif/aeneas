@@ -619,7 +619,7 @@ section -- setSlice!
     let s2 := List.drop (i + n) s
     s0 ++ s1 ++ s2
 
-  @[simp, simp_lists_safe, scalar_tac_simps, grind =]
+  @[simp, simp_lists_safe, scalar_tac_simps, grind =, agrind =]
   theorem length_setSlice! {α} (s : List α) (i : ℕ) (s' : List α) :
     (s.setSlice! i s').length = s.length := by
     simp only [setSlice!, append_assoc, length_append, length_take, inf_le_left, inf_of_le_left,
