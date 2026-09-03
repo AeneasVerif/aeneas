@@ -214,8 +214,9 @@ let () =
       ( "-filter-trait-methods",
         Arg.Set filter_trait_impl_methods,
         " When extracting a trait impl, filter out the methods which are \
-         absent from the model of the trait declaration. Trait declarations \
-         which have no model are not affected." );
+         absent from the model of the trait declaration in the target backend \
+         (e.g., Lean). Trait declarations which have no model are not \
+         affected." );
       ( "-all-computable",
         Arg.Set all_computable,
         " For Lean: do not insert `noncomputable section` at the top of the \
