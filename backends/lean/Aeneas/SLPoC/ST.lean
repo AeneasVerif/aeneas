@@ -1,4 +1,4 @@
-import Aeneas.SLPoC.Exec
+import Aeneas.Data.Coinductive.StateMachine
 import Aeneas.SLPoC.WP
 import Aeneas.Tactic.Step.StepStar
 
@@ -191,7 +191,7 @@ step. A program of `St` performs arbitrarily many events, so an infinite run is
 an infinite `vis` tree and no inductive judgment accepts it. `PartialSpec` is
 therefore the **greatest** fixed point of the one-layer condition
 `PartialSpecF`, written impredicatively as the union of the post-fixed points,
-dually to the way `Exec` of `Aeneas.SLPoC.Exec` is the least fixed point of
+dually to the way `Exec` of `Aeneas.Data.Coinductive.StateMachine` is the least fixed point of
 `ExecF`. Consequently the two judgments open differently: `TotalSpec` gets its
 constructors and its induction principle for free, whereas `PartialSpec` has to
 be given them — `PartialSpec.coinduction` is its introduction rule, and

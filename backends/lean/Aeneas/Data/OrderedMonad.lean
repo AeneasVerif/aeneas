@@ -1,5 +1,7 @@
 import Mathlib.Order.Defs.PartialOrder
 
+/-! Order-compatible monads and monad morphisms. -/
+
 namespace Aeneas
 
 /-- A monad whose result types are preordered and whose bind is monotone in

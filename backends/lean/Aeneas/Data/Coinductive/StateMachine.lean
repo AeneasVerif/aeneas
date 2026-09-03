@@ -42,9 +42,7 @@ in a configuration satisfying `C`, which is what a program logic for `ITree` is
 adequate against (`Exec.exists_stop`).
 -/
 
-namespace Aeneas.SLPoC
-
-open Aeneas.Data.Coinductive
+namespace Aeneas.Data.Coinductive
 
 universe u v w
 
@@ -303,4 +301,4 @@ theorem exists_stop {M : StateMachine E} (hResolves : M.Resolves)
 
 end Exec
 
-end Aeneas.SLPoC
+end Aeneas.Data.Coinductive
