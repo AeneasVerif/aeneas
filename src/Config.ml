@@ -231,6 +231,12 @@ let lean_gen_lakefile = ref false
 (** Only for Lean: emit a translation.json file alongside the Lean files. *)
 let emit_json = ref false
 
+(** Only for Lean: attach the span of the Rust item every declaration comes from
+    to that declaration, with a [@[rust_source ...]] attribute. This is what
+    allows "go to definition" on a generated declaration to jump to the Rust
+    code it was extracted from. *)
+let rust_source_spans = ref false
+
 (** If true, treat the unit functions (function taking no inputs and returning
     no outputs) as unit tests: evaluate them with the interpreter and check that
     they don't panic. *)

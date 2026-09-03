@@ -139,6 +139,7 @@ let lean_keywords : string list =
     "let_tmp";
     "library_note";
     "library_note2";
+    "lines";
     "local";
     "logNamedError";
     "logNamedErrorAt";
@@ -210,6 +211,7 @@ let lean_keywords : string list =
     "run_cmd";
     "run_elab";
     "run_meta";
+    "rust_source_root";
     "s!";
     "says";
     "scoped";
