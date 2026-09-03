@@ -1,4 +1,4 @@
-import Aeneas.SLPoC.WP
+import Aeneas.SLPoC.MutableData.Ptr
 
 namespace Aeneas.SLPoC.Tests.WP
 
@@ -27,8 +27,8 @@ example (P Q R : IProp) (h : P ⊢ Q) : P ∗ R ⊢ Q ∗ R := by
   irewrite h
   iframe
 
-example {α : Type} {p : Aeneas.SLPoC.PCM α} (r : Aeneas.SLPoC.Ref α p)
-    (x : α) : r ↦ x ⊢ r ↦ x := by
+example {α : Type} (p : Aeneas.SLPoC.Ptr α) (value : α) :
+    p ↦ value ⊢ p ↦ value := by
   iframe
 
 example {α : Type} (w : Wp α) : w.wp = Wp.wp w :=
