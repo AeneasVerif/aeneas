@@ -2274,6 +2274,7 @@ let ctx_add_adt_projector_names (decl_name : string) (field_names : string list)
 (** The part of a function or global's provenance that affects its extracted
     name. *)
 type extractable_item_source =
+  | AdtConstructorSource
   | TraitImplSource of T.trait_impl_ref * T.trait_decl_ref * T.assoc_item_id
   | TraitDefaultSource
   | OtherSource
@@ -2288,6 +2289,7 @@ let extractable_global_source (src : global_source) : extractable_item_source =
 let extractable_fun_source (ctx : extraction_ctx) (src : fun_source) :
     extractable_item_source =
   match src with
+  | AdtConstructorFun -> AdtConstructorSource
   | TraitImplFun (impl_ref, trait_ref, method_id, _) ->
       TraitImplSource (impl_ref, trait_ref, T.AssocIdMethod method_id)
   | TraitDefaultFun _ -> TraitDefaultSource
@@ -2378,6 +2380,14 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
   | _ ->
       let llbc_name = opt_rename_llbc_name item_meta.attr_info item_meta.name in
       [%ldebug "llbc_name after renaming: " ^ name_to_string ctx llbc_name];
+      (* We add the suffix "constructor" if the function was synthesized by rustc
+         from an ADT constructor used as a function *)
+      let llbc_name =
+        match src with
+        | AdtConstructorSource ->
+            llbc_name @ [ PeIdent ("constructor", Disambiguator.zero) ]
+        | _ -> llbc_name
+      in
       (* When a trait method/const has a default implementation, this becomes a [fun_decl]
          that we may want to extract. By default, its name is [Trait::method], which
          for lean creates a name clash with the method name as a field in the trait
