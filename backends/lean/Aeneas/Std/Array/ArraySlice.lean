@@ -344,6 +344,11 @@ def core.array.TryFromMutArraySlice.try_from
 def core.array.Array.as_slice {T : Type} {N : Usize} (a : Array T N) : Result (Slice T) :=
   ok (.from a.val (by scalar_tac))
 
+@[step]
+theorem core.array.Array.as_slice_spec {T : Type} {N : Usize} (a : Array T N) :
+    core.array.Array.as_slice a ⦃ (s : Slice T) => s.val = a.val ⦄ := by
+  simp [core.array.Array.as_slice, WP.spec_ok]
+
 /-- Model for `<[T; N] as AsRef<[T]>>::as_ref`: returns the array viewed as a slice. -/
 @[rust_fun "core::array::{core::convert::AsRef<[@T; @N], [@T]>}::as_ref"]
 def Array.Insts.CoreConvertAsRefSlice.as_ref

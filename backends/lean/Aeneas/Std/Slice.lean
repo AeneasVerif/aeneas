@@ -47,6 +47,23 @@ def Slice.new (α : Type u) : Slice α := {
 @[simp, simp_lists_safe, scalar_tac_simps, grind =, agrind =]
 theorem Slice.new_val (α : Type u) : (Slice.new α).val = [] := rfl
 
+/-- Constructs a `Slice` from a `List`, discharges the length obligation with `grind` by default. -/
+def Slice.make {α : Type u} (l : List α) (h : l.length ≤ Usize.max := by grind) : Slice α := ⟨l, h⟩
+
+@[simp, grind =]
+theorem Slice.val_make {α : Type u} (l : List α) (h) : (Slice.make l h).val = l := rfl
+
+@[scalar_tac_simps, grind =]
+theorem Slice.length_make {α : Type u} (l : List α) (h) :
+    (Slice.make l h).length = l.length := rfl
+
+@[simp, grind =]
+theorem Slice.make_val {α : Type u} (s : Slice α) (h) : Slice.make s.val h = s := rfl
+
+theorem Slice.make_inj {α : Type u} (l₁ l₂ : List α) (h₁ h₂) :
+    Slice.make l₁ h₁ = Slice.make l₂ h₂ ↔ l₁ = l₂ :=
+  Subtype.ext_iff
+
 @[rust_fun "core::slice::{[@T]}::len" -canFail -lift]
 abbrev Slice.len {α : Type u} (v : Slice α) : Usize :=
   Usize.ofNatCore v.val.length (by scalar_tac)
