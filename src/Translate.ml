@@ -1373,15 +1373,17 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
       List.iter (fun m -> Printf.fprintf out "import %s\n" m) fi.custom_includes;
       (* Always open the Primitives namespace *)
       Printf.fprintf out "open Aeneas Aeneas.Std Result ControlFlow Error\n";
-      (* It happens that we generate duplicated namespaces, like `betree.betree`.
-         We deactivate the linter for this, because otherwise it leads to too much
-         noise. *)
-      Printf.fprintf out "set_option linter.dupNamespace false\n";
-      (* The mathlib linter generates warnings when we use hash commands like `#assert`:
-         we deactivate this linter. *)
-      Printf.fprintf out "set_option linter.hashCommand false\n";
-      (* Definitions often contain unused variables: deactivate the corresponding linter *)
-      Printf.fprintf out "set_option linter.unusedVariables false\n";
+      (* Silence the linters which would fire on generated code. *)
+      List.iter
+        (fun option -> Printf.fprintf out "set_option %s false\n" option)
+        [
+          "linter.dupNamespace";
+          "linter.hashCommand";
+          "linter.unusedVariables";
+          "linter.style.whitespace";
+          "linter.style.setOption";
+          "linter.style.longLine";
+        ];
       (* Max heart beats *)
       Printf.fprintf out
         "\n\

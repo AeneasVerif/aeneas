@@ -43,7 +43,7 @@ let eliminate_shared_loans (span : Meta.span) (ctx : eval_ctx) : eval_ctx =
   in
   let update_abs (abs : abs) : abs =
     (* Only update the non-frozen abstractions *)
-    if not abs.can_end then update_loans#visit_abs () abs else abs
+    if abs.can_end then update_loans#visit_abs () abs else abs
   in
   let ctx = ctx_map_abs update_abs ctx in
 
