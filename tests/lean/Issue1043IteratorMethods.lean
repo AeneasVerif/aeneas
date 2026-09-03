@@ -64,12 +64,12 @@ impl_def core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator {B :
     traitsiteratorIteratorInst opsfunctionFnMutFTupleClause0_ItemBInst)
 }
 
-/-- [issue_1043_iterator_methods::indexed_squares::closure]
+/-- [issue_1043_iterator_methods::indexed_squares::{closure}]
     Source: 'tests/src/issue-1043-iterator-methods.rs', lines 10:25-10:46 -/
 @[reducible]
 def indexed_squares.closure (I : Type) := Unit
 
-/-- [issue_1043_iterator_methods::indexed_squares::{impl core::ops::function::FnMut<((usize, u32),), u32> for issue_1043_iterator_methods::indexed_squares::closure<I>}::call_mut]:
+/-- [issue_1043_iterator_methods::indexed_squares::{impl core::ops::function::FnMut<((usize, u32),), u32> for issue_1043_iterator_methods::indexed_squares::{closure}<I>}::call_mut]:
     Source: 'tests/src/issue-1043-iterator-methods.rs', lines 10:25-10:46 -/
 def
   indexed_squares.closure.Insts.CoreOpsFunctionFnMutTuplePairUsizeU32U32.call_mut
@@ -83,7 +83,7 @@ def
   let i2 ← x + i1
   ok (i2, c)
 
-/-- [issue_1043_iterator_methods::indexed_squares::{impl core::ops::function::FnOnce<((usize, u32),), u32> for issue_1043_iterator_methods::indexed_squares::closure<I>}::call_once]:
+/-- [issue_1043_iterator_methods::indexed_squares::{impl core::ops::function::FnOnce<((usize, u32),), u32> for issue_1043_iterator_methods::indexed_squares::{closure}<I>}::call_once]:
     Source: 'tests/src/issue-1043-iterator-methods.rs', lines 10:25-10:46 -/
 def
   indexed_squares.closure.Insts.CoreOpsFunctionFnOnceTuplePairUsizeU32U32.call_once
@@ -97,7 +97,7 @@ def
       coreitertraitsiteratorIteratorIU32Inst c p
   ok i
 
-/-- Trait implementation: [issue_1043_iterator_methods::indexed_squares::{impl core::ops::function::FnOnce<((usize, u32),), u32> for issue_1043_iterator_methods::indexed_squares::closure<I>}]
+/-- Trait implementation: [issue_1043_iterator_methods::indexed_squares::{impl core::ops::function::FnOnce<((usize, u32),), u32> for issue_1043_iterator_methods::indexed_squares::{closure}<I>}]
     Source: 'tests/src/issue-1043-iterator-methods.rs', lines 10:25-10:46 -/
 @[reducible]
 def indexed_squares.closure.Insts.CoreOpsFunctionFnOnceTuplePairUsizeU32U32 {I
@@ -109,7 +109,7 @@ def indexed_squares.closure.Insts.CoreOpsFunctionFnOnceTuplePairUsizeU32U32 {I
     coreitertraitsiteratorIteratorIU32Inst
 }
 
-/-- Trait implementation: [issue_1043_iterator_methods::indexed_squares::{impl core::ops::function::FnMut<((usize, u32),), u32> for issue_1043_iterator_methods::indexed_squares::closure<I>}]
+/-- Trait implementation: [issue_1043_iterator_methods::indexed_squares::{impl core::ops::function::FnMut<((usize, u32),), u32> for issue_1043_iterator_methods::indexed_squares::{closure}<I>}]
     Source: 'tests/src/issue-1043-iterator-methods.rs', lines 10:25-10:46 -/
 @[reducible]
 def indexed_squares.closure.Insts.CoreOpsFunctionFnMutTuplePairUsizeU32U32 {I :
