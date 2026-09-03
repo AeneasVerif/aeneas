@@ -9,9 +9,9 @@ package «tests» {}
 
 @[default_target] lean_lib Adt
 @[default_target] lean_lib AdtBorrows
+@[default_target] lean_lib ArraySliceIndex
 @[default_target] lean_lib Arrays
 @[default_target] lean_lib ArraysDefs
-@[default_target] lean_lib ArraySliceIndex
 @[default_target] lean_lib AsMut
 @[default_target] lean_lib AssertCfg
 @[default_target] lean_lib Avl
@@ -25,9 +25,9 @@ package «tests» {}
 @[default_target] lean_lib CastSigned
 @[default_target] lean_lib ChunksExact
 @[default_target] lean_lib Closures
+@[default_target] lean_lib ConstShadow
 @[default_target] lean_lib Constants
 @[default_target] lean_lib ConstantsLean
-@[default_target] lean_lib ConstShadow
 @[default_target] lean_lib Curve25519
 @[default_target] lean_lib Default
 @[default_target] lean_lib DefaultedMethod
@@ -71,10 +71,10 @@ package «tests» {}
 @[default_target] lean_lib LeanKeywords
 @[default_target] lean_lib LeanKeywordsClash
 @[default_target] lean_lib ListBorrows
-@[default_target] lean_lib Loops
-@[default_target] lean_lib LoopsAdts
 @[default_target] lean_lib LoopSharedBorrowProj
 @[default_target] lean_lib LoopSharedLoanInJoin
+@[default_target] lean_lib Loops
+@[default_target] lean_lib LoopsAdts
 @[default_target] lean_lib LoopsIssues
 @[default_target] lean_lib LoopsNested
 @[default_target] lean_lib LoopsNestedRec

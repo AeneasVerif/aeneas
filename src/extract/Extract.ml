@@ -3759,14 +3759,9 @@ let extract_unit_test_if_marked (ctx : extraction_ctx) (fmt : F.formatter)
           if sg.inputs <> [] then (
             F.pp_print_space fmt ();
             F.pp_print_string fmt "()");
+          F.pp_print_string fmt ").reducesTo";
           F.pp_print_space fmt ();
-          F.pp_print_string fmt "==";
-          F.pp_print_space fmt ();
-          let success =
-            ctx_get_variant def.item_meta.span (TBuiltin TResult) result_ok_id
-              ctx
-          in
-          F.pp_print_string fmt (success ^ " ())")
+          F.pp_print_string fmt "()"
       | HOL4 ->
           F.pp_print_string fmt "val _ = assert_ok (";
           F.pp_print_string fmt "“";

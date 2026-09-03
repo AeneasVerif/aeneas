@@ -29,7 +29,7 @@ namespace HashMap
 def distinct_keys (ls : List (Usize × α)) := ls.pairwise_rel (λ x y => x.fst ≠ y.fst)
 
 def hash_mod_key (k : Usize) (l : Nat) : Nat :=
-  match hash_key k with
+  match (hash_key k).match with
   | .ok k => k.val % l
   | _ => 0
 
