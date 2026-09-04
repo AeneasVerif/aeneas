@@ -65,7 +65,7 @@ instance instPointsToBuffer {α : Type} : PointsTo (Buffer α) (List α) :=
 /-! ## Allocation -/
 
 /-- Allocate `n` slots holding `value`. -/
-def Buffer.alloc (n : Nat) (value : α) : St (Buffer α) :=
+def Buffer.alloc (n : Nat) (value : α) : Result (Buffer α) :=
   allocArray (List.replicate n value) fun r => ⟨r.base, r.offset, n⟩
 
 @[step]
@@ -78,7 +78,7 @@ theorem Buffer.alloc.spec (n : Nat) (value : α) :
 
 namespace Buffer
 
-def read (b : Buffer α) (i : Nat) : St α := _root_.Aeneas.SLPoC.read (b.ptrAt i)
+def read (b : Buffer α) (i : Nat) : Result α := _root_.Aeneas.SLPoC.read (b.ptrAt i)
 
 @[step]
 theorem read.spec (b : Buffer α) (i : Nat) (value : α) :
@@ -86,7 +86,7 @@ theorem read.spec (b : Buffer α) (i : Nat) (value : α) :
       ⦃⇓ result => ⌜result = value⌝ ∗ (b.ptrAt i) ↦ value⦄ :=
   _root_.Aeneas.SLPoC.read.spec (b.ptrAt i) value
 
-def write (b : Buffer α) (i : Nat) (value : α) : St Unit :=
+def write (b : Buffer α) (i : Nat) (value : α) : Result Unit :=
   _root_.Aeneas.SLPoC.update (b.ptrAt i) value
 
 @[step]
@@ -96,7 +96,7 @@ theorem write.spec (b : Buffer α) (i : Nat) (oldValue newValue : α) :
   _root_.Aeneas.SLPoC.update.spec (b.ptrAt i) oldValue newValue
 
 /-- Release every slot the view spans. -/
-def free (b : Buffer α) : St Unit := freeRange b.ptr b.length
+def free (b : Buffer α) : Result Unit := freeRange b.ptr b.length
 
 @[step]
 theorem free.spec (b : Buffer α) (values : List α) :
@@ -147,7 +147,7 @@ Each is the range operation of [`Ptr.lean`](Ptr.lean) run over the slots the
 view spans. -/
 
 /-- Allocate a view holding exactly `values`. -/
-def ofList (values : List α) : St (Buffer α) :=
+def ofList (values : List α) : Result (Buffer α) :=
   allocArray values fun r => ⟨r.base, r.offset, values.length⟩
 
 @[step]
@@ -157,7 +157,7 @@ theorem ofList.spec (values : List α) :
   exact (sep_pure_l _ _ h).mpr ⟨rfl, hOwns⟩
 
 /-- Overwrite every slot with `value`. -/
-def fill (b : Buffer α) (value : α) : St Unit := fillRange b.ptr value b.length
+def fill (b : Buffer α) (value : α) : Result Unit := fillRange b.ptr value b.length
 
 @[step]
 theorem fill.spec (b : Buffer α) (values : List α) (value : α) :
@@ -193,7 +193,7 @@ theorem pair_entails_pointsTo {b₁ b₂ : Buffer α} {values₁ values₂ : Lis
     (sep_pure_l _ _ h₂).mpr ⟨hLength₂, hRange₂⟩⟩
 
 /-- Copy every slot of `src` into `dst`. -/
-def copy (dst src : Buffer α) : St Unit := copyRange dst.ptr src.ptr src.length
+def copy (dst src : Buffer α) : Result Unit := copyRange dst.ptr src.ptr src.length
 
 @[step]
 theorem copy.spec (dst src : Buffer α) (dstValues srcValues : List α)
@@ -212,7 +212,7 @@ theorem copy.spec (dst src : Buffer α) (dstValues srcValues : List α)
     (fun _ => pair_entails_pointsTo (by omega) hSrc)
 
 /-- Whether two views hold the same values. -/
-def compare [DecidableEq α] (left right : Buffer α) : St Bool :=
+def compare [DecidableEq α] (left right : Buffer α) : Result Bool :=
   compareRange left.ptr right.ptr left.length
 
 @[step]
@@ -236,7 +236,7 @@ theorem compare.spec [DecidableEq α] (left right : Buffer α)
     ⟨hResult, pair_entails_pointsTo hLeft hRight h hRanges⟩
 
 /-- Exchange the values at indices `i` and `j`. -/
-def swap (b : Buffer α) (i j : Nat) : St Unit := do
+def swap (b : Buffer α) (i j : Nat) : Result Unit := do
   let x ← b.read i
   let y ← b.read j
   b.write i y
@@ -306,7 +306,7 @@ theorem pointsTo_sub (b : Buffer α) (values : List α) (i : Nat) :
 /-! ## Turning a functional mutable slice into memory and back -/
 
 /-- Materialize a functional slice as a fresh mutable memory buffer. -/
-def mut_to_raw (slice : Aeneas.Std.Slice α) : St (Buffer α) :=
+def mut_to_raw (slice : Aeneas.Std.Slice α) : Result (Buffer α) :=
   allocArray slice.val fun r => ⟨r.base, r.offset, slice.val.length⟩
 
 @[step]
@@ -317,7 +317,7 @@ theorem mut_to_raw.spec (slice : Aeneas.Std.Slice α) :
 
 /-- Refunctionalize a mutable buffer, consuming all of its memory ownership. -/
 def end_mut_to_raw (original : Aeneas.Std.Slice α) (b : Buffer α) :
-    St (Aeneas.Std.Slice α) := do
+    Result (Aeneas.Std.Slice α) := do
   let values ← takeRange b.ptr b.length
   pure (original.setSlice! 0 values)
 

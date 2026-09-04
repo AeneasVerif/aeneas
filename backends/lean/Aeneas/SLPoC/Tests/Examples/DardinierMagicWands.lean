@@ -87,7 +87,7 @@ def owns : Tree → IProp
 end Tree
 
 /-- Fuel-recursive form of the paper's `while (y.left != null)` traversal. -/
-def leftLeaf : Nat → Ptr Node → St (Ptr Node)
+def leftLeaf : Nat → Ptr Node → Result (Ptr Node)
   | 0, pointer => pure pointer
   | fuel + 1, pointer => do
       let node ← read pointer

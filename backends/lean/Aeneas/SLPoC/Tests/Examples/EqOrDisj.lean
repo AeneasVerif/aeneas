@@ -130,7 +130,7 @@ def pointsTo (b : InPlaceOrDisjointBuffer α) (state : EqOrDisj (List α)) :
 
 Building the pair touches no memory: the Rust constructors only reshape what
 the caller already owns, and `from_raw_parts` does not even do that.  They are
-`St` actions all the same — in Rust they are calls, so a `do` block mirrors the
+`Result` actions all the same — in Rust they are calls, so a `do` block mirrors the
 Rust and `step` applies their triples — and each rests on an entailment, which
 is what to use in a proof with no program in it. -/
 
@@ -159,7 +159,7 @@ pub fn new_in_place(buffer: &'a mut [T]) -> Self {
 }
 ```
 -/
-def newInPlace (buffer : Buffer α) : St (InPlaceOrDisjointBuffer α) :=
+def newInPlace (buffer : Buffer α) : Result (InPlaceOrDisjointBuffer α) :=
   pure (mkInPlace buffer)
 
 @[step]
@@ -210,7 +210,7 @@ pub fn new_disjoint_from_slices(src: &'a [T], dst: &'a mut [T]) -> Self {
 }
 ```
 -/
-def newDisjoint (src dst : Buffer α) : St (InPlaceOrDisjointBuffer α) :=
+def newDisjoint (src dst : Buffer α) : Result (InPlaceOrDisjointBuffer α) :=
   pure (mkDisjoint src dst)
 
 @[step]
@@ -245,7 +245,7 @@ pub unsafe fn from_raw_parts(src: *const T, dst: *mut T, len: usize) -> Self {
 ```
 -/
 def fromRawParts (src dst : Ptr α) (len : Nat) :
-    St (InPlaceOrDisjointBuffer α) :=
+    Result (InPlaceOrDisjointBuffer α) :=
   pure (mkFromRawParts src dst len)
 
 @[step]
@@ -266,7 +266,7 @@ pub fn len(&self) -> usize {
 }
 ```
 -/
-def length (b : InPlaceOrDisjointBuffer α) : St Nat :=
+def length (b : InPlaceOrDisjointBuffer α) : Result Nat :=
   pure b.len
 
 @[step]
@@ -287,7 +287,7 @@ pub fn src(&self) -> &[T] {
 }
 ```
 -/
-def srcSlice (b : InPlaceOrDisjointBuffer α) : St (Buffer α) :=
+def srcSlice (b : InPlaceOrDisjointBuffer α) : Result (Buffer α) :=
   pure (mkSrcSlice b)
 
 @[step]
@@ -309,7 +309,7 @@ pub fn dst(&mut self) -> &mut [T] {
 }
 ```
 -/
-def dstSlice (b : InPlaceOrDisjointBuffer α) : St (Buffer α) :=
+def dstSlice (b : InPlaceOrDisjointBuffer α) : Result (Buffer α) :=
   pure (mkDstSlice b)
 
 @[step]
@@ -388,7 +388,7 @@ pub unsafe fn loadu_si128_src(&self, offset: usize) -> __m128i {
 }
 ```
 -/
-def loadSrc (b : InPlaceOrDisjointBuffer α) (i : Nat) : St α :=
+def loadSrc (b : InPlaceOrDisjointBuffer α) (i : Nat) : Result α :=
   read (b.src.add i)
 
 theorem loadSrc.spec (b : InPlaceOrDisjointBuffer α) (i : Nat) (value : α) :
@@ -408,7 +408,7 @@ pub unsafe fn loadu_si128_dst(&self, offset: usize) -> __m128i {
 }
 ```
 -/
-def loadDst (b : InPlaceOrDisjointBuffer α) (i : Nat) : St α :=
+def loadDst (b : InPlaceOrDisjointBuffer α) (i : Nat) : Result α :=
   read (b.dst.add i)
 
 theorem loadDst.spec (b : InPlaceOrDisjointBuffer α) (i : Nat) (value : α) :
@@ -427,7 +427,7 @@ pub unsafe fn storeu_si128(&mut self, offset: usize, value: __m128i) {
 }
 ```
 -/
-def store (b : InPlaceOrDisjointBuffer α) (i : Nat) (value : α) : St Unit :=
+def store (b : InPlaceOrDisjointBuffer α) (i : Nat) (value : α) : Result Unit :=
   update (b.dst.add i) value
 
 theorem store.spec (b : InPlaceOrDisjointBuffer α) (i : Nat)
@@ -534,7 +534,7 @@ seen, disjoint it is not.  The disjoint case is proved by the frame rule alone
 — separation is what says the two views do not overlap. -/
 
 def storeThenLoadSrc (b : InPlaceOrDisjointBuffer α) (i : Nat) (value : α) :
-    St α := do
+    Result α := do
   b.store i value
   b.loadSrc i
 
@@ -558,7 +558,7 @@ theorem storeThenLoadSrc.spec_disjoint (b : InPlaceOrDisjointBuffer α)
 /-- A client that mirrors the Rust: build the pair in place, then write through
 it.  The constructor is a call like any other, so `step` goes through its
 triple and hands the ownership on. -/
-def inPlaceWrite (buffer : Buffer α) (i : Nat) (value : α) : St Unit := do
+def inPlaceWrite (buffer : Buffer α) (i : Nat) (value : α) : Result Unit := do
   let b ← newInPlace buffer
   b.store i value
 
