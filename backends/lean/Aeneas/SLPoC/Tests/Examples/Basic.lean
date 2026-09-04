@@ -1,6 +1,6 @@
 import Aeneas.SLPoC.MutableData.Ptr
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Std (Heap Result)
 
@@ -79,4 +79,4 @@ example (b : Bool) (p : Ptr Nat) (value : Nat) :
   unfold conditionalUpdate
   step*
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic

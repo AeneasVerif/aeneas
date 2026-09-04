@@ -30,7 +30,7 @@ leaks.  Such claims would require an operational-trace theorem or a non-affine
 logic.  Structural recursion on the finite path supplies Lean termination.
 -/
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Std (Heap Result)
 
@@ -1534,4 +1534,4 @@ theorem ModelTable.unmap_result_and_clear (table : ModelTable)
 
 end VerusPageTable
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic

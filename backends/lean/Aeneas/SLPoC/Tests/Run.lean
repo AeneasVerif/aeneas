@@ -4,12 +4,12 @@ import Aeneas.SLPoC.Tests.Examples.Basic
 /-!
 # Running verified programs
 
-`Aeneas.SLPoC.ST` turns a proved triple into an execution.  These are the tests
+`Aeneas.SepLogic.ST` turns a proved triple into an execution.  These are the tests
 that it really executes, that what it computes agrees with what the triple
 predicts, and that the proof it carries is available without running anything.
 -/
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Std (Heap Result)
 
@@ -35,7 +35,7 @@ example : (execClosed roundTrip roundTrip.spec).1 = 42 :=
   execClosed_post roundTrip roundTrip.spec
 
 /-- And the execution the interpreter performs is one of the machine of
-`Aeneas.SLPoC.ST`. -/
+`Aeneas.SepLogic.ST`. -/
 example :
     Evaluates roundTrip Heap.empty (execClosed roundTrip roundTrip.spec).1
       (execClosed roundTrip roundTrip.spec).2 :=
@@ -100,4 +100,4 @@ example :
   execTriple_post (Examples.incr_ptr source) initial
     (Examples.incr_ptr.spec source 1) initial_pre
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic

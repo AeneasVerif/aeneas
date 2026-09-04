@@ -35,7 +35,7 @@ the block's header pointer, while its postcondition returns the padding
 ownership and metadata.
 -/
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Std (Heap Result)
 
@@ -234,4 +234,4 @@ theorem popBlock.spec (s : FreeList) (b : Block R) (payload : R)
 
 end FreeList
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic

@@ -356,7 +356,7 @@ def freshHeap {α : Type} (h : Heap) (values : List α) : Heap :=
 
 /-! ## Sub-heaps
 
-The assertions of `Aeneas.SLPoC.WP` are *affine*: they own the cells they
+The assertions of `Aeneas.SepLogic` are *affine*: they own the cells they
 describe and say nothing about the rest of the heap.  Semantically that means
 they are closed under the extension order below, the way Iris's `uPred` is
 monotone in its resource. -/

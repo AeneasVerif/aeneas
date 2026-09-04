@@ -27,7 +27,9 @@ git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_se
 | [`MutableData/Ptr.lean`](MutableData/Ptr.lean) | The first layer: allocation of a run of slots, interior pointers `Ptr α`, pointer arithmetic, range and slot ownership, splitting and joining, read, write and free of one slot, the range operations `freeRange`/`fillRange`/`copyRange`/`compareRange`, and the raw-pointer borrow.  A `Ref` never escapes this directory. |
 | [`MutableData/Buffer.lean`](MutableData/Buffer.lean) | Slices `Buffer α`, the Rust `&mut [T]`: `sub`, `split`, `join`, slot-level and array-level indexed access, `alloc`/`ofList`/`free`/`fill`/`copy`/`compare`/`swap`, and how ownership follows the views. |
 | [`ST.lean`](ST.lean) | The state monad `St`, its state machine, its inductive total-correctness judgment and its coinductive partial-correctness one (`spec` and `dspec`, after `Aeneas.Std.WP`), the triples `triple` and `dtriple` built on them, `guardedModify` and its rule, the loop rule, `step` integration, and certified interpreter. |
-| [`WP.lean`](WP.lean) | Affine separation-logic assertions (`SLProp`, closed under heap extension like Iris's `uPred`), the magic wand, local predicate transformers for individual events, and separation-logic tactics. |
+| [`Basic.lean`](../SepLogic/Basic.lean) | Affine separation-logic assertions (`IProp`, closed under heap extension like Iris's `uPred`), the separating conjunction, the quantifiers, and the magic wand. |
+| [`PredicateTransformer.lean`](../SepLogic/PredicateTransformer.lean) | Monotone predicate transformers `Wp` over those assertions (`Wᴾᵘʳᵉ` of "Dijkstra Monads for All"), and `pp2wp`, the transformer a precondition/postcondition pair denotes. |
+| [`Tactic/SepLogic/`](../Tactic/SepLogic) | The separation-logic proof mode: `Init.lean` registers the `iris_simps` simp set, `Frame.lean` holds the `IFrame` cancellation engine with `iframe`/`isimp`, `Intro.lean` holds the `iintro` family and `isimpl`, `Rewrite.lean` holds `irewrite`, and `Tests/` holds one regression file per tactic. |
 | [`ProofScore.lean`](Tests/Examples/scripts/ProofScore.lean) | Engineering tool, not part of the library: measures how close the proofs of the triples are to the ideal proof, i.e. how much separation logic the automation still leaves to the user. Writes [`proof-score.html`](Tests/Examples/reports/proof-score.html). |
 | [`SourceLoc.lean`](Tests/Examples/scripts/SourceLoc.lean) | Engineering tool, not part of the library: downloads the artifacts every example ports, and unverified Rust implementations of the same data structures, and counts the relevant lines of all three, per file and per declaration, split into computational code, specification/annotation, and proof. Writes [`source-loc.json`](Tests/Examples/reports/source-loc.json), and a standalone `source-loc.html` that draws it (generated on demand, not committed). |
 | [`sources-manifest.json`](Tests/Examples/reports/sources-manifest.json) | Maps every file of `Tests/Examples` to the upstream artifact it ports, pinned to a commit and a SHA-256, says whether the example is expressible in safe Rust and why, and lists unverified Rust implementations of the same data structure. Read by `SourceLoc.lean`. |
@@ -67,11 +69,11 @@ Keep these tables updated whenever a file is added, removed, or repurposed.
 The logic is affine the way Iris's is, rather than the way SLF's
 [Affine Separation Logic](https://softwarefoundations.cis.upenn.edu/slf-current/Affine.html)
 is: affinity is a property of the *model*, not an extra affine top written into
-the triples. An `SLProp` is closed under heap extension — it owns the cells it
+the triples. An `IProp` is closed under heap extension — it owns the cells it
 describes and says nothing about the others — exactly like Iris's `uPred`.
 Consequently:
 
-* the entailment weakens: `H ⊢ emp` for every `H`, so `sl_frame`/`sl_simpl`
+* the entailment weakens: `H ⊢ emp` for every `H`, so `iframe`/`isimpl`
   drop whatever a cancellation leaves over;
 * `emp` and `⌜True⌝` both hold of every heap, so `emp` *is* the affine top and
   no separate predicate for it is needed;

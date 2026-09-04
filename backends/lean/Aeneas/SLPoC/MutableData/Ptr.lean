@@ -30,7 +30,7 @@ This file is also where the heap of `Aeneas.Std.Heap` stops being visible: a
 [`Array.lean`](Array.lean) the arrays whose length is part of their type.
 -/
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Std (AllocId Heap Ref Result)
 
@@ -611,4 +611,4 @@ theorem end_mut_to_raw.spec {α : Type} {value : α} (q : Ptr α) :
   apply triple_seq (free.spec q value)
   exact triple_pure fun _ _ => hResult
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic
