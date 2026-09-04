@@ -1,5 +1,5 @@
 import Aeneas.Data.OrderedMonad
-import Aeneas.SLPoC.Heap
+import Aeneas.Std.Heap
 import AeneasMeta.Simp
 import Lean.Meta.Tactic.AC
 
@@ -22,6 +22,8 @@ provable once `emp` holds of every heap.
 -/
 
 namespace Aeneas.SLPoC
+
+open Aeneas.Std (Heap Ref)
 
 /-- Heap predicates describe heap fragments.  Like Iris's `uPred`, an assertion
 is closed under heap extension: it constrains the cells it owns, and says
@@ -76,7 +78,7 @@ def owns (A : Heap) : IProp where
 /-- The points-to assertion of a reference: the heap owns the slot `r`, and it
 holds `value`. -/
 def Ref.pointsTo {α : Type} (r : Ref α) (value : α) : IProp :=
-  owns (singleton r value)
+  owns (Heap.singleton r value)
 
 /-- What `↦` means, overloaded: a reference points to the slot it names, a
 pointer to the value it addresses, and a buffer to the values it spans. -/
@@ -267,7 +269,7 @@ theorem pure_holds {P : Prop} (h : Heap) : (⌜P⌝ : IProp) h ↔ P :=
   Iff.rfl
 
 theorem Ref.pointsTo_holds {α : Type} (r : Ref α) (value : α)
-    (h : Heap) : (r ↦ value) h ↔ Heap.Sub (singleton r value) h :=
+    (h : Heap) : (r ↦ value) h ↔ Heap.Sub (Heap.singleton r value) h :=
   Iff.rfl
 
 /-- Splitting and joining a heap fragment: owning two compatible fragments is
@@ -292,8 +294,8 @@ duplicated, so a slot still cannot be owned twice. -/
 theorem Ref.pointsTo_exclusive {α : Type} (r : Ref α) (value₁ value₂ : α) :
     r ↦ value₁ ∗ r ↦ value₂ ⊢ ⌜False⌝ := by
   rintro h ⟨h₁, h₂, hCompatible, -, hSingle₁, hSingle₂⟩
-  exact disjoint_contains_false hCompatible (contains_of_sub hSingle₁)
-    (contains_of_sub hSingle₂)
+  exact Heap.disjoint_contains_false hCompatible (Heap.contains_of_sub hSingle₁)
+    (Heap.contains_of_sub hSingle₂)
 
 theorem sep_holds (H₁ H₂ : IProp) (h : Heap) :
     (H₁ ∗ H₂) h ↔

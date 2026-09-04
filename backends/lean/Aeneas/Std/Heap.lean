@@ -5,7 +5,7 @@ public import Aeneas.Data.PartialCommMonoid
 
 public section
 
-namespace Aeneas.SLPoC
+namespace Aeneas.Std
 
 /-!
 # The heap
@@ -26,11 +26,12 @@ time — the `(α : Type) × List α` view of an allocation is what
 `Ptr.pointsToRange` owns, the list of the values at consecutive addresses, and
 it splits and joins by regrouping a separating conjunction.
 
-`MutableData/` builds the Rust view on this, and is the only place a `Ref` is
-visible: [`Ptr`](MutableData/Ptr.lean) allocates a run of slots and is the
-interior pointer into it, [`Buffer`](MutableData/Buffer.lean) is a bounded view
-of one, and [`Array`](MutableData/Array.lean) is the array whose length is part
-of its type.
+`SLPoC/MutableData/` builds the Rust view on this, and is the only place a `Ref`
+is visible: [`Ptr`](../SLPoC/MutableData/Ptr.lean) allocates a run of slots and
+is the interior pointer into it,
+[`Buffer`](../SLPoC/MutableData/Buffer.lean) is a bounded view of one, and
+[`Array`](../SLPoC/MutableData/Array.lean) is the array whose length is part of
+its type.
 -/
 
 /- An allocation identifier is fresh and behaves like a monotonic
@@ -50,24 +51,74 @@ structure Heap where
   private mk ::
   private impl : HeapImpl
 
+/-! ## References -/
+
+/-- A reference to one slot: a bare address, the type being a phantom index
+that constrains specifications only. -/
+@[expose]
+def Ref (_ : Type) := Loc
+
+namespace Ref
+
+/-- Addresses are pairs of natural numbers, so references are inhabited. -/
+instance instInhabited {α : Type} : Inhabited (Ref α) := ⟨((0 : AllocId), 0)⟩
+
+instance instDecidableEq {α : Type} : DecidableEq (Ref α) :=
+  inferInstanceAs (DecidableEq Loc)
+
+@[expose]
+def addr {α : Type} (r : Ref α) : Loc := r
+
+/-- The allocation `r` is interior to. -/
+@[expose]
+def base {α : Type} (r : Ref α) : AllocId := r.addr.1
+
+/-- The slot of that allocation `r` names. -/
+@[expose]
+def offset {α : Type} (r : Ref α) : Nat := r.addr.2
+
+/-- Pointer arithmetic: same allocation, later slot. -/
+@[expose]
+def add {α : Type} (r : Ref α) (i : Nat) : Ref α := (r.base, r.offset + i)
+
+@[simp] theorem base_add {α : Type} (r : Ref α) (i : Nat) :
+    (r.add i).base = r.base := rfl
+
+@[simp] theorem offset_add {α : Type} (r : Ref α) (i : Nat) :
+    (r.add i).offset = r.offset + i := rfl
+
+@[simp] theorem add_zero {α : Type} (r : Ref α) : r.add 0 = r := rfl
+
+theorem add_add {α : Type} (r : Ref α) (i j : Nat) :
+    (r.add i).add j = r.add (i + j) := by
+  simp [Ref.add, Ref.base, Ref.offset, Ref.addr, Nat.add_assoc]
+
+/-- The address `r.add i` names. -/
+theorem addr_add {α : Type} (r : Ref α) (i : Nat) :
+    (r.add i).addr = (r.base, r.offset + i) := rfl
+
+end Ref
+
+namespace Heap
+
 private instance : Coe Heap HeapImpl := ⟨Heap.impl⟩
 private instance : Coe HeapImpl Heap := ⟨Heap.mk⟩
 
-private def Heap.lookup (h : Heap) (address : Loc) :
+private def lookup (h : Heap) (address : Loc) :
     Option HeapCell :=
   h.impl.lookup address
 
-private def Heap.insert (h : Heap) (address : Loc)
+private def insert (h : Heap) (address : Loc)
     (cell : HeapCell) : Heap :=
   ⟨h.impl.insert address cell⟩
 
-private def Heap.erase (h : Heap) (address : Loc) : Heap :=
+private def erase (h : Heap) (address : Loc) : Heap :=
   ⟨h.impl.erase address⟩
 
-private def Heap.keys (h : Heap) :=
+private def keys (h : Heap) :=
   h.impl.keys
 
-private theorem Heap.ext_impl {h₁ h₂ : Heap}
+private theorem ext_impl {h₁ h₂ : Heap}
     (hEq : h₁.impl = h₂.impl) : h₁ = h₂ := by
   cases h₁
   cases h₂
@@ -76,69 +127,69 @@ private theorem Heap.ext_impl {h₁ h₂ : Heap}
 
 def empty : Heap := ⟨∅⟩
 
-instance Heap.instEmptyCollection : EmptyCollection Heap := ⟨empty⟩
+instance instEmptyCollection : EmptyCollection Heap := ⟨empty⟩
 
-def Heap.union (h₁ h₂ : Heap) : Heap := ⟨h₁.impl ∪ h₂.impl⟩
+def union (h₁ h₂ : Heap) : Heap := ⟨h₁.impl ∪ h₂.impl⟩
 
-instance Heap.instUnion : Union Heap := ⟨Heap.union⟩
+instance instUnion : Union Heap := ⟨Heap.union⟩
 
-def Heap.mem (address : Loc) (h : Heap) : Prop :=
+def mem (address : Loc) (h : Heap) : Prop :=
   address ∈ h.impl
 
-instance Heap.instMembership : Membership Loc Heap :=
+instance instMembership : Membership Loc Heap :=
   ⟨fun h address => Heap.mem address h⟩
 
 /-- The number of slots the heap owns. -/
-def Heap.size (h : Heap) : Nat :=
+def size (h : Heap) : Nat :=
   h.impl.keys.card
 
-def Heap.compatible (h₁ h₂ : Heap) : Prop :=
+def compatible (h₁ h₂ : Heap) : Prop :=
   Finmap.Disjoint h₁.impl h₂.impl
 
-private theorem Heap.mem_union {address : Loc} {h₁ h₂ : Heap} :
+private theorem mem_union {address : Loc} {h₁ h₂ : Heap} :
     address ∈ h₁ ∪ h₂ ↔ address ∈ h₁ ∨ address ∈ h₂ :=
   Finmap.mem_union
 
-private theorem Heap.lookup_union_left {address : Loc}
+private theorem lookup_union_left {address : Loc}
     {h₁ h₂ : Heap} (hMem : address ∈ h₁) :
     (h₁ ∪ h₂).lookup address = h₁.lookup address :=
   Finmap.lookup_union_left hMem
 
-private theorem Heap.mem_insert {address insertedAddress : Loc}
+private theorem mem_insert {address insertedAddress : Loc}
     {cell : HeapCell} {h : Heap} :
     address ∈ h.insert insertedAddress cell ↔
       address = insertedAddress ∨ address ∈ h :=
   Finmap.mem_insert
 
-private theorem Heap.mem_erase {address erasedAddress : Loc} {h : Heap} :
+private theorem mem_erase {address erasedAddress : Loc} {h : Heap} :
     address ∈ h.erase erasedAddress ↔
       address ≠ erasedAddress ∧ address ∈ h :=
   Finmap.mem_erase
 
-private theorem Heap.insert_union {address : Loc}
+private theorem insert_union {address : Loc}
     {cell : HeapCell} {h₁ h₂ : Heap} :
     (h₁ ∪ h₂).insert address cell =
       h₁.insert address cell ∪ h₂ := by
   apply Heap.ext_impl
   exact Finmap.insert_union
 
-private theorem Heap.union_assoc' (h₁ h₂ h₃ : Heap) :
+private theorem union_assoc' (h₁ h₂ h₃ : Heap) :
     (h₁ ∪ h₂) ∪ h₃ = h₁ ∪ (h₂ ∪ h₃) := by
   apply Heap.ext_impl
   exact Finmap.union_assoc
 
 @[simp]
-theorem Heap.empty_union (h : Heap) : empty ∪ h = h := by
+theorem empty_union (h : Heap) : empty ∪ h = h := by
   apply Heap.ext_impl
   exact Finmap.empty_union
 
 @[simp]
-theorem Heap.union_empty (h : Heap) : h ∪ empty = h := by
+theorem union_empty (h : Heap) : h ∪ empty = h := by
   apply Heap.ext_impl
   exact Finmap.union_empty
 
 /-- Heaps form a PCM under disjoint union. -/
-instance Heap.instPartialCommMonoid : PartialCommMonoid Heap where
+instance instPartialCommMonoid : PartialCommMonoid Heap where
   Compatible := Heap.compatible
   compatible_comm hCompatible := by
     exact Finmap.Disjoint.symm _ _ hCompatible
@@ -169,43 +220,6 @@ instance Heap.instPartialCommMonoid : PartialCommMonoid Heap where
     apply Heap.ext_impl
     exact Finmap.union_comm_of_disjoint hCompatible
 
-/-- A reference to one slot: a bare address, the type being a phantom index
-that constrains specifications only. -/
-@[expose]
-def Ref (_ : Type) := Loc
-
-/-- Addresses are pairs of natural numbers, so references are inhabited. -/
-instance instInhabitedRef {α : Type} : Inhabited (Ref α) := ⟨((0 : AllocId), 0)⟩
-
-instance instDecidableEqRef {α : Type} : DecidableEq (Ref α) :=
-  inferInstanceAs (DecidableEq Loc)
-
-@[expose]
-def Ref.addr {α : Type} (r : Ref α) : Loc := r
-
-/-- The allocation `r` is interior to. -/
-@[expose]
-def Ref.base {α : Type} (r : Ref α) : AllocId := r.addr.1
-
-/-- The slot of that allocation `r` names. -/
-@[expose]
-def Ref.offset {α : Type} (r : Ref α) : Nat := r.addr.2
-
-/-- Pointer arithmetic: same allocation, later slot. -/
-@[expose]
-def Ref.add {α : Type} (r : Ref α) (i : Nat) : Ref α := (r.base, r.offset + i)
-
-@[simp] theorem Ref.base_add {α : Type} (r : Ref α) (i : Nat) :
-    (r.add i).base = r.base := rfl
-
-@[simp] theorem Ref.offset_add {α : Type} (r : Ref α) (i : Nat) :
-    (r.add i).offset = r.offset + i := rfl
-
-@[simp] theorem Ref.add_zero {α : Type} (r : Ref α) : r.add 0 = r := rfl
-
-theorem Ref.add_add {α : Type} (r : Ref α) (i j : Nat) :
-    (r.add i).add j = r.add (i + j) := by
-  simp [Ref.add, Ref.base, Ref.offset, Ref.addr, Nat.add_assoc]
 
 /-- The heap of the single slot `r`, holding `value`. -/
 def singleton {α : Type} (r : Ref α) (value : α) : Heap :=
@@ -253,8 +267,6 @@ def rangeHeap {α : Type} (r : Ref α) : List α → Heap
     rangeHeap r (value :: rest) = singleton r value ∪ rangeHeap (r.add 1) rest :=
   rfl
 
-theorem addr_add {α : Type} (r : Ref α) (i : Nat) :
-    (r.add i).addr = (r.base, r.offset + i) := rfl
 
 @[simp] theorem rangeHeap_singleton {α : Type} (r : Ref α) (value : α) :
     rangeHeap r [value] = singleton r value := by
@@ -301,8 +313,8 @@ theorem compatible_rangeHeap_append {α : Type} (r : Ref α) (xs ys : List α) :
   intro address hLeft hRight
   obtain ⟨i, hi, hL⟩ := mem_rangeHeap.mp hLeft
   obtain ⟨j, -, hR⟩ := mem_rangeHeap.mp hRight
-  rw [Ref.add_add, addr_add] at hR
-  rw [addr_add] at hL
+  rw [Ref.add_add, Ref.addr_add] at hR
+  rw [Ref.addr_add] at hL
   have hOffset : r.offset + i = r.offset + (xs.length + j) :=
     (congrArg Prod.snd hL).symm.trans (congrArg Prod.snd hR)
   omega
@@ -350,10 +362,10 @@ they are closed under the extension order below, the way Iris's `uPred` is
 monotone in its resource. -/
 
 /-- `Heap.Sub h h'`: `h'` is `h` extended with cells that `h` does not own. -/
-def Heap.Sub (h h' : Heap) : Prop :=
+def Sub (h h' : Heap) : Prop :=
   ∃ rest, PartialCommMonoid.Compatible h rest ∧ h' = h ∪ rest
 
-namespace Heap.Sub
+namespace Sub
 
 @[refl]
 theorem refl (h : Heap) : Heap.Sub h h :=
@@ -461,9 +473,8 @@ theorem union_mono {A B h₁ h₂ : Heap}
     exact hStep₁
   exact hStep₂.trans (Heap.Sub.union_mono_left hSub₁ hCompatible)
 
-end Heap.Sub
+end Sub
 
-namespace Heap
 
 /-- The value the slot `r` holds.  The guard supplies the type equality, so no
 default value has to be invented and this computes. -/
@@ -486,8 +497,6 @@ exactly what has not been freed. -/
 def free {α : Type} (r : Ref α) (h : Heap)
     (_ : contains h r) : Heap :=
   h.erase r.addr
-
-end Heap
 
 theorem mem_of_contains {α : Type} {h : Heap} {r : Ref α}
     (hContains : contains h r) : r.addr ∈ h := by
@@ -702,4 +711,6 @@ theorem read_of_sub {α : Type} {r : Ref α} {value : α} {h : Heap}
       Subsingleton.elim _ _,
     read_union_left hContainsSingleton, read_singleton]
 
-end Aeneas.SLPoC
+end Heap
+
+end Aeneas.Std

@@ -23,7 +23,7 @@ caught by the separation logic, and by the definedness guard of the event a
 heap operation triggers — a read through a dangling or unowned pointer is
 *stuck*, not erroneous.
 
-This file is also where the heap of `Aeneas.SLPoC.Heap` stops being visible: a
+This file is also where the heap of `Aeneas.Std.Heap` stops being visible: a
 `Ref` never appears outside `MutableData/`.
 
 [`Buffer.lean`](Buffer.lean) builds bounded views on this, and
@@ -31,6 +31,8 @@ This file is also where the heap of `Aeneas.SLPoC.Heap` stops being visible: a
 -/
 
 namespace Aeneas.SLPoC
+
+open Aeneas.Std (AllocId Heap Ref Result)
 
 variable {α : Type}
 
@@ -71,7 +73,7 @@ theorem add_add (q : Ptr α) (i j : Nat) : (q.add i).add j = q.add (i + j) := by
 
 /-- `q` owns the `values.length` slots from `q` on, holding `values`. -/
 def pointsToRange (q : Ptr α) (values : List α) : IProp :=
-  owns (rangeHeap q.ref values)
+  owns (Heap.rangeHeap q.ref values)
 
 /-- `q` owns exactly the slot it addresses.  This is the reference assertion
 directly rather than the one-slot range, so that the common case costs the
@@ -93,7 +95,7 @@ theorem Ptr.pointsTo_eq_ref (q : Ptr α) (value : α) :
 /-- A slot is the range of one value. -/
 theorem Ptr.pointsTo_eq_range (q : Ptr α) (value : α) :
     (q ↦ value) = (q ↦* [value]) := by
-  rw [Ptr.pointsTo_eq_ref, Ptr.pointsToRange, rangeHeap_singleton]
+  rw [Ptr.pointsTo_eq_ref, Ptr.pointsToRange, Heap.rangeHeap_singleton]
   rfl
 
 /-! ## Splitting and joining ranges
@@ -107,8 +109,8 @@ namespace Ptr
 theorem pointsToRange_append (q : Ptr α) (xs ys : List α) :
     q ↦* (xs ++ ys) ⊣⊢ q ↦* xs ∗ (q.add xs.length) ↦* ys := by
   rw [pointsToRange, pointsToRange, pointsToRange, ref_add,
-    rangeHeap_append q.ref xs ys]
-  exact owns_union _ _ (compatible_rangeHeap_append q.ref xs ys)
+    Heap.rangeHeap_append q.ref xs ys]
+  exact owns_union _ _ (Heap.compatible_rangeHeap_append q.ref xs ys)
 
 /-- Split a range anywhere. -/
 theorem pointsToRange_split (q : Ptr α) (values : List α) (i : Nat) :
@@ -164,22 +166,22 @@ namespace Ptr
 
 /-- The heap of the single slot `q` addresses, holding `value`. -/
 def singleton (q : Ptr α) (value : α) : Heap :=
-  _root_.Aeneas.SLPoC.singleton q.ref value
+  Heap.singleton q.ref value
 
 /-- `h` has a slot at `q`, and it holds a value of type `α`.  This is the
 definedness guard of every operation on `q`. -/
 def contains (h : Heap) (q : Ptr α) : Prop :=
-  _root_.Aeneas.SLPoC.contains h q.ref
+  Heap.contains h q.ref
 
 @[simp]
 theorem not_contains_empty (q : Ptr α) : ¬ Ptr.contains (∅ : Heap) q :=
-  _root_.Aeneas.SLPoC.not_contains_empty q.ref
+  Heap.not_contains_empty q.ref
 
 /-- Owning a slot is having one: this is what an affine points-to assertion
 gives, the rest of the heap being unconstrained. -/
 theorem contains_of_pointsTo {q : Ptr α} {value : α} {h : Heap}
     (hPointsTo : (q ↦ value) h) : Ptr.contains h q :=
-  contains_of_sub hPointsTo
+  Heap.contains_of_sub hPointsTo
 
 theorem ref_injective {q r : Ptr α} (hEq : q.ref = r.ref) : q = r := by
   cases q; cases r
@@ -191,7 +193,7 @@ theorem ref_injective {q r : Ptr α} (hEq : q.ref = r.ref) : q = r := by
 /-- Two slots at different pointers are disjoint. -/
 theorem disjoint_singleton {q r : Ptr α} {value₁ value₂ : α} (hNe : q ≠ r) :
     PartialCommMonoid.Compatible (q.singleton value₁) (r.singleton value₂) :=
-  _root_.Aeneas.SLPoC.disjoint_singleton fun hEq => hNe (ref_injective hEq)
+  Heap.disjoint_singleton fun hEq => hNe (ref_injective hEq)
 
 end Ptr
 
@@ -203,22 +205,22 @@ spanning all of them. -/
 
 /-- Allocate the run `values`, and wrap the address it starts at. -/
 def allocArray {β : Type} (values : List α) (mk : Ref α → β) : Result β :=
-  guardedModify (fun _ => True) fun h _ =>
-    (mk (freshRef α h), freshHeap h values)
+  Result.guardedModify (fun _ => True) fun h _ =>
+    (mk (Heap.freshRef α h), Heap.freshHeap h values)
 
 theorem allocArray.spec {β : Type} (values : List α) (mk : Ref α → β)
     (post : β → IProp)
-    (hPost : ∀ r : Ref α, owns (rangeHeap r values) ⊢ post (mk r)) :
+    (hPost : ∀ r : Ref α, owns (Heap.rangeHeap r values) ⊢ post (mk r)) :
     ⦃ emp ⦄ allocArray values mk ⦃⇓ result => post result⦄ := by
   apply triple_guardedModify
   intro h _ frame hCompatible
   have hFresh :
       PartialCommMonoid.Compatible
-        (rangeHeap (freshRef α (h ∪ frame)) values) (h ∪ frame) :=
-    compatible_freshRef _ _
+        (Heap.rangeHeap (Heap.freshRef α (h ∪ frame)) values) (h ∪ frame) :=
+    Heap.compatible_freshRef _ _
   obtain ⟨hFreshH, hFreshFrame⟩ :=
     (PartialCommMonoid.compatible_assoc
-      (rangeHeap (freshRef α (h ∪ frame)) values) h frame).mpr
+      (Heap.rangeHeap (Heap.freshRef α (h ∪ frame)) values) h frame).mpr
         ⟨hCompatible, hFresh⟩
   exact ⟨trivial, _, hFreshFrame,
     (PartialCommMonoid.union_assoc hFreshH hFreshFrame).symm,
@@ -244,15 +246,15 @@ and owning the slot is what discharges it. -/
 /-- The definedness guard of a read: the heap has the slot `q` addresses, and
 it holds a value of type `α`. -/
 structure Ptr.Readable (q : Ptr α) (h : Heap) : Prop where
-  contains : _root_.Aeneas.SLPoC.contains h q.ref
+  contains : Heap.contains h q.ref
 
 /-- Owning the slot discharges the guard. -/
 theorem Ptr.readable_of_pointsTo {q : Ptr α} {value : α} {h : Heap}
     (hPointsTo : (q ↦ value) h) : q.Readable h :=
-  ⟨contains_of_sub hPointsTo⟩
+  ⟨Heap.contains_of_sub hPointsTo⟩
 
 def read (q : Ptr α) : Result α :=
-  guardedModify (fun h => q.Readable h) fun h hReadable =>
+  Result.guardedModify (fun h => q.Readable h) fun h hReadable =>
     (Heap.read q.ref h hReadable.contains, h)
 
 @[step]
@@ -267,7 +269,7 @@ theorem read.spec (q : Ptr α) (value : α) :
     Ptr.readable_of_pointsTo hPointsToFrame
   refine ⟨hReadable, h, hCompatible, rfl, ?_⟩
   exact (sep_pure_l _ _ h).mpr
-    ⟨read_of_sub hPointsToFrame hReadable.contains, hPointsTo⟩
+    ⟨Heap.read_of_sub hPointsToFrame hReadable.contains, hPointsTo⟩
 
 /-! ## Writing and releasing
 
@@ -275,7 +277,7 @@ Both are total in the value they are given, so their guard is only that the
 slot exists. -/
 
 def update (q : Ptr α) (value : α) : Result Unit :=
-  guardedModify (fun h => contains h q.ref) fun h hContains =>
+  Result.guardedModify (fun h => Heap.contains h q.ref) fun h hContains =>
     ((), Heap.update q.ref value h hContains)
 
 @[step]
@@ -284,27 +286,27 @@ theorem update.spec (q : Ptr α) (oldValue newValue : α) :
   apply triple_guardedModify
   intro h hPointsTo frame hCompatible
   obtain ⟨rest, hCompatibleRest, rfl⟩ := hPointsTo
-  have hContainsSlot := contains_singleton q.ref oldValue
-  have hContains : contains (singleton q.ref oldValue ∪ rest) q.ref :=
-    contains_union_left hContainsSlot
-  refine ⟨contains_union_left hContains,
+  have hContainsSlot := Heap.contains_singleton q.ref oldValue
+  have hContains : Heap.contains (Heap.singleton q.ref oldValue ∪ rest) q.ref :=
+    Heap.contains_union_left hContainsSlot
+  refine ⟨Heap.contains_union_left hContains,
     Heap.update q.ref newValue _ hContains,
-    disjoint_update_left hCompatible hContains, ?_, ?_⟩
-  · simpa only [show contains_union_left hContains =
-        contains_union_left (h₂ := frame) hContains from rfl] using
-      update_union_left q.ref newValue hContains
+    Heap.disjoint_update_left hCompatible hContains, ?_, ?_⟩
+  · simpa only [show Heap.contains_union_left hContains =
+        Heap.contains_union_left (h₂ := frame) hContains from rfl] using
+      Heap.update_union_left q.ref newValue hContains
   · have hCompatibleNew :
-        PartialCommMonoid.Compatible (singleton q.ref newValue) rest := by
-      have hUpdated := disjoint_update_left (value := newValue)
+        PartialCommMonoid.Compatible (Heap.singleton q.ref newValue) rest := by
+      have hUpdated := Heap.disjoint_update_left (value := newValue)
         hCompatibleRest hContainsSlot
-      rwa [update_singleton] at hUpdated
-    rw [show hContains = contains_union_left hContainsSlot from
-      Subsingleton.elim _ _, update_union_left q.ref newValue hContainsSlot,
-      update_singleton]
+      rwa [Heap.update_singleton] at hUpdated
+    rw [show hContains = Heap.contains_union_left hContainsSlot from
+      Subsingleton.elim _ _, Heap.update_union_left q.ref newValue hContainsSlot,
+      Heap.update_singleton]
     exact Heap.Sub.union_left hCompatibleNew
 
 def free (q : Ptr α) : Result Unit :=
-  guardedModify (fun h => contains h q.ref) fun h hContains =>
+  Result.guardedModify (fun h => Heap.contains h q.ref) fun h hContains =>
     ((), Heap.free q.ref h hContains)
 
 @[step]
@@ -312,12 +314,12 @@ theorem free.spec (q : Ptr α) (value : α) :
     ⦃ q ↦ value ⦄ free q ⦃⇓ emp⦄ := by
   apply triple_guardedModify
   intro h hPointsTo frame hCompatible
-  have hContains : contains h q.ref := contains_of_sub hPointsTo
-  refine ⟨contains_union_left hContains, Heap.free q.ref h hContains,
-    disjoint_free_left hCompatible hContains, ?_, trivial⟩
-  simpa only [show contains_union_left hContains =
-      contains_union_left (h₂ := frame) hContains from rfl] using
-    free_union_left q.ref hCompatible hContains
+  have hContains : Heap.contains h q.ref := Heap.contains_of_sub hPointsTo
+  refine ⟨Heap.contains_union_left hContains, Heap.free q.ref h hContains,
+    Heap.disjoint_free_left hCompatible hContains, ?_, trivial⟩
+  simpa only [show Heap.contains_union_left hContains =
+      Heap.contains_union_left (h₂ := frame) hContains from rfl] using
+    Heap.free_union_left q.ref hCompatible hContains
 
 /-! ## Releasing a range
 
