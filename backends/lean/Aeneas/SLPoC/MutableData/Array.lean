@@ -77,7 +77,7 @@ theorem range_entails_pointsTo {a : Array α n} {values : List α}
 /-! ## Allocation and deallocation -/
 
 /-- Allocate an array of `n` slots, each holding `value`. -/
-def alloc (α : Type) (n : Nat) (value : α) : St (Array α n) :=
+def alloc (α : Type) (n : Nat) (value : α) : Result (Array α n) :=
   allocArray (List.replicate n value) fun r => ⟨⟨r.base, r.offset⟩⟩
 
 @[step]
@@ -88,7 +88,7 @@ theorem alloc.spec (α : Type) (n : Nat) (value : α) :
   exact (sep_pure_l _ _ h).mpr ⟨by simp, hOwns⟩
 
 /-- Allocate an array holding exactly `values`. -/
-def ofList (values : List α) : St (Array α values.length) :=
+def ofList (values : List α) : Result (Array α values.length) :=
   allocArray values fun r => ⟨⟨r.base, r.offset⟩⟩
 
 @[step]
@@ -98,7 +98,7 @@ theorem ofList.spec (values : List α) :
   exact (sep_pure_l _ _ h).mpr ⟨rfl, hOwns⟩
 
 /-- Release every slot of the array. -/
-def free (a : Array α n) : St Unit := a.toBuffer.free
+def free (a : Array α n) : Result Unit := a.toBuffer.free
 
 @[step]
 theorem free.spec (a : Array α n) (values : List α) :
@@ -112,7 +112,7 @@ specifications below derive that ownership from the complete array and
 reassemble it afterward. -/
 
 /-- Read the value at index `i`. -/
-def read (a : Array α n) (i : Nat) : St α := a.toBuffer.read i
+def read (a : Array α n) (i : Nat) : Result α := a.toBuffer.read i
 
 @[step]
 theorem read.spec (a : Array α n) (i : Nat) (value : α) :
@@ -127,7 +127,7 @@ theorem read.spec_array (a : Array α n) (values : List α) (i : Nat)
   Buffer.read.spec_array a.toBuffer values i hIndex
 
 /-- Write `value` at index `i`. -/
-def write (a : Array α n) (i : Nat) (value : α) : St Unit :=
+def write (a : Array α n) (i : Nat) (value : α) : Result Unit :=
   a.toBuffer.write i value
 
 @[step]
@@ -142,7 +142,7 @@ theorem write.spec_array (a : Array α n) (values : List α) (i : Nat)
   Buffer.write.spec_array a.toBuffer values i value hIndex
 
 /-- Exchange the values at indices `i` and `j`. -/
-def swap (a : Array α n) (i j : Nat) : St Unit := a.toBuffer.swap i j
+def swap (a : Array α n) (i j : Nat) : Result Unit := a.toBuffer.swap i j
 
 theorem swap.spec (a : Array α n) (values : List α) (i j : Nat)
     (hi : i < values.length) (hj : j < values.length) :
@@ -153,7 +153,7 @@ theorem swap.spec (a : Array α n) (values : List α) (i j : Nat)
 /-! ## Bulk operations -/
 
 /-- Overwrite every slot with `value`. -/
-def fill (a : Array α n) (value : α) : St Unit := a.toBuffer.fill value
+def fill (a : Array α n) (value : α) : Result Unit := a.toBuffer.fill value
 
 @[step]
 theorem fill.spec (a : Array α n) (values : List α) (value : α) :
@@ -162,7 +162,7 @@ theorem fill.spec (a : Array α n) (values : List α) (value : α) :
 
 /-- Copy every slot of `src` into `dst`.  Both arrays have `n` slots by their
 type, so nothing has to be checked. -/
-def copy (dst src : Array α n) : St Unit := dst.toBuffer.copy src.toBuffer
+def copy (dst src : Array α n) : Result Unit := dst.toBuffer.copy src.toBuffer
 
 @[step]
 theorem copy.spec (dst src : Array α n) (dstValues srcValues : List α) :
@@ -171,7 +171,7 @@ theorem copy.spec (dst src : Array α n) (dstValues srcValues : List α) :
   Buffer.copy.spec dst.toBuffer src.toBuffer dstValues srcValues rfl
 
 /-- Whether two arrays hold the same values. -/
-def compare [DecidableEq α] (left right : Array α n) : St Bool :=
+def compare [DecidableEq α] (left right : Array α n) : Result Bool :=
   Buffer.compare left.toBuffer right.toBuffer
 
 @[step]
@@ -200,7 +200,7 @@ namespace Array
 
 /-- Materialize a functional array as a fresh mutable memory array. -/
 def mut_to_raw {N : Aeneas.Std.Usize} (value : Aeneas.Std.Array α N) :
-    St (Array α N.val) :=
+    Result (Array α N.val) :=
   allocArray value.val fun r => ⟨⟨r.base, r.offset⟩⟩
 
 @[step]
@@ -212,7 +212,7 @@ theorem mut_to_raw.spec {N : Aeneas.Std.Usize} (value : Aeneas.Std.Array α N) :
 /-- Refunctionalize a mutable array, consuming all of its memory ownership. -/
 def end_mut_to_raw {N : Aeneas.Std.Usize} (original : Aeneas.Std.Array α N)
     (a : Array α N.val) :
-    St (Aeneas.Std.Array α N) := do
+    Result (Aeneas.Std.Array α N) := do
   let values ← takeRange a.ptr N.val
   pure (original.setSlice! 0 values)
 

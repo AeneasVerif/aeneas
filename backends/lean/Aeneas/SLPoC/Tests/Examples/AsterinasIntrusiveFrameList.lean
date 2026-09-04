@@ -64,17 +64,17 @@ structure Cursor (M : Type) where
 
 /-- Construct an empty sequential list with an ID supplied by the abstracted
 metadata-region/list-ID framework. -/
-def new (listId : Nat) : St (LinkedList M) :=
+def new (listId : Nat) : Result (LinkedList M) :=
   pure { front := none, back := none, size := 0, listId }
 
 /-- Construct the cursor used by both public front operations. -/
-def cursorFront (s : LinkedList M) : St (Cursor M) :=
+def cursorFront (s : LinkedList M) : Result (Cursor M) :=
   pure { list := s, current := s.front }
 
 /-- Public `push_front`: initialize the detached frame's existing intrusive
 slot, repair the old front's back-link, and publish the slot as the new front.
 There is intentionally no `alloc`. -/
-def pushFront (s : LinkedList M) (frame : Frame M) : St (LinkedList M) := do
+def pushFront (s : LinkedList M) (frame : Frame M) : Result (LinkedList M) := do
   let frameSlot ← read frame.slot
   update frame.slot
     { frameSlot with prev := none, next := s.front, inList := some s.listId }
@@ -93,7 +93,7 @@ def pushFront (s : LinkedList M) (frame : Frame M) : St (LinkedList M) := do
 /-- Constant-time cursor removal, matching the source rewiring order.  On
 success the cursor advances to `next`; the removed slot is detached and the
 same frame handle is reconstructed from its slot. -/
-def takeCurrent (cursor : Cursor M) : St (Cursor M × Option (Frame M)) := do
+def takeCurrent (cursor : Cursor M) : Result (Cursor M × Option (Frame M)) := do
   match cursor.current with
   | none => pure (cursor, none)
   | some current =>
@@ -122,7 +122,7 @@ def takeCurrent (cursor : Cursor M) : St (Cursor M × Option (Frame M)) := do
 
 /-- Public `pop_front`: make the source front cursor and delegate removal to
 `takeCurrent`. -/
-def popFront (s : LinkedList M) : St (LinkedList M × Option (Frame M)) := do
+def popFront (s : LinkedList M) : Result (LinkedList M × Option (Frame M)) := do
   let (cursor, frame) ←
     takeCurrent { list := s, current := s.front }
   pure (cursor.list, frame)
@@ -319,7 +319,7 @@ theorem cursorFront.spec (s : LinkedList M) (entries : List (Entry M)) :
 /-- `new` owns no frame cells and represents the empty pure sequence. -/
 @[step]
 theorem new.spec (listId : Nat) (hnonzero : listId ≠ 0) :
-    ⦃ emp ⦄ (new listId : St (LinkedList M))
+    ⦃ emp ⦄ (new listId : Result (LinkedList M))
       ⦃⇓ s => listRep s []⦄ := by
   unfold new
   step*

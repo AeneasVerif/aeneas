@@ -14,7 +14,7 @@ namespace Aeneas.SLPoC
 
 /-! ## A closed program -/
 
-def roundTrip : St Nat := do
+def roundTrip : Result Nat := do
   let p ← alloc (1 : Nat)
   let value ← read p
   update p (value + 41)
@@ -46,7 +46,7 @@ final heap is a fact about the execution, not about the specification. -/
 example : (execClosed roundTrip roundTrip.spec).2.size = 0 := by
   native_decide
 
-def leaky : St Unit := do
+def leaky : Result Unit := do
   let _ ← alloc (1 : Nat)
   pure ()
 

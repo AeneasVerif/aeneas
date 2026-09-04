@@ -28,12 +28,12 @@ structure Node (α : Type) where
 abbrev Link (α : Type) := Option (Ptr (Node α))
 
 /-- Test whether a linked list is empty. -/
-def isEmpty (x : Link α) : St Bool :=
+def isEmpty (x : Link α) : Result Bool :=
   pure x.isNone
 
 /-- Read the first element.  The proof argument is the erased counterpart of
 Pulse's non-empty-list precondition. -/
-def head (x : Link α) (hne : x ≠ none) : St α :=
+def head (x : Link α) (hne : x ≠ none) : Result α :=
   match x with
   | none => False.elim (hne rfl)
   | some p => do
@@ -41,7 +41,7 @@ def head (x : Link α) (hne : x ≠ none) : St α :=
       pure node.head
 
 /-- Remove and free the first cell, returning the remaining list and value. -/
-def pop (x : Link α) (hne : x ≠ none) : St (Link α × α) :=
+def pop (x : Link α) (hne : x ≠ none) : Result (Link α × α) :=
   match x with
   | none => False.elim (hne rfl)
   | some p => do
@@ -51,7 +51,7 @@ def pop (x : Link α) (hne : x ≠ none) : St (Link α × α) :=
 
 /-- Recursive length, with Pulse's erased logical list made explicit to justify
 structural recursion. -/
-def length : List α → Link α → St Nat
+def length : List α → Link α → Result Nat
   | [], _ => pure 0
   | _ :: _, none => pure 0
   | _ :: xs, some p => do
@@ -60,17 +60,17 @@ def length : List α → Link α → St Nat
       pure (n + 1)
 
 /-- Construct the empty linked list. -/
-def create (α : Type) : St (Link α) :=
+def create (α : Type) : Result (Link α) :=
   pure none
 
 /-- Allocate and prepend one cell. -/
-def cons (v : α) (x : Link α) : St (Link α) := do
+def cons (v : α) (x : Link α) : Result (Link α) := do
   let p ← alloc { head := v, tail := x }
   pure (some p)
 
 /-- Append `y` in place to the non-empty list `x`.  The first argument is
 Pulse's erased logical list and supplies the recursion measure. -/
-def append : List α → Link α → Link α → St Unit
+def append : List α → Link α → Link α → Result Unit
   | [], _, _ => pure ()
   | _ :: _, none, _ => pure ()
   | _ :: xs, some p, y => do
@@ -80,7 +80,7 @@ def append : List α → Link α → Link α → St Unit
       | _ :: _ => append xs node.tail y
 
 /-- Test whether a non-empty list consists of exactly one cell. -/
-def isLastCell (x : Link α) (hne : x ≠ none) : St Bool :=
+def isLastCell (x : Link α) (hne : x ≠ none) : Result Bool :=
   match x with
   | none => False.elim (hne rfl)
   | some p => do
@@ -88,7 +88,7 @@ def isLastCell (x : Link α) (hne : x ≠ none) : St Bool :=
       isEmpty node.tail
 
 /-- Attach `y` directly after the only cell of `x`. -/
-def appendAtLastCell (x y : Link α) (hne : x ≠ none) : St Unit :=
+def appendAtLastCell (x y : Link α) (hne : x ≠ none) : Result Unit :=
   match x with
   | none => False.elim (hne rfl)
   | some p => do
@@ -96,7 +96,7 @@ def appendAtLastCell (x y : Link α) (hne : x ≠ none) : St Unit :=
       update p { node with tail := y }
 
 /-- Detach the tail following the first cell. -/
-def detachNext (x : Link α) (hne : x ≠ none) : St (Link α) :=
+def detachNext (x : Link α) (hne : x ≠ none) : Result (Link α) :=
   match x with
   | none => False.elim (hne rfl)
   | some p => do
@@ -106,7 +106,7 @@ def detachNext (x : Link α) (hne : x ≠ none) : St (Link α) :=
 
 /-- Split after the first `n` cells.  Pulse uses a `UInt32`; `Nat` is the
 unbounded first-order counterpart used by this model. -/
-def split : Nat → Link α → St (Link α)
+def split : Nat → Link α → Result (Link α)
   | 0, x => pure x
   | _ + 1, none => pure none
   | 1, some p => do
@@ -118,18 +118,18 @@ def split : Nat → Link α → St (Link α)
       split (n + 1) node.tail
 
 /-- Insert `item` after the first `n` cells. -/
-def insert (xs : List α) (x : Link α) (item : α) (n : Nat) : St Unit := do
+def insert (xs : List α) (x : Link α) (item : α) (n : Nat) : Result Unit := do
   let tail ← split n x
   let inserted ← cons item tail
   append (xs.take n) x inserted
 
 /-- The upstream Pulse implementation of `delete` currently has the same body
 as `insert`; this definition deliberately preserves that actual behavior. -/
-def delete (xs : List α) (x : Link α) (item : α) (n : Nat) : St Unit :=
+def delete (xs : List α) (x : Link α) (item : α) (n : Nat) : Result Unit :=
   insert xs x item n
 
 /-- Tail-recursive in-place reversal with an accumulator. -/
-def reverseAppend : List α → Link α → Link α → St (Link α)
+def reverseAppend : List α → Link α → Link α → Result (Link α)
   | [], _, acc => pure acc
   | _ :: _, none, acc => pure acc
   | _ :: xs, some p, acc => do
@@ -138,7 +138,7 @@ def reverseAppend : List α → Link α → Link α → St (Link α)
       reverseAppend xs node.tail (some p)
 
 /-- Reverse a linked list in place. -/
-def reverse (xs : List α) (x : Link α) : St (Link α) :=
+def reverse (xs : List α) (x : Link α) : Result (Link α) :=
   reverseAppend xs x none
 
 /-! # Ghost state, specifications and proofs -/

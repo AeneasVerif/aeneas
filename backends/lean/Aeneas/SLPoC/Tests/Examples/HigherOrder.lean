@@ -13,17 +13,17 @@ namespace Aeneas.SLPoC
 
 namespace HigherOrder
 
-def CallbackSpec (callback : Ptr Nat → St Unit) (transform : Nat → Nat) : Prop :=
+def CallbackSpec (callback : Ptr Nat → Result Unit) (transform : Nat → Nat) : Prop :=
   ∀ pointer value,
     ⦃ pointer ↦ value ⦄ callback pointer
       ⦃⇓ pointer ↦ transform value⦄
 
-def applyTwice (callback : Ptr Nat → St Unit) (pointer : Ptr Nat) : St Unit := do
+def applyTwice (callback : Ptr Nat → Result Unit) (pointer : Ptr Nat) : Result Unit := do
   callback pointer
   callback pointer
 
 @[step]
-theorem applyTwice.spec (callback : Ptr Nat → St Unit) (transform : Nat → Nat)
+theorem applyTwice.spec (callback : Ptr Nat → Result Unit) (transform : Nat → Nat)
     (pointer : Ptr Nat) (value : Nat)
     (callbackSpec : CallbackSpec callback transform) :
     ⦃ pointer ↦ value ⦄ applyTwice callback pointer
@@ -32,7 +32,7 @@ theorem applyTwice.spec (callback : Ptr Nat → St Unit) (transform : Nat → Na
   step with callbackSpec pointer value
   exact callbackSpec pointer (transform value)
 
-def increment (pointer : Ptr Nat) : St Unit := do
+def increment (pointer : Ptr Nat) : Result Unit := do
   let value ← read pointer
   update pointer (value + 1)
 
@@ -42,7 +42,7 @@ theorem increment.spec : CallbackSpec increment (fun value => value + 1) := by
   unfold increment
   step*
 
-def incrementTwice (pointer : Ptr Nat) : St Unit :=
+def incrementTwice (pointer : Ptr Nat) : Result Unit :=
   applyTwice increment pointer
 
 theorem incrementTwice.spec (pointer : Ptr Nat) (value : Nat) :
@@ -63,11 +63,11 @@ registered specifications and prove the callback premises.
 
 namespace ResultStyle
 
-def applyF (f : Nat → St Nat) (x : Nat) : St Nat :=
+def applyF (f : Nat → Result Nat) (x : Nat) : Result Nat :=
   f x
 
 @[step]
-theorem applyF.spec (f : Nat → St Nat) (x : Nat) (post : Nat → Prop)
+theorem applyF.spec (f : Nat → Result Nat) (x : Nat) (post : Nat → Prop)
     (hf : (f x) ⦃⇓ y => post y⦄) :
     (applyF f x) ⦃⇓ y => post y⦄ := by
   simpa [applyF] using hf
@@ -81,13 +81,13 @@ example (x : Nat) :
   case hf => step*
   case hRamified => simp [Entails, Aeneas.SLPoC.emp, ipure]
 
-def callPair (f g : Nat → St Nat) (xy : Nat × Nat) : St (Nat × Nat) := do
+def callPair (f g : Nat → Result Nat) (xy : Nat × Nat) : Result (Nat × Nat) := do
   let a ← f xy.1
   let b ← g xy.2
   pure (a, b)
 
 @[step]
-theorem callPair.spec (f g : Nat → St Nat) (xy : Nat × Nat)
+theorem callPair.spec (f g : Nat → Result Nat) (xy : Nat × Nat)
     (postF postG : Nat → Prop)
     (hf : (f xy.1) ⦃⇓ a => postF a⦄)
     (hg : (g xy.2) ⦃⇓ b => postG b⦄) :
@@ -111,12 +111,12 @@ example (x y : Nat) :
     intro result
     iframe
 
-def callFThenG (f g : Nat → St Nat) (x : Nat) : St Nat := do
+def callFThenG (f g : Nat → Result Nat) (x : Nat) : Result Nat := do
   let y ← f x
   g y
 
 @[step]
-theorem callFThenG.spec (f g : Nat → St Nat) (x : Nat)
+theorem callFThenG.spec (f g : Nat → Result Nat) (x : Nat)
     (mid post : Nat → Prop)
     (hf : (f x) ⦃⇓ y => mid y⦄)
     (hg : ∀ y, mid y → (g y) ⦃⇓ z => post z⦄) :

@@ -202,7 +202,7 @@ whatever wrapper the caller asks for: a pointer to its first slot, or a buffer
 spanning all of them. -/
 
 /-- Allocate the run `values`, and wrap the address it starts at. -/
-def allocArray {β : Type} (values : List α) (mk : Ref α → β) : St β :=
+def allocArray {β : Type} (values : List α) (mk : Ref α → β) : Result β :=
   guardedModify (fun _ => True) fun h _ =>
     (mk (freshRef α h), freshHeap h values)
 
@@ -227,7 +227,7 @@ theorem allocArray.spec {β : Type} (values : List α) (mk : Ref α → β)
 /-! ## The one-slot allocation -/
 
 /-- Allocate one slot holding `value`. -/
-def alloc (value : α) : St (Ptr α) :=
+def alloc (value : α) : Result (Ptr α) :=
   allocArray [value] fun r => ⟨r.base, r.offset⟩
 
 @[step]
@@ -251,7 +251,7 @@ theorem Ptr.readable_of_pointsTo {q : Ptr α} {value : α} {h : Heap}
     (hPointsTo : (q ↦ value) h) : q.Readable h :=
   ⟨contains_of_sub hPointsTo⟩
 
-def read (q : Ptr α) : St α :=
+def read (q : Ptr α) : Result α :=
   guardedModify (fun h => q.Readable h) fun h hReadable =>
     (Heap.read q.ref h hReadable.contains, h)
 
@@ -274,7 +274,7 @@ theorem read.spec (q : Ptr α) (value : α) :
 Both are total in the value they are given, so their guard is only that the
 slot exists. -/
 
-def update (q : Ptr α) (value : α) : St Unit :=
+def update (q : Ptr α) (value : α) : Result Unit :=
   guardedModify (fun h => contains h q.ref) fun h hContains =>
     ((), Heap.update q.ref value h hContains)
 
@@ -303,7 +303,7 @@ theorem update.spec (q : Ptr α) (oldValue newValue : α) :
       update_singleton]
     exact Heap.Sub.union_left hCompatibleNew
 
-def free (q : Ptr α) : St Unit :=
+def free (q : Ptr α) : Result Unit :=
   guardedModify (fun h => contains h q.ref) fun h hContains =>
     ((), Heap.free q.ref h hContains)
 
@@ -326,7 +326,7 @@ heap still holds is exactly what has not been freed, and `Heap.size` counts
 it. -/
 
 /-- Release the `n` slots from `q` on. -/
-def freeRange (q : Ptr α) : Nat → St Unit
+def freeRange (q : Ptr α) : Nat → Result Unit
   | 0 => pure ()
   | n + 1 => do
       free q
@@ -412,7 +412,7 @@ each specification is proved by induction on the values the range holds, the
 frame rule carrying the slots already visited. -/
 
 /-- Overwrite the `n` slots from `q` on with `value`. -/
-def fillRange (q : Ptr α) (value : α) : Nat → St Unit
+def fillRange (q : Ptr α) (value : α) : Nat → Result Unit
   | 0 => pure ()
   | n + 1 => do
       update q value
@@ -433,7 +433,7 @@ theorem fillRange.spec (q : Ptr α) (values : List α) (value : α) :
       exact triple_frame_left (ih (q := q.add 1)) _
 
 /-- Copy the `n` slots from `src` on into the `n` slots from `dst` on. -/
-def copyRange (dst src : Ptr α) : Nat → St Unit
+def copyRange (dst src : Ptr α) : Nat → Result Unit
   | 0 => pure ()
   | n + 1 => do
       let value ← read src
@@ -478,7 +478,7 @@ theorem copyRange.spec (dst src : Ptr α) (dstValues srcValues : List α)
 
 /-- Whether the `n` slots from `left` on hold the same values as the `n` slots
 from `right` on. -/
-def compareRange [DecidableEq α] (left right : Ptr α) : Nat → St Bool
+def compareRange [DecidableEq α] (left right : Ptr α) : Nat → Result Bool
   | 0 => pure true
   | n + 1 => do
       let x ← read left
@@ -545,7 +545,7 @@ theorem compareRange.spec [DecidableEq α] (left right : Ptr α)
 
 /-! ## Turning a mutable borrow into a raw pointer and back -/
 
-def mut_to_raw {α : Type} (value : α) : St (Ptr α) :=
+def mut_to_raw {α : Type} (value : α) : Result (Ptr α) :=
   alloc value
 
 @[step]
@@ -554,7 +554,7 @@ theorem mut_to_raw.spec {α : Type} (value : α) :
   alloc.spec value
 
 /-- Read and release `n` consecutive slots. -/
-def takeRange (q : Ptr α) : Nat → St (List α)
+def takeRange (q : Ptr α) : Nat → Result (List α)
   | 0 => pure []
   | n + 1 => do
       let value ← read q
@@ -593,7 +593,7 @@ theorem takeRange.spec_of_length (q : Ptr α) (values : List α) (n : Nat)
   subst n
   exact takeRange.spec q values
 
-def end_mut_to_raw {α : Type} (q : Ptr α) : St α := do
+def end_mut_to_raw {α : Type} (q : Ptr α) : Result α := do
   let value ← read q
   free q
   pure value
