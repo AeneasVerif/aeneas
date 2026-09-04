@@ -1,4 +1,5 @@
-import Aeneas.SLPoC.WP
+import Aeneas.SepLogic
+import Aeneas.Tactic.SepLogic
 
 /-!
 # Downscaled YOLO synthetic cancellation benchmarks
@@ -19,7 +20,7 @@ lake env lean -M3072 -j1 Aeneas/SLPoC/Tests/Examples/YOLOCancel.lean
 `-M` is in MiB.  `trace.profiler` reports declaration and `iframe` time.
 -/
 
-namespace Aeneas.SLPoC.YOLOCancel
+namespace Aeneas.SepLogic.YOLOCancel
 
 set_option maxRecDepth 100000
 set_option maxHeartbeats 600000
@@ -64,4 +65,4 @@ theorem q40 (H1 H2 H3 H4 H5 H6 H7 H8 H9 H10 H11 H12 H13 H14 H15 H16 H17 H18 H19 
   H23 ∗ H13 ∗ H20 ∗ H33 ∗ H38 ∗ H29 ∗ H8 ∗ H11 ∗ H6 ∗ H5 := by
   iframe
 
-end Aeneas.SLPoC.YOLOCancel
+end Aeneas.SepLogic.YOLOCancel
