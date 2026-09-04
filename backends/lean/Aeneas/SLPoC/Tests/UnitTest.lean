@@ -5,6 +5,8 @@ namespace Aeneas.SLPoC
 
 open Aeneas.Data.Coinductive
 
+open Aeneas.Std (Heap Result RustEffect)
+
 unseal Result
 
 /-! ## Failure effect -/
@@ -320,7 +322,7 @@ example (p : Ptr Nat) : ¬ (⦃ emp ⦄ read p ⦃⇓ _ => emp⦄) := by
   intro hTriple
   have hSpec : spec (read p) (fun _ => emp) ∅ :=
     triple_apply hTriple trivial
-  simp only [read, guardedModify] at hSpec
+  simp only [read, Result.guardedModify] at hSpec
   obtain ⟨hReadable, -⟩ := TotalSpec.vis_view hSpec
   exact Ptr.not_contains_empty p hReadable.contains
 

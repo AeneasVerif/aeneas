@@ -10,6 +10,8 @@ The callback's specification describes how it transforms an owned cell, and
 
 namespace Aeneas.SLPoC
 
+open Aeneas.Std (Heap Result)
+
 
 namespace HigherOrder
 

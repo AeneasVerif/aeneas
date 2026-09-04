@@ -41,6 +41,8 @@ whereas this bounded abstraction keeps every suffix marker equal to `none`.
 
 namespace Aeneas.SLPoC
 
+open Aeneas.Std (Heap Result)
+
 
 namespace VerusVerifiedVec
 
@@ -313,7 +315,6 @@ theorem pushNoResize.spec
   iintro initCells suffix hcells hprefix htotal hcapacity
   step
   simp only [hcapacity]
-  step
   split
   · rename_i hroom
     have hsuffix : suffix ≠ [] := by
