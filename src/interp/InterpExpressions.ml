@@ -1148,9 +1148,20 @@ let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
           | Cmp ->
               [%sanity_check] span (int_ty1 = int_ty2);
               TLiteral (TInt I8)
-          (* These return `(int, bool)` / a pointer which isn't a literal type *)
-          | AddChecked | SubChecked | MulChecked | Offset ->
-              [%craise] span "Unimplemented binary operation"
+          (* The checked operations return a pair `(result, overflowed)`, which
+             isn't a literal type: we build the tuple type by hand *)
+          | AddChecked | SubChecked | MulChecked ->
+              [%sanity_check] span (int_ty1 = int_ty2);
+              let fields =
+                [ TLiteral (integer_as_literal int_ty1); TLiteral TBool ]
+              in
+              TAdt
+                {
+                  id = TTuple;
+                  generics = TypesUtils.mk_generic_args [] fields [] [];
+                }
+          (* This returns a pointer, which isn't a literal type *)
+          | Offset -> [%craise] span "Unimplemented binary operation"
           | Shl _ | Shr _ ->
               (* The number of bits can be of a different integer type
                  than the operand *)
