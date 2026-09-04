@@ -27,6 +27,8 @@ its result is logically equal, but it is not used to justify source aliasing.
 
 namespace Aeneas.SLPoC
 
+open Aeneas.Std (Heap Result)
+
 
 namespace VerusBitmap
 

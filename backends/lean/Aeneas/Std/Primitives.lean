@@ -4,7 +4,7 @@ import Aeneas.Extract
 import AeneasMeta.BvEnumToBitVec
 import Aeneas.Data.Coinductive.ITree
 import Aeneas.Data.Coinductive.Effect
-import Aeneas.SLPoC.Heap
+import Aeneas.Std.Heap
 
 namespace Aeneas
 
@@ -67,8 +67,8 @@ open Error
 inductive RustEffect.Input : Type 1 where
 -- We represent partially defined stateful operations as guarded operations.
 -- This avoids either duplicating syntax or requiring decidable equality for types.
-| guardedModify (α : Type) (pre : SLPoC.Heap → Prop)
-    (modify : (h : SLPoC.Heap) → pre h → α × SLPoC.Heap) : RustEffect.Input
+| guardedModify (α : Type) (pre : Heap → Prop)
+    (modify : (h : Heap) → pre h → α × Heap) : RustEffect.Input
 | fail : Error → RustEffect.Input
 
 def RustEffect.Output (i : RustEffect.Input) : Type 1 :=
@@ -426,8 +426,8 @@ def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) 
   | ControlFlow.done x => ok x
 partial_fixpoint
 
-def guardedModify {α : Type} (pre : SLPoC.Heap → Prop)
-    (modify : (h : SLPoC.Heap) → pre h → α × SLPoC.Heap) : Result α :=
+def Result.guardedModify {α : Type} (pre : Heap → Prop)
+    (modify : (h : Heap) → pre h → α × Heap) : Result α :=
   Result.vis (.guardedModify α pre modify) fun answer =>
     Result.ok answer.down
 

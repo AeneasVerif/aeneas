@@ -37,6 +37,8 @@ ownership and metadata.
 
 namespace Aeneas.SLPoC
 
+open Aeneas.Std (Heap Result)
+
 
 /-! # Executable definitions -/
 

@@ -32,6 +32,8 @@ logic.  Structural recursion on the finite path supplies Lean termination.
 
 namespace Aeneas.SLPoC
 
+open Aeneas.Std (Heap Result)
+
 
 namespace VerusPageTable
 
@@ -201,6 +203,8 @@ def unmap (root : Ptr Table) (path : Path) : Result (Option Frame) := do
   let removed ← removeAux root path
   if removed.isSome then
     prune root path
+  else
+    pure ()
   pure removed
 
 /-! # Ghost state, specifications and proofs -/

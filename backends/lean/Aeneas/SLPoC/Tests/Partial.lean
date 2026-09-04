@@ -14,6 +14,8 @@ namespace Aeneas.SLPoC
 
 open Aeneas.Data.Coinductive
 
+open Aeneas.Std (Heap Result loop)
+
 /-! ## The automation drives a partial goal
 
 `step` and `step*` work on `dtriple` exactly as on `triple`: the `@[step]`
@@ -88,7 +90,7 @@ of every event it reaches exactly as `TotalSpec` does. -/
 example (p : Ptr Nat) (Q : IPost Nat) : ¬ dtriple emp (read p) Q := by
   intro hTriple
   have hSpec : dspec (read p) Q ∅ := dtriple_apply hTriple trivial
-  simp only [read, guardedModify] at hSpec
+  simp only [read, Result.guardedModify] at hSpec
   obtain ⟨hReadable, -⟩ := PartialSpec.vis_view hSpec
   exact Ptr.not_contains_empty p hReadable.contains
 
@@ -103,7 +105,7 @@ example (Q : IPost Nat) : dtriple emp (Result.div : Result Nat) Q :=
   dtriple_div
 
 example (Q : IPost Nat) : ¬ triple emp (Result.div : Result Nat) Q := fun hTriple =>
-  spec_div Q empty (triple_apply hTriple trivial)
+  spec_div Q Heap.empty (triple_apply hTriple trivial)
 
 /-! ## A loop that never leaves
 

@@ -153,7 +153,7 @@ def qimp_spec_iff {α β} (P : α → Prop) (k : α → Result β) (Q : β → P
 
 /--
 error: unsolved goals
-⊢ ∀ (x : Nat), qimp_spec (fun y => 0 < x + y) (curry (fun x => ok (x.fst + x.snd)) x) fun z => 0 < z
+⊢ ∀ (x : ℕ), qimp_spec (fun y => 0 < x + y) (curry (fun x => ok (x.1 + x.2)) x) fun z => 0 < z
 -/
 #guard_msgs in
 example : qimp_spec (uncurry' fun x y => x + y > 0) (fun (x, y) => .ok (x + y)) (fun z => z > 0) := by

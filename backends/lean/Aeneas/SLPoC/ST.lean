@@ -1,12 +1,12 @@
 import Aeneas.Data.Coinductive.StateMachine
-import Aeneas.SLPoC.Primitives
+import Aeneas.Std.Primitives
 import Aeneas.SLPoC.WP
 import Aeneas.Tactic.Step.StepStar
 
 /-!
 # The state monad `Result`'s operational semantics and program logic
 
-`Aeneas.SLPoC.Primitives` defines `Result`, the interaction-tree monad over heap
+`Aeneas.Std.Primitives` defines `Result`, the interaction-tree monad over heap
 events. This file gives it an operational semantics and a certified interpreter,
 derives its separation-logic triples, and wires those triples to the
 `step`/`step*` tactics.
@@ -15,6 +15,7 @@ derives its separation-logic triples, and wires those triples to the
 namespace Aeneas.SLPoC
 
 open Aeneas.Data.Coinductive
+open Aeneas.Std (Error Heap Result RustEffect)
 
 universe u
 
@@ -22,7 +23,7 @@ section ResultImplementation
 
 unseal Result
 set_option allowUnsafeReducibility true in
-attribute [local reducible] Result Result.ok Result.vis Result.div bind
+attribute [local reducible] Result Result.ok Result.vis Result.div Aeneas.Std.bind
 
 /-! ## Operational semantics -/
 
@@ -108,7 +109,7 @@ theorem theta_evP_elim {EventResult : Type} {pre : Heap → Prop}
     {Q : EventResult → Heap → Prop} {h : Heap}
     (hWp : theta_evP pre modify Q h) :
     ∃ hPre : pre h, Q (modify h hPre).1 (modify h hPre).2 := by
-  have hWp' := hWp empty (PartialCommMonoid.compatible_comm
+  have hWp' := hWp Heap.empty (PartialCommMonoid.compatible_comm
     (PartialCommMonoid.compatible_empty_left h))
   simp only [Heap.union_empty] at hWp'
   obtain ⟨hPre, h', -, hModify, hPost⟩ := hWp'
@@ -868,7 +869,7 @@ theorem triple_pure {P : IPre} {Q : IPost α} {value : α}
 theorem triple_guardedModify {α : Type} {pre : Heap → Prop}
     {modify : (h : Heap) → pre h → α × Heap} {P : IPre} {Q : IPost α}
     (hWp : P ⊢ theta_ev pre modify Q) :
-    triple P (guardedModify pre modify) Q := by
+    triple P (Result.guardedModify pre modify) Q := by
   intro F h hPre
   have hEvent : theta_ev pre modify (Q ∗+ F) h :=
     theta_ev_frame pre modify Q F h
@@ -984,7 +985,7 @@ theorem dtriple_div {P : IPre} {Q : IPost α} :
 theorem dtriple_guardedModify {α : Type} {pre : Heap → Prop}
     {modify : (h : Heap) → pre h → α × Heap} {P : IPre} {Q : IPost α}
     (hWp : P ⊢ theta_ev pre modify Q) :
-    dtriple P (guardedModify pre modify) Q :=
+    dtriple P (Result.guardedModify pre modify) Q :=
   triple_dtriple (triple_guardedModify hWp)
 
 theorem dtriple_bind {P : IPre} {Q₁ : IPost α} {Q : IPost β} {m : Result α}
@@ -1222,7 +1223,7 @@ section ResultImplementation
 
 unseal Result
 set_option allowUnsafeReducibility true in
-attribute [local reducible] Result Result.ok Result.vis Result.div bind
+attribute [local reducible] Result Result.ok Result.vis Result.div Aeneas.Std.bind
 
 /-! ## Certified execution -/
 
@@ -1386,16 +1387,16 @@ theorem execTriple_evaluates {P : IPre} {Q : IPost α} (m : Result α) (h : Heap
 
 /-- Run a program proved from `emp` on the empty heap. -/
 def execClosed {Q : IPost α} (m : Result α) (hTriple : triple emp m Q) : α × Heap :=
-  execTriple m empty hTriple trivial
+  execTriple m Heap.empty hTriple trivial
 
 theorem execClosed_post {Q : IPost α} (m : Result α) (hTriple : triple emp m Q) :
     Q (execClosed m hTriple).1 (execClosed m hTriple).2 :=
-  execTriple_post m empty hTriple trivial
+  execTriple_post m Heap.empty hTriple trivial
 
 theorem execClosed_evaluates {Q : IPost α} (m : Result α)
     (hTriple : triple emp m Q) :
-    Evaluates m empty (execClosed m hTriple).1 (execClosed m hTriple).2 :=
-  execTriple_evaluates m empty hTriple trivial
+    Evaluates m Heap.empty (execClosed m hTriple).1 (execClosed m hTriple).2 :=
+  execTriple_evaluates m Heap.empty hTriple trivial
 
 end ResultImplementation
 

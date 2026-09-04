@@ -4,6 +4,8 @@ open Aeneas.Data.Coinductive
 
 namespace Aeneas.SLPoC.Tests.Step
 
+open Aeneas.Std (Result)
+
 
 /-! ## A result-dependent spatial postcondition
 

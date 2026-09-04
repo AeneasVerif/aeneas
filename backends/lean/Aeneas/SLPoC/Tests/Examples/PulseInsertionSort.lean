@@ -19,6 +19,8 @@ original array, proves them sorted, and proves them a permutation of the input.
 
 namespace Aeneas.SLPoC
 
+open Aeneas.Std (Heap Result)
+
 
 namespace PulseInsertionSort
 
