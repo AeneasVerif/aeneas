@@ -68,7 +68,7 @@ end Memory
 /-- The loop body, made structurally recursive by an explicit fuel bound.
 `current` and `reversed` are Creusot's `l` and `r`, respectively. -/
 def reverseAux (memory : Ptr Memory) :
-    Nat → Option Addr → Option Addr → St (Option Addr)
+    Nat → Option Addr → Option Addr → Result (Option Addr)
   | 0, _, reversed => pure reversed
   | _ + 1, none, reversed => pure reversed
   | fuel + 1, some current, reversed => do
@@ -80,7 +80,7 @@ def reverseAux (memory : Ptr Memory) :
 /-- Reverse/rewire successors until null is reached or `fuel` iterations have
 been performed.  The lasso theorem proves that its exact bound reaches null. -/
 def reverse (memory : Ptr Memory) (head : Option Addr) (fuel : Nat) :
-    St (Option Addr) :=
+    Result (Option Addr) :=
   reverseAux memory fuel head none
 
 /-! # Ghost state, specifications and proofs -/

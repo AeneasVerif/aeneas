@@ -5,17 +5,19 @@ namespace Aeneas.SLPoC
 
 open Aeneas.Data.Coinductive
 
+unseal Result
+
 /-! ## Failure effect -/
 
-example : (fail .panic : St Nat) =
-    ITree.vis (StEvents.I.fail .panic) PEmpty.elim :=
+example : (Result.fail .panic : Result Nat) =
+    Result.vis (RustEffect.I.fail .panic) PEmpty.elim :=
   rfl
 
-example (Q : IPost Nat) (h : Heap) : ¬ spec (fail .panic) Q h := by
-  simp
+example (Q : IPost Nat) (h : Heap) : ¬ spec (Result.fail .panic) Q h := by
+  simpa [Result.fail, Result.vis] using spec_fail .panic Q h
 
-example (Q : IPost Nat) (h : Heap) : ¬ dspec (fail .panic) Q h := by
-  simp
+example (Q : IPost Nat) (h : Heap) : ¬ dspec (Result.fail .panic) Q h := by
+  simpa [Result.fail, Result.vis] using dspec_fail .panic Q h
 
 /-! ## Entailment framing -/
 
@@ -104,12 +106,12 @@ example (p : Ptr Nat) (n : Nat) :
 
 /-- `step` reduces match/let noise around a terminal return. -/
 example (n : Nat) :
-    ⦃ emp ⦄ (Prod.rec (fun value _ => pure value) (n, true) : St Nat)
+    ⦃ emp ⦄ (Prod.rec (fun value _ => pure value) (n, true) : Result Nat)
       ⦃⇓ result => ⌜result = n⌝⦄ := by
   step
   simp [Entails, ipure]
 
-def namedPure (n : Nat) : St Nat :=
+def namedPure (n : Nat) : Result Nat :=
   pure n
 
 @[step]
@@ -129,7 +131,7 @@ example (n : Nat) :
 
 /-- Normalization inside `step` stays focused on its original goal. -/
 example (n : Nat) :
-    True ∧ ⦃ emp ⦄ (pure n : St Nat) ⦃⇓ result => ⌜result = n⌝⦄ := by
+    True ∧ ⦃ emp ⦄ (pure n : Result Nat) ⦃⇓ result => ⌜result = n⌝⦄ := by
   constructor
   fail_if_success all_goals step
   · trivial
@@ -142,7 +144,7 @@ example (n : Nat) :
 extracted from `H`: whatever is not required by the callee has to end up in `?F`,
 and `?F` cannot mention anything introduced by the entailment. -/
 
-def touchAny (p : Ptr Nat) : St Unit := do
+def touchAny (p : Ptr Nat) : Result Unit := do
   let value ← read p
   update p value
 
@@ -157,7 +159,7 @@ theorem touchAny.spec (p : Ptr Nat) :
   iintro n
   step*
 
-def touchThenSet (p : Ptr Nat) : St Unit := do
+def touchThenSet (p : Ptr Nat) : Result Unit := do
   touchAny p
   update p 7
 
@@ -201,7 +203,7 @@ example (p : Ptr Nat) (x : Nat) : (p ↦ x ⊢ p ↦ x) ∧ 1 = 1 := by
 
 /-! ## The shape of the goal `step` hands back -/
 
-def readThenWrite (p : Ptr Nat) : St Unit := do
+def readThenWrite (p : Ptr Nat) : Result Unit := do
   let value ← read p
   update p (value + 1)
 
@@ -218,7 +220,7 @@ example (p : Ptr Nat) (value : Nat) :
 /-! ## Terminal `pure` -/
 
 /-- `step*` walks through the `return` of a function. -/
-def readAndFree (p : Ptr Nat) : St Nat := do
+def readAndFree (p : Ptr Nat) : Result Nat := do
   let v ← read p
   free p
   pure (v + 1)
@@ -233,7 +235,7 @@ example (p : Ptr Nat) (value : Nat) :
 def opaqueStepResult (actual expected : Nat) : Prop :=
   actual = expected
 
-def readFreeReturn (p : Ptr Nat) : St Nat := do
+def readFreeReturn (p : Ptr Nat) : Result Nat := do
   let value ← read p
   free p
   pure (value + 1)
@@ -322,7 +324,7 @@ example (p : Ptr Nat) : ¬ (⦃ emp ⦄ read p ⦃⇓ _ => emp⦄) := by
   obtain ⟨hReadable, -⟩ := TotalSpec.vis_view hSpec
   exact Ptr.not_contains_empty p hReadable.contains
 
-def allocAndForget (value : Nat) : St Unit := do
+def allocAndForget (value : Nat) : Result Unit := do
   let _ ← alloc value
   pure ()
 
@@ -334,7 +336,7 @@ example (value : Nat) :
 
 /-- Resources owned by the caller may be discarded before a computation. -/
 example (p : Ptr Nat) (value : Nat) :
-    ⦃ p ↦ value ⦄ (pure () : St Unit) ⦃⇓ emp⦄ := by
+    ⦃ p ↦ value ⦄ (pure () : Result Unit) ⦃⇓ emp⦄ := by
   step*
 
 /-! ## Separation-logic tactics -/
@@ -372,7 +374,7 @@ example (p q : Ptr Nat) :
   step*
 
 -- wp_pures
-example (p : Ptr Nat) : ⦃ p ↦ 1 ⦄ (pure 5 : St Nat) ⦃⇓ v => ⌜v = 5⌝ ∗ p ↦ 1⦄ := by
+example (p : Ptr Nat) : ⦃ p ↦ 1 ⦄ (pure 5 : Result Nat) ⦃⇓ v => ⌜v = 5⌝ ∗ p ↦ 1⦄ := by
   wp_pures
   isimpl
 
@@ -449,7 +451,7 @@ example (p : Ptr Nat) :
 
 /-! ### Side conditions -/
 
-def readTwice (p : Ptr Nat) : St Nat := do
+def readTwice (p : Ptr Nat) : Result Nat := do
   let a ← read p
   let b ← read p
   pure (a + b)
@@ -506,7 +508,7 @@ example (q : Ptr Nat) (x y : Nat) : q ↦ x ∗ q ↦ y ⊢ ⌜False⌝ :=
 example (q : Ptr Nat) (x y : Nat) : q ↦ x ∗ (q.add 1) ↦ y ⊢ q ↦* [x, y] :=
   (Ptr.pointsToRange_append q [x] [y]).mpr
 
-def bufferOne : St Nat := do
+def bufferOne : Result Nat := do
   let b ← Buffer.alloc 1 (0 : Nat)
   b.write 0 42
   let value ← b.read 0
