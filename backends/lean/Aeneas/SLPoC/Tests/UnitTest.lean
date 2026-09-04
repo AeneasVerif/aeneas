@@ -1,3 +1,4 @@
+import Aeneas.SLPoC.Semantics
 import Aeneas.SLPoC.MutableData.Buffer
 import Aeneas.SLPoC.Tests.Examples.Basic
 
