@@ -179,7 +179,7 @@ namespace Specifications
 
 /- Atomicity, nondeterminism, parallelism, and the generic modal WP rule were not ported; names ending in `Sequential` are deterministic sequential variants, not implementations of the original concurrent operations. -/
 
-def arith : St Int :=
+def arith : Result Int :=
   pure (1 + 2 * 3 + 4 + 5)
 
 @[step]
@@ -188,7 +188,7 @@ theorem arith_spec :
   unfold arith
   step*
 
-def lambda : St Int :=
+def lambda : Result Int :=
   let add5 := fun x : Int => x + 5
   let double := fun x : Int => x * 2
   let compose := fun f g x => g (f x)
@@ -200,7 +200,7 @@ theorem lambda_spec :
   unfold lambda
   step*
 
-def prog : St Int := do
+def prog : Result Int := do
   let x ← alloc (1 : Int)
   let value ← read x
   update x (value + 2)
@@ -217,7 +217,7 @@ theorem pt_not_dupl {α : Type} (p : Ptr α) (v v' : α) :
   pointsTo_exclusive p v v'
 
 def compareAndSetSequential (p : Ptr Int) (expected replacement : Int) :
-    St Bool := do
+    Result Bool := do
   let value ← read p
   if value = expected then
     update p replacement
@@ -235,7 +235,7 @@ theorem compareAndSetSequential_spec (p : Ptr Int)
   unfold compareAndSetSequential
   step*
 
-def cmpXchg0To10Sequential (p : Ptr Int) : St Bool :=
+def cmpXchg0To10Sequential (p : Ptr Int) : Result Bool :=
   compareAndSetSequential p 0 10
 
 theorem cmpXchg_0_to_10_sequential_spec (p : Ptr Int) (value : Int) :
@@ -246,7 +246,7 @@ theorem cmpXchg_0_to_10_sequential_spec (p : Ptr Int) (value : Int) :
   unfold cmpXchg0To10Sequential
   step*
 
-def casSequential : St (Option (Int × Int)) := do
+def casSequential : Result (Option (Int × Int)) := do
   let p ← alloc (5 : Int)
   let first ← compareAndSetSequential p 6 7
   if first then
@@ -265,7 +265,7 @@ theorem cas_sequential_spec :
   unfold casSequential
   step*
 
-def parClientSequential : St (Ptr Int × Ptr Int × Int) := do
+def parClientSequential : Result (Ptr Int × Ptr Int × Int) := do
   let l₁ ← alloc (0 : Int)
   let l₂ ← alloc (0 : Int)
   update l₁ 21
@@ -282,7 +282,7 @@ theorem par_client_sequential_spec :
   unfold parClientSequential
   step*
 
-def raceLeftThenRightSequential (p : Ptr Int) : St Unit := do
+def raceLeftThenRightSequential (p : Ptr Int) : Result Unit := do
   update p 1
   update p 2
 
@@ -292,7 +292,7 @@ theorem race_left_then_right_sequential_spec (p : Ptr Int) (value : Int) :
   unfold raceLeftThenRightSequential
   step*
 
-def raceRightThenLeftSequential (p : Ptr Int) : St Unit := do
+def raceRightThenLeftSequential (p : Ptr Int) : Result Unit := do
   update p 2
   update p 1
 
@@ -302,7 +302,7 @@ theorem race_right_then_left_sequential_spec (p : Ptr Int) (value : Int) :
   unfold raceRightThenLeftSequential
   step*
 
-def progAdd2 : St Int := do
+def progAdd2 : Result Int := do
   let value ← prog
   pure (value + 2)
 
@@ -320,13 +320,13 @@ theorem prog_add_2_spec'' :
     (progAdd2) ⦃⇓ v => v = 5⦄ :=
   prog_add_2_spec'
 
-def swap (x y : Ptr α) : St Unit := do
+def swap (x y : Ptr α) : Result Unit := do
   let value ← read x
   let other ← read y
   update x other
   update y value
 
-def swapTwice (x y : Ptr α) : St Unit := do
+def swapTwice (x y : Ptr α) : Result Unit := do
   swap x y
   swap x y
 
@@ -369,7 +369,7 @@ theorem isList_cons (p : Ptr (Node α)) (x : α) (next : Link α) (xs : List α)
     iprop(p ↦ { value := x, next := next' } ∗ isList next' xs)
   exact entails_exists_r next (entails_refl _)
 
-def inc : List Int → Link Int → St Unit
+def inc : List Int → Link Int → Result Unit
   | [], _ => pure ()
   | _ :: _, none => pure ()
   | _ :: xs, some p => do
@@ -400,7 +400,7 @@ theorem inc_spec (l : Link Int) (xs : List Int) :
           iintro
           step*
 
-def append : List α → Link α → Link α → St (Link α)
+def append : List α → Link α → Link α → Result (Link α)
   | [], _, l₂ => pure l₂
   | _ :: _, none, l₂ => pure l₂
   | _ :: xs, some p, l₂ => do
@@ -432,7 +432,7 @@ theorem append_spec (l₁ l₂ : Link α) (xs ys : List α) :
           iintro
           step*
 
-def reverseAppend : List α → Link α → Link α → St (Link α)
+def reverseAppend : List α → Link α → Link α → Result (Link α)
   | [], _, acc => pure acc
   | _ :: _, none, acc => pure acc
   | _ :: xs, some p, acc => do
@@ -466,7 +466,7 @@ theorem reverse_append_spec (l acc : Link α) (xs ys : List α) :
           step with ih (l := next) (acc := some p) (ys := x :: ys)
           iframe
 
-def reverse (xs : List α) (l : Link α) : St (Link α) :=
+def reverse (xs : List α) (l : Link α) : Result (Link α) :=
   reverseAppend xs l none
 
 theorem reverse_spec (l : Link α) (xs : List α) :
@@ -488,7 +488,7 @@ theorem bigSep_emp (xs : List α) :
   | cons x xs ih =>
       simp only [bigSep, ih, sep_emp_l_eq]
 
-def foldRight (f : α → β → St β) : List α → Link α → β → St β
+def foldRight (f : α → β → Result β) : List α → Link α → β → Result β
   | [], _, acc => pure acc
   | _ :: _, none, acc => pure acc
   | _ :: xs, some p, acc => do
@@ -498,7 +498,7 @@ def foldRight (f : α → β → St β) : List α → Link α → β → St β
 
 @[step]
 theorem fold_right_spec (P : α → IProp) (I : List α → β → IProp)
-    (f : α → β → St β) (acc : β) (l : Link α) (xs : List α)
+    (f : α → β → Result β) (acc : β) (l : Link α) (xs : List α)
     (hf : ∀ x acc' ys,
       ⦃ P x ∗ I ys acc' ⦄ f x acc'
         ⦃⇓ result => I (x :: ys) result⦄) :
@@ -523,7 +523,7 @@ theorem fold_right_spec (P : α → IProp) (I : List α → β → IProp)
           iintro
           step*
 
-def sumList (xs : List Int) (l : Link Int) : St Int :=
+def sumList (xs : List Int) (l : Link Int) : Result Int :=
   foldRight (fun x acc => pure (x + acc)) xs l 0
 
 theorem sum_list_spec (l : Link Int) (xs : List Int) :
@@ -532,7 +532,7 @@ theorem sum_list_spec (l : Link Int) (xs : List Int) :
         iprop(⌜result = xs.foldr (· + ·) 0⌝ ∗ isList l xs)⦄ := by
   have hf : ∀ x acc ys,
       ⦃ emp ∗ ⌜acc = ys.foldr (· + ·) 0⌝ ⦄
-        (pure (x + acc) : St Int)
+        (pure (x + acc) : Result Int)
         ⦃⇓ result => ⌜result = (x :: ys).foldr (· + ·) 0⌝⦄ := by
     intro x acc ys
     step*

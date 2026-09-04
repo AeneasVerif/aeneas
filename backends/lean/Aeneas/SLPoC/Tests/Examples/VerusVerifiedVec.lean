@@ -53,21 +53,21 @@ structure Vector (α : Type) where
   fixedCapacity : Nat
 
 /-- Allocate an empty bounded abstraction with `capacity` uninitialized markers. -/
-def newFixed (capacity : Nat) : St (Vector α) := do
+def newFixed (capacity : Nat) : Result (Vector α) := do
   let buffer ← PulseArray.alloc capacity none
   let lengthCell ← Aeneas.SLPoC.alloc 0
   pure { buffer, lengthCell, fixedCapacity := capacity }
 
 /-- Read the current number of initialized elements. -/
-def length (v : Vector α) : St Nat :=
+def length (v : Vector α) : Result Nat :=
   Aeneas.SLPoC.read v.lengthCell
 
 /-- Return the immutable capacity of the allocation. -/
-def capacity (v : Vector α) : St Nat :=
+def capacity (v : Vector α) : Result Nat :=
   pure v.fixedCapacity
 
 /-- Observe a copied value, returning `none` when the index is out of bounds. -/
-def readValue (v : Vector α) (i : Nat) : St (Option α) := do
+def readValue (v : Vector α) (i : Nat) : Result (Option α) := do
   let size ← length v
   if i < size then
     let slot ← PulseArray.readAt v.buffer i
@@ -76,7 +76,7 @@ def readValue (v : Vector α) (i : Nat) : St (Option α) := do
     pure none
 
 /-- Run the post-resize append kernel, rejecting without change when full. -/
-def pushNoResize (v : Vector α) (value : α) : St Bool := do
+def pushNoResize (v : Vector α) (value : α) : Result Bool := do
   let size ← length v
   let cap ← capacity v
   if size < cap then

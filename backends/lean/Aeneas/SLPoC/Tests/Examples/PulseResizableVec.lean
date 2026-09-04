@@ -34,22 +34,22 @@ structure ResizableVec (α : Type) where
   capacityCell : Ptr Nat
 
 /-- Allocate a vector with an empty logical prefix and `capacity` buffer cells. -/
-def new (capacity : Nat) : St (ResizableVec α) := do
+def new (capacity : Nat) : Result (ResizableVec α) := do
   let buffer ← PulseArray.alloc capacity none
   let sizeCell ← Aeneas.SLPoC.alloc 0
   let capacityCell ← Aeneas.SLPoC.alloc capacity
   pure ⟨buffer, sizeCell, capacityCell⟩
 
 /-- Read the current logical length. -/
-def length (v : ResizableVec α) : St Nat :=
+def length (v : ResizableVec α) : Result Nat :=
   Aeneas.SLPoC.read v.sizeCell
 
 /-- Read the fixed maximum capacity. -/
-def capacity (v : ResizableVec α) : St Nat :=
+def capacity (v : ResizableVec α) : Result Nat :=
   Aeneas.SLPoC.read v.capacityCell
 
 /-- Read an element, returning `none` exactly when the logical index is out of bounds. -/
-def get (v : ResizableVec α) (i : Nat) : St (Option α) := do
+def get (v : ResizableVec α) (i : Nat) : Result (Option α) := do
   let size ← length v
   if i < size then
     let slot ← PulseArray.readAt v.buffer i
@@ -58,7 +58,7 @@ def get (v : ResizableVec α) (i : Nat) : St (Option α) := do
     pure none
 
 /-- Update an element and report whether the logical index was in bounds. -/
-def set (v : ResizableVec α) (i : Nat) (value : α) : St Bool := do
+def set (v : ResizableVec α) (i : Nat) (value : α) : Result Bool := do
   let size ← length v
   if i < size then
     let _ ← PulseArray.writeAt v.buffer i (some value)
@@ -67,7 +67,7 @@ def set (v : ResizableVec α) (i : Nat) (value : α) : St Bool := do
     pure false
 
 /-- Append when there is room, returning `false` without changing the vector when full. -/
-def push (v : ResizableVec α) (value : α) : St Bool := do
+def push (v : ResizableVec α) (value : α) : Result Bool := do
   let size ← length v
   let cap ← capacity v
   if size < cap then
@@ -78,7 +78,7 @@ def push (v : ResizableVec α) (value : α) : St Bool := do
     pure false
 
 /-- Remove the last logical element, returning `none` exactly when empty. -/
-def pop (v : ResizableVec α) : St (Option α) := do
+def pop (v : ResizableVec α) : Result (Option α) := do
   let size ← length v
   if size = 0 then
     pure none
@@ -89,13 +89,13 @@ def pop (v : ResizableVec α) : St (Option α) := do
     pure slot.join
 
 /-- Test whether another element can be appended. -/
-def hasRoom (v : ResizableVec α) : St Bool := do
+def hasRoom (v : ResizableVec α) : Result Bool := do
   let size ← length v
   let cap ← capacity v
   pure (size < cap)
 
 /-- Free the backing cells and the two separately owned metadata cells. -/
-def free (v : ResizableVec α) : St Unit := do
+def free (v : ResizableVec α) : Result Unit := do
   PulseArray.free v.buffer
   Aeneas.SLPoC.free v.sizeCell
   Aeneas.SLPoC.free v.capacityCell

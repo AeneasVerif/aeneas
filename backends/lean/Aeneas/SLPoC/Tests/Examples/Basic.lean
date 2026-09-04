@@ -5,7 +5,7 @@ namespace Aeneas.SLPoC
 
 namespace Examples
 
-def add1 (x : Nat) : St Nat :=
+def add1 (x : Nat) : Result Nat :=
   pure (x + 1)
 
 @[step]
@@ -14,7 +14,7 @@ theorem add1.spec (x : Nat) :
   unfold add1
   step*
 
-def add2 (x : Nat) : St (Nat × Nat) :=
+def add2 (x : Nat) : Result (Nat × Nat) :=
   pure (x + 1, x + 2)
 
 @[step]
@@ -23,7 +23,7 @@ theorem add2.spec (x : Nat) :
   unfold add2
   step*
 
-def incr_ptr (p : Ptr Nat) : St Unit := do
+def incr_ptr (p : Ptr Nat) : Result Unit := do
   let value ← read p
   update p (value + 1)
 
@@ -33,7 +33,7 @@ theorem incr_ptr.spec (p : Ptr Nat) (value : Nat) :
   unfold incr_ptr
   step*
 
-def incr_borrow (value : Nat) : St Nat := do
+def incr_borrow (value : Nat) : Result Nat := do
   let p ← mut_to_raw value
   incr_ptr p
   end_mut_to_raw p
@@ -66,7 +66,7 @@ example (x : Nat) :
       Examples.add2 y) ⦃⇓ (y, _) => y = x + 2⦄ := by
   step*
 
-def conditionalUpdate (b : Bool) (p : Ptr Nat) (value : Nat) : St Unit :=
+def conditionalUpdate (b : Bool) (p : Ptr Nat) (value : Nat) : Result Unit :=
   if b then update p (value + 1) else update p (value + 2)
 
 example (b : Bool) (p : Ptr Nat) (value : Nat) :

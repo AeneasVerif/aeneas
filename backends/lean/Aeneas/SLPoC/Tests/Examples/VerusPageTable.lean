@@ -107,7 +107,7 @@ end Table
 
 /-- Follow table pointers and return the leaf at exactly `path`.  Encountering
 an empty slot, an early leaf, or a final subtable returns `none`. -/
-def queryAux : Ptr Table → Path → St (Option Frame)
+def queryAux : Ptr Table → Path → Result (Option Frame)
   | _, [] => pure none
   | tablePtr, index :: rest => do
       let table ← read tablePtr
@@ -119,13 +119,13 @@ def queryAux : Ptr Table → Path → St (Option Frame)
       | _, _ => pure none
 
 /-- Public exact-path lookup. -/
-def query (root : Ptr Table) (path : Path) : St (Option Frame) :=
+def query (root : Ptr Table) (path : Path) : Result (Option Frame) :=
   queryAux root path
 
 /-- Insertion behavior matching the upstream algorithm within this exact-key,
 uniform leaf-only subset.  It allocates absent intermediate tables and returns
 `false` without change when a leaf or final slot is already occupied. -/
-def mapAux : Ptr Table → Path → Frame → St Bool
+def mapAux : Ptr Table → Path → Frame → Result Bool
   | _, [], _ => pure false
   | tablePtr, index :: rest, frame => do
       let table ← read tablePtr
@@ -145,14 +145,14 @@ def mapAux : Ptr Table → Path → Frame → St Bool
       | _ :: _, .leaf _ => pure false
 
 /-- Insert one mapping, creating the missing path of table allocations. -/
-def map (root : Ptr Table) (path : Path) (frame : Frame) : St Bool :=
+def map (root : Ptr Table) (path : Path) (frame : Frame) : Result Bool :=
   mapAux root path frame
 
 /-- Clear one leaf only at the exact final key and return the removed frame.
 Empty slots, early leaves on longer paths, and final subtables report `none`.
 In particular, this intentionally omits upstream huge-page/aligned-tail
 removal. -/
-def removeAux : Ptr Table → Path → St (Option Frame)
+def removeAux : Ptr Table → Path → Result (Option Frame)
   | _, [] => pure none
   | tablePtr, index :: rest => do
       let table ← read tablePtr
@@ -166,13 +166,13 @@ def removeAux : Ptr Table → Path → St (Option Frame)
       | _, _ => pure none
 
 /-- Read the source `is_table_empty` test from one table allocation. -/
-def isTableEmpty (tablePtr : Ptr Table) : St Bool := do
+def isTableEmpty (tablePtr : Ptr Table) : Result Bool := do
   let table ← read tablePtr
   pure table.isEmpty
 
 /-- Bottom-up source `prune`.  The result reports whether the current table is
 empty; callers use it to free a child, while the public root is never freed. -/
-def pruneAux : Ptr Table → Path → St Bool
+def pruneAux : Ptr Table → Path → Result Bool
   | tablePtr, [] => isTableEmpty tablePtr
   | tablePtr, [_] => isTableEmpty tablePtr
   | tablePtr, index :: next :: rest => do
@@ -191,13 +191,13 @@ def pruneAux : Ptr Table → Path → St Bool
 
 /-- Execute bottom-up `free` calls for intermediate tables found empty on
 `path`; keep the root. -/
-def prune (root : Ptr Table) (path : Path) : St Unit := do
+def prune (root : Ptr Table) (path : Path) : Result Unit := do
   let _ ← pruneAux root path
   pure ()
 
 /-- Leaf-only `unmap`: remove an exact-key leaf and, only on success, run the
 bottom-up empty-table pruning code. -/
-def unmap (root : Ptr Table) (path : Path) : St (Option Frame) := do
+def unmap (root : Ptr Table) (path : Path) : Result (Option Frame) := do
   let removed ← removeAux root path
   if removed.isSome then
     prune root path
