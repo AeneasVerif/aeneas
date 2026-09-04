@@ -6,8 +6,7 @@ import Aeneas.SepLogic.Basic
 
 `Wp α` is the type of *monotone* predicate transformers from an `IPost α` to an
 `IPre`, corresponding to `Wᴾᵘʳᵉ` in "Dijkstra Monads for All".  It is the
-specification monad the event rules of the state monad are stated in, and
-`pp2wp` is the transformer a precondition/postcondition pair denotes.
+specification monad the event rules of the state monad are stated in.
 
 The assertions themselves are in `Aeneas.SepLogic.Basic`.
 -/
@@ -16,8 +15,6 @@ namespace Aeneas.SepLogic
 
 open Aeneas.Std (Heap)
 
-/-- Monotone predicate transformers, corresponding to `Wᴾᵘʳᵉ` in
-"Dijkstra Monads for All". -/
 structure Wp (α : Type) where
   wp : IPost α → IPre
   monotone :
@@ -100,54 +97,11 @@ instance : LawfulMonad Wp where
 instance : Aeneas.OrderedMonad Wp where
   bind_mono := Wp.bind_mono
 
-/-- Embed a precondition/postcondition pair into a weakest-precondition
-transformer.  The encoding is local: `P` is required to describe only part of
-the heap, and the postcondition is handed to the continuation through a wand,
-so that the frame is threaded automatically. -/
-def pp2wp (P : IPre) (Q : IPost α) : Wp α where
-  wp := fun R => P ∗ (Q -∗+ R)
-  monotone := by
-    intro R₁ R₂ hR
-    exact sep_mono (entails_refl P)
-      (postWand_intro fun value =>
-        entails_trans (postWand_cancel Q R₁ value) (hR value))
-
 def Wp.exists {ι : Sort _} (f : ι → Wp α) : Wp α where
   wp := fun R => iexists (fun x => f x R)
   monotone := by
     rintro R₁ R₂ hR h ⟨x, hx⟩
     exact ⟨x, (f x).monotone hR h hx⟩
-
-theorem pp2wp_conseq {P : IPre} {Q R : IPost α} (hPost : Q ⊢+ R) :
-    P ⊢ pp2wp P Q R :=
-  entails_trans (entails_of_eq (sep_emp_r_eq P).symm)
-    (sep_mono (entails_refl P)
-      (postWand_intro fun value =>
-        entails_trans (entails_of_eq (sep_emp_r_eq (Q value))) (hPost value)))
-
-theorem pp2wp_frame {P : IPre} {Q R : IPost α} (H : IProp) :
-    pp2wp P Q R ∗ H ⊢ pp2wp P Q (R ∗+ H) :=
-  entails_trans (entails_of_eq (sep_assoc_eq P (Q -∗+ R) H))
-    (sep_mono (entails_refl P)
-      (postWand_intro fun value =>
-        entails_trans (entails_of_eq (sep_assoc_eq (Q value) (Q -∗+ R) H).symm)
-          (sep_mono (postWand_cancel Q R value) (entails_refl H))))
-
-/-- The elimination principle of `pp2wp`: the heap splits into the footprint
-described by `P` and a frame, and the continuation accepts any heap the
-postcondition describes, put back next to that frame. -/
-theorem pp2wp_elim {P : IPre} {Q R : IPost α} {h : Heap}
-    (hWp : pp2wp P Q R h) :
-    ∃ h₁ h₂,
-      PartialCommMonoid.Compatible h₁ h₂ ∧
-      h = h₁ ∪ h₂ ∧
-      P h₁ ∧
-      ∀ value h', Q value h' →
-        PartialCommMonoid.Compatible h' h₂ →
-        R value (h' ∪ h₂) := by
-  obtain ⟨h₁, h₂, hDisjoint, hEq, hP, hWand⟩ := hWp
-  exact ⟨h₁, h₂, hDisjoint, hEq, hP, fun value h' hQ hDisjoint' =>
-    postWand_cancel Q R value (h' ∪ h₂) ⟨h', h₂, hDisjoint', rfl, hQ, hWand⟩⟩
 
 theorem Wp.exists_frame {ι : Sort _} {f : ι → Wp α} {Q : IPost α}
     (H : IProp) (hFrame : ∀ x, f x Q ∗ H ⊢ f x (Q ∗+ H)) :
