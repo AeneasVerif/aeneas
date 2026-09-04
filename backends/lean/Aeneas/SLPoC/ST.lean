@@ -385,6 +385,18 @@ theorem spec_pure (value : α) (Q : IPost α) (h : Heap) :
     spec (Pure.pure value : Result α) Q h ↔ Q value h :=
   spec_ret value Q h
 
+/-- Total correctness at a guarded modification, the one node that does any
+work: the guard must hold on the heap the event is performed on, and the
+postcondition must hold of what the modification returns. -/
+theorem spec_guardedModify {α : Type} {pre : Heap → Prop}
+    (modify : (h : Heap) → pre h → α × Heap) (Q : IPost α) (h : Heap) :
+    spec (Result.guardedModify pre modify) Q h ↔
+      ∃ hPre : pre h, Q (modify h hPre).1 (modify h hPre).2 :=
+  ⟨fun hSpec =>
+      let ⟨hPre, hNext⟩ := hSpec.vis_view
+      ⟨hPre, hNext.ret_post⟩,
+    fun ⟨hPre, hPost⟩ => .vis hPre (.ret hPost)⟩
+
 /-- Divergence cannot satisfy a total-correctness specification. -/
 theorem spec_div (Q : IPost α) (h : Heap) :
     ¬ spec (ITree.div : Result α) Q h :=
@@ -744,20 +756,6 @@ def guardedModifyWp {EventResult : Type} (pre : Heap → Prop)
         (fun value _ _ hQ hSub' => (Q value).up_closed hQ hSub') hWp hSub }
   monotone hQ _ hWp := guardedModifyLocal.mono (fun value h' => hQ value h') hWp
 
-/-- Running an event on exactly the heap it owns: the frame is empty, so the
-guard holds of that heap and the modification is what the postcondition sees. -/
-theorem guardedModifyWp_elim {EventResult : Type} {pre : Heap → Prop}
-    {modify : (h : Heap) → pre h → EventResult × Heap}
-    {R : IPost EventResult} {h : Heap}
-    (hWp : guardedModifyWp pre modify R h) :
-    ∃ hPre : pre h, R (modify h hPre).1 (modify h hPre).2 := by
-  have hWp' := hWp Heap.empty (PartialCommMonoid.compatible_comm
-    (PartialCommMonoid.compatible_empty_left h))
-  simp only [Heap.union_empty] at hWp'
-  obtain ⟨hPre, h', -, hModify, hPost⟩ := hWp'
-  subst h'
-  exact ⟨hPre, hPost⟩
-
 /-- The frame rule for one event: the frame a triple carries is absorbed into
 the frame the denotation already quantifies over. -/
 theorem guardedModifyWp_frame {EventResult : Type} (pre : Heap → Prop)
@@ -779,17 +777,31 @@ theorem guardedModifyWp_frame {EventResult : Type} (pre : Heap → Prop)
       hDisjoint'H₂ hDisjoint'Frame] using hModify
   · exact ⟨h', h₂, hDisjoint'H₂, rfl, hPost, hH⟩
 
-/-- The specification of a guarded modification is what its denotation says. -/
+/-- The weakest precondition is sound for total correctness: run the event on
+exactly the heap it owns, taking the frame to be empty. This is the only place
+`guardedModifyWp` meets `TotalSpec`; `spec_guardedModify` does the rest. -/
+theorem guardedModifyWp_spec {α : Type} {pre : Heap → Prop}
+    {modify : (h : Heap) → pre h → α × Heap} {Q : IPost α} {h : Heap}
+    (hWp : guardedModifyWp pre modify Q h) :
+    spec (Result.guardedModify pre modify) Q h := by
+  rw [spec_guardedModify]
+  have hWp' := hWp Heap.empty (PartialCommMonoid.compatible_comm
+    (PartialCommMonoid.compatible_empty_left h))
+  simp only [Heap.union_empty] at hWp'
+  obtain ⟨hPre, h', -, hModify, hPost⟩ := hWp'
+  subst h'
+  exact ⟨hPre, hPost⟩
+
+/-- The specification of a guarded modification is what its weakest precondition
+says: absorb the triple's frame into the one `guardedModifyWp` quantifies over,
+then read off total correctness. -/
 theorem triple_guardedModify {α : Type} {pre : Heap → Prop}
     {modify : (h : Heap) → pre h → α × Heap} {P : IPre} {Q : IPost α}
     (hWp : P ⊢ guardedModifyWp pre modify Q) :
-    triple P (Result.guardedModify pre modify) Q := by
-  intro F h hPre
-  have hEvent : guardedModifyWp pre modify (Q ∗+ F) h :=
-    guardedModifyWp_frame pre modify Q F h
-      (sep_mono hWp (entails_refl F) h hPre)
-  obtain ⟨hGuard, hPost⟩ := guardedModifyWp_elim hEvent
-  exact .vis hGuard (.ret hPost)
+    triple P (Result.guardedModify pre modify) Q := fun F h hPre =>
+  guardedModifyWp_spec
+    (guardedModifyWp_frame pre modify Q F h
+      (sep_mono hWp (entails_refl F) h hPre))
 
 theorem triple_bind {P : IPre} {Q₁ : IPost α}
     {Q : IPost β} {m : Result α} {next : α → Result β}
