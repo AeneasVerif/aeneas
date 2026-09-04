@@ -21,6 +21,8 @@ fixed-capacity behavior rather than assuming successful resizing.
 
 namespace Aeneas.SLPoC
 
+open Aeneas.Std (Heap Result)
+
 
 namespace PulseResizableVec
 

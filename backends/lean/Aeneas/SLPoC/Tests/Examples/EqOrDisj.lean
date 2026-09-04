@@ -25,6 +25,8 @@ time.
 
 namespace Aeneas.SLPoC
 
+open Aeneas.Std (Heap Result)
+
 namespace Examples
 
 /-! ## The ghost state -/

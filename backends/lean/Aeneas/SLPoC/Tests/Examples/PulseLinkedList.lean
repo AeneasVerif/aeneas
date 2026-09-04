@@ -14,6 +14,8 @@ iterative-append fragments are intentionally outside this first-order scope.
 
 namespace Aeneas.SLPoC
 
+open Aeneas.Std (Heap Result)
+
 
 namespace PulseLinkedList
 

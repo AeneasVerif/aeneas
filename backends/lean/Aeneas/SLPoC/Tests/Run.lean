@@ -11,6 +11,7 @@ predicts, and that the proof it carries is available without running anything.
 
 namespace Aeneas.SLPoC
 
+open Aeneas.Std (Heap Result)
 
 /-! ## A closed program -/
 
@@ -36,7 +37,7 @@ example : (execClosed roundTrip roundTrip.spec).1 = 42 :=
 /-- And the execution the interpreter performs is one of the machine of
 `Aeneas.SLPoC.ST`. -/
 example :
-    Evaluates roundTrip empty (execClosed roundTrip roundTrip.spec).1
+    Evaluates roundTrip Heap.empty (execClosed roundTrip roundTrip.spec).1
       (execClosed roundTrip roundTrip.spec).2 :=
   execClosed_evaluates roundTrip roundTrip.spec
 
