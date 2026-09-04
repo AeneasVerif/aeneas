@@ -22,7 +22,7 @@ cells.  Its circular-layout equation extracts the FIFO view by walking from
 `head`, with one-wrap arithmetic justified by `count ≤ capacity`.
 -/
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Std (Heap Result)
 
@@ -65,14 +65,14 @@ def contentsOfBuffer (cells : List (Option α)) (head cap : Nat) :
 /-- Allocate an empty ring buffer of fixed positive capacity. -/
 def new (capacity : Nat) (_ : 0 < capacity) : Result (RingBuffer α) := do
   let buffer ← PulseArray.alloc capacity none
-  let head ← Aeneas.SLPoC.alloc 0
-  let tail ← Aeneas.SLPoC.alloc 0
-  let count ← Aeneas.SLPoC.alloc 0
+  let head ← Aeneas.SepLogic.alloc 0
+  let tail ← Aeneas.SepLogic.alloc 0
+  let count ← Aeneas.SepLogic.alloc 0
   pure { buffer, head, tail, count, cap := capacity }
 
 /-- Read the current number of queued elements. -/
 def length (rb : RingBuffer α) : Result Nat :=
-  Aeneas.SLPoC.read rb.count
+  Aeneas.SepLogic.read rb.count
 
 /-- Return the immutable capacity. -/
 def capacity (rb : RingBuffer α) : Result Nat :=
@@ -80,56 +80,56 @@ def capacity (rb : RingBuffer α) : Result Nat :=
 
 /-- Test whether the FIFO view is empty. -/
 def isEmpty (rb : RingBuffer α) : Result Bool := do
-  let count ← Aeneas.SLPoC.read rb.count
+  let count ← Aeneas.SepLogic.read rb.count
   if count = 0 then pure true else pure false
 
 /-- Test whether the FIFO view occupies the complete fixed capacity. -/
 def isFull (rb : RingBuffer α) : Result Bool := do
-  let count ← Aeneas.SLPoC.read rb.count
+  let count ← Aeneas.SepLogic.read rb.count
   if count = rb.cap then pure true else pure false
 
 /-- Append unless the buffer is full; a full buffer is left unchanged. -/
 def pushBack (rb : RingBuffer α) (value : α) : Result Bool := do
-  let count ← Aeneas.SLPoC.read rb.count
+  let count ← Aeneas.SepLogic.read rb.count
   if count = rb.cap then
     pure false
   else
-    let tail ← Aeneas.SLPoC.read rb.tail
+    let tail ← Aeneas.SepLogic.read rb.tail
     let _ ← PulseArray.writeAt rb.buffer tail (some value)
-    Aeneas.SLPoC.update rb.tail (nextIndex tail rb.cap)
-    Aeneas.SLPoC.update rb.count (count + 1)
+    Aeneas.SepLogic.update rb.tail (nextIndex tail rb.cap)
+    Aeneas.SepLogic.update rb.count (count + 1)
     pure true
 
 /-- Remove and return the FIFO front, or return `none` when empty.
 
 As in Pulse, a successful pop does not clear the old array slot. -/
 def popFront (rb : RingBuffer α) : Result (Option α) := do
-  let count ← Aeneas.SLPoC.read rb.count
+  let count ← Aeneas.SepLogic.read rb.count
   if count = 0 then
     pure none
   else
-    let head ← Aeneas.SLPoC.read rb.head
+    let head ← Aeneas.SepLogic.read rb.head
     let slot ← PulseArray.readAt rb.buffer head
-    Aeneas.SLPoC.update rb.head (nextIndex head rb.cap)
-    Aeneas.SLPoC.update rb.count (count - 1)
+    Aeneas.SepLogic.update rb.head (nextIndex head rb.cap)
+    Aeneas.SepLogic.update rb.count (count - 1)
     pure slot.join
 
 /-- Return the FIFO front without mutation, or `none` when empty. -/
 def peekFront (rb : RingBuffer α) : Result (Option α) := do
-  let count ← Aeneas.SLPoC.read rb.count
+  let count ← Aeneas.SepLogic.read rb.count
   if count = 0 then
     pure none
   else
-    let head ← Aeneas.SLPoC.read rb.head
+    let head ← Aeneas.SepLogic.read rb.head
     let slot ← PulseArray.readAt rb.buffer head
     pure slot.join
 
 /-- Deallocate the backing array and all three metadata cells. -/
 def free (rb : RingBuffer α) : Result Unit := do
   PulseArray.free rb.buffer
-  Aeneas.SLPoC.free rb.head
-  Aeneas.SLPoC.free rb.tail
-  Aeneas.SLPoC.free rb.count
+  Aeneas.SepLogic.free rb.head
+  Aeneas.SepLogic.free rb.tail
+  Aeneas.SepLogic.free rb.count
 
 /-! # Ghost state, specifications and proofs -/
 
@@ -489,4 +489,4 @@ theorem free.spec (rb : RingBuffer α) (items : List α) (cap : Nat) :
 
 end PulseRingBuffer
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic

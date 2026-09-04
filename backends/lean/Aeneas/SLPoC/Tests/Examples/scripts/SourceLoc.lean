@@ -125,7 +125,7 @@ than overstates the verification overhead.
 
 open Lean
 
-namespace Aeneas.SLPoC.SourceLoc
+namespace Aeneas.SepLogic.SourceLoc
 
 /-! ## Small string helpers -/
 
@@ -540,8 +540,8 @@ def analyzeLean (clean : Array String) : Analysis := Id.run do
       let shortName := if shortName.isEmpty then s!"{kind}@{i + 1}" else shortName
       let name := String.intercalate "." (scopes.filter (· != "§") ++ [shortName])
       -- The library lives under one namespace; repeating it helps nobody.
-      let name := if name.startsWith "Aeneas.SLPoC." then
-          (name.drop "Aeneas.SLPoC.".length).toString else name
+      let name := if name.startsWith "Aeneas.SepLogic." then
+          (name.drop "Aeneas.SepLogic.".length).toString else name
       cur := some (start, kind, name)
       pendingAttr := none
       phase :=
@@ -1835,6 +1835,6 @@ def main (args : List String) : IO UInt32 := do
   IO.println s!"wrote {opts.out} and {opts.html}"
   return 0
 
-end Aeneas.SLPoC.SourceLoc
+end Aeneas.SepLogic.SourceLoc
 
-def main (args : List String) : IO UInt32 := Aeneas.SLPoC.SourceLoc.main args
+def main (args : List String) : IO UInt32 := Aeneas.SepLogic.SourceLoc.main args

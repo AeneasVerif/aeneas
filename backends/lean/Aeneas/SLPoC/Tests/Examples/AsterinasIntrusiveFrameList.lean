@@ -27,7 +27,7 @@ constant-time rewiring code; the proved view is the exact front-cursor
 split used by public `pop_front`.
 -/
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Std (Heap Result)
 
@@ -445,4 +445,4 @@ theorem popFront.cons.spec (s : LinkedList M) (frame : Frame M)
 
 end AsterinasIntrusiveFrameList
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic

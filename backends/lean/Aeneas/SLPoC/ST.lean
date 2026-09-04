@@ -1,6 +1,7 @@
 import Aeneas.Data.Coinductive.StateMachine
 import Aeneas.Std.Primitives
-import Aeneas.SLPoC.WP
+import Aeneas.SepLogic
+import Aeneas.Tactic.SepLogic
 import Aeneas.Tactic.Step.StepStar
 
 /-!
@@ -12,7 +13,7 @@ derives its separation-logic triples, and wires those triples to the
 `step`/`step*` tactics.
 -/
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Data.Coinductive
 open Aeneas.Std (Error Heap Result RustEffect)
@@ -646,7 +647,7 @@ theorem PartialSpec.mono_le {m m' : Result α} (hLe : m ⊑ m') {Q : α → Heap
 /-! ### Adequacy of `dspec`
 
 Partial correctness is closed under the transitions of the machine of
-`Aeneas.SLPoC.ST`, which is what makes it mean what it should: every
+`Aeneas.SepLogic.ST`, which is what makes it mean what it should: every
 configuration a proved program reaches performs a defined event, and every run
 that stops satisfies the postcondition. -/
 
@@ -1293,7 +1294,7 @@ def runOpt (m : Result α) (h : Heap) (Q : IPost α) (hSpec : spec m Q h) :
 partial_fixpoint
 
 /-- The interpreter answers, its answer satisfies the postcondition, and it is
-reached by an evaluation of the machine of `Aeneas.SLPoC.ST`. -/
+reached by an evaluation of the machine of `Aeneas.SepLogic.ST`. -/
 theorem runOpt_spec (Q : IPost α) (m : Result α) (h : Heap) (hSpec : spec m Q h) :
     ∃ outcome : α × Heap, runOpt m h Q hSpec = some outcome ∧
       Q outcome.1 outcome.2 ∧ Evaluates m h outcome.1 outcome.2 := by
@@ -1400,4 +1401,4 @@ theorem execClosed_evaluates {Q : IPost α} (m : Result α)
 
 end ResultImplementation
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic

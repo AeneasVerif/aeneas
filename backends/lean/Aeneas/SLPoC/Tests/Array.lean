@@ -3,12 +3,12 @@ import Aeneas.SLPoC.MutableData.Array
 /-!
 # The array interface
 
-Regression tests for `Aeneas.SLPoC.MutableData.Array`: every operation of the
+Regression tests for `Aeneas.SepLogic.MutableData.Array`: every operation of the
 interface, run end to end by the certified interpreter, and the ownership
 lemmas that relate an array to the slice and the range underneath it.
 -/
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Std (Heap Result)
 
@@ -264,4 +264,4 @@ example :
     (execClosed bufferMutToRawRoundTrip bufferMutToRawRoundTrip.spec).2.size = 0 := by
   native_decide
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic

@@ -1,6 +1,6 @@
 import Aeneas.SLPoC.MutableData.Ptr
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Std (Heap Result)
 
@@ -550,4 +550,4 @@ end LinkedList
 
 end IrisTutorial
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic

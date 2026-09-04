@@ -20,7 +20,7 @@ view and gives it back.  [`Array.lean`](Array.lean) puts the length in the type
 on top of this.
 -/
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Std (AllocId Heap Result)
 
@@ -80,22 +80,22 @@ theorem Buffer.alloc.spec (n : Nat) (value : α) :
 
 namespace Buffer
 
-def read (b : Buffer α) (i : Nat) : Result α := _root_.Aeneas.SLPoC.read (b.ptrAt i)
+def read (b : Buffer α) (i : Nat) : Result α := _root_.Aeneas.SepLogic.read (b.ptrAt i)
 
 @[step]
 theorem read.spec (b : Buffer α) (i : Nat) (value : α) :
     ⦃ (b.ptrAt i) ↦ value ⦄ b.read i
       ⦃⇓ result => ⌜result = value⌝ ∗ (b.ptrAt i) ↦ value⦄ :=
-  _root_.Aeneas.SLPoC.read.spec (b.ptrAt i) value
+  _root_.Aeneas.SepLogic.read.spec (b.ptrAt i) value
 
 def write (b : Buffer α) (i : Nat) (value : α) : Result Unit :=
-  _root_.Aeneas.SLPoC.update (b.ptrAt i) value
+  _root_.Aeneas.SepLogic.update (b.ptrAt i) value
 
 @[step]
 theorem write.spec (b : Buffer α) (i : Nat) (oldValue newValue : α) :
     ⦃ (b.ptrAt i) ↦ oldValue ⦄ b.write i newValue
       ⦃⇓ (b.ptrAt i) ↦ newValue⦄ :=
-  _root_.Aeneas.SLPoC.update.spec (b.ptrAt i) oldValue newValue
+  _root_.Aeneas.SepLogic.update.spec (b.ptrAt i) oldValue newValue
 
 /-- Release every slot the view spans. -/
 def free (b : Buffer α) : Result Unit := freeRange b.ptr b.length
@@ -127,7 +127,7 @@ theorem read.spec_array (b : Buffer α) (values : List α) (i : Nat)
       ⦃⇓ result => ⌜result = values[i]⌝ ∗ b ↦ values⦄ := by
   apply triple_ipure
   intro hLength
-  refine triple_conseq (_root_.Aeneas.SLPoC.read.spec_range b.ptr values i hIndex)
+  refine triple_conseq (_root_.Aeneas.SepLogic.read.spec_range b.ptr values i hIndex)
     (entails_refl _) fun result h hPost => ?_
   obtain ⟨hResult, hRange⟩ := (sep_pure_l _ _ h).mp hPost
   exact (sep_pure_l _ _ h).mpr
@@ -139,7 +139,7 @@ theorem write.spec_array (b : Buffer α) (values : List α) (i : Nat) (value : �
   apply triple_ipure
   intro hLength
   refine triple_conseq
-    (_root_.Aeneas.SLPoC.update.spec_range b.ptr values i value hIndex)
+    (_root_.Aeneas.SepLogic.update.spec_range b.ptr values i value hIndex)
     (entails_refl _) fun _ h hPost => ?_
   exact (sep_pure_l _ _ h).mpr ⟨by simpa using hLength, hPost⟩
 
@@ -344,4 +344,4 @@ theorem end_mut_to_raw.spec (original : Aeneas.Std.Slice α) (b : Buffer α)
 
 end Buffer
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic

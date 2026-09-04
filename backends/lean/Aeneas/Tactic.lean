@@ -2,6 +2,7 @@ import Aeneas.Tactic.Conv
 import Aeneas.Tactic.Elab
 import Aeneas.Tactic.Misc
 import Aeneas.Tactic.RustAttributes
+import Aeneas.Tactic.SepLogic
 import Aeneas.Tactic.Setup
 import Aeneas.Tactic.Simp
 import Aeneas.Tactic.Simproc

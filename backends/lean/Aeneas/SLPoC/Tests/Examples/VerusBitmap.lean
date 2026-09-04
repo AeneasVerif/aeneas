@@ -10,7 +10,7 @@ It corresponds to the source `u64_view`, `BitMap::from`, `BitMap::get_bit`,
 bit-vector proof functions.
 
 The Rust `Vec<u64>` is represented by the stable cell-wise
-`Aeneas.SLPoC.PulseArray.Array` model.  A `Word` contains a natural-number bit
+`Aeneas.SepLogic.PulseArray.Array` model.  A `Word` contains a natural-number bit
 mask proved smaller than `2^64`; executable word operations use `Nat.testBit`,
 shifts, OR, XOR, and reduction modulo `2^64`.  Thus the executable bitmap is
 not replaced by a Boolean array.  As in the source, public bit operations
@@ -25,7 +25,7 @@ separate `bitmapOrSelf` definition is only an optional one-read optimization;
 its result is logically equal, but it is not used to justify source aliasing.
 -/
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Std (Heap Result)
 
@@ -657,4 +657,4 @@ theorem bitmapOr.disjoint_spec (left right : Bitmap)
 
 end VerusBitmap
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic

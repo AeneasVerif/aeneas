@@ -1,7 +1,7 @@
 import Aeneas.SLPoC.MutableData.Buffer
 import Aeneas.SLPoC.Tests.Examples.Basic
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Data.Coinductive
 
@@ -275,7 +275,7 @@ example (p : Ptr Nat) (value : Nat) :
   step
   step
   step
-  simp [Entails, Aeneas.SLPoC.emp, ipure]
+  simp [Entails, Aeneas.SepLogic.emp, ipure]
 
 /-! ## Affine resource discard
 
@@ -531,4 +531,4 @@ theorem bufferOne.spec : ⦃ emp ⦄ bufferOne ⦃⇓ result => ⌜result = 42�
 #guard (execClosed bufferOne bufferOne.spec).1 = 42
 #guard (execClosed bufferOne bufferOne.spec).2.size = 0
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic

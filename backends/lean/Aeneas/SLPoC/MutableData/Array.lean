@@ -16,7 +16,7 @@ corresponding buffer implementation, with cell-local primitive specifications
 and whole-array derived specifications where appropriate.
 -/
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Std (Heap Result)
 
@@ -239,4 +239,4 @@ theorem end_mut_to_raw.spec {N : Aeneas.Std.Usize}
 
 end Array
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic
