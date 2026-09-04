@@ -8,9 +8,10 @@ events, and `Aeneas.SLPoC.ST` builds the correctness judgments and the triples
 over it *denotationally*.  This file supplies the operational counterpart, in
 three layers:
 
-* the **operational semantics**: heap events become transitions, which gives
-  `Result` the state machine of "Program Logics à la Carte", the multi-step
-  relation `Reaches` and the big-step relation `Evaluates`;
+* the **runs** of that machine: `Aeneas.SLPoC.ST` gives heap events their
+  meaning as the handler of a state machine (in the style of "Program Logics à
+  la Carte") in order to state the judgments; here we take that machine's
+  multi-step relation `Reaches` and big-step relation `Evaluates`;
 * the **adequacy** of the judgments for that machine: a `dspec`-proved program
   reaches only configurations whose next event is defined, and every run of it
   that stops satisfies the postcondition — which is what makes partial
@@ -27,6 +28,7 @@ so there is no recursion to terminate.
 
 namespace Aeneas.SepLogic
 
+open Aeneas.Data
 open Aeneas.Data.Coinductive
 open Aeneas.Std (Error Heap Result RustEffect)
 
@@ -38,35 +40,15 @@ unseal Result
 set_option allowUnsafeReducibility true in
 attribute [local reducible] Result Result.ok Result.vis Result.div Aeneas.Std.bind
 
-/-! ## Operational semantics -/
+/-! ## Runs of the machine
 
-/-- The operational semantics of `Result`.
-`RustEffect.Step e h answer h'` holds for a heap event when its guard holds on
-`h`, and its modifier returns `answer` and `h'`. An event whose guard does not
-hold is stuck, and a failure event has no transition. -/
-inductive RustEffect.Step :
-    (event : RustEffect.I) → Heap → RustEffect.O event → Heap → Prop where
-  | guardedModify {EventResult : Type} {pre : Heap → Prop}
-      {modify : (h : Heap) → pre h → EventResult × Heap} {h : Heap}
-      (hPre : pre h) :
-      Step (.guardedModify EventResult pre modify) h (.up (modify h hPre).1)
-        (modify h hPre).2
-
-@[reducible]
-def RustEffect.machine : StateMachine RustEffect :=
-  .ofStep Heap RustEffect.Step
-
-theorem RustEffect.machine_resolves :
-    RustEffect.machine.Resolves :=
-  by
-    unfold RustEffect.machine
-    exact StateMachine.ofStep_resolves (E := RustEffect) Heap RustEffect.Step
+The machine of `Result` — `RustEffect.machine`, whose handler `EventSpec` says
+how one heap event is answered on one heap — is defined in `Aeneas.SLPoC.ST`,
+where the correctness judgments need it; what is added here are its runs. -/
 
 /-- Big-step relation -/
 def Evaluates (m : Result α) (h : Heap) (value : α) (h' : Heap) : Prop :=
   RustEffect.machine.Evaluates m h value h'
-
-/-! ## Runs of the machine -/
 
 /-- `Reaches m h m' h'`: the machine of `Result` takes the configuration `(m, h)` to
 the configuration `(m', h')`. -/
@@ -78,46 +60,37 @@ def Reaches (m : Result α) (h : Heap) (m' : Result α) (h' : Heap) : Prop :=
 Partial correctness is closed under the transitions of the machine above, which
 is what makes it mean what it should: every configuration a proved program
 reaches performs a defined event, and every run that stops satisfies the
-postcondition. -/
+postcondition.
 
-/-- Partial correctness is preserved by every run of the machine. -/
-theorem PartialSpec.reaches {Q : α → Heap → Prop} {m m' : Result α} {h h' : Heap}
-    (hSpec : PartialSpec Q m h) (hReaches : Reaches m h m' h') :
-    PartialSpec Q m' h' := by
-  refine hReaches.induction
-    (P := fun t u => PartialSpec Q t u → PartialSpec Q m' h')
-    (fun t u hStop hSpec' => by
-      obtain ⟨rfl, rfl⟩ := hStop
-      exact hSpec')
-    (fun event k u hHandle hSpec' => ?_) hSpec
-  obtain ⟨answer, u', ⟨hPre⟩, hNext⟩ := hHandle
-  exact hNext hSpec'.vis_view.choose_spec
-
-/-- A run that stops establishes the postcondition. -/
-theorem PartialSpec.evaluates {Q : α → Heap → Prop} {m : Result α} {h : Heap}
-    {value : α} {h' : Heap} (hSpec : PartialSpec Q m h)
-    (hEval : Evaluates m h value h') : Q value h' :=
-  (hSpec.reaches hEval).ret_post
+Both halves are the generic adequacy of `Aeneas.Data.Coinductive.Spec` —
+`PartialSpec.runs` and `PartialSpec.evaluates` — at the machine of `Result`,
+which is conjunctive and feasible (`RustEffect.machine_conjunctive`,
+`RustEffect.machine_feasible`); `Reaches` and
+`Evaluates` are that machine's `Runs` and `Evaluates`, so those two apply as
+they stand and only the third statement below is specific to heap events. -/
 
 /-- Every heap event a proved program reaches is defined on the heap it is
 reached with; a proved program cannot reach failure. Partial correctness permits
-divergence, not stuckness. -/
-theorem PartialSpec.pre_of_reaches {Q : α → Heap → Prop} {m : Result α} {h : Heap}
+divergence, not stuckness.  This is the one thing the generic theory cannot
+say, `pre` being what `EventSpec` demands of a heap event. -/
+theorem dspec_pre_of_reaches {Q : α → Heap → Prop} {m : Result α} {h : Heap}
     {EventResult : Type} {pre : Heap → Prop}
     {modify : (h : Heap) → pre h → EventResult × Heap}
     {k : RustEffect.O (RustEffect.I.guardedModify EventResult pre modify) → Result α}
     {h' : Heap}
-    (hSpec : PartialSpec Q m h)
+    (hSpec : PartialSpec RustEffect.machine Q m h)
     (hReaches :
       Reaches m h (.vis (RustEffect.I.guardedModify EventResult pre modify) k) h') :
     pre h' :=
-  (hSpec.reaches hReaches).vis_view.choose
+  (PartialSpec.runs RustEffect.machine_conjunctive RustEffect.machine_feasible
+    hSpec hReaches).vis_view.choose
 
 /-- What a partial triple says of a run that stops. -/
 theorem dtriple_evaluates {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : dtriple P m Q) {h : Heap} (hPre : P h) {value : α} {h' : Heap}
     (hEval : Evaluates m h value h') : Q value h' :=
-  (dtriple_apply hTriple hPre).evaluates hEval
+  PartialSpec.evaluates RustEffect.machine_conjunctive RustEffect.machine_feasible
+    (Q := fun value h' => Q value h') (dtriple_apply hTriple hPre) hEval
 
 /-- What a partial triple says of a run that does not: every event it reaches is
 defined. -/
@@ -130,7 +103,7 @@ theorem dtriple_pre_of_reaches {P : IPre} {m : Result α} {Q : IPost α}
     (hReaches :
       Reaches m h (.vis (RustEffect.I.guardedModify EventResult pre modify) k) h') :
     pre h' :=
-  (dtriple_apply hTriple hPre).pre_of_reaches hReaches
+  dspec_pre_of_reaches (dtriple_apply hTriple hPre) hReaches
 
 /-! ## Certified execution -/
 
@@ -161,7 +134,7 @@ continuation on the heap it produces, and `False` at failure. -/
 theorem spec_unfold_vis {m : Result α} {event : RustEffect.I}
     {k : RustEffect.O event → Result α} {Q : IPost α} {h : Heap}
     (hm : m.unfold = .vis event k) (hSpec : spec m Q h) :
-    EventSpec (fun m' h' => spec m' Q h') event k h := by
+    EventSpec event h fun answer h' => spec (k answer) Q h' := by
   rw [eq_vis_of_unfold hm] at hSpec
   exact hSpec.vis_view
 
@@ -207,7 +180,12 @@ theorem runOpt_spec (Q : IPost α) (m : Result α) (h : Heap) (hSpec : spec m Q 
   · intro value h' hPost hSpec'
     rw [runOpt.eq_def]
     exact ⟨(_, _), rfl, hPost, StateMachine.Evaluates.pure _ _⟩
-  · intro EventResult pre modify k h' hPre ih hSpec'
+  · intro event k h' hHandle
+    cases event with
+    | fail error => exact hHandle.elim
+    | guardedModify EventResult pre modify =>
+    obtain ⟨hPre, ih⟩ := hHandle
+    intro hSpec'
     rw [runOpt.eq_def]
     split
     · rename_i value hm
@@ -222,8 +200,8 @@ theorem runOpt_spec (Q : IPost α) (m : Result α) (h : Heap) (hSpec : spec m Q 
       obtain ⟨outcome, hRun, hPost, hEvaluates⟩ := ih _
       refine ⟨outcome, ?_, hPost, ?_⟩
       · simpa using hRun
-      · exact StateMachine.Evaluates.step (RustEffect.Step.guardedModify hPre)
-          hEvaluates
+      · refine StateMachine.Evaluates.event (M := RustEffect.machine) ?_
+        exact ⟨hPre, hEvaluates⟩
     · rename_i error k hm
       simp only [unfold_vis] at hm
       cases hm
