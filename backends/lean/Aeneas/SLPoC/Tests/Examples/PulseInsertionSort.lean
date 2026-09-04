@@ -17,7 +17,7 @@ The final specification identifies the exact logical contents left in the
 original array, proves them sorted, and proves them a permutation of the input.
 -/
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Std (Heap Result)
 
@@ -279,4 +279,4 @@ theorem insertionSort.spec [LinearOrder α] (array : PulseArray.Array α)
 
 end PulseInsertionSort
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic

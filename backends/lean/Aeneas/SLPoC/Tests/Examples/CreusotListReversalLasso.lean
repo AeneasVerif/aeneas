@@ -22,7 +22,7 @@ the pure cell-wise rewiring model, proves that unrelated addresses are
 unchanged, and identifies the returned pointer as the original head.
 -/
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Std (Heap Result)
 
@@ -541,4 +541,4 @@ theorem reverse.spec (memory : Ptr Memory) (m : Memory)
 
 end CreusotListReversalLasso
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic

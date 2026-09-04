@@ -82,7 +82,7 @@ two tokens is whitespace, comments, and the little syntax a tactic block holds
 together with (`<;>`, `;`), of which the comments are dropped.
 -/
 
-namespace Aeneas.SLPoC.ProofScore
+namespace Aeneas.SepLogic.ProofScore
 
 open Lean Elab
 
@@ -103,8 +103,8 @@ def slCoreNames : Array String :=
 /-- The `⦃ P ⦄ m ⦃⇓ v => Q ⦄` notations of `ST.lean`: a declaration that uses one
 of them states a triple. -/
 def specSyntaxKinds : Array Name :=
-  #[`Aeneas.SLPoC.SepLogic.specSyntax, `Aeneas.SLPoC.SepLogic.specSyntaxPred,
-    `Aeneas.SLPoC.SepLogic.slSpecSyntax, `Aeneas.SLPoC.SepLogic.slSpecSyntaxPred]
+  #[`Aeneas.SepLogic.SepLogic.specSyntax, `Aeneas.SepLogic.SepLogic.specSyntaxPred,
+    `Aeneas.SepLogic.SepLogic.slSpecSyntax, `Aeneas.SepLogic.SepLogic.slSpecSyntaxPred]
 
 /-- Simp sets that configure the automation: tuning them inside a proof is
 separation-logic work too. -/
@@ -1154,6 +1154,6 @@ unsafe def main (args : List String) : IO UInt32 := do
     wrote {opts.out}"
   return 0
 
-end Aeneas.SLPoC.ProofScore
+end Aeneas.SepLogic.ProofScore
 
-unsafe def main (args : List String) : IO UInt32 := Aeneas.SLPoC.ProofScore.main args
+unsafe def main (args : List String) : IO UInt32 := Aeneas.SepLogic.ProofScore.main args

@@ -16,7 +16,7 @@ stores an ordered list of element pointers.  The separation-logic predicate
 fills, and comparisons reusable by later data-structure ports.
 -/
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Std (Heap Result)
 
@@ -34,7 +34,7 @@ def allocCells (n : Nat) (value : α) : Result (List (Ptr α)) :=
   match n with
   | 0 => pure []
   | n + 1 => do
-      let p ← Aeneas.SLPoC.alloc value
+      let p ← Aeneas.SepLogic.alloc value
       let ps ← allocCells n value
       pure (p :: ps)
 
@@ -47,7 +47,7 @@ def alloc (n : Nat) (value : α) : Result (Array α) := do
 def freeCells : List (Ptr α) → Result Unit
   | [] => pure ()
   | p :: ps => do
-      Aeneas.SLPoC.free p
+      Aeneas.SepLogic.free p
       freeCells ps
 
 /-- Free every cell of an array. -/
@@ -58,7 +58,7 @@ def free (a : Array α) : Result Unit :=
 def readCells : List (Ptr α) → Nat → Result (Option α)
   | [], _ => pure none
   | p :: _, 0 => do
-      let value ← Aeneas.SLPoC.read p
+      let value ← Aeneas.SepLogic.read p
       pure (some value)
   | _ :: ps, i + 1 => readCells ps i
 
@@ -70,7 +70,7 @@ def readAt (a : Array α) (i : Nat) : Result (Option α) :=
 def writeCells : List (Ptr α) → Nat → α → Result Bool
   | [], _, _ => pure false
   | p :: _, 0, value => do
-      Aeneas.SLPoC.update p value
+      Aeneas.SepLogic.update p value
       pure true
   | _ :: ps, i + 1, value => writeCells ps i value
 
@@ -82,7 +82,7 @@ def writeAt (a : Array α) (i : Nat) (value : α) : Result Bool :=
 def fillCells : List (Ptr α) → α → Result Unit
   | [], _ => pure ()
   | p :: ps, value => do
-      Aeneas.SLPoC.update p value
+      Aeneas.SepLogic.update p value
       fillCells ps value
 
 /-- Pulse `ArrayTests.fill_array`: overwrite every logical element. -/
@@ -96,8 +96,8 @@ def compareCells [DecidableEq α] :
   | [], _ :: _ => pure false
   | _ :: _, [] => pure false
   | p :: ps, q :: qs => do
-      let left ← Aeneas.SLPoC.read p
-      let right ← Aeneas.SLPoC.read q
+      let left ← Aeneas.SepLogic.read p
+      let right ← Aeneas.SepLogic.read q
       if left = right then
         compareCells ps qs
       else
@@ -444,4 +444,4 @@ theorem vecAllocSmoke.spec :
 
 end PulseArray
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic

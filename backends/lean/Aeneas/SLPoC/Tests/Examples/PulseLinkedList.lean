@@ -12,7 +12,7 @@ basic operations `isEmpty`, `head`, `pop`, `length`, `create`, `cons`,
 iterative-append fragments are intentionally outside this first-order scope.
 -/
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Std (Heap Result)
 
@@ -421,4 +421,4 @@ theorem reverse.spec (x : Link α) (xs : List α) :
 
 end PulseLinkedList
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic

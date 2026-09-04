@@ -8,7 +8,7 @@ The callback's specification describes how it transforms an owned cell, and
 `applyTwice` uses that specification at each call site.
 -/
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Std (Heap Result)
 
@@ -81,7 +81,7 @@ example (x : Nat) :
     done
   step with applyF.spec (fun y => pure (y + 1)) x (fun y => y = x + 1)
   case hf => step*
-  case hRamified => simp [Entails, Aeneas.SLPoC.emp, ipure]
+  case hRamified => simp [Entails, Aeneas.SepLogic.emp, ipure]
 
 def callPair (f g : Nat → Result Nat) (xy : Nat × Nat) : Result (Nat × Nat) := do
   let a ← f xy.1
@@ -139,10 +139,10 @@ example (x : Nat) :
   case hg =>
     intro y hy
     step*
-  case hRamified => simp [Entails, Aeneas.SLPoC.emp, ipure]
+  case hRamified => simp [Entails, Aeneas.SepLogic.emp, ipure]
 
 end ResultStyle
 
 end HigherOrder
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic
