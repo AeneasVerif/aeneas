@@ -24,6 +24,8 @@ unchanged, and identifies the returned pointer as the original head.
 
 namespace Aeneas.SLPoC
 
+open Aeneas.Std (Heap Result)
+
 
 namespace CreusotListReversalLasso
 
