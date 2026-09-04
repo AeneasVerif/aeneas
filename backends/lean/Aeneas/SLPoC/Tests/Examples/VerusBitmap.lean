@@ -99,7 +99,7 @@ def bitIndex (index : Nat) : Nat :=
 
 The default branch makes the executable total; the specification proves it is
 unreachable under the source bound. -/
-def getBit (bitmap : Bitmap) (index : Nat) : St Bool := do
+def getBit (bitmap : Bitmap) (index : Nat) : Result Bool := do
   let bucket ← PulseArray.readAt bitmap.bits (bucketIndex index)
   pure (getWordBit (bucket.getD zeroWord) (bitIndex index))
 
@@ -113,7 +113,7 @@ def setWords (words : List Word) (index : Nat) (bit : Bool) : List Word :=
 
 As for `getBit`, the operation is total, while its exact specification assumes
 the source bound and proves that the write succeeds. -/
-def setBit (bitmap : Bitmap) (index : Nat) (bit : Bool) : St Unit := do
+def setBit (bitmap : Bitmap) (index : Nat) (bit : Bool) : Result Unit := do
   let bucket ← PulseArray.readAt bitmap.bits (bucketIndex index)
   let newWord := setWordBit (bucket.getD zeroWord) (bitIndex index) bit
   let _ ← PulseArray.writeAt bitmap.bits (bucketIndex index) newWord
@@ -127,7 +127,7 @@ def orWords (left right : List Word) : List Word :=
 
 The unequal-shape branches make the executable total.  The public OR
 specification assumes equal word counts, as does the Verus source. -/
-def orCells : List (Ptr Word) → List (Ptr Word) → St (List (Ptr Word))
+def orCells : List (Ptr Word) → List (Ptr Word) → Result (List (Ptr Word))
   | left :: lefts, right :: rights => do
       let leftWord ← read left
       let rightWord ← read right
@@ -137,7 +137,7 @@ def orCells : List (Ptr Word) → List (Ptr Word) → St (List (Ptr Word))
   | _, _ => pure []
 
 /-- Source `BitMap::or`: allocate a fresh bitmap containing bucket-wise OR. -/
-def bitmapOr (left right : Bitmap) : St Bitmap := do
+def bitmapOr (left right : Bitmap) : Result Bitmap := do
   let cells ← orCells left.bits.cells right.bits.cells
   pure ⟨⟨cells⟩⟩
 
@@ -149,7 +149,7 @@ def orSelfWords (words : List Word) : List Word :=
 
 Each input cell is read once, remains owned, and contributes a fresh result
 cell containing `orWord word word`. -/
-def orSelfCells : List (Ptr Word) → St (List (Ptr Word))
+def orSelfCells : List (Ptr Word) → Result (List (Ptr Word))
   | [] => pure []
   | cell :: cells => do
       let word ← read cell
@@ -161,7 +161,7 @@ def orSelfCells : List (Ptr Word) → St (List (Ptr Word))
 
 The actual aliased source execution remains `bitmapOr bitmap bitmap` and has a
 separate specification below. -/
-def bitmapOrSelf (bitmap : Bitmap) : St Bitmap := do
+def bitmapOrSelf (bitmap : Bitmap) : Result Bitmap := do
   let cells ← orSelfCells bitmap.bits.cells
   pure ⟨⟨cells⟩⟩
 

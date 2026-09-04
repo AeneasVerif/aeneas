@@ -78,14 +78,14 @@ def headerSize : Nat := 8
 
 /-- Executable insertion: write the old head into the block header and publish
 that header as the new head. -/
-def insertBlock (s : FreeList) (header : Ptr FreeNode) : St FreeList := do
+def insertBlock (s : FreeList) (header : Ptr FreeNode) : Result FreeList := do
   update header { next := s.first }
   pure { first := some header }
 
 /-- Executable pop: read the first node, advance the head, and return the raw
 block address.  Ghost ownership of the complete block is returned by the
 specification below. -/
-def popBlock (s : FreeList) : St (FreeList × Ptr FreeNode) := do
+def popBlock (s : FreeList) : Result (FreeList × Ptr FreeNode) := do
   let header := s.first.get!
   let node ← read header
   pure ({ first := node.next }, header)

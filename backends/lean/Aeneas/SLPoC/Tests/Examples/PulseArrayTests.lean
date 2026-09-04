@@ -28,7 +28,7 @@ structure Array (α : Type) where
   cells : List (Ptr α)
 
 /-- Allocate `n` cells, each initialized to `value`. -/
-def allocCells (n : Nat) (value : α) : St (List (Ptr α)) :=
+def allocCells (n : Nat) (value : α) : Result (List (Ptr α)) :=
   match n with
   | 0 => pure []
   | n + 1 => do
@@ -37,23 +37,23 @@ def allocCells (n : Nat) (value : α) : St (List (Ptr α)) :=
       pure (p :: ps)
 
 /-- Allocate an initialized array. -/
-def alloc (n : Nat) (value : α) : St (Array α) := do
+def alloc (n : Nat) (value : α) : Result (Array α) := do
   let cells ← allocCells n value
   pure ⟨cells⟩
 
 /-- Free every pointer in a list of cells. -/
-def freeCells : List (Ptr α) → St Unit
+def freeCells : List (Ptr α) → Result Unit
   | [] => pure ()
   | p :: ps => do
       Aeneas.SLPoC.free p
       freeCells ps
 
 /-- Free every cell of an array. -/
-def free (a : Array α) : St Unit :=
+def free (a : Array α) : Result Unit :=
   freeCells a.cells
 
 /-- Read a cell by logical index, returning `none` when out of bounds. -/
-def readCells : List (Ptr α) → Nat → St (Option α)
+def readCells : List (Ptr α) → Nat → Result (Option α)
   | [], _ => pure none
   | p :: _, 0 => do
       let value ← Aeneas.SLPoC.read p
@@ -61,11 +61,11 @@ def readCells : List (Ptr α) → Nat → St (Option α)
   | _ :: ps, i + 1 => readCells ps i
 
 /-- Read an array element by logical index. -/
-def readAt (a : Array α) (i : Nat) : St (Option α) :=
+def readAt (a : Array α) (i : Nat) : Result (Option α) :=
   readCells a.cells i
 
 /-- Write a cell by logical index, returning whether the index was in bounds. -/
-def writeCells : List (Ptr α) → Nat → α → St Bool
+def writeCells : List (Ptr α) → Nat → α → Result Bool
   | [], _, _ => pure false
   | p :: _, 0, value => do
       Aeneas.SLPoC.update p value
@@ -73,23 +73,23 @@ def writeCells : List (Ptr α) → Nat → α → St Bool
   | _ :: ps, i + 1, value => writeCells ps i value
 
 /-- Write an array element by logical index. -/
-def writeAt (a : Array α) (i : Nat) (value : α) : St Bool :=
+def writeAt (a : Array α) (i : Nat) (value : α) : Result Bool :=
   writeCells a.cells i value
 
 /-- Recursively overwrite every cell with `value`. -/
-def fillCells : List (Ptr α) → α → St Unit
+def fillCells : List (Ptr α) → α → Result Unit
   | [], _ => pure ()
   | p :: ps, value => do
       Aeneas.SLPoC.update p value
       fillCells ps value
 
 /-- Pulse `ArrayTests.fill_array`: overwrite every logical element. -/
-def fill (a : Array α) (value : α) : St Unit :=
+def fill (a : Array α) (value : α) : Result Unit :=
   fillCells a.cells value
 
 /-- Recursively compare two cell lists, stopping at the first unequal value. -/
 def compareCells [DecidableEq α] :
-    List (Ptr α) → List (Ptr α) → St Bool
+    List (Ptr α) → List (Ptr α) → Result Bool
   | [], [] => pure true
   | [], _ :: _ => pure false
   | _ :: _, [] => pure false
@@ -102,11 +102,11 @@ def compareCells [DecidableEq α] :
         pure false
 
 /-- Pulse `ArrayTests.compare`, generalized to arrays of possibly different lengths. -/
-def compare [DecidableEq α] (left right : Array α) : St Bool :=
+def compare [DecidableEq α] (left right : Array α) : Result Bool :=
   compareCells left.cells right.cells
 
 /-- Pulse `VecAlloc.hf`: allocate 100 initialized cells and free them all. -/
-def vecAllocSmoke : St Unit := do
+def vecAllocSmoke : Result Unit := do
   let a ← alloc 100 (1 : Nat)
   free a
 

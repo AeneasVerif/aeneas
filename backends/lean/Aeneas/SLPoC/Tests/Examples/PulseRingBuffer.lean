@@ -61,7 +61,7 @@ def contentsOfBuffer (cells : List (Option α)) (head cap : Nat) :
         [cellAt cells (circularIndex head count cap)]
 
 /-- Allocate an empty ring buffer of fixed positive capacity. -/
-def new (capacity : Nat) (_ : 0 < capacity) : St (RingBuffer α) := do
+def new (capacity : Nat) (_ : 0 < capacity) : Result (RingBuffer α) := do
   let buffer ← PulseArray.alloc capacity none
   let head ← Aeneas.SLPoC.alloc 0
   let tail ← Aeneas.SLPoC.alloc 0
@@ -69,25 +69,25 @@ def new (capacity : Nat) (_ : 0 < capacity) : St (RingBuffer α) := do
   pure { buffer, head, tail, count, cap := capacity }
 
 /-- Read the current number of queued elements. -/
-def length (rb : RingBuffer α) : St Nat :=
+def length (rb : RingBuffer α) : Result Nat :=
   Aeneas.SLPoC.read rb.count
 
 /-- Return the immutable capacity. -/
-def capacity (rb : RingBuffer α) : St Nat :=
+def capacity (rb : RingBuffer α) : Result Nat :=
   pure rb.cap
 
 /-- Test whether the FIFO view is empty. -/
-def isEmpty (rb : RingBuffer α) : St Bool := do
+def isEmpty (rb : RingBuffer α) : Result Bool := do
   let count ← Aeneas.SLPoC.read rb.count
   if count = 0 then pure true else pure false
 
 /-- Test whether the FIFO view occupies the complete fixed capacity. -/
-def isFull (rb : RingBuffer α) : St Bool := do
+def isFull (rb : RingBuffer α) : Result Bool := do
   let count ← Aeneas.SLPoC.read rb.count
   if count = rb.cap then pure true else pure false
 
 /-- Append unless the buffer is full; a full buffer is left unchanged. -/
-def pushBack (rb : RingBuffer α) (value : α) : St Bool := do
+def pushBack (rb : RingBuffer α) (value : α) : Result Bool := do
   let count ← Aeneas.SLPoC.read rb.count
   if count = rb.cap then
     pure false
@@ -101,7 +101,7 @@ def pushBack (rb : RingBuffer α) (value : α) : St Bool := do
 /-- Remove and return the FIFO front, or return `none` when empty.
 
 As in Pulse, a successful pop does not clear the old array slot. -/
-def popFront (rb : RingBuffer α) : St (Option α) := do
+def popFront (rb : RingBuffer α) : Result (Option α) := do
   let count ← Aeneas.SLPoC.read rb.count
   if count = 0 then
     pure none
@@ -113,7 +113,7 @@ def popFront (rb : RingBuffer α) : St (Option α) := do
     pure slot.join
 
 /-- Return the FIFO front without mutation, or `none` when empty. -/
-def peekFront (rb : RingBuffer α) : St (Option α) := do
+def peekFront (rb : RingBuffer α) : Result (Option α) := do
   let count ← Aeneas.SLPoC.read rb.count
   if count = 0 then
     pure none
@@ -123,7 +123,7 @@ def peekFront (rb : RingBuffer α) : St (Option α) := do
     pure slot.join
 
 /-- Deallocate the backing array and all three metadata cells. -/
-def free (rb : RingBuffer α) : St Unit := do
+def free (rb : RingBuffer α) : Result Unit := do
   PulseArray.free rb.buffer
   Aeneas.SLPoC.free rb.head
   Aeneas.SLPoC.free rb.tail
@@ -309,7 +309,7 @@ theorem isRingBuffer.pure (rb : RingBuffer α) (items : List α) (cap : Nat) :
 /-- Construction owns every array cell and all three freshly allocated boxes. -/
 @[step]
 theorem new.spec (capacity : Nat) (hcapacity : 0 < capacity) :
-    ⦃ emp ⦄ (new capacity hcapacity : St (RingBuffer α))
+    ⦃ emp ⦄ (new capacity hcapacity : Result (RingBuffer α))
       ⦃⇓ rb => isRingBuffer rb [] capacity⦄ := by
   unfold new
   step as ⟨ buffer, hlength ⟩

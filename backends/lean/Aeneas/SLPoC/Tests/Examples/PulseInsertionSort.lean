@@ -37,7 +37,7 @@ When the next value is smaller, the two cells are swapped and insertion
 continues from the next cell.  Thus the routine is genuinely in-place and
 touches only the cells whose values move.
 -/
-def insertCells [LinearOrder α] (current : Ptr α) : List (Ptr α) → St Unit
+def insertCells [LinearOrder α] (current : Ptr α) : List (Ptr α) → Result Unit
   | [] => pure ()
   | next :: rest => do
       let key ← read current
@@ -56,14 +56,14 @@ The recursive call sorts the suffix; `insertCells` then inserts the head value
 into it.  This is the structurally recursive, right-to-left counterpart of
 Pulse's prefix-growing outer loop.
 -/
-def sortCells [LinearOrder α] : List (Ptr α) → St Unit
+def sortCells [LinearOrder α] : List (Ptr α) → Result Unit
   | [] => pure ()
   | current :: rest => do
       sortCells rest
       insertCells current rest
 
 /-- In-place insertion sort over the cell-wise Pulse array representation. -/
-def insertionSort [LinearOrder α] (array : PulseArray.Array α) : St Unit :=
+def insertionSort [LinearOrder α] (array : PulseArray.Array α) : Result Unit :=
   sortCells array.cells
 
 /-! # Ghost state, specifications and proofs -/
