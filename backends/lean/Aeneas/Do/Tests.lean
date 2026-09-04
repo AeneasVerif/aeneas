@@ -531,7 +531,7 @@ fun w => do
 #guard_msgs in
 #print anon_ctor_monadic_test
 
-structure ExBox (Inst : Type → Type) where
+structure ExBox (Inst : Type → Type u) where
   ty : Type
   inst : Inst ty
   val : ty

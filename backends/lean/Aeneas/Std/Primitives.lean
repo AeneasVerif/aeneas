@@ -4,6 +4,7 @@ import Aeneas.Extract
 import AeneasMeta.BvEnumToBitVec
 import Aeneas.Data.Coinductive.ITree
 import Aeneas.Data.Coinductive.Effect
+import Aeneas.SLPoC.Heap
 
 namespace Aeneas
 
@@ -63,11 +64,16 @@ deriving Repr, BEq
 
 open Error
 
-inductive RustEffect.Input : Type where
+inductive RustEffect.Input : Type 1 where
+-- We represent partially defined stateful operations as guarded operations.
+-- This avoids either duplicating syntax or requiring decidable equality for types.
+| guardedModify (α : Type) (pre : SLPoC.Heap → Prop)
+    (modify : (h : SLPoC.Heap) → pre h → α × SLPoC.Heap) : RustEffect.Input
 | fail : Error → RustEffect.Input
 
-def RustEffect.Output (i : RustEffect.Input) : Type :=
+def RustEffect.Output (i : RustEffect.Input) : Type 1 :=
   match i with
+  | .guardedModify α _ _ => ULift α
   | .fail _ => PEmpty
 
 def RustEffect : Effect := {
@@ -75,10 +81,10 @@ def RustEffect : Effect := {
   O := RustEffect.Output
 }
 
--- We need Result to be irreducble outside this file (to not break metaprograms which normalize types),
+-- We need Result to be irreducible outside this file (to not break metaprograms which normalize types),
 -- but reducible within. The `unseal` command only affects the local scope.
 @[irreducible]
-def Result (α : Type u) : Type u := ITree RustEffect α
+def Result (α : Type u) : Type (max u 1) := ITree RustEffect α
 unseal Result
 
 def Result.ok {α} (a : α) : Result α := .ret a
@@ -113,7 +119,7 @@ def Result.cases {R}
     (div :  motive (Result.div))
     : motive t := ITree.cases ret div vis t
 
-inductive MatchResult (α : Type u) : Type u where
+inductive MatchResult (α : Type u) : Type (max u 1) where
 | ok : (a : α) → MatchResult α
 | div : MatchResult α
 | vis : (eff : RustEffect.Input) → (RustEffect.Output eff → Result α) → MatchResult α
@@ -121,7 +127,7 @@ inductive MatchResult (α : Type u) : Type u where
 /-!
 Can simulate a match on the Result type by matching on the output of this function.
 -/
-def Result.match.{u} {α : Type u} (r : Result α) : MatchResult α :=
+def Result.match {α : Type u} (r : Result α) : MatchResult α :=
   r.cases .ok .vis .div
 
 @[simp, grind =]
@@ -296,6 +302,7 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
 section Order
 
 open Lean.Order
+local notation "PartialOrder" => Lean.Order.PartialOrder
 
 instance : PartialOrder (Result α) := instPartialOrderCoIndOfInhabitedPUnit (ITreeF RustEffect α)
 noncomputable instance : CCPO (Result α) := instCCPOCoIndOfInhabitedPUnit (ITreeF RustEffect α)
@@ -418,6 +425,11 @@ def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) 
   | ControlFlow.cont x => loop body x
   | ControlFlow.done x => ok x
 partial_fixpoint
+
+def guardedModify {α : Type} (pre : SLPoC.Heap → Prop)
+    (modify : (h : SLPoC.Heap) → pre h → α × SLPoC.Heap) : Result α :=
+  Result.vis (.guardedModify α pre modify) fun answer =>
+    Result.ok answer.down
 
 /-!
 # Misc

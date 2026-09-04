@@ -27,9 +27,7 @@ unseal Result
 @[reducible]
 def handler : Handler RustEffect where
   State := Unit
-  handle event _ _ :=
-    match event with
-    | .fail _ => False
+  handle _ _ _ := False
   handle_mono _ := False.elim
 
 theorem handler_conjunctive : handler.Conjunctive := by
@@ -826,11 +824,14 @@ theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
     simp only [WP.wp, PredTrans.apply] at hspec
     split at hspec <;> simp_all
     rename_i x eff heq a
-    cases eff
-    have : heq = PEmpty.elim := by funext; contradiction
-    simp [*] at *
-    try trivial
-    try (all_goals simp at hspec)
+    cases eff with
+    | guardedModify =>
+      exact False.elim hspec
+    | fail =>
+      have : heq = PEmpty.elim := by funext; contradiction
+      simp [*] at *
+      try trivial
+      try (all_goals simp at hspec)
 
 
 /-- Lift an Aeneas step spec to an mvcgen-compatible `Triple`. -/
