@@ -22,6 +22,8 @@ on top of this.
 
 namespace Aeneas.SLPoC
 
+open Aeneas.Std (AllocId Heap Result)
+
 variable {α : Type}
 
 /-- A bounded view of an allocation. -/
