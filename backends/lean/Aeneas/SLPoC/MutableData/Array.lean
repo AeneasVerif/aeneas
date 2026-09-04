@@ -18,6 +18,8 @@ and whole-array derived specifications where appropriate.
 
 namespace Aeneas.SLPoC
 
+open Aeneas.Std (Heap Result)
+
 variable {α : Type} {n : Nat}
 
 /-- A Rust array `[α; n]`: `n` consecutive slots reached through `ptr`. -/

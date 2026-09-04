@@ -31,6 +31,8 @@ Sources:
 
 namespace Aeneas.SLPoC
 
+open Aeneas.Std (Heap Result)
+
 
 namespace DardinierMagicWands
 

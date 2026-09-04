@@ -2,6 +2,7 @@ module
 public import Aeneas.Std.Alloc
 public import Aeneas.Std.Array
 public import Aeneas.Std.Core
+public import Aeneas.Std.Heap
 public import Aeneas.Std.Primitives
 public import Aeneas.Std.PrimitivesLemmas
 public import Aeneas.Std.RawPtr

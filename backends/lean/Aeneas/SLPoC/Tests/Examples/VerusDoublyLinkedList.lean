@@ -18,6 +18,8 @@ ghost state.
 
 namespace Aeneas.SLPoC
 
+open Aeneas.Std (Heap Result)
+
 open VerusStd
 
 /-! # Executable definitions -/

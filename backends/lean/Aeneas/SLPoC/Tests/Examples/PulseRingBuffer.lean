@@ -24,6 +24,8 @@ cells.  Its circular-layout equation extracts the FIFO view by walking from
 
 namespace Aeneas.SLPoC
 
+open Aeneas.Std (Heap Result)
+
 
 namespace PulseRingBuffer
 

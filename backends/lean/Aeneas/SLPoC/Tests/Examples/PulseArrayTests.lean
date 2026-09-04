@@ -18,6 +18,8 @@ fills, and comparisons reusable by later data-structure ports.
 
 namespace Aeneas.SLPoC
 
+open Aeneas.Std (Heap Result)
+
 
 namespace PulseArray
 

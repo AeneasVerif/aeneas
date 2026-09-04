@@ -2,6 +2,8 @@ import Aeneas.SLPoC.MutableData.Ptr
 
 namespace Aeneas.SLPoC
 
+open Aeneas.Std (Heap Result)
+
 
 namespace Examples
 
@@ -64,6 +66,8 @@ example (x : Nat) :
     (do
       let (y, _) ← Examples.add2 x
       Examples.add2 y) ⦃⇓ (y, _) => y = x + 2⦄ := by
+  step
+  rcases y with ⟨y, z⟩
   step*
 
 def conditionalUpdate (b : Bool) (p : Ptr Nat) (value : Nat) : Result Unit :=

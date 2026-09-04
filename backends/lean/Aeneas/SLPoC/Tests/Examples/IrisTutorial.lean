@@ -2,6 +2,8 @@ import Aeneas.SLPoC.MutableData.Ptr
 
 namespace Aeneas.SLPoC
 
+open Aeneas.Std (Heap Result)
+
 
 namespace IrisTutorial
 

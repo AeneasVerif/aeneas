@@ -10,6 +10,8 @@ lemmas that relate an array to the slice and the range underneath it.
 
 namespace Aeneas.SLPoC
 
+open Aeneas.Std (Heap Result)
+
 /-! ## Allocation, indexed access and release -/
 
 def arrayRoundTrip : Result Nat := do

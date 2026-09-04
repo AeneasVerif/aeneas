@@ -29,6 +29,8 @@ split used by public `pop_front`.
 
 namespace Aeneas.SLPoC
 
+open Aeneas.Std (Heap Result)
+
 
 namespace AsterinasIntrusiveFrameList
 
