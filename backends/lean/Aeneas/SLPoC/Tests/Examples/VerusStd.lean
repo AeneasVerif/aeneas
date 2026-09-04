@@ -19,7 +19,7 @@ Every declaration names the `vstd` primitive (or the specification Verus derives
 from it) that makes the corresponding step free on the Verus side.
 -/
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 
 namespace VerusStd
@@ -238,4 +238,4 @@ theorem cellsFrom_read (f : Nat → β → α) (l : List (Ptr α × β)) (i : Na
 
 end VerusStd
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic

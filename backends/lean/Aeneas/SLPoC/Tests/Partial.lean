@@ -3,14 +3,14 @@ import Aeneas.SLPoC.Tests.Examples.Basic
 /-!
 # Partial correctness
 
-`Aeneas.SLPoC.ST` states the divergence-tolerant triple `dtriple`, written
+`Aeneas.SepLogic.ST` states the divergence-tolerant triple `dtriple`, written
 `⦃P⦄ m ⦃⇓ x => Q⦄div`.  These are the tests that it proves what a total triple
 proves of a program that stops, that the automation drives it — through the
 lifting of the total specifications, which are the ones `@[step]` collects — and
 that it proves what a total triple cannot: a loop that never leaves.
 -/
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Data.Coinductive
 
@@ -164,4 +164,4 @@ theorem countdown.spec (p : Ptr Nat) (value : Nat) :
   · simp only [h, ↓reduceIte]
     step*
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic

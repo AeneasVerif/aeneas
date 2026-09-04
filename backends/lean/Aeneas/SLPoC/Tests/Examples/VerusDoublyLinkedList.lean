@@ -11,12 +11,12 @@ takes.
 
 The executable definitions come first; the ghost state, the specifications and
 their proofs follow, in the same namespaces.  The sequence and permission-map
-reasoning Verus inherits from `vstd` lives in `Aeneas.SLPoC.Tests.Examples.VerusStd`.  The
+reasoning Verus inherits from `vstd` lives in `Aeneas.SepLogic.Tests.Examples.VerusStd`.  The
 `*.spec` theorems state the Verus `requires`/`ensures` clauses over the explicit
 ghost state.
 -/
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Std (Heap Result)
 
@@ -543,4 +543,4 @@ theorem run.spec :
 
 end Example
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic
