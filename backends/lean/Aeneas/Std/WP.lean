@@ -30,9 +30,7 @@ unseal Result
 @[reducible]
 def handler : Handler RustEffect where
   State := Unit
-  handle event _ _ :=
-    match event with
-    | .fail _ => False
+  handle _ _ _ := False
   handle_mono _ := False.elim
 
 theorem handler_conjunctive : handler.Conjunctive := by
