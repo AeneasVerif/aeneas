@@ -39,16 +39,16 @@ namespace DoublyLinkedList
 variable {V : Type}
 
 /-- Construct a new, empty, doubly-linked list. -/
-def new : St (DoublyLinkedList V) :=
+def new : Result (DoublyLinkedList V) :=
   pure { head := none, tail := none }
 
 /-- Insert one node, assuming the linked list is empty. -/
-def pushEmptyCase (s : DoublyLinkedList V) (v : V) : St (DoublyLinkedList V) := do
+def pushEmptyCase (s : DoublyLinkedList V) (v : V) : Result (DoublyLinkedList V) := do
   let ptr ← alloc { prev := none, next := none, payload := v }
   pure { s with tail := some ptr, head := some ptr }
 
 /-- Insert a value at the end of the list. -/
-def pushBack (s : DoublyLinkedList V) (v : V) : St (DoublyLinkedList V) := do
+def pushBack (s : DoublyLinkedList V) (v : V) : Result (DoublyLinkedList V) := do
   match s.tail with
   | none =>
     pushEmptyCase s v
@@ -59,7 +59,7 @@ def pushBack (s : DoublyLinkedList V) (v : V) : St (DoublyLinkedList V) := do
     pure { s with tail := some newTailPtr }
 
 /-- Take a value from the end of the list.  Requires the list to be non-empty. -/
-def popBack (s : DoublyLinkedList V) : St (DoublyLinkedList V × V) := do
+def popBack (s : DoublyLinkedList V) : Result (DoublyLinkedList V × V) := do
   let lastPtr := s.tail.get!
   let lastNode ← read lastPtr
   free lastPtr
@@ -74,7 +74,7 @@ def popBack (s : DoublyLinkedList V) : St (DoublyLinkedList V × V) := do
     pure ({ s with tail := some penultimatePtr }, v)
 
 /-- Insert a value at the front of the list. -/
-def pushFront (s : DoublyLinkedList V) (v : V) : St (DoublyLinkedList V) := do
+def pushFront (s : DoublyLinkedList V) (v : V) : Result (DoublyLinkedList V) := do
   match s.head with
   | none =>
     pushEmptyCase s v
@@ -86,7 +86,7 @@ def pushFront (s : DoublyLinkedList V) (v : V) : St (DoublyLinkedList V) := do
 
 /-- Take a value from the front of the list.  Requires the list to be
 non-empty. -/
-def popFront (s : DoublyLinkedList V) : St (DoublyLinkedList V × V) := do
+def popFront (s : DoublyLinkedList V) : Result (DoublyLinkedList V × V) := do
   let firstPtr := s.head.get!
   let firstNode ← read firstPtr
   free firstPtr
@@ -102,7 +102,7 @@ def popFront (s : DoublyLinkedList V) : St (DoublyLinkedList V × V) := do
 
 /-- The `while j < i` loop of `get`, walking the list from index `j` to
 index `i`. -/
-def getLoop (i : Nat) (j : Nat) (ptr : Ptr (Node V)) : St (Ptr (Node V)) :=
+def getLoop (i : Nat) (j : Nat) (ptr : Ptr (Node V)) : Result (Ptr (Node V)) :=
   if j < i then do
     let node ← read ptr
     let nextPtr := node.next.get!
@@ -113,7 +113,7 @@ termination_by i - j
 decreasing_by omega
 
 /-- Get the `i`th value of the list. -/
-def get (s : DoublyLinkedList V) (i : Nat) : St V := do
+def get (s : DoublyLinkedList V) (i : Nat) : Result V := do
   let ptr ← getLoop i 0 s.head.get!
   let node ← read ptr
   pure node.payload
@@ -132,17 +132,17 @@ namespace Iterator
 variable {V : Type}
 
 /-- Create an iterator positioned at the front of `l`. -/
-def new (l : DoublyLinkedList V) : St (Iterator V) :=
+def new (l : DoublyLinkedList V) : Result (Iterator V) :=
   pure { l := l, cur := l.head, index := 0 }
 
 /-- The value the iterator currently points at. -/
-def value (it : Iterator V) : St V := do
+def value (it : Iterator V) : Result V := do
   let cur := it.cur.get!
   let node ← read cur
   pure node.payload
 
 /-- Advance the iterator; returns whether it still points at a value. -/
-def moveNext (it : Iterator V) : St (Iterator V × Bool) := do
+def moveNext (it : Iterator V) : Result (Iterator V × Bool) := do
   let cur := it.cur.get!
   let node ← read cur
   match node.next with
@@ -307,7 +307,7 @@ Verus' `self.well_formed()` becomes `wellFormed s l`, and `self@` becomes
 /-- `new` returns a well-formed list whose view is empty. -/
 @[step]
 theorem new.spec :
-    ⦃ emp ⦄ (new : St (DoublyLinkedList V)) ⦃⇓ s => wellFormed s []⦄ := by
+    ⦃ emp ⦄ (new : Result (DoublyLinkedList V)) ⦃⇓ s => wellFormed s []⦄ := by
   unfold new
   step*
 
@@ -508,7 +508,7 @@ namespace Example
 
 open DoublyLinkedList
 
-def run : St (Nat × Nat × Nat × Bool × Nat × Nat × Nat) := do
+def run : Result (Nat × Nat × Nat × Bool × Nat × Nat × Nat) := do
   let t ← DoublyLinkedList.new (V := Nat)
   let t ← t.pushBack 2
   let t ← t.pushBack 3

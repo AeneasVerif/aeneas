@@ -15,7 +15,7 @@ returned value and makes it framable — so an unbounded `step*` closes this on
 its own.
 -/
 
-def allocAndReturn : St (Ptr Nat) := do
+def allocAndReturn : Result (Ptr Nat) := do
   let p ← alloc 1
   pure p
 
@@ -39,7 +39,7 @@ the user unfolds or simplifies the postcondition.
 def opaqueStepResult (actual expected : Nat) : Prop :=
   actual = expected
 
-def readFreeReturn (p : Ptr Nat) : St Nat := do
+def readFreeReturn (p : Ptr Nat) : Result Nat := do
   let value ← read p
   free p
   pure (value + 1)
@@ -73,17 +73,17 @@ example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => iprop(⌜opaqueStepResult 1 1�
   step
   exact pure_sep_intro _ rfl
 
-/-- `ITree.ret`, the constructor `pure` unfolds to, is a terminal return too. -/
-example (n : Nat) : ⦃ emp ⦄ (ITree.ret n : St Nat) ⦃⇓ result => ⌜result = n⌝⦄ := by
+/-- `Result.ok`, the constructor `pure` unfolds to, is a terminal return too. -/
+example (n : Nat) : ⦃ emp ⦄ Result.ok n ⦃⇓ result => ⌜result = n⌝⦄ := by
   step
   iframe
 
 /-- A `Unit` result is no different. -/
-example (p : Ptr Nat) : ⦃ p ↦ 0 ⦄ (pure () : St Unit) ⦃⇓ p ↦ 0⦄ := by
+example (p : Ptr Nat) : ⦃ p ↦ 0 ⦄ (pure () : Result Unit) ⦃⇓ p ↦ 0⦄ := by
   step
   iframe
 
-def namedReturn (n : Nat) : St Nat :=
+def namedReturn (n : Nat) : Result Nat :=
   pure n
 
 @[step]
@@ -100,7 +100,7 @@ example (n : Nat) : ⦃ emp ⦄ namedReturn n ⦃⇓ result => ⌜result = n⌝�
   iframe
 
 /-- An explicitly named specification wins over the terminal rule. -/
-example (n : Nat) : ⦃ emp ⦄ (pure n : St Nat) ⦃⇓ result => ⌜result = n⌝⦄ := by
+example (n : Nat) : ⦃ emp ⦄ (pure n : Result Nat) ⦃⇓ result => ⌜result = n⌝⦄ := by
   step with pure.spec
   iframe
 
@@ -124,7 +124,7 @@ An unbounded star performs the branch itself, so it cannot replace the bounded
 step in-place when the following proof needs to control that branch.
 -/
 
-def branchAfterRead (p : Ptr Nat) : St Nat := do
+def branchAfterRead (p : Ptr Nat) : Result Nat := do
   let value ← read p
   if value = 0 then pure 1 else pure 2
 
@@ -152,7 +152,7 @@ structure Ghost where
 inductive NeedsWitness : Prop where
   | mk : Ghost → NeedsWitness
 
-def ghostHelper (_p : Ptr Nat) : St Unit :=
+def ghostHelper (_p : Ptr Nat) : Result Unit :=
   pure ()
 
 @[step]
@@ -162,7 +162,7 @@ theorem ghostHelper.spec (p : Ptr Nat) (_witness : NeedsWitness) :
   step
   iframe
 
-def ghostCaller (p : Ptr Nat) : St Unit := do
+def ghostCaller (p : Ptr Nat) : Result Unit := do
   ghostHelper p
   pure ()
 
@@ -198,7 +198,7 @@ This minimizes the explicit steps in `UnitTest`,
 select a theorem absent from the step database.
 -/
 
-def unregisteredHelper (p : Ptr Nat) : St Unit :=
+def unregisteredHelper (p : Ptr Nat) : Result Unit :=
   Examples.incr_ptr p
 
 @[step]
@@ -207,7 +207,7 @@ theorem unregisteredHelper.spec (p : Ptr Nat) (value : Nat) :
   unfold unregisteredHelper
   step*
 
-def unregisteredCaller (p : Ptr Nat) : St Unit := do
+def unregisteredCaller (p : Ptr Nat) : Result Unit := do
   unregisteredHelper p
   pure ()
 

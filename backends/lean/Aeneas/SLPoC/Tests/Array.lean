@@ -12,7 +12,7 @@ namespace Aeneas.SLPoC
 
 /-! ## Allocation, indexed access and release -/
 
-def arrayRoundTrip : St Nat := do
+def arrayRoundTrip : Result Nat := do
   let a ← Array.alloc Nat 3 (0 : Nat)
   a.write 0 1
   a.write 2 41
@@ -58,7 +58,7 @@ example : (execClosed arrayRoundTrip arrayRoundTrip.spec).2.size = 0 := by
 
 /-! ## `ofList`, `swap` and `fill` -/
 
-def arraySwap : St (Nat × Nat) := do
+def arraySwap : Result (Nat × Nat) := do
   let a ← Array.ofList [7, 8]
   a.swap 0 1
   let x ← a.read 0
@@ -92,7 +92,7 @@ theorem arraySwap.spec : ⦃ emp ⦄ arraySwap ⦃⇓ result => ⌜result = (8, 
 
 #guard (execClosed arraySwap arraySwap.spec).1 = (8, 7)
 
-def arrayFill : St Nat := do
+def arrayFill : Result Nat := do
   let a ← Array.alloc Nat 3 (0 : Nat)
   a.fill 5
   let value ← a.read 1
@@ -129,7 +129,7 @@ theorem arrayFill.spec : ⦃ emp ⦄ arrayFill ⦃⇓ result => ⌜result = 5⌝
 Both take two arrays, and the separating conjunction is what says they are two
 allocations: nothing has to assume it. -/
 
-def arrayCopyCompare : St Bool := do
+def arrayCopyCompare : Result Bool := do
   let src ← Array.ofList [1, 2, 3]
   let dst ← Array.alloc Nat 3 (0 : Nat)
   dst.copy src
@@ -203,7 +203,7 @@ private def functionalArray :
   ⟨[1, 2, 3], by simp⟩
 
 def arrayMutToRawRoundTrip :
-    St (Aeneas.Std.Array Nat (Aeneas.Std.Usize.ofNat 3)) := do
+    Result (Aeneas.Std.Array Nat (Aeneas.Std.Usize.ofNat 3)) := do
   let a ← Array.mut_to_raw functionalArray
   a.write 1 9
   Array.end_mut_to_raw functionalArray a
@@ -233,7 +233,7 @@ example :
 private def functionalSlice : Aeneas.Std.Slice Nat :=
   ⟨[4, 5, 6], by scalar_tac⟩
 
-def bufferMutToRawRoundTrip : St (Aeneas.Std.Slice Nat) := do
+def bufferMutToRawRoundTrip : Result (Aeneas.Std.Slice Nat) := do
   let b ← Buffer.mut_to_raw functionalSlice
   b.write 2 7
   Buffer.end_mut_to_raw functionalSlice b
