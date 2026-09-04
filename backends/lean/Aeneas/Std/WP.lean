@@ -34,9 +34,7 @@ unseal Result
 @[reducible]
 def effectWP : EffectWP RustEffect where
   State := Unit
-  wp effect _ _ :=
-    match effect with
-    | .fail _ => False
+  wp _ _ _ := False
 
 instance : EffectWP.Monotone effectWP where
   wp_mono _ := False.elim
@@ -48,9 +46,7 @@ instance : EffectWP.Conjunctive effectWP where
     exact (hAll C₀ hC₀).elim
 
 instance : EffectWP.NoMiracle effectWP where
-  wp_noMiracle := by
-    rintro ⟨⟩ _ h
-    exact h
+  wp_noMiracle _ _ h := h
 
 def spec (m : Result α) (p : Post α) : Prop :=
   DWP effectWP m (fun value _ => p value) ()
