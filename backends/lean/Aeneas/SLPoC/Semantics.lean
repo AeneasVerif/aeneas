@@ -155,26 +155,22 @@ theorem eq_vis_of_unfold {m : Result α} {event : RustEffect.I}
     m = ITree.vis event k :=
   eq_of_unfold hm
 
-/-- At a `vis` node total correctness supplies the guard of the event and total
-correctness of the continuation on the modified heap. -/
-theorem spec_unfold_vis {m : Result α} {EventResult : Type} {pre : Heap → Prop}
-    {modify : (h : Heap) → pre h → EventResult × Heap}
-    {k : RustEffect.O (RustEffect.I.guardedModify EventResult pre modify) → Result α}
-    {Q : IPost α} {h : Heap}
-    (hm : m.unfold = .vis (RustEffect.I.guardedModify EventResult pre modify) k)
-    (hSpec : spec m Q h) :
-    ∃ hPre : pre h, spec (k (.up (modify h hPre).1)) Q (modify h hPre).2 :=
-  by
-    rw [eq_vis_of_unfold hm] at hSpec
-    exact TotalSpec.vis_view hSpec
+/-- At a `vis` node total correctness supplies exactly what `EventSpec` demands
+of the event: the guard of a heap event together with total correctness of the
+continuation on the heap it produces, and `False` at failure. -/
+theorem spec_unfold_vis {m : Result α} {event : RustEffect.I}
+    {k : RustEffect.O event → Result α} {Q : IPost α} {h : Heap}
+    (hm : m.unfold = .vis event k) (hSpec : spec m Q h) :
+    EventSpec (fun m' h' => spec m' Q h') event k h := by
+  rw [eq_vis_of_unfold hm] at hSpec
+  exact hSpec.vis_view
 
 theorem spec_unfold_fail_false {m : Result α} {error : Error}
     {k : RustEffect.O (RustEffect.I.fail error) → Result α}
     {Q : IPost α} {h : Heap}
     (hm : m.unfold = .vis (RustEffect.I.fail error) k)
-    (hSpec : spec m Q h) : False := by
-  rw [eq_vis_of_unfold hm] at hSpec
-  exact hSpec.fail_vis_false
+    (hSpec : spec m Q h) : False :=
+  spec_unfold_vis hm hSpec
 
 /-- Run `m` from `h`. The total-correctness proof supplies the guard of each
 heap event and rules out failure, so nothing has to be decided: the guard of a
@@ -185,7 +181,7 @@ time, so this computes.
 An interaction tree is coinductive, so this is a partial fixed point rather than
 a structural recursion, and it must answer something on a tree with no `ret` in
 sight: `runOpt_spec` shows that `none` is unreachable under total correctness,
-because `TotalSpec` has no constructor for `ITree.div`. -/
+because `TotalSpec` puts `False` in the divergence case of its layer. -/
 def runOpt (m : Result α) (h : Heap) (Q : IPost α) (hSpec : spec m Q h) :
     Option (α × Heap) :=
   match hm : m.unfold with
@@ -204,30 +200,33 @@ reached by an evaluation of the machine of `Aeneas.SepLogic.ST`. -/
 theorem runOpt_spec (Q : IPost α) (m : Result α) (h : Heap) (hSpec : spec m Q h) :
     ∃ outcome : α × Heap, runOpt m h Q hSpec = some outcome ∧
       Q outcome.1 outcome.2 ∧ Evaluates m h outcome.1 outcome.2 := by
-  induction hSpec with
-  | ret hPost =>
-      rw [runOpt.eq_def]
-      exact ⟨(_, _), rfl, hPost, StateMachine.Evaluates.pure _ _⟩
-  | vis hPre hNext ih =>
-      rw [runOpt.eq_def]
-      split
-      · rename_i value hm
-        simp only [unfold_vis] at hm
-        cases hm
-      · rename_i hm
-        simp only [unfold_vis] at hm
-        cases hm
-      · rename_i event k hm
-        simp only [unfold_vis] at hm
-        cases hm
-        obtain ⟨outcome, hRun, hPost, hEvaluates⟩ := ih
-        refine ⟨outcome, ?_, hPost, ?_⟩
-        · simpa using hRun
-        · exact StateMachine.Evaluates.step (RustEffect.Step.guardedModify hPre)
-            hEvaluates
-      · rename_i error k hm
-        simp only [unfold_vis] at hm
-        cases hm
+  refine hSpec.induction
+    (P := fun t u => ∀ hSpec' : spec t Q u, ∃ outcome : α × Heap,
+      runOpt t u Q hSpec' = some outcome ∧
+        Q outcome.1 outcome.2 ∧ Evaluates t u outcome.1 outcome.2) ?_ ?_ hSpec
+  · intro value h' hPost hSpec'
+    rw [runOpt.eq_def]
+    exact ⟨(_, _), rfl, hPost, StateMachine.Evaluates.pure _ _⟩
+  · intro EventResult pre modify k h' hPre ih hSpec'
+    rw [runOpt.eq_def]
+    split
+    · rename_i value hm
+      simp only [unfold_vis] at hm
+      cases hm
+    · rename_i hm
+      simp only [unfold_vis] at hm
+      cases hm
+    · rename_i event k hm
+      simp only [unfold_vis] at hm
+      cases hm
+      obtain ⟨outcome, hRun, hPost, hEvaluates⟩ := ih _
+      refine ⟨outcome, ?_, hPost, ?_⟩
+      · simpa using hRun
+      · exact StateMachine.Evaluates.step (RustEffect.Step.guardedModify hPre)
+          hEvaluates
+    · rename_i error k hm
+      simp only [unfold_vis] at hm
+      cases hm
 
 theorem runOpt_isSome (Q : IPost α) (m : Result α) (h : Heap)
     (hSpec : spec m Q h) : (runOpt m h Q hSpec).isSome := by
