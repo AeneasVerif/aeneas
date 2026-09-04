@@ -19,7 +19,7 @@ name, it is a bounded vector.  This port therefore preserves that exact
 fixed-capacity behavior rather than assuming successful resizing.
 -/
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Std (Heap Result)
 
@@ -38,17 +38,17 @@ structure ResizableVec (α : Type) where
 /-- Allocate a vector with an empty logical prefix and `capacity` buffer cells. -/
 def new (capacity : Nat) : Result (ResizableVec α) := do
   let buffer ← PulseArray.alloc capacity none
-  let sizeCell ← Aeneas.SLPoC.alloc 0
-  let capacityCell ← Aeneas.SLPoC.alloc capacity
+  let sizeCell ← Aeneas.SepLogic.alloc 0
+  let capacityCell ← Aeneas.SepLogic.alloc capacity
   pure ⟨buffer, sizeCell, capacityCell⟩
 
 /-- Read the current logical length. -/
 def length (v : ResizableVec α) : Result Nat :=
-  Aeneas.SLPoC.read v.sizeCell
+  Aeneas.SepLogic.read v.sizeCell
 
 /-- Read the fixed maximum capacity. -/
 def capacity (v : ResizableVec α) : Result Nat :=
-  Aeneas.SLPoC.read v.capacityCell
+  Aeneas.SepLogic.read v.capacityCell
 
 /-- Read an element, returning `none` exactly when the logical index is out of bounds. -/
 def get (v : ResizableVec α) (i : Nat) : Result (Option α) := do
@@ -74,7 +74,7 @@ def push (v : ResizableVec α) (value : α) : Result Bool := do
   let cap ← capacity v
   if size < cap then
     let _ ← PulseArray.writeAt v.buffer size (some value)
-    Aeneas.SLPoC.update v.sizeCell (size + 1)
+    Aeneas.SepLogic.update v.sizeCell (size + 1)
     pure true
   else
     pure false
@@ -87,7 +87,7 @@ def pop (v : ResizableVec α) : Result (Option α) := do
   else
     let last := size - 1
     let slot ← PulseArray.readAt v.buffer last
-    Aeneas.SLPoC.update v.sizeCell last
+    Aeneas.SepLogic.update v.sizeCell last
     pure slot.join
 
 /-- Test whether another element can be appended. -/
@@ -99,8 +99,8 @@ def hasRoom (v : ResizableVec α) : Result Bool := do
 /-- Free the backing cells and the two separately owned metadata cells. -/
 def free (v : ResizableVec α) : Result Unit := do
   PulseArray.free v.buffer
-  Aeneas.SLPoC.free v.sizeCell
-  Aeneas.SLPoC.free v.capacityCell
+  Aeneas.SepLogic.free v.sizeCell
+  Aeneas.SepLogic.free v.capacityCell
 
 /-! # Ghost state, specifications and proofs -/
 
@@ -338,4 +338,4 @@ theorem free.spec (v : ResizableVec α) (contents : List α) (cap : Nat) :
 
 end PulseResizableVec
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic

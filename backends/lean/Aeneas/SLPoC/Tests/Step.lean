@@ -2,7 +2,7 @@ import Aeneas.SLPoC.Tests.Examples.Basic
 
 open Aeneas.Data.Coinductive
 
-namespace Aeneas.SLPoC.Tests.Step
+namespace Aeneas.SepLogic.Tests.Step
 
 open Aeneas.Std (Result)
 
@@ -218,4 +218,4 @@ example (p : Ptr Nat) (value : Nat) :
   unfold unregisteredCaller
   step*
 
-end Aeneas.SLPoC.Tests.Step
+end Aeneas.SepLogic.Tests.Step

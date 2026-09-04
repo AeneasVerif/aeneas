@@ -39,7 +39,7 @@ values beyond its logical length (to support `pop` without clearing a slot),
 whereas this bounded abstraction keeps every suffix marker equal to `none`.
 -/
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Std (Heap Result)
 
@@ -57,12 +57,12 @@ structure Vector (α : Type) where
 /-- Allocate an empty bounded abstraction with `capacity` uninitialized markers. -/
 def newFixed (capacity : Nat) : Result (Vector α) := do
   let buffer ← PulseArray.alloc capacity none
-  let lengthCell ← Aeneas.SLPoC.alloc 0
+  let lengthCell ← Aeneas.SepLogic.alloc 0
   pure { buffer, lengthCell, fixedCapacity := capacity }
 
 /-- Read the current number of initialized elements. -/
 def length (v : Vector α) : Result Nat :=
-  Aeneas.SLPoC.read v.lengthCell
+  Aeneas.SepLogic.read v.lengthCell
 
 /-- Return the immutable capacity of the allocation. -/
 def capacity (v : Vector α) : Result Nat :=
@@ -83,7 +83,7 @@ def pushNoResize (v : Vector α) (value : α) : Result Bool := do
   let cap ← capacity v
   if size < cap then
     let _ ← PulseArray.writeAt v.buffer size (some value)
-    Aeneas.SLPoC.update v.lengthCell (size + 1)
+    Aeneas.SepLogic.update v.lengthCell (size + 1)
     pure true
   else
     pure false
@@ -354,4 +354,4 @@ theorem pushNoResize.spec
 
 end VerusVerifiedVec
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic

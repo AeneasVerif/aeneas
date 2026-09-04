@@ -23,7 +23,7 @@ detail, and what the interface says about aliasing is the same one element at a
 time.
 -/
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Std (Heap Result)
 
@@ -576,4 +576,4 @@ end InPlaceOrDisjointBuffer
 
 end Examples
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic

@@ -29,7 +29,7 @@ Sources:
 - Artifact: <https://doi.org/10.5281/zenodo.6525310>.
 -/
 
-namespace Aeneas.SLPoC
+namespace Aeneas.SepLogic
 
 open Aeneas.Std (Heap Result)
 
@@ -285,4 +285,4 @@ theorem applySelected (x : Ptr (Ptr Nat)) (y z : Ptr Nat)
 
 end DardinierMagicWands
 
-end Aeneas.SLPoC
+end Aeneas.SepLogic

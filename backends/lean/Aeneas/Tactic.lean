@@ -3,6 +3,7 @@ public import Aeneas.Tactic.Conv
 public import Aeneas.Tactic.Elab
 public import Aeneas.Tactic.Misc
 public import Aeneas.Tactic.RustAttributes
+public import Aeneas.Tactic.SepLogic
 public import Aeneas.Tactic.Setup
 public import Aeneas.Tactic.Simp
 public import Aeneas.Tactic.Simproc
