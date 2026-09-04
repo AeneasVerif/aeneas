@@ -174,7 +174,7 @@ semantics and the interpreter in [`Semantics.lean`](Semantics.lean).
 As in `Aeneas.Std.WP.spec`, a proof of total correctness is a finite derivation:
 `ret` establishes the postcondition and `vis` proves the guard and the
 continuation. Nothing proves `ITree.div` correct, so every proved program
-terminates. `spec_mono_le` connects this judgment to the interaction-tree
+terminates. `TotalSpec.mono_le` connects this judgment to the interaction-tree
 approximation order used by `partial_fixpoint`.
 
 `St` cannot be interpreted unconditionally either: a heap cell stores its own
@@ -223,7 +223,7 @@ constructors an inductive definition would have offered, so a straight-line
 proof reads like a total one, and `step` drives a partial goal
 through the lifting `triple_dtriple` — every `@[step]` specification states
 total correctness and is applied to a partial goal as it stands, exactly as
-`spec_dspec` is used for `Result`.
+`Aeneas.Std.WP.spec_dspec` is used for `Result`.
 
 What a partial triple owes is proved against the same machine as the total one:
 `PartialSpec.reaches` carries it along every run, so a terminating run
@@ -246,7 +246,7 @@ theorem incrForever.spec (p : Ptr Nat) (value : Nat) :
 ```
 
 for a loop that increments `p` and never leaves — a triple no total judgment
-can state, since `spec_div` says divergence satisfies none.  See
+can state, since `TotalSpec.div_false` says divergence satisfies none.  See
 [`Tests/Partial.lean`](Tests/Partial.lean).
 
 ## How ideal are the proofs?
