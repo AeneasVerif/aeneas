@@ -44,9 +44,9 @@ adequate against (`Exec.exists_stop`).
 
 namespace Aeneas.Data.Coinductive
 
-universe u v w
+universe u v w x
 
-variable {E : Effect.{v}} {α β γ : Type}
+variable {E : Effect.{v}} {α β γ : Type x}
 
 /-! ## State machines -/
 
@@ -101,6 +101,78 @@ theorem ofStep_resolves (σ : Type u)
     (ofStep σ Step).Resolves := by
   rintro event s C ⟨answer, s', hStep, hOutcome⟩
   exact ⟨answer, s', hOutcome, answer, s', hStep, rfl, rfl⟩
+
+/-- The machine is **feasible**: a demand it meets is met by an actual answer
+and successor state.  Equivalently — the handler being monotone — it never
+answers an event with the impossible demand, which is the miracle a program
+logic must not be able to invoke.
+
+A machine that resolves its transitions is feasible (`Resolves.feasible`), and
+so is a machine whose handler demands something of *every* transition of an
+enabled event. -/
+def Feasible (M : StateMachine E) : Prop :=
+  ∀ (event : E.I) (s : M.State) (C : E.O event → M.State → Prop),
+    M.handle event s C → ∃ answer s', C answer s'
+
+/-- The machine is **positively conjunctive**: what it owes each demand of a
+*nonempty* set of demands on the same event, it owes all of them at once, in a
+single transition.
+
+This is the healthiness condition a limit argument needs
+(`PartialSpec.admissible`), and what it rules out is not nondeterminism but
+*angelic* nondeterminism: a machine that answers each demand by choosing the
+transition that suits it need not have one transition suiting them all.  A
+machine that answers deterministically is conjunctive, and so is one that
+demands something of *every* transition of an enabled event — the ordinary
+reading of a nondeterministic operational semantics.
+
+The set must be inhabited: a machine that cannot answer the event at all owes
+nothing, and there is no demand to meet when there is no demand. -/
+def Conjunctive (M : StateMachine E) : Prop :=
+  ∀ {event : E.I} {s : M.State}
+    (Demands : (E.O event → M.State → Prop) → Prop), (∃ C, Demands C) →
+    (∀ C, Demands C → M.handle event s C) →
+    M.handle event s fun answer s' => ∀ C, Demands C → C answer s'
+
+theorem ofStep_conjunctive (σ : Type u)
+    (Step : (event : E.I) → σ → E.O event → σ → Prop)
+    (hFunctional : ∀ (event : E.I) (s : σ) (answer₁ : E.O event) (s₁ : σ)
+      (answer₂ : E.O event) (s₂ : σ),
+      Step event s answer₁ s₁ → Step event s answer₂ s₂ → answer₁ = answer₂ ∧ s₁ = s₂) :
+    (ofStep σ Step).Conjunctive := by
+  rintro event s Demands ⟨C₀, hC₀⟩ hAll
+  obtain ⟨answer, s', hStep, -⟩ := hAll C₀ hC₀
+  refine ⟨answer, s', hStep, fun C hC => ?_⟩
+  obtain ⟨answer', s'', hStep', hOutcome⟩ := hAll C hC
+  obtain ⟨rfl, rfl⟩ := hFunctional event s answer' s'' answer s' hStep' hStep
+  exact hOutcome
+
+variable {M : StateMachine E}
+
+theorem Resolves.feasible (hResolves : M.Resolves) : M.Feasible := by
+  intro event s C hHandle
+  obtain ⟨answer, s', hOutcome, -⟩ := hResolves event s C hHandle
+  exact ⟨answer, s', hOutcome⟩
+
+/-- `Conjunctive` at a family rather than a set: one transition answers a whole
+inhabited family of demands at once. -/
+theorem Conjunctive.handle_forall (hConj : M.Conjunctive) {ι : Sort w} (i₀ : ι)
+    {event : E.I} {s : M.State} {C : ι → E.O event → M.State → Prop}
+    (hHandle : ∀ i, M.handle event s (C i)) :
+    M.handle event s fun answer s' => ∀ i, C i answer s' := by
+  refine M.handle_mono (fun _ _ hAll i => hAll (C i) ⟨i, rfl⟩)
+    (hConj (fun X => ∃ i, X = C i) ⟨C i₀, i₀, rfl⟩ ?_)
+  rintro X ⟨i, rfl⟩
+  exact hHandle i
+
+/-- `Conjunctive` at two demands. -/
+theorem Conjunctive.handle_and (hConj : M.Conjunctive) {event : E.I} {s : M.State}
+    {C C' : E.O event → M.State → Prop} (hHandle : M.handle event s C)
+    (hHandle' : M.handle event s C') :
+    M.handle event s fun answer s' => C answer s' ∧ C' answer s' := by
+  refine M.handle_mono (fun _ _ hBoth => ⟨hBoth true, hBoth false⟩)
+    (hConj.handle_forall (ι := Bool) (C := fun b => bif b then C else C') true ?_)
+  rintro (_ | _) <;> assumption
 
 end StateMachine
 

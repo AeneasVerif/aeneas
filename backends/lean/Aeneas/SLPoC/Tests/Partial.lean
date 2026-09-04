@@ -106,7 +106,7 @@ example (Q : IPost Nat) : dtriple emp (Result.div : Result Nat) Q :=
   dtriple_div
 
 example (Q : IPost Nat) : ¬ triple emp (Result.div : Result Nat) Q := fun hTriple =>
-  spec_div Q Heap.empty (triple_apply hTriple trivial)
+  TotalSpec.div_false (triple_apply (h := Heap.empty) hTriple trivial)
 
 /-! ## A loop that never leaves
 
