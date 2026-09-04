@@ -28,115 +28,6 @@ unseal Result
 set_option allowUnsafeReducibility true in
 attribute [local reducible] Result Result.ok Result.vis Result.div Aeneas.Std.bind
 
-/-! ## Local event specifications -/
-
-/-- A guarded modification is local when, for every disjoint frame, its guard
-holds and its output can be split into an owned result and the unchanged frame.
-Quantifying over frames here makes the denotation upward-closed and validates
-the frame rule for arbitrary guarded modifications.
-
-This is the raw form of the local specification `theta_ev` of an event, on
-plain heap predicates rather than assertions. -/
-def theta_evP {EventResult : Type} (pre : Heap → Prop)
-    (modify : (h : Heap) → pre h → EventResult × Heap)
-    (Q : EventResult → Heap → Prop) (h : Heap) : Prop :=
-  ∀ frame, PartialCommMonoid.Compatible h frame →
-    ∃ hPre : pre (h ∪ frame), ∃ h',
-      PartialCommMonoid.Compatible h' frame ∧
-      (modify (h ∪ frame) hPre).2 = h' ∪ frame ∧
-      Q (modify (h ∪ frame) hPre).1 h'
-
-theorem theta_evP_mono {EventResult : Type} {pre : Heap → Prop}
-    {modify : (h : Heap) → pre h → EventResult × Heap}
-    {Q Q' : EventResult → Heap → Prop}
-    (hQ : ∀ value h', Q value h' → Q' value h') {h : Heap}
-    (hWp : theta_evP pre modify Q h) : theta_evP pre modify Q' h := by
-  intro frame hDisjoint
-  obtain ⟨hPre, h', hDisjoint', hModify, hPost⟩ := hWp frame hDisjoint
-  exact ⟨hPre, h', hDisjoint', hModify, hQ _ h' hPost⟩
-
-theorem theta_evP_up_closed {EventResult : Type} {pre : Heap → Prop}
-    {modify : (h : Heap) → pre h → EventResult × Heap}
-    {Q : EventResult → Heap → Prop}
-    (hQ : ∀ value h h', Q value h → Heap.Sub h h' → Q value h')
-    {h hBig : Heap} (hWp : theta_evP pre modify Q h) (hSub : Heap.Sub h hBig) :
-    theta_evP pre modify Q hBig := by
-  obtain ⟨rest, hDisjointRest, rfl⟩ := hSub
-  intro frame hDisjointFrame
-  obtain ⟨hDisjointRestFrame, hDisjointCombined⟩ :=
-    (PartialCommMonoid.compatible_assoc h rest frame).mp
-      ⟨hDisjointRest, hDisjointFrame⟩
-  have hWp' := hWp (rest ∪ frame) hDisjointCombined
-  rw [← PartialCommMonoid.union_assoc hDisjointRest hDisjointFrame] at hWp'
-  obtain ⟨hPre, h', hDisjoint', hModify, hPost⟩ := hWp'
-  obtain ⟨hDisjoint'Rest, hDisjoint'Frame⟩ :=
-    (PartialCommMonoid.compatible_assoc h' rest frame).mpr
-      ⟨hDisjointRestFrame, hDisjoint'⟩
-  refine ⟨hPre, h' ∪ rest, hDisjoint'Frame, ?_, ?_⟩
-  · simpa only [PartialCommMonoid.union_assoc
-      hDisjoint'Rest hDisjoint'Frame] using hModify
-  · exact hQ _ h' _ hPost (Heap.Sub.union_left hDisjoint'Rest)
-
-/-- Running an event on exactly the heap it owns: the frame is empty, so the
-guard holds of that heap and the modification is what the postcondition sees. -/
-theorem theta_evP_elim {EventResult : Type} {pre : Heap → Prop}
-    {modify : (h : Heap) → pre h → EventResult × Heap}
-    {Q : EventResult → Heap → Prop} {h : Heap}
-    (hWp : theta_evP pre modify Q h) :
-    ∃ hPre : pre h, Q (modify h hPre).1 (modify h hPre).2 := by
-  have hWp' := hWp Heap.empty (PartialCommMonoid.compatible_comm
-    (PartialCommMonoid.compatible_empty_left h))
-  simp only [Heap.union_empty] at hWp'
-  obtain ⟨hPre, h', -, hModify, hPost⟩ := hWp'
-  subst h'
-  exact ⟨hPre, hPost⟩
-
-theorem theta_evP_frame {EventResult : Type} {pre : Heap → Prop}
-    {modify : (h : Heap) → pre h → EventResult × Heap}
-    {Q : EventResult → Heap → Prop} {H : IProp} {h₁ h₂ : Heap}
-    (hDisjoint : PartialCommMonoid.Compatible h₁ h₂)
-    (hWp : theta_evP pre modify Q h₁) (hH : H h₂) :
-    theta_evP pre modify
-      (fun value h' => ∃ u₁ u₂, PartialCommMonoid.Compatible u₁ u₂ ∧
-        h' = u₁ ∪ u₂ ∧ Q value u₁ ∧ H u₂) (h₁ ∪ h₂) := by
-  intro frame hDisjointFrame
-  obtain ⟨hDisjoint₂Frame, hDisjointCombined⟩ :=
-    (PartialCommMonoid.compatible_assoc h₁ h₂ frame).mp
-      ⟨hDisjoint, hDisjointFrame⟩
-  have hWp' := hWp (h₂ ∪ frame) hDisjointCombined
-  rw [← PartialCommMonoid.union_assoc hDisjoint hDisjointFrame] at hWp'
-  obtain ⟨hPre, h', hDisjoint', hModify, hPost⟩ := hWp'
-  obtain ⟨hDisjoint'H₂, hDisjoint'Frame⟩ :=
-    (PartialCommMonoid.compatible_assoc h' h₂ frame).mpr
-      ⟨hDisjoint₂Frame, hDisjoint'⟩
-  refine ⟨hPre, h' ∪ h₂, hDisjoint'Frame, ?_, ?_⟩
-  · simpa only [PartialCommMonoid.union_assoc
-      hDisjoint'H₂ hDisjoint'Frame] using hModify
-  · exact ⟨h', h₂, hDisjoint'H₂, rfl, hPost, hH⟩
-
-/-- The denotation of a single event into the weakest-precondition monad. -/
-def theta_ev {EventResult : Type} (pre : Heap → Prop)
-    (modify : (h : Heap) → pre h → EventResult × Heap) : Wp EventResult where
-  wp Q := {
-    holds := theta_evP pre modify fun value => (Q value).holds
-    up_closed := fun hWp hSub =>
-      theta_evP_up_closed
-        (fun value _ _ hQ hSub' => (Q value).up_closed hQ hSub') hWp hSub }
-  monotone hQ _ hWp := theta_evP_mono (fun value h' => hQ value h') hWp
-
-theorem theta_ev_elim {EventResult : Type} {pre : Heap → Prop}
-    {modify : (h : Heap) → pre h → EventResult × Heap}
-    {R : IPost EventResult} {h : Heap}
-    (hWp : theta_ev pre modify R h) :
-    ∃ hPre : pre h, R (modify h hPre).1 (modify h hPre).2 :=
-  theta_evP_elim (Q := fun value => (R value).holds) hWp
-
-theorem theta_ev_frame {EventResult : Type} (pre : Heap → Prop)
-    (modify : (h : Heap) → pre h → EventResult × Heap) (Q : IPost EventResult) (H : IProp) :
-    theta_ev pre modify Q ∗ H ⊢ theta_ev pre modify (Q ∗+ H) := by
-  rintro h ⟨h₁, h₂, hDisjoint, rfl, hWp, hH⟩
-  exact theta_evP_frame (Q := fun value => (Q value).holds) hDisjoint hWp hH
-
 /-! ## Total and partial correctness
 
 `Result` carries two correctness judgments, laid out here the way `Aeneas.Std.WP`
@@ -795,16 +686,109 @@ theorem triple_pure {P : IPre} {Q : IPost α} {value : α}
   intro F h hPre
   exact .ret (sep_mono hPost (entails_refl F) h hPre)
 
+/-- A guarded modification is local at `h` when, for every frame disjoint from
+`h`, its guard holds and its output splits into an owned result and the
+unchanged frame. Quantifying over frames here is what makes `guardedModifyWp`
+upward-closed and validates the frame rule, for an arbitrary guard and
+modification.
+
+This is the raw form, on plain heap predicates rather than assertions. -/
+def guardedModifyLocal {EventResult : Type} (pre : Heap → Prop)
+    (modify : (h : Heap) → pre h → EventResult × Heap)
+    (Q : EventResult → Heap → Prop) (h : Heap) : Prop :=
+  ∀ frame, PartialCommMonoid.Compatible h frame →
+    ∃ hPre : pre (h ∪ frame), ∃ h',
+      PartialCommMonoid.Compatible h' frame ∧
+      (modify (h ∪ frame) hPre).2 = h' ∪ frame ∧
+      Q (modify (h ∪ frame) hPre).1 h'
+
+theorem guardedModifyLocal.mono {EventResult : Type} {pre : Heap → Prop}
+    {modify : (h : Heap) → pre h → EventResult × Heap}
+    {Q Q' : EventResult → Heap → Prop}
+    (hQ : ∀ value h', Q value h' → Q' value h') {h : Heap}
+    (hWp : guardedModifyLocal pre modify Q h) : guardedModifyLocal pre modify Q' h := by
+  intro frame hDisjoint
+  obtain ⟨hPre, h', hDisjoint', hModify, hPost⟩ := hWp frame hDisjoint
+  exact ⟨hPre, h', hDisjoint', hModify, hQ _ h' hPost⟩
+
+theorem guardedModifyLocal.up_closed {EventResult : Type} {pre : Heap → Prop}
+    {modify : (h : Heap) → pre h → EventResult × Heap}
+    {Q : EventResult → Heap → Prop}
+    (hQ : ∀ value h h', Q value h → Heap.Sub h h' → Q value h')
+    {h hBig : Heap} (hWp : guardedModifyLocal pre modify Q h) (hSub : Heap.Sub h hBig) :
+    guardedModifyLocal pre modify Q hBig := by
+  obtain ⟨rest, hDisjointRest, rfl⟩ := hSub
+  intro frame hDisjointFrame
+  obtain ⟨hDisjointRestFrame, hDisjointCombined⟩ :=
+    (PartialCommMonoid.compatible_assoc h rest frame).mp
+      ⟨hDisjointRest, hDisjointFrame⟩
+  have hWp' := hWp (rest ∪ frame) hDisjointCombined
+  rw [← PartialCommMonoid.union_assoc hDisjointRest hDisjointFrame] at hWp'
+  obtain ⟨hPre, h', hDisjoint', hModify, hPost⟩ := hWp'
+  obtain ⟨hDisjoint'Rest, hDisjoint'Frame⟩ :=
+    (PartialCommMonoid.compatible_assoc h' rest frame).mpr
+      ⟨hDisjointRestFrame, hDisjoint'⟩
+  refine ⟨hPre, h' ∪ rest, hDisjoint'Frame, ?_, ?_⟩
+  · simpa only [PartialCommMonoid.union_assoc
+      hDisjoint'Rest hDisjoint'Frame] using hModify
+  · exact hQ _ h' _ hPost (Heap.Sub.union_left hDisjoint'Rest)
+
+/-- The weakest precondition of a guarded modification: the assertion holding of
+exactly the heaps at which the modification is local with respect to `Q`. -/
+def guardedModifyWp {EventResult : Type} (pre : Heap → Prop)
+    (modify : (h : Heap) → pre h → EventResult × Heap) : Wp EventResult where
+  wp Q := {
+    holds := guardedModifyLocal pre modify fun value => (Q value).holds
+    up_closed := fun hWp hSub =>
+      guardedModifyLocal.up_closed
+        (fun value _ _ hQ hSub' => (Q value).up_closed hQ hSub') hWp hSub }
+  monotone hQ _ hWp := guardedModifyLocal.mono (fun value h' => hQ value h') hWp
+
+/-- Running an event on exactly the heap it owns: the frame is empty, so the
+guard holds of that heap and the modification is what the postcondition sees. -/
+theorem guardedModifyWp_elim {EventResult : Type} {pre : Heap → Prop}
+    {modify : (h : Heap) → pre h → EventResult × Heap}
+    {R : IPost EventResult} {h : Heap}
+    (hWp : guardedModifyWp pre modify R h) :
+    ∃ hPre : pre h, R (modify h hPre).1 (modify h hPre).2 := by
+  have hWp' := hWp Heap.empty (PartialCommMonoid.compatible_comm
+    (PartialCommMonoid.compatible_empty_left h))
+  simp only [Heap.union_empty] at hWp'
+  obtain ⟨hPre, h', -, hModify, hPost⟩ := hWp'
+  subst h'
+  exact ⟨hPre, hPost⟩
+
+/-- The frame rule for one event: the frame a triple carries is absorbed into
+the frame the denotation already quantifies over. -/
+theorem guardedModifyWp_frame {EventResult : Type} (pre : Heap → Prop)
+    (modify : (h : Heap) → pre h → EventResult × Heap) (Q : IPost EventResult) (H : IProp) :
+    guardedModifyWp pre modify Q ∗ H ⊢ guardedModifyWp pre modify (Q ∗+ H) := by
+  rintro h ⟨h₁, h₂, hDisjoint, rfl, hWp, hH⟩
+  intro frame hDisjointFrame
+  obtain ⟨hDisjoint₂Frame, hDisjointCombined⟩ :=
+    (PartialCommMonoid.compatible_assoc h₁ h₂ frame).mp
+      ⟨hDisjoint, hDisjointFrame⟩
+  have hWp' := hWp (h₂ ∪ frame) hDisjointCombined
+  rw [← PartialCommMonoid.union_assoc hDisjoint hDisjointFrame] at hWp'
+  obtain ⟨hPre, h', hDisjoint', hModify, hPost⟩ := hWp'
+  obtain ⟨hDisjoint'H₂, hDisjoint'Frame⟩ :=
+    (PartialCommMonoid.compatible_assoc h' h₂ frame).mpr
+      ⟨hDisjoint₂Frame, hDisjoint'⟩
+  refine ⟨hPre, h' ∪ h₂, hDisjoint'Frame, ?_, ?_⟩
+  · simpa only [PartialCommMonoid.union_assoc
+      hDisjoint'H₂ hDisjoint'Frame] using hModify
+  · exact ⟨h', h₂, hDisjoint'H₂, rfl, hPost, hH⟩
+
 /-- The specification of a guarded modification is what its denotation says. -/
 theorem triple_guardedModify {α : Type} {pre : Heap → Prop}
     {modify : (h : Heap) → pre h → α × Heap} {P : IPre} {Q : IPost α}
-    (hWp : P ⊢ theta_ev pre modify Q) :
+    (hWp : P ⊢ guardedModifyWp pre modify Q) :
     triple P (Result.guardedModify pre modify) Q := by
   intro F h hPre
-  have hEvent : theta_ev pre modify (Q ∗+ F) h :=
-    theta_ev_frame pre modify Q F h
+  have hEvent : guardedModifyWp pre modify (Q ∗+ F) h :=
+    guardedModifyWp_frame pre modify Q F h
       (sep_mono hWp (entails_refl F) h hPre)
-  obtain ⟨hGuard, hPost⟩ := theta_ev_elim hEvent
+  obtain ⟨hGuard, hPost⟩ := guardedModifyWp_elim hEvent
   exact .vis hGuard (.ret hPost)
 
 theorem triple_bind {P : IPre} {Q₁ : IPost α}
@@ -892,12 +876,6 @@ does not stop, not even that it owns anything. -/
 theorem dtriple_div {P : IPre} {Q : IPost α} :
     dtriple P (ITree.div : Result α) Q :=
   fun _ _ _ => PartialSpec.div
-
-theorem dtriple_guardedModify {α : Type} {pre : Heap → Prop}
-    {modify : (h : Heap) → pre h → α × Heap} {P : IPre} {Q : IPost α}
-    (hWp : P ⊢ theta_ev pre modify Q) :
-    dtriple P (Result.guardedModify pre modify) Q :=
-  triple_dtriple (triple_guardedModify hWp)
 
 theorem dtriple_bind {P : IPre} {Q₁ : IPost α} {Q : IPost β} {m : Result α}
     {next : α → Result β} (hFirst : dtriple P m Q₁)
