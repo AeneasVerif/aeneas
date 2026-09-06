@@ -969,12 +969,70 @@ let join_ctxs_list (config : config) (span : Meta.span)
         in
         join_one_aux ctx
   in
+  (* Refresh, in the context [ctx1] we are about to join in, the regions which
+     are dead (ended) in [ctx1] but still live in the joined context [ctx0]
+     (i.e. owned by a live region abstraction there).
+
+     The two contexts may use the *same* region id for *different* purposes.
+     This typically happens in loop fixed points: a loop-carried value can be
+     overwritten in the loop body, so that a given region id designates a live,
+     loop-carried borrow in the entry context [ctx0] but a dead, overwritten
+     borrow (already ended by [simplify_dummy_values_useless_abs]) in the
+     "continue" context [ctx1]. If we joined the two contexts as is, the union
+     of the ended regions would mark that region as ended even though [ctx0]
+     still owns it through a live abstraction - breaking the invariant "a region
+     owned by a live abstraction is never ended" and later making the join
+     incorrectly treat symbolic values mentioning that region as bottom (see
+     {!InterpUtils.bottom_in_value}).
+
+     We fix this at the source by giving those dead regions of [ctx1] fresh
+     region ids, so that they no longer collide with the live regions of [ctx0].
+     After this refresh, the two contexts agree on the meaning of every region
+     id and the join can proceed normally. *)
+  let refresh_dead_regions_colliding_with_live (ctx0 : eval_ctx)
+      (ctx1 : eval_ctx) : eval_ctx =
+    (* Regions owned by a live abstraction in [ctx0] *)
+    let ctx0_live_regions =
+      List.fold_left
+        (fun acc (ee : env_elem) ->
+          match ee with
+          | EAbs abs -> RegionId.Set.union acc abs.regions.owned
+          | _ -> acc)
+        RegionId.Set.empty ctx0.env
+    in
+    (* Regions dead in [ctx1] but live in [ctx0] *)
+    let colliding = RegionId.Set.inter ctx1.ended_regions ctx0_live_regions in
+    if RegionId.Set.is_empty colliding then ctx1
+    else begin
+      (* Map each colliding region to a fresh region id *)
+      let rmap =
+        RegionId.Set.fold
+          (fun rid acc -> RegionId.Map.add rid (ctx1.fresh_region_id ()) acc)
+          colliding RegionId.Map.empty
+      in
+      let r_subst rid =
+        match RegionId.Map.find_opt rid rmap with
+        | Some nrid -> nrid
+        | None -> rid
+      in
+      [%ltrace
+        "refresh_dead_regions_colliding_with_live: refreshing regions "
+        ^ RegionId.Set.to_string None colliding];
+      let env = Substitute.env_subst_rids r_subst ctx1.env in
+      let ended_regions = RegionId.Set.map r_subst ctx1.ended_regions in
+      { ctx1 with env; ended_regions }
+    end
+  in
   let join_one (ctx : eval_ctx) : eval_ctx =
     [%ltrace
       "join_one: initial ctx:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
 
     (* Simplify the dummy values *)
     let ctx = preprocess_ctx ctx in
+
+    (* Refresh the dead regions of [ctx] which collide with live regions of the
+       joined context, before joining *)
+    let ctx = refresh_dead_regions_colliding_with_live !joined_ctx ctx in
 
     (* Join the two contexts  *)
     let ctx1 = join_one_aux ctx in
@@ -1308,7 +1366,10 @@ let destructure_shared_loans (span : Meta.span) (fixed_aids : AbsId.Set.t) :
                 (* Shouldn't find ended borrows in live abstractions *)
                 [%internal_error] span
             | AEndedIgnoredMutBorrow _ -> (bc, [])
-            | AProjSharedBorrow _ -> [%craise] span "Not implemented"
+            | AProjSharedBorrow _ ->
+                (* Projected shared reborrows (nested borrows below a shared
+                   borrow) are frozen: keep them as they are. *)
+                (bc, [])
           in
           (ABorrow bc, avl)
       | ASymbolic _ | AIgnored _ -> (av.value, [])
