@@ -110,7 +110,7 @@ theorem dtriple_pre_of_reaches {P : IPre} {m : Result α} {Q : IPost α}
 /-- What running `m` from `h` produces: the returned value and final heap,
 together with the postcondition they satisfy and the evaluation that reaches
 them. -/
-def Outcome (m : Result α) (Q : IPost α) (h : Heap) : Type 1 :=
+def Outcome {α : Type u} (m : Result α) (Q : IPost α) (h : Heap) : Type (max u 1) :=
   { outcome : α × Heap //
       Q outcome.1 outcome.2 ∧ Evaluates m h outcome.1 outcome.2 }
 

@@ -24,6 +24,8 @@ The predicate transformers built on these assertions are in
 
 namespace Aeneas.SepLogic
 
+universe u
+
 open Aeneas.Std (Heap Ref)
 
 open Aeneas.Std (Heap Ref)
@@ -50,7 +52,7 @@ theorem IProp.ext {H₁ H₂ : IProp} (hIff : ∀ h, H₁ h ↔ H₂ h) : H₁ =
 abbrev IPre := IProp
 
 /- Postconditions describe both a returned value and a heap fragment. -/
-abbrev IPost (α : Type) := α → IProp
+abbrev IPost (α : Type u) := α → IProp
 
 def Entails (H₁ H₂ : IProp) : Prop :=
   ∀ h, H₁ h → H₂ h
@@ -107,11 +109,11 @@ def iexists {α : Sort _} (J : α → IProp) : IProp where
   holds h := ∃ x, J x h
   up_closed := fun ⟨x, hJ⟩ hExtend => ⟨x, (J x).up_closed hJ hExtend⟩
 
-def postSep {α : Type} (Q : IPost α) (H : IProp) :
+def postSep {α : Type u} (Q : IPost α) (H : IProp) :
     IPost α :=
   fun value => sep (Q value) H
 
-def postEntails {α : Type} (Q₁ Q₂ : IPost α) : Prop :=
+def postEntails {α : Type u} (Q₁ Q₂ : IPost α) : Prop :=
   ∀ value, Entails (Q₁ value) (Q₂ value)
 
 syntax:max "iprop(" term ")" : term
@@ -410,7 +412,7 @@ def wand (H₁ H₂ : IProp) : IProp where
 
 /-- The magic wand between postconditions. Note that it is a heap predicate,
 not a postcondition. -/
-def postWand {α : Type} (Q₁ Q₂ : IPost α) : IProp :=
+def postWand {α : Type u} (Q₁ Q₂ : IPost α) : IProp :=
   iforall fun value => wand (Q₁ value) (Q₂ value)
 
 @[inherit_doc wand] infixr:25 " -∗ " => wand
@@ -460,7 +462,7 @@ theorem wand_mono {H₁ H₁' H₂ H₂' : IProp} (h₁ : H₁' ⊢ H₁) (h₂ 
     (entails_trans (wand_cancel H₁ H₂) h₂))
 
 /-- The postcondition wand is right adjoint to postcondition separation. -/
-theorem postWand_equiv {α : Type} (H : IProp) (Q₁ Q₂ : IPost α) :
+theorem postWand_equiv {α : Type u} (H : IProp) (Q₁ Q₂ : IPost α) :
     (H ⊢ Q₁ -∗+ Q₂) ↔ (Q₁ ∗+ H ⊢+ Q₂) := by
   constructor
   · intro h value
@@ -472,21 +474,21 @@ theorem postWand_equiv {α : Type} (H : IProp) (Q₁ Q₂ : IPost α) :
       wand_intro (h value)
 
 /-- Introduction rule for a postcondition wand. -/
-theorem postWand_intro {α : Type} {H : IProp} {Q₁ Q₂ : IPost α}
+theorem postWand_intro {α : Type u} {H : IProp} {Q₁ Q₂ : IPost α}
     (h : Q₁ ∗+ H ⊢+ Q₂) : H ⊢ Q₁ -∗+ Q₂ :=
   (postWand_equiv H Q₁ Q₂).mpr h
 
 /-- Elimination rule for a postcondition wand. -/
-theorem postWand_cancel {α : Type} (Q₁ Q₂ : IPost α) :
+theorem postWand_cancel {α : Type u} (Q₁ Q₂ : IPost α) :
     Q₁ ∗+ (Q₁ -∗+ Q₂) ⊢+ Q₂ :=
   (postWand_equiv (Q₁ -∗+ Q₂) Q₁ Q₂).mp (entails_refl _)
 
 /-- A postcondition wand yields a heap wand at every value. -/
-theorem postWand_specialize {α : Type} {Q₁ Q₂ : IPost α} (value : α) :
+theorem postWand_specialize {α : Type u} {Q₁ Q₂ : IPost α} (value : α) :
     (Q₁ -∗+ Q₂) ⊢ (Q₁ value -∗ Q₂ value) :=
   forall_specialize value
 
-theorem entails_postWand_pure_eq {α : Type} (H : IProp) (value : α) (Q : IPost α) :
+theorem entails_postWand_pure_eq {α : Type u} (H : IProp) (value : α) (Q : IPost α) :
     (H ⊢ (fun result => ⌜result = value⌝) -∗+ Q) ↔ (H ⊢ Q value) := by
   rw [postWand_equiv]
   constructor
