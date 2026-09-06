@@ -213,6 +213,37 @@ theorem uncurry_eq_prop {α β} (x : α × β) (p : α → β → Prop) :
 theorem uncurry_eq_prop_arrow {α β σ} (x : α × β) (p : α → β → σ → Prop) :
     uncurry p x = p x.fst x.snd := by cases x; rfl
 
+/- Associativity lemmas for binds whose continuation destructures a tuple.
+
+A tuple-destructuring `let (a, b) ← e` is elaborated as `Bind.bind e (uncurry f)`.
+The generic `bind_assoc_eq` rewrites `(e >>= uncurry f) >>= h` to
+`e >>= fun x => (uncurry f x) >>= h`, introducing an intermediate variable `x` to
+which `uncurry f` is applied. Since `x` is not a literal pair, `uncurry_apply_pair`
+cannot fire, leaving the ugly `let (a, b) := x; …` form. The two lemmas below
+normalize tuple binds *without* introducing that intermediate variable: they keep
+the destructuring on the bind, yielding the expected `let (a, b) ← e; …` form (see
+issue #1148). They handle arbitrarily nested tuples by threading the continuation
+through each `uncurry` layer. -/
+
+/-- Associativity for a tuple-destructuring bind: thread the continuation `h` into
+the body of the `uncurry`, keeping the destructuring on the outer bind. -/
+theorem bind_assoc_uncurry {α β γ δ : Type u}
+    (e : Result (α × β)) (f : α → β → Result γ) (h : γ → Result δ) :
+    (Bind.bind (Bind.bind e (uncurry f)) h) =
+    (Bind.bind e (uncurry (fun a b => Bind.bind (f a b) h))) := by
+  cases e with
+  | ok v => cases v with | mk a b => rfl
+  | fail _ => rfl
+  | div => rfl
+
+/-- Push a bind through an `uncurry` *application*. After `bind_assoc_uncurry`
+exposes nested tuple layers as `Bind.bind (uncurry f x) h`, this lemma threads `h`
+into the body, normalizing nested tuple destructurings. -/
+theorem bind_uncurry_app {α β γ δ : Type u}
+    (f : α → β → Result γ) (x : α × β) (h : γ → Result δ) :
+    (Bind.bind (uncurry f x) h) = uncurry (fun a b => Bind.bind (f a b) h) x := by
+  cases x with | mk a b => rfl
+
 /- Allow `partial_fixpoint` to see through `uncurry` in bind continuations.
 This is needed because the custom `do` elaborator generates
 `e >>= uncurry fun a b => rest` for tuple-destructuring `let (a, b) ← e`. -/
