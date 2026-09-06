@@ -1,3 +1,4 @@
+import Aeneas.Std.Delab
 import Aeneas.Data.Coinductive.Spec
 import Aeneas.Std.Primitives
 import Aeneas.SepLogic
@@ -9,7 +10,9 @@ import Aeneas.Tactic.Step.StepStar
 
 `Aeneas.Std.Primitives` defines `Result`, the interaction-tree monad over heap
 events. This file builds its correctness judgments, derives the
-separation-logic triples, and wires those triples to the `step`/`step*` tactics.
+separation-logic triples, wires those triples to the `step`/`step*` tactics,
+and declares the `⦃ value => p ⦄` notation for pure computations — which is
+notation for the triple that owns nothing, not a judgment of its own.
 
 The judgments themselves are not defined here. The meaning of a heap event is
 written down once, as the handler `EventSpec` of the state machine
@@ -26,7 +29,7 @@ open Aeneas.Data
 open Aeneas.Data.Coinductive
 open Aeneas.Std (Error Heap Result RustEffect)
 
-universe u
+universe u v
 
 section ResultImplementation
 
@@ -212,10 +215,13 @@ claim that the computation terminates. -/
 def dtriple (P : IPre) (m : Result α) (Q : IPost α) : Prop :=
   ∀ F h, (P ∗ F) h → dspec m (Q ∗+ F) h
 
+/- The `⇓` is inside `atomic` so that the parser backtracks when it is absent:
+`(m) ⦃ value => p ⦄`, the pure-computation notation of `Aeneas.SepLogic.WP`,
+starts with exactly the same tokens and must stay parseable. -/
 syntax:lead (name := specSyntax)
-  "(" term:lead ")" " ⦃" "⇓ " Lean.Parser.Term.funBinder " => " term " ⦄" : term
+  atomic("(" term:lead ")" " ⦃" "⇓ ") Lean.Parser.Term.funBinder " => " term " ⦄" : term
 syntax:lead (name := specSyntaxPred)
-  "(" term:lead ")" " ⦃" "⇓ " term " ⦄" : term
+  atomic("(" term:lead ")" " ⦃" "⇓ ") term " ⦄" : term
 syntax:lead (name := slSpecSyntax)
   " ⦃" term " ⦄" term:lead
   " ⦃" "⇓ " Lean.Parser.Term.funBinder " => " term " ⦄" : term
@@ -233,9 +239,9 @@ macro_rules
       `(triple iprop($P) $m (fun _ => iprop($Q)))
 
 syntax:lead (name := dspecSyntax)
-  "(" term:lead ")" " ⦃" "⇓ " Lean.Parser.Term.funBinder " => " term " ⦄div" : term
+  atomic("(" term:lead ")" " ⦃" "⇓ ") Lean.Parser.Term.funBinder " => " term " ⦄div" : term
 syntax:lead (name := dspecSyntaxPred)
-  "(" term:lead ")" " ⦃" "⇓ " term " ⦄div" : term
+  atomic("(" term:lead ")" " ⦃" "⇓ ") term " ⦄div" : term
 syntax:lead (name := slDspecSyntax)
   " ⦃" term " ⦄" term:lead
   " ⦃" "⇓ " Lean.Parser.Term.funBinder " => " term " ⦄div" : term
@@ -263,7 +269,7 @@ theorem dtriple_iff (P : IPre) (m : Result α) (Q : IPost α) :
 /-- Every total triple is a partial one.  `step` applies the `@[step]`
 specifications — which state total correctness — to a partial goal through this
 lifting, through the generic `TotalSpec.toPartial`. -/
-theorem triple_dtriple {α : Type} {P : IPre} {m : Result α} {Q : IPost α}
+theorem triple_dtriple {α : Type u} {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : triple P m Q) : dtriple P m Q :=
   fun F h hPre => (hTriple F h hPre).toPartial
 
@@ -479,7 +485,7 @@ theorem triple_guardedModify {α : Type} {pre : Heap → Prop}
     (guardedModifyWp_frame pre modify Q F h
       (sep_mono hWp (entails_refl F) h hPre))
 
-theorem triple_bind {P : IPre} {Q₁ : IPost α}
+theorem triple_bind {α β : Type u} {P : IPre} {Q₁ : IPost α}
     {Q : IPost β} {m : Result α} {next : α → Result β}
     (hFirst : triple P m Q₁)
     (hNext : ∀ value, triple (Q₁ value) (next value) Q) :
@@ -489,7 +495,24 @@ theorem triple_bind {P : IPre} {Q₁ : IPost α}
   intro value h' hPost
   exact hNext value F h' hPost
 
-theorem triple_seq {P H : IPre} {Q : IPost β}
+/-- `triple_bind` on `Aeneas.Std.bind` rather than on `>>=`.
+
+The `Bind` class puts the two value types in the *same* universe, which a call
+in a translated Rust program need not: a function returning a `Type u` may be
+followed by a continuation returning a `Type v`.  `Aeneas.Std.bind` is the
+two-universe bind `Result` is really given, so the rule `step` uses is this one.
+-/
+theorem triple_bind' {α : Type u} {β : Type v} {P : IPre} {Q₁ : IPost α}
+    {Q : IPost β} {m : Result α} {next : α → Result β}
+    (hFirst : triple P m Q₁)
+    (hNext : ∀ value, triple (Q₁ value) (next value) Q) :
+    triple P (Aeneas.Std.bind m next) Q := by
+  intro F h hPre
+  apply (hFirst F h hPre).bind
+  intro value h' hPost
+  exact hNext value F h' hPost
+
+theorem triple_seq {α β : Type u} {P H : IPre} {Q : IPost β}
     {m₁ : Result α} {m₂ : Result β}
     (hFirst : triple P m₁ (fun _ => H))
     (hSecond : triple H m₂ Q) :
@@ -565,7 +588,7 @@ theorem dtriple_div {P : IPre} {Q : IPost α} :
     dtriple P (ITree.div : Result α) Q :=
   fun _ _ _ => PartialSpec.div
 
-theorem dtriple_bind {P : IPre} {Q₁ : IPost α} {Q : IPost β} {m : Result α}
+theorem dtriple_bind {α β : Type u} {P : IPre} {Q₁ : IPost α} {Q : IPost β} {m : Result α}
     {next : α → Result β} (hFirst : dtriple P m Q₁)
     (hNext : ∀ value, dtriple (Q₁ value) (next value) Q) :
     dtriple P (m >>= next) Q := by
@@ -574,7 +597,18 @@ theorem dtriple_bind {P : IPre} {Q₁ : IPost α} {Q : IPost β} {m : Result α}
   intro value h' hPost
   exact hNext value F h' hPost
 
-theorem dtriple_seq {P H : IPre} {Q : IPost β} {m₁ : Result α} {m₂ : Result β}
+/-- `dtriple_bind` on `Aeneas.Std.bind`, the two-universe bind.  See
+`triple_bind'`. -/
+theorem dtriple_bind' {α : Type u} {β : Type v} {P : IPre} {Q₁ : IPost α}
+    {Q : IPost β} {m : Result α} {next : α → Result β} (hFirst : dtriple P m Q₁)
+    (hNext : ∀ value, dtriple (Q₁ value) (next value) Q) :
+    dtriple P (Aeneas.Std.bind m next) Q := by
+  intro F h hPre
+  apply (hFirst F h hPre).bind
+  intro value h' hPost
+  exact hNext value F h' hPost
+
+theorem dtriple_seq {α β : Type u} {P H : IPre} {Q : IPost β} {m₁ : Result α} {m₂ : Result β}
     (hFirst : dtriple P m₁ (fun _ => H)) (hSecond : dtriple H m₂ Q) :
     dtriple P (m₁ >>= fun _ => m₂) Q :=
   dtriple_bind hFirst (fun _ => hSecond)
@@ -583,14 +617,14 @@ theorem dtriple_seq {P H : IPre} {Q : IPost β} {m₁ : Result α} {m₂ : Resul
 
 /-- The ramified frame rule. The wand's conclusion is affine, so `Q` alone is
 enough to permit leftover resources to be discarded. -/
-theorem triple_ramified_frame {α : Type} {P Pm : IPre} {Q Qm : IPost α}
+theorem triple_ramified_frame {α : Type u} {P Pm : IPre} {Q Qm : IPost α}
     {m : Result α} (hStep : triple Pm m Qm)
     (hPre : P ⊢ Pm ∗ (Qm -∗+ Q)) :
     triple P m Q :=
   triple_conseq_frame hStep hPre (postWand_cancel Qm Q)
 
 /-- The ramified frame rule for a call followed by a continuation. -/
-theorem triple_ramified_bind {α β : Type} {P Pm F : IPre} {Qm : IPost α}
+theorem triple_ramified_bind {α β : Type u} {P Pm F : IPre} {Qm : IPost α}
     {next : α → Result β} {Q : IPost β} {m : Result α}
     (hStep : triple Pm m Qm) (hPre : P ⊢ Pm ∗ F)
     (hNext : ∀ value, triple (Qm value ∗ F) (next value) Q) :
@@ -598,25 +632,45 @@ theorem triple_ramified_bind {α β : Type} {P Pm F : IPre} {Qm : IPost α}
   triple_bind (triple_conseq (triple_frame hStep F) hPre (fun _ => entails_refl _))
     hNext
 
+/-- The ramified frame rule for a call followed by a continuation, on the
+two-universe `Aeneas.Std.bind`.  See `triple_bind'`. -/
+theorem triple_ramified_bind' {α : Type u} {β : Type v} {P Pm F : IPre}
+    {Qm : IPost α} {next : α → Result β} {Q : IPost β} {m : Result α}
+    (hStep : triple Pm m Qm) (hPre : P ⊢ Pm ∗ F)
+    (hNext : ∀ value, triple (Qm value ∗ F) (next value) Q) :
+    triple P (Aeneas.Std.bind m next) Q :=
+  triple_bind' (triple_conseq (triple_frame hStep F) hPre (fun _ => entails_refl _))
+    hNext
+
 /-- Rewrite part of a triple's precondition using an entailment. -/
-theorem triple_rewrite {α : Type} {H₁ H₂ H₃ : IPre} {Q : IPost α} {m : Result α}
+theorem triple_rewrite {α : Type u} {H₁ H₂ H₃ : IPre} {Q : IPost α} {m : Result α}
     (hPart : H₁ ⊢ H₂) (hRest : triple (H₂ ∗ H₃) m Q) : triple (H₁ ∗ H₃) m Q :=
   triple_conseq hRest (sep_mono hPart (entails_refl H₃)) (fun _ => entails_refl _)
 
-theorem dtriple_ramified_frame {α : Type} {P Pm : IPre} {Q Qm : IPost α}
+theorem dtriple_ramified_frame {α : Type u} {P Pm : IPre} {Q Qm : IPost α}
     {m : Result α} (hStep : dtriple Pm m Qm) (hPre : P ⊢ Pm ∗ (Qm -∗+ Q)) :
     dtriple P m Q :=
   dtriple_conseq_frame hStep hPre (postWand_cancel Qm Q)
 
-theorem dtriple_ramified_bind {α β : Type} {P Pm F : IPre} {Qm : IPost α}
+theorem dtriple_ramified_bind {α β : Type u} {P Pm F : IPre} {Qm : IPost α}
     {next : α → Result β} {Q : IPost β} {m : Result α} (hStep : dtriple Pm m Qm)
     (hPre : P ⊢ Pm ∗ F) (hNext : ∀ value, dtriple (Qm value ∗ F) (next value) Q) :
     dtriple P (m >>= next) Q :=
   dtriple_bind
     (dtriple_conseq (dtriple_frame hStep F) hPre (fun _ => entails_refl _)) hNext
 
+/-- The ramified bind rule on the two-universe `Aeneas.Std.bind`, for a partial
+goal.  See `triple_bind'`. -/
+theorem dtriple_ramified_bind' {α : Type u} {β : Type v} {P Pm F : IPre}
+    {Qm : IPost α} {next : α → Result β} {Q : IPost β} {m : Result α}
+    (hStep : dtriple Pm m Qm) (hPre : P ⊢ Pm ∗ F)
+    (hNext : ∀ value, dtriple (Qm value ∗ F) (next value) Q) :
+    dtriple P (Aeneas.Std.bind m next) Q :=
+  dtriple_bind'
+    (dtriple_conseq (dtriple_frame hStep F) hPre (fun _ => entails_refl _)) hNext
+
 /-- Rewrite part of a partial triple's precondition using an entailment. -/
-theorem dtriple_rewrite {α : Type} {H₁ H₂ H₃ : IPre} {Q : IPost α} {m : Result α}
+theorem dtriple_rewrite {α : Type u} {H₁ H₂ H₃ : IPre} {Q : IPost α} {m : Result α}
     (hPart : H₁ ⊢ H₂) (hRest : dtriple (H₂ ∗ H₃) m Q) : dtriple (H₁ ∗ H₃) m Q :=
   dtriple_conseq hRest (sep_mono hPart (entails_refl H₃)) (fun _ => entails_refl _)
 
@@ -630,14 +684,14 @@ proves the loop, with no measure and no termination argument. A recursion in
 
 /-- A partial triple is admissible in the program, so it may be proved of a
 `partial_fixpoint` by `Lean.Order.fix_induct`. -/
-theorem dtriple_admissible {α : Type} (P : IPre) (Q : IPost α) :
+theorem dtriple_admissible {α : Type u} (P : IPre) (Q : IPost α) :
     Lean.Order.admissible (fun m : Result α => dtriple P m Q) := by
   intro c hc hAll F h hPre
   exact dspec_admissible (Q ∗+ F) h c hc fun x hx => hAll x hx F h hPre
 
 /-- The same for a family of triples about a recursive *function*, which is the
 shape `fixpoint_induct` expects. -/
-theorem dtriple_admissible_pi {ι α : Type} (P : ι → IPre) (Q : ι → IPost α) :
+theorem dtriple_admissible_pi {ι : Type v} {α : Type u} (P : ι → IPre) (Q : ι → IPost α) :
     Lean.Order.admissible
       (fun f : ι → Result α => ∀ x, dtriple (P x) (f x) (Q x)) :=
   Lean.Order.admissible_pi_apply (fun x m => dtriple (P x) m (Q x))
@@ -646,47 +700,176 @@ theorem dtriple_admissible_pi {ι α : Type} (P : ι → IPre) (Q : ι → IPost
 /-- And the same for a specification that quantifies over parameters of its own
 — a ghost value, an old contents — which is the shape `fixpoint_induct` takes
 when the argument of the recursion does not change. -/
-theorem dtriple_admissible_forall {ι α : Type} (P : ι → IPre) (Q : ι → IPost α) :
+theorem dtriple_admissible_forall {ι : Type v} {α : Type u} (P : ι → IPre) (Q : ι → IPost α) :
     Lean.Order.admissible (fun m : Result α => ∀ x, dtriple (P x) m (Q x)) :=
   Lean.Order.admissible_pi _ fun x => dtriple_admissible (P x) (Q x)
+
+
+/-! ### Bridging lemmas for the pure judgments
+
+`Aeneas.SepLogic.WP` states the pure judgments below, *outside* this section.
+It has to be outside: `Result.ok` and `Result.div` are `[local reducible]` here,
+so a `@[simp]` lemma stated in this section would be indexed under `ITree.ret`
+rather than under `Result.ok`, and would never fire at a call site.  These are
+the three facts whose proofs do need that reducibility, exported so that the
+pure lemmas can be stated where they are indexed correctly. -/
+
+theorem triple_ok_apply {α : Type u} {Q : IPost α} {x : α}
+    (hTriple : triple emp (Result.ok x) Q) : Q x ∅ :=
+  (triple_apply hTriple (h := ∅) trivial).ret_post
+
+theorem triple_ok_intro {α : Type u} {Q : IPost α} {x : α} (hQ : ∀ h, Q x h) :
+    triple emp (Result.ok x) Q :=
+  triple_pure fun h _ => hQ h
+
+theorem dtriple_ok_apply {α : Type u} {Q : IPost α} {x : α}
+    (hTriple : dtriple emp (Result.ok x) Q) : Q x ∅ :=
+  (dtriple_apply hTriple (h := ∅) trivial).ret_post
+
+theorem dtriple_ok_intro {α : Type u} {Q : IPost α} {x : α} (hQ : ∀ h, Q x h) :
+    dtriple emp (Result.ok x) Q :=
+  dtriple_pure fun h _ => hQ h
+
+theorem triple_div_elim {α : Type u} {Q : IPost α}
+    (hTriple : triple emp (Result.div : Result α) Q) : False :=
+  (triple_apply hTriple (h := ∅) trivial).div_false
+
+theorem dtriple_div_intro {α : Type u} {P : IPre} {Q : IPost α} :
+    dtriple P (Result.div : Result α) Q :=
+  dtriple_div
+
+/-! ### What a pure specification does not determine
+
+`Aeneas.Std.WP.spec m p` is *equivalent* to `∃ value, m = .ok value ∧ p value`,
+because the machine it is taken at answers no event at all.  The triple at `emp`
+is weaker, and has to be: `emp` owns nothing, but an event that *needs* nothing
+is still permitted, and such an event returns no value.
+
+The equivalence comes back as soon as the program is known to perform no heap
+event — which is exactly what a translated *pure* Rust function is.  Failure is
+not a heap event and is ruled out by the triple itself, so it is allowed here. -/
+
+/-- `m` performs no heap event.  Failure is not excluded: it is an event the
+machine cannot answer, so a triple rules it out by itself. -/
+def HeapFree {α : Type} (m : Result α) : Prop :=
+  ∀ (EventResult : Type) (pre : Heap → Prop) modify k,
+    m ≠ Result.vis (.guardedModify EventResult pre modify) k
+
+/-- A return performs no heap event. -/
+theorem HeapFree.ok {α : Type} (value : α) : HeapFree (Result.ok value) := by
+  intro _ _ _ _ hEq
+  simp [Result.ok, Result.vis] at hEq
+
+/-- Neither does a failure: failure is the event the machine cannot answer, and
+a triple rules it out on its own. -/
+theorem HeapFree.fail {α : Type} (error : Error) :
+    HeapFree (Result.fail error : Result α) := by
+  intro _ _ _ _ hEq
+  exact absurd (Aeneas.Data.Coinductive.vis_inj_effect hEq) (by simp)
+
+/-- Nor does divergence. -/
+theorem HeapFree.div {α : Type} : HeapFree (Result.div : Result α) := by
+  intro _ _ _ _ hEq
+  simp [Result.div, Result.vis] at hEq
+
+/-- The counterpart of `Aeneas.Std.WP.spec_imp_exists`: a total triple owning
+nothing determines an event-free program, and hands its postcondition back at
+the empty heap. -/
+theorem triple_emp_eq_ok {α : Type} {m : Result α} {Q : IPost α}
+    (hHeapFree : HeapFree m) (hTriple : triple emp m Q) :
+    ∃ value, m = Result.ok value ∧ Q value ∅ := by
+  have hSpec := triple_apply hTriple (h := ∅) trivial
+  cases m with
+  | ret value => exact ⟨value, rfl, hSpec.ret_post⟩
+  | vis event k =>
+      cases event with
+      | guardedModify EventResult pre modify => exact absurd rfl (hHeapFree _ _ _ k)
+      | fail error => exact hSpec.vis_view.elim
+  | div => exact hSpec.div_false.elim
 
 /-! ## Wiring of `step` to separation-logic triples
 
 Both judgments are registered, back to back, and `dtriple` declares `triple` as
 a lifting so that the `@[step]` specifications — which state total correctness —
-apply to a partial goal as they stand, exactly as `Aeneas.Std.WP.dspec`
-registers `Std.WP.spec_dspec`. -/
+apply to a partial goal as they stand.
+
+These two entries are the *only* ones this file registers: the pure-computation
+notation below is notation for these judgments, so `step` needs nothing extra
+for it, and a pure specification needs no lifting to be used on a heap goal. -/
 
 end ResultImplementation
+
+/-! ## Pure computations
+
+A great many Rust functions touch no heap at all: a scalar addition, an
+arithmetic overflow check, a lookup in a `Vec` whose contents are carried by the
+value rather than by the heap.  Their specifications want to say only what the
+call *returns*, on a postcondition `α → Prop`, with no assertion, no frame and
+no points-to in sight.
+
+That is not a second program logic, and — unlike `Aeneas.Std.WP.spec` — it is
+not a second *judgment* either.  It is **notation**:
+
+```
+m ⦃ value => p value ⦄     is     triple  emp m (fun value => ⌜p value⌝)
+m ⦃ value => p value ⦄div  is     dtriple emp m (fun value => ⌜p value⌝)
+```
+
+There is no `spec` constant to unfold, no bridging lemma to apply, and nothing
+to register with `step` a second time.  A pure specification *is* a triple, so:
+
+* everything the triples prove applies to it — the bind rule of a pure
+  specification is `triple_bind`, its rule of consequence is `triple_conseq`,
+  and its admissibility is `dtriple_admissible`;
+* `step` uses a pure specification inside a proof about a heap-manipulating
+  program by its ordinary framing, with no lifting registered and none needed;
+* conversely a function whose *implementation* allocates, mutates and frees may
+  be given a *pure* specification, because owning nothing is a claim about the
+  specification and not about the implementation.  Under a separate pure
+  judgment that statement is not merely unprovable but false, since such a
+  judgment is taken at a machine that answers no event;
+* a higher-order combinator states its callee's contract once, as a
+  precondition/postcondition pair, instead of once per judgment, and the pure
+  case is that contract at `emp`.
+
+The syntax is declared at the end of this file, after the triples are wired to
+`step`.  What it costs is `triple_emp_eq_ok` above: a pure-shaped triple no
+longer determines the program on its own.  `Aeneas.SLPoC.Tests.PureSpec`
+exercises all of this. -/
 
 open Lean Elab Meta Tactic
 
 /-- Bind rule used by `step`. It infers a spatial frame and leaves the callee's
-postcondition, framed, as the precondition of the continuation. -/
-theorem triple_step_bind {α β : Type} {P Pm F : IPre}
+postcondition, framed, as the precondition of the continuation.
+
+It is stated on `Aeneas.Std.bind` rather than on `>>=`: the `Bind` class forces
+the two value types into one universe, and a call in a translated program need
+not respect that. -/
+theorem triple_step_bind {α : Type u} {β : Type v} {P Pm F : IPre}
     {next : α → Result β} {Q : IPost β}
     (m : Result α) (Qm : IPost α) (hStep : triple Pm m Qm)
     (hPre : P ⊢ Pm ∗ F)
     (hNext : ∀ value, triple (Qm value ∗ F) (next value) Q) :
-    triple P (m >>= next) Q :=
-  triple_ramified_bind hStep hPre hNext
+    triple P (Aeneas.Std.bind m next) Q :=
+  triple_ramified_bind' hStep hPre hNext
 
 /-- Rule used by `step` for a terminal monadic call. -/
-theorem triple_step_mono {α : Type} {P Pm : IPre} {Q : IPost α}
+theorem triple_step_mono {α : Type u} {P Pm : IPre} {Q : IPost α}
     (m : Result α) (Qm : IPost α) (hStep : triple Pm m Qm)
     (hRamified : P ⊢ Pm ∗ (Qm -∗+ Q)) :
     triple P m Q :=
   triple_ramified_frame hStep hRamified
 
-/-- Bind rule used by `step` on a partial goal. -/
-theorem dtriple_step_bind {α β : Type} {P Pm F : IPre} {next : α → Result β}
+/-- Bind rule used by `step` on a partial goal.  See `triple_step_bind`. -/
+theorem dtriple_step_bind {α : Type u} {β : Type v} {P Pm F : IPre}
+    {next : α → Result β}
     {Q : IPost β} (m : Result α) (Qm : IPost α) (hStep : dtriple Pm m Qm)
     (hPre : P ⊢ Pm ∗ F) (hNext : ∀ value, dtriple (Qm value ∗ F) (next value) Q) :
-    dtriple P (m >>= next) Q :=
-  dtriple_ramified_bind hStep hPre hNext
+    dtriple P (Aeneas.Std.bind m next) Q :=
+  dtriple_ramified_bind' hStep hPre hNext
 
 /-- Rule used by `step` for a terminal monadic call on a partial goal. -/
-theorem dtriple_step_mono {α : Type} {P Pm : IPre} {Q : IPost α} (m : Result α)
+theorem dtriple_step_mono {α : Type u} {P Pm : IPre} {Q : IPost α} (m : Result α)
     (Qm : IPost α) (hStep : dtriple Pm m Qm) (hRamified : P ⊢ Pm ∗ (Qm -∗+ Q)) :
     dtriple P m Q :=
   dtriple_ramified_frame hStep hRamified
@@ -795,5 +978,127 @@ theorem ret.spec (value : α) :
 theorem pure.spec (value : α) :
     ⦃ emp ⦄ (Pure.pure value : Result α) ⦃⇓ result => ⌜result = value⌝⦄ :=
   ret.spec value
+
+/-!
+# Hoare triple notation for pure computations
+
+`⦃ ⦄` writes a pure specification the way a Rust programmer reads a return
+value: `f x ⦃ y => y > 0 ⦄` is the triple that owns nothing,
+`triple emp (f x) (fun y => ⌜y > 0⌝)`, and several binders destructure a
+returned tuple, so `f x ⦃ y z => ... ⦄` names the two components of a pair
+without a pattern match of its own.
+
+This is *notation*, not a definition.  It is the same surface, and the same
+expansion, as the separation-logic notation of the triples above, read at `emp`
+with a pure postcondition:
+
+```
+m ⦃ x => p ⦄      is      ⦃ emp ⦄ m ⦃⇓ x => ⌜p⌝ ⦄
+m ⦃ x => p ⦄div   is      ⦃ emp ⦄ m ⦃⇓ x => ⌜p⌝ ⦄div
+```
+
+so the two forms are not merely equivalent, they are the same proposition, and
+`step` is driven by the `triple`/`dtriple` registrations alone.
+
+The syntax is `scoped` in `Aeneas.SepLogic.WP` because `Aeneas.Std.WP` declares
+the identical surface for its own, separate judgment; a file chooses between
+them by which namespace it opens.
+-/
+
+namespace WP
+
+/- We use a priority of 55 for the inner term, which is exactly the priority for `|||`.
+This way we can write expressions like `x + y ⦃ z => ... ⦄` without having to put
+parentheses around `x + y`. -/
+scoped syntax:54 (name := pureSpecBinders)
+  term:55 " ⦃ " term+ " => " term " ⦄" : term
+scoped syntax:54 (name := pureSpecPred)
+  term:55 " ⦃ " term " ⦄" : term
+
+-- for partial correctness
+scoped syntax:54 (name := pureDspecBinders)
+  term:55 " ⦃ " term+ " => " term " ⦄div" : term
+scoped syntax:54 (name := pureDspecPred)
+  term:55 " ⦃ " term " ⦄div" : term
+
+open Lean PrettyPrinter
+
+/-- The `IPost` a pure postcondition denotes.  One binder needs no pattern;
+several bind the components of the returned tuple, so the postcondition is the
+pattern-matching lambda `fun (x, y, z) => ⌜p⌝` — an ordinary `IPost`, with no
+`uncurry` chain to peel back off, because the target is a triple. -/
+private def mkPurePost (binders : Array Term) (p : Term) : MacroM Term := do
+  match binders.toList with
+  | [] => `(fun _ => ⌜$p⌝)
+  | [x] => `(fun $x => ⌜$p⌝)
+  | x :: rest => `(fun ($x, $(rest.toArray),*) => ⌜$p⌝)
+
+/-- Macro expansion for a single binder. -/
+scoped macro_rules (kind := pureSpecBinders)
+  | `($m ⦃ $x => $p ⦄) => do
+    let post ← mkPurePost #[x] p
+    `(triple emp $m $post)
+
+/-- Macro expansion for several binders. -/
+scoped macro_rules (kind := pureSpecBinders)
+  | `($m ⦃ $x $xs:term* => $p ⦄) => do
+    let post ← mkPurePost (#[x] ++ xs) p
+    `(triple emp $m $post)
+
+scoped macro_rules (kind := pureDspecBinders)
+  | `($m ⦃ $x => $p ⦄div) => do
+    let post ← mkPurePost #[x] p
+    `(dtriple emp $m $post)
+
+scoped macro_rules (kind := pureDspecBinders)
+  | `($m ⦃ $x $xs:term* => $p ⦄div) => do
+    let post ← mkPurePost (#[x] ++ xs) p
+    `(dtriple emp $m $post)
+
+/-- Macro expansion for a postcondition given as a predicate. -/
+scoped macro_rules (kind := pureSpecPred)
+  | `($m ⦃ $p ⦄) => `(triple emp $m (fun value => ⌜$p value⌝))
+
+scoped macro_rules (kind := pureDspecPred)
+  | `($m ⦃ $p ⦄div) => `(dtriple emp $m (fun value => ⌜$p value⌝))
+
+/-!
+# Pretty-printing
+
+`triple`/`dtriple` have no delaborator of their own, so a goal of the pure shape
+— precondition `emp`, postcondition `fun x => ⌜...⌝`, which is exactly what the
+macros above produce — is printed back in the pure notation.  Anything else
+falls through to the ordinary application printer, so a separating triple still
+prints as one.
+-/
+
+open Delaborator SubExpr
+
+/-- Peel `fun x => ⌜body⌝`, the postcondition of a pure specification. -/
+private def delabPurePost : DelabM (Term × Term) := do
+  guard (← getExpr).isLambda
+  withBindingBodyUnusedName fun binder => do
+    guard ((← getExpr).isAppOfArity ``ipure 1)
+    return (⟨binder⟩, ← withAppArg delab)
+
+/-- `triple emp m (fun x => ⌜p⌝)` prints as `m ⦃ x => p ⦄`. -/
+@[scoped delab app.Aeneas.SepLogic.triple]
+def delabPureTriple : Delab := do
+  guard ((← getExpr).isAppOfArity ``Aeneas.SepLogic.triple 4)
+  guard (← withNaryArg 1 do return (← getExpr).isConstOf ``Aeneas.SepLogic.«emp»)
+  let monadExpr ← withNaryArg 2 delab
+  let (binder, body) ← withNaryArg 3 delabPurePost
+  `($monadExpr ⦃ $binder => $body ⦄)
+
+/-- `dtriple emp m (fun x => ⌜p⌝)` prints as `m ⦃ x => p ⦄div`. -/
+@[scoped delab app.Aeneas.SepLogic.dtriple]
+def delabPureDtriple : Delab := do
+  guard ((← getExpr).isAppOfArity ``Aeneas.SepLogic.dtriple 4)
+  guard (← withNaryArg 1 do return (← getExpr).isConstOf ``Aeneas.SepLogic.«emp»)
+  let monadExpr ← withNaryArg 2 delab
+  let (binder, body) ← withNaryArg 3 delabPurePost
+  `($monadExpr ⦃ $binder => $body ⦄div)
+
+end WP
 
 end Aeneas.SepLogic
