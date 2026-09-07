@@ -405,8 +405,7 @@ theorem compareCells.self_spec [DecidableEq α]
           simp only [compareCells]
           step* 2
           rw [if_pos True.intro]
-          step with ih values
-          iframe
+          step*
 
 /-- Disjoint-input form of Pulse `compare`: the result exactly characterizes
 logical equality and both independent ownership predicates are preserved.
