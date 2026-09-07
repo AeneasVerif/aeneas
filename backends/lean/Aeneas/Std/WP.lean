@@ -19,6 +19,7 @@ def theta (m:Result α) : Wp α :=
   match m with
   | ok x => wp_return x
   | fail _ => fun _ => False
+  | ub => fun _ => False
   | div => fun _ => False
 
 def spec {α} (x:Result α) (p:Post α) :=
@@ -28,6 +29,7 @@ def dspec {α} (x:Result α) (p:Post α) :=
   match x with
   | ok x => p x
   | fail _ => False
+  | ub => False
   | div => True
 
 theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p := by
@@ -62,6 +64,9 @@ theorem spec_ok (x : α) : spec (ok x) p ↔ p x := by simp [spec, theta, wp_ret
 theorem spec_fail (e : Error) : spec (fail e) p ↔ False := by simp [spec, theta]
 
 @[simp, grind =, agrind =]
+theorem spec_ub : spec ub p ↔ False := by simp [spec, theta]
+
+@[simp, grind =, agrind =]
 theorem spec_div : spec div p ↔ False := by simp [spec, theta]
 
 /-! ### `spec_*` for tuple posts
@@ -76,6 +81,10 @@ theorem spec_ok_pair {α β} (a : α) (b : β) (f : α → β → Prop) :
 @[simp, grind =, agrind =]
 theorem spec_fail_pair (e : Error) (f : α → β → Prop) :
     spec (fail e) (uncurry f) ↔ False := by simp
+
+@[simp, grind =, agrind =]
+theorem spec_ub_pair (f : α → β → Prop) :
+    spec ub (uncurry f) ↔ False := by simp
 
 @[simp, grind =, agrind =]
 theorem spec_div_pair (f : α → β → Prop) :
@@ -96,6 +105,8 @@ theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α}
   cases m
   · simp
     apply Hk
+    apply Hm
+  · simp
     apply Hm
   · simp
     apply Hm
@@ -144,6 +155,8 @@ theorem spec_bind' {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α
   cases m
   · simp
     apply Hk
+    apply Hm
+  · simp
     apply Hm
   · simp
     apply Hm
@@ -211,6 +224,8 @@ theorem dspec_bind' {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result �
   cases m
   · simp
     apply Hk
+    apply Hm
+  · simp
     apply Hm
   · simp
     apply Hm
@@ -791,7 +806,7 @@ open Std.Do
 
 instance Result.instWP : WP Result.{u} (.except (ULift Error) (.except PUnit .pure)) where
   wp x := {
-    trans Q := match x with | .ok a => Q.1 a | .fail e => Q.2.1 (ULift.up e) | .div => Q.2.2.1 .unit
+    trans Q := match x with | .ok a => Q.1 a | .fail e => Q.2.1 (ULift.up e) | .ub => ⟨False⟩ | .div => Q.2.2.1 .unit
     conjunctiveRaw Q₁ Q₂ := by
       apply SPred.bientails.of_eq
       cases x <;> simp
