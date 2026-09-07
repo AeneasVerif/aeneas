@@ -314,11 +314,7 @@ theorem new.spec (capacity : Nat) (hcapacity : 0 < capacity) :
     ⦃ emp ⦄ (new capacity hcapacity : Result (RingBuffer α))
       ⦃⇓ rb => isRingBuffer rb [] capacity⦄ := by
   unfold new
-  step as ⟨ buffer, hlength ⟩
-  step as ⟨ head ⟩
-  step as ⟨ tail ⟩
-  step as ⟨ count ⟩
-  step
+  step*
   have hcontents :
       contentsOfBuffer (List.replicate capacity (none : Option α))
         0 capacity 0 = [] := rfl
