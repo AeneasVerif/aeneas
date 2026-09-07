@@ -21,79 +21,12 @@ import Aeneas.Std.Array.Array
 open Aeneas.Std (Result Slice)
 open Aeneas.SepLogic.WP
 
-/-! ## Standalone generated-code interface
-
-The original file imports these declarations from VCR's generated `Symcrust`
-modules.  This test keeps only the fragment needed to state the specifications,
-so it can be checked in Aeneas without depending on the VCR repository.
--/
-
 namespace core.core_arch.x86
 
 set_option linter.style.nameCheck false in
 abbrev __m128i := Aeneas.Std.Array Aeneas.Std.U8 16#usize
 
 end core.core_arch.x86
-
-namespace common
-
-axiom InPlaceOrDisjointBuffer (T : Type) : Type
-
-namespace InPlaceOrDisjointBuffer
-
-axiom len {T : Type} :
-    common.InPlaceOrDisjointBuffer T → Result Aeneas.Std.Usize
-
-axiom src {T : Type} :
-    common.InPlaceOrDisjointBuffer T → Result (Slice T)
-
-axiom dst {T : Type} :
-    common.InPlaceOrDisjointBuffer T →
-      Result (Slice T ×
-        (Slice T → common.InPlaceOrDisjointBuffer T) ×
-        (common.InPlaceOrDisjointBuffer T → common.InPlaceOrDisjointBuffer T))
-
-axiom new_disjoint_from_slices {T : Type} :
-    Slice T → Slice T →
-      Result (common.InPlaceOrDisjointBuffer T ×
-        (common.InPlaceOrDisjointBuffer T → Slice T))
-
-axiom loadu_si128_src {T : Type} :
-    common.InPlaceOrDisjointBuffer T → Aeneas.Std.Usize →
-      Result core.core_arch.x86.__m128i
-
-axiom loadu_si128_dst {T : Type} :
-    common.InPlaceOrDisjointBuffer T → Aeneas.Std.Usize →
-      Result core.core_arch.x86.__m128i
-
-axiom storeu_si128 {T : Type} :
-    common.InPlaceOrDisjointBuffer T → Aeneas.Std.Usize →
-      core.core_arch.x86.__m128i →
-      Result (common.InPlaceOrDisjointBuffer T ×
-        (common.InPlaceOrDisjointBuffer T → common.InPlaceOrDisjointBuffer T))
-
-end InPlaceOrDisjointBuffer
-
-end common
-
-namespace aes.aes_xmm.InPlaceOrDisjointBufferAU8
-
-axiom m128_loadu_src :
-    common.InPlaceOrDisjointBuffer Aeneas.Std.U8 → Aeneas.Std.Usize →
-      Result (Aeneas.Std.Array Aeneas.Std.U8 16#usize)
-
-axiom m128_loadu_dst :
-    common.InPlaceOrDisjointBuffer Aeneas.Std.U8 → Aeneas.Std.Usize →
-      Result (Aeneas.Std.Array Aeneas.Std.U8 16#usize)
-
-axiom m128_storeu :
-    common.InPlaceOrDisjointBuffer Aeneas.Std.U8 → Aeneas.Std.Usize →
-      Aeneas.Std.Array Aeneas.Std.U8 16#usize →
-      Result (common.InPlaceOrDisjointBuffer Aeneas.Std.U8 ×
-        (common.InPlaceOrDisjointBuffer Aeneas.Std.U8 →
-          common.InPlaceOrDisjointBuffer Aeneas.Std.U8))
-
-end aes.aes_xmm.InPlaceOrDisjointBufferAU8
 
 /-- High-level view of `common::InPlaceOrDisjointBuffer`: either one aliased
     slice (in-place mode) or two disjoint slices of equal length. -/
@@ -159,9 +92,141 @@ theorem length_eq (b : InPlaceOrDisjointBuffer T) :
 
 end InPlaceOrDisjointBuffer
 
+/-! ## Standalone generated-code interface
+
+The original file imports these declarations from VCR's generated `Symcrust`
+modules.  Here the generated buffer is represented directly by its high-level
+view, and the small fragment of generated code used below is executable.
+-/
+
+namespace common
+
+private unsafe def transmuteSliceImpl {T U : Type} (s : Slice T) : Slice U :=
+  unsafeCast s
+
+private instance {T : Type} : Nonempty (Slice T) :=
+  ⟨Slice.from [] (by simp)⟩
+
+/-- Byte-level reinterpretation used by the unsafe SIMD operations. -/
+@[implemented_by transmuteSliceImpl]
+opaque transmuteSlice {T U : Type} : Slice T → Slice U
+
+@[simp] axiom transmuteSlice_self {T : Type} (s : Slice T) :
+    transmuteSlice (T := T) (U := T) s = s
+
+abbrev InPlaceOrDisjointBuffer (T : Type) :=
+  _root_.InPlaceOrDisjointBuffer T
+
+namespace InPlaceOrDisjointBuffer
+
+def len {T : Type} (b : common.InPlaceOrDisjointBuffer T) :
+    Result Aeneas.Std.Usize :=
+  pure (Aeneas.Std.Usize.ofNatCore
+    (_root_.InPlaceOrDisjointBuffer.length b) (by
+      have h := (_root_.InPlaceOrDisjointBuffer.src b).property
+      simp only [Aeneas.Std.Usize.max, Aeneas.Std.Usize.numBits] at h
+      change
+        (_root_.InPlaceOrDisjointBuffer.src b).val.length <
+          2 ^ Aeneas.Std.UScalarTy.Usize.numBits
+      have hp : 0 < 2 ^ Aeneas.Std.UScalarTy.Usize.numBits := by positivity
+      omega))
+
+def src {T : Type} (b : common.InPlaceOrDisjointBuffer T) :
+    Result (Slice T) :=
+  pure (_root_.InPlaceOrDisjointBuffer.src b)
+
+def dst {T : Type} (b : common.InPlaceOrDisjointBuffer T) :
+    Result (Slice T ×
+      (Slice T → common.InPlaceOrDisjointBuffer T) ×
+      (common.InPlaceOrDisjointBuffer T → common.InPlaceOrDisjointBuffer T)) :=
+  pure (_root_.InPlaceOrDisjointBuffer.dst b,
+    _root_.InPlaceOrDisjointBuffer.setDst b, id)
+
+def new_disjoint_from_slices {T : Type} (src dst : Slice T) :
+    Result (common.InPlaceOrDisjointBuffer T ×
+      (common.InPlaceOrDisjointBuffer T → Slice T)) :=
+  if h : src.length = dst.length then
+    pure (.disjoint src dst h,
+      fun b => _root_.InPlaceOrDisjointBuffer.dst b)
+  else
+    pure (.equal src, fun b => _root_.InPlaceOrDisjointBuffer.dst b)
+
+private def getBlock
+    (s : Slice Aeneas.Std.U8) (i : Aeneas.Std.Usize) :
+    Aeneas.Std.Array Aeneas.Std.U8 16#usize :=
+  if h : i.val + 16 ≤ s.length then
+    Aeneas.Std.Array.from ((s.val.drop i.val).take 16) (by
+      have hi : i.val + 16 ≤ s.val.length := h
+      simp only [List.length_take, List.length_drop]
+      change min 16 (s.val.length - i.val) = 16
+      rw [Nat.min_eq_left]
+      omega)
+  else
+    Aeneas.Std.Array.repeat 16#usize 0#u8
+
+@[simp] private theorem getBlock_val
+    (s : Slice Aeneas.Std.U8) (i : Aeneas.Std.Usize)
+    (h : i.val + 16 ≤ s.length) :
+    (getBlock s i).val = (s.val.drop i.val).take 16 := by
+  simp [getBlock, h]
+
+def loadu_si128_src {T : Type}
+    (b : common.InPlaceOrDisjointBuffer T) (i : Aeneas.Std.Usize) :
+    Result core.core_arch.x86.__m128i :=
+  pure (getBlock
+    (transmuteSlice (_root_.InPlaceOrDisjointBuffer.src b)) i)
+
+def loadu_si128_dst {T : Type}
+    (b : common.InPlaceOrDisjointBuffer T) (i : Aeneas.Std.Usize) :
+    Result core.core_arch.x86.__m128i :=
+  pure (getBlock
+    (transmuteSlice (_root_.InPlaceOrDisjointBuffer.dst b)) i)
+
+def storeu_si128 {T : Type}
+    (b : common.InPlaceOrDisjointBuffer T) (i : Aeneas.Std.Usize)
+    (v : core.core_arch.x86.__m128i) :
+    Result (common.InPlaceOrDisjointBuffer T ×
+      (common.InPlaceOrDisjointBuffer T →
+        common.InPlaceOrDisjointBuffer T)) :=
+  let dst : Slice Aeneas.Std.U8 :=
+    transmuteSlice (_root_.InPlaceOrDisjointBuffer.dst b)
+  let dst := dst.setSlice! i.val v.val
+  pure (_root_.InPlaceOrDisjointBuffer.setDst b (transmuteSlice dst), id)
+
+end InPlaceOrDisjointBuffer
+
+end common
+
+namespace aes.aes_xmm.InPlaceOrDisjointBufferAU8
+
+def m128_loadu_src
+    (b : common.InPlaceOrDisjointBuffer Aeneas.Std.U8)
+    (i : Aeneas.Std.Usize) :
+    Result (Aeneas.Std.Array Aeneas.Std.U8 16#usize) :=
+  common.InPlaceOrDisjointBuffer.loadu_si128_src b i
+
+def m128_loadu_dst
+    (b : common.InPlaceOrDisjointBuffer Aeneas.Std.U8)
+    (i : Aeneas.Std.Usize) :
+    Result (Aeneas.Std.Array Aeneas.Std.U8 16#usize) :=
+  common.InPlaceOrDisjointBuffer.loadu_si128_dst b i
+
+def m128_storeu
+    (b : common.InPlaceOrDisjointBuffer Aeneas.Std.U8)
+    (i : Aeneas.Std.Usize)
+    (v : Aeneas.Std.Array Aeneas.Std.U8 16#usize) :
+    Result (common.InPlaceOrDisjointBuffer Aeneas.Std.U8 ×
+      (common.InPlaceOrDisjointBuffer Aeneas.Std.U8 →
+        common.InPlaceOrDisjointBuffer Aeneas.Std.U8)) :=
+  common.InPlaceOrDisjointBuffer.storeu_si128 b i v
+
+end aes.aes_xmm.InPlaceOrDisjointBufferAU8
+
 /-- **Abstraction function.**  Maps the opaque Aeneas buffer to its high-level view. -/
-axiom common.InPlaceOrDisjointBuffer.val {T : Type} :
-    common.InPlaceOrDisjointBuffer T → _root_.InPlaceOrDisjointBuffer T
+def common.InPlaceOrDisjointBuffer.val {T : Type}
+    (b : common.InPlaceOrDisjointBuffer T) :
+    _root_.InPlaceOrDisjointBuffer T :=
+  b
 
 open InPlaceOrDisjointBuffer
 
@@ -171,64 +236,97 @@ namespace symcrust.aesgcm
 
 /-- `len` returns the common length of the two sides. -/
 @[step]
-axiom InPlaceOrDisjointBuffer.len.spec {T : Type}
+theorem InPlaceOrDisjointBuffer.len.spec {T : Type}
     (b : common.InPlaceOrDisjointBuffer T) :
     common.InPlaceOrDisjointBuffer.len b
-    ⦃ n => n.val = b.val.length ⦄
+    ⦃ n => n.val = b.val.length ⦄ := by
+  unfold common.InPlaceOrDisjointBuffer.len
+  step*
+  simp [common.InPlaceOrDisjointBuffer.val]
+  iframe
 
 /-- `src` returns the source side. -/
 @[step]
-axiom InPlaceOrDisjointBuffer.src.spec {T : Type}
+theorem InPlaceOrDisjointBuffer.src.spec {T : Type}
     (b : common.InPlaceOrDisjointBuffer T) :
     common.InPlaceOrDisjointBuffer.src b
-    ⦃ s => s = b.val.src ⦄
+    ⦃ s => s = b.val.src ⦄ := by
+  unfold common.InPlaceOrDisjointBuffer.src
+  step*
+  simp [common.InPlaceOrDisjointBuffer.val]
+  iframe
 
 /-- `dst` returns the destination side plus two backward functions:
     - `back1` updates the destination buffer
     - `back2` propagates mutations of the enclosing `&mut self` (there are none,
       so this is the identity) -/
 @[step]
-axiom InPlaceOrDisjointBuffer.dst.spec {T : Type}
+theorem InPlaceOrDisjointBuffer.dst.spec {T : Type}
     (b : common.InPlaceOrDisjointBuffer T) :
     common.InPlaceOrDisjointBuffer.dst b
     ⦃ s back1 back2 =>
       s = b.val.dst ∧
       (∀ s' : Slice T, s'.length = b.val.length →
         (back1 s').val = b.val.setDst s') ∧
-      (∀ b' : common.InPlaceOrDisjointBuffer T, (back2 b').val = b'.val) ⦄
+      (∀ b' : common.InPlaceOrDisjointBuffer T, (back2 b').val = b'.val) ⦄ := by
+  unfold common.InPlaceOrDisjointBuffer.dst
+  step*
+  simp [common.InPlaceOrDisjointBuffer.val]
+  iframe
 
 /-- `new_disjoint_from_slices` builds a disjoint-mode buffer. -/
 @[step]
-axiom InPlaceOrDisjointBuffer.new_disjoint_from_slices.spec {T : Type}
+theorem InPlaceOrDisjointBuffer.new_disjoint_from_slices.spec {T : Type}
     (src dst : Slice T) (h_len : src.length = dst.length) :
     common.InPlaceOrDisjointBuffer.new_disjoint_from_slices src dst
     ⦃ buf back =>
       buf.val = .disjoint src dst h_len ∧
-      (∀ b' : common.InPlaceOrDisjointBuffer T, back b' = b'.val.dst) ⦄
+      (∀ b' : common.InPlaceOrDisjointBuffer T, back b' = b'.val.dst) ⦄ := by
+  unfold common.InPlaceOrDisjointBuffer.new_disjoint_from_slices
+  simp only [h_len, ↓reduceDIte]
+  step*
+  simp [common.InPlaceOrDisjointBuffer.val]
+  iframe
 
 /-! ## SIMD accessors -/
 
 /-- `loadu_si128_src b i` reads the 16 bytes of the source side at offset `i`. -/
 @[step]
-axiom InPlaceOrDisjointBuffer.loadu_si128_src.spec
+theorem InPlaceOrDisjointBuffer.loadu_si128_src.spec
     (b : common.InPlaceOrDisjointBuffer Aeneas.Std.U8) (i : Aeneas.Std.Usize)
     (h : i.val + 16 ≤ b.val.length) :
     common.InPlaceOrDisjointBuffer.loadu_si128_src b i
     ⦃ (r : core.core_arch.x86.__m128i) =>
-      r.val = ((b.val.src).val.drop i.val).take 16 ⦄
+      r.val = ((b.val.src).val.drop i.val).take 16 ⦄ := by
+  have hsrc :
+      i.val + 16 ≤ (_root_.InPlaceOrDisjointBuffer.src b).length := by
+    simpa [common.InPlaceOrDisjointBuffer.val] using h
+  unfold common.InPlaceOrDisjointBuffer.loadu_si128_src
+  step*
+  simp [common.InPlaceOrDisjointBuffer.val,
+    common.InPlaceOrDisjointBuffer.getBlock_val _ _ hsrc]
+  iframe
 
 /-- `loadu_si128_dst b i` reads the 16 bytes of the destination side at offset `i`. -/
 @[step]
-axiom InPlaceOrDisjointBuffer.loadu_si128_dst.spec
+theorem InPlaceOrDisjointBuffer.loadu_si128_dst.spec
     (b : common.InPlaceOrDisjointBuffer Aeneas.Std.U8) (i : Aeneas.Std.Usize)
     (h : i.val + 16 ≤ b.val.length) :
     common.InPlaceOrDisjointBuffer.loadu_si128_dst b i
     ⦃ (r : core.core_arch.x86.__m128i) =>
-      r.val = ((b.val.dst).val.drop i.val).take 16 ⦄
+      r.val = ((b.val.dst).val.drop i.val).take 16 ⦄ := by
+  have hdst :
+      i.val + 16 ≤ (_root_.InPlaceOrDisjointBuffer.dst b).length := by
+    simpa [common.InPlaceOrDisjointBuffer.val] using h
+  unfold common.InPlaceOrDisjointBuffer.loadu_si128_dst
+  step*
+  simp [common.InPlaceOrDisjointBuffer.val,
+    common.InPlaceOrDisjointBuffer.getBlock_val _ _ hdst]
+  iframe
 
 /-- `storeu_si128 b i v` splices the 16 bytes of `v` into the destination side. -/
 @[step]
-axiom InPlaceOrDisjointBuffer.storeu_si128.spec
+theorem InPlaceOrDisjointBuffer.storeu_si128.spec
     (b : common.InPlaceOrDisjointBuffer Aeneas.Std.U8) (i : Aeneas.Std.Usize)
     (v : core.core_arch.x86.__m128i) (h : i.val + 16 ≤ b.val.length) :
     common.InPlaceOrDisjointBuffer.storeu_si128 b i v
@@ -236,28 +334,37 @@ axiom InPlaceOrDisjointBuffer.storeu_si128.spec
       (b'.val.dst).val = List.setSlice! (b.val.dst).val i.val v.val ∧
       b'.val = b.val.setDst b'.val.dst ∧
       (∀ b'' : common.InPlaceOrDisjointBuffer Aeneas.Std.U8,
-        (back b'').val = b''.val) ⦄
+        (back b'').val = b''.val) ⦄ := by
+  have _hi : i.val ≤ b.val.length := by omega
+  unfold common.InPlaceOrDisjointBuffer.storeu_si128
+  step*
+  simp [common.InPlaceOrDisjointBuffer.val]
+  iframe
 
 /-! ## The `aes_xmm` `u8` shims -/
 
 @[step]
-axiom InPlaceOrDisjointBuffer.m128_loadu_src.spec
+theorem InPlaceOrDisjointBuffer.m128_loadu_src.spec
     (b : common.InPlaceOrDisjointBuffer Aeneas.Std.U8) (i : Aeneas.Std.Usize)
     (h : i.val + 16 ≤ b.val.length) :
     aes.aes_xmm.InPlaceOrDisjointBufferAU8.m128_loadu_src b i
     ⦃ (r : Aeneas.Std.Array Aeneas.Std.U8 16#usize) =>
-      r.val = ((b.val.src).val.drop i.val).take 16 ⦄
+      r.val = ((b.val.src).val.drop i.val).take 16 ⦄ := by
+  unfold aes.aes_xmm.InPlaceOrDisjointBufferAU8.m128_loadu_src
+  exact InPlaceOrDisjointBuffer.loadu_si128_src.spec b i h
 
 @[step]
-axiom InPlaceOrDisjointBuffer.m128_loadu_dst.spec
+theorem InPlaceOrDisjointBuffer.m128_loadu_dst.spec
     (b : common.InPlaceOrDisjointBuffer Aeneas.Std.U8) (i : Aeneas.Std.Usize)
     (h : i.val + 16 ≤ b.val.length) :
     aes.aes_xmm.InPlaceOrDisjointBufferAU8.m128_loadu_dst b i
     ⦃ (r : Aeneas.Std.Array Aeneas.Std.U8 16#usize) =>
-      r.val = ((b.val.dst).val.drop i.val).take 16 ⦄
+      r.val = ((b.val.dst).val.drop i.val).take 16 ⦄ := by
+  unfold aes.aes_xmm.InPlaceOrDisjointBufferAU8.m128_loadu_dst
+  exact InPlaceOrDisjointBuffer.loadu_si128_dst.spec b i h
 
 @[step]
-axiom InPlaceOrDisjointBuffer.m128_storeu.spec
+theorem InPlaceOrDisjointBuffer.m128_storeu.spec
     (b : common.InPlaceOrDisjointBuffer Aeneas.Std.U8) (i : Aeneas.Std.Usize)
     (v : Aeneas.Std.Array Aeneas.Std.U8 16#usize)
     (h : i.val + 16 ≤ b.val.length) :
@@ -266,6 +373,8 @@ axiom InPlaceOrDisjointBuffer.m128_storeu.spec
       (b'.val.dst).val = List.setSlice! (b.val.dst).val i.val v.val ∧
       b'.val = b.val.setDst b'.val.dst ∧
       (∀ b'' : common.InPlaceOrDisjointBuffer Aeneas.Std.U8,
-        (back b'').val = b''.val) ⦄
+        (back b'').val = b''.val) ⦄ := by
+  unfold aes.aes_xmm.InPlaceOrDisjointBufferAU8.m128_storeu
+  exact InPlaceOrDisjointBuffer.storeu_si128.spec b i v h
 
 end symcrust.aesgcm
