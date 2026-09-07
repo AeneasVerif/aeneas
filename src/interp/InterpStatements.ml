@@ -553,6 +553,13 @@ let eval_function_call_symbolic_inst (span : Meta.span) (func : fn_ptr)
          correctly instantiated signatures, and delegate the work to an
          auxiliary function *)
       let sg = Builtin.get_builtin_fun_sig fid in
+      let generics =
+        match fid with
+        (* The primitive model does not depend on the [Copy] proof carried by
+           the array-repeat operation. *)
+        | ArrayRepeat -> { func.generics with trait_refs = [] }
+        | _ -> func.generics
+      in
       (* Sanity check: make sure the type parameters don't contain mutable
          borrows, which is a current limitation of our synthesis. *)
       [%classert] span
@@ -567,8 +574,8 @@ let eval_function_call_symbolic_inst (span : Meta.span) (func : fn_ptr)
       (* There shouldn't be any reference to Self *)
       let tr_self = UnknownTrait __FUNCTION__ in
       mk_symbolic_fun_call_inst span ctx ~call_kind:func.kind
-        ~call_generics:func.generics ~call_span:span
-        ~inst_generics:func.generics ~tr_self sg
+        ~call_generics:generics ~call_span:span ~inst_generics:generics ~tr_self
+        sg
   | TraitMethod (trait_ref, method_id) ->
       (* Check that there are no bound regions *)
       [%cassert] span
