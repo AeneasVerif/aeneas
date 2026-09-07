@@ -316,11 +316,11 @@ let rec match_types (span : Meta.span) ~(recover : bool) (ctx0 : eval_ctx)
       in
       let generics = { regions; types; const_generics; trait_refs } in
       TAdt { tref0 with id; generics }
-  | TArray (ty0, len0), TArray (ty1, len1) ->
+  | TArray (ty0, len0, _), TArray (ty1, len1, _) ->
       [%cassert_recover] recover span (len0 = len1)
         "Arrays with different lengths";
-      TArray (match_rec ty0 ty1, len0)
-  | TSlice ty0, TSlice ty1 -> TSlice (match_rec ty0 ty1)
+      TArray (match_rec ty0 ty1, len0, None)
+  | TSlice (ty0, _), TSlice (ty1, _) -> TSlice (match_rec ty0 ty1, None)
   | TVar vid0, TVar vid1 ->
       [%cassert_recover] recover span (vid0 = vid1)
         "Not the same type variables";

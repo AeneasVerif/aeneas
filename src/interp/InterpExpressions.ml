@@ -164,7 +164,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
       | TAdt { builtin = None; _ } as ty ->
           [%sanity_check] span (allow_adt_copy || ty_is_copyable ty)
       | TAdt { builtin = Some TTuple; _ } -> () (* Ok *)
-      | TArray (ty, _) | TSlice ty ->
+      | TArray (ty, _, _) | TSlice (ty, _) ->
           [%cassert] span (ty_is_copyable ty)
             "The type is not primitively copyable"
       | _ -> [%craise] span "Unreachable");
@@ -1302,7 +1302,7 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
             (* Call the continuation *)
             (aggregated, fun e -> e)
         | Some _ -> [%craise] span "Unreachable")
-    | AggregatedArray (ety, cg) ->
+    | AggregatedArray (ety, cg, _) ->
         (* Sanity check: all the values have the proper type *)
         [%classert] span
           (List.for_all (fun (v : tvalue) -> v.ty = ety) values)
@@ -1318,7 +1318,7 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
         (* Sanity check: the number of values is consistent with the length *)
         let len = get_val (literal_as_scalar (constant_expr_as_literal cg)) in
         [%sanity_check] span (len = Z.of_int (List.length values));
-        let ty = TArray (ety, cg) in
+        let ty = TArray (ety, cg, None) in
         (* In order to generate a better AST, we introduce a symbolic
            value equal to the array. The reason is that otherwise, the
            array we introduce here might be duplicated in the generated
