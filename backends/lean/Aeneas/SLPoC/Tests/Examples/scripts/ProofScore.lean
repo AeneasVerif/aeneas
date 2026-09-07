@@ -40,12 +40,16 @@ is ideal when none of its steps handles the separation logic by hand, and the
 score of a file is the fraction of its spots that are ideal.
 
 A step handles the separation logic by hand when it is one of the manual
-tactics (`iframe`, `irewrite`, `iintro_entail`, `isimpl`, `wp_apply`,
+tactics (`irewrite`, `iintro_entail`, `isimpl`, `wp_apply`,
 `wp_mono`, …), or when it mentions separation-logic vocabulary: a connective
 (`∗`, `↦`, `⊢`, `-∗`, `emp`, `iprop(…)`), or a lemma or definition whose
 statement is about `IProp` (`unfold wellFormed`, `simp [nodes_snoc]`,
 `exact triple_pure …`).  `step`, `step*`, and `iintro`
-are the automation itself and are free; so is any pure reasoning.  A
+are the automation itself and are free; so is any pure reasoning.  However,
+an `iframe` is free when its most recent automation tactic on its proof path
+is `step`, but manual after `step*` or when there is no preceding automation
+tactic.  After `step*`, another `step*` must finish the separation-logic goal.
+A
 `step with some.spec` is not: explicitly naming any declaration whose
 statement is about a triple steers automation manually.  A local hypothesis such
 as an induction hypothesis remains free.
@@ -103,8 +107,8 @@ def slCoreNames : Array String :=
 /-- The `⦃ P ⦄ m ⦃⇓ v => Q ⦄` notations of `ST.lean`: a declaration that uses one
 of them states a triple. -/
 def specSyntaxKinds : Array Name :=
-  #[`Aeneas.SepLogic.SepLogic.specSyntax, `Aeneas.SepLogic.SepLogic.specSyntaxPred,
-    `Aeneas.SepLogic.SepLogic.slSpecSyntax, `Aeneas.SepLogic.SepLogic.slSpecSyntaxPred]
+  #[`Aeneas.SepLogic.specSyntax, `Aeneas.SepLogic.specSyntaxPred,
+    `Aeneas.SepLogic.slSpecSyntax, `Aeneas.SepLogic.slSpecSyntaxPred]
 
 /-- Simp sets that configure the automation: tuning them inside a proof is
 separation-logic work too. -/
@@ -212,6 +216,12 @@ partial def firstAtom (stx : Syntax) : String :=
       let s := firstAtom a
       if s.isEmpty then none else some s) |>.getD ""
   | _ => ""
+
+def isStepStar (stx : Syntax) : Bool :=
+  stx.getKind == `Aeneas.StepStar.stepStar
+
+def isStep (stx : Syntax) : Bool :=
+  stx.getKind == `Aeneas.Step.step
 
 /-! ## Reading a file
 
@@ -442,6 +452,12 @@ inductive Verdict where
   | manual (reason : String)
   deriving Inhabited
 
+inductive Automation where
+  | none
+  | step
+  | stepStar
+  deriving Inhabited
+
 def Verdict.isIdeal : Verdict → Bool
   | .ideal => true
   | .manual _ => false
@@ -542,15 +558,24 @@ def Context.stepText (ctx : Context) (stx : Syntax) : String := Id.run do
     return firstLine ++ " …"
   return firstLine
 
-def Context.classify (ctx : Context) (stx : Syntax) : Verdict :=
+def Context.classify (ctx : Context) (stx : Syntax)
+    (automation : Automation := .none) : Verdict :=
   let head := firstAtom stx
-  if manualTactics.contains head then
+  if head == "iframe" then
+    match automation with
+    | .step => .ideal
+    | .stepStar =>
+      .manual "`iframe` follows `step*` without an intervening `step`; use `step*` to finish the goal"
+    | .none => .manual "`iframe` steers the separation logic by hand"
+  else if manualTactics.contains head then
     .manual s!"`{head}` steers the separation logic by hand"
   else if let some theoremName := explicitStepTheorem? stx then
     if ctx.resolver.isSL theoremName then
       .manual s!"`step with {theoremName}` names a triple lemma"
     else
       .ideal
+  else if isStepStar stx then
+    .ideal
   else if idealTactics.contains head then
     .ideal
   else match scanStep ctx.resolver stx with
@@ -584,7 +609,8 @@ partial def leafTokens (r : Resolver) (stx : Syntax) : Array Token :=
     | some ⟨start, stop⟩ => #[{ start, stop, cls := if r.isSL n then "sl" else "id" }]
   | .missing => #[]
 
-def Context.mkStep (ctx : Context) (stx : Syntax) : Step :=
+def Context.mkStep (ctx : Context) (stx : Syntax)
+    (automation : Automation := .none) : Step :=
   let ⟨start, stop⟩ := stx.getRange?.getD ⟨0, 0⟩
   let holes := (subBlocks stx).filterMap fun block => do
     let first ← block[0]?
@@ -594,7 +620,7 @@ def Context.mkStep (ctx : Context) (stx : Syntax) : Step :=
     return (start, stop)
   { line := ctx.fileMap.toPosition (stx.getPos?.getD 0) |>.line
     text := ctx.stepText stx
-    verdict := ctx.classify stx
+    verdict := ctx.classify stx automation
     start, stop, holes
     tokens := (leafTokens ctx.resolver stx).filter fun tok =>
       !holes.any fun (from', to') => from' ≤ tok.start && tok.stop ≤ to' }
@@ -736,14 +762,20 @@ def Context.mkSpot (ctx : Context) (steps : Array Step) : Spot :=
   { line := steps[0]?.map (·.line) |>.getD 0, steps, html, loc }
 
 /-- One spot for this block, plus the spots of the blocks nested in it. -/
-partial def Context.analyzeBlock (ctx : Context) (steps : Array Syntax) : Array Spot := Id.run do
+partial def Context.analyzeBlock (ctx : Context) (steps : Array Syntax)
+    (automation : Automation := .none) : Array Spot := Id.run do
   let mut here : Array Step := #[]
   let mut nested : Array Spot := #[]
+  let mut automation := automation
   for step in steps do
     for atomic in explode step do
-      here := here.push (ctx.mkStep atomic)
+      here := here.push (ctx.mkStep atomic automation)
       for block in subBlocks atomic do
-        nested := nested ++ ctx.analyzeBlock block
+        nested := nested ++ ctx.analyzeBlock block automation
+      if isStepStar atomic then
+        automation := .stepStar
+      else if isStep atomic then
+        automation := .step
   return #[ctx.mkSpot here] ++ nested
 
 structure Score where
@@ -1039,13 +1071,16 @@ def renderReport (files : Array FileScore) : String := Id.run do
     <code>backends/lean</code>.  A <em>spot</em> is one \
     straight-line block of a proof: the block before the first branch, then one per branch body, \
     recursively.  A spot is ideal when it steers the separation logic nowhere by hand — only \
-    <code>step</code>, <code>iintro</code>, and pure reasoning.  The code below is the \
+    <code>step</code>, <code>step*</code>, <code>iintro</code>, and pure reasoning.  The code below is the \
     spot's own, with the nested blocks elided as <span class='elided'>…</span> because they are \
     spots of their own, and without the comments.  See the module docstring of \
     <code>Aeneas/SLPoC/Tests/Examples/scripts/ProofScore.lean</code> for the details.</p>"
   out := out ++ s!"<h2>Rules</h2><ul>\
     <li>free: {codeList idealTactics}, pure reasoning, and <code>unfold</code> of a program;</li>\
-    <li>manual: {codeList manualTactics};</li>\
+    <li>manual: {codeList (manualTactics.filter (· != "iframe"))};</li>\
+    <li><code>iframe</code> is free when the most recent automation tactic on its proof path \
+    is <code>step</code>, and manual after <code>step*</code> or without a preceding \
+    automation tactic;</li>\
     <li>manual: any other step mentioning a separation-logic connective \
     ({codeList slAtoms}), a simp set of the automation ({codeList slAttrNames}), or a \
     declaration whose statement is about <code>IProp</code>.</li></ul>"
@@ -1056,11 +1091,12 @@ def renderReport (files : Array FileScore) : String := Id.run do
     <div class='example-spot'><span class='spot-label'>Spot 2 — ideal</span>\
     <pre><code>· have h : n = n := rfl\n  simp only [h]\n  step*</code></pre></div>\
     <div class='example-spot notideal'><span class='spot-label'>Spot 3 — not ideal</span>\
-    <pre><code>· irewrite h\n  step*</code></pre></div></div>\
+    <pre><code>· step*\n  simp only [h]\n  iframe</code></pre></div></div>\
     The prefix before <code>split</code> is one spot, and each branch is another: \
     <strong>3 spots total</strong>. <strong>Pure reasoning is allowed:</strong> the \
     <code>have</code> and <code>simp</code> in Spot 2 do not lower its score. The manual \
-    <code>irewrite</code> makes Spot 3 nonideal, giving a spot score of \
+    <code>iframe</code> after <code>step*</code> with no intervening <code>step</code> makes \
+    Spot 3 nonideal, giving a spot score of \
     <strong>2 / 3 = 66.7%</strong>; the whole proof is not an ideal proof.</div>"
   out := out ++ "<h2>Summary</h2><table class='summary-table'><thead><tr>\
     <th>File</th><th>Triples</th>\
