@@ -216,7 +216,7 @@ theorem pop.spec (x : Link α) (v : α) (xs : List α) (hne : x ≠ none) :
     ⦃ isList x (v :: xs) ⦄ pop x hne
       ⦃⇓ (tail, result) => ⌜result = v⌝ ∗ isList tail xs⦄ := by
   cases x with
-  | none => contradiction
+  | none => grind
   | some p =>
       simp only [pop, isList]
       iintro
