@@ -294,14 +294,17 @@ python3 Aeneas/SLPoC/Tests/Examples/scripts/proof_simplify.py --in-place FILE.le
 ```
 
 The default mode prints a unified diff.  `--in-place` applies it, and `--check`
-exits with status 1 when a file can be simplified.  The tool first tries to
-merge an adjacent `step`/`step*` pair into a single star.  Next it tries
-to drop explicit `sl_pull` patterns and replace individually unused simple names
-with `_`.
+exits with status 1 when a file can be simplified.  The tool first merges
+adjacent `step`/`step*` pairs, then tries to drop explicit `sl_pull` patterns
+and replace individually unused simple names with `_`.
 Compressing consecutive plain `step` calls is the final stage: it validates
 `step* N`, then immediately tries to remove each newly created bound.
-Bounds already present in the input are not retried.  Each proposed rewrite is
-retained only when `lake env lean --stdin` accepts the complete resulting file.
+It then replaces each plain `iframe` whose most recent automation tactic on
+its proof path is `step*` with another `step*`, and recompresses any pair this
+creates.  An intervening `step` makes the `iframe` acceptable.
+Bounds already present in the input are not retried.  Each proposed rewrite
+is retained only when `lake env lean --stdin` accepts the complete resulting
+file.
 
 To keep compiler use bounded, step-run and binder rewrite classes are validated
 as batches; `sl_pull` names are first checked for lexical use in their tactic

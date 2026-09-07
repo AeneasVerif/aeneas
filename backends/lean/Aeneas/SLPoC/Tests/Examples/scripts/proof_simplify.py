@@ -20,6 +20,16 @@ PLAIN_STEP = re.compile(r"^(?P<indent>[ \t]*)step[ \t]*(?:\r?\n|$)")
 PLAIN_STEP_STAR = re.compile(
     r"^(?P<indent>[ \t]*)step\*(?:[ \t]+[0-9]+)?[ \t]*(?:\r?\n|$)"
 )
+BRANCH_PREFIX = r"(?P<branch>(?:·|(?:case|next)\b.*=>)[ \t]+)?"
+STEP = re.compile(
+    rf"^(?P<indent>[ \t]*){BRANCH_PREFIX}"
+    r"step(?!\*)(?:\?|[ \t].*)?(?:\r?\n|$)"
+)
+STEP_STAR = re.compile(
+    rf"^(?P<indent>[ \t]*){BRANCH_PREFIX}"
+    r"step\*(?:[ \t].*)?(?:\r?\n|$)"
+)
+PLAIN_IFRAME = re.compile(r"^(?P<indent>[ \t]*)iframe[ \t]*(?:\r?\n|$)")
 PLAIN_SL_PULL = re.compile(
     r"^(?P<indent>[ \t]*)sl_pull[ \t]+"
     rf"(?P<args>{SIMPLE_NAME}(?:[ \t]+{SIMPLE_NAME})*)"
@@ -277,6 +287,62 @@ def step_then_star_candidates(source: str) -> list[Edit]:
     return tactic_pair_candidates(source, (PLAIN_STEP,), (PLAIN_STEP_STAR,))
 
 
+def step_star_iframe_candidates(source: str) -> list[Edit]:
+    lines = list(re.finditer(r".*(?:\r?\n|$)", source))
+    candidates: list[Edit] = []
+    step_states: list[tuple[int, bool]] = []
+    for line in lines:
+        text = line.group()
+        stripped = text.strip()
+        if (
+            not stripped
+            or stripped.startswith("--")
+            or stripped.startswith("/-")
+            or stripped.startswith("*")
+            or stripped.startswith("-/")
+        ):
+            continue
+        indent = text[: len(text) - len(text.lstrip(" \t"))]
+        indent_width = len(indent.expandtabs(2))
+        # A lower-indented line leaves the proof path that set the step state.
+        step_states = [
+            state for state in step_states if state[0] <= indent_width
+        ]
+        if step_star := STEP_STAR.fullmatch(text):
+            state_indent = indent_width + (1 if step_star["branch"] else 0)
+            step_states = [
+                state for state in step_states if state[0] < state_indent
+            ]
+            step_states.append((state_indent, True))
+            continue
+        if step := STEP.fullmatch(text):
+            state_indent = indent_width + (1 if step["branch"] else 0)
+            step_states = [
+                state for state in step_states if state[0] < state_indent
+            ]
+            step_states.append((state_indent, False))
+            continue
+        iframe = PLAIN_IFRAME.fullmatch(text)
+        if iframe is None or not step_states or not step_states[-1][1]:
+            continue
+        newline = (
+            "\r\n"
+            if text.endswith("\r\n")
+            else "\n"
+            if text.endswith("\n")
+            else ""
+        )
+        candidates.append(
+            Edit(
+                line.start(),
+                line.end(),
+                f"{iframe['indent']}step*{newline}",
+                "iframe after step*",
+            )
+        )
+    return candidates
+
+
 def sl_pull_drop_candidates(source: str) -> list[Edit]:
     candidates: list[Edit] = []
     for line in re.finditer(r".*(?:\r?\n|$)", source):
@@ -329,6 +395,7 @@ def simplify(
     source: str, checker: LeanChecker
 ) -> tuple[str, list[Edit], list[RejectedEdit]]:
     candidate_finders = (
+        step_star_iframe_candidates,
         star_then_step_candidates,
         step_then_star_candidates,
         sl_pull_drop_candidates,
@@ -368,7 +435,22 @@ def simplify(
     source = apply_edits(source, accepted)
     all_accepted.extend(accepted)
     all_rejected.extend(rejected)
-    return source, all_accepted, all_rejected
+
+    candidates = step_star_iframe_candidates(source)
+    accepted, rejected = accepted_selectively(source, candidates, checker)
+    source = apply_edits(source, accepted)
+    all_accepted.extend(accepted)
+    all_rejected.extend(rejected)
+
+    if accepted:
+        for find_candidates in (star_then_step_candidates, step_then_star_candidates):
+            candidates = find_candidates(source)
+            accepted, rejected = accepted_selectively(source, candidates, checker)
+            source = apply_edits(source, accepted)
+            all_accepted.extend(accepted)
+            all_rejected.extend(rejected)
+
+    return source, all_accepted, list(dict.fromkeys(all_rejected))
 
 
 def unified_diff(path: Path, before: str, after: str) -> str:
@@ -400,8 +482,8 @@ def read_source(path: Path) -> str:
 def parse_args(args: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Simplify step and sl_pull proof scripts, retaining only changes "
-            "accepted by Lean."
+            "Simplify step, iframe, and sl_pull proof scripts, retaining only "
+            "changes accepted by Lean."
         )
     )
     mode = parser.add_mutually_exclusive_group()
@@ -458,6 +540,7 @@ def main(args: list[str]) -> int:
         summary = ", ".join(
             f"{sum(edit.kind == kind for edit in edits)} {kind}"
             for kind in (
+                "iframe after step*",
                 "bounded step run",
                 "step bound",
                 "step/step* pair",
