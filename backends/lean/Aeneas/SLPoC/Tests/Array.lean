@@ -203,7 +203,7 @@ example (a : Array Nat 3) (xs ys : List Nat) :
 
 private def functionalArray :
     Aeneas.Std.Array Nat (Aeneas.Std.Usize.ofNat 3) :=
-  ⟨[1, 2, 3], by simp⟩
+  Aeneas.Std.Array.from [1, 2, 3] (by simp)
 
 def arrayMutToRawRoundTrip :
     Result (Aeneas.Std.Array Nat (Aeneas.Std.Usize.ofNat 3)) := do
@@ -234,7 +234,7 @@ example :
   native_decide
 
 private def functionalSlice : Aeneas.Std.Slice Nat :=
-  ⟨[4, 5, 6], by scalar_tac⟩
+  Aeneas.Std.Slice.from [4, 5, 6] (by scalar_tac)
 
 def bufferMutToRawRoundTrip : Result (Aeneas.Std.Slice Nat) := do
   let b ← Buffer.mut_to_raw functionalSlice
