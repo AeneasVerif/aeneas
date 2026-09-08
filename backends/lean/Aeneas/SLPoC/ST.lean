@@ -370,6 +370,17 @@ theorem triple_ipure' {P : Prop} {m : Result α} {Q : IPost α}
   have ⟨hP, hF⟩ := (sep_pure_l P F h).mp hPre
   exact hTriple hP F h ((sep_emp_l F).mpr h hF)
 
+/-- A triple with a pure precondition and postcondition is a pure implication
+whose conclusion owns nothing. -/
+theorem triple_ipure_iff {P : Prop} {m : Result α} {Q : α → Prop} :
+    triple ⌜P⌝ m (fun value => ⌜Q value⌝) ↔
+      (P → triple emp m (fun value => ⌜Q value⌝)) := by
+  constructor
+  · intro hTriple hP
+    exact triple_conseq hTriple ((entails_emp_ipure_iff P).2 hP)
+      (fun _ => entails_refl _)
+  · exact triple_ipure'
+
 theorem triple_pure {P : IPre} {Q : IPost α} {value : α}
     (hPost : P ⊢ Q value) :
     triple P (pure value : Result α) Q := by
@@ -565,6 +576,17 @@ theorem dtriple_ipure' {P : Prop} {m : Result α} {Q : IPost α}
   intro F h hPre
   have ⟨hP, hF⟩ := (sep_pure_l P F h).mp hPre
   exact hTriple hP F h ((sep_emp_l F).mpr h hF)
+
+/-- A partial triple with a pure precondition and postcondition is a pure
+implication whose conclusion owns nothing. -/
+theorem dtriple_ipure_iff {P : Prop} {m : Result α} {Q : α → Prop} :
+    dtriple ⌜P⌝ m (fun value => ⌜Q value⌝) ↔
+      (P → dtriple emp m (fun value => ⌜Q value⌝)) := by
+  constructor
+  · intro hTriple hP
+    exact dtriple_conseq hTriple ((entails_emp_ipure_iff P).2 hP)
+      (fun _ => entails_refl _)
+  · exact dtriple_ipure'
 
 theorem dtriple_exists {ι : Sort _} {J : ι → IPre} {m : Result α} {Q : IPost α}
     (hTriple : ∀ x, dtriple (J x) m Q) : dtriple iprop(∃ x, J x) m Q := by
@@ -877,6 +899,44 @@ theorem dtriple_step_mono {α : Type u} {P Pm : IPre} {Q : IPost α} (m : Result
 theorem forall_unit {p : Unit → Prop} : (∀ value, p value) ↔ p () :=
   ⟨fun h => h (), fun h value => match value with | () => h⟩
 
+/-- Internal tuple destructuring marker for pure postconditions.
+
+Unlike a pattern lambda, this survives elaboration in a form the delaborator
+can recognize.  Its simp lemmas make it transparent to `step`. -/
+@[inline] def purePostUncurry {α β γ : Type _} (f : α → β → γ) : α × β → γ :=
+  fun (a, b) => f a b
+
+@[simp]
+theorem purePostUncurry_apply {α β γ : Type _} (f : α → β → γ) (p : α × β) :
+    purePostUncurry f p = f p.1 p.2 := by
+  cases p
+  rfl
+
+@[simp]
+theorem purePostUncurry_eq {α β γ : Type _} (f : α → β → γ) :
+    purePostUncurry f = fun p => f p.1 p.2 := by
+  funext p
+  exact purePostUncurry_apply f p
+
+/-- Internal marker for a boundary between separate pure-postcondition binders.
+
+It has the same semantics as `purePostUncurry`, but the delaborator prints it
+as `x y => ...` rather than `(x, y) => ...`. -/
+@[inline] def purePostCurry {α β γ : Type _} (f : α → β → γ) : α × β → γ :=
+  fun (a, b) => f a b
+
+@[simp]
+theorem purePostCurry_apply {α β γ : Type _} (f : α → β → γ) (p : α × β) :
+    purePostCurry f p = f p.1 p.2 := by
+  cases p
+  rfl
+
+@[simp]
+theorem purePostCurry_eq {α β γ : Type _} (f : α → β → γ) :
+    purePostCurry f = fun p => f p.1 p.2 := by
+  funext p
+  exact purePostCurry_apply f p
+
 /-- The tactic `step` runs on the goals it prepares. A no-op on a goal which is
 not a triple. -/
 macro "intro_triple" : tactic =>
@@ -893,7 +953,13 @@ macro "intro_triple" : tactic =>
     mk_spec_bind_skip_args := 7
     qimp_elim_tactics := #[
       ``forall_eq, ``forall_eq',
-      ``forall_unit, ``true_imp_iff
+      ``triple_ipure_iff,
+      ``forall_unit,
+      ``purePostCurry_apply, ``purePostCurry_eq,
+      ``purePostUncurry_apply, ``purePostUncurry_eq,
+      ``sep_emp_l_eq, ``sep_ipure_true_l_eq,
+      ``entails_emp_postWand_ipure_iff,
+      ``entails_emp_ipure_iff, ``entails_refl, ``true_imp_iff
     ]
     intro_tactic := SpecInfo.tac `(tactic| intro_triple)
     discharge_tactic := some `iframe
@@ -912,7 +978,13 @@ macro "intro_triple" : tactic =>
     mk_spec_bind_skip_args := 7
     qimp_elim_tactics := #[
       ``forall_eq, ``forall_eq',
-      ``forall_unit, ``true_imp_iff
+      ``dtriple_ipure_iff,
+      ``forall_unit,
+      ``purePostCurry_apply, ``purePostCurry_eq,
+      ``purePostUncurry_apply, ``purePostUncurry_eq,
+      ``sep_emp_l_eq, ``sep_ipure_true_l_eq,
+      ``entails_emp_postWand_ipure_iff,
+      ``entails_emp_ipure_iff, ``entails_refl, ``true_imp_iff
     ]
     intro_tactic := SpecInfo.tac `(tactic| intro_triple)
     discharge_tactic := some `iframe
@@ -1023,15 +1095,57 @@ scoped syntax:54 (name := pureDspecPred)
 
 open Lean PrettyPrinter
 
-/-- The `IPost` a pure postcondition denotes.  One binder needs no pattern;
-several bind the components of the returned tuple, so the postcondition is the
-pattern-matching lambda `fun (x, y, z) => ⌜p⌝` — an ordinary `IPost`, with no
-`uncurry` chain to peel back off, because the target is a triple. -/
+/-- Build a `purePostUncurry` chain for the leaves of a tuple pattern. -/
+private partial def buildPureUncurryLam (xs : List Term) (body : Term) :
+    MacroM Term := do
+  let uncurryIdent := mkIdent ``purePostUncurry
+  match xs with
+  | [] => pure body
+  | [x] => `(fun $x => $body)
+  | [a, b] => `($uncurryIdent (fun $a $b => $body))
+  | a :: rest =>
+    let inner ← buildPureUncurryLam rest body
+    `($uncurryIdent (fun $a => $inner))
+
+/-- Elaborate one possibly nested tuple binder without generating a matcher
+function, so the delaborator can recover the pattern from `purePostUncurry`. -/
+private partial def mkPureBinderFun (depth : Nat) (binder : Term) (body : Term) :
+    MacroM Term := do
+  match binder with
+  | `( ($a, $bs,*) ) =>
+    let xs : List Term := a :: bs.getElems.toList
+    let mut leafIdents : List Term := []
+    let mut wrappedBody := body
+    for (x, idx) in xs.zipIdx.reverse do
+      match x with
+      | `( ($_, $_,*) ) =>
+        let freshIdent := mkIdent $ .mkSimple s!"_p_{depth}_{idx}"
+        let inner ← mkPureBinderFun (depth + 1) x wrappedBody
+        wrappedBody ← `($inner $freshIdent)
+        leafIdents := freshIdent :: leafIdents
+      | _ =>
+        leafIdents := x :: leafIdents
+    buildPureUncurryLam leafIdents wrappedBody
+  | _ => `(fun $binder => $body)
+
+/-- Preserve the boundary between separate binders with `purePostCurry`, while
+using `purePostUncurry` inside each explicit tuple binder. -/
+private partial def mkPurePostSyntax (body : Term) (depth : Nat)
+    (binders : List Term) : MacroM Term := do
+  match binders with
+  | [] => pure body
+  | [x] => mkPureBinderFun depth x body
+  | x :: rest =>
+    let rest ← mkPurePostSyntax body (depth + 1) rest
+    let inner ← mkPureBinderFun depth x rest
+    `(purePostCurry $inner)
+
+/-- The `IPost` a pure postcondition denotes.  Transparent marker functions
+record whether each product came from separate binders or an explicit tuple
+pattern, allowing the delaborator to reproduce the original surface syntax. -/
 private def mkPurePost (binders : Array Term) (p : Term) : MacroM Term := do
-  match binders.toList with
-  | [] => `(fun _ => ⌜$p⌝)
-  | [x] => `(fun $x => ⌜$p⌝)
-  | x :: rest => `(fun ($x, $(rest.toArray),*) => ⌜$p⌝)
+  let body ← `(⌜$p⌝)
+  mkPurePostSyntax body 0 binders.toList
 
 /-- Macro expansion for a single binder. -/
 scoped macro_rules (kind := pureSpecBinders)
@@ -1073,13 +1187,71 @@ prints as one.
 -/
 
 open Delaborator SubExpr
+open Std.Delab
+  (enterLams delabBindersWith buildTupleTerm delabUncurryAsTupleWith)
 
-/-- Peel `fun x => ⌜body⌝`, the postcondition of a pure specification. -/
-private def delabPurePost : DelabM (Term × Term) := do
-  guard (← getExpr).isLambda
-  withBindingBodyUnusedName fun binder => do
-    guard ((← getExpr).isAppOfArity ``ipure 1)
-    return (⟨binder⟩, ← withAppArg delab)
+/-- Delaborate the `⌜body⌝` at the end of a pure postcondition. -/
+private def delabPureBody : DelabM Term := do
+  guard ((← getExpr).isAppOfArity ``ipure 1)
+  withAppArg delab
+
+/-- Enter one explicit tuple binder without consuming continuation lambdas. -/
+private partial def enterPureUncurryOnce (acc : Array Std.Delab.BinderEntry)
+    (k : Array Std.Delab.BinderEntry → DelabM α) : DelabM α := do
+  match (← getExpr) with
+  | .lam n _ _ _ =>
+    let pos ← getPos
+    withBindingBody' n pure fun fv => do
+      let acc' := acc.push (fv.fvarId!, n, pos)
+      if acc'.size >= 2 then k acc'
+      else if (← getExpr).isAppOfArity ``purePostUncurry 4 then
+        withAppArg <| enterPureUncurryOnce acc' k
+      else
+        enterPureUncurryOnce acc' k
+  | _ => k acc
+
+private def isPurePostBinderWrapper (e : Expr) : Bool :=
+  match_expr e.consumeMData with
+  | purePostCurry _ _ _ _ => true
+  | purePostUncurry _ _ _ _ => true
+  | _ => false
+
+/-- Recover separate binders, explicit tuple binders, and the final pure body
+from the transparent marker chain produced by `mkPurePost`. -/
+private partial def delabPurePost : DelabM (Array Term × Term) := do
+  match_expr (← getExpr).consumeMData with
+  | purePostCurry _ _ _ _ =>
+    withAppArg do
+      match_expr (← getExpr).consumeMData with
+      | purePostUncurry _ _ _ _ =>
+        withAppArg <| enterPureUncurryOnce #[] fun tupleBinders => do
+          let (patterns, (moreBinders, body)) ←
+            delabBindersWith ``purePostUncurry tupleBinders.toList delabPurePost
+          return (#[← buildTupleTerm patterns] ++ moreBinders, body)
+      | _ => delabLamsThenRecurse
+  | purePostUncurry _ _ _ _ =>
+    withAppArg do
+      let (tupleBinder, body) ←
+        delabUncurryAsTupleWith ``purePostUncurry delabPureBody
+      return (#[tupleBinder], body)
+  | _ => delabLamsThenRecurse
+where
+  delabLamsThenRecurse : DelabM (Array Term × Term) := do
+    let e := (← getExpr).consumeMData
+    if let .lam _ _ body _ := e then
+      if !body.consumeMData.isLambda && !isPurePostBinderWrapper body then
+        withBindingBodyUnusedName fun binder =>
+          return (#[⟨binder⟩], ← delabPureBody)
+      else
+        enterLams #[] fun binders => do
+          if binders.size == 1 && isPurePostBinderWrapper (← getExpr) then
+            let (patterns, (moreBinders, body)) ←
+              delabBindersWith ``purePostUncurry binders.toList delabPurePost
+            return (patterns ++ moreBinders, body)
+          else
+            delabBindersWith ``purePostUncurry binders.toList delabPureBody
+    else
+      return (#[], ← delabPureBody)
 
 /-- `triple emp m (fun x => ⌜p⌝)` prints as `m ⦃ x => p ⦄`. -/
 @[scoped delab app.Aeneas.SepLogic.triple]
@@ -1087,8 +1259,9 @@ def delabPureTriple : Delab := do
   guard ((← getExpr).isAppOfArity ``Aeneas.SepLogic.triple 4)
   guard (← withNaryArg 1 do return (← getExpr).isConstOf ``Aeneas.SepLogic.«emp»)
   let monadExpr ← withNaryArg 2 delab
-  let (binder, body) ← withNaryArg 3 delabPurePost
-  `($monadExpr ⦃ $binder => $body ⦄)
+  let (binders, body) ← withNaryArg 3 delabPurePost
+  guard (binders.size > 0)
+  `($monadExpr ⦃ $(binders[0]!) $(binders.drop 1)* => $body ⦄)
 
 /-- `dtriple emp m (fun x => ⌜p⌝)` prints as `m ⦃ x => p ⦄div`. -/
 @[scoped delab app.Aeneas.SepLogic.dtriple]
@@ -1096,8 +1269,9 @@ def delabPureDtriple : Delab := do
   guard ((← getExpr).isAppOfArity ``Aeneas.SepLogic.dtriple 4)
   guard (← withNaryArg 1 do return (← getExpr).isConstOf ``Aeneas.SepLogic.«emp»)
   let monadExpr ← withNaryArg 2 delab
-  let (binder, body) ← withNaryArg 3 delabPurePost
-  `($monadExpr ⦃ $binder => $body ⦄div)
+  let (binders, body) ← withNaryArg 3 delabPurePost
+  guard (binders.size > 0)
+  `($monadExpr ⦃ $(binders[0]!) $(binders.drop 1)* => $body ⦄div)
 
 end WP
 
