@@ -53,6 +53,22 @@ example (m : Result (Nat × Nat)) (p : Nat → Nat → Prop) :
 example (m : Result Nat) (p : Nat → Prop) :
     (m ⦃ p ⦄) = triple emp m (fun value => ⌜p value⌝) := rfl
 
+example (P : Prop) : (emp ⊢ ⌜P⌝) ↔ P :=
+  entails_emp_ipure_iff P
+
+example (P : Prop) (m : Result Nat) (Q : Nat → Prop) :
+    triple ⌜P⌝ m (fun value => ⌜Q value⌝) ↔ (P → m ⦃ Q ⦄) :=
+  triple_ipure_iff
+
+example (P : Prop) (m : Result Nat) (Q : Nat → Prop) :
+    dtriple ⌜P⌝ m (fun value => ⌜Q value⌝) ↔ (P → m ⦃ Q ⦄div) :=
+  dtriple_ipure_iff
+
+example (P Q : Nat → Prop) :
+    (emp ⊢ (fun value => ⌜P value⌝) -∗+ fun value => ⌜Q value⌝) ↔
+      ∀ value, P value → Q value :=
+  entails_emp_postWand_ipure_iff P Q
+
 /-! ## 2. Pretty-printing round trips -/
 
 /-- error: unsolved goals
@@ -66,6 +82,45 @@ example (m : Result Nat) (p : Nat → Prop) :
 /-- error: unsolved goals
 ⊢ Result.ok 0 ⦃ x => True ⦄ -/
 #guard_msgs in example : triple emp (Result.ok 0) (fun _ => ⌜True⌝) := by done
+
+/-- error: unsolved goals
+⊢ Result.ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄ -/
+#guard_msgs in
+example : Result.ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ Result.ok (0, 1) ⦃ x y => x = 0 ∧ y = 1 ⦄ -/
+#guard_msgs in
+example : Result.ok (0, 1) ⦃ x y => x = 0 ∧ y = 1 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ Result.ok (0, 1) ⦃ x y => x = 0 ∧ y = 1 ⦄div -/
+#guard_msgs in
+example : Result.ok (0, 1) ⦃ x y => x = 0 ∧ y = 1 ⦄div := by done
+
+/-- error: unsolved goals
+⊢ Result.ok ((0, 1), 2) ⦃ (a, b) c => a = 0 ∧ b = 1 ∧ c = 2 ⦄ -/
+#guard_msgs in
+example : Result.ok ((0, 1), 2) ⦃ (a, b) c =>
+    a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ Result.ok (0, 1, 2) ⦃ a b c => a = 0 ∧ b = 1 ∧ c = 2 ⦄ -/
+#guard_msgs in
+example : Result.ok (0, 1, 2) ⦃ a b c =>
+    a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ Result.ok (0, 1, 2) ⦃ a (b, c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ -/
+#guard_msgs in
+example : Result.ok (0, 1, 2) ⦃ a (b, c) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ Result.ok (0, 1, 2) ⦃ (a, (b, c)) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ -/
+#guard_msgs in
+example : Result.ok (0, 1, 2) ⦃ (a, (b, c)) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
 
 /-! ## 3. The gap the notation closes
 
@@ -198,7 +253,9 @@ def pureCall (x : Nat) : Result Nat := do
 
 example (x : Nat) : pureCall x ⦃ r => r = x + 3 ⦄ := by
   unfold pureCall
-  step*
+  step
+  step
+  step
 
 /-! ## 6. Total and partial correctness
 
@@ -230,20 +287,19 @@ theorem callWith.spec_pure (f : Nat → Result Nat) (x : Nat) (post : Nat → Pr
 /-- Met by a closure that really is pure ... -/
 example (x : Nat) : callWith bump x ⦃ y => y = x + 1 ⦄ := by
   apply callWith.spec_pure
-  step*
+  step
 
 /-- ... and by one that allocates, mutates and frees. -/
 example (x : Nat) : callWith bumpBoxed x ⦃ y => y = x + 1 ⦄ := by
   apply callWith.spec_pure
-  step*
+  step
 
 /-- The whole higher-order call, pure contract and all, framed into a heap
 proof by `step` — framing a triple is what `step` already does. -/
 example (p : Ptr Nat) (v x : Nat) :
     ⦃ p ↦ v ⦄ callWith bumpBoxed x ⦃⇓ y => ⌜y = x + 1⌝ ∗ p ↦ v⦄ := by
   step with (callWith.spec_pure (post := fun y => y = x + 1))
-  · step*
-  · iframe
+  · step
 
 /-- A *separating* contract.  One specification covers a pure closure, a heap
 closure, and a closure that mixes them. -/
@@ -254,7 +310,7 @@ theorem callWith.spec (f : Nat → Result Nat) (x : Nat) (P : IPre) (Q : IPost N
 
 example (x : Nat) : callWith bump x ⦃ y => y = x + 1 ⦄ := by
   apply callWith.spec
-  step*
+  step
 
 example (p : Ptr Nat) (v w : Nat) :
     ⦃ p ↦ v ⦄ callWith (fun n => do update p n; read p) w
@@ -288,14 +344,12 @@ theorem updateWith.spec (f : Nat → Result Nat) (p : Ptr Nat) (v w : Nat)
 example (p : Ptr Nat) (v : Nat) :
     ⦃ p ↦ v ⦄ updateWith bump p ⦃⇓ p ↦ v + 1⦄ := by
   step* +inferPost
-  iframe
 
 /-- The crossing point: `bumpBoxed` allocates, mutates and frees, yet it meets
 the *pure* contract of `updateWith.spec`. -/
 example (p : Ptr Nat) (v : Nat) :
     ⦃ p ↦ v ⦄ updateWith bumpBoxed p ⦃⇓ p ↦ v + 1⦄ := by
   step* +inferPost
-  iframe
 
 /-- Nesting: a higher-order call inside a higher-order call, pure contract on
 the inside and a separating one on the outside. -/
@@ -304,8 +358,8 @@ example (p : Ptr Nat) (v : Nat) :
       ⦃⇓ y => ⌜y = v + 1⌝ ∗ p ↦ v + 1⦄ := by
   apply callWith.spec
   step with (updateWith.spec (w := v + 1))
-  · step*
-  · step*
+  · step
+  · step
 
 end Ex
 
@@ -332,5 +386,159 @@ example (x : Nat) : ∃ y, Ex.bump x = Result.ok y ∧ y = x + 1 := by
   obtain ⟨y, hy, hp⟩ := triple_emp_eq_ok (Q := fun y => ⌜y = x + 1⌝)
     (by unfold Ex.bump; exact HeapFree.ok _) (Ex.bump.spec x)
   exact ⟨y, hy, (pure_holds ∅).mp hp⟩
+
+/-! ## 9. Examples carried over from `Aeneas.Std.WP`
+
+The statements below are the executable examples from the old pure judgment.
+They confirm that the same notation, tuple destructuring, precedence and
+higher-order postconditions elaborate against the triple-based notation.
+
+The old proofs that explicitly call `spec_bind`, `spec_mono`, `qimp_spec` and
+the related `imp` helpers are necessarily judgment-specific.  Their statements
+remain unchanged; their proofs use the triple registration through `step`.
+-/
+
+namespace LegacyWPExamples
+
+open Aeneas.Std (massert)
+open Aeneas.Std.Result
+
+/-! ### Notation and tuple binders -/
+
+example : ok 0 ⦃ r => r = 0 ⦄ := by step*
+example : triple emp (ok 0) (fun _ => ⌜True⌝) := by step*
+example : ok 0 ⦃ _ => True ⦄ := by step*
+example : triple emp (ok (0, 1)) (fun (x, y) => ⌜x = 0 ∧ y = 1⌝) := by step*
+example : ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄ := by step*
+example : ok (0, 1) ⦃ x y => x = 0 ∧ y = 1 ⦄ := by step*
+example : ok (0, 1, 2) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = 2 ⦄ := by step*
+example : ok (0, 1, true) ⦃ x y z => x = 0 ∧ y = 1 ∧ z ⦄ := by step*
+example : let P (x : Nat) := x = 0; ok 0 ⦃ P ⦄ := by step*
+
+example : ok ((0, 1), 2) ⦃ (a, b) c => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by step*
+example : ok ((0, 1), 2) ⦃ ((a, b), c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by step*
+example : ok (0, (1, 2)) ⦃ a (b, c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by step*
+example : ok (0, (1, 2)) ⦃ (a, (b, c)) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by step*
+example : ok ((0, 1), (2, 3)) ⦃ (a, b) (c, d) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by step*
+example : ok ((0, 1), (2, 3)) ⦃ ((a, b), (c, d)) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by step*
+example : ok ((0, 1), 2) ⦃ ((a, b), c) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by step*
+example : ok ((0, 1), (2, 3)) ⦃ ((a, b), (c, d)) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by step*
+example : ok (0, (1, 2), (3, (4, 5))) ⦃ a (b, c) (d, (e, f)) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ∧ f = 5 ⦄ := by step*
+example : ok ((0, (1, (2, 3))), 4) ⦃ ((a, (b, (c, d))), e) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ⦄ := by step*
+
+/-! The four old pretty-printing examples also elaborate as propositions. -/
+
+example : ok (0, 1, 2) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = 2 ⦄ := by step*
+example : ok ((0, 1), 2) ⦃ (a, b) c =>
+    a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by step*
+example : ok ((0, 1), (2, 3)) ⦃ (a, b) (c, d) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by step*
+example : ok (0, (1, 2), ((3, 4, 5), 6)) ⦃ a (b, c) ((d, e, f), g) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ∧ f = 5 ∧ g = 6 ⦄ := by step*
+
+/-! ### Precedence and nested specifications -/
+
+section
+
+variable (U32 : Type) [HAdd U32 U32 (Result U32)]
+variable (x y : U32)
+
+#elab x + y ⦃ _ => True ⦄
+#elab True → x + y ⦃ _ => True ⦄
+#elab True ∧ x + y ⦃ _ => True ⦄
+
+example (f : Nat → Result (Nat × (Nat → Result Nat)))
+    (_ : ∀ x, f x ⦃ (y, g) => y > 0 ∧ ∀ x, g x ⦃ z => z > y ⦄ ⦄ ∧ True) :
+    True := by
+  simp only
+
+end
+
+/-! ### Bind and consequence examples -/
+
+def add1 (x : Nat) := Result.ok (x + 1)
+
+@[step]
+theorem add1_spec (x : Nat) : add1 x ⦃ y => y = x + 1⦄ := by
+  unfold add1
+  step
+
+example (x : Nat) :
+    (do
+      let y ← add1 x
+      add1 y) ⦃ y => y = x + 2 ⦄ := by
+  step
+  step
+
+example (x : Nat) :
+    (do
+      let y ← add1 x
+      add1 y) ⦃ y => y = x + 2 ⦄ := by
+  step
+  step
+
+def add2 (x : Nat) := Result.ok (x + 1, x + 2)
+
+@[step]
+theorem add2_spec (x : Nat) :
+    add2 x ⦃ (y, z) => y = x + 1 ∧ z = x + 2⦄ := by
+  unfold add2
+  step
+
+example (x : Nat) :
+    (do
+      let (y, _) ← add2 x
+      add2 y) ⦃ (y, _) => y = x + 2 ⦄ := by
+  step
+  rcases y with ⟨y, z⟩
+  step
+  omega
+
+@[step]
+theorem add2_spec' (x : Nat) :
+    add2 x ⦃ y z => y = x + 1 ∧ z = x + 2⦄ := by
+  unfold add2
+  step
+
+example (x : Nat) :
+    (do
+      let (y, _) ← add2 x
+      add2 y) ⦃ y _ => y = x + 2 ⦄ := by
+  step
+  rcases y with ⟨y, z⟩
+  step
+  omega
+
+@[step]
+private theorem massert_spec' (b : Prop) [Decidable b] (h : b) :
+    massert b ⦃ _ => True ⦄ := by
+  simp only [massert, h, ↓reduceIte]
+  exact triple_ok_intro fun _ => trivial
+
+example :
+    (do
+      massert (0 < 1)
+      massert (1 < 2)) ⦃ _ => True ⦄ := by
+  step
+  step
+
+example (zero : List Nat → Result (List Nat))
+    (zero_spec : ∀ s, zero s ⦃ s' =>
+      ∃ (h : s'.length = s.length),
+      (∀ i, (_ : i < s.length) → s'[i]'(by grind) = 0) ⦄)
+    (s : List Nat) :
+    (do
+      let _ ← zero s
+      pure ()) ⦃ _ => True ⦄ := by
+  step
+  step
+
+end LegacyWPExamples
 
 end PureSpecNotationTests

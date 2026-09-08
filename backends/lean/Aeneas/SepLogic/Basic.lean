@@ -242,6 +242,7 @@ theorem sep_emp_r (H : IProp) :
     entails_trans (sep_comm H emp).mp (sep_emp_l H).mp,
     entails_trans (sep_emp_l H).mpr (sep_comm H emp).mpr⟩
 
+@[simp]
 theorem sep_emp_l_eq (H : IProp) :
     (emp ∗ H) = H :=
   bientails_eq (sep_emp_l H)
@@ -272,6 +273,14 @@ theorem emp_holds (h : Heap) : (emp : IProp) h ↔ True :=
 @[simp]
 theorem pure_holds {P : Prop} (h : Heap) : (⌜P⌝ : IProp) h ↔ P :=
   Iff.rfl
+
+/-- An entailment from `emp` to a pure assertion is exactly the pure fact. -/
+theorem entails_emp_ipure_iff (P : Prop) : (emp ⊢ ⌜P⌝) ↔ P := by
+  constructor
+  · intro h
+    exact h ∅ trivial
+  · intro h _ _
+    exact h
 
 theorem Ref.pointsTo_holds {α : Type} (r : Ref α) (value : α)
     (h : Heap) : (r ↦ value) h ↔ Heap.Sub (Heap.singleton r value) h :=
@@ -332,6 +341,13 @@ theorem sep_pure_l (P : Prop) (H : IProp) (h : Heap) :
   · rintro ⟨hP, hH⟩
     exact ⟨∅, h, PartialCommMonoid.compatible_empty_left h,
       (PartialCommMonoid.empty_union h).symm, hP, hH⟩
+
+@[simp]
+theorem sep_ipure_true_l_eq (H : IProp) :
+    (⌜True⌝ ∗ H) = H := by
+  apply IProp.ext
+  intro h
+  simpa using sep_pure_l True H h
 
 theorem pure_sep_intro {P : Prop} (H : IProp) (hP : P) :
     H ⊢ ⌜P⌝ ∗ H := by
@@ -496,5 +512,17 @@ theorem entails_postWand_pure_eq {α : Type u} (H : IProp) (value : α) (Q : IPo
     exact entails_trans (pure_sep_intro (P := value = value) H rfl) (h value)
   · intro h _
     exact entails_pure_l fun hEq => hEq ▸ h
+
+/-- A postcondition wand between pure postconditions, owned from `emp`, is
+pointwise implication between the underlying propositions. -/
+theorem entails_emp_postWand_ipure_iff {α : Type u} (P Q : α → Prop) :
+    (emp ⊢ (fun value => ⌜P value⌝) -∗+ fun value => ⌜Q value⌝) ↔
+      ∀ value, P value → Q value := by
+  rw [postWand_equiv]
+  constructor
+  · intro h value hP
+    exact h value ∅ ((sep_emp_r ⌜P value⌝).mpr ∅ hP)
+  · intro h value heap hPre
+    exact h value ((sep_emp_r ⌜P value⌝).mp heap hPre)
 
 end Aeneas.SepLogic
