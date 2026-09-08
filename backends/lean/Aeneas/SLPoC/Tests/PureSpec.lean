@@ -49,6 +49,14 @@ example (m : Result Nat) (p : Nat → Prop) :
 example (m : Result (Nat × Nat)) (p : Nat → Nat → Prop) :
     (m ⦃ x y => p x y ⦄) = triple emp m (fun (x, y) => ⌜p x y⌝) := rfl
 
+/-- SL triples preserve the same distinction between separate and tuple
+postcondition binders while denoting the same underlying function. -/
+example (P : IProp) (m : Result (Nat × Nat)) (Q : Nat → Nat → IProp) :
+    (⦃ P ⦄ m ⦃⇓ x y => Q x y ⦄) = triple P m (fun (x, y) => Q x y) := rfl
+
+example (P : IProp) (m : Result (Nat × Nat)) (Q : Nat → Nat → IProp) :
+    (⦃ P ⦄ m ⦃⇓ (x, y) => Q x y ⦄) = triple P m (fun (x, y) => Q x y) := rfl
+
 /-- A postcondition given as a predicate is applied to the result. -/
 example (m : Result Nat) (p : Nat → Prop) :
     (m ⦃ p ⦄) = triple emp m (fun value => ⌜p value⌝) := rfl
@@ -121,6 +129,164 @@ example : Result.ok (0, 1, 2) ⦃ a (b, c) =>
 #guard_msgs in
 example : Result.ok (0, 1, 2) ⦃ (a, (b, c)) =>
     a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
+
+/-! The `uncurry_elim_tactics` pass handles both marker forms before the
+triple-specific introduction and entailment simplification passes. -/
+
+example : Result.ok (0, 1) ⦃ x y => x = 0 ∧ y = 1 ⦄ := by
+  step
+
+example : Result.ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄ := by
+  step
+
+example : Result.ok (0, 1) ⦃ x y => x = 0 ∧ y = 1 ⦄div := by
+  step
+
+example : Result.ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄div := by
+  step
+
+/-- error: unsolved goals
+p : Ptr ℕ
+⊢ ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ (x, y) => p ↦ x + y ⦄ -/
+#guard_msgs in
+example (p : Ptr Nat) :
+    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ (x, y) =>
+      p ↦ (x + y)
+    ⦄ := by done
+
+/-- error: unsolved goals
+p : Ptr ℕ
+⊢ ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ x y => p ↦ x + y ⦄ -/
+#guard_msgs in
+example (p : Ptr Nat) :
+    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ x y =>
+      p ↦ (x + y)
+    ⦄ := by done
+
+/-- error: unsolved goals
+p : Ptr ℕ
+⊢ ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ x y => p ↦ x + y ⦄div -/
+#guard_msgs in
+example (p : Ptr Nat) :
+    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ x y =>
+      p ↦ (x + y)
+    ⦄div := by done
+
+/-- error: unsolved goals
+p : Ptr ℕ
+⊢ ⦃ p ↦ 3 ⦄ Result.ok ((0, 1), 2) ⦃⇓ (a, b) c => p ↦ a + b + c ⦄ -/
+#guard_msgs in
+example (p : Ptr Nat) :
+    ⦃ p ↦ 3 ⦄ Result.ok ((0, 1), 2) ⦃⇓ (a, b) c =>
+      p ↦ (a + b + c)
+    ⦄ := by done
+
+/-- error: unsolved goals
+p : Ptr ℕ
+⊢ ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ a b c => p ↦ a + b + c ⦄ -/
+#guard_msgs in
+example (p : Ptr Nat) :
+    ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ a b c =>
+      p ↦ (a + b + c)
+    ⦄ := by done
+
+/-- error: unsolved goals
+p : Ptr ℕ
+⊢ ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ a (b, c) => p ↦ a + b + c ⦄ -/
+#guard_msgs in
+example (p : Ptr Nat) :
+    ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ a (b, c) =>
+      p ↦ (a + b + c)
+    ⦄ := by done
+
+/-- error: unsolved goals
+p : Ptr ℕ
+⊢ ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ (a, (b, c)) => p ↦ a + b + c ⦄ -/
+#guard_msgs in
+example (p : Ptr Nat) :
+    ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ (a, (b, c)) =>
+      p ↦ (a + b + c)
+    ⦄ := by done
+
+example (p : Ptr Nat) :
+    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ (x, y) =>
+      p ↦ (x + y)
+    ⦄ := by
+  step
+
+example (p : Ptr Nat) :
+    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ (x, y) =>
+      p ↦ (x + y)
+    ⦄div := by
+  step
+
+example (p : Ptr Nat) :
+    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ x y =>
+      p ↦ (x + y)
+    ⦄ := by
+  step
+
+example (p : Ptr Nat) :
+    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ x y =>
+      p ↦ (x + y)
+    ⦄div := by
+  step
+
+example (p : Ptr Nat) :
+    ⦃ p ↦ 3 ⦄ Result.ok ((0, 1), 2) ⦃⇓ ((x, y), z) =>
+      p ↦ (x + y + z)
+    ⦄ := by
+  step
+
+example (p : Ptr Nat) :
+    ⦃ p ↦ 3 ⦄ Result.ok ((0, 1), 2) ⦃⇓ (x, y) z =>
+      p ↦ (x + y + z)
+    ⦄ := by
+  step
+
+example (p : Ptr Nat) :
+    ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ x (y, z) =>
+      p ↦ (x + y + z)
+    ⦄div := by
+  step
+
+def incr (value : Nat) : Result Nat :=
+  Result.ok (value + 1)
+
+@[step]
+theorem incr.spec (value : Nat) :
+    ⦃ emp ⦄ incr value ⦃⇓ result =>
+      ⌜result = value + 1⌝
+    ⦄ := by
+  unfold incr
+  step
+
+def pair (value : Nat) : Result (Nat × Nat) :=
+  Result.ok (value, value + 1)
+
+@[step]
+theorem pair.spec (value : Nat) :
+    pair value ⦃ first second =>
+      first = value ∧ second = value + 1
+    ⦄ := by
+  unfold pair
+  step
+
+def incrPair (value : Nat) : Result Nat := do
+  let output ← pair value
+  incr (output.1 + output.2)
+
+/- Registered postcondition uncurrying runs before `intro_tactic`, which then exposes
+both tuple components and both pure hypotheses. -/
+example (value : Nat) :
+    ⦃ emp ⦄ incrPair value ⦃⇓ result =>
+      ⌜result = value + (value + 1) + 1⌝
+    ⦄ := by
+  unfold incrPair
+  step as ⟨ first, second, hFirst, hSecond ⟩
+  guard_hyp hFirst : first = value
+  guard_hyp hSecond : second = value + 1
+  step*
 
 /-! ## 3. Separation-logic triple pretty-printing -/
 
@@ -587,10 +753,7 @@ example (x : Nat) :
     (do
       let (y, _) ← add2 x
       add2 y) ⦃ (y, _) => y = x + 2 ⦄ := by
-  step
-  rcases y with ⟨y, z⟩
-  step
-  omega
+  step*
 
 @[step]
 theorem add2_spec' (x : Nat) :
@@ -602,10 +765,7 @@ example (x : Nat) :
     (do
       let (y, _) ← add2 x
       add2 y) ⦃ y _ => y = x + 2 ⦄ := by
-  step
-  rcases y with ⟨y, z⟩
-  step
-  omega
+  step*
 
 @[step]
 private theorem massert_spec' (b : Prop) [Decidable b] (h : b) :
