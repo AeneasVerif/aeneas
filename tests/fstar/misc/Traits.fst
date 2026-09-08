@@ -287,9 +287,7 @@ noeq type withConstTy_t (self : Type0) (self_v : Type0) (self_w : Type0) (len :
 (** [traits::WithConstTy::LEN2]
     Source: 'tests/src/traits.rs', lines 166:4-166:27
     Visibility: public *)
-let withConstTy_LEN2_default (self : Type0) (clause0_v : Type0) (clause0_w :
-  Type0) (len : usize) : usize =
-  32
+let withConstTy_LEN2_default : usize = 32
 
 (** [traits::{impl traits::WithConstTy<u8, u64, 32usize> for bool}::f]:
     Source: 'tests/src/traits.rs', lines 182:4-182:42
@@ -307,7 +305,7 @@ let bool_Insts_TraitsWithConstTyU8U6432_LEN1 : usize = 12
     Source: 'tests/src/traits.rs', lines 176:0-183:1 *)
 let bool_Insts_TraitsWithConstTyU8U6432 : withConstTy_t bool u8 u64 32 = {
   cLEN1 = Ok bool_Insts_TraitsWithConstTyU8U6432_LEN1;
-  cLEN2 = Ok (withConstTy_LEN2_default bool u8 u64 32);
+  cLEN2 = Ok withConstTy_LEN2_default;
   toU64Inst = u64_Insts_TraitsToU64;
   f = bool_Insts_TraitsWithConstTyU8U6432_f;
 }
@@ -547,33 +545,31 @@ noeq type trait_t (self : Type0) = { cLEN : result usize; }
 (** [traits::{impl traits::Trait for [T; N]}::LEN]
     Source: 'tests/src/traits.rs', lines 317:4-317:25
     Visibility: public *)
-let array_Insts_TraitsTrait_LEN (t : Type0) (n : usize) : usize = n
+let array_Insts_TraitsTrait_LEN (n : usize) : usize = n
 
 (** Trait implementation: [traits::{impl traits::Trait for [T; N]}]
     Source: 'tests/src/traits.rs', lines 316:0-318:1 *)
 let array_Insts_TraitsTrait (t : Type0) (n : usize) : trait_t (array t n) = {
-  cLEN = Ok (array_Insts_TraitsTrait_LEN t n);
+  cLEN = Ok (array_Insts_TraitsTrait_LEN n);
 }
 
 (** [traits::{impl traits::Trait for traits::Wrapper<T>}::LEN]
     Source: 'tests/src/traits.rs', lines 321:4-321:25
     Visibility: public *)
-let wrapper_Insts_TraitsTrait_LEN (#t : Type0) (traitInst : trait_t t)
-  : usize =
-  0
+let wrapper_Insts_TraitsTrait_LEN : usize = 0
 
 (** Trait implementation: [traits::{impl traits::Trait for traits::Wrapper<T>}]
     Source: 'tests/src/traits.rs', lines 320:0-322:1 *)
 let wrapper_Insts_TraitsTrait (#t : Type0) (traitInst : trait_t t) : trait_t
   (wrapper_t t) = {
-  cLEN = Ok (wrapper_Insts_TraitsTrait_LEN traitInst);
+  cLEN = Ok wrapper_Insts_TraitsTrait_LEN;
 }
 
 (** [traits::use_wrapper_len]:
     Source: 'tests/src/traits.rs', lines 324:0-326:1
     Visibility: public *)
 let use_wrapper_len (#t : Type0) (traitInst : trait_t t) : result usize =
-  Ok (wrapper_Insts_TraitsTrait_LEN traitInst)
+  Ok wrapper_Insts_TraitsTrait_LEN
 
 (** [traits::Foo]
     Source: 'tests/src/traits.rs', lines 328:0-331:1
@@ -583,9 +579,7 @@ type foo_t (t : Type0) (u : Type0) = { x : t; y : u; }
 (** [traits::{traits::Foo<T, U>}::FOO]
     Source: 'tests/src/traits.rs', lines 334:4-334:43
     Visibility: public *)
-let foo_FOO (#t : Type0) (u : Type0) (traitInst : trait_t t)
-  : core_result_Result_t t i32 =
-  Core_result_Result_Err 0
+let foo_FOO (t : Type0) : core_result_Result_t t i32 = Core_result_Result_Err 0
 
 (** [traits::use_foo1]:
     Source: 'tests/src/traits.rs', lines 337:0-339:1
@@ -594,7 +588,7 @@ let use_foo1
   (#t : Type0) (u : Type0) (traitInst : trait_t t) :
   result (core_result_Result_t t i32)
   =
-  Ok (foo_FOO u traitInst)
+  Ok (foo_FOO t)
 
 (** [traits::use_foo2]:
     Source: 'tests/src/traits.rs', lines 341:0-343:1
@@ -603,5 +597,5 @@ let use_foo2
   (t : Type0) (#u : Type0) (traitInst : trait_t u) :
   result (core_result_Result_t u i32)
   =
-  Ok (foo_FOO t traitInst)
+  Ok (foo_FOO u)
 

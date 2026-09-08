@@ -180,12 +180,12 @@ Arguments v_x { _ } { _ }.
 (** [constants::{constants::V<T, N>}::LEN]
     Source: 'tests/src/constants.rs', lines 92:4-92:29
     Visibility: public *)
-Definition v_LEN (T : Type) (N : usize) : usize := N.
+Definition v_LEN (N : usize) : usize := N.
 
 (** [constants::use_v]:
     Source: 'tests/src/constants.rs', lines 95:0-97:1
     Visibility: public *)
 Definition use_v (T : Type) (N : usize) : result usize :=
-  Ok (v_LEN T N).
+  Ok (v_LEN N).
 
 End Constants.

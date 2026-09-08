@@ -160,11 +160,11 @@ type v_t (t : Type0) (n : usize) = { x : array t n; }
 (** [constants::{constants::V<T, N>}::LEN]
     Source: 'tests/src/constants.rs', lines 92:4-92:29
     Visibility: public *)
-let v_LEN (t : Type0) (n : usize) : usize = n
+let v_LEN (n : usize) : usize = n
 
 (** [constants::use_v]:
     Source: 'tests/src/constants.rs', lines 95:0-97:1
     Visibility: public *)
 let use_v (t : Type0) (n : usize) : result usize =
-  Ok (v_LEN t n)
+  Ok (v_LEN n)
 
