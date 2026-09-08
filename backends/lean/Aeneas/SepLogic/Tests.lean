@@ -12,6 +12,12 @@ namespace Aeneas.SepLogic.Tests
 example (P Q : IProp) : (P ∗ Q) ⊣⊢ (Q ∗ P) :=
   sep_comm P Q
 
+example (P : IProp) : (emp ∗ P) = P := by
+  simp
+
+example (P : IProp) : (⌜True⌝ ∗ P) = P := by
+  simp
+
 example (P Q : IProp) : P ∗ (P -∗ Q) ⊢ Q :=
   wand_cancel P Q
 
