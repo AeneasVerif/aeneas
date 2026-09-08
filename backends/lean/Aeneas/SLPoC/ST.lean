@@ -223,10 +223,10 @@ syntax:lead (name := specSyntax)
 syntax:lead (name := specSyntaxPred)
   atomic("(" term:lead ")" " ⦃" "⇓ ") term " ⦄" : term
 syntax:lead (name := slSpecSyntax)
-  " ⦃" term " ⦄" term:lead
-  " ⦃" "⇓ " Lean.Parser.Term.funBinder " => " term " ⦄" : term
+  "⦃ " term " ⦄" ppSpace term:lead ppSpace
+  "⦃" "⇓" ppSpace Lean.Parser.Term.funBinder " => " term " ⦄" : term
 syntax:lead (name := slSpecSyntaxPred)
-  " ⦃" term " ⦄" term:lead " ⦃" "⇓ " term " ⦄" : term
+  "⦃ " term " ⦄" ppSpace term:lead ppSpace "⦃" "⇓" ppSpace term " ⦄" : term
 
 macro_rules
   | `(($m) ⦃⇓ $result => $Q⦄) =>
@@ -243,10 +243,10 @@ syntax:lead (name := dspecSyntax)
 syntax:lead (name := dspecSyntaxPred)
   atomic("(" term:lead ")" " ⦃" "⇓ ") term " ⦄div" : term
 syntax:lead (name := slDspecSyntax)
-  " ⦃" term " ⦄" term:lead
-  " ⦃" "⇓ " Lean.Parser.Term.funBinder " => " term " ⦄div" : term
+  "⦃ " term " ⦄" ppSpace term:lead ppSpace
+  "⦃" "⇓" ppSpace Lean.Parser.Term.funBinder " => " term " ⦄div" : term
 syntax:lead (name := slDspecSyntaxPred)
-  " ⦃" term " ⦄" term:lead " ⦃" "⇓ " term " ⦄div" : term
+  "⦃ " term " ⦄" ppSpace term:lead ppSpace "⦃" "⇓" ppSpace term " ⦄div" : term
 
 macro_rules
   | `(($m) ⦃⇓ $result => $Q⦄div) =>
@@ -1253,25 +1253,65 @@ where
     else
       return (#[], ← delabPureBody)
 
-/-- `triple emp m (fun x => ⌜p⌝)` prints as `m ⦃ x => p ⦄`. -/
-@[scoped delab app.Aeneas.SepLogic.triple]
-def delabPureTriple : Delab := do
-  guard ((← getExpr).isAppOfArity ``Aeneas.SepLogic.triple 4)
-  guard (← withNaryArg 1 do return (← getExpr).isConstOf ``Aeneas.SepLogic.«emp»)
-  let monadExpr ← withNaryArg 2 delab
-  let (binders, body) ← withNaryArg 3 delabPurePost
-  guard (binders.size > 0)
-  `($monadExpr ⦃ $(binders[0]!) $(binders.drop 1)* => $body ⦄)
+/-- Print an arbitrary separation-logic postcondition using binder syntax when
+it is a lambda and predicate syntax otherwise. -/
+private def delabSLTriplePost (pre monadExpr : Term) (isPartial : Bool) :
+    DelabM Term := do
+  if (← getExpr).consumeMData.isLambda then
+    withBindingBodyUnusedName fun binder => do
+      let binder : Term := ⟨binder⟩
+      let body ← delab
+      if isPartial then
+        `(⦃$pre⦄ $monadExpr ⦃⇓ $binder => $body⦄div)
+      else
+        `(⦃$pre⦄ $monadExpr ⦃⇓ $binder => $body⦄)
+  else
+    let post ← delab
+    if isPartial then
+      `(⦃$pre⦄ $monadExpr ⦃⇓ $post⦄div)
+    else
+      `(⦃$pre⦄ $monadExpr ⦃⇓ $post⦄)
 
-/-- `dtriple emp m (fun x => ⌜p⌝)` prints as `m ⦃ x => p ⦄div`. -/
-@[scoped delab app.Aeneas.SepLogic.dtriple]
-def delabPureDtriple : Delab := do
-  guard ((← getExpr).isAppOfArity ``Aeneas.SepLogic.dtriple 4)
-  guard (← withNaryArg 1 do return (← getExpr).isConstOf ``Aeneas.SepLogic.«emp»)
+/-- Print an arbitrary triple using the general separation-logic notation. -/
+private def delabSLTripleCore (tripleName : Name) (isPartial : Bool) : Delab := do
+  guard ((← getExpr).isAppOfArity tripleName 4)
+  let monadExpr ← withNaryArg 2 delab
+  let pre ← withNaryArg 1 delab
+  withNaryArg 3 <| delabSLTriplePost pre monadExpr isPartial
+
+/-- Print a pure triple using pure notation. This delaborator fails on general
+separation-logic triples, allowing the global SL delaborator to handle them. -/
+private def delabPureTripleCore (tripleName : Name) (isPartial : Bool) : Delab := do
+  guard ((← getExpr).isAppOfArity tripleName 4)
+  guard (← withNaryArg 1 do
+    return (← getExpr).isConstOf ``Aeneas.SepLogic.«emp»)
   let monadExpr ← withNaryArg 2 delab
   let (binders, body) ← withNaryArg 3 delabPurePost
   guard (binders.size > 0)
-  `($monadExpr ⦃ $(binders[0]!) $(binders.drop 1)* => $body ⦄div)
+  if isPartial then
+    `($monadExpr ⦃ $(binders[0]!) $(binders.drop 1)* => $body ⦄div)
+  else
+    `($monadExpr ⦃ $(binders[0]!) $(binders.drop 1)* => $body ⦄)
+
+/-- Global fallback delaborator for total separation-logic triples. -/
+@[app_delab Aeneas.SepLogic.triple]
+def delabSLTriple : Delab :=
+  delabSLTripleCore ``Aeneas.SepLogic.triple false
+
+/-- Global fallback delaborator for partial separation-logic triples. -/
+@[app_delab Aeneas.SepLogic.dtriple]
+def delabSLDtriple : Delab :=
+  delabSLTripleCore ``Aeneas.SepLogic.dtriple true
+
+/-- Scoped pure-notation delaborator for total triples. -/
+@[scoped delab app.Aeneas.SepLogic.triple]
+def delabPureTriple : Delab :=
+  delabPureTripleCore ``Aeneas.SepLogic.triple false
+
+/-- Scoped pure-notation delaborator for partial triples. -/
+@[scoped delab app.Aeneas.SepLogic.dtriple]
+def delabPureDtriple : Delab :=
+  delabPureTripleCore ``Aeneas.SepLogic.dtriple true
 
 end WP
 
