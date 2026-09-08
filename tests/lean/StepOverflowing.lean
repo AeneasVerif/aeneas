@@ -26,7 +26,7 @@ def test_usize_forward_no_overflow : Result Unit := do
   massert (o = false)
 
 /- Unit test for [step_overflowing::test_usize_forward_no_overflow] -/
-#assert (test_usize_forward_no_overflow == ok ())
+#assert (test_usize_forward_no_overflow).reducesTo ()
 
 /-- [step_overflowing::test_usize_forward_zero]:
     Source: 'tests/src/step_overflowing.rs', lines 27:0-31:1
@@ -37,7 +37,7 @@ def test_usize_forward_zero : Result Unit := do
   massert (o = false)
 
 /- Unit test for [step_overflowing::test_usize_forward_zero] -/
-#assert (test_usize_forward_zero == ok ())
+#assert (test_usize_forward_zero).reducesTo ()
 
 /-- [step_overflowing::test_usize_forward_overflow_wraps_to_zero]:
     Source: 'tests/src/step_overflowing.rs', lines 34:0-38:1
@@ -49,7 +49,7 @@ def test_usize_forward_overflow_wraps_to_zero : Result Unit := do
   massert (o = true)
 
 /- Unit test for [step_overflowing::test_usize_forward_overflow_wraps_to_zero] -/
-#assert (test_usize_forward_overflow_wraps_to_zero == ok ())
+#assert (test_usize_forward_overflow_wraps_to_zero).reducesTo ()
 
 /-- [step_overflowing::test_usize_forward_overflow_max_count]:
     Source: 'tests/src/step_overflowing.rs', lines 41:0-45:1
@@ -61,7 +61,7 @@ def test_usize_forward_overflow_max_count : Result Unit := do
   massert (o = true)
 
 /- Unit test for [step_overflowing::test_usize_forward_overflow_max_count] -/
-#assert (test_usize_forward_overflow_max_count == ok ())
+#assert (test_usize_forward_overflow_max_count).reducesTo ()
 
 /-- [step_overflowing::test_usize_backward_no_overflow]:
     Source: 'tests/src/step_overflowing.rs', lines 48:0-52:1
@@ -73,7 +73,7 @@ def test_usize_backward_no_overflow : Result Unit := do
   massert (o = false)
 
 /- Unit test for [step_overflowing::test_usize_backward_no_overflow] -/
-#assert (test_usize_backward_no_overflow == ok ())
+#assert (test_usize_backward_no_overflow).reducesTo ()
 
 /-- [step_overflowing::test_usize_backward_overflow]:
     Source: 'tests/src/step_overflowing.rs', lines 55:0-59:1
@@ -84,7 +84,7 @@ def test_usize_backward_overflow : Result Unit := do
   massert (o = true)
 
 /- Unit test for [step_overflowing::test_usize_backward_overflow] -/
-#assert (test_usize_backward_overflow == ok ())
+#assert (test_usize_backward_overflow).reducesTo ()
 
 /-- [step_overflowing::test_u8_forward_no_overflow]:
     Source: 'tests/src/step_overflowing.rs', lines 67:0-71:1
@@ -95,7 +95,7 @@ def test_u8_forward_no_overflow : Result Unit := do
   massert (o = false)
 
 /- Unit test for [step_overflowing::test_u8_forward_no_overflow] -/
-#assert (test_u8_forward_no_overflow == ok ())
+#assert (test_u8_forward_no_overflow).reducesTo ()
 
 /-- [step_overflowing::test_u8_forward_overflow_count_fits]:
     Source: 'tests/src/step_overflowing.rs', lines 75:0-79:1
@@ -106,7 +106,7 @@ def test_u8_forward_overflow_count_fits : Result Unit := do
   massert (o = true)
 
 /- Unit test for [step_overflowing::test_u8_forward_overflow_count_fits] -/
-#assert (test_u8_forward_overflow_count_fits == ok ())
+#assert (test_u8_forward_overflow_count_fits).reducesTo ()
 
 /-- [step_overflowing::test_u8_forward_count_too_large]:
     Source: 'tests/src/step_overflowing.rs', lines 84:0-88:1
@@ -117,7 +117,7 @@ def test_u8_forward_count_too_large : Result Unit := do
   massert (o = true)
 
 /- Unit test for [step_overflowing::test_u8_forward_count_too_large] -/
-#assert (test_u8_forward_count_too_large == ok ())
+#assert (test_u8_forward_count_too_large).reducesTo ()
 
 /-- [step_overflowing::test_u8_backward_no_overflow]:
     Source: 'tests/src/step_overflowing.rs', lines 91:0-95:1
@@ -128,7 +128,7 @@ def test_u8_backward_no_overflow : Result Unit := do
   massert (o = false)
 
 /- Unit test for [step_overflowing::test_u8_backward_no_overflow] -/
-#assert (test_u8_backward_no_overflow == ok ())
+#assert (test_u8_backward_no_overflow).reducesTo ()
 
 /-- [step_overflowing::test_u8_backward_overflow_count_fits]:
     Source: 'tests/src/step_overflowing.rs', lines 98:0-102:1
@@ -139,7 +139,7 @@ def test_u8_backward_overflow_count_fits : Result Unit := do
   massert (o = true)
 
 /- Unit test for [step_overflowing::test_u8_backward_overflow_count_fits] -/
-#assert (test_u8_backward_overflow_count_fits == ok ())
+#assert (test_u8_backward_overflow_count_fits).reducesTo ()
 
 /-- [step_overflowing::test_u8_backward_count_too_large]:
     Source: 'tests/src/step_overflowing.rs', lines 107:0-111:1
@@ -150,7 +150,7 @@ def test_u8_backward_count_too_large : Result Unit := do
   massert (o = true)
 
 /- Unit test for [step_overflowing::test_u8_backward_count_too_large] -/
-#assert (test_u8_backward_count_too_large == ok ())
+#assert (test_u8_backward_count_too_large).reducesTo ()
 
 /-- [step_overflowing::test_i32_forward_negative_no_overflow]:
     Source: 'tests/src/step_overflowing.rs', lines 120:0-124:1
@@ -161,7 +161,7 @@ def test_i32_forward_negative_no_overflow : Result Unit := do
   massert (o = false)
 
 /- Unit test for [step_overflowing::test_i32_forward_negative_no_overflow] -/
-#assert (test_i32_forward_negative_no_overflow == ok ())
+#assert (test_i32_forward_negative_no_overflow).reducesTo ()
 
 /-- [step_overflowing::test_i32_forward_overflow]:
     Source: 'tests/src/step_overflowing.rs', lines 127:0-131:1
@@ -173,7 +173,7 @@ def test_i32_forward_overflow : Result Unit := do
   massert (o = true)
 
 /- Unit test for [step_overflowing::test_i32_forward_overflow] -/
-#assert (test_i32_forward_overflow == ok ())
+#assert (test_i32_forward_overflow).reducesTo ()
 
 /-- [step_overflowing::test_i32_forward_count_max]:
     Source: 'tests/src/step_overflowing.rs', lines 137:0-141:1
@@ -185,7 +185,7 @@ def test_i32_forward_count_max : Result Unit := do
   massert (o = true)
 
 /- Unit test for [step_overflowing::test_i32_forward_count_max] -/
-#assert (test_i32_forward_count_max == ok ())
+#assert (test_i32_forward_count_max).reducesTo ()
 
 /-- [step_overflowing::test_i32_backward_negative_no_overflow]:
     Source: 'tests/src/step_overflowing.rs', lines 144:0-148:1
@@ -196,7 +196,7 @@ def test_i32_backward_negative_no_overflow : Result Unit := do
   massert (o = false)
 
 /- Unit test for [step_overflowing::test_i32_backward_negative_no_overflow] -/
-#assert (test_i32_backward_negative_no_overflow == ok ())
+#assert (test_i32_backward_negative_no_overflow).reducesTo ()
 
 /-- [step_overflowing::test_i32_backward_overflow]:
     Source: 'tests/src/step_overflowing.rs', lines 151:0-155:1
@@ -208,7 +208,7 @@ def test_i32_backward_overflow : Result Unit := do
   massert (o = true)
 
 /- Unit test for [step_overflowing::test_i32_backward_overflow] -/
-#assert (test_i32_backward_overflow == ok ())
+#assert (test_i32_backward_overflow).reducesTo ()
 
 /-- [step_overflowing::test_i32_backward_count_max]:
     Source: 'tests/src/step_overflowing.rs', lines 158:0-162:1
@@ -220,7 +220,7 @@ def test_i32_backward_count_max : Result Unit := do
   massert (o = true)
 
 /- Unit test for [step_overflowing::test_i32_backward_count_max] -/
-#assert (test_i32_backward_count_max == ok ())
+#assert (test_i32_backward_count_max).reducesTo ()
 
 /-- [step_overflowing::test_i8_forward_overflow]:
     Source: 'tests/src/step_overflowing.rs', lines 170:0-174:1
@@ -231,7 +231,7 @@ def test_i8_forward_overflow : Result Unit := do
   massert (o = true)
 
 /- Unit test for [step_overflowing::test_i8_forward_overflow] -/
-#assert (test_i8_forward_overflow == ok ())
+#assert (test_i8_forward_overflow).reducesTo ()
 
 /-- [step_overflowing::test_i8_backward_overflow]:
     Source: 'tests/src/step_overflowing.rs', lines 177:0-181:1
@@ -242,7 +242,7 @@ def test_i8_backward_overflow : Result Unit := do
   massert (o = true)
 
 /- Unit test for [step_overflowing::test_i8_backward_overflow] -/
-#assert (test_i8_backward_overflow == ok ())
+#assert (test_i8_backward_overflow).reducesTo ()
 
 /-- [step_overflowing::test_u128_forward_no_overflow]:
     Source: 'tests/src/step_overflowing.rs', lines 189:0-193:1
@@ -256,7 +256,7 @@ def test_u128_forward_no_overflow : Result Unit := do
   massert (v = i1)
 
 /- Unit test for [step_overflowing::test_u128_forward_no_overflow] -/
-#assert (test_u128_forward_no_overflow == ok ())
+#assert (test_u128_forward_no_overflow).reducesTo ()
 
 /-- [step_overflowing::test_u128_forward_overflow]:
     Source: 'tests/src/step_overflowing.rs', lines 196:0-200:1
@@ -268,7 +268,7 @@ def test_u128_forward_overflow : Result Unit := do
   massert (o = true)
 
 /- Unit test for [step_overflowing::test_u128_forward_overflow] -/
-#assert (test_u128_forward_overflow == ok ())
+#assert (test_u128_forward_overflow).reducesTo ()
 
 /-- [step_overflowing::test_i128_backward_overflow]:
     Source: 'tests/src/step_overflowing.rs', lines 203:0-207:1
@@ -280,6 +280,6 @@ def test_i128_backward_overflow : Result Unit := do
   massert (o = true)
 
 /- Unit test for [step_overflowing::test_i128_backward_overflow] -/
-#assert (test_i128_backward_overflow == ok ())
+#assert (test_i128_backward_overflow).reducesTo ()
 
 end step_overflowing

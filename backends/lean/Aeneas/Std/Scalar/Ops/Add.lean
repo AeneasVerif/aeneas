@@ -35,11 +35,11 @@ instance {ty} : HAdd (IScalar ty) (IScalar ty) (Result (IScalar ty)) where
 -/
 
 theorem UScalar.add_equiv {ty} (x y : UScalar ty) :
-  match x + y with
-  | ok z => x.val + y.val < 2^ty.numBits ∧
+  match (x + y).match with
+  | .ok z => x.val + y.val < 2^ty.numBits ∧
     z.val = x.val + y.val ∧
     z.bv = x.bv + y.bv
-  | fail _ => ¬ (UScalar.inBounds ty (x.val + y.val))
+  | .vis (.fail _) _ => ¬ (UScalar.inBounds ty (x.val + y.val))
   | _ => ⊥ := by
   have : x + y = add x y := by rfl
   rw [this]
@@ -53,12 +53,12 @@ theorem UScalar.add_equiv {ty} (x y : UScalar ty) :
   simp [*]
 
 theorem IScalar.add_equiv {ty} (x y : IScalar ty) :
-  match x + y with
-  | ok z =>
+  match (x + y).match with
+  | .ok z =>
     IScalar.inBounds ty (x.val + y.val) ∧
     z.val = x.val + y.val ∧
     z.bv = x.bv + y.bv
-  | fail _ => ¬ (IScalar.inBounds ty (x.val + y.val))
+  | .vis (.fail _) _ => ¬ (IScalar.inBounds ty (x.val + y.val))
   | _ => ⊥ := by
   have : x + y = add x y := by rfl
   rw [this]
@@ -92,6 +92,7 @@ theorem IScalar.add_bv_spec {ty}  {x y : IScalar ty}
   x + y ⦃ z => (↑z : Int) = ↑x + ↑y ∧ z.bv = x.bv + y.bv ⦄ := by
   have h := @add_equiv ty x y
   split at h <;> simp_all [min, max]
+  have : 0 < 2^ty.numBits := by simp
   omega
 
 uscalar theorem «%S».add_bv_spec {x y : «%S»} (hmax : x.val + y.val ≤ «%S».max) :

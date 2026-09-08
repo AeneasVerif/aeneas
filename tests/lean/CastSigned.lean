@@ -25,7 +25,7 @@ def test_u8_cast_signed_all_ones : Result Unit := do
   massert (y = (-1)#i8)
 
 /- Unit test for [cast_signed::test_u8_cast_signed_all_ones] -/
-#assert (test_u8_cast_signed_all_ones == ok ())
+#assert (test_u8_cast_signed_all_ones).reducesTo ()
 
 /-- [cast_signed::test_i8_cast_unsigned_neg_one]:
     Source: 'tests/src/cast_signed.rs', lines 17:0-21:1
@@ -35,7 +35,7 @@ def test_i8_cast_unsigned_neg_one : Result Unit := do
   massert (y = 255#u8)
 
 /- Unit test for [cast_signed::test_i8_cast_unsigned_neg_one] -/
-#assert (test_i8_cast_unsigned_neg_one == ok ())
+#assert (test_i8_cast_unsigned_neg_one).reducesTo ()
 
 /-- [cast_signed::test_u16_cast_signed_high_bit]:
     Source: 'tests/src/cast_signed.rs', lines 25:0-29:1
@@ -45,7 +45,7 @@ def test_u16_cast_signed_high_bit : Result Unit := do
   massert (y = core.num.I16.MIN)
 
 /- Unit test for [cast_signed::test_u16_cast_signed_high_bit] -/
-#assert (test_u16_cast_signed_high_bit == ok ())
+#assert (test_u16_cast_signed_high_bit).reducesTo ()
 
 /-- [cast_signed::test_i16_cast_unsigned_neg_one]:
     Source: 'tests/src/cast_signed.rs', lines 33:0-37:1
@@ -55,7 +55,7 @@ def test_i16_cast_unsigned_neg_one : Result Unit := do
   massert (y = core.num.U16.MAX)
 
 /- Unit test for [cast_signed::test_i16_cast_unsigned_neg_one] -/
-#assert (test_i16_cast_unsigned_neg_one == ok ())
+#assert (test_i16_cast_unsigned_neg_one).reducesTo ()
 
 /-- [cast_signed::test_u32_cast_signed_small]:
     Source: 'tests/src/cast_signed.rs', lines 41:0-45:1
@@ -65,7 +65,7 @@ def test_u32_cast_signed_small : Result Unit := do
   massert (y = 255#i32)
 
 /- Unit test for [cast_signed::test_u32_cast_signed_small] -/
-#assert (test_u32_cast_signed_small == ok ())
+#assert (test_u32_cast_signed_small).reducesTo ()
 
 /-- [cast_signed::test_u32_cast_signed_all_ones]:
     Source: 'tests/src/cast_signed.rs', lines 49:0-53:1
@@ -75,7 +75,7 @@ def test_u32_cast_signed_all_ones : Result Unit := do
   massert (y = (-1)#i32)
 
 /- Unit test for [cast_signed::test_u32_cast_signed_all_ones] -/
-#assert (test_u32_cast_signed_all_ones == ok ())
+#assert (test_u32_cast_signed_all_ones).reducesTo ()
 
 /-- [cast_signed::test_u32_cast_signed_high_bit]:
     Source: 'tests/src/cast_signed.rs', lines 57:0-61:1
@@ -85,7 +85,7 @@ def test_u32_cast_signed_high_bit : Result Unit := do
   massert (y = core.num.I32.MIN)
 
 /- Unit test for [cast_signed::test_u32_cast_signed_high_bit] -/
-#assert (test_u32_cast_signed_high_bit == ok ())
+#assert (test_u32_cast_signed_high_bit).reducesTo ()
 
 /-- [cast_signed::test_i32_cast_unsigned_neg_one]:
     Source: 'tests/src/cast_signed.rs', lines 65:0-69:1
@@ -95,7 +95,7 @@ def test_i32_cast_unsigned_neg_one : Result Unit := do
   massert (y = 4294967295#u32)
 
 /- Unit test for [cast_signed::test_i32_cast_unsigned_neg_one] -/
-#assert (test_i32_cast_unsigned_neg_one == ok ())
+#assert (test_i32_cast_unsigned_neg_one).reducesTo ()
 
 /-- [cast_signed::test_i32_cast_roundtrip]:
     Source: 'tests/src/cast_signed.rs', lines 73:0-77:1
@@ -106,7 +106,7 @@ def test_i32_cast_roundtrip : Result Unit := do
   massert (y = 3735928559#u32)
 
 /- Unit test for [cast_signed::test_i32_cast_roundtrip] -/
-#assert (test_i32_cast_roundtrip == ok ())
+#assert (test_i32_cast_roundtrip).reducesTo ()
 
 /-- [cast_signed::test_u64_cast_signed_all_ones]:
     Source: 'tests/src/cast_signed.rs', lines 81:0-85:1
@@ -116,7 +116,7 @@ def test_u64_cast_signed_all_ones : Result Unit := do
   massert (y = (-1)#i64)
 
 /- Unit test for [cast_signed::test_u64_cast_signed_all_ones] -/
-#assert (test_u64_cast_signed_all_ones == ok ())
+#assert (test_u64_cast_signed_all_ones).reducesTo ()
 
 /-- [cast_signed::test_i64_cast_unsigned_neg_one]:
     Source: 'tests/src/cast_signed.rs', lines 89:0-93:1
@@ -126,7 +126,7 @@ def test_i64_cast_unsigned_neg_one : Result Unit := do
   massert (y = core.num.U64.MAX)
 
 /- Unit test for [cast_signed::test_i64_cast_unsigned_neg_one] -/
-#assert (test_i64_cast_unsigned_neg_one == ok ())
+#assert (test_i64_cast_unsigned_neg_one).reducesTo ()
 
 /-- [cast_signed::test_u128_cast_signed_all_ones]:
     Source: 'tests/src/cast_signed.rs', lines 97:0-101:1
@@ -136,7 +136,7 @@ def test_u128_cast_signed_all_ones : Result Unit := do
   massert (y = (-1)#i128)
 
 /- Unit test for [cast_signed::test_u128_cast_signed_all_ones] -/
-#assert (test_u128_cast_signed_all_ones == ok ())
+#assert (test_u128_cast_signed_all_ones).reducesTo ()
 
 /-- [cast_signed::test_i128_cast_unsigned_neg_one]:
     Source: 'tests/src/cast_signed.rs', lines 105:0-109:1
@@ -146,7 +146,7 @@ def test_i128_cast_unsigned_neg_one : Result Unit := do
   massert (y = core.num.U128.MAX)
 
 /- Unit test for [cast_signed::test_i128_cast_unsigned_neg_one] -/
-#assert (test_i128_cast_unsigned_neg_one == ok ())
+#assert (test_i128_cast_unsigned_neg_one).reducesTo ()
 
 /-- [cast_signed::test_usize_cast_roundtrip]:
     Source: 'tests/src/cast_signed.rs', lines 113:0-117:1
@@ -157,7 +157,7 @@ def test_usize_cast_roundtrip : Result Unit := do
   massert (y = 12345#usize)
 
 /- Unit test for [cast_signed::test_usize_cast_roundtrip] -/
-#assert (test_usize_cast_roundtrip == ok ())
+#assert (test_usize_cast_roundtrip).reducesTo ()
 
 /-- [cast_signed::test_isize_cast_unsigned_neg_one]:
     Source: 'tests/src/cast_signed.rs', lines 121:0-125:1
@@ -167,6 +167,6 @@ def test_isize_cast_unsigned_neg_one : Result Unit := do
   massert (y = core.num.Usize.MAX)
 
 /- Unit test for [cast_signed::test_isize_cast_unsigned_neg_one] -/
-#assert (test_isize_cast_unsigned_neg_one == ok ())
+#assert (test_isize_cast_unsigned_neg_one).reducesTo ()
 
 end cast_signed

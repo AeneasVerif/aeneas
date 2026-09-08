@@ -40,22 +40,20 @@ Theorems with a specification which use integers and bit-vectors
 -/
 
 theorem UScalar.mul_equiv {ty} (x y : UScalar ty) :
-  match mul x y with
-  | ok z => x.val * y.val ≤ UScalar.max ty ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv
-  | fail _ => UScalar.max ty < x.val * y.val
-  | .div => False := by
+  match (mul x y).match with
+  | .ok z => x.val * y.val ≤ UScalar.max ty ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv
+  | .vis (.fail _) _ => UScalar.max ty < x.val * y.val
+  | _ => False := by
   simp only [mul]
   have := tryMk_eq ty (x.val * y.val)
   split <;> simp_all only [inBounds, true_and, not_lt, gt_iff_lt]
-  simp_all only [tryMk, ofOption, tryMkOpt, check_bounds, decide_true, dite_true, ok.injEq]
-  rename_i hEq; simp only [← hEq, ofNatCore, val]
+  simp_all only [tryMk, ofOption, tryMkOpt, check_bounds, decide_true, dite_true]
+  rename_i hEq; simp only [← hEq, ofNatCore, val] at *
   split_conjs
   . simp only [bv_toNat, max]; omega
-  . zify at this; zify; simp only [bv_toNat, BitVec.toNat_ofFin, Nat.cast_mul, BitVec.toNat_mul,
+  . zify at this; zify; simp only [bv_toNat, BitVec.toNat_mul,
     Int.natCast_emod, Nat.cast_pow, Nat.cast_ofNat] at *
-    rw [Int.emod_eq_of_lt]
-    . apply Int.pos_mul_pos_is_pos <;> simp
-    . simp only [this]
+    rw [Int.emod_eq_of_lt] <;> grind
   . have : 0 < 2^ty.numBits := by simp
     simp only [max, gt_iff_lt]
     omega
@@ -66,20 +64,20 @@ theorem UScalar.mul_bv_spec {ty} {x y : UScalar ty}
   x * y ⦃ z => (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv ⦄ := by
   have : x * y = mul x y := by rfl
   have := mul_equiv x y
-  split at this <;> simp_all [spec_ok, and_self, spec_fail]
+  split at this <;> simp_all [spec_ok, and_self, spec_vis]
   omega
 
 theorem IScalar.mul_equiv {ty} (x y : IScalar ty) :
-  match mul x y with
-  | ok z => IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
-  | fail _ => ¬(IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty)
-  | .div => False := by
+  match (mul x y).match with
+  | .ok z => IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
+  | .vis (.fail _) _ => ¬(IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty)
+  | _ => False := by
   simp only [mul, not_and, not_le]
   have := tryMk_eq ty (x.val * y.val)
   split <;> simp_all only [inBounds, min, max, true_and, not_and, not_lt] <;>
   simp_all only [tryMk, ofOption, tryMkOpt, check_bounds, and_self, decide_true, dite_true,
-    ok.injEq, Bool.decide_and, Bool.and_eq_true, decide_eq_true_eq] <;>
-  rename_i hEq <;> simp only [← hEq, ofIntCore, val] <;>
+    Bool.decide_and, Bool.and_eq_true, decide_eq_true_eq] <;>
+  rename_i hEq <;> simp at hEq <;> simp only [← hEq, ofIntCore, val] <;>
   simp only [bv_toInt_eq, ← BitVec.toInt_inj, BitVec.toInt_mul]
   . split_conjs
     . omega
@@ -118,7 +116,7 @@ theorem IScalar.mul_bv_spec {ty} {x y : IScalar ty}
   x * y ⦃ z => (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv ⦄ := by
   have : x * y = mul x y := by rfl
   have := mul_equiv x y
-  split at this <;> simp_all
+  split at this <;> simp_all [spec_ok, and_self]
 
 uscalar theorem «%S».mul_bv_spec {x y : «%S»} (hmax : x.val * y.val ≤ «%S».max) :
   x * y ⦃ z => (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv ⦄ :=

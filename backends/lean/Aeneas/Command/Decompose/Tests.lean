@@ -1570,7 +1570,7 @@ info: test39_eq : ∀ (n : ℕ),
 #guard_msgs in
 #check @test39_eq
 /--
-info: 'Aeneas.Command.Decompose.Tests.test39_eq' depends on axioms: [propext, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test39_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test39_eq

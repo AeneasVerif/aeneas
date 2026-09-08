@@ -94,7 +94,7 @@ def test2 : Result Unit := do
   ok ()
 
 /- Unit test for [no_nested_borrows::test2] -/
-#assert (test2 == ok ())
+#assert (test2).reducesTo ()
 
 /-- [no_nested_borrows::get_max]:
     Source: 'tests/src/no_nested_borrows.rs', lines 76:0-82:1
@@ -114,7 +114,7 @@ def test3 : Result Unit := do
   massert (z = 15#u32)
 
 /- Unit test for [no_nested_borrows::test3] -/
-#assert (test3 == ok ())
+#assert (test3).reducesTo ()
 
 /-- [no_nested_borrows::test_neg1]:
     Source: 'tests/src/no_nested_borrows.rs', lines 93:0-97:1
@@ -124,7 +124,7 @@ def test_neg1 : Result Unit := do
   massert (y = (-3)#i32)
 
 /- Unit test for [no_nested_borrows::test_neg1] -/
-#assert (test_neg1 == ok ())
+#assert (test_neg1).reducesTo ()
 
 /-- [no_nested_borrows::refs_test1]:
     Source: 'tests/src/no_nested_borrows.rs', lines 101:0-110:1
@@ -133,7 +133,7 @@ def refs_test1 : Result Unit := do
   massert (1#i32 = 1#i32)
 
 /- Unit test for [no_nested_borrows::refs_test1] -/
-#assert (refs_test1 == ok ())
+#assert (refs_test1).reducesTo ()
 
 /-- [no_nested_borrows::refs_test2]:
     Source: 'tests/src/no_nested_borrows.rs', lines 113:0-125:1
@@ -145,7 +145,7 @@ def refs_test2 : Result Unit := do
   massert (2#i32 = 2#i32)
 
 /- Unit test for [no_nested_borrows::refs_test2] -/
-#assert (refs_test2 == ok ())
+#assert (refs_test2).reducesTo ()
 
 /-- [no_nested_borrows::test_list1]:
     Source: 'tests/src/no_nested_borrows.rs', lines 130:0-132:1
@@ -154,7 +154,7 @@ def test_list1 : Result Unit := do
   ok ()
 
 /- Unit test for [no_nested_borrows::test_list1] -/
-#assert (test_list1 == ok ())
+#assert (test_list1).reducesTo ()
 
 /-- [no_nested_borrows::copy_int]:
     Source: 'tests/src/no_nested_borrows.rs', lines 134:0-136:1
@@ -188,7 +188,7 @@ def test_copy_int : Result Unit := do
   massert (0#i32 = y)
 
 /- Unit test for [no_nested_borrows::test_copy_int] -/
-#assert (test_copy_int == ok ())
+#assert (test_copy_int).reducesTo ()
 
 /-- [no_nested_borrows::is_cons]:
     Source: 'tests/src/no_nested_borrows.rs', lines 170:0-175:1
@@ -206,7 +206,7 @@ def test_is_cons : Result Unit := do
   massert b
 
 /- Unit test for [no_nested_borrows::test_is_cons] -/
-#assert (test_is_cons == ok ())
+#assert (test_is_cons).reducesTo ()
 
 /-- [no_nested_borrows::split_list]:
     Source: 'tests/src/no_nested_borrows.rs', lines 184:0-189:1
@@ -224,7 +224,7 @@ def test_split_list : Result Unit := do
   massert (hd = 0#i32)
 
 /- Unit test for [no_nested_borrows::test_split_list] -/
-#assert (test_split_list == ok ())
+#assert (test_split_list).reducesTo ()
 
 /-- [no_nested_borrows::choose]:
     Source: 'tests/src/no_nested_borrows.rs', lines 200:0-206:1
@@ -249,7 +249,7 @@ def choose_test : Result Unit := do
   massert (y = 0#i32)
 
 /- Unit test for [no_nested_borrows::choose_test] -/
-#assert (choose_test == ok ())
+#assert (choose_test).reducesTo ()
 
 /-- [no_nested_borrows::test_char]:
     Source: 'tests/src/no_nested_borrows.rs', lines 221:0-223:1
@@ -372,7 +372,7 @@ def test_list_functions : Result Unit := do
   massert (i6 = 2#i32)
 
 /- Unit test for [no_nested_borrows::test_list_functions] -/
-#assert (test_list_functions == ok ())
+#assert (test_list_functions).reducesTo ()
 
 /-- [no_nested_borrows::id_mut_pair1]:
     Source: 'tests/src/no_nested_borrows.rs', lines 348:0-350:1
@@ -463,7 +463,7 @@ def test_constants : Result Unit := do
   massert (swp.p.x = 1#u32)
 
 /- Unit test for [no_nested_borrows::test_constants] -/
-#assert (test_constants == ok ())
+#assert (test_constants).reducesTo ()
 
 /-- [no_nested_borrows::test_weird_borrows1]:
     Source: 'tests/src/no_nested_borrows.rs', lines 407:0-415:1
@@ -472,7 +472,7 @@ def test_weird_borrows1 : Result Unit := do
   ok ()
 
 /- Unit test for [no_nested_borrows::test_weird_borrows1] -/
-#assert (test_weird_borrows1 == ok ())
+#assert (test_weird_borrows1).reducesTo ()
 
 /-- [no_nested_borrows::test_mem_replace]:
     Source: 'tests/src/no_nested_borrows.rs', lines 417:0-421:1
