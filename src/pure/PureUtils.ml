@@ -251,8 +251,8 @@ let mk_generic_args_from_types (types : ty list) : generic_args =
 
 let compute_literal_type (cv : literal) : ty =
   match cv with
-  | VScalar (SignedScalar (ty, _)) -> TLiteral (TInt ty)
-  | VScalar (UnsignedScalar (ty, _)) -> TLiteral (TUInt ty)
+  | VScalar (SignedInteger (ty, _)) -> TLiteral (TInt ty)
+  | VScalar (UnsignedInteger (ty, _)) -> TLiteral (TUInt ty)
   | VBool _ -> TLiteral TBool
   | VChar _ -> TLiteral TChar
   | VFloat { float_ty; _ } -> TLiteral (TFloat float_ty)

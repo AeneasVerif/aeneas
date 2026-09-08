@@ -176,8 +176,7 @@ let update_array_default (crate : crate) : crate =
          [
            TArray
              ( TVar (Free _),
-               ({ kind = CLiteral (VScalar (UnsignedScalar (Usize, nv))); _ } as
-                n),
+               ({ kind = CInteger (UnsignedInteger (Usize, nv)); _ } as n),
                _ );
          ];
        const_generics = [];
@@ -1284,7 +1283,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
               *)
               method! visit_Constant env (cv : constant_expr) =
                 match (cv.kind, cv.ty) with
-                | ( CLiteral (VStr str),
+                | ( CStr str,
                     TRef
                       (_, (TAdt { builtin = Some TStr; _ } as str_ty), ref_kind)
                   ) ->
@@ -1293,7 +1292,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
                     let local_id =
                       let local_id = fresh_local str_ty in
                       let new_cv : constant_expr =
-                        { kind = CLiteral (VStr str); ty = str_ty }
+                        { kind = CStr str; ty = str_ty }
                       in
                       let st =
                         {
@@ -1313,11 +1312,10 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
                       Constant
                         {
                           kind =
-                            CLiteral
-                              (VScalar
-                                 (UnsignedScalar
-                                    (Usize, Z.of_int (String.length str))));
-                          ty = TLiteral (TUInt Usize);
+                            CInteger
+                              (UnsignedInteger
+                                 (Usize, Z.of_int (String.length str)));
+                          ty = TScalar (TInteger (Unsigned Usize));
                         }
                     in
                     (* Then the borrow *)

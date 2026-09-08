@@ -870,7 +870,7 @@ and extract_array_or_slice (span : Meta.span) (ctx : extraction_ctx)
     (* Print the parameters *)
     F.pp_print_space fmt ();
     extract_const_generic span ctx fmt ~inside:true
-      (CgValue (VScalar (UnsignedScalar (Usize, Z.of_int (List.length args)))));
+      (CgValue (VScalar (UnsignedInteger (Usize, Z.of_int (List.length args)))));
     F.pp_print_space fmt ();
     F.pp_print_string fmt "[";
     (* Close the box for `Array.mk T N [` *)

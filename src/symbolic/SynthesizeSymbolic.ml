@@ -42,7 +42,7 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
   (* Match on the symbolic value type to know which can of expansion happened *)
   let expansion =
     match sv.sv_ty with
-    | TLiteral TBool -> (
+    | TScalar TBool -> (
         (* Boolean expansion: there should be two branches *)
         match ls with
         | [
@@ -50,14 +50,14 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
          (Some (SeLiteral (VBool false)), false_exp);
         ] -> ExpandBool (true_exp, false_exp)
         | _ -> [%craise] span "Ill-formed boolean expansion")
-    | TLiteral (TInt _) | TLiteral (TUInt _) ->
+    | TScalar (TInteger _) ->
         let int_ty = ty_as_integer sv.sv_ty in
         (* Switch over an integer: split between the "regular" branches
            and the "otherwise" branch (which should be the last branch) *)
         let branches, otherwise = Collections.List.pop_last ls in
         (* For all the regular branches, the symbolic value should have
          * been expanded to a constant *)
-        let get_scalar (see : symbolic_expansion option) : scalar_value =
+        let get_scalar (see : symbolic_expansion option) : integer_value =
           match see with
           | Some (SeLiteral (VScalar cv)) ->
               [%sanity_check] span (Scalars.get_ty cv = int_ty);
@@ -73,7 +73,7 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
         [%sanity_check] span (otherwise_see = None);
         (* Return *)
         ExpandInt (int_ty, branches, otherwise)
-    | TLiteral (TFloat _) ->
+    | TScalar (TFloat _) ->
         [%craise] span "Float are not supported in Aeneas yet"
     | TAdt _ ->
         (* Branching: it is necessarily an enumeration expansion *)

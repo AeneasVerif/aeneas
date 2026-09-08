@@ -268,7 +268,7 @@ let fuel_succ_id = VariantId.of_int 1
 type int_ty = V.int_ty [@@deriving show, ord]
 type u_int_ty = V.u_int_ty [@@deriving show, ord]
 type float_value = V.float_value [@@deriving show, ord]
-type scalar_value = V.scalar_value [@@deriving show, ord]
+type integer_value = V.integer_value [@@deriving show, ord]
 type char_value = Charon.Uchar.t [@@deriving show, ord]
 type big_int = Charon.BigInt.big_int [@@deriving show, ord]
 
@@ -288,7 +288,7 @@ class ['self] iter_ty_base =
     method visit_u_int_ty : 'env -> u_int_ty -> unit = fun _ _ -> ()
     method visit_float_type : 'env -> float_type -> unit = fun _ _ -> ()
     method visit_float_value : 'env -> float_value -> unit = fun _ _ -> ()
-    method visit_scalar_value : 'env -> scalar_value -> unit = fun _ _ -> ()
+    method visit_integer_value : 'env -> integer_value -> unit = fun _ _ -> ()
     method visit_char_value : 'env -> char_value -> unit = fun _ _ -> ()
     method visit_big_int : 'env -> big_int -> unit = fun _ _ -> ()
 
@@ -346,7 +346,7 @@ class ['self] map_ty_base =
     method visit_float_type : 'env -> float_type -> float_type = fun _ x -> x
     method visit_float_value : 'env -> float_value -> float_value = fun _ x -> x
 
-    method visit_scalar_value : 'env -> scalar_value -> scalar_value =
+    method visit_integer_value : 'env -> integer_value -> integer_value =
       fun _ x -> x
 
     method visit_char_value : 'env -> char_value -> char_value = fun _ x -> x
@@ -422,7 +422,7 @@ class virtual ['self] reduce_ty_base =
     method visit_float_type : 'env -> float_type -> 'a = fun _ _ -> self#zero
     method visit_float_value : 'env -> float_value -> 'a = fun _ _ -> self#zero
 
-    method visit_scalar_value : 'env -> scalar_value -> 'a =
+    method visit_integer_value : 'env -> integer_value -> 'a =
       fun _ _ -> self#zero
 
     method visit_char_value : 'env -> char_value -> 'a = fun _ _ -> self#zero
@@ -505,7 +505,7 @@ class virtual ['self] mapreduce_ty_base =
     method visit_float_value : 'env -> float_value -> float_value * 'a =
       fun _ x -> (x, self#zero)
 
-    method visit_scalar_value : 'env -> scalar_value -> scalar_value * 'a =
+    method visit_integer_value : 'env -> integer_value -> integer_value * 'a =
       fun _ x -> (x, self#zero)
 
     method visit_char_value : 'env -> char_value -> char_value * 'a =
@@ -714,7 +714,7 @@ and literal_type =
   | TPureInt  (** Mathematical (unbounded) integer *)
 
 and literal =
-  | VScalar of scalar_value
+  | VScalar of integer_value
   | VFloat of float_value
   | VBool of bool
   | VChar of char_value

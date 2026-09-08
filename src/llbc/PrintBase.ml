@@ -7,6 +7,8 @@ open ValuesUtils
 open Expressions
 open LlbcAst
 
+let literal_to_string = ValuesUtils.literal_to_string
+
 (** Helper to make a function which colorizes text *)
 let mk_colorize ((r, g, b) : int * int * int) : string -> string =
   (* ANSI escape sequence for 24-bit RGB foreground color *)

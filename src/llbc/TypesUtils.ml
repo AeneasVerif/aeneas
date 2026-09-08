@@ -2,6 +2,21 @@ open Types
 open Utils
 include Charon.TypesUtils
 
+let constant_expr_as_literal (c : constant_expr) : Values.literal =
+  match c.kind with
+  | CBool v -> VBool v
+  | CInteger v -> VScalar v
+  | CChar v -> VChar v
+  | CFloat v -> VFloat v
+  | CStr v -> VStr v
+  | CByteStr v -> VByteStr v
+  | _ -> raise (Failure "Expected a primitive constant")
+
+let constant_expr_as_integer (c : constant_expr) : integer_value =
+  match c.kind with
+  | CInteger v -> v
+  | _ -> raise (Failure "Expected an integer constant")
+
 (** Create a tuple type. *)
 let mk_tuple_ty (tys : ty list) : ty =
   TAdt

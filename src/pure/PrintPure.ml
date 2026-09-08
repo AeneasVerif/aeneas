@@ -254,12 +254,12 @@ let const_generic_var_to_string (v : const_generic_param) =
   "(" ^ v.name ^ " : " ^ literal_type_to_string v.ty ^ ")"
 
 let integer_type_to_string = Print.integer_type_to_string
-let scalar_value_to_string = Print.scalar_value_to_string
+let integer_value_to_string = Print.integer_value_to_string
 let float_value_to_string = Print.float_value_to_string
 
 let literal_to_string (lit : literal) : string =
   match lit with
-  | VScalar sv -> scalar_value_to_string sv
+  | VScalar sv -> integer_value_to_string sv
   | VFloat fv -> float_value_to_string fv
   | VBool b -> Bool.to_string b
   | VChar c -> Charon.Uchar.to_string c
