@@ -280,10 +280,6 @@ def fvarNameSlot (fv : Expr) : MetaM (Option Name) := do
   let n ← fv.fvarId!.getUserName
   pure (if n.hasMacroScopes ∨ Name.isElabSynthesized n then none else some n)
 
-/-- Used to name post-condition hypotheses introduced by `step`. -/
-def postName (base : Name) (suffix : String) : Name :=
-  base.getPrefix ++ .mkSimple (base.getString! ++ "_post" ++ suffix)
-
 /-- A generic binary tree with data at the leaves. Underlies `FVarTree` and `NameTree`. -/
 inductive BTree (α : Type) where
   | leaf (val : α)
@@ -448,6 +444,35 @@ def getVarNamesFromGoal : TacticM (Array (Option Name) × Option Name) := do
   else
     let names ← getPostNamesFromGoal
     pure (names, names[0]?.join)
+
+/-- Helper to decompose a binary relation for deriving the name for postconditions
+    in `introOutputs`. Prefers names on the LHS but falls back to RHS if none is found
+    We pass in an `outputNames` map so we can associate the FVarId with the chosen name
+    -/
+def decomposeRelation? (type : Expr) (outputNames : Std.HashMap FVarId Name) :
+    MetaM (Option Name) := do
+  let some (l, r) :=
+    (match_expr type with
+    | Eq _ l r => some (l, r)
+    | HEq _ l _ r => some (l, r)
+    | LE.le _ _ l r => some (l, r)
+    | LT.lt _ _ l r => some (l, r)
+    | GE.ge _ _ l r => some (l, r)
+    | GT.gt _ _ l r => some (l, r)
+    | BEq.beq _ _ l r => some (l, r)
+    | _ => none) | return none
+  if let some n ← exprBaseName? l then return some n
+  exprBaseName? r
+where
+  exprBaseName? (e : Expr) : MetaM (Option Name) := do
+    match e with
+    | .const c _ => return some c
+    | .fvar fvarId =>
+      if let some n := outputNames[fvarId]? then return some n
+      let userName ← fvarId.getUserName
+      if userName.hasMacroScopes then return none
+      return some userName
+    | _ => return none
 
 /-- Attempt to resolve typeclasses. -/
 def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) := do
@@ -757,56 +782,87 @@ def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState : Ste
             (.targets #[] true)
   if (← getUnsolvedGoals).isEmpty then trace[Step] "Main goal solved by cleanup simp!"; return none
 
-  /- Now compute the prop-status of the remaining leading binders (these are the
-     post-conditions and existential variables to introduce). -/
-  let goal ← getMainGoal
-  let outputIsProp ← goal.withContext do
-    let type ← goal.getType
-    let type ← instantiateMVars type
-    forallTelescope type.consumeMData fun fvars _ => do
-    fvars.mapM fun e => do isProp (← inferType e)
-
-  /- Total number of "logical" outputs+post slots, used for the user-provided-id check. -/
-  let totalSlots := outputFVars.size + outputIsProp.size
-  if totalSlots < args.ids.size ∧ args.idsUserProvided then
-    logWarning m!"Too many ids provided ({args.ids}): expected ≤ {totalSlots} ids, got {args.ids.size}"
-
   /- The prefix length is the number of leaf fvars produced by destructuring the outputs. -/
   let prefixLength := outputFVars.size
-  /- The postfix length: the remaining binders (post-condition and existential variables). -/
-  let postfixLength := outputIsProp.size
-  trace[Step] "Prefix length (outputs): {prefixLength}, postfix length (post-conditions): {postfixLength}"
 
-  /- Compute names for outputs (from `args.ids`) and posts. -/
-  let totalNumProps := (outputIsProp.filter id).size
   let mkFreshAnon (isProp : Bool) :=
     if isProp then mkFreshAnonPropUserName else mkFreshUserName `x
-  let mkFreshName (nPropsBefore : Nat) (i : Nat) (isProp : Bool) : TacticM Name := do
-    -- Use the user-provided name if possible
+
+  /- Names for the already-introduced output fvars (one name per leaf): we use the
+     user-provided ids when available, and generate fresh names otherwise. -/
+  let outputIds ← (Array.range prefixLength).mapM fun i => do
     if h : i < args.ids.size then
       match args.ids[i] with
-      | none => mkFreshAnon isProp
       | some n => pure n
-    else
-      -- Otherwise, it depends on whether the var is a prop or not
-      if ¬ isProp then
-        -- Generate a name for an output var
-        mkFreshUserName `x
-      else
-        -- Generate a name for a post-condition
-        match args.postsBasename with
-        | none => mkFreshAnonPropUserName
-        | some baseName =>
-          let (root, baseStr) := match baseName with
-            | .str root s => (root, s ++ "_post")
-            | _ => (.anonymous, "_post")
-          let postIdx :=
-            if totalNumProps = 1 then ""
-            else s!"{nPropsBefore + 1}"
-          pure (Name.str root s!"{baseStr}{postIdx}")
+      | none => mkFreshUserName `x
+    else mkFreshUserName `x
 
-  /- Names for the already-introduced output fvars (one name per leaf). -/
-  let outputIds ← (Array.range prefixLength).mapM fun i => mkFreshName 0 i false
+  /- Associate every output fvar with the name we picked for it, so that when naming the
+     post-conditions we can resolve references to the outputs back to those names. -/
+  let outputNames : Std.HashMap FVarId Name :=
+    (Array.range prefixLength).foldl (init := ∅) fun m i =>
+      m.insert outputFVars[i]! outputIds[i]!
+
+  /- Now compute the prop-status and the names of the remaining leading binders (these are
+     the post-conditions and existential variables to introduce).
+
+     We prefer user-provided names, and for non-Props we generate fresh names. For Props we
+     analyze the type of the hypothesis: if it is of the form `<id> <binrel> _` (or `_<binrel><id>`)
+     then we prefer using `<id>_post<idx>`, so that each post-condition is named after the output
+     it constrains. We compute the names here, while the binders' types are still at hand,
+     and use them further below when actually introducing the binders. -/
+  let goal ← getMainGoal
+  let (postsIsProp, postsIdsArr) ← goal.withContext do
+    let type ← instantiateMVars (← goal.getType)
+    forallTelescope type.consumeMData fun fvars _ => do
+      let typesAndProps : Array (Expr × Bool) ← fvars.mapM fun fv => do
+        let ty ← inferType fv
+        pure (ty, ← isProp ty)
+
+      /- Total number of "logical" outputs+post slots, used for the user-provided-id check. -/
+      let totalSlots := prefixLength + typesAndProps.size
+      if totalSlots < args.ids.size ∧ args.idsUserProvided then
+        logWarning m!"Too many ids provided ({args.ids}): expected ≤ {totalSlots} ids, got {args.ids.size}"
+
+      let mut postsIds : Array Name := #[]
+      /- How many post-conditions we already named after a given base name, used to
+         disambiguate several post-conditions constraining the same output. -/
+      let mut postCounts : Std.HashMap Name Nat := ∅
+      for h : i in [0:typesAndProps.size] do
+        let (ty, tyIsProp) := typesAndProps[i]
+        let n ←
+          -- Use the user-provided name if possible
+          if hi : prefixLength + i < args.ids.size then
+            match args.ids[prefixLength + i] with
+            | some n => pure n
+            | none => mkFreshAnon tyIsProp
+          else if args.idsUserProvided then
+            mkFreshAnon tyIsProp
+          else if ¬ tyIsProp then
+            -- Generate a name for an existential variable
+            mkFreshUserName `x
+          else
+            -- Generate a name for a post-condition
+            let nameSpec :=
+              match ← decomposeRelation? ty outputNames, args.postsBasename with
+              | some relName, some (.str root _) => some (root, relName)
+              | some relName, _                  => some (.anonymous, relName)
+              | none,         some (.str root s) => some (root, Name.mkSimple s)
+              | none,         _                  => none
+            match nameSpec with
+            | none => mkFreshAnonPropUserName
+            | some (nameRoot, baseName) =>
+              let suffixNum := postCounts.getD baseName 0
+              let suffixStr := if suffixNum == 0 then "" else s!"{suffixNum}"
+              postCounts := postCounts.insert baseName (suffixNum + 1)
+              pure (Name.str nameRoot s!"{baseName}_post{suffixStr}")
+        postsIds := postsIds.push n
+      pure (typesAndProps.map (·.2), postsIds)
+
+  /- The postfix length: the remaining binders (post-condition and existential variables). -/
+  let postfixLength := postsIsProp.size
+  trace[Step] "Prefix length (outputs): {prefixLength}, postfix length (post-conditions): {postfixLength}"
+  trace[Step] "output ids: {outputIds}, post ids: {postsIdsArr}"
 
   /- Rename the output fvars to the user-provided names. -/
   let mut goal ← getMainGoal
@@ -820,13 +876,6 @@ def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState : Ste
   introPrettyEquality args fExpr (outputFVars.map Expr.fvar)
   traceGoalWithNode "goal after introducing the pretty equality"
 
-  /- Compute names for the post-conditions and existential variables. -/
-  let mut postsIdsArr : Array Name := #[]
-  let mut nPropsBefore := 0
-  for i in [0:postfixLength] do
-    let isProp := outputIsProp[i]!
-    postsIdsArr := postsIdsArr.push (← mkFreshName nPropsBefore (prefixLength + i) isProp)
-    if isProp then nPropsBefore := nPropsBefore + 1
   let postsIds := postsIdsArr.toList
 
   /- Introduce the post-conditions and existential variables. -/
@@ -843,7 +892,7 @@ def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState : Ste
   let outputInfos := outputFVars.mapIdx fun i fv =>
     { fvarId := fv, name? := mkName? (outputIds.getD i `_), isProp := false : Output }
   let postInfos := posts.mapIdx fun i fv =>
-    { fvarId := fv, name? := mkName? (postsIds.getD i `_), isProp := outputIsProp.getD i true : Output }
+    { fvarId := fv, name? := mkName? (postsIds.getD i `_), isProp := postsIsProp.getD i true : Output }
   let introducedVars := outputInfos ++ postInfos
 
   pure (some { goal := ← getMainGoal, outputs := introducedVars, stepState })

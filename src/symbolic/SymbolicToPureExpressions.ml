@@ -413,8 +413,6 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
                   | Index
                       { is_array = _; mutability = RShared; is_range = true } ->
                       "subslice_shared"
-                  | PtrFromParts RMut -> "ptr_from_parts_mut"
-                  | PtrFromParts RShared -> "ptr_from_parts_shared"
                 end
               | FunId (FRegular fid) -> (
                   let decl =

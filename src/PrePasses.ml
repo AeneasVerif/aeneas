@@ -191,7 +191,8 @@ let update_array_default (crate : crate) : crate =
            TArray
              ( TVar (Free _),
                ({ kind = CLiteral (VScalar (UnsignedScalar (Usize, nv))); _ } as
-                n) );
+                n),
+               _ );
          ];
        const_generics = [];
        trait_refs = _;
@@ -273,13 +274,13 @@ let update_array_default (crate : crate) : crate =
       in
       let elem_ty =
         match merged_impl.impl_trait.generics.types with
-        | [ TArray ((TVar (Free _) as elem_ty), _) ] -> elem_ty
+        | [ TArray ((TVar (Free _) as elem_ty), _, _) ] -> elem_ty
         | _ -> [%internal_error] merged_impl.item_meta.span
       in
       let generics =
         {
           merged_impl.impl_trait.generics with
-          types = [ TArray (elem_ty, cg) ];
+          types = [ TArray (elem_ty, cg, None) ];
         }
       in
       let impl_trait = { merged_impl.impl_trait with generics } in
@@ -322,7 +323,7 @@ let update_array_default (crate : crate) : crate =
             let sg = fdecl.signature in
             [%sanity_check_opt_span] None (sg.inputs = []);
             match sg.output with
-            | TArray ((TVar (Free _) as elem_ty), _) ->
+            | TArray ((TVar (Free _) as elem_ty), _, _) ->
                 let generics =
                   {
                     fdecl.generics with
@@ -336,7 +337,7 @@ let update_array_default (crate : crate) : crate =
                       ];
                   }
                 in
-                let sg = { sg with output = TArray (elem_ty, cg) } in
+                let sg = { sg with output = TArray (elem_ty, cg, None) } in
                 let fdecl = { fdecl with signature = sg; generics } in
                 Some fdecl
             | _ -> [%internal_error] fdecl.item_meta.span)
@@ -2294,6 +2295,86 @@ let fix_closure_lifetimes (crate : crate) (f : fun_decl) : fun_decl =
           f
       | _, _ -> f)
 
+(** Fill in erased lifetime arguments on closure types in function signatures.
+
+    For example, the user may write:
+    {[
+      fn f<'a>(x: &'a u8) -> impl Fn() -> u8 + 'a {
+        move || *x
+      }
+    ]}
+    Charon resolves the opaque [impl Fn()] return type to the generated closure
+    type, but leaves its lifetime argument erased:
+    {[
+      struct f::closure<'a> {
+        _0 : &'a u8,
+      }
+
+      fn f<'a>(x : &'a u8) -> make::closure<'_>
+    ]}
+    The return type should instead be [f::closure<'a>].
+
+    We can repair the signature when it binds exactly one region parameter: in
+    that case every erased region argument of a closure type must refer to that
+    region. With several region parameters, we cannot determine which lifetime
+    the closure captured and leave the signature unchanged. Also note that the
+    closure type may be nested inside another type, such as
+    [Map<Range<i32>, f::closure<'_>>], so we have to be quite general.
+
+    This complements [fix_closure_lifetimes], which repairs the generated
+    closure methods rather than the function creating the closure.
+
+    See https://github.com/AeneasVerif/charon/issues/1040 and
+    https://github.com/AeneasVerif/aeneas/issues/1207.
+
+    TODO: remove once the Charon issue is fixed. *)
+let fix_closure_signature_regions (crate : crate) (f : fun_decl) : fun_decl =
+  match f.generics.regions with
+  | [ rp ] ->
+      (* Only one region parameter: we can eventually fix *)
+      let region = RVar (Free rp.index) in
+      let updated = ref false in
+      let is_closure_ty (id : TypeDeclId.id) : bool =
+        match TypeDeclId.Map.find_opt id crate.type_decls with
+        | Some { src = ClosureType _; _ } -> true
+        | _ -> false
+      in
+      let visitor =
+        object
+          inherit [_] map_ty as super
+
+          method! visit_TAdt env tref =
+            let tref =
+              if is_closure_ty tref.id then
+                let regions =
+                  List.map
+                    (fun region0 ->
+                      match region0 with
+                      | RErased ->
+                          updated := true;
+                          region
+                      | _ -> region0)
+                    tref.generics.regions
+                in
+                { tref with generics = { tref.generics with regions } }
+              else tref
+            in
+            super#visit_TAdt env tref
+        end
+      in
+      let inputs = List.map (visitor#visit_ty ()) f.signature.inputs in
+      let output = visitor#visit_ty () f.signature.output in
+      if !updated then begin
+        let signature = { f.signature with inputs; output } in
+        let f = { f with signature } in
+        [%ltrace
+          let env = Print.crate_to_fmt_env crate in
+          "Updated: " ^ Print.fun_decl_to_string env "" " " f];
+        f
+      end
+      else f
+  | _ -> f
+
 let apply_passes (crate : crate) : crate =
   (* Passes that apply to the whole crate *)
   let crate = update_array_default crate in
@@ -2301,6 +2382,7 @@ let apply_passes (crate : crate) : crate =
   let function_passes =
     [
       ("fix_closure_lifetimes", fix_closure_lifetimes);
+      ("fix_closure_signature_regions", fix_closure_signature_regions);
       ("erase_body_regions", erase_body_regions);
       ("remove_unreachable", remove_unreachable);
       ("update_loop", update_loops);

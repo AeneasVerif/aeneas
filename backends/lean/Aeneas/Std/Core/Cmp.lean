@@ -126,11 +126,11 @@ def core.cmp.PartialOrd.ge.default {Self Rhs : Type}
 /- Auxiliary functions for the default implementations of `Ord` methods -/
 def core.cmp.Ord.max_body {Self : Type} (lt : Self → Self → Result Bool)
   (x y : Self) : Result Self := do
-  if ← lt x y then ok y else ok x
+  if ← lt y x then ok x else ok y
 
 def core.cmp.Ord.min_body {Self : Type} (lt : Self → Self → Result Bool)
   (x y : Self) : Result Self := do
-  if ← lt x y then ok x else ok y
+  if ← lt y x then ok y else ok x
 
 def core.cmp.Ord.clamp_body {Self : Type} (le lt gt : Self → Self → Result Bool)
   (self min max : Self) : Result Self := do

@@ -149,13 +149,13 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
                   [%craise_opt_span] span
                     "Box/vec/option type with incorrect number of arguments")
           | T.TStr -> TAdt (TBuiltin TStr, generics)))
-  | T.TArray (ty, len) ->
+  | T.TArray (ty, len, _) ->
       let ty = translate span ty in
       let len = translate_constant_expr_kind span len.kind in
       TAdt
         ( TBuiltin TArray,
           { types = [ ty ]; const_generics = [ len ]; trait_refs = [] } )
-  | T.TSlice ty ->
+  | T.TSlice (ty, _) ->
       let ty = translate span ty in
       TAdt
         ( TBuiltin TSlice,
@@ -363,13 +363,13 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
               [%craise_opt_span] span
                 "Unreachable: box/vec/option receives exactly one type \
                  parameter"))
-  | T.TArray (ty, len) ->
+  | T.TArray (ty, len, _) ->
       let ty = translate ty in
       let len = translate_constant_expr_kind span len.kind in
       TAdt
         ( TBuiltin TArray,
           { types = [ ty ]; const_generics = [ len ]; trait_refs = [] } )
-  | T.TSlice ty ->
+  | T.TSlice (ty, _) ->
       let ty = translate ty in
       TAdt
         ( TBuiltin TSlice,
@@ -488,7 +488,7 @@ and compute_back_ty_num_levels (span : Meta.span option)
                 [%craise_opt_span] span
                   "Unreachable: boxes receive exactly one type parameter")
         | Some TTuple -> List.iter (explore outer_regions) generics.types)
-    | T.TArray (ty, _) | T.TSlice ty -> explore outer_regions ty
+    | T.TArray (ty, _, _) | T.TSlice (ty, _) -> explore outer_regions ty
     | TVar _ | TNever | TLiteral _ -> save_count outer_regions
     | TRef (r, rty, rkind) -> (
         match rkind with

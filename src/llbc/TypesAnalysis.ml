@@ -358,7 +358,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
     | TRawPtr (rty, _) ->
         (* TODO: not sure what to do here *)
         analyze span expl_info ty_info rty
-    | TArray (ty, _) | TSlice ty ->
+    | TArray (ty, _, _) | TSlice (ty, _) ->
         (* Nothing to update: just explore the type parameters *)
         analyze span expl_info ty_info ty
     | TAdt { generics; builtin = Some (TTuple | TBox | TStr); _ } ->

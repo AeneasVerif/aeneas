@@ -471,7 +471,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
             (fun ((v, ty) : tvalue * ty) -> [%sanity_check] span (v.ty = ty))
             fields_with_types
       (* Builtin type case *)
-      | VAdt av, TArray (inner_ty, len) ->
+      | VAdt av, TArray (inner_ty, len, _) ->
           [%sanity_check] span
             (List.for_all (fun (v : tvalue) -> v.ty = inner_ty) av.fields);
           (* The length is necessarily concrete *)
