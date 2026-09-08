@@ -376,8 +376,6 @@ theorem countToFive.spec :
   apply triple_bind' makeCounter.spec
   intro increment
   iintro
-  rw [sep_comm_eq]
-  iintro incrementSpec
   step*
 
 /-! ## 4. The gap the notation closes
