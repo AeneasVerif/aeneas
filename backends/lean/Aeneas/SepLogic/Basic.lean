@@ -139,6 +139,23 @@ macro_rules
   | `($P ⊣⊢ $Q) => `(BiEntails $P $Q)
 notation:50 r:50 " ↦ " value:50 => PointsTo.pointsTo r value
 
+open Lean PrettyPrinter Delaborator SubExpr
+
+/-- Print pure assertions using separation-logic quotation syntax. -/
+@[app_delab ipure]
+def delabIpure : Delab := do
+  guard ((← getExpr).isAppOfArity ``ipure 1)
+  let proposition ← withAppArg delab
+  `(⌜$proposition⌝)
+
+/-- Print separation-logic entailment using its surface notation. -/
+@[app_delab Entails]
+def delabEntails : Delab := do
+  guard ((← getExpr).isAppOfArity ``Entails 2)
+  let lhs ← withNaryArg 0 delab
+  let rhs ← withNaryArg 1 delab
+  `($lhs ⊢ $rhs)
+
 theorem entails_refl (H : IProp) : H ⊢ H :=
   fun _ hH => hH
 

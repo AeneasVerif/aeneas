@@ -9,6 +9,20 @@ without the proof mode.  The tactic tests are in `Aeneas.Tactic.SepLogic.Tests`.
 
 namespace Aeneas.SepLogic.Tests
 
+/-! ## Pretty-printing -/
+
+/-- error: unsolved goals
+P Q : IProp
+⊢ P ⊢ Q -/
+#guard_msgs in
+example (P Q : IProp) : Entails P Q := by done
+
+/-- error: unsolved goals
+P : Prop
+⊢ emp ⊢ ⌜P⌝ -/
+#guard_msgs in
+example (P : Prop) : Entails emp (ipure P) := by done
+
 example (P Q : IProp) : (P ∗ Q) ⊣⊢ (Q ∗ P) :=
   sep_comm P Q
 
