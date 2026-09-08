@@ -21,11 +21,11 @@ def wp_return (x:α) : Wp α := fun p => p x
 
 @[grind]
 inductive spec {α} : (x : Result α) → (p : Post α) →  Prop where
-| ret : ∀ p x, p x → spec (.ok x) p
+| ret : ∀ {p x}, p x → spec (.ok x) p
 
 
 inductive dspec {α} : (x : Result α) → (p : Post α) →  Prop where
-| ret : ∀ p x, p x → dspec (.ok x) p
+| ret : ∀ {p x}, p x → dspec (.ok x) p
 | div : ∀ p, dspec div p
 
 theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p := by
