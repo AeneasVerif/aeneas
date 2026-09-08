@@ -46,7 +46,7 @@ let compute_body_fun_deps (e : texpr) : FunIdSet.t =
             | FromLlbc (fid, lp_id) -> (
                 match fid with
                 | TraitMethod _ -> ()
-                | FunId (FRegular fid) ->
+                | FunId fid ->
                     let id = { def_id = fid; lp_id } in
                     ids := FunIdSet.add id !ids))
     end

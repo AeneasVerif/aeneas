@@ -1,19 +1,6 @@
 open Types
 open LlbcAst
 include Charon.LlbcAstUtils
-open Collections
-
-module FunIdOrderedType : OrderedType with type t = fun_id = struct
-  type t = fun_id
-
-  let compare = compare_fun_id
-  let to_string = show_fun_id
-  let pp_t = pp_fun_id
-  let show_t = show_fun_id
-end
-
-module FunIdMap = Collections.MakeMap (FunIdOrderedType)
-module FunIdSet = Collections.MakeSet (FunIdOrderedType)
 
 let body_as_body = Charon.LlbcAstUtils.body_as_structured
 
@@ -45,11 +32,6 @@ let fun_decl_global_initializer (f : fun_decl) : global_decl_ref option =
 
 let fun_decl_is_global_initializer (f : fun_decl) : bool =
   Option.is_some (fun_decl_global_initializer f)
-
-let lookup_fun_sig (fun_id : fun_id) (fun_decls : fun_decl FunDeclId.Map.t) :
-    bound_fun_sig =
-  let (FRegular id) = fun_id in
-  bound_fun_sig_of_decl (FunDeclId.Map.find id fun_decls)
 
 (** Return the opaque declarations found in the crate, which are also *not
     builtin*.

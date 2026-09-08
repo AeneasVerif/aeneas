@@ -11,7 +11,7 @@ let log = Logging.symbolic_to_pure_expressions_log
 
 let translate_fn_ptr_kind (ctx : bs_ctx) (id : A.fn_ptr_kind) : fn_ptr_kind =
   match id with
-  | FunId fun_id -> FunId fun_id
+  | T.Fun fun_id -> FunId fun_id
   | TraitMethod (trait_ref, method_id) ->
       let trait_ref =
         translate_fwd_trait_ref (Some ctx.span) ctx.decls_ctx trait_ref
@@ -300,7 +300,7 @@ and translate_target_dispatch (input_svs : V.symbolic_value list)
     in
     let qualif : qualif =
       {
-        id = FunOrOp (Fun (FromLlbc (FunId (FRegular fdr.id), None)));
+        id = FunOrOp (Fun (FromLlbc (FunId fdr.id, None)));
         generics = pure_generics;
       }
     in
@@ -437,7 +437,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
           let back_fun_name =
             let name =
               match fid with
-              | FunId (FRegular fid) ->
+              | Fun fid ->
                   compute_back_fun_name ctx
                     (FunDeclId.Map.find fid ctx.fun_ctx.llbc_fun_decls)
               | TraitMethod (trait_ref, method_id) ->
@@ -696,7 +696,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
   *)
   let ctx, call_e =
     match call.call_id with
-    | S.Fun (FunId (FRegular fid), _)
+    | S.Fun (Fun fid, _)
       when (FunDeclId.Map.find fid ctx.fun_ctx.llbc_fun_decls).item_meta
              .diagnostic_item = Some "box_new" ->
         let ctx, back_funs_bodies =
@@ -731,7 +731,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
   *)
   let call_e =
     match call.call_id with
-    | S.Fun (FunId (FRegular fid), _)
+    | S.Fun (Fun fid, _)
       when List.exists
              (TypesUtils.ty_has_mut_borrows ctx.type_ctx.type_infos)
              call.generics.types -> (
@@ -1613,7 +1613,7 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         let qualif = Qualif { id = FunOrOp func; generics } in
         let ty =
           match kind with
-          | T.FunId (FRegular _) ->
+          | T.Fun _ ->
               let sg =
                 [%unwrap_with_span] ctx.span
                   (lookup_fn_ptr_sig ctx kind)

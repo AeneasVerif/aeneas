@@ -19,7 +19,7 @@ let translate_fun_decl_body (ctx : bs_ctx) (signature : fun_sig) (body : S.expr)
     ^ "\n\n- decomposed_fun_sig:\n"
     ^ decomposed_fun_sig_to_string ctx ctx.sg];
 
-  let effect_info = get_fun_effect_info ctx (FunId (FRegular def_id)) None in
+  let effect_info = get_fun_effect_info ctx (FunId def_id) None in
   let mk_return (ctx : bs_ctx) v =
     match v with
     | None ->

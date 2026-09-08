@@ -539,7 +539,7 @@ let mk_symbolic_fun_call_inst (span : Meta.span) (ctx : eval_ctx)
 let eval_function_call_symbolic_inst (span : Meta.span) (func : fn_ptr)
     (ctx : eval_ctx) : symbolic_fun_call_inst =
   match func.kind with
-  | FunId (FRegular fid) ->
+  | Fun fid ->
       let tr_self = UnknownTrait __FUNCTION__ in
       (* Lookup the declaration *)
       let def = ctx_lookup_fun_decl span ctx fid in
@@ -1238,7 +1238,7 @@ and eval_function_call_concrete (config : config) (span : Meta.span)
   | FnOpDynamic _ -> [%craise] span "Function pointers are not supported yet"
   | FnOpRegular func -> (
       match func.kind with
-      | FunId (FRegular fid) ->
+      | Fun fid ->
           let def = ctx_lookup_fun_decl span ctx fid in
           if def.item_meta.diagnostic_item = Some "box_new" then
             let ctx, cc =

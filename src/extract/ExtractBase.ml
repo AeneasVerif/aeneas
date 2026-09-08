@@ -117,7 +117,7 @@ and id =
             def CONST : Result u32 := ok CONST.val
           ]} *)
   | FunId of fun_id
-  | TerminationMeasureId of (A.fun_id * (LoopId.id * bool) option)
+  | TerminationMeasureId of (A.fun_decl_id * (LoopId.id * bool) option)
       (** The definition which provides the decreases/termination measure. We
           insert calls to this clause to prove/reason about termination: the
           body of those clauses must be defined by the user, in the proper
@@ -133,7 +133,7 @@ and id =
            }
            {- in Lean, this is the content of the [termination_by] clause. }
           } *)
-  | DecreasesProofId of (A.fun_id * (LoopId.id * bool) option)
+  | DecreasesProofId of (A.fun_decl_id * (LoopId.id * bool) option)
       (** The definition which provides the decreases/termination proof. We
           insert calls to this clause to prove/reason about termination: the
           body of those clauses must be defined by the user, in the proper
@@ -659,8 +659,8 @@ let type_id_to_string (ctx : extraction_ctx) =
 let global_decl_id_to_string (ctx : extraction_ctx) =
   PrintPure.global_decl_id_to_string (extraction_ctx_to_fmt_env ctx)
 
-let llbc_fun_id_to_string (ctx : extraction_ctx) =
-  PrintPure.llbc_fun_id_to_string (extraction_ctx_to_fmt_env ctx)
+let fun_decl_id_to_string (ctx : extraction_ctx) =
+  PrintPure.fun_decl_id_to_string (extraction_ctx_to_fmt_env ctx)
 
 let fun_id_to_string (ctx : extraction_ctx) =
   PrintPure.regular_fun_id_to_string (extraction_ctx_to_fmt_env ctx)
@@ -686,7 +686,7 @@ let id_to_string (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
       "@pureGlobalValue(" ^ global_decl_id_to_string ctx gid ^ ")"
   | FunId fid -> fun_id_to_string ctx fid
   | DecreasesProofId (fid, lid) ->
-      let fun_name = llbc_fun_id_to_string ctx fid in
+      let fun_name = fun_decl_id_to_string ctx fid in
       let loop =
         match lid with
         | None -> ""
@@ -696,7 +696,7 @@ let id_to_string (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
       in
       "decreases proof for function: " ^ fun_name ^ loop
   | TerminationMeasureId (fid, lid) ->
-      let fun_name = llbc_fun_id_to_string ctx fid in
+      let fun_name = fun_decl_id_to_string ctx fid in
       let loop =
         match lid with
         | None -> ""
@@ -820,7 +820,7 @@ let ctx_get_function (span : Meta.span) (id : fun_id) (ctx : extraction_ctx) :
 
 let ctx_get_local_function (span : Meta.span) (id : A.FunDeclId.id)
     (lp : (LoopId.id * bool) option) (ctx : extraction_ctx) : string =
-  ctx_get_function span (FromLlbc (FunId (FRegular id), lp)) ctx
+  ctx_get_function span (FromLlbc (Pure.FunId id, lp)) ctx
 
 let ctx_get_type (span : Meta.span option) (id : type_id) (ctx : extraction_ctx)
     : string =
@@ -907,11 +907,11 @@ let ctx_get_variant (span : Meta.span) (def_id : type_id)
 
 let ctx_get_decreases_proof (span : Meta.span) (def_id : A.FunDeclId.id)
     (loop_id : (LoopId.id * bool) option) (ctx : extraction_ctx) : string =
-  ctx_get (Some span) (DecreasesProofId (FRegular def_id, loop_id)) ctx
+  ctx_get (Some span) (DecreasesProofId (def_id, loop_id)) ctx
 
 let ctx_get_termination_measure (span : Meta.span) (def_id : A.FunDeclId.id)
     (loop_id : (LoopId.id * bool) option) (ctx : extraction_ctx) : string =
-  ctx_get (Some span) (TerminationMeasureId (FRegular def_id, loop_id)) ctx
+  ctx_get (Some span) (TerminationMeasureId (def_id, loop_id)) ctx
 
 let ctx_lookup_fun_decl_info (ctx : extraction_ctx) (id : A.FunDeclId.id) :
     pure_fun_translation option =
@@ -2515,14 +2515,14 @@ let ctx_add_decreases_proof (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let name = ctx_compute_decreases_proof_name def ctx in
   ctx_add def.item_meta.span
-    (DecreasesProofId (FRegular def.def_id, def.loop_id))
+    (DecreasesProofId (def.def_id, def.loop_id))
     name ctx
 
 let ctx_add_termination_measure (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let name = ctx_compute_termination_measure_name def ctx in
   ctx_add def.item_meta.span
-    (TerminationMeasureId (FRegular def.def_id, def.loop_id))
+    (TerminationMeasureId (def.def_id, def.loop_id))
     name ctx
 
 (* TODO: move to Extract *)
@@ -2537,7 +2537,7 @@ let ctx_add_fun_decl (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
     let def_id = def.def_id in
     (* Add the function name *)
     let def_name = ctx_compute_fun_name def false ctx in
-    let fun_id = (Pure.FunId (FRegular def_id), def.loop_id) in
+    let fun_id = (Pure.FunId def_id, def.loop_id) in
     ctx_add def.item_meta.span (FunId (FromLlbc fun_id)) def_name ctx
 
 let ctx_compute_type_decl_name (ctx : extraction_ctx) (def : type_decl) : string

@@ -56,7 +56,6 @@ type span_data = Meta.span_data [@@deriving show, ord]
 type span = Meta.span [@@deriving show, ord]
 type ref_kind = Types.ref_kind [@@deriving show, ord]
 type 'a de_bruijn_var = 'a Types.de_bruijn_var [@@deriving show, ord]
-type llbc_fun_id = A.fun_id [@@deriving show, ord]
 type overflow_mode = E.overflow_mode [@@deriving show, ord]
 type de_bruijn_id = T.de_bruijn_id [@@deriving show, ord]
 type type_var_id = TypeVarId.id [@@deriving show, ord]
@@ -1004,8 +1003,6 @@ class ['self] iter_tpat_base =
         self#visit_option self#visit_string e var.basename;
         self#visit_ty e var.ty
 
-    method visit_llbc_fun_id : 'env -> llbc_fun_id -> unit = fun _ _ -> ()
-
     method visit_pure_builtin_fun_id : 'env -> pure_builtin_fun_id -> unit =
       fun _ _ -> ()
 
@@ -1039,8 +1036,6 @@ class ['self] map_tpat_base =
           ty = self#visit_ty e var.ty;
         }
 
-    method visit_llbc_fun_id : 'env -> llbc_fun_id -> llbc_fun_id = fun _ x -> x
-
     method visit_pure_builtin_fun_id :
         'env -> pure_builtin_fun_id -> pure_builtin_fun_id =
       fun _ x -> x
@@ -1072,8 +1067,6 @@ class virtual ['self] reduce_tpat_base =
         let x1 = self#visit_option self#visit_string e var.basename in
         let x2 = self#visit_ty e var.ty in
         self#plus (self#plus x0 x1) x2
-
-    method visit_llbc_fun_id : 'env -> llbc_fun_id -> 'a = fun _ _ -> self#zero
 
     method visit_pure_builtin_fun_id : 'env -> pure_builtin_fun_id -> 'a =
       fun _ _ -> self#zero
@@ -1115,9 +1108,6 @@ class virtual ['self] mapreduce_tpat_base =
         let basename, x1 = self#visit_option self#visit_string e var.basename in
         let ty, x2 = self#visit_ty e var.ty in
         ({ id; basename; ty }, self#plus (self#plus x0 x1) x2)
-
-    method visit_llbc_fun_id : 'env -> llbc_fun_id -> llbc_fun_id * 'a =
-      fun _ x -> (x, self#zero)
 
     method visit_pure_builtin_fun_id :
         'env -> pure_builtin_fun_id -> pure_builtin_fun_id * 'a =
@@ -1230,7 +1220,7 @@ and cast_kind =
       *)
 
 and fn_ptr_kind =
-  | FunId of llbc_fun_id
+  | FunId of fun_decl_id
   | TraitMethod of trait_ref * trait_method_id
 
 (** A function id for a non-builtin function.

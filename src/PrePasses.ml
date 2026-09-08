@@ -102,7 +102,7 @@ let remove_unreachable (crate : crate) (f : fun_decl) : fun_decl =
         match call.func with
         | FnOpRegular { kind; _ } -> (
             match kind with
-            | FunId (FRegular fid) ->
+            | Fun fid ->
                 let fun_decl =
                   [%silent_unwrap_opt_span] (Some st.span)
                     (FunDeclId.Map.find_opt fid crate.fun_decls)
@@ -372,13 +372,13 @@ let update_array_default (crate : crate) : crate =
 
         method! visit_fn_ptr env fn_ptr =
           match fn_ptr.kind with
-          | FunId (FRegular fid) -> begin
+          | Fun fid -> begin
               match FunDeclId.Map.find_opt fid methods with
               | None -> super#visit_fn_ptr env fn_ptr
               | Some n ->
                   let fn_ptr =
                     {
-                      kind = FunId (FRegular merged_method);
+                      kind = Fun merged_method;
                       generics = { fn_ptr.generics with const_generics = [ n ] };
                     }
                   in
@@ -1443,9 +1443,7 @@ let simplify_panics (crate : crate) (f : fun_decl) : fun_decl =
       method! visit_block env (block : block) =
         let is_from_str_call (st : statement) : bool =
           match st.kind with
-          | Call
-              ({ func = FnOpRegular { kind = FunId (FRegular fid); _ }; _ }, _)
-            -> (
+          | Call ({ func = FnOpRegular { kind = Fun fid; _ }; _ }, _) -> (
               match FunDeclId.Map.find_opt fid crate.fun_decls with
               | Some decl -> is_from_str decl
               | None -> false)
@@ -1719,7 +1717,7 @@ let replace_static (crate : crate) : crate =
 
               method! visit_Call _ call on_unwind =
                 match call.func with
-                | FnOpRegular { kind = FunId (FRegular id) as kind; generics }
+                | FnOpRegular { kind = Fun id as kind; generics }
                   when id = d.def_id ->
                     let func =
                       FnOpRegular
@@ -2011,7 +2009,7 @@ let simplify_trait_calls (crate : crate) : crate =
   let try_replace_call (super_visit : unit -> statement_kind) (span : Meta.span)
       (call : call) (on_unwind : block) : statement_kind =
     match call.func with
-    | FnOpRegular { kind = FunId (FRegular fid); generics } -> (
+    | FnOpRegular { kind = Fun fid; generics } -> (
         match FunDeclId.Map.find_opt fid crate.fun_decls with
         | Some d
           when List.length generics.trait_refs > 0 && List.length call.args > 0
@@ -2076,7 +2074,7 @@ let simplify_trait_calls (crate : crate) : crate =
                       in
 
                       (* *)
-                      let kind = FunId (FRegular method_ref.binder_value.id) in
+                      let kind = Fun method_ref.binder_value.id in
                       let func = FnOpRegular { kind; generics } in
                       Call ({ call with func }, on_unwind)
                   | _ ->
