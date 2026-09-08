@@ -215,46 +215,208 @@ claim that the computation terminates. -/
 def dtriple (P : IPre) (m : Result α) (Q : IPost α) : Prop :=
   ∀ F h, (P ∗ F) h → dspec m (Q ∗+ F) h
 
+/-- Internal tuple-destructuring marker for postconditions. Unlike a pattern
+lambda, it remains visible to `step` and the delaborators. -/
+@[inline] def postUncurry {α β γ : Type _} (f : α → β → γ) : α × β → γ :=
+  fun (a, b) => f a b
+
+@[simp]
+theorem postUncurry_apply {α β γ : Type _} (f : α → β → γ) (p : α × β) :
+    postUncurry f p = f p.1 p.2 := by
+  cases p
+  rfl
+
+@[simp]
+theorem postUncurry_eq {α β γ : Type _} (f : α → β → γ) :
+    postUncurry f = fun p => f p.1 p.2 := by
+  funext p
+  exact postUncurry_apply f p
+
+/-- Internal marker for a boundary between separate postcondition binders. It
+is semantically identical to `postUncurry`, but delaborators print it as
+`x y => ...` rather than `(x, y) => ...`. -/
+@[inline] def postCurry {α β γ : Type _} (f : α → β → γ) : α × β → γ :=
+  fun (a, b) => f a b
+
+@[simp]
+theorem postCurry_apply {α β γ : Type _} (f : α → β → γ) (p : α × β) :
+    postCurry f p = f p.1 p.2 := by
+  cases p
+  rfl
+
+@[simp]
+theorem postCurry_eq {α β γ : Type _} (f : α → β → γ) :
+    postCurry f = fun p => f p.1 p.2 := by
+  funext p
+  exact postCurry_apply f p
+
+/-- Split separate postcondition binders before `step` introduces the
+result and its postcondition hypotheses. -/
+theorem forall_triple_postCurry {α β γ : Type _}
+    (P : α → β → IProp) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
+    (∀ value, triple (postCurry P value ∗ F) (next value) Q) ↔
+      ∀ first second, triple (P first second ∗ F) (next (first, second)) Q := by
+  constructor
+  · intro h first second
+    exact h (first, second)
+  · intro h ⟨first, second⟩
+    exact h first second
+
+/-- Partial-triple counterpart of `forall_triple_postCurry`. -/
+theorem forall_dtriple_postCurry {α β γ : Type _}
+    (P : α → β → IProp) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
+    (∀ value, dtriple (postCurry P value ∗ F) (next value) Q) ↔
+      ∀ first second, dtriple (P first second ∗ F) (next (first, second)) Q := by
+  constructor
+  · intro h first second
+    exact h (first, second)
+  · intro h ⟨first, second⟩
+    exact h first second
+
+/-- Split an uncurried postcondition before `step` introduces the
+result and its postcondition hypotheses. -/
+theorem forall_triple_postUncurry {α β γ : Type _}
+    (P : α → β → IProp) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
+    (∀ value, triple (postUncurry P value ∗ F) (next value) Q) ↔
+      ∀ first second, triple (P first second ∗ F) (next (first, second)) Q := by
+  constructor
+  · intro h first second
+    exact h (first, second)
+  · intro h ⟨first, second⟩
+    exact h first second
+
+/-- Partial-triple counterpart of `forall_triple_postUncurry`. -/
+theorem forall_dtriple_postUncurry {α β γ : Type _}
+    (P : α → β → IProp) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
+    (∀ value, dtriple (postUncurry P value ∗ F) (next value) Q) ↔
+      ∀ first second, dtriple (P first second ∗ F) (next (first, second)) Q := by
+  constructor
+  · intro h first second
+    exact h (first, second)
+  · intro h ⟨first, second⟩
+    exact h first second
+
 /- The `⇓` is inside `atomic` so that the parser backtracks when it is absent:
 `(m) ⦃ value => p ⦄`, the pure-computation notation of `Aeneas.SepLogic.WP`,
 starts with exactly the same tokens and must stay parseable. -/
 syntax:lead (name := specSyntax)
-  atomic("(" term:lead ")" " ⦃" "⇓ ") Lean.Parser.Term.funBinder " => " term " ⦄" : term
+  atomic("(" term:lead ")" " ⦃" "⇓ ") term+ " => " term " ⦄" : term
 syntax:lead (name := specSyntaxPred)
   atomic("(" term:lead ")" " ⦃" "⇓ ") term " ⦄" : term
 syntax:lead (name := slSpecSyntax)
   "⦃ " term " ⦄" ppSpace term:lead ppSpace
-  "⦃" "⇓" ppSpace Lean.Parser.Term.funBinder " => " term " ⦄" : term
+  "⦃" "⇓" ppSpace term+ " => " term " ⦄" : term
 syntax:lead (name := slSpecSyntaxPred)
   "⦃ " term " ⦄" ppSpace term:lead ppSpace "⦃" "⇓" ppSpace term " ⦄" : term
 
+open Lean PrettyPrinter
+
+/-- Build a marker chain for the leaves of a possibly nested tuple pattern. -/
+private partial def buildPostUncurryLamWith (uncurryName : Name)
+    (xs : List Term) (body : Term) : MacroM Term := do
+  let uncurryIdent := mkIdent uncurryName
+  match xs with
+  | [] => pure body
+  | [x] => `(fun $x => $body)
+  | [a, b] => `($uncurryIdent (fun $a $b => $body))
+  | a :: rest =>
+    let inner ← buildPostUncurryLamWith uncurryName rest body
+    `($uncurryIdent (fun $a => $inner))
+
+/-- Elaborate one possibly nested tuple binder without generating a matcher
+function, so `step` and the delaborator can recover its structure. -/
+private partial def mkPostBinderFunWith (uncurryName : Name) (depth : Nat)
+    (binder : Term) (body : Term) : MacroM Term := do
+  match binder with
+  | `( ($a, $bs,*) ) =>
+    let xs : List Term := a :: bs.getElems.toList
+    let mut leafIdents : List Term := []
+    let mut wrappedBody := body
+    for (x, idx) in xs.zipIdx.reverse do
+      match x with
+      | `( ($_, $_,*) ) =>
+        let freshIdent := mkIdent $ .mkSimple s!"_p_{depth}_{idx}"
+        let inner ← mkPostBinderFunWith uncurryName (depth + 1) x wrappedBody
+        wrappedBody ← `($inner $freshIdent)
+        leafIdents := freshIdent :: leafIdents
+      | _ =>
+        leafIdents := x :: leafIdents
+    buildPostUncurryLamWith uncurryName leafIdents wrappedBody
+  | _ => `(fun $binder => $body)
+
+/-- Preserve boundaries between separate binders with `curryName`, while using
+`uncurryName` inside each explicit tuple binder. -/
+private partial def mkPostSyntaxWith (curryName uncurryName : Name)
+    (body : Term) (depth : Nat) (binders : List Term) : MacroM Term := do
+  match binders with
+  | [] => pure body
+  | [x] => mkPostBinderFunWith uncurryName depth x body
+  | x :: rest =>
+    let rest ← mkPostSyntaxWith curryName uncurryName body (depth + 1) rest
+    let inner ← mkPostBinderFunWith uncurryName depth x rest
+    let curryIdent := mkIdent curryName
+    `($curryIdent $inner)
+
+/-- Build a marked postcondition from the parsed binder array. -/
+private def mkPostWith (curryName uncurryName : Name)
+    (binders : Array Term) (body : Term) : MacroM Term :=
+  mkPostSyntaxWith curryName uncurryName body 0 binders.toList
+
 macro_rules
-  | `(($m) ⦃⇓ $result => $Q⦄) =>
-      `(triple emp $m (fun $result => ⌜$Q⌝))
+  | `(($m) ⦃⇓ $result => $Q⦄) => do
+      let post ← mkPostWith ``postCurry ``postUncurry #[result] (← `(⌜$Q⌝))
+      `(triple emp $m $post)
+  | `(⦃$P⦄ $m ⦃⇓ $result => $Q⦄) => do
+      let post ← mkPostWith ``postCurry ``postUncurry #[result] (← `(iprop($Q)))
+      `(triple iprop($P) $m $post)
+
+macro_rules
+  | `(($m) ⦃⇓ $result $results:term* => $Q⦄) => do
+      let post ← mkPostWith ``postCurry ``postUncurry
+        (#[result] ++ results) (← `(⌜$Q⌝))
+      `(triple emp $m $post)
+  | `(⦃$P⦄ $m ⦃⇓ $result $results:term* => $Q⦄) => do
+      let post ← mkPostWith ``postCurry ``postUncurry
+        (#[result] ++ results) (← `(iprop($Q)))
+      `(triple iprop($P) $m $post)
+
+macro_rules
   | `(($m) ⦃⇓ $Q:term⦄) =>
       `(triple emp $m (fun _ => ⌜$Q⌝))
-  | `(⦃$P⦄ $m ⦃⇓ $result => $Q⦄) =>
-      `(triple iprop($P) $m (fun $result => iprop($Q)))
   | `(⦃$P⦄ $m ⦃⇓ $Q⦄) =>
       `(triple iprop($P) $m (fun _ => iprop($Q)))
 
 syntax:lead (name := dspecSyntax)
-  atomic("(" term:lead ")" " ⦃" "⇓ ") Lean.Parser.Term.funBinder " => " term " ⦄div" : term
+  atomic("(" term:lead ")" " ⦃" "⇓ ") term+ " => " term " ⦄div" : term
 syntax:lead (name := dspecSyntaxPred)
   atomic("(" term:lead ")" " ⦃" "⇓ ") term " ⦄div" : term
 syntax:lead (name := slDspecSyntax)
   "⦃ " term " ⦄" ppSpace term:lead ppSpace
-  "⦃" "⇓" ppSpace Lean.Parser.Term.funBinder " => " term " ⦄div" : term
+  "⦃" "⇓" ppSpace term+ " => " term " ⦄div" : term
 syntax:lead (name := slDspecSyntaxPred)
   "⦃ " term " ⦄" ppSpace term:lead ppSpace "⦃" "⇓" ppSpace term " ⦄div" : term
 
 macro_rules
-  | `(($m) ⦃⇓ $result => $Q⦄div) =>
-      `(dtriple emp $m (fun $result => ⌜$Q⌝))
+  | `(($m) ⦃⇓ $result => $Q⦄div) => do
+      let post ← mkPostWith ``postCurry ``postUncurry #[result] (← `(⌜$Q⌝))
+      `(dtriple emp $m $post)
+  | `(⦃$P⦄ $m ⦃⇓ $result => $Q⦄div) => do
+      let post ← mkPostWith ``postCurry ``postUncurry #[result] (← `(iprop($Q)))
+      `(dtriple iprop($P) $m $post)
+
+macro_rules
+  | `(($m) ⦃⇓ $result $results:term* => $Q⦄div) => do
+      let post ← mkPostWith ``postCurry ``postUncurry
+        (#[result] ++ results) (← `(⌜$Q⌝))
+      `(dtriple emp $m $post)
+  | `(⦃$P⦄ $m ⦃⇓ $result $results:term* => $Q⦄div) => do
+      let post ← mkPostWith ``postCurry ``postUncurry
+        (#[result] ++ results) (← `(iprop($Q)))
+      `(dtriple iprop($P) $m $post)
+
+macro_rules
   | `(($m) ⦃⇓ $Q:term⦄div) =>
       `(dtriple emp $m (fun _ => ⌜$Q⌝))
-  | `(⦃$P⦄ $m ⦃⇓ $result => $Q⦄div) =>
-      `(dtriple iprop($P) $m (fun $result => iprop($Q)))
   | `(⦃$P⦄ $m ⦃⇓ $Q⦄div) =>
       `(dtriple iprop($P) $m (fun _ => iprop($Q)))
 
@@ -899,44 +1061,6 @@ theorem dtriple_step_mono {α : Type u} {P Pm : IPre} {Q : IPost α} (m : Result
 theorem forall_unit {p : Unit → Prop} : (∀ value, p value) ↔ p () :=
   ⟨fun h => h (), fun h value => match value with | () => h⟩
 
-/-- Internal tuple destructuring marker for pure postconditions.
-
-Unlike a pattern lambda, this survives elaboration in a form the delaborator
-can recognize.  Its simp lemmas make it transparent to `step`. -/
-@[inline] def purePostUncurry {α β γ : Type _} (f : α → β → γ) : α × β → γ :=
-  fun (a, b) => f a b
-
-@[simp]
-theorem purePostUncurry_apply {α β γ : Type _} (f : α → β → γ) (p : α × β) :
-    purePostUncurry f p = f p.1 p.2 := by
-  cases p
-  rfl
-
-@[simp]
-theorem purePostUncurry_eq {α β γ : Type _} (f : α → β → γ) :
-    purePostUncurry f = fun p => f p.1 p.2 := by
-  funext p
-  exact purePostUncurry_apply f p
-
-/-- Internal marker for a boundary between separate pure-postcondition binders.
-
-It has the same semantics as `purePostUncurry`, but the delaborator prints it
-as `x y => ...` rather than `(x, y) => ...`. -/
-@[inline] def purePostCurry {α β γ : Type _} (f : α → β → γ) : α × β → γ :=
-  fun (a, b) => f a b
-
-@[simp]
-theorem purePostCurry_apply {α β γ : Type _} (f : α → β → γ) (p : α × β) :
-    purePostCurry f p = f p.1 p.2 := by
-  cases p
-  rfl
-
-@[simp]
-theorem purePostCurry_eq {α β γ : Type _} (f : α → β → γ) :
-    purePostCurry f = fun p => f p.1 p.2 := by
-  funext p
-  exact purePostCurry_apply f p
-
 /-- The tactic `step` runs on the goals it prepares. A no-op on a goal which is
 not a triple. -/
 macro "intro_triple" : tactic =>
@@ -951,12 +1075,16 @@ macro "intro_triple" : tactic =>
     mk_spec_mono_skip_args := 4
     mk_spec_bind := ``triple_step_bind
     mk_spec_bind_skip_args := 7
+    uncurry_elim_tactics := #[
+      ``forall_triple_postCurry,
+      ``forall_triple_postUncurry,
+      ``postCurry_apply, ``postCurry_eq,
+      ``postUncurry_apply, ``postUncurry_eq
+    ]
     qimp_elim_tactics := #[
       ``forall_eq, ``forall_eq',
       ``triple_ipure_iff,
       ``forall_unit,
-      ``purePostCurry_apply, ``purePostCurry_eq,
-      ``purePostUncurry_apply, ``purePostUncurry_eq,
       ``sep_emp_l_eq, ``sep_ipure_true_l_eq,
       ``entails_emp_postWand_ipure_iff,
       ``entails_emp_ipure_iff, ``entails_refl, ``true_imp_iff
@@ -976,12 +1104,16 @@ macro "intro_triple" : tactic =>
     mk_spec_mono_skip_args := 4
     mk_spec_bind := ``dtriple_step_bind
     mk_spec_bind_skip_args := 7
+    uncurry_elim_tactics := #[
+      ``forall_dtriple_postCurry,
+      ``forall_dtriple_postUncurry,
+      ``postCurry_apply, ``postCurry_eq,
+      ``postUncurry_apply, ``postUncurry_eq
+    ]
     qimp_elim_tactics := #[
       ``forall_eq, ``forall_eq',
       ``dtriple_ipure_iff,
       ``forall_unit,
-      ``purePostCurry_apply, ``purePostCurry_eq,
-      ``purePostUncurry_apply, ``purePostUncurry_eq,
       ``sep_emp_l_eq, ``sep_ipure_true_l_eq,
       ``entails_emp_postWand_ipure_iff,
       ``entails_emp_ipure_iff, ``entails_refl, ``true_imp_iff
@@ -1093,59 +1225,12 @@ scoped syntax:54 (name := pureDspecBinders)
 scoped syntax:54 (name := pureDspecPred)
   term:55 " ⦃ " term " ⦄div" : term
 
-open Lean PrettyPrinter
-
-/-- Build a `purePostUncurry` chain for the leaves of a tuple pattern. -/
-private partial def buildPureUncurryLam (xs : List Term) (body : Term) :
-    MacroM Term := do
-  let uncurryIdent := mkIdent ``purePostUncurry
-  match xs with
-  | [] => pure body
-  | [x] => `(fun $x => $body)
-  | [a, b] => `($uncurryIdent (fun $a $b => $body))
-  | a :: rest =>
-    let inner ← buildPureUncurryLam rest body
-    `($uncurryIdent (fun $a => $inner))
-
-/-- Elaborate one possibly nested tuple binder without generating a matcher
-function, so the delaborator can recover the pattern from `purePostUncurry`. -/
-private partial def mkPureBinderFun (depth : Nat) (binder : Term) (body : Term) :
-    MacroM Term := do
-  match binder with
-  | `( ($a, $bs,*) ) =>
-    let xs : List Term := a :: bs.getElems.toList
-    let mut leafIdents : List Term := []
-    let mut wrappedBody := body
-    for (x, idx) in xs.zipIdx.reverse do
-      match x with
-      | `( ($_, $_,*) ) =>
-        let freshIdent := mkIdent $ .mkSimple s!"_p_{depth}_{idx}"
-        let inner ← mkPureBinderFun (depth + 1) x wrappedBody
-        wrappedBody ← `($inner $freshIdent)
-        leafIdents := freshIdent :: leafIdents
-      | _ =>
-        leafIdents := x :: leafIdents
-    buildPureUncurryLam leafIdents wrappedBody
-  | _ => `(fun $binder => $body)
-
-/-- Preserve the boundary between separate binders with `purePostCurry`, while
-using `purePostUncurry` inside each explicit tuple binder. -/
-private partial def mkPurePostSyntax (body : Term) (depth : Nat)
-    (binders : List Term) : MacroM Term := do
-  match binders with
-  | [] => pure body
-  | [x] => mkPureBinderFun depth x body
-  | x :: rest =>
-    let rest ← mkPurePostSyntax body (depth + 1) rest
-    let inner ← mkPureBinderFun depth x rest
-    `(purePostCurry $inner)
-
 /-- The `IPost` a pure postcondition denotes.  Transparent marker functions
 record whether each product came from separate binders or an explicit tuple
 pattern, allowing the delaborator to reproduce the original surface syntax. -/
 private def mkPurePost (binders : Array Term) (p : Term) : MacroM Term := do
   let body ← `(⌜$p⌝)
-  mkPurePostSyntax body 0 binders.toList
+  mkPostWith ``postCurry ``postUncurry binders body
 
 /-- Macro expansion for a single binder. -/
 scoped macro_rules (kind := pureSpecBinders)
@@ -1186,6 +1271,7 @@ falls through to the ordinary application printer, so a separating triple still
 prints as one.
 -/
 
+open Lean PrettyPrinter
 open Delaborator SubExpr
 open Std.Delab
   (enterLams delabBindersWith buildTupleTerm delabUncurryAsTupleWith)
@@ -1204,7 +1290,7 @@ private partial def enterPureUncurryOnce (acc : Array Std.Delab.BinderEntry)
     withBindingBody' n pure fun fv => do
       let acc' := acc.push (fv.fvarId!, n, pos)
       if acc'.size >= 2 then k acc'
-      else if (← getExpr).isAppOfArity ``purePostUncurry 4 then
+      else if (← getExpr).isAppOfArity ``postUncurry 4 then
         withAppArg <| enterPureUncurryOnce acc' k
       else
         enterPureUncurryOnce acc' k
@@ -1212,27 +1298,27 @@ private partial def enterPureUncurryOnce (acc : Array Std.Delab.BinderEntry)
 
 private def isPurePostBinderWrapper (e : Expr) : Bool :=
   match_expr e.consumeMData with
-  | purePostCurry _ _ _ _ => true
-  | purePostUncurry _ _ _ _ => true
+  | postCurry _ _ _ _ => true
+  | postUncurry _ _ _ _ => true
   | _ => false
 
 /-- Recover separate binders, explicit tuple binders, and the final pure body
 from the transparent marker chain produced by `mkPurePost`. -/
 private partial def delabPurePost : DelabM (Array Term × Term) := do
   match_expr (← getExpr).consumeMData with
-  | purePostCurry _ _ _ _ =>
+  | postCurry _ _ _ _ =>
     withAppArg do
       match_expr (← getExpr).consumeMData with
-      | purePostUncurry _ _ _ _ =>
+      | postUncurry _ _ _ _ =>
         withAppArg <| enterPureUncurryOnce #[] fun tupleBinders => do
           let (patterns, (moreBinders, body)) ←
-            delabBindersWith ``purePostUncurry tupleBinders.toList delabPurePost
+            delabBindersWith ``postUncurry tupleBinders.toList delabPurePost
           return (#[← buildTupleTerm patterns] ++ moreBinders, body)
       | _ => delabLamsThenRecurse
-  | purePostUncurry _ _ _ _ =>
+  | postUncurry _ _ _ _ =>
     withAppArg do
       let (tupleBinder, body) ←
-        delabUncurryAsTupleWith ``purePostUncurry delabPureBody
+        delabUncurryAsTupleWith ``postUncurry delabPureBody
       return (#[tupleBinder], body)
   | _ => delabLamsThenRecurse
 where
@@ -1246,31 +1332,73 @@ where
         enterLams #[] fun binders => do
           if binders.size == 1 && isPurePostBinderWrapper (← getExpr) then
             let (patterns, (moreBinders, body)) ←
-              delabBindersWith ``purePostUncurry binders.toList delabPurePost
+              delabBindersWith ``postUncurry binders.toList delabPurePost
             return (patterns ++ moreBinders, body)
           else
-            delabBindersWith ``purePostUncurry binders.toList delabPureBody
+            delabBindersWith ``postUncurry binders.toList delabPureBody
     else
       return (#[], ← delabPureBody)
+
+/-- Enter one explicit SL tuple binder without consuming continuation lambdas. -/
+private partial def enterSLUncurryOnce (acc : Array Std.Delab.BinderEntry)
+    (k : Array Std.Delab.BinderEntry → DelabM α) : DelabM α := do
+  match (← getExpr) with
+  | .lam n _ _ _ =>
+    let pos ← getPos
+    withBindingBody' n pure fun fv => do
+      let acc' := acc.push (fv.fvarId!, n, pos)
+      if acc'.size >= 2 then k acc'
+      else if (← getExpr).isAppOfArity ``postUncurry 4 then
+        withAppArg <| enterSLUncurryOnce acc' k
+      else
+        enterSLUncurryOnce acc' k
+  | _ => k acc
+
+/-- Recover separate binders, explicit tuple binders, and the final spatial
+postcondition from the marker chain produced by `mkPostSyntaxWith`. -/
+private partial def delabSLPost : DelabM (Array Term × Term) := do
+  match_expr (← getExpr).consumeMData with
+  | postCurry _ _ _ _ =>
+    withAppArg do
+      match_expr (← getExpr).consumeMData with
+      | postUncurry _ _ _ _ =>
+        withAppArg <| enterSLUncurryOnce #[] fun tupleBinders => do
+          let (patterns, (moreBinders, body)) ←
+            delabBindersWith ``postUncurry tupleBinders.toList delabSLPost
+          return (#[← buildTupleTerm patterns] ++ moreBinders, body)
+      | _ =>
+        match (← getExpr).consumeMData with
+        | .lam _ _ _ _ =>
+          withBindingBodyUnusedName fun binder => do
+            let (moreBinders, body) ← delabSLPost
+            return (#[⟨binder⟩] ++ moreBinders, body)
+        | _ => failure
+  | postUncurry _ _ _ _ =>
+    withAppArg do
+      let (binder, body) ←
+        delabUncurryAsTupleWith ``postUncurry delab
+      return (#[binder], body)
+  | _ =>
+    if (← getExpr).consumeMData.isLambda then
+      withBindingBodyUnusedName fun binder => do
+        return (#[⟨binder⟩], ← delab)
+    else
+      return (#[], ← delab)
 
 /-- Print an arbitrary separation-logic postcondition using binder syntax when
 it is a lambda and predicate syntax otherwise. -/
 private def delabSLTriplePost (pre monadExpr : Term) (isPartial : Bool) :
     DelabM Term := do
-  if (← getExpr).consumeMData.isLambda then
-    withBindingBodyUnusedName fun binder => do
-      let binder : Term := ⟨binder⟩
-      let body ← delab
-      if isPartial then
-        `(⦃$pre⦄ $monadExpr ⦃⇓ $binder => $body⦄div)
-      else
-        `(⦃$pre⦄ $monadExpr ⦃⇓ $binder => $body⦄)
-  else
-    let post ← delab
+  let (binders, body) ← delabSLPost
+  if h : binders.size > 0 then
     if isPartial then
-      `(⦃$pre⦄ $monadExpr ⦃⇓ $post⦄div)
+      `(⦃$pre⦄ $monadExpr ⦃⇓ $(binders[0]) $(binders.drop 1)* => $body⦄div)
     else
-      `(⦃$pre⦄ $monadExpr ⦃⇓ $post⦄)
+      `(⦃$pre⦄ $monadExpr ⦃⇓ $(binders[0]) $(binders.drop 1)* => $body⦄)
+  else if isPartial then
+    `(⦃$pre⦄ $monadExpr ⦃⇓ $body⦄div)
+  else
+    `(⦃$pre⦄ $monadExpr ⦃⇓ $body⦄)
 
 /-- Print an arbitrary triple using the general separation-logic notation. -/
 private def delabSLTripleCore (tripleName : Name) (isPartial : Bool) : Delab := do
