@@ -7,11 +7,20 @@ include Charon.ValuesUtils
 (** Utility exception *)
 exception FoundSymbolicValue of symbolic_value
 
+let literal_to_string (lit : literal) : string =
+  match lit with
+  | VScalar v -> Charon.Print.integer_value_to_string v
+  | VFloat v -> Charon.Print.float_value_to_string v
+  | VBool v -> Bool.to_string v
+  | VChar v -> "'" ^ Charon.PrintFmt.escape_char_debug v ^ "'"
+  | VByteStr v -> "[" ^ String.concat ", " (List.map string_of_int v) ^ "]"
+  | VStr v -> "\"" ^ v ^ "\""
+
 let mk_unit_value : tvalue =
   { value = VAdt { variant_id = None; fields = [] }; ty = mk_unit_ty }
 
 let mk_bool_value (b : bool) : tvalue =
-  { value = VLiteral (VBool b); ty = TLiteral TBool }
+  { value = VLiteral (VBool b); ty = TScalar TBool }
 
 let mk_true : tvalue = mk_bool_value true
 let mk_false : tvalue = mk_bool_value false

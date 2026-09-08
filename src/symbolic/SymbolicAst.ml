@@ -323,7 +323,7 @@ and expansion =
       (** ADT expansion *)
   | ExpandBool of expr * expr
       (** A boolean expansion (i.e, an [if ... then ... else ...]) *)
-  | ExpandInt of integer_type * (scalar_value * expr) list * expr
+  | ExpandInt of integer_type * (integer_value * expr) list * expr
       (** An integer expansion (i.e, a switch over an integer). The last
           expression is for the "otherwise" branch. *)
 

@@ -411,7 +411,7 @@ let rec compare_rtys ?(allow_erased = false) (span : Meta.span) (ctx : eval_ctx)
     (if allow_erased then true else ty_is_rty ty1 && ty_is_rty ty2);
   (* Normalize the associated types *)
   match (ty1, ty2) with
-  | TLiteral lit1, TLiteral lit2 ->
+  | TScalar lit1, TScalar lit2 ->
       [%sanity_check] span (lit1 = lit2);
       default
   | TAdt tref1, TAdt tref2 ->
@@ -2258,9 +2258,9 @@ let rec norm_proj_tys_union (span : Meta.span) ?(strict : bool = true)
   | TVar id1, TVar id2 ->
       [%sanity_check] span (id1 = id2);
       TVar id1
-  | TLiteral lit1, TLiteral lit2 ->
+  | TScalar lit1, TScalar lit2 ->
       [%sanity_check] span (lit1 = lit2);
-      TLiteral lit1
+      TScalar lit1
   | TNever, TNever -> TNever
   | TRef (r1, ty1, rk1), TRef (r2, ty2, rk2) ->
       [%sanity_check] span (rk1 = rk2);

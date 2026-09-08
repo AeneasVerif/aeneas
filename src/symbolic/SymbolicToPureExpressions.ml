@@ -569,13 +569,13 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               (* We only support casts between pointers to literal types for now *)
               let get_ty (ty : T.ty) =
                 match ty with
-                | TRawPtr (TLiteral lit, rkind) ->
+                | TRawPtr (TScalar scalar_ty, rkind) ->
                     let mut =
                       match rkind with
                       | RMut -> Mut
                       | RShared -> Const
                     in
-                    (lit, mut)
+                    (scalar_ty, mut)
                 | _ ->
                     let env = bs_ctx_to_fmt_env ctx in
                     [%craise] ctx.span
@@ -1465,7 +1465,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       [%sanity_check] ctx.span (ty = false_e.ty);
       { e; ty }
   | ExpandInt (int_ty, branches, otherwise) ->
-      let translate_branch ((v, branch_e) : V.scalar_value * S.expr) :
+      let translate_branch ((v, branch_e) : V.integer_value * S.expr) :
           match_branch =
         (* We don't need to update the context: we don't introduce any
            new values/variables *)
@@ -1476,7 +1476,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       let branches = List.map translate_branch branches in
       let otherwise = translate_expr otherwise ctx in
       let pat_ty =
-        TLiteral (translate_literal_type (TypesUtils.integer_as_literal int_ty))
+        TLiteral (translate_literal_type (TypesUtils.integer_as_scalar int_ty))
       in
       let otherwise_pat : tpat = { pat = PIgnored; ty = pat_ty } in
       let otherwise : match_branch =

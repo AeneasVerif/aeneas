@@ -380,12 +380,12 @@ let check_borrowed_values_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
   let info = { outer_borrow = false; outer_shared = false } in
   visitor#visit_eval_ctx info ctx
 
-let check_literal_type (span : Meta.span) (cv : literal) (ty : literal_type) :
+let check_literal_type (span : Meta.span) (cv : literal) (ty : scalar_type) :
     unit =
   match (cv, ty) with
-  | VScalar (SignedScalar (sv_ty, _)), TInt int_ty ->
+  | VScalar (SignedInteger (sv_ty, _)), TInteger (Signed int_ty) ->
       [%sanity_check] span (sv_ty = int_ty)
-  | VScalar (UnsignedScalar (sv_ty, _)), TUInt int_ty ->
+  | VScalar (UnsignedInteger (sv_ty, _)), TInteger (Unsigned int_ty) ->
       [%sanity_check] span (sv_ty = int_ty)
   | VBool _, TBool | VChar _, TChar -> ()
   | _ -> [%craise] span "Erroneous typing"
@@ -432,7 +432,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
       [%sanity_check] span (ty_is_ety tv.ty);
       (* Check the current pair (value, type) *)
       (match (tv.value, tv.ty) with
-      | VLiteral cv, TLiteral ty -> check_literal_type span cv ty
+      | VLiteral cv, TScalar ty -> check_literal_type span cv ty
       (* ADT case *)
       | VAdt av, TAdt { id = def_id; generics; builtin = None } ->
           (* Retrieve the definition to check the variant id, the number of
@@ -475,11 +475,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           [%sanity_check] span
             (List.for_all (fun (v : tvalue) -> v.ty = inner_ty) av.fields);
           (* The length is necessarily concrete *)
-          let len =
-            Scalars.get_val
-              (ValuesUtils.literal_as_scalar
-                 (TypesUtils.constant_expr_as_literal len))
-          in
+          let len = Scalars.get_val (TypesUtils.constant_expr_as_integer len) in
           [%sanity_check] span (Z.of_int (List.length av.fields) = len)
       | VAdt _, TSlice _ -> [%craise] span "Unexpected slice value"
       | VAdt av, TAdt { generics; builtin = Some aty_id; _ } -> (

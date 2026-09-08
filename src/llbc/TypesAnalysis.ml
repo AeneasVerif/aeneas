@@ -284,7 +284,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
   let rec analyze (span : Meta.span option) (expl_info : expl_info)
       (ty_info : partial_type_info) (ty : ty) : partial_type_info =
     match ty with
-    | TLiteral _ | TNever | TDynTrait _ -> ty_info
+    | TScalar _ | TNever | TDynTrait _ -> ty_info
     | TTraitType (tref, _, _) ->
         (* TODO: normalize the trait types.
            For now we only emit a warning because it makes some tests fail. *)
@@ -803,7 +803,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
             | Some (TTuple | TBox | TStr) -> super#visit_ty outer ty
           end
         | TArray _ | TSlice _ -> super#visit_ty outer ty
-        | TVar _ | TLiteral _ | TNever -> ()
+        | TVar _ | TScalar _ | TNever -> ()
         | TRef (r, ref_ty, _) ->
             self#visit_region outer r;
             let outer = r :: outer in

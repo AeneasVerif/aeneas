@@ -29,13 +29,18 @@ let translate_constant_expr_kind (span : span option) :
     Types.constant_expr_kind -> const_generic = function
   | CGlobal { id; _ } -> CgGlobal id
   | CVar v -> CgVar v
-  | CLiteral l -> CgValue (translate_literal l)
+  | CBool v -> CgValue (VBool v)
+  | CInteger v -> CgValue (VScalar v)
+  | CChar v -> CgValue (VChar v)
+  | CFloat v -> CgValue (VFloat v)
+  | CStr v -> CgValue (VStr v)
+  | CByteStr v -> CgValue (VByteStr v)
   | _ -> [%craise_opt_span] span "Unsupported constant expression kind"
 
-let translate_literal_type (ty : V.literal_type) : literal_type =
+let translate_literal_type (ty : V.scalar_type) : literal_type =
   match ty with
-  | V.TInt x -> TInt x
-  | V.TUInt x -> TUInt x
+  | V.TInteger (Signed x) -> TInt x
+  | V.TInteger (Unsigned x) -> TUInt x
   | V.TFloat x -> TFloat x
   | V.TBool -> TBool
   | V.TChar -> TChar
@@ -43,7 +48,7 @@ let translate_literal_type (ty : V.literal_type) : literal_type =
 let translate_const_generic_param (span : span option)
     (c : Types.const_generic_param) : const_generic_param =
   match c.ty with
-  | TLiteral ty ->
+  | TScalar ty ->
       { index = c.index; name = c.name; ty = translate_literal_type ty }
   | _ -> [%craise_opt_span] span "Unsupported constant expression type"
 
@@ -163,7 +168,7 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
   | TVar var ->
       TVar var
       (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
-  | TLiteral ty -> TLiteral (translate_literal_type ty)
+  | TScalar ty -> TLiteral (translate_literal_type ty)
   | TNever -> TNever
   | TRef (_, rty, _) -> translate span rty
   | TRawPtr (ty, rkind) ->
@@ -257,12 +262,8 @@ let translate_variant (span : Meta.span) (v : T.variant) : variant =
   let variant_attr_info = v.attr_info in
   let discriminant, ty =
     match v.discriminant with
-    | VScalar (SignedScalar (ty, v)) -> (Z.to_int v, TInt ty)
-    | VScalar (UnsignedScalar (ty, v)) -> (Z.to_int v, TUInt ty)
-    | _ ->
-        [%craise] span
-          "Internal error, please report an issue: found an enumeration \
-           variant with an unexpected type"
+    | SignedInteger (ty, v) -> (Z.to_int v, TInt ty)
+    | UnsignedInteger (ty, v) -> (Z.to_int v, TUInt ty)
   in
   { variant_name; fields; variant_attr_info; discriminant; ty }
 
@@ -376,7 +377,7 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
           { types = [ ty ]; const_generics = []; trait_refs = [] } )
   | TVar var -> TVar var
   | TNever -> TNever
-  | TLiteral lty -> TLiteral (translate_literal_type lty)
+  | TScalar scalar_ty -> TLiteral (translate_literal_type scalar_ty)
   | TRef (_, rty, _) -> translate rty
   | TRawPtr (ty, rkind) ->
       let mut =
@@ -488,7 +489,7 @@ and compute_back_ty_num_levels (span : Meta.span option)
                   "Unreachable: boxes receive exactly one type parameter")
         | Some TTuple -> List.iter (explore outer_regions) generics.types)
     | T.TArray (ty, _, _) | T.TSlice (ty, _) -> explore outer_regions ty
-    | TVar _ | TNever | TLiteral _ -> save_count outer_regions
+    | TVar _ | TNever | TScalar _ -> save_count outer_regions
     | TRef (r, rty, rkind) -> (
         match rkind with
         | RShared ->
@@ -625,7 +626,7 @@ and translate_back_ty_aux (span : Meta.span option) (decls_ctx : C.decls_ctx)
         if keep_adt outer_regions ty then
           Some (translate_fwd_ty span decls_ctx ty)
         else None
-    | TVar _ | TNever | TLiteral _ -> stop outer_regions ty
+    | TVar _ | TNever | TScalar _ -> stop outer_regions ty
     | TRef (r, rty, rkind) -> (
         match rkind with
         | RShared ->

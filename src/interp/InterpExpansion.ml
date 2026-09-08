@@ -534,7 +534,7 @@ let expand_symbolic_bool (span : Meta.span) (sv : symbolic_value)
   (* Compute the expanded value *)
   let original_sv = sv in
   let rty = original_sv.sv_ty in
-  [%sanity_check] span (rty = TLiteral TBool);
+  [%sanity_check] span (rty = TScalar TBool);
   (* Expand the symbolic value to true or false and continue execution *)
   let see_true = SeLiteral (VBool true) in
   let see_false = SeLiteral (VBool false) in
@@ -634,15 +634,16 @@ let expand_symbolic_adt (span : Meta.span) (sv : symbolic_value)
 
 let expand_symbolic_int (span : Meta.span) (sv : symbolic_value)
     (sv_place : SA.mplace option) (int_type : integer_type)
-    (tgts : scalar_value list) :
+    (tgts : integer_value list) :
     eval_ctx -> (eval_ctx list * eval_ctx) * (SA.expr list * SA.expr -> SA.expr)
     =
  fun ctx ->
   (* Sanity check *)
   (match int_type with
-  | Signed int_type -> [%sanity_check] span (sv.sv_ty = TLiteral (TInt int_type))
+  | Signed int_type ->
+      [%sanity_check] span (sv.sv_ty = TScalar (TInteger (Signed int_type)))
   | Unsigned int_type ->
-      [%sanity_check] span (sv.sv_ty = TLiteral (TUInt int_type)));
+      [%sanity_check] span (sv.sv_ty = TScalar (TInteger (Unsigned int_type))));
   (* For all the branches of the switch, we expand the symbolic value
    * to the value given by the branch and execute the branch statement.
    * For the otherwise branch, we leave the symbolic value as it is

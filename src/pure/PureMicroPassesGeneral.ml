@@ -3628,9 +3628,9 @@ let update_match_over_isize_usize_visitor (_ctx : ctx) (f : fun_decl) =
                     let pat =
                       match pat.pat with
                       | PIgnored -> { pat = PIgnored; ty = pure_ty }
-                      | PConstant (VScalar (UnsignedScalar (_, v))) ->
+                      | PConstant (VScalar (UnsignedInteger (_, v))) ->
                           { pat = PConstant (VPureNat v); ty = pure_ty }
-                      | PConstant (VScalar (SignedScalar (_, v))) ->
+                      | PConstant (VScalar (SignedInteger (_, v))) ->
                           { pat = PConstant (VPureInt v); ty = pure_ty }
                       | _ ->
                           (* Shouldn't happen*)
