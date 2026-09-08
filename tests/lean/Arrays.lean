@@ -541,9 +541,7 @@ def f0 : Result Unit := do
     Source: 'tests/src/arrays.rs', lines 311:0-314:1
     Visibility: public -/
 def f1 : Result Unit := do
-  let _ ←
-    Array.index_mut_usize (Array.make 2#usize [ 1#u32, 2#u32 ] : Array Std.U32
-      2#usize) 0#usize
+  let _ ← Array.index_mut_usize (Array.make 2#usize [ 1#u32, 2#u32 ]) 0#usize
   ok ()
 
 /-- [arrays::f2]:
@@ -567,9 +565,7 @@ def f4
     Source: 'tests/src/arrays.rs', lines 318:0-323:1
     Visibility: public -/
 def f3 : Result Std.U32 := do
-  let i ←
-    Array.index_usize (Array.make 2#usize [ 1#u32, 2#u32 ] : Array Std.U32
-      2#usize) 0#usize
+  let i ← Array.index_usize (Array.make 2#usize [ 1#u32, 2#u32 ]) 0#usize
   f2 i
   let b := Array.repeat 32#usize 0#u32
   let s ← lift (Array.to_slice (Array.make 2#usize [ 1#u32, 2#u32 ]))

@@ -191,8 +191,19 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
           | Discriminant -> (hole, mk_holes (), false)
           | Fail | Assert | FuelDecrease | FuelEqZero ->
               (f.ty, mk_known (), false)
-          | UpdateAtIndex _ | IndexAtIndex _ | IndexMutAtIndex _ ->
-              (known_f_ty, known_args_tys, false)
+          | UpdateAtIndex _ -> (known_f_ty, known_args_tys, false)
+          | IndexAtIndex kind | IndexMutAtIndex kind ->
+              let collection_ty =
+                let id, const_generics =
+                  match kind with
+                  | Array -> (TArray, [ cg_hole ])
+                  | Slice -> (TSlice, [])
+                in
+                TAdt
+                  ( TBuiltin id,
+                    { types = [ hole ]; const_generics; trait_refs = [] } )
+              in
+              (known_f_ty, [ collection_ty; TLiteral (TUInt Usize) ], false)
           | ResultUnwrapMut -> (hole, mk_holes (), false)
           | GetTarget -> (f.ty, mk_known (), false)
           | TargetFeatureEnabled -> (f.ty, mk_known (), false)
