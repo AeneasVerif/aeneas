@@ -23,6 +23,9 @@ P : Prop
 #guard_msgs in
 example (P : Prop) : Entails emp (ipure P) := by done
 
+example (P : IProp) : iprop(P) = P :=
+  rfl
+
 example (P Q : IProp) : (P ∗ Q) ⊣⊢ (Q ∗ P) :=
   sep_comm P Q
 
