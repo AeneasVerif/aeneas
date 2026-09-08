@@ -94,14 +94,7 @@ let erase_body_regions (crate : crate) (f : fun_decl) : fun_decl =
     instance *)
 let remove_unreachable (crate : crate) (f : fun_decl) : fun_decl =
   let impl_pat = NameMatcher.parse_pattern "core::intrinsics::unreachable" in
-  let mctx = NameMatcher.ctx_from_crate crate in
-  let match_name =
-    NameMatcher.match_name mctx
-      {
-        map_vars_to_vars = true;
-        match_with_trait_decl_refs = Config.match_patterns_with_trait_decl_refs;
-      }
-  in
+  let match_name = ExtractName.match_name crate in
 
   let is_unreachable (st : statement) : bool =
     match st.kind with
@@ -162,14 +155,7 @@ let remove_unreachable (crate : crate) (f : fun_decl) : fun_decl =
 let update_array_default (crate : crate) : crate =
   let pctx = Print.crate_to_fmt_env crate in
   let impl_pat = NameMatcher.parse_pattern "core::default::Default" in
-  let mctx = NameMatcher.ctx_from_crate crate in
-  let match_name =
-    NameMatcher.match_name mctx
-      {
-        map_vars_to_vars = true;
-        match_with_trait_decl_refs = Config.match_patterns_with_trait_decl_refs;
-      }
-  in
+  let match_name = ExtractName.match_name crate in
 
   (* Helper: check whether a trait impl matches the [Default<[T; N]>] pattern,
      and if so return its array length [N]. We ignore the case where the length
@@ -966,7 +952,6 @@ let strip_unnecessary_target_suffixes (crate : crate) : crate =
     and all references (trait refs, clauses, type constraints, parent clauses).
 *)
 let filter_marker_traits (crate : crate) : crate =
-  let mctx = NameMatcher.ctx_from_crate crate in
   let pats =
     List.map NameMatcher.parse_pattern
       [
@@ -984,20 +969,13 @@ let filter_marker_traits (crate : crate) : crate =
         "core::alloc::Allocator";
       ]
   in
-  let match_config =
-    {
-      NameMatcher.map_vars_to_vars = true;
-      match_with_trait_decl_refs = Config.match_patterns_with_trait_decl_refs;
-    }
-  in
   (* Collect the trait decl ids to filter *)
   let filtered_ids =
     TraitDeclId.Map.fold
       (fun id (decl : trait_decl) acc ->
         if
           List.exists
-            (fun pat ->
-              NameMatcher.match_name mctx match_config pat decl.item_meta.name)
+            (fun pat -> ExtractName.match_name crate pat decl.item_meta.name)
             pats
         then TraitDeclId.Set.add id acc
         else acc)
@@ -1684,11 +1662,8 @@ let replace_static (crate : crate) : crate =
      - we want to update its signature to replace 'static with a lifetime variable
      - we want to update its uses
   *)
-  let names_set = NameMatcher.NameMatcherMap.of_list [ (pat, ()) ] in
-  let match_ctx = Charon.NameMatcher.ctx_from_crate crate in
   let in_set (d : fun_decl) : bool =
-    let config = ExtractName.default_match_config in
-    NameMatcher.NameMatcherMap.mem match_ctx config d.item_meta.name names_set
+    ExtractName.match_name crate pat d.item_meta.name
   in
   let decl_opt = ref None in
   let in_set (_ : FunDeclId.id) (d : fun_decl) =
@@ -2031,14 +2006,7 @@ let simplify_trait_calls (crate : crate) : crate =
     NameMatcher.parse_pattern
       "core::convert::{core::convert::TryInto<@T, @U, @Error>}::try_into"
   in
-  let mctx = NameMatcher.ctx_from_crate crate in
-  let match_pattern =
-    NameMatcher.match_name mctx
-      {
-        map_vars_to_vars = true;
-        match_with_trait_decl_refs = Config.match_patterns_with_trait_decl_refs;
-      }
-  in
+  let match_pattern = ExtractName.match_name crate in
   let is_blanket_into_iter = match_pattern into_iter_pat in
   let is_blanket_try_into = match_pattern try_into_pat in
 

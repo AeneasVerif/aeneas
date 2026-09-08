@@ -16,7 +16,7 @@ attribute [-simp] List.getElem!_eq_getElem?_getD
 
 /-! Array to slice/subslices -/
 
-@[step_pure_def]
+@[step_pure_def, rust_fun "core::array::{[@T; @N]}::as_slice" -canFail]
 def Array.to_slice {α : Type u} {n : Usize} (v : Array α n) : Slice α :=
   .from  v.val (by scalar_tac)
 
@@ -30,6 +30,7 @@ theorem Array.from_slice_val {α : Type u} {n : Usize} (a : Array α n) (ns : Sl
   (from_slice a ns).val = ns.val
   := by simp [from_slice, *]
 
+@[rust_fun "core::array::{[@T; @N]}::as_mut_slice" -canFail]
 def Array.to_slice_mut {α : Type u} {n : Usize} (a : Array α n) :
   Slice α × (Slice α → Array α n) :=
   (Array.to_slice a, Array.from_slice a)
@@ -340,10 +341,6 @@ def core.array.TryFromMutArraySlice.try_from
     ok ((.Ok (.from s.val (by scalar_tac)), back))
   else ok ((.Err (), fun _ => s))
 
-@[rust_fun "core::array::{[@T; @N]}::as_slice"]
-def core.array.Array.as_slice {T : Type} {N : Usize} (a : Array T N) : Result (Slice T) :=
-  ok (.from a.val (by scalar_tac))
-
 /-- Model for `<[T; N] as AsRef<[T]>>::as_ref`: returns the array viewed as a slice. -/
 @[rust_fun "core::array::{core::convert::AsRef<[@T; @N], [@T]>}::as_ref"]
 def Array.Insts.CoreConvertAsRefSlice.as_ref
@@ -358,15 +355,6 @@ def Array.Insts.CoreConvertAsMutSlice.as_mut
     Result ((Slice T) × (Slice T → Array T N)) :=
   let back (s : Slice T) : Array T N :=
     if h : s.length = N then .from  s.val (by scalar_tac)
-    else a
-  ok (.from a.val (by scalar_tac), back)
-
-@[rust_fun "core::array::{[@T; @N]}::as_mut_slice"]
-def core.array.Array.as_mut_slice
-  {T : Type} {N : Usize} (a : Array T N) :
-  Result (Slice T × (Slice T → Array T N)) :=
-  let back (s : Slice T) : Array T N :=
-    if h: s.length = N then .from s.val (by scalar_tac)
     else a
   ok (.from a.val (by scalar_tac), back)
 
