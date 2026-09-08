@@ -122,7 +122,32 @@ example : Result.ok (0, 1, 2) ⦃ a (b, c) =>
 example : Result.ok (0, 1, 2) ⦃ (a, (b, c)) =>
     a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
 
-/-! ## 3. The gap the notation closes
+/-! ## 3. Separation-logic triple pretty-printing -/
+
+/-- error: unsolved goals
+P : IProp
+⊢ ⦃ P ⦄ Result.ok 0 ⦃⇓ value => P ∗ ⌜value = 0⌝ ⦄ -/
+#guard_msgs in
+example (P : IProp) :
+    triple P (Result.ok 0) (fun value => P ∗ ⌜value = 0⌝) := by done
+
+/-- error: unsolved goals
+P : IProp
+⊢ ⦃ P ⦄ Result.ok 0 ⦃⇓ value => P ∗ ⌜value = 0⌝ ⦄div -/
+#guard_msgs in
+example (P : IProp) :
+    dtriple P (Result.ok 0) (fun value => P ∗ ⌜value = 0⌝) := by done
+
+/-- error: unsolved goals
+P : IProp
+Q : IPost ℕ
+m : Result ℕ
+⊢ ⦃ P ⦄ m ⦃⇓ Q ⦄ -/
+#guard_msgs in
+example (P : IProp) (Q : IPost Nat) (m : Result Nat) :
+    triple P m Q := by done
+
+/-! ## 4. The gap the notation closes
 
 `Aeneas.Std.WP.spec` is a judgment of its own, taken at the machine that
 carries no state and answers no event.  Both halves of the boundary it creates
