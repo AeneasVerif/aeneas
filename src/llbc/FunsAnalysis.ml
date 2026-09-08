@@ -43,7 +43,7 @@ let lookup_fun_info (infos : modules_funs_info) (id : FunOrMethodId.id) :
 
 let fun_or_method_id_of_fn_ptr (kind : fn_ptr_kind) : FunOrMethodId.id option =
   match kind with
-  | FunId (FRegular id) -> Some (FunOrMethodId.Fun id)
+  | Fun id -> Some (FunOrMethodId.Fun id)
   | TraitMethod (trait_ref, method_id) ->
       Some (FunOrMethodId.of_trait_method trait_ref method_id)
 
@@ -186,7 +186,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
                 ()
             | FnOpRegular func -> (
                 match func.kind with
-                | FunId (FRegular id) -> self#visit_fid env id
+                | Fun id -> self#visit_fid env id
                 | TraitMethod _ ->
                     (* We consider trait functions can fail, but can not diverge and are not stateful.
                        TODO: this may cause issues if we use use a fuel parameter.

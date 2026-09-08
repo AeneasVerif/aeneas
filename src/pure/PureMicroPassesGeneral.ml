@@ -708,7 +708,7 @@ let lift_fun (ctx : ctx) (fun_id : fun_id) : bool =
   (* Lookup if the function is builtin: we only lift builtin functions
      which were explictly marked to be lifted. *)
   match fun_id with
-  | FromLlbc (FunId (FRegular fid), _) -> begin
+  | FromLlbc (FunId fid, _) -> begin
       match FunDeclId.Map.find_opt fid ctx.fun_decls with
       | None -> false
       | Some def -> (
@@ -2175,7 +2175,7 @@ let eliminate_box_functions_visitor (ctx : ctx) (def : fun_decl) =
              general case, where functions could be boxed (meaning we
              could have: [box_new f x]) *)
           match fun_id with
-          | Fun (FromLlbc (FunId (FRegular fid), _lp_id))
+          | Fun (FromLlbc (FunId fid, _lp_id))
             when (FunDeclId.Map.find fid ctx.fun_decls).item_meta
                    .diagnostic_item = Some "box_new" ->
               let arg, args = Collections.List.pop args in
@@ -2239,7 +2239,7 @@ let simplify_trait_calls_visitor (ctx : ctx) (def : fun_decl) =
       match opt_destruct_function_call e with
       | Some (fun_id, generics, args) -> (
           match fun_id with
-          | Fun (FromLlbc (FunId (FRegular fid), _)) -> (
+          | Fun (FromLlbc (FunId fid, _)) -> (
               match FunDeclId.Map.find_opt fid ctx.fun_decls with
               | Some d
                 when List.length generics.trait_refs > 0 && List.length args > 0
@@ -2267,8 +2267,7 @@ let simplify_trait_calls_visitor (ctx : ctx) (def : fun_decl) =
                           (* Create a call to the method *)
                           let fun_id = method_decl.binder_value.fun_id in
                           let qualif =
-                            FunOrOp
-                              (Fun (FromLlbc (FunId (FRegular fun_id), None)))
+                            FunOrOp (Fun (FromLlbc (FunId fun_id, None)))
                           in
                           (* TODO: should we handle the binder? *)
                           let qualif : qualif =
@@ -2402,7 +2401,7 @@ let recover_builtin_index_functions =
   in
   let destruct_matching_call ctx (e : texpr) (pattern, kind, id) =
     match opt_destruct_function_call e with
-    | Some (Fun (FromLlbc (FunId (FRegular fid), None)), generics, args)
+    | Some (Fun (FromLlbc (FunId fid, None)), generics, args)
       when fun_matches_name ctx fid pattern -> begin
         match (kind, args) with
         | Array, [ collection; ({ ty = TLiteral (TUInt Usize); _ } as index) ]
@@ -2656,7 +2655,7 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
           (* ... = SliceIndex<usize>::index_mut i a *)
           Qualif
             {
-              id = FunOrOp (Fun (FromLlbc (FunId (FRegular fid), None)));
+              id = FunOrOp (Fun (FromLlbc (FunId fid, None)));
               generics = index_generics;
             },
           [ i; a ] )
@@ -3079,11 +3078,7 @@ let add_fuel_one (ctx : ctx) (loops : fun_decl LoopId.Map.t) (def : fun_decl) :
         (* *)
         begin
           match f.e with
-          | Qualif
-              {
-                id = FunOrOp (Fun (FromLlbc (FunId (FRegular fid'), lp_id)));
-                _;
-              } ->
+          | Qualif { id = FunOrOp (Fun (FromLlbc (FunId fid', lp_id))); _ } ->
               (* Lookup the decl *)
               let def' : fun_decl =
                 match lp_id with
@@ -3115,11 +3110,7 @@ let add_fuel_one (ctx : ctx) (loops : fun_decl LoopId.Map.t) (def : fun_decl) :
         let f, args = destruct_apps re in
         begin
           match f.e with
-          | Qualif
-              {
-                id = FunOrOp (Fun (FromLlbc (FunId (FRegular fid'), lp_id)));
-                _;
-              } ->
+          | Qualif { id = FunOrOp (Fun (FromLlbc (FunId fid', lp_id))); _ } ->
               (* Lookup the decl *)
               let def' : fun_decl =
                 match lp_id with

@@ -288,7 +288,7 @@ let compute_reducible (_ctx : ctx) (transl : pure_fun_translation list) :
               id = FunOrOp (Fun (FromLlbc (FunId fid, Some _lp_id)));
               generics = _;
             }
-          when fid = FRegular trans.f.def_id ->
+          when fid = trans.f.def_id ->
             let f =
               { trans.f with backend_attributes = { reducible = true } }
             in

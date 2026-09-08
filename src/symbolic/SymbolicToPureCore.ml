@@ -338,7 +338,7 @@ let lookup_fn_ptr_sig (ctx : bs_ctx) (kind : A.fn_ptr_kind) : fun_sigs option =
 let fun_or_method_id_of_pure_fn_ptr (kind : fn_ptr_kind) :
     A.FunOrMethodId.id option =
   match kind with
-  | FunId (FRegular id) -> Some (A.FunOrMethodId.Fun id)
+  | FunId id -> Some (A.FunOrMethodId.Fun id)
   | TraitMethod (trait_ref, method_id) ->
       Some
         (A.FunOrMethodId.Method
@@ -416,9 +416,9 @@ let symbolic_loop_to_string (ctx : bs_ctx) (e : SymbolicAst.loop) : string =
   let env = bs_ctx_to_fmt_env ctx in
   PrintSymbolicAst.loop_to_string env "" "  " e
 
-let fun_id_to_string (ctx : bs_ctx) (id : A.fun_id) : string =
+let fun_id_to_string (ctx : bs_ctx) (id : A.fun_decl_id) : string =
   let env = bs_ctx_to_fmt_env ctx in
-  Print.fun_id_to_string env id
+  Print.fun_decl_id_to_string env id
 
 let fun_sig_to_string (ctx : bs_ctx) (sg : fun_sig) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in

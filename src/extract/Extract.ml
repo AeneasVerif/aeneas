@@ -55,7 +55,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
         | _ -> ctx
       in
       let f = def.f in
-      let fun_id = (Pure.FunId (FRegular f.def_id), f.loop_id) in
+      let fun_id = (Pure.FunId f.def_id, f.loop_id) in
       ctx_add f.item_meta.span (FunId (FromLlbc fun_id)) info.extract_name ctx
   | None ->
       (* Not builtin *)
@@ -999,7 +999,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       let explicit =
         try
           match fun_id with
-          | FromLlbc (FunId (FRegular fun_decl_id), lp_id) -> begin
+          | FromLlbc (FunId fun_decl_id, lp_id) -> begin
               (* Lookup the function to retrieve the signature information *)
               let trans_fun =
                 [%silent_unwrap] span (ctx_lookup_fun_decl_info ctx fun_decl_id)
@@ -1066,7 +1066,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       *)
       let types_explicit_traits =
         match fun_id with
-        | FromLlbc (FunId (FRegular id), _) ->
+        | FromLlbc (FunId id, _) ->
             fun_builtin_filter_types_trait_clauses (ty_to_string ctx)
               (trait_ref_to_string ctx) id generics.types explicit
               generics.trait_refs ctx

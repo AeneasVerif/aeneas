@@ -838,10 +838,6 @@ let fun_suffix (lp_id : (LoopId.id * bool) option) : string =
   in
   lp_suff
 
-let llbc_fun_id_to_string (env : fmt_env) (fid : A.fun_id) : string =
-  let (FRegular fid) = fid in
-  fun_decl_id_to_string env fid
-
 let pure_builtin_fun_id_to_string (fid : pure_builtin_fun_id) : string =
   match fid with
   | Return -> "@return"
@@ -878,7 +874,7 @@ let regular_fun_id_to_string (env : fmt_env) (fun_id : fun_id) : string =
   | FromLlbc (fid, lp_id) ->
       let f =
         match fid with
-        | FunId (FRegular fid) -> fun_decl_id_to_string env fid
+        | FunId fid -> fun_decl_id_to_string env fid
         | TraitMethod (trait_ref, method_id) ->
             let method_name =
               Charon.GAstUtils.get_method_name env.crate

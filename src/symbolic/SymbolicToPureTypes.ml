@@ -398,7 +398,7 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
       [%cassert_opt_span] span (binder_regions = []) "Unimplemented";
       let generics = translate_fwd_generic_args span decls_ctx generics in
       match kind with
-      | T.FunId (FRegular fid) ->
+      | T.Fun fid ->
           let fdecl =
             [%unwrap_opt_span] span
               (FunDeclId.Map.find_opt fid decls_ctx.fun_ctx.fun_decls)
@@ -719,7 +719,7 @@ and compute_raw_fun_effect_info (span : Meta.span option)
     (fun_infos : FunsAnalysis.modules_funs_info) (fun_id : fn_ptr_kind)
     (gid : T.RegionGroupId.id option) : fun_effect_info =
   match fun_id with
-  | TraitMethod _ | FunId (FRegular _) ->
+  | TraitMethod _ | FunId _ ->
       let info =
         [%silent_unwrap_opt_span] span
           (lookup_pure_fn_ptr_info fun_infos fun_id)
@@ -1131,7 +1131,7 @@ and translate_fun_sigs_from_decl (decls_ctx : C.decls_ctx)
           (LlbcAstUtils.fun_body_get_input_vars body)
     | _ -> List.map (fun _ -> None) fdef.signature.inputs
   in
-  translate_fun_sigs (Some span) decls_ctx (FunId (FRegular fdef.def_id))
+  translate_fun_sigs (Some span) decls_ctx (FunId fdef.def_id)
     (bound_fun_sig_of_decl fdef)
     input_names
 
@@ -1240,7 +1240,7 @@ and translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : fn_ptr_kind)
 and get_fun_effect_info (ctx : bs_ctx) (fun_id : fn_ptr_kind)
     (gid : T.RegionGroupId.id option) : fun_effect_info =
   match fun_id with
-  | TraitMethod _ | FunId (FRegular _) ->
+  | TraitMethod _ | FunId _ ->
       let sg =
         [%silent_unwrap_opt_span] (Some ctx.span)
           (lookup_pure_fn_ptr_sig ctx fun_id)

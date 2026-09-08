@@ -212,7 +212,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
           (* Lookup the signature *)
           let sg =
             match fid with
-            | FunId (FRegular fid) ->
+            | FunId fid ->
                 let trans_fun =
                   [%silent_unwrap] span
                     (LlbcAst.FunDeclId.Map.find_opt fid trans_funs)
