@@ -496,6 +496,23 @@ theorem triple_ipure {P : Prop} {H : IPre} {m : Result α}
     (sep_pure_l P (H ∗ F) h).mp ((sep_assoc _ _ _).mp h hPre)
   exact hTriple hP F h hHF
 
+/-- Extract a pure fact from an arbitrary position in a separating
+precondition. `iintro_shallow` supplies the rearrangement equality without
+unfolding representation predicates. -/
+theorem triple_ipure_anywhere (P : Prop) (H' : IPre) {H : IPre}
+    {m : Result α} {Q : IPost α}
+    (hExtract : H = iprop(⌜P⌝ ∗ H'))
+    (hTriple : P → triple H' m Q) :
+    triple H m Q := by
+  rw [hExtract]
+  exact triple_ipure hTriple
+
+/-- Protect the frame while `step` extracts facts from a callee postcondition. -/
+theorem triple_introFrame (Qm F : IPre) {m : Result α} {Q : IPost α}
+    (hTriple : triple (Qm ∗ introFrame F) m Q) :
+    triple (Qm ∗ F) m Q := by
+  simpa only [introFrame_eq] using hTriple
+
 /-- Copy a pure fact of the precondition into the local context *without*
 consuming it.  Unlike `triple_ipure` the precondition is unchanged, so the fact
 stays available to the framing of the later steps. -/
@@ -724,6 +741,21 @@ theorem dtriple_ipure {P : Prop} {H : IPre} {m : Result α} {Q : IPost α}
   intro F h hPre
   have ⟨hP, hHF⟩ := (sep_pure_l P (H ∗ F) h).mp ((sep_assoc _ _ _).mp h hPre)
   exact hTriple hP F h hHF
+
+/-- Partial-triple counterpart of `triple_ipure_anywhere`. -/
+theorem dtriple_ipure_anywhere (P : Prop) (H' : IPre) {H : IPre}
+    {m : Result α} {Q : IPost α}
+    (hExtract : H = iprop(⌜P⌝ ∗ H'))
+    (hTriple : P → dtriple H' m Q) :
+    dtriple H m Q := by
+  rw [hExtract]
+  exact dtriple_ipure hTriple
+
+/-- Partial-triple counterpart of `triple_introFrame`. -/
+theorem dtriple_introFrame (Qm F : IPre) {m : Result α} {Q : IPost α}
+    (hTriple : dtriple (Qm ∗ introFrame F) m Q) :
+    dtriple (Qm ∗ F) m Q := by
+  simpa only [introFrame_eq] using hTriple
 
 /-- Copy a pure fact of the precondition into the local context without
 consuming it. -/
@@ -1064,7 +1096,7 @@ theorem forall_unit {p : Unit → Prop} : (∀ value, p value) ↔ p () :=
 /-- The tactic `step` runs on the goals it prepares. A no-op on a goal which is
 not a triple. -/
 macro "intro_triple" : tactic =>
-  `(tactic| (isimp; iintro_shallow))
+  `(tactic| iintro_shallow_post)
 
 #register_spec_info {
     spec_name := ``triple
