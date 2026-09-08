@@ -81,6 +81,37 @@ example (p : Ptr Nat) (value : Nat) :
   iintro
   step*
 
+/-- `iintro_shallow` finds pure facts to the right of spatial resources without
+unfolding those resources. -/
+example (p : Ptr Nat) (value : Nat) :
+    ⦃ iprop(p ↦ value ∗ ⌜value = 1⌝) ⦄ pure () ⦃⇓ p ↦ value⦄ := by
+  iintro_shallow
+  rename_i hValue
+  guard_hyp hValue : value = 1
+  apply triple_pure
+  iframe
+
+/-- Right-side extraction also works for partial triples. -/
+example (p : Ptr Nat) (value : Nat) :
+    ⦃ iprop(p ↦ value ∗ ⌜value = 1⌝) ⦄ pure () ⦃⇓ p ↦ value⦄div := by
+  iintro_shallow
+  rename_i hValue
+  guard_hyp hValue : value = 1
+  apply dtriple_pure
+  iframe
+
+/-- The `step` introduction variant extracts facts from the callee
+postcondition on the left, but not from the frame on the right. -/
+example (p : Ptr Nat) (value : Nat) (P F : Prop) :
+    ⦃ iprop((p ↦ value ∗ ⌜P⌝) ∗ ⌜F⌝) ⦄ pure ()
+      ⦃⇓ iprop(p ↦ value ∗ ⌜F⌝)⦄ := by
+  intro_triple
+  rename_i hP
+  guard_hyp hP : P
+  fail_if_success have : F := by assumption
+  apply triple_pure
+  iframe
+
 /-! ## `iintro_keep`
 
 Unlike `iintro`, this copies the pure facts of the precondition into the local
@@ -112,7 +143,6 @@ example (n : Nat) :
     ⦃ emp ⦄ (Prod.rec (fun value _ => pure value) (n, true) : Result Nat)
       ⦃⇓ result => ⌜result = n⌝⦄ := by
   step
-  simp [Entails, ipure]
 
 def namedPure (n : Nat) : Result Nat :=
   pure n
@@ -122,15 +152,12 @@ theorem namedPure.spec (n : Nat) :
     ⦃ emp ⦄ namedPure n ⦃⇓ result => ⌜result = n⌝⦄ := by
   unfold namedPure
   step
-  simp [Entails, ipure]
 
 /-- The direct terminal rule does not unfold named wrappers and bypass their
-registered specifications: `step` goes through `namedPure.spec` and exposes
-the final ramified-frame goal. -/
+registered specifications: `step` goes through `namedPure.spec`. -/
 example (n : Nat) :
     ⦃ emp ⦄ namedPure n ⦃⇓ result => ⌜result = n⌝⦄ := by
   step
-  simp [Entails, ipure]
 
 /-- Normalization inside `step` stays focused on its original goal. -/
 example (n : Nat) :
@@ -139,7 +166,6 @@ example (n : Nat) :
   fail_if_success all_goals step
   · trivial
   · step
-    simp [Entails, ipure]
 
 /-! ## Frame inference
 
@@ -251,7 +277,6 @@ example (p : Ptr Nat) (value : Nat) :
   unfold readFreeReturn
   step*
   simp only [opaqueStepResult]
-  iframe
 
 /-- A bounded `step*` can represent the finite block without entering the
 terminal entailment. -/
@@ -262,7 +287,6 @@ example (p : Ptr Nat) (value : Nat) :
   step* 2
   step
   simp only [opaqueStepResult]
-  iframe
 
 /-- Conversely, unbounded `step*` may solve the terminal entailment, making
 the tactics after the original finite block fail with no goals. -/
@@ -276,7 +300,6 @@ example (p : Ptr Nat) (value : Nat) :
   step
   step
   step
-  simp [Entails, Aeneas.SepLogic.emp, ipure]
 
 /-! ## Affine resource discard
 
