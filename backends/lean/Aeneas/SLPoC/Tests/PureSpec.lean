@@ -147,6 +147,73 @@ m : Result ℕ
 example (P : IProp) (Q : IPost Nat) (m : Result Nat) :
     triple P m Q := by done
 
+/-! Nested triples are propositions, so an SL postcondition embeds them as pure
+assertions explicitly. -/
+
+example (makeIncrement : Result (Nat → Result Nat)) : Prop :=
+  ⦃ emp ⦄ makeIncrement ⦃⇓ increment =>
+    ⌜⦃ emp ⦄ increment 0 ⦃⇓ value => ⌜value = 1⌝ ⦄⌝
+  ⦄
+
+example (makeIncrement : Result (Nat → Result Nat)) : Prop :=
+  ⦃ emp ⦄ makeIncrement ⦃⇓ increment =>
+    ⌜∀ x, ⦃ emp ⦄ increment x ⦃⇓ value => ⌜value = x + 1⌝ ⦄⌝
+  ⦄
+
+def increment (p : Ptr Nat) (_ : Unit) : Result Nat := do
+  let value ← read p
+  update p (value + 1)
+  pure (value + 1)
+
+@[step]
+theorem increment.spec (p : Ptr Nat) (n : Nat) :
+    ⦃ p ↦ n ⦄ increment p () ⦃⇓ value =>
+      p ↦ (n + 1) ∗ ⌜value = n + 1⌝
+    ⦄ := by
+  unfold increment
+  step*
+
+/- `Aeneas.Std.bind` is the heterogeneous bind: the allocated pointer is in
+`Type 0`, while a function returning `Result Nat` lives in `Type 1`. -/
+def makeCounter : Result (Unit → Result Nat) :=
+  Aeneas.Std.bind (alloc 0) fun p =>
+    Result.ok (increment p)
+
+@[step]
+theorem makeCounter.spec :
+  ⦃ emp ⦄ makeCounter ⦃⇓ increment =>
+    ∃ p : Ptr Nat,
+      p ↦ 0 ∗ ⌜∀ n, ⦃ p ↦ n ⦄ increment () ⦃⇓ value =>
+          p ↦ (n + 1) ∗ ⌜value = n + 1⌝
+        ⦄⌝
+  ⦄ := by
+  unfold makeCounter
+  apply triple_bind' (alloc.spec 0)
+  intro p
+  apply triple_pure
+  apply entails_exists_r p
+  exact entails_trans
+    (pure_sep_intro (p ↦ 0) fun n => increment.spec p n)
+    (sep_comm _ _).mp
+
+def countToFive : Result Nat :=
+  Aeneas.Std.bind makeCounter fun increment => do
+    let _ ← increment ()
+    let _ ← increment ()
+    let _ ← increment ()
+    let _ ← increment ()
+    increment ()
+
+theorem countToFive.spec :
+    countToFive ⦃ value => value = 5 ⦄ := by
+  unfold countToFive
+  apply triple_bind' makeCounter.spec
+  intro increment
+  iintro
+  rw [sep_comm_eq]
+  iintro incrementSpec
+  step*
+
 /-! ## 4. The gap the notation closes
 
 `Aeneas.Std.WP.spec` is a judgment of its own, taken at the machine that
