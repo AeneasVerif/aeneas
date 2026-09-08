@@ -153,12 +153,9 @@ theorem countdown.spec (p : Ptr Nat) (value : Nat) :
       (fun _ _ => iprop(p ↦ 0))) ?_
   intro loop hLoop v
   step* 1
-  by_cases h : value = 0
+  by_cases h : v = 0
   · simp only [h, ↓reduceIte]
     step
-    apply entails_pure_l
-    intro hValue
-    subst v
     apply postWand_intro
     intro _
     iframe
