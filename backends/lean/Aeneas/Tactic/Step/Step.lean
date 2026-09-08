@@ -26,7 +26,8 @@ a bug and doesn't give the proper arguments: this way we make sure tactics like 
 will not crash if there is a bug in the code which adds the pretty equality (this is only useful
 information for the user).
 -/
-@[irreducible, expose] def prettyMonadEq {α : Type u} {β : Type v} (_ : Std.Result α) (_ : β) : Type := Unit
+@[irreducible, expose] def prettyMonadEq {m : Type u → Type w} {α : Type u} {β : Type v}
+  (_ : m α) (_ : β) : Type := Unit
 
 macro:max "[> " "let" y:term " ← " x:term " <]"   : term => `(prettyMonadEq $x $y)
 
@@ -35,7 +36,8 @@ meta def unexpPrettyMonadEqofNat : Lean.PrettyPrinter.Unexpander | `($_ $x $y) =
 
 example (x y z : Std.U32) (_ : [> let z ← x + y <]) : True := by simp
 
-def eq_imp_prettyMonadEq {α : Type u} {β : Type v} (x : Std.Result α) (y : β) : prettyMonadEq x y := by
+def eq_imp_prettyMonadEq {m : Type u → Type w} {α : Type u} {β : Type v}
+  (x : m α) (y : β) : prettyMonadEq x y := by
   unfold prettyMonadEq
   constructor
 
@@ -223,6 +225,27 @@ structure Args where
   /- Syntax of the tactic provided by the user to solve the remaining proof obligations -/
   byTacSyntax : Option Syntax
 
+/-- Decompose a registered specification statement -/
+meta def getSpecInfoArgs (ty : Expr) : MetaM (SpecInfo × Array Expr) :=
+  ty.consumeMData.withApp fun spec? args => do
+    let some specName := spec?.constName?
+      | throwError "{spec?} is not a spec statement"
+    let some info ← specInfoLookup specName
+      | throwError "{specName} is not a supported spec statement"
+    unless args.size = info.arity do
+      throwError "Not a fully applied specification statement: {ty}"
+    return (info, args)
+
+/-- The program mentioned by a registered specification statement. -/
+meta def getSpecProgram (ty : Expr) : MetaM Expr := do
+  let (info, args) ← getSpecInfoArgs ty
+  return args[info.program_index]!
+
+/-- The post-condition of a registered specification statement. -/
+meta def getSpecPost (ty : Expr) : MetaM Expr := do
+  let (info, args) ← getSpecInfoArgs ty
+  return args[info.post_index]!
+
 /- Analyze a goal comp
 
    If comp = bind m k then return true and m
@@ -232,17 +255,10 @@ structure Args where
    and returns the corresponding SpecInfo
 -/
 meta def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr × SpecInfo) := do
-  forallTelescope goalTy fun nvars goalTy => do
+  forallTelescope goalTy fun _ goalTy => do
 
-  let (spec?, args) := goalTy.consumeMData.withApp (fun f args => (f, args))
-  let name ← match spec? with
-    | Expr.const name _ => pure name
-    | _ => throwError "{spec?} is not a spec statement"
-  let .some info ← specInfoLookup name
-    | throwError "{name} is not a supported spec statement"
-  let compTy ← if h: args.size = info.arity
-               then pure (args[info.program_index]!)
-               else throwError "Goal is not a fully applied `spec m P`"
+  let (info, args) ← getSpecInfoArgs goalTy
+  let compTy := args[info.program_index]!
 
   trace[Step] "compTy: {compTy}"
 
@@ -264,10 +280,6 @@ meta def Name.isElabSynthesized : Name → Bool
 meta def fvarNameSlot (fv : Expr) : MetaM (Option Name) := do
   let n ← fv.fvarId!.getUserName
   pure (if n.hasMacroScopes ∨ Name.isElabSynthesized n then none else some n)
-
-/-- Used to name post-condition hypotheses introduced by `step`. -/
-meta def postName (base : Name) (suffix : String) : Name :=
-  base.getPrefix ++ .mkSimple (base.getString! ++ "_post" ++ suffix)
 
 meta section
 /-- A generic binary tree with data at the leaves. Underlies `FVarTree` and `NameTree`. -/
@@ -411,10 +423,9 @@ meta def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
 meta def getBindVarNames : TacticM (Array (Option Name)) := do
   try
     withMainContext do
-    let goalTy ← (← getMainGoal).getType
-    let goalTy ← instantiateMVars goalTy
+    let goalTy ← getMainTarget
     forallTelescope goalTy fun _ goalTy => do
-    let_expr Std.WP.spec _ m _ := goalTy | return #[]
+    let m ← getSpecProgram goalTy
     let_expr Bind.bind _ _ _ _ _ cont := m | return #[]
     getPostNames cont
   catch _ => pure #[]
@@ -423,17 +434,7 @@ meta def getBindVarNames : TacticM (Array (Option Name)) := do
     The goal should be a valid spec statement, such as `spec program post`. -/
 meta def getPostNamesFromGoal : TacticM (Array (Option Name)) := do
   try
-    let goalTy ← (← getMainGoal).getType
-    let goalTy ← instantiateMVars goalTy
-    goalTy.consumeMData.withApp fun spec? args => do
-    let specname ← match spec? with
-      | Expr.const name _ => pure name
-      | _ => throwError "{spec?} is not a spec statement"
-    let .some info ← specInfoLookup specname
-      | throwError "{specname} is not a supported spec statement"
-    if args.size = info.arity then
-      getPostNames args[info.post_index]!
-    else pure #[]
+    getPostNames (← getSpecPost (← getMainTarget))
   catch _ => pure #[]
 
 /-- Extract variable names from the current goal for naming `step` outputs.
@@ -446,6 +447,35 @@ meta def getVarNamesFromGoal : TacticM (Array (Option Name) × Option Name) := d
   else
     let names ← getPostNamesFromGoal
     pure (names, names[0]?.join)
+
+/-- Helper to decompose a binary relation for deriving the name for postconditions
+    in `introOutputs`. Prefers names on the LHS but falls back to RHS if none is found
+    We pass in an `outputNames` map so we can associate the FVarId with the chosen name
+    -/
+meta def decomposeRelation? (type : Expr) (outputNames : Std.HashMap FVarId Name) :
+    MetaM (Option Name) := do
+  let some (l, r) :=
+    (match_expr type with
+    | Eq _ l r => some (l, r)
+    | HEq _ l _ r => some (l, r)
+    | LE.le _ _ l r => some (l, r)
+    | LT.lt _ _ l r => some (l, r)
+    | GE.ge _ _ l r => some (l, r)
+    | GT.gt _ _ l r => some (l, r)
+    | BEq.beq _ _ l r => some (l, r)
+    | _ => none) | return none
+  if let some n ← exprBaseName? l then return some n
+  exprBaseName? r
+where
+  exprBaseName? (e : Expr) : MetaM (Option Name) := do
+    match e with
+    | .const c _ => return some c
+    | .fvar fvarId =>
+      if let some n := outputNames[fvarId]? then return some n
+      let userName ← fvarId.getUserName
+      if userName.hasMacroScopes then return none
+      return some userName
+    | _ => return none
 
 /-- Attempt to resolve typeclasses. -/
 meta def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) := do
@@ -547,12 +577,20 @@ meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool
   let specMonoBindTy ← inferType specMonoBind
   trace[Step] "Applied specMonoBind with theorem: {specMonoBind}: {specMonoBindTy}"
 
-  let (specMonoBindMVars, _, specMonoBindTy) ← forallMetaBoundedTelescope specMonoBindTy 1
-  if (specMonoBindMVars.size ≠ 1) then throwError "Unreachable"
-  let ngoal := specMonoBindMVars[0]!.mvarId!
+  /- Introduce meta-variables for the premises and the new goal (the very last mvar). -/
+  let (specMonoBindMVars, _, specMonoBindTy) ← forallMetaTelescope specMonoBindTy
+  if (specMonoBindMVars.size == 0) then
+    throwError "The specMonoBind theorem should have at least one premise"
+  let ngoal := specMonoBindMVars.back!.mvarId!
   let specMonoBind ← mkAppOptM' specMonoBind (specMonoBindMVars.map some)
   trace[Step] "Applied specMonoBind with theorem: {specMonoBind}: {specMonoBindTy}"
 
+  /- Retrieve the premises (we pop the last mvar, which is the new goal) -/
+  let extraPreconditions := specMonoBindMVars.pop.map Expr.mvarId!
+  let mvarsIds := mvars.map Expr.mvarId! ++ extraPreconditions
+  let mvarsIds ← mvarsIds.filterM (fun mvar => do pure (not (← mvar.isAssigned)))
+
+  /- Check that the program in the goal is defeq to the program in the lookup up spec -/
   let mgoal ← Tactic.getMainGoal
   let specMonoBindTy ← inferType specMonoBind
   let goalTy ← mgoal.getType
@@ -567,9 +605,6 @@ meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool
 
   mgoal.assign specMonoBind
   trace[Step] "New goal: {ngoal}"
-
-  let mvarsIds := mvars.map Expr.mvarId!
-  let mvarsIds ← mvarsIds.filterM (fun mvar => do pure (not (← mvar.isAssigned)))
 
   -- Attempt to resolve the typeclass instances
   let mvarsIds ← trySolveTypeclasses mvarsIds.toList
@@ -750,56 +785,87 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
             (.targets #[] true)
   if (← getUnsolvedGoals).isEmpty then trace[Step] "Main goal solved by cleanup simp!"; return none
 
-  /- Now compute the prop-status of the remaining leading binders (these are the
-     post-conditions and existential variables to introduce). -/
-  let goal ← getMainGoal
-  let outputIsProp ← goal.withContext do
-    let type ← goal.getType
-    let type ← instantiateMVars type
-    forallTelescope type.consumeMData fun fvars _ => do
-    fvars.mapM fun e => do isProp (← inferType e)
-
-  /- Total number of "logical" outputs+post slots, used for the user-provided-id check. -/
-  let totalSlots := outputFVars.size + outputIsProp.size
-  if totalSlots < args.ids.size ∧ args.idsUserProvided then
-    logWarning m!"Too many ids provided ({args.ids}): expected ≤ {totalSlots} ids, got {args.ids.size}"
-
   /- The prefix length is the number of leaf fvars produced by destructuring the outputs. -/
   let prefixLength := outputFVars.size
-  /- The postfix length: the remaining binders (post-condition and existential variables). -/
-  let postfixLength := outputIsProp.size
-  trace[Step] "Prefix length (outputs): {prefixLength}, postfix length (post-conditions): {postfixLength}"
 
-  /- Compute names for outputs (from `args.ids`) and posts. -/
-  let totalNumProps := (outputIsProp.filter id).size
   let mkFreshAnon (isProp : Bool) :=
     if isProp then mkFreshAnonPropUserName else mkFreshUserName `x
-  let mkFreshName (nPropsBefore : Nat) (i : Nat) (isProp : Bool) : TacticM Name := do
-    -- Use the user-provided name if possible
+
+  /- Names for the already-introduced output fvars (one name per leaf): we use the
+     user-provided ids when available, and generate fresh names otherwise. -/
+  let outputIds ← (Array.range prefixLength).mapM fun i => do
     if h : i < args.ids.size then
       match args.ids[i] with
-      | none => mkFreshAnon isProp
       | some n => pure n
-    else
-      -- Otherwise, it depends on whether the var is a prop or not
-      if ¬ isProp then
-        -- Generate a name for an output var
-        mkFreshUserName `x
-      else
-        -- Generate a name for a post-condition
-        match args.postsBasename with
-        | none => mkFreshAnonPropUserName
-        | some baseName =>
-          let (root, baseStr) := match baseName with
-            | .str root s => (root, s ++ "_post")
-            | _ => (.anonymous, "_post")
-          let postIdx :=
-            if totalNumProps = 1 then ""
-            else s!"{nPropsBefore + 1}"
-          pure (Name.str root s!"{baseStr}{postIdx}")
+      | none => mkFreshUserName `x
+    else mkFreshUserName `x
 
-  /- Names for the already-introduced output fvars (one name per leaf). -/
-  let outputIds ← (Array.range prefixLength).mapM fun i => mkFreshName 0 i false
+  /- Associate every output fvar with the name we picked for it, so that when naming the
+     post-conditions we can resolve references to the outputs back to those names. -/
+  let outputNames : Std.HashMap FVarId Name :=
+    (Array.range prefixLength).foldl (init := ∅) fun m i =>
+      m.insert outputFVars[i]! outputIds[i]!
+
+  /- Now compute the prop-status and the names of the remaining leading binders (these are
+     the post-conditions and existential variables to introduce).
+
+     We prefer user-provided names, and for non-Props we generate fresh names. For Props we
+     analyze the type of the hypothesis: if it is of the form `<id> <binrel> _` (or `_<binrel><id>`)
+     then we prefer using `<id>_post<idx>`, so that each post-condition is named after the output
+     it constrains. We compute the names here, while the binders' types are still at hand,
+     and use them further below when actually introducing the binders. -/
+  let goal ← getMainGoal
+  let (postsIsProp, postsIdsArr) ← goal.withContext do
+    let type ← instantiateMVars (← goal.getType)
+    forallTelescope type.consumeMData fun fvars _ => do
+      let typesAndProps : Array (Expr × Bool) ← fvars.mapM fun fv => do
+        let ty ← inferType fv
+        pure (ty, ← isProp ty)
+
+      /- Total number of "logical" outputs+post slots, used for the user-provided-id check. -/
+      let totalSlots := prefixLength + typesAndProps.size
+      if totalSlots < args.ids.size ∧ args.idsUserProvided then
+        logWarning m!"Too many ids provided ({args.ids}): expected ≤ {totalSlots} ids, got {args.ids.size}"
+
+      let mut postsIds : Array Name := #[]
+      /- How many post-conditions we already named after a given base name, used to
+         disambiguate several post-conditions constraining the same output. -/
+      let mut postCounts : Std.HashMap Name Nat := ∅
+      for h : i in [0:typesAndProps.size] do
+        let (ty, tyIsProp) := typesAndProps[i]
+        let n ←
+          -- Use the user-provided name if possible
+          if hi : prefixLength + i < args.ids.size then
+            match args.ids[prefixLength + i] with
+            | some n => pure n
+            | none => mkFreshAnon tyIsProp
+          else if args.idsUserProvided then
+            mkFreshAnon tyIsProp
+          else if ¬ tyIsProp then
+            -- Generate a name for an existential variable
+            mkFreshUserName `x
+          else
+            -- Generate a name for a post-condition
+            let nameSpec :=
+              match ← decomposeRelation? ty outputNames, args.postsBasename with
+              | some relName, some (.str root _) => some (root, relName)
+              | some relName, _                  => some (.anonymous, relName)
+              | none,         some (.str root s) => some (root, Name.mkSimple s)
+              | none,         _                  => none
+            match nameSpec with
+            | none => mkFreshAnonPropUserName
+            | some (nameRoot, baseName) =>
+              let suffixNum := postCounts.getD baseName 0
+              let suffixStr := if suffixNum == 0 then "" else s!"{suffixNum}"
+              postCounts := postCounts.insert baseName (suffixNum + 1)
+              pure (Name.str nameRoot s!"{baseName}_post{suffixStr}")
+        postsIds := postsIds.push n
+      pure (typesAndProps.map (·.2), postsIds)
+
+  /- The postfix length: the remaining binders (post-condition and existential variables). -/
+  let postfixLength := postsIsProp.size
+  trace[Step] "Prefix length (outputs): {prefixLength}, postfix length (post-conditions): {postfixLength}"
+  trace[Step] "output ids: {outputIds}, post ids: {postsIdsArr}"
 
   /- Rename the output fvars to the user-provided names. -/
   let mut goal ← getMainGoal
@@ -813,13 +879,6 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
   introPrettyEquality args fExpr (outputFVars.map Expr.fvar)
   traceGoalWithNode "goal after introducing the pretty equality"
 
-  /- Compute names for the post-conditions and existential variables. -/
-  let mut postsIdsArr : Array Name := #[]
-  let mut nPropsBefore := 0
-  for i in [0:postfixLength] do
-    let isProp := outputIsProp[i]!
-    postsIdsArr := postsIdsArr.push (← mkFreshName nPropsBefore (prefixLength + i) isProp)
-    if isProp then nPropsBefore := nPropsBefore + 1
   let postsIds := postsIdsArr.toList
 
   /- Introduce the post-conditions and existential variables. -/
@@ -836,7 +895,7 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
   let outputInfos := outputFVars.mapIdx fun i fv =>
     { fvarId := fv, name? := mkName? (outputIds.getD i `_), isProp := false : Output }
   let postInfos := posts.mapIdx fun i fv =>
-    { fvarId := fv, name? := mkName? (postsIds.getD i `_), isProp := outputIsProp.getD i true : Output }
+    { fvarId := fv, name? := mkName? (postsIds.getD i `_), isProp := postsIsProp.getD i true : Output }
   let introducedVars := outputInfos ++ postInfos
 
   pure (some { goal := ← getMainGoal, outputs := introducedVars, stepState })

@@ -20,6 +20,11 @@ let passes :
        Remark: some passes below use the fact that we removed the meta-data
        (otherwise we would have to "unmeta" expressions before matching) *)
     (None, "remove_meta_def", remove_meta);
+    (* Introduce the assertions checking that the required target features
+       are enabled *)
+    ( Some (fun _ -> !Config.feature_gates),
+      "intro_target_feature_asserts",
+      intro_target_feature_asserts );
     (* Convert the unit variables to [()] if they are used as right-values or
      * [_] if they are used as left values. *)
     (None, "unit_vars_to_unit", unit_vars_to_unit);

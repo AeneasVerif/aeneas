@@ -1,5 +1,6 @@
 module
 public import Aeneas.Tactic.Step.Step
+public meta import Aeneas.Std.Array.Array
 public section
 
 /-!

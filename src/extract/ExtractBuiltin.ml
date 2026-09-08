@@ -299,11 +299,8 @@ let builtin_trait_decls_info () =
       (* IndexMut *)
       mk_trait "core::ops::index::IndexMut" ~parent_clauses:[ "indexInst" ]
         ~methods:[ "index_mut" ] ();
-      (* Sealed *)
-      mk_trait "core::slice::index::private_slice_index::Sealed" ();
       (* SliceIndex *)
-      mk_trait "core::slice::index::SliceIndex" ~parent_clauses:[ "sealedInst" ]
-        ~types:[ "Output" ]
+      mk_trait "core::slice::index::SliceIndex" ~types:[ "Output" ]
         ~methods:
           [
             "get";
@@ -374,11 +371,6 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
       (* core::ops::index::IndexMut<[T], I> *)
       fmt "core::ops::index::IndexMut<[@T], @I, @O>"
         ~extract_name:(Some "core::ops::index::IndexMutSliceInst") ();
-      (* core::slice::index::private_slice_index::Sealed<Range<usize>> *)
-      fmt
-        "core::slice::index::private_slice_index::Sealed<core::ops::range::Range<usize>>"
-        ~extract_name:
-          (Some "core.slice.index.private_slice_index.SealedRangeUsizeInst") ();
       (* core::slice::index::SliceIndex<Range<usize>, [T]> *)
       fmt
         "core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], \
@@ -391,10 +383,6 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
       (* core::ops::index::IndexMut<[T; N], I> *)
       fmt "core::ops::index::IndexMut<[@T; @N], @I, @O>"
         ~extract_name:(Some "core::ops::index::IndexMutArrayInst") ();
-      (* core::slice::index::private_slice_index::Sealed<usize> *)
-      fmt "core::slice::index::private_slice_index::Sealed<usize>"
-        ~extract_name:
-          (Some "core::slice::index::private_slice_index::SealedUsizeInst") ();
       (* core::slice::index::SliceIndex<usize, [T]> *)
       fmt "core::slice::index::SliceIndex<usize, [@T], @T>"
         ~extract_name:(Some "core::slice::index::SliceIndexUsizeSliceInst") ();
@@ -644,6 +632,12 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
       (fun ty ->
         "core.num." ^ StringUtils.capitalize_first_letter ty ^ ".from_be_bytes")
       ~can_fail:false ()
+  (* Box::new is erased together with the builtin Box type. *)
+  @ [
+      mk_fun "alloc::boxed::{Box<@T>}::new"
+        ~extract_name:(Some "alloc.boxed.Box.new") ~can_fail:false ~lift:false
+        ();
+    ]
   (* Clone<bool> *)
   @ mk_funs
       (fun fn -> "core::clone::impls::{core::clone::Clone<bool>}::" ^ fn)

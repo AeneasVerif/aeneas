@@ -52,16 +52,14 @@ let tvalue_as_symbolic (span : Meta.span) (v : tvalue) : symbolic_value =
 
 let mk_etuple ~(borrow_proj : bool) (vl : tevalue list) : tevalue =
   let tys = List.map (fun (v : tevalue) -> v.ty) vl in
-  let generics = mk_generic_args_from_types tys in
   {
     value = EAdt { borrow_proj; variant_id = None; fields = vl };
-    ty = TAdt { id = TTuple; generics };
+    ty = mk_tuple_ty tys;
   }
 
 let mk_epat_tuple (vl : tepat list) : tepat =
   let tys = List.map (fun (v : tepat) -> v.ty) vl in
-  let generics = mk_generic_args_from_types tys in
-  { pat = PAdt (None, vl); ty = TAdt { id = TTuple; generics } }
+  { pat = PAdt (None, vl); ty = mk_tuple_ty tys }
 
 let mk_simpl_etuple ~(borrow_proj : bool) (vl : tevalue list) : tevalue =
   match vl with
@@ -71,7 +69,7 @@ let mk_simpl_etuple ~(borrow_proj : bool) (vl : tevalue list) : tevalue =
 (** Peel boxes as long as the value is of the form [Box<T>] *)
 let rec unbox_tvalue (span : Meta.span) (v : tvalue) : tvalue =
   match (v.value, v.ty) with
-  | VAdt av, TAdt { id = TBuiltin TBox; _ } -> (
+  | VAdt av, TAdt { builtin = Some TBox; _ } -> (
       match av.fields with
       | [ bv ] -> unbox_tvalue span bv
       | _ -> [%internal_error] span)
@@ -84,12 +82,6 @@ let mk_tvalue_from_symbolic_value (svalue : symbolic_value) : tvalue =
     { value = av; ty = Substitute.erase_regions svalue.sv_ty }
   in
   av
-
-(** Box a value *)
-let mk_box_value (span : Meta.span) (v : tvalue) : tvalue =
-  let box_ty = mk_box_ty v.ty in
-  let box_v = VAdt { variant_id = None; fields = [ v ] } in
-  mk_tvalue span box_ty box_v
 
 let is_bottom (v : value) : bool =
   match v with
@@ -261,7 +253,7 @@ let symbolic_value_is_greedily_expandable (span : Meta.span option)
     match sv.sv_ty with
     | TArray _ | TSlice _ -> false
     | TRef _ -> true
-    | TAdt { id = TAdtId id; _ } ->
+    | TAdt { id; builtin = None; _ } ->
         (* Lookup the type of the ADT to check if we can expand it *)
         let def = TypeDeclId.Map.find id type_decls in
         begin

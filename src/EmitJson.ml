@@ -124,6 +124,7 @@ type state = {
   mutable trait_impl_entries : trait_impl_entry list;
   mutable current_lean_file : string;
   mutable current_lean_namespace : string;
+  mutable current_in_namespace : bool;
   mutable dest_dir : string;
 }
 
@@ -136,6 +137,7 @@ let make_state () : state =
     trait_impl_entries = [];
     current_lean_file = "";
     current_lean_namespace = "";
+    current_in_namespace = true;
     dest_dir = "";
   }
 
@@ -149,10 +151,11 @@ let init_if_enabled ~(dest_dir : string) : unit =
 (* Entry construction                                                       *)
 (* ------------------------------------------------------------------------ *)
 
-(** Add current Lean namespace to a short name to form the full Lean name. *)
+(** Add the Lean namespace to a short name to form the full Lean name. *)
 let full_lean_name (basename : string) : string =
-  if state.current_lean_namespace = "" then basename
-  else state.current_lean_namespace ^ "." ^ basename
+  if state.current_in_namespace then
+    state.current_lean_namespace ^ "." ^ basename
+  else basename
 
 (** Extract the Rust source location (file + line range) from a span. *)
 let source_of_span (span : Meta.span) : source =
@@ -270,7 +273,8 @@ let trait_impl_entry_of_trait_impl (ctx : ExtractBase.extraction_ctx)
 (* Pipeline hooks (no-ops when -emit-json is off)                           *)
 (* ------------------------------------------------------------------------ *)
 
-let begin_file_if_enabled ~(filename : string) ~(namespace : string) : unit =
+let begin_file_if_enabled ~(filename : string) ~(namespace : string)
+    ~(in_namespace : bool) : unit =
   if !Config.emit_json then begin
     (* Record the Lean file relative to dest_dir. *)
     let basename = Filename.basename filename in
@@ -280,7 +284,8 @@ let begin_file_if_enabled ~(filename : string) ~(namespace : string) : unit =
       | Some subdir -> Filename.concat subdir basename
     in
     state.current_lean_file <- rel;
-    state.current_lean_namespace <- namespace
+    state.current_lean_namespace <- namespace;
+    state.current_in_namespace <- in_namespace
   end
 
 let record_fun_if_enabled (ctx : ExtractBase.extraction_ctx)

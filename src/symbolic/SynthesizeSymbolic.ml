@@ -11,8 +11,14 @@ let mk_mplace (span : Meta.span) (p : place) (ctx : Contexts.eval_ctx) : mplace
     match place.kind with
     | PlaceLocal var_id ->
         PlaceLocal (Contexts.ctx_lookup_real_var_binder span ctx var_id)
-    | PlaceProjection (subplace, pe) ->
+    | PlaceProjection (subplace, Field (variant_id, field_id)) ->
+        let type_ref = TypesUtils.ty_as_adt subplace.ty in
+        let pe = { type_ref; variant_id; field_id } in
         PlaceProjection (place_to_mplace subplace, pe)
+    | PlaceProjection (subplace, (Deref | ProjIndex _ | Subslice _)) ->
+        place_to_mplace subplace
+    | PlaceProjection (_, PtrMetadata) ->
+        [%craise] span "Unsupported place projection: pointer metadata"
     | PlaceGlobal gref -> PlaceGlobal gref
   in
   place_to_mplace p

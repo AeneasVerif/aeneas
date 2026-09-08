@@ -23,3 +23,8 @@ private def notCI : Bool := run_io
 lean_exe extract where
   root := `AeneasExtract
   supportInterpreter := true
+
+/-- Extract the Lean tokens that are not permitted as standalone identifiers. -/
+lean_exe extract_lean_keywords where
+  root := `ExtractLeanKeywords
+  supportInterpreter := true

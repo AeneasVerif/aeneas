@@ -4,6 +4,7 @@ public import Aeneas.Std.Core.Cmp
 public import Aeneas.Std.Core.Convert
 public import Aeneas.Std.Core.Core
 public import Aeneas.Std.Core.CoreOption
+public import Aeneas.Std.Core.CoreResult
 public import Aeneas.Std.Core.Default
 public import Aeneas.Std.Core.Discriminant
 public import Aeneas.Std.Core.Error

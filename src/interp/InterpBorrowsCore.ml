@@ -452,12 +452,12 @@ let rec compare_rtys ?(allow_erased = false) (span : Meta.span) (ctx : eval_ctx)
       in
       (* Combine *)
       combine params_b tys_b
-  | TArray (ty1, len1), TArray (ty2, len2) ->
+  | TArray (ty1, len1, _), TArray (ty2, len2, _) ->
       (* There are no regions in the const generics, so we ignore them,
          but we still check they are the same, for sanity *)
       [%sanity_check] span (len1 = len2);
       compare ty1 ty2
-  | TSlice ty1, TSlice ty2 -> compare ty1 ty2
+  | TSlice (ty1, _), TSlice (ty2, _) -> compare ty1 ty2
   | TRef (r1, ty1, kind1), TRef (r2, ty2, kind2) ->
       (* Sanity check *)
       [%sanity_check] span (kind1 = kind2);
@@ -1513,25 +1513,24 @@ let lookup_aproj_loans_opt (span : Meta.span) (abs_id : AbsId.id)
         if abs.abs_id = abs_id then super#visit_abs (Some abs) abs else ()
 
       method! visit_aproj (abs : abs option) sproj =
-        (match sproj with
+        match sproj with
         | AProjBorrows _ | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
             super#visit_aproj abs sproj
         | AProjLoans aproj_loan ->
             let abs = Option.get abs in
             [%sanity_check] span (abs.abs_id = abs_id);
-            if aproj_loan.proj.sv_id = sv_id then set_found aproj_loan else ());
-        super#visit_aproj abs sproj
+            if aproj_loan.proj.sv_id = sv_id then set_found aproj_loan
+            else super#visit_aproj (Some abs) sproj
 
       method! visit_eproj (abs : abs option) sproj =
-        (match sproj with
+        match sproj with
         | EProjBorrows _ | EEndedProjLoans _ | EEndedProjBorrows _ | EEmpty ->
             super#visit_eproj abs sproj
         | EProjLoans aproj_loan ->
             let abs = Option.get abs in
             [%sanity_check] span (abs.abs_id = abs_id);
             if aproj_loan.proj.sv_id = sv_id then set_found_eproj aproj_loan
-            else ());
-        super#visit_eproj abs sproj
+            else super#visit_eproj (Some abs) sproj
     end
   in
   (* Apply *)
@@ -2251,7 +2250,7 @@ let rec norm_proj_tys_union (span : Meta.span) ?(strict : bool = true)
       [%sanity_check] span (tref1.id = tref2.id);
       TAdt
         {
-          id = tref1.id;
+          tref1 with
           generics =
             norm_proj_generic_args_union span ~strict ctx tref1.generics
               tref2.generics;
@@ -2316,11 +2315,11 @@ let rec norm_proj_tys_union (span : Meta.span) ?(strict : bool = true)
         }
       in
       TFnPtr { binder_regions = []; binder_value }
-  | TArray (ty0, len0), TArray (ty1, len1) ->
+  | TArray (ty0, len0, _), TArray (ty1, len1, _) ->
       [%sanity_check] span (len0 = len1);
-      TArray (norm_proj_tys_union span ~strict ctx ty0 ty1, len0)
-  | TSlice ty0, TSlice ty1 ->
-      TSlice (norm_proj_tys_union span ~strict ctx ty0 ty1)
+      TArray (norm_proj_tys_union span ~strict ctx ty0 ty1, len0, None)
+  | TSlice (ty0, _), TSlice (ty1, _) ->
+      TSlice (norm_proj_tys_union span ~strict ctx ty0 ty1, None)
   | _ ->
       [%ltrace
         "- ty1: " ^ ty_to_string ctx ty1 ^ "\n- ty2: " ^ ty_to_string ctx ty2];

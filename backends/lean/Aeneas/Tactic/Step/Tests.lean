@@ -1,4 +1,5 @@
 module
+public import Aeneas.Tactic.Step.Tests.Triple
 public import Aeneas.Tactic.Step.Tests.HigherOrder
 public import Aeneas.Tactic.Step.Tests.IntroOutputs
 public import Aeneas.Tactic.Step.Tests.MaxRecDepthMetavar

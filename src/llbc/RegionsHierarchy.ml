@@ -105,10 +105,10 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
   (* Explore the types in the signature to add the edges *)
   let rec explore_ty (outer : region list) (ty : ty) =
     match ty with
-    | TAdt { id; generics } ->
+    | TAdt { id; generics; builtin } ->
         (* Add constraints coming from the type clauses *)
-        (match id with
-        | TAdtId id ->
+        (match builtin with
+        | None ->
             (* Lookup the type declaration *)
             let decl = TypeDeclId.Map.find_opt id crate.type_decls in
             let decl =
@@ -138,10 +138,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
             List.iter
               (add_edges_from_region_binder add_edges_from_types_outlive)
               predicates.types_outlive
-        | TTuple -> (* No clauses for tuples *) ()
-        | TBuiltin aid -> (
-            match aid with
-            | TBox | TStr -> (* No clauses for those *) ()));
+        | Some (TTuple | TBox | TStr) -> (* No clauses for those *) ());
         (* Explore the generics *)
         explore_generics outer generics
     | TArray _ | TSlice _ -> (* No clauses for those *) ()

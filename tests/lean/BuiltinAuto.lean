@@ -7,6 +7,9 @@ open Aeneas Aeneas.Std Result ControlFlow Error
 set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false
+set_option linter.style.whitespace false
+set_option linter.style.setOption false
+set_option linter.style.longLine false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -20,7 +23,7 @@ noncomputable section
 namespace builtin_auto
 
 /-- [core::ptr::null]:
-    Source: '/rustc/library/core/src/ptr/mod.rs', lines 854:0-854:55
+    Source: '/rustc/library/core/src/ptr/mod.rs', lines 876:0-876:55
     Name pattern: [core::ptr::null]
     Visibility: public -/
 @[rust_fun "core::ptr::null"]

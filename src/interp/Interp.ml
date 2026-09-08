@@ -51,12 +51,13 @@ let analyze_type_declarations (crate : crate)
 
 let compute_contexts (crate : crate) : decls_ctx =
   let crate_graph = Deps.compute_graph_of_uses crate in
-  let type_decls_list, _, _, _, _, _ = split_declarations crate.declarations in
+  let declarations = Option.get crate.declarations in
+  let type_decls_list, _, _, _, _, _ = split_declarations declarations in
   let fmt_env : Print.fmt_env = Charon.Print.crate_to_fmt_env crate in
 
   (* Split the declaration groups between the declaration kinds (types, functions, etc.) *)
   let type_decls_groups, _, _, _, _, mixed_groups =
-    split_declarations_to_group_maps crate.declarations
+    split_declarations_to_group_maps declarations
   in
   (* Check if there are mixed groups: if there are, we report an error
      and ignore those. *)
@@ -138,12 +139,19 @@ let compute_contexts (crate : crate) : decls_ctx =
         TraitImplId.Set.add_in_place id trait_impl_ids
     end
   in
-  List.iter (visitor#visit_declaration_group ()) crate.declarations;
+  List.iter (visitor#visit_declaration_group ()) declarations;
 
   let type_decls = crate.type_decls in
   let to_extract =
     TypeDeclId.Map.filter
-      (fun id _ -> TypeDeclId.Set.mem id !type_decl_ids)
+      (fun id (d : type_decl) ->
+        (* Charon introduces declarations for the builtin types (tuples, [Box],
+           [str]): we handle those separately, and don't extract them *)
+        TypeDeclId.Set.mem id !type_decl_ids
+        &&
+        match d.src with
+        | BuiltinType _ -> false
+        | _ -> true)
       type_decls
   in
   let type_infos = analyze_type_declarations crate type_decls_list in

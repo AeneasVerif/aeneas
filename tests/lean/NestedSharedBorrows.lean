@@ -7,6 +7,9 @@ open Aeneas Aeneas.Std Result ControlFlow Error
 set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false
+set_option linter.style.whitespace false
+set_option linter.style.setOption false
+set_option linter.style.longLine false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -20,7 +23,7 @@ noncomputable section
 namespace nested_shared_borrows
 
 /-- [core::option::{impl core::ops::try_trait::Try for core::option::Option<T>}::branch]:
-    Source: '/rustc/library/core/src/option.rs', lines 2779:4-2779:64
+    Source: '/rustc/library/core/src/option.rs', lines 2868:4-2868:64
     Name pattern: [core::option::{core::ops::try_trait::Try<core::option::Option<@T>>}::branch]
     Visibility: public -/
 @[rust_fun
@@ -31,7 +34,7 @@ axiom core.option.Option.Insts.CoreOpsTry_traitTry.branch
     core.convert.Infallible) T)
 
 /-- [core::option::{impl core::ops::try_trait::FromResidual<core::option::Option<core::convert::Infallible>> for core::option::Option<T>}::from_residual]:
-    Source: '/rustc/library/core/src/option.rs', lines 2793:4-2793:67
+    Source: '/rustc/library/core/src/option.rs', lines 2882:4-2882:67
     Name pattern: [core::option::{core::ops::try_trait::FromResidual<core::option::Option<@T>, core::option::Option<core::convert::Infallible>>}::from_residual]
     Visibility: public -/
 @[rust_fun

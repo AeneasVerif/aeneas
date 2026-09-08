@@ -1203,7 +1203,7 @@ and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
                     if field_id + 1 = Option.get num_fields then twos_prefix
                     else twos_prefix ^ ".1"
                 else "#" ^ string_of_int field_id
-          else ctx_get_field span proj.adt_id proj.field_id ctx
+          else ctx_get_field ~qualified:true span proj.adt_id proj.field_id ctx
         in
         (* Open a box *)
         F.pp_open_hovbox fmt ctx.indent_incr;
@@ -2886,17 +2886,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
   (* Register the names *)
   List.fold_left
     (fun ctx (method_id, default_id, fun_name) ->
-      (* Register the method name.
-
-          Similarly as with structure fields, in the case of Lean check
-          whether we collide with keywords. If it is the case, add french quotes.
-       *)
-      let fun_name =
-        match backend () with
-        | Lean when names_maps_is_keyword ctx.names_maps fun_name ->
-            "«" ^ fun_name ^ "»"
-        | _ -> fun_name
-      in
+      (* Register the method name *)
       let ctx =
         ctx_add trait_decl.item_meta.span
           (TraitMethodId (trait_decl.def_id, method_id))
@@ -3662,10 +3652,30 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
         extract_trait_impl_item ctx fmt item_name ty)
       (List.combine trait_decl.implied_clauses impl.parent_trait_refs);
 
-    (* The methods *)
+    (* The methods.
+
+       If the [filter_trait_impl_methods] option is on, we skip the methods
+       which are absent from the model of the trait declaration. *)
+    let keep_method : string -> bool =
+      if not !filter_trait_impl_methods then fun _ -> true
+      else
+        let pure_trait_decl =
+          [%unwrap_with_span] span
+            (TraitDeclId.Map.find_opt trait_decl_id ctx.trans_trait_decls)
+            "Could not lookup the translated trait declaration"
+        in
+        match pure_trait_decl.builtin_info with
+        | None -> fun _ -> true
+        | Some info ->
+            let method_names =
+              Collections.StringSet.of_list (List.map fst info.methods)
+            in
+            fun item_name -> Collections.StringSet.mem item_name method_names
+    in
     List.iter
-      (fun (method_id, _name, bound_fn) ->
-        extract_trait_impl_method_items ctx fmt impl method_id bound_fn)
+      (fun (method_id, name, bound_fn) ->
+        if keep_method name then
+          extract_trait_impl_method_items ctx fmt impl method_id bound_fn)
       impl.methods;
 
     (* Close the outer boxes for the definition, as well as the brackets *)

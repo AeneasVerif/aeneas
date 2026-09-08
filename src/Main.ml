@@ -215,6 +215,12 @@ let () =
          collisions with field projectors. Example: the `len` method in `impl \
          Struct { fn len(&self) -> usize { ... } }` would be named \
          `Struct.impl.len`." );
+      ( "-filter-trait-methods",
+        Arg.Set filter_trait_impl_methods,
+        " When extracting a trait impl, filter out the methods which are \
+         absent from the model of the trait declaration in the target backend \
+         (e.g., Lean). Trait declarations which have no model are not \
+         affected." );
       ( "-all-computable",
         Arg.Set all_computable,
         " For Lean: do not insert `noncomputable section` at the top of the \
@@ -223,6 +229,11 @@ let () =
       ( "-loops-to-rec",
         Arg.Set loops_to_recursive_functions,
         " Always extract loops to recursive functions." );
+      ( "-feature-gates",
+        Arg.Set feature_gates,
+        " For Lean: introduce an assertion at the beginning of the functions \
+         annotated with `#[target_feature(enable = \"...\")]`, to check that \
+         the required target features are available." );
       ( "-loops-no-rec",
         Arg.Set no_recursive_loops,
         " Never attempt to extract loops to recursive functions." );
@@ -505,11 +516,15 @@ let () =
     | Some backend -> (
         match backend with
         | FStar ->
+            check_not !feature_gates
+              "The F* backend doesn't support the -feature-gates option";
             (* F* can disambiguate the field names *)
             record_fields_short_names := true;
             (* Introducing [massert] leads to type inferencing issues *)
             intro_massert := false
         | Coq ->
+            check_not !feature_gates
+              "The Coq backend doesn't support the -feature-gates option";
             (* Some patterns are not supported *)
             decompose_monadic_let_bindings := true;
             decompose_nested_let_patterns := true
@@ -525,6 +540,8 @@ let () =
             (* *) merge_let_app_decompose_tuple := true;
             lift_pure_function_calls := true
         | HOL4 ->
+            check_not !feature_gates
+              "The HOL4 backend doesn't support the -feature-gates option";
             (* We don't support fuel for the HOL4 backend *)
             if !use_fuel then (
               log#error "The HOL4 backend doesn't support the -use-fuel option";
@@ -590,7 +607,7 @@ let () =
              (function
                | Aeneas.LlbcAst.FunGroup (RecGroup (_ :: _)) -> true
                | _ -> false)
-             m.declarations
+             (Option.get m.declarations)
       then (
         log#error
           "The Lean backend doesn't support the use of \

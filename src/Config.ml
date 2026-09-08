@@ -346,6 +346,22 @@ let lift_pure_function_calls = ref false
     ]} *)
 let intro_massert = ref true
 
+(** Introduce assertions checking that the target features required by a
+    function are available.
+
+    If the option is [true], a function annotated with, e.g.,
+    [#[target_feature(enable = "avx2")]] gets an assertion introduced at the
+    beginning of its body:
+    {[
+      massert (target_feature_enabled "avx2");
+      ...
+    ]}
+
+    This makes the (implicit) safety requirement of [#[target_feature]]
+    functions explicit in the extracted code: the caller has to prove that the
+    feature is available before calling the function. *)
+let feature_gates = ref false
+
 (** Simplify the forward/backward functions, in case we merge them (i.e., the
     forward functions return the backward functions).
 
@@ -587,6 +603,16 @@ let method_names_in_impl_namespace = ref false
 
 (** *)
 let all_computable = ref false
+
+(** When extracting a trait impl, filter out the methods which are absent from
+    the model of the trait declaration (its builtin info).
+
+    Trait declarations which have no model are not affected: all their methods
+    are extracted. This is useful for the traits of the standard library, whose
+    models often list only a subset of the methods of the original Rust trait.
+    Without this option, the extracted impls may contain fields which do not
+    exist in the model, leading to code which does not typecheck. *)
+let filter_trait_impl_methods = ref false
 
 (** Do not attempt to extract loops to recursive functions *)
 let no_recursive_loops = ref false

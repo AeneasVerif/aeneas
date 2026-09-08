@@ -804,12 +804,8 @@ let alloc_vec_Vec_push (#a  : Type0) (v : alloc_vec_Vec a) (x : a) :
 let alloc_vec_Vec_insert (#a : Type0) (v : alloc_vec_Vec a) (i : usize) (x : a) : result (alloc_vec_Vec a) =
   if i < length v then Ok (list_update v i x) else Fail Failure
 
-// Trait declaration: [core::slice::index::private_slice_index::Sealed]
-type core_slice_index_private_slice_index_Sealed (self : Type0) = unit
-
 // Trait declaration: [core::slice::index::SliceIndex]
 noeq type core_slice_index_SliceIndex (self t output : Type0) = {
-  sealedInst : core_slice_index_private_slice_index_Sealed self;
   get : self → t → result (option output);
   get_mut : self → t → result (option output & (option output -> t));
   get_unchecked : self → const_raw_ptr t → result (const_raw_ptr output);
@@ -882,14 +878,9 @@ let core_array_Array_index_mut
   result (out & (out -> array t n)) =
   admit () // TODO
 
-// Trait implementation: [core::slice::index::private_slice_index::Range]
-let core_slice_index_private_slice_index_SealedSliceIndexRangeUsizeSliceInst
-  : core_slice_index_private_slice_index_Sealed (core_ops_range_Range usize) = ()
-
 // Trait implementation: [core::slice::index::Range]
 let core_slice_index_SliceIndexRangeUsizeSliceInst (t : Type0) :
   core_slice_index_SliceIndex (core_ops_range_Range usize) (slice t) (slice t) = {
-  sealedInst = core_slice_index_private_slice_index_SealedSliceIndexRangeUsizeSliceInst;
   get = core_slice_index_SliceIndexRangeUsizeSlice_get #t;
   get_mut = core_slice_index_SliceIndexRangeUsizeSlice_get_mut #t;
   get_unchecked = core_slice_index_SliceIndexRangeUsizeSlice_get_unchecked #t;
@@ -957,14 +948,9 @@ let core_slice_index_usize_index_mut (#t : Type0) :
   usize → slice t → result (t & (t -> slice t)) =
   admit () // TODO
 
-// Trait implementation: [core::slice::index::private_slice_index::usize]
-let core_slice_index_private_slice_index_SealedUsizeInst
-  : core_slice_index_private_slice_index_Sealed usize = ()
-
 // Trait implementation: [core::slice::index::usize]
 let core_slice_index_SliceIndexUsizeSliceInst (t : Type0) :
   core_slice_index_SliceIndex usize (slice t) t = {
-  sealedInst = core_slice_index_private_slice_index_SealedUsizeInst;
   get = core_slice_index_usize_get #t;
   get_mut = core_slice_index_usize_get_mut #t;
   get_unchecked = core_slice_index_usize_get_unchecked #t;

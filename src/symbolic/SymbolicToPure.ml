@@ -305,7 +305,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   let generics, preds = translate_generic_params span llbc_generics in
   let explicit_info = compute_explicit_info generics [] in
   let parent_trait_refs =
-    List.map (translate_strait_ref span) implied_trait_refs
+    List.map (translate_fwd_trait_ref span ctx) implied_trait_refs
   in
   let consts =
     List.map
