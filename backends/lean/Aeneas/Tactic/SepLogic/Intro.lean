@@ -15,8 +15,42 @@ namespace Aeneas.SepLogic
 
 open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic
 
+/-- Marker used while `step` introduces a callee postcondition. It keeps
+`iintro_shallow` from traversing into the inferred frame. -/
+def introFrame (F : IProp) : IProp := F
+
+theorem introFrame_eq (F : IProp) : introFrame F = F := by
+  rfl
+
+/-- Find a directly exposed pure assertion in a separating-conjunction tree and
+return its proposition together with the tree with that assertion removed.
+Opaque representation predicates are not unfolded. -/
+private partial def extractPure? (pre : Expr) : Option (Expr × Expr) :=
+  let pre := pre.consumeMData
+  if pre.isAppOfArity ``ipure 1 then
+    none
+  else if pre.isAppOfArity ``sep 2 then
+    let args := pre.getAppArgs
+    let left := args[0]!.consumeMData
+    let right := args[1]!.consumeMData
+    if left.isAppOfArity ``ipure 1 then
+      some (left.appArg!, right)
+    else if right.isAppOfArity ``ipure 1 then
+      some (right.appArg!, left)
+    else
+      match extractPure? left with
+      | some (proposition, rest) =>
+        some (proposition, mkApp2 (mkConst ``sep) rest right)
+      | none =>
+        match extractPure? right with
+        | some (proposition, rest) =>
+          some (proposition, mkApp2 (mkConst ``sep) left rest)
+        | none => none
+  else
+    none
+
 /-- One step of `iintro`: peel a quantifier or a pure fact off the precondition
-of a triple.  Fails when the precondition is purely spatial.
+of a total or partial triple. Fails when the precondition is purely spatial.
 
 The precondition is unfolded (`wellFormed`, `isList`, …) only as far as needed to
 expose its head connective: applying `triple_exists` or `triple_ipure` blindly
@@ -35,7 +69,9 @@ elab "iintro_step" : tactic => withMainContext do
   let goal ← getMainGoal
   let target ← instantiateMVars (← goal.getType)
   let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
-  unless fn.isConstOf `Aeneas.SepLogic.triple && args.size = 4 do
+  let isTriple := fn.isConstOf `Aeneas.SepLogic.triple
+  let isDtriple := fn.isConstOf `Aeneas.SepLogic.dtriple
+  unless (isTriple || isDtriple) && args.size = 4 do
     throwError "iintro_step: the goal is not a separation-logic triple"
   let precondition ← IFrame.exposeConnective args[1]!
   let head := precondition.consumeMData.getAppFn
@@ -44,16 +80,39 @@ elab "iintro_step" : tactic => withMainContext do
       pure ((← IFrame.exposeConnective precondition.consumeMData.appFn!.appArg!)
         |>.consumeMData.isAppOfArity ``ipure 1)
     else pure false
-  let lemmaName ←
-    if head.isConstOf ``iexists then pure `Aeneas.SepLogic.triple_exists
-    else if head.isConstOf ``ipure then pure `Aeneas.SepLogic.triple_ipure'
-    else if leadingPure then pure `Aeneas.SepLogic.triple_ipure
-    else
-      throwError "iintro_step: the precondition has no quantifier or pure fact \
-        left to extract:\n{precondition}"
+  let specName :=
+    if isDtriple then `Aeneas.SepLogic.dtriple
+    else `Aeneas.SepLogic.triple
   let goal ← goal.change
-    (← mkAppOptM `Aeneas.SepLogic.triple #[args[0]!, precondition, args[2]!, args[3]!])
-  replaceMainGoal (← goal.apply (← mkConstWithFreshMVarLevels lemmaName))
+    (← mkAppOptM specName #[args[0]!, precondition, args[2]!, args[3]!])
+  if head.isConstOf ``iexists then
+    let lemmaName :=
+      if isDtriple then `Aeneas.SepLogic.dtriple_exists
+      else `Aeneas.SepLogic.triple_exists
+    replaceMainGoal (← goal.apply (← mkConstWithFreshMVarLevels lemmaName))
+  else if head.isConstOf ``ipure then
+    let lemmaName :=
+      if isDtriple then `Aeneas.SepLogic.dtriple_ipure'
+      else `Aeneas.SepLogic.triple_ipure'
+    replaceMainGoal (← goal.apply (← mkConstWithFreshMVarLevels lemmaName))
+  else if leadingPure then
+    let lemmaName :=
+      if isDtriple then `Aeneas.SepLogic.dtriple_ipure
+      else `Aeneas.SepLogic.triple_ipure
+    replaceMainGoal (← goal.apply (← mkConstWithFreshMVarLevels lemmaName))
+  else if let some (proposition, rest) := extractPure? precondition then
+    let lemmaName :=
+      if isDtriple then `Aeneas.SepLogic.dtriple_ipure_anywhere
+      else `Aeneas.SepLogic.triple_ipure_anywhere
+    let normalized := mkApp2 (mkConst ``sep)
+      (mkApp (mkConst ``ipure) proposition) rest
+    let hExtract ← IFrame.proveEqAC precondition normalized
+    let thm := mkAppN (← mkConstWithFreshMVarLevels lemmaName)
+      #[args[0]!, proposition, rest, precondition, args[2]!, args[3]!, hExtract]
+    replaceMainGoal (← goal.apply thm)
+  else
+    throwError "iintro_step: the precondition has no quantifier or pure fact \
+      left to extract:\n{precondition}"
 
 /-- Move the existentials and pure facts of a triple's precondition into the
 local context.
@@ -77,16 +136,17 @@ macro_rules
 
 /-- Whether a quantifier or a pure fact can be peeled off `pre` without unfolding it: an opened
 representation predicate is one the frame inference of a later `step` can no longer match. -/
-private def isPullable (pre : Expr) : Bool :=
+private partial def isPullable (pre : Expr) : Bool :=
   let pre := pre.consumeMData
   if pre.isAppOfArity ``iexists 2 || pre.isAppOfArity ``ipure 1 then true
   else if pre.isAppOfArity ``sep 2 then
-    pre.appFn!.appArg!.consumeMData.isAppOfArity ``ipure 1
+    isPullable pre.appFn!.appArg! || isPullable pre.appArg!
   else false
 
 private partial def pullPrecondition (goal : MVarId) : TacticM MVarId := goal.withContext do
   let target := (← instantiateMVars (← goal.getType)).consumeMData
-  unless target.isAppOfArity `Aeneas.SepLogic.triple 4 &&
+  unless (target.isAppOfArity `Aeneas.SepLogic.triple 4 ||
+      target.isAppOfArity `Aeneas.SepLogic.dtriple 4) &&
       isPullable target.getAppArgs[1]! do return goal
   setGoals [goal]
   let state ← saveState
@@ -102,6 +162,33 @@ private partial def pullPrecondition (goal : MVarId) : TacticM MVarId := goal.wi
 `isPullable`. -/
 elab "iintro_shallow" : tactic => withMainContext do
   setGoals [← pullPrecondition (← getMainGoal)]
+
+/-- Run `iintro_shallow` on the left side of the top-level separating
+conjunction while treating its right side as an opaque frame. This is the
+variant used by `step` on continuation triples of the shape `Qm value ∗ F`. -/
+elab "iintro_shallow_post" : tactic => withMainContext do
+  let goal ← getMainGoal
+  let target := (← instantiateMVars (← goal.getType)).consumeMData
+  let isTriple := target.isAppOfArity `Aeneas.SepLogic.triple 4
+  let isDtriple := target.isAppOfArity `Aeneas.SepLogic.dtriple 4
+  unless isTriple || isDtriple do
+    evalTactic (← `(tactic| isimp))
+    return
+  let args := target.getAppArgs
+  let precondition := args[1]!.consumeMData
+  unless precondition.isAppOfArity ``sep 2 do
+    evalTactic (← `(tactic| (isimp; iintro_shallow)))
+    return
+  let preArgs := precondition.getAppArgs
+  let lemmaName :=
+    if isDtriple then `Aeneas.SepLogic.dtriple_introFrame
+    else `Aeneas.SepLogic.triple_introFrame
+  let thm := mkApp3 (← mkConstWithFreshMVarLevels lemmaName)
+    args[0]! preArgs[0]! preArgs[1]!
+  replaceMainGoal (← goal.apply thm)
+  evalTactic (← `(tactic| (isimp; iintro_shallow)))
+  unless (← getUnsolvedGoals).isEmpty do
+    evalTactic (← `(tactic| (simp only [introFrame_eq]; isimp)))
 
 /-- One step of `iintro_keep`: copy the leading pure fact of the precondition of
 a triple into the local context, *without* removing it from the precondition.
