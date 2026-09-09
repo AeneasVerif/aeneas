@@ -457,7 +457,7 @@ example (v : Nat) : old_add1 v ⦃ y => y = v + 1 ⦄ := by
 /-- **Separation → pure.**  In this direction there is nothing to lift at all:
 a program that performs an event is outright *false* under a judgment whose
 machine answers none. -/
-example (e : RustEffect.I) (k : RustEffect.O e → Result Nat) (p : Nat → Prop) :
+example (e : RustEffect.Input) (k : RustEffect.Output e → Result Nat) (p : Nat → Prop) :
     ¬ Aeneas.Std.WP.spec (Result.vis e k) p := by
   simp
 
