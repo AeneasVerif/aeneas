@@ -57,10 +57,9 @@ theorem incrementTwice.spec (pointer : Ptr Nat) (value : Nat) :
 /-! ## Result-style higher-order specifications
 
 These examples mirror the three core cases in
-`Aeneas.Tactic.Step.Tests.HigherOrder`. The `fail_if_success` checks record that,
-unlike for `Std.Result`, `step* +inferPost` does not infer predicate parameters
-for SLPoC triples. Supplying those predicates explicitly lets `step` use the
-registered specifications and prove the callback premises.
+`Aeneas.Tactic.Step.Tests.HigherOrder`. As for `Std.Result`, `step* +inferPost`
+infers the predicate parameters of the registered specifications and proves
+the callback premises.
 -/
 
 namespace ResultStyle
@@ -76,12 +75,7 @@ theorem applyF.spec (f : Nat → Result Nat) (x : Nat) (post : Nat → Prop)
 
 example (x : Nat) :
     (applyF (fun y => pure (y + 1)) x) ⦃⇓ y => y = x + 1⦄ := by
-  fail_if_success
-    step* +inferPost
-    done
-  step with applyF.spec (fun y => pure (y + 1)) x (fun y => y = x + 1)
-  case hf => step*
-  case hRamified => simp [Entails, Aeneas.SepLogic.emp, ipure]
+  step* +inferPost
 
 def callPair (f g : Nat → Result Nat) (xy : Nat × Nat) : Result (Nat × Nat) := do
   let a ← f xy.1
@@ -100,18 +94,7 @@ theorem callPair.spec (f g : Nat → Result Nat) (xy : Nat × Nat)
 example (x y : Nat) :
     (callPair (fun a => pure (a + 1)) (fun b => pure (b + 2)) (x, y))
       ⦃⇓ result => result.1 = x + 1 ∧ result.2 = y + 2⦄ := by
-  fail_if_success
-    step* +inferPost
-    done
-  step with callPair.spec
-    (fun a => pure (a + 1)) (fun b => pure (b + 2)) (x, y)
-    (fun a => a = x + 1) (fun b => b = y + 2)
-  case hf => step*
-  case hg => step*
-  case hRamified =>
-    apply postWand_intro
-    intro result
-    iframe
+  step* +inferPost
 
 def callFThenG (f g : Nat → Result Nat) (x : Nat) : Result Nat := do
   let y ← f x
@@ -129,17 +112,7 @@ theorem callFThenG.spec (f g : Nat → Result Nat) (x : Nat)
 example (x : Nat) :
     (callFThenG (fun y => pure (y + 1)) (fun y => pure (y + 1)) x)
       ⦃⇓ result => result = x + 2⦄ := by
-  fail_if_success
-    step* +inferPost
-    done
-  step with callFThenG.spec
-    (fun y => pure (y + 1)) (fun y => pure (y + 1)) x
-    (fun y => y = x + 1) (fun result => result = x + 2)
-  case hf => step*
-  case hg =>
-    intro y hy
-    step*
-  case hRamified => simp [Entails, Aeneas.SepLogic.emp, ipure]
+  step* +inferPost
 
 end ResultStyle
 
