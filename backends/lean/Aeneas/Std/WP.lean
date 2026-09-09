@@ -184,6 +184,7 @@ def imp (P Q : Prop) : Prop := P → Q
 theorem imp_and_iff (P0 P1 Q : Prop) : imp (P0 ∧ P1) Q ↔ P0 → imp P1 Q := by simp [imp]
 
 /-- Implication with quantifier -/
+@[expose]
 def qimp {α} (P₀ P₁ : Post α) : Prop := ∀ x, P₀ x → P₁ x
 
 /-- We use this lemma to decompose nested `uncurry'` predicates into a sequence of universal quantifiers. -/
