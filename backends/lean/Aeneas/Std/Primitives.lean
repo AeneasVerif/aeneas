@@ -72,11 +72,13 @@ deriving Repr, BEq
 
 open Error
 
+@[expose] section
 inductive Result (α : Type u) where
   | ok (v: α): Result α
   | fail (e: Error): Result α
   | div
 deriving Repr, BEq
+end
 
 open Result
 
@@ -133,6 +135,8 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
   | fail v => fail v
   | div => div
 
+@[expose] section
+
 -- Allows using Result in do-blocks
 instance : Bind Result where
   bind := bind
@@ -140,6 +144,8 @@ instance : Bind Result where
 -- Allows using pure x in do-blocks
 instance : Pure Result where
   pure := fun x => ok x
+
+end
 
 @[simp] theorem bind_ok (x : α) (f : α → Result β) : bind (.ok x) f = f x := by simp [bind]
 @[simp] theorem bind_fail (x : Error) (f : α → Result β) : bind (.fail x) f = .fail x := by simp [bind]
@@ -161,6 +167,8 @@ instance : Pure Result where
   simp [Bind.bind]
   cases e <;> simp
 
+@[expose] section
+
 @[simp]
 def bind_eq_iff (x : Result α) (y y' : α → Result β) :
   ((Bind.bind x y) = (Bind.bind x y')) ↔
@@ -168,6 +176,8 @@ def bind_eq_iff (x : Result α) (y y' : α → Result β) :
   cases x <;> simp_all
 
 instance : Monad Result where
+
+end
 
 /-!
 # Partial Fixpoint

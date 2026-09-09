@@ -4,7 +4,11 @@ public import Aeneas.Std.Slice
 public import Aeneas.Std.Array.Array
 public import Aeneas.Std.Core.Iter
 public meta import Aeneas.Std.Core.Iter
+public meta import Aeneas.Std.Slice
+public meta import Aeneas.Std.Array.Array
 public section
+
+@[expose] section
 
 namespace Aeneas.Std
 
@@ -136,7 +140,7 @@ def core.slice.iter.ChunksExact.getRemainder
   {T : Type} (self : core.slice.iter.ChunksExact T) : Result (Slice T) :=
   ok self.remainder
 
-@[expose, rust_fun
+@[rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>}::next"]
 def core.slice.iter.IteratorChunksExact.next
   {T : Type} (self : core.slice.iter.ChunksExact T) :
@@ -234,8 +238,6 @@ private def collectStepBy (sbi : core.iter.adapters.step_by.StepBy (core.slice.i
       let rest ← collectStepBy sbi fuel
       .ok (x :: rest)
 
-/- TODO: the `#assert`s below are disabled. Re-enable when cross-module  `#assert` is mended.
-
 -- step_by(0) panics
 #assert
   match core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [1, 2, 3]) 0#usize with
@@ -332,7 +334,6 @@ private def collectNestedStepBy
     (mkSliceIter [0, 1, 2, 3, 4, 5, 6, 7]) 2#usize
   let sbi2 ← core.iter.traits.iterator.Iterator.step_by.default sbi 2#usize
   collectNestedStepBy sbi2) == .ok [0, 4]
--/
 
 -- ============================================================================
 -- Step specs for SharedArray.into_iter and SharedSlice.into_iter
