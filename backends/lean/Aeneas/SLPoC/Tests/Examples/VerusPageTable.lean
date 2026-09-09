@@ -801,10 +801,8 @@ theorem queryAux.spec (pointer : Ptr Table) (model : ModelTable)
             rename_i hFrame
             subst concreteFrame
             have hFold := tableOwn_unselect pointer index concrete model
-            simp only [hConcrete, hModel, entryOwn] at hFold
+            simp only [hConcrete, hModel, entryOwn, sep_ipure_true_l_eq] at hFold
             step
-            irewrite (pure_front_middle True
-              (pointer ↦ concrete) (entriesExcept index concrete model))
             irewrite hFold
             iframe
           · irewrite (pure_middle_front False
@@ -853,10 +851,8 @@ theorem queryAux.spec (pointer : Ptr Table) (model : ModelTable)
             rename_i hFrame
             subst concreteFrame
             have hFold := tableOwn_unselect pointer index concrete model
-            simp only [hConcrete, hModel, entryOwn] at hFold
+            simp only [hConcrete, hModel, entryOwn, sep_ipure_true_l_eq] at hFold
             step
-            irewrite (pure_front_middle True
-              (pointer ↦ concrete) (entriesExcept index concrete model))
             irewrite hFold
             iframe
           · irewrite (pure_middle_front False

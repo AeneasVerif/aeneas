@@ -56,7 +56,6 @@ example (p : Ptr Nat) (value : Nat) :
   step* 2
   step
   simp only [opaqueStepResult]
-  iframe
 
 /-! ## The terminal return
 
@@ -78,7 +77,6 @@ example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => iprop(⌜opaqueStepResult 1 1�
 /-- `Result.ok`, the constructor `pure` unfolds to, is a terminal return too. -/
 example (n : Nat) : ⦃ emp ⦄ Result.ok n ⦃⇓ result => ⌜result = n⌝⦄ := by
   step
-  iframe
 
 /-- A `Unit` result is no different. -/
 example (p : Ptr Nat) : ⦃ p ↦ 0 ⦄ (pure () : Result Unit) ⦃⇓ p ↦ 0⦄ := by
@@ -93,18 +91,15 @@ theorem namedReturn.spec (n : Nat) :
     ⦃ emp ⦄ namedReturn n ⦃⇓ result => ⌜result = n⌝⦄ := by
   unfold namedReturn
   step
-  iframe
 
 /-- A named pure wrapper is not a *syntactic* return: the terminal rule does not
 unfold it, so the step goes through its registered specification. -/
 example (n : Nat) : ⦃ emp ⦄ namedReturn n ⦃⇓ result => ⌜result = n⌝⦄ := by
   step
-  iframe
 
 /-- An explicitly named specification wins over the terminal rule. -/
 example (n : Nat) : ⦃ emp ⦄ (pure n : Result Nat) ⦃⇓ result => ⌜result = n⌝⦄ := by
   step with pure.spec
-  iframe
 
 /-! ## An unbounded star consumes the whole goal
 
