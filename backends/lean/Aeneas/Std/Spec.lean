@@ -25,6 +25,11 @@ structure SpecInfo where
   mk_spec_bind : Name
   mk_spec_bind_skip_args : Nat
 
+  /-- Tactic applied on mono's and bind's preconditions in `step`
+      and mono's final goal in `step*`.
+      If not solved, then the precondition/goal stay unchanged. -/
+  discharge_tactic : Option Name := none
+
   uncurry_elim_tactics : Array Lean.Name
   qimp_elim_tactics : Array Lean.Name
 
