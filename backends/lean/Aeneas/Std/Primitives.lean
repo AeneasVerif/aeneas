@@ -60,6 +60,8 @@ def elabImpl : CommandElab := fun (stx: Syntax) => do
 # Results and Monadic Combinators
 -/
 
+@[expose] section
+
 inductive Error where
    | assertionFailure: Error
    | integerOverflow: Error
@@ -72,15 +74,6 @@ deriving Repr, BEq
 
 open Error
 
-<<<<<<< HEAD
-@[expose] section
-inductive Result (α : Type u) where
-  | ok (v: α): Result α
-  | fail (e: Error): Result α
-  | div
-deriving Repr, BEq
-end
-=======
 inductive RustEffect.Input : Type where
 | fail : Error → RustEffect.Input
 
@@ -243,7 +236,6 @@ def Result.reducesTo {R : Type} [BEq R] (r : Result R) (expected : R) : Bool :=
   match r.match with
   | .ok x => x == expected
   | _ => false
->>>>>>> upstream/main
 
 open Result
 
@@ -257,36 +249,10 @@ instance Result_Nonempty (α : Type u) : Nonempty (Result α) :=
 # Helpers
 -/
 
-<<<<<<< HEAD
-@[global_simps]
-def ok? {α: Type u} (r: Result α): Bool :=
-  match r with
-  | ok _ => true
-  | fail _ | div => false
-
-def div? {α: Type u} (r: Result α): Bool :=
-  match r with
-  | div => true
-  | ok _ | fail _ => false
-
-@[expose] def massert (b : Prop) [Decidable b] : Result Unit :=
-  if b then ok () else fail assertionFailure
-
-macro "prove_eval_global" : tactic => `(tactic| simp (failIfUnchanged := false) only [global_simps] <;> first | apply Eq.refl | decide)
-
-@[global_simps]
-def eval_global {α: Type u} (x: Result α) (_: ok? x := by prove_eval_global) : α :=
-  match x with
-  | fail _ | div => by contradiction
-  | ok x => x
-
-@[simp, expose]
-=======
 def massert (b : Prop) [Decidable b] : Result Unit :=
   if b then ok () else fail assertionFailure
 
 @[simp]
->>>>>>> upstream/main
 def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
   match x with
   | some x => ok x
@@ -301,29 +267,6 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
 # Do-DSL Support
 -/
 
-<<<<<<< HEAD
-@[expose] def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
-  match x with
-  | ok v  => f v
-  | fail v => fail v
-  | div => div
-
-@[expose] section
-
--- Allows using Result in do-blocks
-instance : Bind Result where
-  bind := bind
-
--- Allows using pure x in do-blocks
-instance : Pure Result where
-  pure := fun x => ok x
-
-end
-
-@[simp] theorem bind_ok (x : α) (f : α → Result β) : bind (.ok x) f = f x := by simp [bind]
-@[simp] theorem bind_fail (x : Error) (f : α → Result β) : bind (.fail x) f = .fail x := by simp [bind]
-@[simp] theorem bind_div (f : α → Result β) : bind .div f = .div := by simp [bind]
-=======
 @[simp] theorem bind_ok (x : α) (f : α → Result β) : bind (.ok x) f = f x :=
   by simp [bind, ok]
 @[simp] theorem bind_vis (e k) (f : α → Result β) : bind (.vis e k) f = .vis e (fun x => bind (k x) f) :=
@@ -336,7 +279,6 @@ end
   exact x.elim
 
 @[simp] theorem bind_div (f : α → Result β) : bind .div f = .div := by simp [bind, div]
->>>>>>> upstream/main
 
 @[simp] theorem bind_tc_ok (x : α) (f : α → Result β) :
   (do let y ← .ok x; f y) = f x := by simp [bind, Bind.bind, ok]
@@ -356,25 +298,12 @@ end
 @[simp] theorem bind_assoc_eq {a b c : Type u}
   (e : Result a) (g :  a → Result b) (h : b → Result c) :
   (Bind.bind (Bind.bind e g) h) =
-<<<<<<< HEAD
-  (Bind.bind e (λ x => Bind.bind (g x) h)) := by
-  simp [Bind.bind]
-  cases e <;> simp
-
-@[expose] section
-
-@[simp]
-def bind_eq_iff (x : Result α) (y y' : α → Result β) :
-  ((Bind.bind x y) = (Bind.bind x y')) ↔
-  ∀ v, x = ok v → y v = y' v := by
-  cases x <;> simp_all
-
-instance : Monad Result where
-=======
   (Bind.bind e (λ x => Bind.bind (g x) h)) := by apply bind_assoc
->>>>>>> upstream/main
 
 end
+
+unseal Result
+open Result
 
 /-!
 # Partial Fixpoint
@@ -499,22 +428,11 @@ inductive ControlFlow (α : Type u) (β : Type v) where
   | done (v : β) -- break
 deriving Repr, BEq
 
-<<<<<<< HEAD
-@[expose] def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) (x : α) : Result β := do
-  match body x with
-  | ok r =>
-    match r with
-    | ControlFlow.cont x => loop body x
-    | ControlFlow.done x => ok x
-  | fail e => fail e
-  | div => div
-=======
 def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) (x : α) : Result β := do
   bind (body x) fun r =>
   match r with
   | ControlFlow.cont x => loop body x
   | ControlFlow.done x => ok x
->>>>>>> upstream/main
 partial_fixpoint
 
 /-!
