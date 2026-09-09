@@ -376,7 +376,7 @@ meta partial def Script.toSyntax (script : Script) : MetaM (Array Syntax.Tactic)
 inductive TargetKind where
 | bind (names : Array (Option Name))
 | switch (info : Bifurcation.Info)
-| result
+| result (dischargeTac : Option (TSyntax `tactic))
 | unknown
 
 /- Smaller helper which we use to check in which situation we are -/
@@ -387,7 +387,7 @@ meta def analyzeTarget : TacticM TargetKind := do
     -- Dive into a registered specification
     let some program ← observing? (Step.getSpecProgram goalTy)
       | trace[Step] "not an application of a registered specification statement: {goalTy}"
-        return .result
+        return .result none
     trace[Step] "application of a registered specification statement about: {program}"
     let e ← Utils.normalizeLetBindings program
     -- Check whether this is a bind
@@ -400,7 +400,7 @@ meta def analyzeTarget : TacticM TargetKind := do
       pure (.switch bfInfo)
     else
       trace[Step] "not a registered spec"
-      pure .result
+      pure (.result (← Step.getDischargeTactic goalTy))
   catch _ =>
     trace[Step] "exception caught"
     pure .unknown
@@ -547,21 +547,22 @@ where
       /- Put everything together — after branches, state is discarded (we can't merge
          divergent e-graphs). Use the pre-branch state going forward. -/
       mkStx branchInfos
-    | .result => do
-      let (info, mainGoal) ← onResult cfg ss
+    | .result dischargeTac => do
+      let (info, mainGoal) ← onResult cfg ss dischargeTac
       let mainGoal ← match mainGoal with
         | none => pure #[]
         | some mainGoal => pure #[(mainGoal, none)]
       pure { info with subgoals := info.subgoals ++ mainGoal }
     | .unknown => do
       trace[Step] "don't know what to do: it may be a terminal goal, attempting to solve it with grind"
-      let (info, mainGoal) ← onResult cfg ss
+      let (info, mainGoal) ← onResult cfg ss none
       let mainGoal ← match mainGoal with
         | none => pure #[]
         | some mainGoal => pure #[(mainGoal, none)]
       pure { info with subgoals := info.subgoals ++ mainGoal }
 
-  onResult (cfg : Config) (ss : Step.StepState) : TacticM (Info × Option MVarId) := do
+  onResult (cfg : Config) (ss : Step.StepState)
+      (dischargeTac : Option (TSyntax `tactic)) : TacticM (Info × Option MVarId) := do
     withTraceNode `Step (fun _ => pure m!"onResult") do
     /- If we encounter `(do f a)` we process it as if it were `(do let res ← f a; return res)`
        since (id = (· >>= pure)) and when we desugar the do block we have that
@@ -579,10 +580,16 @@ where
       trace[Step] "done"
       pure (info, none)
     | some (mvarId, _) =>
-      let (info', mvarId) ← onFinish cfg mvarId
+      let dischargeTactics :=
+        match dischargeTac with
+        | none => []
+        | some tac => [("specification discharge tactic", tac, evalTactic tac)]
+      let (info', mvarId) ← onFinish cfg mvarId dischargeTactics
       pure (info ++ info', mvarId)
 
-  onFinish (cfg : Config) (mvarId : MVarId) : TacticM (Info × Option MVarId) := do
+  onFinish (cfg : Config) (mvarId : MVarId)
+      (extraTacl : List (String × Syntax.Tactic × TacticM Unit) := []) :
+      TacticM (Info × Option MVarId) := do
     withTraceNode `Step (fun _ => pure m!"onFinish") do
     setGoals [mvarId]
     traceGoalWithNode "goal"
@@ -619,7 +626,7 @@ where
             tacStx.resolve stx
           | none => tryFinish tacl
       let finishTactics :=
-        [("grind", ← `(tactic| agrind), grindTac)] ++
+        [("grind", ← `(tactic| agrind), grindTac)] ++ extraTacl ++
         match cfg.preconditionTac with
         | none => []
         | some tac => [("user tactic", tac, evalTactic tac)]
