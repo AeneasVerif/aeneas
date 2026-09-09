@@ -56,15 +56,15 @@ outright, having no possible answer at all.
 This is the whole semantics of the events of `Result`, and the only definition
 in this file that looks at them. -/
 @[reducible]
-def EventSpec : (event : RustEffect.I) → Heap →
-    (RustEffect.O event → Heap → Prop) → Prop
+def EventSpec : (event : RustEffect.Input) → Heap →
+    (RustEffect.Output event → Heap → Prop) → Prop
   | .guardedModify _ pre modify, h, C =>
       ∃ hPre : pre h, C (.up (modify h hPre).1) (modify h hPre).2
   | .fail _, _, _ => False
 
 /-- What an event demands is monotone in what follows. -/
-theorem EventSpec.mono {event : RustEffect.I} {h : Heap}
-    {C C' : RustEffect.O event → Heap → Prop}
+theorem EventSpec.mono {event : RustEffect.Input} {h : Heap}
+    {C C' : RustEffect.Output event → Heap → Prop}
     (hC : ∀ answer h', C answer h' → C' answer h')
     (hEvent : EventSpec event h C) : EventSpec event h C' := by
   cases event with
@@ -180,9 +180,9 @@ theorem spec_fail (error : Error) (Q : IPost α) (h : Heap) :
 
 @[simp]
 theorem spec_fail_vis (error : Error)
-    (k : RustEffect.O (RustEffect.I.fail error) → Result α)
+    (k : RustEffect.Output (RustEffect.Input.fail error) → Result α)
     (Q : IPost α) (h : Heap) :
-    ¬ spec (.vis (RustEffect.I.fail error) k) Q h :=
+    ¬ spec (.vis (RustEffect.Input.fail error) k) Q h :=
   fun hSpec => hSpec.vis_view
 
 /-- Failure is not partially correct either: partial correctness permits
@@ -194,9 +194,9 @@ theorem dspec_fail (error : Error) (Q : IPost α) (h : Heap) :
 
 @[simp]
 theorem dspec_fail_vis (error : Error)
-    (k : RustEffect.O (RustEffect.I.fail error) → Result α)
+    (k : RustEffect.Output (RustEffect.Input.fail error) → Result α)
     (Q : IPost α) (h : Heap) :
-    ¬ dspec (.vis (RustEffect.I.fail error) k) Q h :=
+    ¬ dspec (.vis (RustEffect.Input.fail error) k) Q h :=
   fun hSpec => hSpec.vis_view
 
 /-! ## Hoare triples
@@ -674,7 +674,7 @@ theorem guardedModifyWp_spec {α : Type} {pre : Heap → Prop}
   obtain ⟨hPre, h', -, hModify, hPost⟩ := hWp'
   subst h'
   refine TotalSpec.vis (M := RustEffect.machine)
-    (event := RustEffect.I.guardedModify _ pre modify) ?_
+    (event := RustEffect.Input.guardedModify _ pre modify) ?_
   exact ⟨hPre, .ret hPost⟩
 
 /-- The specification of a guarded modification is what its weakest precondition
@@ -1164,7 +1164,7 @@ theorem forall_unit {p : Unit → Prop} : (∀ value, p value) ↔ p () :=
 
 /-- The tactic `step` runs on the goals it prepares. A no-op on a goal which is
 not a triple. -/
-macro "intro_triple" : tactic =>
+macro (name := intro_triple) "intro_triple" : tactic =>
   `(tactic| iintro_shallow_post)
 
 #register_spec_info {
@@ -1191,7 +1191,7 @@ macro "intro_triple" : tactic =>
       ``entails_emp_postWand_ipure_iff,
       ``entails_emp_ipure_iff, ``entails_refl, ``true_imp_iff
     ]
-    intro_tactic := SpecInfo.tac `(tactic| intro_triple)
+    intro_tactic := some ``intro_triple
     discharge_tactic := some `iframe
     to_mvcgen := none
     liftings := #[
@@ -1225,7 +1225,7 @@ macro "intro_triple" : tactic =>
       ``entails_emp_postWand_ipure_iff,
       ``entails_emp_ipure_iff, ``entails_refl, ``true_imp_iff
     ]
-    intro_tactic := SpecInfo.tac `(tactic| intro_triple)
+    intro_tactic := some ``intro_triple
     discharge_tactic := some `iframe
     to_mvcgen := none
     liftings := #[

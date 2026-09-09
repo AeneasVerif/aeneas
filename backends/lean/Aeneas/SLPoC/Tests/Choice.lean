@@ -16,7 +16,7 @@ The angelic machine is the interesting one, because it is the reading
 existential.  `RustEffect.machine` is nevertheless conjunctive, and
 `angelic_conjunctive_of_subsingleton` is why: the guard of a heap event is a
 *proposition*, so the machine chooses from a subsingleton, which is no choice at
-all.  Widen that guard to a real type — add `choice` to `RustEffect.I` — and
+all.  Widen that guard to a real type — add `choice` to `RustEffect.Input` — and
 `not_angelic_conjunctive` applies: `dspec_admissible` is then false, and with it
 partial correctness of every program defined by `partial_fixpoint`.
 `not_admissible` exhibits that failure concretely.
