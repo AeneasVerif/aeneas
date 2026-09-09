@@ -19,12 +19,9 @@ open Lean Elab Command Term Meta
 otherwise (like a Rust `assert!`). It is emitted by the extraction engine for functions marked
 `#[verify::test]`.
 
-**Note:** `#assert` *compiles and runs* `e` (via `evalTerm`), so it needs the compiled/native code
-of every function `e` transitively calls. Consequently:
-
-* In the IDE (Lean server): always works, both with the module system or without.
-* In files which don't use the module system: works.
-* In a file which uses the module system, built using `lake build`: **does not work**. -/
+**Note:** `#assert` *compiles and runs* `e` (via `evalTerm`), so
+- everything used directly in the expression must be meta-accessible
+- and everything called transitively by the expression must have its code available. -/
 syntax (name := assert) "#assert" term: command
 
 @[command_elab assert]
