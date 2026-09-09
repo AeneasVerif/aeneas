@@ -379,9 +379,7 @@ theorem ITree.le_ret_inj
 
 theorem ITree.div_is_bot :
   bot = (.div : ITree E R) := by
-  unfold bot
-  have dir1 := csup_le (x := .div) (chain_empty (ITree E R)) (by grind [empty_chain])
   apply ITree.le_div_is_div
-  assumption
+  exact bot_le _
 
 namespace Aeneas.Data.Coinductive
