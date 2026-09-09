@@ -1,24 +1,24 @@
 import Aeneas.SLPoC.MutableData.Ptr
 
 /-!
-# The pure-computation notation
+# Pure-computation judgments and notation
 
-`Aeneas.SepLogic.WP` declares `⦃ ⦄` as *notation* for the separation-logic
-triple that owns nothing:
+`Aeneas.SepLogic.WP` defines `spec` and `dspec` as the separation-logic triples
+that own nothing, with ordinary predicate postconditions:
 
 ```
 m ⦃ x => p ⦄     is   ⦃ emp ⦄ m ⦃⇓ x => ⌜p⌝ ⦄     is   triple emp m (fun x => ⌜p⌝)
 m ⦃ x => p ⦄div  is   ⦃ emp ⦄ m ⦃⇓ x => ⌜p⌝ ⦄div  is   dtriple emp m (fun x => ⌜p⌝)
 ```
 
-There is no pure judgment, so there is nothing to bridge and nothing extra to
-register with `step`: the `triple`/`dtriple` entries drive every proof below.
+All four judgments have independent `step` registrations. Pure specifications
+lift to SL specifications. SL specifications lift back only at `emp` with a
+pure postcondition; spatial intermediate assertions require an SL goal.
 
 These tests cover the notation itself, the fact that the two forms are the
-*same proposition*, the interoperability that buys — a pure specification used
-inside a heap proof, a heap proof behind a pure specification, and both under
-one `step*`, in higher-order settings too — and the one thing the design gives
-up.
+*same proposition*, pure specifications used inside heap proofs, and
+higher-order contracts. Heap-manipulating examples use explicit SL triples,
+even when their final postconditions are pure.
 
 The file deliberately does not `open Aeneas`: the old `Aeneas.Std.WP` notation
 is still in scope in this build and declares the identical surface for its own,
@@ -34,7 +34,8 @@ open Aeneas.SepLogic.WP
 
 /-! ## 1. The two forms are the same proposition
 
-`rfl` is the point: these are not two judgments related by a lemma. -/
+`rfl` is the point: the named pure judgments retain the meaning of the former
+notation by definitional equality. -/
 
 example (m : Result Nat) (p : Nat → Prop) :
     (m ⦃ x => p x ⦄) = triple emp m (fun x => ⌜p x⌝) := rfl
@@ -88,8 +89,41 @@ example (P Q : Nat → Prop) :
 #guard_msgs in example : Result.ok 0 ⦃ r => r = 0 ⦄div := by done
 
 /-- error: unsolved goals
-⊢ Result.ok 0 ⦃ x => True ⦄ -/
+⊢ ⦃ emp ⦄
+    Result.ok 0
+    ⦃⇓ x => ⌜True⌝ ⦄ -/
 #guard_msgs in example : triple emp (Result.ok 0) (fun _ => ⌜True⌝) := by done
+
+/-! Opening `WP` does not change how SL triples are printed, even when their
+preconditions are `emp` and their postconditions are pure. -/
+
+/-- error: unsolved goals
+⊢ ⦃ emp ⦄
+    Result.ok 0
+    ⦃⇓ r => ⌜r = 0⌝ ⦄ -/
+#guard_msgs in
+example : ⦃ emp ⦄ Result.ok 0 ⦃⇓ r => ⌜r = 0⌝ ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ⦃ emp ⦄
+    Result.ok 0
+    ⦃⇓ r => ⌜r = 0⌝ ⦄div -/
+#guard_msgs in
+example : dtriple emp (Result.ok 0) (fun r => ⌜r = 0⌝) := by done
+
+/-- error: unsolved goals
+⊢ ⦃ emp ⦄
+    Result.ok (0, 1)
+    ⦃⇓ x y => ⌜x = 0 ∧ y = 1⌝ ⦄ -/
+#guard_msgs in
+example : ⦃ emp ⦄ Result.ok (0, 1) ⦃⇓ x y => ⌜x = 0 ∧ y = 1⌝ ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ⦃ emp ⦄
+    Result.ok (0, 1)
+    ⦃⇓ (x, y) => ⌜x = 0 ∧ y = 1⌝ ⦄div -/
+#guard_msgs in
+example : ⦃ emp ⦄ Result.ok (0, 1) ⦃⇓ (x, y) => ⌜x = 0 ∧ y = 1⌝ ⦄div := by done
 
 /-- error: unsolved goals
 ⊢ Result.ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄ -/
@@ -147,7 +181,9 @@ example : Result.ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄div := by
 
 /-- error: unsolved goals
 p : Ptr ℕ
-⊢ ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ (x, y) => p ↦ x + y ⦄ -/
+⊢ ⦃ p ↦ 1 ⦄
+    Result.ok (0, 1)
+    ⦃⇓ (x, y) => p ↦ x + y ⦄ -/
 #guard_msgs in
 example (p : Ptr Nat) :
     ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ (x, y) =>
@@ -156,7 +192,9 @@ example (p : Ptr Nat) :
 
 /-- error: unsolved goals
 p : Ptr ℕ
-⊢ ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ x y => p ↦ x + y ⦄ -/
+⊢ ⦃ p ↦ 1 ⦄
+    Result.ok (0, 1)
+    ⦃⇓ x y => p ↦ x + y ⦄ -/
 #guard_msgs in
 example (p : Ptr Nat) :
     ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ x y =>
@@ -165,7 +203,9 @@ example (p : Ptr Nat) :
 
 /-- error: unsolved goals
 p : Ptr ℕ
-⊢ ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ x y => p ↦ x + y ⦄div -/
+⊢ ⦃ p ↦ 1 ⦄
+    Result.ok (0, 1)
+    ⦃⇓ x y => p ↦ x + y ⦄div -/
 #guard_msgs in
 example (p : Ptr Nat) :
     ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ x y =>
@@ -174,7 +214,9 @@ example (p : Ptr Nat) :
 
 /-- error: unsolved goals
 p : Ptr ℕ
-⊢ ⦃ p ↦ 3 ⦄ Result.ok ((0, 1), 2) ⦃⇓ (a, b) c => p ↦ a + b + c ⦄ -/
+⊢ ⦃ p ↦ 3 ⦄
+    Result.ok ((0, 1), 2)
+    ⦃⇓ (a, b) c => p ↦ a + b + c ⦄ -/
 #guard_msgs in
 example (p : Ptr Nat) :
     ⦃ p ↦ 3 ⦄ Result.ok ((0, 1), 2) ⦃⇓ (a, b) c =>
@@ -183,7 +225,9 @@ example (p : Ptr Nat) :
 
 /-- error: unsolved goals
 p : Ptr ℕ
-⊢ ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ a b c => p ↦ a + b + c ⦄ -/
+⊢ ⦃ p ↦ 3 ⦄
+    Result.ok (0, 1, 2)
+    ⦃⇓ a b c => p ↦ a + b + c ⦄ -/
 #guard_msgs in
 example (p : Ptr Nat) :
     ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ a b c =>
@@ -192,7 +236,9 @@ example (p : Ptr Nat) :
 
 /-- error: unsolved goals
 p : Ptr ℕ
-⊢ ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ a (b, c) => p ↦ a + b + c ⦄ -/
+⊢ ⦃ p ↦ 3 ⦄
+    Result.ok (0, 1, 2)
+    ⦃⇓ a (b, c) => p ↦ a + b + c ⦄ -/
 #guard_msgs in
 example (p : Ptr Nat) :
     ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ a (b, c) =>
@@ -201,7 +247,9 @@ example (p : Ptr Nat) :
 
 /-- error: unsolved goals
 p : Ptr ℕ
-⊢ ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ (a, (b, c)) => p ↦ a + b + c ⦄ -/
+⊢ ⦃ p ↦ 3 ⦄
+    Result.ok (0, 1, 2)
+    ⦃⇓ (a, (b, c)) => p ↦ a + b + c ⦄ -/
 #guard_msgs in
 example (p : Ptr Nat) :
     ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ (a, (b, c)) =>
@@ -279,9 +327,9 @@ def incrPair (value : Nat) : Result Nat := do
 /- Registered postcondition uncurrying runs before `intro_tactic`, which then exposes
 both tuple components and both pure hypotheses. -/
 example (value : Nat) :
-    ⦃ emp ⦄ incrPair value ⦃⇓ result =>
-      ⌜result = value + (value + 1) + 1⌝
-    ⦄ := by
+    ⦃ emp ⦄
+      incrPair value
+    ⦃⇓ result => ⌜result = value + (value + 1) + 1⌝ ⦄ := by
   unfold incrPair
   step as ⟨ first, second, hFirst, hSecond ⟩
   guard_hyp hFirst : first = value
@@ -292,14 +340,18 @@ example (value : Nat) :
 
 /-- error: unsolved goals
 P : IProp
-⊢ ⦃ P ⦄ Result.ok 0 ⦃⇓ value => P ∗ ⌜value = 0⌝ ⦄ -/
+⊢ ⦃ P ⦄
+    Result.ok 0
+    ⦃⇓ value => P ∗ ⌜value = 0⌝ ⦄ -/
 #guard_msgs in
 example (P : IProp) :
     triple P (Result.ok 0) (fun value => P ∗ ⌜value = 0⌝) := by done
 
 /-- error: unsolved goals
 P : IProp
-⊢ ⦃ P ⦄ Result.ok 0 ⦃⇓ value => P ∗ ⌜value = 0⌝ ⦄div -/
+⊢ ⦃ P ⦄
+    Result.ok 0
+    ⦃⇓ value => P ∗ ⌜value = 0⌝ ⦄div -/
 #guard_msgs in
 example (P : IProp) :
     dtriple P (Result.ok 0) (fun value => P ∗ ⌜value = 0⌝) := by done
@@ -308,7 +360,9 @@ example (P : IProp) :
 P : IProp
 Q : IPost ℕ
 m : Result ℕ
-⊢ ⦃ P ⦄ m ⦃⇓ Q ⦄ -/
+⊢ ⦃ P ⦄
+    m
+    ⦃⇓ Q ⦄ -/
 #guard_msgs in
 example (P : IProp) (Q : IPost Nat) (m : Result Nat) :
     triple P m Q := by done
@@ -349,9 +403,8 @@ def makeCounter : Result (Unit → Result Nat) :=
 theorem makeCounter.spec :
   ⦃ emp ⦄ makeCounter ⦃⇓ increment =>
     ∃ p : Ptr Nat,
-      p ↦ 0 ∗ ⌜∀ n, ⦃ p ↦ n ⦄ increment () ⦃⇓ value =>
-          p ↦ (n + 1) ∗ ⌜value = n + 1⌝
-        ⦄⌝
+      p ↦ 0 ∗
+      ⌜∀ n, ⦃ p ↦ n ⦄ increment () ⦃⇓ value => p ↦ (n + 1) ∗ ⌜value = n + 1⌝ ⦄⌝
   ⦄ := by
   unfold makeCounter
   apply triple_bind' (alloc.spec 0)
@@ -371,7 +424,7 @@ def countToFive : Result Nat :=
     increment ()
 
 theorem countToFive.spec :
-    countToFive ⦃ value => value = 5 ⦄ := by
+    ⦃ emp ⦄ countToFive ⦃⇓ value => ⌜value = 5⌝⦄ := by
   unfold countToFive
   apply triple_bind' makeCounter.spec
   intro increment
@@ -432,8 +485,7 @@ example (x : Nat) (h : Result.ok x ⦃ r => r = 3 ⦄) : x = 3 :=
 
 /-! ## 5. Interoperability
 
-Every proof below is driven by `step`/`step*` through the `triple`/`dtriple`
-registrations alone. -/
+The four registrations and their liftings drive these `step`/`step*` proofs. -/
 
 namespace Ex
 
@@ -454,8 +506,8 @@ example (x : Nat) : (do let p ← bumps x; bump p.1) ⦃ r => r = x + 2 ⦄ := b
 
 /-! ### A pure specification inside a heap proof
 
-No lifting and no bridging lemma: `bump.spec` *is* a triple, so `step`'s
-ramified-frame rule carries `p ↦ v` around it. -/
+The pure-to-SL lifting exposes `bump.spec` as a triple, so `step`'s ramified-frame
+rule carries `p ↦ v` around it. -/
 
 def bumpCell (p : Ptr Nat) : Result Unit := do
   let v ← read p
@@ -468,12 +520,10 @@ theorem bumpCell.spec (p : Ptr Nat) (v : Nat) :
   unfold bumpCell
   step*
 
-/-! ### A heap proof behind a pure specification
+/-! ### A heap-manipulating implementation with a pure postcondition
 
-`bumpBoxed` allocates, mutates and frees; its interface owns nothing, so its
-specification is written in the pure notation — and that is a theorem, not a
-wish, because the pure notation is a triple.  Under a separate pure judgment
-the same statement is *false* (§3). -/
+`bumpBoxed` allocates, mutates and frees. Its proof uses an SL triple so that
+intermediate postconditions can carry the allocated cell. -/
 
 def bumpBoxed (v : Nat) : Result Nat := do
   let p ← alloc v
@@ -483,11 +533,12 @@ def bumpBoxed (v : Nat) : Result Nat := do
   pure w
 
 @[step]
-theorem bumpBoxed.spec (v : Nat) : bumpBoxed v ⦃ r => r = v + 1 ⦄ := by
+theorem bumpBoxed.spec (v : Nat) :
+    ⦃ emp ⦄ bumpBoxed v ⦃⇓ r => ⌜r = v + 1⌝⦄ := by
   unfold bumpBoxed
   step*
 
-/-! ### Both directions in one `step*` -/
+/-! ### Spatial and pure calls in one SL proof -/
 
 def mixedCall (p : Ptr Nat) : Result Nat := do
   bumpCell p
@@ -500,27 +551,25 @@ theorem mixedCall.spec (p : Ptr Nat) (v : Nat) :
   unfold mixedCall
   step*
 
-/-- A caller that owns nothing keeps a pure specification, though two of its
-three calls allocate. -/
+/-- A caller that owns nothing can still use SL triples for its allocating
+callees and lift the pure specification of `bump` between them. -/
 def pureCall (x : Nat) : Result Nat := do
   let y ← bumpBoxed x
   let z ← bump y
   bumpBoxed z
 
-example (x : Nat) : pureCall x ⦃ r => r = x + 3 ⦄ := by
+example (x : Nat) : ⦃ emp ⦄ pureCall x ⦃⇓ r => ⌜r = x + 3⌝⦄ := by
   unfold pureCall
-  step
-  step
-  step
+  step*
 
 /-! ## 6. Total and partial correctness
 
-`⦃ ⦄div` is `dtriple` at `emp`, so the registered `triple → dtriple` lifting
-crosses the pure/heap boundary too. -/
+`⦃ ⦄div` denotes `WP.dspec`, defined by `dtriple` at `emp`. The registered
+total-to-partial liftings cross the pure/heap boundary too. -/
 
 example (x : Nat) : bump x ⦃ y => y = x + 1 ⦄div := by step*
 
-example (v : Nat) : bumpBoxed v ⦃ r => r = v + 1 ⦄div := by step*
+example (v : Nat) : ⦃ emp ⦄ bumpBoxed v ⦃⇓ r => ⌜r = v + 1⌝⦄div := by step*
 
 example (p : Ptr Nat) (v : Nat) :
     ⦃ p ↦ v ⦄ bumpCell p ⦃⇓ p ↦ v + 1⦄div :=
@@ -540,13 +589,14 @@ theorem callWith.spec_pure (f : Nat → Result Nat) (x : Nat) (post : Nat → Pr
     callWith f x ⦃ y => post y ⦄ := by
   unfold callWith; exact hf
 
-/-- Met by a closure that really is pure ... -/
+/-- A pure closure meets the pure contract. -/
 example (x : Nat) : callWith bump x ⦃ y => y = x + 1 ⦄ := by
   apply callWith.spec_pure
   step
 
-/-- ... and by one that allocates, mutates and frees. -/
-example (x : Nat) : callWith bumpBoxed x ⦃ y => y = x + 1 ⦄ := by
+/-- A callee's SL triple at `emp` with a pure postcondition also meets the
+pure contract; its spatial implementation is already verified separately. -/
+example (x : Nat) : ⦃ emp ⦄ callWith bumpBoxed x ⦃⇓ y => ⌜y = x + 1⌝⦄ := by
   apply callWith.spec_pure
   step
 
@@ -601,8 +651,8 @@ example (p : Ptr Nat) (v : Nat) :
     ⦃ p ↦ v ⦄ updateWith bump p ⦃⇓ p ↦ v + 1⦄ := by
   step* +inferPost
 
-/-- The crossing point: `bumpBoxed` allocates, mutates and frees, yet it meets
-the *pure* contract of `updateWith.spec`. -/
+/-- The already-proved SL specification of `bumpBoxed` supplies the pure
+callback contract, without opening its spatial implementation in a pure goal. -/
 example (p : Ptr Nat) (v : Nat) :
     ⦃ p ↦ v ⦄ updateWith bumpBoxed p ⦃⇓ p ↦ v + 1⦄ := by
   step* +inferPost
@@ -619,25 +669,23 @@ example (p : Ptr Nat) (v : Nat) :
 
 end Ex
 
-/-! ## 8. What the notation gives up
+/-! ## 8. Recovering program equality
 
-A pure-shaped triple no longer determines the program: `emp` owns nothing, but
-an event that *needs* nothing is still permitted, and such an event is not a
-`Result.ok`.  `triple_emp_eq_ok` recovers the old equivalence from the extra
-hypothesis that the program performs no heap event. -/
+An SL triple at `emp` does not determine the program: an event that needs no
+owned resources is still permitted. `triple_emp_eq_ok` determines the returned
+value when the program is known to perform no heap event. -/
 
-/-- `alloc` satisfies a pure-shaped triple ... -/
-example : alloc (0 : Nat) ⦃ _ => True ⦄ := by
+/-- Allocation satisfies an SL triple owning nothing initially. -/
+example : ⦃ emp ⦄ alloc (0 : Nat) ⦃⇓ _ => ⌜True⌝⦄ := by
   step*
 
-/-- ... while not being a `Result.ok`. -/
+/-- But it is not a `Result.ok`. -/
 example : ¬ ∃ q, alloc (0 : Nat) = Result.ok q := by
   rintro ⟨q, hq⟩
   have hNot : ¬ Aeneas.Std.WP.spec (alloc (0 : Nat)) (fun _ => True) := by
     simp [alloc, allocArray, Result.guardedModify]
   exact hNot (Aeneas.Std.WP.exists_imp_spec ⟨q, hq, trivial⟩)
 
-/-- And the recovery, on a program that performs no heap event. -/
 example (x : Nat) : ∃ y, Ex.bump x = Result.ok y ∧ y = x + 1 := by
   obtain ⟨y, hy, hp⟩ := triple_emp_eq_ok (Q := fun y => ⌜y = x + 1⌝)
     (by unfold Ex.bump; exact HeapFree.ok _) (Ex.bump.spec x)
@@ -650,8 +698,8 @@ They confirm that the same notation, tuple destructuring, precedence and
 higher-order postconditions elaborate against the triple-based notation.
 
 The old proofs that explicitly call `spec_bind`, `spec_mono`, `qimp_spec` and
-the related `imp` helpers are necessarily judgment-specific.  Their statements
-remain unchanged; their proofs use the triple registration through `step`.
+the related `imp` helpers are necessarily judgment-specific. Their statements
+remain unchanged; their proofs use the four registrations through `step`.
 -/
 
 namespace LegacyWPExamples

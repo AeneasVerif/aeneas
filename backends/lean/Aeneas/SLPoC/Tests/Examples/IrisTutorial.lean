@@ -210,7 +210,7 @@ def prog : Result Int := do
 
 @[step]
 theorem prog_spec :
-    (prog) ⦃⇓ v => v = 3⦄ := by
+    ⦃ emp ⦄ prog ⦃⇓ v => ⌜v = 3⌝⦄ := by
   unfold prog
   step*
 
@@ -263,7 +263,7 @@ def casSequential : Result (Option (Int × Int)) := do
       pure none
 
 theorem cas_sequential_spec :
-    (casSequential) ⦃⇓ result => result = some (5, 7)⦄ := by
+    ⦃ emp ⦄ casSequential ⦃⇓ result => ⌜result = some (5, 7)⌝⦄ := by
   unfold casSequential
   step*
 
@@ -309,17 +309,17 @@ def progAdd2 : Result Int := do
   pure (value + 2)
 
 theorem prog_add_2_spec :
-    (progAdd2) ⦃⇓ v => v = 5⦄ := by
+    ⦃ emp ⦄ progAdd2 ⦃⇓ v => ⌜v = 5⌝⦄ := by
   unfold progAdd2
   step*
 
 theorem prog_add_2_spec' :
-    (progAdd2) ⦃⇓ v => v = 5⦄ := by
+    ⦃ emp ⦄ progAdd2 ⦃⇓ v => ⌜v = 5⌝⦄ := by
   unfold progAdd2
   step*
 
 theorem prog_add_2_spec'' :
-    (progAdd2) ⦃⇓ v => v = 5⦄ :=
+    ⦃ emp ⦄ progAdd2 ⦃⇓ v => ⌜v = 5⌝⦄ :=
   prog_add_2_spec'
 
 def swap (x y : Ptr α) : Result Unit := do
