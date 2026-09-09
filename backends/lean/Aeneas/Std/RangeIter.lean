@@ -362,6 +362,7 @@ theorem core.iter.adapters.enumerate.IteratorEnumerate.next_some_spec
   have hadd := @UScalar.add_equiv UScalarTy.Usize self.count (1#usize)
   split at hadd
   · rename_i z heq
+    simp at heq
     obtain ⟨_, hval, _⟩ := hadd
     simp [heq, bind_tc_ok, spec_ok, uncurry', hval]
   · exfalso; simp [UScalar.inBounds] at hadd; scalar_tac
@@ -453,6 +454,7 @@ theorem core.iter.adapters.take.IteratorTake.next_ChunksExact_spec {T : Type}
       split at h
       next z heq =>
         obtain ⟨_, hval, _⟩ := h
+        simp at heq
         exact ⟨z, heq, by scalar_tac⟩
       next heq =>
         exfalso; scalar_tac

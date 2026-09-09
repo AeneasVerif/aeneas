@@ -55,7 +55,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
         | _ -> ctx
       in
       let f = def.f in
-      let fun_id = (Pure.FunId (FRegular f.def_id), f.loop_id) in
+      let fun_id = (Pure.FunId f.def_id, f.loop_id) in
       ctx_add f.item_meta.span (FunId (FromLlbc fun_id)) info.extract_name ctx
   | None ->
       (* Not builtin *)
@@ -870,7 +870,7 @@ and extract_array_or_slice (span : Meta.span) (ctx : extraction_ctx)
     (* Print the parameters *)
     F.pp_print_space fmt ();
     extract_const_generic span ctx fmt ~inside:true
-      (CgValue (VScalar (UnsignedScalar (Usize, Z.of_int (List.length args)))));
+      (CgValue (VScalar (UnsignedInteger (Usize, Z.of_int (List.length args)))));
     F.pp_print_space fmt ();
     F.pp_print_string fmt "[";
     (* Close the box for `Array.mk T N [` *)
@@ -999,7 +999,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       let explicit =
         try
           match fun_id with
-          | FromLlbc (FunId (FRegular fun_decl_id), lp_id) -> begin
+          | FromLlbc (FunId fun_decl_id, lp_id) -> begin
               (* Lookup the function to retrieve the signature information *)
               let trans_fun =
                 [%silent_unwrap] span (ctx_lookup_fun_decl_info ctx fun_decl_id)
@@ -1027,17 +1027,17 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
               let explicit = meth.signature.explicit_info in
               Some (adjust_explicit_info explicit true generics)
             end
-          | FromLlbc (FunId (FBuiltin aid), _) ->
-              Some
-                (Builtin.BuiltinFunIdMap.find aid ctx.builtin_sigs)
-                  .explicit_info
-          | Pure (UpdateAtIndex Array) ->
+          | Pure
+              (UpdateAtIndex Array | IndexAtIndex Array | IndexMutAtIndex Array)
+            ->
               Some
                 {
                   explicit_types = [ Implicit ];
                   explicit_const_generics = [ Implicit ];
                 }
-          | Pure (UpdateAtIndex Slice) ->
+          | Pure
+              (UpdateAtIndex Slice | IndexAtIndex Slice | IndexMutAtIndex Slice)
+            ->
               Some
                 { explicit_types = [ Implicit ]; explicit_const_generics = [] }
           | Pure Discriminant ->
@@ -1066,7 +1066,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       *)
       let types_explicit_traits =
         match fun_id with
-        | FromLlbc (FunId (FRegular id), _) ->
+        | FromLlbc (FunId id, _) ->
             fun_builtin_filter_types_trait_clauses (ty_to_string ctx)
               (trait_ref_to_string ctx) id generics.types explicit
               generics.trait_refs ctx
@@ -3779,14 +3779,9 @@ let extract_unit_test_if_marked (ctx : extraction_ctx) (fmt : F.formatter)
           if sg.inputs <> [] then (
             F.pp_print_space fmt ();
             F.pp_print_string fmt "()");
+          F.pp_print_string fmt ").reducesTo";
           F.pp_print_space fmt ();
-          F.pp_print_string fmt "==";
-          F.pp_print_space fmt ();
-          let success =
-            ctx_get_variant def.item_meta.span (TBuiltin TResult) result_ok_id
-              ctx
-          in
-          F.pp_print_string fmt (success ^ " ())")
+          F.pp_print_string fmt "()"
       | HOL4 ->
           F.pp_print_string fmt "val _ = assert_ok (";
           F.pp_print_string fmt "“";

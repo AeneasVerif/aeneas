@@ -150,7 +150,7 @@ let eval_assertion (config : config) (span : Meta.span) (assertion : assertion)
   (* Evaluate the operand *)
   let v, ctx, cf_eval_op = eval_operand config span assertion.cond ctx in
   (* Evaluate the assertion *)
-  [%sanity_check] span (v.ty = TLiteral TBool);
+  [%sanity_check] span (v.ty = TScalar TBool);
   let st, cf_eval_assert =
     (* We make a choice here: we could completely decouple the concrete and
      * symbolic executions here but choose not to. In the case where we
@@ -163,7 +163,7 @@ let eval_assertion (config : config) (span : Meta.span) (assertion : assertion)
         eval_assertion_concrete config span assertion ctx
     | VSymbolic sv ->
         [%sanity_check] span (config.mode = SymbolicMode);
-        [%sanity_check] span (sv.sv_ty = TLiteral TBool);
+        [%sanity_check] span (sv.sv_ty = TScalar TBool);
         (* We continue the execution as if the test had succeeded, and thus
          * perform the symbolic expansion: sv ~~> true.
          * We will of course synthesize an assertion in the generated code
@@ -539,7 +539,7 @@ let mk_symbolic_fun_call_inst (span : Meta.span) (ctx : eval_ctx)
 let eval_function_call_symbolic_inst (span : Meta.span) (func : fn_ptr)
     (ctx : eval_ctx) : symbolic_fun_call_inst =
   match func.kind with
-  | FunId (FRegular fid) ->
+  | Fun fid ->
       let tr_self = UnknownTrait __FUNCTION__ in
       (* Lookup the declaration *)
       let def = ctx_lookup_fun_decl span ctx fid in
@@ -547,35 +547,6 @@ let eval_function_call_symbolic_inst (span : Meta.span) (func : fn_ptr)
       mk_symbolic_fun_call_inst span ctx ~call_kind:func.kind
         ~call_generics:func.generics ~call_span:def.item_meta.span
         ~inst_generics:func.generics ~tr_self signature
-  | FunId (FBuiltin fid) ->
-      (* In symbolic mode, the behavior of a function call is completely
-         defined by the signature of the function: we thus simply generate
-         correctly instantiated signatures, and delegate the work to an
-         auxiliary function *)
-      let sg = Builtin.get_builtin_fun_sig fid in
-      let generics =
-        match fid with
-        (* The primitive model does not depend on the [Copy] proof carried by
-           the array-repeat operation. *)
-        | ArrayRepeat -> { func.generics with trait_refs = [] }
-        | _ -> func.generics
-      in
-      (* Sanity check: make sure the type parameters don't contain mutable
-         borrows, which is a current limitation of our synthesis. *)
-      [%classert] span
-        (List.for_all
-           (fun ty -> not (ty_has_mut_borrows ctx.type_ctx.type_infos ty))
-           func.generics.types)
-        (lazy
-          ("Instantiating the type parameters of a function with types \
-            containing mutable borrows is currently not allowed ("
-         ^ fn_ptr_to_string ctx func ^ ")"));
-
-      (* There shouldn't be any reference to Self *)
-      let tr_self = UnknownTrait __FUNCTION__ in
-      mk_symbolic_fun_call_inst span ctx ~call_kind:func.kind
-        ~call_generics:generics ~call_span:span ~inst_generics:generics ~tr_self
-        sg
   | TraitMethod (trait_ref, method_id) ->
       (* Check that there are no bound regions *)
       [%cassert] span
@@ -923,19 +894,17 @@ and eval_switch_raw (config : config) (span : Meta.span) (data : switch_data)
       let ctx0 = ctx in
       let ctx_resl, cf_switch =
         match (op_v.value, op_v.ty) with
-        | VLiteral (VBool b), TLiteral TBool ->
-            let target =
-              branch_for_case (fun case -> case.kind = CLiteral (VBool b))
-            in
+        | VLiteral (VBool b), TScalar TBool ->
+            let target = branch_for_case (fun case -> case.kind = CBool b) in
             eval_block config target ctx
-        | VSymbolic sv, TLiteral TBool ->
+        | VSymbolic sv, TScalar TBool ->
             (* Expand the symbolic boolean, and continue by evaluating
                the branches *)
             let true_block =
-              branch_for_case (fun case -> case.kind = CLiteral (VBool true))
+              branch_for_case (fun case -> case.kind = CBool true)
             in
             let false_block =
-              branch_for_case (fun case -> case.kind = CLiteral (VBool false))
+              branch_for_case (fun case -> case.kind = CBool false)
             in
             let (true_ctx, false_ctx), cf_bool =
               expand_symbolic_bool span sv
@@ -964,22 +933,20 @@ and eval_switch_raw (config : config) (span : Meta.span) (data : switch_data)
                    and simply duplicate the code *)
                 (ctx_resl, cc)
             else (ctx_resl, cc)
-        | VLiteral (VScalar sv), TLiteral ((TInt _ | TUInt _) as int_ty) ->
+        | VLiteral (VScalar sv), TScalar (TInteger _ as int_ty) ->
             (* Sanity check *)
-            [%sanity_check] span (Scalars.get_ty sv = literal_as_integer int_ty);
+            [%sanity_check] span (Scalars.get_ty sv = scalar_as_integer int_ty);
             (* Find the branch *)
             let target =
-              branch_for_case (fun case -> case.kind = CLiteral (VScalar sv))
+              branch_for_case (fun case -> case.kind = CInteger sv)
             in
             eval_block config target ctx
-        | VSymbolic sv, TLiteral ((TInt _ | TUInt _) as int_ty) ->
+        | VSymbolic sv, TScalar (TInteger _ as int_ty) ->
             let values, target_blocks =
               List.split
                 (List.map
                    (fun (case, branch_id) ->
-                     ( literal_as_scalar
-                         (TypesUtils.constant_expr_as_literal case),
-                       branch branch_id ))
+                     (TypesUtils.constant_expr_as_integer case, branch branch_id))
                    data.branches)
             in
             let otherwise =
@@ -991,8 +958,7 @@ and eval_switch_raw (config : config) (span : Meta.span) (data : switch_data)
             let (ctx_branches, ctx_otherwise), cf_int =
               expand_symbolic_int span sv
                 (S.mk_opt_place_from_op span op ctx)
-                (literal_as_integer int_ty)
-                values ctx
+                (scalar_as_integer int_ty) values ctx
             in
             (* Evaluate the branches: first the "regular" branches *)
             let resl_branches =
@@ -1272,7 +1238,7 @@ and eval_function_call_concrete (config : config) (span : Meta.span)
   | FnOpDynamic _ -> [%craise] span "Function pointers are not supported yet"
   | FnOpRegular func -> (
       match func.kind with
-      | FunId (FRegular fid) ->
+      | Fun fid ->
           let def = ctx_lookup_fun_decl span ctx fid in
           if def.item_meta.diagnostic_item = Some "box_new" then
             let ctx, cc =
@@ -1280,7 +1246,6 @@ and eval_function_call_concrete (config : config) (span : Meta.span)
             in
             ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span cc)
           else eval_non_builtin_function_call_concrete config span fid call ctx
-      | FunId (FBuiltin _) -> [%craise] span "Unimplemented"
       | TraitMethod _ -> [%craise] span "Unimplemented")
 
 and eval_function_call_symbolic (config : config) (span : Meta.span)

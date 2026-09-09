@@ -100,9 +100,9 @@ let ty_to_string (ctx : tc_ctx) (x : ty) : string =
 
 let check_literal (span : Meta.span) (v : literal) (ty : literal_type) : unit =
   match (ty, v) with
-  | TInt int_ty, VScalar (SignedScalar (ty, _)) ->
+  | TInt int_ty, VScalar (SignedInteger (ty, _)) ->
       [%sanity_check] span (int_ty = ty)
-  | TUInt int_ty, VScalar (UnsignedScalar (ty, _)) ->
+  | TUInt int_ty, VScalar (UnsignedInteger (ty, _)) ->
       [%sanity_check] span (int_ty = ty)
   | TBool, VBool _ | TChar, VChar _ -> ()
   | _ -> [%craise] span "Inconsistent type"

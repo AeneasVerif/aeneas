@@ -117,7 +117,7 @@ and id =
             def CONST : Result u32 := ok CONST.val
           ]} *)
   | FunId of fun_id
-  | TerminationMeasureId of (A.fun_id * (LoopId.id * bool) option)
+  | TerminationMeasureId of (A.fun_decl_id * (LoopId.id * bool) option)
       (** The definition which provides the decreases/termination measure. We
           insert calls to this clause to prove/reason about termination: the
           body of those clauses must be defined by the user, in the proper
@@ -133,7 +133,7 @@ and id =
            }
            {- in Lean, this is the content of the [termination_by] clause. }
           } *)
-  | DecreasesProofId of (A.fun_id * (LoopId.id * bool) option)
+  | DecreasesProofId of (A.fun_decl_id * (LoopId.id * bool) option)
       (** The definition which provides the decreases/termination proof. We
           insert calls to this clause to prove/reason about termination: the
           body of those clauses must be defined by the user, in the proper
@@ -402,7 +402,7 @@ let allow_collisions (id : id) : bool =
   | TraitTypeId _
   | TraitConstId _
   | TraitMethodId _ -> !Config.record_fields_short_names
-  | FunId (Pure _ | FromLlbc (FunId (FBuiltin _), _)) ->
+  | FunId (Pure _) ->
       (* We map several builtin functions to the same id *)
       true
   | _ -> false
@@ -486,7 +486,6 @@ type names_map_init = {
   builtin_adts : (builtin_ty * string) list;
   builtin_structs : (builtin_ty * string) list;
   builtin_variants : (builtin_ty * VariantId.id * string) list;
-  builtin_llbc_functions : (A.builtin_fun_id * string) list;
   builtin_pure_functions : (pure_builtin_fun_id * string) list;
 }
 
@@ -593,7 +592,6 @@ type extraction_ctx = {
   trans_types : Pure.type_decl Pure.TypeDeclId.Map.t;
   trans_funs : pure_fun_translation A.FunDeclId.Map.t;
   trans_globals : Pure.global_decl Pure.GlobalDeclId.Map.t;
-  builtin_sigs : Pure.fun_sig Builtin.BuiltinFunIdMap.t;
   functions_with_decreases_clause : PureUtils.FunLoopIdSet.t;
   trans_trait_decls : Pure.trait_decl Pure.TraitDeclId.Map.t;
   trans_trait_impls : Pure.trait_impl Pure.TraitImplId.Map.t;
@@ -661,8 +659,8 @@ let type_id_to_string (ctx : extraction_ctx) =
 let global_decl_id_to_string (ctx : extraction_ctx) =
   PrintPure.global_decl_id_to_string (extraction_ctx_to_fmt_env ctx)
 
-let llbc_fun_id_to_string (ctx : extraction_ctx) =
-  PrintPure.llbc_fun_id_to_string (extraction_ctx_to_fmt_env ctx)
+let fun_decl_id_to_string (ctx : extraction_ctx) =
+  PrintPure.fun_decl_id_to_string (extraction_ctx_to_fmt_env ctx)
 
 let fun_id_to_string (ctx : extraction_ctx) =
   PrintPure.regular_fun_id_to_string (extraction_ctx_to_fmt_env ctx)
@@ -688,7 +686,7 @@ let id_to_string (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
       "@pureGlobalValue(" ^ global_decl_id_to_string ctx gid ^ ")"
   | FunId fid -> fun_id_to_string ctx fid
   | DecreasesProofId (fid, lid) ->
-      let fun_name = llbc_fun_id_to_string ctx fid in
+      let fun_name = fun_decl_id_to_string ctx fid in
       let loop =
         match lid with
         | None -> ""
@@ -698,7 +696,7 @@ let id_to_string (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
       in
       "decreases proof for function: " ^ fun_name ^ loop
   | TerminationMeasureId (fid, lid) ->
-      let fun_name = llbc_fun_id_to_string ctx fid in
+      let fun_name = fun_decl_id_to_string ctx fid in
       let loop =
         match lid with
         | None -> ""
@@ -822,7 +820,7 @@ let ctx_get_function (span : Meta.span) (id : fun_id) (ctx : extraction_ctx) :
 
 let ctx_get_local_function (span : Meta.span) (id : A.FunDeclId.id)
     (lp : (LoopId.id * bool) option) (ctx : extraction_ctx) : string =
-  ctx_get_function span (FromLlbc (FunId (FRegular id), lp)) ctx
+  ctx_get_function span (FromLlbc (Pure.FunId id, lp)) ctx
 
 let ctx_get_type (span : Meta.span option) (id : type_id) (ctx : extraction_ctx)
     : string =
@@ -909,11 +907,11 @@ let ctx_get_variant (span : Meta.span) (def_id : type_id)
 
 let ctx_get_decreases_proof (span : Meta.span) (def_id : A.FunDeclId.id)
     (loop_id : (LoopId.id * bool) option) (ctx : extraction_ctx) : string =
-  ctx_get (Some span) (DecreasesProofId (FRegular def_id, loop_id)) ctx
+  ctx_get (Some span) (DecreasesProofId (def_id, loop_id)) ctx
 
 let ctx_get_termination_measure (span : Meta.span) (def_id : A.FunDeclId.id)
     (loop_id : (LoopId.id * bool) option) (ctx : extraction_ctx) : string =
-  ctx_get (Some span) (TerminationMeasureId (FRegular def_id, loop_id)) ctx
+  ctx_get (Some span) (TerminationMeasureId (def_id, loop_id)) ctx
 
 let ctx_lookup_fun_decl_info (ctx : extraction_ctx) (id : A.FunDeclId.id) :
     pure_fun_translation option =
@@ -1212,37 +1210,6 @@ let builtin_variants () : (builtin_ty * VariantId.id * string) list =
         (* No Fuel::Succ on purpose *)
       ]
 
-let builtin_llbc_functions () : (A.builtin_fun_id * string) list =
-  match backend () with
-  | FStar | Coq | HOL4 ->
-      [
-        (ArrayToSliceShared, "array_to_slice");
-        (ArrayToSliceMut, "array_to_slice_mut");
-        (ArrayRepeat, "array_repeat");
-        ( Index { is_array = true; mutability = RShared; is_range = false },
-          "array_index_usize" );
-        ( Index { is_array = true; mutability = RMut; is_range = false },
-          "array_index_mut_usize" );
-        ( Index { is_array = false; mutability = RShared; is_range = false },
-          "slice_index_usize" );
-        ( Index { is_array = false; mutability = RMut; is_range = false },
-          "slice_index_mut_usize" );
-      ]
-  | Lean ->
-      [
-        (ArrayToSliceShared, "Array.to_slice");
-        (ArrayToSliceMut, "Array.to_slice_mut");
-        (ArrayRepeat, "Array.repeat");
-        ( Index { is_array = true; mutability = RShared; is_range = false },
-          "Array.index_usize" );
-        ( Index { is_array = true; mutability = RMut; is_range = false },
-          "Array.index_mut_usize" );
-        ( Index { is_array = false; mutability = RShared; is_range = false },
-          "Slice.index_usize" );
-        ( Index { is_array = false; mutability = RMut; is_range = false },
-          "Slice.index_mut_usize" );
-      ]
-
 let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
   match backend () with
   | FStar ->
@@ -1254,6 +1221,10 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (FuelEqZero, "is_zero");
         (UpdateAtIndex Slice, "slice_update_usize");
         (UpdateAtIndex Array, "array_update_usize");
+        (IndexAtIndex Slice, "slice_index_usize");
+        (IndexAtIndex Array, "array_index_usize");
+        (IndexMutAtIndex Slice, "slice_index_mut_usize");
+        (IndexMutAtIndex Array, "array_index_mut_usize");
         (ToResult, "return");
       ]
   | Coq ->
@@ -1264,6 +1235,10 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (Assert, "massert");
         (UpdateAtIndex Slice, "slice_update_usize");
         (UpdateAtIndex Array, "array_update_usize");
+        (IndexAtIndex Slice, "slice_index_usize");
+        (IndexAtIndex Array, "array_index_usize");
+        (IndexMutAtIndex Slice, "slice_index_mut_usize");
+        (IndexMutAtIndex Array, "array_index_mut_usize");
         (ToResult, "return_");
       ]
   | Lean ->
@@ -1275,6 +1250,10 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (Discriminant, "read_discriminant");
         (UpdateAtIndex Slice, "Slice.update");
         (UpdateAtIndex Array, "Array.update");
+        (IndexAtIndex Slice, "Slice.index_usize");
+        (IndexAtIndex Array, "Array.index_usize");
+        (IndexMutAtIndex Slice, "Slice.index_mut_usize");
+        (IndexMutAtIndex Array, "Array.index_mut_usize");
         (ToResult, "lift");
         (ResultUnwrapMut, "core.result.Result.unwrap.mut");
         (GetTarget, "get_target");
@@ -1288,6 +1267,10 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (Assert, "massert");
         (UpdateAtIndex Slice, "slice_update_usize");
         (UpdateAtIndex Array, "array_update_usize");
+        (IndexAtIndex Slice, "slice_index_usize");
+        (IndexAtIndex Array, "array_index_usize");
+        (IndexMutAtIndex Slice, "slice_index_mut_usize");
+        (IndexMutAtIndex Array, "array_index_mut_usize");
         (ToResult, "return");
       ]
 
@@ -1297,7 +1280,6 @@ let names_map_init () : names_map_init =
     builtin_adts = builtin_adts ();
     builtin_structs = builtin_struct_constructors ();
     builtin_variants = builtin_variants ();
-    builtin_llbc_functions = builtin_llbc_functions ();
     builtin_pure_functions = builtin_pure_functions ();
   }
 
@@ -1368,12 +1350,8 @@ let initialize_names_maps () : names_maps =
   in
   let builtin_functions =
     List.map
-      (fun (fid, name) ->
-        ((FromLlbc (Pure.FunId (FBuiltin fid), None), None), name))
-      init.builtin_llbc_functions
-    @ List.map
-        (fun (fid, name) -> ((Pure fid, None), name))
-        init.builtin_pure_functions
+      (fun (fid, name) -> ((Pure fid, None), name))
+      init.builtin_pure_functions
   in
   let nm =
     List.fold_left
@@ -2537,14 +2515,14 @@ let ctx_add_decreases_proof (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let name = ctx_compute_decreases_proof_name def ctx in
   ctx_add def.item_meta.span
-    (DecreasesProofId (FRegular def.def_id, def.loop_id))
+    (DecreasesProofId (def.def_id, def.loop_id))
     name ctx
 
 let ctx_add_termination_measure (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let name = ctx_compute_termination_measure_name def ctx in
   ctx_add def.item_meta.span
-    (TerminationMeasureId (FRegular def.def_id, def.loop_id))
+    (TerminationMeasureId (def.def_id, def.loop_id))
     name ctx
 
 (* TODO: move to Extract *)
@@ -2559,7 +2537,7 @@ let ctx_add_fun_decl (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
     let def_id = def.def_id in
     (* Add the function name *)
     let def_name = ctx_compute_fun_name def false ctx in
-    let fun_id = (Pure.FunId (FRegular def_id), def.loop_id) in
+    let fun_id = (Pure.FunId def_id, def.loop_id) in
     ctx_add def.item_meta.span (FunId (FromLlbc fun_id)) def_name ctx
 
 let ctx_compute_type_decl_name (ctx : extraction_ctx) (def : type_decl) : string

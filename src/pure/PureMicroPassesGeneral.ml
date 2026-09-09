@@ -708,7 +708,7 @@ let lift_fun (ctx : ctx) (fun_id : fun_id) : bool =
   (* Lookup if the function is builtin: we only lift builtin functions
      which were explictly marked to be lifted. *)
   match fun_id with
-  | FromLlbc (FunId (FRegular fid), _) -> begin
+  | FromLlbc (FunId fid, _) -> begin
       match FunDeclId.Map.find_opt fid ctx.fun_decls with
       | None -> false
       | Some def -> (
@@ -716,8 +716,6 @@ let lift_fun (ctx : ctx) (fun_id : fun_id) : bool =
           | None -> false
           | Some info -> info.lift)
     end
-  | FromLlbc (FunId (FBuiltin (ArrayToSliceShared | ArrayToSliceMut)), _) ->
-      true
   | _ -> false
 
 (** A helper predicate *)
@@ -2177,7 +2175,7 @@ let eliminate_box_functions_visitor (ctx : ctx) (def : fun_decl) =
              general case, where functions could be boxed (meaning we
              could have: [box_new f x]) *)
           match fun_id with
-          | Fun (FromLlbc (FunId (FRegular fid), _lp_id))
+          | Fun (FromLlbc (FunId fid, _lp_id))
             when (FunDeclId.Map.find fid ctx.fun_decls).item_meta
                    .diagnostic_item = Some "box_new" ->
               let arg, args = Collections.List.pop args in
@@ -2241,7 +2239,7 @@ let simplify_trait_calls_visitor (ctx : ctx) (def : fun_decl) =
       match opt_destruct_function_call e with
       | Some (fun_id, generics, args) -> (
           match fun_id with
-          | Fun (FromLlbc (FunId (FRegular fid), _)) -> (
+          | Fun (FromLlbc (FunId fid, _)) -> (
               match FunDeclId.Map.find_opt fid ctx.fun_decls with
               | Some d
                 when List.length generics.trait_refs > 0 && List.length args > 0
@@ -2269,8 +2267,7 @@ let simplify_trait_calls_visitor (ctx : ctx) (def : fun_decl) =
                           (* Create a call to the method *)
                           let fun_id = method_decl.binder_value.fun_id in
                           let qualif =
-                            FunOrOp
-                              (Fun (FromLlbc (FunId (FRegular fun_id), None)))
+                            FunOrOp (Fun (FromLlbc (FunId fun_id, None)))
                           in
                           (* TODO: should we handle the binder? *)
                           let qualif : qualif =
@@ -2369,6 +2366,89 @@ let apply_beta_reduction_visitor (ctx : ctx) (def : fun_decl) =
 
 let apply_beta_reduction =
   lift_expr_map_visitor_with_state apply_beta_reduction_visitor FVarId.Map.empty
+
+(** Return whether a translated function matches [pattern]. *)
+let fun_matches_name (ctx : ctx) (fid : FunDeclId.id) pattern : bool =
+  let decl = FunDeclId.Map.find fid ctx.fun_decls in
+  ExtractName.match_name ctx.crate pattern decl.item_meta.name
+
+let slice_index_mut_usize_pattern =
+  NameMatcher.parse_pattern
+    "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
+     @T>}::index_mut"
+
+(** Recover the array and slice indexing primitives from calls to their
+    standard-library implementations. *)
+let recover_builtin_index_functions =
+  let parse = NameMatcher.parse_pattern in
+  let index_funs =
+    [
+      ( parse "core::array::{core::ops::index::Index<[@T; @N], @I, @O>}::index",
+        Array,
+        IndexAtIndex Array );
+      ( parse
+          "core::array::{core::ops::index::IndexMut<[@T; @N], @I, \
+           @O>}::index_mut",
+        Array,
+        IndexMutAtIndex Array );
+      ( parse
+          "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
+           @T>}::index",
+        Slice,
+        IndexAtIndex Slice );
+      (slice_index_mut_usize_pattern, Slice, IndexMutAtIndex Slice);
+    ]
+  in
+  let destruct_matching_call ctx (e : texpr) (pattern, kind, id) =
+    match opt_destruct_function_call e with
+    | Some (Fun (FromLlbc (FunId fid, None)), generics, args)
+      when fun_matches_name ctx fid pattern -> begin
+        match (kind, args) with
+        | Array, [ collection; ({ ty = TLiteral (TUInt Usize); _ } as index) ]
+        | Slice, [ ({ ty = TLiteral (TUInt Usize); _ } as index); collection ]
+          -> Some (kind, id, generics, collection, index)
+        | _ -> None
+      end
+    | _ -> None
+  in
+  lift_expr_map_visitor (fun (ctx : ctx) (def : fun_decl) ->
+      let span = def.item_meta.span in
+      object
+        inherit [_] map_expr as super
+
+        method! visit_texpr env e =
+          let e =
+            match List.find_map (destruct_matching_call ctx e) index_funs with
+            | Some (kind, id, generics, collection, index) ->
+                let generics =
+                  match kind with
+                  | Array ->
+                      let ty, n = ty_as_array span collection.ty in
+                      {
+                        types = [ ty ];
+                        const_generics = [ n ];
+                        trait_refs = [];
+                      }
+                  | Slice -> generics
+                in
+                [%add_loc] mk_qualif_apps span
+                  { id = FunOrOp (Fun (Pure id)); generics }
+                  [ collection; index ] e.ty
+            | None -> e
+          in
+          super#visit_texpr env e
+      end)
+
+let count_fvar_uses (fid : FVarId.id) (e : texpr) : int =
+  let count = ref 0 in
+  let visitor =
+    object
+      inherit [_] iter_expr
+      method! visit_fvar_id _ fid' = if fid = fid' then incr count
+    end
+  in
+  visitor#visit_texpr () e;
+  !count
 
 (** This pass simplifies uses of array/slice index operations.
 
@@ -2537,6 +2617,10 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
           mk_opened_let true back_pat (mk_call_to_update back_v) next
   in
 
+  let is_usize_slice_index_mut (fid : FunDeclId.id) : bool =
+    fun_matches_name ctx fid slice_index_mut_usize_pattern
+  in
+
   object (self)
     inherit [_] map_expr
 
@@ -2547,6 +2631,19 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
       let e2 = self#visit_texpr env e2 in
       (* Check if the current let-binding is a call to an index function *)
       let e1_app, e1_args = destruct_apps e1 in
+      let simplify (back_var : fvar) is_array index_generics a i =
+        [%ldebug
+          "identified a pattern to simplify:\n"
+          ^ texpr_to_string ctx { e = Let (monadic, pat, e1, e2); ty = e2.ty }];
+
+        (* We first check that there is only a single use of the backward
+           function. TODO: generalize *)
+        let count = count_fvar_uses back_var.id e2 in
+        if count = 1 then
+          (try_simplify monadic pat e1 e2 back_var is_array index_generics a i)
+            .e
+        else (mk_opened_let monadic pat e1 e2).e
+      in
       match (pat.pat, e1_app.e, e1_args) with
       | ( (* let (_, back) = ... *)
           PAdt
@@ -2555,48 +2652,28 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
               fields =
                 [ { pat = PIgnored; _ }; { pat = POpen (back_var, _); _ } ];
             },
-          (* ... = Array.index_mut_usize a i *)
+          (* ... = SliceIndex<usize>::index_mut i a *)
           Qualif
             {
-              id =
-                FunOrOp
-                  (Fun
-                     (FromLlbc
-                        ( FunId
-                            (FBuiltin
-                               (Index
-                                  {
-                                    is_array;
-                                    mutability = RMut;
-                                    is_range = false;
-                                  })),
-                          None )));
+              id = FunOrOp (Fun (FromLlbc (FunId fid, None)));
+              generics = index_generics;
+            },
+          [ i; a ] )
+        when is_usize_slice_index_mut fid ->
+          simplify back_var false index_generics a i
+      | ( PAdt
+            {
+              variant_id = None;
+              fields =
+                [ { pat = PIgnored; _ }; { pat = POpen (back_var, _); _ } ];
+            },
+          Qualif
+            {
+              id = FunOrOp (Fun (Pure (IndexMutAtIndex array_or_slice)));
               generics = index_generics;
             },
           [ a; i ] ) ->
-          [%ldebug
-            "identified a pattern to simplify:\n"
-            ^ texpr_to_string ctx { e = Let (monadic, pat, e1, e2); ty = e2.ty }];
-
-          (* Attempt to simplify the let-binding.
-
-             We first check that there is only a single use of the backward
-             function. TODO: generalize
-          *)
-          let count = ref 0 in
-          let count_visitor =
-            object
-              inherit [_] iter_expr
-
-              method! visit_fvar_id _ fid =
-                if fid = back_var.id then count := !count + 1 else ()
-            end
-          in
-          count_visitor#visit_texpr () e2;
-          if !count = 1 then
-            (try_simplify monadic pat e1 e2 back_var is_array index_generics a i)
-              .e
-          else (mk_opened_let monadic pat e1 e2).e
+          simplify back_var (array_or_slice = Array) index_generics a i
       | _ -> (mk_opened_let monadic pat e1 e2).e
   end
 
@@ -3001,11 +3078,7 @@ let add_fuel_one (ctx : ctx) (loops : fun_decl LoopId.Map.t) (def : fun_decl) :
         (* *)
         begin
           match f.e with
-          | Qualif
-              {
-                id = FunOrOp (Fun (FromLlbc (FunId (FRegular fid'), lp_id)));
-                _;
-              } ->
+          | Qualif { id = FunOrOp (Fun (FromLlbc (FunId fid', lp_id))); _ } ->
               (* Lookup the decl *)
               let def' : fun_decl =
                 match lp_id with
@@ -3037,11 +3110,7 @@ let add_fuel_one (ctx : ctx) (loops : fun_decl LoopId.Map.t) (def : fun_decl) :
         let f, args = destruct_apps re in
         begin
           match f.e with
-          | Qualif
-              {
-                id = FunOrOp (Fun (FromLlbc (FunId (FRegular fid'), lp_id)));
-                _;
-              } ->
+          | Qualif { id = FunOrOp (Fun (FromLlbc (FunId fid', lp_id))); _ } ->
               (* Lookup the decl *)
               let def' : fun_decl =
                 match lp_id with
@@ -3550,9 +3619,9 @@ let update_match_over_isize_usize_visitor (_ctx : ctx) (f : fun_decl) =
                     let pat =
                       match pat.pat with
                       | PIgnored -> { pat = PIgnored; ty = pure_ty }
-                      | PConstant (VScalar (UnsignedScalar (_, v))) ->
+                      | PConstant (VScalar (UnsignedInteger (_, v))) ->
                           { pat = PConstant (VPureNat v); ty = pure_ty }
-                      | PConstant (VScalar (SignedScalar (_, v))) ->
+                      | PConstant (VScalar (SignedInteger (_, v))) ->
                           { pat = PConstant (VPureInt v); ty = pure_ty }
                       | _ ->
                           (* Shouldn't happen*)

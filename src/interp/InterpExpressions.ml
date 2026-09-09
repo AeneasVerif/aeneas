@@ -93,7 +93,7 @@ let access_rplace_reorganize (config : config) (span : Meta.span)
     (ctx, f)
 
 (** Convert an operand constant operand value to a typed value *)
-let literal_to_tvalue (span : Meta.span) (ty : literal_type) (cv : literal)
+let literal_to_tvalue (span : Meta.span) (ty : scalar_type) (cv : literal)
     (ctx : eval_ctx) : tvalue =
   (* Check the type while converting - we actually need some information
    * contained in the type *)
@@ -101,18 +101,18 @@ let literal_to_tvalue (span : Meta.span) (ty : literal_type) (cv : literal)
   let min_ptr_size = get_target_min_ptr_size ctx.crate in
   match (ty, cv) with
   (* Scalar, boolean... *)
-  | TBool, VBool v -> { value = VLiteral (VBool v); ty = TLiteral ty }
-  | TChar, VChar v -> { value = VLiteral (VChar v); ty = TLiteral ty }
-  | TInt int_ty, VScalar (SignedScalar (sv_ty, _) as sv) ->
+  | TBool, VBool v -> { value = VLiteral (VBool v); ty = TScalar ty }
+  | TChar, VChar v -> { value = VLiteral (VChar v); ty = TScalar ty }
+  | TInteger (Signed int_ty), VScalar (SignedInteger (sv_ty, _) as sv) ->
       (* Check the type and the ranges *)
       [%sanity_check] span (int_ty = sv_ty);
-      [%sanity_check] span (check_scalar_value_in_range min_ptr_size sv);
-      { value = VLiteral (VScalar sv); ty = TLiteral ty }
-  | TUInt int_ty, VScalar (UnsignedScalar (sv_ty, _) as sv) ->
+      [%sanity_check] span (check_integer_value_in_range min_ptr_size sv);
+      { value = VLiteral (VScalar sv); ty = TScalar ty }
+  | TInteger (Unsigned int_ty), VScalar (UnsignedInteger (sv_ty, _) as sv) ->
       (* Check the type and the ranges *)
       [%sanity_check] span (int_ty = sv_ty);
-      [%sanity_check] span (check_scalar_value_in_range min_ptr_size sv);
-      { value = VLiteral (VScalar sv); ty = TLiteral ty }
+      [%sanity_check] span (check_integer_value_in_range min_ptr_size sv);
+      { value = VLiteral (VScalar sv); ty = TScalar ty }
   (* Remaining cases (invalid) *)
   | _, _ -> [%craise] span "Improperly typed constant value"
 
@@ -371,15 +371,24 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
   | Constant cv -> begin
       [%ldebug "constant of type: " ^ ty_to_string ctx cv.ty];
       match cv.kind with
-      | CLiteral lit -> (
-          [%ldebug "literal constant"];
-          (* FIXME: the str type is not in [literal_type] *)
+      | CBool _ | CInteger _ | CChar _ | CFloat _ -> (
+          [%ldebug "scalar constant"];
+          match cv.ty with
+          | TScalar lit_ty ->
+              let lit = TypesUtils.constant_expr_as_literal cv in
+              (literal_to_tvalue span lit_ty lit ctx, ctx, fun e -> e)
+          | _ ->
+              [%craise] span
+                ("Unsupported type for scalar constant: "
+               ^ ty_to_string ctx cv.ty))
+      | CStr v -> (
+          [%ldebug "string constant"];
+          (* FIXME: the str type is not in [scalar_type] *)
+          let lit = VStr v in
           match cv.ty with
           | TAdt { builtin = Some TStr; _ } ->
               let v : tvalue = { value = VLiteral lit; ty = cv.ty } in
               (v, ctx, fun e -> e)
-          | TLiteral lit_ty ->
-              (literal_to_tvalue span lit_ty lit ctx, ctx, fun e -> e)
           | TRef (RErased, (TAdt { builtin = Some TStr; _ } as str_ty), RShared)
             ->
               (* Reference to a string *)
@@ -417,9 +426,8 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
               (borrow, ctx, cf)
           | _ ->
               [%craise] span
-                ("Encountered an unsupported constant: "
-                ^ constant_expr_to_string ctx cv
-                ^ " : " ^ ty_to_string ctx cv.ty))
+                ("Unsupported type for string constant: "
+               ^ ty_to_string ctx cv.ty))
       | CTraitConst (trait_ref, const_id) -> (
           [%ldebug "trait constant"];
           let ctx0 = ctx in
@@ -638,41 +646,42 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
             v with
             value =
               VLiteral
-                (VScalar (Result.get_ok (mk_scalar min_ptr_size int_ty value)));
+                (VScalar
+                   (Result.get_ok (mk_integer_value min_ptr_size int_ty value)));
           }
     | Neg OPanic, VLiteral (VScalar sv) -> (
         let i = Z.neg (get_val sv) in
         let ptr_size = get_target_ptr_size span ctx.crate in
-        match mk_scalar ptr_size (get_ty sv) i with
+        match mk_integer_value ptr_size (get_ty sv) i with
         | Error _ -> Error EPanic
         | Ok sv -> Ok { v with value = VLiteral (VScalar sv) })
     | Cast (CastScalar (src, tgt)), VLiteral (VScalar sv)
-      when literal_type_is_integer src && literal_type_is_integer tgt -> (
+      when scalar_type_is_integer src && scalar_type_is_integer tgt -> (
         (* Cast between integers *)
-        let src_ty, tgt_ty = (literal_as_integer src, literal_as_integer tgt) in
+        let src_ty, tgt_ty = (scalar_as_integer src, scalar_as_integer tgt) in
         [%sanity_check] span (src_ty = get_ty sv);
         let i = get_val sv in
         let ptr_size = get_target_ptr_size span ctx.crate in
-        match mk_scalar ptr_size tgt_ty i with
+        match mk_integer_value ptr_size tgt_ty i with
         | Error _ -> Error EPanic
         | Ok sv ->
-            let ty = TLiteral tgt in
+            let ty = TScalar tgt in
             let value = VLiteral (VScalar sv) in
             Ok { ty; value })
     | Cast (CastScalar (TBool, tgt)), VLiteral (VBool sv)
-      when literal_type_is_integer tgt -> (
+      when scalar_type_is_integer tgt -> (
         (* Cast bool -> int *)
-        let tgt_ty = literal_as_integer tgt in
+        let tgt_ty = scalar_as_integer tgt in
         let i = Z.of_int (if sv then 1 else 0) in
         let ptr_size = get_target_ptr_size span ctx.crate in
-        match mk_scalar ptr_size tgt_ty i with
+        match mk_integer_value ptr_size tgt_ty i with
         | Error _ -> Error EPanic
         | Ok sv ->
-            let ty = TLiteral tgt in
+            let ty = TScalar tgt in
             let value = VLiteral (VScalar sv) in
             Ok { ty; value })
     | Cast (CastScalar (src, TBool)), VLiteral (VScalar sv)
-      when literal_type_is_integer src ->
+      when scalar_type_is_integer src ->
         (* Cast int -> bool *)
         let b =
           if Z.of_int 0 = get_val sv then false
@@ -680,7 +689,7 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
           else [%craise] span "Conversion from int to bool: out of range"
         in
         let value = VLiteral (VBool b) in
-        let ty = TLiteral TBool in
+        let ty = TScalar TBool in
         Ok { ty; value }
     | _ -> [%craise] span ("Invalid input for unop: " ^ unop_to_string ctx unop)
   in
@@ -950,12 +959,12 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
       let res_sv_id = ctx.fresh_symbolic_value_id () in
       let res_sv_ty =
         match (unop, v.ty) with
-        | Not, (TLiteral TBool as lty) -> lty
-        | Not, (TLiteral (TInt _) as lty) -> lty
-        | Not, (TLiteral (TUInt _) as lty) -> lty
-        | Neg OPanic, (TLiteral (TInt _) as lty) -> lty
-        | Neg OPanic, (TLiteral (TUInt _) as lty) -> lty
-        | Cast (CastScalar (_, tgt_ty)), _ -> TLiteral tgt_ty
+        | Not, (TScalar TBool as lty) -> lty
+        | Not, (TScalar (TInteger (Signed _)) as lty) -> lty
+        | Not, (TScalar (TInteger (Unsigned _)) as lty) -> lty
+        | Neg OPanic, (TScalar (TInteger (Signed _)) as lty) -> lty
+        | Neg OPanic, (TScalar (TInteger (Unsigned _)) as lty) -> lty
+        | Cast (CastScalar (_, tgt_ty)), _ -> TScalar tgt_ty
         | Cast (CastUnsize (ty0, ty1, _)), _ ->
             (* If the following function succeeds, then it means the cast is well-formed
            (otherwise it throws an exception) *)
@@ -1001,7 +1010,7 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
     (* Equality/inequality check is primitive only for a subset of types *)
     [%cassert] span (ty_is_copyable v1.ty) "Type is not primitively copyable";
     let b = v1 = v2 in
-    Ok { value = VLiteral (VBool b); ty = TLiteral TBool })
+    Ok { value = VLiteral (VBool b); ty = TScalar TBool })
   else
     (* For the non-equality operations, the input values are necessarily scalars,
        with the exception of the comparison operations which also accept booleans
@@ -1022,7 +1031,7 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
               | BitXor -> b1 <> b2
               | _ -> [%craise] span "Unreachable"
             in
-            Ok ({ value = VLiteral (VBool b); ty = TLiteral TBool } : tvalue)
+            Ok ({ value = VLiteral (VBool b); ty = TScalar TBool } : tvalue)
         | _ ->
             [%craise] span ("Invalid inputs for binop: " ^ binop_to_string binop)
       end
@@ -1046,7 +1055,7 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
               | Gt -> Z.gt sv1_value sv2_value
               | _ -> [%craise] span "Unreachable"
             in
-            Ok ({ value = VLiteral (VBool b); ty = TLiteral TBool } : tvalue)
+            Ok ({ value = VLiteral (VBool b); ty = TScalar TBool } : tvalue)
         | Div OPanic
         | Rem OPanic
         | Add OPanic
@@ -1061,22 +1070,27 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
                   if sv2_value = Z.zero then Error ()
                   else
                     let ptr_size = get_target_ptr_size span ctx.crate in
-                    mk_scalar ptr_size sv1_int_ty (Z.div sv1_value sv2_value)
+                    mk_integer_value ptr_size sv1_int_ty
+                      (Z.div sv1_value sv2_value)
               | Rem OPanic ->
                   (* See [https://github.com/ocaml/Zarith/blob/master/z.mli] *)
                   if sv2_value = Z.zero then Error ()
                   else
                     let ptr_size = get_target_ptr_size span ctx.crate in
-                    mk_scalar ptr_size sv1_int_ty (Z.rem sv1_value sv2_value)
+                    mk_integer_value ptr_size sv1_int_ty
+                      (Z.rem sv1_value sv2_value)
               | Add OPanic ->
                   let ptr_size = get_target_ptr_size span ctx.crate in
-                  mk_scalar ptr_size sv1_int_ty (Z.add sv1_value sv2_value)
+                  mk_integer_value ptr_size sv1_int_ty
+                    (Z.add sv1_value sv2_value)
               | Sub OPanic ->
                   let ptr_size = get_target_ptr_size span ctx.crate in
-                  mk_scalar ptr_size sv1_int_ty (Z.sub sv1_value sv2_value)
+                  mk_integer_value ptr_size sv1_int_ty
+                    (Z.sub sv1_value sv2_value)
               | Mul OPanic ->
                   let ptr_size = get_target_ptr_size span ctx.crate in
-                  mk_scalar ptr_size sv1_int_ty (Z.mul sv1_value sv2_value)
+                  mk_integer_value ptr_size sv1_int_ty
+                    (Z.mul sv1_value sv2_value)
               | BitXor -> raise Unimplemented
               | BitAnd -> raise Unimplemented
               | BitOr -> raise Unimplemented
@@ -1088,7 +1102,7 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
                 Ok
                   {
                     value = VLiteral (VScalar sv);
-                    ty = TLiteral (integer_as_literal sv1_int_ty);
+                    ty = TScalar (integer_as_scalar sv1_int_ty);
                   })
         | Ne | Eq -> [%craise] span "Unreachable"
         | _ ->
@@ -1125,36 +1139,36 @@ let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
       (* Equality/inequality check is primitive only for a subset of types *)
       [%cassert] span (ty_is_copyable v1.ty)
         "The type is not primitively copyable";
-      TLiteral TBool)
+      TScalar TBool)
     else
       (* Other operations: input types can be booleans for comparison operators
        (booleans are ordered: [false < true]), or bitwise operators (&, |, ^).
        In the other cases, input types are integers *)
       match (v1.ty, v2.ty) with
-      | TLiteral TBool, TLiteral TBool
+      | TScalar TBool, TScalar TBool
         when binop = Lt || binop = Le || binop = Ge || binop = Gt
              || binop = BitAnd || binop = BitOr || binop = BitXor ->
-          TLiteral TBool
-      | TLiteral lty1, TLiteral lty2
-        when literal_type_is_integer lty1 && literal_type_is_integer lty2 -> (
+          TScalar TBool
+      | TScalar lty1, TScalar lty2
+        when scalar_type_is_integer lty1 && scalar_type_is_integer lty2 -> (
           let int_ty1, int_ty2 = (ty_as_integer v1.ty, ty_as_integer v2.ty) in
           match binop with
           | Lt | Le | Ge | Gt ->
               [%sanity_check] span (int_ty1 = int_ty2);
-              TLiteral TBool
+              TScalar TBool
           | Div _ | Rem _ | Add _ | Sub _ | Mul _ | BitXor | BitAnd | BitOr ->
               [%sanity_check] span (int_ty1 = int_ty2);
-              TLiteral (integer_as_literal int_ty1)
+              TScalar (integer_as_scalar int_ty1)
           | Cmp ->
               [%sanity_check] span (int_ty1 = int_ty2);
-              TLiteral (TInt I8)
+              TScalar (TInteger (Signed I8))
           (* These return `(int, bool)` / a pointer which isn't a literal type *)
           | AddChecked | SubChecked | MulChecked | Offset ->
               [%craise] span "Unimplemented binary operation"
           | Shl _ | Shr _ ->
               (* The number of bits can be of a different integer type
                  than the operand *)
-              TLiteral (integer_as_literal int_ty1)
+              TScalar (integer_as_scalar int_ty1)
           | Ne | Eq -> [%craise] span "Unreachable")
       | _ -> [%craise] span "Invalid inputs for binop"
   in
@@ -1316,7 +1330,7 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
                    values)
             ^ "]"));
         (* Sanity check: the number of values is consistent with the length *)
-        let len = get_val (literal_as_scalar (constant_expr_as_literal cg)) in
+        let len = get_val (constant_expr_as_integer cg) in
         [%sanity_check] span (len = Z.of_int (List.length values));
         let ty = TArray (ety, cg, None) in
         (* In order to generate a better AST, we introduce a symbolic
@@ -1405,9 +1419,8 @@ let eval_discriminant (config : config) (span : Meta.span) (p : place)
     [%sanity_check] span (variants <> []);
     let variant0 = List.hd variants in
     match variant0.discriminant with
-    | VScalar (SignedScalar (ty, _)) -> TLiteral (TInt ty)
-    | VScalar (UnsignedScalar (ty, _)) -> TLiteral (TUInt ty)
-    | _ -> [%internal_error] span
+    | SignedInteger (ty, _) -> TScalar (TInteger (Signed ty))
+    | UnsignedInteger (ty, _) -> TScalar (TInteger (Unsigned ty))
   in
 
   (* Case disjunction: is the value concrete or symbolic?
@@ -1424,7 +1437,7 @@ let eval_discriminant (config : config) (span : Meta.span) (p : place)
 
       let v : tvalue =
         let value = variant.discriminant in
-        { value = VLiteral value; ty = discr_ty }
+        { value = VLiteral (VScalar value); ty = discr_ty }
       in
       (v, ctx, cf_read)
   | VSymbolic adt_sv ->

@@ -1,5 +1,6 @@
 include Charon.Types
 
+type integer_value = Charon.Values.integer_value [@@deriving show, ord]
 type region_id_set = RegionId.Set.t [@@deriving show, eq, ord]
 
 (** A normalized projection type.

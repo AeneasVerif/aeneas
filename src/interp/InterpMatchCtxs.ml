@@ -326,7 +326,7 @@ let rec match_types (span : Meta.span) ~(recover : bool) (ctx0 : eval_ctx)
         "Not the same type variables";
       let vid = vid0 in
       TVar vid
-  | TLiteral lty0, TLiteral lty1 ->
+  | TScalar lty0, TScalar lty1 ->
       [%cassert_recover] recover span (lty0 = lty1) "Not the same literal types";
       ty0
   | TNever, TNever -> ty0

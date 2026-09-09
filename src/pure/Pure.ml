@@ -56,7 +56,6 @@ type span_data = Meta.span_data [@@deriving show, ord]
 type span = Meta.span [@@deriving show, ord]
 type ref_kind = Types.ref_kind [@@deriving show, ord]
 type 'a de_bruijn_var = 'a Types.de_bruijn_var [@@deriving show, ord]
-type llbc_fun_id = A.fun_id [@@deriving show, ord]
 type overflow_mode = E.overflow_mode [@@deriving show, ord]
 type de_bruijn_id = T.de_bruijn_id [@@deriving show, ord]
 type type_var_id = TypeVarId.id [@@deriving show, ord]
@@ -125,6 +124,11 @@ type pure_builtin_fun_id =
           an element in an array/slice, we create a mutable borrow to this
           element, then use the borrow to perform the update. The update
           functions are introduced in the pure code by a micro-pass. *)
+  | IndexAtIndex of array_or_slice
+      (** Index an array or slice with a [usize]. Introduced by micro-passes
+          which recognize lower-level standard library calls. *)
+  | IndexMutAtIndex of array_or_slice
+      (** Mutably index an array or slice with a [usize]. *)
   | ToResult
       (** Lifts a pure expression to a monadic expression.
 
@@ -263,7 +267,7 @@ let fuel_succ_id = VariantId.of_int 1
 type int_ty = V.int_ty [@@deriving show, ord]
 type u_int_ty = V.u_int_ty [@@deriving show, ord]
 type float_value = V.float_value [@@deriving show, ord]
-type scalar_value = V.scalar_value [@@deriving show, ord]
+type integer_value = V.integer_value [@@deriving show, ord]
 type char_value = Charon.Uchar.t [@@deriving show, ord]
 type big_int = Charon.BigInt.big_int [@@deriving show, ord]
 
@@ -283,7 +287,7 @@ class ['self] iter_ty_base =
     method visit_u_int_ty : 'env -> u_int_ty -> unit = fun _ _ -> ()
     method visit_float_type : 'env -> float_type -> unit = fun _ _ -> ()
     method visit_float_value : 'env -> float_value -> unit = fun _ _ -> ()
-    method visit_scalar_value : 'env -> scalar_value -> unit = fun _ _ -> ()
+    method visit_integer_value : 'env -> integer_value -> unit = fun _ _ -> ()
     method visit_char_value : 'env -> char_value -> unit = fun _ _ -> ()
     method visit_big_int : 'env -> big_int -> unit = fun _ _ -> ()
 
@@ -341,7 +345,7 @@ class ['self] map_ty_base =
     method visit_float_type : 'env -> float_type -> float_type = fun _ x -> x
     method visit_float_value : 'env -> float_value -> float_value = fun _ x -> x
 
-    method visit_scalar_value : 'env -> scalar_value -> scalar_value =
+    method visit_integer_value : 'env -> integer_value -> integer_value =
       fun _ x -> x
 
     method visit_char_value : 'env -> char_value -> char_value = fun _ x -> x
@@ -417,7 +421,7 @@ class virtual ['self] reduce_ty_base =
     method visit_float_type : 'env -> float_type -> 'a = fun _ _ -> self#zero
     method visit_float_value : 'env -> float_value -> 'a = fun _ _ -> self#zero
 
-    method visit_scalar_value : 'env -> scalar_value -> 'a =
+    method visit_integer_value : 'env -> integer_value -> 'a =
       fun _ _ -> self#zero
 
     method visit_char_value : 'env -> char_value -> 'a = fun _ _ -> self#zero
@@ -500,7 +504,7 @@ class virtual ['self] mapreduce_ty_base =
     method visit_float_value : 'env -> float_value -> float_value * 'a =
       fun _ x -> (x, self#zero)
 
-    method visit_scalar_value : 'env -> scalar_value -> scalar_value * 'a =
+    method visit_integer_value : 'env -> integer_value -> integer_value * 'a =
       fun _ x -> (x, self#zero)
 
     method visit_char_value : 'env -> char_value -> char_value * 'a =
@@ -709,7 +713,7 @@ and literal_type =
   | TPureInt  (** Mathematical (unbounded) integer *)
 
 and literal =
-  | VScalar of scalar_value
+  | VScalar of integer_value
   | VFloat of float_value
   | VBool of bool
   | VChar of char_value
@@ -999,8 +1003,6 @@ class ['self] iter_tpat_base =
         self#visit_option self#visit_string e var.basename;
         self#visit_ty e var.ty
 
-    method visit_llbc_fun_id : 'env -> llbc_fun_id -> unit = fun _ _ -> ()
-
     method visit_pure_builtin_fun_id : 'env -> pure_builtin_fun_id -> unit =
       fun _ _ -> ()
 
@@ -1034,8 +1036,6 @@ class ['self] map_tpat_base =
           ty = self#visit_ty e var.ty;
         }
 
-    method visit_llbc_fun_id : 'env -> llbc_fun_id -> llbc_fun_id = fun _ x -> x
-
     method visit_pure_builtin_fun_id :
         'env -> pure_builtin_fun_id -> pure_builtin_fun_id =
       fun _ x -> x
@@ -1067,8 +1067,6 @@ class virtual ['self] reduce_tpat_base =
         let x1 = self#visit_option self#visit_string e var.basename in
         let x2 = self#visit_ty e var.ty in
         self#plus (self#plus x0 x1) x2
-
-    method visit_llbc_fun_id : 'env -> llbc_fun_id -> 'a = fun _ _ -> self#zero
 
     method visit_pure_builtin_fun_id : 'env -> pure_builtin_fun_id -> 'a =
       fun _ _ -> self#zero
@@ -1110,9 +1108,6 @@ class virtual ['self] mapreduce_tpat_base =
         let basename, x1 = self#visit_option self#visit_string e var.basename in
         let ty, x2 = self#visit_ty e var.ty in
         ({ id; basename; ty }, self#plus (self#plus x0 x1) x2)
-
-    method visit_llbc_fun_id : 'env -> llbc_fun_id -> llbc_fun_id * 'a =
-      fun _ x -> (x, self#zero)
 
     method visit_pure_builtin_fun_id :
         'env -> pure_builtin_fun_id -> pure_builtin_fun_id * 'a =
@@ -1225,7 +1220,7 @@ and cast_kind =
       *)
 
 and fn_ptr_kind =
-  | FunId of llbc_fun_id
+  | FunId of fun_decl_id
   | TraitMethod of trait_ref * trait_method_id
 
 (** A function id for a non-builtin function.

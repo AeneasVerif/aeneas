@@ -94,14 +94,7 @@ let erase_body_regions (crate : crate) (f : fun_decl) : fun_decl =
     instance *)
 let remove_unreachable (crate : crate) (f : fun_decl) : fun_decl =
   let impl_pat = NameMatcher.parse_pattern "core::intrinsics::unreachable" in
-  let mctx = NameMatcher.ctx_from_crate crate in
-  let match_name =
-    NameMatcher.match_name mctx
-      {
-        map_vars_to_vars = true;
-        match_with_trait_decl_refs = Config.match_patterns_with_trait_decl_refs;
-      }
-  in
+  let match_name = ExtractName.match_name crate in
 
   let is_unreachable (st : statement) : bool =
     match st.kind with
@@ -109,7 +102,7 @@ let remove_unreachable (crate : crate) (f : fun_decl) : fun_decl =
         match call.func with
         | FnOpRegular { kind; _ } -> (
             match kind with
-            | FunId (FRegular fid) ->
+            | Fun fid ->
                 let fun_decl =
                   [%silent_unwrap_opt_span] (Some st.span)
                     (FunDeclId.Map.find_opt fid crate.fun_decls)
@@ -162,14 +155,7 @@ let remove_unreachable (crate : crate) (f : fun_decl) : fun_decl =
 let update_array_default (crate : crate) : crate =
   let pctx = Print.crate_to_fmt_env crate in
   let impl_pat = NameMatcher.parse_pattern "core::default::Default" in
-  let mctx = NameMatcher.ctx_from_crate crate in
-  let match_name =
-    NameMatcher.match_name mctx
-      {
-        map_vars_to_vars = true;
-        match_with_trait_decl_refs = Config.match_patterns_with_trait_decl_refs;
-      }
-  in
+  let match_name = ExtractName.match_name crate in
 
   (* Helper: check whether a trait impl matches the [Default<[T; N]>] pattern,
      and if so return its array length [N]. We ignore the case where the length
@@ -190,8 +176,7 @@ let update_array_default (crate : crate) : crate =
          [
            TArray
              ( TVar (Free _),
-               ({ kind = CLiteral (VScalar (UnsignedScalar (Usize, nv))); _ } as
-                n),
+               ({ kind = CInteger (UnsignedInteger (Usize, nv)); _ } as n),
                _ );
          ];
        const_generics = [];
@@ -387,13 +372,13 @@ let update_array_default (crate : crate) : crate =
 
         method! visit_fn_ptr env fn_ptr =
           match fn_ptr.kind with
-          | FunId (FRegular fid) -> begin
+          | Fun fid -> begin
               match FunDeclId.Map.find_opt fid methods with
               | None -> super#visit_fn_ptr env fn_ptr
               | Some n ->
                   let fn_ptr =
                     {
-                      kind = FunId (FRegular merged_method);
+                      kind = Fun merged_method;
                       generics = { fn_ptr.generics with const_generics = [ n ] };
                     }
                   in
@@ -966,7 +951,6 @@ let strip_unnecessary_target_suffixes (crate : crate) : crate =
     and all references (trait refs, clauses, type constraints, parent clauses).
 *)
 let filter_marker_traits (crate : crate) : crate =
-  let mctx = NameMatcher.ctx_from_crate crate in
   let pats =
     List.map NameMatcher.parse_pattern
       [
@@ -984,20 +968,13 @@ let filter_marker_traits (crate : crate) : crate =
         "core::alloc::Allocator";
       ]
   in
-  let match_config =
-    {
-      NameMatcher.map_vars_to_vars = true;
-      match_with_trait_decl_refs = Config.match_patterns_with_trait_decl_refs;
-    }
-  in
   (* Collect the trait decl ids to filter *)
   let filtered_ids =
     TraitDeclId.Map.fold
       (fun id (decl : trait_decl) acc ->
         if
           List.exists
-            (fun pat ->
-              NameMatcher.match_name mctx match_config pat decl.item_meta.name)
+            (fun pat -> ExtractName.match_name crate pat decl.item_meta.name)
             pats
         then TraitDeclId.Set.add id acc
         else acc)
@@ -1306,7 +1283,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
               *)
               method! visit_Constant env (cv : constant_expr) =
                 match (cv.kind, cv.ty) with
-                | ( CLiteral (VStr str),
+                | ( CStr str,
                     TRef
                       (_, (TAdt { builtin = Some TStr; _ } as str_ty), ref_kind)
                   ) ->
@@ -1315,7 +1292,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
                     let local_id =
                       let local_id = fresh_local str_ty in
                       let new_cv : constant_expr =
-                        { kind = CLiteral (VStr str); ty = str_ty }
+                        { kind = CStr str; ty = str_ty }
                       in
                       let st =
                         {
@@ -1335,11 +1312,10 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
                       Constant
                         {
                           kind =
-                            CLiteral
-                              (VScalar
-                                 (UnsignedScalar
-                                    (Usize, Z.of_int (String.length str))));
-                          ty = TLiteral (TUInt Usize);
+                            CInteger
+                              (UnsignedInteger
+                                 (Usize, Z.of_int (String.length str)));
+                          ty = TScalar (TInteger (Unsigned Usize));
                         }
                     in
                     (* Then the borrow *)
@@ -1467,9 +1443,7 @@ let simplify_panics (crate : crate) (f : fun_decl) : fun_decl =
       method! visit_block env (block : block) =
         let is_from_str_call (st : statement) : bool =
           match st.kind with
-          | Call
-              ({ func = FnOpRegular { kind = FunId (FRegular fid); _ }; _ }, _)
-            -> (
+          | Call ({ func = FnOpRegular { kind = Fun fid; _ }; _ }, _) -> (
               match FunDeclId.Map.find_opt fid crate.fun_decls with
               | Some decl -> is_from_str decl
               | None -> false)
@@ -1684,11 +1658,8 @@ let replace_static (crate : crate) : crate =
      - we want to update its signature to replace 'static with a lifetime variable
      - we want to update its uses
   *)
-  let names_set = NameMatcher.NameMatcherMap.of_list [ (pat, ()) ] in
-  let match_ctx = Charon.NameMatcher.ctx_from_crate crate in
   let in_set (d : fun_decl) : bool =
-    let config = ExtractName.default_match_config in
-    NameMatcher.NameMatcherMap.mem match_ctx config d.item_meta.name names_set
+    ExtractName.match_name crate pat d.item_meta.name
   in
   let decl_opt = ref None in
   let in_set (_ : FunDeclId.id) (d : fun_decl) =
@@ -1746,7 +1717,7 @@ let replace_static (crate : crate) : crate =
 
               method! visit_Call _ call on_unwind =
                 match call.func with
-                | FnOpRegular { kind = FunId (FRegular id) as kind; generics }
+                | FnOpRegular { kind = Fun id as kind; generics }
                   when id = d.def_id ->
                     let func =
                       FnOpRegular
@@ -2031,21 +2002,14 @@ let simplify_trait_calls (crate : crate) : crate =
     NameMatcher.parse_pattern
       "core::convert::{core::convert::TryInto<@T, @U, @Error>}::try_into"
   in
-  let mctx = NameMatcher.ctx_from_crate crate in
-  let match_pattern =
-    NameMatcher.match_name mctx
-      {
-        map_vars_to_vars = true;
-        match_with_trait_decl_refs = Config.match_patterns_with_trait_decl_refs;
-      }
-  in
+  let match_pattern = ExtractName.match_name crate in
   let is_blanket_into_iter = match_pattern into_iter_pat in
   let is_blanket_try_into = match_pattern try_into_pat in
 
   let try_replace_call (super_visit : unit -> statement_kind) (span : Meta.span)
       (call : call) (on_unwind : block) : statement_kind =
     match call.func with
-    | FnOpRegular { kind = FunId (FRegular fid); generics } -> (
+    | FnOpRegular { kind = Fun fid; generics } -> (
         match FunDeclId.Map.find_opt fid crate.fun_decls with
         | Some d
           when List.length generics.trait_refs > 0 && List.length call.args > 0
@@ -2110,7 +2074,7 @@ let simplify_trait_calls (crate : crate) : crate =
                       in
 
                       (* *)
-                      let kind = FunId (FRegular method_ref.binder_value.id) in
+                      let kind = Fun method_ref.binder_value.id in
                       let func = FnOpRegular { kind; generics } in
                       Call ({ call with func }, on_unwind)
                   | _ ->

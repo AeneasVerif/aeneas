@@ -102,7 +102,7 @@ def test_tuple_struct_constructor : Result Unit := do
   ok ()
 
 /- Unit test for [issue_767_adt_constructor::test_tuple_struct_constructor] -/
-#assert (test_tuple_struct_constructor == ok ())
+#assert (test_tuple_struct_constructor).reducesTo ()
 
 /-- [issue_767_adt_constructor::test_enum_constructor]:
     Source: 'tests/src/issue-767-adt-constructor.rs', lines 26:0-28:1 -/
@@ -110,6 +110,6 @@ def test_enum_constructor : Result Unit := do
   ok ()
 
 /- Unit test for [issue_767_adt_constructor::test_enum_constructor] -/
-#assert (test_enum_constructor == ok ())
+#assert (test_enum_constructor).reducesTo ()
 
 end issue_767_adt_constructor

@@ -254,12 +254,12 @@ let const_generic_var_to_string (v : const_generic_param) =
   "(" ^ v.name ^ " : " ^ literal_type_to_string v.ty ^ ")"
 
 let integer_type_to_string = Print.integer_type_to_string
-let scalar_value_to_string = Print.scalar_value_to_string
+let integer_value_to_string = Print.integer_value_to_string
 let float_value_to_string = Print.float_value_to_string
 
 let literal_to_string (lit : literal) : string =
   match lit with
-  | VScalar sv -> scalar_value_to_string sv
+  | VScalar sv -> integer_value_to_string sv
   | VFloat fv -> float_value_to_string fv
   | VBool b -> Bool.to_string b
   | VChar c -> Charon.Uchar.to_string c
@@ -838,14 +838,6 @@ let fun_suffix (lp_id : (LoopId.id * bool) option) : string =
   in
   lp_suff
 
-let llbc_builtin_fun_id_to_string (fid : A.builtin_fun_id) : string =
-  Charon.Print.builtin_fun_id_to_string fid
-
-let llbc_fun_id_to_string (env : fmt_env) (fid : A.fun_id) : string =
-  match fid with
-  | FRegular fid -> fun_decl_id_to_string env fid
-  | FBuiltin fid -> llbc_builtin_fun_id_to_string fid
-
 let pure_builtin_fun_id_to_string (fid : pure_builtin_fun_id) : string =
   match fid with
   | Return -> "@return"
@@ -862,6 +854,16 @@ let pure_builtin_fun_id_to_string (fid : pure_builtin_fun_id) : string =
       | Array -> "@arrayUpdate"
       | Slice -> "@sliceUpdate"
     end
+  | IndexAtIndex array_or_slice -> begin
+      match array_or_slice with
+      | Array -> "@arrayIndex"
+      | Slice -> "@sliceIndex"
+    end
+  | IndexMutAtIndex array_or_slice -> begin
+      match array_or_slice with
+      | Array -> "@arrayIndexMut"
+      | Slice -> "@sliceIndexMut"
+    end
   | Discriminant -> "@discriminant"
   | ResultUnwrapMut -> "@resultUnwrapMut"
   | GetTarget -> "@getTarget"
@@ -872,8 +874,7 @@ let regular_fun_id_to_string (env : fmt_env) (fun_id : fun_id) : string =
   | FromLlbc (fid, lp_id) ->
       let f =
         match fid with
-        | FunId (FRegular fid) -> fun_decl_id_to_string env fid
-        | FunId (FBuiltin fid) -> llbc_builtin_fun_id_to_string fid
+        | FunId fid -> fun_decl_id_to_string env fid
         | TraitMethod (trait_ref, method_id) ->
             let method_name =
               Charon.GAstUtils.get_method_name env.crate
