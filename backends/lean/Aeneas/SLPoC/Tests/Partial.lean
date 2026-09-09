@@ -28,7 +28,7 @@ example (p : Ptr Nat) (value : Nat) :
   step*
 
 example (value : Nat) :
-    (Examples.incr_borrow value) ⦃⇓ result => result = value + 1⦄div := by
+    ⦃ emp ⦄ Examples.incr_borrow value ⦃⇓ result => ⌜result = value + 1⌝⦄div := by
   step*
 
 example (x : Nat) :
@@ -47,7 +47,8 @@ def roundTripPartial : Result Nat := do
   free p
   pure result
 
-theorem roundTripPartial.spec : (roundTripPartial) ⦃⇓ result => result = 42⦄div := by
+theorem roundTripPartial.spec :
+    ⦃ emp ⦄ roundTripPartial ⦃⇓ result => ⌜result = 42⌝⦄div := by
   unfold roundTripPartial
   step*
 

@@ -42,7 +42,7 @@ def incr_borrow (value : Nat) : Result Nat := do
 
 @[step]
 theorem incr_borrow.spec (value : Nat) :
-    (incr_borrow value) ⦃⇓ result => result = value + 1⦄ := by
+    ⦃ emp ⦄ incr_borrow value ⦃⇓ result => ⌜result = value + 1⌝⦄ := by
   unfold incr_borrow
   step*
 
@@ -53,7 +53,7 @@ example (p : Ptr Nat) (value : Nat) :
   step*
 
 example (value : Nat) :
-    (Examples.incr_borrow value) ⦃⇓ result => result = value + 1⦄ := by
+    ⦃ emp ⦄ Examples.incr_borrow value ⦃⇓ result => ⌜result = value + 1⌝⦄ := by
   step*
 
 example (x : Nat) :
