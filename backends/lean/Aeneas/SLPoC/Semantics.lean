@@ -76,11 +76,11 @@ say, `pre` being what `EventSpec` demands of a heap event. -/
 theorem dspec_pre_of_reaches {Q : α → Heap → Prop} {m : Result α} {h : Heap}
     {EventResult : Type} {pre : Heap → Prop}
     {modify : (h : Heap) → pre h → EventResult × Heap}
-    {k : RustEffect.O (RustEffect.I.guardedModify EventResult pre modify) → Result α}
+    {k : RustEffect.Output (RustEffect.Input.guardedModify EventResult pre modify) → Result α}
     {h' : Heap}
     (hSpec : PartialSpec RustEffect.machine Q m h)
     (hReaches :
-      Reaches m h (.vis (RustEffect.I.guardedModify EventResult pre modify) k) h') :
+      Reaches m h (.vis (RustEffect.Input.guardedModify EventResult pre modify) k) h') :
     pre h' :=
   (PartialSpec.runs RustEffect.machine_conjunctive RustEffect.machine_feasible
     hSpec hReaches).vis_view.choose
@@ -98,10 +98,10 @@ theorem dtriple_pre_of_reaches {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : dtriple P m Q) {h : Heap} (hPre : P h)
     {EventResult : Type} {pre : Heap → Prop}
     {modify : (h : Heap) → pre h → EventResult × Heap}
-    {k : RustEffect.O (RustEffect.I.guardedModify EventResult pre modify) → Result α}
+    {k : RustEffect.Output (RustEffect.Input.guardedModify EventResult pre modify) → Result α}
     {h' : Heap}
     (hReaches :
-      Reaches m h (.vis (RustEffect.I.guardedModify EventResult pre modify) k) h') :
+      Reaches m h (.vis (RustEffect.Input.guardedModify EventResult pre modify) k) h') :
     pre h' :=
   dspec_pre_of_reaches (dtriple_apply hTriple hPre) hReaches
 
@@ -123,25 +123,25 @@ theorem eq_ret_of_unfold {m : Result α} {value : α} (hm : m.unfold = .ret valu
     m = ITree.ret value :=
   eq_of_unfold hm
 
-theorem eq_vis_of_unfold {m : Result α} {event : RustEffect.I}
-    {k : RustEffect.O event → Result α} (hm : m.unfold = .vis event k) :
+theorem eq_vis_of_unfold {m : Result α} {event : RustEffect.Input}
+    {k : RustEffect.Output event → Result α} (hm : m.unfold = .vis event k) :
     m = ITree.vis event k :=
   eq_of_unfold hm
 
 /-- At a `vis` node total correctness supplies exactly what `EventSpec` demands
 of the event: the guard of a heap event together with total correctness of the
 continuation on the heap it produces, and `False` at failure. -/
-theorem spec_unfold_vis {m : Result α} {event : RustEffect.I}
-    {k : RustEffect.O event → Result α} {Q : IPost α} {h : Heap}
+theorem spec_unfold_vis {m : Result α} {event : RustEffect.Input}
+    {k : RustEffect.Output event → Result α} {Q : IPost α} {h : Heap}
     (hm : m.unfold = .vis event k) (hSpec : spec m Q h) :
     EventSpec event h fun answer h' => spec (k answer) Q h' := by
   rw [eq_vis_of_unfold hm] at hSpec
   exact hSpec.vis_view
 
 theorem spec_unfold_fail_false {m : Result α} {error : Error}
-    {k : RustEffect.O (RustEffect.I.fail error) → Result α}
+    {k : RustEffect.Output (RustEffect.Input.fail error) → Result α}
     {Q : IPost α} {h : Heap}
-    (hm : m.unfold = .vis (RustEffect.I.fail error) k)
+    (hm : m.unfold = .vis (RustEffect.Input.fail error) k)
     (hSpec : spec m Q h) : False :=
   spec_unfold_vis hm hSpec
 
@@ -160,11 +160,11 @@ def runOpt (m : Result α) (h : Heap) (Q : IPost α) (hSpec : spec m Q h) :
   match hm : m.unfold with
   | .ret value => some (value, h)
   | .div => none
-  | .vis (RustEffect.I.guardedModify _ _ modify) k =>
+  | .vis (RustEffect.Input.guardedModify _ _ modify) k =>
       let hNext := spec_unfold_vis hm hSpec
       runOpt (k (.up (modify h hNext.choose).1))
         (modify h hNext.choose).2 Q hNext.choose_spec
-  | .vis (RustEffect.I.fail _error) _k =>
+  | .vis (RustEffect.Input.fail _error) _k =>
       False.elim (spec_unfold_fail_false hm hSpec)
 partial_fixpoint
 

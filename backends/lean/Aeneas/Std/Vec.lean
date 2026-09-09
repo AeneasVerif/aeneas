@@ -403,14 +403,10 @@ def alloc.vec.Vec.with_capacity (T : Type) (_ : Usize) : alloc.vec.Vec T := Vec.
 def alloc.vec.Vec.extend_from_slice {T : Type} (cloneInst : core.clone.Clone T)
   (v : alloc.vec.Vec T) (s : Slice T) : Result (alloc.vec.Vec T) :=
   if h : v.length + s.length ≤ Usize.max then do
-    match h' : (Slice.clone cloneInst.clone s).match with
-    | .ok s' =>
-      ok (.from (v.val ++ s'.val) (by
-        simp at h'
-        have := Slice.clone_length h'
-        scalar_tac))
-    | .vis eff k => Result.vis eff (fun x => nomatch x)
-    | .div => div
+    let s' ← List.clone cloneInst.clone s.val
+    ok (Vec.from (v.val ++ s'.val) (by
+      have hs := s'.property
+      simpa [hs] using h))
   else fail .panic
 
 @[rust_fun "alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>}::deref"

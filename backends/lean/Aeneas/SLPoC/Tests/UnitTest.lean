@@ -13,7 +13,7 @@ unseal Result
 /-! ## Failure effect -/
 
 example : (Result.fail .panic : Result Nat) =
-    Result.vis (RustEffect.I.fail .panic) PEmpty.elim :=
+    Result.vis (RustEffect.Input.fail .panic) PEmpty.elim :=
   rfl
 
 example (Q : IPost Nat) (h : Heap) : ¬ spec (Result.fail .panic) Q h := by
