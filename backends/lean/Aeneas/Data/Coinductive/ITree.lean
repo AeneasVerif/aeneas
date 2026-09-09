@@ -212,6 +212,9 @@ instance : Monad (ITree.{u} E) where
   pure := ITree.ret
   bind := ITree.bind
 
+@[simp]
+theorem ITree.pure_eq_ret (r : R) : (pure r : ITree E R) = ITree.ret r := rfl
+
 @[elab_as_elim, cases_eliminator]
 def ITree.cases {E : Effect.{u}} {R}
     {motive : ITree E R → Sort v}
@@ -327,6 +330,15 @@ theorem ret_inj {E} {α} {x y} : (@ITree.ret α E x = ITree.ret y) ↔ (x = y) :
 theorem vis_inj_effect {E} {α} {e1 e2 k1 k2} : @ITree.vis α E e1 k1 = ITree.vis e2 k2
   → e1 = e2 := by grind
 
+/-- The event *and* the continuations of two equal `vis` nodes agree. -/
+theorem vis_inj {R : Type w} {E : Effect.{v}} {i i' : E.I} {k : E.O i → ITree E R}
+    {k' : E.O i' → ITree E R} (hEq : ITree.vis i k = ITree.vis i' k') :
+    i = i' ∧ HEq k k' := by
+  have hUnfold := congrArg ITree.unfold hEq
+  simp only [unfold_vis] at hUnfold
+  injection hUnfold with hEvent hCont
+  exact ⟨hEvent, hCont⟩
+
 -- Theorems to make ITree.cases compute:
 @[simp]
 theorem ITree.cases.ret {E R motive r d v x}
@@ -377,5 +389,128 @@ theorem ITree.div_is_bot :
   have dir1 := csup_le (x := .div) (chain_empty (ITree E R)) (by grind [empty_chain])
   apply ITree.le_div_is_div
   assumption
+
+/-! ## Chains of trees and their suprema
+
+These lemmas characterize the shape and children of chain suprema.
+-/
+
+/-- A tree below a return is that return, or the bottom element. -/
+theorem ITree.le_ret_cases {t : ITree E R} {value : R} (hLe : t ⊑ ITree.ret value) :
+    t = ITree.div ∨ t = ITree.ret value := by
+  rw [ITree.le_unfold] at hLe
+  obtain rfl | ⟨_, rfl, hRet⟩ | ⟨_, _, _, _, hVis, _⟩ := hLe
+  · exact Or.inl rfl
+  · exact Or.inr (by rw [ret_inj.mp hRet])
+  · exact absurd hVis not_vis_ret
+
+/-- A tree below a `vis` node performs the same event, or is the bottom
+element. -/
+theorem ITree.le_vis_cases {t : ITree E R} {i : E.I} {k : E.O i → ITree E R}
+    (hLe : t ⊑ ITree.vis i k) :
+    t = ITree.div ∨ ∃ k', t = ITree.vis i k' ∧ ∀ o, k' o ⊑ k o := by
+  rw [ITree.le_unfold] at hLe
+  obtain rfl | ⟨_, _, hRet⟩ | ⟨_, k₁, k₂, rfl, hVis, hCont⟩ := hLe
+  · exact Or.inl rfl
+  · exact absurd hRet.symm not_vis_ret
+  · obtain ⟨rfl, hHEq⟩ := vis_inj hVis
+    obtain rfl := eq_of_heq hHEq
+    exact Or.inr ⟨k₁, rfl, hCont⟩
+
+/-- And a tree above a `vis` node performs that event too: an approximation is
+only ever refined, never contradicted. -/
+theorem ITree.vis_le_cases {t : ITree E R} {i : E.I} {k : E.O i → ITree E R}
+    (hLe : ITree.vis i k ⊑ t) :
+    ∃ k', t = ITree.vis i k' ∧ ∀ o, k o ⊑ k' o := by
+  rw [ITree.le_unfold] at hLe
+  obtain hDiv | ⟨_, hRet, _⟩ | ⟨_, k₁, k₂, hVis, rfl, hCont⟩ := hLe
+  · exact absurd hDiv.symm not_div_vis
+  · exact absurd hRet.symm not_vis_ret
+  · obtain ⟨rfl, hHEq⟩ := vis_inj hVis
+    obtain rfl := eq_of_heq hHEq
+    exact ⟨k₂, rfl, hCont⟩
+
+/-- Every element of a chain that contains a `vis` node is `div` or a `vis` node
+on the same event. -/
+theorem ITree.chain_vis_cases {c : ITree E R → Prop} (hc : chain c) {i : E.I}
+    {k' : E.O i → ITree E R} (hMem : c (ITree.vis i k')) {u : ITree E R}
+    (hu : c u) : u = ITree.div ∨ ∃ k'', u = ITree.vis i k'' := by
+  obtain hLe | hLe := hc _ _ hu hMem
+  · exact (ITree.le_vis_cases hLe).imp id fun ⟨k'', hEq, _⟩ => ⟨k'', hEq⟩
+  · exact Or.inr ((ITree.vis_le_cases hLe).imp fun k'' h => h.1)
+
+/-- The chain of the `o`-children of the `vis` nodes of a chain of trees.  The
+supremum of a chain of trees is a `vis` node whose children are the suprema of
+exactly these. -/
+def ITree.visChain (c : ITree E R → Prop) (i : E.I) (o : E.O i) :
+    ITree E R → Prop :=
+  fun t => ∃ k, c (ITree.vis i k) ∧ t = k o
+
+theorem ITree.visChain_chain {c : ITree E R → Prop} (hc : chain c) (i : E.I)
+    (o : E.O i) : chain (ITree.visChain c i o) := by
+  rintro _ _ ⟨k₁, hMem₁, rfl⟩ ⟨k₂, hMem₂, rfl⟩
+  obtain hLe | hLe := hc _ _ hMem₁ hMem₂
+  · obtain hDiv | ⟨k, hEq, hCont⟩ := ITree.le_vis_cases hLe
+    · exact absurd hDiv.symm not_div_vis
+    · obtain ⟨-, hHEq⟩ := vis_inj hEq
+      obtain rfl := eq_of_heq hHEq
+      exact Or.inl (hCont o)
+  · obtain hDiv | ⟨k, hEq, hCont⟩ := ITree.le_vis_cases hLe
+    · exact absurd hDiv.symm not_div_vis
+    · obtain ⟨-, hHEq⟩ := vis_inj hEq
+      obtain rfl := eq_of_heq hHEq
+      exact Or.inr (hCont o)
+
+/-- A chain whose supremum returns a value contains that very return: a limit
+returns nothing its approximations do not. -/
+theorem ITree.csup_ret_mem {c : ITree E R → Prop} (hc : chain c) {value : R}
+    (hEq : CCPO.csup hc = ITree.ret value) : c (ITree.ret value) := by
+  refine Classical.byContradiction fun hNot => ?_
+  have hDiv : ∀ y, c y → y ⊑ (ITree.div : ITree E R) := by
+    intro y hy
+    have hLe : y ⊑ ITree.ret value := hEq ▸ le_csup hc hy
+    obtain rfl | rfl := ITree.le_ret_cases hLe
+    · exact PartialOrder.rel_refl
+    · exact absurd hy hNot
+  exact not_ret_div (ITree.le_div_is_div _ (hEq ▸ csup_le hc hDiv))
+
+/-- And a chain whose supremum performs an event contains a tree that performs
+it. -/
+theorem ITree.csup_vis_mem {c : ITree E R → Prop} (hc : chain c) {i : E.I}
+    {k : E.O i → ITree E R} (hEq : CCPO.csup hc = ITree.vis i k) :
+    ∃ k', c (ITree.vis i k') := by
+  refine Classical.byContradiction fun hNot => ?_
+  simp only [not_exists] at hNot
+  have hDiv : ∀ y, c y → y ⊑ (ITree.div : ITree E R) := by
+    intro y hy
+    have hLe : y ⊑ ITree.vis i k := hEq ▸ le_csup hc hy
+    obtain rfl | ⟨k', rfl, -⟩ := ITree.le_vis_cases hLe
+    · exact PartialOrder.rel_refl
+    · exact absurd hy (hNot k')
+  exact not_div_vis (ITree.le_div_is_div _ (hEq ▸ csup_le hc hDiv)).symm
+
+/-- The children of the supremum are the suprema of the children: what a limit
+does after an event is what its approximations do after it. -/
+theorem ITree.csup_vis {c : ITree E R → Prop} (hc : chain c) {i : E.I}
+    {k' : E.O i → ITree E R} (hMem : c (ITree.vis i k')) :
+    CCPO.csup hc =
+      ITree.vis i (fun o => CCPO.csup (ITree.visChain_chain hc i o)) := by
+  refine is_sup_unique (CCPO.csup_spec hc) (fun x => ⟨fun hLe y hy => ?_, ?_⟩)
+  · refine PartialOrder.rel_trans ?_ hLe
+    obtain rfl | ⟨k'', rfl⟩ := ITree.chain_vis_cases hc hMem hy
+    · exact ITree.div_is_bot ▸ bot_le _
+    · rw [ITree.le_unfold]
+      exact Or.inr (Or.inr ⟨i, k'', _, rfl, rfl,
+        fun o => le_csup (ITree.visChain_chain hc i o) ⟨k'', hy, rfl⟩⟩)
+  · intro hUpper
+    obtain ⟨kx, rfl, -⟩ := ITree.vis_le_cases (hUpper _ hMem)
+    rw [ITree.le_unfold]
+    refine Or.inr (Or.inr ⟨i, _, kx, rfl, rfl, fun o => ?_⟩)
+    refine csup_le (ITree.visChain_chain hc i o) ?_
+    rintro _ ⟨k'', hMem'', rfl⟩
+    obtain ⟨kx', hEqx, hCont⟩ := ITree.vis_le_cases (hUpper _ hMem'')
+    obtain ⟨-, hHEq⟩ := vis_inj hEqx
+    obtain rfl := eq_of_heq hHEq
+    exact hCont o
 
 namespace Aeneas.Data.Coinductive
