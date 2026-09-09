@@ -1,7 +1,11 @@
+module
 /-
 This file is from https://github.com/ISTA-PLV/coinductive/tree/main,
 see README in this folder.
 -/
+
+@[expose] public section
+
 namespace Aeneas.Data.Coinductive
 
 structure Effect : Type (u + 1) where
