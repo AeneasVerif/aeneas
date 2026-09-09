@@ -163,7 +163,10 @@ theorem Result.ok_injective {α} : Function.Injective (@Result.ok α) := by
 /-- `Result.fail` is opaque, so its injectivity has to be stated separately. -/
 @[grind inj]
 theorem Result.fail_injective {α} : Function.Injective (@Result.fail α) := by
-  intro a b h; simpa using congrArg Result.match h
+  intro a b h
+  have h := congrArg Result.match h
+  simp only [Result.match.fail, MatchResult.vis.injEq, RustEffect.Input.fail.injEq] at h
+  exact h.1
 
 /-! The disequality lemmas for the constructors of `Result`. They all follow from the fact that
 `Result.match` maps the constructors to *distinct* constructors of the inductive `MatchResult`. -/
