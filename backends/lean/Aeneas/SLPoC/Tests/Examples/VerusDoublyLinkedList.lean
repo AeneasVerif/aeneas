@@ -536,8 +536,8 @@ def run : Result (Nat × Nat × Nat × Bool × Nat × Nat × Nat) := do
   pure (v1, v2, v3, g, x, y, z)
 
 theorem run.spec :
-    (run) ⦃⇓ (v1, v2, v3, g, x, y, z) =>
-      v1 = 1 ∧ v2 = 2 ∧ v3 = 3 ∧ g = false ∧ x = 3 ∧ y = 1 ∧ z = 2⦄ := by
+    ⦃ emp ⦄ run ⦃⇓ (v1, v2, v3, g, x, y, z) =>
+      ⌜v1 = 1 ∧ v2 = 2 ∧ v3 = 3 ∧ g = false ∧ x = 3 ∧ y = 1 ∧ z = 2⌝⦄ := by
   unfold run
   step*
 
