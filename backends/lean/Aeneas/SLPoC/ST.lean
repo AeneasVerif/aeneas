@@ -11,8 +11,9 @@ import Aeneas.Tactic.Step.StepStar
 `Aeneas.Std.Primitives` defines `Result`, the interaction-tree monad over heap
 events. This file builds its correctness judgments, derives the
 separation-logic triples, wires those triples to the `step`/`step*` tactics,
-and declares the `⦃ value => p ⦄` notation for pure computations — which is
-notation for the triple that owns nothing, not a judgment of its own.
+and defines the pure judgments `WP.spec` and `WP.dspec`, written
+`⦃ value => p ⦄` and `⦃ value => p ⦄div`. They wrap the triples that own
+nothing and are registered independently with `step`.
 
 The judgments themselves are not defined here. The meaning of a heap event is
 written down once, as the handler `EventSpec` of the state machine
@@ -215,6 +216,18 @@ claim that the computation terminates. -/
 def dtriple (P : IPre) (m : Result α) (Q : IPost α) : Prop :=
   ∀ F h, (P ∗ F) h → dspec m (Q ∗+ F) h
 
+namespace WP
+
+/-- Total correctness with no owned input and a pure postcondition. -/
+def spec (m : Result α) (Q : α → Prop) : Prop :=
+  triple emp m (fun value => ⌜Q value⌝)
+
+/-- The divergence-tolerant counterpart of `spec`. -/
+def dspec (m : Result α) (Q : α → Prop) : Prop :=
+  dtriple emp m (fun value => ⌜Q value⌝)
+
+end WP
+
 /-- Internal tuple-destructuring marker for postconditions. Unlike a pattern
 lambda, it remains visible to `step` and the delaborators. -/
 @[inline] def postUncurry {α β γ : Type _} (f : α → β → γ) : α × β → γ :=
@@ -304,10 +317,10 @@ syntax:lead (name := specSyntax)
 syntax:lead (name := specSyntaxPred)
   atomic("(" term:lead ")" " ⦃" "⇓ ") term " ⦄" : term
 syntax:lead (name := slSpecSyntax)
-  "⦃ " term " ⦄" ppSpace term:lead ppSpace
+  "⦃ " term " ⦄" ppLine term:lead ppLine
   "⦃" "⇓" ppSpace term+ " => " term " ⦄" : term
 syntax:lead (name := slSpecSyntaxPred)
-  "⦃ " term " ⦄" ppSpace term:lead ppSpace "⦃" "⇓" ppSpace term " ⦄" : term
+  "⦃ " term " ⦄" ppLine term:lead ppLine "⦃" "⇓" ppSpace term " ⦄" : term
 
 open Lean PrettyPrinter
 
@@ -364,8 +377,8 @@ private def mkPostWith (curryName uncurryName : Name)
 
 macro_rules
   | `(($m) ⦃⇓ $result => $Q⦄) => do
-      let post ← mkPostWith ``postCurry ``postUncurry #[result] (← `(⌜$Q⌝))
-      `(triple emp $m $post)
+      let post ← mkPostWith ``postCurry ``postUncurry #[result] Q
+      `(WP.spec $m $post)
   | `(⦃$P⦄ $m ⦃⇓ $result => $Q⦄) => do
       let post ← mkPostWith ``postCurry ``postUncurry #[result] (← `(iprop($Q)))
       `(triple iprop($P) $m $post)
@@ -373,8 +386,8 @@ macro_rules
 macro_rules
   | `(($m) ⦃⇓ $result $results:term* => $Q⦄) => do
       let post ← mkPostWith ``postCurry ``postUncurry
-        (#[result] ++ results) (← `(⌜$Q⌝))
-      `(triple emp $m $post)
+        (#[result] ++ results) Q
+      `(WP.spec $m $post)
   | `(⦃$P⦄ $m ⦃⇓ $result $results:term* => $Q⦄) => do
       let post ← mkPostWith ``postCurry ``postUncurry
         (#[result] ++ results) (← `(iprop($Q)))
@@ -382,7 +395,7 @@ macro_rules
 
 macro_rules
   | `(($m) ⦃⇓ $Q:term⦄) =>
-      `(triple emp $m (fun _ => ⌜$Q⌝))
+      `(WP.spec $m (fun _ => $Q))
   | `(⦃$P⦄ $m ⦃⇓ $Q⦄) =>
       `(triple iprop($P) $m (fun _ => iprop($Q)))
 
@@ -391,15 +404,15 @@ syntax:lead (name := dspecSyntax)
 syntax:lead (name := dspecSyntaxPred)
   atomic("(" term:lead ")" " ⦃" "⇓ ") term " ⦄div" : term
 syntax:lead (name := slDspecSyntax)
-  "⦃ " term " ⦄" ppSpace term:lead ppSpace
+  "⦃ " term " ⦄" ppLine term:lead ppLine
   "⦃" "⇓" ppSpace term+ " => " term " ⦄div" : term
 syntax:lead (name := slDspecSyntaxPred)
-  "⦃ " term " ⦄" ppSpace term:lead ppSpace "⦃" "⇓" ppSpace term " ⦄div" : term
+  "⦃ " term " ⦄" ppLine term:lead ppLine "⦃" "⇓" ppSpace term " ⦄div" : term
 
 macro_rules
   | `(($m) ⦃⇓ $result => $Q⦄div) => do
-      let post ← mkPostWith ``postCurry ``postUncurry #[result] (← `(⌜$Q⌝))
-      `(dtriple emp $m $post)
+      let post ← mkPostWith ``postCurry ``postUncurry #[result] Q
+      `(WP.dspec $m $post)
   | `(⦃$P⦄ $m ⦃⇓ $result => $Q⦄div) => do
       let post ← mkPostWith ``postCurry ``postUncurry #[result] (← `(iprop($Q)))
       `(dtriple iprop($P) $m $post)
@@ -407,8 +420,8 @@ macro_rules
 macro_rules
   | `(($m) ⦃⇓ $result $results:term* => $Q⦄div) => do
       let post ← mkPostWith ``postCurry ``postUncurry
-        (#[result] ++ results) (← `(⌜$Q⌝))
-      `(dtriple emp $m $post)
+        (#[result] ++ results) Q
+      `(WP.dspec $m $post)
   | `(⦃$P⦄ $m ⦃⇓ $result $results:term* => $Q⦄div) => do
       let post ← mkPostWith ``postCurry ``postUncurry
         (#[result] ++ results) (← `(iprop($Q)))
@@ -416,7 +429,7 @@ macro_rules
 
 macro_rules
   | `(($m) ⦃⇓ $Q:term⦄div) =>
-      `(dtriple emp $m (fun _ => ⌜$Q⌝))
+      `(WP.dspec $m (fun _ => $Q))
   | `(⦃$P⦄ $m ⦃⇓ $Q⦄div) =>
       `(dtriple iprop($P) $m (fun _ => iprop($Q)))
 
@@ -923,12 +936,10 @@ theorem dtriple_admissible_forall {ι : Type v} {α : Type u} (P : ι → IPre) 
 
 /-! ### Bridging lemmas for the pure judgments
 
-`Aeneas.SepLogic.WP` states the pure judgments below, *outside* this section.
-It has to be outside: `Result.ok` and `Result.div` are `[local reducible]` here,
-so a `@[simp]` lemma stated in this section would be indexed under `ITree.ret`
-rather than under `Result.ok`, and would never fire at a call site.  These are
-the three facts whose proofs do need that reducibility, exported so that the
-pure lemmas can be stated where they are indexed correctly. -/
+These lemmas expose the return and divergence rules without requiring callers
+to unseal `Result`. Rules registered for concrete constructors are stated
+outside this section, where `Result.ok` and `Result.div` are no longer locally
+reducible, so they are indexed under their public names. -/
 
 theorem triple_ok_apply {α : Type u} {Q : IPost α} {x : α}
     (hTriple : triple emp (Result.ok x) Q) : Q x ∅ :=
@@ -1003,55 +1014,113 @@ theorem triple_emp_eq_ok {α : Type} {m : Result α} {Q : IPost α}
       | fail error => exact hSpec.vis_view.elim
   | div => exact hSpec.div_false.elim
 
-/-! ## Wiring of `step` to separation-logic triples
-
-Both judgments are registered, back to back, and `dtriple` declares `triple` as
-a lifting so that the `@[step]` specifications — which state total correctness —
-apply to a partial goal as they stand.
-
-These two entries are the *only* ones this file registers: the pure-computation
-notation below is notation for these judgments, so `step` needs nothing extra
-for it, and a pure specification needs no lifting to be used on a heap goal. -/
-
 end ResultImplementation
 
 /-! ## Pure computations
 
-A great many Rust functions touch no heap at all: a scalar addition, an
-arithmetic overflow check, a lookup in a `Vec` whose contents are carried by the
-value rather than by the heap.  Their specifications want to say only what the
-call *returns*, on a postcondition `α → Prop`, with no assertion, no frame and
-no points-to in sight.
+`WP.spec` and `WP.dspec` are named judgments with ordinary `α → Prop`
+postconditions. Their definitions preserve the meaning of the former notation:
+the corresponding SL triple at `emp` and a pure postcondition.
 
-That is not a second program logic, and — unlike `Aeneas.Std.WP.spec` — it is
-not a second *judgment* either.  It is **notation**:
+Each judgment has its own `step` registration. Pure specifications lift to SL
+specifications for framing. SL specifications lift back only when their
+precondition is `emp` and their postcondition is pure. Pure goals stay in the
+pure judgment; proofs that need spatial intermediate assertions use SL goals
+instead. Total specifications also lift to partial ones, never conversely. -/
 
-```
-m ⦃ value => p value ⦄     is     triple  emp m (fun value => ⌜p value⌝)
-m ⦃ value => p value ⦄div  is     dtriple emp m (fun value => ⌜p value⌝)
-```
+namespace WP
 
-There is no `spec` constant to unfold, no bridging lemma to apply, and nothing
-to register with `step` a second time.  A pure specification *is* a triple, so:
+theorem spec_iff {m : Result α} {Q : α → Prop} :
+    spec m Q ↔ triple emp m (fun value => ⌜Q value⌝) := Iff.rfl
 
-* everything the triples prove applies to it — the bind rule of a pure
-  specification is `triple_bind`, its rule of consequence is `triple_conseq`,
-  and its admissibility is `dtriple_admissible`;
-* `step` uses a pure specification inside a proof about a heap-manipulating
-  program by its ordinary framing, with no lifting registered and none needed;
-* conversely a function whose *implementation* allocates, mutates and frees may
-  be given a *pure* specification, because owning nothing is a claim about the
-  specification and not about the implementation.  Under a separate pure
-  judgment that statement is not merely unprovable but false, since such a
-  judgment is taken at a machine that answers no event;
-* a higher-order combinator states its callee's contract once, as a
-  precondition/postcondition pair, instead of once per judgment, and the pure
-  case is that contract at `emp`.
+theorem dspec_iff {m : Result α} {Q : α → Prop} :
+    dspec m Q ↔ dtriple emp m (fun value => ⌜Q value⌝) := Iff.rfl
 
-The syntax is declared at the end of this file, after the triples are wired to
-`step`.  What it costs is `triple_emp_eq_ok` above: a pure-shaped triple no
-longer determines the program on its own.  `Aeneas.SLPoC.Tests.PureSpec`
-exercises all of this. -/
+theorem spec_triple {α : Type u} {m : Result α} {Q : α → Prop}
+    (h : spec m Q) : triple emp m (fun value => ⌜Q value⌝) := h
+
+theorem triple_spec {α : Type u} {m : Result α} {Q : α → Prop}
+    (h : triple emp m (fun value => ⌜Q value⌝)) : spec m Q := h
+
+theorem dspec_dtriple {α : Type u} {m : Result α} {Q : α → Prop}
+    (h : dspec m Q) : dtriple emp m (fun value => ⌜Q value⌝) := h
+
+theorem dtriple_dspec {α : Type u} {m : Result α} {Q : α → Prop}
+    (h : dtriple emp m (fun value => ⌜Q value⌝)) : dspec m Q := h
+
+theorem spec_dspec {α : Type u} {m : Result α} {Q : α → Prop}
+    (h : spec m Q) : dspec m Q := triple_dtriple h
+
+theorem spec_dtriple {α : Type u} {m : Result α} {Q : α → Prop}
+    (h : spec m Q) : dtriple emp m (fun value => ⌜Q value⌝) :=
+  triple_dtriple h
+
+theorem triple_dspec {α : Type u} {m : Result α} {Q : α → Prop}
+    (h : triple emp m (fun value => ⌜Q value⌝)) : dspec m Q :=
+  triple_dtriple h
+
+theorem spec_mono {α : Type u} {Q : α → Prop}
+    (m : Result α) (Qm : α → Prop) (h : spec m Qm)
+    (hPost : ∀ value, Qm value → Q value) : spec m Q :=
+  triple_conseq h (entails_refl emp) (fun value _ => hPost value)
+
+theorem dspec_mono {α : Type u} {Q : α → Prop}
+    (m : Result α) (Qm : α → Prop) (h : dspec m Qm)
+    (hPost : ∀ value, Qm value → Q value) : dspec m Q :=
+  dtriple_conseq h (entails_refl emp) (fun value _ => hPost value)
+
+theorem spec_bind {α : Type u} {β : Type v} {next : α → Result β} {Q : β → Prop}
+    (m : Result α) (Qm : α → Prop) (h : spec m Qm)
+    (hNext : ∀ value, Qm value → spec (next value) Q) :
+    spec (Aeneas.Std.bind m next) Q :=
+  triple_bind' h (fun value => triple_ipure' (hNext value))
+
+theorem dspec_bind {α : Type u} {β : Type v} {next : α → Result β} {Q : β → Prop}
+    (m : Result α) (Qm : α → Prop) (h : dspec m Qm)
+    (hNext : ∀ value, Qm value → dspec (next value) Q) :
+    dspec (Aeneas.Std.bind m next) Q :=
+  dtriple_bind' h (fun value => dtriple_ipure' (hNext value))
+
+theorem dspec_admissible {α : Type u} (Q : α → Prop) :
+    Lean.Order.admissible (fun m : Result α => dspec m Q) :=
+  dtriple_admissible emp (fun value => ⌜Q value⌝)
+
+end WP
+
+theorem forall_postCurry {α β : Type _} (P : α → β → Prop) (Q : α × β → Prop) :
+    (∀ value, postCurry P value → Q value) ↔
+      ∀ first second, P first second → Q (first, second) :=
+  ⟨fun h first second => h (first, second), fun h ⟨first, second⟩ => h first second⟩
+
+theorem forall_postUncurry {α β : Type _} (P : α → β → Prop) (Q : α × β → Prop) :
+    (∀ value, postUncurry P value → Q value) ↔
+      ∀ first second, P first second → Q (first, second) :=
+  ⟨fun h first second => h (first, second), fun h ⟨first, second⟩ => h first second⟩
+
+/-- Keep tuple binders visible when lifting a pure postcondition into SL. -/
+theorem forall_triple_ipure_postCurry {α β γ : Type _}
+    (P : α → β → Prop) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
+    (∀ value, triple (⌜postCurry P value⌝ ∗ F) (next value) Q) ↔
+      ∀ first second, triple (⌜P first second⌝ ∗ F) (next (first, second)) Q :=
+  forall_triple_postCurry (fun first second => ⌜P first second⌝) F next Q
+
+theorem forall_triple_ipure_postUncurry {α β γ : Type _}
+    (P : α → β → Prop) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
+    (∀ value, triple (⌜postUncurry P value⌝ ∗ F) (next value) Q) ↔
+      ∀ first second, triple (⌜P first second⌝ ∗ F) (next (first, second)) Q :=
+  forall_triple_postUncurry (fun first second => ⌜P first second⌝) F next Q
+
+theorem forall_dtriple_ipure_postCurry {α β γ : Type _}
+    (P : α → β → Prop) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
+    (∀ value, dtriple (⌜postCurry P value⌝ ∗ F) (next value) Q) ↔
+      ∀ first second, dtriple (⌜P first second⌝ ∗ F) (next (first, second)) Q :=
+  forall_dtriple_postCurry (fun first second => ⌜P first second⌝) F next Q
+
+theorem forall_dtriple_ipure_postUncurry {α β γ : Type _}
+    (P : α → β → Prop) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
+    (∀ value, dtriple (⌜postUncurry P value⌝ ∗ F) (next value) Q) ↔
+      ∀ first second, dtriple (⌜P first second⌝ ∗ F) (next (first, second)) Q :=
+  forall_dtriple_postUncurry (fun first second => ⌜P first second⌝) F next Q
 
 open Lean Elab Meta Tactic
 
@@ -1110,6 +1179,7 @@ macro "intro_triple" : tactic =>
     uncurry_elim_tactics := #[
       ``forall_triple_postCurry,
       ``forall_triple_postUncurry,
+      ``forall_triple_ipure_postCurry, ``forall_triple_ipure_postUncurry,
       ``postCurry_apply, ``postCurry_eq,
       ``postUncurry_apply, ``postUncurry_eq
     ]
@@ -1124,7 +1194,11 @@ macro "intro_triple" : tactic =>
     intro_tactic := SpecInfo.tac `(tactic| intro_triple)
     discharge_tactic := some `iframe
     to_mvcgen := none
-    liftings := #[]
+    liftings := #[
+      { from_statement := ``WP.spec
+        conversion_thm := ``WP.spec_triple
+        conversion_thm_inferred_args := 3 }
+    ]
   }
 
 #register_spec_info {
@@ -1139,6 +1213,7 @@ macro "intro_triple" : tactic =>
     uncurry_elim_tactics := #[
       ``forall_dtriple_postCurry,
       ``forall_dtriple_postUncurry,
+      ``forall_dtriple_ipure_postCurry, ``forall_dtriple_ipure_postUncurry,
       ``postCurry_apply, ``postCurry_eq,
       ``postUncurry_apply, ``postUncurry_eq
     ]
@@ -1156,7 +1231,63 @@ macro "intro_triple" : tactic =>
     liftings := #[
       { from_statement := ``triple
         conversion_thm := ``triple_dtriple
-        conversion_thm_inferred_args := 4 }
+        conversion_thm_inferred_args := 4 },
+      { from_statement := ``WP.spec
+        conversion_thm := ``WP.spec_dtriple
+        conversion_thm_inferred_args := 3 },
+      { from_statement := ``WP.dspec
+        conversion_thm := ``WP.dspec_dtriple
+        conversion_thm_inferred_args := 3 }
+    ]
+  }
+
+#register_spec_info {
+    spec_name := ``WP.spec
+    arity := 3
+    program_index := 1
+    post_index := 2
+    mk_spec_mono := ``WP.spec_mono
+    mk_spec_mono_skip_args := 2
+    mk_spec_bind := ``WP.spec_bind
+    mk_spec_bind_skip_args := 4
+    uncurry_elim_tactics := #[``forall_postCurry, ``forall_postUncurry]
+    qimp_elim_tactics := #[
+      ``postCurry_apply, ``postCurry_eq, ``postUncurry_apply, ``postUncurry_eq,
+      ``forall_eq, ``forall_eq', ``forall_unit, ``true_imp_iff
+    ]
+    to_mvcgen := none
+    liftings := #[
+      { from_statement := ``triple
+        conversion_thm := ``WP.triple_spec
+        conversion_thm_inferred_args := 3 }
+    ]
+  }
+
+#register_spec_info {
+    spec_name := ``WP.dspec
+    arity := 3
+    program_index := 1
+    post_index := 2
+    mk_spec_mono := ``WP.dspec_mono
+    mk_spec_mono_skip_args := 2
+    mk_spec_bind := ``WP.dspec_bind
+    mk_spec_bind_skip_args := 4
+    uncurry_elim_tactics := #[``forall_postCurry, ``forall_postUncurry]
+    qimp_elim_tactics := #[
+      ``postCurry_apply, ``postCurry_eq, ``postUncurry_apply, ``postUncurry_eq,
+      ``forall_eq, ``forall_eq', ``forall_unit, ``true_imp_iff
+    ]
+    to_mvcgen := none
+    liftings := #[
+      { from_statement := ``WP.spec
+        conversion_thm := ``WP.spec_dspec
+        conversion_thm_inferred_args := 3 },
+      { from_statement := ``triple
+        conversion_thm := ``WP.triple_dspec
+        conversion_thm_inferred_args := 3 },
+      { from_statement := ``dtriple
+        conversion_thm := ``WP.dtriple_dspec
+        conversion_thm_inferred_args := 3 }
     ]
   }
 
@@ -1215,6 +1346,18 @@ theorem pure.spec (value : α) :
     ⦃ emp ⦄ (Pure.pure value : Result α) ⦃⇓ result => ⌜result = value⌝⦄ :=
   ret.spec value
 
+/-- Pure returns stay in the pure judgment, allowing `step` to infer ordinary
+predicate postconditions without introducing spatial entailments. -/
+@[step]
+theorem WP.ok_spec (value : α) :
+    WP.spec (Result.ok value) (fun result => result = value) :=
+  ret.spec value
+
+@[step]
+theorem WP.pure_spec (value : α) :
+    WP.spec (Pure.pure value : Result α) (fun result => result = value) :=
+  WP.ok_spec value
+
 /-!
 # Hoare triple notation for pure computations
 
@@ -1224,17 +1367,16 @@ value: `f x ⦃ y => y > 0 ⦄` is the triple that owns nothing,
 returned tuple, so `f x ⦃ y z => ... ⦄` names the two components of a pair
 without a pattern match of its own.
 
-This is *notation*, not a definition.  It is the same surface, and the same
-expansion, as the separation-logic notation of the triples above, read at `emp`
-with a pure postcondition:
+The notation expands to the named judgments `WP.spec` and `WP.dspec`, whose
+definitions are the separation-logic triples at `emp` with a pure postcondition:
 
 ```
 m ⦃ x => p ⦄      is      ⦃ emp ⦄ m ⦃⇓ x => ⌜p⌝ ⦄
 m ⦃ x => p ⦄div   is      ⦃ emp ⦄ m ⦃⇓ x => ⌜p⌝ ⦄div
 ```
 
-so the two forms are not merely equivalent, they are the same proposition, and
-`step` is driven by the `triple`/`dtriple` registrations alone.
+The two forms remain definitionally equal. Their separate registrations and
+liftings let `step` use pure rules for pure calls and spatial rules for heap calls.
 
 The syntax is `scoped` in `Aeneas.SepLogic.WP` because `Aeneas.Std.WP` declares
 the identical surface for its own, separate judgment; a file chooses between
@@ -1257,61 +1399,53 @@ scoped syntax:54 (name := pureDspecBinders)
 scoped syntax:54 (name := pureDspecPred)
   term:55 " ⦃ " term " ⦄div" : term
 
-/-- The `IPost` a pure postcondition denotes.  Transparent marker functions
+/-- The predicate a pure postcondition denotes. Transparent marker functions
 record whether each product came from separate binders or an explicit tuple
 pattern, allowing the delaborator to reproduce the original surface syntax. -/
 private def mkPurePost (binders : Array Term) (p : Term) : MacroM Term := do
-  let body ← `(⌜$p⌝)
-  mkPostWith ``postCurry ``postUncurry binders body
+  mkPostWith ``postCurry ``postUncurry binders p
 
 /-- Macro expansion for a single binder. -/
 scoped macro_rules (kind := pureSpecBinders)
   | `($m ⦃ $x => $p ⦄) => do
     let post ← mkPurePost #[x] p
-    `(triple emp $m $post)
+    `(spec $m $post)
 
 /-- Macro expansion for several binders. -/
 scoped macro_rules (kind := pureSpecBinders)
   | `($m ⦃ $x $xs:term* => $p ⦄) => do
     let post ← mkPurePost (#[x] ++ xs) p
-    `(triple emp $m $post)
+    `(spec $m $post)
 
 scoped macro_rules (kind := pureDspecBinders)
   | `($m ⦃ $x => $p ⦄div) => do
     let post ← mkPurePost #[x] p
-    `(dtriple emp $m $post)
+    `(dspec $m $post)
 
 scoped macro_rules (kind := pureDspecBinders)
   | `($m ⦃ $x $xs:term* => $p ⦄div) => do
     let post ← mkPurePost (#[x] ++ xs) p
-    `(dtriple emp $m $post)
+    `(dspec $m $post)
 
 /-- Macro expansion for a postcondition given as a predicate. -/
 scoped macro_rules (kind := pureSpecPred)
-  | `($m ⦃ $p ⦄) => `(triple emp $m (fun value => ⌜$p value⌝))
+  | `($m ⦃ $p ⦄) => `(spec $m $p)
 
 scoped macro_rules (kind := pureDspecPred)
-  | `($m ⦃ $p ⦄div) => `(dtriple emp $m (fun value => ⌜$p value⌝))
+  | `($m ⦃ $p ⦄div) => `(dspec $m $p)
 
 /-!
 # Pretty-printing
 
-`triple`/`dtriple` have no delaborator of their own, so a goal of the pure shape
-— precondition `emp`, postcondition `fun x => ⌜...⌝`, which is exactly what the
-macros above produce — is printed back in the pure notation.  Anything else
-falls through to the ordinary application printer, so a separating triple still
-prints as one.
+The named pure judgments print their predicate postconditions directly.
+SL triples always use the separating notation, including triples at `emp`
+with pure postconditions.
 -/
 
 open Lean PrettyPrinter
 open Delaborator SubExpr
 open Std.Delab
   (enterLams delabBindersWith buildTupleTerm delabUncurryAsTupleWith)
-
-/-- Delaborate the `⌜body⌝` at the end of a pure postcondition. -/
-private def delabPureBody : DelabM Term := do
-  guard ((← getExpr).isAppOfArity ``ipure 1)
-  withAppArg delab
 
 /-- Enter one explicit tuple binder without consuming continuation lambdas. -/
 private partial def enterPureUncurryOnce (acc : Array Std.Delab.BinderEntry)
@@ -1350,7 +1484,7 @@ private partial def delabPurePost : DelabM (Array Term × Term) := do
   | postUncurry _ _ _ _ =>
     withAppArg do
       let (tupleBinder, body) ←
-        delabUncurryAsTupleWith ``postUncurry delabPureBody
+        delabUncurryAsTupleWith ``postUncurry delab
       return (#[tupleBinder], body)
   | _ => delabLamsThenRecurse
 where
@@ -1359,7 +1493,7 @@ where
     if let .lam _ _ body _ := e then
       if !body.consumeMData.isLambda && !isPurePostBinderWrapper body then
         withBindingBodyUnusedName fun binder =>
-          return (#[⟨binder⟩], ← delabPureBody)
+          return (#[⟨binder⟩], ← delab)
       else
         enterLams #[] fun binders => do
           if binders.size == 1 && isPurePostBinderWrapper (← getExpr) then
@@ -1367,9 +1501,9 @@ where
               delabBindersWith ``postUncurry binders.toList delabPurePost
             return (patterns ++ moreBinders, body)
           else
-            delabBindersWith ``postUncurry binders.toList delabPureBody
+            delabBindersWith ``postUncurry binders.toList delab
     else
-      return (#[], ← delabPureBody)
+      return (#[], ← delab)
 
 /-- Enter one explicit SL tuple binder without consuming continuation lambdas. -/
 private partial def enterSLUncurryOnce (acc : Array Std.Delab.BinderEntry)
@@ -1439,39 +1573,37 @@ private def delabSLTripleCore (tripleName : Name) (isPartial : Bool) : Delab := 
   let pre ← withNaryArg 1 delab
   withNaryArg 3 <| delabSLTriplePost pre monadExpr isPartial
 
-/-- Print a pure triple using pure notation. This delaborator fails on general
-separation-logic triples, allowing the global SL delaborator to handle them. -/
-private def delabPureTripleCore (tripleName : Name) (isPartial : Bool) : Delab := do
-  guard ((← getExpr).isAppOfArity tripleName 4)
-  guard (← withNaryArg 1 do
-    return (← getExpr).isConstOf ``Aeneas.SepLogic.«emp»)
-  let monadExpr ← withNaryArg 2 delab
-  let (binders, body) ← withNaryArg 3 delabPurePost
-  guard (binders.size > 0)
-  if isPartial then
-    `($monadExpr ⦃ $(binders[0]!) $(binders.drop 1)* => $body ⦄div)
-  else
-    `($monadExpr ⦃ $(binders[0]!) $(binders.drop 1)* => $body ⦄)
-
-/-- Global fallback delaborator for total separation-logic triples. -/
+/-- Delaborator for total separation-logic triples. -/
 @[app_delab Aeneas.SepLogic.triple]
 def delabSLTriple : Delab :=
   delabSLTripleCore ``Aeneas.SepLogic.triple false
 
-/-- Global fallback delaborator for partial separation-logic triples. -/
+/-- Delaborator for partial separation-logic triples. -/
 @[app_delab Aeneas.SepLogic.dtriple]
 def delabSLDtriple : Delab :=
   delabSLTripleCore ``Aeneas.SepLogic.dtriple true
 
-/-- Scoped pure-notation delaborator for total triples. -/
-@[scoped delab app.Aeneas.SepLogic.triple]
-def delabPureTriple : Delab :=
-  delabPureTripleCore ``Aeneas.SepLogic.triple false
+private def delabPureSpecCore (specName : Name) (isPartial : Bool) : Delab := do
+  guard ((← getExpr).isAppOfArity specName 3)
+  let monadExpr ← withNaryArg 1 delab
+  let (binders, body) ← withNaryArg 2 delabPurePost
+  if h : binders.size > 0 then
+    if isPartial then
+      `($monadExpr ⦃ $(binders[0]) $(binders.drop 1)* => $body ⦄div)
+    else
+      `($monadExpr ⦃ $(binders[0]) $(binders.drop 1)* => $body ⦄)
+  else if isPartial then
+    `($monadExpr ⦃ $body ⦄div)
+  else
+    `($monadExpr ⦃ $body ⦄)
 
-/-- Scoped pure-notation delaborator for partial triples. -/
-@[scoped delab app.Aeneas.SepLogic.dtriple]
-def delabPureDtriple : Delab :=
-  delabPureTripleCore ``Aeneas.SepLogic.dtriple true
+@[scoped delab app.Aeneas.SepLogic.WP.spec]
+def delabPureSpec : Delab :=
+  delabPureSpecCore ``spec false
+
+@[scoped delab app.Aeneas.SepLogic.WP.dspec]
+def delabPureDspec : Delab :=
+  delabPureSpecCore ``dspec true
 
 end WP
 

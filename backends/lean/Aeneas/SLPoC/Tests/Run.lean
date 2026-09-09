@@ -24,7 +24,7 @@ def roundTrip : Result Nat := do
   free p
   pure result
 
-theorem roundTrip.spec : (roundTrip) ⦃⇓ result => result = 42⦄ := by
+theorem roundTrip.spec : ⦃ emp ⦄ roundTrip ⦃⇓ result => ⌜result = 42⌝⦄ := by
   unfold roundTrip
   step*
 
