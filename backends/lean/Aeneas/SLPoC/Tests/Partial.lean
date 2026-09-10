@@ -4,11 +4,11 @@ import Aeneas.SLPoC.Tests.Examples.Basic
 /-!
 # Partial correctness
 
-`Aeneas.SepLogic.ST` states the divergence-tolerant triple `dtriple`, written
-`⦃P⦄ m ⦃⇓ x => Q⦄div`.  These are the tests that it proves what a total triple
+`Aeneas.SepLogic.ST` states the divergence-tolerant ispec `dispec`, written
+`⦃P⦄ m ⦃⇓ x => Q⦄div`.  These are the tests that it proves what a total ispec
 proves of a program that stops, that the automation drives it — through the
 lifting of the total specifications, which are the ones `@[step]` collects — and
-that it proves what a total triple cannot: a loop that never leaves.
+that it proves what a total ispec cannot: a loop that never leaves.
 -/
 
 namespace Aeneas.SepLogic
@@ -19,8 +19,8 @@ open Aeneas.Std (Heap Result loop)
 
 /-! ## The automation drives a partial goal
 
-`step` and `step*` work on `dtriple` exactly as on `triple`: the `@[step]`
-specifications state *total* correctness, and `triple_dtriple` lifts each of
+`step` and `step*` work on `dispec` exactly as on `ispec`: the `@[step]`
+specifications state *total* correctness, and `ispec_dispec` lifts each of
 them where it is applied, as `Aeneas.Std.WP.spec_dspec` does for `Result`. -/
 
 example (p : Ptr Nat) (value : Nat) :
@@ -54,22 +54,22 @@ theorem roundTripPartial.spec :
 
 /-- And a total proof is a partial one, so it need not be redone. -/
 example : ⦃ emp ⦄ Examples.incr_borrow 1 ⦃⇓ result => ⌜result = 2⌝⦄div :=
-  triple_dtriple (Examples.incr_borrow.spec 1)
+  ispec_dispec (Examples.incr_borrow.spec 1)
 
 /-- The proof-mode tactics have partial counterparts: `dwp_pures` for a terminal
 `pure`, `dwp_apply` for a terminal call through the ramified frame rule, and
-`dwp_mono` to weaken a triple already proved. -/
+`dwp_mono` to weaken an `ispec` already proved. -/
 example (p : Ptr Nat) : ⦃ p ↦ 1 ⦄ (pure 5 : Result Nat) ⦃⇓ v => ⌜v = 5⌝ ∗ p ↦ 1⦄div := by
   dwp_pures
   isimpl
 
 example (p q : Ptr Nat) (x : Nat) :
     ⦃ iprop(p ↦ x ∗ q ↦ 9) ⦄ Examples.incr_ptr p ⦃⇓ iprop(q ↦ 9 ∗ p ↦ (x + 1))⦄div := by
-  dwp_apply (triple_dtriple (Examples.incr_ptr.spec p x))
+  dwp_apply (ispec_dispec (Examples.incr_ptr.spec p x))
 
 example (p : Ptr Nat) (value : Nat) :
     ⦃ p ↦ value ⦄ Examples.incr_ptr p ⦃⇓ emp⦄div := by
-  dwp_mono (triple_dtriple (Examples.incr_ptr.spec p value))
+  dwp_mono (ispec_dispec (Examples.incr_ptr.spec p value))
 
 /-! ## What partial correctness still owes
 
@@ -80,20 +80,20 @@ example (p : Ptr Nat) (value : Nat) (h : Heap) (hPre : (p ↦ value) h)
     (result : Unit) (h' : Heap)
     (hEval : Evaluates (Examples.incr_ptr p) h result h') :
     (p ↦ value + 1) h' :=
-  dtriple_evaluates (triple_dtriple (Examples.incr_ptr.spec p value)) hPre hEval
+  dispec_evaluates (ispec_dispec (Examples.incr_ptr.spec p value)) hPre hEval
 
 section
 
 unseal Result
 
 /-- Being stuck, on the other hand, is not permitted: a read through a pointer
-nothing owns has no partial triple either, since `PartialSpec` proves the guard
-of every event it reaches exactly as `TotalSpec` does. -/
-example (p : Ptr Nat) (Q : IPost Nat) : ¬ dtriple emp (read p) Q := by
+nothing owns has no partial specification either, since partial correctness
+proves the guard of every event it reaches just as total correctness does. -/
+example (p : Ptr Nat) (Q : IPost Nat) : ¬ dispec emp (read p) Q := by
   intro hTriple
-  have hSpec : dspec (read p) Q ∅ := dtriple_apply hTriple trivial
+  have hSpec := hTriple emp ∅ ((sep_emp_r emp).mpr ∅ trivial)
   simp only [read, Result.guardedModify] at hSpec
-  obtain ⟨hReadable, -⟩ := PartialSpec.vis_view hSpec
+  obtain ⟨hReadable, -⟩ := hSpec.vis_view
   exact Ptr.not_contains_empty p hReadable.contains
 
 end
@@ -101,13 +101,13 @@ end
 /-! ## What only partial correctness proves
 
 `Result.div` — the tree of an unproductive recursion — satisfies every partial
-triple and no total one at all. -/
+ispec and no total one at all. -/
 
-example (Q : IPost Nat) : dtriple emp (Result.div : Result Nat) Q :=
-  dtriple_div
+example (Q : IPost Nat) : dispec emp (Result.div : Result Nat) Q :=
+  dispec_div
 
-example (Q : IPost Nat) : ¬ triple emp (Result.div : Result Nat) Q := fun hTriple =>
-  TotalSpec.div_false (triple_apply (h := Heap.empty) hTriple trivial)
+example (Q : IPost Nat) : ¬ ispec emp (Result.div : Result Nat) Q := fun hTriple =>
+  (hTriple emp Heap.empty ((sep_emp_r emp).mpr Heap.empty trivial)).div_false
 
 /-! ## A loop that never leaves
 
@@ -128,13 +128,13 @@ theorem incrForever.spec (p : Ptr Nat) (value : Nat) :
   revert value
   refine incrForever.fixpoint_induct p
     (fun loop => ∀ v, ⦃ p ↦ v ⦄ loop ⦃⇓ emp⦄div)
-    (dtriple_admissible_forall (fun v : Nat => iprop(p ↦ v)) (fun _ _ => emp)) ?_
+    (dispec_admissible_forall (fun v : Nat => iprop(p ↦ v)) (fun _ _ => emp)) ?_
   intro loop hLoop v
   step*
 
 /-- The same rule proves a loop that does stop.  Partial correctness claims only
 that *if* the countdown leaves, the cell it owns is zero — and proving that much
-needs the invariant alone, where a total triple would also need the measure that
+needs the invariant alone, where a total ispec would also need the measure that
 `value` decreases. -/
 def countdown (p : Ptr Nat) : Result Unit := do
   let value ← read p
@@ -150,7 +150,7 @@ theorem countdown.spec (p : Ptr Nat) (value : Nat) :
   revert value
   refine countdown.fixpoint_induct p
     (fun loop => ∀ v, ⦃ p ↦ v ⦄ loop ⦃⇓ p ↦ 0⦄div)
-    (dtriple_admissible_forall (fun v : Nat => iprop(p ↦ v))
+    (dispec_admissible_forall (fun v : Nat => iprop(p ↦ v))
       (fun _ _ => iprop(p ↦ 0))) ?_
   intro loop hLoop v
   step* 1
