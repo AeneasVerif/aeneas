@@ -30,23 +30,17 @@ partial def enterLams (acc : Array BinderEntry)
       enterLams (acc.push (fv.fvarId!, n, pos)) k
   | _ => k acc
 
-/-- Enter `fun` binders and chained applications of `uncurryName`, flattening
-all leaves.
+/-- Enter `fun` binders and chained `Std.uncurry`s, flattening all leaves.
 
 Example: on `uncurry (fun a => uncurry (fun b c => body))`, collects `[a, b, c]`
 and leaves the reader at `body`. -/
-partial def enterUncurryChainWith (uncurryName : Name) (acc : Array BinderEntry)
-    (k : Array BinderEntry → DelabM α) : DelabM α :=
-  enterLams acc fun acc' => do
-    if (← getExpr).isAppOfArity uncurryName 4 then
-      withAppArg <| enterUncurryChainWith uncurryName acc' k
-    else
-      k acc'
-
-/-- `enterUncurryChainWith` specialized to `Aeneas.Std.uncurry`. -/
 partial def enterUncurryChain (acc : Array BinderEntry)
     (k : Array BinderEntry → DelabM α) : DelabM α :=
-  enterUncurryChainWith ``_root_.Aeneas.Std.uncurry acc k
+  enterLams acc fun acc' => do
+    if (← getExpr).isAppOfArity ``_root_.Aeneas.Std.uncurry 4 then
+      withAppArg <| enterUncurryChain acc' k
+    else
+      k acc'
 
 /-- Build tuple syntax `(p₀, p₁, ...)` from an array of pattern terms. -/
 def buildTupleTerm (pats : Array Term) : DelabM Term := do
@@ -55,10 +49,9 @@ def buildTupleTerm (pats : Array Term) : DelabM Term := do
   `(($head, $tail,*))
 
 /-- Build a pattern for each binder, folding any immediate destructuring of
-`fv` (tuple via `uncurryName`, or ctor via `T.casesOn`) into a nested pattern.
-`k` runs on the resulting body. -/
-partial def delabBindersWith (uncurryName : Name) (binders : List BinderEntry)
-    (k : DelabM α) :
+    `fv` (tuple via `Std.uncurry`, or ctor via `T.casesOn`) into a nested
+    pattern. `k` runs on the resulting body. -/
+partial def delabBinders (binders : List BinderEntry) (k : DelabM α) :
     DelabM (Array Term × α) := do
   match binders with
   | [] => return (#[], ← k)
@@ -69,17 +62,17 @@ partial def delabBindersWith (uncurryName : Name) (binders : List BinderEntry)
 where
   splitRec (inner : Array BinderEntry) (rest : List BinderEntry) :
       DelabM (Array Term × Array Term × α) := do
-    let (all, a) ← delabBindersWith uncurryName (inner.toList ++ rest) k
+    let (all, a) ← delabBinders (inner.toList ++ rest) k
     let n := inner.size
     return (all.extract 0 n, all.extract n all.size, a)
   /-- Tuple destructuring via `Std.uncurry`. -/
   tupleBind? (fv : FVarId) (tuplePos : Pos) (rest : List BinderEntry) :
       DelabM (Option (Array Term × α)) := do
     let e ← getExpr
-    unless e.isAppOfArity uncurryName 5 do return none
+    unless e.isAppOfArity ``_root_.Aeneas.Std.uncurry 5 do return none
     let val := e.appArg!
     unless val.isFVar ∧ val.fvarId! == fv do return none
-    withAppFn <| withAppArg <| enterUncurryChainWith uncurryName #[] fun inner => do
+    withAppFn <| withAppArg <| enterUncurryChain #[] fun inner => do
       let (innerPats, restPats, a) ← splitRec inner rest
       let fvPat : Term := annotatePos tuplePos (← buildTupleTerm innerPats)
       addTermInfo tuplePos fvPat.raw (.fvar fv) (isBinder := true)
@@ -106,13 +99,8 @@ where
       DelabM (Array Term × α) := do
     let stx : Term := annotatePos binderPos ⟨Lean.mkIdent name⟩
     addTermInfo binderPos stx.raw (.fvar fv) (isBinder := true)
-    let (restPats, a) ← delabBindersWith uncurryName rest k
+    let (restPats, a) ← delabBinders rest k
     return (#[stx] ++ restPats, a)
-
-/-- `delabBindersWith` specialized to `Aeneas.Std.uncurry`. -/
-partial def delabBinders (binders : List BinderEntry) (k : DelabM α) :
-    DelabM (Array Term × α) :=
-  delabBindersWith ``_root_.Aeneas.Std.uncurry binders k
 
 /-- Enter an `uncurry` chain, collect binder patterns via `delabBinders`,
 and wrap them in a single tuple term. Returns `(tupleTerm, k_result)`.
@@ -121,14 +109,9 @@ Expects the reader to be positioned at the function argument of `uncurry`
 (i.e., after `withAppArg`).
 
 Example: on `fun a => uncurry (fun b c => body)`, produces `((a, b, c), bodyTerm)`. -/
-def delabUncurryAsTupleWith (uncurryName : Name) (k : DelabM α) :
-    DelabM (Term × α) :=
-  enterUncurryChainWith uncurryName #[] fun binders => do
-    let (pats, a) ← delabBindersWith uncurryName binders.toList k
-    return (← buildTupleTerm pats, a)
-
-/-- `delabUncurryAsTupleWith` specialized to `Aeneas.Std.uncurry`. -/
 def delabUncurryAsTuple (k : DelabM α) : DelabM (Term × α) :=
-  delabUncurryAsTupleWith ``_root_.Aeneas.Std.uncurry k
+  enterUncurryChain #[] fun binders => do
+    let (pats, a) ← delabBinders binders.toList k
+    return (← buildTupleTerm pats, a)
 
 end Aeneas.Std.Delab
