@@ -1,4 +1,5 @@
 import Aeneas.Std.Delab
+import Aeneas.Std.WP
 import Aeneas.SLPoC.StateMachine
 import Aeneas.Std.Primitives
 import Aeneas.SepLogic
@@ -98,54 +99,11 @@ theorem dspec_admissible {α : Type u} (Q : α → Prop) :
     Lean.Order.admissible (fun m : Result α => dspec m Q) :=
   dispec_admissible emp (fun value => ⌜Q value⌝)
 
-/-- Variant of `uncurry` used to decompose tuples in post-conditions.
-
-Similar to `uncurry` but delaborated differently:
-`uncurry'` is delaborated as `x y => ...` (separate binders), while
-`uncurry` is delaborated as `(x, y) => ...` (tuple binder).
-We use this in the Hoare triple notation `⦃ ⦄`.
-
-Example: `f 0 ⦃ x y z => ... ⦄` desugars to
-`spec (f 0) (uncurry' fun x => uncurry' fun y z => ...)`.
--/
-@[inline] def postUncurry {α β γ : Type _} (f : α → β → γ) : α × β → γ :=
-  fun (a, b) => f a b
-
-@[simp]
-theorem postUncurry_apply {α β γ : Type _} (f : α → β → γ) (p : α × β) :
-    postUncurry f p = f p.1 p.2 := by
-  cases p
-  rfl
-
-@[simp]
-theorem postUncurry_eq {α β γ : Type _} (f : α → β → γ) :
-    postUncurry f = fun p => f p.1 p.2 := by
-  funext p
-  exact postUncurry_apply f p
-
-/-- Internal marker for a boundary between separate postcondition binders. It
-is semantically identical to `postUncurry`, but delaborators print it as
-`x y => ...` rather than `(x, y) => ...`. -/
-@[inline] def postCurry {α β γ : Type _} (f : α → β → γ) : α × β → γ :=
-  fun (a, b) => f a b
-
-@[simp]
-theorem postCurry_apply {α β γ : Type _} (f : α → β → γ) (p : α × β) :
-    postCurry f p = f p.1 p.2 := by
-  cases p
-  rfl
-
-@[simp]
-theorem postCurry_eq {α β γ : Type _} (f : α → β → γ) :
-    postCurry f = fun p => f p.1 p.2 := by
-  funext p
-  exact postCurry_apply f p
-
 /-- Split separate postcondition binders before `step` introduces the
 result and its postcondition hypotheses. -/
-theorem forall_ispec_postCurry {α β γ : Type _}
+theorem forall_ispec_uncurry' {α β γ : Type _}
     (P : α → β → IProp) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
-    (∀ value, ispec (postCurry P value ∗ F) (next value) Q) ↔
+    (∀ value, ispec (Std.WP.uncurry' P value ∗ F) (next value) Q) ↔
       ∀ first second, ispec (P first second ∗ F) (next (first, second)) Q := by
   constructor
   · intro h first second
@@ -153,10 +111,10 @@ theorem forall_ispec_postCurry {α β γ : Type _}
   · intro h ⟨first, second⟩
     exact h first second
 
-/-- Partial-ispec counterpart of `forall_ispec_postCurry`. -/
-theorem forall_dispec_postCurry {α β γ : Type _}
+/-- Partial-ispec counterpart of `forall_ispec_uncurry'`. -/
+theorem forall_dispec_uncurry' {α β γ : Type _}
     (P : α → β → IProp) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
-    (∀ value, dispec (postCurry P value ∗ F) (next value) Q) ↔
+    (∀ value, dispec (Std.WP.uncurry' P value ∗ F) (next value) Q) ↔
       ∀ first second, dispec (P first second ∗ F) (next (first, second)) Q := by
   constructor
   · intro h first second
@@ -166,9 +124,9 @@ theorem forall_dispec_postCurry {α β γ : Type _}
 
 /-- Split an uncurried postcondition before `step` introduces the
 result and its postcondition hypotheses. -/
-theorem forall_ispec_postUncurry {α β γ : Type _}
+theorem forall_ispec_uncurry {α β γ : Type _}
     (P : α → β → IProp) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
-    (∀ value, ispec (postUncurry P value ∗ F) (next value) Q) ↔
+    (∀ value, ispec (Std.uncurry P value ∗ F) (next value) Q) ↔
       ∀ first second, ispec (P first second ∗ F) (next (first, second)) Q := by
   constructor
   · intro h first second
@@ -176,16 +134,31 @@ theorem forall_ispec_postUncurry {α β γ : Type _}
   · intro h ⟨first, second⟩
     exact h first second
 
-/-- Partial-ispec counterpart of `forall_ispec_postUncurry`. -/
-theorem forall_dispec_postUncurry {α β γ : Type _}
+/-- Partial-ispec counterpart of `forall_ispec_uncurry`. -/
+theorem forall_dispec_uncurry {α β γ : Type _}
     (P : α → β → IProp) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
-    (∀ value, dispec (postUncurry P value ∗ F) (next value) Q) ↔
+    (∀ value, dispec (Std.uncurry P value ∗ F) (next value) Q) ↔
       ∀ first second, dispec (P first second ∗ F) (next (first, second)) Q := by
   constructor
   · intro h first second
     exact h (first, second)
   · intro h ⟨first, second⟩
     exact h first second
+
+theorem uncurry_apply {α β γ : Type _} (f : α → β → γ) (p : α × β) :
+    Std.uncurry f p = f p.1 p.2 := by
+  cases p
+  rfl
+
+theorem uncurry_eq {α β γ : Type _} (f : α → β → γ) :
+    Std.uncurry f = fun p => f p.1 p.2 := by
+  funext p
+  exact uncurry_apply f p
+
+theorem uncurry'_eq {α β γ : Type _} (f : α → β → γ) :
+    Std.WP.uncurry' f = fun p => f p.1 p.2 := by
+  funext p
+  exact Std.WP.uncurry'_eq p f
 
 /- The `⇓` is inside `atomic` so that the parser backtracks when it is absent:
 `(m) ⦃ value => p ⦄`, the pure-computation notation of `Aeneas.SepLogic.WP`,
@@ -255,19 +228,20 @@ private def mkPostWith (curryName uncurryName : Name)
 
 macro_rules
   | `(($m) ⦃⇓ $result => $Q⦄) => do
-      let post ← mkPostWith ``postCurry ``postUncurry #[result] Q
+      let post ← mkPostWith ``Aeneas.Std.WP.uncurry' ``Aeneas.Std.uncurry #[result] Q
       `(spec $m $post)
   | `(⦃$P⦄ $m ⦃⇓ $result => $Q⦄) => do
-      let post ← mkPostWith ``postCurry ``postUncurry #[result] (← `(iprop($Q)))
+      let post ←
+        mkPostWith ``Aeneas.Std.WP.uncurry' ``Aeneas.Std.uncurry #[result] (← `(iprop($Q)))
       `(ispec iprop($P) $m $post)
 
 macro_rules
   | `(($m) ⦃⇓ $result $results:term* => $Q⦄) => do
-      let post ← mkPostWith ``postCurry ``postUncurry
+      let post ← mkPostWith ``Aeneas.Std.WP.uncurry' ``Aeneas.Std.uncurry
         (#[result] ++ results) Q
       `(spec $m $post)
   | `(⦃$P⦄ $m ⦃⇓ $result $results:term* => $Q⦄) => do
-      let post ← mkPostWith ``postCurry ``postUncurry
+      let post ← mkPostWith ``Aeneas.Std.WP.uncurry' ``Aeneas.Std.uncurry
         (#[result] ++ results) (← `(iprop($Q)))
       `(ispec iprop($P) $m $post)
 
@@ -289,19 +263,20 @@ syntax:lead (name := slDspecSyntaxPred)
 
 macro_rules
   | `(($m) ⦃⇓ $result => $Q⦄div) => do
-      let post ← mkPostWith ``postCurry ``postUncurry #[result] Q
+      let post ← mkPostWith ``Aeneas.Std.WP.uncurry' ``Aeneas.Std.uncurry #[result] Q
       `(dspec $m $post)
   | `(⦃$P⦄ $m ⦃⇓ $result => $Q⦄div) => do
-      let post ← mkPostWith ``postCurry ``postUncurry #[result] (← `(iprop($Q)))
+      let post ←
+        mkPostWith ``Aeneas.Std.WP.uncurry' ``Aeneas.Std.uncurry #[result] (← `(iprop($Q)))
       `(dispec iprop($P) $m $post)
 
 macro_rules
   | `(($m) ⦃⇓ $result $results:term* => $Q⦄div) => do
-      let post ← mkPostWith ``postCurry ``postUncurry
+      let post ← mkPostWith ``Aeneas.Std.WP.uncurry' ``Aeneas.Std.uncurry
         (#[result] ++ results) Q
       `(dspec $m $post)
   | `(⦃$P⦄ $m ⦃⇓ $result $results:term* => $Q⦄div) => do
-      let post ← mkPostWith ``postCurry ``postUncurry
+      let post ← mkPostWith ``Aeneas.Std.WP.uncurry' ``Aeneas.Std.uncurry
         (#[result] ++ results) (← `(iprop($Q)))
       `(dispec iprop($P) $m $post)
 
@@ -929,40 +904,40 @@ theorem dspec_bind {α : Type u} {β : Type v} {next : α → Result β} {Q : β
     dspec (Aeneas.Std.bind m next) Q :=
   dispec_bind' h (fun value => dispec_ipure' (hNext value))
 
-theorem forall_postCurry {α β : Type _} (P : α → β → Prop) (Q : α × β → Prop) :
-    (∀ value, postCurry P value → Q value) ↔
+theorem forall_uncurry' {α β : Type _} (P : α → β → Prop) (Q : α × β → Prop) :
+    (∀ value, Std.WP.uncurry' P value → Q value) ↔
       ∀ first second, P first second → Q (first, second) :=
   ⟨fun h first second => h (first, second), fun h ⟨first, second⟩ => h first second⟩
 
-theorem forall_postUncurry {α β : Type _} (P : α → β → Prop) (Q : α × β → Prop) :
-    (∀ value, postUncurry P value → Q value) ↔
+theorem forall_uncurry {α β : Type _} (P : α → β → Prop) (Q : α × β → Prop) :
+    (∀ value, Std.uncurry P value → Q value) ↔
       ∀ first second, P first second → Q (first, second) :=
   ⟨fun h first second => h (first, second), fun h ⟨first, second⟩ => h first second⟩
 
 /-- Keep tuple binders visible when lifting a pure postcondition into SL. -/
-theorem forall_ispec_ipure_postCurry {α β γ : Type _}
+theorem forall_ispec_ipure_uncurry' {α β γ : Type _}
     (P : α → β → Prop) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
-    (∀ value, ispec (⌜postCurry P value⌝ ∗ F) (next value) Q) ↔
+    (∀ value, ispec (⌜Std.WP.uncurry' P value⌝ ∗ F) (next value) Q) ↔
       ∀ first second, ispec (⌜P first second⌝ ∗ F) (next (first, second)) Q :=
-  forall_ispec_postCurry (fun first second => ⌜P first second⌝) F next Q
+  forall_ispec_uncurry' (fun first second => ⌜P first second⌝) F next Q
 
-theorem forall_ispec_ipure_postUncurry {α β γ : Type _}
+theorem forall_ispec_ipure_uncurry {α β γ : Type _}
     (P : α → β → Prop) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
-    (∀ value, ispec (⌜postUncurry P value⌝ ∗ F) (next value) Q) ↔
+    (∀ value, ispec (⌜Std.uncurry P value⌝ ∗ F) (next value) Q) ↔
       ∀ first second, ispec (⌜P first second⌝ ∗ F) (next (first, second)) Q :=
-  forall_ispec_postUncurry (fun first second => ⌜P first second⌝) F next Q
+  forall_ispec_uncurry (fun first second => ⌜P first second⌝) F next Q
 
-theorem forall_dispec_ipure_postCurry {α β γ : Type _}
+theorem forall_dispec_ipure_uncurry' {α β γ : Type _}
     (P : α → β → Prop) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
-    (∀ value, dispec (⌜postCurry P value⌝ ∗ F) (next value) Q) ↔
+    (∀ value, dispec (⌜Std.WP.uncurry' P value⌝ ∗ F) (next value) Q) ↔
       ∀ first second, dispec (⌜P first second⌝ ∗ F) (next (first, second)) Q :=
-  forall_dispec_postCurry (fun first second => ⌜P first second⌝) F next Q
+  forall_dispec_uncurry' (fun first second => ⌜P first second⌝) F next Q
 
-theorem forall_dispec_ipure_postUncurry {α β γ : Type _}
+theorem forall_dispec_ipure_uncurry {α β γ : Type _}
     (P : α → β → Prop) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
-    (∀ value, dispec (⌜postUncurry P value⌝ ∗ F) (next value) Q) ↔
+    (∀ value, dispec (⌜Std.uncurry P value⌝ ∗ F) (next value) Q) ↔
       ∀ first second, dispec (⌜P first second⌝ ∗ F) (next (first, second)) Q :=
-  forall_dispec_postUncurry (fun first second => ⌜P first second⌝) F next Q
+  forall_dispec_uncurry (fun first second => ⌜P first second⌝) F next Q
 
 open Lean Elab Meta Tactic
 
@@ -1019,11 +994,11 @@ macro (name := intro_ispec) "intro_ispec" : tactic =>
     mk_spec_bind := ``ispec_step_bind
     mk_spec_bind_skip_args := 7
     uncurry_elim_tactics := #[
-      ``forall_ispec_postCurry,
-      ``forall_ispec_postUncurry,
-      ``forall_ispec_ipure_postCurry, ``forall_ispec_ipure_postUncurry,
-      ``postCurry_apply, ``postCurry_eq,
-      ``postUncurry_apply, ``postUncurry_eq
+      ``forall_ispec_uncurry',
+      ``forall_ispec_uncurry,
+      ``forall_ispec_ipure_uncurry', ``forall_ispec_ipure_uncurry,
+      ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair, ``uncurry'_eq,
+      ``uncurry_apply, ``uncurry_eq
     ]
     qimp_elim_tactics := #[
       ``forall_eq, ``forall_eq',
@@ -1053,11 +1028,11 @@ macro (name := intro_ispec) "intro_ispec" : tactic =>
     mk_spec_bind := ``dispec_step_bind
     mk_spec_bind_skip_args := 7
     uncurry_elim_tactics := #[
-      ``forall_dispec_postCurry,
-      ``forall_dispec_postUncurry,
-      ``forall_dispec_ipure_postCurry, ``forall_dispec_ipure_postUncurry,
-      ``postCurry_apply, ``postCurry_eq,
-      ``postUncurry_apply, ``postUncurry_eq
+      ``forall_dispec_uncurry',
+      ``forall_dispec_uncurry,
+      ``forall_dispec_ipure_uncurry', ``forall_dispec_ipure_uncurry,
+      ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair, ``uncurry'_eq,
+      ``uncurry_apply, ``uncurry_eq
     ]
     qimp_elim_tactics := #[
       ``forall_eq, ``forall_eq',
@@ -1092,9 +1067,10 @@ macro (name := intro_ispec) "intro_ispec" : tactic =>
     mk_spec_mono_skip_args := 2
     mk_spec_bind := ``spec_bind
     mk_spec_bind_skip_args := 4
-    uncurry_elim_tactics := #[``forall_postCurry, ``forall_postUncurry]
+    uncurry_elim_tactics := #[``forall_uncurry', ``forall_uncurry]
     qimp_elim_tactics := #[
-      ``postCurry_apply, ``postCurry_eq, ``postUncurry_apply, ``postUncurry_eq,
+      ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair, ``uncurry'_eq,
+      ``uncurry_apply, ``uncurry_eq,
       ``forall_eq, ``forall_eq', ``forall_unit, ``true_imp_iff
     ]
     to_mvcgen := none
@@ -1114,9 +1090,10 @@ macro (name := intro_ispec) "intro_ispec" : tactic =>
     mk_spec_mono_skip_args := 2
     mk_spec_bind := ``dspec_bind
     mk_spec_bind_skip_args := 4
-    uncurry_elim_tactics := #[``forall_postCurry, ``forall_postUncurry]
+    uncurry_elim_tactics := #[``forall_uncurry', ``forall_uncurry]
     qimp_elim_tactics := #[
-      ``postCurry_apply, ``postCurry_eq, ``postUncurry_apply, ``postUncurry_eq,
+      ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair, ``uncurry'_eq,
+      ``uncurry_apply, ``uncurry_eq,
       ``forall_eq, ``forall_eq', ``forall_unit, ``true_imp_iff
     ]
     to_mvcgen := none
@@ -1245,7 +1222,7 @@ scoped syntax:54 (name := pureDspecPred)
 record whether each product came from separate binders or an explicit tuple
 pattern, allowing the delaborator to reproduce the original surface syntax. -/
 private def mkPurePost (binders : Array Term) (p : Term) : MacroM Term := do
-  mkPostWith ``postCurry ``postUncurry binders p
+  mkPostWith ``Aeneas.Std.WP.uncurry' ``Aeneas.Std.uncurry binders p
 
 /-- Macro expansion for a single binder. -/
 scoped macro_rules (kind := pureSpecBinders)
@@ -1298,7 +1275,7 @@ private partial def enterPureUncurryOnce (acc : Array Std.Delab.BinderEntry)
     withBindingBody' n pure fun fv => do
       let acc' := acc.push (fv.fvarId!, n, pos)
       if acc'.size >= 2 then k acc'
-      else if (← getExpr).isAppOfArity ``postUncurry 4 then
+      else if (← getExpr).isAppOfArity ``Std.uncurry 4 then
         withAppArg <| enterPureUncurryOnce acc' k
       else
         enterPureUncurryOnce acc' k
@@ -1306,27 +1283,27 @@ private partial def enterPureUncurryOnce (acc : Array Std.Delab.BinderEntry)
 
 private def isPurePostBinderWrapper (e : Expr) : Bool :=
   match_expr e.consumeMData with
-  | postCurry _ _ _ _ => true
-  | postUncurry _ _ _ _ => true
+  | Std.WP.uncurry' _ _ _ _ => true
+  | Std.uncurry _ _ _ _ => true
   | _ => false
 
 /-- Recover separate binders, explicit tuple binders, and the final pure body
 from the transparent marker chain produced by `mkPurePost`. -/
 private partial def delabPurePost : DelabM (Array Term × Term) := do
   match_expr (← getExpr).consumeMData with
-  | postCurry _ _ _ _ =>
+  | Std.WP.uncurry' _ _ _ _ =>
     withAppArg do
       match_expr (← getExpr).consumeMData with
-      | postUncurry _ _ _ _ =>
+      | Std.uncurry _ _ _ _ =>
         withAppArg <| enterPureUncurryOnce #[] fun tupleBinders => do
           let (patterns, (moreBinders, body)) ←
-            delabBindersWith ``postUncurry tupleBinders.toList delabPurePost
+            delabBindersWith ``Std.uncurry tupleBinders.toList delabPurePost
           return (#[← buildTupleTerm patterns] ++ moreBinders, body)
       | _ => delabLamsThenRecurse
-  | postUncurry _ _ _ _ =>
+  | Std.uncurry _ _ _ _ =>
     withAppArg do
       let (tupleBinder, body) ←
-        delabUncurryAsTupleWith ``postUncurry delab
+        delabUncurryAsTupleWith ``Std.uncurry delab
       return (#[tupleBinder], body)
   | _ => delabLamsThenRecurse
 where
@@ -1340,10 +1317,10 @@ where
         enterLams #[] fun binders => do
           if binders.size == 1 && isPurePostBinderWrapper (← getExpr) then
             let (patterns, (moreBinders, body)) ←
-              delabBindersWith ``postUncurry binders.toList delabPurePost
+              delabBindersWith ``Std.uncurry binders.toList delabPurePost
             return (patterns ++ moreBinders, body)
           else
-            delabBindersWith ``postUncurry binders.toList delab
+            delabBindersWith ``Std.uncurry binders.toList delab
     else
       return (#[], ← delab)
 
@@ -1356,7 +1333,7 @@ private partial def enterSLUncurryOnce (acc : Array Std.Delab.BinderEntry)
     withBindingBody' n pure fun fv => do
       let acc' := acc.push (fv.fvarId!, n, pos)
       if acc'.size >= 2 then k acc'
-      else if (← getExpr).isAppOfArity ``postUncurry 4 then
+      else if (← getExpr).isAppOfArity ``Std.uncurry 4 then
         withAppArg <| enterSLUncurryOnce acc' k
       else
         enterSLUncurryOnce acc' k
@@ -1366,13 +1343,13 @@ private partial def enterSLUncurryOnce (acc : Array Std.Delab.BinderEntry)
 postcondition from the marker chain produced by `mkPostSyntaxWith`. -/
 private partial def delabSLPost : DelabM (Array Term × Term) := do
   match_expr (← getExpr).consumeMData with
-  | postCurry _ _ _ _ =>
+  | Std.WP.uncurry' _ _ _ _ =>
     withAppArg do
       match_expr (← getExpr).consumeMData with
-      | postUncurry _ _ _ _ =>
+      | Std.uncurry _ _ _ _ =>
         withAppArg <| enterSLUncurryOnce #[] fun tupleBinders => do
           let (patterns, (moreBinders, body)) ←
-            delabBindersWith ``postUncurry tupleBinders.toList delabSLPost
+            delabBindersWith ``Std.uncurry tupleBinders.toList delabSLPost
           return (#[← buildTupleTerm patterns] ++ moreBinders, body)
       | _ =>
         match (← getExpr).consumeMData with
@@ -1381,10 +1358,10 @@ private partial def delabSLPost : DelabM (Array Term × Term) := do
             let (moreBinders, body) ← delabSLPost
             return (#[⟨binder⟩] ++ moreBinders, body)
         | _ => failure
-  | postUncurry _ _ _ _ =>
+  | Std.uncurry _ _ _ _ =>
     withAppArg do
       let (binder, body) ←
-        delabUncurryAsTupleWith ``postUncurry delab
+        delabUncurryAsTupleWith ``Std.uncurry delab
       return (#[binder], body)
   | _ =>
     if (← getExpr).consumeMData.isLambda then
