@@ -5,24 +5,6 @@ import Aeneas.SepLogic
 import Aeneas.Tactic.SepLogic
 import Aeneas.Tactic.Step.StepStar
 
-/-!
-# The program logic of the state monad `Result`
-
-`Aeneas.Std.Primitives` defines `Result`, the interaction-tree monad over heap
-events. This file builds its correctness judgments, derives the
-separation-logic ispecs, wires those ispecs to the `step`/`step*` tactics,
-and defines the pure judgments `spec` and `dspec`, written
-`⦃ value => p ⦄` and `⦃ value => p ⦄div`. They wrap the ispecs that own
-nothing and are registered independently with `step`.
-
-The meaning of a heap event is written down once in `RustEffect.handler`. The
-separation-logic judgments are
-defined directly from the generic `TotalSpec` and `PartialSpec` judgments of
-`Aeneas.Data.Coinductive.Spec` at that machine. The machine's runs — the
-operational semantics `Result` is adequate for — and the certified interpreter
-that runs a proved program are in `Aeneas.SLPoC.Semantics`.
--/
-
 namespace Aeneas.SepLogic
 
 open Aeneas.Data
@@ -31,26 +13,16 @@ open Aeneas.Std (Error Heap Result RustEffect)
 
 universe u v
 
+def Post (α:Type u) := (α -> Prop)
+
 section ResultImplementation
 
 unseal Result
 set_option allowUnsafeReducibility true in
 attribute [local reducible] Result Result.ok Result.vis Result.div Aeneas.Std.bind
 
-/-! ## The machine of `Result`
-
-`Result` is an interaction tree, so it fixes no meaning for its events; a state
-handler (`Aeneas.Data.Coinductive.Handler`) does, by saying how one event is
-answered on one heap. `RustEffect.handler` is the single place the meaning of a
-heap event is written down: the correctness judgments below are the generic
-judgments of `Aeneas.Data.Coinductive.Spec` at this handler, and
-`Aeneas.SLPoC.Semantics` proves them adequate for its runs. -/
-
-/-- The handler of `Result`: a heap event must be defined on the heap it is
-performed on, and what follows runs on the answer and heap it produces; failure
-is rejected outright, having no possible answer at all. -/
 @[reducible]
-def RustEffect.handler : Handler RustEffect where
+def handler : Handler RustEffect where
   State := Heap
   handle
     | .guardedModify _ pre modify, h, C =>
@@ -62,105 +34,80 @@ def RustEffect.handler : Handler RustEffect where
     | guardedModify => exact hEvent.imp fun _ hNext => hC _ _ hNext
     | fail => exact hEvent.elim
 
-/-- The machine is **positively conjunctive**: whatever a heap event owes each
-of a nonempty set of demands on a given heap, it owes all of them in one single
-transition.  It holds because the guard of an event is a *proposition*, so the
-modifier cannot depend on which proof of the guard it is performed with: there
-is nothing for the machine to choose.
-
-This is what the admissibility of partial correctness
-(`Coinductive.PartialSpec.admissible`, used by `dispec_admissible`) and its
-adequacy need. -/
-theorem RustEffect.handler_conjunctive : RustEffect.handler.Conjunctive := by
+theorem handler_conjunctive : handler.Conjunctive := by
   intro event h Demands ⟨C₀, hC₀⟩ hAll
   cases event with
   | guardedModify EventResult pre modify =>
       exact ⟨(hAll C₀ hC₀).1, fun C hC => (hAll C hC).2⟩
   | fail error => exact (hAll C₀ hC₀).elim
 
-/-! ## Total and partial correctness
-
-`Result` carries total- and partial-correctness judgments, laid out here the
-way `Aeneas.Std.WP` lays out `spec` and `dspec`.
-
-`TotalSpec` is *total* correctness. As for `Aeneas.Std.WP.spec`, a proof is a
-finite derivation ending in `ret`; nothing proves `ITree.div` correct, so a
-program that does not terminate has no proof at all.
-
-`PartialSpec` is the divergence-tolerant counterpart. It says what `TotalSpec`
-says of a run that *stops* and nothing about a run that does not, while still
-requiring every event the program reaches to be defined: divergence is
-permitted, being stuck is not.
-
-`Aeneas.Std.WP` specializes the same generic judgments to a handler that rejects
-every event. Here the handler accepts defined heap events, so partial correctness
-also admits infinite `vis` trees, not just `Result.div`: it is a **greatest**
-fixed point rather than an inductive judgment with a divergence constructor.
-
-Both are judgments of `Aeneas.Data.Coinductive.Spec` — the least and greatest
-fixed points of the same one-layer condition `SpecF`, differing only in what
-divergence owes — at the machine above, and their whole theory is proved there
-of an arbitrary machine: the constructors and destructors,
-`TotalSpec.induction` and `PartialSpec.coinduction`, the structural rules, and
-admissibility. Their adequacy for runs is in `Aeneas.SLPoC.StateMachine`.
-Use them under those names; what is added here is only what is specific to heap
-events, which is what `RustEffect.handler.handle` reduces to at a concrete
-event. -/
-
-/-- Total correctness of `m` on the exact heap `h`. -/
 abbrev iwp (m : Result α) (Q : IPost α) (h : Heap) : Prop :=
-  TotalSpec RustEffect.handler (fun value h' => Q value h') m h
+  TotalSpec handler (fun value h' => Q value h') m h
 
-/-- Partial correctness of `m` on the exact heap `h`. -/
 abbrev diwp (m : Result α) (Q : IPost α) (h : Heap) : Prop :=
-  PartialSpec RustEffect.handler (fun value h' => Q value h') m h
+  PartialSpec handler (fun value h' => Q value h') m h
 
-/-- Partial correctness is admissible: it holds of the limit of a chain of
-programs as soon as it holds of every program in it.  This is what
-`Lean.Order.fix_induct` — the induction principle `partial_fixpoint` attaches to
-a recursive definition — needs, and it is the counterpart of
-`Aeneas.Std.WP.dspec_admissible`.  It holds because the machine of `Result` is
-conjunctive: what the approximations demand of an event one at a time, it
-answers the limit all at once. -/
-private theorem diwp_admissible (Q : IPost α) (h : Heap) :
-    Lean.Order.admissible (fun m : Result α => diwp m Q h) :=
-  PartialSpec.admissible RustEffect.handler_conjunctive _ h
-
-/-!
-Dot notation on the generic judgments finds `.ret`, `.bind`, `.mono`,
-`.mono_le`, `.vis_view`, `.toPartial` and the rest in `TotalSpec` and
-`PartialSpec`. What is left is what only `RustEffect.handler` knows: an event
-the handler cannot answer is no more correct than one it can answer wrongly. A
-guarded modification is proved correct in one place, and that place is
-`guardedModifyWp_spec`, where its weakest precondition meets `TotalSpec`. -/
-
-/-! ## Separation-logic specifications
-
-`ispec` and `dispec` are the two judgments made local, and are declared here
-side by side. Both quantify over an arbitrary frame the computation must
-preserve; only `ispec` claims that the computation terminates. -/
-
-/-- A total-correctness separation-logic specification. The quantified `F` is an arbitrary
-frame that the computation must preserve. -/
+/-- Total-correctness separation-logic specification -/
 def ispec (P : IPre) (m : Result α) (Q : IPost α) : Prop :=
   ∀ F h, (P ∗ F) h → iwp m (Q ∗+ F) h
 
-/-- A partial-correctness separation-logic specification. As in `ispec` the quantified `F`
-is an arbitrary frame the computation must preserve; unlike `ispec` it does not
-claim that the computation terminates. -/
+/-- Partial-correctness separation-logic specification -/
 def dispec (P : IPre) (m : Result α) (Q : IPost α) : Prop :=
   ∀ F h, (P ∗ F) h → diwp m (Q ∗+ F) h
 
-/-- Total correctness with no owned input and a pure postcondition. -/
-def spec (m : Result α) (Q : α → Prop) : Prop :=
+/-- Total-correctness pure specification -/
+def spec (m : Result α) (Q : Post α) : Prop :=
   ispec emp m (fun value => ⌜Q value⌝)
 
-/-- The divergence-tolerant counterpart of `spec`. -/
-def dspec (m : Result α) (Q : α → Prop) : Prop :=
+/-- Partial-correctness pure specification -/
+def dspec (m : Result α) (Q : Post α) : Prop :=
   dispec emp m (fun value => ⌜Q value⌝)
 
-/-- Internal tuple-destructuring marker for postconditions. Unlike a pattern
-lambda, it remains visible to `step` and the delaborators. -/
+theorem ispec_dispec {α : Type u} {P : IPre} {m : Result α} {Q : IPost α}
+    (hTriple : ispec P m Q) : dispec P m Q :=
+  fun F h hPre => (hTriple F h hPre).toPartial
+
+theorem spec_ispec (m : Result α) (Q : Post α) : spec m Q → ispec emp m (fun value => ⌜Q value⌝) := id
+
+theorem dspec_dispec (m : Result α) (Q : Post α) : dspec m Q → dispec emp m (fun value => ⌜Q value⌝) := id
+
+theorem spec_dspec (m : Result α) (Q : Post α) : spec m Q → dspec m Q := ispec_dispec
+
+theorem spec_dispec (m : Result α) (Q : Post α) : spec m Q → dispec emp m (fun value => ⌜Q value⌝) :=
+  ispec_dispec
+
+theorem ispec_spec (m : Result α) (Q : Post α) :
+    ispec emp m (fun value => ⌜Q value⌝) → spec m Q := id
+
+theorem ispec_dspec (m : Result α) (Q : Post α) :
+    ispec emp m (fun value => ⌜Q value⌝) → dspec m Q := ispec_dispec
+
+theorem dispec_dspec (m : Result α) (Q : Post α) :
+    dispec emp m (fun value => ⌜Q value⌝) → dspec m Q := id
+
+private theorem diwp_admissible (Q : IPost α) (h : Heap) :
+    Lean.Order.admissible (fun m : Result α => diwp m Q h) :=
+  PartialSpec.admissible handler_conjunctive _ h
+
+theorem dispec_admissible {α : Type u} (P : IPre) (Q : IPost α) :
+    Lean.Order.admissible (fun m : Result α => dispec P m Q) := by
+  intro c hc hAll F h hPre
+  exact diwp_admissible (Q ∗+ F) h c hc fun x hx => hAll x hx F h hPre
+
+theorem dspec_admissible {α : Type u} (Q : α → Prop) :
+    Lean.Order.admissible (fun m : Result α => dspec m Q) :=
+  dispec_admissible emp (fun value => ⌜Q value⌝)
+
+/-- Variant of `uncurry` used to decompose tuples in post-conditions.
+
+Similar to `uncurry` but delaborated differently:
+`uncurry'` is delaborated as `x y => ...` (separate binders), while
+`uncurry` is delaborated as `(x, y) => ...` (tuple binder).
+We use this in the Hoare triple notation `⦃ ⦄`.
+
+Example: `f 0 ⦃ x y z => ... ⦄` desugars to
+`spec (f 0) (uncurry' fun x => uncurry' fun y z => ...)`.
+-/
 @[inline] def postUncurry {α β γ : Type _} (f : α → β → γ) : α × β → γ :=
   fun (a, b) => f a b
 
@@ -364,18 +311,12 @@ macro_rules
   | `(⦃$P⦄ $m ⦃⇓ $Q⦄div) =>
       `(dispec iprop($P) $m (fun _ => iprop($Q)))
 
-/-- Every total ispec is a partial one.  `step` applies the `@[step]`
-specifications — which state total correctness — to a partial goal through this
-lifting, through the generic `TotalSpec.toPartial`. -/
-theorem ispec_dispec {α : Type u} {P : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : ispec P m Q) : dispec P m Q :=
-  fun F h hPre => (hTriple F h hPre).toPartial
 
 /-! ### `ispec` rules -/
 
 private theorem ispec_apply {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : ispec P m Q) {h : Heap} (hPre : P h) :
-    TotalSpec RustEffect.handler (fun value h' => Q value h') m h := by
+    TotalSpec handler (fun value h' => Q value h') m h := by
   have hSpec := hTriple emp h ((sep_emp_r P).mpr h hPre)
   exact hSpec.mono fun value => sep_elim_right (Q value) emp
 
@@ -596,14 +537,14 @@ modification returns. -/
 private theorem guardedModifyWp_spec {α : Type} {pre : Heap → Prop}
     {modify : (h : Heap) → pre h → α × Heap} {Q : IPost α} {h : Heap}
     (hWp : guardedModifyWp pre modify Q h) :
-    TotalSpec RustEffect.handler (fun value h' => Q value h')
+    TotalSpec handler (fun value h' => Q value h')
       (Result.guardedModify pre modify) h := by
   have hWp' := hWp Heap.empty (PartialCommMonoid.compatible_comm
     (PartialCommMonoid.compatible_empty_left h))
   simp only [Heap.union_empty] at hWp'
   obtain ⟨hPre, h', -, hModify, hPost⟩ := hWp'
   subst h'
-  refine TotalSpec.vis (H := RustEffect.handler)
+  refine TotalSpec.vis (H := handler)
     (event := RustEffect.Input.guardedModify _ pre modify) ?_
   exact ⟨hPre, .ret hPost⟩
 
@@ -656,7 +597,7 @@ theorem ispec_seq {α β : Type u} {P H : IPre} {Q : IPost β}
 
 private theorem dispec_apply {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : dispec P m Q) {h : Heap} (hPre : P h) :
-    PartialSpec RustEffect.handler (fun value h' => Q value h') m h := by
+    PartialSpec handler (fun value h' => Q value h') m h := by
   have hSpec := hTriple emp h ((sep_emp_r P).mpr h hPre)
   exact hSpec.mono fun value => sep_elim_right (Q value) emp
 
@@ -849,12 +790,6 @@ proves the loop, with no measure and no termination argument. A recursion in
 `partial_fixpoint` attaches to it, and anything else by
 `PartialSpec.coinduction` itself. -/
 
-/-- A partial specification is admissible in the program, so it may be proved of a
-`partial_fixpoint` by `Lean.Order.fix_induct`. -/
-theorem dispec_admissible {α : Type u} (P : IPre) (Q : IPost α) :
-    Lean.Order.admissible (fun m : Result α => dispec P m Q) := by
-  intro c hc hAll F h hPre
-  exact diwp_admissible (Q ∗+ F) h c hc fun x hx => hAll x hx F h hPre
 
 /-- The same for a family of ispecs about a recursive *function*, which is the
 shape `fixpoint_induct` expects. -/
@@ -972,29 +907,6 @@ theorem spec_iff {m : Result α} {Q : α → Prop} :
 theorem dspec_iff {m : Result α} {Q : α → Prop} :
     dspec m Q ↔ dispec emp m (fun value => ⌜Q value⌝) := Iff.rfl
 
-theorem spec_ispec {α : Type u} {m : Result α} {Q : α → Prop}
-    (h : spec m Q) : ispec emp m (fun value => ⌜Q value⌝) := h
-
-theorem ispec_spec {α : Type u} {m : Result α} {Q : α → Prop}
-    (h : ispec emp m (fun value => ⌜Q value⌝)) : spec m Q := h
-
-theorem dspec_dispec {α : Type u} {m : Result α} {Q : α → Prop}
-    (h : dspec m Q) : dispec emp m (fun value => ⌜Q value⌝) := h
-
-theorem dispec_dspec {α : Type u} {m : Result α} {Q : α → Prop}
-    (h : dispec emp m (fun value => ⌜Q value⌝)) : dspec m Q := h
-
-theorem spec_dspec {α : Type u} {m : Result α} {Q : α → Prop}
-    (h : spec m Q) : dspec m Q := ispec_dispec h
-
-theorem spec_dispec {α : Type u} {m : Result α} {Q : α → Prop}
-    (h : spec m Q) : dispec emp m (fun value => ⌜Q value⌝) :=
-  ispec_dispec h
-
-theorem ispec_dspec {α : Type u} {m : Result α} {Q : α → Prop}
-    (h : ispec emp m (fun value => ⌜Q value⌝)) : dspec m Q :=
-  ispec_dispec h
-
 theorem spec_mono {α : Type u} {Q : α → Prop}
     (m : Result α) (Qm : α → Prop) (h : spec m Qm)
     (hPost : ∀ value, Qm value → Q value) : spec m Q :=
@@ -1016,10 +928,6 @@ theorem dspec_bind {α : Type u} {β : Type v} {next : α → Result β} {Q : β
     (hNext : ∀ value, Qm value → dspec (next value) Q) :
     dspec (Aeneas.Std.bind m next) Q :=
   dispec_bind' h (fun value => dispec_ipure' (hNext value))
-
-theorem dspec_admissible {α : Type u} (Q : α → Prop) :
-    Lean.Order.admissible (fun m : Result α => dspec m Q) :=
-  dispec_admissible emp (fun value => ⌜Q value⌝)
 
 theorem forall_postCurry {α β : Type _} (P : α → β → Prop) (Q : α × β → Prop) :
     (∀ value, postCurry P value → Q value) ↔
