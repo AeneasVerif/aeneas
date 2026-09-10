@@ -6,7 +6,7 @@ import Aeneas.Tactic.SepLogic.Frame
 Moving the existentials and pure facts of a precondition into the local context,
 and the entailment-facing names of `iframe`.
 
-The triple lemmas these tactics apply (`triple_exists`, `triple_ipure`, …) are
+The ispec lemmas these tactics apply (`ispec_exists`, `ispec_ipure`, …) are
 resolved by name at elaboration time, so this module does not depend on the
 module that defines them.
 -/
@@ -50,10 +50,10 @@ private partial def extractPure? (pre : Expr) : Option (Expr × Expr) :=
     none
 
 /-- One step of `iintro`: peel a quantifier or a pure fact off the precondition
-of a total or partial triple. Fails when the precondition is purely spatial.
+of a total or partial ispec. Fails when the precondition is purely spatial.
 
 The precondition is unfolded (`wellFormed`, `isList`, …) only as far as needed to
-expose its head connective: applying `triple_exists` or `triple_ipure` blindly
+expose its head connective: applying `ispec_exists` or `ispec_ipure` blindly
 would let the unifier see through `sep`/`ipure` down to the raw heap predicate
 and peel a quantifier of the *model* instead. -/
 elab "iintro_step" : tactic => withMainContext do
@@ -69,10 +69,10 @@ elab "iintro_step" : tactic => withMainContext do
   let goal ← getMainGoal
   let target ← instantiateMVars (← goal.getType)
   let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
-  let isTriple := fn.isConstOf `Aeneas.SepLogic.triple
-  let isDtriple := fn.isConstOf `Aeneas.SepLogic.dtriple
-  unless (isTriple || isDtriple) && args.size = 4 do
-    throwError "iintro_step: the goal is not a separation-logic triple"
+  let isISpec := fn.isConstOf `Aeneas.SepLogic.ispec
+  let isDispec := fn.isConstOf `Aeneas.SepLogic.dispec
+  unless (isISpec || isDispec) && args.size = 4 do
+    throwError "iintro_step: the goal is not a separation-logic ispec"
   let precondition ← IFrame.exposeConnective args[1]!
   let head := precondition.consumeMData.getAppFn
   let leadingPure ←
@@ -81,29 +81,29 @@ elab "iintro_step" : tactic => withMainContext do
         |>.consumeMData.isAppOfArity ``ipure 1)
     else pure false
   let specName :=
-    if isDtriple then `Aeneas.SepLogic.dtriple
-    else `Aeneas.SepLogic.triple
+    if isDispec then `Aeneas.SepLogic.dispec
+    else `Aeneas.SepLogic.ispec
   let goal ← goal.change
     (← mkAppOptM specName #[args[0]!, precondition, args[2]!, args[3]!])
   if head.isConstOf ``iexists then
     let lemmaName :=
-      if isDtriple then `Aeneas.SepLogic.dtriple_exists
-      else `Aeneas.SepLogic.triple_exists
+      if isDispec then `Aeneas.SepLogic.dispec_exists
+      else `Aeneas.SepLogic.ispec_exists
     replaceMainGoal (← goal.apply (← mkConstWithFreshMVarLevels lemmaName))
   else if head.isConstOf ``ipure then
     let lemmaName :=
-      if isDtriple then `Aeneas.SepLogic.dtriple_ipure'
-      else `Aeneas.SepLogic.triple_ipure'
+      if isDispec then `Aeneas.SepLogic.dispec_ipure'
+      else `Aeneas.SepLogic.ispec_ipure'
     replaceMainGoal (← goal.apply (← mkConstWithFreshMVarLevels lemmaName))
   else if leadingPure then
     let lemmaName :=
-      if isDtriple then `Aeneas.SepLogic.dtriple_ipure
-      else `Aeneas.SepLogic.triple_ipure
+      if isDispec then `Aeneas.SepLogic.dispec_ipure
+      else `Aeneas.SepLogic.ispec_ipure
     replaceMainGoal (← goal.apply (← mkConstWithFreshMVarLevels lemmaName))
   else if let some (proposition, rest) := extractPure? precondition then
     let lemmaName :=
-      if isDtriple then `Aeneas.SepLogic.dtriple_ipure_anywhere
-      else `Aeneas.SepLogic.triple_ipure_anywhere
+      if isDispec then `Aeneas.SepLogic.dispec_ipure_anywhere
+      else `Aeneas.SepLogic.ispec_ipure_anywhere
     let normalized := mkApp2 (mkConst ``sep)
       (mkApp (mkConst ``ipure) proposition) rest
     let hExtract ← IFrame.proveEqAC precondition normalized
@@ -114,7 +114,7 @@ elab "iintro_step" : tactic => withMainContext do
     throwError "iintro_step: the precondition has no quantifier or pure fact \
       left to extract:\n{precondition}"
 
-/-- Move the existentials and pure facts of a triple's precondition into the
+/-- Move the existentials and pure facts of a ispec's precondition into the
 local context.
 
 `iintro` peels as many of them as it can, using inaccessible names.
@@ -145,8 +145,8 @@ private partial def isPullable (pre : Expr) : Bool :=
 
 private partial def pullPrecondition (goal : MVarId) : TacticM MVarId := goal.withContext do
   let target := (← instantiateMVars (← goal.getType)).consumeMData
-  unless (target.isAppOfArity `Aeneas.SepLogic.triple 4 ||
-      target.isAppOfArity `Aeneas.SepLogic.dtriple 4) &&
+  unless (target.isAppOfArity `Aeneas.SepLogic.ispec 4 ||
+      target.isAppOfArity `Aeneas.SepLogic.dispec 4) &&
       isPullable target.getAppArgs[1]! do return goal
   setGoals [goal]
   let state ← saveState
@@ -165,13 +165,13 @@ elab "iintro_shallow" : tactic => withMainContext do
 
 /-- Run `iintro_shallow` on the left side of the top-level separating
 conjunction while treating its right side as an opaque frame. This is the
-variant used by `step` on continuation triples of the shape `Qm value ∗ F`. -/
+variant used by `step` on continuation ispecs of the shape `Qm value ∗ F`. -/
 elab "iintro_shallow_post" : tactic => withMainContext do
   let goal ← getMainGoal
   let target := (← instantiateMVars (← goal.getType)).consumeMData
-  let isTriple := target.isAppOfArity `Aeneas.SepLogic.triple 4
-  let isDtriple := target.isAppOfArity `Aeneas.SepLogic.dtriple 4
-  unless isTriple || isDtriple do
+  let isISpec := target.isAppOfArity `Aeneas.SepLogic.ispec 4
+  let isDispec := target.isAppOfArity `Aeneas.SepLogic.dispec 4
+  unless isISpec || isDispec do
     evalTactic (← `(tactic| isimp))
     return
   let args := target.getAppArgs
@@ -181,8 +181,8 @@ elab "iintro_shallow_post" : tactic => withMainContext do
     return
   let preArgs := precondition.getAppArgs
   let lemmaName :=
-    if isDtriple then `Aeneas.SepLogic.dtriple_introFrame
-    else `Aeneas.SepLogic.triple_introFrame
+    if isDispec then `Aeneas.SepLogic.dispec_introFrame
+    else `Aeneas.SepLogic.ispec_introFrame
   let thm := mkApp3 (← mkConstWithFreshMVarLevels lemmaName)
     args[0]! preArgs[0]! preArgs[1]!
   replaceMainGoal (← goal.apply thm)
@@ -191,7 +191,7 @@ elab "iintro_shallow_post" : tactic => withMainContext do
     evalTactic (← `(tactic| (simp only [introFrame_eq]; isimp)))
 
 /-- One step of `iintro_keep`: copy the leading pure fact of the precondition of
-a triple into the local context, *without* removing it from the precondition.
+a ispec into the local context, *without* removing it from the precondition.
 
 `iintro_step` consumes the fact, but that is often the wrong thing here: the
 assertion has to keep it for the framing of the later
@@ -205,8 +205,8 @@ elab "iintro_keep_step" : tactic => withMainContext do
   let goal ← getMainGoal
   let target ← instantiateMVars (← goal.getType)
   let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
-  unless fn.isConstOf `Aeneas.SepLogic.triple && args.size = 4 do
-    throwError "iintro_keep_step: the goal is not a separation-logic triple"
+  unless fn.isConstOf `Aeneas.SepLogic.ispec && args.size = 4 do
+    throwError "iintro_keep_step: the goal is not a separation-logic ispec"
   let precondition ← IFrame.exposeConnective args[1]!
   unless precondition.consumeMData.isAppOfArity ``sep 2 do
     throwError "iintro_keep_step: the precondition is not a separating conjunction"
@@ -219,18 +219,18 @@ elab "iintro_keep_step" : tactic => withMainContext do
     throwError "iintro_keep_step: this pure fact is already in the context"
   let exposed := mkApp2 (mkConst ``sep) leading precondition.consumeMData.appArg!
   let goal ← goal.change
-    (← mkAppOptM `Aeneas.SepLogic.triple #[args[0]!, exposed, args[2]!, args[3]!])
+    (← mkAppOptM `Aeneas.SepLogic.ispec #[args[0]!, exposed, args[2]!, args[3]!])
   let [next] ← goal.apply
-    (← mkConstWithFreshMVarLevels `Aeneas.SepLogic.triple_ipure_keep)
+    (← mkConstWithFreshMVarLevels `Aeneas.SepLogic.ispec_ipure_keep)
     | throwError "iintro_keep_step: unexpected number of goals"
   let (_, next) ← next.intro1P
   /- Put the precondition back in its original, folded form: only the local
      context should record that the step happened. -/
   replaceMainGoal
     [← next.change
-      (← mkAppOptM `Aeneas.SepLogic.triple #[args[0]!, args[1]!, args[2]!, args[3]!])]
+      (← mkAppOptM `Aeneas.SepLogic.ispec #[args[0]!, args[1]!, args[2]!, args[3]!])]
 
-/-- Copy the pure facts of the precondition of a triple into the local context,
+/-- Copy the pure facts of the precondition of a ispec into the local context,
 leaving the precondition untouched.  See `iintro_keep_step`. -/
 macro "iintro_keep" : tactic => `(tactic| repeat (iintro_keep_step; rename_i _))
 
