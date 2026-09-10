@@ -26,7 +26,7 @@ namespace issue_767_adt_constructor
     Visibility: public -/
 @[rust_fun "core::option::{core::option::Option<@T>}::map"]
 axiom core.option.Option.map
-  {T : Type} {U : Type} {F : Type} (opsfunctionFnOnceFTupleTUInst :
+  {T : Type} {U : Type} {F : Type u} (opsfunctionFnOnceFTupleTUInst :
   core.ops.function.FnOnce F T U) :
   Option T → F → Result (Option U)
 
