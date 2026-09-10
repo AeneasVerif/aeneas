@@ -39,19 +39,44 @@ theorem handler_conjunctive : handler.Conjunctive := by
       exact ⟨(hAll C₀ hC₀).1, fun C hC => (hAll C hC).2⟩
   | fail error => exact (hAll C₀ hC₀).elim
 
-abbrev iwp (m : Result α) (Q : IPost α) (h : Heap) : Prop :=
-  TotalSpec handler (fun value h' => Q value h') m h
+abbrev rawIwp (total:Bool) (m : Result α) (Q : IPost α) (h : Heap) : Prop :=
+  (if total then TotalSpec else PartialSpec) handler (fun value h' => Q value h') m h
 
-abbrev diwp (m : Result α) (Q : IPost α) (h : Heap) : Prop :=
-  PartialSpec handler (fun value h' => Q value h') m h
+def iwp (total:Bool) (m : Result α) (Q : IPost α) : IProp where
+  holds owned :=
+    ∀ F h, (owns owned ∗ F) h → rawIwp total m (Q ∗+ F) h
+  up_closed hWp hSub F h hPre :=
+    hWp F h (sep_mono
+      (fun _ hOwns => hSub.trans hOwns)
+      (entails_refl F) h hPre)
 
 /-- Total-correctness separation-logic specification -/
 def ispec (P : IPre) (m : Result α) (Q : IPost α) : Prop :=
-  ∀ F h, (P ∗ F) h → iwp m (Q ∗+ F) h
+  P ⊢ iwp true m Q
 
 /-- Partial-correctness separation-logic specification -/
 def dispec (P : IPre) (m : Result α) (Q : IPost α) : Prop :=
-  ∀ F h, (P ∗ F) h → diwp m (Q ∗+ F) h
+  P ⊢ iwp false m Q
+
+theorem ispec_iff {P : IPre} {m : Result α} {Q : IPost α} :
+    ispec P m Q ↔
+      ∀ F h, (P ∗ F) h → rawIwp true m (Q ∗+ F) h := by
+  constructor
+  · rintro hSpec F _ ⟨h₁, h₂, hDisjoint, rfl, hP, hF⟩
+    exact hSpec h₁ hP F _ ⟨h₁, h₂, hDisjoint, rfl, Heap.Sub.refl _, hF⟩
+  · intro hSpec owned hP F _
+    rintro ⟨h₁, h₂, hDisjoint, rfl, hOwned, hF⟩
+    exact hSpec F _ ⟨h₁, h₂, hDisjoint, rfl, P.up_closed hP hOwned, hF⟩
+
+theorem dispec_iff {P : IPre} {m : Result α} {Q : IPost α} :
+    dispec P m Q ↔
+      ∀ F h, (P ∗ F) h → rawIwp false m (Q ∗+ F) h := by
+  constructor
+  · rintro hSpec F _ ⟨h₁, h₂, hDisjoint, rfl, hP, hF⟩
+    exact hSpec h₁ hP F _ ⟨h₁, h₂, hDisjoint, rfl, Heap.Sub.refl _, hF⟩
+  · intro hSpec owned hP F _
+    rintro ⟨h₁, h₂, hDisjoint, rfl, hOwned, hF⟩
+    exact hSpec F _ ⟨h₁, h₂, hDisjoint, rfl, P.up_closed hP hOwned, hF⟩
 
 /-- Total-correctness pure specification -/
 def spec (m : Result α) (Q : Post α) : Prop :=
@@ -62,8 +87,11 @@ def dspec (m : Result α) (Q : Post α) : Prop :=
   dispec emp m (fun value => ⌜Q value⌝)
 
 theorem ispec_dispec {α : Type u} {P : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : ispec P m Q) : dispec P m Q :=
-  fun F h hPre => (hTriple F h hPre).toPartial
+    (hTriple : ispec P m Q) : dispec P m Q := by
+  rw [ispec_iff] at hTriple
+  rw [dispec_iff]
+  intro F h hPre
+  exact (hTriple F h hPre).toPartial
 
 theorem spec_ispec (m : Result α) (Q : Post α) : spec m Q → ispec emp m (fun value => ⌜Q value⌝) := id
 
@@ -83,14 +111,15 @@ theorem ispec_dspec (m : Result α) (Q : Post α) :
 theorem dispec_dspec (m : Result α) (Q : Post α) :
     dispec emp m (fun value => ⌜Q value⌝) → dspec m Q := id
 
-private theorem diwp_admissible (Q : IPost α) (h : Heap) :
-    Lean.Order.admissible (fun m : Result α => diwp m Q h) :=
+private theorem rawIwp_admissible (Q : IPost α) (h : Heap) :
+    Lean.Order.admissible (fun m : Result α => rawIwp false m Q h) :=
   PartialSpec.admissible handler_conjunctive _ h
 
 theorem dispec_admissible {α : Type u} (P : IPre) (Q : IPost α) :
     Lean.Order.admissible (fun m : Result α => dispec P m Q) := by
+  simp only [dispec_iff]
   intro c hc hAll F h hPre
-  exact diwp_admissible (Q ∗+ F) h c hc fun x hx => hAll x hx F h hPre
+  exact rawIwp_admissible (Q ∗+ F) h c hc fun x hx => hAll x hx F h hPre
 
 theorem dspec_admissible {α : Type u} (Q : α → Prop) :
     Lean.Order.admissible (fun m : Result α => dspec m Q) :=
@@ -288,7 +317,8 @@ macro_rules
 
 private theorem ispec_apply {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : ispec P m Q) {h : Heap} (hPre : P h) :
-    TotalSpec handler (fun value h' => Q value h') m h := by
+    rawIwp true m Q h := by
+  rw [ispec_iff] at hTriple
   have hSpec := hTriple emp h ((sep_emp_r P).mpr h hPre)
   exact hSpec.mono fun value => sep_elim_right (Q value) emp
 
@@ -301,6 +331,7 @@ theorem spec_fail (error : Error) (Q : α → Prop) :
 theorem ispec_frame {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : ispec P m Q) (H : IProp) :
     ispec (P ∗ H) m (Q ∗+ H) := by
+  rw [ispec_iff] at hTriple ⊢
   intro F h hPre
   have hSpec := hTriple (H ∗ F) h ((sep_assoc P H F).mp h hPre)
   exact hSpec.mono fun value heap => (sep_assoc (Q value) H F).mpr heap
@@ -311,6 +342,7 @@ already past on the left. -/
 theorem ispec_frame_left {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : ispec P m Q) (H : IProp) :
     ispec (H ∗ P) m (fun value => H ∗ Q value) := by
+  rw [ispec_iff] at hTriple ⊢
   intro F h hPre
   have hSwapped : (P ∗ (H ∗ F)) h :=
     (sep_assoc P H F).mp h
@@ -324,6 +356,7 @@ theorem ispec_conseq {P' P : IPre} {m : Result α}
     (hTriple : ispec P' m Q') (hP : P ⊢ P')
     (hQ : Q' ⊢+ Q) :
     ispec P m Q := by
+  rw [ispec_iff] at hTriple ⊢
   intro F h hPre
   have hSpec := hTriple F h (sep_mono hP (entails_refl F) h hPre)
   exact hSpec.mono fun value => sep_mono (hQ value) (entails_refl F)
@@ -346,6 +379,7 @@ theorem ispec_ipure {P : Prop} {H : IPre} {m : Result α}
     {Q : IPost α}
     (hTriple : P → ispec H m Q) :
     ispec (⌜P⌝ ∗ H) m Q := by
+  simp only [ispec_iff] at hTriple ⊢
   intro F h hPre
   have ⟨hP, hHF⟩ :=
     (sep_pure_l P (H ∗ F) h).mp ((sep_assoc _ _ _).mp h hPre)
@@ -375,6 +409,7 @@ theorem ispec_ipure_keep {P : Prop} {H : IPre} {m : Result α}
     {Q : IPost α}
     (hTriple : P → ispec (⌜P⌝ ∗ H) m Q) :
     ispec (⌜P⌝ ∗ H) m Q := by
+  simp only [ispec_iff] at hTriple ⊢
   intro F h hPre
   have ⟨hP, _⟩ :=
     (sep_pure_l P (H ∗ F) h).mp ((sep_assoc _ _ _).mp h hPre)
@@ -384,6 +419,7 @@ theorem ispec_exists {ι : Sort _} {J : ι → IPre} {m : Result α}
     {Q : IPost α}
     (hTriple : ∀ x, ispec (J x) m Q) :
     ispec iprop(∃ x, J x) m Q := by
+  simp only [ispec_iff] at hTriple ⊢
   intro F h hPre
   obtain ⟨h₁, h₂, hDisjoint, rfl, ⟨x, hJ⟩, hF⟩ := hPre
   exact hTriple x F _ ⟨h₁, h₂, hDisjoint, rfl, hJ, hF⟩
@@ -400,6 +436,7 @@ theorem ispec_conseq_frame {H₂ : IProp} {H₁ H : IPre}
 theorem ispec_ipure' {P : Prop} {m : Result α} {Q : IPost α}
     (hTriple : P → ispec emp m Q) :
     ispec ⌜P⌝ m Q := by
+  simp only [ispec_iff] at hTriple ⊢
   intro F h hPre
   have ⟨hP, hF⟩ := (sep_pure_l P F h).mp hPre
   exact hTriple hP F h ((sep_emp_l F).mpr h hF)
@@ -418,6 +455,7 @@ theorem ispec_ipure_iff {P : Prop} {m : Result α} {Q : α → Prop} :
 theorem ispec_pure {P : IPre} {Q : IPost α} {value : α}
     (hPost : P ⊢ Q value) :
     ispec P (pure value : Result α) Q := by
+  rw [ispec_iff]
   intro F h hPre
   exact .ret (sep_mono hPost (entails_refl F) h hPre)
 
@@ -509,8 +547,7 @@ modification returns. -/
 private theorem guardedModifyWp_spec {α : Type} {pre : Heap → Prop}
     {modify : (h : Heap) → pre h → α × Heap} {Q : IPost α} {h : Heap}
     (hWp : guardedModifyWp pre modify Q h) :
-    TotalSpec handler (fun value h' => Q value h')
-      (Result.guardedModify pre modify) h := by
+    rawIwp true (Result.guardedModify pre modify) Q h := by
   have hWp' := hWp Heap.empty (PartialCommMonoid.compatible_comm
     (PartialCommMonoid.compatible_empty_left h))
   simp only [Heap.union_empty] at hWp'
@@ -526,8 +563,10 @@ then read off total correctness. -/
 theorem ispec_guardedModify {α : Type} {pre : Heap → Prop}
     {modify : (h : Heap) → pre h → α × Heap} {P : IPre} {Q : IPost α}
     (hWp : P ⊢ guardedModifyWp pre modify Q) :
-    ispec P (Result.guardedModify pre modify) Q := fun F h hPre =>
-  guardedModifyWp_spec
+    ispec P (Result.guardedModify pre modify) Q := by
+  rw [ispec_iff]
+  intro F h hPre
+  exact guardedModifyWp_spec
     (guardedModifyWp_frame pre modify Q F h
       (sep_mono hWp (entails_refl F) h hPre))
 
@@ -536,6 +575,7 @@ theorem ispec_bind {α β : Type u} {P : IPre} {Q₁ : IPost α}
     (hFirst : ispec P m Q₁)
     (hNext : ∀ value, ispec (Q₁ value) (next value) Q) :
     ispec P (m >>= next) Q := by
+  simp only [ispec_iff] at hFirst hNext ⊢
   intro F h hPre
   apply (hFirst F h hPre).bind
   intro value h' hPost
@@ -553,6 +593,7 @@ theorem ispec_bind' {α : Type u} {β : Type v} {P : IPre} {Q₁ : IPost α}
     (hFirst : ispec P m Q₁)
     (hNext : ∀ value, ispec (Q₁ value) (next value) Q) :
     ispec P (Aeneas.Std.bind m next) Q := by
+  simp only [ispec_iff] at hFirst hNext ⊢
   intro F h hPre
   apply (hFirst F h hPre).bind
   intro value h' hPost
@@ -569,7 +610,8 @@ theorem ispec_seq {α β : Type u} {P H : IPre} {Q : IPost β}
 
 private theorem dispec_apply {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : dispec P m Q) {h : Heap} (hPre : P h) :
-    PartialSpec handler (fun value h' => Q value h') m h := by
+    rawIwp false m Q h := by
+  rw [dispec_iff] at hTriple
   have hSpec := hTriple emp h ((sep_emp_r P).mpr h hPre)
   exact hSpec.mono fun value => sep_elim_right (Q value) emp
 
@@ -582,12 +624,14 @@ theorem dspec_fail (error : Error) (Q : α → Prop) :
 
 theorem dispec_frame {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : dispec P m Q) (H : IProp) : dispec (P ∗ H) m (Q ∗+ H) := by
+  rw [dispec_iff] at hTriple ⊢
   intro F h hPre
   have hSpec := hTriple (H ∗ F) h ((sep_assoc P H F).mp h hPre)
   exact hSpec.mono fun value heap => (sep_assoc (Q value) H F).mpr heap
 
 theorem dispec_conseq {P' P : IPre} {m : Result α} {Q' Q : IPost α}
     (hTriple : dispec P' m Q') (hP : P ⊢ P') (hQ : Q' ⊢+ Q) : dispec P m Q := by
+  rw [dispec_iff] at hTriple ⊢
   intro F h hPre
   have hSpec := hTriple F h (sep_mono hP (entails_refl F) h hPre)
   exact hSpec.mono fun value => sep_mono (hQ value) (entails_refl F)
@@ -602,6 +646,7 @@ theorem dispec_hany_pre {P H : IPre} {m : Result α} {Q : IPost α}
 
 theorem dispec_ipure {P : Prop} {H : IPre} {m : Result α} {Q : IPost α}
     (hTriple : P → dispec H m Q) : dispec (⌜P⌝ ∗ H) m Q := by
+  simp only [dispec_iff] at hTriple ⊢
   intro F h hPre
   have ⟨hP, hHF⟩ := (sep_pure_l P (H ∗ F) h).mp ((sep_assoc _ _ _).mp h hPre)
   exact hTriple hP F h hHF
@@ -625,12 +670,14 @@ theorem dispec_introFrame (Qm F : IPre) {m : Result α} {Q : IPost α}
 consuming it. -/
 theorem dispec_ipure_keep {P : Prop} {H : IPre} {m : Result α} {Q : IPost α}
     (hTriple : P → dispec (⌜P⌝ ∗ H) m Q) : dispec (⌜P⌝ ∗ H) m Q := by
+  simp only [dispec_iff] at hTriple ⊢
   intro F h hPre
   have ⟨hP, _⟩ := (sep_pure_l P (H ∗ F) h).mp ((sep_assoc _ _ _).mp h hPre)
   exact hTriple hP F h hPre
 
 theorem dispec_ipure' {P : Prop} {m : Result α} {Q : IPost α}
     (hTriple : P → dispec emp m Q) : dispec ⌜P⌝ m Q := by
+  simp only [dispec_iff] at hTriple ⊢
   intro F h hPre
   have ⟨hP, hF⟩ := (sep_pure_l P F h).mp hPre
   exact hTriple hP F h ((sep_emp_l F).mpr h hF)
@@ -648,6 +695,7 @@ theorem dispec_ipure_iff {P : Prop} {m : Result α} {Q : α → Prop} :
 
 theorem dispec_exists {ι : Sort _} {J : ι → IPre} {m : Result α} {Q : IPost α}
     (hTriple : ∀ x, dispec (J x) m Q) : dispec iprop(∃ x, J x) m Q := by
+  simp only [dispec_iff] at hTriple ⊢
   intro F h hPre
   obtain ⟨h₁, h₂, hDisjoint, rfl, ⟨x, hJ⟩, hF⟩ := hPre
   exact hTriple x F _ ⟨h₁, h₂, hDisjoint, rfl, hJ, hF⟩
@@ -659,19 +707,23 @@ theorem dispec_conseq_frame {H₂ : IProp} {H₁ H : IPre} {Q₁ Q : IPost α}
 
 theorem dispec_pure {P : IPre} {Q : IPost α} {value : α} (hPost : P ⊢ Q value) :
     dispec P (pure value : Result α) Q := by
+  rw [dispec_iff]
   intro F h hPre
   exact .ret (sep_mono hPost (entails_refl F) h hPre)
 
 /-- Divergence satisfies every partial ispec: nothing is claimed of a run that
 does not stop, not even that it owns anything. -/
 theorem dispec_div {P : IPre} {Q : IPost α} :
-    dispec P (ITree.div : Result α) Q :=
-  fun _ _ _ => PartialSpec.div
+    dispec P (ITree.div : Result α) Q := by
+  rw [dispec_iff]
+  intro _ _ _
+  exact PartialSpec.div
 
 theorem dispec_bind {α β : Type u} {P : IPre} {Q₁ : IPost α} {Q : IPost β} {m : Result α}
     {next : α → Result β} (hFirst : dispec P m Q₁)
     (hNext : ∀ value, dispec (Q₁ value) (next value) Q) :
     dispec P (m >>= next) Q := by
+  simp only [dispec_iff] at hFirst hNext ⊢
   intro F h hPre
   apply (hFirst F h hPre).bind
   intro value h' hPost
@@ -683,6 +735,7 @@ theorem dispec_bind' {α : Type u} {β : Type v} {P : IPre} {Q₁ : IPost α}
     {Q : IPost β} {m : Result α} {next : α → Result β} (hFirst : dispec P m Q₁)
     (hNext : ∀ value, dispec (Q₁ value) (next value) Q) :
     dispec P (Aeneas.Std.bind m next) Q := by
+  simp only [dispec_iff] at hFirst hNext ⊢
   intro F h hPre
   apply (hFirst F h hPre).bind
   intro value h' hPost
