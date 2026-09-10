@@ -469,7 +469,7 @@ theorem orCells.disjoint_spec (leftCells rightCells : List (Ptr Word))
               | cons right rights =>
                   simp only [PulseArray.ownsCells]
                   rw [sep_comm_eq _ (⌜False⌝)]
-                  apply triple_ipure
+                  apply ispec_ipure
                   intro hfalse
                   contradiction
   | cons left leftCells ih =>
@@ -486,7 +486,7 @@ theorem orCells.disjoint_spec (leftCells rightCells : List (Ptr Word))
               | cons rightWord rightWords =>
                   simp only [PulseArray.ownsCells]
                   rw [sep_comm_eq _ (⌜False⌝)]
-                  apply triple_ipure
+                  apply ispec_ipure
                   intro hfalse
                   contradiction
           | cons right rightCells =>
@@ -494,7 +494,7 @@ theorem orCells.disjoint_spec (leftCells rightCells : List (Ptr Word))
               | nil =>
                   simp only [PulseArray.ownsCells]
                   rw [sep_comm_eq _ (⌜False⌝)]
-                  apply triple_ipure
+                  apply ispec_ipure
                   intro hfalse
                   contradiction
               | cons rightWord rightWords =>
