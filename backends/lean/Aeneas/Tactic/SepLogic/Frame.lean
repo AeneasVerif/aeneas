@@ -512,7 +512,7 @@ partial def pullGoal (goal : MVarId) : TacticM MVarId := do
   if ← isFrameInference goal then
     throwError "iintro_entail: this is a frame-inference goal.  Extracting anything \
       from its left-hand side would lose it from the frame, which was created in \
-      an outer context; pull at the level of the triple instead, with `iintro`."
+      an outer context; pull at the level of the specification instead, with `iintro`."
   let target ← instantiateMVars (← goal.getType)
   if target.consumeMData.isAppOfArity ``postEntails 3 then
     let (_, next) ← goal.intro1P
