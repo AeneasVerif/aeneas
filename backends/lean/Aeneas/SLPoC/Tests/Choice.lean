@@ -1,12 +1,12 @@
-import Aeneas.Data.Coinductive.Spec
+import Aeneas.SLPoC.StateMachine
 
 /-!
 # A choice event, angelic and demonic
 
-`Aeneas.Data.Coinductive.Spec` asks a machine for two healthiness conditions
-rather than for determinism: `StateMachine.Resolves`, which total correctness is
-adequate against, and `StateMachine.Conjunctive` together with
-`StateMachine.Feasible`, which partial correctness needs.  This file is what
+`Aeneas.SLPoC.StateMachine` relates the generic judgments to runs under
+healthiness conditions rather than determinism: `Handler.Resolves`, which total
+correctness is adequate against, and `Handler.Conjunctive` together with
+`Handler.Feasible`, which partial correctness needs.  This file is what
 those conditions are *for*: a single event `choice a`, "produce an element of
 `a`", read once angelically and once demonically, showing that each reading
 satisfies one half and fails the other.
@@ -36,7 +36,7 @@ open Lean.Order
 /-- The **angelic** reading: the machine answers a demand whenever *some*
 element of `a` meets it.  This is the reading of `Aeneas.SepLogic.EventSpec`,
 and the choice operator of *Program Logics à la Carte*. -/
-@[reducible] def angelic : StateMachine ChoiceEffect where
+@[reducible] def angelic : Handler ChoiceEffect where
   State := Unit
   handle a s C := ∃ x : a, C ⟨x⟩ s
   handle_mono := by rintro a s C C' hC ⟨x, hOutcome⟩; exact ⟨x, hC _ _ hOutcome⟩
@@ -44,7 +44,7 @@ and the choice operator of *Program Logics à la Carte*. -/
 /-- The **demonic** reading: the machine answers a demand only when *every*
 element of `a` meets it.  The event must still have an answer, or the machine
 would meet every demand, including the impossible one. -/
-@[reducible] def demonic : StateMachine ChoiceEffect where
+@[reducible] def demonic : Handler ChoiceEffect where
   State := Unit
   handle a s C := Nonempty a ∧ ∀ x : a, C ⟨x⟩ s
   handle_mono := by
