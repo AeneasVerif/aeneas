@@ -53,6 +53,40 @@ def exposeConnective? (e : Expr) : MetaM (Option Expr) := do
 def exposeConnective (e : Expr) : MetaM Expr :=
   return (← exposeConnective? e).getD e
 
+/-- Expose a proposition that is an entailment, possibly through one or more
+reducible wrappers. The entailment itself is not unfolded. -/
+partial def exposeEntailment? (e : Expr) : MetaM (Option Expr) := do
+  let e := (← instantiateMVars e).consumeMData
+  if e.isAppOfArity ``Entails 2 then return some e
+  match ← unfoldDefinition? e with
+  | some e' => exposeEntailment? e'
+  | none => return none
+
+/-- Rebuild `target` with a new entailment source when `target` is a reducible
+wrapper around `source ⊢ destination`. Falls back to the exposed entailment if
+the wrapper cannot be reconstructed safely. -/
+def mkEntailmentLike (target source destination newSource : Expr) : MetaM Expr := do
+  let (fn, targetArgs) :=
+    target.consumeMData.withApp fun fn args => (fn, args)
+  let newSourceType ← inferType newSource
+  for h : i in [:targetArgs.size] do
+    let argType ← inferType targetArgs[i]
+    if ← isDefEq argType newSourceType then
+      let candidate := mkAppN fn (targetArgs.set! i newSource)
+      if let some exposed ← exposeEntailment? candidate then
+        let args := exposed.getAppArgs
+        if ← isDefEq args[0]! newSource then
+          if ← isDefEq args[1]! destination then
+            return candidate
+  let replacement := target.replace fun e =>
+    if e == source then some newSource else none
+  if let some exposed ← exposeEntailment? replacement then
+    let args := exposed.getAppArgs
+    if ← isDefEq args[0]! newSource then
+      if ← isDefEq args[1]! destination then
+        return replacement
+  mkAppM ``Entails #[newSource, destination]
+
 private def reducePostApplication (e : Expr) : MetaM Expr := do
   let e ← instantiateMVars e
   let e ← Lean.Core.betaReduce e
