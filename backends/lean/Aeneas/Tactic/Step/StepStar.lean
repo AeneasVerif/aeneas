@@ -387,9 +387,10 @@ def analyzeTarget : TacticM TargetKind := do
     trace[Step] "application of a registered specification statement about: {program}"
     let e ← Utils.normalizeLetBindings program
     -- Check whether this is a bind
-    if let .const ``Bind.bind .. := e.getAppFn then
-      let #[_m, _self, _α, _β, _value, cont] := e.getAppArgs
-        | throwError "Expected bind to have 6 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
+    if e.getAppFn.isConstOf ``Bind.bind || e.getAppFn.isConstOf ``Std.bind then
+      let arity : Nat := if e.getAppFn.isConstOf ``Bind.bind then 6 else 4
+      let some (_, cont) := Step.getBindArgs? e
+        | throwError "Expected bind to have {arity} arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
       let names ← Step.getPostNames cont
       pure (.bind names)
     else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
