@@ -173,7 +173,7 @@ theorem leftLeaf.preserves_spec (tree : Tree) :
       simp only [Tree.owns]
       rw [leftLeaf]
       step
-      apply triple_conseq (triple_frame leftIH
+      apply ispec_conseq (ispec_frame leftIH
         iprop(
           pointer ↦ {
             value
@@ -195,7 +195,7 @@ theorem leftLeaf.cursor_spec (tree : Tree) :
           ⌜result = tree.leftmost.root⌝ ∗
           tree.leftmost.owns ∗
           (tree.leftmost.owns -∗ tree.owns))⦄ := by
-  apply triple_conseq (leftLeaf.preserves_spec tree)
+  apply ispec_conseq (leftLeaf.preserves_spec tree)
   · exact entails_refl _
   · intro result
     irewrite tree.packageLeftmost
@@ -206,7 +206,7 @@ wand, recovering ownership of the original tree. -/
 theorem leftLeaf.spec (tree : Tree) :
     ⦃ tree.owns ⦄ leftLeaf (tree.leftDepth + 1) tree.root
       ⦃⇓ result => ⌜result = tree.leftmost.root⌝ ∗ tree.owns⦄ := by
-  apply triple_conseq (leftLeaf.cursor_spec tree)
+  apply ispec_conseq (leftLeaf.cursor_spec tree)
   · exact entails_refl _
   · intro result
     irewrite (wand_cancel tree.leftmost.owns tree.owns)

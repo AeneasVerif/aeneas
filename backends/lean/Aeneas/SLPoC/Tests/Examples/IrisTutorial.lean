@@ -539,7 +539,7 @@ theorem sum_list_spec (l : Link Int) (xs : List Int) :
     intro x acc ys
     step*
   unfold sumList
-  apply triple_conseq
+  apply ispec_conseq
     (fold_right_spec (fun _ : Int => emp)
       (fun ys acc => ⌜acc = ys.foldr (· + ·) 0⌝)
       (fun x acc => pure (x + acc)) 0 l xs hf)

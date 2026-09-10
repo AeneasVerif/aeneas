@@ -16,11 +16,13 @@ example : (Result.fail .panic : Result Nat) =
     Result.vis (RustEffect.Input.fail .panic) PEmpty.elim :=
   rfl
 
-example (Q : IPost Nat) (h : Heap) : ¬ spec (Result.fail .panic) Q h := by
-  simpa [Result.fail, Result.vis] using spec_fail .panic Q h
+example (Q : Nat → Prop) :
+    ¬ spec (Result.fail .panic : Result Nat) Q :=
+  spec_fail .panic Q
 
-example (Q : IPost Nat) (h : Heap) : ¬ dspec (Result.fail .panic) Q h := by
-  simpa [Result.fail, Result.vis] using dspec_fail .panic Q h
+example (Q : Nat → Prop) :
+    ¬ dspec (Result.fail .panic : Result Nat) Q :=
+  dspec_fail .panic Q
 
 /-! ## Entailment framing -/
 
@@ -88,16 +90,16 @@ example (p : Ptr Nat) (value : Nat) :
   iintro_shallow
   rename_i hValue
   guard_hyp hValue : value = 1
-  apply triple_pure
+  apply ispec_pure
   iframe
 
-/-- Right-side extraction also works for partial triples. -/
+/-- Right-side extraction also works for partial ispecs. -/
 example (p : Ptr Nat) (value : Nat) :
     ⦃ iprop(p ↦ value ∗ ⌜value = 1⌝) ⦄ pure () ⦃⇓ p ↦ value⦄div := by
   iintro_shallow
   rename_i hValue
   guard_hyp hValue : value = 1
-  apply dtriple_pure
+  apply dispec_pure
   iframe
 
 /-- The `step` introduction variant extracts facts from the callee
@@ -105,11 +107,11 @@ postcondition on the left, but not from the frame on the right. -/
 example (p : Ptr Nat) (value : Nat) (P F : Prop) :
     ⦃ iprop((p ↦ value ∗ ⌜P⌝) ∗ ⌜F⌝) ⦄ pure ()
       ⦃⇓ iprop(p ↦ value ∗ ⌜F⌝)⦄ := by
-  intro_triple
+  intro_ispec
   rename_i hP
   guard_hyp hP : P
   fail_if_success have : F := by assumption
-  apply triple_pure
+  apply ispec_pure
   iframe
 
 /-! ## `iintro_keep`
@@ -344,10 +346,9 @@ example (p : Ptr Nat) (value : Nat) : ¬ (emp ⊢ p ↦ value) := by
 /-- Nor does it excuse a specification from owning what it reads. -/
 example (p : Ptr Nat) : ¬ (⦃ emp ⦄ read p ⦃⇓ _ => emp⦄) := by
   intro hTriple
-  have hSpec : spec (read p) (fun _ => emp) ∅ :=
-    triple_apply hTriple trivial
+  have hSpec := hTriple emp ∅ ((sep_emp_r emp).mpr ∅ trivial)
   simp only [read, Result.guardedModify] at hSpec
-  obtain ⟨hReadable, -⟩ := TotalSpec.vis_view hSpec
+  obtain ⟨hReadable, -⟩ := hSpec.vis_view
   exact Ptr.not_contains_empty p hReadable.contains
 
 def allocAndForget (value : Nat) : Result Unit := do
@@ -389,7 +390,7 @@ example (p q r : Ptr Nat) :
   irewrite (cellPair p q)
   isimpl
 
--- irewrite with an equality, on a triple precondition
+-- irewrite with an equality, on an `ispec` precondition
 theorem swapEq (p q : Ptr Nat) : iprop(p ↦ 1 ∗ q ↦ 2) = iprop(q ↦ 2 ∗ p ↦ 1) :=
   sep_comm_eq _ _
 
@@ -433,7 +434,7 @@ example (p q : Ptr Nat) (x : Nat) :
     ⦃ iprop(iexists (fun n => iprop(q ↦ n)) ∗ p ↦ x) ⦄ touchThenSet p
       ⦃⇓ iprop(iexists (fun n => iprop(q ↦ n)) ∗ p ↦ 7)⦄ := by
   unfold touchThenSet
-  apply triple_step_bind (touchAny p) _ (touchAny.spec p)
+  apply ispec_step_bind (touchAny p) _ (touchAny.spec p)
   case hPre =>
     fail_if_success iintro_entail
     iframe
@@ -545,9 +546,9 @@ def bufferOne : Result Nat := do
 run end to end. -/
 theorem bufferOne.spec : ⦃ emp ⦄ bufferOne ⦃⇓ result => ⌜result = 42⌝⦄ := by
   unfold bufferOne
-  apply triple_bind (Buffer.alloc.spec 1 (0 : Nat))
+  apply ispec_bind (Buffer.alloc.spec 1 (0 : Nat))
   intro b
-  refine triple_conseq ?_ (Buffer.pointsTo_entails_range b _)
+  refine ispec_conseq ?_ (Buffer.pointsTo_entails_range b _)
     (fun _ => entails_refl _)
   step*
 

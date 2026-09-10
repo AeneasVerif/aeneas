@@ -224,15 +224,15 @@ theorem end_mut_to_raw.spec {N : Aeneas.Std.Usize}
     ⦃ a ↦ values ⦄ end_mut_to_raw original a
       ⦃⇓ result => ⌜result.val = values⌝⦄ := by
   unfold end_mut_to_raw
-  apply triple_ipure
+  apply ispec_ipure
   intro hLength
   have hTake :
       ⦃ a.ptr ↦* values ⦄ takeRange a.ptr N.val
         ⦃⇓ result => ⌜result = values⌝⦄ := by
     exact takeRange.spec_of_length a.ptr values N.val hLength
-  apply triple_bind hTake
+  apply ispec_bind hTake
   intro result
-  exact triple_pure fun _ hResult => by
+  exact ispec_pure fun _ hResult => by
     rw [hResult]
     simp only [Aeneas.Std.Array.setSlice!]
     simp [List.setSlice!, hLength, original.property]

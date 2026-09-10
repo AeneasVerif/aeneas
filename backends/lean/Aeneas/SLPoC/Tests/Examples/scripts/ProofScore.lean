@@ -18,7 +18,7 @@ writes `Aeneas/SLPoC/Tests/Examples/reports/proof-score.html`.
 
 ## What is measured
 
-The ideal proof of a triple never handles the separation logic manually: it
+The ideal proof of an `ispec` never handles the separation logic manually: it
 unfolds the program and uses `step` or `step*`, with
 pure reasoning (`obtain`, `have`, `simp`, …) and `iintro` in between, and one
 such block per branch of the program:
@@ -44,19 +44,19 @@ tactics (`irewrite`, `iintro_entail`, `isimpl`, `wp_apply`,
 `wp_mono`, …), or when it mentions separation-logic vocabulary: a connective
 (`∗`, `↦`, `⊢`, `-∗`, `emp`, `iprop(…)`), or a lemma or definition whose
 statement is about `IProp` (`unfold wellFormed`, `simp [nodes_snoc]`,
-`exact triple_pure …`).  `step`, `step*`, and `iintro`
+`exact ispec_pure …`).  `step`, `step*`, and `iintro`
 are the automation itself and are free; so is any pure reasoning.  However,
 an `iframe` is free when its most recent automation tactic on its proof path
 is `step`, but manual after `step*` or when there is no preceding automation
 tactic.  After `step*`, another `step*` must finish the separation-logic goal.
 A
 `step with some.spec` is not: explicitly naming any declaration whose
-statement is about a triple steers automation manually.  A local hypothesis such
+statement is about an `ispec` steers automation manually. A local hypothesis such
 as an induction hypothesis remains free.
 
-Only declarations whose statement is a triple are scored.  The separation-logic
+Only declarations whose statement is an `ispec` are scored. The separation-logic
 lemmas a development proves on the side (`nodes_snoc`, `nodesFrom_append`, …)
-are not scored, but a triple proof that *uses* one is charged for it.
+are not scored, but an `ispec` proof that *uses* one is charged for it.
 
 ## The report
 
@@ -102,10 +102,10 @@ whose statement mentions one of them is a separation-logic declaration. -/
 def slCoreNames : Array String :=
   #["IProp", "IPre", "IPost", "Entails", "postEntails", "BiEntails", "emp", "ipure",
     "pointsTo", "sep", "iexists", "iforall", "wand", "postSep", "postWand",
-    "triple", "Wp"]
+    "ispec", "Wp"]
 
 /-- The `⦃ P ⦄ m ⦃⇓ v => Q ⦄` notations of `ST.lean`: a declaration that uses one
-of them states a triple. -/
+of them states an `ispec`. -/
 def specSyntaxKinds : Array Name :=
   #[`Aeneas.SepLogic.specSyntax, `Aeneas.SepLogic.specSyntaxPred,
     `Aeneas.SepLogic.slSpecSyntax, `Aeneas.SepLogic.slSpecSyntaxPred]
@@ -405,7 +405,7 @@ partial def syntaxMentionsSL (r : Resolver) (stx : Syntax) : Option String :=
     else if r.isSL n then some s!"the separation-logic declaration `{n}`"
     else none
   | .node _ k args =>
-    if specSyntaxKinds.contains k then some "a triple"
+    if specSyntaxKinds.contains k then some "an ispec"
     else if k.getRoot == `Aeneas && (k.toString.splitOn "SepLogic").length > 1 then
       some "separation-logic notation"
     else args.findSome? (syntaxMentionsSL r)
@@ -436,14 +436,14 @@ def localSLNames (file : ParsedFile) (imported : NameSet) : NameSet := Id.run do
       names := names.insert decl.name
   return names
 
-/-- Is this declaration's statement a triple? -/
-def isTriple (decl : ParsedDecl) : Bool :=
+/-- Is this declaration's statement an `ispec`? -/
+def isISpec (decl : ParsedDecl) : Bool :=
   match decl.signature? with
   | none => false
   | some sig =>
     (syntaxFind? sig fun s =>
       specSyntaxKinds.contains s.getKind ||
-      (s.isIdent && lastComponent s.getId == "triple")).isSome
+      (s.isIdent && lastComponent s.getId == "ispec")).isSome
 
 /-! ## Scoring a proof -/
 
@@ -571,7 +571,7 @@ def Context.classify (ctx : Context) (stx : Syntax)
     .manual s!"`{head}` steers the separation logic by hand"
   else if let some theoremName := explicitStepTheorem? stx then
     if ctx.resolver.isSL theoremName then
-      .manual s!"`step with {theoremName}` names a triple lemma"
+      .manual s!"`step with {theoremName}` names an ispec lemma"
     else
       .ideal
   else if isStepStar stx then
@@ -788,7 +788,7 @@ def Score.total (s : Score) : Nat := s.spots.size
 def Score.ideal (s : Score) : Nat := s.spots.countP (·.isIdeal)
 def Score.isIdeal (s : Score) : Bool := s.spots.all (·.isIdeal)
 
-/-- Score one triple declaration.  A proof given as a term, rather than by a
+/-- Score one ispec declaration.  A proof given as a term, rather than by a
 tactic block, is a single spot. -/
 def Context.scoreDecl (ctx : Context) (decl : ParsedDecl) : Score :=
   let spots :=
@@ -830,7 +830,7 @@ def scoreFile (imported : NameSet) (file : ParsedFile) : FileScore :=
   let ctx : Context :=
     { input := file.input, fileMap := file.fileMap, resolver := { slNames } }
   { path := file.path
-    scores := file.decls.filter isTriple |>.map fun decl =>
+    scores := file.decls.filter isISpec |>.map fun decl =>
       { ctx with resolver.currNamespace := decl.currNamespace
                  resolver.opens := decl.opens }.scoreDecl decl
     parseErrors := file.parseErrors }
@@ -1035,7 +1035,7 @@ def renderFile (f : FileScore) : String := Id.run do
       has not been built, so some of its declarations are missing here \
       ({escapeHtml (", ".intercalate f.parseErrors.toList)}).</p>"
   if f.scores.isEmpty then
-    return out ++ "<p>No triple to score in this file.</p></details>"
+    return out ++ "<p>No ispec to score in this file.</p></details>"
   out := out ++ "<table><thead><tr><th>Declaration</th><th>Line</th><th>Spots</th>\
     <th>Ideal</th><th>Score</th><th>LOC</th><th>Ideal LOC</th></tr></thead><tbody>"
   for s in f.scores do
@@ -1099,7 +1099,7 @@ def renderReport (files : Array FileScore) : String := Id.run do
     Spot 3 nonideal, giving a spot score of \
     <strong>2 / 3 = 66.7%</strong>; the whole proof is not an ideal proof.</div>"
   out := out ++ "<h2>Summary</h2><table class='summary-table'><thead><tr>\
-    <th>File</th><th>Triples</th>\
+    <th>File</th><th>ISpecs</th>\
     <th>Spots</th><th>Ideal spots</th><th>Score</th>\
     <th>Avg Ideal Spot LOC</th><th>Avg Nonideal Spot LOC</th><th>Ideal Proofs</th>\
     <th>Avg Ideal Proof LOC</th><th>Avg Nonideal Proof LOC</th>\

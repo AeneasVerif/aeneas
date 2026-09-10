@@ -133,7 +133,7 @@ def pointsTo (b : InPlaceOrDisjointBuffer α) (state : EqOrDisj (List α)) :
 Building the pair touches no memory: the Rust constructors only reshape what
 the caller already owns, and `from_raw_parts` does not even do that.  They are
 `Result` actions all the same — in Rust they are calls, so a `do` block mirrors the
-Rust and `step` applies their triples — and each rests on an entailment, which
+Rust and `step` applies their ispecs — and each rests on an entailment, which
 is what to use in a proof with no program in it. -/
 
 /-- The value `new_in_place` returns. -/
@@ -231,7 +231,7 @@ def mkFromRawParts (src dst : Ptr α) (len : Nat) : InPlaceOrDisjointBuffer α :
 
 /-- `InPlaceOrDisjointBuffer::from_raw_parts`.  It is `unsafe` in Rust because
 nothing checks its contract; here it owns nothing and promises nothing, so its
-triple starts from `emp`.  The contract *is* the `pointsTo` a caller has to
+ispec starts from `emp`.  The contract *is* the `pointsTo` a caller has to
 produce, and the frame rule is what carries that across the call.
 
 ```rust
@@ -370,7 +370,7 @@ theorem pointsTo_dstSlice_disjoint (b : InPlaceOrDisjointBuffer α)
 
 `loadu_si128_src`, `loadu_si128_dst` and `storeu_si128`, one element at a time.
 None of them has a precondition: an offset out of the range the caller owns
-simply has no provable triple.
+simply has no provable ispec.
 
 Each has two specifications: the slot-level one here, which is the primitive,
 and the `spec_state` further down, which is what the interface means.  Only the
@@ -452,7 +452,7 @@ theorem loadSrc.spec_state (b : InPlaceOrDisjointBuffer α)
   | equal values =>
       obtain ⟨hLt, hGet⟩ :=
         List.getElem?_eq_some_iff.mp (show values[i]? = some value from hIndex)
-      apply triple_ipure_keep
+      apply ispec_ipure_keep
       rintro ⟨hSame, -⟩
       simp only [pointsTo]
       unfold loadSrc
@@ -462,7 +462,7 @@ theorem loadSrc.spec_state (b : InPlaceOrDisjointBuffer α)
       obtain ⟨hLt, hGet⟩ :=
         List.getElem?_eq_some_iff.mp
           (show srcValues[i]? = some value from hIndex)
-      apply triple_ipure_keep
+      apply ispec_ipure_keep
       rintro -
       simp only [pointsTo]
       unfold loadSrc
@@ -480,7 +480,7 @@ theorem loadDst.spec_state (b : InPlaceOrDisjointBuffer α)
   | equal values =>
       obtain ⟨hLt, hGet⟩ :=
         List.getElem?_eq_some_iff.mp (show values[i]? = some value from hIndex)
-      apply triple_ipure_keep
+      apply ispec_ipure_keep
       rintro -
       simp only [pointsTo]
       unfold loadDst
@@ -490,7 +490,7 @@ theorem loadDst.spec_state (b : InPlaceOrDisjointBuffer α)
       obtain ⟨hLt, hGet⟩ :=
         List.getElem?_eq_some_iff.mp
           (show dstValues[i]? = some value from hIndex)
-      apply triple_ipure_keep
+      apply ispec_ipure_keep
       rintro -
       simp only [pointsTo]
       unfold loadDst
@@ -508,7 +508,7 @@ theorem store.spec_state (b : InPlaceOrDisjointBuffer α)
   cases state with
   | equal values =>
       have hLt : i < values.length := hIndex
-      apply triple_ipure_keep
+      apply ispec_ipure_keep
       rintro -
       simp only [EqOrDisj.write, EqOrDisj.written, pointsTo, List.length_set]
       unfold store
@@ -519,7 +519,7 @@ theorem store.spec_state (b : InPlaceOrDisjointBuffer α)
       step*
   | disjoint srcValues dstValues =>
       have hLt : i < dstValues.length := hIndex
-      apply triple_ipure_keep
+      apply ispec_ipure_keep
       rintro -
       simp only [EqOrDisj.write, EqOrDisj.written, pointsTo, List.length_set]
       unfold store
@@ -559,7 +559,7 @@ theorem storeThenLoadSrc.spec_disjoint (b : InPlaceOrDisjointBuffer α)
 
 /-- A client that mirrors the Rust: build the pair in place, then write through
 it.  The constructor is a call like any other, so `step` goes through its
-triple and hands the ownership on. -/
+ispec and hands the ownership on. -/
 def inPlaceWrite (buffer : Buffer α) (i : Nat) (value : α) : Result Unit := do
   let b ← newInPlace buffer
   b.store i value

@@ -5,8 +5,8 @@ import Aeneas.SLPoC.Tests.Examples.Basic
 /-!
 # Running verified programs
 
-`Aeneas.SepLogic.ST` turns a proved triple into an execution.  These are the tests
-that it really executes, that what it computes agrees with what the triple
+`Aeneas.SepLogic.ST` turns a proved ispec into an execution.  These are the tests
+that it really executes, that what it computes agrees with what the ispec
 predicts, and that the proof it carries is available without running anything.
 -/
 
@@ -31,7 +31,7 @@ theorem roundTrip.spec : ⦃ emp ⦄ roundTrip ⦃⇓ result => ⌜result = 42�
 -- The interpreter runs it.
 #guard (execClosed roundTrip roundTrip.spec).1 = 42
 
-/-- Its answer needs no execution: it *is* the postcondition of the triple. -/
+/-- Its answer needs no execution: it *is* the postcondition of the ispec. -/
 example : (execClosed roundTrip roundTrip.spec).1 = 42 :=
   execClosed_post roundTrip roundTrip.spec
 
@@ -43,7 +43,7 @@ example :
   execClosed_evaluates roundTrip roundTrip.spec
 
 /-- What running a closed program shows and the affine logic cannot: this run
-leaks nothing.  A triple only says what its postcondition owns, so the empty
+leaks nothing.  A ispec only says what its postcondition owns, so the empty
 final heap is a fact about the execution, not about the specification. -/
 example : (execClosed roundTrip roundTrip.spec).2.size = 0 := by
   native_decide
@@ -63,9 +63,9 @@ example : (execClosed leaky leaky.spec).2.size = 1 := by
 
 /-! ## A program run on a heap it does not own entirely
 
-`runTriple` needs the precondition to hold of the initial heap.  Being affine,
+`runISpec` needs the precondition to hold of the initial heap. Being affine,
 an assertion is satisfied by any heap that *extends* the cells it describes, so
-the same triple runs the program on a larger heap — the frame is simply carried
+the same ispec runs the program on a larger heap — the frame is simply carried
 along. -/
 
 private def source : Ptr Nat := ⟨0, 0⟩
@@ -90,15 +90,15 @@ private theorem initial_pre : (source ↦ 1) initial :=
 
 -- The frame is carried along: the run leaves both cells behind.
 #guard
-  (execTriple (Examples.incr_ptr source) initial
+  (execISpec (Examples.incr_ptr source) initial
     (Examples.incr_ptr.spec source 1) initial_pre).2.size = 2
 
-/-- And the owned cell was incremented, by the postcondition of the triple. -/
+/-- And the owned cell was incremented, by the postcondition of the ispec. -/
 example :
     (source ↦ 1 + 1)
-      (execTriple (Examples.incr_ptr source) initial
+      (execISpec (Examples.incr_ptr source) initial
         (Examples.incr_ptr.spec source 1) initial_pre).2 :=
-  execTriple_post (Examples.incr_ptr source) initial
+  execISpec_post (Examples.incr_ptr source) initial
     (Examples.incr_ptr.spec source 1) initial_pre
 
 end Aeneas.SepLogic

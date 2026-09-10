@@ -38,14 +38,14 @@ def partialSpatial (x : Nat) : Result Nat := Result.ok x
 
 run_meta do
   for (name, arity) in
-      #[(``WP.spec, 3), (``WP.dspec, 3), (``triple, 4), (``dtriple, 4)] do
+      #[(``spec, 3), (``dspec, 3), (``ispec, 4), (``dispec, 4)] do
     let some info ← Aeneas.specInfoLookup name
       | throwError "Missing registration for {name}"
     unless info.arity == arity do
       throwError "Incorrect arity for {name}"
   for (name, judgment) in
-      #[(``totalPure.spec, ``WP.spec), (``partialPure.spec, ``WP.dspec),
-        (``totalSpatial.spec, ``triple), (``partialSpatial.spec, ``dtriple)] do
+      #[(``totalPure.spec, ``spec), (``partialPure.spec, ``dspec),
+        (``totalSpatial.spec, ``ispec), (``partialSpatial.spec, ``dispec)] do
     let (_, info) ← Aeneas.Step.getStepSpecFunArgsExpr (← Lean.getConstInfo name).type
     unless info.spec_name == judgment do
       throwError "{name} registered under the wrong judgment"
@@ -113,7 +113,7 @@ example (x : Nat) (P : IProp) :
 that have only a partial specification. -/
 
 example (x : Nat) :
-    triple emp (do
+    ispec emp (do
       let p ← alloc x
       let y ← read p
       free p
@@ -123,10 +123,10 @@ def partialAlloc (x : Nat) := alloc x
 
 @[step] theorem partialAlloc.spec (x : Nat) :
     ⦃ emp ⦄ partialAlloc x ⦃⇓ p => p ↦ x ⦄div :=
-  triple_dtriple (alloc.spec x)
+  ispec_dispec (alloc.spec x)
 
 example (x : Nat) :
-    dtriple emp (do
+    dispec emp (do
       let p ← partialAlloc x
       let y ← read p
       free p
@@ -194,7 +194,7 @@ example (x : Nat) (P : IProp) :
 
 example (Q : Nat → Prop) :
     Lean.Order.admissible (fun m : Result Nat => m ⦃ Q ⦄div) :=
-  WP.dspec_admissible Q
+  dspec_admissible Q
 
 def applyPure (f : Nat → Result Nat) (x : Nat) : Result Nat := f x
 
@@ -214,14 +214,14 @@ m : Result ℕ
 Q : ℕ → Prop
 ⊢ m ⦃ Q ⦄ -/
 #guard_msgs in
-example (m : Result Nat) (Q : Nat → Prop) : WP.spec m Q := by done
+example (m : Result Nat) (Q : Nat → Prop) : spec m Q := by done
 
 /-- error: unsolved goals
 m : Result ℕ
 Q : ℕ → Prop
 ⊢ m ⦃ Q ⦄div -/
 #guard_msgs in
-example (m : Result Nat) (Q : Nat → Prop) : WP.dspec m Q := by done
+example (m : Result Nat) (Q : Nat → Prop) : dspec m Q := by done
 
 /-! No lifting may upgrade partial correctness or turn a spatial contract into
 a pure one by discarding its owned resources. -/

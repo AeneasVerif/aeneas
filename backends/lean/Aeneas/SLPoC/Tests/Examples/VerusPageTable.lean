@@ -24,7 +24,7 @@ physical-frame ownership tokens are otherwise abstracted.
 Unlike an opaque-map encoding, each reachable intermediate table is a distinct
 typed SLPoC heap allocation.  The executable code performs pointer reads,
 updates, allocation, and `free`; recursive ownership tracks reachable child
-tables.  SLPoC triples are affine, however, so these postconditions do not by
+tables.  SLPoC ispecs are affine, however, so these postconditions do not by
 themselves establish exact global heap deltas, exact reclamation, or absence of
 leaks.  Such claims would require an operational-trace theorem or a non-affine
 logic.  Structural recursion on the finite path supplies Lean termination.
@@ -336,7 +336,7 @@ recursively owns the separately allocated child table it points to. -/
     | _, _ => ⌜False⌝
 
   /-- Recursive ownership tracking one table cell and its reachable child
-  tables.  Because triples are affine, this predicate describes the resources
+  tables.  Because ispecs are affine, this predicate describes the resources
   retained by the proof rather than excluding unrelated or leaked cells from
   the global heap. -/
   def tableOwn (pointer : Ptr Table) : ModelTable → IProp
@@ -748,7 +748,7 @@ theorem pure_front_middle (fact : Prop) (left right : IProp) :
 
 /-! ## Exact functional specifications
 
-These triples exactly relate results and reachable ownership to the pure model.
+These ispecs exactly relate results and reachable ownership to the pure model.
 Their affine postconditions do not assert exact global allocation or
 reclamation deltas.
 -/

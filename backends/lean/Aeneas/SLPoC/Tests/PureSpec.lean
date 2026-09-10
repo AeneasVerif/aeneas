@@ -3,12 +3,12 @@ import Aeneas.SLPoC.MutableData.Ptr
 /-!
 # Pure-computation judgments and notation
 
-`Aeneas.SepLogic.WP` defines `spec` and `dspec` as the separation-logic triples
-that own nothing, with ordinary predicate postconditions:
+`Aeneas.SepLogic` defines `spec` and `dspec` as the separation-logic
+specifications that own nothing, with ordinary predicate postconditions:
 
 ```
-m ⦃ x => p ⦄     is   ⦃ emp ⦄ m ⦃⇓ x => ⌜p⌝ ⦄     is   triple emp m (fun x => ⌜p⌝)
-m ⦃ x => p ⦄div  is   ⦃ emp ⦄ m ⦃⇓ x => ⌜p⌝ ⦄div  is   dtriple emp m (fun x => ⌜p⌝)
+m ⦃ x => p ⦄     is   ⦃ emp ⦄ m ⦃⇓ x => ⌜p⌝ ⦄     is   ispec emp m (fun x => ⌜p⌝)
+m ⦃ x => p ⦄div  is   ⦃ emp ⦄ m ⦃⇓ x => ⌜p⌝ ⦄div  is   dispec emp m (fun x => ⌜p⌝)
 ```
 
 All four judgments have independent `step` registrations. Pure specifications
@@ -17,7 +17,7 @@ pure postcondition; spatial intermediate assertions require an SL goal.
 
 These tests cover the notation itself, the fact that the two forms are the
 *same proposition*, pure specifications used inside heap proofs, and
-higher-order contracts. Heap-manipulating examples use explicit SL triples,
+higher-order contracts. Heap-manipulating examples use explicit SL ispecs,
 even when their final postconditions are pure.
 
 The file deliberately does not `open Aeneas`: the old `Aeneas.Std.WP` notation
@@ -38,7 +38,7 @@ open Aeneas.SepLogic.WP
 notation by definitional equality. -/
 
 example (m : Result Nat) (p : Nat → Prop) :
-    (m ⦃ x => p x ⦄) = triple emp m (fun x => ⌜p x⌝) := rfl
+    (m ⦃ x => p x ⦄) = ispec emp m (fun x => ⌜p x⌝) := rfl
 
 example (m : Result Nat) (p : Nat → Prop) :
     (m ⦃ x => p x ⦄) = (⦃ emp ⦄ m ⦃⇓ x => ⌜p x⌝⦄) := rfl
@@ -48,30 +48,30 @@ example (m : Result Nat) (p : Nat → Prop) :
 
 /-- Several binders destructure the returned tuple. -/
 example (m : Result (Nat × Nat)) (p : Nat → Nat → Prop) :
-    (m ⦃ x y => p x y ⦄) = triple emp m (fun (x, y) => ⌜p x y⌝) := rfl
+    (m ⦃ x y => p x y ⦄) = ispec emp m (fun (x, y) => ⌜p x y⌝) := rfl
 
-/-- SL triples preserve the same distinction between separate and tuple
+/-- SL ispecs preserve the same distinction between separate and tuple
 postcondition binders while denoting the same underlying function. -/
 example (P : IProp) (m : Result (Nat × Nat)) (Q : Nat → Nat → IProp) :
-    (⦃ P ⦄ m ⦃⇓ x y => Q x y ⦄) = triple P m (fun (x, y) => Q x y) := rfl
+    (⦃ P ⦄ m ⦃⇓ x y => Q x y ⦄) = ispec P m (fun (x, y) => Q x y) := rfl
 
 example (P : IProp) (m : Result (Nat × Nat)) (Q : Nat → Nat → IProp) :
-    (⦃ P ⦄ m ⦃⇓ (x, y) => Q x y ⦄) = triple P m (fun (x, y) => Q x y) := rfl
+    (⦃ P ⦄ m ⦃⇓ (x, y) => Q x y ⦄) = ispec P m (fun (x, y) => Q x y) := rfl
 
 /-- A postcondition given as a predicate is applied to the result. -/
 example (m : Result Nat) (p : Nat → Prop) :
-    (m ⦃ p ⦄) = triple emp m (fun value => ⌜p value⌝) := rfl
+    (m ⦃ p ⦄) = ispec emp m (fun value => ⌜p value⌝) := rfl
 
 example (P : Prop) : (emp ⊢ ⌜P⌝) ↔ P :=
   entails_emp_ipure_iff P
 
 example (P : Prop) (m : Result Nat) (Q : Nat → Prop) :
-    triple ⌜P⌝ m (fun value => ⌜Q value⌝) ↔ (P → m ⦃ Q ⦄) :=
-  triple_ipure_iff
+    ispec ⌜P⌝ m (fun value => ⌜Q value⌝) ↔ (P → m ⦃ Q ⦄) :=
+  ispec_ipure_iff
 
 example (P : Prop) (m : Result Nat) (Q : Nat → Prop) :
-    dtriple ⌜P⌝ m (fun value => ⌜Q value⌝) ↔ (P → m ⦃ Q ⦄div) :=
-  dtriple_ipure_iff
+    dispec ⌜P⌝ m (fun value => ⌜Q value⌝) ↔ (P → m ⦃ Q ⦄div) :=
+  dispec_ipure_iff
 
 example (P Q : Nat → Prop) :
     (emp ⊢ (fun value => ⌜P value⌝) -∗+ fun value => ⌜Q value⌝) ↔
@@ -92,9 +92,9 @@ example (P Q : Nat → Prop) :
 ⊢ ⦃ emp ⦄
     Result.ok 0
     ⦃⇓ x => ⌜True⌝ ⦄ -/
-#guard_msgs in example : triple emp (Result.ok 0) (fun _ => ⌜True⌝) := by done
+#guard_msgs in example : ispec emp (Result.ok 0) (fun _ => ⌜True⌝) := by done
 
-/-! Opening `WP` does not change how SL triples are printed, even when their
+/-! Opening `WP` does not change how SL ispecs are printed, even when their
 preconditions are `emp` and their postconditions are pure. -/
 
 /-- error: unsolved goals
@@ -109,7 +109,7 @@ example : ⦃ emp ⦄ Result.ok 0 ⦃⇓ r => ⌜r = 0⌝ ⦄ := by done
     Result.ok 0
     ⦃⇓ r => ⌜r = 0⌝ ⦄div -/
 #guard_msgs in
-example : dtriple emp (Result.ok 0) (fun r => ⌜r = 0⌝) := by done
+example : dispec emp (Result.ok 0) (fun r => ⌜r = 0⌝) := by done
 
 /-- error: unsolved goals
 ⊢ ⦃ emp ⦄
@@ -165,7 +165,7 @@ example : Result.ok (0, 1, 2) ⦃ (a, (b, c)) =>
     a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
 
 /-! The `uncurry_elim_tactics` pass handles both marker forms before the
-triple-specific introduction and entailment simplification passes. -/
+ispec-specific introduction and entailment simplification passes. -/
 
 example : Result.ok (0, 1) ⦃ x y => x = 0 ∧ y = 1 ⦄ := by
   step
@@ -336,7 +336,7 @@ example (value : Nat) :
   guard_hyp hSecond : second = value + 1
   step*
 
-/-! ## 3. Separation-logic triple pretty-printing -/
+/-! ## 3. Separation-logic ispec pretty-printing -/
 
 /-- error: unsolved goals
 P : IProp
@@ -345,7 +345,7 @@ P : IProp
     ⦃⇓ value => P ∗ ⌜value = 0⌝ ⦄ -/
 #guard_msgs in
 example (P : IProp) :
-    triple P (Result.ok 0) (fun value => P ∗ ⌜value = 0⌝) := by done
+    ispec P (Result.ok 0) (fun value => P ∗ ⌜value = 0⌝) := by done
 
 /-- error: unsolved goals
 P : IProp
@@ -354,7 +354,7 @@ P : IProp
     ⦃⇓ value => P ∗ ⌜value = 0⌝ ⦄div -/
 #guard_msgs in
 example (P : IProp) :
-    dtriple P (Result.ok 0) (fun value => P ∗ ⌜value = 0⌝) := by done
+    dispec P (Result.ok 0) (fun value => P ∗ ⌜value = 0⌝) := by done
 
 /-- error: unsolved goals
 P : IProp
@@ -365,9 +365,9 @@ m : Result ℕ
     ⦃⇓ Q ⦄ -/
 #guard_msgs in
 example (P : IProp) (Q : IPost Nat) (m : Result Nat) :
-    triple P m Q := by done
+    ispec P m Q := by done
 
-/-! Nested triples are propositions, so an SL postcondition embeds them as pure
+/-! Nested ispecs are propositions, so an SL postcondition embeds them as pure
 assertions explicitly. -/
 
 example (makeIncrement : Result (Nat → Result Nat)) : Prop :=
@@ -407,9 +407,9 @@ theorem makeCounter.spec :
       ⌜∀ n, ⦃ p ↦ n ⦄ increment () ⦃⇓ value => p ↦ (n + 1) ∗ ⌜value = n + 1⌝ ⦄⌝
   ⦄ := by
   unfold makeCounter
-  apply triple_bind' (alloc.spec 0)
+  apply ispec_bind' (alloc.spec 0)
   intro p
-  apply triple_pure
+  apply ispec_pure
   apply entails_exists_r p
   exact entails_trans
     (pure_sep_intro (p ↦ 0) fun n => increment.spec p n)
@@ -426,7 +426,7 @@ def countToFive : Result Nat :=
 theorem countToFive.spec :
     ⦃ emp ⦄ countToFive ⦃⇓ value => ⌜value = 5⌝⦄ := by
   unfold countToFive
-  apply triple_bind' makeCounter.spec
+  apply ispec_bind' makeCounter.spec
   intro increment
   iintro
   step*
@@ -448,7 +448,7 @@ theorem old_add1.spec (x : Nat) :
 
 /-- **Pure → separation.**  The specification is registered, it is about the
 right program, and it is exactly what the goal asks for; `step` still cannot
-use it, because `triple` declares no lifting from `Aeneas.Std.WP.spec`. -/
+use it, because `ispec` declares no lifting from `Aeneas.Std.WP.spec`. -/
 example (v : Nat) : old_add1 v ⦃ y => y = v + 1 ⦄ := by
   fail_if_success step with old_add1.spec
   unfold old_add1
@@ -468,20 +468,20 @@ example (p : Ptr Nat → Prop) : ¬ Aeneas.Std.WP.spec (alloc (0 : Nat)) p := by
 
 /-! ## 4. The computation rules
 
-They are the rules of the triples, read at `emp` and a pure postcondition. -/
+They are the rules of the ispecs, read at `emp` and a pure postcondition. -/
 
 example : Result.ok 3 ⦃ r => r = 3 ⦄ := ret.spec 3
 
 example (e : Error) : ¬ (Result.fail e ⦃ (_ : Nat) => True ⦄) :=
-  fun hTriple => spec_fail e _ ∅ (triple_apply hTriple (h := ∅) trivial)
+  spec_fail e _
 
-example : ¬ ((Result.div : Result Nat) ⦃ _ => True ⦄) := triple_div_elim
+example : ¬ ((Result.div : Result Nat) ⦃ _ => True ⦄) := ispec_div_elim
 
-example : (Result.div : Result Nat) ⦃ _ => True ⦄div := dtriple_div_intro
+example : (Result.div : Result Nat) ⦃ _ => True ⦄div := dispec_div_intro
 
-/-- A pure-shaped triple about a return hands its postcondition back. -/
+/-- A pure-shaped ispec about a return hands its postcondition back. -/
 example (x : Nat) (h : Result.ok x ⦃ r => r = 3 ⦄) : x = 3 :=
-  (pure_holds ∅).mp (triple_ok_apply (Q := fun r => ⌜r = 3⌝) h)
+  (pure_holds ∅).mp (ispec_ok_apply (Q := fun r => ⌜r = 3⌝) h)
 
 /-! ## 5. Interoperability
 
@@ -506,7 +506,7 @@ example (x : Nat) : (do let p ← bumps x; bump p.1) ⦃ r => r = x + 2 ⦄ := b
 
 /-! ### A pure specification inside a heap proof
 
-The pure-to-SL lifting exposes `bump.spec` as a triple, so `step`'s ramified-frame
+The pure-to-SL lifting exposes `bump.spec` as an `ispec`, so `step`'s ramified-frame
 rule carries `p ↦ v` around it. -/
 
 def bumpCell (p : Ptr Nat) : Result Unit := do
@@ -522,7 +522,7 @@ theorem bumpCell.spec (p : Ptr Nat) (v : Nat) :
 
 /-! ### A heap-manipulating implementation with a pure postcondition
 
-`bumpBoxed` allocates, mutates and frees. Its proof uses an SL triple so that
+`bumpBoxed` allocates, mutates and frees. Its proof uses an SL ispec so that
 intermediate postconditions can carry the allocated cell. -/
 
 def bumpBoxed (v : Nat) : Result Nat := do
@@ -551,7 +551,7 @@ theorem mixedCall.spec (p : Ptr Nat) (v : Nat) :
   unfold mixedCall
   step*
 
-/-- A caller that owns nothing can still use SL triples for its allocating
+/-- A caller that owns nothing can still use SL ispecs for its allocating
 callees and lift the pure specification of `bump` between them. -/
 def pureCall (x : Nat) : Result Nat := do
   let y ← bumpBoxed x
@@ -564,7 +564,7 @@ example (x : Nat) : ⦃ emp ⦄ pureCall x ⦃⇓ r => ⌜r = x + 3⌝⦄ := by
 
 /-! ## 6. Total and partial correctness
 
-`⦃ ⦄div` denotes `WP.dspec`, defined by `dtriple` at `emp`. The registered
+`⦃ ⦄div` denotes `dspec`, defined by `dispec` at `emp`. The registered
 total-to-partial liftings cross the pure/heap boundary too. -/
 
 example (x : Nat) : bump x ⦃ y => y = x + 1 ⦄div := by step*
@@ -573,7 +573,7 @@ example (v : Nat) : ⦃ emp ⦄ bumpBoxed v ⦃⇓ r => ⌜r = v + 1⌝⦄div :=
 
 example (p : Ptr Nat) (v : Nat) :
     ⦃ p ↦ v ⦄ bumpCell p ⦃⇓ p ↦ v + 1⦄div :=
-  triple_dtriple (bumpCell.spec p v)
+  ispec_dispec (bumpCell.spec p v)
 
 /-! ## 7. Higher order
 
@@ -594,14 +594,14 @@ example (x : Nat) : callWith bump x ⦃ y => y = x + 1 ⦄ := by
   apply callWith.spec_pure
   step
 
-/-- A callee's SL triple at `emp` with a pure postcondition also meets the
+/-- A callee's SL ispec at `emp` with a pure postcondition also meets the
 pure contract; its spatial implementation is already verified separately. -/
 example (x : Nat) : ⦃ emp ⦄ callWith bumpBoxed x ⦃⇓ y => ⌜y = x + 1⌝⦄ := by
   apply callWith.spec_pure
   step
 
 /-- The whole higher-order call, pure contract and all, framed into a heap
-proof by `step` — framing a triple is what `step` already does. -/
+proof by `step` — framing an `ispec` is what `step` already does. -/
 example (p : Ptr Nat) (v x : Nat) :
     ⦃ p ↦ v ⦄ callWith bumpBoxed x ⦃⇓ y => ⌜y = x + 1⌝ ∗ p ↦ v⦄ := by
   step with (callWith.spec_pure (post := fun y => y = x + 1))
@@ -671,11 +671,11 @@ end Ex
 
 /-! ## 8. Recovering program equality
 
-An SL triple at `emp` does not determine the program: an event that needs no
-owned resources is still permitted. `triple_emp_eq_ok` determines the returned
+An SL ispec at `emp` does not determine the program: an event that needs no
+owned resources is still permitted. `ispec_emp_eq_ok` determines the returned
 value when the program is known to perform no heap event. -/
 
-/-- Allocation satisfies an SL triple owning nothing initially. -/
+/-- Allocation satisfies an SL ispec owning nothing initially. -/
 example : ⦃ emp ⦄ alloc (0 : Nat) ⦃⇓ _ => ⌜True⌝⦄ := by
   step*
 
@@ -687,7 +687,7 @@ example : ¬ ∃ q, alloc (0 : Nat) = Result.ok q := by
   exact hNot (Aeneas.Std.WP.exists_imp_spec ⟨q, hq, trivial⟩)
 
 example (x : Nat) : ∃ y, Ex.bump x = Result.ok y ∧ y = x + 1 := by
-  obtain ⟨y, hy, hp⟩ := triple_emp_eq_ok (Q := fun y => ⌜y = x + 1⌝)
+  obtain ⟨y, hy, hp⟩ := ispec_emp_eq_ok (Q := fun y => ⌜y = x + 1⌝)
     (by unfold Ex.bump; exact HeapFree.ok _) (Ex.bump.spec x)
   exact ⟨y, hy, (pure_holds ∅).mp hp⟩
 
@@ -695,7 +695,7 @@ example (x : Nat) : ∃ y, Ex.bump x = Result.ok y ∧ y = x + 1 := by
 
 The statements below are the executable examples from the old pure judgment.
 They confirm that the same notation, tuple destructuring, precedence and
-higher-order postconditions elaborate against the triple-based notation.
+higher-order postconditions elaborate against the ispec-based notation.
 
 The old proofs that explicitly call `spec_bind`, `spec_mono`, `qimp_spec` and
 the related `imp` helpers are necessarily judgment-specific. Their statements
@@ -710,9 +710,9 @@ open Aeneas.Std.Result
 /-! ### Notation and tuple binders -/
 
 example : ok 0 ⦃ r => r = 0 ⦄ := by step*
-example : triple emp (ok 0) (fun _ => ⌜True⌝) := by step*
+example : ispec emp (ok 0) (fun _ => ⌜True⌝) := by step*
 example : ok 0 ⦃ _ => True ⦄ := by step*
-example : triple emp (ok (0, 1)) (fun (x, y) => ⌜x = 0 ∧ y = 1⌝) := by step*
+example : ispec emp (ok (0, 1)) (fun (x, y) => ⌜x = 0 ∧ y = 1⌝) := by step*
 example : ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄ := by step*
 example : ok (0, 1) ⦃ x y => x = 0 ∧ y = 1 ⦄ := by step*
 example : ok (0, 1, 2) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = 2 ⦄ := by step*
@@ -817,7 +817,7 @@ example (x : Nat) :
 private theorem massert_spec' (b : Prop) [Decidable b] (h : b) :
     massert b ⦃ _ => True ⦄ := by
   simp only [massert, h, ↓reduceIte]
-  exact triple_ok_intro fun _ => trivial
+  exact ispec_ok_intro fun _ => trivial
 
 example :
     (do

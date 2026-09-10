@@ -212,7 +212,7 @@ theorem allocArray.spec {β : Type} (values : List α) (mk : Ref α → β)
     (post : β → IProp)
     (hPost : ∀ r : Ref α, owns (Heap.rangeHeap r values) ⊢ post (mk r)) :
     ⦃ emp ⦄ allocArray values mk ⦃⇓ result => post result⦄ := by
-  apply triple_guardedModify
+  apply ispec_guardedModify
   intro h _ frame hCompatible
   have hFresh :
       PartialCommMonoid.Compatible
@@ -261,7 +261,7 @@ def read (q : Ptr α) : Result α :=
 theorem read.spec (q : Ptr α) (value : α) :
     ⦃ q ↦ value ⦄ read q
       ⦃⇓ result => ⌜result = value⌝ ∗ q ↦ value⦄ := by
-  apply triple_guardedModify
+  apply ispec_guardedModify
   intro h hPointsTo frame hCompatible
   have hPointsToFrame : (q ↦ value) (h ∪ frame) :=
     (q ↦ value).up_closed hPointsTo (Heap.Sub.union_left hCompatible)
@@ -283,7 +283,7 @@ def update (q : Ptr α) (value : α) : Result Unit :=
 @[step]
 theorem update.spec (q : Ptr α) (oldValue newValue : α) :
     ⦃ q ↦ oldValue ⦄ update q newValue ⦃⇓ q ↦ newValue⦄ := by
-  apply triple_guardedModify
+  apply ispec_guardedModify
   intro h hPointsTo frame hCompatible
   obtain ⟨rest, hCompatibleRest, rfl⟩ := hPointsTo
   have hContainsSlot := Heap.contains_singleton q.ref oldValue
@@ -312,7 +312,7 @@ def free (q : Ptr α) : Result Unit :=
 @[step]
 theorem free.spec (q : Ptr α) (value : α) :
     ⦃ q ↦ value ⦄ free q ⦃⇓ emp⦄ := by
-  apply triple_guardedModify
+  apply ispec_guardedModify
   intro h hPointsTo frame hCompatible
   have hContains : Heap.contains h q.ref := Heap.contains_of_sub hPointsTo
   refine ⟨Heap.contains_union_left hContains, Heap.free q.ref h hContains,
@@ -338,7 +338,7 @@ def freeRange (q : Ptr α) : Nat → Result Unit
 theorem freeRange.spec (q : Ptr α) (values : List α) :
     ⦃ q ↦* values ⦄ freeRange q values.length ⦃⇓ emp⦄ := by
   induction values generalizing q with
-  | nil => exact triple_pure fun _ _ => trivial
+  | nil => exact ispec_pure fun _ _ => trivial
   | cons value rest ih =>
       have hSplit :
           (q ↦* (value :: rest)) = iprop(q ↦ value ∗ (q.add 1) ↦* rest) := by
@@ -346,11 +346,11 @@ theorem freeRange.spec (q : Ptr α) (values : List α) :
           bientails_eq (Ptr.pointsToRange_append q [value] rest),
           ← Ptr.pointsTo_eq_range]
         rfl
-      show triple _ (do free q; freeRange (q.add 1) rest.length) _
+      show ispec _ (do free q; freeRange (q.add 1) rest.length) _
       rw [hSplit]
-      apply triple_bind (triple_frame (free.spec q value) ((q.add 1) ↦* rest))
+      apply ispec_bind (ispec_frame (free.spec q value) ((q.add 1) ↦* rest))
       intro _
-      exact triple_conseq (ih (q := q.add 1)) (sep_elim_left _ _)
+      exact ispec_conseq (ih (q := q.add 1)) (sep_elim_left _ _)
         fun _ => entails_refl _
 
 /-! ## Reading and writing through a range
@@ -404,7 +404,7 @@ operations below walk a range in. -/
 theorem read.spec_frame (q : Ptr α) (value : α) (H : IProp) :
     ⦃ q ↦ value ∗ H ⦄ read q
       ⦃⇓ result => ⌜result = value⌝ ∗ (q ↦ value ∗ H)⦄ :=
-  triple_conseq (triple_frame (read.spec q value) H) (entails_refl _)
+  ispec_conseq (ispec_frame (read.spec q value) H) (entails_refl _)
     fun _ => (sep_assoc _ _ _).mp
 
 /-! ## Bulk operations
@@ -425,14 +425,14 @@ theorem fillRange.spec (q : Ptr α) (values : List α) (value : α) :
     ⦃ q ↦* values ⦄ fillRange q value values.length
       ⦃⇓ q ↦* List.replicate values.length value⦄ := by
   induction values generalizing q with
-  | nil => exact triple_pure (entails_refl _)
+  | nil => exact ispec_pure (entails_refl _)
   | cons old rest ih =>
       rw [List.length_cons, List.replicate_succ, Ptr.pointsToRange_cons,
         Ptr.pointsToRange_cons]
-      show triple _ (do update q value; fillRange (q.add 1) value rest.length) _
-      apply triple_bind (triple_frame (update.spec q old value) _)
+      show ispec _ (do update q value; fillRange (q.add 1) value rest.length) _
+      apply ispec_bind (ispec_frame (update.spec q old value) _)
       intro _
-      exact triple_frame_left (ih (q := q.add 1)) _
+      exact ispec_frame_left (ih (q := q.add 1)) _
 
 /-- Copy the `n` slots from `src` on into the `n` slots from `dst` on. -/
 def copyRange (dst src : Ptr α) : Nat → Result Unit
@@ -450,7 +450,7 @@ theorem copyRange.spec (dst src : Ptr α) (dstValues srcValues : List α)
       ⦃⇓ dst ↦* srcValues ∗ src ↦* srcValues⦄ := by
   induction srcValues generalizing dst src dstValues with
   | nil =>
-      refine triple_pure (entails_trans (entails_emp_r _) ?_)
+      refine ispec_pure (entails_trans (entails_emp_r _) ?_)
       rw [Ptr.pointsToRange_nil, Ptr.pointsToRange_nil]
       exact (sep_emp_l emp).mpr
   | cons value rest ih =>
@@ -461,22 +461,22 @@ theorem copyRange.spec (dst src : Ptr α) (dstValues srcValues : List α)
       have hRest : oldRest.length = rest.length := by simpa using hLength
       rw [List.length_cons, Ptr.pointsToRange_cons, Ptr.pointsToRange_cons,
         Ptr.pointsToRange_cons]
-      refine triple_conseq (P' := iprop(src ↦ value ∗
+      refine ispec_conseq (P' := iprop(src ↦ value ∗
           (dst ↦ old ∗ ((dst.add 1) ↦* oldRest ∗ (src.add 1) ↦* rest))))
         ?_ (by iframe) (fun _ => entails_refl _)
-      apply triple_bind (read.spec_frame src value _)
+      apply ispec_bind (read.spec_frame src value _)
       intro result
-      apply triple_ipure
+      apply ispec_ipure
       intro hResult
       rw [hResult]
-      refine triple_conseq (P' := iprop(dst ↦ old ∗
+      refine ispec_conseq (P' := iprop(dst ↦ old ∗
           (src ↦ value ∗ ((dst.add 1) ↦* oldRest ∗ (src.add 1) ↦* rest))))
         ?_ (by iframe) (fun _ => entails_refl _)
-      apply triple_bind (triple_frame (update.spec dst old value) _)
+      apply ispec_bind (ispec_frame (update.spec dst old value) _)
       intro _
-      have hTail := triple_frame (ih (dst.add 1) (src.add 1) oldRest hRest)
+      have hTail := ispec_frame (ih (dst.add 1) (src.add 1) oldRest hRest)
         iprop(dst ↦ value ∗ src ↦ value)
-      exact triple_conseq hTail (by iframe) (fun _ => by iframe)
+      exact ispec_conseq hTail (by iframe) (fun _ => by iframe)
 
 /-- Whether the `n` slots from `left` on hold the same values as the `n` slots
 from `right` on. -/
@@ -501,7 +501,7 @@ theorem compareRange.spec [DecidableEq α] (left right : Ptr α)
         cases rightValues with
         | nil => rfl
         | cons _ _ => simp at hLength
-      exact triple_pure fun h hPre => (sep_pure_l _ _ h).mpr ⟨by simp, hPre⟩
+      exact ispec_pure fun h hPre => (sep_pure_l _ _ h).mpr ⟨by simp, hPre⟩
   | cons x lrest ih =>
       obtain ⟨y, rrest, rfl⟩ : ∃ y rrest, rightValues = y :: rrest := by
         cases rightValues with
@@ -509,27 +509,27 @@ theorem compareRange.spec [DecidableEq α] (left right : Ptr α)
         | cons y rrest => exact ⟨y, rrest, rfl⟩
       have hRest : lrest.length = rrest.length := by simpa using hLength
       rw [List.length_cons, Ptr.pointsToRange_cons, Ptr.pointsToRange_cons]
-      refine triple_conseq (P' := iprop(left ↦ x ∗
+      refine ispec_conseq (P' := iprop(left ↦ x ∗
           (right ↦ y ∗ ((left.add 1) ↦* lrest ∗ (right.add 1) ↦* rrest))))
         ?_ (by iframe) (fun _ => entails_refl _)
-      apply triple_bind (read.spec_frame left x _)
+      apply ispec_bind (read.spec_frame left x _)
       intro resultLeft
-      apply triple_ipure
+      apply ispec_ipure
       intro hLeft
       rw [hLeft]
-      refine triple_conseq (P' := iprop(right ↦ y ∗
+      refine ispec_conseq (P' := iprop(right ↦ y ∗
           (left ↦ x ∗ ((left.add 1) ↦* lrest ∗ (right.add 1) ↦* rrest))))
         ?_ (by iframe) (fun _ => entails_refl _)
-      apply triple_bind (read.spec_frame right y _)
+      apply ispec_bind (read.spec_frame right y _)
       intro resultRight
-      apply triple_ipure
+      apply ispec_ipure
       intro hRight
       rw [hRight]
       by_cases hEq : x = y
       · rw [if_pos hEq]
-        have hTail := triple_frame (ih (left.add 1) (right.add 1) rrest hRest)
+        have hTail := ispec_frame (ih (left.add 1) (right.add 1) rrest hRest)
           iprop(left ↦ x ∗ right ↦ y)
-        refine triple_conseq hTail (by iframe) fun result h hPost => ?_
+        refine ispec_conseq hTail (by iframe) fun result h hPost => ?_
         obtain ⟨hResult, hOwn⟩ :=
           (sep_pure_l _ _ h).mp ((sep_assoc _ _ _).mp h hPost)
         refine (sep_pure_l _ _ h).mpr ⟨?_, ?_⟩
@@ -539,7 +539,7 @@ theorem compareRange.spec [DecidableEq α] (left right : Ptr α)
               iprop((left ↦ x ∗ (left.add 1) ↦* lrest) ∗
                 (right ↦ y ∗ (right.add 1) ↦* rrest))) h hOwn
       · rw [if_neg hEq]
-        refine triple_pure fun h hPre => (sep_pure_l _ _ h).mpr ⟨by simp [hEq], ?_⟩
+        refine ispec_pure fun h hPre => (sep_pure_l _ _ h).mpr ⟨by simp [hEq], ?_⟩
         exact (by iframe : iprop(right ↦ y ∗ (left ↦ x ∗
           ((left.add 1) ↦* lrest ∗ (right.add 1) ↦* rrest))) ⊢
             iprop((left ↦ x ∗ (left.add 1) ↦* lrest) ∗
@@ -570,21 +570,21 @@ theorem takeRange.spec (q : Ptr α) (values : List α) :
       ⦃⇓ result => ⌜result = values⌝⦄ := by
   induction values generalizing q with
   | nil =>
-      exact triple_pure fun _ _ => rfl
+      exact ispec_pure fun _ _ => rfl
   | cons value rest ih =>
       rw [Ptr.pointsToRange_cons]
       simp only [List.length_cons, takeRange]
-      apply triple_bind (read.spec_frame q value ((q.add 1) ↦* rest))
+      apply ispec_bind (read.spec_frame q value ((q.add 1) ↦* rest))
       intro result
-      apply triple_ipure
+      apply ispec_ipure
       intro hResult
-      apply triple_bind
-        (triple_conseq (triple_frame (free.spec q value) ((q.add 1) ↦* rest))
+      apply ispec_bind
+        (ispec_conseq (ispec_frame (free.spec q value) ((q.add 1) ↦* rest))
           (entails_refl _) fun _ => (sep_emp_l _).mp)
       intro _
-      apply triple_bind (ih (q := q.add 1))
+      apply ispec_bind (ih (q := q.add 1))
       intro tail
-      exact triple_pure fun _ hTail => by
+      exact ispec_pure fun _ hTail => by
         change result :: tail = value :: rest
         exact congrArg₂ List.cons hResult hTail
 
@@ -604,11 +604,11 @@ def end_mut_to_raw {α : Type} (q : Ptr α) : Result α := do
 theorem end_mut_to_raw.spec {α : Type} {value : α} (q : Ptr α) :
     ⦃ q ↦ value ⦄ end_mut_to_raw q ⦃⇓ result => ⌜result = value⌝⦄ := by
   unfold end_mut_to_raw
-  apply triple_bind (read.spec q value)
+  apply ispec_bind (read.spec q value)
   intro result
-  apply triple_ipure
+  apply ispec_ipure
   intro hResult
-  apply triple_seq (free.spec q value)
-  exact triple_pure fun _ _ => hResult
+  apply ispec_seq (free.spec q value)
+  exact ispec_pure fun _ _ => hResult
 
 end Aeneas.SepLogic

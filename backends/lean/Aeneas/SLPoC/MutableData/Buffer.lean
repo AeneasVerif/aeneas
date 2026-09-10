@@ -12,7 +12,7 @@ compute new views, while the lemmas below say how ownership follows them.
 
 Every operation reduces to a pointer operation, and none has a precondition:
 `Buffer.sub b i n` and `Buffer.split b i` are total, and a read or a write out
-of the range the caller owns simply has no provable triple.
+of the range the caller owns simply has no provable ispec.
 
 Reads and writes come with two specifications: a slot-level one, which is the
 primitive and the one `step` uses, and an array-level one, which owns the whole
@@ -103,9 +103,9 @@ def free (b : Buffer α) : Result Unit := freeRange b.ptr b.length
 @[step]
 theorem free.spec (b : Buffer α) (values : List α) :
     ⦃ b ↦ values ⦄ b.free ⦃⇓ emp⦄ := by
-  apply triple_ipure
+  apply ispec_ipure
   intro hLength
-  show triple _ (freeRange b.ptr b.length) _
+  show ispec _ (freeRange b.ptr b.length) _
   rw [← hLength]
   exact freeRange.spec b.ptr values
 
@@ -125,9 +125,9 @@ theorem read.spec_array (b : Buffer α) (values : List α) (i : Nat)
     (hIndex : i < values.length) :
     ⦃ b ↦ values ⦄ b.read i
       ⦃⇓ result => ⌜result = values[i]⌝ ∗ b ↦ values⦄ := by
-  apply triple_ipure
+  apply ispec_ipure
   intro hLength
-  refine triple_conseq (_root_.Aeneas.SepLogic.read.spec_range b.ptr values i hIndex)
+  refine ispec_conseq (_root_.Aeneas.SepLogic.read.spec_range b.ptr values i hIndex)
     (entails_refl _) fun result h hPost => ?_
   obtain ⟨hResult, hRange⟩ := (sep_pure_l _ _ h).mp hPost
   exact (sep_pure_l _ _ h).mpr
@@ -136,9 +136,9 @@ theorem read.spec_array (b : Buffer α) (values : List α) (i : Nat)
 theorem write.spec_array (b : Buffer α) (values : List α) (i : Nat) (value : α)
     (hIndex : i < values.length) :
     ⦃ b ↦ values ⦄ b.write i value ⦃⇓ b ↦ values.set i value⦄ := by
-  apply triple_ipure
+  apply ispec_ipure
   intro hLength
-  refine triple_conseq
+  refine ispec_conseq
     (_root_.Aeneas.SepLogic.update.spec_range b.ptr values i value hIndex)
     (entails_refl _) fun _ h hPost => ?_
   exact (sep_pure_l _ _ h).mpr ⟨by simpa using hLength, hPost⟩
@@ -165,11 +165,11 @@ def fill (b : Buffer α) (value : α) : Result Unit := fillRange b.ptr value b.l
 theorem fill.spec (b : Buffer α) (values : List α) (value : α) :
     ⦃ b ↦ values ⦄ b.fill value
       ⦃⇓ b ↦ List.replicate b.length value⦄ := by
-  apply triple_ipure
+  apply ispec_ipure
   intro hLength
-  show triple _ (fillRange b.ptr value b.length) _
+  show ispec _ (fillRange b.ptr value b.length) _
   rw [← hLength]
-  refine triple_conseq (fillRange.spec b.ptr values value) (entails_refl _)
+  refine ispec_conseq (fillRange.spec b.ptr values value) (entails_refl _)
     fun _ h hPost => (sep_pure_l _ _ h).mpr ⟨by simp [hLength], hPost⟩
 
 /-- The two length facts a binary operation needs, pulled out of what its two
@@ -202,13 +202,13 @@ theorem copy.spec (dst src : Buffer α) (dstValues srcValues : List α)
     (hLength : dst.length = src.length) :
     ⦃ dst ↦ dstValues ∗ src ↦ srcValues ⦄ dst.copy src
       ⦃⇓ dst ↦ srcValues ∗ src ↦ srcValues⦄ := by
-  refine triple_conseq ?_ (pointsTo_pair_entails dst src dstValues srcValues)
+  refine ispec_conseq ?_ (pointsTo_pair_entails dst src dstValues srcValues)
     (fun _ => entails_refl _)
-  apply triple_ipure
+  apply ispec_ipure
   rintro ⟨hDst, hSrc⟩
-  show triple _ (copyRange dst.ptr src.ptr src.length) _
+  show ispec _ (copyRange dst.ptr src.ptr src.length) _
   rw [← hSrc]
-  exact triple_conseq
+  exact ispec_conseq
     (copyRange.spec dst.ptr src.ptr dstValues srcValues (by omega))
     (entails_refl _)
     (fun _ => pair_entails_pointsTo (by omega) hSrc)
@@ -223,14 +223,14 @@ theorem compare.spec [DecidableEq α] (left right : Buffer α)
     ⦃ left ↦ leftValues ∗ right ↦ rightValues ⦄ Buffer.compare left right
       ⦃⇓ result => ⌜result = decide (leftValues = rightValues)⌝ ∗
         (left ↦ leftValues ∗ right ↦ rightValues)⦄ := by
-  refine triple_conseq ?_
+  refine ispec_conseq ?_
     (pointsTo_pair_entails left right leftValues rightValues)
     (fun _ => entails_refl _)
-  apply triple_ipure
+  apply ispec_ipure
   rintro ⟨hLeft, hRight⟩
-  show triple _ (compareRange left.ptr right.ptr left.length) _
+  show ispec _ (compareRange left.ptr right.ptr left.length) _
   rw [← hLeft]
-  refine triple_conseq
+  refine ispec_conseq
     (compareRange.spec left.ptr right.ptr leftValues rightValues (by omega))
     (entails_refl _) fun result h hPost => ?_
   obtain ⟨hResult, hRanges⟩ := (sep_pure_l _ _ h).mp hPost
@@ -249,16 +249,16 @@ theorem swap.spec (b : Buffer α) (values : List α) (i j : Nat)
     ⦃ b ↦ values ⦄ b.swap i j
       ⦃⇓ b ↦ (values.set i values[j]).set j values[i]⦄ := by
   unfold Buffer.swap
-  apply triple_bind (read.spec_array b values i hi)
+  apply ispec_bind (read.spec_array b values i hi)
   intro x
-  apply triple_ipure
+  apply ispec_ipure
   intro hx
-  apply triple_bind (read.spec_array b values j hj)
+  apply ispec_bind (read.spec_array b values j hj)
   intro y
-  apply triple_ipure
+  apply ispec_ipure
   intro hy
   rw [hx, hy]
-  apply triple_bind (write.spec_array b values i values[j] hi)
+  apply ispec_bind (write.spec_array b values i values[j] hi)
   intro _
   exact write.spec_array b (values.set i values[j]) j values[i]
     (by simpa using hj)
@@ -330,15 +330,15 @@ theorem end_mut_to_raw.spec (original : Aeneas.Std.Slice α) (b : Buffer α)
       ⦃⇓ result =>
         ⌜result.val = original.val.setSlice! 0 values⌝⦄ := by
   unfold end_mut_to_raw
-  apply triple_ipure
+  apply ispec_ipure
   intro hLength
   have hTake :
       ⦃ b.ptr ↦* values ⦄ takeRange b.ptr b.length
         ⦃⇓ result => ⌜result = values⌝⦄ :=
     takeRange.spec_of_length b.ptr values b.length hLength
-  apply triple_bind hTake
+  apply ispec_bind hTake
   intro result
-  exact triple_pure fun _ hResult => by
+  exact ispec_pure fun _ hResult => by
     rw [hResult, Aeneas.Std.Slice.setSlice!_val]
     rfl
 
