@@ -356,7 +356,7 @@ theorem compareCells.disjoint_spec [DecidableEq α]
               | cons value values =>
                   simp only [ownsCells]
                   rw [sep_comm_eq _ (⌜False⌝)]
-                  apply triple_ipure
+                  apply ispec_ipure
                   intro hfalse
                   contradiction
           | cons q rightCells =>
@@ -364,7 +364,7 @@ theorem compareCells.disjoint_spec [DecidableEq α]
               | nil =>
                   simp only [ownsCells]
                   rw [sep_comm_eq _ (⌜False⌝)]
-                  apply triple_ipure
+                  apply ispec_ipure
                   intro hfalse
                   contradiction
               | cons rightValue rightValues =>

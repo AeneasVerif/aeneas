@@ -10,18 +10,17 @@ import Aeneas.Tactic.Step.StepStar
 
 `Aeneas.Std.Primitives` defines `Result`, the interaction-tree monad over heap
 events. This file builds its correctness judgments, derives the
-separation-logic triples, wires those triples to the `step`/`step*` tactics,
-and defines the pure judgments `WP.spec` and `WP.dspec`, written
-`⦃ value => p ⦄` and `⦃ value => p ⦄div`. They wrap the triples that own
+separation-logic ispecs, wires those ispecs to the `step`/`step*` tactics,
+and defines the pure judgments `spec` and `dspec`, written
+`⦃ value => p ⦄` and `⦃ value => p ⦄div`. They wrap the ispecs that own
 nothing and are registered independently with `step`.
 
-The judgments themselves are not defined here. The meaning of a heap event is
-written down once, as the handler `EventSpec` of the state machine
-`RustEffect.machine`, and `spec` and `dspec` are then the generic judgments
-`TotalSpec` and `PartialSpec` of `Aeneas.Data.Coinductive.Spec` at that machine,
-used under their generic names with their generic rules. The machine's runs —
-the operational semantics `Result` is adequate for — and the certified
-interpreter that runs a proved program are in `Aeneas.SLPoC.Semantics`.
+The meaning of a heap event is written down once, as the handler `EventSpec` of
+the state machine `RustEffect.machine`. The separation-logic judgments are
+defined directly from the generic `TotalSpec` and `PartialSpec` judgments of
+`Aeneas.Data.Coinductive.Spec` at that machine. The machine's runs — the
+operational semantics `Result` is adequate for — and the certified interpreter
+that runs a proved program are in `Aeneas.SLPoC.Semantics`.
 -/
 
 namespace Aeneas.SepLogic
@@ -87,8 +86,8 @@ modifier cannot depend on which proof of the guard it is performed with: there
 is nothing for the machine to choose.
 
 This is what the admissibility of partial correctness
-(`Coinductive.PartialSpec.admissible`, used by `dspec_admissible`) and the
-adequacy of `dspec` need. -/
+(`Coinductive.PartialSpec.admissible`, used by `dispec_admissible`) and its
+adequacy need. -/
 theorem RustEffect.machine_conjunctive : RustEffect.machine.Conjunctive := by
   intro event h Demands ⟨C₀, hC₀⟩ hAll
   cases event with
@@ -97,8 +96,8 @@ theorem RustEffect.machine_conjunctive : RustEffect.machine.Conjunctive := by
   | fail error => exact (hAll C₀ hC₀).elim
 
 /-- The machine **resolves** its transitions: the one way it answers a heap
-event answers it with one definite outcome.  This is what the adequacy of `spec`
-needs, and it makes the machine feasible: no heap event is a miracle. -/
+event answers it with one definite outcome. This is what total-correctness
+adequacy needs, and it makes the machine feasible: no heap event is a miracle. -/
 theorem RustEffect.machine_resolves : RustEffect.machine.Resolves := by
   intro event h C hHandle
   cases event with
@@ -110,28 +109,27 @@ theorem RustEffect.machine_feasible : RustEffect.machine.Feasible :=
 
 /-! ## Total and partial correctness
 
-`Result` carries two correctness judgments, laid out here the way `Aeneas.Std.WP`
-lays out `spec` and `dspec`.
+`Result` carries total- and partial-correctness judgments, laid out here the
+way `Aeneas.Std.WP` lays out `spec` and `dspec`.
 
-`spec` is *total* correctness. As for `Aeneas.Std.WP.spec` a proof is a finite
-derivation ending in `ret`; nothing proves `ITree.div` correct, so a program that
-does not terminate has no proof at all.
+`TotalSpec` is *total* correctness. As for `Aeneas.Std.WP.spec`, a proof is a
+finite derivation ending in `ret`; nothing proves `ITree.div` correct, so a
+program that does not terminate has no proof at all.
 
-`dspec` is the divergence-tolerant counterpart. It says what `spec` says of a
-run that *stops* and nothing about a run that does not, while still requiring
-every event the program reaches to be defined: divergence is permitted, being
-stuck is not.
+`PartialSpec` is the divergence-tolerant counterpart. It says what `TotalSpec`
+says of a run that *stops* and nothing about a run that does not, while still
+requiring every event the program reaches to be defined: divergence is
+permitted, being stuck is not.
 
 `Aeneas.Std.WP` specializes the same generic judgments to a handler that rejects
 every event. Here the handler accepts defined heap events, so partial correctness
 also admits infinite `vis` trees, not just `Result.div`: it is a **greatest**
 fixed point rather than an inductive judgment with a divergence constructor.
 
-Neither judgment is defined here. Both are the judgments of
-`Aeneas.Data.Coinductive.Spec` — `TotalSpec` and `PartialSpec`, the least and
-the greatest fixed point of the same one-layer condition `SpecF`, differing only
-in what divergence owes — at the machine above, and their whole theory is proved
-there of an arbitrary machine: the constructors and destructors,
+Both are judgments of `Aeneas.Data.Coinductive.Spec` — the least and greatest
+fixed points of the same one-layer condition `SpecF`, differing only in what
+divergence owes — at the machine above, and their whole theory is proved there
+of an arbitrary machine: the constructors and destructors,
 `TotalSpec.induction` and `PartialSpec.coinduction`, the structural rules, and
 admissibility. Their adequacy for runs is in `Aeneas.SLPoC.StateMachine`.
 Use them under those names; what is added here is
@@ -139,12 +137,11 @@ only what is specific to heap events, which is what `EventSpec` reduces to at a
 concrete event. -/
 
 /-- Total correctness of `m` on the exact heap `h`. -/
-abbrev spec (m : Result α) (Q : IPost α) (h : Heap) : Prop :=
+abbrev iwp (m : Result α) (Q : IPost α) (h : Heap) : Prop :=
   TotalSpec RustEffect.machine (fun value h' => Q value h') m h
 
-/-- Partial correctness of `m` on the exact heap `h`, on assertions.  The
-counterpart of `spec`, and named after `Aeneas.Std.WP.dspec`. -/
-abbrev dspec (m : Result α) (Q : IPost α) (h : Heap) : Prop :=
+/-- Partial correctness of `m` on the exact heap `h`. -/
+abbrev diwp (m : Result α) (Q : IPost α) (h : Heap) : Prop :=
   PartialSpec RustEffect.machine (fun value h' => Q value h') m h
 
 /-- Partial correctness is admissible: it holds of the limit of a chain of
@@ -154,77 +151,42 @@ a recursive definition — needs, and it is the counterpart of
 `Aeneas.Std.WP.dspec_admissible`.  It holds because the machine of `Result` is
 conjunctive: what the approximations demand of an event one at a time, it
 answers the limit all at once. -/
-theorem dspec_admissible (Q : IPost α) (h : Heap) :
-    Lean.Order.admissible (fun m : Result α => dspec m Q h) :=
+private theorem diwp_admissible (Q : IPost α) (h : Heap) :
+    Lean.Order.admissible (fun m : Result α => diwp m Q h) :=
   PartialSpec.admissible RustEffect.machine_conjunctive _ h
 
-/-! ### Failure
+/-!
+Dot notation on the generic judgments finds `.ret`, `.bind`, `.mono`,
+`.mono_le`, `.vis_view`, `.toPartial` and the rest in `TotalSpec` and
+`PartialSpec`. What is left is what only `EventSpec` knows: an event the machine
+cannot answer is no more correct than one it can answer wrongly. A guarded
+modification is proved correct in one place, and that place is
+`guardedModifyWp_spec`, where its weakest precondition meets `TotalSpec`. -/
 
-The rest of the theory is inherited rather than restated: `spec` and `dspec` are
-`abbrev`s, so dot notation on a hypothesis of either finds `.ret`,
-`.bind`, `.mono`, `.mono_le`, `.vis_view`, `.toPartial` and the rest in
-`TotalSpec` and `PartialSpec`.  What is left is what only `EventSpec` knows: an
-event the machine cannot answer is no more correct than one it can answer
-wrongly.  A guarded modification is proved correct in one place, and that place
-is `guardedModifyWp_spec`, where its weakest precondition meets `TotalSpec`. -/
+/-! ## Separation-logic specifications
 
-/-- Failure is not totally correct: it is the event the machine cannot answer,
-so `EventSpec` gives `False` outright.  `TotalSpec.div_false` rules out the
-other way of not returning. -/
-@[simp]
-theorem spec_fail (error : Error) (Q : IPost α) (h : Heap) :
-    ¬ spec (Result.fail error) Q h :=
-  fun hSpec => hSpec.vis_view
-
-@[simp]
-theorem spec_fail_vis (error : Error)
-    (k : RustEffect.Output (RustEffect.Input.fail error) → Result α)
-    (Q : IPost α) (h : Heap) :
-    ¬ spec (.vis (RustEffect.Input.fail error) k) Q h :=
-  fun hSpec => hSpec.vis_view
-
-/-- Failure is not partially correct either: partial correctness permits
-divergence, not stuckness. -/
-@[simp]
-theorem dspec_fail (error : Error) (Q : IPost α) (h : Heap) :
-    ¬ dspec (Result.fail error) Q h :=
-  fun hSpec => hSpec.vis_view
-
-@[simp]
-theorem dspec_fail_vis (error : Error)
-    (k : RustEffect.Output (RustEffect.Input.fail error) → Result α)
-    (Q : IPost α) (h : Heap) :
-    ¬ dspec (.vis (RustEffect.Input.fail error) k) Q h :=
-  fun hSpec => hSpec.vis_view
-
-/-! ## Hoare triples
-
-`triple` and `dtriple` are the two judgments made local, and are declared here
+`ispec` and `dispec` are the two judgments made local, and are declared here
 side by side. Both quantify over an arbitrary frame the computation must
-preserve; only `triple` claims that the computation terminates. -/
+preserve; only `ispec` claims that the computation terminates. -/
 
-/-- A total-correctness separation triple. The quantified `F` is an arbitrary
+/-- A total-correctness separation-logic specification. The quantified `F` is an arbitrary
 frame that the computation must preserve. -/
-def triple (P : IPre) (m : Result α) (Q : IPost α) : Prop :=
-  ∀ F h, (P ∗ F) h → spec m (Q ∗+ F) h
+def ispec (P : IPre) (m : Result α) (Q : IPost α) : Prop :=
+  ∀ F h, (P ∗ F) h → iwp m (Q ∗+ F) h
 
-/-- A partial-correctness separation triple.  As in `triple` the quantified `F`
-is an arbitrary frame the computation must preserve; unlike `triple` it does not
+/-- A partial-correctness separation-logic specification. As in `ispec` the quantified `F`
+is an arbitrary frame the computation must preserve; unlike `ispec` it does not
 claim that the computation terminates. -/
-def dtriple (P : IPre) (m : Result α) (Q : IPost α) : Prop :=
-  ∀ F h, (P ∗ F) h → dspec m (Q ∗+ F) h
-
-namespace WP
+def dispec (P : IPre) (m : Result α) (Q : IPost α) : Prop :=
+  ∀ F h, (P ∗ F) h → diwp m (Q ∗+ F) h
 
 /-- Total correctness with no owned input and a pure postcondition. -/
 def spec (m : Result α) (Q : α → Prop) : Prop :=
-  triple emp m (fun value => ⌜Q value⌝)
+  ispec emp m (fun value => ⌜Q value⌝)
 
 /-- The divergence-tolerant counterpart of `spec`. -/
 def dspec (m : Result α) (Q : α → Prop) : Prop :=
-  dtriple emp m (fun value => ⌜Q value⌝)
-
-end WP
+  dispec emp m (fun value => ⌜Q value⌝)
 
 /-- Internal tuple-destructuring marker for postconditions. Unlike a pattern
 lambda, it remains visible to `step` and the delaborators. -/
@@ -263,21 +225,21 @@ theorem postCurry_eq {α β γ : Type _} (f : α → β → γ) :
 
 /-- Split separate postcondition binders before `step` introduces the
 result and its postcondition hypotheses. -/
-theorem forall_triple_postCurry {α β γ : Type _}
+theorem forall_ispec_postCurry {α β γ : Type _}
     (P : α → β → IProp) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
-    (∀ value, triple (postCurry P value ∗ F) (next value) Q) ↔
-      ∀ first second, triple (P first second ∗ F) (next (first, second)) Q := by
+    (∀ value, ispec (postCurry P value ∗ F) (next value) Q) ↔
+      ∀ first second, ispec (P first second ∗ F) (next (first, second)) Q := by
   constructor
   · intro h first second
     exact h (first, second)
   · intro h ⟨first, second⟩
     exact h first second
 
-/-- Partial-triple counterpart of `forall_triple_postCurry`. -/
-theorem forall_dtriple_postCurry {α β γ : Type _}
+/-- Partial-ispec counterpart of `forall_ispec_postCurry`. -/
+theorem forall_dispec_postCurry {α β γ : Type _}
     (P : α → β → IProp) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
-    (∀ value, dtriple (postCurry P value ∗ F) (next value) Q) ↔
-      ∀ first second, dtriple (P first second ∗ F) (next (first, second)) Q := by
+    (∀ value, dispec (postCurry P value ∗ F) (next value) Q) ↔
+      ∀ first second, dispec (P first second ∗ F) (next (first, second)) Q := by
   constructor
   · intro h first second
     exact h (first, second)
@@ -286,21 +248,21 @@ theorem forall_dtriple_postCurry {α β γ : Type _}
 
 /-- Split an uncurried postcondition before `step` introduces the
 result and its postcondition hypotheses. -/
-theorem forall_triple_postUncurry {α β γ : Type _}
+theorem forall_ispec_postUncurry {α β γ : Type _}
     (P : α → β → IProp) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
-    (∀ value, triple (postUncurry P value ∗ F) (next value) Q) ↔
-      ∀ first second, triple (P first second ∗ F) (next (first, second)) Q := by
+    (∀ value, ispec (postUncurry P value ∗ F) (next value) Q) ↔
+      ∀ first second, ispec (P first second ∗ F) (next (first, second)) Q := by
   constructor
   · intro h first second
     exact h (first, second)
   · intro h ⟨first, second⟩
     exact h first second
 
-/-- Partial-triple counterpart of `forall_triple_postUncurry`. -/
-theorem forall_dtriple_postUncurry {α β γ : Type _}
+/-- Partial-ispec counterpart of `forall_ispec_postUncurry`. -/
+theorem forall_dispec_postUncurry {α β γ : Type _}
     (P : α → β → IProp) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
-    (∀ value, dtriple (postUncurry P value ∗ F) (next value) Q) ↔
-      ∀ first second, dtriple (P first second ∗ F) (next (first, second)) Q := by
+    (∀ value, dispec (postUncurry P value ∗ F) (next value) Q) ↔
+      ∀ first second, dispec (P first second ∗ F) (next (first, second)) Q := by
   constructor
   · intro h first second
     exact h (first, second)
@@ -376,26 +338,26 @@ private def mkPostWith (curryName uncurryName : Name)
 macro_rules
   | `(($m) ⦃⇓ $result => $Q⦄) => do
       let post ← mkPostWith ``postCurry ``postUncurry #[result] Q
-      `(WP.spec $m $post)
+      `(spec $m $post)
   | `(⦃$P⦄ $m ⦃⇓ $result => $Q⦄) => do
       let post ← mkPostWith ``postCurry ``postUncurry #[result] (← `(iprop($Q)))
-      `(triple iprop($P) $m $post)
+      `(ispec iprop($P) $m $post)
 
 macro_rules
   | `(($m) ⦃⇓ $result $results:term* => $Q⦄) => do
       let post ← mkPostWith ``postCurry ``postUncurry
         (#[result] ++ results) Q
-      `(WP.spec $m $post)
+      `(spec $m $post)
   | `(⦃$P⦄ $m ⦃⇓ $result $results:term* => $Q⦄) => do
       let post ← mkPostWith ``postCurry ``postUncurry
         (#[result] ++ results) (← `(iprop($Q)))
-      `(triple iprop($P) $m $post)
+      `(ispec iprop($P) $m $post)
 
 macro_rules
   | `(($m) ⦃⇓ $Q:term⦄) =>
-      `(WP.spec $m (fun _ => $Q))
+      `(spec $m (fun _ => $Q))
   | `(⦃$P⦄ $m ⦃⇓ $Q⦄) =>
-      `(triple iprop($P) $m (fun _ => iprop($Q)))
+      `(ispec iprop($P) $m (fun _ => iprop($Q)))
 
 syntax:lead (name := dspecSyntax)
   atomic("(" term:lead ")" " ⦃" "⇓ ") term+ " => " term " ⦄div" : term
@@ -410,63 +372,61 @@ syntax:lead (name := slDspecSyntaxPred)
 macro_rules
   | `(($m) ⦃⇓ $result => $Q⦄div) => do
       let post ← mkPostWith ``postCurry ``postUncurry #[result] Q
-      `(WP.dspec $m $post)
+      `(dspec $m $post)
   | `(⦃$P⦄ $m ⦃⇓ $result => $Q⦄div) => do
       let post ← mkPostWith ``postCurry ``postUncurry #[result] (← `(iprop($Q)))
-      `(dtriple iprop($P) $m $post)
+      `(dispec iprop($P) $m $post)
 
 macro_rules
   | `(($m) ⦃⇓ $result $results:term* => $Q⦄div) => do
       let post ← mkPostWith ``postCurry ``postUncurry
         (#[result] ++ results) Q
-      `(WP.dspec $m $post)
+      `(dspec $m $post)
   | `(⦃$P⦄ $m ⦃⇓ $result $results:term* => $Q⦄div) => do
       let post ← mkPostWith ``postCurry ``postUncurry
         (#[result] ++ results) (← `(iprop($Q)))
-      `(dtriple iprop($P) $m $post)
+      `(dispec iprop($P) $m $post)
 
 macro_rules
   | `(($m) ⦃⇓ $Q:term⦄div) =>
-      `(WP.dspec $m (fun _ => $Q))
+      `(dspec $m (fun _ => $Q))
   | `(⦃$P⦄ $m ⦃⇓ $Q⦄div) =>
-      `(dtriple iprop($P) $m (fun _ => iprop($Q)))
+      `(dispec iprop($P) $m (fun _ => iprop($Q)))
 
-theorem triple_iff (P : IPre) (m : Result α) (Q : IPost α) :
-    triple P m Q ↔ ∀ F h, (P ∗ F) h → spec m (Q ∗+ F) h :=
-  Iff.rfl
-
-theorem dtriple_iff (P : IPre) (m : Result α) (Q : IPost α) :
-    dtriple P m Q ↔ ∀ F h, (P ∗ F) h → dspec m (Q ∗+ F) h :=
-  Iff.rfl
-
-/-- Every total triple is a partial one.  `step` applies the `@[step]`
+/-- Every total ispec is a partial one.  `step` applies the `@[step]`
 specifications — which state total correctness — to a partial goal through this
 lifting, through the generic `TotalSpec.toPartial`. -/
-theorem triple_dtriple {α : Type u} {P : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : triple P m Q) : dtriple P m Q :=
+theorem ispec_dispec {α : Type u} {P : IPre} {m : Result α} {Q : IPost α}
+    (hTriple : ispec P m Q) : dispec P m Q :=
   fun F h hPre => (hTriple F h hPre).toPartial
 
-/-! ### `triple` rules -/
+/-! ### `ispec` rules -/
 
-theorem triple_apply {P : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : triple P m Q) {h : Heap} (hPre : P h) :
-    spec m Q h := by
+private theorem ispec_apply {P : IPre} {m : Result α} {Q : IPost α}
+    (hTriple : ispec P m Q) {h : Heap} (hPre : P h) :
+    TotalSpec RustEffect.machine (fun value h' => Q value h') m h := by
   have hSpec := hTriple emp h ((sep_emp_r P).mpr h hPre)
   exact hSpec.mono fun value => sep_elim_right (Q value) emp
 
-theorem triple_frame {P : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : triple P m Q) (H : IProp) :
-    triple (P ∗ H) m (Q ∗+ H) := by
+/-- Failure has no total pure specification. -/
+@[simp]
+theorem spec_fail (error : Error) (Q : α → Prop) :
+    ¬ spec (Result.fail error) Q :=
+  fun hSpec => (ispec_apply hSpec (h := ∅) trivial).vis_view
+
+theorem ispec_frame {P : IPre} {m : Result α} {Q : IPost α}
+    (hTriple : ispec P m Q) (H : IProp) :
+    ispec (P ∗ H) m (Q ∗+ H) := by
   intro F h hPre
   have hSpec := hTriple (H ∗ F) h ((sep_assoc P H F).mp h hPre)
   exact hSpec.mono fun value heap => (sep_assoc (Q value) H F).mpr heap
 
-/-- The frame rule, framing on the left.  `triple_frame` adds its resource on
+/-- The frame rule, framing on the left.  `ispec_frame` adds its resource on
 the right; a program that walks a data structure usually has to keep what it is
 already past on the left. -/
-theorem triple_frame_left {P : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : triple P m Q) (H : IProp) :
-    triple (H ∗ P) m (fun value => H ∗ Q value) := by
+theorem ispec_frame_left {P : IPre} {m : Result α} {Q : IPost α}
+    (hTriple : ispec P m Q) (H : IProp) :
+    ispec (H ∗ P) m (fun value => H ∗ Q value) := by
   intro F h hPre
   have hSwapped : (P ∗ (H ∗ F)) h :=
     (sep_assoc P H F).mp h
@@ -475,33 +435,33 @@ theorem triple_frame_left {P : IPre} {m : Result α} {Q : IPost α}
   exact (sep_mono (sep_comm (Q value) H).mp (entails_refl F)) heap
     ((sep_assoc (Q value) H F).mpr heap hPost)
 
-theorem triple_conseq {P' P : IPre} {m : Result α}
+theorem ispec_conseq {P' P : IPre} {m : Result α}
     {Q' Q : IPost α}
-    (hTriple : triple P' m Q') (hP : P ⊢ P')
+    (hTriple : ispec P' m Q') (hP : P ⊢ P')
     (hQ : Q' ⊢+ Q) :
-    triple P m Q := by
+    ispec P m Q := by
   intro F h hPre
   have hSpec := hTriple F h (sep_mono hP (entails_refl F) h hPre)
   exact hSpec.mono fun value => sep_mono (hQ value) (entails_refl F)
 
 /-- An arbitrary postcondition resource may be discarded.  Since the logic is
 affine this is an instance of the rule of consequence. -/
-theorem triple_hany_post {P H : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : triple P m (Q ∗+ H)) :
-    triple P m Q :=
-  triple_conseq hTriple (entails_refl P)
+theorem ispec_hany_post {P H : IPre} {m : Result α} {Q : IPost α}
+    (hTriple : ispec P m (Q ∗+ H)) :
+    ispec P m Q :=
+  ispec_conseq hTriple (entails_refl P)
     (fun value => sep_elim_right (Q value) H)
 
 /-- An arbitrary precondition resource may be discarded. -/
-theorem triple_hany_pre {P H : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : triple P m Q) :
-    triple (P ∗ H) m Q :=
-  triple_hany_post (triple_frame hTriple H)
+theorem ispec_hany_pre {P H : IPre} {m : Result α} {Q : IPost α}
+    (hTriple : ispec P m Q) :
+    ispec (P ∗ H) m Q :=
+  ispec_hany_post (ispec_frame hTriple H)
 
-theorem triple_ipure {P : Prop} {H : IPre} {m : Result α}
+theorem ispec_ipure {P : Prop} {H : IPre} {m : Result α}
     {Q : IPost α}
-    (hTriple : P → triple H m Q) :
-    triple (⌜P⌝ ∗ H) m Q := by
+    (hTriple : P → ispec H m Q) :
+    ispec (⌜P⌝ ∗ H) m Q := by
   intro F h hPre
   have ⟨hP, hHF⟩ :=
     (sep_pure_l P (H ∗ F) h).mp ((sep_assoc _ _ _).mp h hPre)
@@ -510,70 +470,70 @@ theorem triple_ipure {P : Prop} {H : IPre} {m : Result α}
 /-- Extract a pure fact from an arbitrary position in a separating
 precondition. `iintro_shallow` supplies the rearrangement equality without
 unfolding representation predicates. -/
-theorem triple_ipure_anywhere (P : Prop) (H' : IPre) {H : IPre}
+theorem ispec_ipure_anywhere (P : Prop) (H' : IPre) {H : IPre}
     {m : Result α} {Q : IPost α}
     (hExtract : H = iprop(⌜P⌝ ∗ H'))
-    (hTriple : P → triple H' m Q) :
-    triple H m Q := by
+    (hTriple : P → ispec H' m Q) :
+    ispec H m Q := by
   rw [hExtract]
-  exact triple_ipure hTriple
+  exact ispec_ipure hTriple
 
 /-- Protect the frame while `step` extracts facts from a callee postcondition. -/
-theorem triple_introFrame (Qm F : IPre) {m : Result α} {Q : IPost α}
-    (hTriple : triple (Qm ∗ introFrame F) m Q) :
-    triple (Qm ∗ F) m Q := by
+theorem ispec_introFrame (Qm F : IPre) {m : Result α} {Q : IPost α}
+    (hTriple : ispec (Qm ∗ introFrame F) m Q) :
+    ispec (Qm ∗ F) m Q := by
   simpa only [introFrame_eq] using hTriple
 
 /-- Copy a pure fact of the precondition into the local context *without*
-consuming it.  Unlike `triple_ipure` the precondition is unchanged, so the fact
+consuming it.  Unlike `ispec_ipure` the precondition is unchanged, so the fact
 stays available to the framing of the later steps. -/
-theorem triple_ipure_keep {P : Prop} {H : IPre} {m : Result α}
+theorem ispec_ipure_keep {P : Prop} {H : IPre} {m : Result α}
     {Q : IPost α}
-    (hTriple : P → triple (⌜P⌝ ∗ H) m Q) :
-    triple (⌜P⌝ ∗ H) m Q := by
+    (hTriple : P → ispec (⌜P⌝ ∗ H) m Q) :
+    ispec (⌜P⌝ ∗ H) m Q := by
   intro F h hPre
   have ⟨hP, _⟩ :=
     (sep_pure_l P (H ∗ F) h).mp ((sep_assoc _ _ _).mp h hPre)
   exact hTriple hP F h hPre
 
-theorem triple_exists {ι : Sort _} {J : ι → IPre} {m : Result α}
+theorem ispec_exists {ι : Sort _} {J : ι → IPre} {m : Result α}
     {Q : IPost α}
-    (hTriple : ∀ x, triple (J x) m Q) :
-    triple iprop(∃ x, J x) m Q := by
+    (hTriple : ∀ x, ispec (J x) m Q) :
+    ispec iprop(∃ x, J x) m Q := by
   intro F h hPre
   obtain ⟨h₁, h₂, hDisjoint, rfl, ⟨x, hJ⟩, hF⟩ := hPre
   exact hTriple x F _ ⟨h₁, h₂, hDisjoint, rfl, hJ, hF⟩
 
-theorem triple_conseq_frame {H₂ : IProp} {H₁ H : IPre}
+theorem ispec_conseq_frame {H₂ : IProp} {H₁ H : IPre}
     {Q₁ Q : IPost α}
     {m : Result α}
-    (hTriple : triple H₁ m Q₁)
+    (hTriple : ispec H₁ m Q₁)
     (hPre : H ⊢ H₁ ∗ H₂)
     (hPost : Q₁ ∗+ H₂ ⊢+ Q) :
-    triple H m Q :=
-  triple_conseq (triple_frame hTriple H₂) hPre hPost
+    ispec H m Q :=
+  ispec_conseq (ispec_frame hTriple H₂) hPre hPost
 
-theorem triple_ipure' {P : Prop} {m : Result α} {Q : IPost α}
-    (hTriple : P → triple emp m Q) :
-    triple ⌜P⌝ m Q := by
+theorem ispec_ipure' {P : Prop} {m : Result α} {Q : IPost α}
+    (hTriple : P → ispec emp m Q) :
+    ispec ⌜P⌝ m Q := by
   intro F h hPre
   have ⟨hP, hF⟩ := (sep_pure_l P F h).mp hPre
   exact hTriple hP F h ((sep_emp_l F).mpr h hF)
 
-/-- A triple with a pure precondition and postcondition is a pure implication
+/-- A ispec with a pure precondition and postcondition is a pure implication
 whose conclusion owns nothing. -/
-theorem triple_ipure_iff {P : Prop} {m : Result α} {Q : α → Prop} :
-    triple ⌜P⌝ m (fun value => ⌜Q value⌝) ↔
-      (P → triple emp m (fun value => ⌜Q value⌝)) := by
+theorem ispec_ipure_iff {P : Prop} {m : Result α} {Q : α → Prop} :
+    ispec ⌜P⌝ m (fun value => ⌜Q value⌝) ↔
+      (P → ispec emp m (fun value => ⌜Q value⌝)) := by
   constructor
   · intro hTriple hP
-    exact triple_conseq hTriple ((entails_emp_ipure_iff P).2 hP)
+    exact ispec_conseq hTriple ((entails_emp_ipure_iff P).2 hP)
       (fun _ => entails_refl _)
-  · exact triple_ipure'
+  · exact ispec_ipure'
 
-theorem triple_pure {P : IPre} {Q : IPost α} {value : α}
+theorem ispec_pure {P : IPre} {Q : IPost α} {value : α}
     (hPost : P ⊢ Q value) :
-    triple P (pure value : Result α) Q := by
+    ispec P (pure value : Result α) Q := by
   intro F h hPre
   exact .ret (sep_mono hPost (entails_refl F) h hPre)
 
@@ -635,7 +595,7 @@ def guardedModifyWp {EventResult : Type} (pre : Heap → Prop)
         (fun value _ _ hQ hSub' => (Q value).up_closed hQ hSub') hWp hSub }
   monotone hQ _ hWp := guardedModifyLocal.mono (fun value h' => hQ value h') hWp
 
-/-- The frame rule for one event: the frame a triple carries is absorbed into
+/-- The frame rule for one event: the frame an `ispec` carries is absorbed into
 the frame the denotation already quantifies over. -/
 theorem guardedModifyWp_frame {EventResult : Type} (pre : Heap → Prop)
     (modify : (h : Heap) → pre h → EventResult × Heap) (Q : IPost EventResult) (H : IProp) :
@@ -662,10 +622,11 @@ exactly the heap it owns, taking the frame to be empty.  This is the only place
 is proved correct: `TotalSpec.vis` hands the event to the machine, and what the
 machine demands of it is `EventSpec` at `guardedModify` — the guard, and the
 postcondition of what the modification returns. -/
-theorem guardedModifyWp_spec {α : Type} {pre : Heap → Prop}
+private theorem guardedModifyWp_spec {α : Type} {pre : Heap → Prop}
     {modify : (h : Heap) → pre h → α × Heap} {Q : IPost α} {h : Heap}
     (hWp : guardedModifyWp pre modify Q h) :
-    spec (Result.guardedModify pre modify) Q h := by
+    TotalSpec RustEffect.machine (fun value h' => Q value h')
+      (Result.guardedModify pre modify) h := by
   have hWp' := hWp Heap.empty (PartialCommMonoid.compatible_comm
     (PartialCommMonoid.compatible_empty_left h))
   simp only [Heap.union_empty] at hWp'
@@ -676,260 +637,268 @@ theorem guardedModifyWp_spec {α : Type} {pre : Heap → Prop}
   exact ⟨hPre, .ret hPost⟩
 
 /-- The specification of a guarded modification is what its weakest precondition
-says: absorb the triple's frame into the one `guardedModifyWp` quantifies over,
+says: absorb the ispec's frame into the one `guardedModifyWp` quantifies over,
 then read off total correctness. -/
-theorem triple_guardedModify {α : Type} {pre : Heap → Prop}
+theorem ispec_guardedModify {α : Type} {pre : Heap → Prop}
     {modify : (h : Heap) → pre h → α × Heap} {P : IPre} {Q : IPost α}
     (hWp : P ⊢ guardedModifyWp pre modify Q) :
-    triple P (Result.guardedModify pre modify) Q := fun F h hPre =>
+    ispec P (Result.guardedModify pre modify) Q := fun F h hPre =>
   guardedModifyWp_spec
     (guardedModifyWp_frame pre modify Q F h
       (sep_mono hWp (entails_refl F) h hPre))
 
-theorem triple_bind {α β : Type u} {P : IPre} {Q₁ : IPost α}
+theorem ispec_bind {α β : Type u} {P : IPre} {Q₁ : IPost α}
     {Q : IPost β} {m : Result α} {next : α → Result β}
-    (hFirst : triple P m Q₁)
-    (hNext : ∀ value, triple (Q₁ value) (next value) Q) :
-    triple P (m >>= next) Q := by
+    (hFirst : ispec P m Q₁)
+    (hNext : ∀ value, ispec (Q₁ value) (next value) Q) :
+    ispec P (m >>= next) Q := by
   intro F h hPre
   apply (hFirst F h hPre).bind
   intro value h' hPost
   exact hNext value F h' hPost
 
-/-- `triple_bind` on `Aeneas.Std.bind` rather than on `>>=`.
+/-- `ispec_bind` on `Aeneas.Std.bind` rather than on `>>=`.
 
 The `Bind` class puts the two value types in the *same* universe, which a call
 in a translated Rust program need not: a function returning a `Type u` may be
 followed by a continuation returning a `Type v`.  `Aeneas.Std.bind` is the
 two-universe bind `Result` is really given, so the rule `step` uses is this one.
 -/
-theorem triple_bind' {α : Type u} {β : Type v} {P : IPre} {Q₁ : IPost α}
+theorem ispec_bind' {α : Type u} {β : Type v} {P : IPre} {Q₁ : IPost α}
     {Q : IPost β} {m : Result α} {next : α → Result β}
-    (hFirst : triple P m Q₁)
-    (hNext : ∀ value, triple (Q₁ value) (next value) Q) :
-    triple P (Aeneas.Std.bind m next) Q := by
+    (hFirst : ispec P m Q₁)
+    (hNext : ∀ value, ispec (Q₁ value) (next value) Q) :
+    ispec P (Aeneas.Std.bind m next) Q := by
   intro F h hPre
   apply (hFirst F h hPre).bind
   intro value h' hPost
   exact hNext value F h' hPost
 
-theorem triple_seq {α β : Type u} {P H : IPre} {Q : IPost β}
+theorem ispec_seq {α β : Type u} {P H : IPre} {Q : IPost β}
     {m₁ : Result α} {m₂ : Result β}
-    (hFirst : triple P m₁ (fun _ => H))
-    (hSecond : triple H m₂ Q) :
-    triple P (m₁ >>= fun _ => m₂) Q :=
-  triple_bind hFirst (fun _ => hSecond)
+    (hFirst : ispec P m₁ (fun _ => H))
+    (hSecond : ispec H m₂ Q) :
+    ispec P (m₁ >>= fun _ => m₂) Q :=
+  ispec_bind hFirst (fun _ => hSecond)
 
-/-! ### `dtriple` rules -/
+/-! ### `dispec` rules -/
 
-theorem dtriple_apply {P : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : dtriple P m Q) {h : Heap} (hPre : P h) : dspec m Q h := by
+private theorem dispec_apply {P : IPre} {m : Result α} {Q : IPost α}
+    (hTriple : dispec P m Q) {h : Heap} (hPre : P h) :
+    PartialSpec RustEffect.machine (fun value h' => Q value h') m h := by
   have hSpec := hTriple emp h ((sep_emp_r P).mpr h hPre)
   exact hSpec.mono fun value => sep_elim_right (Q value) emp
 
-theorem dtriple_frame {P : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : dtriple P m Q) (H : IProp) : dtriple (P ∗ H) m (Q ∗+ H) := by
+/-- Failure has no partial pure specification: divergence is permitted, not
+stuckness. -/
+@[simp]
+theorem dspec_fail (error : Error) (Q : α → Prop) :
+    ¬ dspec (Result.fail error) Q :=
+  fun hSpec => (dispec_apply hSpec (h := ∅) trivial).vis_view
+
+theorem dispec_frame {P : IPre} {m : Result α} {Q : IPost α}
+    (hTriple : dispec P m Q) (H : IProp) : dispec (P ∗ H) m (Q ∗+ H) := by
   intro F h hPre
   have hSpec := hTriple (H ∗ F) h ((sep_assoc P H F).mp h hPre)
   exact hSpec.mono fun value heap => (sep_assoc (Q value) H F).mpr heap
 
-theorem dtriple_conseq {P' P : IPre} {m : Result α} {Q' Q : IPost α}
-    (hTriple : dtriple P' m Q') (hP : P ⊢ P') (hQ : Q' ⊢+ Q) : dtriple P m Q := by
+theorem dispec_conseq {P' P : IPre} {m : Result α} {Q' Q : IPost α}
+    (hTriple : dispec P' m Q') (hP : P ⊢ P') (hQ : Q' ⊢+ Q) : dispec P m Q := by
   intro F h hPre
   have hSpec := hTriple F h (sep_mono hP (entails_refl F) h hPre)
   exact hSpec.mono fun value => sep_mono (hQ value) (entails_refl F)
 
-theorem dtriple_hany_post {P H : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : dtriple P m (Q ∗+ H)) : dtriple P m Q :=
-  dtriple_conseq hTriple (entails_refl P) (fun value => sep_elim_right (Q value) H)
+theorem dispec_hany_post {P H : IPre} {m : Result α} {Q : IPost α}
+    (hTriple : dispec P m (Q ∗+ H)) : dispec P m Q :=
+  dispec_conseq hTriple (entails_refl P) (fun value => sep_elim_right (Q value) H)
 
-theorem dtriple_hany_pre {P H : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : dtriple P m Q) : dtriple (P ∗ H) m Q :=
-  dtriple_hany_post (dtriple_frame hTriple H)
+theorem dispec_hany_pre {P H : IPre} {m : Result α} {Q : IPost α}
+    (hTriple : dispec P m Q) : dispec (P ∗ H) m Q :=
+  dispec_hany_post (dispec_frame hTriple H)
 
-theorem dtriple_ipure {P : Prop} {H : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : P → dtriple H m Q) : dtriple (⌜P⌝ ∗ H) m Q := by
+theorem dispec_ipure {P : Prop} {H : IPre} {m : Result α} {Q : IPost α}
+    (hTriple : P → dispec H m Q) : dispec (⌜P⌝ ∗ H) m Q := by
   intro F h hPre
   have ⟨hP, hHF⟩ := (sep_pure_l P (H ∗ F) h).mp ((sep_assoc _ _ _).mp h hPre)
   exact hTriple hP F h hHF
 
-/-- Partial-triple counterpart of `triple_ipure_anywhere`. -/
-theorem dtriple_ipure_anywhere (P : Prop) (H' : IPre) {H : IPre}
+/-- Partial-ispec counterpart of `ispec_ipure_anywhere`. -/
+theorem dispec_ipure_anywhere (P : Prop) (H' : IPre) {H : IPre}
     {m : Result α} {Q : IPost α}
     (hExtract : H = iprop(⌜P⌝ ∗ H'))
-    (hTriple : P → dtriple H' m Q) :
-    dtriple H m Q := by
+    (hTriple : P → dispec H' m Q) :
+    dispec H m Q := by
   rw [hExtract]
-  exact dtriple_ipure hTriple
+  exact dispec_ipure hTriple
 
-/-- Partial-triple counterpart of `triple_introFrame`. -/
-theorem dtriple_introFrame (Qm F : IPre) {m : Result α} {Q : IPost α}
-    (hTriple : dtriple (Qm ∗ introFrame F) m Q) :
-    dtriple (Qm ∗ F) m Q := by
+/-- Partial-ispec counterpart of `ispec_introFrame`. -/
+theorem dispec_introFrame (Qm F : IPre) {m : Result α} {Q : IPost α}
+    (hTriple : dispec (Qm ∗ introFrame F) m Q) :
+    dispec (Qm ∗ F) m Q := by
   simpa only [introFrame_eq] using hTriple
 
 /-- Copy a pure fact of the precondition into the local context without
 consuming it. -/
-theorem dtriple_ipure_keep {P : Prop} {H : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : P → dtriple (⌜P⌝ ∗ H) m Q) : dtriple (⌜P⌝ ∗ H) m Q := by
+theorem dispec_ipure_keep {P : Prop} {H : IPre} {m : Result α} {Q : IPost α}
+    (hTriple : P → dispec (⌜P⌝ ∗ H) m Q) : dispec (⌜P⌝ ∗ H) m Q := by
   intro F h hPre
   have ⟨hP, _⟩ := (sep_pure_l P (H ∗ F) h).mp ((sep_assoc _ _ _).mp h hPre)
   exact hTriple hP F h hPre
 
-theorem dtriple_ipure' {P : Prop} {m : Result α} {Q : IPost α}
-    (hTriple : P → dtriple emp m Q) : dtriple ⌜P⌝ m Q := by
+theorem dispec_ipure' {P : Prop} {m : Result α} {Q : IPost α}
+    (hTriple : P → dispec emp m Q) : dispec ⌜P⌝ m Q := by
   intro F h hPre
   have ⟨hP, hF⟩ := (sep_pure_l P F h).mp hPre
   exact hTriple hP F h ((sep_emp_l F).mpr h hF)
 
-/-- A partial triple with a pure precondition and postcondition is a pure
+/-- A partial ispec with a pure precondition and postcondition is a pure
 implication whose conclusion owns nothing. -/
-theorem dtriple_ipure_iff {P : Prop} {m : Result α} {Q : α → Prop} :
-    dtriple ⌜P⌝ m (fun value => ⌜Q value⌝) ↔
-      (P → dtriple emp m (fun value => ⌜Q value⌝)) := by
+theorem dispec_ipure_iff {P : Prop} {m : Result α} {Q : α → Prop} :
+    dispec ⌜P⌝ m (fun value => ⌜Q value⌝) ↔
+      (P → dispec emp m (fun value => ⌜Q value⌝)) := by
   constructor
   · intro hTriple hP
-    exact dtriple_conseq hTriple ((entails_emp_ipure_iff P).2 hP)
+    exact dispec_conseq hTriple ((entails_emp_ipure_iff P).2 hP)
       (fun _ => entails_refl _)
-  · exact dtriple_ipure'
+  · exact dispec_ipure'
 
-theorem dtriple_exists {ι : Sort _} {J : ι → IPre} {m : Result α} {Q : IPost α}
-    (hTriple : ∀ x, dtriple (J x) m Q) : dtriple iprop(∃ x, J x) m Q := by
+theorem dispec_exists {ι : Sort _} {J : ι → IPre} {m : Result α} {Q : IPost α}
+    (hTriple : ∀ x, dispec (J x) m Q) : dispec iprop(∃ x, J x) m Q := by
   intro F h hPre
   obtain ⟨h₁, h₂, hDisjoint, rfl, ⟨x, hJ⟩, hF⟩ := hPre
   exact hTriple x F _ ⟨h₁, h₂, hDisjoint, rfl, hJ, hF⟩
 
-theorem dtriple_conseq_frame {H₂ : IProp} {H₁ H : IPre} {Q₁ Q : IPost α}
-    {m : Result α} (hTriple : dtriple H₁ m Q₁) (hPre : H ⊢ H₁ ∗ H₂)
-    (hPost : Q₁ ∗+ H₂ ⊢+ Q) : dtriple H m Q :=
-  dtriple_conseq (dtriple_frame hTriple H₂) hPre hPost
+theorem dispec_conseq_frame {H₂ : IProp} {H₁ H : IPre} {Q₁ Q : IPost α}
+    {m : Result α} (hTriple : dispec H₁ m Q₁) (hPre : H ⊢ H₁ ∗ H₂)
+    (hPost : Q₁ ∗+ H₂ ⊢+ Q) : dispec H m Q :=
+  dispec_conseq (dispec_frame hTriple H₂) hPre hPost
 
-theorem dtriple_pure {P : IPre} {Q : IPost α} {value : α} (hPost : P ⊢ Q value) :
-    dtriple P (pure value : Result α) Q := by
+theorem dispec_pure {P : IPre} {Q : IPost α} {value : α} (hPost : P ⊢ Q value) :
+    dispec P (pure value : Result α) Q := by
   intro F h hPre
   exact .ret (sep_mono hPost (entails_refl F) h hPre)
 
-/-- Divergence satisfies every partial triple: nothing is claimed of a run that
+/-- Divergence satisfies every partial ispec: nothing is claimed of a run that
 does not stop, not even that it owns anything. -/
-theorem dtriple_div {P : IPre} {Q : IPost α} :
-    dtriple P (ITree.div : Result α) Q :=
+theorem dispec_div {P : IPre} {Q : IPost α} :
+    dispec P (ITree.div : Result α) Q :=
   fun _ _ _ => PartialSpec.div
 
-theorem dtriple_bind {α β : Type u} {P : IPre} {Q₁ : IPost α} {Q : IPost β} {m : Result α}
-    {next : α → Result β} (hFirst : dtriple P m Q₁)
-    (hNext : ∀ value, dtriple (Q₁ value) (next value) Q) :
-    dtriple P (m >>= next) Q := by
+theorem dispec_bind {α β : Type u} {P : IPre} {Q₁ : IPost α} {Q : IPost β} {m : Result α}
+    {next : α → Result β} (hFirst : dispec P m Q₁)
+    (hNext : ∀ value, dispec (Q₁ value) (next value) Q) :
+    dispec P (m >>= next) Q := by
   intro F h hPre
   apply (hFirst F h hPre).bind
   intro value h' hPost
   exact hNext value F h' hPost
 
-/-- `dtriple_bind` on `Aeneas.Std.bind`, the two-universe bind.  See
-`triple_bind'`. -/
-theorem dtriple_bind' {α : Type u} {β : Type v} {P : IPre} {Q₁ : IPost α}
-    {Q : IPost β} {m : Result α} {next : α → Result β} (hFirst : dtriple P m Q₁)
-    (hNext : ∀ value, dtriple (Q₁ value) (next value) Q) :
-    dtriple P (Aeneas.Std.bind m next) Q := by
+/-- `dispec_bind` on `Aeneas.Std.bind`, the two-universe bind.  See
+`ispec_bind'`. -/
+theorem dispec_bind' {α : Type u} {β : Type v} {P : IPre} {Q₁ : IPost α}
+    {Q : IPost β} {m : Result α} {next : α → Result β} (hFirst : dispec P m Q₁)
+    (hNext : ∀ value, dispec (Q₁ value) (next value) Q) :
+    dispec P (Aeneas.Std.bind m next) Q := by
   intro F h hPre
   apply (hFirst F h hPre).bind
   intro value h' hPost
   exact hNext value F h' hPost
 
-theorem dtriple_seq {α β : Type u} {P H : IPre} {Q : IPost β} {m₁ : Result α} {m₂ : Result β}
-    (hFirst : dtriple P m₁ (fun _ => H)) (hSecond : dtriple H m₂ Q) :
-    dtriple P (m₁ >>= fun _ => m₂) Q :=
-  dtriple_bind hFirst (fun _ => hSecond)
+theorem dispec_seq {α β : Type u} {P H : IPre} {Q : IPost β} {m₁ : Result α} {m₂ : Result β}
+    (hFirst : dispec P m₁ (fun _ => H)) (hSecond : dispec H m₂ Q) :
+    dispec P (m₁ >>= fun _ => m₂) Q :=
+  dispec_bind hFirst (fun _ => hSecond)
 
 /-! ## Ramified rules -/
 
 /-- The ramified frame rule. The wand's conclusion is affine, so `Q` alone is
 enough to permit leftover resources to be discarded. -/
-theorem triple_ramified_frame {α : Type u} {P Pm : IPre} {Q Qm : IPost α}
-    {m : Result α} (hStep : triple Pm m Qm)
+theorem ispec_ramified_frame {α : Type u} {P Pm : IPre} {Q Qm : IPost α}
+    {m : Result α} (hStep : ispec Pm m Qm)
     (hPre : P ⊢ Pm ∗ (Qm -∗+ Q)) :
-    triple P m Q :=
-  triple_conseq_frame hStep hPre (postWand_cancel Qm Q)
+    ispec P m Q :=
+  ispec_conseq_frame hStep hPre (postWand_cancel Qm Q)
 
 /-- The ramified frame rule for a call followed by a continuation. -/
-theorem triple_ramified_bind {α β : Type u} {P Pm F : IPre} {Qm : IPost α}
+theorem ispec_ramified_bind {α β : Type u} {P Pm F : IPre} {Qm : IPost α}
     {next : α → Result β} {Q : IPost β} {m : Result α}
-    (hStep : triple Pm m Qm) (hPre : P ⊢ Pm ∗ F)
-    (hNext : ∀ value, triple (Qm value ∗ F) (next value) Q) :
-    triple P (m >>= next) Q :=
-  triple_bind (triple_conseq (triple_frame hStep F) hPre (fun _ => entails_refl _))
+    (hStep : ispec Pm m Qm) (hPre : P ⊢ Pm ∗ F)
+    (hNext : ∀ value, ispec (Qm value ∗ F) (next value) Q) :
+    ispec P (m >>= next) Q :=
+  ispec_bind (ispec_conseq (ispec_frame hStep F) hPre (fun _ => entails_refl _))
     hNext
 
 /-- The ramified frame rule for a call followed by a continuation, on the
-two-universe `Aeneas.Std.bind`.  See `triple_bind'`. -/
-theorem triple_ramified_bind' {α : Type u} {β : Type v} {P Pm F : IPre}
+two-universe `Aeneas.Std.bind`.  See `ispec_bind'`. -/
+theorem ispec_ramified_bind' {α : Type u} {β : Type v} {P Pm F : IPre}
     {Qm : IPost α} {next : α → Result β} {Q : IPost β} {m : Result α}
-    (hStep : triple Pm m Qm) (hPre : P ⊢ Pm ∗ F)
-    (hNext : ∀ value, triple (Qm value ∗ F) (next value) Q) :
-    triple P (Aeneas.Std.bind m next) Q :=
-  triple_bind' (triple_conseq (triple_frame hStep F) hPre (fun _ => entails_refl _))
+    (hStep : ispec Pm m Qm) (hPre : P ⊢ Pm ∗ F)
+    (hNext : ∀ value, ispec (Qm value ∗ F) (next value) Q) :
+    ispec P (Aeneas.Std.bind m next) Q :=
+  ispec_bind' (ispec_conseq (ispec_frame hStep F) hPre (fun _ => entails_refl _))
     hNext
 
-/-- Rewrite part of a triple's precondition using an entailment. -/
-theorem triple_rewrite {α : Type u} {H₁ H₂ H₃ : IPre} {Q : IPost α} {m : Result α}
-    (hPart : H₁ ⊢ H₂) (hRest : triple (H₂ ∗ H₃) m Q) : triple (H₁ ∗ H₃) m Q :=
-  triple_conseq hRest (sep_mono hPart (entails_refl H₃)) (fun _ => entails_refl _)
+/-- Rewrite part of an `ispec` precondition using an entailment. -/
+theorem ispec_rewrite {α : Type u} {H₁ H₂ H₃ : IPre} {Q : IPost α} {m : Result α}
+    (hPart : H₁ ⊢ H₂) (hRest : ispec (H₂ ∗ H₃) m Q) : ispec (H₁ ∗ H₃) m Q :=
+  ispec_conseq hRest (sep_mono hPart (entails_refl H₃)) (fun _ => entails_refl _)
 
-theorem dtriple_ramified_frame {α : Type u} {P Pm : IPre} {Q Qm : IPost α}
-    {m : Result α} (hStep : dtriple Pm m Qm) (hPre : P ⊢ Pm ∗ (Qm -∗+ Q)) :
-    dtriple P m Q :=
-  dtriple_conseq_frame hStep hPre (postWand_cancel Qm Q)
+theorem dispec_ramified_frame {α : Type u} {P Pm : IPre} {Q Qm : IPost α}
+    {m : Result α} (hStep : dispec Pm m Qm) (hPre : P ⊢ Pm ∗ (Qm -∗+ Q)) :
+    dispec P m Q :=
+  dispec_conseq_frame hStep hPre (postWand_cancel Qm Q)
 
-theorem dtriple_ramified_bind {α β : Type u} {P Pm F : IPre} {Qm : IPost α}
-    {next : α → Result β} {Q : IPost β} {m : Result α} (hStep : dtriple Pm m Qm)
-    (hPre : P ⊢ Pm ∗ F) (hNext : ∀ value, dtriple (Qm value ∗ F) (next value) Q) :
-    dtriple P (m >>= next) Q :=
-  dtriple_bind
-    (dtriple_conseq (dtriple_frame hStep F) hPre (fun _ => entails_refl _)) hNext
+theorem dispec_ramified_bind {α β : Type u} {P Pm F : IPre} {Qm : IPost α}
+    {next : α → Result β} {Q : IPost β} {m : Result α} (hStep : dispec Pm m Qm)
+    (hPre : P ⊢ Pm ∗ F) (hNext : ∀ value, dispec (Qm value ∗ F) (next value) Q) :
+    dispec P (m >>= next) Q :=
+  dispec_bind
+    (dispec_conseq (dispec_frame hStep F) hPre (fun _ => entails_refl _)) hNext
 
 /-- The ramified bind rule on the two-universe `Aeneas.Std.bind`, for a partial
-goal.  See `triple_bind'`. -/
-theorem dtriple_ramified_bind' {α : Type u} {β : Type v} {P Pm F : IPre}
+goal.  See `ispec_bind'`. -/
+theorem dispec_ramified_bind' {α : Type u} {β : Type v} {P Pm F : IPre}
     {Qm : IPost α} {next : α → Result β} {Q : IPost β} {m : Result α}
-    (hStep : dtriple Pm m Qm) (hPre : P ⊢ Pm ∗ F)
-    (hNext : ∀ value, dtriple (Qm value ∗ F) (next value) Q) :
-    dtriple P (Aeneas.Std.bind m next) Q :=
-  dtriple_bind'
-    (dtriple_conseq (dtriple_frame hStep F) hPre (fun _ => entails_refl _)) hNext
+    (hStep : dispec Pm m Qm) (hPre : P ⊢ Pm ∗ F)
+    (hNext : ∀ value, dispec (Qm value ∗ F) (next value) Q) :
+    dispec P (Aeneas.Std.bind m next) Q :=
+  dispec_bind'
+    (dispec_conseq (dispec_frame hStep F) hPre (fun _ => entails_refl _)) hNext
 
-/-- Rewrite part of a partial triple's precondition using an entailment. -/
-theorem dtriple_rewrite {α : Type u} {H₁ H₂ H₃ : IPre} {Q : IPost α} {m : Result α}
-    (hPart : H₁ ⊢ H₂) (hRest : dtriple (H₂ ∗ H₃) m Q) : dtriple (H₁ ∗ H₃) m Q :=
-  dtriple_conseq hRest (sep_mono hPart (entails_refl H₃)) (fun _ => entails_refl _)
+/-- Rewrite part of a partial ispec's precondition using an entailment. -/
+theorem dispec_rewrite {α : Type u} {H₁ H₂ H₃ : IPre} {Q : IPost α} {m : Result α}
+    (hPart : H₁ ⊢ H₂) (hRest : dispec (H₂ ∗ H₃) m Q) : dispec (H₁ ∗ H₃) m Q :=
+  dispec_conseq hRest (sep_mono hPart (entails_refl H₃)) (fun _ => entails_refl _)
 
 /-! ## Reasoning about loops
 
-The rules a partial triple is for: an invariant that the body re-establishes
+The rules a partial specification is for: an invariant that the body re-establishes
 proves the loop, with no measure and no termination argument. A recursion in
-`Result` is proved with `dtriple_admissible` and the `fixpoint_induct` principle
+`Result` is proved with `dispec_admissible` and the `fixpoint_induct` principle
 `partial_fixpoint` attaches to it, and anything else by
 `PartialSpec.coinduction` itself. -/
 
-/-- A partial triple is admissible in the program, so it may be proved of a
+/-- A partial specification is admissible in the program, so it may be proved of a
 `partial_fixpoint` by `Lean.Order.fix_induct`. -/
-theorem dtriple_admissible {α : Type u} (P : IPre) (Q : IPost α) :
-    Lean.Order.admissible (fun m : Result α => dtriple P m Q) := by
+theorem dispec_admissible {α : Type u} (P : IPre) (Q : IPost α) :
+    Lean.Order.admissible (fun m : Result α => dispec P m Q) := by
   intro c hc hAll F h hPre
-  exact dspec_admissible (Q ∗+ F) h c hc fun x hx => hAll x hx F h hPre
+  exact diwp_admissible (Q ∗+ F) h c hc fun x hx => hAll x hx F h hPre
 
-/-- The same for a family of triples about a recursive *function*, which is the
+/-- The same for a family of ispecs about a recursive *function*, which is the
 shape `fixpoint_induct` expects. -/
-theorem dtriple_admissible_pi {ι : Type v} {α : Type u} (P : ι → IPre) (Q : ι → IPost α) :
+theorem dispec_admissible_pi {ι : Type v} {α : Type u} (P : ι → IPre) (Q : ι → IPost α) :
     Lean.Order.admissible
-      (fun f : ι → Result α => ∀ x, dtriple (P x) (f x) (Q x)) :=
-  Lean.Order.admissible_pi_apply (fun x m => dtriple (P x) m (Q x))
-    fun x => dtriple_admissible (P x) (Q x)
+      (fun f : ι → Result α => ∀ x, dispec (P x) (f x) (Q x)) :=
+  Lean.Order.admissible_pi_apply (fun x m => dispec (P x) m (Q x))
+    fun x => dispec_admissible (P x) (Q x)
 
 /-- And the same for a specification that quantifies over parameters of its own
 — a ghost value, an old contents — which is the shape `fixpoint_induct` takes
 when the argument of the recursion does not change. -/
-theorem dtriple_admissible_forall {ι : Type v} {α : Type u} (P : ι → IPre) (Q : ι → IPost α) :
-    Lean.Order.admissible (fun m : Result α => ∀ x, dtriple (P x) m (Q x)) :=
-  Lean.Order.admissible_pi _ fun x => dtriple_admissible (P x) (Q x)
+theorem dispec_admissible_forall {ι : Type v} {α : Type u} (P : ι → IPre) (Q : ι → IPost α) :
+    Lean.Order.admissible (fun m : Result α => ∀ x, dispec (P x) m (Q x)) :=
+  Lean.Order.admissible_pi _ fun x => dispec_admissible (P x) (Q x)
 
 
 /-! ### Bridging lemmas for the pure judgments
@@ -939,43 +908,43 @@ to unseal `Result`. Rules registered for concrete constructors are stated
 outside this section, where `Result.ok` and `Result.div` are no longer locally
 reducible, so they are indexed under their public names. -/
 
-theorem triple_ok_apply {α : Type u} {Q : IPost α} {x : α}
-    (hTriple : triple emp (Result.ok x) Q) : Q x ∅ :=
-  (triple_apply hTriple (h := ∅) trivial).ret_post
+theorem ispec_ok_apply {α : Type u} {Q : IPost α} {x : α}
+    (hTriple : ispec emp (Result.ok x) Q) : Q x ∅ :=
+  (ispec_apply hTriple (h := ∅) trivial).ret_post
 
-theorem triple_ok_intro {α : Type u} {Q : IPost α} {x : α} (hQ : ∀ h, Q x h) :
-    triple emp (Result.ok x) Q :=
-  triple_pure fun h _ => hQ h
+theorem ispec_ok_intro {α : Type u} {Q : IPost α} {x : α} (hQ : ∀ h, Q x h) :
+    ispec emp (Result.ok x) Q :=
+  ispec_pure fun h _ => hQ h
 
-theorem dtriple_ok_apply {α : Type u} {Q : IPost α} {x : α}
-    (hTriple : dtriple emp (Result.ok x) Q) : Q x ∅ :=
-  (dtriple_apply hTriple (h := ∅) trivial).ret_post
+theorem dispec_ok_apply {α : Type u} {Q : IPost α} {x : α}
+    (hTriple : dispec emp (Result.ok x) Q) : Q x ∅ :=
+  (dispec_apply hTriple (h := ∅) trivial).ret_post
 
-theorem dtriple_ok_intro {α : Type u} {Q : IPost α} {x : α} (hQ : ∀ h, Q x h) :
-    dtriple emp (Result.ok x) Q :=
-  dtriple_pure fun h _ => hQ h
+theorem dispec_ok_intro {α : Type u} {Q : IPost α} {x : α} (hQ : ∀ h, Q x h) :
+    dispec emp (Result.ok x) Q :=
+  dispec_pure fun h _ => hQ h
 
-theorem triple_div_elim {α : Type u} {Q : IPost α}
-    (hTriple : triple emp (Result.div : Result α) Q) : False :=
-  (triple_apply hTriple (h := ∅) trivial).div_false
+theorem ispec_div_elim {α : Type u} {Q : IPost α}
+    (hTriple : ispec emp (Result.div : Result α) Q) : False :=
+  (ispec_apply hTriple (h := ∅) trivial).div_false
 
-theorem dtriple_div_intro {α : Type u} {P : IPre} {Q : IPost α} :
-    dtriple P (Result.div : Result α) Q :=
-  dtriple_div
+theorem dispec_div_intro {α : Type u} {P : IPre} {Q : IPost α} :
+    dispec P (Result.div : Result α) Q :=
+  dispec_div
 
 /-! ### What a pure specification does not determine
 
 `Aeneas.Std.WP.spec m p` is *equivalent* to `∃ value, m = .ok value ∧ p value`,
-because the machine it is taken at answers no event at all.  The triple at `emp`
+because the machine it is taken at answers no event at all.  The ispec at `emp`
 is weaker, and has to be: `emp` owns nothing, but an event that *needs* nothing
 is still permitted, and such an event returns no value.
 
 The equivalence comes back as soon as the program is known to perform no heap
 event — which is exactly what a translated *pure* Rust function is.  Failure is
-not a heap event and is ruled out by the triple itself, so it is allowed here. -/
+not a heap event and is ruled out by the ispec itself, so it is allowed here. -/
 
-/-- `m` performs no heap event.  Failure is not excluded: it is an event the
-machine cannot answer, so a triple rules it out by itself. -/
+/-- `m` performs no heap event. Failure is not excluded: it is an event the
+machine cannot answer, so an `ispec` rules it out by itself. -/
 def HeapFree {α : Type} (m : Result α) : Prop :=
   ∀ (EventResult : Type) (pre : Heap → Prop) modify k,
     m ≠ Result.vis (.guardedModify EventResult pre modify) k
@@ -986,7 +955,7 @@ theorem HeapFree.ok {α : Type} (value : α) : HeapFree (Result.ok value) := by
   simp [Result.ok, Result.vis] at hEq
 
 /-- Neither does a failure: failure is the event the machine cannot answer, and
-a triple rules it out on its own. -/
+an `ispec` rules it out on its own. -/
 theorem HeapFree.fail {α : Type} (error : Error) :
     HeapFree (Result.fail error : Result α) := by
   intro _ _ _ _ hEq
@@ -997,13 +966,13 @@ theorem HeapFree.div {α : Type} : HeapFree (Result.div : Result α) := by
   intro _ _ _ _ hEq
   simp [Result.div, Result.vis] at hEq
 
-/-- The counterpart of `Aeneas.Std.WP.spec_imp_exists`: a total triple owning
+/-- The counterpart of `Aeneas.Std.WP.spec_imp_exists`: a total ispec owning
 nothing determines an event-free program, and hands its postcondition back at
 the empty heap. -/
-theorem triple_emp_eq_ok {α : Type} {m : Result α} {Q : IPost α}
-    (hHeapFree : HeapFree m) (hTriple : triple emp m Q) :
+theorem ispec_emp_eq_ok {α : Type} {m : Result α} {Q : IPost α}
+    (hHeapFree : HeapFree m) (hTriple : ispec emp m Q) :
     ∃ value, m = Result.ok value ∧ Q value ∅ := by
-  have hSpec := triple_apply hTriple (h := ∅) trivial
+  have hSpec := ispec_apply hTriple (h := ∅) trivial
   cases m with
   | ret value => exact ⟨value, rfl, hSpec.ret_post⟩
   | vis event k =>
@@ -1016,9 +985,9 @@ end ResultImplementation
 
 /-! ## Pure computations
 
-`WP.spec` and `WP.dspec` are named judgments with ordinary `α → Prop`
+`spec` and `dspec` are named judgments with ordinary `α → Prop`
 postconditions. Their definitions preserve the meaning of the former notation:
-the corresponding SL triple at `emp` and a pure postcondition.
+the corresponding SL ispec at `emp` and a pure postcondition.
 
 Each judgment has its own `step` registration. Pure specifications lift to SL
 specifications for framing. SL specifications lift back only when their
@@ -1026,64 +995,60 @@ precondition is `emp` and their postcondition is pure. Pure goals stay in the
 pure judgment; proofs that need spatial intermediate assertions use SL goals
 instead. Total specifications also lift to partial ones, never conversely. -/
 
-namespace WP
-
 theorem spec_iff {m : Result α} {Q : α → Prop} :
-    spec m Q ↔ triple emp m (fun value => ⌜Q value⌝) := Iff.rfl
+    spec m Q ↔ ispec emp m (fun value => ⌜Q value⌝) := Iff.rfl
 
 theorem dspec_iff {m : Result α} {Q : α → Prop} :
-    dspec m Q ↔ dtriple emp m (fun value => ⌜Q value⌝) := Iff.rfl
+    dspec m Q ↔ dispec emp m (fun value => ⌜Q value⌝) := Iff.rfl
 
-theorem spec_triple {α : Type u} {m : Result α} {Q : α → Prop}
-    (h : spec m Q) : triple emp m (fun value => ⌜Q value⌝) := h
+theorem spec_ispec {α : Type u} {m : Result α} {Q : α → Prop}
+    (h : spec m Q) : ispec emp m (fun value => ⌜Q value⌝) := h
 
-theorem triple_spec {α : Type u} {m : Result α} {Q : α → Prop}
-    (h : triple emp m (fun value => ⌜Q value⌝)) : spec m Q := h
+theorem ispec_spec {α : Type u} {m : Result α} {Q : α → Prop}
+    (h : ispec emp m (fun value => ⌜Q value⌝)) : spec m Q := h
 
-theorem dspec_dtriple {α : Type u} {m : Result α} {Q : α → Prop}
-    (h : dspec m Q) : dtriple emp m (fun value => ⌜Q value⌝) := h
+theorem dspec_dispec {α : Type u} {m : Result α} {Q : α → Prop}
+    (h : dspec m Q) : dispec emp m (fun value => ⌜Q value⌝) := h
 
-theorem dtriple_dspec {α : Type u} {m : Result α} {Q : α → Prop}
-    (h : dtriple emp m (fun value => ⌜Q value⌝)) : dspec m Q := h
+theorem dispec_dspec {α : Type u} {m : Result α} {Q : α → Prop}
+    (h : dispec emp m (fun value => ⌜Q value⌝)) : dspec m Q := h
 
 theorem spec_dspec {α : Type u} {m : Result α} {Q : α → Prop}
-    (h : spec m Q) : dspec m Q := triple_dtriple h
+    (h : spec m Q) : dspec m Q := ispec_dispec h
 
-theorem spec_dtriple {α : Type u} {m : Result α} {Q : α → Prop}
-    (h : spec m Q) : dtriple emp m (fun value => ⌜Q value⌝) :=
-  triple_dtriple h
+theorem spec_dispec {α : Type u} {m : Result α} {Q : α → Prop}
+    (h : spec m Q) : dispec emp m (fun value => ⌜Q value⌝) :=
+  ispec_dispec h
 
-theorem triple_dspec {α : Type u} {m : Result α} {Q : α → Prop}
-    (h : triple emp m (fun value => ⌜Q value⌝)) : dspec m Q :=
-  triple_dtriple h
+theorem ispec_dspec {α : Type u} {m : Result α} {Q : α → Prop}
+    (h : ispec emp m (fun value => ⌜Q value⌝)) : dspec m Q :=
+  ispec_dispec h
 
 theorem spec_mono {α : Type u} {Q : α → Prop}
     (m : Result α) (Qm : α → Prop) (h : spec m Qm)
     (hPost : ∀ value, Qm value → Q value) : spec m Q :=
-  triple_conseq h (entails_refl emp) (fun value _ => hPost value)
+  ispec_conseq h (entails_refl emp) (fun value _ => hPost value)
 
 theorem dspec_mono {α : Type u} {Q : α → Prop}
     (m : Result α) (Qm : α → Prop) (h : dspec m Qm)
     (hPost : ∀ value, Qm value → Q value) : dspec m Q :=
-  dtriple_conseq h (entails_refl emp) (fun value _ => hPost value)
+  dispec_conseq h (entails_refl emp) (fun value _ => hPost value)
 
 theorem spec_bind {α : Type u} {β : Type v} {next : α → Result β} {Q : β → Prop}
     (m : Result α) (Qm : α → Prop) (h : spec m Qm)
     (hNext : ∀ value, Qm value → spec (next value) Q) :
     spec (Aeneas.Std.bind m next) Q :=
-  triple_bind' h (fun value => triple_ipure' (hNext value))
+  ispec_bind' h (fun value => ispec_ipure' (hNext value))
 
 theorem dspec_bind {α : Type u} {β : Type v} {next : α → Result β} {Q : β → Prop}
     (m : Result α) (Qm : α → Prop) (h : dspec m Qm)
     (hNext : ∀ value, Qm value → dspec (next value) Q) :
     dspec (Aeneas.Std.bind m next) Q :=
-  dtriple_bind' h (fun value => dtriple_ipure' (hNext value))
+  dispec_bind' h (fun value => dispec_ipure' (hNext value))
 
 theorem dspec_admissible {α : Type u} (Q : α → Prop) :
     Lean.Order.admissible (fun m : Result α => dspec m Q) :=
-  dtriple_admissible emp (fun value => ⌜Q value⌝)
-
-end WP
+  dispec_admissible emp (fun value => ⌜Q value⌝)
 
 theorem forall_postCurry {α β : Type _} (P : α → β → Prop) (Q : α × β → Prop) :
     (∀ value, postCurry P value → Q value) ↔
@@ -1096,29 +1061,29 @@ theorem forall_postUncurry {α β : Type _} (P : α → β → Prop) (Q : α × 
   ⟨fun h first second => h (first, second), fun h ⟨first, second⟩ => h first second⟩
 
 /-- Keep tuple binders visible when lifting a pure postcondition into SL. -/
-theorem forall_triple_ipure_postCurry {α β γ : Type _}
+theorem forall_ispec_ipure_postCurry {α β γ : Type _}
     (P : α → β → Prop) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
-    (∀ value, triple (⌜postCurry P value⌝ ∗ F) (next value) Q) ↔
-      ∀ first second, triple (⌜P first second⌝ ∗ F) (next (first, second)) Q :=
-  forall_triple_postCurry (fun first second => ⌜P first second⌝) F next Q
+    (∀ value, ispec (⌜postCurry P value⌝ ∗ F) (next value) Q) ↔
+      ∀ first second, ispec (⌜P first second⌝ ∗ F) (next (first, second)) Q :=
+  forall_ispec_postCurry (fun first second => ⌜P first second⌝) F next Q
 
-theorem forall_triple_ipure_postUncurry {α β γ : Type _}
+theorem forall_ispec_ipure_postUncurry {α β γ : Type _}
     (P : α → β → Prop) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
-    (∀ value, triple (⌜postUncurry P value⌝ ∗ F) (next value) Q) ↔
-      ∀ first second, triple (⌜P first second⌝ ∗ F) (next (first, second)) Q :=
-  forall_triple_postUncurry (fun first second => ⌜P first second⌝) F next Q
+    (∀ value, ispec (⌜postUncurry P value⌝ ∗ F) (next value) Q) ↔
+      ∀ first second, ispec (⌜P first second⌝ ∗ F) (next (first, second)) Q :=
+  forall_ispec_postUncurry (fun first second => ⌜P first second⌝) F next Q
 
-theorem forall_dtriple_ipure_postCurry {α β γ : Type _}
+theorem forall_dispec_ipure_postCurry {α β γ : Type _}
     (P : α → β → Prop) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
-    (∀ value, dtriple (⌜postCurry P value⌝ ∗ F) (next value) Q) ↔
-      ∀ first second, dtriple (⌜P first second⌝ ∗ F) (next (first, second)) Q :=
-  forall_dtriple_postCurry (fun first second => ⌜P first second⌝) F next Q
+    (∀ value, dispec (⌜postCurry P value⌝ ∗ F) (next value) Q) ↔
+      ∀ first second, dispec (⌜P first second⌝ ∗ F) (next (first, second)) Q :=
+  forall_dispec_postCurry (fun first second => ⌜P first second⌝) F next Q
 
-theorem forall_dtriple_ipure_postUncurry {α β γ : Type _}
+theorem forall_dispec_ipure_postUncurry {α β γ : Type _}
     (P : α → β → Prop) (F : IProp) (next : α × β → Result γ) (Q : IPost γ) :
-    (∀ value, dtriple (⌜postUncurry P value⌝ ∗ F) (next value) Q) ↔
-      ∀ first second, dtriple (⌜P first second⌝ ∗ F) (next (first, second)) Q :=
-  forall_dtriple_postUncurry (fun first second => ⌜P first second⌝) F next Q
+    (∀ value, dispec (⌜postUncurry P value⌝ ∗ F) (next value) Q) ↔
+      ∀ first second, dispec (⌜P first second⌝ ∗ F) (next (first, second)) Q :=
+  forall_dispec_postUncurry (fun first second => ⌜P first second⌝) F next Q
 
 open Lean Elab Meta Tactic
 
@@ -1128,125 +1093,125 @@ postcondition, framed, as the precondition of the continuation.
 It is stated on `Aeneas.Std.bind` rather than on `>>=`: the `Bind` class forces
 the two value types into one universe, and a call in a translated program need
 not respect that. -/
-theorem triple_step_bind {α : Type u} {β : Type v} {P Pm F : IPre}
+theorem ispec_step_bind {α : Type u} {β : Type v} {P Pm F : IPre}
     {next : α → Result β} {Q : IPost β}
-    (m : Result α) (Qm : IPost α) (hStep : triple Pm m Qm)
+    (m : Result α) (Qm : IPost α) (hStep : ispec Pm m Qm)
     (hPre : P ⊢ Pm ∗ F)
-    (hNext : ∀ value, triple (Qm value ∗ F) (next value) Q) :
-    triple P (Aeneas.Std.bind m next) Q :=
-  triple_ramified_bind' hStep hPre hNext
+    (hNext : ∀ value, ispec (Qm value ∗ F) (next value) Q) :
+    ispec P (Aeneas.Std.bind m next) Q :=
+  ispec_ramified_bind' hStep hPre hNext
 
 /-- Rule used by `step` for a terminal monadic call. -/
-theorem triple_step_mono {α : Type u} {P Pm : IPre} {Q : IPost α}
-    (m : Result α) (Qm : IPost α) (hStep : triple Pm m Qm)
+theorem ispec_step_mono {α : Type u} {P Pm : IPre} {Q : IPost α}
+    (m : Result α) (Qm : IPost α) (hStep : ispec Pm m Qm)
     (hRamified : P ⊢ Pm ∗ (Qm -∗+ Q)) :
-    triple P m Q :=
-  triple_ramified_frame hStep hRamified
+    ispec P m Q :=
+  ispec_ramified_frame hStep hRamified
 
-/-- Bind rule used by `step` on a partial goal.  See `triple_step_bind`. -/
-theorem dtriple_step_bind {α : Type u} {β : Type v} {P Pm F : IPre}
+/-- Bind rule used by `step` on a partial goal.  See `ispec_step_bind`. -/
+theorem dispec_step_bind {α : Type u} {β : Type v} {P Pm F : IPre}
     {next : α → Result β}
-    {Q : IPost β} (m : Result α) (Qm : IPost α) (hStep : dtriple Pm m Qm)
-    (hPre : P ⊢ Pm ∗ F) (hNext : ∀ value, dtriple (Qm value ∗ F) (next value) Q) :
-    dtriple P (Aeneas.Std.bind m next) Q :=
-  dtriple_ramified_bind' hStep hPre hNext
+    {Q : IPost β} (m : Result α) (Qm : IPost α) (hStep : dispec Pm m Qm)
+    (hPre : P ⊢ Pm ∗ F) (hNext : ∀ value, dispec (Qm value ∗ F) (next value) Q) :
+    dispec P (Aeneas.Std.bind m next) Q :=
+  dispec_ramified_bind' hStep hPre hNext
 
 /-- Rule used by `step` for a terminal monadic call on a partial goal. -/
-theorem dtriple_step_mono {α : Type u} {P Pm : IPre} {Q : IPost α} (m : Result α)
-    (Qm : IPost α) (hStep : dtriple Pm m Qm) (hRamified : P ⊢ Pm ∗ (Qm -∗+ Q)) :
-    dtriple P m Q :=
-  dtriple_ramified_frame hStep hRamified
+theorem dispec_step_mono {α : Type u} {P Pm : IPre} {Q : IPost α} (m : Result α)
+    (Qm : IPost α) (hStep : dispec Pm m Qm) (hRamified : P ⊢ Pm ∗ (Qm -∗+ Q)) :
+    dispec P m Q :=
+  dispec_ramified_frame hStep hRamified
 
 theorem forall_unit {p : Unit → Prop} : (∀ value, p value) ↔ p () :=
   ⟨fun h => h (), fun h value => match value with | () => h⟩
 
 /-- The tactic `step` runs on the goals it prepares. A no-op on a goal which is
-not a triple. -/
-macro (name := intro_triple) "intro_triple" : tactic =>
+not an `ispec`. -/
+macro (name := intro_ispec) "intro_ispec" : tactic =>
   `(tactic| iintro_shallow_post)
 
 #register_spec_info {
-    spec_name := ``triple
+    spec_name := ``ispec
     arity := 4
     program_index := 2
     post_index := 3
-    mk_spec_mono := ``triple_step_mono
+    mk_spec_mono := ``ispec_step_mono
     mk_spec_mono_skip_args := 4
-    mk_spec_bind := ``triple_step_bind
+    mk_spec_bind := ``ispec_step_bind
     mk_spec_bind_skip_args := 7
     uncurry_elim_tactics := #[
-      ``forall_triple_postCurry,
-      ``forall_triple_postUncurry,
-      ``forall_triple_ipure_postCurry, ``forall_triple_ipure_postUncurry,
+      ``forall_ispec_postCurry,
+      ``forall_ispec_postUncurry,
+      ``forall_ispec_ipure_postCurry, ``forall_ispec_ipure_postUncurry,
       ``postCurry_apply, ``postCurry_eq,
       ``postUncurry_apply, ``postUncurry_eq
     ]
     qimp_elim_tactics := #[
       ``forall_eq, ``forall_eq',
-      ``triple_ipure_iff,
+      ``ispec_ipure_iff,
       ``forall_unit,
       ``sep_emp_l_eq, ``sep_ipure_true_l_eq,
       ``entails_emp_postWand_ipure_iff,
       ``entails_emp_ipure_iff, ``entails_refl, ``true_imp_iff
     ]
-    intro_tactic := some ``intro_triple
+    intro_tactic := some ``intro_ispec
     discharge_tactic := some `iframe
     to_mvcgen := none
     liftings := #[
-      { from_statement := ``WP.spec
-        conversion_thm := ``WP.spec_triple
+      { from_statement := ``spec
+        conversion_thm := ``spec_ispec
         conversion_thm_inferred_args := 3 }
     ]
   }
 
 #register_spec_info {
-    spec_name := ``dtriple
+    spec_name := ``dispec
     arity := 4
     program_index := 2
     post_index := 3
-    mk_spec_mono := ``dtriple_step_mono
+    mk_spec_mono := ``dispec_step_mono
     mk_spec_mono_skip_args := 4
-    mk_spec_bind := ``dtriple_step_bind
+    mk_spec_bind := ``dispec_step_bind
     mk_spec_bind_skip_args := 7
     uncurry_elim_tactics := #[
-      ``forall_dtriple_postCurry,
-      ``forall_dtriple_postUncurry,
-      ``forall_dtriple_ipure_postCurry, ``forall_dtriple_ipure_postUncurry,
+      ``forall_dispec_postCurry,
+      ``forall_dispec_postUncurry,
+      ``forall_dispec_ipure_postCurry, ``forall_dispec_ipure_postUncurry,
       ``postCurry_apply, ``postCurry_eq,
       ``postUncurry_apply, ``postUncurry_eq
     ]
     qimp_elim_tactics := #[
       ``forall_eq, ``forall_eq',
-      ``dtriple_ipure_iff,
+      ``dispec_ipure_iff,
       ``forall_unit,
       ``sep_emp_l_eq, ``sep_ipure_true_l_eq,
       ``entails_emp_postWand_ipure_iff,
       ``entails_emp_ipure_iff, ``entails_refl, ``true_imp_iff
     ]
-    intro_tactic := some ``intro_triple
+    intro_tactic := some ``intro_ispec
     discharge_tactic := some `iframe
     to_mvcgen := none
     liftings := #[
-      { from_statement := ``triple
-        conversion_thm := ``triple_dtriple
+      { from_statement := ``ispec
+        conversion_thm := ``ispec_dispec
         conversion_thm_inferred_args := 4 },
-      { from_statement := ``WP.spec
-        conversion_thm := ``WP.spec_dtriple
+      { from_statement := ``spec
+        conversion_thm := ``spec_dispec
         conversion_thm_inferred_args := 3 },
-      { from_statement := ``WP.dspec
-        conversion_thm := ``WP.dspec_dtriple
+      { from_statement := ``dspec
+        conversion_thm := ``dspec_dispec
         conversion_thm_inferred_args := 3 }
     ]
   }
 
 #register_spec_info {
-    spec_name := ``WP.spec
+    spec_name := ``spec
     arity := 3
     program_index := 1
     post_index := 2
-    mk_spec_mono := ``WP.spec_mono
+    mk_spec_mono := ``spec_mono
     mk_spec_mono_skip_args := 2
-    mk_spec_bind := ``WP.spec_bind
+    mk_spec_bind := ``spec_bind
     mk_spec_bind_skip_args := 4
     uncurry_elim_tactics := #[``forall_postCurry, ``forall_postUncurry]
     qimp_elim_tactics := #[
@@ -1255,20 +1220,20 @@ macro (name := intro_triple) "intro_triple" : tactic =>
     ]
     to_mvcgen := none
     liftings := #[
-      { from_statement := ``triple
-        conversion_thm := ``WP.triple_spec
+      { from_statement := ``ispec
+        conversion_thm := ``ispec_spec
         conversion_thm_inferred_args := 3 }
     ]
   }
 
 #register_spec_info {
-    spec_name := ``WP.dspec
+    spec_name := ``dspec
     arity := 3
     program_index := 1
     post_index := 2
-    mk_spec_mono := ``WP.dspec_mono
+    mk_spec_mono := ``dspec_mono
     mk_spec_mono_skip_args := 2
-    mk_spec_bind := ``WP.dspec_bind
+    mk_spec_bind := ``dspec_bind
     mk_spec_bind_skip_args := 4
     uncurry_elim_tactics := #[``forall_postCurry, ``forall_postUncurry]
     qimp_elim_tactics := #[
@@ -1277,22 +1242,22 @@ macro (name := intro_triple) "intro_triple" : tactic =>
     ]
     to_mvcgen := none
     liftings := #[
-      { from_statement := ``WP.spec
-        conversion_thm := ``WP.spec_dspec
+      { from_statement := ``spec
+        conversion_thm := ``spec_dspec
         conversion_thm_inferred_args := 3 },
-      { from_statement := ``triple
-        conversion_thm := ``WP.triple_dspec
+      { from_statement := ``ispec
+        conversion_thm := ``ispec_dspec
         conversion_thm_inferred_args := 3 },
-      { from_statement := ``dtriple
-        conversion_thm := ``WP.dtriple_dspec
+      { from_statement := ``dispec
+        conversion_thm := ``dispec_dspec
         conversion_thm_inferred_args := 3 }
     ]
   }
 
 /-! ## Weakest-precondition tactics -/
 
-/-- Reduce a triple about a terminal `pure v` to the entailment `P ⊢ Q v`. -/
-macro "wp_pures" : tactic => `(tactic| apply triple_pure)
+/-- Reduce an `ispec` about a terminal `pure v` to the entailment `P ⊢ Q v`. -/
+macro "wp_pures" : tactic => `(tactic| apply ispec_pure)
 
 /-- Apply a specification to the goal, frame the resources it does not need,
 and discharge the resulting entailment with `isimpl`. -/
@@ -1302,19 +1267,19 @@ macro_rules
   | `(tactic| wp_apply $[$thm?]? $[by $tac?]?) => do
     let apply ←
       match thm? with
-      | some thm => `(tactic| refine triple_ramified_frame $thm ?_)
-      | none => `(tactic| refine triple_ramified_frame (by assumption) ?_)
+      | some thm => `(tactic| refine ispec_ramified_frame $thm ?_)
+      | none => `(tactic| refine ispec_ramified_frame (by assumption) ?_)
     match tac? with
     | none => `(tactic| ($apply; isimpl))
     | some tac => `(tactic| ($apply; isimpl by $tac))
 
-/-- Re-state an already-proved triple under a weaker postcondition. -/
+/-- Re-state an already-proved ispec under a weaker postcondition. -/
 macro "wp_mono " thm:term : tactic =>
-  `(tactic| (apply triple_conseq $thm (entails_refl _) <;> (intro _ <;> iframe)))
+  `(tactic| (apply ispec_conseq $thm (entails_refl _) <;> (intro _ <;> iframe)))
 
-/-- Reduce a partial triple about a terminal `pure v` to the entailment
+/-- Reduce a partial ispec about a terminal `pure v` to the entailment
 `P ⊢ Q v`. -/
-macro "dwp_pures" : tactic => `(tactic| apply dtriple_pure)
+macro "dwp_pures" : tactic => `(tactic| apply dispec_pure)
 
 /-- Apply a partial specification to the goal, frame the resources it does not
 need, and discharge the resulting entailment with `isimpl`. -/
@@ -1324,20 +1289,20 @@ macro_rules
   | `(tactic| dwp_apply $[$thm?]? $[by $tac?]?) => do
     let apply ←
       match thm? with
-      | some thm => `(tactic| refine dtriple_ramified_frame $thm ?_)
-      | none => `(tactic| refine dtriple_ramified_frame (by assumption) ?_)
+      | some thm => `(tactic| refine dispec_ramified_frame $thm ?_)
+      | none => `(tactic| refine dispec_ramified_frame (by assumption) ?_)
     match tac? with
     | none => `(tactic| ($apply; isimpl))
     | some tac => `(tactic| ($apply; isimpl by $tac))
 
-/-- Re-state an already-proved partial triple under a weaker postcondition. -/
+/-- Re-state an already-proved partial ispec under a weaker postcondition. -/
 macro "dwp_mono " thm:term : tactic =>
-  `(tactic| (apply dtriple_conseq $thm (entails_refl _) <;> (intro _ <;> iframe)))
+  `(tactic| (apply dispec_conseq $thm (entails_refl _) <;> (intro _ <;> iframe)))
 
 @[step]
 theorem ret.spec (value : α) :
     ⦃ emp ⦄ Result.ok value ⦃⇓ result => ⌜result = value⌝⦄ :=
-  triple_pure fun _ _ => rfl
+  ispec_pure fun _ _ => rfl
 
 @[step]
 theorem pure.spec (value : α) :
@@ -1347,26 +1312,26 @@ theorem pure.spec (value : α) :
 /-- Pure returns stay in the pure judgment, allowing `step` to infer ordinary
 predicate postconditions without introducing spatial entailments. -/
 @[step]
-theorem WP.ok_spec (value : α) :
-    WP.spec (Result.ok value) (fun result => result = value) :=
+theorem ok_spec (value : α) :
+    spec (Result.ok value) (fun result => result = value) :=
   ret.spec value
 
 @[step]
-theorem WP.pure_spec (value : α) :
-    WP.spec (Pure.pure value : Result α) (fun result => result = value) :=
-  WP.ok_spec value
+theorem pure_spec (value : α) :
+    spec (Pure.pure value : Result α) (fun result => result = value) :=
+  ok_spec value
 
 /-!
-# Hoare triple notation for pure computations
+# Pure specification notation
 
 `⦃ ⦄` writes a pure specification the way a Rust programmer reads a return
-value: `f x ⦃ y => y > 0 ⦄` is the triple that owns nothing,
-`triple emp (f x) (fun y => ⌜y > 0⌝)`, and several binders destructure a
+value: `f x ⦃ y => y > 0 ⦄` is the `ispec` that owns nothing,
+`ispec emp (f x) (fun y => ⌜y > 0⌝)`, and several binders destructure a
 returned tuple, so `f x ⦃ y z => ... ⦄` names the two components of a pair
 without a pattern match of its own.
 
-The notation expands to the named judgments `WP.spec` and `WP.dspec`, whose
-definitions are the separation-logic triples at `emp` with a pure postcondition:
+The notation expands to the named judgments `spec` and `dspec`, whose
+definitions are the separation-logic ispecs at `emp` with a pure postcondition:
 
 ```
 m ⦃ x => p ⦄      is      ⦃ emp ⦄ m ⦃⇓ x => ⌜p⌝ ⦄
@@ -1407,36 +1372,36 @@ private def mkPurePost (binders : Array Term) (p : Term) : MacroM Term := do
 scoped macro_rules (kind := pureSpecBinders)
   | `($m ⦃ $x => $p ⦄) => do
     let post ← mkPurePost #[x] p
-    `(spec $m $post)
+    `(Aeneas.SepLogic.spec $m $post)
 
 /-- Macro expansion for several binders. -/
 scoped macro_rules (kind := pureSpecBinders)
   | `($m ⦃ $x $xs:term* => $p ⦄) => do
     let post ← mkPurePost (#[x] ++ xs) p
-    `(spec $m $post)
+    `(Aeneas.SepLogic.spec $m $post)
 
 scoped macro_rules (kind := pureDspecBinders)
   | `($m ⦃ $x => $p ⦄div) => do
     let post ← mkPurePost #[x] p
-    `(dspec $m $post)
+    `(Aeneas.SepLogic.dspec $m $post)
 
 scoped macro_rules (kind := pureDspecBinders)
   | `($m ⦃ $x $xs:term* => $p ⦄div) => do
     let post ← mkPurePost (#[x] ++ xs) p
-    `(dspec $m $post)
+    `(Aeneas.SepLogic.dspec $m $post)
 
 /-- Macro expansion for a postcondition given as a predicate. -/
 scoped macro_rules (kind := pureSpecPred)
-  | `($m ⦃ $p ⦄) => `(spec $m $p)
+  | `($m ⦃ $p ⦄) => `(Aeneas.SepLogic.spec $m $p)
 
 scoped macro_rules (kind := pureDspecPred)
-  | `($m ⦃ $p ⦄div) => `(dspec $m $p)
+  | `($m ⦃ $p ⦄div) => `(Aeneas.SepLogic.dspec $m $p)
 
 /-!
 # Pretty-printing
 
 The named pure judgments print their predicate postconditions directly.
-SL triples always use the separating notation, including triples at `emp`
+SL ispecs always use the separating notation, including ispecs at `emp`
 with pure postconditions.
 -/
 
@@ -1551,7 +1516,7 @@ private partial def delabSLPost : DelabM (Array Term × Term) := do
 
 /-- Print an arbitrary separation-logic postcondition using binder syntax when
 it is a lambda and predicate syntax otherwise. -/
-private def delabSLTriplePost (pre monadExpr : Term) (isPartial : Bool) :
+private def delabSLISpecPost (pre monadExpr : Term) (isPartial : Bool) :
     DelabM Term := do
   let (binders, body) ← delabSLPost
   if h : binders.size > 0 then
@@ -1564,22 +1529,22 @@ private def delabSLTriplePost (pre monadExpr : Term) (isPartial : Bool) :
   else
     `(⦃$pre⦄ $monadExpr ⦃⇓ $body⦄)
 
-/-- Print an arbitrary triple using the general separation-logic notation. -/
-private def delabSLTripleCore (tripleName : Name) (isPartial : Bool) : Delab := do
-  guard ((← getExpr).isAppOfArity tripleName 4)
+/-- Print an arbitrary ispec using the general separation-logic notation. -/
+private def delabSLISpecCore (ispecName : Name) (isPartial : Bool) : Delab := do
+  guard ((← getExpr).isAppOfArity ispecName 4)
   let monadExpr ← withNaryArg 2 delab
   let pre ← withNaryArg 1 delab
-  withNaryArg 3 <| delabSLTriplePost pre monadExpr isPartial
+  withNaryArg 3 <| delabSLISpecPost pre monadExpr isPartial
 
-/-- Delaborator for total separation-logic triples. -/
-@[app_delab Aeneas.SepLogic.triple]
-def delabSLTriple : Delab :=
-  delabSLTripleCore ``Aeneas.SepLogic.triple false
+/-- Delaborator for total separation-logic ispecs. -/
+@[app_delab Aeneas.SepLogic.ispec]
+def delabSLISpec : Delab :=
+  delabSLISpecCore ``Aeneas.SepLogic.ispec false
 
-/-- Delaborator for partial separation-logic triples. -/
-@[app_delab Aeneas.SepLogic.dtriple]
-def delabSLDtriple : Delab :=
-  delabSLTripleCore ``Aeneas.SepLogic.dtriple true
+/-- Delaborator for partial separation-logic ispecs. -/
+@[app_delab Aeneas.SepLogic.dispec]
+def delabSLDispec : Delab :=
+  delabSLISpecCore ``Aeneas.SepLogic.dispec true
 
 private def delabPureSpecCore (specName : Name) (isPartial : Bool) : Delab := do
   guard ((← getExpr).isAppOfArity specName 3)
@@ -1595,13 +1560,13 @@ private def delabPureSpecCore (specName : Name) (isPartial : Bool) : Delab := do
   else
     `($monadExpr ⦃ $body ⦄)
 
-@[scoped delab app.Aeneas.SepLogic.WP.spec]
+@[scoped delab app.Aeneas.SepLogic.spec]
 def delabPureSpec : Delab :=
-  delabPureSpecCore ``spec false
+  delabPureSpecCore ``Aeneas.SepLogic.spec false
 
-@[scoped delab app.Aeneas.SepLogic.WP.dspec]
+@[scoped delab app.Aeneas.SepLogic.dspec]
 def delabPureDspec : Delab :=
-  delabPureSpecCore ``dspec true
+  delabPureSpecCore ``Aeneas.SepLogic.dspec true
 
 end WP
 
