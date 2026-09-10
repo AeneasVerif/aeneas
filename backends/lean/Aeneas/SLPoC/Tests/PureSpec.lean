@@ -336,6 +336,63 @@ example (value : Nat) :
   guard_hyp hSecond : second = value + 1
   step*
 
+/-! ### Pure programs stated as SL triples
+
+These computations never access the heap, but their specifications deliberately
+use `ispec emp` and embedded pure assertions. The SL pipeline handles the same
+scalar, tuple, `Unit`, and existential shapes without a spatial `qimp`.
+-/
+
+def pureSLTwice (value : Nat) : Result Nat := do
+  let next ← incr value
+  incr next
+
+example (value : Nat) :
+    ⦃ emp ⦄ pureSLTwice value ⦃⇓ result => ⌜result = value + 2⌝⦄ := by
+  unfold pureSLTwice
+  step*
+
+def pureSLPair (value : Nat) : Result Nat := do
+  let (first, _) ← pair value
+  incr first
+
+example (value : Nat) :
+    ⦃ emp ⦄ pureSLPair value ⦃⇓ result => ⌜result = value + 1⌝⦄ := by
+  unfold pureSLPair
+  step*
+
+def pureSLUnit (value : Nat) : Result Nat := do
+  let _ ← (Result.ok () : Result Unit)
+  incr value
+
+example (value : Nat) :
+    ⦃ emp ⦄ pureSLUnit value ⦃⇓ result => ⌜result = value + 1⌝⦄ := by
+  unfold pureSLUnit
+  step*
+
+def pureSLExists (value : Nat) : Result Nat :=
+  Result.ok value
+
+@[step]
+theorem pureSLExists.spec (value : Nat) :
+    ⦃ emp ⦄ pureSLExists value ⦃⇓ result =>
+      ∃ witness : Nat, ⌜result = witness ∧ witness = value⌝
+    ⦄ := by
+  unfold pureSLExists
+  apply ispec_pure
+  refine entails_exists_r value ?_
+  exact (entails_emp_ipure_iff _).2 ⟨rfl, rfl⟩
+
+def consumePureSLExists (value : Nat) : Result Nat := do
+  let result ← pureSLExists value
+  incr result
+
+example (value : Nat) :
+    ⦃ emp ⦄ consumePureSLExists value
+      ⦃⇓ result => ⌜result = value + 1⌝⦄ := by
+  unfold consumePureSLExists
+  step*
+
 /-! ## 3. Separation-logic ispec pretty-printing -/
 
 /-- error: unsolved goals
@@ -393,6 +450,54 @@ theorem increment.spec (p : Ptr Nat) (n : Nat) :
   unfold increment
   step*
 
+/-! ### The same shapes with spatial resources
+
+Spatial triples use ramified bind and entailment rather than ordinary
+implication. The same scalar, tuple, `Unit`, and existential shapes are handled
+directly by `step`.
+-/
+
+def incrementTwiceSL (p : Ptr Nat) : Result Nat := do
+  let _ ← increment p ()
+  increment p ()
+
+example (p : Ptr Nat) (n : Nat) :
+    ⦃ p ↦ n ⦄ incrementTwiceSL p ⦃⇓ value =>
+      p ↦ (n + 2) ∗ ⌜value = n + 2⌝
+    ⦄ := by
+  unfold incrementTwiceSL
+  step*
+
+def readPairSL (p : Ptr Nat) : Result (Nat × Nat) := do
+  let value ← read p
+  pure (value, value + 1)
+
+@[step]
+theorem readPairSL.spec (p : Ptr Nat) (n : Nat) :
+    ⦃ p ↦ n ⦄ readPairSL p ⦃⇓ first second =>
+      p ↦ n ∗ ⌜first = n ∧ second = n + 1⌝
+    ⦄ := by
+  unfold readPairSL
+  step*
+
+def usePairSL (p : Ptr Nat) : Result Unit := do
+  let (_, next) ← readPairSL p
+  update p next
+
+example (p : Ptr Nat) (n : Nat) :
+    ⦃ p ↦ n ⦄ usePairSL p ⦃⇓ p ↦ (n + 1)⦄ := by
+  unfold usePairSL
+  step*
+
+def updateTwiceSL (p : Ptr Nat) (n : Nat) : Result Unit := do
+  update p (n + 1)
+  update p (n + 2)
+
+example (p : Ptr Nat) (n : Nat) :
+    ⦃ p ↦ n ⦄ updateTwiceSL p n ⦃⇓ p ↦ (n + 2)⦄ := by
+  unfold updateTwiceSL
+  step*
+
 /- `Aeneas.Std.bind` is the heterogeneous bind: the allocated pointer is in
 `Type 0`, while a function returning `Result Nat` lives in `Type 1`. -/
 def makeCounter : Result (Unit → Result Nat) :=
@@ -426,9 +531,6 @@ def countToFive : Result Nat :=
 theorem countToFive.spec :
     ⦃ emp ⦄ countToFive ⦃⇓ value => ⌜value = 5⌝⦄ := by
   unfold countToFive
-  apply ispec_bind' makeCounter.spec
-  intro increment
-  iintro
   step*
 
 /-! ## 4. The gap the notation closes
@@ -669,11 +771,10 @@ example (p : Ptr Nat) (v : Nat) :
 
 end Ex
 
-/-! ## 8. Recovering program equality
+/-! ## 8. What an SL ispec does not determine
 
 An SL ispec at `emp` does not determine the program: an event that needs no
-owned resources is still permitted. `ispec_emp_eq_ok` determines the returned
-value when the program is known to perform no heap event. -/
+owned resources is still permitted. -/
 
 /-- Allocation satisfies an SL ispec owning nothing initially. -/
 example : ⦃ emp ⦄ alloc (0 : Nat) ⦃⇓ _ => ⌜True⌝⦄ := by
@@ -685,11 +786,6 @@ example : ¬ ∃ q, alloc (0 : Nat) = Result.ok q := by
   have hNot : ¬ Aeneas.Std.WP.spec (alloc (0 : Nat)) (fun _ => True) := by
     simp [alloc, allocArray, Result.guardedModify]
   exact hNot (Aeneas.Std.WP.exists_imp_spec ⟨q, hq, trivial⟩)
-
-example (x : Nat) : ∃ y, Ex.bump x = Result.ok y ∧ y = x + 1 := by
-  obtain ⟨y, hy, hp⟩ := ispec_emp_eq_ok (Q := fun y => ⌜y = x + 1⌝)
-    (by unfold Ex.bump; exact HeapFree.ok _) (Ex.bump.spec x)
-  exact ⟨y, hy, (pure_holds ∅).mp hp⟩
 
 /-! ## 9. Examples carried over from `Aeneas.Std.WP`
 
