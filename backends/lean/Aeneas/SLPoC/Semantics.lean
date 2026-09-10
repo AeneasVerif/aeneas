@@ -62,7 +62,7 @@ is what makes it mean what it should: every configuration a proved program
 reaches performs a defined event, and every run that stops satisfies the
 postcondition.
 
-Both halves are the generic adequacy of `Aeneas.Data.Coinductive.Spec` —
+Both halves are the generic adequacy proved in `Aeneas.SLPoC.StateMachine` —
 `PartialSpec.runs` and `PartialSpec.evaluates` — at the machine of `Result`,
 which is conjunctive and feasible (`RustEffect.machine_conjunctive`,
 `RustEffect.machine_feasible`); `Reaches` and
@@ -179,7 +179,7 @@ theorem runOpt_spec (Q : IPost α) (m : Result α) (h : Heap) (hSpec : spec m Q 
         Q outcome.1 outcome.2 ∧ Evaluates t u outcome.1 outcome.2) ?_ ?_ hSpec
   · intro value h' hPost hSpec'
     rw [runOpt.eq_def]
-    exact ⟨(_, _), rfl, hPost, StateMachine.Evaluates.pure _ _⟩
+    exact ⟨(_, _), rfl, hPost, Handler.Evaluates.pure _ _⟩
   · intro event k h' hHandle
     cases event with
     | fail error => exact hHandle.elim
@@ -200,7 +200,7 @@ theorem runOpt_spec (Q : IPost α) (m : Result α) (h : Heap) (hSpec : spec m Q 
       obtain ⟨outcome, hRun, hPost, hEvaluates⟩ := ih _
       refine ⟨outcome, ?_, hPost, ?_⟩
       · simpa using hRun
-      · refine StateMachine.Evaluates.event (M := RustEffect.machine) ?_
+      · refine Handler.Evaluates.event (M := RustEffect.machine) ?_
         exact ⟨hPre, hEvaluates⟩
     · rename_i error k hm
       simp only [unfold_vis] at hm
