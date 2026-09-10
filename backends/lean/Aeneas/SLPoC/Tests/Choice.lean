@@ -12,8 +12,8 @@ those conditions are *for*: a single event `choice a`, "produce an element of
 satisfies one half and fails the other.
 
 The angelic machine is the interesting one, because it is the reading
-`Aeneas.SepLogic.RustEffect.handler` already uses — a heap event is answered by
-an existential. `RustEffect.handler` is nevertheless conjunctive, and
+`Aeneas.SepLogic.handler` already uses — a heap event is answered by
+an existential. `handler` is nevertheless conjunctive, and
 `angelic_conjunctive_of_subsingleton` is why: the guard of a heap event is a
 *proposition*, so the machine chooses from a subsingleton, which is no choice at
 all.  Widen that guard to a real type — add `choice` to `RustEffect.Input` — and
@@ -35,7 +35,7 @@ open Lean.Order
 
 /-- The **angelic** reading: the machine answers a demand whenever *some*
 element of `a` meets it. This is the reading of
-`Aeneas.SepLogic.RustEffect.handler`, and the choice operator of
+`Aeneas.SepLogic.handler`, and the choice operator of
 *Program Logics à la Carte*. -/
 @[reducible] def angelic : Handler ChoiceEffect where
   State := Unit
@@ -97,9 +97,9 @@ theorem not_angelic_conjunctive : ¬ angelic.Conjunctive := by
 /-- What the angel does have: a choice from a *subsingleton* is no choice, so
 the machine is conjunctive at such an event however angelically it is read.
 
-This is exactly the situation of `RustEffect.handler`: it answers a heap event
+This is exactly the situation of `handler`: it answers a heap event
 by `∃ hPre : pre h, …`, and `pre h` being a `Prop` there is only one `hPre` to
-be had. It is what `RustEffect.handler_conjunctive` proves, and the
+be had. It is what `handler_conjunctive` proves, and the
 only reason the machine of `Result` gets to be both angelic and conjunctive. -/
 theorem angelic_conjunctive_of_subsingleton (a : Type) [Subsingleton a]
     (s : Unit) (Demands : (ChoiceEffect.O a → Unit → Prop) → Prop)
