@@ -11,16 +11,13 @@ namespace Aeneas.SepLogic
 open Aeneas.Data
 open Aeneas.Data.Coinductive
 open Aeneas.Std (Error Heap Result RustEffect)
+open Aeneas.Std.WP (Post)
 
 universe u v
-
-def Post (α:Type u) := (α -> Prop)
 
 section ResultImplementation
 
 unseal Result
-set_option allowUnsafeReducibility true in
-attribute [local reducible] Result Result.ok Result.vis Result.div Aeneas.Std.bind
 
 @[reducible]
 def handler : Handler RustEffect where
@@ -812,55 +809,6 @@ theorem ispec_div_elim {α : Type u} {Q : IPost α}
 theorem dispec_div_intro {α : Type u} {P : IPre} {Q : IPost α} :
     dispec P (Result.div : Result α) Q :=
   dispec_div
-
-/-! ### What a pure specification does not determine
-
-`Aeneas.Std.WP.spec m p` is *equivalent* to `∃ value, m = .ok value ∧ p value`,
-because the machine it is taken at answers no event at all.  The ispec at `emp`
-is weaker, and has to be: `emp` owns nothing, but an event that *needs* nothing
-is still permitted, and such an event returns no value.
-
-The equivalence comes back as soon as the program is known to perform no heap
-event — which is exactly what a translated *pure* Rust function is.  Failure is
-not a heap event and is ruled out by the ispec itself, so it is allowed here. -/
-
-/-- `m` performs no heap event. Failure is not excluded: it is an event the
-machine cannot answer, so an `ispec` rules it out by itself. -/
-def HeapFree {α : Type} (m : Result α) : Prop :=
-  ∀ (EventResult : Type) (pre : Heap → Prop) modify k,
-    m ≠ Result.vis (.guardedModify EventResult pre modify) k
-
-/-- A return performs no heap event. -/
-theorem HeapFree.ok {α : Type} (value : α) : HeapFree (Result.ok value) := by
-  intro _ _ _ _ hEq
-  simp [Result.ok, Result.vis] at hEq
-
-/-- Neither does a failure: failure is the event the machine cannot answer, and
-an `ispec` rules it out on its own. -/
-theorem HeapFree.fail {α : Type} (error : Error) :
-    HeapFree (Result.fail error : Result α) := by
-  intro _ _ _ _ hEq
-  exact absurd (Aeneas.Data.Coinductive.vis_inj_effect hEq) (by simp)
-
-/-- Nor does divergence. -/
-theorem HeapFree.div {α : Type} : HeapFree (Result.div : Result α) := by
-  intro _ _ _ _ hEq
-  simp [Result.div, Result.vis] at hEq
-
-/-- The counterpart of `Aeneas.Std.WP.spec_imp_exists`: a total ispec owning
-nothing determines an event-free program, and hands its postcondition back at
-the empty heap. -/
-theorem ispec_emp_eq_ok {α : Type} {m : Result α} {Q : IPost α}
-    (hHeapFree : HeapFree m) (hTriple : ispec emp m Q) :
-    ∃ value, m = Result.ok value ∧ Q value ∅ := by
-  have hSpec := ispec_apply hTriple (h := ∅) trivial
-  cases m with
-  | ret value => exact ⟨value, rfl, hSpec.ret_post⟩
-  | vis event k =>
-      cases event with
-      | guardedModify EventResult pre modify => exact absurd rfl (hHeapFree _ _ _ k)
-      | fail error => exact hSpec.vis_view.elim
-  | div => exact hSpec.div_false.elim
 
 end ResultImplementation
 
