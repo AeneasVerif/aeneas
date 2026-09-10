@@ -243,7 +243,6 @@ theorem InPlaceOrDisjointBuffer.len.spec {T : Type}
   unfold common.InPlaceOrDisjointBuffer.len
   step*
   simp [common.InPlaceOrDisjointBuffer.val]
-  iframe
 
 /-- `src` returns the source side. -/
 @[step]
@@ -254,7 +253,6 @@ theorem InPlaceOrDisjointBuffer.src.spec {T : Type}
   unfold common.InPlaceOrDisjointBuffer.src
   step*
   simp [common.InPlaceOrDisjointBuffer.val]
-  iframe
 
 /-- `dst` returns the destination side plus two backward functions:
     - `back1` updates the destination buffer
@@ -272,7 +270,6 @@ theorem InPlaceOrDisjointBuffer.dst.spec {T : Type}
   unfold common.InPlaceOrDisjointBuffer.dst
   step*
   simp [common.InPlaceOrDisjointBuffer.val]
-  iframe
 
 /-- `new_disjoint_from_slices` builds a disjoint-mode buffer. -/
 @[step]
@@ -286,7 +283,6 @@ theorem InPlaceOrDisjointBuffer.new_disjoint_from_slices.spec {T : Type}
   simp only [h_len, ↓reduceDIte]
   step*
   simp [common.InPlaceOrDisjointBuffer.val]
-  iframe
 
 /-! ## SIMD accessors -/
 
@@ -305,7 +301,6 @@ theorem InPlaceOrDisjointBuffer.loadu_si128_src.spec
   step*
   simp [common.InPlaceOrDisjointBuffer.val,
     common.InPlaceOrDisjointBuffer.getBlock_val _ _ hsrc]
-  iframe
 
 /-- `loadu_si128_dst b i` reads the 16 bytes of the destination side at offset `i`. -/
 @[step]
@@ -322,7 +317,6 @@ theorem InPlaceOrDisjointBuffer.loadu_si128_dst.spec
   step*
   simp [common.InPlaceOrDisjointBuffer.val,
     common.InPlaceOrDisjointBuffer.getBlock_val _ _ hdst]
-  iframe
 
 /-- `storeu_si128 b i v` splices the 16 bytes of `v` into the destination side. -/
 @[step]
@@ -339,7 +333,6 @@ theorem InPlaceOrDisjointBuffer.storeu_si128.spec
   unfold common.InPlaceOrDisjointBuffer.storeu_si128
   step*
   simp [common.InPlaceOrDisjointBuffer.val]
-  iframe
 
 /-! ## The `aes_xmm` `u8` shims -/
 
