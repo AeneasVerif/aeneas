@@ -1265,7 +1265,7 @@ with pure postconditions.
 open Lean PrettyPrinter
 open Delaborator SubExpr
 open Std.Delab
-  (enterLams delabBindersWith buildTupleTerm delabUncurryAsTupleWith)
+  (enterLams delabBinders buildTupleTerm delabUncurryAsTuple)
 
 /-- Enter one explicit tuple binder without consuming continuation lambdas. -/
 private partial def enterPureUncurryOnce (acc : Array Std.Delab.BinderEntry)
@@ -1298,13 +1298,12 @@ private partial def delabPurePost : DelabM (Array Term × Term) := do
       | Std.uncurry _ _ _ _ =>
         withAppArg <| enterPureUncurryOnce #[] fun tupleBinders => do
           let (patterns, (moreBinders, body)) ←
-            delabBindersWith ``Std.uncurry tupleBinders.toList delabPurePost
+            delabBinders tupleBinders.toList delabPurePost
           return (#[← buildTupleTerm patterns] ++ moreBinders, body)
       | _ => delabLamsThenRecurse
   | Std.uncurry _ _ _ _ =>
     withAppArg do
-      let (tupleBinder, body) ←
-        delabUncurryAsTupleWith ``Std.uncurry delab
+      let (tupleBinder, body) ← delabUncurryAsTuple delab
       return (#[tupleBinder], body)
   | _ => delabLamsThenRecurse
 where
@@ -1318,10 +1317,10 @@ where
         enterLams #[] fun binders => do
           if binders.size == 1 && isPurePostBinderWrapper (← getExpr) then
             let (patterns, (moreBinders, body)) ←
-              delabBindersWith ``Std.uncurry binders.toList delabPurePost
+              delabBinders binders.toList delabPurePost
             return (patterns ++ moreBinders, body)
           else
-            delabBindersWith ``Std.uncurry binders.toList delab
+            delabBinders binders.toList delab
     else
       return (#[], ← delab)
 
@@ -1350,7 +1349,7 @@ private partial def delabSLPost : DelabM (Array Term × Term) := do
       | Std.uncurry _ _ _ _ =>
         withAppArg <| enterSLUncurryOnce #[] fun tupleBinders => do
           let (patterns, (moreBinders, body)) ←
-            delabBindersWith ``Std.uncurry tupleBinders.toList delabSLPost
+            delabBinders tupleBinders.toList delabSLPost
           return (#[← buildTupleTerm patterns] ++ moreBinders, body)
       | _ =>
         match (← getExpr).consumeMData with
@@ -1361,8 +1360,7 @@ private partial def delabSLPost : DelabM (Array Term × Term) := do
         | _ => failure
   | Std.uncurry _ _ _ _ =>
     withAppArg do
-      let (binder, body) ←
-        delabUncurryAsTupleWith ``Std.uncurry delab
+      let (binder, body) ← delabUncurryAsTuple delab
       return (#[binder], body)
   | _ =>
     if (← getExpr).consumeMData.isLambda then
