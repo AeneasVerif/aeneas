@@ -15,8 +15,8 @@ and defines the pure judgments `spec` and `dspec`, written
 `⦃ value => p ⦄` and `⦃ value => p ⦄div`. They wrap the ispecs that own
 nothing and are registered independently with `step`.
 
-The meaning of a heap event is written down once, as the handler `EventSpec` of
-the state machine `RustEffect.machine`. The separation-logic judgments are
+The meaning of a heap event is written down once in `RustEffect.handler`. The
+separation-logic judgments are
 defined directly from the generic `TotalSpec` and `PartialSpec` judgments of
 `Aeneas.Data.Coinductive.Spec` at that machine. The machine's runs — the
 operational semantics `Result` is adequate for — and the certified interpreter
@@ -40,44 +40,27 @@ attribute [local reducible] Result Result.ok Result.vis Result.div Aeneas.Std.bi
 /-! ## The machine of `Result`
 
 `Result` is an interaction tree, so it fixes no meaning for its events; a state
-handler (`Aeneas.Data.Coinductive.Handler`) does, by saying how one event
-is answered on one heap. `RustEffect.machine` is that machine, and `EventSpec`
-— its handler — is the single place the meaning of a heap event is written
-down: the correctness judgments below are the generic judgments of
-`Aeneas.Data.Coinductive.Spec` at this machine, and the runs
-`Aeneas.SLPoC.Semantics` proves them adequate for are its runs. -/
+handler (`Aeneas.Data.Coinductive.Handler`) does, by saying how one event is
+answered on one heap. `RustEffect.handler` is the single place the meaning of a
+heap event is written down: the correctness judgments below are the generic
+judgments of `Aeneas.Data.Coinductive.Spec` at this handler, and
+`Aeneas.SLPoC.Semantics` proves them adequate for its runs. -/
 
-/-- What performing `event` on the heap `h` demands, with what follows left to
-`C`: a heap event must be defined on the heap it is performed on, and what
-follows runs on the answer and the heap it produces; failure is rejected
-outright, having no possible answer at all.
-
-This is the whole semantics of the events of `Result`, and the only definition
-in this file that looks at them. -/
+/-- The handler of `Result`: a heap event must be defined on the heap it is
+performed on, and what follows runs on the answer and heap it produces; failure
+is rejected outright, having no possible answer at all. -/
 @[reducible]
-def EventSpec : (event : RustEffect.Input) → Heap →
-    (RustEffect.Output event → Heap → Prop) → Prop
-  | .guardedModify _ pre modify, h, C =>
-      ∃ hPre : pre h, C (.up (modify h hPre).1) (modify h hPre).2
-  | .fail _, _, _ => False
-
-/-- What an event demands is monotone in what follows. -/
-theorem EventSpec.mono {event : RustEffect.Input} {h : Heap}
-    {C C' : RustEffect.Output event → Heap → Prop}
-    (hC : ∀ answer h', C answer h' → C' answer h')
-    (hEvent : EventSpec event h C) : EventSpec event h C' := by
-  cases event with
-  | guardedModify => exact hEvent.imp fun _ hNext => hC _ _ hNext
-  | fail => exact hEvent.elim
-
-/-- The machine of `Result`: its states are heaps, and it answers an event the
-way `EventSpec` says. Everything below is the generic theory of
-`Aeneas.Data.Coinductive` at this one machine. -/
-@[reducible]
-def RustEffect.machine : Handler RustEffect where
+def RustEffect.handler : Handler RustEffect where
   State := Heap
-  handle := EventSpec
-  handle_mono := EventSpec.mono
+  handle
+    | .guardedModify _ pre modify, h, C =>
+        ∃ hPre : pre h, C (.up (modify h hPre).1) (modify h hPre).2
+    | .fail _, _, _ => False
+  handle_mono := by
+    intro event h C C' hC hEvent
+    cases event with
+    | guardedModify => exact hEvent.imp fun _ hNext => hC _ _ hNext
+    | fail => exact hEvent.elim
 
 /-- The machine is **positively conjunctive**: whatever a heap event owes each
 of a nonempty set of demands on a given heap, it owes all of them in one single
@@ -88,24 +71,12 @@ is nothing for the machine to choose.
 This is what the admissibility of partial correctness
 (`Coinductive.PartialSpec.admissible`, used by `dispec_admissible`) and its
 adequacy need. -/
-theorem RustEffect.machine_conjunctive : RustEffect.machine.Conjunctive := by
+theorem RustEffect.handler_conjunctive : RustEffect.handler.Conjunctive := by
   intro event h Demands ⟨C₀, hC₀⟩ hAll
   cases event with
   | guardedModify EventResult pre modify =>
       exact ⟨(hAll C₀ hC₀).1, fun C hC => (hAll C hC).2⟩
   | fail error => exact (hAll C₀ hC₀).elim
-
-/-- The machine **resolves** its transitions: the one way it answers a heap
-event answers it with one definite outcome. This is what total-correctness
-adequacy needs, and it makes the machine feasible: no heap event is a miracle. -/
-theorem RustEffect.machine_resolves : RustEffect.machine.Resolves := by
-  intro event h C hHandle
-  cases event with
-  | guardedModify EventResult pre modify => exact ⟨_, _, hHandle.2, hHandle.1, rfl, rfl⟩
-  | fail error => exact hHandle.elim
-
-theorem RustEffect.machine_feasible : RustEffect.machine.Feasible :=
-  machine_resolves.feasible
 
 /-! ## Total and partial correctness
 
@@ -132,17 +103,17 @@ divergence owes — at the machine above, and their whole theory is proved there
 of an arbitrary machine: the constructors and destructors,
 `TotalSpec.induction` and `PartialSpec.coinduction`, the structural rules, and
 admissibility. Their adequacy for runs is in `Aeneas.SLPoC.StateMachine`.
-Use them under those names; what is added here is
-only what is specific to heap events, which is what `EventSpec` reduces to at a
-concrete event. -/
+Use them under those names; what is added here is only what is specific to heap
+events, which is what `RustEffect.handler.handle` reduces to at a concrete
+event. -/
 
 /-- Total correctness of `m` on the exact heap `h`. -/
 abbrev iwp (m : Result α) (Q : IPost α) (h : Heap) : Prop :=
-  TotalSpec RustEffect.machine (fun value h' => Q value h') m h
+  TotalSpec RustEffect.handler (fun value h' => Q value h') m h
 
 /-- Partial correctness of `m` on the exact heap `h`. -/
 abbrev diwp (m : Result α) (Q : IPost α) (h : Heap) : Prop :=
-  PartialSpec RustEffect.machine (fun value h' => Q value h') m h
+  PartialSpec RustEffect.handler (fun value h' => Q value h') m h
 
 /-- Partial correctness is admissible: it holds of the limit of a chain of
 programs as soon as it holds of every program in it.  This is what
@@ -153,14 +124,14 @@ conjunctive: what the approximations demand of an event one at a time, it
 answers the limit all at once. -/
 private theorem diwp_admissible (Q : IPost α) (h : Heap) :
     Lean.Order.admissible (fun m : Result α => diwp m Q h) :=
-  PartialSpec.admissible RustEffect.machine_conjunctive _ h
+  PartialSpec.admissible RustEffect.handler_conjunctive _ h
 
 /-!
 Dot notation on the generic judgments finds `.ret`, `.bind`, `.mono`,
 `.mono_le`, `.vis_view`, `.toPartial` and the rest in `TotalSpec` and
-`PartialSpec`. What is left is what only `EventSpec` knows: an event the machine
-cannot answer is no more correct than one it can answer wrongly. A guarded
-modification is proved correct in one place, and that place is
+`PartialSpec`. What is left is what only `RustEffect.handler` knows: an event
+the handler cannot answer is no more correct than one it can answer wrongly. A
+guarded modification is proved correct in one place, and that place is
 `guardedModifyWp_spec`, where its weakest precondition meets `TotalSpec`. -/
 
 /-! ## Separation-logic specifications
@@ -404,7 +375,7 @@ theorem ispec_dispec {α : Type u} {P : IPre} {m : Result α} {Q : IPost α}
 
 private theorem ispec_apply {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : ispec P m Q) {h : Heap} (hPre : P h) :
-    TotalSpec RustEffect.machine (fun value h' => Q value h') m h := by
+    TotalSpec RustEffect.handler (fun value h' => Q value h') m h := by
   have hSpec := hTriple emp h ((sep_emp_r P).mpr h hPre)
   exact hSpec.mono fun value => sep_elim_right (Q value) emp
 
@@ -619,20 +590,20 @@ theorem guardedModifyWp_frame {EventResult : Type} (pre : Heap → Prop)
 /-- The weakest precondition is sound for total correctness: run the event on
 exactly the heap it owns, taking the frame to be empty.  This is the only place
 `guardedModifyWp` meets `TotalSpec`, and the only place a guarded modification
-is proved correct: `TotalSpec.vis` hands the event to the machine, and what the
-machine demands of it is `EventSpec` at `guardedModify` — the guard, and the
-postcondition of what the modification returns. -/
+is proved correct: `TotalSpec.vis` hands the event to the handler, whose
+`guardedModify` case demands the guard and the postcondition of what the
+modification returns. -/
 private theorem guardedModifyWp_spec {α : Type} {pre : Heap → Prop}
     {modify : (h : Heap) → pre h → α × Heap} {Q : IPost α} {h : Heap}
     (hWp : guardedModifyWp pre modify Q h) :
-    TotalSpec RustEffect.machine (fun value h' => Q value h')
+    TotalSpec RustEffect.handler (fun value h' => Q value h')
       (Result.guardedModify pre modify) h := by
   have hWp' := hWp Heap.empty (PartialCommMonoid.compatible_comm
     (PartialCommMonoid.compatible_empty_left h))
   simp only [Heap.union_empty] at hWp'
   obtain ⟨hPre, h', -, hModify, hPost⟩ := hWp'
   subst h'
-  refine TotalSpec.vis (H := RustEffect.machine)
+  refine TotalSpec.vis (H := RustEffect.handler)
     (event := RustEffect.Input.guardedModify _ pre modify) ?_
   exact ⟨hPre, .ret hPost⟩
 
@@ -685,7 +656,7 @@ theorem ispec_seq {α β : Type u} {P H : IPre} {Q : IPost β}
 
 private theorem dispec_apply {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : dispec P m Q) {h : Heap} (hPre : P h) :
-    PartialSpec RustEffect.machine (fun value h' => Q value h') m h := by
+    PartialSpec RustEffect.handler (fun value h' => Q value h') m h := by
   have hSpec := hTriple emp h ((sep_emp_r P).mpr h hPre)
   exact hSpec.mono fun value => sep_elim_right (Q value) emp
 
