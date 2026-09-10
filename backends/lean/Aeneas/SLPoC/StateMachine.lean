@@ -1,4 +1,4 @@
-import Aeneas.Data.Coinductive.ITree
+import Aeneas.Data.Coinductive.Spec
 
 /-!
 # Interaction trees and the state machines that run them
@@ -6,7 +6,8 @@ import Aeneas.Data.Coinductive.ITree
 A program is an **interaction tree** `ITree E α` over the event signature `E`
 (`Aeneas.Data.Coinductive.ITree`): a possibly infinite tree of events, each
 followed by a continuation.  It fixes no meaning for the events — that is the
-job of a **state machine** for `E`, defined in the second half of this file
+job of a **state machine** for `E`, represented by the `Handler` of
+`Aeneas.Data.Coinductive.Spec`. This file gives it an operational reading
 following *Program Logics à la Carte* (Vistrup, Sammler and Jung, POPL 2025, §5
 "Angelic Choice and State Machine Adequacy"): a single-step relation saying how
 the machine answers one event, and nothing else.  The traversal of the program —
@@ -17,9 +18,9 @@ The correspondence with the Coq development of the paper (`src/exec.v`) is:
 
 | Here | Paper |
 |---|---|
-| `StateMachine` | `seHandler`, the single-step relation |
-| `StateMachine.handle` | `sehandle` |
-| `StateMachine.handle_mono` | `sehandler_mono` |
+| `Handler` | `seHandler`, the single-step relation |
+| `Handler.handle` | `sehandle` |
+| `Handler.handle_mono` | `sehandler_mono` |
 | `Exec` | `exec`, the multi-step relation |
 | `Exec.stop`, `Exec.event` | the variants `ExecStop`, `ExecVis` of `execF` |
 | `Exec.dup`, `Exec.bind` | `exec_dup`, `exec_bind` |
@@ -36,7 +37,7 @@ and `Exec M .div s C` holds only by stopping where it stands.
 
 A machine is *angelic*: `M.handle e s C` holds when **some** transition of `M`
 answers `e` in the state `s` with a result and a successor state satisfying `C`
-— see `StateMachine.ofStep`, which builds a machine from a transition relation.
+— see `Handler.ofStep`, which builds a machine from a transition relation.
 Accordingly `Exec M m s C` states that `m` *has* an execution from `s` stopping
 in a configuration satisfying `C`, which is what a program logic for `ITree` is
 adequate against (`Exec.exists_stop`).
@@ -50,27 +51,7 @@ variable {E : Effect.{v}} {α β γ : Type x}
 
 /-! ## State machines -/
 
-/-- A state machine for the event signature `E`: the single-step relation of
-*Program Logics à la Carte*, where it is called `seHandler`.
-
-The transitions are given in continuation-passing style rather than as a plain
-relation, so that a machine may constrain the answer to an event by an arbitrary
-predicate on the outcome — for instance, by requiring the pointer an allocation
-returns to be fresh. -/
-structure StateMachine (E : Effect.{v}) where
-  /-- The states the machine runs on. -/
-  State : Type u
-  /-- `handle e s C` holds when the machine can answer the event `e` in the
-  state `s` by a transition whose result and successor state satisfy `C`. -/
-  handle : (event : E.I) → State → (E.O event → State → Prop) → Prop
-  /-- Answering an event with a stronger outcome answers it with a weaker one
-  (`sehandler_mono` in the paper). -/
-  handle_mono :
-    ∀ {event : E.I} {s : State} {C C' : E.O event → State → Prop},
-      (∀ answer s', C answer s' → C' answer s') →
-      handle event s C → handle event s C'
-
-namespace StateMachine
+namespace Handler
 
 /-- The machine on states `σ` whose transitions are the quadruples of `Step`:
 `Step e s answer s'` says that the event `e` may be answered in the state `s`
@@ -80,7 +61,7 @@ Every machine of an operational semantics arises this way; `handle` is more
 general only in that it also accommodates the angelic and demonic choice
 operators of the paper. -/
 def ofStep (σ : Type u) (Step : (event : E.I) → σ → E.O event → σ → Prop) :
-    StateMachine E where
+    Handler E where
   State := σ
   handle event s C := ∃ answer s', Step event s answer s' ∧ C answer s'
   handle_mono := by
@@ -91,7 +72,7 @@ def ofStep (σ : Type u) (Step : (event : E.I) → σ → E.O event → σ → P
 outcome satisfying `C`, one single transition already does.  This is what makes
 `Exec M m s C` mean that `m` has a concrete execution stopping in `C`
 (`Exec.exists_stop`); every machine built by `ofStep` resolves. -/
-def Resolves (M : StateMachine E) : Prop :=
+def Resolves (M : Handler E) : Prop :=
   ∀ (event : E.I) (s : M.State) (C : E.O event → M.State → Prop),
     M.handle event s C →
     ∃ answer s', C answer s' ∧ M.handle event s fun a u => a = answer ∧ u = s'
@@ -110,29 +91,9 @@ logic must not be able to invoke.
 A machine that resolves its transitions is feasible (`Resolves.feasible`), and
 so is a machine whose handler demands something of *every* transition of an
 enabled event. -/
-def Feasible (M : StateMachine E) : Prop :=
+def Feasible (M : Handler E) : Prop :=
   ∀ (event : E.I) (s : M.State) (C : E.O event → M.State → Prop),
     M.handle event s C → ∃ answer s', C answer s'
-
-/-- The machine is **positively conjunctive**: what it owes each demand of a
-*nonempty* set of demands on the same event, it owes all of them at once, in a
-single transition.
-
-This is the healthiness condition a limit argument needs
-(`PartialSpec.admissible`), and what it rules out is not nondeterminism but
-*angelic* nondeterminism: a machine that answers each demand by choosing the
-transition that suits it need not have one transition suiting them all.  A
-machine that answers deterministically is conjunctive, and so is one that
-demands something of *every* transition of an enabled event — the ordinary
-reading of a nondeterministic operational semantics.
-
-The set must be inhabited: a machine that cannot answer the event at all owes
-nothing, and there is no demand to meet when there is no demand. -/
-def Conjunctive (M : StateMachine E) : Prop :=
-  ∀ {event : E.I} {s : M.State}
-    (Demands : (E.O event → M.State → Prop) → Prop), (∃ C, Demands C) →
-    (∀ C, Demands C → M.handle event s C) →
-    M.handle event s fun answer s' => ∀ C, Demands C → C answer s'
 
 theorem ofStep_conjunctive (σ : Type u)
     (Step : (event : E.I) → σ → E.O event → σ → Prop)
@@ -147,23 +108,12 @@ theorem ofStep_conjunctive (σ : Type u)
   obtain ⟨rfl, rfl⟩ := hFunctional event s answer' s'' answer s' hStep' hStep
   exact hOutcome
 
-variable {M : StateMachine E}
+variable {M : Handler E}
 
 theorem Resolves.feasible (hResolves : M.Resolves) : M.Feasible := by
   intro event s C hHandle
   obtain ⟨answer, s', hOutcome, -⟩ := hResolves event s C hHandle
   exact ⟨answer, s', hOutcome⟩
-
-/-- `Conjunctive` at a family rather than a set: one transition answers a whole
-inhabited family of demands at once. -/
-theorem Conjunctive.handle_forall (hConj : M.Conjunctive) {ι : Sort w} (i₀ : ι)
-    {event : E.I} {s : M.State} {C : ι → E.O event → M.State → Prop}
-    (hHandle : ∀ i, M.handle event s (C i)) :
-    M.handle event s fun answer s' => ∀ i, C i answer s' := by
-  refine M.handle_mono (fun _ _ hAll i => hAll (C i) ⟨i, rfl⟩)
-    (hConj (fun X => ∃ i, X = C i) ⟨C i₀, i₀, rfl⟩ ?_)
-  rintro X ⟨i, rfl⟩
-  exact hHandle i
 
 /-- `Conjunctive` at two demands. -/
 theorem Conjunctive.handle_and (hConj : M.Conjunctive) {event : E.I} {s : M.State}
@@ -174,7 +124,7 @@ theorem Conjunctive.handle_and (hConj : M.Conjunctive) {event : E.I} {s : M.Stat
     (hConj.handle_forall (ι := Bool) (C := fun b => bif b then C else C') true ?_)
   rintro (_ | _) <;> assumption
 
-end StateMachine
+end Handler
 
 /-! ## The multi-step relation -/
 
@@ -184,7 +134,7 @@ machine answers, the execution continuing in `X`.
 
 A `ret` node has nothing left to do, and the divergent tree `ITree.div` never
 does anything, so neither of them offers a transition. -/
-def ExecF (M : StateMachine.{u,v} E)
+def ExecF (M : Handler.{u,v} E)
     (C X : ITree E α → M.State → Prop) (m : ITree E α) (s : M.State) : Prop :=
   C m s ∨
     match m.unfold with
@@ -206,14 +156,14 @@ is proved.
 
 An execution may stop at any point, which is what makes `Exec` compose
 (`Exec.dup`, `Exec.bind`). -/
-def Exec (M : StateMachine E) (m : ITree E α) (s : M.State)
+def Exec (M : Handler E) (m : ITree E α) (s : M.State)
     (C : ITree E α → M.State → Prop) : Prop :=
   ∀ X : ITree E α → M.State → Prop,
     (∀ m' s', ExecF M C X m' s' → X m' s') → X m s
 
 namespace Exec
 
-variable {M : StateMachine E} {C C' P : ITree E α → M.State → Prop}
+variable {M : Handler E} {C C' P : ITree E α → M.State → Prop}
 
 theorem execF_mono {X X' : ITree E α → M.State → Prop}
     (hX : ∀ m' s', X m' s' → X' m' s') {m : ITree E α} {s : M.State}
@@ -290,21 +240,21 @@ end Exec
 
 /-! ## Reachability and evaluation -/
 
-namespace StateMachine
+namespace Handler
 
 /-- `M.Runs m s m' s'`: the machine `M` takes the configuration `(m, s)` to the
 configuration `(m', s')`. -/
-def Runs (M : StateMachine E) (m : ITree E α) (s : M.State) (m' : ITree E α)
+def Runs (M : Handler E) (m : ITree E α) (s : M.State) (m' : ITree E α)
     (s' : M.State) : Prop :=
   Exec M m s fun t u => t = m' ∧ u = s'
 
 /-- `M.Evaluates m s value s'`: the program `m`, run by the machine `M` from the
 state `s`, returns `value` and leaves the state `s'`. -/
-def Evaluates (M : StateMachine E) (m : ITree E α) (s : M.State) (value : α)
+def Evaluates (M : Handler E) (m : ITree E α) (s : M.State) (value : α)
     (s' : M.State) : Prop :=
   M.Runs m s (.ret value) s'
 
-variable {M : StateMachine E}
+variable {M : Handler E}
 
 theorem Runs.refl (m : ITree E α) (s : M.State) : M.Runs m s m s :=
   Exec.stop ⟨rfl, rfl⟩
@@ -347,7 +297,7 @@ theorem Evaluates.bind {m : ITree E α} {next : α → ITree E γ}
       itree_ret_bind value next]
     exact hNext)
 
-end StateMachine
+end Handler
 
 namespace Exec
 
@@ -357,12 +307,12 @@ is an actual run of the program to a configuration satisfying `C`.
 This is what justifies reading `Exec M m s C` as "`m` has an execution stopping
 in `C`", and it is how the adequacy of a program logic stated in terms of `Exec`
 is turned into a statement about a concrete evaluation. -/
-theorem exists_stop {M : StateMachine E} (hResolves : M.Resolves)
+theorem exists_stop {M : Handler E} (hResolves : M.Resolves)
     {m : ITree E α} {s : M.State} {C : ITree E α → M.State → Prop}
     (hExec : Exec M m s C) :
     ∃ m' s', M.Runs m s m' s' ∧ C m' s' := by
   refine hExec.induction (P := fun m s => ∃ m' s', M.Runs m s m' s' ∧ C m' s')
-    (fun m' s' hStop => ⟨m', s', StateMachine.Runs.refl _ _, hStop⟩)
+    (fun m' s' hStop => ⟨m', s', Handler.Runs.refl _ _, hStop⟩)
     fun ev k s' hHandle => ?_
   obtain ⟨answer, s₁, hNext, hSingle⟩ := hResolves ev s' _ hHandle
   obtain ⟨m', s₂, hRuns, hC⟩ := hNext
@@ -372,5 +322,57 @@ theorem exists_stop {M : StateMachine E} (hResolves : M.Resolves)
   exact hRuns
 
 end Exec
+
+/-! ## Adequacy of the generic correctness judgments -/
+
+variable {M : Handler E}
+
+/-- Total correctness is exactly execution to a return satisfying the postcondition. -/
+theorem TotalSpec.exec_iff {Q : α → M.State → Prop} {m : ITree E α} {s : M.State} :
+    TotalSpec M Q m s ↔
+      Exec M m s fun t u => ∃ value, t = ITree.ret value ∧ Q value u := by
+  constructor
+  · intro hSpec
+    exact hSpec.induction
+      (P := fun t u => Exec M t u fun t' u' => ∃ value, t' = ITree.ret value ∧ Q value u')
+      (fun value s' hPost => Exec.stop ⟨value, rfl, hPost⟩)
+      fun _ _ _ hHandle => Exec.event hHandle
+  · intro hExec
+    refine hExec.induction (P := fun t u => TotalSpec M Q t u) ?_
+      fun _ _ _ hHandle => TotalSpec.vis hHandle
+    rintro m' s' ⟨value, rfl, hPost⟩
+    exact TotalSpec.ret hPost
+
+/-- A totally correct program has a terminating run when the handler resolves
+its transitions. -/
+theorem TotalSpec.evaluates (hResolves : M.Resolves) {Q : α → M.State → Prop}
+    {m : ITree E α} {s : M.State} (hSpec : TotalSpec M Q m s) :
+    ∃ value s', M.Evaluates m s value s' ∧ Q value s' := by
+  obtain ⟨m', s', hRuns, value, rfl, hPost⟩ :=
+    Exec.exists_stop hResolves (TotalSpec.exec_iff.mp hSpec)
+  exact ⟨value, s', hRuns, hPost⟩
+
+/-- Partial correctness is preserved by runs of a conjunctive, feasible handler. -/
+theorem PartialSpec.runs (hConj : M.Conjunctive) (hFeasible : M.Feasible)
+    {Q : α → M.State → Prop}
+    {m m' : ITree E α} {s s' : M.State} (hSpec : PartialSpec M Q m s)
+    (hRuns : M.Runs m s m' s') : PartialSpec M Q m' s' := by
+  refine hRuns.induction
+    (P := fun t u => PartialSpec M Q t u → PartialSpec M Q m' s')
+    (fun t u hStop hSpec' => by
+      obtain ⟨rfl, rfl⟩ := hStop
+      exact hSpec')
+    (fun event k u hHandle hSpec' => ?_) hSpec
+  obtain ⟨answer, u', hPreserves, hChild⟩ :=
+    hFeasible _ _ _ (hConj.handle_and hHandle hSpec'.vis_view)
+  exact hPreserves hChild
+
+/-- A terminating run of a partially correct program establishes its postcondition. -/
+theorem PartialSpec.evaluates (hConj : M.Conjunctive) (hFeasible : M.Feasible)
+    {Q : α → M.State → Prop}
+    {m : ITree E α} {s : M.State} {value : α} {s' : M.State}
+    (hSpec : PartialSpec M Q m s) (hEval : M.Evaluates m s value s') :
+    Q value s' :=
+  (hSpec.runs hConj hFeasible hEval).ret_post
 
 end Aeneas.Data.Coinductive

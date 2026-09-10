@@ -818,7 +818,7 @@ instance Result.instWPMonad : WPMonad Result (.except (ULift Error) (.except PUn
 theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
     (⊢ₛ wp⟦x⟧ (fun a => ⌜P (.ok a)⌝,
                   fun e => ⌜P (.fail e.down)⌝,
-                  fun _ => ⌜False⌝, -- unreachable: `RustEffect` currently only has the `fail` effect.
+                  fun _ => ⌜False⌝, -- if other effects are used, this provides no information.
                   fun .unit => ⌜P .div⌝, .unit)) → P x := by
     intro hspec
     simp only [WP.wp, PredTrans.apply] at hspec

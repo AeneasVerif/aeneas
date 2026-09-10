@@ -1,5 +1,5 @@
 import Aeneas.Std.Delab
-import Aeneas.Data.Coinductive.Spec
+import Aeneas.SLPoC.StateMachine
 import Aeneas.Std.Primitives
 import Aeneas.SepLogic
 import Aeneas.Tactic.SepLogic
@@ -41,7 +41,7 @@ attribute [local reducible] Result Result.ok Result.vis Result.div Aeneas.Std.bi
 /-! ## The machine of `Result`
 
 `Result` is an interaction tree, so it fixes no meaning for its events; a state
-machine (`Aeneas.Data.Coinductive.StateMachine`) does, by saying how one event
+handler (`Aeneas.Data.Coinductive.Handler`) does, by saying how one event
 is answered on one heap. `RustEffect.machine` is that machine, and `EventSpec`
 — its handler — is the single place the meaning of a heap event is written
 down: the correctness judgments below are the generic judgments of
@@ -75,7 +75,7 @@ theorem EventSpec.mono {event : RustEffect.Input} {h : Heap}
 way `EventSpec` says. Everything below is the generic theory of
 `Aeneas.Data.Coinductive` at this one machine. -/
 @[reducible]
-def RustEffect.machine : StateMachine RustEffect where
+def RustEffect.machine : Handler RustEffect where
   State := Heap
   handle := EventSpec
   handle_mono := EventSpec.mono
@@ -122,21 +122,19 @@ run that *stops* and nothing about a run that does not, while still requiring
 every event the program reaches to be defined: divergence is permitted, being
 stuck is not.
 
-`Aeneas.Std.WP.dspec` is `spec` plus one constructor for `Result.div`, and that
-suffices there because the only event of `Result` is `fail`, which has no
-continuation: a computation that neither returns nor fails *is* `div`, in one
-step. A program of `Result` may perform arbitrarily many heap events before
-returning or failing, so an infinite run is an infinite `vis` tree and no
-inductive judgment accepts it: partial correctness has to be a **greatest**
-fixed point.
+`Aeneas.Std.WP` specializes the same generic judgments to a handler that rejects
+every event. Here the handler accepts defined heap events, so partial correctness
+also admits infinite `vis` trees, not just `Result.div`: it is a **greatest**
+fixed point rather than an inductive judgment with a divergence constructor.
 
 Neither judgment is defined here. Both are the judgments of
 `Aeneas.Data.Coinductive.Spec` — `TotalSpec` and `PartialSpec`, the least and
 the greatest fixed point of the same one-layer condition `SpecF`, differing only
 in what divergence owes — at the machine above, and their whole theory is proved
 there of an arbitrary machine: the constructors and destructors,
-`TotalSpec.induction` and `PartialSpec.coinduction`, the structural rules,
-admissibility, and adequacy. Use them under those names; what is added here is
+`TotalSpec.induction` and `PartialSpec.coinduction`, the structural rules, and
+admissibility. Their adequacy for runs is in `Aeneas.SLPoC.StateMachine`.
+Use them under those names; what is added here is
 only what is specific to heap events, which is what `EventSpec` reduces to at a
 concrete event. -/
 
@@ -163,7 +161,7 @@ theorem dspec_admissible (Q : IPost α) (h : Heap) :
 /-! ### Failure
 
 The rest of the theory is inherited rather than restated: `spec` and `dspec` are
-`abbrev`s, so dot notation on a hypothesis of either finds `.ret`, `.pure`,
+`abbrev`s, so dot notation on a hypothesis of either finds `.ret`,
 `.bind`, `.mono`, `.mono_le`, `.vis_view`, `.toPartial` and the rest in
 `TotalSpec` and `PartialSpec`.  What is left is what only `EventSpec` knows: an
 event the machine cannot answer is no more correct than one it can answer
@@ -673,7 +671,7 @@ theorem guardedModifyWp_spec {α : Type} {pre : Heap → Prop}
   simp only [Heap.union_empty] at hWp'
   obtain ⟨hPre, h', -, hModify, hPost⟩ := hWp'
   subst h'
-  refine TotalSpec.vis (M := RustEffect.machine)
+  refine TotalSpec.vis (H := RustEffect.machine)
     (event := RustEffect.Input.guardedModify _ pre modify) ?_
   exact ⟨hPre, .ret hPost⟩
 

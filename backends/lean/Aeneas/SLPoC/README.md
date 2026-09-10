@@ -5,13 +5,11 @@ logic (SL) support.
 
 ## Updating the stacked branches
 
-`cezar/firstorder_seplogic` is stacked on `cezar/tactic-step`. After committing
-in the `tactic-step` worktree, update both remote branches and replay the SLPoC
-commits on the new tactic commit:
+`cezar/firstorder_seplogic` is stacked on `cezar/integration`. After updating
+the integration branch, replay the SLPoC commits on it:
 
 ```bash
-git push origin cezar/tactic-step
-git -C ../firstorder_seplogic rebase cezar/tactic-step
+git -C ../firstorder_seplogic rebase cezar/integration
 git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_seplogic
 ```
 
@@ -19,15 +17,16 @@ git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_se
 
 | File | Purpose |
 |---|---|
-| [`StateMachine.lean`](../Data/Coinductive/StateMachine.lean) | The state machines that give the interaction trees of [`Aeneas.Data.Coinductive.ITree`](../Data/Coinductive/ITree.lean) an operational semantics (after "Program Logics à la Carte"): `StateMachine`, `Exec`, `Runs` and `Evaluates`. |
+| [`Coinductive/Spec.lean`](../Data/Coinductive/Spec.lean) | Generic `Handler`, `TotalSpec`, and `PartialSpec`, their shared layer `SpecF`, structural rules, and admissibility for conjunctive handlers. Shared with `Std/WP.lean`. |
+| [`StateMachine.lean`](StateMachine.lean) | Operational semantics for those handlers (after "Program Logics à la Carte"): `Exec`, `Handler.Runs`, and `Handler.Evaluates`, with the adequacy proofs connecting the generic correctness judgments to runs. |
 | [`Heap.lean`](../Std/Heap.lean) | Defines addresses (`AllocId × Nat`), finite heaps of slots under disjoint union, their PCM instance, references and their arithmetic, the heap of a run of slots, allocation, and the sub-heap order the affine assertions are closed under. |
 | [`Primitives.lean`](../Std/Primitives.lean) | Defines `Result`, the interaction-tree monad over the `RustEffect` heap events (`guardedModify` and `fail`), its monad and partial-fixpoint instances, and the `loop` combinator. |
 | [`PartialCommMonoid.lean`](../Data/PartialCommMonoid.lean) | The `PartialCommMonoid` class the heap is an instance of: a total union selected by a compatibility relation. |
 | [`MutableData/Array.lean`](MutableData/Array.lean) | Arrays `Array α n`, the Rust `[α; n]`: the length lives in the type.  `toBuffer` is the coercion to a slice, and every operation and specification is the buffer one with `n` for the length. |
 | [`MutableData/Ptr.lean`](MutableData/Ptr.lean) | The first layer: allocation of a run of slots, interior pointers `Ptr α`, pointer arithmetic, range and slot ownership, splitting and joining, read, write and free of one slot, the range operations `freeRange`/`fillRange`/`copyRange`/`compareRange`, and the raw-pointer borrow.  A `Ref` never escapes this directory. |
 | [`MutableData/Buffer.lean`](MutableData/Buffer.lean) | Slices `Buffer α`, the Rust `&mut [T]`: `sub`, `split`, `join`, slot-level and array-level indexed access, `alloc`/`ofList`/`free`/`fill`/`copy`/`compare`/`swap`, and how ownership follows the views. |
-| [`ST.lean`](ST.lean) | The program logic of the state monad `Result`: the one-layer condition `SpecF` and its event case `EventSpec`, the least and the greatest fixed point of `SpecF` that are the total- and the partial-correctness judgment (`spec` and `dspec`, after `Aeneas.Std.WP`), the triples `triple` and `dtriple` built on them, their rules — including `guardedModifyWp`, the weakest precondition of a heap event, and the rule that consumes it — the loop rule, and `step` integration.  It also carries the `⦃ value => p ⦄` notation for *pure* computations, which is not a judgment of its own but notation for the triple that owns nothing, `triple emp m (fun value => ⌜p value⌝)`; only `triple` and `dtriple` are registered with `step`. |
-| [`Semantics.lean`](Semantics.lean) | What those triples say about running the program: the operational semantics `RustEffect.Step` and the machine it induces, the relations `Reaches` and `Evaluates`, the adequacy of `dspec`/`dtriple` for that machine, and the certified interpreter (`exec`, `execTriple`, `execClosed`) that recurses on a total-correctness proof to actually run a verified program. |
+| [`ST.lean`](ST.lean) | The heap handler `RustEffect.machine`, whose event semantics is `EventSpec`; the generic judgments specialized as `spec` and `dspec`; and the separation triples, framing and loop rules, and `step` integration. The pure judgments `WP.spec` and `WP.dspec` wrap triples with no owned input and a pure postcondition and have their own `step` registrations. |
+| [`Semantics.lean`](Semantics.lean) | What those triples say about running the program: the relations `Reaches` and `Evaluates` for `RustEffect.machine`, the adequacy of `dspec`/`dtriple`, and the certified interpreter (`exec`, `execTriple`, `execClosed`) that uses a total-correctness proof to run a verified program. |
 | [`Basic.lean`](../SepLogic/Basic.lean) | Affine separation-logic assertions (`IProp`, closed under heap extension like Iris's `uPred`), the separating conjunction, the quantifiers, and the magic wand. |
 | [`PredicateTransformer.lean`](../SepLogic/PredicateTransformer.lean) | Monotone predicate transformers `Wp` over those assertions (`Wᴾᵘʳᵉ` of "Dijkstra Monads for All"), and `pp2wp`, the transformer a precondition/postcondition pair denotes. |
 | [`Tactic/SepLogic/`](../Tactic/SepLogic) | The separation-logic proof mode: `Init.lean` registers the `iris_simps` simp set, `Frame.lean` holds the `IFrame` cancellation engine with `iframe`/`isimp`, `Intro.lean` holds the `iintro` family and `isimpl`, `Rewrite.lean` holds `irewrite`, and `Tests/` holds one regression file per tactic. |
@@ -158,19 +157,22 @@ the range the view spans — so freeing part of an allocation is expressible and
 frame-preserving.  `Heap.size` counts the slots a heap still holds, which is
 what tells a leak from a clean run.
 
-## Four semantics for `St`
+## Four semantics for `Result`
 
-A program of `St` is an **interaction tree**
+A program of `Result` is an **interaction tree**
 ([`Aeneas.Data.Coinductive.ITree`](../Data/Coinductive/ITree.lean)) over the
-heap- and universe-polymorphic event signature `StEvents Heap`.  It has an
-*operational* semantics
-(`RustEffect.Step`, lifted to the big-step `Evaluates` of [`StateMachine.lean`](../Data/Coinductive/StateMachine.lean)),
+event signature `RustEffect`. Its handler `RustEffect.machine` gives it an
+*operational* semantics via the big-step `Evaluates` of
+[`StateMachine.lean`](StateMachine.lean),
 a total-correctness semantics (`TotalSpec`, exposed as `spec`), a
 partial-correctness one (`PartialSpec`, exposed as `dspec`) — the least and the
 greatest fixed point of one shared layer `SpecF`, which differ only in what
 divergence owes and share `EventSpec`, the single statement of what an event
-demands of the run that follows it — and an *executable* one — the two spec judgments in [`ST.lean`](ST.lean), the
-semantics and the interpreter in [`Semantics.lean`](Semantics.lean).
+demands of the run that follows it — and an *executable* one. The generic
+judgments live in [`Coinductive/Spec.lean`](../Data/Coinductive/Spec.lean),
+their heap specializations in [`ST.lean`](ST.lean), their adequacy proofs in
+[`StateMachine.lean`](StateMachine.lean), and the heap semantics and interpreter
+in [`Semantics.lean`](Semantics.lean).
 
 As in `Aeneas.Std.WP.spec`, a proof of total correctness is a finite derivation:
 `ret` establishes the postcondition and `vis` proves the guard and the
@@ -178,7 +180,7 @@ continuation. Nothing proves `ITree.div` correct, so every proved program
 terminates. `TotalSpec.mono_le` connects this judgment to the interaction-tree
 approximation order used by `partial_fixpoint`.
 
-`St` cannot be interpreted unconditionally either: a heap cell stores its own
+`Result` cannot be interpreted unconditionally either: a heap cell stores its own
 Lean type (`HeapCell = Σ α : Type, α`), so `Ptr.contains h p` is not decidable
 and a read through a dangling or mistyped pointer is stuck rather than
 erroneous. The program logic supplies what is missing, so `run` takes the
@@ -212,11 +214,10 @@ frames exactly as `triple` does and says what the total triple says of a run
 that *stops*, while still requiring every event the program reaches to be
 defined: divergence is permitted, being stuck is not.
 
-`Aeneas.Std.WP.dspec` is `spec` plus a constructor for `Result.div`, and that
-suffices there because the only event of `Result` is `fail`, which has no
-continuation.  A program of `St` performs arbitrarily many events, so an
-infinite run is an infinite `vis` tree that no inductive judgment accepts:
-`PartialSpec` is therefore the *greatest* fixed point of its one-layer
+`Aeneas.Std.WP.dspec` specializes the same generic `PartialSpec` to a handler
+that rejects every event. SLPoC instead accepts defined heap events, including
+infinite `vis` trees that no inductive judgment accepts. `PartialSpec` is the
+*greatest* fixed point of its one-layer
 condition, spelled out as the union of the post-fixed points, dually to the way
 `Exec` is the least fixed point of `ExecF`.  `PartialSpec.coinduction` is its
 introduction rule and `PartialSpec.ret`, `.div` and `.vis` recover the
@@ -227,13 +228,14 @@ total correctness and is applied to a partial goal as it stands, exactly as
 `Aeneas.Std.WP.spec_dspec` is used for `Result`.
 
 What a partial triple owes is proved against the same machine as the total one:
-`PartialSpec.reaches` carries it along every run, so a terminating run
+`PartialSpec.runs` carries it along every run, so a terminating run
 establishes the postcondition (`dtriple_evaluates`) and every event reached is
 defined on the heap it is reached with (`dtriple_pre_of_reaches`).
 
-Being a greatest fixed point, it is also *admissible* (`dspec_admissible`,
-`dtriple_admissible`), which is what `fixpoint_induct` asks of a property proved
-of a `partial_fixpoint`.  That proof rests on the facts about suprema of chains
+Because the heap handler is conjunctive, partial correctness is also
+*admissible* (`dspec_admissible`, `dtriple_admissible`), which is what
+`fixpoint_induct` asks of a property proved of a `partial_fixpoint`. That proof
+rests on the facts about suprema of chains
 of trees — a supremum has the shape of the elements it is taken over, and its
 children are the suprema of theirs — which are ordinary interaction-tree order
 theory and live with the rest of it in
