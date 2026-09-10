@@ -245,6 +245,21 @@ def getSpecPost (ty : Expr) : MetaM Expr := do
   let (info, args) ← getSpecInfoArgs ty
   return args[info.post_index]!
 
+/-- The discharge tactic registered for a specification statement. -/
+def getDischargeTactic (ty : Expr) : MetaM (Option (TSyntax `tactic)) := do
+  let (info, _) ← getSpecInfoArgs ty
+  let some tacticName := info.discharge_tactic
+    | return none
+  match Parser.runParserCategory (← getEnv) `tactic tacticName.toString with
+  | .ok tactic => pure (some ⟨tactic⟩)
+  | .error error => throwError
+      "Could not parse registered discharge tactic `{tacticName}`: {error}"
+
+/-- The discharge tactic registered for the specification statement in the current goal. -/
+def getDischargeTacticFromGoal : TacticM (Option (TSyntax `tactic)) := do
+  withMainContext do
+  getDischargeTactic (← getMainTarget)
+
 /- Analyze a goal comp
 
    If comp = bind m k then return true and m
@@ -1309,6 +1324,30 @@ def evalAGrindWithPreprocess (withGroundSimprocs : Bool) (config : Grind.Config)
       Aeneas.Grind.agrindEval config params mvarId
     catch e => trace[Step] "Grind failed:\n{e.toMessageData}"
 
+/-- Prepare the tactics used to discharge preconditions and infer ghost variables. -/
+def prepareAssumTac (config : Config) : TacticM (Option (TacticM Unit)) := do
+  /- **The specification's discharge tactic**: -/
+  let dischargeTac : List (TacticM Unit) ← do
+    match ← getDischargeTacticFromGoal with
+    | none => pure []
+    | some tac => pure [
+        withTraceNode `Step
+          (fun _ => pure m!"Attempting to solve with the discharge tactic: `{tac}`") do
+        evalTactic tac
+      ]
+
+  let customAssumTacs : List (TacticM Unit) ← do
+    if config.assumTac then
+      /- Preprocessing step for `singleAssumptionTac` -/
+      let singleAssumptionTacDtree ← singleAssumptionTacPreprocess
+      pure [do
+        withTraceNode `Step (fun _ => pure m!"Attempting to solve with `singleAssumptionTac`") do
+        singleAssumptionTacCore singleAssumptionTacDtree (instMVars := config.inferGhostVars)]
+    else pure []
+
+  let assumTacs := dischargeTac ++ customAssumTacs
+  return if assumTacs.isEmpty then none else some (firstTacSolve assumTacs)
+
 def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option Expr)
   (ids : Array (Option Name)) (idsUserProvided : Bool) (postsBasename : Option Name := none)
   (byTacStx : Option Syntax.Tactic)
@@ -1322,20 +1361,13 @@ def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option 
   withMainContext do
 
   /- **Assumption tactic**:
-
     We use it to:
     - discharge preconditions by using local assumptions (this is activated by `Config.assumTac`)
+      and the registered discharge tactic
     - more importantly, instantiate meta-variables introduced because of ghost variables, by matching
       preconditions against local assumptions (this is activated by `Config.inferGhostVars`)
   -/
-  let customAssumTac : Option (TacticM Unit) ← do
-    if config.assumTac then
-      /- Preprocessing step for `singleAssumptionTac` -/
-      let singleAssumptionTacDtree ← singleAssumptionTacPreprocess
-      pure (some do
-        withTraceNode `Step (fun _ => pure m!"Attempting to solve with `singleAssumptionTac`") do
-        singleAssumptionTacCore singleAssumptionTacDtree (instMVars := config.inferGhostVars))
-    else pure none
+  let assumTac ← prepareAssumTac config
 
   /- **Grind tactic**: Excluded from allTacs when `threadGrindState = true` -/
   let grindTac : List (TacticM Unit) :=
@@ -1430,7 +1462,7 @@ def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option 
     async := config.async,
     inferGhostVars := config.inferGhostVars,
     inferPost := config.inferPost,
-    keepPretty, ids, idsUserProvided, postsBasename, assumTac := customAssumTac,
+    keepPretty, ids, idsUserProvided, postsBasename, assumTac,
     solvePreconditionTac,
     config,
     stepState := if config.threadGrindState then stepState else {},
