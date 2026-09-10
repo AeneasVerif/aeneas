@@ -1,6 +1,6 @@
 import Mathlib.Order.Defs.PartialOrder
 
-/-! Order-compatible monads and monad morphisms. -/
+/-! Order-compatible monads. -/
 
 namespace Aeneas
 
@@ -13,19 +13,5 @@ class OrderedMonad (m : Type u → Type v) [Monad m] [LawfulMonad m]
       m₁ ≤ m₂ →
       (∀ value, next₁ value ≤ next₂ value) →
       m₁ >>= next₁ ≤ m₂ >>= next₂
-
-/-- A monad morphism whose laws hold up to the target monad's setoid
-equivalence. -/
-structure MonadMorphism (m : Type u → Type v) (n : Type u → Type w)
-    [Monad m] [LawfulMonad m] [Monad n] [LawfulMonad n]
-    [∀ α : Type u, Setoid (n α)] where
-  toFun : {α : Type u} → m α → n α
-  map_pure :
-    ∀ {α} (value : α),
-      toFun (Pure.pure value : m α) ≈ (Pure.pure value : n α)
-  map_bind :
-    ∀ {α β} (x : m α) (next : α → m β),
-      toFun (x >>= next) ≈
-        toFun x >>= fun value => toFun (next value)
 
 end Aeneas
