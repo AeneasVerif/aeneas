@@ -40,20 +40,34 @@ unseal Result
 set_option allowUnsafeReducibility true in
 attribute [local reducible] Result Result.ok Result.vis Result.div Aeneas.Std.bind
 
+/-! ## Handler properties required by operational adequacy -/
+
+/-- The handler resolves its transitions: the one way it answers a heap event
+answers it with one definite outcome. -/
+theorem RustEffect.handler_resolves : RustEffect.handler.Resolves := by
+  intro event h C hHandle
+  cases event with
+  | guardedModify EventResult pre modify => exact ⟨_, _, hHandle.2, hHandle.1, rfl, rfl⟩
+  | fail error => exact hHandle.elim
+
+/-- The handler is feasible: no heap event is a miracle. -/
+theorem RustEffect.handler_feasible : RustEffect.handler.Feasible :=
+  handler_resolves.feasible
+
 /-! ## Runs of the machine
 
-The machine of `Result` — `RustEffect.machine`, whose handler `EventSpec` says
-how one heap event is answered on one heap — is defined in `Aeneas.SLPoC.ST`,
-where the correctness judgments need it; what is added here are its runs. -/
+The handler of `Result` — `RustEffect.handler`, which says how one heap event is
+answered on one heap — is defined in `Aeneas.SLPoC.ST`, where the correctness
+judgments need it; what is added here are its runs. -/
 
 /-- Big-step relation -/
 def Evaluates (m : Result α) (h : Heap) (value : α) (h' : Heap) : Prop :=
-  RustEffect.machine.Evaluates m h value h'
+  RustEffect.handler.Evaluates m h value h'
 
 /-- `Reaches m h m' h'`: the machine of `Result` takes the configuration `(m, h)` to
 the configuration `(m', h')`. -/
 def Reaches (m : Result α) (h : Heap) (m' : Result α) (h' : Heap) : Prop :=
-  RustEffect.machine.Runs m h m' h'
+  RustEffect.handler.Runs m h m' h'
 
 /-! ### Adequacy of `PartialSpec`
 
@@ -64,45 +78,45 @@ postcondition.
 
 Both halves are the generic adequacy proved in `Aeneas.SLPoC.StateMachine` —
 `PartialSpec.runs` and `PartialSpec.evaluates` — at the machine of `Result`,
-which is conjunctive and feasible (`RustEffect.machine_conjunctive`,
-`RustEffect.machine_feasible`); `Reaches` and
+which is conjunctive and feasible (`RustEffect.handler_conjunctive`,
+`RustEffect.handler_feasible`); `Reaches` and
 `Evaluates` are that machine's `Runs` and `Evaluates`, so those two apply as
 they stand and only the third statement below is specific to heap events. -/
 
 private theorem ispec_total {P : IPre} {m : Result α} {Q : IPost α}
     (hSpec : ispec P m Q) {h : Heap} (hPre : P h) :
-    TotalSpec RustEffect.machine (fun value h' => Q value h') m h := by
+    TotalSpec RustEffect.handler (fun value h' => Q value h') m h := by
   have hRaw := hSpec emp h ((sep_emp_r P).mpr h hPre)
   exact hRaw.mono fun value => sep_elim_right (Q value) emp
 
 private theorem dispec_partial {P : IPre} {m : Result α} {Q : IPost α}
     (hSpec : dispec P m Q) {h : Heap} (hPre : P h) :
-    PartialSpec RustEffect.machine (fun value h' => Q value h') m h := by
+    PartialSpec RustEffect.handler (fun value h' => Q value h') m h := by
   have hRaw := hSpec emp h ((sep_emp_r P).mpr h hPre)
   exact hRaw.mono fun value => sep_elim_right (Q value) emp
 
 /-- Every heap event a proved program reaches is defined on the heap it is
 reached with; a proved program cannot reach failure. Partial correctness permits
-divergence, not stuckness.  This is the one thing the generic theory cannot
-say, `pre` being what `EventSpec` demands of a heap event. -/
+divergence, not stuckness. This is the one thing the generic theory cannot say,
+`pre` being what the `guardedModify` case of the handler demands. -/
 private theorem partialSpec_pre_of_reaches {Q : α → Heap → Prop}
     {m : Result α} {h : Heap}
     {EventResult : Type} {pre : Heap → Prop}
     {modify : (h : Heap) → pre h → EventResult × Heap}
     {k : RustEffect.Output (RustEffect.Input.guardedModify EventResult pre modify) → Result α}
     {h' : Heap}
-    (hSpec : PartialSpec RustEffect.machine Q m h)
+    (hSpec : PartialSpec RustEffect.handler Q m h)
     (hReaches :
       Reaches m h (.vis (RustEffect.Input.guardedModify EventResult pre modify) k) h') :
     pre h' :=
-  (PartialSpec.runs RustEffect.machine_conjunctive RustEffect.machine_feasible
+  (PartialSpec.runs RustEffect.handler_conjunctive RustEffect.handler_feasible
     hSpec hReaches).vis_view.choose
 
 /-- What a partial ispec says of a run that stops. -/
 theorem dispec_evaluates {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : dispec P m Q) {h : Heap} (hPre : P h) {value : α} {h' : Heap}
     (hEval : Evaluates m h value h') : Q value h' :=
-  PartialSpec.evaluates RustEffect.machine_conjunctive RustEffect.machine_feasible
+  PartialSpec.evaluates RustEffect.handler_conjunctive RustEffect.handler_feasible
     (Q := fun value h' => Q value h') (dispec_partial hTriple hPre) hEval
 
 /-- What a partial ispec says of a run that does not: every event it reaches is
@@ -141,15 +155,15 @@ theorem eq_vis_of_unfold {m : Result α} {event : RustEffect.Input}
     m = ITree.vis event k :=
   eq_of_unfold hm
 
-/-- At a `vis` node total correctness supplies exactly what `EventSpec` demands
+/-- At a `vis` node total correctness supplies exactly what the handler demands
 of the event: the guard of a heap event together with total correctness of the
 continuation on the heap it produces, and `False` at failure. -/
 private theorem totalSpec_unfold_vis {m : Result α} {event : RustEffect.Input}
     {k : RustEffect.Output event → Result α} {Q : IPost α} {h : Heap}
     (hm : m.unfold = .vis event k)
-    (hSpec : TotalSpec RustEffect.machine (fun value h' => Q value h') m h) :
-    EventSpec event h fun answer h' =>
-      TotalSpec RustEffect.machine (fun value h'' => Q value h'') (k answer) h' := by
+    (hSpec : TotalSpec RustEffect.handler (fun value h' => Q value h') m h) :
+    RustEffect.handler.handle event h fun answer h' =>
+      TotalSpec RustEffect.handler (fun value h'' => Q value h'') (k answer) h' := by
   rw [eq_vis_of_unfold hm] at hSpec
   exact hSpec.vis_view
 
@@ -157,7 +171,7 @@ private theorem totalSpec_unfold_fail_false {m : Result α} {error : Error}
     {k : RustEffect.Output (RustEffect.Input.fail error) → Result α}
     {Q : IPost α} {h : Heap}
     (hm : m.unfold = .vis (RustEffect.Input.fail error) k)
-    (hSpec : TotalSpec RustEffect.machine (fun value h' => Q value h') m h) : False :=
+    (hSpec : TotalSpec RustEffect.handler (fun value h' => Q value h') m h) : False :=
   totalSpec_unfold_vis hm hSpec
 
 /-- Run `m` from `h`. The total-correctness proof supplies the guard of each
@@ -171,7 +185,7 @@ a structural recursion, and it must answer something on a tree with no `ret` in
 sight: `runOpt_spec` shows that `none` is unreachable under total correctness,
 because `TotalSpec` puts `False` in the divergence case of its layer. -/
 private def runOpt (m : Result α) (h : Heap) (Q : IPost α)
-    (hSpec : TotalSpec RustEffect.machine (fun value h' => Q value h') m h) :
+    (hSpec : TotalSpec RustEffect.handler (fun value h' => Q value h') m h) :
     Option (α × Heap) :=
   match hm : m.unfold with
   | .ret value => some (value, h)
@@ -187,12 +201,12 @@ partial_fixpoint
 /-- The interpreter answers, its answer satisfies the postcondition, and it is
 reached by an evaluation of the machine of `Aeneas.SepLogic.ST`. -/
 private theorem runOpt_spec (Q : IPost α) (m : Result α) (h : Heap)
-    (hSpec : TotalSpec RustEffect.machine (fun value h' => Q value h') m h) :
+    (hSpec : TotalSpec RustEffect.handler (fun value h' => Q value h') m h) :
     ∃ outcome : α × Heap, runOpt m h Q hSpec = some outcome ∧
       Q outcome.1 outcome.2 ∧ Evaluates m h outcome.1 outcome.2 := by
   refine hSpec.induction
     (P := fun t u => ∀ hSpec' :
-        TotalSpec RustEffect.machine (fun value h' => Q value h') t u,
+        TotalSpec RustEffect.handler (fun value h' => Q value h') t u,
       ∃ outcome : α × Heap,
       runOpt t u Q hSpec' = some outcome ∧
         Q outcome.1 outcome.2 ∧ Evaluates t u outcome.1 outcome.2) ?_ ?_ hSpec
@@ -219,21 +233,21 @@ private theorem runOpt_spec (Q : IPost α) (m : Result α) (h : Heap)
       obtain ⟨outcome, hRun, hPost, hEvaluates⟩ := ih _
       refine ⟨outcome, ?_, hPost, ?_⟩
       · simpa using hRun
-      · refine Handler.Evaluates.event (M := RustEffect.machine) ?_
+      · refine Handler.Evaluates.event (M := RustEffect.handler) ?_
         exact ⟨hPre, hEvaluates⟩
     · rename_i error k hm
       simp only [unfold_vis] at hm
       cases hm
 
 private theorem runOpt_isSome (Q : IPost α) (m : Result α) (h : Heap)
-    (hSpec : TotalSpec RustEffect.machine (fun value h' => Q value h') m h) :
+    (hSpec : TotalSpec RustEffect.handler (fun value h' => Q value h') m h) :
     (runOpt m h Q hSpec).isSome := by
   obtain ⟨outcome, hRun, -⟩ := runOpt_spec Q m h hSpec
   rw [hRun]
   rfl
 
 private theorem runOpt_get_spec (Q : IPost α) (m : Result α) (h : Heap)
-    (hSpec : TotalSpec RustEffect.machine (fun value h' => Q value h') m h) :
+    (hSpec : TotalSpec RustEffect.handler (fun value h' => Q value h') m h) :
     Q ((runOpt m h Q hSpec).get (runOpt_isSome Q m h hSpec)).1
         ((runOpt m h Q hSpec).get (runOpt_isSome Q m h hSpec)).2 ∧
       Evaluates m h ((runOpt m h Q hSpec).get (runOpt_isSome Q m h hSpec)).1
@@ -249,24 +263,24 @@ private theorem runOpt_get_spec (Q : IPost α) (m : Result α) (h : Heap)
 /-- Run `m` from `h`, certified: the value and heap come with the postcondition
 they satisfy and with the evaluation that reaches them. -/
 private def run (m : Result α) (h : Heap) (Q : IPost α)
-    (hSpec : TotalSpec RustEffect.machine (fun value h' => Q value h') m h) :
+    (hSpec : TotalSpec RustEffect.handler (fun value h' => Q value h') m h) :
     Outcome m Q h :=
   ⟨(runOpt m h Q hSpec).get (runOpt_isSome Q m h hSpec),
     runOpt_get_spec Q m h hSpec⟩
 
 /-- The value and heap produced by `run`. -/
 private def exec (m : Result α) (h : Heap) (Q : IPost α)
-    (hSpec : TotalSpec RustEffect.machine (fun value h' => Q value h') m h) :
+    (hSpec : TotalSpec RustEffect.handler (fun value h' => Q value h') m h) :
     α × Heap :=
   (run m h Q hSpec).val
 
 private theorem exec_post (m : Result α) (h : Heap) (Q : IPost α)
-    (hSpec : TotalSpec RustEffect.machine (fun value h' => Q value h') m h) :
+    (hSpec : TotalSpec RustEffect.handler (fun value h' => Q value h') m h) :
     Q (exec m h Q hSpec).1 (exec m h Q hSpec).2 :=
   (run m h Q hSpec).property.1
 
 private theorem exec_evaluates (m : Result α) (h : Heap) (Q : IPost α)
-    (hSpec : TotalSpec RustEffect.machine (fun value h' => Q value h') m h) :
+    (hSpec : TotalSpec RustEffect.handler (fun value h' => Q value h') m h) :
     Evaluates m h (exec m h Q hSpec).1 (exec m h Q hSpec).2 :=
   (run m h Q hSpec).property.2
 
