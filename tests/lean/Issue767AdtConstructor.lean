@@ -19,6 +19,7 @@ set_option maxRecDepth 2048
 
 namespace issue_767_adt_constructor
 
+
 /-- [issue_767_adt_constructor::Struct]
     Source: 'tests/src/issue-767-adt-constructor.rs', lines 5:0-5:19 -/
 @[reducible]
