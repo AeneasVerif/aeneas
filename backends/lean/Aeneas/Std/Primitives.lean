@@ -423,6 +423,8 @@ attribute [simp, grind =] Function.uncurry_apply_pair
 # Loops
 -/
 
+@[expose] section
+
 inductive ControlFlow (α : Type u) (β : Type v) where
   | cont (v : α) -- continue
   | done (v : β) -- break
@@ -434,6 +436,8 @@ def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) 
   | ControlFlow.cont x => loop body x
   | ControlFlow.done x => ok x
 partial_fixpoint
+
+end
 
 /-!
 # Misc

@@ -7,6 +7,7 @@ public meta import Aeneas.Std.Spec
 public meta import Aeneas.Std.Delab
 public import Aeneas.Data.Coinductive.ITree
 public import Aeneas.Data.Coinductive.Effect
+import all Init.Internal.Order.Basic
 public section
 
 namespace Aeneas.Std.WP
@@ -60,7 +61,7 @@ theorem dspec_admissible {α} (p : Post α )
             rename_i h
             simp [ok] at *
             rw [ITree.le_ret_inj _ _ h]
-            rfl
+            exact PartialOrder.rel_refl
           · simp [div, ok]
             rw [← ITree.div_is_bot]
             apply bot_le
@@ -108,7 +109,8 @@ We use this in the Hoare triple notation `⦃ ⦄`.
 Example: `f 0 ⦃ x y z => ... ⦄` desugars to
 `spec (f 0) (uncurry' fun x => uncurry' fun y z => ...)`.
 -/
-@[expose] def uncurry' {α β} (p : α → β → Prop) : α × β → Prop :=
+@[expose]
+def uncurry' {α β} (p : α → β → Prop) : α × β → Prop :=
   fun (x, y) => p x y
 
 @[simp] theorem uncurry'_pair x y (p : α → β → Prop) : uncurry' p (x, y) = p x y := by simp [uncurry']
@@ -174,7 +176,8 @@ theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α}
 def curry {α β γ} (f : α × β → γ) (x : α) : β → γ := fun y => f (x, y)
 
 /-- Implication -/
-@[expose] def imp (P Q : Prop) : Prop := P → Q
+@[expose]
+def imp (P Q : Prop) : Prop := P → Q
 
 @[simp]
 theorem imp_and_iff (P0 P1 Q : Prop) : imp (P0 ∧ P1) Q ↔ P0 → imp P1 Q := by simp [imp]
@@ -202,7 +205,8 @@ theorem spec_mono' {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : s
   grind only [qimp]
 
 /-- Implication of a `spec` predicate with quantifier -/
-@[expose] def qimp_spec {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) : Prop :=
+@[expose]
+def qimp_spec {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) : Prop :=
   ∀ x, P x → spec (k x) Q
 
 /-- This alternative to `spec_bind` controls the introduction of universal quantifiers with `imp_spec`. -/
@@ -271,6 +275,7 @@ theorem dspec_mono' {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : 
   grind only [qimp]
 
 /-- Implication of a `dspec` predicate with quantifier -/
+@[expose]
 def qimp_dspec {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) : Prop :=
   ∀ x, P x → dspec (k x) Q
 
