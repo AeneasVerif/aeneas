@@ -5,10 +5,6 @@ import Aeneas.Tactic.SepLogic.Frame
 
 Moving the existentials and pure facts of a precondition into the local context,
 and the entailment-facing names of `iframe`.
-
-The ispec lemmas these tactics apply (`ispec_exists`, `ispec_ipure`, …) are
-resolved by name at elaboration time, so this module does not depend on the
-module that defines them.
 -/
 
 namespace Aeneas.SepLogic
@@ -49,72 +45,98 @@ private partial def extractPure? (pre : Expr) : Option (Expr × Expr) :=
   else
     none
 
+/-- Copy a pure fact from an entailment's source into the local context without
+removing it from the source. -/
+theorem entails_pure_keep {P : Prop} {H H' H₀ : IProp}
+    (hExtract : H₀ ⊢ ⌜P⌝ ∗ H) (h : P → H₀ ⊢ H') : H₀ ⊢ H' := by
+  intro heap hH₀
+  have ⟨hP, _⟩ := (sep_pure_l P H heap).mp (hExtract heap hH₀)
+  exact h hP heap hH₀
+
 /-- One step of `iintro`: peel a quantifier or a pure fact off the precondition
-of a total or partial ispec. Fails when the precondition is purely spatial.
+of an entailment. Fails when the precondition is purely spatial.
 
 The precondition is unfolded (`wellFormed`, `isList`, …) only as far as needed to
-expose its head connective: applying `ispec_exists` or `ispec_ipure` blindly
-would let the unifier see through `sep`/`ipure` down to the raw heap predicate
-and peel a quantifier of the *model* instead. -/
+expose its head connective; this avoids peeling a quantifier of the underlying
+heap model instead. -/
 elab "iintro_step" : tactic => withMainContext do
+  let goal ← getMainGoal
+  let target ← instantiateMVars (← goal.getType)
+  let some entailment ← IFrame.exposeEntailment? target
+    | throwError "iintro_step: the goal is not a separation-logic entailment"
+  let args := entailment.getAppArgs
+  let source := args[0]!
+  let destination := args[1]!
   /- Float the existentials out of the separating conjunctions and drop the
      `emp`s left behind by previous steps, so that the head connective of the
      precondition is the one we want to peel. -/
-  let _ ← Aeneas.Simp.simpAt true
+  let (simpCtx, simprocs) ← Aeneas.Simp.mkSimpCtx true
     { dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1 }
+    .simp
     { addSimpThms :=
         #[``sep_exists_l_eq, ``sep_exists_r_eq,
           ``sep_emp_l_eq, ``sep_emp_r_eq] }
-    (.targets #[] true)
-  let goal ← getMainGoal
-  let target ← instantiateMVars (← goal.getType)
-  let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
-  let isISpec := fn.isConstOf `Aeneas.SepLogic.ispec
-  let isDispec := fn.isConstOf `Aeneas.SepLogic.dispec
-  unless (isISpec || isDispec) && args.size = 4 do
-    throwError "iintro_step: the goal is not a separation-logic ispec"
-  let precondition ← IFrame.exposeConnective args[1]!
+  let (simpResult, _) ← Lean.Meta.simp source simpCtx simprocs
+  let normalizedSource ← instantiateMVars simpResult.expr
+  let (goal, target, source) ←
+    if normalizedSource == source then
+      pure (goal, target, source)
+    else
+      let normalizedTarget ←
+        IFrame.mkEntailmentLike target source destination normalizedSource
+      let next ← mkFreshExprSyntheticOpaqueMVar normalizedTarget
+      let hEq ←
+        match simpResult.proof? with
+        | some proof => pure proof
+        | none => mkEqRefl source
+      goal.assign (← mkAppM ``entails_trans
+        #[← mkAppM ``entails_of_eq #[hEq], next])
+      pure (next.mvarId!, normalizedTarget, normalizedSource)
+  let precondition ← IFrame.exposeConnective source
   let head := precondition.consumeMData.getAppFn
-  let leadingPure ←
-    if precondition.consumeMData.isAppOfArity ``sep 2 then
-      pure ((← IFrame.exposeConnective precondition.consumeMData.appFn!.appArg!)
-        |>.consumeMData.isAppOfArity ``ipure 1)
-    else pure false
-  let specName :=
-    if isDispec then `Aeneas.SepLogic.dispec
-    else `Aeneas.SepLogic.ispec
-  let goal ← goal.change
-    (← mkAppOptM specName #[args[0]!, precondition, args[2]!, args[3]!])
+  let pure? ←
+    if precondition.consumeMData.isAppOfArity ``ipure 1 then
+      pure (some (precondition.consumeMData.appArg!, mkConst `Aeneas.SepLogic.emp))
+    else if precondition.consumeMData.isAppOfArity ``sep 2 then
+      let preArgs := precondition.consumeMData.getAppArgs
+      let leading ← IFrame.exposeConnective preArgs[0]!
+      if leading.consumeMData.isAppOfArity ``ipure 1 then
+        pure (some (leading.consumeMData.appArg!, preArgs[1]!))
+      else
+        pure (extractPure? precondition)
+    else
+      pure none
   if head.isConstOf ``iexists then
-    let lemmaName :=
-      if isDispec then `Aeneas.SepLogic.dispec_exists
-      else `Aeneas.SepLogic.ispec_exists
-    replaceMainGoal (← goal.apply (← mkConstWithFreshMVarLevels lemmaName))
-  else if head.isConstOf ``ipure then
-    let lemmaName :=
-      if isDispec then `Aeneas.SepLogic.dispec_ipure'
-      else `Aeneas.SepLogic.ispec_ipure'
-    replaceMainGoal (← goal.apply (← mkConstWithFreshMVarLevels lemmaName))
-  else if leadingPure then
-    let lemmaName :=
-      if isDispec then `Aeneas.SepLogic.dispec_ipure
-      else `Aeneas.SepLogic.ispec_ipure
-    replaceMainGoal (← goal.apply (← mkConstWithFreshMVarLevels lemmaName))
-  else if let some (proposition, rest) := extractPure? precondition then
-    let lemmaName :=
-      if isDispec then `Aeneas.SepLogic.dispec_ipure_anywhere
-      else `Aeneas.SepLogic.ispec_ipure_anywhere
+    let some u := head.constLevels!.head?
+      | throwError "could not determine the universe of {precondition}"
+    let preArgs := precondition.consumeMData.getAppArgs
+    let ι := preArgs[0]!
+    let body := preArgs[1]!
+    let newType ← withLocalDeclD `x ι fun x => do
+      let newSource ← Lean.Core.betaReduce (mkApp body x)
+      let newTarget ← IFrame.mkEntailmentLike target source destination newSource
+      mkForallFVars #[x] newTarget
+    let next ← mkFreshExprSyntheticOpaqueMVar newType
+    goal.assign (mkAppN (mkConst ``entails_exists_l [u])
+      #[ι, destination, body, next])
+    replaceMainGoal [next.mvarId!]
+  else if let some (proposition, rest) := pure? then
     let normalized := mkApp2 (mkConst ``sep)
       (mkApp (mkConst ``ipure) proposition) rest
-    let hExtract ← IFrame.proveEqAC precondition normalized
-    let thm := mkAppN (← mkConstWithFreshMVarLevels lemmaName)
-      #[args[0]!, proposition, rest, precondition, args[2]!, args[3]!, hExtract]
-    replaceMainGoal (← goal.apply thm)
+    let reorder ← mkAppM ``entails_of_eq #[← IFrame.proveEqAC precondition normalized]
+    let newTarget ← IFrame.mkEntailmentLike target source destination rest
+    let newType ← withLocalDeclD `h proposition fun h =>
+      mkForallFVars #[h] newTarget
+    let next ← mkFreshExprSyntheticOpaqueMVar newType
+    let extract := mkAppN (mkConst ``entails_pure_l)
+      #[proposition, rest, destination, next]
+    goal.assign (← mkAppM ``entails_trans #[reorder, extract])
+    replaceMainGoal [next.mvarId!]
   else
     throwError "iintro_step: the precondition has no quantifier or pure fact \
       left to extract:\n{precondition}"
 
-/-- Move the existentials and pure facts of a ispec's precondition into the
+/-- Move the existentials and pure facts of an entailment's precondition into the
 local context.
 
 `iintro` peels as many of them as it can, using inaccessible names.
@@ -144,10 +166,9 @@ private partial def isPullable (pre : Expr) : Bool :=
   else false
 
 private partial def pullPrecondition (goal : MVarId) : TacticM MVarId := goal.withContext do
-  let target := (← instantiateMVars (← goal.getType)).consumeMData
-  unless (target.isAppOfArity `Aeneas.SepLogic.ispec 4 ||
-      target.isAppOfArity `Aeneas.SepLogic.dispec 4) &&
-      isPullable target.getAppArgs[1]! do return goal
+  let target ← instantiateMVars (← goal.getType)
+  let some entailment ← IFrame.exposeEntailment? target | return goal
+  unless isPullable entailment.getAppArgs[0]! do return goal
   setGoals [goal]
   let state ← saveState
   try
@@ -165,49 +186,47 @@ elab "iintro_shallow" : tactic => withMainContext do
 
 /-- Run `iintro_shallow` on the left side of the top-level separating
 conjunction while treating its right side as an opaque frame. This is the
-variant used by `step` on continuation ispecs of the shape `Qm value ∗ F`. -/
+variant used by `step` on continuation preconditions of the shape
+`Qm value ∗ F`. -/
 elab "iintro_shallow_post" : tactic => withMainContext do
   let goal ← getMainGoal
-  let target := (← instantiateMVars (← goal.getType)).consumeMData
-  let isISpec := target.isAppOfArity `Aeneas.SepLogic.ispec 4
-  let isDispec := target.isAppOfArity `Aeneas.SepLogic.dispec 4
-  unless isISpec || isDispec do
-    evalTactic (← `(tactic| isimp))
-    return
-  let args := target.getAppArgs
-  let precondition := args[1]!.consumeMData
-  unless precondition.isAppOfArity ``sep 2 do
+  let target ← instantiateMVars (← goal.getType)
+  let some entailment ← IFrame.exposeEntailment? target
+    | evalTactic (← `(tactic| isimp))
+      return
+  let args := entailment.getAppArgs
+  let source := args[0]!.consumeMData
+  unless source.isAppOfArity ``sep 2 do
     evalTactic (← `(tactic| (isimp; iintro_shallow)))
     return
-  let preArgs := precondition.getAppArgs
-  let lemmaName :=
-    if isDispec then `Aeneas.SepLogic.dispec_introFrame
-    else `Aeneas.SepLogic.ispec_introFrame
-  let thm := mkApp3 (← mkConstWithFreshMVarLevels lemmaName)
-    args[0]! preArgs[0]! preArgs[1]!
-  replaceMainGoal (← goal.apply thm)
+  let sourceArgs := source.getAppArgs
+  let markedSource := mkApp2 (mkConst ``sep) sourceArgs[0]!
+    (mkApp (mkConst ``introFrame) sourceArgs[1]!)
+  let markedTarget ← IFrame.mkEntailmentLike target args[0]! args[1]! markedSource
+  let goal ← goal.change markedTarget
+  replaceMainGoal [goal]
   evalTactic (← `(tactic| (isimp; iintro_shallow)))
   unless (← getUnsolvedGoals).isEmpty do
     evalTactic (← `(tactic| (simp only [introFrame_eq]; isimp)))
 
-/-- One step of `iintro_keep`: copy the leading pure fact of the precondition of
-a ispec into the local context, *without* removing it from the precondition.
+/-- One step of `iintro_keep`: copy the leading pure fact of an entailment's
+precondition into the local context, *without* removing it from the
+precondition.
 
 `iintro_step` consumes the fact, but that is often the wrong thing here: the
-assertion has to keep it for the framing of the later
-steps (this is why `iintro` before a `step` can turn a working proof into a
-failing one).  Copying is always sound, and it is what makes the pointer of a
-callee's precondition (`s.head.get!`, say) reducible to the one the assertion
-owns.
+assertion has to keep it for the framing of later steps. Copying is always
+sound, and it is what makes a term mentioned by a callee's precondition
+reducible to the one the assertion owns.
 
 Fails when the fact is already in the context, so that `repeat` terminates. -/
 elab "iintro_keep_step" : tactic => withMainContext do
   let goal ← getMainGoal
   let target ← instantiateMVars (← goal.getType)
-  let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
-  unless fn.isConstOf `Aeneas.SepLogic.ispec && args.size = 4 do
-    throwError "iintro_keep_step: the goal is not a separation-logic ispec"
-  let precondition ← IFrame.exposeConnective args[1]!
+  let some entailment ← IFrame.exposeEntailment? target
+    | throwError "iintro_keep_step: the goal is not a separation-logic entailment"
+  let args := entailment.getAppArgs
+  let source := args[0]!
+  let precondition ← IFrame.exposeConnective source
   unless precondition.consumeMData.isAppOfArity ``sep 2 do
     throwError "iintro_keep_step: the precondition is not a separating conjunction"
   let leading ← IFrame.exposeConnective precondition.consumeMData.appFn!.appArg!
@@ -218,20 +237,16 @@ elab "iintro_keep_step" : tactic => withMainContext do
       pure !decl.isImplementationDetail <&&> isDefEq decl.type proposition then
     throwError "iintro_keep_step: this pure fact is already in the context"
   let exposed := mkApp2 (mkConst ``sep) leading precondition.consumeMData.appArg!
-  let goal ← goal.change
-    (← mkAppOptM `Aeneas.SepLogic.ispec #[args[0]!, exposed, args[2]!, args[3]!])
-  let [next] ← goal.apply
-    (← mkConstWithFreshMVarLevels `Aeneas.SepLogic.ispec_ipure_keep)
-    | throwError "iintro_keep_step: unexpected number of goals"
-  let (_, next) ← next.intro1P
-  /- Put the precondition back in its original, folded form: only the local
-     context should record that the step happened. -/
-  replaceMainGoal
-    [← next.change
-      (← mkAppOptM `Aeneas.SepLogic.ispec #[args[0]!, args[1]!, args[2]!, args[3]!])]
+  let hExtract ← mkAppM ``entails_of_eq #[← IFrame.proveEqAC precondition exposed]
+  let newType ← withLocalDeclD .anonymous proposition fun h =>
+    mkForallFVars #[h] target
+  let next ← mkFreshExprSyntheticOpaqueMVar newType
+  goal.assign (← mkAppM ``entails_pure_keep #[hExtract, next])
+  let (_, next) ← next.mvarId!.intro1P
+  replaceMainGoal [next]
 
-/-- Copy the pure facts of the precondition of a ispec into the local context,
-leaving the precondition untouched.  See `iintro_keep_step`. -/
+/-- Copy the pure facts of an entailment's precondition into the local context,
+leaving the precondition untouched. See `iintro_keep_step`. -/
 macro "iintro_keep" : tactic => `(tactic| repeat (iintro_keep_step; rename_i _))
 
 /-- `iframe` under the name used for entailment simplification. -/
