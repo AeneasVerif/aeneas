@@ -1,5 +1,8 @@
-import Aeneas.Std.Scalar.Core
-import Aeneas.Data.ListN
+module
+public import Aeneas.Std.Scalar.Core
+public import Aeneas.Data.ListN
+
+public section
 
 namespace Aeneas.Std
 open Aeneas.Data.ListN
@@ -15,7 +18,7 @@ structure Slice (α : Type u) where
   bound : leng ≤ Usize.max
 deriving BEq, ReflBEq, LawfulBEq, DecidableEq
 
-@[coe]
+@[expose, coe]
 def Slice.val {α} (s : Slice α) : List α := s.list.toList
 
 @[simp, scalar_tac s.val]
@@ -26,7 +29,7 @@ theorem Slice.property {α} (s : Slice α) : s.val.length ≤ Usize.max := by
 grind_pattern Slice.property => s.val
 grind_pattern [agrind] Slice.property => s.val
 
-def Slice.from {α} (l : List α) (h : l.length ≤ Usize.max) : Slice α :=
+@[expose] def Slice.from {α} (l : List α) (h : l.length ≤ Usize.max) : Slice α :=
   {
     leng := l.length
     list := .fromList l

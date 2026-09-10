@@ -1,10 +1,11 @@
-import Aeneas.Tactic.Conv
-import Aeneas.Tactic.Elab
-import Aeneas.Tactic.Misc
-import Aeneas.Tactic.RustAttributes
-import Aeneas.Tactic.Setup
-import Aeneas.Tactic.Simp
-import Aeneas.Tactic.Simproc
-import Aeneas.Tactic.Solver
-import Aeneas.Tactic.Step
-import Aeneas.Tactic.Tests
+module
+public import Aeneas.Tactic.Conv
+public import Aeneas.Tactic.Elab
+public import Aeneas.Tactic.Misc
+public import Aeneas.Tactic.RustAttributes
+public import Aeneas.Tactic.Setup
+public import Aeneas.Tactic.Simp
+public import Aeneas.Tactic.Simproc
+public import Aeneas.Tactic.Solver
+public import Aeneas.Tactic.Step
+public import Aeneas.Tactic.Tests

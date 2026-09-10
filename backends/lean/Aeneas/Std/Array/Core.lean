@@ -1,6 +1,8 @@
 /- Arrays/Slices -/
-import Aeneas.Std.Scalar.Core
-import Aeneas.Data.List.List
+module
+public import Aeneas.Std.Scalar.Core
+public import Aeneas.Data.List.List
+public section
 
 namespace Aeneas.Std
 
@@ -52,6 +54,7 @@ theorem List.mapM_with_length_spec{post : Nat → β → Prop} {f : α → Resul
       · grind
     · grind
 
+@[expose]
 def List.clone (clone : α → Result α) (l : List α) : Result ({ l' : List α // l'.length = l.length}) :=
   List.mapM_with_length clone l
 

@@ -1,7 +1,14 @@
 /- Arrays/Slices -/
-import Aeneas.Std.Slice
-import Aeneas.Std.Array.Array
-import Aeneas.Std.Core.Iter
+module
+public import Aeneas.Std.Slice
+public import Aeneas.Std.Array.Array
+public import Aeneas.Std.Core.Iter
+public meta import Aeneas.Std.Core.Iter
+meta import Aeneas.Std.Slice
+meta import Aeneas.Std.Array.Array
+public section
+
+@[expose] section
 
 namespace Aeneas.Std
 

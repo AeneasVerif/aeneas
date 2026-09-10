@@ -1,11 +1,13 @@
 /- Arrays/slices -/
-import Lean
-import Lean.Meta.Tactic.Simp
-import Init.Data.List.Basic
-import Mathlib.Tactic.Linarith
-import Aeneas.Std.Scalar.Core
-import Aeneas.Tactic.Solver.ScalarTac
-import Aeneas.Tactic.Step.Init
+module
+public import Lean
+public import Lean.Meta.Tactic.Simp
+public import Init.Data.List.Basic
+public import Mathlib.Tactic.Linarith
+public import Aeneas.Std.Scalar.Core
+public import Aeneas.Tactic.Solver.ScalarTac
+public import Aeneas.Tactic.Step.Init
+public section
 
 namespace Aeneas
 

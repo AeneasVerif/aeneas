@@ -1,6 +1,8 @@
-import Aeneas.Std.Core.Core
-import Aeneas.Std.Core.Result
-import Aeneas.Std.String
+module
+public import Aeneas.Std.Core.Core
+public import Aeneas.Std.Core.Result
+public import Aeneas.Std.String
+public section
 
 namespace Aeneas.Std
 
@@ -18,7 +20,7 @@ theorem core.option.Option.expect.spec {T : Type} (x : Option T) (msg: Str) (h :
   expect x msg ⦃ v => x = some v ⦄ := by
   simp only [expect, Result.ofOption]; grind
 
-@[rust_fun "core::option::{core::option::Option<@T>}::ok_or"]
+@[expose, rust_fun "core::option::{core::option::Option<@T>}::ok_or"]
 def core.option.Option.ok_or {T E : Type} (x : Option T) (e : E) :
   Result (core.result.Result T E) :=
   match x with

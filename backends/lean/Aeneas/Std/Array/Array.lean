@@ -1,9 +1,12 @@
 /- Arrays -/
-import Aeneas.Data.List
-import Aeneas.Tactic.Step.Init
-import Aeneas.Std.Array.Core
-import Aeneas.Std.Core.Default
-import Aeneas.Data.ListN
+module
+public import Aeneas.Data.List
+public import Aeneas.Tactic.Step.Init
+public import Aeneas.Std.Array.Core
+public import Aeneas.Std.Core.Default
+public import Aeneas.Data.ListN
+
+public section
 
 namespace Aeneas.Std
 
@@ -26,14 +29,14 @@ structure Array (α : Type u) (n : Usize) where
   list : ListN α n.val
 deriving BEq, ReflBEq, LawfulBEq, DecidableEq
 
-@[coe]
+@[expose, coe]
 def Array.val {α n} (a : Array α n) : List α := a.list.toList
 
 @[simp, scalar_tac_simps, simp_scalar_safe, simp_lists_safe, grind =, agrind =]
 theorem Array.property {α n} (s : Array α n) : s.val.length = n.val := by
   simp [Array.val, ListN_length]
 
-def Array.from {α n} (l : List α) (h : l.length = n.val) : Array α n :=
+@[expose] def Array.from {α n} (l : List α) (h : l.length = n.val) : Array α n :=
   {
     list := cast (congrArg (ListN α) h) (.fromList l)
   }

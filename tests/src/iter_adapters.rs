@@ -1,3 +1,4 @@
+//@ [lean] aeneas-args=-use-lean-modules false
 //@ [!lean] skip
 #![feature(register_tool)]
 #![register_tool(verify)]

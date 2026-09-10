@@ -1,4 +1,6 @@
-import AeneasMeta.Simp
+module
+public import AeneasMeta.Simp
+public section
 open Lean Meta
 
 namespace Aeneas.SimpBoolProp
@@ -8,7 +10,7 @@ namespace Aeneas.SimpBoolProp
 -/
 
 -- We can't define and use trace classes in the same file
-initialize registerTraceClass `SimpBoolProp
+meta initialize registerTraceClass `SimpBoolProp
 
 /-!
 # Simp Bool/Prop Simpsets

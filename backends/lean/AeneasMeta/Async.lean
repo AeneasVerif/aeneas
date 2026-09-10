@@ -1,3 +1,4 @@
-import AeneasMeta.Async.Async
-import AeneasMeta.Async.Test
-import AeneasMeta.Async.TestTactics
+module
+public import AeneasMeta.Async.Async
+public import AeneasMeta.Async.Test
+public import AeneasMeta.Async.TestTactics

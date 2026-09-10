@@ -1,9 +1,11 @@
-import Lean
-import Aeneas.Std.Global
-import Aeneas.Extract
-import AeneasMeta.BvEnumToBitVec
-import Aeneas.Data.Coinductive.ITree
-import Aeneas.Data.Coinductive.Effect
+module
+public import Lean
+public meta import Aeneas.Std.Global
+public import Aeneas.Extract
+public import AeneasMeta.BvEnumToBitVec
+public import Aeneas.Data.Coinductive.ITree
+public import Aeneas.Data.Coinductive.Effect
+public section
 
 namespace Aeneas
 
@@ -16,10 +18,17 @@ namespace Std
 open Lean Elab Command Term Meta
 open Aeneas.Data.Coinductive
 
+/-- `#assert e` checks that the boolean expression `e` evaluates to `true`, raising an error
+otherwise (like a Rust `assert!`). It is emitted by the extraction engine for functions marked
+`#[verify::test]`.
+
+**Note:** `#assert` *compiles and runs* `e` (via `evalTerm`), so
+- everything used directly in the expression must be meta-accessible
+- and everything called transitively by the expression must have its code available. -/
 syntax (name := assert) "#assert" term: command
 
 @[command_elab assert]
-unsafe
+meta unsafe
 def assertImpl : CommandElab := fun (stx: Syntax) => do
   runTermElabM (fun _ => do
     let r ← evalTerm Bool (mkConst ``Bool) stx[1]
@@ -38,7 +47,7 @@ info: true
 syntax (name := elabSyntax) "#elab" term: command
 
 @[command_elab elabSyntax]
-unsafe
+meta unsafe
 def elabImpl : CommandElab := fun (stx: Syntax) => do
   runTermElabM (fun _ => do
     /- Simply elaborate the syntax to check that it is correct -/
@@ -50,6 +59,8 @@ def elabImpl : CommandElab := fun (stx: Syntax) => do
 /-!
 # Results and Monadic Combinators
 -/
+
+@[expose] section
 
 inductive Error where
    | assertionFailure: Error
@@ -289,6 +300,11 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
   (Bind.bind (Bind.bind e g) h) =
   (Bind.bind e (λ x => Bind.bind (g x) h)) := by apply bind_assoc
 
+end
+
+unseal Result
+open Result
+
 /-!
 # Partial Fixpoint
 -/
@@ -323,7 +339,7 @@ directly.
 
 `uncurry` is purely internal to Aeneas' elaboration pipeline and should never
 be directly manipulated by the user. -/
-@[inline] def uncurry {α β γ} (f : α → β → γ) : α × β → γ :=
+@[inline, expose] def uncurry {α β γ} (f : α → β → γ) : α × β → γ :=
   fun (a, b) => f a b
 
 @[simp, grind =] theorem uncurry_apply_pair {α β γ} (f : α → β → γ) (a : α) (b : β) :
@@ -401,11 +417,13 @@ attribute [simp, grind =] Function.uncurry_apply_pair
     which appear inside a `lift`. As only a specific set of functions from the standard library are
     purified (i.e., don't live in `Result`), this should not be a big issue in practice.
   -/
-def lift {α : Type u} (x : α) : Result α := Result.ok x
+@[expose] def lift {α : Type u} (x : α) : Result α := Result.ok x
 
 /-!
 # Loops
 -/
+
+@[expose] section
 
 inductive ControlFlow (α : Type u) (β : Type v) where
   | cont (v : α) -- continue
@@ -418,6 +436,8 @@ def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) 
   | ControlFlow.cont x => loop body x
   | ControlFlow.done x => ok x
 partial_fixpoint
+
+end
 
 /-!
 # Misc
@@ -435,7 +455,7 @@ instance SubtypeLawfulBEq [BEq α] (p : α → Prop) [LawfulBEq α] : LawfulBEq 
 
 /- A helper function that converts failure (and any effects) to none and success to some
    TODO: move up to Core module? -/
-def Option.ofResult {a : Type u} (x : Result a) :
+@[expose] def Option.ofResult {a : Type u} (x : Result a) :
   Option a :=
   match x.match with
   | .ok x => .some x

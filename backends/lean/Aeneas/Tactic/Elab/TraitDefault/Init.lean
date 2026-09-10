@@ -1,4 +1,8 @@
-import Lean
+module
+public import Lean.Elab.PreDefinition.Basic
+public meta import Lean.Elab.DefView
+public meta import Lean.Elab.PreDefinition.Basic
+public section
 
 /-!
 # `impl_def` and `@[trait_default]`
@@ -120,13 +124,13 @@ open Lean.Parser.Term Lean.Parser.Command
 
 /-- Register the `@[trait_default]` tag attribute. Functions marked with this attribute
     are eligible for automatic unfolding by `impl_def` during field resolution. -/
-initialize traitDefaultAttr : TagAttribute ←
+meta initialize traitDefaultAttr : TagAttribute ←
   registerTagAttribute `trait_default
     "Marks a function as a trait default that can be unfolded by `impl_def`."
 
 /-! ## Trace class -/
 
-initialize registerTraceClass `Aeneas.implDef
+meta initialize registerTraceClass `Aeneas.implDef
 
 /-! ## Helpers -/
 
@@ -134,7 +138,7 @@ initialize registerTraceClass `Aeneas.implDef
 
     Used to decide whether a field value still depends on the self-reference and therefore
     needs further resolution. -/
-def exprContainsFVar (e : Expr) (fvarId : FVarId) : Bool :=
+meta def exprContainsFVar (e : Expr) (fvarId : FVarId) : Bool :=
   Option.isSome <| e.find? fun
     | .fvar id => id == fvarId
     | _ => false
@@ -147,7 +151,7 @@ def exprContainsFVar (e : Expr) (fvarId : FVarId) : Bool :=
 
     The traversal uses `.visit` (not `.done`) after unfolding so that nested
     `@[trait_default]` calls exposed by the unfolding are also processed. -/
-partial def unfoldTraitDefaults (e : Expr) : MetaM Expr := do
+meta partial def unfoldTraitDefaults (e : Expr) : MetaM Expr := do
   let env ← getEnv
   Core.transform e (pre := fun e => do
     let fn := e.getAppFn
@@ -175,7 +179,7 @@ partial def unfoldTraitDefaults (e : Expr) : MetaM Expr := do
 
     The `projMap` maps each projection function name to its field index, built from
     `StructureInfo.getProjFn?`. -/
-def substituteProjections (e : Expr) (selfFvarId : FVarId) (structName : Name)
+meta def substituteProjections (e : Expr) (selfFvarId : FVarId) (structName : Name)
     (resolvedFields : Std.HashMap Nat Expr) : MetaM Expr := do
   let env ← getEnv
   let some structInfo := getStructureInfo? env structName
@@ -243,7 +247,7 @@ def substituteProjections (e : Expr) (selfFvarId : FVarId) (structName : Name)
        - Stop early if an iteration makes no progress.
     4. Error if any fields remain unresolved.
     5. Reassemble the constructor application with resolved field values. -/
-def resolveStructFields (value : Expr) (selfFvarId : FVarId) (type : Expr) : MetaM Expr := do
+meta def resolveStructFields (value : Expr) (selfFvarId : FVarId) (type : Expr) : MetaM Expr := do
   let env ← getEnv
   let typeFn := type.getAppFn
   let .const structName _ := typeFn
@@ -318,6 +322,7 @@ def resolveStructFields (value : Expr) (selfFvarId : FVarId) (type : Expr) : Met
        compiles, and applies any declaration attributes (e.g., `@[simp]`). -/
 elab mods:declModifiers "impl_def " id:declId sig:optDeclSig val:declVal : command => do
   let modifiers ← elabModifiers mods
+  let inPublicScope := (← getScope).isPublic
   let (binders, type?) := expandOptDeclSig sig
   let typeStx ← match type? with
     | some t => pure t
@@ -330,6 +335,10 @@ elab mods:declModifiers "impl_def " id:declId sig:optDeclSig val:declVal : comma
       throwErrorAt val.raw "impl_def only supports `:= body` syntax"
 
   runTermElabM fun _sectionVars => do
+    let isPub :=
+      if inPublicScope || !(← getEnv).header.isModule then !modifiers.visibility.isPrivate
+      else modifiers.visibility.isPublic
+    let modifiers := { modifiers with visibility := if isPub then .public else .private }
     let ⟨shortDeclName, declName, levelNames, _⟩ ←
       Term.expandDeclId (← getCurrNamespace) (← getLevelNames) id modifiers
 
@@ -387,6 +396,7 @@ elab mods:declModifiers "impl_def " id:declId sig:optDeclSig val:declVal : comma
         }
 
         let docCtx := (← getLCtx, ← getLocalInstances)
-        addAndCompileNonRec docCtx preDef
+        withExporting (isExporting := isPub) do
+          addAndCompileNonRec docCtx preDef
 
 end Aeneas.TraitDefault

@@ -1,3 +1,5 @@
+module
+
 /-!
 # `ListN`: length-indexed lists
 
@@ -33,6 +35,8 @@ the list itself.
 See: https://github.com/AeneasVerif/aeneas/issues/1138
 -/
 
+public section
+
 namespace Aeneas.Data.ListN
 
 inductive ListN.{u} (α : Type u) : Nat → Type u where
@@ -40,12 +44,12 @@ inductive ListN.{u} (α : Type u) : Nat → Type u where
 | cons {n} : α → ListN α n → ListN α n.succ
 deriving BEq, ReflBEq, LawfulBEq, DecidableEq
 
-def ListN.toList {a n} (l : ListN a n) : List a :=
+@[expose] def ListN.toList {a n} (l : ListN a n) : List a :=
   match l with
   | .nil => .nil
   | .cons a l' => .cons a l'.toList
 
-def ListN.fromList {a} (l : List a) : ListN a l.length :=
+@[expose] def ListN.fromList {a} (l : List a) : ListN a l.length :=
   match l with
   | .nil => .nil
   | .cons a l' => .cons a (ListN.fromList l')

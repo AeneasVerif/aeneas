@@ -1,9 +1,11 @@
-import Aeneas.Tactic.Simp.SimpLists.SimpLists
-import Aeneas.Data.List.List
-import Aeneas.Data.Vector
-import Aeneas.Std.Array
-import Aeneas.Std.Slice
-import Aeneas.Std
+module
+public import Aeneas.Tactic.Simp.SimpLists.SimpLists
+public import Aeneas.Data.List.List
+public import Aeneas.Data.Vector
+public import Aeneas.Std.Array
+public import Aeneas.Std.Slice
+public import Aeneas.Std
+public section
 
 local macro_rules
 | `(tactic| get_elem_tactic) => `(tactic| grind)

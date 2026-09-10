@@ -1,7 +1,9 @@
-import Mathlib.Data.ZMod.Basic
-import Aeneas.Tactic.Solver.ScalarTac.ScalarTac
-import Aeneas.Std.Scalar.Core
-import Aeneas.Tactic.Simproc.ReduceZMod.ReduceZMod
+module
+public import Mathlib.Data.ZMod.Basic
+public import Aeneas.Tactic.Solver.ScalarTac.ScalarTac
+public import Aeneas.Std.Scalar.Core
+public import Aeneas.Tactic.Simproc.ReduceZMod.ReduceZMod
+public section
 
 namespace Aeneas
 

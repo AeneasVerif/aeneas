@@ -1,5 +1,10 @@
-import Lean
-import AeneasMeta.UtilsCore
+module
+public import Lean
+public meta import Lean.Elab.Tactic.Location
+public meta import Lean.Meta.Tactic.Rewrite
+public meta import Lean.Elab.Tactic.NormCast
+public import AeneasMeta.UtilsCore
+public section
 
 namespace Lean
 
@@ -9,16 +14,16 @@ namespace LocalContext
 
   -- Small utility: return the list of declarations in the context, from
   -- the last to the first.
-  def getAllDecls (lctx : Lean.LocalContext) : MetaM (List Lean.LocalDecl) :=
+  meta def getAllDecls (lctx : Lean.LocalContext) : MetaM (List Lean.LocalDecl) :=
     lctx.foldrM (fun d ls => do let d ← instantiateLocalDeclMVars d; pure (d :: ls)) []
 
   -- Return the list of declarations in the context, but filter the
   -- declarations which are considered as implementation details
-  def getDecls (lctx : Lean.LocalContext) : MetaM (List Lean.LocalDecl) := do
+  meta def getDecls (lctx : Lean.LocalContext) : MetaM (List Lean.LocalDecl) := do
     let ls ← lctx.getAllDecls
     pure (ls.filter (fun d => not d.isImplementationDetail))
 
-  def getAssumptions (lctx : Lean.LocalContext) : MetaM (List Lean.LocalDecl) := do
+  meta def getAssumptions (lctx : Lean.LocalContext) : MetaM (List Lean.LocalDecl) := do
     let ls ← lctx.getDecls
     ls.filterM (fun d => isProp d.type)
 
@@ -34,7 +39,7 @@ open Lean Elab Term Meta Tactic
 
 -- Useful helper to explore definitions and figure out the variant
 -- of their sub-expressions.
-def explore_term (incr : String) (e : Expr) : MetaM Unit :=
+meta def explore_term (incr : String) (e : Expr) : MetaM Unit :=
   match e with
   | .bvar _ => do logInfo m!"{incr}bvar: {e}"; return ()
   | .fvar _ => do logInfo m!"{incr}fvar: {e}"; return ()
@@ -66,7 +71,7 @@ def explore_term (incr : String) (e : Expr) : MetaM Unit :=
     logInfo m!"{incr}proj: {e}"
     explore_term (incr ++ "  ") struct
 
-def explore_decl (n : Name) : TermElabM Unit := do
+meta def explore_decl (n : Name) : TermElabM Unit := do
   logInfo m!"Name: {n}"
   let env ← getEnv
   let decl := env.constants.find! n
@@ -89,7 +94,8 @@ syntax (name := printDecl) "print_decl " ident : command
 
 open Lean.Elab.Command
 
-@[command_elab printDecl] def elabPrintDecl : CommandElab := fun stx => do
+@[command_elab printDecl]
+meta def elabPrintDecl : CommandElab := fun stx => do
   liftTermElabM do
     let id := stx[1]
     addCompletionInfo <| CompletionInfo.id id id.getId (danglingDot := false) {} none
@@ -97,7 +103,7 @@ open Lean.Elab.Command
     let name := cs.constName!
     explore_decl name
 
-def printDecls (decls : List LocalDecl) : MetaM Unit := do
+meta def printDecls (decls : List LocalDecl) : MetaM Unit := do
   let decls ← decls.foldrM (λ decl msg => do
     pure (m!"\n{decl.toExpr} : {← inferType decl.toExpr}" ++ msg)) m!""
   logInfo m!"# Ctx decls:{decls}"
@@ -118,7 +124,7 @@ elab "print_ctx_decls" : tactic => do
 -- The continuation takes as parameters:
 -- - the current depth of the expression (useful for printing/debugging)
 -- - the expression to explore
-partial def mapreduceVisit {a : Type} (k : Nat → a → Expr → MetaM (a × Expr))
+meta partial def mapreduceVisit {a : Type} (k : Nat → a → Expr → MetaM (a × Expr))
   (state : a) (e : Expr) : MetaM (a × Expr) := do
   let mapreduceVisitBinders (state : a) (xs : Array Expr) (k2 : a → MetaM (a × Expr)) :
     MetaM (a × Expr) := do
@@ -190,7 +196,7 @@ partial def mapreduceVisit {a : Type} (k : Nat → a → Expr → MetaM (a × Ex
 -- The continuation takes as parameters:
 -- - the current depth of the expression (useful for printing/debugging)
 -- - the expression to explore
-partial def mapVisit (k : Nat → Expr → MetaM Expr) (e : Expr) : MetaM Expr := do
+meta partial def mapVisit (k : Nat → Expr → MetaM Expr) (e : Expr) : MetaM Expr := do
   let k' i (_ : Unit) e := do
     let e ← k i e
     pure ((), e)
@@ -198,7 +204,7 @@ partial def mapVisit (k : Nat → Expr → MetaM Expr) (e : Expr) : MetaM Expr :
   pure e
 
 -- A reduce visitor
-partial def reduceVisit {a : Type} (k : Nat → a → Expr → MetaM a) (s : a) (e : Expr) : MetaM a := do
+meta partial def reduceVisit {a : Type} (k : Nat → a → Expr → MetaM a) (s : a) (e : Expr) : MetaM a := do
   let k' i (s : a) e := do
     let s ← k i s e
     pure (s, e)
@@ -207,14 +213,14 @@ partial def reduceVisit {a : Type} (k : Nat → a → Expr → MetaM a) (s : a) 
 
 -- Generate a fresh user name for an anonymous proposition to introduce in the
 -- assumptions
-def mkFreshAnonPropUserName := mkFreshUserName `_
+meta def mkFreshAnonPropUserName := mkFreshUserName `_
 
 section Methods
   variable [MonadLiftT MetaM m] [MonadControlT MetaM m] [Monad m] [MonadError m]
   variable {a : Type}
 
   /- Like `lambdaTelescopeN` but only destructs a fixed number of lambdas -/
-  def lambdaTelescopeN (e : Expr) (n : Nat) (k : Array Expr → Expr → m a) : m a :=
+  meta def lambdaTelescopeN (e : Expr) (n : Nat) (k : Array Expr → Expr → m a) : m a :=
     lambdaTelescope e fun xs body => do
     if xs.size < n then throwError "lambdaTelescopeN: not enough lambdas"
     let xs := xs.extract 0 n
@@ -225,14 +231,14 @@ section Methods
   /- Like `lambdaTelescope`, but only destructs one lambda
      TODO: is there an equivalent of this function somewhere in the
      standard library? -/
-  def lambdaOne (e : Expr) (k : Expr → Expr → m a) : m a :=
+  meta def lambdaOne (e : Expr) (k : Expr → Expr → m a) : m a :=
     lambdaTelescopeN e 1 λ xs b => k (xs[0]!) b
 
-  def isExists (e : Expr) : Bool := e.getAppFn.isConstOf ``Exists ∧ e.getAppNumArgs = 2
+  meta def isExists (e : Expr) : Bool := e.getAppFn.isConstOf ``Exists ∧ e.getAppNumArgs = 2
 
   -- Remark: Lean doesn't find the inhabited and nonempty instances if we don'
   -- put them explicitely in the signature
-  partial def existsTelescopeProcess [Inhabited (m a)] [Nonempty (m a)]
+  meta partial def existsTelescopeProcess [Inhabited (m a)] [Nonempty (m a)]
     (fvars : Array Expr) (e : Expr) (k : Array Expr → Expr → m a) : m a := do
     -- Attempt to deconstruct an existential
     if isExists e then do
@@ -243,7 +249,7 @@ section Methods
       -- No existential: call the continuation
       k fvars e
 
-  def existsTelescope [Inhabited (m a)] [Nonempty (m a)] (e : Expr) (k : Array Expr → Expr → m a) : m a := do
+  meta def existsTelescope [Inhabited (m a)] [Nonempty (m a)] (e : Expr) (k : Array Expr → Expr → m a) : m a := do
     existsTelescopeProcess #[] e k
 
 end Methods
@@ -254,7 +260,7 @@ inductive Location where
   /-- Same as Location -/
   | targets (hypotheses : Array FVarId) (type : Bool)
 
-def addDeclTac {α} (name : Name) (val : Expr) (type : Expr) (asLet : Bool) (m : Expr → TacticM α) :
+meta def addDeclTac {α} (name : Name) (val : Expr) (type : Expr) (asLet : Bool) (m : Expr → TacticM α) :
   TacticM α :=
   -- I don't think we need that
   withMainContext do
@@ -278,7 +284,7 @@ def addDeclTac {α} (name : Name) (val : Expr) (type : Expr) (asLet : Bool) (m :
     -- after the declaration was added, so it will persist
     m nval
 
-def addDeclTacSyntax (name : Name) (val : Syntax) (asLet : Bool) : TacticM Unit :=
+meta def addDeclTacSyntax (name : Name) (val : Syntax) (asLet : Bool) : TacticM Unit :=
   -- I don't think we need that
   withMainContext do
   --
@@ -306,7 +312,7 @@ example (x : Bool) : Nat := by
   cases x <;> custom_let x := 3 <;> apply x
 
 -- Attempt to apply a tactic
-def tryTac (tac : TacticM Unit) : TacticM Unit := do
+meta def tryTac (tac : TacticM Unit) : TacticM Unit := do
   let _ ← tryTactic tac
 
 /-- Copy/pasted from Mathlib because we do not want to add it as a dependency for this module
@@ -333,7 +339,7 @@ def allGoals (tac : TacticM Unit) : TacticM Unit := do
     We sometimes use this rather than `allGoals`, because when the tactic throws
     an exception that we attempt to catch outside, the behavior can be quite surprising.
  -/
-def allGoalsNoRecover (tac : TacticM Unit) : TacticM Unit := do
+meta def allGoalsNoRecover (tac : TacticM Unit) : TacticM Unit := do
   let mvarIds ← getGoals
   let mut mvarIdsNew := #[]
   for mvarId in mvarIds do
@@ -344,7 +350,7 @@ def allGoalsNoRecover (tac : TacticM Unit) : TacticM Unit := do
   setGoals mvarIdsNew.toList
 
 -- Repeatedly apply a tactic
-partial def repeatTac (tac : TacticM Unit) : TacticM Unit := do
+meta partial def repeatTac (tac : TacticM Unit) : TacticM Unit := do
   try
     tac
     allGoalsNoRecover (focus (repeatTac tac))
@@ -362,19 +368,19 @@ def firstTacSolve (tacl : List (TacticM Unit)) : TacticM Unit := do
       if ¬ gl.isEmpty then throwError "tactic failed"
     catch _ => firstTacSolve tacl
 
-def isConj (e : Expr) : MetaM Bool :=
+meta def isConj (e : Expr) : MetaM Bool :=
   e.consumeMData.withApp fun f args => pure (f.isConstOf ``And ∧ args.size = 2)
 
 -- Return the first conjunct if the expression is a conjunction, or the
 -- expression itself otherwise. Also return the second conjunct if it is a
 -- conjunction.
-def optSplitConj (e : Expr) : Expr × Option Expr :=
+meta def optSplitConj (e : Expr) : Expr × Option Expr :=
   e.consumeMData.withApp fun f args =>
   if f.isConstOf ``And ∧ args.size = 2 then (args[0]!, some (args[1]!))
   else (e, none)
 
 -- Tactic to split on a conjunction.
-partial def splitConjs (e : Expr) : List Expr :=
+meta partial def splitConjs (e : Expr) : List Expr :=
   let (e, optE) := optSplitConj e.consumeMData
   match optE with
   | none => [e]
@@ -382,7 +388,7 @@ partial def splitConjs (e : Expr) : List Expr :=
     e :: splitConjs e'
 
 -- Split the goal if it is a conjunction
-def splitConjTarget : TacticM Unit := do
+meta def splitConjTarget : TacticM Unit := do
   withMainContext do
   let g ← getMainTarget
   trace[Utils] "splitConjTarget: goal: {g}"
@@ -441,13 +447,13 @@ partial def destProdsVal (x : Expr) : List Expr :=
 
 -- Return the set of FVarIds in the expression
 -- TODO: this collects fvars introduced in the inner bindings
-partial def getFVarIds (e : Expr) (hs : Std.HashSet FVarId := Std.HashSet.emptyWithCapacity) : MetaM (Std.HashSet FVarId) := do
+meta partial def getFVarIds (e : Expr) (hs : Std.HashSet FVarId := Std.HashSet.emptyWithCapacity) : MetaM (Std.HashSet FVarId) := do
   reduceVisit (fun _ (hs : Std.HashSet FVarId) e =>
     if e.isFVar then pure (hs.insert e.fvarId!) else pure hs)
     hs e
 
 -- Return the set of MVarIds in the expression
-partial def getMVarIds (e : Expr) (hs : Std.HashSet MVarId := Std.HashSet.emptyWithCapacity) : MetaM (Std.HashSet MVarId) := do
+meta partial def getMVarIds (e : Expr) (hs : Std.HashSet MVarId := Std.HashSet.emptyWithCapacity) : MetaM (Std.HashSet MVarId) := do
   reduceVisit (fun _ (hs : Std.HashSet MVarId) e =>
     if e.isMVar then pure (hs.insert e.mvarId!) else pure hs)
     hs e
@@ -456,14 +462,14 @@ partial def getMVarIds (e : Expr) (hs : Std.HashSet MVarId := Std.HashSet.emptyW
 def assumptionTac : TacticM Unit :=
   liftMetaTactic fun mvarId => do mvarId.assumption; pure []
 
-def filterAssumptionTacPreprocess : TacticM (DiscrTree FVarId) := do
+meta def filterAssumptionTacPreprocess : TacticM (DiscrTree FVarId) := do
   let mut dtree := DiscrTree.empty
   for decl in (← (← getLCtx).getDecls) do
     dtree ← dtree.insert decl.type decl.fvarId
   pure dtree
 
 /-- Return `true` if managed to close goal `mvarId` using an assumption. -/
-def filterAssumptionTacCore (dtree : DiscrTree FVarId) : TacticM Bool := do
+meta def filterAssumptionTacCore (dtree : DiscrTree FVarId) : TacticM Bool := do
   withMainContext do
   let g ← getMainGoal
   let type ← instantiateMVars (← g.getType)
@@ -485,7 +491,7 @@ def filterAssumptionTacCore (dtree : DiscrTree FVarId) : TacticM Bool := do
     easily triggers "maximum recursion reached" errors when there are big integer constants in the
     context.
 -/
-def filterAssumptionTac : TacticM Bool := do
+meta def filterAssumptionTac : TacticM Bool := do
   let dtree ← filterAssumptionTacPreprocess
   filterAssumptionTacCore dtree
 
@@ -508,7 +514,7 @@ example (x y : Nat) (_ : y * 3000 ≤ 1) (_ : x * 3000 ≤ 1) : y * 3000 ≤ 1 :
   fassumption
 
 /- List all the local declarations matching the goal. -/
-def getMatchingAssumptions (type : Expr) (transparency : Meta.TransparencyMode := .reducible) :
+meta def getMatchingAssumptions (type : Expr) (transparency : Meta.TransparencyMode := .reducible) :
     MetaM (List (LocalDecl × Name)) :=
   withTransparency transparency do
   let typeType ← inferType type
@@ -526,10 +532,10 @@ def getMatchingAssumptions (type : Expr) (transparency : Meta.TransparencyMode :
     restoreState s
     pure x
 
-def singleAssumptionTacPreprocess := filterAssumptionTacPreprocess
+meta def singleAssumptionTacPreprocess := filterAssumptionTacPreprocess
 
 /-- `instMVars`: if `true`, we allow instantiating meta-variables -/
-def singleAssumptionTacCore (dtree : DiscrTree FVarId) (instMVars : Bool) : TacticM Unit := do
+meta def singleAssumptionTacCore (dtree : DiscrTree FVarId) (instMVars : Bool) : TacticM Unit := do
   withMainContext do
   let mvarId ← getMainGoal
   mvarId.checkNotAssigned `sassumption
@@ -569,7 +575,7 @@ def singleAssumptionTacCore (dtree : DiscrTree FVarId) (instMVars : Bool) : Tact
 
    We implement this behaviour to make sure we do not trigger spurious instantiations of meta-variables.
 -/
-def singleAssumptionTac : TacticM Unit := do
+meta def singleAssumptionTac : TacticM Unit := do
   let dtree ← singleAssumptionTacPreprocess
   singleAssumptionTacCore dtree true
 
@@ -586,7 +592,7 @@ example (x y z w : Int) (h0 : x < y) (_ : x < w) (h1 : y < z) : x < z := by
 
    TODO: there must be simpler. Use use _root_.Lean.MVarId.cases for instance.
    On the other hand this tactic is a good reference for this kind of manipulations. -/
-def splitDisjTac (h : Expr) (kleft kright : Expr → TacticM Unit) : TacticM Unit := do
+meta def splitDisjTac (h : Expr) (kleft kright : Expr → TacticM Unit) : TacticM Unit := do
   trace[Utils] "assumption on which to split: {h}"
   -- Retrieve the main goal
   withMainContext do
@@ -642,7 +648,7 @@ def splitDisjTac (h : Expr) (kleft kright : Expr → TacticM Unit) : TacticM Uni
   setGoals (leftGoals ++ rightGoals ++ goals)
   trace[Utils] "new goals: {← getUnsolvedGoals}"
 
-partial def splitDisjsTac (h : Expr) : TacticM Unit :=
+meta partial def splitDisjsTac (h : Expr) : TacticM Unit :=
   tryTac (splitDisjTac h splitDisjsTac splitDisjsTac)
 
 elab "split_disj" " at " n:ident : tactic => do
@@ -667,7 +673,7 @@ example (x : Int) (h : x = 0 ∨ x = 1 ∨ x = 2) : x ≤ 2 := by
 
 -- Tactic to split on an exists.
 -- `h` must be an FVar
-def splitExistsTac (h : Expr) (optId : Option Name) (k : Expr → Expr → TacticM α) : TacticM α := do
+meta def splitExistsTac (h : Expr) (optId : Option Name) (k : Expr → Expr → TacticM α) : TacticM α := do
   withMainContext do
   let goal ←  getMainGoal
   let hTy ← inferType h
@@ -708,7 +714,7 @@ def listTryPopHead (ls : List α) : Option α × List α :=
   If `ids` is not empty, we use it to name the introduced variables. We
   transmit the stripped expression and the remaining ids to the continuation.
  -/
-partial def splitAllExistsTac [Inhabited α] (h : Expr) (ids : List (Option Name))
+meta partial def splitAllExistsTac [Inhabited α] (h : Expr) (ids : List (Option Name))
   (k : Array Expr → Expr → List (Option Name) → TacticM α) : TacticM α := do
   let rec run (fvars : Array Expr) h ids := do
     if isExists (← inferType h) then do
@@ -721,7 +727,7 @@ partial def splitAllExistsTac [Inhabited α] (h : Expr) (ids : List (Option Name
   run #[] h ids
 
 -- Tactic to split on a conjunction.
-def splitConjTac (h : Expr) (optIds : Option (Name × Name)) (k : Expr → Expr → TacticM α)  : TacticM α := do
+meta def splitConjTac (h : Expr) (optIds : Option (Name × Name)) (k : Expr → Expr → TacticM α)  : TacticM α := do
   withMainContext do
   let goal ←  getMainGoal
   let hTy ← inferType h
@@ -752,7 +758,7 @@ def splitConjTac (h : Expr) (optIds : Option (Name × Name)) (k : Expr → Expr 
     throwError "Not a conjunction"
 
 -- Tactic to fully split a conjunction
-partial def splitFullConjTacAux [Inhabited α] [Nonempty α] (keepCurrentName : Bool) (l : List Expr) (h : Expr) (k : List Expr → TacticM α)  : TacticM α := do
+meta partial def splitFullConjTacAux [Inhabited α] [Nonempty α] (keepCurrentName : Bool) (l : List Expr) (h : Expr) (k : List Expr → TacticM α)  : TacticM α := do
   try
     let ids ← do
       if keepCurrentName then do
@@ -770,12 +776,12 @@ partial def splitFullConjTacAux [Inhabited α] [Nonempty α] (keepCurrentName : 
 
 -- Tactic to fully split a conjunction
 -- `keepCurrentName`: if `true`, then the first conjunct has the name of the original assumption
-def splitFullConjTac [Inhabited α] [Nonempty α] (keepCurrentName : Bool) (h : Expr) (k : List Expr → TacticM α)  : TacticM α := do
+meta def splitFullConjTac [Inhabited α] [Nonempty α] (keepCurrentName : Bool) (h : Expr) (k : List Expr → TacticM α)  : TacticM α := do
   splitFullConjTacAux keepCurrentName [] h (λ l => k l.reverse)
 
 syntax optAtArgs := ("at" ident)?
 
-def elabOptAtArgs (args : TSyntax `Aeneas.Utils.optAtArgs) : TacticM (Option Expr) := do
+meta def elabOptAtArgs (args : TSyntax `Aeneas.Utils.optAtArgs) : TacticM (Option Expr) := do
   withMainContext do
   let args := (args.raw.getArgs[0]!).getArgs
   if args.size > 0 then do
@@ -822,14 +828,14 @@ example (h : ∃ x y z, x + y + z ≥ 0) : ∃ x, x ≥ 0 := by
   exists x + y + z
 
 /- Adapted from Elab.Tactic.Rewrite -/
-def rewriteTarget (eqThm : Expr) (symm : Bool) (config : Rewrite.Config := {}) : TacticM Unit := do
+meta def rewriteTarget (eqThm : Expr) (symm : Bool) (config : Rewrite.Config := {}) : TacticM Unit := do
   Term.withSynthesize <| withMainContext do
     let r ← (← getMainGoal).rewrite (← getMainTarget) eqThm symm (config := config)
     let mvarId' ← (← getMainGoal).replaceTargetEq r.eNew r.eqProof
     replaceMainGoal (mvarId' :: r.mvarIds)
 
 /- Adapted from Elab.Tactic.Rewrite -/
-def rewriteLocalDecl (eqThm : Expr) (symm : Bool) (fvarId : FVarId) (config : Rewrite.Config := {}) :
+meta def rewriteLocalDecl (eqThm : Expr) (symm : Bool) (fvarId : FVarId) (config : Rewrite.Config := {}) :
     TacticM Unit := withMainContext do
   -- Note: we cannot execute `replaceLocalDecl` inside `Term.withSynthesize`.
   -- See issues #2711 and #2727.
@@ -840,7 +846,7 @@ def rewriteLocalDecl (eqThm : Expr) (symm : Bool) (fvarId : FVarId) (config : Re
   replaceMainGoal (replaceResult.mvarId :: rwResult.mvarIds)
 
 /- Adapted from Elab.Tactic.Rewrite -/
-def rewriteWithThms
+meta def rewriteWithThms
   (thms : List (Bool × Expr))
   (rewrite : (symm : Bool) → (thm : Expr) → TacticM Unit)
   : TacticM Unit := do
@@ -852,7 +858,7 @@ def rewriteWithThms
   go thms
 
 /- Adapted from Elab.Tactic.Rewrite -/
-def evalRewriteSeqAux (cfg : Rewrite.Config) (thms : List (Bool × Expr)) (loc : Tactic.Location) : TacticM Unit :=
+meta def evalRewriteSeqAux (cfg : Rewrite.Config) (thms : List (Bool × Expr)) (loc : Tactic.Location) : TacticM Unit :=
   rewriteWithThms thms fun symm term => do
     withLocation loc
       (rewriteLocalDecl term symm · cfg)
@@ -860,7 +866,7 @@ def evalRewriteSeqAux (cfg : Rewrite.Config) (thms : List (Bool × Expr)) (loc :
       (throwTacticEx `rewrite · "did not find instance of the pattern in the current goal")
 
 /-- `rpt`: if `true`, repeatedly rewrite -/
-def rewriteAt (cfg : Rewrite.Config) (rpt : Bool)
+meta def rewriteAt (cfg : Rewrite.Config) (rpt : Bool)
   (thms : List (Bool × Name)) (loc : Tactic.Location) : TacticM Unit := do
   -- Lookup the theorems
   let lookupThm (x : Bool × Name) : TacticM (List (Bool × Expr)) := do
@@ -882,7 +888,7 @@ def rewriteAt (cfg : Rewrite.Config) (rpt : Bool)
   else
     evalRewriteSeqAux cfg thms loc
 
-@[inline] def liftMetaTactic2 (tactic : MVarId → MetaM (Option (α × MVarId))) : TacticM (Option α) :=
+@[inline] meta def liftMetaTactic2 (tactic : MVarId → MetaM (Option (α × MVarId))) : TacticM (Option α) :=
   withMainContext do
     if let some (res, mvarId) ← tactic (← getMainGoal) then
       replaceMainGoal [mvarId]
@@ -892,14 +898,14 @@ def rewriteAt (cfg : Rewrite.Config) (rpt : Bool)
       pure none
 
 /-- Copy/paster from `norm_cast`: we need to retrieve the new fvar id -/
-def normCastHyp (cfg : Simp.NormCastConfig) (fvarId : FVarId) : TacticM (Option FVarId) :=
+meta def normCastHyp (cfg : Simp.NormCastConfig) (fvarId : FVarId) : TacticM (Option FVarId) :=
   liftMetaTactic2 fun goal => do
     let hyp ← instantiateMVars (← fvarId.getDecl).type
     let prf ← NormCast.derive hyp cfg
     return (← applySimpResultToLocalDecl goal fvarId prf false)
 
 /- Return `none` if the goal was closed, otherwise return the modified fvar ids -/
-def normCastAt (loc : Location) : TacticM (Option (Array (FVarId))) := do
+meta def normCastAt (loc : Location) : TacticM (Option (Array (FVarId))) := do
   withMainContext do
   match loc with
   | .targets asms tgt =>
@@ -982,7 +988,7 @@ end
 /-- Split anything in the context, and return the resulting set of subgoals.
     Raise an exception if we couldn't split.
  -/
-def splitAny : TacticM (List MVarId) := do
+meta def splitAny : TacticM (List MVarId) := do
   -- This is taken from `evalSplit`
   let mvarId ← getMainGoal
   let fvarIds ← mvarId.getNondepPropHyps
@@ -1005,7 +1011,7 @@ def splitLocalDecl (mvarId : MVarId) (fvarId : FVarId) : TacticM (Option (List (
       pure (mvarId, nfvarIds)
 
 /-- Repeteadly split the disjunctions in the context, then apply a tactic when we can't split anymore -/
-partial def splitAll (endTac : TacticM Unit) : TacticM Unit := do
+meta partial def splitAll (endTac : TacticM Unit) : TacticM Unit := do
   withMainContext do
   try
     let mvarIds ← splitAny
@@ -1059,7 +1065,7 @@ example (x y : Int) : True := by
   dcases h: x = y <;> simp
 
 /-- Inspired by the `clear` tactic -/
-def clearFVarIds (fvarIds : Array FVarId) : TacticM Unit := do
+meta def clearFVarIds (fvarIds : Array FVarId) : TacticM Unit := do
   let fvarIds ← withMainContext <| sortFVarIds fvarIds
   for fvarId in fvarIds.reverse do
     withMainContext do
@@ -1070,11 +1076,11 @@ def clearFVarIds (fvarIds : Array FVarId) : TacticM Unit := do
 namespace MathlibDuplicate
   /-- Given a local context and an array of `FVarIds` assumed to be in that local context, remove all
     implementation details. -/
-    def filterOutImplementationDetails (lctx : LocalContext) (fvarIds : Array FVarId) : Array FVarId :=
+    meta def filterOutImplementationDetails (lctx : LocalContext) (fvarIds : Array FVarId) : Array FVarId :=
       fvarIds.filter (fun fvar => ! (lctx.fvarIdToDecl.find! fvar).isImplementationDetail)
 
     /-- Elaborate syntax for an `FVarId` in the local context of the given goal. -/
-    def getFVarIdAt (goal : MVarId) (id : Syntax) : TacticM FVarId := withRef id do
+    meta def getFVarIdAt (goal : MVarId) (id : Syntax) : TacticM FVarId := withRef id do
       -- use apply-like elaboration to suppress insertion of implicit arguments
       let e ← goal.withContext do
         elabTermForApply id (mayPostpone := false)
@@ -1089,7 +1095,7 @@ namespace MathlibDuplicate
 
     If `includeImplementationDetails` is `false` (the default), we filter out implementation details
     (`implDecl`s and `auxDecl`s) from the resulting list of `FVarId`s. -/
-    def getFVarIdsAt (goal : MVarId) (ids : Option (Array Syntax) := none)
+    meta def getFVarIdsAt (goal : MVarId) (ids : Option (Array Syntax) := none)
         (includeImplementationDetails : Bool := false) : TacticM (Array FVarId) :=
       goal.withContext do
         let lctx := (← goal.getDecl).lctx
@@ -1103,7 +1109,7 @@ namespace MathlibDuplicate
 end MathlibDuplicate
 
 /-- Minimize the goal by removing all the unnecessary variables and assumptions -/
-partial def minimizeGoal : TacticM Unit := do
+meta partial def minimizeGoal : TacticM Unit := do
   withMainContext do
   /- Retrieve the goal -/
   let goalTy ← instantiateMVars (← (← getMainGoal).getType)
@@ -1186,7 +1192,7 @@ elab "minimize_goal" : tactic => do
   minimizeGoal
 
 /-- Print the goal as an auxiliary lemma that can be copy-pasted by the user -/
-def extractGoal (ref : Syntax) (fullGoal : Bool) : TacticM Unit := do
+meta def extractGoal (ref : Syntax) (fullGoal : Bool) : TacticM Unit := do
   /- First minimize the goal, if necessary -/
   if ¬ fullGoal then
     minimizeGoal
@@ -1337,7 +1343,7 @@ example (i : Nat) (h : i ≤ 7) :
   apply h
 
 /-- Introduce an auxiliary assertion for the goal -/
-def extractAssert (ref : Syntax) : TacticM Unit := do
+meta def extractAssert (ref : Syntax) : TacticM Unit := do
   withMainContext do
   let goal ← (← getMainGoal).getType
   let goal ← Lean.Meta.Tactic.TryThis.delabToRefinableSyntax goal
@@ -1380,7 +1386,7 @@ def mkProd (x y : Expr) : MetaM Expr :=
    For instance, deconstructs `(a : Type) × List a` into
    `Type` and `λ a => List a`.
  -/
-def getSigmaTypes (ty : Expr) : MetaM (Expr × Expr) := do
+meta def getSigmaTypes (ty : Expr) : MetaM (Expr × Expr) := do
   ty.withApp fun f args => do
   if ¬ f.isConstOf ``Sigma ∨ args.size ≠ 2 then
     throwError "Invalid argument to getSigmaTypes: {ty}"
@@ -1456,7 +1462,7 @@ def mkProdsType (xl : List Expr) : MetaM Expr :=
    Also, we stop at the first input that we treat as an
    input type.
  -/
-def splitInputArgs (in_tys : Array Expr) (out_ty : Expr) : MetaM (Array Expr × Array Expr) := do
+meta def splitInputArgs (in_tys : Array Expr) (out_ty : Expr) : MetaM (Array Expr × Array Expr) := do
   -- Look for the first parameter which appears in the subsequent parameters
   let rec splitAux (in_tys : List Expr) : MetaM (Std.HashSet FVarId × List Expr × List Expr) :=
     match in_tys with
@@ -1485,7 +1491,7 @@ def splitInputArgs (in_tys : Array Expr) (out_ty : Expr) : MetaM (Array Expr × 
   pure (Array.mk in_tys, Array.mk in_args)
 
 /- Apply a lambda expression to some arguments, simplifying the lambdas -/
-def applyLambdaToArgs (e : Expr) (xs : Array Expr) : MetaM Expr := do
+meta def applyLambdaToArgs (e : Expr) (xs : Array Expr) : MetaM Expr := do
   lambdaTelescopeN e xs.size fun vars body =>
   -- Create the substitution
   let s : Std.HashMap FVarId Expr := Std.HashMap.ofList (List.zip (vars.toList.map Expr.fvarId!) xs.toList)
@@ -1510,7 +1516,7 @@ def applyLambdaToArgs (e : Expr) (xs : Array Expr) : MetaM Expr := do
    Example:
    `⟨ True, 3 ⟩ : (x : Bool) × (if x then Int else Unit)`
  -/
-def mkSigmasVal (ty : Expr) (xl : List Expr) : MetaM Expr :=
+meta def mkSigmasVal (ty : Expr) (xl : List Expr) : MetaM Expr :=
   match xl with
   | [] => do
     trace[Utils] "mkSigmasVal: []"
@@ -1693,7 +1699,7 @@ def mkProdsMatchOrUnit (xl : List Expr) (out : Expr) : MetaM Expr :=
 
     We return the pair: (original assumptions, new assumptions)
 -/
-def duplicateAssumptions (toDuplicate : Option (Array FVarId) := none) :
+meta def duplicateAssumptions (toDuplicate : Option (Array FVarId) := none) :
   TacticM (Array FVarId × Array FVarId) :=
   withMainContext do
   let decls ← do

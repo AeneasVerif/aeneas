@@ -1,5 +1,7 @@
-import Aeneas.Std.Scalar.Ops.Mul
-import Aeneas.Std.Scalar.Elab
+module
+public import Aeneas.Std.Scalar.Ops.Mul
+public import Aeneas.Std.Scalar.Elab
+public section
 
 namespace Aeneas.Std
 

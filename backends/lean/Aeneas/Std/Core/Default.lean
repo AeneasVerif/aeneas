@@ -1,4 +1,7 @@
-import Aeneas.Std.Primitives
+module
+public import Aeneas.Std.Primitives
+public meta import Aeneas.Extract.Extract
+public section
 
 namespace Aeneas.Std
 

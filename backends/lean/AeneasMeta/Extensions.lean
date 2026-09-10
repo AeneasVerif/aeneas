@@ -1,8 +1,10 @@
-import Lean
-import AeneasMeta.Utils
+module
+public import Lean
+public import AeneasMeta.Utils
 
-import Lean.Meta.DiscrTree
-import Lean.Meta.Tactic.Simp
+public import Lean.Meta.DiscrTree
+public import Lean.Meta.Tactic.Simp
+public section
 
 namespace Aeneas
 
@@ -12,7 +14,7 @@ namespace Extensions
 open Lean Elab Term Meta
 open Utils
 
-def ListDeclarationExtension (α : Type) := SimplePersistentEnvExtension α (List α)
+@[expose] def ListDeclarationExtension (α : Type) := SimplePersistentEnvExtension α (List α)
 
 instance : Inhabited (ListDeclarationExtension α) :=
   inferInstanceAs (Inhabited (SimplePersistentEnvExtension ..))
@@ -26,7 +28,7 @@ def mkListDeclarationExtension [Inhabited α] (name : Name := by exact decl_name
     toArrayFn     := fun l => l.toArray
   }
 
-def SetDeclarationExtension := SimplePersistentEnvExtension Name NameSet
+@[expose] def SetDeclarationExtension := SimplePersistentEnvExtension Name NameSet
 
 def mkSetDeclarationExtension (name : Name := by exact decl_name%) :
   IO SetDeclarationExtension :=

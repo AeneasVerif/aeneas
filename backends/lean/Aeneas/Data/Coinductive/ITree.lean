@@ -1,9 +1,12 @@
+module
 /-
 This file is adaped from https://github.com/ISTA-PLV/coinductive/tree/main,
 see README in this folder.
 -/
-import Aeneas.Data.Coinductive.CoInd
-import Aeneas.Data.Coinductive.Effect
+public import Aeneas.Data.Coinductive.CoInd
+public import Aeneas.Data.Coinductive.Effect
+
+@[expose] public section
 
 namespace Aeneas.Data.Coinductive
 
@@ -274,6 +277,7 @@ theorem div_bind (t : S → ITree E R) :
 theorem vis_bind i k (t : S → ITree E R) :
   (.vis i k) >>= t = .vis i (λ o => k o >>= t) := by simp [Bind.bind]
 
+@[expose] section
 
 def Effect.trigger (E₁ : Effect.{u}) {E₂ : Effect.{u}} [E₁ -< E₂] (i : E₁.I) : ITree.{u} E₂ (E₁.O i) :=
   let ⟨i₂, f⟩ := (Subeffect.map i);
@@ -286,6 +290,8 @@ def ITree.iter {α : Type a} {β : Type b} (t : α → ITree E (α ⊕ β)) : α
     | .inl a => .iter t a
     | .inr b => return b
 partial_fixpoint
+
+end
 
 -- NOTE: the original library had a function ITree.interp, which could handle converting an ITree from
 -- on set of Effects to another. If we need this, recover it from the original library.
@@ -373,9 +379,7 @@ theorem ITree.le_ret_inj
 
 theorem ITree.div_is_bot :
   bot = (.div : ITree E R) := by
-  unfold bot
-  have dir1 := csup_le (x := .div) (chain_empty (ITree E R)) (by grind [empty_chain])
   apply ITree.le_div_is_div
-  assumption
+  exact bot_le _
 
 namespace Aeneas.Data.Coinductive

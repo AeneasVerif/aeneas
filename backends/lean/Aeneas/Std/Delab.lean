@@ -1,5 +1,7 @@
-import Lean
-import Aeneas.Std.Primitives
+module
+public import Lean
+public import Aeneas.Std.Primitives
+public section
 
 /-! # Shared delaboration helpers for uncurry chains
 

@@ -1,4 +1,6 @@
-import AeneasMeta.Saturate.Attribute
+module
+public import AeneasMeta.Saturate.Attribute
+public section
 
 open Lean Lean.Meta Lean.Elab Lean.Elab.Term Lean.Elab.Tactic
 
@@ -30,7 +32,7 @@ structure VisitConfig extends Config where
   matchWithRules : Bool
   matchWithPartialMatches : Bool
 
-structure PartialMatch where
+meta structure PartialMatch where
   numBinders : Nat
   -- The remaining patterns to match, including the current one
   patterns : List Pattern
@@ -39,10 +41,10 @@ structure PartialMatch where
   thName : Name
   deriving Inhabited, BEq
 
-instance : ToFormat PartialMatch where
+meta instance : ToFormat PartialMatch where
   format x := f!"({x.numBinders}, {x.patterns}, {x.thName}, {x.subst})"
 
-instance : ToMessageData PartialMatch where
+meta instance : ToMessageData PartialMatch where
   toMessageData x := m!"({x.numBinders}, {x.patterns}, {x.thName}, {x.subst})"
 
 structure DiagnosticsInfo where
@@ -52,22 +54,22 @@ structure DiagnosticsInfo where
 structure Diagnostics where
   hits : Std.HashMap Name DiagnosticsInfo
 
-def Diagnostics.empty : Diagnostics := ⟨ Std.HashMap.emptyWithCapacity ⟩
+meta def Diagnostics.empty : Diagnostics := ⟨ Std.HashMap.emptyWithCapacity ⟩
 
-def Diagnostics.insertHit (diagnostics : Diagnostics) (name : Name) : Diagnostics :=
+meta def Diagnostics.insertHit (diagnostics : Diagnostics) (name : Name) : Diagnostics :=
   match diagnostics.hits[name]? with
   | none => ⟨ diagnostics.hits.insert name { hits:= 1, used := 0 } ⟩
   | some info => ⟨ diagnostics.hits.insert name { info with hits := info.hits + 1 } ⟩
 
-def Diagnostics.insertUsed (diagnostics : Diagnostics) (name : Name) : Diagnostics :=
+meta def Diagnostics.insertUsed (diagnostics : Diagnostics) (name : Name) : Diagnostics :=
   match diagnostics.hits[name]? with
   | none => ⟨ diagnostics.hits.insert name { hits:= 1, used := 0 } ⟩ -- This shouldn't happen
   | some info => ⟨ diagnostics.hits.insert name { info with used := info.used + 1} ⟩
 
-def Diagnostics.insertHitRules (info : Diagnostics) (rules : Array Rule) : Diagnostics :=
+meta def Diagnostics.insertHitRules (info : Diagnostics) (rules : Array Rule) : Diagnostics :=
   rules.foldl (fun info rule => info.insertHit rule.thName) info
 
-def Diagnostics.toArray (info : Diagnostics) : Array String :=
+meta def Diagnostics.toArray (info : Diagnostics) : Array String :=
   let hits := info.hits.toList
   let hits := (hits.mergeSort (fun (_, info0) (_, info1) => info0.hits + info0.used ≤ info1.hits + info1.used)).reverse
   let hits := hits.toArray
@@ -80,16 +82,16 @@ inductive AsmPath where
 | asm (asm : FVarId)
 | conj (dir : LeftOrRight) (p : AsmPath)
 
-def AsmPath.format (p : AsmPath) : Format :=
+meta def AsmPath.format (p : AsmPath) : Format :=
   match p with
   | .asm fvarId => f!"{Expr.fvar fvarId}"
   | .conj .left p => f!"{p.format}.left"
   | .conj .right p => f!"{p.format}.right"
 
-instance : ToFormat AsmPath where
+meta instance : ToFormat AsmPath where
   format x := AsmPath.format x
 
-instance : ToMessageData AsmPath where
+meta instance : ToMessageData AsmPath where
   toMessageData x := m!"({AsmPath.format x})"
 
 structure State where
@@ -109,26 +111,26 @@ structure State where
   /- Do not introduce a theorem if its conclusion is already in the set -/
   ignore : Std.HashSet Expr
 
-def State.insertHitRules (s : State) (rules : Array Rule) : State :=
+meta def State.insertHitRules (s : State) (rules : Array Rule) : State :=
   { s with diagnostics := s.diagnostics.insertHitRules rules }
 
-def State.insertUsed (s : State) (name : Name) : State :=
+meta def State.insertUsed (s : State) (name : Name) : State :=
   { s with diagnostics := s.diagnostics.insertUsed name }
 
-def State.insertMatch (s : State) (e : Expr) : State :=
+meta def State.insertMatch (s : State) (e : Expr) : State :=
   { s with matched := s.matched.insert e }
 
 /- Note that we shouldn't insert assumptions which contain bound variables. This should
    be prevented by the fact that when diving into expressions containing binders, we
    set the path to `none`. -/
-def State.insertAssumption (s : State) (path : Option AsmPath) (e : Expr) : State :=
+meta def State.insertAssumption (s : State) (path : Option AsmPath) (e : Expr) : State :=
   match path with
   | some path =>
     -- We insert assumptions only if they do not contain bound vars
     { s with assumptions := s.assumptions.insert e path }
   | none => s
 
-def State.new
+meta def State.new
   (rules : Array Rules)
   (pmatches : DiscrTree PartialMatch := DiscrTree.empty)
   (diagnostics : Diagnostics := Diagnostics.empty)
@@ -137,7 +139,7 @@ def State.new
   (ignore : Std.HashSet Expr := Std.HashSet.emptyWithCapacity) : State :=
   { rules, pmatches, diagnostics, matched, assumptions, ignore }
 
-def mkExprFromPath (path : AsmPath) : MetaM Expr := do
+meta def mkExprFromPath (path : AsmPath) : MetaM Expr := do
   match path with
   | .asm asm => pure (Expr.fvar asm)
   | .conj dir p =>
@@ -148,7 +150,7 @@ def mkExprFromPath (path : AsmPath) : MetaM Expr := do
       | .right => ``And.right
     mkAppOptM dir #[none, none, some p]
 
-def State.insertPartialMatch (state : State)
+meta def State.insertPartialMatch (state : State)
   (boundVars : Std.HashSet FVarId)
   (pmatch : PartialMatch) : MetaM State := do
   withTraceNode `Saturate (fun _ => pure m!"insertPartialMatch") do
@@ -203,7 +205,7 @@ def State.insertPartialMatch (state : State)
     -- Store the partial match
     pure { state with pmatches := ← state.pmatches.insert key pmatch }
 
-def checkIfPatDefEq (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
+meta def checkIfPatDefEq (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
   (pat : Expr) (numBinders : Nat) (e : Expr) : MetaM (Option (Array Expr)) := do
   withTraceNode `Saturate (fun _ => pure m!"checkIfPatDefEq") do
   -- Strip the binders, introduce meta-variables at the same time, and match
@@ -233,7 +235,7 @@ def checkIfPatDefEq (preprocessThm : Option (Array Expr → Expr → MetaM Unit)
     return none
   return (some mvars)
 
-def matchExprWithRules
+meta def matchExprWithRules
   (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
   (path : Option AsmPath)
   (boundVars : Std.HashSet FVarId)
@@ -295,7 +297,7 @@ def matchExprWithRules
       state ← state.insertPartialMatch boundVars pmatch
   pure state
 
-def matchExprWithPartialMatches
+meta def matchExprWithPartialMatches
   (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
   (path : Option AsmPath)
   (boundVars : Std.HashSet FVarId)
@@ -349,7 +351,7 @@ def matchExprWithPartialMatches
     - `boundVars`: if an instantiation of a theorem contains a bound variable, we ignore
       it (because we couldn't introduce the instantiated theorem it in the environment)
  -/
-def matchExpr
+meta def matchExpr
   (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
   (path : Option AsmPath)
   (boundVars : Std.HashSet FVarId)
@@ -369,7 +371,7 @@ def matchExpr
   let state ← matchExprWithPartialMatches preprocessThm path boundVars state e
   pure state
 
-def filterProofTerms (config : Config) (exprs : Array Expr) : MetaM (Array Expr) :=
+meta def filterProofTerms (config : Config) (exprs : Array Expr) : MetaM (Array Expr) :=
   if ¬ config.visitProofTerms then
     exprs.filterM fun arg => do
         let ty ← inferType arg
@@ -378,7 +380,7 @@ def filterProofTerms (config : Config) (exprs : Array Expr) : MetaM (Array Expr)
   else pure exprs
 
 /- Recursively explore a term -/
-private partial def visit
+private meta partial def visit
   (config : VisitConfig)
   (path : Option AsmPath)
   (depth : Nat)
@@ -470,7 +472,7 @@ private partial def visit
     This is necessary if we want to saturate the goal in several steps and modify
     the assumptions in between (with a call to simp for example).
 -/
-private partial def visitRecomputeAssumptions
+private meta partial def visitRecomputeAssumptions
   (path : Option AsmPath)
   (depth : Nat)
   (exploreSubterms : Expr → Array Expr → MetaM (Array Expr))
@@ -549,7 +551,7 @@ def exploreArithSubterms (f : Expr) (args : Array Expr) : MetaM (Array Expr) := 
     pure #[]
 
 /- The saturation tactic itself -/
-partial def evalSaturateCore
+meta partial def evalSaturateCore
   (config : Config)
   (state : State)
   (exploreSubterms : Option (Expr → Array Expr → MetaM (Array Expr)) := none)
@@ -689,7 +691,7 @@ partial def evalSaturateCore
   pure (state, allFVars)
 
 /- Reexplore the context to recompute the set of assumptions -/
-def recomputeAssumptions
+meta def recomputeAssumptions
   (state : State)
   (exploreSubterms : Option (Expr → Array Expr → MetaM (Array Expr)) := none)
   (declsToExplore : Array FVarId)
@@ -719,7 +721,7 @@ def recomputeAssumptions
       visit path state decl.type
     else pure state) state
 
-partial def evalSaturate {α}
+meta partial def evalSaturate {α}
   (config : Config)
   (satAttr : Array SaturateAttribute)
   (exploreSubterms : Option (Expr → Array Expr → MetaM (Array Expr)) := none)

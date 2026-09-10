@@ -1,3 +1,4 @@
-import Aeneas.Tactic.Solver.BvTac.BvTac
-import Aeneas.Tactic.Solver.BvTac.Lemmas
-import Aeneas.Tactic.Simproc.BvSimprocs
+module
+public import Aeneas.Tactic.Solver.BvTac.BvTac
+public import Aeneas.Tactic.Solver.BvTac.Lemmas
+public import Aeneas.Tactic.Simproc.BvSimprocs

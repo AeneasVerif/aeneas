@@ -1,3 +1,4 @@
-import Aeneas.Data.Range.SRRange.Basic
-import Aeneas.Data.Range.SRRange.Lemmas
-import Aeneas.Data.Range.SRRange.Notations
+module
+public import Aeneas.Data.Range.SRRange.Basic
+public import Aeneas.Data.Range.SRRange.Lemmas
+public import Aeneas.Data.Range.SRRange.Notations

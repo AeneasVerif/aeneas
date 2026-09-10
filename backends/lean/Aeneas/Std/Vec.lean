@@ -1,12 +1,15 @@
 /- Vectors -/
-import Lean
-import Lean.Meta.Tactic.Simp
-import Init.Data.List.Basic
-import Aeneas.Std.Scalar
-import Aeneas.Std.Slice
-import Aeneas.Tactic.Solver.ScalarTac
-import Aeneas.Tactic.Step.Init
-import Aeneas.Std.WP
+module
+public import Lean
+public import Lean.Meta.Tactic.Simp
+public import Init.Data.List.Basic
+public import Aeneas.Std.Scalar
+public import Aeneas.Std.Slice
+public import Aeneas.Tactic.Solver.ScalarTac
+public import Aeneas.Tactic.Step.Init
+public import Aeneas.Std.WP
+
+public section
 
 namespace Aeneas
 
@@ -29,7 +32,7 @@ structure Vec (α : Type u) where
   slice : Slice α
 deriving BEq, ReflBEq, LawfulBEq, DecidableEq
 
-@[coe]
+@[expose, coe]
 def Vec.val {α} (v : Vec α) : List α := (Slice.val v.slice)
 
 /-- We need this to coerce vectors to lists without marking `Vec` as reducible.
@@ -38,7 +41,7 @@ def Vec.val {α} (v : Vec α) : List α := (Slice.val v.slice)
 instance (α : Type u) : CoeOut (Vec α) (List α) where
   coe := λ v => v.val
 
-def Vec.from {α} (l : List α) (h : l.length ≤ Usize.max) : Vec α := {slice := Slice.from l h}
+@[expose] def Vec.from {α} (l : List α) (h : l.length ≤ Usize.max) : Vec α := {slice := Slice.from l h}
 
 @[simp, simp_lists_safe, grind =, agrind =]
 theorem Vec.from_val {α} (l : List α) (h : l.length ≤ Usize.max)
@@ -133,7 +136,7 @@ abbrev Vec.get? {α : Type u} (v : Vec α) (i : Nat) : Option α := getElem? v i
 @[simp, scalar_tac_simps, simp_lists_safe, simp_lists_hyps_simps, grind, agrind]
 abbrev Vec.get! {α : Type u} [Inhabited α] (v : Vec α) (i : Nat) : α := getElem! v i
 
-def Vec.set {α : Type u} (v: Vec α) (i: Usize) (x: α) : Vec α :=
+@[expose] def Vec.set {α : Type u} (v: Vec α) (i: Usize) (x: α) : Vec α :=
   .from (v.val.set i.val x) (by have := v.property; simp [*])
 
 def Vec.set_opt {α : Type u} (v: Vec α) (i: Usize) (x: Option α) : Vec α :=
@@ -341,7 +344,7 @@ theorem Vec.index_Range_spec {α : Type} (v : Vec α) (r : core.ops.range.Range 
   have := @core.slice.index.SliceIndexRangeUsizeSlice.index.step_spec α r v.slice h0 h1
   exact this
 
-def Vec.setSlice! {α : Type u} (s : Vec α) (i : ℕ) (s' : List α) : Vec α :=
+@[expose] def Vec.setSlice! {α : Type u} (s : Vec α) (i : ℕ) (s' : List α) : Vec α :=
   {slice := Slice.setSlice! s.slice i s'}
 
 @[step]

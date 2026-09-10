@@ -18,7 +18,7 @@ set_option maxRecDepth 2048
 namespace step_by
 
 /-- [step_by::test_step_by_1]:
-    Source: 'tests/src/step_by.rs', lines 8:0-17:1
+    Source: 'tests/src/step_by.rs', lines 9:0-18:1
     Visibility: public -/
 def test_step_by_1 : Result Unit := do
   let s ←
@@ -63,7 +63,7 @@ def test_step_by_1 : Result Unit := do
 #assert (test_step_by_1).reducesTo ()
 
 /-- [step_by::test_step_by_2]:
-    Source: 'tests/src/step_by.rs', lines 21:0-28:1
+    Source: 'tests/src/step_by.rs', lines 22:0-29:1
     Visibility: public -/
 def test_step_by_2 : Result Unit := do
   let s ←
@@ -98,7 +98,7 @@ def test_step_by_2 : Result Unit := do
 #assert (test_step_by_2).reducesTo ()
 
 /-- [step_by::test_step_by_3]:
-    Source: 'tests/src/step_by.rs', lines 32:0-39:1
+    Source: 'tests/src/step_by.rs', lines 33:0-40:1
     Visibility: public -/
 def test_step_by_3 : Result Unit := do
   let s ←
@@ -133,7 +133,7 @@ def test_step_by_3 : Result Unit := do
 #assert (test_step_by_3).reducesTo ()
 
 /-- [step_by::test_step_by_larger_than_len]:
-    Source: 'tests/src/step_by.rs', lines 43:0-48:1
+    Source: 'tests/src/step_by.rs', lines 44:0-49:1
     Visibility: public -/
 def test_step_by_larger_than_len : Result Unit := do
   let s ← lift (Array.to_slice (Array.make 3#usize [ 0#u32, 1#u32, 2#u32 ]))
@@ -156,7 +156,7 @@ def test_step_by_larger_than_len : Result Unit := do
 #assert (test_step_by_larger_than_len).reducesTo ()
 
 /-- [step_by::test_step_by_empty]:
-    Source: 'tests/src/step_by.rs', lines 52:0-56:1
+    Source: 'tests/src/step_by.rs', lines 53:0-57:1
     Visibility: public -/
 def test_step_by_empty : Result Unit := do
   let s ← lift (Array.to_slice (Std.Array.empty Std.U32))
@@ -174,7 +174,7 @@ def test_step_by_empty : Result Unit := do
 #assert (test_step_by_empty).reducesTo ()
 
 /-- [step_by::test_step_by_single]:
-    Source: 'tests/src/step_by.rs', lines 60:0-65:1
+    Source: 'tests/src/step_by.rs', lines 61:0-66:1
     Visibility: public -/
 def test_step_by_single : Result Unit := do
   let s ← lift (Array.to_slice (Array.make 1#usize [ 42#u32 ]))
@@ -197,7 +197,7 @@ def test_step_by_single : Result Unit := do
 #assert (test_step_by_single).reducesTo ()
 
 /-- [step_by::test_step_by_single_step_2]:
-    Source: 'tests/src/step_by.rs', lines 69:0-74:1
+    Source: 'tests/src/step_by.rs', lines 70:0-75:1
     Visibility: public -/
 def test_step_by_single_step_2 : Result Unit := do
   let s ← lift (Array.to_slice (Array.make 1#usize [ 42#u32 ]))
@@ -220,7 +220,7 @@ def test_step_by_single_step_2 : Result Unit := do
 #assert (test_step_by_single_step_2).reducesTo ()
 
 /-- [step_by::test_step_by_eq_len]:
-    Source: 'tests/src/step_by.rs', lines 78:0-83:1
+    Source: 'tests/src/step_by.rs', lines 79:0-84:1
     Visibility: public -/
 def test_step_by_eq_len : Result Unit := do
   let s ← lift (Array.to_slice (Array.make 3#usize [ 0#u32, 1#u32, 2#u32 ]))
@@ -243,7 +243,7 @@ def test_step_by_eq_len : Result Unit := do
 #assert (test_step_by_eq_len).reducesTo ()
 
 /-- [step_by::test_step_by_len_minus_1]:
-    Source: 'tests/src/step_by.rs', lines 87:0-93:1
+    Source: 'tests/src/step_by.rs', lines 88:0-94:1
     Visibility: public -/
 def test_step_by_len_minus_1 : Result Unit := do
   let s ← lift (Array.to_slice (Array.make 3#usize [ 0#u32, 1#u32, 2#u32 ]))
@@ -271,7 +271,7 @@ def test_step_by_len_minus_1 : Result Unit := do
 #assert (test_step_by_len_minus_1).reducesTo ()
 
 /-- [step_by::test_step_by_two_elements]:
-    Source: 'tests/src/step_by.rs', lines 97:0-102:1
+    Source: 'tests/src/step_by.rs', lines 98:0-103:1
     Visibility: public -/
 def test_step_by_two_elements : Result Unit := do
   let s ← lift (Array.to_slice (Array.make 2#usize [ 0#u32, 1#u32 ]))
@@ -294,7 +294,7 @@ def test_step_by_two_elements : Result Unit := do
 #assert (test_step_by_two_elements).reducesTo ()
 
 /-- [step_by::test_step_by_4_on_longer]:
-    Source: 'tests/src/step_by.rs', lines 106:0-113:1
+    Source: 'tests/src/step_by.rs', lines 107:0-114:1
     Visibility: public -/
 def test_step_by_4_on_longer : Result Unit := do
   let s ←

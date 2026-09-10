@@ -1,5 +1,7 @@
-import Lean
-import Mathlib.Tactic.Linarith -- Introduces a lot of useful lemmas
+module
+public import Lean
+public import Mathlib.Tactic.Linarith -- Introduces a lot of useful lemmas
+public section
 
 namespace Aeneas
 

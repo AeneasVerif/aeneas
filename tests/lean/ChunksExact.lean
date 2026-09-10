@@ -18,7 +18,7 @@ set_option maxRecDepth 2048
 namespace chunks_exact
 
 /-- [chunks_exact::test_chunks_exact_exact_fit]:
-    Source: 'tests/src/chunks_exact.rs', lines 8:0-22:1
+    Source: 'tests/src/chunks_exact.rs', lines 9:0-23:1
     Visibility: public -/
 def test_chunks_exact_exact_fit : Result Unit := do
   let s ←
@@ -52,7 +52,7 @@ def test_chunks_exact_exact_fit : Result Unit := do
 #assert (test_chunks_exact_exact_fit).reducesTo ()
 
 /-- [chunks_exact::test_chunks_exact_with_remainder]:
-    Source: 'tests/src/chunks_exact.rs', lines 26:0-41:1
+    Source: 'tests/src/chunks_exact.rs', lines 27:0-42:1
     Visibility: public -/
 def test_chunks_exact_with_remainder : Result Unit := do
   let s ←
@@ -88,7 +88,7 @@ def test_chunks_exact_with_remainder : Result Unit := do
 #assert (test_chunks_exact_with_remainder).reducesTo ()
 
 /-- [chunks_exact::test_chunks_exact_remainder_2]:
-    Source: 'tests/src/chunks_exact.rs', lines 45:0-57:1
+    Source: 'tests/src/chunks_exact.rs', lines 46:0-58:1
     Visibility: public -/
 def test_chunks_exact_remainder_2 : Result Unit := do
   let s ←
@@ -118,7 +118,7 @@ def test_chunks_exact_remainder_2 : Result Unit := do
 #assert (test_chunks_exact_remainder_2).reducesTo ()
 
 /-- [chunks_exact::test_chunks_exact_size_1]:
-    Source: 'tests/src/chunks_exact.rs', lines 61:0-73:1
+    Source: 'tests/src/chunks_exact.rs', lines 62:0-74:1
     Visibility: public -/
 def test_chunks_exact_size_1 : Result Unit := do
   let s ←
@@ -147,7 +147,7 @@ def test_chunks_exact_size_1 : Result Unit := do
 #assert (test_chunks_exact_size_1).reducesTo ()
 
 /-- [chunks_exact::test_chunks_exact_empty]:
-    Source: 'tests/src/chunks_exact.rs', lines 77:0-83:1
+    Source: 'tests/src/chunks_exact.rs', lines 78:0-84:1
     Visibility: public -/
 def test_chunks_exact_empty : Result Unit := do
   let s ← lift (Array.to_slice (Std.Array.empty Std.U32))
@@ -163,7 +163,7 @@ def test_chunks_exact_empty : Result Unit := do
 #assert (test_chunks_exact_empty).reducesTo ()
 
 /-- [chunks_exact::test_chunks_exact_chunk_larger_than_slice]:
-    Source: 'tests/src/chunks_exact.rs', lines 87:0-95:1
+    Source: 'tests/src/chunks_exact.rs', lines 88:0-96:1
     Visibility: public -/
 def test_chunks_exact_chunk_larger_than_slice : Result Unit := do
   let s ← lift (Array.to_slice (Array.make 2#usize [ 1#u32, 2#u32 ]))
@@ -183,7 +183,7 @@ def test_chunks_exact_chunk_larger_than_slice : Result Unit := do
 #assert (test_chunks_exact_chunk_larger_than_slice).reducesTo ()
 
 /-- [chunks_exact::test_chunks_exact_chunk_equals_slice]:
-    Source: 'tests/src/chunks_exact.rs', lines 99:0-109:1
+    Source: 'tests/src/chunks_exact.rs', lines 100:0-110:1
     Visibility: public -/
 def test_chunks_exact_chunk_equals_slice : Result Unit := do
   let s ← lift (Array.to_slice (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ]))
@@ -207,7 +207,7 @@ def test_chunks_exact_chunk_equals_slice : Result Unit := do
 #assert (test_chunks_exact_chunk_equals_slice).reducesTo ()
 
 /-- [chunks_exact::test_chunks_exact_2_odd]:
-    Source: 'tests/src/chunks_exact.rs', lines 113:0-126:1
+    Source: 'tests/src/chunks_exact.rs', lines 114:0-127:1
     Visibility: public -/
 def test_chunks_exact_2_odd : Result Unit := do
   let s ←
@@ -239,7 +239,7 @@ def test_chunks_exact_2_odd : Result Unit := do
 #assert (test_chunks_exact_2_odd).reducesTo ()
 
 /-- [chunks_exact::test_chunks_exact_2_single_element]:
-    Source: 'tests/src/chunks_exact.rs', lines 130:0-137:1
+    Source: 'tests/src/chunks_exact.rs', lines 131:0-138:1
     Visibility: public -/
 def test_chunks_exact_2_single_element : Result Unit := do
   let s ← lift (Array.to_slice (Array.make 1#usize [ 42#u32 ]))
