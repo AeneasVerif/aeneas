@@ -50,7 +50,7 @@ theorem dspec_admissible {α} (p : Post α) :
 
 /-- Variant of `uncurry` used to decompose tuples in post-conditions.
 
-Similar to `uncurry` but specialized for `Prop` and delaborated differently:
+Similar to `uncurry` but delaborated differently:
 `uncurry'` is delaborated as `x y => ...` (separate binders), while
 `uncurry` is delaborated as `(x, y) => ...` (tuple binder).
 We use this in the Hoare triple notation `⦃ ⦄`.
@@ -58,11 +58,11 @@ We use this in the Hoare triple notation `⦃ ⦄`.
 Example: `f 0 ⦃ x y z => ... ⦄` desugars to
 `spec (f 0) (uncurry' fun x => uncurry' fun y z => ...)`.
 -/
-def uncurry' {α β} (p : α → β → Prop) : α × β → Prop :=
+def uncurry' {α β γ : Type _} (p : α → β → γ) : α × β → γ :=
   fun (x, y) => p x y
 
-@[simp] theorem uncurry'_pair x y (p : α → β → Prop) : uncurry' p (x, y) = p x y := by simp [uncurry']
-@[defeq] theorem uncurry'_eq x (p : α → β → Prop) : uncurry' p x = p x.fst x.snd := by simp [uncurry']
+@[simp] theorem uncurry'_pair x y (p : α → β → γ) : uncurry' p (x, y) = p x y := by simp [uncurry']
+@[defeq] theorem uncurry'_eq x (p : α → β → γ) : uncurry' p x = p x.fst x.snd := by simp [uncurry']
 
 @[simp, grind =, agrind =]
 theorem spec_ok (x : α) : spec (ok x) p ↔ p x := TotalSpec.ret_iff
@@ -420,7 +420,7 @@ private partial def enterUncurryOnce (acc : Array Std.Delab.BinderEntry)
 /-- Is the expression an `uncurry'` or `uncurry` wrapper? -/
 private def isPostBinderWrapper (e : Expr) : Bool :=
   match_expr e.consumeMData with
-  | uncurry' _ _ _ => true
+  | uncurry' _ _ _ _ => true
   | uncurry _ _ _ _ => true
   | _ => false
 
@@ -430,11 +430,11 @@ name like `x` or a (potentially nested) tuple pattern like `(a, b)`).
 -/
 private partial def delabPostBinders : DelabM (Array Term × Term) := do
   match_expr (← getExpr).consumeMData with
-  | uncurry' _ _ _ =>
-    /- `uncurry' f`: dive into `f` (arg 2) and peel one binder.
+  | uncurry' _ _ _ _ =>
+    /- `uncurry' f`: dive into `f` (arg 3) and peel one binder.
        If `f = uncurry g`, the binder is a tuple `(a, b)`.
        If `f = fun x => rest`, the binder is scalar `x`. -/
-    withNaryArg 2 do
+    withNaryArg 3 do
       match_expr (← getExpr).consumeMData with
       | uncurry _ _ _ _ =>
         -- Tuple binder: peel one uncurry level, then recurse for more binders
