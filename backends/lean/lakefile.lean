@@ -28,3 +28,7 @@ lean_exe extract where
 lean_exe extract_lean_keywords where
   root := `ExtractLeanKeywords
   supportInterpreter := true
+
+lean_exe summarize where
+  root := `AeneasSummary
+  supportInterpreter := true
