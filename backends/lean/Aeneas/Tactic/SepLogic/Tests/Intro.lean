@@ -3,8 +3,8 @@ import Aeneas.Tactic.SepLogic.Intro
 /-!
 # Regression tests for `iintro_entail` and `isimpl`
 
-`iintro`, `iintro_shallow` and `iintro_keep` act on a triple, so their tests
-live with the module that defines triples.
+`iintro`, `iintro_shallow` and `iintro_keep` act on an `ispec`, so their tests
+live with the module that defines separation-logic specifications.
 -/
 
 namespace Aeneas.Tactic.SepLogic.Tests.Intro

@@ -303,10 +303,10 @@ theorem cursorFront.spec (s : LinkedList M) (entries : List (Entry M)) :
     ⦃ listRep s entries ⦄ cursorFront s
     ⦃⇓ cursor => frontCursorRep cursor entries⦄ := by
   unfold cursorFront
-  refine triple_conseq
+  refine ispec_conseq
     (P := listRep s entries)
     (Q := fun cursor => frontCursorRep cursor entries)
-    (triple_frame
+    (ispec_frame
       (pure.spec ({ list := s, current := s.front } : Cursor M))
       (listRep s entries)) ?_ ?_
   · rw [sep_emp_l_eq]
@@ -328,7 +328,7 @@ theorem new.spec (listId : Nat) (hnonzero : listId ≠ 0) :
 
 /-- Exact ownership-transfer and sequence specification for public
 `push_front`: the supplied independent frame becomes precisely the new head.
-The executable definition contains no allocation; the affine triple alone
+The executable definition contains no allocation; the affine ispec alone
 does not establish an exact operational heap delta. -/
 @[step]
 theorem pushFront.spec (s : LinkedList M) (entries : List (Entry M))
@@ -407,12 +407,12 @@ theorem popFront.empty.spec (s : LinkedList M) :
       ⦃⇓ (cursor, result) =>
         ⌜cursor = initial ∧ result = none⌝ ∗
         frontCursorRep cursor []⦄ := by
-    apply triple_conseq (takeCurrent.empty.spec initial)
+    apply ispec_conseq (takeCurrent.empty.spec initial)
     · unfold initial frontCursorRep
       iframe
     · intro result
       exact entails_refl _
-  refine triple_bind htake ?_
+  refine ispec_bind htake ?_
   rintro ⟨cursor, result⟩
   step*
 
@@ -434,12 +434,12 @@ theorem popFront.cons.spec (s : LinkedList M) (frame : Frame M)
         ⌜result = some frame⌝ ∗
         detachedFrame frame payload ∗
         frontCursorRep cursor rest⦄ := by
-    apply triple_conseq (takeCurrent.cons.spec initial frame payload rest)
+    apply ispec_conseq (takeCurrent.cons.spec initial frame payload rest)
     · unfold initial frontCursorRep
       iframe
     · intro result
       exact entails_refl _
-  refine triple_bind htake ?_
+  refine ispec_bind htake ?_
   rintro ⟨cursor, result⟩
   step*
 

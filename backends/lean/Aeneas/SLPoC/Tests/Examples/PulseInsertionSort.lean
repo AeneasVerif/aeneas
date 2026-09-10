@@ -202,7 +202,7 @@ theorem insertCells.spec [LinearOrder α] (current : Ptr α)
       | cons value values =>
           simp only [PulseArray.ownsCells]
           rw [sep_comm_eq _ (⌜False⌝)]
-          apply triple_ipure
+          apply ispec_ipure
           intro hfalse
           contradiction
   | cons next cells ih =>
@@ -210,7 +210,7 @@ theorem insertCells.spec [LinearOrder α] (current : Ptr α)
       | nil =>
           simp only [PulseArray.ownsCells]
           rw [sep_comm_eq _ (⌜False⌝)]
-          apply triple_ipure
+          apply ispec_ipure
           intro hfalse
           contradiction
       | cons value values =>
