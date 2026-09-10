@@ -85,13 +85,15 @@ they stand and only the third statement below is specific to heap events. -/
 
 private theorem ispec_total {P : IPre} {m : Result α} {Q : IPost α}
     (hSpec : ispec P m Q) {h : Heap} (hPre : P h) :
-    TotalSpec handler (fun value h' => Q value h') m h := by
+    rawIwp true m Q h := by
+  rw [ispec_iff] at hSpec
   have hRaw := hSpec emp h ((sep_emp_r P).mpr h hPre)
   exact hRaw.mono fun value => sep_elim_right (Q value) emp
 
 private theorem dispec_partial {P : IPre} {m : Result α} {Q : IPost α}
     (hSpec : dispec P m Q) {h : Heap} (hPre : P h) :
-    PartialSpec handler (fun value h' => Q value h') m h := by
+    rawIwp false m Q h := by
+  rw [dispec_iff] at hSpec
   have hRaw := hSpec emp h ((sep_emp_r P).mpr h hPre)
   exact hRaw.mono fun value => sep_elim_right (Q value) emp
 
