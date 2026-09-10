@@ -20,10 +20,9 @@ theorem entails_rewrite {H₁ H₂ H₃ H₄ : IProp} (hPart : H₁ ⊢ H₂)
 
 namespace IFrame
 
-/-- Rewrite the assertion `H` (the left-hand side of an entailment, or the
-precondition of a ispec) using `lemma : A ⊢ B` or `lemma : A = B`, replacing the
-atom `A` of `H` by `B`.  Returns the rewritten assertion and a proof of
-`H ⊢ rewritten`. -/
+/-- Rewrite the assertion `H` using `lemma : A ⊢ B` or `lemma : A = B`,
+replacing the atom `A` of `H` by `B`. Returns the rewritten assertion and a
+proof of `H ⊢ rewritten`. -/
 def rewriteAssertion (assertion : Expr) (rule : Expr) : TacticM (Expr × Expr) := do
   let ruleType ← instantiateMVars (← inferType rule)
   /- Accept both an entailment and an equality, in either direction for the
@@ -54,9 +53,9 @@ end IFrame
 /-- Rewrite part of the current resources with an entailment.
 
 `irewrite M`, for `M : A ⊢ B` (or `M : A = B`), replaces the assertion `A` by
-`B` in the left-hand side of the entailment, or in the precondition of the
-ispec, that the goal states.  This is how a representation predicate is opened
-or closed when plain cancellation cannot see through it.
+`B` in the left-hand side of the entailment that the goal states. Reducible
+wrappers around an entailment are preserved. This is how a representation
+predicate is opened or closed when plain cancellation cannot see through it.
 
 Unlike `rw`, `M` need not be an equality and `A` need not occur syntactically:
 it only has to be one of the `∗`-separated atoms, up to unification. -/
@@ -64,21 +63,13 @@ elab "irewrite" rule:term : tactic => Tactic.focus do withMainContext do
   let rule ← Tactic.elabTerm rule none
   let goal ← getMainGoal
   let target ← instantiateMVars (← goal.getType)
-  let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
-  if fn.isConstOf ``Entails && args.size = 2 then
-    let (rewritten, proof) ← IFrame.rewriteAssertion args[0]! rule
-    let next ← mkFreshExprSyntheticOpaqueMVar (← mkAppM ``Entails #[rewritten, args[1]!])
-    goal.assign (← mkAppM ``entails_trans #[proof, next])
-    replaceMainGoal [next.mvarId!]
-  else if fn.isConstOf `Aeneas.SepLogic.ispec && args.size = 4 then
-    let (rewritten, proof) ← IFrame.rewriteAssertion args[1]! rule
-    let next ← mkFreshExprSyntheticOpaqueMVar
-      (← mkAppOptM `Aeneas.SepLogic.ispec #[args[0]!, rewritten, args[2]!, args[3]!])
-    let qrefl ← withLocalDeclD `value args[0]! fun value => do
-      mkLambdaFVars #[value] (← mkAppM ``entails_refl #[mkApp args[3]! value])
-    goal.assign (← mkAppM `Aeneas.SepLogic.ispec_conseq #[next, proof, qrefl])
-    replaceMainGoal [next.mvarId!]
-  else
-    throwError "irewrite expects an entailment or a ispec, got\n{target}"
+  let some entailment ← IFrame.exposeEntailment? target
+    | throwError "irewrite expects an entailment, got\n{target}"
+  let args := entailment.getAppArgs
+  let (rewritten, proof) ← IFrame.rewriteAssertion args[0]! rule
+  let nextType ← IFrame.mkEntailmentLike target args[0]! args[1]! rewritten
+  let next ← mkFreshExprSyntheticOpaqueMVar nextType
+  goal.assign (← mkAppM ``entails_trans #[proof, next])
+  replaceMainGoal [next.mvarId!]
 
 end Aeneas.SepLogic
