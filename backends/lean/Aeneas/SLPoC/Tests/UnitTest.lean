@@ -346,6 +346,7 @@ example (p : Ptr Nat) (value : Nat) : ¬ (emp ⊢ p ↦ value) := by
 /-- Nor does it excuse a specification from owning what it reads. -/
 example (p : Ptr Nat) : ¬ (⦃ emp ⦄ read p ⦃⇓ _ => emp⦄) := by
   intro hTriple
+  rw [ispec_iff] at hTriple
   have hSpec := hTriple emp ∅ ((sep_emp_r emp).mpr ∅ trivial)
   simp only [read, Result.guardedModify] at hSpec
   obtain ⟨hReadable, -⟩ := hSpec.vis_view

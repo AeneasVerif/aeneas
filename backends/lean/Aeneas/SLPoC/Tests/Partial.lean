@@ -91,6 +91,7 @@ nothing owns has no partial specification either, since partial correctness
 proves the guard of every event it reaches just as total correctness does. -/
 example (p : Ptr Nat) (Q : IPost Nat) : ¬ dispec emp (read p) Q := by
   intro hTriple
+  rw [dispec_iff] at hTriple
   have hSpec := hTriple emp ∅ ((sep_emp_r emp).mpr ∅ trivial)
   simp only [read, Result.guardedModify] at hSpec
   obtain ⟨hReadable, -⟩ := hSpec.vis_view
@@ -106,8 +107,10 @@ ispec and no total one at all. -/
 example (Q : IPost Nat) : dispec emp (Result.div : Result Nat) Q :=
   dispec_div
 
-example (Q : IPost Nat) : ¬ ispec emp (Result.div : Result Nat) Q := fun hTriple =>
-  (hTriple emp Heap.empty ((sep_emp_r emp).mpr Heap.empty trivial)).div_false
+example (Q : IPost Nat) : ¬ ispec emp (Result.div : Result Nat) Q := by
+  rw [ispec_iff]
+  intro hTriple
+  exact (hTriple emp Heap.empty ((sep_emp_r emp).mpr Heap.empty trivial)).div_false
 
 /-! ## A loop that never leaves
 
