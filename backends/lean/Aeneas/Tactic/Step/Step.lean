@@ -815,6 +815,13 @@ def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTree : 
   TacticM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"introOutputs") do
   traceGoalWithNode "Initial goal"
+  /- The goal looks like:
+     mono: qimp P₀ P₁
+     bind: qimp (uncurry' Pₘ) (fun value => spec (k value) Pₖ)
+     bind': ∀ v, ispec (uncurry' Pₘ v ∗ emp) (k v) Q
+  -/
+
+
   trace[Step] "call-site tree: {repr callSiteTree}"
 
   /- Normalize the premise into the `∀ x, P₀ → ... → Pₘ → k ⦃ Q ⦄` shape. -/
