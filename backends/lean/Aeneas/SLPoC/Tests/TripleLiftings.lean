@@ -17,6 +17,9 @@ def totalPure (x : Nat) : Result Nat := Result.ok x
 def partialPure (x : Nat) : Result Nat := Result.ok x
 def totalSpatial (x : Nat) : Result Nat := Result.ok x
 def partialSpatial (x : Nat) : Result Nat := Result.ok x
+def legacyTotalPure (x : Nat) : Result Nat := Result.ok x
+def legacyPartialPure (x : Nat) : Result Nat := Result.ok x
+def legacyPair (x : Nat) : Result (Nat × Nat) := Result.ok (x, x + 1)
 
 @[step] theorem totalPure.spec (x : Nat) : totalPure x ⦃ y => y = x ⦄ := by
   unfold totalPure
@@ -35,6 +38,20 @@ def partialSpatial (x : Nat) : Result Nat := Result.ok x
     ⦃ emp ⦄ partialSpatial x ⦃⇓ y => ⌜y = x⌝ ⦄div := by
   unfold partialSpatial
   step
+
+@[step] theorem legacyTotalPure.spec (x : Nat) :
+    Aeneas.Std.WP.spec (legacyTotalPure x) (fun y => y = x) := by
+  simp [legacyTotalPure]
+
+@[step] theorem legacyPartialPure.spec (x : Nat) :
+    Aeneas.Std.WP.dspec (legacyPartialPure x) (fun y => y = x) := by
+  simp [legacyPartialPure]
+
+@[step] theorem legacyPair.spec (x : Nat) :
+    Aeneas.Std.WP.spec (legacyPair x)
+      (Aeneas.Std.WP.uncurry' fun first second =>
+        first = x ∧ second = x + 1) := by
+  simp [legacyPair, Aeneas.Std.WP.spec_ok, Aeneas.Std.WP.uncurry']
 
 run_meta do
   for (name, arity) in
@@ -58,6 +75,45 @@ example (x : Nat) (P : IProp) :
     ⦃ P ⦄ totalPure x ⦃⇓ y => P ∗ ⌜y = x⌝ ⦄ := by step*
 example (x : Nat) (P : IProp) :
     ⦃ P ⦄ totalPure x ⦃⇓ y => P ∗ ⌜y = x⌝ ⦄div := by step*
+
+/-! Legacy pure specifications lift directly to spatial judgments. -/
+
+example (x : Nat) (P : IProp) :
+    ⦃ P ⦄ legacyTotalPure x ⦃⇓ y => P ∗ ⌜y = x⌝ ⦄ := by step*
+example (x : Nat) (P : IProp) :
+    ⦃ P ⦄ legacyTotalPure x ⦃⇓ y => P ∗ ⌜y = x⌝ ⦄div := by step*
+example (x : Nat) (P : IProp) :
+    ⦃ P ⦄ legacyPartialPure x ⦃⇓ y => P ∗ ⌜y = x⌝ ⦄div := by step*
+
+/-! Tuple binders survive legacy lifting into an SL bind continuation. -/
+
+def useLegacyPair (x : Nat) : Result Nat := do
+  let pair ← legacyPair x
+  Result.ok (pair.1 + pair.2)
+
+example (x : Nat) :
+    ⦃ emp ⦄ useLegacyPair x
+      ⦃⇓ result => ⌜result = x + (x + 1)⌝ ⦄ := by
+  unfold useLegacyPair
+  step as ⟨first, second, hFirst, hSecond⟩
+  guard_hyp hFirst : first = x
+  guard_hyp hSecond : second = x + 1
+  simp [hFirst, hSecond]
+
+/-! The named SL mono relation also preserves tuple binders for direct
+spatial specifications, without invoking a lifting. -/
+
+example (recur : Nat → Result (Nat × Nat))
+    (hRecur : ∀ x,
+      ⦃ emp ⦄ recur x
+        ⦃⇓ (first, second) => ⌜first = x ∧ second = x + 1⌝ ⦄)
+    (x : Nat) :
+    ⦃ emp ⦄ recur x
+      ⦃⇓ pair => ⌜pair.1 + pair.2 = x + (x + 1)⌝ ⦄ := by
+  step with hRecur x as ⟨first, second, hFirst, hSecond⟩
+  guard_hyp hFirst : first = x
+  guard_hyp hSecond : second = x + 1
+  simp [hFirst, hSecond]
 
 /-! Partial pure specifications work only in partial judgments. -/
 
@@ -137,11 +193,9 @@ example (x : Nat) :
 example (m : Result Nat) (h : m ⦃ n => n = 7 ⦄) (P : IProp) :
     ⦃ P ⦄ m ⦃⇓ n => P ∗ ⌜n = 7⌝ ⦄ := by
   step with h
-  iframe
 example (m : Result Nat) (h : m ⦃ n => n = 7 ⦄div) (P : IProp) :
     ⦃ P ⦄ m ⦃⇓ n => P ∗ ⌜n = 7⌝ ⦄div := by
   step with h
-  iframe
 example (m : Result Nat) (h : ⦃ emp ⦄ m ⦃⇓ n => ⌜n = 7⌝ ⦄) :
     m ⦃ n => n = 7 ⦄div := by step with h
 example (m : Result Nat) (h : ⦃ emp ⦄ m ⦃⇓ n => ⌜n = 7⌝ ⦄div) :

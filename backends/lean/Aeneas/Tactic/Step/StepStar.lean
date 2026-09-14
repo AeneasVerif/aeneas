@@ -421,7 +421,7 @@ partial def evalStepStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
       pure { grindState? := some gs }
     else pure {}
   -- Simplify the target
-  let (info, mvarId) ← simplifyTarget
+  let (info, mvarId) ← simplifyTarget false
   -- Continue
   match mvarId with
   | some _ =>
@@ -447,13 +447,17 @@ partial def evalStepStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
   | none => pure { script := info.script, unassignedVars := #[], subgoals := #[] }
 
 where
-  simplifyTarget : TacticM (Info × Option MVarId) := do
+  simplifyTarget (simplifySLOk : Bool) : TacticM (Info × Option MVarId) := do
     withTraceNode `Step (fun _ => do pure m!"simplifyTarget") do
     traceGoalWithNode "about to simplify goal"
     let mvarId0 ← getMainGoal
+    let addSimpThms ←
+      if simplifySLOk then
+        Step.getSLOkSimps
+      else pure #[]
     let r ← Simp.simpAt (simpOnly := true)
       { maxDischargeDepth := 1, failIfUnchanged := false}
-      {simpThms := #[← Step.stepSimpExt.getTheorems]}
+      {simpThms := #[← Step.stepSimpExt.getTheorems], addSimpThms}
       (.targets #[] true)
     /- We may have proven the goal already -/
     let tac : Array Syntax.Tactic ← do
@@ -605,7 +609,7 @@ where
     setGoals [mvarId]
     traceGoalWithNode "goal"
     /- Simplify a bit -/
-    let (info, mvarId) ← simplifyTarget
+    let (info, mvarId) ← simplifyTarget true
     match mvarId with
     | none => pure (info, mvarId)
     | some mvarId =>

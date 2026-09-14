@@ -548,9 +548,14 @@ theorem old_add1.spec (x : Nat) :
     Aeneas.Std.WP.spec (old_add1 x) (fun y => y = x + 1) := by
   simp [old_add1]
 
-/-- **Pure → separation.**  The specification is registered, it is about the
-right program, and it is exactly what the goal asks for; `step` still cannot
-use it, because `ispec` declares no lifting from `Aeneas.Std.WP.spec`. -/
+/-- Legacy pure specifications lift directly to separation triples. -/
+example (v : Nat) (P : IProp) :
+    ⦃ P ⦄ old_add1 v ⦃⇓ y => P ∗ ⌜y = v + 1⌝ ⦄ := by
+  step*
+
+/-- Lifting lookup is deliberately single-hop. A legacy pure specification can
+lift to `ispec`, but is not first lifted to `ispec` and then back into the new
+pure `spec` judgment. -/
 example (v : Nat) : old_add1 v ⦃ y => y = v + 1 ⦄ := by
   fail_if_success step with old_add1.spec
   unfold old_add1
@@ -747,6 +752,8 @@ theorem updateWith.spec (f : Nat → Result Nat) (p : Ptr Nat) (v w : Nat)
     (hf : f v ⦃ r => r = w ⦄) :
     ⦃ p ↦ v ⦄ updateWith f p ⦃⇓ p ↦ w⦄ := by
   unfold updateWith
+  step as ⟨v', hv'⟩
+  subst v'
   step*
 
 example (p : Ptr Nat) (v : Nat) :
@@ -793,7 +800,7 @@ The statements below are the executable examples from the old pure judgment.
 They confirm that the same notation, tuple destructuring, precedence and
 higher-order postconditions elaborate against the ispec-based notation.
 
-The old proofs that explicitly call `spec_bind`, `spec_mono`, `qimp_spec` and
+The old proofs that explicitly call `spec_bind`, `spec_mono`, `qimp` and
 the related `imp` helpers are necessarily judgment-specific. Their statements
 remain unchanged; their proofs use the four registrations through `step`.
 -/
