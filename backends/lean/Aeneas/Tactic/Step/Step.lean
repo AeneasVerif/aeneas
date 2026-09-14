@@ -85,6 +85,14 @@ attribute [step_simps] Aeneas.Std.bind_assoc_eq
 attribute [step_simps] Aeneas.Std.uncurry_apply_pair
 attribute [step_simps] ite_self -- this is sometimes necessary
 
+/-- SL terminal-return simp lemmas, when the SL specification module is imported. -/
+meta def getSLOkSimps : CoreM (Array Name) := do
+  let env ← getEnv
+  pure (#[
+    `Aeneas.SepLogic.ispec_ok_iff,
+    `Aeneas.SepLogic.dispec_ok_iff
+  ].filter env.contains)
+
 /- Builtin simprocs cannot be added to a custom set directly via `attribute`.
 See: https://github.com/leanprover/lean4/issues/13962 -/
 -- We often see expressions like `Int.ofNat 3`
@@ -1050,8 +1058,11 @@ meta def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option Main
       Note that we want to simplify targets of the shape:
       `ok ... ⦃ x₀ ... xₙ => ... ⦄`
       -/
+      let slOkSimps ← getSLOkSimps
       let r ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
-        {simpThms := #[← stepSimpExt.getTheorems], declsToUnfold := #[``pure]} (.targets #[] true)
+        {simpThms := #[← stepSimpExt.getTheorems],
+         addSimpThms := slOkSimps,
+         declsToUnfold := #[``pure]} (.targets #[] true)
       if r.isSome then
         pure (some ({goal := ← getMainGoal, outputs, stepState := mainGoal.stepState} : MainGoal))
       else pure none
