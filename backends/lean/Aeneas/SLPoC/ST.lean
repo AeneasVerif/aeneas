@@ -111,6 +111,58 @@ theorem ispec_dspec (m : Result α) (Q : Post α) :
 theorem dispec_dspec (m : Result α) (Q : Post α) :
     dispec emp m (fun value => ⌜Q value⌝) → dspec m Q := id
 
+private theorem totalSpec_of_stdSpec
+    {m : Result α} {Q : α → Prop} (hSpec : Std.WP.spec m Q) (h : Heap) :
+    TotalSpec handler (fun value h' => Q value ∧ h' = h) m h := by
+  exact hSpec.induction
+    (P := fun m' _ => TotalSpec handler (fun value h' => Q value ∧ h' = h) m' h)
+    (fun value _ hPost => .ret ⟨hPost, rfl⟩)
+    (fun _ _ _ hHandle => by simp at hHandle)
+
+private theorem partialSpec_of_stdDspec
+    {m : Result α} {Q : α → Prop} (hSpec : Std.WP.dspec m Q) (h : Heap) :
+    PartialSpec handler (fun value h' => Q value ∧ h' = h) m h := by
+  refine PartialSpec.coinduction
+    (fun m' h' => Std.WP.dspec m' Q ∧ h' = h) ?_ ⟨hSpec, rfl⟩
+  intro m' h' hPure
+  obtain ⟨hPure, hEq⟩ := hPure
+  cases m' using ITree.cases
+  · exact ⟨PartialSpec.ret_post hPure, hEq⟩
+  · simp only [SpecF.div]
+  · have hFalse : False := by
+      simpa [Std.WP.handler] using PartialSpec.vis_view hPure
+    exact hFalse.elim
+
+/-- A specification under the event-rejecting legacy handler describes an
+effect-free computation, so it preserves every framed heap. -/
+theorem stdSpec_ispec (m : Result α) (Q : Post α) :
+    Std.WP.spec m Q → ispec emp m (fun value => ⌜Q value⌝) := by
+  intro hSpec
+  rw [ispec_iff]
+  intro F h hPre
+  have hF : F h := (sep_emp_l F).mp h hPre
+  exact (totalSpec_of_stdSpec hSpec h).mono fun value h' hPost => by
+    obtain ⟨hQ, hEq⟩ := hPost
+    subst h'
+    exact (sep_pure_l (Q value) F h).mpr ⟨hQ, hF⟩
+
+/-- Partial-correctness counterpart of `stdSpec_ispec`. -/
+theorem stdDspec_dispec (m : Result α) (Q : Post α) :
+    Std.WP.dspec m Q → dispec emp m (fun value => ⌜Q value⌝) := by
+  intro hSpec
+  rw [dispec_iff]
+  intro F h hPre
+  have hF : F h := (sep_emp_l F).mp h hPre
+  exact (partialSpec_of_stdDspec hSpec h).mono fun value h' hPost => by
+    obtain ⟨hQ, hEq⟩ := hPost
+    subst h'
+    exact (sep_pure_l (Q value) F h).mpr ⟨hQ, hF⟩
+
+/-- A total legacy specification also lifts to a partial separation triple. -/
+theorem stdSpec_dispec (m : Result α) (Q : Post α) :
+    Std.WP.spec m Q → dispec emp m (fun value => ⌜Q value⌝) :=
+  fun hSpec => ispec_dispec (stdSpec_ispec m Q hSpec)
+
 private theorem rawIwp_admissible (Q : IPost α) (h : Heap) :
     Lean.Order.admissible (fun m : Result α => rawIwp false m Q h) :=
   PartialSpec.admissible handler_conjunctive _ h
@@ -360,6 +412,28 @@ theorem ispec_conseq {P' P : IPre} {m : Result α}
   intro F h hPre
   have hSpec := hTriple F h (sep_mono hP (entails_refl F) h hPre)
   exact hSpec.mono fun value => sep_mono (hQ value) (entails_refl F)
+
+/-- Preserve separate tuple binders while lifting a legacy specification. -/
+theorem stdSpecUncurry'_ispec
+    (m : Result (α × β)) (Q : α → β → Prop) :
+    Std.WP.spec m (Std.WP.uncurry' Q) →
+      ispec emp m (Std.WP.uncurry' fun first second => ⌜Q first second⌝) := by
+  intro hSpec
+  refine ispec_conseq (stdSpec_ispec m (Std.WP.uncurry' Q) hSpec)
+    (entails_refl emp) ?_
+  rintro ⟨first, second⟩
+  exact entails_refl ⌜Q first second⌝
+
+/-- Preserve a tuple-pattern binder while lifting a legacy specification. -/
+theorem stdSpecUncurry_ispec
+    (m : Result (α × β)) (Q : α → β → Prop) :
+    Std.WP.spec m (Std.uncurry Q) →
+      ispec emp m (Std.uncurry fun first second => ⌜Q first second⌝) := by
+  intro hSpec
+  refine ispec_conseq (stdSpec_ispec m (Std.uncurry Q) hSpec)
+    (entails_refl emp) ?_
+  rintro ⟨first, second⟩
+  exact entails_refl ⌜Q first second⌝
 
 /-- An arbitrary postcondition resource may be discarded.  Since the logic is
 affine this is an instance of the rule of consequence. -/
@@ -855,6 +929,34 @@ theorem dispec_ok_intro {α : Type u} {Q : IPost α} {x : α} (hQ : ∀ h, Q x h
     dispec emp (Result.ok x) Q :=
   dispec_pure fun h _ => hQ h
 
+@[simp, step_simps]
+theorem sep_ipure_true_r_eq (P : IProp) :
+    (P ∗ ⌜True⌝) = P := by
+  rw [sep_comm_eq, sep_ipure_true_l_eq]
+
+attribute [simp, step_simps] entails_emp_ipure_iff
+attribute [step_simps] entails_refl
+
+@[simp]
+theorem ispec_ok_iff {α : Type u} {P : IPre} {Q : IPost α} {x : α} :
+    ispec P (Result.ok x) Q ↔ P ⊢ Q x := by
+  constructor
+  · intro hTriple h hP
+    rw [ispec_iff] at hTriple
+    have hPost := (hTriple emp h ((sep_emp_r P).mpr h hP)).ret_post
+    exact (sep_emp_r (Q x)).mp h hPost
+  · exact ispec_pure
+
+@[simp]
+theorem dispec_ok_iff {α : Type u} {P : IPre} {Q : IPost α} {x : α} :
+    dispec P (Result.ok x) Q ↔ P ⊢ Q x := by
+  constructor
+  · intro hTriple h hP
+    rw [dispec_iff] at hTriple
+    have hPost := (hTriple emp h ((sep_emp_r P).mpr h hP)).ret_post
+    exact (sep_emp_r (Q x)).mp h hPost
+  · exact dispec_pure
+
 theorem ispec_div_elim {α : Type u} {Q : IPost α}
     (hTriple : ispec emp (Result.div : Result α) Q) : False :=
   (ispec_apply hTriple (h := ∅) trivial).div_false
@@ -956,10 +1058,18 @@ theorem ispec_step_bind {α : Type u} {β : Type v} {P Pm F : IPre}
     ispec P (Aeneas.Std.bind m next) Q :=
   ispec_ramified_bind' hStep hPre hNext
 
+/-- Ramified implication between a callee triple and its enclosing triple. -/
+def iqimp {α : Type u} (P Pm : IPre) (Qm Q : IPost α) : Prop :=
+  P ⊢ Pm ∗ (Qm -∗+ Q)
+
+theorem iqimp_iff {α : Type u} (P Pm : IPre) (Qm Q : IPost α) :
+    iqimp P Pm Qm Q ↔ P ⊢ Pm ∗ (Qm -∗+ Q) :=
+  Iff.rfl
+
 /-- Rule used by `step` for a terminal monadic call. -/
 theorem ispec_step_mono {α : Type u} {P Pm : IPre} {Q : IPost α}
     (m : Result α) (Qm : IPost α) (hStep : ispec Pm m Qm)
-    (hRamified : P ⊢ Pm ∗ (Qm -∗+ Q)) :
+    (hRamified : iqimp P Pm Qm Q) :
     ispec P m Q :=
   ispec_ramified_frame hStep hRamified
 
@@ -973,7 +1083,7 @@ theorem dispec_step_bind {α : Type u} {β : Type v} {P Pm F : IPre}
 
 /-- Rule used by `step` for a terminal monadic call on a partial goal. -/
 theorem dispec_step_mono {α : Type u} {P Pm : IPre} {Q : IPost α} (m : Result α)
-    (Qm : IPost α) (hStep : dispec Pm m Qm) (hRamified : P ⊢ Pm ∗ (Qm -∗+ Q)) :
+    (Qm : IPost α) (hStep : dispec Pm m Qm) (hRamified : iqimp P Pm Qm Q) :
     dispec P m Q :=
   dispec_ramified_frame hStep hRamified
 
@@ -995,14 +1105,12 @@ macro (name := intro_ispec) "intro_ispec" : tactic =>
     mk_spec_bind := ``ispec_step_bind
     mk_spec_bind_skip_args := 7
     uncurry_elim_tactics := #[
-      ``forall_ispec_uncurry',
-      ``forall_ispec_uncurry,
-      ``forall_ispec_ipure_uncurry', ``forall_ispec_ipure_uncurry,
+      ``iqimp_iff,
       ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair, ``uncurry'_eq,
       ``uncurry_apply, ``uncurry_eq
     ]
     qimp_elim_tactics := #[
-      ``forall_eq, ``forall_eq',
+      ``iqimp_iff,
       ``ispec_ipure_iff,
       ``forall_unit,
       ``sep_emp_l_eq, ``sep_ipure_true_l_eq,
@@ -1015,6 +1123,15 @@ macro (name := intro_ispec) "intro_ispec" : tactic =>
     liftings := #[
       { from_statement := ``spec
         conversion_thm := ``spec_ispec
+        conversion_thm_inferred_args := 3 },
+      { from_statement := ``Std.WP.spec
+        conversion_thm := ``stdSpecUncurry'_ispec
+        conversion_thm_inferred_args := 4 },
+      { from_statement := ``Std.WP.spec
+        conversion_thm := ``stdSpecUncurry_ispec
+        conversion_thm_inferred_args := 4 },
+      { from_statement := ``Std.WP.spec
+        conversion_thm := ``stdSpec_ispec
         conversion_thm_inferred_args := 3 }
     ]
   }
@@ -1029,14 +1146,12 @@ macro (name := intro_ispec) "intro_ispec" : tactic =>
     mk_spec_bind := ``dispec_step_bind
     mk_spec_bind_skip_args := 7
     uncurry_elim_tactics := #[
-      ``forall_dispec_uncurry',
-      ``forall_dispec_uncurry,
-      ``forall_dispec_ipure_uncurry', ``forall_dispec_ipure_uncurry,
+      ``iqimp_iff,
       ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair, ``uncurry'_eq,
       ``uncurry_apply, ``uncurry_eq
     ]
     qimp_elim_tactics := #[
-      ``forall_eq, ``forall_eq',
+      ``iqimp_iff,
       ``dispec_ipure_iff,
       ``forall_unit,
       ``sep_emp_l_eq, ``sep_ipure_true_l_eq,
@@ -1055,6 +1170,12 @@ macro (name := intro_ispec) "intro_ispec" : tactic =>
         conversion_thm_inferred_args := 3 },
       { from_statement := ``dspec
         conversion_thm := ``dspec_dispec
+        conversion_thm_inferred_args := 3 },
+      { from_statement := ``Std.WP.spec
+        conversion_thm := ``stdSpec_dispec
+        conversion_thm_inferred_args := 3 },
+      { from_statement := ``Std.WP.dspec
+        conversion_thm := ``stdDspec_dispec
         conversion_thm_inferred_args := 3 }
     ]
   }
