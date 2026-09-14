@@ -1189,7 +1189,7 @@ macro (name := intro_ispec) "intro_ispec" : tactic =>
     mk_spec_mono_skip_args := 2
     mk_spec_bind := ``spec_bind
     mk_spec_bind_skip_args := 4
-    uncurry_elim_tactics := #[``forall_uncurry', ``forall_uncurry]
+    uncurry_elim_tactics := #[]
     qimp_elim_tactics := #[
       ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair, ``uncurry'_eq,
       ``uncurry_apply, ``uncurry_eq,
@@ -1212,7 +1212,7 @@ macro (name := intro_ispec) "intro_ispec" : tactic =>
     mk_spec_mono_skip_args := 2
     mk_spec_bind := ``dspec_bind
     mk_spec_bind_skip_args := 4
-    uncurry_elim_tactics := #[``forall_uncurry', ``forall_uncurry]
+    uncurry_elim_tactics := #[]
     qimp_elim_tactics := #[
       ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair, ``uncurry'_eq,
       ``uncurry_apply, ``uncurry_eq,

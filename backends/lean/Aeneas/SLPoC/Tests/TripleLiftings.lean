@@ -85,7 +85,7 @@ example (x : Nat) (P : IProp) :
 example (x : Nat) (P : IProp) :
     ⦃ P ⦄ legacyPartialPure x ⦃⇓ y => P ∗ ⌜y = x⌝ ⦄div := by step*
 
-/-! Tuple binders survive legacy lifting into an SL bind continuation. -/
+/-! Legacy lifting preserves a single pair binder from the call site. -/
 
 def useLegacyPair (x : Nat) : Result Nat := do
   let pair ← legacyPair x
@@ -93,15 +93,14 @@ def useLegacyPair (x : Nat) : Result Nat := do
 
 example (x : Nat) :
     ⦃ emp ⦄ useLegacyPair x
-      ⦃⇓ result => ⌜result = x + (x + 1)⌝ ⦄ := by
-  unfold useLegacyPair
-  step as ⟨first, second, hFirst, hSecond⟩
-  guard_hyp hFirst : first = x
-  guard_hyp hSecond : second = x + 1
-  simp [hFirst, hSecond]
+        ⦃⇓ result => ⌜result = x + (x + 1)⌝ ⦄ := by
+    unfold useLegacyPair
+    step as ⟨pair, hFirst, hSecond⟩
+    guard_hyp hFirst : pair.1 = x
+    guard_hyp hSecond : pair.2 = x + 1
+    simp [hFirst, hSecond]
 
-/-! The named SL mono relation also preserves tuple binders for direct
-spatial specifications, without invoking a lifting. -/
+/-! A terminal call likewise follows the single binder in the outer postcondition. -/
 
 example (recur : Nat → Result (Nat × Nat))
     (hRecur : ∀ x,
@@ -110,9 +109,9 @@ example (recur : Nat → Result (Nat × Nat))
     (x : Nat) :
     ⦃ emp ⦄ recur x
       ⦃⇓ pair => ⌜pair.1 + pair.2 = x + (x + 1)⌝ ⦄ := by
-  step with hRecur x as ⟨first, second, hFirst, hSecond⟩
-  guard_hyp hFirst : first = x
-  guard_hyp hSecond : second = x + 1
+  step with hRecur x as ⟨pair, hFirst, hSecond⟩
+  guard_hyp hFirst : pair.1 = x
+  guard_hyp hSecond : pair.2 = x + 1
   simp [hFirst, hSecond]
 
 /-! Partial pure specifications work only in partial judgments. -/
@@ -233,17 +232,17 @@ def usePartialPair (x : Nat) : Result Nat := do
 example (x : Nat) :
     usePartialPair x ⦃ z => z = x + (x + 1) ⦄div := by
   unfold usePartialPair
-  step as ⟨first, second, hFirst, hSecond⟩
-  guard_hyp hFirst : first = x
-  guard_hyp hSecond : second = x + 1
+  step as ⟨pair, hFirst, hSecond⟩
+  guard_hyp hFirst : pair.1 = x
+  guard_hyp hSecond : pair.2 = x + 1
   step*
 
 example (x : Nat) (P : IProp) :
     ⦃ P ⦄ usePartialPair x ⦃⇓ z => P ∗ ⌜z = x + (x + 1)⌝ ⦄div := by
   unfold usePartialPair
-  step as ⟨first, second, hFirst, hSecond⟩
-  guard_hyp hFirst : first = x
-  guard_hyp hSecond : second = x + 1
+  step as ⟨pair, hFirst, hSecond⟩
+  guard_hyp hFirst : pair.1 = x
+  guard_hyp hSecond : pair.2 = x + 1
   step*
 
 example (Q : Nat → Prop) :
