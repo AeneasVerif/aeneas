@@ -370,7 +370,7 @@ partial def Script.toSyntax (script : Script) : MetaM (Array Syntax.Tactic) := d
     pure (s0 ++ s1)
 
 inductive TargetKind where
-| bind (names : Array (Option Name))
+| bind (names : Array (Option Name)) (dischargeTac : Option (TSyntax `tactic))
 | switch (info : Bifurcation.Info)
 | result (dischargeTac : Option (TSyntax `tactic))
 | unknown
@@ -392,7 +392,7 @@ def analyzeTarget : TacticM TargetKind := do
       let some (_, cont) := Step.getBindArgs? e
         | throwError "Expected bind to have {arity} arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
       let names ← Step.getPostNames cont
-      pure (.bind names)
+      pure (.bind names (← Step.getDischargeTactic goalTy))
     else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
       pure (.switch bfInfo)
     else
@@ -421,7 +421,7 @@ partial def evalStepStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
       pure { grindState? := some gs }
     else pure {}
   -- Simplify the target
-  let (info, mvarId) ← simplifyTarget
+  let (info, mvarId) ← simplifyTarget false
   -- Continue
   match mvarId with
   | some _ =>
@@ -447,13 +447,17 @@ partial def evalStepStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
   | none => pure { script := info.script, unassignedVars := #[], subgoals := #[] }
 
 where
-  simplifyTarget : TacticM (Info × Option MVarId) := do
+  simplifyTarget (simplifySLOk : Bool) : TacticM (Info × Option MVarId) := do
     withTraceNode `Step (fun _ => do pure m!"simplifyTarget") do
     traceGoalWithNode "about to simplify goal"
     let mvarId0 ← getMainGoal
+    let addSimpThms ←
+      if simplifySLOk then
+        Step.getSLOkSimps
+      else pure #[]
     let r ← Simp.simpAt (simpOnly := true)
       { maxDischargeDepth := 1, failIfUnchanged := false}
-      {simpThms := #[← Step.stepSimpExt.getTheorems]}
+      {simpThms := #[← Step.stepSimpExt.getTheorems], addSimpThms}
       (.targets #[] true)
     /- We may have proven the goal already -/
     let tac : Array Syntax.Tactic ← do
@@ -485,7 +489,7 @@ where
         else pure (some (fuel - 1))
     let targetKind ← analyzeTarget
     match targetKind with
-    | .bind names => do
+    | .bind names dischargeTac => do
       let (info, mainGoalAndState) ← onBind cfg names ss
       /- Continue, if necessary -/
       match mainGoalAndState with
@@ -506,8 +510,13 @@ where
         /- Check if there are unassigned meta-variables which are not `Prop`:
            if it is the case it means there are meta-variables we could not infer, so we stop -/
         if info.unassignedVars.isEmpty then
-          let restInfo ← traverseProgram cfg fuel ss
-          return (info ++ restInfo)
+          if (← observing? (Step.getSpecProgram (← getMainTarget))).isSome then
+            let restInfo ← traverseProgram cfg fuel ss
+            return (info ++ restInfo)
+          else
+            let dischargeTactics ← mkDischargeTactics dischargeTac
+            let (finishInfo, _) ← onFinish cfg mainGoal dischargeTactics
+            return (info ++ finishInfo)
         else
           trace[Step] "Found unassigned meta-variables of type ≠ Prop: stopping"
           let info' : Info ← pure
@@ -577,12 +586,21 @@ where
       trace[Step] "done"
       pure (info, none)
     | some (mvarId, _) =>
-      let dischargeTactics :=
-        match dischargeTac with
-        | none => []
-        | some tac => [("specification discharge tactic", tac, evalTactic tac)]
+      let dischargeTactics ← mkDischargeTactics dischargeTac
       let (info', mvarId) ← onFinish cfg mvarId dischargeTactics
       pure (info ++ info', mvarId)
+
+  mkDischargeTactics (dischargeTac : Option (TSyntax `tactic)) :
+      TacticM (List (String × Syntax.Tactic × TacticM Unit)) := do
+    match dischargeTac with
+    | none => pure []
+    | some tac =>
+      let simpThenTac ← `(tactic| subst_vars <;> $tac)
+      pure [
+        ("equality substitution followed by the specification discharge tactic",
+          simpThenTac, evalTactic simpThenTac),
+        ("specification discharge tactic", tac, evalTactic tac)
+      ]
 
   onFinish (cfg : Config) (mvarId : MVarId)
       (extraTacl : List (String × Syntax.Tactic × TacticM Unit) := []) :
@@ -591,7 +609,7 @@ where
     setGoals [mvarId]
     traceGoalWithNode "goal"
     /- Simplify a bit -/
-    let (info, mvarId) ← simplifyTarget
+    let (info, mvarId) ← simplifyTarget true
     match mvarId with
     | none => pure (info, mvarId)
     | some mvarId =>
