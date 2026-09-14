@@ -324,16 +324,15 @@ def incrPair (value : Nat) : Result Nat := do
   let output ← pair value
   incr (output.1 + output.2)
 
-/- Registered postcondition uncurrying runs before `intro_tactic`, which then exposes
-both tuple components and both pure hypotheses. -/
+/- A single call-site binder keeps the pair together. -/
 example (value : Nat) :
     ⦃ emp ⦄
       incrPair value
     ⦃⇓ result => ⌜result = value + (value + 1) + 1⌝ ⦄ := by
   unfold incrPair
-  step as ⟨ first, second, hFirst, hSecond ⟩
-  guard_hyp hFirst : first = value
-  guard_hyp hSecond : second = value + 1
+  step as ⟨ output, hFirst, hSecond ⟩
+  guard_hyp hFirst : output.1 = value
+  guard_hyp hSecond : output.2 = value + 1
   step*
 
 /-! ### Pure programs stated as SL triples
