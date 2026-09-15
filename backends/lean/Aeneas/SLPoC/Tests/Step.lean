@@ -4,6 +4,8 @@ open Aeneas.Data.Coinductive
 
 namespace Aeneas.SepLogic.Tests.Step
 
+open Aeneas.Std.WP
+
 open Aeneas.Std (Result)
 
 
@@ -56,6 +58,7 @@ example (p : Ptr Nat) (value : Nat) :
   step* 2
   step
   simp only [opaqueStepResult]
+  simp_all
 
 /-! ## The terminal return
 

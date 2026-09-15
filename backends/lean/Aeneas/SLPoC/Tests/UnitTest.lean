@@ -6,6 +6,8 @@ namespace Aeneas.SepLogic
 
 open Aeneas.Data.Coinductive
 
+open Aeneas.Std.WP
+
 open Aeneas.Std (Heap Result RustEffect)
 
 unseal Result
@@ -18,11 +20,11 @@ example : (Result.fail .panic : Result Nat) =
 
 example (Q : Nat → Prop) :
     ¬ spec (Result.fail .panic : Result Nat) Q :=
-  spec_fail .panic Q
+  (spec_fail .panic).mp
 
 example (Q : Nat → Prop) :
     ¬ dspec (Result.fail .panic : Result Nat) Q :=
-  dspec_fail .panic Q
+  (dspec_fail .panic).mp
 
 /-! ## Entailment framing -/
 
@@ -90,7 +92,7 @@ example (p : Ptr Nat) (value : Nat) :
   iintro_shallow
   rename_i hValue
   guard_hyp hValue : value = 1
-  apply ispec_pure
+  apply (ispec_ok _).mpr
   iframe
 
 /-- Right-side extraction also works for partial ispecs. -/
@@ -99,7 +101,7 @@ example (p : Ptr Nat) (value : Nat) :
   iintro_shallow
   rename_i hValue
   guard_hyp hValue : value = 1
-  apply dispec_pure
+  apply (dispec_ok _).mpr
   iframe
 
 /-- The `step` introduction variant extracts facts from the callee
@@ -111,7 +113,7 @@ example (p : Ptr Nat) (value : Nat) (P F : Prop) :
   rename_i hP
   guard_hyp hP : P
   fail_if_success have : F := by assumption
-  apply ispec_pure
+  apply (ispec_ok _).mpr
   iframe
 
 /-! ## `iintro_keep`
@@ -289,6 +291,7 @@ example (p : Ptr Nat) (value : Nat) :
   step* 2
   step
   simp only [opaqueStepResult]
+  simp_all
 
 /-- Conversely, unbounded `step*` may solve the terminal entailment, making
 the tactics after the original finite block fail with no goals. -/
@@ -302,6 +305,7 @@ example (p : Ptr Nat) (value : Nat) :
   step
   step
   step
+  simp_all
 
 /-! ## Affine resource discard
 
@@ -435,7 +439,7 @@ example (p q : Ptr Nat) (x : Nat) :
     ⦃ iprop(iexists (fun n => iprop(q ↦ n)) ∗ p ↦ x) ⦄ touchThenSet p
       ⦃⇓ iprop(iexists (fun n => iprop(q ↦ n)) ∗ p ↦ 7)⦄ := by
   unfold touchThenSet
-  apply ispec_step_bind (touchAny p) _ (touchAny.spec p)
+  apply Aeneas.Std.WP.ispec_bind (m := touchAny p) (touchAny.spec p)
   case hPre =>
     fail_if_success iintro_entail
     iframe

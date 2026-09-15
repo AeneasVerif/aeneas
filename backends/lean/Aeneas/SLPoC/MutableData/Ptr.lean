@@ -1,4 +1,10 @@
-import Aeneas.SLPoC.ST
+import Aeneas.Std.Delab
+import Aeneas.Std.WP
+import Aeneas.SLPoC.StateMachine
+import Aeneas.Std.Primitives
+import Aeneas.SepLogic
+import Aeneas.Tactic.SepLogic
+import Aeneas.Tactic.Step.StepStar
 
 /-!
 # Interior pointers
@@ -32,7 +38,38 @@ This file is also where the heap of `Aeneas.Std.Heap` stops being visible: a
 
 namespace Aeneas.SepLogic
 
+open Aeneas.Std.WP
+
 open Aeneas.Std (AllocId Heap Ref Result)
+
+/-! ## Unframed structural rules
+
+`Aeneas.Std.WP.ispec_bind` carries the explicit frame `step` needs to split a
+precondition it has not been told how to divide.  The proofs below always shape
+the precondition by hand with `ispec_conseq` first, so they want the plain
+sequencing rules, which are the `F := emp` case. -/
+
+theorem ispec_bind' {α : Type u} {β : Type v} {P : IPre} {Q₁ : IPost α}
+    {Q : IPost β} {m : Result α} {next : α → Result β}
+    (hFirst : ispec P m Q₁)
+    (hNext : ∀ value, ispec (Q₁ value) (next value) Q) :
+    ispec P (Aeneas.Std.bind m next) Q :=
+  Aeneas.Std.WP.ispec_bind hFirst (sep_emp_r P).mpr
+    fun value => by rw [sep_emp_r_eq]; exact hNext value
+
+theorem ispec_bind {α β : Type u} {P : IPre} {Q₁ : IPost α}
+    {Q : IPost β} {m : Result α} {next : α → Result β}
+    (hFirst : ispec P m Q₁)
+    (hNext : ∀ value, ispec (Q₁ value) (next value) Q) :
+    ispec P (m >>= next) Q :=
+  ispec_bind' hFirst hNext
+
+theorem ispec_seq {α β : Type u} {P H : IPre} {Q : IPost β}
+    {m₁ : Result α} {m₂ : Result β}
+    (hFirst : ispec P m₁ (fun _ => H))
+    (hSecond : ispec H m₂ Q) :
+    ispec P (m₁ >>= fun _ => m₂) Q :=
+  ispec_bind hFirst fun _ => hSecond
 
 variable {α : Type}
 
@@ -338,7 +375,7 @@ def freeRange (q : Ptr α) : Nat → Result Unit
 theorem freeRange.spec (q : Ptr α) (values : List α) :
     ⦃ q ↦* values ⦄ freeRange q values.length ⦃⇓ emp⦄ := by
   induction values generalizing q with
-  | nil => exact ispec_pure fun _ _ => trivial
+  | nil => exact (ispec_ok _).mpr fun _ _ => trivial
   | cons value rest ih =>
       have hSplit :
           (q ↦* (value :: rest)) = iprop(q ↦ value ∗ (q.add 1) ↦* rest) := by
@@ -425,7 +462,7 @@ theorem fillRange.spec (q : Ptr α) (values : List α) (value : α) :
     ⦃ q ↦* values ⦄ fillRange q value values.length
       ⦃⇓ q ↦* List.replicate values.length value⦄ := by
   induction values generalizing q with
-  | nil => exact ispec_pure (entails_refl _)
+  | nil => exact (ispec_ok _).mpr (entails_refl _)
   | cons old rest ih =>
       rw [List.length_cons, List.replicate_succ, Ptr.pointsToRange_cons,
         Ptr.pointsToRange_cons]
@@ -450,7 +487,7 @@ theorem copyRange.spec (dst src : Ptr α) (dstValues srcValues : List α)
       ⦃⇓ dst ↦* srcValues ∗ src ↦* srcValues⦄ := by
   induction srcValues generalizing dst src dstValues with
   | nil =>
-      refine ispec_pure (entails_trans (entails_emp_r _) ?_)
+      refine (ispec_ok _).mpr (entails_trans (entails_emp_r _) ?_)
       rw [Ptr.pointsToRange_nil, Ptr.pointsToRange_nil]
       exact (sep_emp_l emp).mpr
   | cons value rest ih =>
@@ -466,7 +503,7 @@ theorem copyRange.spec (dst src : Ptr α) (dstValues srcValues : List α)
         ?_ (by iframe) (fun _ => entails_refl _)
       apply ispec_bind (read.spec_frame src value _)
       intro result
-      apply ispec_ipure
+      apply ispec_ipure.mpr
       intro hResult
       rw [hResult]
       refine ispec_conseq (P' := iprop(dst ↦ old ∗
@@ -501,7 +538,7 @@ theorem compareRange.spec [DecidableEq α] (left right : Ptr α)
         cases rightValues with
         | nil => rfl
         | cons _ _ => simp at hLength
-      exact ispec_pure fun h hPre => (sep_pure_l _ _ h).mpr ⟨by simp, hPre⟩
+      exact (ispec_ok _).mpr fun h hPre => (sep_pure_l _ _ h).mpr ⟨by simp, hPre⟩
   | cons x lrest ih =>
       obtain ⟨y, rrest, rfl⟩ : ∃ y rrest, rightValues = y :: rrest := by
         cases rightValues with
@@ -514,7 +551,7 @@ theorem compareRange.spec [DecidableEq α] (left right : Ptr α)
         ?_ (by iframe) (fun _ => entails_refl _)
       apply ispec_bind (read.spec_frame left x _)
       intro resultLeft
-      apply ispec_ipure
+      apply ispec_ipure.mpr
       intro hLeft
       rw [hLeft]
       refine ispec_conseq (P' := iprop(right ↦ y ∗
@@ -522,7 +559,7 @@ theorem compareRange.spec [DecidableEq α] (left right : Ptr α)
         ?_ (by iframe) (fun _ => entails_refl _)
       apply ispec_bind (read.spec_frame right y _)
       intro resultRight
-      apply ispec_ipure
+      apply ispec_ipure.mpr
       intro hRight
       rw [hRight]
       by_cases hEq : x = y
@@ -539,7 +576,7 @@ theorem compareRange.spec [DecidableEq α] (left right : Ptr α)
               iprop((left ↦ x ∗ (left.add 1) ↦* lrest) ∗
                 (right ↦ y ∗ (right.add 1) ↦* rrest))) h hOwn
       · rw [if_neg hEq]
-        refine ispec_pure fun h hPre => (sep_pure_l _ _ h).mpr ⟨by simp [hEq], ?_⟩
+        refine (ispec_ok _).mpr fun h hPre => (sep_pure_l _ _ h).mpr ⟨by simp [hEq], ?_⟩
         exact (by iframe : iprop(right ↦ y ∗ (left ↦ x ∗
           ((left.add 1) ↦* lrest ∗ (right.add 1) ↦* rrest))) ⊢
             iprop((left ↦ x ∗ (left.add 1) ↦* lrest) ∗
@@ -570,13 +607,13 @@ theorem takeRange.spec (q : Ptr α) (values : List α) :
       ⦃⇓ result => ⌜result = values⌝⦄ := by
   induction values generalizing q with
   | nil =>
-      exact ispec_pure fun _ _ => rfl
+      exact (ispec_ok _).mpr fun _ _ => rfl
   | cons value rest ih =>
       rw [Ptr.pointsToRange_cons]
       simp only [List.length_cons, takeRange]
       apply ispec_bind (read.spec_frame q value ((q.add 1) ↦* rest))
       intro result
-      apply ispec_ipure
+      apply ispec_ipure.mpr
       intro hResult
       apply ispec_bind
         (ispec_conseq (ispec_frame (free.spec q value) ((q.add 1) ↦* rest))
@@ -584,7 +621,7 @@ theorem takeRange.spec (q : Ptr α) (values : List α) :
       intro _
       apply ispec_bind (ih (q := q.add 1))
       intro tail
-      exact ispec_pure fun _ hTail => by
+      exact (ispec_ok _).mpr fun _ hTail => by
         change result :: tail = value :: rest
         exact congrArg₂ List.cons hResult hTail
 
@@ -606,9 +643,9 @@ theorem end_mut_to_raw.spec {α : Type} {value : α} (q : Ptr α) :
   unfold end_mut_to_raw
   apply ispec_bind (read.spec q value)
   intro result
-  apply ispec_ipure
+  apply ispec_ipure.mpr
   intro hResult
   apply ispec_seq (free.spec q value)
-  exact ispec_pure fun _ _ => hResult
+  exact (ispec_ok _).mpr fun _ _ => hResult
 
 end Aeneas.SepLogic
