@@ -597,6 +597,11 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
       trait_impls pure_translations
   in
 
+  (* Minimize the generic parameters of the globals *)
+  let global_decls, pure_translations, trait_impls =
+    Micro.minimize_globals_generics global_decls pure_translations trait_impls
+  in
+
   (* Return *)
   ( trans_ctx,
     {
