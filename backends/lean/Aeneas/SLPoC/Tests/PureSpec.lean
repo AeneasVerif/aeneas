@@ -28,9 +28,10 @@ notation closes.
 
 namespace PureSpecNotationTests
 
+open Aeneas
 open Aeneas.Std (Error Result RustEffect)
 open Aeneas.SepLogic
-open Aeneas.SepLogic.WP
+open Aeneas.Std.WP
 
 /-! ## 1. The two forms are the same proposition
 
@@ -168,16 +169,16 @@ example : Result.ok (0, 1, 2) ⦃ (a, (b, c)) =>
 ispec-specific introduction and entailment simplification passes. -/
 
 example : Result.ok (0, 1) ⦃ x y => x = 0 ∧ y = 1 ⦄ := by
-  step
+  step*
 
 example : Result.ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄ := by
-  step
+  step*
 
 example : Result.ok (0, 1) ⦃ x y => x = 0 ∧ y = 1 ⦄div := by
-  step
+  step*
 
 example : Result.ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄div := by
-  step
+  step*
 
 /-- error: unsolved goals
 p : Ptr ℕ
@@ -318,7 +319,7 @@ theorem pair.spec (value : Nat) :
       first = value ∧ second = value + 1
     ⦄ := by
   unfold pair
-  step
+  step*
 
 def incrPair (value : Nat) : Result Nat := do
   let output ← pair value
@@ -378,7 +379,7 @@ theorem pureSLExists.spec (value : Nat) :
       ∃ witness : Nat, ⌜result = witness ∧ witness = value⌝
     ⦄ := by
   unfold pureSLExists
-  apply ispec_pure
+  apply (ispec_ok _).mpr
   refine entails_exists_r value ?_
   exact (entails_emp_ipure_iff _).2 ⟨rfl, rfl⟩
 
@@ -513,7 +514,7 @@ theorem makeCounter.spec :
   unfold makeCounter
   apply ispec_bind' (alloc.spec 0)
   intro p
-  apply ispec_pure
+  apply (ispec_ok _).mpr
   apply entails_exists_r p
   exact entails_trans
     (pure_sep_intro (p ↦ 0) fun n => increment.spec p n)
@@ -552,25 +553,27 @@ example (v : Nat) (P : IProp) :
     ⦃ P ⦄ old_add1 v ⦃⇓ y => P ∗ ⌜y = v + 1⌝ ⦄ := by
   step*
 
-/-- Lifting lookup is deliberately single-hop. A legacy pure specification can
-lift to `ispec`, but is not first lifted to `ispec` and then back into the new
-pure `spec` judgment. -/
+/-- There is no longer a lifting hop to make in this direction: `spec` is one
+judgment again, so a legacy pure specification applies to a pure goal directly. -/
 example (v : Nat) : old_add1 v ⦃ y => y = v + 1 ⦄ := by
-  fail_if_success step with old_add1.spec
-  unfold old_add1
-  step*
+  step with old_add1.spec
+  all_goals simp_all
 
-/-- **Separation → pure.**  In this direction there is nothing to lift at all:
-a program that performs an event is outright *false* under a judgment whose
-machine answers none. -/
-example (e : RustEffect.Input) (k : RustEffect.Output e → Result Nat) (p : Nat → Prop) :
-    ¬ Aeneas.Std.WP.spec (Result.vis e k) p := by
-  simp
+/-- **Separation → pure.**  There is nothing to lift in this direction either,
+but for the opposite reason: the boundary is gone.  `spec` *is* `ispec` read at
+`emp` with a pure postcondition. -/
+example (m : Result Nat) (p : Nat → Prop) :
+    Aeneas.Std.WP.spec m p = ispec emp m (fun value => ⌜p value⌝) := rfl
 
-/-- Concretely: `alloc` has no pure specification, however weak — so a function
-that allocates has none either, however pure its interface. -/
-example (p : Ptr Nat → Prop) : ¬ Aeneas.Std.WP.spec (alloc (0 : Nat)) p := by
-  simp [alloc, allocArray, Result.guardedModify]
+/-- So a program that performs an event is no longer outright false under the
+pure judgment: `IProp` is affine and `emp` holds of every heap, so an event that
+only extends the heap preserves every frame it is asked to.  What a total pure
+specification still rules out is failure and divergence, and nothing else. -/
+example (e : Error) (p : Nat → Prop) : ¬ Aeneas.Std.WP.spec (Result.fail e) p :=
+  (spec_fail e).mp
+
+example (p : Nat → Prop) : ¬ Aeneas.Std.WP.spec (Result.div : Result Nat) p :=
+  spec_div.mp
 
 /-! ## 4. The computation rules
 
@@ -579,15 +582,14 @@ They are the rules of the ispecs, read at `emp` and a pure postcondition. -/
 example : Result.ok 3 ⦃ r => r = 3 ⦄ := ret.spec 3
 
 example (e : Error) : ¬ (Result.fail e ⦃ (_ : Nat) => True ⦄) :=
-  spec_fail e _
+  (spec_fail e).mp
 
-example : ¬ ((Result.div : Result Nat) ⦃ _ => True ⦄) := ispec_div_elim
+example : ¬ ((Result.div : Result Nat) ⦃ _ => True ⦄) := spec_div.mp
 
-example : (Result.div : Result Nat) ⦃ _ => True ⦄div := dispec_div_intro
+example : (Result.div : Result Nat) ⦃ _ => True ⦄div := dispec_div
 
 /-- A pure-shaped ispec about a return hands its postcondition back. -/
-example (x : Nat) (h : Result.ok x ⦃ r => r = 3 ⦄) : x = 3 :=
-  (pure_holds ∅).mp (ispec_ok_apply (Q := fun r => ⌜r = 3⌝) h)
+example (x : Nat) (h : Result.ok x ⦃ r => r = 3 ⦄) : x = 3 := (spec_ok x).mp h
 
 /-! ## 5. Interoperability
 
@@ -699,12 +701,14 @@ theorem callWith.spec_pure (f : Nat → Result Nat) (x : Nat) (post : Nat → Pr
 example (x : Nat) : callWith bump x ⦃ y => y = x + 1 ⦄ := by
   apply callWith.spec_pure
   step
+  all_goals simp_all
 
 /-- A callee's SL ispec at `emp` with a pure postcondition also meets the
 pure contract; its spatial implementation is already verified separately. -/
 example (x : Nat) : ⦃ emp ⦄ callWith bumpBoxed x ⦃⇓ y => ⌜y = x + 1⌝⦄ := by
   apply callWith.spec_pure
   step
+  all_goals simp_all
 
 /-- The whole higher-order call, pure contract and all, framed into a heap
 proof by `step` — framing an `ispec` is what `step` already does. -/
@@ -712,6 +716,7 @@ example (p : Ptr Nat) (v x : Nat) :
     ⦃ p ↦ v ⦄ callWith bumpBoxed x ⦃⇓ y => ⌜y = x + 1⌝ ∗ p ↦ v⦄ := by
   step with (callWith.spec_pure (post := fun y => y = x + 1))
   · step
+    all_goals simp_all
 
 /-- A *separating* contract.  One specification covers a pure closure, a heap
 closure, and a closure that mixes them. -/
@@ -758,12 +763,14 @@ theorem updateWith.spec (f : Nat → Result Nat) (p : Ptr Nat) (v w : Nat)
 example (p : Ptr Nat) (v : Nat) :
     ⦃ p ↦ v ⦄ updateWith bump p ⦃⇓ p ↦ v + 1⦄ := by
   step* +inferPost
+  all_goals simp_all
 
 /-- The already-proved SL specification of `bumpBoxed` supplies the pure
 callback contract, without opening its spatial implementation in a pure goal. -/
 example (p : Ptr Nat) (v : Nat) :
     ⦃ p ↦ v ⦄ updateWith bumpBoxed p ⦃⇓ p ↦ v + 1⦄ := by
   step* +inferPost
+  all_goals simp_all
 
 /-- Nesting: a higher-order call inside a higher-order call, pure contract on
 the inside and a separating one on the outside. -/
@@ -773,6 +780,7 @@ example (p : Ptr Nat) (v : Nat) :
   apply callWith.spec
   step with (updateWith.spec (w := v + 1))
   · step
+    all_goals simp_all
   · step
 
 end Ex
@@ -786,12 +794,11 @@ owned resources is still permitted. -/
 example : ⦃ emp ⦄ alloc (0 : Nat) ⦃⇓ _ => ⌜True⌝⦄ := by
   step*
 
-/-- But it is not a `Result.ok`. -/
+/-- But it is not a `Result.ok`.  This no longer follows from the specification
+-- allocation satisfies one -- only from the program. -/
 example : ¬ ∃ q, alloc (0 : Nat) = Result.ok q := by
   rintro ⟨q, hq⟩
-  have hNot : ¬ Aeneas.Std.WP.spec (alloc (0 : Nat)) (fun _ => True) := by
-    simp [alloc, allocArray, Result.guardedModify]
-  exact hNot (Aeneas.Std.WP.exists_imp_spec ⟨q, hq, trivial⟩)
+  simp [alloc, allocArray, Result.guardedModify] at hq
 
 /-! ## 9. Examples carried over from `Aeneas.Std.WP`
 
@@ -873,7 +880,7 @@ def add1 (x : Nat) := Result.ok (x + 1)
 @[step]
 theorem add1_spec (x : Nat) : add1 x ⦃ y => y = x + 1⦄ := by
   unfold add1
-  step
+  step*
 
 example (x : Nat) :
     (do
@@ -881,6 +888,7 @@ example (x : Nat) :
       add1 y) ⦃ y => y = x + 2 ⦄ := by
   step
   step
+  all_goals simp_all
 
 example (x : Nat) :
     (do
@@ -888,6 +896,7 @@ example (x : Nat) :
       add1 y) ⦃ y => y = x + 2 ⦄ := by
   step
   step
+  all_goals simp_all
 
 def add2 (x : Nat) := Result.ok (x + 1, x + 2)
 
@@ -895,7 +904,7 @@ def add2 (x : Nat) := Result.ok (x + 1, x + 2)
 theorem add2_spec (x : Nat) :
     add2 x ⦃ (y, z) => y = x + 1 ∧ z = x + 2⦄ := by
   unfold add2
-  step
+  step*
 
 example (x : Nat) :
     (do
@@ -907,7 +916,7 @@ example (x : Nat) :
 theorem add2_spec' (x : Nat) :
     add2 x ⦃ y z => y = x + 1 ∧ z = x + 2⦄ := by
   unfold add2
-  step
+  step*
 
 example (x : Nat) :
     (do
@@ -919,7 +928,7 @@ example (x : Nat) :
 private theorem massert_spec' (b : Prop) [Decidable b] (h : b) :
     massert b ⦃ _ => True ⦄ := by
   simp only [massert, h, ↓reduceIte]
-  exact ispec_ok_intro fun _ => trivial
+  exact (spec_ok ()).mpr trivial
 
 example :
     (do
@@ -936,8 +945,7 @@ example (zero : List Nat → Result (List Nat))
     (do
       let _ ← zero s
       pure ()) ⦃ _ => True ⦄ := by
-  step
-  step
+  step*
 
 end LegacyWPExamples
 

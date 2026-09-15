@@ -11,6 +11,8 @@ lemmas that relate an array to the slice and the range underneath it.
 
 namespace Aeneas.SepLogic
 
+open Aeneas.Std.WP
+
 open Aeneas.Std (Heap Result)
 
 /-! ## Allocation, indexed access and release -/
@@ -44,14 +46,14 @@ theorem arrayRoundTrip.spec :
   intro _
   apply ispec_bind (Array.read.spec_array a [1, 0, 41] 0 (by simp))
   intro x
-  apply ispec_ipure
+  apply ispec_ipure.mpr
   intro hx
   apply ispec_bind (Array.read.spec_array a [1, 0, 41] 2 (by simp))
   intro y
-  apply ispec_ipure
+  apply ispec_ipure.mpr
   intro hy
   apply ispec_seq (Array.free.spec a [1, 0, 41])
-  exact ispec_pure fun _ _ => by simp_all
+  exact (ispec_ok _).mpr fun _ _ => by simp_all
 
 #guard (execClosed arrayRoundTrip arrayRoundTrip.spec).1 = 42
 
@@ -84,14 +86,14 @@ theorem arraySwap.spec : ⦃ emp ⦄ arraySwap ⦃⇓ result => ⌜result = (8, 
     simpa using Array.read.spec_array a [8, 7] 0 (by simp)
   apply ispec_bind hReadZero
   intro x
-  apply ispec_ipure
+  apply ispec_ipure.mpr
   intro hx
   apply ispec_bind (Array.read.spec_array a [8, 7] 1 (by simp))
   intro y
-  apply ispec_ipure
+  apply ispec_ipure.mpr
   intro hy
   apply ispec_seq (Array.free.spec a [8, 7])
-  exact ispec_pure fun _ _ => by simp_all
+  exact (ispec_ok _).mpr fun _ _ => by simp_all
 
 #guard (execClosed arraySwap arraySwap.spec).1 = (8, 7)
 
@@ -120,10 +122,10 @@ theorem arrayFill.spec : ⦃ emp ⦄ arrayFill ⦃⇓ result => ⌜result = 5⌝
     simpa using Array.read.spec_array a [5, 5, 5] 1 (by simp)
   apply ispec_bind hRead
   intro value
-  apply ispec_ipure
+  apply ispec_ipure.mpr
   intro hValue
   apply ispec_seq (Array.free.spec a [5, 5, 5])
-  exact ispec_pure fun _ _ => hValue
+  exact (ispec_ok _).mpr fun _ _ => hValue
 
 #guard (execClosed arrayFill arrayFill.spec).1 = 5
 
@@ -157,14 +159,14 @@ theorem arrayCopyCompare.spec :
   intro _
   apply ispec_bind (Array.compare.spec dst src [1, 2, 3] [1, 2, 3])
   intro same
-  apply ispec_ipure
+  apply ispec_ipure.mpr
   intro hSame
   apply ispec_bind (ispec_frame (Array.free.spec dst [1, 2, 3]) _)
   intro _
   apply ispec_seq
     (ispec_conseq (Array.free.spec src [1, 2, 3]) (sep_elim_left _ _)
       fun _ => entails_refl _)
-  exact ispec_pure fun _ _ => by simpa using hSame
+  exact (ispec_ok _).mpr fun _ _ => by simpa using hSame
 
 #guard (execClosed arrayCopyCompare arrayCopyCompare.spec).1 = true
 
