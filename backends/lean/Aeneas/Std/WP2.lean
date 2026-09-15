@@ -168,13 +168,56 @@ def uncurry' {α β γ : Type _} (p : α → β → γ) : α × β → γ :=
 @[defeq] theorem uncurry'_eq x (p : α → β → γ) : uncurry' p x = p x.fst x.snd := by simp [uncurry']
 
 /-! ### `ispec` rules -/
+@[simp, grind =, agrind =]
+theorem ispec_ok (x:α) : ispec P (ok x) Q ↔ P ⊢ Q x := by
+  constructor
+  · intro hTriple h hP
+    rw [ispec_iff] at hTriple
+    have hPost := (hTriple emp h ((sep_emp_r P).mpr h hP)).ret_post
+    exact (sep_emp_r (Q x)).mp h hPost
+  · intro hPost
+    rw [ispec_iff]
+    intro F h hPre
+    exact .ret (sep_mono hPost (entails_refl F) h hPre)
 
-private theorem ispec_apply {P : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : ispec P m Q) {h : Heap} (hPre : P h) :
-    rawIwp true m Q h := by
-  rw [ispec_iff] at hTriple
-  have hSpec := hTriple emp h ((sep_emp_r P).mpr h hPre)
-  exact hSpec.mono fun value => sep_elim_right (Q value) emp
+/-- A guarded modification is correct exactly when it is *local* at every heap `P`
+describes: for every disjoint frame, the guard holds and the output splits into an
+owned result and the unchanged frame.  Quantifying over frames here is what
+validates the frame rule — the frame an `ispec` carries is already one of them. -/
+theorem ispec_guardedModify {α : Type} {pre : Heap → Prop}
+    {modify : (h : Heap) → pre h → α × Heap} {P : IPre} {Q : IPost α}
+    (hLocal : ∀ h, P h → ∀ frame, PartialCommMonoid.Compatible h frame →
+      ∃ hPre : pre (h ∪ frame), ∃ h',
+        PartialCommMonoid.Compatible h' frame ∧
+        (modify (h ∪ frame) hPre).2 = h' ∪ frame ∧
+        Q (modify (h ∪ frame) hPre).1 h') :
+    ispec P (Result.guardedModify pre modify) Q := by
+  rw [ispec_iff]
+  rintro F h ⟨owned, framed, hDisjoint, rfl, hP, hF⟩
+  obtain ⟨hPre, h', hDisjoint', hModify, hPost⟩ := hLocal owned hP framed hDisjoint
+  refine TotalSpec.vis (H := handler)
+    (event := RustEffect.Input.guardedModify _ pre modify) ⟨hPre, ?_⟩
+  rw [hModify]
+  exact .ret ⟨h', framed, hDisjoint', rfl, hPost, hF⟩
+
+@[simp, grind =, agrind =]
+theorem ispec_fail (e : Error) : ispec P (fail e) Q ↔ P ⊢ ⌜False⌝ := by
+  constructor
+  · intro hTriple h hP
+    rw [ispec_iff] at hTriple
+    exact (hTriple emp h ((sep_emp_r P).mpr h hP)).vis_view
+  · intro hFalse h hP
+    exact (hFalse h hP).elim
+
+@[simp, grind =, agrind =]
+theorem ispec_div :
+    ispec P (Result.div : Result α) Q ↔ P ⊢ ⌜False⌝ := by
+  constructor
+  · intro hTriple h hP
+    rw [ispec_iff] at hTriple
+    exact (hTriple emp h ((sep_emp_r P).mpr h hP)).div_false
+  · intro hFalse h hP
+    exact (hFalse h hP).elim
 
 theorem ispec_frame {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : ispec P m Q) (H : IProp) :
@@ -209,6 +252,22 @@ theorem ispec_mono {α : Type u} {P Pm : IPre} {Q : IPost α} {m : Result α} {Q
   intro F h hPre
   have hSpec := hFramed F h (sep_mono hRamified (entails_refl F) h hPre)
   exact hSpec.mono fun value => sep_mono (postWand_cancel Qm Q value) (entails_refl F)
+
+/-- Bind rule used by `step`. It is stated on `Aeneas.Std.bind` rather than on `>>=` -/
+theorem ispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
+    {next : α → Result β} {Q : IPost β} {m : Result α} {Qm : IPost α}
+    (hStep : ispec Pm m Qm)
+    (hPre : P ⊢ Pm ∗ F)
+    (hNext : ∀ value, ispec (Qm value ∗ F) (next value) Q) :
+    ispec P (Aeneas.Std.bind m next) Q := by
+  have hFirst : ispec P m (Qm ∗+ F) :=
+    ispec_mono (ispec_frame hStep F)
+      (entails_trans hPre (entails_sep_postWand _ (fun _ => entails_refl _)))
+  simp only [ispec_iff] at hFirst hNext ⊢
+  intro frame h hP
+  apply (hFirst frame h hP).bind
+  intro value h' hPost
+  exact hNext value frame h' hPost
 
 /-- Preserve separate tuple binders while lifting a pure specification. -/
 theorem specUncurry'_ispec
@@ -310,42 +369,6 @@ theorem ispec_ipure_iff {P : Prop} {m : Result α} {Q : α → Prop} :
     exact ispec_mono hTriple (entails_trans ((entails_emp_ipure_iff P).2 hP)
       (entails_sep_postWand _ (fun _ => entails_refl _)))
   · exact ispec_ipure'
-
-/-- A guarded modification is correct exactly when it is *local* at every heap `P`
-describes: for every disjoint frame, the guard holds and the output splits into an
-owned result and the unchanged frame.  Quantifying over frames here is what
-validates the frame rule — the frame an `ispec` carries is already one of them. -/
-theorem ispec_guardedModify {α : Type} {pre : Heap → Prop}
-    {modify : (h : Heap) → pre h → α × Heap} {P : IPre} {Q : IPost α}
-    (hLocal : ∀ h, P h → ∀ frame, PartialCommMonoid.Compatible h frame →
-      ∃ hPre : pre (h ∪ frame), ∃ h',
-        PartialCommMonoid.Compatible h' frame ∧
-        (modify (h ∪ frame) hPre).2 = h' ∪ frame ∧
-        Q (modify (h ∪ frame) hPre).1 h') :
-    ispec P (Result.guardedModify pre modify) Q := by
-  rw [ispec_iff]
-  rintro F h ⟨owned, framed, hDisjoint, rfl, hP, hF⟩
-  obtain ⟨hPre, h', hDisjoint', hModify, hPost⟩ := hLocal owned hP framed hDisjoint
-  refine TotalSpec.vis (H := handler)
-    (event := RustEffect.Input.guardedModify _ pre modify) ⟨hPre, ?_⟩
-  rw [hModify]
-  exact .ret ⟨h', framed, hDisjoint', rfl, hPost, hF⟩
-
-/-- Bind rule used by `step`. It is stated on `Aeneas.Std.bind` rather than on `>>=` -/
-theorem ispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
-    {next : α → Result β} {Q : IPost β} {m : Result α} {Qm : IPost α}
-    (hStep : ispec Pm m Qm)
-    (hPre : P ⊢ Pm ∗ F)
-    (hNext : ∀ value, ispec (Qm value ∗ F) (next value) Q) :
-    ispec P (Aeneas.Std.bind m next) Q := by
-  have hFirst : ispec P m (Qm ∗+ F) :=
-    ispec_mono (ispec_frame hStep F)
-      (entails_trans hPre (entails_sep_postWand _ (fun _ => entails_refl _)))
-  simp only [ispec_iff] at hFirst hNext ⊢
-  intro frame h hP
-  apply (hFirst frame h hP).bind
-  intro value h' hPost
-  exact hNext value frame h' hPost
 
 /-! ### `dispec` rules -/
 private theorem dispec_apply {P : IPre} {m : Result α} {Q : IPost α}
@@ -506,30 +529,6 @@ theorem dispec_admissible_forall {ι : Type v} {α : Type u} (P : ι → IPre) (
   Lean.Order.admissible_pi _ fun x => dispec_admissible (P x) (Q x)
 
 -- `ispec` theorems
-theorem ispec_ok_apply {α : Type u} {Q : IPost α} {x : α}
-    (hTriple : ispec emp (Result.ok x) Q) : Q x ∅ :=
-  (ispec_apply hTriple (h := ∅) trivial).ret_post
-
-@[simp, grind =, agrind =]
-theorem ispec_ok {α : Type u} {P : IPre} {Q : IPost α} {x : α} :
-    ispec P (Result.ok x) Q ↔ P ⊢ Q x := by
-  constructor
-  · intro hTriple h hP
-    rw [ispec_iff] at hTriple
-    have hPost := (hTriple emp h ((sep_emp_r P).mpr h hP)).ret_post
-    exact (sep_emp_r (Q x)).mp h hPost
-  · intro hPost
-    rw [ispec_iff]
-    intro F h hPre
-    exact .ret (sep_mono hPost (entails_refl F) h hPre)
-
-theorem ispec_ok_intro {α : Type u} {Q : IPost α} {x : α} (hQ : ∀ h, Q x h) :
-    ispec emp (Result.ok x) Q :=
-  ispec_ok.mpr fun h _ => hQ h
-
-theorem ispec_div_elim {α : Type u} {Q : IPost α}
-    (hTriple : ispec emp (Result.div : Result α) Q) : False :=
-  (ispec_apply hTriple (h := ∅) trivial).div_false
 
 -- `dispec` theorems
 theorem dispec_ok_apply {α : Type u} {Q : IPost α} {x : α}
@@ -562,16 +561,16 @@ theorem dispec_div_intro {α : Type u} {P : IPre} {Q : IPost α} :
 -- `spec` theorems
 @[simp, grind =, agrind =]
 theorem spec_ok (x : α) : spec (Result.ok x) p ↔ p x :=
-  ispec_ok.trans (entails_emp_ipure_iff (p x))
+  (ispec_ok x).trans (entails_emp_ipure_iff (p x))
 
 /-- Failure has no total pure specification. -/
 @[simp, grind =, agrind =]
 theorem spec_fail (e : Error) : spec (Result.fail e) p ↔ False :=
-  iff_false_intro fun hSpec => (ispec_apply hSpec (h := ∅) trivial).vis_view
+  (ispec_fail e).trans (entails_emp_ipure_iff False)
 
 @[simp, grind =, agrind =]
 theorem spec_div : spec (Result.div : Result α) p ↔ False :=
-  iff_false_intro ispec_div_elim
+  ispec_div.trans (entails_emp_ipure_iff False)
 
 -- `dspec` theorems
 @[simp, grind =, agrind =]
@@ -1297,7 +1296,7 @@ outside `Aeneas.Tactic.Step.Init`, which imports `Aeneas.Std.WP`. -/
 
 theorem ret.spec (value : α) :
     ⦃ emp ⦄ Result.ok value ⦃⇓ result => ⌜result = value⌝⦄ :=
-  ispec_ok.mpr fun _ _ => rfl
+  (ispec_ok value).mpr fun _ _ => rfl
 
 theorem pure.spec (value : α) :
     ⦃ emp ⦄ (Pure.pure value : Result α) ⦃⇓ result => ⌜result = value⌝⦄ :=
