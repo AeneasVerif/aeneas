@@ -583,10 +583,44 @@ private partial def mkPostSyntaxWith (curryName uncurryName : Name)
     let curryIdent := mkIdent curryName
     `($curryIdent $inner)
 
-/-- Build a marked postcondition from the parsed binder array. -/
+/-- If `stx` is a bare identifier or a juxtaposition (application) of bare
+identifiers — i.e. a binder group like `a b c` — return the identifiers in
+order.  Otherwise return `none`, so anonymous constructors `⟨a, b⟩`, tuple
+patterns, and other structured terms are left untouched. -/
+private partial def binderGroupIdents? (stx : Syntax) : Option (Array Term) :=
+  if stx.isIdent then some #[⟨stx⟩]
+  else if stx.getKind == ``Lean.Parser.Term.app || stx.getKind == Lean.nullKind then
+    stx.getArgs.foldlM (init := (#[] : Array Term)) fun acc s =>
+      (binderGroupIdents? s).map (acc ++ ·)
+  else none
+
+/-- Expand a binder that shares one type ascription across several names —
+`(a b c : T)` — into the list of single binders `[(a : T), (b : T), (c : T)]`,
+so each name becomes its own product component (exactly as if written
+separately).  Tuple/pattern binders `(a, b)`, `(⟨a, b⟩ : T)`, single binders
+`(a : T)`, and bare identifiers are returned unchanged. -/
+private def expandGroupedBinder (binder : Term) : MacroM (List Term) := do
+  match binder with
+  | `(($e : $t)) =>
+    match binderGroupIdents? e.raw with
+    | some ids =>
+      if ids.size ≤ 1 then pure [binder]
+      else ids.toList.mapM fun id => `(($id : $t))
+    | none => pure [binder]
+  | _ => pure [binder]
+
+/-- Flatten grouped binders across the whole binder list. -/
+private def expandBinders (xs : List Term) : MacroM (List Term) := do
+  let mut out : Array Term := #[]
+  for x in xs do
+    out := out ++ (← expandGroupedBinder x).toArray
+  pure out.toList
+
+/-- Build a marked postcondition from the parsed binder array, expanding grouped
+binders into one component per name first. -/
 private def mkPostWith (curryName uncurryName : Name)
-    (binders : Array Term) (body : Term) : MacroM Term :=
-  mkPostSyntaxWith curryName uncurryName body 0 binders.toList
+    (binders : Array Term) (body : Term) : MacroM Term := do
+  mkPostSyntaxWith curryName uncurryName body 0 (← expandBinders binders.toList)
 
 macro_rules
   | `(($m) ⦃⇓ $result => $Q⦄) => do
@@ -731,11 +765,15 @@ with pure postconditions.
 
 open Lean PrettyPrinter
 open Delaborator SubExpr
-open Std.Delab
-  (enterLams delabBinders buildTupleTerm delabUncurryAsTuple)
+open Std.Delab (enterLams delabBinders buildTupleTerm delabUncurryAsTuple)
 
-/-- Enter one explicit tuple binder without consuming continuation lambdas. -/
-private partial def enterPureUncurryOnce (acc : Array Std.Delab.BinderEntry)
+/-- Enter exactly the binders of a single `uncurry` level (up to 2).
+Unlike `enterUncurryChain` (which flattens everything), this stops after 2 binders
+so the continuation lambdas are left untouched.
+
+Example: on `fun a b => fun c => body`, collects `[a, b]` and leaves the reader
+at `fun c => body`. -/
+private partial def enterUncurryOnce (acc : Array Std.Delab.BinderEntry)
     (k : Array Std.Delab.BinderEntry → DelabM α) : DelabM α := do
   match (← getExpr) with
   | .lam n _ _ _ =>
@@ -744,12 +782,12 @@ private partial def enterPureUncurryOnce (acc : Array Std.Delab.BinderEntry)
       let acc' := acc.push (fv.fvarId!, n, pos)
       if acc'.size >= 2 then k acc'
       else if (← getExpr).isAppOfArity ``Std.uncurry 4 then
-        withAppArg <| enterPureUncurryOnce acc' k
+        withAppArg <| enterUncurryOnce acc' k
       else
-        enterPureUncurryOnce acc' k
+        enterUncurryOnce acc' k
   | _ => k acc
 
-private def isPurePostBinderWrapper (e : Expr) : Bool :=
+private def isPostBinderWrapper (e : Expr) : Bool :=
   match_expr e.consumeMData with
   | uncurry' _ _ _ _ => true
   | uncurry _ _ _ _ => true
@@ -763,7 +801,7 @@ private partial def delabPurePost : DelabM (Array Term × Term) := do
     withAppArg do
       match_expr (← getExpr).consumeMData with
       | Std.uncurry _ _ _ _ =>
-        withAppArg <| enterPureUncurryOnce #[] fun tupleBinders => do
+        withAppArg <| enterUncurryOnce #[] fun tupleBinders => do
           let (patterns, (moreBinders, body)) ←
             delabBinders tupleBinders.toList delabPurePost
           return (#[← buildTupleTerm patterns] ++ moreBinders, body)
@@ -777,7 +815,7 @@ where
   delabLamsThenRecurse : DelabM (Array Term × Term) := do
     if (← getExpr).consumeMData.isLambda then
       enterLams #[] fun binders => do
-        if binders.size == 1 && isPurePostBinderWrapper (← getExpr) then
+        if binders.size == 1 && isPostBinderWrapper (← getExpr) then
           let (patterns, (moreBinders, body)) ←
             delabBinders binders.toList delabPurePost
           return (patterns ++ moreBinders, body)
@@ -785,21 +823,6 @@ where
           delabBinders binders.toList delab
     else
       return (#[], ← delab)
-
-/-- Enter one explicit SL tuple binder without consuming continuation lambdas. -/
-private partial def enterSLUncurryOnce (acc : Array Std.Delab.BinderEntry)
-    (k : Array Std.Delab.BinderEntry → DelabM α) : DelabM α := do
-  match (← getExpr) with
-  | .lam n _ _ _ =>
-    let pos ← getPos
-    withBindingBody' n pure fun fv => do
-      let acc' := acc.push (fv.fvarId!, n, pos)
-      if acc'.size >= 2 then k acc'
-      else if (← getExpr).isAppOfArity ``Std.uncurry 4 then
-        withAppArg <| enterSLUncurryOnce acc' k
-      else
-        enterSLUncurryOnce acc' k
-  | _ => k acc
 
 /-- Recover separate binders, explicit tuple binders, and the final spatial
 postcondition from the marker chain produced by `mkPostSyntaxWith`. -/
@@ -809,7 +832,7 @@ private partial def delabSLPost : DelabM (Array Term × Term) := do
     withAppArg do
       match_expr (← getExpr).consumeMData with
       | Std.uncurry _ _ _ _ =>
-        withAppArg <| enterSLUncurryOnce #[] fun tupleBinders => do
+        withAppArg <| enterUncurryOnce #[] fun tupleBinders => do
           let (patterns, (moreBinders, body)) ←
             delabBinders tupleBinders.toList delabSLPost
           return (#[← buildTupleTerm patterns] ++ moreBinders, body)
