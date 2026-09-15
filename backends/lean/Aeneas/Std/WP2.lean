@@ -199,15 +199,16 @@ theorem ispec_frame_left {P : IPre} {m : Result α} {Q : IPost α}
   exact (sep_mono (sep_comm (Q value) H).mp (entails_refl F)) heap
     ((sep_assoc (Q value) H F).mpr heap hPost)
 
-theorem ispec_conseq {P' P : IPre} {m : Result α}
-    {Q' Q : IPost α}
-    (hTriple : ispec P' m Q') (hP : P ⊢ P')
-    (hQ : Q' ⊢+ Q) :
+/-- Mono rule used by `step` -/
+theorem ispec_mono {α : Type u} {P Pm : IPre} {Q : IPost α} {m : Result α} {Qm : IPost α}
+    (hStep : ispec Pm m Qm)
+    (hRamified : P ⊢ Pm ∗ (Qm -∗+ Q)) :
     ispec P m Q := by
-  rw [ispec_iff] at hTriple ⊢
+  have hFramed := ispec_frame hStep (Qm -∗+ Q)
+  rw [ispec_iff] at hFramed ⊢
   intro F h hPre
-  have hSpec := hTriple F h (sep_mono hP (entails_refl F) h hPre)
-  exact hSpec.mono fun value => sep_mono (hQ value) (entails_refl F)
+  have hSpec := hFramed F h (sep_mono hRamified (entails_refl F) h hPre)
+  exact hSpec.mono fun value => sep_mono (postWand_cancel Qm Q value) (entails_refl F)
 
 /-- Preserve separate tuple binders while lifting a pure specification. -/
 theorem specUncurry'_ispec
@@ -215,8 +216,7 @@ theorem specUncurry'_ispec
     spec m (uncurry' Q) →
       ispec emp m (uncurry' fun first second => ⌜Q first second⌝) := by
   intro hSpec
-  refine ispec_conseq (spec_ispec m (uncurry' Q) hSpec)
-    (entails_refl emp) ?_
+  refine ispec_mono (spec_ispec m (uncurry' Q) hSpec) (entails_sep_postWand _ ?_)
   rintro ⟨first, second⟩
   exact entails_refl ⌜Q first second⌝
 
@@ -226,8 +226,7 @@ theorem specUncurry_ispec
     spec m (Std.uncurry Q) →
       ispec emp m (Std.uncurry fun first second => ⌜Q first second⌝) := by
   intro hSpec
-  refine ispec_conseq (spec_ispec m (Std.uncurry Q) hSpec)
-    (entails_refl emp) ?_
+  refine ispec_mono (spec_ispec m (Std.uncurry Q) hSpec) (entails_sep_postWand _ ?_)
   rintro ⟨first, second⟩
   exact entails_refl ⌜Q first second⌝
 
@@ -236,8 +235,7 @@ affine this is an instance of the rule of consequence. -/
 theorem ispec_hany_post {P H : IPre} {m : Result α} {Q : IPost α}
     (hTriple : ispec P m (Q ∗+ H)) :
     ispec P m Q :=
-  ispec_conseq hTriple (entails_refl P)
-    (fun value => sep_elim_right (Q value) H)
+  ispec_mono hTriple (entails_sep_postWand P (fun value => sep_elim_right (Q value) H))
 
 /-- An arbitrary precondition resource may be discarded. -/
 theorem ispec_hany_pre {P H : IPre} {m : Result α} {Q : IPost α}
@@ -309,8 +307,8 @@ theorem ispec_ipure_iff {P : Prop} {m : Result α} {Q : α → Prop} :
       (P → ispec emp m (fun value => ⌜Q value⌝)) := by
   constructor
   · intro hTriple hP
-    exact ispec_conseq hTriple ((entails_emp_ipure_iff P).2 hP)
-      (fun _ => entails_refl _)
+    exact ispec_mono hTriple (entails_trans ((entails_emp_ipure_iff P).2 hP)
+      (entails_sep_postWand _ (fun _ => entails_refl _)))
   · exact ispec_ipure'
 
 /-- A guarded modification is correct exactly when it is *local* at every heap `P`
@@ -333,13 +331,6 @@ theorem ispec_guardedModify {α : Type} {pre : Heap → Prop}
   rw [hModify]
   exact .ret ⟨h', framed, hDisjoint', rfl, hPost, hF⟩
 
-/-- Mono rule used by `step` -/
-theorem ispec_mono {α : Type u} {P Pm : IPre} {Q : IPost α} {m : Result α} {Qm : IPost α}
-    (hStep : ispec Pm m Qm)
-    (hRamified : P ⊢ Pm ∗ (Qm -∗+ Q)) :
-    ispec P m Q :=
-  ispec_conseq (ispec_frame hStep (Qm -∗+ Q)) hRamified (postWand_cancel Qm Q)
-
 /-- Bind rule used by `step`. It is stated on `Aeneas.Std.bind` rather than on `>>=` -/
 theorem ispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
     {next : α → Result β} {Q : IPost β} {m : Result α} {Qm : IPost α}
@@ -348,7 +339,8 @@ theorem ispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
     (hNext : ∀ value, ispec (Qm value ∗ F) (next value) Q) :
     ispec P (Aeneas.Std.bind m next) Q := by
   have hFirst : ispec P m (Qm ∗+ F) :=
-    ispec_conseq (ispec_frame hStep F) hPre (fun _ => entails_refl _)
+    ispec_mono (ispec_frame hStep F)
+      (entails_trans hPre (entails_sep_postWand _ (fun _ => entails_refl _)))
   simp only [ispec_iff] at hFirst hNext ⊢
   intro frame h hP
   apply (hFirst frame h hP).bind
@@ -370,16 +362,20 @@ theorem dispec_frame {P : IPre} {m : Result α} {Q : IPost α}
   have hSpec := hTriple (H ∗ F) h ((sep_assoc P H F).mp h hPre)
   exact hSpec.mono fun value heap => (sep_assoc (Q value) H F).mpr heap
 
-theorem dispec_conseq {P' P : IPre} {m : Result α} {Q' Q : IPost α}
-    (hTriple : dispec P' m Q') (hP : P ⊢ P') (hQ : Q' ⊢+ Q) : dispec P m Q := by
-  rw [dispec_iff] at hTriple ⊢
+/-- Mono rule used by `step` on a partial goal.  See `ispec_mono`. -/
+theorem dispec_mono {α : Type u} {P Pm : IPre} {Q : IPost α} {m : Result α} {Qm : IPost α}
+    (hStep : dispec Pm m Qm)
+    (hRamified : P ⊢ Pm ∗ (Qm -∗+ Q)) :
+    dispec P m Q := by
+  have hFramed := dispec_frame hStep (Qm -∗+ Q)
+  rw [dispec_iff] at hFramed ⊢
   intro F h hPre
-  have hSpec := hTriple F h (sep_mono hP (entails_refl F) h hPre)
-  exact hSpec.mono fun value => sep_mono (hQ value) (entails_refl F)
+  have hSpec := hFramed F h (sep_mono hRamified (entails_refl F) h hPre)
+  exact hSpec.mono fun value => sep_mono (postWand_cancel Qm Q value) (entails_refl F)
 
 theorem dispec_hany_post {P H : IPre} {m : Result α} {Q : IPost α}
     (hTriple : dispec P m (Q ∗+ H)) : dispec P m Q :=
-  dispec_conseq hTriple (entails_refl P) (fun value => sep_elim_right (Q value) H)
+  dispec_mono hTriple (entails_sep_postWand P (fun value => sep_elim_right (Q value) H))
 
 theorem dispec_hany_pre {P H : IPre} {m : Result α} {Q : IPost α}
     (hTriple : dispec P m Q) : dispec (P ∗ H) m Q :=
@@ -430,8 +426,8 @@ theorem dispec_ipure_iff {P : Prop} {m : Result α} {Q : α → Prop} :
       (P → dispec emp m (fun value => ⌜Q value⌝)) := by
   constructor
   · intro hTriple hP
-    exact dispec_conseq hTriple ((entails_emp_ipure_iff P).2 hP)
-      (fun _ => entails_refl _)
+    exact dispec_mono hTriple (entails_trans ((entails_emp_ipure_iff P).2 hP)
+      (entails_sep_postWand _ (fun _ => entails_refl _)))
   · exact dispec_ipure'
 
 theorem dispec_exists {ι : Sort _} {J : ι → IPre} {m : Result α} {Q : IPost α}
@@ -455,14 +451,6 @@ theorem dispec_div {P : IPre} {Q : IPost α} :
   intro _ _ _
   exact PartialSpec.div
 
-/-- Mono rule used by `step` for a terminal monadic call on a partial goal.
-See `ispec_mono`. -/
-theorem dispec_mono {α : Type u} {P Pm : IPre} {Q : IPost α} {m : Result α} {Qm : IPost α}
-    (hStep : dispec Pm m Qm)
-    (hRamified : P ⊢ Pm ∗ (Qm -∗+ Q)) :
-    dispec P m Q :=
-  dispec_conseq (dispec_frame hStep (Qm -∗+ Q)) hRamified (postWand_cancel Qm Q)
-
 /-- Bind rule used by `step` on a partial goal.  See `ispec_bind`. -/
 theorem dispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
     {next : α → Result β} {Q : IPost β} {m : Result α} {Qm : IPost α}
@@ -471,7 +459,8 @@ theorem dispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
     (hNext : ∀ value, dispec (Qm value ∗ F) (next value) Q) :
     dispec P (Aeneas.Std.bind m next) Q := by
   have hFirst : dispec P m (Qm ∗+ F) :=
-    dispec_conseq (dispec_frame hStep F) hPre (fun _ => entails_refl _)
+    dispec_mono (dispec_frame hStep F)
+      (entails_trans hPre (entails_sep_postWand _ (fun _ => entails_refl _)))
   simp only [dispec_iff] at hFirst hNext ⊢
   intro frame h hP
   apply (hFirst frame h hP).bind
@@ -483,12 +472,14 @@ theorem dispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
 /-- Rewrite part of an `ispec` precondition using an entailment. -/
 theorem ispec_rewrite {α : Type u} {H₁ H₂ H₃ : IPre} {Q : IPost α} {m : Result α}
     (hPart : H₁ ⊢ H₂) (hRest : ispec (H₂ ∗ H₃) m Q) : ispec (H₁ ∗ H₃) m Q :=
-  ispec_conseq hRest (sep_mono hPart (entails_refl H₃)) (fun _ => entails_refl _)
+  ispec_mono hRest (entails_trans (sep_mono hPart (entails_refl H₃))
+    (entails_sep_postWand _ (fun _ => entails_refl _)))
 
 /-- Rewrite part of a partial ispec's precondition using an entailment. -/
 theorem dispec_rewrite {α : Type u} {H₁ H₂ H₃ : IPre} {Q : IPost α} {m : Result α}
     (hPart : H₁ ⊢ H₂) (hRest : dispec (H₂ ∗ H₃) m Q) : dispec (H₁ ∗ H₃) m Q :=
-  dispec_conseq hRest (sep_mono hPart (entails_refl H₃)) (fun _ => entails_refl _)
+  dispec_mono hRest (entails_trans (sep_mono hPart (entails_refl H₃))
+    (entails_sep_postWand _ (fun _ => entails_refl _)))
 
 /-! ## Reasoning about loops
 
@@ -549,14 +540,9 @@ theorem dispec_ok_intro {α : Type u} {Q : IPost α} {x : α} (hQ : ∀ h, Q x h
     dispec emp (Result.ok x) Q :=
   dispec_pure fun h _ => hQ h
 
-/- TODO: also register this, `entails_emp_ipure_iff` and `entails_refl` with
-`@[step_simps]`, once that attribute lives outside `Aeneas.Tactic.Step.Init`,
+/- TODO: register `sep_ipure_true_r_eq`, `entails_emp_ipure_iff` and `entails_refl`
+with `@[step_simps]`, once that attribute lives outside `Aeneas.Tactic.Step.Init`,
 which imports `Aeneas.Std.WP`. -/
-@[simp]
-theorem sep_ipure_true_r_eq (P : IProp) :
-    (P ∗ ⌜True⌝) = P := by
-  rw [sep_comm_eq, sep_ipure_true_l_eq]
-
 attribute [simp] entails_emp_ipure_iff
 
 @[simp, grind =, agrind =]
@@ -1027,11 +1013,11 @@ theorem dspec_iff {m : Result α} {Q : α → Prop} :
 /-- Mono rule used by `step`. -/
 theorem spec_mono {α : Type u} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀) :
     (∀ x, P₀ x → P₁ x) → spec m P₁ :=
-  fun hMonPost => ispec_conseq h (entails_refl emp) (fun value _ => hMonPost value)
+  fun hMonPost => ispec_mono h (entails_sep_postWand _ (fun value _ => hMonPost value))
 
 theorem dspec_mono {α : Type u} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : dspec m P₀) :
     (∀ x, P₀ x → P₁ x) → dspec m P₁ :=
-  fun hMonPost => dispec_conseq h (entails_refl emp) (fun value _ => hMonPost value)
+  fun hMonPost => dispec_mono h (entails_sep_postWand _ (fun value _ => hMonPost value))
 
 /-- Bind rule used by `step`. It is stated on `Aeneas.Std.bind` rather than on `>>=`, which is
 what a translated program binds with. -/
@@ -1042,7 +1028,8 @@ theorem spec_bind {α : Type u} {β : Type v} {k : α → Result β} {Pₖ : Pos
     spec (Aeneas.Std.bind m k) Pₖ :=
   fun hm hk =>
     ispec_bind hm (sep_emp_r emp).mpr fun value =>
-      ispec_conseq (ispec_ipure' (hk value)) (sep_emp_r _).mp (fun _ => entails_refl _)
+      ispec_mono (ispec_ipure' (hk value)) (entails_trans (sep_emp_r _).mp
+        (entails_sep_postWand _ (fun _ => entails_refl _)))
 
 theorem dspec_bind {α : Type u} {β : Type v} {k : α → Result β} {Pₖ : Post β}
     {m : Result α} {Pₘ : Post α} :
@@ -1051,7 +1038,8 @@ theorem dspec_bind {α : Type u} {β : Type v} {k : α → Result β} {Pₖ : Po
     dspec (Aeneas.Std.bind m k) Pₖ :=
   fun hm hk =>
     dispec_bind hm (sep_emp_r emp).mpr fun value =>
-      dispec_conseq (dispec_ipure' (hk value)) (sep_emp_r _).mp (fun _ => entails_refl _)
+      dispec_mono (dispec_ipure' (hk value)) (entails_trans (sep_emp_r _).mp
+        (entails_sep_postWand _ (fun _ => entails_refl _)))
 
 open Lean Elab Meta Tactic
 
@@ -1272,15 +1260,15 @@ macro_rules
   | `(tactic| wp_apply $[$thm?]? $[by $tac?]?) => do
     let apply ←
       match thm? with
-      | some thm => `(tactic| refine ispec_mono _ _ $thm ?_)
-      | none => `(tactic| refine ispec_mono _ _ (by assumption) ?_)
+      | some thm => `(tactic| refine ispec_mono $thm ?_)
+      | none => `(tactic| refine ispec_mono (by assumption) ?_)
     match tac? with
     | none => `(tactic| ($apply; isimpl))
     | some tac => `(tactic| ($apply; isimpl by $tac))
 
 /-- Re-state an already-proved ispec under a weaker postcondition. -/
 macro "wp_mono " thm:term : tactic =>
-  `(tactic| (apply ispec_conseq $thm (entails_refl _) <;> (intro _ <;> iframe)))
+  `(tactic| (refine ispec_mono $thm ?_ <;> iframe))
 
 /-- Reduce a partial ispec about a terminal `pure v` to the entailment
 `P ⊢ Q v`. -/
@@ -1294,15 +1282,15 @@ macro_rules
   | `(tactic| dwp_apply $[$thm?]? $[by $tac?]?) => do
     let apply ←
       match thm? with
-      | some thm => `(tactic| refine dispec_mono _ _ $thm ?_)
-      | none => `(tactic| refine dispec_mono _ _ (by assumption) ?_)
+      | some thm => `(tactic| refine dispec_mono $thm ?_)
+      | none => `(tactic| refine dispec_mono (by assumption) ?_)
     match tac? with
     | none => `(tactic| ($apply; isimpl))
     | some tac => `(tactic| ($apply; isimpl by $tac))
 
 /-- Re-state an already-proved partial ispec under a weaker postcondition. -/
 macro "dwp_mono " thm:term : tactic =>
-  `(tactic| (apply dispec_conseq $thm (entails_refl _) <;> (intro _ <;> iframe)))
+  `(tactic| (refine dispec_mono $thm ?_ <;> iframe))
 
 /- TODO: register the four rules below with `@[step]` once that attribute lives
 outside `Aeneas.Tactic.Step.Init`, which imports `Aeneas.Std.WP`. -/

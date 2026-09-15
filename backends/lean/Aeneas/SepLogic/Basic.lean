@@ -365,6 +365,11 @@ theorem sep_ipure_true_l_eq (H : IProp) :
   intro h
   simpa using sep_pure_l True H h
 
+@[simp]
+theorem sep_ipure_true_r_eq (H : IProp) :
+    (H ∗ ⌜True⌝) = H := by
+  rw [sep_comm_eq, sep_ipure_true_l_eq]
+
 theorem pure_sep_intro {P : Prop} (H : IProp) (hP : P) :
     H ⊢ ⌜P⌝ ∗ H := by
   intro h hH
@@ -514,6 +519,16 @@ theorem postWand_intro {α : Type u} {H : IProp} {Q₁ Q₂ : IPost α}
 theorem postWand_cancel {α : Type u} (Q₁ Q₂ : IPost α) :
     Q₁ ∗+ (Q₁ -∗+ Q₂) ⊢+ Q₂ :=
   (postWand_equiv (Q₁ -∗+ Q₂) Q₁ Q₂).mp (entails_refl _)
+
+/-- A postcondition weakening owns nothing, so it is always available as a
+ramified wand.  This is what lets a ramified frame rule subsume the rule of
+consequence: weakening `P` to `P'` and `Q'` to `Q` ramifies as
+`hP.trans (entails_sep_postWand _ hQ)`. -/
+theorem entails_sep_postWand {α : Type u} (H : IProp) {Q₁ Q₂ : IPost α}
+    (hQ : Q₁ ⊢+ Q₂) : H ⊢ H ∗ (Q₁ -∗+ Q₂) :=
+  entails_trans (sep_emp_r H).mpr
+    (sep_mono (entails_refl H)
+      (postWand_intro fun value => entails_trans (sep_emp_r (Q₁ value)).mp (hQ value)))
 
 /-- A postcondition wand yields a heap wand at every value. -/
 theorem postWand_specialize {α : Type u} {Q₁ Q₂ : IPost α} (value : α) :
