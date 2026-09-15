@@ -84,14 +84,10 @@ instance : MonadLift Result ITreeC where
   | .ok a => .ret a
   | _ => .div -- TODO
 
-theorem spec_coinSpec {α} {x : Result α} {p: Post α} : spec x p → coinSpec p x := by
-  intros s
-  cases x
-  · apply coinSpec.ret
-    simp [spec_ok] at s
-    assumption
-  · simp at s
-  · simp at s
+/- The `spec → coinSpec` lifting is gone: `spec` no longer rules out every event
+-- one that only extends the heap satisfies it -- while the coercion above sends
+every `vis` to `.div`, which `coinSpec` rejects.  Reinstating it needs `coinSpec`
+to model the effects, which is beside the point of this demo. -/
 
 @[simp, grind =, agrind =]
 theorem coinSpec_ret {α p} (x : α) : coinSpec p (ITree.ret x) ↔ p x := by
@@ -121,11 +117,7 @@ theorem coinSpec_ret {α p} (x : α) : coinSpec p (ITree.ret x) ↔ p x := by
   mk_spec_bind_skip_args := 4
   intro_tactic := some ``Aeneas.Std.WP.introTactic
   to_mvcgen := .none
-  liftings := #[
-    { from_statement := ``Std.WP.spec
-      conversion_thm := ``spec_coinSpec
-      conversion_thm_inferred_args := 3 }
-  ]
+  liftings := #[]
 }
 
 instance : Monad ITreeC := instMonadITree

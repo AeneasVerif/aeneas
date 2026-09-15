@@ -1,4 +1,10 @@
-import Aeneas.SLPoC.ST
+import Aeneas.Std.Delab
+import Aeneas.Std.WP
+import Aeneas.SLPoC.StateMachine
+import Aeneas.Std.Primitives
+import Aeneas.SepLogic
+import Aeneas.Tactic.SepLogic
+import Aeneas.Tactic.Step.StepStar
 
 /-!
 # The machine of `Result`: operational semantics and certified interpreter
@@ -27,6 +33,8 @@ divergence, so there is no recursion to terminate.
 -/
 
 namespace Aeneas.SepLogic
+
+open Aeneas.Std.WP
 
 open Aeneas.Data
 open Aeneas.Data.Coinductive
@@ -85,14 +93,14 @@ they stand and only the third statement below is specific to heap events. -/
 
 private theorem ispec_total {P : IPre} {m : Result α} {Q : IPost α}
     (hSpec : ispec P m Q) {h : Heap} (hPre : P h) :
-    rawIwp true m Q h := by
+    TotalSpec handler (fun value h' => Q value h') m h := by
   rw [ispec_iff] at hSpec
   have hRaw := hSpec emp h ((sep_emp_r P).mpr h hPre)
   exact hRaw.mono fun value => sep_elim_right (Q value) emp
 
 private theorem dispec_partial {P : IPre} {m : Result α} {Q : IPost α}
     (hSpec : dispec P m Q) {h : Heap} (hPre : P h) :
-    rawIwp false m Q h := by
+    PartialSpec handler (fun value h' => Q value h') m h := by
   rw [dispec_iff] at hSpec
   have hRaw := hSpec emp h ((sep_emp_r P).mpr h hPre)
   exact hRaw.mono fun value => sep_elim_right (Q value) emp

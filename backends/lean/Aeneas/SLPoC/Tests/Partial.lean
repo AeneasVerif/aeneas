@@ -15,6 +15,8 @@ namespace Aeneas.SepLogic
 
 open Aeneas.Data.Coinductive
 
+open Aeneas.Std.WP
+
 open Aeneas.Std (Heap Result loop)
 
 /-! ## The automation drives a partial goal
@@ -185,6 +187,6 @@ theorem waitZero.spec (p : Ptr Nat) (value rounds : Nat) :
   step* 1
   split
   · step*
-  · exact hLoop _
+  · exact dispec_ipure.mpr fun _ => hLoop _
 
 end Aeneas.SepLogic
