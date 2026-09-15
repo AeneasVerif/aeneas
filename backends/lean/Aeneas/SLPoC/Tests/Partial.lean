@@ -157,13 +157,34 @@ theorem countdown.spec (p : Ptr Nat) (value : Nat) :
       (fun _ _ => iprop(p ↦ 0))) ?_
   intro loop hLoop v
   step* 1
-  by_cases h : v = 0
-  · simp only [h, ↓reduceIte]
-    step
-    apply postWand_intro
-    intro _
-    iframe
-  · simp only [h, ↓reduceIte]
-    step*
+  split
+  · step*
+  · step*
+
+/-! ## `dspec_induction` on a separation-logic goal
+
+The boilerplate above — the motive, the admissibility argument — is what
+`dspec_induction` writes on its own.  It closes the admissibility side-goal with
+the theorems carrying the `dspec_admissible` attribute, and `dispec_func_admissible`
+is the one registered for `dispec`, so the tactic drives a separation-logic goal
+exactly as it drives a pure `Std.WP.dspec` one. -/
+
+/-- Poll `p` until it holds `0`, counting the rounds it took. -/
+def waitZero (p : Ptr Nat) (rounds : Nat) : Result Nat := do
+  let value ← read p
+  if value = 0 then pure rounds else waitZero p (rounds + 1)
+partial_fixpoint
+
+/-- Polling leaves `p` alone: the invariant is all the proof needs, and the
+tactic asks for nothing else. -/
+theorem waitZero.spec (p : Ptr Nat) (value rounds : Nat) :
+    ⦃ p ↦ value ⦄ waitZero p rounds ⦃⇓ _ => p ↦ value⦄div := by
+  revert rounds
+  dspec_induction waitZero
+  intro loop hLoop rounds
+  step* 1
+  split
+  · step*
+  · exact hLoop _
 
 end Aeneas.SepLogic

@@ -59,7 +59,7 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
   split
   . rename_i hd tl
     split
-    . -- This call to `simp` simplifies the `∃ x y. ...`
+    . -- This call to `simp` simplifies the `∃ x back. ...`
       simp
       split_conjs
       . -- Reasoning about `List.index`:
@@ -467,12 +467,7 @@ theorem pseudo_random_spec {T} {h : Hash T}
   -- clear new_spec
   generalize 0#u32 = x
   revert x
-  apply pseudo_random_loop.fixpoint_induct
-    (motive := fun loop : U32 → Result U32 => ∀ x : U32,
-      dispec emp (loop x) (fun result : U32 => ⌜result.val >= 100⌝))
-  · exact dispec_admissible_pi
-      (ι := U32) (α := U32)
-      (fun _ : U32 => emp) (fun _ (result : U32) => ⌜result.val >= 100⌝)
+  dspec_induction pseudo_random_loop
   intros loop' ih x
   simp only
   simp
