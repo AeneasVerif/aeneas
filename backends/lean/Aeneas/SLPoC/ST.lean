@@ -632,11 +632,6 @@ theorem ispec_ramified_bind' {α : Type u} {β : Type v} {P Pm F : IPre}
   ispec_bind' (ispec_conseq (ispec_frame hStep F) hPre (fun _ => entails_refl _))
     hNext
 
-/-- Rewrite part of an `ispec` precondition using an entailment. -/
-theorem ispec_rewrite {α : Type u} {H₁ H₂ H₃ : IPre} {Q : IPost α} {m : Result α}
-    (hPart : H₁ ⊢ H₂) (hRest : ispec (H₂ ∗ H₃) m Q) : ispec (H₁ ∗ H₃) m Q :=
-  ispec_conseq hRest (sep_mono hPart (entails_refl H₃)) (fun _ => entails_refl _)
-
 theorem dispec_ramified_frame {α : Type u} {P Pm : IPre} {Q Qm : IPost α}
     {m : Result α} (hStep : dispec Pm m Qm) (hPre : P ⊢ Pm ∗ (Qm -∗+ Q)) :
     dispec P m Q :=
@@ -658,11 +653,6 @@ theorem dispec_ramified_bind' {α : Type u} {β : Type v} {P Pm F : IPre}
     dispec P (Aeneas.Std.bind m next) Q :=
   dispec_bind'
     (dispec_conseq (dispec_frame hStep F) hPre (fun _ => entails_refl _)) hNext
-
-/-- Rewrite part of a partial ispec's precondition using an entailment. -/
-theorem dispec_rewrite {α : Type u} {H₁ H₂ H₃ : IPre} {Q : IPost α} {m : Result α}
-    (hPart : H₁ ⊢ H₂) (hRest : dispec (H₂ ∗ H₃) m Q) : dispec (H₁ ∗ H₃) m Q :=
-  dispec_conseq hRest (sep_mono hPart (entails_refl H₃)) (fun _ => entails_refl _)
 
 /-! ## Reasoning about loops
 
