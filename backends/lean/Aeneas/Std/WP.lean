@@ -4,8 +4,8 @@ import AeneasMeta.Simp
 import Std.Do
 import Aeneas.Tactic.Solver.Grind.Init
 import Aeneas.Std.Spec
-import Aeneas.Tactic.Step.DspecInduction
 import Aeneas.Tactic.Step.Intro
+import Aeneas.Tactic.Step.DspecInduction
 import Aeneas.Data.Coinductive.ITree
 import Aeneas.Data.Coinductive.Effect
 import Aeneas.Data.Coinductive.Spec

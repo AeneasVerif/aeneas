@@ -68,7 +68,6 @@ theorem forall_unit_intro {p : Unit → Prop} (h : p ()) : ∀ value, p value :=
   fun value => match value with | () => h
 
 export Intro (forall_unit)
-
 attribute [step_simps]
   bind_assoc Std.bind_tc_ok Std.bind_tc_vis Std.bind_tc_div
   /- Those are quite useful to simplify the goal further by eliminating existential quantifiers for instance. -/
@@ -824,11 +823,10 @@ def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTree : 
   withTraceNode `Step (fun _ => pure m!"introOutputs") do
   traceGoalWithNode "Initial goal"
   /- The goal looks like:
-     mono: qimp P₀ P₁
-     bind: qimp (uncurry' Pₘ) (fun value => spec (k value) Pₖ)
-     bind': ∀ v, ispec (uncurry' Pₘ v ∗ emp) (k v) Q
+     mono: ∀ x, P₀ x → P₁ x
+     bind: ∀ x, Pₘ x → spec (k x) Pₖ
+     bind (separation logic): ∀ v, ispec (Pₘ v ∗ emp) (k v) Q
   -/
-
 
   trace[Step] "call-site tree: {repr callSiteTree}"
 
