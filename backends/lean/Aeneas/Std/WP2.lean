@@ -1,6 +1,5 @@
 import Aeneas.Std.Primitives
 import Aeneas.Std.Delab
-import Std.Do
 import Aeneas.Tactic.Solver.Grind.Init
 import Aeneas.Std.Spec
 import Aeneas.Tactic.Step.Intro
@@ -26,8 +25,6 @@ def Wp α := Post α → Pre
 
 def wp_return (x:α) : Wp α := fun p => p x
 
-universe u v
-
 section ResultImplementation
 
 unseal Result
@@ -52,7 +49,7 @@ theorem handler_conjunctive : handler.Conjunctive := by
       exact ⟨(hAll C₀ hC₀).1, fun C hC => (hAll C hC).2⟩
   | fail error => exact (hAll C₀ hC₀).elim
 
-abbrev rawIwp (total:Bool) (m : Result α) (Q : IPost α) (h : Heap) : Prop :=
+private abbrev rawIwp (total:Bool) (m : Result α) (Q : IPost α) (h : Heap) : Prop :=
   (if total then TotalSpec else PartialSpec) handler (fun value h' => Q value h') m h
 
 def iwp (total:Bool) (m : Result α) (Q : IPost α) : IProp where
@@ -72,16 +69,16 @@ def dispec (P : IPre) (m : Result α) (Q : IPost α) : Prop :=
   P ⊢ iwp false m Q
 
 /-- Total-correctness pure specification -/
-def spec (m : Result α) (Q : Post α) : Prop :=
-  ispec emp m (fun value => ⌜Q value⌝)
+def spec (m : Result α) (p : Post α) : Prop :=
+  ispec emp m (fun value => ⌜p value⌝)
 
 /-- Partial-correctness pure specification -/
-def dspec (m : Result α) (Q : Post α) : Prop :=
-  dispec emp m (fun value => ⌜Q value⌝)
+def dspec (m : Result α) (p : Post α) : Prop :=
+  dispec emp m (fun value => ⌜p value⌝)
 
 theorem ispec_iff {P : IPre} {m : Result α} {Q : IPost α} :
     ispec P m Q ↔
-      ∀ F h, (P ∗ F) h → rawIwp true m (Q ∗+ F) h := by
+      ∀ F h, (P ∗ F) h → TotalSpec handler (fun value h' => (Q ∗+ F) value h') m h := by
   constructor
   · rintro hSpec F _ ⟨h₁, h₂, hDisjoint, rfl, hP, hF⟩
     exact hSpec h₁ hP F _ ⟨h₁, h₂, hDisjoint, rfl, Heap.Sub.refl _, hF⟩
@@ -91,7 +88,7 @@ theorem ispec_iff {P : IPre} {m : Result α} {Q : IPost α} :
 
 theorem dispec_iff {P : IPre} {m : Result α} {Q : IPost α} :
     dispec P m Q ↔
-      ∀ F h, (P ∗ F) h → rawIwp false m (Q ∗+ F) h := by
+      ∀ F h, (P ∗ F) h → PartialSpec handler (fun value h' => (Q ∗+ F) value h') m h := by
   constructor
   · rintro hSpec F _ ⟨h₁, h₂, hDisjoint, rfl, hP, hF⟩
     exact hSpec h₁ hP F _ ⟨h₁, h₂, hDisjoint, rfl, Heap.Sub.refl _, hF⟩
@@ -110,7 +107,7 @@ theorem spec_ispec (m : Result α) (Q : Post α) : spec m Q → ispec emp m (fun
 
 theorem dspec_dispec (m : Result α) (Q : Post α) : dspec m Q → dispec emp m (fun value => ⌜Q value⌝) := id
 
-theorem spec_dspec (m : Result α) (Q : Post α) : spec m Q → dspec m Q := ispec_dispec
+theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p := ispec_dispec
 
 theorem spec_dispec (m : Result α) (Q : Post α) : spec m Q → dispec emp m (fun value => ⌜Q value⌝) :=
   ispec_dispec
@@ -137,23 +134,23 @@ theorem dispec_admissible {α : Type u} (P : IPre) (Q : IPost α) :
 /-- The shape the `dspec_induction` tactic needs to discharge the admissibility
 side-goal it generates for a separation-logic partial specification. -/
 @[dspec_admissible]
-theorem dispec_func_admissible {ι : Type v} {α : Type u} (arg : ι) (P : IPre) (Q : IPost α) :
+theorem dispec_func_admissible {ι : Sort v} {α : Type u} (arg : ι) (P : IPre) (Q : IPost α) :
     admissible (fun f : ι → Result α => dispec P (f arg) Q) :=
   admissible_apply (fun _ m => dispec P m Q) arg (dispec_admissible P Q)
 
-theorem dspec_admissible {α : Type u} (Q : α → Prop) :
-    admissible (fun m : Result α => dspec m Q) :=
-  dispec_admissible emp (fun value => ⌜Q value⌝)
+theorem dspec_admissible {α} (p : Post α) :
+    admissible (fun x => dspec x p) :=
+  dispec_admissible emp (fun value => ⌜p value⌝)
 
 /-- The same as `dispec_func_admissible`, for the pure partial specification. -/
 @[dspec_admissible]
-theorem dspec_func_admissible {ι : Type v} {α : Type u} (arg : ι) (p : Post α) :
+theorem dspec_func_admissible {ι : Sort v} {α} (arg : ι) (p : Post α) :
     admissible (fun f : ι → Result α => dspec (f arg) p) :=
   admissible_apply (fun _ m => dspec m p) arg (dspec_admissible p)
 
 /-! ### `ispec` theorems -/
 @[simp, grind =, agrind =]
-theorem ispec_ok (x : α) : ispec P (Result.ok x) Q ↔ P ⊢ Q x := by
+theorem ispec_ok (x : α) : ispec P (ok x) Q ↔ P ⊢ Q x := by
   constructor
   · intro hTriple h hP
     rw [ispec_iff] at hTriple
@@ -185,7 +182,7 @@ theorem ispec_guardedModify {α : Type} {pre : IPre}
   exact .ret ⟨h', framed, hDisjoint', rfl, hPost, hF⟩
 
 @[simp, grind =, agrind =]
-theorem ispec_fail (e : Error) : ispec P (Result.fail e) Q ↔ P ⊢ ⌜False⌝ := by
+theorem ispec_fail (e : Error) : ispec P (fail e) Q ↔ P ⊢ ⌜False⌝ := by
   constructor
   · intro hTriple h hP
     rw [ispec_iff] at hTriple
@@ -195,7 +192,7 @@ theorem ispec_fail (e : Error) : ispec P (Result.fail e) Q ↔ P ⊢ ⌜False⌝
 
 @[simp, grind =, agrind =]
 theorem ispec_div :
-    ispec P (Result.div : Result α) Q ↔ P ⊢ ⌜False⌝ := by
+    ispec P (div : Result α) Q ↔ P ⊢ ⌜False⌝ := by
   constructor
   · intro hTriple h hP
     rw [ispec_iff] at hTriple
@@ -272,19 +269,21 @@ theorem ispec_ipure_iff {P : Prop} {m : Result α} {Q : IPost α} :
 /-- Copy a pure fact of the precondition into the local context *without*
 consuming it: the precondition is unchanged, so the fact stays available to the
 framing of the later steps.  This is `ispec_ipure` used in both directions. -/
-theorem ispec_ipure_keep {P : Prop} {H : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : P → ispec (⌜P⌝ ∗ H) m Q) :
-    ispec (⌜P⌝ ∗ H) m Q :=
-  ispec_ipure.mpr fun hP => ispec_ipure.mp (hTriple hP) hP
+theorem ispec_ipure_keep {P : Prop} {H : IPre} {m : Result α} {Q : IPost α} :
+    ispec (⌜P⌝ ∗ H) m Q ↔ (P → ispec (⌜P⌝ ∗ H) m Q) :=
+  ⟨fun hTriple _ => hTriple,
+   fun hTriple => ispec_ipure.mpr fun hP => ispec_ipure.mp (hTriple hP) hP⟩
 
-theorem ispec_exists {ι : Sort _} {J : ι → IPre} {m : Result α}
-    {Q : IPost α}
-    (hTriple : ∀ x, ispec (J x) m Q) :
-    ispec iprop(∃ x, J x) m Q := by
-  simp only [ispec_iff] at hTriple ⊢
-  intro F h hPre
-  obtain ⟨h₁, h₂, hDisjoint, rfl, ⟨x, hJ⟩, hF⟩ := hPre
-  exact hTriple x F _ ⟨h₁, h₂, hDisjoint, rfl, hJ, hF⟩
+theorem ispec_exists {ι : Sort _} {J : ι → IPre} {m : Result α} {Q : IPost α} :
+    ispec iprop(∃ x, J x) m Q ↔ ∀ x, ispec (J x) m Q := by
+  constructor
+  · intro hTriple x
+    exact fun h hJ => hTriple h ⟨x, hJ⟩
+  · intro hTriple
+    simp only [ispec_iff] at hTriple ⊢
+    intro F h hPre
+    obtain ⟨h₁, h₂, hDisjoint, rfl, ⟨x, hJ⟩, hF⟩ := hPre
+    exact hTriple x F _ ⟨h₁, h₂, hDisjoint, rfl, hJ, hF⟩
 
 /-! ### `dispec` theorems -/
 private theorem dispec_apply {P : IPre} {m : Result α} {Q : IPost α}
@@ -296,7 +295,7 @@ private theorem dispec_apply {P : IPre} {m : Result α} {Q : IPost α}
 
 @[simp, grind =, agrind =]
 theorem dispec_ok {α : Type u} {P : IPre} {Q : IPost α} (x : α) :
-    dispec P (Result.ok x) Q ↔ P ⊢ Q x := by
+    dispec P (ok x) Q ↔ P ⊢ Q x := by
   constructor
   · intro hTriple h hP
     rw [dispec_iff] at hTriple
@@ -310,7 +309,7 @@ theorem dispec_ok {α : Type u} {P : IPre} {Q : IPost α} (x : α) :
 /-- Divergence satisfies every partial ispec: nothing is claimed of a run that
 does not stop, not even that it owns anything. -/
 theorem dispec_div {P : IPre} {Q : IPost α} :
-    dispec P (Result.div : Result α) Q := by
+    dispec P (div : Result α) Q := by
   rw [dispec_iff]
   intro _ _ _
   exact PartialSpec.div
@@ -369,31 +368,21 @@ theorem dispec_ipure_iff {P : Prop} {m : Result α} {Q : IPost α} :
   exact dispec_ipure
 
 /-- Partial counterpart of `ispec_ipure_keep`. -/
-theorem dispec_ipure_keep {P : Prop} {H : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : P → dispec (⌜P⌝ ∗ H) m Q) :
-    dispec (⌜P⌝ ∗ H) m Q :=
-  dispec_ipure.mpr fun hP => dispec_ipure.mp (hTriple hP) hP
+theorem dispec_ipure_keep {P : Prop} {H : IPre} {m : Result α} {Q : IPost α} :
+    dispec (⌜P⌝ ∗ H) m Q ↔ (P → dispec (⌜P⌝ ∗ H) m Q) :=
+  ⟨fun hTriple _ => hTriple,
+   fun hTriple => dispec_ipure.mpr fun hP => dispec_ipure.mp (hTriple hP) hP⟩
 
-theorem dispec_exists {ι : Sort _} {J : ι → IPre} {m : Result α} {Q : IPost α}
-    (hTriple : ∀ x, dispec (J x) m Q) : dispec iprop(∃ x, J x) m Q := by
-  simp only [dispec_iff] at hTriple ⊢
-  intro F h hPre
-  obtain ⟨h₁, h₂, hDisjoint, rfl, ⟨x, hJ⟩, hF⟩ := hPre
-  exact hTriple x F _ ⟨h₁, h₂, hDisjoint, rfl, hJ, hF⟩
-
-/-! ## Rewriting rules -/
-
-/-- Rewrite part of an `ispec` precondition using an entailment. -/
-theorem ispec_rewrite {α : Type u} {H₁ H₂ H₃ : IPre} {Q : IPost α} {m : Result α}
-    (hPart : H₁ ⊢ H₂) (hRest : ispec (H₂ ∗ H₃) m Q) : ispec (H₁ ∗ H₃) m Q :=
-  ispec_mono hRest (entails_trans (sep_mono hPart (entails_refl H₃))
-    (entails_sep_postWand _ (fun _ => entails_refl _)))
-
-/-- Rewrite part of a partial ispec's precondition using an entailment. -/
-theorem dispec_rewrite {α : Type u} {H₁ H₂ H₃ : IPre} {Q : IPost α} {m : Result α}
-    (hPart : H₁ ⊢ H₂) (hRest : dispec (H₂ ∗ H₃) m Q) : dispec (H₁ ∗ H₃) m Q :=
-  dispec_mono hRest (entails_trans (sep_mono hPart (entails_refl H₃))
-    (entails_sep_postWand _ (fun _ => entails_refl _)))
+theorem dispec_exists {ι : Sort _} {J : ι → IPre} {m : Result α} {Q : IPost α} :
+    dispec iprop(∃ x, J x) m Q ↔ ∀ x, dispec (J x) m Q := by
+  constructor
+  · intro hTriple x
+    exact fun h hJ => hTriple h ⟨x, hJ⟩
+  · intro hTriple
+    simp only [dispec_iff] at hTriple ⊢
+    intro F h hPre
+    obtain ⟨h₁, h₂, hDisjoint, rfl, ⟨x, hJ⟩, hF⟩ := hPre
+    exact hTriple x F _ ⟨h₁, h₂, hDisjoint, rfl, hJ, hF⟩
 
 /-! ## Reasoning about loops
 
@@ -435,71 +424,69 @@ specifications for framing; SL specifications lift back only when their
 precondition is `emp`. Total specifications also lift to partial ones, never
 conversely. -/
 @[simp, grind =, agrind =]
-theorem spec_ok (x : α) : spec (Result.ok x) p ↔ p x :=
+theorem spec_ok (x : α) : spec (ok x) p ↔ p x :=
   (ispec_ok x).trans (entails_emp_ipure_iff (p x))
 
 /-- Failure has no total pure specification. -/
 @[simp, grind =, agrind =]
-theorem spec_fail (e : Error) : spec (Result.fail e) p ↔ False :=
+theorem spec_fail (e : Error) : spec (fail e) p ↔ False :=
   (ispec_fail e).trans (entails_emp_ipure_iff False)
 
 @[simp, grind =, agrind =]
-theorem spec_div : spec (Result.div : Result α) p ↔ False :=
+theorem spec_div : spec div p ↔ False :=
   ispec_div.trans (entails_emp_ipure_iff False)
 
 /-- Mono rule used by `step`. -/
-theorem spec_mono {α : Type u} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀) :
+theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
     (∀ x, P₀ x → P₁ x) → spec m P₁ :=
   fun hMonPost => ispec_mono h (entails_sep_postWand _ (fun value _ => hMonPost value))
 
 /-- Bind rule used by `step`. It is stated on `Aeneas.Std.bind` rather than on `>>=`, which is
 what a translated program binds with. -/
-theorem spec_bind {α : Type u} {β : Type v} {k : α → Result β} {Pₖ : Post β}
-    {m : Result α} {Pₘ : Post α} :
+theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
     spec m Pₘ →
     (∀ x, Pₘ x → spec (k x) Pₖ) →
-    spec (Aeneas.Std.bind m k) Pₖ :=
+    spec (Std.bind m k) Pₖ :=
   fun hm hk =>
     ispec_bind hm (sep_emp_r emp).mpr fun value =>
       ispec_mono (ispec_ipure_iff.mpr (hk value)) (entails_trans (sep_emp_r _).mp
         (entails_sep_postWand _ (fun _ => entails_refl _)))
 
-theorem exists_imp_spec {m : Result α} {P : Post α} :
-    (∃ y, m = Result.ok y ∧ P y) → spec m P := by
+theorem exists_imp_spec {m:Result α} {P:Post α} :
+    (∃ y, m = ok y ∧ P y) → spec m P := by
   rintro ⟨y, rfl, hP⟩
   exact (spec_ok y).mpr hP
 
 /-! ### `dspec` theorems -/
 @[simp, grind =, agrind =]
-theorem dspec_ok (x : α) : dspec (Result.ok x) p ↔ p x :=
+theorem dspec_ok (x : α) : dspec (ok x) p ↔ p x :=
   (dispec_ok x).trans (entails_emp_ipure_iff (p x))
 
 /-- Failure has no partial pure specification: divergence is permitted, not
 stuckness. -/
 @[simp, grind =, agrind =]
-theorem dspec_fail (e : Error) : dspec (Result.fail e) p ↔ False :=
+theorem dspec_fail (e : Error) : dspec (fail e) p ↔ False :=
   iff_false_intro fun hSpec => (dispec_apply hSpec (h := ∅) trivial).vis_view
 
 @[simp, grind =, agrind =]
-theorem dspec_div : dspec (Result.div : Result α) p ↔ True :=
+theorem dspec_div : dspec (div : Result α) p ↔ True :=
   iff_true_intro dispec_div
 
-theorem dspec_mono {α : Type u} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : dspec m P₀) :
+theorem dspec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : dspec m P₀):
     (∀ x, P₀ x → P₁ x) → dspec m P₁ :=
   fun hMonPost => dispec_mono h (entails_sep_postWand _ (fun value _ => hMonPost value))
 
-theorem dspec_bind {α : Type u} {β : Type v} {k : α → Result β} {Pₖ : Post β}
-    {m : Result α} {Pₘ : Post α} :
+theorem dspec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
     dspec m Pₘ →
     (∀ x, Pₘ x → dspec (k x) Pₖ) →
-    dspec (Aeneas.Std.bind m k) Pₖ :=
+    dspec (Std.bind m k) Pₖ :=
   fun hm hk =>
     dispec_bind hm (sep_emp_r emp).mpr fun value =>
       dispec_mono (dispec_ipure_iff.mpr (hk value)) (entails_trans (sep_emp_r _).mp
         (entails_sep_postWand _ (fun _ => entails_refl _)))
 
-theorem dspec_imp_forall {m : Result α} {P : Post α} :
-    dspec m P → (∀ y, m = Result.ok y → P y) := by
+theorem dspec_imp_forall {m:Result α} {P:Post α} :
+    dspec m P → (∀ y, m = ok y → P y) := by
   grind only [= dspec_ok]
 
 end ResultImplementation
@@ -788,19 +775,14 @@ private partial def delabPurePost : DelabM (Array Term × Term) := do
   | _ => delabLamsThenRecurse
 where
   delabLamsThenRecurse : DelabM (Array Term × Term) := do
-    let e := (← getExpr).consumeMData
-    if let .lam _ _ body _ := e then
-      if !body.consumeMData.isLambda && !isPurePostBinderWrapper body then
-        withBindingBodyUnusedName fun binder =>
-          return (#[⟨binder⟩], ← delab)
-      else
-        enterLams #[] fun binders => do
-          if binders.size == 1 && isPurePostBinderWrapper (← getExpr) then
-            let (patterns, (moreBinders, body)) ←
-              delabBinders binders.toList delabPurePost
-            return (patterns ++ moreBinders, body)
-          else
-            delabBinders binders.toList delab
+    if (← getExpr).consumeMData.isLambda then
+      enterLams #[] fun binders => do
+        if binders.size == 1 && isPurePostBinderWrapper (← getExpr) then
+          let (patterns, (moreBinders, body)) ←
+            delabBinders binders.toList delabPurePost
+          return (patterns ++ moreBinders, body)
+        else
+          delabBinders binders.toList delab
     else
       return (#[], ← delab)
 
@@ -903,6 +885,118 @@ def delabPureSpec : Delab :=
 def delabPureDspec : Delab :=
   delabPureSpecCore ``Aeneas.Std.WP.dspec true
 
+/-!
+# Tests
+-/
+
+/-- error: unsolved goals
+⊢ ok 0 ⦃ r => r = 0 ⦄ -/
+#guard_msgs in example : ok 0 ⦃ r => r = 0 ⦄ := by done
+/-- error: unsolved goals
+⊢ ok 0 ⦃ x✝ => True ⦄ -/
+#guard_msgs in example : spec (ok 0) fun _ => True := by done
+/-- error: unsolved goals
+⊢ ok 0 ⦃ x✝ => True ⦄ -/
+#guard_msgs in example : ok 0 ⦃ _ => True ⦄ := by done
+/-- error: unsolved goals
+⊢ ok (0, 1) ⦃ x✝ =>
+    match x✝ with
+    | (x, y) => x = 0 ∧ y = 1 ⦄ -/
+#guard_msgs in example : spec (ok (0, 1)) fun (x, y) => x = 0 ∧ y = 1 := by done
+/-- error: unsolved goals
+⊢ ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄ -/
+#guard_msgs in example : ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄ := by done
+/-- error: unsolved goals
+⊢ ok (0, 1) ⦃ x y => x = 0 ∧ y = 1 ⦄ -/
+#guard_msgs in example : ok (0, 1) ⦃ x y => x = 0 ∧ y = 1 ⦄ := by done
+/-- error: unsolved goals
+⊢ ok (0, 1, 2) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = 2 ⦄ -/
+#guard_msgs in example : ok (0, 1, 2) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = 2 ⦄ := by done
+/-- error: unsolved goals
+⊢ ok (0, 1, true) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = true ⦄ -/
+#guard_msgs in example : ok (0, 1, true) ⦃ x y z => x = 0 ∧ y = 1 ∧ z ⦄ := by done
+/-- error: unsolved goals
+⊢ let P := fun x => x = 0;
+  ok 0 ⦃ P ⦄ -/
+#guard_msgs in example : let P (x : Nat) := x = 0; ok 0 ⦃ P ⦄ := by done
+
+/-! ### Mixed tuple / scalar binders -/
+
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2) ⦃ (a, b) c => a = 0 ∧ b = 1 ∧ c = 2 ⦄ -/
+#guard_msgs in -- Tuple followed by scalar
+example : ok ((0, 1), 2) ⦃ (a, b) c => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2) ⦃ ((a, b), c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ -/
+#guard_msgs in -- Same but with nesting
+example : ok ((0, 1), 2) ⦃ ((a, b), c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok (0, 1, 2) ⦃ a (b, c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ -/
+#guard_msgs in -- Scalar followed by tuple
+example : ok (0, (1, 2)) ⦃ a (b, c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok (0, 1, 2) ⦃ (a, (b, c)) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ -/
+#guard_msgs in -- Same but with nesting
+example : ok (0, (1, 2)) ⦃ (a, (b, c)) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2, 3) ⦃ (a, b) (c, d) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ -/
+#guard_msgs in -- Two tuples in sequence
+example : ok ((0, 1), (2, 3)) ⦃ (a, b) (c, d) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2, 3) ⦃ ((a, b), (c, d)) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ -/
+#guard_msgs in -- Same but with nesting
+example : ok ((0, 1), (2, 3)) ⦃ ((a, b), (c, d)) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2) ⦃ ((a, b), c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ -/
+#guard_msgs in -- A single nested tuple
+example : ok ((0, 1), 2) ⦃ ((a, b), c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2, 3) ⦃ ((a, b), (c, d)) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ -/
+#guard_msgs in -- Two nested tuples
+example : ok ((0, 1), (2, 3)) ⦃ ((a, b), (c, d)) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok (0, (1, 2), 3, 4, 5) ⦃ a (b, c) (d, (e, f)) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ∧ f = 5 ⦄ -/
+#guard_msgs in -- Scalar, tuple, nested tuple
+example : ok (0, (1, 2), (3, (4, 5))) ⦃ a (b, c) (d, (e, f)) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ∧ f = 5 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok ((0, 1, 2, 3), 4) ⦃ ((a, (b, (c, d))), e) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ⦄ -/
+#guard_msgs in -- More nesting
+example : ok ((0, (1, (2, 3))), 4) ⦃ ((a, (b, (c, d))), e) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ⦄
+  := by done
+
+/-! ### Pretty-printing round-trip checks -/
+
+/-- error: unsolved goals
+⊢ ok (0, 1, 2) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = 2 ⦄ -/
+#guard_msgs in example : ok (0, 1, 2) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = 2 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2) ⦃ (a, b) c => a = 0 ∧ b = 1 ∧ c = 2 ⦄ -/
+#guard_msgs in example : ok ((0, 1), 2) ⦃ (a, b) c =>
+    a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2, 3) ⦃ (a, b) (c, d) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ -/
+#guard_msgs in example : ok ((0, 1), (2, 3)) ⦃ (a, b) (c, d) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok (0, (1, 2), (3, 4, 5), 6) ⦃ a (b, c) ((d, e, f), g) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ∧ f = 5 ∧ g = 6 ⦄ -/
+#guard_msgs in example : ok (0, (1, 2), ((3, 4, 5), 6)) ⦃ a (b, c) ((d, e, f), g) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ∧ f = 5 ∧ g = 6 ⦄ := by done
 end Aeneas
 
 namespace Aeneas.Std.WP
@@ -911,8 +1005,6 @@ open Std Result
 open Aeneas.Data.Coinductive
 open Lean.Order
 open Aeneas.SepLogic
-
-universe u v
 
 open Lean Elab Meta Tactic
 
@@ -1181,3 +1273,218 @@ theorem pure_spec (value : α) :
   ok_spec value
 
 end Aeneas.Std.WP
+
+namespace Aeneas.Std
+
+/-!
+# Loops
+-/
+
+/-- General spec for loops with a termination measure.
+
+It is meant to derive lemmas to reason about loops: in most situations, one shouldn't
+have to use it directly when verifying programs.
+-/
+theorem loop.spec {α : Type u} {β : Type v} {γ : Type w}
+  (measure : α → γ)
+  [wf : WellFoundedRelation γ]
+  (inv : α → Prop)
+  (post : β → Prop)
+  (body : α → Result (ControlFlow α β)) (x : α)
+  (hBody :
+    ∀ x, inv x → body x ⦃ r =>
+      match r with
+      | .done y => post y
+      | .cont x' => inv x' ∧ wf.rel (measure x') (measure x) ⦄)
+  (hInv : inv x) :
+  loop body x ⦃ post ⦄ := by
+  suffices ∀ x' x, measure x = x' → inv x → loop body x ⦃ post ⦄
+    by apply this <;> first | rfl | assumption
+  apply @wf.wf.fix γ (fun x' =>
+    ∀ x, measure x = x' →
+    inv x → loop body x ⦃ post ⦄)
+  intro y ih x eq ix
+  subst eq
+  unfold loop
+  apply WP.spec_bind (hBody x ix)
+  intro r hr
+  cases r with
+  | done z => simpa using hr
+  | cont x' => exact ih (measure x') hr.2 x' rfl hr.1
+
+theorem loop.spec_decr_nat {α : Type u} {β : Type v}
+  (measure : α → Nat)
+  (inv : α → Prop)
+  (post : β → Prop)
+  (body : α → Result (ControlFlow α β)) (x : α)
+  (hBody :
+    ∀ x, inv x → body x ⦃ r =>
+      match r with
+      | .done y => post y
+      | .cont x' => inv x' ∧ measure x' < measure x ⦄)
+  (hInv : inv x) :
+  loop body x ⦃ post ⦄ := by
+  have := loop.spec measure inv post body x hBody hInv
+  apply this
+
+end Aeneas.Std
+
+namespace Aeneas.Std.WP
+
+section
+  variable (U32 : Type) [HAdd U32 U32 (Result U32)]
+  variable (x y : U32)
+
+  #elab x + y ⦃ _ => True ⦄
+  #elab True → x + y ⦃ _ => True ⦄
+  #elab True ∧ x + y ⦃ _ => True ⦄
+
+  -- Checking what happpens if we put post-conditions inside post-conditions
+  example (f : Nat → Result (Nat × (Nat → Result Nat)))
+          (_ : ∀ x, f x ⦃ (y, g) => y > 0 ∧ ∀ x, g x ⦃ z => z > y ⦄ ⦄ ∧ True)
+   : True := by simp only
+end
+
+def add1 (x : Nat) := Result.ok (x + 1)
+theorem  add1_spec (x : Nat) : add1 x ⦃ y => y = x + 1⦄ :=
+  by simp [add1]
+
+/-- Example with a tuple output. -/
+example (x : Nat) :
+  (do
+    let y ← add1 x
+    add1 y) ⦃ y => y = x + 2 ⦄ := by
+    -- step as ⟨ y, z ⟩
+    apply spec_bind (add1_spec _)
+    intro y h
+    -- step as ⟨ y1, z1⟩
+    apply spec_mono (add1_spec _)
+    intro y' h
+    --
+    grind
+
+/-- The same, with the tactic `step` registers to introduce the outputs and the facts of
+their premises. -/
+example (x : Nat) :
+  (do
+    let y ← add1 x
+    add1 y) ⦃ y => y = x + 2 ⦄ := by
+    -- step as ⟨ y, z ⟩
+    apply spec_bind (add1_spec _)
+    intro_split
+    -- step as ⟨ y1, z1⟩
+    apply spec_mono (add1_spec _)
+    intro_split
+    --
+    grind
+
+def add2 (x : Nat) := Result.ok (x + 1, x + 2)
+
+theorem  add2_spec (x : Nat) : add2 x ⦃ (y, z) => y = x + 1 ∧ z = x + 2⦄ :=
+  by simp [add2]
+
+/-- Example with a tuple output. -/
+example (x : Nat) :
+  (do
+    let (y, _) ← add2 x
+    add2 y) ⦃ (y, _) => y = x + 2 ⦄ := by
+    -- step as ⟨ y, z ⟩
+    apply spec_bind
+    . apply add2_spec
+    rintro ⟨y, z⟩ h
+    simp at h
+    -- step as ⟨ y1, z1⟩
+    apply spec_mono
+    . apply add2_spec
+    rintro ⟨y1, z1⟩ h
+    simp at h
+    grind
+
+theorem  add2_spec' (x : Nat) : add2 x ⦃ y z => y = x + 1 ∧ z = x + 2⦄ :=
+  by simp [add2]
+
+/-- The same with separate binders: `intro_split` reduces the `uncurry'` marker of the
+post-condition, and splits the conjunction it holds into two facts. `step` additionally
+destructures the output itself, which is why it can name the two components. -/
+example (x : Nat) :
+  (do
+    let (y, _) ← add2 x
+    add2 y) ⦃ y _ => y = x + 2 ⦄ := by
+    -- step as ⟨ y, z ⟩
+    apply spec_bind
+    . apply add2_spec'
+    intro_split
+    -- step as ⟨ y1, z1⟩
+    apply spec_mono
+    . apply add2_spec'
+    intro_split
+    /- The marker of the *enclosing* post-condition is left alone: `step` reduces it by
+       destructuring the output. -/
+    simp only [uncurry'_eq]
+    grind
+
+private theorem massert_spec' (b : Prop) [Decidable b] (h : b) :
+  massert b ⦃ _ => True ⦄ := by
+  grind [massert]
+
+/-- Example with a function outputting `()`: the quantifier is over `Unit`, and the fact it
+carries says nothing, so `intro_split` drops it. `step` additionally instantiates the `Unit`
+binder rather than introducing a useless output. -/
+example :
+  (do
+    massert (0 < 1);
+    massert (1 < 2)
+    ) ⦃ _ => True ⦄
+  := by
+  --
+  apply spec_bind
+  · apply massert_spec'; omega
+  intro_split
+  --
+  apply spec_mono
+  · apply massert_spec'; omega
+  intro_split
+  trivial
+
+/- Example with a post-condition manipulating an ∃ -/
+example (zero : List Nat → Result (List Nat))
+    (zero_spec : ∀ s, zero s ⦃ s' =>
+      ∃ (h : s'.length = s.length),
+      (∀ i, (_ : i < s.length) → s'[i]'(by grind) = 0) ⦄)
+    (s : List Nat) :
+    (do
+      let _ ← zero s
+      pure ()) ⦃ _ => True ⦄ := by
+  apply spec_bind
+  · apply zero_spec
+  /- `intro_split` peels the existential of the post-condition, and splits the conjunction
+     under it. -/
+  intro_split
+  --
+  simp only [pure, spec_ok]
+
+
+end Aeneas.Std.WP
+
+/- TODO: mvcgen support is dropped for now.
+
+`import Std.Do` went with it; it is needed again to restore the bridge.
+
+`WP.lean` carried a bridge to `Std.Do`: a `WP`/`WPMonad` instance for `Result`
+plus `spec_to_mvcgen`/`dspec_to_mvcgen`, which let `@[step]` theorems generate
+companion `@[spec]` lemmas (see `info.to_mvcgen` in `Aeneas.Tactic.Step.Init`).
+
+Both lifts are *false* under this handler.  The instance sent every effect other
+than `fail` to `False`, so a `Triple` rules out `guardedModify`; `spec`/`dspec`
+do not, because an event that only extends the heap preserves every frame it is
+asked to.  The `vis` case of the old proofs is exactly the gap.
+
+Restoring the bridge means teaching the `WP` instance to *model* `guardedModify`
+rather than discard it.  Until then every `#register_spec_info` above keeps
+`to_mvcgen := none`, and `Aeneas/Tactic/Step/Tests/MvcgenSpec.lean` -- the only
+file in the repo that calls `mvcgen` -- has to be dropped or reworked when this
+file replaces `WP.lean`.
+
+Its `Triple` notation also collides with the separation-logic `⦃P⦄ m ⦃⇓ x => Q⦄`
+declared here, as does `Std.Do`'s `⌜⌝` with `SepLogic.ipure`; any future mvcgen
+code in this file must apply `Triple`/`SPred.pure`/`PostCond.noThrow` directly. -/

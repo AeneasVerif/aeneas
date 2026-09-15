@@ -298,6 +298,12 @@ theorem entails_emp_ipure_iff (P : Prop) : (emp ⊢ ⌜P⌝) ↔ P := by
   · intro h _ _
     exact h
 
+/-- An entailment between pure assertions is exactly the implication: neither
+side owns anything, so no heap is involved. -/
+@[simp]
+theorem entails_ipure_iff (P Q : Prop) : (⌜P⌝ ⊢ ⌜Q⌝) ↔ (P → Q) :=
+  ⟨fun h hP => h ∅ hP, fun h _ hP => h hP⟩
+
 theorem Ref.pointsTo_holds {α : Type} (r : Ref α) (value : α)
     (h : Heap) : (r ↦ value) h ↔ Heap.Sub (Heap.singleton r value) h :=
   Iff.rfl
