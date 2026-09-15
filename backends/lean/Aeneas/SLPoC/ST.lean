@@ -352,28 +352,6 @@ theorem ispec_conseq {P' P : IPre} {m : Result α}
   have hSpec := hTriple F h (sep_mono hP (entails_refl F) h hPre)
   exact hSpec.mono fun value => sep_mono (hQ value) (entails_refl F)
 
-/-- Preserve separate tuple binders while lifting a legacy specification. -/
-theorem stdSpecUncurry'_ispec
-    (m : Result (α × β)) (Q : α → β → Prop) :
-    Std.WP.spec m (Std.WP.uncurry' Q) →
-      ispec emp m (Std.WP.uncurry' fun first second => ⌜Q first second⌝) := by
-  intro hSpec
-  refine ispec_conseq (stdSpec_ispec m (Std.WP.uncurry' Q) hSpec)
-    (entails_refl emp) ?_
-  rintro ⟨first, second⟩
-  exact entails_refl ⌜Q first second⌝
-
-/-- Preserve a tuple-pattern binder while lifting a legacy specification. -/
-theorem stdSpecUncurry_ispec
-    (m : Result (α × β)) (Q : α → β → Prop) :
-    Std.WP.spec m (Std.uncurry Q) →
-      ispec emp m (Std.uncurry fun first second => ⌜Q first second⌝) := by
-  intro hSpec
-  refine ispec_conseq (stdSpec_ispec m (Std.uncurry Q) hSpec)
-    (entails_refl emp) ?_
-  rintro ⟨first, second⟩
-  exact entails_refl ⌜Q first second⌝
-
 theorem ispec_ipure {P : Prop} {H : IPre} {m : Result α}
     {Q : IPost α}
     (hTriple : P → ispec H m Q) :
@@ -1000,12 +978,6 @@ elab (name := intro_ispec) "intro_ispec" : tactic => withMainContext do
       { from_statement := ``spec
         conversion_thm := ``spec_ispec
         conversion_thm_inferred_args := 3 },
-      { from_statement := ``Std.WP.spec
-        conversion_thm := ``stdSpecUncurry'_ispec
-        conversion_thm_inferred_args := 4 },
-      { from_statement := ``Std.WP.spec
-        conversion_thm := ``stdSpecUncurry_ispec
-        conversion_thm_inferred_args := 4 },
       { from_statement := ``Std.WP.spec
         conversion_thm := ``stdSpec_ispec
         conversion_thm_inferred_args := 3 }
