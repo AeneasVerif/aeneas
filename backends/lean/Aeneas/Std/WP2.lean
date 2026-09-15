@@ -153,7 +153,7 @@ theorem dspec_func_admissible {ι : Type v} {α : Type u} (arg : ι) (p : Post �
 
 /-! ### `ispec` theorems -/
 @[simp, grind =, agrind =]
-theorem ispec_ok (x:α) : ispec P (ok x) Q ↔ P ⊢ Q x := by
+theorem ispec_ok (x : α) : ispec P (Result.ok x) Q ↔ P ⊢ Q x := by
   constructor
   · intro hTriple h hP
     rw [ispec_iff] at hTriple
@@ -185,7 +185,7 @@ theorem ispec_guardedModify {α : Type} {pre : IPre}
   exact .ret ⟨h', framed, hDisjoint', rfl, hPost, hF⟩
 
 @[simp, grind =, agrind =]
-theorem ispec_fail (e : Error) : ispec P (fail e) Q ↔ P ⊢ ⌜False⌝ := by
+theorem ispec_fail (e : Error) : ispec P (Result.fail e) Q ↔ P ⊢ ⌜False⌝ := by
   constructor
   · intro hTriple h hP
     rw [ispec_iff] at hTriple
@@ -286,13 +286,34 @@ theorem ispec_exists {ι : Sort _} {J : ι → IPre} {m : Result α}
   obtain ⟨h₁, h₂, hDisjoint, rfl, ⟨x, hJ⟩, hF⟩ := hPre
   exact hTriple x F _ ⟨h₁, h₂, hDisjoint, rfl, hJ, hF⟩
 
-/-! ### `dispec` rules -/
+/-! ### `dispec` theorems -/
 private theorem dispec_apply {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : dispec P m Q) {h : Heap} (hPre : P h) :
     rawIwp false m Q h := by
   rw [dispec_iff] at hTriple
   have hSpec := hTriple emp h ((sep_emp_r P).mpr h hPre)
   exact hSpec.mono fun value => sep_elim_right (Q value) emp
+
+@[simp, grind =, agrind =]
+theorem dispec_ok {α : Type u} {P : IPre} {Q : IPost α} (x : α) :
+    dispec P (Result.ok x) Q ↔ P ⊢ Q x := by
+  constructor
+  · intro hTriple h hP
+    rw [dispec_iff] at hTriple
+    have hPost := (hTriple emp h ((sep_emp_r P).mpr h hP)).ret_post
+    exact (sep_emp_r (Q x)).mp h hPost
+  · intro hPost
+    rw [dispec_iff]
+    intro F h hPre
+    exact .ret (sep_mono hPost (entails_refl F) h hPre)
+
+/-- Divergence satisfies every partial ispec: nothing is claimed of a run that
+does not stop, not even that it owns anything. -/
+theorem dispec_div {P : IPre} {Q : IPost α} :
+    dispec P (Result.div : Result α) Q := by
+  rw [dispec_iff]
+  intro _ _ _
+  exact PartialSpec.div
 
 theorem dispec_frame {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : dispec P m Q) (H : IProp) : dispec (P ∗ H) m (Q ∗+ H) := by
@@ -311,6 +332,22 @@ theorem dispec_mono {α : Type u} {P Pm : IPre} {Q : IPost α} {m : Result α} {
   intro F h hPre
   have hSpec := hFramed F h (sep_mono hRamified (entails_refl F) h hPre)
   exact hSpec.mono fun value => sep_mono (postWand_cancel Qm Q value) (entails_refl F)
+
+/-- Bind rule used by `step` on a partial goal.  See `ispec_bind`. -/
+theorem dispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
+    {next : α → Result β} {Q : IPost β} {m : Result α} {Qm : IPost α}
+    (hStep : dispec Pm m Qm)
+    (hPre : P ⊢ Pm ∗ F)
+    (hNext : ∀ value, dispec (Qm value ∗ F) (next value) Q) :
+    dispec P (Aeneas.Std.bind m next) Q := by
+  have hFirst : dispec P m (Qm ∗+ F) :=
+    dispec_mono (dispec_frame hStep F)
+      (entails_trans hPre (entails_sep_postWand _ (fun _ => entails_refl _)))
+  simp only [dispec_iff] at hFirst hNext ⊢
+  intro frame h hP
+  apply (hFirst frame h hP).bind
+  intro value h' hPost
+  exact hNext value frame h' hPost
 
 /-- Partial counterpart of `ispec_ipure`. -/
 theorem dispec_ipure {P : Prop} {H : IPre} {m : Result α} {Q : IPost α} :
@@ -343,36 +380,6 @@ theorem dispec_exists {ι : Sort _} {J : ι → IPre} {m : Result α} {Q : IPost
   intro F h hPre
   obtain ⟨h₁, h₂, hDisjoint, rfl, ⟨x, hJ⟩, hF⟩ := hPre
   exact hTriple x F _ ⟨h₁, h₂, hDisjoint, rfl, hJ, hF⟩
-
-theorem dispec_pure {P : IPre} {Q : IPost α} {value : α} (hPost : P ⊢ Q value) :
-    dispec P (pure value : Result α) Q := by
-  rw [dispec_iff]
-  intro F h hPre
-  exact .ret (sep_mono hPost (entails_refl F) h hPre)
-
-/-- Divergence satisfies every partial ispec: nothing is claimed of a run that
-does not stop, not even that it owns anything. -/
-theorem dispec_div {P : IPre} {Q : IPost α} :
-    dispec P (ITree.div : Result α) Q := by
-  rw [dispec_iff]
-  intro _ _ _
-  exact PartialSpec.div
-
-/-- Bind rule used by `step` on a partial goal.  See `ispec_bind`. -/
-theorem dispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
-    {next : α → Result β} {Q : IPost β} {m : Result α} {Qm : IPost α}
-    (hStep : dispec Pm m Qm)
-    (hPre : P ⊢ Pm ∗ F)
-    (hNext : ∀ value, dispec (Qm value ∗ F) (next value) Q) :
-    dispec P (Aeneas.Std.bind m next) Q := by
-  have hFirst : dispec P m (Qm ∗+ F) :=
-    dispec_mono (dispec_frame hStep F)
-      (entails_trans hPre (entails_sep_postWand _ (fun _ => entails_refl _)))
-  simp only [dispec_iff] at hFirst hNext ⊢
-  intro frame h hP
-  apply (hFirst frame h hP).bind
-  intro value h' hPost
-  exact hNext value frame h' hPost
 
 /-! ## Rewriting rules -/
 
@@ -412,35 +419,21 @@ theorem dispec_admissible_forall {ι : Type v} {α : Type u} (P : ι → IPre) (
     Lean.Order.admissible (fun m : Result α => ∀ x, dispec (P x) m (Q x)) :=
   Lean.Order.admissible_pi _ fun x => dispec_admissible (P x) (Q x)
 
--- `dispec` theorems
-theorem dispec_ok_apply {α : Type u} {Q : IPost α} {x : α}
-    (hTriple : dispec emp (Result.ok x) Q) : Q x ∅ :=
-  (dispec_apply hTriple (h := ∅) trivial).ret_post
-
-theorem dispec_ok_intro {α : Type u} {Q : IPost α} {x : α} (hQ : ∀ h, Q x h) :
-    dispec emp (Result.ok x) Q :=
-  dispec_pure fun h _ => hQ h
-
 /- TODO: register `sep_ipure_true_r_eq`, `entails_emp_ipure_iff` and `entails_refl`
 with `@[step_simps]`, once that attribute lives outside `Aeneas.Tactic.Step.Init`,
 which imports `Aeneas.Std.WP`. -/
 attribute [simp] entails_emp_ipure_iff
 
-@[simp, grind =, agrind =]
-theorem dispec_ok {α : Type u} {P : IPre} {Q : IPost α} {x : α} :
-    dispec P (Result.ok x) Q ↔ P ⊢ Q x := by
-  constructor
-  · intro hTriple h hP
-    rw [dispec_iff] at hTriple
-    have hPost := (hTriple emp h ((sep_emp_r P).mpr h hP)).ret_post
-    exact (sep_emp_r (Q x)).mp h hPost
-  · exact dispec_pure
+/-! ### `spec` theorems
 
-theorem dispec_div_intro {α : Type u} {P : IPre} {Q : IPost α} :
-    dispec P (Result.div : Result α) Q :=
-  dispec_div
+`spec` and `dspec` are named judgments with ordinary `α → Prop` postconditions,
+defined as the SL judgments at `emp` with a pure postcondition, so each rule
+below reads the corresponding `ispec`/`dispec` one.
 
--- `spec` theorems
+Each judgment has its own `step` registration. Pure specifications lift to SL
+specifications for framing; SL specifications lift back only when their
+precondition is `emp`. Total specifications also lift to partial ones, never
+conversely. -/
 @[simp, grind =, agrind =]
 theorem spec_ok (x : α) : spec (Result.ok x) p ↔ p x :=
   (ispec_ok x).trans (entails_emp_ipure_iff (p x))
@@ -454,15 +447,32 @@ theorem spec_fail (e : Error) : spec (Result.fail e) p ↔ False :=
 theorem spec_div : spec (Result.div : Result α) p ↔ False :=
   ispec_div.trans (entails_emp_ipure_iff False)
 
--- `dspec` theorems
-@[simp, grind =, agrind =]
-theorem dspec_ok (x : α) : dspec (Result.ok x) p ↔ p x :=
-  dispec_ok.trans (entails_emp_ipure_iff (p x))
+/-- Mono rule used by `step`. -/
+theorem spec_mono {α : Type u} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀) :
+    (∀ x, P₀ x → P₁ x) → spec m P₁ :=
+  fun hMonPost => ispec_mono h (entails_sep_postWand _ (fun value _ => hMonPost value))
+
+/-- Bind rule used by `step`. It is stated on `Aeneas.Std.bind` rather than on `>>=`, which is
+what a translated program binds with. -/
+theorem spec_bind {α : Type u} {β : Type v} {k : α → Result β} {Pₖ : Post β}
+    {m : Result α} {Pₘ : Post α} :
+    spec m Pₘ →
+    (∀ x, Pₘ x → spec (k x) Pₖ) →
+    spec (Aeneas.Std.bind m k) Pₖ :=
+  fun hm hk =>
+    ispec_bind hm (sep_emp_r emp).mpr fun value =>
+      ispec_mono (ispec_ipure_iff.mpr (hk value)) (entails_trans (sep_emp_r _).mp
+        (entails_sep_postWand _ (fun _ => entails_refl _)))
 
 theorem exists_imp_spec {m : Result α} {P : Post α} :
     (∃ y, m = Result.ok y ∧ P y) → spec m P := by
   rintro ⟨y, rfl, hP⟩
   exact (spec_ok y).mpr hP
+
+/-! ### `dspec` theorems -/
+@[simp, grind =, agrind =]
+theorem dspec_ok (x : α) : dspec (Result.ok x) p ↔ p x :=
+  (dispec_ok x).trans (entails_emp_ipure_iff (p x))
 
 /-- Failure has no partial pure specification: divergence is permitted, not
 stuckness. -/
@@ -473,6 +483,20 @@ theorem dspec_fail (e : Error) : dspec (Result.fail e) p ↔ False :=
 @[simp, grind =, agrind =]
 theorem dspec_div : dspec (Result.div : Result α) p ↔ True :=
   iff_true_intro dispec_div
+
+theorem dspec_mono {α : Type u} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : dspec m P₀) :
+    (∀ x, P₀ x → P₁ x) → dspec m P₁ :=
+  fun hMonPost => dispec_mono h (entails_sep_postWand _ (fun value _ => hMonPost value))
+
+theorem dspec_bind {α : Type u} {β : Type v} {k : α → Result β} {Pₖ : Post β}
+    {m : Result α} {Pₘ : Post α} :
+    dspec m Pₘ →
+    (∀ x, Pₘ x → dspec (k x) Pₖ) →
+    dspec (Aeneas.Std.bind m k) Pₖ :=
+  fun hm hk =>
+    dispec_bind hm (sep_emp_r emp).mpr fun value =>
+      dispec_mono (dispec_ipure_iff.mpr (hk value)) (entails_trans (sep_emp_r _).mp
+        (entails_sep_postWand _ (fun _ => entails_refl _)))
 
 theorem dspec_imp_forall {m : Result α} {P : Post α} :
     dspec m P → (∀ y, m = Result.ok y → P y) := by
@@ -890,49 +914,6 @@ open Aeneas.SepLogic
 
 universe u v
 
-/-! ## Pure computations
-
-`spec` and `dspec` are named judgments with ordinary `α → Prop`
-postconditions. Their definitions preserve the meaning of the former notation:
-the corresponding SL ispec at `emp` and a pure postcondition.
-
-Each judgment has its own `step` registration. Pure specifications lift to SL
-specifications for framing. SL specifications lift back only when their
-precondition is `emp` and their postcondition is pure. Pure goals stay in the
-pure judgment; proofs that need spatial intermediate assertions use SL goals
-instead. Total specifications also lift to partial ones, never conversely. -/
-
-/-- Mono rule used by `step`. -/
-theorem spec_mono {α : Type u} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀) :
-    (∀ x, P₀ x → P₁ x) → spec m P₁ :=
-  fun hMonPost => ispec_mono h (entails_sep_postWand _ (fun value _ => hMonPost value))
-
-theorem dspec_mono {α : Type u} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : dspec m P₀) :
-    (∀ x, P₀ x → P₁ x) → dspec m P₁ :=
-  fun hMonPost => dispec_mono h (entails_sep_postWand _ (fun value _ => hMonPost value))
-
-/-- Bind rule used by `step`. It is stated on `Aeneas.Std.bind` rather than on `>>=`, which is
-what a translated program binds with. -/
-theorem spec_bind {α : Type u} {β : Type v} {k : α → Result β} {Pₖ : Post β}
-    {m : Result α} {Pₘ : Post α} :
-    spec m Pₘ →
-    (∀ x, Pₘ x → spec (k x) Pₖ) →
-    spec (Aeneas.Std.bind m k) Pₖ :=
-  fun hm hk =>
-    ispec_bind hm (sep_emp_r emp).mpr fun value =>
-      ispec_mono (ispec_ipure_iff.mpr (hk value)) (entails_trans (sep_emp_r _).mp
-        (entails_sep_postWand _ (fun _ => entails_refl _)))
-
-theorem dspec_bind {α : Type u} {β : Type v} {k : α → Result β} {Pₖ : Post β}
-    {m : Result α} {Pₘ : Post α} :
-    dspec m Pₘ →
-    (∀ x, Pₘ x → dspec (k x) Pₖ) →
-    dspec (Aeneas.Std.bind m k) Pₖ :=
-  fun hm hk =>
-    dispec_bind hm (sep_emp_r emp).mpr fun value =>
-      dispec_mono (dispec_ipure_iff.mpr (hk value)) (entails_trans (sep_emp_r _).mp
-        (entails_sep_postWand _ (fun _ => entails_refl _)))
-
 open Lean Elab Meta Tactic
 
 theorem forall_unit {p : Unit → Prop} : (∀ value, p value) ↔ p () :=
@@ -1136,7 +1117,7 @@ macro (name := intro_spec) "intro_spec" : tactic =>
 /-! ## Weakest-precondition tactics -/
 
 /-- Reduce an `ispec` about a terminal `pure v` to the entailment `P ⊢ Q v`. -/
-macro "wp_pures" : tactic => `(tactic| apply ispec_ok.mpr)
+macro "wp_pures" : tactic => `(tactic| apply (ispec_ok _).mpr)
 
 /-- Apply a specification to the goal, frame the resources it does not need,
 and discharge the resulting entailment with `isimpl`. -/
@@ -1158,7 +1139,7 @@ macro "wp_mono " thm:term : tactic =>
 
 /-- Reduce a partial ispec about a terminal `pure v` to the entailment
 `P ⊢ Q v`. -/
-macro "dwp_pures" : tactic => `(tactic| apply dispec_pure)
+macro "dwp_pures" : tactic => `(tactic| apply (dispec_ok _).mpr)
 
 /-- Apply a partial specification to the goal, frame the resources it does not
 need, and discharge the resulting entailment with `isimpl`. -/
