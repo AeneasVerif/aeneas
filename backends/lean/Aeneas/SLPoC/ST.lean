@@ -373,12 +373,6 @@ theorem ispec_ipure_anywhere (P : Prop) (H' : IPre) {H : IPre}
   rw [hExtract]
   exact ispec_ipure hTriple
 
-/-- Protect the frame while `step` extracts facts from a callee postcondition. -/
-theorem ispec_introFrame (Qm F : IPre) {m : Result α} {Q : IPost α}
-    (hTriple : ispec (Qm ∗ introFrame F) m Q) :
-    ispec (Qm ∗ F) m Q := by
-  simpa only [introFrame_eq] using hTriple
-
 /-- Copy a pure fact of the precondition into the local context *without*
 consuming it.  Unlike `ispec_ipure` the precondition is unchanged, so the fact
 stays available to the framing of the later steps. -/
@@ -537,21 +531,6 @@ theorem dispec_ipure_anywhere (P : Prop) (H' : IPre) {H : IPre}
     dispec H m Q := by
   rw [hExtract]
   exact dispec_ipure hTriple
-
-/-- Partial-ispec counterpart of `ispec_introFrame`. -/
-theorem dispec_introFrame (Qm F : IPre) {m : Result α} {Q : IPost α}
-    (hTriple : dispec (Qm ∗ introFrame F) m Q) :
-    dispec (Qm ∗ F) m Q := by
-  simpa only [introFrame_eq] using hTriple
-
-/-- Copy a pure fact of the precondition into the local context without
-consuming it. -/
-theorem dispec_ipure_keep {P : Prop} {H : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : P → dispec (⌜P⌝ ∗ H) m Q) : dispec (⌜P⌝ ∗ H) m Q := by
-  simp only [dispec_iff] at hTriple ⊢
-  intro F h hPre
-  have ⟨hP, _⟩ := (sep_pure_l P (H ∗ F) h).mp ((sep_assoc _ _ _).mp h hPre)
-  exact hTriple hP F h hPre
 
 theorem dispec_ipure' {P : Prop} {m : Result α} {Q : IPost α}
     (hTriple : P → dispec emp m Q) : dispec ⌜P⌝ m Q := by
