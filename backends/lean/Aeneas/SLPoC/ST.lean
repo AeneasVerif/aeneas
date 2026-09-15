@@ -177,21 +177,6 @@ theorem dspec_admissible {α : Type u} (Q : α → Prop) :
     Lean.Order.admissible (fun m : Result α => dspec m Q) :=
   dispec_admissible emp (fun value => ⌜Q value⌝)
 
-theorem uncurry_apply {α β γ : Type _} (f : α → β → γ) (p : α × β) :
-    Std.uncurry f p = f p.1 p.2 := by
-  cases p
-  rfl
-
-theorem uncurry_eq {α β γ : Type _} (f : α → β → γ) :
-    Std.uncurry f = fun p => f p.1 p.2 := by
-  funext p
-  exact uncurry_apply f p
-
-theorem uncurry'_eq {α β γ : Type _} (f : α → β → γ) :
-    Std.WP.uncurry' f = fun p => f p.1 p.2 := by
-  funext p
-  exact Std.WP.uncurry'_eq p f
-
 /- The `⇓` is inside `atomic` so that the parser backtracks when it is absent:
 `(m) ⦃ value => p ⦄`, the pure-computation notation of `Aeneas.SepLogic.WP`,
 starts with exactly the same tokens and must stay parseable. -/
@@ -1011,39 +996,16 @@ theorem forall_unit {p : Unit → Prop} : (∀ value, p value) ↔ p () :=
 * a ramified entailment `P ⊢ Pm ∗ (Qm -∗+ Q)`, which collapses to a pointwise
   implication when both postconditions are pure.
 
-The postcondition of a callee reaches these goals wrapped in the markers the
-`⦃⇓ x y => … ⦄` notation leaves behind. `intro_ispec` reduces them
-*definitionally* — the wrapper is a function which pattern-matches on the result
-tuple, so unfolding it once and reducing the match exposes the assertion — which
-is why no rewriting lemma about them is needed here. -/
+The facts of a pure judgment are the binders of the premise, and `Step.Intro`
+handles them; here they have to be extracted from an assertion first, which is
+what this section adds. The postcondition of a callee reaches the goal wrapped
+in the markers of the `⦃⇓ x y => … ⦄` notation, and `Step.Intro.reduceMarkers`
+reduces those *definitionally*, which is why no rewriting lemma about them is
+needed. -/
 
 namespace Intro
 
-/-- Reduce an application which is stuck on a definition that destructures its
-argument: this is the shape of the markers the `⦃⇓ x y => … ⦄` notation leaves
-behind, which apply the body of a postcondition to the result tuple.
-
-The definition is unfolded once, and the reduction is kept only when it fires a
-match with a *single* alternative, i.e. an irrefutable destructuring. A
-representation predicate is left alone: it either unfolds to its body and no
-further, or it is a genuine case analysis, which is the job of the `iris_simps`
-lemmas — and the frame inference can no longer match an opened one. -/
-private def reduceMarker? (e : Expr) : MetaM (Option Expr) := do
-  let e := (← instantiateMVars e).consumeMData.headBeta
-  unless e.getAppFn.isConst && e.getAppNumArgs > 0 do return none
-  let some unfolded ← unfoldDefinition? e | return none
-  let some matcher ← matchMatcherApp? unfolded | return none
-  unless matcher.alts.size == 1 do return none
-  let reduced ← whnfCore unfolded
-  if reduced == unfolded then return none
-  return some reduced
-
-/-- Reduce the markers at the head of `e`. -/
-private partial def reduceMarkers (e : Expr) : MetaM Expr := do
-  let e := (← instantiateMVars e).consumeMData.headBeta
-  match ← reduceMarker? e with
-  | some e' => reduceMarkers e'
-  | none => return e
+open Aeneas.Step.Intro (reduceMarkers)
 
 /-- Expose the structure of an assertion by reducing the markers it holds: those
 of the separating conjunctions it is built from, and those of the propositions
@@ -1095,44 +1057,6 @@ private def normalizeGoal : TacticM Unit := do
   if newTarget != target then
     replaceMainGoal [← goal.change newTarget]
 
-/-- Split a freshly introduced pure fact into the hypotheses it stands for: its
-conjuncts and the witnesses of its existentials.  This is the counterpart of the
-`and_imp`/`exists_imp` clean-up `step` applies to the judgments which do not
-introduce their outputs themselves. -/
-private partial def splitHypothesis (goal : MVarId) (fvarId : FVarId) :
-    MetaM MVarId := do
-  let type ← goal.withContext do instantiateMVars (← fvarId.getType)
-  unless type.consumeMData.isAppOfArity ``And 2
-      || type.consumeMData.isAppOfArity ``Exists 2 do
-    return goal
-  let subgoals ← goal.cases fvarId
-  let some subgoal := subgoals[0]? | return goal
-  unless subgoals.size == 1 do return goal
-  let mut goal := subgoal.mvarId
-  /- The fields are split from the last one on: destructuring one invalidates the
-     hypotheses which follow it. -/
-  for field in subgoal.fields.reverse do
-    if let some fvarId := field.consumeMData.fvarId? then
-      goal ← splitHypothesis goal fvarId
-  return goal
-
-/-- Split the hypotheses the extraction added to the context. -/
-private def splitNewHypotheses (before : Std.HashSet FVarId) : TacticM Unit := do
-  let goal ← getMainGoal
-  let introduced ← goal.withContext do
-    pure <| (← getLCtx).foldl (init := #[]) fun acc decl =>
-      if decl.isImplementationDetail || before.contains decl.fvarId then acc
-      else acc.push decl.fvarId
-  let mut goal := goal
-  for fvarId in introduced.reverse do
-    goal ← splitHypothesis goal fvarId
-  replaceMainGoal [goal]
-
-/-- The local hypotheses of the main goal. -/
-def localHypotheses : TacticM (Std.HashSet FVarId) := do
-  (← getMainGoal).withContext do
-    pure <| (← getLCtx).foldl (init := ∅) fun acc decl => acc.insert decl.fvarId
-
 end Intro
 
 /-- The tactic `step` runs on the goals it prepares for `ispec` and `dispec`.
@@ -1141,12 +1065,14 @@ A no-op on a goal which is neither.
 See the section above for the shapes it normalizes, and for why it needs no
 lemma about the markers of the postcondition notation. -/
 elab (name := intro_ispec) "intro_ispec" : tactic => withMainContext do
+  let before ← Aeneas.Step.Intro.localHypotheses
+  replaceMainGoal [(← (← getMainGoal).intros).2]
+  withMainContext do
   Intro.normalizeGoal
-  let before ← Intro.localHypotheses
   evalTactic (← `(tactic| iintro_shallow_post))
   unless (← getUnsolvedGoals).isEmpty do
     withMainContext do
-    Intro.splitNewHypotheses before
+    Aeneas.Step.Intro.splitNewHypotheses before
     withMainContext do
     /- Collapse what is left of a ramified entailment between pure
        postconditions, and of a triple with a pure precondition.  The pure facts
@@ -1171,10 +1097,6 @@ elab (name := intro_ispec) "intro_ispec" : tactic => withMainContext do
     mk_spec_mono_skip_args := 4
     mk_spec_bind := ``ispec_step_bind
     mk_spec_bind_skip_args := 7
-    /- `intro_tactic` is fully responsible for the normalization of the mono and bind
-       premises, which makes those two simp sets irrelevant here. -/
-    uncurry_elim_tactics := #[]
-    qimp_elim_tactics := #[]
     intro_tactic := some ``intro_ispec
     discharge_tactic := some `iframe
     to_mvcgen := none
@@ -1203,9 +1125,6 @@ elab (name := intro_ispec) "intro_ispec" : tactic => withMainContext do
     mk_spec_mono_skip_args := 4
     mk_spec_bind := ``dispec_step_bind
     mk_spec_bind_skip_args := 7
-    /- See the `ispec` registration: `intro_tactic` replaces those two simp sets. -/
-    uncurry_elim_tactics := #[]
-    qimp_elim_tactics := #[]
     intro_tactic := some ``intro_ispec
     discharge_tactic := some `iframe
     to_mvcgen := none
@@ -1228,6 +1147,13 @@ elab (name := intro_ispec) "intro_ispec" : tactic => withMainContext do
     ]
   }
 
+/-- The tactic `step` runs on the premises of the pure judgments. An equality which
+determines the result is substituted rather than introduced, and what is left is introduced
+and split. -/
+macro (name := intro_spec) "intro_spec" : tactic =>
+  /- Substituting the equality can close the premise, hence `all_goals`. -/
+  `(tactic| (simp -failIfUnchanged only [forall_eq, forall_eq']; all_goals intro_split))
+
 #register_spec_info {
     spec_name := ``spec
     arity := 3
@@ -1237,12 +1163,7 @@ elab (name := intro_ispec) "intro_ispec" : tactic => withMainContext do
     mk_spec_mono_skip_args := 2
     mk_spec_bind := ``spec_bind
     mk_spec_bind_skip_args := 4
-    uncurry_elim_tactics := #[]
-    qimp_elim_tactics := #[
-      ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair, ``uncurry'_eq,
-      ``uncurry_apply, ``uncurry_eq,
-      ``forall_eq, ``forall_eq', ``forall_unit, ``true_imp_iff
-    ]
+    intro_tactic := some ``intro_spec
     to_mvcgen := none
     liftings := #[
       { from_statement := ``ispec
@@ -1260,12 +1181,7 @@ elab (name := intro_ispec) "intro_ispec" : tactic => withMainContext do
     mk_spec_mono_skip_args := 2
     mk_spec_bind := ``dspec_bind
     mk_spec_bind_skip_args := 4
-    uncurry_elim_tactics := #[]
-    qimp_elim_tactics := #[
-      ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair, ``uncurry'_eq,
-      ``uncurry_apply, ``uncurry_eq,
-      ``forall_eq, ``forall_eq', ``forall_unit, ``true_imp_iff
-    ]
+    intro_tactic := some ``intro_spec
     to_mvcgen := none
     liftings := #[
       { from_statement := ``spec
@@ -1453,7 +1369,7 @@ private partial def enterPureUncurryOnce (acc : Array Std.Delab.BinderEntry)
 
 private def isPurePostBinderWrapper (e : Expr) : Bool :=
   match_expr e.consumeMData with
-  | Std.WP.uncurry' _ _ _ _ => true
+  | Aeneas.Std.WP.uncurry' _ _ _ _ => true
   | Std.uncurry _ _ _ _ => true
   | _ => false
 
@@ -1461,7 +1377,7 @@ private def isPurePostBinderWrapper (e : Expr) : Bool :=
 from the transparent marker chain produced by `mkPurePost`. -/
 private partial def delabPurePost : DelabM (Array Term × Term) := do
   match_expr (← getExpr).consumeMData with
-  | Std.WP.uncurry' _ _ _ _ =>
+  | Aeneas.Std.WP.uncurry' _ _ _ _ =>
     withAppArg do
       match_expr (← getExpr).consumeMData with
       | Std.uncurry _ _ _ _ =>
@@ -1512,7 +1428,7 @@ private partial def enterSLUncurryOnce (acc : Array Std.Delab.BinderEntry)
 postcondition from the marker chain produced by `mkPostSyntaxWith`. -/
 private partial def delabSLPost : DelabM (Array Term × Term) := do
   match_expr (← getExpr).consumeMData with
-  | Std.WP.uncurry' _ _ _ _ =>
+  | Aeneas.Std.WP.uncurry' _ _ _ _ =>
     withAppArg do
       match_expr (← getExpr).consumeMData with
       | Std.uncurry _ _ _ _ =>
