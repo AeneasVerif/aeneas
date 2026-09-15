@@ -151,23 +151,7 @@ theorem dspec_func_admissible {ι : Type v} {α : Type u} (arg : ι) (p : Post �
     admissible (fun f : ι → Result α => dspec (f arg) p) :=
   admissible_apply (fun _ m => dspec m p) arg (dspec_admissible p)
 
-/-- Variant of `uncurry` used to decompose tuples in post-conditions.
-
-Similar to `uncurry` but delaborated differently:
-`uncurry'` is delaborated as `x y => ...` (separate binders), while
-`uncurry` is delaborated as `(x, y) => ...` (tuple binder).
-We use this in the Hoare triple notation `⦃ ⦄`.
-
-Example: `f 0 ⦃ x y z => ... ⦄` desugars to
-`spec (f 0) (uncurry' fun x => uncurry' fun y z => ...)`.
--/
-def uncurry' {α β γ : Type _} (p : α → β → γ) : α × β → γ :=
-  fun (x, y) => p x y
-
-@[simp] theorem uncurry'_pair x y (p : α → β → γ) : uncurry' p (x, y) = p x y := by simp [uncurry']
-@[defeq] theorem uncurry'_eq x (p : α → β → γ) : uncurry' p x = p x.fst x.snd := by simp [uncurry']
-
-/-! ### `ispec` rules -/
+/-! ### `ispec` theorems -/
 @[simp, grind =, agrind =]
 theorem ispec_ok (x:α) : ispec P (ok x) Q ↔ P ⊢ Q x := by
   constructor
@@ -285,17 +269,10 @@ theorem ispec_ipure_iff {P : Prop} {m : Result α} {Q : IPost α} :
   rw [← sep_emp_r_eq ⌜P⌝]
   exact ispec_ipure
 
-/-- Protect the frame while `step` extracts facts from a callee postcondition. -/
-theorem ispec_introFrame (Qm F : IPre) {m : Result α} {Q : IPost α}
-    (hTriple : ispec (Qm ∗ introFrame F) m Q) :
-    ispec (Qm ∗ F) m Q := by
-  simpa only [introFrame_eq] using hTriple
-
 /-- Copy a pure fact of the precondition into the local context *without*
-consuming it.  Unlike `ispec_ipure` the precondition is unchanged, so the fact
-stays available to the framing of the later steps. -/
-theorem ispec_ipure_keep {P : Prop} {H : IPre} {m : Result α}
-    {Q : IPost α}
+consuming it: the precondition is unchanged, so the fact stays available to the
+framing of the later steps.  This is `ispec_ipure` used in both directions. -/
+theorem ispec_ipure_keep {P : Prop} {H : IPre} {m : Result α} {Q : IPost α}
     (hTriple : P → ispec (⌜P⌝ ∗ H) m Q) :
     ispec (⌜P⌝ ∗ H) m Q :=
   ispec_ipure.mpr fun hP => ispec_ipure.mp (hTriple hP) hP
@@ -354,16 +331,10 @@ theorem dispec_ipure_iff {P : Prop} {m : Result α} {Q : IPost α} :
   rw [← sep_emp_r_eq ⌜P⌝]
   exact dispec_ipure
 
-/-- Partial-ispec counterpart of `ispec_introFrame`. -/
-theorem dispec_introFrame (Qm F : IPre) {m : Result α} {Q : IPost α}
-    (hTriple : dispec (Qm ∗ introFrame F) m Q) :
-    dispec (Qm ∗ F) m Q := by
-  simpa only [introFrame_eq] using hTriple
-
-/-- Copy a pure fact of the precondition into the local context without
-consuming it. -/
+/-- Partial counterpart of `ispec_ipure_keep`. -/
 theorem dispec_ipure_keep {P : Prop} {H : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : P → dispec (⌜P⌝ ∗ H) m Q) : dispec (⌜P⌝ ∗ H) m Q :=
+    (hTriple : P → dispec (⌜P⌝ ∗ H) m Q) :
+    dispec (⌜P⌝ ∗ H) m Q :=
   dispec_ipure.mpr fun hP => dispec_ipure.mp (hTriple hP) hP
 
 theorem dispec_exists {ι : Sort _} {J : ι → IPre} {m : Result α} {Q : IPost α}
@@ -440,8 +411,6 @@ when the argument of the recursion does not change. -/
 theorem dispec_admissible_forall {ι : Type v} {α : Type u} (P : ι → IPre) (Q : ι → IPost α) :
     Lean.Order.admissible (fun m : Result α => ∀ x, dispec (P x) m (Q x)) :=
   Lean.Order.admissible_pi _ fun x => dispec_admissible (P x) (Q x)
-
--- `ispec` theorems
 
 -- `dispec` theorems
 theorem dispec_ok_apply {α : Type u} {Q : IPost α} {x : α}
@@ -525,6 +494,7 @@ open Std WP Result
 # Hoare triple notation and elaboration
 -/
 
+
 /- The `⇓` is inside `atomic` so that the parser backtracks when it is absent:
 `(m) ⦃ value => p ⦄`, the pure-computation notation of `Aeneas.Std.WP`,
 starts with exactly the same tokens and must stay parseable. -/
@@ -539,6 +509,22 @@ syntax:lead (name := slSpecSyntaxPred)
   "⦃ " term " ⦄" ppLine term:lead ppLine "⦃" "⇓" ppSpace term " ⦄" : term
 
 open Lean PrettyPrinter
+
+/-- Variant of `uncurry` used to decompose tuples in post-conditions.
+
+Similar to `uncurry` but delaborated differently:
+`uncurry'` is delaborated as `x y => ...` (separate binders), while
+`uncurry` is delaborated as `(x, y) => ...` (tuple binder).
+We use this in the Hoare triple notation `⦃ ⦄`.
+
+Example: `f 0 ⦃ x y z => ... ⦄` desugars to
+`spec (f 0) (uncurry' fun x => uncurry' fun y z => ...)`.
+-/
+def uncurry' {α β γ : Type _} (p : α → β → γ) : α × β → γ :=
+  fun (x, y) => p x y
+
+@[simp] theorem uncurry'_pair x y (p : α → β → γ) : uncurry' p (x, y) = p x y := by simp [uncurry']
+@[defeq] theorem uncurry'_eq x (p : α → β → γ) : uncurry' p x = p x.fst x.snd := by simp [uncurry']
 
 /-- Build a marker chain for the leaves of a possibly nested tuple pattern. -/
 private partial def buildPostUncurryLamWith (uncurryName : Name)
@@ -754,15 +740,15 @@ private partial def enterPureUncurryOnce (acc : Array Std.Delab.BinderEntry)
 
 private def isPurePostBinderWrapper (e : Expr) : Bool :=
   match_expr e.consumeMData with
-  | Std.WP.uncurry' _ _ _ _ => true
-  | Std.uncurry _ _ _ _ => true
+  | uncurry' _ _ _ _ => true
+  | uncurry _ _ _ _ => true
   | _ => false
 
 /-- Recover separate binders, explicit tuple binders, and the final pure body
 from the transparent marker chain produced by `mkPurePost`. -/
 private partial def delabPurePost : DelabM (Array Term × Term) := do
   match_expr (← getExpr).consumeMData with
-  | Std.WP.uncurry' _ _ _ _ =>
+  | uncurry' _ _ _ _ =>
     withAppArg do
       match_expr (← getExpr).consumeMData with
       | Std.uncurry _ _ _ _ =>
@@ -813,7 +799,7 @@ private partial def enterSLUncurryOnce (acc : Array Std.Delab.BinderEntry)
 postcondition from the marker chain produced by `mkPostSyntaxWith`. -/
 private partial def delabSLPost : DelabM (Array Term × Term) := do
   match_expr (← getExpr).consumeMData with
-  | Std.WP.uncurry' _ _ _ _ =>
+  | uncurry' _ _ _ _ =>
     withAppArg do
       match_expr (← getExpr).consumeMData with
       | Std.uncurry _ _ _ _ =>
