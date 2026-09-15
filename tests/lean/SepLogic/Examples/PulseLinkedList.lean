@@ -1,0 +1,428 @@
+import SepLogic.MutableData.Ptr
+
+/-!
+# Pulse sequential linked lists
+
+A Lean SLPoC port of the sequential first-order fragment of
+[`Pulse.Lib.LinkedList`](https://github.com/FStarLang/FStar/blob/master/pulse/lib/pulse/lib/Pulse.Lib.LinkedList.fst)
+and its interface.  The port covers the owning linked-list predicate and the
+basic operations `isEmpty`, `head`, `pop`, `length`, `create`, `cons`,
+`append`, `isLastCell`, `appendAtLastCell`, `detachNext`, `split`, `insert`,
+`delete`, and `reverse`.  Pulse's wand-based cursor, iterator, length-loop, and
+iterative-append fragments are intentionally outside this first-order scope.
+-/
+
+open Aeneas
+open SepLogic
+open Aeneas.SepLogic
+
+namespace SepLogic
+
+open Aeneas.Std (Heap Result)
+
+
+namespace PulseLinkedList
+
+/-! # Executable definitions -/
+
+/-- A Pulse linked-list cell. -/
+structure Node (α : Type) where
+  head : α
+  tail : Option (Ptr (Node α))
+
+/-- Pulse's nullable `node_ptr`. -/
+abbrev Link (α : Type) := Option (Ptr (Node α))
+
+/-- Test whether a linked list is empty. -/
+def isEmpty (x : Link α) : Result Bool :=
+  pure x.isNone
+
+/-- Read the first element.  The proof argument is the erased counterpart of
+Pulse's non-empty-list precondition. -/
+def head (x : Link α) (hne : x ≠ none) : Result α :=
+  match x with
+  | none => False.elim (hne rfl)
+  | some p => do
+      let node ← read p
+      pure node.head
+
+/-- Remove and free the first cell, returning the remaining list and value. -/
+def pop (x : Link α) (hne : x ≠ none) : Result (Link α × α) :=
+  match x with
+  | none => False.elim (hne rfl)
+  | some p => do
+      let node ← read p
+      free p
+      pure (node.tail, node.head)
+
+/-- Recursive length, with Pulse's erased logical list made explicit to justify
+structural recursion. -/
+def length : List α → Link α → Result Nat
+  | [], _ => pure 0
+  | _ :: _, none => pure 0
+  | _ :: xs, some p => do
+      let node ← read p
+      let n ← length xs node.tail
+      pure (n + 1)
+
+/-- Construct the empty linked list. -/
+def create (α : Type) : Result (Link α) :=
+  pure none
+
+/-- Allocate and prepend one cell. -/
+def cons (v : α) (x : Link α) : Result (Link α) := do
+  let p ← alloc { head := v, tail := x }
+  pure (some p)
+
+/-- Append `y` in place to the non-empty list `x`.  The first argument is
+Pulse's erased logical list and supplies the recursion measure. -/
+def append : List α → Link α → Link α → Result Unit
+  | [], _, _ => pure ()
+  | _ :: _, none, _ => pure ()
+  | _ :: xs, some p, y => do
+      let node ← read p
+      match xs with
+      | [] => update p { node with tail := y }
+      | _ :: _ => append xs node.tail y
+
+/-- Test whether a non-empty list consists of exactly one cell. -/
+def isLastCell (x : Link α) (hne : x ≠ none) : Result Bool :=
+  match x with
+  | none => False.elim (hne rfl)
+  | some p => do
+      let node ← read p
+      isEmpty node.tail
+
+/-- Attach `y` directly after the only cell of `x`. -/
+def appendAtLastCell (x y : Link α) (hne : x ≠ none) : Result Unit :=
+  match x with
+  | none => False.elim (hne rfl)
+  | some p => do
+      let node ← read p
+      update p { node with tail := y }
+
+/-- Detach the tail following the first cell. -/
+def detachNext (x : Link α) (hne : x ≠ none) : Result (Link α) :=
+  match x with
+  | none => False.elim (hne rfl)
+  | some p => do
+      let node ← read p
+      update p { node with tail := none }
+      pure node.tail
+
+/-- Split after the first `n` cells.  Pulse uses a `UInt32`; `Nat` is the
+unbounded first-order counterpart used by this model. -/
+def split : Nat → Link α → Result (Link α)
+  | 0, x => pure x
+  | _ + 1, none => pure none
+  | 1, some p => do
+      let node ← read p
+      update p { node with tail := none }
+      pure node.tail
+  | n + 2, some p => do
+      let node ← read p
+      split (n + 1) node.tail
+
+/-- Insert `item` after the first `n` cells. -/
+def insert (xs : List α) (x : Link α) (item : α) (n : Nat) : Result Unit := do
+  let tail ← split n x
+  let inserted ← cons item tail
+  append (xs.take n) x inserted
+
+/-- The upstream Pulse implementation of `delete` currently has the same body
+as `insert`; this definition deliberately preserves that actual behavior. -/
+def delete (xs : List α) (x : Link α) (item : α) (n : Nat) : Result Unit :=
+  insert xs x item n
+
+/-- Tail-recursive in-place reversal with an accumulator. -/
+def reverseAppend : List α → Link α → Link α → Result (Link α)
+  | [], _, acc => pure acc
+  | _ :: _, none, acc => pure acc
+  | _ :: xs, some p, acc => do
+      let node ← read p
+      update p { node with tail := acc }
+      reverseAppend xs node.tail (some p)
+
+/-- Reverse a linked list in place. -/
+def reverse (xs : List α) (x : Link α) : Result (Link α) :=
+  reverseAppend xs x none
+
+/-! # Ghost state, specifications and proofs -/
+
+/-- Exact ownership of a linked list with pure view `xs`. -/
+def isList : Link α → List α → IProp
+  | none, [] => emp
+  | some p, x :: xs =>
+      iexists fun next =>
+        iprop(p ↦ { head := x, tail := next } ∗ isList next xs)
+  | _, _ => ⌜False⌝
+
+@[simp] theorem isList_none_nil : isList (none : Link α) [] = emp := rfl
+
+@[simp] theorem isList_none_cons (x : α) (xs : List α) :
+    isList (none : Link α) (x :: xs) = ⌜False⌝ := rfl
+
+@[simp] theorem isList_some_nil (p : Ptr (Node α)) :
+    isList (some p) [] = ⌜False⌝ := rfl
+
+/-- Unfold one owned cell. -/
+theorem isList_unfold (p : Ptr (Node α)) (x : α) (xs : List α) :
+    isList (some p) (x :: xs) ⊢
+      iexists fun next =>
+        iprop(p ↦ { head := x, tail := next } ∗ isList next xs) := by
+  iframe
+
+/-- Fold one owned cell. -/
+theorem isList_fold (p : Ptr (Node α)) (x : α) (next : Link α)
+    (xs : List α) :
+    p ↦ { head := x, tail := next } ∗ isList next xs ⊢
+      isList (some p) (x :: xs) := by
+  change _ ⊢ iexists fun next' =>
+    iprop(p ↦ { head := x, tail := next' } ∗ isList next' xs)
+  exact entails_exists_r next (entails_refl _)
+
+/-- A list is empty exactly when its link is null. -/
+@[step]
+theorem isEmpty.spec (x : Link α) (xs : List α) :
+    ⦃ isList x xs ⦄ isEmpty x
+      ⦃⇓ b => ⌜b = decide (xs = [])⌝ ∗ isList x xs⦄ := by
+  unfold isEmpty
+  cases xs with
+  | nil =>
+      cases x
+      · step*
+      · iintro
+        contradiction
+  | cons v vs =>
+      cases x with
+      | none =>
+          iintro
+          contradiction
+      | some p =>
+          simp only [Option.isNone_some, List.cons_ne_nil, decide_false]
+          step*
+
+/-- `head` preserves ownership and returns the exact first value. -/
+@[step]
+theorem head.spec (x : Link α) (v : α) (xs : List α) (hne : x ≠ none) :
+    ⦃ isList x (v :: xs) ⦄ head x hne
+      ⦃⇓ result => ⌜result = v⌝ ∗ isList x (v :: xs)⦄ := by
+  cases x with
+  | none => contradiction
+  | some p =>
+      simp only [head]
+      iintro
+      step*
+
+/-- `pop` frees the first cell and returns its exact tail and value. -/
+@[step]
+theorem pop.spec (x : Link α) (v : α) (xs : List α) (hne : x ≠ none) :
+    ⦃ isList x (v :: xs) ⦄ pop x hne
+      ⦃⇓ (tail, result) => ⌜result = v⌝ ∗ isList tail xs⦄ := by
+  cases x with
+  | none => grind
+  | some p =>
+      simp only [pop, isList]
+      iintro
+      step*
+
+/-- Recursive `length` preserves every cell and computes the pure-list length. -/
+@[step]
+theorem length.spec (x : Link α) (xs : List α) :
+    ⦃ isList x xs ⦄ length xs x
+      ⦃⇓ n => ⌜n = xs.length⌝ ∗ isList x xs⦄ := by
+  induction xs generalizing x with
+  | nil =>
+      cases x
+      · simp only [length, List.length_nil]
+        step*
+      · iintro
+        contradiction
+  | cons v xs ih =>
+      cases x with
+      | none =>
+          iintro
+          contradiction
+      | some p =>
+          simp only [length, List.length_cons]
+          iintro
+          step*
+
+/-- `create` returns the uniquely represented empty list. -/
+@[step]
+theorem create.spec :
+    ⦃ emp ⦄ create α ⦃⇓ x => isList x []⦄ := by
+  unfold create
+  step*
+
+/-- `cons` allocates one cell and prepends its value to the exact view. -/
+@[step]
+theorem cons.spec (v : α) (x : Link α) (xs : List α) :
+    ⦃ isList x xs ⦄ cons v x
+      ⦃⇓ y => isList y (v :: xs)⦄ := by
+  unfold cons
+  step*
+
+/-- `append` preserves the head link `x` and mutates its last cell so that its
+exact view becomes `xs ++ ys`. -/
+@[step]
+theorem append.spec (x y : Link α) (xs ys : List α) (hne : xs ≠ []) :
+    ⦃ isList x xs ∗ isList y ys ⦄ append xs x y
+      ⦃⇓ isList x (xs ++ ys)⦄ := by
+  induction xs generalizing x y ys with
+  | nil => contradiction
+  | cons v xs ih =>
+      cases x with
+      | none =>
+          iintro
+          contradiction
+      | some p =>
+          simp only [isList]
+          iintro
+          cases xs with
+          | nil =>
+              simp only [append, List.singleton_append]
+              step*
+          | cons w ws =>
+              simp only [append, List.cons_append]
+              step*
+
+/-- `isLastCell` preserves ownership and exactly characterizes a singleton. -/
+@[step]
+theorem isLastCell.spec (x : Link α) (v : α) (xs : List α)
+    (hne : x ≠ none) :
+    ⦃ isList x (v :: xs) ⦄ isLastCell x hne
+      ⦃⇓ b => ⌜b = decide (xs = [])⌝ ∗ isList x (v :: xs)⦄ := by
+  cases x with
+  | none => contradiction
+  | some p =>
+      simp only [isLastCell]
+      iintro
+      step*
+
+/-- `appendAtLastCell` implements Pulse's singleton-specialized append helper. -/
+@[step]
+theorem appendAtLastCell.spec (x y : Link α) (v : α) (ys : List α)
+    (hne : x ≠ none) :
+    ⦃ isList x [v] ∗ isList y ys ⦄ appendAtLastCell x y hne
+      ⦃⇓ isList x (v :: ys)⦄ := by
+  cases x with
+  | none => contradiction
+  | some p =>
+      simp only [appendAtLastCell, isList]
+      iintro
+      step*
+
+/-- `detachNext` turns the first cell into a singleton and returns the exact
+detached tail. -/
+@[step]
+theorem detachNext.spec (x : Link α) (v : α) (xs : List α) (hne : x ≠ none) :
+    ⦃ isList x (v :: xs) ⦄ detachNext x hne
+      ⦃⇓ tail => isList x [v] ∗ isList tail xs⦄ := by
+  cases x with
+  | none => contradiction
+  | some p =>
+      simp only [detachNext, isList]
+      iintro
+      step*
+      refine entails_exists_r none ?_
+      simp only [isList]
+      iframe
+
+/-- `split n` leaves the first `n` values under the original head link and
+returns ownership of the exact suffix. -/
+@[step]
+theorem split.spec (n : Nat) (x : Link α) (xs : List α)
+    (hpos : 0 < n) (hle : n ≤ xs.length) :
+    ⦃ isList x xs ⦄ split n x
+      ⦃⇓ tail => isList x (xs.take n) ∗ isList tail (xs.drop n)⦄ := by
+  induction n generalizing x xs with
+  | zero => omega
+  | succ n ih =>
+      rcases xs with _ | ⟨v, xs⟩
+      · simp at hle
+      · cases x with
+        | none =>
+            iintro
+            contradiction
+        | some p =>
+            iintro next
+            cases n with
+            | zero =>
+                simp only [split, List.take, List.drop]
+                step*
+                apply sep_mono
+                · refine entails_exists_r (none : Link α) ?_
+                  simp only [isList]
+                  iframe
+                · iframe
+            | succ n =>
+                simp only [split, List.take, List.drop]
+                step
+                step with ih (x := next) (xs := xs) (by omega) (by simpa using hle)
+                iframe
+
+/-- `insert` splits the exact view and inserts `item` at index `n`. -/
+@[step]
+theorem insert.spec (n : Nat) (x : Link α) (xs : List α) (item : α)
+    (hpos : 0 < n) (hlt : n < xs.length) :
+    ⦃ isList x xs ⦄ insert xs x item n
+      ⦃⇓ isList x (xs.take n ++ item :: xs.drop n)⦄ := by
+  have htake : xs.take n ≠ [] := by
+    cases n with
+    | zero => omega
+    | succ n =>
+        cases xs <;> simp_all
+  unfold insert
+  have hle := Nat.le_of_lt hlt
+  step*
+
+/-- Pulse's current `delete` body is insertion; its exact specification records
+that behavior rather than claiming removal. -/
+@[step]
+theorem delete.spec (n : Nat) (x : Link α) (xs : List α) (item : α)
+    (hpos : 0 < n) (hlt : n < xs.length) :
+    ⦃ isList x xs ⦄ delete xs x item n
+      ⦃⇓ isList x (xs.take n ++ item :: xs.drop n)⦄ := by
+  unfold delete
+  step with insert.spec n x xs item hpos hlt
+  iframe
+
+/-- Accumulator form of reversal: the result has view `xs.reverse ++ ys`. -/
+@[step]
+theorem reverseAppend.spec (x acc : Link α) (xs ys : List α) :
+    ⦃ isList x xs ∗ isList acc ys ⦄ reverseAppend xs x acc
+      ⦃⇓ result => isList result (xs.reverse ++ ys)⦄ := by
+  induction xs generalizing x acc ys with
+  | nil =>
+      cases x
+      · simp only [isList, reverseAppend, List.reverse_nil, List.nil_append]
+        step*
+      · iintro
+        contradiction
+  | cons v xs ih =>
+      cases x with
+      | none =>
+          iintro
+          contradiction
+      | some p =>
+          simp only [isList, reverseAppend, List.reverse_cons, List.append_assoc,
+            List.singleton_append]
+          iintro next
+          step* 2
+          step with ih (x := next) (acc := some p) (ys := v :: ys)
+          iframe
+
+/-- `reverse` consumes the original orientation and returns exact ownership in
+reverse pure-list order. -/
+@[step]
+theorem reverse.spec (x : Link α) (xs : List α) :
+    ⦃ isList x xs ⦄ reverse xs x
+      ⦃⇓ result => isList result xs.reverse⦄ := by
+  unfold reverse
+  step with reverseAppend.spec x none xs []
+  iframe
+
+end PulseLinkedList
+
+end SepLogic
