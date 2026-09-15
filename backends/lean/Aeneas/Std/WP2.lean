@@ -184,7 +184,7 @@ theorem ispec_ok (x:α) : ispec P (ok x) Q ↔ P ⊢ Q x := by
 describes: for every disjoint frame, the guard holds and the output splits into an
 owned result and the unchanged frame.  Quantifying over frames here is what
 validates the frame rule — the frame an `ispec` carries is already one of them. -/
-theorem ispec_guardedModify {α : Type} {pre : Heap → Prop}
+theorem ispec_guardedModify {α : Type} {pre : IPre}
     {modify : (h : Heap) → pre h → α × Heap} {P : IPre} {Q : IPost α}
     (hLocal : ∀ h, P h → ∀ frame, PartialCommMonoid.Compatible h frame →
       ∃ hPre : pre (h ∪ frame), ∃ h',
@@ -227,9 +227,7 @@ theorem ispec_frame {P : IPre} {m : Result α} {Q : IPost α}
   have hSpec := hTriple (H ∗ F) h ((sep_assoc P H F).mp h hPre)
   exact hSpec.mono fun value heap => (sep_assoc (Q value) H F).mpr heap
 
-/-- The frame rule, framing on the left.  `ispec_frame` adds its resource on
-the right; a program that walks a data structure usually has to keep what it is
-already past on the left. -/
+/-- The frame rule, framing on the left. -/
 theorem ispec_frame_left {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : ispec P m Q) (H : IProp) :
     ispec (H ∗ P) m (fun value => H ∗ Q value) := by
@@ -302,26 +300,26 @@ theorem ispec_hany_pre {P H : IPre} {m : Result α} {Q : IPost α}
     ispec (P ∗ H) m Q :=
   ispec_hany_post (ispec_frame hTriple H)
 
-theorem ispec_ipure {P : Prop} {H : IPre} {m : Result α}
-    {Q : IPost α}
-    (hTriple : P → ispec H m Q) :
-    ispec (⌜P⌝ ∗ H) m Q := by
-  simp only [ispec_iff] at hTriple ⊢
-  intro F h hPre
-  have ⟨hP, hHF⟩ :=
-    (sep_pure_l P (H ∗ F) h).mp ((sep_assoc _ _ _).mp h hPre)
-  exact hTriple hP F h hHF
+/-- A pure fact in the precondition is exactly a hypothesis of the triple. -/
+theorem ispec_ipure {P : Prop} {H : IPre} {m : Result α} {Q : IPost α} :
+    ispec (⌜P⌝ ∗ H) m Q ↔ (P → ispec H m Q) := by
+  constructor
+  · intro hTriple hP
+    exact ispec_mono hTriple (entails_trans (pure_sep_intro H hP)
+      (entails_sep_postWand _ (fun _ => entails_refl _)))
+  · intro hTriple
+    simp only [ispec_iff] at hTriple ⊢
+    intro F h hPre
+    have ⟨hP, hHF⟩ :=
+      (sep_pure_l P (H ∗ F) h).mp ((sep_assoc _ _ _).mp h hPre)
+    exact hTriple hP F h hHF
 
-/-- Extract a pure fact from an arbitrary position in a separating
-precondition. `iintro_shallow` supplies the rearrangement equality without
-unfolding representation predicates. -/
-theorem ispec_ipure_anywhere (P : Prop) (H' : IPre) {H : IPre}
-    {m : Result α} {Q : IPost α}
-    (hExtract : H = iprop(⌜P⌝ ∗ H'))
-    (hTriple : P → ispec H' m Q) :
-    ispec H m Q := by
-  rw [hExtract]
-  exact ispec_ipure hTriple
+/-- A triple whose precondition is pure is a pure implication whose conclusion
+owns nothing: `ispec_ipure` at `H := emp`. -/
+theorem ispec_ipure_iff {P : Prop} {m : Result α} {Q : IPost α} :
+    ispec ⌜P⌝ m Q ↔ (P → ispec emp m Q) := by
+  rw [← sep_emp_r_eq ⌜P⌝]
+  exact ispec_ipure
 
 /-- Protect the frame while `step` extracts facts from a callee postcondition. -/
 theorem ispec_introFrame (Qm F : IPre) {m : Result α} {Q : IPost α}
@@ -335,12 +333,8 @@ stays available to the framing of the later steps. -/
 theorem ispec_ipure_keep {P : Prop} {H : IPre} {m : Result α}
     {Q : IPost α}
     (hTriple : P → ispec (⌜P⌝ ∗ H) m Q) :
-    ispec (⌜P⌝ ∗ H) m Q := by
-  simp only [ispec_iff] at hTriple ⊢
-  intro F h hPre
-  have ⟨hP, _⟩ :=
-    (sep_pure_l P (H ∗ F) h).mp ((sep_assoc _ _ _).mp h hPre)
-  exact hTriple hP F h hPre
+    ispec (⌜P⌝ ∗ H) m Q :=
+  ispec_ipure.mpr fun hP => ispec_ipure.mp (hTriple hP) hP
 
 theorem ispec_exists {ι : Sort _} {J : ι → IPre} {m : Result α}
     {Q : IPost α}
@@ -350,25 +344,6 @@ theorem ispec_exists {ι : Sort _} {J : ι → IPre} {m : Result α}
   intro F h hPre
   obtain ⟨h₁, h₂, hDisjoint, rfl, ⟨x, hJ⟩, hF⟩ := hPre
   exact hTriple x F _ ⟨h₁, h₂, hDisjoint, rfl, hJ, hF⟩
-
-theorem ispec_ipure' {P : Prop} {m : Result α} {Q : IPost α}
-    (hTriple : P → ispec emp m Q) :
-    ispec ⌜P⌝ m Q := by
-  simp only [ispec_iff] at hTriple ⊢
-  intro F h hPre
-  have ⟨hP, hF⟩ := (sep_pure_l P F h).mp hPre
-  exact hTriple hP F h ((sep_emp_l F).mpr h hF)
-
-/-- A ispec with a pure precondition and postcondition is a pure implication
-whose conclusion owns nothing. -/
-theorem ispec_ipure_iff {P : Prop} {m : Result α} {Q : α → Prop} :
-    ispec ⌜P⌝ m (fun value => ⌜Q value⌝) ↔
-      (P → ispec emp m (fun value => ⌜Q value⌝)) := by
-  constructor
-  · intro hTriple hP
-    exact ispec_mono hTriple (entails_trans ((entails_emp_ipure_iff P).2 hP)
-      (entails_sep_postWand _ (fun _ => entails_refl _)))
-  · exact ispec_ipure'
 
 /-! ### `dispec` rules -/
 private theorem dispec_apply {P : IPre} {m : Result α} {Q : IPost α}
@@ -404,21 +379,24 @@ theorem dispec_hany_pre {P H : IPre} {m : Result α} {Q : IPost α}
     (hTriple : dispec P m Q) : dispec (P ∗ H) m Q :=
   dispec_hany_post (dispec_frame hTriple H)
 
-theorem dispec_ipure {P : Prop} {H : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : P → dispec H m Q) : dispec (⌜P⌝ ∗ H) m Q := by
-  simp only [dispec_iff] at hTriple ⊢
-  intro F h hPre
-  have ⟨hP, hHF⟩ := (sep_pure_l P (H ∗ F) h).mp ((sep_assoc _ _ _).mp h hPre)
-  exact hTriple hP F h hHF
+/-- Partial counterpart of `ispec_ipure`. -/
+theorem dispec_ipure {P : Prop} {H : IPre} {m : Result α} {Q : IPost α} :
+    dispec (⌜P⌝ ∗ H) m Q ↔ (P → dispec H m Q) := by
+  constructor
+  · intro hTriple hP
+    exact dispec_mono hTriple (entails_trans (pure_sep_intro H hP)
+      (entails_sep_postWand _ (fun _ => entails_refl _)))
+  · intro hTriple
+    simp only [dispec_iff] at hTriple ⊢
+    intro F h hPre
+    have ⟨hP, hHF⟩ := (sep_pure_l P (H ∗ F) h).mp ((sep_assoc _ _ _).mp h hPre)
+    exact hTriple hP F h hHF
 
-/-- Partial-ispec counterpart of `ispec_ipure_anywhere`. -/
-theorem dispec_ipure_anywhere (P : Prop) (H' : IPre) {H : IPre}
-    {m : Result α} {Q : IPost α}
-    (hExtract : H = iprop(⌜P⌝ ∗ H'))
-    (hTriple : P → dispec H' m Q) :
-    dispec H m Q := by
-  rw [hExtract]
-  exact dispec_ipure hTriple
+/-- Partial counterpart of `ispec_ipure_iff`. -/
+theorem dispec_ipure_iff {P : Prop} {m : Result α} {Q : IPost α} :
+    dispec ⌜P⌝ m Q ↔ (P → dispec emp m Q) := by
+  rw [← sep_emp_r_eq ⌜P⌝]
+  exact dispec_ipure
 
 /-- Partial-ispec counterpart of `ispec_introFrame`. -/
 theorem dispec_introFrame (Qm F : IPre) {m : Result α} {Q : IPost α}
@@ -429,29 +407,8 @@ theorem dispec_introFrame (Qm F : IPre) {m : Result α} {Q : IPost α}
 /-- Copy a pure fact of the precondition into the local context without
 consuming it. -/
 theorem dispec_ipure_keep {P : Prop} {H : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : P → dispec (⌜P⌝ ∗ H) m Q) : dispec (⌜P⌝ ∗ H) m Q := by
-  simp only [dispec_iff] at hTriple ⊢
-  intro F h hPre
-  have ⟨hP, _⟩ := (sep_pure_l P (H ∗ F) h).mp ((sep_assoc _ _ _).mp h hPre)
-  exact hTriple hP F h hPre
-
-theorem dispec_ipure' {P : Prop} {m : Result α} {Q : IPost α}
-    (hTriple : P → dispec emp m Q) : dispec ⌜P⌝ m Q := by
-  simp only [dispec_iff] at hTriple ⊢
-  intro F h hPre
-  have ⟨hP, hF⟩ := (sep_pure_l P F h).mp hPre
-  exact hTriple hP F h ((sep_emp_l F).mpr h hF)
-
-/-- A partial ispec with a pure precondition and postcondition is a pure
-implication whose conclusion owns nothing. -/
-theorem dispec_ipure_iff {P : Prop} {m : Result α} {Q : α → Prop} :
-    dispec ⌜P⌝ m (fun value => ⌜Q value⌝) ↔
-      (P → dispec emp m (fun value => ⌜Q value⌝)) := by
-  constructor
-  · intro hTriple hP
-    exact dispec_mono hTriple (entails_trans ((entails_emp_ipure_iff P).2 hP)
-      (entails_sep_postWand _ (fun _ => entails_refl _)))
-  · exact dispec_ipure'
+    (hTriple : P → dispec (⌜P⌝ ∗ H) m Q) : dispec (⌜P⌝ ∗ H) m Q :=
+  dispec_ipure.mpr fun hP => dispec_ipure.mp (hTriple hP) hP
 
 theorem dispec_exists {ι : Sort _} {J : ι → IPre} {m : Result α} {Q : IPost α}
     (hTriple : ∀ x, dispec (J x) m Q) : dispec iprop(∃ x, J x) m Q := by
@@ -1003,12 +960,6 @@ precondition is `emp` and their postcondition is pure. Pure goals stay in the
 pure judgment; proofs that need spatial intermediate assertions use SL goals
 instead. Total specifications also lift to partial ones, never conversely. -/
 
-theorem spec_iff {m : Result α} {Q : α → Prop} :
-    spec m Q ↔ ispec emp m (fun value => ⌜Q value⌝) := Iff.rfl
-
-theorem dspec_iff {m : Result α} {Q : α → Prop} :
-    dspec m Q ↔ dispec emp m (fun value => ⌜Q value⌝) := Iff.rfl
-
 /-- Mono rule used by `step`. -/
 theorem spec_mono {α : Type u} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀) :
     (∀ x, P₀ x → P₁ x) → spec m P₁ :=
@@ -1027,7 +978,7 @@ theorem spec_bind {α : Type u} {β : Type v} {k : α → Result β} {Pₖ : Pos
     spec (Aeneas.Std.bind m k) Pₖ :=
   fun hm hk =>
     ispec_bind hm (sep_emp_r emp).mpr fun value =>
-      ispec_mono (ispec_ipure' (hk value)) (entails_trans (sep_emp_r _).mp
+      ispec_mono (ispec_ipure_iff.mpr (hk value)) (entails_trans (sep_emp_r _).mp
         (entails_sep_postWand _ (fun _ => entails_refl _)))
 
 theorem dspec_bind {α : Type u} {β : Type v} {k : α → Result β} {Pₖ : Post β}
@@ -1037,7 +988,7 @@ theorem dspec_bind {α : Type u} {β : Type v} {k : α → Result β} {Pₖ : Po
     dspec (Aeneas.Std.bind m k) Pₖ :=
   fun hm hk =>
     dispec_bind hm (sep_emp_r emp).mpr fun value =>
-      dispec_mono (dispec_ipure' (hk value)) (entails_trans (sep_emp_r _).mp
+      dispec_mono (dispec_ipure_iff.mpr (hk value)) (entails_trans (sep_emp_r _).mp
         (entails_sep_postWand _ (fun _ => entails_refl _)))
 
 open Lean Elab Meta Tactic
