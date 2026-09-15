@@ -287,19 +287,6 @@ theorem specUncurry_ispec
   rintro ⟨first, second⟩
   exact entails_refl ⌜Q first second⌝
 
-/-- An arbitrary postcondition resource may be discarded.  Since the logic is
-affine this is an instance of the rule of consequence. -/
-theorem ispec_hany_post {P H : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : ispec P m (Q ∗+ H)) :
-    ispec P m Q :=
-  ispec_mono hTriple (entails_sep_postWand P (fun value => sep_elim_right (Q value) H))
-
-/-- An arbitrary precondition resource may be discarded. -/
-theorem ispec_hany_pre {P H : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : ispec P m Q) :
-    ispec (P ∗ H) m Q :=
-  ispec_hany_post (ispec_frame hTriple H)
-
 /-- A pure fact in the precondition is exactly a hypothesis of the triple. -/
 theorem ispec_ipure {P : Prop} {H : IPre} {m : Result α} {Q : IPost α} :
     ispec (⌜P⌝ ∗ H) m Q ↔ (P → ispec H m Q) := by
@@ -370,14 +357,6 @@ theorem dispec_mono {α : Type u} {P Pm : IPre} {Q : IPost α} {m : Result α} {
   intro F h hPre
   have hSpec := hFramed F h (sep_mono hRamified (entails_refl F) h hPre)
   exact hSpec.mono fun value => sep_mono (postWand_cancel Qm Q value) (entails_refl F)
-
-theorem dispec_hany_post {P H : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : dispec P m (Q ∗+ H)) : dispec P m Q :=
-  dispec_mono hTriple (entails_sep_postWand P (fun value => sep_elim_right (Q value) H))
-
-theorem dispec_hany_pre {P H : IPre} {m : Result α} {Q : IPost α}
-    (hTriple : dispec P m Q) : dispec (P ∗ H) m Q :=
-  dispec_hany_post (dispec_frame hTriple H)
 
 /-- Partial counterpart of `ispec_ipure`. -/
 theorem dispec_ipure {P : Prop} {H : IPre} {m : Result α} {Q : IPost α} :
