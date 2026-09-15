@@ -844,6 +844,19 @@ theorem dispec_admissible_forall {ι : Type v} {α : Type u} (P : ι → IPre) (
     Lean.Order.admissible (fun m : Result α => ∀ x, dispec (P x) m (Q x)) :=
   Lean.Order.admissible_pi _ fun x => dispec_admissible (P x) (Q x)
 
+/-- The shape the `dspec_induction` tactic needs to discharge the admissibility
+side-goal it generates for a separation-logic partial specification. -/
+@[dspec_admissible]
+theorem dispec_func_admissible {ι : Type v} {α : Type u} (arg : ι) (P : IPre) (Q : IPost α) :
+    Lean.Order.admissible (fun f : ι → Result α => dispec P (f arg) Q) :=
+  Lean.Order.admissible_apply (fun _ m => dispec P m Q) arg (dispec_admissible P Q)
+
+/-- The same as `dispec_func_admissible`, for the pure partial specification. -/
+@[dspec_admissible]
+theorem dspec_func_admissible {ι : Type v} {α : Type u} (arg : ι) (Q : Post α) :
+    Lean.Order.admissible (fun f : ι → Result α => dspec (f arg) Q) :=
+  Lean.Order.admissible_apply (fun _ m => dspec m Q) arg (dspec_admissible Q)
+
 
 /-! ### Bridging lemmas for the pure judgments
 
