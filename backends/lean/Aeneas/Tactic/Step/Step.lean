@@ -2477,3 +2477,18 @@ end Test
 end Step
 
 end Aeneas
+
+/-! ## Separation-logic registrations
+
+`Aeneas.Std.WP` proves these but cannot register them: `@[step]` and
+`@[step_simps]` are declared in `Aeneas.Tactic.Step.Init`, which imports
+`Aeneas.Std.WP`.  This file is the first point where both are in scope. -/
+
+attribute [step_simps] Aeneas.SepLogic.sep_ipure_true_r_eq
+attribute [step_simps] Aeneas.SepLogic.entails_emp_ipure_iff
+attribute [step_simps] Aeneas.SepLogic.entails_refl
+
+attribute [step] Aeneas.Std.WP.ret.spec
+attribute [step] Aeneas.Std.WP.pure.spec
+attribute [step] Aeneas.Std.WP.ok_spec
+attribute [step] Aeneas.Std.WP.pure_spec

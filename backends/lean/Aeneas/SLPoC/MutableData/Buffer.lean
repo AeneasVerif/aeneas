@@ -22,6 +22,8 @@ on top of this.
 
 namespace Aeneas.SepLogic
 
+open Aeneas.Std.WP
+
 open Aeneas.Std (AllocId Heap Result)
 
 variable {α : Type}
@@ -103,7 +105,7 @@ def free (b : Buffer α) : Result Unit := freeRange b.ptr b.length
 @[step]
 theorem free.spec (b : Buffer α) (values : List α) :
     ⦃ b ↦ values ⦄ b.free ⦃⇓ emp⦄ := by
-  apply ispec_ipure
+  apply ispec_ipure.mpr
   intro hLength
   show ispec _ (freeRange b.ptr b.length) _
   rw [← hLength]
@@ -125,7 +127,7 @@ theorem read.spec_array (b : Buffer α) (values : List α) (i : Nat)
     (hIndex : i < values.length) :
     ⦃ b ↦ values ⦄ b.read i
       ⦃⇓ result => ⌜result = values[i]⌝ ∗ b ↦ values⦄ := by
-  apply ispec_ipure
+  apply ispec_ipure.mpr
   intro hLength
   refine ispec_conseq (_root_.Aeneas.SepLogic.read.spec_range b.ptr values i hIndex)
     (entails_refl _) fun result h hPost => ?_
@@ -136,7 +138,7 @@ theorem read.spec_array (b : Buffer α) (values : List α) (i : Nat)
 theorem write.spec_array (b : Buffer α) (values : List α) (i : Nat) (value : α)
     (hIndex : i < values.length) :
     ⦃ b ↦ values ⦄ b.write i value ⦃⇓ b ↦ values.set i value⦄ := by
-  apply ispec_ipure
+  apply ispec_ipure.mpr
   intro hLength
   refine ispec_conseq
     (_root_.Aeneas.SepLogic.update.spec_range b.ptr values i value hIndex)
@@ -165,7 +167,7 @@ def fill (b : Buffer α) (value : α) : Result Unit := fillRange b.ptr value b.l
 theorem fill.spec (b : Buffer α) (values : List α) (value : α) :
     ⦃ b ↦ values ⦄ b.fill value
       ⦃⇓ b ↦ List.replicate b.length value⦄ := by
-  apply ispec_ipure
+  apply ispec_ipure.mpr
   intro hLength
   show ispec _ (fillRange b.ptr value b.length) _
   rw [← hLength]
@@ -204,7 +206,7 @@ theorem copy.spec (dst src : Buffer α) (dstValues srcValues : List α)
       ⦃⇓ dst ↦ srcValues ∗ src ↦ srcValues⦄ := by
   refine ispec_conseq ?_ (pointsTo_pair_entails dst src dstValues srcValues)
     (fun _ => entails_refl _)
-  apply ispec_ipure
+  apply ispec_ipure.mpr
   rintro ⟨hDst, hSrc⟩
   show ispec _ (copyRange dst.ptr src.ptr src.length) _
   rw [← hSrc]
@@ -226,7 +228,7 @@ theorem compare.spec [DecidableEq α] (left right : Buffer α)
   refine ispec_conseq ?_
     (pointsTo_pair_entails left right leftValues rightValues)
     (fun _ => entails_refl _)
-  apply ispec_ipure
+  apply ispec_ipure.mpr
   rintro ⟨hLeft, hRight⟩
   show ispec _ (compareRange left.ptr right.ptr left.length) _
   rw [← hLeft]
@@ -251,11 +253,11 @@ theorem swap.spec (b : Buffer α) (values : List α) (i j : Nat)
   unfold Buffer.swap
   apply ispec_bind (read.spec_array b values i hi)
   intro x
-  apply ispec_ipure
+  apply ispec_ipure.mpr
   intro hx
   apply ispec_bind (read.spec_array b values j hj)
   intro y
-  apply ispec_ipure
+  apply ispec_ipure.mpr
   intro hy
   rw [hx, hy]
   apply ispec_bind (write.spec_array b values i values[j] hi)
@@ -330,7 +332,7 @@ theorem end_mut_to_raw.spec (original : Aeneas.Std.Slice α) (b : Buffer α)
       ⦃⇓ result =>
         ⌜result.val = original.val.setSlice! 0 values⌝⦄ := by
   unfold end_mut_to_raw
-  apply ispec_ipure
+  apply ispec_ipure.mpr
   intro hLength
   have hTake :
       ⦃ b.ptr ↦* values ⦄ takeRange b.ptr b.length
@@ -338,7 +340,7 @@ theorem end_mut_to_raw.spec (original : Aeneas.Std.Slice α) (b : Buffer α)
     takeRange.spec_of_length b.ptr values b.length hLength
   apply ispec_bind hTake
   intro result
-  exact ispec_pure fun _ hResult => by
+  exact (ispec_ok _).mpr fun _ hResult => by
     rw [hResult, Aeneas.Std.Slice.setSlice!_val]
     rfl
 
