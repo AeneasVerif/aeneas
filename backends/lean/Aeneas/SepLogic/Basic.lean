@@ -17,9 +17,8 @@ discarded anywhere.  Following Iris's `uPred`, affinity is a property of the
 `IProp` bundles closure under `Heap.Sub`, which is what makes `emp ∗ H ⊣⊢ H`
 provable once `emp` holds of every heap.
 
-The predicate transformers built on these assertions are in
-`Aeneas.SepLogic.PredicateTransformer`, and the proof-mode tactics (`iframe`,
-`iintro`, `isimpl`, `irewrite`) in `Aeneas.Tactic.SepLogic`.
+The proof-mode tactics (`iframe`, `iintro`, `isimpl`, `irewrite`) built on
+these assertions are in `Aeneas.Tactic.SepLogic`.
 -/
 
 namespace Aeneas.SepLogic

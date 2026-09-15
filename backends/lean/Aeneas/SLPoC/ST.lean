@@ -472,116 +472,25 @@ theorem ispec_pure {P : IPre} {Q : IPost α} {value : α}
   intro F h hPre
   exact .ret (sep_mono hPost (entails_refl F) h hPre)
 
-/-- A guarded modification is local at `h` when, for every frame disjoint from
-`h`, its guard holds and its output splits into an owned result and the
-unchanged frame. Quantifying over frames here is what makes `guardedModifyWp`
-upward-closed and validates the frame rule, for an arbitrary guard and
-modification.
-
-This is the raw form, on plain heap predicates rather than assertions. -/
-def guardedModifyLocal {EventResult : Type} (pre : Heap → Prop)
-    (modify : (h : Heap) → pre h → EventResult × Heap)
-    (Q : EventResult → Heap → Prop) (h : Heap) : Prop :=
-  ∀ frame, PartialCommMonoid.Compatible h frame →
-    ∃ hPre : pre (h ∪ frame), ∃ h',
-      PartialCommMonoid.Compatible h' frame ∧
-      (modify (h ∪ frame) hPre).2 = h' ∪ frame ∧
-      Q (modify (h ∪ frame) hPre).1 h'
-
-theorem guardedModifyLocal.mono {EventResult : Type} {pre : Heap → Prop}
-    {modify : (h : Heap) → pre h → EventResult × Heap}
-    {Q Q' : EventResult → Heap → Prop}
-    (hQ : ∀ value h', Q value h' → Q' value h') {h : Heap}
-    (hWp : guardedModifyLocal pre modify Q h) : guardedModifyLocal pre modify Q' h := by
-  intro frame hDisjoint
-  obtain ⟨hPre, h', hDisjoint', hModify, hPost⟩ := hWp frame hDisjoint
-  exact ⟨hPre, h', hDisjoint', hModify, hQ _ h' hPost⟩
-
-theorem guardedModifyLocal.up_closed {EventResult : Type} {pre : Heap → Prop}
-    {modify : (h : Heap) → pre h → EventResult × Heap}
-    {Q : EventResult → Heap → Prop}
-    (hQ : ∀ value h h', Q value h → Heap.Sub h h' → Q value h')
-    {h hBig : Heap} (hWp : guardedModifyLocal pre modify Q h) (hSub : Heap.Sub h hBig) :
-    guardedModifyLocal pre modify Q hBig := by
-  obtain ⟨rest, hDisjointRest, rfl⟩ := hSub
-  intro frame hDisjointFrame
-  obtain ⟨hDisjointRestFrame, hDisjointCombined⟩ :=
-    (PartialCommMonoid.compatible_assoc h rest frame).mp
-      ⟨hDisjointRest, hDisjointFrame⟩
-  have hWp' := hWp (rest ∪ frame) hDisjointCombined
-  rw [← PartialCommMonoid.union_assoc hDisjointRest hDisjointFrame] at hWp'
-  obtain ⟨hPre, h', hDisjoint', hModify, hPost⟩ := hWp'
-  obtain ⟨hDisjoint'Rest, hDisjoint'Frame⟩ :=
-    (PartialCommMonoid.compatible_assoc h' rest frame).mpr
-      ⟨hDisjointRestFrame, hDisjoint'⟩
-  refine ⟨hPre, h' ∪ rest, hDisjoint'Frame, ?_, ?_⟩
-  · simpa only [PartialCommMonoid.union_assoc
-      hDisjoint'Rest hDisjoint'Frame] using hModify
-  · exact hQ _ h' _ hPost (Heap.Sub.union_left hDisjoint'Rest)
-
-/-- The weakest precondition of a guarded modification: the assertion holding of
-exactly the heaps at which the modification is local with respect to `Q`. -/
-def guardedModifyWp {EventResult : Type} (pre : Heap → Prop)
-    (modify : (h : Heap) → pre h → EventResult × Heap) : Wp EventResult where
-  wp Q := {
-    holds := guardedModifyLocal pre modify fun value => (Q value).holds
-    up_closed := fun hWp hSub =>
-      guardedModifyLocal.up_closed
-        (fun value _ _ hQ hSub' => (Q value).up_closed hQ hSub') hWp hSub }
-  monotone hQ _ hWp := guardedModifyLocal.mono (fun value h' => hQ value h') hWp
-
-/-- The frame rule for one event: the frame an `ispec` carries is absorbed into
-the frame the denotation already quantifies over. -/
-theorem guardedModifyWp_frame {EventResult : Type} (pre : Heap → Prop)
-    (modify : (h : Heap) → pre h → EventResult × Heap) (Q : IPost EventResult) (H : IProp) :
-    guardedModifyWp pre modify Q ∗ H ⊢ guardedModifyWp pre modify (Q ∗+ H) := by
-  rintro h ⟨h₁, h₂, hDisjoint, rfl, hWp, hH⟩
-  intro frame hDisjointFrame
-  obtain ⟨hDisjoint₂Frame, hDisjointCombined⟩ :=
-    (PartialCommMonoid.compatible_assoc h₁ h₂ frame).mp
-      ⟨hDisjoint, hDisjointFrame⟩
-  have hWp' := hWp (h₂ ∪ frame) hDisjointCombined
-  rw [← PartialCommMonoid.union_assoc hDisjoint hDisjointFrame] at hWp'
-  obtain ⟨hPre, h', hDisjoint', hModify, hPost⟩ := hWp'
-  obtain ⟨hDisjoint'H₂, hDisjoint'Frame⟩ :=
-    (PartialCommMonoid.compatible_assoc h' h₂ frame).mpr
-      ⟨hDisjoint₂Frame, hDisjoint'⟩
-  refine ⟨hPre, h' ∪ h₂, hDisjoint'Frame, ?_, ?_⟩
-  · simpa only [PartialCommMonoid.union_assoc
-      hDisjoint'H₂ hDisjoint'Frame] using hModify
-  · exact ⟨h', h₂, hDisjoint'H₂, rfl, hPost, hH⟩
-
-/-- The weakest precondition is sound for total correctness: run the event on
-exactly the heap it owns, taking the frame to be empty.  This is the only place
-`guardedModifyWp` meets `TotalSpec`, and the only place a guarded modification
-is proved correct: `TotalSpec.vis` hands the event to the handler, whose
-`guardedModify` case demands the guard and the postcondition of what the
-modification returns. -/
-private theorem guardedModifyWp_spec {α : Type} {pre : Heap → Prop}
-    {modify : (h : Heap) → pre h → α × Heap} {Q : IPost α} {h : Heap}
-    (hWp : guardedModifyWp pre modify Q h) :
-    rawIwp true (Result.guardedModify pre modify) Q h := by
-  have hWp' := hWp Heap.empty (PartialCommMonoid.compatible_comm
-    (PartialCommMonoid.compatible_empty_left h))
-  simp only [Heap.union_empty] at hWp'
-  obtain ⟨hPre, h', -, hModify, hPost⟩ := hWp'
-  subst h'
-  refine TotalSpec.vis (H := handler)
-    (event := RustEffect.Input.guardedModify _ pre modify) ?_
-  exact ⟨hPre, .ret hPost⟩
-
-/-- The specification of a guarded modification is what its weakest precondition
-says: absorb the ispec's frame into the one `guardedModifyWp` quantifies over,
-then read off total correctness. -/
+/-- A guarded modification is correct exactly when it is *local* at every heap `P`
+describes: for every disjoint frame, the guard holds and the output splits into an
+owned result and the unchanged frame.  Quantifying over frames here is what
+validates the frame rule — the frame an `ispec` carries is already one of them. -/
 theorem ispec_guardedModify {α : Type} {pre : Heap → Prop}
     {modify : (h : Heap) → pre h → α × Heap} {P : IPre} {Q : IPost α}
-    (hWp : P ⊢ guardedModifyWp pre modify Q) :
+    (hLocal : ∀ h, P h → ∀ frame, PartialCommMonoid.Compatible h frame →
+      ∃ hPre : pre (h ∪ frame), ∃ h',
+        PartialCommMonoid.Compatible h' frame ∧
+        (modify (h ∪ frame) hPre).2 = h' ∪ frame ∧
+        Q (modify (h ∪ frame) hPre).1 h') :
     ispec P (Result.guardedModify pre modify) Q := by
   rw [ispec_iff]
-  intro F h hPre
-  exact guardedModifyWp_spec
-    (guardedModifyWp_frame pre modify Q F h
-      (sep_mono hWp (entails_refl F) h hPre))
+  rintro F h ⟨owned, framed, hDisjoint, rfl, hP, hF⟩
+  obtain ⟨hPre, h', hDisjoint', hModify, hPost⟩ := hLocal owned hP framed hDisjoint
+  refine TotalSpec.vis (H := handler)
+    (event := RustEffect.Input.guardedModify _ pre modify) ⟨hPre, ?_⟩
+  rw [hModify]
+  exact .ret ⟨h', framed, hDisjoint', rfl, hPost, hF⟩
 
 theorem ispec_bind {α β : Type u} {P : IPre} {Q₁ : IPost α}
     {Q : IPost β} {m : Result α} {next : α → Result β}
