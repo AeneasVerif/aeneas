@@ -18,6 +18,8 @@ and whole-array derived specifications where appropriate.
 
 namespace Aeneas.SepLogic
 
+open Aeneas.Std.WP
+
 open Aeneas.Std (Heap Result)
 
 variable {α : Type} {n : Nat}
@@ -224,7 +226,7 @@ theorem end_mut_to_raw.spec {N : Aeneas.Std.Usize}
     ⦃ a ↦ values ⦄ end_mut_to_raw original a
       ⦃⇓ result => ⌜result.val = values⌝⦄ := by
   unfold end_mut_to_raw
-  apply ispec_ipure
+  apply ispec_ipure.mpr
   intro hLength
   have hTake :
       ⦃ a.ptr ↦* values ⦄ takeRange a.ptr N.val
@@ -232,7 +234,7 @@ theorem end_mut_to_raw.spec {N : Aeneas.Std.Usize}
     exact takeRange.spec_of_length a.ptr values N.val hLength
   apply ispec_bind hTake
   intro result
-  exact ispec_pure fun _ hResult => by
+  exact (ispec_ok _).mpr fun _ hResult => by
     rw [hResult]
     simp only [Aeneas.Std.Array.setSlice!]
     simp [List.setSlice!, hLength, original.property]
