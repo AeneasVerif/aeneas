@@ -267,27 +267,6 @@ theorem ispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
   intro value h' hPost
   exact hNext value frame h' hPost
 
-/-- Preserve separate tuple binders while lifting a pure specification. -/
-theorem specUncurry'_ispec
-    (m : Result (α × β)) (Q : α → β → Prop) :
-    spec m (uncurry' Q) →
-      ispec emp m (uncurry' fun first second => ⌜Q first second⌝) := by
-  intro hSpec
-  refine ispec_mono (spec_ispec m (uncurry' Q) hSpec) (entails_sep_postWand _ ?_)
-  rintro ⟨first, second⟩
-  exact entails_refl ⌜Q first second⌝
-
-/-- Preserve a tuple-pattern binder while lifting a pure specification. -/
-theorem specUncurry_ispec
-    (m : Result (α × β)) (Q : α → β → Prop) :
-    spec m (Std.uncurry Q) →
-      ispec emp m (Std.uncurry fun first second => ⌜Q first second⌝) := by
-  intro hSpec
-  refine ispec_mono (spec_ispec m (Std.uncurry Q) hSpec) (entails_sep_postWand _ ?_)
-  rintro ⟨first, second⟩
-  exact entails_refl ⌜Q first second⌝
-
-/-- A pure fact in the precondition is exactly a hypothesis of the triple. -/
 theorem ispec_ipure {P : Prop} {H : IPre} {m : Result α} {Q : IPost α} :
     ispec (⌜P⌝ ∗ H) m Q ↔ (P → ispec H m Q) := by
   constructor
@@ -301,8 +280,6 @@ theorem ispec_ipure {P : Prop} {H : IPre} {m : Result α} {Q : IPost α} :
       (sep_pure_l P (H ∗ F) h).mp ((sep_assoc _ _ _).mp h hPre)
     exact hTriple hP F h hHF
 
-/-- A triple whose precondition is pure is a pure implication whose conclusion
-owns nothing: `ispec_ipure` at `H := emp`. -/
 theorem ispec_ipure_iff {P : Prop} {m : Result α} {Q : IPost α} :
     ispec ⌜P⌝ m Q ↔ (P → ispec emp m Q) := by
   rw [← sep_emp_r_eq ⌜P⌝]
@@ -1090,12 +1067,6 @@ elab (name := intro_ispec) "intro_ispec" : tactic => withMainContext do
     discharge_tactic := some `iframe
     to_mvcgen := none
     liftings := #[
-      { from_statement := ``spec
-        conversion_thm := ``specUncurry'_ispec
-        conversion_thm_inferred_args := 4 },
-      { from_statement := ``spec
-        conversion_thm := ``specUncurry_ispec
-        conversion_thm_inferred_args := 4 },
       { from_statement := ``spec
         conversion_thm := ``spec_ispec
         conversion_thm_inferred_args := 3 }
