@@ -790,11 +790,7 @@ theorem dispec_ok_intro {α : Type u} {Q : IPost α} {x : α} (hQ : ∀ h, Q x h
     dispec emp (Result.ok x) Q :=
   dispec_pure fun h _ => hQ h
 
-@[simp, step_simps]
-theorem sep_ipure_true_r_eq (P : IProp) :
-    (P ∗ ⌜True⌝) = P := by
-  rw [sep_comm_eq, sep_ipure_true_l_eq]
-
+attribute [step_simps] sep_ipure_true_r_eq
 attribute [simp, step_simps] entails_emp_ipure_iff
 attribute [step_simps] entails_refl
 
