@@ -79,4 +79,11 @@ namespace Test3
 
 end Test3
 
+/- Verify LSP info is available. -/
+
+/-- info: true -/
+#guard_msgs in
+#eval show Lean.MetaM Bool from do
+  return (← Lean.findDeclarationRanges? `Aeneas.TraitDefault.Test.Test1.TraitInst).isSome
+
 end Aeneas.TraitDefault.Test
