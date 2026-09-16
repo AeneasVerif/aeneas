@@ -11,22 +11,22 @@ open Result Error ScalarElab
 # Wrapping Add
 -/
 
-def UScalar.wrapping_add {ty} (x y : UScalar ty) : UScalar ty := ⟨ x.bv + y.bv ⟩
+@[expose] def UScalar.wrapping_add {ty} (x y : UScalar ty) : UScalar ty := ⟨ x.bv + y.bv ⟩
 
-def IScalar.wrapping_add {ty} (x y : IScalar ty) : IScalar ty := ⟨ x.bv + y.bv ⟩
+@[expose] def IScalar.wrapping_add {ty} (x y : IScalar ty) : IScalar ty := ⟨ x.bv + y.bv ⟩
 
-uscalar @[step_pure_def]
+uscalar @[expose, step_pure_def]
 def «%S».wrapping_add (x y : «%S») : «%S» := @UScalar.wrapping_add UScalarTy.«%S» x y
 
-iscalar @[step_pure_def]
+iscalar @[expose, step_pure_def]
 def «%S».wrapping_add (x y : «%S») : «%S» := @IScalar.wrapping_add IScalarTy.«%S» x y
 
 /- [core::num::{_}::wrapping_add] -/
-uscalar @[step_pure_def]
+uscalar @[expose, step_pure_def]
 def core.num.«%S».wrapping_add : «%S» → «%S» → «%S» := @UScalar.wrapping_add UScalarTy.«%S»
 
 /- [core::num::{_}::wrapping_add] -/
-iscalar @[step_pure_def]
+iscalar @[expose, step_pure_def]
 def core.num.«%S».wrapping_add : «%S» → «%S» → «%S»  := @IScalar.wrapping_add IScalarTy.«%S»
 
 @[simp, bvify] theorem UScalar.wrapping_add_bv_eq {ty} (x y : UScalar ty) :

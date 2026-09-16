@@ -551,7 +551,7 @@ theorem core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next_
   core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next_UScalar_spec
     (by simp) (by intros; rfl) (by intros; rfl) r
 
-@[reducible,
+@[expose, reducible,
   rust_trait_impl "core::iter::traits::double_ended::DoubleEndedIterator<core::ops::range::Range<@A>, @A>"]
 def core.ops.range.Range.Insts.DoubleEndedIterator
   {A : Type} (StepInst : core.iter.range.Step A) :

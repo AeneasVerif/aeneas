@@ -19,7 +19,7 @@ structure core.fmt.Debug (T : Type u) where
   fmt : T → core.fmt.Formatter → Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter)
 
 -- TODO: move?
-@[rust_fun "core::result::{core::result::Result<@T, @E>}::unwrap"]
+@[expose, rust_fun "core::result::{core::result::Result<@T, @E>}::unwrap"]
 def core.result.Result.unwrap {T E : Type}
   (_ : core.fmt.Debug E) (e : core.result.Result T E) : Std.Result T :=
   match e with

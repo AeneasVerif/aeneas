@@ -25,12 +25,12 @@ iscalar @[reducible, expose] def core.clone.Clone'S : core.clone.Clone «%S» :=
   clone := liftFun1 core.clone.impls.Clone'S.clone
   clone_from := liftFun2 core.clone.impls.Clone'S.clone_from }
 
-uscalar @[reducible]
+uscalar @[expose, reducible]
 def core.marker.Copy'S : core.marker.Copy «%S» := {
   cloneInst := core.clone.Clone'S
 }
 
-iscalar @[reducible]
+iscalar @[expose, reducible]
 def core.marker.Copy'S : core.marker.Copy «%S» := {
   cloneInst := core.clone.Clone'S
 }

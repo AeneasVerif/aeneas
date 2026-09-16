@@ -15,16 +15,16 @@ open Result Error Arith ScalarElab WP
 # Multiplication: Definitions
 -/
 
-def UScalar.mul {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
+@[expose] def UScalar.mul {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
   UScalar.tryMk ty (x.val * y.val)
 
-def IScalar.mul {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
+@[expose] def IScalar.mul {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
   IScalar.tryMk ty (x.val * y.val)
 
-def UScalar.try_mul {ty : UScalarTy} (x y : UScalar ty) : Option (UScalar ty) :=
+@[expose] def UScalar.try_mul {ty : UScalarTy} (x y : UScalar ty) : Option (UScalar ty) :=
   Option.ofResult (mul x y)
 
-def IScalar.try_mul {ty : IScalarTy} (x y : IScalar ty) : Option (IScalar ty) :=
+@[expose] def IScalar.try_mul {ty : IScalarTy} (x y : IScalar ty) : Option (IScalar ty) :=
   Option.ofResult (mul x y)
 
 instance {ty} : HMul (UScalar ty) (UScalar ty) (Result (UScalar ty)) where

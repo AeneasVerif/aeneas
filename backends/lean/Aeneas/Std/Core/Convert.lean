@@ -16,12 +16,12 @@ inductive core.convert.Infallible where
 structure core.convert.Into (Self : Type) (T : Type) where
   into : Self → Result T
 
-@[reducible, simp, step_simps, rust_fun "core::convert::{core::convert::Into<@T, @U>}::into"]
+@[expose, reducible, simp, step_simps, rust_fun "core::convert::{core::convert::Into<@T, @U>}::into"]
 def core.convert.IntoFrom.into {T : Type} {U : Type}
   (fromInst : core.convert.From U T) (x : T) : Result U :=
   fromInst.from x
 
-@[reducible, rust_trait_impl "core::convert::Into<@Self, @T>"]
+@[expose, reducible, rust_trait_impl "core::convert::Into<@Self, @T>"]
 def core.convert.IntoFrom {T : Type} {U : Type} (fromInst : core.convert.From U T)
   : core.convert.Into T U := {
   into := core.convert.IntoFrom.into fromInst
@@ -31,10 +31,10 @@ def core.convert.IntoFrom {T : Type} {U : Type} (fromInst : core.convert.From U 
 structure core.convert.AsRef (Self : Type) (T : Type) where
   as_ref : Self → Result T
 
-@[simp, step_simps, rust_fun "core::convert::{core::convert::From<@T, @T>}::from" -canFail]
+@[expose, simp, step_simps, rust_fun "core::convert::{core::convert::From<@T, @T>}::from" -canFail]
 def core.convert.FromSame.from {T : Type} (x : T) : T := x
 
-@[reducible, rust_trait_impl "core::convert::From<@Self, @Self>"]
+@[expose, reducible, rust_trait_impl "core::convert::From<@Self, @Self>"]
 def core.convert.FromSame (T : Type) : core.convert.From T T := {
   «from» := fun x => ok (core.convert.FromSame.from x)
 }
@@ -43,7 +43,7 @@ def core.convert.FromSame (T : Type) : core.convert.From T T := {
 structure core.convert.TryFrom (Self T Error : Type) where
   try_from : T → Result (core.result.Result Self Error)
 
-@[rust_fun "core::convert::{core::convert::TryInto<@T, @U, @Error>}::try_into"]
+@[expose, rust_fun "core::convert::{core::convert::TryInto<@T, @U, @Error>}::try_into"]
 def core.convert.TryInto.Blanket.try_into
   {T : Type} {U : Type} {Error : Type} (TryFromInst : core.convert.TryFrom U T Error) (x : T) :
   Result (core.result.Result U Error) :=
@@ -53,18 +53,18 @@ def core.convert.TryInto.Blanket.try_into
 structure core.convert.TryInto (Self T Error : Type) where
   try_into : Self → Result (core.result.Result T Error)
 
-@[reducible, simp]
+@[expose, reducible, simp]
 def core.convert.TryIntoFrom.try_into {T U Error : Type} (fromInst : core.convert.TryFrom U T Error)
   (x : T) : Result (core.result.Result U Error) :=
   fromInst.try_from x
 
-@[reducible, rust_trait_impl "core::convert::{core::convert::TryInto<@T, @U>}"]
+@[expose, reducible, rust_trait_impl "core::convert::{core::convert::TryInto<@T, @U>}"]
 def core.convert.TryIntoFrom {T U Error : Type} (fromInst : core.convert.TryFrom U T Error) :
   core.convert.TryInto T U Error := {
   try_into := core.convert.TryIntoFrom.try_into fromInst
 }
 
-@[reducible, rust_trait_impl "core::convert::TryInto<@T, @U, @E>"]
+@[expose, reducible, rust_trait_impl "core::convert::TryInto<@T, @U, @E>"]
 def core.convert.TryInto.Blanket {T U E : Type}
   (TryFromInst : core.convert.TryFrom U T E) :
   core.convert.TryInto T U E := {
@@ -75,19 +75,19 @@ def core.convert.TryInto.Blanket {T U E : Type}
 structure core.convert.AsMut (Self : Type) (T : Type) where
   as_mut : Self → Result (T × (T → Self))
 
-@[reducible, rust_trait_impl "core::convert::AsMut<Box<@T>, @T>"]
+@[expose, reducible, rust_trait_impl "core::convert::AsMut<Box<@T>, @T>"]
 def core.convert.AsMutBox (T : Type) : core.convert.AsMut T T := {
   as_mut := fun x => ok (alloc.boxed.AsMutBox.as_mut x)
 }
 
 /-- `Result::is_ok`: `true` on `Ok`, `false` on `Err`. -/
-@[rust_fun "core::result::{core::result::Result<@T, @E>}::is_ok"]
+@[expose, rust_fun "core::result::{core::result::Result<@T, @E>}::is_ok"]
 def core.result.Result.is_ok {T E : Type} :
     core.result.Result T E → Std.Result Bool
   | .Ok _ => .ok true
   | .Err _ => .ok false
 
-def core.result.Result.ok? {T E : Type} (r : core.result.Result T E) : Bool :=
+@[expose] def core.result.Result.ok? {T E : Type} (r : core.result.Result T E) : Bool :=
   match r with
   | .Ok _ => true
   | .Err _ => false
@@ -101,7 +101,7 @@ theorem core.result.Result.ok?_Err {T E : Type} (e : E) :
   (core.result.Result.Err e : core.result.Result T E).ok? = false := by grind [ok?]
 
 /-- `Result::branch` (`Try`): `Ok v ⇒ Continue v`, `Err e ⇒ Break (Err e)`. -/
-@[rust_fun
+@[expose, rust_fun
   "core::result::{core::ops::try_trait::Try<core::result::Result<@T, @E>>}::branch"]
 def core.result.Result.Insts.CoreOpsTry.branch
   {T E : Type} :
@@ -113,7 +113,7 @@ def core.result.Result.Insts.CoreOpsTry.branch
 
 /-- `Result::from_residual` (`FromResidual`): converts an `Err`-residual,
     applying the `From` instance to the error. -/
-@[rust_fun
+@[expose, rust_fun
   "core::result::{core::ops::try_trait::FromResidual<core::result::Result<@T, @F>, core::result::Result<core::convert::Infallible, @E>>}::from_residual"]
 def core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
   (T : Type) {E F : Type} (convertFromInst : core.convert.From F E)

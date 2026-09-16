@@ -1,6 +1,7 @@
 module
 public import Aeneas.Std.Scalar.Core
 public import Aeneas.Std.Scalar.Elab
+public import Mathlib.Data.Nat.Log
 import all Mathlib.Data.Nat.Log
 public section
 
@@ -12,6 +13,7 @@ open ScalarElab
 # Leading zeros
 -/
 
+@[expose]
 def BitVec.leadingZeros {w : Nat} (x : BitVec w) : Nat :=
   if x = 0 then w else w - (Nat.log 2 x.toNat) - 1
 
@@ -21,6 +23,7 @@ def BitVec.leadingZeros {w : Nat} (x : BitVec w) : Nat :=
 #assert BitVec.leadingZeros 1#32 = 31
 #assert BitVec.leadingZeros 255#32 = 24
 
-scalar @[step_pure_def] def core.num.«%S».leading_zeros (x : «%S») : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+scalar @[expose, step_pure_def] def core.num.«%S».leading_zeros (x : «%S») : U32 :=
+  ⟨ BitVec.leadingZeros x.bv ⟩
 
 end Aeneas.Std

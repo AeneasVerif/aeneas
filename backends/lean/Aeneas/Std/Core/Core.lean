@@ -40,10 +40,10 @@ def core.clone.CloneGlobal : core.clone.Clone Global := {
 }
 
 /- [core::clone::impls::{(core::clone::Clone for bool)#19}::clone] -/
-@[reducible, simp, step_simps]
+@[expose, reducible, simp, step_simps]
 def clone.impls.CloneBool.clone (b : Bool) : Bool := b
 
-@[reducible, rust_trait_impl "core::clone::Clone<bool>"]
+@[expose, reducible, rust_trait_impl "core::clone::Clone<bool>"]
 def clone.CloneBool : clone.Clone Bool := {
   clone := fun b => ok (clone.impls.CloneBool.clone b)
   clone_from := fun _ b => ok (clone.impls.CloneBool.clone b)

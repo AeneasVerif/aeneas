@@ -174,7 +174,7 @@ def core.cmp.Ord.clamp.default {Self : Type} (le lt gt : Self → Self → Resul
   (self min max : Self) : Result Self :=
   core.cmp.Ord.clamp_body le lt gt self min max
 
-@[simp, rust_fun "core::cmp::min"]
+@[expose, simp, rust_fun "core::cmp::min"]
 def core.cmp.min {T : Type} (OrdInst : core.cmp.Ord T) (x y : T) : Result T :=
   -- TODO: is this the correct model?
   OrdInst.min x y

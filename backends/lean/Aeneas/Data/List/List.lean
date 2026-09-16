@@ -65,6 +65,7 @@ theorem getElem_cons_nzero {α} (hd : α) (tl : List α) (i : Nat)
   | zero => scalar_tac
   | succ n => simp
 
+@[expose]
 def slice (start end_ : Nat) (ls : List α) : List α :=
   (ls.drop start).take (end_ - start)
 
@@ -614,7 +615,7 @@ theorem splitAt_length {α : Type u}  (n : Nat)  (l : List α) :
 section -- setSlice!
   attribute [-simp] getElem!_eq_getElem?_getD
 
-  def setSlice! {α} (s : List α) (i : ℕ) (s' : List α) : List α :=
+  @[expose] def setSlice! {α} (s : List α) (i : ℕ) (s' : List α) : List α :=
     let s0 := List.take i s
     let n := min s'.length (s.length - i)
     let s1 := List.take n s'

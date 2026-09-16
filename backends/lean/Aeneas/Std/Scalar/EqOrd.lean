@@ -20,13 +20,13 @@ scalar @[simp] abbrev core.cmp.impls.PartialEq'S.ne (x y : «%S») : Bool := ¬ 
 
 /- Trait implementation: [core::cmp::impls::{core::cmp::PartialEq<u8> for u8}]
    Name pattern: core::cmp::PartialEq<u8, u8> -/
-scalar @[reducible] def core.cmp.PartialEq'S : core.cmp.PartialEq «%S» «%S» := {
+scalar @[expose, reducible] def core.cmp.PartialEq'S : core.cmp.PartialEq «%S» «%S» := {
   eq := liftFun2 core.cmp.impls.PartialEq'S.eq
   ne := liftFun2 core.cmp.impls.PartialEq'S.ne }
 
 /- Trait implementation: [core::cmp::impls::{core::cmp::Eq for u8}]
    Name pattern: core::cmp::Eq<u8> -/
-scalar @[reducible] def core.cmp.Eq'S : core.cmp.Eq «%S» := {
+scalar @[expose, reducible] def core.cmp.Eq'S : core.cmp.Eq «%S» := {
   partialEqInst := core.cmp.PartialEq'S }
 
 /- [core::cmp::impls::{core::cmp::PartialOrd<u8> for u8}::partial_cmp]:
@@ -64,7 +64,8 @@ scalar @[reducible, expose] def core.cmp.PartialOrd'S : core.cmp.PartialOrd «%S
   ge := liftFun2 core.cmp.impls.PartialOrd'S.ge }
 
 /- Name pattern: core::cmp::impls::{core::cmp::Ord<SCALAR>}::min -/
-scalar @[step_pure_def] def core.cmp.impls.Ord'S.min (x y : «%S») : «%S» := if y < x then y else x
+scalar @[expose, step_pure_def] def core.cmp.impls.Ord'S.min (x y : «%S») : «%S» :=
+  if y < x then y else x
 
 scalar @[simp, scalar_tac_simps] theorem core.cmp.impls.Ord'S.min_val (x y : «%S») : (min x y).val = Min.min x.val y.val := by simp [min]; split <;> simp <;> omega
 
@@ -91,7 +92,7 @@ iscalar def core.cmp.impls.Ord'S.clamp (self min max : «%S») : Result «%S» :
 
 /- Trait implementation: [core::cmp::impls::{core::cmp::Ord for u8}]
    Name pattern: core::cmp::Ord<u8> -/
-scalar @[reducible] def core.cmp.Ord'S : core.cmp.Ord «%S» := {
+scalar @[expose, reducible] def core.cmp.Ord'S : core.cmp.Ord «%S» := {
   eqInst := core.cmp.Eq'S
   partialOrdInst := core.cmp.PartialOrd'S
   cmp := liftFun2 core.cmp.impls.Ord'S.cmp

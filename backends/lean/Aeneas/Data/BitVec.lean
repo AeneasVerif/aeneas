@@ -25,11 +25,11 @@ attribute [-simp] List.getElem!_eq_getElem?_getD
 attribute [bvify, simp_scalar_safe] BitVec.zero_eq
 attribute [bvify, simp_scalar_safe] BitVec.instInhabited
 
-def BitVec.toArray {n} (bv: BitVec n) : Array Bool := Array.finRange n |>.map (bv[·])
-def BitVec.ofFn {n} (f: Fin n → Bool) : BitVec n := (BitVec.ofBoolListLE <| List.ofFn f).cast (by simp)
-def BitVec.set {n} (i: Fin n) (b: Bool) (bv: BitVec n) : BitVec n := bv ^^^ (((bv[i] ^^ b).toNat : BitVec n) <<< i.val)
+@[expose] def BitVec.toArray {n} (bv: BitVec n) : Array Bool := Array.finRange n |>.map (bv[·])
+@[expose] def BitVec.ofFn {n} (f: Fin n → Bool) : BitVec n := (BitVec.ofBoolListLE <| List.ofFn f).cast (by simp)
+@[expose] def BitVec.set {n} (i: Fin n) (b: Bool) (bv: BitVec n) : BitVec n := bv ^^^ (((bv[i] ^^ b).toNat : BitVec n) <<< i.val)
 
-def BitVec.toByteArray {n} (bv: BitVec n) : ByteArray :=
+@[expose] def BitVec.toByteArray {n} (bv: BitVec n) : ByteArray :=
   let paddedLen := (n + 7)/8
   let bv' := bv.setWidth (paddedLen*8)
   ByteArray.mk <| Array.finRange paddedLen
@@ -392,21 +392,21 @@ theorem Byte.eq_iff (b0 b1 : Byte) : b0 = b1 ↔ ∀ i < 8, b0.testBit i = b1.te
 # Conversion to a little/big-endian list of bytes
 -/
 
-def BitVec.toLEBytes {w : ℕ} (b : BitVec w) : List Byte :=
+@[expose] def BitVec.toLEBytes {w : ℕ} (b : BitVec w) : List Byte :=
   if w > 0 then
     b.setWidth 8 :: BitVec.toLEBytes ((b >>> 8).setWidth (w - 8))
   else []
 
-def BitVec.toBEBytes {w : ℕ} (b : BitVec w) : List Byte :=
+@[expose] def BitVec.toBEBytes {w : ℕ} (b : BitVec w) : List Byte :=
   List.reverse b.toLEBytes
 
-def BitVec.fromLEBytes (l : List Byte) : BitVec (8 * l.length) :=
+@[expose] def BitVec.fromLEBytes (l : List Byte) : BitVec (8 * l.length) :=
   match l with
   | [] => BitVec.ofNat _ 0
   | b :: l =>
     BitVec.setWidth (8 * (b :: l).length) b ||| ((BitVec.fromLEBytes l).setWidth (8 * (b :: l).length) <<< 8)
 
-def BitVec.fromBEBytes (l : List Byte) : BitVec (8 * l.length) :=
+@[expose] def BitVec.fromBEBytes (l : List Byte) : BitVec (8 * l.length) :=
   (BitVec.fromLEBytes l.reverse).cast (by simp)
 
 @[simp, simp_lists_safe, simp_scalar_safe, scalar_tac_simps, grind =, agrind =]
