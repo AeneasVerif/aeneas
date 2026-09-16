@@ -350,11 +350,14 @@ theorem popBack.spec (s : DoublyLinkedList V) (l : Cells V) (hne : l ≠ []) :
     ⦃ wellFormed s l ⦄ popBack s
       ⦃⇓ (s', v) => ⌜l.getLast?.map Prod.snd = some v⌝ ∗ wellFormed s' l.dropLast⦄ := by
   obtain ⟨l', ⟨_, _⟩, rfl⟩ := (eq_nil_or_snoc l).resolve_left hne
+  unfold popBack
+  iintro ⟨_, htail⟩
+  simp only [lastPtr_snoc] at htail
   rcases eq_nil_or_snoc l' with rfl | ⟨_, ⟨_, _⟩, rfl⟩
-  <;> unfold popBack
-  <;> iintro ⟨_, htail⟩
-  <;> simp only [lastPtr_snoc] at htail
-  <;> step*
+  · step*
+  · step as ⟨lastNode, hlastNode⟩
+    subst lastNode
+    step*
 
 /-- `pushFront` prepends `v` to the list. -/
 @[step]
@@ -372,7 +375,7 @@ theorem pushFront.spec (s : DoublyLinkedList V) (l : Cells V) (v : V) :
     · iintro ⟨hhead, _⟩
       exfalso
       change s.head = none at hhead
-      simp_all
+      agrind
     · iintro
       obtain rfl : rh = oldHeadPtr := by grind
       step*
@@ -386,7 +389,11 @@ theorem popFront.spec (s : DoublyLinkedList V) (rh : Ptr (Node V)) (vh : V)
   unfold popFront
   iintro_keep
   -- `nodes_cons_two`, which splits the two first nodes out, is stated over a pair.
-  rcases l with _ | ⟨⟨_, _⟩, _⟩ <;> step*
+  rcases l with _ | ⟨⟨_, _⟩, _⟩
+  · step*
+  · step as ⟨firstNode, hfirstNode⟩
+    subst firstNode
+    step*
 
 /- `step` infers the index and payload by matching `nodes_read`'s `Prop`
 argument against a local assumption, which every caller below gets from
@@ -411,13 +418,13 @@ theorem getLoop.spec (l : Cells V) (i j : Nat) (r : Ptr (Node V))
   induction j, r using getLoop.induct (i := i) with
   | case1 j r hlt ih =>
     rw [getLoop, if_pos hlt]
-    obtain ⟨rj, vj, hj⟩ := exists_cell l j (by omega)
-    obtain ⟨r', v', hj'⟩ := exists_cell l (j + 1) (by omega)
+    obtain ⟨rj, vj, hj⟩ := exists_cell l j (by agrind)
+    obtain ⟨r', v', hj'⟩ := exists_cell l (j + 1) (by agrind)
     obtain rfl : r = rj := by grind
     step*
     case hr => grind
   | case2 j r hge =>
-    obtain rfl : j = i := by omega
+    obtain rfl : j = i := by agrind
     rw [getLoop, if_neg hge]
     step*
 
@@ -499,8 +506,8 @@ theorem moveNext.spec (it : Iterator V) (l : Cells V) (hvalid : valid it l) :
   step
   by_cases hlast : it.index + 1 = l.length
   · step*
-  · obtain ⟨r', v', hcell'⟩ := exists_cell l (it.index + 1) (by omega)
-    simp only [nodeAt, nextOf, if_neg hlast, hcell', Option.map_some, valid]
+  · obtain ⟨r', v', hcell'⟩ := exists_cell l (it.index + 1) (by agrind)
+    simp only [valid]
     step*
 
 end Iterator

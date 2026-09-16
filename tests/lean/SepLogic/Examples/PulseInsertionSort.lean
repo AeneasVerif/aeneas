@@ -205,28 +205,17 @@ theorem insertCells.spec [LinearOrder α] (current : Ptr α)
           step*
       | cons value values =>
           simp only [PulseArray.ownsCells]
-          rw [sep_comm_eq _ (⌜False⌝)]
-          apply ispec_ipure
-          intro hfalse
+          iintro
           contradiction
   | cons next cells ih =>
       cases values with
       | nil =>
           simp only [PulseArray.ownsCells]
-          rw [sep_comm_eq _ (⌜False⌝)]
-          apply ispec_ipure
-          intro hfalse
+          iintro
           contradiction
       | cons value values =>
-          simp only [insertCells]
-          step* 2
-          split
-          · rename_i horder
-            simp only [orderedInsert, horder]
-            step*
-          · rename_i horder
-            simp only [orderedInsert, horder]
-            step*
+          simp only [insertCells, orderedInsert]
+          step*
 
 /--
 The outer-loop invariant: the recursively processed suffix has precisely the

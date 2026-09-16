@@ -265,11 +265,9 @@ theorem get.spec (v : ResizableVec α) (contents : List α) (cap i : Nat) :
     ⦃ owns v contents cap ⦄ get v i
       ⦃⇓ result => ⌜result = contents[i]?⌝ ∗ owns v contents cap⦄ := by
   unfold get length
-  iintro _ hInv
+  iintro buffer hInv
+  have hslot := bufferInv_get (i := i) hInv
   step*
-  · have hslot := bufferInv_get hInv (by omega)
-    simp only [hslot, join_map_some]
-    iframe
 
 /-- `set` reports the exact bounds test and updates exactly the selected logical element. -/
 @[step]
@@ -283,11 +281,10 @@ theorem set.spec (v : ResizableVec α) (contents : List α) (cap i : Nat)
   iintro _ hInv
   step*
   · have hnewInv := bufferInv_set (i := i) (value := value) hInv
-    simp only [decide_true]
     iframe
   · have hset : contents.set i value = contents :=
-      list_set_eq_self_of_length_le contents i value (by omega)
-    simp only [decide_false, hset]
+      list_set_eq_self_of_length_le contents i value (by agrind)
+    simp only [hset]
     iframe
 
 /-! ## Stack operations -/
@@ -303,10 +300,11 @@ theorem push.spec (v : ResizableVec α) (contents : List α) (cap : Nat)
         owns v (if contents.length < cap then contents ++ [value] else contents) cap⦄ := by
   unfold push length capacity
   iintro _ hInv
+  step* 2
+  subst_vars
   step*
-  have hnewInv := bufferInv_push (value := value) hInv (by omega)
-  simp only [decide_true]
-  iframe
+  · have hnewInv := bufferInv_push (value := value) hInv (by agrind)
+    iframe
 
 /-- `pop` returns the exact last element, removes exactly that element, and
 preserves capacity and complete ownership. -/
@@ -317,17 +315,12 @@ theorem pop.spec (v : ResizableVec α) (contents : List α) (cap : Nat) :
         ⌜result = contents.getLast?⌝ ∗ owns v contents.dropLast cap⦄ := by
   unfold pop length
   iintro _ hInv
+  have hnewInv := bufferInv_pop hInv
+  have hslot := bufferInv_get (i := contents.length - 1) hInv
   step*
-  · have hnil : contents = [] := List.eq_nil_of_length_eq_zero (by omega)
+  · have hnil : contents = [] := List.eq_nil_of_length_eq_zero (by agrind)
     subst contents
     simp only [List.getLast?_nil, List.dropLast_nil]
-    iframe
-  · have hslot := bufferInv_get (i := contents.length - 1) hInv (by omega)
-    simp only [hslot, join_map_some]
-    have hlastValue : contents[contents.length - 1]? = contents.getLast? := by
-      exact List.getLast?_eq_getElem?.symm
-    rw [hlastValue]
-    have hnewInv := bufferInv_pop hInv
     iframe
 
 /-! ## Deallocation -/

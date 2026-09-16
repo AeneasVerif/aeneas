@@ -456,9 +456,8 @@ theorem loadSrc.spec_state (b : InPlaceOrDisjointBuffer α)
   | equal values =>
       obtain ⟨hLt, hGet⟩ :=
         List.getElem?_eq_some_iff.mp (show values[i]? = some value from hIndex)
-      apply ispec_ipure_keep
-      rintro ⟨hSame, -⟩
       simp only [pointsTo]
+      iintro ⟨hSame, hLength⟩
       unfold loadSrc
       rw [hSame, Ptr.pointsToRange_eq_take_get_drop hLt, hGet]
       step*
@@ -466,8 +465,6 @@ theorem loadSrc.spec_state (b : InPlaceOrDisjointBuffer α)
       obtain ⟨hLt, hGet⟩ :=
         List.getElem?_eq_some_iff.mp
           (show srcValues[i]? = some value from hIndex)
-      apply ispec_ipure_keep
-      rintro -
       simp only [pointsTo]
       unfold loadSrc
       rw [Ptr.pointsToRange_eq_take_get_drop hLt, hGet]
@@ -484,8 +481,6 @@ theorem loadDst.spec_state (b : InPlaceOrDisjointBuffer α)
   | equal values =>
       obtain ⟨hLt, hGet⟩ :=
         List.getElem?_eq_some_iff.mp (show values[i]? = some value from hIndex)
-      apply ispec_ipure_keep
-      rintro -
       simp only [pointsTo]
       unfold loadDst
       rw [Ptr.pointsToRange_eq_take_get_drop hLt, hGet]
@@ -494,8 +489,6 @@ theorem loadDst.spec_state (b : InPlaceOrDisjointBuffer α)
       obtain ⟨hLt, hGet⟩ :=
         List.getElem?_eq_some_iff.mp
           (show dstValues[i]? = some value from hIndex)
-      apply ispec_ipure_keep
-      rintro -
       simp only [pointsTo]
       unfold loadDst
       rw [Ptr.pointsToRange_eq_take_get_drop hLt, hGet]
@@ -512,8 +505,6 @@ theorem store.spec_state (b : InPlaceOrDisjointBuffer α)
   cases state with
   | equal values =>
       have hLt : i < values.length := hIndex
-      apply ispec_ipure_keep
-      rintro -
       simp only [EqOrDisj.write, EqOrDisj.written, pointsTo, List.length_set]
       unfold store
       rw [Ptr.pointsToRange_eq_take_get_drop hLt,
@@ -523,8 +514,6 @@ theorem store.spec_state (b : InPlaceOrDisjointBuffer α)
       step*
   | disjoint srcValues dstValues =>
       have hLt : i < dstValues.length := hIndex
-      apply ispec_ipure_keep
-      rintro -
       simp only [EqOrDisj.write, EqOrDisj.written, pointsTo, List.length_set]
       unfold store
       rw [Ptr.pointsToRange_eq_take_get_drop hLt,
@@ -574,7 +563,7 @@ theorem inPlaceWrite.spec (buffer : Buffer α) (values : List α) (i : Nat)
       ⦃⇓ (mkInPlace buffer).pointsTo (.equal (values.set i value))⦄ := by
   unfold inPlaceWrite
   step*
-  case hIndex => exact hIndex
+  · exact hIndex
 
 end InPlaceOrDisjointBuffer
 

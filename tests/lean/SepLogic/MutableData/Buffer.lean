@@ -86,6 +86,10 @@ theorem Buffer.alloc.spec (n : Nat) (value : α) :
 
 namespace Buffer
 
+/-- A buffer owns the range its pointer owns. -/
+theorem pointsTo_def (b : Buffer α) (values : List α) :
+    (b ↦ values) = iprop(⌜values.length = b.length⌝ ∗ b.ptr ↦* values) := rfl
+
 def read (b : Buffer α) (i : Nat) : Result α := _root_.SepLogic.read (b.ptrAt i)
 
 @[step]
@@ -109,11 +113,11 @@ def free (b : Buffer α) : Result Unit := freeRange b.ptr b.length
 @[step]
 theorem free.spec (b : Buffer α) (values : List α) :
     ⦃ b ↦ values ⦄ b.free ⦃⇓ emp⦄ := by
-  apply ispec_ipure.mpr
-  intro hLength
-  show ispec _ (freeRange b.ptr b.length) _
+  unfold Buffer.free
+  simp only [pointsTo_def]
+  iintro hLength
   rw [← hLength]
-  exact freeRange.spec b.ptr values
+  step*
 
 /-! ## The array interface
 
@@ -131,23 +135,20 @@ theorem read.spec_array (b : Buffer α) (values : List α) (i : Nat)
     (hIndex : i < values.length) :
     ⦃ b ↦ values ⦄ b.read i
       ⦃⇓ result => ⌜result = values[i]⌝ ∗ b ↦ values⦄ := by
-  apply ispec_ipure.mpr
-  intro hLength
-  refine ispec_conseq (_root_.SepLogic.read.spec_range b.ptr values i hIndex)
-    (entails_refl _) fun result h hPost => ?_
-  obtain ⟨hResult, hRange⟩ := (sep_pure_l _ _ h).mp hPost
-  exact (sep_pure_l _ _ h).mpr
-    ⟨hResult, (sep_pure_l _ _ h).mpr ⟨hLength, hRange⟩⟩
+  change ispec _ (_root_.SepLogic.read (b.ptr.add i)) _
+  simp only [pointsTo_def]
+  iintro hLength
+  step with _root_.SepLogic.read.spec_range b.ptr values i hIndex
+  iframe
 
 theorem write.spec_array (b : Buffer α) (values : List α) (i : Nat) (value : α)
     (hIndex : i < values.length) :
     ⦃ b ↦ values ⦄ b.write i value ⦃⇓ b ↦ values.set i value⦄ := by
-  apply ispec_ipure.mpr
-  intro hLength
-  refine ispec_conseq
-    (_root_.SepLogic.update.spec_range b.ptr values i value hIndex)
-    (entails_refl _) fun _ h hPost => ?_
-  exact (sep_pure_l _ _ h).mpr ⟨by simpa using hLength, hPost⟩
+  change ispec _ (update (b.ptr.add i) value) _
+  simp only [pointsTo_def]
+  iintro hLength
+  step with _root_.SepLogic.update.spec_range b.ptr values i value hIndex
+  iframe
 
 /-! ## Bulk operations
 
@@ -171,12 +172,11 @@ def fill (b : Buffer α) (value : α) : Result Unit := fillRange b.ptr value b.l
 theorem fill.spec (b : Buffer α) (values : List α) (value : α) :
     ⦃ b ↦ values ⦄ b.fill value
       ⦃⇓ b ↦ List.replicate b.length value⦄ := by
-  apply ispec_ipure.mpr
-  intro hLength
-  show ispec _ (fillRange b.ptr value b.length) _
+  unfold Buffer.fill
+  simp only [pointsTo_def]
+  iintro hLength
   rw [← hLength]
-  refine ispec_conseq (fillRange.spec b.ptr values value) (entails_refl _)
-    fun _ h hPost => (sep_pure_l _ _ h).mpr ⟨by simp [hLength], hPost⟩
+  step*
 
 /-- The two length facts a binary operation needs, pulled out of what its two
 views own. -/
@@ -208,16 +208,12 @@ theorem copy.spec (dst src : Buffer α) (dstValues srcValues : List α)
     (hLength : dst.length = src.length) :
     ⦃ dst ↦ dstValues ∗ src ↦ srcValues ⦄ dst.copy src
       ⦃⇓ dst ↦ srcValues ∗ src ↦ srcValues⦄ := by
-  refine ispec_conseq ?_ (pointsTo_pair_entails dst src dstValues srcValues)
-    (fun _ => entails_refl _)
-  apply ispec_ipure.mpr
-  rintro ⟨hDst, hSrc⟩
-  show ispec _ (copyRange dst.ptr src.ptr src.length) _
+  unfold Buffer.copy
+  simp only [pointsTo_def]
+  iintro hDst hSrc
   rw [← hSrc]
-  exact ispec_conseq
-    (copyRange.spec dst.ptr src.ptr dstValues srcValues (by omega))
-    (entails_refl _)
-    (fun _ => pair_entails_pointsTo (by omega) hSrc)
+  step*
+  · agrind
 
 /-- Whether two views hold the same values. -/
 def compare [DecidableEq α] (left right : Buffer α) : Result Bool :=
@@ -229,19 +225,12 @@ theorem compare.spec [DecidableEq α] (left right : Buffer α)
     ⦃ left ↦ leftValues ∗ right ↦ rightValues ⦄ Buffer.compare left right
       ⦃⇓ result => ⌜result = decide (leftValues = rightValues)⌝ ∗
         (left ↦ leftValues ∗ right ↦ rightValues)⦄ := by
-  refine ispec_conseq ?_
-    (pointsTo_pair_entails left right leftValues rightValues)
-    (fun _ => entails_refl _)
-  apply ispec_ipure.mpr
-  rintro ⟨hLeft, hRight⟩
-  show ispec _ (compareRange left.ptr right.ptr left.length) _
+  unfold Buffer.compare
+  simp only [pointsTo_def]
+  iintro hLeft hRight
   rw [← hLeft]
-  refine ispec_conseq
-    (compareRange.spec left.ptr right.ptr leftValues rightValues (by omega))
-    (entails_refl _) fun result h hPost => ?_
-  obtain ⟨hResult, hRanges⟩ := (sep_pure_l _ _ h).mp hPost
-  exact (sep_pure_l _ _ h).mpr
-    ⟨hResult, pair_entails_pointsTo hLeft hRight h hRanges⟩
+  step*
+  · agrind
 
 /-- Exchange the values at indices `i` and `j`. -/
 def swap (b : Buffer α) (i j : Nat) : Result Unit := do
@@ -255,25 +244,15 @@ theorem swap.spec (b : Buffer α) (values : List α) (i j : Nat)
     ⦃ b ↦ values ⦄ b.swap i j
       ⦃⇓ b ↦ (values.set i values[j]).set j values[i]⦄ := by
   unfold Buffer.swap
-  apply ispec_bind (read.spec_array b values i hi)
-  intro x
-  apply ispec_ipure.mpr
-  intro hx
-  apply ispec_bind (read.spec_array b values j hj)
-  intro y
-  apply ispec_ipure.mpr
-  intro hy
-  rw [hx, hy]
-  apply ispec_bind (write.spec_array b values i values[j] hi)
-  intro _
-  exact write.spec_array b (values.set i values[j]) j values[i]
+  step with read.spec_array b values i hi as ⟨x, hx⟩
+  step with read.spec_array b values j hj as ⟨y, hy⟩
+  subst x y
+  step with write.spec_array b values i values[j] hi
+  step with write.spec_array b (values.set i values[j]) j values[i]
     (by simpa using hj)
+  iframe
 
 /-! ## How ownership follows the views -/
-
-/-- A buffer owns the range its pointer owns. -/
-theorem pointsTo_def (b : Buffer α) (values : List α) :
-    (b ↦ values) = iprop(⌜values.length = b.length⌝ ∗ b.ptr ↦* values) := rfl
 
 /-- Forget the length the view records and keep the range it owns. -/
 theorem pointsTo_entails_range (b : Buffer α) (values : List α) :
@@ -336,17 +315,11 @@ theorem end_mut_to_raw.spec (original : Aeneas.Std.Slice α) (b : Buffer α)
       ⦃⇓ result =>
         ⌜result.val = original.val.setSlice! 0 values⌝⦄ := by
   unfold end_mut_to_raw
-  apply ispec_ipure.mpr
-  intro hLength
-  have hTake :
-      ⦃ b.ptr ↦* values ⦄ takeRange b.ptr b.length
-        ⦃⇓ result => ⌜result = values⌝⦄ :=
-    takeRange.spec_of_length b.ptr values b.length hLength
-  apply ispec_bind hTake
-  intro result
-  exact (ispec_ok _).mpr fun _ hResult => by
-    rw [hResult, Aeneas.Std.Slice.setSlice!_val]
-    rfl
+  simp only [pointsTo_def]
+  iintro hLength
+  step with takeRange.spec_of_length b.ptr values b.length hLength
+  step*
+  simp [Aeneas.Std.Slice.setSlice!_val, *]
 
 end Buffer
 

@@ -175,20 +175,15 @@ theorem leftLeaf.preserves_spec (tree : Tree) :
       step*
   | branch pointer value left right leftIH _ =>
       simp only [Tree.owns]
+      change ⦃ _ ⦄ leftLeaf ((left.leftDepth + 1) + 1) pointer
+        ⦃⇓ result => _⦄
       rw [leftLeaf]
-      step
-      apply ispec_conseq (ispec_frame leftIH
-        iprop(
-          pointer ↦ {
-            value
-            left := some left.root
-            right := some right.root
-          } ∗
-          right.owns))
-      · iframe
-      · intro result
-        simp only [postSep]
-        exact entails_of_eq (by ac_rfl)
+      step as ⟨node, hnode⟩
+      subst node
+      step with leftIH
+      conv_lhs => rw [sep_comm_eq, sep_assoc_eq]
+      apply sep_mono (entails_refl _)
+      exact postWand_intro fun _ => entails_of_eq (by simp only [postSep]; ac_rfl)
 
 /-- The traversal result stated in the paper's loop-invariant form. The
 remaining resources have been packaged into a wand back to the input tree. -/
@@ -199,22 +194,22 @@ theorem leftLeaf.cursor_spec (tree : Tree) :
           ⌜result = tree.leftmost.root⌝ ∗
           tree.leftmost.owns ∗
           (tree.leftmost.owns -∗ tree.owns))⦄ := by
-  apply ispec_conseq (leftLeaf.preserves_spec tree)
-  · exact entails_refl _
-  · intro result
-    irewrite tree.packageLeftmost
-    iframe
+  step with leftLeaf.preserves_spec tree
+  apply entails_sep_postWand
+  intro result
+  irewrite tree.packageLeftmost
+  iframe
 
 /-- The paper's final `apply` operation consumes the current subtree and its
 wand, recovering ownership of the original tree. -/
 theorem leftLeaf.spec (tree : Tree) :
     ⦃ tree.owns ⦄ leftLeaf (tree.leftDepth + 1) tree.root
       ⦃⇓ result => ⌜result = tree.leftmost.root⌝ ∗ tree.owns⦄ := by
-  apply ispec_conseq (leftLeaf.cursor_spec tree)
-  · exact entails_refl _
-  · intro result
-    irewrite (wand_cancel tree.leftmost.owns tree.owns)
-    iframe
+  step with leftLeaf.cursor_spec tree
+  apply entails_sep_postWand
+  intro result
+  irewrite (wand_cancel tree.leftmost.owns tree.owns)
+  iframe
 
 /-! ## Uniform footprints across alternatives
 

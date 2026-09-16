@@ -502,8 +502,9 @@ theorem reverseAux.spec (memory : Ptr Memory) (m : Memory)
   | cons m p previous ps final tail ih =>
       simp only [List.length_cons]
       unfold reverseAux
-      step* 2
-      exact ih
+      step as ⟨state, hstate⟩
+      subst state
+      step*
 
 /-- Exact functional correctness for Creusot's lasso reversal.  The returned
 pointer is the original head and the entire final memory is the pure rewiring
