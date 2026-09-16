@@ -2,7 +2,6 @@ import SepLogic.Examples.AsterinasIntrusiveFrameList
 import SepLogic.Examples.Basic
 import SepLogic.Examples.CreusotListReversalLasso
 import SepLogic.Examples.DardinierMagicWands
-import SepLogic.Examples.EqOrDisj
 import SepLogic.Examples.HigherOrder
 import SepLogic.Examples.InPlaceOrDisjointBuffer
 import SepLogic.Examples.IrisTutorial
