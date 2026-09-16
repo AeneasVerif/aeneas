@@ -68,7 +68,7 @@ tactic rather than replacing the test with automation that bypasses it.
 | [`Basic.lean`](Tests/Examples/Basic.lean) | Basic programs and specifications exercising `step` over pure computations and pointers. |
 | [`CreusotListReversalLasso.lean`](Tests/Examples/CreusotListReversalLasso.lean) | Port of Creusot's cyclic-list reversal over an explicit first-order memory, with exact traversal and rewiring results. |
 | [`DardinierMagicWands.lean`](Tests/Examples/DardinierMagicWands.lean) | Ports Dardinier's leftmost-leaf wand-packaging example and the uniform-footprint counterexample from *Sound Automation of Magic Wands*. |
-| [`EqOrDisj.lean`](Tests/Examples/EqOrDisj.lean) | Port of the `InPlaceOrDisjointBuffer` of [SymCRust](https://github.com/microsoft/VCR) over `Ptr`/`Buffer` — a read/write view pair that either aliases or is separated — with its constructors, views and element accessors specified in full against equal-or-disjoint ghost state. |
+| [`InPlaceOrDisjointBuffer.lean`](Examples/InPlaceOrDisjointBuffer.lean) | Combined SymCRust buffer example: equal-or-disjoint pointer ownership, constructors, views, element and 16-byte accesses, stateful backward functions, and pointer-free client contracts, with intended integration destinations documented in the file. |
 | [`IrisTutorial.lean`](Tests/Examples/IrisTutorial.lean) | Sequential ports of Iris tutorial proof-mode, pointer, and linked-list examples. |
 | [`Partial.lean`](Tests/Partial.lean) | Regression tests for partial correctness: the automation on a `dtriple` goal, what a partial triple still owes, and the loops only it proves. |
 | [`PureSpec.lean`](Tests/PureSpec.lean) | Regression tests for the pure-computation notation: that `m ⦃ x => p ⦄` and `⦃ emp ⦄ m ⦃⇓ x => ⌜p⌝ ⦄` are the *same* proposition, the round trip through the delaborator, the interoperability one judgment buys — a pure specification framed into a heap proof, a heap proof behind a pure specification, both under one `step*`, and higher-order contracts in either form. |
@@ -422,6 +422,10 @@ The committed reports and figures below are a historical snapshot, not
 measurements of the current proof scripts. Regenerate the reports to compare a
 new proof revision.
 
+The historical `EqOrDisj.lean` example is now included in
+[`InPlaceOrDisjointBuffer.lean`](Examples/InPlaceOrDisjointBuffer.lean).
+Its snapshot counts below still describe the former standalone file.
+
 Over those 6, the snapshot costs **×1.29** the artifact it answers: **×0.86** on
 what runs, and **×1.49** on specification and proof.  It spends 78.4% of its
 lines on verification, the artifact 67.7%.
@@ -434,7 +438,7 @@ Relevant lines, as `total (code, spec + proof)`:
 | [`Basic.lean`](Tests/Examples/Basic.lean) | yes | — | 52 (13, 39) | — | — |
 | [`CreusotListReversalLasso.lean`](Tests/Examples/CreusotListReversalLasso.lean) | yes | 181 (53, 128) | 380 (53, 327) | fragment | — |
 | [`DardinierMagicWands.lean`](Tests/Examples/DardinierMagicWands.lean) | n/a | — | 180 (25, 155) | — | — |
-| [`EqOrDisj.lean`](Tests/Examples/EqOrDisj.lean) | no | — | 262 (55, 207) | — | 143 (143, 0) |
+| `EqOrDisj.lean` (historical) | no | — | 262 (55, 207) | — | 143 (143, 0) |
 | [`HigherOrder.lean`](Tests/Examples/HigherOrder.lean) | yes | — | 97 (15, 82) | — | — |
 | [`IrisTutorial.lean`](Tests/Examples/IrisTutorial.lean) | n/a | 459 (87, 372) | 444 (100, 344) | ×0.97 | 98 (98, 0) |
 | [`PulseArrayTests.lean`](Tests/Examples/PulseArrayTests.lean) | yes | 329 (179, 150) | 333 (59, 274) | fragment | — |
