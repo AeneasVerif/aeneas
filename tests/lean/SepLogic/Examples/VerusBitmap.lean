@@ -398,8 +398,8 @@ theorem getBit.spec (bitmap : Bitmap) (words : List Word) (index : Nat)
     ⦃ rep bitmap words ⦄ getBit bitmap index
       ⦃⇓ bit => ⌜bit = bitView words index⌝ ∗ rep bitmap words⦄ := by
   unfold getBit
-  step with PulseArray.readAt.spec bitmap.bits words (bucketIndex index)
-  
+  step with PulseArray.readAt.spec bitmap.bits words (bucketIndex index) as ⟨bucket, hbucket⟩
+  subst bucket
   have hin := bucketIndex_lt_length words index hindex
   simp only [List.getElem?_eq_getElem hin, Option.getD_some]
   rw [bitView_eq_getElem words index hindex]
@@ -419,8 +419,8 @@ theorem setBit.spec (bitmap : Bitmap) (words : List Word) (index : Nat)
               if other = index then bit else bitView words other⌝ ∗
         rep bitmap (setWords words index bit)⦄ := by
   unfold setBit
-  step with PulseArray.readAt.spec bitmap.bits words (bucketIndex index)
-  
+  step with PulseArray.readAt.spec bitmap.bits words (bucketIndex index) as ⟨bucket, hbucket⟩
+  subst bucket
   have hin := bucketIndex_lt_length words index hindex
   step
   have hPure :
@@ -472,9 +472,7 @@ theorem orCells.disjoint_spec (leftCells rightCells : List (Ptr Word))
                   step*
               | cons right rights =>
                   simp only [PulseArray.ownsCells]
-                  rw [sep_comm_eq _ (⌜False⌝)]
-                  apply ispec_ipure
-                  intro hfalse
+                  iintro
                   contradiction
   | cons left leftCells ih =>
       cases leftWords with
@@ -489,17 +487,13 @@ theorem orCells.disjoint_spec (leftCells rightCells : List (Ptr Word))
                   simp at hlength
               | cons rightWord rightWords =>
                   simp only [PulseArray.ownsCells]
-                  rw [sep_comm_eq _ (⌜False⌝)]
-                  apply ispec_ipure
-                  intro hfalse
+                  iintro
                   contradiction
           | cons right rightCells =>
               cases rightWords with
               | nil =>
                   simp only [PulseArray.ownsCells]
-                  rw [sep_comm_eq _ (⌜False⌝)]
-                  apply ispec_ipure
-                  intro hfalse
+                  iintro
                   contradiction
               | cons rightWord rightWords =>
                   simp only [PulseArray.ownsCells_cons, orCells, orWords,

@@ -1,35 +1,59 @@
-# Separation Logic Proof of Concept
+# First-order separation logic tests and examples
 
-This directory contains the proof-of-concept work for extending the separation
-logic (SL) support.
+This directory exercises Aeneas's integrated first-order separation logic.
+The assertions and tactics live in `backends/lean/Aeneas/SepLogic`,
+`backends/lean/Aeneas/Std/WP.lean`, and
+`backends/lean/Aeneas/Tactic/SepLogic`; the test memory interfaces and example
+proofs live here.
 
-## Updating the stacked branches
+## Building the proofs
 
-`cezar/firstorder_seplogic` is stacked on `cezar/integration`. After updating
-the integration branch, replay the SLPoC commits on it:
+From the repository root:
 
 ```bash
-git -C ../firstorder_seplogic rebase cezar/integration
-git -C ../firstorder_seplogic push --force-with-lease origin cezar/firstorder_seplogic
+cd tests/lean
+lake build SepLogic
 ```
+
+`SepLogic` is an explicit Lake target, not part of the default test build.
+For a focused build, use a module target such as
+`lake build SepLogic.Examples.PulseLinkedList`.
+
+## Proof style
+
+Start a program proof with `unfold program` followed by `step*`. The registered
+specifications handle sequencing, framing, branches, and terminal returns.
+Use `step as ⟨value, hValue⟩` when subsequent reasoning needs a named output:
+`step` retains the equality in `hValue`, rather than substituting the output
+automatically. Use `subst value` or pure reasoning when needed.
+
+Keep bounded `step* n` where the proof must expose an ownership predicate or
+choose an invariant before proceeding. Use `step with theorem` for local
+contracts, ghost arguments that cannot be inferred, or an alternative
+specification. In particular, the array-interface tests register whole-array
+access specifications locally; the default registrations still describe
+individual slots.
+
+Spatial representation lemmas continue to use `iintro`, `irewrite`, and
+`iframe`. Tests of a particular proof-mode tactic deliberately retain that
+tactic rather than replacing the test with automation that bypasses it.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| [`Coinductive/Spec.lean`](../Data/Coinductive/Spec.lean) | Generic `Handler`, `TotalSpec`, and `PartialSpec`, their shared layer `SpecF`, structural rules, and admissibility for conjunctive handlers. Shared with `Std/WP.lean`. |
-| [`StateMachine.lean`](StateMachine.lean) | Operational semantics for those handlers (after "Program Logics à la Carte"): `Exec`, `Handler.Runs`, and `Handler.Evaluates`, with the adequacy proofs connecting the generic correctness judgments to runs. |
-| [`Heap.lean`](../Std/Heap.lean) | Defines addresses (`AllocId × Nat`), finite heaps of slots under disjoint union, their PCM instance, references and their arithmetic, the heap of a run of slots, allocation, and the sub-heap order the affine assertions are closed under. |
-| [`Primitives.lean`](../Std/Primitives.lean) | Defines `Result`, the interaction-tree monad over the `RustEffect` heap events (`guardedModify` and `fail`), its monad and partial-fixpoint instances, and the `loop` combinator. |
-| [`PartialCommMonoid.lean`](../Data/PartialCommMonoid.lean) | The `PartialCommMonoid` class the heap is an instance of: a total union selected by a compatibility relation. |
+| [`Coinductive/Spec.lean`](../../../backends/lean/Aeneas/Data/Coinductive/Spec.lean) | Generic `Handler`, `TotalSpec`, and `PartialSpec`, their shared layer `SpecF`, structural rules, and admissibility for conjunctive handlers. Shared with `Std/WP.lean`. |
+| [`StateMachine.lean`](../../../backends/lean/Aeneas/Data/Coinductive/StateMachine.lean) | Operational semantics for those handlers (after "Program Logics à la Carte"): `Exec`, `Handler.Runs`, and `Handler.Evaluates`, with the adequacy proofs connecting the generic correctness judgments to runs. |
+| [`Heap.lean`](../../../backends/lean/Aeneas/Std/Heap.lean) | Defines addresses (`AllocId × Nat`), finite heaps of slots under disjoint union, their PCM instance, references and their arithmetic, the heap of a run of slots, allocation, and the sub-heap order the affine assertions are closed under. |
+| [`Primitives.lean`](../../../backends/lean/Aeneas/Std/Primitives.lean) | Defines `Result`, the interaction-tree monad over the `RustEffect` heap events (`guardedModify` and `fail`), its monad and partial-fixpoint instances, and the `loop` combinator. |
+| [`PartialCommMonoid.lean`](../../../backends/lean/Aeneas/Data/PartialCommMonoid.lean) | The `PartialCommMonoid` class the heap is an instance of: a total union selected by a compatibility relation. |
 | [`MutableData/Array.lean`](MutableData/Array.lean) | Arrays `Array α n`, the Rust `[α; n]`: the length lives in the type.  `toBuffer` is the coercion to a slice, and every operation and specification is the buffer one with `n` for the length. |
 | [`MutableData/Ptr.lean`](MutableData/Ptr.lean) | The first layer: allocation of a run of slots, interior pointers `Ptr α`, pointer arithmetic, range and slot ownership, splitting and joining, read, write and free of one slot, the range operations `freeRange`/`fillRange`/`copyRange`/`compareRange`, and the raw-pointer borrow.  A `Ref` never escapes this directory. |
 | [`MutableData/Buffer.lean`](MutableData/Buffer.lean) | Slices `Buffer α`, the Rust `&mut [T]`: `sub`, `split`, `join`, slot-level and array-level indexed access, `alloc`/`ofList`/`free`/`fill`/`copy`/`compare`/`swap`, and how ownership follows the views. |
-| [`ST.lean`](ST.lean) | The heap handler `RustEffect.machine`, whose event semantics is `EventSpec`; the generic judgments specialized as `spec` and `dspec`; and the separation triples, framing and loop rules, and `step` integration. The pure judgments `WP.spec` and `WP.dspec` wrap triples with no owned input and a pure postcondition and have their own `step` registrations. |
-| [`Semantics.lean`](Semantics.lean) | What those triples say about running the program: the relations `Reaches` and `Evaluates` for `RustEffect.machine`, the adequacy of `dspec`/`dtriple`, and the certified interpreter (`exec`, `execTriple`, `execClosed`) that uses a total-correctness proof to run a verified program. |
-| [`Basic.lean`](../SepLogic/Basic.lean) | Affine separation-logic assertions (`IProp`, closed under heap extension like Iris's `uPred`), the separating conjunction, the quantifiers, and the magic wand. |
-| [`PredicateTransformer.lean`](../SepLogic/PredicateTransformer.lean) | Monotone predicate transformers `Wp` over those assertions (`Wᴾᵘʳᵉ` of "Dijkstra Monads for All"), and `pp2wp`, the transformer a precondition/postcondition pair denotes. |
-| [`Tactic/SepLogic/`](../Tactic/SepLogic) | The separation-logic proof mode: `Init.lean` registers the `iris_simps` simp set, `Frame.lean` holds the `IFrame` cancellation engine with `iframe`/`isimp`, `Intro.lean` holds the `iintro` family and `isimpl`, `Rewrite.lean` holds `irewrite`, and `Tests/` holds one regression file per tactic. |
+| [`Std/WP.lean`](../../../backends/lean/Aeneas/Std/WP.lean) | The total and partial judgments `ispec`, `dispec`, `spec`, and `dspec`, their structural rules, and their `step` registrations and liftings. |
+| [`Semantics.lean`](../../../backends/lean/Aeneas/SepLogic/Semantics.lean) | Operational adequacy and the certified interpreter (`execISpec`, `execClosed`) that uses a total-correctness proof to run a verified program. |
+| [`Basic.lean`](../../../backends/lean/Aeneas/SepLogic/Basic.lean) | Affine separation-logic assertions (`IProp`, closed under heap extension like Iris's `uPred`), the separating conjunction, the quantifiers, and the magic wand. |
+| [`Tactic/SepLogic/`](../../../backends/lean/Aeneas/Tactic/SepLogic) | The separation-logic proof mode: `Init.lean` registers the `iris_simps` simp set, `Frame.lean` holds the `IFrame` cancellation engine with `iframe`/`isimp`, `Intro.lean` holds the `iintro` family and `isimpl`, `Rewrite.lean` holds `irewrite`, and `Tests/` holds one regression file per tactic. |
 | [`ProofScore.lean`](Tests/Examples/scripts/ProofScore.lean) | Engineering tool, not part of the library: measures how close the proofs of the triples are to the ideal proof, i.e. how much separation logic the automation still leaves to the user. Writes [`proof-score.html`](Tests/Examples/reports/proof-score.html). |
 | [`SourceLoc.lean`](Tests/Examples/scripts/SourceLoc.lean) | Engineering tool, not part of the library: downloads the artifacts every example ports, and unverified Rust implementations of the same data structures, and counts the relevant lines of all three, per file and per declaration, split into computational code, specification/annotation, and proof. Writes [`source-loc.json`](Tests/Examples/reports/source-loc.json), and a standalone `source-loc.html` that draws it (generated on demand, not committed). |
 | [`sources-manifest.json`](Tests/Examples/reports/sources-manifest.json) | Maps every file of `Tests/Examples` to the upstream artifact it ports, pinned to a commit and a SHA-256, says whether the example is expressible in safe Rust and why, and lists unverified Rust implementations of the same data structure. Read by `SourceLoc.lean`. |
@@ -255,17 +279,17 @@ can state, since `TotalSpec.div_false` says divergence satisfies none.  See
 ## How ideal are the proofs?
 
 The point of the automation is that a triple should be proved by unfolding the
-program and calling `step*`, `step`, or `step*`, with only pure reasoning and
-`sl_pull` in between, and one such block per branch of the program.
+program and calling `step` or `step*`, with only pure reasoning and
+`iintro` in between, and one such block per branch of the program.
 `step with some.spec` is not ideal whenever the named declaration states a
 triple, regardless of whether it is registered with `@[step]`; local induction
 hypotheses remain ideal.  Run
 
 ```
-lake env lean --run Aeneas/SLPoC/Tests/Examples/scripts/ProofScore.lean
+lake env lean --run SepLogic/Examples/scripts/ProofScore.lean
 ```
 
-from `backends/lean` to measure how far the proofs are from that, in
+from `tests/lean` to measure how far the proofs are from that, in
 [`proof-score.html`](Tests/Examples/reports/proof-score.html): every proof of a triple is split into
 *spots* — one straight-line block before the first branch, then one per branch
 body, recursively — and a spot counts as ideal when no step of it steers the
@@ -288,11 +312,11 @@ report elsewhere.
 
 ## Simplifying proofs
 
-Run the compilation-guided simplifier from `backends/lean`:
+Run the compilation-guided simplifier from `tests/lean`:
 
 ```
-python3 Aeneas/SLPoC/Tests/Examples/scripts/proof_simplify.py FILE.lean
-python3 Aeneas/SLPoC/Tests/Examples/scripts/proof_simplify.py --in-place FILE.lean
+python3 SepLogic/Examples/scripts/proof_simplify.py FILE.lean
+python3 SepLogic/Examples/scripts/proof_simplify.py --in-place FILE.lean
 ```
 
 The default mode prints a unified diff.  `--in-place` applies it, and `--check`
@@ -327,7 +351,7 @@ commit, and [`SourceLoc.lean`](Tests/Examples/scripts/SourceLoc.lean) downloads
 them and counts both sides:
 
 ```
-lake env lean --run Aeneas/SLPoC/Tests/Examples/scripts/SourceLoc.lean
+lake env lean --run SepLogic/Examples/scripts/SourceLoc.lean
 ```
 
 It writes the counts twice: [`reports/source-loc.json`](Tests/Examples/reports/source-loc.json)
@@ -394,7 +418,11 @@ why, so the sums that follow are taken over the 6 comparable examples alone —
 adding the rest in would compare a kernel against a library and flatter whichever
 side happens to be a fragment.
 
-Over those 6, the port costs **×1.29** the artifact it answers: **×0.86** on
+The committed reports and figures below are a historical snapshot, not
+measurements of the current proof scripts. Regenerate the reports to compare a
+new proof revision.
+
+Over those 6, the snapshot costs **×1.29** the artifact it answers: **×0.86** on
 what runs, and **×1.49** on specification and proof.  It spends 78.4% of its
 lines on verification, the artifact 67.7%.
 

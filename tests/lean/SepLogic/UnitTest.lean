@@ -93,19 +93,17 @@ example (p : Ptr Nat) (value : Nat) :
 unfolding those resources. -/
 example (p : Ptr Nat) (value : Nat) :
     ⦃ iprop(p ↦ value ∗ ⌜value = 1⌝) ⦄ pure () ⦃⇓ p ↦ value⦄ := by
+  wp_pures
   iintro_shallow
-  rename_i hValue
-  guard_hyp hValue : value = 1
-  apply (ispec_ok _).mpr
+  guard_hyp h : value = 1
   iframe
 
 /-- Right-side extraction also works for partial ispecs. -/
 example (p : Ptr Nat) (value : Nat) :
     ⦃ iprop(p ↦ value ∗ ⌜value = 1⌝) ⦄ pure () ⦃⇓ p ↦ value⦄div := by
+  dwp_pures
   iintro_shallow
-  rename_i hValue
-  guard_hyp hValue : value = 1
-  apply (dispec_ok _).mpr
+  guard_hyp h : value = 1
   iframe
 
 /-- The `step` introduction variant extracts facts from the callee
@@ -113,11 +111,10 @@ postcondition on the left, but not from the frame on the right. -/
 example (p : Ptr Nat) (value : Nat) (P F : Prop) :
     ⦃ iprop((p ↦ value ∗ ⌜P⌝) ∗ ⌜F⌝) ⦄ pure ()
       ⦃⇓ iprop(p ↦ value ∗ ⌜F⌝)⦄ := by
-  intro_ispec
-  rename_i hP
-  guard_hyp hP : P
+  wp_pures
+  iintro_shallow_post
+  guard_hyp h : P
   fail_if_success have : F := by assumption
-  apply (ispec_ok _).mpr
   iframe
 
 /-! ## `iintro_keep`
@@ -139,12 +136,10 @@ example (p q : Ptr Nat) :
 the context (to rewrite the cell) and in the assertion (for the postcondition). -/
 example (p : Ptr Nat) (n : Nat) :
     ⦃ iprop(⌜n = 1⌝ ∗ p ↦ n) ⦄ pure () ⦃⇓ iprop(⌜n = 1⌝ ∗ p ↦ 1)⦄ := by
-  iintro_shallow
-  step
-  case hRamified =>
-    apply postWand_intro
-    intro _
-    iframe
+  wp_pures
+  iintro_keep
+  guard_target = (iprop(⌜n = 1⌝ ∗ p ↦ n) ⊢ iprop(⌜n = 1⌝ ∗ p ↦ 1))
+  iframe
 
 /-- `step` reduces match/let noise around a terminal return. -/
 example (n : Nat) :
@@ -244,12 +239,14 @@ def readThenWrite (p : Ptr Nat) : Result Unit := do
   let value ← read p
   update p (value + 1)
 
-/-- The equation `read.spec` returns is substituted, the `Unit` output of
-`update` introduces no binder, and the `∗ emp` of an empty frame is gone. -/
+/-- `step` names the returned value and its equation, and removes the `∗ emp`
+of an empty frame. The caller may substitute the equation before continuing. -/
 example (p : Ptr Nat) (value : Nat) :
     ⦃ p ↦ value ⦄ readThenWrite p ⦃⇓ p ↦ value + 1⦄ := by
   unfold readThenWrite
-  step
+  step as ⟨actual, hActual⟩
+  guard_hyp hActual : actual = value
+  subst actual
   guard_target =
     ⦃ p ↦ value ⦄ update p (value + 1) ⦃⇓ p ↦ value + 1⦄
   step*
@@ -285,6 +282,7 @@ example (p : Ptr Nat) (value : Nat) :
   unfold readFreeReturn
   step*
   simp only [opaqueStepResult]
+  agrind
 
 /-- A bounded `step*` can represent the finite block without entering the
 terminal entailment. -/
@@ -295,7 +293,7 @@ example (p : Ptr Nat) (value : Nat) :
   step* 2
   step
   simp only [opaqueStepResult]
-  simp_all
+  agrind
 
 /-- Conversely, unbounded `step*` may solve the terminal entailment, making
 the tactics after the original finite block fail with no goals. -/
@@ -309,7 +307,7 @@ example (p : Ptr Nat) (value : Nat) :
   step
   step
   step
-  simp_all
+  agrind
 
 /-! ## Affine resource discard
 
@@ -555,10 +553,8 @@ def bufferOne : Result Nat := do
 run end to end. -/
 theorem bufferOne.spec : ⦃ emp ⦄ bufferOne ⦃⇓ result => ⌜result = 42⌝⦄ := by
   unfold bufferOne
-  apply ispec_bind (Buffer.alloc.spec 1 (0 : Nat))
-  intro b
-  refine ispec_conseq ?_ (Buffer.pointsTo_entails_range b _)
-    (fun _ => entails_refl _)
+  step as ⟨b⟩
+  irewrite (Buffer.pointsTo_entails_range b _)
   step*
 
 -- The interpreter runs it, and the released buffer leaves nothing behind.
