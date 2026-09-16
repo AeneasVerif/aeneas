@@ -307,20 +307,7 @@ theorem cursorFront.spec (s : LinkedList M) (entries : List (Entry M)) :
     ⦃ listRep s entries ⦄ cursorFront s
     ⦃⇓ cursor => frontCursorRep cursor entries⦄ := by
   unfold cursorFront
-  refine ispec_conseq
-    (P := listRep s entries)
-    (Q := fun cursor => frontCursorRep cursor entries)
-    (ispec_frame
-      (pure.spec ({ list := s, current := s.front } : Cursor M))
-      (listRep s entries)) ?_ ?_
-  · rw [sep_emp_l_eq]
-    exact entails_refl _
-  · intro cursor
-    apply entails_pure_l
-    intro hcursor
-    subst cursor
-    unfold frontCursorRep
-    iframe
+  step*
 
 /-- `new` owns no frame cells and represents the empty pure sequence. -/
 @[step]
@@ -392,10 +379,14 @@ theorem takeCurrent.cons.spec (cursor : Cursor M) (frame : Frame M)
   cases rest with
   | nil =>
       simp only [firstSlot_nil, ownedFrom_nil]
+      step as ⟨currentSlot, hcurrentSlot⟩
+      subst currentSlot
       step*
   | cons next rest' =>
       rcases next with ⟨nextFrame, nextPayload⟩
       simp only [firstSlot_cons, ownedFrom_cons]
+      step as ⟨currentSlot, hcurrentSlot⟩
+      subst currentSlot
       step*
 
 /-- Public empty pop reports empty and preserves the list exactly. -/
@@ -405,19 +396,7 @@ theorem popFront.empty.spec (s : LinkedList M) :
     ⦃⇓ (s', result) =>
       ⌜s' = s ∧ result = none⌝ ∗ listRep s' []⦄ := by
   unfold popFront
-  let initial : Cursor M := { list := s, current := s.front }
-  have htake :
-      ⦃ listRep s [] ⦄ takeCurrent initial
-      ⦃⇓ (cursor, result) =>
-        ⌜cursor = initial ∧ result = none⌝ ∗
-        frontCursorRep cursor []⦄ := by
-    apply ispec_conseq (takeCurrent.empty.spec initial)
-    · unfold initial frontCursorRep
-      iframe
-    · intro result
-      exact entails_refl _
-  refine ispec_bind htake ?_
-  rintro ⟨cursor, result⟩
+  step with takeCurrent.empty.spec { list := s, current := s.front }
   step*
 
 /-- Public nonempty pop returns/removes exactly the pure head and transfers its
@@ -431,20 +410,7 @@ theorem popFront.cons.spec (s : LinkedList M) (frame : Frame M)
       detachedFrame frame payload ∗
       listRep s' rest⦄ := by
   unfold popFront
-  let initial : Cursor M := { list := s, current := s.front }
-  have htake :
-      ⦃ listRep s ((frame, payload) :: rest) ⦄ takeCurrent initial
-      ⦃⇓ (cursor, result) =>
-        ⌜result = some frame⌝ ∗
-        detachedFrame frame payload ∗
-        frontCursorRep cursor rest⦄ := by
-    apply ispec_conseq (takeCurrent.cons.spec initial frame payload rest)
-    · unfold initial frontCursorRep
-      iframe
-    · intro result
-      exact entails_refl _
-  refine ispec_bind htake ?_
-  rintro ⟨cursor, result⟩
+  step with takeCurrent.cons.spec { list := s, current := s.front } frame payload rest
   step*
 
 end AsterinasIntrusiveFrameList

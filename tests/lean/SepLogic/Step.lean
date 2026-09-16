@@ -34,7 +34,8 @@ example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => p ↦ 1⦄ := by
 /-- The same goal reached one step at a time. -/
 example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => p ↦ 1⦄ := by
   unfold allocAndReturn
-  step*
+  step
+  step
 
 /-! ## Manual work on the terminal entailment
 
@@ -62,7 +63,7 @@ example (p : Ptr Nat) (value : Nat) :
   step* 2
   step
   simp only [opaqueStepResult]
-  simp_all
+  agrind
 
 /-! ## The terminal return
 
@@ -205,7 +206,6 @@ select a theorem absent from the step database.
 def unregisteredHelper (p : Ptr Nat) : Result Unit :=
   Examples.incr_ptr p
 
-@[step]
 theorem unregisteredHelper.spec (p : Ptr Nat) (value : Nat) :
     ⦃ p ↦ value ⦄ unregisteredHelper p ⦃⇓ p ↦ value + 1⦄ := by
   unfold unregisteredHelper
@@ -218,6 +218,10 @@ def unregisteredCaller (p : Ptr Nat) : Result Unit := do
 example (p : Ptr Nat) (value : Nat) :
     ⦃ p ↦ value ⦄ unregisteredCaller p ⦃⇓ p ↦ value + 1⦄ := by
   unfold unregisteredCaller
+  fail_if_success
+    step*
+    done
+  step with unregisteredHelper.spec
   step*
 
 end SepLogic.Tests.Step
