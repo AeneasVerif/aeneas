@@ -1,4 +1,6 @@
-import Aeneas.Std.Core.Fmt
+module
+public import Aeneas.Std.Core.Fmt
+public section
 
 namespace Aeneas.Std
 

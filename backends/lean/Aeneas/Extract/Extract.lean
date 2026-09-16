@@ -1,11 +1,13 @@
-import AeneasMeta.Extensions
+module
+public import AeneasMeta.Extensions
+public section
 /-! Helpers to provide informations about the models for the Rust standard library -/
 
 open Lean
 
 namespace Aeneas.Extract
 
-initialize registerTraceClass `Extract
+meta initialize registerTraceClass `Extract
 
 structure Field where
   rust : String

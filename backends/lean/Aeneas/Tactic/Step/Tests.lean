@@ -1,3 +1,4 @@
+module
 import Aeneas.Tactic.Step.Tests.Triple
 import Aeneas.Tactic.Step.Tests.Coin
 import Aeneas.Tactic.Step.Tests.HigherOrder
