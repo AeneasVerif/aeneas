@@ -298,6 +298,56 @@ example (f : Result (Nat × Nat))
   guard_hyp hw : a = witness.toNat
   exact hab
 
+example (f : Result (Nat × Nat))
+    (h : f ⦃ p => ∃ witness : Bool, p.1 = witness.toNat ∧ p.1 = p.2 ⦄) :
+    (do let (a, b) ← f; ok (a, b)) ⦃ a b => a = b ⦄ := by
+  let* ⟨witness, a, b, hw, hab⟩ ← h
+  guard_hyp witness : Bool
+  guard_hyp a : Nat
+  guard_hyp b : Nat
+  guard_hyp hw : a = witness.toNat
+  exact hab
+
+example (f : Result (Nat × Nat × Nat))
+    (h : f ⦃ p =>
+      ∃ witness : Bool × Nat, p.1 = witness.1.toNat ∧ p.2.1 = witness.2 ∧ p.2.1 = p.2.2 ⦄) :
+    (do let (a, b, c) ← f; ok (a, b, c)) ⦃ _ b c => b = c ⦄ := by
+  let* ⟨witness, a, b, c, ha, hb, hbc⟩ ← h
+  guard_hyp witness : Bool × Nat
+  guard_hyp ha : a = witness.1.toNat
+  guard_hyp hb : b = witness.2
+  exact hbc
+
+example (f : Result (Nat × Nat))
+    (h : f ⦃ p =>
+      ∃ witness : Nat × Nat, p.1 = witness.1 ∧ p.2 = witness.2 ∧ witness.1 = witness.2 ⦄) :
+    (do let (a, b) ← f; ok (a, b)) ⦃ a b => a = b ⦄ := by
+  let* ⟨witness, a, b, ha, hb, hw⟩ ← h
+  guard_hyp witness : Nat × Nat
+  exact ha.trans (hw.trans hb.symm)
+
+example (f : Result Unit) (h : f ⦃ _ => ∃ witness : Nat, witness > 0 ⦄) :
+    f ⦃ _ => ∃ witness : Nat, witness > 0 ⦄ := by
+  let* ⟨witness, hw⟩ ← h
+  guard_hyp witness : Nat
+  guard_hyp hw : witness > 0
+  exact ⟨witness, hw⟩
+
+example (f : Result (Option Nat)) (n : Nat)
+    (h : f ⦃ x => ∃ witness, x = some witness ∧ witness ≤ n ⦄) :
+    f ⦃ r => ∃ witness, r = some witness ∧ witness ≤ n ⦄ := by
+  step with h
+  guard_hyp r : Nat
+  exact ⟨r, x_post, r_post⟩
+
+example (f : Result (Nat × Nat))
+    (h : f ⦃ p => ∃ witness : Bool, p.1 = witness.toNat ∧ p.1 = p.2 ⦄div) :
+    (do let (a, b) ← f; ok (a, b)) ⦃ a b => a = b ⦄div := by
+  let* ⟨witness, a, b, hw, hab⟩ ← h
+  guard_hyp witness : Bool
+  guard_hyp hw : a = witness.toNat
+  simpa using hab
+
 example (r : core.result.Result core.convert.Infallible Nat) (e : Nat) (hr : r = .Err e) :
     core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
       Unit (core.convert.FromSame Nat) r
@@ -343,5 +393,70 @@ example (f : Result Bool) (P : Prop)
   step with hf as ⟨b, h⟩
   guard_hyp h : b = true ↔ P
   exact h
+
+theorem triple_step_mono_plain {P Pm : Prop} {Q : Post α}
+    (m : Id α) (Qm : Post α) (hStep : triple Pm m Qm)
+    (hPre : P → Pm) (hPost : ∀ value, Qm value → Q value) :
+    triple P m Q :=
+  triple_step_mono m Qm hStep hPre hPost
+
+def bundledSpecInfo : SpecInfo := {
+    spec_name := ``triple
+    arity := 4
+    program_index := 2
+    post_index := 3
+    mk_spec_mono := ``triple_step_mono_plain
+    mk_spec_mono_skip_args := 4
+    mk_spec_bind := ``triple_step_bind
+    mk_spec_bind_skip_args := 6
+    to_mvcgen := none
+    liftings := #[]
+  }
+
+#register_spec_info bundledSpecInfo
+
+example (m : Id (Nat × Nat)) (n : Nat)
+    (h : triple True m (fun p => p.2 = n)) :
+    triple True m (Aeneas.Std.uncurry fun (_a : Nat) (b : Nat) => b ≤ n) := by
+  step with h
+  guard_hyp b_post : b = n
+  exact Nat.le_of_eq b_post
+
+example (m : Id Nat) (P Q : Nat → Prop)
+    (h : triple True m (fun r => P r ∧ Q r)) : triple True m P := by
+  step with h as ⟨result, post⟩
+  guard_hyp post : P result ∧ Q result
+  exact post.1
+
+syntax (name := keepBundled) "keep_bundled" : tactic
+macro_rules
+  | `(tactic| keep_bundled) => `(tactic| (intros; try rw [triple_pull]))
+
+#register_spec_info { bundledSpecInfo with intro_tactic := some ``keepBundled }
+
+example (m : Id Nat) (P Q : Nat → Prop)
+    (h : triple True m (fun r => P r ∧ Q r)) : triple True m P := by
+  step with h as ⟨result, post⟩
+  guard_hyp post : P result ∧ Q result
+  exact post.1
+
+example (m : Id Nat) (next : Nat → Id Nat) (P Q S : Nat → Prop)
+    (h : triple True m (fun r => P r ∧ Q r))
+    (hNext : ∀ r, P r → triple True (next r) S) :
+    triple True (m >>= next) S := by
+  step with h as ⟨result, post⟩
+  guard_hyp post : P result ∧ Q result
+  exact hNext result post.1
+
+#register_spec_info { bundledSpecInfo with
+  intro_tactic := some ``keepBundled
+  post_intro_tactic := some ``Aeneas.Std.WP.intro_step_post }
+
+example (m : Id Nat) (P Q : Nat → Prop)
+    (h : triple True m (fun r => P r ∧ Q r)) : triple True m P := by
+  step with h as ⟨result, hp, hq⟩
+  guard_hyp hp : P result
+  guard_hyp hq : Q result
+  exact hp
 
 end Aeneas.Tactic.Step.Tests.IntroTactic

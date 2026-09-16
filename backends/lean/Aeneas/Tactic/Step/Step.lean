@@ -69,8 +69,7 @@ instantiates its binder instead of introducing it. -/
 theorem forall_unit_intro {p : Unit → Prop} (h : p ()) : ∀ value, p value :=
   fun value => match value with | () => h
 
-/-- Eliminate a `Unit` premise without dropping unused output binders. -/
-theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
+export Intro (forall_unit)
 
 attribute [step_simps]
   bind_assoc Std.bind_tc_ok Std.bind_tc_vis Std.bind_tc_div
@@ -691,7 +690,7 @@ unit is not an output, and introducing it would shift the names of the outputs a
 post-conditions which follow.
 
 Returns `none` when the goal does not start with a `Unit` binder. -/
-def elimUnitOutput (goal : MVarId) : MetaM (Option MVarId) := do
+def elimUnitOutput (goal : MVarId) : MetaM (Option MVarId) := goal.withContext do
   let goalTy := (← instantiateMVars (← goal.getType)).consumeMData
   unless goalTy.isForall && goalTy.bindingDomain!.consumeMData.isConstOf ``Unit do
     return none
@@ -725,8 +724,8 @@ meta def getCallSiteTree (info : SpecInfo) (isLet : Bool) (goal : MVarId) :
   else
     getContInput specArgs[info.post_index]!
 
-/-- Run the tactic named `tac` on the goal, reverting what it introduces in the context. -/
-def runIntroTactic (tac : Name) : TacticM Unit := do
+/-- Run an intro tactic and return the output binder index. -/
+def runIntroTacticWithOutput (tac : Name) : TacticM (Option Nat) := do
   withTraceNode `Step (fun _ => pure m!"intro_tactic: {tac}") do
   let originalGoal ← getMainGoal
   let goal ← originalGoal.withContext do
@@ -738,7 +737,9 @@ def runIntroTactic (tac : Name) : TacticM Unit := do
   match ← getUnsolvedGoals with
   | [] =>
     originalGoal.assign (← instantiateMVars (mkMVar goal))
+    return none
   | [nextGoal] =>
+    let (outputIndex, nextGoal) ← Intro.takeOutputIndex nextGoal
     let nextGoal ← match last? with
       | some last => Prod.snd <$> nextGoal.revertAfter last
       | none => Prod.snd <$> nextGoal.revert (← nextGoal.withContext do pure (← getLCtx).getFVarIds)
@@ -747,12 +748,12 @@ def runIntroTactic (tac : Name) : TacticM Unit := do
     if type == nextType then
       originalGoal.assign (mkMVar nextGoal)
       setGoals [nextGoal]
-      return
+      return outputIndex
     /- Preserve sharing between recursive calls. -/
     if type.hasExprMVar || nextType.hasExprMVar then
       originalGoal.assign (← instantiateMVars (mkMVar goal))
       setGoals [nextGoal]
-      return
+      return outputIndex
     /- Hide normalization from well-founded recursion. -/
     let proof ← originalGoal.withContext do
       withLocalDeclD `next nextType fun next => do
@@ -764,20 +765,19 @@ def runIntroTactic (tac : Name) : TacticM Unit := do
         pure (mkApp thm (mkMVar nextGoal))
     originalGoal.assign proof
     setGoals [nextGoal]
+    return outputIndex
   | _ => throwError "`intro_tactic` must not create multiple goals"
+
+/-- Run an intro tactic, reverting introduced binders. -/
+def runIntroTactic (tac : Name) : TacticM Unit :=
+  discard <| runIntroTacticWithOutput tac
 
 /-- Reduce tuple projections before naming facts. -/
 def reduceOutputProjections : TacticM Unit := do
-  withTraceNode `Step (fun _ => pure m!"dsimpAt: reducing the output projections") do
-    Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
-      { addSimpThms := #[``Std.uncurry_apply_pair, ``uncurry'_pair] ++ scalar_eqs }
-      (.targets #[] true)
+  Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
+    {} (.targets #[] true)
 
-/-- Fold the scalar types back.
-
-    Some of them get unfolded too much along the way (e.g., `U32` sometimes gets unfolded to
-    `UScalar .U32`), which has nothing to do with the judgment at hand: we do it for every
-    statement, before the outputs are introduced with those types. -/
+/-- Preserve scalar aliases. -/
 def foldScalarTypes : TacticM Unit := do
   withTraceNode `Step (fun _ => pure m!"dsimpAt: folding back scalar types") do
     Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
@@ -809,18 +809,20 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTr
   trace[Step] "call-site tree: {repr callSiteTree}"
 
   /- Normalize the premise into the `∀ x, P₀ → ... → Pₘ → k ⦃ Q ⦄` shape. -/
-  if let some tac := info.intro_tactic then
-    runIntroTactic tac
-    if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
-    traceGoalWithNode "goal after running `intro_tactic`"
+  let outputIndex ← match info.intro_tactic with
+    | some tac => runIntroTacticWithOutput tac
+    | none => pure none
+  if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
+  traceGoalWithNode "goal after running `intro_tactic`"
   foldScalarTypes
   if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after folding back the scalar types"
-
   /- Introduce the single output and recursively destructure it according to the
      merged binder tree. We use a fresh internal name here and rename leaves to
      user-provided names later. -/
   let mut outputFVars : Array FVarId := #[]
+  let (witnessFVars, goal) ← (← getMainGoal).introNP (outputIndex.getD 0)
+  setGoals [goal]
   let goal ← getMainGoal
   let goalTy ← instantiateMVars (← goal.getType)
   let goalTy := goalTy.consumeMData
@@ -845,40 +847,32 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTr
   if outputFVars.size > 1 then
     reduceOutputProjections
     if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
-    traceGoalWithNode "goal after reducing the output projections"
 
-  /- Normalize facts exposed by output destructuring. -/
-  let _ ← withTraceNode `Step (fun _ => pure m!"simpAt: cleanup after destructure") do
-    Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
-            { addSimpThms :=
-                #[``Std.uncurry_apply_pair,
-                  ``Std.uncurry_eq_prop, ``Std.uncurry_eq_prop_arrow,
-                  ``uncurry'_pair, ``uncurry'_eq,
-                  ``and_imp, ``exists_imp, ``forall_unit, ``true_imp_iff] ++ scalar_eqs }
-            (.targets #[] true)
-  if (← getUnsolvedGoals).isEmpty then trace[Step] "Main goal solved by cleanup simp!"; return none
-  traceGoalWithNode "goal after the cleanup simp"
+  if let some tac := info.post_intro_tactic then
+    runIntroTactic tac
+    if (← getUnsolvedGoals).isEmpty then trace[Step] "Main goal solved by post-intro tactic!"; return none
+    traceGoalWithNode "goal after the post-intro tactic"
 
-  /- The prefix length is the number of leaf fvars produced by destructuring the outputs. -/
-  let prefixLength := outputFVars.size
+  let prefixFVars := witnessFVars ++ outputFVars
+  let prefixLength := prefixFVars.size
+  let prefixIsProp ← withMainContext do
+    prefixFVars.mapM fun fv => do isProp (← fv.getType)
 
   let mkFreshAnon (isProp : Bool) :=
     if isProp then mkFreshAnonPropUserName else mkFreshUserName `x
 
-  /- Names for the already-introduced output fvars (one name per leaf): we use the
-     user-provided ids when available, and generate fresh names otherwise. -/
-  let outputIds ← (Array.range prefixLength).mapM fun i => do
+  let prefixIds ← (Array.range prefixLength).mapM fun i => do
     if h : i < args.ids.size then
       match args.ids[i] with
       | some n => pure n
-      | none => mkFreshUserName `x
-    else mkFreshUserName `x
+      | none => mkFreshAnon prefixIsProp[i]!
+    else mkFreshAnon prefixIsProp[i]!
 
   /- Associate every output fvar with the name we picked for it, so that when naming the
      post-conditions we can resolve references to the outputs back to those names. -/
   let outputNames : Std.HashMap FVarId Name :=
     (Array.range prefixLength).foldl (init := ∅) fun m i =>
-      m.insert outputFVars[i]! outputIds[i]!
+      m.insert prefixFVars[i]! prefixIds[i]!.eraseMacroScopes
 
   /- Now compute the prop-status and the names of the remaining leading binders (these are
      the post-conditions and existential variables to introduce).
@@ -892,13 +886,8 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTr
   let (postsIsProp, postsIdsArr) ← goal.withContext do
     let type ← instantiateMVars (← goal.getType)
     forallTelescope type.consumeMData fun fvars _ => do
-      /- Destructuring the outputs leaves projections behind (`(x, y).fst`), which the
-         post-processing reduces later, but the names are picked from these types now:
-         reduce them structurally first, or a post would be named after the tuple. -/
-      let (dsimpCtx, dsimprocs) ← Simp.mkSimpCtx true { failIfUnchanged := false } .dsimp {}
       let typesAndProps : Array (Expr × Bool) ← fvars.mapM fun fv => do
         let ty ← inferType fv
-        let (ty, _) ← Lean.Meta.dsimp ty dsimpCtx dsimprocs
         pure (ty, ← isProp ty)
 
       /- Total number of "logical" outputs+post slots, used for the user-provided-id check. -/
@@ -944,12 +933,12 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTr
   /- The postfix length: the remaining binders (post-condition and existential variables). -/
   let postfixLength := postsIsProp.size
   trace[Step] "Prefix length (outputs): {prefixLength}, postfix length (post-conditions): {postfixLength}"
-  trace[Step] "output ids: {outputIds}, post ids: {postsIdsArr}"
+  trace[Step] "prefix ids: {prefixIds}, post ids: {postsIdsArr}"
 
   /- Rename the output fvars to the user-provided names. -/
   let mut goal ← getMainGoal
-  for h : i in [0:outputFVars.size] do
-    goal ← goal.rename outputFVars[i] outputIds[i]!
+  for h : i in [0:prefixFVars.size] do
+    goal ← goal.rename prefixFVars[i] prefixIds[i]!
   setGoals [goal]
   traceGoalWithNode "goal after renaming outputs"
 
@@ -971,8 +960,8 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTr
     match n with
     | .str _ s => if s == "_" then none else some n
     | _ => none
-  let outputInfos := outputFVars.mapIdx fun i fv =>
-    { fvarId := fv, name? := mkName? (outputIds.getD i `_), isProp := false : Output }
+  let outputInfos := prefixFVars.mapIdx fun i fv =>
+    { fvarId := fv, name? := mkName? (prefixIds.getD i `_), isProp := prefixIsProp[i]! : Output }
   let postInfos := posts.mapIdx fun i fv =>
     { fvarId := fv, name? := mkName? (postsIds.getD i `_), isProp := postsIsProp.getD i true : Output }
   let introducedVars := outputInfos ++ postInfos
