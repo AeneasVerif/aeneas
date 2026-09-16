@@ -210,13 +210,8 @@ theorem insertBlock.spec (s : FreeList) (entries : Entries R)
     ⦃ freeListRep s entries ∗ blockOwn b payload ⦄
       insertBlock s b.header
     ⦃⇓ s' => freeListRep s' ((b, payload) :: entries)⦄ := by
-  unfold insertBlock freeListRep
-  simp only [firstHeader_cons, freeBlocks_cons]
-  rw [sep_assoc_eq]
-  iintro hfirst
-  unfold blockOwn
+  unfold insertBlock freeListRep blockOwn
   iintro
-  rw [hfirst]
   step*
 
 /-- Exact pop specification.  It removes precisely the first ghost entry,

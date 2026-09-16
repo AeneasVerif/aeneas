@@ -468,9 +468,8 @@ theorem reverse_append_spec (l acc : Link α) (xs ys : List α) :
           simp only [isList, reverseAppend, List.reverse_cons, List.append_assoc,
             List.singleton_append]
           iintro next
-          step* 2
-          step with ih (l := next) (acc := some p) (ys := x :: ys)
-          iframe
+          have hRecur (start stop : Link α) := ih (l := start) (acc := stop) (ys := x :: ys)
+          step*
 
 def reverse (xs : List α) (l : Link α) : Result (Link α) :=
   reverseAppend xs l none
@@ -543,12 +542,10 @@ theorem sum_list_spec (l : Link Int) (xs : List Int) :
     intro x acc ys
     step*
   unfold sumList
-  apply ispec_conseq
-    (fold_right_spec (fun _ : Int => emp)
+  step with fold_right_spec (fun _ : Int => emp)
       (fun ys acc => ⌜acc = ys.foldr (· + ·) 0⌝)
-      (fun x acc => pure (x + acc)) 0 l xs hf)
-  · iframe
-  · iframe
+      (fun x acc => pure (x + acc)) 0 l xs hf
+  iframe
 
 end LinkedList
 
