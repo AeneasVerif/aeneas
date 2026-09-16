@@ -55,7 +55,7 @@ scalar @[expose] def core.cmp.impls.PartialOrd'S.ge (x y : «%S») : Bool := x.v
 
 /- Trait implementation: [core::cmp::impls::{core::cmp::PartialOrd<u8> for u8}]
    Name pattern: core::cmp::PartialOrd<u8, u8> -/
-scalar @[reducible, expose] def core.cmp.PartialOrd'S : core.cmp.PartialOrd «%S» «%S» := {
+scalar @[expose, reducible] def core.cmp.PartialOrd'S : core.cmp.PartialOrd «%S» «%S» := {
   partialEqInst := core.cmp.PartialEq'S
   partial_cmp := liftFun2 core.cmp.impls.PartialOrd'S.partial_cmp
   lt := liftFun2 core.cmp.impls.PartialOrd'S.lt

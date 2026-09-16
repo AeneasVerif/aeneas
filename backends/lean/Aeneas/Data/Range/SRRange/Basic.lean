@@ -31,12 +31,12 @@ namespace SRRange
 universe u v
 
 /-- The number of elements in the range. -/
-@[simp, expose] def size (r : SRRange) : Nat := (r.stop - r.start + r.step - 1) / r.step
+@[expose, simp] def size (r : SRRange) : Nat := (r.stop - r.start + r.step - 1) / r.step
 
 /-- A bound of the number of elements in the range -/
-@[simp, expose] def sizeBound (r : SRRange) : Nat := r.stop - r.start
+@[expose, simp] def sizeBound (r : SRRange) : Nat := r.stop - r.start
 
-@[inline, expose] protected def forIn' [Monad m] (range : SRRange) (init : β)
+@[expose, inline] protected def forIn' [Monad m] (range : SRRange) (init : β)
     (f : (i : Nat) → i ∈ range → β → m (ForInStep β)) : m β :=
   let rec @[specialize] loop (maxSteps : Nat) (b : β) (i : Nat)
       (hs : (i - range.start) % range.step = 0) (hl : range.start ≤ i := by omega) : m β := do

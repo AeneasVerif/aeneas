@@ -47,7 +47,7 @@ inductive IScalarTy where
 | I128
 deriving BvEnumToBitVec
 
-@[implicit_reducible, expose]
+@[expose, implicit_reducible]
 def UScalarTy.numBits (ty : UScalarTy) : Nat :=
   match ty with
   | Usize => System.Platform.numBits
@@ -57,7 +57,7 @@ def UScalarTy.numBits (ty : UScalarTy) : Nat :=
   | U64 => 64
   | U128 => 128
 
-@[implicit_reducible, expose]
+@[expose, implicit_reducible]
 def IScalarTy.numBits (ty : IScalarTy) : Nat :=
   match ty with
   | Isize => System.Platform.numBits
@@ -523,11 +523,11 @@ theorem IScalar.bound_suffices (ty : IScalarTy) (x : Int) :
     apply Int.emod_lt_of_pos; simp
   { bv := ⟨ x', h ⟩ }
 
-@[reducible, expose] def UScalar.ofNat {ty : UScalarTy} (x : Nat)
+@[expose, reducible] def UScalar.ofNat {ty : UScalarTy} (x : Nat)
   (hInBounds : x ≤ UScalar.cMax ty := by decide) : UScalar ty :=
   UScalar.ofNatCore x (UScalar.bound_suffices ty x hInBounds)
 
-@[reducible, expose] def IScalar.ofInt {ty : IScalarTy} (x : Int)
+@[expose, reducible] def IScalar.ofInt {ty : IScalarTy} (x : Int)
   (hInBounds : IScalar.cMin ty ≤ x ∧ x ≤ IScalar.cMax ty := by decide) : IScalar ty :=
   IScalar.ofIntCore x (IScalar.bound_suffices ty x hInBounds)
 

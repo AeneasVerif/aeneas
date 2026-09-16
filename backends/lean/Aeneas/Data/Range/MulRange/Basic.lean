@@ -30,7 +30,7 @@ instance : Membership Nat MulRange where
 namespace MulRange
 universe u v
 
-@[inline, expose] protected def forIn' [Monad m] (range : MulRange) (init : β)
+@[expose, inline] protected def forIn' [Monad m] (range : MulRange) (init : β)
     (f : (i : Nat) → i ∈ range → β → m (ForInStep β)) : m β :=
   let rec @[specialize] loop (maxSteps : Nat) (b : β) (i : Nat)
       (hs : ∃ k, i = range.start * range.mul ^ k)

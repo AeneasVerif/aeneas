@@ -29,7 +29,7 @@ instance : Membership Nat DivRange where
 namespace DivRange
 universe u v
 
-@[inline, expose] protected def forIn' [Monad m] (range : DivRange) (init : β)
+@[expose, inline] protected def forIn' [Monad m] (range : DivRange) (init : β)
     (f : (i : Nat) → i ∈ range → β → m (ForInStep β)) : m β :=
   let rec @[specialize] loop (maxSteps : Nat) (b : β) (i : Nat)
       (hs : ∃ k, i = range.start / range.divisor ^ k)

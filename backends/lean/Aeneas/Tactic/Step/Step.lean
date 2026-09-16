@@ -26,7 +26,7 @@ a bug and doesn't give the proper arguments: this way we make sure tactics like 
 will not crash if there is a bug in the code which adds the pretty equality (this is only useful
 information for the user).
 -/
-@[irreducible, expose] def prettyMonadEq {m : Type u → Type w} {α : Type u} {β : Type v}
+@[expose, irreducible] def prettyMonadEq {m : Type u → Type w} {α : Type u} {β : Type v}
   (_ : m α) (_ : β) : Type := Unit
 
 macro:max "[> " "let" y:term " ← " x:term " <]"   : term => `(prettyMonadEq $x $y)
