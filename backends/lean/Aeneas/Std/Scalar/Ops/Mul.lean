@@ -139,7 +139,7 @@ theorem UScalar.mul_spec {ty} {x y : UScalar ty}
   x * y ⦃ z => (↑z : Nat) = ↑x * ↑y ⦄ := by
   apply spec_mono
   apply mul_bv_spec hmax
-  grind
+  exact fun _ h => h.1
 
 /-- Generic theorem - shouldn't be used much -/
 theorem IScalar.mul_spec {ty} {x y : IScalar ty}
@@ -148,7 +148,7 @@ theorem IScalar.mul_spec {ty} {x y : IScalar ty}
   x * y ⦃ z => (↑z : Int) = ↑x * ↑y ⦄ := by
   apply spec_mono
   apply @mul_bv_spec ty x y (by scalar_tac) (by scalar_tac)
-  grind
+  exact fun _ h => h.1
 
 uscalar @[step] theorem «%S».mul_spec {x y : «%S»} (hmax : x.val * y.val ≤ «%S».max) :
   x * y ⦃ z => (↑z : Nat) = ↑x * ↑y ⦄ :=
