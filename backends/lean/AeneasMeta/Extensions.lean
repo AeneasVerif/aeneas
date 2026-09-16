@@ -14,6 +14,8 @@ namespace Extensions
 open Lean Elab Term Meta
 open Utils
 
+/- This `expose` is required for several of the following definitions but the errors include the comment that
+this is "a current compiler limitation for `module`s that may be lifted in the future". -/
 @[expose] def ListDeclarationExtension (α : Type) := SimplePersistentEnvExtension α (List α)
 
 instance : Inhabited (ListDeclarationExtension α) :=
@@ -28,6 +30,8 @@ def mkListDeclarationExtension [Inhabited α] (name : Name := by exact decl_name
     toArrayFn     := fun l => l.toArray
   }
 
+/- This `expose` is required for several of the following definitions but the errors include the comment that
+this is "a current compiler limitation for `module`s that may be lifted in the future". -/
 @[expose] def SetDeclarationExtension := SimplePersistentEnvExtension Name NameSet
 
 def mkSetDeclarationExtension (name : Name := by exact decl_name%) :
