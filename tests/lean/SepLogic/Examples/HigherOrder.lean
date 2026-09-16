@@ -35,8 +35,8 @@ theorem applyTwice.spec (callback : Ptr Nat → Result Unit) (transform : Nat �
     ⦃ pointer ↦ value ⦄ applyTwice callback pointer
       ⦃⇓ pointer ↦ transform (transform value)⦄ := by
   unfold applyTwice
-  step with callbackSpec pointer value
-  exact callbackSpec pointer (transform value)
+  unfold CallbackSpec at callbackSpec
+  step*
 
 def increment (pointer : Ptr Nat) : Result Unit := do
   let value ← read pointer
@@ -53,9 +53,8 @@ def incrementTwice (pointer : Ptr Nat) : Result Unit :=
 
 theorem incrementTwice.spec (pointer : Ptr Nat) (value : Nat) :
     ⦃ pointer ↦ value ⦄ incrementTwice pointer
-      ⦃⇓ pointer ↦ (value + 1) + 1⦄ := by
-  unfold incrementTwice
-  exact applyTwice.spec increment (fun current => current + 1)
+      ⦃⇓ pointer ↦ (value + 1) + 1⦄ :=
+  applyTwice.spec increment (fun current => current + 1)
     pointer value increment.spec
 
 /-! ## Result-style higher-order specifications
@@ -74,8 +73,7 @@ def applyF (f : Nat → Result Nat) (x : Nat) : Result Nat :=
 @[step]
 theorem applyF.spec (f : Nat → Result Nat) (x : Nat) (post : Nat → Prop)
     (hf : (f x) ⦃⇓ y => post y⦄) :
-    (applyF f x) ⦃⇓ y => post y⦄ := by
-  simpa [applyF] using hf
+    (applyF f x) ⦃⇓ y => post y⦄ := hf
 
 example (x : Nat) :
     (applyF (fun y => pure (y + 1)) x) ⦃⇓ y => y = x + 1⦄ := by

@@ -18,5 +18,3 @@ import SepLogic.Examples.VerusPageTable
 import SepLogic.Examples.VerusStd
 import SepLogic.Examples.VerusVerifiedVec
 import SepLogic.Examples.YOLOCancel
-import SepLogic.Examples.scripts.ProofScore
-import SepLogic.Examples.scripts.SourceLoc

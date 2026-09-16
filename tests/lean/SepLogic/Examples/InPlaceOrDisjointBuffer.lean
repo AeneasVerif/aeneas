@@ -21,7 +21,7 @@ import Aeneas.Std.Array.Array
 open Aeneas.Std (Result Slice)
 open SepLogic
 open Aeneas
-open Aeneas.SepLogic.WP
+open Aeneas.SepLogic
 
 namespace core.core_arch.x86
 
@@ -244,7 +244,7 @@ theorem InPlaceOrDisjointBuffer.len.spec {T : Type}
     ⦃ n => n.val = b.val.length ⦄ := by
   unfold common.InPlaceOrDisjointBuffer.len
   step*
-  simp [common.InPlaceOrDisjointBuffer.val]
+  · simp [*, common.InPlaceOrDisjointBuffer.val]
 
 /-- `src` returns the source side. -/
 @[step]
@@ -254,7 +254,7 @@ theorem InPlaceOrDisjointBuffer.src.spec {T : Type}
     ⦃ s => s = b.val.src ⦄ := by
   unfold common.InPlaceOrDisjointBuffer.src
   step*
-  simp [common.InPlaceOrDisjointBuffer.val]
+  · simp [*, common.InPlaceOrDisjointBuffer.val]
 
 /-- `dst` returns the destination side plus two backward functions:
     - `back1` updates the destination buffer
@@ -269,8 +269,7 @@ theorem InPlaceOrDisjointBuffer.dst.spec {T : Type}
       (∀ s' : Slice T, s'.length = b.val.length →
         (back1 s').val = b.val.setDst s') ∧
       (∀ b' : common.InPlaceOrDisjointBuffer T, (back2 b').val = b'.val) ⦄ := by
-  unfold common.InPlaceOrDisjointBuffer.dst
-  step*
+  apply (Aeneas.Std.WP.spec_ok _).mpr
   simp [common.InPlaceOrDisjointBuffer.val]
 
 /-- `new_disjoint_from_slices` builds a disjoint-mode buffer. -/
@@ -283,7 +282,7 @@ theorem InPlaceOrDisjointBuffer.new_disjoint_from_slices.spec {T : Type}
       (∀ b' : common.InPlaceOrDisjointBuffer T, back b' = b'.val.dst) ⦄ := by
   unfold common.InPlaceOrDisjointBuffer.new_disjoint_from_slices
   simp only [h_len, ↓reduceDIte]
-  step*
+  apply (Aeneas.Std.WP.spec_ok _).mpr
   simp [common.InPlaceOrDisjointBuffer.val]
 
 /-! ## SIMD accessors -/
@@ -301,8 +300,8 @@ theorem InPlaceOrDisjointBuffer.loadu_si128_src.spec
     simpa [common.InPlaceOrDisjointBuffer.val] using h
   unfold common.InPlaceOrDisjointBuffer.loadu_si128_src
   step*
-  simp [common.InPlaceOrDisjointBuffer.val,
-    common.InPlaceOrDisjointBuffer.getBlock_val _ _ hsrc]
+  · simp [*, common.InPlaceOrDisjointBuffer.val,
+      common.InPlaceOrDisjointBuffer.getBlock_val _ _ hsrc]
 
 /-- `loadu_si128_dst b i` reads the 16 bytes of the destination side at offset `i`. -/
 @[step]
@@ -317,8 +316,8 @@ theorem InPlaceOrDisjointBuffer.loadu_si128_dst.spec
     simpa [common.InPlaceOrDisjointBuffer.val] using h
   unfold common.InPlaceOrDisjointBuffer.loadu_si128_dst
   step*
-  simp [common.InPlaceOrDisjointBuffer.val,
-    common.InPlaceOrDisjointBuffer.getBlock_val _ _ hdst]
+  · simp [*, common.InPlaceOrDisjointBuffer.val,
+      common.InPlaceOrDisjointBuffer.getBlock_val _ _ hdst]
 
 /-- `storeu_si128 b i v` splices the 16 bytes of `v` into the destination side. -/
 @[step]
@@ -331,9 +330,8 @@ theorem InPlaceOrDisjointBuffer.storeu_si128.spec
       b'.val = b.val.setDst b'.val.dst ∧
       (∀ b'' : common.InPlaceOrDisjointBuffer Aeneas.Std.U8,
         (back b'').val = b''.val) ⦄ := by
-  have _hi : i.val ≤ b.val.length := by omega
-  unfold common.InPlaceOrDisjointBuffer.storeu_si128
-  step*
+  have _hi : i.val ≤ b.val.length := by agrind
+  apply (Aeneas.Std.WP.spec_ok _).mpr
   simp [common.InPlaceOrDisjointBuffer.val]
 
 /-! ## The `aes_xmm` `u8` shims -/

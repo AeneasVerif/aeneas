@@ -359,30 +359,17 @@ theorem compareCells.disjoint_spec [DecidableEq α]
                   step*
               | cons value values =>
                   simp only [ownsCells]
-                  rw [sep_comm_eq _ (⌜False⌝)]
-                  apply ispec_ipure
-                  intro hfalse
+                  iintro
                   contradiction
           | cons q rightCells =>
               cases rightValues with
               | nil =>
                   simp only [ownsCells]
-                  rw [sep_comm_eq _ (⌜False⌝)]
-                  apply ispec_ipure
-                  intro hfalse
+                  iintro
                   contradiction
               | cons rightValue rightValues =>
                   simp only [ownsCells_cons, compareCells]
-                  step* 2
-                  split
-                  · rename_i heq
-                    subst rightValue
-                    simp only [List.cons.injEq, true_and]
-                    step with ih rightCells leftValues rightValues
-                    iframe
-                  · rename_i hne
-                    simp only [List.cons.injEq, hne, false_and, decide_false]
-                    step*
+                  step*
 
 /-- Comparing a cell list with itself needs only one ownership predicate.
 Each pair of immutable reads returns the same owned value, and recursion
@@ -407,8 +394,6 @@ theorem compareCells.self_spec [DecidableEq α]
           contradiction
       | cons value values =>
           simp only [compareCells]
-          step* 2
-          rw [if_pos True.intro]
           step*
 
 /-- Disjoint-input form of Pulse `compare`: the result exactly characterizes

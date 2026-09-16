@@ -380,9 +380,9 @@ theorem pureSLExists.spec (value : Nat) :
       ∃ witness : Nat, ⌜result = witness ∧ witness = value⌝
     ⦄ := by
   unfold pureSLExists
-  apply (ispec_ok _).mpr
+  step*
   refine entails_exists_r value ?_
-  exact (entails_emp_ipure_iff _).2 ⟨rfl, rfl⟩
+  iframe
 
 def consumePureSLExists (value : Nat) : Result Nat := do
   let result ← pureSLExists value
@@ -513,13 +513,9 @@ theorem makeCounter.spec :
       ⌜∀ n, ⦃ p ↦ n ⦄ increment () ⦃⇓ value => p ↦ (n + 1) ∗ ⌜value = n + 1⌝ ⦄⌝
   ⦄ := by
   unfold makeCounter
-  apply ispec_bind' (alloc.spec 0)
-  intro p
-  apply (ispec_ok _).mpr
-  apply entails_exists_r p
-  exact entails_trans
-    (pure_sep_intro (p ↦ 0) fun n => increment.spec p n)
-    (sep_comm _ _).mp
+  step as ⟨p⟩
+  have hIncrement := increment.spec p
+  step*
 
 def countToFive : Result Nat :=
   Aeneas.Std.bind makeCounter fun increment => do
@@ -558,7 +554,7 @@ example (v : Nat) (P : IProp) :
 judgment again, so a legacy pure specification applies to a pure goal directly. -/
 example (v : Nat) : old_add1 v ⦃ y => y = v + 1 ⦄ := by
   step with old_add1.spec
-  all_goals simp_all
+  assumption
 
 /-- **Separation → pure.**  There is nothing to lift in this direction either,
 but for the opposite reason: the boundary is gone.  `spec` *is* `ispec` read at
@@ -701,23 +697,20 @@ theorem callWith.spec_pure (f : Nat → Result Nat) (x : Nat) (post : Nat → Pr
 /-- A pure closure meets the pure contract. -/
 example (x : Nat) : callWith bump x ⦃ y => y = x + 1 ⦄ := by
   apply callWith.spec_pure
-  step
-  all_goals simp_all
+  step*
 
 /-- A callee's SL ispec at `emp` with a pure postcondition also meets the
 pure contract; its spatial implementation is already verified separately. -/
 example (x : Nat) : ⦃ emp ⦄ callWith bumpBoxed x ⦃⇓ y => ⌜y = x + 1⌝⦄ := by
   apply callWith.spec_pure
-  step
-  all_goals simp_all
+  step*
 
 /-- The whole higher-order call, pure contract and all, framed into a heap
 proof by `step` — framing an `ispec` is what `step` already does. -/
 example (p : Ptr Nat) (v x : Nat) :
     ⦃ p ↦ v ⦄ callWith bumpBoxed x ⦃⇓ y => ⌜y = x + 1⌝ ∗ p ↦ v⦄ := by
   step with (callWith.spec_pure (post := fun y => y = x + 1))
-  · step
-    all_goals simp_all
+  · step*
 
 /-- A *separating* contract.  One specification covers a pure closure, a heap
 closure, and a closure that mixes them. -/
@@ -764,14 +757,14 @@ theorem updateWith.spec (f : Nat → Result Nat) (p : Ptr Nat) (v w : Nat)
 example (p : Ptr Nat) (v : Nat) :
     ⦃ p ↦ v ⦄ updateWith bump p ⦃⇓ p ↦ v + 1⦄ := by
   step* +inferPost
-  all_goals simp_all
+  assumption
 
 /-- The already-proved SL specification of `bumpBoxed` supplies the pure
 callback contract, without opening its spatial implementation in a pure goal. -/
 example (p : Ptr Nat) (v : Nat) :
     ⦃ p ↦ v ⦄ updateWith bumpBoxed p ⦃⇓ p ↦ v + 1⦄ := by
   step* +inferPost
-  all_goals simp_all
+  assumption
 
 /-- Nesting: a higher-order call inside a higher-order call, pure contract on
 the inside and a separating one on the outside. -/
@@ -780,9 +773,8 @@ example (p : Ptr Nat) (v : Nat) :
       ⦃⇓ y => ⌜y = v + 1⌝ ∗ p ↦ v + 1⦄ := by
   apply callWith.spec
   step with (updateWith.spec (w := v + 1))
-  · step
-    all_goals simp_all
-  · step
+  · step*
+  · step*
 
 end Ex
 
@@ -889,15 +881,13 @@ example (x : Nat) :
       add1 y) ⦃ y => y = x + 2 ⦄ := by
   step
   step
-  all_goals simp_all
+  agrind
 
 example (x : Nat) :
     (do
       let y ← add1 x
       add1 y) ⦃ y => y = x + 2 ⦄ := by
-  step
-  step
-  all_goals simp_all
+  step*
 
 def add2 (x : Nat) := Result.ok (x + 1, x + 2)
 

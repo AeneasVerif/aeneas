@@ -200,7 +200,7 @@ example (m : Result Nat) (h : m ⦃ n => n = 7 ⦄div) (P : IProp) :
 example (m : Result Nat) (h : ⦃ emp ⦄ m ⦃⇓ n => ⌜n = 7⌝ ⦄) :
     m ⦃ n => n = 7 ⦄div := by
   step with h
-  all_goals simp_all
+  assumption
 example (m : Result Nat) (h : ⦃ emp ⦄ m ⦃⇓ n => ⌜n = 7⌝ ⦄div) :
     m ⦃ n => n = 7 ⦄div := by step*
 
@@ -316,12 +316,12 @@ example (m : Result Nat) (p : Ptr Nat)
     m ⦃ n => n = 0 ⦄ := by
   fail_if_success solve | step with _hSpatial
   step with hPure
-  all_goals simp_all
+  assumption
 
 example : totalPure 0 ⦃ n => n = 0 ⦄ := by
   fail_if_success step with (totalSpatial.spec 1)
   step with totalPure.spec
-  all_goals simp_all
+  assumption
 
 example : True := by
   fail_if_success
