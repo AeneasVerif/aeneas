@@ -288,18 +288,10 @@ theorem readValue.spec (v : Vector α) (contents : List α) (cap i : Nat) :
       ⦃⇓ result => ⌜result = contents[i]?⌝ ∗ owns v contents cap⦄ := by
   unfold readValue length
   iintro initCells suffix hcells _ _ _
-  step
-  split
-  · rename_i hi
-    unfold PulseArray.readAt
-    rw [hcells]
-    step with readInitialized.spec initCells suffix contents i hi
-    simp_all only [join_map_some]
-    step*
-  · rename_i hi
-    have hout : contents[i]? = none := List.getElem?_eq_none (by omega)
-    simp only [hout]
-    step*
+  have hRead := readInitialized.spec initCells suffix contents i
+  unfold PulseArray.readAt
+  rw [hcells]
+  step*
 
 /-! ## Post-resize fixed-capacity append kernel -/
 
@@ -317,7 +309,8 @@ theorem pushNoResize.spec
           cap⦄ := by
   unfold pushNoResize length capacity
   iintro initCells suffix hcells hprefix htotal hcapacity
-  step
+  step as ⟨size, hsize⟩
+  subst size
   simp only [hcapacity]
   split
   · rename_i hroom
@@ -325,7 +318,7 @@ theorem pushNoResize.spec
       intro hSuffixEmpty
       subst suffix
       simp only [List.length_nil, Nat.add_zero] at htotal
-      omega
+      agrind
     cases suffix with
     | nil => contradiction
     | cons next suffix =>
@@ -343,11 +336,11 @@ theorem pushNoResize.spec
             (initCells ++ [next]).length + suffix.length = cap := by
           simp only [List.length_cons] at htotal
           simp only [List.length_append, List.length_cons, List.length_nil]
-          omega
+          agrind
         simp only [hroom, decide_true]
         step*
   · rename_i hfull
-    have hsuffixLength : suffix.length = 0 := by omega
+    have hsuffixLength : suffix.length = 0 := by agrind
     have hsuffix : suffix = [] := List.eq_nil_of_length_eq_zero hsuffixLength
     subst suffix
     simp only [hfull, decide_false]

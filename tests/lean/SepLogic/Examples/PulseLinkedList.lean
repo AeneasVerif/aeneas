@@ -337,7 +337,7 @@ theorem split.spec (n : Nat) (x : Link α) (xs : List α)
     ⦃ isList x xs ⦄ split n x
       ⦃⇓ tail => isList x (xs.take n) ∗ isList tail (xs.drop n)⦄ := by
   induction n generalizing x xs with
-  | zero => omega
+  | zero => agrind
   | succ n ih =>
       rcases xs with _ | ⟨v, xs⟩
       · simp at hle
@@ -358,9 +358,8 @@ theorem split.spec (n : Nat) (x : Link α) (xs : List α)
                 · iframe
             | succ n =>
                 simp only [split, List.take, List.drop]
-                step
-                step with ih (x := next) (xs := xs) (by omega) (by simpa using hle)
-                iframe
+                step*
+                · agrind
 
 /-- `insert` splits the exact view and inserts `item` at index `n`. -/
 @[step]
@@ -370,9 +369,11 @@ theorem insert.spec (n : Nat) (x : Link α) (xs : List α) (item : α)
       ⦃⇓ isList x (xs.take n ++ item :: xs.drop n)⦄ := by
   have htake : xs.take n ≠ [] := by
     cases n with
-    | zero => omega
+    | zero => agrind
     | succ n =>
-        cases xs <;> simp_all
+        cases xs
+        · simp at hlt
+        · simp
   unfold insert
   have hle := Nat.le_of_lt hlt
   step*
@@ -409,9 +410,8 @@ theorem reverseAppend.spec (x acc : Link α) (xs ys : List α) :
           simp only [isList, reverseAppend, List.reverse_cons, List.append_assoc,
             List.singleton_append]
           iintro next
-          step* 2
-          step with ih (x := next) (acc := some p) (ys := v :: ys)
-          iframe
+          have hRecur (start stop : Link α) := ih (x := start) (acc := stop) (ys := v :: ys)
+          step*
 
 /-- `reverse` consumes the original orientation and returns exact ownership in
 reverse pure-list order. -/

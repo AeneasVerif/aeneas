@@ -5,7 +5,7 @@ import SepLogic.Examples.Basic
 /-!
 # Running verified programs
 
-`Aeneas.SepLogic.ST` turns a proved ispec into an execution.  These are the tests
+`Aeneas.SepLogic.Semantics` turns a proved ispec into an execution. These are the tests
 that it really executes, that what it computes agrees with what the ispec
 predicts, and that the proof it carries is available without running anything.
 -/
@@ -40,7 +40,7 @@ example : (execClosed roundTrip roundTrip.spec).1 = 42 :=
   execClosed_post roundTrip roundTrip.spec
 
 /-- And the execution the interpreter performs is one of the machine of
-`Aeneas.SepLogic.ST`. -/
+`Aeneas.Std.WP`. -/
 example :
     Evaluates roundTrip Heap.empty (execClosed roundTrip roundTrip.spec).1
       (execClosed roundTrip roundTrip.spec).2 :=

@@ -4,7 +4,7 @@ import SepLogic.Examples.Basic
 /-!
 # Partial correctness
 
-`Aeneas.SepLogic.ST` states the divergence-tolerant ispec `dispec`, written
+`Aeneas.Std.WP` states the divergence-tolerant ispec `dispec`, written
 `⦃P⦄ m ⦃⇓ x => Q⦄div`.  These are the tests that it proves what a total ispec
 proves of a program that stops, that the automation drives it — through the
 lifting of the total specifications, which are the ones `@[step]` collects — and
@@ -162,10 +162,7 @@ theorem countdown.spec (p : Ptr Nat) (value : Nat) :
     (dispec_admissible_forall (fun v : Nat => iprop(p ↦ v))
       (fun _ _ => iprop(p ↦ 0))) ?_
   intro loop hLoop v
-  step* 1
-  split
-  · step*
-  · step*
+  step*
 
 /-! ## `dspec_induction` on a separation-logic goal
 
@@ -188,9 +185,6 @@ theorem waitZero.spec (p : Ptr Nat) (value rounds : Nat) :
   revert rounds
   dspec_induction waitZero
   intro loop hLoop rounds
-  step* 1
-  split
-  · step*
-  · exact dispec_ipure.mpr fun _ => hLoop _
+  step*
 
 end SepLogic
