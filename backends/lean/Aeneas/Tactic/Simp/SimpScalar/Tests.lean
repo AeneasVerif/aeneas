@@ -1,6 +1,5 @@
 module
-public import Aeneas.Tactic.Simp.SimpScalar.Lemmas
-public section
+import Aeneas.Tactic.Simp.SimpScalar.Lemmas
 
 /-!
 # simp_scalar regression tests

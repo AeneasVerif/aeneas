@@ -1,7 +1,6 @@
 module
-public import Aeneas.Std.Slice
-public import Aeneas.Tactic.Step
-public section
+import Aeneas.Std.Slice
+import Aeneas.Tactic.Step
 
 open Aeneas Aeneas.Std Result ControlFlow Error
 

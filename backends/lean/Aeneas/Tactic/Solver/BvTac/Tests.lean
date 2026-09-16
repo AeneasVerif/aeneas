@@ -1,7 +1,6 @@
 module
-public import Aeneas.Tactic.Solver.BvTac.BvTac
-public import Aeneas.Std
-public section
+import Aeneas.Tactic.Solver.BvTac.BvTac
+import Aeneas.Std
 
 /-!
 # bv_tac regression tests

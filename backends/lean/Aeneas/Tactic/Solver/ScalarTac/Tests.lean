@@ -1,6 +1,5 @@
 module
-public import Aeneas.Tactic.Solver.ScalarTac.Lemmas
-public section
+import Aeneas.Tactic.Solver.ScalarTac.Lemmas
 
 namespace Aeneas.Std.ScalarTac.Tests
 

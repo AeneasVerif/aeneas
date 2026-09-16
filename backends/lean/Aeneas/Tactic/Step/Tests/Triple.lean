@@ -1,11 +1,10 @@
 module
-public import Aeneas.Tactic.Step
+import Aeneas.Tactic.Step
 
 /-!
 This file tests the use of a custom triple with `#register_spec_info`
 -/
 
-public section
 
 open Aeneas
 
@@ -29,7 +28,7 @@ theorem Post.entails_iff (P Q : Post α) :
   Iff.rfl
 
 /- A simple state monad manipulating pairs of natural numbers. -/
-@[expose] def TestM (α : Type) := State → α × State
+def TestM (α : Type) := State → α × State
 
 instance : Monad TestM where
   pure value := fun state => (value, state)

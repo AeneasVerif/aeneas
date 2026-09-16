@@ -2,11 +2,10 @@
 Big tests for the #decompose command (performance/stress tests)
 -/
 module
-public import Aeneas.Command.Decompose
-public import Aeneas.Std
-public import Aeneas.Do.Elab
-public import Aeneas.Do.Delab
-public section
+import Aeneas.Command.Decompose
+import Aeneas.Std
+import Aeneas.Do.Elab
+import Aeneas.Do.Delab
 
 open Aeneas.Std
 open Aeneas.Command.Decompose

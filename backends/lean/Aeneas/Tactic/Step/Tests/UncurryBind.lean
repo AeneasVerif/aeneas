@@ -1,8 +1,7 @@
 module
-public import Aeneas.Std.Slice
-public import Aeneas.Tactic.Step
-public import Aeneas.Do
-public section
+import Aeneas.Std.Slice
+import Aeneas.Tactic.Step
+import Aeneas.Do
 
 open Aeneas Aeneas.Std Result
 

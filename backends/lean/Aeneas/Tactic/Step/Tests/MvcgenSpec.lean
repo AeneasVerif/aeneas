@@ -1,8 +1,7 @@
 module
-public import Aeneas.Std.Scalar
-public import Aeneas.Std.Array
-public import Aeneas.Tactic.Step
-public section
+import Aeneas.Std.Scalar
+import Aeneas.Std.Array
+import Aeneas.Tactic.Step
 
 open Aeneas Aeneas.Std Result Std.Do
 set_option mvcgen.warning false

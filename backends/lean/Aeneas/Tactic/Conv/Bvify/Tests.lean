@@ -1,7 +1,6 @@
 module
-public import Aeneas.Tactic.Conv.Bvify.Bvify
-public import Aeneas.Std
-public section
+import Aeneas.Tactic.Conv.Bvify.Bvify
+import Aeneas.Std
 
 /-!
 # bvify regression tests

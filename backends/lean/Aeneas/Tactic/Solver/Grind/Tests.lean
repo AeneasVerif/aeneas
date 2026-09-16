@@ -1,6 +1,5 @@
 module
-public import Aeneas.Tactic.Solver.ScalarTac.Lemmas
-public section
+import Aeneas.Tactic.Solver.ScalarTac.Lemmas
 
 /-!
 # `grind` pattern-selection tests for the Aeneas `.val` projections

@@ -1,8 +1,7 @@
 module
-public import Aeneas.Do
-public import Aeneas.Std.Slice
-public import Aeneas.Tactic.Step
-public section
+import Aeneas.Do
+import Aeneas.Std.Slice
+import Aeneas.Tactic.Step
 
 /-! # `introOutputs` tests -/
 

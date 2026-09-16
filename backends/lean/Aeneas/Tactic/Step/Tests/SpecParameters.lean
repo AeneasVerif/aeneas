@@ -1,6 +1,5 @@
 module
-public import Aeneas.Tactic.Step
-public section
+import Aeneas.Tactic.Step
 
 open Aeneas Aeneas.Std Result
 

@@ -1,8 +1,7 @@
 module
-public import Aeneas.Std
-public import Aeneas.Tactic.Step
+import Aeneas.Std
+import Aeneas.Tactic.Step
 
-@[expose] public section
 
 /-! # Coinductive specifications over `ITree`s
 
@@ -164,4 +163,3 @@ instance : MonoBind ITreeC := instMonoBindITree
 
 end Aeneas.Tactic.Step.Tests.Coin
 
-end

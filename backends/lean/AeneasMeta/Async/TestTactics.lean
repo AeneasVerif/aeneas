@@ -5,7 +5,6 @@ public meta import AeneasMeta.Utils
 public meta import AeneasMeta.Async.Async
 public meta import AeneasMeta.Simp.Simp
 public import Lean
-public section
 
 /-! We're putting the tactics used in the tests in a file different from the tests themselves because
   running tactics from the current file waits on compilation of all definitions.
