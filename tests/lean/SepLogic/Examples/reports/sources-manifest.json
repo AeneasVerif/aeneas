@@ -169,9 +169,9 @@
       ]
     },
     {
-      "lean": "EqOrDisj.lean",
+      "lean": "InPlaceOrDisjointBuffer.lean",
       "project": "SymCRust",
-      "note": "Port of `InPlaceOrDisjointBuffer<'a, T>`.",
+      "note": "Combined pointer model and generated-code prototype of `InPlaceOrDisjointBuffer<'a, T>`, including stateful backward functions and full 16-byte accesses.",
       "safeRust": {
         "verdict": "no",
         "reason": "The type is a pair of raw pointers whose safety condition is exactly `src == dst` or `src` and `dst` disjoint, and its `unsafe` constructor asks the caller for it. Safe Rust can encode the two shapes as an enum — `&mut [T]` in place, `(&[T], &mut [T])` disjoint — but the aliasing choice then becomes a run-time tag matched at every call site, instead of the ghost state this file makes it."
@@ -190,14 +190,7 @@
           "note": "`InOutBuf<'inp, 'out, T>`: the same in-place-or-disjoint buffer pair, in production cryptographic Rust, with a safe API over raw pointers."
         }
       ],
-      "sources": [
-        {
-          "url": "https://github.com/microsoft/VCR/blob/main/SymCRust/src/common.rs",
-          "language": "rust",
-          "downloadable": false,
-          "reason": "`microsoft/VCR` is not publicly readable."
-        }
-      ]
+      "sources": []
     },
     {
       "lean": "HigherOrder.lean",
