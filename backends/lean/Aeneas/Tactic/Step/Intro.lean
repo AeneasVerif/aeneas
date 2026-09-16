@@ -19,6 +19,23 @@ namespace Aeneas.Step.Intro
 
 open Lean Meta Elab Tactic
 
+theorem forall_unit {p : Prop} : (Unit → p) ↔ p :=
+  ⟨fun h => h (), fun h _ => h⟩
+
+/-- Record the output binder index. -/
+def markOutputIndex (goal : MVarId) (index : Nat) : MetaM MVarId := do
+  if index == 0 then return goal
+  goal.replaceTargetDefEq
+    (.mdata (KVMap.empty.setNat `aeneas.step.outputIndex index) (← goal.getType))
+
+def takeOutputIndex (goal : MVarId) : MetaM (Option Nat × MVarId) := do
+  if let .mdata data body := ← goal.getType then
+    if let some (.ofNat index) := data.find `aeneas.step.outputIndex then
+      let data := data.erase `aeneas.step.outputIndex
+      let body := if data.isEmpty then body else mkMData data body
+      return (some index, ← goal.replaceTargetDefEq body)
+  return (none, goal)
+
 /-- Whether `e` consists only of outputs, projections, and constructors. -/
 partial def isOutputLike (e : Expr) : MetaM Bool := do
   let e := e.consumeMData
@@ -256,6 +273,8 @@ elab (name := introSplit) "intro_split" : tactic => do
     replaceMainGoal [goal]
     return
   let (reverted, goal) ← goal.revert ordered (preserveOrder := true)
-  replaceMainGoal [(← goal.introNP reverted.size).2]
+  let goal := (← goal.introNP reverted.size).2
+  let outputIndex := if factIdx > 0 then reverted.idxOf introduced[0]! else 0
+  replaceMainGoal [← markOutputIndex goal outputIndex]
 
 end Aeneas.Step.Intro

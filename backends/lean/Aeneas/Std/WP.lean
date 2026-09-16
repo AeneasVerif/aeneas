@@ -1,5 +1,6 @@
 import Aeneas.Std.Primitives
 import Aeneas.Std.Delab
+import AeneasMeta.Simp
 import Std.Do
 import Aeneas.Tactic.Solver.Grind.Init
 import Aeneas.Std.Spec
@@ -885,6 +886,17 @@ end Aeneas.Std
 
 namespace Aeneas.Std.WP
 
+/-- Normalize logical facts exposed after output destructuring. -/
+elab (name := intro_step_post) "intro_step_post" : tactic => do
+  let _ ← Aeneas.Simp.simpAt true
+    { maxDischargeDepth := 1, failIfUnchanged := false, iota := false }
+    { addSimpThms :=
+        #[``Aeneas.Std.uncurry_apply_pair,
+          ``Aeneas.Std.uncurry_eq_prop, ``Aeneas.Std.uncurry_eq_prop_arrow,
+          ``Aeneas.Std.WP.uncurry'_pair, ``Aeneas.Std.WP.uncurry'_eq,
+          ``and_imp, ``exists_imp, ``Aeneas.Step.Intro.forall_unit, ``true_imp_iff] }
+    (.targets #[] true)
+
 -- registers the spec info for use in the step tactic, see Spec.lean
 #register_spec_info {
     spec_name := ``Std.WP.spec
@@ -898,6 +910,7 @@ namespace Aeneas.Std.WP
     /- The premise of the two rules above is a plain `∀ x, P x → …`: introducing its
        binders and splitting the fact among them is all there is to do. -/
     intro_tactic := some ``Aeneas.Step.Intro.introSplit
+    post_intro_tactic := some ``intro_step_post
     to_mvcgen := .some ``Std.WP.spec_to_mvcgen
     liftings := #[]
   }
@@ -912,6 +925,7 @@ namespace Aeneas.Std.WP
     mk_spec_bind := ``Std.WP.dspec_bind
     mk_spec_bind_skip_args := 4
     intro_tactic := some ``Aeneas.Step.Intro.introSplit
+    post_intro_tactic := some ``intro_step_post
     to_mvcgen := .some ``Std.WP.dspec_to_mvcgen
     liftings := #[
       { from_statement := ``Std.WP.spec

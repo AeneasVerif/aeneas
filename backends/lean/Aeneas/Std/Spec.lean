@@ -33,8 +33,14 @@ structure SpecInfo where
   binders of the premise and work on the facts among them — `Aeneas.Step.Intro.intro_split`
   does exactly that, and is all a statement whose premise already is `∀ x, P x → …` needs.
 
+  A tactic which reorders binders must record the output with
+  `Aeneas.Step.Intro.markOutputIndex`.
+
   Without one, `step` introduces the outputs of the premise as it stands. -/
   intro_tactic : Option Lean.Name := none
+
+  /-- Optional normalization after output destructuring; it must not create multiple goals. -/
+  post_intro_tactic : Option Lean.Name := none
 
   to_mvcgen: Option Name
 
