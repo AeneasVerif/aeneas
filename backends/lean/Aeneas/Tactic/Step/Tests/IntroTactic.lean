@@ -156,6 +156,28 @@ example (P : Prop) (h : P) : P := by
 elab "run_intro_split" : tactic => do
   Step.runIntroTactic ``Aeneas.Step.Intro.introSplit
 
+open Lean Meta Elab Tactic in
+elab "run_intro_pending " n:ident : tactic => withMainContext do
+  let n := mkFVar (← getFVarId n)
+  let pending ← mkFreshExprMVar (mkConst ``Nat)
+  let goal ← getMainGoal
+  let worker ← mkFreshExprSyntheticOpaqueMVar ((← goal.getType).replaceFVar n pending)
+  setGoals [worker.mvarId!]
+  Step.runIntroTactic ``Aeneas.Step.Intro.introSplit
+  let proof ← instantiateMVars worker
+  if proof.getAppFn.isConst then
+    throwError "Output normalization generalized a pending obligation"
+  pending.mvarId!.assign n
+  goal.assign worker
+
+example (n : Nat) (P : Nat → Prop) (R : Prop) (hR : R) :
+    ∀ value, value = n ∧ P value → R := by
+  run_intro_pending n
+  intro value heq hP
+  guard_hyp heq : value = n
+  guard_hyp hP : P value
+  exact hR
+
 /- What the tactic introduces is reverted, one binder per fact: `intro_split` splits the
    conjunction it introduces, and the premise comes back with one binder per conjunct. -/
 example (P Q R : Prop) (hR : R) : P ∧ Q → R := by
@@ -163,5 +185,163 @@ example (P Q R : Prop) (hR : R) : P ∧ Q → R := by
   guard_target = P → Q → R
   intro _ _
   exact hR
+
+example (n : Nat) (P Q : Nat → Prop) (R : Prop) (hR : R) :
+    (∃ x, x = n ∧ P x ∧ Q x) → R := by
+  run_intro_split
+  guard_target = P n → Q n → R
+  intro _ _
+  exact hR
+
+example (n : Nat) (P : Nat → Prop) (R : Prop) (hR : R) :
+    (∃ x, P x ∧ n = x) → R := by
+  run_intro_split
+  guard_target = P n → R
+  intro _
+  exact hR
+
+example (b : Bool) (n : Nat) (P Q : Nat → Prop) (R : Prop) (hR : R) :
+    (match b with
+     | true => ∃ x, n = x ∧ P x ∧ Q x
+     | false => ∃ x, P x ∧ x = n) → R := by
+  run_intro_split
+  guard_target = (match b with | true => P n ∧ Q n | false => P n) → R
+  intro _
+  exact hR
+
+example (n : Nat) (P Q R : Prop) (hR : R) :
+    ((n = n → True → Unit → P ∧ Q) ∧ (∃ x, x = n ∧ True)) → R := by
+  run_intro_split
+  guard_target = P → Q → R
+  intro _ _
+  exact hR
+
+example (P Q : Prop) (R : P ∧ Q → Prop) (hR : ∀ h, R h) : ∀ h, R h := by
+  run_intro_split
+  guard_target = ∀ hp hq, R ⟨hp, hq⟩
+  intro hp hq
+  exact hR ⟨hp, hq⟩
+
+example (Q R : Prop) (hR : R) : (Q ∧ ∃ f : Unit → Nat, f () = 0) → R := by
+  run_intro_split
+  guard_target = Q → ∀ f : Unit → Nat, f () = 0 → R
+  intro _ _ _
+  exact hR
+
+elab "run_intro_split_compact" : tactic => do
+  let goal ← Lean.Elab.Tactic.getMainGoal
+  Step.runIntroTactic ``Aeneas.Step.Intro.introSplit
+  let proof ← Lean.instantiateMVars (Lean.mkMVar goal)
+  if (proof.find? fun e =>
+      e.isConstOf ``And.casesOn || e.isConstOf ``And.rec ||
+      e.isConstOf ``Exists.casesOn || e.isConstOf ``Exists.rec).isSome then
+    throwError "intro_split exposed an elimination recursor around its continuation"
+
+example (P : Nat → Prop) (Q R : Prop) (hR : R) :
+    (∃ n, P n ∧ (True → Unit → Q)) → R := by
+  run_intro_split_compact
+  guard_target = ∀ n, P n → Q → R
+  intro _ _ _
+  exact hR
+
+/- Keep let-bound postconditions bundled. -/
+example (compute : Nat → Nat × Nat) (P : Nat → Nat → Nat → Prop) (R : Prop) (hR : R) :
+    ∀ output : Nat × Nat,
+      Aeneas.Std.WP.uncurry' (fun a b =>
+        let (x, y) := compute a
+        P a b x ∧ P a b y) output → R := by
+  run_intro_split
+  guard_target = ∀ output : Nat × Nat,
+    (let (x, y) := compute output.1
+     P output.1 output.2 x ∧ P output.1 output.2 y) → R
+  intro _ _
+  exact hR
+
+open Aeneas.Std Result
+
+def bundled (compute : Nat → Nat × Nat) (n : Nat) : Result (Nat × Nat) :=
+  ok (compute n)
+
+@[local step]
+theorem bundled_spec (compute : Nat → Nat × Nat) (n : Nat) :
+    bundled compute n ⦃ a b =>
+      let (x, y) := compute n
+      a = x ∧ b = y ⦄ := by
+  simp [bundled, Aeneas.Std.WP.uncurry']
+
+example (compute : Nat → Nat × Nat) (n : Nat) :
+    (do let (a, b) ← bundled compute n; ok (a, b)) ⦃ out => out = compute n ⦄ := by
+  step as ⟨a, b, h⟩
+  guard_hyp h : a = (compute n).1 ∧ b = (compute n).2
+  obtain ⟨ha, hb⟩ := h
+  exact Prod.ext ha hb
+
+def conditional (bound : U32) : Result Bool := ok (bound.val = bound.val)
+
+@[local step]
+theorem conditional_spec (bound : U32) :
+    conditional bound ⦃ result => bound.val = 0 → result = true ⦄ := by
+  simp [conditional]
+
+example : conditional 0#u32 ⦃ result => result = true ⦄ := by
+  step as ⟨result, h⟩
+  guard_hyp h : True → result = true
+  exact h trivial
+
+example (f : Result (Nat × Nat))
+    (h : f ⦃ a b => ∃ witness : Bool, a = witness.toNat ∧ a = b ⦄) :
+    (do let (a, b) ← f; ok (a, b)) ⦃ a b => a = b ⦄ := by
+  step with h as ⟨a, b, witness, hw, hab⟩
+  guard_hyp a : Nat
+  guard_hyp b : Nat
+  guard_hyp witness : Bool
+  guard_hyp hw : a = witness.toNat
+  exact hab
+
+example (r : core.result.Result core.convert.Infallible Nat) (e : Nat) (hr : r = .Err e) :
+    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+      Unit (core.convert.FromSame Nat) r
+      ⦃ out => out = .Err e ⦄ := by
+  step with core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual.spec
+  agrind
+
+example (r : core.result.Result core.convert.Infallible Nat) (e : Nat) (hr : r = .Err e) :
+    (do
+      let out ← core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+        Unit (core.convert.FromSame Nat) r
+      ok (out, ()))
+      ⦃ status state =>
+        match status with
+        | .Ok _ => False
+        | .Err error => error = e ∧ state = () ⦄ := by
+  step*
+
+example (f : Result (List Nat)) (n : Nat)
+    (h : f ⦃ result => ∃ hlen : result.length = n, n = result.length ∧ hlen = hlen ⦄) :
+    f ⦃ result => result.length = n ⦄ := by
+  step with h as ⟨result, hlen, hlen'⟩
+  guard_hyp result : List Nat
+  guard_hyp hlen : result.length = n
+  guard_hyp hlen' : n = result.length
+  exact hlen
+
+example (f : Result Bool) (n : Nat) (P : Nat → Prop)
+    (hf : f ⦃ b =>
+      match b with
+      | true => n = n ∧ ∃ j, j < n ∧ ¬ P j
+      | false => True ⦄) :
+    f ⦃ b => b = false ∨ ∃ j, j < n ∧ ¬ P j ⦄ := by
+  step with hf as ⟨b, h⟩
+  cases b
+  · exact Or.inl rfl
+  · obtain ⟨_, j, hj, hnot⟩ := h
+    exact Or.inr ⟨j, hj, hnot⟩
+
+example (f : Result Bool) (P : Prop)
+    (hf : f ⦃ b => b = true ↔ True ∧ P ⦄) :
+    f ⦃ b => b = true ↔ P ⦄ := by
+  step with hf as ⟨b, h⟩
+  guard_hyp h : b = true ↔ P
+  exact h
 
 end Aeneas.Tactic.Step.Tests.IntroTactic
