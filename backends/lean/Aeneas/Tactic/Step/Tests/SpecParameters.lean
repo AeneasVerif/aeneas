@@ -48,8 +48,7 @@ theorem paramSpec_bind' {α β : Type} {k : α → Result β} {Pₖ : β → Pro
     mk_spec_bind := ``paramSpec_bind'
     mk_spec_bind_skip_args := 5
     uncurry_elim_tactics := #[
-      ``Std.WP.qimp_spec_unit, ``Std.WP.qimp_unit,
-      ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
+      ``Std.WP.qimp_unit, ``Std.WP.qimp_exists,
       ``Std.WP.forall_unit, ``true_imp_iff]
     qimp_elim_tactics := #[
       ``qimpParam_iff, ``Std.WP.qimp_iff,

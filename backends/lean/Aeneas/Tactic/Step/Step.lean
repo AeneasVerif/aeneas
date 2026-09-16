@@ -517,7 +517,7 @@ meta def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) :=
 
 /-- Attempt to match a given theorem with the monadic call in the target.
 The resulting target should be of the shape:
-`qimp_spec P k Q` (or `qimp P Q`)
+`qimp P Q` (or another registered judgment's mono/bind premise)
 -/
 meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th : Expr) :
   TacticM (Array MVarId) := do
@@ -678,16 +678,29 @@ meta def introOneSurfaceBinder {α} (goal : MVarId) (tree : BTree α) :
   let (fv, goal') ← goal.intro tmp
   destructureFVar goal' fv tree
 
-/-- Extract the call-site destructure tree from the current goal, which should
-have shape `qimp_spec P k Q` or `qimp P Q`.
-
-Returns the bind continuation `k`'s tree (for `qimp_spec`) or the outer post
-`Q`'s tree (for `qimp`) -/
-meta def extractCallSiteTree (goalTy : Expr) : MetaM (Option NameTree) := do
-  match_expr goalTy.consumeMData with
-  | Std.WP.qimp_spec _ _ _ k _ => return some (← getContInput k)
-  | Std.WP.qimp _ _ Q => return some (← getContInput Q)
-  | _ => return none
+/-- Extract the output destructuring requested by the original specification
+goal. Bind goals use the source continuation, while terminal goals use the
+outer postcondition. Falls back to a single output when the shape is unavailable. -/
+meta def getCallSiteTree (info : SpecInfo) (isLet : Bool) (goal : MVarId) :
+    MetaM NameTree := do
+  let fallback : NameTree := .leaf none
+  let goalTy ← instantiateMVars (← goal.getType)
+  let goalTy := goalTy.consumeMData
+  let (head, specArgs) := goalTy.withApp fun head args => (head.consumeMData, args)
+  unless head.isConstOf info.spec_name && specArgs.size == info.arity do
+    return fallback
+  if isLet then
+    let program := specArgs[info.program_index]!
+    let bindArgs? ←
+      match getBindArgs? program with
+      | some bindArgs => pure (some bindArgs)
+      | none => do
+        let program ← Utils.normalizeLetBindings program
+        pure (getBindArgs? program)
+    let some (_, cont) := bindArgs? | return fallback
+    getContInput cont
+  else
+    getContInput specArgs[info.post_index]!
 
 /-- Run the tactic named `tac` under the leading binders of the goal, reverting what it
 introduces. -/
@@ -710,7 +723,7 @@ def runTacUnderBinders (tac : Name) : TacticM Unit := do
     the step theorem.
 
     After application of the step theorem, the target should be of the shape:
-    `qimp_spec P k Q` (or `qimp P Q`)
+    `qimp P Q` (or another registered judgment's mono/bind premise)
 
     We transform it to a target of the shape:
     `∀ x, P' x → P₀ → ... → Pₘ → k ⦃ Q ⦄`
@@ -718,34 +731,23 @@ def runTacUnderBinders (tac : Name) : TacticM Unit := do
     where the single output `x` is destructured according to the call-site
     tree.
 
-    The post `(uncurry' f) x` left after `qimp_spec_iff` is reduced via `uncurry'_eq`
+    The post `(uncurry' f) x` left after `qimp_iff` is reduced via `uncurry'_eq`
     to `f x.fst x.snd` (or via `uncurry'_pair`/`uncurry_apply_pair` when `x` was destructured).
 
     If a grind state is provided, it is updated with the newly introduced hypotheses so that
     subsequent steps can reuse it.
 -/
-meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState : StepState) :
+meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTree : NameTree)
+    (stepState : StepState) :
   TacticM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"introOutputs") do
   traceGoalWithNode "Initial goal"
-  /- Inspect the goal before simp to capture the call-site tree. The simp passes
-     below destroy this structure, so we must record it now. -/
-  let callSiteTree : NameTree ← do
-    let goal ← getMainGoal
-    let goalTy ← instantiateMVars (← goal.getType)
-    match (← extractCallSiteTree goalTy) with
-    | some tree =>
-      trace[Step] "call-site tree: {repr tree}"
-      pure tree
-    | none =>
-      trace[Step] "Could not extract qimp_spec/qimp from goal; falling back to a single leaf"
-      pure (.leaf none)
+  trace[Step] "call-site tree: {repr callSiteTree}"
 
-  /- First simp pass handles Unit binders, existentials, and standard step simps. -/
+  /- First simp pass handles Unit binders and existentials. -/
   let some _ ← withTraceNode `Step (fun _ => pure m!"simpAt: monadic/unit/exists preprocessing") do
     Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
-            { simpThms := #[← stepSimpExt.getTheorems],
-              addSimpThms :=
+            { addSimpThms :=
                 info.uncurry_elim_tactics }
             (.targets #[] true)
     | trace[Step] "The main goal was solved!"; return none
@@ -756,16 +758,17 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
     if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
     traceGoalWithNode "goal after running `intro_tactic`"
 
-  /- Eliminate `qimp_spec`/`qimp` to reveal a single `∀ x, imp (P x) (...)`.
+  /- Eliminate the registered mono/bind relation to reveal a single
+     `∀ x, imp (P x) (...)`.
      `Std.WP.uncurry'_eq` rewrites the leftover `(uncurry' f) x` into the nicer
      `f x.fst x.snd` form. `Std.uncurry_apply_pair` handles the case where `x`
      is a literal pair. -/
-  let some _ ← withTraceNode `Step (fun _ => pure m!"simpAt: eliminating `qimp_spec` and `qimp`") do
+  let some _ ← withTraceNode `Step (fun _ => pure m!"simpAt: eliminating the mono/bind relation") do
     Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
             { addSimpThms := info.qimp_elim_tactics }
             (.targets #[] true)
     | trace[Step] "The main goal was solved!"; return none
-  traceGoalWithNode "goal after eliminating `qimp_spec`/`qimp`"
+  traceGoalWithNode "goal after eliminating the mono/bind relation"
 
   /- Eliminate `imp`
 
@@ -1045,6 +1048,7 @@ meta def stepWith (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args)
   withTraceNode `Step (fun _ => pure m!"stepWith") do
   -- Save the main goal before tryMatch (needed for lazy grind state initialization)
   let originalGoal ← getMainGoal
+  let callSiteTree ← getCallSiteTree info isLet originalGoal
   -- Attempt to instantiate the theorem and introduce it in the context
   let newGoals ← tryMatch info lifting isLet th
   --
@@ -1066,7 +1070,7 @@ meta def stepWith (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args)
   /- Process the main goal -/
   -- Introduce the outputs, including the post-conditions, into the context
   setGoals [mainGoal]
-  let mainGoal ← introOutputs info args fExpr stepState
+  let mainGoal ← introOutputs info args fExpr callSiteTree stepState
   /- Simplify the post-conditions in the main goal - note that we waited until now
       because by solving the preconditions we may have instantiated meta-variables.
       We also simplify the goal again (to simplify let-bindings, etc.) -/
