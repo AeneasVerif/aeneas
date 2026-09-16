@@ -1,6 +1,7 @@
 module
 public import Aeneas.Std.Primitives
 public import Aeneas.Std.Delab
+public meta import AeneasMeta.Simp
 public import Aeneas.Tactic.Solver.Grind.Init
 public import Aeneas.Tactic.Step.DspecInduction
 public meta import Aeneas.Std.Spec
@@ -1228,6 +1229,17 @@ elab (name := intro_ispec) "intro_ispec" : tactic => withMainContext do
             ``ispec_ipure_iff, ``dispec_ipure_iff,
             ``and_imp, ``exists_imp, ``forall_unit, ``true_imp_iff] }
       (.targets #[] true)
+
+/-- Normalize after output destructuring. -/
+elab (name := intro_step_post) "intro_step_post" : tactic => do
+  let _ ← Aeneas.Simp.simpAt true
+    { maxDischargeDepth := 1, failIfUnchanged := false, iota := false }
+    { addSimpThms :=
+        #[``Aeneas.Std.uncurry_apply_pair,
+          ``Aeneas.Std.uncurry_eq_prop, ``Aeneas.Std.uncurry_eq_prop_arrow,
+          ``Aeneas.Std.WP.uncurry'_pair, ``Aeneas.Std.WP.uncurry'_eq,
+          ``and_imp, ``exists_imp, ``Aeneas.Step.Intro.forall_unit, ``true_imp_iff] }
+    (.targets #[] true)
 
 #register_spec_info {
     spec_name := ``ispec
