@@ -167,7 +167,7 @@ def qimp_uncurry' {α₀ α₁} (P : α₀ → α₁ → Prop) (Q : α₀ × α�
 /-- We use this lemma to eliminate `imp` after we decomposed the nested `uncurry'` -/
 theorem qimp_iff {α} (P₀ P₁ : Post α) : qimp P₀ P₁ ↔ ∀ x, imp (P₀ x) (P₁ x) := by simp [qimp, imp]
 
-/-- Monotonicity with controlled introduction of universal quantifiers. -/
+/-- `spec_mono` controls the introduction of universal quantifiers by introducing `imp`. -/
 theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
   qimp P₀ P₁ → spec m P₁ := by
   intros HMonPost
@@ -181,7 +181,7 @@ theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : sp
 def qimp_spec {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) : Prop :=
   ∀ x, P x → spec (k x) Q
 
-/-- Heterogeneous bind with controlled introduction of universal quantifiers. -/
+/-- `spec_bind` controls the introduction of universal quantifiers with `qimp_spec`. -/
 theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
   spec m Pₘ →
   (qimp_spec Pₘ k Pₖ) →
