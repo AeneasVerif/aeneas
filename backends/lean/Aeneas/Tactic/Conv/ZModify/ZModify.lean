@@ -105,6 +105,8 @@ elab stx:zmodify : tactic =>
   let (config, n, args, loc) ← parseZModify stx
   zmodifyTac config n args loc
 
+/- Builtin simprocs cannot be added to a custom set directly via `attribute`.
+See: https://github.com/leanprover/lean4/issues/13962 -/
 attribute [zmodify] Nat.eq_mod_iff_eq_ZMod Int.eq_mod_iff_eq_ZMod div_to_ZMod
 dsimproc [zmodify] Nat.reduceGcd' (Nat.gcd _ _) := Nat.reduceGcd
 attribute [zmodify] ZMod.natCast_val ZMod.natCast_mod ZMod.cast_id' ZMod.intCast_mod id_eq

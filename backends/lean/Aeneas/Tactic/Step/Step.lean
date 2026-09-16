@@ -81,6 +81,8 @@ attribute [step_simps] Aeneas.Std.bind_assoc_eq
 attribute [step_simps] Aeneas.Std.uncurry_apply_pair
 attribute [step_simps] ite_self -- this is sometimes necessary
 
+/- Builtin simprocs cannot be added to a custom set directly via `attribute`.
+See: https://github.com/leanprover/lean4/issues/13962 -/
 -- We often see expressions like `Int.ofNat 3`
 dsimproc [step_post_simps] Int.reduceToNat' (Int.toNat _) := Int.reduceToNat
 

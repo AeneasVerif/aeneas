@@ -31,7 +31,8 @@ end
 
 /- Simp procedures -/
 
-/- Builtin simprocs cannot be added to the `bvify` set directly via `attribute`. -/
+/- Builtin simprocs cannot be added to a custom set directly via `attribute`.
+See: https://github.com/leanprover/lean4/issues/13962 -/
 simproc ↓ [bvify] reduceIte' (ite _ _ _) := reduceIte
 simproc [bvify] Nat.reduceLeDiff' ((_ : Nat) ≤ _) := Nat.reduceLeDiff
 simproc [bvify] Nat.reduceLT' ((_ : Nat) < _) := Nat.reduceLT
