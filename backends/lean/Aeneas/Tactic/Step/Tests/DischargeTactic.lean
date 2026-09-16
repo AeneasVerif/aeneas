@@ -22,7 +22,7 @@ def triple (P : Prop) (m : Id α) (Q : Post α) : Prop :=
 theorem triple_step_mono {P Pm : Prop} {Q : Post α}
     (m : Id α) (Qm : Post α) (hStep : triple Pm m Qm)
     (hPre : P → Pm)
-    (hPost : Post.entails Qm Q) :
+    (hPost : ∀ value, Qm value → Q value) :
     triple P m Q :=
   fun hP => hPost m (hStep (hPre hP))
 
