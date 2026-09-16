@@ -12,7 +12,8 @@ namespace Aeneas.SimpBoolProp
 
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 
-/-- TODO: builtin simprocs can't be directly added under the module system. -/
+/- Builtin simprocs cannot be added to a custom set directly via `attribute`.
+See: https://github.com/leanprover/lean4/issues/13962 -/
 simproc ↓ [simp_bool_prop] reduceIte' (ite _ _ _) := reduceIte
 
 attribute [simp_bool_prop]
