@@ -21,15 +21,6 @@ theorem Post.entails_iff (P Q : Post α) :
 def triple (P : Prop) (m : Id α) (Q : Post α) : Prop :=
   P → Q m
 
-theorem triple_uncurry (P : α → β → Prop) (next : α × β → Id γ) (Q : Post γ) :
-    (∀ value, triple (Std.WP.uncurry' P value) (next value) Q) ↔
-    (∀ first second, triple (P first second) (next (first, second)) Q) := by
-  constructor
-  · intro h first second
-    simpa [Std.WP.uncurry'] using h (first, second)
-  · rintro h ⟨ first, second ⟩
-    simpa [Std.WP.uncurry'] using h first second
-
 theorem triple_step_mono {P Pm : Prop} {Q : Post α}
     (m : Id α) (Qm : Post α) (hStep : triple Pm m Qm)
     (hPre : P → Pm)
@@ -59,14 +50,19 @@ theorem triple_true (P : Prop) (m : Id α) :
   intro _
   trivial
 
-/- intro tactic -/
+/- intro tactic: it is responsible for the whole normalization of the mono and bind
+   premises, so it exposes the binders of `Post.entails` itself, introduces them — `step`
+   reverts what it introduces — and pulls the precondition of the continuation. -/
 syntax (name := pullPre) "pull_pre" : tactic
 macro_rules
   | `(tactic| pull_pre) =>
-    `(tactic| first
-      | exact triple_true _ _
-      | (rw [triple_pull]; try rw [and_imp])
-      | skip)
+    `(tactic| (
+        try rw [Post.entails_iff]
+        intros
+        first
+        | exact triple_true _ _
+        | (rw [triple_pull]; try rw [and_imp])
+        | skip))
 
 #register_spec_info {
     spec_name := ``triple
@@ -77,8 +73,6 @@ macro_rules
     mk_spec_mono_skip_args := 4
     mk_spec_bind := ``triple_step_bind
     mk_spec_bind_skip_args := 6
-    uncurry_elim_tactics := #[``triple_uncurry]
-    qimp_elim_tactics := #[``Post.entails_iff, ``true_imp_iff]
     intro_tactic := some ``pullPre
     to_mvcgen := none
     liftings := #[]
@@ -96,33 +90,11 @@ theorem incr_spec (value : Nat) :
   intro _
   rfl
 
-def pair (value : Nat) : Id (Nat × Nat) :=
-  (value, value + 1)
-
-@[step]
-theorem pair_spec (value : Nat) :
-    triple True (pair value)
-      (Std.WP.uncurry' fun first second => first = value ∧ second = value + 1) := by
-  unfold triple pair Std.WP.uncurry'
-  simp
-
 attribute [irreducible] triple
 
 @[irreducible] def incrTwice (value : Nat) : Id Nat := do
   let once ← incr value
   incr once
-
-def incrPair (value : Nat) : Id Nat :=
-  pair value >>= fun output => incr (output.1 + output.2)
-
-/- Registered uncurrying runs before `intro_tactic`, which then exposes both hypotheses. -/
-example (value : Nat) :
-    triple True (incrPair value) (fun result => result = value + (value + 1) + 1) := by
-  unfold incrPair
-  step as ⟨ first, second, hFirst, hSecond ⟩
-  guard_hyp hFirst : first = value
-  guard_hyp hSecond : second = value + 1
-  step*
 
 /- `step as` names the result and the hypothesis exposed by `intro_tactic`. -/
 /--
@@ -161,24 +133,35 @@ example (value : Nat) :
   unfold incrTwice
   step
 
-/-! ## `runTacUnderBinders` contract -/
+/-! ## `runIntroTactic` contract -/
 
-elab "run_constructor_under_binders" : tactic => do
-  Step.runTacUnderBinders ``Lean.Parser.Tactic.constructor
+elab "run_constructor" : tactic => do
+  Step.runIntroTactic ``Lean.Parser.Tactic.constructor
 
-/- `runTacUnderBinders` rejects tactics that create multiple goals. -/
+/- `runIntroTactic` rejects tactics that create multiple goals. -/
 /--
 error: `intro_tactic` must not create multiple goals
 -/
 #guard_msgs in
-example (P Q : Prop) : P → Q → P ∧ Q := by
-  run_constructor_under_binders
+example (P Q : Prop) : P ∧ Q := by
+  run_constructor
 
-elab "run_assumption_under_binders" : tactic => do
-  Step.runTacUnderBinders ``Lean.Parser.Tactic.assumption
+elab "run_assumption" : tactic => do
+  Step.runIntroTactic ``Lean.Parser.Tactic.assumption
 
-/- `runTacUnderBinders` permits tactics that solve the goal completely. -/
-example (P : Prop) : P → P := by
-  run_assumption_under_binders
+/- `runIntroTactic` permits tactics that solve the goal completely. -/
+example (P : Prop) (h : P) : P := by
+  run_assumption
+
+elab "run_intro_split" : tactic => do
+  Step.runIntroTactic ``Aeneas.Step.Intro.introSplit
+
+/- What the tactic introduces is reverted, one binder per fact: `intro_split` splits the
+   conjunction it introduces, and the premise comes back with one binder per conjunct. -/
+example (P Q R : Prop) (hR : R) : P ∧ Q → R := by
+  run_intro_split
+  guard_target = P → Q → R
+  intro _ _
+  exact hR
 
 end Aeneas.Tactic.Step.Tests.IntroTactic
