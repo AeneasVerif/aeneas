@@ -64,9 +64,10 @@ meta def scalar_eqs := #[
   ``iscalar_isize_eq, ``iscalar_i8_eq, ``iscalar_i16_eq, ``iscalar_i32_eq, ``iscalar_i64_eq, ``iscalar_i128_eq
 ]
 
-/-- Note that `forall_const` is too general: it can eliminate unused outputs that we actually
-want to introduce in the context -/
-theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
+/-- The `()` of a function which returns nothing is not an output: `introOutputs`
+instantiates its binder instead of introducing it. -/
+theorem forall_unit_intro {p : Unit → Prop} (h : p ()) : ∀ value, p value :=
+  fun value => match value with | () => h
 
 attribute [step_simps]
   bind_assoc Std.bind_tc_ok Std.bind_tc_vis Std.bind_tc_div
@@ -516,8 +517,8 @@ meta def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) :=
       pure mvar
 
 /-- Attempt to match a given theorem with the monadic call in the target.
-The resulting target should be of the shape:
-`qimp P Q` (or another registered judgment's mono/bind premise)
+The resulting target should be the registered judgment's mono/bind premise,
+e.g. `∀ x, P x → k ⦃ Q ⦄`.
 -/
 meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th : Expr) :
   TacticM (Array MVarId) := do
@@ -678,6 +679,21 @@ meta def introOneSurfaceBinder {α} (goal : MVarId) (tree : BTree α) :
   let (fv, goal') ← goal.intro tmp
   destructureFVar goal' fv tree
 
+/-- Instantiate the leading binder of the goal when the function returned `()`: the
+unit is not an output, and introducing it would shift the names of the outputs and
+post-conditions which follow.
+
+Returns `none` when the goal does not start with a `Unit` binder. -/
+def elimUnitOutput (goal : MVarId) : MetaM (Option MVarId) := do
+  let goalTy := (← instantiateMVars (← goal.getType)).consumeMData
+  unless goalTy.isForall && goalTy.bindingDomain!.consumeMData.isConstOf ``Unit do
+    return none
+  let post := Expr.lam goalTy.bindingName! (mkConst ``Unit) goalTy.bindingBody!
+    goalTy.bindingInfo!
+  let newGoal ← mkFreshExprSyntheticOpaqueMVar (goalTy.bindingBody!.instantiate1 (mkConst ``Unit.unit))
+  goal.assign (mkApp2 (mkConst ``forall_unit_intro) post newGoal)
+  return some newGoal.mvarId!
+
 /-- Extract the output destructuring requested by the original specification
 goal. Bind goals use the source continuation, while terminal goals use the
 outer postcondition. Falls back to a single output when the shape is unavailable. -/
@@ -702,13 +718,12 @@ meta def getCallSiteTree (info : SpecInfo) (isLet : Bool) (goal : MVarId) :
   else
     getContInput specArgs[info.post_index]!
 
-/-- Run the tactic named `tac` under the leading binders of the goal, reverting what it
-introduces. -/
-def runTacUnderBinders (tac : Name) : TacticM Unit := do
+/-- Run the tactic named `tac` on the goal, reverting what it introduces in the context. -/
+def runIntroTactic (tac : Name) : TacticM Unit := do
   withTraceNode `Step (fun _ => pure m!"intro_tactic: {tac}") do
   let goal ← getMainGoal
   let last? := (← goal.getDecl).lctx.lastDecl.map LocalDecl.fvarId
-  setGoals [(← goal.intros).2]
+  setGoals [goal]
   evalTactic (mkNode tac #[])
   match ← getUnsolvedGoals with
   | [] => return
@@ -719,11 +734,21 @@ def runTacUnderBinders (tac : Name) : TacticM Unit := do
     setGoals [goal]
   | _ => throwError "`intro_tactic` must not create multiple goals"
 
+/-- Fold the scalar types back.
+
+    Some of them get unfolded too much along the way (e.g., `U32` sometimes gets unfolded to
+    `UScalar .U32`), which has nothing to do with the judgment at hand: we do it for every
+    statement, before the outputs are introduced with those types. -/
+def foldScalarTypes : TacticM Unit := do
+  withTraceNode `Step (fun _ => pure m!"dsimpAt: folding back scalar types") do
+    Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
+      { addSimpThms := scalar_eqs } (.targets #[] true)
+
 /-- Introduce the outputs (variables and postconditions) into the context after applying
     the step theorem.
 
-    After application of the step theorem, the target should be of the shape:
-    `qimp P Q` (or another registered judgment's mono/bind premise)
+    After application of the step theorem, the target is the judgment's mono/bind premise,
+    e.g. `∀ x, P x → k ⦃ Q ⦄`.
 
     We transform it to a target of the shape:
     `∀ x, P' x → P₀ → ... → Pₘ → k ⦃ Q ⦄`
@@ -731,8 +756,8 @@ def runTacUnderBinders (tac : Name) : TacticM Unit := do
     where the single output `x` is destructured according to the call-site
     tree.
 
-    The post `(uncurry' f) x` left after `qimp_iff` is reduced via `uncurry'_eq`
-    to `f x.fst x.snd` (or via `uncurry'_pair`/`uncurry_apply_pair` when `x` was destructured).
+    Normalizing the premise into that shape is the job of the specification statement: it is
+    what the tactic it registers as its `intro_tactic` does.
 
     If a grind state is provided, it is updated with the newly introduced hypotheses so that
     subsequent steps can reuse it.
@@ -744,41 +769,14 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTr
   traceGoalWithNode "Initial goal"
   trace[Step] "call-site tree: {repr callSiteTree}"
 
-  /- First simp pass handles Unit binders and existentials. -/
-  let some _ ← withTraceNode `Step (fun _ => pure m!"simpAt: monadic/unit/exists preprocessing") do
-    Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
-            { addSimpThms :=
-                info.uncurry_elim_tactics }
-            (.targets #[] true)
-    | trace[Step] "The main goal was solved!"; return none
-  traceGoalWithNode "goal after monadic preprocessing"
-
+  /- Normalize the premise into the `∀ x, P₀ → ... → Pₘ → k ⦃ Q ⦄` shape. -/
   if let some tac := info.intro_tactic then
-    runTacUnderBinders tac
+    runIntroTactic tac
     if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
     traceGoalWithNode "goal after running `intro_tactic`"
-
-  /- Eliminate the registered mono/bind relation to reveal a single
-     `∀ x, imp (P x) (...)`.
-     `Std.WP.uncurry'_eq` rewrites the leftover `(uncurry' f) x` into the nicer
-     `f x.fst x.snd` form. `Std.uncurry_apply_pair` handles the case where `x`
-     is a literal pair. -/
-  let some _ ← withTraceNode `Step (fun _ => pure m!"simpAt: eliminating the mono/bind relation") do
-    Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
-            { addSimpThms := info.qimp_elim_tactics }
-            (.targets #[] true)
-    | trace[Step] "The main goal was solved!"; return none
-  traceGoalWithNode "goal after eliminating the mono/bind relation"
-
-  /- Eliminate `imp`
-
-  Some types get unfolded too much (e.g., `U32` sometimes gets unfolded to `U32) so we use this call
-  to `dsimp` to also fold them back. -/
-  withTraceNode `Step (fun _ => pure m!"dsimpAt: eliminating `imp` and folding back scalar types") do
-    Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
-      { declsToUnfold := #[``Std.WP.imp], addSimpThms := scalar_eqs } (.targets #[] true)
+  foldScalarTypes
   if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
-  traceGoalWithNode "goal after eliminating `imp` and folding back the scalar types"
+  traceGoalWithNode "goal after folding back the scalar types"
 
   /- Introduce the single output and recursively destructure it according to the
      merged binder tree. We use a fresh internal name here and rename leaves to
@@ -789,35 +787,21 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTr
   let goalTy := goalTy.consumeMData
 
   -- There might be no quantifier if the function outputs `()`, in which case we
-  -- eliminate the `forall` quantifier (via `forall_unit`) when doing the simplification above.
+  -- instantiate the `forall` quantifier rather than introduce a useless output.
   if goalTy.isForall then
     if ¬ (← isProp goalTy.bindingDomain!) then
-      let (fvs, goal') ← introOneSurfaceBinder goal callSiteTree
-      setGoals [goal']
-      outputFVars := fvs
+      if let some goal' ← elimUnitOutput goal then
+        trace[Step] "unit output — instantiating its binder"
+        setGoals [goal']
+      else
+        let (fvs, goal') ← introOneSurfaceBinder goal callSiteTree
+        setGoals [goal']
+        outputFVars := fvs
     else
       trace[Step] "leading quantifier is a Prop — no output to introduce"
   else
     trace[Step] "no leading quantifier — skipping output introduction"
   traceGoalWithNode "goal after introducing the output"
-
-  /- After destructuring, any `uncurry`-applied pair patterns can now
-     reduce, exposing inner conjunctions and implications. We re-run
-     simp to flatten these. `uncurry_eq_prop` / `uncurry_eq_prop_arrow` /
-     `uncurry'_eq` rewrite remaining `uncurry` and `uncurry'`s that
-     eventually return `Prop` into `p x.fst x.snd`.
-
-     The `Prop` restriction keeps these from firing on bind continuations
-     elsewhere in the goal. -/
-  let _ ← withTraceNode `Step (fun _ => pure m!"simpAt: cleanup after destructure") do
-    Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
-            { addSimpThms :=
-                #[``Std.uncurry_apply_pair,
-                  ``Std.uncurry_eq_prop, ``Std.uncurry_eq_prop_arrow,
-                  ``Std.WP.uncurry'_pair, ``Std.WP.uncurry'_eq,
-                  ``and_imp, ``exists_imp, ``forall_unit, ``true_imp_iff] ++ scalar_eqs }
-            (.targets #[] true)
-  if (← getUnsolvedGoals).isEmpty then trace[Step] "Main goal solved by cleanup simp!"; return none
 
   /- The prefix length is the number of leaf fvars produced by destructuring the outputs. -/
   let prefixLength := outputFVars.size
@@ -852,8 +836,13 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTr
   let (postsIsProp, postsIdsArr) ← goal.withContext do
     let type ← instantiateMVars (← goal.getType)
     forallTelescope type.consumeMData fun fvars _ => do
+      /- Destructuring the outputs leaves projections behind (`(x, y).fst`), which the
+         post-processing reduces later, but the names are picked from these types now:
+         reduce them structurally first, or a post would be named after the tuple. -/
+      let (dsimpCtx, dsimprocs) ← Simp.mkSimpCtx true { failIfUnchanged := false } .dsimp {}
       let typesAndProps : Array (Expr × Bool) ← fvars.mapM fun fv => do
         let ty ← inferType fv
+        let (ty, _) ← Lean.Meta.dsimp ty dsimpCtx dsimprocs
         pure (ty, ← isProp ty)
 
       /- Total number of "logical" outputs+post slots, used for the user-provided-id check. -/
@@ -2085,18 +2074,19 @@ info: example
     step as ⟨ z ⟩
     scalar_tac
 
-  /- Example with an existential -/
+  /- Example with an existential: the result comes first, the witness of the existential
+     after it. -/
   /--
 error: unsolved goals
 case a
 x : U32
 f : U32 → Result U32
 h : ∀ (x : U32), f x ⦃ y => ∃ z > 0, ↑y = ↑x + z ⦄
-y : ℕ
-z : U32
-_✝¹ : y > 0
-_✝ : ↑z = ↑x + y
-⊢ ↑z > ↑x
+y : U32
+z : ℕ
+_✝¹ : z > 0
+_✝ : ↑y = ↑x + z
+⊢ ↑y > ↑x
   -/
   #guard_msgs in
   example (x : U32) (f : U32 → Result U32) (h : ∀ x, f x ⦃ y => ∃ z, z > 0 ∧ y.val = x.val + z ⦄) :

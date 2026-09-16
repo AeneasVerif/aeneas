@@ -32,13 +32,14 @@ theorem coinSpec_mono {α} {P₁ : Post α} {m : ITreeC α} {P₀ : Post α} (h 
   intros x c
   cases c <;> grind only
 
-/-- Implication of a `dspec` predicate with quantifier -/
+/-- The premise of `coinSpec_bind`, named so that the coinduction invariant below can
+mention it. -/
 def qimp_coinSpec {α β} (P : α → Prop) (k : α → ITreeC β) (Q : β → Prop) : Prop :=
   ∀ x, P x → coinSpec Q (k x)
 
 theorem coinSpec_bind {α β} {k : α -> ITreeC β} {Pₖ : Post β} {m : ITreeC α} {Pₘ : Post α} :
   coinSpec Pₘ m →
-  (qimp_coinSpec Pₘ k Pₖ) →
+  (∀ x, Pₘ x → coinSpec Pₖ (k x)) →
   coinSpec Pₖ (ITree.bind m k) := by
   intro Hm Hk
   refine coinSpec.coinduct _
@@ -92,20 +93,6 @@ theorem spec_coinSpec {α} {x : Result α} {p: Post α} : spec x p → coinSpec 
   · simp at s
   · simp at s
 
-@[simp]
-theorem qimp_coinSpec_unit {α} (P : Unit → Prop) (k : Unit → ITreeC α) (Q : α → Prop) :
-  qimp_coinSpec P k Q ↔ (P () → coinSpec Q (k ())) := by
-  grind [qimp_coinSpec]
-
-@[simp]
-theorem qimp_coinSpec_exists {α β γ} (P : γ → α → Prop) (k : α → ITreeC β) (Q : β → Prop) :
-  qimp_coinSpec (fun x => ∃ y, P y x) k Q ↔ ∀ x, qimp_coinSpec (P x) k Q := by
-  simp only [qimp_coinSpec, forall_exists_index]; grind
-
-def qimp_coinSpec_iff {α β} (P : α → Prop) (k : α → ITreeC β) (Q : β → Prop) :
-  qimp_coinSpec P k Q ↔ ∀ x, imp (P x) (coinSpec Q (k x)) := by
-  simp [qimp_coinSpec, imp]
-
 @[simp, grind =, agrind =]
 theorem coinSpec_ret {α p} (x : α) : coinSpec p (ITree.ret x) ↔ p x := by
   constructor
@@ -132,21 +119,9 @@ theorem coinSpec_ret {α p} (x : α) : coinSpec p (ITree.ret x) ↔ p x := by
   mk_spec_mono_skip_args := 2
   mk_spec_bind := ``coinSpec_bind
   mk_spec_bind_skip_args := 4
-  uncurry_elim_tactics := #[
-    ``qimp_coinSpec_unit,
-    ``Std.WP.qimp_unit,
-    ``qimp_coinSpec_exists,
-    ``Std.WP.qimp_exists,
-    ``forall_unit, ``true_imp_iff
-  ]
-  qimp_elim_tactics := #[
-    ``qimp_coinSpec_iff,
-    ``Std.WP.qimp_iff,
-    ``Std.WP.imp_and_iff, ``Std.uncurry_apply_pair,
-    ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
-    ``Std.WP.imp_exists_iff,
-    ``forall_unit, ``true_imp_iff
-  ]
+  /- The premises of the two rules above are plain implications, which `intro_split`
+     knows how to introduce. -/
+  intro_tactic := some ``Aeneas.Step.Intro.introSplit
   to_mvcgen := .none
   liftings := #[
     { from_statement := ``Std.WP.spec
