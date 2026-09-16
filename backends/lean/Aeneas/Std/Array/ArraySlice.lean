@@ -19,8 +19,6 @@ attribute [-simp] List.getElem!_eq_getElem?_getD
 
 /-! Array to slice/subslices -/
 
-section
-
 @[expose, step_pure_def, rust_fun "core::array::{[@T; @N]}::as_slice" -canFail]
 def Array.to_slice {α : Type u} {n : Usize} (v : Array α n) : Slice α :=
   .from  v.val (by scalar_tac)
@@ -29,8 +27,6 @@ def Array.to_slice {α : Type u} {n : Usize} (v : Array α n) : Slice α :=
   if h: s.val.length = n.val then
     .from s.val (by simp [*])
   else a -- Unreachable case
-
-end
 
 @[simp]
 theorem Array.from_slice_val {α : Type u} {n : Usize} (a : Array α n) (ns : Slice α) (h : ns.val.length = n.val) :
