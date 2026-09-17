@@ -21,7 +21,7 @@ noncomputable section
 namespace mut_borrow_in_shared_borrow
 
 /-- [core::slice::{[T]}::first]:
-    Source: '/rustc/library/core/src/slice/mod.rs', lines 155:4-155:43
+    Source: '/rustc/library/core/src/slice/mod.rs', lines 157:4-157:43
     Name pattern: [core::slice::{[@T]}::first]
     Visibility: public -/
 @[rust_fun "core::slice::{[@T]}::first"]

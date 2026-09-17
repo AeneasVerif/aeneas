@@ -7,9 +7,6 @@ namespace Aeneas.Std
 
 open Result
 
-@[rust_type "core::convert::Infallible"]
-inductive core.convert.Infallible where
-
 @[rust_trait "core::convert::Into"]
 structure core.convert.Into (Self : Type) (T : Type) where
   into : Self → Result T
@@ -105,17 +102,17 @@ def core.result.Result.Insts.CoreOpsTry.branch
   {T E : Type} :
   core.result.Result T E →
     Std.Result (core.ops.control_flow.ControlFlow
-      (core.result.Result core.convert.Infallible E) T)
+      (core.result.Result Never E) T)
   | .Ok v => .ok (.Continue v)
   | .Err e => .ok (.Break (.Err e))
 
 /-- `Result::from_residual` (`FromResidual`): converts an `Err`-residual,
     applying the `From` instance to the error. -/
 @[rust_fun
-  "core::result::{core::ops::try_trait::FromResidual<core::result::Result<@T, @F>, core::result::Result<core::convert::Infallible, @E>>}::from_residual"]
-def core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+  "core::result::{core::ops::try_trait::FromResidual<core::result::Result<@T, @F>, core::result::Result<!, @E>>}::from_residual"]
+def core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
   (T : Type) {E F : Type} (convertFromInst : core.convert.From F E)
-  (r : core.result.Result core.convert.Infallible E) : Std.Result (core.result.Result T F) :=
+  (r : core.result.Result Never E) : Std.Result (core.result.Result T F) :=
   match r with
   | .Ok x => x.casesOn
   | .Err e => do
@@ -137,7 +134,7 @@ theorem core.result.Result.Insts.CoreOpsTry.branch_Ok.spec
     {T E : Type} (v : T) :
     core.result.Result.Insts.CoreOpsTry.branch (T := T) (E := E) (.Ok v)
     ⦃ (cf : core.ops.control_flow.ControlFlow
-              (core.result.Result core.convert.Infallible E) T) =>
+              (core.result.Result Never E) T) =>
         cf = .Continue v ⦄ := by
   exact (WP.spec_ok _).mpr rfl
 
@@ -146,7 +143,7 @@ theorem core.result.Result.Insts.CoreOpsTry.branch_Err.spec
     {T E : Type} (e : E) :
     core.result.Result.Insts.CoreOpsTry.branch (T := T) (E := E) (.Err e)
     ⦃ (cf : core.ops.control_flow.ControlFlow
-              (core.result.Result core.convert.Infallible E) T) =>
+              (core.result.Result Never E) T) =>
         cf = .Break (.Err e) ⦄ := by
   exact (WP.spec_ok _).mpr rfl
 
@@ -155,7 +152,7 @@ theorem core.result.Result.Insts.CoreOpsTry.branch.step_spec
     {T E : Type} (r : core.result.Result T E) :
     core.result.Result.Insts.CoreOpsTry.branch r
     ⦃ (cf : core.ops.control_flow.ControlFlow
-              (core.result.Result core.convert.Infallible E) T) =>
+              (core.result.Result Never E) T) =>
         match r with
         | .Ok v => cf = .Continue v
         | .Err e => cf = .Break (.Err e) ⦄ := by
@@ -166,24 +163,24 @@ theorem core.result.Result.Insts.CoreOpsTry.branch.step_spec
 /-- Step spec for `Result::from_residual` on an `Err`: applies the `From`
     conversion to the error.
 
-    Note that as `core.convert.Infallible` is an empty type the `.Ok` case is not possible.
+    Note that as `Never` is an empty type the `.Ok` case is not possible.
 -/
 @[step]
 theorem
-  core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual_Err.spec
+  core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual_Err.spec
     (T : Type) {E F : Type} (convertFromInst : core.convert.From F E)
     (e : E) (v : F) (hfrom : convertFromInst.from e = .ok v) :
-    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+    core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
       T convertFromInst (.Err e)
     ⦃ (out : core.result.Result T F) => out = .Err v ⦄ := by
   simp [from_residual, hfrom]
 
 @[step]
 theorem
-  core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual.spec
+  core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual.spec
     (T : Type) {E F : Type} (convertFromInst : core.convert.From F E)
-    (r : Result convert.Infallible E) (hfrom : ∀ e, r = .Err e → ∃ v, convertFromInst.from e = .ok v) :
-    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+    (r : Result Never E) (hfrom : ∀ e, r = .Err e → ∃ v, convertFromInst.from e = .ok v) :
+    core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
       T convertFromInst r
     ⦃ (out : core.result.Result T F) => ∃ e v, r = .Err e ∧ convertFromInst.from e = .ok v ∧ out = .Err v ⦄ := by
   match h: r with
