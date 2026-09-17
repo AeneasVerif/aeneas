@@ -10,6 +10,7 @@ import Aeneas.Std.SliceDef
 namespace Aeneas.Std
 
 open Result Error core.ops.range WP
+open Aeneas.SepLogic
 
 local macro_rules
 | `(tactic| get_elem_tactic) => `(tactic| grind)
@@ -54,6 +55,30 @@ abbrev Slice.len {α : Type u} (v : Slice α) : Usize :=
 @[simp, scalar_tac_simps, simp_scalar_safe, simp_lists_safe, grind =, agrind =]
 theorem Slice.len_val {α : Type u} (v : Slice α) : (Slice.len v).val = v.length :=
   by simp
+
+/-- Materialize a functional slice as fresh memory and return a const pointer
+to its first slot. Unlike Rust's `as_ptr`, this allocates because the functional
+slice model has no address. -/
+@[rust_fun "core::slice::{[@T]}::as_ptr"]
+def Slice.as_ptr {T : Type} (s : Slice T) : Result (ConstRawPtr T) :=
+  RawPtr.materialize s.val
+
+@[step]
+theorem Slice.as_ptr.spec {T : Type} (s : Slice T) :
+    ⦃ emp ⦄ s.as_ptr ⦃⇓ p => p ↦* s.val⦄ :=
+  RawPtr.materialize.spec s.val
+
+/-- Materialize a functional slice as fresh memory and return a mutable pointer
+to its first slot. Unlike Rust's `as_mut_ptr`, this allocates because the
+functional slice model has no address. -/
+@[rust_fun "core::slice::{[@T]}::as_mut_ptr"]
+def Slice.as_mut_ptr {T : Type} (s : Slice T) : Result (MutRawPtr T) :=
+  RawPtr.materialize s.val
+
+@[step]
+theorem Slice.as_mut_ptr.spec {T : Type} (s : Slice T) :
+    ⦃ emp ⦄ s.as_mut_ptr ⦃⇓ p => p ↦* s.val⦄ :=
+  RawPtr.materialize.spec s.val
 
 instance {α : Type u} : GetElem (Slice α) Nat α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i h

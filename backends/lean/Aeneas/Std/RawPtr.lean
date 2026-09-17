@@ -217,6 +217,16 @@ theorem RawPtr.allocArray.spec {β : Type} (values : List T) (mk : Ref T → β)
     (PartialCommMonoid.union_assoc hFreshH hFreshFrame).symm,
     hPost _ _ (Heap.Sub.union_left hFreshH)⟩
 
+/-- Materialize a list as fresh memory with the requested pointer mutability. -/
+def RawPtr.materialize (values : List T) : Result (RawPtr T M) :=
+  RawPtr.allocArray values fun r => ⟨r.base, r.offset⟩
+
+@[step]
+theorem RawPtr.materialize.spec (values : List T) :
+    ⦃ emp ⦄ RawPtr.materialize (M := M) values
+      ⦃⇓ p => p ↦* values⦄ :=
+  RawPtr.allocArray.spec _ _ _ fun _ => entails_refl _
+
 /-- Allocate one mutable slot. -/
 def MutRawPtr.alloc (value : T) : Result (MutRawPtr T) :=
   RawPtr.allocArray [value] fun r => ⟨r.base, r.offset⟩
