@@ -1,6 +1,7 @@
 module
 public import Aeneas.Std.Alloc
 public import Aeneas.Std.Array
+public import Aeneas.Std.Buffer
 public import Aeneas.Std.Core
 public import Aeneas.Std.Heap
 public import Aeneas.Std.Primitives
