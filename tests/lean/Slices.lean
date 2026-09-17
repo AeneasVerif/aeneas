@@ -5,6 +5,9 @@ open Aeneas Aeneas.Std Result ControlFlow Error
 set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false
+set_option linter.style.whitespace false
+set_option linter.style.setOption false
+set_option linter.style.longLine false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -49,9 +52,7 @@ def split_at_mut
   {T : Type} (x : Slice T) (n : Std.Usize) :
   Result (((Slice T) × (Slice T)) × (((Slice T) × (Slice T)) → Slice T))
   := do
-  let ((s, s1), split_at_mut_back) ← core.slice.Slice.split_at_mut x n
-  let back := fun p => split_at_mut_back p
-  ok ((s, s1), back)
+  core.slice.Slice.split_at_mut x n
 
 /-- [slices::split_at_mut_and_deref]:
     Source: 'tests/src/slices.rs', lines 19:0-22:1

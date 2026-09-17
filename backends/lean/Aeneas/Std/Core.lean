@@ -3,6 +3,7 @@ import Aeneas.Std.Core.Cmp
 import Aeneas.Std.Core.Convert
 import Aeneas.Std.Core.Core
 import Aeneas.Std.Core.CoreOption
+import Aeneas.Std.Core.CoreResult
 import Aeneas.Std.Core.Default
 import Aeneas.Std.Core.Discriminant
 import Aeneas.Std.Core.Error

@@ -22,6 +22,13 @@ structure core.ops.range.RangeTo (Idx : Type u) where
   mk ::
   «end»: Idx
 
+/-- `core::ops::range::RangeFull`
+
+    The Rust struct is a unit struct: it carries no bounds, so indexing a slice
+    with it yields the whole slice. -/
+@[reducible, rust_type "core::ops::range::RangeFull"]
+def core.ops.range.RangeFull := Unit
+
 /-- `core::ops::range::RangeInclusive` (`a..=b`).
 
     Modelled with the three logical fields of the Rust struct: `start`, `«end»`,

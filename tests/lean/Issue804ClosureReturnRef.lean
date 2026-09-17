@@ -5,6 +5,9 @@ open Aeneas Aeneas.Std Result ControlFlow Error
 set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false
+set_option linter.style.whitespace false
+set_option linter.style.setOption false
+set_option linter.style.longLine false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -27,12 +30,12 @@ axiom core.array.from_fn
   core.ops.function.FnMut F Std.Usize T) :
   F → Result (Array T N)
 
-/-- [issue_804_closure_return_ref::each_ref::closure]
+/-- [issue_804_closure_return_ref::each_ref::{closure}]
     Source: 'tests/src/issue-804-closure-return-ref.rs', lines 6:24-6:33 -/
 @[reducible]
 def each_ref.closure := Array Std.U8 10#usize
 
-/-- [issue_804_closure_return_ref::each_ref::{impl core::ops::function::FnMut<(usize,), &'_ u8> for issue_804_closure_return_ref::each_ref::closure<'_0>}::call_mut]:
+/-- [issue_804_closure_return_ref::each_ref::{impl core::ops::function::FnMut<(usize,), &'_ u8> for issue_804_closure_return_ref::each_ref::{closure}<'_0>}::call_mut]:
     Source: 'tests/src/issue-804-closure-return-ref.rs', lines 6:24-6:33 -/
 def each_ref.closure.Insts.CoreOpsFunctionFnMutTupleUsizeSharedU8.call_mut
   (c : each_ref.closure) (tupled_args : Std.Usize) :
@@ -41,7 +44,7 @@ def each_ref.closure.Insts.CoreOpsFunctionFnMutTupleUsizeSharedU8.call_mut
   let i ← Array.index_usize c tupled_args
   ok (i, c)
 
-/-- [issue_804_closure_return_ref::each_ref::{impl core::ops::function::FnOnce<(usize,), &'_ u8> for issue_804_closure_return_ref::each_ref::closure<'_0>}::call_once]:
+/-- [issue_804_closure_return_ref::each_ref::{impl core::ops::function::FnOnce<(usize,), &'_ u8> for issue_804_closure_return_ref::each_ref::{closure}<'_0>}::call_once]:
     Source: 'tests/src/issue-804-closure-return-ref.rs', lines 6:24-6:33 -/
 def each_ref.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeSharedU8.call_once
   (c : each_ref.closure) (i : Std.Usize) : Result Std.U8 := do
@@ -49,7 +52,7 @@ def each_ref.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeSharedU8.call_once
     each_ref.closure.Insts.CoreOpsFunctionFnMutTupleUsizeSharedU8.call_mut c i
   ok i1
 
-/-- Trait implementation: [issue_804_closure_return_ref::each_ref::{impl core::ops::function::FnOnce<(usize,), &'_ u8> for issue_804_closure_return_ref::each_ref::closure<'_0>}]
+/-- Trait implementation: [issue_804_closure_return_ref::each_ref::{impl core::ops::function::FnOnce<(usize,), &'_ u8> for issue_804_closure_return_ref::each_ref::{closure}<'_0>}]
     Source: 'tests/src/issue-804-closure-return-ref.rs', lines 6:24-6:33 -/
 @[reducible]
 def each_ref.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeSharedU8 :
@@ -58,7 +61,7 @@ def each_ref.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeSharedU8 :
     each_ref.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeSharedU8.call_once
 }
 
-/-- Trait implementation: [issue_804_closure_return_ref::each_ref::{impl core::ops::function::FnMut<(usize,), &'_ u8> for issue_804_closure_return_ref::each_ref::closure<'_0>}]
+/-- Trait implementation: [issue_804_closure_return_ref::each_ref::{impl core::ops::function::FnMut<(usize,), &'_ u8> for issue_804_closure_return_ref::each_ref::{closure}<'_0>}]
     Source: 'tests/src/issue-804-closure-return-ref.rs', lines 6:24-6:33 -/
 @[reducible]
 def each_ref.closure.Insts.CoreOpsFunctionFnMutTupleUsizeSharedU8 :

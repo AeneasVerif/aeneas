@@ -5,6 +5,9 @@ open Aeneas Aeneas.Std Result ControlFlow Error
 set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false
+set_option linter.style.whitespace false
+set_option linter.style.setOption false
+set_option linter.style.longLine false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -57,7 +60,7 @@ def test_step_by_1 : Result Unit := do
   massert b
 
 /- Unit test for [step_by::test_step_by_1] -/
-#assert (test_step_by_1 == ok ())
+#assert (test_step_by_1).reducesTo ()
 
 /-- [step_by::test_step_by_2]:
     Source: 'tests/src/step_by.rs', lines 21:0-28:1
@@ -92,7 +95,7 @@ def test_step_by_2 : Result Unit := do
   massert b
 
 /- Unit test for [step_by::test_step_by_2] -/
-#assert (test_step_by_2 == ok ())
+#assert (test_step_by_2).reducesTo ()
 
 /-- [step_by::test_step_by_3]:
     Source: 'tests/src/step_by.rs', lines 32:0-39:1
@@ -127,7 +130,7 @@ def test_step_by_3 : Result Unit := do
   massert b
 
 /- Unit test for [step_by::test_step_by_3] -/
-#assert (test_step_by_3 == ok ())
+#assert (test_step_by_3).reducesTo ()
 
 /-- [step_by::test_step_by_larger_than_len]:
     Source: 'tests/src/step_by.rs', lines 43:0-48:1
@@ -150,7 +153,7 @@ def test_step_by_larger_than_len : Result Unit := do
   massert b
 
 /- Unit test for [step_by::test_step_by_larger_than_len] -/
-#assert (test_step_by_larger_than_len == ok ())
+#assert (test_step_by_larger_than_len).reducesTo ()
 
 /-- [step_by::test_step_by_empty]:
     Source: 'tests/src/step_by.rs', lines 52:0-56:1
@@ -168,7 +171,7 @@ def test_step_by_empty : Result Unit := do
   massert b
 
 /- Unit test for [step_by::test_step_by_empty] -/
-#assert (test_step_by_empty == ok ())
+#assert (test_step_by_empty).reducesTo ()
 
 /-- [step_by::test_step_by_single]:
     Source: 'tests/src/step_by.rs', lines 60:0-65:1
@@ -191,7 +194,7 @@ def test_step_by_single : Result Unit := do
   massert b
 
 /- Unit test for [step_by::test_step_by_single] -/
-#assert (test_step_by_single == ok ())
+#assert (test_step_by_single).reducesTo ()
 
 /-- [step_by::test_step_by_single_step_2]:
     Source: 'tests/src/step_by.rs', lines 69:0-74:1
@@ -214,7 +217,7 @@ def test_step_by_single_step_2 : Result Unit := do
   massert b
 
 /- Unit test for [step_by::test_step_by_single_step_2] -/
-#assert (test_step_by_single_step_2 == ok ())
+#assert (test_step_by_single_step_2).reducesTo ()
 
 /-- [step_by::test_step_by_eq_len]:
     Source: 'tests/src/step_by.rs', lines 78:0-83:1
@@ -237,7 +240,7 @@ def test_step_by_eq_len : Result Unit := do
   massert b
 
 /- Unit test for [step_by::test_step_by_eq_len] -/
-#assert (test_step_by_eq_len == ok ())
+#assert (test_step_by_eq_len).reducesTo ()
 
 /-- [step_by::test_step_by_len_minus_1]:
     Source: 'tests/src/step_by.rs', lines 87:0-93:1
@@ -265,7 +268,7 @@ def test_step_by_len_minus_1 : Result Unit := do
   massert b
 
 /- Unit test for [step_by::test_step_by_len_minus_1] -/
-#assert (test_step_by_len_minus_1 == ok ())
+#assert (test_step_by_len_minus_1).reducesTo ()
 
 /-- [step_by::test_step_by_two_elements]:
     Source: 'tests/src/step_by.rs', lines 97:0-102:1
@@ -288,7 +291,7 @@ def test_step_by_two_elements : Result Unit := do
   massert b
 
 /- Unit test for [step_by::test_step_by_two_elements] -/
-#assert (test_step_by_two_elements == ok ())
+#assert (test_step_by_two_elements).reducesTo ()
 
 /-- [step_by::test_step_by_4_on_longer]:
     Source: 'tests/src/step_by.rs', lines 106:0-113:1
@@ -326,6 +329,6 @@ def test_step_by_4_on_longer : Result Unit := do
   massert b
 
 /- Unit test for [step_by::test_step_by_4_on_longer] -/
-#assert (test_step_by_4_on_longer == ok ())
+#assert (test_step_by_4_on_longer).reducesTo ()
 
 end step_by

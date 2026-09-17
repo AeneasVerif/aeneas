@@ -280,6 +280,55 @@ def core.iter.range.IScalarStep.backward_checked {ty : IScalarTy}
       (by have := start.hBounds; omega)))
   else ok none
 
+/-! ### `forward_overflowing` / `backward_overflowing` for scalars
+
+The standard library defines one implementation per scalar type, with two different
+cases. For the types narrower than (or equal to) `usize`:
+```rust
+fn forward_overflowing(start: Self, n: usize) -> (Self, bool) {
+    match Self::try_from(n) {
+        Ok(n) => start.overflowing_add(n),
+        // if n is out of range, `start + n` must overflow
+        Err(_) => (start.wrapping_add(n as Self), true),
+    }
+}
+```
+and for the wider ones:  `start.overflowing_add(n as Self)` (the cast is
+exact there). The signed impls are the same modulo
+`overflowing_add_unsigned` / `wrapping_add_unsigned`.
+
+All of those agree with the uniform model below:
+
+* the value is always `start.wrapping_add(n)`
+* the flag is exactly "the mathematical result does not fit in `Self`"
+
+This does *not* model `Step for NonZero<_>`, which saturates instead of
+wrapping and is a separate impl. -/
+
+/-- Generic `forward_overflowing` for all unsigned scalar types. -/
+def core.iter.range.UScalarStep.forward_overflowing {ty : UScalarTy}
+    (start : UScalar ty) (n : Usize) : Result (UScalar ty × Bool) :=
+  ok (⟨ start.bv + BitVec.ofNat ty.numBits n.val ⟩,
+      decide (UScalar.max ty < start.val + n.val))
+
+/-- Generic `backward_overflowing` for all unsigned scalar types. -/
+def core.iter.range.UScalarStep.backward_overflowing {ty : UScalarTy}
+    (start : UScalar ty) (n : Usize) : Result (UScalar ty × Bool) :=
+  ok (⟨ start.bv - BitVec.ofNat ty.numBits n.val ⟩,
+      decide (start.val < n.val))
+
+/-- Generic `forward_overflowing` for all signed scalar types. -/
+def core.iter.range.IScalarStep.forward_overflowing {ty : IScalarTy}
+    (start : IScalar ty) (n : Usize) : Result (IScalar ty × Bool) :=
+  ok (⟨ start.bv + BitVec.ofNat ty.numBits n.val ⟩,
+      decide (IScalar.max ty < start.val + (n.val : Int)))
+
+/-- Generic `backward_overflowing` for all signed scalar types. -/
+def core.iter.range.IScalarStep.backward_overflowing {ty : IScalarTy}
+    (start : IScalar ty) (n : Usize) : Result (IScalar ty × Bool) :=
+  ok (⟨ start.bv - BitVec.ofNat ty.numBits n.val ⟩,
+      decide (start.val - (n.val : Int) < IScalar.min ty))
+
 -- ============================================================================
 -- Specialized Step instances
 -- ============================================================================
@@ -318,6 +367,10 @@ abbrev core.iter.range.StepUsize.steps_between := @UScalarStep.steps_between .Us
 abbrev core.iter.range.StepUsize.forward_checked := @UScalarStep.forward_checked .Usize
 @[rust_fun "core::iter::range::{core::iter::range::Step<usize>}::backward_checked"]
 abbrev core.iter.range.StepUsize.backward_checked := @UScalarStep.backward_checked .Usize
+@[rust_fun "core::iter::range::{core::iter::range::Step<usize>}::forward_overflowing"]
+abbrev core.iter.range.StepUsize.forward_overflowing := @UScalarStep.forward_overflowing .Usize
+@[rust_fun "core::iter::range::{core::iter::range::Step<usize>}::backward_overflowing"]
+abbrev core.iter.range.StepUsize.backward_overflowing := @UScalarStep.backward_overflowing .Usize
 @[rust_trait_impl "core::iter::range::Step<usize>"]
 abbrev core.iter.range.StepUsize := UScalarStep .Usize core.clone.CloneUsize core.cmp.PartialOrdUsize
 
@@ -327,6 +380,10 @@ abbrev core.iter.range.StepU8.steps_between := @UScalarStep.steps_between .U8
 abbrev core.iter.range.StepU8.forward_checked := @UScalarStep.forward_checked .U8
 @[rust_fun "core::iter::range::{core::iter::range::Step<u8>}::backward_checked"]
 abbrev core.iter.range.StepU8.backward_checked := @UScalarStep.backward_checked .U8
+@[rust_fun "core::iter::range::{core::iter::range::Step<u8>}::forward_overflowing"]
+abbrev core.iter.range.StepU8.forward_overflowing := @UScalarStep.forward_overflowing .U8
+@[rust_fun "core::iter::range::{core::iter::range::Step<u8>}::backward_overflowing"]
+abbrev core.iter.range.StepU8.backward_overflowing := @UScalarStep.backward_overflowing .U8
 @[rust_trait_impl "core::iter::range::Step<u8>"]
 abbrev core.iter.range.StepU8 := UScalarStep .U8 core.clone.CloneU8 core.cmp.PartialOrdU8
 
@@ -336,6 +393,10 @@ abbrev core.iter.range.StepU16.steps_between := @UScalarStep.steps_between .U16
 abbrev core.iter.range.StepU16.forward_checked := @UScalarStep.forward_checked .U16
 @[rust_fun "core::iter::range::{core::iter::range::Step<u16>}::backward_checked"]
 abbrev core.iter.range.StepU16.backward_checked := @UScalarStep.backward_checked .U16
+@[rust_fun "core::iter::range::{core::iter::range::Step<u16>}::forward_overflowing"]
+abbrev core.iter.range.StepU16.forward_overflowing := @UScalarStep.forward_overflowing .U16
+@[rust_fun "core::iter::range::{core::iter::range::Step<u16>}::backward_overflowing"]
+abbrev core.iter.range.StepU16.backward_overflowing := @UScalarStep.backward_overflowing .U16
 @[rust_trait_impl "core::iter::range::Step<u16>"]
 abbrev core.iter.range.StepU16 := UScalarStep .U16 core.clone.CloneU16 core.cmp.PartialOrdU16
 
@@ -345,6 +406,10 @@ abbrev core.iter.range.StepU32.steps_between := @UScalarStep.steps_between .U32
 abbrev core.iter.range.StepU32.forward_checked := @UScalarStep.forward_checked .U32
 @[rust_fun "core::iter::range::{core::iter::range::Step<u32>}::backward_checked"]
 abbrev core.iter.range.StepU32.backward_checked := @UScalarStep.backward_checked .U32
+@[rust_fun "core::iter::range::{core::iter::range::Step<u32>}::forward_overflowing"]
+abbrev core.iter.range.StepU32.forward_overflowing := @UScalarStep.forward_overflowing .U32
+@[rust_fun "core::iter::range::{core::iter::range::Step<u32>}::backward_overflowing"]
+abbrev core.iter.range.StepU32.backward_overflowing := @UScalarStep.backward_overflowing .U32
 @[rust_trait_impl "core::iter::range::Step<u32>"]
 abbrev core.iter.range.StepU32 := UScalarStep .U32 core.clone.CloneU32 core.cmp.PartialOrdU32
 
@@ -354,6 +419,10 @@ abbrev core.iter.range.StepU64.steps_between := @UScalarStep.steps_between .U64
 abbrev core.iter.range.StepU64.forward_checked := @UScalarStep.forward_checked .U64
 @[rust_fun "core::iter::range::{core::iter::range::Step<u64>}::backward_checked"]
 abbrev core.iter.range.StepU64.backward_checked := @UScalarStep.backward_checked .U64
+@[rust_fun "core::iter::range::{core::iter::range::Step<u64>}::forward_overflowing"]
+abbrev core.iter.range.StepU64.forward_overflowing := @UScalarStep.forward_overflowing .U64
+@[rust_fun "core::iter::range::{core::iter::range::Step<u64>}::backward_overflowing"]
+abbrev core.iter.range.StepU64.backward_overflowing := @UScalarStep.backward_overflowing .U64
 @[rust_trait_impl "core::iter::range::Step<u64>"]
 abbrev core.iter.range.StepU64 := UScalarStep .U64 core.clone.CloneU64 core.cmp.PartialOrdU64
 
@@ -363,6 +432,10 @@ abbrev core.iter.range.StepU128.steps_between := @UScalarStep.steps_between .U12
 abbrev core.iter.range.StepU128.forward_checked := @UScalarStep.forward_checked .U128
 @[rust_fun "core::iter::range::{core::iter::range::Step<u128>}::backward_checked"]
 abbrev core.iter.range.StepU128.backward_checked := @UScalarStep.backward_checked .U128
+@[rust_fun "core::iter::range::{core::iter::range::Step<u128>}::forward_overflowing"]
+abbrev core.iter.range.StepU128.forward_overflowing := @UScalarStep.forward_overflowing .U128
+@[rust_fun "core::iter::range::{core::iter::range::Step<u128>}::backward_overflowing"]
+abbrev core.iter.range.StepU128.backward_overflowing := @UScalarStep.backward_overflowing .U128
 @[rust_trait_impl "core::iter::range::Step<u128>"]
 abbrev core.iter.range.StepU128 := UScalarStep .U128 core.clone.CloneU128 core.cmp.PartialOrdU128
 
@@ -372,6 +445,10 @@ abbrev core.iter.range.StepIsize.steps_between := @IScalarStep.steps_between .Is
 abbrev core.iter.range.StepIsize.forward_checked := @IScalarStep.forward_checked .Isize
 @[rust_fun "core::iter::range::{core::iter::range::Step<isize>}::backward_checked"]
 abbrev core.iter.range.StepIsize.backward_checked := @IScalarStep.backward_checked .Isize
+@[rust_fun "core::iter::range::{core::iter::range::Step<isize>}::forward_overflowing"]
+abbrev core.iter.range.StepIsize.forward_overflowing := @IScalarStep.forward_overflowing .Isize
+@[rust_fun "core::iter::range::{core::iter::range::Step<isize>}::backward_overflowing"]
+abbrev core.iter.range.StepIsize.backward_overflowing := @IScalarStep.backward_overflowing .Isize
 @[rust_trait_impl "core::iter::range::Step<isize>"]
 abbrev core.iter.range.StepIsize := IScalarStep .Isize core.clone.CloneIsize core.cmp.PartialOrdIsize
 
@@ -381,6 +458,10 @@ abbrev core.iter.range.StepI8.steps_between := @IScalarStep.steps_between .I8
 abbrev core.iter.range.StepI8.forward_checked := @IScalarStep.forward_checked .I8
 @[rust_fun "core::iter::range::{core::iter::range::Step<i8>}::backward_checked"]
 abbrev core.iter.range.StepI8.backward_checked := @IScalarStep.backward_checked .I8
+@[rust_fun "core::iter::range::{core::iter::range::Step<i8>}::forward_overflowing"]
+abbrev core.iter.range.StepI8.forward_overflowing := @IScalarStep.forward_overflowing .I8
+@[rust_fun "core::iter::range::{core::iter::range::Step<i8>}::backward_overflowing"]
+abbrev core.iter.range.StepI8.backward_overflowing := @IScalarStep.backward_overflowing .I8
 @[rust_trait_impl "core::iter::range::Step<i8>"]
 abbrev core.iter.range.StepI8 := IScalarStep .I8 core.clone.CloneI8 core.cmp.PartialOrdI8
 
@@ -390,6 +471,10 @@ abbrev core.iter.range.StepI16.steps_between := @IScalarStep.steps_between .I16
 abbrev core.iter.range.StepI16.forward_checked := @IScalarStep.forward_checked .I16
 @[rust_fun "core::iter::range::{core::iter::range::Step<i16>}::backward_checked"]
 abbrev core.iter.range.StepI16.backward_checked := @IScalarStep.backward_checked .I16
+@[rust_fun "core::iter::range::{core::iter::range::Step<i16>}::forward_overflowing"]
+abbrev core.iter.range.StepI16.forward_overflowing := @IScalarStep.forward_overflowing .I16
+@[rust_fun "core::iter::range::{core::iter::range::Step<i16>}::backward_overflowing"]
+abbrev core.iter.range.StepI16.backward_overflowing := @IScalarStep.backward_overflowing .I16
 @[rust_trait_impl "core::iter::range::Step<i16>"]
 abbrev core.iter.range.StepI16 := IScalarStep .I16 core.clone.CloneI16 core.cmp.PartialOrdI16
 
@@ -399,6 +484,10 @@ abbrev core.iter.range.StepI32.steps_between := @IScalarStep.steps_between .I32
 abbrev core.iter.range.StepI32.forward_checked := @IScalarStep.forward_checked .I32
 @[rust_fun "core::iter::range::{core::iter::range::Step<i32>}::backward_checked"]
 abbrev core.iter.range.StepI32.backward_checked := @IScalarStep.backward_checked .I32
+@[rust_fun "core::iter::range::{core::iter::range::Step<i32>}::forward_overflowing"]
+abbrev core.iter.range.StepI32.forward_overflowing := @IScalarStep.forward_overflowing .I32
+@[rust_fun "core::iter::range::{core::iter::range::Step<i32>}::backward_overflowing"]
+abbrev core.iter.range.StepI32.backward_overflowing := @IScalarStep.backward_overflowing .I32
 @[rust_trait_impl "core::iter::range::Step<i32>"]
 abbrev core.iter.range.StepI32 := IScalarStep .I32 core.clone.CloneI32 core.cmp.PartialOrdI32
 
@@ -408,6 +497,10 @@ abbrev core.iter.range.StepI64.steps_between := @IScalarStep.steps_between .I64
 abbrev core.iter.range.StepI64.forward_checked := @IScalarStep.forward_checked .I64
 @[rust_fun "core::iter::range::{core::iter::range::Step<i64>}::backward_checked"]
 abbrev core.iter.range.StepI64.backward_checked := @IScalarStep.backward_checked .I64
+@[rust_fun "core::iter::range::{core::iter::range::Step<i64>}::forward_overflowing"]
+abbrev core.iter.range.StepI64.forward_overflowing := @IScalarStep.forward_overflowing .I64
+@[rust_fun "core::iter::range::{core::iter::range::Step<i64>}::backward_overflowing"]
+abbrev core.iter.range.StepI64.backward_overflowing := @IScalarStep.backward_overflowing .I64
 @[rust_trait_impl "core::iter::range::Step<i64>"]
 abbrev core.iter.range.StepI64 := IScalarStep .I64 core.clone.CloneI64 core.cmp.PartialOrdI64
 
@@ -417,6 +510,10 @@ abbrev core.iter.range.StepI128.steps_between := @IScalarStep.steps_between .I12
 abbrev core.iter.range.StepI128.forward_checked := @IScalarStep.forward_checked .I128
 @[rust_fun "core::iter::range::{core::iter::range::Step<i128>}::backward_checked"]
 abbrev core.iter.range.StepI128.backward_checked := @IScalarStep.backward_checked .I128
+@[rust_fun "core::iter::range::{core::iter::range::Step<i128>}::forward_overflowing"]
+abbrev core.iter.range.StepI128.forward_overflowing := @IScalarStep.forward_overflowing .I128
+@[rust_fun "core::iter::range::{core::iter::range::Step<i128>}::backward_overflowing"]
+abbrev core.iter.range.StepI128.backward_overflowing := @IScalarStep.backward_overflowing .I128
 @[rust_trait_impl "core::iter::range::Step<i128>"]
 abbrev core.iter.range.StepI128 := IScalarStep .I128 core.clone.CloneI128 core.cmp.PartialOrdI128
 

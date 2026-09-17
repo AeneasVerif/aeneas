@@ -41,9 +41,9 @@ example (xs : List Nat) :
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, setA, a_post1, a_post2 ⟩ ← readPair_spec
+  [apply]     let* ⟨ a, setA, a_post, setA_post ⟩ ← readPair_spec
     let* ⟨ b, b_post ⟩ ← readSingle_spec
-    let* ⟨ c, setC, c_post1, c_post2 ⟩ ← readPair_spec
+    let* ⟨ c, setC, c_post, setC_post ⟩ ← readPair_spec
     let* ⟨ ⟩ ← readSingle_spec
 -/
 #guard_msgs in
@@ -89,7 +89,7 @@ example (xs : List Nat) :
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, setA, a_post1, a_post2 ⟩ ← readPair_spec
+  [apply]     let* ⟨ a, setA, a_post, setA_post ⟩ ← readPair_spec
     let* ⟨ b, b_post ⟩ ← readSingle_spec
     agrind
 -/

@@ -5,6 +5,9 @@ open Aeneas Aeneas.Std Result ControlFlow Error
 set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false
+set_option linter.style.whitespace false
+set_option linter.style.setOption false
+set_option linter.style.longLine false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -12,28 +15,7 @@ set_option maxHeartbeats 1000000
 /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
 set_option maxRecDepth 2048
 
-/- You can remove the following line by using the CLI option `-all-computable`: -/
-noncomputable section
-
 namespace drop
-
-/-- [core::iter::range::{impl core::iter::range::Step for usize}::backward_overflowing]:
-    Source: '/rustc/library/core/src/iter/range.rs', lines 357:16-357:78
-    Name pattern: [core::iter::range::{core::iter::range::Step<usize>}::backward_overflowing]
-    Visibility: public -/
-@[rust_fun
-  "core::iter::range::{core::iter::range::Step<usize>}::backward_overflowing"]
-axiom Usize.Insts.CoreIterRangeStep.backward_overflowing
-  : Std.Usize → Std.Usize → Result (Std.Usize × Bool)
-
-/-- [core::iter::range::{impl core::iter::range::Step for usize}::forward_overflowing]:
-    Source: '/rustc/library/core/src/iter/range.rs', lines 348:16-348:77
-    Name pattern: [core::iter::range::{core::iter::range::Step<usize>}::forward_overflowing]
-    Visibility: public -/
-@[rust_fun
-  "core::iter::range::{core::iter::range::Step<usize>}::forward_overflowing"]
-axiom Usize.Insts.CoreIterRangeStep.forward_overflowing
-  : Std.Usize → Std.Usize → Result (Std.Usize × Bool)
 
 /-- [drop::fill]: loop body 0:
     Source: 'tests/src/drop.rs', lines 7:4-9:5 -/

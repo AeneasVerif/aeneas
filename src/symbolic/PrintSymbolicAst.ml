@@ -215,8 +215,8 @@ and expansion_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       let e1 = expr_to_string env indent1 indent_incr e1 in
       indent ^ "if " ^ scrut ^ " then\n" ^ e0 ^ "\n" ^ indent ^ "else\n" ^ e1
   | ExpandInt (_, branches, otherwise) ->
-      let branch_to_string ((sv, branch) : scalar_value * expr) : string =
-        indent ^ "| " ^ scalar_value_to_string sv ^ " ->\n"
+      let branch_to_string ((sv, branch) : integer_value * expr) : string =
+        indent ^ "| " ^ integer_value_to_string sv ^ " ->\n"
         ^ expr_to_string env indent1 indent_incr branch
       in
       let otherwise = expr_to_string env indent1 indent_incr otherwise in

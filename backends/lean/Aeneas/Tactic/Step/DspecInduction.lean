@@ -93,8 +93,7 @@ theorem curry_admissible (a1 a2 a3) (P : (a1 → a2 → a3) → Prop) [CCPO a3]
 theorem WP_func_admissible (α β : Type) (arg) (post)
   : Order.admissible fun (f : α → Result β) => WP.dspec (f arg) post := by
   apply Lean.Order.admissible_apply (fun _ fx => WP.dspec fx _)
-  apply Lean.Order.admissible_flatOrder
-  simp only [WP.dspec]
+  apply WP.dspec_admissible
 
 def getParamNames (ty : Expr) : MetaM (Array Name) := do
   forallTelescope ty fun xs _ => do
@@ -343,7 +342,7 @@ example x y : (first_arg_const x y) ⦃fun x => x = 0⦄div := by
   dspec_induction first_arg_const
   intros first_arg_const' ih y
   split
-  · trivial
+  · simp
   · apply ih
 
 example x y : (second_arg_const x y) ⦃fun x => x = 0⦄div := by
@@ -351,7 +350,7 @@ example x y : (second_arg_const x y) ⦃fun x => x = 0⦄div := by
   dspec_induction second_arg_const
   intros second_arg_const' ih y
   split
-  · trivial
+  · simp
   · apply ih
 
 end Test

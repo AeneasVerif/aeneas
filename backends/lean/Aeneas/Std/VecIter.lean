@@ -13,9 +13,9 @@ def alloc.vec.into_iter.IntoIter (T : Type) : Type := alloc.vec.Vec T
   (keepParams := [true, false])]
 def alloc.vec.into_iter.IteratorIntoIter.next {T : Type} (it: alloc.vec.into_iter.IntoIter T) :
   Result ((Option T) × (alloc.vec.into_iter.IntoIter T)) :=
-  match it with
-  | ⟨ [], _ ⟩  => ok (none, it)
-  | ⟨ hd :: tl, _ ⟩ => ok (hd, ⟨ tl, by scalar_tac ⟩ )
+  match h : it.val with
+  | []  => ok (none, it)
+  | hd :: tl => ok (hd, .from tl (by grind) )
 
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, @A>, @T>"
@@ -66,7 +66,7 @@ def alloc.vec.FromIteratorVec.from_iter
   fun input => do
     let iter ← IntoIteratorInst.into_iter input
     let list ← alloc.vec.FromIteratorVec.iterToList IntoIteratorInst.iteratorInst iter []
-    if h : list.length ≤ Usize.max then .ok ⟨ list, h ⟩
+    if h : list.length ≤ Usize.max then .ok (.from list h)
     else .fail .panic
 
 @[reducible, rust_trait_impl
