@@ -21,25 +21,24 @@ noncomputable section
 namespace nested_shared_borrows
 
 /-- [core::option::{impl core::ops::try_trait::Try for core::option::Option<T>}::branch]:
-    Source: '/rustc/library/core/src/option.rs', lines 2868:4-2868:64
+    Source: '/rustc/library/core/src/option.rs', lines 2875:4-2875:64
     Name pattern: [core::option::{core::ops::try_trait::Try<core::option::Option<@T>>}::branch]
     Visibility: public -/
 @[rust_fun
   "core::option::{core::ops::try_trait::Try<core::option::Option<@T>>}::branch"]
 axiom core.option.Option.Insts.CoreOpsTry_traitTry.branch
   {T : Type} :
-  Option T → Result (core.ops.control_flow.ControlFlow (Option
-    core.convert.Infallible) T)
+  Option T → Result (core.ops.control_flow.ControlFlow (Option Never) T)
 
-/-- [core::option::{impl core::ops::try_trait::FromResidual<core::option::Option<core::convert::Infallible>> for core::option::Option<T>}::from_residual]:
-    Source: '/rustc/library/core/src/option.rs', lines 2882:4-2882:67
-    Name pattern: [core::option::{core::ops::try_trait::FromResidual<core::option::Option<@T>, core::option::Option<core::convert::Infallible>>}::from_residual]
+/-- [core::option::{impl core::ops::try_trait::FromResidual<core::option::Option<!>> for core::option::Option<T>}::from_residual]:
+    Source: '/rustc/library/core/src/option.rs', lines 2889:4-2889:49
+    Name pattern: [core::option::{core::ops::try_trait::FromResidual<core::option::Option<@T>, core::option::Option<!>>}::from_residual]
     Visibility: public -/
 @[rust_fun
-  "core::option::{core::ops::try_trait::FromResidual<core::option::Option<@T>, core::option::Option<core::convert::Infallible>>}::from_residual"]
+  "core::option::{core::ops::try_trait::FromResidual<core::option::Option<@T>, core::option::Option<!>>}::from_residual"]
 axiom
-  core.option.Option.Insts.CoreOpsTry_traitFromResidualOptionInfallible.from_residual
-  (T : Type) : Option core.convert.Infallible → Result (Option T)
+  core.option.Option.Insts.CoreOpsTry_traitFromResidualOptionNever.from_residual
+  (T : Type) : Option Never → Result (Option T)
 
 /-- [nested_shared_borrows::do_option]:
     Source: 'tests/src/nested-shared-borrows.rs', lines 12:0-14:1 -/
@@ -55,7 +54,7 @@ def double_ref_option (_arg : Std.U8) : Result (Option Unit) := do
   match cf with
   | core.ops.control_flow.ControlFlow.Continue _ => ok (some ())
   | core.ops.control_flow.ControlFlow.Break residual =>
-    core.option.Option.Insts.CoreOpsTry_traitFromResidualOptionInfallible.from_residual
+    core.option.Option.Insts.CoreOpsTry_traitFromResidualOptionNever.from_residual
       Unit residual
 
 /-- [nested_shared_borrows::do_result]:
@@ -74,7 +73,7 @@ def double_ref_result
   | core.ops.control_flow.ControlFlow.Continue _ =>
     ok (core.result.Result.Ok ())
   | core.ops.control_flow.ControlFlow.Break residual =>
-    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+    core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
       Unit (core.convert.FromSame Unit) residual
 
 /-- [nested_shared_borrows::S]
@@ -99,7 +98,7 @@ def S.method_try
   | core.ops.control_flow.ControlFlow.Continue val =>
     ok (core.result.Result.Ok val)
   | core.ops.control_flow.ControlFlow.Break residual =>
-    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+    core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
       Std.U8 (core.convert.FromSame Unit) residual
 
 end nested_shared_borrows

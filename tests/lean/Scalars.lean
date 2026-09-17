@@ -246,7 +246,7 @@ def use_question_mark
     let i ← val + 1#u32
     ok (core.result.Result.Ok i)
   | core.ops.control_flow.ControlFlow.Break residual =>
-    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+    core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
       Std.U32 (core.convert.FromSame Unit) residual
 
 /-- [scalars::test_question_mark_ok]:
