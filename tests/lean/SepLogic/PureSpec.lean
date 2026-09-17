@@ -791,7 +791,8 @@ example : ⦃ emp ⦄ alloc (0 : Nat) ⦃⇓ _ => ⌜True⌝⦄ := by
 -- allocation satisfies one -- only from the program. -/
 example : ¬ ∃ q, alloc (0 : Nat) = Result.ok q := by
   rintro ⟨q, hq⟩
-  simp [alloc, allocArray, Result.guardedModify] at hq
+  simp [Aeneas.Std.MutRawPtr.alloc, Aeneas.Std.RawPtr.allocArray,
+    Result.guardedModify] at hq
 
 /-! ## 9. Examples carried over from `Aeneas.Std.WP`
 

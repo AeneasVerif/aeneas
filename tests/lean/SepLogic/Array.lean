@@ -1,5 +1,7 @@
 import Aeneas.SepLogic.Semantics
 import SepLogic.MutableData.Array
+import SepLogic.MutableData.Buffer
+import SepLogic.MutableData.Ptr
 
 /-!
 # The array interface
@@ -121,7 +123,7 @@ example (a : Array Nat 3) (values : List Nat) (h : Heap)
 /-- A slice of known length is an array. -/
 example (b : Buffer Nat) (values : List Nat) (hLength : values.length = 3) :
     b ↦ values ⊢ (b.toArray 3) ↦ values :=
-  Buffer.pointsTo_toArray hLength
+  Aeneas.Std.Buffer.pointsTo_toArray hLength
 
 /-- Ownership of an array still splits along its indices, since the range
 underneath it does. -/
@@ -174,7 +176,7 @@ theorem bufferMutToRawRoundTrip.spec :
   apply ispec_spec
   step as ⟨b⟩
   step with Buffer.write.spec_array b [4, 5, 6] 2 7 (by simp)
-  step with Buffer.end_mut_to_raw.spec functionalSlice b [4, 5, 7]
+  step with Aeneas.Std.Buffer.end_mut_to_raw.spec functionalSlice b [4, 5, 7]
   simp [functionalSlice, List.setSlice!]
   iframe
 
