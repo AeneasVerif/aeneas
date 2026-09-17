@@ -2,7 +2,6 @@ module
 public import Aeneas.Std.Delab
 public import Aeneas.Std.Scalar.Core
 public import Aeneas.Std.WP
-public import Aeneas.Data.Coinductive.StateMachine
 public import Aeneas.Std.Primitives
 public import Aeneas.SepLogic
 public import Aeneas.Tactic.SepLogic.Frame
