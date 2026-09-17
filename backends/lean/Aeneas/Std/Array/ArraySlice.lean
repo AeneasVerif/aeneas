@@ -14,6 +14,7 @@ public section
 namespace Aeneas.Std
 
 open Result Error core.ops.range WP
+open Aeneas.SepLogic
 
 attribute [-simp] List.getElem!_eq_getElem?_getD
 
@@ -129,6 +130,30 @@ def core.array.TryFromSliceError := Unit
 @[simp, simp_lists_safe, grind =, agrind =]
 theorem Array.val_to_slice {α} {n} (a : Array α n) : a.to_slice.val = a.val := by
   simp only [Array.to_slice, Slice.from_val]
+
+/-- Materialize an array as fresh memory and return a const pointer to its
+first slot. -/
+def Array.as_ptr {T : Type} {N : Usize} (a : Array T N) :
+    Result (ConstRawPtr T) :=
+  a.to_slice.as_ptr
+
+@[step]
+theorem Array.as_ptr.spec {T : Type} {N : Usize} (a : Array T N) :
+    ⦃ emp ⦄ a.as_ptr ⦃⇓ p => p ↦* a.val⦄ := by
+  simpa only [Array.as_ptr, Array.val_to_slice] using
+    Slice.as_ptr.spec a.to_slice
+
+/-- Materialize an array as fresh memory and return a mutable pointer to its
+first slot. -/
+def Array.as_mut_ptr {T : Type} {N : Usize} (a : Array T N) :
+    Result (MutRawPtr T) :=
+  a.to_slice.as_mut_ptr
+
+@[step]
+theorem Array.as_mut_ptr.spec {T : Type} {N : Usize} (a : Array T N) :
+    ⦃ emp ⦄ a.as_mut_ptr ⦃⇓ p => p ↦* a.val⦄ := by
+  simpa only [Array.as_mut_ptr, Array.val_to_slice] using
+    Slice.as_mut_ptr.spec a.to_slice
 
 @[simp, simp_lists_safe, simp_scalar_safe, scalar_tac a.to_slice, grind =, agrind =]
 theorem Array.length_to_slice (a : Array α n) :
