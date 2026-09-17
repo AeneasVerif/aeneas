@@ -8,6 +8,7 @@ import Aeneas.Std.Scalar
 import Aeneas.Std.Slice
 import Aeneas.Std.SliceDef
 import Aeneas.Std.SliceIter
+import Aeneas.Std.SpecRefl
 import Aeneas.Std.Std
 import Aeneas.Std.String
 import Aeneas.Std.StringDef
