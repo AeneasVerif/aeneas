@@ -873,4 +873,112 @@ def dep_return_seq : Result (Std.Array U64 25#usize) := do
 
 end CapturedSynthMVarTests
 
+namespace CrossUniverseTests
+
+open Aeneas Aeneas.Std Result
+
+def cross_universe {α : Type u} {β : Type v} (m : Result α) (k : α → Result β) :
+    Result β := do
+  let x ← m
+  k x
+
+example {α : Type u} {β : Type v} (m : Result α) (k : α → Result β) :
+    cross_universe m k = Aeneas.Std.bind m k := rfl
+
+def callback (m : Result Nat) : Result (Nat × (Nat → Result Unit)) := do
+  let n ← m
+  pure (n, fun _ => pure ())
+
+example (m : Result Nat) :
+    callback m = Aeneas.Std.bind m (fun n => pure (n, fun _ => pure ())) := rfl
+
+def callback_pat (m : Result (Nat × Nat)) :
+    Result (Nat × (Nat → Result Unit)) := do
+  let (n, k) ← m
+  pure (n + k, fun _ => pure ())
+
+example (m : Result (Nat × Nat)) :
+    callback_pat m =
+      Aeneas.Std.bind m (Aeneas.Std.uncurry fun n k => pure (n + k, fun _ => pure ())) := rfl
+
+def callback_seq (m : Result Unit) : Result (Nat → Result Unit) := do
+  m
+  pure (fun _ => pure ())
+
+example (m : Result Unit) :
+    callback_seq m = Aeneas.Std.bind m (fun _ => pure (fun _ => pure ())) := rfl
+
+def callback_chain (m : Result Nat) (next : Nat → Result Nat) :
+    Result (Nat × (Nat → Result Unit)) := do
+  let n ← m
+  let k ← next n
+  pure (k, fun _ => pure ())
+
+example (m : Result Nat) (next : Nat → Result Nat) :
+    callback_chain m next =
+      Aeneas.Std.bind m (fun n =>
+        Aeneas.Std.bind (next n) (fun k => pure (k, fun _ => pure ()))) := rfl
+
+def run_callback (m : Result (Nat → Result Unit)) : Result Unit := do
+  let f ← m
+  f 0
+
+example (m : Result (Nat → Result Unit)) :
+    run_callback m = Aeneas.Std.bind m (fun f => f 0) := rfl
+
+def readValue {T : Type u} (value : T) : Result T :=
+  pure value
+
+def writeValue {T : Type u} (_ : T) : Result Unit :=
+  pure ()
+
+def read_with_callback {T : Type u} (value : T) :
+    Result (T × (T → Result Unit)) := do
+  let read ← readValue value
+  pure (read, fun updated => writeValue updated)
+
+example {T : Type u} (value : T) :
+    read_with_callback value =
+      Aeneas.Std.bind (readValue value) fun read =>
+        pure (read, fun updated => writeValue updated) := rfl
+
+def inferred_match_result (b : Bool) (m : Result Nat) :
+    Result (core.result.Result Nat Unit) := do
+  let r ← match b with
+    | true => do
+      let n ← m
+      ok (core.result.Result.Ok n)
+    | false => ok (core.result.Result.Err ())
+  ok r
+
+example (b : Bool) (m : Result Nat) :
+    inferred_match_result b m =
+      Aeneas.Std.bind
+        (match b with
+        | true => Aeneas.Std.bind m (fun n => ok (core.result.Result.Ok n))
+        | false => ok (core.result.Result.Err ()))
+        Result.ok := rfl
+
+def inferred_match_callback (b : Bool) (m : Result Nat) : Result Unit := do
+  let r ← match b with
+    | true => do
+      let n ← m
+      ok (core.result.Result.Ok n)
+    | false => ok (core.result.Result.Err (fun (_ : Nat) => (pure () : Result Unit)))
+  match r with
+  | .Ok _ => pure ()
+  | .Err f => f 0
+
+example (b : Bool) (m : Result Nat) :
+    inferred_match_callback b m =
+      Aeneas.Std.bind
+        (match b with
+        | true => Aeneas.Std.bind m (fun n => ok (core.result.Result.Ok n))
+        | false => ok (core.result.Result.Err (fun (_ : Nat) => (pure () : Result Unit))))
+        (fun r => match r with
+        | .Ok _ => pure ()
+        | .Err f => f 0) := rfl
+
+end CrossUniverseTests
+
 end Do
