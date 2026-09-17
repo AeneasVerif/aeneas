@@ -63,12 +63,25 @@ meta def mkContext (expectedType : Expr) : TermElabM Context := do
   let pureInst ← synthInstance (← mkAppM ``Pure #[m])
   return { m, expectedAlpha := α, bindInst, pureInst }
 
+/-- Build `m α`. -/
+meta def ElabM.mkMonadicType (α : Expr) : ElabM Expr := do
+  let ctx ← read
+  /- `Result` supports binds between different universes, unlike `Bind m`. -/
+  if ctx.m.isConstOf ``Aeneas.Std.Result then
+    return mkApp (mkConst ``Aeneas.Std.Result [← getDecLevel α]) α
+  else
+    pure (mkApp ctx.m α)
+
 meta def ElabM.mkBind (e k : Expr) : ElabM Expr := do
   let ctx ← read
+  if ctx.m.isConstOf ``Aeneas.Std.Result then
+    let eType ← instantiateMVars (← inferType e)
+    let resultType ← ElabM.mkMonadicType ctx.expectedAlpha
+    /- Do not unify unresolved universes here: later match arms may determine them. -/
+    if eType.getAppFn != ctx.m || resultType.getAppFn != ctx.m then
+      return ← mkAppOptM ``Aeneas.Std.bind
+        #[none, some ctx.expectedAlpha, some e, some k]
   mkAppOptM ``Bind.bind #[some ctx.m, some ctx.bindInst, none, none, some e, some k]
-
-/-- Build `m α`. -/
-meta def ElabM.mkMonadicType (α : Expr) : ElabM Expr := read >>= fun ctx => pure (mkApp ctx.m α)
 
 /-- Run an `ElabM` against the given `do` block expected type. -/
 meta def ElabM.execute (x : ElabM Expr) (expectedType : Expr) : TermElabM Expr := do
@@ -545,6 +558,18 @@ end
 meta def elabDoSeq (doSeq : TSyntax ``doSeq) : ElabM Expr :=
   getDoElems doSeq >>= fun elems => elabDoSeqCore elems
 
+/-- Preserve the `Bind.bind` shape used by tactics once universe inference finishes. -/
+meta def normalizeResultBinds (expr : Expr) : MetaM Expr :=
+  Meta.transform expr (post := fun e => do
+    if e.isAppOfArity ``Aeneas.Std.bind 4 then
+      let [u, v] := e.getAppFn.constLevels! | return .done e
+      if u == v then
+        let args := e.getAppArgs
+        return .done (← mkAppOptM ``Bind.bind
+          #[some (mkConst ``Aeneas.Std.Result [u]), none,
+            some args[0]!, some args[1]!, some args[2]!, some args[3]!])
+    return .done e)
+
 /-- Option to toggle the new Aeneas `do` elaborator -/
 meta register_option Aeneas.customDoElab : Bool := {
     defValue := true
@@ -564,7 +589,10 @@ meta def elabDo : TermElab := fun stx expectedType? => do
     | _ => pure false
   if useNewElab then
     let `(do $doSeq) := stx | throwUnsupportedSyntax
-    Do.ElabM.execute (Do.elabDoSeq doSeq) expectedType?.get!
+    let result ← Do.ElabM.execute (Do.elabDoSeq doSeq) expectedType?.get!
+    let result ← Term.ensureHasType expectedType? result
+    synthesizeSyntheticMVarsNoPostponing
+    Do.normalizeResultBinds (← instantiateMVars result)
   else
     Term.elabDo stx expectedType?
 
