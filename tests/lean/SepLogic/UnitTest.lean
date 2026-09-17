@@ -1,5 +1,6 @@
 import Aeneas.SepLogic.Semantics
 import SepLogic.MutableData.Buffer
+import SepLogic.MutableData.Ptr
 import SepLogic.Examples.Basic
 
 open Aeneas
@@ -354,7 +355,7 @@ example (p : Ptr Nat) : ¬ (⦃ emp ⦄ read p ⦃⇓ _ => emp⦄) := by
   intro hTriple
   rw [ispec_iff] at hTriple
   have hSpec := hTriple emp ∅ ((sep_emp_r emp).mpr ∅ trivial)
-  simp only [read, Result.guardedModify] at hSpec
+  simp only [Aeneas.Std.RawPtr.read, Result.guardedModify] at hSpec
   obtain ⟨hReadable, -⟩ := hSpec.vis_view
   exact Ptr.not_contains_empty p hReadable.contains
 

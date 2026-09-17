@@ -26,12 +26,10 @@ time — the `(α : Type) × List α` view of an allocation is what
 `Ptr.pointsToRange` owns, the list of the values at consecutive addresses, and
 it splits and joins by regrouping a separating conjunction.
 
-`tests/lean/SepLogic/MutableData/` builds the Rust view on this, and is the only place a `Ref`
-is visible: [`Ptr`](../../../../tests/lean/SepLogic/MutableData/Ptr.lean) allocates a run of slots and
-is the interior pointer into it,
-[`Buffer`](../../../../tests/lean/SepLogic/MutableData/Buffer.lean) is a bounded view of one, and
-[`Array`](../../../../tests/lean/SepLogic/MutableData/Array.lean) is the array whose length is part of
-its type.
+[`RawPtr`](RawPtr.lean) builds the Rust pointer view on this heap: it allocates
+runs of slots and addresses their interiors. The mutable-data prototypes under
+`tests/lean/SepLogic/MutableData/` build bounded buffers and statically sized
+arrays on top of those raw pointers.
 -/
 
 /- An allocation identifier is fresh and behaves like a monotonic
