@@ -1253,6 +1253,8 @@ let lean_builtin_funs =
     mk_fun "core::slice::{[@T]}::get_unchecked" "core.slice.Slice.get_unchecked";
     (* file: "Aeneas/Std/Slice.lean", line: 121 *)
     mk_fun "core::slice::{[@T]}::is_empty" "core.slice.Slice.is_empty";
+    mk_fun "core::slice::{[@T]}::as_ptr" "Slice.as_ptr";
+    mk_fun "core::slice::{[@T]}::as_mut_ptr" "Slice.as_mut_ptr";
     (* file: "Aeneas/Std/SliceIter.lean", line: 27 *)
     mk_fun "core::slice::{[@T]}::iter" "core.slice.Slice.iter";
     (* file: "Aeneas/Std/SliceIter.lean", line: 54 *)
