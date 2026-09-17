@@ -27,30 +27,24 @@ def List.mapM_with_length {m : Type u → Type v} [Monad m] {α : Type w} {β : 
     let a' ← f a
     pure ⟨a' :: l, by grind⟩
 
-theorem List.mapM_with_length_spec{post : Nat → β → Prop} {f : α → Result β} {l : List α}
+/- Stated as a `spec`, not as "it returns an `ok`": the recursion then composes
+with `spec_bind`, and no separate returning hypothesis is needed. -/
+theorem List.mapM_with_length_spec {post : Nat → β → Prop} {f : α → Result β} {l : List α}
   (h : ∀ i (hi : i < l.length), f l[i] ⦃ post i ⦄) :
-  exists l', (List.mapM_with_length f l = .ok l')
-    ∧ (l'.val.map ok = l.map f)
-    := by
+  List.mapM_with_length f l ⦃ l' => ∀ i (hi : i < l'.val.length), post i l'.val[i] ⦄ := by
   induction l generalizing post with
   | nil => simp [mapM_with_length, pure]
   | cons a as ih =>
-    have ih := ih (post := fun n => post n.succ)
-    have : ∀ (i : ℕ) (hi : i < as.length), f as[i] ⦃ post i.succ ⦄ := by
-      intros i hi
-      apply h i.succ (by grind)
-    obtain ⟨lih, propih⟩ := ih this
-    have fa := h 0 (by grind)
-    cases hfa : (f a) <;> simp_all
-    rename_i r
-    exists (r :: lih)
-    constructor
-    · constructor
-      · simp [mapM_with_length]
-        simp [*]
-        simp [Functor.map]
-      · grind
-    · grind
+    simp only [mapM_with_length]
+    apply spec_bind (ih (post := fun n => post n.succ) (by intro i hi; exact h i.succ (by grind)))
+    intro l hl
+    apply spec_bind (h 0 (by grind))
+    intro a' ha'
+    simp only [pure, spec_ok]
+    intro i hi
+    cases i with
+    | zero => simpa using ha'
+    | succ j => simpa using hl j (by simp at hi; grind)
 
 def List.clone (clone : α → Result α) (l : List α) : Result ({ l' : List α // l'.length = l.length}) :=
   List.mapM_with_length clone l
