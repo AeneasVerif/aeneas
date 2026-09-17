@@ -69,6 +69,12 @@ pub fn zip_iter(a: &[u8], b: &[u8]) {
     for _ in a.iter().zip(b.iter()) {}
 }
 
+pub fn arrays_zip_iter() {
+    let a = [1u32, 2u32, 3u32];
+    let b = [9u32, 17u32, 10u32];
+    for _ in a.iter().zip(b.iter()) {}
+}
+
 /*
 fn array_into_iter<const N : usize>(s : &[u8; N]) {
     for _ in s {}
