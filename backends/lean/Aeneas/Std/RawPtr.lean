@@ -1,7 +1,6 @@
 import Aeneas.Std.Delab
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.WP
-import Aeneas.Data.Coinductive.StateMachine
 import Aeneas.Std.Primitives
 import Aeneas.SepLogic
 import Aeneas.Tactic.SepLogic.Frame
