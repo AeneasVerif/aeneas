@@ -1,11 +1,13 @@
-import SepLogic.MutableData.Buffer
+import Aeneas.Std.Buffer
 import Aeneas.Std.Array.Array
+import Aeneas.Tactic.SepLogic
+import Aeneas.Tactic.Step.StepStar
 
 /-!
 # Arrays
 
 `Array α n` is the Rust array `[α; n]`: `n` consecutive slots of the allocation
-of [`Ptr.lean`](Ptr.lean), reached through one pointer.  What distinguishes it
+reached through one mutable raw pointer. What distinguishes it
 from the `Buffer α` of [`Buffer.lean`](Buffer.lean) is where the length lives —
 in the *type* of an array, in a *field* of a buffer — which is exactly the
 difference between `[T; N]` and `&mut [T]`.
@@ -24,21 +26,21 @@ namespace SepLogic
 
 open Aeneas.Std.WP
 
-open Aeneas.Std (Heap Result)
+open Aeneas.Std (Buffer Heap MutRawPtr RawPtr Result)
 
 variable {α : Type} {n : Nat}
 
 /-- A Rust array `[α; n]`: `n` consecutive slots reached through `ptr`. -/
 structure Array (α : Type) (n : Nat) where
-  ptr : Ptr α
-  /- As for `Ptr` and `Buffer`, being inhabited is what makes the `unwrap`s of
+  ptr : MutRawPtr α
+  /- As for `RawPtr` and `Buffer`, being inhabited is what makes the `unwrap`s of
      a translated Rust program expressible as `Option.get!`. -/
   deriving Inhabited, DecidableEq
 
 namespace Array
 
 /-- The pointer to the slot at index `i`. -/
-def ptrAt (a : Array α n) (i : Nat) : Ptr α := a.ptr.add i
+def ptrAt (a : Array α n) (i : Nat) : MutRawPtr α := a.ptr.add i
 
 /-- The slice spanning the whole array: `[T; N]` seen as `&mut [T]`. -/
 def toBuffer (a : Array α n) : Buffer α := ⟨a.ptr.base, a.ptr.offset, n⟩
@@ -86,23 +88,23 @@ theorem range_entails_pointsTo {a : Array α n} {values : List α}
 
 /-- Allocate an array of `n` slots, each holding `value`. -/
 def alloc (α : Type) (n : Nat) (value : α) : Result (Array α n) :=
-  allocArray (List.replicate n value) fun r => ⟨⟨r.base, r.offset⟩⟩
+  RawPtr.allocArray (List.replicate n value) fun r => ⟨⟨r.base, r.offset⟩⟩
 
 @[step]
 theorem alloc.spec (α : Type) (n : Nat) (value : α) :
     ⦃ emp ⦄ Array.alloc α n value
       ⦃⇓ a => a ↦ List.replicate n value⦄ := by
-  refine allocArray.spec _ _ _ fun r h hOwns => ?_
+  refine RawPtr.allocArray.spec _ _ _ fun r h hOwns => ?_
   exact (sep_pure_l _ _ h).mpr ⟨by simp, hOwns⟩
 
 /-- Allocate an array holding exactly `values`. -/
 def ofList (values : List α) : Result (Array α values.length) :=
-  allocArray values fun r => ⟨⟨r.base, r.offset⟩⟩
+  RawPtr.allocArray values fun r => ⟨⟨r.base, r.offset⟩⟩
 
 @[step]
 theorem ofList.spec (values : List α) :
     ⦃ emp ⦄ Array.ofList values ⦃⇓ a => a ↦ values⦄ := by
-  refine allocArray.spec _ _ _ fun r h hOwns => ?_
+  refine RawPtr.allocArray.spec _ _ _ fun r h hOwns => ?_
   exact (sep_pure_l _ _ h).mpr ⟨rfl, hOwns⟩
 
 /-- Release every slot of the array. -/
@@ -132,7 +134,7 @@ theorem read.spec_array (a : Array α n) (values : List α) (i : Nat)
     (hIndex : i < values.length) :
     ⦃ a ↦ values ⦄ a.read i
       ⦃⇓ result => ⌜result = values[i]⌝ ∗ a ↦ values⦄ :=
-  Buffer.read.spec_array a.toBuffer values i hIndex
+  Buffer.read.spec_buffer a.toBuffer values i hIndex
 
 /-- Write `value` at index `i`. -/
 def write (a : Array α n) (i : Nat) (value : α) : Result Unit :=
@@ -147,7 +149,7 @@ theorem write.spec (a : Array α n) (i : Nat) (oldValue newValue : α) :
 theorem write.spec_array (a : Array α n) (values : List α) (i : Nat)
     (value : α) (hIndex : i < values.length) :
     ⦃ a ↦ values ⦄ a.write i value ⦃⇓ a ↦ values.set i value⦄ :=
-  Buffer.write.spec_array a.toBuffer values i value hIndex
+  Buffer.write.spec_buffer a.toBuffer values i value hIndex
 
 /-- Exchange the values at indices `i` and `j`. -/
 def swap (a : Array α n) (i j : Nat) : Result Unit := a.toBuffer.swap i j
@@ -194,13 +196,24 @@ end Array
 
 /-! ## Slices of statically known length -/
 
-/-- Read a slice back as an array of the length its type records. -/
-def Buffer.toArray (b : Buffer α) (n : Nat) : Array α n := ⟨b.ptr⟩
+end SepLogic
 
-theorem Buffer.pointsTo_toArray {b : Buffer α} {values : List α}
+namespace Aeneas.Std.Buffer
+
+/-- Read a slice back as an array of the length its type records. -/
+def toArray (b : Buffer α) (n : Nat) : SepLogic.Array α n := ⟨b.ptr⟩
+
+theorem pointsTo_toArray {b : Buffer α} {values : List α}
     (hLength : values.length = n) : b ↦ values ⊢ (b.toArray n) ↦ values :=
   entails_trans (Buffer.pointsTo_entails_range b values)
-    (Array.range_entails_pointsTo (a := b.toArray n) hLength)
+    (SepLogic.Array.range_entails_pointsTo (a := b.toArray n) hLength)
+
+end Aeneas.Std.Buffer
+
+namespace SepLogic
+
+open Aeneas.Std.WP
+open Aeneas.Std (Buffer Heap MutRawPtr RawPtr Result)
 
 namespace Array
 
@@ -209,19 +222,19 @@ namespace Array
 /-- Materialize a functional array as a fresh mutable memory array. -/
 def mut_to_raw {N : Aeneas.Std.Usize} (value : Aeneas.Std.Array α N) :
     Result (Array α N.val) :=
-  allocArray value.val fun r => ⟨⟨r.base, r.offset⟩⟩
+  RawPtr.allocArray value.val fun r => ⟨⟨r.base, r.offset⟩⟩
 
 @[step]
 theorem mut_to_raw.spec {N : Aeneas.Std.Usize} (value : Aeneas.Std.Array α N) :
     ⦃ emp ⦄ mut_to_raw value ⦃⇓ a => a ↦ value.val⦄ := by
-  refine allocArray.spec _ _ _ fun r h hOwns => ?_
+  refine RawPtr.allocArray.spec _ _ _ fun r h hOwns => ?_
   exact (sep_pure_l _ _ h).mpr ⟨value.property, hOwns⟩
 
 /-- Refunctionalize a mutable array, consuming all of its memory ownership. -/
 def end_mut_to_raw {N : Aeneas.Std.Usize} (original : Aeneas.Std.Array α N)
     (a : Array α N.val) :
     Result (Aeneas.Std.Array α N) := do
-  let values ← takeRange a.ptr N.val
+  let values ← Aeneas.Std.MutRawPtr.takeRange a.ptr N.val
   pure (original.setSlice! 0 values)
 
 @[step]
@@ -232,7 +245,8 @@ theorem end_mut_to_raw.spec {N : Aeneas.Std.Usize}
   unfold end_mut_to_raw
   simp only [pointsTo_eq_buffer, Buffer.pointsTo_def, ptr_toBuffer, length_toBuffer]
   iintro hLength
-  step with takeRange.spec_of_length a.ptr values N.val hLength
+  step with Aeneas.Std.MutRawPtr.takeRange.spec_of_length
+    a.ptr values N.val hLength
   step*
   simp only [Aeneas.Std.Array.setSlice!_val]
   simp [List.setSlice!, original.property, *]

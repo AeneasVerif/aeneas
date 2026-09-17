@@ -1,4 +1,5 @@
 import SepLogic.MutableData.Buffer
+import SepLogic.MutableData.Ptr
 import Aeneas.Std.Array.Array
 import Aeneas.SepLogic.Semantics
 
