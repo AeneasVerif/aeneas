@@ -297,8 +297,9 @@ theorem Vec.index_mut_RangeTo_spec {α : Type} (v : Vec α) (r : core.ops.range.
   have := core.slice.index.SliceIndexRangeToUsizeSlice.index_mut.step_spec r v.slice h
   simp [pure, Bind.bind]
   apply Aeneas.Std.WP.spec_bind this
+  rintro ⟨s1, back⟩ hs
   cases v
-  simp [Vec.val]
+  simpa [Vec.val] using hs
 
 -- Vec index/index_mut with RangeFrom
 
@@ -325,8 +326,9 @@ theorem Vec.index_mut_RangeFrom_spec {α : Type} (v : Vec α) (r : core.ops.rang
   have := core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.step_spec r v.slice h
   simp [pure, Bind.bind]
   apply Aeneas.Std.WP.spec_bind this
+  rintro ⟨s1, back⟩ hs
   cases v
-  simp [Vec.val]
+  simpa [Vec.val] using hs
 
 -- Vec index/index_mut with Range
 
@@ -356,8 +358,9 @@ theorem Vec.index_mut_Range_spec {α : Type} (v : Vec α) (r : core.ops.range.Ra
   have := core.slice.index.SliceIndexRangeUsizeSlice.index_mut.step_spec r v.slice h0 h1
   simp [pure, Bind.bind]
   apply Aeneas.Std.WP.spec_bind this
+  rintro ⟨s1, back⟩ hs
   cases v
-  simp [Vec.val, Vec.setSlice!]
+  simpa [Vec.val, Vec.setSlice!] using hs
 
 end alloc.vec
 
@@ -373,7 +376,8 @@ theorem alloc.slice.Slice.to_vec_spec {T : Type} (cloneInst : core.clone.Clone T
   alloc.slice.Slice.to_vec cloneInst s ⦃ s' => s = s'.slice ⦄ := by
   simp only [to_vec]
   apply Std.WP.spec_bind (Slice.clone_spec h)
-  grind
+  intro s' hs
+  simpa using hs
 
 @[rust_fun "alloc::slice::{[@T]}::into_vec" -canFail -lift (keepParams := [true, false])]
 def alloc.slice.Slice.into_vec

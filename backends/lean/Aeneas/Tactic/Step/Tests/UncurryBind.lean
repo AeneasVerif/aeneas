@@ -115,4 +115,18 @@ example (x : Nat) :
     mkTriple x ⦃ (a, b) c => a = x ∧ b = x + 1 ∧ c = x + 2 ⦄ := by
     done
 
+universe u v
+
+example {α : Type u} {β : Type v} {m : Result α} {k : α → Result β}
+    {P : α → Prop} {Q : β → Prop}
+    (hm : WP.spec m P) (hk : ∀ x, P x → WP.spec (k x) Q) :
+    WP.spec (Std.bind m k) Q :=
+  WP.spec_bind hm hk
+
+example {α : Type u} {β : Type v} {m : Result α} {k : α → Result β}
+    {P : α → Prop} {Q : β → Prop}
+    (hm : WP.dspec m P) (hk : ∀ x, P x → WP.dspec (k x) Q) :
+    WP.dspec (Std.bind m k) Q :=
+  WP.dspec_bind hm hk
+
 end Aeneas.Tactic.Step.Tests.UncurryBind
