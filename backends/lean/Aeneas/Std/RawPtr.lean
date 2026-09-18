@@ -366,10 +366,10 @@ theorem read.spec_range (q : RawPtr T M) (values : List T) (i : Nat)
 theorem read.spec_frame (q : RawPtr T M) (value : T) (H : IProp) :
     ⦃ q ↦ value ∗ H ⦄ q.read
       ⦃⇓ result => ⌜result = value⌝ ∗ (q ↦ value ∗ H)⦄ := by
-  apply WP.ispec_conseq (WP.ispec_frame (read.spec q value) H)
-  · exact entails_refl _
-  · intro _
-    iframe
+  apply WP.ispec_mono (WP.ispec_frame (read.spec q value) H)
+  apply entails_sep_postWand
+  intro _
+  iframe
 
 end RawPtr
 
@@ -408,11 +408,10 @@ theorem MutRawPtr.fillRange.spec (q : MutRawPtr T) (values : List T) (value : T)
       apply WP.ispec_bind (MutRawPtr.write.spec q old value)
       · iframe
       · intro _
-        apply WP.ispec_conseq
+        apply WP.ispec_mono
           (WP.ispec_frame (ih (q := q.add 1)) (q ↦ value))
-        · iframe
-        · intro _
-          iframe
+        exact entails_trans (by iframe)
+          (entails_sep_postWand _ (by intro _; iframe))
 
 /-- Copy `n` slots from a pointer of either mutability into mutable storage. -/
 def MutRawPtr.copyRange (dst : MutRawPtr T) (src : RawPtr T M) : Nat → Result Unit
@@ -463,19 +462,19 @@ theorem MutRawPtr.copyRange.spec (dst : MutRawPtr T) (src : RawPtr T M)
           (MutRawPtr.write.spec dst old value)
         · iframe
         · intro _
-          apply WP.ispec_conseq
+          apply WP.ispec_mono
             (WP.ispec_frame
               (ih (dst := dst.add 1) (src := src.add 1)
                 (dstValues := oldRest) hRest)
               (iprop(dst ↦ value ∗ src ↦ value)))
-          · iframe
-          · intro _
-            change
-              iprop(((dst.add 1) ↦* rest ∗ (src.add 1) ↦* rest) ∗
-                (dst ↦ value ∗ src ↦ value)) ⊢
-              iprop((dst ↦ value ∗ (dst.add 1) ↦* rest) ∗
-                (src ↦ value ∗ (src.add 1) ↦* rest))
-            iframe
+          refine entails_trans (by iframe) (entails_sep_postWand _ ?_)
+          intro _
+          change
+            iprop(((dst.add 1) ↦* rest ∗ (src.add 1) ↦* rest) ∗
+              (dst ↦ value ∗ src ↦ value)) ⊢
+            iprop((dst ↦ value ∗ (dst.add 1) ↦* rest) ∗
+              (src ↦ value ∗ (src.add 1) ↦* rest))
+          iframe
 
 /-- Compare two ranges through pointers of either mutability. -/
 def RawPtr.compareRange [DecidableEq T]
@@ -532,14 +531,13 @@ theorem RawPtr.compareRange.spec [DecidableEq T]
           by_cases hxy : x = y
           · subst y
             simp only [List.cons.injEq, true_and]
-            apply WP.ispec_conseq
+            apply WP.ispec_mono
               (WP.ispec_frame
                 (ih (left := left.add 1) (right := right.add 1)
                   (rightValues := rightRest) hRest)
                 (iprop(left ↦ x ∗ right ↦ x)))
-            · iframe
-            · intro _
-              iframe
+            exact entails_trans (by iframe)
+              (entails_sep_postWand _ (by intro _; iframe))
           · simp only [if_neg hxy]
             apply (ispec_ok _).2
             simp only [List.cons.injEq, hxy, false_and]
