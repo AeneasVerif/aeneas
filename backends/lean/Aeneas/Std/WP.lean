@@ -1,5 +1,6 @@
 import Aeneas.Std.Primitives
 import Aeneas.Std.Delab
+import Std.Do
 import AeneasMeta.Simp
 import Aeneas.Tactic.Solver.Grind.Init
 import Aeneas.Std.Spec
@@ -581,6 +582,128 @@ theorem dspec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α
 theorem dspec_imp_forall {m:Result α} {P:Post α} :
     dspec m P → (∀ y, m = ok y → P y) := by
   grind only [= dspec_ok]
+
+/-! ### `mvcgen`
+
+The generic interpretation models the heap effects directly. `Heap : Type 1`
+cannot be the state of `Std.Do.WP Result.{0}`: its postcondition shape lives in
+the result universe. `Result.toMvcgen` lifts return values to a universe that
+can also contain the heap, without changing the source computation.
+Use explicit `Std.Do` constructors here to avoid the SL notation collisions.
+-/
+
+instance Result.instWP :
+    _root_.Std.Do.WP Result.{u + 1} (.arg (ULift.{u + 1} Heap) .pure) :=
+  (totalWPMonadULift handler handler_conjunctive).toWP
+
+instance Result.instWPMonad :
+    _root_.Std.Do.WPMonad Result.{u + 1} (.arg (ULift.{u + 1} Heap) .pure) :=
+  totalWPMonadULift handler handler_conjunctive
+
+/-- Lift only the return values so that `mvcgen` can use the heap-state interpretation. -/
+def Result.toMvcgen {α : Type u} (m : Result α) : Result (ULift.{u + 1} α) :=
+  Std.bind m fun value => Result.ok ⟨value⟩
+
+theorem Result.toMvcgen_totalSpec {α : Type u} {m : Result α}
+    {Q : HPost handler (ULift.{u + 1} α)} {heap : Heap} :
+    TotalSpec handler Q (Result.toMvcgen m) heap ↔
+      TotalSpec handler (fun value heap' => Q ⟨value⟩ heap') m heap := by
+  simp only [Result.toMvcgen, Std.bind, TotalSpec.bind_iff, Result.ok, TotalSpec.ret_iff]
+
+@[spec]
+theorem Result.toMvcgen_bind {α β : Type u} (m : Result α) (k : α → Result β)
+    (Q : _root_.Std.Do.PostCond (ULift.{u + 1} β) (.arg (ULift.{u + 1} Heap) .pure)) :
+    _root_.Std.Do.Triple (Result.toMvcgen (m >>= k))
+      ((_root_.Std.Do.WP.wp (Result.toMvcgen m)).apply
+        (fun value => (_root_.Std.Do.WP.wp (Result.toMvcgen (k value.down))).apply Q, Q.2))
+      Q := by
+  intro heap h
+  simp only [_root_.Std.Do.WP.wp, _root_.Std.Do.PredTrans.apply,
+    Result.toMvcgen, Bind.bind, Std.bind, TotalSpec.bind_iff,
+    Result.ok, TotalSpec.ret_iff] at h ⊢
+  exact h
+
+@[spec]
+theorem Result.toMvcgen_pure {α : Type u} (value : α)
+    (Q : _root_.Std.Do.PostCond (ULift.{u + 1} α) (.arg (ULift.{u + 1} Heap) .pure)) :
+    _root_.Std.Do.Triple (Result.toMvcgen (pure value)) (Q.1 ⟨value⟩) Q := by
+  intro heap h
+  simpa only [_root_.Std.Do.WP.wp, _root_.Std.Do.PredTrans.apply,
+    Result.toMvcgen, pure, Std.bind, Result.ok, itree_ret_bind, TotalSpec.ret_iff] using h
+
+@[spec]
+theorem Result.toMvcgen_ite {α : Type u} (b : Prop) [Decidable b] (m n : Result α) :
+    Result.toMvcgen (if b then m else n) =
+      if b then Result.toMvcgen m else Result.toMvcgen n := by
+  split <;> rfl
+
+@[spec]
+theorem Result.toMvcgen_dite {α : Type u} (b : Prop) [Decidable b]
+    (m : b → Result α) (n : ¬ b → Result α) :
+    Result.toMvcgen (if h : b then m h else n h) =
+      if h : b then Result.toMvcgen (m h) else Result.toMvcgen (n h) := by
+  split <;> rfl
+
+/-- Semantic termination, including all visible heap effects. Merely excluding
+the syntactic constructor `div` does not exclude divergence after an event. -/
+def Result.terminates (m : Result α) (heap : Heap) : Prop :=
+  TotalSpec handler (fun _ _ => True) m heap
+
+/-- Spatial correctness is a heap-state triple for every disjoint frame. -/
+theorem ispec_iff_mvcgen {α : Type u} {P : IPre} {m : Result α} {Q : IPost α} :
+    ispec P m Q ↔ ∀ F : IProp,
+      _root_.Std.Do.Triple (ps := .arg (ULift.{u + 1} Heap) .pure) (Result.toMvcgen m)
+        (fun heap : ULift.{u + 1} Heap => _root_.Std.Do.SPred.pure ((P ∗ F) heap.down))
+        (_root_.Std.Do.PostCond.noThrow fun value heap =>
+          _root_.Std.Do.SPred.pure ((Q ∗+ F) value.down heap.down)) := by
+  rw [ispec_iff]
+  constructor
+  · intro h F heap hPre
+    exact Result.toMvcgen_totalSpec.mpr (h F heap.down hPre)
+  · intro h F heap hPre
+    exact Result.toMvcgen_totalSpec.mp (h F ⟨heap⟩ hPre)
+
+/-- Expose a spatial specification as a heap-state triple. For an additional
+frame, apply this to `ispec_frame h F`, or use `ispec_iff_mvcgen`. -/
+theorem ispec_to_mvcgen {α : Type u} {P : IPre} {x : Result α} {Q : IPost α}
+    (h : ispec P x Q) :
+    _root_.Std.Do.Triple (ps := .arg (ULift.{u + 1} Heap) .pure) (Result.toMvcgen x)
+      (fun heap : ULift.{u + 1} Heap => _root_.Std.Do.SPred.pure (P heap.down))
+      (_root_.Std.Do.PostCond.noThrow fun value heap =>
+        _root_.Std.Do.SPred.pure (Q value.down heap.down)) := by
+  intro heap hPre
+  apply Result.toMvcgen_totalSpec.mpr
+  have hSpec := ispec_iff.mp h emp heap.down ((sep_emp_r P).mpr _ hPre)
+  exact hSpec.mono fun value heap' hPost => (sep_emp_r (Q value)).mp heap' hPost
+
+/-- A partial spatial specification yields a total heap-state triple only with
+a semantic termination premise. -/
+theorem dispec_to_mvcgen {α : Type u} {P : IPre} {x : Result α} {Q : IPost α}
+    (h : dispec P x Q) :
+    _root_.Std.Do.Triple (ps := .arg (ULift.{u + 1} Heap) .pure) (Result.toMvcgen x)
+      (fun heap : ULift.{u + 1} Heap =>
+        _root_.Std.Do.SPred.pure (P heap.down ∧ Result.terminates x heap.down))
+      (_root_.Std.Do.PostCond.noThrow fun value heap =>
+        _root_.Std.Do.SPred.pure (Q value.down heap.down)) := by
+  intro heap ⟨hPre, hTerm⟩
+  apply Result.toMvcgen_totalSpec.mpr
+  exact TotalSpec.ofPartial handler_conjunctive hTerm (dispec_apply h hPre)
+
+theorem spec_to_mvcgen {α : Type u} {x : Result α} {Q : Post α} (h : spec x Q) :
+    _root_.Std.Do.Triple (ps := .arg (ULift.{u + 1} Heap) .pure)
+      (Result.toMvcgen x) (_root_.Std.Do.SPred.pure True)
+      (_root_.Std.Do.PostCond.noThrow fun value => _root_.Std.Do.SPred.pure (Q value.down)) := by
+  intro heap _
+  exact (ispec_to_mvcgen (P := emp) (Q := fun value => ipure (Q value)) h)
+    heap True.intro
+
+theorem dspec_to_mvcgen {α : Type u} {x : Result α} {Q : Post α} (h : dspec x Q) :
+    _root_.Std.Do.Triple (ps := .arg (ULift.{u + 1} Heap) .pure) (Result.toMvcgen x)
+      (fun heap : ULift.{u + 1} Heap => _root_.Std.Do.SPred.pure (Result.terminates x heap.down))
+      (_root_.Std.Do.PostCond.noThrow fun value => _root_.Std.Do.SPred.pure (Q value.down)) := by
+  intro heap hTerm
+  exact (dispec_to_mvcgen (P := emp) (Q := fun value => ipure (Q value)) h)
+    heap ⟨True.intro, hTerm⟩
 
 /- `dispec` unfolds to a nested `∀`, and the `admissible` search behind
 `dspec_func_admissible` otherwise walks straight past the judgment into its
@@ -1242,7 +1365,7 @@ elab (name := intro_step_post) "intro_step_post" : tactic => do
     intro_tactic := some ``intro_ispec
     post_intro_tactic := some ``intro_step_post
     discharge_tactic := some `iframe
-    to_mvcgen := none
+    to_mvcgen := some ``ispec_to_mvcgen
     liftings := #[
       { from_statement := ``spec
         conversion_thm := ``spec_ispec
@@ -1262,7 +1385,7 @@ elab (name := intro_step_post) "intro_step_post" : tactic => do
     intro_tactic := some ``intro_ispec
     post_intro_tactic := some ``intro_step_post
     discharge_tactic := some `iframe
-    to_mvcgen := none
+    to_mvcgen := some ``dispec_to_mvcgen
     liftings := #[
       { from_statement := ``ispec
         conversion_thm := ``ispec_dispec
@@ -1287,7 +1410,7 @@ elab (name := intro_step_post) "intro_step_post" : tactic => do
     mk_spec_bind_skip_args := 4
     intro_tactic := some ``Aeneas.Step.Intro.introSplit
     post_intro_tactic := some ``intro_step_post
-    to_mvcgen := none
+    to_mvcgen := some ``spec_to_mvcgen
     liftings := #[
       { from_statement := ``ispec
         conversion_thm := ``ispec_spec
@@ -1306,7 +1429,7 @@ elab (name := intro_step_post) "intro_step_post" : tactic => do
     mk_spec_bind_skip_args := 4
     intro_tactic := some ``Aeneas.Step.Intro.introSplit
     post_intro_tactic := some ``intro_step_post
-    to_mvcgen := none
+    to_mvcgen := some ``dspec_to_mvcgen
     liftings := #[
       { from_statement := ``spec
         conversion_thm := ``spec_dspec
@@ -1579,26 +1702,3 @@ example (zero : List Nat → Result (List Nat))
 
 
 end Aeneas.Std.WP
-
-/- TODO: mvcgen support is dropped for now.
-
-`import Std.Do` went with it; it is needed again to restore the bridge.
-
-`WP.lean` carried a bridge to `Std.Do`: a `WP`/`WPMonad` instance for `Result`
-plus `spec_to_mvcgen`/`dspec_to_mvcgen`, which let `@[step]` theorems generate
-companion `@[spec]` lemmas (see `info.to_mvcgen` in `Aeneas.Tactic.Step.Init`).
-
-Both lifts are *false* under this handler.  The instance sent every effect other
-than `fail` to `False`, so a `Triple` rules out `guardedModify`; `spec`/`dspec`
-do not, because an event that only extends the heap preserves every frame it is
-asked to.  The `vis` case of the old proofs is exactly the gap.
-
-Restoring the bridge means teaching the `WP` instance to *model* `guardedModify`
-rather than discard it.  Until then every `#register_spec_info` above keeps
-`to_mvcgen := none`, and `Aeneas/Tactic/Step/Tests/MvcgenSpec.lean` -- the only
-file in the repo that calls `mvcgen` -- has to be dropped or reworked when this
-file replaces `WP.lean`.
-
-Its `Triple` notation also collides with the separation-logic `⦃P⦄ m ⦃⇓ x => Q⦄`
-declared here, as does `Std.Do`'s `⌜⌝` with `SepLogic.ipure`; any future mvcgen
-code in this file must apply `Triple`/`SPred.pure`/`PostCond.noThrow` directly. -/
