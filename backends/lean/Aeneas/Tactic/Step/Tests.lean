@@ -3,8 +3,6 @@ import Aeneas.Tactic.Step.Tests.Coin
 import Aeneas.Tactic.Step.Tests.DischargeTactic
 import Aeneas.Tactic.Step.Tests.HigherOrder
 import Aeneas.Tactic.Step.Tests.IntroOutputs
-import Aeneas.Tactic.Step.Tests.MvcgenSpec
-import Aeneas.Tactic.Step.Tests.MvcgenUniverses
 import Aeneas.Tactic.Step.Tests.MaxRecDepthMetavar
 import Aeneas.Tactic.Step.Tests.SpecParameters
 import Aeneas.Tactic.Step.Tests.TupleDestruct
