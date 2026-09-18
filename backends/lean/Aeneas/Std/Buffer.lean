@@ -205,13 +205,12 @@ theorem writeRange.spec (p : MutRawPtr T) (old values : List T)
         (MutRawPtr.write.spec p previous value)
       · iframe
       · intro _
-        apply WP.ispec_conseq
+        apply WP.ispec_mono
           (WP.ispec_frame
             (ih (p := p.add 1) (old := oldRest) hRest)
             (p ↦ value))
-        · iframe
-        · intro _
-          iframe
+        exact entails_trans (by iframe)
+          (entails_sep_postWand _ (by intro _; iframe))
 
 /-- Turn a list whose length fits in `Usize` into a functional slice. -/
 def toSlice (values : List T) : Result (Slice T) :=
@@ -245,11 +244,10 @@ theorem readSlice.spec (b : Buffer T) (s : Slice T) :
   rw [sep_emp_r_eq]
   iintro hValues
   subst values
-  apply WP.ispec_conseq
+  apply WP.ispec_mono
     (WP.ispec_frame (toSlice.spec s) (b.ptr ↦* s.val))
-  · iframe
-  · intro result
-    iframe
+  exact entails_trans (by iframe)
+    (entails_sep_postWand _ (by intro result; iframe))
 
 /-- Write a functional slice into the existing buffer allocation. -/
 def writeSlice (b : Buffer T) (s : Slice T) : Result Unit :=
