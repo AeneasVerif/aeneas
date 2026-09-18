@@ -218,6 +218,13 @@ instance instPartialCommMonoid : PartialCommMonoid Heap where
     apply Heap.ext_impl
     exact Finmap.union_comm_of_disjoint hCompatible
 
+theorem union_right_cancel {h₁ h₂ frame : Heap}
+    (hCompatible₁ : PartialCommMonoid.Compatible h₁ frame)
+    (hCompatible₂ : PartialCommMonoid.Compatible h₂ frame)
+    (hEq : h₁ ∪ frame = h₂ ∪ frame) : h₁ = h₂ := by
+  apply Heap.ext_impl
+  exact (Finmap.union_cancel hCompatible₁ hCompatible₂).mp (congrArg Heap.impl hEq)
+
 
 /-- The heap of the single slot `r`, holding `value`. -/
 def singleton {α : Type} (r : Ref α) (value : α) : Heap :=
