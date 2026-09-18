@@ -1,8 +1,7 @@
-import SepLogic.Array
+import SepLogic.Buffer
 import SepLogic.Choice
 import SepLogic.CurryIntroQimp
-import SepLogic.Examples
-import SepLogic.MutableData
+import SepLogic.Fixtures
 import SepLogic.Partial
 import SepLogic.PureSpec
 import SepLogic.Run

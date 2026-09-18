@@ -1,18 +1,15 @@
-import Aeneas.Data.Coinductive.StateMachine
+import Aeneas.Data.Coinductive.Spec
 
 /-!
 # A choice event, angelic and demonic
 
-`Aeneas.Data.Coinductive.StateMachine` relates the generic judgments to runs under
-healthiness conditions rather than determinism: `Handler.Resolves`, which total
-correctness is adequate against, and `Handler.Conjunctive` together with
-`Handler.Feasible`, which partial correctness needs.  This file is what
-those conditions are *for*: a single event `choice a`, "produce an element of
-`a`", read once angelically and once demonically, showing that each reading
-satisfies one half and fails the other.
+The generic judgments interpret a single event `choice a`, "produce an element
+of `a`", once angelically and once demonically. These tests exercise the resulting
+postconditions, conjunctivity, and admissibility. Execution and adequacy tests
+belong with the operational semantics on `cezar/sm-semantics`.
 
 The angelic machine is the interesting one, because it is the reading
-`Aeneas.SepLogic.handler` already uses — a heap event is answered by
+`Aeneas.Std.WP.handler` already uses — a heap event is answered by
 an existential. `handler` is nevertheless conjunctive, and
 `angelic_conjunctive_of_subsingleton` is why: the guard of a heap event is a
 *proposition*, so the machine chooses from a subsingleton, which is no choice at
@@ -35,7 +32,7 @@ open Lean.Order
 
 /-- The **angelic** reading: the machine answers a demand whenever *some*
 element of `a` meets it. This is the reading of
-`Aeneas.SepLogic.handler`, and the choice operator of
+`Aeneas.Std.WP.handler`, and the choice operator of
 *Program Logics à la Carte*. -/
 @[reducible] def angelic : Handler ChoiceEffect where
   State := Unit
@@ -57,41 +54,29 @@ returns `0` or `1` accordingly. -/
 def flip : ITree ChoiceEffect Nat :=
   .vis Bool fun b => .ret (if b.down then 0 else 1)
 
-/-! ## What the angel has: total correctness
-
-An angelic machine resolves its transitions, which is all total correctness is
-adequate against.  So `spec`-style reasoning survives angelic choice intact:
-a program proved totally correct still *has* a run, and the run returns what
-was proved of it. -/
-
-theorem angelic_resolves : angelic.Resolves := by
-  rintro a s C ⟨x, hOutcome⟩
-  exact ⟨⟨x⟩, s, hOutcome, x, rfl, rfl⟩
-
-theorem angelic_feasible : angelic.Feasible := angelic_resolves.feasible
+/-! ## Angelic total and partial correctness -/
 
 /-- The angel picks the branch that meets the specification. -/
 theorem angelic_flip_total : TotalSpec angelic (fun value _ => value = 0) flip () :=
   .vis ⟨true, .ret rfl⟩
 
-/-- And the run it justifies exists: `TotalSpec.evaluates` applies unchanged. -/
-example : ∃ value s', angelic.Evaluates flip () value s' ∧ value = 0 :=
-  angelic_flip_total.evaluates angelic_resolves
+theorem angelic_flip_partial : PartialSpec angelic (fun value _ => value = 0) flip () :=
+  angelic_flip_total.toPartial
 
 /-! ## What the angel breaks: two demands on one event
 
 Partial correctness compares what the machine does to *several* demands on the
-same event — the demands of the approximations of a recursive program against
-those of its limit, and the demand a run makes against the one a specification
-justified.  An angel answers each demand by choosing the element that suits it,
+same event — in particular, the demands of the approximations of a recursive
+program against those of its limit. An angel answers each demand by choosing
+the element that suits it,
 and no single element need suit them all. -/
 
 theorem not_angelic_conjunctive : ¬ angelic.Conjunctive := by
   intro hConj
   obtain ⟨b, hTrue, hFalse⟩ :=
-    hConj.handle_and (event := Bool) (s := ())
-      (C := fun answer _ => answer.down = true)
-      (C' := fun answer _ => answer.down = false) ⟨true, rfl⟩ ⟨false, rfl⟩
+    hConj.handle_and (H := angelic) (event := Bool) (s := ())
+      (C₁ := fun answer _ => answer.down = true)
+      (C₂ := fun answer _ => answer.down = false) ⟨true, rfl⟩ ⟨false, rfl⟩
   simp_all
 
 /-- What the angel does have: a choice from a *subsingleton* is no choice, so
@@ -114,28 +99,6 @@ theorem angelic_conjunctive_of_subsingleton (a : Type) [Subsingleton a]
 
 /-- A guard is such an event: this is `pre` of a heap event, as a choice. -/
 example (p : Prop) : Subsingleton (PLift p) := ⟨fun a b => by cases a; cases b; rfl⟩
-
-/-! ## What the angel breaks: partial correctness is not preserved by runs
-
-On an angelic machine a run is a run *the angel may steer*, and the branch it
-takes need not be the branch the specification was proved of.  So
-`PartialSpec.runs` — which asks for `Conjunctive` and `Feasible` — is not merely
-unproven here but false. -/
-
-theorem angelic_flip_partial : PartialSpec angelic (fun value _ => value = 0) flip () :=
-  angelic_flip_total.toPartial
-
-/-- The angel is free to take the other branch. -/
-theorem angelic_flip_runs : angelic.Runs flip () (.ret 1) () := by
-  apply Exec.event (M := angelic) (event := Bool)
-  exact ⟨false, Exec.stop ⟨rfl, rfl⟩⟩
-
-theorem not_angelic_partialSpec_runs :
-    ¬ ∀ {α : Type} {Q : α → Unit → Prop} {m m' : ITree ChoiceEffect α} {s s' : Unit},
-        PartialSpec angelic Q m s → angelic.Runs m s m' s' → PartialSpec angelic Q m' s' := by
-  intro hRuns
-  have hSpec := hRuns angelic_flip_partial angelic_flip_runs
-  exact absurd hSpec.ret_post (by decide)
 
 /-! ## What the angel breaks: admissibility
 
@@ -206,43 +169,27 @@ theorem not_admissible :
   obtain ⟨-, hSpec⟩ := hLimit.vis_view
   exact absurd hSpec.ret_post (by decide)
 
-/-! ## The demon has the other half
+/-! ## Demonic choice is conjunctive
 
-Demonic choice is the ordinary reading of a nondeterministic operational
-semantics — the machine must be prepared for every answer — and it is
-conjunctive and feasible without being deterministic and without resolving its
-transitions.  So it keeps everything partial correctness has and loses the
-adequacy of total correctness, exactly the mirror image of the angel. -/
+The postcondition must hold for every answer, so the handler can combine
+demands and partial correctness is admissible. -/
 
 theorem demonic_conjunctive : demonic.Conjunctive := by
   rintro a s Demands ⟨C₀, hC₀⟩ hAll
   exact ⟨(hAll C₀ hC₀).1, fun x C hC => (hAll C hC).2 x⟩
 
-theorem demonic_feasible : demonic.Feasible := by
-  rintro a s C ⟨⟨x⟩, hAll⟩
-  exact ⟨⟨x⟩, s, hAll x⟩
+theorem not_demonic_flip_total :
+    ¬ TotalSpec demonic (fun value _ => value = 0) flip () := by
+  intro hSpec
+  exact absurd ((hSpec.vis_view).2 false).ret_post (by decide)
 
-/-- The demon has no single transition to offer: a run of it is a run of every
-branch at once, which is why `TotalSpec.evaluates` is unavailable. -/
-theorem not_demonic_resolves : ¬ demonic.Resolves := by
-  intro hResolves
-  obtain ⟨answer, s', -, -, hAll⟩ :=
-    hResolves Bool () (fun _ _ => True) ⟨⟨true⟩, fun _ => trivial⟩
-  have hTrue := (hAll true).1
-  have hFalse := (hAll false).1
-  simp only [← hTrue, ULift.up.injEq] at hFalse
-  exact Bool.noConfusion hFalse
+theorem not_demonic_flip_partial :
+    ¬ PartialSpec demonic (fun value _ => value = 0) flip () := by
+  intro hSpec
+  exact absurd ((hSpec.vis_view).2 false).ret_post (by decide)
 
-/-- Both halves of the theory partial correctness has are available, with no
-determinism anywhere: admissibility, so `partial_fixpoint` programs can be
-reasoned about, and preservation by runs. -/
 example (Q : Nat → Unit → Prop) :
     Lean.Order.admissible fun m : ITree ChoiceEffect Nat => PartialSpec demonic Q m () :=
   PartialSpec.admissible demonic_conjunctive Q ()
-
-example {Q : Nat → Unit → Prop} {m m' : ITree ChoiceEffect Nat} {s s' : Unit}
-    (hSpec : PartialSpec demonic Q m s) (hRuns : demonic.Runs m s m' s') :
-    PartialSpec demonic Q m' s' :=
-  hSpec.runs demonic_conjunctive demonic_feasible hRuns
 
 end Aeneas.Data.Coinductive.ChoiceTest
