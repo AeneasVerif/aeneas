@@ -1,4 +1,5 @@
-import SepLogic.MutableData.Ptr
+import Aeneas.Std.RawPtr
+import Aeneas.Tactic.Step
 
 /-!
 # Curry, introduction, and `qimp` elimination interaction
@@ -10,30 +11,29 @@ in a spatial assertion.
 
 namespace CurryIntroQimpTests
 
-open Aeneas.Std (Result)
-open SepLogic
+open Aeneas.Std (Result MutRawPtr)
 open Aeneas.SepLogic
 open Aeneas
 open Aeneas.Std.WP
 
-def pairResult (_p : Ptr Nat) : Result (Nat × Nat) :=
+def pairResult (_p : MutRawPtr Nat) : Result (Nat × Nat) :=
   Result.ok (1, 2)
 
 @[step]
-theorem pairResult.spec (p : Ptr Nat) (n : Nat) :
+theorem pairResult.spec (p : MutRawPtr Nat) (n : Nat) :
     ⦃ p ↦ n ⦄ pairResult p ⦃⇓ x y =>
       p ↦ n ∗ ⌜x = 1⌝ ∗ ⌜y = 2⌝
     ⦄ := by
   unfold pairResult
   step
 
-def consumePair (p : Ptr Nat) : Result Nat := do
+def consumePair (p : MutRawPtr Nat) : Result Nat := do
   let (x, y) ← pairResult p
   pure (x + y)
 
 /-- Pure facts to the right of a spatial resource are introduced after the
 curried result components. -/
-example (p : Ptr Nat) (n : Nat) :
+example (p : MutRawPtr Nat) (n : Nat) :
     ⦃ p ↦ n ⦄ consumePair p ⦃⇓ result =>
       p ↦ n ∗ ⌜result = 3⌝
     ⦄ := by
@@ -45,7 +45,7 @@ example (p : Ptr Nat) (n : Nat) :
 
 /-- Facts in the inferred frame remain spatial and are not included among the
 names introduced from the callee postcondition. -/
-example (p : Ptr Nat) (n : Nat) (F : Prop) :
+example (p : MutRawPtr Nat) (n : Nat) (F : Prop) :
     ⦃ p ↦ n ∗ ⌜F⌝ ⦄ consumePair p ⦃⇓ result =>
       p ↦ n ∗ ⌜F⌝ ∗ ⌜result = 3⌝
     ⦄ := by
