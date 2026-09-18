@@ -336,7 +336,67 @@ theorem Conjunctive.handle_forall {ι : Sort u'} {event : E.I} {s : H.State}
   rintro X ⟨i, rfl⟩
   exact hHandle i
 
+theorem Conjunctive.handle_and {event : E.I} {s : H.State}
+    {C₁  C₂ : HPost H (E.O event)} (hConj : H.Conjunctive)
+    (h₁ : H.handle event s C₁) (h₂ : H.handle event s C₂) :
+    H.handle event s fun answer s' => C₁ answer s' ∧ C₂ answer s' := by
+  refine H.handle_mono
+    (fun _ _ hAll => ⟨hAll C₁ (Or.inl rfl), hAll C₂ (Or.inr rfl)⟩)
+    (hConj (fun C => C = C₁ ∨ C = C₂) ⟨C₁, Or.inl rfl⟩ ?_)
+  rintro C (rfl | rfl)
+  · exact h₁
+  · exact h₂
+
 end Handler
+
+
+/-- Partial correctness implies total correctness when termination is known semantically. -/
+theorem TotalSpec.ofPartial (hConj : H.Conjunctive) {Q : HPost H α}
+    {m : ITree E α} {s : H.State}
+    (hTotal : TotalSpec H (fun _ _ => True) m s)
+    (hPartial : PartialSpec H Q m s) : TotalSpec H Q m s := by
+  refine hTotal.induction
+    (P := fun t s' => PartialSpec H Q t s' → TotalSpec H Q t s') ?_ ?_ hPartial
+  · intro value s' _ hSpec
+    exact .ret hSpec.ret_post
+  · intro event tail s' hHandle hSpec
+    exact .vis (H.handle_mono (fun _ _ hChild => hChild.1 hChild.2)
+      (hConj.handle_and hHandle hSpec.vis_view))
+
+theorem TotalSpec.and_iff (hConj : H.Conjunctive) {Q₁ Q₂ : HPost H α}
+    {m : ITree E α} {s : H.State} :
+    TotalSpec H (fun value s' => Q₁ value s' ∧ Q₂ value s') m s ↔
+      TotalSpec H Q₁ m s ∧ TotalSpec H Q₂ m s := by
+  constructor
+  · intro hSpec
+    exact ⟨hSpec.mono fun _ _ => And.left, hSpec.mono fun _ _ => And.right⟩
+  · rintro ⟨h₁, h₂⟩
+    refine h₁.induction
+      (P := fun t s' => TotalSpec H Q₂ t s' →
+        TotalSpec H (fun value s'' => Q₁ value s'' ∧ Q₂ value s'') t s') ?_ ?_ h₂
+    · intro value s' hPost hSpec
+      exact .ret ⟨hPost, hSpec.ret_post⟩
+    · intro event tail s' hHandle hSpec
+      exact .vis (H.handle_mono (fun _ _ hChild => hChild.1 hChild.2)
+        (hConj.handle_and hHandle hSpec.vis_view))
+
+theorem PartialSpec.and_iff (hConj : H.Conjunctive) {Q₁ Q₂ : HPost H α}
+    {m : ITree E α} {s : H.State} :
+    PartialSpec H (fun value s' => Q₁ value s' ∧ Q₂ value s') m s ↔
+      PartialSpec H Q₁ m s ∧ PartialSpec H Q₂ m s := by
+  constructor
+  · intro hSpec
+    exact ⟨hSpec.mono fun _ _ => And.left, hSpec.mono fun _ _ => And.right⟩
+  · intro hSpec
+    refine PartialSpec.coinduction
+      (fun t s' => PartialSpec H Q₁ t s' ∧ PartialSpec H Q₂ t s') ?_ hSpec
+    rintro t s' ⟨h₁, h₂⟩
+    cases t using ITree.cases
+    · exact ⟨h₁.ret_post, h₂.ret_post⟩
+    · simp only [SpecF.div]
+    · exact hConj.handle_and h₁.vis_view h₂.vis_view
+
+/-! ## PartialSpec is admissible -/
 
 /-- Partial correctness with a conjunctive handler is admissible. -/
 theorem PartialSpec.admissible (hConj : H.Conjunctive) (Q : HPost H α) (s : H.State) :
