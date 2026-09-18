@@ -17,6 +17,9 @@ discarded anywhere.  Following Iris's `uPred`, affinity is a property of the
 `IProp` bundles closure under `Heap.Sub`, which is what makes `emp ∗ H ⊣⊢ H`
 provable once `emp` holds of every heap.
 
+Additive conjunction `iprop(P ∧ Q)` asserts both predicates on the same heap
+fragment; separating conjunction `P ∗ Q` splits it into disjoint fragments.
+
 The proof-mode tactics (`iframe`, `iintro`, `isimpl`, `irewrite`) built on
 these assertions are in `Aeneas.Tactic.SepLogic`.
 -/
@@ -92,6 +95,12 @@ class PointsTo (ρ : Type u) (β : outParam (Type v)) where
 instance instPointsToRef {α : Type} : PointsTo (Ref α) α :=
   ⟨Ref.pointsTo⟩
 
+/-- Additive conjunction: both assertions hold of the same heap fragment. -/
+def iand (P Q : IProp) : IProp where
+  holds h := P h ∧ Q h
+  up_closed := fun hPQ hSub =>
+    ⟨P.up_closed hPQ.1 hSub, Q.up_closed hPQ.2 hSub⟩
+
 def sep (H₁ H₂ : IProp) : IProp where
   holds h :=
     ∃ h₁ h₂,
@@ -129,6 +138,10 @@ macro_rules
   | `(iprop($H)) => `($H)
 infixr:35 " ∗ " => sep
 infixr:40 " ∗+ " => postSep
+macro_rules
+  | `(iprop(($P))) => `(iprop($P))
+  | `(iprop($P ∧ $Q)) => `(iand iprop($P) iprop($Q))
+  | `(iprop($P ∗ $Q)) => `(iprop($P) ∗ iprop($Q))
 syntax:25 term:29 " ⊢ " term:25 : term
 syntax:25 term:29 " ⊢+ " term:25 : term
 syntax:25 term:29 " ⊣⊢ " term:29 : term
@@ -146,6 +159,12 @@ def delabIpure : Delab := do
   guard ((← getExpr).isAppOfArity ``ipure 1)
   let proposition ← withAppArg delab
   `(⌜$proposition⌝)
+
+@[app_delab iand]
+def delabIand : Delab := do
+  let lhs ← withNaryArg 0 delab
+  let rhs ← withNaryArg 1 delab
+  `(iprop($lhs ∧ $rhs))
 
 /-- Print separation-logic entailment using its surface notation. -/
 @[app_delab Entails]
@@ -168,6 +187,35 @@ theorem entails_of_eq {P Q : IProp} (hEq : P = Q) : P ⊢ Q := by
 
 theorem bientails_eq {P Q : IProp} (hEquiv : P ⊣⊢ Q) : P = Q :=
   IProp.ext fun h => ⟨hEquiv.mp h, hEquiv.mpr h⟩
+
+theorem iand_intro {H P Q : IProp} (hP : H ⊢ P) (hQ : H ⊢ Q) :
+    H ⊢ iprop(P ∧ Q) :=
+  fun heap hH => ⟨hP heap hH, hQ heap hH⟩
+
+theorem iand_elim_left {P Q : IProp} : iprop(P ∧ Q) ⊢ P :=
+  fun _ h => h.1
+
+theorem iand_elim_right {P Q : IProp} : iprop(P ∧ Q) ⊢ Q :=
+  fun _ h => h.2
+
+theorem iand_mono {P₁ P₂ Q₁ Q₂ : IProp} (hP : P₁ ⊢ P₂) (hQ : Q₁ ⊢ Q₂) :
+    iprop(P₁ ∧ Q₁) ⊢ iprop(P₂ ∧ Q₂) :=
+  iand_intro (entails_trans iand_elim_left hP) (entails_trans iand_elim_right hQ)
+
+theorem iand_comm (P Q : IProp) : iprop(P ∧ Q) ⊣⊢ iprop(Q ∧ P) :=
+  ⟨iand_intro iand_elim_right iand_elim_left,
+   iand_intro iand_elim_right iand_elim_left⟩
+
+theorem iand_assoc (P Q R : IProp) : iprop((P ∧ Q) ∧ R) ⊣⊢ iprop(P ∧ (Q ∧ R)) :=
+  ⟨fun _ h => ⟨h.1.1, h.1.2, h.2⟩, fun _ h => ⟨⟨h.1, h.2.1⟩, h.2.2⟩⟩
+
+@[simp]
+theorem iand_self_eq (P : IProp) : iprop(P ∧ P) = P :=
+  bientails_eq ⟨iand_elim_left, iand_intro (entails_refl P) (entails_refl P)⟩
+
+@[simp]
+theorem iand_ipure_eq (P Q : Prop) : iprop(⌜P⌝ ∧ ⌜Q⌝) = ⌜P ∧ Q⌝ :=
+  rfl
 
 theorem sep_assoc (H₁ H₂ H₃ : IProp) :
     (H₁ ∗ H₂) ∗ H₃ ⊣⊢ H₁ ∗ (H₂ ∗ H₃) := by
@@ -290,6 +338,10 @@ theorem emp_holds (h : Heap) : (emp : IProp) h ↔ True :=
 theorem pure_holds {P : Prop} (h : Heap) : (⌜P⌝ : IProp) h ↔ P :=
   Iff.rfl
 
+@[simp]
+theorem iand_holds (P Q : IProp) (h : Heap) : iprop(P ∧ Q) h ↔ P h ∧ Q h :=
+  Iff.rfl
+
 /-- An entailment from `emp` to a pure assertion is exactly the pure fact. -/
 theorem entails_emp_ipure_iff (P : Prop) : (emp ⊢ ⌜P⌝) ↔ P := by
   constructor
@@ -338,6 +390,41 @@ theorem sep_holds (H₁ H₂ : IProp) (h : Heap) :
       ∃ h₁ h₂, PartialCommMonoid.Compatible h₁ h₂ ∧
         h = h₁ ∪ h₂ ∧ H₁ h₁ ∧ H₂ h₂ :=
   Iff.rfl
+
+/-- An owned frame can be chosen exactly, moving its extra cells to the other
+factor by upward closure. -/
+theorem sep_owns_holds (P : IProp) (frame heap : Heap) :
+    (P ∗ owns frame) heap ↔
+      ∃ owned, PartialCommMonoid.Compatible owned frame ∧
+        heap = owned ∪ frame ∧ P owned := by
+  constructor
+  · rintro ⟨owned, _, hCompatible, rfl, hP, rest, hFrameRest, rfl⟩
+    have hCompatible' : PartialCommMonoid.Compatible owned (rest ∪ frame) := by
+      rwa [← PartialCommMonoid.union_comm_of_compatible hFrameRest]
+    obtain ⟨hOwnedRest, hCombined⟩ :=
+      (PartialCommMonoid.compatible_assoc owned rest frame).mpr
+        ⟨PartialCommMonoid.compatible_comm hFrameRest, hCompatible'⟩
+    refine ⟨owned ∪ rest, hCombined, ?_, P.up_closed hP (Heap.Sub.union_left hOwnedRest)⟩
+    rw [PartialCommMonoid.union_comm_of_compatible hFrameRest,
+      PartialCommMonoid.union_assoc hOwnedRest hCombined]
+  · rintro ⟨owned, hCompatible, rfl, hP⟩
+    exact ⟨owned, frame, hCompatible, rfl, hP, Heap.Sub.refl frame⟩
+
+/-- Conjunction distributes over a fixed owned frame: heap cancellation makes
+the remaining fragment the same for both assertions. This need not hold for an
+arbitrary assertion in place of `owns frame`. -/
+theorem sep_iand_owns (P Q : IProp) (frame : Heap) :
+    iprop(P ∧ Q) ∗ owns frame ⊣⊢ iprop((P ∗ owns frame) ∧ (Q ∗ owns frame)) := by
+  constructor
+  · exact iand_intro
+      (sep_mono iand_elim_left (entails_refl _))
+      (sep_mono iand_elim_right (entails_refl _))
+  · intro heap ⟨hP, hQ⟩
+    obtain ⟨owned₁, hCompatible₁, hEq₁, hP⟩ := (sep_owns_holds P frame heap).mp hP
+    obtain ⟨owned₂, hCompatible₂, hEq₂, hQ⟩ := (sep_owns_holds Q frame heap).mp hQ
+    have hEq := Heap.union_right_cancel hCompatible₁ hCompatible₂ (hEq₁.symm.trans hEq₂)
+    subst owned₂
+    exact ⟨owned₁, frame, hCompatible₁, hEq₁, ⟨hP, hQ⟩, Heap.Sub.refl frame⟩
 
 theorem exists_holds {ι : Sort _} (J : ι → IProp) (h : Heap) :
     iexists J h ↔ ∃ x, J x h :=
@@ -461,6 +548,7 @@ def postWand {α : Type u} (Q₁ Q₂ : IPost α) : IProp :=
 @[inherit_doc wand] infixr:25 " -∗ " => wand
 @[inherit_doc postWand] infixr:25 " -∗+ " => postWand
 macro_rules
+  | `(iprop($P -∗ $Q)) => `(iprop($P) -∗ iprop($Q))
   | `(iprop(∀ $x:ident, $H)) => `(iforall fun $x => iprop($H))
   | `(iprop(∀ $x:ident : $type, $H)) =>
       `(iforall fun ($x : $type) => iprop($H))
