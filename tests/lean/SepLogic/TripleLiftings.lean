@@ -1,4 +1,5 @@
-import SepLogic.MutableData.Ptr
+import Aeneas.Std.RawPtr
+import Aeneas.Tactic.Step
 
 /-!
 # Registered pure and spatial judgments
@@ -9,8 +10,7 @@ specifications, including local contracts and framing pure calls in SL goals.
 
 namespace TripleLiftingTests
 
-open Aeneas.Std (Result)
-open SepLogic
+open Aeneas.Std (Result RawPtr MutRawPtr)
 open Aeneas.SepLogic
 open Aeneas
 open Aeneas.Std.WP
@@ -56,18 +56,18 @@ def legacyPair (x : Nat) : Result (Nat × Nat) := Result.ok (x, x + 1)
   simp [legacyPair, Aeneas.Std.WP.spec_ok, Aeneas.Std.WP.uncurry']
 
 run_meta do
-  for (name, arity) in
+  for (specName, arity) in
       #[(``spec, 3), (``dspec, 3), (``ispec, 4), (``dispec, 4)] do
-    let some info ← Aeneas.specInfoLookup name
-      | throwError "Missing registration for {name}"
+    let some info ← Aeneas.specInfoLookup specName
+      | Lean.throwError "Missing registration for {specName}"
     unless info.arity == arity do
-      throwError "Incorrect arity for {name}"
-  for (name, judgment) in
+      Lean.throwError "Incorrect arity for {specName}"
+  for (specName, judgment) in
       #[(``totalPure.spec, ``spec), (``partialPure.spec, ``dspec),
         (``totalSpatial.spec, ``ispec), (``partialSpatial.spec, ``dispec)] do
-    let (_, info) ← Aeneas.Step.getStepSpecFunArgsExpr (← Lean.getConstInfo name).type
+    let (_, info) ← Aeneas.Step.getStepSpecFunArgsExpr (← Lean.getConstInfo specName).type
     unless info.spec_name == judgment do
-      throwError "{name} registered under the wrong judgment"
+      Lean.throwError "{specName} registered under the wrong judgment"
 
 /-! Total pure specifications work in all four judgments. -/
 
@@ -171,22 +171,22 @@ that have only a partial specification. -/
 
 example (x : Nat) :
     ispec emp (do
-      let p ← alloc x
-      let y ← read p
-      free p
+      let p ← MutRawPtr.alloc x
+      let y ← RawPtr.read p
+      MutRawPtr.free p
       totalPure y) (fun z => ⌜z = x⌝) := by step*
 
-def partialAlloc (x : Nat) := alloc x
+def partialAlloc (x : Nat) := MutRawPtr.alloc x
 
 @[step] theorem partialAlloc.spec (x : Nat) :
     ⦃ emp ⦄ partialAlloc x ⦃⇓ p => p ↦ x ⦄div :=
-  ispec_dispec (alloc.spec x)
+  ispec_dispec (MutRawPtr.alloc.spec x)
 
 example (x : Nat) :
     dispec emp (do
       let p ← partialAlloc x
-      let y ← read p
-      free p
+      let y ← RawPtr.read p
+      MutRawPtr.free p
       partialPure y) (fun z => ⌜z = x⌝) := by step*
 
 /-! Local contracts and explicit theorem selection use the same liftings. -/
@@ -310,7 +310,7 @@ example (x : Nat) (P : IProp) :
   unfold partialSpatial
   step*
 
-example (m : Result Nat) (p : Ptr Nat)
+example (m : Result Nat) (p : MutRawPtr Nat)
     (hPure : m ⦃ n => n = 0 ⦄)
     (_hSpatial : ⦃ p ↦ 0 ⦄ m ⦃⇓ n => p ↦ 0 ∗ ⌜n = 0⌝ ⦄) :
     m ⦃ n => n = 0 ⦄ := by
@@ -325,9 +325,9 @@ example : totalPure 0 ⦃ n => n = 0 ⦄ := by
 
 example : True := by
   fail_if_success
-    have : alloc (0 : Nat) ⦃ _ => True ⦄ := by step*
+    have : MutRawPtr.alloc (0 : Nat) ⦃ _ => True ⦄ := by step*
   fail_if_success
-    have : alloc (0 : Nat) ⦃ _ => True ⦄div := by step*
+    have : MutRawPtr.alloc (0 : Nat) ⦃ _ => True ⦄div := by step*
   trivial
 
 end TripleLiftingTests
