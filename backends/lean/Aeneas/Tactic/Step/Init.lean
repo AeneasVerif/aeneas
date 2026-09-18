@@ -298,7 +298,7 @@ private meta def generateMvcgenSpec (toMvcgenThm : Name) (stx : Syntax) (attrKin
     -- Apply the original theorem to all fvars to get: spec (f args) Q
     let thConst := Lean.mkConst thName (sig.levelParams.map .param)
     let thApp := mkAppN thConst fvars
-    -- The conversion theorem chooses the target program, precondition, and postcondition.
+    -- Wrap with spec_to_mvcgen to produce: Triple (f args) ⌜True⌝ post⟨...⟩
     let proof ← mkAppM toMvcgenThm #[thApp]
     let innerTy ← inferType proof
     -- Re-introduce all fvars as binders
