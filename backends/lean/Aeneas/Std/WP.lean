@@ -260,16 +260,6 @@ theorem ispec_mono {α : Type u} {P Pm : IPre} {Q : IPost α} {m : Result α} {Q
   have hSpec := hFramed F h (sep_mono hRamified (entails_refl F) h hPre)
   exact hSpec.mono fun value => sep_mono (postWand_cancel Qm Q value) (entails_refl F)
 
-/-- Rule of consequence: strengthen the precondition and weaken the postcondition.
-The special case of `ispec_mono` in which no resource is transferred. -/
-theorem ispec_conseq {P' P : IPre} {m : Result α} {Q' Q : IPost α}
-    (hTriple : ispec P' m Q') (hP : P ⊢ P') (hQ : Q' ⊢+ Q) :
-    ispec P m Q := by
-  rw [ispec_iff] at hTriple ⊢
-  intro F h hPre
-  have hSpec := hTriple F h (sep_mono hP (entails_refl F) h hPre)
-  exact hSpec.mono fun value => sep_mono (hQ value) (entails_refl F)
-
 /-- Bind rule used by `step`. It is stated on `Aeneas.Std.bind` rather than on `>>=` -/
 theorem ispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
     {next : α → Result β} {Q : IPost β} {m : Result α} {Qm : IPost α}
