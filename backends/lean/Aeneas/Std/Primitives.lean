@@ -52,13 +52,8 @@ def elabImpl : CommandElab := fun (stx: Syntax) => do
 -/
 
 inductive Error where
-   | assertionFailure: Error
-   | integerOverflow: Error
-   | divisionByZero: Error
-   | arrayOutOfBounds: Error
-   | maximumSizeExceeded: Error
    | panic: Error
-   | undef: Error
+   | ub: Error
 deriving Repr, BEq
 
 open Error
@@ -239,7 +234,7 @@ instance Result_Nonempty (α : Type u) : Nonempty (Result α) :=
 -/
 
 def massert (b : Prop) [Decidable b] : Result Unit :=
-  if b then ok () else fail assertionFailure
+  if b then ok () else fail ub
 
 @[simp]
 def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
