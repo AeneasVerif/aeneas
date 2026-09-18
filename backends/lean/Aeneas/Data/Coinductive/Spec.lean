@@ -331,20 +331,6 @@ theorem Conjunctive.handle_and {event : E.I} {s : H.State}
 
 end Handler
 
-
-/-- Partial correctness implies total correctness when termination is known semantically. -/
-theorem TotalSpec.ofPartial (hConj : H.Conjunctive) {Q : HPost H α}
-    {m : ITree E α} {s : H.State}
-    (hTotal : TotalSpec H (fun _ _ => True) m s)
-    (hPartial : PartialSpec H Q m s) : TotalSpec H Q m s := by
-  refine hTotal.induction
-    (P := fun t s' => PartialSpec H Q t s' → TotalSpec H Q t s') ?_ ?_ hPartial
-  · intro value s' _ hSpec
-    exact .ret hSpec.ret_post
-  · intro event tail s' hHandle hSpec
-    exact .vis (H.handle_mono (fun _ _ hChild => hChild.1 hChild.2)
-      (hConj.handle_and hHandle hSpec.vis_view))
-
 theorem TotalSpec.and_iff (hConj : H.Conjunctive) {Q₁ Q₂ : HPost H α}
     {m : ITree E α} {s : H.State} :
     TotalSpec H (fun value s' => Q₁ value s' ∧ Q₂ value s') m s ↔
