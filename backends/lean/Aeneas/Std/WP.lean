@@ -260,6 +260,20 @@ theorem ispec_mono {α : Type u} {P Pm : IPre} {Q : IPost α} {m : Result α} {Q
   have hSpec := hFramed F h (sep_mono hRamified (entails_refl F) h hPre)
   exact hSpec.mono fun value => sep_mono (postWand_cancel Qm Q value) (entails_refl F)
 
+/-- Combine postconditions on the same owned heap, keeping the frame unchanged. -/
+theorem ispec_and {α : Type u} {P : IPre} {m : Result α} {Q₁ Q₂ : IPost α}
+    (h₁ : ispec P m Q₁) (h₂ : ispec P m Q₂) :
+    ispec P m (fun value => iprop(Q₁ value ∧ Q₂ value)) := by
+  rw [ispec_iff] at h₁ h₂ ⊢
+  rintro F _ ⟨owned, framed, hCompatible, rfl, hP, hF⟩
+  have hPre : (P ∗ owns framed) (owned ∪ framed) :=
+    ⟨owned, framed, hCompatible, rfl, hP, Heap.Sub.refl framed⟩
+  have hBoth := (TotalSpec.and_iff handler_conjunctive).mpr
+    ⟨h₁ (owns framed) _ hPre, h₂ (owns framed) _ hPre⟩
+  refine hBoth.mono fun value heap hPost => ?_
+  exact (sep_mono (entails_refl _) (fun _ hSub => F.up_closed hF hSub)) heap
+    ((sep_iand_owns (Q₁ value) (Q₂ value) framed).mpr heap hPost)
+
 /-- Bind rule used by `step`. It is stated on `Aeneas.Std.bind` rather than on `>>=` -/
 theorem ispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
     {next : α → Result β} {Q : IPost β} {m : Result α} {Qm : IPost α}
@@ -359,6 +373,19 @@ theorem dispec_mono {α : Type u} {P Pm : IPre} {Q : IPost α} {m : Result α} {
   intro F h hPre
   have hSpec := hFramed F h (sep_mono hRamified (entails_refl F) h hPre)
   exact hSpec.mono fun value => sep_mono (postWand_cancel Qm Q value) (entails_refl F)
+
+theorem dispec_and {α : Type u} {P : IPre} {m : Result α} {Q₁ Q₂ : IPost α}
+    (h₁ : dispec P m Q₁) (h₂ : dispec P m Q₂) :
+    dispec P m (fun value => iprop(Q₁ value ∧ Q₂ value)) := by
+  rw [dispec_iff] at h₁ h₂ ⊢
+  rintro F _ ⟨owned, framed, hCompatible, rfl, hP, hF⟩
+  have hPre : (P ∗ owns framed) (owned ∪ framed) :=
+    ⟨owned, framed, hCompatible, rfl, hP, Heap.Sub.refl framed⟩
+  have hBoth := (PartialSpec.and_iff handler_conjunctive).mpr
+    ⟨h₁ (owns framed) _ hPre, h₂ (owns framed) _ hPre⟩
+  refine hBoth.mono fun value heap hPost => ?_
+  exact (sep_mono (entails_refl _) (fun _ hSub => F.up_closed hF hSub)) heap
+    ((sep_iand_owns (Q₁ value) (Q₂ value) framed).mpr heap hPost)
 
 /-- Bind rule used by `step` on a partial goal.  See `ispec_bind`. -/
 theorem dispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
@@ -486,6 +513,10 @@ theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : sp
     (∀ x, P₀ x → P₁ x) → spec m P₁ :=
   fun hMonPost => ispec_mono h (entails_sep_postWand _ (fun value _ => hMonPost value))
 
+theorem spec_and {m : Result α} {p q : Post α} (h₁ : spec m p) (h₂ : spec m q) :
+    spec m (fun value => p value ∧ q value) :=
+  ispec_and h₁ h₂
+
 /-- Bind rule used by `step`. It is stated on `Aeneas.Std.bind` rather than on `>>=`, which is
 what a translated program binds with. -/
 theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
@@ -497,58 +528,18 @@ theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α}
       ispec_mono (ispec_ipure_iff.mpr (hk value)) (entails_trans (sep_emp_r _).mp
         (entails_sep_postWand _ (fun _ => entails_refl _)))
 
-theorem exists_imp_spec {m:Result α} {P:Post α} :
-    (∃ y, m = ok y ∧ P y) → spec m P := by
-  rintro ⟨y, rfl, hP⟩
-  exact (spec_ok y).mpr hP
-
-/-- A total specification no longer proves that a computation *returns* -- an
-event that only extends the heap satisfies `spec` too, see the section note
-above -- so that has to be supplied separately. -/
-theorem spec_imp_exists {m : Result α} {P : Post α} (h : spec m P)
-    (hok : ∃ y, m = ok y) : ∃ y, m = ok y ∧ P y := by
-  obtain ⟨y, rfl⟩ := hok
-  exact ⟨y, rfl, (spec_ok y).mp h⟩
-
-/-- A total specification pins down the value a computation returns, even
-without knowing that it does. -/
-theorem spec_imp_forall {m : Result α} {P : Post α} :
-    spec m P → (∀ y, m = ok y → P y) := by
-  grind only [= spec_ok]
-
-/-- The machine of `Result` is feasible -- no heap event is a miracle -- and it
-answers each event in exactly one way, so two total specifications of the same
-computation are witnessed by the *same* run. -/
-private theorem totalSpec_exists_and {Q₁ Q₂ : HPost handler α} {m : Result α} {h : Heap}
-    (h₁ : TotalSpec handler Q₁ m h) (h₂ : TotalSpec handler Q₂ m h) :
-    ∃ value heap, Q₁ value heap ∧ Q₂ value heap := by
-  refine TotalSpec.induction
-    (P := fun m h => TotalSpec handler Q₂ m h → ∃ value heap, Q₁ value heap ∧ Q₂ value heap)
-    (fun value s hPost hOther => ⟨value, s, hPost, hOther.ret_post⟩)
-    (fun event k s hHandle hOther => ?_) h₁ h₂
-  have hOther' : handler.handle event s fun answer s' => TotalSpec handler Q₂ (k answer) s' := by
-    simpa only [SpecF.vis] using hOther.step
-  cases event with
-  | guardedModify _ pre modify => exact hHandle.2 hOther'.2
-  | fail _ => exact hHandle.elim
-
-/-- A computation meeting two total specifications evaluates to one value meeting
-both.  This is the semantic replacement for `spec_imp_exists`: that lemma could
-*name* the returned value only because the former judgment ruled out every event,
-and `m = ok y` is a claim about the shape of `m`, not about what it evaluates to. -/
-theorem spec_exists_and {m : Result α} {p q : Post α} (h₁ : spec m p) (h₂ : spec m q) :
-    ∃ value, p value ∧ q value := by
-  have hEmp : ((emp : IPre) ∗ emp) (∅ : Heap) := (sep_emp_r emp).mpr ∅ trivial
-  obtain ⟨value, heap, hp, hq⟩ :=
-    totalSpec_exists_and (ispec_iff.mp h₁ emp ∅ hEmp) (ispec_iff.mp h₂ emp ∅ hEmp)
-  exact ⟨value,
-    (pure_holds heap).mp ((sep_emp_r _).mp heap hp),
-    (pure_holds heap).mp ((sep_emp_r _).mp heap hq)⟩
-
 /-- A total specification is inhabited: the computation evaluates to some value
 satisfying it, even when nothing says it is syntactically an `ok`. -/
-theorem spec_exists {m : Result α} {p : Post α} (h : spec m p) : ∃ value, p value :=
-  (spec_exists_and h h).imp fun _ hp => hp.1
+theorem spec_exists {m : Result α} {p : Post α} (h : spec m p) : ∃ value, p value := by
+  have hEmp : ((emp : IPre) ∗ emp) (∅ : Heap) := (sep_emp_r emp).mpr ∅ trivial
+  refine TotalSpec.induction
+    (P := fun _ _ => ∃ value, p value)
+    (fun value heap hPost =>
+      ⟨value, (pure_holds heap).mp ((sep_emp_r _).mp heap hPost)⟩)
+    (fun event _ _ hHandle => ?_) (ispec_iff.mp h emp ∅ hEmp)
+  cases event with
+  | guardedModify => exact hHandle.2
+  | fail => exact hHandle.elim
 
 
 /-! ### `dspec` theorems -/
@@ -570,6 +561,10 @@ theorem dspec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : d
     (∀ x, P₀ x → P₁ x) → dspec m P₁ :=
   fun hMonPost => dispec_mono h (entails_sep_postWand _ (fun value _ => hMonPost value))
 
+theorem dspec_and {m : Result α} {p q : Post α} (h₁ : dspec m p) (h₂ : dspec m q) :
+    dspec m (fun value => p value ∧ q value) :=
+  dispec_and h₁ h₂
+
 theorem dspec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
     dspec m Pₘ →
     (∀ x, Pₘ x → dspec (k x) Pₖ) →
@@ -578,10 +573,6 @@ theorem dspec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α
     dispec_bind hm (sep_emp_r emp).mpr fun value =>
       dispec_mono (dispec_ipure_iff.mpr (hk value)) (entails_trans (sep_emp_r _).mp
         (entails_sep_postWand _ (fun _ => entails_refl _)))
-
-theorem dspec_imp_forall {m:Result α} {P:Post α} :
-    dspec m P → (∀ y, m = ok y → P y) := by
-  grind only [= dspec_ok]
 
 /-! ### `mvcgen`
 
