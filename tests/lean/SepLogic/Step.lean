@@ -1,4 +1,4 @@
-import SepLogic.Examples.Basic
+import SepLogic.Fixtures
 
 open Aeneas.Data.Coinductive
 open SepLogic
@@ -10,7 +10,9 @@ namespace SepLogic.Tests.Step
 
 open Aeneas.Std.WP
 
-open Aeneas.Std (Result)
+open Aeneas.Std (MutRawPtr RawPtr Result)
+open Aeneas.Std.MutRawPtr (alloc free write)
+open Aeneas.Std.RawPtr (read)
 
 
 /-! ## A result-dependent spatial postcondition
@@ -23,7 +25,7 @@ returned value and makes it framable — so an unbounded `step*` closes this on
 its own.
 -/
 
-def allocAndReturn : Result (Ptr Nat) := do
+def allocAndReturn : Result (MutRawPtr Nat) := do
   let p ← alloc 1
   pure p
 
@@ -48,12 +50,12 @@ the user unfolds or simplifies the postcondition.
 def opaqueStepResult (actual expected : Nat) : Prop :=
   actual = expected
 
-def readFreeReturn (p : Ptr Nat) : Result Nat := do
+def readFreeReturn (p : MutRawPtr Nat) : Result Nat := do
   let value ← read p
   free p
   pure (value + 1)
 
-example (p : Ptr Nat) (value : Nat) :
+example (p : MutRawPtr Nat) (value : Nat) :
     ⦃ p ↦ value ⦄ readFreeReturn p
       ⦃⇓ result => ⌜opaqueStepResult result (value + 1)⌝⦄ := by
   unfold readFreeReturn
@@ -87,7 +89,7 @@ example (n : Nat) : ⦃ emp ⦄ Result.ok n ⦃⇓ result => ⌜result = n⌝⦄
   step
 
 /-- A `Unit` result is no different. -/
-example (p : Ptr Nat) : ⦃ p ↦ 0 ⦄ (pure () : Result Unit) ⦃⇓ p ↦ 0⦄ := by
+example (p : MutRawPtr Nat) : ⦃ p ↦ 0 ⦄ (pure () : Result Unit) ⦃⇓ p ↦ 0⦄ := by
   step
   iframe
 
@@ -116,7 +118,7 @@ the star also proves the terminal entailment, so the following tactic fails
 with no goals.
 -/
 
-example (p : Ptr Nat) (value : Nat) :
+example (p : MutRawPtr Nat) (value : Nat) :
     ⦃ p ↦ value ⦄ readFreeReturn p
       ⦃⇓ result => ⌜result = value + 1⌝⦄ := by
   unfold readFreeReturn
@@ -129,11 +131,11 @@ An unbounded star performs the branch itself, so it cannot replace the bounded
 step in-place when the following proof needs to control that branch.
 -/
 
-def branchAfterRead (p : Ptr Nat) : Result Nat := do
+def branchAfterRead (p : MutRawPtr Nat) : Result Nat := do
   let value ← read p
   if value = 0 then pure 1 else pure 2
 
-example (p : Ptr Nat) (value : Nat) :
+example (p : MutRawPtr Nat) (value : Nat) :
     ⦃ p ↦ value ⦄ branchAfterRead p
       ⦃⇓ result =>
         iprop(⌜result = if value = 0 then 1 else 2⌝ ∗ p ↦ value)⦄ := by
@@ -157,21 +159,21 @@ structure Ghost where
 inductive NeedsWitness : Prop where
   | mk : Ghost → NeedsWitness
 
-def ghostHelper (_p : Ptr Nat) : Result Unit :=
+def ghostHelper (_p : MutRawPtr Nat) : Result Unit :=
   pure ()
 
 @[step]
-theorem ghostHelper.spec (p : Ptr Nat) (_witness : NeedsWitness) :
+theorem ghostHelper.spec (p : MutRawPtr Nat) (_witness : NeedsWitness) :
     ⦃ p ↦ 0 ⦄ ghostHelper p ⦃⇓ p ↦ 0⦄ := by
   unfold ghostHelper
   step
   iframe
 
-def ghostCaller (p : Ptr Nat) : Result Unit := do
+def ghostCaller (p : MutRawPtr Nat) : Result Unit := do
   ghostHelper p
   pure ()
 
-example (p : Ptr Nat) :
+example (p : MutRawPtr Nat) :
     ⦃ p ↦ 0 ⦄ ghostCaller p ⦃⇓ p ↦ 0⦄ := by
   unfold ghostCaller
   fail_if_success
@@ -187,7 +189,7 @@ example (p : Ptr Nat) :
 points-to assertions, but then fails to prove the opaque pure fact. Its failure
 rolls back that assignment, so `step` leaves the `Nat` metavariable as the first
 goal. -/
-example (p : Ptr Nat) (value : Nat) :
+example (p : MutRawPtr Nat) (value : Nat) :
     ⦃ p ↦ value ⦄ read p
       ⦃⇓ result => iprop(⌜opaqueStepResult result value⌝ ∗ p ↦ value)⦄ := by
   step
@@ -203,19 +205,19 @@ This minimizes the explicit steps in `UnitTest`,
 select a theorem absent from the step database.
 -/
 
-def unregisteredHelper (p : Ptr Nat) : Result Unit :=
-  Examples.incr_ptr p
+def unregisteredHelper (p : MutRawPtr Nat) : Result Unit :=
+  Fixtures.incr_ptr p
 
-theorem unregisteredHelper.spec (p : Ptr Nat) (value : Nat) :
+theorem unregisteredHelper.spec (p : MutRawPtr Nat) (value : Nat) :
     ⦃ p ↦ value ⦄ unregisteredHelper p ⦃⇓ p ↦ value + 1⦄ := by
   unfold unregisteredHelper
   step*
 
-def unregisteredCaller (p : Ptr Nat) : Result Unit := do
+def unregisteredCaller (p : MutRawPtr Nat) : Result Unit := do
   unregisteredHelper p
   pure ()
 
-example (p : Ptr Nat) (value : Nat) :
+example (p : MutRawPtr Nat) (value : Nat) :
     ⦃ p ↦ value ⦄ unregisteredCaller p ⦃⇓ p ↦ value + 1⦄ := by
   unfold unregisteredCaller
   fail_if_success

@@ -1,4 +1,5 @@
-import SepLogic.MutableData.Ptr
+import Aeneas.Std.RawPtr
+import Aeneas.Tactic.Step
 
 /-!
 # Pure-computation judgments and notation
@@ -29,8 +30,7 @@ notation closes.
 namespace PureSpecNotationTests
 
 open Aeneas
-open SepLogic
-open Aeneas.Std (Error Result RustEffect)
+open Aeneas.Std (Error Result RustEffect RawPtr MutRawPtr)
 open Aeneas.SepLogic
 open Aeneas.Std.WP
 
@@ -182,119 +182,119 @@ example : Result.ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄div := by
   step*
 
 /-- error: unsolved goals
-p : Ptr ℕ
+p : MutRawPtr ℕ
 ⊢ ⦃ p ↦ 1 ⦄
     Result.ok (0, 1)
     ⦃⇓ (x, y) => p ↦ x + y ⦄ -/
 #guard_msgs in
-example (p : Ptr Nat) :
+example (p : MutRawPtr Nat) :
     ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ (x, y) =>
       p ↦ (x + y)
     ⦄ := by done
 
 /-- error: unsolved goals
-p : Ptr ℕ
+p : MutRawPtr ℕ
 ⊢ ⦃ p ↦ 1 ⦄
     Result.ok (0, 1)
     ⦃⇓ x y => p ↦ x + y ⦄ -/
 #guard_msgs in
-example (p : Ptr Nat) :
+example (p : MutRawPtr Nat) :
     ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ x y =>
       p ↦ (x + y)
     ⦄ := by done
 
 /-- error: unsolved goals
-p : Ptr ℕ
+p : MutRawPtr ℕ
 ⊢ ⦃ p ↦ 1 ⦄
     Result.ok (0, 1)
     ⦃⇓ x y => p ↦ x + y ⦄div -/
 #guard_msgs in
-example (p : Ptr Nat) :
+example (p : MutRawPtr Nat) :
     ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ x y =>
       p ↦ (x + y)
     ⦄div := by done
 
 /-- error: unsolved goals
-p : Ptr ℕ
+p : MutRawPtr ℕ
 ⊢ ⦃ p ↦ 3 ⦄
     Result.ok ((0, 1), 2)
     ⦃⇓ (a, b) c => p ↦ a + b + c ⦄ -/
 #guard_msgs in
-example (p : Ptr Nat) :
+example (p : MutRawPtr Nat) :
     ⦃ p ↦ 3 ⦄ Result.ok ((0, 1), 2) ⦃⇓ (a, b) c =>
       p ↦ (a + b + c)
     ⦄ := by done
 
 /-- error: unsolved goals
-p : Ptr ℕ
+p : MutRawPtr ℕ
 ⊢ ⦃ p ↦ 3 ⦄
     Result.ok (0, 1, 2)
     ⦃⇓ a b c => p ↦ a + b + c ⦄ -/
 #guard_msgs in
-example (p : Ptr Nat) :
+example (p : MutRawPtr Nat) :
     ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ a b c =>
       p ↦ (a + b + c)
     ⦄ := by done
 
 /-- error: unsolved goals
-p : Ptr ℕ
+p : MutRawPtr ℕ
 ⊢ ⦃ p ↦ 3 ⦄
     Result.ok (0, 1, 2)
     ⦃⇓ a (b, c) => p ↦ a + b + c ⦄ -/
 #guard_msgs in
-example (p : Ptr Nat) :
+example (p : MutRawPtr Nat) :
     ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ a (b, c) =>
       p ↦ (a + b + c)
     ⦄ := by done
 
 /-- error: unsolved goals
-p : Ptr ℕ
+p : MutRawPtr ℕ
 ⊢ ⦃ p ↦ 3 ⦄
     Result.ok (0, 1, 2)
     ⦃⇓ (a, (b, c)) => p ↦ a + b + c ⦄ -/
 #guard_msgs in
-example (p : Ptr Nat) :
+example (p : MutRawPtr Nat) :
     ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ (a, (b, c)) =>
       p ↦ (a + b + c)
     ⦄ := by done
 
-example (p : Ptr Nat) :
+example (p : MutRawPtr Nat) :
     ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ (x, y) =>
       p ↦ (x + y)
     ⦄ := by
   step
 
-example (p : Ptr Nat) :
+example (p : MutRawPtr Nat) :
     ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ (x, y) =>
       p ↦ (x + y)
     ⦄div := by
   step
 
-example (p : Ptr Nat) :
+example (p : MutRawPtr Nat) :
     ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ x y =>
       p ↦ (x + y)
     ⦄ := by
   step
 
-example (p : Ptr Nat) :
+example (p : MutRawPtr Nat) :
     ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ x y =>
       p ↦ (x + y)
     ⦄div := by
   step
 
-example (p : Ptr Nat) :
+example (p : MutRawPtr Nat) :
     ⦃ p ↦ 3 ⦄ Result.ok ((0, 1), 2) ⦃⇓ ((x, y), z) =>
       p ↦ (x + y + z)
     ⦄ := by
   step
 
-example (p : Ptr Nat) :
+example (p : MutRawPtr Nat) :
     ⦃ p ↦ 3 ⦄ Result.ok ((0, 1), 2) ⦃⇓ (x, y) z =>
       p ↦ (x + y + z)
     ⦄ := by
   step
 
-example (p : Ptr Nat) :
+example (p : MutRawPtr Nat) :
     ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ x (y, z) =>
       p ↦ (x + y + z)
     ⦄div := by
@@ -438,13 +438,13 @@ example (makeIncrement : Result (Nat → Result Nat)) : Prop :=
     ⌜∀ x, ⦃ emp ⦄ increment x ⦃⇓ value => ⌜value = x + 1⌝ ⦄⌝
   ⦄
 
-def increment (p : Ptr Nat) (_ : Unit) : Result Nat := do
-  let value ← read p
-  update p (value + 1)
+def increment (p : MutRawPtr Nat) (_ : Unit) : Result Nat := do
+  let value ← RawPtr.read p
+  MutRawPtr.write p (value + 1)
   pure (value + 1)
 
 @[step]
-theorem increment.spec (p : Ptr Nat) (n : Nat) :
+theorem increment.spec (p : MutRawPtr Nat) (n : Nat) :
     ⦃ p ↦ n ⦄ increment p () ⦃⇓ value =>
       p ↦ (n + 1) ∗ ⌜value = n + 1⌝
     ⦄ := by
@@ -458,43 +458,43 @@ implication. The same scalar, tuple, `Unit`, and existential shapes are handled
 directly by `step`.
 -/
 
-def incrementTwiceSL (p : Ptr Nat) : Result Nat := do
+def incrementTwiceSL (p : MutRawPtr Nat) : Result Nat := do
   let _ ← increment p ()
   increment p ()
 
-example (p : Ptr Nat) (n : Nat) :
+example (p : MutRawPtr Nat) (n : Nat) :
     ⦃ p ↦ n ⦄ incrementTwiceSL p ⦃⇓ value =>
       p ↦ (n + 2) ∗ ⌜value = n + 2⌝
     ⦄ := by
   unfold incrementTwiceSL
   step*
 
-def readPairSL (p : Ptr Nat) : Result (Nat × Nat) := do
-  let value ← read p
+def readPairSL (p : MutRawPtr Nat) : Result (Nat × Nat) := do
+  let value ← RawPtr.read p
   pure (value, value + 1)
 
 @[step]
-theorem readPairSL.spec (p : Ptr Nat) (n : Nat) :
+theorem readPairSL.spec (p : MutRawPtr Nat) (n : Nat) :
     ⦃ p ↦ n ⦄ readPairSL p ⦃⇓ first second =>
       p ↦ n ∗ ⌜first = n ∧ second = n + 1⌝
     ⦄ := by
   unfold readPairSL
   step*
 
-def usePairSL (p : Ptr Nat) : Result Unit := do
+def usePairSL (p : MutRawPtr Nat) : Result Unit := do
   let (_, next) ← readPairSL p
-  update p next
+  MutRawPtr.write p next
 
-example (p : Ptr Nat) (n : Nat) :
+example (p : MutRawPtr Nat) (n : Nat) :
     ⦃ p ↦ n ⦄ usePairSL p ⦃⇓ p ↦ (n + 1)⦄ := by
   unfold usePairSL
   step*
 
-def updateTwiceSL (p : Ptr Nat) (n : Nat) : Result Unit := do
-  update p (n + 1)
-  update p (n + 2)
+def updateTwiceSL (p : MutRawPtr Nat) (n : Nat) : Result Unit := do
+  MutRawPtr.write p (n + 1)
+  MutRawPtr.write p (n + 2)
 
-example (p : Ptr Nat) (n : Nat) :
+example (p : MutRawPtr Nat) (n : Nat) :
     ⦃ p ↦ n ⦄ updateTwiceSL p n ⦃⇓ p ↦ (n + 2)⦄ := by
   unfold updateTwiceSL
   step*
@@ -502,13 +502,13 @@ example (p : Ptr Nat) (n : Nat) :
 /- `Aeneas.Std.bind` is the heterogeneous bind: the allocated pointer is in
 `Type 0`, while a function returning `Result Nat` lives in `Type 1`. -/
 def makeCounter : Result (Unit → Result Nat) :=
-  Aeneas.Std.bind (alloc 0) fun p =>
+  Aeneas.Std.bind (MutRawPtr.alloc 0) fun p =>
     Result.ok (increment p)
 
 @[step]
 theorem makeCounter.spec :
   ⦃ emp ⦄ makeCounter ⦃⇓ increment =>
-    ∃ p : Ptr Nat,
+    ∃ p : MutRawPtr Nat,
       p ↦ 0 ∗
       ⌜∀ n, ⦃ p ↦ n ⦄ increment () ⦃⇓ value => p ↦ (n + 1) ∗ ⌜value = n + 1⌝ ⦄⌝
   ⦄ := by
@@ -614,13 +614,13 @@ example (x : Nat) : (do let p ← bumps x; bump p.1) ⦃ r => r = x + 2 ⦄ := b
 The pure-to-SL lifting exposes `bump.spec` as an `ispec`, so `step`'s ramified-frame
 rule carries `p ↦ v` around it. -/
 
-def bumpCell (p : Ptr Nat) : Result Unit := do
-  let v ← read p
+def bumpCell (p : MutRawPtr Nat) : Result Unit := do
+  let v ← RawPtr.read p
   let w ← bump v
-  update p w
+  MutRawPtr.write p w
 
 @[step]
-theorem bumpCell.spec (p : Ptr Nat) (v : Nat) :
+theorem bumpCell.spec (p : MutRawPtr Nat) (v : Nat) :
     ⦃ p ↦ v ⦄ bumpCell p ⦃⇓ p ↦ v + 1⦄ := by
   unfold bumpCell
   step*
@@ -631,10 +631,10 @@ theorem bumpCell.spec (p : Ptr Nat) (v : Nat) :
 intermediate postconditions can carry the allocated cell. -/
 
 def bumpBoxed (v : Nat) : Result Nat := do
-  let p ← alloc v
+  let p ← MutRawPtr.alloc v
   bumpCell p
-  let w ← read p
-  free p
+  let w ← RawPtr.read p
+  MutRawPtr.free p
   pure w
 
 @[step]
@@ -645,13 +645,13 @@ theorem bumpBoxed.spec (v : Nat) :
 
 /-! ### Spatial and pure calls in one SL proof -/
 
-def mixedCall (p : Ptr Nat) : Result Nat := do
+def mixedCall (p : MutRawPtr Nat) : Result Nat := do
   bumpCell p
-  let v ← read p
+  let v ← RawPtr.read p
   bumpBoxed v
 
 @[step]
-theorem mixedCall.spec (p : Ptr Nat) (v : Nat) :
+theorem mixedCall.spec (p : MutRawPtr Nat) (v : Nat) :
     ⦃ p ↦ v ⦄ mixedCall p ⦃⇓ r => ⌜r = v + 2⌝ ∗ p ↦ v + 1⦄ := by
   unfold mixedCall
   step*
@@ -676,7 +676,7 @@ example (x : Nat) : bump x ⦃ y => y = x + 1 ⦄div := by step*
 
 example (v : Nat) : ⦃ emp ⦄ bumpBoxed v ⦃⇓ r => ⌜r = v + 1⌝⦄div := by step*
 
-example (p : Ptr Nat) (v : Nat) :
+example (p : MutRawPtr Nat) (v : Nat) :
     ⦃ p ↦ v ⦄ bumpCell p ⦃⇓ p ↦ v + 1⦄div :=
   ispec_dispec (bumpCell.spec p v)
 
@@ -707,7 +707,7 @@ example (x : Nat) : ⦃ emp ⦄ callWith bumpBoxed x ⦃⇓ y => ⌜y = x + 1⌝
 
 /-- The whole higher-order call, pure contract and all, framed into a heap
 proof by `step` — framing an `ispec` is what `step` already does. -/
-example (p : Ptr Nat) (v x : Nat) :
+example (p : MutRawPtr Nat) (v x : Nat) :
     ⦃ p ↦ v ⦄ callWith bumpBoxed x ⦃⇓ y => ⌜y = x + 1⌝ ∗ p ↦ v⦄ := by
   step with (callWith.spec_pure (post := fun y => y = x + 1))
   · step*
@@ -723,14 +723,14 @@ example (x : Nat) : callWith bump x ⦃ y => y = x + 1 ⦄ := by
   apply callWith.spec
   step
 
-example (p : Ptr Nat) (v w : Nat) :
-    ⦃ p ↦ v ⦄ callWith (fun n => do update p n; read p) w
+example (p : MutRawPtr Nat) (v w : Nat) :
+    ⦃ p ↦ v ⦄ callWith (fun n => do MutRawPtr.write p n; RawPtr.read p) w
       ⦃⇓ y => ⌜y = w⌝ ∗ p ↦ w⦄ := by
   apply callWith.spec
   step*
 
-example (p : Ptr Nat) (v w : Nat) :
-    ⦃ p ↦ v ⦄ callWith (fun n => do let m ← bump n; update p m; read p) w
+example (p : MutRawPtr Nat) (v w : Nat) :
+    ⦃ p ↦ v ⦄ callWith (fun n => do let m ← bump n; MutRawPtr.write p m; RawPtr.read p) w
       ⦃⇓ y => ⌜y = w + 1⌝ ∗ p ↦ w + 1⦄ := by
   apply callWith.spec
   step*
@@ -740,13 +740,13 @@ example (p : Ptr Nat) (v w : Nat) :
 `f` must own nothing — a real restriction, but one expressed in the same logic
 as everything else, and `step` frames `p ↦ v` around it by itself. -/
 
-def updateWith (f : Nat → Result Nat) (p : Ptr Nat) : Result Unit := do
-  let v ← read p
+def updateWith (f : Nat → Result Nat) (p : MutRawPtr Nat) : Result Unit := do
+  let v ← RawPtr.read p
   let w ← f v
-  update p w
+  MutRawPtr.write p w
 
 @[step]
-theorem updateWith.spec (f : Nat → Result Nat) (p : Ptr Nat) (v w : Nat)
+theorem updateWith.spec (f : Nat → Result Nat) (p : MutRawPtr Nat) (v w : Nat)
     (hf : f v ⦃ r => r = w ⦄) :
     ⦃ p ↦ v ⦄ updateWith f p ⦃⇓ p ↦ w⦄ := by
   unfold updateWith
@@ -754,21 +754,21 @@ theorem updateWith.spec (f : Nat → Result Nat) (p : Ptr Nat) (v w : Nat)
   subst v'
   step*
 
-example (p : Ptr Nat) (v : Nat) :
+example (p : MutRawPtr Nat) (v : Nat) :
     ⦃ p ↦ v ⦄ updateWith bump p ⦃⇓ p ↦ v + 1⦄ := by
   step* +inferPost
   assumption
 
 /-- The already-proved SL specification of `bumpBoxed` supplies the pure
 callback contract, without opening its spatial implementation in a pure goal. -/
-example (p : Ptr Nat) (v : Nat) :
+example (p : MutRawPtr Nat) (v : Nat) :
     ⦃ p ↦ v ⦄ updateWith bumpBoxed p ⦃⇓ p ↦ v + 1⦄ := by
   step* +inferPost
   assumption
 
 /-- Nesting: a higher-order call inside a higher-order call, pure contract on
 the inside and a separating one on the outside. -/
-example (p : Ptr Nat) (v : Nat) :
+example (p : MutRawPtr Nat) (v : Nat) :
     ⦃ p ↦ v ⦄ callWith (fun n => do updateWith bump p; bump n) v
       ⦃⇓ y => ⌜y = v + 1⌝ ∗ p ↦ v + 1⦄ := by
   apply callWith.spec
@@ -784,12 +784,12 @@ An SL ispec at `emp` does not determine the program: an event that needs no
 owned resources is still permitted. -/
 
 /-- Allocation satisfies an SL ispec owning nothing initially. -/
-example : ⦃ emp ⦄ alloc (0 : Nat) ⦃⇓ _ => ⌜True⌝⦄ := by
+example : ⦃ emp ⦄ MutRawPtr.alloc (0 : Nat) ⦃⇓ _ => ⌜True⌝⦄ := by
   step*
 
 /-- But it is not a `Result.ok`.  This no longer follows from the specification
 -- allocation satisfies one -- only from the program. -/
-example : ¬ ∃ q, alloc (0 : Nat) = Result.ok q := by
+example : ¬ ∃ q, MutRawPtr.alloc (0 : Nat) = Result.ok q := by
   rintro ⟨q, hq⟩
   simp [Aeneas.Std.MutRawPtr.alloc, Aeneas.Std.RawPtr.allocArray,
     Result.guardedModify] at hq
