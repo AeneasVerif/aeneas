@@ -79,44 +79,49 @@ theorem infallible [_root_.Ord T] [OrdSpec H]: ∀ a b, H.cmp a b ⦃ _ => True 
 instance: Coe (avl.Ordering) (_root_.Ordering) where
   coe a := a.toLeanOrdering
 
-theorem rustCmpEq [_root_.Ord T] [O: OrdSpec H]: H.cmp a b = .ok o <-> compare a b = o.toLeanOrdering := by
+/-- Stated semantically.  `H.cmp a b = .ok o` is a claim about the *shape* of the
+computation, and a `spec` no longer implies one: it rules out failure and
+divergence, but not an event.  `H.cmp a b ⦃ o' => o' = o ⦄` says what the
+syntactic form was being used to say -- the comparison evaluates to `o`. -/
+theorem rustCmpEq [_root_.Ord T] [O: OrdSpec H]:
+    H.cmp a b ⦃ o' => o' = o ⦄ <-> compare a b = o.toLeanOrdering := by
   apply Iff.intro
   . intro Hcmp
-    obtain ⟨ o', ⟨ Hcmp', Hcompare ⟩ ⟩ := WP.spec_imp_exists (O.infallible a b)
-    rw [Hcmp', ok.injEq] at Hcmp
-    simp [Hcompare, Hcmp]
+    obtain ⟨ o', Ho', Hcompare ⟩ :=
+      WP.spec_exists (WP.spec_and Hcmp (O.infallible a b))
+    rw [Hcompare, Ho']
   . intro Hcompare
-    obtain ⟨ o', ⟨ Hcmp', Hcompare' ⟩ ⟩ := WP.spec_imp_exists (O.infallible a b)
-    rw [Hcompare', avl.Ordering.toLeanOrdering.injEq] at Hcompare
-    simp [Hcompare.symm, Hcmp']
+    refine WP.spec_mono (O.infallible a b) fun o' Ho' => ?_
+    rw [Ho', avl.Ordering.toLeanOrdering.injEq] at Hcompare
+    exact Hcompare
 
 
 theorem oppositeOfOpposite {x y: _root_.Ordering}: x.toDualOrdering = y ↔ x = y.toDualOrdering := by
   cases x <;> cases y <;> simp
-theorem oppositeRustOrder [_root_.Ord T] [Spec: OrdSpecSymmetry H] {a b}: H.cmp b a = .ok o ↔ H.cmp a b = .ok o.toDualOrdering := by
+theorem oppositeRustOrder [_root_.Ord T] [Spec: OrdSpecSymmetry H] {a b}:
+    H.cmp b a ⦃ o' => o' = o ⦄ ↔ H.cmp a b ⦃ o' => o' = o.toDualOrdering ⦄ := by
   rw [rustCmpEq, Spec.symmetry, compare, Ord.opposite, oppositeOfOpposite, rustCmpEq, toDualOrderingOfToLeanOrdering]
 
 theorem ltOfRustOrder
   [LO: LinearOrder T]
   [Spec: OrdSpec H]:
-  ∀ a b, H.cmp a b = .ok .Less -> a < b := by
+  ∀ a b, H.cmp a b ⦃ o => o = .Less ⦄ -> a < b := by
   intros a b
   intro Hcmp
   -- why the typeclass search doesn't work here?
   refine' (@compare_lt_iff_lt T LO).1 _
-  obtain ⟨ o, ⟨ Hcmp', Hcompare ⟩ ⟩ := WP.spec_imp_exists (Spec.infallible a b)
-  simp only [Hcmp', ok.injEq] at Hcmp
-  simp [Hcompare, Hcmp, avl.Ordering.toLeanOrdering]
+  have Hcompare := (rustCmpEq H).mp Hcmp
+  simp [Hcompare, avl.Ordering.toLeanOrdering]
 
 theorem gtOfRustOrder
   [LinearOrder T]
   [Spec: OrdSpecSymmetry H]:
-  ∀ a b, H.cmp a b = .ok .Greater -> b < a := by
+  ∀ a b, H.cmp a b ⦃ o => o = .Greater ⦄ -> b < a := by
   intros a b
   intro Hcmp
   refine' @ltOfRustOrder _ H _ Spec.toOrdSpec _ _ _
   rewrite [oppositeRustOrder]
-  simp [Hcmp]
+  simpa using Hcmp
 
 -- TODO: move to standard library
 @[simp]

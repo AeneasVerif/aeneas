@@ -68,7 +68,6 @@ theorem forall_unit_intro {p : Unit → Prop} (h : p ()) : ∀ value, p value :=
   fun value => match value with | () => h
 
 export Intro (forall_unit)
-
 attribute [step_simps]
   bind_assoc Std.bind_tc_ok Std.bind_tc_vis Std.bind_tc_div
   /- Those are quite useful to simplify the goal further by eliminating existential quantifiers for instance. -/
@@ -81,6 +80,14 @@ attribute [step_simps]
 attribute [step_simps] Aeneas.Std.bind_assoc_eq
 attribute [step_simps] Aeneas.Std.uncurry_apply_pair
 attribute [step_simps] ite_self -- this is sometimes necessary
+
+/-- SL terminal-return simp lemmas, when the SL specification module is imported. -/
+def getSLOkSimps : CoreM (Array Name) := do
+  let env ← getEnv
+  pure (#[
+    `Aeneas.SepLogic.ispec_ok_iff,
+    `Aeneas.SepLogic.dispec_ok_iff
+  ].filter env.contains)
 
 attribute [step_post_simps]
   -- We often see expressions like `Int.ofNat 3`
@@ -815,6 +822,12 @@ def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTree : 
   TacticM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"introOutputs") do
   traceGoalWithNode "Initial goal"
+  /- The goal looks like:
+     mono: ∀ x, P₀ x → P₁ x
+     bind: ∀ x, Pₘ x → spec (k x) Pₖ
+     bind (separation logic): ∀ v, ispec (Pₘ v ∗ emp) (k v) Q
+  -/
+
   trace[Step] "call-site tree: {repr callSiteTree}"
 
   /- Normalize the premise into the `∀ x, P₀ → ... → Pₘ → k ⦃ Q ⦄` shape. -/
@@ -1096,8 +1109,11 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal)
       Note that we want to simplify targets of the shape:
       `ok ... ⦃ x₀ ... xₙ => ... ⦄`
       -/
+      let slOkSimps ← getSLOkSimps
       let r ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
-        {simpThms := #[← stepSimpExt.getTheorems], declsToUnfold := #[``pure]} (.targets #[] true)
+        {simpThms := #[← stepSimpExt.getTheorems],
+         addSimpThms := slOkSimps,
+         declsToUnfold := #[``pure]} (.targets #[] true)
       if r.isSome then
         pure (some ({goal := ← getMainGoal, outputs, stepState := mainGoal.stepState} : MainGoal))
       else pure none
@@ -2461,3 +2477,18 @@ end Test
 end Step
 
 end Aeneas
+
+/-! ## Separation-logic registrations
+
+`Aeneas.Std.WP` proves these but cannot register them: `@[step]` and
+`@[step_simps]` are declared in `Aeneas.Tactic.Step.Init`, which imports
+`Aeneas.Std.WP`.  This file is the first point where both are in scope. -/
+
+attribute [step_simps] Aeneas.SepLogic.sep_ipure_true_r_eq
+attribute [step_simps] Aeneas.SepLogic.entails_emp_ipure_iff
+attribute [step_simps] Aeneas.SepLogic.entails_refl
+
+attribute [step] Aeneas.Std.WP.ret.spec
+attribute [step] Aeneas.Std.WP.pure.spec
+attribute [step] Aeneas.Std.WP.ok_spec
+attribute [step] Aeneas.Std.WP.pure_spec
