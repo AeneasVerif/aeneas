@@ -12,6 +12,14 @@ open Aeneas.Std (Ref)
 example (P Q : IProp) : P ∗ Q ⊢ Q ∗ P := by
   iframe
 
+example (P Q F : IProp) : iprop(P ∧ Q) ∗ F ⊢ F ∗ iprop(P ∧ Q) := by
+  iframe
+
+private def combined (P Q : IProp) : IProp := iprop(P ∧ Q)
+
+example (P Q F : IProp) : combined P Q ∗ F ⊢ F ∗ iprop(P ∧ Q) := by
+  iframe
+
 example (P : IProp) : emp ∗ P ⊢ P := by
   isimp
   iframe
