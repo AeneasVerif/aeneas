@@ -46,7 +46,12 @@ elab "discharge_markers" : tactic => do
     | exact dischargeMarker
     | assumption))
 
-#register_spec_info {
+/- Reuse the standard premise normalization while customizing the triple and its
+   discharge tactic. -/
+run_cmd Lean.Elab.Command.liftTermElabM do
+  let some info ← specInfoLookup ``Std.WP.spec
+    | Lean.throwError "The standard WP specification is not registered"
+  specAttr.add { info with
     spec_name := ``triple
     arity := 4
     program_index := 2
@@ -56,8 +61,6 @@ elab "discharge_markers" : tactic => do
     mk_spec_bind := ``triple_step_bind
     mk_spec_bind_skip_args := 6
     discharge_tactic := some `discharge_markers
-    qimp_elim_tactics := #[``Post.entails_iff, ``true_imp_iff]
-    uncurry_elim_tactics := #[]
     to_mvcgen := none
     liftings := #[]
   }
