@@ -453,8 +453,7 @@ def nestedExistentialProg : Result ((Nat × Nat) × Nat) := ok ((1, 2), 3)
 @[step]
 theorem nestedExistentialProg_spec :
     nestedExistentialProg ⦃ (a, b) c => ∃ (_ : a = 1), b = 2 ∧ c = 3 ⦄ := by
-  constructor
-  simp
+  unfold nestedExistentialProg; simp
 
 /--
 info: Try this:
