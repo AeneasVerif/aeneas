@@ -387,8 +387,9 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
     simp only [Int.tdiv_neg, Int.neg_tdiv, neg_neg]
 
 uscalar theorem «%S».div_bv_spec (x : «%S») {y : «%S»} (hnz : ↑y ≠ (0 : Nat)) :
-  x / y ⦃ z => (↑z : Nat) = ↑x / ↑y ∧ z.bv = x.bv / y.bv ⦄ :=
-  exists_imp_spec (UScalar.div_bv_spec x hnz)
+  x / y ⦃ z => (↑z : Nat) = ↑x / ↑y ∧ z.bv = x.bv / y.bv ⦄ := by
+  obtain ⟨z, hz, hpost⟩ := UScalar.div_bv_spec x hnz
+  simpa only [hz, spec_ok] using hpost
 
 iscalar theorem «%S».div_bv_spec {x y : «%S»} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = «%S».min ∧ y.val = -1)) :
@@ -415,12 +416,14 @@ theorem IScalar.div_spec {ty} {x y : IScalar ty}
   simp [hz]
 
 uscalar @[step] theorem «%S».div_spec (x : «%S») {y : «%S»} (hnz : ↑y ≠ (0 : Nat)) :
-  (x / y) ⦃ z => (↑z : Nat) = ↑x / ↑y ⦄ :=
-  exists_imp_spec (UScalar.div_spec x hnz)
+  (x / y) ⦃ z => (↑z : Nat) = ↑x / ↑y ⦄ := by
+  obtain ⟨z, hz, hpost⟩ := UScalar.div_spec x hnz
+  simpa only [hz, spec_ok] using hpost
 
 iscalar @[step] theorem «%S».div_spec {x y : «%S»} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = «%S».min ∧ y.val = -1)) :
-  (x / y) ⦃ z => (↑z : Int) = Int.tdiv ↑x ↑y ⦄ :=
-  exists_imp_spec (IScalar.div_spec hnz (by scalar_tac))
+  (x / y) ⦃ z => (↑z : Int) = Int.tdiv ↑x ↑y ⦄ := by
+  obtain ⟨z, hz, hpost⟩ := IScalar.div_spec (x := x) hnz (by scalar_tac)
+  simpa only [hz, spec_ok] using hpost
 
 end Aeneas.Std

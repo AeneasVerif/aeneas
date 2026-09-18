@@ -87,7 +87,8 @@ theorem rustCmpEq [_root_.Ord T] [O: OrdSpec H]:
     H.cmp a b ⦃ o' => o' = o ⦄ <-> compare a b = o.toLeanOrdering := by
   apply Iff.intro
   . intro Hcmp
-    obtain ⟨ o', Ho', Hcompare ⟩ := WP.spec_exists_and Hcmp (O.infallible a b)
+    obtain ⟨ o', Ho', Hcompare ⟩ :=
+      WP.spec_exists (WP.spec_and Hcmp (O.infallible a b))
     rw [Hcompare, Ho']
   . intro Hcompare
     refine WP.spec_mono (O.infallible a b) fun o' Ho' => ?_

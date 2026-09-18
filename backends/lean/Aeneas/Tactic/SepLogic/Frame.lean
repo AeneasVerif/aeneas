@@ -21,7 +21,7 @@ namespace IFrame
 
 private def isConnective (e : Expr) : Bool :=
   let head := e.consumeMData.getAppFn
-  head.isConstOf ``sep || head.isConstOf ``ipure ||
+  head.isConstOf ``sep || head.isConstOf ``iand || head.isConstOf ``ipure ||
     head.isConstOf ``iexists || head.isConstOf `Aeneas.SepLogic.emp ||
     -- `wand` is *defined* as an existential; unfolding it would be a disaster.
     head.isConstOf ``wand || head.isConstOf ``postWand || head.isConstOf ``iforall
@@ -33,7 +33,7 @@ private def wand? (e : Expr) : Option Bool :=
   else if e.isAppOfArity ``wand 2 then some false
   else none
 
-/-- Expose the head connective (`sep`, `ipure`, `iexists` or `emp`) of a
+/-- Expose the head connective (`sep`, `iand`, `ipure`, `iexists` or `emp`) of a
 separation-logic assertion, by unfolding a definition that is a mere wrapper
 around one — `wellFormed s l` is `⌜…⌝ ∗ nodes l`, `isList s vs` is `∃ l, …`.
 

@@ -26,6 +26,43 @@ example (P : Prop) : Entails emp (ipure P) := by done
 example (P : IProp) : iprop(P) = P :=
   rfl
 
+/-- error: unsolved goals
+P Q : IProp
+⊢ P ⊢ iprop(P ∧ Q) -/
+#guard_msgs in
+example (P Q : IProp) : Entails P (iand P Q) := by done
+
+example (P Q R : IProp) : iprop(P ∗ (Q ∧ R)) = (P ∗ iand Q R) :=
+  rfl
+
+example (P Q R : IProp) : iprop((P ∧ Q) -∗ R) = (iand P Q -∗ R) :=
+  rfl
+
+example (J : Nat → IProp) (P : IProp) :
+    iprop(∃ x, J x ∧ P) = iexists (fun x => iand (J x) P) :=
+  rfl
+
+example (J : Nat → IProp) (P : IProp) :
+    iprop(∀ x, J x ∧ P) = iforall (fun x => iand (J x) P) :=
+  rfl
+
+example (H P Q : IProp) (hP : H ⊢ P) (hQ : H ⊢ Q) : H ⊢ iprop(P ∧ Q) :=
+  iand_intro hP hQ
+
+example (P Q R : IProp) : iprop((P ∧ Q) ∧ R) ⊣⊢ iprop(P ∧ (Q ∧ R)) :=
+  iand_assoc P Q R
+
+example (P Q : Prop) : iprop(⌜P⌝ ∧ ⌜Q⌝) = ⌜P ∧ Q⌝ := by
+  simp
+
+example {α : Type} (r : Aeneas.Std.Ref α) (value : α) :
+    iprop((r ↦ value) ∧ (r ↦ value)) = (r ↦ value) := by
+  simp
+
+example (P Q : IProp) (frame : Aeneas.Std.Heap) :
+    iprop((P ∗ owns frame) ∧ (Q ∗ owns frame)) ⊢ iprop(P ∧ Q) ∗ owns frame :=
+  (sep_iand_owns P Q frame).mpr
+
 example (P Q : IProp) : (P ∗ Q) ⊣⊢ (Q ∗ P) :=
   sep_comm P Q
 
