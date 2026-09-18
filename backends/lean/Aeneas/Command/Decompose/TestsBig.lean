@@ -755,4 +755,21 @@ info: 'Aeneas.Command.Decompose.TestsBig.test56_eq' depends on axioms: [propext,
 #guard_msgs in
 #print axioms test56_eq
 
+/- Same-universe decompositions must retain the lightweight monad-law proof
+   path even for a long chain comparable to a generated Keccak round. -/
+open Lean in
+macro "longResultChain% " n:num : term => do
+  let x := mkIdent `x
+  let mut body ← `(Result.ok $x)
+  for _ in [:n.getNat] do
+    body ← `(Bind.bind ($x + 1#u32) (fun ($x : U32) => $body))
+  `(fun ($x : U32) => $body)
+
+set_option maxRecDepth 4096 in
+def longResultChain : U32 → Result U32 := longResultChain% 400
+
+set_option maxRecDepth 4096 in
+#decompose longResultChain longResultChain.fold
+  letRange 0 350 => longResultChain_prefix
+
 end Aeneas.Command.Decompose.TestsBig
