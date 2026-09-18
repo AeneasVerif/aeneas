@@ -1,10 +1,8 @@
 import Aeneas.Data.Coinductive.ITree
-import Std.Do
 
 /-!
 Generic total- and partial-correctness for interaction trees.
 `TotalSpec` is a least fixed point; `PartialSpec` is a greatest fixed point.
-Conjunctive handlers also provide `Std.Do.WPMonad` interpretations for `mvcgen`.
 -/
 
 namespace Aeneas.Data.Coinductive
@@ -266,67 +264,6 @@ theorem PartialSpec.bind {Q₁ : HPost H α} {Q₂ : HPost H β}
         exact H.handle_mono (fun _ _ hChild => Or.inl ⟨_, rfl, hChild⟩) hSpec.vis_view
   · exact hSpec.step.mono_tail fun _ _ => Or.inr
 
-/-- Recover the weakest intermediate postcondition of a totally correct bind. -/
-theorem TotalSpec.bind_inv {Q : HPost H β} {m : ITree E α}
-    {k : α → ITree E β} {s : H.State}
-    (hSpec : TotalSpec H Q (ITree.bind m k) s) :
-    TotalSpec H (fun value s' => TotalSpec H Q (k value) s') m s := by
-  /- Retain the original spec for decompositions whose left operand immediately returns. -/
-  have h := hSpec.induction
-    (P := fun t s' => TotalSpec H Q t s' ∧
-      ∀ m', t = ITree.bind m' k →
-        TotalSpec H (fun value s'' => TotalSpec H Q (k value) s'') m' s') ?_ ?_
-  · exact h.2 m rfl
-  · intro value s' hPost
-    refine ⟨.ret hPost, ?_⟩
-    intro m' hEq
-    cases m' using ITree.cases
-    · rename_i value'
-      simp only [ITree.pure_eq_ret, itree_ret_bind] at hEq ⊢
-      exact .ret (hEq ▸ TotalSpec.ret hPost)
-    · simp only [itree_div_bind] at hEq
-      exact (not_ret_div hEq).elim
-    · simp only [itree_vis_bind] at hEq
-      exact (not_vis_ret hEq).elim
-  · intro event tail s' hHandle
-    have hVis : TotalSpec H Q (.vis event tail) s' :=
-      .vis (H.handle_mono (fun _ _ hChild => hChild.1) hHandle)
-    refine ⟨hVis, ?_⟩
-    intro m' hEq
-    cases m' using ITree.cases
-    · rename_i value
-      simp only [ITree.pure_eq_ret, itree_ret_bind] at hEq ⊢
-      exact .ret (hEq ▸ hVis)
-    · simp only [itree_div_bind] at hEq
-      exact (not_div_vis hEq.symm).elim
-    · rename_i event' tail'
-      simp only [itree_vis_bind] at hEq
-      obtain ⟨rfl, hTail⟩ := vis_inj hEq
-      have hTail := eq_of_heq hTail
-      exact .vis (H.handle_mono
-        (fun answer _ hChild => hChild.2 (tail' answer) (congrFun hTail answer))
-        hHandle)
-
-theorem TotalSpec.bind_iff {Q : HPost H β} {m : ITree E α}
-    {k : α → ITree E β} {s : H.State} :
-    TotalSpec H Q (ITree.bind m k) s ↔
-      TotalSpec H (fun value s' => TotalSpec H Q (k value) s') m s :=
-  ⟨TotalSpec.bind_inv, fun hSpec => hSpec.bind fun _ _ => id⟩
-
-theorem PartialSpec.bind_iff {Q : HPost H β} {m : ITree E α}
-    {k : α → ITree E β} {s : H.State} :
-    PartialSpec H Q (ITree.bind m k) s ↔
-      PartialSpec H (fun value s' => PartialSpec H Q (k value) s') m s := by
-  refine ⟨fun hSpec => ?_, fun hSpec => hSpec.bind fun _ _ => id⟩
-  refine PartialSpec.coinduction
-    (fun t s' => PartialSpec H Q (ITree.bind t k) s') ?_ hSpec
-  intro t s' hSpec'
-  cases t using ITree.cases
-  · simpa only [ITree.pure_eq_ret, itree_ret_bind, SpecF.ret] using hSpec'
-  · simp only [SpecF.div]
-  · rw [itree_vis_bind] at hSpec'
-    exact hSpec'.vis_view
-
 theorem TotalSpec.mono_le {Q : HPost H α} {m m' : ITree E α} {s : H.State}
     (hLe : m ⊑ m') (hSpec : TotalSpec H Q m s) :
     TotalSpec H Q m' s := by
@@ -362,7 +299,7 @@ theorem PartialSpec.mono_le {Q : HPost H α} {m m' : ITree E α} {s : H.State}
     exact H.handle_mono (fun answer _ hNext => ⟨_, hCont answer, hNext⟩)
       hSpec'.vis_view
 
-/-! ## Conjunctive handlers -/
+/-! ## PartialSpec is admissible -/
 
 namespace Handler
 
@@ -381,53 +318,7 @@ theorem Conjunctive.handle_forall {ι : Sort u'} {event : E.I} {s : H.State}
   rintro X ⟨i, rfl⟩
   exact hHandle i
 
-theorem Conjunctive.handle_and {event : E.I} {s : H.State}
-    {C₁ C₂ : HPost H (E.O event)} (hConj : H.Conjunctive)
-    (h₁ : H.handle event s C₁) (h₂ : H.handle event s C₂) :
-    H.handle event s fun answer s' => C₁ answer s' ∧ C₂ answer s' := by
-  refine H.handle_mono
-    (fun _ _ hAll => ⟨hAll C₁ (Or.inl rfl), hAll C₂ (Or.inr rfl)⟩)
-    (hConj (fun C => C = C₁ ∨ C = C₂) ⟨C₁, Or.inl rfl⟩ ?_)
-  rintro C (rfl | rfl)
-  · exact h₁
-  · exact h₂
-
 end Handler
-
-theorem TotalSpec.and_iff (hConj : H.Conjunctive) {Q₁ Q₂ : HPost H α}
-    {m : ITree E α} {s : H.State} :
-    TotalSpec H (fun value s' => Q₁ value s' ∧ Q₂ value s') m s ↔
-      TotalSpec H Q₁ m s ∧ TotalSpec H Q₂ m s := by
-  constructor
-  · intro hSpec
-    exact ⟨hSpec.mono fun _ _ => And.left, hSpec.mono fun _ _ => And.right⟩
-  · rintro ⟨h₁, h₂⟩
-    refine h₁.induction
-      (P := fun t s' => TotalSpec H Q₂ t s' →
-        TotalSpec H (fun value s'' => Q₁ value s'' ∧ Q₂ value s'') t s') ?_ ?_ h₂
-    · intro value s' hPost hSpec
-      exact .ret ⟨hPost, hSpec.ret_post⟩
-    · intro event tail s' hHandle hSpec
-      exact .vis (H.handle_mono (fun _ _ hChild => hChild.1 hChild.2)
-        (hConj.handle_and hHandle hSpec.vis_view))
-
-theorem PartialSpec.and_iff (hConj : H.Conjunctive) {Q₁ Q₂ : HPost H α}
-    {m : ITree E α} {s : H.State} :
-    PartialSpec H (fun value s' => Q₁ value s' ∧ Q₂ value s') m s ↔
-      PartialSpec H Q₁ m s ∧ PartialSpec H Q₂ m s := by
-  constructor
-  · intro hSpec
-    exact ⟨hSpec.mono fun _ _ => And.left, hSpec.mono fun _ _ => And.right⟩
-  · intro hSpec
-    refine PartialSpec.coinduction
-      (fun t s' => PartialSpec H Q₁ t s' ∧ PartialSpec H Q₂ t s') ?_ hSpec
-    rintro t s' ⟨h₁, h₂⟩
-    cases t using ITree.cases
-    · exact ⟨h₁.ret_post, h₂.ret_post⟩
-    · simp only [SpecF.div]
-    · exact hConj.handle_and h₁.vis_view h₂.vis_view
-
-/-! ## PartialSpec is admissible -/
 
 /-- Partial correctness with a conjunctive handler is admissible. -/
 theorem PartialSpec.admissible (hConj : H.Conjunctive) (Q : HPost H α) (s : H.State) :
@@ -463,117 +354,6 @@ theorem PartialSpec.admissible (hConj : H.Conjunctive) (Q : HPost H α) (s : H.S
         by rintro _ ⟨k', hMem', rfl⟩; exact hChild ⟨k', hMem'⟩, rfl⟩
 
 end Aeneas.Data.Coinductive
-
-namespace Aeneas.Std.WP
-
-/-! ## Generic `mvcgen` interpretations -/
-
-open Aeneas.Data.Coinductive
-open Std.Do
-
-universe u v w
-
-section Stateful
-
-variable {E : Effect.{v}} (H : Handler.{u, v} E) (hConj : H.Conjunctive)
-
-/-- Interpret interaction trees using total correctness and a stateful event handler.
-
-Use `letI := totalWPMonad H hConj` (or a local instance) to enable `mvcgen`.
-The handler must be conjunctive because `Std.Do.PredTrans` preserves conjunctions.
-This is not a global instance: the same effect can have different handlers or use
-`partialWPMonad` instead.
--/
-@[reducible]
-def totalWPMonad : WPMonad (ITree.{u} E) (.arg H.State .pure) where
-  wp m := {
-    trans Q s := ⟨TotalSpec H (fun value s' => (Q.1 value s').down) m s⟩
-    conjunctiveRaw Q₁ Q₂ := by
-      intro s
-      exact TotalSpec.and_iff hConj
-  }
-  wp_pure value := by
-    apply PredTrans.ext
-    intro Q
-    funext s
-    apply SPred.ext_nil
-    exact TotalSpec.ret_iff
-  wp_bind m k := by
-    apply PredTrans.ext
-    intro Q
-    funext s
-    apply SPred.ext_nil
-    exact TotalSpec.bind_iff
-
-/-- Like `totalWPMonad`, but using partial correctness: divergence is permitted,
-while visible effects are still interpreted by `H`. -/
-@[reducible]
-def partialWPMonad : WPMonad (ITree.{u} E) (.arg H.State .pure) where
-  wp m := {
-    trans Q s := ⟨PartialSpec H (fun value s' => (Q.1 value s').down) m s⟩
-    conjunctiveRaw Q₁ Q₂ := by
-      intro s
-      exact PartialSpec.and_iff hConj
-  }
-  wp_pure value := by
-    apply PredTrans.ext
-    intro Q
-    funext s
-    apply SPred.ext_nil
-    exact PartialSpec.ret_iff
-  wp_bind m k := by
-    apply PredTrans.ext
-    intro Q
-    funext s
-    apply SPred.ext_nil
-    exact PartialSpec.bind_iff
-
-/-- Convert between a total-correctness `mvcgen` triple and handler specifications. -/
-theorem totalTriple_iff {α : Type u} {m : ITree E α}
-    {P : H.State → Prop} {Q : HPost H α} :
-    letI := totalWPMonad H hConj
-    (⦃ fun s => ⌜P s⌝ ⦄ m ⦃ ⇓ value s' => ⌜Q value s'⌝ ⦄) ↔
-      ∀ s, P s → TotalSpec H Q m s :=
-  Iff.rfl
-
-/-- Convert between a partial-correctness `mvcgen` triple and handler specifications. -/
-theorem partialTriple_iff {α : Type u} {m : ITree E α}
-    {P : H.State → Prop} {Q : HPost H α} :
-    letI := partialWPMonad H hConj
-    (⦃ fun s => ⌜P s⌝ ⦄ m ⦃ ⇓ value s' => ⌜Q value s'⌝ ⦄) ↔
-      ∀ s, P s → PartialSpec H Q m s :=
-  Iff.rfl
-
-end Stateful
-
-/-- Specialize total correctness to a pure predicate transformer when the handler
-has only one state. The result and state universes are independent. -/
-@[reducible]
-def totalPureWPMonad {E : Effect.{v}} (H : Handler.{w, v} E)
-    (hConj : H.Conjunctive) [Subsingleton H.State] (s : H.State) :
-    WPMonad (ITree.{u} E) .pure where
-  wp m := {
-    trans Q := ⟨TotalSpec H (fun value _ => (Q.1 value).down) m s⟩
-    conjunctiveRaw Q₁ Q₂ := TotalSpec.and_iff hConj
-  }
-  wp_pure value := by
-    apply PredTrans.ext
-    intro Q
-    apply SPred.ext_nil
-    exact TotalSpec.ret_iff
-  wp_bind m k := by
-    apply PredTrans.ext
-    intro Q
-    apply SPred.ext_nil
-    change TotalSpec H _ (ITree.bind m k) s ↔ TotalSpec H _ m s
-    rw [TotalSpec.bind_iff]
-    apply Iff.of_eq
-    congr 1
-    funext value s'
-    rw [Subsingleton.elim s' s]
-    rfl
-
-end Aeneas.Std.WP
 
 namespace Aeneas.Data.Coinductive.StateTest
 

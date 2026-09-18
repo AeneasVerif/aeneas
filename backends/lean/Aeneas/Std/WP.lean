@@ -781,19 +781,57 @@ namespace Aeneas.Std.WP
 open Std Result
 open Std.Do
 
-unseal Result
+-- mvcgen does not support all types of effects, and currently this implementation only works with fail and div.
+-- This option is set here so that this same code works for any extension to RustEffect.Input
+set_option match.ignoreUnusedAlts true
+-- There are three types of exceptions in the type: the Error from Result.fail,
+-- a dummy exception thrown when any other effect is used, and Result.div.
+instance Result.instWP : WP Result.{u} (.except (ULift Error) (.except PUnit (.except PUnit .pure))) where
+  wp x := {
+    trans Q := match x.match with
+      | .ok a => Q.1 a
+      | .vis eff _ =>
+        match eff with
+        | .fail e => Q.2.1 (ULift.up e)
+        | _ => Q.2.2.1 PUnit.unit
+      | .div => Q.2.2.2.1 .unit
+    conjunctiveRaw Q₁ Q₂ := by
+      apply SPred.bientails.of_eq
+      cases x <;> simp
+      try (rename_i i k)
+      try (cases i <;> simp)
+  }
+set_option match.ignoreUnusedAlts false
 
-instance Result.instWP : WP Result.{u} .pure :=
-  (totalPureWPMonad handler handler_conjunctive ()).toWP
+instance Result.instWPMonad : WPMonad Result (.except (ULift Error) (.except PUnit (.except PUnit .pure))) where
+  wp_pure a := by apply PredTrans.ext; intro Q; simp [PredTrans.apply, wp, WP.wp]; rfl
+  wp_bind x f := by
+    apply PredTrans.ext
+    intro Q
+    simp [PredTrans.apply, wp, WP.wp]
+    cases x
+    · cbv
+    · simp
+      rename_i i k
+      cases i <;> cbv
+    · cbv
 
-instance Result.instWPMonad : WPMonad Result .pure :=
-  totalPureWPMonad handler handler_conjunctive ()
 
 theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
-    (⊢ₛ wp⟦x⟧ (⇓ value => ⌜P (.ok value)⌝)) → P x := by
-  intro h
-  obtain ⟨value, rfl, hP⟩ := spec_imp_exists (h True.intro)
-  exact hP
+    (⊢ₛ wp⟦x⟧ (fun a => ⌜P (.ok a)⌝,
+                  fun e => ⌜P (.fail e.down)⌝,
+                  fun _ => ⌜False⌝, -- unreachable: `RustEffect` currently only has the `fail` effect.
+                  fun .unit => ⌜P .div⌝, .unit)) → P x := by
+    intro hspec
+    simp only [WP.wp, PredTrans.apply] at hspec
+    split at hspec <;> simp_all
+    rename_i x eff heq a
+    cases eff
+    have : heq = PEmpty.elim := by funext; contradiction
+    simp [*] at *
+    try trivial
+    try (all_goals simp at hspec)
+
 
 /-- Lift an Aeneas step spec to an mvcgen-compatible `Triple`. -/
 theorem spec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
@@ -801,12 +839,12 @@ theorem spec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
     ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
   obtain ⟨v, hx, hQv⟩ := spec_imp_exists h
   subst hx
-  simp [Triple, WP.wp, PredTrans.apply, Result.ok, hQv]
+  simp [Triple, WP.wp, PredTrans.apply, hQv]
 
 theorem dspec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
     (h : dspec x Q) :
     ⦃ ⌜ ¬ x = .div ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
-  change ¬ x = .div → spec x Q
+  simp [Triple, WP.wp, PredTrans.apply, SPred.pure]
   cases x <;> simp [*] at *
   trivial
 
