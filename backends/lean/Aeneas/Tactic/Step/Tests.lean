@@ -5,6 +5,8 @@ import Aeneas.Tactic.Step.Tests.DischargeTactic
 import Aeneas.Tactic.Step.Tests.HigherOrder
 import Aeneas.Tactic.Step.Tests.HigherOrderOption
 import Aeneas.Tactic.Step.Tests.IntroOutputs
+import Aeneas.Tactic.Step.Tests.MvcgenSpec
+import Aeneas.Tactic.Step.Tests.MvcgenUniverses
 import Aeneas.Tactic.Step.Tests.MaxRecDepthMetavar
 import Aeneas.Tactic.Step.Tests.ParserErrors
 import Aeneas.Tactic.Step.Tests.SpecParameters
