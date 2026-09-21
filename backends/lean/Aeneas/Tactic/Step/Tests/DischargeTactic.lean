@@ -33,9 +33,9 @@ theorem triple_step_bind {P Pm : Prop} {next : α → Id β} {Q : Post β}
     (m : Id α) (Qm : Post α) (hStep : triple Pm m Qm)
     (hPre : P → Pm)
     (_ : DischargeMarker) -- `step` must apply the registered discharge tactic.
-    (hNext : ∀ value, triple (Qm value) (next value) Q) :
+    (hNext : ∀ value, Qm value → triple True (next value) Q) :
     triple P (m >>= next) Q :=
-  fun hP => hNext m (hStep (hPre hP))
+  fun hP => hNext m (hStep (hPre hP)) trivial
 
 
 theorem dischargeMarker : DischargeMarker :=
@@ -119,9 +119,9 @@ theorem zero_spec : triple True zero (fun value => value = 0) :=
 
 def finishValue (value : Nat) : Id Nat := value
 
-theorem triple_finishValue (P : Prop) (value : Nat) (Q : Post Nat) :
-    triple P (finishValue value) Q ↔ (P → Q value) :=
-  Iff.rfl
+theorem triple_finishValue (value : Nat) (Q : Post Nat) :
+    triple True (finishValue value) Q ↔ Q value := by
+  simp [triple, finishValue]
 
 attribute [local step_simps] triple_finishValue
 
