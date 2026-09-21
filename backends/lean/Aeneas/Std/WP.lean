@@ -8,6 +8,7 @@ import Aeneas.Tactic.Step.DspecInduction
 import Aeneas.Tactic.Step.Intro
 import Aeneas.Data.Coinductive.ITree
 import Aeneas.Data.Coinductive.Effect
+import Aeneas.Data.Coinductive.Spec
 
 namespace Aeneas.Std.WP
 
@@ -22,77 +23,35 @@ def Wp α := Post α → Pre
 
 def wp_return (x:α) : Wp α := fun p => p x
 
-@[grind]
-inductive spec {α} : (x : Result α) → (p : Post α) →  Prop where
-| ret : ∀ {p x}, p x → spec (.ok x) p
-
-
-inductive dspec {α} : (x : Result α) → (p : Post α) →  Prop where
-| ret : ∀ {p x}, p x → dspec (.ok x) p
-| div : ∀ p, dspec div p
-
-theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p := by
-  intros s
-  cases s
-  apply dspec.ret
-  assumption
+section ResultImplementation
 
 unseal Result
-theorem dspec_admissible {α} (p : Post α )
-  : admissible (fun x => dspec x p) := by
-  intro c hchain h
-  simp at h
-  by_cases (∃ a, c a) <;> rename_i h1
-  · have : c (CCPO.csup hchain) := by
-      by_cases (∃ a, c (.ok a))
-      · rename_i h2
-        rcases h2 with ⟨a, ca⟩
-        have dir1 := csup_le (x:=.ok a) hchain (by
-          intros y cy
-          have h := h y cy
-          cases h
-          · have order := hchain _ _ ca cy
-            cases order <;> try assumption
-            rename_i h
-            simp [ok] at *
-            rw [ITree.le_ret_inj _ _ h]
-            rfl
-          · simp [div, ok]
-            rw [← ITree.div_is_bot]
-            apply bot_le
-          )
-        have dir2 := le_csup hchain ca
-        rw [PartialOrder.rel_antisymm dir1 dir2]
-        assumption
-      · have := CCPO.csup_spec hchain
-        simp [is_sup] at this
-        have this := (this .div).mpr
-        have only_div : ∀ a, c a → a = div := by
-          intros a ca
-          have h := h a ca
-          cases h <;> grind
-        have this := this (by
-          intros y cy
-          simp [only_div y cy]
-          apply PartialOrder.rel_refl
-          )
-        simp [Result, instCCPOResult]
-        rw [ITree.le_div_is_div (CCPO.csup (c:=c) hchain) this]
-        rcases h1 with ⟨a, ca⟩
-        have h := h a ca
-        simp [div] at only_div
-        rw [← only_div a ca]
-        assumption
-    grind
-  · have : CCPO.csup hchain = bot := by
-      unfold bot empty_chain
-      congr
-      grind
-    rw [this]
-    unfold Result
-    rw [ITree.div_is_bot]
-    constructor
-seal Result
+
+@[reducible]
+def handler : Handler RustEffect where
+  State := Unit
+  handle event _ _ :=
+    match event with
+    | .fail _ => False
+  handle_mono _ := False.elim
+
+theorem handler_conjunctive : handler.Conjunctive := by
+  intro _ _ _ hNonempty hAll
+  obtain ⟨C₀, hC₀⟩ := hNonempty
+  exact (hAll C₀ hC₀).elim
+
+def spec (m : Result α) (p : Post α) : Prop :=
+  TotalSpec handler (fun value _ => p value) m ()
+
+def dspec (m : Result α) (p : Post α) : Prop :=
+  PartialSpec handler (fun value _ => p value) m ()
+
+theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p :=
+  TotalSpec.toPartial
+
+theorem dspec_admissible {α} (p : Post α) :
+    admissible (fun x => dspec x p) :=
+  PartialSpec.admissible handler_conjunctive _ ()
 
 /-- The shape the `dspec_induction` tactic needs to discharge the admissibility
 side-goal it generates for a partial specification about a recursive function. -/
@@ -119,26 +78,16 @@ def uncurry' {α β γ : Type _} (p : α → β → γ) : α × β → γ :=
 @[defeq] theorem uncurry'_eq x (p : α → β → γ) : uncurry' p x = p x.fst x.snd := by simp [uncurry']
 
 @[simp, grind =, agrind =]
-theorem spec_ok (x : α) : spec (ok x) p ↔ p x := by
-  constructor
-  · intros s
-    generalize H : ok x = v at s
-    cases s
-    simp at H
-    grind
-  · intros px
-    constructor
-    assumption
+theorem spec_ok (x : α) : spec (ok x) p ↔ p x := TotalSpec.ret_iff
 
 @[simp, grind =, agrind =]
-theorem spec_vis (e k) : spec (.vis e k) p ↔ False := by grind [ok_not_vis, vis_not_ok]
+theorem spec_vis (e k) : spec (.vis e k) p ↔ False := ⟨fun h => TotalSpec.vis_view h, False.elim⟩
 
 @[simp, grind =, agrind =]
-theorem spec_fail (e : Error) : spec (fail e) p ↔ False := by
-  simp [Result.fail_eq_vis]
+theorem spec_fail (e : Error) : spec (fail e) p ↔ False := by simp [Result.fail_eq_vis]
 
 @[simp, grind =, agrind =]
-theorem spec_div : spec div p ↔ False := by grind [ok_not_div, div_not_ok]
+theorem spec_div : spec div p ↔ False := ⟨TotalSpec.div_false, False.elim⟩
 
 /-! ### `spec_*` for tuple posts
 
@@ -151,7 +100,7 @@ theorem spec_ok_pair {α β} (a : α) (b : β) (f : α → β → Prop) :
 
 @[simp, grind =, agrind =]
 theorem spec_fail_pair (e : Error) (f : α → β → Prop) :
-    spec (fail e) (uncurry f) ↔ False := by grind
+    spec (fail e) (uncurry f) ↔ False := by simp
 
 @[simp, grind =, agrind =]
 theorem spec_div_pair (f : α → β → Prop) :
@@ -159,32 +108,20 @@ theorem spec_div_pair (f : α → β → Prop) :
 
 /-- Mono rule used by `step`. -/
 theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
-  (∀ x, P₀ x → P₁ x) → spec m P₁ := by
-  intros HMonPost
-  revert h
-  intros s
-  cases s
-  constructor
-  grind only
+  (∀ x, P₀ x → P₁ x) → spec m P₁ :=
+  fun HMonPost => TotalSpec.mono h fun value _ => HMonPost value
 
 /-- Bind rule used by `step`. It is stated on `Std.bind` rather than on `>>=`, which is
 what a translated program binds with. -/
 theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
   spec m Pₘ →
   (∀ x, Pₘ x → spec (k x) Pₖ) →
-  spec (Std.bind m k) Pₖ := by
-  intro Hm Hk
-  cases Hm
-  simp
-  grind only
+  spec (Std.bind m k) Pₖ :=
+  fun Hm Hk => TotalSpec.bind (k := k) Hm fun value _ => Hk value
 
 theorem spec_equiv_exists (m:Result α) (P:Post α) :
   spec m P ↔ (∃ y, m = ok y ∧ P y) := by
-  constructor
-  · intros s
-    cases s
-    grind only [ok]
-  · grind
+  cases m <;> simp
 
 theorem spec_imp_exists {m:Result α} {P:Post α} :
   spec m P → (∃ y, m = ok y ∧ P y) := by
@@ -196,49 +133,32 @@ theorem exists_imp_spec {m:Result α} {P:Post α} :
 
 -- `dspec` theorems
 theorem dspec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : dspec m P₀):
-  (∀ x, P₀ x → P₁ x) → dspec m P₁ := by
-  intros HMonPost
-  revert h
-  intros s
-  cases s <;> constructor
-  grind only
+  (∀ x, P₀ x → P₁ x) → dspec m P₁ :=
+  fun HMonPost => PartialSpec.mono h fun value _ => HMonPost value
 
 theorem dspec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
   dspec m Pₘ →
   (∀ x, Pₘ x → dspec (k x) Pₖ) →
-  dspec (Std.bind m k) Pₖ := by
-  intro Hm Hk
-  cases Hm
-  · simp
-    grind only
-  · simp
-    constructor
+  dspec (Std.bind m k) Pₖ :=
+  fun Hm Hk => PartialSpec.bind (k := k) Hm fun value _ => Hk value
 
 @[simp, grind =, agrind =]
-theorem dspec_ok (x : α) : dspec (ok x) p ↔ p x := by
-  constructor
-  · intros s
-    generalize h : Result.ok x = v at s
-    cases s <;> simp at *; grind
-  · intros px
-    constructor
-    assumption
+theorem dspec_ok (x : α) : dspec (ok x) p ↔ p x := PartialSpec.ret_iff
 
 @[simp, grind =, agrind =]
-theorem dspec_vis (e k) : dspec (.vis e k) p ↔ False := by
-  constructor
-  · intros s
-    generalize h : Result.vis e k = v at s
-    cases s <;> simp at *
-  · intros; contradiction
+theorem dspec_vis (e k) : dspec (.vis e k) p ↔ False := ⟨fun h => PartialSpec.vis_view h, False.elim⟩
 
 @[simp, grind =, agrind =]
-theorem dspec_fail (e : Error) : dspec (fail e) p ↔ False := by
-  simp [Result.fail_eq_vis]
+theorem dspec_div : dspec (div : Result α) p ↔ True := iff_true_intro PartialSpec.div
+
+@[simp, grind =, agrind =]
+theorem dspec_fail (e : Error) : dspec (fail e) p ↔ False := by simp [Result.fail_eq_vis]
 
 theorem dspec_imp_forall {m:Result α} {P:Post α} :
   dspec m P → (∀ y, m = ok y → P y) := by
   grind only [= dspec_ok]
+
+end ResultImplementation
 
 end Aeneas.Std.WP
 
