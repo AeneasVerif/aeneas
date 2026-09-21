@@ -41,9 +41,25 @@ theorem triple_step_bind {P Pm : Prop} {next : α → Id β} {Q : Post β}
 theorem dischargeMarker : DischargeMarker :=
   .intro
 
+inductive Terminal (value : Nat) : Prop where
+  | intro
+
+theorem terminalZero : Terminal 0 :=
+  .intro
+
+inductive EqualityMarker : Prop where
+  | intro
+
+elab "discharge_equality_marker" : tactic => Lean.Elab.Tactic.withMainContext do
+  unless (← Lean.getLCtx).any (fun decl => decl.type.isAppOf ``Eq) do
+    Lean.throwError "Expected an equality hypothesis"
+  Lean.Elab.Tactic.evalTactic (← `(tactic| exact EqualityMarker.intro))
+
 elab "discharge_markers" : tactic => do
   Lean.Elab.Tactic.evalTactic (← `(tactic| first
     | exact dischargeMarker
+    | exact terminalZero
+    | discharge_equality_marker
     | assumption))
 
 /- Reuse the standard premise normalization while customizing the triple and its
@@ -94,5 +110,74 @@ info: Try this:
 example (value : Nat) :
     triple True (pureValue value) (fun _ => DischargeMarker) := by
   step*?
+
+def zero : Id Nat := 0
+
+@[step]
+theorem zero_spec : triple True zero (fun value => value = 0) :=
+  fun _ => rfl
+
+def finishValue (value : Nat) : Id Nat := value
+
+theorem triple_finishValue (P : Prop) (value : Nat) (Q : Post Nat) :
+    triple P (finishValue value) Q ↔ (P → Q value) :=
+  Iff.rfl
+
+attribute [local step_simps] triple_finishValue
+
+/- The mono goal needs equality substitution before the registered tactic can finish. -/
+/--
+info: Try this:
+
+  [apply]     let* ⟨ value, value_post ⟩ ← zero_spec
+    subst_vars <;> discharge_markers
+-/
+#guard_msgs in
+example : triple True zero (fun value => Terminal value) := by
+  step*?
+
+/- Simplifying the bind continuation removes the registered specification. -/
+/--
+info: Try this:
+
+  [apply]     let* ⟨ value, value_post ⟩ ← zero_spec
+    subst_vars <;> discharge_markers
+-/
+#guard_msgs in
+example : triple True (zero >>= fun value => finishValue value) Terminal := by
+  step*?
+
+/- Continue traversing while the main goal is still a registered specification. -/
+example : triple True (zero >>= fun _ => zero >>= finishValue) Terminal := by
+  step*
+
+/- The plain discharge tactic must still see equalities if substitution fails. -/
+example : triple True zero (fun _ => EqualityMarker) := by
+  step*
+
+/--
+info: Try this:
+
+  [apply]     let* ⟨ value, value_post ⟩ ← zero_spec
+    discharge_markers
+-/
+#guard_msgs in
+example : triple True (zero >>= fun value => finishValue value) (fun _ => EqualityMarker) := by
+  step*?
+
+/- Replay the generated scripts, including the fallback without substitution. -/
+set_option linter.unnecessarySeqFocus false in
+example : triple True zero (fun value => Terminal value) := by
+  let* ⟨ value, value_post ⟩ ← zero_spec
+  subst_vars <;> discharge_markers
+
+set_option linter.unnecessarySeqFocus false in
+example : triple True (zero >>= fun value => finishValue value) Terminal := by
+  let* ⟨ value, value_post ⟩ ← zero_spec
+  subst_vars <;> discharge_markers
+
+example : triple True (zero >>= fun value => finishValue value) (fun _ => EqualityMarker) := by
+  let* ⟨ value, value_post ⟩ ← zero_spec
+  discharge_markers
 
 end Aeneas.Tactic.Step.Tests.DischargeTactic
