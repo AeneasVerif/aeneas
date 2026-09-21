@@ -25,8 +25,22 @@ structure SpecInfo where
   mk_spec_bind : Name
   mk_spec_bind_skip_args : Nat
 
-  uncurry_elim_tactics : Array Lean.Name
-  qimp_elim_tactics : Array Lean.Name
+  /-- Name of a tactic run on the mono/bind premise left by the step theorem, to bring it
+  to the `∀ x, P₀ → ... → Pₘ → k ⦃ Q ⦄` shape `step` introduces the outputs from.
+
+  It is run on the premise as it stands: it may transform or solve it, but must not create
+  multiple goals. What it introduces in the context is reverted, so it can introduce the
+  binders of the premise and work on the facts among them — `Aeneas.Step.Intro.intro_split`
+  does exactly that, and is all a statement whose premise already is `∀ x, P x → …` needs.
+
+  A tactic which reorders binders must record the output with
+  `Aeneas.Step.Intro.markOutputIndex`.
+
+  Without one, `step` introduces the outputs of the premise as it stands. -/
+  intro_tactic : Option Lean.Name := none
+
+  /-- Optional normalization after output destructuring; it must not create multiple goals. -/
+  post_intro_tactic : Option Lean.Name := none
 
   to_mvcgen: Option Name
 

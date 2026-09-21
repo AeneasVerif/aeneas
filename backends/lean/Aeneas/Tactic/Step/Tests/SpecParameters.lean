@@ -10,24 +10,15 @@ namespace Aeneas.Tactic.Step.Tests.SpecParameters
 
 theorem paramSpec_mono' {α : Type} {tag : Nat} {P₁ : α → Prop} {m : Result α}
     {P₀ : α → Prop} (h : paramSpec tag m P₀) :
-    Std.WP.qimp P₀ P₁ → paramSpec tag m P₁ := by
+    (∀ x, P₀ x → P₁ x) → paramSpec tag m P₁ := by
   intro hq
   unfold paramSpec at h ⊢
   exact ⟨rfl, Std.WP.spec_mono h.2 hq⟩
 
-def qimpParam {α β : Type} (tag : Nat) (Pₘ : α → Prop) (k : α → Result β)
-    (Pₖ : β → Prop) : Prop :=
-  ∀ x, Pₘ x → paramSpec tag (k x) Pₖ
-
-theorem qimpParam_iff {α β : Type} (tag : Nat) (Pₘ : α → Prop)
-    (k : α → Result β) (Pₖ : β → Prop) :
-    qimpParam tag Pₘ k Pₖ ↔ ∀ x, Pₘ x → paramSpec tag (k x) Pₖ :=
-  Iff.rfl
-
 theorem paramSpec_bind' {α β : Type} {k : α → Result β} {Pₖ : β → Prop}
     {tag : Nat} {m : Result α} {Pₘ : α → Prop} :
     paramSpec tag m Pₘ →
-    qimpParam tag Pₘ k Pₖ →
+    (∀ x, Pₘ x → paramSpec tag (k x) Pₖ) →
     paramSpec tag (Std.bind m k) Pₖ := by
   intro hm hk
   unfold paramSpec at hm ⊢
@@ -46,16 +37,7 @@ theorem paramSpec_bind' {α β : Type} {k : α → Result β} {Pₖ : β → Pro
     mk_spec_mono_skip_args := 3
     mk_spec_bind := ``paramSpec_bind'
     mk_spec_bind_skip_args := 5
-    uncurry_elim_tactics := #[
-      ``Std.WP.qimp_spec_unit, ``Std.WP.qimp_unit,
-      ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
-      ``Std.WP.forall_unit, ``true_imp_iff]
-    qimp_elim_tactics := #[
-      ``qimpParam_iff, ``Std.WP.qimp_iff,
-      ``Std.WP.imp_and_iff, ``Std.uncurry_apply_pair,
-      ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
-      ``Std.WP.imp_exists_iff,
-      ``Std.WP.forall_unit, ``true_imp_iff]
+    intro_tactic := some ``Aeneas.Step.Intro.introSplit
     to_mvcgen := none
     liftings := #[]
   }
