@@ -370,7 +370,7 @@ partial def Script.toSyntax (script : Script) : MetaM (Array Syntax.Tactic) := d
     pure (s0 ++ s1)
 
 inductive TargetKind where
-| bind (names : Array (Option Name))
+| bind (names : Array (Option Name)) (dischargeTac : Option (TSyntax `tactic))
 | switch (info : Bifurcation.Info)
 | result (dischargeTac : Option (TSyntax `tactic))
 | unknown
@@ -391,7 +391,7 @@ def analyzeTarget : TacticM TargetKind := do
       let #[_m, _self, _α, _β, _value, cont] := e.getAppArgs
         | throwError "Expected bind to have 6 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
       let names ← Step.getPostNames cont
-      pure (.bind names)
+      pure (.bind names (← Step.getDischargeTactic goalTy))
     else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
       pure (.switch bfInfo)
     else
@@ -484,7 +484,7 @@ where
         else pure (some (fuel - 1))
     let targetKind ← analyzeTarget
     match targetKind with
-    | .bind names => do
+    | .bind names dischargeTac => do
       let (info, mainGoalAndState) ← onBind cfg names ss
       /- Continue, if necessary -/
       match mainGoalAndState with
@@ -505,8 +505,13 @@ where
         /- Check if there are unassigned meta-variables which are not `Prop`:
            if it is the case it means there are meta-variables we could not infer, so we stop -/
         if info.unassignedVars.isEmpty then
-          let restInfo ← traverseProgram cfg fuel ss
-          return (info ++ restInfo)
+          if (← observing? (Step.getSpecProgram (← getMainTarget))).isSome then
+            let restInfo ← traverseProgram cfg fuel ss
+            return (info ++ restInfo)
+          else
+            let dischargeTactics ← mkDischargeTactics dischargeTac
+            let (finishInfo, _) ← onFinish cfg mainGoal dischargeTactics
+            return (info ++ finishInfo)
         else
           trace[Step] "Found unassigned meta-variables of type ≠ Prop: stopping"
           let info' : Info ← pure
@@ -576,12 +581,21 @@ where
       trace[Step] "done"
       pure (info, none)
     | some (mvarId, _) =>
-      let dischargeTactics :=
-        match dischargeTac with
-        | none => []
-        | some tac => [("specification discharge tactic", tac, evalTactic tac)]
+      let dischargeTactics ← mkDischargeTactics dischargeTac
       let (info', mvarId) ← onFinish cfg mvarId dischargeTactics
       pure (info ++ info', mvarId)
+
+  mkDischargeTactics (dischargeTac : Option (TSyntax `tactic)) :
+      TacticM (List (String × Syntax.Tactic × TacticM Unit)) := do
+    match dischargeTac with
+    | none => pure []
+    | some tac =>
+      let simpThenTac ← `(tactic| subst_vars <;> $tac)
+      pure [
+        ("equality substitution followed by the specification discharge tactic",
+          simpThenTac, evalTactic simpThenTac),
+        ("specification discharge tactic", tac, evalTactic tac)
+      ]
 
   onFinish (cfg : Config) (mvarId : MVarId)
       (extraTacl : List (String × Syntax.Tactic × TacticM Unit) := []) :

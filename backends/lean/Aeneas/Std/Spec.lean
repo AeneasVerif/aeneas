@@ -26,7 +26,8 @@ structure SpecInfo where
   mk_spec_bind_skip_args : Nat
 
   /-- Tactic applied on mono's and bind's preconditions in `step`
-      and mono's final goal in `step*`.
+      and mono's and bind's final goals in `step*`.
+      Final goals are also attempted with equality substitution first.
       If not solved, then the precondition/goal stay unchanged. -/
   discharge_tactic : Option Name := none
 
