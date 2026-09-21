@@ -3,6 +3,7 @@ import Aeneas.Std.Delab
 import Std.Do
 import Aeneas.Tactic.Solver.Grind.Init
 import Aeneas.Std.Spec
+import Aeneas.Tactic.Step.DspecInduction
 import Aeneas.Data.Coinductive.ITree
 import Aeneas.Data.Coinductive.Effect
 
@@ -90,6 +91,13 @@ theorem dspec_admissible {α} (p : Post α )
     rw [ITree.div_is_bot]
     constructor
 seal Result
+
+/-- The shape the `dspec_induction` tactic needs to discharge the admissibility
+side-goal it generates for a partial specification about a recursive function. -/
+@[dspec_admissible]
+theorem dspec_func_admissible {ι : Sort v} {α} (arg : ι) (p : Post α) :
+    admissible (fun f : ι → Result α => dspec (f arg) p) :=
+  admissible_apply (fun _ m => dspec m p) arg (dspec_admissible p)
 
 /-- Variant of `uncurry` used to decompose tuples in post-conditions.
 
