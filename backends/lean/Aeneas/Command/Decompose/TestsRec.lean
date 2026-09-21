@@ -202,3 +202,39 @@ fun n a => do
 -/
 #guard_msgs in
 #print recAxLoop_rec
+
+/- The loop body crosses the universe boundary of a monadic write-back
+   callback; the recursive call must stay outside the extracted prefix. -/
+def crossUniverseLoop (n : Nat) (borrow : Result (Nat × (Nat → Result Nat))) :
+    Result Nat := do
+  if n == 0 then Result.ok 0
+  else
+    Aeneas.Std.bind borrow fun (seed, back) => do
+    let offset ← Result.ok (seed + 1)
+    let restored ← back offset
+    crossUniverseLoop (n - 1) (Result.ok (restored, back))
+partial_fixpoint
+
+#decompose crossUniverseLoop crossUniverseLoop.fold
+  branch 1 (letRange 0 3) => crossUniverseLoop_body
+
+example (borrow : Result (Nat × (Nat → Result Nat))) :
+    crossUniverseLoop_body borrow =
+      (do
+        let (seed, back) ← borrow
+        let offset ← Result.ok (seed + 1)
+        let restored ← back offset
+        pure (back, restored)) := rfl
+
+example (n : Nat) (borrow : Result (Nat × (Nat → Result Nat))) :
+    crossUniverseLoop n borrow =
+      (if n == 0 then Result.ok 0 else do
+        let (back, restored) ← crossUniverseLoop_body borrow
+        crossUniverseLoop (n - 1) (Result.ok (restored, back))) :=
+  crossUniverseLoop.fold n borrow
+
+/--
+info: 'Aeneas.Command.Decompose.TestsRec.crossUniverseLoop.fold' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms crossUniverseLoop.fold

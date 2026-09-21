@@ -284,6 +284,20 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
 @[simp] theorem bind_tc_div (f : α → Result β) :
   (do let y ← div; f y) = div := by simp [bind, Bind.bind, div]
 
+/-- Associativity for `Result` computations whose value types have different universes. -/
+theorem bind_assoc_poly {α : Type u} {β : Type v} {γ : Type w}
+    (x : Result α) (f : α → Result β) (g : β → Result γ) :
+    bind (bind x f) g = bind x (fun a => bind (f a) g) := by
+  change ITree.bind (ITree.bind x f) g = ITree.bind x (fun a => ITree.bind (f a) g)
+  ext n
+  induction n generalizing x
+  · rfl
+  · rw [ITree.bind.eq_def x, ITree.bind.eq_def x]
+    split
+    · simp
+    · simp
+    · simp [*]
+
 @[simp] theorem bind_assoc_eq {a b c : Type u}
   (e : Result a) (g :  a → Result b) (h : b → Result c) :
   (Bind.bind (Bind.bind e g) h) =

@@ -2674,4 +2674,149 @@ info: test66_eq : ∀ (x : U32), test66 x = test66_body x
 #guard_msgs in
 #check @test66_eq
 
+/- Cross-universe binds must count as bindings, not as terminal expressions.
+   The callback-containing tuple lives in Type 1, unlike the Nat result. -/
+def crossUniverse (small : Result Nat)
+    (large : Result (Nat × (Nat → Result Nat))) : Result Nat := do
+  let n ← small
+  Aeneas.Std.bind large fun (m, back) => do
+  let l ← back n
+  pure (l + m)
+
+#decompose crossUniverse crossUniverse.fold
+  letRange 0 2 => crossUniverse_prefix
+
+example (small : Result Nat) (large : Result (Nat × (Nat → Result Nat))) :
+    crossUniverse_prefix small large =
+      (do
+        let n ← small
+        let (m, back) ← large
+        pure (n, m, back)) := rfl
+
+example (small : Result Nat) (large : Result (Nat × (Nat → Result Nat))) :
+    crossUniverse small large =
+      (do
+        let (n, m, back) ← crossUniverse_prefix small large
+        let l ← back n
+        pure (l + m)) := crossUniverse.fold small large
+
+#decompose crossUniverse crossUniverse.navigate
+  letAt 1 (full) => crossUniverse_large
+  letAt 2 (full) => crossUniverse_callback
+  afterLets full => crossUniverse_result
+
+example (small : Result Nat) (large : Result (Nat × (Nat → Result Nat))) :
+    crossUniverse small large =
+      (do
+        let n ← small
+        let (m, back) ← crossUniverse_large large
+        let l ← crossUniverse_callback n back
+        crossUniverse_result m l) := crossUniverse.navigate small large
+
+/- The optimized single-result path must rebuild both directions of bind,
+   including when the result universes are unrelated parameters. -/
+def crossUniverseSingle {α : Type u} {β : Type v}
+    (first : Result α) (next : α → Result β) (last : β → Result α) : Result α := do
+  let x ← first
+  let y ← next x
+  last y
+
+#decompose crossUniverseSingle crossUniverseSingle.fold
+  letRange 0 2 => crossUniverseSingle_prefix
+
+example {α : Type u} {β : Type v}
+    (first : Result α) (next : α → Result β) :
+    crossUniverseSingle_prefix first next = Aeneas.Std.bind first next := rfl
+
+example {α : Type u} {β : Type v}
+    (first : Result α) (next : α → Result β) (last : β → Result α) :
+    crossUniverseSingle first next last =
+      Aeneas.Std.bind (crossUniverseSingle_prefix first next) last :=
+  crossUniverseSingle.fold first next last
+
+/- A discarded high-universe result needs a fresh low-universe `pure ()`. -/
+def crossUniverseDiscard (small : Result Nat) (large : Result (ULift.{1} Nat)) :
+    Result Nat := do
+  let n ← small
+  let _ ← large
+  pure n
+
+#decompose crossUniverseDiscard crossUniverseDiscard.fold
+  letRange 1 1 => crossUniverseDiscard_effect
+
+example (large : Result (ULift.{1} Nat)) :
+    crossUniverseDiscard_effect large =
+      Aeneas.Std.bind large (fun _ => Result.ok ()) := rfl
+
+example (small : Result Nat) (large : Result (ULift.{1} Nat)) :
+    crossUniverseDiscard small large =
+      (do
+        let n ← small
+        let _ ← crossUniverseDiscard_effect large
+        pure n) := crossUniverseDiscard.fold small large
+
+/- The last extracted binding is pure and changes the result universe. -/
+def crossUniversePure (large : Result (ULift.{1} Nat)) : Result Nat := do
+  let h ← large
+  let n := h.down
+  pure (n + 1)
+
+#decompose crossUniversePure crossUniversePure.fold
+  letRange 0 2 => crossUniversePure_prefix
+
+example (large : Result (ULift.{1} Nat)) :
+    crossUniversePure_prefix large =
+      Aeneas.Std.bind large (fun h => Result.ok h.down) := rfl
+
+example (large : Result (ULift.{1} Nat)) :
+    crossUniversePure large =
+      (do
+        let n ← crossUniversePure_prefix large
+        pure (n + 1)) := crossUniversePure.fold large
+
+/- Explicit nested tuple patterns, including the three-component borrow
+   shape used by extracted buffer operations. -/
+def crossUniverseNested
+    (large : Result ((Nat × Nat) × (Nat → Result Nat) × (Nat → Nat))) : Result Nat :=
+  Aeneas.Std.bind large fun ((a, b), restore, back) => do
+    let n ← restore (a + b)
+    pure (back n)
+
+#decompose crossUniverseNested crossUniverseNested.fold
+  letRange 0 2 => crossUniverseNested_prefix
+
+example (large : Result ((Nat × Nat) × (Nat → Result Nat) × (Nat → Nat))) :
+    crossUniverseNested_prefix large =
+      (Aeneas.Std.bind large fun ((a, b), restore, back) => do
+        let n ← restore (a + b)
+        pure (back, n)) := rfl
+
+example (large : Result ((Nat × Nat) × (Nat → Result Nat) × (Nat → Nat))) :
+    crossUniverseNested large =
+      (do
+        let (back, n) ← crossUniverseNested_prefix large
+        pure (back n)) := crossUniverseNested.fold large
+
+def crossUniverseNamedPair (large : Result ((Nat × Nat) × (Nat → Result Nat))) :
+    Result Nat :=
+  Aeneas.Std.bind large fun (pair, restore) => do
+    let n ← restore pair.1
+    pure (n + pair.2)
+
+#decompose crossUniverseNamedPair crossUniverseNamedPair.fold
+  letRange 0 1 => crossUniverseNamedPair_prefix
+
+example (large : Result ((Nat × Nat) × (Nat → Result Nat))) :
+    crossUniverseNamedPair_prefix large =
+      (do
+        let (pair, restore) ← large
+        pure (pair, restore)) := rfl
+
+example (large : Result ((Nat × Nat) × (Nat → Result Nat))) :
+    crossUniverseNamedPair large =
+      (do
+        let (pair, restore) ← crossUniverseNamedPair_prefix large
+        let n ← restore pair.1
+        pure (n + pair.2)) := crossUniverseNamedPair.fold large
+
 end Aeneas.Command.Decompose.Tests
