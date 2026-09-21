@@ -64,7 +64,7 @@ theorem UScalar.mul_bv_spec {ty} {x y : UScalar ty}
   x * y ⦃ z => (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv ⦄ := by
   have : x * y = mul x y := by rfl
   have := mul_equiv x y
-  split at this <;> simp_all [spec_ok, and_self, spec_vis]
+  split at this <;> simp_all [spec_ok, and_self]
   omega
 
 theorem IScalar.mul_equiv {ty} (x y : IScalar ty) :

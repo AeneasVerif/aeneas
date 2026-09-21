@@ -280,8 +280,9 @@ theorem Slice.index_mut_usize_spec {α : Type u} (v: Slice α) (i: Usize)
   (hbound : i.val < v.length) :
   v.index_mut_usize i ⦃ x back => x = v.val[i.val] ∧ back = Slice.set v i ⦄ := by
   simp only [index_mut_usize, Bind.bind]
-  have ⟨ x, h ⟩ := spec_imp_exists (Slice.index_usize_spec v i hbound)
-  simp [h]
+  apply spec_bind (Slice.index_usize_spec v i hbound)
+  intro x hx
+  simp [hx]
 
 @[simp, simp_lists_safe]
 theorem Slice.update_index_eq α [Inhabited α] (x : Slice α) (i : Usize) (h : i.val < x.val.length) :
@@ -710,8 +711,9 @@ theorem Slice.clone_length {T : Type} {clone : T → Result T} {s s' : Slice T} 
 theorem Slice.clone_spec {T : Type} {clone : T → Result T} {s : Slice T} (h : ∀ x ∈ s.val, clone x = ok x) :
   Slice.clone clone s ⦃ s' => s = s' ⦄ := by
   simp only [Slice.clone]
-  have ⟨ _, h ⟩ := spec_imp_exists (List.clone_spec h)
-  simp [h]
+  apply spec_bind (List.clone_spec h)
+  intro l' hl'
+  simp [hl']
 
 @[rust_fun "core::slice::{[@T]}::split_at"]
 def core.slice.Slice.split_at {T : Type} (s : Slice T) (n : Usize) :
@@ -800,16 +802,13 @@ theorem core.slice.Slice.swap_spec {T : Type} [Inhabited T] (s : Slice T) (a b :
       s'.val[b.val]! = s.val[a.val]! ∧
       ∀ i, i ≠ a.val → i ≠ b.val → s'.val[i]! = s.val[i]! ⦄ := by
   simp only [core.slice.Slice.swap, Bind.bind]
-  have ⟨av, hav⟩ := spec_imp_exists (Slice.index_usize_spec s a ha)
-  simp only [hav]
-  have ⟨bv, hbv⟩ := spec_imp_exists (Slice.index_usize_spec s b hb)
-  simp only [hbv]
-  have ⟨s1, hs1⟩ := spec_imp_exists (Slice.update_spec s a (s.val[b.val]) ha)
-  simp only [bind_ok, Slice.length, ne_eq, hs1]
-  have hlen1 : b.val < s1.length := by rw [hs1.2, Slice.set_length]; exact hb
-  have ⟨s', hs'⟩ := spec_imp_exists (Slice.update_spec s1 b (s.val[a.val]) hlen1)
-  rw [hs1.2] at hs'
-  simp only [hs', spec_ok]
+  apply spec_bind (Slice.index_usize_spec s a ha); intro av hav
+  apply spec_bind (Slice.index_usize_spec s b hb); intro bv hbv
+  apply spec_bind (Slice.update_spec s a bv ha); intro s1 hs1
+  have hlen1 : b.val < s1.length := by rw [hs1, Slice.set_length]; exact hb
+  apply spec_mono (Slice.update_spec s1 b av hlen1); intro s' hs'
+  subst hav hbv hs1 hs'
+  simp only [Slice.length, ne_eq]
   refine ⟨?_, ?_, ?_, ?_⟩
   · simp only [Slice.set_val_eq, List.length_set]
   · by_cases hab : (↑a : ℕ) = ↑b
@@ -928,7 +927,7 @@ theorem core.slice.index.SliceIndexRangeUsizeSlice.index.step_spec {α : Type}
   · simp only [spec_ok]
     simp_lists
     grind
-  · simp only [fail, spec_vis]
+  · simp only [spec_fail]
     scalar_tac
 
 -- RangeTo step specs
@@ -1024,17 +1023,17 @@ def Slice.mapM  {α β} (f : α → Result β) (x : Slice α) : Result (Slice β
 theorem Slice.mapM_spec {α β} {f : α → Result β} {s : Slice α} {post : Nat → β → Prop}
     (hf : ∀ i (hi : i < s.len), f s[i] ⦃ post i ⦄) :
     s.mapM f ⦃ s' => s'.len = s.len ∧ ∀ i (hi : i < s'.len), post i s'[i] ⦄ := by
-  obtain ⟨l', eq, mapeq⟩ := List.mapM_with_length_spec (post:=post) (f:=f) (l:=s.val) (by
+  simp only [mapM]
+  apply spec_bind (List.mapM_with_length_spec (post := post) (f := f) (l := s.val) (by
     intros i hi
     simp at *
     apply (hf ⟨i, by grind⟩)
-    simp [UScalar.val, hi])
-  simp [mapM]
-  simp [eq]
+    simp [UScalar.val, hi]))
+  intro l' hl'
+  simp only [spec_ok]
   constructor
   · grind
   · intros i hi
-    have : (List.map ok ↑l')[i.val] = (List.map f ↑s)[i.val] := by grind
     grind
 
 -- ============================================================================
@@ -1067,19 +1066,18 @@ theorem core.slice.Slice.fill.spec {T : Type} (cloneInst : core.clone.Clone T)
     ⦃ (s' : Slice T) =>
       s'.length = s.length ∧
       s'.val = List.replicate s.length v ⦄ := by
-  cases h : cloneInst.clone v <;> simp_all
-  simp [fill, h]
-  obtain ⟨l', eq, mapeq⟩ := List.mapM_with_length_spec (post:=fun _ v' => v' = v) (f:=fun _ => ok v) (l:=s.val) (by
-    intros i hi
-    simp)
-  simp at mapeq
-  simp [eq]
-  rw [<- List.map_const'] at mapeq
-  have same : (fun x : T => ok v) = ok ∘ (fun x => v) := by grind
-  rw [same] at mapeq
-  rw [<- List.map_map (g := ok) (f := (fun _ => v))] at mapeq
-  rw [List.map_inj_right _] at mapeq
-  · simp [mapeq]
-  · simp
+  simp only [fill]
+  apply spec_bind (List.mapM_with_length_spec (post := fun _ v' => v' = v)
+    (f := fun _ => cloneInst.clone v) (l := s.val) (by intros i hi; exact hclone))
+  intro l' hl'
+  simp only [spec_ok]
+  have hlen := l'.property
+  have hrep : l'.val = List.replicate s.val.length v := by
+    apply List.ext_getElem
+    · simp [hlen]
+    · intro i h1 h2
+      simp only [List.getElem_replicate]
+      exact hl' i h1
+  simp [hrep, Slice.length]
 
 end Aeneas.Std
