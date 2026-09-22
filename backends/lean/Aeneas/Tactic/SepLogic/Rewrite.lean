@@ -22,7 +22,8 @@ namespace IFrame
 
 /-- Rewrite the assertion `H` using `lemma : A ⊢ B` or `lemma : A = B`,
 replacing the atom `A` of `H` by `B`. Returns the rewritten assertion and a
-proof of `H ⊢ rewritten`. -/
+proof of `H ⊢ rewritten`. When the rule consumes all resources, the result
+is `B` without an extra `∗ emp`. -/
 def rewriteAssertion (assertion : Expr) (rule : Expr) : TacticM (Expr × Expr) := do
   let ruleType ← instantiateMVars (← inferType rule)
   /- Accept both an entailment and an equality, in either direction for the
@@ -41,10 +42,15 @@ def rewriteAssertion (assertion : Expr) (rule : Expr) : TacticM (Expr × Expr) :
      do not have to be adjacent in `assertion`. -/
   let some restAtoms ← removeMatches atoms (← flatten lhs)
     | throwError "irewrite: {lhs}\nis not part of\n{assertion}"
+  let lhs ← instantiateMVars lhs
+  let rhs ← instantiateMVars rhs
+  if restAtoms.isEmpty then
+    let reorder ← mkAppM ``entails_of_eq #[← proveEqAC assertion lhs]
+    return (rhs, ← mkAppM ``entails_trans #[reorder, entailment])
   let rest := mkStar restAtoms
-  let reordered := mkApp2 (mkConst ``sep) (← instantiateMVars lhs) rest
+  let reordered := mkApp2 (mkConst ``sep) lhs rest
   let reorder ← mkAppM ``entails_of_eq #[← proveEqAC assertion reordered]
-  let rewritten := mkApp2 (mkConst ``sep) (← instantiateMVars rhs) rest
+  let rewritten := mkApp2 (mkConst ``sep) rhs rest
   let change ← mkAppM ``sep_mono #[entailment, ← mkAppM ``entails_refl #[rest]]
   return (rewritten, ← mkAppM ``entails_trans #[reorder, change])
 
