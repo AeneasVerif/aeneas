@@ -129,4 +129,42 @@ example {α : Type u} {β : Type v} {m : Result α} {k : α → Result β}
     WP.dspec (Std.bind m k) Q :=
   WP.dspec_bind hm hk
 
+/- A heterogeneous inner bind must reassociate through the ordinary outer bind,
+   without a local simp registration or manual bind normalization. -/
+example {α : Type u} {β γ : Type v}
+    (m : Result α) (f : α → Result β) (g : β → Result γ)
+    (P : α → Prop) (Q : β → Prop) (R : γ → Prop)
+    (hm : m ⦃ x => P x ⦄)
+    (hf : ∀ x, P x → f x ⦃ y => Q y ⦄)
+    (hg : ∀ y, Q y → g y ⦃ z => R z ⦄) :
+    ((do let y ← ((do let x ← m; f x) : Result β); g y) : Result γ)
+    ⦃ z => R z ⦄ := by
+  step with hm as ⟨x, hx⟩
+  step with hf x hx as ⟨y, hy⟩
+  step with hg y hy
+  assumption
+
+example {α : Type u} {β γ : Type v}
+    (m : Result α) (f : α → Result β) (g : β → Result γ)
+    (P : α → Prop) (Q : β → Prop) (R : γ → Prop)
+    (hm : m ⦃ x => P x ⦄)
+    (hf : ∀ x, P x → f x ⦃ y => Q y ⦄)
+    (hg : ∀ y, Q y → g y ⦃ z => R z ⦄) :
+    ((do let y ← ((do let x ← m; f x) : Result β); g y) : Result γ)
+    ⦃ z => R z ⦄ := by
+  let* ⟨x, hx⟩ ← hm
+  let* ⟨y, hy⟩ ← hf x hx
+  let* ⟨z, hz⟩ ← hg y hy
+  exact hz
+
+example {α : Type u} {β γ : Type v}
+    (m : Result α) (f : α → Result β) (g : β → Result γ)
+    (P : α → Prop) (Q : β → Prop) (R : γ → Prop)
+    (hm : m ⦃ x => P x ⦄)
+    (hf : ∀ x, P x → f x ⦃ y => Q y ⦄)
+    (hg : ∀ y, Q y → g y ⦃ z => R z ⦄) :
+    ((do let y ← ((do let x ← m; f x) : Result β); g y) : Result γ)
+    ⦃ z => R z ⦄ := by
+  step*
+
 end Aeneas.Tactic.Step.Tests.UncurryBind

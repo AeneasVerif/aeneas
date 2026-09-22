@@ -12,6 +12,30 @@ import Aeneas.Do
 
 namespace Aeneas
 
+namespace Std
+
+/-- Reassociate a heterogeneous `Result` bind inside an ordinary `do` bind.
+
+This lets `step` reach the first call in `Bind.bind (Std.bind x f) g`.
+For example, VCR's `new_disjoint_from_slices` returns a monadic backward
+continuation, so its result lives in a higher universe than the surrounding
+buffer computation. This occurs in the stitched branches of:
+* `symcrust.aesgcm.encrypt_body.x86_64.spec` in
+  `SymCRust/lean/Symcrust/Properties/Aes/Gcm/Lifecycle/Encrypt.lean`;
+* `symcrust.aesgcm.decrypt_body.x86_64.spec` in
+  `SymCRust/lean/Symcrust/Properties/Aes/Gcm/Lifecycle/Decrypt.lean`.
+
+Both need reassociation at `InPlaceOrDisjointBuffer.new_disjoint_from_slices`,
+even when the surrounding specification is already an SL triple. -/
+@[step_simps]
+theorem bind_assoc_mixed {α : Type u} {β γ : Type v}
+    (x : Result α) (f : α → Result β) (g : β → Result γ) :
+    ((do let b ← ((do let a ← x; f a) : Result β); g b) : Result γ) =
+      ((do let a ← x; let b ← f a; g b) : Result γ) :=
+  bind_assoc_poly x f g
+
+end Std
+
 namespace Step
 
 open Lean Elab Term Meta Tactic
