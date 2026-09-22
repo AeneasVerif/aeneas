@@ -192,12 +192,14 @@ elab "iintro_shallow_post" : tactic => withMainContext do
   let goal ← getMainGoal
   let target ← instantiateMVars (← goal.getType)
   let some entailment ← IFrame.exposeEntailment? target
-    | evalTactic (← `(tactic| isimp))
+    | normalizeSep
       return
   let args := entailment.getAppArgs
   let source := args[0]!.consumeMData
   unless source.isAppOfArity ``sep 2 do
-    evalTactic (← `(tactic| (isimp; iintro_shallow)))
+    normalizeSep
+    unless (← getUnsolvedGoals).isEmpty do
+      evalTactic (← `(tactic| iintro_shallow))
     return
   let sourceArgs := source.getAppArgs
   let markedSource := mkApp2 (mkConst ``sep) sourceArgs[0]!
@@ -205,9 +207,12 @@ elab "iintro_shallow_post" : tactic => withMainContext do
   let markedTarget ← IFrame.mkEntailmentLike target args[0]! args[1]! markedSource
   let goal ← goal.change markedTarget
   replaceMainGoal [goal]
-  evalTactic (← `(tactic| (isimp; iintro_shallow)))
+  normalizeSep
   unless (← getUnsolvedGoals).isEmpty do
-    evalTactic (← `(tactic| (simp only [introFrame_eq]; isimp)))
+    evalTactic (← `(tactic| iintro_shallow))
+  unless (← getUnsolvedGoals).isEmpty do
+    evalTactic (← `(tactic| simp only [introFrame_eq]))
+    normalizeSep
 
 /-- One step of `iintro_keep`: copy the leading pure fact of an entailment's
 precondition into the local context, *without* removing it from the

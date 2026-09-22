@@ -77,6 +77,7 @@ theorem alloc.spec (n : Nat) (value : T) :
   exact (sep_pure_l _ _ h).mpr ⟨by simp, hOwns⟩
 
 /-- A buffer owns exactly the range addressed by its pointer. -/
+@[iris_simps]
 theorem pointsTo_def (b : Buffer T) (values : List T) :
     (b ↦ values) =
       iprop(⌜values.length = b.length⌝ ∗ b.ptr ↦* values) := rfl
@@ -301,11 +302,7 @@ theorem pointsTo_pair_entails (b₁ b₂ : Buffer T)
       iprop(⌜values₁.length = b₁.length ∧
           values₂.length = b₂.length⌝ ∗
         (b₁.ptr ↦* values₁ ∗ b₂.ptr ↦* values₂)) := by
-  rintro heap ⟨h₁, h₂, hCompatible, rfl, hOne, hTwo⟩
-  obtain ⟨hLength₁, hRange₁⟩ := (sep_pure_l _ _ h₁).mp hOne
-  obtain ⟨hLength₂, hRange₂⟩ := (sep_pure_l _ _ h₂).mp hTwo
-  exact (sep_pure_l _ _ _).mpr
-    ⟨⟨hLength₁, hLength₂⟩, h₁, h₂, hCompatible, rfl, hRange₁, hRange₂⟩
+  isimp
 
 /-- Reassemble two buffer ownership assertions from their ranges. -/
 theorem pair_entails_pointsTo {b₁ b₂ : Buffer T}
@@ -314,10 +311,7 @@ theorem pair_entails_pointsTo {b₁ b₂ : Buffer T}
     (hLength₂ : values₂.length = b₂.length) :
     b₁.ptr ↦* values₁ ∗ b₂.ptr ↦* values₂ ⊢
       b₁ ↦ values₁ ∗ b₂ ↦ values₂ := by
-  rintro heap ⟨h₁, h₂, hCompatible, rfl, hRange₁, hRange₂⟩
-  exact ⟨h₁, h₂, hCompatible, rfl,
-    (sep_pure_l _ _ h₁).mpr ⟨hLength₁, hRange₁⟩,
-    (sep_pure_l _ _ h₂).mpr ⟨hLength₂, hRange₂⟩⟩
+  isimp
 
 /-- Copy every slot of `src` into `dst`. -/
 def copy (dst src : Buffer T) : Result Unit :=
@@ -366,6 +360,7 @@ def swap (b : Buffer T) (i j : Nat) : Result Unit := do
   b.write i y
   b.write j x
 
+@[step]
 theorem swap.spec (b : Buffer T) (values : List T) (i j : Nat)
     (hi : i < values.length) (hj : j < values.length) :
     ⦃ b ↦ values ⦄ b.swap i j
@@ -390,14 +385,14 @@ theorem swap.spec (b : Buffer T) (values : List T) (i j : Nat)
 
 /-- Forget the recorded length and retain ownership of the underlying range. -/
 theorem pointsTo_entails_range (b : Buffer T) (values : List T) :
-    b ↦ values ⊢ b.ptr ↦* values :=
-  fun h hPointsTo => ((sep_pure_l _ _ h).mp hPointsTo).2
+    b ↦ values ⊢ b.ptr ↦* values := by
+  isimp
 
 /-- Package ownership of a range as ownership of a buffer of matching length. -/
 theorem range_entails_pointsTo {b : Buffer T} {values : List T}
     (hLength : values.length = b.length) :
-    b.ptr ↦* values ⊢ b ↦ values :=
-  fun h hRange => (sep_pure_l _ _ h).mpr ⟨hLength, hRange⟩
+    b.ptr ↦* values ⊢ b ↦ values := by
+  isimp
 
 theorem pointsTo_split (b : Buffer T) (values : List T) (i : Nat) :
     b.ptr ↦* values ⊣⊢
