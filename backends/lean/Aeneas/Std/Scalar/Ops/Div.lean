@@ -13,14 +13,14 @@ open Result Error Arith ScalarElab WP
 -/
 
 def UScalar.div {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
-  if y.bv != 0 then ok ⟨ BitVec.udiv x.bv y.bv ⟩ else fail divisionByZero
+  if y.bv != 0 then ok ⟨ BitVec.udiv x.bv y.bv ⟩ else fail panic
 
 def IScalar.div {ty : IScalarTy} (x y : IScalar ty): Result (IScalar ty) :=
   if y.val != 0 then
     -- There can be an overflow if `x` is equal to the lower bound and `y` to `-1`
     if ¬ (x.val = IScalar.min ty && y.val = -1) then ok ⟨ BitVec.sdiv x.bv y.bv ⟩
-    else fail integerOverflow
-  else fail divisionByZero
+    else fail panic
+  else fail panic
 
 def UScalar.try_div {ty : UScalarTy} (x y : UScalar ty) : Option (UScalar ty) :=
   Option.ofResult (div x y)

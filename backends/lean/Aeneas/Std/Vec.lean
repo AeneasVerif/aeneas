@@ -156,7 +156,7 @@ def Vec.push {α : Type u} (v : Vec α) (x : α) : Result (Vec α)
   if h : nlen ≤ U32.max || nlen ≤ Usize.max then
     ok (.from (List.concat v.val x) (by simp; scalar_tac))
   else
-    fail maximumSizeExceeded
+    fail panic
 
 @[step]
 theorem Vec.push_spec {α : Type u} (v : Vec α) (x : α) (h : v.val.length < Usize.max) :
@@ -169,7 +169,7 @@ def Vec.insert {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
   if i.val < v.length then
     ok (.from (v.val.set i x) (by have := v.property; simp [*]))
   else
-    fail arrayOutOfBounds
+    fail panic
 
 @[step]
 theorem Vec.insert_spec {α : Type u} (v: Vec α) (i: Usize) (x: α)
@@ -179,7 +179,7 @@ theorem Vec.insert_spec {α : Type u} (v: Vec α) (i: Usize) (x: α)
 
 def Vec.index_usize {α : Type u} (v: Vec α) (i: Usize) : Result α :=
   match v[i.val]? with
-  | none => fail .arrayOutOfBounds
+  | none => fail .panic
   | some x => ok x
 
 @[step]
@@ -192,7 +192,7 @@ theorem Vec.index_usize_spec {α : Type u} (v: Vec α) (i: Usize)
 
 def Vec.update {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
   match v.val[i.val]? with
-  | none => fail .arrayOutOfBounds
+  | none => fail .panic
   | some _ =>
     ok (.from (v.val.set i x) (by have := v.property; simp [*] ))
 
