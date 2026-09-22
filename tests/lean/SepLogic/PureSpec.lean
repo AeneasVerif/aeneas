@@ -757,14 +757,12 @@ theorem updateWith.spec (f : Nat → Result Nat) (p : MutRawPtr Nat) (v w : Nat)
 example (p : MutRawPtr Nat) (v : Nat) :
     ⦃ p ↦ v ⦄ updateWith bump p ⦃⇓ p ↦ v + 1⦄ := by
   step* +inferPost
-  assumption
 
 /-- The already-proved SL specification of `bumpBoxed` supplies the pure
 callback contract, without opening its spatial implementation in a pure goal. -/
 example (p : MutRawPtr Nat) (v : Nat) :
     ⦃ p ↦ v ⦄ updateWith bumpBoxed p ⦃⇓ p ↦ v + 1⦄ := by
   step* +inferPost
-  assumption
 
 /-- Nesting: a higher-order call inside a higher-order call, pure contract on
 the inside and a separating one on the outside. -/
