@@ -69,20 +69,18 @@ example (p : MutRawPtr Nat) (value : Nat) :
 
 /-! ## The terminal return
 
-`step` uses the registered `pure.spec` and leaves its ramified-frame entailment
-as the mono goal. The simplification passes collapse its result-equality wand,
-after which an explicit `iframe` closes routine terminal goals. `step*` runs
-that registered final discharger itself.
+`step` uses the registered `pure.spec`. Its introduction hooks simplify the
+ramified-frame entailment, closing routine spatial goals and leaving any
+unresolved pure facts for the caller.
 -/
 
-/-- What `iframe` cannot close is left as the goal, stated about the returned
-value: the assertion the entailment starts from and the one its postcondition
-asks for are the *same*, which is what `pure_sep_intro` needs here. -/
+/-- Matching spatial resources are cancelled, leaving the unresolved pure fact. -/
 example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => iprop(⌜opaqueStepResult 1 1⌝ ∗ p ↦ 1)⦄ := by
   unfold allocAndReturn
   step* 1
   step
-  exact pure_sep_intro _ rfl
+  guard_target = opaqueStepResult 1 1
+  rfl
 
 /-- `Result.ok`, the constructor `pure` unfolds to, is a terminal return too. -/
 example (n : Nat) : ⦃ emp ⦄ Result.ok n ⦃⇓ result => ⌜result = n⌝⦄ := by
@@ -91,7 +89,6 @@ example (n : Nat) : ⦃ emp ⦄ Result.ok n ⦃⇓ result => ⌜result = n⌝⦄
 /-- A `Unit` result is no different. -/
 example (p : MutRawPtr Nat) : ⦃ p ↦ 0 ⦄ (pure () : Result Unit) ⦃⇓ p ↦ 0⦄ := by
   step
-  iframe
 
 def namedReturn (n : Nat) : Result Nat :=
   pure n
@@ -127,24 +124,26 @@ example (p : MutRawPtr Nat) (value : Nat) :
 /-! ## The proof must branch before stepping further
 
 This is the small version of bounded stars followed by `split` or `by_cases`.
-An unbounded star performs the branch itself, so it cannot replace the bounded
-step in-place when the following proof needs to control that branch.
+A bounded star leaves the branch for the caller, who relates the read value
+to the original value before choosing a branch.
 -/
 
 def branchAfterRead (p : MutRawPtr Nat) : Result Nat := do
   let value ← read p
   if value = 0 then pure 1 else pure 2
 
-example (p : MutRawPtr Nat) (value : Nat) :
-    ⦃ p ↦ value ⦄ branchAfterRead p
+example (p : MutRawPtr Nat) (initial : Nat) :
+    ⦃ p ↦ initial ⦄ branchAfterRead p
       ⦃⇓ result =>
-        iprop(⌜result = if value = 0 then 1 else 2⌝ ∗ p ↦ value)⦄ := by
+        iprop(⌜result = if initial = 0 then 1 else 2⌝ ∗ p ↦ initial)⦄ := by
   unfold branchAfterRead
-  fail_if_success
-    step*
-    by_cases h : value = 0
   step* 1
-  by_cases h : value = 0 <;> simp only [h, ↓reduceIte] <;> step <;> iframe
+  subst value
+  by_cases h : initial = 0
+  · simp only [h, ↓reduceIte]
+    step
+  · simp only [h, ↓reduceIte]
+    step
 
 /-! ## A specification argument is not inferable
 
@@ -167,7 +166,6 @@ theorem ghostHelper.spec (p : MutRawPtr Nat) (_witness : NeedsWitness) :
     ⦃ p ↦ 0 ⦄ ghostHelper p ⦃⇓ p ↦ 0⦄ := by
   unfold ghostHelper
   step
-  iframe
 
 def ghostCaller (p : MutRawPtr Nat) : Result Unit := do
   ghostHelper p
@@ -181,22 +179,20 @@ example (p : MutRawPtr Nat) :
     done
   step with ghostHelper.spec p (NeedsWitness.mk { f := id })
   step
-  iframe
 
-/-! ## A failed discharge leaves inference metavariables unsolved -/
+/-! ## Inference survives an unresolved pure postcondition -/
 
-/-- `iframe` can infer the value argument of `read.spec` by matching the
-points-to assertions, but then fails to prove the opaque pure fact. Its failure
-rolls back that assignment, so `step` leaves the `Nat` metavariable as the first
-goal. -/
+attribute [local irreducible] opaqueStepResult in
+/-- Matching the points-to assertions infers the value argument of `read.spec`.
+The remaining pure fact does not roll back that inference. Keep the predicate
+irreducible here so automatic discharge cannot close it by reflexivity. -/
 example (p : MutRawPtr Nat) (value : Nat) :
     ⦃ p ↦ value ⦄ read p
       ⦃⇓ result => iprop(⌜opaqueStepResult result value⌝ ∗ p ↦ value)⦄ := by
-  step
-  · guard_target = Nat
-    exact value
-  · simp only [opaqueStepResult]
-    iframe
+  step as ⟨result, hResult⟩
+  guard_hyp hResult : result = value
+  guard_target = opaqueStepResult result value
+  simpa only [opaqueStepResult] using hResult
 
 /-! ## The required specification is not registered
 
