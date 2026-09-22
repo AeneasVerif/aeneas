@@ -114,4 +114,23 @@ example (cell : Nat → IProp) (n : Nat) (P : Nat → Prop) (hP : Unit → P n) 
   guard_target = P n
   exact hP ()
 
+/- A returned tuple which is not a literal is still destructured by the
+   postcondition, and the resource is framed. -/
+example (cell : Nat → IProp) (n : Nat) (p : Nat × Nat) (P : Nat → Nat → Prop)
+    (hP : Unit → P p.1 p.2) :
+    ⦃ cell n ⦄ Result.ok (n, p)
+    ⦃⇓ first (a, b) => ⌜first = n ∧ P a b⌝ ∗ cell first ⦄ := by
+  step
+  guard_target = P p.1 p.2
+  exact hP ()
+
+/- Same, when the destructured tuple is followed by more outputs. -/
+example (cell : Nat → IProp) (n : Nat) (p : Nat × Nat) (P : Nat → Nat → Nat → Prop)
+    (hP : Unit → P p.1 p.2 n) :
+    ⦃ cell n ⦄ Result.ok (p, n)
+    ⦃⇓ (a, b) last => ⌜P a b last⌝ ∗ cell last ⦄ := by
+  step
+  guard_target = P p.1 p.2 n
+  exact hP ()
+
 end Aeneas.Tactic.Step.Tests.SpatialGhosts

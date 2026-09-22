@@ -108,14 +108,6 @@ attribute [step_simps] Aeneas.Std.bind_assoc_eq
 attribute [step_simps] Aeneas.Std.uncurry_apply_pair
 attribute [step_simps] ite_self -- this is sometimes necessary
 
-/-- SL terminal-return simp lemmas, when the SL specification module is imported. -/
-meta def getSLOkSimps : CoreM (Array Name) := do
-  let env ← getEnv
-  pure (#[
-    `Aeneas.SepLogic.ispec_ok_iff,
-    `Aeneas.SepLogic.dispec_ok_iff
-  ].filter env.contains)
-
 /- Builtin simprocs cannot be added to a custom set directly via `attribute`.
 See: https://github.com/leanprover/lean4/issues/13962 -/
 -- We often see expressions like `Int.ofNat 3`
@@ -1110,10 +1102,8 @@ meta def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option Main
       Note that we want to simplify targets of the shape:
       `ok ... ⦃ x₀ ... xₙ => ... ⦄`
       -/
-      let slOkSimps ← getSLOkSimps
       let r ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
         {simpThms := #[← stepSimpExt.getTheorems],
-         addSimpThms := slOkSimps,
          declsToUnfold := #[``pure]} (.targets #[] true)
       if r.isSome then
         pure (some ({goal := ← getMainGoal, outputs, stepState := mainGoal.stepState} : MainGoal))
@@ -1563,41 +1553,45 @@ meta def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Op
   trace[Step] "Step done"
   return ⟨ goals, usedTheorem ⟩
 
-/-- The rewrite rules which discharge the specification of a terminal return.
-
-    The separation logic judgments only get `fail`/`div`: their `ok` case is handled by
-    the `@[step]` theorem `WP.ret.spec`, which also simplifies the spatial
-    post-condition, and rewriting with `ispec_ok` would bypass it. -/
-def getTerminalSimps : CoreM (Array Name) := do
-  pure (#[
-    ``Std.WP.spec_ok,  ``Std.WP.spec_fail,  ``Std.WP.spec_div,
-    ``Std.WP.dspec_ok, ``Std.WP.dspec_fail, ``Std.WP.dspec_div,
-    ``Std.WP.ispec_fail, ``Std.WP.ispec_div, ``Std.WP.dispec_div] ++ (← getSLOkSimps))
+/-- The rewrite rules which discharge the specification of a terminal return. -/
+def terminalSimps : Array Name := #[
+  ``Std.WP.spec_ok,   ``Std.WP.spec_fail,   ``Std.WP.spec_div,
+  ``Std.WP.dspec_ok,  ``Std.WP.dspec_fail,  ``Std.WP.dspec_div,
+  ``Std.WP.ispec_ok,  ``Std.WP.ispec_fail,  ``Std.WP.ispec_div,
+  ``Std.WP.dispec_ok, ``Std.WP.dispec_fail, ``Std.WP.dispec_div,
+  /- The returned value need not be a literal tuple -/
+  ``Std.uncurry_eq_prop, ``Std.uncurry_eq_prop_arrow,
+  ``Std.WP.uncurry_eq_iprop, ``Std.WP.uncurry_eq_iprop_arrow]
 
 /-- Reduce the specification of a program which immediately returns: turn `ok x ⦃ Q ⦄`
     into `Q x`, `fail e ⦃ Q ⦄` into `False`, etc.
 
     There is no specification to apply in this situation: the terminal-return rules
-    (`WP.spec_ok`, `WP.spec_fail`, ...) are rewrite rules, so we simply normalize the
-    goal with them. Return `true` if the specification statement did disappear, meaning
-    the goal is fully processed; otherwise `step` proceeds as usual (the normalization
-    performed here subsumes the one `evalStepCore` starts with).
+    (`WP.spec_ok`, `WP.ispec_fail`, ...) are rewrite rules, so we simply normalize the
+    goal with them, then run the post-introduction tactic of the judgment, as we would
+    after applying a specification. Return `true` if the specification statement did
+    disappear, meaning the goal is fully processed; otherwise `step` proceeds as usual
+    (the normalization performed here subsumes the one `evalStepCore` starts with).
 -/
 meta def tryTerminalReturn : TacticM Bool := do
   withTraceNode `Step (fun _ => pure m!"tryTerminalReturn") do
   withMainContext do
-  let some program ← observing? (getSpecProgram (← getMainTarget))
+  let some (info, args) ← observing? (getSpecInfoArgs (← getMainTarget))
     | return false
-  let program := (← Utils.normalizeLetBindings program).consumeMData
+  let program := (← Utils.normalizeLetBindings args[info.program_index]!).consumeMData
   unless [``Std.Result.ok, ``Std.Result.fail, ``Std.Result.div].any program.isAppOf do
     return false
   let r ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false }
-    {simpThms := #[← stepSimpExt.getTheorems], addSimpThms := ← getTerminalSimps,
+    {simpThms := #[← stepSimpExt.getTheorems], addSimpThms := terminalSimps,
      declsToUnfold := #[``pure]} (.targets #[] true)
   -- The goal may have been closed altogether
   let some _ := r | return true
-  withMainContext do
-  pure (← observing? (getSpecProgram (← getMainTarget))).isNone
+  unless (← withMainContext do observing? (getSpecProgram (← getMainTarget))).isNone do
+    return false
+  /- Normalize what is left exactly as after applying a specification (for the
+     separation logic judgments, this frames the resulting entailment). -/
+  if let some tac := info.post_intro_tactic then runIntroTactic tac
+  pure true
 
 meta def evalStep
   (config : Config) (keepPretty : Option Name) (withArg: Option Expr)
@@ -2593,6 +2587,9 @@ variable (P : IProp) (S : α → IProp) (T : β → IProp)
 #check_step WP.dspec (div : Result α) Q => True
 #check_step WP.ispec P (fail e) S => (P ⊢ ⌜False⌝)
 #check_step WP.ispec P (div : Result α) S => (P ⊢ ⌜False⌝)
+#check_step WP.dispec P (ok x) S => (P ⊢ S x)
+#check_step WP.dispec P (fail e) S => (P ⊢ ⌜False⌝)
+#check_step WP.dispec P (div : Result α) S => True
 
 -- left identity
 -- #check_step WP.ispec P (do let y ← ok x; k y) T => WP.ispec P (k x) T

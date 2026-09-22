@@ -175,6 +175,15 @@ def uncurry' {α β γ : Type _} (p : α → β → γ) : α × β → γ :=
 @[simp] theorem uncurry'_pair x y (p : α → β → γ) : uncurry' p (x, y) = p x y := by simp [uncurry']
 @[defeq] theorem uncurry'_eq x (p : α → β → γ) : uncurry' p x = p x.fst x.snd := by simp [uncurry']
 
+/-- The spatial counterparts of `Std.uncurry_eq_prop` and `Std.uncurry_eq_prop_arrow`,
+for postconditions of the separation logic judgments applied to a returned tuple
+which is not a literal. -/
+theorem uncurry_eq_iprop {α β} (x : α × β) (p : α → β → IProp) :
+    Std.uncurry p x = p x.fst x.snd := by cases x; rfl
+
+theorem uncurry_eq_iprop_arrow {α β σ} (x : α × β) (p : α → β → σ → IProp) :
+    Std.uncurry p x = p x.fst x.snd := by cases x; rfl
+
 /-! ### `ispec` theorems -/
 @[simp, grind =, agrind =]
 theorem ispec_ok (x : α) : ispec P (ok x) Q ↔ P ⊢ Q x := by
@@ -354,6 +363,15 @@ theorem dispec_div {P : IPre} {Q : IPost α} :
   rw [dispec_iff]
   intro _ _ _
   exact PartialSpec.div
+
+/-- Failure has no partial ispec either: divergence is permitted, not stuckness. -/
+@[simp, grind =, agrind =]
+theorem dispec_fail (e : Error) : dispec P (fail e) Q ↔ P ⊢ ⌜False⌝ := by
+  constructor
+  · intro hTriple h hP
+    exact (dispec_apply hTriple hP).vis_view
+  · intro hFalse h hP
+    exact (hFalse h hP).elim
 
 theorem dispec_frame {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : dispec P m Q) (H : IProp) : dispec (P ∗ H) m (Q ∗+ H) := by
