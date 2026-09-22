@@ -6,6 +6,7 @@ import Aeneas.Tactic.Step.Tests.HigherOrder
 import Aeneas.Tactic.Step.Tests.IntroOutputs
 import Aeneas.Tactic.Step.Tests.MaxRecDepthMetavar
 import Aeneas.Tactic.Step.Tests.SpecParameters
+import Aeneas.Tactic.Step.Tests.SpatialGhosts
 import Aeneas.Tactic.Step.Tests.TupleDestruct
 import Aeneas.Tactic.Step.Tests.UncurryBind
 import Aeneas.Tactic.Step.Tests.IntroTactic

@@ -1116,8 +1116,8 @@ theorem forall_unit {p : Unit → Prop} : (∀ value, p value) ↔ p () :=
 
 * a continuation `∀ value, ispec (Qm value ∗ F) (next value) Q`, whose pure
   facts and existentials become hypotheses;
-* a ramified entailment `P ⊢ Pm ∗ (Qm -∗+ Q)`, which collapses to a pointwise
-  implication when both postconditions are pure.
+* a ramified entailment `P ⊢ Pm ∗ (Qm -∗+ Q)`, whose matched resources are
+  cancelled and whose residual postcondition wand is introduced by `isimp`.
 
 The facts of a pure judgment are the binders of the premise, and `Step.Intro`
 handles them; here they have to be extracted from an assertion first, which is
@@ -1180,6 +1180,20 @@ private meta def normalizeGoal : TacticM Unit := do
   if newTarget != target then
     replaceMainGoal [← goal.change newTarget]
 
+/-- Normalize spatial obligations without exceeding the introduction hook's
+single-continuation contract. Ambiguous witnesses remain for explicit `isimp`. -/
+private meta def simplifySpatialGoal : TacticM Unit := do
+  unless (← getUnsolvedGoals).isEmpty do
+    let before ← Aeneas.Step.Intro.localHypotheses
+    let saved ← saveState
+    evalTactic (← `(tactic| isimp only))
+    let goals ← getUnsolvedGoals
+    if goals.length > 1 || (← goals.anyM fun goal =>
+        goal.withContext do return !(← isProp (← goal.getType))) then
+      saved.restore
+    else unless goals.isEmpty do
+      Aeneas.Step.Intro.splitNewHypotheses before
+
 end Intro
 
 /-- The tactic `step` runs on the goals it prepares for `ispec` and `dispec`.
@@ -1210,8 +1224,11 @@ elab (name := intro_ispec) "intro_ispec" : tactic => withMainContext do
             ``ispec_ipure_iff, ``dispec_ipure_iff,
             ``and_imp, ``exists_imp, ``forall_unit, ``true_imp_iff] }
       (.targets #[] true)
+  Intro.simplifySpatialGoal
 
-/-- Normalize after output destructuring. -/
+/-- Normalize after output destructuring, then frame spatial goals exposed by
+reducing the remaining postcondition markers. The earlier pass in `intro_ispec`
+is still needed to introduce wand-bound results before they are destructured. -/
 elab (name := intro_step_post) "intro_step_post" : tactic => do
   let _ ← Aeneas.Simp.simpAt true
     { maxDischargeDepth := 1, failIfUnchanged := false, iota := false }
@@ -1221,6 +1238,7 @@ elab (name := intro_step_post) "intro_step_post" : tactic => do
           ``Aeneas.Std.WP.uncurry'_pair, ``Aeneas.Std.WP.uncurry'_eq,
           ``and_imp, ``exists_imp, ``Aeneas.Step.Intro.forall_unit, ``true_imp_iff] }
     (.targets #[] true)
+  Intro.simplifySpatialGoal
 
 #register_spec_info {
     spec_name := ``ispec
