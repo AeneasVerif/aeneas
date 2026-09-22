@@ -113,14 +113,18 @@ def mkStar (atoms : Array Expr) : Expr :=
 
 def removeMatches (available required : Array Expr) :
     MetaM (Option (Array Expr)) := do
+  let initial ← saveState
   let mut remaining := available
   for expected in required do
     let mut found := none
     for h : i in [:remaining.size] do
+      let candidate ← saveState
       if ← isDefEq expected remaining[i] then
         found := some i
         break
-    let some i := found | return none
+      candidate.restore
+    let some i := found
+      | initial.restore; return none
     remaining :=
       remaining.extract 0 i ++ remaining.extract (i + 1) remaining.size
   return some remaining
@@ -279,7 +283,7 @@ private partial def pullLeft (goal : MVarId) : TacticM MVarId := do
       | throwError "could not determine the universe of {source}"
     let ι := sourceArgs[0]!
     let J := sourceArgs[1]!
-    let newType ← withLocalDeclD `x ι fun x => do
+    let newType ← withLocalDeclD (← mkFreshUserName `x) ι fun x => do
       mkForallFVars #[x] (← mkAppM ``Entails #[← Core.betaReduce (mkApp J x), destination])
     let newGoal ← mkFreshExprSyntheticOpaqueMVar newType
     goal.assign (mkAppN (mkConst ``entails_exists_l [u]) #[ι, destination, J, newGoal])
@@ -292,7 +296,7 @@ private partial def pullLeft (goal : MVarId) : TacticM MVarId := do
   let atom := atoms[i]!
   let proposition := atom.consumeMData.appArg!
   let rest := mkStar (atoms.eraseIdx! i)
-  let newType ← withLocalDeclD `h proposition fun h => do
+  let newType ← withLocalDeclD (← mkFreshUserName `h) proposition fun h => do
     mkForallFVars #[h] (← mkAppM ``Entails #[rest, destination])
   let newGoal ← mkFreshExprSyntheticOpaqueMVar newType
   let extract := mkAppN (mkConst ``entails_pure_l)
@@ -303,21 +307,41 @@ private partial def pullLeft (goal : MVarId) : TacticM MVarId := do
   let (_, next) ← newGoal.mvarId!.intro1P
   pullLeft next
 
+/-- Use newly extracted pure facts before matching spatial assertions. In
+particular, a returned pointer's equality must rewrite its owned predicate
+before cancellation can infer an existential view. -/
+private def rewritePureFacts (goal : MVarId) (facts : Array FVarId) :
+    TacticM (Option MVarId) := goal.withContext do
+  if facts.isEmpty then return some goal
+  let saved ← getGoals
+  try
+    setGoals [goal]
+    let _ ← Aeneas.Simp.simpAt true
+      { dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1 }
+      { hypsToUse := facts } (.targets #[] true)
+    match ← getUnsolvedGoals with
+    | [] => return none
+    | [goal] => return some goal
+    | _ => throwError "normalizing pure facts produced multiple goals"
+  finally
+    setGoals saved
+
 /-- Replace a right-hand-side `∃ x, J x` by `J ?x` for a fresh metavariable
 `?x`, to be determined by the cancellation phase. -/
-private partial def instantiateRightExists (goal : MVarId) : TacticM MVarId := do
-  if ← isFrameInference goal then return goal
+private partial def instantiateRightExists (goal : MVarId)
+    (witnesses : Array MVarId := #[]) : TacticM (MVarId × Array MVarId) := do
+  if ← isFrameInference goal then return (goal, witnesses)
   let goal ← floatExists (← exposeGoal goal)
-  if ← isFrameInference goal then return goal
+  if ← isFrameInference goal then return (goal, witnesses)
   goal.withContext do
   let target ← instantiateMVars (← goal.getType)
   let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
-  unless fn.isConstOf ``Entails && args.size = 2 do return goal
+  unless fn.isConstOf ``Entails && args.size = 2 do return (goal, witnesses)
   let source := args[0]!
   let destination ← reducePostApplication args[1]!
   let (destFn, destArgs) :=
     destination.consumeMData.withApp fun fn args => (fn, args)
-  unless destFn.isConstOf ``iexists && destArgs.size = 2 do return goal
+  unless destFn.isConstOf ``iexists && destArgs.size = 2 do return (goal, witnesses)
   let some u := destFn.constLevels!.head?
     | throwError "could not determine the universe of {destination}"
   let ι := destArgs[0]!
@@ -326,7 +350,7 @@ private partial def instantiateRightExists (goal : MVarId) : TacticM MVarId := d
   let newType ← mkAppM ``Entails #[source, ← Core.betaReduce (mkApp J witness)]
   let newGoal ← mkFreshExprSyntheticOpaqueMVar newType
   goal.assign (mkAppN (mkConst ``entails_exists_r [u]) #[ι, source, J, witness, newGoal])
-  instantiateRightExists newGoal.mvarId!
+  instantiateRightExists newGoal.mvarId! (witnesses.push witness.mvarId!)
 
 /-- Replace the top-level existentials of the callee precondition of a
 frame-inference goal by metavariables, so that the cancellation can pick the
@@ -525,8 +549,15 @@ partial def solveGoal (discharger : Option Syntax.Tactic) (goal : MVarId) :
         let goal ← if decomposing then exposeGoal (← decompose goal) else pure goal
         solveHimpl discharger goal
       else
+        let before ← goal.withContext do
+          return (← getLCtx).foldl (init := (∅ : Std.HashSet FVarId))
+            fun ids decl => ids.insert decl.fvarId
         let goal ← pullLeft goal
-        let goal ← instantiateRightExists goal
+        let facts ← goal.withContext do
+          return (← (← getLCtx).getAssumptions).filterMap fun decl =>
+            if before.contains decl.fvarId then none else some decl.fvarId
+        let some goal ← rewritePureFacts goal facts.toArray | return
+        let (goal, _) ← instantiateRightExists goal
         let goal ← exposeGoal goal
         let goal ← if decomposing then exposeGoal (← decompose goal) else pure goal
         solveHimpl discharger goal
@@ -556,6 +587,100 @@ partial def pullGoal (goal : MVarId) : TacticM MVarId := do
 
 end
 
+private theorem sep_ipure_eq (P Q : Prop) :
+    (⌜P⌝ ∗ ⌜Q⌝) = ⌜P ∧ Q⌝ := by
+  apply IProp.ext
+  intro heap
+  exact sep_pure_l P ⌜Q⌝ heap
+
+/-- Cancel matching atoms without requiring the residual entailment to be
+provable. Every atom is consumed at most once; unmatched resources stay in the
+residual goal. -/
+private def cancelGoal (goal : MVarId) : TacticM MVarId := goal.withContext do
+  let target := (← instantiateMVars (← goal.getType)).consumeMData
+  let args := target.getAppArgs
+  unless target.isAppOfArity ``Entails 2 do return goal
+  let source ← reducePostApplication args[0]!
+  let destination ← reducePostApplication args[1]!
+  let mut remaining ← flatten source
+  let mut matched := #[]
+  let mut unmatched := #[]
+  for expected in ← flatten destination do
+    let mut found := none
+    for h : i in [:remaining.size] do
+      let candidate ← saveState
+      if ← isDefEq expected remaining[i] then
+        found := some i
+        break
+      candidate.restore
+    match found with
+    | some i =>
+      matched := matched.push expected
+      remaining := remaining.eraseIdx! i
+    | none => unmatched := unmatched.push expected
+  if matched.isEmpty then return goal
+  let frame := mkStar matched
+  let left := mkStar remaining
+  let right := mkStar unmatched
+  let residual ← mkFreshExprSyntheticOpaqueMVar (← mkAppM ``Entails #[left, right])
+  let leftEq ← proveEqAC source (← mkAppM ``sep #[frame, left])
+  let rightEq ← proveEqAC (← mkAppM ``sep #[frame, right]) destination
+  let framed ← mkAppM ``sep_mono #[← mkAppM ``entails_refl #[frame], residual]
+  let finish ← mkAppM ``entails_trans #[framed, ← mkAppM ``entails_of_eq #[rightEq]]
+  goal.assign (← mkAppM ``entails_trans #[← mkAppM ``entails_of_eq #[leftEq], finish])
+  return residual.mvarId!
+
+/-- Extract facts before cancellation, so framing an owned predicate does not
+lose the information it contained. Keep frame-inference goals untouched: their
+metavariables were created outside the extracted witnesses' scope. -/
+partial def simplifyGoal (goal : MVarId) (useHyps : Bool := true) : TacticM (List MVarId) := do
+  let target := (← instantiateMVars (← goal.getType)).consumeMData
+  if target.isAppOfArity ``postEntails 3 then
+    let (_, next) ← goal.intro1P
+    return ← simplifyGoal next useHyps
+  unless target.isAppOfArity ``Entails 2 do return [goal]
+  if ← isFrameInference goal then return [goal]
+  let before ← goal.withContext do
+    return (← getLCtx).foldl (init := (∅ : Std.HashSet FVarId))
+      fun ids decl => ids.insert decl.fvarId
+  let goal ← pullLeft goal
+  let facts ← goal.withContext do
+    return (← (← getLCtx).getAssumptions).filterMap fun decl =>
+      if before.contains decl.fvarId then none else some decl.fvarId
+  let some goal ← if useHyps then rewritePureFacts goal facts.toArray else pure (some goal)
+    | return []
+  let (goal, witnesses) ← instantiateRightExists goal
+  let goal ← cancelGoal (← exposeGoal goal)
+  let wandGoal? ← goal.withContext do
+    let target := (← instantiateMVars (← goal.getType)).consumeMData
+    let args := target.getAppArgs
+    unless target.isAppOfArity ``Entails 2 do return none
+    let destination ← reducePostApplication args[1]!
+    unless destination.isAppOfArity ``postWand 3 do return none
+    let wandArgs := destination.getAppArgs
+    let premise ← mkAppM ``postEntails
+      #[← mkAppM ``postSep #[wandArgs[1]!, args[0]!], wandArgs[2]!]
+    let next ← mkFreshExprSyntheticOpaqueMVar premise
+    goal.assign (← mkAppM ``postWand_intro #[next])
+    return some next.mvarId!
+  if let some wandGoal := wandGoal? then
+    let goals ← simplifyGoal wandGoal useHyps
+    return ← (witnesses.toList ++ goals).filterM fun goal => return !(← goal.isAssigned)
+  let finish ← if useHyps then
+    `(tactic| (
+      simp (config := { failIfUnchanged := false }) only
+        [sep_emp_l_eq, sep_emp_r_eq, sep_ipure_eq, entails_emp_ipure_iff, entails_refl,
+          and_true, true_and, *];
+      try assumption))
+    else
+    `(tactic| (
+      simp (config := { failIfUnchanged := false }) only
+        [sep_emp_l_eq, sep_emp_r_eq, sep_ipure_eq, entails_emp_ipure_iff, entails_refl,
+          and_true, true_and];
+      try assumption))
+  let (goals, _) ← runTactic goal finish
+  return ← (witnesses.toList ++ goals).filterM fun goal => return !(← goal.isAssigned)
+
 end IFrame
 
 /-- Prove a separation-logic entailment `H₁ ⊢ H₂` (or a postcondition entailment
@@ -570,8 +695,8 @@ end IFrame
 4. the pure assertions left over on the right-hand side are discharged last —
    after step 3, so that they mention no leftover metavariable.
 
-Unmatched pure assertions of the left-hand side may be discarded; unmatched
-spatial assertions are reported as an error.
+Unused assertions of the left-hand side may be discarded in this affine logic.
+Required spatial assertions that cannot be matched are reported as an error.
 
 When the right-hand side is of the shape `H ∗ ?F` for an unassigned
 metavariable `?F` (frame inference, as generated by `step`), steps 1 and 2 are
@@ -614,7 +739,7 @@ the `emp`s, and reassociate to the right.
 Also collapses a ramified wand whose antecedent is a pure equality
 (`entails_postWand_pure_eq`): that is the shape a terminal return leaves behind, and
 frame inference cannot cancel it on its own. -/
-elab "isimp" : tactic => withMainContext do
+def normalizeSep : TacticM Unit := withMainContext do
   let _ ← Aeneas.Simp.simpAt true
     { dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1 }
     { addSimpThms :=
@@ -622,5 +747,41 @@ elab "isimp" : tactic => withMainContext do
           ``sep_exists_l_eq, ``sep_exists_r_eq, ``sep_assoc_eq,
           ``entails_postWand_pure_eq] }
     (.targets #[] true)
+
+/-- Normalize and cancel spatial resources, leaving unsolved pure assertions as
+ordinary Lean goals. Facts are extracted before their ownership is framed away.
+Residual postcondition wands are introduced pointwise, retaining the unmatched
+resources as a frame for the antecedent. Uninferred existential witnesses remain
+explicit goals.
+`isimp [lemmas]` also opens representation predicates with the supplied lemmas.
+`isimp only [lemmas]` omits `iris_simps` and hypothesis-based rewriting, keeping
+the residual mathematical goal in its original form.
+Unlike `iframe` (and its alias `isimpl`), this tactic does not require all
+remaining obligations to be solved. -/
+syntax (name := iSimp) "isimp" (" only")? (" [" term,* "]")? : tactic
+
+private def evalISimp (lemmas : Array (TSyntax `term)) (simpOnly : Bool := false) : TacticM Unit :=
+  Tactic.focus do withMainContext do
+    let simpLemmas ← lemmas.mapM fun stx => `(Parser.Tactic.simpLemma| $stx:term)
+    let goal ← getMainGoal
+    let target := (← instantiateMVars (← goal.getType)).consumeMData
+    let spatial := target.isAppOfArity ``Entails 2 || target.isAppOfArity ``postEntails 3
+    let frameInference ← IFrame.isFrameInference goal
+    if spatial && !frameInference && !simpOnly then
+      evalTactic (← `(tactic|
+        simp (config := { failIfUnchanged := false, dsimp := false }) only
+          [iris_simps, $simpLemmas,*]))
+    else if !lemmas.isEmpty then
+      evalTactic (← `(tactic|
+        simp (config := { failIfUnchanged := false, dsimp := false }) only [$simpLemmas,*]))
+    unless (← getUnsolvedGoals).isEmpty || frameInference do normalizeSep
+    unless (← getUnsolvedGoals).isEmpty || !spatial || frameInference do
+      replaceMainGoal (← IFrame.simplifyGoal (← getMainGoal) (!simpOnly))
+
+elab_rules : tactic
+  | `(tactic| isimp) => evalISimp #[]
+  | `(tactic| isimp [$lemmas,*]) => evalISimp lemmas.getElems
+  | `(tactic| isimp only) => evalISimp #[] true
+  | `(tactic| isimp only [$lemmas,*]) => evalISimp lemmas.getElems true
 
 end Aeneas.SepLogic
