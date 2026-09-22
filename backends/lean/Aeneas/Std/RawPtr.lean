@@ -1,6 +1,9 @@
 module
 public import Aeneas.Std.Delab
 public import Aeneas.Std.Scalar.Core
+public import Aeneas.Std.Scalar.Notations
+public import Aeneas.Std.SliceDef
+public import Aeneas.Data.BitVec
 public import Aeneas.Std.WP
 public import Aeneas.Std.Primitives
 public import Aeneas.SepLogic
@@ -631,16 +634,148 @@ inductive ScalarKind where
 
 class IsScalar (T : Type) where
   isScalar : (∃ ty, T = UScalar ty) ∨ (∃ ty, T = IScalar ty)
+  size : Usize
+  toBytes : Slice T → Result (Slice U8)
+  fromBytes : Slice U8 → Result (Slice T)
+
+namespace IsScalar
+
+def numElems (T : Type) [IsScalar T] (numBytes : Nat) : Nat :=
+  (numBytes + (size (T := T)).val - 1) / (size (T := T)).val
+
+def encode (toBytes : T → List U8) (s : Slice T) : Result (Slice U8) :=
+  let bytes := s.val.flatMap toBytes
+  if h : bytes.length ≤ Usize.max then .ok (Slice.from bytes h)
+  else .fail .arrayOutOfBounds
+
+def decode (size : Nat) (fromBytes : List U8 → T) (s : Slice U8) :
+    Result (Slice T) :=
+  if size = 0 ∨ s.val.length % size ≠ 0 then .fail .undef
+  else
+    let values := (s.val.toChunks size).map fromBytes
+    if h : values.length ≤ Usize.max then .ok (Slice.from values h)
+    else .fail .arrayOutOfBounds
+
+end IsScalar
 
 instance {ty} : IsScalar (UScalar ty) where
   isScalar := by simp
+  size := ⟨BitVec.ofNat _ (ty.numBits / 8)⟩
+  toBytes :=
+    match ty with
+    | .U8 => Result.ok
+    | ty => IsScalar.encode fun (x : UScalar ty) =>
+        x.bv.toLEBytes.map (@UScalar.mk .U8)
+  fromBytes :=
+    match ty with
+    | .U8 => Result.ok
+    | ty => IsScalar.decode (ty.numBits / 8) fun bytes =>
+        ⟨(BitVec.fromLEBytes (bytes.map UScalar.bv)).setWidth ty.numBits⟩
 
 instance {ty} : IsScalar (IScalar ty) where
   isScalar := by simp
+  size := ⟨BitVec.ofNat _ (ty.numBits / 8)⟩
+  toBytes := IsScalar.encode fun (x : IScalar ty) =>
+    x.bv.toLEBytes.map (@UScalar.mk .U8)
+  fromBytes := IsScalar.decode (ty.numBits / 8) fun bytes =>
+    ⟨(BitVec.fromLEBytes (bytes.map UScalar.bv)).setWidth ty.numBits⟩
 
+namespace IsScalar
+
+@[simp]
+theorem size_u8 : size (T := U8) = 1#usize := by
+  change (⟨BitVec.ofNat _ 1⟩ : Usize) = 1#usize
+  apply UScalar.eq_of_val_eq
+  simp [UScalar.val]
+
+@[simp]
+theorem numElems_u8 (numBytes : Nat) : numElems U8 numBytes = numBytes := by
+  simp [numElems]
+
+@[simp, step_simps]
+theorem toBytes_u8 (s : Slice U8) : toBytes s = .ok s := rfl
+
+@[simp, step_simps]
+theorem fromBytes_u8 (s : Slice U8) : fromBytes (T := U8) s = .ok s := rfl
+
+end IsScalar
+
+/-- Scalar pointer casts remain unsupported: changing the element type also
+    requires reinterpreting the typed heap, not just scaling the offset.
+    `IsScalar.toBytes` and `IsScalar.fromBytes` convert values, not ownership. -/
 def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability)
     [IsScalar T] [IsScalar T'] (_ : RawPtr T M) :
     Result (RawPtr T' M') :=
   .fail .undef
 
 end Aeneas.Std
+
+namespace Aeneas.Std.IsScalar.Tests
+
+def bytes : Slice U8 := Slice.from [52#u8, 18#u8, 255#u8, 255#u8] (by scalar_tac)
+
+def words : Slice U16 := Slice.from [4660#u16, 65535#u16] (by scalar_tac)
+
+def signedWords : Slice I16 := Slice.from [4660#i16, (-1)#i16] (by scalar_tac)
+
+example (s : Slice U8) : toBytes s = .ok s := rfl
+
+example (s : Slice U8) : fromBytes (T := U8) s = .ok s := rfl
+
+example : toBytes words = .ok bytes := by
+  simp [toBytes, encode, words, bytes, BitVec.toLEBytes,
+    show 4 ≤ Usize.max by scalar_tac]
+  rfl
+
+example : fromBytes (T := U16) bytes = .ok words := by
+  change (if _ : 2 ≤ Usize.max then Result.ok words else .fail .arrayOutOfBounds) = _
+  simp [show 2 ≤ Usize.max by scalar_tac]
+
+example : toBytes signedWords = .ok bytes := by
+  simp [toBytes, encode, signedWords, bytes, BitVec.toLEBytes,
+    show 4 ≤ Usize.max by scalar_tac]
+  rfl
+
+example : fromBytes (T := I16) bytes = .ok signedWords := by
+  change (if _ : 2 ≤ Usize.max then Result.ok signedWords else .fail .arrayOutOfBounds) = _
+  simp [show 2 ≤ Usize.max by scalar_tac]
+
+example : fromBytes (T := U16) (Slice.from [1#u8] (by scalar_tac)) = .fail .undef := by
+  simp [fromBytes, decode]
+
+example : fromBytes (T := I32) (Slice.from [1#u8, 2#u8, 3#u8] (by scalar_tac)) =
+    .fail .undef := by
+  simp [fromBytes, decode]
+
+example : fromBytes (T := U32) (Slice.from [] (by scalar_tac)) =
+    .ok (Slice.from [] (by scalar_tac)) := by
+  simp [fromBytes, decode, List.toChunks]
+
+example : numElems U8 16 = 16 := by simp
+
+example : numElems U32 16 = 4 := by
+  rcases System.Platform.numBits_eq with h | h
+  · simp [numElems, size, UScalar.val, h]
+  · simp [numElems, size, UScalar.val, h]
+
+example : numElems U64 17 = 3 := by
+  rcases System.Platform.numBits_eq with h | h
+  · simp [numElems, size, UScalar.val, h]
+  · simp [numElems, size, UScalar.val, h]
+
+example : numElems U128 0 = 0 := by
+  rcases System.Platform.numBits_eq with h | h
+  · simp [numElems, size, UScalar.val, h]
+  · simp [numElems, size, UScalar.val, h]
+
+example : (size (T := U128)).val = 16 := by
+  rcases System.Platform.numBits_eq with h | h
+  · simp [size, UScalar.val, h]
+  · simp [size, UScalar.val, h]
+
+example : (size (T := Isize)).val = System.Platform.numBits / 8 := by
+  rcases System.Platform.numBits_eq with h | h
+  · simp [size, UScalar.val, h]
+  · simp [size, UScalar.val, h]
+
+end Aeneas.Std.IsScalar.Tests
