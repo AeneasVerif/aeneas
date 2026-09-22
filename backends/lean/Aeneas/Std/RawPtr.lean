@@ -200,6 +200,7 @@ def RawPtr.allocArray {β : Type} (values : List T) (mk : Ref T → β) : Result
   Result.guardedModify (fun _ => True) fun h _ =>
     (mk (Heap.freshRef T h), Heap.freshHeap h values)
 
+@[step]
 theorem RawPtr.allocArray.spec {β : Type} (values : List T) (mk : Ref T → β)
     (post : β → IProp)
     (hPost : ∀ r : Ref T, owns (Heap.rangeHeap r values) ⊢ post (mk r)) :
