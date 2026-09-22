@@ -1616,24 +1616,36 @@ def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option 
   trace[Step] "Step done"
   return ⟨ goals, usedTheorem ⟩
 
+/-- The rewrite rules which discharge the specification of a terminal return.
+
+    The separation logic judgments only get `fail`/`div`: their `ok` case is handled by
+    the `@[step]` theorem `WP.ret.spec`, which also simplifies the spatial
+    post-condition, and rewriting with `ispec_ok` would bypass it. -/
+def getTerminalSimps : CoreM (Array Name) := do
+  pure (#[
+    ``Std.WP.spec_ok,  ``Std.WP.spec_fail,  ``Std.WP.spec_div,
+    ``Std.WP.dspec_ok, ``Std.WP.dspec_fail, ``Std.WP.dspec_div,
+    ``Std.WP.ispec_fail, ``Std.WP.ispec_div, ``Std.WP.dispec_div] ++ (← getSLOkSimps))
+
 /-- Reduce the specification of a program which immediately returns: turn `ok x ⦃ Q ⦄`
-    into `Q x` (and similarly for the separation logic judgments).
+    into `Q x`, `fail e ⦃ Q ⦄` into `False`, etc.
 
     There is no specification to apply in this situation: the terminal-return rules
-    (`WP.spec_ok`, `ispec_ok_iff`, ...) are rewrite rules, so we simply normalize the
+    (`WP.spec_ok`, `WP.spec_fail`, ...) are rewrite rules, so we simply normalize the
     goal with them. Return `true` if the specification statement did disappear, meaning
     the goal is fully processed; otherwise `step` proceeds as usual (the normalization
-    performed here is the very first thing `evalStepCore` does anyway).
+    performed here subsumes the one `evalStepCore` starts with).
 -/
 def tryTerminalReturn : TacticM Bool := do
   withTraceNode `Step (fun _ => pure m!"tryTerminalReturn") do
   withMainContext do
   let some program ← observing? (getSpecProgram (← getMainTarget))
     | return false
-  unless (← Utils.normalizeLetBindings program).consumeMData.isAppOf ``Std.Result.ok do
+  let program := (← Utils.normalizeLetBindings program).consumeMData
+  unless [``Std.Result.ok, ``Std.Result.fail, ``Std.Result.div].any program.isAppOf do
     return false
   let r ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false }
-    {simpThms := #[← stepSimpExt.getTheorems], addSimpThms := ← getSLOkSimps,
+    {simpThms := #[← stepSimpExt.getTheorems], addSimpThms := ← getTerminalSimps,
      declsToUnfold := #[``pure]} (.targets #[] true)
   -- The goal may have been closed altogether
   let some _ := r | return true
@@ -2607,13 +2619,14 @@ variable (P : IProp) (S : α → IProp) (T : β → IProp)
 #check_step WP.spec (ok x) Q => Q x
 #check_step WP.ispec P (ok x) S => (P ⊢ S x)
 #check_step WP.spec (ok x) (fun _ => True) => True
--- #check_step WP.spec (fail e) Q => False
--- #check_step WP.spec (div : Result α) Q => False
--- #check_step WP.dspec (fail e) Q => False
--- #check_step WP.dspec (div : Result α) Q => True
--- #check_step WP.ispec (fail e) Q => False
--- #check_step WP.ispec (div : Result α) Q => False
+#check_step WP.spec (fail e) Q => False
+#check_step WP.spec (div : Result α) Q => False
+#check_step WP.dspec (fail e) Q => False
+#check_step WP.dspec (div : Result α) Q => True
+#check_step WP.ispec P (fail e) S => (P ⊢ ⌜False⌝)
+#check_step WP.ispec P (div : Result α) S => (P ⊢ ⌜False⌝)
 
+-- left identity
 -- #check_step WP.ispec P (do let y ← ok x; k y) T => WP.ispec P (k x) T
 -- #check_step WP.spec (do let y ← ok x; k y) R => WP.spec (k x) R
 -- #check_step WP.spec (do let y ← (fail e : Result α); k y) R => False
@@ -2621,6 +2634,7 @@ variable (P : IProp) (S : α → IProp) (T : β → IProp)
 -- #check_step WP.dspec (do let y ← (div : Result α); k y) R => True
 
 -- How to state these? this is not step. step already should apply mono of m
+-- right identity
 -- #check_step WP.spec (do let z ← (do let y ← m x; k y)) k' R' =>
 --   WP.spec (do let y ← m x; k y >>= k') R'
 -- #check_step WP.ispec (do let z ← (do let y ← m x; k y)) k' R' =>
