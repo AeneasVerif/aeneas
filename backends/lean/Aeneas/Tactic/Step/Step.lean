@@ -1563,12 +1563,40 @@ meta def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Op
   trace[Step] "Step done"
   return ⟨ goals, usedTheorem ⟩
 
+/-- Reduce the specification of a program which immediately returns: turn `ok x ⦃ Q ⦄`
+    into `Q x` (and similarly for the separation logic judgments).
+
+    There is no specification to apply in this situation: the terminal-return rules
+    (`WP.spec_ok`, `ispec_ok_iff`, ...) are rewrite rules, so we simply normalize the
+    goal with them. Return `true` if the specification statement did disappear, meaning
+    the goal is fully processed; otherwise `step` proceeds as usual (the normalization
+    performed here is the very first thing `evalStepCore` does anyway).
+-/
+meta def tryTerminalReturn : TacticM Bool := do
+  withTraceNode `Step (fun _ => pure m!"tryTerminalReturn") do
+  withMainContext do
+  let some program ← observing? (getSpecProgram (← getMainTarget))
+    | return false
+  unless (← Utils.normalizeLetBindings program).consumeMData.isAppOf ``Std.Result.ok do
+    return false
+  let r ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false }
+    {simpThms := #[← stepSimpExt.getTheorems], addSimpThms := ← getSLOkSimps,
+     declsToUnfold := #[``pure]} (.targets #[] true)
+  -- The goal may have been closed altogether
+  let some _ := r | return true
+  withMainContext do
+  pure (← observing? (getSpecProgram (← getMainTarget))).isNone
+
 meta def evalStep
   (config : Config) (keepPretty : Option Name) (withArg: Option Expr)
   (ids: Array (Option Name)) (idsUserProvided : Bool)
   (postsBasename : Option Name := none) (byTac : Option Syntax.Tactic)
-  : TacticM UsedTheorem := do
+  : TacticM (Option UsedTheorem) := do
   focus do
+  /- A terminal return is not a call: there is no specification to look up, we simply
+     reduce it (`step` then behaves like a no-op on the resulting goal). -/
+  if withArg.isNone then
+    if ← tryTerminalReturn then return none
   let ⟨goals, usedTheorem⟩ ← evalStepCore config keepPretty withArg ids idsUserProvided postsBasename byTac
   -- Wait for all the proof attempts to finish
   let mut sgs := #[]
@@ -1584,7 +1612,7 @@ meta def evalStep
     | none => []
     | some goal => [goal.goal]
   setGoals (goals.unassignedVars.toList ++ sgs.toList ++ mainGoal)
-  pure usedTheorem
+  pure (some usedTheorem)
 
 /-- The `step` tactic is used to reason about monadic goals.
 It is a bit equivalent to the `mvcgen` tactic from the Lean standard library.
@@ -1691,8 +1719,9 @@ elab tk:"step?" args:stepArgs : tactic => do
   let mut stxArgs := args.raw
   -- Update the syntax to add the `with thm`
   if stxArgs[1].isNone then
-    let withArg := mkNullNode #[mkAtom "with", ← stats.toSyntax]
-    stxArgs := stxArgs.setArg 1 withArg
+    if let some stats := stats then
+      let withArg := mkNullNode #[mkAtom "with", ← stats.toSyntax]
+      stxArgs := stxArgs.setArg 1 withArg
   let tac := mkNode `Aeneas.Step.step #[mkAtom "step", stxArgs]
   let fmt ← PrettyPrinter.ppCategory ``Lean.Parser.Tactic.tacticSeq tac
   Meta.Tactic.TryThis.addSuggestion tk fmt.pretty (origSpan? := ← getRef)
@@ -1760,11 +1789,12 @@ elab tk:letStep : tactic => do
   let mut stxArgs := tk.raw
   if suggest then
     trace[Step] "suggest is true"
-    let withArg ← stats.toSyntax
-    stxArgs := stxArgs.setArg 7 withArg
-    let stxArgs' : TSyntax `Aeneas.Step.letStep := ⟨ stxArgs ⟩
-    trace[Step] "stxArgs': {stxArgs}"
-    Meta.Tactic.TryThis.addSuggestion tk stxArgs' (origSpan? := ← getRef)
+    if let some stats := stats then
+      let withArg ← stats.toSyntax
+      stxArgs := stxArgs.setArg 7 withArg
+      let stxArgs' : TSyntax `Aeneas.Step.letStep := ⟨ stxArgs ⟩
+      trace[Step] "stxArgs': {stxArgs}"
+      Meta.Tactic.TryThis.addSuggestion tk stxArgs' (origSpan? := ← getRef)
 
 namespace Test
   open Std Result
@@ -2514,3 +2544,54 @@ attribute [step] Aeneas.Std.WP.ret.spec
 attribute [step] Aeneas.Std.WP.pure.spec
 attribute [step] Aeneas.Std.WP.ok_spec
 attribute [step] Aeneas.Std.WP.pure_spec
+
+namespace Aeneas.Step.Test.TerminalReduction
+
+open Aeneas.Std Result Aeneas.SepLogic
+open Lean Meta Elab Tactic
+
+/- Check `step` on an isolated goal, without assumptions that could discharge it:
+   `=> True` requires the goal to be closed, otherwise exactly one goal must remain,
+   and it must match the expected one syntactically. -/
+local elab "#check_step " target:term " => " expected:term : command =>
+  Command.runTermElabM fun _ => do
+    let target ← Term.elabTermEnsuringType target (mkSort .zero)
+    let goal ← mkFreshExprSyntheticOpaqueMVar target
+    let _ ← Tactic.run goal.mvarId! do
+      evalTactic (← `(tactic| step))
+      match ← getUnsolvedGoals with
+      | [] =>
+        unless (← Term.elabTermEnsuringType expected (mkSort .zero)).isConstOf ``True do
+          throwError "The goal was unexpectedly closed"
+      | [_] => evalTactic (← `(tactic| guard_target =ₛ $expected))
+      | goals => throwError "Expected at most one remaining goal, got {goals.length}"
+
+variable (α β : Type) (x : α) (m : Result α) (k : α → Result β) (k' : β → Result χ)
+variable (Q : α → Prop) (R : β → Prop) (R' : χ → Prop) (e : Error)
+variable (P : IProp) (S : α → IProp) (T : β → IProp)
+
+/- A terminal return is reduced instead of being turned into an opaque output
+   together with its defining equation. -/
+#check_step WP.spec (ok x) Q => Q x
+#check_step WP.ispec P (ok x) S => (P ⊢ S x)
+#check_step WP.spec (ok x) (fun _ => True) => True
+-- #check_step WP.spec (fail e) Q => False
+-- #check_step WP.spec (div : Result α) Q => False
+-- #check_step WP.dspec (fail e) Q => False
+-- #check_step WP.dspec (div : Result α) Q => True
+-- #check_step WP.ispec (fail e) Q => False
+-- #check_step WP.ispec (div : Result α) Q => False
+
+-- #check_step WP.ispec P (do let y ← ok x; k y) T => WP.ispec P (k x) T
+-- #check_step WP.spec (do let y ← ok x; k y) R => WP.spec (k x) R
+-- #check_step WP.spec (do let y ← (fail e : Result α); k y) R => False
+-- #check_step WP.spec (do let y ← (div : Result α); k y) R => False
+-- #check_step WP.dspec (do let y ← (div : Result α); k y) R => True
+
+-- How to state these? this is not step. step already should apply mono of m
+-- #check_step WP.spec (do let z ← (do let y ← m x; k y)) k' R' =>
+--   WP.spec (do let y ← m x; k y >>= k') R'
+-- #check_step WP.ispec (do let z ← (do let y ← m x; k y)) k' R' =>
+--   WP.ispec (do let y ← m x; k y >>= k') R'
+
+end Aeneas.Step.Test.TerminalReduction
