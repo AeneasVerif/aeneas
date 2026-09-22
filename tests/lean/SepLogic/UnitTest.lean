@@ -384,9 +384,9 @@ example (Q1 Q2 : IPost Nat) : Q1 ∗+ (Q1 -∗+ Q2) ⊢+ Q2 := postWand_cancel Q
 example (p : MutRawPtr Nat) :
     iprop(∃ n, ⌜0 < n⌝ ∗ p ↦ n) ⊢ iprop(∃ m, p ↦ (m + 1)) := by
   iintro_entail
-  -- `iintro_entail` names the variables it introduces `x` and the facts `h`.
+  rename_i x hx
   refine entails_exists_r (x - 1) ?_
-  rw [show x - 1 + 1 = x by omega]
+  rw [show x - 1 + 1 = x by agrind]
   isimpl
 
 -- irewrite with an entailment
@@ -421,11 +421,10 @@ example (p q : MutRawPtr Nat) (x : Nat) :
 
 /-! ### The ramified frame rule in `step` -/
 
-/-- `step` exposes a terminal call's ramified-frame obligation for the caller. -/
+/-- `step` discharges a terminal call's routine ramified-frame obligation. -/
 example (p q : MutRawPtr Nat) :
     ⦃ iprop(p ↦ 3 ∗ q ↦ 7) ⦄ read p ⦃⇓ r => iprop(⌜r = 3⌝ ∗ (p ↦ 3 ∗ q ↦ 7))⦄ := by
   step with read.spec p 3
-  iframe
 
 /-- What the ramified frame rule buys: the precondition of the *caller* may be an
 existential, and `iframe` is free to open it because there is no frame
@@ -463,7 +462,7 @@ example (p q : MutRawPtr Nat) :
     ∧ (iprop(p ↦ 3 ∗ q ↦ 7) ⊢ iprop(q ↦ 7 ∗ p ↦ 3)) := by
   refine ⟨?_, ?_⟩
   step with read.spec p 3
-  iframe
+  guard_target = (iprop(p ↦ 3 ∗ q ↦ 7) ⊢ iprop(q ↦ 7 ∗ p ↦ 3))
   iframe
 
 /-! ## `step` -/
@@ -497,25 +496,22 @@ theorem readTwice.spec (p : MutRawPtr Nat) (n : Nat) (hn : 0 < n) :
   unfold readTwice
   step*
 
-/-- The `Prop` argument of a registered specification is handed back tagged with its
-binder name, so `with` is unnecessary even though `hn` is not determined by the
-program: it is discharged like any other goal. -/
+/-- The `Prop` argument of a registered specification is discharged automatically,
+even though its value argument is not determined by the program. -/
 example (p : MutRawPtr Nat) : ⦃ p ↦ 3 ⦄ readTwice p ⦃⇓ r => iprop(⌜0 < r⌝ ∗ p ↦ 3)⦄ := by
   step*
-  case hn => grind
 
-/-- `grind` is the last resort: `0 < n` follows from `hguard` only together with
-`hb`, which is out of reach of `assumption`, `simp` and `omega`. -/
+/-- The default solver combines the implication and the equality to discharge
+the side condition. -/
 example (p : MutRawPtr Nat) (n : Nat) (b : Bool) (hb : b = true) (hguard : b = true → 0 < n) :
     ⦃ p ↦ n ⦄ readTwice p ⦃⇓ r => iprop(⌜0 < r⌝ ∗ p ↦ n)⦄ := by
   step*
-  case hn => grind
 
-/-- `-grind` drops it, handing the side condition back tagged with its binder name. -/
+/-- Disabling both step grind paths does not disable the SL judgment's `iframe`
+discharger, which can still prove this side condition. -/
 example (p : MutRawPtr Nat) (n : Nat) (b : Bool) (hb : b = true) (hguard : b = true → 0 < n) :
     ⦃ p ↦ n ⦄ readTwice p ⦃⇓ r => iprop(⌜0 < r⌝ ∗ p ↦ n)⦄ := by
-  step* -grind
-  case hn => grind
+  step* -grind -threadGrindState
 
 /-! ## Buffers and interior pointers
 

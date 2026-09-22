@@ -151,7 +151,5 @@ theorem bufferMutToRawRoundTrip.spec :
   step as ⟨b⟩
   step with Buffer.write.spec_buffer b [4, 5, 6] 2 7 (by simp)
   step with Buffer.end_mut_to_raw.spec functionalSlice b [4, 5, 7]
-  simp [functionalSlice, List.setSlice!]
-  iframe
 
 end SepLogic.BufferTests
