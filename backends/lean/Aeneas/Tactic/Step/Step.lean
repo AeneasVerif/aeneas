@@ -418,11 +418,39 @@ meta def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) :=
       trace[Step] "Could not decompose application"
       pure mvar
 
+/-- Infer separation-logic ghost arguments from the resources being consumed,
+before pure preconditions can select an earlier view. Use the same frame
+inference as a bind, including the caller's pointer equalities. Failure leaves
+all metavariables untouched; the usual precondition solver is still available. -/
+private meta def inferSpatialGhosts (info : SpecInfo) (goalTy thTy : Expr) : TacticM Unit := do
+  unless info.spec_name == ``Std.WP.ispec || info.spec_name == ``Std.WP.dispec do
+    return
+  let goalArgs := (← instantiateMVars goalTy).consumeMData.getAppArgs
+  let thArgs := (← instantiateMVars thTy).consumeMData.getAppArgs
+  unless goalArgs.size == info.arity && thArgs.size == info.arity do return
+  unless thArgs[1]!.hasExprMVar do return
+  let saved ← saveState
+  let goals ← getGoals
+  try
+    let frame ← mkFreshExprMVar (mkConst ``SepLogic.IProp)
+    let destination ← mkAppM ``SepLogic.sep #[thArgs[1]!, frame]
+    let obligation ← mkAppM ``SepLogic.Entails #[goalArgs[1]!, destination]
+    let proof ← mkFreshExprSyntheticOpaqueMVar obligation
+    setGoals [proof.mvarId!]
+    evalTactic (← `(tactic| iframe))
+    unless (← getUnsolvedGoals).isEmpty do
+      throwError "spatial ghost inference left an unresolved framing obligation"
+    setGoals goals
+  catch error =>
+    saved.restore
+    trace[Step] "Spatial ghost inference did not match: {error.toMessageData}"
+
 /-- Attempt to match a given theorem with the monadic call in the target.
 The resulting target should be mono's or bind's premise:
 e.g. `∀ x, P₀ x → P₁ x` or `∀ x, P x → k x ⦃ Q ⦄`
 -/
-meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th : Expr) :
+meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th : Expr)
+    (inferGhostVars : Bool := true) :
   TacticM (Array MVarId) := do
   withTraceNode `Step (fun _ => pure m!"tryMatch") do
   /- Apply the theorem
@@ -515,6 +543,8 @@ meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool
     trace[Step] "Could not unify the theorem with the target"
     throwError "Could not unify the theorem with the target:\n- theorem: {specMonoBindTy}\n- target: {goalTy}"
 
+  if inferGhostVars then
+    inferSpatialGhosts info goalTy thTy
   mgoal.assign specMonoBind
   trace[Step] "New goal: {ngoal}"
 
@@ -809,7 +839,7 @@ meta def stepWith (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args)
   -- Save the main goal before tryMatch (needed for lazy grind state initialization)
   let originalGoal ← getMainGoal
   -- Attempt to instantiate the theorem and introduce it in the context
-  let newGoals ← tryMatch info lifting isLet th
+  let newGoals ← tryMatch info lifting isLet th args.inferGhostVars
   --
   withMainContext do
   traceGoalWithNode "current goal"
