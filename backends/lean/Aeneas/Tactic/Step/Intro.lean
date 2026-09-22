@@ -75,7 +75,7 @@ def reduceMarker? (e : Expr) : MetaM (Option Expr) := do
   | _ => return none
 
 /-- Reduce up to `fuel` markers at the head of `e`. -/
-partial def reduceMarkers (e : Expr) (fuel : Nat := 16) : MetaM Expr := do
+partial def reduceMarkers (e : Expr) (fuel : Nat := 20) : MetaM Expr := do
   let e := (← instantiateMVars e).consumeMData.headBeta
   match fuel with
   | 0 => return e
