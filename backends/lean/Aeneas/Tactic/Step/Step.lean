@@ -466,15 +466,23 @@ def getContInput (e : Expr) : MetaM NameTree := do
 def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
   return (← getContInput e).flatten
 
-/-- Extract the variable names from the bind continuation in the current goal.
-    Returns an empty array if the goal is not a bind. -/
+/-- Extract the variable names from the bind continuation of the first call in the current
+    goal. Returns an empty array if the goal is not a bind.
+
+    The first call may be nested, as in `do let z ← (do let y ← f x; g y); h z`, whose
+    first call is `f x`: `step` reassociates the binds, and should name the output `y`. -/
 def getBindVarNames : TacticM (Array (Option Name)) := do
   try
     withMainContext do
     let goalTy ← getMainTarget
     forallTelescope goalTy fun _ goalTy => do
-    let m ← getSpecProgram goalTy
-    let some (_, cont) := getBindArgs? m | return #[]
+    let mut program ← getSpecProgram goalTy
+    let mut cont? := none
+    repeat
+      let some (m, cont) := getBindArgs? program | break
+      program := m
+      cont? := some cont
+    let some cont := cont? | return #[]
     getPostNames cont
   catch _ => pure #[]
 
@@ -2604,9 +2612,9 @@ local elab "#check_step " target:term " => " expected:term : command =>
       | [_] => evalTactic (← `(tactic| guard_target =ₛ $expected))
       | goals => throwError "Expected at most one remaining goal, got {goals.length}"
 
-variable (α β : Type) (x : α) (m : Result α) (k : α → Result β) (k' : β → Result χ)
+variable (α β χ : Type) (x : α) (m : Result α) (k : α → Result β) (k' : β → Result χ)
 variable (Q : α → Prop) (R : β → Prop) (R' : χ → Prop) (e : Error)
-variable (P : IProp) (S : α → IProp) (T : β → IProp)
+variable (P : IProp) (S : α → IProp) (T : β → IProp) (T' : χ → IProp)
 
 /- A terminal return is reduced instead of being turned into an opaque output
    together with its defining equation. -/
@@ -2630,11 +2638,18 @@ variable (P : IProp) (S : α → IProp) (T : β → IProp)
 -- #check_step WP.spec (do let y ← (div : Result α); k y) R => False
 -- #check_step WP.dspec (do let y ← (div : Result α); k y) R => True
 
--- How to state these? this is not step. step already should apply mono of m
--- right identity
--- #check_step WP.spec (do let z ← (do let y ← m x; k y)) k' R' =>
---   WP.spec (do let y ← m x; k y >>= k') R'
--- #check_step WP.ispec (do let z ← (do let y ← m x; k y)) k' R' =>
---   WP.ispec (do let y ← m x; k y >>= k') R'
+/- Associativity: `step` reassociates the binds, then applies the specification of `m`
+   (here, an assumption), naming its output after the binder of `m`. -/
+section
+variable (hm : WP.spec m Q)
+#check_step WP.spec (do let w ← (do let y ← m; k y); k' w) R' =>
+  WP.spec (do let w ← k y; k' w) R'
+end
+
+section
+variable (hm : WP.ispec P m S)
+#check_step WP.ispec P (do let w ← (do let y ← m; k y); k' w) T' =>
+  WP.ispec (S y) (do let w ← k y; k' w) T'
+end
 
 end Aeneas.Step.Test.TerminalReduction
