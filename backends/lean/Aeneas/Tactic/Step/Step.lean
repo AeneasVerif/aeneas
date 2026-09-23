@@ -93,7 +93,7 @@ theorem forall_unit_intro {p : Unit → Prop} (h : p ()) : ∀ value, p value :=
 
 export Intro (forall_unit)
 attribute [step_simps]
-  bind_assoc Std.bind_tc_ok Std.bind_tc_vis Std.bind_tc_div
+  bind_assoc Std.bind_tc_ok Std.bind_tc_vis Std.bind_tc_fail Std.bind_tc_div
   /- Those are quite useful to simplify the goal further by eliminating existential quantifiers for instance. -/
   and_assoc Std.Result.ok.injEq Prod.mk.injEq
   exists_eq_left exists_eq_left' exists_eq_right exists_eq_right' exists_eq exists_eq' true_and and_true
@@ -1627,15 +1627,19 @@ def terminalSimps : Array Name := #[
 /-- Reduce the specification of a program which immediately returns: turn `ok x ⦃ Q ⦄`
     into `Q x`, `fail e ⦃ Q ⦄` into `False`, etc.
 
-    There is no specification to apply in this situation: the terminal-return rules
-    (`WP.spec_ok`, `WP.ispec_fail`, ...) are rewrite rules, so we simply normalize the
-    goal with them, then run the post-introduction tactic of the judgment, as we would
-    after applying a specification. Return `true` if the specification statement did
-    disappear, meaning the goal is fully processed; otherwise `step` proceeds as usual
-    (the normalization performed here subsumes the one `evalStepCore` starts with).
+    We first normalize the goal as `evalStepCore` does, which may expose a terminal
+    return (e.g., `fail e >>= k` becomes `fail e`). There is then no specification to
+    apply: the terminal-return rules (`WP.spec_ok`, `WP.ispec_fail`, ...) are rewrite
+    rules, so we simply normalize the goal with them, then run the post-introduction
+    tactic of the judgment, as we would after applying a specification. Return `true` if
+    the specification statement did disappear, meaning the goal is fully processed;
+    otherwise `step` proceeds as usual, on the normalized goal.
 -/
 def tryTerminalReturn : TacticM Bool := do
   withTraceNode `Step (fun _ => pure m!"tryTerminalReturn") do
+  let some _ ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false }
+      {simpThms := #[← stepSimpExt.getTheorems]} (.targets #[] true)
+    | return true
   withMainContext do
   let some (info, args) ← observing? (getSpecInfoArgs (← getMainTarget))
     | return false
@@ -1662,9 +1666,17 @@ def evalStep
   focus do
   /- A terminal return is not a call: there is no specification to look up, we simply
      reduce it (`step` then behaves like a no-op on the resulting goal). -/
+  let mut progress := false
   if withArg.isNone then
+    let target ← instantiateMVars (← getMainTarget)
     if ← tryTerminalReturn then return none
-  let ⟨goals, usedTheorem⟩ ← evalStepCore config keepPretty withArg ids idsUserProvided postsBasename byTac
+    progress := (← instantiateMVars (← getMainTarget)) != target
+  /- If normalizing made progress, e.g. by reducing `ok x >>= k` to `k x`, it is fine if
+     there is nothing left to apply: `step` only fails if it cannot do anything. -/
+  let some ⟨goals, usedTheorem⟩ ←
+      try some <$> evalStepCore config keepPretty withArg ids idsUserProvided postsBasename byTac
+      catch ex => if progress then pure none else throw ex
+    | return none
   -- Wait for all the proof attempts to finish
   let mut sgs := #[]
   for (mvarId, proof) in goals.preconditions do
@@ -2632,11 +2644,11 @@ variable (P : IProp) (S : α → IProp) (T : β → IProp) (T' : χ → IProp)
 #check_step WP.dispec P (div : Result α) S => True
 
 -- left identity
--- #check_step WP.ispec P (do let y ← ok x; k y) T => WP.ispec P (k x) T
--- #check_step WP.spec (do let y ← ok x; k y) R => WP.spec (k x) R
--- #check_step WP.spec (do let y ← (fail e : Result α); k y) R => False
--- #check_step WP.spec (do let y ← (div : Result α); k y) R => False
--- #check_step WP.dspec (do let y ← (div : Result α); k y) R => True
+#check_step WP.ispec P (do let y ← ok x; k y) T => WP.ispec P (k x) T
+#check_step WP.spec (do let y ← ok x; k y) R => WP.spec (k x) R
+#check_step WP.spec (do let y ← (fail e : Result α); k y) R => False
+#check_step WP.spec (do let y ← (div : Result α); k y) R => False
+#check_step WP.dspec (do let y ← (div : Result α); k y) R => True
 
 /- Associativity: `step` reassociates the binds, then applies the specification of `m`
    (here, an assumption), naming its output after the binder of `m`. -/
