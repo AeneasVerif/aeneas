@@ -18,10 +18,10 @@ structure core.cmp.Eq (Self : Type) where
   partialEqInst : core.cmp.PartialEq Self Self
   assert_fields_are_eq (_ : Self) : Result Unit := .ok ()
 
-@[simp, rust_fun "core::cmp::Eq::assert_fields_are_eq"]
+@[simp, trait_default, rust_fun "core::cmp::Eq::assert_fields_are_eq"]
 def core.cmp.Eq.assert_fields_are_eq.default
-  {Self : Type} (EqInst : core.cmp.Eq Self) (x : Self) : Result Unit :=
-  EqInst.assert_fields_are_eq x
+  {Self : Type} (_EqInst : core.cmp.Eq Self) (_x : Self) : Result Unit :=
+  .ok ()
 
 /- Default method. -/
 def core.cmp.PartialEq.ne.default {Self Rhs : Type} (eq : Self → Rhs → Result Bool)
