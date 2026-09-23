@@ -11,9 +11,8 @@ import Aeneas.Tactic.Step.Trace
    the conclusion is a dspec theorem about a function call.
    In particular, the statement needs to be proven to be admissible.
 
-   See the examples below to see what the tactic does
+   See the examples in `Aeneas/Tactic/Step/Tests/DspecInduction.lean` to see what the tactic does
    and the manual examples show what the tactic is doing written out directly. -/
-
 
 namespace Aeneas
 
@@ -112,19 +111,14 @@ theorem curry_admissible (a1 a2 a3) (P : (a1 → a2 → a3) → Prop) [CCPO a3]
 
 /-- Close `g` by applying one of the theorems registered with the `dspec_admissible`
 attribute. -/
-private partial def applyAdmissibleThm (g : MVarId) (thms : List Name) : TacticM Unit := do
-  match thms with
-  | [] =>
-    throwError "failed to prove admissibility condition: none of the theorems registered \
-                with the `dspec_admissible` attribute applies to \
-                {← instantiateMVars (← g.getType)}"
-  | thm :: thms => do
-    let s ← saveState
-    try
+private def applyAdmissibleThm (g : MVarId) (thms : List Name) : TacticM Unit := do
+  for thm in thms do
+    let res ← observing? do
       let [] ← g.apply (← mkConstWithFreshMVarLevels thm) | failure
-    catch _ =>
-      s.restore
-      applyAdmissibleThm g thms
+    if res.isSome then return
+  throwError "failed to prove admissibility condition: none of the theorems registered \
+              with the `dspec_admissible` attribute applies to \
+              {← instantiateMVars (← g.getType)}"
 
 def getParamNames (ty : Expr) : MetaM (Array Name) := do
   forallTelescope ty fun xs _ => do

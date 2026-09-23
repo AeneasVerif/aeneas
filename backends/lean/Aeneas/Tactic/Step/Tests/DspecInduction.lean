@@ -98,9 +98,6 @@ def dummy_hash (_i : Std.U32) : Result Std.U32 := do
 
 open ControlFlow
 
-/-- [tutorial::pseudo_random]: loop body 0:
-    Source: 'src/lib.rs', lines 258:2-260:3
-    Visibility: public -/
 def pseudo_random_loop.body
   (state : Std.U32) : Result (ControlFlow Std.U32 Std.U32) := do
   if state < 100#u32
@@ -108,19 +105,13 @@ def pseudo_random_loop.body
        ok (cont state1)
   else ok (done state)
 
-/-- [tutorial::pseudo_random]: loop 0:
-    Source: 'src/lib.rs', lines 258:2-260:3
-    Visibility: public -/
 def pseudo_random_loop (state : Std.U32) : Result Std.U32 := do
   loop
     (fun state1 => pseudo_random_loop.body state1)
     state
 
-/-- [tutorial::pseudo_random]:
-    Source: 'src/lib.rs', lines 255:0-262:1
-    Visibility: public -/
 @[reducible] def pseudo_random : Result Std.U32 := do
-               pseudo_random_loop 0#u32
+  pseudo_random_loop 0#u32
 
 
 theorem pseudo_random_spec :
@@ -140,9 +131,7 @@ theorem pseudo_random_spec :
   · simp [*]
     unfold dummy_hash
     simp
-    -- note that here, i am refraining from using the result of dummy_hash,
-    -- since its supposed to represent a hash function where we can't predict the result,
-    -- but it actually is just a constant
+    -- here we treat `dummy_hash` as opaque and use `step`
     step
     grind
   · simp [*]
@@ -159,9 +148,28 @@ def second_arg_const (x y : Nat) : Result Nat :=
   else second_arg_const (x + 1) y
 partial_fixpoint
 
--- uncomment to see the difference:
--- #check first_arg_const.fixpoint_induct
--- #check second_arg_const.fixpoint_induct
+-- note how the two induction principles differ:
+/--
+info: Aeneas.DspecInduction.Test.first_arg_const.fixpoint_induct (x : ℕ) (motive : (ℕ → Result ℕ) → Prop)
+  (adm : Lean.Order.admissible motive)
+  (h :
+    ∀ (first_arg_const : ℕ → Result ℕ),
+      motive first_arg_const → motive fun y => if x = 0 then ok 0 else first_arg_const (y + 1)) :
+  motive (first_arg_const x)
+-/
+#guard_msgs in
+#check first_arg_const.fixpoint_induct
+
+/--
+info: Aeneas.DspecInduction.Test.second_arg_const.fixpoint_induct (y : ℕ) (motive : (ℕ → Result ℕ) → Prop)
+  (adm : Lean.Order.admissible motive)
+  (h :
+    ∀ (second_arg_const : ℕ → Result ℕ),
+      motive second_arg_const → motive fun x => if y = 0 then ok 0 else second_arg_const (x + 1)) :
+  motive fun x => second_arg_const x y
+-/
+#guard_msgs in
+#check second_arg_const.fixpoint_induct
 
 example x y : (first_arg_const x y) ⦃fun x => x = 0⦄div := by
   revert y
