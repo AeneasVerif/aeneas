@@ -1,7 +1,9 @@
-import Mathlib.Data.Nat.Bitwise
-import Aeneas.Tactic.Simp.SimpLists.Init
-import Aeneas.Tactic.Solver.ScalarTac.CondSimpTac
-import Aeneas.Tactic.Simp.SimpBoolProp.SimpBoolProp
+module
+public import Mathlib.Data.Nat.Bitwise
+public meta import Aeneas.Tactic.Simp.SimpLists.Init
+public meta import Aeneas.Tactic.Solver.ScalarTac.CondSimpTac
+public import Aeneas.Tactic.Simp.SimpBoolProp.SimpBoolProp
+public section
 
 /-!
 # `simp_lists` tactic
@@ -43,7 +45,7 @@ attribute [simp_lists_safe] List.length_cons List.length_nil
 -- Automatically go from `getElem!` to `getElem`
 attribute [simp_lists] getElem!_pos
 
-def simpListsTac (config : ScalarTac.CondSimpTacConfig)
+meta def simpListsTac (config : ScalarTac.CondSimpTacConfig)
   (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := pure #[]
   let hypsArgs : ScalarTac.CondSimpArgs := {
@@ -83,7 +85,7 @@ The `+safe` option restricts `simp_lists` to only the safe lemmas.
 -/
 syntax (name := simp_lists) "simp_lists" Parser.Tactic.optConfig ("[" (term<|>"*"),* "]")? (location)? : tactic
 
-def parseSimpLists :
+meta def parseSimpLists :
 TSyntax ``simp_lists -> TacticM (ScalarTac.CondSimpTacConfig × ScalarTac.CondSimpPartialArgs × Utils.Location)
 | `(tactic| simp_lists $config $[[$args,*]]? $[$loc:location]?) => do
   let config ← ScalarTac.elabCondSimpTacConfig config

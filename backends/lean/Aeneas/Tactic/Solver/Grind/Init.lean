@@ -1,5 +1,10 @@
-import Lean
-import Aeneas.Tactic.Solver.Grind.Attribute
+module
+public meta import Aeneas.Tactic.Solver.Grind.Attribute
+public meta import Lean.Elab.ConfigEval.Commands
+public meta import Lean.Elab.ConfigEval.DeriveEvalConfigItem
+public meta import Lean.Elab.Tactic.Grind.Param
+public meta import Lean.Meta.Tactic.Grind.SimpUtil
+public meta section
 
 namespace Aeneas.Grind
 

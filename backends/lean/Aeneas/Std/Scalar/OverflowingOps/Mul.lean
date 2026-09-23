@@ -1,6 +1,8 @@
-import Aeneas.Std.Scalar.Core
-import Aeneas.Std.Scalar.Elab
-import Aeneas.Std.Scalar.Notations
+module
+public import Aeneas.Std.Scalar.Core
+public import Aeneas.Std.Scalar.Elab
+public import Aeneas.Std.Scalar.Notations
+public section
 
 namespace Aeneas.Std
 

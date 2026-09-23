@@ -1,1 +1,2 @@
-import Aeneas.Tactic.Misc.FCongr.FCongr
+module
+public import Aeneas.Tactic.Misc.FCongr.FCongr

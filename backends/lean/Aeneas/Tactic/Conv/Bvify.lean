@@ -1,2 +1,3 @@
-import Aeneas.Tactic.Conv.Bvify.Bvify
-import Aeneas.Tactic.Conv.Bvify.Lemmas
+module
+public import Aeneas.Tactic.Conv.Bvify.Bvify
+public import Aeneas.Tactic.Conv.Bvify.Lemmas

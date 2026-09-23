@@ -1,6 +1,7 @@
 /-
 Big tests for the #decompose command (performance/stress tests)
 -/
+module
 import Aeneas.Command.Decompose
 import Aeneas.Std
 import Aeneas.Do.Elab

@@ -255,6 +255,10 @@ let extract_decreases_clauses = ref false
     given by the user. *)
 let extract_template_decreases_clauses = ref true
 
+(** Whether to emit Lean output using the module system. Defaults to [true].
+    Pass `-use-lean-modules false` to emit non-module Lean files. *)
+let use_lean_modules = ref true
+
 (** {1 Micro passes} *)
 
 (** Some provers like F* and Coq don't support the decomposition of return
