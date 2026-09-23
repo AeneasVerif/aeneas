@@ -23,9 +23,6 @@ let lean_builtin_types =
       ~kind:
         (KEnum
            [ ("Less", Some "lt"); ("Equal", Some "eq"); ("Greater", Some "gt") ]);
-    (* file: "Aeneas/Std/Core/Convert.lean", line: 12 *)
-    mk_type "core::convert::Infallible" "core.convert.Infallible"
-      ~kind:(KEnum []);
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 49 *)
     mk_type "core::fmt::Arguments" "core.fmt.Arguments";
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 10 *)
@@ -444,13 +441,13 @@ let lean_builtin_funs =
       "core::convert::num::ptr_try_from_impls::{core::convert::TryFrom<u32, \
        usize, core::num::error::TryFromIntError>}::try_from"
       "core.convert.num.ptr_try_from_impls.TryFromU32Usize.try_from";
-    (* file: "Aeneas/Std/Core/Convert.lean", line: 34 *)
+    (* file: "Aeneas/Std/Core/Convert.lean", line: 31 *)
     mk_fun "core::convert::{core::convert::From<@T, @T>}::from"
       "core.convert.FromSame.from" ~can_fail:false;
-    (* file: "Aeneas/Std/Core/Convert.lean", line: 19 *)
+    (* file: "Aeneas/Std/Core/Convert.lean", line: 16 *)
     mk_fun "core::convert::{core::convert::Into<@T, @U>}::into"
       "core.convert.IntoFrom.into";
-    (* file: "Aeneas/Std/Core/Convert.lean", line: 46 *)
+    (* file: "Aeneas/Std/Core/Convert.lean", line: 43 *)
     mk_fun "core::convert::{core::convert::TryInto<@T, @U, @Error>}::try_into"
       "core.convert.TryInto.Blanket.try_into";
     (* file: "Aeneas/Std/Core/Default.lean", line: 12 *)
@@ -1025,13 +1022,12 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Core.lean", line: 104 *)
     mk_fun "core::option::{core::option::Option<@T>}::unwrap_or"
       "core.option.Option.unwrap_or" ~can_fail:false;
-    (* file: "Aeneas/Std/Core/Convert.lean", line: 116 *)
+    (* file: "Aeneas/Std/Core/Convert.lean", line: 113 *)
     mk_fun
       "core::result::{core::ops::try_trait::FromResidual<core::result::Result<@T, \
-       @F>, core::result::Result<core::convert::Infallible, \
-       @E>>}::from_residual"
-      "core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual";
-    (* file: "Aeneas/Std/Core/Convert.lean", line: 104 *)
+       @F>, core::result::Result<!, @E>>}::from_residual"
+      "core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual";
+    (* file: "Aeneas/Std/Core/Convert.lean", line: 101 *)
     mk_fun
       "core::result::{core::ops::try_trait::Try<core::result::Result<@T, \
        @E>>}::branch"
@@ -1039,7 +1035,7 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 116 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::expect"
       "core.result.Result.expect";
-    (* file: "Aeneas/Std/Core/Convert.lean", line: 84 *)
+    (* file: "Aeneas/Std/Core/Convert.lean", line: 81 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::is_ok"
       "core.result.Result.is_ok";
     (* file: "Aeneas/Std/Core/CoreResult.lean", line: 13 *)
@@ -1317,22 +1313,22 @@ let lean_builtin_trait_decls =
           ("gt", "gt");
           ("ge", "ge");
         ];
-    (* file: "Aeneas/Std/Core/Convert.lean", line: 74 *)
+    (* file: "Aeneas/Std/Core/Convert.lean", line: 71 *)
     mk_trait_decl "core::convert::AsMut" "core.convert.AsMut"
       ~methods:[ ("as_mut", "as_mut") ];
-    (* file: "Aeneas/Std/Core/Convert.lean", line: 30 *)
+    (* file: "Aeneas/Std/Core/Convert.lean", line: 27 *)
     mk_trait_decl "core::convert::AsRef" "core.convert.AsRef"
       ~methods:[ ("as_ref", "as_ref") ];
     (* file: "Aeneas/Std/Core/Core.lean", line: 23 *)
     mk_trait_decl "core::convert::From" "core.convert.From"
       ~methods:[ ("from", "from") ];
-    (* file: "Aeneas/Std/Core/Convert.lean", line: 15 *)
+    (* file: "Aeneas/Std/Core/Convert.lean", line: 12 *)
     mk_trait_decl "core::convert::Into" "core.convert.Into"
       ~methods:[ ("into", "into") ];
-    (* file: "Aeneas/Std/Core/Convert.lean", line: 42 *)
+    (* file: "Aeneas/Std/Core/Convert.lean", line: 39 *)
     mk_trait_decl "core::convert::TryFrom" "core.convert.TryFrom"
       ~methods:[ ("try_from", "try_from") ];
-    (* file: "Aeneas/Std/Core/Convert.lean", line: 52 *)
+    (* file: "Aeneas/Std/Core/Convert.lean", line: 49 *)
     mk_trait_decl "core::convert::TryInto" "core.convert.TryInto"
       ~methods:[ ("try_into", "try_into") ];
     (* file: "Aeneas/Std/Core/Default.lean", line: 8 *)
@@ -1516,7 +1512,7 @@ let lean_builtin_trait_impls =
       ~keep_params:(Some [ true; true; false; false ]);
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 210 *)
     mk_trait_impl "core::cmp::PartialEq<bool, bool>" "core.cmp.PartialEqBool";
-    (* file: "Aeneas/Std/Core/Convert.lean", line: 78 *)
+    (* file: "Aeneas/Std/Core/Convert.lean", line: 75 *)
     mk_trait_impl "core::convert::AsMut<Box<@T>, @T>" "core.convert.AsMutBox";
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 486 *)
     mk_trait_impl "core::convert::AsMut<[@T; @N], [@T]>"
@@ -1524,7 +1520,7 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 480 *)
     mk_trait_impl "core::convert::AsRef<[@T; @N], [@T]>"
       "Array.Insts.CoreConvertAsRefSlice";
-    (* file: "Aeneas/Std/Core/Convert.lean", line: 37 *)
+    (* file: "Aeneas/Std/Core/Convert.lean", line: 34 *)
     mk_trait_impl "core::convert::From<@Self, @Self>" "core.convert.FromSame";
     (* file: "Aeneas/Std/Vec.lean", line: 523 *)
     mk_trait_impl "core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>"
@@ -1533,17 +1529,17 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Vec.lean", line: 507 *)
     mk_trait_impl "core::convert::From<alloc::vec::Vec<@T>, [@T; @N]>"
       "core.convert.FromVecArray";
-    (* file: "Aeneas/Std/Core/Convert.lean", line: 24 *)
+    (* file: "Aeneas/Std/Core/Convert.lean", line: 21 *)
     mk_trait_impl "core::convert::Into<@Self, @T>" "core.convert.IntoFrom";
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 323 *)
     mk_trait_impl
       "core::convert::TryFrom<&'a [@T; @N], &'a [@T], \
        core::array::TryFromSliceError>"
       "core.convert.TryFromSharedArraySliceTryFromSliceError";
-    (* file: "Aeneas/Std/Core/Convert.lean", line: 67 *)
+    (* file: "Aeneas/Std/Core/Convert.lean", line: 64 *)
     mk_trait_impl "core::convert::TryInto<@T, @U, @E>"
       "core.convert.TryInto.Blanket";
-    (* file: "Aeneas/Std/Core/Convert.lean", line: 61 *)
+    (* file: "Aeneas/Std/Core/Convert.lean", line: 58 *)
     mk_trait_impl "core::convert::{core::convert::TryInto<@T, @U>}"
       "core.convert.TryIntoFrom";
     (* file: "Aeneas/Std/Array/Array.lean", line: 468 *)

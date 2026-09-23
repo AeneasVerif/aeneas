@@ -23,7 +23,7 @@ noncomputable section
 namespace issue_767_adt_constructor
 
 /-- [core::option::{core::option::Option<T>}::map]:
-    Source: '/rustc/library/core/src/option.rs', lines 1158:4-1160:53
+    Source: '/rustc/library/core/src/option.rs', lines 1160:4-1162:53
     Name pattern: [core::option::{core::option::Option<@T>}::map]
     Visibility: public -/
 @[rust_fun "core::option::{core::option::Option<@T>}::map"]

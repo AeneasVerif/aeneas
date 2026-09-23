@@ -23,14 +23,14 @@ noncomputable section
 namespace derive
 
 /-- [core::cmp::impls::{impl core::cmp::PartialEq<bool> for bool}::ne]:
-    Source: '/rustc/library/core/src/cmp.rs', lines 2156:16-2156:50
+    Source: '/rustc/library/core/src/cmp.rs', lines 2188:16-2188:50
     Name pattern: [core::cmp::impls::{core::cmp::PartialEq<bool, bool>}::ne]
     Visibility: public -/
 @[rust_fun "core::cmp::impls::{core::cmp::PartialEq<bool, bool>}::ne"]
 axiom Bool.Insts.CoreCmpPartialEqBool.ne : Bool → Bool → Result Bool
 
 /-- [alloc::boxed::{impl core::cmp::PartialEq<alloc::boxed::Box<T>> for alloc::boxed::Box<T>}::ne]:
-    Source: '/rustc/library/alloc/src/boxed.rs', lines 2170:4-2170:38
+    Source: '/rustc/library/alloc/src/boxed.rs', lines 2185:4-2185:38
     Name pattern: [alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::ne]
     Visibility: public -/
 @[rust_fun "alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::ne"]
@@ -184,19 +184,13 @@ impl_def ScalarEnum.Insts.CoreCmpPartialEqScalarEnum : core.cmp.PartialEq
     ScalarEnum.Insts.CoreCmpPartialEqScalarEnum
 }
 
-/-- [derive::{impl core::cmp::Eq for derive::ScalarEnum}::assert_fields_are_eq]:
-    Source: 'tests/src/derive.rs', lines 8:33-8:35
-    Visibility: public -/
-def ScalarEnum.Insts.CoreCmpEq.assert_fields_are_eq
-  (self : ScalarEnum) : Result Unit := do
-  ok ()
-
 /-- Trait implementation: [derive::{impl core::cmp::Eq for derive::ScalarEnum}]
     Source: 'tests/src/derive.rs', lines 8:33-8:35 -/
 @[reducible]
-def ScalarEnum.Insts.CoreCmpEq : core.cmp.Eq ScalarEnum := {
+impl_def ScalarEnum.Insts.CoreCmpEq : core.cmp.Eq ScalarEnum := {
   partialEqInst := ScalarEnum.Insts.CoreCmpPartialEqScalarEnum
-  assert_fields_are_eq := ScalarEnum.Insts.CoreCmpEq.assert_fields_are_eq
+  assert_fields_are_eq := core.cmp.Eq.assert_fields_are_eq.default
+    ScalarEnum.Insts.CoreCmpEq
 }
 
 /-- [derive::{impl core::fmt::Debug for derive::ScalarEnum}::fmt]:

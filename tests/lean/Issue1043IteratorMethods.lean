@@ -23,7 +23,7 @@ noncomputable section
 namespace issue_1043_iterator_methods
 
 /-- [core::iter::traits::iterator::Iterator::map]:
-    Source: '/rustc/library/core/src/iter/traits/iterator.rs', lines 831:4-834:34
+    Source: '/rustc/library/core/src/iter/traits/iterator.rs', lines 845:4-848:34
     Name pattern: [core::iter::traits::iterator::Iterator::map]
     Visibility: public -/
 @[trait_default, rust_fun "core::iter::traits::iterator::Iterator::map"]
