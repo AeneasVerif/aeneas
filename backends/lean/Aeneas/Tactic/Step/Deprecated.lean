@@ -3,9 +3,11 @@ Copyright (c) 2024-2025 Inria. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Son Ho
 -/
-import Aeneas.Tactic.Step.Step
-import Aeneas.Tactic.Step.StepStar
-import Aeneas.Tactic.Step.StepArraySpec
+module
+public import Aeneas.Tactic.Step.Step
+public import Aeneas.Tactic.Step.StepStar
+public import Aeneas.Tactic.Step.StepArraySpec
+public section
 
 /-!
 # Deprecated `progress` syntax and attributes
@@ -22,12 +24,12 @@ namespace Aeneas.Deprecated
 open Lean Elab Meta Tactic
 
 /-- When `true` (default), using the deprecated `progress` syntax emits a warning. -/
-register_option Aeneas.Deprecated.progressWarning : Bool := {
+meta register_option Aeneas.Deprecated.progressWarning : Bool := {
   defValue := true
   descr := "Emit warnings when using the deprecated `progress` syntax (renamed to `step`)"
 }
 
-private def emitProgressWarning (what : String) : CoreM Unit := do
+private meta def emitProgressWarning (what : String) : CoreM Unit := do
   if Aeneas.Deprecated.progressWarning.get (← getOptions) then
     logWarning m!"`{what}` has been renamed to `{what.replace "progress" "step"}`. \
       The `{what}` syntax is deprecated and will be removed in a future version. \
@@ -60,7 +62,7 @@ elab tk:"progress?" args:Step.stepArgs : tactic => do
 syntax (name := deprecatedProgressStar) "progress" noWs ("*" <|> "*?") StepStar.«step*_args» : tactic
 
 @[tactic deprecatedProgressStar]
-def evalDeprecatedProgressStarTac : Tactic := fun stx => do
+meta def evalDeprecatedProgressStarTac : Tactic := fun stx => do
   match stx with
   | `(tactic| progress* $args:«step*_args») =>
     emitProgressWarning "progress*"
@@ -86,7 +88,7 @@ syntax (name := deprecatedProgressArraySpec)
 
 open Lean.Elab.Command in
 @[command_elab deprecatedProgressArraySpec]
-def evalDeprecatedProgressArraySpec : CommandElab := fun stx => do
+meta def evalDeprecatedProgressArraySpec : CommandElab := fun stx => do
   liftCoreM <| emitProgressWarning "progress_array_spec"
   match stx with
   | `($[$vis]? progress_array_spec (name := $thm_name:ident) $array:ident [ $i:ident ]! { $x:ident => $pred:term } by $tac:tacticSeq) => do
@@ -109,7 +111,7 @@ These register theorems in the same `step` database as their non-deprecated coun
 -/
 
 /-- **Deprecated:** Use `@[step]` instead. -/
-private def progressDeprecatedAttrImpl : AttributeImpl where
+private meta def progressDeprecatedAttrImpl : AttributeImpl where
   «name» := `progress
   descr := "Deprecated: use `step` instead. Adds theorems to the `step` database."
   add := fun thName stx attrKind => do
@@ -119,51 +121,51 @@ private def progressDeprecatedAttrImpl : AttributeImpl where
   erase := fun thName => do
     Step.stepAttr.attr.erase thName
 
-initialize _progressDeprecatedAttr : Unit ←
+meta initialize _progressDeprecatedAttr : Unit ←
   registerBuiltinAttribute progressDeprecatedAttrImpl
 
 /-- **Deprecated:** Use `@[step_pure]` instead. -/
-private def progressPureDeprecatedAttrImpl : AttributeImpl where
+private meta def progressPureDeprecatedAttrImpl : AttributeImpl where
   «name» := `progress_pure
   descr := "Deprecated: use `step_pure` instead."
   add := fun thName stx attrKind => do
     emitProgressWarning "progress_pure"
     Step.stepPureAttribute.attr.add thName stx attrKind
 
-initialize _progressPureDeprecatedAttr : Unit ←
+meta initialize _progressPureDeprecatedAttr : Unit ←
   registerBuiltinAttribute progressPureDeprecatedAttrImpl
 
 /-- **Deprecated:** Use `@[step_pure_def]` instead. -/
-private def progressPureDefDeprecatedAttrImpl : AttributeImpl where
+private meta def progressPureDefDeprecatedAttrImpl : AttributeImpl where
   «name» := `progress_pure_def
   descr := "Deprecated: use `step_pure_def` instead."
   add := fun thName stx attrKind => do
     emitProgressWarning "progress_pure_def"
     Step.stepPureDefAttribute.attr.add thName stx attrKind
 
-initialize _progressPureDefDeprecatedAttr : Unit ←
+meta initialize _progressPureDefDeprecatedAttr : Unit ←
   registerBuiltinAttribute progressPureDefDeprecatedAttrImpl
 
 /-- **Deprecated:** Use `@[step_simps]` instead. Forwards to `step_simps`. -/
-initialize do
+meta initialize do
   mkSimpAttr `progress_simps
     "Deprecated: use `step_simps` instead. Forwards to `step_simps`."
     Step.stepSimpExt
 
 /-- **Deprecated:** Use `@[step_pre_simps]` instead. Forwards to `step_pre_simps`. -/
-initialize do
+meta initialize do
   mkSimpAttr `progress_pre_simps
     "Deprecated: use `step_pre_simps` instead. Forwards to `step_pre_simps`."
     Step.stepPreSimpExt
 
 /-- **Deprecated:** Use `@[step_post_simps]` instead. Forwards to `step_post_simps`. -/
-initialize do
+meta initialize do
   mkSimpAttr `progress_post_simps
     "Deprecated: use `step_post_simps` instead. Forwards to `step_post_simps`."
     Step.stepPostSimpExt
 
 /-- **Deprecated:** Use `@[step_post_simps_proc]` instead. Forwards to `step_post_simps_proc`. -/
-initialize do
+meta initialize do
   Simp.mkSimprocAttr `progress_post_simps_proc
     "Deprecated: use `step_post_simps_proc` instead. Forwards to `step_post_simps_proc`."
     Step.stepPostSimprocExt `Aeneas.Deprecated.progressPostSimpsProcDeprecated

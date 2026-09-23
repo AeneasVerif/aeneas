@@ -1,6 +1,8 @@
-import Lean
-import Mathlib.Control.Monad.Cont
-import Aeneas.Std
+module
+public import Lean
+public meta import Mathlib.Control.Monad.Cont
+public import Aeneas.Std
+public section
 
 /-! # New `do` Elaborator
 
@@ -20,18 +22,18 @@ open Lean Elab Parser Term Meta
 
 /- Some necessary instances for `ContT` -/
 
-instance [MonadExceptOf ε m] [Monad m] : MonadExceptOf ε (ContT r m) where
+meta instance [MonadExceptOf ε m] [Monad m] : MonadExceptOf ε (ContT r m) where
   throw e := fun _ => throw e
   tryCatch x h := fun k => tryCatch (x k) (fun e => h e k)
 --
-instance [MonadRef m] [Monad m] : MonadRef (ContT r m) where
+meta instance [MonadRef m] [Monad m] : MonadRef (ContT r m) where
   getRef := fun k => do let ref ← MonadRef.getRef; k ref
   withRef ref x := fun k => MonadRef.withRef ref (x k)
 --
-instance [AddErrorMessageContext m] [Monad m] : AddErrorMessageContext (ContT r m) where
+meta instance [AddErrorMessageContext m] [Monad m] : AddErrorMessageContext (ContT r m) where
   add stx msg := fun k => do let r ← AddErrorMessageContext.add stx msg; k r
 --
-instance [Monad m] [MonadQuotation m] : MonadQuotation (ContT r m) where
+meta instance [Monad m] [MonadQuotation m] : MonadQuotation (ContT r m) where
   getCurrMacroScope := fun k => do let s ← getCurrMacroScope; k s
   getContext := fun k => do let ctx ← MonadQuotation.getContext; k ctx
   withFreshMacroScope x := fun k => withFreshMacroScope (x k)
@@ -52,7 +54,7 @@ structure Context where
 abbrev ElabM := ReaderT Context $ ContT Expr TermElabM
 
 /-- Split `m α` and synthesize the `Bind m` and `Pure m` instances. -/
-def mkContext (expectedType : Expr) : TermElabM Context := do
+meta def mkContext (expectedType : Expr) : TermElabM Context := do
   let expectedType ← whnf expectedType
   let (m, α) ← match expectedType with
     | Expr.app m α => pure (m, α)
@@ -62,7 +64,7 @@ def mkContext (expectedType : Expr) : TermElabM Context := do
   return { m, expectedAlpha := α, bindInst, pureInst }
 
 /-- Build `m α`. -/
-def ElabM.mkMonadicType (α : Expr) : ElabM Expr := do
+meta def ElabM.mkMonadicType (α : Expr) : ElabM Expr := do
   let ctx ← read
   /- `Result` supports binds between different universes, unlike `Bind m`. -/
   if ctx.m.isConstOf ``Aeneas.Std.Result then
@@ -70,7 +72,7 @@ def ElabM.mkMonadicType (α : Expr) : ElabM Expr := do
   else
     pure (mkApp ctx.m α)
 
-def ElabM.mkBind (e k : Expr) : ElabM Expr := do
+meta def ElabM.mkBind (e k : Expr) : ElabM Expr := do
   let ctx ← read
   if ctx.m.isConstOf ``Aeneas.Std.Result then
     let eType ← instantiateMVars (← inferType e)
@@ -82,34 +84,34 @@ def ElabM.mkBind (e k : Expr) : ElabM Expr := do
   mkAppOptM ``Bind.bind #[some ctx.m, some ctx.bindInst, none, none, some e, some k]
 
 /-- Run an `ElabM` against the given `do` block expected type. -/
-def ElabM.execute (x : ElabM Expr) (expectedType : Expr) : TermElabM Expr := do
+meta def ElabM.execute (x : ElabM Expr) (expectedType : Expr) : TermElabM Expr := do
   let ctx ← mkContext expectedType
   (x.run ctx).run pure
 
 /-- `Meta.withLocalDeclD` lifted to `ElabM`. -/
-def ElabM.withLocalDeclD (name : Name) (type : Expr) (body : Expr → ElabM Expr) : ElabM Expr :=
+meta def ElabM.withLocalDeclD (name : Name) (type : Expr) (body : Expr → ElabM Expr) : ElabM Expr :=
   fun ctx k => Meta.withLocalDeclD name type fun fvar =>
     (body fvar).run ctx |>.run k
 
 /-- `Meta.withLetDecl` lifted to `ElabM`. -/
-def ElabM.withLetDecl (name : Name) (type : Expr) (value : Expr)
+meta def ElabM.withLetDecl (name : Name) (type : Expr) (value : Expr)
     (body : Expr → ElabM Expr) : ElabM Expr :=
   fun ctx k => Meta.withLetDecl name type value fun fvar =>
     (body fvar).run ctx |>.run k
 
 /-- Our own `foldInfo` since InfoTree.foldInfo` requires a `ContextInfo` to be set which isn't
   available while we're in `termElab`. -/
-partial def foldInfoNoCtx {α : Type u} (f : Info → α → α) (init : α) : InfoTree → α
+meta partial def foldInfoNoCtx {α : Type u} (f : Info → α → α) (init : α) : InfoTree → α
   | .context _ t => foldInfoNoCtx f init t
   | .node i ts   => ts.foldl (init := f i init) (foldInfoNoCtx f)
   | .hole _      => init
 
-def inRange (r : Syntax.Range) (s : Syntax) : Bool :=
+meta def inRange (r : Syntax.Range) (s : Syntax) : Bool :=
   s.getRange?.any fun inner => r.start ≤ inner.start && inner.stop ≤ r.stop
 
 /-- Extract the `(userName, syntax)` binder entry from `info` when it's a
     binder `TermInfo` -/
-def binderEntry? (patRange : Syntax.Range) (info : Info) : Option (Name × Syntax) := do
+meta def binderEntry? (patRange : Syntax.Range) (info : Info) : Option (Name × Syntax) := do
   let .ofTermInfo ti := info | none
   let .fvar fid := ti.expr | none
   if ti.isBinder && inRange patRange ti.stx then
@@ -120,7 +122,7 @@ def binderEntry? (patRange : Syntax.Range) (info : Info) : Option (Name × Synta
 
 /-- `foldInfoNoCtx` callback: prepend a pattern-binder entry from `info` onto
     `acc` when `info` describes one. -/
-def collectBinder (patRange : Syntax.Range) (info : Info)
+meta def collectBinder (patRange : Syntax.Range) (info : Info)
     (acc : List (Name × Syntax)) : List (Name × Syntax) :=
   match binderEntry? patRange info with
   | some entry => entry :: acc
@@ -129,7 +131,7 @@ def collectBinder (patRange : Syntax.Range) (info : Info)
 /-- Walk the current InfoTrees and collect a `userName → Syntax` map for every
     binder `TermInfo` entry whose syntax falls inside `patRange`. Throws on
     duplicate `userName`s, which will be a Lean error anyway. -/
-def buildArmBinderMap (patRange : Syntax.Range) : ElabM (NameMap Syntax) := do
+meta def buildArmBinderMap (patRange : Syntax.Range) : ElabM (NameMap Syntax) := do
   let trees ← getInfoTrees
   let entries := trees.foldl (init := []) (foldInfoNoCtx (collectBinder patRange))
   let mut m : NameMap Syntax := ∅
@@ -141,7 +143,7 @@ def buildArmBinderMap (patRange : Syntax.Range) : ElabM (NameMap Syntax) := do
 
 /-- Fill a match arm's `?m` by elaborating `body` under the arm's pattern binders
     and assigning the abstracted result to the mvar. -/
-def ElabM.assignArmMVar (arm : Expr) (binderMap : NameMap Syntax) (body : ElabM Expr) :
+meta def ElabM.assignArmMVar (arm : Expr) (binderMap : NameMap Syntax) (body : ElabM Expr) :
     ElabM Unit :=
   fun ctx k => Meta.lambdaTelescope arm fun fvars ebody => do
     let .mvar mvarId := ebody.getAppFn
@@ -163,7 +165,7 @@ def ElabM.assignArmMVar (arm : Expr) (binderMap : NameMap Syntax) (body : ElabM 
 
 /-- For a single-constructor inductive (other than `Prod`), return the constructor
     name and field types instantiated at the type's parameters. `none` otherwise. -/
-def getCtorFieldTypes (ty : Expr) : MetaM (Option (Name × List Expr)) := do
+meta def getCtorFieldTypes (ty : Expr) : MetaM (Option (Name × List Expr)) := do
   let ty ← whnf ty
   -- Prod has its own decompose/uncurry path
   if ty.isAppOf ``Prod then return none
@@ -178,7 +180,7 @@ def getCtorFieldTypes (ty : Expr) : MetaM (Option (Name × List Expr)) := do
     return some (ctorName, fieldTypes)
 
 /-- Build `T.casesOn discr minor` with a non-dependent motive `fun _ : ty => resultType`. -/
-def mkCasesOn (ty : Expr) (indName : Name) (discr : Expr)
+meta def mkCasesOn (ty : Expr) (indName : Name) (discr : Expr)
     (minor : Expr) (resultType : Expr) : MetaM Expr := do
   let indVal ← getConstInfoInduct indName
   -- `casesOn`'s first universe is the motive's; the rest are the inductive's.
@@ -188,14 +190,14 @@ def mkCasesOn (ty : Expr) (indName : Name) (discr : Expr)
   let motive ← withLocalDeclD `_ ty fun x => mkLambdaFVars #[x] resultType
   return mkAppN casesOn (params ++ #[motive, discr, minor])
 
-partial def decomposeProductType (ty : Expr) (n : Nat) : MetaM (List Expr) := do
+meta partial def decomposeProductType (ty : Expr) (n : Nat) : MetaM (List Expr) := do
   if n ≤ 1 then return [ty]
   let ty ← whnf ty
   match_expr ty with
   | Prod α β => return α :: (← decomposeProductType β (n - 1))
   | _ => throwError "expected a product type, got{indentExpr ty}"
 
-partial def mkUncurries (innerLam : Expr) (types : List Expr) : MetaM Expr := do
+meta partial def mkUncurries (innerLam : Expr) (types : List Expr) : MetaM Expr := do
   match types with
   | [] | [_] => return innerLam
   | [_, _] => mkAppM ``_root_.Aeneas.Std.uncurry #[innerLam]
@@ -214,7 +216,7 @@ inductive PatShape where
   deriving Inhabited
 
 /-- Walk `pat` alongside its expected `ty`, producing a `PatShape`. -/
-partial def analyzePat (pat : Term) (ty : Expr) : ElabM PatShape := do
+meta partial def analyzePat (pat : Term) (ty : Expr) : ElabM PatShape := do
   let analyzeSubs (subPats : Array Term) (subTypes : List Expr) : ElabM (Array PatShape) :=
     subPats.toList.zip subTypes |>.toArray.mapM fun (p, t) => analyzePat p t
   match pat with
@@ -245,12 +247,12 @@ partial def analyzePat (pat : Term) (ty : Expr) : ElabM PatShape := do
     throwError "analyzePat: unsupported pattern kind `{pat.raw.getKind}`{indentD pat}"
 
 /-- Result type of a `casesOn` whose minor is `curried : f₁ → … → fₙ → ρ`. -/
-def computeCasesOnResultType (curried : Expr) (fieldTypes : List Expr) : MetaM Expr := do
+meta def computeCasesOnResultType (curried : Expr) (fieldTypes : List Expr) : MetaM Expr := do
   forallBoundedTelescope (← inferType curried) fieldTypes.length fun _ body => return body
 
 /-- Introduce a fresh fvar for `sub` and register a binder InfoTree node when the
     sub-pattern is a named leaf. Non-leaf sub-patterns get a synthetic `_xN` name. -/
-def withSubPatFVar (sub : PatShape) (ty : Expr) (idx : Nat) (k : Expr → ElabM Expr) : ElabM Expr :=
+meta def withSubPatFVar (sub : PatShape) (ty : Expr) (idx : Nat) (k : Expr → ElabM Expr) : ElabM Expr :=
   let (n, id?) := match sub with
     | .leaf (some id) => (id.getId, some id)
     | .leaf none      => (`_, none)
@@ -262,7 +264,7 @@ def withSubPatFVar (sub : PatShape) (ty : Expr) (idx : Nat) (k : Expr → ElabM 
 mutual
 
 /-- Build a curried lambda `fun x₁ … xₙ => body [x₁, …, xₙ]`, one fvar per sub-pattern. -/
-partial def mkCurriedLambda (subs : List PatShape) (types : List Expr)
+meta partial def mkCurriedLambda (subs : List PatShape) (types : List Expr)
     (body : Array Expr → ElabM Expr) (idx : Nat := 0) : ElabM Expr := do
   match subs, types with
   | [], _ | _, [] => body #[]
@@ -273,7 +275,7 @@ partial def mkCurriedLambda (subs : List PatShape) (types : List Expr)
       mkLambdaFVars #[fv] innerBody
 
 /-- Recursively unpack each `fv` per its `sub`, calling `body` with the collected leaves. -/
-partial def unpackAll (subs : List PatShape) (fvs : List Expr) (types : List Expr)
+meta partial def unpackAll (subs : List PatShape) (fvs : List Expr) (types : List Expr)
     (body : Array Expr → ElabM Expr) : ElabM Expr := do
   match subs, fvs, types with
   | [], _, _ | _, [], _ | _, _, [] => body #[]
@@ -283,7 +285,7 @@ partial def unpackAll (subs : List PatShape) (fvs : List Expr) (types : List Exp
 
 /-- Unpack `fv : ty` per `sub`, calling `body` with the leaves. Emits
     `Std.uncurry` for `.prod` and `T.casesOn` for `.ctor`. -/
-partial def unpackFvar (sub : PatShape) (fv : Expr) (ty : Expr)
+meta partial def unpackFvar (sub : PatShape) (fv : Expr) (ty : Expr)
     (body : Array Expr → ElabM Expr) : ElabM Expr := do
   match sub with
   | .leaf _ => body #[fv]
@@ -305,7 +307,7 @@ end
 
 /-- Build a continuation `k : ty → ρ` that destructures its argument per `shape`
     and calls `body` with the leaf fvars. -/
-partial def mkPatContinuation (shape : PatShape) (ty : Expr)
+meta partial def mkPatContinuation (shape : PatShape) (ty : Expr)
     (body : Array Expr → ElabM Expr) : ElabM Expr := do
   match shape with
   | .leaf _ => withSubPatFVar shape ty 0 fun fv => do
@@ -327,7 +329,7 @@ partial def mkPatContinuation (shape : PatShape) (ty : Expr)
 
 /-- Elaborate `cond`, returning a `Prop`. `Bool` is coerced to `cond = true`.
     Synthetic mvars are forced so `Decidable` can be inferred downstream. -/
-def elabIfCondition (cond : Term) : ElabM Expr := do
+meta def elabIfCondition (cond : Term) : ElabM Expr := do
   let condExpr ← Lean.Elab.Term.elabTerm cond none
   synthesizeSyntheticMVarsNoPostponing
   let condExpr ← instantiateMVars condExpr
@@ -338,14 +340,14 @@ def elabIfCondition (cond : Term) : ElabM Expr := do
     pure condExpr
 
 /-- Build `ite propExpr thn els`, synthesizing the `Decidable` instance. -/
-def mkIteExpr (propExpr thn els : Expr) : MetaM Expr := do
+meta def mkIteExpr (propExpr thn els : Expr) : MetaM Expr := do
   mkAppOptM ``ite #[none, some propExpr, none, some thn, some els]
 
 /-! ## Individual `doElem` handlers-/
 
 abbrev DoElem := TSyntax `doElem
 
-def getDoElems (doSeq : TSyntax ``doSeq) : ElabM (List DoElem) := do
+meta def getDoElems (doSeq : TSyntax ``doSeq) : ElabM (List DoElem) := do
   match doSeq with
   | `(doSeq| $[$elems $[;]?]*) => return elems.toList
   | _ => throwError "unexpected `doSeq` syntax {indentD doSeq}"
@@ -353,7 +355,7 @@ def getDoElems (doSeq : TSyntax ``doSeq) : ElabM (List DoElem) := do
 mutual
 
 /-- Dispatch a `doElem` to its handler. -/
-partial def elabDoElem (elem : DoElem) (rest : List DoElem) : ElabM Expr := do
+meta partial def elabDoElem (elem : DoElem) (rest : List DoElem) : ElabM Expr := do
   match elem with
   | `(doElem| let $x:ident $[: $ty?]? ← $rhs) => elabDoLetArrowId x ty? rhs rest
   | `(doElem| let $pat:term ← $rhs)  => elabDoLetArrowPat pat rhs rest
@@ -376,7 +378,7 @@ partial def elabDoElem (elem : DoElem) (rest : List DoElem) : ElabM Expr := do
 
 /-- Elaborate a monadic sub-term. If `rest` is empty, use the block's expected
     type `m α`; otherwise elaborate at `m Unit` and bind `rest` onto it. -/
-partial def elabMonadicAsDoElem
+meta partial def elabMonadicAsDoElem
     (elabAtType : Expr → ElabM Expr) (rest : List DoElem) : ElabM Expr := do
   match rest with
   | [] =>
@@ -397,11 +399,11 @@ partial def elabMonadicAsDoElem
       ElabM.mkBind e body
 
 /-- Elaborate a term in a `doSeq` position. -/
-partial def elabDoExpr (term : Term) (rest : List DoElem) : ElabM Expr :=
+meta partial def elabDoExpr (term : Term) (rest : List DoElem) : ElabM Expr :=
   elabMonadicAsDoElem (fun ty => elabTermEnsuringType term ty) rest
 
 /-- Elaborate `let x ← e`. -/
-partial def elabDoLetArrowId (x : Ident) (ty? : Option Term) (rhs : DoElem)
+meta partial def elabDoLetArrowId (x : Ident) (ty? : Option Term) (rhs : DoElem)
     (rest : List DoElem) : ElabM Expr := do
   let name := x.getId
   let ty ← match ty? with
@@ -430,7 +432,7 @@ partial def elabDoLetArrowId (x : Ident) (ty? : Option Term) (rhs : DoElem)
     ElabM.mkBind e body
 
 /-- Elaborate `let pat ← e`. -/
-partial def elabDoLetArrowPat (pat : Term) (rhs : DoElem) (rest : List DoElem) : ElabM Expr := do
+meta partial def elabDoLetArrowPat (pat : Term) (rhs : DoElem) (rest : List DoElem) : ElabM Expr := do
   let α ← mkFreshTypeMVar
   let expectedType ← ElabM.mkMonadicType α
   let e ← withReader (fun ctx => { ctx with expectedAlpha := α }) do
@@ -453,7 +455,7 @@ partial def elabDoLetArrowPat (pat : Term) (rhs : DoElem) (rest : List DoElem) :
   ElabM.mkBind e k
 
 /-- Elaborate `let x := e`. -/
-partial def elabDoLetId (x : Ident) (ty? : Option Term) (rhs : Term)
+meta partial def elabDoLetId (x : Ident) (ty? : Option Term) (rhs : Term)
     (rest : List DoElem) : ElabM Expr := do
   let name := x.getId
   let α ← match ty? with
@@ -467,7 +469,7 @@ partial def elabDoLetId (x : Ident) (ty? : Option Term) (rhs : Term)
     mkLetFVars #[fvar] restExpr
 
 /-- Elaborate `let pat := e`. -/
-partial def elabDoLetPat (pat : Term) (rhs : Term)
+meta partial def elabDoLetPat (pat : Term) (rhs : Term)
     (rest : List DoElem) : ElabM Expr := do
   let α ← mkFreshTypeMVar
   let val ← elabTermEnsuringType rhs α
@@ -481,7 +483,7 @@ partial def elabDoLetPat (pat : Term) (rhs : Term)
 
 /-- Elaborate an `if/else-if/…/else` chain as nested `ite`s. `rest` is bound
     once outside the chain. -/
-partial def elabDoIfChain (branches : Array (Term × TSyntax ``doSeq))
+meta partial def elabDoIfChain (branches : Array (Term × TSyntax ``doSeq))
     (elseSeq : TSyntax ``doSeq) (rest : List DoElem) : ElabM Expr := do
   let elabAtType (ty : Expr) : ElabM Expr := do
     let some α := ty.getAppArgs[0]?
@@ -498,7 +500,7 @@ partial def elabDoIfChain (branches : Array (Term × TSyntax ``doSeq))
 /-- Elaborate a `match`. Drives Lean's match elaborator with `_` in each arm
     body, then fills the resulting per-arm mvars by elaborating the original
     `doSeq`s directly in the mvar's local context -/
-partial def elabDoMatch
+meta partial def elabDoMatch
     (gen? : Option (TSyntax [`Lean.Parser.Term.trueVal, `Lean.Parser.Term.falseVal]))
     (motive? : Option (TSyntax ``Term.motive))
     (discrs : Array (TSyntax ``Term.matchDiscr))
@@ -547,17 +549,17 @@ partial def elabDoMatch
     instantiateMVars matchExpr
   elabMonadicAsDoElem elabAtType rest
 
-partial def elabDoSeqCore : List DoElem → ElabM Expr
+meta partial def elabDoSeqCore : List DoElem → ElabM Expr
   | [] => throwError "unexpected empty `do` block"
   | elem :: rest => elabDoElem elem rest
 
 end
 
-def elabDoSeq (doSeq : TSyntax ``doSeq) : ElabM Expr :=
+meta def elabDoSeq (doSeq : TSyntax ``doSeq) : ElabM Expr :=
   getDoElems doSeq >>= fun elems => elabDoSeqCore elems
 
 /-- Preserve the `Bind.bind` shape used by tactics once universe inference finishes. -/
-def normalizeResultBinds (expr : Expr) : MetaM Expr :=
+meta def normalizeResultBinds (expr : Expr) : MetaM Expr :=
   Meta.transform expr (post := fun e => do
     if e.isAppOfArity ``Aeneas.Std.bind 4 then
       let [u, v] := e.getAppFn.constLevels! | return .done e
@@ -569,7 +571,7 @@ def normalizeResultBinds (expr : Expr) : MetaM Expr :=
     return .done e)
 
 /-- Option to toggle the new Aeneas `do` elaborator -/
-register_option Aeneas.customDoElab : Bool := {
+meta register_option Aeneas.customDoElab : Bool := {
     defValue := true
     descr  := "Use the custom Aeneas `do` elaborator"
   }
@@ -578,7 +580,7 @@ register_option Aeneas.customDoElab : Bool := {
     `Aeneas.Std.Result _` blocks when `Aeneas.newDoElab` is set; otherwise falls
     back to Lean's default. -/
 @[term_elab «do»]
-def elabDo : TermElab := fun stx expectedType? => do
+meta def elabDo : TermElab := fun stx expectedType? => do
   let useNewElab ← do
     let some expectedType := expectedType? | pure false
     let expectedType ← instantiateMVars =<< whnf expectedType
