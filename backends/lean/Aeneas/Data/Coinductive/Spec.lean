@@ -506,4 +506,62 @@ example (state : Nat) (Q : HPost handler Unit) :
   simp [dspec, failure, fail, Bind.bind] at hSpec
   exact hSpec.vis_view
 
+/-! A productive infite program. -/
+def flipCoinIgnore : ITree StateEffect Unit := do
+  let _ <- choose Bool
+  flipCoinIgnore
+partial_fixpoint
+
+/-- Partial correctness accepts a productive infinite program. -/
+theorem flipCoinIgnore_dspec (state : Nat) (Q : HPost handler Unit) :
+    dspec flipCoinIgnore Q state := by
+  refine flipCoinIgnore.fixpoint_induct (fun x => dspec x Q state)
+    (PartialSpec.admissible handler_conjunctive Q state) ?_
+  intro x hx
+  simp only [dspec, choose, Bind.bind, itree_vis_bind, itree_ret_bind]
+  exact PartialSpec.vis ⟨⟨true⟩, fun _ => hx⟩
+
+/-- A computation which is totally correct cannot also be partially correct for the `False`
+    postcondition, i.e., it must eventually return. -/
+theorem not_spec_of_dspec_false {m : ITree StateEffect α} {state : Nat} {Q : HPost handler α}
+    (hNever : dspec m (fun _ _ => False) state) : ¬ spec m Q state := by
+  intro hSpec
+  refine TotalSpec.induction (P := fun m s => dspec m (fun _ _ => False) s → False)
+    (fun _ _ _ h => PartialSpec.ret_post h)
+    (fun event k s hHandle h => ?_) hSpec hNever
+  have h := PartialSpec.vis_view h
+  cases event with
+  | get | put _ => exact hHandle h
+  | fail => exact hHandle
+  | choose _ =>
+    obtain ⟨⟨a⟩, h⟩ := h
+    exact hHandle.2 a (h a)
+
+/- Total correctness does not accept a productive infinite program -/
+example (state : Nat) : ¬ spec flipCoinIgnore (fun _ _ => True) state :=
+  not_spec_of_dspec_false (flipCoinIgnore_dspec state _)
+
+/-! A silent infinite program -/
+def silentLoop : ITree StateEffect Unit := do
+  let _ ← (pure () : ITree StateEffect Unit)
+  silentLoop
+partial_fixpoint
+
+theorem silentLoop_eq_div : silentLoop = ITree.div := by
+  apply ITree.le_div_is_div
+  refine silentLoop.fixpoint_induct (fun x => Lean.Order.PartialOrder.rel x ITree.div)
+    (fun _ hc h => Lean.Order.csup_le hc h) ?_
+  intro x hx
+  simpa only [Bind.bind, ITree.pure_eq_ret, itree_ret_bind] using hx
+
+/- Total correctness does not accept a silent infinite program -/
+example (state : Nat) : ¬ spec silentLoop (fun _ _ => True) state := by
+  rw [spec, silentLoop_eq_div]
+  exact TotalSpec.div_false
+
+/- Partial correctness accepts a silent infinite program -/
+example (state : Nat) (Q : HPost handler Unit) : dspec silentLoop Q state := by
+  rw [dspec, silentLoop_eq_div]
+  exact PartialSpec.div
+
 end Aeneas.Data.Coinductive.StateTest
