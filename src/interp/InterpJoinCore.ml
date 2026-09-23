@@ -742,8 +742,13 @@ let tavalue_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
   let obj =
     object
       inherit [_] map_tavalue as super
-      method! visit_borrow_content _ _ = [%craise] span "Unexpected borrow"
-      method! visit_loan_content _ _ = [%craise] span "Unexpected loan"
+
+      (** Concrete borrows/loans may appear inside the shared values of shared
+          loans (nested borrows below a shared borrow). They are frozen and do
+          not carry projection markers, so we traverse them unchanged. *)
+      method! visit_borrow_content env bc = super#visit_borrow_content env bc
+
+      method! visit_loan_content env lc = super#visit_loan_content env lc
 
       method! visit_proj_marker _ pm =
         (* We do this to make sure we don't miss a projection marker *)
@@ -782,6 +787,10 @@ let tavalue_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
         | ASharedBorrow (pm0, bid, sid) ->
             [%sanity_check] span (pm0 = PNone);
             super#visit_aborrow_content env (ASharedBorrow (pm, bid, sid))
+        | AProjSharedBorrow _ ->
+            (* Projected shared reborrows (nested borrows below a shared borrow)
+               do not carry a projection marker: leave them unchanged. *)
+            super#visit_aborrow_content env bc
         | _ -> [%internal_error] span
     end
   in
