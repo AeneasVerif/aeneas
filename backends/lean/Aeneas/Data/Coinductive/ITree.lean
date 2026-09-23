@@ -441,6 +441,13 @@ theorem ITree.chain_vis_cases {c : ITree E R → Prop} (hc : chain c) {i : E.I}
   · exact (ITree.le_vis_cases hLe).imp id fun ⟨k'', hEq, _⟩ => ⟨k'', hEq⟩
   · exact Or.inr ((ITree.vis_le_cases hLe).imp fun k'' h => h.1)
 
+/-- The chain obtained by following answer `o` into the subtrees of a chain which starts with
+    event `i`.
+
+    In a chain, all the trees which are not `div` start with the same node, so suprema can be
+    computed one node at a time: if the chain `c` contains some `vis i k`, its supremum is
+    `vis i (fun o => csup (visChain c i o))` (see `ITree.csup_vis`). This is how we descend
+    into the supremum of a chain, e.g., to prove that `PartialSpec` is admissible. -/
 def ITree.visChain (c : ITree E R → Prop) (i : E.I) (o : E.O i) :
     ITree E R → Prop :=
   fun t => ∃ k, c (ITree.vis i k) ∧ t = k o
