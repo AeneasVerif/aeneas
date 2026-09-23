@@ -2,7 +2,6 @@ module
 import Aeneas.Std
 import Aeneas.Tactic.Step
 
-
 /-! # Coinductive specifications over `ITree`s
 
 This file shows how to build coinductive predicates over `ITree`s, and how to register them with
