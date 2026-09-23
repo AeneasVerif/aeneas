@@ -1505,7 +1505,7 @@ meta def proveStep (goalType : Expr) (defNames : Array Name) : TermElabM Expr :=
   -- Keep the existing fast path for large same-universe decompositions.
   let simpThms := if hasResultBind then
       #[``resultBind_eq, ``resultPure_eq,
-        ``Aeneas.Std.bind_assoc_eq, ``Aeneas.Std.bind_assoc_poly,
+        ``Aeneas.Std.bind_assoc_eq, ``Aeneas.Std.bind_assoc,
         ``Aeneas.Std.bind_ok, ``LawfulMonad.pure_bind]
     else #[``Aeneas.Std.bind_assoc_eq, ``LawfulMonad.pure_bind]
   match ← simpOnlyTarget mvarId' #[] simpThms with
