@@ -2,6 +2,7 @@
 Tests for `#decompose` on recursive functions (WF recursion, partial_fixpoint,
 structural recursion).
 -/
+module
 import Aeneas.Command.Decompose
 import Aeneas.Std
 import Aeneas.Do.Elab

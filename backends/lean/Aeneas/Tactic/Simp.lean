@@ -1,7 +1,8 @@
-import Aeneas.Tactic.Simp.SimpBoolProp
-import Aeneas.Tactic.Simp.SimpIfs
-import Aeneas.Tactic.Simp.SimpLemmas
-import Aeneas.Tactic.Simp.SimpLists
-import Aeneas.Tactic.Simp.SimpListsScalar
-import Aeneas.Tactic.Simp.RingEqNF
-import Aeneas.Tactic.Simp.SimpScalar
+module
+public import Aeneas.Tactic.Simp.SimpBoolProp
+public import Aeneas.Tactic.Simp.SimpIfs
+public import Aeneas.Tactic.Simp.SimpLemmas
+public import Aeneas.Tactic.Simp.SimpLists
+public import Aeneas.Tactic.Simp.SimpListsScalar
+public import Aeneas.Tactic.Simp.RingEqNF
+public import Aeneas.Tactic.Simp.SimpScalar

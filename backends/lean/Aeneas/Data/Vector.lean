@@ -1,4 +1,6 @@
-import Aeneas.Data.Array
+module
+public import Aeneas.Data.Array
+public section
 
 namespace Vector
 

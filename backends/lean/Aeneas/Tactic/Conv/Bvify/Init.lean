@@ -1,4 +1,6 @@
-import AeneasMeta.Simp
+module
+public import AeneasMeta.Simp
+public section
 open Lean Meta
 
 namespace Aeneas.Bvify
@@ -8,7 +10,7 @@ namespace Aeneas.Bvify
 -/
 
 -- We can't define and use trace classes in the same file
-initialize registerTraceClass `Bvify
+meta initialize registerTraceClass `Bvify
 
 /-!
 # Bvify Simpsets

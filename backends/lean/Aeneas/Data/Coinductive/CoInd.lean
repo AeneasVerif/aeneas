@@ -1,3 +1,4 @@
+module
 /-
 This file is from https://github.com/ISTA-PLV/coinductive/tree/main,
 see README in this folder.
@@ -721,3 +722,5 @@ theorem CoInd.leN_le [Inhabited (F PUnit)] (c1 c2 : CoInd F) n :
 
 end CoIndN_le
 end partial_order
+
+end

@@ -1,6 +1,8 @@
-import Aeneas.Std.Scalar.Core
-import Aeneas.Tactic.Solver.ScalarTac
-import Mathlib.Data.BitVec
+module
+public meta import Aeneas.Std.Scalar.Core
+public import Aeneas.Tactic.Solver.ScalarTac
+public import Mathlib.Data.BitVec
+public section
 
 namespace Aeneas.Std
 
@@ -14,7 +16,7 @@ The reference semantics are here: https://doc.rust-lang.org/reference/expression
 -/
 
 /-- When casting between unsigned integers, we truncate or **zero**-extend the integer. -/
-@[step_pure_def]
+@[expose, step_pure_def]
 def UScalar.cast {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) : UScalar tgt_ty :=
   -- This truncates the integer if the numBits is smaller
   ⟨ x.bv.zeroExtend tgt_ty.numBits ⟩
@@ -23,13 +25,13 @@ def UScalar.cast {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) 
 
    When casting from an unsigned integer to a signed integer, we truncate or **zero**-extend.
 -/
-@[step_pure_def]
+@[expose, step_pure_def]
 def UScalar.hcast {src_ty : UScalarTy} (tgt_ty : IScalarTy) (x : UScalar src_ty) : IScalar tgt_ty :=
   -- This truncates the integer if the numBits is smaller
   ⟨ x.bv.zeroExtend tgt_ty.numBits ⟩
 
 /-- When casting between signed integers, we truncate or **sign**-extend. -/
-@[step_pure_def]
+@[expose, step_pure_def]
 def IScalar.cast {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) : IScalar tgt_ty :=
   ⟨ x.bv.signExtend tgt_ty.numBits ⟩
 
@@ -37,7 +39,7 @@ def IScalar.cast {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) 
 
    When casting from a signed integer to a unsigned integer, we truncate or **sign**-extend.
 -/
-@[step_pure_def]
+@[expose, step_pure_def]
 def IScalar.hcast {src_ty : IScalarTy} (tgt_ty : UScalarTy) (x : IScalar src_ty) : UScalar tgt_ty :=
   ⟨ x.bv.signExtend tgt_ty.numBits ⟩
 
@@ -94,10 +96,10 @@ section
 
 end
 
-def UScalar.cast_fromBool (ty : UScalarTy) (x : Bool) : UScalar ty :=
+@[expose] def UScalar.cast_fromBool (ty : UScalarTy) (x : Bool) : UScalar ty :=
   if x then ⟨ 1#ty.numBits ⟩ else ⟨ 0#ty.numBits ⟩
 
-def IScalar.cast_fromBool (ty : IScalarTy) (x : Bool) : IScalar ty :=
+@[expose] def IScalar.cast_fromBool (ty : IScalarTy) (x : Bool) : IScalar ty :=
   if x then ⟨ 1#ty.numBits ⟩ else ⟨ 0#ty.numBits ⟩
 
 /-!
@@ -114,7 +116,7 @@ theorem UScalar.cast_inBounds_spec {src_ty : UScalarTy}
   apply Nat.mod_eq_of_lt; omega
 
 /-- This theorem allows us not to use bit-vectors when reasoning about casts, if there are no overflows -/
-def UScalar.hcast_inBounds_spec {src_ty : UScalarTy}
+@[expose] def UScalar.hcast_inBounds_spec {src_ty : UScalarTy}
   (tgt_ty : IScalarTy) (x : UScalar src_ty)
   (h : x.val ≤ IScalar.max tgt_ty) :
   lift (UScalar.hcast tgt_ty x) ⦃ y => y.val = x.val ⦄ := by
@@ -128,7 +130,7 @@ def UScalar.hcast_inBounds_spec {src_ty : UScalarTy}
   . scalar_tac
 
 /-- This theorem allows us not to use bit-vectors when reasoning about casts, if there are no overflows -/
-def IScalar.cast_inBounds_spec {src_ty : IScalarTy}
+@[expose] def IScalar.cast_inBounds_spec {src_ty : IScalarTy}
   (tgt_ty : IScalarTy) (x : IScalar src_ty) (h : IScalar.min tgt_ty ≤ x.val ∧ x.val ≤ IScalar.max tgt_ty) :
   lift (IScalar.cast tgt_ty x) ⦃ y => y.val = x.val ⦄
   := by
@@ -141,7 +143,7 @@ def IScalar.cast_inBounds_spec {src_ty : IScalarTy}
   . scalar_tac
 
 /-- This theorem allows us not to use bit-vectors when reasoning about casts, if there are no overflows -/
-def IScalar.hcast_inBounds_spec {src_ty : IScalarTy}
+@[expose] def IScalar.hcast_inBounds_spec {src_ty : IScalarTy}
   (tgt_ty : UScalarTy) (x : IScalar src_ty) (h : 0 ≤ x.val ∧ x.val ≤ UScalar.max tgt_ty) :
   lift (IScalar.hcast tgt_ty x) ⦃ y => y.val = x.val ⦄ := by
   simp only [lift, hcast, BitVec.signExtend, bv_toInt_eq, WP.spec_ok]
