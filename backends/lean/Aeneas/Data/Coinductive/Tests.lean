@@ -1,4 +1,6 @@
+module
 import Aeneas.Data.Coinductive.Spec
+import all Init.Internal.Order.Basic
 
 /-! # Tests for the generic total- and partial-correctness specifications -/
 

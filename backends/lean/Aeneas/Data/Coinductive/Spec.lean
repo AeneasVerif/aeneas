@@ -1,4 +1,8 @@
-import Aeneas.Data.Coinductive.ITree
+module
+public import Aeneas.Data.Coinductive.ITree
+import all Init.Internal.Order.Basic
+
+@[expose] public section
 
 /-!
 Generic total- and partial-correctness for interaction trees.
@@ -365,3 +369,5 @@ theorem PartialSpec.admissible (hConj : H.Conjunctive) (Q : HPost H α) (s : H.S
         by rintro _ ⟨k', hMem', rfl⟩; exact hChild ⟨k', hMem'⟩, rfl⟩
 
 end Aeneas.Data.Coinductive
+
+end

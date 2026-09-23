@@ -7,6 +7,7 @@ public meta import Aeneas.Std.Spec
 public meta import Aeneas.Std.Delab
 public import Aeneas.Data.Coinductive.ITree
 public import Aeneas.Data.Coinductive.Effect
+public import Aeneas.Data.Coinductive.Spec
 import all Init.Internal.Order.Basic
 public section
 
@@ -23,11 +24,11 @@ open Lean.Order
 
 @[expose] def wp_return (x:α) : Wp α := fun p => p x
 
-@[expose] section
-
 section ResultImplementation
 
 unseal Result
+
+@[expose] section
 
 @[reducible]
 def handler : Handler RustEffect where
@@ -54,7 +55,7 @@ theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p :=
 theorem dspec_admissible {α} (p : Post α) :
     admissible (fun x => dspec x p) :=
   PartialSpec.admissible handler_conjunctive _ ()
-  
+
 end
 
 /-- Variant of `uncurry` used to decompose tuples in post-conditions.
