@@ -55,4 +55,3 @@ fn i64_to_be_bytes(x: i64) -> [u8; 8] {
 }
 
 fn use_debug_clause<T: core::fmt::Debug>(_: T) {}
-
