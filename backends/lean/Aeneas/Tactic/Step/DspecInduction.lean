@@ -48,7 +48,7 @@ meta initialize dspecAdmissibleAttr : AttributeImpl ← do
     descr := "Registers a theorem used by `dspec_induction` to discharge the \
               admissibility side-goal it generates. Such a theorem must have the shape \
               `Order.admissible fun f => <judgment> (f arg)`, for instance \
-              `Order.admissible fun (f : ι → Result α) => WP.dspec (f arg) post`."
+              `Order.admissible fun (f : α → Result β) => WP.dspec (f arg) post`."
     add := fun declName stx _ => do
       Attribute.Builtin.ensureNoArgs stx
       let key ← MetaM.run' do

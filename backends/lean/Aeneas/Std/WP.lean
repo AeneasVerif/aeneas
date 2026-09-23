@@ -103,8 +103,8 @@ seal Result
 /-- The shape the `dspec_induction` tactic needs to discharge the admissibility
 side-goal it generates for a partial specification about a recursive function. -/
 @[dspec_admissible]
-theorem dspec_func_admissible {ι : Sort v} {α} (arg : ι) (p : Post α) :
-    admissible (fun f : ι → Result α => dspec (f arg) p) :=
+theorem dspec_func_admissible {α : Sort v} {β} (arg : α) (p : Post β) :
+    admissible (fun f : α → Result β => dspec (f arg) p) :=
   admissible_apply (fun _ m => dspec m p) arg (dspec_admissible p)
 
 /-- Variant of `uncurry` used to decompose tuples in post-conditions.
