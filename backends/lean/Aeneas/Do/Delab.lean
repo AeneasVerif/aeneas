@@ -52,12 +52,16 @@ private meta def parseCtorBind? (arg : Expr) : DelabM CtorBindShape := do
     | failure
   return { xName, numParams }
 
-/-- Walk a `Bind.bind` chain into `doElem`s, recognising tuple and ctor
-    destructuring continuations in addition to plain binds and lets. -/
+/-- Walk a chain of binds (`Std.bind`, or `Bind.bind` for the code elaborated with Lean's `do`)
+    into `doElem`s, recognising tuple and ctor destructuring continuations in addition to plain
+    binds and lets. -/
 meta partial def aeneasDelabDoElems : DelabM (List DoElem) := do
   let e ← getExpr
-  if e.isAppOfArity ``Bind.bind 6 then
-    let α := e.getAppArgs[2]!
+  let α? :=
+    if e.isAppOfArity ``Aeneas.Std.bind 4 then some e.getAppArgs[0]!
+    else if e.isAppOfArity ``Bind.bind 6 then some e.getAppArgs[2]!
+    else none
+  if let some α := α? then
     let ma ← withAppFn <| withAppArg delab
     let arg := e.appArg!
     if arg.isAppOfArity ``_root_.Aeneas.Std.uncurry 4 then
@@ -112,17 +116,26 @@ where
 
 open Parser Term
 
-/-- Top-level `do`-block delab, restricted to the `Std.Result` monad. -/
-@[delab app.Bind.bind]
-meta def aeneasDelabDo : Delab := whenNotPPOption getPPExplicit <| whenPPOption getPPNotation do
+meta def aeneasDelabDoCore : Delab := whenNotPPOption getPPExplicit <| whenPPOption getPPNotation do
   unless Aeneas.customDoElab.get (← getOptions) do failure
-  let e ← getExpr
-  -- only use the new `do` delaborator for `Result _` do blocks
-  unless e.isAppOfArity ``Bind.bind 6 do failure
-  unless e.getAppArgs[0]!.isConstOf ``Aeneas.Std.Result do failure
   let elems ← aeneasDelabDoElems
   let items ← elems.toArray.mapM (`(doSeqItem|$(·):doElem))
   `(do $items:doSeqItem*)
+
+/-- Top-level `do`-block delab for `Std.bind`. -/
+@[delab app.Aeneas.Std.bind]
+meta def aeneasDelabDo : Delab := do
+  unless (← getExpr).isAppOfArity ``Aeneas.Std.bind 4 do failure
+  aeneasDelabDoCore
+
+/-- Top-level `do`-block delab for `Bind.bind`, restricted to the `Std.Result` monad
+    (the code elaborated with Lean's `do`). -/
+@[delab app.Bind.bind]
+meta def aeneasDelabBindDo : Delab := do
+  let e ← getExpr
+  unless e.isAppOfArity ``Bind.bind 6 do failure
+  unless e.getAppArgs[0]!.isConstOf ``Aeneas.Std.Result do failure
+  aeneasDelabDoCore
 
 end Delab
 end Do
