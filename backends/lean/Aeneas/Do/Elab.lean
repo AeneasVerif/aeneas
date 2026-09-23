@@ -558,7 +558,13 @@ end
 meta def elabDoSeq (doSeq : TSyntax ``doSeq) : ElabM Expr :=
   getDoElems doSeq >>= fun elems => elabDoSeqCore elems
 
-/-- Preserve the `Bind.bind` shape used by tactics once universe inference finishes. -/
+/-- `ElabM.mkBind` emits `Std.bind` (rather than `Bind.bind`) whenever the universes of the
+    computation and of the `do` block are different *or not yet known*: they may only be resolved
+    later, for instance by another arm of a `match`. Once the elaboration is finished, we turn back
+    the `Std.bind`s whose universes turned out to be equal into `Bind.bind`, so that `Std.bind`
+    only remains where it is necessary. The resulting terms thus have the same shape as the ones
+    produced by Lean's `do` elaborator, which is what the delaborator and the `simp` lemmas about
+    binds (e.g., `bind_tc_ok`) expect. -/
 meta def normalizeResultBinds (expr : Expr) : MetaM Expr :=
   Meta.transform expr (post := fun e => do
     if e.isAppOfArity ``Aeneas.Std.bind 4 then
