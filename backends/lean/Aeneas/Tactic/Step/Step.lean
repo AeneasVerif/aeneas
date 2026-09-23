@@ -327,7 +327,7 @@ meta partial def uncurryTelescope (e : Expr) (k : Option FVarTree → Expr → M
      - Otherwise: call k none e. -/
   let e := e.consumeMData
   match_expr e with
-  | Std.WP.uncurry' _ _ f =>
+  | Std.WP.uncurry' _ _ _ f =>
     intoUncurry f.consumeMData (fun tree body => k (some tree) body)
   | Std.uncurry _ _ _ f =>
     intoUncurry f.consumeMData (fun tree body => k (some tree) body)
