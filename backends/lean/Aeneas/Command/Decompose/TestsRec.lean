@@ -210,7 +210,7 @@ def crossUniverseLoop (n : Nat) (borrow : Result (Nat × (Nat → Result Nat))) 
     Result Nat := do
   if n == 0 then Result.ok 0
   else
-    Aeneas.Std.bind borrow fun (seed, back) => do
+    let (seed, back) ← borrow
     let offset ← Result.ok (seed + 1)
     let restored ← back offset
     crossUniverseLoop (n - 1) (Result.ok (restored, back))

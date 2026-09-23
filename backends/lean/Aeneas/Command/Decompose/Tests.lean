@@ -2680,7 +2680,7 @@ info: test66_eq : ∀ (x : U32), test66 x = test66_body x
 def crossUniverse (small : Result Nat)
     (large : Result (Nat × (Nat → Result Nat))) : Result Nat := do
   let n ← small
-  Aeneas.Std.bind large fun (m, back) => do
+  let (m, back) ← large
   let l ← back n
   pure (l + m)
 
@@ -2775,20 +2775,21 @@ example (large : Result (ULift.{1} Nat)) :
         let n ← crossUniversePure_prefix large
         pure (n + 1)) := crossUniversePure.fold large
 
-/- Explicit nested tuple patterns, including the three-component borrow
+/- Nested tuple patterns, including the three-component borrow
    shape used by extracted buffer operations. -/
 def crossUniverseNested
-    (large : Result ((Nat × Nat) × (Nat → Result Nat) × (Nat → Nat))) : Result Nat :=
-  Aeneas.Std.bind large fun ((a, b), restore, back) => do
-    let n ← restore (a + b)
-    pure (back n)
+    (large : Result ((Nat × Nat) × (Nat → Result Nat) × (Nat → Nat))) : Result Nat := do
+  let ((a, b), restore, back) ← large
+  let n ← restore (a + b)
+  pure (back n)
 
 #decompose crossUniverseNested crossUniverseNested.fold
   letRange 0 2 => crossUniverseNested_prefix
 
 example (large : Result ((Nat × Nat) × (Nat → Result Nat) × (Nat → Nat))) :
     crossUniverseNested_prefix large =
-      (Aeneas.Std.bind large fun ((a, b), restore, back) => do
+      (do
+        let ((a, b), restore, back) ← large
         let n ← restore (a + b)
         pure (back, n)) := rfl
 
@@ -2799,10 +2800,10 @@ example (large : Result ((Nat × Nat) × (Nat → Result Nat) × (Nat → Nat)))
         pure (back n)) := crossUniverseNested.fold large
 
 def crossUniverseNamedPair (large : Result ((Nat × Nat) × (Nat → Result Nat))) :
-    Result Nat :=
-  Aeneas.Std.bind large fun (pair, restore) => do
-    let n ← restore pair.1
-    pure (n + pair.2)
+    Result Nat := do
+  let (pair, restore) ← large
+  let n ← restore pair.1
+  pure (n + pair.2)
 
 #decompose crossUniverseNamedPair crossUniverseNamedPair.fold
   letRange 0 1 => crossUniverseNamedPair_prefix

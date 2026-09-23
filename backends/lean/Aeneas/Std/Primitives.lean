@@ -330,10 +330,11 @@ theorem pure_tc_eq {α : Type u} (x : α) : (pure x : Result α) = .ok x := rfl
 @[simp] theorem bind_tc_div (f : α → Result β) :
   (do let y ← div; f y) = div := by simp [bind, Bind.bind, div]
 
+/-- `Std.bind_assoc` for the typeclass bind (whose computations live in the same universe). -/
 @[simp] theorem bind_assoc_eq {a b c : Type u}
   (e : Result a) (g :  a → Result b) (h : b → Result c) :
   (Bind.bind (Bind.bind e g) h) =
-  (Bind.bind e (λ x => Bind.bind (g x) h)) := by apply bind_assoc
+  (Bind.bind e (λ x => Bind.bind (g x) h)) := Std.bind_assoc e g h
 
 end
 

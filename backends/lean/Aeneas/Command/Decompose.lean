@@ -734,38 +734,6 @@ where
         let destructor ← rebuildUncurryFromTree child body
         k pairVar (mkApp destructor pairVar)
 
-/-- Recover a tuple pattern's nesting from the input type and the match alternative's parameters. -/
-private meta partial def tuplePatternTree? (type : Expr) (fields : Array Expr) (idx : Nat) :
-    MetaM (Option (FVarTree × Nat)) := do
-  let some field := fields[idx]? | return none
-  if ← isDefEq type (← inferType field) then
-    return some (.leaf field, idx + 1)
-  let type ← whnf type
-  unless type.isAppOfArity ``Prod 2 do return none
-  let some (left, idx) ← tuplePatternTree? type.getAppArgs[0]! fields idx | return none
-  let some (right, idx) ← tuplePatternTree? type.getAppArgs[1]! fields idx | return none
-  return some (.pair left right, idx)
-
-/-- Explicit `bind x fun (a, b) => ...` uses a matcher instead of `Std.uncurry`.
-    Normalize only tuple-pattern continuations, keeping named pair binders intact. -/
-private meta def normalizeTupleBinds (e : Expr) : MetaM Expr :=
-  Meta.transform e (post := fun e => do
-    let some (_, computation, cont) := matchBind? e | return .done e
-    let .lam name type body bi := cont | return .done e
-    unless type.isAppOfArity ``Prod 2 do return .done e
-    withLocalDecl name bi type fun arg => do
-      let body := body.instantiate1 arg
-      let some matcher ← matchMatcherApp? body | return .done e
-      unless matcher.discrs == #[arg] && matcher.alts.size == 1 do return .done e
-      lambdaTelescope matcher.alts[0]! fun fields body => do
-        let some (tree, count) ← tuplePatternTree? type fields 0 | return .done e
-        unless count == fields.size do return .done e
-        let cont' ← rebuildUncurryFromTree tree body
-        if cont'.containsFVar arg.fvarId! then return .done e
-        unless ← isDefEq cont cont' do
-          throwError "#decompose: tuple-pattern normalization changed the continuation"
-        return .done (mkApp2 e.appFn!.appFn! computation cont'))
-
 /-- Rebuild an expression from `bindings[startIdx .. endIdx-1]` followed by `terminal`.
     Abstracts fvars bottom-up using `mkLambdaFVars` / `mkLetFVars`.
     Handles tuple-destructuring binds by reconstructing `Std.uncurry` chains. -/
@@ -1486,13 +1454,6 @@ private meta def simpOnlyTarget (mvarId : MVarId) (declsToUnfold : Array Name)
     | none => return none
     | some (_, mvarId') => return some mvarId'
 
-theorem resultBind_eq {α β : Type u}
-    (x : Aeneas.Std.Result α) (f : α → Aeneas.Std.Result β) :
-    x >>= f = Aeneas.Std.bind x f := rfl
-
-theorem resultPure_eq {α : Type u} (x : α) :
-    (pure x : Aeneas.Std.Result α) = Aeneas.Std.Result.ok x := rfl
-
 /-- Prove the decomposition equality: `∀ params, body_original = body_decomposed`.
     `defNames` are the names of all auxiliary definitions introduced. -/
 meta def proveStep (goalType : Expr) (defNames : Array Name) : TermElabM Expr := do
@@ -1500,14 +1461,8 @@ meta def proveStep (goalType : Expr) (defNames : Array Name) : TermElabM Expr :=
   let (_, mvarId) ← mvar.mvarId!.intros
   let unfoldNames := defNames ++ #[``_root_.Aeneas.Std.uncurry]
   let mvarId' ← mvarId.deltaTarget (unfoldNames.contains ·)
-  let hasResultBind := ((← mvarId'.getType).find?
-    (·.isAppOfArity ``Aeneas.Std.bind 4)).isSome
-  -- Keep the existing fast path for large same-universe decompositions.
-  let simpThms := if hasResultBind then
-      #[``resultBind_eq, ``resultPure_eq,
-        ``Aeneas.Std.bind_assoc_eq, ``Aeneas.Std.bind_assoc,
-        ``Aeneas.Std.bind_ok, ``LawfulMonad.pure_bind]
-    else #[``Aeneas.Std.bind_assoc_eq, ``LawfulMonad.pure_bind]
+  let simpThms := #[``Aeneas.Std.bind_tc_eq, ``Aeneas.Std.pure_tc_eq,
+    ``Aeneas.Std.bind_assoc, ``Aeneas.Std.bind_ok, ``LawfulMonad.pure_bind]
   match ← simpOnlyTarget mvarId' #[] simpThms with
   | none => return ← instantiateMVars mvar
   | some mvarId'' =>
@@ -1557,7 +1512,7 @@ private meta def decomposeViaDef (fnName : Name) (levelParams : List Name)
     -- Apply each clause sequentially
     let ((currentBody, introNames), _) ←
       (do
-        let mut currentBody ← normalizeTupleBinds body
+        let mut currentBody := body
         let mut introNames : Array Name := #[]
         for (pat, newName, _) in parsedClauses do
           currentBody ← applyClause currentBody pat newName levelParams srcIsNoncomputable
@@ -1608,7 +1563,7 @@ private meta def decomposeViaEqDef (fnName eqDefName : Name) (levelParams : List
     -- Apply each clause to the clean body
     let ((currentBody, introNames), _) ←
       (do
-        let mut currentBody ← normalizeTupleBinds cleanBody
+        let mut currentBody := cleanBody
         let mut introNames : Array Name := #[]
         for (pat, newName, _) in parsedClauses do
           currentBody ← applyClause currentBody pat newName levelParams srcIsNoncomputable
