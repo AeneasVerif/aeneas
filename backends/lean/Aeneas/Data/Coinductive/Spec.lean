@@ -309,8 +309,11 @@ theorem PartialSpec.mono_le {Q : HPost H α} {m m' : ITree E α} {s : H.State}
 
 namespace Handler
 
-/-- A handler is *conjunctive* if, whenever it satisfies each continuation-demand of a nonempty
-    family, it also satisfies their conjunction.
+/-- A handler is *conjunctive* if, whenever it satisfies each continuation, it also satisfies their conjunction.
+
+    Reading `H.handle e s C` as the triple `e {C}`: if `e {C₁} ∧ e {C₂} ∧ … ∧ e {Cₙ}`, then
+    `e {fun a s' => C₁ a s' ∧ C₂ a s' ∧ … ∧ Cₙ a s'}`. The definition below asks this for any
+    nonempty (possibly infinite) family of continuations, given by the predicate `Demands`.
 
     Deterministic events and demonic choice (`∀ answer, C answer s`) are conjunctive. Angelic
     choice (`∃ answer, C answer s`) is not: each demand may be met by a different answer, with no
