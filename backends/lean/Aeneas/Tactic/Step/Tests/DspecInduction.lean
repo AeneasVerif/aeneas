@@ -1,4 +1,6 @@
-import Aeneas.Tactic.Step.DspecInduction
+module
+public import Lean
+public import Aeneas.Tactic.Step.DspecInduction
 import Aeneas.Tactic.Step.Step
 import Aeneas.Tactic.Solver.ScalarTac
 import Aeneas.Std

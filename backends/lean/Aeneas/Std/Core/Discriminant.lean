@@ -1,7 +1,9 @@
-import Aeneas.Std.Core.Core
-import Aeneas.Std.Core.Fmt
-import Aeneas.Std.Core.Cmp
-import Aeneas.Std.Core.Hash
+module
+public import Aeneas.Std.Core.Core
+public import Aeneas.Std.Core.Fmt
+public import Aeneas.Std.Core.Cmp
+public import Aeneas.Std.Core.Hash
+public section
 
 namespace Aeneas.Std
 

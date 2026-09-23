@@ -1,8 +1,10 @@
 /- Step specs for Range/StepBy iterators on Usize.
    These use WP.spec_bind directly to avoid importing the step tactic. -/
-import Aeneas.Std.Core.Iter
-import Aeneas.Std.Scalar
-import Aeneas.Std.SliceIter
+module
+public import Aeneas.Std.Core.Iter
+public import Aeneas.Std.Scalar
+public import Aeneas.Std.SliceIter
+public section
 
 namespace Aeneas.Std
 
@@ -549,7 +551,7 @@ theorem core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next_
   core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next_UScalar_spec
     (by simp) (by intros; rfl) (by intros; rfl) r
 
-@[reducible,
+@[expose, reducible,
   rust_trait_impl "core::iter::traits::double_ended::DoubleEndedIterator<core::ops::range::Range<@A>, @A>"]
 def core.ops.range.Range.Insts.DoubleEndedIterator
   {A : Type} (StepInst : core.iter.range.Step A) :

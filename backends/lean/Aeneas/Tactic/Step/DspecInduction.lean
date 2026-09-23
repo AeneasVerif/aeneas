@@ -1,8 +1,12 @@
-import Lean
-import Mathlib.Tactic.Simproc.ExistsAndEq
-import AeneasMeta.Utils
-import AeneasMeta.Extensions
-import Aeneas.Tactic.Step.Trace
+module
+public import Lean
+public import Mathlib.Tactic.Simproc.ExistsAndEq
+public import AeneasMeta.Utils
+public meta import AeneasMeta.Extensions
+public import Aeneas.Tactic.Step.Trace
+public meta import Lean.Meta.Tactic.Repeat
+import all Init.Internal.Order.Basic
+public section
 
 /- Tactic for unfolding partial_fixpoint definitions with fixpoint_induct.
    Normally you would use the normal unfold tactic, but that requires the proof to be terminating.
@@ -28,17 +32,17 @@ The theorems are stored in a discrimination tree, indexed by the body of the pre
 whose admissibility they prove: for `Order.admissible fun f => WP.dspec (f arg) post`
 the key is `WP.dspec (?f ?arg) ?post`. This allows us to look up the theorems which
 apply to a given admissibility goal, rather than trying all of them. -/
-initialize dspecAdmissibleExt : Extensions.DiscrTreeExtension Name ←
+meta initialize dspecAdmissibleExt : Extensions.DiscrTreeExtension Name ←
   Extensions.mkDiscrTreeExtension `dspecAdmissibleMap
 
 /-- Decompose `Order.admissible P` into the type `α` of the argument of `P` and `P`. -/
-private def destAdmissible (ty : Expr) : MetaM (Expr × Expr) := do
+private meta def destAdmissible (ty : Expr) : MetaM (Expr × Expr) := do
   let ty := (← instantiateMVars ty).cleanupAnnotations
   let_expr Lean.Order.admissible α _ P := ty
     | throwError "expected a proposition of the shape `Order.admissible P`, got:{indentExpr ty}"
   pure (α, P)
 
-initialize dspecAdmissibleAttr : AttributeImpl ← do
+meta initialize dspecAdmissibleAttr : AttributeImpl ← do
   let attrImpl : AttributeImpl := {
     name := `dspec_admissible
     descr := "Registers a theorem used by `dspec_induction` to discharge the \
@@ -63,7 +67,7 @@ initialize dspecAdmissibleAttr : AttributeImpl ← do
 
 /-- Get the theorems registered with the `dspec_admissible` attribute which may be used
 to prove the admissibility goal `ty`. -/
-def getAdmissibleThms (ty : Expr) : MetaM (Array Name) := do
+meta def getAdmissibleThms (ty : Expr) : MetaM (Array Name) := do
   let (α, P) ← destAdmissible ty
   withLocalDeclD `f α fun f => do
     (dspecAdmissibleExt.getState (← getEnv)).getMatch (P.beta #[f]).headBeta
@@ -132,7 +136,7 @@ theorem curry_admissible (a1 a2 a3) (P : (a1 → a2 → a3) → Prop) [CCPO a3]
 
 /-- Close `g` by applying one of the theorems registered with the `dspec_admissible`
 attribute. -/
-private def applyAdmissibleThm (g : MVarId) : TacticM Unit := do
+private meta def applyAdmissibleThm (g : MVarId) : TacticM Unit := do
   let thms ← getAdmissibleThms (← g.getType)
   trace[DspecInduction] "candidate admissibility theorems: {thms}"
   for thm in thms do
@@ -143,14 +147,14 @@ private def applyAdmissibleThm (g : MVarId) : TacticM Unit := do
               with the `dspec_admissible` attribute applies to \
               {← instantiateMVars (← g.getType)}"
 
-def getParamNames (ty : Expr) : MetaM (Array Name) := do
+meta def getParamNames (ty : Expr) : MetaM (Array Name) := do
   forallTelescope ty fun xs _ => do
     xs.mapM fun x => do
       let localDecl ← x.fvarId!.getDecl
       return localDecl.userName
 
 -- given a function type, return list of input types
-def getInputTypes (ty : Expr) : List Expr :=
+meta def getInputTypes (ty : Expr) : List Expr :=
   match ty with
   | .forallE _ ty body _ => .cons ty (getInputTypes body)
   | _ => []

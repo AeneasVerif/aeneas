@@ -1,8 +1,10 @@
-import Aeneas.Extract
-import Aeneas.Std.Primitives
-import Aeneas.Std.WP
-import Aeneas.Tactic.Step.Init
-import Aeneas.Tactic.Elab.TraitDefault.Init
+module
+public import Aeneas.Extract
+public import Aeneas.Std.Primitives
+public import Aeneas.Std.WP
+public import Aeneas.Tactic.Step.Init
+public import Aeneas.Tactic.Elab.TraitDefault.Init
+public section
 
 namespace Aeneas.Std
 
@@ -18,17 +20,17 @@ structure core.cmp.Eq (Self : Type) where
   partialEqInst : core.cmp.PartialEq Self Self
   assert_fields_are_eq (_ : Self) : Result Unit := .ok ()
 
-@[simp, rust_fun "core::cmp::Eq::assert_fields_are_eq"]
+@[expose, simp, trait_default, rust_fun "core::cmp::Eq::assert_fields_are_eq"]
 def core.cmp.Eq.assert_fields_are_eq.default
-  {Self : Type} (EqInst : core.cmp.Eq Self) (x : Self) : Result Unit :=
-  EqInst.assert_fields_are_eq x
+  {Self : Type} (_EqInst : core.cmp.Eq Self) (_x : Self) : Result Unit :=
+  .ok ()
 
 /- Default method. -/
 def core.cmp.PartialEq.ne.default {Self Rhs : Type} (eq : Self → Rhs → Result Bool)
   (self : Self) (other : Rhs) : Result Bool := do
   ok (¬ (← eq self other))
 
-@[trait_default, rust_fun "core::cmp::PartialEq::ne"]
+@[expose, trait_default, rust_fun "core::cmp::PartialEq::ne"]
 def core.cmp.PartialEq.ne.trait_default {Self Rhs : Type}
   (PartialEqInst : core.cmp.PartialEq Self Rhs)
   (self : Self) (other : Rhs) : Result Bool :=
@@ -128,7 +130,7 @@ def core.cmp.Ord.max_body {Self : Type} (lt : Self → Self → Result Bool)
   (x y : Self) : Result Self := do
   if ← lt y x then ok x else ok y
 
-def core.cmp.Ord.min_body {Self : Type} (lt : Self → Self → Result Bool)
+@[expose] def core.cmp.Ord.min_body {Self : Type} (lt : Self → Self → Result Bool)
   (x y : Self) : Result Self := do
   if ← lt y x then ok y else ok x
 
@@ -157,11 +159,11 @@ def core.cmp.Ord.max.default {Self : Type} (lt : Self → Self → Result Bool)
   (x y : Self) : Result Self :=
   core.cmp.Ord.max_body lt x y
 
-def core.cmp.Ord.min.default {Self : Type} (lt : Self → Self → Result Bool)
+@[expose] def core.cmp.Ord.min.default {Self : Type} (lt : Self → Self → Result Bool)
   (x y : Self) : Result Self :=
   core.cmp.Ord.min_body lt x y
 
-@[trait_default, rust_fun "core::cmp::Ord::min"]
+@[expose, trait_default, rust_fun "core::cmp::Ord::min"]
 def core.cmp.Ord.min.trait_default {Self : Type} (OrdInst : core.cmp.Ord Self)
   (x y : Self) : Result Self :=
   core.cmp.Ord.min.default OrdInst.partialOrdInst.lt x y
@@ -172,7 +174,7 @@ def core.cmp.Ord.clamp.default {Self : Type} (le lt gt : Self → Self → Resul
   (self min max : Self) : Result Self :=
   core.cmp.Ord.clamp_body le lt gt self min max
 
-@[simp, rust_fun "core::cmp::min"]
+@[expose, simp, rust_fun "core::cmp::min"]
 def core.cmp.min {T : Type} (OrdInst : core.cmp.Ord T) (x y : T) : Result T :=
   -- TODO: is this the correct model?
   OrdInst.min x y
