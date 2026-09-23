@@ -20,7 +20,7 @@ structure core.cmp.Eq (Self : Type) where
   partialEqInst : core.cmp.PartialEq Self Self
   assert_fields_are_eq (_ : Self) : Result Unit := .ok ()
 
-@[simp, trait_default, rust_fun "core::cmp::Eq::assert_fields_are_eq"]
+@[expose, simp, trait_default, rust_fun "core::cmp::Eq::assert_fields_are_eq"]
 def core.cmp.Eq.assert_fields_are_eq.default
   {Self : Type} (_EqInst : core.cmp.Eq Self) (_x : Self) : Result Unit :=
   .ok ()
