@@ -22,9 +22,21 @@ open Lean Elab Term Meta Tactic
 open Utils
 open Lean.Order
 
-/-! ## The `dspec_admissible` attribute -/
-initialize dspecAdmissibleExt : SimplePersistentEnvExtension Name NameSet ←
-  Extensions.mkSetDeclarationExtension `dspecAdmissibleMap
+/-! ## The `dspec_admissible` attribute
+
+The theorems are stored in a discrimination tree, indexed by the body of the predicate
+whose admissibility they prove: for `Order.admissible fun f => WP.dspec (f arg) post`
+the key is `WP.dspec (?f ?arg) ?post`. This allows us to look up the theorems which
+apply to a given admissibility goal, rather than trying all of them. -/
+initialize dspecAdmissibleExt : Extensions.DiscrTreeExtension Name ←
+  Extensions.mkDiscrTreeExtension `dspecAdmissibleMap
+
+/-- Decompose `Order.admissible P` into the type `α` of the argument of `P` and `P`. -/
+private def destAdmissible (ty : Expr) : MetaM (Expr × Expr) := do
+  let ty := (← instantiateMVars ty).cleanupAnnotations
+  let_expr Lean.Order.admissible α _ P := ty
+    | throwError "expected a proposition of the shape `Order.admissible P`, got:{indentExpr ty}"
+  pure (α, P)
 
 initialize dspecAdmissibleAttr : AttributeImpl ← do
   let attrImpl : AttributeImpl := {
@@ -35,17 +47,26 @@ initialize dspecAdmissibleAttr : AttributeImpl ← do
               `Order.admissible fun (f : ι → Result α) => WP.dspec (f arg) post`."
     add := fun declName stx _ => do
       Attribute.Builtin.ensureNoArgs stx
-      modifyEnv fun env => dspecAdmissibleExt.addEntry env declName
+      let key ← MetaM.run' do
+        let info ← getConstInfo declName
+        let (_, _, concl) ← forallMetaTelescope info.type
+        let (α, P) ← destAdmissible concl
+        let f ← mkFreshExprMVar α
+        DiscrTree.mkPath (P.beta #[f]).headBeta
+      modifyEnv fun env => dspecAdmissibleExt.addEntry env (key, declName)
     erase := fun declName => do
       modifyEnv fun env =>
-        dspecAdmissibleExt.modifyState env fun s => s.erase declName
+        dspecAdmissibleExt.modifyState env fun s => s.mapArrays (·.filter (· != declName))
   }
   registerBuiltinAttribute attrImpl
   pure attrImpl
 
-/-- Get the theorems registered with the `dspec_admissible` attribute. -/
-def getAdmissibleThms [Monad m] [MonadEnv m] : m (List Name) := do
-  pure (dspecAdmissibleExt.getState (← getEnv)).toList
+/-- Get the theorems registered with the `dspec_admissible` attribute which may be used
+to prove the admissibility goal `ty`. -/
+def getAdmissibleThms (ty : Expr) : MetaM (Array Name) := do
+  let (α, P) ← destAdmissible ty
+  withLocalDeclD `f α fun f => do
+    (dspecAdmissibleExt.getState (← getEnv)).getMatch (P.beta #[f]).headBeta
 
 theorem curry_admissible (a1 a2 a3) (P : (a1 → a2 → a3) → Prop) [CCPO a3]
   (h : Order.admissible fun (f : (a1 × a2) → a3) => P (fun x y => f (x, y)))
@@ -111,7 +132,9 @@ theorem curry_admissible (a1 a2 a3) (P : (a1 → a2 → a3) → Prop) [CCPO a3]
 
 /-- Close `g` by applying one of the theorems registered with the `dspec_admissible`
 attribute. -/
-private def applyAdmissibleThm (g : MVarId) (thms : List Name) : TacticM Unit := do
+private def applyAdmissibleThm (g : MVarId) : TacticM Unit := do
+  let thms ← getAdmissibleThms (← g.getType)
+  trace[DspecInduction] "candidate admissibility theorems: {thms}"
   for thm in thms do
     let res ← observing? do
       let [] ← g.apply (← mkConstWithFreshMVarLevels thm) | failure
@@ -192,7 +215,6 @@ elab "dspec_induction" func:ident : tactic => do
     let onError {α} : TacticM α := throwError "failed to prove admissibility condition"
     let curry_admissible ← mkConstWithFreshMVarLevels `Aeneas.DspecInduction.curry_admissible
     let admissible_pi ← mkConstWithFreshMVarLevels `Lean.Order.admissible_pi
-    let admissibleThms ← getAdmissibleThms
     let [g_admissible]
       ← repeat' (fun g => g.apply curry_admissible) [g_admissible] | onError
     let [g_admissible]
@@ -200,7 +222,7 @@ elab "dspec_induction" func:ident : tactic => do
           let [g] ← (g.apply admissible_pi) | onError
           pure [(← g.intro1P).snd]
       ) [g_admissible] | onError
-    applyAdmissibleThm g_admissible admissibleThms
+    applyAdmissibleThm g_admissible
 
   replaceMainGoal [g_main]
   pure ()

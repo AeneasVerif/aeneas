@@ -187,6 +187,20 @@ example x y : (second_arg_const x y) ⦃fun x => x = 0⦄div := by
   · simp
   · apply ih
 
+-- the admissibility theorems are looked up by the shape of the admissibility goal
+open Lean Elab Term in
+elab "#admissible_thms " t:term : command => Command.liftTermElabM do
+  let ty ← elabTermAndSynthesize t none
+  logInfo m!"{← getAdmissibleThms ty}"
+
+/-- info: [Aeneas.Std.WP.dspec_func_admissible] -/
+#guard_msgs in
+#admissible_thms Lean.Order.admissible (fun f : Nat → Result Nat => WP.dspec (f 0) (fun _ => True))
+
+/-- info: [] -/
+#guard_msgs in
+#admissible_thms Lean.Order.admissible (fun _ : Nat → Result Nat => True)
+
 end Test
 
 end DspecInduction
