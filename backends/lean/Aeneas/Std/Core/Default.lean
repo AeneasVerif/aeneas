@@ -1,4 +1,7 @@
-import Aeneas.Std.Primitives
+module
+public import Aeneas.Std.Primitives
+public meta import Aeneas.Extract.Extract
+public section
 
 namespace Aeneas.Std
 
@@ -6,7 +9,7 @@ namespace Aeneas.Std
 structure core.default.Default (Self : Type u) where
   default : Result Self
 
-@[rust_fun "core::default::{core::default::Default<bool>}::default"]
+@[expose, rust_fun "core::default::{core::default::Default<bool>}::default"]
 def core.default.DefaultBool.default : Result Bool := .ok false
 
 end Aeneas.Std

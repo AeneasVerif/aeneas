@@ -1,10 +1,13 @@
-import Aeneas.Std.Core.Fmt
-import Aeneas.Std.Array.Array
-import Aeneas.Std.Slice
-import Aeneas.Std.Range
-import Aeneas.Data.List.List
-import Aeneas.Std.Core.Convert
-import Aeneas.Std.Core.Cmp
+module
+public import Aeneas.Std.Core.Fmt
+public import Aeneas.Std.Array.Array
+public import Aeneas.Std.Slice
+public import Aeneas.Std.Range
+public import Aeneas.Data.List.List
+public import Aeneas.Std.Core.Convert
+public import Aeneas.Std.Core.Cmp
+import all Init.Data.List.Control
+public section
 
 /-! Array definitions which mention slices -/
 
@@ -16,11 +19,11 @@ attribute [-simp] List.getElem!_eq_getElem?_getD
 
 /-! Array to slice/subslices -/
 
-@[step_pure_def, rust_fun "core::array::{[@T; @N]}::as_slice" -canFail]
+@[expose, step_pure_def, rust_fun "core::array::{[@T; @N]}::as_slice" -canFail]
 def Array.to_slice {α : Type u} {n : Usize} (v : Array α n) : Slice α :=
   .from  v.val (by scalar_tac)
 
-def Array.from_slice {α : Type u} {n : Usize} (a : Array α n) (s : Slice α) : Array α n :=
+@[expose] def Array.from_slice {α : Type u} {n : Usize} (a : Array α n) (s : Slice α) : Array α n :=
   if h: s.val.length = n.val then
     .from s.val (by simp [*])
   else a -- Unreachable case
@@ -30,7 +33,7 @@ theorem Array.from_slice_val {α : Type u} {n : Usize} (a : Array α n) (ns : Sl
   (from_slice a ns).val = ns.val
   := by simp [from_slice, *]
 
-@[rust_fun "core::array::{[@T; @N]}::as_mut_slice" -canFail]
+@[expose, rust_fun "core::array::{[@T; @N]}::as_mut_slice" -canFail]
 def Array.to_slice_mut {α : Type u} {n : Usize} (a : Array α n) :
   Slice α × (Slice α → Array α n) :=
   (Array.to_slice a, Array.from_slice a)
@@ -44,7 +47,7 @@ theorem Array.to_slice_mut_spec {α : Type u} {n : Usize} (a : Array α n) :
     s.val = a.val ∧ back = Array.from_slice a ⦄ := by
   simp [lift, to_slice_mut, to_slice, WP.spec_ok]
 
-def Array.subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) : Result (Slice α) :=
+@[expose] def Array.subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) : Result (Slice α) :=
   if r.start.val < r.end.val ∧ r.end.val ≤ a.val.length then
     ok (.from (a.val.slice r.start.val r.end.val)
           (by
@@ -66,7 +69,7 @@ theorem Array.subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array 
   simp only [this]
 
 
-def Array.update_subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) (s : Slice α) : Result (Array α n) :=
+@[expose] def Array.update_subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) (s : Slice α) : Result (Array α n) :=
   -- TODO: not completely sure here
   if h: r.start.val < r.end.val ∧ r.end.val ≤ a.length ∧ s.val.length = r.end.val - r.start.val then
     ok (.from (a.val.setSlice! r.start s.val) (by scalar_tac))
@@ -91,13 +94,13 @@ theorem Array.update_subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a :
     simp_lists
   . scalar_tac
 
-@[rust_fun "core::array::{core::ops::index::Index<[@T; @N], @I, @O>}::index"]
+@[expose, rust_fun "core::array::{core::ops::index::Index<[@T; @N], @I, @O>}::index"]
 def core.array.Array.index
   {T I Output : Type} {N : Usize} (inst : core.ops.index.Index (Slice T) I Output)
   (a : Array T N) (i : I) : Result Output :=
   inst.index a.to_slice i
 
-@[rust_fun "core::array::{core::ops::index::IndexMut<[@T; @N], @I, @O>}::index_mut"]
+@[expose, rust_fun "core::array::{core::ops::index::IndexMut<[@T; @N], @I, @O>}::index_mut"]
 def core.array.Array.index_mut
   {T I Output : Type} {N : Usize} (inst : core.ops.index.IndexMut (Slice T) I Output)
   (a : Array T N) (i : I) :
@@ -105,14 +108,14 @@ def core.array.Array.index_mut
   let (s, back) ← inst.index_mut a.to_slice i
   ok (s, fun o => Array.from_slice a (back o))
 
-@[rust_trait_impl "core::ops::index::Index<[@T; @N], @I, @O>"]
+@[expose, rust_trait_impl "core::ops::index::Index<[@T; @N], @I, @O>"]
 def core.ops.index.IndexArray {T I Output : Type} {N : Usize}
   (inst : core.ops.index.Index (Slice T) I Output) :
   core.ops.index.Index (Array T N) I Output := {
   index := core.array.Array.index inst
 }
 
-@[rust_trait_impl "core::ops::index::IndexMut<[@T; @N], @I, @O>"]
+@[expose, rust_trait_impl "core::ops::index::IndexMut<[@T; @N], @I, @O>"]
 def core.ops.index.IndexMutArray {T I Output : Type} {N : Usize}
   (inst : core.ops.index.IndexMut (Slice T) I Output) :
   core.ops.index.IndexMut (Array T N) I Output := {
@@ -120,7 +123,7 @@ def core.ops.index.IndexMutArray {T I Output : Type} {N : Usize}
   index_mut := core.array.Array.index_mut inst
 }
 
-@[reducible, rust_type "core::array::TryFromSliceError"]
+@[expose, reducible, rust_type "core::array::TryFromSliceError"]
 def core.array.TryFromSliceError := Unit
 
 @[simp, simp_lists_safe, grind =, agrind =]
@@ -132,7 +135,7 @@ theorem Array.length_to_slice (a : Array α n) :
   a.to_slice.length = n := by
   simp only [Slice.length, Array.to_slice, Slice.from_val, Array.property]
 
-@[rust_fun "core::array::equality::{core::cmp::PartialEq<[@T; @N], [@U; @N]>}::eq"]
+@[expose, rust_fun "core::array::equality::{core::cmp::PartialEq<[@T; @N], [@U; @N]>}::eq"]
 def core.array.equality.PartialEqArray.eq
   {T : Type} {U : Type} {N : Usize} (partialEqInst : core.cmp.PartialEq T U)
   (a0 : Array T N) (a1 : Array U N) : Result Bool := do
@@ -141,7 +144,7 @@ def core.array.equality.PartialEqArray.eq
     List.allM (fun (x, y) => do let b ← partialEqInst.ne x y; ok (¬ b)) (List.zip a0.val a1.val)
   else .ok false
 
-@[rust_fun "core::array::equality::{core::cmp::PartialEq<[@T; @N], [@U; @N]>}::ne"]
+@[expose, rust_fun "core::array::equality::{core::cmp::PartialEq<[@T; @N], [@U; @N]>}::ne"]
 def core.array.equality.PartialEqArray.ne
   {T : Type} {U : Type} {N : Usize} (partialEqInst : core.cmp.PartialEq T U)
   (a0 : Array T N) (a1 : Array U N) : Result Bool := do
@@ -150,7 +153,7 @@ def core.array.equality.PartialEqArray.ne
 
 /-- `<[T] as PartialEq<[U]>>::eq`: two slices are equal iff they have the same
     length and are elementwise equal (per the element `PartialEq`). -/
-@[rust_fun "core::slice::cmp::{core::cmp::PartialEq<[@T], [@U]>}::eq"]
+@[expose, rust_fun "core::slice::cmp::{core::cmp::PartialEq<[@T], [@U]>}::eq"]
 def core.slice.cmp.PartialEqSlice.eq
   {T : Type} {U : Type} (partialEqInst : core.cmp.PartialEq T U)
   (s0 : Slice T) (s1 : Slice U) : Result Bool := do
@@ -218,7 +221,7 @@ theorem core.slice.cmp.PartialEqSlice.eq_homo_spec
     simp [hne]
 
 /-- `<[T] as PartialEq<[U]>>::ne`: negation of slice equality. -/
-@[rust_fun "core::slice::cmp::{core::cmp::PartialEq<[@T], [@U]>}::ne"]
+@[expose, rust_fun "core::slice::cmp::{core::cmp::PartialEq<[@T], [@U]>}::ne"]
 def core.slice.cmp.PartialEqSlice.ne
   {T : Type} {U : Type} (partialEqInst : core.cmp.PartialEq T U)
   (s0 : Slice T) (s1 : Slice U) : Result Bool := do
@@ -276,21 +279,21 @@ theorem core.slice.cmp.PartialEqSlice.ne_homo_spec
     have hne : s1 ≠ s2 := fun h => hlen (by rw [h])
     simp [hne]
 
-@[rust_fun "core::array::{core::fmt::Debug<core::array::TryFromSliceError>}::fmt"]
+@[expose, rust_fun "core::array::{core::fmt::Debug<core::array::TryFromSliceError>}::fmt"]
 def core.array.DebugTryFromSliceError.fmt
   (_ : core.array.TryFromSliceError) (fmt : core.fmt.Formatter) :
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
   -- TODO: this model is simplistic
   .ok (.Ok (), fmt)
 
-@[reducible, rust_trait_impl
+@[expose, reducible, rust_trait_impl
   "core::fmt::Debug<core::array::TryFromSliceError>"]
 def core.fmt.DebugTryFromSliceError : core.fmt.Debug
   core.array.TryFromSliceError := {
   fmt := core.array.DebugTryFromSliceError.fmt
 }
 
-@[rust_fun "core::array::{core::convert::TryFrom<[@T; @N], &'0 [@T], core::array::TryFromSliceError>}::try_from"]
+@[expose, rust_fun "core::array::{core::convert::TryFrom<[@T; @N], &'0 [@T], core::array::TryFromSliceError>}::try_from"]
 def core.array.TryFromArrayCopySlice.try_from
   {T : Type} (N : Usize) (_copyInst : core.marker.Copy T) (s : Slice T) :
   Result (core.result.Result (Array T N) core.array.TryFromSliceError) := do
@@ -310,14 +313,14 @@ theorem core.array.TryFromArrayCopySlice.try_from.step
   simp only [core.array.TryFromArrayCopySlice.try_from]
   grind only [usr Usize.cMax_bound, usr Usize.cMax_bound', = spec_ok, !Array.from_val]
 
-@[rust_fun "core::array::{core::convert::TryFrom<&'a [@T; @N], &'a [@T], core::array::TryFromSliceError>}::try_from"]
+@[expose, rust_fun "core::array::{core::convert::TryFrom<&'a [@T; @N], &'a [@T], core::array::TryFromSliceError>}::try_from"]
 def core.array.TryFromSharedArraySlice.try_from
   {T : Type} (N : Usize) (s : Slice T) :
   Result (core.result.Result (Array T N) core.array.TryFromSliceError) := do
   if h: s.len = N then .ok (.Ok (.from s.val (by scalar_tac)))
   else .ok (.Err ())
 
-@[reducible, rust_trait_impl
+@[expose, reducible, rust_trait_impl
   "core::convert::TryFrom<&'a [@T; @N], &'a [@T], core::array::TryFromSliceError>"]
 def core.convert.TryFromSharedArraySliceTryFromSliceError (T : Type) (N : Usize) :
   core.convert.TryFrom (Array T N) (Slice T)
@@ -325,7 +328,7 @@ def core.convert.TryFromSharedArraySliceTryFromSliceError (T : Type) (N : Usize)
   try_from := core.array.TryFromSharedArraySlice.try_from N
 }
 
-@[rust_fun "core::array::{core::convert::TryFrom<&'a mut [@T; @N], &'a mut [@T], core::array::TryFromSliceError>}::try_from"]
+@[expose, rust_fun "core::array::{core::convert::TryFrom<&'a mut [@T; @N], &'a mut [@T], core::array::TryFromSliceError>}::try_from"]
 def core.array.TryFromMutArraySlice.try_from
   {T : Type} (N : Usize) (s : Slice T) :
   Result (
@@ -342,14 +345,14 @@ def core.array.TryFromMutArraySlice.try_from
   else ok ((.Err (), fun _ => s))
 
 /-- Model for `<[T; N] as AsRef<[T]>>::as_ref`: returns the array viewed as a slice. -/
-@[rust_fun "core::array::{core::convert::AsRef<[@T; @N], [@T]>}::as_ref"]
+@[expose, rust_fun "core::array::{core::convert::AsRef<[@T; @N], [@T]>}::as_ref"]
 def Array.Insts.CoreConvertAsRefSlice.as_ref
     {T : Type} {N : Usize} (a : Array T N) : Result (Slice T) :=
   ok (.from a.val (by scalar_tac))
 
 /-- Model for `<[T; N] as AsMut<[T]>>::as_mut`: returns the array as a mutable slice
     plus a back-conversion that restores it to an array. -/
-@[rust_fun "core::array::{core::convert::AsMut<[@T; @N], [@T]>}::as_mut"]
+@[expose, rust_fun "core::array::{core::convert::AsMut<[@T; @N], [@T]>}::as_mut"]
 def Array.Insts.CoreConvertAsMutSlice.as_mut
     {T : Type} {N : Usize} (a : Array T N) :
     Result ((Slice T) × (Slice T → Array T N)) :=
@@ -474,13 +477,13 @@ theorem Array.index_mut_SliceIndexRangeFromUsizeSlice {T : Type} {N : Usize}
     show (r.start : Usize) ≤ a.to_slice.length from by scalar_tac]
   simp
 
-@[reducible, rust_trait_impl "core::convert::AsRef<[@T; @N], [@T]>"]
+@[expose, reducible, rust_trait_impl "core::convert::AsRef<[@T; @N], [@T]>"]
 def Array.Insts.CoreConvertAsRefSlice (T : Type) (N : Std.Usize) :
   core.convert.AsRef (Array T N) (Slice T) := {
   as_ref := Array.Insts.CoreConvertAsRefSlice.as_ref
 }
 
-@[reducible, rust_trait_impl "core::convert::AsMut<[@T; @N], [@T]>"]
+@[expose, reducible, rust_trait_impl "core::convert::AsMut<[@T; @N], [@T]>"]
 def Array.Insts.CoreConvertAsMutSlice (T : Type) (N : Std.Usize) :
   core.convert.AsMut (Array T N) (Slice T) := {
   as_mut := Array.Insts.CoreConvertAsMutSlice.as_mut

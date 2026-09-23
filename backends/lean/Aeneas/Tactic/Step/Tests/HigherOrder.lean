@@ -1,3 +1,4 @@
+module
 import Aeneas.Std.Slice
 import Aeneas.Tactic.Step
 

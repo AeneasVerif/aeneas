@@ -1,3 +1,4 @@
+module
 import AeneasMeta.Async.TestTactics
 
 namespace Aeneas.Async.Test
