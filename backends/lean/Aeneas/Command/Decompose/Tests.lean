@@ -1,6 +1,7 @@
 /-
 Tests for the #decompose command
 -/
+module
 import Aeneas.Command.Decompose
 import Aeneas.Std
 import Aeneas.Do.Elab

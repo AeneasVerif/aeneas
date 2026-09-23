@@ -1,3 +1,4 @@
+module
 import Aeneas.Tactic.Simp.SimpScalar.Lemmas
 
 /-!
