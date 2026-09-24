@@ -481,4 +481,18 @@ example (m : Id Nat) (next : Nat → Id Nat) (P Q S : Nat → Prop)
   guard_hyp post : P result ∧ Q result
   exact hNext result post.1
 
+/- A `post_intro_tactic` splitting the facts `keepBundled` leaves bundled. -/
+macro (name := splitFacts) "split_facts" : tactic => `(tactic| try simp only [and_imp])
+
+#register_spec_info { bundledSpecInfo with
+  intro_tactic := some ``keepBundled
+  post_intro_tactic := some ``splitFacts }
+
+example (m : Id Nat) (P Q : Nat → Prop)
+    (h : triple True m (fun r => P r ∧ Q r)) : triple True m P := by
+  step with h as ⟨result, hp, hq⟩
+  guard_hyp hp : P result
+  guard_hyp hq : Q result
+  exact hp
+
 end Aeneas.Tactic.Step.Tests.IntroTactic

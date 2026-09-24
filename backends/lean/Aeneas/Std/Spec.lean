@@ -44,6 +44,9 @@ structure SpecInfo where
   It must return the index of the output among the binders of the resulting goal: usually 0. -/
   intro_tactic : Option Lean.Name := none
 
+  /-- Name of a tactic normalizing the goal after output destructuring. -/
+  post_intro_tactic : Option Lean.Name := none
+
   /-- Tactic applied on mono's and bind's preconditions in `step`
       and mono's and bind's final goals in `step*`.
       Final goals are also attempted with equality substitution first.
