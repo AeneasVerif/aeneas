@@ -44,9 +44,6 @@ structure SpecInfo where
   It must return the index of the output among the binders of the resulting goal: usually 0. -/
   intro_tactic : Option Lean.Name := none
 
-  /-- Name of a tactic normalizing the goal after output destructuring. -/
-  post_intro_tactic : Option Lean.Name := none
-
   to_mvcgen: Option Name
 
   liftings : Array LiftingInfo
