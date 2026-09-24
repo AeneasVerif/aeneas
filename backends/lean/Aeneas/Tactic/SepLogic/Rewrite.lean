@@ -1,4 +1,22 @@
-import Aeneas.Tactic.SepLogic.Frame
+module
+public import Aeneas.Tactic.SepLogic.Frame
+public meta import Lean
+public meta import AeneasMeta.Simp
+public section
+
+namespace Aeneas.SepLogic
+
+/-- The rule behind `irewrite`: rewrite a part of the left-hand side of an
+entailment with an entailment of its own. -/
+theorem entails_rewrite {H₁ H₂ H₃ H₄ : IProp} (hPart : H₁ ⊢ H₂)
+    (hRest : H₂ ∗ H₃ ⊢ H₄) : H₁ ∗ H₃ ⊢ H₄ :=
+  entails_trans (sep_mono hPart (entails_refl H₃)) hRest
+
+end Aeneas.SepLogic
+
+end
+
+public meta section
 
 /-!
 # `irewrite`
@@ -11,12 +29,6 @@ closed when plain cancellation cannot see through it.
 namespace Aeneas.SepLogic
 
 open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic
-
-/-- The rule behind `irewrite`: rewrite a part of the left-hand side of an
-entailment with an entailment of its own. -/
-theorem entails_rewrite {H₁ H₂ H₃ H₄ : IProp} (hPart : H₁ ⊢ H₂)
-    (hRest : H₂ ∗ H₃ ⊢ H₄) : H₁ ∗ H₃ ⊢ H₄ :=
-  entails_trans (sep_mono hPart (entails_refl H₃)) hRest
 
 namespace IFrame
 

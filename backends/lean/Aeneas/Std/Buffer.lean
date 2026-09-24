@@ -1,8 +1,10 @@
-import Aeneas.Std.RawPtr
-import Aeneas.Std.Slice
-import Aeneas.Tactic.SepLogic.Frame
-import Aeneas.Tactic.SepLogic.Intro
-import Aeneas.Tactic.Step.Init
+module
+public import Aeneas.Std.RawPtr
+public import Aeneas.Std.Slice
+public import Aeneas.Tactic.SepLogic.Frame
+public import Aeneas.Tactic.SepLogic.Intro
+public import Aeneas.Tactic.Step.Init
+@[expose] public section
 
 /-!
 # Buffers

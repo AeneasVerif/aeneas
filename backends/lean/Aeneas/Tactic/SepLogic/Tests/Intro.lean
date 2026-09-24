@@ -1,4 +1,6 @@
-import Aeneas.Tactic.SepLogic.Intro
+module
+public import Aeneas.Tactic.SepLogic.Intro
+public section
 
 /-!
 # Regression tests for `iintro_entail` and `isimpl`
