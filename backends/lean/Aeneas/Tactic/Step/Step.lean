@@ -811,18 +811,20 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTr
   foldScalarTypes
   if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after folding back the scalar types"
+
   /- Normalize the premise into the `∀ x, P₀ → ... → Pₘ → k ⦃ Q ⦄` shape. -/
   let outputIndex ← match info.intro_tactic with
     | some fn => runIntroTactic fn
     | none => pure 0
   if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after running `intro_tactic`"
+
   /- Introduce the single output and recursively destructure it according to the
      merged binder tree. We use a fresh internal name here and rename leaves to
      user-provided names later. -/
   let mut outputFVars : Array FVarId := #[]
   /- The `intro_tactic` may have put binders before the output (e.g., existential witnesses
-     hoisted by `intro_split`, see `IntroFn`): introduce them first. -/
+     hoisted by `intro_split`): introduce them first. -/
   let (witnessFVars, goal) ← (← getMainGoal).introNP outputIndex
   setGoals [goal]
   let goal ← getMainGoal
@@ -850,7 +852,7 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTr
     reduceOutputProjections
     if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
 
-  /- The `post_intro_tactic` only normalizes the goal: it does not introduce anything. -/
+  /- The `post_intro_tactic` normalizes the goal. -/
   if let some tac := info.post_intro_tactic then
     withTraceNode `Step (fun _ => pure m!"post_intro_tactic: {tac}") do
       evalTactic (mkNode tac #[])
