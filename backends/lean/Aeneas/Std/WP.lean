@@ -722,6 +722,7 @@ example (x : Nat) :
     apply spec_mono
     . apply add2_spec'
     intro_split
+    --
     /- The marker of the *enclosing* post-condition is left alone: `step` reduces it by
        destructuring the output. -/
     simp only [uncurry'_eq]
@@ -731,9 +732,7 @@ private theorem massert_spec' (b : Prop) [Decidable b] (h : b) :
   massert b ⦃ _ => True ⦄ := by
   grind [massert]
 
-/-- Example with a function outputting `()`: the quantifier is over `Unit`, and the fact it
-carries says nothing, so `intro_split` drops it. `step` additionally instantiates the `Unit`
-binder rather than introducing a useless output. -/
+/-- Example with a function outputting `()` (we need to eliminate the quantifier) -/
 example :
   (do
     massert (0 < 1);
