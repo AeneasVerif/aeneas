@@ -1,4 +1,31 @@
-import Aeneas.Tactic.SepLogic.Frame
+module
+public import Aeneas.Tactic.SepLogic.Frame
+public meta import Lean
+public meta import AeneasMeta.Simp
+public section
+
+namespace Aeneas.SepLogic
+
+/-- Marker used while `step` introduces a callee postcondition. It keeps
+`iintro_shallow` from traversing into the inferred frame. -/
+@[expose] def introFrame (F : IProp) : IProp := F
+
+theorem introFrame_eq (F : IProp) : introFrame F = F := by
+  rfl
+
+/-- Copy a pure fact from an entailment's source into the local context without
+removing it from the source. -/
+theorem entails_pure_keep {P : Prop} {H H' H₀ : IProp}
+    (hExtract : H₀ ⊢ ⌜P⌝ ∗ H) (h : P → H₀ ⊢ H') : H₀ ⊢ H' := by
+  intro heap hH₀
+  have ⟨hP, _⟩ := (sep_pure_l P H heap).mp (hExtract heap hH₀)
+  exact h hP heap hH₀
+
+end Aeneas.SepLogic
+
+end
+
+public meta section
 
 /-!
 # `iintro` and `isimpl`
@@ -10,13 +37,6 @@ and the entailment-facing names of `iframe`.
 namespace Aeneas.SepLogic
 
 open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic
-
-/-- Marker used while `step` introduces a callee postcondition. It keeps
-`iintro_shallow` from traversing into the inferred frame. -/
-def introFrame (F : IProp) : IProp := F
-
-theorem introFrame_eq (F : IProp) : introFrame F = F := by
-  rfl
 
 /-- Find a directly exposed pure assertion in a separating-conjunction tree and
 return its proposition together with the tree with that assertion removed.
@@ -44,14 +64,6 @@ private partial def extractPure? (pre : Expr) : Option (Expr × Expr) :=
         | none => none
   else
     none
-
-/-- Copy a pure fact from an entailment's source into the local context without
-removing it from the source. -/
-theorem entails_pure_keep {P : Prop} {H H' H₀ : IProp}
-    (hExtract : H₀ ⊢ ⌜P⌝ ∗ H) (h : P → H₀ ⊢ H') : H₀ ⊢ H' := by
-  intro heap hH₀
-  have ⟨hP, _⟩ := (sep_pure_l P H heap).mp (hExtract heap hH₀)
-  exact h hP heap hH₀
 
 /-- One step of `iintro`: peel a quantifier or a pure fact off the precondition
 of an entailment. Fails when the precondition is purely spatial.

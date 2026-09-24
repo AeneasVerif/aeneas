@@ -1,5 +1,7 @@
-import Aeneas.SepLogic.Basic
-import AeneasMeta.Simp
+module
+public import Aeneas.SepLogic.Basic
+public import AeneasMeta.Simp
+public section
 
 /-!
 # Setup for the separation-logic proof mode
@@ -21,5 +23,15 @@ initialize irisSimpExt : SimpExtension ←
     The `iris_simps` attribute registers simp lemmas used by `iframe` and \
     `iintro` to normalize separation-logic assertions (typically, lemmas that \
     decompose a representation predicate into the cells it owns)."
+
+namespace IFrame
+
+theorem sep_ipure_eq (P Q : Prop) :
+    (⌜P⌝ ∗ ⌜Q⌝) = ⌜P ∧ Q⌝ := by
+  apply IProp.ext
+  intro heap
+  exact sep_pure_l P ⌜Q⌝ heap
+
+end IFrame
 
 end Aeneas.SepLogic

@@ -1,6 +1,6 @@
 module
 
-import Mathlib.Data.Finmap
+public import Mathlib.Data.Finmap
 public import Aeneas.Data.PartialCommMonoid
 
 public section
@@ -42,7 +42,7 @@ abbrev Loc := AllocId × Nat
 /- Heap entries store the Lean type and the value of one slot. -/
 abbrev HeapCell := Σ α : Type, α
 
-private abbrev HeapImpl := Finmap fun _ : Loc => HeapCell
+abbrev HeapImpl := Finmap fun _ : Loc => HeapCell
 
 /-- A finite collection of dynamically typed heap cells. -/
 structure Heap where
@@ -356,7 +356,7 @@ theorem compatible_freshRef {α : Type} (h : Heap) (values : List α) :
   exact not_mem_freshBase (h := h) rfl hMem
 
 /-- The heap `freshRef` allocates into. -/
-def freshHeap {α : Type} (h : Heap) (values : List α) : Heap :=
+@[expose] def freshHeap {α : Type} (h : Heap) (values : List α) : Heap :=
   rangeHeap (freshRef α h) values ∪ h
 
 /-! ## Sub-heaps
@@ -367,7 +367,7 @@ they are closed under the extension order below, the way Iris's `uPred` is
 monotone in its resource. -/
 
 /-- `Heap.Sub h h'`: `h'` is `h` extended with cells that `h` does not own. -/
-def Sub (h h' : Heap) : Prop :=
+@[expose] def Sub (h h' : Heap) : Prop :=
   ∃ rest, PartialCommMonoid.Compatible h rest ∧ h' = h ∪ rest
 
 namespace Sub

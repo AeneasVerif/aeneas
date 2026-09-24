@@ -34,7 +34,7 @@ theorem bind_assoc_mixed {α : Type u} {β γ : Type v}
     (x : Result α) (f : α → Result β) (g : β → Result γ) :
     ((do let b ← ((do let a ← x; f a) : Result β); g b) : Result γ) =
       ((do let a ← x; let b ← f a; g b) : Result γ) :=
-  bind_assoc_poly x f g
+  Std.bind_assoc x f g
 
 end Std
 
@@ -96,7 +96,7 @@ theorem forall_unit_intro {p : Unit → Prop} (h : p ()) : ∀ value, p value :=
 export Intro (forall_unit)
 attribute [step_simps]
   bind_assoc Std.bind_tc_ok Std.bind_tc_vis Std.bind_tc_fail Std.bind_tc_div
-  Std.bind_assoc Std.bind_ok Std.bind_vis Std.bind_div
+  Std.bind_assoc Std.bind_ok Std.bind_vis Std.bind_fail Std.bind_div
   /- Those are quite useful to simplify the goal further by eliminating existential quantifiers for instance. -/
   and_assoc Std.Result.ok.injEq Prod.mk.injEq
   exists_eq_left exists_eq_left' exists_eq_right exists_eq_right' exists_eq exists_eq' true_and and_true
@@ -1571,7 +1571,7 @@ meta def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Op
   return ⟨ goals, usedTheorem ⟩
 
 /-- The rewrite rules which discharge the specification of a terminal return. -/
-def terminalSimps : Array Name := #[
+meta def terminalSimps : Array Name := #[
   ``Std.WP.spec_ok,   ``Std.WP.spec_fail,   ``Std.WP.spec_div,
   ``Std.WP.dspec_ok,  ``Std.WP.dspec_fail,  ``Std.WP.dspec_div,
   ``Std.WP.ispec_ok,  ``Std.WP.ispec_fail,  ``Std.WP.ispec_div,
@@ -1593,6 +1593,9 @@ def terminalSimps : Array Name := #[
 -/
 meta def tryTerminalReturn : TacticM Bool := do
   withTraceNode `Step (fun _ => pure m!"tryTerminalReturn") do
+  /- Only normalize specification statements: `step` must not close other goals. -/
+  if (← withMainContext do observing? (getSpecInfoArgs (← getMainTarget))).isNone then
+    return false
   let some _ ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false }
       {simpThms := #[← stepSimpExt.getTheorems]} (.targets #[] true)
     | return true
@@ -1611,7 +1614,8 @@ meta def tryTerminalReturn : TacticM Bool := do
     return false
   /- Normalize what is left exactly as after applying a specification (for the
      separation logic judgments, this frames the resulting entailment). -/
-  if let some tac := info.post_intro_tactic then runIntroTactic tac
+  if let some tac := info.post_intro_tactic then
+    withMainContext do evalTactic (mkNode tac #[])
   pure true
 
 meta def evalStep

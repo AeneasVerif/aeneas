@@ -1,4 +1,6 @@
-import Aeneas.Tactic.Step
+module
+public import Aeneas.Tactic.Step
+public section
 
 namespace Aeneas.Tactic.Step.Tests.SpatialGhosts
 

@@ -1,4 +1,6 @@
-import Aeneas.Tactic.SepLogic.Rewrite
+module
+public import Aeneas.Tactic.SepLogic.Rewrite
+public section
 
 /-!
 # Regression tests for `irewrite`

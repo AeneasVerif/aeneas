@@ -1,4 +1,6 @@
-import Aeneas.Std.Heap
+module
+public import Aeneas.Std.Heap
+@[expose] public section
 
 /-!
 # Iris-compatible first-order separation logic
@@ -155,20 +157,20 @@ open Lean PrettyPrinter Delaborator SubExpr
 
 /-- Print pure assertions using separation-logic quotation syntax. -/
 @[app_delab ipure]
-def delabIpure : Delab := do
+meta def delabIpure : Delab := do
   guard ((← getExpr).isAppOfArity ``ipure 1)
   let proposition ← withAppArg delab
   `(⌜$proposition⌝)
 
 @[app_delab iand]
-def delabIand : Delab := do
+meta def delabIand : Delab := do
   let lhs ← withNaryArg 0 delab
   let rhs ← withNaryArg 1 delab
   `(iprop($lhs ∧ $rhs))
 
 /-- Print separation-logic entailment using its surface notation. -/
 @[app_delab Entails]
-def delabEntails : Delab := do
+meta def delabEntails : Delab := do
   guard ((← getExpr).isAppOfArity ``Entails 2)
   let lhs ← withNaryArg 0 delab
   let rhs ← withNaryArg 1 delab

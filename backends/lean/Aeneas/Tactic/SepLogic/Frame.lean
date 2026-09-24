@@ -1,5 +1,10 @@
-import Aeneas.Tactic.SepLogic.Init
-import Lean.Meta.Tactic.AC
+module
+public import Aeneas.Tactic.SepLogic.Init
+public meta import Aeneas.Tactic.SepLogic.Init
+public import Lean.Meta.Tactic.AC
+public meta import Lean
+public meta import AeneasMeta.Simp
+public meta section
 
 /-!
 # `iframe` and `isimp`
@@ -586,12 +591,6 @@ partial def pullGoal (goal : MVarId) : TacticM MVarId := do
     pullLeft goal
 
 end
-
-private theorem sep_ipure_eq (P Q : Prop) :
-    (⌜P⌝ ∗ ⌜Q⌝) = ⌜P ∧ Q⌝ := by
-  apply IProp.ext
-  intro heap
-  exact sep_pure_l P ⌜Q⌝ heap
 
 /-- Cancel matching atoms without requiring the residual entailment to be
 provable. Every atom is consumed at most once; unmatched resources stay in the

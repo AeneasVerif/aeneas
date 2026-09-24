@@ -10,7 +10,7 @@ public import Aeneas.SepLogic
 public import Aeneas.Tactic.SepLogic.Frame
 public import Aeneas.Tactic.SepLogic.Intro
 public import Aeneas.Tactic.Step.Init
-public section
+@[expose] public section
 
 /-!
 # Raw pointers
@@ -239,7 +239,9 @@ def MutRawPtr.alloc (value : T) : Result (MutRawPtr T) :=
 @[step]
 theorem MutRawPtr.alloc.spec (value : T) :
     ⦃ emp ⦄ MutRawPtr.alloc value ⦃⇓ q => q ↦ value⦄ :=
-  RawPtr.allocArray.spec _ _ _ fun _ => entails_refl _
+  RawPtr.allocArray.spec _ _ _ fun _ => by
+    rw [RawPtr.pointsTo_eq_range]
+    exact entails_refl _
 
 namespace RawPtr
 
