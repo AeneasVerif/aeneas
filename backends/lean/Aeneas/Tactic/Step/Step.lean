@@ -724,47 +724,19 @@ meta unsafe def evalIntroFnUnsafe (name : Name) : TacticM IntroFn :=
 @[implemented_by evalIntroFnUnsafe]
 meta opaque evalIntroFn (name : Name) : TacticM IntroFn
 
-/-- Run the function registered as an `intro_tactic` on a copy of the main goal, revert what
-it introduced, and return the index of the output (see `IntroFn`). -/
+/-- Run the function registered as an `intro_tactic` on the main goal, revert what it
+introduced, and return the index of the output (see `IntroFn`). -/
 meta def runIntroTactic (fn : Name) : TacticM Nat := do
   withTraceNode `Step (fun _ => pure m!"intro_tactic: {fn}") do
   let run ← evalIntroFn fn
-  let originalGoal ← getMainGoal
-  let goal ← originalGoal.withContext do
-    return (← mkFreshExprSyntheticOpaqueMVar (← originalGoal.getType)
-      (← originalGoal.getTag)).mvarId!
-  let last? := (← goal.getDecl).lctx.lastDecl.map LocalDecl.fvarId
-  setGoals [goal]
+  let last? := (← (← getMainGoal).getDecl).lctx.lastDecl.map LocalDecl.fvarId
   let outputIndex ← run
   match ← getUnsolvedGoals with
-  | [] =>
-    originalGoal.assign (← instantiateMVars (mkMVar goal))
-    return 0
+  | [] => return 0
   | [nextGoal] =>
     let nextGoal ← match last? with
       | some last => Prod.snd <$> nextGoal.revertAfter last
       | none => Prod.snd <$> nextGoal.revert (← nextGoal.withContext do pure (← getLCtx).getFVarIds)
-    let type ← instantiateMVars (← originalGoal.getType)
-    let nextType ← instantiateMVars (← nextGoal.getType)
-    if type == nextType then
-      originalGoal.assign (mkMVar nextGoal)
-      setGoals [nextGoal]
-      return outputIndex
-    /- Preserve sharing between recursive calls. -/
-    if type.hasExprMVar || nextType.hasExprMVar then
-      originalGoal.assign (← instantiateMVars (mkMVar goal))
-      setGoals [nextGoal]
-      return outputIndex
-    /- Hide normalization from well-founded recursion. -/
-    let proof ← originalGoal.withContext do
-      withLocalDeclD `next nextType fun next => do
-        let proof ← withoutModifyingMCtx do
-          nextGoal.assign next
-          instantiateMVars (mkMVar goal)
-        let proof ← mkLambdaFVars #[next] proof
-        let thm ← mkAuxTheorem (← inferType proof) proof (zetaDelta := true)
-        pure (mkApp thm (mkMVar nextGoal))
-    originalGoal.assign proof
     setGoals [nextGoal]
     return outputIndex
   | _ => throwError "`intro_tactic` must not create multiple goals"
@@ -824,7 +796,7 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTr
      user-provided names later. -/
   let mut outputFVars : Array FVarId := #[]
   /- The `intro_tactic` may have put binders before the output (e.g., existential witnesses
-     hoisted by `intro_split`): introduce them first. -/
+     hoisted by `Std.WP.introTactic`): introduce them first. -/
   let (witnessFVars, goal) ← (← getMainGoal).introNP outputIndex
   setGoals [goal]
   let goal ← getMainGoal
@@ -2144,6 +2116,26 @@ _✝ : ↑z = ↑x + y
   example (x : U32) (f : U32 → Result U32) (h : ∀ x, f x ⦃ y => ∃ z, z > 0 ∧ y.val = x.val + z ⦄) :
     f x ⦃ y => y.val > x.val ⦄ := by
     step as ⟨ y, z ⟩
+
+  /- The same with several binders: the existential is below the `uncurry'` marker. -/
+  /--
+error: unsolved goals
+case a
+x : U32
+f : U32 → Result (U32 × U32)
+h : ∀ (x : U32), f x ⦃ a b => ∃ z > 0, ↑a = ↑x + z ∧ b = a ⦄
+z : ℕ
+a b : U32
+_✝² : z > 0
+_✝¹ : ↑a = ↑x + z
+_✝ : b = a
+⊢ ↑a > ↑x
+  -/
+  #guard_msgs in
+  example (x : U32) (f : U32 → Result (U32 × U32))
+      (h : ∀ x, f x ⦃ a b => ∃ z, z > 0 ∧ a.val = x.val + z ∧ b = a ⦄) :
+    f x ⦃ a _ => a.val > x.val ⦄ := by
+    step as ⟨ z, a, b ⟩
 
   /- Inhabited -/
   def get (x : Option α) : Result α :=

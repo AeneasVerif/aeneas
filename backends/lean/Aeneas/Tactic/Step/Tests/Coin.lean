@@ -119,9 +119,7 @@ theorem coinSpec_ret {α p} (x : α) : coinSpec p (ITree.ret x) ↔ p x := by
   mk_spec_mono_skip_args := 2
   mk_spec_bind := ``coinSpec_bind
   mk_spec_bind_skip_args := 4
-  /- The premises of the two rules above are plain implications, which `intro_split`
-     knows how to introduce. -/
-  intro_tactic := some ``Aeneas.Step.Intro.introSplit
+  intro_tactic := some ``Aeneas.Std.WP.introTactic
   to_mvcgen := .none
   liftings := #[
     { from_statement := ``Std.WP.spec

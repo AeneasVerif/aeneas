@@ -667,21 +667,6 @@ example (x : Nat) :
     --
     grind
 
-/-- The same, with the tactic `step` registers to introduce the outputs and the facts of
-their premises. -/
-example (x : Nat) :
-  (do
-    let y ← add1 x
-    add1 y) ⦃ y => y = x + 2 ⦄ := by
-    -- step as ⟨ y, z ⟩
-    apply spec_bind (add1_spec _)
-    intro_split
-    -- step as ⟨ y1, z1⟩
-    apply spec_mono (add1_spec _)
-    intro_split
-    --
-    grind
-
 def add2 (x : Nat) := Result.ok (x + 1, x + 2)
 
 theorem  add2_spec (x : Nat) : add2 x ⦃ (y, z) => y = x + 1 ∧ z = x + 2⦄ :=
@@ -707,9 +692,8 @@ example (x : Nat) :
 theorem  add2_spec' (x : Nat) : add2 x ⦃ y z => y = x + 1 ∧ z = x + 2⦄ :=
   by simp [add2]
 
-/-- The same with separate binders: `intro_split` reduces the `uncurry'` marker of the
-post-condition, and splits the conjunction it holds into two facts. `step` additionally
-destructures the output itself, which is why it can name the two components. -/
+/-- The same with separate binders: the post-condition is wrapped in the `uncurry'` marker,
+which is reduced by destructuring the output. -/
 example (x : Nat) :
   (do
     let (y, _) ← add2 x
@@ -717,15 +701,12 @@ example (x : Nat) :
     -- step as ⟨ y, z ⟩
     apply spec_bind
     . apply add2_spec'
-    intro_split
+    rintro ⟨y, z⟩ ⟨h, _⟩
     -- step as ⟨ y1, z1⟩
     apply spec_mono
     . apply add2_spec'
-    intro_split
-    --
-    /- The marker of the *enclosing* post-condition is left alone: `step` reduces it by
-       destructuring the output. -/
-    simp only [uncurry'_eq]
+    rintro ⟨y1, z1⟩ ⟨h1, _⟩
+    simp only [uncurry'_pair]
     grind
 
 private theorem massert_spec' (b : Prop) [Decidable b] (h : b) :
@@ -742,11 +723,11 @@ example :
   --
   apply spec_bind
   · apply massert_spec'; omega
-  intro_split
+  intro _ _
   --
   apply spec_mono
   · apply massert_spec'; omega
-  intro_split
+  intro _ _
   trivial
 
 /- Example with a post-condition manipulating an ∃ -/
@@ -760,9 +741,7 @@ example (zero : List Nat → Result (List Nat))
       pure ()) ⦃ _ => True ⦄ := by
   apply spec_bind
   · apply zero_spec
-  /- `intro_split` peels the existential of the post-condition, and splits the conjunction
-     under it. -/
-  intro_split
+  rintro _ ⟨_, _⟩
   --
   simp only [pure, spec_ok]
 
@@ -903,6 +882,16 @@ end Aeneas.Std
 
 namespace Aeneas.Std.WP
 
+/-- The `intro_tactic` of `spec` and `dspec`: their premise is a plain `∀ x, P x → …`, and
+normalizing the fact `P x` is all there is to do. The markers are the definitions the
+postcondition notation `⦃ … ⦄` wraps its body in (see `mk_function_syntax`). -/
+meta def introTactic : IntroFn := do
+  let markers := #[``Aeneas.Std.WP.uncurry', ``Aeneas.Std.uncurry]
+  let some (goal, index) ← Aeneas.Step.Intro.normalizeTarget markers
+      (← Lean.Elab.Tactic.getMainGoal) | return 0
+  Lean.Elab.Tactic.replaceMainGoal [goal]
+  return index
+
 -- registers the spec info for use in the step tactic, see Spec.lean
 #register_spec_info {
     spec_name := ``Std.WP.spec
@@ -913,9 +902,7 @@ namespace Aeneas.Std.WP
     mk_spec_mono_skip_args := 2
     mk_spec_bind := ``Std.WP.spec_bind
     mk_spec_bind_skip_args := 4
-    /- The premise of the two rules above is a plain `∀ x, P x → …`: introducing its
-       binders and splitting the fact among them is all there is to do. -/
-    intro_tactic := some ``Aeneas.Step.Intro.introSplit
+    intro_tactic := some ``Aeneas.Std.WP.introTactic
     to_mvcgen := .some ``Std.WP.spec_to_mvcgen
     liftings := #[]
   }
@@ -929,7 +916,7 @@ namespace Aeneas.Std.WP
     mk_spec_mono_skip_args := 2
     mk_spec_bind := ``Std.WP.dspec_bind
     mk_spec_bind_skip_args := 4
-    intro_tactic := some ``Aeneas.Step.Intro.introSplit
+    intro_tactic := some ``Aeneas.Std.WP.introTactic
     to_mvcgen := .some ``Std.WP.dspec_to_mvcgen
     liftings := #[
       { from_statement := ``Std.WP.spec

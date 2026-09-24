@@ -38,7 +38,7 @@ theorem paramSpec_bind' {α β : Type} {k : α → Result β} {Pₖ : β → Pro
     mk_spec_mono_skip_args := 3
     mk_spec_bind := ``paramSpec_bind'
     mk_spec_bind_skip_args := 5
-    intro_tactic := some ``Aeneas.Step.Intro.introSplit
+    intro_tactic := some ``Aeneas.Std.WP.introTactic
     to_mvcgen := none
     liftings := #[]
   }
