@@ -1,3 +1,5 @@
+module
+public import Lean.Elab.Tactic.Basic
 import Aeneas.Tactic.Step
 
 open Aeneas
