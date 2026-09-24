@@ -190,7 +190,7 @@ structure Stats extends Goals where
 
 attribute [step_post_simps]
   Std.IScalar.toNat Std.UScalar.ofNatCore_val_eq Std.IScalar.ofInt_val_eq
-  forall_unit Std.Result.ok.injEq eq_self_iff_true true_and and_true
+  forall_unit Std.Result.ok.injEq
 
 structure Args where
   /-- Asynchronously solve the preconditions? **DO NOT USE**: this is experimental and triggers bugs -/
@@ -2108,15 +2108,16 @@ _✝ : ↑z = ↑x + y
     f x ⦃ y => y.val > x.val ⦄ := by
     step as ⟨ y, z ⟩
 
-  /- The same with several binders: the existential is below the `uncurry'` marker. -/
+  /- With several binders, the existential is below the `uncurry'` marker: its witnesses
+     come after the outputs. -/
   /--
 error: unsolved goals
 case a
 x : U32
 f : U32 → Result (U32 × U32)
 h : ∀ (x : U32), f x ⦃ a b => ∃ z > 0, ↑a = ↑x + z ∧ b = a ⦄
-z : ℕ
 a b : U32
+z : ℕ
 _✝² : z > 0
 _✝¹ : ↑a = ↑x + z
 _✝ : b = a
@@ -2126,7 +2127,7 @@ _✝ : b = a
   example (x : U32) (f : U32 → Result (U32 × U32))
       (h : ∀ x, f x ⦃ a b => ∃ z, z > 0 ∧ a.val = x.val + z ∧ b = a ⦄) :
     f x ⦃ a _ => a.val > x.val ⦄ := by
-    step as ⟨ z, a, b ⟩
+    step as ⟨ a, b, z ⟩
 
   /- Inhabited -/
   def get (x : Option α) : Result α :=
