@@ -705,40 +705,42 @@ Falls back to a single output when the target does not have the expected shape. 
 meta def getCallSiteTree (info : SpecInfo) (isLet : Bool) (goal : MVarId) :
     MetaM NameTree := do
   let fallback : NameTree := .leaf none
+  /- Instantiate like `getFirstBind` does when computing `isLet`, so that we see the same bind. -/
   let goalTy ← instantiateMVars (← goal.getType)
   let goalTy := goalTy.consumeMData
   let (head, specArgs) := goalTy.withApp fun head args => (head.consumeMData, args)
   unless head.isConstOf info.spec_name && specArgs.size == info.arity do
     return fallback
   if isLet then
-    let program := specArgs[info.program_index]!
-    let bindArgs? ←
-      match getBindArgs? program with
-      | some bindArgs => pure (some bindArgs)
-      | none => do
-        let program ← Utils.normalizeLetBindings program
-        pure (getBindArgs? program)
-    let some (_, cont) := bindArgs? | return fallback
+    let some (_, cont) := getBindArgs? specArgs[info.program_index]! | return fallback
     getContInput cont
   else
     getContInput specArgs[info.post_index]!
 
-/-- Run an intro tactic and return the output binder index. -/
-meta def runIntroTacticWithOutput (tac : Name) : TacticM (Option Nat) := do
-  withTraceNode `Step (fun _ => pure m!"intro_tactic: {tac}") do
+meta unsafe def evalIntroFnUnsafe (name : Name) : TacticM IntroFn :=
+  evalConstCheck IntroFn ``IntroFn name
+
+/-- Look up the function registered as an `intro_tactic`. -/
+@[implemented_by evalIntroFnUnsafe]
+meta opaque evalIntroFn (name : Name) : TacticM IntroFn
+
+/-- Run the function registered as an `intro_tactic` on a copy of the main goal, revert what
+it introduced, and return the index of the output (see `IntroFn`). -/
+meta def runIntroTactic (fn : Name) : TacticM Nat := do
+  withTraceNode `Step (fun _ => pure m!"intro_tactic: {fn}") do
+  let run ← evalIntroFn fn
   let originalGoal ← getMainGoal
   let goal ← originalGoal.withContext do
     return (← mkFreshExprSyntheticOpaqueMVar (← originalGoal.getType)
       (← originalGoal.getTag)).mvarId!
   let last? := (← goal.getDecl).lctx.lastDecl.map LocalDecl.fvarId
   setGoals [goal]
-  evalTactic (mkNode tac #[])
+  let outputIndex ← run
   match ← getUnsolvedGoals with
   | [] =>
     originalGoal.assign (← instantiateMVars (mkMVar goal))
-    return none
+    return 0
   | [nextGoal] =>
-    let (outputIndex, nextGoal) ← Intro.takeOutputIndex nextGoal
     let nextGoal ← match last? with
       | some last => Prod.snd <$> nextGoal.revertAfter last
       | none => Prod.snd <$> nextGoal.revert (← nextGoal.withContext do pure (← getLCtx).getFVarIds)
@@ -767,10 +769,6 @@ meta def runIntroTacticWithOutput (tac : Name) : TacticM (Option Nat) := do
     return outputIndex
   | _ => throwError "`intro_tactic` must not create multiple goals"
 
-/-- Run an intro tactic, reverting introduced binders. -/
-meta def runIntroTactic (tac : Name) : TacticM Unit :=
-  discard <| runIntroTacticWithOutput tac
-
 /-- Reduce tuple projections before naming facts. -/
 meta def reduceOutputProjections : TacticM Unit := do
   Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
@@ -792,8 +790,11 @@ meta def foldScalarTypes : TacticM Unit := do
     target of the shape:
     `∀ x, P' x → P₀ → ... → Pₘ → k ⦃ Q ⦄`
 
-    We then introduce the single output `x`, destructured according to the call-site
-    tree, and the post-conditions `P₀ ... Pₘ`.
+    We then introduce the single output `x`, destructured according to the
+    *call-site tree*---i.e., the shape of the pattern with which the program destructures the
+    output of the call we step through (see `getCallSiteTree`): for
+    `let (y, (z, w)) ← f x; k` it is `⟨y, ⟨z, w⟩⟩`. Destructuring the output along it
+    introduces one variable per component rather than a single tuple.
 
     If a grind state is provided, it is updated with the newly introduced hypotheses so that
     subsequent steps can reuse it.
@@ -812,15 +813,17 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTr
   traceGoalWithNode "goal after folding back the scalar types"
   /- Normalize the premise into the `∀ x, P₀ → ... → Pₘ → k ⦃ Q ⦄` shape. -/
   let outputIndex ← match info.intro_tactic with
-    | some tac => runIntroTacticWithOutput tac
-    | none => pure none
+    | some fn => runIntroTactic fn
+    | none => pure 0
   if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after running `intro_tactic`"
   /- Introduce the single output and recursively destructure it according to the
      merged binder tree. We use a fresh internal name here and rename leaves to
      user-provided names later. -/
   let mut outputFVars : Array FVarId := #[]
-  let (witnessFVars, goal) ← (← getMainGoal).introNP (outputIndex.getD 0)
+  /- The `intro_tactic` may have put binders before the output (e.g., existential witnesses
+     hoisted by `intro_split`, see `IntroFn`): introduce them first. -/
+  let (witnessFVars, goal) ← (← getMainGoal).introNP outputIndex
   setGoals [goal]
   let goal ← getMainGoal
   let goalTy ← instantiateMVars (← goal.getType)
@@ -847,8 +850,12 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTr
     reduceOutputProjections
     if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
 
+  /- The `post_intro_tactic` only normalizes the goal: it does not introduce anything. -/
   if let some tac := info.post_intro_tactic then
-    runIntroTactic tac
+    withTraceNode `Step (fun _ => pure m!"post_intro_tactic: {tac}") do
+      evalTactic (mkNode tac #[])
+    if (← getUnsolvedGoals).length > 1 then
+      throwError "`post_intro_tactic` must not create multiple goals"
     if (← getUnsolvedGoals).isEmpty then trace[Step] "Main goal solved by post-intro tactic!"; return none
     traceGoalWithNode "goal after the post-intro tactic"
 

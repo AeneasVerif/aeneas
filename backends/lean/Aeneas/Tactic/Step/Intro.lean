@@ -1,6 +1,7 @@
 module
 public import Lean
 public import AeneasMeta.Utils
+public import Aeneas.Std.Spec
 public section
 
 /-!
@@ -23,20 +24,6 @@ open Lean Meta Elab Tactic
 
 theorem forall_unit {p : Prop} : (Unit → p) ↔ p :=
   ⟨fun h => h (), fun h _ => h⟩
-
-/-- Record the output binder index. -/
-meta def markOutputIndex (goal : MVarId) (index : Nat) : MetaM MVarId := do
-  if index == 0 then return goal
-  goal.replaceTargetDefEq
-    (.mdata (KVMap.empty.setNat `aeneas.step.outputIndex index) (← goal.getType))
-
-meta def takeOutputIndex (goal : MVarId) : MetaM (Option Nat × MVarId) := do
-  if let .mdata data body := ← goal.getType then
-    if let some (.ofNat index) := data.find `aeneas.step.outputIndex then
-      let data := data.erase `aeneas.step.outputIndex
-      let body := if data.isEmpty then body else mkMData data body
-      return (some index, ← goal.replaceTargetDefEq body)
-  return (none, goal)
 
 /-- Whether `e` consists only of outputs, projections, and constructors. -/
 meta partial def isOutputLike (e : Expr) : MetaM Bool := do
@@ -237,7 +224,7 @@ meta def introsPreservingNames (goal : MVarId) : MetaM (Array FVarId × MVarId) 
   goal.introNP (leadingBinders (← instantiateMVars (← goal.getType)).consumeMData)
 
 /-- Introduce a premise and split its facts while preserving binder order. -/
-elab (name := introSplit) "intro_split" : tactic => do
+meta def introSplit : IntroFn := do
   let before ← localHypotheses
   let (introduced, goal) ← introsPreservingNames (← getMainGoal)
   let factIdx? ← goal.withContext do
@@ -249,7 +236,7 @@ elab (name := introSplit) "intro_split" : tactic => do
     pure idx?
   let some factIdx := factIdx? |
       replaceMainGoal [goal]
-      return
+      return 0
   let fact := introduced[factIdx]!
   let hoistExists ← goal.withContext do
     return (← instantiateMVars (← fact.getType)).consumeMData.headBeta.isAppOfArity ``Exists 2
@@ -273,10 +260,13 @@ elab (name := introSplit) "intro_split" : tactic => do
       (newFVars.filter (!witnesses.contains ·)).anyM (exprDependsOn type ·)
   if ordered == newFVars || dependsOnOutput then
     replaceMainGoal [goal]
-    return
+    return 0
   let (reverted, goal) ← goal.revert ordered (preserveOrder := true)
   let goal := (← goal.introNP reverted.size).2
-  let outputIndex := if factIdx > 0 then reverted.idxOf introduced[0]! else 0
-  replaceMainGoal [← markOutputIndex goal outputIndex]
+  replaceMainGoal [goal]
+  return if factIdx > 0 then reverted.idxOf introduced[0]! else 0
+
+/-- `introSplit`, as a tactic. -/
+elab (name := intro_split) "intro_split" : tactic => discard introSplit
 
 end Aeneas.Step.Intro

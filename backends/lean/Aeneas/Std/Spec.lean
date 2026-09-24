@@ -16,6 +16,12 @@ structure LiftingInfo where
   conversion_thm : Name
   conversion_thm_inferred_args : Nat
 
+/-- The type of an `intro_tactic`.
+
+A function registered as an `intro_tactic` must be declared with this type, e.g.
+`meta def myIntro : IntroFn := ...`. -/
+abbrev IntroFn := Lean.Elab.Tactic.TacticM Nat
+
 structure SpecInfo where
   spec_name : Lean.Name
   arity : Nat
@@ -27,21 +33,18 @@ structure SpecInfo where
   mk_spec_bind : Name
   mk_spec_bind_skip_args : Nat
 
-  /-- Name of a tactic run on the mono/bind premise left by the step theorem, to bring it
-  to the `∀ x, P₀ → ... → Pₘ → k ⦃ Q ⦄` shape `step` introduces the outputs from.
+  /-- Name of a function of type `IntroFn` (i.e., `TacticM Nat`) run on the
+  mono/bind premise left by the step theorem, to bring it to the `∀ x, P₀ → ... → Pₘ → k ⦃ Q ⦄`
+  shape `step` introduces the outputs from.
 
   It is run on the premise as it stands: it may transform or solve it, but must not create
-  multiple goals. What it introduces in the context is reverted, so it can introduce the
-  binders of the premise and work on the facts among them — `Aeneas.Step.Intro.intro_split`
-  does exactly that, and is all a statement whose premise already is `∀ x, P x → …` needs.
+  multiple goals. What it introduces in the context is reverted, so it can be reintroduced
+  later with the names provided by the user.
 
-  A tactic which reorders binders must record the output with
-  `Aeneas.Step.Intro.markOutputIndex`.
-
-  Without one, `step` introduces the outputs of the premise as it stands. -/
+  It must return the index of the output among the binders of the resulting goal: usually 0. -/
   intro_tactic : Option Lean.Name := none
 
-  /-- Optional normalization after output destructuring; it must not create multiple goals. -/
+  /-- Name of a tactic normalizing the goal after output destructuring. -/
   post_intro_tactic : Option Lean.Name := none
 
   to_mvcgen: Option Name
@@ -75,6 +78,10 @@ meta unsafe def register_spec_info : Lean.Elab.Command.CommandElab := fun stx =>
     elabTerm info (some (mkConst ``SpecInfo))
   let value ← Lean.Elab.Command.liftTermElabM do
     Lean.Meta.evalExpr SpecInfo (mkConst ``SpecInfo) expr
+  if let some fn := value.intro_tactic then
+    unless (← getConstInfo fn).type.isConstOf ``IntroFn do
+      throwError "`intro_tactic` must be a function of type `Aeneas.IntroFn`, \
+        but `{fn}` has type {(← getConstInfo fn).type}"
   specAttr.add value
 
 meta def specInfoLookup (n : Name) : MetaM (Option SpecInfo) := do
