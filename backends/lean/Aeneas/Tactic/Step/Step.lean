@@ -70,6 +70,7 @@ theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
 
 attribute [step_simps]
   bind_assoc Std.bind_tc_ok Std.bind_tc_vis Std.bind_tc_div
+  Std.bind_assoc Std.bind_ok Std.bind_vis Std.bind_div
   /- Those are quite useful to simplify the goal further by eliminating existential quantifiers for instance. -/
   and_assoc Std.Result.ok.injEq Prod.mk.injEq
   exists_eq_left exists_eq_left' exists_eq_right exists_eq_right' exists_eq exists_eq' true_and and_true
@@ -227,6 +228,13 @@ structure Args where
   /- Syntax of the tactic provided by the user to solve the remaining proof obligations -/
   byTacSyntax : Option Syntax
 
+/-- Recognize both the monad-class bind and `Result`'s heterogeneous bind. -/
+meta def getBindArgs? (program : Expr) : Option (Expr × Expr) :=
+  match_expr program.consumeMData with
+  | Bind.bind _ _ _ _ m next => some (m, next)
+  | Std.bind _ _ m next => some (m, next)
+  | _ => none
+
 /-- Decompose a registered specification statement -/
 meta def getSpecInfoArgs (ty : Expr) : MetaM (SpecInfo × Array Expr) :=
   ty.consumeMData.withApp fun spec? args => do
@@ -263,12 +271,11 @@ meta def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr × SpecInfo) := do
   let compTy := args[info.program_index]!
 
   trace[Step] "compTy: {compTy}"
+  trace[Step] "bind?: {compTy.consumeMData.getAppFn}"
 
-  let (bind?, args) := compTy.consumeMData.withApp (fun f args => (f, args))
-  trace[Step] "bind?: {bind?}"
-  if h: bind?.isConstOf ``bind ∧ args.size = 6
-  then pure (true, args[4], info)
-  else pure (false, compTy, info)
+  match getBindArgs? compTy with
+  | some (m, _) => pure (true, m, info)
+  | none => pure (false, compTy, info)
 
 /-- Names introduced by the `do` elaborator's `mkPatContinuation` as a
     fallback (`_xN`) when no leaf name is available — e.g. all leaves are
@@ -428,7 +435,7 @@ meta def getBindVarNames : TacticM (Array (Option Name)) := do
     let goalTy ← getMainTarget
     forallTelescope goalTy fun _ goalTy => do
     let m ← getSpecProgram goalTy
-    let_expr Bind.bind _ _ _ _ _ cont := m | return #[]
+    let some (_, cont) := getBindArgs? m | return #[]
     getPostNames cont
   catch _ => pure #[]
 

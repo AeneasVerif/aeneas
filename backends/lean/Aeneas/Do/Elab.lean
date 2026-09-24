@@ -41,34 +41,29 @@ meta instance [Monad m] [MonadQuotation m] : MonadQuotation (ContT r m) where
 namespace Aeneas
 namespace Do
 
-/-- Monad info cached from the `do` block's expected type `m α`. -/
+/-- Info cached from the `do` block's expected type `Result α`. -/
 structure Context where
-  m : Expr
   /-- The element type `α`. -/
   expectedAlpha : Expr
-  /-- Instance of `Bind m` -/
-  bindInst : Expr
-  /-- Instance of `Pure m` -/
-  pureInst : Expr
 
 abbrev ElabM := ReaderT Context $ ContT Expr TermElabM
 
-/-- Split `m α` and synthesize the `Bind m` and `Pure m` instances. -/
+/-- Split `Result α`. -/
 meta def mkContext (expectedType : Expr) : TermElabM Context := do
   let expectedType ← whnf expectedType
-  let (m, α) ← match expectedType with
-    | Expr.app m α => pure (m, α)
-    | _ => throwError "expected a monadic type `m α`, got {indentExpr expectedType}"
-  let bindInst ← synthInstance (← mkAppM ``Bind #[m])
-  let pureInst ← synthInstance (← mkAppM ``Pure #[m])
-  return { m, expectedAlpha := α, bindInst, pureInst }
+  match_expr expectedType with
+  | Aeneas.Std.Result α => return { expectedAlpha := α }
+  | _ => throwError "expected a type of the shape `Result α`, got {indentExpr expectedType}"
 
-meta def ElabM.mkBind (e k : Expr) : ElabM Expr := do
-  let ctx ← read
-  mkAppOptM ``Bind.bind #[some ctx.m, some ctx.bindInst, none, none, some e, some k]
+/-- Build `Result α`. `Std.bind` supports binds between different universes, so we do not force
+    `α` to live in the universe of the `do` block's expected type. -/
+meta def ElabM.mkMonadicType (α : Expr) : ElabM Expr := do
+  return mkApp (mkConst ``Aeneas.Std.Result [← getDecLevel α]) α
 
-/-- Build `m α`. -/
-meta def ElabM.mkMonadicType (α : Expr) : ElabM Expr := read >>= fun ctx => pure (mkApp ctx.m α)
+/-- Build `Std.bind e k`. We always use the universe polymorphic `Std.bind` (and never `Bind.bind`).
+    We do not provide the result type: it is inferred from `k`. -/
+meta def ElabM.mkBind (e k : Expr) : ElabM Expr :=
+  mkAppOptM ``Aeneas.Std.bind #[none, none, some e, some k]
 
 /-- Run an `ElabM` against the given `do` block expected type. -/
 meta def ElabM.execute (x : ElabM Expr) (expectedType : Expr) : TermElabM Expr := do
@@ -564,7 +559,10 @@ meta def elabDo : TermElab := fun stx expectedType? => do
     | _ => pure false
   if useNewElab then
     let `(do $doSeq) := stx | throwUnsupportedSyntax
-    Do.ElabM.execute (Do.elabDoSeq doSeq) expectedType?.get!
+    let result ← Do.ElabM.execute (Do.elabDoSeq doSeq) expectedType?.get!
+    let result ← Term.ensureHasType expectedType? result
+    synthesizeSyntheticMVarsNoPostponing
+    instantiateMVars result
   else
     Term.elabDo stx expectedType?
 
