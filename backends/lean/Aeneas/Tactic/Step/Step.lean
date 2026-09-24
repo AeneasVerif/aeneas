@@ -190,10 +190,7 @@ structure Stats extends Goals where
 
 attribute [step_post_simps]
   Std.IScalar.toNat Std.UScalar.ofNatCore_val_eq Std.IScalar.ofInt_val_eq
-
-attribute [step_post_simps]
   forall_unit Std.Result.ok.injEq
-
 
 structure Args where
   /-- Asynchronously solve the preconditions? **DO NOT USE**: this is experimental and triggers bugs -/
@@ -524,7 +521,7 @@ meta def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) :=
 
 /-- Attempt to match a given theorem with the monadic call in the target.
 The resulting target should be the registered judgment's mono/bind premise,
-e.g. `∀ x, P x → k ⦃ Q ⦄`.
+e.g. `∀ x, P x → k x ⦃ Q ⦄` or `∀ x, P₀ x → P₁ x`.
 -/
 meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th : Expr) :
   TacticM (Array MVarId) := do
@@ -700,9 +697,14 @@ def elimUnitOutput (goal : MVarId) : MetaM (Option MVarId) := goal.withContext d
   goal.assign (mkApp2 (mkConst ``forall_unit_intro) post newGoal)
   return some newGoal.mvarId!
 
-/-- Extract the output destructuring requested by the original specification
-goal. Bind goals use the source continuation, while terminal goals use the
-outer postcondition. Falls back to a single output when the shape is unavailable. -/
+/-- Extract how the output has to be restructured from the target.
+
+- bind case: the target is `(do let (y, z) ← f x; k y z) ⦃ Q ⦄`, and we read the
+  pattern `(y, z)` from the input of the continuation.
+- mono case: the target is `f x ⦃ (y, z) => Q y z ⦄`, and we read the pattern `(y, z)`
+  from the input of the post-condition.
+
+Falls back to a single output when the target does not have the expected shape. -/
 meta def getCallSiteTree (info : SpecInfo) (isLet : Bool) (goal : MVarId) :
     MetaM NameTree := do
   let fallback : NameTree := .leaf none
@@ -787,16 +789,14 @@ def foldScalarTypes : TacticM Unit := do
     the step theorem.
 
     After application of the step theorem, the target is the judgment's mono/bind premise,
-    e.g. `∀ x, P x → k ⦃ Q ⦄`.
+    e.g. `∀ x, P x → k x ⦃ Q ⦄` or `∀ x, P₀ x → P₁ x`.
 
-    We transform it to a target of the shape:
+    The `intro_tactic` registered by the specification statement first normalizes it to a
+    target of the shape:
     `∀ x, P' x → P₀ → ... → Pₘ → k ⦃ Q ⦄`
 
-    where the single output `x` is destructured according to the call-site
-    tree.
-
-    Normalizing the premise into that shape is the job of the specification statement: it is
-    what the tactic it registers as its `intro_tactic` does.
+    We then introduce the single output `x`, destructured according to the call-site
+    tree, and the post-conditions `P₀ ... Pₘ`.
 
     If a grind state is provided, it is updated with the newly introduced hypotheses so that
     subsequent steps can reuse it.
