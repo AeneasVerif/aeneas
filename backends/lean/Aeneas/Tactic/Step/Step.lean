@@ -190,7 +190,7 @@ structure Stats extends Goals where
 
 attribute [step_post_simps]
   Std.IScalar.toNat Std.UScalar.ofNatCore_val_eq Std.IScalar.ofInt_val_eq
-  forall_unit Std.Result.ok.injEq
+  forall_unit Std.Result.ok.injEq eq_self_iff_true true_and and_true
 
 structure Args where
   /-- Asynchronously solve the preconditions? **DO NOT USE**: this is experimental and triggers bugs -/
@@ -686,16 +686,13 @@ meta def introOneSurfaceBinder {α} (goal : MVarId) (tree : BTree α) :
 unit is not an output, and introducing it would shift the names of the outputs and
 post-conditions which follow.
 
-Returns `none` when the goal does not start with a `Unit` binder. -/
-def elimUnitOutput (goal : MVarId) : MetaM (Option MVarId) := goal.withContext do
-  let goalTy := (← instantiateMVars (← goal.getType)).consumeMData
-  unless goalTy.isForall && goalTy.bindingDomain!.consumeMData.isConstOf ``Unit do
-    return none
-  let post := Expr.lam goalTy.bindingName! (mkConst ``Unit) goalTy.bindingBody!
-    goalTy.bindingInfo!
-  let newGoal ← mkFreshExprSyntheticOpaqueMVar (goalTy.bindingBody!.instantiate1 (mkConst ``Unit.unit))
-  goal.assign (mkApp2 (mkConst ``forall_unit_intro) post newGoal)
-  return some newGoal.mvarId!
+`goalTy` is the (instantiated) type of `goal`, which must be `∀ x : Unit, body`. -/
+meta def elimUnitOutput (goal : MVarId) (goalTy : Expr) : MetaM MVarId := goal.withContext do
+  let .forallE name _ body info := goalTy
+    | throwError "elimUnitOutput: expected a `Unit` binder, got {goalTy}"
+  let newGoal ← mkFreshExprSyntheticOpaqueMVar (body.instantiate1 (mkConst ``Unit.unit))
+  goal.assign (mkApp2 (mkConst ``forall_unit_intro) (.lam name (mkConst ``Unit) body info) newGoal)
+  return newGoal.mvarId!
 
 /-- Extract how the output has to be restructured from the target.
 
@@ -808,15 +805,17 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTr
   traceGoalWithNode "Initial goal"
   trace[Step] "call-site tree: {repr callSiteTree}"
 
+  /- Instantiating the step theorem may unfold scalar types (e.g., `U32` to `UScalar .U32`):
+     fold them back. -/
+  foldScalarTypes
+  if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
+  traceGoalWithNode "goal after folding back the scalar types"
   /- Normalize the premise into the `∀ x, P₀ → ... → Pₘ → k ⦃ Q ⦄` shape. -/
   let outputIndex ← match info.intro_tactic with
     | some tac => runIntroTacticWithOutput tac
     | none => pure none
   if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after running `intro_tactic`"
-  foldScalarTypes
-  if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
-  traceGoalWithNode "goal after folding back the scalar types"
   /- Introduce the single output and recursively destructure it according to the
      merged binder tree. We use a fresh internal name here and rename leaves to
      user-provided names later. -/
@@ -831,9 +830,9 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTr
   -- instantiate the `forall` quantifier rather than introduce a useless output.
   if goalTy.isForall then
     if ¬ (← isProp goalTy.bindingDomain!) then
-      if let some goal' ← elimUnitOutput goal then
+      if goalTy.bindingDomain!.consumeMData.isConstOf ``Unit then
         trace[Step] "unit output — instantiating its binder"
-        setGoals [goal']
+        setGoals [← elimUnitOutput goal goalTy]
       else
         let (fvs, goal') ← introOneSurfaceBinder goal callSiteTree
         setGoals [goal']
@@ -1016,33 +1015,6 @@ meta def trySolvePreconditions (args : Args) (config : Config)
     allGoalsNoRecover (solvePreconditionTac stepState.grindState?)
     pure (stepState, (← getUnsolvedGoals).map fun g => (g, OptTask.none))
 
-/-- Simplify logical facts without changing the structure of bundled match alternatives. -/
-def simplifyPostLogic (goal : MVarId) (posts : Array FVarId) :
-    MetaM (Option (Array FVarId × MVarId)) := do
-  let thms ← #[``eq_self_iff_true, ``true_and, ``and_true]
-    |>.foldlM (fun thms name => thms.addConst name (post := false)) ({} : SimpTheorems)
-  let ctx ← Lean.Meta.Simp.mkContext
-    { iota := false, zeta := false, dsimp := false, maxDischargeDepth := 0 }
-    (simpTheorems := #[thms])
-  let pre : Lean.Meta.Simp.Simproc := fun e => do
-    if e.isForall || e.isLambda || e.isLet ||
-        e.isAppOf ``Eq || e.isAppOf ``Iff || e.isAppOf ``And ||
-        e.isAppOf ``Or || e.isAppOf ``Exists then
-      return ← Lean.Meta.Simp.preDefault #[] e
-    return .done { expr := e }
-  let mut goal := goal
-  let mut posts' := #[]
-  for post in posts do
-    let result ← goal.withContext do
-      let type ← instantiateMVars (← post.getType)
-      let (result, _) ← Lean.Meta.Simp.main type ctx
-        (methods := { Lean.Meta.Simp.mkDefaultMethodsCore #[] with pre })
-      applySimpResultToLocalDecl goal post result (mayCloseGoal := true)
-    let some (post, goal') := result | return none
-    goal := goal'
-    posts' := posts'.push post
-  return some (posts', goal)
-
 /-- Post-process the main goal.
 
 The main thing we do is simplify the post-conditions.
@@ -1071,9 +1043,6 @@ meta def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option Main
       trace[Step] "Goal closed by simplifying the introduced post-conditions"
       pure none
     | some posts =>
-      let some (posts, goal) ← simplifyPostLogic (← getMainGoal) posts
-        | setGoals []; return none
-      setGoals [goal]
       trace[Step] "Goal not closed"
       withMainContext do
       let outputs ← posts.mapM fun fvid => do

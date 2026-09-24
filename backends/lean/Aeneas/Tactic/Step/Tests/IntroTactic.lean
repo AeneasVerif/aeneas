@@ -384,7 +384,7 @@ example (f : Result Bool) (n : Nat) (P : Nat → Prop)
   step with hf as ⟨b, h⟩
   cases b
   · exact Or.inl rfl
-  · obtain ⟨_, j, hj, hnot⟩ := h
+  · obtain ⟨j, hj, hnot⟩ := h
     exact Or.inr ⟨j, hj, hnot⟩
 
 example (f : Result Bool) (P : Prop)
