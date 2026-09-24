@@ -320,7 +320,7 @@ example : conditional 0#u32 ⦃ result => result = true ⦄ := by
 example (f : Result (Nat × Nat))
     (h : f ⦃ a b => ∃ witness : Bool, a = witness.toNat ∧ a = b ⦄) :
     (do let (a, b) ← f; ok (a, b)) ⦃ a b => a = b ⦄ := by
-  step with h as ⟨witness, a, b, hw, hab⟩
+  step with h as ⟨a, b, witness, hw, hab⟩
   guard_hyp witness : Bool
   guard_hyp a : Nat
   guard_hyp b : Nat

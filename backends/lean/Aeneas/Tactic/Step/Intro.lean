@@ -16,10 +16,16 @@ implication, such as `Std.WP.spec` (see `Std.WP.introTactic`). For instance, it 
 ```
 to
 ```
-∀ y x, P x.1 x.2 → Q x.1 x.2 y → k x ⦃ r => R r ⦄
+∀ x y, P x.1 x.2 → Q x.1 x.2 y → k x ⦃ r => R r ⦄
 ```
 in four steps, one per section below: reduce the `uncurry'` marker, simplify the fact, split
-its `∧`s and `∃`s into binders, and move the witnesses before the outputs.
+its `∧`s and `∃`s into binders, and, for a postcondition with a single binder such as
+`⦃ r => ∃ y, P r y ⦄`, move the witnesses before the output.
+
+Proofs rely on the order and names of the binders, which is why they are the same as those
+`step` produced before `intro_tactic` existed: the witnesses are named `x` (so that the facts
+about them are named `x_post`, …) and the witnesses of a postcondition with several binders
+stay after the outputs.
 
 `normalizeTarget` rewrites the goal; it does not introduce the fact as a hypothesis and then
 simplify that hypothesis. This matters for recursive specifications: `decreasing_by` sees
@@ -95,9 +101,23 @@ private meta def isLogical (e : Expr) : MetaM Bool := do
   if let .const name _ := e.getAppFn then return ← isMatcher name
   return false
 
+/-- Unfold `e` if it is an application of reducible definitions (e.g., `abbrev`s) standing
+for a conjunction or an existential, which `splitFact` then splits. Matches are not
+unfolded, so that postconditions destructuring a value stay bundled. -/
+meta partial def unfoldReducibleFact? (e : Expr) : MetaM (Option Expr) := do
+  let e := e.consumeMData
+  let .const name _ := e.getAppFn | return none
+  if ← isMatcher name then return none
+  unless (← getReducibilityStatus name) == .reducible do return none
+  let some e' ← unfoldDefinition? e | return none
+  let e' := e'.headBeta.consumeMData
+  if e'.isAppOfArity ``And 2 || e'.isAppOfArity ``Exists 2 then return some e'
+  unfoldReducibleFact? e'
+
 /-- Normalize a fact: reduce the markers anywhere in its logical structure (see
-`isLogical`), eliminate defining existentials, and drop trivial conjuncts and premises.
-Program terms are left alone, so that bundled postconditions stay bundled. -/
+`isLogical`), unfold the reducible definitions standing for a conjunction or an existential,
+eliminate defining existentials, and drop trivial conjuncts and premises. Other program
+terms are left alone, so that bundled postconditions stay bundled. -/
 meta def normalizeFact (markers : Array Name) (type : Expr) : MetaM Simp.Result := do
   let names := #[
     /- Defining existentials: `∃ y, y = e ∧ P y` becomes `P e`. -/
@@ -114,6 +134,7 @@ meta def normalizeFact (markers : Array Name) (type : Expr) : MetaM Simp.Result 
     if let some e' ← withTransparency .default (reduceMarker? markers e) then
       return .visit { expr := e'.headBeta }
     if ← isLogical e then return ← Simp.preDefault #[] e
+    if let some e' ← unfoldReducibleFact? e then return .visit { expr := e' }
     return .done { expr := e }
   let (result, _) ← Simp.main type ctx (methods := { Simp.mkDefaultMethodsCore #[] with pre })
   return result
@@ -129,12 +150,15 @@ theorem forall_and_index {a b : Prop} {p : a ∧ b → Prop} :
 - `∀ h : a ∧ b, rest h` becomes `∀ (ha : a) (hb : b), rest ⟨ha, hb⟩`, and `a` and `b` are
   split in turn;
 - `∀ h : ∃ x, p x, rest h` becomes `∀ x (h : p x), rest ⟨x, h⟩`, and `p x` is split in turn;
+- a reducible definition standing for one of the above is unfolded first;
 - any other fact is left alone.
+
+The witnesses are named `x`, like `exists_imp` names them.
 
 `rest` is a function of the proof of the fact. Returns the new premise, and a proof that it
 is equivalent to `∀ h : fact, rest h`. -/
 meta partial def splitFact (name : Name) (fact rest : Expr) : MetaM (Expr × Expr) := do
-  let fact := fact.consumeMData
+  let fact := (← unfoldReducibleFact? fact).getD fact.consumeMData
   if fact.isConstOf ``True then
     return ((mkApp rest (mkConst ``True.intro)).headBeta,
       mkApp3 (mkConst ``forall_prop_of_true) fact rest (mkConst ``True.intro))
@@ -158,8 +182,7 @@ meta partial def splitFact (name : Name) (fact rest : Expr) : MetaM (Expr × Exp
          ↔ ∀ x (h : p x), rest ⟨x, h⟩     -- `forall_exists_index`
          ↔ ∀ x, splitP x                   -- split `p x`, under `x` -/
     let step₁ ← mkAppOptM ``forall_exists_index #[α, p, rest]
-    let witness := if let .lam n .. := p then n else `x
-    withLocalDeclD witness α fun x => do
+    withLocalDeclD `x α fun x => do
       let px := (mkApp p x).headBeta
       let restX ← withLocalDeclD name px fun h => do
         mkLambdaFVars #[h]
@@ -184,9 +207,15 @@ private meta partial def countLeadingExists (e : Expr) : Nat :=
 
 Splitting `fact` has turned its leading existential witnesses into the leading binders of
 `premise`. They are all moved if none of their types depends on the outputs, and none of
-them is otherwise. -/
-meta def numHoistedWitnesses (xs : Array Expr) (fact premise : Expr) : MetaM Nat := do
+them is otherwise.
+
+They are only moved if the original fact `dom` is itself an existential, i.e., for a
+postcondition with a single binder `⦃ r => ∃ y, P r y ⦄`. The witnesses of a postcondition
+with several binders are below the `uncurry'` marker: they stay after the outputs. -/
+meta def numHoistedWitnesses (xs : Array Expr) (dom fact premise : Expr) : MetaM Nat := do
   if xs.isEmpty then return 0
+  unless (← instantiateMVars dom).consumeMData.headBeta.consumeMData.isAppOfArity ``Exists 2 do
+    return 0
   let n := countLeadingExists fact
   if n == 0 then return 0
   forallBoundedTelescope premise n fun ws _ => do
@@ -248,8 +277,10 @@ meta def normalizeTarget (markers : Array Name) (goal : MVarId) :
     /- Example: `premise = ∀ y, P x.1 x.2 → Q x.1 x.2 y → k x ⦃ r => R r ⦄`. -/
 
     /- Step 4: count the witnesses to move before the outputs. -/
-    let numWitnesses ← numHoistedWitnesses xs fact premise
-    /- Example: `numWitnesses = 1`, as the type of `y` does not depend on `x`. -/
+    let numWitnesses ← numHoistedWitnesses xs dom fact premise
+    /- Example: `numWitnesses = 0`, as the postcondition has several binders. With a single
+       binder, `⦃ r => ∃ y, P r ∧ Q r y ⦄`, we would get `numWitnesses = 1`, as the type of
+       `y` does not depend on `x`. -/
     if premise == original && numWitnesses == 0 then return none
 
     /- Replace `goal : ∀ xs, original` by `newGoal : ∀ ws xs, premise'`, where
@@ -258,8 +289,8 @@ meta def normalizeTarget (markers : Array Name) (goal : MVarId) :
       let newTarget ← mkForallFVars ws (← mkForallFVars xs premise')
       let newGoal ← withLCtx lctx localInsts do
         mkFreshExprSyntheticOpaqueMVar newTarget (← goal.getTag)
-      /- Example: `ws = #[y]`,
-         `newTarget = ∀ y x, P x.1 x.2 → Q x.1 x.2 y → k x ⦃ r => R r ⦄`. -/
+      /- Example: `ws = #[]`,
+         `newTarget = ∀ x y, P x.1 x.2 → Q x.1 x.2 y → k x ⦃ r => R r ⦄`. -/
       let inner ← mkLambdaFVars ws (mkAppN (mkAppN newGoal ws) xs)
       goal.assign (← mkLambdaFVars xs (← mkAppM ``Iff.mpr #[proof, inner]))
       return some (newGoal.mvarId!, numWitnesses)
