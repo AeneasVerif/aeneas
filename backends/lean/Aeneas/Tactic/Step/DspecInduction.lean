@@ -1,13 +1,12 @@
-import Lean
-import Aeneas.Tactic.Solver.ScalarTac
-import Aeneas.Tactic.Step.Init
-import Aeneas.Tactic.Step.GrindState
-import Aeneas.Std
-import Aeneas.Tactic.Simp.SimpLemmas
-import AeneasMeta.Async
-import Aeneas.Tactic.Solver.Grind.Init
-import Aeneas.Tactic.Step.InferPost
-import Aeneas.Tactic.Step.Step
+module
+public import Lean
+public import Mathlib.Tactic.Simproc.ExistsAndEq
+public import AeneasMeta.Utils
+public meta import AeneasMeta.Extensions
+public import Aeneas.Tactic.Step.Trace
+public meta import Lean.Meta.Tactic.Repeat
+import all Init.Internal.Order.Basic
+public section
 
 /- Tactic for unfolding partial_fixpoint definitions with fixpoint_induct.
    Normally you would use the normal unfold tactic, but that requires the proof to be terminating.
@@ -16,7 +15,7 @@ import Aeneas.Tactic.Step.Step
    the conclusion is a dspec theorem about a function call.
    In particular, the statement needs to be proven to be admissible.
 
-   See the examples below to see what the tactic does
+   See the examples in `Aeneas/Tactic/Step/Tests/DspecInduction.lean` to see what the tactic does
    and the manual examples show what the tactic is doing written out directly. -/
 
 namespace Aeneas
@@ -26,7 +25,54 @@ namespace DspecInduction
 open Lean Elab Term Meta Tactic
 open Utils
 open Lean.Order
-open Std Result
+
+/-! ## The `dspec_admissible` attribute
+
+The theorems are stored in a discrimination tree, indexed by the body of the predicate
+whose admissibility they prove, where the bound function is replaced by a metavariable.
+As the discrimination tree abstracts every subterm whose head is a metavariable into a
+wildcard, for `Order.admissible fun f => WP.dspec (f arg) post` the key is
+`WP.dspec ?e ?post`. This allows us to look up the theorems which apply to a given
+admissibility goal, rather than trying all of them. -/
+meta initialize dspecAdmissibleExt : Extensions.DiscrTreeExtension Name ←
+  Extensions.mkDiscrTreeExtension `dspecAdmissibleMap
+
+/-- Decompose `Order.admissible P` into the type `α` of the argument of `P` and `P`. -/
+private meta def destAdmissible (ty : Expr) : MetaM (Expr × Expr) := do
+  let ty := (← instantiateMVars ty).cleanupAnnotations
+  let_expr Lean.Order.admissible α _ P := ty
+    | throwError "expected a proposition of the shape `Order.admissible P`, got:{indentExpr ty}"
+  pure (α, P)
+
+meta initialize dspecAdmissibleAttr : AttributeImpl ← do
+  let attrImpl : AttributeImpl := {
+    name := `dspec_admissible
+    descr := "Registers a theorem used by `dspec_induction` to discharge the \
+              admissibility side-goal it generates. Such a theorem must have the shape \
+              `Order.admissible fun f => <judgment> (f arg)`, for instance \
+              `Order.admissible fun (f : α → Result β) => WP.dspec (f arg) post`."
+    add := fun declName stx _ => do
+      Attribute.Builtin.ensureNoArgs stx
+      let key ← MetaM.run' do
+        let info ← getConstInfo declName
+        let (_, _, concl) ← forallMetaTelescope info.type
+        let (α, P) ← destAdmissible concl
+        let f ← mkFreshExprMVar α
+        DiscrTree.mkPath (P.beta #[f]).headBeta
+      modifyEnv fun env => dspecAdmissibleExt.addEntry env (key, declName)
+    erase := fun declName => do
+      modifyEnv fun env =>
+        dspecAdmissibleExt.modifyState env fun s => s.mapArrays (·.filter (· != declName))
+  }
+  registerBuiltinAttribute attrImpl
+  pure attrImpl
+
+/-- Get the theorems registered with the `dspec_admissible` attribute which may be used
+to prove the admissibility goal `ty`. -/
+meta def getAdmissibleThms (ty : Expr) : MetaM (Array Name) := do
+  let (α, P) ← destAdmissible ty
+  withLocalDeclD `f α fun f => do
+    (dspecAdmissibleExt.getState (← getEnv)).getMatch (P.beta #[f]).headBeta
 
 theorem curry_admissible (a1 a2 a3) (P : (a1 → a2 → a3) → Prop) [CCPO a3]
   (h : Order.admissible fun (f : (a1 × a2) → a3) => P (fun x y => f (x, y)))
@@ -90,19 +136,27 @@ theorem curry_admissible (a1 a2 a3) (P : (a1 → a2 → a3) → Prop) [CCPO a3]
   simp only [↓existsAndEq, and_true] at *
   apply h
 
-theorem WP_func_admissible (α β : Type) (arg) (post)
-  : Order.admissible fun (f : α → Result β) => WP.dspec (f arg) post := by
-  apply Lean.Order.admissible_apply (fun _ fx => WP.dspec fx _)
-  apply WP.dspec_admissible
+/-- Close `g` by applying one of the theorems registered with the `dspec_admissible`
+attribute. -/
+private meta def applyAdmissibleThm (g : MVarId) : TacticM Unit := do
+  let thms ← getAdmissibleThms (← g.getType)
+  trace[DspecInduction] "candidate admissibility theorems: {thms}"
+  for thm in thms do
+    let res ← observing? do
+      let [] ← g.apply (← mkConstWithFreshMVarLevels thm) | failure
+    if res.isSome then return
+  throwError "failed to prove admissibility condition: none of the theorems registered \
+              with the `dspec_admissible` attribute applies to \
+              {← instantiateMVars (← g.getType)}"
 
-def getParamNames (ty : Expr) : MetaM (Array Name) := do
+meta def getParamNames (ty : Expr) : MetaM (Array Name) := do
   forallTelescope ty fun xs _ => do
     xs.mapM fun x => do
       let localDecl ← x.fvarId!.getDecl
       return localDecl.userName
 
 -- given a function type, return list of input types
-def getInputTypes (ty : Expr) : List Expr :=
+meta def getInputTypes (ty : Expr) : List Expr :=
   match ty with
   | .forallE _ ty body _ => .cons ty (getInputTypes body)
   | _ => []
@@ -167,7 +221,6 @@ elab "dspec_induction" func:ident : tactic => do
     let onError {α} : TacticM α := throwError "failed to prove admissibility condition"
     let curry_admissible ← mkConstWithFreshMVarLevels `Aeneas.DspecInduction.curry_admissible
     let admissible_pi ← mkConstWithFreshMVarLevels `Lean.Order.admissible_pi
-    let WP_func_admissible ← mkConstWithFreshMVarLevels `Aeneas.DspecInduction.WP_func_admissible
     let [g_admissible]
       ← repeat' (fun g => g.apply curry_admissible) [g_admissible] | onError
     let [g_admissible]
@@ -175,185 +228,13 @@ elab "dspec_induction" func:ident : tactic => do
           let [g] ← (g.apply admissible_pi) | onError
           pure [(← g.intro1P).snd]
       ) [g_admissible] | onError
-    let [] ← g_admissible.apply WP_func_admissible | onError
+    applyAdmissibleThm g_admissible
 
   replaceMainGoal [g_main]
   pure ()
 
 -- uncomment to see debug traces:
 -- set_option trace.DspecInduction true
-
-namespace Test
-
-open Std Result Aeneas.Step
-
-def simple_diverge (x : Std.I32) : Result Std.I32 := do
-  if x = 0#i32
-  then ok 10#i32
-  else
-    let i1 ← 1#i32 + 1#i32
-    simple_diverge i1
-partial_fixpoint
-
-macro "prove_admissible" : tactic =>
-  `(tactic| (
-      (repeat' apply curry_admissible)
-      (repeat' (apply Lean.Order.admissible_pi ; intro))
-      (apply WP_func_admissible)
-  )
-  )
-
--- this version demonstrates what the dspec_induction tactic does, just done manually
-theorem test_div_manual (x : Std.I32) : Std.WP.dspec (simple_diverge x) (fun res => res = 10#i32)
-  := by
-    revert x
-    apply simple_diverge.fixpoint_induct
-      (motive := fun simple_diverge => ∀ x, WP.dspec (simple_diverge x) (fun res => res = 10#i32))
-    · prove_admissible
-    · intros
-      simp only
-      split
-      . simp [*]
-      . step
-        step
-        simp [*]
-
--- here, done automatically with the tactic
-theorem test_div_tactic (x : Std.I32) : Std.WP.dspec (simple_diverge x) (fun res => res = 10#i32)
-  := by
-    revert x
-    dspec_induction simple_diverge
-    intros
-    simp only
-    split
-    . simp [*]
-    . step
-      step
-      simp [*]
-
-def simple_diverge_2' (x y : Std.I32) : Result Std.I32 := do
-  if x = y#i32
-  then ok 10#i32
-  else
-    let i1 ← 1#i32 + 1#i32
-    let i2 ← 1#i32 + 1#i32
-    simple_diverge_2' i1 i2
-partial_fixpoint
-
-theorem test_div_2_manual (x y : Std.I32) : Std.WP.dspec (simple_diverge_2' x y) (fun res => res = 10#i32)
-  := by
-    revert x y
-    apply simple_diverge_2'.fixpoint_induct
-      (motive := fun simple_diverge_2' => ∀ x y, WP.dspec (simple_diverge_2' x y) (fun res => res = 10#i32))
-    · prove_admissible
-    · intros
-      simp only
-      split
-      . simp [*]
-      . step
-        step
-        simp [*]
-
-theorem test_div_2_tactic (x y : Std.I32) : Std.WP.dspec (simple_diverge_2' x y) (fun res => res = 10#i32)
-  := by
-    revert x y
-    dspec_induction simple_diverge_2'
-    intros
-    simp only
-    split
-    . simp [*]
-    . step
-      step
-      simp [*]
-
-
-def dummy_hash (_i : Std.U32) : Result Std.U32 := do
-  ok 1000#u32
-
-open ControlFlow
-
-/-- [tutorial::pseudo_random]: loop body 0:
-    Source: 'src/lib.rs', lines 258:2-260:3
-    Visibility: public -/
-def pseudo_random_loop.body
-  (state : Std.U32) : Result (ControlFlow Std.U32 Std.U32) := do
-  if state < 100#u32
-  then let state1 ← dummy_hash state
-       ok (cont state1)
-  else ok (done state)
-
-/-- [tutorial::pseudo_random]: loop 0:
-    Source: 'src/lib.rs', lines 258:2-260:3
-    Visibility: public -/
-def pseudo_random_loop (state : Std.U32) : Result Std.U32 := do
-  loop
-    (fun state1 => pseudo_random_loop.body state1)
-    state
-
-/-- [tutorial::pseudo_random]:
-    Source: 'src/lib.rs', lines 255:0-262:1
-    Visibility: public -/
-@[reducible] def pseudo_random : Result Std.U32 := do
-               pseudo_random_loop 0#u32
-
-
-theorem pseudo_random_spec :
-  pseudo_random ⦃fun x => x.val >= 100⦄div := by
-  unfold pseudo_random
-  unfold pseudo_random_loop
-  -- note here that we must make a potentially non-obvious decision about
-  -- what to generalize and how to do the induction
-  generalize 0#u32 = x
-  revert x
-  dspec_induction loop
-  intros loop' ih x
-  simp only
-  unfold pseudo_random_loop.body
-  simp
-  by_cases ((↑x : Nat) < 100)
-  · simp [*]
-    unfold dummy_hash
-    simp
-    -- note that here, i am refraining from using the result of dummy_hash,
-    -- since its supposed to represent a hash function where we can't predict the result,
-    -- but it actually is just a constant
-    step
-    grind
-  · simp [*]
-    grind
-
--- these two examples demonstrate how .fixpoint_induct theorems can take various forms.
-def first_arg_const (x y : Nat) : Result Nat :=
-  if x = 0 then .ok 0
-  else first_arg_const x (y + 1)
-partial_fixpoint
-
-def second_arg_const (x y : Nat) : Result Nat :=
-  if y = 0 then .ok 0
-  else second_arg_const (x + 1) y
-partial_fixpoint
-
--- uncomment to see the difference:
--- #check first_arg_const.fixpoint_induct
--- #check second_arg_const.fixpoint_induct
-
-example x y : (first_arg_const x y) ⦃fun x => x = 0⦄div := by
-  revert y
-  dspec_induction first_arg_const
-  intros first_arg_const' ih y
-  split
-  · simp
-  · apply ih
-
-example x y : (second_arg_const x y) ⦃fun x => x = 0⦄div := by
-  revert x
-  dspec_induction second_arg_const
-  intros second_arg_const' ih y
-  split
-  · simp
-  · apply ih
-
-end Test
 
 end DspecInduction
 end Aeneas

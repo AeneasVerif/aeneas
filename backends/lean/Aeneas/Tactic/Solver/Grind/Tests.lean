@@ -1,3 +1,4 @@
+module
 import Aeneas.Tactic.Solver.ScalarTac.Lemmas
 
 /-!

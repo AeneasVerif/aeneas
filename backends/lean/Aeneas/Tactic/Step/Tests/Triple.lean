@@ -1,8 +1,10 @@
+module
 import Aeneas.Tactic.Step
 
 /-!
 This file tests the use of a custom triple with `#register_spec_info`
 -/
+
 
 open Aeneas
 

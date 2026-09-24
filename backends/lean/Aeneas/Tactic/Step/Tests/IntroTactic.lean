@@ -1,4 +1,7 @@
+module
 import Aeneas.Tactic.Step
+public meta import Lean
+public meta import Aeneas.Tactic.Step
 
 open Aeneas
 
@@ -348,16 +351,16 @@ example (f : Result (Nat × Nat))
   guard_hyp hw : a = witness.toNat
   simpa using hab
 
-example (r : core.result.Result core.convert.Infallible Nat) (e : Nat) (hr : r = .Err e) :
-    core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+example (r : core.result.Result Never Nat) (e : Nat) (hr : r = .Err e) :
+    core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
       Unit (core.convert.FromSame Nat) r
       ⦃ out => out = .Err e ⦄ := by
-  step with core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual.spec
+  step with core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual.spec
   agrind
 
-example (r : core.result.Result core.convert.Infallible Nat) (e : Nat) (hr : r = .Err e) :
+example (r : core.result.Result Never Nat) (e : Nat) (hr : r = .Err e) :
     (do
-      let out ← core.result.Result.Insts.CoreOpsTryTraitFromResidualResultInfallible.from_residual
+      let out ← core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
         Unit (core.convert.FromSame Nat) r
       ok (out, ()))
       ⦃ status state =>
@@ -400,7 +403,7 @@ theorem triple_step_mono_plain {P Pm : Prop} {Q : Post α}
     triple P m Q :=
   triple_step_mono m Qm hStep hPre hPost
 
-def bundledSpecInfo : SpecInfo := {
+meta def bundledSpecInfo : SpecInfo := {
     spec_name := ``triple
     arity := 4
     program_index := 2

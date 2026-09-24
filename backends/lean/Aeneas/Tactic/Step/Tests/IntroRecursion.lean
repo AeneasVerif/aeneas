@@ -1,4 +1,7 @@
+module
 import Aeneas.Tactic.Step
+public meta import Lean
+public meta import Aeneas.Tactic.Step
 import Aeneas.Tactic.Solver.ScalarTac
 
 open Aeneas Aeneas.Std Result

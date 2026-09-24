@@ -1,9 +1,11 @@
-import Aeneas.Std.Scalar.Core
-import Aeneas.Std.Scalar.Misc
-import Aeneas.Std.Scalar.Elab
-import Aeneas.Tactic.Solver.ScalarTac
-import Mathlib.Data.BitVec
-import Mathlib.Data.Int.Init
+module
+public import Aeneas.Std.Scalar.Core
+public import Aeneas.Std.Scalar.Misc
+public import Aeneas.Std.Scalar.Elab
+public import Aeneas.Tactic.Solver.ScalarTac
+public import Mathlib.Data.BitVec
+public import Mathlib.Data.Int.Init
+public section
 
 namespace Aeneas.Std
 
@@ -13,16 +15,16 @@ open Result Error Arith ScalarElab WP
 # Multiplication: Definitions
 -/
 
-def UScalar.mul {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
+@[expose] def UScalar.mul {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
   UScalar.tryMk ty (x.val * y.val)
 
-def IScalar.mul {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
+@[expose] def IScalar.mul {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
   IScalar.tryMk ty (x.val * y.val)
 
-def UScalar.try_mul {ty : UScalarTy} (x y : UScalar ty) : Option (UScalar ty) :=
+@[expose] def UScalar.try_mul {ty : UScalarTy} (x y : UScalar ty) : Option (UScalar ty) :=
   Option.ofResult (mul x y)
 
-def IScalar.try_mul {ty : IScalarTy} (x y : IScalar ty) : Option (IScalar ty) :=
+@[expose] def IScalar.try_mul {ty : IScalarTy} (x y : IScalar ty) : Option (IScalar ty) :=
   Option.ofResult (mul x y)
 
 instance {ty} : HMul (UScalar ty) (UScalar ty) (Result (UScalar ty)) where
@@ -64,7 +66,7 @@ theorem UScalar.mul_bv_spec {ty} {x y : UScalar ty}
   x * y ⦃ z => (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv ⦄ := by
   have : x * y = mul x y := by rfl
   have := mul_equiv x y
-  split at this <;> simp_all [spec_ok, and_self, spec_vis]
+  split at this <;> simp_all [spec_ok, and_self]
   omega
 
 theorem IScalar.mul_equiv {ty} (x y : IScalar ty) :

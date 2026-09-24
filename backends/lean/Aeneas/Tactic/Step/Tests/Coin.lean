@@ -1,3 +1,4 @@
+module
 import Aeneas.Std
 import Aeneas.Tactic.Step
 
@@ -135,3 +136,4 @@ noncomputable instance {T} : Lean.Order.CCPO (ITreeC T) := instCCPOCoIndOfInhabi
 instance : MonoBind ITreeC := instMonoBindITree
 
 end Aeneas.Tactic.Step.Tests.Coin
+

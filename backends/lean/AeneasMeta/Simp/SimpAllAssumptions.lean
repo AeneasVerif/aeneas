@@ -1,7 +1,9 @@
-import Lean.Meta.Tactic.Clear
-import Lean.Meta.Tactic.Util
-import Lean.Meta.Tactic.Simp.Main
-import AeneasMeta.Simp.Simp
+module
+public import Lean.Meta.Tactic.Clear
+public import Lean.Meta.Tactic.Util
+public import Lean.Meta.Tactic.Simp.Main
+public import AeneasMeta.Simp.Simp
+public section
 
 /-!
 This file is adapted from Lean.Meta.Tactic.Simp.SimpAll.lean
@@ -12,7 +14,7 @@ namespace Aeneas.Simp
 
 open Lean Meta
 
-initialize registerTraceClass `Aeneas.Meta.Tactic.simp.all
+meta initialize registerTraceClass `Aeneas.Meta.Tactic.simp.all
 
 open Simp (Stats SimprocsArray)
 

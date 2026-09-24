@@ -503,7 +503,7 @@ let type_decl_from_decl_id_is_tuple_struct (ctx : TypesAnalysis.type_infos)
 let rec trait_ref_kind_is_local_clause (id : trait_ref_kind) : bool =
   match id with
   | Self | Clause _ -> true
-  | ParentClause (tref, _) | ItemClause (tref, _, _) ->
+  | ParentClause (tref, _) | ItemClause (tref, _, _, _) ->
       trait_ref_kind_is_local_clause tref.kind
   | TraitImpl _ | BuiltinOrAuto _ | UnknownTrait _ | Dyn -> false
 

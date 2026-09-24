@@ -1,3 +1,4 @@
+module
 import Aeneas.Tactic.Elab.TraitDefault.Init
 
 namespace Aeneas.TraitDefault.Test

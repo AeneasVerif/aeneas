@@ -1,5 +1,8 @@
+module
 import Mathlib.Tactic.Tauto
-import Aeneas.Tactic.Simp.SimpBoolProp.Init
+public meta import Lean.Meta.Tactic.Simp.BuiltinSimprocs.Core
+public meta import Aeneas.Tactic.Simp.SimpBoolProp.Init
+public section
 
 /-!
 # `simp_bool_prop` lemmas and simp procedures
@@ -9,8 +12,11 @@ namespace Aeneas.SimpBoolProp
 
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 
+/- Builtin simprocs cannot be added to a custom set directly via `attribute`.
+See: https://github.com/leanprover/lean4/issues/13962 -/
+simproc ↓ [simp_bool_prop] reduceIte' (ite _ _ _) := reduceIte
+
 attribute [simp_bool_prop]
-  reduceIte
   true_implies false_implies implies_true imp_false
   Bool.true_and Bool.and_true
   Bool.false_and Bool.and_false

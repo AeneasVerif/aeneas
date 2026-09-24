@@ -1,5 +1,7 @@
-import Lean
-import AeneasMeta.Utils
+module
+public import Lean
+public import AeneasMeta.Utils
+public section
 
 /-!
 # The shared part of an `intro_tactic`
@@ -23,12 +25,12 @@ theorem forall_unit {p : Prop} : (Unit → p) ↔ p :=
   ⟨fun h => h (), fun h _ => h⟩
 
 /-- Record the output binder index. -/
-def markOutputIndex (goal : MVarId) (index : Nat) : MetaM MVarId := do
+meta def markOutputIndex (goal : MVarId) (index : Nat) : MetaM MVarId := do
   if index == 0 then return goal
   goal.replaceTargetDefEq
     (.mdata (KVMap.empty.setNat `aeneas.step.outputIndex index) (← goal.getType))
 
-def takeOutputIndex (goal : MVarId) : MetaM (Option Nat × MVarId) := do
+meta def takeOutputIndex (goal : MVarId) : MetaM (Option Nat × MVarId) := do
   if let .mdata data body := ← goal.getType then
     if let some (.ofNat index) := data.find `aeneas.step.outputIndex then
       let data := data.erase `aeneas.step.outputIndex
@@ -37,7 +39,7 @@ def takeOutputIndex (goal : MVarId) : MetaM (Option Nat × MVarId) := do
   return (none, goal)
 
 /-- Whether `e` consists only of outputs, projections, and constructors. -/
-partial def isOutputLike (e : Expr) : MetaM Bool := do
+meta partial def isOutputLike (e : Expr) : MetaM Bool := do
   let e := e.consumeMData
   if e.isFVar || e.isLit || e.isSort then return true
   if e.isProj then return ← isOutputLike e.projExpr!
@@ -61,7 +63,7 @@ a *single* alternative, i.e. an irrefutable destructuring. A definition which me
 abbreviates its body is left alone, and so is a genuine case analysis — for a separation
 logic, opening a representation predicate would leave an assertion the frame inference can
 no longer match. -/
-def reduceMarker? (e : Expr) : MetaM (Option Expr) := do
+meta def reduceMarker? (e : Expr) : MetaM (Option Expr) := do
   let e := (← instantiateMVars e).consumeMData.headBeta
   unless e.getAppFn.isConst && e.getAppNumArgs > 0 do return none
   let some unfolded ← unfoldDefinition? e | return none
@@ -75,7 +77,7 @@ def reduceMarker? (e : Expr) : MetaM (Option Expr) := do
   | _ => return none
 
 /-- Reduce up to `fuel` markers at the head of `e`. -/
-partial def reduceMarkers (e : Expr) (fuel : Nat := 16) : MetaM Expr := do
+meta partial def reduceMarkers (e : Expr) (fuel : Nat := 16) : MetaM Expr := do
   let e := (← instantiateMVars e).consumeMData.headBeta
   match fuel with
   | 0 => return e
@@ -85,14 +87,14 @@ partial def reduceMarkers (e : Expr) (fuel : Nat := 16) : MetaM Expr := do
     | none => return e
 
 /-- Normalize the type of a fact in place, reducing the markers at its head. -/
-def normalizeFact (goal : MVarId) (fvarId : FVarId) : MetaM MVarId := do
+meta def normalizeFact (goal : MVarId) (fvarId : FVarId) : MetaM MVarId := do
   goal.withContext do
     let type ← instantiateMVars (← fvarId.getType)
     let type' ← reduceMarkers type
     if type' == type.consumeMData then pure goal else goal.replaceLocalDeclDefEq fvarId type'
 
 /-- Prove trivial assumptions without evaluating program terms. -/
-def trivialProof? (type : Expr) : MetaM (Option Expr) := do
+meta def trivialProof? (type : Expr) : MetaM (Option Expr) := do
   let type := type.consumeMData
   if type.isConstOf ``True then return some (mkConst ``True.intro)
   if type.isConstOf ``Unit then return some (mkConst ``Unit.unit)
@@ -102,7 +104,7 @@ def trivialProof? (type : Expr) : MetaM (Option Expr) := do
   | _ => return none
 
 /-- Normalize defining existentials before splitting facts. -/
-def normalizeExists (goal : MVarId) (fvarId : FVarId) : MetaM (MVarId × FVarId) := do
+meta def normalizeExists (goal : MVarId) (fvarId : FVarId) : MetaM (MVarId × FVarId) := do
   let goal ← normalizeFact goal fvarId
   goal.withContext do
     let type ← instantiateMVars (← fvarId.getType)
@@ -129,7 +131,7 @@ def normalizeExists (goal : MVarId) (fvarId : FVarId) : MetaM (MVarId × FVarId)
     return (← result.mvarId.tryClear fvarId, result.fvarId)
 
 /-- Collect conjuncts and discharge vacuous assumptions. -/
-partial def collectFacts (type proof : Expr) (name : Name) : MetaM (Array Hypothesis) := do
+meta partial def collectFacts (type proof : Expr) (name : Name) : MetaM (Array Hypothesis) := do
   let type ← reduceMarkers type
   if type.isConstOf ``True then return #[]
   if let .forallE _ domain body _ := type then
@@ -143,10 +145,10 @@ partial def collectFacts (type proof : Expr) (name : Name) : MetaM (Array Hypoth
     return left ++ right
   | _ => return #[{ userName := name, type, value := proof }]
 
-private def witnessNames : Array AltVarNames := #[{ varNames := [`x] }]
+private meta def witnessNames : Array AltVarNames := #[{ varNames := [`x] }]
 
 /-- Eliminate existentials without wrapping nondependent continuations in `casesOn`. -/
-def elimExists (goal : MVarId) (fvarId : FVarId) : MetaM (Array FVarId × MVarId) :=
+meta def elimExists (goal : MVarId) (fvarId : FVarId) : MetaM (Array FVarId × MVarId) :=
   goal.withContext do
     let target ← goal.getType
     if ← exprDependsOn target fvarId then
@@ -164,7 +166,7 @@ def elimExists (goal : MVarId) (fvarId : FVarId) : MetaM (Array FVarId × MVarId
     return (fields, ← goal.tryClear fvarId)
 
 /-- Normalize and recursively split a fact into witnesses and conjuncts. -/
-partial def splitHypothesis (goal : MVarId) (fvarId : FVarId) : MetaM MVarId := do
+meta partial def splitHypothesis (goal : MVarId) (fvarId : FVarId) : MetaM MVarId := do
   let goal ← normalizeFact goal fvarId
   let type ← goal.withContext do instantiateMVars (← fvarId.getType)
   unless ← goal.withContext (isProp type) do return goal
@@ -195,7 +197,7 @@ partial def splitHypothesis (goal : MVarId) (fvarId : FVarId) : MetaM MVarId := 
   return (← goal.introNP reverted.size).2
 
 /-- Peel leading existentials while preserving witness order. -/
-partial def peelLeadingExists (goal : MVarId) (fvarId : FVarId)
+meta partial def peelLeadingExists (goal : MVarId) (fvarId : FVarId)
     (witnesses : Array FVarId := #[]) : MetaM (MVarId × Array FVarId × Option FVarId) := do
   let goal ← normalizeFact goal fvarId
   let type ← goal.withContext do instantiateMVars (← fvarId.getType)
@@ -206,12 +208,12 @@ partial def peelLeadingExists (goal : MVarId) (fvarId : FVarId)
   peelLeadingExists goal rest (witnesses.push witness)
 
 /-- The hypotheses of the main goal, to be compared with the context a later step reaches. -/
-def localHypotheses : TacticM (Std.HashSet FVarId) := do
+meta def localHypotheses : TacticM (Std.HashSet FVarId) := do
   (← getMainGoal).withContext do
     pure <| (← getLCtx).foldl (init := ∅) fun acc decl => acc.insert decl.fvarId
 
 /-- Normalize and split the hypotheses which appeared since `before` was taken. -/
-def splitNewHypotheses (before : Std.HashSet FVarId) : TacticM Unit := do
+meta def splitNewHypotheses (before : Std.HashSet FVarId) : TacticM Unit := do
   let goal ← getMainGoal
   let introduced ← goal.withContext do
     pure <| (← getLCtx).foldl (init := #[]) fun acc decl =>
@@ -224,14 +226,14 @@ def splitNewHypotheses (before : Std.HashSet FVarId) : TacticM Unit := do
     goal ← splitHypothesis goal fvarId
   replaceMainGoal [goal]
 
-private def leadingBinders : Expr → Nat
+private meta def leadingBinders : Expr → Nat
   | .forallE _ _ body _ => leadingBinders body + 1
   | .letE _ _ _ body _ => leadingBinders body + 1
   | .mdata _ body => leadingBinders body
   | _ => 0
 
 /-- Introduce leading binders without replacing their user names. -/
-def introsPreservingNames (goal : MVarId) : MetaM (Array FVarId × MVarId) := do
+meta def introsPreservingNames (goal : MVarId) : MetaM (Array FVarId × MVarId) := do
   goal.introNP (leadingBinders (← instantiateMVars (← goal.getType)).consumeMData)
 
 /-- Introduce a premise and split its facts while preserving binder order. -/

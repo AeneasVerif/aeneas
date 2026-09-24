@@ -1,3 +1,4 @@
+module
 import Aeneas.Tactic.Step
 
 open Aeneas Aeneas.Std Result
