@@ -51,6 +51,9 @@ structure SpecInfo where
   `a`, `b` and `c` into the context. -/
   prepare_intro_outputs : Name
 
+  /-- Name of a tactic normalizing the goal after output destructuring. -/
+  post_intro_tactic : Option Lean.Name := none
+
   /-- Name of a `DischargeTactic` callback (optional).
 
   This lets a specification come with a dedicated tactic for the goals it generates
