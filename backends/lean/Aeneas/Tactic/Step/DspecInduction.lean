@@ -29,9 +29,11 @@ open Lean.Order
 /-! ## The `dspec_admissible` attribute
 
 The theorems are stored in a discrimination tree, indexed by the body of the predicate
-whose admissibility they prove: for `Order.admissible fun f => WP.dspec (f arg) post`
-the key is `WP.dspec (?f ?arg) ?post`. This allows us to look up the theorems which
-apply to a given admissibility goal, rather than trying all of them. -/
+whose admissibility they prove, where the bound function is replaced by a metavariable.
+As the discrimination tree abstracts every subterm whose head is a metavariable into a
+wildcard, for `Order.admissible fun f => WP.dspec (f arg) post` the key is
+`WP.dspec ?e ?post`. This allows us to look up the theorems which apply to a given
+admissibility goal, rather than trying all of them. -/
 meta initialize dspecAdmissibleExt : Extensions.DiscrTreeExtension Name ←
   Extensions.mkDiscrTreeExtension `dspecAdmissibleMap
 

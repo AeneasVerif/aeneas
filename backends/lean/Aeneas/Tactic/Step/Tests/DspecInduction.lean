@@ -199,6 +199,11 @@ elab "#admissible_thms " t:term : command => Command.liftTermElabM do
 #guard_msgs in
 #admissible_thms Lean.Order.admissible (fun f : Nat → Result Nat => WP.dspec (f 0) (fun _ => True))
 
+-- the key is `WP.dspec ?e ?post`: the argument of `WP.dspec` is not inspected
+/-- info: [Aeneas.Std.WP.dspec_func_admissible] -/
+#guard_msgs in
+#admissible_thms Lean.Order.admissible (fun _ : Nat → Result Nat => WP.dspec (.ok 0) (fun _ => True))
+
 /-- info: [] -/
 #guard_msgs in
 #admissible_thms Lean.Order.admissible (fun _ : Nat → Result Nat => True)
