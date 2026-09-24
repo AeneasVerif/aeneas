@@ -124,14 +124,14 @@ meta def aeneasDelabDoCore : Delab := whenNotPPOption getPPExplicit <| whenPPOpt
 
 /-- Top-level `do`-block delab for `Std.bind`. -/
 @[delab app.Aeneas.Std.bind]
-meta def aeneasDelabDo : Delab := do
+meta def aeneasDelabStdBindDo : Delab := do
   unless (← getExpr).isAppOfArity ``Aeneas.Std.bind 4 do failure
   aeneasDelabDoCore
 
 /-- Top-level `do`-block delab for `Bind.bind`, restricted to the `Std.Result` monad
     (the code elaborated with Lean's `do`). -/
 @[delab app.Bind.bind]
-meta def aeneasDelabBindDo : Delab := do
+meta def aeneasDelabBindBindDo : Delab := do
   let e ← getExpr
   unless e.isAppOfArity ``Bind.bind 6 do failure
   unless e.getAppArgs[0]!.isConstOf ``Aeneas.Std.Result do failure
