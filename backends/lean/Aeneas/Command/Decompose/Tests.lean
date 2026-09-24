@@ -103,7 +103,7 @@ info: def Aeneas.Command.Decompose.Tests.test2_aux : U32 → Result (UScalar USc
 fun x => do
   let a ← x + 1#u32
   let b ← 2#u32 * x
-  pure (a, b)
+  Result.ok (a, b)
 -/
 #guard_msgs in
 #print test2_aux
@@ -324,7 +324,7 @@ info: def Aeneas.Command.Decompose.Tests.test8_effects : U32 → U32 → Result 
 fun x y => do
   sideEffect1 x
   sideEffect2 y
-  pure ()
+  Result.ok ()
 -/
 #guard_msgs in
 #print test8_effects
@@ -397,7 +397,7 @@ fun x => do
   let a ← x + 1#u32
   let b ← x + 2#u32
   let c ← x + 3#u32
-  pure (a, b, c)
+  Result.ok (a, b, c)
 -/
 #guard_msgs in
 #print test10_triple
@@ -440,7 +440,7 @@ fun x => do
   let b ← x + 2#u32
   let c ← x + 3#u32
   let d ← x + 4#u32
-  pure (a, b, c, d)
+  Result.ok (a, b, c, d)
 -/
 #guard_msgs in
 #print test11_quad
@@ -482,7 +482,7 @@ fun x =>
   let a := ↑x;
   do
   let b ← x + 1#u32
-  pure (a, b)
+  Result.ok (a, b)
 -/
 #guard_msgs in
 #print test12_mixed1
@@ -492,7 +492,7 @@ fun a b =>
   let c := a + 1;
   do
   let d ← b + 2#u32
-  pure (c, d)
+  Result.ok (c, d)
 -/
 #guard_msgs in
 #print test12_mixed2
@@ -806,7 +806,7 @@ info: def Aeneas.Command.Decompose.Tests.test22_prefix : Result Unit :=
 do
   log "start"
   log "middle"
-  pure ()
+  Result.ok ()
 -/
 #guard_msgs in
 #print test22_prefix
@@ -843,7 +843,7 @@ fun x s b => do
   let a ← x + 1#u32
   let len : ℕ := (↑s).length
   let c ← if b = true then x + 2#u32 else pure a
-  pure (len, c)
+  Result.ok (len, c)
 -/
 #guard_msgs in
 #print test23_prefix
@@ -1981,7 +1981,7 @@ info: def Aeneas.Command.Decompose.Tests.test50_prefix : U32 → Result (UScalar
 fun x => do
   let a ← x + 1#u32
   let (b, c) ← Result.ok (a, a)
-  pure (b, c)
+  Result.ok (b, c)
 -/
 #guard_msgs in
 #print test50_prefix
@@ -2197,7 +2197,7 @@ fun x => do
     do
       let v ← x + 1#u32
       ok (v, v)
-  pure (a, b)
+  ok (a, b)
 -/
 #guard_msgs in
 #print f_prefix
@@ -2268,7 +2268,7 @@ fun x => do
       let v ← x + 1#u32
       let w ← x + 2#u32
       ok ((v, w), w, v)
-  pure (a, b, c, d)
+  ok (a, b, c, d)
 -/
 #guard_msgs in
 #print g_prefix
@@ -2309,7 +2309,7 @@ fun x => do
       ok ((v, w), (w, u), u, v)
   let r ← a + c
   let s ← r + e
-  pure (b, d, f, s)
+  ok (b, d, f, s)
 -/
 #guard_msgs in
 #print g_prefix
@@ -2372,7 +2372,7 @@ fun x => do
   let r1 ← a + c
   let r2 ← r1 + e
   let r3 ← r2 + g
-  pure (b, d, f, h, r3)
+  ok (b, d, f, h, r3)
 -/
 #guard_msgs in
 #print g_prefix
@@ -2467,7 +2467,7 @@ info: def Aeneas.Command.Decompose.Tests.test59.test59_f2 : Slice U8 →
 fun pk => do
   let ((b0, b1), back) ← core.slice.Slice.split_at_mut pk 2#usize
   let _ ← b0.index_usize 0#usize
-  pure (b0, b1, back)
+  ok (b0, b1, back)
 -/
 #guard_msgs in
 #print test59_f2

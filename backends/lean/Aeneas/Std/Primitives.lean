@@ -292,8 +292,8 @@ protected theorem pure_bind {α : Type u} {β : Type v} (x : α) (f : α → Res
 /-- Associativity. -/
 @[simp] protected theorem bind_assoc {α : Type u} {β : Type v} {γ : Type w}
     (x : Result α) (f : α → Result β) (g : β → Result γ) :
-    bind (bind x f) g = bind x (fun a => bind (f a) g) := by
-  change ITree.bind (ITree.bind x f) g = ITree.bind x (fun a => ITree.bind (f a) g)
+    bind (bind x f) g = bind x (fun x => bind (f x) g) := by
+  change ITree.bind (ITree.bind x f) g = ITree.bind x (fun x => ITree.bind (f x) g)
   ext n
   induction n generalizing x
   · rfl
