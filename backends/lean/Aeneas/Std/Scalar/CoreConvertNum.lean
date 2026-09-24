@@ -579,35 +579,35 @@ open ScalarElab
 /-!
 # To Little-Endian
 -/
-uscalar_no_usize def core.num.«%S».to_le_bytes (x : «%S») : Array U8 (%Size)#usize :=
+uscalar_no_usize @[expose] def core.num.«%S».to_le_bytes (x : «%S») : Array U8 (%Size)#usize :=
   .from (x.bv.toLEBytes.map UScalar.mk) (by simp [BitVec.toLEBytes_length])
-iscalar_no_isize def core.num.«%S».to_le_bytes (x : «%S») : Array U8 (%Size)#usize :=
+iscalar_no_isize @[expose] def core.num.«%S».to_le_bytes (x : «%S») : Array U8 (%Size)#usize :=
   .from (x.bv.toLEBytes.map UScalar.mk) (by simp [BitVec.toLEBytes_length])
 
 /-!
 # To Big-Endian
 -/
-uscalar_no_usize def core.num.«%S».to_be_bytes (x : «%S») : Array U8 (%Size)#usize :=
+uscalar_no_usize @[expose] def core.num.«%S».to_be_bytes (x : «%S») : Array U8 (%Size)#usize :=
   .from (x.bv.toBEBytes.map UScalar.mk) (by simp [BitVec.toBEBytes_length])
-iscalar_no_isize def core.num.«%S».to_be_bytes (x : «%S») : Array U8 (%Size)#usize :=
+iscalar_no_isize @[expose] def core.num.«%S».to_be_bytes (x : «%S») : Array U8 (%Size)#usize :=
   .from (x.bv.toBEBytes.map UScalar.mk) (by simp [BitVec.toBEBytes_length])
 
 /-!
 # From Little-Endian
 -/
-uscalar_no_usize def core.num.«%S».from_le_bytes (a : Array U8 (%Size)#usize) : «%S» :=
+uscalar_no_usize @[expose] def core.num.«%S».from_le_bytes (a : Array U8 (%Size)#usize) : «%S» :=
   ⟨ (BitVec.fromLEBytes (List.map U8.bv a.val)).cast (by simp) ⟩
 
-iscalar_no_isize def core.num.«%S».from_le_bytes (a : Array U8 (%Size)#usize) : «%S» :=
+iscalar_no_isize @[expose] def core.num.«%S».from_le_bytes (a : Array U8 (%Size)#usize) : «%S» :=
   ⟨ (BitVec.fromLEBytes (List.map U8.bv a.val)).cast (by simp) ⟩
 
 /-!
 # From Big-Endian
 -/
-uscalar_no_usize def core.num.«%S».from_be_bytes (a : Array U8 (%Size)#usize) : «%S» :=
+uscalar_no_usize @[expose] def core.num.«%S».from_be_bytes (a : Array U8 (%Size)#usize) : «%S» :=
   ⟨ (BitVec.fromBEBytes (List.map U8.bv a.val)).cast (by simp) ⟩
 
-iscalar_no_isize def core.num.«%S».from_be_bytes (a : Array U8 (%Size)#usize) : «%S» :=
+iscalar_no_isize @[expose] def core.num.«%S».from_be_bytes (a : Array U8 (%Size)#usize) : «%S» :=
   ⟨ (BitVec.fromBEBytes (List.map U8.bv a.val)).cast (by simp) ⟩
 
 /-!
