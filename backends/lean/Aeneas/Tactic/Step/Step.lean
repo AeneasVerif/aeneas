@@ -249,7 +249,7 @@ meta def getSpecPost (ty : Expr) : MetaM Expr := do
   return args[info.post_index]!
 
 /-- The discharge tactic registered for a specification statement. -/
-def getDischargeTactic (ty : Expr) : MetaM (Option (TSyntax `tactic)) := do
+meta def getDischargeTactic (ty : Expr) : MetaM (Option (TSyntax `tactic)) := do
   let (info, _) ← getSpecInfoArgs ty
   let some tacticName := info.discharge_tactic
     | return none
@@ -259,7 +259,7 @@ def getDischargeTactic (ty : Expr) : MetaM (Option (TSyntax `tactic)) := do
       "Could not parse registered discharge tactic `{tacticName}`: {error}"
 
 /-- The discharge tactic registered for the specification statement in the current goal. -/
-def getDischargeTacticFromGoal : TacticM (Option (TSyntax `tactic)) := do
+meta def getDischargeTacticFromGoal : TacticM (Option (TSyntax `tactic)) := do
   withMainContext do
   getDischargeTactic (← getMainTarget)
 
