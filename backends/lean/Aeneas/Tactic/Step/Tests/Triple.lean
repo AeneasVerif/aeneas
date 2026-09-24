@@ -60,12 +60,12 @@ theorem triple_step_bind {P Pm : Pre} {next : α → TestM β}
   fun state hP =>
     hNext (m state).2 (m state).1 (hStep state (hPre state hP)) (m state).2 rfl
 
-/- intro tactic: expose the binders of `Post.entails`, and let `intro_split` introduce
+/- intro tactic: expose the binders of `Post.entails`, and let `Std.WP.introTactic` normalize
    and split the facts among them. -/
 open Lean Elab Tactic in
 meta def introEntails : Aeneas.IntroFn := do
   evalTactic (← `(tactic| try rw [Post.entails_iff]))
-  Aeneas.Step.Intro.introSplit
+  Aeneas.Std.WP.introTactic
 
 #register_spec_info {
     spec_name := ``triple

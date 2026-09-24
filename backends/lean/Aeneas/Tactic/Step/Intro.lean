@@ -5,25 +5,36 @@ public import Aeneas.Std.Spec
 public section
 
 /-!
-# The shared part of an `intro_tactic`
+# Normalizing the premise of a step theorem
 
-`step` hands the mono/bind premise left by a step theorem to the tactic the specification
-statement registers as its `intro_tactic`, which has to bring it to the
-`∀ outputs, facts → …` shape `step` introduces the outputs from.
+After applying a step theorem, `step` is left with a target `∀ outputs, fact → k outputs`,
+which the `intro_tactic` of the judgment has to bring to the shape `step` introduces: one
+binder per fact. `normalizeTarget` does so for judgments whose premise is a plain
+implication, such as `Std.WP.spec` (see `Std.WP.introTactic`). For instance, it rewrites
+```
+∀ x, uncurry' (fun a b => ∃ y, P a b ∧ Q a b y) x → k x ⦃ r => R r ⦄
+```
+to
+```
+∀ y x, P x.1 x.2 → Q x.1 x.2 y → k x ⦃ r => R r ⦄
+```
+in four steps, one per section below: reduce the `uncurry'` marker, simplify the fact, split
+its `∧`s and `∃`s into binders, and move the witnesses before the outputs.
 
-What the judgments have in common there is the treatment of the facts: the markers the
-postcondition notation leaves behind have to be reduced, and a fact standing for several
-of them has to be split. `intro_split` does exactly that and nothing else, which is all a
-judgment whose premise already *is* `∀ x, P x → …` needs; a separation-logic judgment
-extracts its facts from an assertion first, and then reuses these same helpers.
+`normalizeTarget` rewrites the goal; it does not introduce the fact as a hypothesis and then
+simplify that hypothesis. This matters for recursive specifications: `decreasing_by` sees
+the hypotheses that the proof term binds around the recursive call. If we introduced
+`h : uncurry' (…) x` and simplified it afterwards, the proof term would still bind `h` with
+its original, unsplit type, and that is what the termination proof would get. Rewriting the
+goal first makes the proof term bind the split facts directly
+(see `Tests/IntroRecursion.lean`).
 -/
 
 namespace Aeneas.Step.Intro
 
 open Lean Meta Elab Tactic
 
-theorem forall_unit {p : Prop} : (Unit → p) ↔ p :=
-  ⟨fun h => h (), fun h _ => h⟩
+/-! ## Step 1: markers -/
 
 /-- Whether `e` consists only of outputs, projections, and constructors. -/
 meta partial def isOutputLike (e : Expr) : MetaM Bool := do
@@ -41,22 +52,19 @@ meta partial def isOutputLike (e : Expr) : MetaM Bool := do
         return ← isOutputLike args[info.numParams]
   return false
 
-/-- Reduce an application which is stuck on a definition that destructures its argument:
-this is the shape of the markers a multi-binder postcondition is built from, which apply
-the body of the postcondition to the result tuple.
+/-- Reduce `e` if it is an application of one of the `markers`, the definitions the
+postcondition notation of the judgment wraps its body in: `uncurry' p x` reduces to
+`p x.1 x.2`.
 
-The definition is unfolded once, and the reduction is kept only when it fires a match with
-a *single* alternative, i.e. an irrefutable destructuring. A definition which merely
-abbreviates its body is left alone, and so is a genuine case analysis — for a separation
-logic, opening a representation predicate would leave an assertion the frame inference can
-no longer match. -/
-meta def reduceMarker? (e : Expr) : MetaM (Option Expr) := do
+A marker is only reduced if it unfolds to a match with a single alternative on outputs
+(see `isOutputLike`), so that program computations are never evaluated. -/
+meta def reduceMarker? (markers : Array Name) (e : Expr) : MetaM (Option Expr) := do
   let e := (← instantiateMVars e).consumeMData.headBeta
-  unless e.getAppFn.isConst && e.getAppNumArgs > 0 do return none
+  let .const name _ := e.getAppFn | return none
+  unless markers.contains name do return none
   let some unfolded ← unfoldDefinition? e | return none
   let some matcher ← matchMatcherApp? unfolded | return none
   unless matcher.alts.size == 1 do return none
-  /- Do not evaluate program computations or the marker body. -/
   for discr in matcher.discrs do
     unless ← isOutputLike discr do return none
   match ← Lean.Meta.reduceMatcher? unfolded with
@@ -64,209 +72,196 @@ meta def reduceMarker? (e : Expr) : MetaM (Option Expr) := do
   | _ => return none
 
 /-- Reduce up to `fuel` markers at the head of `e`. -/
-meta partial def reduceMarkers (e : Expr) (fuel : Nat := 16) : MetaM Expr := do
+meta partial def reduceMarkers (markers : Array Name) (e : Expr) (fuel : Nat := 16) :
+    MetaM Expr := do
   let e := (← instantiateMVars e).consumeMData.headBeta
   match fuel with
   | 0 => return e
   | fuel + 1 =>
-    match ← reduceMarker? e with
-    | some e' => reduceMarkers e' fuel
+    match ← reduceMarker? markers e with
+    | some e' => reduceMarkers markers e' fuel
     | none => return e
 
-/-- Normalize the type of a fact in place, reducing the markers at its head. -/
-meta def normalizeFact (goal : MVarId) (fvarId : FVarId) : MetaM MVarId := do
-  goal.withContext do
-    let type ← instantiateMVars (← fvarId.getType)
-    let type' ← reduceMarkers type
-    if type' == type.consumeMData then pure goal else goal.replaceLocalDeclDefEq fvarId type'
+/-! ## Step 2: simplification -/
 
-/-- Prove trivial assumptions without evaluating program terms. -/
-meta def trivialProof? (type : Expr) : MetaM (Option Expr) := do
-  let type := type.consumeMData
-  if type.isConstOf ``True then return some (mkConst ``True.intro)
-  if type.isConstOf ``Unit then return some (mkConst ``Unit.unit)
-  match_expr type with
-  | Eq _ lhs rhs =>
-    if lhs == rhs then return some (← mkEqRefl lhs) else return none
-  | _ => return none
+theorem forall_unit {p : Prop} : (Unit → p) ↔ p :=
+  ⟨fun h => h (), fun h _ => h⟩
 
-/-- Normalize defining existentials before splitting facts. -/
-meta def normalizeExists (goal : MVarId) (fvarId : FVarId) : MetaM (MVarId × FVarId) := do
-  let goal ← normalizeFact goal fvarId
-  goal.withContext do
-    let type ← instantiateMVars (← fvarId.getType)
-    unless ← isProp type do return (goal, fvarId)
-    if (type.find? (·.isAppOfArity ``Exists 2)).isNone then return (goal, fvarId)
-    let thms ← #[``exists_eq_left, ``exists_eq_left', ``exists_eq_right, ``exists_eq_right']
-      |>.foldlM (fun thms name => thms.addConst name (post := false)) ({} : SimpTheorems)
-    let ctx ← Simp.mkContext { iota := false, zeta := false, dsimp := false }
-      (simpTheorems := #[thms])
-    let pre : Simp.Simproc := fun e => do
-      if e.isForall || e.isLambda || e.isLet ||
-          e.isAppOf ``And || e.isAppOf ``Or || e.isAppOf ``Exists ||
-          e.isAppOf ``ite || e.isAppOf ``dite then
-        return ← Simp.preDefault #[] e
-      if let .const name _ := e.getAppFn then
-        if ← isMatcher name then
-          return ← Simp.preDefault #[] e
-      return .done { expr := e }
-    let (result, _) ← Simp.main type ctx (methods := { Simp.mkDefaultMethodsCore #[] with pre })
-    let some proof := result.proof?
-      | return (← goal.replaceLocalDeclDefEq fvarId result.expr, fvarId)
-    let result ← goal.assertAfter fvarId (← fvarId.getUserName) result.expr
-      (← mkEqMP proof (.fvar fvarId))
-    return (← result.mvarId.tryClear fvarId, result.fvarId)
+/-- Whether `normalizeFact` looks inside `e`: logical connectives, and matches (which are
+entered, but not split). -/
+private meta def isLogical (e : Expr) : MetaM Bool := do
+  if e.isForall || e.isLambda || e.isLet then return true
+  if [``And, ``Or, ``Exists, ``Not, ``Eq, ``Iff, ``ite, ``dite].any e.isAppOf then return true
+  if let .const name _ := e.getAppFn then return ← isMatcher name
+  return false
 
-/-- Collect conjuncts and discharge vacuous assumptions. -/
-meta partial def collectFacts (type proof : Expr) (name : Name) : MetaM (Array Hypothesis) := do
-  let type ← reduceMarkers type
-  if type.isConstOf ``True then return #[]
-  if let .forallE _ domain body _ := type then
-    unless body.hasLooseBVars do
-      if let some witness ← trivialProof? domain then
-        return ← collectFacts body (mkApp proof witness) name
-  match_expr type with
-  | And p q =>
-    let left ← collectFacts p (mkApp3 (mkConst ``And.left) p q proof) name
-    let right ← collectFacts q (mkApp3 (mkConst ``And.right) p q proof) name
-    return left ++ right
-  | _ => return #[{ userName := name, type, value := proof }]
+/-- Normalize a fact: reduce the markers anywhere in its logical structure (see
+`isLogical`), eliminate defining existentials, and drop trivial conjuncts and premises.
+Program terms are left alone, so that bundled postconditions stay bundled. -/
+meta def normalizeFact (markers : Array Name) (type : Expr) : MetaM Simp.Result := do
+  let names := #[
+    /- Defining existentials: `∃ y, y = e ∧ P y` becomes `P e`. -/
+    ``exists_eq_left, ``exists_eq_left', ``exists_eq_right, ``exists_eq_right',
+    ``exists_eq, ``exists_eq',
+    /- Trivial conjuncts and premises. -/
+    ``and_true, ``true_and, ``eq_self_iff_true, ``true_imp_iff, ``forall_unit]
+  let thms ← names.foldlM (init := ({} : SimpTheorems)) fun thms name => do
+    (← thms.addConst name (post := false)).addConst name
+  let ctx ← Simp.mkContext { iota := false, zeta := false, dsimp := false }
+    (simpTheorems := #[thms])
+  let pre : Simp.Simproc := fun e => do
+    /- Simp runs with reducible transparency, which would not unfold the markers. -/
+    if let some e' ← withTransparency .default (reduceMarker? markers e) then
+      return .visit { expr := e'.headBeta }
+    if ← isLogical e then return ← Simp.preDefault #[] e
+    return .done { expr := e }
+  let (result, _) ← Simp.main type ctx (methods := { Simp.mkDefaultMethodsCore #[] with pre })
+  return result
 
-private meta def witnessNames : Array AltVarNames := #[{ varNames := [`x] }]
+/-! ## Step 3: splitting -/
 
-/-- Eliminate existentials without wrapping nondependent continuations in `casesOn`. -/
-meta def elimExists (goal : MVarId) (fvarId : FVarId) : MetaM (Array FVarId × MVarId) :=
-  goal.withContext do
-    let target ← goal.getType
-    if ← exprDependsOn target fvarId then
-      let #[subgoal] ← goal.cases fvarId witnessNames |
-        throwError "intro_split: expected a single existential constructor"
-      return (subgoal.fields.map Expr.fvarId!, subgoal.mvarId)
-    let type ← instantiateMVars (← fvarId.getType)
-    let_expr Exists α p := type |
-      throwError "intro_split: expected an existential"
-    let contType ← withLocalDeclD `x α fun x => do
-      mkForallFVars #[x] (← mkArrow (mkApp p x).headBeta target)
-    let cont ← mkFreshExprSyntheticOpaqueMVar contType (← goal.getTag)
-    goal.assign (mkApp5 (mkConst ``Exists.elim [← getLevel α]) α p target (.fvar fvarId) cont)
-    let (fields, goal) ← cont.mvarId!.introNP 2
-    return (fields, ← goal.tryClear fvarId)
+theorem forall_and_index {a b : Prop} {p : a ∧ b → Prop} :
+    (∀ h, p h) ↔ ∀ (ha : a) (hb : b), p ⟨ha, hb⟩ :=
+  ⟨fun h ha hb => h ⟨ha, hb⟩, fun h ⟨ha, hb⟩ => h ha hb⟩
 
-/-- Normalize and recursively split a fact into witnesses and conjuncts. -/
-meta partial def splitHypothesis (goal : MVarId) (fvarId : FVarId) : MetaM MVarId := do
-  let goal ← normalizeFact goal fvarId
-  let type ← goal.withContext do instantiateMVars (← fvarId.getType)
-  unless ← goal.withContext (isProp type) do return goal
-  if type.consumeMData.isConstOf ``True then
-    return (← goal.tryClear fvarId)
-  let facts ← goal.withContext do collectFacts type (.fvar fvarId) (← fvarId.getUserName)
-  let isExists := type.consumeMData.isAppOfArity ``Exists 2
-  unless isExists do
-    if let #[fact] := facts then
-      if fact.type == type then return goal
-  let (reverted, goal) ← goal.revertAfter fvarId
-  let dependent ← goal.withContext do exprDependsOn (← goal.getType) fvarId
-  let (fields, goal) ←
-    if isExists then
-      elimExists goal fvarId
-    else if dependent && type.consumeMData.isAppOfArity ``And 2 then do
-      let subgoals ← goal.cases fvarId witnessNames
-      let #[subgoal] := subgoals |
-        throwError "intro_split: expected a single constructor"
-      pure (subgoal.fields.map Expr.fvarId!, subgoal.mvarId)
-    else do
-      let (fields, goal) ← goal.assertHypotheses facts
-      pure (fields, ← goal.tryClear fvarId)
-  let mut goal := goal
-  /- Each edit invalidates later hypotheses. -/
-  for field in fields.reverse do
-    goal ← splitHypothesis goal field
-  return (← goal.introNP reverted.size).2
+/-- Split the premise `∀ h : fact, rest h` into the witnesses and conjuncts `fact` stands for:
+- `∀ h : True, rest h` becomes `rest trivial`;
+- `∀ h : a ∧ b, rest h` becomes `∀ (ha : a) (hb : b), rest ⟨ha, hb⟩`, and `a` and `b` are
+  split in turn;
+- `∀ h : ∃ x, p x, rest h` becomes `∀ x (h : p x), rest ⟨x, h⟩`, and `p x` is split in turn;
+- any other fact is left alone.
 
-/-- Peel leading existentials while preserving witness order. -/
-meta partial def peelLeadingExists (goal : MVarId) (fvarId : FVarId)
-    (witnesses : Array FVarId := #[]) : MetaM (MVarId × Array FVarId × Option FVarId) := do
-  let goal ← normalizeFact goal fvarId
-  let type ← goal.withContext do instantiateMVars (← fvarId.getType)
-  unless type.consumeMData.isAppOfArity ``Exists 2 do return (goal, witnesses, some fvarId)
-  let (fields, goal) ← elimExists goal fvarId
-  let #[witness, rest] := fields |
-    throwError "intro_split: expected an existential witness and its fact"
-  peelLeadingExists goal rest (witnesses.push witness)
+`rest` is a function of the proof of the fact. Returns the new premise, and a proof that it
+is equivalent to `∀ h : fact, rest h`. -/
+meta partial def splitFact (name : Name) (fact rest : Expr) : MetaM (Expr × Expr) := do
+  let fact := fact.consumeMData
+  if fact.isConstOf ``True then
+    return ((mkApp rest (mkConst ``True.intro)).headBeta,
+      mkApp3 (mkConst ``forall_prop_of_true) fact rest (mkConst ``True.intro))
+  match_expr fact with
+  | And a b =>
+    /- (∀ h : a ∧ b, rest h)
+         ↔ ∀ (ha : a) (hb : b), rest ⟨ha, hb⟩     -- `forall_and_index`
+         ↔ ∀ (ha : a), splitB ha                   -- split `b`, under `ha`
+         ↔ premise                                 -- split `a` -/
+    let step₁ ← mkAppOptM ``forall_and_index #[a, b, rest]
+    let (splitB, step₂) ← withLocalDeclD name a fun ha => do
+      let restB ← withLocalDeclD name b fun hb => do
+        mkLambdaFVars #[hb] (mkApp rest (mkApp4 (mkConst ``And.intro) a b ha hb)).headBeta
+      let (splitB, proofB) ← splitFact name b restB
+      return (← mkLambdaFVars #[ha] splitB,
+        ← mkAppM ``forall_congr' #[← mkLambdaFVars #[ha] proofB])
+    let (premise, step₃) ← splitFact name a splitB
+    return (premise, ← mkAppM ``Iff.trans #[step₁, ← mkAppM ``Iff.trans #[step₂, step₃]])
+  | Exists α p =>
+    /- (∀ h : ∃ x, p x, rest h)
+         ↔ ∀ x (h : p x), rest ⟨x, h⟩     -- `forall_exists_index`
+         ↔ ∀ x, splitP x                   -- split `p x`, under `x` -/
+    let step₁ ← mkAppOptM ``forall_exists_index #[α, p, rest]
+    let witness := if let .lam n .. := p then n else `x
+    withLocalDeclD witness α fun x => do
+      let px := (mkApp p x).headBeta
+      let restX ← withLocalDeclD name px fun h => do
+        mkLambdaFVars #[h]
+          (mkApp rest (mkApp4 (mkConst ``Exists.intro [← getLevel α]) α p x h)).headBeta
+      let (splitP, proofP) ← splitFact name px restX
+      let step₂ ← mkAppM ``forall_congr' #[← mkLambdaFVars #[x] proofP]
+      return (← mkForallFVars #[x] splitP, ← mkAppM ``Iff.trans #[step₁, step₂])
+  | _ =>
+    let premise ← withLocalDeclD name fact fun h => do
+      mkForallFVars #[h] (mkApp rest h).headBeta
+    return (premise, ← mkAppM ``Iff.refl #[premise])
 
-/-- The hypotheses of the main goal, to be compared with the context a later step reaches. -/
-meta def localHypotheses : TacticM (Std.HashSet FVarId) := do
-  (← getMainGoal).withContext do
-    pure <| (← getLCtx).foldl (init := ∅) fun acc decl => acc.insert decl.fvarId
+/-! ## Step 4: hoisting -/
 
-/-- Normalize and split the hypotheses which appeared since `before` was taken. -/
-meta def splitNewHypotheses (before : Std.HashSet FVarId) : TacticM Unit := do
-  let goal ← getMainGoal
-  let introduced ← goal.withContext do
-    pure <| (← getLCtx).foldl (init := #[]) fun acc decl =>
-      if decl.isImplementationDetail || before.contains decl.fvarId then acc
-      else acc.push decl.fvarId
-  let mut goal := goal
-  for fvarId in introduced.reverse do
-    let (goal', fvarId) ← normalizeExists goal fvarId
-    goal := goal'
-    goal ← splitHypothesis goal fvarId
-  replaceMainGoal [goal]
-
-private meta def leadingBinders : Expr → Nat
-  | .forallE _ _ body _ => leadingBinders body + 1
-  | .letE _ _ _ body _ => leadingBinders body + 1
-  | .mdata _ body => leadingBinders body
+/-- The number of existentials at the head of `e`. -/
+private meta partial def countLeadingExists (e : Expr) : Nat :=
+  match_expr e.consumeMData with
+  | Exists _ p => if let .lam _ _ body _ := p then countLeadingExists body + 1 else 1
   | _ => 0
 
-/-- Introduce leading binders without replacing their user names. -/
-meta def introsPreservingNames (goal : MVarId) : MetaM (Array FVarId × MVarId) := do
-  goal.introNP (leadingBinders (← instantiateMVars (← goal.getType)).consumeMData)
+/-- The number of leading binders of `premise` to move before the outputs `xs`.
 
-/-- Introduce a premise and split its facts while preserving binder order. -/
-meta def introSplit : IntroFn := do
-  let before ← localHypotheses
-  let (introduced, goal) ← introsPreservingNames (← getMainGoal)
-  let factIdx? ← goal.withContext do
-    let mut idx? := none
-    for h : i in [0 : introduced.size] do
-      if ← isProp (← introduced[i].getType) then
-        idx? := some i
-        break
-    pure idx?
-  let some factIdx := factIdx? |
-      replaceMainGoal [goal]
-      return 0
-  let fact := introduced[factIdx]!
-  let hoistExists ← goal.withContext do
-    return (← instantiateMVars (← fact.getType)).consumeMData.headBeta.isAppOfArity ``Exists 2
-  let (_, goal) ← goal.revertAfter fact
-  let (goal, fact) ← normalizeExists goal fact
-  let (goal, witnesses, rest?) ←
-    if hoistExists then peelLeadingExists goal fact
-    else pure (goal, #[], some fact)
-  let goal ← match rest? with
-    | some rest => splitHypothesis goal rest
-    | none => pure goal
-  /- Restore the premise's binder order. -/
-  let newFVars ← goal.withContext do
-    pure <| (← getLCtx).foldl (init := #[]) fun acc decl =>
-      if decl.isImplementationDetail || before.contains decl.fvarId then acc
-      else acc.push decl.fvarId
-  let ordered := witnesses ++ newFVars.filter (!witnesses.contains ·)
-  let dependsOnOutput ← goal.withContext do
-    witnesses.anyM fun witness => do
-      let type ← witness.getType
-      (newFVars.filter (!witnesses.contains ·)).anyM (exprDependsOn type ·)
-  if ordered == newFVars || dependsOnOutput then
-    replaceMainGoal [goal]
-    return 0
-  let (reverted, goal) ← goal.revert ordered (preserveOrder := true)
-  let goal := (← goal.introNP reverted.size).2
-  replaceMainGoal [goal]
-  return if factIdx > 0 then reverted.idxOf introduced[0]! else 0
+Splitting `fact` has turned its leading existential witnesses into the leading binders of
+`premise`. They are all moved if none of their types depends on the outputs, and none of
+them is otherwise. -/
+meta def numHoistedWitnesses (xs : Array Expr) (fact premise : Expr) : MetaM Nat := do
+  if xs.isEmpty then return 0
+  let n := countLeadingExists fact
+  if n == 0 then return 0
+  forallBoundedTelescope premise n fun ws _ => do
+    if ws.size != n then return 0
+    let outputs := xs.map Expr.fvarId!
+    let independent ← ws.allM fun w => do
+      return !(← instantiateMVars (← inferType w)).hasAnyFVar outputs.contains
+    return if independent then n else 0
 
-/-- `introSplit`, as a tactic. -/
-elab (name := intro_split) "intro_split" : tactic => discard introSplit
+/-! ## Putting it together -/
+
+/-- Introduce the outputs, i.e. the leading binders of `e` which are not propositions, and
+pass them to `k` together with the remainder of `e`. -/
+private meta partial def withOutputs {α} (e : Expr) (k : Array Expr → Expr → MetaM α)
+    (xs : Array Expr := #[]) : MetaM α := do
+  if let .forallE name dom body bi := e.consumeMData then
+    unless ← isProp dom do
+      return ← withLocalDecl name bi dom fun x =>
+        withOutputs (body.instantiate1 x) k (xs.push x)
+  k xs e.consumeMData
+
+/-- Normalize the first fact of the target, as described in the module doc. `markers` are
+the definitions to reduce in step 1.
+
+Returns the new goal and the number of witnesses moved before the outputs, which is the
+index of the first output; or `none` if the target is already normalized.
+
+The `Example:` comments follow the example of the module doc. -/
+meta def normalizeTarget (markers : Array Name) (goal : MVarId) :
+    MetaM (Option (MVarId × Nat)) := goal.withContext do
+  /- The new goal lives in the context of the original one, not under the outputs. -/
+  let lctx ← getLCtx
+  let localInsts ← getLocalInstances
+  /- Introduce the outputs `xs`, and split the rest of the target into the fact `dom` and
+     the continuation `body`. -/
+  withOutputs (← instantiateMVars (← goal.getType)) fun xs original => do
+    let .forallE name dom body bi := original | return none
+    /- Example: `xs = #[x]`, `dom = uncurry' (fun a b => ∃ y, P a b ∧ Q a b y) x`, and
+       `body = k x ⦃ r => R r ⦄`. -/
+
+    /- Steps 1–2: reduce the markers and simplify the fact, with `factEq? : dom = fact`.
+       When the continuation depends on the proof of the fact, the fact can only be changed
+       up to definitional equality: we then only reduce the markers at its head. -/
+    let (fact, factEq?) ←
+      if body.hasLooseBVars then pure (← reduceMarkers markers dom, none)
+      else
+        let result ← normalizeFact markers dom
+        pure (result.expr, result.proof?)
+    /- Example: `fact = ∃ y, P x.1 x.2 ∧ Q x.1 x.2 y`. -/
+
+    /- Step 3: split `fact` into binders, with `proof : original ↔ premise`. -/
+    let (premise, splitProof) ← splitFact name fact (.lam name fact body bi)
+    let proof ← match factEq? with
+      | none => pure splitProof
+      | some eq =>
+        let congr ← mkAppOptM ``imp_congr_left
+          #[none, none, some body, some (← mkAppM ``Iff.of_eq #[eq])]
+        mkAppM ``Iff.trans #[congr, splitProof]
+    /- Example: `premise = ∀ y, P x.1 x.2 → Q x.1 x.2 y → k x ⦃ r => R r ⦄`. -/
+
+    /- Step 4: count the witnesses to move before the outputs. -/
+    let numWitnesses ← numHoistedWitnesses xs fact premise
+    /- Example: `numWitnesses = 1`, as the type of `y` does not depend on `x`. -/
+    if premise == original && numWitnesses == 0 then return none
+
+    /- Replace `goal : ∀ xs, original` by `newGoal : ∀ ws xs, premise'`, where
+       `premise = ∀ ws, premise'`, with `goal := fun xs => proof.mpr (fun ws => newGoal ws xs)`. -/
+    forallBoundedTelescope premise numWitnesses fun ws premise' => do
+      let newTarget ← mkForallFVars ws (← mkForallFVars xs premise')
+      let newGoal ← withLCtx lctx localInsts do
+        mkFreshExprSyntheticOpaqueMVar newTarget (← goal.getTag)
+      /- Example: `ws = #[y]`,
+         `newTarget = ∀ y x, P x.1 x.2 → Q x.1 x.2 y → k x ⦃ r => R r ⦄`. -/
+      let inner ← mkLambdaFVars ws (mkAppN (mkAppN newGoal ws) xs)
+      goal.assign (← mkLambdaFVars xs (← mkAppM ``Iff.mpr #[proof, inner]))
+      return some (newGoal.mvarId!, numWitnesses)
 
 end Aeneas.Step.Intro

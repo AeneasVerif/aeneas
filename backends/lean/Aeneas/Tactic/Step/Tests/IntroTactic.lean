@@ -186,7 +186,7 @@ example (P : Prop) (h : P) : P := by
   run_assumption
 
 elab "run_intro_split" : tactic => do
-  discard <| Step.runIntroTactic ``Aeneas.Step.Intro.introSplit
+  discard <| Step.runIntroTactic ``Aeneas.Std.WP.introTactic
 
 open Lean Meta Elab Tactic in
 elab "run_intro_pending " n:ident : tactic => withMainContext do
@@ -195,7 +195,7 @@ elab "run_intro_pending " n:ident : tactic => withMainContext do
   let goal ← getMainGoal
   let worker ← mkFreshExprSyntheticOpaqueMVar ((← goal.getType).replaceFVar n pending)
   setGoals [worker.mvarId!]
-  discard <| Step.runIntroTactic ``Aeneas.Step.Intro.introSplit
+  discard <| Step.runIntroTactic ``Aeneas.Std.WP.introTactic
   let proof ← instantiateMVars worker
   if proof.getAppFn.isConst then
     throwError "Output normalization generalized a pending obligation"
@@ -210,8 +210,8 @@ example (n : Nat) (P : Nat → Prop) (R : Prop) (hR : R) :
   guard_hyp hP : P value
   exact hR
 
-/- What the tactic introduces is reverted, one binder per fact: `intro_split` splits the
-   conjunction it introduces, and the premise comes back with one binder per conjunct. -/
+/- `Std.WP.introTactic` splits the conjunction of the premise: it comes back with one binder per
+   conjunct. -/
 example (P Q R : Prop) (hR : R) : P ∧ Q → R := by
   run_intro_split
   guard_target = P → Q → R
@@ -262,12 +262,12 @@ example (Q R : Prop) (hR : R) : (Q ∧ ∃ f : Unit → Nat, f () = 0) → R := 
 
 elab "run_intro_split_compact" : tactic => do
   let goal ← Lean.Elab.Tactic.getMainGoal
-  discard <| Step.runIntroTactic ``Aeneas.Step.Intro.introSplit
+  discard <| Step.runIntroTactic ``Aeneas.Std.WP.introTactic
   let proof ← Lean.instantiateMVars (Lean.mkMVar goal)
   if (proof.find? fun e =>
       e.isConstOf ``And.casesOn || e.isConstOf ``And.rec ||
       e.isConstOf ``Exists.casesOn || e.isConstOf ``Exists.rec).isSome then
-    throwError "intro_split exposed an elimination recursor around its continuation"
+    throwError "introTactic exposed an elimination recursor around its continuation"
 
 example (P : Nat → Prop) (Q R : Prop) (hR : R) :
     (∃ n, P n ∧ (True → Unit → Q)) → R := by
@@ -323,10 +323,10 @@ example : conditional 0#u32 ⦃ result => result = true ⦄ := by
 example (f : Result (Nat × Nat))
     (h : f ⦃ a b => ∃ witness : Bool, a = witness.toNat ∧ a = b ⦄) :
     (do let (a, b) ← f; ok (a, b)) ⦃ a b => a = b ⦄ := by
-  step with h as ⟨a, b, witness, hw, hab⟩
+  step with h as ⟨witness, a, b, hw, hab⟩
+  guard_hyp witness : Bool
   guard_hyp a : Nat
   guard_hyp b : Nat
-  guard_hyp witness : Bool
   guard_hyp hw : a = witness.toNat
   exact hab
 
