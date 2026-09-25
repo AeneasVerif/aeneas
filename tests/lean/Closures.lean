@@ -28,7 +28,7 @@ namespace closures
     Visibility: public -/
 @[trait_default, rust_fun "core::iter::traits::iterator::Iterator::map"]
 axiom core.iter.traits.iterator.Iterator.map.default
-  {Self : Type} {B : Type} {F : Type} {Clause0_Item : Type} (IteratorInst :
+  {Self : Type} {B : Type} {F : Type u} {Clause0_Item : Type} (IteratorInst :
   core.iter.traits.iterator.Iterator Self Clause0_Item)
   (opsfunctionFnMutFTupleClause0_ItemBInst : core.ops.function.FnMut F
   Clause0_Item B) :
@@ -356,8 +356,7 @@ def u8_id (x : Std.U8) : Result Std.U8 := do
 def P.Insts.CoreOpsFunctionFnMutTupleU8U8.call_mut
   (state : Std.U8 → Result Std.U8) (args : Std.U8) :
   Result (Std.U8 × (Std.U8 → Result Std.U8))
-  := do
-  let i ← u8_id args
+  := Aeneas.Std.bind (u8_id args) fun i =>
   ok (i, state)
 
 /-- [closures::{impl core::ops::function::FnOnce<(u8,), u8> for closures::u8_id}::call_once]:
@@ -385,12 +384,12 @@ def P.Insts.CoreOpsFunctionFnMutTupleU8U8 : core.ops.function.FnMut (Std.U8 →
 
 /-- [closures::map_fn_pointer]:
     Source: 'tests/src/closures.rs', lines 47:0-49:1 -/
-def map_fn_pointer (x : alloc.vec.Vec Std.U8) : Result Unit := do
-  let ii ← alloc.vec.IntoIteratorVec.into_iter x
-  let _ ←
-    core.iter.traits.iterator.Iterator.map.default
+def map_fn_pointer (x : alloc.vec.Vec Std.U8) : Result Unit :=
+  Aeneas.Std.bind (alloc.vec.IntoIteratorVec.into_iter x) fun ii =>
+  Aeneas.Std.bind
+    (core.iter.traits.iterator.Iterator.map.default
       (core.iter.traits.iterator.IteratorVecIntoIter Std.U8)
-      P.Insts.CoreOpsFunctionFnMutTupleU8U8 ii (u8_id)
+      P.Insts.CoreOpsFunctionFnMutTupleU8U8 ii u8_id) fun _ =>
   ok ()
 
 end closures

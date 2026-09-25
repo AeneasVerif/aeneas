@@ -14,6 +14,30 @@ public section
 
 namespace Aeneas
 
+namespace Std
+
+/-- Reassociate a heterogeneous `Result` bind inside an ordinary `do` bind.
+
+This lets `step` reach the first call in `Bind.bind (Std.bind x f) g`.
+For example, VCR's `new_disjoint_from_slices` returns a monadic backward
+continuation, so its result lives in a higher universe than the surrounding
+buffer computation. This occurs in the stitched branches of:
+* `symcrust.aesgcm.encrypt_body.x86_64.spec` in
+  `SymCRust/lean/Symcrust/Properties/Aes/Gcm/Lifecycle/Encrypt.lean`;
+* `symcrust.aesgcm.decrypt_body.x86_64.spec` in
+  `SymCRust/lean/Symcrust/Properties/Aes/Gcm/Lifecycle/Decrypt.lean`.
+
+Both need reassociation at `InPlaceOrDisjointBuffer.new_disjoint_from_slices`,
+even when the surrounding specification is already an SL triple. -/
+@[step_simps]
+theorem bind_assoc_mixed {α : Type u} {β γ : Type v}
+    (x : Result α) (f : α → Result β) (g : β → Result γ) :
+    ((do let b ← ((do let a ← x; f a) : Result β); g b) : Result γ) =
+      ((do let a ← x; let b ← f a; g b) : Result γ) :=
+  Std.bind_assoc x f g
+
+end Std
+
 namespace Step
 
 open Lean Elab Term Meta Tactic
@@ -70,10 +94,9 @@ theorem forall_unit_intro {p : Unit → Prop} (h : p ()) : ∀ value, p value :=
   fun value => match value with | () => h
 
 export Intro (forall_unit)
-
 attribute [step_simps]
-  bind_assoc Std.bind_tc_ok Std.bind_tc_vis Std.bind_tc_div
-  Std.bind_assoc Std.bind_ok Std.bind_vis Std.bind_div
+  bind_assoc Std.bind_tc_ok Std.bind_tc_vis Std.bind_tc_fail Std.bind_tc_div
+  Std.bind_assoc Std.bind_ok Std.bind_vis Std.bind_fail Std.bind_div
   /- Those are quite useful to simplify the goal further by eliminating existential quantifiers for instance. -/
   and_assoc Std.Result.ok.injEq Prod.mk.injEq
   exists_eq_left exists_eq_left' exists_eq_right exists_eq_right' exists_eq exists_eq' true_and and_true
@@ -446,15 +469,23 @@ meta def getContInput (e : Expr) : MetaM NameTree := do
 meta def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
   return (← getContInput e).flatten
 
-/-- Extract the variable names from the bind continuation in the current goal.
-    Returns an empty array if the goal is not a bind. -/
+/-- Extract the variable names from the bind continuation of the first call in the current
+    goal. Returns an empty array if the goal is not a bind.
+
+    The first call may be nested, as in `do let z ← (do let y ← f x; g y); h z`, whose
+    first call is `f x`: `step` reassociates the binds, and should name the output `y`. -/
 meta def getBindVarNames : TacticM (Array (Option Name)) := do
   try
     withMainContext do
     let goalTy ← getMainTarget
     forallTelescope goalTy fun _ goalTy => do
-    let m ← getSpecProgram goalTy
-    let some (_, cont) := getBindArgs? m | return #[]
+    let mut program ← getSpecProgram goalTy
+    let mut cont? := none
+    repeat
+      let some (m, cont) := getBindArgs? program | break
+      program := m
+      cont? := some cont
+    let some cont := cont? | return #[]
     getPostNames cont
   catch _ => pure #[]
 
@@ -534,11 +565,39 @@ meta def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) :=
       trace[Step] "Could not decompose application"
       pure mvar
 
+/-- Infer separation-logic ghost arguments from the resources being consumed,
+before pure preconditions can select an earlier view. Use the same frame
+inference as a bind, including the caller's pointer equalities. Failure leaves
+all metavariables untouched; the usual precondition solver is still available. -/
+private meta def inferSpatialGhosts (info : SpecInfo) (goalTy thTy : Expr) : TacticM Unit := do
+  unless info.spec_name == ``Std.WP.ispec || info.spec_name == ``Std.WP.dispec do
+    return
+  let goalArgs := (← instantiateMVars goalTy).consumeMData.getAppArgs
+  let thArgs := (← instantiateMVars thTy).consumeMData.getAppArgs
+  unless goalArgs.size == info.arity && thArgs.size == info.arity do return
+  unless thArgs[1]!.hasExprMVar do return
+  let saved ← saveState
+  let goals ← getGoals
+  try
+    let frame ← mkFreshExprMVar (mkConst ``SepLogic.IProp)
+    let destination ← mkAppM ``SepLogic.sep #[thArgs[1]!, frame]
+    let obligation ← mkAppM ``SepLogic.Entails #[goalArgs[1]!, destination]
+    let proof ← mkFreshExprSyntheticOpaqueMVar obligation
+    setGoals [proof.mvarId!]
+    evalTactic (← `(tactic| iframe))
+    unless (← getUnsolvedGoals).isEmpty do
+      throwError "spatial ghost inference left an unresolved framing obligation"
+    setGoals goals
+  catch error =>
+    saved.restore
+    trace[Step] "Spatial ghost inference did not match: {error.toMessageData}"
+
 /-- Attempt to match a given theorem with the monadic call in the target.
 The resulting target should be the registered judgment's mono/bind premise,
 e.g. `∀ x, P x → k x ⦃ Q ⦄` or `∀ x, P₀ x → P₁ x`.
 -/
-meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th : Expr) :
+meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th : Expr)
+    (inferGhostVars : Bool := true) :
   TacticM (Array MVarId) := do
   withTraceNode `Step (fun _ => pure m!"tryMatch") do
   /- Apply the theorem
@@ -631,6 +690,8 @@ meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool
     trace[Step] "Could not unify the theorem with the target"
     throwError "Could not unify the theorem with the target:\n- theorem: {specMonoBindTy}\n- target: {goalTy}"
 
+  if inferGhostVars then
+    inferSpatialGhosts info goalTy thTy
   mgoal.assign specMonoBind
   trace[Step] "New goal: {ngoal}"
 
@@ -791,6 +852,12 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTr
   TacticM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"introOutputs") do
   traceGoalWithNode "Initial goal"
+  /- The goal looks like:
+     mono: ∀ x, P₀ x → P₁ x
+     bind: ∀ x, Pₘ x → spec (k x) Pₖ
+     bind (separation logic): ∀ v, ispec (Pₘ v ∗ emp) (k v) Q
+  -/
+
   trace[Step] "call-site tree: {repr callSiteTree}"
 
   /- Instantiating the step theorem may unfold scalar types (e.g., `U32` to `UScalar .U32`):
@@ -838,6 +905,15 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTr
   if outputFVars.size > 1 then
     reduceOutputProjections
     if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
+
+  /- The `post_intro_tactic` normalizes the goal. -/
+  if let some tac := info.post_intro_tactic then
+    withTraceNode `Step (fun _ => pure m!"post_intro_tactic: {tac}") do
+      evalTactic (mkNode tac #[])
+    if (← getUnsolvedGoals).length > 1 then
+      throwError "`post_intro_tactic` must not create multiple goals"
+    if (← getUnsolvedGoals).isEmpty then trace[Step] "Main goal solved by post-intro tactic!"; return none
+    traceGoalWithNode "goal after the post-intro tactic"
 
   let prefixFVars := witnessFVars ++ outputFVars
   let prefixLength := prefixFVars.size
@@ -1044,7 +1120,8 @@ meta def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option Main
       `ok ... ⦃ x₀ ... xₙ => ... ⦄`
       -/
       let r ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
-        {simpThms := #[← stepSimpExt.getTheorems], declsToUnfold := #[``pure]} (.targets #[] true)
+        {simpThms := #[← stepSimpExt.getTheorems],
+         declsToUnfold := #[``pure]} (.targets #[] true)
       if r.isSome then
         pure (some ({goal := ← getMainGoal, outputs, stepState := mainGoal.stepState} : MainGoal))
       else pure none
@@ -1070,7 +1147,7 @@ meta def stepWith (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args)
   let originalGoal ← getMainGoal
   let callSiteTree ← getCallSiteTree info isLet originalGoal
   -- Attempt to instantiate the theorem and introduce it in the context
-  let newGoals ← tryMatch info lifting isLet th
+  let newGoals ← tryMatch info lifting isLet th args.inferGhostVars
   --
   withMainContext do
   traceGoalWithNode "current goal"
@@ -1493,13 +1570,73 @@ meta def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Op
   trace[Step] "Step done"
   return ⟨ goals, usedTheorem ⟩
 
+/-- The rewrite rules which discharge the specification of a terminal return. -/
+meta def terminalSimps : Array Name := #[
+  ``Std.WP.spec_ok,   ``Std.WP.spec_fail,   ``Std.WP.spec_div,
+  ``Std.WP.dspec_ok,  ``Std.WP.dspec_fail,  ``Std.WP.dspec_div,
+  ``Std.WP.ispec_ok,  ``Std.WP.ispec_fail,  ``Std.WP.ispec_div,
+  ``Std.WP.dispec_ok, ``Std.WP.dispec_fail, ``Std.WP.dispec_div,
+  /- The returned value need not be a literal tuple -/
+  ``Std.uncurry_eq_prop, ``Std.uncurry_eq_prop_arrow,
+  ``Std.WP.uncurry_eq_iprop, ``Std.WP.uncurry_eq_iprop_arrow]
+
+/-- Reduce the specification of a program which immediately returns: turn `ok x ⦃ Q ⦄`
+    into `Q x`, `fail e ⦃ Q ⦄` into `False`, etc.
+
+    We first normalize the goal as `evalStepCore` does, which may expose a terminal
+    return (e.g., `fail e >>= k` becomes `fail e`). There is then no specification to
+    apply: the terminal-return rules (`WP.spec_ok`, `WP.ispec_fail`, ...) are rewrite
+    rules, so we simply normalize the goal with them, then run the post-introduction
+    tactic of the judgment, as we would after applying a specification. Return `true` if
+    the specification statement did disappear, meaning the goal is fully processed;
+    otherwise `step` proceeds as usual, on the normalized goal.
+-/
+meta def tryTerminalReturn : TacticM Bool := do
+  withTraceNode `Step (fun _ => pure m!"tryTerminalReturn") do
+  /- Only normalize specification statements: `step` must not close other goals. -/
+  if (← withMainContext do observing? (getSpecInfoArgs (← getMainTarget))).isNone then
+    return false
+  let some _ ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false }
+      {simpThms := #[← stepSimpExt.getTheorems]} (.targets #[] true)
+    | return true
+  withMainContext do
+  let some (info, args) ← observing? (getSpecInfoArgs (← getMainTarget))
+    | return false
+  let program := (← Utils.normalizeLetBindings args[info.program_index]!).consumeMData
+  unless [``Std.Result.ok, ``Std.Result.fail, ``Std.Result.div].any program.isAppOf do
+    return false
+  let r ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false }
+    {simpThms := #[← stepSimpExt.getTheorems], addSimpThms := terminalSimps,
+     declsToUnfold := #[``pure]} (.targets #[] true)
+  -- The goal may have been closed altogether
+  let some _ := r | return true
+  unless (← withMainContext do observing? (getSpecProgram (← getMainTarget))).isNone do
+    return false
+  /- Normalize what is left exactly as after applying a specification (for the
+     separation logic judgments, this frames the resulting entailment). -/
+  if let some tac := info.post_intro_tactic then
+    withMainContext do evalTactic (mkNode tac #[])
+  pure true
+
 meta def evalStep
   (config : Config) (keepPretty : Option Name) (withArg: Option Expr)
   (ids: Array (Option Name)) (idsUserProvided : Bool)
   (postsBasename : Option Name := none) (byTac : Option Syntax.Tactic)
-  : TacticM UsedTheorem := do
+  : TacticM (Option UsedTheorem) := do
   focus do
-  let ⟨goals, usedTheorem⟩ ← evalStepCore config keepPretty withArg ids idsUserProvided postsBasename byTac
+  /- A terminal return is not a call: there is no specification to look up, we simply
+     reduce it (`step` then behaves like a no-op on the resulting goal). -/
+  let mut progress := false
+  if withArg.isNone then
+    let target ← instantiateMVars (← getMainTarget)
+    if ← tryTerminalReturn then return none
+    progress := (← instantiateMVars (← getMainTarget)) != target
+  /- If normalizing made progress, e.g. by reducing `ok x >>= k` to `k x`, it is fine if
+     there is nothing left to apply: `step` only fails if it cannot do anything. -/
+  let some ⟨goals, usedTheorem⟩ ←
+      try some <$> evalStepCore config keepPretty withArg ids idsUserProvided postsBasename byTac
+      catch ex => if progress then pure none else throw ex
+    | return none
   -- Wait for all the proof attempts to finish
   let mut sgs := #[]
   for (mvarId, proof) in goals.preconditions do
@@ -1514,7 +1651,7 @@ meta def evalStep
     | none => []
     | some goal => [goal.goal]
   setGoals (goals.unassignedVars.toList ++ sgs.toList ++ mainGoal)
-  pure usedTheorem
+  pure (some usedTheorem)
 
 /-- The `step` tactic is used to reason about monadic goals.
 It is a bit equivalent to the `mvcgen` tactic from the Lean standard library.
@@ -1621,8 +1758,9 @@ elab tk:"step?" args:stepArgs : tactic => do
   let mut stxArgs := args.raw
   -- Update the syntax to add the `with thm`
   if stxArgs[1].isNone then
-    let withArg := mkNullNode #[mkAtom "with", ← stats.toSyntax]
-    stxArgs := stxArgs.setArg 1 withArg
+    if let some stats := stats then
+      let withArg := mkNullNode #[mkAtom "with", ← stats.toSyntax]
+      stxArgs := stxArgs.setArg 1 withArg
   let tac := mkNode `Aeneas.Step.step #[mkAtom "step", stxArgs]
   let fmt ← PrettyPrinter.ppCategory ``Lean.Parser.Tactic.tacticSeq tac
   Meta.Tactic.TryThis.addSuggestion tk fmt.pretty (origSpan? := ← getRef)
@@ -1690,11 +1828,12 @@ elab tk:letStep : tactic => do
   let mut stxArgs := tk.raw
   if suggest then
     trace[Step] "suggest is true"
-    let withArg ← stats.toSyntax
-    stxArgs := stxArgs.setArg 7 withArg
-    let stxArgs' : TSyntax `Aeneas.Step.letStep := ⟨ stxArgs ⟩
-    trace[Step] "stxArgs': {stxArgs}"
-    Meta.Tactic.TryThis.addSuggestion tk stxArgs' (origSpan? := ← getRef)
+    if let some stats := stats then
+      let withArg ← stats.toSyntax
+      stxArgs := stxArgs.setArg 7 withArg
+      let stxArgs' : TSyntax `Aeneas.Step.letStep := ⟨ stxArgs ⟩
+      trace[Step] "stxArgs': {stxArgs}"
+      Meta.Tactic.TryThis.addSuggestion tk stxArgs' (origSpan? := ← getRef)
 
 namespace Test
   open Std Result
@@ -2429,3 +2568,81 @@ end Test
 end Step
 
 end Aeneas
+
+/-! ## Separation-logic registrations
+
+`Aeneas.Std.WP` proves these but cannot register them: `@[step]` and
+`@[step_simps]` are declared in `Aeneas.Tactic.Step.Init`, which imports
+`Aeneas.Std.WP`.  This file is the first point where both are in scope. -/
+
+attribute [step_simps] Aeneas.SepLogic.sep_ipure_true_r_eq
+attribute [step_simps] Aeneas.SepLogic.entails_emp_ipure_iff
+attribute [step_simps] Aeneas.SepLogic.entails_refl
+
+attribute [step] Aeneas.Std.WP.ret.spec
+attribute [step] Aeneas.Std.WP.pure.spec
+attribute [step] Aeneas.Std.WP.ok_spec
+attribute [step] Aeneas.Std.WP.pure_spec
+
+namespace Aeneas.Step.Test.TerminalReduction
+
+open Aeneas.Std Result Aeneas.SepLogic
+open Lean Meta Elab Tactic
+
+/- Check `step` on an isolated goal, without assumptions that could discharge it:
+   `=> True` requires the goal to be closed, otherwise exactly one goal must remain,
+   and it must match the expected one syntactically. -/
+local elab "#check_step " target:term " => " expected:term : command =>
+  Command.runTermElabM fun _ => do
+    let target ← Term.elabTermEnsuringType target (mkSort .zero)
+    let goal ← mkFreshExprSyntheticOpaqueMVar target
+    let _ ← Tactic.run goal.mvarId! do
+      evalTactic (← `(tactic| step))
+      match ← getUnsolvedGoals with
+      | [] =>
+        unless (← Term.elabTermEnsuringType expected (mkSort .zero)).isConstOf ``True do
+          throwError "The goal was unexpectedly closed"
+      | [_] => evalTactic (← `(tactic| guard_target =ₛ $expected))
+      | goals => throwError "Expected at most one remaining goal, got {goals.length}"
+
+variable (α β χ : Type) (x : α) (m : Result α) (k : α → Result β) (k' : β → Result χ)
+variable (Q : α → Prop) (R : β → Prop) (R' : χ → Prop) (e : Error)
+variable (P : IProp) (S : α → IProp) (T : β → IProp) (T' : χ → IProp)
+
+/- A terminal return is reduced instead of being turned into an opaque output
+   together with its defining equation. -/
+#check_step WP.spec (ok x) Q => Q x
+#check_step WP.ispec P (ok x) S => (P ⊢ S x)
+#check_step WP.spec (ok x) (fun _ => True) => True
+#check_step WP.spec (fail e) Q => False
+#check_step WP.spec (div : Result α) Q => False
+#check_step WP.dspec (fail e) Q => False
+#check_step WP.dspec (div : Result α) Q => True
+#check_step WP.ispec P (fail e) S => (P ⊢ ⌜False⌝)
+#check_step WP.ispec P (div : Result α) S => (P ⊢ ⌜False⌝)
+#check_step WP.dispec P (ok x) S => (P ⊢ S x)
+#check_step WP.dispec P (fail e) S => (P ⊢ ⌜False⌝)
+#check_step WP.dispec P (div : Result α) S => True
+
+-- left identity
+#check_step WP.ispec P (do let y ← ok x; k y) T => WP.ispec P (k x) T
+#check_step WP.spec (do let y ← ok x; k y) R => WP.spec (k x) R
+#check_step WP.spec (do let y ← (fail e : Result α); k y) R => False
+#check_step WP.spec (do let y ← (div : Result α); k y) R => False
+#check_step WP.dspec (do let y ← (div : Result α); k y) R => True
+
+/- Associativity: `step` reassociates the binds, then applies the specification of `m`
+   (here, an assumption), naming its output after the binder of `m`. -/
+section
+variable (hm : WP.spec m Q)
+#check_step WP.spec (do let w ← (do let y ← m; k y); k' w) R' =>
+  WP.spec (do let w ← k y; k' w) R'
+end
+
+section
+variable (hm : WP.ispec P m S)
+#check_step WP.ispec P (do let w ← (do let y ← m; k y); k' w) T' =>
+  WP.ispec (S y) (do let w ← k y; k' w) T'
+end
+
+end Aeneas.Step.Test.TerminalReduction
