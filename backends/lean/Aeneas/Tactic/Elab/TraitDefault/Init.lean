@@ -420,4 +420,7 @@ elab mods:declModifiers "impl_def " id:declId sig:optDeclSig val:declVal : comma
         withExporting (isExporting := isPub) do
           addAndCompileNonRec docCtx preDef
 
+        -- Register LSP info for the introduced name.
+        Elab.addDeclarationRangesFromSyntax declName (← getRef) id
+
 end Aeneas.TraitDefault
