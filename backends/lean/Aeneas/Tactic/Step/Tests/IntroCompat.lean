@@ -23,9 +23,7 @@ def id' (n : Nat) : Result Nat := ok n
 @[local step]
 theorem id'_spec (n : Nat) : id' n ⦃ r => r = n ⦄ := by simp [id']
 
-/-! ## Leading existentials of a multi-binder postcondition come after the outputs
-
-Only the witnesses of a single-binder postcondition precede the output. -/
+/-! ## Leading existentials of a postcondition come after the outputs -/
 
 theorem dup_witness_spec (n : Nat) :
     dup n ⦃ a b => ∃ (w : Bool) (k : Nat), a = n + k ∧ b = n ∧ w = (k == 0) ⦄ := by

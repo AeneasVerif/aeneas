@@ -884,19 +884,19 @@ namespace Aeneas.Std.WP
 
 /-- The `intro_tactic` of `spec` and `dspec`: their premise is a plain `∀ x, P x → …`, and
 normalizing the fact `P x` is all there is to do. The markers are the definitions the
-postcondition notation `⦃ … ⦄` wraps its body in (see `mk_function_syntax`). -/
+postcondition notation `⦃ … ⦄` wraps its body in (see `mk_function_syntax`). The outputs
+stay the leading binders: the index of the output is `0`. -/
 meta def introTactic : IntroFn := do
   let markers := #[``Aeneas.Std.WP.uncurry', ``Aeneas.Std.uncurry]
-  let index ← match ← Aeneas.Step.Intro.normalizeTarget markers
-      (← Lean.Elab.Tactic.getMainGoal) with
-    | some (goal, index) => Lean.Elab.Tactic.replaceMainGoal [goal]; pure index
-    | none => pure 0
+  if let some goal ← Aeneas.Step.Intro.normalizeTarget markers
+      (← Lean.Elab.Tactic.getMainGoal) then
+    Lean.Elab.Tactic.replaceMainGoal [goal]
   let _ ← Aeneas.Simp.simpAt true
     { maxDischargeDepth := 1, failIfUnchanged := false, iota := false }
     { addSimpThms := #[``and_imp, ``exists_imp, ``true_imp_iff,
         ``Aeneas.Step.Intro.forall_unit] }
     (.targets #[] true)
-  return index
+  return 0
 
 -- registers the spec info for use in the step tactic, see Spec.lean
 #register_spec_info {

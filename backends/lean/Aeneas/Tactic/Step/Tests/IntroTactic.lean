@@ -333,7 +333,7 @@ example (f : Result (Nat × Nat))
 example (f : Result (Nat × Nat))
     (h : f ⦃ p => ∃ witness : Bool, p.1 = witness.toNat ∧ p.1 = p.2 ⦄) :
     (do let (a, b) ← f; ok (a, b)) ⦃ a b => a = b ⦄ := by
-  let* ⟨witness, a, b, hw, hab⟩ ← h
+  let* ⟨a, b, witness, hw, hab⟩ ← h
   guard_hyp witness : Bool
   guard_hyp a : Nat
   guard_hyp b : Nat
@@ -344,7 +344,7 @@ example (f : Result (Nat × Nat × Nat))
     (h : f ⦃ p =>
       ∃ witness : Bool × Nat, p.1 = witness.1.toNat ∧ p.2.1 = witness.2 ∧ p.2.1 = p.2.2 ⦄) :
     (do let (a, b, c) ← f; ok (a, b, c)) ⦃ _ b c => b = c ⦄ := by
-  let* ⟨witness, a, b, c, ha, hb, hbc⟩ ← h
+  let* ⟨a, b, c, witness, ha, hb, hbc⟩ ← h
   guard_hyp witness : Bool × Nat
   guard_hyp ha : a = witness.1.toNat
   guard_hyp hb : b = witness.2
@@ -354,7 +354,7 @@ example (f : Result (Nat × Nat))
     (h : f ⦃ p =>
       ∃ witness : Nat × Nat, p.1 = witness.1 ∧ p.2 = witness.2 ∧ witness.1 = witness.2 ⦄) :
     (do let (a, b) ← f; ok (a, b)) ⦃ a b => a = b ⦄ := by
-  let* ⟨witness, a, b, ha, hb, hw⟩ ← h
+  let* ⟨a, b, witness, ha, hb, hw⟩ ← h
   guard_hyp witness : Nat × Nat
   exact ha.trans (hw.trans hb.symm)
 
@@ -369,13 +369,15 @@ example (f : Result (Option Nat)) (n : Nat)
     (h : f ⦃ x => ∃ witness, x = some witness ∧ witness ≤ n ⦄) :
     f ⦃ r => ∃ witness, r = some witness ∧ witness ≤ n ⦄ := by
   step with h
-  guard_hyp r : Nat
-  exact ⟨r, x_post, r_post⟩
+  rename_i w
+  guard_hyp r : Option Nat
+  guard_hyp w : Nat
+  exact ⟨w, r_post, x_post⟩
 
 example (f : Result (Nat × Nat))
     (h : f ⦃ p => ∃ witness : Bool, p.1 = witness.toNat ∧ p.1 = p.2 ⦄div) :
     (do let (a, b) ← f; ok (a, b)) ⦃ a b => a = b ⦄div := by
-  let* ⟨witness, a, b, hw, hab⟩ ← h
+  let* ⟨a, b, witness, hw, hab⟩ ← h
   guard_hyp witness : Bool
   guard_hyp hw : a = witness.toNat
   simpa using hab

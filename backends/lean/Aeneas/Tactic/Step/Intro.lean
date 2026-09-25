@@ -18,9 +18,10 @@ to
 ```
 ∀ x y, P x.1 x.2 → Q x.1 x.2 y → k x ⦃ r => R r ⦄
 ```
-in four steps, one per section below: reduce the `uncurry'` marker, simplify the fact, split
-its `∧`s and `∃`s into binders, and, for a postcondition with a single binder such as
-`⦃ r => ∃ y, P r y ⦄`, move the witnesses before the output.
+in three steps, one per section below: reduce the `uncurry'` marker, simplify the fact, and
+split its `∧`s and `∃`s into binders. The outputs stay the leading binders: the existential
+witnesses always come after them, including for a postcondition with a single binder such as
+`⦃ r => ∃ y, P r y ⦄`.
 
 `normalizeTarget` rewrites the goal; it does not introduce the fact as a hypothesis and then
 simplify that hypothesis. This matters for recursive specifications: `decreasing_by` sees
@@ -188,36 +189,6 @@ meta partial def splitFact (name : Name) (fact rest : Expr) : MetaM (Expr × Exp
       mkForallFVars #[h] (mkApp rest h).headBeta
     return (premise, ← mkAppM ``Iff.refl #[premise])
 
-/-! ## Step 4: hoisting -/
-
-/-- The number of existentials at the head of `e`. -/
-private meta partial def countLeadingExists (e : Expr) : Nat :=
-  match_expr e.consumeMData with
-  | Exists _ p => if let .lam _ _ body _ := p then countLeadingExists body + 1 else 1
-  | _ => 0
-
-/-- The number of leading binders of `premise` to move before the outputs `xs`.
-
-Splitting `fact` has turned its leading existential witnesses into the leading binders of
-`premise`. They are all moved if none of their types depends on the outputs, and none of
-them is otherwise.
-
-They are only moved if the original fact `dom` is itself an existential, i.e., for a
-postcondition with a single binder `⦃ r => ∃ y, P r y ⦄`. The witnesses of a postcondition
-with several binders are below the `uncurry'` marker: they stay after the outputs. -/
-meta def numHoistedWitnesses (xs : Array Expr) (dom fact premise : Expr) : MetaM Nat := do
-  if xs.isEmpty then return 0
-  unless (← instantiateMVars dom).consumeMData.headBeta.consumeMData.isAppOfArity ``Exists 2 do
-    return 0
-  let n := countLeadingExists fact
-  if n == 0 then return 0
-  forallBoundedTelescope premise n fun ws _ => do
-    if ws.size != n then return 0
-    let outputs := xs.map Expr.fvarId!
-    let independent ← ws.allM fun w => do
-      return !(← instantiateMVars (← inferType w)).hasAnyFVar outputs.contains
-    return if independent then n else 0
-
 /-! ## Putting it together -/
 
 /-- Introduce the outputs, i.e. the leading binders of `e` which are not propositions, and
@@ -233,12 +204,12 @@ private meta partial def withOutputs {α} (e : Expr) (k : Array Expr → Expr �
 /-- Normalize the first fact of the target, as described in the module doc. `markers` are
 the definitions to reduce in step 1.
 
-Returns the new goal and the number of witnesses moved before the outputs, which is the
-index of the first output; or `none` if the target is already normalized.
+Returns the new goal, or `none` if the target is already normalized. The outputs remain the
+leading binders of the new goal.
 
 The `Example:` comments follow the example of the module doc. -/
 meta def normalizeTarget (markers : Array Name) (goal : MVarId) :
-    MetaM (Option (MVarId × Nat)) := goal.withContext do
+    MetaM (Option MVarId) := goal.withContext do
   /- The new goal lives in the context of the original one, not under the outputs. -/
   let lctx ← getLCtx
   let localInsts ← getLocalInstances
@@ -269,23 +240,15 @@ meta def normalizeTarget (markers : Array Name) (goal : MVarId) :
         mkAppM ``Iff.trans #[congr, splitProof]
     /- Example: `premise = ∀ y, P x.1 x.2 → Q x.1 x.2 y → k x ⦃ r => R r ⦄`. -/
 
-    /- Step 4: count the witnesses to move before the outputs. -/
-    let numWitnesses ← numHoistedWitnesses xs dom fact premise
-    /- Example: `numWitnesses = 0`, as the postcondition has several binders. With a single
-       binder, `⦃ r => ∃ y, P r ∧ Q r y ⦄`, we would get `numWitnesses = 1`, as the type of
-       `y` does not depend on `x`. -/
-    if premise == original && numWitnesses == 0 then return none
+    if premise == original then return none
 
-    /- Replace `goal : ∀ xs, original` by `newGoal : ∀ ws xs, premise'`, where
-       `premise = ∀ ws, premise'`, with `goal := fun xs => proof.mpr (fun ws => newGoal ws xs)`. -/
-    forallBoundedTelescope premise numWitnesses fun ws premise' => do
-      let newTarget ← mkForallFVars ws (← mkForallFVars xs premise')
-      let newGoal ← withLCtx lctx localInsts do
-        mkFreshExprSyntheticOpaqueMVar newTarget (← goal.getTag)
-      /- Example: `ws = #[]`,
-         `newTarget = ∀ x y, P x.1 x.2 → Q x.1 x.2 y → k x ⦃ r => R r ⦄`. -/
-      let inner ← mkLambdaFVars ws (mkAppN (mkAppN newGoal ws) xs)
-      goal.assign (← mkLambdaFVars xs (← mkAppM ``Iff.mpr #[proof, inner]))
-      return some (newGoal.mvarId!, numWitnesses)
+    /- Replace `goal : ∀ xs, original` by `newGoal : ∀ xs, premise`, with
+       `goal := fun xs => proof.mpr (newGoal xs)`. -/
+    let newTarget ← mkForallFVars xs premise
+    let newGoal ← withLCtx lctx localInsts do
+      mkFreshExprSyntheticOpaqueMVar newTarget (← goal.getTag)
+    /- Example: `newTarget = ∀ x y, P x.1 x.2 → Q x.1 x.2 y → k x ⦃ r => R r ⦄`. -/
+    goal.assign (← mkLambdaFVars xs (← mkAppM ``Iff.mpr #[proof, mkAppN newGoal xs]))
+    return some newGoal.mvarId!
 
 end Aeneas.Step.Intro

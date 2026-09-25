@@ -795,8 +795,8 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTr
      merged binder tree. We use a fresh internal name here and rename leaves to
      user-provided names later. -/
   let mut outputFVars : Array FVarId := #[]
-  /- The `intro_tactic` may have put binders before the output (e.g., existential witnesses
-     hoisted by `Std.WP.introTactic`): introduce them first. -/
+  /- The `intro_tactic` may have put binders before the output (see `IntroFn`): introduce
+     them first. -/
   let (witnessFVars, goal) ← (← getMainGoal).introNP outputIndex
   setGoals [goal]
   let goal ← getMainGoal
@@ -2090,18 +2090,18 @@ info: example
     step as ⟨ z ⟩
     scalar_tac
 
-  /- Leading existential witnesses precede the result. -/
+  /- Leading existential witnesses do not precede the result. -/
   /--
 error: unsolved goals
 case a
 x : U32
 f : U32 → Result U32
 h : ∀ (x : U32), f x ⦃ y => ∃ z > 0, ↑y = ↑x + z ⦄
-y : ℕ
-z : U32
-_✝¹ : y > 0
-_✝ : ↑z = ↑x + y
-⊢ ↑z > ↑x
+y : U32
+z : ℕ
+_✝¹ : z > 0
+_✝ : ↑y = ↑x + z
+⊢ ↑y > ↑x
   -/
   #guard_msgs in
   example (x : U32) (f : U32 → Result U32) (h : ∀ x, f x ⦃ y => ∃ z, z > 0 ∧ y.val = x.val + z ⦄) :
