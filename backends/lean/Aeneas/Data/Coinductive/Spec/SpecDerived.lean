@@ -19,18 +19,7 @@ variable {E : Effect.{v}} {α : Type u} {β : Type u'} {S : EffectSpec.{w, v} E}
 
 local infix:50 " ≤ " => entails
 
-/-- `EffectSpec.wp_conj` for a family indexed by a nonempty type. -/
-theorem EffectSpec.wp_forall {ι : Sort u'} {event : E.I} {s : S.State}
-    {C : ι → S.Post (E.O event)} (i₀ : ι) (hWp : ∀ i, S.wp event (C i) s) :
-    S.wp event (fun answer s' => ∀ i, C i answer s') s := by
-  refine S.wp_mono (fun _ _ hAll i => hAll (C i) ⟨i, rfl⟩)
-    (S.wp_conj (fun X => ∃ i, X = C i) ⟨C i₀, i₀, rfl⟩ ?_)
-  rintro X ⟨i, rfl⟩
-  exact hWp i
-
-/-- Constructor-oriented form of `TotalSpec.least`: to prove `P` for every totally-correct tree,
-    it suffices to show that `P` is closed under the `ret` and `vis` cases (the `div` case is
-    vacuous). -/
+/-- Prove `P m s` by induction on total correctness, given `TotalSpec S Q m s`. -/
 theorem TotalSpec.induction {Q : S.Post α} {P : ITreePred S α}
     {m : ITree E α} {s : S.State}
     (hRet : ∀ value s, Q value s → P (.ret value) s)
@@ -74,8 +63,7 @@ theorem TotalSpec.vis_view {Q : S.Post α} {event : E.I}
     S.wp event (fun answer s' => TotalSpec S Q (k answer) s') s := by
   simpa only [SpecF.vis] using hSpec.step
 
-/-- Pointwise form of `PartialSpec.greatest`: any post-fixed point `X` of `SpecF True S Q`
-    implies `PartialSpec S Q`. -/
+/-- Prove `PartialSpec S Q m s` by exhibiting a coinductive invariant. -/
 theorem PartialSpec.coinduction {Q : S.Post α} {m : ITree E α} {s : S.State}
     (X : ITreePred S α) (hClosed : X ≤ SpecF True S Q X) (hX : X m s) :
     PartialSpec S Q m s :=
@@ -119,35 +107,6 @@ theorem TotalSpec.mono {Q Q' : S.Post α} {m : ITree E α} {s : S.State}
   hSpec.induction (P := TotalSpec S Q')
     (fun value s' hPost => TotalSpec.ret_iff.mpr (hQ value s' hPost)) fun _ _ _ hWp => .vis hWp
 
-theorem PartialSpec.mono {Q Q' : S.Post α} {m : ITree E α} {s : S.State}
-    (hSpec : PartialSpec S Q m s) (hQ : Q ≤ Q') :
-    PartialSpec S Q' m s :=
-  coinduction (PartialSpec S Q)
-    (fun _ _ hSpec' => hSpec'.step.mono id hQ fun _ _ => id) hSpec
-
-/-! ## Conjunction of postconditions -/
-
-/-- One layer of a specification commutes with a nonempty conjunction of postconditions and
-    continuations (by `EffectSpec.wp_conj`). -/
-theorem SpecF.forall_iff {ι : Sort u'} [Nonempty ι] {allowDivergence : Prop}
-    {Q : ι → S.Post α} {X : ι → ITreePred S α} {m : ITree E α} {s : S.State} :
-    SpecF allowDivergence S (fun a s => ∀ i, Q i a s) (fun t s => ∀ i, X i t s) m s ↔
-      ∀ i, SpecF allowDivergence S (Q i) (X i) m s := by
-  refine ⟨fun h i => h.mono id (fun _ _ hAll => hAll i) fun _ _ hAll => hAll i, ?_⟩
-  obtain ⟨i₀⟩ := ‹Nonempty ι›
-  cases m using ITree.cases with
-  | ret value =>
-      simp only [ITree.pure_eq_ret, SpecF.ret]
-      exact id
-  | div =>
-      simp only [SpecF.div]
-      exact fun h => h i₀
-  | vis event k =>
-      simp only [SpecF.vis]
-      exact S.wp_forall i₀
-
-/-! ## Sequencing and the ITree order -/
-
 theorem TotalSpec.bind {Q₁ : S.Post α} {Q₂ : S.Post β}
     {m : ITree E α} {k : α → ITree E β} {s : S.State}
     (hFirst : TotalSpec S Q₁ m s)
@@ -159,6 +118,12 @@ theorem TotalSpec.bind {Q₁ : S.Post α} {Q₂ : S.Post β}
     fun _ _ _ hWp => by
       rw [itree_vis_bind]
       exact .vis hWp
+
+theorem PartialSpec.mono {Q Q' : S.Post α} {m : ITree E α} {s : S.State}
+    (hSpec : PartialSpec S Q m s) (hQ : Q ≤ Q') :
+    PartialSpec S Q' m s :=
+  coinduction (PartialSpec S Q)
+    (fun _ _ hSpec' => hSpec'.step.mono id hQ fun _ _ => id) hSpec
 
 theorem PartialSpec.bind {Q₁ : S.Post α} {Q₂ : S.Post β}
     {m : ITree E α} {k : α → ITree E β} {s : S.State}
@@ -218,7 +183,13 @@ theorem PartialSpec.mono_le {Q : S.Post α} {m m' : ITree E α} {s : S.State}
     exact S.wp_mono (fun answer _ hNext => ⟨_, hCont answer, hNext⟩)
       hSpec'.vis_view
 
-/-! ## `PartialSpec` is admissible -/
+theorem EffectSpec.wp_forall {ι : Sort u'} {event : E.I} {s : S.State}
+    {C : ι → S.Post (E.O event)} (i₀ : ι) (hWp : ∀ i, S.wp event (C i) s) :
+    S.wp event (fun answer s' => ∀ i, C i answer s') s := by
+  refine S.wp_mono (fun _ _ hAll i => hAll (C i) ⟨i, rfl⟩)
+    (S.wp_conj (fun X => ∃ i, X = C i) ⟨C i₀, i₀, rfl⟩ ?_)
+  rintro X ⟨i, rfl⟩
+  exact hWp i
 
 /-- Partial correctness is admissible. -/
 theorem PartialSpec.admissible (S : EffectSpec E) (Q : S.Post α) (s : S.State) :
