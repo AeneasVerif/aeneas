@@ -11,7 +11,7 @@ let log = Logging.symbolic_to_pure_expressions_log
 
 let translate_fn_ptr_kind (ctx : bs_ctx) (id : A.fn_ptr_kind) : fn_ptr_kind =
   match id with
-  | FunId fun_id -> FunId fun_id
+  | T.Fun fun_id -> FunId fun_id
   | TraitMethod (trait_ref, method_id) ->
       let trait_ref =
         translate_fwd_trait_ref (Some ctx.span) ctx.decls_ctx trait_ref
@@ -180,6 +180,45 @@ let decompose_let_match (ctx : bs_ctx) (pat : tpat) (bound : texpr) :
   in
   (!ctx, (pat, bound))
 
+(** Compute the base name to use for the backward functions introduced by a call
+    to [decl].
+
+    We derive it from the name of the *model* of [decl], if it has one, as this
+    is the name which appears in the generated code: for instance, we model
+    [core::array::{[@T; @N]}::as_mut_slice] with [Array.to_slice_mut], and thus
+    name the backward function [to_slice_mut_back] rather than
+    [as_mut_slice_back]. We fall back to the last identifier of the Rust name if
+    [decl] has no model.
+
+    Remark: we can only look at the model name for the backends which use
+    qualified names (i.e., Lean). The other backends flatten the paths by using
+    [_] as a separator (e.g., the model above is called [array_to_slice_mut] in
+    Coq), meaning we can not identify its last identifier. *)
+let compute_back_fun_name (ctx : bs_ctx) (decl : LlbcAst.fun_decl) : string =
+  let model_name =
+    if Config.backend () <> Lean then None
+    else
+      match
+        match_name_find_opt ctx.decls_ctx decl.item_meta.name
+          (ExtractBuiltin.builtin_funs_map ())
+      with
+      | Some { extract_name; _ } ->
+          Some (Collections.List.last (String.split_on_char '.' extract_name))
+      | None -> None
+  in
+  match model_name with
+  | Some name -> name
+  | None -> (
+      let name =
+        LlbcAstUtils.strip_target_or_instantiated_suffix decl.item_meta.name
+      in
+      match Collections.List.last name with
+      | PeIdent (s, _) -> s
+      | PeImpl _ -> "impl"
+      | _ ->
+          (* We shouldn't get there *)
+          [%craise] decl.item_meta.span "Unexpected")
+
 let rec translate_expr (e : S.expr) (ctx : bs_ctx) : texpr =
   [%ldebug "e:\n" ^ bs_ctx_expr_to_string ctx e];
   match e with
@@ -261,7 +300,7 @@ and translate_target_dispatch (input_svs : V.symbolic_value list)
     in
     let qualif : qualif =
       {
-        id = FunOrOp (Fun (FromLlbc (FunId (FRegular fdr.id), None)));
+        id = FunOrOp (Fun (FromLlbc (FunId fdr.id, None)));
         generics = pure_generics;
       }
     in
@@ -398,39 +437,9 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
           let back_fun_name =
             let name =
               match fid with
-              | FunId (FBuiltin fid) -> begin
-                  match fid with
-                  | BoxNew -> "box_new"
-                  | ArrayRepeat -> "array_repeat"
-                  | ArrayToSliceShared -> "to_slice_shared"
-                  | ArrayToSliceMut -> "to_slice_mut"
-                  | Index { is_array = _; mutability = RMut; is_range = false }
-                    -> "index_mut"
-                  | Index
-                      { is_array = _; mutability = RShared; is_range = false }
-                    -> "index_shared"
-                  | Index { is_array = _; mutability = RMut; is_range = true }
-                    -> "subslice_mut"
-                  | Index
-                      { is_array = _; mutability = RShared; is_range = true } ->
-                      "subslice_shared"
-                  | PtrFromParts RMut -> "ptr_from_parts_mut"
-                  | PtrFromParts RShared -> "ptr_from_parts_shared"
-                end
-              | FunId (FRegular fid) -> (
-                  let decl =
-                    FunDeclId.Map.find fid ctx.fun_ctx.llbc_fun_decls
-                  in
-                  let name =
-                    LlbcAstUtils.strip_target_or_instantiated_suffix
-                      decl.item_meta.name
-                  in
-                  match Collections.List.last name with
-                  | PeIdent (s, _) -> s
-                  | PeImpl _ -> "impl"
-                  | _ ->
-                      (* We shouldn't get there *)
-                      [%craise] decl.item_meta.span "Unexpected")
+              | Fun fid ->
+                  compute_back_fun_name ctx
+                    (FunDeclId.Map.find fid ctx.fun_ctx.llbc_fun_decls)
               | TraitMethod (trait_ref, method_id) ->
                   Charon.GAstUtils.get_method_name ctx.decls_ctx.crate
                     trait_ref.trait_decl_ref.binder_value.id method_id
@@ -560,13 +569,13 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               (* We only support casts between pointers to literal types for now *)
               let get_ty (ty : T.ty) =
                 match ty with
-                | TRawPtr (TLiteral lit, rkind) ->
+                | TRawPtr (TScalar scalar_ty, rkind) ->
                     let mut =
                       match rkind with
                       | RMut -> Mut
                       | RShared -> Const
                     in
-                    (lit, mut)
+                    (scalar_ty, mut)
                 | _ ->
                     let env = bs_ctx_to_fmt_env ctx in
                     [%craise] ctx.span
@@ -687,7 +696,9 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
   *)
   let ctx, call_e =
     match call.call_id with
-    | S.Fun (FunId (FBuiltin BoxNew), _) ->
+    | S.Fun (Fun fid, _)
+      when (FunDeclId.Map.find fid ctx.fun_ctx.llbc_fun_decls).item_meta
+             .diagnostic_item = Some "box_new" ->
         let ctx, back_funs_bodies =
           List.fold_left_map
             (fun ctx (f : tpat) ->
@@ -720,7 +731,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
   *)
   let call_e =
     match call.call_id with
-    | S.Fun (FunId (FRegular fid), _)
+    | S.Fun (Fun fid, _)
       when List.exists
              (TypesUtils.ty_has_mut_borrows ctx.type_ctx.type_infos)
              call.generics.types -> (
@@ -732,16 +743,10 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               NameMatcher.parse_pattern
                 "core::result::{core::result::Result<@T, @E>}::unwrap"
             in
-            let mctx = NameMatcher.ctx_from_crate ctx.decls_ctx.crate in
-            let match_name =
-              NameMatcher.match_name mctx
-                {
-                  map_vars_to_vars = true;
-                  match_with_trait_decl_refs =
-                    Config.match_patterns_with_trait_decl_refs;
-                }
-            in
-            if match_name unwrap_pat fun_decl.item_meta.name then
+            if
+              ExtractName.match_name ctx.decls_ctx.crate unwrap_pat
+                fun_decl.item_meta.name
+            then
               (* Update the call *)
               let app, args = destruct_apps call_e in
               match app.e with
@@ -1460,7 +1465,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       [%sanity_check] ctx.span (ty = false_e.ty);
       { e; ty }
   | ExpandInt (int_ty, branches, otherwise) ->
-      let translate_branch ((v, branch_e) : V.scalar_value * S.expr) :
+      let translate_branch ((v, branch_e) : V.integer_value * S.expr) :
           match_branch =
         (* We don't need to update the context: we don't introduce any
            new values/variables *)
@@ -1471,7 +1476,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       let branches = List.map translate_branch branches in
       let otherwise = translate_expr otherwise ctx in
       let pat_ty =
-        TLiteral (translate_literal_type (TypesUtils.integer_as_literal int_ty))
+        TLiteral (translate_literal_type (TypesUtils.integer_as_scalar int_ty))
       in
       let otherwise_pat : tpat = { pat = PIgnored; ty = pat_ty } in
       let otherwise : match_branch =
@@ -1500,24 +1505,24 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value) (scrutinee : texpr)
     (svl : V.symbolic_value list) (branch : S.expr) (ctx : bs_ctx) : texpr =
   (* TODO: always introduce a match, and use micro-passes to turn the
      the match into a let? *)
-  let type_id, _ = TypesUtils.ty_as_adt sv.V.sv_ty in
+  let adt = TypesUtils.ty_as_adt sv.V.sv_ty in
   let ctx, vars = fresh_vars_for_symbolic_values svl ctx in
   let branch = translate_expr branch ctx in
-  match type_id with
-  | TAdtId _ ->
+  match adt.builtin with
+  | None ->
       let lvars = List.map (fun v -> mk_tpat_from_fvar None v) vars in
       let lv = mk_adt_pat scrutinee.ty variant_id lvars in
       let monadic = false in
       [%add_loc] mk_closed_checked_let ctx monadic lv
         (mk_opt_mplace_texpr scrutinee_mplace scrutinee)
         branch
-  | TBuiltin TTuple ->
+  | Some TTuple ->
       let vars = List.map (fun x -> mk_tpat_from_fvar None x) vars in
       let monadic = false in
       [%add_loc] mk_closed_checked_let ctx monadic (mk_simpl_tuple_pat vars)
         (mk_opt_mplace_texpr scrutinee_mplace scrutinee)
         branch
-  | TBuiltin TBox ->
+  | Some TBox ->
       (* There should be exactly one variable *)
       let var =
         match vars with
@@ -1531,7 +1536,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value) (scrutinee : texpr)
         (mk_tpat_from_fvar None var)
         (mk_opt_mplace_texpr scrutinee_mplace scrutinee)
         branch
-  | TBuiltin TStr ->
+  | Some TStr ->
       (* We can't expand those values: we can access the fields only
        * through the functions provided by the API (note that we don't
        * know how to expand values like vectors or arrays, because they have a variable number
@@ -1608,8 +1613,7 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         let qualif = Qualif { id = FunOrOp func; generics } in
         let ty =
           match kind with
-          | T.FunId (FBuiltin _) -> [%craise] ctx.span "Unimplemented"
-          | T.FunId (FRegular _) ->
+          | T.Fun _ ->
               let sg =
                 [%unwrap_with_span] ctx.span
                   (lookup_fn_ptr_sig ctx kind)

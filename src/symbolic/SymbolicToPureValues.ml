@@ -98,7 +98,7 @@ let rec tvalue_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (v : V.tvalue) :
         let fields = List.map translate av.fields in
         (* Eliminate the tuple wrapper if it is a tuple with exactly one field *)
         match v.ty with
-        | TAdt { id = TBuiltin TTuple; _ } ->
+        | TAdt { builtin = Some TTuple; _ } ->
             [%sanity_check] ctx.span (variant_id = None);
             mk_simpl_tuple_texpr ctx.span fields
         | _ ->
@@ -309,7 +309,7 @@ let gtranslate_adt_fields ~(project_borrows : bool)
   let span = ctx.span in
   (* We do not do the same thing depending on whether we visit a tuple
      or a "regular" ADT *)
-  let adt_id, _ = TypesUtils.ty_as_adt av_ty in
+  let adt = TypesUtils.ty_as_adt av_ty in
   (* Check if the ADT contains borrows *)
   let proj_kind = compute_proj_kind av in
   [%ldebug
@@ -335,9 +335,9 @@ let gtranslate_adt_fields ~(project_borrows : bool)
       let filter_fields =
         filter
         &&
-        match adt_id with
-        | TBuiltin (TTuple | TBox) -> true
-        | TBuiltin _ | TAdtId _ -> (
+        match adt.builtin with
+        | Some (TTuple | TBox) -> true
+        | Some _ | None -> (
             match proj_kind with
             | UnknownProj | BorrowProj BShared | LoanProj BShared -> true
             | _ -> false)
@@ -355,8 +355,8 @@ let gtranslate_adt_fields ~(project_borrows : bool)
             (List.map
                (Print.option_to_string (fun (_, x) -> output_to_string x))
                info_fields)];
-      match adt_id with
-      | TAdtId _ ->
+      match adt.builtin with
+      | None ->
           if filter_fields then (
             [%sanity_check] span (List.for_all Option.is_none info_fields);
             (ctx, None))
@@ -367,19 +367,19 @@ let gtranslate_adt_fields ~(project_borrows : bool)
             in
             let pat = mk_adt fields in
             (ctx, Some (infos, pat))
-      | TBuiltin TBox -> begin
+      | Some TBox -> begin
           (* The box type becomes the identity in the translation *)
           match info_fields with
           | [ None ] -> (ctx, None)
           | [ Some (info, v) ] -> (ctx, Some ([ info ], v))
           | _ -> [%craise] span "Unreachable"
         end
-      | TBuiltin TStr ->
+      | Some TStr ->
           (* This case is unreachable:
              - for strings: the [str] is not polymorphic.
           *)
           [%craise] span "Unreachable"
-      | TBuiltin TTuple ->
+      | Some TTuple ->
           (* If the filtering is activated, we ignore the fields which do not
              consume values (i.e., which do not contain ended mutable borrows). *)
           if filter then
@@ -661,7 +661,7 @@ let abs_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
 
 let translate_mprojection_elem span (pe : S.mprojection_elem) : mprojection_elem
     =
-  let type_id = translate_type_id span pe.type_id in
+  let type_id = translate_type_id span pe.type_ref in
   { type_id; variant_id = pe.variant_id; field_id = pe.field_id }
 
 (** Translate a "meta"-place *)

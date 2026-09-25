@@ -3010,9 +3010,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
         {
           id =
             FunOrOp
-              (Fun
-                 (FromLlbc
-                    (FunId (FRegular def.def_id), Some (loop.loop_id, false))));
+              (Fun (FromLlbc (FunId def.def_id, Some (loop.loop_id, false))));
           generics;
         }
     in
@@ -3599,7 +3597,7 @@ let decompose_loop_body_aux (ctx : ctx) (def : fun_decl) (body : fun_body)
               FunOrOp
                 (Fun
                    (FromLlbc
-                      ( FunId (FRegular def.def_id),
+                      ( FunId def.def_id,
                         Some (fst (Option.get def.loop_id), true (* is_body *))
                       )));
             generics = generic_args;

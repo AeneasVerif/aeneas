@@ -29,13 +29,18 @@ let translate_constant_expr_kind (span : span option) :
     Types.constant_expr_kind -> const_generic = function
   | CGlobal { id; _ } -> CgGlobal id
   | CVar v -> CgVar v
-  | CLiteral l -> CgValue (translate_literal l)
+  | CBool v -> CgValue (VBool v)
+  | CInteger v -> CgValue (VScalar v)
+  | CChar v -> CgValue (VChar v)
+  | CFloat v -> CgValue (VFloat v)
+  | CStr v -> CgValue (VStr v)
+  | CByteStr v -> CgValue (VByteStr v)
   | _ -> [%craise_opt_span] span "Unsupported constant expression kind"
 
-let translate_literal_type (ty : V.literal_type) : literal_type =
+let translate_literal_type (ty : V.scalar_type) : literal_type =
   match ty with
-  | V.TInt x -> TInt x
-  | V.TUInt x -> TUInt x
+  | V.TInteger (Signed x) -> TInt x
+  | V.TInteger (Unsigned x) -> TUInt x
   | V.TFloat x -> TFloat x
   | V.TBool -> TBool
   | V.TChar -> TChar
@@ -43,7 +48,7 @@ let translate_literal_type (ty : V.literal_type) : literal_type =
 let translate_const_generic_param (span : span option)
     (c : Types.const_generic_param) : const_generic_param =
   match c.ty with
-  | TLiteral ty ->
+  | TScalar ty ->
       { index = c.index; name = c.name; ty = translate_literal_type ty }
   | _ -> [%craise_opt_span] span "Unsupported constant expression type"
 
@@ -98,7 +103,7 @@ and translate_trait_ref_kind (span : Meta.span option)
         translate_generic_args span translate_ty impl_ref.generics
       in
       TraitImpl (impl_ref.id, generics)
-  | BuiltinOrAuto (data, _, _) ->
+  | BuiltinOrAuto (data, _, _, _) ->
       let data =
         match data with
         | BuiltinClone -> BuiltinClone
@@ -132,11 +137,11 @@ and translate_trait_ref_kind (span : Meta.span option)
 let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
   let translate = translate_sty in
   match ty with
-  | T.TAdt { id; generics } -> (
+  | T.TAdt { id; generics; builtin } -> (
       let generics = translate_sgeneric_args span generics in
-      match id with
-      | T.TAdtId adt_id -> TAdt (TAdtId adt_id, generics)
-      | T.TBuiltin aty -> (
+      match builtin with
+      | None -> TAdt (TAdtId id, generics)
+      | Some aty -> (
           match aty with
           | T.TTuple ->
               [%sanity_check_opt_span] span (generics.const_generics = []);
@@ -149,13 +154,13 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
                   [%craise_opt_span] span
                     "Box/vec/option type with incorrect number of arguments")
           | T.TStr -> TAdt (TBuiltin TStr, generics)))
-  | T.TArray (ty, len) ->
+  | T.TArray (ty, len, _) ->
       let ty = translate span ty in
       let len = translate_constant_expr_kind span len.kind in
       TAdt
         ( TBuiltin TArray,
           { types = [ ty ]; const_generics = [ len ]; trait_refs = [] } )
-  | T.TSlice ty ->
+  | T.TSlice (ty, _) ->
       let ty = translate span ty in
       TAdt
         ( TBuiltin TSlice,
@@ -163,7 +168,7 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
   | TVar var ->
       TVar var
       (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
-  | TLiteral ty -> TLiteral (translate_literal_type ty)
+  | TScalar ty -> TLiteral (translate_literal_type ty)
   | TNever -> TNever
   | TRef (_, rty, _) -> translate span rty
   | TRawPtr (ty, rkind) ->
@@ -257,12 +262,8 @@ let translate_variant (span : Meta.span) (v : T.variant) : variant =
   let variant_attr_info = v.attr_info in
   let discriminant, ty =
     match v.discriminant with
-    | VScalar (SignedScalar (ty, v)) -> (Z.to_int v, TInt ty)
-    | VScalar (UnsignedScalar (ty, v)) -> (Z.to_int v, TUInt ty)
-    | _ ->
-        [%craise] span
-          "Internal error, please report an issue: found an enumeration \
-           variant with an unexpected type"
+    | SignedInteger (ty, v) -> (Z.to_int v, TInt ty)
+    | UnsignedInteger (ty, v) -> (Z.to_int v, TUInt ty)
   in
   { variant_name; fields; variant_attr_info; discriminant; ty }
 
@@ -323,12 +324,13 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
     preds;
   }
 
-let translate_type_id (span : Meta.span option) (id : T.type_id) : type_id =
-  match id with
-  | TAdtId adt_id -> TAdtId adt_id
-  | TBuiltin T.TTuple -> TTuple
-  | TBuiltin T.TStr -> TBuiltin TStr
-  | TBuiltin T.TBox ->
+let translate_type_id (span : Meta.span option) (tref : T.type_decl_ref) :
+    type_id =
+  match tref.builtin with
+  | None -> TAdtId tref.id
+  | Some T.TTuple -> TTuple
+  | Some T.TStr -> TBuiltin TStr
+  | Some T.TBox ->
       (* Boxes have to be eliminated: this type id shouldn't be translated *)
       [%craise_opt_span] span "Unexpected box type"
 
@@ -343,18 +345,18 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
     (ty : T.ty) : ty =
   let translate = translate_fwd_ty span decls_ctx in
   match ty with
-  | T.TAdt { id; generics } -> (
+  | T.TAdt ({ generics; _ } as tref) -> (
       let t_generics = translate_fwd_generic_args span decls_ctx generics in
       (* Eliminate boxes and simplify tuples *)
-      match id with
-      | TAdtId _ | TBuiltin TStr ->
-          let id = translate_type_id span id in
+      match tref.builtin with
+      | None | Some TStr ->
+          let id = translate_type_id span tref in
           TAdt (id, t_generics)
-      | TBuiltin TTuple ->
+      | Some TTuple ->
           (* Note that if there is exactly one type, [mk_simpl_tuple_ty] is the
              identity *)
           mk_simpl_tuple_ty t_generics.types
-      | TBuiltin TBox -> (
+      | Some TBox -> (
           (* We eliminate boxes *)
           match t_generics.types with
           | [ bty ] -> bty
@@ -362,20 +364,20 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
               [%craise_opt_span] span
                 "Unreachable: box/vec/option receives exactly one type \
                  parameter"))
-  | T.TArray (ty, len) ->
+  | T.TArray (ty, len, _) ->
       let ty = translate ty in
       let len = translate_constant_expr_kind span len.kind in
       TAdt
         ( TBuiltin TArray,
           { types = [ ty ]; const_generics = [ len ]; trait_refs = [] } )
-  | T.TSlice ty ->
+  | T.TSlice (ty, _) ->
       let ty = translate ty in
       TAdt
         ( TBuiltin TSlice,
           { types = [ ty ]; const_generics = []; trait_refs = [] } )
   | TVar var -> TVar var
   | TNever -> TNever
-  | TLiteral lty -> TLiteral (translate_literal_type lty)
+  | TScalar scalar_ty -> TLiteral (translate_literal_type scalar_ty)
   | TRef (_, rty, _) -> translate rty
   | TRawPtr (ty, rkind) ->
       let mut =
@@ -396,8 +398,7 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
       [%cassert_opt_span] span (binder_regions = []) "Unimplemented";
       let generics = translate_fwd_generic_args span decls_ctx generics in
       match kind with
-      | T.FunId (FBuiltin _) -> [%craise_opt_span] span "Unimplemented"
-      | T.FunId (FRegular fid) ->
+      | T.Fun fid ->
           let fdecl =
             [%unwrap_opt_span] span
               (FunDeclId.Map.find_opt fid decls_ctx.fun_ctx.fun_decls)
@@ -458,9 +459,9 @@ and compute_back_ty_num_levels (span : Meta.span option)
       ^ "): " ^ Print.ty_to_string ctx ty ^ "\n- outer_regions: "
       ^ T.RegionGroupId.Set.to_string None outer_regions];
     match ty with
-    | T.TAdt { id; generics } -> (
-        match id with
-        | TAdtId _ ->
+    | T.TAdt { generics; builtin; _ } -> (
+        match builtin with
+        | None ->
             (* Analyze the type *)
             let info = TypesAnalysis.analyze_ty span type_infos ty in
             (* TODO: we need to extend the type analysis to count the level
@@ -478,17 +479,17 @@ and compute_back_ty_num_levels (span : Meta.span option)
               else outer_regions
             in
             save_count outer_regions
-        | TBuiltin TStr -> save_count outer_regions
-        | TBuiltin TBox -> (
+        | Some TStr -> save_count outer_regions
+        | Some TBox -> (
             (* Eliminate the box *)
             match generics.types with
             | [ bty ] -> explore outer_regions bty
             | _ ->
                 [%craise_opt_span] span
                   "Unreachable: boxes receive exactly one type parameter")
-        | TBuiltin TTuple -> List.iter (explore outer_regions) generics.types)
-    | T.TArray (ty, _) | T.TSlice ty -> explore outer_regions ty
-    | TVar _ | TNever | TLiteral _ -> save_count outer_regions
+        | Some TTuple -> List.iter (explore outer_regions) generics.types)
+    | T.TArray (ty, _, _) | T.TSlice (ty, _) -> explore outer_regions ty
+    | TVar _ | TNever | TScalar _ -> save_count outer_regions
     | TRef (r, rty, rkind) -> (
         match rkind with
         | RShared ->
@@ -591,7 +592,7 @@ and translate_back_ty_aux (span : Meta.span option) (decls_ctx : C.decls_ctx)
       "Exploring: " ^ Print.ty_to_string ctx ty ^ "\n- outer_regions: "
       ^ T.RegionGroupId.Set.to_string None outer_regions];
     match ty with
-    | T.TAdt { id = TBuiltin TTuple; generics } -> (
+    | T.TAdt { generics; builtin = Some TTuple; _ } -> (
         (* Tuples can contain borrows (which we eliminate).
 
          Note that no borrow gets eliminated if we are already inside a
@@ -603,29 +604,29 @@ and translate_back_ty_aux (span : Meta.span option) (decls_ctx : C.decls_ctx)
             (* Note that if there is exactly one type, [mk_simpl_tuple_ty]
              * is the identity *)
             Some (mk_simpl_tuple_ty tys_t))
-    | T.TAdt { id; generics } when keep_adt outer_regions ty -> (
-        match id with
-        | TAdtId _ ->
+    | T.TAdt ({ generics; _ } as tref) when keep_adt outer_regions ty -> (
+        match tref.builtin with
+        | None ->
             (* The type should contain a mutable reference for the proper
              level: translate it as a forward type *)
-            let type_id = translate_type_id span id in
+            let type_id = translate_type_id span tref in
             let generics = translate_fwd_generic_args span decls_ctx generics in
             Some (TAdt (type_id, generics))
-        | TBuiltin TStr -> stop outer_regions ty
-        | TBuiltin TBox -> (
+        | Some TStr -> stop outer_regions ty
+        | Some TBox -> (
             (* Eliminate the box *)
             match generics.types with
             | [ bty ] -> explore outer_regions bty
             | _ ->
                 [%craise_opt_span] span
                   "Unreachable: boxes receive exactly one type parameter")
-        | TBuiltin TTuple -> [%internal_error_opt_span] span)
+        | Some TTuple -> [%internal_error_opt_span] span)
     | T.TAdt _ -> None
     | T.TArray _ | T.TSlice _ ->
         if keep_adt outer_regions ty then
           Some (translate_fwd_ty span decls_ctx ty)
         else None
-    | TVar _ | TNever | TLiteral _ -> stop outer_regions ty
+    | TVar _ | TNever | TScalar _ -> stop outer_regions ty
     | TRef (r, rty, rkind) -> (
         match rkind with
         | RShared ->
@@ -718,7 +719,7 @@ and compute_raw_fun_effect_info (span : Meta.span option)
     (fun_infos : FunsAnalysis.modules_funs_info) (fun_id : fn_ptr_kind)
     (gid : T.RegionGroupId.id option) : fun_effect_info =
   match fun_id with
-  | TraitMethod _ | FunId (FRegular _) ->
+  | TraitMethod _ | FunId _ ->
       let info =
         [%silent_unwrap_opt_span] span
           (lookup_pure_fn_ptr_info fun_infos fun_id)
@@ -728,13 +729,6 @@ and compute_raw_fun_effect_info (span : Meta.span option)
         can_fail = info.can_fail && gid = None;
         can_diverge = info.can_diverge;
         is_rec = info.is_rec && gid = None;
-      }
-  | FunId (FBuiltin aid) ->
-      {
-        (* Note that backward functions can't fail *)
-        can_fail = Builtin.builtin_fun_can_fail aid && gid = None;
-        can_diverge = false;
-        is_rec = false;
       }
 
 (** Translate an instantiated function signature to a decomposed function
@@ -1137,7 +1131,7 @@ and translate_fun_sigs_from_decl (decls_ctx : C.decls_ctx)
           (LlbcAstUtils.fun_body_get_input_vars body)
     | _ -> List.map (fun _ -> None) fdef.signature.inputs
   in
-  translate_fun_sigs (Some span) decls_ctx (FunId (FRegular fdef.def_id))
+  translate_fun_sigs (Some span) decls_ctx (FunId fdef.def_id)
     (bound_fun_sig_of_decl fdef)
     input_names
 
@@ -1246,7 +1240,7 @@ and translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : fn_ptr_kind)
 and get_fun_effect_info (ctx : bs_ctx) (fun_id : fn_ptr_kind)
     (gid : T.RegionGroupId.id option) : fun_effect_info =
   match fun_id with
-  | TraitMethod _ | FunId (FRegular _) ->
+  | TraitMethod _ | FunId _ ->
       let sg =
         [%silent_unwrap_opt_span] (Some ctx.span)
           (lookup_pure_fn_ptr_sig ctx fun_id)
@@ -1258,9 +1252,6 @@ and get_fun_effect_info (ctx : bs_ctx) (fun_id : fn_ptr_kind)
         | Some gid -> (RegionGroupId.Map.find gid sg.fun_ty.back_sg).effect_info
       in
       { info with is_rec = info.is_rec && gid = None }
-  | FunId (FBuiltin _) ->
-      compute_raw_fun_effect_info (Some ctx.span) ctx.fun_ctx.fun_infos fun_id
-        gid
 
 (** Simply calls [translate_fwd_ty] *)
 let ctx_translate_fwd_ty (ctx : bs_ctx) (ty : T.ty) : ty =

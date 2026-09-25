@@ -1,3 +1,4 @@
+module
 import Aeneas.Tactic.Solver.ScalarTac.Tests
 import Aeneas.Tactic.Solver.Grind.Tests
 import Aeneas.Tactic.Solver.BvTac.Tests

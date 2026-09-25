@@ -105,6 +105,11 @@ let () =
         Arg.String set_subdir,
         " Extract the files in a sub-folder; this option has an impact on the \
          import paths of the generated files" );
+      ( "-use-lean-modules",
+        Arg.Bool (fun b -> use_lean_modules := b),
+        " Emit Lean files using the module system (default: true). Pass \
+         `-use-lean-modules false` to emit files that don't use the module \
+         system." );
       ( "-test-units",
         Arg.Set test_unit_functions,
         " Test the unit functions with the concrete (i.e., not symbolic) \
@@ -211,6 +216,12 @@ let () =
          collisions with field projectors. Example: the `len` method in `impl \
          Struct { fn len(&self) -> usize { ... } }` would be named \
          `Struct.impl.len`." );
+      ( "-filter-trait-methods",
+        Arg.Set filter_trait_impl_methods,
+        " When extracting a trait impl, filter out the methods which are \
+         absent from the model of the trait declaration in the target backend \
+         (e.g., Lean). Trait declarations which have no model are not \
+         affected." );
       ( "-all-computable",
         Arg.Set all_computable,
         " For Lean: do not insert `noncomputable section` at the top of the \
@@ -597,7 +608,7 @@ let () =
              (function
                | Aeneas.LlbcAst.FunGroup (RecGroup (_ :: _)) -> true
                | _ -> false)
-             m.declarations
+             (Option.get m.declarations)
       then (
         log#error
           "The Lean backend doesn't support the use of \

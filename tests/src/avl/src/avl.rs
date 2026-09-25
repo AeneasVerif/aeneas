@@ -1,7 +1,7 @@
 //! Adapted from https://en.wikipedia.org/wiki/AVL_tree
 #![feature(register_tool)]
 #![register_tool(aeneas)]
-#![feature(box_patterns)]
+#![feature(deref_patterns)]
 
 impl Ord for i32 {
     fn cmp(&self, other: &Self) -> Ordering {

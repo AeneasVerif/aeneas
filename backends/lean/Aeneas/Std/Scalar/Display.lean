@@ -1,5 +1,7 @@
-import Aeneas.Std.Scalar.Core
-import Aeneas.Std.Core.Fmt
+module
+public import Aeneas.Std.Scalar.Core
+public import Aeneas.Std.Core.Fmt
+public section
 
 namespace Aeneas.Std
 

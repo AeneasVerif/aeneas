@@ -1,8 +1,10 @@
 /- Step specs for Range/StepBy iterators on Usize.
    These use WP.spec_bind directly to avoid importing the step tactic. -/
-import Aeneas.Std.Core.Iter
-import Aeneas.Std.Scalar
-import Aeneas.Std.SliceIter
+module
+public import Aeneas.Std.Core.Iter
+public import Aeneas.Std.Scalar
+public import Aeneas.Std.SliceIter
+public section
 
 namespace Aeneas.Std
 
@@ -360,6 +362,7 @@ theorem core.iter.adapters.enumerate.IteratorEnumerate.next_some_spec
   have hadd := @UScalar.add_equiv UScalarTy.Usize self.count (1#usize)
   split at hadd
   · rename_i z heq
+    simp at heq
     obtain ⟨_, hval, _⟩ := hadd
     simp [heq, bind_tc_ok, spec_ok, uncurry', hval]
   · exfalso; simp [UScalar.inBounds] at hadd; scalar_tac
@@ -451,6 +454,7 @@ theorem core.iter.adapters.take.IteratorTake.next_ChunksExact_spec {T : Type}
       split at h
       next z heq =>
         obtain ⟨_, hval, _⟩ := h
+        simp at heq
         exact ⟨z, heq, by scalar_tac⟩
       next heq =>
         exfalso; scalar_tac
@@ -547,7 +551,7 @@ theorem core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next_
   core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next_UScalar_spec
     (by simp) (by intros; rfl) (by intros; rfl) r
 
-@[reducible,
+@[expose, reducible,
   rust_trait_impl "core::iter::traits::double_ended::DoubleEndedIterator<core::ops::range::Range<@A>, @A>"]
 def core.ops.range.Range.Insts.DoubleEndedIterator
   {A : Type} (StepInst : core.iter.range.Step A) :

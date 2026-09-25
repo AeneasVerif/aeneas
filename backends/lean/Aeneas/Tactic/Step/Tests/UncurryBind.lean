@@ -1,3 +1,4 @@
+module
 import Aeneas.Std.Slice
 import Aeneas.Tactic.Step
 import Aeneas.Do
@@ -41,9 +42,9 @@ example (xs : List Nat) :
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, setA, a_post1, a_post2 ⟩ ← readPair_spec
+  [apply]     let* ⟨ a, setA, a_post, setA_post ⟩ ← readPair_spec
     let* ⟨ b, b_post ⟩ ← readSingle_spec
-    let* ⟨ c, setC, c_post1, c_post2 ⟩ ← readPair_spec
+    let* ⟨ c, setC, c_post, setC_post ⟩ ← readPair_spec
     let* ⟨ ⟩ ← readSingle_spec
 -/
 #guard_msgs in
@@ -89,7 +90,7 @@ example (xs : List Nat) :
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, setA, a_post1, a_post2 ⟩ ← readPair_spec
+  [apply]     let* ⟨ a, setA, a_post, setA_post ⟩ ← readPair_spec
     let* ⟨ b, b_post ⟩ ← readSingle_spec
     agrind
 -/
@@ -114,5 +115,19 @@ x : ℕ
 example (x : Nat) :
     mkTriple x ⦃ (a, b) c => a = x ∧ b = x + 1 ∧ c = x + 2 ⦄ := by
     done
+
+universe u v
+
+example {α : Type u} {β : Type v} {m : Result α} {k : α → Result β}
+    {P : α → Prop} {Q : β → Prop}
+    (hm : WP.spec m P) (hk : ∀ x, P x → WP.spec (k x) Q) :
+    WP.spec (Std.bind m k) Q :=
+  WP.spec_bind hm hk
+
+example {α : Type u} {β : Type v} {m : Result α} {k : α → Result β}
+    {P : α → Prop} {Q : β → Prop}
+    (hm : WP.dspec m P) (hk : ∀ x, P x → WP.dspec (k x) Q) :
+    WP.dspec (Std.bind m k) Q :=
+  WP.dspec_bind hm hk
 
 end Aeneas.Tactic.Step.Tests.UncurryBind

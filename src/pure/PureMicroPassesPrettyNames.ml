@@ -258,10 +258,7 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
           match f.e with
           | Qualif
               {
-                id =
-                  FunOrOp
-                    (Fun
-                       (FromLlbc (FunId (FRegular fid), Some (lp_id, is_body))));
+                id = FunOrOp (Fun (FromLlbc (FunId fid, Some (lp_id, is_body))));
                 _;
               }
             when fid = def.def_id ->

@@ -1,3 +1,4 @@
+module
 import Aeneas.Do
 import Aeneas.Std.Slice
 import Aeneas.Tactic.Step
@@ -17,7 +18,7 @@ theorem pairProg_spec : pairProg ⦃ p => p.1 = 1 ∧ p.2 = 2 ⦄ := by
 /--
 info: Try this:
 
-  [apply]     let* ⟨ p, p_post1, p_post2 ⟩ ← pairProg_spec
+  [apply]     let* ⟨ p, p_post, p_post1 ⟩ ← pairProg_spec
     agrind
 -/
 #guard_msgs in
@@ -27,7 +28,7 @@ example : pairProg ⦃ p => p.1 = 1 ∧ p.2 = 2 ⦄ := by
 /--
 info: Try this:
 
-  [apply]     let* ⟨ p, p_post1, p_post2 ⟩ ← pairProg_spec
+  [apply]     let* ⟨ p, p_post, p_post1 ⟩ ← pairProg_spec
     agrind
 -/
 #guard_msgs in
@@ -43,7 +44,7 @@ theorem threeProg_spec : threeProg ⦃ a b c => a = 1 ∧ b = 2 ∧ c = 3 ⦄ :=
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, c, a_post1, a_post2, a_post3 ⟩ ← threeProg_spec
+  [apply]     let* ⟨ a, b, c, a_post, b_post, c_post ⟩ ← threeProg_spec
     agrind
 -/
 #guard_msgs in
@@ -53,7 +54,7 @@ example : threeProg ⦃ a b c => a = 1 ∧ b = 2 ∧ c = 3 ⦄ := by
 /--
 info: Try this:
 
-  [apply]     let* ⟨ x, y, x_post1, x_post2, x_post3 ⟩ ← threeProg_spec
+  [apply]     let* ⟨ x, y, x_post, x_post1, x_post2 ⟩ ← threeProg_spec
     agrind
 -/
 #guard_msgs in
@@ -69,7 +70,7 @@ theorem nestedProg_spec : nestedProg ⦃ ((a, b), c) => a = 5 ∧ b = 6 ∧ c = 
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, c, a_post1, a_post2, a_post3 ⟩ ← nestedProg_spec
+  [apply]     let* ⟨ a, b, c, a_post, b_post, c_post ⟩ ← nestedProg_spec
     agrind
 -/
 #guard_msgs in
@@ -81,9 +82,9 @@ error: unsolved goals
 case a
 a : ℕ × ℕ
 b : ℕ
-a_post1 : a.1 = 5
-a_post2 : a.2 = 6
-a_post3 : b = 7
+a_post : a.1 = 5
+a_post1 : a.2 = 6
+b_post : b = 7
 ⊢ a.1 = 5 ∧ a.2 = 6 ∧ b = 7
 -/
 #guard_msgs in
@@ -93,7 +94,7 @@ example : nestedProg ⦃ a b => a.1 = 5 ∧ a.2 = 6 ∧ b = 7 ⦄ := by
 /--
 info: Try this:
 
-  [apply]     let* ⟨ x, y, x_post1, x_post2, x_post3 ⟩ ← nestedProg_spec
+  [apply]     let* ⟨ x, y, x_post, x_post1, y_post ⟩ ← nestedProg_spec
     agrind
 -/
 #guard_msgs in
@@ -140,7 +141,7 @@ theorem quadProg_spec :
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
+  [apply]     let* ⟨ a, b, a_post, a_post1, a_post2, a_post3 ⟩ ← quadProg_spec
     agrind
 -/
 #guard_msgs in
@@ -152,10 +153,10 @@ error: unsolved goals
 case a
 c : ℕ × ℕ
 a b : ℕ
-a_post1 : a = 8
-a_post2 : b = 9
-a_post3 : c.1 = 10
-a_post4 : c.2 = 11
+a_post : a = 8
+b_post : b = 9
+a_post1 : c.1 = 10
+a_post2 : c.2 = 11
 ⊢ a + b * 2 + c.1 + c.2 = 47
 -/
 #guard_msgs in
@@ -166,7 +167,7 @@ example : (do let ((a, b), c) ← quadProg
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, c, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
+  [apply]     let* ⟨ a, b, c, a_post, a_post1, b_post, c_post ⟩ ← quadProg_spec
     agrind
 -/
 #guard_msgs in
@@ -176,7 +177,7 @@ example : (do let (a, (b, c)) ← quadProg
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, c, d, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
+  [apply]     let* ⟨ a, b, c, d, a_post, b_post, c_post, d_post ⟩ ← quadProg_spec
     agrind
 -/
 #guard_msgs in
@@ -194,10 +195,10 @@ theorem quadProg_spec :
 error: unsolved goals
 case a
 a b : ℕ × ℕ
-a_post1 : a.1 = 8
-a_post2 : a.2 = 9
-a_post3 : b.1 = 10
-a_post4 : b.2 = 11
+a_post : a.1 = 8
+a_post1 : a.2 = 9
+a_post2 : b.1 = 10
+a_post3 : b.2 = 11
 ⊢ a.1 + a.2 + b.1 + b.2 = 38
 -/
 #guard_msgs in
@@ -208,7 +209,7 @@ example : (do let (a, b) ← quadProg
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, c, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
+  [apply]     let* ⟨ a, b, c, a_post, b_post, a_post1, a_post2 ⟩ ← quadProg_spec
     agrind
 -/
 #guard_msgs in
@@ -218,7 +219,7 @@ example : (do let ((a, b), c) ← quadProg
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, c, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
+  [apply]     let* ⟨ a, b, c, a_post, a_post1, b_post, c_post ⟩ ← quadProg_spec
     agrind
 -/
 #guard_msgs in
@@ -228,7 +229,7 @@ example : (do let (a, (b, c)) ← quadProg
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, c, d, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
+  [apply]     let* ⟨ a, b, c, d, a_post, b_post, c_post, d_post ⟩ ← quadProg_spec
     agrind
 -/
 #guard_msgs in
@@ -245,7 +246,7 @@ theorem quadProg_spec :
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
+  [apply]     let* ⟨ a, b, a_post, a_post1, a_post2, a_post3 ⟩ ← quadProg_spec
     agrind
 -/
 #guard_msgs in
@@ -255,7 +256,7 @@ example : (do let (a, b) ← quadProg
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, c, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
+  [apply]     let* ⟨ a, b, c, a_post, b_post, a_post1, a_post2 ⟩ ← quadProg_spec
     agrind
 -/
 #guard_msgs in
@@ -265,7 +266,7 @@ example : (do let ((a, b), c) ← quadProg
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, c, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
+  [apply]     let* ⟨ a, b, c, a_post, a_post1, b_post, c_post ⟩ ← quadProg_spec
     agrind
 -/
 #guard_msgs in
@@ -275,7 +276,7 @@ example : (do let (a, (b, c)) ← quadProg
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, c, d, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
+  [apply]     let* ⟨ a, b, c, d, a_post, b_post, c_post, d_post ⟩ ← quadProg_spec
     agrind
 -/
 #guard_msgs in
@@ -292,7 +293,7 @@ theorem quadProg_spec :
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
+  [apply]     let* ⟨ a, b, a_post, a_post1, a_post2, a_post3 ⟩ ← quadProg_spec
     agrind
 -/
 #guard_msgs in
@@ -302,7 +303,7 @@ example : (do let (a, b) ← quadProg
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, c, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
+  [apply]     let* ⟨ a, b, c, a_post, b_post, a_post1, a_post2 ⟩ ← quadProg_spec
     agrind
 -/
 #guard_msgs in
@@ -312,7 +313,7 @@ example : (do let ((a, b), c) ← quadProg
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, c, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
+  [apply]     let* ⟨ a, b, c, a_post, a_post1, b_post, c_post ⟩ ← quadProg_spec
     agrind
 -/
 #guard_msgs in
@@ -322,7 +323,7 @@ example : (do let (a, (b, c)) ← quadProg
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, c, d, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
+  [apply]     let* ⟨ a, b, c, d, a_post, b_post, c_post, d_post ⟩ ← quadProg_spec
     agrind
 -/
 #guard_msgs in
@@ -339,7 +340,7 @@ theorem quadProg_spec :
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
+  [apply]     let* ⟨ a, b, a_post, a_post1, a_post2, a_post3 ⟩ ← quadProg_spec
     agrind
 -/
 #guard_msgs in
@@ -349,7 +350,7 @@ example : (do let (a, b) ← quadProg
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, c, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
+  [apply]     let* ⟨ a, b, c, a_post, b_post, a_post1, a_post2 ⟩ ← quadProg_spec
     agrind
 -/
 #guard_msgs in
@@ -359,7 +360,7 @@ example : (do let ((a, b), c) ← quadProg
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, c, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
+  [apply]     let* ⟨ a, b, c, a_post, a_post1, b_post, c_post ⟩ ← quadProg_spec
     agrind
 -/
 #guard_msgs in
@@ -369,7 +370,7 @@ example : (do let (a, (b, c)) ← quadProg
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, c, d, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
+  [apply]     let* ⟨ a, b, c, d, a_post, b_post, c_post, d_post ⟩ ← quadProg_spec
     agrind
 -/
 #guard_msgs in
@@ -386,7 +387,7 @@ theorem quadProg_spec :
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
+  [apply]     let* ⟨ a, b, a_post, a_post1, a_post2, a_post3 ⟩ ← quadProg_spec
     agrind
 -/
 #guard_msgs in
@@ -396,7 +397,7 @@ example : (do let (a, b) ← quadProg
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, c, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
+  [apply]     let* ⟨ a, b, c, a_post, b_post, a_post1, a_post2 ⟩ ← quadProg_spec
     agrind
 -/
 #guard_msgs in
@@ -406,7 +407,7 @@ example : (do let ((a, b), c) ← quadProg
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, c, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
+  [apply]     let* ⟨ a, b, c, a_post, a_post1, b_post, c_post ⟩ ← quadProg_spec
     agrind
 -/
 #guard_msgs in
@@ -416,7 +417,7 @@ example : (do let (a, (b, c)) ← quadProg
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, c, d, a_post1, a_post2, a_post3, a_post4 ⟩ ← quadProg_spec
+  [apply]     let* ⟨ a, b, c, d, a_post, b_post, c_post, d_post ⟩ ← quadProg_spec
     agrind
 -/
 #guard_msgs in
@@ -453,12 +454,13 @@ def nestedExistentialProg : Result ((Nat × Nat) × Nat) := ok ((1, 2), 3)
 @[step]
 theorem nestedExistentialProg_spec :
     nestedExistentialProg ⦃ (a, b) c => ∃ (_ : a = 1), b = 2 ∧ c = 3 ⦄ := by
-  unfold nestedExistentialProg; exact ⟨rfl, rfl, rfl⟩
+  constructor
+  simp
 
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, c, a_post1, a_post2, a_post3 ⟩ ← nestedExistentialProg_spec
+  [apply]     let* ⟨ a, b, c, a_post, b_post, c_post ⟩ ← nestedExistentialProg_spec
     agrind
 -/
 #guard_msgs in
@@ -496,8 +498,8 @@ error: unsolved goals
 case a
 a : ℕ × ℕ
 b c : ℕ
-a_post1 : pred a
-a_post2 : pred (b, c)
+a_post : pred a
+a_post1 : pred (b, c)
 ⊢ a.1 + a.2 + b + c = 38
 -/
 #guard_msgs in

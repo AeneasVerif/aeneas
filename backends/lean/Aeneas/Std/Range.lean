@@ -1,11 +1,13 @@
 /- Arrays/slices -/
-import Lean
-import Lean.Meta.Tactic.Simp
-import Init.Data.List.Basic
-import Mathlib.Tactic.Linarith
-import Aeneas.Std.Scalar.Core
-import Aeneas.Tactic.Solver.ScalarTac
-import Aeneas.Tactic.Step.Init
+module
+public import Lean
+public import Lean.Meta.Tactic.Simp
+public import Init.Data.List.Basic
+public import Mathlib.Tactic.Linarith
+public import Aeneas.Std.Scalar.Core
+public import Aeneas.Tactic.Solver.ScalarTac
+public import Aeneas.Tactic.Step.Init
+public section
 
 namespace Aeneas
 
@@ -21,6 +23,13 @@ structure core.ops.range.Range (Idx : Type u) where
 structure core.ops.range.RangeTo (Idx : Type u) where
   mk ::
   «end»: Idx
+
+/-- `core::ops::range::RangeFull`
+
+    The Rust struct is a unit struct: it carries no bounds, so indexing a slice
+    with it yields the whole slice. -/
+@[expose, reducible, rust_type "core::ops::range::RangeFull"]
+def core.ops.range.RangeFull := Unit
 
 /-- `core::ops::range::RangeInclusive` (`a..=b`).
 

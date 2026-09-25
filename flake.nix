@@ -189,11 +189,18 @@
             inputs.charon.packages.${system}.rustToolchain
           ];
           buildPhase = ''
+            # Check that the OCaml code is formatted
             make format
             rm -rf ./src/_build
             rm -rf ./tests/test_runner/_build
-            if ! diff --no-dereference -ru . ${src}; then
+            if ! diff --no-dereference -ru ${src} .; then
               echo 'ERROR: Code is not formatted. Run `make format` to format the project files.'
+              exit 1
+            fi
+            # Check that `tests/lean/lakefile.lean` is up to date.
+            make -C tests/lean lakefile.lean
+            if ! diff --no-dereference -u ${src}/tests/lean/lakefile.lean tests/lean/lakefile.lean; then
+              echo 'ERROR: tests/lean/lakefile.lean is out of date. Run `make -C tests/lean lakefile.lean`.'
               exit 1
             fi
           '';

@@ -255,6 +255,10 @@ let extract_decreases_clauses = ref false
     given by the user. *)
 let extract_template_decreases_clauses = ref true
 
+(** Whether to emit Lean output using the module system. Defaults to [true].
+    Pass `-use-lean-modules false` to emit non-module Lean files. *)
+let use_lean_modules = ref true
+
 (** {1 Micro passes} *)
 
 (** Some provers like F* and Coq don't support the decomposition of return
@@ -599,6 +603,16 @@ let method_names_in_impl_namespace = ref false
 
 (** *)
 let all_computable = ref false
+
+(** When extracting a trait impl, filter out the methods which are absent from
+    the model of the trait declaration (its builtin info).
+
+    Trait declarations which have no model are not affected: all their methods
+    are extracted. This is useful for the traits of the standard library, whose
+    models often list only a subset of the methods of the original Rust trait.
+    Without this option, the extracted impls may contain fields which do not
+    exist in the model, leading to code which does not typecheck. *)
+let filter_trait_impl_methods = ref false
 
 (** Do not attempt to extract loops to recursive functions *)
 let no_recursive_loops = ref false

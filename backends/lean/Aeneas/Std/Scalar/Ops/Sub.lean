@@ -1,8 +1,10 @@
-import Aeneas.Std.Scalar.Core
-import Aeneas.Std.Scalar.Misc
-import Aeneas.Std.Scalar.Elab
-import Aeneas.Tactic.Solver.ScalarTac
-import Mathlib.Data.BitVec
+module
+public import Aeneas.Std.Scalar.Core
+public import Aeneas.Std.Scalar.Misc
+public import Aeneas.Std.Scalar.Elab
+public import Aeneas.Tactic.Solver.ScalarTac
+public import Mathlib.Data.BitVec
+public section
 
 namespace Aeneas.Std
 
@@ -12,17 +14,17 @@ open Result Error Arith ScalarElab WP
 # Subtraction: Definitions
 -/
 
-def UScalar.sub {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
+@[expose] def UScalar.sub {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
   if x.val < y.val then fail .integerOverflow
   else ok ⟨ BitVec.ofNat _ (x.val - y.val) ⟩
 
-def IScalar.sub {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
+@[expose] def IScalar.sub {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
   IScalar.tryMk ty (x.val - y.val)
 
-def UScalar.try_sub {ty : UScalarTy} (x y : UScalar ty) : Option (UScalar ty) :=
+@[expose] def UScalar.try_sub {ty : UScalarTy} (x y : UScalar ty) : Option (UScalar ty) :=
   Option.ofResult (sub x y)
 
-def IScalar.try_sub {ty : IScalarTy} (x y : IScalar ty) : Option (IScalar ty) :=
+@[expose] def IScalar.try_sub {ty : IScalarTy} (x y : IScalar ty) : Option (IScalar ty) :=
   Option.ofResult (sub x y)
 
 instance {ty} : HSub (UScalar ty) (UScalar ty) (Result (UScalar ty)) where
@@ -37,12 +39,12 @@ instance {ty} : HSub (IScalar ty) (IScalar ty) (Result (IScalar ty)) where
 -/
 
 theorem UScalar.sub_equiv {ty} (x y : UScalar ty) :
-  match x - y with
-  | ok z =>
+  match (x - y).match with
+  | .ok z =>
     y.val ≤ x.val ∧
     x.val = z.val + y.val ∧
     z.bv = x.bv - y.bv
-  | fail _ => x.val < y.val
+  | .vis (.fail _) _ => x.val < y.val
   | _ => ⊥ := by
   have : x - y = sub x y := by rfl
   simp [this, sub]
@@ -81,12 +83,12 @@ theorem UScalar.sub_equiv {ty} (x y : UScalar ty) :
     ring_nf
 
 theorem IScalar.sub_equiv {ty} (x y : IScalar ty) :
-  match x - y with
-  | ok z =>
+  match (x - y).match with
+  | .ok z =>
     IScalar.inBounds ty (x.val - y.val) ∧
     z.val = x.val - y.val ∧
     z.bv = x.bv - y.bv
-  | fail _ => ¬ (IScalar.inBounds ty (x.val - y.val))
+  | .vis (.fail _) _ => ¬ (IScalar.inBounds ty (x.val - y.val))
   | _ => ⊥ := by
   have : x - y = sub x y := by rfl
   simp [this, sub]

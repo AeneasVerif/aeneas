@@ -1,6 +1,8 @@
-import Lean
-import Aeneas.Extract
-import Aeneas.Std.Primitives
+module
+public import Lean
+public meta import Aeneas.Extract.Extract
+public import Aeneas.Std.Primitives
+public section
 
 namespace Aeneas
 

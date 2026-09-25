@@ -1,3 +1,4 @@
+module
 import Aeneas.Std.Scalar
 import Aeneas.Std.Array
 import Aeneas.Tactic.Step

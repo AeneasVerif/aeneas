@@ -1,6 +1,7 @@
 /-
 Big tests for the #decompose command (performance/stress tests)
 -/
+module
 import Aeneas.Command.Decompose
 import Aeneas.Std
 import Aeneas.Do.Elab
@@ -276,7 +277,7 @@ fun x y z w => do
   let c7 ← c6 + c0
   let c8 ← c7 + c1
   let c9 ← c8 + 1#u32
-  pure (c0, c3, c6, c9)
+  Result.ok (c0, c3, c6, c9)
 -/
 #guard_msgs in
 #print test32_tt_comp
@@ -296,7 +297,7 @@ fun x y z w => do
   let d7 ← d6 + d0
   let d8 ← d7 + d1
   let d9 ← d8 + 1#u32
-  pure (d0, d4, d7, d9)
+  Result.ok (d0, d4, d7, d9)
 -/
 #guard_msgs in
 #print test32_te_comp
@@ -316,7 +317,7 @@ fun x y z w => do
   let e7 ← e6 + e0
   let e8 ← e7 + e1
   let e9 ← e8 + 1#u32
-  pure (e0, e3, e6, e9)
+  Result.ok (e0, e3, e6, e9)
 -/
 #guard_msgs in
 #print test32_et_comp
@@ -336,7 +337,7 @@ fun x y z w => do
   let f7 ← f6 + f0
   let f8 ← f7 + f1
   let f9 ← f8 + 1#u32
-  pure (f0, f4, f7, f9)
+  Result.ok (f0, f4, f7, f9)
 -/
 #guard_msgs in
 #print test32_ee_comp
@@ -753,5 +754,22 @@ info: 'Aeneas.Command.Decompose.TestsBig.test56_eq' depends on axioms: [propext,
 -/
 #guard_msgs in
 #print axioms test56_eq
+
+/- Same-universe decompositions must retain the lightweight monad-law proof
+   path even for a long chain comparable to a generated Keccak round. -/
+open Lean in
+macro "longResultChain% " n:num : term => do
+  let x := mkIdent `x
+  let mut body ← `(Result.ok $x)
+  for _ in [:n.getNat] do
+    body ← `(Bind.bind ($x + 1#u32) (fun ($x : U32) => $body))
+  `(fun ($x : U32) => $body)
+
+set_option maxRecDepth 4096 in
+def longResultChain : U32 → Result U32 := longResultChain% 400
+
+set_option maxRecDepth 4096 in
+#decompose longResultChain longResultChain.fold
+  letRange 0 350 => longResultChain_prefix
 
 end Aeneas.Command.Decompose.TestsBig
