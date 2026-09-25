@@ -1,5 +1,6 @@
 module
 public import Aeneas.Std.Core.Core
+public import Aeneas.Std.Core.Ops
 public import Aeneas.Std.Core.Result
 public import Aeneas.Std.String
 public section
@@ -34,5 +35,75 @@ theorem core.option.Option.ok_or_some {T E : Type} (value : T) (error : E) :
 @[simp]
 theorem core.option.Option.ok_or_none {T E : Type} (error : E) :
   core.option.Option.ok_or (none : Option T) error = ok (.Err error) := rfl
+
+/-- Pure model of `Option::map`: leaves `none` untouched and maps the payload
+    of `some` through `fnOnce`. -/
+@[expose, rust_fun "core::option::{core::option::Option<@T>}::map"]
+def core.option.Option.map
+  {T U F : Type} (fnOnce : core.ops.function.FnOnce F T U)
+  (x : Option T) (f : F) :
+  Result (Option U) :=
+  match x with
+  | some value => do
+      let mapped ← fnOnce.call_once f value
+      ok (some mapped)
+  | none => ok none
+
+@[simp]
+theorem core.option.Option.map_some
+  {T U F : Type} (fnOnce : core.ops.function.FnOnce F T U) (value : T) (f : F) :
+  core.option.Option.map fnOnce (some value) f = (do
+    let mapped ← fnOnce.call_once f value
+    ok (some mapped)) := rfl
+
+@[simp]
+theorem core.option.Option.map_none
+  {T U F : Type} (fnOnce : core.ops.function.FnOnce F T U) (f : F) :
+  core.option.Option.map fnOnce (none : Option T) f = ok (none : Option U) := rfl
+
+/-- Pure model of `Option::is_some_and`: `false` on `none`, and the result of
+    `fnOnce` on the payload of `some`. -/
+@[expose, rust_fun "core::option::{core::option::Option<@T>}::is_some_and"]
+def core.option.Option.is_some_and
+  {T F : Type} (fnOnce : core.ops.function.FnOnce F T Bool)
+  (x : Option T) (f : F) :
+  Result Bool :=
+  match x with
+  | none => ok false
+  | some value => fnOnce.call_once f value
+
+@[simp]
+theorem core.option.Option.is_some_and_some
+  {T F : Type} (fnOnce : core.ops.function.FnOnce F T Bool) (value : T) (f : F) :
+  core.option.Option.is_some_and fnOnce (some value) f = fnOnce.call_once f value := rfl
+
+@[simp]
+theorem core.option.Option.is_some_and_none
+  {T F : Type} (fnOnce : core.ops.function.FnOnce F T Bool) (f : F) :
+  core.option.Option.is_some_and fnOnce (none : Option T) f = ok false := rfl
+
+/-- Pure model of `bool::then`: `none` on `false`, and on `true` the result of
+    `fnOnce` wrapped in `some`. -/
+@[expose, rust_fun "core::bool::{bool}::then"]
+def core.bool.Bool.then
+  {T F : Type} (fnOnce : core.ops.function.FnOnce F Unit T)
+  (b : Bool) (f : F) :
+  Result (Option T) :=
+  if b then do
+    let value ← fnOnce.call_once f ()
+    ok (some value)
+  else ok none
+
+@[simp]
+theorem core.bool.Bool.then_true
+  {T F : Type} (fnOnce : core.ops.function.FnOnce F Unit T) (f : F) :
+  core.bool.Bool.then fnOnce true f = (do
+    let value ← fnOnce.call_once f ()
+    ok (some value)) := rfl
+
+@[simp]
+theorem core.bool.Bool.then_false
+  {T F : Type} (fnOnce : core.ops.function.FnOnce F Unit T) (f : F) :
+  core.bool.Bool.then fnOnce false f = ok (none : Option T) := rfl
 
 end Aeneas.Std
