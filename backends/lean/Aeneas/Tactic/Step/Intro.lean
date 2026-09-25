@@ -146,6 +146,7 @@ theorem forall_and_index {a b : Prop} {p : a ∧ b → Prop} :
 - `∀ h : a ∧ b, rest h` becomes `∀ (ha : a) (hb : b), rest ⟨ha, hb⟩`, and `a` and `b` are
   split in turn;
 - `∀ h : ∃ x, p x, rest h` becomes `∀ x (h : p x), rest ⟨x, h⟩`, and `p x` is split in turn;
+  the witness keeps the name of the existential binder;
 - a reducible definition standing for one of the above is unfolded first;
 - any other fact is left alone.
 
@@ -176,7 +177,8 @@ meta partial def splitFact (name : Name) (fact rest : Expr) : MetaM (Expr × Exp
          ↔ ∀ x (h : p x), rest ⟨x, h⟩     -- `forall_exists_index`
          ↔ ∀ x, splitP x                   -- split `p x`, under `x` -/
     let step₁ ← mkAppOptM ``forall_exists_index #[α, p, rest]
-    withLocalDeclD `x α fun x => do
+    let witness := if let .lam n .. := p then n else `x
+    withLocalDeclD witness α fun x => do
       let px := (mkApp p x).headBeta
       let restX ← withLocalDeclD name px fun h => do
         mkLambdaFVars #[h]

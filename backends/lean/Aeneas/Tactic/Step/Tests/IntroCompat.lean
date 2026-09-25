@@ -41,9 +41,9 @@ example (n : Nat) :
   guard_hyp hw : w = (k == 0)
   exact hb
 
-/-! ## Existential witnesses are named `x`
+/-! ## Facts about existential witnesses are named after the binder
 
-The facts about a witness are thus named `x_post`, `x_post1`, ... -/
+The facts about the witness of `∃ s, …` are named `s_post`, `s_post1`, ... -/
 
 theorem dup_nested_spec (n : Nat) :
     dup n ⦃ a b => a = n ∧ ∃ s, s ≥ a ∧ s = a + b ∧ b = n ⦄ := by
@@ -53,8 +53,8 @@ example (n : Nat) :
     (do let (a, b) ← dup n; ok (a + b)) ⦃ r => r = n + n ⦄ := by
   step with dup_nested_spec
   rename_i s
-  guard_hyp x_post : s ≥ a
-  guard_hyp x_post1 : s = a + b
+  guard_hyp s_post : s ≥ a
+  guard_hyp s_post1 : s = a + b
   guard_hyp b_post : b = n
   simp [a_post, b_post]
 

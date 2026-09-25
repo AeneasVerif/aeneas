@@ -372,7 +372,8 @@ example (f : Result (Option Nat)) (n : Nat)
   rename_i w
   guard_hyp r : Option Nat
   guard_hyp w : Nat
-  exact ⟨w, r_post, x_post⟩
+  guard_hyp witness_post : w ≤ n
+  exact ⟨w, r_post, witness_post⟩
 
 example (f : Result (Nat × Nat))
     (h : f ⦃ p => ∃ witness : Bool, p.1 = witness.toNat ∧ p.1 = p.2 ⦄div) :
