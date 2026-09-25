@@ -210,7 +210,7 @@ impl Ord for Keyed {
     }
 }
 
-/// on tie, Rust's max returns its second argument, see PR #1286 Bentkamp.
+/// on tie, Rust's max returns its second argument
 #[verify::test]
 pub fn test_keyed_max_tie() {
     let a = Keyed { key: 1, tag: 0 };
