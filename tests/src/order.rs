@@ -32,7 +32,7 @@ pub fn wrap_cmp(x: &Wrap, y: &Wrap) -> Ordering {
 }
 
 // ---------------------------------------------------------------------------
-// exercises <, <=, >, >=, max, min and clamp on types that only derive partial_cmp/cmp, everything else goes through the default methods, its the #1274 fix.
+// exercises <, <=, >, >=, max, min and clamp on types that derive partial_cmp/cmp
 // ---------------------------------------------------------------------------
 
 #[verify::test]
