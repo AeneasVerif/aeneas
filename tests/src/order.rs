@@ -218,7 +218,7 @@ pub fn test_keyed_max_tie() {
     assert!(a.max(b).tag == 1);
 }
 
-/// same same but different, on tie, Rust's min retuns its first argument
+/// on tie, Rust's min returns its first argument
 #[verify::test]
 pub fn test_keyed_min_tie() {
     let a = Keyed { key: 1, tag: 0 };
