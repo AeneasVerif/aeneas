@@ -208,50 +208,50 @@ def core.cmp.min {T : Type} (OrdInst : core.cmp.Ord T) (x y : T) : Result T :=
   -- TODO: is this the correct model?
   OrdInst.min x y
 
-@[simp, rust_fun "core::cmp::max"]
+@[expose, simp, rust_fun "core::cmp::max"]
 def core.cmp.max {T : Type} (OrdInst : core.cmp.Ord T) (x y : T) : Result T :=
   -- TODO: is this the correct model?
   OrdInst.max x y
 
-@[simp, rust_fun "core::cmp::impls::{core::cmp::PartialEq<(), ()>}::eq"]
+@[expose, simp, rust_fun "core::cmp::impls::{core::cmp::PartialEq<(), ()>}::eq"]
 def core.cmp.impls.PartialEqUnit.eq (_ _ : Unit) : Result Bool := ok true
 
-@[simp, rust_fun "core::cmp::impls::{core::cmp::PartialEq<(), ()>}::ne"]
+@[expose, simp, rust_fun "core::cmp::impls::{core::cmp::PartialEq<(), ()>}::ne"]
 def core.cmp.impls.PartialEqUnit.ne (_ _ : Unit) : Result Bool := ok false
 
-@[reducible, rust_trait_impl "core::cmp::PartialEq<(), ()>"]
+@[expose, reducible, rust_trait_impl "core::cmp::PartialEq<(), ()>"]
 def core.cmp.PartialEqUnit : core.cmp.PartialEq Unit Unit := {
   eq := core.cmp.impls.PartialEqUnit.eq
   ne := core.cmp.impls.PartialEqUnit.ne
 }
 
-@[simp, rust_fun "core::cmp::impls::{core::cmp::PartialOrd<(), ()>}::partial_cmp"]
+@[expose, simp, rust_fun "core::cmp::impls::{core::cmp::PartialOrd<(), ()>}::partial_cmp"]
 def core.cmp.impls.PartialOrdUnit.partial_cmp (_ _ : Unit) : Result (Option Ordering) :=
   ok (some .eq)
 
-@[simp, rust_fun "core::cmp::impls::{core::cmp::Ord<()>}::cmp"]
+@[expose, simp, rust_fun "core::cmp::impls::{core::cmp::Ord<()>}::cmp"]
 def core.cmp.impls.OrdUnit.cmp (_ _ : Unit) : Result Ordering :=
   ok .eq
 
-@[rust_fun "core::cmp::impls::{core::cmp::PartialEq<bool, bool>}::eq"]
+@[expose, rust_fun "core::cmp::impls::{core::cmp::PartialEq<bool, bool>}::eq"]
 def core.cmp.impls.PartialEqBool.eq (b0 b1 : Bool) : Result Bool := .ok (b0 = b1)
 
-@[reducible, rust_trait_impl "core::cmp::PartialEq<bool, bool>"]
+@[expose, reducible, rust_trait_impl "core::cmp::PartialEq<bool, bool>"]
 def core.cmp.PartialEqBool : core.cmp.PartialEq Bool Bool := {
   eq := core.cmp.impls.PartialEqBool.eq
 }
 
-@[simp, rust_fun "core::cmp::impls::{core::cmp::PartialEq<&'a @A, &'b @B>}::eq"]
+@[expose, simp, rust_fun "core::cmp::impls::{core::cmp::PartialEq<&'a @A, &'b @B>}::eq"]
 def core.cmp.impls.PartialEqShared.eq {A : Type} {B : Type} (PartialEqInst : core.cmp.PartialEq A B)
   (x : A) (y : B) : Result Bool :=
   PartialEqInst.eq x y
 
-@[simp, rust_fun "core::cmp::impls::{core::cmp::PartialEq<&'a @A, &'b @B>}::ne"]
+@[expose, simp, rust_fun "core::cmp::impls::{core::cmp::PartialEq<&'a @A, &'b @B>}::ne"]
 def core.cmp.impls.PartialEqShared.ne {A : Type} {B : Type} (PartialEqInst : core.cmp.PartialEq A B)
   (x : A) (y : B) : Result Bool :=
   PartialEqInst.ne x y
 
-@[reducible, rust_trait_impl "core::cmp::PartialEq<&'a @A, &'b @B>"]
+@[expose, reducible, rust_trait_impl "core::cmp::PartialEq<&'a @A, &'b @B>"]
 def core.cmp.PartialEqShared {A : Type} {B : Type}
   (PartialEqInst : core.cmp.PartialEq A B) : core.cmp.PartialEq A B := {
   eq := core.cmp.impls.PartialEqShared.eq PartialEqInst
@@ -294,12 +294,12 @@ def core.cmp.PartialOrdShared {A : Type} {B : Type}
   ge := core.cmp.impls.PartialOrdShared.ge PartialOrdInst
 }
 
-@[rust_fun "alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::eq" (keepParams := [true, false])]
+@[expose, rust_fun "alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::eq" (keepParams := [true, false])]
 def alloc.boxed.PartialEqBox.eq
   {T : Type} (PartialEqInst : core.cmp.PartialEq T T) (x y : T) : Result Bool :=
   PartialEqInst.eq x y
 
-@[reducible, rust_trait_impl "core::cmp::PartialEq<Box<@T>, Box<@T>>" (keepParams := [true, false])]
+@[expose, reducible, rust_trait_impl "core::cmp::PartialEq<Box<@T>, Box<@T>>" (keepParams := [true, false])]
 def core.cmp.PartialEqBox {T : Type} (PartialEqInst : core.cmp.PartialEq T T) :
   core.cmp.PartialEq T T := {
   eq := alloc.boxed.PartialEqBox.eq PartialEqInst

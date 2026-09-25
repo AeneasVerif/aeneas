@@ -21,14 +21,14 @@ opaque core.str.iter.IteratorChars.collect
   core.iter.traits.collect.FromIterator B Char) :
   core.str.iter.Chars → Result B
 
-@[reducible, rust_trait_impl
+@[expose, reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::str::iter::Chars<'a>, char>"]
 def core.iter.traits.iterator.IteratorChars :
   core.iter.traits.iterator.Iterator core.str.iter.Chars Char := {
   next := core.str.iter.IteratorChars.next
 }
 
-@[rust_fun "core::str::{str}::chars"]
+@[expose, rust_fun "core::str::{str}::chars"]
 def core.str.Str.chars (s : Str) : Result core.str.iter.Chars :=
   .ok { iter := { slice := s, i := 0 } }
 

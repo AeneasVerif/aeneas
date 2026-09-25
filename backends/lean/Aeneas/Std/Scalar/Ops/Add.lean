@@ -157,7 +157,7 @@ theorem SharedUScalar.Insts.CoreOpsArithAddUScalarUScalar.add_spec
     ⦃ z => (↑z : Nat) = ↑x + ↑y ⦄ :=
   UScalar.add_spec hmax
 
-uscalar def «Shared'S».Insts.«CoreOpsArithAdd'S'S».add (x y : «%S») : Result «%S» :=
+uscalar @[expose] def «Shared'S».Insts.«CoreOpsArithAdd'S'S».add (x y : «%S») : Result «%S» :=
   SharedUScalar.Insts.CoreOpsArithAddUScalarUScalar.add x y
 
 uscalar @[step] theorem «Shared'S».Insts.«CoreOpsArithAdd'S'S».add_spec
