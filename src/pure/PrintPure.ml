@@ -254,12 +254,12 @@ let const_generic_var_to_string (v : const_generic_param) =
   "(" ^ v.name ^ " : " ^ literal_type_to_string v.ty ^ ")"
 
 let integer_type_to_string = Print.integer_type_to_string
-let scalar_value_to_string = Print.scalar_value_to_string
+let integer_value_to_string = Print.integer_value_to_string
 let float_value_to_string = Print.float_value_to_string
 
 let literal_to_string (lit : literal) : string =
   match lit with
-  | VScalar sv -> scalar_value_to_string sv
+  | VScalar sv -> integer_value_to_string sv
   | VFloat fv -> float_value_to_string fv
   | VBool b -> Bool.to_string b
   | VChar c -> Charon.Uchar.to_string c
@@ -460,21 +460,22 @@ let var_to_string (env : fmt_env) (v : var) : string =
 
 let mprojection_elem_to_string (env : fmt_env) (inside : string)
     (pe : mprojection_elem) : string =
-  match pe.pkind with
-  | E.ProjTuple _ -> "(" ^ inside ^ ")." ^ T.FieldId.to_string pe.field_id
-  | E.ProjAdt (adt_id, opt_variant_id) -> (
+  match pe.type_id with
+  | TTuple -> "(" ^ inside ^ ")." ^ T.FieldId.to_string pe.field_id
+  | TAdtId adt_id -> (
       let field_name =
-        match adt_field_to_string env adt_id opt_variant_id pe.field_id with
+        match adt_field_to_string env adt_id pe.variant_id pe.field_id with
         | Some field_name -> field_name
         | None -> T.FieldId.to_string pe.field_id
       in
-      match opt_variant_id with
+      match pe.variant_id with
       | None -> "(" ^ inside ^ ")." ^ field_name
       | Some variant_id ->
           let variant_name =
             adt_variant_from_type_decl_id_to_string env adt_id variant_id
           in
           "(" ^ inside ^ " as " ^ variant_name ^ ")." ^ field_name)
+  | TBuiltin _ -> failwith "Unexpected field projection"
 
 let rec mplace_to_string (env : fmt_env) (p : mplace) : string =
   match p with
@@ -837,14 +838,6 @@ let fun_suffix (lp_id : (LoopId.id * bool) option) : string =
   in
   lp_suff
 
-let llbc_builtin_fun_id_to_string (fid : A.builtin_fun_id) : string =
-  Charon.Print.builtin_fun_id_to_string fid
-
-let llbc_fun_id_to_string (env : fmt_env) (fid : A.fun_id) : string =
-  match fid with
-  | FRegular fid -> fun_decl_id_to_string env fid
-  | FBuiltin fid -> llbc_builtin_fun_id_to_string fid
-
 let pure_builtin_fun_id_to_string (fid : pure_builtin_fun_id) : string =
   match fid with
   | Return -> "@return"
@@ -861,17 +854,27 @@ let pure_builtin_fun_id_to_string (fid : pure_builtin_fun_id) : string =
       | Array -> "@arrayUpdate"
       | Slice -> "@sliceUpdate"
     end
+  | IndexAtIndex array_or_slice -> begin
+      match array_or_slice with
+      | Array -> "@arrayIndex"
+      | Slice -> "@sliceIndex"
+    end
+  | IndexMutAtIndex array_or_slice -> begin
+      match array_or_slice with
+      | Array -> "@arrayIndexMut"
+      | Slice -> "@sliceIndexMut"
+    end
   | Discriminant -> "@discriminant"
   | ResultUnwrapMut -> "@resultUnwrapMut"
   | GetTarget -> "@getTarget"
+  | TargetFeatureEnabled -> "@targetFeatureEnabled"
 
 let regular_fun_id_to_string (env : fmt_env) (fun_id : fun_id) : string =
   match fun_id with
   | FromLlbc (fid, lp_id) ->
       let f =
         match fid with
-        | FunId (FRegular fid) -> fun_decl_id_to_string env fid
-        | FunId (FBuiltin fid) -> llbc_builtin_fun_id_to_string fid
+        | FunId fid -> fun_decl_id_to_string env fid
         | TraitMethod (trait_ref, method_id) ->
             let method_name =
               Charon.GAstUtils.get_method_name env.crate
@@ -907,6 +910,7 @@ let unop_to_string (env : fmt_env) (unop : unop) : string =
 
 let binop_to_string (env : fmt_env) (binop : binop) =
   let int_ty_to_string int_ty = "::<" ^ integer_type_to_string int_ty ^ ">" in
+  let lit_ty_to_string lit_ty = "::<" ^ literal_type_to_string lit_ty ^ ">" in
   let int_tys_to_string int_ty0 int_ty1 =
     "::<"
     ^ integer_type_to_string int_ty0
@@ -920,10 +924,10 @@ let binop_to_string (env : fmt_env) (binop : binop) =
   | BitOr int_ty -> "|" ^ int_ty_to_string int_ty
   | Eq ty -> "==" ^ "::<" ^ ty_to_string env false ty ^ ">"
   | Ne ty -> "!=" ^ "::<" ^ ty_to_string env false ty ^ ">"
-  | Lt int_ty -> "<" ^ int_ty_to_string int_ty
-  | Le int_ty -> "<=" ^ int_ty_to_string int_ty
-  | Ge int_ty -> ">=" ^ int_ty_to_string int_ty
-  | Gt int_ty -> ">" ^ int_ty_to_string int_ty
+  | Lt lit_ty -> "<" ^ lit_ty_to_string lit_ty
+  | Le lit_ty -> "<=" ^ lit_ty_to_string lit_ty
+  | Ge lit_ty -> ">=" ^ lit_ty_to_string lit_ty
+  | Gt lit_ty -> ">" ^ lit_ty_to_string lit_ty
   | Div (om, int_ty) ->
       Print.overflow_mode_to_string om ^ "./" ^ int_ty_to_string int_ty
   | Rem (om, int_ty) ->
@@ -946,7 +950,9 @@ let binop_to_string (env : fmt_env) (binop : binop) =
   | SubChecked int_ty -> "checked.-" ^ int_ty_to_string int_ty
   | MulChecked int_ty -> "checked.*" ^ int_ty_to_string int_ty
   | Cmp int_ty -> "cmp" ^ int_ty_to_string int_ty
+  | BoolAnd -> "&&"
   | BoolOr -> "||"
+  | BoolXor -> "^^"
 
 let fun_or_op_id_to_string (env : fmt_env) (fun_id : fun_or_op_id) : string =
   match fun_id with

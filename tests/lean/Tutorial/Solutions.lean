@@ -452,4 +452,29 @@ theorem add_with_carry_spec
   step as ⟨ c, x' ⟩
   simp_all
 
+
+theorem pseudo_random_spec {T} {h : Hash T}
+  (hash_spec : ∀ x, (h.hash x) ⦃fun _ => True⦄div)
+  :
+  pseudo_random h ⦃fun x => x.val >= 100⦄div := by
+  unfold pseudo_random
+  -- unfold pseudo_random_loop
+  -- if we proceed by unfolding `pseudo_random_loop`, then the proof will be non-terminating.
+  -- instead, we can use the dspec_induction tactic
+  -- note here that we must make a potentially non-obvious decision about
+  -- what to generalize and how to do the induction
+  -- clear new_spec
+  generalize 0#u32 = x
+  revert x
+  dspec_induction pseudo_random_loop
+  intros loop' ih x
+  simp only
+  simp
+  by_cases ((↑x : Nat) < 100)
+  · simp [*]
+    step*
+  · simp [*]
+    grind
+
+
 end tutorial

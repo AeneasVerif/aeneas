@@ -1,12 +1,17 @@
 /- Arrays -/
-import Aeneas.Data.List
-import Aeneas.Tactic.Step.Init
-import Aeneas.Std.Array.Core
-import Aeneas.Std.Core.Default
+module
+public import Aeneas.Data.List
+public import Aeneas.Tactic.Step.Init
+public import Aeneas.Std.Array.Core
+public import Aeneas.Std.Core.Default
+public import Aeneas.Data.ListN
+
+public section
 
 namespace Aeneas.Std
 
 open Result Error WP
+open Aeneas.Data.ListN
 
 local macro_rules
 | `(tactic| get_elem_tactic) => `(tactic| grind)
@@ -15,7 +20,55 @@ local macro_rules
 # Array
 -/
 
-def Array (α : Type u) (n : Usize) := { l : List α // l.length = n.val }
+-- Note that we can't define `Array` as a subtype of `List` (that is:
+-- `{ l : List α // l.length = n.val }`): Lean would then reject the inductive definitions
+-- which use `Array` in a positive position.
+-- See the explanations in `Aeneas/Data/ListN.lean`, as well as the github issue:
+-- https://github.com/AeneasVerif/aeneas/issues/1138.
+structure Array (α : Type u) (n : Usize) where
+  list : ListN α n.val
+deriving BEq, ReflBEq, LawfulBEq, DecidableEq
+
+@[expose, coe]
+def Array.val {α n} (a : Array α n) : List α := a.list.toList
+
+@[simp, scalar_tac_simps, simp_scalar_safe, simp_lists_safe, grind =, agrind =]
+theorem Array.property {α n} (s : Array α n) : s.val.length = n.val := by
+  simp [Array.val, ListN_length]
+
+@[expose] def Array.from {α n} (l : List α) (h : l.length = n.val) : Array α n :=
+  {
+    list := cast (congrArg (ListN α) h) (.fromList l)
+  }
+
+@[simp, simp_lists_safe, grind =, agrind =]
+theorem Array.from_val {α} {n : Usize} (l : List α) (h : l.length = n.val)
+  : (Array.from l h).val = l := by
+  simp [Array.from, Array.val]
+  grind [ListN.from_to_inverse]
+
+@[simp, simp_lists_safe, grind =, agrind =]
+theorem Array.val_from {α n} (s : Array α n) h
+  : Array.from s.val h = s := by
+  rcases s with ⟨l⟩
+  simp [val, Array.from] at *
+  grind [ListN.to_from_inverse (l:=l)]
+
+theorem Array.eq_iff {α n} (s0 s1 : Array α n) : s0 = s1 ↔ s0.val = s1.val := by
+  constructor
+  · grind
+  · intros p
+    simp [val] at p
+    have : s1.list ≍ s0.list := by
+      have := ListN.to_from_inverse (l:=s0.list)
+      have := ListN.to_from_inverse (l:=s1.list)
+      grind
+    cases s0; cases s1
+    grind
+
+@[ext, grind ext, agrind ext]
+theorem Array.ext {α n} (s0 s1 : Array α n) (h : s0.val = s1.val) : s0 = s1 :=
+  (Array.eq_iff s0 s1).mpr h
 
 /-- We need this to coerce arrays to lists without marking `Array` as reducible.
     Also not that we *do not* want to mark `Array` as reducible: it triggers issues.
@@ -23,14 +76,10 @@ def Array (α : Type u) (n : Usize) := { l : List α // l.length = n.val }
 instance (α : Type u) (n : Usize) : CoeOut (Array α n) (List α) where
   coe := λ v => v.val
 
-instance [BEq α] : BEq (Array α n) := SubtypeBEq _
-
-instance [BEq α] [LawfulBEq α] : LawfulBEq (Array α n) := SubtypeLawfulBEq _
-
 instance {α : Type u} {n : Usize} [Inhabited α] : Inhabited (Array α n) :=
-  ⟨ ⟨ List.replicate n.val default, by simp ⟩ ⟩
+  ⟨ .from (List.replicate n.val default) (by simp) ⟩
 
-def Array.empty (α : Type u) : Array α (Usize.ofNat 0) := ⟨ [], by simp ⟩
+@[expose] def Array.empty (α : Type u) : Array α (Usize.ofNat 0) := .from [] (by simp)
 
 /- Registering some theorems for `scalar_tac` -/
 @[scalar_tac_simps, grind =, agrind =]
@@ -46,8 +95,13 @@ abbrev Array.v {α : Type u} {n : Usize} (v : Array α n) : List α := v.val
 example {α: Type u} {n : Usize} (v : Array α n) : v.length ≤ Usize.max := by
   scalar_tac
 
-def Array.make {α : Type u} (n : Usize) (init : List α) (hl : init.length = n.val := by simp) :
-  Array α n := ⟨ init, by apply hl ⟩
+@[expose] def Array.make {α : Type u} (n : Usize) (init : List α) (hl : init.length = n.val := by simp) :
+  Array α n := .from init (by apply hl)
+
+@[simp, simp_lists_safe, grind =, agrind =]
+theorem Array.make_val {α : Type u} (n : Usize) (init : List α) (hl : init.length = n.val) :
+  (Array.make n init hl).val = init := by
+  simp [Array.make]
 
 example : Array Int (Usize.ofNat 2) := Array.make (Usize.ofNat 2) [0, 1] (by simp)
 
@@ -102,18 +156,19 @@ theorem Array.getElem!_Usize_eq {α : Type u} [Inhabited α] {n : Usize} (v : Ar
 abbrev Array.slice {α : Type u} {n : Usize} [Inhabited α] (v : Array α n) (i j : Nat) : List α :=
   v.val.slice i j
 
-def Array.index_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) : Result α :=
+@[expose] def Array.index_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) : Result α :=
   match v[i]? with
   | none => fail .arrayOutOfBounds
   | some x => ok x
 
 -- For initialization
+@[expose, rust_fun "core::array::repeat" -canFail -lift (keepTraitClauses := [false])]
 def Array.repeat {α : Type u} (n : Usize) (x : α) : Array α n :=
-  ⟨ List.replicate n.val x, by simp_all ⟩
+  .from (List.replicate n.val x) (by simp_all)
 
 @[simp]
 theorem Array.repeat_val (n : Usize) (x : α) : (Array.repeat n x).val = List.replicate n.val x := by
-  simp only [Array.repeat]
+  simp only [Array.repeat, Array.from_val]
 
 @[step]
 theorem Array.index_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize)
@@ -121,11 +176,11 @@ theorem Array.index_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usi
   (v.index_usize i) ⦃ x => x = v.val[i.val] ⦄ := by
   grind [index_usize]
 
-def Array.set {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) : Array α n :=
-  ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
+@[expose] def Array.set {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) : Array α n :=
+  .from (v.val.set i.val x) (by have := v.property; simp [*])
 
-def Array.set_opt {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: Option α) : Array α n :=
-  ⟨ v.val.set_opt i.val x, by have := v.property; simp [*] ⟩
+@[expose] def Array.set_opt {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: Option α) : Array α n :=
+  .from (v.val.set_opt i.val x) (by have := v.property; simp [*])
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_safe, grind =, agrind =]
 theorem Array.set_val_eq {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) :
@@ -208,11 +263,11 @@ theorem Array.getElem_Nat_set_eq
 theorem Array.set_length {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) :
   (v.set i x).length = v.length := by simp
 
-def Array.update {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) : Result (Array α n) :=
+@[expose] def Array.update {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) : Result (Array α n) :=
   match v[i]? with
   | none => fail .arrayOutOfBounds
   | some _ =>
-    ok ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
+    ok (.from (v.val.set i.val x) (by have := v.property; simp [*]))
 
 @[step]
 theorem Array.update_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x : α)
@@ -223,7 +278,7 @@ theorem Array.update_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (
   simp at *
   split <;> simp_all
 
-def Array.index_mut_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) :
+@[expose] def Array.index_mut_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) :
   Result (α × (α -> Array α n)) := do
   let x ← index_usize v i
   ok (x, set v i)
@@ -232,15 +287,16 @@ def Array.index_mut_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) :
 theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize)
   (hbound : i.val < v.length) :
   v.index_mut_usize i ⦃ x back => x = v.val[i.val] ∧ back = set v i ⦄ := by
-  simp only [index_mut_usize, Bind.bind, bind]
-  have ⟨ x, h ⟩ := spec_imp_exists (index_usize_spec v i hbound)
-  simp [h]
+  simp only [index_mut_usize, Bind.bind]
+  apply spec_bind (index_usize_spec v i hbound)
+  intro x hx
+  simp [hx]
 
 @[simp]
 theorem Array.set_getElem!_eq {α} {n : Usize} [Inhabited α] (x : Array α n) (i : Usize) :
   x.set i (x.val[i.val]!) = x := by
   have := @List.set_getElem_self _ x.val i.val
-  simp only [Array, Subtype.ext_iff, set_val_eq, List.set_getElem!]
+  simp only [Array.eq_iff, set_val_eq, List.set_getElem!]
 
 @[simp]
 theorem Array.set_getElem_eq {α} {n : Usize} (x : Array α n) (i : Usize) (h : i.val < x.length) :
@@ -249,15 +305,15 @@ theorem Array.set_getElem_eq {α} {n : Usize} (x : Array α n) (i : Usize) (h : 
     simpa using h
   have hself : x.val.set i.val x.val[i.val] = x.val :=
     List.set_getElem_self (as := x.val) (i := i.val) (h := h')
-  simp only [Array, Subtype.ext_iff, set_val_eq] at hself ⊢
+  simp only [Array.eq_iff, set_val_eq] at hself ⊢
   exact hself
 
 @[simp↓, simp_lists_safe↓]
 theorem Array.getElem_set_eq {α} {n : Usize} (v : Array α n) (i : Usize) (x : α) (h : i.val < (v.set i x).length) :
   (v.set i x)[i]'h = x := by
   cases v
-  unfold set getElem instGetElemArrayUsizeLtNatValLengthValListEq
-  simp only [List.getElem_set_self]
+  unfold set getElem instGetElemArrayUsizeLtNatValLengthVal
+  simp only [Array.from_val, List.getElem_set_self]
 
 @[simp↓, simp_lists_safe↓]
 theorem Array.getElem_set_eq' {α} {n : Usize} (v : Array α n) (i j : Usize) (x : α) (h : j.val < (v.set i x).length)
@@ -270,29 +326,29 @@ theorem Array.getElem_set_neq {α} {n : Usize} (v : Array α n) (i j : Usize) (x
   (h : j.val < (v.set i x).length) (h' : i ≠ j) :
   (v.set i x)[j]'h = v[j] := by
   cases v
-  unfold set getElem instGetElemArrayUsizeLtNatValLengthValListEq
+  unfold set getElem instGetElemArrayUsizeLtNatValLengthVal
   simp only [ne_eq, UScalar.neq_to_neq_val] at *
   simp_lists [List.getElem_set_ne]
 
 /-- Small helper (this function doesn't model a specific Rust function) -/
-def Array.clone {α : Type u} {n : Usize} (clone : α → Result α) (s : Array α n) : Result (Array α n) := do
+@[expose] def Array.clone {α : Type u} {n : Usize} (clone : α → Result α) (s : Array α n) : Result (Array α n) := do
   let s' ← List.clone clone s.val
-  ok ⟨ s', by have:= s'.property; scalar_tac ⟩
+  ok (.from s' (by have:= s'.property; scalar_tac))
 
 theorem Array.clone_length {α : Type u} {n : Usize} (clone : α → Result α) (s s' : Array α n) (h : Array.clone clone s = ok s') :
   s'.length = s.length := by
   simp [Array.clone] at h
-  simp [List.clone] at h
-  split at h <;> simp_all
+  cases h2 : List.clone clone ↑s <;> simp_all
 
 @[step]
 theorem Array.clone_spec {α : Type u} {n : Usize} {clone : α → Result α} {s : Array α n} (h : ∀ x ∈ s.val, clone x = ok x) :
   Array.clone clone s ⦃ s' => s' = s ⦄ := by
   simp only [Array.clone]
-  have ⟨ l', h ⟩ := spec_imp_exists (List.clone_spec h)
-  simp [h]
+  apply spec_bind (List.clone_spec h)
+  intro l' hl'
+  simp [hl']
 
-@[rust_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone"]
+@[expose, rust_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone"]
 def core.array.CloneArray.clone
   {T : Type} {N : Usize} (cloneInst : core.clone.Clone T) (a : Array T N) : Result (Array T N) :=
   Array.clone cloneInst.clone a
@@ -302,10 +358,11 @@ theorem core.array.CloneArray.clone_spec {T : Type} {N : Usize} (cloneInst : cor
   (h : ∀ x ∈ a.val, cloneInst.clone x = ok x) :
   core.array.CloneArray.clone cloneInst a ⦃ a' => a = a' ⦄:= by
   unfold clone
-  have := spec_imp_exists (Array.clone_spec h)
-  grind
+  apply spec_mono (Array.clone_spec h)
+  intro a' ha'
+  exact ha'.symm
 
-@[rust_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone_from"]
+@[expose, rust_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone_from"]
 def core.array.CloneArray.clone_from {T : Type} {N : Usize} (cloneInst : core.clone.Clone T)
   (_self source : Array T N) : Result (Array T N) :=
   Array.clone cloneInst.clone source
@@ -315,24 +372,30 @@ theorem core.array.CloneArray.clone_from_spec {T : Type} {N : Usize} (cloneInst 
   (self source : Array T N) (h : ∀ x ∈ source.val, cloneInst.clone x = ok x) :
   core.array.CloneArray.clone_from cloneInst self source ⦃ source' => source = source' ⦄ := by
   unfold clone_from
-  have := spec_imp_exists (Array.clone_spec h)
-  grind
+  apply spec_mono (Array.clone_spec h)
+  intro source' hsource'
+  exact hsource'.symm
 
-@[reducible, rust_trait_impl "core::clone::Clone<[@T; @N]>"]
+@[expose, reducible, rust_trait_impl "core::clone::Clone<[@T; @N]>"]
 def core.clone.CloneArray {T : Type} (N : Usize)
   (cloneCloneInst : core.clone.Clone T) : core.clone.Clone (Array T N) := {
   clone := core.array.CloneArray.clone cloneCloneInst
   clone_from := core.array.CloneArray.clone_from cloneCloneInst
 }
 
-def Array.setSlice! {α : Type u} {n} (s : Array α n) (i : ℕ) (s' : List α) : Array α n :=
-  ⟨s.val.setSlice! i s', by scalar_tac⟩
+@[expose] def Array.setSlice! {α : Type u} {n} (s : Array α n) (i : ℕ) (s' : List α) : Array α n :=
+  .from (s.val.setSlice! i s') (by scalar_tac)
+
+@[simp, simp_lists_safe, grind =, agrind =]
+theorem Array.setSlice!_val {α : Type u} {n} (s : Array α n) (i : ℕ) (s' : List α) :
+  (s.setSlice! i s').val = s.val.setSlice! i s' := by
+  simp [Array.setSlice!]
 
 @[simp_lists_safe]
 theorem Array.setSlice!_getElem!_prefix {α} {n} [Inhabited α]
   (s : Array α n) (s' : List α) (i j : ℕ) (h : j < i) :
   (s.setSlice! i s')[j]! = s[j]! := by
-  simp only [Array.setSlice!, Array.getElem!_Nat_eq]
+  simp only [Array.setSlice!, Array.from_val, Array.getElem!_Nat_eq]
   simp_lists
 
 @[simp_lists_safe]
@@ -341,16 +404,17 @@ theorem Array.setSlice!_getElem_prefix {α} {n}
   (s.setSlice! i s')[j] = s[j] := by
   have hj' : j < (s.setSlice! i s').length := by scalar_tac
   have h1 : (s.setSlice! i s')[j]? = s[j]? := by
-    simp only [Array.getElem?_Nat_eq, Array.setSlice!]
+    simp only [Array.getElem?_Nat_eq, Array.setSlice!, Array.from_val]
     simp_lists [List.setSlice!_getElem?_prefix]
-  simpa [Array.getElem?_Nat_eq, Array.getElem_Nat_eq,
-    List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2] using h1
+  simp only [Array.getElem?_Nat_eq, List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2,
+    Option.some.injEq] at h1
+  exact h1
 
 @[simp_lists_safe]
 theorem Array.setSlice!_getElem!_middle {α} {n} [Inhabited α]
   (s : Array α n) (s' : List α) (i j : ℕ) (h : i ≤ j ∧ j - i < s'.length ∧ j < s.length) :
   (s.setSlice! i s')[j]! = s'[j - i]! := by
-  simp only [Array.setSlice!, Array.getElem!_Nat_eq]
+  simp only [Array.setSlice!, Array.from_val, Array.getElem!_Nat_eq]
   simp_lists
 
 @[simp_lists_safe]
@@ -361,15 +425,16 @@ theorem Array.setSlice!_getElem_middle {α} {n}
     scalar_tac
   have hji : j - i < s'.length := h.2.1
   have h1 : (s.setSlice! i s')[j]? = s'[j - i]? := by
-    simp only [Array.getElem?_Nat_eq, Array.setSlice!]
+    simp only [Array.getElem?_Nat_eq, Array.setSlice!, Array.from_val]
     simp_lists [List.setSlice!_getElem?_middle]
-  simpa [Array.getElem?_Nat_eq, Array.getElem_Nat_eq,
-    List.getElem?_eq_getElem hj', List.getElem?_eq_getElem hji] using h1
+  simp only [Array.getElem?_Nat_eq, List.getElem?_eq_getElem hj', List.getElem?_eq_getElem hji,
+    Option.some.injEq] at h1
+  exact h1
 
 theorem Array.setSlice!_getElem!_suffix {α} {n} [Inhabited α]
   (s : Array α n) (s' : List α) (i j : ℕ) (h : i + s'.length ≤ j) :
   (s.setSlice! i s')[j]! = s[j]! := by
-  simp only [Array.setSlice!, Array.getElem!_Nat_eq]
+  simp only [Array.setSlice!, Array.from_val, Array.getElem!_Nat_eq]
   simp_lists
 
 theorem Array.setSlice!_getElem_suffix {α} {n}
@@ -377,13 +442,13 @@ theorem Array.setSlice!_getElem_suffix {α} {n}
   (s.setSlice! i s')[j] = s[j] := by
   have hj' : j < (s.setSlice! i s').length := by scalar_tac
   have h1 : (s.setSlice! i s')[j]? = s[j]? := by
-    simp only [Array.getElem?_Nat_eq, Array.setSlice!]
+    simp only [Array.getElem?_Nat_eq, Array.setSlice!, Array.from_val]
     simp_lists [List.setSlice!_getElem?_suffix]
-  simpa [Array.getElem?_Nat_eq, Array.getElem_Nat_eq,
-    List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2] using h1
-
+  simp only [Array.getElem?_Nat_eq, List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2,
+    Option.some.injEq] at h1
+  exact h1
 /- Remark: see the comment for `core.default.DefaultArray` -/
-@[rust_fun "core::array::{core::default::Default<[@T; @N]>}::default"]
+@[expose, rust_fun "core::array::{core::default::Default<[@T; @N]>}::default"]
 def core.default.DefaultArray.default {T : Type} (N : Usize) (defaultInst : core.default.Default T) : Result (Array T N) := do
   let x ← defaultInst.default
   .ok (Array.repeat N x)
@@ -393,20 +458,26 @@ def core.default.DefaultArray.default {T : Type} (N : Usize) (defaultInst : core
    the case where the length is equal to 0, because in this case we don't need the type of
    the elements to have a default value). We factor the cases where `N` is ≠ 0 in the Lean model.
  -/
-@[reducible, rust_trait_impl "core::default::Default<[@T; @N]>"]
+@[expose, reducible, rust_trait_impl "core::default::Default<[@T; @N]>"]
 def core.default.DefaultArray {T : Type} (N : Usize)
   (defaultInst : core.default.Default T) : core.default.Default (Array T N) := {
   default := core.default.DefaultArray.default N defaultInst
 }
 
-@[rust_fun "core::array::{core::default::Default<[@T; 0]>}::default"]
+@[expose, rust_fun "core::array::{core::default::Default<[@T; 0]>}::default"]
 def core.default.DefaultArrayEmpty.default (T : Type) : Result (Array T (Usize.ofNat 0)) :=
-  ok ⟨ [], by scalar_tac ⟩
+  ok (.from []  (by scalar_tac))
 
 /- See the comments for `core.default.DefaultArray` -/
-@[reducible, rust_trait_impl "core::default::Default<[@T; 0]>"]
+@[expose, reducible, rust_trait_impl "core::default::Default<[@T; 0]>"]
 def core.default.DefaultArrayEmpty (T : Type) : core.default.Default (Array T (Usize.ofNat 0)) := {
   default := core.default.DefaultArrayEmpty.default T
+}
+
+@[expose, reducible, rust_trait_impl "core::marker::Copy<[@T; @N]>"]
+def Array.Insts.CoreMarkerCopy {T : Type} (N : Std.Usize)
+  (markerCopyInst : core.marker.Copy T) : core.marker.Copy (Array T N) := {
+  cloneInst := core.clone.CloneArray N markerCopyInst.cloneInst
 }
 
 end Aeneas.Std

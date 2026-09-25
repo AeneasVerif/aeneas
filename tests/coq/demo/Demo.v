@@ -9,13 +9,13 @@ Local Open Scope Primitives_scope.
 Module Demo.
 
 (** [core::num::{u32}::wrapping_add]:
-    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2583:8-2583:58
+    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2681:8-2681:58
     Name pattern: [core::num::{u32}::wrapping_add]
     Visibility: public *)
 Axiom core_num_U32_wrapping_add : u32 -> u32 -> result u32.
 
 (** [core::num::{u32}::wrapping_sub]:
-    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2620:8-2620:58
+    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2718:8-2718:58
     Name pattern: [core::num::{u32}::wrapping_sub]
     Visibility: public *)
 Axiom core_num_U32_wrapping_sub : u32 -> u32 -> result u32.

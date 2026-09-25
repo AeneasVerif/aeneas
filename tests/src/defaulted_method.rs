@@ -1,4 +1,4 @@
-//@ [fstar,coq] subdir=misc
+//@ [!lean] skip
 trait Trait {
     fn provided_method(&self) -> u32 {
         self.required_method()

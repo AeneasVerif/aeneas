@@ -1,7 +1,11 @@
-import Lean
-import AeneasMeta.Utils
-import Aeneas.Tactic.Solver.Grind.Init
-import Aeneas.Tactic.Step.Init
+module
+public import Lean
+public import AeneasMeta.Utils
+public meta import AeneasMeta.Simp.Simp
+public import Mathlib.Tactic.Simproc.ExistsAndEq
+public import Aeneas.Tactic.Solver.Grind.Init
+public meta import Aeneas.Tactic.Step.Init
+public section
 
 namespace Aeneas
 
@@ -14,7 +18,7 @@ open Lean Elab Meta Tactic TacticM
 
     `eliminate` controls which free variables to try clearing from the context before collecting
     escaping variables -/
-def inferPost (goal : MVarId) (eliminate : LocalDecl → Bool := fun _ => true) :
+meta def inferPost (goal : MVarId) (eliminate : LocalDecl → Bool := fun _ => true) :
     TacticM MVarId := withTraceNode `Step (fun _ => do pure m!"inferPost") <| goal.withContext do
   traceGoalWithNode "metavariable context"
   let goalTy ← instantiateMVars (← goal.getType)
@@ -56,6 +60,12 @@ def inferPost (goal : MVarId) (eliminate : LocalDecl → Bool := fun _ => true) 
     -- Wrap with existentials over all escaping vars
     let existsBody ← escapingLocalDecls.foldrM (fun decl acc => do
         mkAppM ``Exists #[← mkLambdaFVars #[.fvar decl.fvarId] acc]) body
+    -- Simplify the inferred post-condition *before* it is used
+    let (ctx, simprocs) ← Aeneas.Simp.mkSimpCtx true { failIfUnchanged := false } .simp
+      { addSimpThms := #[``exists_prop, ``exists_and_left, ``exists_and_right,
+                         ``and_true, ``true_and],
+        addSimprocs := #[``ExistsAndEq.existsAndEq] }
+    let existsBody := (← Lean.Meta.simp existsBody ctx simprocs).1.expr
     mkLambdaFVars boundVars existsBody
   trace[Step] m!"inferred postcondition: {←ppExpr postExpr}"
   postMVarId.assign postExpr

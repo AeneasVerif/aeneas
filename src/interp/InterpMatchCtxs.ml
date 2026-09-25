@@ -291,8 +291,9 @@ let rec match_types (span : Meta.span) ~(recover : bool) (ctx0 : eval_ctx)
     match_types span ~recover ctx0 ctx1 match_distinct_types match_regions
   in
   match (ty0, ty1) with
-  | ( TAdt { id = id0; generics = generics0 },
-      TAdt { id = id1; generics = generics1 } ) ->
+  | TAdt ({ id = id0; generics = generics0; _ } as tref0), TAdt tref1 ->
+      let id1 = tref1.id in
+      let generics1 = tref1.generics in
       [%cassert_recover] recover span (id0 = id1) "Not the same ADT ids";
       [%cassert_recover] recover span
         (phys_eq generics0.const_generics generics1.const_generics)
@@ -314,18 +315,18 @@ let rec match_types (span : Meta.span) ~(recover : bool) (ctx0 : eval_ctx)
           (List.combine generics0.types generics1.types)
       in
       let generics = { regions; types; const_generics; trait_refs } in
-      TAdt { id; generics }
-  | TArray (ty0, len0), TArray (ty1, len1) ->
+      TAdt { tref0 with id; generics }
+  | TArray (ty0, len0, _), TArray (ty1, len1, _) ->
       [%cassert_recover] recover span (len0 = len1)
         "Arrays with different lengths";
-      TArray (match_rec ty0 ty1, len0)
-  | TSlice ty0, TSlice ty1 -> TSlice (match_rec ty0 ty1)
+      TArray (match_rec ty0 ty1, len0, None)
+  | TSlice (ty0, _), TSlice (ty1, _) -> TSlice (match_rec ty0 ty1, None)
   | TVar vid0, TVar vid1 ->
       [%cassert_recover] recover span (vid0 = vid1)
         "Not the same type variables";
       let vid = vid0 in
       TVar vid
-  | TLiteral lty0, TLiteral lty1 ->
+  | TScalar lty0, TScalar lty1 ->
       [%cassert_recover] recover span (lty0 = lty1) "Not the same literal types";
       ty0
   | TNever, TNever -> ty0
@@ -398,16 +399,18 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
               (* If we get here, either there is a typing inconsistency, or we are
                  trying to match a reserved borrow, which shouldn't happen because
                  reserved borrow should be eliminated very quickly - they are introduced
-                 just before function calls which activate them *)
-              [%craise] M.span "Unexpected"
+                 just before function calls which activate them. *)
+              [%craise_recover] M.recover M.span "Unexpected"
         in
         { value = VBorrow bc; ty }
     | VLoan lc0, VLoan lc1 -> begin
         match (lc0, lc1) with
         | VSharedLoan (id0, sv0), VSharedLoan (id1, sv1) ->
             let sv = match_rec sv0 sv1 in
+            (* If the two loans have the same id it is simple. Otherwise we abort -
+               in theory we would need to introduce a fresh abstraction. *)
             [%cassert_recover] M.recover M.span
-              (not (value_has_borrows sv.value))
+              (id0 = id1 || not (value_has_borrows sv.value))
               "The join of nested borrows is not supported yet";
             M.match_shared_loans match_rec ctx0 ctx1 ty id0 id1 sv
         | VMutLoan id0, VMutLoan id1 ->
@@ -528,8 +531,8 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
                    there are no nested borrows *)
                 v0
             | _ ->
-                (* We should get there only if there are nested borrows *)
-                [%craise_recover] M.recover M.span "Unexpected")
+                (* We get there when there are nested borrows *)
+                M.match_aproj_shared_borrows ctx0 ctx1 v0.ty asb0 v1.ty asb1 ty)
         | _ ->
             (* TODO: getting there is not necessarily inconsistent (it may
                just be because the environments don't match) so we may want
@@ -1710,6 +1713,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
   let match_aproj_borrows _ _ _ _ _ _ _ _ _ _ =
     [%craise_recover] S.recover span "Unreachable"
 
+  let match_aproj_shared_borrows _ _ _ _ _ _ _ =
+    [%craise_recover] S.recover span "Unimplemented"
+
   let match_aproj_loans _ _ _ _ _ _ _ _ _ _ =
     [%craise_recover] S.recover span "Unreachable"
 
@@ -2112,6 +2118,30 @@ struct
     let proj : symbolic_proj = { sv_id; proj_ty } in
     let proj = AProjLoans { proj; consumed = []; borrows = [] } in
     { value = ASymbolic (PNone, proj); ty }
+
+  let match_aproj_shared_borrows (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0
+      (asb0 : abstract_shared_borrows) _ty1 (asb1 : abstract_shared_borrows) ty
+      : tavalue =
+    (* We are checking whether two environments are equivalent: for now we
+       do something simple by matching the abstract shared borrows two by two. *)
+    if List.length asb0 <> List.length asb1 then
+      raise (Distinct "match_aproj_shared_borrows: not the same length");
+    let match_asb (asb0 : abstract_shared_borrow)
+        (asb1 : abstract_shared_borrow) : abstract_shared_borrow =
+      match (asb0, asb1) with
+      | AsbBorrow (bid0, _sid0), AsbBorrow (bid1, _sid1) ->
+          let bid = match_borrow_id bid0 bid1 in
+          (* It's always safer to refresh shared borrow ids *)
+          let sid = ctx0.fresh_shared_borrow_id () in
+          AsbBorrow (bid, sid)
+      | AsbProjReborrows proj0, AsbProjReborrows proj1 ->
+          let sv_id = match_symbolic_value_ids proj0.sv_id proj1.sv_id in
+          let proj_ty = match_rtys ctx0 ctx1 proj0.proj_ty proj1.proj_ty in
+          AsbProjReborrows { sv_id; proj_ty }
+      | _ -> raise (Distinct "match_aproj_shared_borrows: distinct borrows")
+    in
+    let asb = List.map2 match_asb asb0 asb1 in
+    { value = ABorrow (AProjSharedBorrow asb); ty }
 
   let match_avalues (_ : tvalue_matcher) (ctx0 : eval_ctx) (ctx1 : eval_ctx) v0
       v1 =

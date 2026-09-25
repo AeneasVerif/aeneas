@@ -72,14 +72,14 @@ let type_borrows_info_init : type_borrows_info =
     contains_nested_mut = false;
   }
 
-(** Return true if a type declaration is a structure with unnamed fields.
+(** Return true if a type declaration is a structure with positional fields.
 
     Note that there are two possibilities:
-    - either all the fields are named
-    - or none of the fields are named *)
+    - either all the fields are positional
+    - or none of the fields are positional *)
 let type_decl_is_tuple_struct (x : type_decl) : bool =
   match x.kind with
-  | Struct fields -> List.for_all (fun f -> f.field_name = None) fields
+  | Struct fields -> List.for_all (fun f -> f.is_positional) fields
   | _ -> false
 
 let initialize_g_type_info (is_tuple_struct : bool) ~(is_rec : bool)
@@ -284,7 +284,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
   let rec analyze (span : Meta.span option) (expl_info : expl_info)
       (ty_info : partial_type_info) (ty : ty) : partial_type_info =
     match ty with
-    | TLiteral _ | TNever | TDynTrait _ -> ty_info
+    | TScalar _ | TNever | TDynTrait _ -> ty_info
     | TTraitType (tref, _, _) ->
         (* TODO: normalize the trait types.
            For now we only emit a warning because it makes some tests fail. *)
@@ -358,15 +358,15 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
     | TRawPtr (rty, _) ->
         (* TODO: not sure what to do here *)
         analyze span expl_info ty_info rty
-    | TArray (ty, _) | TSlice ty ->
+    | TArray (ty, _, _) | TSlice (ty, _) ->
         (* Nothing to update: just explore the type parameters *)
         analyze span expl_info ty_info ty
-    | TAdt { id = TTuple | TBuiltin (TBox | TStr); generics } ->
+    | TAdt { generics; builtin = Some (TTuple | TBox | TStr); _ } ->
         (* Nothing to update: just explore the type parameters *)
         List.fold_left
           (fun ty_info ty -> analyze span expl_info ty_info ty)
           ty_info generics.types
-    | TAdt { id = TAdtId adt_id; generics } ->
+    | TAdt { id = adt_id; generics; builtin = None } ->
         (* Lookup the information for this type definition *)
         let adt_info =
           [%silent_unwrap_opt_span] span (TypeDeclId.Map.find_opt adt_id infos)
@@ -722,8 +722,9 @@ let compute_outlive_proj_ty (span : Meta.span option)
         | TAdt adt -> begin
             (* TODO: we need to handle those *)
             [%sanity_check_opt_span] span (adt.generics.trait_refs = []);
-            match adt.id with
-            | TAdtId id ->
+            match adt.builtin with
+            | None ->
+                let id = adt.id in
                 (* Lookup the declaration and use the region constraints
                    to check which regions outlive the projected regions. *)
                 let decl =
@@ -799,13 +800,10 @@ let compute_outlive_proj_ty (span : Meta.span option)
                     let ty, r = pred.binder_value in
                     outlive_visitor#visit_ty r ty)
                   types_outlive
-            | TTuple -> super#visit_ty outer ty
-            | TBuiltin builtin_ty -> (
-                match builtin_ty with
-                | TBox | TStr -> super#visit_ty outer ty)
+            | Some (TTuple | TBox | TStr) -> super#visit_ty outer ty
           end
         | TArray _ | TSlice _ -> super#visit_ty outer ty
-        | TVar _ | TLiteral _ | TNever -> ()
+        | TVar _ | TScalar _ | TNever -> ()
         | TRef (r, ref_ty, _) ->
             self#visit_region outer r;
             let outer = r :: outer in
@@ -933,3 +931,126 @@ let compute_outlive_proj_ty (span : Meta.span option)
     (RegionId.Set.inter outlive_regions regions = RegionId.Set.empty);
 
   outlive_regions
+
+(** Detect "implied bounds" that relate a locally-bound (higher-ranked) region
+    to a free region, and reject such cases.
+
+    A higher-ranked trait bound or arrow type (e.g.
+    [for<'a> Trait<Pair<'a, 'b>>]) may, through the implied bounds of the types
+    it mentions (here [Pair<'a, 'b>] where [struct Pair<'a, 'b: 'a>]), introduce
+    an outlives constraint between the locally-bound region ['a] and the free
+    region ['b]. Such constraints are hard to take into account so for now we
+    detect such cases and reject them.
+
+    Such implied bounds come from two sources:
+    - the [regions_outlive] / [types_outlive] predicates of the declarations of
+      the ADTs mentioned in the types (Charon materializes them transitively);
+    - the borrows we dive into: in a borrow [&'r T], the lifetime ['r] of the
+      borrow must be shorter than (i.e. is outlived by) every lifetime appearing
+      in the referent [T]. We track the borrow regions we have dived into to
+      check these. *)
+let check_no_bound_free_implied_bounds (span : Meta.span option)
+    (type_decls : type_decl TypeDeclId.Map.t) (tys : ty list) : unit =
+  let is_bound (r : region) =
+    match r with
+    | RVar (Bound _) -> true
+    | _ -> false
+  in
+  let is_free (r : region) =
+    match r with
+    | RVar (Free _) -> true
+    | _ -> false
+  in
+  (* The constraint "[r0] outlives [r1]" is problematic if it relates a
+     locally-bound region and a free one. *)
+  let check_pair (r0 : region) (r1 : region) : unit =
+    if (is_bound r0 && is_free r1) || (is_free r0 && is_bound r1) then
+      [%craise_opt_span] span
+        "Unimplemented: found an occurrence of a lifetime constraint relating\n\
+        \         a higher-ranked lifetime to a free lifetime."
+  in
+  let regions_of_ty (ty : ty) : region list =
+    let acc = ref [] in
+    let v =
+      object
+        inherit [_] iter_ty
+        method! visit_region _ r = acc := r :: !acc
+      end
+    in
+    v#visit_ty () ty;
+    !acc
+  in
+  let visitor =
+    object (self)
+      inherit [_] iter_ty as super
+
+      (* [outer] is the list of borrow regions we have dived into: the referent
+         of a borrow must outlive the borrow, so every region we encounter must
+         outlive each of the [outer] borrow regions. *)
+      method! visit_region (outer : region list) (r : region) =
+        List.iter (fun o -> check_pair r o) outer
+
+      method! visit_ty (outer : region list) (ty : ty) =
+        match ty with
+        | TRef (r, ref_ty, _) ->
+            (* [r] itself must outlive the outer borrow regions. *)
+            self#visit_region outer r;
+            (* The regions of [ref_ty] must outlive [r] (the borrow's lifetime
+               is shorter than the lifetimes appearing in the referent), as well
+               as the outer borrow regions: we record [r] and dive in. *)
+            self#visit_ty (r :: outer) ref_ty
+        | TAdt { id; generics = adt_generics; builtin } ->
+            (* The implied bounds coming from the ADT's own declaration
+               (constraints between its lifetime/type parameters). *)
+            (match builtin with
+            | None -> (
+                match TypeDeclId.Map.find_opt id type_decls with
+                | None -> ()
+                | Some decl ->
+                    let subst =
+                      Charon.Substitute.make_subst_from_generics decl.generics
+                        adt_generics Self
+                    in
+                    let preds =
+                      Charon.Substitute.predicates_substitute subst
+                        decl.generics
+                    in
+                    (* [r0] outlives [r1] *)
+                    List.iter
+                      (fun (p : (region, region) outlives_pred region_binder) ->
+                        let r0, r1 = p.binder_value in
+                        check_pair r0 r1)
+                      preds.regions_outlive;
+                    (* [ty] outlives [r]: every region of [ty] outlives [r] *)
+                    List.iter
+                      (fun (p : (ty, region) outlives_pred region_binder) ->
+                        let ty, r = p.binder_value in
+                        List.iter (fun rt -> check_pair rt r) (regions_of_ty ty))
+                      preds.types_outlive)
+            | _ -> ());
+            (* Dive into the generic arguments. The region arguments are checked
+               against [outer] by [visit_region], the type arguments are
+               recursed into. *)
+            super#visit_ty outer ty
+        | _ -> super#visit_ty outer ty
+    end
+  in
+  List.iter (visitor#visit_ty []) tys
+
+(** Check that a function signature does not introduce an implied bound relating
+    a locally-bound (higher-ranked) region to a free region (see
+    {!check_no_bound_free_implied_bounds}). We look at the input/output types as
+    well as the types appearing in the (possibly higher-ranked) trait clauses.
+*)
+let check_fun_decl_no_bound_free_implied_bounds
+    (type_decls : type_decl TypeDeclId.Map.t) (f : fun_decl) : unit =
+  let span = Some f.item_meta.span in
+  let ({ inputs; output; _ } : fun_sig) = f.signature in
+  (* The types mentioned in the (possibly higher-ranked) trait clauses. *)
+  let clause_tys =
+    List.concat_map
+      (fun (c : trait_param) -> c.trait.binder_value.generics.types)
+      f.generics.trait_clauses
+  in
+  check_no_bound_free_implied_bounds span type_decls
+    ((output :: inputs) @ clause_tys)

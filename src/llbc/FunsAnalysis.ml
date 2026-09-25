@@ -7,6 +7,7 @@
       translate it) *)
 
 open LlbcAst
+open LlbcAstUtils
 open ExpressionsUtils
 open Charon.GAstUtils
 open Errors
@@ -42,10 +43,9 @@ let lookup_fun_info (infos : modules_funs_info) (id : FunOrMethodId.id) :
 
 let fun_or_method_id_of_fn_ptr (kind : fn_ptr_kind) : FunOrMethodId.id option =
   match kind with
-  | FunId (FRegular id) -> Some (FunOrMethodId.Fun id)
+  | Fun id -> Some (FunOrMethodId.Fun id)
   | TraitMethod (trait_ref, method_id) ->
       Some (FunOrMethodId.of_trait_method trait_ref method_id)
-  | FunId (FBuiltin _) -> None
 
 let lookup_fun_decl_info (infos : modules_funs_info) (id : FunDeclId.id) :
     fun_info option =
@@ -178,7 +178,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
             | BinaryOp (bop, _, _) ->
                 can_fail := binop_can_fail bop || !can_fail
 
-          method! visit_Call env call =
+          method! visit_Call env call on_unwind =
             (match call.func with
             | FnOpDynamic _ ->
                 (* Ignoring this: we lookup the called function upon creating
@@ -186,16 +186,13 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
                 ()
             | FnOpRegular func -> (
                 match func.kind with
-                | FunId (FRegular id) -> self#visit_fid env id
-                | FunId (FBuiltin id) ->
-                    (* None of the builtin functions can diverge nor are considered stateful *)
-                    can_fail := !can_fail || Builtin.builtin_fun_can_fail id
+                | Fun id -> self#visit_fid env id
                 | TraitMethod _ ->
                     (* We consider trait functions can fail, but can not diverge and are not stateful.
                        TODO: this may cause issues if we use use a fuel parameter.
                     *)
                     can_fail := true));
-            super#visit_Call env call
+            super#visit_Call env call on_unwind
 
           method! visit_Panic env =
             self#may_fail true;
@@ -208,7 +205,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
       in
       (* Sanity check: global bodies don't contain stateful calls *)
       [%cassert] f.item_meta.span
-        (Option.is_none f.is_global_initializer || not !stateful)
+        ((not (fun_decl_is_global_initializer f)) || not !stateful)
         "Global definition containing a stateful call in its body";
       let builtin_info = get_builtin_info f in
       let has_builtin_info = builtin_info <> None in
@@ -234,9 +231,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     List.iter visit_fun d;
     (* We need to know if the declaration group contains a global - note that
      * groups containing globals contain exactly one declaration *)
-    let is_global_decl_body =
-      List.exists (fun f -> Option.is_some f.is_global_initializer) d
-    in
+    let is_global_decl_body = List.exists fun_decl_is_global_initializer d in
     [%cassert] (List.hd d).item_meta.span
       ((not is_global_decl_body) || List.length d = 1)
       "This global definition is in a group of mutually recursive definitions";
@@ -313,6 +308,6 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
           ^ "]")
   in
 
-  analyze_decl_groups m.declarations;
+  analyze_decl_groups (Option.get m.declarations);
 
   !infos

@@ -51,12 +51,13 @@ let analyze_type_declarations (crate : crate)
 
 let compute_contexts (crate : crate) : decls_ctx =
   let crate_graph = Deps.compute_graph_of_uses crate in
-  let type_decls_list, _, _, _, _, _ = split_declarations crate.declarations in
+  let declarations = Option.get crate.declarations in
+  let type_decls_list, _, _, _, _, _ = split_declarations declarations in
   let fmt_env : Print.fmt_env = Charon.Print.crate_to_fmt_env crate in
 
   (* Split the declaration groups between the declaration kinds (types, functions, etc.) *)
   let type_decls_groups, _, _, _, _, mixed_groups =
-    split_declarations_to_group_maps crate.declarations
+    split_declarations_to_group_maps declarations
   in
   (* Check if there are mixed groups: if there are, we report an error
      and ignore those. *)
@@ -138,12 +139,19 @@ let compute_contexts (crate : crate) : decls_ctx =
         TraitImplId.Set.add_in_place id trait_impl_ids
     end
   in
-  List.iter (visitor#visit_declaration_group ()) crate.declarations;
+  List.iter (visitor#visit_declaration_group ()) declarations;
 
   let type_decls = crate.type_decls in
   let to_extract =
     TypeDeclId.Map.filter
-      (fun id _ -> TypeDeclId.Set.mem id !type_decl_ids)
+      (fun id (d : type_decl) ->
+        (* Charon introduces declarations for the builtin types (tuples, [Box],
+           [str]): we handle those separately, and don't extract them *)
+        TypeDeclId.Set.mem id !type_decl_ids
+        &&
+        match d.src with
+        | BuiltinType _ -> false
+        | _ -> true)
       type_decls
   in
   let type_infos = analyze_type_declarations crate type_decls_list in
@@ -191,13 +199,13 @@ let compute_contexts (crate : crate) : decls_ctx =
         inherit [_] iter_crate as super
 
         (* Include a method if an implementation of it is in the extracted functions. *)
-        method! visit_item_source env (src : item_source) =
+        method! visit_fun_source env (src : fun_source) =
           (match src with
-          | TraitDeclItem (trait_ref, AssocIdMethod method_id)
-          | TraitImplItem (_, trait_ref, AssocIdMethod method_id, _) ->
+          | TraitDefaultFun (trait_ref, method_id)
+          | TraitImplFun (_, trait_ref, method_id, _) ->
               add_trait_method_id trait_ref.id method_id
           | _ -> ());
-          super#visit_item_source env src
+          super#visit_fun_source env src
 
         (* Include a method if it is mentioned in the extracted functions. *)
         method! visit_fn_ptr env fn_ptr =
@@ -250,7 +258,7 @@ let compute_contexts (crate : crate) : decls_ctx =
     We return a new context because we compute and add the type normalization
     map in the same step. *)
 let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
-    (sg : bound_fun_sig) (_kind : item_source) : eval_ctx * inst_fun_sig =
+    (sg : bound_fun_sig) (_kind : fun_source) : eval_ctx * inst_fun_sig =
   let tr_self = UnknownTrait "symbolic_instantiate_fun_sig" in
   let generics =
     Substitute.generic_args_of_params_erase_regions (Some span)
@@ -547,7 +555,7 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
            is false *)
           let pop_locals =
             if !Config.borrow_check_globals then true
-            else not (Option.is_some fdef.is_global_initializer)
+            else not (fun_decl_is_global_initializer fdef)
           in
           pop_frame config span ~pop_locals ~pop_return_value:true ctx
         in

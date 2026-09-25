@@ -1,15 +1,17 @@
 /- Complementary functions and lemmas for the `List` type -/
+module
 
-import Mathlib.Data.List.GetD
-import Aeneas.Tactic.Solver.ScalarTac
-import AeneasMeta.Utils
-import Aeneas.Tactic.Simp.SimpLemmas
-import Aeneas.Data.Nat
-import Aeneas.Tactic.Simp.SimpLists.Init
-import Aeneas.Std.Primitives
-import Aeneas.Tactic.Simp.SimpLists.SimpLists
-import Aeneas.Tactic.Simp.SimpScalar.SimpScalar
-import Aeneas.Tactic.Solver.Grind.Init
+public import Mathlib.Data.List.GetD
+public import Aeneas.Tactic.Solver.ScalarTac
+public import AeneasMeta.Utils
+public import Aeneas.Tactic.Simp.SimpLemmas
+public import Aeneas.Data.Nat
+public import Aeneas.Tactic.Simp.SimpLists.Init
+public import Aeneas.Std.Primitives
+public import Aeneas.Tactic.Simp.SimpLists.SimpLists
+public import Aeneas.Tactic.Simp.SimpScalar.SimpScalar
+public import Aeneas.Tactic.Solver.Grind.Init
+public section
 
 namespace List -- We do not use the `Aeneas` namespace on purpose
 
@@ -47,7 +49,7 @@ attribute [simp] getElem?_cons_zero getElem!_cons_zero
 @[simp_lists_safe]
 theorem getElem!_cons_nzero' {α} [Inhabited α] (x : α) (tl : List α) (i : ℕ) (hi : 0 < i) :
   (x :: tl)[i]! = tl[i - 1]! := by
-  simp only [Nat.not_eq, ne_eq, not_lt_zero', or_true, getElem!_cons_nzero, hi]
+  simp only [Nat.not_eq, ne_eq, Nat.not_lt_zero, or_true, getElem!_cons_nzero, hi]
 
 @[simp_lists_safe]
 theorem getElem!_cons_zero' {α} [Inhabited α] (x : α) (tl : List α) (i : ℕ) (hi : i = 0) :
@@ -63,6 +65,7 @@ theorem getElem_cons_nzero {α} (hd : α) (tl : List α) (i : Nat)
   | zero => scalar_tac
   | succ n => simp
 
+@[expose]
 def slice (start end_ : Nat) (ls : List α) : List α :=
   (ls.drop start).take (end_ - start)
 
@@ -206,7 +209,7 @@ theorem drop_length_is_le (i : Nat) (ls : List α) : (ls.drop i).length ≤ ls.l
     if h: i = 0 then by simp [*]
     else
       have := drop_length_is_le (i - 1) tl
-      by simp only [Nat.not_eq, ne_eq, not_false_eq_true, neq_imp, not_lt_zero', false_or, true_or,
+      by simp only [Nat.not_eq, ne_eq, not_false_eq_true, neq_imp, Nat.not_lt_zero, false_or, true_or,
         or_self, drop_cons_nzero, length_drop, length_cons, tsub_le_iff_right, h]; omega
 
 attribute [simp, simp_lists_safe, grind =] drop_of_length_le
@@ -612,14 +615,14 @@ theorem splitAt_length {α : Type u}  (n : Nat)  (l : List α) :
 section -- setSlice!
   attribute [-simp] getElem!_eq_getElem?_getD
 
-  def setSlice! {α} (s : List α) (i : ℕ) (s' : List α) : List α :=
+  @[expose] def setSlice! {α} (s : List α) (i : ℕ) (s' : List α) : List α :=
     let s0 := List.take i s
     let n := min s'.length (s.length - i)
     let s1 := List.take n s'
     let s2 := List.drop (i + n) s
     s0 ++ s1 ++ s2
 
-  @[simp, simp_lists_safe, scalar_tac_simps, grind =]
+  @[simp, simp_lists_safe, scalar_tac_simps, grind =, agrind =]
   theorem length_setSlice! {α} (s : List α) (i : ℕ) (s' : List α) :
     (s.setSlice! i s').length = s.length := by
     simp only [setSlice!, append_assoc, length_append, length_take, inf_le_left, inf_of_le_left,

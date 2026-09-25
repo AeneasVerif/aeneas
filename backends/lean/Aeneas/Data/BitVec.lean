@@ -1,20 +1,22 @@
-import Init.Data.List.OfFn
-import Init.Data.BitVec.Lemmas
-import Batteries.Data.BitVec.Lemmas
-import Mathlib.Data.Nat.Basic
-import Mathlib.Data.Fin.Basic
-import Mathlib.Data.Nat.Cast.Basic
-import Mathlib.Data.BitVec
-import Mathlib.Tactic.Ring
-import Mathlib.Data.Nat.Bitwise
-import Aeneas.Data.Byte
-import Aeneas.Tactic.Conv.Bvify.Init
-import Aeneas.Tactic.Simp.SimpLists.SimpLists
-import Aeneas.Tactic.Conv.Natify.Natify
-import Aeneas.Tactic.Conv.ZModify.ZModify
-import Aeneas.Data.List
-import Aeneas.Tactic.Simp.SimpScalar
-import Aeneas.Tactic.Solver.Grind.Init
+module
+public import Init.Data.List.OfFn
+public import Init.Data.BitVec.Lemmas
+public import Batteries.Data.BitVec.Lemmas
+public import Mathlib.Data.Nat.Basic
+public import Mathlib.Data.Fin.Basic
+public import Mathlib.Data.Nat.Cast.Basic
+public import Mathlib.Data.BitVec
+public import Mathlib.Tactic.Ring
+public import Mathlib.Data.Nat.Bitwise
+public import Aeneas.Data.Byte
+public import Aeneas.Tactic.Conv.Bvify.Init
+public import Aeneas.Tactic.Simp.SimpLists.SimpLists
+public import Aeneas.Tactic.Conv.Natify.Natify
+public import Aeneas.Tactic.Conv.ZModify.ZModify
+public import Aeneas.Data.List
+public import Aeneas.Tactic.Simp.SimpScalar
+public import Aeneas.Tactic.Solver.Grind.Init
+public section
 
 open Lean
 
@@ -23,11 +25,11 @@ attribute [-simp] List.getElem!_eq_getElem?_getD
 attribute [bvify, simp_scalar_safe] BitVec.zero_eq
 attribute [bvify, simp_scalar_safe] BitVec.instInhabited
 
-def BitVec.toArray {n} (bv: BitVec n) : Array Bool := Array.finRange n |>.map (bv[·])
-def BitVec.ofFn {n} (f: Fin n → Bool) : BitVec n := (BitVec.ofBoolListLE <| List.ofFn f).cast (by simp)
-def BitVec.set {n} (i: Fin n) (b: Bool) (bv: BitVec n) : BitVec n := bv ^^^ (((bv[i] ^^ b).toNat : BitVec n) <<< i.val)
+@[expose] def BitVec.toArray {n} (bv: BitVec n) : Array Bool := Array.finRange n |>.map (bv[·])
+@[expose] def BitVec.ofFn {n} (f: Fin n → Bool) : BitVec n := (BitVec.ofBoolListLE <| List.ofFn f).cast (by simp)
+@[expose] def BitVec.set {n} (i: Fin n) (b: Bool) (bv: BitVec n) : BitVec n := bv ^^^ (((bv[i] ^^ b).toNat : BitVec n) <<< i.val)
 
-def BitVec.toByteArray {n} (bv: BitVec n) : ByteArray :=
+@[expose] def BitVec.toByteArray {n} (bv: BitVec n) : ByteArray :=
   let paddedLen := (n + 7)/8
   let bv' := bv.setWidth (paddedLen*8)
   ByteArray.mk <| Array.finRange paddedLen
@@ -293,7 +295,7 @@ theorem BitVec.getElem!_mod_pow2_eq {w} (x : BitVec w) (i j : ℕ) (h : j < i) :
     by_cases hw: w = 1
     . simp_all only [one_ne_zero, not_false_eq_true, pow_one, Nat.mod_self]
       cases i <;> simp_all only [ne_eq, Nat.add_eq_zero_iff, one_ne_zero, and_false, not_false_eq_true,
-        zero_pow, Nat.zero_mod, Nat.mod_zero, not_lt_zero']
+        zero_pow, Nat.zero_mod, Nat.mod_zero, Nat.not_lt_zero]
     . have : 2 < 2^w := by
         have : 2^1 < 2^w := by apply Nat.pow_lt_pow_of_lt <;> omega
         omega
@@ -390,21 +392,21 @@ theorem Byte.eq_iff (b0 b1 : Byte) : b0 = b1 ↔ ∀ i < 8, b0.testBit i = b1.te
 # Conversion to a little/big-endian list of bytes
 -/
 
-def BitVec.toLEBytes {w : ℕ} (b : BitVec w) : List Byte :=
+@[expose] def BitVec.toLEBytes {w : ℕ} (b : BitVec w) : List Byte :=
   if w > 0 then
     b.setWidth 8 :: BitVec.toLEBytes ((b >>> 8).setWidth (w - 8))
   else []
 
-def BitVec.toBEBytes {w : ℕ} (b : BitVec w) : List Byte :=
+@[expose] def BitVec.toBEBytes {w : ℕ} (b : BitVec w) : List Byte :=
   List.reverse b.toLEBytes
 
-def BitVec.fromLEBytes (l : List Byte) : BitVec (8 * l.length) :=
+@[expose] def BitVec.fromLEBytes (l : List Byte) : BitVec (8 * l.length) :=
   match l with
   | [] => BitVec.ofNat _ 0
   | b :: l =>
     BitVec.setWidth (8 * (b :: l).length) b ||| ((BitVec.fromLEBytes l).setWidth (8 * (b :: l).length) <<< 8)
 
-def BitVec.fromBEBytes (l : List Byte) : BitVec (8 * l.length) :=
+@[expose] def BitVec.fromBEBytes (l : List Byte) : BitVec (8 * l.length) :=
   (BitVec.fromLEBytes l.reverse).cast (by simp)
 
 @[simp, simp_lists_safe, simp_scalar_safe, scalar_tac_simps, grind =, agrind =]
@@ -577,7 +579,7 @@ theorem BitVec.getElem!_toLEBytes {w : ℕ} (b : BitVec w) (i j : ℕ) (h : j < 
     by_cases hi: i = 0
     . simp_all only [gt_iff_lt, List.getElem!_cons_zero, getElem!_setWidth, MulZeroClass.mul_zero,
       zero_add]
-    . simp only [Nat.not_eq, ne_eq, hi, not_false_eq_true, not_lt_zero', false_or, true_or,
+    . simp only [Nat.not_eq, ne_eq, hi, not_false_eq_true, Nat.not_lt_zero, false_or, true_or,
       List.getElem!_cons_nzero]
       rw [getElem!_toLEBytes]
       . by_cases 8 * i + j < w

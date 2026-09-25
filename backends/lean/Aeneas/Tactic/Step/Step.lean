@@ -1,15 +1,16 @@
-import Lean
-import Aeneas.Tactic.Solver.ScalarTac
-import Aeneas.Tactic.Step.Init
-import Aeneas.Tactic.Step.GrindState
-import Aeneas.Std
--- just here until the unit bind PR gets merged
-import Aeneas.Do
-import Aeneas.Tactic.Simp.SimpLemmas
-import AeneasMeta.Async
-import Aeneas.Tactic.Solver.Grind.Init
-import Aeneas.Tactic.Step.InferPost
-import Aeneas.Do
+module
+public import Lean
+public import Aeneas.Tactic.Solver.ScalarTac
+public import Aeneas.Tactic.Step.Init
+public import Aeneas.Tactic.Step.GrindState
+public import Aeneas.Std
+public import Aeneas.Tactic.Simp.SimpLemmas
+public import AeneasMeta.Async
+public import Aeneas.Tactic.Solver.Grind.Init
+public import Aeneas.Tactic.Step.InferPost
+public import Aeneas.Std.WP
+public import Aeneas.Do
+public section
 
 namespace Aeneas
 
@@ -25,16 +26,18 @@ a bug and doesn't give the proper arguments: this way we make sure tactics like 
 will not crash if there is a bug in the code which adds the pretty equality (this is only useful
 information for the user).
 -/
-@[irreducible] def prettyMonadEq {α : Type u} {β : Type v} (_ : Std.Result α) (_ : β) : Type := Unit
+@[expose, irreducible] def prettyMonadEq {m : Type u → Type w} {α : Type u} {β : Type v}
+  (_ : m α) (_ : β) : Type := Unit
 
 macro:max "[> " "let" y:term " ← " x:term " <]"   : term => `(prettyMonadEq $x $y)
 
 @[app_unexpander prettyMonadEq]
-def unexpPrettyMonadEqofNat : Lean.PrettyPrinter.Unexpander | `($_ $x $y) => `([> let $y ← $x <]) | _ => throw ()
+meta def unexpPrettyMonadEqofNat : Lean.PrettyPrinter.Unexpander | `($_ $x $y) => `([> let $y ← $x <]) | _ => throw ()
 
 example (x y z : Std.U32) (_ : [> let z ← x + y <]) : True := by simp
 
-def eq_imp_prettyMonadEq {α : Type u} {β : Type v} (x : Std.Result α) (y : β) : prettyMonadEq x y := by
+def eq_imp_prettyMonadEq {m : Type u → Type w} {α : Type u} {β : Type v}
+  (x : m α) (y : β) : prettyMonadEq x y := by
   unfold prettyMonadEq
   constructor
 
@@ -56,7 +59,7 @@ def eq_imp_prettyMonadEq {α : Type u} {β : Type v} (x : Std.Result α) (y : β
 @[defeq] theorem iscalar_i64_eq   : Std.IScalar .I64 = Std.I64 := by rfl
 @[defeq] theorem iscalar_i128_eq  : Std.IScalar .I128 = Std.I128 := by rfl
 @[defeq] theorem iscalar_isize_eq : Std.IScalar .Isize = Std.Isize := by rfl
-def scalar_eqs := #[
+meta def scalar_eqs := #[
   ``uscalar_usize_eq, ``uscalar_u8_eq, ``uscalar_u16_eq, ``uscalar_u32_eq, ``uscalar_u64_eq, ``uscalar_u128_eq,
   ``iscalar_isize_eq, ``iscalar_i8_eq, ``iscalar_i16_eq, ``iscalar_i32_eq, ``iscalar_i64_eq, ``iscalar_i128_eq
 ]
@@ -66,7 +69,8 @@ want to introduce in the context -/
 theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
 
 attribute [step_simps]
-  bind_assoc Std.bind_tc_ok Std.bind_tc_fail Std.bind_tc_div
+  bind_assoc Std.bind_tc_ok Std.bind_tc_vis Std.bind_tc_div
+  Std.bind_assoc Std.bind_ok Std.bind_vis Std.bind_div
   /- Those are quite useful to simplify the goal further by eliminating existential quantifiers for instance. -/
   and_assoc Std.Result.ok.injEq Prod.mk.injEq
   exists_eq_left exists_eq_left' exists_eq_right exists_eq_right' exists_eq exists_eq' true_and and_true
@@ -76,10 +80,12 @@ attribute [step_simps]
 
 attribute [step_simps] Aeneas.Std.bind_assoc_eq
 attribute [step_simps] Aeneas.Std.uncurry_apply_pair
+attribute [step_simps] ite_self -- this is sometimes necessary
 
-attribute [step_post_simps]
-  -- We often see expressions like `Int.ofNat 3`
-  Int.reduceToNat
+/- Builtin simprocs cannot be added to a custom set directly via `attribute`.
+See: https://github.com/leanprover/lean4/issues/13962 -/
+-- We often see expressions like `Int.ofNat 3`
+dsimproc [step_post_simps] Int.reduceToNat' (Int.toNat _) := Int.reduceToNat
 
 inductive TheoremOrLocal where
 | Theorem (thName : Name)
@@ -104,7 +110,7 @@ instance: ToString UsedTheorem where
   | .localHyp decl => s!"local hypothesis {decl.userName.toString}"
   | .stepThm name => s!"step theorem {name}"
 
-def toSyntax: UsedTheorem → MetaM Syntax.Term
+meta def toSyntax: UsedTheorem → MetaM Syntax.Term
 | givenExpr e =>
   -- Remark: exprToSyntax doesn't give the expected result
   Lean.Meta.Tactic.TryThis.delabToRefinableSyntax e
@@ -148,17 +154,17 @@ inductive OptTask α where
 | task (t : Task α)
 | none
 
-def OptTask.get (x : OptTask α) : Option α :=
+meta def OptTask.get (x : OptTask α) : Option α :=
   match x with
   | .task t => some t.get
   | .none => .none
 
-def OptTask.map (f : α → β) (x : OptTask α) (prio : Task.Priority := Task.Priority.default) (sync : Bool := false) : OptTask β :=
+meta def OptTask.map (f : α → β) (x : OptTask α) (prio : Task.Priority := Task.Priority.default) (sync : Bool := false) : OptTask β :=
   match x with
   | .task t => .task (t.map f prio sync)
   | .none => .none
 
-def OptTask.bind (x : OptTask α) (f : α → Task β) (prio : Task.Priority := Task.Priority.default) (sync : Bool := false) : OptTask β :=
+meta def OptTask.bind (x : OptTask α) (f : α → Task β) (prio : Task.Priority := Task.Priority.default) (sync : Bool := false) : OptTask β :=
   match x with
   | .task t => .task (t.bind f prio sync)
   | .none => .none
@@ -222,57 +228,83 @@ structure Args where
   /- Syntax of the tactic provided by the user to solve the remaining proof obligations -/
   byTacSyntax : Option Syntax
 
+/-- Recognize both the monad-class bind and `Result`'s heterogeneous bind. -/
+meta def getBindArgs? (program : Expr) : Option (Expr × Expr) :=
+  match_expr program.consumeMData with
+  | Bind.bind _ _ _ _ m next => some (m, next)
+  | Std.bind _ _ m next => some (m, next)
+  | _ => none
+
+/-- Decompose a registered specification statement -/
+meta def getSpecInfoArgs (ty : Expr) : MetaM (SpecInfo × Array Expr) :=
+  ty.consumeMData.withApp fun spec? args => do
+    let some specName := spec?.constName?
+      | throwError "{spec?} is not a spec statement"
+    let some info ← specInfoLookup specName
+      | throwError "{specName} is not a supported spec statement"
+    unless args.size = info.arity do
+      throwError "Not a fully applied specification statement: {ty}"
+    return (info, args)
+
+/-- The program mentioned by a registered specification statement. -/
+meta def getSpecProgram (ty : Expr) : MetaM Expr := do
+  let (info, args) ← getSpecInfoArgs ty
+  return args[info.program_index]!
+
+/-- The post-condition of a registered specification statement. -/
+meta def getSpecPost (ty : Expr) : MetaM Expr := do
+  let (info, args) ← getSpecInfoArgs ty
+  return args[info.post_index]!
+
 /- Analyze a goal comp
 
    If comp = bind m k then return true and m
    Else return false and comp
--/
-def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr) := do
-  forallTelescope goalTy fun nvars goalTy => do
 
-  let (spec?, args) := goalTy.consumeMData.withApp (fun f args => (f, args))
-  let compTy ← if h: spec?.isConstOf ``Std.WP.spec ∧ args.size = 3
-               then pure (args[1])
-               else throwError "Goal is not a `spec m P`"
+   Also looks up which type of spec is being used in the statement,
+   and returns the corresponding SpecInfo
+-/
+meta def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr × SpecInfo) := do
+  forallTelescope goalTy fun _ goalTy => do
+
+  let (info, args) ← getSpecInfoArgs goalTy
+  let compTy := args[info.program_index]!
 
   trace[Step] "compTy: {compTy}"
+  trace[Step] "bind?: {compTy.consumeMData.getAppFn}"
 
-  let (bind?, args) := compTy.consumeMData.withApp (fun f args => (f, args))
-  trace[Step] "bind?: {bind?}"
-  if h: bind?.isConstOf ``bind ∧ args.size = 6
-  then pure (true, args[4])
-  else pure (false, compTy)
+  match getBindArgs? compTy with
+  | some (m, _) => pure (true, m, info)
+  | none => pure (false, compTy, info)
 
 /-- Names introduced by the `do` elaborator's `mkPatContinuation` as a
     fallback (`_xN`) when no leaf name is available — e.g. all leaves are
     `_`. These get filtered out so we fall back to spec post-condition names. -/
-def Name.isElabSynthesized : Name → Bool
+meta def Name.isElabSynthesized : Name → Bool
   | .str .anonymous s => s.startsWith "_x" && s.length > 2 && (s.drop 2).all Char.isDigit
   | _ => false
 
 /-- Convert an fvar's user name into the `Option Name` slot used by `step*`.
     Returns `none` for macro-scoped names and `_xN` placeholders. -/
-def fvarNameSlot (fv : Expr) : MetaM (Option Name) := do
+meta def fvarNameSlot (fv : Expr) : MetaM (Option Name) := do
   let n ← fv.fvarId!.getUserName
   pure (if n.hasMacroScopes ∨ Name.isElabSynthesized n then none else some n)
 
-/-- Used to name post-condition hypotheses introduced by `step`. -/
-def postName (base : Name) (suffix : String) : Name :=
-  base.getPrefix ++ .mkSimple (base.getString! ++ "_post" ++ suffix)
-
+meta section
 /-- A generic binary tree with data at the leaves. Underlies `FVarTree` and `NameTree`. -/
 inductive BTree (α : Type) where
   | leaf (val : α)
   | pair (left right : BTree α)
 deriving Inhabited, Repr
+end
 
 /-- Flatten a `BTree` into a left-to-right array of leaf values. -/
-def BTree.flatten {α} : BTree α → Array α
+meta def BTree.flatten {α} : BTree α → Array α
   | .leaf v => #[v]
   | .pair l r => l.flatten ++ r.flatten
 
 /-- Monadic map over the leaf values of a `BTree`. -/
-def BTree.mapM {m} [Monad m] {α β} (f : α → m β) : BTree α → m (BTree β)
+meta def BTree.mapM {m} [Monad m] {α β} (f : α → m β) : BTree α → m (BTree β)
   | .leaf v => return .leaf (← f v)
   | .pair l r => return .pair (← l.mapM f) (← r.mapM f)
 
@@ -295,14 +327,14 @@ See the examples and state descriptions below for the full specification.
 - **A** (`uncurryTelescope`): entry — dispatch on `uncurry`/`uncurry'`/lambda/other
 - **B** (`intoUncurry`): inside uncurry — peel up to 2 lambdas from `f`
 - **C** (`decomposeFVar`): check if an fvar is destructured by applied `uncurry` in body -/
-partial def uncurryTelescope (e : Expr) (k : Option FVarTree → Expr → MetaM α) : MetaM α := do
+meta partial def uncurryTelescope (e : Expr) (k : Option FVarTree → Expr → MetaM α) : MetaM α := do
   /- ## State A: Entry
      - `e = uncurry f` or `e = uncurry' f`: go to B(f, ...).
      - `e = fun x => body`: plain lambda, introduce fvar, call k.
      - Otherwise: call k none e. -/
   let e := e.consumeMData
   match_expr e with
-  | Std.WP.uncurry' _ _ f =>
+  | Std.WP.uncurry' _ _ _ f =>
     intoUncurry f.consumeMData (fun tree body => k (some tree) body)
   | Std.uncurry _ _ _ f =>
     intoUncurry f.consumeMData (fun tree body => k (some tree) body)
@@ -385,45 +417,39 @@ where
 
 /-- Analyze a continuation expression to compute a `NameTree`.
 Wrapper around `uncurryTelescope` that extracts names from the `FVarTree`. -/
-def getContInput (e : Expr) : MetaM NameTree := do
+meta def getContInput (e : Expr) : MetaM NameTree := do
   uncurryTelescope e fun optTree _body => do
     match optTree with
     | some tree => tree.mapM fvarNameSlot
     | none => return .leaf none
 
 /-- Extract names from a post-condition or bind-continuation expression. -/
-def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
+meta def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
   return (← getContInput e).flatten
 
 /-- Extract the variable names from the bind continuation in the current goal.
     Returns an empty array if the goal is not a bind. -/
-def getBindVarNames : TacticM (Array (Option Name)) := do
+meta def getBindVarNames : TacticM (Array (Option Name)) := do
   try
     withMainContext do
-    let goalTy ← (← getMainGoal).getType
-    let goalTy ← instantiateMVars goalTy
+    let goalTy ← getMainTarget
     forallTelescope goalTy fun _ goalTy => do
-    let_expr Std.WP.spec _ m _ := goalTy | return #[]
-    let_expr Bind.bind _ _ _ _ _ cont := m | return #[]
+    let m ← getSpecProgram goalTy
+    let some (_, cont) := getBindArgs? m | return #[]
     getPostNames cont
   catch _ => pure #[]
 
 /-- Extract the names used in the post-condition of the current goal.
-    The goal should have the shape `spec program post`. -/
-def getPostNamesFromGoal : TacticM (Array (Option Name)) := do
+    The goal should be a valid spec statement, such as `spec program post`. -/
+meta def getPostNamesFromGoal : TacticM (Array (Option Name)) := do
   try
-    let goalTy ← (← getMainGoal).getType
-    let goalTy ← instantiateMVars goalTy
-    goalTy.consumeMData.withApp fun spec? args => do
-    if spec?.isConstOf ``Std.WP.spec ∧ args.size = 3 then
-      getPostNames args[2]!
-    else pure #[]
+    getPostNames (← getSpecPost (← getMainTarget))
   catch _ => pure #[]
 
 /-- Extract variable names from the current goal for naming `step` outputs.
     If the goal is a bind (`let x ← ...` or `let (a, b, …) ← …`), extracts the
     binding names; otherwise falls back to the spec's post-condition. -/
-def getVarNamesFromGoal : TacticM (Array (Option Name) × Option Name) := do
+meta def getVarNamesFromGoal : TacticM (Array (Option Name) × Option Name) := do
   let bindNames ← getBindVarNames
   if bindNames.any Option.isSome then
     pure (bindNames, bindNames.findSome? id)
@@ -431,8 +457,37 @@ def getVarNamesFromGoal : TacticM (Array (Option Name) × Option Name) := do
     let names ← getPostNamesFromGoal
     pure (names, names[0]?.join)
 
+/-- Helper to decompose a binary relation for deriving the name for postconditions
+    in `introOutputs`. Prefers names on the LHS but falls back to RHS if none is found
+    We pass in an `outputNames` map so we can associate the FVarId with the chosen name
+    -/
+meta def decomposeRelation? (type : Expr) (outputNames : Std.HashMap FVarId Name) :
+    MetaM (Option Name) := do
+  let some (l, r) :=
+    (match_expr type with
+    | Eq _ l r => some (l, r)
+    | HEq _ l _ r => some (l, r)
+    | LE.le _ _ l r => some (l, r)
+    | LT.lt _ _ l r => some (l, r)
+    | GE.ge _ _ l r => some (l, r)
+    | GT.gt _ _ l r => some (l, r)
+    | BEq.beq _ _ l r => some (l, r)
+    | _ => none) | return none
+  if let some n ← exprBaseName? l then return some n
+  exprBaseName? r
+where
+  exprBaseName? (e : Expr) : MetaM (Option Name) := do
+    match e with
+    | .const c _ => return some c
+    | .fvar fvarId =>
+      if let some n := outputNames[fvarId]? then return some n
+      let userName ← fvarId.getUserName
+      if userName.hasMacroScopes then return none
+      return some userName
+    | _ => return none
+
 /-- Attempt to resolve typeclasses. -/
-def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) := do
+meta def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) := do
   withTraceNode `Step (fun _ => pure m!"trySolveTypeclasses") do
   mvarsIds.filterMapM fun (mvar : MVarId) => do
     trace[Step] "goal: {mvar}"
@@ -464,7 +519,7 @@ def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) := do
 The resulting target should be of the shape:
 `qimp_spec P k Q` (or `qimp P Q`)
 -/
-def tryMatch (isLet : Bool) (th : Expr) :
+meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th : Expr) :
   TacticM (Array MVarId) := do
   withTraceNode `Step (fun _ => pure m!"tryMatch") do
   /- Apply the theorem
@@ -485,36 +540,66 @@ def tryMatch (isLet : Bool) (th : Expr) :
   let th := mkAppN th mvars
   trace[Step] "Uninstantiated theorem: {th}: {← inferType th}"
 
+  -- do lifting if given
+  let (th, thTy) ←
+    match lifting with
+    | .none => pure (th, thTy)
+    | .some lifting => do
+      let liftingThm ← Term.mkConst lifting.conversion_thm
+      trace[Step] "Trying to lift by {liftingThm}"
+      let liftingThmTy ← inferType liftingThm
+      let (liftThmVars, _, _liftThmTy) ← forallMetaBoundedTelescope liftingThmTy lifting.conversion_thm_inferred_args
+      let liftingThmPartiallyApplied ← mkAppOptM' liftingThm (liftThmVars.map some)
+      let liftingThmApplied := mkAppN liftingThmPartiallyApplied #[th]
+      let liftingThmAppliedTy ← inferType liftingThmApplied
+      Lean.Meta.check liftingThmApplied -- need to instantiate the lifting theorem implicit arguments
+      let thTy ← inferType liftingThmApplied
+      let thTy ← normalizeLetBindings thTy
+      trace[Step] "After lifting have: {liftingThmApplied} : {liftingThmAppliedTy}"
+      pure (liftingThmApplied, thTy)
+
   -- `thTy` should be of the shape `spec program post`: we need to retrieve `program`
   let (thHead, thArgs) := thTy.consumeMData.withApp (fun f args => (f, args))
-  if !thHead.isConst || thHead.constName! != ``Std.WP.spec then
+  if !thHead.isConst || thHead.constName! != info.spec_name then
     throwError "Not a spec theorem"
+
   let (program, P) ←
-    if h: thArgs.size = 3
-    then pure (thArgs[1], thArgs[2])
+    if thArgs.size = info.arity
+    then pure (thArgs[info.program_index]!, thArgs[info.post_index]!)
     else throwError "Not a spec theorem"
 
   let (specMonoBindName, varNum) :=
     if isLet
-    then (``Std.WP.spec_bind', 4)
-    else (``Std.WP.spec_mono', 2)
+    then (info.mk_spec_bind, info.mk_spec_bind_skip_args)
+    else (info.mk_spec_mono, info.mk_spec_mono_skip_args)
   let specMonoBind ← Term.mkConst specMonoBindName
   let specMonoBindTy ← inferType specMonoBind
   trace[Step] "specMonoBind (isLet:{isLet}): {specMonoBind}: {← inferType specMonoBind}"
-  let (specMonoBindMVars, _, specMonoBindTy) ← forallMetaBoundedTelescope specMonoBindTy varNum
+  let (specMonoBindMVars, _, _specMonoBindTy) ← forallMetaBoundedTelescope specMonoBindTy varNum
   let specMonoBind ← mkAppOptM' specMonoBind (specMonoBindMVars.map some)
   trace[Step] "Uninstantiated specMonoBind: {specMonoBind}: {← inferType specMonoBind}"
 
   let specMonoBind := mkAppN specMonoBind #[program, P, th]
+  /- Type-checking the application unifies spec parameters shared by the bind theorem
+     and the step theorem before unresolved theorem arguments are collected. -/
+  Lean.Meta.check specMonoBind
   let specMonoBindTy ← inferType specMonoBind
   trace[Step] "Applied specMonoBind with theorem: {specMonoBind}: {specMonoBindTy}"
 
-  let (specMonoBindMVars, _, specMonoBindTy) ← forallMetaBoundedTelescope specMonoBindTy 1
-  if (specMonoBindMVars.size ≠ 1) then throwError "Unreachable"
-  let ngoal := specMonoBindMVars[0]!.mvarId!
+  /- Introduce meta-variables for the premises and the new goal (the very last mvar). -/
+  let (specMonoBindMVars, _, specMonoBindTy) ← forallMetaTelescope specMonoBindTy
+  if (specMonoBindMVars.size == 0) then
+    throwError "The specMonoBind theorem should have at least one premise"
+  let ngoal := specMonoBindMVars.back!.mvarId!
   let specMonoBind ← mkAppOptM' specMonoBind (specMonoBindMVars.map some)
   trace[Step] "Applied specMonoBind with theorem: {specMonoBind}: {specMonoBindTy}"
 
+  /- Retrieve the premises (we pop the last mvar, which is the new goal) -/
+  let extraPreconditions := specMonoBindMVars.pop.map Expr.mvarId!
+  let mvarsIds := mvars.map Expr.mvarId! ++ extraPreconditions
+  let mvarsIds ← mvarsIds.filterM (fun mvar => do pure (not (← mvar.isAssigned)))
+
+  /- Check that the program in the goal is defeq to the program in the lookup up spec -/
   let mgoal ← Tactic.getMainGoal
   let specMonoBindTy ← inferType specMonoBind
   let goalTy ← mgoal.getType
@@ -530,10 +615,6 @@ def tryMatch (isLet : Bool) (th : Expr) :
   mgoal.assign specMonoBind
   trace[Step] "New goal: {ngoal}"
 
-  let env ← getEnv
-  let mvarsIds := mvars.map Expr.mvarId!
-  let mvarsIds ← mvarsIds.filterM (fun mvar => do pure (not (← mvar.isAssigned)))
-
   -- Attempt to resolve the typeclass instances
   let mvarsIds ← trySolveTypeclasses mvarsIds.toList
   let mvarsIds := mvarsIds.toArray
@@ -545,7 +626,7 @@ def tryMatch (isLet : Bool) (th : Expr) :
   pure mvarsIds
 
 /-- Small helper: introduce the pretty equality (e.g., `[> let z ← x + y <]`) -/
-def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) :
+meta def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) :
   TacticM Unit := do
   withTraceNode `Step (fun _ => pure m!"introPrettyEquality") do
   withMainContext do
@@ -564,7 +645,7 @@ def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) 
 
 /-- Compute the leaf types obtained by destructuring a value of type `ty` according
 to the shape of a `BTree`. At a `pair` node, `ty` must be a product `α × β`. -/
-partial def destructTreeLeafTypes {α} (ty : Expr) (tree : BTree α) :
+meta partial def destructTreeLeafTypes {α} (ty : Expr) (tree : BTree α) :
     MetaM (Array Expr) := do
   match tree with
   | .leaf _ => return #[ty]
@@ -577,7 +658,7 @@ partial def destructTreeLeafTypes {α} (ty : Expr) (tree : BTree α) :
 /-- Reconstruct a value following the shape of a `BTree`, consuming leaf values
 from the front of `leaves`. Returns the reconstructed value and the unconsumed
 leaves. At a `pair` node we build a `Prod.mk`. -/
-partial def destructTreeMk {α} (tree : BTree α) (leaves : List Expr) :
+meta partial def destructTreeMk {α} (tree : BTree α) (leaves : List Expr) :
     MetaM (Expr × List Expr) := do
   match tree with
   | .leaf _ =>
@@ -591,7 +672,7 @@ partial def destructTreeMk {α} (tree : BTree α) (leaves : List Expr) :
 
 /-- Project the leaves out of `root` following the shape of a `BTree`. At a `pair`
 node we use `Prod.fst`/`Prod.snd`. -/
-partial def destructTreeProjs {α} (tree : BTree α) (root : Expr) :
+meta partial def destructTreeProjs {α} (tree : BTree α) (root : Expr) :
     MetaM (Array Expr) := do
   match tree with
   | .leaf _ => return #[root]
@@ -621,7 +702,7 @@ variable `α` when `ty = Option α`), we abstract those variables (together with
 universe parameters) before adding the cached lemma to the environment, and re-apply them
 here. The returned term is the cached lemma applied to those variables, i.e. a proof of
 `∀ (P : ty → Prop), (∀ x₀ ... xₙ, P (mk ...)) ↔ (∀ x, P x)` in the current context. -/
-def mkDestructEquivThm {α} (ty : Expr) (tree : BTree α) : MetaM Expr := do
+meta def mkDestructEquivThm {α} (ty : Expr) (tree : BTree α) : MetaM Expr := do
   withTraceNode `Step (fun _ => pure m!"mkDestructEquivThm: {ty}") do
   let ty ← instantiateMVars ty
   let leafTys ← destructTreeLeafTypes ty tree
@@ -683,7 +764,7 @@ have shape `qimp_spec P k Q` or `qimp P Q`.
 
 Returns the bind continuation `k`'s tree (for `qimp_spec`) or the outer post
 `Q`'s tree (for `qimp`) -/
-def extractCallSiteTree (goalTy : Expr) : MetaM (Option NameTree) := do
+meta def extractCallSiteTree (goalTy : Expr) : MetaM (Option NameTree) := do
   match_expr goalTy.consumeMData with
   | Std.WP.qimp_spec _ _ _ k _ => return some (← getContInput k)
   | Std.WP.qimp _ _ Q => return some (← getContInput Q)
@@ -707,7 +788,7 @@ def extractCallSiteTree (goalTy : Expr) : MetaM (Option NameTree) := do
     If a grind state is provided, it is updated with the newly introduced hypotheses so that
     subsequent steps can reuse it.
 -/
-def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
+meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState : StepState) :
   TacticM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"introOutputs") do
   traceGoalWithNode "Initial goal"
@@ -729,9 +810,7 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
     Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
             { simpThms := #[← stepSimpExt.getTheorems],
               addSimpThms :=
-                #[``Std.WP.qimp_spec_unit, ``Std.WP.qimp_unit,
-                  ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
-                  ``forall_unit, ``true_imp_iff] }
+                info.uncurry_elim_tactics }
             (.targets #[] true)
     | trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after monadic preprocessing"
@@ -742,12 +821,7 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
      is a literal pair. -/
   let some _ ← withTraceNode `Step (fun _ => pure m!"simpAt: eliminating `qimp_spec` and `qimp`") do
     Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
-            { addSimpThms :=
-                #[``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
-                  ``Std.WP.imp_and_iff, ``Std.uncurry_apply_pair,
-                  ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
-                  ``Std.WP.imp_exists_iff,
-                  ``forall_unit, ``true_imp_iff] }
+            { addSimpThms := info.qimp_elim_tactics }
             (.targets #[] true)
     | trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after eliminating `qimp_spec`/`qimp`"
@@ -835,73 +909,88 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
                 #[``Std.uncurry_apply_pair,
                   ``Std.uncurry_eq_prop, ``Std.uncurry_eq_prop_arrow,
                   ``Std.WP.uncurry'_pair, ``Std.WP.uncurry'_eq,
-                  ``and_imp, ``forall_unit, ``true_imp_iff] ++ scalar_eqs }
+                  ``and_imp, ``exists_imp, ``forall_unit, ``true_imp_iff] ++ scalar_eqs }
             (.targets #[] true)
   if (← getUnsolvedGoals).isEmpty then trace[Step] "Main goal solved by cleanup simp!"; return none
 
-  /- Now compute the prop-status of the remaining leading binders (these are the
-     post-conditions and existential variables to introduce). -/
-  let goal ← getMainGoal
-  let outputIsProp ← goal.withContext do
-    let type ← goal.getType
-    let type ← instantiateMVars type
-    forallTelescope type.consumeMData fun fvars _ => do
-    fvars.mapM fun e => do isProp (← inferType e)
-
-  /- Total number of "logical" outputs+post slots, used for the user-provided-id check. -/
-  let totalSlots := outputFVars.size + outputIsProp.size
-  if totalSlots < args.ids.size ∧ args.idsUserProvided then
-    logWarning m!"Too many ids provided ({args.ids}): expected ≤ {totalSlots} ids, got {args.ids.size}"
-
   /- The prefix length is the number of leaf fvars produced by destructuring the outputs. -/
   let prefixLength := outputFVars.size
-  /- The postfix length: the remaining binders (post-condition and existential variables). -/
-  let postfixLength := outputIsProp.size
-  trace[Step] "Prefix length (outputs): {prefixLength}, postfix length (post-conditions): {postfixLength}"
 
-  /- Compute names for outputs (from `args.ids`) and posts. -/
-  let totalNumProps := (outputIsProp.filter id).size
   let mkFreshAnon (isProp : Bool) :=
     if isProp then mkFreshAnonPropUserName else mkFreshUserName `x
-  let mkFreshName (nPropsBefore : Nat) (i : Nat) (isProp : Bool) : TacticM Name := do
-    -- Use the user-provided name if possible
-    if h : i < args.ids.size then
-      match args.ids[i] with
-      | none => mkFreshAnon isProp
-      | some n => pure n
-    else
-      -- Otherwise, it depends on whether the var is a prop or not
-      if ¬ isProp then
-        -- Generate a name for an output var
-        mkFreshUserName `x
-      else
-        -- Generate a name for a post-condition
-        match args.postsBasename with
-        | none => mkFreshAnonPropUserName
-        | some baseName =>
-          let (root, baseStr) := match baseName with
-            | .str root s => (root, s ++ "_post")
-            | _ => (.anonymous, "_post")
-          let postIdx :=
-            if totalNumProps = 1 then ""
-            else s!"{nPropsBefore + 1}"
-          pure (Name.str root s!"{baseStr}{postIdx}")
 
-  /- The output fvars were already introduced with their user-facing names by
-     `introN` above, so there is no renaming pass here. -/
+  /- Associate every output fvar with the name we picked for it, so that when naming the
+     post-conditions we can resolve references to the outputs back to those names. -/
+  let outputNames : Std.HashMap FVarId Name :=
+    (Array.range prefixLength).foldl (init := ∅) fun m i =>
+      m.insert outputFVars[i]! outputIds[i]!
+
+  /- Now compute the prop-status and the names of the remaining leading binders (these are
+     the post-conditions and existential variables to introduce).
+
+     We prefer user-provided names, and for non-Props we generate fresh names. For Props we
+     analyze the type of the hypothesis: if it is of the form `<id> <binrel> _` (or `_<binrel><id>`)
+     then we prefer using `<id>_post<idx>`, so that each post-condition is named after the output
+     it constrains. We compute the names here, while the binders' types are still at hand,
+     and use them further below when actually introducing the binders. -/
+  let goal ← getMainGoal
+  let (postsIsProp, postsIdsArr) ← goal.withContext do
+    let type ← instantiateMVars (← goal.getType)
+    forallTelescope type.consumeMData fun fvars _ => do
+      let typesAndProps : Array (Expr × Bool) ← fvars.mapM fun fv => do
+        let ty ← inferType fv
+        pure (ty, ← isProp ty)
+
+      /- Total number of "logical" outputs+post slots, used for the user-provided-id check. -/
+      let totalSlots := prefixLength + typesAndProps.size
+      if totalSlots < args.ids.size ∧ args.idsUserProvided then
+        logWarning m!"Too many ids provided ({args.ids}): expected ≤ {totalSlots} ids, got {args.ids.size}"
+
+      let mut postsIds : Array Name := #[]
+      /- How many post-conditions we already named after a given base name, used to
+         disambiguate several post-conditions constraining the same output. -/
+      let mut postCounts : Std.HashMap Name Nat := ∅
+      for h : i in [0:typesAndProps.size] do
+        let (ty, tyIsProp) := typesAndProps[i]
+        let n ←
+          -- Use the user-provided name if possible
+          if hi : prefixLength + i < args.ids.size then
+            match args.ids[prefixLength + i] with
+            | some n => pure n
+            | none => mkFreshAnon tyIsProp
+          else if args.idsUserProvided then
+            mkFreshAnon tyIsProp
+          else if ¬ tyIsProp then
+            -- Generate a name for an existential variable
+            mkFreshUserName `x
+          else
+            -- Generate a name for a post-condition
+            let nameSpec :=
+              match ← decomposeRelation? ty outputNames, args.postsBasename with
+              | some relName, some (.str root _) => some (root, relName)
+              | some relName, _                  => some (.anonymous, relName)
+              | none,         some (.str root s) => some (root, Name.mkSimple s)
+              | none,         _                  => none
+            match nameSpec with
+            | none => mkFreshAnonPropUserName
+            | some (nameRoot, baseName) =>
+              let suffixNum := postCounts.getD baseName 0
+              let suffixStr := if suffixNum == 0 then "" else s!"{suffixNum}"
+              postCounts := postCounts.insert baseName (suffixNum + 1)
+              pure (Name.str nameRoot s!"{baseName}_post{suffixStr}")
+        postsIds := postsIds.push n
+      pure (typesAndProps.map (·.2), postsIds)
+
+  /- The postfix length: the remaining binders (post-condition and existential variables). -/
+  let postfixLength := postsIsProp.size
+  trace[Step] "Prefix length (outputs): {prefixLength}, postfix length (post-conditions): {postfixLength}"
+  trace[Step] "output ids: {outputIds}, post ids: {postsIdsArr}"
 
   /- Introduce the pretty equality. -/
   withMainContext do
   introPrettyEquality args fExpr (outputFVars.map Expr.fvar)
   traceGoalWithNode "goal after introducing the pretty equality"
 
-  /- Compute names for the post-conditions and existential variables. -/
-  let mut postsIdsArr : Array Name := #[]
-  let mut nPropsBefore := 0
-  for i in [0:postfixLength] do
-    let isProp := outputIsProp[i]!
-    postsIdsArr := postsIdsArr.push (← mkFreshName nPropsBefore (prefixLength + i) isProp)
-    if isProp then nPropsBefore := nPropsBefore + 1
   let postsIds := postsIdsArr.toList
 
   /- Introduce the post-conditions and existential variables. -/
@@ -918,7 +1007,7 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
   let outputInfos := outputFVars.mapIdx fun i fv =>
     { fvarId := fv, name? := mkName? (outputIds.getD i `_), isProp := false : Output }
   let postInfos := posts.mapIdx fun i fv =>
-    { fvarId := fv, name? := mkName? (postsIds.getD i `_), isProp := outputIsProp.getD i true : Output }
+    { fvarId := fv, name? := mkName? (postsIds.getD i `_), isProp := postsIsProp.getD i true : Output }
   let introducedVars := outputInfos ++ postInfos
 
   pure (some { goal := ← getMainGoal, outputs := introducedVars, stepState })
@@ -931,7 +1020,7 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
       (this is a way of avoiding spurious instantiations). This helps with the second phase.
     - we then use the other tactic on the preconditions
  -/
-def trySolvePreconditions (args : Args) (config : Config)
+meta def trySolvePreconditions (args : Args) (config : Config)
     (originalGoal : MVarId) (stepState : StepState)
     (solvePreconditionTac : Option StepGrindState → TacticM Unit)
     (newPropGoals : List MVarId)
@@ -977,7 +1066,7 @@ The main thing we do is simplify the post-conditions.
 
 TODO: simplify or remove this function.
 -/
-def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal) := do
+meta def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"postprocessMainGoal") do
   match mainGoal with
   | none => pure none
@@ -1019,7 +1108,7 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal)
       else pure none
 
 /-- If the option is set, infer an unresolved postcondition metavariable in the main goal. -/
-def inferPostMainGoal (args : Args) (mainGoal : Option MainGoal) : TacticM (Option MainGoal) := do
+meta def inferPostMainGoal (args : Args) (mainGoal : Option MainGoal) : TacticM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"inferPostMainGoal") do
   unless args.inferPost do
     return mainGoal
@@ -1032,13 +1121,13 @@ def inferPostMainGoal (args : Args) (mainGoal : Option MainGoal) : TacticM (Opti
     let goal ← inferPost mg.goal (eliminate := fun decl => decl.type.isAppOf ``prettyMonadEq)
     pure (some { mg with goal := goal })
 
-def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
+meta def stepWith (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
   TacticM Goals := do
   withTraceNode `Step (fun _ => pure m!"stepWith") do
   -- Save the main goal before tryMatch (needed for lazy grind state initialization)
   let originalGoal ← getMainGoal
   -- Attempt to instantiate the theorem and introduce it in the context
-  let newGoals ← tryMatch isLet th
+  let newGoals ← tryMatch info lifting isLet th
   --
   withMainContext do
   traceGoalWithNode "current goal"
@@ -1058,7 +1147,7 @@ def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
   /- Process the main goal -/
   -- Introduce the outputs, including the post-conditions, into the context
   setGoals [mainGoal]
-  let mainGoal ← introOutputs args fExpr stepState
+  let mainGoal ← introOutputs info args fExpr stepState
   /- Simplify the post-conditions in the main goal - note that we waited until now
       because by solving the preconditions we may have instantiated meta-variables.
       We also simplify the goal again (to simplify let-bindings, etc.) -/
@@ -1083,21 +1172,21 @@ def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
 
 /-- Small utility: if `args` is not empty, return the name of the app in the first
     arg, if it is a const. -/
-def getFirstArgAppName (args : Array Expr) : MetaM (Option Name) := do
+meta def getFirstArgAppName (args : Array Expr) : MetaM (Option Name) := do
   if args.size = 0 then pure none
   else
     args[0]!.withApp fun f _ => do
     if f.isConst then pure (some f.constName)
     else pure none
 
-def getFirstArg (args : Array Expr) : Option Expr := do
+meta def getFirstArg (args : Array Expr) : Option Expr := do
   if args.size = 0 then none
   else some args[0]!
 
 /-- Helper: try to apply a theorem.
 
     Return the list of post-conditions we introduced if it succeeded. -/
-def tryApply (args : Args) (isLet:Bool) (fExpr : Expr) (kind : String) (th : Option Expr) :
+meta def tryApply (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args) (isLet:Bool) (fExpr : Expr) (kind : String) (th : Option Expr) :
   TacticM (Option Goals) := do
   let res ← do
     match th with
@@ -1109,19 +1198,41 @@ def tryApply (args : Args) (isLet:Bool) (fExpr : Expr) (kind : String) (th : Opt
       -- Apply the theorem
       let res ← do
         try
-          let res ← stepWith args isLet fExpr th
+          let res ← stepWith info lifting args isLet fExpr th
           pure (some res)
         catch _ => pure none
   match res with
   | some res => pure (some res)
   | none => pure none
 
+/-- Given a theorem to be applied, find the lifting that can lift it to the given
+    spec statment represented by `info`
+    or `none` if it already is the correct spec statement
+-/
+meta def getLiftingForThm (info : SpecInfo) (thm : Expr) : MetaM (Option LiftingInfo) := do
+  let thTy ← inferType thm
+  let thTy ← normalizeLetBindings thTy
+  let thOutput ← forallTelescope thTy (fun _ out => return out)
+  let spec? := thOutput.consumeMData.withApp (fun f _ => f)
+  trace[Step] "spec? is {spec?}"
+  let name ← match spec? with
+    | Expr.const name _ => pure name
+    | _ =>
+      -- We don't want to error here to ensure it doesn't break cases where
+      -- no lifting occurs, but the theorem can't reduce
+      return .none
+  trace[Step] "name is {name}"
+  for lifting in info.liftings do
+    if lifting.from_statement == name then return lifting
+  if name == info.spec_name then return .none else
+  throwError "{name} is not a valid spec theorem"
+
 /-- Try to step with an assumption.
     Return `some` if we succeed, `none` otherwise.
 
     -- TODO: check that they are "compatible" with the goal to avoid a potentially expensive unification
 -/
-def tryAssumptions (args : Args) (isLet:Bool) (fExpr : Expr) :
+meta def tryAssumptions (info : SpecInfo) (args : Args) (isLet:Bool) (fExpr : Expr) :
   TacticM (Option (Goals × UsedTheorem)) := do
   withTraceNode `Step (fun _ => pure m!"tryAssumptions") do run
 where
@@ -1132,12 +1243,13 @@ where
   for decl in decls.reverse do
     trace[Step] "Trying assumption: {decl.userName} : {decl.type}"
     try
-      let goal ← stepWith args isLet fExpr decl.toExpr
+      let lifting ← getLiftingForThm info decl.toExpr
+      let goal ← stepWith info lifting args isLet fExpr decl.toExpr
       return (some (goal, .localHyp decl))
     catch _ => continue
   pure none
 
-def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
+meta def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
   TacticM (Goals × UsedTheorem) := do
   withMainContext do
   -- Retrieve the goal
@@ -1155,18 +1267,19 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
      TODO: we should also check that no quantified variable appears in fExpr.
      If such variables appear, we should just fail because the goal doesn't
      have the proper shape. -/
-  let (goalIsLet, fExpr) ← do
+  let (goalIsLet, fExpr, info) ← do
     withTraceNode `Step (fun _ => pure m!"Calling getFirstBind to deconstruct the target") do
     getFirstBind goalTy
   /- If the user provided a theorem/assumption: use it.
      Otherwise, lookup one. -/
   match withTh with
   | some th => do
-    let goals ← stepWith args goalIsLet fExpr th
+    let lifting ← getLiftingForThm info th
+    let goals ← stepWith info lifting args goalIsLet fExpr th
     return (goals, .givenExpr th)
   | none =>
     -- Try all the assumptions one by one and if it fails try to lookup a theorem.
-    if let some res ← tryAssumptions args goalIsLet fExpr then return res
+    if let some res ← tryAssumptions info args goalIsLet fExpr then return res
     /- It failed: lookup the pspec theorems which match the expression *only
        if the function is a constant* -/
     let fIsConst ← do
@@ -1177,21 +1290,26 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
       throwError "Step failed"
     else do
       trace[Step] "No assumption succeeded: trying to lookup a pspec theorem"
-      let pspecs : Array Name ← do
-        let thNames ← stepAttr.find? fExpr
-        /- TODO: because of reduction, there may be several valid theorems (for
-           instance for the scalars). We need to sort them from most specific to
-           least specific. For now, we assume the most specific theorems are at
-           the end. -/
-        let thNames := thNames.reverse
-        trace[Step] "Looked up pspec theorems: {thNames}"
-        pure thNames
-      -- Try the theorems one by one
-      for pspec in pspecs do
-        let pspecExpr ← Term.mkConst pspec
-        match ← tryApply args goalIsLet fExpr "pspec theorem" pspecExpr with
-        | some goals => return (goals, .stepThm pspec)
-        | none => pure ()
+      -- Try with info.name theorems directly (the `.none`) as well as any liftings
+      let liftings : Array (Option LiftingInfo) := #[.none] ++ Array.map .some info.liftings
+      for lifting in liftings do
+        let pspecs : Array Name ← do
+          let thNames ← stepAttr.find? -- looks up the theorem in a discrimination tree
+            (match lifting with | .none => info.spec_name | .some l => l.from_statement)
+            fExpr
+          /- TODO: because of reduction, there may be several valid theorems (for
+            instance for the scalars). We need to sort them from most specific to
+            least specific. For now, we assume the most specific theorems are at
+            the end. -/
+          let thNames := thNames.reverse
+          trace[Step] "Looked up pspec theorems: {thNames}"
+          pure thNames
+        -- Try the theorems one by one
+        for pspec in pspecs do
+          let pspecExpr ← Term.mkConst pspec
+          match ← tryApply info lifting args goalIsLet fExpr "pspec theorem" pspecExpr with
+          | some goals => return (goals, .stepThm pspec)
+          | none => pure ()
       -- It failed: try to use the recursive assumptions
       trace[Step] "Failed using a pspec theorem: trying to use a recursive assumption"
       -- We try to apply the assumptions of kind "auxDecl"
@@ -1204,7 +1322,8 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
       for decl in decls.reverse do
         trace[Step] "Trying recursive assumption: {decl.userName} : {decl.type}"
         try
-          let goals ← stepWith args goalIsLet fExpr decl.toExpr
+          -- We should never need to lift a recursive assumption
+          let goals ← stepWith info .none args goalIsLet fExpr decl.toExpr
           return (goals, .localHyp decl)
         catch _ => continue
       -- Nothing worked: failed
@@ -1214,7 +1333,7 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
 
 syntax stepArgs := Parser.Tactic.optConfig ("with" term)? ("as" " ⟨ " binderIdent,* " ⟩")? ("by" tacticSeq)?
 
-def parseStepArgs
+meta def parseStepArgs
 : TSyntax ``Aeneas.Step.stepArgs →
   TacticM (Config × Option Expr × Array (Option Name) × Bool × Option Name × Option Syntax.Tactic)
 | args@`(stepArgs| $config $[with $pspec:term]? $[as ⟨ $ids,* ⟩]? $[by $byTac]? ) =>
@@ -1260,7 +1379,7 @@ def parseStepArgs
 | _ => throwUnsupportedSyntax
 
 /-- Use `agrind` after preprocessing goal the goal, in particular to simplify arithmetic expressions. -/
-def evalAGrindWithPreprocess (withGroundSimprocs : Bool) (config : Grind.Config) (nla : Bool) : TacticM Unit := do
+meta def evalAGrindWithPreprocess (withGroundSimprocs : Bool) (config : Grind.Config) (nla : Bool) : TacticM Unit := do
   withTraceNode `Step (fun _ => do pure m!"evalAGrindWithPreprocess") do
   traceGoalWithNode "before preprocessing"
   let simpArgs : Simp.SimpArgs ← ScalarTac.getSimpArgs
@@ -1283,7 +1402,7 @@ def evalAGrindWithPreprocess (withGroundSimprocs : Bool) (config : Grind.Config)
       Aeneas.Grind.agrindEval config params mvarId
     catch e => trace[Step] "Grind failed:\n{e.toMessageData}"
 
-def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option Expr)
+meta def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option Expr)
   (ids : Array (Option Name)) (idsUserProvided : Bool) (postsBasename : Option Name := none)
   (byTacStx : Option Syntax.Tactic)
   (stepState : StepState := {})
@@ -1414,7 +1533,7 @@ def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option 
   trace[Step] "Step done"
   return ⟨ goals, usedTheorem ⟩
 
-def evalStep
+meta def evalStep
   (config : Config) (keepPretty : Option Name) (withArg: Option Expr)
   (ids: Array (Option Name)) (idsUserProvided : Bool)
   (postsBasename : Option Name := none) (byTac : Option Syntax.Tactic)
@@ -1554,7 +1673,7 @@ syntax optConfig := Parser.Tactic.optConfig
 syntax (name := letStep) "let" noWs "*" " ⟨ " binderIdent,* " ⟩" colGe
   " ← " colGe ("[" Parser.Tactic.optConfig " ] ")? ("*?" <|> "*" <|> term) ("by" tacticSeq)? : tactic
 
-def parseLetStep
+meta def parseLetStep
 : TSyntax ``Aeneas.Step.letStep ->
   TacticM (Config × Option Expr × Bool × Array (Option Name) × Option Name × Option Syntax.Tactic)
 | args@`(tactic| let* ⟨ $ids,* ⟩ ← $[[$config]]? $pspec $[by $byTac]?) =>  withMainContext do
@@ -2045,7 +2164,7 @@ info: example
 
   /- Example with an existential -/
   /--
-  error: unsolved goals
+error: unsolved goals
 case a
 x : U32
 f : U32 → Result U32
@@ -2096,7 +2215,7 @@ z_post : ↑z = ↑x + ↑y
 
   /- Test that manipulates a post-condition containing an ∃ -/
   /--
-  error: unsolved goals
+error: unsolved goals
 case a
 zero : Slice U32 → Result (Slice U32)
 zero_spec :
@@ -2208,6 +2327,121 @@ h1 : ∀ (i : ℕ) (x : i < s.length), s'[i] = 0#u32
       assumption
 
   end Ntt
+
+  namespace DspecTests
+  -- This section has tests for dspec.
+  def simple_diverge (x : Std.I32) : Result Std.I32 := do
+    if x = 0#i32
+    then ok 10#i32
+    else
+      let i1 ← 1#i32 + 1#i32
+      simple_diverge i1
+  partial_fixpoint
+
+  theorem test_div (x : Std.I32) : Std.WP.dspec (simple_diverge x) (fun res => res = 10#i32)
+    := by
+      revert x
+      apply simple_diverge.fixpoint_induct
+        (motive := fun simple_diverge => ∀ x, WP.dspec (simple_diverge x) (fun res => res = 10#i32))
+      · apply Lean.Order.admissible_pi
+        intros y
+        apply Lean.Order.admissible_apply (fun _ fx => WP.dspec fx _)
+        apply WP.dspec_admissible
+      · intros
+        simp only
+        split
+        . simp [*]
+        . step
+          step
+          simp [*]
+
+  def simple_diverge_2 (x y : Std.I32) : Result Std.I32 := do
+    if x = 0#i32
+    then ok 10#i32
+    else
+      let i1 ← x + y
+      simple_diverge_2 i1 i1
+  partial_fixpoint
+
+  def simple_converge (x : Std.I32) : Result Std.I32 := do
+    if x = 0#i32
+    then ok 10#i32
+    else ok 10#i32
+
+  @[step]
+  theorem simple_converge_property_dspec (x : Std.I32)
+    : Std.WP.dspec (simple_converge x) (fun res => res = 10#i32)
+    := by
+      unfold simple_converge
+      split <;> simp
+
+  -- test using dspec theorem to step dspec
+  example : WP.dspec
+    (do let x ← simple_converge 5#i32
+        let _y ← simple_converge 6#i32
+        ok x) (fun x => x = 10#i32) := by
+      step
+      step
+      simp [*]
+
+  example : WP.spec
+    (do let x ← 1#i32 + 2#i32
+        let y ← x + x
+        ok y) (fun z => z.val == 6) := by
+    step
+    step
+    simp [*]
+
+  -- requires lifting spec to dspec
+  example : WP.dspec
+    (do let x ← 1#i32 + 2#i32
+        let y ← x + x
+        ok y) (fun z => z.val == 6) := by
+    step
+    step
+    simp [*]
+
+  -- test lifting using `step with`
+  example : WP.dspec
+    (do let x ← 1#i32 + 2#i32
+        let y ← x + x
+        ok y) (fun z => z.val == 6) := by
+    step with I32.add_spec
+    step with I32.add_spec
+    simp [*]
+
+  -- test lifting an assumption
+  example (f : I32 → Result I32)
+    (h : ∀ x, (f x) ⦃fun y => y.val = 10⦄)
+    :
+    ( do let x ← f 1#i32
+         let y ← x + 1#i32
+         ok y) ⦃fun y => y.val = 11⦄div
+    := by
+    step
+    step
+    simp [*]
+
+  -- test using a spec theorem to prove a dspec
+  example : WP.dspec
+    (do let x ← simple_converge 5#i32
+        let _y ← simple_converge 6#i32
+        ok x) (fun x => x = 10#i32) := by
+      step
+      step
+      simp [*]
+
+  -- confirm that you can't use dspec from spec
+  /-- error: Step failed: could not find a local assumption or a theorem to apply -/
+  #guard_msgs in
+  example : WP.spec
+    (do let x ← simple_diverge 5#i32
+        let y ← simple_diverge 6#i32
+        ok x) (fun x => x = 10#i32) := by
+    step -- this should fail!
+    step
+    simp [*]
+end DspecTests
 
 end Test
 

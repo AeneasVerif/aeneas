@@ -6,13 +6,13 @@ open Primitives
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [core::num::{u32}::wrapping_add]:
-    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2583:8-2583:58
+    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2681:8-2681:58
     Name pattern: [core::num::{u32}::wrapping_add]
     Visibility: public *)
 assume val core_num_U32_wrapping_add : u32 -> u32 -> result u32
 
 (** [core::num::{u32}::wrapping_sub]:
-    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2620:8-2620:58
+    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2718:8-2718:58
     Name pattern: [core::num::{u32}::wrapping_sub]
     Visibility: public *)
 assume val core_num_U32_wrapping_sub : u32 -> u32 -> result u32
@@ -175,15 +175,11 @@ let use_counter
 (** [demo::mod_add]:
     Source: 'tests/src/demo.rs', lines 117:0-125:1 *)
 let mod_add (a : u32) (b : u32) : result u32 =
-  if a < 3329
-  then
-    if b < 3329
-    then
-      let* sum = u32_add a b in
-      let* res = core_num_U32_wrapping_sub sum 3329 in
-      let* mask = u32_shr #I32 res 16 in
-      let q = u32_and 3329 mask in
-      core_num_U32_wrapping_add res q
-    else Fail Failure
-  else Fail Failure
+  let* _ = massert (a < 3329) in
+  let* _ = massert (b < 3329) in
+  let* sum = u32_add a b in
+  let* res = core_num_U32_wrapping_sub sum 3329 in
+  let* mask = u32_shr #I32 res 16 in
+  let q = u32_and 3329 mask in
+  core_num_U32_wrapping_add res q
 

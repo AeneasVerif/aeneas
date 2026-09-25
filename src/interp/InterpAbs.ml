@@ -252,11 +252,11 @@ let convert_value_to_output_avalues (span : Meta.span) (ctx : eval_ctx)
   let rec check_inputs (v : tvalue) (proj_ty : ty) : unit =
     match (v.value, proj_ty) with
     | VLiteral _, _ -> ()
-    | VAdt { variant_id; fields }, TAdt { id; generics } ->
+    | VAdt { variant_id; fields }, TAdt tref ->
         [%cassert] span (ty_no_regions v.ty)
           "Nested borrows are not supported yet";
         let field_types =
-          ctx_adt_get_instantiated_field_types span ctx id variant_id generics
+          ctx_adt_get_instantiated_field_types span ctx tref variant_id
         in
         List.iter2 check_inputs fields field_types
     | VBottom, _ -> [%internal_error] span
@@ -272,9 +272,9 @@ let convert_value_to_output_avalues (span : Meta.span) (ctx : eval_ctx)
     match (v.value, proj_ty) with
     | VLiteral _, _ -> ([], mk_eignored (Some (ctx.env, v)) proj_ty)
     | VBottom, _ -> [%internal_error] span
-    | VAdt { variant_id; fields }, TAdt { id; generics } ->
+    | VAdt { variant_id; fields }, TAdt tref ->
         let field_types =
-          ctx_adt_get_instantiated_field_types span ctx id variant_id generics
+          ctx_adt_get_instantiated_field_types span ctx tref variant_id
         in
         let avalues, outputs =
           List.split (List.map2 to_output fields field_types)

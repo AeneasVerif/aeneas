@@ -20,6 +20,11 @@ let passes :
        Remark: some passes below use the fact that we removed the meta-data
        (otherwise we would have to "unmeta" expressions before matching) *)
     (None, "remove_meta_def", remove_meta);
+    (* Introduce the assertions checking that the required target features
+       are enabled *)
+    ( Some (fun _ -> !Config.feature_gates),
+      "intro_target_feature_asserts",
+      intro_target_feature_asserts );
     (* Convert the unit variables to [()] if they are used as right-values or
      * [_] if they are used as left values. *)
     (None, "unit_vars_to_unit", unit_vars_to_unit);
@@ -187,6 +192,17 @@ let passes :
     ( None,
       "simplify_binop_panic_then_wrapping",
       simplify_binop_panic_then_wrapping );
+    (* Recover the array and slice indexing primitives from the standard calls
+       that Charon introduces when lowering MIR indexing. *)
+    (None, "recover_builtin_index_functions", recover_builtin_index_functions);
+    (None, "filter_useless (after index recovery)", filter_useless);
+    (* Index recovery can expose eta-reducible backward functions. *)
+    (None, "simplify_lambdas (after index recovery)", simplify_lambdas);
+    ( None,
+      "inline_useless_var_assignments (after index recovery)",
+      inline_useless_var_assignments ~inline_named:true ~inline_const:true
+        ~inline_pure:false ~inline_identity:true ~inline_loop_back_calls:false
+    );
     (* Simplify the array/slice manipulations by introducing calls to [array_update]
        [slice_update] *)
     (None, "simplify_array_slice_update", simplify_array_slice_update);
@@ -272,7 +288,7 @@ let compute_reducible (_ctx : ctx) (transl : pure_fun_translation list) :
               id = FunOrOp (Fun (FromLlbc (FunId fid, Some _lp_id)));
               generics = _;
             }
-          when fid = FRegular trans.f.def_id ->
+          when fid = trans.f.def_id ->
             let f =
               { trans.f with backend_attributes = { reducible = true } }
             in
@@ -295,9 +311,9 @@ let compute_reducible (_ctx : ctx) (transl : pure_fun_translation list) :
     backward functions. Note that here, keeping the forward function it is not
     *necessary* but convenient. *)
 let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
-    (trans_ctx : trans_ctx) (builtin_sigs : fun_sig Builtin.BuiltinFunIdMap.t)
-    (type_decls : type_decl list) (trait_impls : trait_impl list)
-    (transl : fun_decl list) : pure_fun_translation list =
+    (trans_ctx : trans_ctx) (type_decls : type_decl list)
+    (trait_impls : trait_impl list) (transl : fun_decl list) :
+    pure_fun_translation list =
   let fun_decls =
     FunDeclId.Map.of_list
       (List.map (fun (f : fun_decl) -> (f.def_id, f)) transl)
@@ -559,7 +575,7 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
 
      TODO: move
   *)
-  let transl = add_type_annotations trans_ctx transl builtin_sigs type_decls in
+  let transl = add_type_annotations trans_ctx transl type_decls in
 
   (* Update the "reducible" attribute *)
   let ctx, _ = create_ctx () in

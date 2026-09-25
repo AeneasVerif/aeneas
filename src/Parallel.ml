@@ -24,7 +24,7 @@ module Pool = struct
 
   let pool =
     lazy
-      (let num_domains = recommended_domain_count () in
+      (let num_domains = recommended_domain_count () - 1 in
        T.setup_pool ~num_domains ())
 
   let get () = Lazy.force pool

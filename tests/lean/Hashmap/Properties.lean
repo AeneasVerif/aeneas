@@ -29,7 +29,7 @@ namespace HashMap
 def distinct_keys (ls : List (Usize × α)) := ls.pairwise_rel (λ x y => x.fst ≠ y.fst)
 
 def hash_mod_key (k : Usize) (l : Nat) : Nat :=
-  match hash_key k with
+  match (hash_key k).match with
   | .ok k => k.val % l
   | _ => 0
 
@@ -313,13 +313,11 @@ theorem insert_in_list_spec {α : Type} (l : Nat) (key: Usize) (value: α) (l0: 
   step with insert_in_list_spec_aux as ⟨ b, l1 ⟩
   simp_all
 
--- Remark: α and β must live in the same universe, otherwise the
--- bind doesn't work
 theorem if_update_eq
-  {α β : Type u} (b : Bool) (y : α) (e : Result α) (f : α → Result β) :
-  (if b then Bind.bind e f else f y) = Bind.bind (if b then e else pure y) f
+  {α : Type u} {β : Type v} (b : Bool) (y : α) (e : Result α) (f : α → Result β) :
+  (if b then Std.bind e f else f y) = Std.bind (if b then e else ok y) f
   := by
-  split <;> simp [Pure.pure]
+  split <;> simp
 
 def frame_slots_params (hm1 hm2 : HashMap α) :=
   -- The max load factor is the same
@@ -837,7 +835,6 @@ theorem try_resize_spec {α : Type} (hm : HashMap α) (hInv : hm.inv):
           simp [alloc.vec.Vec.len, inv, inv_load] at *
           -- TODO: this should be automated
           have hIneq1 : n1.val ≤ Usize.max / 2 := by simp [*]
-          simp at hIneq1
           -- TODO: this should be automated
           have hIneq2 : n2.val ≤ n1.val / hm.2.1.val := by simp [*]
           rw [Nat.le_div_iff_mul_le] at hIneq2 <;> try simp [*]

@@ -246,3 +246,17 @@ fn test() {
     assert!(x.len() == 1);
     assert!(x[0] == 0xfffffffe);
 }
+
+trait Hash {
+  fn hash(_ : u32) -> u32;
+}
+
+
+pub fn pseudo_random<T : Hash>() -> u32 {
+  let mut state : u32 = 0;
+
+  while state < 100 {
+    state = <T as Hash>::hash(state);
+  }
+  return state;
+}

@@ -1,5 +1,7 @@
-import Aeneas.Std.Scalar.Core
-import Aeneas.Std.Scalar.Elab
+module
+public import Aeneas.Std.Scalar.Core
+public import Aeneas.Std.Scalar.Elab
+public section
 
 namespace Aeneas.Std
 
@@ -24,11 +26,11 @@ iscalar @[step_pure_def]
 def «%S».wrapping_shl (x : «%S») (s : U32) : «%S» := @IScalar.wrapping_shl IScalarTy.«%S» x s
 
 /- [core::num::{_}::wrapping_shl] -/
-uscalar @[step_pure_def]
+uscalar @[expose, step_pure_def]
 def core.num.«%S».wrapping_shl : «%S» → U32 → «%S» := @UScalar.wrapping_shl UScalarTy.«%S»
 
 /- [core::num::{_}::wrapping_shl] -/
-iscalar @[step_pure_def]
+iscalar @[expose, step_pure_def]
 def core.num.«%S».wrapping_shl : «%S» → U32 → «%S» := @IScalar.wrapping_shl IScalarTy.«%S»
 
 attribute [rust_fun "core::num::{u8}::wrapping_shl" -canFail] core.num.U8.wrapping_shl

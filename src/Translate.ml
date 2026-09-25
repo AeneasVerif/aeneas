@@ -3,7 +3,6 @@ open Types
 open Values
 open LlbcAst
 open Contexts
-open Builtin
 module SA = SymbolicAst
 module Micro = PureMicroPasses
 open TranslateCore
@@ -118,6 +117,14 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
           item_binder_params = fdef.generics;
           item_binder_value = fdef.signature;
         }];
+
+  (* Reject signatures that introduce an implied bound relating a higher-ranked
+     (locally-bound) lifetime to a free one. This is also checked when translating
+     the signature, but the body is translated through a separate entry point, so
+     we check here too to cleanly skip the function rather than failing later when
+     looking up its (untranslated) signature. *)
+  TypesAnalysis.check_fun_decl_no_bound_free_implied_bounds
+    trans_ctx.type_ctx.type_decls fdef;
 
   (* Compute the symbolic ASTs, if the function is transparent *)
   let symbolic_trans =
@@ -298,7 +305,6 @@ let translate_function_to_pure (trans_ctx : trans_ctx) (marked_ids : marked_ids)
 
 type translated_crate = {
   type_decls : Pure.type_decl list;
-  builtin_fun_sigs : Pure.fun_sig BuiltinFunIdMap.t;
   fun_decls : pure_fun_translation list;
   global_decls : Pure.global_decl list;
   trait_decls : Pure.trait_decl list;
@@ -421,16 +427,6 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
 
     FunOrMethodId.Map.of_list
       (FunOrMethodId.Map.bindings method_sigs @ fun_decl_sigs)
-  in
-
-  (* Translate the signatures of the builtin functions *)
-  let builtin_fun_sigs =
-    BuiltinFunIdMap.map
-      (fun (info : builtin_fun_info) ->
-        SymbolicToPureTypes.translate_fun_sig trans_ctx
-          (Pure.FunId (FBuiltin info.fun_id)) info.fun_sig
-          (List.map (fun _ -> None) info.fun_sig.item_binder_value.inputs))
-      builtin_fun_infos
   in
 
   (* Translate all the functions.
@@ -597,15 +593,14 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
 
   (* Apply the micro-passes *)
   let pure_translations =
-    Micro.apply_passes_to_pure_fun_translations crate trans_ctx builtin_fun_sigs
-      type_decls trait_impls pure_translations
+    Micro.apply_passes_to_pure_fun_translations crate trans_ctx type_decls
+      trait_impls pure_translations
   in
 
   (* Return *)
   ( trans_ctx,
     {
       type_decls;
-      builtin_fun_sigs;
       fun_decls = pure_translations;
       global_decls;
       trait_decls;
@@ -802,53 +797,6 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
         export_type_extra_info kind def)
       defs)
 
-(** Export a global declaration.
-
-    TODO: check correct behavior with opaque globals. *)
-let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
-    (id : GlobalDeclId.id) : unit =
-  let global_decls = ctx.trans_ctx.crate.global_decls in
-  let global = GlobalDeclId.Map.find id global_decls in
-  let global_init =
-    Option.get (Charon.GAstUtils.init_fun_id_of_global global)
-  in
-  let trans =
-    [%silent_unwrap_opt_span] None
-      (ExtractBase.ctx_lookup_fun_decl_info ctx global_init)
-  in
-  [%sanity_check] global.item_meta.span (trans.loops = [] && trans.bodies = []);
-  let body = trans.f in
-
-  let is_opaque = Option.is_none body.Pure.body in
-
-  (* Save the fact that we extract opaque definitions, if we do *)
-  ctx.extracted_opaque := is_opaque || !(ctx.extracted_opaque);
-
-  (* Check if we extract the global *)
-  let extract =
-    config.extract_globals
-    && (((not is_opaque) && config.extract_transparent)
-       || (is_opaque && config.extract_opaque))
-  in
-  (* Check if it is a builtin global - if yes, we ignore it because we
-     map the definition to one in the standard library *)
-  let open ExtractBuiltin in
-  let extract =
-    extract
-    && match_name_find_opt ctx.trans_ctx global.item_meta.name
-         (builtin_globals_map ())
-       = None
-  in
-  if extract then (
-    (* We don't wrap global declaration groups between calls to functions
-       [{start, end}_global_decl_group] (which don't exist): global declaration
-       groups are always singletons, so the [extract_global_decl] function
-       takes care of generating the delimiters.
-    *)
-    let pure_global = GlobalDeclId.Map.find_opt id ctx.trans_globals in
-    Extract.extract_global_decl ctx fmt pure_global body config.interface;
-    Option.iter (EmitJson.record_global_if_enabled ctx) pure_global)
-
 (** Utility.
 
     Export a group of functions, used by {!export_functions_group}.
@@ -945,6 +893,49 @@ let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
     List.iter (fun f -> f ()) extract_defs;
     Extract.end_fun_decl_group fmt is_rec decls)
 
+(** Extract the decreases-clause template bodies for a list of function
+    declarations (typically a function together with the loops it contains).
+
+    Does nothing unless [config.extract_template_decreases_clauses] is set. *)
+let export_fun_decls_decreases_templates (fmt : Format.formatter)
+    (config : gen_config) (ctx : gen_ctx) (decls : Pure.fun_decl list) : unit =
+  if config.extract_template_decreases_clauses then
+    (* Utility to check whether a function has a decrease clause *)
+    let has_decreases_clause (def : Pure.fun_decl) : bool =
+      PureUtils.FunLoopIdSet.mem (def.def_id, def.loop_id)
+        ctx.functions_with_decreases_clause
+    in
+    let extract_decrease decl =
+      if has_decreases_clause decl then
+        match Config.backend () with
+        | Lean ->
+            Extract.extract_template_lean_termination_and_decreasing ctx fmt
+              decl
+        | FStar -> Extract.extract_template_fstar_decreases_clause ctx fmt decl
+        | Coq ->
+            raise (Failure "Coq doesn't have decreases/termination clauses")
+        | HOL4 ->
+            raise (Failure "HOL4 doesn't have decreases/termination clauses")
+    in
+    List.iter extract_decrease decls
+
+(** Reorder a list of (already flattened) function declarations into mutually
+    recursive subgroups and extract each subgroup.
+
+    Does nothing unless [config.extract_fun_decls] is set. Per-declaration
+    filtering (transparent/opaque) is handled by {!export_functions_group_scc}.
+*)
+let export_fun_decls_scc (fmt : Format.formatter) (config : gen_config)
+    (ctx : gen_ctx) (decls : Pure.fun_decl list) : unit =
+  if config.extract_fun_decls then
+    (* Group the mutually recursive definitions *)
+    let subgroups = ReorderDecls.group_reorder_fun_decls decls in
+    (* Extract the subgroups *)
+    List.iter
+      (fun (is_rec, decls) ->
+        export_functions_group_scc fmt config ctx is_rec decls)
+      subgroups
+
 (** Export a group of function declarations.
 
     In case of (non-mutually) recursive functions, we use a simple procedure to
@@ -967,46 +958,13 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
   if List.exists (fun b -> b) builtin then
     (* Sanity check *)
     assert (List.for_all (fun b -> b) builtin)
-  else
-    (* Utility to check a function has a decrease clause *)
-    let has_decreases_clause (def : Pure.fun_decl) : bool =
-      PureUtils.FunLoopIdSet.mem (def.def_id, def.loop_id)
-        ctx.functions_with_decreases_clause
-    in
-
-    (* Extract the decrease clauses template bodies *)
-    if config.extract_template_decreases_clauses then
-      List.iter
-        (fun f ->
-          (* We only generate decreases clauses for the forward functions, because
-             the termination argument should only depend on the forward inputs.
-             The backward functions thus use the same decreases clauses as the
-             forward function.
-
-             Rem.: we might filter backward functions in {!PureMicroPasses}, but
-             we don't remove forward functions. Instead, we remember if we should
-             filter those functions at extraction time with a boolean (see the
-             type of the [pure_ls] input parameter).
-          *)
-          let extract_decrease decl =
-            let has_decr_clause = has_decreases_clause decl in
-            if has_decr_clause then
-              match Config.backend () with
-              | Lean ->
-                  Extract.extract_template_lean_termination_and_decreasing ctx
-                    fmt decl
-              | FStar ->
-                  Extract.extract_template_fstar_decreases_clause ctx fmt decl
-              | Coq ->
-                  raise
-                    (Failure "Coq doesn't have decreases/termination clauses")
-              | HOL4 ->
-                  raise
-                    (Failure "HOL4 doesn't have decreases/termination clauses")
-          in
-          extract_decrease f.f;
-          List.iter extract_decrease f.loops)
-        pure_ls;
+  else (
+    (* Extract the decrease clauses template bodies. We only generate them for
+       the forward functions and the loops (not the decomposed loop bodies). *)
+    List.iter
+      (fun f ->
+        export_fun_decls_decreases_templates fmt config ctx (f.f :: f.loops))
+      pure_ls;
 
     (* Flatten the translated functions (concatenate the functions with
        the declarations introduced for the loops) *)
@@ -1016,20 +974,72 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
     in
 
     (* Extract the function definitions *)
-    (if config.extract_fun_decls then
-       (* Group the mutually recursive definitions *)
-       let subgroups = ReorderDecls.group_reorder_fun_decls decls in
-
-       (* Extract the subgroups *)
-       let export_subgroup (is_rec : bool) (decls : Pure.fun_decl list) : unit =
-         export_functions_group_scc fmt config ctx is_rec decls
-       in
-       List.iter (fun (is_rec, decls) -> export_subgroup is_rec decls) subgroups);
+    export_fun_decls_scc fmt config ctx decls;
 
     (* Insert unit tests for functions marked with #[verify::test] *)
     List.iter
       (fun trans -> Extract.extract_unit_test_if_marked ctx fmt trans.f)
-      pure_ls
+      pure_ls)
+
+(** Export a global declaration.
+
+    A global (a [const]/[static] item) is defined as a call to the translation
+    of its initializer function. If the initializer contains loops, we extract
+    those loops (and their decomposed bodies) as ordinary auxiliary functions,
+    which we emit *before* the global declaration itself so that the global body
+    can refer to them. *)
+let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
+    (id : GlobalDeclId.id) : unit =
+  let global_decls = ctx.trans_ctx.crate.global_decls in
+  let global = GlobalDeclId.Map.find id global_decls in
+  let global_init =
+    Option.get (Charon.GAstUtils.init_fun_id_of_global global)
+  in
+  let trans =
+    [%silent_unwrap_opt_span] None
+      (ExtractBase.ctx_lookup_fun_decl_info ctx global_init)
+  in
+  let body = trans.f in
+
+  let is_opaque = Option.is_none body.Pure.body in
+
+  (* Save the fact that we extract opaque definitions, if we do *)
+  ctx.extracted_opaque := is_opaque || !(ctx.extracted_opaque);
+
+  (* Check if it is a builtin global - if yes, we ignore it (together with the
+     auxiliary functions introduced for the loops it may contain) because we
+     map the definition to one in the standard library *)
+  let is_builtin =
+    let open ExtractBuiltin in
+    match_name_find_opt ctx.trans_ctx global.item_meta.name
+      (builtin_globals_map ())
+    <> None
+  in
+
+  (* Check if we extract the global itself *)
+  let extract =
+    config.extract_globals
+    && (((not is_opaque) && config.extract_transparent)
+       || (is_opaque && config.extract_opaque))
+    && not is_builtin
+  in
+  if extract then (
+    (* We don't wrap global declaration groups between calls to functions
+       [{start, end}_global_decl_group] (which don't exist): global declaration
+       groups are always singletons, so the [extract_global_decl] function
+       takes care of generating the delimiters.
+
+       However, the global initializer may contain loops, which are extracted as
+       separate auxiliary functions. We extract them before extracting the global
+       itself, mirroring what {!export_functions_group} does for regular
+       functions: the decreases-clause templates for the loops, then the auxiliary
+       function definitions. *)
+    export_fun_decls_decreases_templates fmt config ctx trans.loops;
+    export_fun_decls_scc fmt config ctx (trans.loops @ trans.bodies);
+
+    let pure_global = GlobalDeclId.Map.find_opt id ctx.trans_globals in
+    Extract.extract_global_decl ctx fmt pure_global body config.interface;
+    Option.iter (EmitJson.record_global_if_enabled ctx) pure_global)
 
 let trait_decl_is_builtin (ctx : gen_ctx) (id : Pure.trait_decl_id) : bool =
   let trait_decl =
@@ -1252,7 +1262,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
       with CFailure _ ->
         (* An exception was raised: ignore it *)
         ())
-    ctx.crate.declarations
+    (Option.get ctx.crate.declarations)
 
 type extract_file_info = {
   filename : string;
@@ -1277,7 +1287,8 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
   let fmt = Format.formatter_of_out_channel out in
 
   (* Tell EmitJson file/namespace for the upcoming declarations. *)
-  EmitJson.begin_file_if_enabled ~filename:fi.filename ~namespace:fi.namespace;
+  EmitJson.begin_file_if_enabled ~filename:fi.filename ~namespace:fi.namespace
+    ~in_namespace:fi.in_namespace;
 
   (* Print the headers.
    * Note that we don't use the OCaml formatter for purpose: we want to control
@@ -1290,7 +1301,8 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
   (match Config.backend () with
   | Lean ->
       Printf.fprintf out "-- THIS FILE WAS AUTOMATICALLY GENERATED BY AENEAS\n";
-      Printf.fprintf out "-- [%s]%s\n" fi.rust_module_name fi.custom_msg
+      Printf.fprintf out "-- [%s]%s\n" fi.rust_module_name fi.custom_msg;
+      if !Config.use_lean_modules then Printf.fprintf out "module\n"
   | Coq | FStar | HOL4 ->
       Printf.fprintf out
         "(** THIS FILE WAS AUTOMATICALLY GENERATED BY AENEAS *)\n";
@@ -1342,22 +1354,33 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
         fi.custom_includes;
       Printf.fprintf out "Module %s.\n" fi.module_name
   | Lean ->
-      Printf.fprintf out "import Aeneas\n";
+      let import_kw =
+        if !Config.use_lean_modules then "public import" else "import"
+      in
+      Printf.fprintf out "%s Aeneas\n" import_kw;
       (* Add the custom imports *)
-      List.iter (fun m -> Printf.fprintf out "import %s\n" m) fi.custom_imports;
+      List.iter
+        (fun m -> Printf.fprintf out "%s %s\n" import_kw m)
+        fi.custom_imports;
       (* Add the custom includes *)
-      List.iter (fun m -> Printf.fprintf out "import %s\n" m) fi.custom_includes;
+      List.iter
+        (fun m -> Printf.fprintf out "%s %s\n" import_kw m)
+        fi.custom_includes;
+      if !Config.use_lean_modules then
+        Printf.fprintf out "@[expose] public section\n";
       (* Always open the Primitives namespace *)
       Printf.fprintf out "open Aeneas Aeneas.Std Result ControlFlow Error\n";
-      (* It happens that we generate duplicated namespaces, like `betree.betree`.
-         We deactivate the linter for this, because otherwise it leads to too much
-         noise. *)
-      Printf.fprintf out "set_option linter.dupNamespace false\n";
-      (* The mathlib linter generates warnings when we use hash commands like `#assert`:
-         we deactivate this linter. *)
-      Printf.fprintf out "set_option linter.hashCommand false\n";
-      (* Definitions often contain unused variables: deactivate the corresponding linter *)
-      Printf.fprintf out "set_option linter.unusedVariables false\n";
+      (* Silence the linters which would fire on generated code. *)
+      List.iter
+        (fun option -> Printf.fprintf out "set_option %s false\n" option)
+        [
+          "linter.dupNamespace";
+          "linter.hashCommand";
+          "linter.unusedVariables";
+          "linter.style.whitespace";
+          "linter.style.setOption";
+          "linter.style.longLine";
+        ];
       (* Max heart beats *)
       Printf.fprintf out
         "\n\
@@ -1433,7 +1456,6 @@ let extract_translated_crate (filename : string) (dest_dir : string)
     (trans_crate : translated_crate) (extracted_opaque : bool ref) : unit =
   let {
     type_decls = trans_types;
-    builtin_fun_sigs = builtin_sigs;
     fun_decls = trans_funs;
     global_decls = trans_globals;
     trait_decls = trans_trait_decls;
@@ -1511,7 +1533,6 @@ let extract_translated_crate (filename : string) (dest_dir : string)
       trans_trait_impls;
       trans_types;
       trans_funs;
-      builtin_sigs;
       trans_globals;
       functions_with_decreases_clause = rec_functions;
       types_filter_type_args_map = Pure.TypeDeclId.Map.empty;
@@ -1577,11 +1598,12 @@ let extract_translated_crate (filename : string) (dest_dir : string)
                  (def.Pure.def_id, def.Pure.loop_id)
                  rec_functions
           in
-          (* Register the names, only if the function is not a global body -
-           * those are handled later *)
-          let is_global = trans.f.Pure.is_global_decl_body in
-          if is_global then ctx
-          else Extract.extract_fun_decl_register_names ctx gen_decr_clause trans
+          (* Register the names. If [trans.f] is a global initializer body,
+             [extract_fun_decl_register_names] (via [ctx_add_fun_decl]) skips it
+             - the global is registered separately below through
+             [extract_global_decl_register_names] - but still registers the
+             loops/bodies, which are ordinary auxiliary functions. *)
+          Extract.extract_fun_decl_register_names ctx gen_decr_clause trans
         with CFailure error ->
           (* An exception was raised: ignore it *)
           let name = name_to_string trans_ctx trans.f.item_meta.name in
@@ -2101,7 +2123,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
      extract_file gen_config ctx file_info);
 
   (* Emit translation.json. *)
-  EmitJson.write_if_enabled ~crate_name:crate.name ~llbc_file:filename
+  EmitJson.write_if_enabled ~crate_name:crate.name
   |> Option.iter (fun path -> log#linfo (lazy ("Generated: " ^ path)));
 
   (* Generate the build file *)
@@ -2122,8 +2144,10 @@ let extract_translated_crate (filename : string) (dest_dir : string)
       if !Config.split_files && !Config.generate_lib_entry_point then (
         let filename = Filename.concat dest_dir (crate_name ^ ".lean") in
         let out = open_out filename in
-        (* Write *)
-        Printf.fprintf out "import %s.Funs\n" crate_name;
+        if !Config.use_lean_modules then (
+          Printf.fprintf out "module\n";
+          Printf.fprintf out "public import %s.Funs\n" crate_name)
+        else Printf.fprintf out "import %s.Funs\n" crate_name;
         (* Flush and close the file, log *)
         close_out out;
         log#linfo (lazy ("Generated: " ^ filename)));

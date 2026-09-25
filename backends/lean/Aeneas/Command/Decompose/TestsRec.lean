@@ -2,6 +2,7 @@
 Tests for `#decompose` on recursive functions (WF recursion, partial_fixpoint,
 structural recursion).
 -/
+module
 import Aeneas.Command.Decompose
 import Aeneas.Std
 import Aeneas.Do.Elab
@@ -154,4 +155,87 @@ fun n => do
 #guard_msgs in
 #print recPF3_else
 
-namespace Aeneas.Command.Decompose.TestsRec
+-- ============================================================================
+-- Test 5: partial_fixpoint with NO LCNF — helper captures the recursive call
+-- ============================================================================
+-- Regression test: a `partial_fixpoint` that reaches an `axiom` has no compiled
+-- code (no LCNF) and yet is NOT tagged `noncomputable` (partial_fixpoints are
+-- not compiled). When a decomposition clause extracts a helper that *captures
+-- the recursive call*, the helper references this LCNF-less constant. The
+-- predictive `hasNoncomputableDep` check does not catch it (the constant is
+-- neither `noncomputable` nor an axiom/opaque itself), so `#decompose` used to
+-- fail with "Failed to find LCNF signature". `addDefinition` now adds the
+-- helper and *attempts* to compile it, falling back to a `noncomputable` tag
+-- when compilation fails. This mirrors SymCrust's `sign_internal_loop`, whose
+-- body reaches an axiomatised SHAKE/Keccak primitive.
+
+axiom recAxOp (n : Nat) : Result Nat
+
+noncomputable section
+def recAxLoop (n : Nat) : Result Nat := do
+  if n == 0 then .ok 0
+  else
+    let a ← recAxOp n
+    let b ← recAxLoop (n - 1)
+    .ok (a + b)
+partial_fixpoint
+end
+
+-- The helper `recAxLoop_rec` captures the recursive call `recAxLoop (n - 1)`.
+#decompose recAxLoop recAxLoop_eq
+  branch 1 (letRange 1 2) => recAxLoop_rec
+
+/--
+info: recAxLoop_eq : ∀ (n : ℕ),
+  recAxLoop n =
+    if (n == 0) = true then Result.ok 0
+    else do
+      let a ← recAxOp n
+      recAxLoop_rec n a
+-/
+#guard_msgs in
+#check @recAxLoop_eq
+/--
+info: def Aeneas.Command.Decompose.TestsRec.recAxLoop_rec : ℕ → ℕ → Result ℕ :=
+fun n a => do
+  let b ← recAxLoop (n - 1)
+  Result.ok (a + b)
+-/
+#guard_msgs in
+#print recAxLoop_rec
+
+/- The loop body crosses the universe boundary of a monadic write-back
+   callback; the recursive call must stay outside the extracted prefix. -/
+def crossUniverseLoop (n : Nat) (borrow : Result (Nat × (Nat → Result Nat))) :
+    Result Nat := do
+  if n == 0 then Result.ok 0
+  else
+    let (seed, back) ← borrow
+    let offset ← Result.ok (seed + 1)
+    let restored ← back offset
+    crossUniverseLoop (n - 1) (Result.ok (restored, back))
+partial_fixpoint
+
+#decompose crossUniverseLoop crossUniverseLoop.fold
+  branch 1 (letRange 0 3) => crossUniverseLoop_body
+
+example (borrow : Result (Nat × (Nat → Result Nat))) :
+    crossUniverseLoop_body borrow =
+      (do
+        let (seed, back) ← borrow
+        let offset ← Result.ok (seed + 1)
+        let restored ← back offset
+        pure (back, restored)) := rfl
+
+example (n : Nat) (borrow : Result (Nat × (Nat → Result Nat))) :
+    crossUniverseLoop n borrow =
+      (if n == 0 then Result.ok 0 else do
+        let (back, restored) ← crossUniverseLoop_body borrow
+        crossUniverseLoop (n - 1) (Result.ok (restored, back))) :=
+  crossUniverseLoop.fold n borrow
+
+/--
+info: 'Aeneas.Command.Decompose.TestsRec.crossUniverseLoop.fold' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms crossUniverseLoop.fold

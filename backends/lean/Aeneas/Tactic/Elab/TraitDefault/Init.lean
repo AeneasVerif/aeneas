@@ -1,4 +1,8 @@
-import Lean
+module
+public import Lean.Elab.PreDefinition.Basic
+public meta import Lean.Elab.DefView
+public meta import Lean.Elab.PreDefinition.Basic
+public section
 
 /-!
 # `impl_def` and `@[trait_default]`
@@ -69,6 +73,10 @@ unfolded during resolution. The attribute is typically placed on default method
 implementations that refer to the trait instance (`self`). The unfolding works
 even if the definition is also marked `@[irreducible]`.
 
+When using the module system, the definition must additionally be **exposed** (either
+`@[expose]` on the declaration or inside an `@[expose] section`); otherwise its
+body is unavailable to `impl_def` in downstream modules and resolution fails.
+
 ## `impl_def` command
 
 `impl_def` has the same surface syntax as `def`:
@@ -120,13 +128,13 @@ open Lean.Parser.Term Lean.Parser.Command
 
 /-- Register the `@[trait_default]` tag attribute. Functions marked with this attribute
     are eligible for automatic unfolding by `impl_def` during field resolution. -/
-initialize traitDefaultAttr : TagAttribute ←
+meta initialize traitDefaultAttr : TagAttribute ←
   registerTagAttribute `trait_default
     "Marks a function as a trait default that can be unfolded by `impl_def`."
 
 /-! ## Trace class -/
 
-initialize registerTraceClass `Aeneas.implDef
+meta initialize registerTraceClass `Aeneas.implDef
 
 /-! ## Helpers -/
 
@@ -134,7 +142,7 @@ initialize registerTraceClass `Aeneas.implDef
 
     Used to decide whether a field value still depends on the self-reference and therefore
     needs further resolution. -/
-def exprContainsFVar (e : Expr) (fvarId : FVarId) : Bool :=
+meta def exprContainsFVar (e : Expr) (fvarId : FVarId) : Bool :=
   Option.isSome <| e.find? fun
     | .fvar id => id == fvarId
     | _ => false
@@ -146,16 +154,24 @@ def exprContainsFVar (e : Expr) (fvarId : FVarId) : Bool :=
     this is needed because some generated default implementations are marked as irreducible.
 
     The traversal uses `.visit` (not `.done`) after unfolding so that nested
-    `@[trait_default]` calls exposed by the unfolding are also processed. -/
-partial def unfoldTraitDefaults (e : Expr) : MetaM Expr := do
+    `@[trait_default]` calls exposed by the unfolding are also processed.
+
+    Any `@[trait_default]` constant whose body is *not* available for unfolding — which,
+    under the module system, happens when the definition is not marked `@[expose]` — is
+    returned in the second component, so that callers can report an actionable error. -/
+meta partial def unfoldTraitDefaults (e : Expr) : MetaM (Expr × Std.HashSet Name) := do
   let env ← getEnv
-  Core.transform e (pre := fun e => do
-    let fn := e.getAppFn
-    if let .const name _ := fn then
-      if traitDefaultAttr.hasTag env name then
-        if let some e' ← withTransparency .all <| unfoldDefinition? e then
-          return .visit e'.headBeta
-    return .continue)
+  let go : StateT (Std.HashSet Name) MetaM Expr :=
+    Core.transform e (pre := fun e => do
+      let fn := e.getAppFn
+      if let .const name _ := fn then
+        if traitDefaultAttr.hasTag env name then
+          if let some e' ← withTransparency .all <| unfoldDefinition? e then
+            return .visit e'.headBeta
+          else
+            modify (·.insert name)
+      return .continue)
+  go.run ∅
 
 /-- Replace every projection of the self-reference free variable `selfFvarId` in `e` with
     the corresponding value from `resolvedFields`.
@@ -175,7 +191,7 @@ partial def unfoldTraitDefaults (e : Expr) : MetaM Expr := do
 
     The `projMap` maps each projection function name to its field index, built from
     `StructureInfo.getProjFn?`. -/
-def substituteProjections (e : Expr) (selfFvarId : FVarId) (structName : Name)
+meta def substituteProjections (e : Expr) (selfFvarId : FVarId) (structName : Name)
     (resolvedFields : Std.HashMap Nat Expr) : MetaM Expr := do
   let env ← getEnv
   let some structInfo := getStructureInfo? env structName
@@ -197,17 +213,25 @@ def substituteProjections (e : Expr) (selfFvarId : FVarId) (structName : Name)
             return .done val
       return .continue
     | _ =>
-      -- Case 2: application-style projection (e.g., `@Trait.N selfFvar`)
+      -- Case 2: application-style projection (e.g., `@Trait.N selfFvar extraArgs…`).
+      -- The self-reference is the projection's *structure* argument, which sits at
+      -- index `numParams` of the projection function — it need not be the last
+      -- argument (e.g. a method field `eq : Self → Rhs → Result Bool` is projected
+      -- as `@Trait.eq params self extra…`). We locate it via the projection info and
+      -- re-apply the resolved field value to any trailing arguments.
       let fn := e.getAppFn
       let args := e.getAppArgs
       if let .const projName _ := fn then
-        if args.size > 0 then
+        if let some projInfo := (← getEnv).getProjectionFnInfo? projName then
           if let some fieldIdx := projMap[projName]? then
-            let lastArg := args.back!.consumeMData
-            let lastArgFn := lastArg.getAppFn
-            if lastArgFn.isFVar && lastArgFn.fvarId! == selfFvarId then
-              if let some val := resolvedFields[fieldIdx]? then
-                return .done val
+            if projInfo.numParams < args.size then
+              let structArg := args[projInfo.numParams]!.consumeMData
+              -- Note that the instance may have (type) parameters
+              let structArgFn := structArg.getAppFn
+              if structArgFn.isFVar && structArgFn.fvarId! == selfFvarId then
+                if let some val := resolvedFields[fieldIdx]? then
+                  let extraArgs := args.extract (projInfo.numParams + 1) args.size
+                  return .done (mkAppN val extraArgs)
       return .continue)
 
 /-- Resolve all fields of a structure constructor application, eliminating
@@ -235,7 +259,7 @@ def substituteProjections (e : Expr) (selfFvarId : FVarId) (structName : Name)
        - Stop early if an iteration makes no progress.
     4. Error if any fields remain unresolved.
     5. Reassemble the constructor application with resolved field values. -/
-def resolveStructFields (value : Expr) (selfFvarId : FVarId) (type : Expr) : MetaM Expr := do
+meta def resolveStructFields (value : Expr) (selfFvarId : FVarId) (type : Expr) : MetaM Expr := do
   let env ← getEnv
   let typeFn := type.getAppFn
   let .const structName _ := typeFn
@@ -254,6 +278,8 @@ def resolveStructFields (value : Expr) (selfFvarId : FVarId) (type : Expr) : Met
   let mut fieldValues := allArgs[numParams:].toArray
   let mut resolved : Std.HashMap Nat Expr := {}
   let mut unresolved : Array Nat := #[]
+  -- `@[trait_default]` constants encountered whose body could not be unfolded
+  let mut blocked : Std.HashSet Name := ∅
 
   -- Initial classification
   for i in [:numFields] do
@@ -270,7 +296,8 @@ def resolveStructFields (value : Expr) (selfFvarId : FVarId) (type : Expr) : Met
     let mut stillUnresolved : Array Nat := #[]
     for i in unresolved do
       let fieldVal := fieldValues[i]!
-      let fieldVal' ← unfoldTraitDefaults fieldVal
+      let (fieldVal', fieldBlocked) ← unfoldTraitDefaults fieldVal
+      blocked := blocked.insertMany fieldBlocked
       let fieldVal' ← substituteProjections fieldVal' selfFvarId structName resolved
       if !exprContainsFVar fieldVal' selfFvarId then
         resolved := resolved.insert i fieldVal'
@@ -285,6 +312,12 @@ def resolveStructFields (value : Expr) (selfFvarId : FVarId) (type : Expr) : Met
 
   if !unresolved.isEmpty then
     let unresolvedNames := unresolved.map fun i => structInfo.fieldNames[i]!
+    let blockedNames := blocked.toArray
+    if !blockedNames.isEmpty then
+      throwError "impl_def: could not resolve recursive fields: {unresolvedNames}\n\
+        The body of the following `@[trait_default]` definitions could not be unfolded: \
+        {blockedNames}\n\
+        Mark them with `@[expose]` so that their bodies are available to `impl_def`."
     throwError "impl_def: could not resolve recursive fields: {unresolvedNames}"
 
   return mkAppN ctorFn (paramArgs ++ fieldValues)
@@ -310,6 +343,7 @@ def resolveStructFields (value : Expr) (selfFvarId : FVarId) (type : Expr) : Met
        compiles, and applies any declaration attributes (e.g., `@[simp]`). -/
 elab mods:declModifiers "impl_def " id:declId sig:optDeclSig val:declVal : command => do
   let modifiers ← elabModifiers mods
+  let inPublicScope := (← getScope).isPublic
   let (binders, type?) := expandOptDeclSig sig
   let typeStx ← match type? with
     | some t => pure t
@@ -322,6 +356,10 @@ elab mods:declModifiers "impl_def " id:declId sig:optDeclSig val:declVal : comma
       throwErrorAt val.raw "impl_def only supports `:= body` syntax"
 
   runTermElabM fun _sectionVars => do
+    let isPub :=
+      if inPublicScope || !(← getEnv).header.isModule then !modifiers.visibility.isPrivate
+      else modifiers.visibility.isPublic
+    let modifiers := { modifiers with visibility := if isPub then .public else .private }
     let ⟨shortDeclName, declName, levelNames, _⟩ ←
       Term.expandDeclId (← getCurrNamespace) (← getLevelNames) id modifiers
 
@@ -379,6 +417,7 @@ elab mods:declModifiers "impl_def " id:declId sig:optDeclSig val:declVal : comma
         }
 
         let docCtx := (← getLCtx, ← getLocalInstances)
-        addAndCompileNonRec docCtx preDef
+        withExporting (isExporting := isPub) do
+          addAndCompileNonRec docCtx preDef
 
 end Aeneas.TraitDefault

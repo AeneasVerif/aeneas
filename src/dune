@@ -15,6 +15,8 @@
 
 ;; TODO: change to qualified
 
+(vendored_dirs charon)
+
 (include_subdirs unqualified)
 
 ;; Scan all subdirectories for OCaml files
@@ -32,6 +34,7 @@
    aeneas.ppx))
  (libraries
   charon
+  easy_logging
   core_unix
   ocamlgraph
   str
@@ -40,7 +43,6 @@
   ppx_deriving_yojson)
  (modules
   BorrowCheck
-  Builtin
   Collections
   Config
   ConstStrings
@@ -79,6 +81,7 @@
   InterpStatements
   InterpUtils
   Invariants
+  LeanKeywords
   LlbcAst
   LlbcAstUtils
   LlbcOfJson
@@ -126,9 +129,12 @@
   Values
   ValuesUtils))
 
-;; Embed the git commit into the binary so that `aeneas -version` can report it.
+;; Embed the version into the binary so that `aeneas -version` can report it.
 ;; Follows the same pattern as opam (see https://github.com/ocaml/opam/blob/master/src/client/dune).
-;; Step 1: capture the git description (commit hash, with -dirty suffix if needed).
+;; Step 1: capture the version string. If the `AENEAS_VERSION` environment
+;; variable is set (e.g. by the Nix release build, which has no access to the
+;; git history inside its sandbox) we use it directly; otherwise we fall back to
+;; the git description (commit hash, with -dirty suffix if needed).
 
 (rule
  (target git-sha)
@@ -137,7 +143,8 @@
   (ignore-stderr
    (with-stdout-to
     %{target}
-    (system "git describe --always --dirty 2>/dev/null || echo")))))
+    (system
+     "if [ -n \"$AENEAS_VERSION\" ]; then echo \"$AENEAS_VERSION\"; else git describe --always --dirty 2>/dev/null || echo; fi")))))
 
 ;; Step 2: generate GitVersion.ml from the captured hash.
 ;; Produces `let commit = Some "<hash>"` or `let commit = None` if git is unavailable.

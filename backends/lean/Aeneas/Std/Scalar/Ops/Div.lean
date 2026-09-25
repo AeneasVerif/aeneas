@@ -1,8 +1,10 @@
-import Aeneas.Std.Scalar.Core
-import Aeneas.Std.Scalar.Misc
-import Aeneas.Std.Scalar.Elab
-import Aeneas.Tactic.Solver.ScalarTac
-import Mathlib.Data.BitVec
+module
+public import Aeneas.Std.Scalar.Core
+public import Aeneas.Std.Scalar.Misc
+public import Aeneas.Std.Scalar.Elab
+public import Aeneas.Tactic.Solver.ScalarTac
+public import Mathlib.Data.BitVec
+public section
 
 namespace Aeneas.Std
 
@@ -12,10 +14,10 @@ open Result Error Arith ScalarElab WP
 # Division: Definitions
 -/
 
-def UScalar.div {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
+@[expose] def UScalar.div {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
   if y.bv != 0 then ok ⟨ BitVec.udiv x.bv y.bv ⟩ else fail divisionByZero
 
-def IScalar.div {ty : IScalarTy} (x y : IScalar ty): Result (IScalar ty) :=
+@[expose] def IScalar.div {ty : IScalarTy} (x y : IScalar ty): Result (IScalar ty) :=
   if y.val != 0 then
     -- There can be an overflow if `x` is equal to the lower bound and `y` to `-1`
     if ¬ (x.val = IScalar.min ty && y.val = -1) then ok ⟨ BitVec.sdiv x.bv y.bv ⟩
@@ -366,7 +368,6 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
         have := @Int.ediv_le_self (-x.val).toNat (-y.val).toNat (by omega)
         omega
       -- Then use the hypothesis about the fact that we're not equal to the bound
-      zify at hIneq
       have : (-x.val).toNat = -x.val := by omega
       rw [this] at hIneq; rw [this]
       have : (-y.val).toNat = -y.val := by omega

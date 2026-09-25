@@ -7,6 +7,8 @@ open ValuesUtils
 open Expressions
 open LlbcAst
 
+let literal_to_string = ValuesUtils.literal_to_string
+
 (** Helper to make a function which colorizes text *)
 let mk_colorize ((r, g, b) : int * int * int) : string -> string =
   (* ANSI escape sequence for 24-bit RGB foreground color *)
@@ -143,10 +145,10 @@ module Values = struct
     | TArray _ ->
         (* Happens when we aggregate values *)
         "@Array[" ^ String.concat ", " fields ^ "]"
-    | TAdt { id = TTuple; _ } ->
+    | TAdt { builtin = Some TTuple; _ } ->
         (* Tuple *)
         "(" ^ String.concat ", " fields ^ ")"
-    | TAdt { id = TAdtId def_id; _ } ->
+    | TAdt { id = def_id; builtin = None; _ } ->
         (* "Regular" ADT *)
         let adt_ident =
           match variant_id with
@@ -168,7 +170,7 @@ module Values = struct
               let fields = String.concat " " fields in
               adt_ident ^ " { " ^ fields ^ " }"
         else adt_ident
-    | TAdt { id = TBuiltin aty; _ } -> (
+    | TAdt { builtin = Some aty; _ } -> (
         (* Builtin type *)
         match (aty, fields) with
         | TBox, [ bv ] -> "@Box(" ^ bv ^ ")"

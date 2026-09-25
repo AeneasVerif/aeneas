@@ -1,5 +1,7 @@
-import Aeneas.Std.Scalar.Ops.Rem
-import Aeneas.Std.Scalar.Elab
+module
+public import Aeneas.Std.Scalar.Ops.Rem
+public import Aeneas.Std.Scalar.Elab
+public section
 
 namespace Aeneas.Std
 
@@ -40,7 +42,7 @@ theorem core.num.checked_rem_UScalar_bv_spec {ty} (x y : UScalar ty) :
     simp
     have hnz' : y.val ≠ 0 := by zify at *; simp_all
     have : x % y = x.rem y := by rfl
-    have ⟨_, hz⟩ := spec_imp_exists (UScalar.rem_bv_spec x hnz')
+    have hz := UScalar.rem_bv_spec x hnz'
     simp [this, UScalar.rem, hnz] at hz
     simp [hz, hnz']
 
@@ -65,10 +67,10 @@ theorem core.num.checked_rem_IScalar_bv_spec {ty} (x y : IScalar ty) :
   . zify at *
     simp_all
   . rename_i hnz
-    simp
-    have hnz' : y.val ≠ 0 := by zify at *; simp_all
+    have hnz' : y.val ≠ 0 := by
+      intro h; apply hnz; exact h
     have : x % y = x.rem y := by rfl
-    have ⟨ _, hz ⟩ := spec_imp_exists (@IScalar.rem_bv_spec _ x y hnz')
+    have hz := @IScalar.rem_bv_spec _ x y hnz'
     simp [this, IScalar.rem, hnz] at hz
     simp [*]
 

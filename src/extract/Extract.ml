@@ -55,7 +55,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
         | _ -> ctx
       in
       let f = def.f in
-      let fun_id = (Pure.FunId (FRegular f.def_id), f.loop_id) in
+      let fun_id = (Pure.FunId f.def_id, f.loop_id) in
       ctx_add f.item_meta.span (FunId (FromLlbc fun_id)) info.extract_name ctx
   | None ->
       (* Not builtin *)
@@ -72,7 +72,11 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
         else ctx
       in
       (* We have to register the function itself, and the loops it
-         may contain (which are extracted as functions) *)
+         may contain (which are extracted as functions).
+
+         Note: if [def.f] is a global initializer body, [ctx_add_fun_decl]
+         skips it (the global is registered separately as a global); the loops
+         and bodies are ordinary functions and are registered normally. *)
       let funs = (def.f :: def.loops) @ def.bodies in
       (* Register the decrease clauses *)
       let ctx = List.fold_left register_decreases ctx funs in
@@ -84,7 +88,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
 (** Simply add the global name to the context. *)
 let extract_global_decl_register_names (ctx : extraction_ctx)
     (def : global_decl) : extraction_ctx =
-  ctx_add_global_decl_and_body def ctx
+  ctx_add_global_decl def ctx
 
 (** The following function factorizes the extraction of ADT values.
 
@@ -589,7 +593,9 @@ let extract_binop (span : Meta.span) (ctx : extraction_ctx)
   (* Some binary operations have a special notation depending on the backend *)
   (match (backend (), binop) with
   | HOL4, (Eq _ | Ne _)
-  | (FStar | Coq | Lean), (Eq _ | Lt _ | Le _ | Ne _ | Ge _ | Gt _ | BoolOr)
+  | (FStar | Coq | Lean), (Eq _ | Lt _ | Le _ | Ne _ | Ge _ | Gt _)
+  | (FStar | Lean), (BoolAnd | BoolOr)
+  | Lean, BoolXor
   | ( Lean,
       ( Div (OPanic, _)
       | Rem (OPanic, _)
@@ -617,14 +623,15 @@ let extract_binop (span : Meta.span) (ctx : extraction_ctx)
         | BitXor _ -> "^^^"
         | BitOr _ -> "|||"
         | BitAnd _ -> "&&&"
+        | BoolAnd -> "&&"
         | BoolOr -> "||"
+        | BoolXor -> "^^"
         | _ ->
             [%add_loc] admit_string span
               ("Unimplemented binary operation: " ^ binop_to_string ctx binop)
       in
       let binop_str =
         match (backend (), binop) with
-        | Coq, BoolOr -> binop_str
         | Coq, _ -> "s" ^ binop_str
         | _ -> binop_str
       in
@@ -863,7 +870,7 @@ and extract_array_or_slice (span : Meta.span) (ctx : extraction_ctx)
     (* Print the parameters *)
     F.pp_print_space fmt ();
     extract_const_generic span ctx fmt ~inside:true
-      (CgValue (VScalar (UnsignedScalar (Usize, Z.of_int (List.length args)))));
+      (CgValue (VScalar (UnsignedInteger (Usize, Z.of_int (List.length args)))));
     F.pp_print_space fmt ();
     F.pp_print_string fmt "[";
     (* Close the box for `Array.mk T N [` *)
@@ -992,7 +999,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       let explicit =
         try
           match fun_id with
-          | FromLlbc (FunId (FRegular fun_decl_id), lp_id) -> begin
+          | FromLlbc (FunId fun_decl_id, lp_id) -> begin
               (* Lookup the function to retrieve the signature information *)
               let trans_fun =
                 [%silent_unwrap] span (ctx_lookup_fun_decl_info ctx fun_decl_id)
@@ -1020,17 +1027,17 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
               let explicit = meth.signature.explicit_info in
               Some (adjust_explicit_info explicit true generics)
             end
-          | FromLlbc (FunId (FBuiltin aid), _) ->
-              Some
-                (Builtin.BuiltinFunIdMap.find aid ctx.builtin_sigs)
-                  .explicit_info
-          | Pure (UpdateAtIndex Array) ->
+          | Pure
+              (UpdateAtIndex Array | IndexAtIndex Array | IndexMutAtIndex Array)
+            ->
               Some
                 {
                   explicit_types = [ Implicit ];
                   explicit_const_generics = [ Implicit ];
                 }
-          | Pure (UpdateAtIndex Slice) ->
+          | Pure
+              (UpdateAtIndex Slice | IndexAtIndex Slice | IndexMutAtIndex Slice)
+            ->
               Some
                 { explicit_types = [ Implicit ]; explicit_const_generics = [] }
           | Pure Discriminant ->
@@ -1059,7 +1066,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       *)
       let types_explicit_traits =
         match fun_id with
-        | FromLlbc (FunId (FRegular id), _) ->
+        | FromLlbc (FunId id, _) ->
             fun_builtin_filter_types_trait_clauses (ty_to_string ctx)
               (trait_ref_to_string ctx) id generics.types explicit
               generics.trait_refs ctx
@@ -1196,7 +1203,7 @@ and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
                     if field_id + 1 = Option.get num_fields then twos_prefix
                     else twos_prefix ^ ".1"
                 else "#" ^ string_of_int field_id
-          else ctx_get_field span proj.adt_id proj.field_id ctx
+          else ctx_get_field ~qualified:true span proj.adt_id proj.field_id ctx
         in
         (* Open a box *)
         F.pp_open_hovbox fmt ctx.indent_incr;
@@ -2115,7 +2122,15 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
       [ "reducible" ]
     else []
   in
-  let attributes = rust_attributes @ reduc_attribute in
+  (* A trait method's default-implementation body is emitted with the
+     [trait_default] attribute so that the [impl_def] command can unfold it when
+     resolving self-referential trait-impl fields (see the TraitDefault elab). *)
+  let trait_default =
+    if backend () = Lean && fun_source_is_trait_default ctx def.src then
+      [ "trait_default" ]
+    else []
+  in
+  let attributes = rust_attributes @ reduc_attribute @ trait_default in
   extract_attributes span ctx fmt def.item_meta.name None attributes "rust_fun"
     []
     ~is_external:(not def.item_meta.is_local);
@@ -2481,7 +2496,7 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
   in
   let trait_default =
     match decl.src with
-    | TraitDeclItem _ -> [ "trait_default" ]
+    | TraitDefaultGlobal _ -> [ "trait_default" ]
     | _ -> []
   in
   let attributes = attributes @ trait_default in
@@ -2803,7 +2818,7 @@ let extract_trait_decl_type_names (ctx : extraction_ctx)
 
 (** Similar to {!extract_trait_decl_register_names} *)
 let extract_trait_decl_method_names (ctx : extraction_ctx)
-    (trait_decl : trait_decl) (trait_decl_name : string)
+    (trait_decl : trait_decl) (_trait_decl_name : string)
     (builtin_info : Pure.builtin_trait_decl_info option) : extraction_ctx =
   [%ltrace trait_decl.name];
   let methods = trait_decl.methods in
@@ -2821,7 +2836,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
     [%ldebug
       "compute_item_name: llbc_name=" ^ name_to_string ctx item_meta.name];
     let name =
-      ctx_compute_fun_global_name_no_suffix item_meta TopLevelItem
+      ctx_compute_fun_name_no_suffix item_meta NormalFun
         ~is_trait_decl_field:true ctx
     in
     (* Add a prefix if necessary *)
@@ -2871,30 +2886,16 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
   (* Register the names *)
   List.fold_left
     (fun ctx (method_id, default_id, fun_name) ->
-      (* Register the method name.
-
-          Similarly as with structure fields, in the case of Lean check
-          whether we collide with keywords. If it is the case, add french quotes.
-       *)
-      let fun_name =
-        match backend () with
-        | Lean when names_maps_is_keyword ctx.names_maps fun_name ->
-            "«" ^ fun_name ^ "»"
-        | _ -> fun_name
-      in
+      (* Register the method name *)
       let ctx =
         ctx_add trait_decl.item_meta.span
           (TraitMethodId (trait_decl.def_id, method_id))
           fun_name ctx
       in
-      (* Also register the default implementation if there is *)
-      match default_id with
-      | Some def_id when backend () = Lean ->
-          ctx_add trait_decl.item_meta.span
-            (FunId (FromLlbc (FunId (FRegular def_id), None)))
-            (trait_decl_name ^ fun_name ^ ".default")
-            ctx
-      | _ -> ctx)
+      (* We do not register the default_id: it is registered when registering
+         the default method itself. *)
+      ignore default_id;
+      ctx)
     ctx method_names
 
 (** Similar to {!extract_type_decl_register_names} *)
@@ -3651,10 +3652,30 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
         extract_trait_impl_item ctx fmt item_name ty)
       (List.combine trait_decl.implied_clauses impl.parent_trait_refs);
 
-    (* The methods *)
+    (* The methods.
+
+       If the [filter_trait_impl_methods] option is on, we skip the methods
+       which are absent from the model of the trait declaration. *)
+    let keep_method : string -> bool =
+      if not !filter_trait_impl_methods then fun _ -> true
+      else
+        let pure_trait_decl =
+          [%unwrap_with_span] span
+            (TraitDeclId.Map.find_opt trait_decl_id ctx.trans_trait_decls)
+            "Could not lookup the translated trait declaration"
+        in
+        match pure_trait_decl.builtin_info with
+        | None -> fun _ -> true
+        | Some info ->
+            let method_names =
+              Collections.StringSet.of_list (List.map fst info.methods)
+            in
+            fun item_name -> Collections.StringSet.mem item_name method_names
+    in
     List.iter
-      (fun (method_id, _name, bound_fn) ->
-        extract_trait_impl_method_items ctx fmt impl method_id bound_fn)
+      (fun (method_id, name, bound_fn) ->
+        if keep_method name then
+          extract_trait_impl_method_items ctx fmt impl method_id bound_fn)
       impl.methods;
 
     (* Close the outer boxes for the definition, as well as the brackets *)
@@ -3758,14 +3779,9 @@ let extract_unit_test_if_marked (ctx : extraction_ctx) (fmt : F.formatter)
           if sg.inputs <> [] then (
             F.pp_print_space fmt ();
             F.pp_print_string fmt "()");
+          F.pp_print_string fmt ").reducesTo";
           F.pp_print_space fmt ();
-          F.pp_print_string fmt "==";
-          F.pp_print_space fmt ();
-          let success =
-            ctx_get_variant def.item_meta.span (TBuiltin TResult) result_ok_id
-              ctx
-          in
-          F.pp_print_string fmt (success ^ " ())")
+          F.pp_print_string fmt "()"
       | HOL4 ->
           F.pp_print_string fmt "val _ = assert_ok (";
           F.pp_print_string fmt "“";

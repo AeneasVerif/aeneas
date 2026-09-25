@@ -3010,9 +3010,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
         {
           id =
             FunOrOp
-              (Fun
-                 (FromLlbc
-                    (FunId (FRegular def.def_id), Some (loop.loop_id, false))));
+              (Fun (FromLlbc (FunId def.def_id, Some (loop.loop_id, false))));
           generics;
         }
     in
@@ -3218,7 +3216,10 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
         loop_pos;
         name = def.name;
         signature = loop_sig;
-        is_global_decl_body = def.is_global_decl_body;
+        (* Loops extracted from a global initializer are ordinary auxiliary
+           functions, not the global's value body: only the top-level init
+           function is the global body. *)
+        is_global_decl_body = false;
         body = Some fun_body;
       }
     in
@@ -3554,7 +3555,10 @@ let decompose_loop_body_aux (ctx : ctx) (def : fun_decl) (body : fun_body)
       loop_pos = def.loop_pos;
       name = def.name;
       signature = body_sig;
-      is_global_decl_body = def.is_global_decl_body;
+      (* Decomposed loop bodies extracted from a global initializer are ordinary
+         auxiliary functions, not the global's value body: only the top-level
+         init function is the global body. *)
+      is_global_decl_body = false;
       body = Some body_fun_body;
     }
   in
@@ -3593,7 +3597,7 @@ let decompose_loop_body_aux (ctx : ctx) (def : fun_decl) (body : fun_body)
               FunOrOp
                 (Fun
                    (FromLlbc
-                      ( FunId (FRegular def.def_id),
+                      ( FunId def.def_id,
                         Some (fst (Option.get def.loop_id), true (* is_body *))
                       )));
             generics = generic_args;

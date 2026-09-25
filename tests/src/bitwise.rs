@@ -26,3 +26,15 @@ pub fn or_u32(a: u32, b: u32) -> u32 {
 pub fn and_u32(a: u32, b: u32) -> u32 {
     a & b
 }
+
+pub fn and_bool(a: bool, b: bool) -> bool {
+    a & b
+}
+
+pub fn or_bool(a: bool, b: bool) -> bool {
+    a | b
+}
+
+pub fn xor_bool(a: bool, b: bool) -> bool {
+    a ^ b
+}

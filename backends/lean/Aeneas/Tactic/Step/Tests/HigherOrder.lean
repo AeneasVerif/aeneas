@@ -1,3 +1,4 @@
+module
 import Aeneas.Std.Slice
 import Aeneas.Tactic.Step
 
@@ -49,7 +50,7 @@ theorem callPair_spec (f g : U32 → Result U32) (xy : U32 × U32)
 /--
 info: Try this:
 
-  [apply]     let* ⟨ ab, ab_post1, ab_post2 ⟩ ← [ +inferPost ] callPair_spec
+  [apply]     let* ⟨ ab, ab_post, ab_post1 ⟩ ← [ +inferPost ] callPair_spec
     case hf =>
       let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
       agrind
@@ -108,7 +109,7 @@ def callSlicemapM (x : Slice U32) : Result (Slice U32) := do
 /--
 info: Try this:
 
-  [apply]     let* ⟨ y, y_post1, y_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
+  [apply]     let* ⟨ y, y_post, y_post1 ⟩ ← [ +inferPost ] Slice.mapM_spec
     case hf =>
       intros i hi
       let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
@@ -127,6 +128,19 @@ example (s : Slice U32) (h : ∀ i (hi : i < s.len), s[i] < U32.max) :
   step*? +inferPost
   trace_state
 
+example (s : Slice U32) (h : ∀ i (hi : i < s.len), s[i] < U32.max) :
+  callSlicemapM s ⦃ s' =>
+    s'.len = s.len ∧
+    ∀ i (hi₁ : i < s.len) (hi₂ : i < s'.len), s'[i].val = s[i].val + 1
+    ⦄ := by
+  unfold callSlicemapM
+  let* ⟨ y, y_post1, y_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
+  case hf =>
+    intros i hi
+    let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
+    agrind (instances := 20) (ematch := 1)
+  agrind (instances := 40) (ematch := 2)
+
 def callSlicemapMTwice (x : Slice U32) : Result (Slice U32) := do
   let y ← x.mapM (fun x => x + 1#u32)
   let z ← y.mapM (fun x => x * x)
@@ -135,12 +149,12 @@ def callSlicemapMTwice (x : Slice U32) : Result (Slice U32) := do
 /--
 info: Try this:
 
-  [apply]     let* ⟨ y, y_post1, y_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
+  [apply]     let* ⟨ y, y_post, y_post1 ⟩ ← [ +inferPost ] Slice.mapM_spec
     case hf =>
       intros i hi
       let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
       agrind
-    let* ⟨ z, z_post1, z_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
+    let* ⟨ z, z_post, z_post1 ⟩ ← [ +inferPost ] Slice.mapM_spec
     case hf =>
       intros i hi
       let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.mul_spec
@@ -158,5 +172,26 @@ example (s : Slice U32) (h : ∀ i (hi : i < s.len), (s[i] + 1) * (s[i] + 1) ≤
   unfold callSlicemapMTwice
   step*? +inferPost
   trace_state
+
+#guard_msgs in
+example (s : Slice U32) (h : ∀ i (hi : i < s.len), (s[i] + 1) * (s[i] + 1) ≤ U32.max) :
+  callSlicemapMTwice s ⦃ s' =>
+    s'.len = s.len ∧
+    ∀ i (hi₁ : i < s.len) (hi₂ : i < s'.len), s'[i].val = (s[i].val + 1) * (s[i].val + 1)
+    ⦄ := by
+  unfold callSlicemapMTwice
+  let* ⟨ y, y_post1, y_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
+  case hf =>
+    intros i hi
+    let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
+    agrind (instances := 20) (ematch := 1)
+  let* ⟨ z, z_post1, z_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
+  case hf =>
+    intros i hi
+    let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.mul_spec
+    agrind (instances := 20) (ematch := 1)
+  agrind (instances := 100) (ematch := 2)
+
+
 
 end higher_order

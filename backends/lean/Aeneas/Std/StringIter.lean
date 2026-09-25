@@ -1,6 +1,8 @@
-import Aeneas.Std.String
-import Aeneas.Std.Core.Iter
-import Aeneas.Std.SliceIter
+module
+public import Aeneas.Std.String
+public import Aeneas.Std.Core.Iter
+public import Aeneas.Std.SliceIter
+public section
 
 namespace Aeneas.Std
 
@@ -8,14 +10,25 @@ namespace Aeneas.Std
 structure core.str.iter.Chars where
   iter : core.slice.iter.Iter U8
 
-@[rust_fun
-  "core::str::iter::{core::iter::traits::iterator::Iterator<core::str::iter::Chars<'a>, char>}::collect"]
-def core.str.iter.IteratorChars.collect
+-- TODO:
+@[rust_fun "core::str::iter::{core::iter::traits::iterator::Iterator<core::str::iter::Chars<'a>, char>}::next"]
+opaque core.str.iter.IteratorChars.next (_iter : core.str.iter.Chars) : Result ((Option Char) × core.str.iter.Chars)
+
+-- TODO:
+@[rust_fun "core::str::iter::{core::iter::traits::iterator::Iterator<core::str::iter::Chars<'a>, char>}::collect"]
+opaque core.str.iter.IteratorChars.collect
   {B : Type} (itertraitscollectFromIteratorBCharInst :
   core.iter.traits.collect.FromIterator B Char) :
-  core.str.iter.Chars → Result B := sorry
+  core.str.iter.Chars → Result B
 
-@[rust_fun "core::str::{str}::chars"]
+@[expose, reducible, rust_trait_impl
+  "core::iter::traits::iterator::Iterator<core::str::iter::Chars<'a>, char>"]
+def core.iter.traits.iterator.IteratorChars :
+  core.iter.traits.iterator.Iterator core.str.iter.Chars Char := {
+  next := core.str.iter.IteratorChars.next
+}
+
+@[expose, rust_fun "core::str::{str}::chars"]
 def core.str.Str.chars (s : Str) : Result core.str.iter.Chars :=
   .ok { iter := { slice := s, i := 0 } }
 
