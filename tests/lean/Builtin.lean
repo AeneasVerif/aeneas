@@ -63,8 +63,28 @@ def u32_from_le_bytes (x : Array Std.U8 4#usize) : Result Std.U32 := do
 def u32_to_le_bytes (x : Std.U32) : Result (Array Std.U8 4#usize) := do
   ok (core.num.U32.to_le_bytes x)
 
+/-- [builtin::i64_from_le_bytes]:
+    Source: 'tests/src/builtin.rs', lines 41:0-43:1 -/
+def i64_from_le_bytes (x : Array Std.U8 8#usize) : Result Std.I64 := do
+  ok (core.num.I64.from_le_bytes x)
+
+/-- [builtin::i64_to_le_bytes]:
+    Source: 'tests/src/builtin.rs', lines 45:0-47:1 -/
+def i64_to_le_bytes (x : Std.I64) : Result (Array Std.U8 8#usize) := do
+  ok (core.num.I64.to_le_bytes x)
+
+/-- [builtin::i64_from_be_bytes]:
+    Source: 'tests/src/builtin.rs', lines 49:0-51:1 -/
+def i64_from_be_bytes (x : Array Std.U8 8#usize) : Result Std.I64 := do
+  ok (core.num.I64.from_be_bytes x)
+
+/-- [builtin::i64_to_be_bytes]:
+    Source: 'tests/src/builtin.rs', lines 53:0-55:1 -/
+def i64_to_be_bytes (x : Std.I64) : Result (Array Std.U8 8#usize) := do
+  ok (core.num.I64.to_be_bytes x)
+
 /-- [builtin::use_debug_clause]:
-    Source: 'tests/src/builtin.rs', lines 38:0-38:49 -/
+    Source: 'tests/src/builtin.rs', lines 57:0-57:49 -/
 def use_debug_clause
   {T : Type} (corefmtDebugInst : core.fmt.Debug T) (t : T) : Result Unit := do
   ok ()
