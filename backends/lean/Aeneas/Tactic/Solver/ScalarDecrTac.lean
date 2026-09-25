@@ -25,17 +25,12 @@ meta def removeInvImageAssumptions : TacticM Unit := do
   -- Get the local declarations
   let ctx ← Lean.MonadLCtx.getLCtx
   let decls ← ctx.getDecls
-  -- Retrieve the list of local declarations which contain `invertImage`
-  let containsInvertImage (decl : LocalDecl) : MetaM Bool := do
-    reduceVisit (
-      fun _ b e =>
-      pure (
-        b ||
-        match e with
-        | .const name _ => name == ``invImage || name == ``InvImage
-        | _ => false)) false decl.type
+  -- Retrieve the list of local declarations which contain `invertImage`.
+  -- Note that we use `Expr.find?` (which caches the shared sub-terms it visits) rather than
+  -- a visitor rebuilding the expression: the context can be very large.
+  let isInvImage (e : Expr) : Bool := e.isConstOf ``invImage || e.isConstOf ``InvImage
   let filtDecls ← liftM (decls.filterM fun decl => do
-    if ← isProp decl.type then containsInvertImage decl
+    if ← isProp decl.type then pure ((← instantiateMVars decl.type).find? isInvImage).isSome
     else pure false)
   let filtDecls := filtDecls.toArray.map LocalDecl.fvarId
   /- Attempt to clear those assumptions - note that it may not always succeed as
