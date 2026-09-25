@@ -232,13 +232,13 @@ let lean_builtin_funs =
        @A>, @T>}::next"
       "alloc.vec.into_iter.IteratorIntoIter.next"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 620 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 616 *)
     mk_fun
       "alloc::vec::partial_eq::{core::cmp::PartialEq<alloc::vec::Vec<@T>, \
        alloc::vec::Vec<@U>>}::eq"
       "alloc.vec.partial_eq.PartialEqVec.eq"
       ~keep_params:(Some [ true; true; false; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 630 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 626 *)
     mk_fun
       "alloc::vec::partial_eq::{core::cmp::PartialEq<alloc::vec::Vec<@T>, \
        alloc::vec::Vec<@U>>}::ne"
@@ -261,27 +261,27 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Vec.lean", line: 155 *)
     mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::push" "alloc.vec.Vec.push"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 448 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 444 *)
     mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::resize" "alloc.vec.Vec.resize"
       ~keep_params:(Some [ true; false ]);
     (* file: "Aeneas/Std/Vec.lean", line: 408 *)
     mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::with_capacity"
       "alloc.vec.Vec.with_capacity" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 606 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 602 *)
     mk_fun "alloc::vec::{core::clone::Clone<alloc::vec::Vec<@T>>}::clone"
       "alloc.vec.CloneVec.clone"
       ~keep_params:(Some [ true; false ])
       ~keep_trait_clauses:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 521 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 517 *)
     mk_fun
       "alloc::vec::{core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>}::from"
       "alloc.vec.FromBoxSliceVec.from"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 507 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 503 *)
     mk_fun
       "alloc::vec::{core::convert::From<alloc::vec::Vec<@T>, [@T; @N]>}::from"
       "alloc.vec.FromVecArray.from";
-    (* file: "Aeneas/Std/Vec.lean", line: 651 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 647 *)
     mk_fun "alloc::vec::{core::fmt::Debug<alloc::vec::Vec<@T>>}::fmt"
       "alloc.vec.DebugVec.fmt"
       ~keep_params:(Some [ true; false ]);
@@ -296,13 +296,13 @@ let lean_builtin_funs =
        @T, alloc::vec::into_iter::IntoIter<@T, @A>>}::into_iter"
       "alloc.vec.IntoIteratorVec.into_iter"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 425 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 421 *)
     mk_fun
       "alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>}::deref"
       "alloc.vec.Vec.deref"
       ~keep_params:(Some [ true; false ])
       ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 435 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 431 *)
     mk_fun
       "alloc::vec::{core::ops::deref::DerefMut<alloc::vec::Vec<@T>, \
        [@T]>}::deref_mut"
@@ -1499,7 +1499,7 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Core/Core.lean", line: 37 *)
     mk_trait_impl "core::clone::Clone<alloc::alloc::Global>"
       "core.core.clone.CloneGlobal";
-    (* file: "Aeneas/Std/Vec.lean", line: 613 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 609 *)
     mk_trait_impl "core::clone::Clone<alloc::vec::Vec<@T>>"
       "core.clone.CloneallocvecVec"
       ~keep_params:(Some [ true; false ])
@@ -1515,7 +1515,7 @@ let lean_builtin_trait_impls =
     mk_trait_impl "core::cmp::PartialEq<Box<@T>, Box<@T>>"
       "core.cmp.PartialEqBox"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 641 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 637 *)
     mk_trait_impl
       "core::cmp::PartialEq<alloc::vec::Vec<@T>, alloc::vec::Vec<@U>>"
       "core.cmp.PartialEqVec"
@@ -1532,11 +1532,11 @@ let lean_builtin_trait_impls =
       "Array.Insts.CoreConvertAsRefSlice";
     (* file: "Aeneas/Std/Core/Convert.lean", line: 34 *)
     mk_trait_impl "core::convert::From<@Self, @Self>" "core.convert.FromSame";
-    (* file: "Aeneas/Std/Vec.lean", line: 529 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 525 *)
     mk_trait_impl "core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>"
       "core.convert.FromBoxSliceVec"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 513 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 509 *)
     mk_trait_impl "core::convert::From<alloc::vec::Vec<@T>, [@T; @N]>"
       "core.convert.FromVecArray";
     (* file: "Aeneas/Std/Core/Convert.lean", line: 21 *)
@@ -1563,7 +1563,7 @@ let lean_builtin_trait_impls =
     mk_trait_impl "core::fmt::Debug<()>" "core.fmt.DebugUnit";
     (* file: "Aeneas/Std/Array/ArrayDebug.lean", line: 18 *)
     mk_trait_impl "core::fmt::Debug<[@T; @N]>" "Array.Insts.CoreFmtDebug";
-    (* file: "Aeneas/Std/Vec.lean", line: 662 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 658 *)
     mk_trait_impl "core::fmt::Debug<alloc::vec::Vec<@T>>" "core.fmt.DebugVec"
       ~keep_params:(Some [ true; false ]);
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 190 *)
@@ -1699,7 +1699,7 @@ let lean_builtin_trait_impls =
     mk_trait_impl "core::ops::deref::Deref<Box<@T>, @T>"
       "core.ops.deref.DerefBoxInst"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 430 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 426 *)
     mk_trait_impl "core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>"
       "core.ops.deref.DerefVec"
       ~keep_params:(Some [ true; false ]);
@@ -1707,7 +1707,7 @@ let lean_builtin_trait_impls =
     mk_trait_impl "core::ops::deref::DerefMut<Box<@T>, @T>"
       "core.ops.deref.DerefMutBoxInst"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 441 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 437 *)
     mk_trait_impl "core::ops::deref::DerefMut<alloc::vec::Vec<@T>, [@T]>"
       "core.ops.deref.DerefMutVec"
       ~keep_params:(Some [ true; false ]);
