@@ -643,40 +643,100 @@ meta def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array E
   Utils.addDeclTac name e (← inferType e) (asLet := false) fun e => do
     trace[Step] "Introduced the \"pretty\" let binding: {← inferType e}"
 
-/-- Recursively destructure an introduced fvar of a Prod type according to the
-shape of a `BTree`. Returns the leaf fvars and the updated goal. The destructured FVars
-are named later in `introOutputs`.
-
-NOTE: We are using `cases` to break up the FVar which could be slow for nested
-goals or when the goal context gets large. Something to keep an eye on.
--/
-meta partial def destructureFVar {α} (goal : MVarId) (fv : FVarId) (tree : BTree α) :
-    TacticM (Array FVarId × MVarId) := do
+/-- Collect leaf types from `ty`; each pair node in `tree` must match a product. -/
+meta partial def destructTreeLeafTypes {α} (ty : Expr) (tree : BTree α) :
+    MetaM (Array Expr) := do
   match tree with
-  | .leaf _ => return (#[fv], goal)
+  | .leaf _ => return #[ty]
   | .pair l r =>
-    let subgoals ← goal.cases fv
-    if _ : subgoals.size = 1 then
-      let subgoal := subgoals[0]
-      let fields := subgoal.fields
-      if fields.size < 2 then
-        throwError "destructureFVar: cases on Prod produced {fields.size} fields, expected 2"
-      let leftFV := fields[0]!.fvarId!
-      let rightFV := fields[1]!.fvarId!
-      let (lFVs, g1) ← destructureFVar subgoal.mvarId leftFV l
-      let (rFVs, g2) ← destructureFVar g1 rightFV r
-      return (lFVs ++ rFVs, g2)
-    else
-      throwError "destructureFVar: cases on Prod returned {subgoals.size} subgoals, expected 1"
+    match_expr ty.consumeMData with
+    | Prod a b =>
+      return (← destructTreeLeafTypes a l) ++ (← destructTreeLeafTypes b r)
+    | _ => throwError "destructTreeLeafTypes: expected a product type, got {ty}"
 
-/-- Introduce one universally-quantified output and destructure it according to
-the tree's shape. The destructured FVars are named later in `introOutputs`.
--/
-meta def introOneSurfaceBinder {α} (goal : MVarId) (tree : BTree α) :
-    TacticM (Array FVarId × MVarId) := do
-  let tmp ← mkFreshUserName `_x
-  let (fv, goal') ← goal.intro tmp
-  destructureFVar goal' fv tree
+/-- Build a nested product shaped by `tree`, returning the unused leaves. -/
+meta partial def destructTreeMk {α} (tree : BTree α) (leaves : List Expr) :
+    MetaM (Expr × List Expr) := do
+  match tree with
+  | .leaf _ =>
+    match leaves with
+    | x :: rest => return (x, rest)
+    | [] => throwError "destructTreeMk: not enough leaves"
+  | .pair l r =>
+    let (le, leaves) ← destructTreeMk l leaves
+    let (re, leaves) ← destructTreeMk r leaves
+    return (← mkAppM ``Prod.mk #[le, re], leaves)
+
+/-- Project the leaves of `root` according to `tree`. -/
+meta partial def destructTreeProjs {α} (tree : BTree α) (root : Expr) :
+    MetaM (Array Expr) := do
+  match tree with
+  | .leaf _ => return #[root]
+  | .pair l r =>
+    let fst ← mkAppM ``Prod.fst #[root]
+    let snd ← mkAppM ``Prod.snd #[root]
+    return (← destructTreeProjs l fst) ++ (← destructTreeProjs r snd)
+
+/-- Cache the equivalence for destructuring `ty` according to `tree`:
+```
+∀ (P : ty → Prop), (∀ x₀ ... xₙ, P (mk x₀ ... xₙ)) ↔ (∀ x, P x)
+```
+Here `mk` reconstructs the nested product. Abstract local dependencies and universes
+before caching, then return the lemma applied to the current context. -/
+meta def mkDestructEquivThm {α} (ty : Expr) (tree : BTree α) : MetaM Expr := do
+  withTraceNode `Step (fun _ => pure m!"mkDestructEquivThm: {ty}") do
+  let ty ← instantiateMVars ty
+  let leafTys ← destructTreeLeafTypes ty tree
+  let leafDecls : Array (Name × (Array Expr → MetaM Expr)) :=
+    leafTys.mapIdx fun i t => (Name.num `x i, fun _ => pure t)
+  -- P : ty → Prop
+  withLocalDeclD `P (← mkArrow ty (.sort .zero)) fun P => do
+  -- LHS: ∀ x₀ ... xₙ, P (mk x₀ ... xₙ)
+  let lhs ← withLocalDeclsD leafDecls fun xs => do
+    let (mk, _) ← destructTreeMk tree xs.toList
+    mkForallFVars xs (mkApp P mk)
+  -- RHS: ∀ x, P x
+  let rhs ← withLocalDeclD `x ty fun x => mkForallFVars #[x] (mkApp P x)
+  let iff ← mkAppM ``Iff #[lhs, rhs]
+  let stmt ← mkForallFVars #[P] iff
+  -- Forward direction: ∀ (h : LHS) (x : ty), P x  (defeq via structure eta)
+  let fwd ←
+    withLocalDeclD `h lhs fun h =>
+    withLocalDeclD `x ty fun x => do
+      let projs ← destructTreeProjs tree x
+      mkLambdaFVars #[h, x] (mkAppN h projs)
+  -- Backward direction: ∀ (h : RHS) x₀ ... xₙ, P (mk x₀ ... xₙ)
+  let bwd ←
+    withLocalDeclD `h rhs fun h =>
+    withLocalDeclsD leafDecls fun xs => do
+      let (mk, _) ← destructTreeMk tree xs.toList
+      mkLambdaFVars (#[h] ++ xs) (mkApp h mk)
+  let proof ← mkLambdaFVars #[P] (← mkAppM ``Iff.intro #[fwd, bwd])
+  /- Close over transitive local dependencies, preserving context order. -/
+  let mut used : Std.HashSet FVarId := {}
+  for e in #[stmt, proof] do
+    for fv in (collectFVars {} e).fvarIds do used := used.insert fv
+  let lctx ← getLCtx
+  let mut changed := true
+  while changed do
+    changed := false
+    for decl in lctx do
+      if used.contains decl.fvarId then
+        let mut deps := (collectFVars {} decl.type).fvarIds
+        /- Include dependencies of local let values. -/
+        if let .ldecl (value := v) .. := decl then
+          deps := deps ++ (collectFVars {} v).fvarIds
+        for fv in deps do
+          if ¬ used.contains fv then used := used.insert fv; changed := true
+  let ctxFVars : Array Expr := lctx.foldl (init := #[]) fun acc decl =>
+    if used.contains decl.fvarId ∧ ¬ decl.isImplementationDetail then acc.push decl.toExpr else acc
+  let closedStmt ← mkForallFVars ctxFVars stmt
+  let closedProof ← mkLambdaFVars ctxFVars proof
+  let levelParams := (collectLevelParams {} closedStmt |>.collect closedProof).params.toList
+  let name ← mkAuxLemma levelParams closedStmt closedProof (kind? := `Aeneas_step_destruct)
+  /- Dependent lets remain let binders; only generalized locals are arguments. -/
+  let ctxArgs ← ctxFVars.filterM fun fv => return !(← getFVarLocalDecl fv).isLet
+  return mkAppN (mkConst name (levelParams.map Level.param)) ctxArgs
 
 /-- Extract the call-site destructure tree from the current goal, which should
 have shape `qimp_spec P k Q` or `qimp P Q`.
@@ -755,10 +815,10 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
   if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after eliminating `imp` and folding back the scalar types"
 
-  /- Introduce the single output and recursively destructure it according to the
-     merged binder tree. We use a fresh internal name here and rename leaves to
-     user-provided names later. -/
+  /- Destructure the output according to the call-site tree using `mkDestructEquivThm`,
+     then introduce the leaves with their chosen names. -/
   let mut outputFVars : Array FVarId := #[]
+  let mut outputIds : Array Name := #[]
   let goal ← getMainGoal
   let goalTy ← instantiateMVars (← goal.getType)
   let goalTy := goalTy.consumeMData
@@ -767,7 +827,27 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
   -- eliminate the `forall` quantifier (via `forall_unit`) when doing the simplification above.
   if goalTy.isForall then
     if ¬ (← isProp goalTy.bindingDomain!) then
-      let (fvs, goal') ← introOneSurfaceBinder goal callSiteTree
+      let ty := goalTy.bindingDomain!
+      let P := Expr.lam goalTy.bindingName! ty goalTy.bindingBody! goalTy.bindingInfo!
+      let prefixLength := callSiteTree.flatten.size
+      outputIds ← (Array.range prefixLength).mapM fun i => do
+        if h : i < args.ids.size then
+          match args.ids[i] with
+          | none => mkFreshUserName `x
+          | some n => pure n
+        else mkFreshUserName `x
+      let thm ← mkDestructEquivThm ty callSiteTree
+      let thm := mkApp thm P
+      let thmTy ← instantiateMVars (← inferType thm)
+      let_expr Iff destrGoalTy _ := thmTy.consumeMData
+        | throwError "introOutputs: expected an `Iff`, got {thmTy}"
+      let newGoal ← mkFreshExprSyntheticOpaqueMVar destrGoalTy
+      /- Preserve the case label. -/
+      newGoal.mvarId!.setTag (← goal.getTag)
+      goal.assign (← mkAppM ``Iff.mp #[thm, newGoal])
+      let (fvs, goal') ← newGoal.mvarId!.introN prefixLength outputIds.toList
+      /- Rename to display anonymous outputs as `_✝` rather than the underlying binder name. -/
+      let goal' ← fvs.zip outputIds |>.foldlM (fun g (fv, id) => g.rename fv id) goal'
       setGoals [goal']
       outputFVars := fvs
     else
@@ -799,15 +879,6 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
 
   let mkFreshAnon (isProp : Bool) :=
     if isProp then mkFreshAnonPropUserName else mkFreshUserName `x
-
-  /- Names for the already-introduced output fvars (one name per leaf): we use the
-     user-provided ids when available, and generate fresh names otherwise. -/
-  let outputIds ← (Array.range prefixLength).mapM fun i => do
-    if h : i < args.ids.size then
-      match args.ids[i] with
-      | some n => pure n
-      | none => mkFreshUserName `x
-    else mkFreshUserName `x
 
   /- Associate every output fvar with the name we picked for it, so that when naming the
      post-conditions we can resolve references to the outputs back to those names. -/
@@ -875,13 +946,6 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
   let postfixLength := postsIsProp.size
   trace[Step] "Prefix length (outputs): {prefixLength}, postfix length (post-conditions): {postfixLength}"
   trace[Step] "output ids: {outputIds}, post ids: {postsIdsArr}"
-
-  /- Rename the output fvars to the user-provided names. -/
-  let mut goal ← getMainGoal
-  for h : i in [0:outputFVars.size] do
-    goal ← goal.rename outputFVars[i] outputIds[i]!
-  setGoals [goal]
-  traceGoalWithNode "goal after renaming outputs"
 
   /- Introduce the pretty equality. -/
   withMainContext do

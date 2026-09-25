@@ -151,8 +151,8 @@ example : (do let (a, b) ← quadProg
 /--
 error: unsolved goals
 case a
-c : ℕ × ℕ
 a b : ℕ
+c : ℕ × ℕ
 a_post : a = 8
 b_post : b = 9
 a_post1 : c.1 = 10
@@ -471,7 +471,7 @@ example :
 /--
 error: unsolved goals
 case a
-c a b : ℕ
+a b c : ℕ
 ha : a = 1
 hb : b = 2
 hc : c = 3
@@ -510,3 +510,38 @@ example :
   step with quadProg_spec
 
 end
+
+/- Output types may depend on polymorphic parameters and local let bindings. -/
+def genericPair {α : Type u} (x : α) : Result (α × Nat) := ok (x, 1)
+
+@[step]
+theorem genericPair_spec {α : Type u} (x : α) :
+    genericPair x ⦃ (y : α) (k : Nat) => y = x ∧ k = 1 ⦄ := by
+  unfold genericPair
+  step*
+
+example {α : Type u} (x : α) :
+    (do let (y, k) ← genericPair x; ok (y, k)) ⦃ y k => y = x ∧ k = 1 ⦄ := by
+  step*
+
+example (m : Nat) :
+    let n := m + 1
+    ∀ x : Vector Nat n,
+      (do let (y, k) ← genericPair x; ok (y, k)) ⦃ y k => y = x ∧ k = 1 ⦄ := by
+  intro n x
+  step*
+
+example {α : Type u} (m : Nat) :
+    let n := m + 1
+    let size := n + 1
+    ∀ x : Vector α size,
+      (do let (y, k) ← genericPair x; ok (y, k)) ⦃ y k => y = x ∧ k = 1 ⦄ := by
+  intro n size x
+  step*
+
+example (m : Nat) :
+    have n := m + 1
+    ∀ x : Vector Nat n,
+      (do let (y, k) ← genericPair x; ok (y, k)) ⦃ y k => y = x ∧ k = 1 ⦄ := by
+  intro n x
+  step*
