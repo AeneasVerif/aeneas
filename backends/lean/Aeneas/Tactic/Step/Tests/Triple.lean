@@ -1,5 +1,6 @@
 module
 import Aeneas.Tactic.Step
+public meta import Aeneas.Tactic.Step
 
 /-!
 This file tests the use of a custom triple with `#register_spec_info`
@@ -59,6 +60,13 @@ theorem triple_step_bind {P Pm : Pre} {next : α → TestM β}
   fun state hP =>
     hNext (m state).2 (m state).1 (hStep state (hPre state hP)) (m state).2 rfl
 
+/- intro tactic: expose the binders of `Post.entails`, and let `Std.WP.introTactic` normalize
+   and split the facts among them. -/
+open Lean Elab Tactic in
+meta def introEntails : Aeneas.IntroFn := do
+  evalTactic (← `(tactic| try rw [Post.entails_iff]))
+  Aeneas.Std.WP.introTactic
+
 #register_spec_info {
     spec_name := ``triple
     arity := 4
@@ -68,8 +76,7 @@ theorem triple_step_bind {P Pm : Pre} {next : α → TestM β}
     mk_spec_mono_skip_args := 4
     mk_spec_bind := ``triple_step_bind
     mk_spec_bind_skip_args := 6
-    uncurry_elim_tactics := #[``true_imp_iff]
-    qimp_elim_tactics := #[``Post.entails_iff, ``true_imp_iff]
+    intro_tactic := some ``introEntails
     to_mvcgen := none
     liftings := #[]
   }

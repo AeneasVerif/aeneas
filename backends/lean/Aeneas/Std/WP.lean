@@ -1,10 +1,12 @@
 module
 public import Aeneas.Std.Primitives
 public import Aeneas.Std.Delab
+public meta import AeneasMeta.Simp
 public import Std.Do
 public import Aeneas.Tactic.Solver.Grind.Init
 public import Aeneas.Tactic.Step.DspecInduction
 public meta import Aeneas.Std.Spec
+public import Aeneas.Tactic.Step.Intro
 public meta import Aeneas.Std.Delab
 public import Aeneas.Data.Coinductive.ITree
 public import Aeneas.Data.Coinductive.Effect
@@ -107,6 +109,7 @@ theorem dspec_func_admissible {α : Sort v} {β} (arg : α) (p : Post β) :
     admissible (fun f : α → Result β => dspec (f arg) p) :=
   admissible_apply (fun _ m => dspec m p) arg (dspec_admissible p)
 
+-- `spec` theorems
 /-- Variant of `uncurry` used to decompose tuples in post-conditions.
 
 Similar to `uncurry` but delaborated differently:
@@ -164,83 +167,26 @@ theorem spec_fail_pair (e : Error) (f : α → β → Prop) :
 theorem spec_div_pair (f : α → β → Prop) :
     spec div (uncurry f) ↔ False := by simp
 
-/-- Small helper to currify functions -/
-def curry {α β γ} (f : α × β → γ) (x : α) : β → γ := fun y => f (x, y)
-
-/-- Implication -/
-@[expose]
-def imp (P Q : Prop) : Prop := P → Q
-
-@[simp]
-theorem imp_and_iff (P0 P1 Q : Prop) : imp (P0 ∧ P1) Q ↔ P0 → imp P1 Q := by simp [imp]
-
-/-- Implication with quantifier -/
-@[expose]
-def qimp {α} (P₀ P₁ : Post α) : Prop := ∀ x, P₀ x → P₁ x
-
-/-- We use this lemma to decompose nested `uncurry'` predicates into a sequence of universal quantifiers. -/
-@[simp]
-def qimp_uncurry' {α₀ α₁} (P : α₀ → α₁ → Prop) (Q : α₀ × α₁ → Prop) :
-  qimp (uncurry' P) Q ↔ ∀ x, qimp (P x) (curry Q x) := by
-  simp [qimp, curry]
-
-/-- We use this lemma to eliminate `imp` after we decomposed the nested `uncurry'` -/
-theorem qimp_iff {α} (P₀ P₁ : Post α) : qimp P₀ P₁ ↔ ∀ x, imp (P₀ x) (P₁ x) := by simp [qimp, imp]
-
-/-- `spec_mono` controls the introduction of universal quantifiers by introducing `imp`. -/
+/-- Mono rule used by `step`. -/
 theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
-  qimp P₀ P₁ → spec m P₁ := by
+  (∀ x, P₀ x → P₁ x) → spec m P₁ := by
   intros HMonPost
   revert h
   intros s
   cases s
   constructor
-  grind only [qimp]
+  grind only
 
-/-- Implication of a `spec` predicate with quantifier -/
-@[expose]
-def qimp_spec {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) : Prop :=
-  ∀ x, P x → spec (k x) Q
-
-/-- `spec_bind` controls the introduction of universal quantifiers with `qimp_spec`. -/
+/-- Bind rule used by `step`. It is stated on `Std.bind` rather than on `>>=`, which is
+what a translated program binds with. -/
 theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
   spec m Pₘ →
-  (qimp_spec Pₘ k Pₖ) →
+  (∀ x, Pₘ x → spec (k x) Pₖ) →
   spec (Std.bind m k) Pₖ := by
   intro Hm Hk
-  simp only [qimp_spec] at *
   cases Hm
   simp
   grind only
-
-/-- We use this lemma to decompose nested `uncurry'` predicates into a sequence of universal quantifiers. -/
-@[simp]
-def qimp_spec_uncurry' {α₀ α₁ β} (P : α₀ → α₁ → Prop) (k : α₀ × α₁ → Result β) (Q : β → Prop) :
-  qimp_spec (uncurry' P) k Q ↔ ∀ x, qimp_spec (P x) (curry k x) Q := by
-  simp [qimp_spec, curry]
-
-/-- We use this lemma to eliminate `imp_spec` after we decomposed the nested `uncurry'` -/
-def qimp_spec_iff {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) :
-  qimp_spec P k Q ↔ ∀ x, imp (P x) (spec (k x) Q) := by
-  simp [qimp_spec, imp]
-
-/--
-error: unsolved goals
-⊢ ∀ (x : Nat), qimp_spec (fun y => 0 < x + y) (curry (fun x => ok (x.fst + x.snd)) x) fun z => 0 < z
--/
-#guard_msgs in
-example : qimp_spec (uncurry' fun x y => x + y > 0) (fun (x, y) => .ok (x + y)) (fun z => z > 0) := by
-  simp
-
-@[simp]
-theorem qimp_exists {α β} (P₀ : β → Post α) (P₁ : Post α) :
-  qimp (fun x => ∃ y, P₀ y x) P₁ ↔ ∀ x, qimp (P₀ x) P₁ := by
-  simp only [qimp, forall_exists_index]; grind
-
-@[simp]
-theorem qimp_spec_exists {α β γ} (P : γ → α → Prop) (k : α → Result β) (Q : β → Prop) :
-  qimp_spec (fun x => ∃ y, P y x) k Q ↔ ∀ x, qimp_spec (P x) k Q := by
-  simp only [qimp_spec, forall_exists_index]; grind
 
 theorem spec_equiv_exists (m:Result α) (P:Post α) :
   spec m P ↔ (∃ y, m = ok y ∧ P y) := by
@@ -260,48 +206,23 @@ theorem exists_imp_spec {m:Result α} {P:Post α} :
 
 -- `dspec` theorems
 theorem dspec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : dspec m P₀):
-  qimp P₀ P₁ → dspec m P₁ := by
+  (∀ x, P₀ x → P₁ x) → dspec m P₁ := by
   intros HMonPost
   revert h
   intros s
   cases s <;> constructor
-  grind only [qimp]
-
-/-- Implication of a `dspec` predicate with quantifier -/
-@[expose]
-def qimp_dspec {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) : Prop :=
-  ∀ x, P x → dspec (k x) Q
+  grind only
 
 theorem dspec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
   dspec m Pₘ →
-  (qimp_dspec Pₘ k Pₖ) →
+  (∀ x, Pₘ x → dspec (k x) Pₖ) →
   dspec (Std.bind m k) Pₖ := by
   intro Hm Hk
-  simp only [qimp_dspec] at *
   cases Hm
   · simp
     grind only
   · simp
     constructor
-
-@[simp]
-def qimp_dspec_uncurry' {α₀ α₁ β} (P : α₀ → α₁ → Prop) (k : α₀ × α₁ → Result β) (Q : β → Prop) :
-  qimp_dspec (uncurry' P) k Q ↔ ∀ x, qimp_dspec (P x) (curry k x) Q := by
-  simp [qimp_dspec, curry]
-
-@[simp]
-theorem qimp_dspec_unit {α} (P : Unit → Prop) (k : Unit → Result α) (Q : α → Prop) :
-  qimp_dspec P k Q ↔ (P () → dspec (k ()) Q) := by
-  grind [qimp_dspec]
-
-@[simp]
-theorem qimp_dspec_exists {α β γ} (P : γ → α → Prop) (k : α → Result β) (Q : β → Prop) :
-  qimp_dspec (fun x => ∃ y, P y x) k Q ↔ ∀ x, qimp_dspec (P x) k Q := by
-  simp only [qimp_dspec, forall_exists_index]; grind
-
-def qimp_dspec_iff {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) :
-  qimp_dspec P k Q ↔ ∀ x, imp (P x) (dspec (k x) Q) := by
-  simp [qimp_dspec, imp]
 
 @[simp, grind =, agrind =]
 theorem dspec_ok (x : α) : dspec (ok x) p ↔ p x := by
@@ -732,7 +653,7 @@ def add1 (x : Nat) := Result.ok (x + 1)
 theorem  add1_spec (x : Nat) : add1 x ⦃ y => y = x + 1⦄ :=
   by simp [add1]
 
-/-- Example without `imp` -/
+/-- Example with a tuple output. -/
 example (x : Nat) :
   (do
     let y ← add1 x
@@ -742,25 +663,6 @@ example (x : Nat) :
     intro y h
     -- step as ⟨ y1, z1⟩
     apply spec_mono (add1_spec _)
-    intro y' h
-    --
-    grind
-
-/-- Example with `imp` -/
-example (x : Nat) :
-  (do
-    let y ← add1 x
-    add1 y) ⦃ y => y = x + 2 ⦄ := by
-    -- step as ⟨ y, z ⟩
-    apply spec_bind (add1_spec _)
-    simp -failIfUnchanged only -- introduce the quantifiers
-    simp only [qimp_spec_iff] -- eliminate `qimp_spec`
-    intro y h
-    -- step as ⟨ y1, z1⟩
-    apply spec_mono (add1_spec _)
-    simp -failIfUnchanged only -- introduce the quantifiers
-    simp only [qimp_iff] -- eliminate `qimp_spec`
-    simp only [imp] -- eliminate `imp`
     intro y' h
     --
     grind
@@ -770,7 +672,7 @@ def add2 (x : Nat) := Result.ok (x + 1, x + 2)
 theorem  add2_spec (x : Nat) : add2 x ⦃ (y, z) => y = x + 1 ∧ z = x + 2⦄ :=
   by simp [add2]
 
-/-- Example without `imp` -/
+/-- Example with a tuple output. -/
 example (x : Nat) :
   (do
     let (y, _) ← add2 x
@@ -790,7 +692,8 @@ example (x : Nat) :
 theorem  add2_spec' (x : Nat) : add2 x ⦃ y z => y = x + 1 ∧ z = x + 2⦄ :=
   by simp [add2]
 
-/-- Example with `imp` -/
+/-- The same with separate binders: the post-condition is wrapped in the `uncurry'` marker,
+which is reduced by destructuring the output. -/
 example (x : Nat) :
   (do
     let (y, _) ← add2 x
@@ -798,38 +701,17 @@ example (x : Nat) :
     -- step as ⟨ y, z ⟩
     apply spec_bind
     . apply add2_spec'
-    simp -failIfUnchanged only [qimp_spec_uncurry'] -- introduce the quantifiers
-    simp only [qimp_spec_iff, curry] -- eliminate `qimp_spec` and `curry`
-    simp only [imp] -- eliminate `imp`
-    intro y z h0
+    rintro ⟨y, z⟩ ⟨h, _⟩
     -- step as ⟨ y1, z1⟩
     apply spec_mono
     . apply add2_spec'
-    simp -failIfUnchanged only [qimp_uncurry'] -- introduce the quantifiers
-    simp only [qimp_iff, curry, uncurry'] -- eliminate `qimp_spec` and `curry`
-    simp only [imp]
-    intros y z h
-    --
+    rintro ⟨y1, z1⟩ ⟨h1, _⟩
+    simp only [uncurry'_pair]
     grind
 
 private theorem massert_spec' (b : Prop) [Decidable b] (h : b) :
   massert b ⦃ _ => True ⦄ := by
   grind [massert]
-
-@[simp]
-theorem qimp_spec_unit {α} (P : Unit → Prop) (k : Unit → Result α) (Q : α → Prop) :
-  qimp_spec P k Q ↔ (P () → k () ⦃ Q ⦄) := by
-  grind [qimp_spec]
-
-@[simp]
-theorem qimp_unit (P Q : Unit → Prop) :
-  qimp P Q ↔ (P () → Q ()) := by
-  grind [qimp]
-
-@[simp]
-theorem imp_exists_iff {α} (P : α → Prop) (Q : Prop) :
-  imp (∃ x, P x) Q ↔ (∀ x, imp (P x) Q) := by
-  simp only [imp, forall_exists_index]
 
 /-- Example with a function outputting `()` (we need to eliminate the quantifier) -/
 example :
@@ -841,11 +723,12 @@ example :
   --
   apply spec_bind
   · apply massert_spec'; omega
-  simp -failIfUnchanged only [qimp_spec_unit, forall_const]
+  intro _ _
   --
   apply spec_mono
   · apply massert_spec'; omega
-  simp -failIfUnchanged only [qimp_unit, forall_const]
+  intro _ _
+  trivial
 
 /- Example with a post-condition manipulating an ∃ -/
 example (zero : List Nat → Result (List Nat))
@@ -858,8 +741,7 @@ example (zero : List Nat → Result (List Nat))
       pure ()) ⦃ _ => True ⦄ := by
   apply spec_bind
   · apply zero_spec
-  simp -failIfUnchanged only [qimp_spec_iff, imp_exists_iff]
-  rintro s' h0 h1
+  rintro _ ⟨_, _⟩
   --
   simp only [pure, spec_ok]
 
@@ -1000,9 +882,21 @@ end Aeneas.Std
 
 namespace Aeneas.Std.WP
 
-/-- Note that `forall_const` is too general: it can eliminate unused outputs that we actually
-want to introduce in the context -/
-theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
+/-- The `intro_tactic` of `spec` and `dspec`: their premise is a plain `∀ x, P x → …`, and
+normalizing the fact `P x` is all there is to do. The markers are the definitions the
+postcondition notation `⦃ … ⦄` wraps its body in (see `mk_function_syntax`). -/
+meta def introTactic : IntroFn := do
+  let markers := #[``Aeneas.Std.WP.uncurry', ``Aeneas.Std.uncurry]
+  let index ← match ← Aeneas.Step.Intro.normalizeTarget markers
+      (← Lean.Elab.Tactic.getMainGoal) with
+    | some (goal, index) => Lean.Elab.Tactic.replaceMainGoal [goal]; pure index
+    | none => pure 0
+  let _ ← Aeneas.Simp.simpAt true
+    { maxDischargeDepth := 1, failIfUnchanged := false, iota := false }
+    { addSimpThms := #[``and_imp, ``exists_imp, ``true_imp_iff,
+        ``Aeneas.Step.Intro.forall_unit] }
+    (.targets #[] true)
+  return index
 
 -- registers the spec info for use in the step tactic, see Spec.lean
 #register_spec_info {
@@ -1014,17 +908,7 @@ theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
     mk_spec_mono_skip_args := 2
     mk_spec_bind := ``Std.WP.spec_bind
     mk_spec_bind_skip_args := 4
-    uncurry_elim_tactics := #[
-      ``Std.WP.qimp_spec_unit, ``Std.WP.qimp_unit,
-      ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
-      ``forall_unit, ``true_imp_iff
-    ]
-    qimp_elim_tactics := #[
-      ``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
-      ``Std.WP.imp_and_iff, ``Std.uncurry_apply_pair,
-      ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
-      ``Std.WP.imp_exists_iff,
-      ``forall_unit, ``true_imp_iff]
+    intro_tactic := some ``Aeneas.Std.WP.introTactic
     to_mvcgen := .some ``Std.WP.spec_to_mvcgen
     liftings := #[]
   }
@@ -1038,17 +922,7 @@ theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
     mk_spec_mono_skip_args := 2
     mk_spec_bind := ``Std.WP.dspec_bind
     mk_spec_bind_skip_args := 4
-    uncurry_elim_tactics := #[
-      ``Std.WP.qimp_dspec_unit, ``Std.WP.qimp_unit,
-      ``Std.WP.qimp_dspec_exists, ``Std.WP.qimp_exists,
-      ``forall_unit, ``true_imp_iff
-    ]
-    qimp_elim_tactics := #[
-      ``Std.WP.qimp_dspec_iff, ``Std.WP.qimp_iff,
-      ``Std.WP.imp_and_iff, ``Std.uncurry_apply_pair,
-      ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
-      ``Std.WP.imp_exists_iff,
-      ``forall_unit, ``true_imp_iff]
+    intro_tactic := some ``Aeneas.Std.WP.introTactic
     to_mvcgen := .some ``Std.WP.dspec_to_mvcgen
     liftings := #[
       { from_statement := ``Std.WP.spec
