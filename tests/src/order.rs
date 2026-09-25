@@ -182,7 +182,7 @@ pub fn test_wrap_ref_partial_cmp() {
 }
 
 // ---------------------------------------------------------------------------
-// eercises values that Ord calls equal but differ (same key, different tag).
+// same key, different tag: checks which argument max, min and clamp return on a tie.
 // ---------------------------------------------------------------------------
 
 pub struct Keyed {
