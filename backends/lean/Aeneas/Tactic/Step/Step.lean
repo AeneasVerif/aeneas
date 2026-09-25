@@ -742,12 +742,12 @@ meta def runIntroTactic (fn : Name) : TacticM Nat := do
   | _ => throwError "`intro_tactic` must not create multiple goals"
 
 /-- Reduce tuple projections before naming facts. -/
-def reduceOutputProjections : TacticM Unit := do
+meta def reduceOutputProjections : TacticM Unit := do
   Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
     {} (.targets #[] true)
 
 /-- Preserve scalar aliases. -/
-def foldScalarTypes : TacticM Unit := do
+meta def foldScalarTypes : TacticM Unit := do
   withTraceNode `Step (fun _ => pure m!"dsimpAt: folding back scalar types") do
     Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
       { addSimpThms := scalar_eqs } (.targets #[] true)
