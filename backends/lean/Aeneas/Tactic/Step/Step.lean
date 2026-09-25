@@ -643,8 +643,7 @@ meta def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array E
   Utils.addDeclTac name e (← inferType e) (asLet := false) fun e => do
     trace[Step] "Introduced the \"pretty\" let binding: {← inferType e}"
 
-/-- Compute the leaf types obtained by destructuring a value of type `ty` according
-to the shape of a `BTree`. At a `pair` node, `ty` must be a product `α × β`. -/
+/-- Collect leaf types from `ty`; each pair node in `tree` must match a product. -/
 meta partial def destructTreeLeafTypes {α} (ty : Expr) (tree : BTree α) :
     MetaM (Array Expr) := do
   match tree with
@@ -655,9 +654,7 @@ meta partial def destructTreeLeafTypes {α} (ty : Expr) (tree : BTree α) :
       return (← destructTreeLeafTypes a l) ++ (← destructTreeLeafTypes b r)
     | _ => throwError "destructTreeLeafTypes: expected a product type, got {ty}"
 
-/-- Reconstruct a value following the shape of a `BTree`, consuming leaf values
-from the front of `leaves`. Returns the reconstructed value and the unconsumed
-leaves. At a `pair` node we build a `Prod.mk`. -/
+/-- Build a nested product shaped by `tree`, returning the unused leaves. -/
 meta partial def destructTreeMk {α} (tree : BTree α) (leaves : List Expr) :
     MetaM (Expr × List Expr) := do
   match tree with
@@ -670,8 +667,7 @@ meta partial def destructTreeMk {α} (tree : BTree α) (leaves : List Expr) :
     let (re, leaves) ← destructTreeMk r leaves
     return (← mkAppM ``Prod.mk #[le, re], leaves)
 
-/-- Project the leaves out of `root` following the shape of a `BTree`. At a `pair`
-node we use `Prod.fst`/`Prod.snd`. -/
+/-- Project the leaves of `root` according to `tree`. -/
 meta partial def destructTreeProjs {α} (tree : BTree α) (root : Expr) :
     MetaM (Array Expr) := do
   match tree with
@@ -681,27 +677,12 @@ meta partial def destructTreeProjs {α} (tree : BTree α) (root : Expr) :
     let snd ← mkAppM ``Prod.snd #[root]
     return (← destructTreeProjs l fst) ++ (← destructTreeProjs r snd)
 
-/-- Generate (and cache in the environment, via `mkAuxLemma`) a theorem witnessing
-that a universally-quantified output of type `ty` can be destructured following the
-shape of `tree`:
+/-- Cache the equivalence for destructuring `ty` according to `tree`:
 ```
 ∀ (P : ty → Prop), (∀ x₀ ... xₙ, P (mk x₀ ... xₙ)) ↔ (∀ x, P x)
 ```
-where `mk x₀ ... xₙ` is the nested `Prod.mk` reconstruction following `tree`.
-
-The proof is a direct term: the forward direction applies the destructured hypothesis
-to the projections of `x` (relying on structure eta `(x.1, x.2) ≡ x`), and the backward
-direction applies the hypothesis to the reconstructed tuple.
-
-`introOutputs` instantiates `P` with the goal body and applies the `.mp` direction as a
-raw proof term, avoiding the repeated `goal.cases` calls (and the huge proof term they
-produce) of the previous implementation.
-
-Since `ty` (and hence the statement) may reference local free variables (e.g. a section
-variable `α` when `ty = Option α`), we abstract those variables (together with their
-universe parameters) before adding the cached lemma to the environment, and re-apply them
-here. The returned term is the cached lemma applied to those variables, i.e. a proof of
-`∀ (P : ty → Prop), (∀ x₀ ... xₙ, P (mk ...)) ↔ (∀ x, P x)` in the current context. -/
+Here `mk` reconstructs the nested product. Abstract local dependencies and universes
+before caching, then return the lemma applied to the current context. -/
 meta def mkDestructEquivThm {α} (ty : Expr) (tree : BTree α) : MetaM Expr := do
   withTraceNode `Step (fun _ => pure m!"mkDestructEquivThm: {ty}") do
   let ty ← instantiateMVars ty
@@ -731,10 +712,7 @@ meta def mkDestructEquivThm {α} (ty : Expr) (tree : BTree α) : MetaM Expr := d
       let (mk, _) ← destructTreeMk tree xs.toList
       mkLambdaFVars (#[h] ++ xs) (mkApp h mk)
   let proof ← mkLambdaFVars #[P] (← mkAppM ``Iff.intro #[fwd, bwd])
-  /- Abstract the local free variables appearing in the statement/proof so that the
-     cached lemma is closed. We compute the transitive closure over the context to make
-     sure dependencies (e.g. an `α` referenced in the type of another variable) are kept,
-     and keep the resulting variables in local-context order. -/
+  /- Close over transitive local dependencies, preserving context order. -/
   let mut used : Std.HashSet FVarId := {}
   for e in #[stmt, proof] do
     for fv in (collectFVars {} e).fvarIds do used := used.insert fv
@@ -745,8 +723,7 @@ meta def mkDestructEquivThm {α} (ty : Expr) (tree : BTree α) : MetaM Expr := d
     for decl in lctx do
       if used.contains decl.fvarId then
         let mut deps := (collectFVars {} decl.type).fvarIds
-        /- `let`-bound locals carry a value, which `mkLambdaFVars`/`mkForallFVars`
-           preserve, so we must also keep the fvars it references. -/
+        /- Include dependencies of local let values. -/
         if let .ldecl (value := v) .. := decl then
           deps := deps ++ (collectFVars {} v).fvarIds
         for fv in deps do
@@ -757,7 +734,9 @@ meta def mkDestructEquivThm {α} (ty : Expr) (tree : BTree α) : MetaM Expr := d
   let closedProof ← mkLambdaFVars ctxFVars proof
   let levelParams := (collectLevelParams {} closedStmt |>.collect closedProof).params.toList
   let name ← mkAuxLemma levelParams closedStmt closedProof (kind? := `Aeneas_step_destruct)
-  return mkAppN (mkConst name (levelParams.map Level.param)) ctxFVars
+  /- Dependent lets remain let binders; only generalized locals are arguments. -/
+  let ctxArgs ← ctxFVars.filterM fun fv => return !(← getFVarLocalDecl fv).isLet
+  return mkAppN (mkConst name (levelParams.map Level.param)) ctxArgs
 
 /-- Extract the call-site destructure tree from the current goal, which should
 have shape `qimp_spec P k Q` or `qimp P Q`.
@@ -836,17 +815,8 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
   if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after eliminating `imp` and folding back the scalar types"
 
-  /- Introduce the outputs by destructuring the single surface binder according to
-     the merged binder tree.
-
-     Instead of repeatedly calling `goal.cases` (which builds a huge proof term), we
-     generate on the fly an equivalence theorem
-       `∀ (P : ty → Prop), (∀ x₀ ... xₙ, P (mk x₀ ... xₙ)) ↔ (∀ x, P x)`
-     (cached in the environment via `mkAuxLemma`), instantiate `P` with the goal body,
-     and rewrite the goal `∀ x, P x` into `∀ x₀ ... xₙ, P (mk x₀ ... xₙ)` by directly
-     building the proof term `thm.mp ?newGoal` (no `apply`, to avoid unification and
-     reduction). We then introduce the destructured outputs with `introN`, directly
-     giving them their user-provided names. -/
+  /- Destructure the output according to the call-site tree using `mkDestructEquivThm`,
+     then introduce the leaves with their chosen names. -/
   let mut outputFVars : Array FVarId := #[]
   let mut outputIds : Array Name := #[]
   let goal ← getMainGoal
@@ -858,34 +828,25 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
   if goalTy.isForall then
     if ¬ (← isProp goalTy.bindingDomain!) then
       let ty := goalTy.bindingDomain!
-      /- `P := fun x => body`, i.e. the goal seen as `∀ x, P x`. -/
       let P := Expr.lam goalTy.bindingName! ty goalTy.bindingBody! goalTy.bindingInfo!
-      /- The number of leaf outputs is the number of leaves of the call-site tree. -/
       let prefixLength := callSiteTree.flatten.size
-      /- Compute the user-facing names for the outputs up front, so that `introN`
-         introduces them already named (no separate rename pass). -/
       outputIds ← (Array.range prefixLength).mapM fun i => do
         if h : i < args.ids.size then
           match args.ids[i] with
           | none => mkFreshUserName `x
           | some n => pure n
         else mkFreshUserName `x
-      /- Generate (and cache) the destructuring-equivalence theorem and rewrite the goal. -/
       let thm ← mkDestructEquivThm ty callSiteTree
       let thm := mkApp thm P
       let thmTy ← instantiateMVars (← inferType thm)
       let_expr Iff destrGoalTy _ := thmTy.consumeMData
         | throwError "introOutputs: expected an `Iff`, got {thmTy}"
       let newGoal ← mkFreshExprSyntheticOpaqueMVar destrGoalTy
-      /- Preserve the original goal's tag (e.g. `case a`) on the new goal, which
-         `goal.intro`/`goal.cases` used to do automatically. -/
+      /- Preserve the case label. -/
       newGoal.mvarId!.setTag (← goal.getTag)
       goal.assign (← mkAppM ``Iff.mp #[thm, newGoal])
       let (fvs, goal') ← newGoal.mvarId!.introN prefixLength outputIds.toList
-      /- `introN` keeps user-provided names, but it renders an anonymous name (`_`) using
-         the underlying binder name (e.g. `x✝`) rather than the inaccessible `_✝` that
-         `rename` produces. Re-assert the names with `rename` so anonymous outputs display
-         as `_✝`, matching the previous `goal.cases`-based behaviour. -/
+      /- Rename to display anonymous outputs as `_✝` rather than the underlying binder name. -/
       let goal' ← fvs.zip outputIds |>.foldlM (fun g (fv, id) => g.rename fv id) goal'
       setGoals [goal']
       outputFVars := fvs

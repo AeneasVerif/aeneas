@@ -510,3 +510,38 @@ example :
   step with quadProg_spec
 
 end
+
+/- Output types may depend on polymorphic parameters and local let bindings. -/
+def genericPair {α : Type u} (x : α) : Result (α × Nat) := ok (x, 1)
+
+@[step]
+theorem genericPair_spec {α : Type u} (x : α) :
+    genericPair x ⦃ (y : α) (k : Nat) => y = x ∧ k = 1 ⦄ := by
+  unfold genericPair
+  step*
+
+example {α : Type u} (x : α) :
+    (do let (y, k) ← genericPair x; ok (y, k)) ⦃ y k => y = x ∧ k = 1 ⦄ := by
+  step*
+
+example (m : Nat) :
+    let n := m + 1
+    ∀ x : Vector Nat n,
+      (do let (y, k) ← genericPair x; ok (y, k)) ⦃ y k => y = x ∧ k = 1 ⦄ := by
+  intro n x
+  step*
+
+example {α : Type u} (m : Nat) :
+    let n := m + 1
+    let size := n + 1
+    ∀ x : Vector α size,
+      (do let (y, k) ← genericPair x; ok (y, k)) ⦃ y k => y = x ∧ k = 1 ⦄ := by
+  intro n size x
+  step*
+
+example (m : Nat) :
+    have n := m + 1
+    ∀ x : Vector Nat n,
+      (do let (y, k) ← genericPair x; ok (y, k)) ⦃ y k => y = x ∧ k = 1 ⦄ := by
+  intro n x
+  step*
