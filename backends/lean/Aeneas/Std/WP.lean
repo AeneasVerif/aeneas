@@ -32,30 +32,30 @@ unseal Result
 @[expose] section
 
 @[reducible]
-def handler : Handler RustEffect where
+def effectSpec : EffectSpec RustEffect where
   State := Unit
-  handle event _ _ :=
+  wp event _ _ :=
     match event with
     | .fail _ => False
-  handle_mono _ := False.elim
+  wp_mono _ := False.elim
 
-theorem handler_conjunctive : handler.Conjunctive := by
+theorem effectSpec_conjunctive : effectSpec.Conjunctive := by
   intro _ _ _ hNonempty hAll
   obtain ⟨C₀, hC₀⟩ := hNonempty
   exact (hAll C₀ hC₀).elim
 
 def spec (m : Result α) (p : Post α) : Prop :=
-  TotalSpec handler (fun value _ => p value) m ()
+  TotalSpec effectSpec (fun value _ => p value) m ()
 
 def dspec (m : Result α) (p : Post α) : Prop :=
-  PartialSpec handler (fun value _ => p value) m ()
+  PartialSpec effectSpec (fun value _ => p value) m ()
 
 theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p :=
   TotalSpec.toPartial
 
 theorem dspec_admissible {α} (p : Post α) :
     admissible (fun x => dspec x p) :=
-  PartialSpec.admissible handler_conjunctive _ ()
+  PartialSpec.admissible effectSpec_conjunctive _ ()
 
 end
 

@@ -1,5 +1,5 @@
 module
-import Aeneas.Data.Coinductive.Spec
+import Aeneas.Data.Coinductive.Spec.SpecDerived
 import all Init.Internal.Order.Basic
 
 /-! # Tests for the generic total- and partial-correctness specifications -/
@@ -25,23 +25,23 @@ def StateEffect : Effect where
   O := StateEvent.output
 
 @[reducible]
-def handler : Handler StateEffect where
+def effectSpec : EffectSpec StateEffect where
   State := Nat
-  handle event state C :=
+  wp event C state :=
     match event with
     | .get => C ⟨state⟩ state
     | .put value => C ⟨()⟩ value
     | .fail => False
     | .choose α => Nonempty α ∧ ∀ answer, C ⟨answer⟩ state
-  handle_mono := by
-    rintro event state C C' hC hHandle
+  wp_mono := by
+    rintro event C C' hC state hWp
     cases event
-    · exact hC _ _ hHandle
-    · exact hC _ _ hHandle
-    · exact hHandle.elim
-    · exact ⟨hHandle.1, fun answer => hC _ _ (hHandle.2 answer)⟩
+    · exact hC _ _ hWp
+    · exact hC _ _ hWp
+    · exact hWp.elim
+    · exact ⟨hWp.1, fun answer => hC _ _ (hWp.2 answer)⟩
 
-theorem handler_conjunctive : handler.Conjunctive := by
+theorem effectSpec_conjunctive : effectSpec.Conjunctive := by
   rintro event state Demands ⟨C₀, hC₀⟩ hAll
   cases event
   · exact fun C hC => hAll C hC
@@ -49,16 +49,16 @@ theorem handler_conjunctive : handler.Conjunctive := by
   · exact (hAll C₀ hC₀).elim
   · exact ⟨(hAll C₀ hC₀).1, fun answer C hC => (hAll C hC).2 answer⟩
 
-def spec (m : ITree StateEffect α) (p : HPost handler α) (state : Nat) : Prop :=
-  TotalSpec handler p m state
+def spec (m : ITree StateEffect α) (p : effectSpec.Post α) (state : Nat) : Prop :=
+  TotalSpec effectSpec p m state
 
-def dspec (m : ITree StateEffect α) (p : HPost handler α) (state : Nat) : Prop :=
-  PartialSpec handler p m state
+def dspec (m : ITree StateEffect α) (p : effectSpec.Post α) (state : Nat) : Prop :=
+  PartialSpec effectSpec p m state
 
-example (Q : HPost handler Nat) :
+example (Q : effectSpec.Post Nat) :
     Lean.Order.admissible fun computation : ITree StateEffect Nat =>
       dspec computation Q 0 :=
-  PartialSpec.admissible handler_conjunctive Q 0
+  PartialSpec.admissible effectSpec_conjunctive Q 0
 
 def get : ITree StateEffect Nat :=
   .vis .get fun value => .ret value.down
@@ -112,7 +112,7 @@ example (state : Nat) :
   simp [spec, flip, choose, Bind.bind]
   apply TotalSpec.vis
   change Nonempty Bool ∧ ∀ answer : Bool,
-    TotalSpec handler
+    TotalSpec effectSpec
       (fun value state' => (value = 0 ∨ value = 1) ∧ state' = state)
       (.ret (if answer then 0 else 1)) state
   constructor
@@ -132,7 +132,7 @@ example (state : Nat) :
     simp [spec, flip, choose, Bind.bind]
     apply TotalSpec.vis
     change Nonempty Bool ∧ ∀ answer : Bool,
-      TotalSpec handler
+      TotalSpec effectSpec
         (fun value state' => (value = 0 ∨ value = 1) ∧ state' = state)
         (.ret (if answer then 0 else 1)) state
     constructor
@@ -143,13 +143,13 @@ example (state : Nat) :
       · simp
       · simp)
 
-example (state : Nat) (Q : HPost handler Unit) :
+example (state : Nat) (Q : effectSpec.Post Unit) :
     ¬ spec failure Q state := by
   intro hSpec
   simp [spec, failure, fail, Bind.bind] at hSpec
   exact hSpec.vis_view
 
-example (state : Nat) (Q : HPost handler Unit) :
+example (state : Nat) (Q : effectSpec.Post Unit) :
     ¬ dspec failure Q state := by
   intro hSpec
   simp [dspec, failure, fail, Bind.bind] at hSpec
@@ -162,29 +162,29 @@ def flipCoinIgnore : ITree StateEffect Unit := do
 partial_fixpoint
 
 /-- Partial correctness accepts a productive infinite program. -/
-theorem flipCoinIgnore_dspec (state : Nat) (Q : HPost handler Unit) :
+theorem flipCoinIgnore_dspec (state : Nat) (Q : effectSpec.Post Unit) :
     dspec flipCoinIgnore Q state := by
   refine flipCoinIgnore.fixpoint_induct (fun x => dspec x Q state)
-    (PartialSpec.admissible handler_conjunctive Q state) ?_
+    (PartialSpec.admissible effectSpec_conjunctive Q state) ?_
   intro x hx
   simp only [dspec, choose, Bind.bind, itree_vis_bind, itree_ret_bind]
   exact PartialSpec.vis ⟨⟨true⟩, fun _ => hx⟩
 
 /-- A computation which is totally correct cannot also be partially correct for the `False`
     postcondition, i.e., it must eventually return. -/
-theorem not_spec_of_dspec_false {m : ITree StateEffect α} {state : Nat} {Q : HPost handler α}
+theorem not_spec_of_dspec_false {m : ITree StateEffect α} {state : Nat} {Q : effectSpec.Post α}
     (hNever : dspec m (fun _ _ => False) state) : ¬ spec m Q state := by
   intro hSpec
   refine TotalSpec.induction (P := fun m s => dspec m (fun _ _ => False) s → False)
     (fun _ _ _ h => PartialSpec.ret_post h)
-    (fun event k s hHandle h => ?_) hSpec hNever
+    (fun event k s hWp h => ?_) hSpec hNever
   have h := PartialSpec.vis_view h
   cases event with
-  | get | put _ => exact hHandle h
-  | fail => exact hHandle
+  | get | put _ => exact hWp h
+  | fail => exact hWp
   | choose _ =>
     obtain ⟨⟨a⟩, h⟩ := h
-    exact hHandle.2 a (h a)
+    exact hWp.2 a (h a)
 
 /- Total correctness does not accept a productive infinite program -/
 example (state : Nat) : ¬ spec flipCoinIgnore (fun _ _ => True) state :=
@@ -209,7 +209,7 @@ example (state : Nat) : ¬ spec silentLoop (fun _ _ => True) state := by
   exact TotalSpec.div_false
 
 /- Partial correctness accepts a silent infinite program -/
-example (state : Nat) (Q : HPost handler Unit) : dspec silentLoop Q state := by
+example (state : Nat) (Q : effectSpec.Post Unit) : dspec silentLoop Q state := by
   rw [dspec, silentLoop_eq_div]
   exact PartialSpec.div
 

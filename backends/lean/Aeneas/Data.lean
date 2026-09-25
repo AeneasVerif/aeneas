@@ -2,7 +2,6 @@ module
 public import Aeneas.Data.Array
 public import Aeneas.Data.BitVec
 public import Aeneas.Data.Byte
-public import Aeneas.Data.Coinductive.Tests
 public import Aeneas.Data.Discriminant
 public import Aeneas.Data.Fin
 public import Aeneas.Data.Int
