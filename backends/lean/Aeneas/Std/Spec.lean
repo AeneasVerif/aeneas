@@ -44,6 +44,12 @@ structure SpecInfo where
   It must return the index of the output among the binders of the resulting goal: usually 0. -/
   intro_tactic : Option Lean.Name := none
 
+  /-- Tactic applied on mono's and bind's preconditions in `step`
+      and mono's and bind's final goals in `step*`.
+      Final goals are also attempted with equality substitution first.
+      If not solved, then the precondition/goal stay unchanged. -/
+  discharge_tactic : Option Name := none
+
   to_mvcgen: Option Name
 
   liftings : Array LiftingInfo
