@@ -3,6 +3,7 @@ public import Aeneas.Std.Primitives
 public import Aeneas.Std.Delab
 public import Std.Do
 public import Aeneas.Tactic.Solver.Grind.Init
+public import Aeneas.Tactic.Step.DspecInduction
 public meta import Aeneas.Std.Spec
 public meta import Aeneas.Std.Delab
 public import Aeneas.Data.Coinductive.ITree
@@ -99,6 +100,13 @@ theorem dspec_admissible {α} (p : Post α )
     constructor
 seal Result
 
+/-- The shape the `dspec_induction` tactic needs to discharge the admissibility
+side-goal it generates for a partial specification about a recursive function. -/
+@[dspec_admissible]
+theorem dspec_func_admissible {α : Sort v} {β} (arg : α) (p : Post β) :
+    admissible (fun f : α → Result β => dspec (f arg) p) :=
+  admissible_apply (fun _ m => dspec m p) arg (dspec_admissible p)
+
 /-- Variant of `uncurry` used to decompose tuples in post-conditions.
 
 Similar to `uncurry` but delaborated differently:
@@ -156,23 +164,6 @@ theorem spec_fail_pair (e : Error) (f : α → β → Prop) :
 theorem spec_div_pair (f : α → β → Prop) :
     spec div (uncurry f) ↔ False := by simp
 
-theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
-  (∀ x, P₀ x → P₁ x) → spec m P₁ := by
-  intros HMonPost
-  revert h
-  intros s
-  cases s
-  grind
-
-theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
-  spec m Pₘ →
-  (forall x, Pₘ x → spec (k x) Pₖ) →
-  spec (m >>= k) Pₖ := by
-  intro Hm Hk
-  cases Hm
-  simp [Bind.bind]
-  grind only
-
 /-- Small helper to currify functions -/
 def curry {α β γ} (f : α × β → γ) (x : α) : β → γ := fun y => f (x, y)
 
@@ -184,6 +175,7 @@ def imp (P Q : Prop) : Prop := P → Q
 theorem imp_and_iff (P0 P1 Q : Prop) : imp (P0 ∧ P1) Q ↔ P0 → imp P1 Q := by simp [imp]
 
 /-- Implication with quantifier -/
+@[expose]
 def qimp {α} (P₀ P₁ : Post α) : Prop := ∀ x, P₀ x → P₁ x
 
 /-- We use this lemma to decompose nested `uncurry'` predicates into a sequence of universal quantifiers. -/
@@ -195,8 +187,8 @@ def qimp_uncurry' {α₀ α₁} (P : α₀ → α₁ → Prop) (Q : α₀ × α�
 /-- We use this lemma to eliminate `imp` after we decomposed the nested `uncurry'` -/
 theorem qimp_iff {α} (P₀ P₁ : Post α) : qimp P₀ P₁ ↔ ∀ x, imp (P₀ x) (P₁ x) := by simp [qimp, imp]
 
-/-- Alternative to `spec_mono`: we control the introduction of universal quantifiers by introducing `imp`. -/
-theorem spec_mono' {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
+/-- `spec_mono` controls the introduction of universal quantifiers by introducing `imp`. -/
+theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
   qimp P₀ P₁ → spec m P₁ := by
   intros HMonPost
   revert h
@@ -210,8 +202,8 @@ theorem spec_mono' {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : s
 def qimp_spec {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) : Prop :=
   ∀ x, P x → spec (k x) Q
 
-/-- This alternative to `spec_bind` controls the introduction of universal quantifiers with `imp_spec`. -/
-theorem spec_bind' {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
+/-- `spec_bind` controls the introduction of universal quantifiers with `qimp_spec`. -/
+theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
   spec m Pₘ →
   (qimp_spec Pₘ k Pₖ) →
   spec (Std.bind m k) Pₖ := by
@@ -267,7 +259,7 @@ theorem exists_imp_spec {m:Result α} {P:Post α} :
   exact (spec_equiv_exists m P).2
 
 -- `dspec` theorems
-theorem dspec_mono' {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : dspec m P₀):
+theorem dspec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : dspec m P₀):
   qimp P₀ P₁ → dspec m P₁ := by
   intros HMonPost
   revert h
@@ -280,7 +272,7 @@ theorem dspec_mono' {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : 
 def qimp_dspec {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) : Prop :=
   ∀ x, P x → dspec (k x) Q
 
-theorem dspec_bind' {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
+theorem dspec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
   dspec m Pₘ →
   (qimp_dspec Pₘ k Pₖ) →
   dspec (Std.bind m k) Pₖ := by
@@ -760,12 +752,12 @@ example (x : Nat) :
     let y ← add1 x
     add1 y) ⦃ y => y = x + 2 ⦄ := by
     -- step as ⟨ y, z ⟩
-    apply spec_bind' (add1_spec _)
+    apply spec_bind (add1_spec _)
     simp -failIfUnchanged only -- introduce the quantifiers
     simp only [qimp_spec_iff] -- eliminate `qimp_spec`
     intro y h
     -- step as ⟨ y1, z1⟩
-    apply spec_mono' (add1_spec _)
+    apply spec_mono (add1_spec _)
     simp -failIfUnchanged only -- introduce the quantifiers
     simp only [qimp_iff] -- eliminate `qimp_spec`
     simp only [imp] -- eliminate `imp`
@@ -804,14 +796,14 @@ example (x : Nat) :
     let (y, _) ← add2 x
     add2 y) ⦃ y _ => y = x + 2 ⦄ := by
     -- step as ⟨ y, z ⟩
-    apply spec_bind'
+    apply spec_bind
     . apply add2_spec'
     simp -failIfUnchanged only [qimp_spec_uncurry'] -- introduce the quantifiers
     simp only [qimp_spec_iff, curry] -- eliminate `qimp_spec` and `curry`
     simp only [imp] -- eliminate `imp`
     intro y z h0
     -- step as ⟨ y1, z1⟩
-    apply spec_mono'
+    apply spec_mono
     . apply add2_spec'
     simp -failIfUnchanged only [qimp_uncurry'] -- introduce the quantifiers
     simp only [qimp_iff, curry, uncurry'] -- eliminate `qimp_spec` and `curry`
@@ -847,11 +839,11 @@ example :
     ) ⦃ _ => True ⦄
   := by
   --
-  apply spec_bind'
+  apply spec_bind
   · apply massert_spec'; omega
   simp -failIfUnchanged only [qimp_spec_unit, forall_const]
   --
-  apply spec_mono'
+  apply spec_mono
   · apply massert_spec'; omega
   simp -failIfUnchanged only [qimp_unit, forall_const]
 
@@ -864,7 +856,7 @@ example (zero : List Nat → Result (List Nat))
     (do
       let _ ← zero s
       pure ()) ⦃ _ => True ⦄ := by
-  apply spec_bind'
+  apply spec_bind
   · apply zero_spec
   simp -failIfUnchanged only [qimp_spec_iff, imp_exists_iff]
   rintro s' h0 h1
@@ -1018,9 +1010,9 @@ theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
     arity := 3
     program_index := 1
     post_index := 2
-    mk_spec_mono := ``Std.WP.spec_mono'
+    mk_spec_mono := ``Std.WP.spec_mono
     mk_spec_mono_skip_args := 2
-    mk_spec_bind := ``Std.WP.spec_bind'
+    mk_spec_bind := ``Std.WP.spec_bind
     mk_spec_bind_skip_args := 4
     uncurry_elim_tactics := #[
       ``Std.WP.qimp_spec_unit, ``Std.WP.qimp_unit,
@@ -1042,9 +1034,9 @@ theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
     arity := 3
     program_index := 1
     post_index := 2
-    mk_spec_mono := ``Std.WP.dspec_mono'
+    mk_spec_mono := ``Std.WP.dspec_mono
     mk_spec_mono_skip_args := 2
-    mk_spec_bind := ``Std.WP.dspec_bind'
+    mk_spec_bind := ``Std.WP.dspec_bind
     mk_spec_bind_skip_args := 4
     uncurry_elim_tactics := #[
       ``Std.WP.qimp_dspec_unit, ``Std.WP.qimp_unit,
