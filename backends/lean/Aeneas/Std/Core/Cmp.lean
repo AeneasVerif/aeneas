@@ -258,6 +258,42 @@ def core.cmp.PartialEqShared {A : Type} {B : Type}
   ne := core.cmp.impls.PartialEqShared.ne PartialEqInst
 }
 
+@[expose, simp, rust_fun "core::cmp::impls::{core::cmp::PartialOrd<&'a @A, &'b @B>}::partial_cmp"]
+def core.cmp.impls.PartialOrdShared.partial_cmp {A : Type} {B : Type}
+  (PartialOrdInst : core.cmp.PartialOrd A B) (x : A) (y : B) : Result (Option Ordering) :=
+  PartialOrdInst.partial_cmp x y
+
+@[expose, simp, rust_fun "core::cmp::impls::{core::cmp::PartialOrd<&'a @A, &'b @B>}::lt"]
+def core.cmp.impls.PartialOrdShared.lt {A : Type} {B : Type}
+  (PartialOrdInst : core.cmp.PartialOrd A B) (x : A) (y : B) : Result Bool :=
+  PartialOrdInst.lt x y
+
+@[expose, simp, rust_fun "core::cmp::impls::{core::cmp::PartialOrd<&'a @A, &'b @B>}::le"]
+def core.cmp.impls.PartialOrdShared.le {A : Type} {B : Type}
+  (PartialOrdInst : core.cmp.PartialOrd A B) (x : A) (y : B) : Result Bool :=
+  PartialOrdInst.le x y
+
+@[expose, simp, rust_fun "core::cmp::impls::{core::cmp::PartialOrd<&'a @A, &'b @B>}::gt"]
+def core.cmp.impls.PartialOrdShared.gt {A : Type} {B : Type}
+  (PartialOrdInst : core.cmp.PartialOrd A B) (x : A) (y : B) : Result Bool :=
+  PartialOrdInst.gt x y
+
+@[expose, simp, rust_fun "core::cmp::impls::{core::cmp::PartialOrd<&'a @A, &'b @B>}::ge"]
+def core.cmp.impls.PartialOrdShared.ge {A : Type} {B : Type}
+  (PartialOrdInst : core.cmp.PartialOrd A B) (x : A) (y : B) : Result Bool :=
+  PartialOrdInst.ge x y
+
+@[reducible, rust_trait_impl "core::cmp::PartialOrd<&'a @A, &'b @B>"]
+def core.cmp.PartialOrdShared {A : Type} {B : Type}
+  (PartialOrdInst : core.cmp.PartialOrd A B) : core.cmp.PartialOrd A B := {
+  partialEqInst := core.cmp.PartialEqShared PartialOrdInst.partialEqInst
+  partial_cmp := core.cmp.impls.PartialOrdShared.partial_cmp PartialOrdInst
+  lt := core.cmp.impls.PartialOrdShared.lt PartialOrdInst
+  le := core.cmp.impls.PartialOrdShared.le PartialOrdInst
+  gt := core.cmp.impls.PartialOrdShared.gt PartialOrdInst
+  ge := core.cmp.impls.PartialOrdShared.ge PartialOrdInst
+}
+
 @[rust_fun "alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::eq" (keepParams := [true, false])]
 def alloc.boxed.PartialEqBox.eq
   {T : Type} (PartialEqInst : core.cmp.PartialEq T T) (x y : T) : Result Bool :=
