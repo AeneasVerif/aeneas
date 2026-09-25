@@ -1,19 +1,6 @@
 open Types
 open LlbcAst
 include Charon.LlbcAstUtils
-open Collections
-
-module FunIdOrderedType : OrderedType with type t = fun_id = struct
-  type t = fun_id
-
-  let compare = compare_fun_id
-  let to_string = show_fun_id
-  let pp_t = pp_fun_id
-  let show_t = show_fun_id
-end
-
-module FunIdMap = Collections.MakeMap (FunIdOrderedType)
-module FunIdSet = Collections.MakeSet (FunIdOrderedType)
 
 let body_as_body = Charon.LlbcAstUtils.body_as_structured
 
@@ -38,13 +25,13 @@ let body_is_target_dispatch (b : body) : bool =
 let body_is_translatable (b : body) : bool =
   body_is_known b || body_is_target_dispatch b
 
-let lookup_fun_sig (fun_id : fun_id) (fun_decls : fun_decl FunDeclId.Map.t) :
-    bound_fun_sig =
-  match fun_id with
-  | FRegular id ->
-      let fun_decl = FunDeclId.Map.find id fun_decls in
-      bound_fun_sig_of_decl fun_decl
-  | FBuiltin aid -> Builtin.get_builtin_fun_sig aid
+let fun_decl_global_initializer (f : fun_decl) : global_decl_ref option =
+  match f.src with
+  | GlobalInitializerFun global -> Some global
+  | _ -> None
+
+let fun_decl_is_global_initializer (f : fun_decl) : bool =
+  Option.is_some (fun_decl_global_initializer f)
 
 (** Return the opaque declarations found in the crate, which are also *not
     builtin*.

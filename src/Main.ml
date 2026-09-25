@@ -20,7 +20,7 @@ let _ =
   (* Set the level for the Charon loggers (for the ones internal to Aeneas,
      the level was set up at creation time) *)
   main_log#set_level EL.Info;
-  llbc_of_json_logger#set_level EL.Info
+  Logs.Src.set_level Charon.Logging.llbc_of_json_logger (Some Logs.Info)
 
 (* This is necessary to have a backtrace when raising exceptions - for some
  * reason, the -g option doesn't work.
@@ -105,6 +105,11 @@ let () =
         Arg.String set_subdir,
         " Extract the files in a sub-folder; this option has an impact on the \
          import paths of the generated files" );
+      ( "-use-lean-modules",
+        Arg.Bool (fun b -> use_lean_modules := b),
+        " Emit Lean files using the module system (default: true). Pass \
+         `-use-lean-modules false` to emit files that don't use the module \
+         system." );
       ( "-test-units",
         Arg.Set test_unit_functions,
         " Test the unit functions with the concrete (i.e., not symbolic) \
@@ -211,6 +216,12 @@ let () =
          collisions with field projectors. Example: the `len` method in `impl \
          Struct { fn len(&self) -> usize { ... } }` would be named \
          `Struct.impl.len`." );
+      ( "-filter-trait-methods",
+        Arg.Set filter_trait_impl_methods,
+        " When extracting a trait impl, filter out the methods which are \
+         absent from the model of the trait declaration in the target backend \
+         (e.g., Lean). Trait declarations which have no model are not \
+         affected." );
       ( "-all-computable",
         Arg.Set all_computable,
         " For Lean: do not insert `noncomputable section` at the top of the \
@@ -219,6 +230,11 @@ let () =
       ( "-loops-to-rec",
         Arg.Set loops_to_recursive_functions,
         " Always extract loops to recursive functions." );
+      ( "-feature-gates",
+        Arg.Set feature_gates,
+        " For Lean: introduce an assertion at the beginning of the functions \
+         annotated with `#[target_feature(enable = \"...\")]`, to check that \
+         the required target features are available." );
       ( "-loops-no-rec",
         Arg.Set no_recursive_loops,
         " Never attempt to extract loops to recursive functions." );
@@ -501,11 +517,15 @@ let () =
     | Some backend -> (
         match backend with
         | FStar ->
+            check_not !feature_gates
+              "The F* backend doesn't support the -feature-gates option";
             (* F* can disambiguate the field names *)
             record_fields_short_names := true;
             (* Introducing [massert] leads to type inferencing issues *)
             intro_massert := false
         | Coq ->
+            check_not !feature_gates
+              "The Coq backend doesn't support the -feature-gates option";
             (* Some patterns are not supported *)
             decompose_monadic_let_bindings := true;
             decompose_nested_let_patterns := true
@@ -521,6 +541,8 @@ let () =
             (* *) merge_let_app_decompose_tuple := true;
             lift_pure_function_calls := true
         | HOL4 ->
+            check_not !feature_gates
+              "The HOL4 backend doesn't support the -feature-gates option";
             (* We don't support fuel for the HOL4 backend *)
             if !use_fuel then (
               log#error "The HOL4 backend doesn't support the -use-fuel option";
@@ -586,7 +608,7 @@ let () =
              (function
                | Aeneas.LlbcAst.FunGroup (RecGroup (_ :: _)) -> true
                | _ -> false)
-             m.declarations
+             (Option.get m.declarations)
       then (
         log#error
           "The Lean backend doesn't support the use of \
@@ -619,7 +641,7 @@ let () =
               (* We also ignore the trait method declarations *)
               &&
               match d.src with
-              | TraitDeclItem _ -> false
+              | TraitDefaultFun _ -> false
               | _ -> true)
             fun_decls
         in

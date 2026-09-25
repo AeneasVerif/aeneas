@@ -72,8 +72,18 @@ class ['self] map_tvalue_base =
       fun env ids -> BorrowId.Set.map (self#visit_loan_id env) ids
   end
 
+(** A primitive value. Charon represents those directly as constant expression
+    kinds, while the interpreter also needs them as runtime values. *)
+type literal =
+  | VScalar of integer_value
+  | VFloat of float_value
+  | VBool of bool
+  | VChar of char_value
+  | VByteStr of int list
+  | VStr of string
+
 (** A symbolic value *)
-type symbolic_value = {
+and symbolic_value = {
   sv_id : symbolic_value_id;
   sv_ty : ty;  (** This should be a type with regions *)
 }

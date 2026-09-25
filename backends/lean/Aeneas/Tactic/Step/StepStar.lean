@@ -1,19 +1,19 @@
-import Aeneas.Tactic.Step.Step
-import AeneasMeta.Split
+module
+public import Aeneas.Tactic.Step.Step
+public import AeneasMeta.Split
+public section
 open Lean Meta Elab Tactic
 
 namespace Aeneas
 
 /-- Given a goal of the shape `spec (match ... with ...) post`, perform a case split
 and introduce an equality. -/
-def esplitMatchAtSpec (h : Name) (names : Option (List (List (Option Name)))) :
+meta def esplitMatchAtSpec (h : Name) (names : Option (List (List (Option Name)))) :
   TacticM (List (Array FVarId × FVarId × MVarId)) := do
   withTraceNode `Utils (fun _ => do pure m!"esplitMatchAtSpec") do
   focus do withMainContext do
   let tgt ← getMainTarget
-  tgt.consumeMData.withApp fun spec? args => do
-  if ¬ (spec?.isConstOf ``Std.WP.spec) ∨ args.size ≠ 3 then throwError "Not a valid spec goal"
-  let prog := args[1]!
+  let prog ← Step.getSpecProgram tgt
   -- Check that we have a matcher
   let some ma ← Meta.matchMatcherApp? prog (alsoCasesOn := true)
     | throwError "not a matcher: {prog}"
@@ -43,7 +43,7 @@ def esplitMatchAtSpec (h : Name) (names : Option (List (List (Option Name)))) :
   --
   pure goals
 
-def esplitMatchAtSpecTac (h : Name) (names : Option (List (List (Option Name)))) :
+meta def esplitMatchAtSpecTac (h : Name) (names : Option (List (List (Option Name)))) :
   TacticM (List (MVarId)) := do
   (← esplitMatchAtSpec h names).mapM fun (_, _, g) => pure g
 
@@ -60,12 +60,10 @@ theorem dite_false : (dite False t e) = e (by simp) := by simp
 /-- Split an `if then else` in a spec predicate:
 `⊢ spec (if ... then ... else ...) post`
 -/
-def esplitIteAtSpec (h : Name) : TacticM (List (FVarId × MVarId)) := do
+meta def esplitIteAtSpec (h : Name) : TacticM (List (FVarId × MVarId)) := do
   focus do withMainContext do
   let tgt ← getMainTarget
-  tgt.consumeMData.withApp fun spec? args => do
-  if ¬ (spec?.isConstOf ``Std.WP.spec) ∨ args.size ≠ 3 then throwError "Not a valid spec goal"
-  let prog := args[1]!
+  let prog ← Step.getSpecProgram tgt
   -- Check that we have an if then else
   prog.withApp fun ite? args => do
   trace[Utils] "ite?: {ite?}, args: {args}"
@@ -96,7 +94,7 @@ def esplitIteAtSpec (h : Name) : TacticM (List (FVarId × MVarId)) := do
   setGoals (goals.map Prod.snd)
   pure goals
 
-def esplitIteAtSpecTac (h : Name) : TacticM (List MVarId) := do
+meta def esplitIteAtSpecTac (h : Name) : TacticM (List MVarId) := do
   pure ((← esplitIteAtSpec h).map Prod.snd)
 
 elab "spec_split_if": tactic => do setGoals (← esplitIteAtSpecTac (← mkFreshUserName `h))
@@ -136,13 +134,11 @@ example (b : Bool) : Std.WP.spec (if h: b then .ok 0 else .ok 1) (fun _ => True)
 
 /-- Given a goal of the shape `spec (match ... with ...) post` or `spec (if ... then ... else ...)`,
 perform a case split. -/
-def esplitAtSpec (h : Name) (names : Option (List (List (Option Name)))) : TacticM (List (Array FVarId × FVarId × MVarId)) := do
+meta def esplitAtSpec (h : Name) (names : Option (List (List (Option Name)))) : TacticM (List (Array FVarId × FVarId × MVarId)) := do
   withTraceNode `Utils (fun _ => do pure m!"esplitAtSpec") do
   focus do withMainContext do
   let tgt ← getMainTarget
-  tgt.consumeMData.withApp fun spec? args => do
-  if ¬ (spec?.isConstOf ``Std.WP.spec) ∨ args.size ≠ 3 then throwError "Not a valid spec goal"
-  let prog := args[1]!
+  let prog ← Step.getSpecProgram tgt
   -- Check whether we have a matcher
   let ma ← Meta.matchMatcherApp? prog (alsoCasesOn := true)
   if ma.isSome
@@ -153,13 +149,14 @@ def esplitAtSpec (h : Name) (names : Option (List (List (Option Name)))) : Tacti
     trace[Utils] "splitting an if then else"
     pure ((← esplitIteAtSpec h).map fun (h, g) => (#[], h, g))
 
-def esplitAtSpecTac (h : Name) : TacticM (List MVarId) := do
+meta def esplitAtSpecTac (h : Name) : TacticM (List MVarId) := do
   pure ((← esplitAtSpec h (some [])).map fun (_, _, g) => g)
 
 elab "spec_split": tactic => do setGoals (← esplitAtSpecTac (← mkFreshUserName `h))
 elab "spec_split" "as" h:ident : tactic => do setGoals (← esplitAtSpecTac h.getId)
 
 namespace Bifurcation
+meta section
 
 /-- Expression on which a branch depends -/
 structure Discr where
@@ -237,8 +234,9 @@ instance: ToMessageData Info where
     let discr := MessageData.ofArray <| discrs.map (ToMessageData.toMessageData)
     let branches := MessageData.ofArray <| branches.map (ToMessageData.toMessageData)
     m!"(info {kind} {discr} {branches})"
+end
 
-def Info.ofExpr(e: Expr): MetaM (Option Info) := do
+meta def Info.ofExpr(e: Expr): MetaM (Option Info) := do
   let e := e.consumeMData
   if e.isIte || e.isDIte then
     let kind := if e.isIte then .ite else .dite
@@ -280,7 +278,7 @@ def Info.ofExpr(e: Expr): MetaM (Option Info) := do
     else return none
   else return none
 
-def Info.toExpr(info: Info): Expr :=
+meta def Info.toExpr(info: Info): Expr :=
   let fn := Expr.const info.matcher info.uLevels
   let args := info.params ++
     #[info.motive] ++
@@ -292,7 +290,7 @@ end Bifurcation
 
 namespace StepStar
 
-abbrev traceGoalWithNode := Step.traceGoalWithNode
+meta abbrev traceGoalWithNode := Step.traceGoalWithNode
 
 structure Config where
   stepConfig : Step.Config
@@ -308,12 +306,12 @@ inductive TaskOrDone α where
 | task (x : Task α)
 | done (x : α)
 
-def TaskOrDone.get (x : TaskOrDone α) : α :=
+meta def TaskOrDone.get (x : TaskOrDone α) : α :=
   match x with
   | .task x => x.get
   | .done x => x
 
-def TaskOrDone.mk (x : α) : TaskOrDone α := .done x
+meta def TaskOrDone.mk (x : α) : TaskOrDone α := .done x
 
 inductive BranchArg where
 | case (stx : TSyntax `Lean.Parser.Tactic.caseArg)
@@ -337,14 +335,14 @@ structure Result where
   unassignedVars : Array MVarId
   subgoals: Array MVarId
 
-instance: Append Info where
+meta instance: Append Info where
   append inf1 inf2 := {
     script := .seq inf1.script inf2.script,
     subgoals := inf1.subgoals ++ inf2.subgoals,
     unassignedVars := inf1.unassignedVars ++ inf2.unassignedVars,
   }
 
-def nameToBinderIdent (n : Name) : TSyntax `Lean.binderIdent :=
+meta def nameToBinderIdent (n : Name) : TSyntax `Lean.binderIdent :=
   if n.isInternalDetail
   then mkNode ``Lean.binderIdent #[mkHole mkNullNode]
   else mkNode ``Lean.binderIdent #[mkIdent n]
@@ -352,7 +350,7 @@ def nameToBinderIdent (n : Name) : TSyntax `Lean.binderIdent :=
 /-- Convert the script into syntax.
     This is a blocking operation: it waits for all the sub-components of the script to be generated.
 -/
-partial def Script.toSyntax (script : Script) : MetaM (Array Syntax.Tactic) := do
+meta partial def Script.toSyntax (script : Script) : MetaM (Array Syntax.Tactic) := do
   match script with
   | .split splitStx branches =>
     let branches ← branches.mapM fun (caseArgs, branch) => do
@@ -382,34 +380,33 @@ inductive TargetKind where
 | unknown
 
 /- Smaller helper which we use to check in which situation we are -/
-def analyzeTarget : TacticM TargetKind := do
+meta def analyzeTarget : TacticM TargetKind := do
   withTraceNode `Step (fun _ => do pure m!"analyzeTarget") do
   try
-    let goalTy ← (← getMainGoal).getType
-    -- Dive into the `spec program post`
-    goalTy.consumeMData.withApp fun spec? args => do
-    if h: spec?.isConstOf ``Std.WP.spec ∧ args.size = 3 then
-      trace[Step] "application of `spec` with arity 3"
-      let program := args[1]
-      -- Check if this is a bind
-      let e ← Utils.normalizeLetBindings program
-      if let .const ``Bind.bind .. := e.getAppFn then
-        let #[_m, _self, _α, _β, _value, cont] := e.getAppArgs
-          | throwError "Expected bind to have 6 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
-        let names ← Step.getPostNames cont
-        pure (.bind names)
-      else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
-        pure (.switch bfInfo)
-      else
-        pure .result
+    let goalTy ← getMainTarget
+    -- Dive into a registered specification
+    let some program ← observing? (Step.getSpecProgram goalTy)
+      | trace[Step] "not an application of a registered specification statement: {goalTy}"
+        return .result
+    trace[Step] "application of a registered specification statement about: {program}"
+    let e ← Utils.normalizeLetBindings program
+    -- Check whether this is a bind
+    if e.getAppFn.isConstOf ``Bind.bind || e.getAppFn.isConstOf ``Std.bind then
+      let arity : Nat := if e.getAppFn.isConstOf ``Bind.bind then 6 else 4
+      let some (_, cont) := Step.getBindArgs? e
+        | throwError "Expected bind to have {arity} arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
+      let names ← Step.getPostNames cont
+      pure (.bind names)
+    else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
+      pure (.switch bfInfo)
     else
-      trace[Step] "not an application of `spec` with arity 3"
+      trace[Step] "not a registered spec"
       pure .result
   catch _ =>
     trace[Step] "exception caught"
     pure .unknown
 
-partial def evalStepStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
+meta partial def evalStepStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
   withMainContext do focus do
   withTraceNode `Step (fun _ => do pure m!"evalStepStar") do
   -- Initialize the step state (grind threading)
@@ -601,7 +598,6 @@ where
       -- TODO: use global options
       let grindTac : TacticM Unit :=
         Step.evalAGrindWithPreprocess cfg.stepConfig.withGroundSimprocs cfg.stepConfig.toGrindConfig cfg.stepConfig.nla
-      -- TODO: add the tactic given by the user
       let tacStx : IO.Promise Syntax.Tactic ← IO.Promise.new
       let rec tryFinish (tacl : List (String × Syntax.Tactic × TacticM Unit)) : TacticM Unit := do
         match tacl with
@@ -623,9 +619,14 @@ where
             trace[Step] "goal solved"
             tacStx.resolve stx
           | none => tryFinish tacl
+      let finishTactics :=
+        [("grind", ← `(tactic| agrind), grindTac)] ++
+        match cfg.preconditionTac with
+        | none => []
+        | some tac => [("user tactic", tac, evalTactic tac)]
       let info' ← do
         if cfg.stepConfig.async then
-          let proof ← Async.asyncRunTactic (tryFinish [("grind", ← `(tactic| agrind), grindTac)])
+          let proof ← Async.asyncRunTactic (tryFinish finishTactics)
           let proof := proof.result?.map (fun x => match x with | none | some none => none | some (some x) => some x)
           let info' : Info ← pure
             { script := .tacs #[.task tacStx.result?],
@@ -633,7 +634,7 @@ where
               subgoals := #[(mvarId, some (TaskOrDone.task proof))] }
           pure info'
         else
-          tryFinish [("grind", ← `(tactic| agrind), grindTac)]
+          tryFinish finishTactics
           let info' : Info ← pure
             { script := .tacs #[.task tacStx.result?],
               unassignedVars := #[],
@@ -670,9 +671,7 @@ where
             | .forallE _ _ body _ => stripForall body
             | e => e
           let innerTy := stripForall precTy
-          let isSpec := innerTy.consumeMData.withApp fun f args =>
-            f.isConstOf ``Std.WP.spec && args.size == 3
-          if isSpec then
+          if isSpec : (← observing? (Step.getSpecProgram innerTy)).isSome then
             let tag ← mvarId.getTag
             let (subInfo, introNames) ← commitIfNoEx do
               setGoals [mvarId]
@@ -842,27 +841,13 @@ where
     try some <$> Step.evalStepCore cfg.stepConfig (some (.str .anonymous "_")) none ids false postsBasename cfg.preconditionTac ss
     catch _ => pure none
 
-  makeIds (base: Name) (numElem numPost : Nat) (defaultId := "x"): Array (TSyntax ``Lean.binderIdent) :=
-    let (root, base?) := match base with
-      | .str root base => (root, some base)
-      | .num root _ => (root, none)
-      | .anonymous => (.anonymous, none)
-    let base := base?.getD defaultId
-    let optionallyEnumerated base num := match num with
-      | 0 => #[]
-      | 1 => #[Name.str root base]
-      | num => Array.ofFn fun (i: Fin num) => Name.str root s!"{base}_{i.val+1}"
-    let elemNames := optionallyEnumerated base numElem
-    let postNames := optionallyEnumerated s!"{base}_post" numPost
-    elemNames ++ postNames |>.map (mkNode ``Lean.binderIdent #[mkIdent ·])
-
   makeCaseArgs tag names :=
     let tag := Lean.mkNode ``Lean.binderIdent #[mkIdent tag]
     let binderIdents := names.map nameToBinderIdent
     Lean.mkNode ``Lean.Parser.Tactic.caseArg #[tag, mkNullNode (args := binderIdents)]
 
 syntax «step*_args» := (num)? Lean.Parser.Tactic.optConfig ("by" tacticSeq)?
-def parseArgs: TSyntax `Aeneas.StepStar.«step*_args» → TermElabM (Config × Option Nat)
+meta def parseArgs: TSyntax `Aeneas.StepStar.«step*_args» → TermElabM (Config × Option Nat)
 | `(«step*_args»| $(fuel)? $config $[by $preconditionTac:tacticSeq]?) => do
   withTraceNode `Step (fun _ => pure m!"parseArgs") do
   let fuel ← do match fuel with
@@ -891,7 +876,7 @@ Its variant `step*?` allows automatically generating the equivalent proof script
 syntax (name := stepStar) "step" noWs ("*" <|> "*?") «step*_args»: tactic
 
 @[tactic stepStar, inherit_doc Step.step]
-def evalStepStarTac : Tactic := fun stx => do
+meta def evalStepStarTac : Tactic := fun stx => do
   match stx with
   | `(tactic| step* $args:«step*_args») =>
     let (cfg, fuel) ← parseArgs args

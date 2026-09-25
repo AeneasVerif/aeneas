@@ -1,6 +1,8 @@
-import Mathlib.Data.Nat.Log
-import Mathlib.Algebra.Order.Sub.Defs
-import Aeneas.Data.Range.DivRange.Basic
+module
+public import Mathlib.Data.Nat.Log
+public import Mathlib.Algebra.Order.Sub.Defs
+public import Aeneas.Data.Range.DivRange.Basic
+public section
 
 namespace Aeneas
 
@@ -61,7 +63,7 @@ private theorem mem_of_mem_divRange_loop_aux
       exists (k + 1)
       simp [hkEq, Nat.div_div_eq_div_mul, Nat.pow_add_one']
 
-private theorem mem_of_mem_divRange (r : DivRange) (a : Nat)
+theorem mem_of_mem_divRange (r : DivRange) (a : Nat)
     (h : a ∈ divRange r.start r.stop r.divisor) : a ∈ r := by
   have hDiv := r.divisor_pos
   have h0 := Nat.log_le_self r.divisor r.start

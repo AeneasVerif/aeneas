@@ -1,3 +1,4 @@
-import Aeneas.Do.Delab
-import Aeneas.Do.Elab
-import Aeneas.Do.Tests
+module
+public import Aeneas.Do.Delab
+public import Aeneas.Do.Elab
+public import Aeneas.Do.Tests

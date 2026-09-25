@@ -8,6 +8,11 @@ let match_with_trait_decl_refs = Config.match_patterns_with_trait_decl_refs
 let default_match_config : match_config =
   { map_vars_to_vars = true; match_with_trait_decl_refs }
 
+let match_name (crate : Charon.GAst.crate) (pattern : pattern)
+    (name : Types.name) : bool =
+  let ctx = ctx_from_crate crate in
+  Charon.NameMatcher.match_name ctx default_match_config pattern name
+
 let default_to_pat_config : to_pat_config =
   { tgt = TkName; use_trait_decl_refs = match_with_trait_decl_refs }
 

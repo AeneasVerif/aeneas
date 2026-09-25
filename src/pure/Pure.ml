@@ -56,7 +56,6 @@ type span_data = Meta.span_data [@@deriving show, ord]
 type span = Meta.span [@@deriving show, ord]
 type ref_kind = Types.ref_kind [@@deriving show, ord]
 type 'a de_bruijn_var = 'a Types.de_bruijn_var [@@deriving show, ord]
-type llbc_fun_id = A.fun_id [@@deriving show, ord]
 type overflow_mode = E.overflow_mode [@@deriving show, ord]
 type de_bruijn_id = T.de_bruijn_id [@@deriving show, ord]
 type type_var_id = TypeVarId.id [@@deriving show, ord]
@@ -125,6 +124,11 @@ type pure_builtin_fun_id =
           an element in an array/slice, we create a mutable borrow to this
           element, then use the borrow to perform the update. The update
           functions are introduced in the pure code by a micro-pass. *)
+  | IndexAtIndex of array_or_slice
+      (** Index an array or slice with a [usize]. Introduced by micro-passes
+          which recognize lower-level standard library calls. *)
+  | IndexMutAtIndex of array_or_slice
+      (** Mutably index an array or slice with a [usize]. *)
   | ToResult
       (** Lifts a pure expression to a monadic expression.
 
@@ -142,6 +146,14 @@ type pure_builtin_fun_id =
           bodies generate a call to [get_target] and dispatch on the result. The
           function is fallible and axiomatized; nothing can be deduced from its
           output. *)
+  | TargetFeatureEnabled
+      (** [target_feature_enabled feature] is [true] if the target feature
+          [feature] (e.g., ["avx2"]) is available on the machine executing the
+          code.
+
+          Used by the [-feature-gates] option: the functions annotated with
+          [#[target_feature(enable = "...")]] get an assertion introduced at the
+          beginning of their body. *)
 [@@deriving show, ord]
 
 (* Builtin declarations coming from external libraries.
@@ -255,7 +267,7 @@ let fuel_succ_id = VariantId.of_int 1
 type int_ty = V.int_ty [@@deriving show, ord]
 type u_int_ty = V.u_int_ty [@@deriving show, ord]
 type float_value = V.float_value [@@deriving show, ord]
-type scalar_value = V.scalar_value [@@deriving show, ord]
+type integer_value = V.integer_value [@@deriving show, ord]
 type char_value = Charon.Uchar.t [@@deriving show, ord]
 type big_int = Charon.BigInt.big_int [@@deriving show, ord]
 
@@ -275,7 +287,7 @@ class ['self] iter_ty_base =
     method visit_u_int_ty : 'env -> u_int_ty -> unit = fun _ _ -> ()
     method visit_float_type : 'env -> float_type -> unit = fun _ _ -> ()
     method visit_float_value : 'env -> float_value -> unit = fun _ _ -> ()
-    method visit_scalar_value : 'env -> scalar_value -> unit = fun _ _ -> ()
+    method visit_integer_value : 'env -> integer_value -> unit = fun _ _ -> ()
     method visit_char_value : 'env -> char_value -> unit = fun _ _ -> ()
     method visit_big_int : 'env -> big_int -> unit = fun _ _ -> ()
 
@@ -333,7 +345,7 @@ class ['self] map_ty_base =
     method visit_float_type : 'env -> float_type -> float_type = fun _ x -> x
     method visit_float_value : 'env -> float_value -> float_value = fun _ x -> x
 
-    method visit_scalar_value : 'env -> scalar_value -> scalar_value =
+    method visit_integer_value : 'env -> integer_value -> integer_value =
       fun _ x -> x
 
     method visit_char_value : 'env -> char_value -> char_value = fun _ x -> x
@@ -409,7 +421,7 @@ class virtual ['self] reduce_ty_base =
     method visit_float_type : 'env -> float_type -> 'a = fun _ _ -> self#zero
     method visit_float_value : 'env -> float_value -> 'a = fun _ _ -> self#zero
 
-    method visit_scalar_value : 'env -> scalar_value -> 'a =
+    method visit_integer_value : 'env -> integer_value -> 'a =
       fun _ _ -> self#zero
 
     method visit_char_value : 'env -> char_value -> 'a = fun _ _ -> self#zero
@@ -492,7 +504,7 @@ class virtual ['self] mapreduce_ty_base =
     method visit_float_value : 'env -> float_value -> float_value * 'a =
       fun _ x -> (x, self#zero)
 
-    method visit_scalar_value : 'env -> scalar_value -> scalar_value * 'a =
+    method visit_integer_value : 'env -> integer_value -> integer_value * 'a =
       fun _ x -> (x, self#zero)
 
     method visit_char_value : 'env -> char_value -> char_value * 'a =
@@ -701,7 +713,7 @@ and literal_type =
   | TPureInt  (** Mathematical (unbounded) integer *)
 
 and literal =
-  | VScalar of scalar_value
+  | VScalar of integer_value
   | VFloat of float_value
   | VBool of bool
   | VChar of char_value
@@ -927,15 +939,15 @@ and type_decl = {
       polymorphic = false;
     }]
 
-type field_proj_kind = E.field_proj_kind [@@deriving show, ord]
 type field_id = FieldId.id [@@deriving show, ord]
 
-(* TODO: we might want to redefine field_proj_kind here, to prevent field accesses
- * on enumerations.
- * Also: tuples...
- * Rmk: projections are actually only used as span-data.
- *)
-type mprojection_elem = { pkind : field_proj_kind; field_id : field_id }
+(** Field projections used as span data. The source type is retained because
+    meta-places otherwise erase the type carried by LLBC places. *)
+type mprojection_elem = {
+  type_id : type_id;
+  variant_id : VariantId.id option;
+  field_id : field_id;
+}
 [@@deriving show, ord]
 
 (** "Meta" place.
@@ -991,8 +1003,6 @@ class ['self] iter_tpat_base =
         self#visit_option self#visit_string e var.basename;
         self#visit_ty e var.ty
 
-    method visit_llbc_fun_id : 'env -> llbc_fun_id -> unit = fun _ _ -> ()
-
     method visit_pure_builtin_fun_id : 'env -> pure_builtin_fun_id -> unit =
       fun _ _ -> ()
 
@@ -1026,8 +1036,6 @@ class ['self] map_tpat_base =
           ty = self#visit_ty e var.ty;
         }
 
-    method visit_llbc_fun_id : 'env -> llbc_fun_id -> llbc_fun_id = fun _ x -> x
-
     method visit_pure_builtin_fun_id :
         'env -> pure_builtin_fun_id -> pure_builtin_fun_id =
       fun _ x -> x
@@ -1059,8 +1067,6 @@ class virtual ['self] reduce_tpat_base =
         let x1 = self#visit_option self#visit_string e var.basename in
         let x2 = self#visit_ty e var.ty in
         self#plus (self#plus x0 x1) x2
-
-    method visit_llbc_fun_id : 'env -> llbc_fun_id -> 'a = fun _ _ -> self#zero
 
     method visit_pure_builtin_fun_id : 'env -> pure_builtin_fun_id -> 'a =
       fun _ _ -> self#zero
@@ -1102,9 +1108,6 @@ class virtual ['self] mapreduce_tpat_base =
         let basename, x1 = self#visit_option self#visit_string e var.basename in
         let ty, x2 = self#visit_ty e var.ty in
         ({ id; basename; ty }, self#plus (self#plus x0 x1) x2)
-
-    method visit_llbc_fun_id : 'env -> llbc_fun_id -> llbc_fun_id * 'a =
-      fun _ x -> (x, self#zero)
 
     method visit_pure_builtin_fun_id :
         'env -> pure_builtin_fun_id -> pure_builtin_fun_id * 'a =
@@ -1217,7 +1220,7 @@ and cast_kind =
       *)
 
 and fn_ptr_kind =
-  | FunId of llbc_fun_id
+  | FunId of fun_decl_id
   | TraitMethod of trait_ref * trait_method_id
 
 (** A function id for a non-builtin function.
@@ -1786,7 +1789,8 @@ type fun_body = {
 }
 [@@deriving show]
 
-type item_source = T.item_source [@@deriving show]
+type fun_source = A.fun_source [@@deriving show]
+type global_source = A.global_source [@@deriving show]
 
 (** Attributes to add to the generated code *)
 type backend_attributes = {
@@ -1811,7 +1815,7 @@ type fun_decl = {
   def_id : FunDeclId.id;
   item_meta : T.item_meta;
   builtin_info : builtin_fun_info option;
-  src : item_source;
+  src : fun_source;
   backend_attributes : backend_attributes;
   num_loops : int;
       (** The number of loops in the parent forward function (basically the
@@ -1868,7 +1872,7 @@ type global_decl = {
           wrapped inside [Result]) *)
   output_ty : ty;  (** The pure type of the global (without [Result]) *)
   can_fail : bool;  (** [true] if the global can fail *)
-  src : item_source;
+  src : global_source;
   body_id : FunDeclId.id;
 }
 [@@deriving show]

@@ -1,5 +1,7 @@
-import Lean
-import Aeneas.Std.Alloc
+module
+public import Lean
+public import Aeneas.Std.Alloc
+public section
 
 namespace Aeneas
 
@@ -26,14 +28,14 @@ structure core.ops.deref.DerefMut (Self Target : Type) where
   deref_mut : Self → Result (Target × (Target → Self))
 
 /-- Trait instance -/
-@[rust_trait_impl "core::ops::deref::Deref<Box<@T>, @T>" (keepParams := [true, false])]
+@[expose, rust_trait_impl "core::ops::deref::Deref<Box<@T>, @T>" (keepParams := [true, false])]
 def core.ops.deref.DerefBoxInst (T : Type) :
   core.ops.deref.Deref T T := {
   deref x := ok (alloc.boxed.Box.deref x)
 }
 
 /-- Trait instance -/
-@[rust_trait_impl "core::ops::deref::DerefMut<Box<@T>, @T>" (keepParams := [true, false])]
+@[expose, rust_trait_impl "core::ops::deref::DerefMut<Box<@T>, @T>" (keepParams := [true, false])]
 def core.ops.deref.DerefMutBoxInst (T : Type) :
   core.ops.deref.DerefMut T T := {
   derefInst := DerefBoxInst T
@@ -48,7 +50,7 @@ structure core.ops.bit.BitAnd (Self : Type) (Rhs : Type) (Self_Output : Type) wh
 structure core.ops.drop.Drop (Self : Type) where
   drop : Self → Result Self
 
-@[rust_fun "core::ops::drop::Drop::drop"]
+@[expose, rust_fun "core::ops::drop::Drop::drop"]
 def core.ops.drop.Drop.drop.default {Self : Type}
     (DropInst : core.ops.drop.Drop Self) : Self → Result Self :=
   fun s => DropInst.drop s
@@ -73,11 +75,9 @@ def BuiltinFnOnce (Inputs : Type u) (Outputs : Type v) : core.ops.function.FnOnc
 
 def BuiltinFnMut (Inputs : Type u) (Outputs : Type v) : core.ops.function.FnMut (Inputs → Result Outputs) Inputs Outputs := {
   FnOnceInst := BuiltinFnOnce Inputs Outputs
-  call_mut f x :=
-    match f x with
-    | ok y => ok (y, f)
-    | fail e => fail e
-    | div => div
+  call_mut f x := do
+    bind (f x) λ v =>
+    ok (v, f)
 }
 
 def BuiltinFn (Inputs : Type u) (Outputs : Type v) : core.ops.function.Fn (Inputs → Result Outputs) Inputs Outputs := {

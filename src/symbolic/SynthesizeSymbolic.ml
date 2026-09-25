@@ -11,8 +11,14 @@ let mk_mplace (span : Meta.span) (p : place) (ctx : Contexts.eval_ctx) : mplace
     match place.kind with
     | PlaceLocal var_id ->
         PlaceLocal (Contexts.ctx_lookup_real_var_binder span ctx var_id)
-    | PlaceProjection (subplace, pe) ->
+    | PlaceProjection (subplace, Field (variant_id, field_id)) ->
+        let type_ref = TypesUtils.ty_as_adt subplace.ty in
+        let pe = { type_ref; variant_id; field_id } in
         PlaceProjection (place_to_mplace subplace, pe)
+    | PlaceProjection (subplace, (Deref | ProjIndex _ | Subslice _)) ->
+        place_to_mplace subplace
+    | PlaceProjection (_, PtrMetadata) ->
+        [%craise] span "Unsupported place projection: pointer metadata"
     | PlaceGlobal gref -> PlaceGlobal gref
   in
   place_to_mplace p
@@ -36,7 +42,7 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
   (* Match on the symbolic value type to know which can of expansion happened *)
   let expansion =
     match sv.sv_ty with
-    | TLiteral TBool -> (
+    | TScalar TBool -> (
         (* Boolean expansion: there should be two branches *)
         match ls with
         | [
@@ -44,14 +50,14 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
          (Some (SeLiteral (VBool false)), false_exp);
         ] -> ExpandBool (true_exp, false_exp)
         | _ -> [%craise] span "Ill-formed boolean expansion")
-    | TLiteral (TInt _) | TLiteral (TUInt _) ->
+    | TScalar (TInteger _) ->
         let int_ty = ty_as_integer sv.sv_ty in
         (* Switch over an integer: split between the "regular" branches
            and the "otherwise" branch (which should be the last branch) *)
         let branches, otherwise = Collections.List.pop_last ls in
         (* For all the regular branches, the symbolic value should have
          * been expanded to a constant *)
-        let get_scalar (see : symbolic_expansion option) : scalar_value =
+        let get_scalar (see : symbolic_expansion option) : integer_value =
           match see with
           | Some (SeLiteral (VScalar cv)) ->
               [%sanity_check] span (Scalars.get_ty cv = int_ty);
@@ -67,7 +73,7 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
         [%sanity_check] span (otherwise_see = None);
         (* Return *)
         ExpandInt (int_ty, branches, otherwise)
-    | TLiteral (TFloat _) ->
+    | TScalar (TFloat _) ->
         [%craise] span "Float are not supported in Aeneas yet"
     | TAdt _ ->
         (* Branching: it is necessarily an enumeration expansion *)

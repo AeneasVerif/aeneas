@@ -331,15 +331,16 @@ let compute_expanded_symbolic_box_value (span : Meta.span) (ctx : eval_ctx)
     controls the expansion of enumerations: if [false], it doesn't allow the
     expansion of enumerations *containing several variants*. *)
 let compute_expanded_symbolic_adt_value (span : Meta.span)
-    (expand_enumerations : bool) (adt_id : type_id) (generics : generic_args)
-    (ctx : eval_ctx) : symbolic_expansion list =
-  match (adt_id, generics.regions, generics.types) with
-  | TAdtId def_id, _, _ ->
+    (expand_enumerations : bool) (tref : type_decl_ref) (ctx : eval_ctx) :
+    symbolic_expansion list =
+  let generics = tref.generics in
+  match (tref.builtin, generics.regions, generics.types) with
+  | None, _, _ ->
       compute_expanded_symbolic_non_builtin_adt_value span expand_enumerations
-        def_id generics ctx
-  | TTuple, [], _ ->
+        tref.id generics ctx
+  | Some TTuple, [], _ ->
       [ compute_expanded_symbolic_tuple_value span ctx generics.types ]
-  | TBuiltin TBox, [], [ boxed_ty ] ->
+  | Some TBox, [], [ boxed_ty ] ->
       [ compute_expanded_symbolic_box_value span ctx boxed_ty ]
   | _ ->
       [%craise] span
@@ -533,7 +534,7 @@ let expand_symbolic_bool (span : Meta.span) (sv : symbolic_value)
   (* Compute the expanded value *)
   let original_sv = sv in
   let rty = original_sv.sv_ty in
-  [%sanity_check] span (rty = TLiteral TBool);
+  [%sanity_check] span (rty = TScalar TBool);
   (* Expand the symbolic value to true or false and continue execution *)
   let see_true = SeLiteral (VBool true) in
   let see_false = SeLiteral (VBool false) in
@@ -564,12 +565,11 @@ let expand_symbolic_value_no_branching (span : Meta.span) (sv : symbolic_value)
   let ctx, cc =
     match rty with
     (* ADTs *)
-    | TAdt { id = adt_id; generics } ->
+    | TAdt tref ->
         (* Compute the expanded value *)
         let allow_branching = false in
         let seel =
-          compute_expanded_symbolic_adt_value span allow_branching adt_id
-            generics ctx
+          compute_expanded_symbolic_adt_value span allow_branching tref ctx
         in
         (* There should be exacly one branch *)
         let see = Collections.List.to_cons_nil seel in
@@ -617,12 +617,11 @@ let expand_symbolic_adt (span : Meta.span) (sv : symbolic_value)
   (* Execute *)
   match rty with
   (* ADTs *)
-  | TAdt { id = adt_id; generics } ->
+  | TAdt tref ->
       let allow_branching = true in
       (* Compute the expanded value *)
       let seel =
-        compute_expanded_symbolic_adt_value span allow_branching adt_id generics
-          ctx
+        compute_expanded_symbolic_adt_value span allow_branching tref ctx
       in
       (* Apply *)
       let ctx_branches =
@@ -635,15 +634,16 @@ let expand_symbolic_adt (span : Meta.span) (sv : symbolic_value)
 
 let expand_symbolic_int (span : Meta.span) (sv : symbolic_value)
     (sv_place : SA.mplace option) (int_type : integer_type)
-    (tgts : scalar_value list) :
+    (tgts : integer_value list) :
     eval_ctx -> (eval_ctx list * eval_ctx) * (SA.expr list * SA.expr -> SA.expr)
     =
  fun ctx ->
   (* Sanity check *)
   (match int_type with
-  | Signed int_type -> [%sanity_check] span (sv.sv_ty = TLiteral (TInt int_type))
+  | Signed int_type ->
+      [%sanity_check] span (sv.sv_ty = TScalar (TInteger (Signed int_type)))
   | Unsigned int_type ->
-      [%sanity_check] span (sv.sv_ty = TLiteral (TUInt int_type)));
+      [%sanity_check] span (sv.sv_ty = TScalar (TInteger (Unsigned int_type))));
   (* For all the branches of the switch, we expand the symbolic value
    * to the value given by the branch and execute the branch statement.
    * For the otherwise branch, we leave the symbolic value as it is
@@ -700,7 +700,7 @@ let greedy_expand_symbolics_with_borrows (span : Meta.span) : cm_fun =
       [%ltrace "about to expand: " ^ symbolic_value_to_string ctx sv];
       let ctx, cc =
         match sv.sv_ty with
-        | TAdt { id = TAdtId def_id; _ } ->
+        | TAdt { id = def_id; builtin = None; _ } ->
             (* {!expand_symbolic_value_no_branching} checks if there are branchings,
              * but we prefer to also check it here - this leads to cleaner messages
              * and debugging *)
@@ -721,10 +721,10 @@ let greedy_expand_symbolics_with_borrows (span : Meta.span) : cm_fun =
             end;
             (* *)
             expand_symbolic_value_no_branching span sv None ctx
-        | TAdt { id = TTuple | TBuiltin TBox; _ } | TRef (_, _, _) ->
+        | TAdt { builtin = Some (TTuple | TBox); _ } | TRef (_, _, _) ->
             (* Ok *)
             expand_symbolic_value_no_branching span sv None ctx
-        | TArray _ | TSlice _ | TAdt { id = TBuiltin TStr; _ } ->
+        | TArray _ | TSlice _ | TAdt { builtin = Some TStr; _ } ->
             (* We can't expand those *)
             [%craise] span
               "Attempted to greedily expand an ADT which can't be expanded "

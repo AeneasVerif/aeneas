@@ -59,10 +59,6 @@ jobs:
             artifact_name: aeneas-linux-aarch64
             nix_attr: aeneas-static-release
             nix_machine: false
-          - os: macos-15-intel
-            artifact_name: aeneas-macos-x86_64
-            nix_attr: aeneas-release
-            nix_machine: false
           - os: macos-latest
             artifact_name: aeneas-macos-aarch64
             nix_attr: aeneas-release
@@ -112,11 +108,15 @@ jobs:
           curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
 
+      - name: Hash Lean dependencies
+        id: hash-lean-dependencies
+        run: echo "hash=$(nix-hash --flat --type sha256 dist_staging/backends/lean/lake-manifest.json)" >> "$GITHUB_OUTPUT"
+
       - name: Cache Lean dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: dist_staging/backends/lean/.lake
-          key: ${{ matrix.os }}-lean-${{ hashFiles('dist_staging/backends/lean/lake-manifest.json') }}
+          key: ${{ matrix.os }}-lean-${{ steps.hash-lean-dependencies.outputs.hash }}
           restore-keys: |
             ${{ matrix.os }}-lean-
 

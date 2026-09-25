@@ -267,30 +267,38 @@ let compute_loop_break_context (config : config) (span : Meta.span)
     { fp_ctx with env = List.map update fp_ctx.env }
   in
 
-  (* Evaluate the loop body to register the different contexts upon reentry *)
-  let ctx_resl, _ = eval_loop_body fp_ctx in
-  (* Keep only the contexts which reached a `continue`. *)
-  let keep_break_ctx (ctx, res) : eval_ctx option =
-    [%ltrace "register_continue_ctx"];
-    match res with
-    | Return | Panic | Continue _ -> None
-    | Unit ->
-        (* See the comment in {!eval_loop} *)
-        [%craise] span "Unreachable"
-    | Break i ->
-        (* We don't support breaks to outer loops *)
-        (* For now we don't support continues to outer loops *)
-        [%cassert] span (i = 0) "Continues to outer loops not supported yet";
-        Some ctx
+  (* Within one evaluation, break paths may fork after creating a loan and thus
+     share its IDs (e.g., both contain [ML@8]/[MB@8]). This can lead to issues
+     later when trying to join with a context that has refreshed ids, as the join
+     then introduces region abstractions that are missing from the break context,
+     leading to a unification issue. In order to address the issue, we reevaluate
+     the body once to refresh the ids: joining all the resulting break contexts
+     then introduces all the necessary abstractions. *)
+  let eval_break_ctxs () =
+    (* Evaluate the loop body to register the different contexts at a break. *)
+    let ctx_resl, _ = eval_loop_body fp_ctx in
+    let keep_break_ctx (ctx, res) : eval_ctx option =
+      [%ltrace "register_break_ctx"];
+      match res with
+      | Return | Panic | Continue _ -> None
+      | Unit ->
+          (* See the comment in {!eval_loop} *)
+          [%craise] span "Unreachable"
+      | Break i ->
+          (* We don't support breaks to outer loops *)
+          [%cassert] span (i = 0) "Breaks to outer loops not supported yet";
+          Some ctx
+    in
+    List.filter_map keep_break_ctx ctx_resl
   in
-  let break_ctxs = List.filter_map keep_break_ctx ctx_resl in
+  let break_ctxs = eval_break_ctxs () in
 
   [%ltrace
     "about to join the contexts at the breaks:\n"
     ^ String.concat "\n\n"
         (List.map
            (fun ctx ->
-             "- continue_ctx:\n"
+             "- break_ctx:\n"
              ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx)
            break_ctxs)
     ^ "\n"];
@@ -304,6 +312,9 @@ let compute_loop_break_context (config : config) (span : Meta.span)
       (* Single break context *)
       Single
   | ctxs ->
+      (* Evaluate a second time so that the same break paths contain fresh IDs,
+         then join all the contexts as before. *)
+      let ctxs = ctxs @ eval_break_ctxs () in
       (* Join the contexts *)
       let break_ctx =
         loop_join_break_ctxs config span loop_id fixed_aids fixed_dids ctxs

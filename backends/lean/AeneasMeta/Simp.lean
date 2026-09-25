@@ -1,3 +1,4 @@
-import AeneasMeta.Simp.Simp
-import AeneasMeta.Simp.SimpAllAssumptions
-import AeneasMeta.Simp.RegisterCommand
+module
+public import AeneasMeta.Simp.Simp
+public import AeneasMeta.Simp.SimpAllAssumptions
+public import AeneasMeta.Simp.RegisterCommand

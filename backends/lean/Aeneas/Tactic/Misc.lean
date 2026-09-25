@@ -1,3 +1,4 @@
-import Aeneas.Tactic.Misc.FApplyExact
-import Aeneas.Tactic.Misc.FCongr
-import Aeneas.Tactic.Misc.Let
+module
+public import Aeneas.Tactic.Misc.FApplyExact
+public import Aeneas.Tactic.Misc.FCongr
+public import Aeneas.Tactic.Misc.Let

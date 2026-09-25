@@ -1,7 +1,9 @@
-import Aeneas.Std.Core.Core
-import Aeneas.Std.Core.Fmt
-import Aeneas.Std.Core.Cmp
-import Aeneas.Std.Core.Hash
+module
+public import Aeneas.Std.Core.Core
+public import Aeneas.Std.Core.Fmt
+public import Aeneas.Std.Core.Cmp
+public import Aeneas.Std.Core.Hash
+public section
 
 namespace Aeneas.Std
 
@@ -23,7 +25,7 @@ which are available to rustc but which we can't provide). Any code which relies 
 will not type-check. The reason why we provide it is that it happens that the LLBC crate contains
 this definition, while it is actually not used in the extracted model: we just want Aeneas to consider
 it as builtin so that it doesn't generate any axiom for it (this is a way of ignoring it). -/
-@[rust_fun "core::intrinsics::discriminant_value"]
+@[expose, rust_fun "core::intrinsics::discriminant_value"]
 def core.intrinsics.discriminant_value
   {T : Type} (DiscrInst : DiscriminantKind T) (_ : T) :
   Result (DiscrInst.Discriminant) := .fail .undef -- TODO: we need

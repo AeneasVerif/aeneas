@@ -1,21 +1,23 @@
-import Aeneas.Std.Core.Iter
-import Aeneas.Std.Vec
+module
+public import Aeneas.Std.Core.Iter
+public import Aeneas.Std.Vec
+public section
 
 namespace Aeneas.Std
 
 open Result
 
-@[rust_type "alloc::vec::into_iter::IntoIter" (keepParams := [true, false])]
+@[expose, rust_type "alloc::vec::into_iter::IntoIter" (keepParams := [true, false])]
 def alloc.vec.into_iter.IntoIter (T : Type) : Type := alloc.vec.Vec T
 
-@[rust_fun
+@[expose, rust_fun
   "alloc::vec::into_iter::{core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, @A>, @T>}::next"
   (keepParams := [true, false])]
 def alloc.vec.into_iter.IteratorIntoIter.next {T : Type} (it: alloc.vec.into_iter.IntoIter T) :
   Result ((Option T) × (alloc.vec.into_iter.IntoIter T)) :=
-  match it with
-  | ⟨ [], _ ⟩  => ok (none, it)
-  | ⟨ hd :: tl, _ ⟩ => ok (hd, ⟨ tl, by scalar_tac ⟩ )
+  match h : it.val with
+  | []  => ok (none, it)
+  | hd :: tl => ok (hd, .from tl (by grind) )
 
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, @A>, @T>"
@@ -31,12 +33,12 @@ impl_def core.iter.traits.iterator.IteratorVecIntoIter (T : Type) :
     (core.iter.traits.iterator.IteratorVecIntoIter T)
 }
 
-@[rust_fun
+@[expose, rust_fun
   "alloc::vec::{core::iter::traits::collect::IntoIterator<alloc::vec::Vec<@T>, @T, alloc::vec::into_iter::IntoIter<@T, @A>>}::into_iter"
   (keepParams := [true, false])]
 def alloc.vec.IntoIteratorVec.into_iter {T : Type} (v: alloc.vec.Vec T) : Result (alloc.vec.into_iter.IntoIter T) := ok v
 
-@[reducible, rust_trait_impl
+@[expose, reducible, rust_trait_impl
   "core::iter::traits::collect::IntoIterator<alloc::vec::Vec<@T>, @T, alloc::vec::into_iter::IntoIter<@T, @A>>"
   (keepParams := [true, false])]
 def core.iter.traits.collect.IntoIteratorVec (T : Type) :
@@ -57,7 +59,7 @@ def alloc.vec.FromIteratorVec.iterToList
   | some item => alloc.vec.FromIteratorVec.iterToList iterInst iter (item :: acc)
 partial_fixpoint
 
-@[rust_fun
+@[expose, rust_fun
   "alloc::vec::{core::iter::traits::collect::FromIterator<alloc::vec::Vec<@T>, @T>}::from_iter"]
 def alloc.vec.FromIteratorVec.from_iter
   {T : Type} {I : Type} {IntoIter : Type}
@@ -66,10 +68,10 @@ def alloc.vec.FromIteratorVec.from_iter
   fun input => do
     let iter ← IntoIteratorInst.into_iter input
     let list ← alloc.vec.FromIteratorVec.iterToList IntoIteratorInst.iteratorInst iter []
-    if h : list.length ≤ Usize.max then .ok ⟨ list, h ⟩
+    if h : list.length ≤ Usize.max then .ok (.from list h)
     else .fail .panic
 
-@[reducible, rust_trait_impl
+@[expose, reducible, rust_trait_impl
   "core::iter::traits::collect::FromIterator<alloc::vec::Vec<@T>, @T>"]
 def core.iter.traits.collect.FromIteratorVec (T : Type) :
   core.iter.traits.collect.FromIterator (alloc.vec.Vec T) T := {
@@ -78,7 +80,7 @@ def core.iter.traits.collect.FromIteratorVec (T : Type) :
     alloc.vec.FromIteratorVec.from_iter IntoIteratorInst
 }
 
-@[rust_fun
+@[expose, rust_fun
   "alloc::vec::into_iter::{core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, @A>, @T>}::map"]
 def alloc.vec.into_iter.IntoIter.Insts.CoreIterTraitsIteratorIterator.map
   {T : Type} {A : Type} {F : Type}
