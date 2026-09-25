@@ -151,6 +151,46 @@ pub fn test_is_multiple_of_zero_divisor() {
 }
 
 // ============================================================================
+// is_power_of_two
+// ============================================================================
+
+#[verify::test]
+pub fn test_is_power_of_two_u8() {
+    assert!(64u8.is_power_of_two());
+    assert!(!65u8.is_power_of_two());
+}
+
+#[verify::test]
+pub fn test_is_power_of_two_u16() {
+    assert!(256u16.is_power_of_two());
+    assert!(!255u16.is_power_of_two());
+}
+
+#[verify::test]
+pub fn test_is_power_of_two_u32() {
+    assert!(1u32.is_power_of_two());
+    assert!(1024u32.is_power_of_two());
+    assert!(!1023u32.is_power_of_two());
+}
+
+#[verify::test]
+pub fn test_is_power_of_two_u64() {
+    assert!(!0u64.is_power_of_two());
+    assert!(!3u64.is_power_of_two());
+}
+
+#[verify::test]
+pub fn test_is_power_of_two_u128() {
+    assert!(2u128.is_power_of_two());
+}
+
+#[verify::test]
+pub fn test_is_power_of_two_usize() {
+    assert!(8usize.is_power_of_two());
+    assert!(!0usize.is_power_of_two());
+}
+
+// ============================================================================
 // TryFrom<...>
 // ============================================================================
 

@@ -288,8 +288,9 @@ theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i:
   (hbound : i.val < v.length) :
   v.index_mut_usize i ⦃ x back => x = v.val[i.val] ∧ back = set v i ⦄ := by
   simp only [index_mut_usize, Bind.bind]
-  have ⟨ x, h ⟩ := spec_imp_exists (index_usize_spec v i hbound)
-  simp [h]
+  apply spec_bind (index_usize_spec v i hbound)
+  intro x hx
+  simp [hx]
 
 @[simp]
 theorem Array.set_getElem!_eq {α} {n : Usize} [Inhabited α] (x : Array α n) (i : Usize) :
@@ -343,8 +344,9 @@ theorem Array.clone_length {α : Type u} {n : Usize} (clone : α → Result α) 
 theorem Array.clone_spec {α : Type u} {n : Usize} {clone : α → Result α} {s : Array α n} (h : ∀ x ∈ s.val, clone x = ok x) :
   Array.clone clone s ⦃ s' => s' = s ⦄ := by
   simp only [Array.clone]
-  have ⟨ l', h ⟩ := spec_imp_exists (List.clone_spec h)
-  simp [h]
+  apply spec_bind (List.clone_spec h)
+  intro l' hl'
+  simp [hl']
 
 @[expose, rust_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone"]
 def core.array.CloneArray.clone
@@ -356,8 +358,9 @@ theorem core.array.CloneArray.clone_spec {T : Type} {N : Usize} (cloneInst : cor
   (h : ∀ x ∈ a.val, cloneInst.clone x = ok x) :
   core.array.CloneArray.clone cloneInst a ⦃ a' => a = a' ⦄:= by
   unfold clone
-  have := spec_imp_exists (Array.clone_spec h)
-  grind
+  apply spec_mono (Array.clone_spec h)
+  intro a' ha'
+  exact ha'.symm
 
 @[expose, rust_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone_from"]
 def core.array.CloneArray.clone_from {T : Type} {N : Usize} (cloneInst : core.clone.Clone T)
@@ -369,8 +372,9 @@ theorem core.array.CloneArray.clone_from_spec {T : Type} {N : Usize} (cloneInst 
   (self source : Array T N) (h : ∀ x ∈ source.val, cloneInst.clone x = ok x) :
   core.array.CloneArray.clone_from cloneInst self source ⦃ source' => source = source' ⦄ := by
   unfold clone_from
-  have := spec_imp_exists (Array.clone_spec h)
-  grind
+  apply spec_mono (Array.clone_spec h)
+  intro source' hsource'
+  exact hsource'.symm
 
 @[expose, reducible, rust_trait_impl "core::clone::Clone<[@T; @N]>"]
 def core.clone.CloneArray {T : Type} (N : Usize)

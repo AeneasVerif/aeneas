@@ -113,8 +113,6 @@ instance : Monad Result where
   pure := .ok
   bind := bind
 
-instance : LawfulMonad Result := instLawfulMonadITree
-
 @[elab_as_elim, cases_eliminator]
 def Result.cases {R}
     {motive : Result R → Sort v}
@@ -280,6 +278,43 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
 
 @[simp] theorem bind_div (f : α → Result β) : bind .div f = .div := by simp [bind, div]
 
+
+
+/-- Left identity. -/
+protected theorem pure_bind {α : Type u} {β : Type v} (x : α) (f : α → Result β) :
+    bind (.ok x) f = f x := bind_ok x f
+
+/-- Right identity. -/
+@[simp] protected theorem bind_pure {α : Type u} (x : Result α) : bind x .ok = x := by
+  change ITree.bind x ITree.ret = x
+  exact _root_.bind_pure (m := ITree RustEffect) x
+
+/-- Associativity. -/
+@[simp] protected theorem bind_assoc {α : Type u} {β : Type v} {γ : Type w}
+    (x : Result α) (f : α → Result β) (g : β → Result γ) :
+    bind (bind x f) g = bind x (fun x => bind (f x) g) := by
+  change ITree.bind (ITree.bind x f) g = ITree.bind x (fun x => ITree.bind (f x) g)
+  ext n
+  induction n generalizing x
+  · rfl
+  · rw [ITree.bind.eq_def x, ITree.bind.eq_def x]
+    split
+    · simp
+    · simp
+    · simp [*]
+
+instance : LawfulMonad Result := LawfulMonad.mk' Result
+  (id_map := Std.bind_pure)
+  (pure_bind := Std.pure_bind)
+  (bind_assoc := Std.bind_assoc)
+
+/-- Normalize the typeclass bind (`>>=`) to `Std.bind`. -/
+theorem bind_tc_eq {α β : Type u} (x : Result α) (f : α → Result β) :
+    Bind.bind x f = bind x f := rfl
+
+/-- Normalize the typeclass `pure` to `Result.ok`. -/
+theorem pure_tc_eq {α : Type u} (x : α) : (pure x : Result α) = .ok x := rfl
+
 @[simp] theorem bind_tc_ok (x : α) (f : α → Result β) :
   (do let y ← .ok x; f y) = f x := by simp [bind, Bind.bind, ok]
 
@@ -295,10 +330,11 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
 @[simp] theorem bind_tc_div (f : α → Result β) :
   (do let y ← div; f y) = div := by simp [bind, Bind.bind, div]
 
+/-- `Std.bind_assoc` for the typeclass bind (whose computations live in the same universe). -/
 @[simp] theorem bind_assoc_eq {a b c : Type u}
   (e : Result a) (g :  a → Result b) (h : b → Result c) :
   (Bind.bind (Bind.bind e g) h) =
-  (Bind.bind e (λ x => Bind.bind (g x) h)) := by apply bind_assoc
+  (Bind.bind e (λ x => Bind.bind (g x) h)) := Std.bind_assoc e g h
 
 end
 
@@ -366,7 +402,7 @@ theorem uncurry_eq_prop_arrow {α β σ} (x : α × β) (p : α → β → σ �
 
 /- Allow `partial_fixpoint` to see through `uncurry` in bind continuations.
 This is needed because the custom `do` elaborator generates
-`e >>= uncurry fun a b => rest` for tuple-destructuring `let (a, b) ← e`. -/
+`bind e (uncurry fun a b => rest)` for tuple-destructuring `let (a, b) ← e`. -/
 section
 open Lean.Order
 
