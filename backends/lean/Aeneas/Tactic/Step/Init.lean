@@ -101,7 +101,7 @@ structure Config where
   nla : Bool := true
   /-- Thread a grind state through `step*` calls, reusing simp caches, the e-graph, and
       derived facts across iterations. When `false`, each `step` creates a fresh grind
-      call (current behavior). -/
+      call (current behavior). Has no effect if `grind` is `false`. -/
   threadGrindState : Bool := true
   /-- Number of grind preprocessing iterations after internalizing each proposition hypothesis.
       This is the N in `(solvers <|> instantiate [<|> splitNext <|> mbtc]).loop N`. -/
@@ -121,6 +121,9 @@ def Config.toGrindConfig (cfg : Config) : Grind.Config :=
         preprocessGrind := _,
         splits, ematch, splitMatch, splitIte, splitIndPred, funext, gen, genLocal, instances, canonHeartbeats } := cfg
   { splits, ematch, splitMatch, splitIte, splitIndPred, funext, gen, genLocal, instances, canonHeartbeats }
+
+/-- Should we discharge the preconditions with a grind state threaded through the steps? -/
+def Config.useThreadedGrind (cfg : Config) : Bool := cfg.grind && cfg.threadGrindState
 
 declare_option_config_elab Config elabPartialConfig aeneas.step
 

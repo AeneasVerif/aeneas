@@ -941,7 +941,7 @@ meta def trySolvePreconditions (args : Args) (config : Config)
   /- If `threadGrindState` is on but we don't have an already-initialized grind state,
      initialize it now (lazily: only if there are unsolved preconditions) -/
   let stepState ← do
-    if config.threadGrindState && stepState.grindState?.isNone && !goals.isEmpty then
+    if config.useThreadedGrind && stepState.grindState?.isNone && !goals.isEmpty then
       pure { stepState with grindState? := some (← Step.initStepGrindState config originalGoal) }
     else
       pure stepState
@@ -1402,7 +1402,7 @@ meta def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Op
     trace[Step] "Precondition: {← getMainGoal}"
     try
       -- Try threaded grind discharge first, fall back to standard tactics
-      match gs? with
+      match if config.useThreadedGrind then gs? else none with
       | some gs =>
         try
           threadedGrindTac gs

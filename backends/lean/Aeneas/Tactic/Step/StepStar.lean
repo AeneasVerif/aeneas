@@ -411,7 +411,7 @@ meta partial def evalStepStar (cfg: Config) (fuel : Option Nat) : TacticM Result
   withTraceNode `Step (fun _ => do pure m!"evalStepStar") do
   -- Initialize the step state (grind threading)
   let initState : Step.StepState ←
-    if cfg.stepConfig.threadGrindState then
+    if cfg.stepConfig.useThreadedGrind then
       let mvarId ← getMainGoal
       let gs ← Step.initStepGrindState cfg.stepConfig mvarId
       /- Check if grind detected a contradiction during initialization.
