@@ -20,7 +20,7 @@ set_option maxRecDepth 2048
 namespace order
 
 /-- [order::compare]:
-    Source: 'tests/src/order.rs', lines 5:0-7:1
+    Source: 'tests/src/order.rs', lines 7:0-9:1
     Visibility: public -/
 def compare
   {T : Type} (corecmpOrdInst : core.cmp.Ord T) (x : T) (y : T) :
@@ -29,53 +29,53 @@ def compare
   corecmpOrdInst.cmp x y
 
 /-- [order::u32_compare]:
-    Source: 'tests/src/order.rs', lines 9:0-11:1
+    Source: 'tests/src/order.rs', lines 11:0-13:1
     Visibility: public -/
 def u32_compare (x : Std.U32) (y : Std.U32) : Result Ordering := do
   ok (core.cmp.impls.OrdU32.cmp x y)
 
 /-- [order::u64_partial_cmp]:
-    Source: 'tests/src/order.rs', lines 13:0-15:1
+    Source: 'tests/src/order.rs', lines 15:0-17:1
     Visibility: public -/
 def u64_partial_cmp
   (x : Std.U64) (y : Std.U64) : Result (Option Ordering) := do
   ok (core.cmp.impls.PartialOrdU64.partial_cmp x y)
 
 /-- [order::Wrap]
-    Source: 'tests/src/order.rs', lines 22:0-22:21
+    Source: 'tests/src/order.rs', lines 24:0-24:21
     Visibility: public -/
 @[reducible]
 def Wrap := Std.U64
 
 /-- Trait implementation: [order::{impl core::marker::StructuralPartialEq for order::Wrap}]
-    Source: 'tests/src/order.rs', lines 21:9-21:18 -/
+    Source: 'tests/src/order.rs', lines 23:9-23:18 -/
 @[reducible]
 def Wrap.Insts.CoreMarkerStructuralPartialEq : core.marker.StructuralPartialEq
   Wrap := {
 }
 
 /-- [order::{impl core::cmp::PartialEq<order::Wrap> for order::Wrap}::eq]:
-    Source: 'tests/src/order.rs', lines 21:9-21:18
+    Source: 'tests/src/order.rs', lines 23:9-23:18
     Visibility: public -/
 def Wrap.Insts.CoreCmpPartialEqWrap.eq
   (self : Wrap) (other : Wrap) : Result Bool := do
   ok (self = other)
 
 /-- Trait implementation: [order::{impl core::cmp::PartialEq<order::Wrap> for order::Wrap}]
-    Source: 'tests/src/order.rs', lines 21:9-21:18 -/
+    Source: 'tests/src/order.rs', lines 23:9-23:18 -/
 @[reducible]
 def Wrap.Insts.CoreCmpPartialEqWrap : core.cmp.PartialEq Wrap Wrap := {
   eq := Wrap.Insts.CoreCmpPartialEqWrap.eq
 }
 
 /-- [order::{impl core::cmp::Eq for order::Wrap}::assert_fields_are_eq]:
-    Source: 'tests/src/order.rs', lines 21:20-21:22
+    Source: 'tests/src/order.rs', lines 23:20-23:22
     Visibility: public -/
 def Wrap.Insts.CoreCmpEq.assert_fields_are_eq (self : Wrap) : Result Unit := do
   ok ()
 
 /-- Trait implementation: [order::{impl core::cmp::Eq for order::Wrap}]
-    Source: 'tests/src/order.rs', lines 21:20-21:22 -/
+    Source: 'tests/src/order.rs', lines 23:20-23:22 -/
 @[reducible]
 def Wrap.Insts.CoreCmpEq : core.cmp.Eq Wrap := {
   partialEqInst := Wrap.Insts.CoreCmpPartialEqWrap
@@ -83,14 +83,14 @@ def Wrap.Insts.CoreCmpEq : core.cmp.Eq Wrap := {
 }
 
 /-- [order::{impl core::cmp::Ord for order::Wrap}::cmp]:
-    Source: 'tests/src/order.rs', lines 21:36-21:39
+    Source: 'tests/src/order.rs', lines 23:36-23:39
     Visibility: public -/
 def Wrap.Insts.CoreCmpOrd.cmp
   (self : Wrap) (other : Wrap) : Result Ordering := do
   ok (core.cmp.impls.OrdU64.cmp self other)
 
 /-- [order::{impl core::cmp::PartialOrd<order::Wrap> for order::Wrap}::partial_cmp]:
-    Source: 'tests/src/order.rs', lines 21:24-21:34
+    Source: 'tests/src/order.rs', lines 23:24-23:34
     Visibility: public -/
 def Wrap.Insts.CoreCmpPartialOrdWrap.partial_cmp
   (self : Wrap) (other : Wrap) : Result (Option Ordering) := do
@@ -98,32 +98,550 @@ def Wrap.Insts.CoreCmpPartialOrdWrap.partial_cmp
   ok (some o)
 
 /-- Trait implementation: [order::{impl core::cmp::PartialOrd<order::Wrap> for order::Wrap}]
-    Source: 'tests/src/order.rs', lines 21:24-21:34 -/
+    Source: 'tests/src/order.rs', lines 23:24-23:34 -/
 @[reducible]
-def Wrap.Insts.CoreCmpPartialOrdWrap : core.cmp.PartialOrd Wrap Wrap := {
+impl_def Wrap.Insts.CoreCmpPartialOrdWrap : core.cmp.PartialOrd Wrap Wrap := {
   partialEqInst := Wrap.Insts.CoreCmpPartialEqWrap
   partial_cmp := Wrap.Insts.CoreCmpPartialOrdWrap.partial_cmp
+  lt := core.cmp.PartialOrd.lt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap
+  le := core.cmp.PartialOrd.le.trait_default Wrap.Insts.CoreCmpPartialOrdWrap
+  gt := core.cmp.PartialOrd.gt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap
+  ge := core.cmp.PartialOrd.ge.trait_default Wrap.Insts.CoreCmpPartialOrdWrap
 }
 
 /-- Trait implementation: [order::{impl core::cmp::Ord for order::Wrap}]
-    Source: 'tests/src/order.rs', lines 21:36-21:39 -/
+    Source: 'tests/src/order.rs', lines 23:36-23:39 -/
 @[reducible]
-def Wrap.Insts.CoreCmpOrd : core.cmp.Ord Wrap := {
+impl_def Wrap.Insts.CoreCmpOrd : core.cmp.Ord Wrap := {
   eqInst := Wrap.Insts.CoreCmpEq
   partialOrdInst := Wrap.Insts.CoreCmpPartialOrdWrap
   cmp := Wrap.Insts.CoreCmpOrd.cmp
+  max := core.cmp.Ord.max.trait_default Wrap.Insts.CoreCmpOrd
+  min := core.cmp.Ord.min.trait_default Wrap.Insts.CoreCmpOrd
+  clamp := core.cmp.Ord.clamp.trait_default Wrap.Insts.CoreCmpOrd
 }
 
 /-- [order::wrap_partial_cmp]:
-    Source: 'tests/src/order.rs', lines 24:0-26:1
+    Source: 'tests/src/order.rs', lines 26:0-28:1
     Visibility: public -/
 def wrap_partial_cmp (x : Wrap) (y : Wrap) : Result (Option Ordering) := do
   Wrap.Insts.CoreCmpPartialOrdWrap.partial_cmp x y
 
 /-- [order::wrap_cmp]:
-    Source: 'tests/src/order.rs', lines 28:0-30:1
+    Source: 'tests/src/order.rs', lines 30:0-32:1
     Visibility: public -/
 def wrap_cmp (x : Wrap) (y : Wrap) : Result Ordering := do
   Wrap.Insts.CoreCmpOrd.cmp x y
+
+/-- [order::test_wrap_lt]:
+    Source: 'tests/src/order.rs', lines 39:0-43:1
+    Visibility: public -/
+def test_wrap_lt : Result Unit := do
+  let b ←
+    core.cmp.PartialOrd.lt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 1#u64
+      2#u64
+  massert b
+  let b1 ←
+    core.cmp.PartialOrd.lt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
+      2#u64
+  massert (¬ b1)
+  let b2 ←
+    core.cmp.PartialOrd.lt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
+      1#u64
+  massert (¬ b2)
+
+/- Unit test for [order::test_wrap_lt] -/
+#assert (test_wrap_lt).reducesTo ()
+
+/-- [order::test_wrap_le]:
+    Source: 'tests/src/order.rs', lines 46:0-50:1
+    Visibility: public -/
+def test_wrap_le : Result Unit := do
+  let b ←
+    core.cmp.PartialOrd.le.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 1#u64
+      2#u64
+  massert b
+  let b1 ←
+    core.cmp.PartialOrd.le.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
+      2#u64
+  massert b1
+  let b2 ←
+    core.cmp.PartialOrd.le.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
+      1#u64
+  massert (¬ b2)
+
+/- Unit test for [order::test_wrap_le] -/
+#assert (test_wrap_le).reducesTo ()
+
+/-- [order::test_wrap_gt]:
+    Source: 'tests/src/order.rs', lines 53:0-57:1
+    Visibility: public -/
+def test_wrap_gt : Result Unit := do
+  let b ←
+    core.cmp.PartialOrd.gt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
+      1#u64
+  massert b
+  let b1 ←
+    core.cmp.PartialOrd.gt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
+      2#u64
+  massert (¬ b1)
+  let b2 ←
+    core.cmp.PartialOrd.gt.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 1#u64
+      2#u64
+  massert (¬ b2)
+
+/- Unit test for [order::test_wrap_gt] -/
+#assert (test_wrap_gt).reducesTo ()
+
+/-- [order::test_wrap_ge]:
+    Source: 'tests/src/order.rs', lines 60:0-64:1
+    Visibility: public -/
+def test_wrap_ge : Result Unit := do
+  let b ←
+    core.cmp.PartialOrd.ge.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
+      1#u64
+  massert b
+  let b1 ←
+    core.cmp.PartialOrd.ge.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
+      2#u64
+  massert b1
+  let b2 ←
+    core.cmp.PartialOrd.ge.trait_default Wrap.Insts.CoreCmpPartialOrdWrap 1#u64
+      2#u64
+  massert (¬ b2)
+
+/- Unit test for [order::test_wrap_ge] -/
+#assert (test_wrap_ge).reducesTo ()
+
+/-- [order::test_wrap_max]:
+    Source: 'tests/src/order.rs', lines 67:0-71:1
+    Visibility: public -/
+def test_wrap_max : Result Unit := do
+  let w ← core.cmp.Ord.max.trait_default Wrap.Insts.CoreCmpOrd 1#u64 2#u64
+  let b ← Wrap.Insts.CoreCmpPartialEqWrap.eq w 2#u64
+  massert b
+  let w1 ← core.cmp.Ord.max.trait_default Wrap.Insts.CoreCmpOrd 2#u64 1#u64
+  let b1 ← Wrap.Insts.CoreCmpPartialEqWrap.eq w1 2#u64
+  massert b1
+  let w2 ← core.cmp.Ord.max.trait_default Wrap.Insts.CoreCmpOrd 2#u64 2#u64
+  let b2 ← Wrap.Insts.CoreCmpPartialEqWrap.eq w2 2#u64
+  massert b2
+
+/- Unit test for [order::test_wrap_max] -/
+#assert (test_wrap_max).reducesTo ()
+
+/-- [order::test_wrap_min]:
+    Source: 'tests/src/order.rs', lines 74:0-78:1
+    Visibility: public -/
+def test_wrap_min : Result Unit := do
+  let w ← core.cmp.Ord.min.trait_default Wrap.Insts.CoreCmpOrd 1#u64 2#u64
+  let b ← Wrap.Insts.CoreCmpPartialEqWrap.eq w 1#u64
+  massert b
+  let w1 ← core.cmp.Ord.min.trait_default Wrap.Insts.CoreCmpOrd 2#u64 1#u64
+  let b1 ← Wrap.Insts.CoreCmpPartialEqWrap.eq w1 1#u64
+  massert b1
+  let w2 ← core.cmp.Ord.min.trait_default Wrap.Insts.CoreCmpOrd 2#u64 2#u64
+  let b2 ← Wrap.Insts.CoreCmpPartialEqWrap.eq w2 2#u64
+  massert b2
+
+/- Unit test for [order::test_wrap_min] -/
+#assert (test_wrap_min).reducesTo ()
+
+/-- [order::test_wrap_clamp]:
+    Source: 'tests/src/order.rs', lines 81:0-85:1
+    Visibility: public -/
+def test_wrap_clamp : Result Unit := do
+  let w ←
+    core.cmp.Ord.clamp.trait_default Wrap.Insts.CoreCmpOrd 0#u64 1#u64 3#u64
+  let b ← Wrap.Insts.CoreCmpPartialEqWrap.eq w 1#u64
+  massert b
+  let w1 ←
+    core.cmp.Ord.clamp.trait_default Wrap.Insts.CoreCmpOrd 2#u64 1#u64 3#u64
+  let b1 ← Wrap.Insts.CoreCmpPartialEqWrap.eq w1 2#u64
+  massert b1
+  let w2 ←
+    core.cmp.Ord.clamp.trait_default Wrap.Insts.CoreCmpOrd 4#u64 1#u64 3#u64
+  let b2 ← Wrap.Insts.CoreCmpPartialEqWrap.eq w2 3#u64
+  massert b2
+
+/- Unit test for [order::test_wrap_clamp] -/
+#assert (test_wrap_clamp).reducesTo ()
+
+/-- [order::Rank]
+    Source: 'tests/src/order.rs', lines 88:0-92:1
+    Visibility: public -/
+@[discriminant isize]
+inductive Rank where
+| Low : Rank
+| Mid : Rank
+| High : Rank
+
+/-- Trait implementation: [order::{impl core::marker::StructuralPartialEq for order::Rank}]
+    Source: 'tests/src/order.rs', lines 87:9-87:18 -/
+@[reducible]
+def Rank.Insts.CoreMarkerStructuralPartialEq : core.marker.StructuralPartialEq
+  Rank := {
+}
+
+/-- [order::{impl core::cmp::PartialEq<order::Rank> for order::Rank}::eq]:
+    Source: 'tests/src/order.rs', lines 87:9-87:18
+    Visibility: public -/
+def Rank.Insts.CoreCmpPartialEqRank.eq
+  (self : Rank) (other : Rank) : Result Bool := do
+  let self1 := read_discriminant self
+  let other1 := read_discriminant other
+  ok (self1 = other1)
+
+/-- Trait implementation: [order::{impl core::cmp::PartialEq<order::Rank> for order::Rank}]
+    Source: 'tests/src/order.rs', lines 87:9-87:18 -/
+@[reducible]
+def Rank.Insts.CoreCmpPartialEqRank : core.cmp.PartialEq Rank Rank := {
+  eq := Rank.Insts.CoreCmpPartialEqRank.eq
+}
+
+/-- Trait implementation: [order::{impl core::cmp::Eq for order::Rank}]
+    Source: 'tests/src/order.rs', lines 87:20-87:22 -/
+@[reducible]
+impl_def Rank.Insts.CoreCmpEq : core.cmp.Eq Rank := {
+  partialEqInst := Rank.Insts.CoreCmpPartialEqRank
+  assert_fields_are_eq := core.cmp.Eq.assert_fields_are_eq.default
+    Rank.Insts.CoreCmpEq
+}
+
+/-- [order::{impl core::cmp::Ord for order::Rank}::cmp]:
+    Source: 'tests/src/order.rs', lines 87:36-87:39
+    Visibility: public -/
+def Rank.Insts.CoreCmpOrd.cmp
+  (self : Rank) (other : Rank) : Result Ordering := do
+  let self1 := read_discriminant self
+  let other1 := read_discriminant other
+  ok (core.cmp.impls.OrdIsize.cmp self1 other1)
+
+/-- [order::{impl core::cmp::PartialOrd<order::Rank> for order::Rank}::partial_cmp]:
+    Source: 'tests/src/order.rs', lines 87:24-87:34
+    Visibility: public -/
+def Rank.Insts.CoreCmpPartialOrdRank.partial_cmp
+  (self : Rank) (other : Rank) : Result (Option Ordering) := do
+  let o ← Rank.Insts.CoreCmpOrd.cmp self other
+  ok (some o)
+
+/-- Trait implementation: [order::{impl core::cmp::PartialOrd<order::Rank> for order::Rank}]
+    Source: 'tests/src/order.rs', lines 87:24-87:34 -/
+@[reducible]
+impl_def Rank.Insts.CoreCmpPartialOrdRank : core.cmp.PartialOrd Rank Rank := {
+  partialEqInst := Rank.Insts.CoreCmpPartialEqRank
+  partial_cmp := Rank.Insts.CoreCmpPartialOrdRank.partial_cmp
+  lt := core.cmp.PartialOrd.lt.trait_default Rank.Insts.CoreCmpPartialOrdRank
+  le := core.cmp.PartialOrd.le.trait_default Rank.Insts.CoreCmpPartialOrdRank
+  gt := core.cmp.PartialOrd.gt.trait_default Rank.Insts.CoreCmpPartialOrdRank
+  ge := core.cmp.PartialOrd.ge.trait_default Rank.Insts.CoreCmpPartialOrdRank
+}
+
+/-- Trait implementation: [order::{impl core::cmp::Ord for order::Rank}]
+    Source: 'tests/src/order.rs', lines 87:36-87:39 -/
+@[reducible]
+impl_def Rank.Insts.CoreCmpOrd : core.cmp.Ord Rank := {
+  eqInst := Rank.Insts.CoreCmpEq
+  partialOrdInst := Rank.Insts.CoreCmpPartialOrdRank
+  cmp := Rank.Insts.CoreCmpOrd.cmp
+  max := core.cmp.Ord.max.trait_default Rank.Insts.CoreCmpOrd
+  min := core.cmp.Ord.min.trait_default Rank.Insts.CoreCmpOrd
+  clamp := core.cmp.Ord.clamp.trait_default Rank.Insts.CoreCmpOrd
+}
+
+/-- [order::test_rank_lt]:
+    Source: 'tests/src/order.rs', lines 95:0-99:1
+    Visibility: public -/
+def test_rank_lt : Result Unit := do
+  let b ←
+    core.cmp.PartialOrd.lt.trait_default Rank.Insts.CoreCmpPartialOrdRank
+      Rank.Low Rank.High
+  massert b
+  let b1 ←
+    core.cmp.PartialOrd.lt.trait_default Rank.Insts.CoreCmpPartialOrdRank
+      Rank.Mid Rank.Mid
+  massert (¬ b1)
+  let b2 ←
+    core.cmp.PartialOrd.lt.trait_default Rank.Insts.CoreCmpPartialOrdRank
+      Rank.High Rank.Low
+  massert (¬ b2)
+
+/- Unit test for [order::test_rank_lt] -/
+#assert (test_rank_lt).reducesTo ()
+
+/-- [order::Num]
+    Source: 'tests/src/order.rs', lines 105:0-108:1
+    Visibility: public -/
+@[discriminant isize]
+inductive Num where
+| Val : Std.U8 → Num
+| Nan : Num
+
+/-- [order::{impl core::cmp::PartialEq<order::Num> for order::Num}::eq]:
+    Source: 'tests/src/order.rs', lines 111:4-116:5
+    Visibility: public -/
+def Num.Insts.CoreCmpPartialEqNum.eq
+  (self : Num) (other : Num) : Result Bool := do
+  match self with
+  | Num.Val a =>
+    match other with
+    | Num.Val b => lift (core.cmp.impls.PartialEqU8.eq a b)
+    | Num.Nan => ok false
+  | Num.Nan => ok false
+
+/-- Trait implementation: [order::{impl core::cmp::PartialEq<order::Num> for order::Num}]
+    Source: 'tests/src/order.rs', lines 110:0-117:1 -/
+@[reducible]
+def Num.Insts.CoreCmpPartialEqNum : core.cmp.PartialEq Num Num := {
+  eq := Num.Insts.CoreCmpPartialEqNum.eq
+}
+
+/-- [order::{impl core::cmp::PartialOrd<order::Num> for order::Num}::partial_cmp]:
+    Source: 'tests/src/order.rs', lines 120:4-125:5
+    Visibility: public -/
+def Num.Insts.CoreCmpPartialOrdNum.partial_cmp
+  (self : Num) (other : Num) : Result (Option Ordering) := do
+  match self with
+  | Num.Val a =>
+    match other with
+    | Num.Val b => ok (core.cmp.impls.PartialOrdU8.partial_cmp a b)
+    | Num.Nan => ok none
+  | Num.Nan => ok none
+
+/-- Trait implementation: [order::{impl core::cmp::PartialOrd<order::Num> for order::Num}]
+    Source: 'tests/src/order.rs', lines 119:0-126:1 -/
+@[reducible]
+impl_def Num.Insts.CoreCmpPartialOrdNum : core.cmp.PartialOrd Num Num := {
+  partialEqInst := Num.Insts.CoreCmpPartialEqNum
+  partial_cmp := Num.Insts.CoreCmpPartialOrdNum.partial_cmp
+  lt := core.cmp.PartialOrd.lt.trait_default Num.Insts.CoreCmpPartialOrdNum
+  le := core.cmp.PartialOrd.le.trait_default Num.Insts.CoreCmpPartialOrdNum
+  gt := core.cmp.PartialOrd.gt.trait_default Num.Insts.CoreCmpPartialOrdNum
+  ge := core.cmp.PartialOrd.ge.trait_default Num.Insts.CoreCmpPartialOrdNum
+}
+
+/-- [order::test_num_incomparable]:
+    Source: 'tests/src/order.rs', lines 129:0-135:1
+    Visibility: public -/
+def test_num_incomparable : Result Unit := do
+  let b ←
+    core.cmp.PartialOrd.lt.trait_default Num.Insts.CoreCmpPartialOrdNum Num.Nan
+      (Num.Val 1#u8)
+  massert (¬ b)
+  let b1 ←
+    core.cmp.PartialOrd.le.trait_default Num.Insts.CoreCmpPartialOrdNum Num.Nan
+      (Num.Val 1#u8)
+  massert (¬ b1)
+  let b2 ←
+    core.cmp.PartialOrd.gt.trait_default Num.Insts.CoreCmpPartialOrdNum Num.Nan
+      (Num.Val 1#u8)
+  massert (¬ b2)
+  let b3 ←
+    core.cmp.PartialOrd.ge.trait_default Num.Insts.CoreCmpPartialOrdNum Num.Nan
+      (Num.Val 1#u8)
+  massert (¬ b3)
+  let b4 ←
+    core.cmp.PartialOrd.le.trait_default Num.Insts.CoreCmpPartialOrdNum Num.Nan
+      Num.Nan
+  massert (¬ b4)
+
+/- Unit test for [order::test_num_incomparable] -/
+#assert (test_num_incomparable).reducesTo ()
+
+/-- [order::test_wrap_ref_lt]:
+    Source: 'tests/src/order.rs', lines 142:0-147:1
+    Visibility: public -/
+def test_wrap_ref_lt : Result Unit := do
+  let b ←
+    core.cmp.impls.PartialOrdShared.lt Wrap.Insts.CoreCmpPartialOrdWrap 1#u64
+      2#u64
+  massert b
+  let b1 ←
+    core.cmp.impls.PartialOrdShared.lt Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
+      1#u64
+  massert (¬ b1)
+
+/- Unit test for [order::test_wrap_ref_lt] -/
+#assert (test_wrap_ref_lt).reducesTo ()
+
+/-- [order::test_wrap_ref_le]:
+    Source: 'tests/src/order.rs', lines 150:0-155:1
+    Visibility: public -/
+def test_wrap_ref_le : Result Unit := do
+  let b ←
+    core.cmp.impls.PartialOrdShared.le Wrap.Insts.CoreCmpPartialOrdWrap 1#u64
+      2#u64
+  massert b
+  let b1 ←
+    core.cmp.impls.PartialOrdShared.le Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
+      1#u64
+  massert (¬ b1)
+
+/- Unit test for [order::test_wrap_ref_le] -/
+#assert (test_wrap_ref_le).reducesTo ()
+
+/-- [order::test_wrap_ref_gt]:
+    Source: 'tests/src/order.rs', lines 158:0-163:1
+    Visibility: public -/
+def test_wrap_ref_gt : Result Unit := do
+  let b ←
+    core.cmp.impls.PartialOrdShared.gt Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
+      1#u64
+  massert b
+  let b1 ←
+    core.cmp.impls.PartialOrdShared.gt Wrap.Insts.CoreCmpPartialOrdWrap 1#u64
+      2#u64
+  massert (¬ b1)
+
+/- Unit test for [order::test_wrap_ref_gt] -/
+#assert (test_wrap_ref_gt).reducesTo ()
+
+/-- [order::test_wrap_ref_ge]:
+    Source: 'tests/src/order.rs', lines 166:0-171:1
+    Visibility: public -/
+def test_wrap_ref_ge : Result Unit := do
+  let b ←
+    core.cmp.impls.PartialOrdShared.ge Wrap.Insts.CoreCmpPartialOrdWrap 2#u64
+      1#u64
+  massert b
+  let b1 ←
+    core.cmp.impls.PartialOrdShared.ge Wrap.Insts.CoreCmpPartialOrdWrap 1#u64
+      2#u64
+  massert (¬ b1)
+
+/- Unit test for [order::test_wrap_ref_ge] -/
+#assert (test_wrap_ref_ge).reducesTo ()
+
+/-- [order::test_wrap_ref_partial_cmp]:
+    Source: 'tests/src/order.rs', lines 174:0-182:1
+    Visibility: public -/
+def test_wrap_ref_partial_cmp : Result Unit := do
+  let o ←
+    core.cmp.impls.PartialOrdShared.partial_cmp
+      Wrap.Insts.CoreCmpPartialOrdWrap 1#u64 2#u64
+  let b ←
+    match o with
+    | none => ok false
+    | some o1 =>
+      match o1 with
+      | Ordering.lt => ok true
+      | Ordering.eq => ok false
+      | Ordering.gt => ok false
+  massert b
+
+/- Unit test for [order::test_wrap_ref_partial_cmp] -/
+#assert (test_wrap_ref_partial_cmp).reducesTo ()
+
+/-- [order::Keyed]
+    Source: 'tests/src/order.rs', lines 188:0-191:1
+    Visibility: public -/
+structure Keyed where
+  key : Std.U8
+  tag : Std.U8
+
+/-- [order::{impl core::cmp::PartialEq<order::Keyed> for order::Keyed}::eq]:
+    Source: 'tests/src/order.rs', lines 194:4-196:5
+    Visibility: public -/
+def Keyed.Insts.CoreCmpPartialEqKeyed.eq
+  (self : Keyed) (other : Keyed) : Result Bool := do
+  ok (self.key = other.key)
+
+/-- Trait implementation: [order::{impl core::cmp::PartialEq<order::Keyed> for order::Keyed}]
+    Source: 'tests/src/order.rs', lines 193:0-197:1 -/
+@[reducible]
+def Keyed.Insts.CoreCmpPartialEqKeyed : core.cmp.PartialEq Keyed Keyed := {
+  eq := Keyed.Insts.CoreCmpPartialEqKeyed.eq
+}
+
+/-- Trait implementation: [order::{impl core::cmp::Eq for order::Keyed}]
+    Source: 'tests/src/order.rs', lines 199:0-199:20 -/
+@[reducible]
+impl_def Keyed.Insts.CoreCmpEq : core.cmp.Eq Keyed := {
+  partialEqInst := Keyed.Insts.CoreCmpPartialEqKeyed
+  assert_fields_are_eq := core.cmp.Eq.assert_fields_are_eq.default
+    Keyed.Insts.CoreCmpEq
+}
+
+/-- [order::{impl core::cmp::Ord for order::Keyed}::cmp]:
+    Source: 'tests/src/order.rs', lines 208:4-210:5
+    Visibility: public -/
+def Keyed.Insts.CoreCmpOrd.cmp
+  (self : Keyed) (other : Keyed) : Result Ordering := do
+  ok (core.cmp.impls.OrdU8.cmp self.key other.key)
+
+/-- [order::{impl core::cmp::PartialOrd<order::Keyed> for order::Keyed}::partial_cmp]:
+    Source: 'tests/src/order.rs', lines 202:4-204:5
+    Visibility: public -/
+def Keyed.Insts.CoreCmpPartialOrdKeyed.partial_cmp
+  (self : Keyed) (other : Keyed) : Result (Option Ordering) := do
+  let o ← Keyed.Insts.CoreCmpOrd.cmp self other
+  ok (some o)
+
+/-- Trait implementation: [order::{impl core::cmp::PartialOrd<order::Keyed> for order::Keyed}]
+    Source: 'tests/src/order.rs', lines 201:0-205:1 -/
+@[reducible]
+impl_def Keyed.Insts.CoreCmpPartialOrdKeyed : core.cmp.PartialOrd Keyed Keyed
+  := {
+  partialEqInst := Keyed.Insts.CoreCmpPartialEqKeyed
+  partial_cmp := Keyed.Insts.CoreCmpPartialOrdKeyed.partial_cmp
+  lt := core.cmp.PartialOrd.lt.trait_default Keyed.Insts.CoreCmpPartialOrdKeyed
+  le := core.cmp.PartialOrd.le.trait_default Keyed.Insts.CoreCmpPartialOrdKeyed
+  gt := core.cmp.PartialOrd.gt.trait_default Keyed.Insts.CoreCmpPartialOrdKeyed
+  ge := core.cmp.PartialOrd.ge.trait_default Keyed.Insts.CoreCmpPartialOrdKeyed
+}
+
+/-- Trait implementation: [order::{impl core::cmp::Ord for order::Keyed}]
+    Source: 'tests/src/order.rs', lines 207:0-211:1 -/
+@[reducible]
+impl_def Keyed.Insts.CoreCmpOrd : core.cmp.Ord Keyed := {
+  eqInst := Keyed.Insts.CoreCmpEq
+  partialOrdInst := Keyed.Insts.CoreCmpPartialOrdKeyed
+  cmp := Keyed.Insts.CoreCmpOrd.cmp
+  max := core.cmp.Ord.max.trait_default Keyed.Insts.CoreCmpOrd
+  min := core.cmp.Ord.min.trait_default Keyed.Insts.CoreCmpOrd
+  clamp := core.cmp.Ord.clamp.trait_default Keyed.Insts.CoreCmpOrd
+}
+
+/-- [order::test_keyed_max_tie]:
+    Source: 'tests/src/order.rs', lines 215:0-219:1
+    Visibility: public -/
+def test_keyed_max_tie : Result Unit := do
+  let k ←
+    core.cmp.Ord.max.trait_default Keyed.Insts.CoreCmpOrd
+      { key := 1#u8, tag := 0#u8 } { key := 1#u8, tag := 1#u8 }
+  massert (k.tag = 1#u8)
+
+/- Unit test for [order::test_keyed_max_tie] -/
+#assert (test_keyed_max_tie).reducesTo ()
+
+/-- [order::test_keyed_min_tie]:
+    Source: 'tests/src/order.rs', lines 223:0-227:1
+    Visibility: public -/
+def test_keyed_min_tie : Result Unit := do
+  let k ←
+    core.cmp.Ord.min.trait_default Keyed.Insts.CoreCmpOrd
+      { key := 1#u8, tag := 0#u8 } { key := 1#u8, tag := 1#u8 }
+  massert (k.tag = 0#u8)
+
+/- Unit test for [order::test_keyed_min_tie] -/
+#assert (test_keyed_min_tie).reducesTo ()
+
+/-- [order::test_keyed_clamp_tie]:
+    Source: 'tests/src/order.rs', lines 231:0-238:1
+    Visibility: public -/
+def test_keyed_clamp_tie : Result Unit := do
+  let r ←
+    core.cmp.Ord.clamp.trait_default Keyed.Insts.CoreCmpOrd
+      { key := 1#u8, tag := 0#u8 } { key := 1#u8, tag := 1#u8 }
+      { key := 3#u8, tag := 3#u8 }
+  massert (r.tag = 0#u8)
+  let r1 ←
+    core.cmp.Ord.clamp.trait_default Keyed.Insts.CoreCmpOrd
+      { key := 3#u8, tag := 0#u8 } { key := 1#u8, tag := 1#u8 }
+      { key := 3#u8, tag := 3#u8 }
+  massert (r1.tag = 0#u8)
+
+/- Unit test for [order::test_keyed_clamp_tie] -/
+#assert (test_keyed_clamp_tie).reducesTo ()
 
 end order

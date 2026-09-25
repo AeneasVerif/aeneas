@@ -64,25 +64,25 @@ attribute
   Ordering
 
 /- Auxiliary functions for the default implementations of `PartialOrd` methods -/
-def core.cmp.PartialOrd.lt_body {Self Rhs : Type}
+@[expose] def core.cmp.PartialOrd.lt_body {Self Rhs : Type}
   (partial_cmp : Self → Rhs → Result (Option Ordering))
   (x : Self) (y : Rhs) : Result Bool := do
   let cmp ← partial_cmp x y
   ok (cmp = some .lt)
 
-def core.cmp.PartialOrd.le_body {Self Rhs : Type}
+@[expose] def core.cmp.PartialOrd.le_body {Self Rhs : Type}
   (partial_cmp : Self → Rhs → Result (Option Ordering))
   (x : Self) (y : Rhs) : Result Bool := do
   let cmp ← partial_cmp x y
   ok (cmp = some .lt ∨ cmp = some .eq)
 
-def core.cmp.PartialOrd.gt_body {Self Rhs : Type}
+@[expose] def core.cmp.PartialOrd.gt_body {Self Rhs : Type}
   (partial_cmp : Self → Rhs → Result (Option Ordering))
   (x : Self) (y : Rhs) : Result Bool := do
   let cmp ← partial_cmp x y
   ok (cmp = some .gt)
 
-def core.cmp.PartialOrd.ge_body {Self Rhs : Type}
+@[expose] def core.cmp.PartialOrd.ge_body {Self Rhs : Type}
   (partial_cmp : Self → Rhs → Result (Option Ordering))
   (x : Self) (y : Rhs) : Result Bool := do
   let cmp ← partial_cmp x y
@@ -98,35 +98,55 @@ structure core.cmp.PartialOrd (Self : Type) (Rhs : Type) where
   ge : Self → Rhs → Result Bool := core.cmp.PartialOrd.ge_body partial_cmp
 
 /- Default method -/
-@[expose, rust_fun "core::cmp::PartialOrd::lt"]
-def core.cmp.PartialOrd.lt.default {Self Rhs : Type}
+@[expose] def core.cmp.PartialOrd.lt.default {Self Rhs : Type}
   (partial_cmp : Self → Rhs → Result (Option Ordering))
   (x : Self) (y : Rhs) : Result Bool :=
   core.cmp.PartialOrd.lt_body partial_cmp x y
 
+@[expose, trait_default, rust_fun "core::cmp::PartialOrd::lt"]
+def core.cmp.PartialOrd.lt.trait_default {Self Rhs : Type}
+  (PartialOrdInst : core.cmp.PartialOrd Self Rhs)
+  (x : Self) (y : Rhs) : Result Bool :=
+  core.cmp.PartialOrd.lt.default PartialOrdInst.partial_cmp x y
+
 /- Default method -/
-@[expose, rust_fun "core::cmp::PartialOrd::le"]
-def core.cmp.PartialOrd.le.default {Self Rhs : Type}
+@[expose] def core.cmp.PartialOrd.le.default {Self Rhs : Type}
   (partial_cmp : Self → Rhs → Result (Option Ordering))
   (x : Self) (y : Rhs) : Result Bool :=
   core.cmp.PartialOrd.le_body partial_cmp x y
 
+@[expose, trait_default, rust_fun "core::cmp::PartialOrd::le"]
+def core.cmp.PartialOrd.le.trait_default {Self Rhs : Type}
+  (PartialOrdInst : core.cmp.PartialOrd Self Rhs)
+  (x : Self) (y : Rhs) : Result Bool :=
+  core.cmp.PartialOrd.le.default PartialOrdInst.partial_cmp x y
+
 /- Default method -/
-@[expose, rust_fun "core::cmp::PartialOrd::gt"]
-def core.cmp.PartialOrd.gt.default {Self Rhs : Type}
+@[expose] def core.cmp.PartialOrd.gt.default {Self Rhs : Type}
   (partial_cmp : Self → Rhs → Result (Option Ordering))
   (x : Self) (y : Rhs) : Result Bool :=
   core.cmp.PartialOrd.gt_body partial_cmp x y
 
+@[expose, trait_default, rust_fun "core::cmp::PartialOrd::gt"]
+def core.cmp.PartialOrd.gt.trait_default {Self Rhs : Type}
+  (PartialOrdInst : core.cmp.PartialOrd Self Rhs)
+  (x : Self) (y : Rhs) : Result Bool :=
+  core.cmp.PartialOrd.gt.default PartialOrdInst.partial_cmp x y
+
 /- Default method -/
-@[expose, rust_fun "core::cmp::PartialOrd::ge"]
-def core.cmp.PartialOrd.ge.default {Self Rhs : Type}
+@[expose] def core.cmp.PartialOrd.ge.default {Self Rhs : Type}
   (partial_cmp : Self → Rhs → Result (Option Ordering))
   (x : Self) (y : Rhs) : Result Bool :=
   core.cmp.PartialOrd.ge_body partial_cmp x y
 
+@[expose, trait_default, rust_fun "core::cmp::PartialOrd::ge"]
+def core.cmp.PartialOrd.ge.trait_default {Self Rhs : Type}
+  (PartialOrdInst : core.cmp.PartialOrd Self Rhs)
+  (x : Self) (y : Rhs) : Result Bool :=
+  core.cmp.PartialOrd.ge.default PartialOrdInst.partial_cmp x y
+
 /- Auxiliary functions for the default implementations of `Ord` methods -/
-def core.cmp.Ord.max_body {Self : Type} (lt : Self → Self → Result Bool)
+@[expose] def core.cmp.Ord.max_body {Self : Type} (lt : Self → Self → Result Bool)
   (x y : Self) : Result Self := do
   if ← lt y x then ok x else ok y
 
@@ -134,7 +154,7 @@ def core.cmp.Ord.max_body {Self : Type} (lt : Self → Self → Result Bool)
   (x y : Self) : Result Self := do
   if ← lt y x then ok y else ok x
 
-def core.cmp.Ord.clamp_body {Self : Type} (le lt gt : Self → Self → Result Bool)
+@[expose] def core.cmp.Ord.clamp_body {Self : Type} (le lt gt : Self → Self → Result Bool)
   (self min max : Self) : Result Self := do
   massert (← le min max)
   if ← lt self min then ok min
@@ -154,10 +174,14 @@ structure core.cmp.Ord (Self : Type) where
     core.cmp.Ord.clamp_body partialOrdInst.le partialOrdInst.lt partialOrdInst.gt
 
 /- Default method -/
-@[expose, rust_fun "core::cmp::Ord::max"]
-def core.cmp.Ord.max.default {Self : Type} (lt : Self → Self → Result Bool)
+@[expose] def core.cmp.Ord.max.default {Self : Type} (lt : Self → Self → Result Bool)
   (x y : Self) : Result Self :=
   core.cmp.Ord.max_body lt x y
+
+@[expose, trait_default, rust_fun "core::cmp::Ord::max"]
+def core.cmp.Ord.max.trait_default {Self : Type} (OrdInst : core.cmp.Ord Self)
+  (x y : Self) : Result Self :=
+  core.cmp.Ord.max.default OrdInst.partialOrdInst.lt x y
 
 @[expose] def core.cmp.Ord.min.default {Self : Type} (lt : Self → Self → Result Bool)
   (x y : Self) : Result Self :=
@@ -169,10 +193,15 @@ def core.cmp.Ord.min.trait_default {Self : Type} (OrdInst : core.cmp.Ord Self)
   core.cmp.Ord.min.default OrdInst.partialOrdInst.lt x y
 
 /- Default method -/
-@[expose, rust_fun "core::cmp::Ord::clamp"]
-def core.cmp.Ord.clamp.default {Self : Type} (le lt gt : Self → Self → Result Bool)
+@[expose] def core.cmp.Ord.clamp.default {Self : Type} (le lt gt : Self → Self → Result Bool)
   (self min max : Self) : Result Self :=
   core.cmp.Ord.clamp_body le lt gt self min max
+
+@[expose, trait_default, rust_fun "core::cmp::Ord::clamp"]
+def core.cmp.Ord.clamp.trait_default {Self : Type} (OrdInst : core.cmp.Ord Self)
+  (self min max : Self) : Result Self :=
+  core.cmp.Ord.clamp.default OrdInst.partialOrdInst.le OrdInst.partialOrdInst.lt
+    OrdInst.partialOrdInst.gt self min max
 
 @[expose, simp, rust_fun "core::cmp::min"]
 def core.cmp.min {T : Type} (OrdInst : core.cmp.Ord T) (x y : T) : Result T :=
@@ -227,6 +256,42 @@ def core.cmp.PartialEqShared {A : Type} {B : Type}
   (PartialEqInst : core.cmp.PartialEq A B) : core.cmp.PartialEq A B := {
   eq := core.cmp.impls.PartialEqShared.eq PartialEqInst
   ne := core.cmp.impls.PartialEqShared.ne PartialEqInst
+}
+
+@[expose, simp, rust_fun "core::cmp::impls::{core::cmp::PartialOrd<&'a @A, &'b @B>}::partial_cmp"]
+def core.cmp.impls.PartialOrdShared.partial_cmp {A : Type} {B : Type}
+  (PartialOrdInst : core.cmp.PartialOrd A B) (x : A) (y : B) : Result (Option Ordering) :=
+  PartialOrdInst.partial_cmp x y
+
+@[expose, simp, rust_fun "core::cmp::impls::{core::cmp::PartialOrd<&'a @A, &'b @B>}::lt"]
+def core.cmp.impls.PartialOrdShared.lt {A : Type} {B : Type}
+  (PartialOrdInst : core.cmp.PartialOrd A B) (x : A) (y : B) : Result Bool :=
+  PartialOrdInst.lt x y
+
+@[expose, simp, rust_fun "core::cmp::impls::{core::cmp::PartialOrd<&'a @A, &'b @B>}::le"]
+def core.cmp.impls.PartialOrdShared.le {A : Type} {B : Type}
+  (PartialOrdInst : core.cmp.PartialOrd A B) (x : A) (y : B) : Result Bool :=
+  PartialOrdInst.le x y
+
+@[expose, simp, rust_fun "core::cmp::impls::{core::cmp::PartialOrd<&'a @A, &'b @B>}::gt"]
+def core.cmp.impls.PartialOrdShared.gt {A : Type} {B : Type}
+  (PartialOrdInst : core.cmp.PartialOrd A B) (x : A) (y : B) : Result Bool :=
+  PartialOrdInst.gt x y
+
+@[expose, simp, rust_fun "core::cmp::impls::{core::cmp::PartialOrd<&'a @A, &'b @B>}::ge"]
+def core.cmp.impls.PartialOrdShared.ge {A : Type} {B : Type}
+  (PartialOrdInst : core.cmp.PartialOrd A B) (x : A) (y : B) : Result Bool :=
+  PartialOrdInst.ge x y
+
+@[reducible, rust_trait_impl "core::cmp::PartialOrd<&'a @A, &'b @B>"]
+def core.cmp.PartialOrdShared {A : Type} {B : Type}
+  (PartialOrdInst : core.cmp.PartialOrd A B) : core.cmp.PartialOrd A B := {
+  partialEqInst := core.cmp.PartialEqShared PartialOrdInst.partialEqInst
+  partial_cmp := core.cmp.impls.PartialOrdShared.partial_cmp PartialOrdInst
+  lt := core.cmp.impls.PartialOrdShared.lt PartialOrdInst
+  le := core.cmp.impls.PartialOrdShared.le PartialOrdInst
+  gt := core.cmp.impls.PartialOrdShared.gt PartialOrdInst
+  ge := core.cmp.impls.PartialOrdShared.ge PartialOrdInst
 }
 
 @[expose, rust_fun "alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::eq" (keepParams := [true, false])]
