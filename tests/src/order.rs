@@ -135,7 +135,7 @@ pub fn test_num_incomparable() {
 }
 
 // ---------------------------------------------------------------------------
-// exercises impl PartialOrd<&B> for &A, it's how the issue's own example (a < b on two &Foo) compiles.
+// exercises impl PartialOrd<&B> for &A
 // ---------------------------------------------------------------------------
 
 #[verify::test]
