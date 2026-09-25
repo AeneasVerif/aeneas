@@ -43,24 +43,16 @@ theorem TotalSpec.induction {Q : S.Post α} {P : ITreePred S α}
 
 /-! ## Constructors and destructors of `TotalSpec` -/
 
-theorem TotalSpec.ret {Q : S.Post α} {value : α} {s : S.State}
-    (hPost : Q value s) : TotalSpec S Q (.ret value) s :=
-  intro (by simpa only [SpecF.ret] using hPost)
-
 theorem TotalSpec.vis {Q : S.Post α} {event : E.I}
     {k : E.O event → ITree E α} {s : S.State}
     (hWp : S.wp event (fun answer s' => TotalSpec S Q (k answer) s') s) :
     TotalSpec S Q (.vis event k) s :=
   intro (by simpa only [SpecF.vis] using hWp)
 
-theorem TotalSpec.ret_post {Q : S.Post α} {value : α} {s : S.State}
-    (hSpec : TotalSpec S Q (.ret value) s) : Q value s := by
-  simpa only [SpecF.ret] using hSpec.step
-
 @[simp]
 theorem TotalSpec.ret_iff {Q : S.Post α} {value : α} {s : S.State} :
-    TotalSpec S Q (.ret value) s ↔ Q value s :=
-  ⟨TotalSpec.ret_post, TotalSpec.ret⟩
+    TotalSpec S Q (.ret value) s ↔ Q value s := by
+  rw [TotalSpec.fixedPoint, SpecF.ret]
 
 /-- Divergence is never totally correct. -/
 theorem TotalSpec.div_false {Q : S.Post α} {s : S.State}
@@ -82,10 +74,6 @@ theorem PartialSpec.coinduction {Q : S.Post α} {m : ITree E α} {s : S.State}
 
 /-! ## Constructors and destructors of `PartialSpec` -/
 
-theorem PartialSpec.ret {Q : S.Post α} {value : α} {s : S.State}
-    (hPost : Q value s) : PartialSpec S Q (.ret value) s :=
-  intro (by simpa only [SpecF.ret] using hPost)
-
 @[simp]
 theorem PartialSpec.div {Q : S.Post α} {s : S.State} :
     PartialSpec S Q (ITree.div : ITree E α) s :=
@@ -97,14 +85,10 @@ theorem PartialSpec.vis {Q : S.Post α} {event : E.I}
     PartialSpec S Q (.vis event k) s :=
   intro (by simpa only [SpecF.vis] using hWp)
 
-theorem PartialSpec.ret_post {Q : S.Post α} {value : α} {s : S.State}
-    (hSpec : PartialSpec S Q (.ret value) s) : Q value s := by
-  simpa only [SpecF.ret] using hSpec.step
-
 @[simp]
 theorem PartialSpec.ret_iff {Q : S.Post α} {value : α} {s : S.State} :
-    PartialSpec S Q (.ret value) s ↔ Q value s :=
-  ⟨PartialSpec.ret_post, PartialSpec.ret⟩
+    PartialSpec S Q (.ret value) s ↔ Q value s := by
+  rw [PartialSpec.fixedPoint, SpecF.ret]
 
 theorem PartialSpec.vis_view {Q : S.Post α} {event : E.I}
     {k : E.O event → ITree E α} {s : S.State}
@@ -115,7 +99,7 @@ theorem PartialSpec.vis_view {Q : S.Post α} {event : E.I}
 /-- Lift total correctness to partial correctness. -/
 theorem TotalSpec.toPartial {Q : S.Post α} {m : ITree E α}
     {s : S.State} (hSpec : TotalSpec S Q m s) : PartialSpec S Q m s :=
-  hSpec.induction (P := PartialSpec S Q) (fun _ _ hPost => .ret hPost)
+  hSpec.induction (P := PartialSpec S Q) (fun _ _ hPost => PartialSpec.ret_iff.mpr hPost)
     fun _ _ _ hWp => .vis hWp
 
 /-! ## Structural rules -/
@@ -124,7 +108,7 @@ theorem TotalSpec.mono {Q Q' : S.Post α} {m : ITree E α} {s : S.State}
     (hSpec : TotalSpec S Q m s) (hQ : Q ≤ Q') :
     TotalSpec S Q' m s :=
   hSpec.induction (P := TotalSpec S Q')
-    (fun value s' hPost => .ret (hQ value s' hPost)) fun _ _ _ hWp => .vis hWp
+    (fun value s' hPost => TotalSpec.ret_iff.mpr (hQ value s' hPost)) fun _ _ _ hWp => .vis hWp
 
 theorem PartialSpec.mono {Q Q' : S.Post α} {m : ITree E α} {s : S.State}
     (hSpec : PartialSpec S Q m s) (hQ : Q ≤ Q') :
@@ -159,7 +143,7 @@ theorem PartialSpec.bind {Q₁ : S.Post α} {Q₂ : S.Post β}
     | ret value =>
         simp only [ITree.pure_eq_ret, itree_ret_bind]
         intro hSpec
-        exact ((hK value s' hSpec.ret_post).step).mono id (fun _ _ => id) fun _ _ => Or.inr
+        exact ((hK value s' (PartialSpec.ret_iff.mp hSpec)).step).mono id (fun _ _ => id) fun _ _ => Or.inr
     | div => simp only [itree_div_bind, SpecF.div, implies_true]
     | vis event k' =>
         simp only [itree_vis_bind, SpecF.vis]
@@ -177,7 +161,7 @@ theorem TotalSpec.mono_le {Q : S.Post α} {m m' : ITree E α} {s : S.State}
     obtain hDiv | ⟨value', hRet, rfl⟩ | ⟨_, _, _, hVis, _, _⟩ := hLe'
     · exact absurd hDiv not_ret_div
     · obtain rfl := ret_inj.mp hRet
-      exact .ret hPost
+      exact TotalSpec.ret_iff.mpr hPost
     · exact absurd hVis not_vis_ret
   · intro event k s' hWp t' hLe'
     rw [ITree.le_unfold] at hLe'
@@ -197,46 +181,24 @@ theorem PartialSpec.mono_le {Q : S.Post α} {m m' : ITree E α} {s : S.State}
   rw [ITree.le_unfold] at hLe'
   obtain rfl | ⟨value, rfl, rfl⟩ | ⟨event, k, k', rfl, rfl, hCont⟩ := hLe'
   · simp only [SpecF.div]
-  · simpa only [SpecF.ret] using hSpec'.ret_post
+  · simpa only [SpecF.ret] using PartialSpec.ret_iff.mp hSpec'
   · simp only [SpecF.vis]
     exact S.wp_mono (fun answer _ hNext => ⟨_, hCont answer, hNext⟩)
       hSpec'.vis_view
 
-/-! ## PartialSpec is admissible -/
+/-! ## `PartialSpec` is admissible -/
 
-namespace EffectSpec
-
-/-- An effect specification is *conjunctive* if, whenever it satisfies each continuation, it also satisfies their conjunction.
-
-    Reading `S.wp e C s` as the triple `e {C}`: if `e {C₁} ∧ e {C₂} ∧ … ∧ e {Cₙ}`, then
-    `e {fun a s' => C₁ a s' ∧ C₂ a s' ∧ … ∧ Cₙ a s'}`. The definition below asks this for any
-    nonempty (possibly infinite) family of continuations, given by the predicate `Demands`.
-
-    Deterministic events and demonic choice (`∀ answer, C answer s`) are conjunctive. Angelic
-    choice (`∃ answer, C answer s`) is not: each demand may be met by a different answer, with no
-    single answer meeting all of them.
-
-    This is what makes `PartialSpec` admissible: a `vis` node at the supremum of a chain must
-    satisfy the demands of all its approximations at once. -/
-def Conjunctive (S : EffectSpec E) : Prop :=
-  ∀ {event : E.I} {s : S.State}
-    (Demands : S.Post (E.O event) → Prop), (∃ C, Demands C) →
-    (∀ C, Demands C → S.wp event C s) →
-    S.wp event (fun answer s' => ∀ C, Demands C → C answer s') s
-
-theorem Conjunctive.wp_forall {ι : Sort u'} {event : E.I} {s : S.State}
-    {C : ι → S.Post (E.O event)} (hConj : S.Conjunctive) (i₀ : ι)
-    (hWp : ∀ i, S.wp event (C i) s) :
+/-- `EffectSpec.wp_conj` for a family indexed by a nonempty type. -/
+theorem EffectSpec.wp_forall {ι : Sort u'} {event : E.I} {s : S.State}
+    {C : ι → S.Post (E.O event)} (i₀ : ι) (hWp : ∀ i, S.wp event (C i) s) :
     S.wp event (fun answer s' => ∀ i, C i answer s') s := by
   refine S.wp_mono (fun _ _ hAll i => hAll (C i) ⟨i, rfl⟩)
-    (hConj (fun X => ∃ i, X = C i) ⟨C i₀, i₀, rfl⟩ ?_)
+    (S.wp_conj (fun X => ∃ i, X = C i) ⟨C i₀, i₀, rfl⟩ ?_)
   rintro X ⟨i, rfl⟩
   exact hWp i
 
-end EffectSpec
-
-/-- Partial correctness with a conjunctive effect specification is admissible. -/
-theorem PartialSpec.admissible (hConj : S.Conjunctive) (Q : S.Post α) (s : S.State) :
+/-- Partial correctness is admissible. -/
+theorem PartialSpec.admissible (S : EffectSpec E) (Q : S.Post α) (s : S.State) :
     Lean.Order.admissible (fun m : ITree E α => PartialSpec S Q m s) := by
   intro c hc hAll
   refine coinduction
@@ -248,7 +210,7 @@ theorem PartialSpec.admissible (hConj : S.Conjunctive) (Q : S.Post α) (s : S.St
   cases t using ITree.cases with
   | ret value =>
       simp only [ITree.pure_eq_ret, SpecF.ret]
-      exact (hAll' _ (ITree.csup_ret_mem hc' hEq)).ret_post
+      exact PartialSpec.ret_iff.mp (hAll' _ (ITree.csup_ret_mem hc' hEq))
   | div => simp only [SpecF.div]
   | vis event k =>
       simp only [SpecF.vis]
@@ -258,7 +220,7 @@ theorem PartialSpec.admissible (hConj : S.Conjunctive) (Q : S.Post α) (s : S.St
           S.wp event (fun answer u' =>
             ∀ k' : { k' : E.O event → ITree E α // c' (ITree.vis event k') },
               PartialSpec S Q (k'.val answer) u') u :=
-        hConj.wp_forall ⟨k₀, hMem₀⟩ fun k' => (hAll' _ k'.property).vis_view
+        S.wp_forall ⟨k₀, hMem₀⟩ fun k' => (hAll' _ k'.property).vis_view
       -- Limit children are suprema of approximation children.
       obtain rfl : k = fun o => CCPO.csup (ITree.visChain_chain hc' event o) := by
         rw [ITree.csup_vis hc' hMem₀] at hEq

@@ -38,11 +38,13 @@ def effectSpec : EffectSpec RustEffect where
     match event with
     | .fail _ => False
   wp_mono _ := False.elim
-
-theorem effectSpec_conjunctive : effectSpec.Conjunctive := by
-  intro _ _ _ hNonempty hAll
-  obtain ⟨C₀, hC₀⟩ := hNonempty
-  exact (hAll C₀ hC₀).elim
+  wp_conj := by
+    intro _ _ _ hNonempty hAll
+    obtain ⟨C₀, hC₀⟩ := hNonempty
+    exact (hAll C₀ hC₀).elim
+  wp_noMiracle := by
+    rintro ⟨⟩ _ h
+    exact h
 
 def spec (m : Result α) (p : Post α) : Prop :=
   TotalSpec effectSpec (fun value _ => p value) m ()
@@ -55,7 +57,7 @@ theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p :=
 
 theorem dspec_admissible {α} (p : Post α) :
     admissible (fun x => dspec x p) :=
-  PartialSpec.admissible effectSpec_conjunctive _ ()
+  PartialSpec.admissible effectSpec _ ()
 
 end
 

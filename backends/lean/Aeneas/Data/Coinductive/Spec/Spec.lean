@@ -19,14 +19,24 @@ universe u u' v w
 
 /-! ## Effect specifications -/
 
-/-- A specification of the effect `E`: a state, and for each event a monotone weakest precondition. -/
+/-- A specification of the effect `E`: a state, and for each event a weakest precondition which
+    is *healthy* in Dijkstra's sense: monotone, conjunctive, and excluding miracles. -/
 structure EffectSpec (E : Effect.{v}) where
   State : Type u -- the state threaded through events
   wp : (event : E.I) → (E.O event → State → Prop) → (State → Prop)
+  /-- Monotonicity of wp. -/
   wp_mono :
     ∀ {event : E.I} {C C' : E.O event → State → Prop},
       (∀ answer s', C answer s' → C' answer s') →
       ∀ {s : State}, wp event C s → wp event C' s
+  /-- Conjunctivity:  if `e {C₁} ∧ e {C₂} ∧ … `, then `e {fun a s' => C₁ a s' ∧ C₂ a s' ∧ … }`. -/
+  wp_conj :
+    ∀ {event : E.I} {s : State} (Demands : (E.O event → State → Prop) → Prop),
+      (∃ C, Demands C) → (∀ C, Demands C → wp event C s) →
+      wp event (fun answer s' => ∀ C, Demands C → C answer s') s
+  /-- Excluded miracle: no event guarantees the `False` postcondition. Without it, total
+      correctness would not imply termination. -/
+  wp_noMiracle : ∀ (event : E.I) (s : State), ¬ wp event (fun _ _ => False) s
 
 variable {E : Effect.{v}} {α : Type u} {S : EffectSpec.{w, v} E}
 

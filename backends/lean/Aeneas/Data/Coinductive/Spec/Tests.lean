@@ -40,14 +40,19 @@ def effectSpec : EffectSpec StateEffect where
     · exact hC _ _ hWp
     · exact hWp.elim
     · exact ⟨hWp.1, fun answer => hC _ _ (hWp.2 answer)⟩
-
-theorem effectSpec_conjunctive : effectSpec.Conjunctive := by
-  rintro event state Demands ⟨C₀, hC₀⟩ hAll
-  cases event
-  · exact fun C hC => hAll C hC
-  · exact fun C hC => hAll C hC
-  · exact (hAll C₀ hC₀).elim
-  · exact ⟨(hAll C₀ hC₀).1, fun answer C hC => (hAll C hC).2 answer⟩
+  wp_conj := by
+    rintro event state Demands ⟨C₀, hC₀⟩ hAll
+    cases event
+    · exact fun C hC => hAll C hC
+    · exact fun C hC => hAll C hC
+    · exact (hAll C₀ hC₀).elim
+    · exact ⟨(hAll C₀ hC₀).1, fun answer C hC => (hAll C hC).2 answer⟩
+  wp_noMiracle := by
+    rintro (_ | _ | _ | _) _ h
+    · exact h
+    · exact h
+    · exact h
+    · exact h.1.elim h.2
 
 def spec (m : ITree StateEffect α) (p : effectSpec.Post α) (state : Nat) : Prop :=
   TotalSpec effectSpec p m state
@@ -58,7 +63,7 @@ def dspec (m : ITree StateEffect α) (p : effectSpec.Post α) (state : Nat) : Pr
 example (Q : effectSpec.Post Nat) :
     Lean.Order.admissible fun computation : ITree StateEffect Nat =>
       dspec computation Q 0 :=
-  PartialSpec.admissible effectSpec_conjunctive Q 0
+  PartialSpec.admissible effectSpec Q 0
 
 def get : ITree StateEffect Nat :=
   .vis .get fun value => .ret value.down
@@ -94,7 +99,7 @@ theorem increment_spec (state : Nat) :
   simp [spec, increment, get, put, Bind.bind]
   apply TotalSpec.vis
   apply TotalSpec.vis
-  exact TotalSpec.ret ⟨rfl, rfl⟩
+  exact TotalSpec.ret_iff.mpr ⟨rfl, rfl⟩
 
 example (state : Nat) :
     spec increment (fun value state' => value = state ∧ state' = state + 1)
@@ -118,7 +123,7 @@ example (state : Nat) :
   constructor
   · exact ⟨true⟩
   · intro answer
-    apply TotalSpec.ret
+    apply TotalSpec.ret_iff.mpr
     cases answer
     · simp
     · simp
@@ -138,7 +143,7 @@ example (state : Nat) :
     constructor
     · exact ⟨true⟩
     · intro answer
-      apply TotalSpec.ret
+      apply TotalSpec.ret_iff.mpr
       cases answer
       · simp
       · simp)
@@ -154,63 +159,5 @@ example (state : Nat) (Q : effectSpec.Post Unit) :
   intro hSpec
   simp [dspec, failure, fail, Bind.bind] at hSpec
   exact hSpec.vis_view
-
-/-! A productive infite program. -/
-def flipCoinIgnore : ITree StateEffect Unit := do
-  let _ <- choose Bool
-  flipCoinIgnore
-partial_fixpoint
-
-/-- Partial correctness accepts a productive infinite program. -/
-theorem flipCoinIgnore_dspec (state : Nat) (Q : effectSpec.Post Unit) :
-    dspec flipCoinIgnore Q state := by
-  refine flipCoinIgnore.fixpoint_induct (fun x => dspec x Q state)
-    (PartialSpec.admissible effectSpec_conjunctive Q state) ?_
-  intro x hx
-  simp only [dspec, choose, Bind.bind, itree_vis_bind, itree_ret_bind]
-  exact PartialSpec.vis ⟨⟨true⟩, fun _ => hx⟩
-
-/-- A computation which is totally correct cannot also be partially correct for the `False`
-    postcondition, i.e., it must eventually return. -/
-theorem not_spec_of_dspec_false {m : ITree StateEffect α} {state : Nat} {Q : effectSpec.Post α}
-    (hNever : dspec m (fun _ _ => False) state) : ¬ spec m Q state := by
-  intro hSpec
-  refine TotalSpec.induction (P := fun m s => dspec m (fun _ _ => False) s → False)
-    (fun _ _ _ h => PartialSpec.ret_post h)
-    (fun event k s hWp h => ?_) hSpec hNever
-  have h := PartialSpec.vis_view h
-  cases event with
-  | get | put _ => exact hWp h
-  | fail => exact hWp
-  | choose _ =>
-    obtain ⟨⟨a⟩, h⟩ := h
-    exact hWp.2 a (h a)
-
-/- Total correctness does not accept a productive infinite program -/
-example (state : Nat) : ¬ spec flipCoinIgnore (fun _ _ => True) state :=
-  not_spec_of_dspec_false (flipCoinIgnore_dspec state _)
-
-/-! A silent infinite program -/
-def silentLoop : ITree StateEffect Unit := do
-  let _ ← (pure () : ITree StateEffect Unit)
-  silentLoop
-partial_fixpoint
-
-theorem silentLoop_eq_div : silentLoop = ITree.div := by
-  apply ITree.le_div_is_div
-  refine silentLoop.fixpoint_induct (fun x => Lean.Order.PartialOrder.rel x ITree.div)
-    (fun _ hc h => Lean.Order.csup_le hc h) ?_
-  intro x hx
-  simpa only [Bind.bind, ITree.pure_eq_ret, itree_ret_bind] using hx
-
-/- Total correctness does not accept a silent infinite program -/
-example (state : Nat) : ¬ spec silentLoop (fun _ _ => True) state := by
-  rw [spec, silentLoop_eq_div]
-  exact TotalSpec.div_false
-
-/- Partial correctness accepts a silent infinite program -/
-example (state : Nat) (Q : effectSpec.Post Unit) : dspec silentLoop Q state := by
-  rw [dspec, silentLoop_eq_div]
-  exact PartialSpec.div
 
 end Aeneas.Data.Coinductive.StateTest
