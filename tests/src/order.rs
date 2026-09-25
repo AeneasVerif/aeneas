@@ -99,7 +99,7 @@ pub fn test_rank_lt() {
 }
 
 // ---------------------------------------------------------------------------
-// exercises the case where partial_cmp returns None where all 4 comparisons must be false.
+// partial_cmp returns None for Num::Nan, so <, <=, > and >= must all be false.
 // ---------------------------------------------------------------------------
 
 pub enum Num {
