@@ -819,7 +819,7 @@ and variant = {
   variant_name : string;
   fields : field list;
   variant_attr_info : (attr_info[@opaque]);
-  discriminant : int;
+  discriminant : big_int;
   ty : literal_type;
 }
 
