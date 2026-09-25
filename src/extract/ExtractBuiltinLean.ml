@@ -194,7 +194,7 @@ let lean_builtin_funs =
       "core.alloc.boxed.CloneBox.clone"
       ~keep_params:(Some [ true; false ])
       ~keep_trait_clauses:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 232 *)
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 297 *)
     mk_fun "alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::eq"
       "alloc.boxed.PartialEqBox.eq"
       ~keep_params:(Some [ true; false ]);
@@ -395,46 +395,62 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 23 *)
     mk_fun "core::cmp::Eq::assert_fields_are_eq"
       "core.cmp.Eq.assert_fields_are_eq.default";
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 172 *)
-    mk_fun "core::cmp::Ord::clamp" "core.cmp.Ord.clamp.default";
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 157 *)
-    mk_fun "core::cmp::Ord::max" "core.cmp.Ord.max.default";
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 166 *)
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 200 *)
+    mk_fun "core::cmp::Ord::clamp" "core.cmp.Ord.clamp.trait_default";
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 181 *)
+    mk_fun "core::cmp::Ord::max" "core.cmp.Ord.max.trait_default";
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 190 *)
     mk_fun "core::cmp::Ord::min" "core.cmp.Ord.min.trait_default";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 33 *)
     mk_fun "core::cmp::PartialEq::ne" "core.cmp.PartialEq.ne.trait_default";
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 122 *)
-    mk_fun "core::cmp::PartialOrd::ge" "core.cmp.PartialOrd.ge.default";
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 115 *)
-    mk_fun "core::cmp::PartialOrd::gt" "core.cmp.PartialOrd.gt.default";
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 108 *)
-    mk_fun "core::cmp::PartialOrd::le" "core.cmp.PartialOrd.le.default";
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 101 *)
-    mk_fun "core::cmp::PartialOrd::lt" "core.cmp.PartialOrd.lt.default";
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 203 *)
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 142 *)
+    mk_fun "core::cmp::PartialOrd::ge" "core.cmp.PartialOrd.ge.trait_default";
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 130 *)
+    mk_fun "core::cmp::PartialOrd::gt" "core.cmp.PartialOrd.gt.trait_default";
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 118 *)
+    mk_fun "core::cmp::PartialOrd::le" "core.cmp.PartialOrd.le.trait_default";
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 106 *)
+    mk_fun "core::cmp::PartialOrd::lt" "core.cmp.PartialOrd.lt.trait_default";
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 232 *)
     mk_fun "core::cmp::impls::{core::cmp::Ord<()>}::cmp"
       "core.cmp.impls.OrdUnit.cmp";
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 215 *)
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 244 *)
     mk_fun "core::cmp::impls::{core::cmp::PartialEq<&'a @A, &'b @B>}::eq"
       "core.cmp.impls.PartialEqShared.eq";
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 220 *)
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 249 *)
     mk_fun "core::cmp::impls::{core::cmp::PartialEq<&'a @A, &'b @B>}::ne"
       "core.cmp.impls.PartialEqShared.ne";
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 187 *)
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 216 *)
     mk_fun "core::cmp::impls::{core::cmp::PartialEq<(), ()>}::eq"
       "core.cmp.impls.PartialEqUnit.eq";
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 190 *)
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 219 *)
     mk_fun "core::cmp::impls::{core::cmp::PartialEq<(), ()>}::ne"
       "core.cmp.impls.PartialEqUnit.ne";
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 207 *)
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 236 *)
     mk_fun "core::cmp::impls::{core::cmp::PartialEq<bool, bool>}::eq"
       "core.cmp.impls.PartialEqBool.eq";
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 199 *)
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 281 *)
+    mk_fun "core::cmp::impls::{core::cmp::PartialOrd<&'a @A, &'b @B>}::ge"
+      "core.cmp.impls.PartialOrdShared.ge";
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 276 *)
+    mk_fun "core::cmp::impls::{core::cmp::PartialOrd<&'a @A, &'b @B>}::gt"
+      "core.cmp.impls.PartialOrdShared.gt";
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 271 *)
+    mk_fun "core::cmp::impls::{core::cmp::PartialOrd<&'a @A, &'b @B>}::le"
+      "core.cmp.impls.PartialOrdShared.le";
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 266 *)
+    mk_fun "core::cmp::impls::{core::cmp::PartialOrd<&'a @A, &'b @B>}::lt"
+      "core.cmp.impls.PartialOrdShared.lt";
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 261 *)
+    mk_fun
+      "core::cmp::impls::{core::cmp::PartialOrd<&'a @A, &'b @B>}::partial_cmp"
+      "core.cmp.impls.PartialOrdShared.partial_cmp";
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 228 *)
     mk_fun "core::cmp::impls::{core::cmp::PartialOrd<(), ()>}::partial_cmp"
       "core.cmp.impls.PartialOrdUnit.partial_cmp";
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 182 *)
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 211 *)
     mk_fun "core::cmp::max" "core.cmp.max";
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 177 *)
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 206 *)
     mk_fun "core::cmp::min" "core.cmp.min";
     (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 817 *)
     mk_fun
@@ -1304,7 +1320,7 @@ let lean_builtin_trait_decls =
     mk_trait_decl "core::cmp::Eq" "core.cmp.Eq"
       ~parent_clauses:[ "partialEqInst" ]
       ~methods:[ ("assert_fields_are_eq", "assert_fields_are_eq") ];
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 144 *)
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 164 *)
     mk_trait_decl "core::cmp::Ord" "core.cmp.Ord"
       ~parent_clauses:[ "eqInst"; "partialOrdInst" ]
       ~methods:
@@ -1506,12 +1522,12 @@ let lean_builtin_trait_impls =
       ~keep_trait_clauses:(Some [ true; false ]);
     (* file: "Aeneas/Std/Core/Core.lean", line: 46 *)
     mk_trait_impl "core::clone::Clone<bool>" "core.clone.CloneBool";
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 225 *)
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 254 *)
     mk_trait_impl "core::cmp::PartialEq<&'a @A, &'b @B>"
       "core.cmp.PartialEqShared";
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 193 *)
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 222 *)
     mk_trait_impl "core::cmp::PartialEq<(), ()>" "core.cmp.PartialEqUnit";
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 237 *)
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 302 *)
     mk_trait_impl "core::cmp::PartialEq<Box<@T>, Box<@T>>"
       "core.cmp.PartialEqBox"
       ~keep_params:(Some [ true; false ]);
@@ -1520,8 +1536,11 @@ let lean_builtin_trait_impls =
       "core::cmp::PartialEq<alloc::vec::Vec<@T>, alloc::vec::Vec<@U>>"
       "core.cmp.PartialEqVec"
       ~keep_params:(Some [ true; true; false; false ]);
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 210 *)
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 239 *)
     mk_trait_impl "core::cmp::PartialEq<bool, bool>" "core.cmp.PartialEqBool";
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 286 *)
+    mk_trait_impl "core::cmp::PartialOrd<&'a @A, &'b @B>"
+      "core.cmp.PartialOrdShared";
     (* file: "Aeneas/Std/Core/Convert.lean", line: 75 *)
     mk_trait_impl "core::convert::AsMut<Box<@T>, @T>" "core.convert.AsMutBox";
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 486 *)
