@@ -216,8 +216,80 @@ def test_is_multiple_of_zero_divisor : Result Unit := do
 /- Unit test for [scalars::test_is_multiple_of_zero_divisor] -/
 #assert (test_is_multiple_of_zero_divisor).reducesTo ()
 
+/-- [scalars::test_is_power_of_two_u8]:
+    Source: 'tests/src/scalars.rs', lines 158:0-161:1
+    Visibility: public -/
+def test_is_power_of_two_u8 : Result Unit := do
+  let b ← core.num.U8.is_power_of_two 64#u8
+  massert b
+  let b1 ← core.num.U8.is_power_of_two 65#u8
+  massert (¬ b1)
+
+/- Unit test for [scalars::test_is_power_of_two_u8] -/
+#assert (test_is_power_of_two_u8).reducesTo ()
+
+/-- [scalars::test_is_power_of_two_u16]:
+    Source: 'tests/src/scalars.rs', lines 164:0-167:1
+    Visibility: public -/
+def test_is_power_of_two_u16 : Result Unit := do
+  let b ← core.num.U16.is_power_of_two 256#u16
+  massert b
+  let b1 ← core.num.U16.is_power_of_two 255#u16
+  massert (¬ b1)
+
+/- Unit test for [scalars::test_is_power_of_two_u16] -/
+#assert (test_is_power_of_two_u16).reducesTo ()
+
+/-- [scalars::test_is_power_of_two_u32]:
+    Source: 'tests/src/scalars.rs', lines 170:0-174:1
+    Visibility: public -/
+def test_is_power_of_two_u32 : Result Unit := do
+  let b ← core.num.U32.is_power_of_two 1#u32
+  massert b
+  let b1 ← core.num.U32.is_power_of_two 1024#u32
+  massert b1
+  let b2 ← core.num.U32.is_power_of_two 1023#u32
+  massert (¬ b2)
+
+/- Unit test for [scalars::test_is_power_of_two_u32] -/
+#assert (test_is_power_of_two_u32).reducesTo ()
+
+/-- [scalars::test_is_power_of_two_u64]:
+    Source: 'tests/src/scalars.rs', lines 177:0-180:1
+    Visibility: public -/
+def test_is_power_of_two_u64 : Result Unit := do
+  let b ← core.num.U64.is_power_of_two 0#u64
+  massert (¬ b)
+  let b1 ← core.num.U64.is_power_of_two 3#u64
+  massert (¬ b1)
+
+/- Unit test for [scalars::test_is_power_of_two_u64] -/
+#assert (test_is_power_of_two_u64).reducesTo ()
+
+/-- [scalars::test_is_power_of_two_u128]:
+    Source: 'tests/src/scalars.rs', lines 183:0-185:1
+    Visibility: public -/
+def test_is_power_of_two_u128 : Result Unit := do
+  let b ← core.num.U128.is_power_of_two 2#u128
+  massert b
+
+/- Unit test for [scalars::test_is_power_of_two_u128] -/
+#assert (test_is_power_of_two_u128).reducesTo ()
+
+/-- [scalars::test_is_power_of_two_usize]:
+    Source: 'tests/src/scalars.rs', lines 188:0-191:1
+    Visibility: public -/
+def test_is_power_of_two_usize : Result Unit := do
+  let b ← core.num.Usize.is_power_of_two 8#usize
+  massert b
+  let b1 ← core.num.Usize.is_power_of_two 0#usize
+  massert (¬ b1)
+
+/- Unit test for [scalars::test_is_power_of_two_usize] -/
+#assert (test_is_power_of_two_usize).reducesTo ()
+
 /-- [scalars::test_try_from_usize_u32_ok]:
-    Source: 'tests/src/scalars.rs', lines 158:0-160:1
+    Source: 'tests/src/scalars.rs', lines 198:0-200:1
     Visibility: public -/
 def test_try_from_usize_u32_ok : Result Unit := do
   let r ←
@@ -229,7 +301,7 @@ def test_try_from_usize_u32_ok : Result Unit := do
 #assert (test_try_from_usize_u32_ok).reducesTo ()
 
 /-- [scalars::checked_div]:
-    Source: 'tests/src/scalars.rs', lines 166:0-171:1 -/
+    Source: 'tests/src/scalars.rs', lines 206:0-211:1 -/
 def checked_div
   (a : Std.U32) (b : Std.U32) : Result (core.result.Result Std.U32 Unit) := do
   if b = 0#u32
@@ -238,7 +310,7 @@ def checked_div
        ok (core.result.Result.Ok i)
 
 /-- [scalars::use_question_mark]:
-    Source: 'tests/src/scalars.rs', lines 173:0-176:1 -/
+    Source: 'tests/src/scalars.rs', lines 213:0-216:1 -/
 def use_question_mark
   (a : Std.U32) (b : Std.U32) : Result (core.result.Result Std.U32 Unit) := do
   let r ← checked_div a b
@@ -252,7 +324,7 @@ def use_question_mark
       Std.U32 (core.convert.FromSame Unit) residual
 
 /-- [scalars::test_question_mark_ok]:
-    Source: 'tests/src/scalars.rs', lines 179:0-183:1
+    Source: 'tests/src/scalars.rs', lines 219:0-223:1
     Visibility: public -/
 def test_question_mark_ok : Result Unit := do
   let r ← use_question_mark 10#u32 2#u32
@@ -265,7 +337,7 @@ def test_question_mark_ok : Result Unit := do
 #assert (test_question_mark_ok).reducesTo ()
 
 /-- [scalars::test_question_mark_err]:
-    Source: 'tests/src/scalars.rs', lines 186:0-189:1
+    Source: 'tests/src/scalars.rs', lines 226:0-229:1
     Visibility: public -/
 def test_question_mark_err : Result Unit := do
   let r ← use_question_mark 10#u32 0#u32
