@@ -134,3 +134,16 @@ example
     have : i ≠ i' := by scalar_tac
     simp_lists [paDst2_post, paDst1_post, h3]
     scalar_tac
+
+/- Reordering long chains of `set` used to be exponential (`List.set_comm'` was used as a permutation
+   lemma, which requires `acLt` checks): make sure this remains cheap. -/
+set_option maxHeartbeats 200000 in
+example (s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s12 : Std.Array U64 25#usize)
+    (v1 v2 v3 v4 v5 v6 v7 v8 v9 v10 v11 v12 : U64)
+    (h1 : s1 = s0.set 1#usize v1) (h2 : s2 = s1.set 6#usize v2) (h3 : s3 = s2.set 9#usize v3)
+    (h4 : s4 = s3.set 22#usize v4) (h5 : s5 = s4.set 14#usize v5) (h6 : s6 = s5.set 20#usize v6)
+    (h7 : s7 = s6.set 2#usize v7) (h8 : s8 = s7.set 12#usize v8) (h9 : s9 = s8.set 13#usize v9)
+    (h10 : s10 = s9.set 19#usize v10) (h11 : s11 = s10.set 23#usize v11)
+    (h12 : s12 = s11.set 15#usize v12) :
+    s12.val[0]! = s0.val[0]! := by
+  simp_lists [h12, h11, h10, h9, h8, h7, h6, h5, h4, h3, h2, h1]

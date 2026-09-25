@@ -763,12 +763,27 @@ theorem forall_imp_foldl_eq {α β} (l : List β) (s0 s1 : α) (f1 f2 : α → �
   . simp_all only [not_mem_nil, IsEmpty.forall_iff, implies_true, foldl_nil]
   . simp_all only [mem_cons, forall_eq_or_imp, foldl_cons, implies_true]
 
-/- This one might be expensive -/
-@[simp_lists_safe]
 theorem set_comm' {α} {i j : Nat} (h : j < i) (a : List α) (x y : α) :
   (a.set i x).set j y = (a.set j y).set i x := by
   rw [set_comm]
   omega
+
+/-- Reorder nested `List.set`s so that the indices increase from the inside out, i.e., rewrite
+    `(a.set i x).set j y` to `(a.set j y).set i x` when the discharger can prove `j < i`.
+
+    We use a simproc rather than marking `set_comm'` as a simp lemma: `simp` would treat it as a
+    permutation lemma (its sides are equal up to a renaming of the variables) and would thus only
+    use it for ordered rewriting, which requires checking that the result is smaller than the input
+    with `acLt`. `acLt` is exponential in the depth of the terms and becomes extremely expensive on
+    chains of `List.set`. The ordering is useless here: the side condition `j < i` already
+    guarantees termination. -/
+simproc [simp_lists_safe] reduceSetComm (List.set (List.set _ _ _) _ _) := fun e => do
+  let_expr List.set _ e' j y := e | return .continue
+  let_expr List.set _ a i x := e' | return .continue
+  let some h ← (← Lean.Meta.Simp.getMethods).discharge? (← Lean.Meta.mkAppM ``LT.lt #[j, i])
+    | return .continue
+  let expr ← Lean.Meta.mkAppM ``List.set #[← Lean.Meta.mkAppM ``List.set #[a, j, y], i, x]
+  return .visit { expr, proof? := ← Lean.Meta.mkAppM ``set_comm' #[h, a, x, y] }
 
 @[simp_lists_safe]
 theorem getElem!_ofFn {n : ℕ} {α : Type u} [Inhabited α] (f : Fin n → α) (i : ℕ) (hi : i < n) :
