@@ -884,11 +884,7 @@ namespace Aeneas.Std.WP
 
 /-- The `intro_tactic` of `spec` and `dspec`: their premise is a plain `∀ x, P x → …`, and
 normalizing the fact `P x` is all there is to do. The markers are the definitions the
-postcondition notation `⦃ … ⦄` wraps its body in (see `mk_function_syntax`).
-
-We then normalize the rest of the goal like `step` did before `intro_tactic` existed: the
-conjunctive and existential premises inside the facts and in the postcondition of the goal
-are curried, and the trivial premises dropped. -/
+postcondition notation `⦃ … ⦄` wraps its body in (see `mk_function_syntax`). -/
 meta def introTactic : IntroFn := do
   let markers := #[``Aeneas.Std.WP.uncurry', ``Aeneas.Std.uncurry]
   let index ← match ← Aeneas.Step.Intro.normalizeTarget markers

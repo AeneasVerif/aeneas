@@ -22,11 +22,6 @@ in four steps, one per section below: reduce the `uncurry'` marker, simplify the
 its `∧`s and `∃`s into binders, and, for a postcondition with a single binder such as
 `⦃ r => ∃ y, P r y ⦄`, move the witnesses before the output.
 
-Proofs rely on the order and names of the binders, which is why they are the same as those
-`step` produced before `intro_tactic` existed: the witnesses are named `x` (so that the facts
-about them are named `x_post`, …) and the witnesses of a postcondition with several binders
-stay after the outputs.
-
 `normalizeTarget` rewrites the goal; it does not introduce the fact as a hypothesis and then
 simplify that hypothesis. This matters for recursive specifications: `decreasing_by` sees
 the hypotheses that the proof term binds around the recursive call. If we introduced
@@ -152,8 +147,6 @@ theorem forall_and_index {a b : Prop} {p : a ∧ b → Prop} :
 - `∀ h : ∃ x, p x, rest h` becomes `∀ x (h : p x), rest ⟨x, h⟩`, and `p x` is split in turn;
 - a reducible definition standing for one of the above is unfolded first;
 - any other fact is left alone.
-
-The witnesses are named `x`, like `exists_imp` names them.
 
 `rest` is a function of the proof of the fact. Returns the new premise, and a proof that it
 is equivalent to `∀ h : fact, rest h`. -/
