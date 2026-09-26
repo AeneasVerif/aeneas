@@ -347,4 +347,245 @@ def test_question_mark_err : Result Unit := do
 /- Unit test for [scalars::test_question_mark_err] -/
 #assert (test_question_mark_err).reducesTo ()
 
+/-- Trait declaration: [scalars::FromBool]
+    Source: 'tests/src/scalars.rs', lines 235:0-235:33
+    Visibility: public -/
+structure FromBool (Self : Type) where
+  coreconvertFromSelfBoolInst : core.convert.From Self Bool
+
+/-- [scalars::supertrait_from_bool]:
+    Source: 'tests/src/scalars.rs', lines 237:0-239:1
+    Visibility: public -/
+def supertrait_from_bool
+  {T : Type} (FromBoolInst : FromBool T) (b : Bool) : Result T := do
+  FromBoolInst.coreconvertFromSelfBoolInst.«from» b
+
+/-- Trait implementation: [scalars::{impl scalars::FromBool for usize}]
+    Source: 'tests/src/scalars.rs', lines 243:8-243:32 -/
+@[reducible]
+def Usize.Insts.ScalarsFromBool : FromBool Std.Usize := {
+  coreconvertFromSelfBoolInst := core.convert.FromUsizeBool
+}
+
+/-- Trait implementation: [scalars::{impl scalars::FromBool for u8}]
+    Source: 'tests/src/scalars.rs', lines 243:8-243:32 -/
+@[reducible]
+def U8.Insts.ScalarsFromBool : FromBool Std.U8 := {
+  coreconvertFromSelfBoolInst := core.convert.FromU8Bool
+}
+
+/-- Trait implementation: [scalars::{impl scalars::FromBool for u16}]
+    Source: 'tests/src/scalars.rs', lines 243:8-243:32 -/
+@[reducible]
+def U16.Insts.ScalarsFromBool : FromBool Std.U16 := {
+  coreconvertFromSelfBoolInst := core.convert.FromU16Bool
+}
+
+/-- Trait implementation: [scalars::{impl scalars::FromBool for u32}]
+    Source: 'tests/src/scalars.rs', lines 243:8-243:32 -/
+@[reducible]
+def U32.Insts.ScalarsFromBool : FromBool Std.U32 := {
+  coreconvertFromSelfBoolInst := core.convert.FromU32Bool
+}
+
+/-- Trait implementation: [scalars::{impl scalars::FromBool for u64}]
+    Source: 'tests/src/scalars.rs', lines 243:8-243:32 -/
+@[reducible]
+def U64.Insts.ScalarsFromBool : FromBool Std.U64 := {
+  coreconvertFromSelfBoolInst := core.convert.FromU64Bool
+}
+
+/-- Trait implementation: [scalars::{impl scalars::FromBool for u128}]
+    Source: 'tests/src/scalars.rs', lines 243:8-243:32 -/
+@[reducible]
+def U128.Insts.ScalarsFromBool : FromBool Std.U128 := {
+  coreconvertFromSelfBoolInst := core.convert.FromU128Bool
+}
+
+/-- Trait implementation: [scalars::{impl scalars::FromBool for isize}]
+    Source: 'tests/src/scalars.rs', lines 243:8-243:32 -/
+@[reducible]
+def Isize.Insts.ScalarsFromBool : FromBool Std.Isize := {
+  coreconvertFromSelfBoolInst := core.convert.FromIsizeBool
+}
+
+/-- Trait implementation: [scalars::{impl scalars::FromBool for i8}]
+    Source: 'tests/src/scalars.rs', lines 243:8-243:32 -/
+@[reducible]
+def I8.Insts.ScalarsFromBool : FromBool Std.I8 := {
+  coreconvertFromSelfBoolInst := core.convert.FromI8Bool
+}
+
+/-- Trait implementation: [scalars::{impl scalars::FromBool for i16}]
+    Source: 'tests/src/scalars.rs', lines 243:8-243:32 -/
+@[reducible]
+def I16.Insts.ScalarsFromBool : FromBool Std.I16 := {
+  coreconvertFromSelfBoolInst := core.convert.FromI16Bool
+}
+
+/-- Trait implementation: [scalars::{impl scalars::FromBool for i32}]
+    Source: 'tests/src/scalars.rs', lines 243:8-243:32 -/
+@[reducible]
+def I32.Insts.ScalarsFromBool : FromBool Std.I32 := {
+  coreconvertFromSelfBoolInst := core.convert.FromI32Bool
+}
+
+/-- Trait implementation: [scalars::{impl scalars::FromBool for i64}]
+    Source: 'tests/src/scalars.rs', lines 243:8-243:32 -/
+@[reducible]
+def I64.Insts.ScalarsFromBool : FromBool Std.I64 := {
+  coreconvertFromSelfBoolInst := core.convert.FromI64Bool
+}
+
+/-- Trait implementation: [scalars::{impl scalars::FromBool for i128}]
+    Source: 'tests/src/scalars.rs', lines 243:8-243:32 -/
+@[reducible]
+def I128.Insts.ScalarsFromBool : FromBool Std.I128 := {
+  coreconvertFromSelfBoolInst := core.convert.FromI128Bool
+}
+
+/-- [scalars::test_from_bool_usize]:
+    Source: 'tests/src/scalars.rs', lines 246:8-249:9
+    Visibility: public -/
+def test_from_bool_usize : Result Unit := do
+  let i ← supertrait_from_bool Usize.Insts.ScalarsFromBool false
+  massert (i = 0#usize)
+  let i1 ← supertrait_from_bool Usize.Insts.ScalarsFromBool true
+  massert (i1 = 1#usize)
+
+/- Unit test for [scalars::test_from_bool_usize] -/
+#assert (test_from_bool_usize).reducesTo ()
+
+/-- [scalars::test_from_bool_u8]:
+    Source: 'tests/src/scalars.rs', lines 246:8-249:9
+    Visibility: public -/
+def test_from_bool_u8 : Result Unit := do
+  let i ← supertrait_from_bool U8.Insts.ScalarsFromBool false
+  massert (i = 0#u8)
+  let i1 ← supertrait_from_bool U8.Insts.ScalarsFromBool true
+  massert (i1 = 1#u8)
+
+/- Unit test for [scalars::test_from_bool_u8] -/
+#assert (test_from_bool_u8).reducesTo ()
+
+/-- [scalars::test_from_bool_u16]:
+    Source: 'tests/src/scalars.rs', lines 246:8-249:9
+    Visibility: public -/
+def test_from_bool_u16 : Result Unit := do
+  let i ← supertrait_from_bool U16.Insts.ScalarsFromBool false
+  massert (i = 0#u16)
+  let i1 ← supertrait_from_bool U16.Insts.ScalarsFromBool true
+  massert (i1 = 1#u16)
+
+/- Unit test for [scalars::test_from_bool_u16] -/
+#assert (test_from_bool_u16).reducesTo ()
+
+/-- [scalars::test_from_bool_u32]:
+    Source: 'tests/src/scalars.rs', lines 246:8-249:9
+    Visibility: public -/
+def test_from_bool_u32 : Result Unit := do
+  let i ← supertrait_from_bool U32.Insts.ScalarsFromBool false
+  massert (i = 0#u32)
+  let i1 ← supertrait_from_bool U32.Insts.ScalarsFromBool true
+  massert (i1 = 1#u32)
+
+/- Unit test for [scalars::test_from_bool_u32] -/
+#assert (test_from_bool_u32).reducesTo ()
+
+/-- [scalars::test_from_bool_u64]:
+    Source: 'tests/src/scalars.rs', lines 246:8-249:9
+    Visibility: public -/
+def test_from_bool_u64 : Result Unit := do
+  let i ← supertrait_from_bool U64.Insts.ScalarsFromBool false
+  massert (i = 0#u64)
+  let i1 ← supertrait_from_bool U64.Insts.ScalarsFromBool true
+  massert (i1 = 1#u64)
+
+/- Unit test for [scalars::test_from_bool_u64] -/
+#assert (test_from_bool_u64).reducesTo ()
+
+/-- [scalars::test_from_bool_u128]:
+    Source: 'tests/src/scalars.rs', lines 246:8-249:9
+    Visibility: public -/
+def test_from_bool_u128 : Result Unit := do
+  let i ← supertrait_from_bool U128.Insts.ScalarsFromBool false
+  massert (i = 0#u128)
+  let i1 ← supertrait_from_bool U128.Insts.ScalarsFromBool true
+  massert (i1 = 1#u128)
+
+/- Unit test for [scalars::test_from_bool_u128] -/
+#assert (test_from_bool_u128).reducesTo ()
+
+/-- [scalars::test_from_bool_isize]:
+    Source: 'tests/src/scalars.rs', lines 246:8-249:9
+    Visibility: public -/
+def test_from_bool_isize : Result Unit := do
+  let i ← supertrait_from_bool Isize.Insts.ScalarsFromBool false
+  massert (i = 0#isize)
+  let i1 ← supertrait_from_bool Isize.Insts.ScalarsFromBool true
+  massert (i1 = 1#isize)
+
+/- Unit test for [scalars::test_from_bool_isize] -/
+#assert (test_from_bool_isize).reducesTo ()
+
+/-- [scalars::test_from_bool_i8]:
+    Source: 'tests/src/scalars.rs', lines 246:8-249:9
+    Visibility: public -/
+def test_from_bool_i8 : Result Unit := do
+  let i ← supertrait_from_bool I8.Insts.ScalarsFromBool false
+  massert (i = 0#i8)
+  let i1 ← supertrait_from_bool I8.Insts.ScalarsFromBool true
+  massert (i1 = 1#i8)
+
+/- Unit test for [scalars::test_from_bool_i8] -/
+#assert (test_from_bool_i8).reducesTo ()
+
+/-- [scalars::test_from_bool_i16]:
+    Source: 'tests/src/scalars.rs', lines 246:8-249:9
+    Visibility: public -/
+def test_from_bool_i16 : Result Unit := do
+  let i ← supertrait_from_bool I16.Insts.ScalarsFromBool false
+  massert (i = 0#i16)
+  let i1 ← supertrait_from_bool I16.Insts.ScalarsFromBool true
+  massert (i1 = 1#i16)
+
+/- Unit test for [scalars::test_from_bool_i16] -/
+#assert (test_from_bool_i16).reducesTo ()
+
+/-- [scalars::test_from_bool_i32]:
+    Source: 'tests/src/scalars.rs', lines 246:8-249:9
+    Visibility: public -/
+def test_from_bool_i32 : Result Unit := do
+  let i ← supertrait_from_bool I32.Insts.ScalarsFromBool false
+  massert (i = 0#i32)
+  let i1 ← supertrait_from_bool I32.Insts.ScalarsFromBool true
+  massert (i1 = 1#i32)
+
+/- Unit test for [scalars::test_from_bool_i32] -/
+#assert (test_from_bool_i32).reducesTo ()
+
+/-- [scalars::test_from_bool_i64]:
+    Source: 'tests/src/scalars.rs', lines 246:8-249:9
+    Visibility: public -/
+def test_from_bool_i64 : Result Unit := do
+  let i ← supertrait_from_bool I64.Insts.ScalarsFromBool false
+  massert (i = 0#i64)
+  let i1 ← supertrait_from_bool I64.Insts.ScalarsFromBool true
+  massert (i1 = 1#i64)
+
+/- Unit test for [scalars::test_from_bool_i64] -/
+#assert (test_from_bool_i64).reducesTo ()
+
+/-- [scalars::test_from_bool_i128]:
+    Source: 'tests/src/scalars.rs', lines 246:8-249:9
+    Visibility: public -/
+def test_from_bool_i128 : Result Unit := do
+  let i ← supertrait_from_bool I128.Insts.ScalarsFromBool false
+  massert (i = 0#i128)
+  let i1 ← supertrait_from_bool I128.Insts.ScalarsFromBool true
+  massert (i1 = 1#i128)
+
+/- Unit test for [scalars::test_from_bool_i128] -/
+#assert (test_from_bool_i128).reducesTo ()
+
 end scalars
