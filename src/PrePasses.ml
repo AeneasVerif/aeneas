@@ -1259,6 +1259,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
               local_ty = ty;
               name = None;
               span = f.item_meta.span;
+              drop_flag_for = None;
             }
           in
           new_locals := local :: !new_locals;
@@ -1519,6 +1520,7 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
               local_ty = ty;
               name = None;
               span = f.item_meta.span;
+              drop_flag_for = None;
             }
           in
           new_locals := local :: !new_locals;
