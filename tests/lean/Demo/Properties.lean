@@ -56,7 +56,7 @@ theorem i32_id_spec (n : I32) (h : 0 ≤ n.val) :
   i32_id n ⦃ n' => n' = n ⦄ := by
   unfold i32_id
   split
-  . simp [*]
+  . simp_all
   . step as ⟨ n1 ⟩
     step
     step as ⟨ n2 ⟩
