@@ -24,7 +24,7 @@ namespace loops_nested_rec
     Visibility: public -/
 @[rust_loop]
 def iter_loop0_loop0 (n : Std.U32) (j : Std.U32) : Result Unit := do
-  if j < n
+  if (j < n : Bool)
   then let j1 ← j + 1#u32
        iter_loop0_loop0 n j1
   else ok ()
@@ -35,7 +35,7 @@ partial_fixpoint
     Visibility: public -/
 @[rust_loop]
 def iter_loop0 (m : Std.U32) (n : Std.U32) (i : Std.U32) : Result Unit := do
-  if i < m
+  if (i < m : Bool)
   then iter_loop0_loop0 n 0#u32
        let i1 ← i + 1#u32
        iter_loop0 m n i1
@@ -55,7 +55,7 @@ def iter (m : Std.U32) (n : Std.U32) : Result Unit := do
 @[rust_loop]
 def sum_loop0_loop0
   (n : Std.U32) (s : Std.U32) (j : Std.U32) : Result Std.U32 := do
-  if j < n
+  if (j < n : Bool)
   then let s1 ← s + 1#u32
        let j1 ← j + 1#u32
        sum_loop0_loop0 n s1 j1
@@ -70,7 +70,7 @@ def sum_loop0
   (m : Std.U32) (n : Std.U32) (s : Std.U32) (i : Std.U32) :
   Result Std.U32
   := do
-  if i < m
+  if (i < m : Bool)
   then
     let s1 ← sum_loop0_loop0 n s 0#u32
     let i1 ← i + 1#u32
@@ -92,7 +92,7 @@ def update_array_loop0_loop0
   (out : Array Std.U8 4#usize) (j : Std.Usize) :
   Result (Array Std.U8 4#usize)
   := do
-  if j < 4#usize
+  if (j < 4#usize : Bool)
   then
     let a ← Array.update out j 1#u8
     let j1 ← j + 1#usize
@@ -105,7 +105,7 @@ partial_fixpoint
 @[rust_loop]
 def update_array_loop0
   (out : Array Std.U8 4#usize) (i : Std.Usize) : Result Unit := do
-  if i < 4#usize
+  if (i < 4#usize : Bool)
   then
     let a ← Array.update out i 0#u8
     let out1 ← update_array_loop0_loop0 a 0#usize
@@ -154,7 +154,7 @@ def ntt_layer_loop0_loop0
   (factor : Std.U32) (j : Std.Usize) :
   Result (Array Std.U16 256#usize)
   := do
-  if j < len
+  if (j < len : Bool)
   then
     let i ← start + j
     let i1 ← Array.index_usize a i
@@ -183,7 +183,7 @@ def ntt_layer_loop0
   (start : Std.Usize) :
   Result (Array Std.U16 256#usize)
   := do
-  if start < 256#usize
+  if (start < 256#usize : Bool)
   then
     let i ← Array.index_usize FACTORS k
     let factor ← core.convert.IntoFrom.into core.convert.FromU32U16 i
@@ -256,7 +256,7 @@ def generate_matrix_inner_loop
   (key : Key) (state : Array Std.U8 8#usize) (j : Std.Usize) :
   Result (Key × (Array Std.U8 8#usize))
   := do
-  if j < 4#usize
+  if (j < 4#usize : Bool)
   then
     let (a_transpose, atranspose_mut_back) ← Key.atranspose_mut key
     let (i, index_mut_back) ← Array.index_mut_usize a_transpose j
@@ -286,7 +286,7 @@ def generate_matrix_loop0_loop0
   (i : Std.U8) (j : Std.U8) :
   Result (Key × (Array Std.U8 8#usize) × (Array Std.U8 2#usize))
   := do
-  if j < 4#u8
+  if (j < 4#u8 : Bool)
   then
     let coordinates1 ← Array.update coordinates 0#usize j
     let state_work1 ← shake_state_copy state_base state_work
@@ -314,7 +314,7 @@ def generate_matrix_loop0
   (i : Std.U8) :
   Result (Key × (Array Std.U8 8#usize))
   := do
-  if i < 4#u8
+  if (i < 4#u8 : Bool)
   then
     let a ← Array.update coordinates 1#usize i
     let (key1, state_work1, coordinates1) ←

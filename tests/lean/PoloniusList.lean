@@ -36,7 +36,7 @@ def get_list_at_x
   := do
   match ls with
   | List.Cons hd tl =>
-    if hd = x
+    if (hd = x : Bool)
     then ok (ls, fun ls1 => ls1)
     else
       let (l, get_list_at_x_back) ← get_list_at_x tl x

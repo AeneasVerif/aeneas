@@ -29,7 +29,7 @@ def f_loop.body
   := do
   let s1 ← lift (core.num.U32.wrapping_add s x)
   let i1 ← lift (core.num.U32.wrapping_add i 1#u32)
-  if i1 > 10#u32
+  if (i1 > 10#u32 : Bool)
   then ok (done s1)
   else ok (cont (s1, i1))
 

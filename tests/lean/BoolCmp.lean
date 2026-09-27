@@ -23,24 +23,24 @@ namespace bool_cmp
     Source: 'tests/src/bool-cmp.rs', lines 5:0-7:1
     Visibility: public -/
 def le (a : Bool) (b : Bool) : Result Bool := do
-  ok (a <= b)
+  ok (a <= b : Bool)
 
 /-- [bool_cmp::lt]:
     Source: 'tests/src/bool-cmp.rs', lines 9:0-11:1
     Visibility: public -/
 def lt (a : Bool) (b : Bool) : Result Bool := do
-  ok (a < b)
+  ok (a < b : Bool)
 
 /-- [bool_cmp::ge]:
     Source: 'tests/src/bool-cmp.rs', lines 13:0-15:1
     Visibility: public -/
 def ge (a : Bool) (b : Bool) : Result Bool := do
-  ok (a >= b)
+  ok (a >= b : Bool)
 
 /-- [bool_cmp::gt]:
     Source: 'tests/src/bool-cmp.rs', lines 17:0-19:1
     Visibility: public -/
 def gt (a : Bool) (b : Bool) : Result Bool := do
-  ok (a > b)
+  ok (a > b : Bool)
 
 end bool_cmp

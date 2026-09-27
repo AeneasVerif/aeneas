@@ -30,7 +30,7 @@ def ref_incr (x : Std.I32) : Result Std.I32 := do
     Visibility: public -/
 def test_incr : Result Unit := do
   let x ← ref_incr 0#i32
-  massert (x = 1#i32)
+  massert (x = 1#i32 : Bool)
 
 /- Unit test for [paper::test_incr] -/
 #assert (test_incr).reducesTo ()
@@ -52,10 +52,10 @@ def choose
 def test_choose : Result Unit := do
   let (z, choose_back) ← choose true 0#i32 0#i32
   let z1 ← z + 1#i32
-  massert (z1 = 1#i32)
+  massert (z1 = 1#i32 : Bool)
   let (x, y) := choose_back z1
-  massert (x = 1#i32)
-  massert (y = 0#i32)
+  massert (x = 1#i32 : Bool)
+  massert (y = 0#i32 : Bool)
 
 /- Unit test for [paper::test_choose] -/
 #assert (test_choose).reducesTo ()
@@ -75,7 +75,7 @@ def list_nth_mut
   {T : Type} (l : List T) (i : Std.U32) : Result (T × (T → List T)) := do
   match l with
   | List.Cons x tl =>
-    if i = 0#u32
+    if (i = 0#u32 : Bool)
     then let back := fun t => List.Cons t tl
          ok (x, back)
     else
@@ -107,7 +107,7 @@ def test_nth : Result Unit := do
   let x1 ← x + 1#i32
   let l := list_nth_mut_back x1
   let i ← sum l
-  massert (i = 7#i32)
+  massert (i = 7#i32 : Bool)
 
 /- Unit test for [paper::test_nth] -/
 #assert (test_nth).reducesTo ()

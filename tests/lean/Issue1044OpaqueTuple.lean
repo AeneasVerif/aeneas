@@ -44,7 +44,7 @@ def update_adjacent_loop.body
   := do
   let i1 ← i + 2#usize
   let i2 := Slice.len into
-  if i1 <= i2
+  if (i1 <= i2 : Bool)
   then
     let g ← Slice.index_usize into i
     let i3 ← i + 1#usize

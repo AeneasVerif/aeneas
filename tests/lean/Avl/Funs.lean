@@ -25,9 +25,9 @@ namespace avl
     Visibility: public -/
 def I32.Insts.AvlOrd.cmp
   (self : Std.I32) (other : Std.I32) : Result Ordering := do
-  if self < other
+  if (self < other : Bool)
   then ok Ordering.Less
-  else if self = other
+  else if (self = other : Bool)
        then ok Ordering.Equal
        else ok Ordering.Greater
 
@@ -46,7 +46,7 @@ def Node.rotate_left
   let (x, root1) :=
     core.mem.replace (Node.mk root.value root.left b root.balance_factor)
       (Node.mk z.value o z.right z.balance_factor)
-  if root1.balance_factor = 0#i8
+  if (root1.balance_factor = 0#i8 : Bool)
   then
     ok (Node.mk root1.value (some (Node.mk x.value x.left x.right 1#i8))
       root1.right (-1)#i8)
@@ -62,7 +62,7 @@ def Node.rotate_right
   let (x, root1) :=
     core.mem.replace (Node.mk root.value b root.right root.balance_factor)
       (Node.mk z.value z.left o z.balance_factor)
-  if root1.balance_factor = 0#i8
+  if (root1.balance_factor = 0#i8 : Bool)
   then
     ok (Node.mk root1.value root1.left (some (Node.mk x.value x.left 
       x.right (-1)#i8)) 1#i8)
@@ -81,12 +81,12 @@ def Node.rotate_left_right
   let (x, root1) :=
     core.mem.replace (Node.mk root.value b root.right root.balance_factor)
       (Node.mk y.value o1 o2 y.balance_factor)
-  if root1.balance_factor = 0#i8
+  if (root1.balance_factor = 0#i8 : Bool)
   then
     ok (Node.mk root1.value (some (Node.mk z.value z.left a 0#i8)) (some
       (Node.mk x.value x.left x.right 0#i8)) 0#i8)
   else
-    if root1.balance_factor < 0#i8
+    if (root1.balance_factor < 0#i8 : Bool)
     then
       ok (Node.mk root1.value (some (Node.mk z.value z.left a 0#i8)) (some
         (Node.mk x.value x.left x.right 1#i8)) 0#i8)
@@ -105,12 +105,12 @@ def Node.rotate_right_left
   let (x, root1) :=
     core.mem.replace (Node.mk root.value root.left b root.balance_factor)
       (Node.mk y.value o1 o2 y.balance_factor)
-  if root1.balance_factor = 0#i8
+  if (root1.balance_factor = 0#i8 : Bool)
   then
     ok (Node.mk root1.value (some (Node.mk x.value x.left x.right 0#i8)) (some
       (Node.mk z.value a z.right 0#i8)) 0#i8)
   else
-    if root1.balance_factor > 0#i8
+    if (root1.balance_factor > 0#i8 : Bool)
     then
       ok (Node.mk root1.value (some (Node.mk x.value x.left x.right (-1)#i8))
         (some (Node.mk z.value a z.right 0#i8)) 0#i8)
@@ -130,11 +130,11 @@ def Node.insert_in_left
   if b
   then
     let i ← node.balance_factor - 1#i8
-    if i = (-2)#i8
+    if (i = (-2)#i8 : Bool)
     then
       let (o1, o2) := core.mem.replace o none
       let left ← core.option.Option.unwrap o1
-      if left.balance_factor <= 0#i8
+      if (left.balance_factor <= 0#i8 : Bool)
       then
         let node1 ←
           Node.rotate_right (Node.mk node.value o2 node.right i) left
@@ -157,11 +157,11 @@ def Node.insert_in_right
   if b
   then
     let i ← node.balance_factor + 1#i8
-    if i = 2#i8
+    if (i = 2#i8 : Bool)
     then
       let (o1, o2) := core.mem.replace o none
       let right ← core.option.Option.unwrap o1
-      if right.balance_factor >= 0#i8
+      if (right.balance_factor >= 0#i8 : Bool)
       then
         let node1 ←
           Node.rotate_left (Node.mk node.value node.left o2 i) right

@@ -83,7 +83,7 @@ def Const_Aeneas11 : Result Std.U32 := 10#u32 + 1#u32
 /-- [rename_attribute::factorial]:
     Source: 'tests/src/rename_attribute.rs', lines 58:0-64:1 -/
 def Factfn (n : Std.U64) : Result Std.U64 := do
-  if n <= 1#u64
+  if (n <= 1#u64 : Bool)
   then ok 1#u64
   else let i ← n - 1#u64
        let i1 ← Factfn i
@@ -98,7 +98,7 @@ def No_borrows_sum_loop.body
   (max : Std.U32) (i : Std.U32) (s : Std.U32) :
   Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
   := do
-  if i < max
+  if (i < max : Bool)
   then let s1 ← s + i
        let i1 ← i + 1#u32
        ok (cont (i1, s1))

@@ -24,7 +24,7 @@ namespace issue_1140_global_loop
     Visibility: public -/
 @[rust_loop_body]
 def S_loop.body (i : Std.U32) : Result (ControlFlow Std.U32 Std.U32) := do
-  if i < 3#u32
+  if (i < 3#u32 : Bool)
   then let i1 ← i + 1#u32
        ok (cont i1)
   else ok (done i)
@@ -51,7 +51,7 @@ def C_loop.body
   (sum : Std.U32) (i : Std.U32) :
   Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
   := do
-  if i < 5#u32
+  if (i < 5#u32 : Bool)
   then let sum1 ← sum + i
        let i1 ← i + 1#u32
        ok (cont (sum1, i1))

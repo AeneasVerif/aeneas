@@ -59,7 +59,7 @@ def Wrap.Insts.CoreMarkerStructuralPartialEq : core.marker.StructuralPartialEq
     Visibility: public -/
 def Wrap.Insts.CoreCmpPartialEqWrap.eq
   (self : Wrap) (other : Wrap) : Result Bool := do
-  ok (self = other)
+  ok (self = other : Bool)
 
 /-- Trait implementation: [order::{impl core::cmp::PartialEq<order::Wrap> for order::Wrap}]
     Source: 'tests/src/order.rs', lines 21:9-21:18 -/

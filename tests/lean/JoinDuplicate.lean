@@ -23,15 +23,15 @@ namespace join_duplicate
     Source: 'tests/src/join-duplicate.rs', lines 3:0-10:1 -/
 def join_nested_shared (b : Bool) : Result Unit := do
   if b
-  then massert (1#i32 > 0#i32)
-  else massert (2#i32 > 0#i32)
+  then massert (1#i32 > 0#i32 : Bool)
+  else massert (2#i32 > 0#i32 : Bool)
 
 /-- [join_duplicate::join_nested_shared_in_loop]: loop body 0:
     Source: 'tests/src/join-duplicate.rs', lines 26:4-28:5 -/
 @[rust_loop_body]
 def join_nested_shared_in_loop_loop0.body
   (n : Std.U32) (i : Std.U32) : Result (ControlFlow Std.U32 Unit) := do
-  if i < n
+  if (i < n : Bool)
   then let i1 ← i + 1#u32
        ok (cont i1)
   else ok (done ())
@@ -50,7 +50,7 @@ def join_nested_shared_in_loop_loop0
 @[rust_loop_body]
 def join_nested_shared_in_loop_loop1.body
   (n : Std.U32) (i : Std.U32) : Result (ControlFlow Std.U32 Unit) := do
-  if i < n
+  if (i < n : Bool)
   then let i1 ← i + 1#u32
        ok (cont i1)
   else ok (done ())

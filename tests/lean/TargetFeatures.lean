@@ -54,7 +54,7 @@ def x86.sum_loop.body
   Result (ControlFlow (Std.U32 × Std.Usize) Std.U32)
   := do
   let i1 := Slice.len x
-  if i < i1
+  if (i < i1 : Bool)
   then
     let i2 ← Slice.index_usize x i
     let sum1 ← lift (core.num.U32.wrapping_add sum i2)
@@ -111,7 +111,7 @@ def dispatch_add.«aarch64-apple-darwin»
     Visibility: public -/
 def dispatch_add (i : Std.U32) (i1 : Std.U32) : Result Std.U32 := do
   let tgt ← get_target
-  if tgt = (toStr "x86_64-apple-darwin")
+  if (tgt = (toStr "x86_64-apple-darwin") : Bool)
   then dispatch_add.«x86_64-apple-darwin» i i1
   else dispatch_add.«aarch64-apple-darwin» i i1
 

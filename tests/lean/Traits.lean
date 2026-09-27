@@ -191,7 +191,7 @@ structure ToType (Self : Type) (T : Type) where
     Source: 'tests/src/traits.rs', lines 95:4-97:5
     Visibility: public -/
 def U64.Insts.TraitsToTypeBool.to_type (self : Std.U64) : Result Bool := do
-  ok (self > 0#u64)
+  ok (self > 0#u64 : Bool)
 
 /-- Trait implementation: [traits::{impl traits::ToType<bool> for u64}]
     Source: 'tests/src/traits.rs', lines 94:0-98:1 -/
@@ -248,7 +248,7 @@ def TestType.test.TestType1 := Std.U64
     Source: 'tests/src/traits.rs', lines 141:12-143:13 -/
 def TestType.test.TestType1.Insts.TraitsTestTypeTestTestTrait.test
   (self : TestType.test.TestType1) : Result Bool := do
-  ok (self > 1#u64)
+  ok (self > 1#u64 : Bool)
 
 /-- [traits::{traits::TestType<T>}::test]:
     Source: 'tests/src/traits.rs', lines 128:4-149:5
@@ -258,7 +258,7 @@ def TestType.test
   Result Bool
   := do
   let x1 ← ToU64Inst.to_u64 x
-  if x1 > 0#u64
+  if (x1 > 0#u64 : Bool)
   then TestType.test.TestType1.Insts.TraitsTestTypeTestTestTrait.test 0#u64
   else ok false
 

@@ -73,7 +73,7 @@ inductive CList (T : Type) where
 def list_nth {T : Type} (l : CList T) (i : Std.U32) : Result T := do
   match l with
   | CList.CCons x tl =>
-    if i = 0#u32
+    if (i = 0#u32 : Bool)
     then ok x
     else let i1 ← i - 1#u32
          list_nth tl i1
@@ -87,7 +87,7 @@ def list_nth_mut
   {T : Type} (l : CList T) (i : Std.U32) : Result (T × (T → CList T)) := do
   match l with
   | CList.CCons x tl =>
-    if i = 0#u32
+    if (i = 0#u32 : Bool)
     then let back := fun t => CList.CCons t tl
          ok (x, back)
     else
@@ -106,7 +106,7 @@ partial_fixpoint
 def list_nth1_loop {T : Type} (l : CList T) (i : Std.U32) : Result T := do
   match l with
   | CList.CCons x tl =>
-    if i = 0#u32
+    if (i = 0#u32 : Bool)
     then ok x
     else let i1 ← i - 1#u32
          list_nth1_loop tl i1
@@ -124,7 +124,7 @@ def list_nth1 {T : Type} (l : CList T) (i : Std.U32) : Result T := do
     Source: 'src/lib.rs', lines 76:0-83:1
     Visibility: public -/
 def i32_id (i : Std.I32) : Result Std.I32 := do
-  if i = 0#i32
+  if (i = 0#i32 : Bool)
   then ok 0#i32
   else let i1 ← i - 1#i32
        let i2 ← i32_id i1
@@ -137,7 +137,7 @@ mutual
     Source: 'src/lib.rs', lines 85:0-92:1
     Visibility: public -/
 def even (i : Std.U32) : Result Bool := do
-  if i = 0#u32
+  if (i = 0#u32 : Bool)
   then ok true
   else let i1 ← i - 1#u32
        odd i1
@@ -147,7 +147,7 @@ partial_fixpoint
     Source: 'src/lib.rs', lines 94:0-101:1
     Visibility: public -/
 def odd (i : Std.U32) : Result Bool := do
-  if i = 0#u32
+  if (i = 0#u32 : Bool)
   then ok false
   else let i1 ← i - 1#u32
        even i1
@@ -193,7 +193,7 @@ def list_nth_mut1_loop
   {T : Type} (l : CList T) (i : Std.U32) : Result (T × (T → CList T)) := do
   match l with
   | CList.CCons x tl =>
-    if i = 0#u32
+    if (i = 0#u32 : Bool)
     then ok (x, fun t => CList.CCons t tl)
     else
       let i1 ← i - 1#u32
@@ -269,7 +269,7 @@ def zero_loop
   Result (alloc.vec.Vec Std.U32)
   := do
   let i1 := alloc.vec.Vec.len x
-  if i < i1
+  if (i < i1 : Bool)
   then
     let (_, index_mut_back) ←
       alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice Std.U32) x
@@ -296,7 +296,7 @@ def add_no_overflow_loop
   Result (alloc.vec.Vec Std.U32)
   := do
   let i1 := alloc.vec.Vec.len x
-  if i < i1
+  if (i < i1 : Bool)
   then
     let i2 ←
       alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32) y i
@@ -330,7 +330,7 @@ def add_with_carry_loop
   Result (Std.U8 × (alloc.vec.Vec Std.U32))
   := do
   let i1 := alloc.vec.Vec.len x
-  if i < i1
+  if (i < i1 : Bool)
   then
     let i2 ←
       alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32) x i
@@ -364,7 +364,7 @@ def add_with_carry
 /-- [tutorial::max]:
     Source: 'src/lib.rs', lines 201:0-203:1 -/
 def max (x : Std.Usize) (y : Std.Usize) : Result Std.Usize := do
-  if x > y
+  if (x > y : Bool)
   then ok x
   else ok y
 
@@ -373,7 +373,7 @@ def max (x : Std.Usize) (y : Std.Usize) : Result Std.Usize := do
 def get_or_zero
   (y : alloc.vec.Vec Std.U32) (i : Std.Usize) : Result Std.U32 := do
   let i1 := alloc.vec.Vec.len y
-  if i < i1
+  if (i < i1 : Bool)
   then alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32) y i
   else ok 0#u32
 
@@ -386,7 +386,7 @@ def add_loop
   (c0 : Std.U8) (i : Std.Usize) :
   Result ((alloc.vec.Vec Std.U32) × Std.U8)
   := do
-  if i < max1
+  if (i < max1 : Bool)
   then
     let yi ← get_or_zero y i
     let i1 ←
@@ -434,7 +434,7 @@ structure Hash (Self : Type) where
 @[rust_loop]
 def pseudo_random_loop
   {T : Type} (HashInst : Hash T) (state : Std.U32) : Result Std.U32 := do
-  if state < 100#u32
+  if (state < 100#u32 : Bool)
   then let state1 ← HashInst.hash state
        pseudo_random_loop HashInst state1
   else ok state

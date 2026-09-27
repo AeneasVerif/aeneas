@@ -54,7 +54,7 @@ def HashMap.allocate_slots_loop
   {T : Type} (slots : alloc.vec.Vec (AList T)) (n : Std.Usize) :
   Result (alloc.vec.Vec (AList T))
   := do
-  if n > 0#usize
+  if (n > 0#usize : Bool)
   then
     let slots1 ← alloc.vec.Vec.push slots AList.Nil
     let n1 ← n - 1#usize
@@ -105,7 +105,7 @@ def HashMap.clear_loop
   Result (alloc.vec.Vec (AList T))
   := do
   let i1 := alloc.vec.Vec.len slots
-  if i < i1
+  if (i < i1 : Bool)
   then
     let (_, index_mut_back) ←
       alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice (AList T))
@@ -138,7 +138,7 @@ def HashMap.insert_in_list_loop
   := do
   match ls with
   | AList.Cons ckey cvalue tl =>
-    if ckey = key
+    if (ckey = key : Bool)
     then ok (false, AList.Cons ckey value tl)
     else
       let (b, back) ← HashMap.insert_in_list_loop key value tl
@@ -205,7 +205,7 @@ def HashMap.move_elements_loop
   Result ((HashMap T) × (alloc.vec.Vec (AList T)))
   := do
   let i1 := alloc.vec.Vec.len slots
-  if i < i1
+  if (i < i1 : Bool)
   then
     let (a, index_mut_back) ←
       alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice (AList T))
@@ -233,7 +233,7 @@ def HashMap.try_resize {T : Type} (self : HashMap T) : Result (HashMap T) := do
   let capacity := alloc.vec.Vec.len self.slots
   let n1 ← core.num.Usize.MAX / 2#usize
   let i ← n1 / self.max_load_factor.dividend
-  if capacity <= i
+  if (capacity <= i : Bool)
   then
     let i1 ← capacity * 2#usize
     let ntable ← HashMap.new_with_capacity T i1 self.max_load_factor
@@ -250,7 +250,7 @@ def HashMap.insert
   := do
   let self1 ← HashMap.insert_no_resize self key value
   let i ← HashMap.len self1
-  if i > self1.max_load
+  if (i > self1.max_load : Bool)
   then if self1.saturated
        then ok self1
        else HashMap.try_resize self1
@@ -264,7 +264,7 @@ def HashMap.contains_key_in_list_loop
   {T : Type} (key : Std.Usize) (ls : AList T) : Result Bool := do
   match ls with
   | AList.Cons ckey _ tl =>
-    if ckey = key
+    if (ckey = key : Bool)
     then ok true
     else HashMap.contains_key_in_list_loop key tl
   | AList.Nil => ok false
@@ -298,7 +298,7 @@ def HashMap.get_in_list_loop
   {T : Type} (key : Std.Usize) (ls : AList T) : Result (Option T) := do
   match ls with
   | AList.Cons ckey cvalue tl =>
-    if ckey = key
+    if (ckey = key : Bool)
     then ok (some cvalue)
     else HashMap.get_in_list_loop key tl
   | AList.Nil => ok none
@@ -334,7 +334,7 @@ def HashMap.get_mut_in_list_loop
   := do
   match ls with
   | AList.Cons ckey cvalue tl =>
-    if ckey = key
+    if (ckey = key : Bool)
     then
       ok (some cvalue,
         fun o =>
@@ -390,7 +390,7 @@ def HashMap.remove_from_list_loop
   := do
   match ls with
   | AList.Cons ckey t tl =>
-    if ckey = key
+    if (ckey = key : Bool)
     then
       let (mv_ls, _) := core.mem.replace ls AList.Nil
       match mv_ls with

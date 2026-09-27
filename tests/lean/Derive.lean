@@ -172,7 +172,7 @@ def ScalarEnum.Insts.CoreCmpPartialEqScalarEnum.eq
   (self : ScalarEnum) (other : ScalarEnum) : Result Bool := do
   let self1 := read_discriminant self
   let other1 := read_discriminant other
-  ok (self1 = other1)
+  ok (self1 = other1 : Bool)
 
 /-- Trait implementation: [derive::{impl core::cmp::PartialEq<derive::ScalarEnum> for derive::ScalarEnum}]
     Source: 'tests/src/derive.rs', lines 8:22-8:31 -/
@@ -275,7 +275,7 @@ def CopyEnum.Insts.CoreCmpPartialEqCopyEnum.eq
   := do
   let self1 := read_discriminant self
   let other1 := read_discriminant other
-  if self1 = other1
+  if (self1 = other1 : Bool)
   then
     match self with
     | CopyEnum.Variant0 => ok true
@@ -420,7 +420,7 @@ def Enum.Insts.CoreCmpPartialEqEnum.eq
   := do
   let self1 := read_discriminant self
   let other1 := read_discriminant other
-  if self1 = other1
+  if (self1 = other1 : Bool)
   then
     match self with
     | Enum.Variant0 => ok true
@@ -570,7 +570,7 @@ def List.Insts.CoreCmpPartialEqList.eq
   := do
   let self1 := read_discriminant self
   let other1 := read_discriminant other
-  if self1 = other1
+  if (self1 = other1 : Bool)
   then
     match self with
     | List.Nil => ok true
@@ -674,9 +674,9 @@ def CopyStruct.Insts.CoreCmpPartialEqCopyStruct.eq
   let b ← core.cmp.impls.PartialEqUnit.eq () ()
   if b
   then
-    if self.f1 = other.f1
+    if (self.f1 = other.f1 : Bool)
     then
-      if self.f2 = other.f2
+      if (self.f2 = other.f2 : Bool)
       then corecmpPartialEqInst.eq self.f3 other.f3
       else ok false
     else ok false
@@ -870,16 +870,17 @@ def Struct6Fields.Insts.CoreMarkerStructuralPartialEq :
     Visibility: public -/
 def Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields.eq
   (self : Struct6Fields) (other : Struct6Fields) : Result Bool := do
-  if self.a = other.a
+  if (self.a = other.a : Bool)
   then
-    if self.b = other.b
+    if (self.b = other.b : Bool)
     then
-      if self.c = other.c
+      if (self.c = other.c : Bool)
       then
-        if self.d = other.d
-        then if self.e = other.e
-             then ok (self.f = other.f)
-             else ok false
+        if (self.d = other.d : Bool)
+        then
+          if (self.e = other.e : Bool)
+          then ok (self.f = other.f : Bool)
+          else ok false
         else ok false
       else ok false
     else ok false

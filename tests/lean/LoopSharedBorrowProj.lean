@@ -63,7 +63,7 @@ def carve_loop.body
   let (o, iter1) ← core.slice.iter.IteratorSliceIter.next iter
   match o with
   | none => ok (done true)
-  | some c => if c = x
+  | some c => if (c = x : Bool)
               then ok (done false)
               else ok (cont iter1)
 

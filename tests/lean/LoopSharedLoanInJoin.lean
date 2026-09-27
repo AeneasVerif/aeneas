@@ -83,7 +83,7 @@ def State.extract_loop.body
   | none => ok (done (a, i1, result))
   | some i2 =>
     let (a1, i3, lane_index1) ←
-      if i1 = i
+      if (i1 = i : Bool)
       then do
            let a2 ← transform a
            ok (a2, 0#u32, 0#usize)

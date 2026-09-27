@@ -24,7 +24,7 @@ namespace cast_signed
     Visibility: public -/
 def test_u8_cast_signed_all_ones : Result Unit := do
   let y ← core.num.U8.cast_signed 255#u8
-  massert (y = (-1)#i8)
+  massert (y = (-1)#i8 : Bool)
 
 /- Unit test for [cast_signed::test_u8_cast_signed_all_ones] -/
 #assert (test_u8_cast_signed_all_ones).reducesTo ()
@@ -34,7 +34,7 @@ def test_u8_cast_signed_all_ones : Result Unit := do
     Visibility: public -/
 def test_i8_cast_unsigned_neg_one : Result Unit := do
   let y ← core.num.I8.cast_unsigned (-1)#i8
-  massert (y = 255#u8)
+  massert (y = 255#u8 : Bool)
 
 /- Unit test for [cast_signed::test_i8_cast_unsigned_neg_one] -/
 #assert (test_i8_cast_unsigned_neg_one).reducesTo ()
@@ -44,7 +44,7 @@ def test_i8_cast_unsigned_neg_one : Result Unit := do
     Visibility: public -/
 def test_u16_cast_signed_high_bit : Result Unit := do
   let y ← core.num.U16.cast_signed 32768#u16
-  massert (y = core.num.I16.MIN)
+  massert (y = core.num.I16.MIN : Bool)
 
 /- Unit test for [cast_signed::test_u16_cast_signed_high_bit] -/
 #assert (test_u16_cast_signed_high_bit).reducesTo ()
@@ -54,7 +54,7 @@ def test_u16_cast_signed_high_bit : Result Unit := do
     Visibility: public -/
 def test_i16_cast_unsigned_neg_one : Result Unit := do
   let y ← core.num.I16.cast_unsigned (-1)#i16
-  massert (y = core.num.U16.MAX)
+  massert (y = core.num.U16.MAX : Bool)
 
 /- Unit test for [cast_signed::test_i16_cast_unsigned_neg_one] -/
 #assert (test_i16_cast_unsigned_neg_one).reducesTo ()
@@ -64,7 +64,7 @@ def test_i16_cast_unsigned_neg_one : Result Unit := do
     Visibility: public -/
 def test_u32_cast_signed_small : Result Unit := do
   let y ← core.num.U32.cast_signed 255#u32
-  massert (y = 255#i32)
+  massert (y = 255#i32 : Bool)
 
 /- Unit test for [cast_signed::test_u32_cast_signed_small] -/
 #assert (test_u32_cast_signed_small).reducesTo ()
@@ -74,7 +74,7 @@ def test_u32_cast_signed_small : Result Unit := do
     Visibility: public -/
 def test_u32_cast_signed_all_ones : Result Unit := do
   let y ← core.num.U32.cast_signed 4294967295#u32
-  massert (y = (-1)#i32)
+  massert (y = (-1)#i32 : Bool)
 
 /- Unit test for [cast_signed::test_u32_cast_signed_all_ones] -/
 #assert (test_u32_cast_signed_all_ones).reducesTo ()
@@ -84,7 +84,7 @@ def test_u32_cast_signed_all_ones : Result Unit := do
     Visibility: public -/
 def test_u32_cast_signed_high_bit : Result Unit := do
   let y ← core.num.U32.cast_signed 2147483648#u32
-  massert (y = core.num.I32.MIN)
+  massert (y = core.num.I32.MIN : Bool)
 
 /- Unit test for [cast_signed::test_u32_cast_signed_high_bit] -/
 #assert (test_u32_cast_signed_high_bit).reducesTo ()
@@ -94,7 +94,7 @@ def test_u32_cast_signed_high_bit : Result Unit := do
     Visibility: public -/
 def test_i32_cast_unsigned_neg_one : Result Unit := do
   let y ← core.num.I32.cast_unsigned (-1)#i32
-  massert (y = 4294967295#u32)
+  massert (y = 4294967295#u32 : Bool)
 
 /- Unit test for [cast_signed::test_i32_cast_unsigned_neg_one] -/
 #assert (test_i32_cast_unsigned_neg_one).reducesTo ()
@@ -105,7 +105,7 @@ def test_i32_cast_unsigned_neg_one : Result Unit := do
 def test_i32_cast_roundtrip : Result Unit := do
   let i ← core.num.U32.cast_signed 3735928559#u32
   let y ← core.num.I32.cast_unsigned i
-  massert (y = 3735928559#u32)
+  massert (y = 3735928559#u32 : Bool)
 
 /- Unit test for [cast_signed::test_i32_cast_roundtrip] -/
 #assert (test_i32_cast_roundtrip).reducesTo ()
@@ -115,7 +115,7 @@ def test_i32_cast_roundtrip : Result Unit := do
     Visibility: public -/
 def test_u64_cast_signed_all_ones : Result Unit := do
   let y ← core.num.U64.cast_signed core.num.U64.MAX
-  massert (y = (-1)#i64)
+  massert (y = (-1)#i64 : Bool)
 
 /- Unit test for [cast_signed::test_u64_cast_signed_all_ones] -/
 #assert (test_u64_cast_signed_all_ones).reducesTo ()
@@ -125,7 +125,7 @@ def test_u64_cast_signed_all_ones : Result Unit := do
     Visibility: public -/
 def test_i64_cast_unsigned_neg_one : Result Unit := do
   let y ← core.num.I64.cast_unsigned (-1)#i64
-  massert (y = core.num.U64.MAX)
+  massert (y = core.num.U64.MAX : Bool)
 
 /- Unit test for [cast_signed::test_i64_cast_unsigned_neg_one] -/
 #assert (test_i64_cast_unsigned_neg_one).reducesTo ()
@@ -135,7 +135,7 @@ def test_i64_cast_unsigned_neg_one : Result Unit := do
     Visibility: public -/
 def test_u128_cast_signed_all_ones : Result Unit := do
   let y ← core.num.U128.cast_signed core.num.U128.MAX
-  massert (y = (-1)#i128)
+  massert (y = (-1)#i128 : Bool)
 
 /- Unit test for [cast_signed::test_u128_cast_signed_all_ones] -/
 #assert (test_u128_cast_signed_all_ones).reducesTo ()
@@ -145,7 +145,7 @@ def test_u128_cast_signed_all_ones : Result Unit := do
     Visibility: public -/
 def test_i128_cast_unsigned_neg_one : Result Unit := do
   let y ← core.num.I128.cast_unsigned (-1)#i128
-  massert (y = core.num.U128.MAX)
+  massert (y = core.num.U128.MAX : Bool)
 
 /- Unit test for [cast_signed::test_i128_cast_unsigned_neg_one] -/
 #assert (test_i128_cast_unsigned_neg_one).reducesTo ()
@@ -156,7 +156,7 @@ def test_i128_cast_unsigned_neg_one : Result Unit := do
 def test_usize_cast_roundtrip : Result Unit := do
   let i ← core.num.Usize.cast_signed 12345#usize
   let y ← core.num.Isize.cast_unsigned i
-  massert (y = 12345#usize)
+  massert (y = 12345#usize : Bool)
 
 /- Unit test for [cast_signed::test_usize_cast_roundtrip] -/
 #assert (test_usize_cast_roundtrip).reducesTo ()
@@ -166,7 +166,7 @@ def test_usize_cast_roundtrip : Result Unit := do
     Visibility: public -/
 def test_isize_cast_unsigned_neg_one : Result Unit := do
   let y ← core.num.Isize.cast_unsigned (-1)#isize
-  massert (y = core.num.Usize.MAX)
+  massert (y = core.num.Usize.MAX : Bool)
 
 /- Unit test for [cast_signed::test_isize_cast_unsigned_neg_one] -/
 #assert (test_isize_cast_unsigned_neg_one).reducesTo ()
