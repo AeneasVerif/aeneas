@@ -283,7 +283,7 @@ def core.cmp.impls.PartialOrdShared.ge {A : Type} {B : Type}
   (PartialOrdInst : core.cmp.PartialOrd A B) (x : A) (y : B) : Result Bool :=
   PartialOrdInst.ge x y
 
-@[reducible, rust_trait_impl "core::cmp::PartialOrd<&'a @A, &'b @B>"]
+@[expose, reducible, rust_trait_impl "core::cmp::PartialOrd<&'a @A, &'b @B>"]
 def core.cmp.PartialOrdShared {A : Type} {B : Type}
   (PartialOrdInst : core.cmp.PartialOrd A B) : core.cmp.PartialOrd A B := {
   partialEqInst := core.cmp.PartialEqShared PartialOrdInst.partialEqInst
