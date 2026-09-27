@@ -1,0 +1,13 @@
+{
+  "name": "aeneas",
+  "owner": {
+    "name": "AeneasVerif"
+  },
+  "plugins": [
+    {
+      "name": "aeneas",
+      "source": "./",
+      "description": "Skills for verifying Rust programs with Aeneas"
+    }
+  ]
+}
