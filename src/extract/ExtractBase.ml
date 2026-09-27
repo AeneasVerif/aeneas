@@ -928,7 +928,7 @@ let unop_name (unop : unop) : string =
           | Some int_ty -> int_name int_ty ^ "_not")
       | Lean -> begin
           match ty with
-          | None -> "¬"
+          | None -> "!"
           | Some _ -> "~~~"
         end
       | Coq -> if Option.is_none ty then "negb" else "scalar_not"
