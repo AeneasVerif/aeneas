@@ -136,7 +136,7 @@ let same_symbolic_id (sv0 : symbolic_value) (sv1 : symbolic_value) : bool =
 
 let mk_var (index : LocalId.id) (name : string option) (local_ty : ty)
     (span : Meta.span) : local =
-  { index; name; local_ty; span }
+  { index; name; local_ty; span; drop_flag_for = None }
 
 (** Small helper - TODO: move *)
 let mk_place_from_var_id (ctx : eval_ctx) (span : Meta.span)
