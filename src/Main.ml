@@ -141,8 +141,8 @@ let () =
          down)." );
       ( "-gen-lib-entry",
         Arg.Set generate_lib_entry_point,
-        " Add an entry point file to the generated library (only valid if the \
-         crate is split between different files)" );
+        " Legacy: add an entry point file to the generated library (with \
+         -split-files-legacy)" );
       ( "-lean-default-lakefile",
         Arg.Clear lean_gen_lakefile,
         " Generate a default lakefile.lean (Lean only)" );
@@ -474,10 +474,10 @@ let () =
   (* Sanity check: the use of decrease clauses is not compatible with the use of fuel *)
   check_arg_not !use_fuel "-use-fuel" !extract_decreases_clauses
     "-decreases-clauses";
+  (* [-split-files] emits its entry point by default, so [-gen-lib-entry] only
+     applies to the legacy split. *)
   check_arg_implies !generate_lib_entry_point "-gen-lib-entry"
     !split_files_legacy "-split-files-legacy";
-  check_arg_not !generate_lib_entry_point "-gen-lib-entry"
-    (Option.is_some !subdir) "-subdir";
   if !lean_gen_lakefile && not (backend () = Lean) then
     fail_with_error
       "The -lean-default-lakefile option is valid only for the Lean backend";

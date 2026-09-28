@@ -2341,10 +2341,9 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          Maybe generate it if the user asks for it?
       *)
   | Lean ->
-      (*
-       * Generate the library entry point, if the crate is split between
-       * different files.
-       *)
+      (* The per-file split ([-split-files]) emits its entry point ([Crate.lean])
+         by default, inside [extract_by_file]. The legacy split does not, so
+         [-gen-lib-entry] opts into generating a minimal [Crate.lean]. *)
       if !Config.split_files_legacy && !Config.generate_lib_entry_point then (
         let filename = Filename.concat dest_dir (crate_name ^ ".lean") in
         let out = open_out filename in
