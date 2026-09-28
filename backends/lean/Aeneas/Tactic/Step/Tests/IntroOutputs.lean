@@ -151,8 +151,8 @@ example : (do let (a, b) ← quadProg
 /--
 error: unsolved goals
 case a
-c : ℕ × ℕ
 a b : ℕ
+c : ℕ × ℕ
 a_post : a = 8
 b_post : b = 9
 a_post1 : c.1 = 10
@@ -446,9 +446,7 @@ h : y = z + 1
 example : (do let (x, y) ← existentialProg; ok (x + y)) ⦃ res => res > 2 ⦄ := by
   step with existentialProg_spec as ⟨ x, y, hx, z, hz, h ⟩
 
-/- A *nested*-tuple result combined with a *leading* existential in the post.
-   The post's `∃` only becomes visible after the output is destructured, so it
-   must be split by the post-destructure cleanup pass. -/
+/- Outputs must precede existentially quantified variables, including in nested tuples. -/
 def nestedExistentialProg : Result ((Nat × Nat) × Nat) := ok ((1, 2), 3)
 
 @[step]
@@ -471,7 +469,7 @@ example :
 /--
 error: unsolved goals
 case a
-c a b : ℕ
+a b c : ℕ
 ha : a = 1
 hb : b = 2
 hc : c = 3
@@ -510,3 +508,65 @@ example :
   step with quadProg_spec
 
 end
+
+def genericPair {α : Type u} (x : α) : Result (α × Nat) := ok (x, 1)
+
+@[step]
+theorem genericPair_spec {α : Type u} (x : α) :
+    genericPair x ⦃ (y : α) (k : Nat) => y = x ∧ k = 1 ⦄ := by
+  unfold genericPair
+  step*
+
+example {α : Type u} (x : α) :
+    (do let (y, k) ← genericPair x; ok (y, k + 1))
+      ⦃ (y : α) (k : Nat) => y = x ∧ k = 2 ⦄ := by
+  step*
+
+/- Local type dependencies must remain in scope when proving the equivalence. -/
+example {α : Type u} (m : Nat) :
+    let n := m + 1
+    let size := n + 1
+    ∀ x : Vector α size,
+      (do let (y, k) ← genericPair x; ok (y, k + 1))
+        ⦃ y k => y = x ∧ k = 2 ⦄ := by
+  intro n size x
+  step*
+
+example (m : Nat) :
+    have n := m + 1
+    ∀ x : Vector Nat n,
+      (do let (y, k) ← genericPair x; ok (y, k + 1))
+        ⦃ y k => y = x ∧ k = 2 ⦄ := by
+  intro n x
+  step*
+
+/- Partial correctness uses the same call-site tuple pattern. -/
+example :
+    (do let ((a, b), c) ← nestedProg; ok (a + b + c))
+      ⦃ (r : Nat) => r = 18 ⦄div := by
+  step with nestedProg_spec as ⟨a, b, c, ha, hb, hc⟩
+  simp [ha, hb, hc]
+
+/- Unit outputs disappear even when the postcondition depends on them. -/
+def unitProg : Result Unit := ok ()
+
+@[step]
+theorem unitProg_spec : unitProg ⦃ (u : Unit) => u = () ⦄ := by
+  unfold unitProg
+  step*
+
+abbrev UnitOutput := Unit
+
+example (f : Result UnitOutput) (h : f ⦃ (u : UnitOutput) => u = () ⦄) :
+    (do let _ ← f; genericPair 5) ⦃ y k => y = 5 ∧ k = 1 ⦄ := by
+  step with h as ⟨⟩
+  step*
+
+example : (do let _ ← unitProg; genericPair 5) ⦃ y k => y = 5 ∧ k = 1 ⦄ := by
+  step*
+
+example (g : Unit → Result Nat) (hg : ∀ u, g u ⦃ (n : Nat) => n = 0 ⦄) :
+    (do let u ← unitProg; g u) ⦃ (n : Nat) => n = 0 ⦄ := by
+  step with unitProg_spec
+  step with hg as ⟨n, hn⟩
+  exact hn

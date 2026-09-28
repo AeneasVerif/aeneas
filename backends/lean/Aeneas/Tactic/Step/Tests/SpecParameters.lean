@@ -16,14 +16,15 @@ theorem paramSpec_mono' {α : Type} {tag : Nat} {P₁ : α → Prop} {m : Result
   unfold paramSpec at h ⊢
   exact ⟨rfl, Std.WP.spec_mono h.2 hq⟩
 
-def qimpParam {α β : Type} (tag : Nat) (Pₘ : α → Prop) (k : α → Result β)
+@[irreducible] def qimpParam {α β : Type} (tag : Nat) (Pₘ : α → Prop) (k : α → Result β)
     (Pₖ : β → Prop) : Prop :=
   ∀ x, Pₘ x → paramSpec tag (k x) Pₖ
 
 theorem qimpParam_iff {α β : Type} (tag : Nat) (Pₘ : α → Prop)
     (k : α → Result β) (Pₖ : β → Prop) :
-    qimpParam tag Pₘ k Pₖ ↔ ∀ x, Pₘ x → paramSpec tag (k x) Pₖ :=
-  Iff.rfl
+    qimpParam tag Pₘ k Pₖ ↔ ∀ x, Pₘ x → paramSpec tag (k x) Pₖ := by
+  unfold qimpParam
+  rfl
 
 theorem paramSpec_bind' {α β : Type} {k : α → Result β} {Pₖ : β → Prop}
     {tag : Nat} {m : Result α} {Pₘ : α → Prop} :
@@ -33,6 +34,7 @@ theorem paramSpec_bind' {α β : Type} {k : α → Result β} {Pₖ : β → Pro
   intro hm hk
   unfold paramSpec at hm ⊢
   refine ⟨rfl, Std.WP.spec_bind hm.2 ?_⟩
+  unfold qimpParam at hk
   intro x hx
   have hk := hk x hx
   unfold paramSpec at hk
