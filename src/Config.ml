@@ -228,9 +228,10 @@ let split_files_legacy = ref false
 *)
 let split_files = ref false
 
-(** Only for Lean: generate the library entry point, if the crate is split
-    between different files. The entry point is simply a file with the name of
-    the crate and which includes all the other files. *)
+(** Legacy flag, for Lean with [-split-files-legacy] only: generate an entry
+    point, a file named after the crate that imports [Crate.Funs]. It only
+    resolves when the files are in a [Crate/] directory ([-subdir Crate]), so it
+    is off by default. [-split-files] always writes its own entry point. *)
 let generate_lib_entry_point = ref false
 
 (** For Lean, controls whether we generate a lakefile or not. *)
