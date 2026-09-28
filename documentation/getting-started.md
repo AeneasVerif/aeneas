@@ -30,17 +30,24 @@ This compiles the Rust code and produces `my_crate.llbc`, a serialized intermedi
 aeneas -backend lean my_crate.llbc -dest proofs -subdir /MyCrate/Code -split-files -namespace MyCrate
 ```
 
-This creates Lean files under `proofs/MyCrate/Code/`:
+With `-split-files`, Aeneas writes one Lean module per Rust source file, under
+`proofs/MyCrate/Code/`, mirroring the crate:
 
-| Generated file                   | Contains                                         |
-|----------------------------------|--------------------------------------------------|
-| `Types.lean`                     | Rust types → Lean inductive types                |
-| `Funs.lean`                      | Rust functions → Lean monadic functions          |
-| `FunsExternal_Template.lean`     | Stubs for external functions (you complete this) |
-| `TypesExternal_Template.lean`    | Stubs for external types (you complete this)     |
+| Generated file                         | Contains                                                    |
+|----------------------------------------|-------------------------------------------------------------|
+| `Lib.lean`, `Foo.lean`, `Foo/Bar.lean` | The types and functions of `src/lib.rs`, `src/foo.rs`, `src/foo/bar.rs` |
+| `Foo/Baz/Opaques2_Template.lean`       | The extracted opaque definitions in the file `src/foo/baz.rs` (you complete this) |
+| `FunsExternal_Template.lean`           | Stubs for the functions from external dependencies (you complete this) |
+| `TypesExternal_Template.lean`          | Stubs for the types from external dependencies (you complete this)     |
+
+An added complexity is when there are mutual dependency relations between Rust declarations defined in
+different files. Lean does not allow for mutual recursion between files, so in these cases the extraction will
+generate bundle files that combine the contents of multiple Rust files into one.
 
 **Key aeneas flags:**
-- `-split-files` — one file per declaration group (recommended for large crates)
+- `-split-files` — one Lean module per Rust source file, mirroring the crate
+  (used in this tutorial). Without `-subdir`, it also writes a `MyCrate.lean`
+  entry point that imports every module.
 - `-dest <dir>` — output directory
 - `-subdir <dir>` — subdirectory within dest
 - `-namespace <name>` — Lean namespace prefix
@@ -56,10 +63,11 @@ proofs/
 ├── MyCrate.lean                      ← module root (import all)
 └── MyCrate/
     ├── Code/                         ← generated code (step 2 output)
-    │   ├── Types.lean
-    │   ├── Funs.lean
-    │   ├── FunsExternal.lean         ← rename from _Template, fill in
-    │   └── TypesExternal.lean        ← rename from _Template, fill in
+    │   ├── Lib.lean                  ← one module per Rust source file
+    │   ├── Foo.lean
+    │   ├── ...
+    │   ├── FunsExternal.lean         ← copy from _Template, fill in
+    │   └── TypesExternal.lean        ← copy from _Template, fill in
     ├── Spec/                         ← your pure specifications
     │   └── Basic.lean
     └── Properties/                   ← your proofs
@@ -84,13 +92,14 @@ package «my-crate» {}
 lean_lib «MyCrate»
 ```
 
-**Handle the `_Template` files:**
-```bash
-cd proofs/MyCrate/Code
-cp FunsExternal_Template.lean FunsExternal.lean
-cp TypesExternal_Template.lean TypesExternal.lean
-```
-Then fill in the external definitions in those files. These model functions that Aeneas couldn't translate (e.g., FFI, std library internals).
+`MyCrate.lean` is yours: import the modules you need, e.g. `import MyCrate.Code.Lib`.
+
+**Handle the `_Template` files:** copy each `X_Template.lean` to `X.lean`
+(the name the other modules import), then fill in the definitions.
+
+These model what Aeneas couldn't translate (e.g., FFI, std library internals,
+opaque functions). Aeneas regenerates the templates but never overwrites your
+copies.
 
 ## Step 4: Write Your First Spec
 
@@ -98,7 +107,7 @@ Create `proofs/MyCrate/Properties/Basic.lean`:
 
 ```lean
 import Aeneas
-import MyCrate.Code.Funs
+import MyCrate.Code.Lib -- the module of `src/lib.rs`, which defines `add_overflow`
 
 open MyCrate
 
@@ -141,7 +150,7 @@ cd proofs && lake build
 ## Checklist
 
 - [ ] `charon cargo --preset=aeneas` produces `.llbc` without errors
-- [ ] `aeneas -backend lean` generates `Types.lean` + `Funs.lean`
+- [ ] `aeneas -backend lean` generates one `.lean` file per Rust source file
 - [ ] `_Template` files renamed and filled in
 - [ ] `lean-toolchain` matches Aeneas backend
 - [ ] `lakefile.lean` has `require aeneas from ...`
