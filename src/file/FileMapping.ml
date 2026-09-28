@@ -97,6 +97,17 @@ let relative_source_path ~(root : string list) (path : string) : string option =
   | None | Some [] -> None
   | Some rel -> Some (String.concat "/" rel)
 
+(** The path of a generated file relative to the directory [dir], e.g.
+    ["Crate/A/Part1.lean"] for [out/Crate/A/Part1.lean] with [dir = "out"].
+    [None] if the file is not in [dir]. *)
+let relative_to ~(dir : string) (path : string) : string option =
+  let prefix = if String.ends_with ~suffix:"/" dir then dir else dir ^ "/" in
+  if String.starts_with ~prefix path then
+    Some
+      (String.sub path (String.length prefix)
+         (String.length path - String.length prefix))
+  else None
+
 (** The Lean module-path components for a source file, without the crate prefix.
     [path] is relative to the crate's source root (see {!relative_source_path}).
 *)

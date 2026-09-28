@@ -501,11 +501,9 @@ let placement_to_string ~(dest_dir : string) ~(entry_point : string option)
     Printf.ksprintf (fun s -> Buffer.add_string buf (s ^ "\n")) fmt
   in
   let relative (filename : string) : string =
-    let prefix = Filename.concat dest_dir "" in
-    if String.starts_with ~prefix filename then
-      String.sub filename (String.length prefix)
-        (String.length filename - String.length prefix)
-    else filename
+    Option.value
+      (FileMapping.relative_to ~dir:dest_dir filename)
+      ~default:filename
   in
   let components =
     List.filter (fun (c : component) -> not c.is_dropped) components
