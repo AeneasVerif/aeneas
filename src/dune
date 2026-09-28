@@ -63,6 +63,7 @@
   ExtractTypes
   FileGraph
   FileMapping
+  FilePlan
   FunsAnalysis
   GitVersion
   Identifiers
