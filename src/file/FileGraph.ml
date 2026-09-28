@@ -100,6 +100,10 @@ type t = {
       (** The crate's source root (e.g. [["crates"; "mycrate"; "src"]]): the key
           of a file bucket is the file's path relative to it. *)
   members : item_id list BucketMap.t;  (** The declarations in each bucket. *)
+  item_uses : item_id list AnyDeclIdMap.t;
+      (** The declarations each declaration uses, whichever bucket they are in.
+          We need this extra information when figuring out how to split up a
+          single component into its transparent/opaque layers. *)
   edges : BucketSet.t BucketMap.t;
       (** [edges] maps a bucket to the buckets it uses. Self-edges are omitted.
       *)
@@ -145,9 +149,7 @@ let compute (crate : crate) : t =
         match bucket_of_item crate ~root id with
         | None ->
             (* The id is in [crate.declarations] but the crate has no
-               data on it. This shouldn't happen. [FilePlan.place_by_file] also
-               warns if this leaves a whole declaration group without a
-               bucket. *)
+               data on it. This shouldn't happen. *)
             [%warn_opt_span] None
               ("Multi-file extraction: no metadata found for " ^ show_item_id id
              ^ "; it will not appear in the output");
@@ -187,17 +189,20 @@ let compute (crate : crate) : t =
             Some (BucketSet.add dst (Option.value s ~default:BucketSet.empty)))
           !edges
   in
+  let item_uses : item_id list AnyDeclIdMap.t ref = ref AnyDeclIdMap.empty in
   AnyDeclIdMap.iter
     (fun used users ->
-      match bucket_of used with
-      | None -> ()
-      | Some ub ->
-          Deps.ItemInfoSet.iter
-            (fun (user : Deps.item_info) ->
-              match bucket_of user.id with
-              | None -> ()
-              | Some usb -> add_edge usb ub)
-            users)
+      let ub = bucket_of used in
+      Deps.ItemInfoSet.iter
+        (fun (user : Deps.item_info) ->
+          item_uses :=
+            AnyDeclIdMap.update user.id
+              (fun l -> Some (used :: Option.value l ~default:[]))
+              !item_uses;
+          match (ub, bucket_of user.id) with
+          | Some ub, Some usb -> add_edge usb ub
+          | _ -> ())
+        users)
     uses.graph;
 
   (* The SCCs of the bucket graph, dependencies first (see {!t.sccs}). *)
@@ -215,6 +220,7 @@ let compute (crate : crate) : t =
     item_bucket;
     root;
     members = !members;
+    item_uses = !item_uses;
     edges = !edges;
     sccs;
   }

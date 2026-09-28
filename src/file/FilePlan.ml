@@ -171,3 +171,159 @@ let cut_layers ~(opacity : 'a -> group_opacity) ~(deps : 'a -> 'a list)
           ( l mod 2 = 1,
             List.filteri (fun i _ -> placed i = l) (Array.to_list groups) ))
         used
+
+(** The path of the file for the module [components]. An opaque layer is written
+    as a [_Template] file. *)
+let file_of_components ~(module_root_dir : string) ~(is_opaque_layer : bool)
+    (components : string list) : string =
+  module_root_dir ^ "/"
+  ^ String.concat "/" components
+  ^ (if is_opaque_layer then "_Template" else "")
+  ^ ".lean"
+
+(** The files of the module [base], given its layers (see {!cut_layers}).
+    Returns the path of the aggregator, if there is one, and the layers.
+
+    A module with a single layer is a single file at [base]. A module with
+    multiple layers has one file per layer ([base.Part1], [base.Opaques2], ...),
+    and an aggregator at [base] that imports them all. *)
+let module_files ~(import_prefix : string) ~(module_root_dir : string)
+    (base : string list) (layers : (bool * LlbcAst.declaration_group list) list)
+    : string option * component_layer list =
+  (* The layer for the module [components], holding [groups]. *)
+  let layer ~(is_opaque_layer : bool) (components : string list)
+      (groups : LlbcAst.declaration_group list) : component_layer =
+    {
+      is_opaque_layer;
+      import_name = import_prefix ^ FileMapping.dotted_module_name components;
+      filename = file_of_components ~module_root_dir ~is_opaque_layer components;
+      groups;
+    }
+  in
+  match layers with
+  | [] ->
+      (* Nothing to write, so no file. *)
+      (None, [])
+  | [ (is_opaque_layer, groups) ] ->
+      (None, [ layer ~is_opaque_layer base groups ])
+  | layers ->
+      let layers =
+        List.mapi
+          (fun i (is_opaque_layer, groups) ->
+            let components =
+              FileMapping.layer_module_components base
+                ~is_opaque:is_opaque_layer ~index:(i + 1)
+            in
+            layer ~is_opaque_layer components groups)
+          layers
+      in
+      ( Some (file_of_components ~module_root_dir ~is_opaque_layer:false base),
+        layers )
+
+(** The Lean files to write for each component of the file graph, dependencies
+    first.
+
+    A component is named after its source file, or after all of them in the SCC
+    If its declarations need several layers ({!cut_layers}), each layer is its
+    own file and the component's name is an aggregator that imports them all.
+    Declarations without metadata are left out ({!FileGraph.compute} warns about
+    them). *)
+let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
+    ~(import_prefix : string) ~(module_root_dir : string) : component list =
+  let scc_list = SCC.SccId.Map.bindings fg.sccs.sccs in
+  let is_builtin = LlbcAstUtils.item_is_builtin crate in
+  let is_opaque = LlbcAstUtils.item_is_opaque crate in
+  let opacity = group_opacity ~crate ~is_builtin ~is_opaque in
+
+  (* The SCC each bucket is in. *)
+  let bucket_to_scc =
+    SCC.SccId.Map.fold
+      (fun scc_id buckets acc ->
+        List.fold_left (fun acc b -> BucketMap.add b scc_id acc) acc buckets)
+      fg.sccs.sccs BucketMap.empty
+  in
+  (* The SCC a declaration group is in. All the members of a group are in the
+     same SCC, so we use the first one that has a bucket. *)
+  let group_scc (g : LlbcAst.declaration_group) : SCC.SccId.id option =
+    List.find_map
+      (fun id ->
+        Option.bind (LlbcAstUtils.AnyDeclIdMap.find_opt id fg.item_bucket)
+          (fun b -> BucketMap.find_opt b bucket_to_scc))
+      (LlbcAstUtils.declaration_group_to_list g)
+  in
+  (* The declaration groups of each SCC, in [crate.declarations] order (so
+     declarations come before their uses). *)
+  let groups_by_scc : LlbcAst.declaration_group list SCC.SccId.Map.t =
+    SCC.SccId.Map.map List.rev
+      (List.fold_left
+         (fun acc g ->
+           match group_scc g with
+           | None ->
+               (* No member has a bucket: [FileGraph.compute] already warned
+                  about each of them. *)
+               acc
+           | Some scc_id ->
+               SCC.SccId.Map.update scc_id
+                 (function
+                   | None -> Some [ g ]
+                   | Some gs -> Some (g :: gs))
+                 acc)
+         SCC.SccId.Map.empty
+         (Option.get crate.declarations))
+  in
+
+  (* The declaration group of each item. *)
+  let group_of_item =
+    List.fold_left
+      (fun acc g ->
+        List.fold_left
+          (fun acc id -> LlbcAstUtils.AnyDeclIdMap.add id g acc)
+          acc
+          (LlbcAstUtils.declaration_group_to_list g))
+      LlbcAstUtils.AnyDeclIdMap.empty
+      (Option.get crate.declarations)
+  in
+  (* The groups a group uses. [cut_layers] ignores the ones outside the
+     module being cut. *)
+  let group_deps (g : LlbcAst.declaration_group) :
+      LlbcAst.declaration_group list =
+    List.concat_map
+      (fun id ->
+        List.filter_map
+          (fun used -> LlbcAstUtils.AnyDeclIdMap.find_opt used group_of_item)
+          (Option.value
+             (LlbcAstUtils.AnyDeclIdMap.find_opt id fg.item_uses)
+             ~default:[]))
+      (LlbcAstUtils.declaration_group_to_list g)
+  in
+
+  List.map
+    (fun (scc_id, buckets) ->
+      let source_files =
+        List.filter_map
+          (function
+            | BFile p -> Some p
+            | BExternalTypes | BExternalFuns -> None)
+          buckets
+      in
+      let base =
+        match source_files with
+        | [ p ] -> FileMapping.module_components_of_file p
+        | paths -> FileMapping.merged_module_components paths
+      in
+      let groups =
+        Option.value (SCC.SccId.Map.find_opt scc_id groups_by_scc) ~default:[]
+      in
+      let aggregator, layers =
+        module_files ~import_prefix ~module_root_dir base
+          (cut_layers ~opacity ~deps:group_deps groups)
+      in
+      {
+        scc_id;
+        buckets;
+        source_files;
+        import_name = import_prefix ^ FileMapping.dotted_module_name base;
+        aggregator;
+        layers;
+      })
+    scc_list
