@@ -33,15 +33,12 @@ structure SpecInfo where
   mk_spec_bind : Name
   mk_spec_bind_skip_args : Nat
 
-  /-- Name of a function of type `IntroFn` (i.e., `TacticM Nat`) run on the
-  mono/bind premise left by the step theorem, to bring it to the `∀ x, P₀ → ... → Pₘ → k ⦃ Q ⦄`
-  shape `step` introduces the outputs from.
-
-  It is run on the premise as it stands: it may transform or solve it, but must not create
+  /-- It is run on the premise as it stands: it may transform or solve it, but must not create
   multiple goals. What it introduces in the context is reverted, so it can be reintroduced
   later with the names provided by the user.
 
-  It must return the index of the output among the binders of the resulting goal: usually 0. -/
+  It must be of type `IntroFn`, and return the index of the output among the binders
+  of the resulting goal: usually 0. -/
   intro_tactic : Option Lean.Name := none
 
   to_mvcgen: Option Name

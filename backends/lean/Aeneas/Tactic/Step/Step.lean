@@ -64,8 +64,6 @@ meta def scalar_eqs := #[
   ``iscalar_isize_eq, ``iscalar_i8_eq, ``iscalar_i16_eq, ``iscalar_i32_eq, ``iscalar_i64_eq, ``iscalar_i128_eq
 ]
 
-/-- The `()` of a function which returns nothing is not an output: `introOutputs`
-instantiates its binder instead of introducing it. -/
 theorem forall_unit_intro {p : Unit → Prop} (h : p ()) : ∀ value, p value :=
   fun value => match value with | () => h
 
@@ -520,8 +518,8 @@ meta def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) :=
       pure mvar
 
 /-- Attempt to match a given theorem with the monadic call in the target.
-The resulting target should be the registered judgment's mono/bind premise,
-e.g. `∀ x, P x → k x ⦃ Q ⦄` or `∀ x, P₀ x → P₁ x`.
+The resulting target should be mono's or bind's premise:
+e.g. `∀ x, P₀ x → P₁ x` or `∀ x, P x → k x ⦃ Q ⦄`
 -/
 meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th : Expr) :
   TacticM (Array MVarId) := do
@@ -682,11 +680,7 @@ meta def introOneSurfaceBinder {α} (goal : MVarId) (tree : BTree α) :
   let (fv, goal') ← goal.intro tmp
   destructureFVar goal' fv tree
 
-/-- Instantiate the leading binder of the goal when the function returned `()`: the
-unit is not an output, and introducing it would shift the names of the outputs and
-post-conditions which follow.
-
-`goalTy` is the (instantiated) type of `goal`, which must be `∀ x : Unit, body`. -/
+/-- Instantiate the leading binder of the goal when it is a unit. -/
 meta def elimUnitOutput (goal : MVarId) (goalTy : Expr) : MetaM MVarId := goal.withContext do
   let .forallE name _ body info := goalTy
     | throwError "elimUnitOutput: expected a `Unit` binder, got {goalTy}"
@@ -694,18 +688,17 @@ meta def elimUnitOutput (goal : MVarId) (goalTy : Expr) : MetaM MVarId := goal.w
   goal.assign (mkApp2 (mkConst ``forall_unit_intro) (.lam name (mkConst ``Unit) body info) newGoal)
   return newGoal.mvarId!
 
-/-- Extract how the output has to be restructured from the target.
-
-- bind case: the target is `(do let (y, z) ← f x; k y z) ⦃ Q ⦄`, and we read the
-  pattern `(y, z)` from the input of the continuation.
-- mono case: the target is `f x ⦃ (y, z) => Q y z ⦄`, and we read the pattern `(y, z)`
-  from the input of the post-condition.
+/-- Extract the call-site destructure tree from the goal.
+Example for spec/dspec:
+- bind case: if the goal is `(do let (y, z) ← f x; k y z) ⦃ Q ⦄`, then it returns
+  the pattern `(y, z)` from the binding.
+- mono case: if the goal is `f x ⦃ (y, z) => Q y z ⦄`, then it returns pattern `(y, z)`
+  from the postcondition.
 
 Falls back to a single output when the target does not have the expected shape. -/
 meta def getCallSiteTree (info : SpecInfo) (isLet : Bool) (goal : MVarId) :
     MetaM NameTree := do
   let fallback : NameTree := .leaf none
-  /- Instantiate like `getFirstBind` does when computing `isLet`, so that we see the same bind. -/
   let goalTy ← instantiateMVars (← goal.getType)
   let goalTy := goalTy.consumeMData
   let (head, specArgs) := goalTy.withApp fun head args => (head.consumeMData, args)
@@ -717,10 +710,11 @@ meta def getCallSiteTree (info : SpecInfo) (isLet : Bool) (goal : MVarId) :
   else
     getContInput specArgs[info.post_index]!
 
+-- we have to use unsafe since solving for a tactic using a name cannot guarantee
+-- having introFn
 meta unsafe def evalIntroFnUnsafe (name : Name) : TacticM IntroFn :=
   evalConstCheck IntroFn ``IntroFn name
 
-/-- Look up the function registered as an `intro_tactic`. -/
 @[implemented_by evalIntroFnUnsafe]
 meta opaque evalIntroFn (name : Name) : TacticM IntroFn
 
@@ -741,12 +735,10 @@ meta def runIntroTactic (fn : Name) : TacticM Nat := do
     return outputIndex
   | _ => throwError "`intro_tactic` must not create multiple goals"
 
-/-- Reduce tuple projections before naming facts. -/
 meta def reduceOutputProjections : TacticM Unit := do
   Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
     {} (.targets #[] true)
 
-/-- Preserve scalar aliases. -/
 meta def foldScalarTypes : TacticM Unit := do
   withTraceNode `Step (fun _ => pure m!"dsimpAt: folding back scalar types") do
     Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
@@ -784,7 +776,7 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTr
   if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after folding back the scalar types"
 
-  /- Normalize the premise into the `∀ x, P₀ → ... → Pₘ → k ⦃ Q ⦄` shape. -/
+  /- Run the intro_tactic. -/
   let outputIndex ← match info.intro_tactic with
     | some fn => runIntroTactic fn
     | none => pure 0

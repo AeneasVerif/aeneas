@@ -32,18 +32,13 @@ theorem coinSpec_mono {α} {P₁ : Post α} {m : ITreeC α} {P₀ : Post α} (h 
   intros x c
   cases c <;> grind only
 
-/-- The premise of `coinSpec_bind`, named so that the coinduction invariant below can
-mention it. -/
-def qimp_coinSpec {α β} (P : α → Prop) (k : α → ITreeC β) (Q : β → Prop) : Prop :=
-  ∀ x, P x → coinSpec Q (k x)
-
 theorem coinSpec_bind {α β} {k : α -> ITreeC β} {Pₖ : Post β} {m : ITreeC α} {Pₘ : Post α} :
   coinSpec Pₘ m →
   (∀ x, Pₘ x → coinSpec Pₖ (k x)) →
   coinSpec Pₖ (ITree.bind m k) := by
   intro Hm Hk
   refine coinSpec.coinduct _
-    (fun t => ∃ (m : ITreeC α) (k : _), t = ITree.bind m k ∧ coinSpec Pₘ m ∧ qimp_coinSpec Pₘ k Pₖ)
+    (fun t => ∃ (m : ITreeC α) (k : _), t = ITree.bind m k ∧ coinSpec Pₘ m ∧ ∀ x, Pₘ x → coinSpec Pₖ (k x))
     ?_ _ ?_
   · clear k Hk
     -- simp only
@@ -68,7 +63,6 @@ theorem coinSpec_bind {α β} {k : α -> ITreeC β} {Pₖ : Post β} {m : ITreeC
         intros b
         exists (ITree.ret a)
         simp [*, coinSpec.ret]
-        unfold qimp_coinSpec
         exists (fun _ => m' b) -- this seems really weird. is the statement really right?
         simp [*]
     | vis m k =>
