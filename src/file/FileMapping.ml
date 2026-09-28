@@ -150,8 +150,8 @@ let layer_module_components (base : string list) ~(is_opaque : bool)
   base @ [ word ^ string_of_int index ]
 
 (** The module path [base] with [_index] added to its last component, to tell
-    apart two modules with the same name. This is used when we need to disambiguate
-    Lean modules that are generated with the same base path. *)
+    apart two modules with the same name. This is used when we need to
+    disambiguate Lean modules that are generated with the same base path. *)
 let indexed_module_components (base : string list) ~(index : int) : string list
     =
   match List.rev base with

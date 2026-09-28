@@ -1924,7 +1924,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
            [Foo_Types.fst], [Foo_Funs.fst], etc.
          *)
         let filebasename =
-          if !Config.split_files then
+          if !Config.split_files_legacy then
             if Config.backend () = Lean then full_dest_dir ^ "/"
             else Filename.concat full_dest_dir crate_name ^ module_delimiter
           else Filename.concat full_dest_dir crate_name
@@ -2039,7 +2039,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
     flush stdout);
 
   (* Extract one or several files, depending on the configuration *)
-  (if !Config.split_files then (
+  (if !Config.split_files_legacy then (
      let base_gen_config =
        {
          extract_types = false;
@@ -2312,7 +2312,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
        * Generate the library entry point, if the crate is split between
        * different files.
        *)
-      if !Config.split_files && !Config.generate_lib_entry_point then (
+      if !Config.split_files_legacy && !Config.generate_lib_entry_point then (
         let filename = Filename.concat dest_dir (crate_name ^ ".lean") in
         let out = open_out filename in
         if !Config.use_lean_modules then (

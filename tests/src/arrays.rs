@@ -2,7 +2,7 @@
 //@ [coq,fstar] subdir=arrays
 //@ [coq,fstar] aeneas-args=-loops-to-rec
 //@ [fstar] aeneas-args=-decreases-clauses
-//@ [fstar] aeneas-args=-split-files
+//@ [fstar] aeneas-args=-split-files-legacy
 //! Exercise the translation of arrays, with features supported by Eurydice
 
 pub enum AB {
