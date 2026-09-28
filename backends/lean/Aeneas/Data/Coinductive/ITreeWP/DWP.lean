@@ -99,26 +99,6 @@ theorem DWP.bind
       rw [itree_vis_bind]
       exact .vis hWp
 
-theorem DWP.mono_le (hLe : m ⊑ m') (hSpec : DWP θ m Q s) :
-    DWP θ m' Q s := by
-  refine hSpec.induction
-    (P := fun t u => ∀ t', t ⊑ t' → DWP θ t' Q u) ?_ ?_ m' hLe
-  · intro value s' hPost t' hLe'
-    rw [ITree.le_unfold] at hLe'
-    obtain hDiv | ⟨value', hRet, rfl⟩ | ⟨_, _, _, hVis, _, _⟩ := hLe'
-    · exact absurd hDiv not_ret_div
-    · obtain rfl := ret_inj.mp hRet
-      exact DWP.ret_iff.mpr hPost
-    · exact absurd hVis not_vis_ret
-  · intro event k s' hWp t' hLe'
-    rw [ITree.le_unfold] at hLe'
-    obtain hDiv | ⟨_, hRet, _⟩ | ⟨_, k₁, k₂, hVis, rfl, hLe''⟩ := hLe'
-    · exact absurd hDiv.symm not_div_vis
-    · exact absurd hRet.symm not_vis_ret
-    · obtain ⟨rfl, hCont⟩ := vis_inj hVis
-      obtain rfl := eq_of_heq hCont
-      exact .vis (θ.wp_mono (fun answer _ hNext => hNext _ (hLe'' answer)) hWp)
-
 end
 
 end Aeneas.Data.Coinductive

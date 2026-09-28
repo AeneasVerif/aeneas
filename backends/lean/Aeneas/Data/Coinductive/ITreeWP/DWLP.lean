@@ -97,19 +97,6 @@ theorem DWLP.bind
         exact θ.wp_mono (fun _ _ hChild => Or.inl ⟨_, rfl, hChild⟩) hSpec.vis_view
   · exact hSpec.step.mono id (fun _ _ => id) fun _ _ => Or.inr
 
-theorem DWLP.mono_le (hLe : m ⊑ m') (hSpec : DWLP θ m' Q s) :
-    DWLP θ m Q s := by
-  refine coinduction (fun t s' => ∃ t', t ⊑ t' ∧ DWLP θ t' Q s') ?_
-    ⟨m', hLe, hSpec⟩
-  rintro t s' ⟨t', hLe', hSpec'⟩
-  rw [ITree.le_unfold] at hLe'
-  obtain rfl | ⟨value, rfl, rfl⟩ | ⟨event, k, k', rfl, rfl, hCont⟩ := hLe'
-  · simp only [FunctionalWP.div]
-  · simpa only [FunctionalWP.ret] using DWLP.ret_iff.mp hSpec'
-  · simp only [FunctionalWP.vis]
-    exact θ.wp_mono (fun answer _ hNext => ⟨_, hCont answer, hNext⟩)
-      hSpec'.vis_view
-
 /-- Partial correctness is admissible. -/
 theorem DWLP.admissible (θ : EffectWP E) [θ.Monotone] [θ.Conjunctive]
     (Q : θ.Post α) (s : θ.State) :

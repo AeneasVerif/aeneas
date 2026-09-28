@@ -14,7 +14,6 @@ variable {E : Effect.{v}} {α : Type u} {θ : EffectWP.{w, v} E}
 local infix:50 " ≤ " => entails
 private theorem entails_iff_le {P P' : θ.Post α} : entails P P' ↔ LE.le P P' := Iff.rfl
 
-/-- We lift the WP of an event (`EffectWP`) to a WP for ITrees. -/
 
 abbrev ITreePred (θ : EffectWP E) (α : Type u) := θ.Post (ITree E α)
 
@@ -24,6 +23,7 @@ private noncomputable instance ITreePred.instCompleteLattice : CompleteLattice (
 -- EffectWP      : (event : E.I) →           (E.O event → State → Prop) → (State → Prop)
 -- FunctionalWP  : (X : ITree E α -> Prop) → (E.O event → State → Prop) → (ITree E α → Prop)
 
+/-- Lift the WP of an event (`EffectWP`) to a WP for ITrees. -/
 @[expose] def FunctionalWP (allowDivergence : Prop) (θ : EffectWP E) (Q : θ.Post α)
     (X : ITreePred θ α) : ITreePred θ α :=
   fun m s =>
@@ -47,7 +47,6 @@ theorem FunctionalWP.vis :
       θ.wp event (fun answer s' => X (k answer) s') s := by
   simp only [FunctionalWP, ITree.cases.vis]
 
-/-- For monotone event WPs, `FunctionalWP` is monotone in all its arguments. -/
 theorem FunctionalWP.mono [θ.Monotone]
     (hDiv : allowDivergence → allowDivergence')
     (hQ : Q ≤ Q')
