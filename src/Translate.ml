@@ -1456,6 +1456,24 @@ let extract_file ?(groups : declaration_group list option) (config : gen_config)
   (* Flush and close the file *)
   close_out out
 
+(** The "extract everything" [gen_config], shared by the single-file extraction
+    and [-split-files] (which each emit all declaration kinds into one module,
+    unlike the by-kind legacy split). *)
+let full_extraction_config () : gen_config =
+  {
+    extract_types = true;
+    extract_decreases_clauses = !Config.extract_decreases_clauses;
+    extract_template_decreases_clauses =
+      !Config.extract_template_decreases_clauses;
+    extract_fun_decls = true;
+    extract_trait_decls = true;
+    extract_trait_impls = true;
+    extract_transparent = true;
+    extract_opaque = true;
+    extract_globals = true;
+    interface = false;
+  }
+
 let extract_translated_crate (filename : string) (dest_dir : string)
     (subdir : string option) (crate : crate) (trans_ctx : trans_ctx)
     (trans_crate : translated_crate) (extracted_opaque : bool ref) : unit =
@@ -2109,21 +2127,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
      in
      extract_file fun_config ctx file_info)
    else
-     let gen_config =
-       {
-         extract_types = true;
-         extract_decreases_clauses = !Config.extract_decreases_clauses;
-         extract_template_decreases_clauses =
-           !Config.extract_template_decreases_clauses;
-         extract_fun_decls = true;
-         extract_trait_decls = true;
-         extract_trait_impls = true;
-         extract_transparent = true;
-         extract_opaque = true;
-         extract_globals = true;
-         interface = false;
-       }
-     in
+     let gen_config = full_extraction_config () in
      let file_info =
        {
          filename = extract_filebasename ^ ext;
