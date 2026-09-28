@@ -61,6 +61,7 @@
   ExtractErrors
   ExtractName
   ExtractTypes
+  FileGraph
   FileMapping
   FunsAnalysis
   GitVersion
