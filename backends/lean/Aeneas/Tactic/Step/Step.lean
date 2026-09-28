@@ -646,13 +646,15 @@ meta def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array E
   Utils.addDeclTac name e (← inferType e) (asLet := false) fun e => do
     trace[Step] "Introduced the \"pretty\" let binding: {← inferType e}"
 
-/-- Create the output leaves in call-site order and reconstruct their tuple. -/
+/-- Introduce one local variable per leaf of `tree`, then pass the variables and their
+tuple to `k`. For type `(A × B) × C` and pattern `((a, b), c)`, call
+`k #[a, b, c] ((a, b), c)`. A leaf of type `A × B` stays a single variable. -/
 meta partial def withOutputTuple {α β} (ty : Expr) (tree : BTree α)
     (k : Array Expr → Expr → MetaM β) : MetaM β := do
   match tree with
   | .leaf _ => withLocalDeclD `x ty fun x => k #[x] x
   | .pair l r =>
-    let ty ← whnf ty
+    let ty ← withReducible <| whnf ty
     match_expr ty with
     | Prod a b =>
       withOutputTuple a l fun xs x =>
@@ -660,7 +662,9 @@ meta partial def withOutputTuple {α β} (ty : Expr) (tree : BTree α)
         k (xs ++ ys) (← mkAppM ``Prod.mk #[x, y])
     | _ => throwError "Expected a product for the output pattern, got {ty}"
 
-/-- Build the desired output telescope before simplifying anything. -/
+/-- Replace the quantified output with binders matching `tree`.
+For `∀ p : (A × B) × C, R p` and pattern `((a, b), c)`, return
+`(∀ a b c, R ((a, b), c), 3)`. Unit outputs are replaced with `()`. -/
 meta def mkOutputTarget (type : Expr) (tree : NameTree) : MetaM (Expr × Nat) := do
   let type ← withTransparency .all <| whnf type
   let .forallE _ ty body _ := type | return (type, 0)
@@ -679,8 +683,10 @@ meta def extractCallSiteTree (goalTy : Expr) : MetaM (Option NameTree) := do
   | Std.WP.qimp _ _ Q => return some (← getContInput Q)
   | _ => return none
 
-/-- Build an output telescope in call-site order, prove it equivalent to the original
-goal with `simp`, then introduce the outputs and postconditions. -/
+/-- Update the target so that outputs are quantified in call-site order.
+For example, `qimp_spec P k Q` with pattern `((a, b), c)` becomes
+`∀ a b c, P ((a, b), c) → k ((a, b), c) ⦃ Q ⦄`.
+Prove equivalence with `simp`, then introduce outputs and postconditions. -/
 meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState : StepState) :
   TacticM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"introOutputs") do
@@ -725,6 +731,8 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
   let mkFreshAnon (isProp : Bool) :=
     if isProp then mkFreshAnonPropUserName else mkFreshUserName `x
 
+  /- Names for the already-introduced output fvars (one name per leaf): we use the
+     user-provided ids when available, and generate fresh names otherwise. -/
   let outputIds ← (Array.range prefixLength).mapM fun i => do
     if h : i < args.ids.size then
       match args.ids[i] with
@@ -732,11 +740,20 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
       | none => mkFreshUserName `x
     else mkFreshUserName `x
 
+  /- Associate every output fvar with the name we picked for it, so that when naming the
+     post-conditions we can resolve references to the outputs back to those names. -/
   let outputNames : Std.HashMap FVarId Name :=
     (Array.range prefixLength).foldl (init := ∅) fun m i =>
       m.insert outputFVars[i]! outputIds[i]!
 
-  /- Prefer explicit names; otherwise name relational postconditions after their outputs. -/
+  /- Now compute the prop-status and the names of the remaining leading binders (these are
+     the post-conditions and existential variables to introduce).
+
+     We prefer user-provided names, and for non-Props we generate fresh names. For Props we
+     analyze the type of the hypothesis: if it is of the form `<id> <binrel> _` (or `_ <binrel> <id>`)
+     then we prefer using `<id>_post<idx>`, so that each post-condition is named after the output
+     it constrains. We compute the names here, while the binders' types are still at hand,
+     and use them further below when actually introducing the binders. -/
   let goal ← getMainGoal
   let (postsIsProp, postsIdsArr) ← goal.withContext do
     let type ← instantiateMVars (← goal.getType)
@@ -745,11 +762,14 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
         let ty ← inferType fv
         pure (ty, ← isProp ty)
 
+      /- Total number of "logical" outputs+post slots, used for the user-provided-id check. -/
       let totalSlots := prefixLength + typesAndProps.size
       if totalSlots < args.ids.size ∧ args.idsUserProvided then
         logWarning m!"Too many ids provided ({args.ids}): expected ≤ {totalSlots} ids, got {args.ids.size}"
 
       let mut postsIds : Array Name := #[]
+      /- How many post-conditions we already named after a given base name, used to
+         disambiguate several post-conditions constraining the same output. -/
       let mut postCounts : Std.HashMap Name Nat := ∅
       for h : i in [0:typesAndProps.size] do
         let (ty, tyIsProp) := typesAndProps[i]

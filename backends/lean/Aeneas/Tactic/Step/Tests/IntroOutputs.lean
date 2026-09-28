@@ -509,6 +509,14 @@ example :
 
 end
 
+/- Product abbreviations can be inspected using reducible transparency. -/
+abbrev NestedOutput := (Nat × Nat) × Nat
+
+example (f : Result NestedOutput) (h : f ⦃ p => p = ((1, 2), 3) ⦄) :
+    (do let ((a, b), c) ← f; ok (a + b + c)) ⦃ r => r = 6 ⦄ := by
+  step with h as ⟨a, b, c, ha, hb, hc⟩
+  simp [ha, hb, hc]
+
 def genericPair {α : Type u} (x : α) : Result (α × Nat) := ok (x, 1)
 
 @[step]
@@ -522,7 +530,8 @@ example {α : Type u} (x : α) :
       ⦃ (y : α) (k : Nat) => y = x ∧ k = 2 ⦄ := by
   step*
 
-/- Local type dependencies must remain in scope when proving the equivalence. -/
+/- The output type `Vector α size` refers to local lets `size` and `n`.
+   Check that constructing the target and proving equivalence preserve those references. -/
 example {α : Type u} (m : Nat) :
     let n := m + 1
     let size := n + 1
@@ -532,6 +541,7 @@ example {α : Type u} (m : Nat) :
   intro n size x
   step*
 
+/- Also cover a local `have` used in the output type. -/
 example (m : Nat) :
     have n := m + 1
     ∀ x : Vector Nat n,
@@ -547,7 +557,7 @@ example :
   step with nestedProg_spec as ⟨a, b, c, ha, hb, hc⟩
   simp [ha, hb, hc]
 
-/- Unit outputs disappear even when the postcondition depends on them. -/
+/- Outputs of type unit disappear even when the postcondition uses them explicitly. -/
 def unitProg : Result Unit := ok ()
 
 @[step]
