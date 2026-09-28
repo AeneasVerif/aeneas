@@ -60,6 +60,7 @@
   ExtractErrors
   ExtractName
   ExtractTypes
+  FileMapping
   FormatCompat
   FunsAnalysis
   GitVersion
