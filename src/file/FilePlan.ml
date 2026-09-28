@@ -28,13 +28,20 @@ type component = {
   source_files : string list;
       (** Its source files, relative to the crate's source root. Empty for an
           external component. *)
+  is_external : bool;
+      (** [true] for the external modules ([TypesExternal] / [FunsExternal]). *)
+  is_dropped : bool;
+      (** [true] for external modules whose referenced declarations are all
+          builtins: we neither emit them nor import them from local modules.
+          Implies [is_external]. *)
   import_name : string;
       (** The Lean name other files import, e.g. [Crate.Foo]. *)
   aggregator : string option;
       (** [Some filename] if there are several layers: an imports-only file at
           [import_name] that imports them all. *)
   layers : component_layer list;
-      (** In import order. With a single layer, its file is at [import_name]. *)
+      (** In import order. With a single layer, its file is at [import_name].
+          Empty iff [is_dropped]. *)
 }
 
 (** The directory the Lean files go in: [D/Crate/], next to the [D/Crate.lean]
@@ -297,6 +304,13 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
       (LlbcAstUtils.declaration_group_to_list g)
   in
 
+  (* Whether a declaration group has a non-builtin opaque. *)
+  let group_has_opaques (g : LlbcAst.declaration_group) : bool =
+    List.exists
+      (fun id -> (not (is_builtin id)) && is_opaque id)
+      (LlbcAstUtils.declaration_group_to_list g)
+  in
+
   List.map
     (fun (scc_id, buckets) ->
       let source_files =
@@ -306,22 +320,69 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
             | BExternalTypes | BExternalFuns -> None)
           buckets
       in
-      let base =
-        match source_files with
-        | [ p ] -> FileMapping.module_components_of_file p
-        | paths -> FileMapping.merged_module_components paths
+      let is_external =
+        List.exists
+          (function
+            | BFile _ -> false
+            | BExternalTypes | BExternalFuns -> true)
+          buckets
       in
+      (* SCCs that mix external and non-external buckets are impossible, since
+         an external declaration can't use a local one. *)
+      if is_external && source_files <> [] then
+        [%craise_opt_span] None
+          ("Multi-file extraction: external declarations ended up in a \
+            dependency cycle with local source file(s) ("
+          ^ String.concat ", " source_files
+          ^ ").");
       let groups =
         Option.value (SCC.SccId.Map.find_opt scc_id groups_by_scc) ~default:[]
       in
+      (* An external SCC has nothing to emit iff all its declarations are
+         builtins: dropping it avoids an empty file. *)
+      let is_dropped =
+        is_external
+        && List.for_all
+             (fun g ->
+               List.for_all is_builtin
+                 (LlbcAstUtils.declaration_group_to_list g))
+             groups
+      in
+      let base =
+        if is_external then
+          let suffix =
+            if
+              List.exists
+                (function
+                  | BExternalFuns -> true
+                  | _ -> false)
+                buckets
+            then "FunsExternal"
+            else "TypesExternal"
+          in
+          [ suffix ]
+        else
+          match source_files with
+          | [ p ] -> FileMapping.module_components_of_file p
+          | paths -> FileMapping.merged_module_components paths
+      in
+      let layers =
+        if is_dropped then []
+        else if is_external then
+          (* The external modules are never layered. One [_Template] file iff
+             anything in it is opaque. *)
+          [ (List.exists group_has_opaques groups, groups) ]
+        else cut_layers ~opacity ~deps:group_deps groups
+      in
       let aggregator, layers =
-        module_files ~import_prefix ~module_root_dir base
-          (cut_layers ~opacity ~deps:group_deps groups)
+        module_files ~import_prefix ~module_root_dir base layers
       in
       {
         scc_id;
         buckets;
         source_files;
+        is_external;
+        is_dropped;
         import_name = import_prefix ^ FileMapping.dotted_module_name base;
         aggregator;
         layers;
