@@ -1853,6 +1853,20 @@ let extract_translated_crate (filename : string) (dest_dir : string)
   in
   let has_opaque = has_opaque_types || has_opaque_funs in
 
+  (* The file graph (SCCs), computed lazily: nothing needs it unless
+     [-dump-file-graph] is set. *)
+  let file_graph = lazy (FileGraph.compute crate) in
+
+  (* Diagnostic: print the file-dependency graph, then continue extraction. *)
+  if !Config.dump_file_graph then (
+    let get_name (id : Types.item_id) : string =
+      match LlbcAstUtils.crate_get_item_meta crate id with
+      | Some m -> name_to_string trans_ctx m.name
+      | None -> "<unknown item>"
+    in
+    print_string (FileGraph.graph_to_string (Lazy.force file_graph) ~get_name);
+    flush stdout);
+
   (* Extract one or several files, depending on the configuration *)
   (if !Config.split_files then (
      let base_gen_config =

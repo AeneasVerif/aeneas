@@ -218,3 +218,90 @@ let compute (crate : crate) : t =
     edges = !edges;
     sccs;
   }
+
+(** How to name a bucket to the user: a file bucket's actual path on disk or a
+    placeholder for the external buckets. *)
+let bucket_to_string (b : bucket) : string =
+  match b with
+  | BFile p -> p
+  | BExternalTypes -> "<external types>"
+  | BExternalFuns -> "<external funs>"
+
+(** The report printed by [-dump-file-graph]: the buckets with their
+    declarations, the edges between buckets, and the strongly connected
+    components. [get_name] gives the Rust name of an item, for display. *)
+let graph_to_string (graph : t) ~(get_name : item_id -> string) : string =
+  let buf = Buffer.create 1024 in
+  let line fmt =
+    Printf.ksprintf (fun s -> Buffer.add_string buf (s ^ "\n")) fmt
+  in
+
+  let bucket_list = List.map fst (BucketMap.bindings graph.members) in
+  let merges =
+    List.filter
+      (fun (_, bs) -> List.length bs > 1)
+      (SCC.SccId.Map.bindings graph.sccs.sccs)
+  in
+
+  line "================ FILE GRAPH ================";
+  line "Crate: %s" graph.crate_name;
+  line "Source root: %s"
+    (match graph.root with
+    | [] -> "<directory cargo ran in>"
+    | root -> String.concat "/" root);
+  line "Buckets: %d   Forced merges (cyclic SCCs): %d" (List.length bucket_list)
+    (List.length merges);
+  line "";
+
+  line "---- Buckets and their declarations ----";
+  List.iter
+    (fun b ->
+      let ids = Option.value (BucketMap.find_opt b graph.members) ~default:[] in
+      line "%s  (%d declarations)" (bucket_to_string b) (List.length ids);
+      List.iter
+        (fun id ->
+          line "    [%-11s] %s" (item_id_to_kind_name id) (get_name id))
+        (List.rev ids))
+    bucket_list;
+  line "";
+
+  line "---- Bucket dependency edges (importer -> imported) ----";
+  List.iter
+    (fun b ->
+      let deps =
+        Option.value (BucketMap.find_opt b graph.edges) ~default:BucketSet.empty
+      in
+      if not (BucketSet.is_empty deps) then
+        line "    %s  ->  %s" (bucket_to_string b)
+          (String.concat ", "
+             (List.map bucket_to_string (BucketSet.elements deps))))
+    bucket_list;
+  line "";
+
+  line "---- Strongly-connected components ----";
+  line "Each SCC becomes one Lean module; an SCC with >1 bucket is a forced";
+  line "merge (those source files must share a single Lean module).";
+  List.iter
+    (fun (scc_id, bs) ->
+      let dep_ids =
+        Option.value
+          (SCC.SccId.Map.find_opt scc_id graph.sccs.scc_deps)
+          ~default:SCC.SccId.Set.empty
+      in
+      let deps_str =
+        if SCC.SccId.Set.is_empty dep_ids then ""
+        else
+          "   (depends on SCC "
+          ^ String.concat ", "
+              (List.map SCC.SccId.to_string (SCC.SccId.Set.elements dep_ids))
+          ^ ")"
+      in
+      let tag = if List.length bs > 1 then "  <== MERGED (cyclic)" else "" in
+      line "  SCC %s: %s%s%s"
+        (SCC.SccId.to_string scc_id)
+        (String.concat " + " (List.map bucket_to_string bs))
+        deps_str tag)
+    (SCC.SccId.Map.bindings graph.sccs.sccs);
+  line "=======================================================================";
+
+  Buffer.contents buf
