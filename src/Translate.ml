@@ -2024,9 +2024,18 @@ let extract_translated_crate (filename : string) (dest_dir : string)
   in
   let has_opaque = has_opaque_types || has_opaque_funs in
 
-  (* The file graph (SCCs), computed lazily: nothing needs it unless
-     [-dump-file-graph] is set. *)
+  (* The file graph is only computed if [-dump-file-graph] or [-split-files]
+     needs it, and the placement only in [-split-files] mode. *)
   let file_graph = lazy (FileGraph.compute crate) in
+  let placement =
+    if !Config.split_files then
+      Some
+        (FilePlan.place_by_file (Lazy.force file_graph) ~crate ~import_prefix
+           ~module_root_dir:
+             (FilePlan.module_root_dir ~subdir ~full_dest_dir ~crate_name)
+           ~all_computable:!Config.all_computable)
+    else None
+  in
 
   (* Diagnostic: print the file-dependency graph, then continue extraction. *)
   if !Config.dump_file_graph then (
@@ -2038,8 +2047,14 @@ let extract_translated_crate (filename : string) (dest_dir : string)
     print_string (FileGraph.graph_to_string (Lazy.force file_graph) ~get_name);
     flush stdout);
 
-  (* Extract one or several files, depending on the configuration *)
-  (if !Config.split_files_legacy then (
+  (* Extract one or several files, depending on the configuration.
+     [placement] is [Some] exactly in [-split-files] mode. *)
+  (match placement with
+  | Some components ->
+      extract_by_file ctx crate ~dest_dir ~subdir ~namespace ~crate_name
+        ~fg:(Lazy.force file_graph) ~components
+  | None ->
+  if !Config.split_files_legacy then (
      let base_gen_config =
        {
          extract_types = false;
