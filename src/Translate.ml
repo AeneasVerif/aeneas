@@ -1104,9 +1104,10 @@ let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
 
 (** A generic utility to generate the extracted definitions: as we may want to
     split the definitions between different files (or not), we can control what
-    is precisely extracted. *)
-let extract_definitions (fmt : Format.formatter) (config : gen_config)
-    (ctx : gen_ctx) : unit =
+    is precisely extracted, with the [gen_config] flags and [groups] (all the
+    declaration groups of the crate by default). *)
+let extract_definitions ?(groups : declaration_group list option)
+    (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx) : unit =
   (* Export the definition groups to the file, in the proper order.
      - [extract_decl]: extract the type declaration (if not filtered)
      - [extract_extra_info]: extra the extra type information (e.g.,
@@ -1256,13 +1257,17 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
           "Mixed-recursive declaration groups are not supported"
   in
 
+  (* The groups to extract: all of them by default. *)
+  let groups =
+    Option.value groups ~default:(Option.get ctx.crate.declarations)
+  in
   List.iter
     (fun g ->
       try export_decl_group g
       with CFailure _ ->
         (* An exception was raised: ignore it *)
         ())
-    (Option.get ctx.crate.declarations)
+    groups
 
 type extract_file_info = {
   filename : string;
@@ -1280,8 +1285,8 @@ type extract_file_info = {
           of the file *)
 }
 
-let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
-    : unit =
+let extract_file ?(groups : declaration_group list option) (config : gen_config)
+    (ctx : gen_ctx) (fi : extract_file_info) : unit =
   (* Open the file and create the formatter *)
   let out = open_out fi.filename in
   let fmt = Format.formatter_of_out_channel out in
@@ -1424,7 +1429,7 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
   Format.pp_open_vbox fmt 0;
 
   (* Extract the definitions *)
-  extract_definitions fmt config ctx;
+  extract_definitions ?groups fmt config ctx;
 
   (* Close the box and end the formatting *)
   Format.pp_close_box fmt ();
