@@ -5,12 +5,10 @@ public import Aeneas.Std.Spec
 public section
 
 /-!
-# Normalizing the premise of a step theorem
 
 After applying a step theorem, `step` is left with a target `∀ outputs, fact → k outputs`,
-which the `intro_tactic` of the judgment has to bring to the shape `step` introduces: one
-binder per fact. `normalizeTarget` does so for judgments whose premise is a plain
-implication, such as `Std.WP.spec` (see `Std.WP.introTactic`). For instance, it rewrites
+which the `intro_tactic` can process how the shape `step` introduces the hypothesis
+For instance, it rewrites
 ```
 ∀ x, uncurry' (fun a b => ∃ y, P a b ∧ Q a b y) x → k x ⦃ r => R r ⦄
 ```
@@ -18,25 +16,20 @@ to
 ```
 ∀ x y, P x.1 x.2 → Q x.1 x.2 y → k x ⦃ r => R r ⦄
 ```
-in three steps, one per section below: reduce the `uncurry'` marker, simplify the fact, and
-split its `∧`s and `∃`s into binders. The outputs stay the leading binders: the existential
-witnesses always come after them, including for a postcondition with a single binder such as
-`⦃ r => ∃ y, P r y ⦄`.
 
-`normalizeTarget` rewrites the goal; it does not introduce the fact as a hypothesis and then
-simplify that hypothesis. This matters for recursive specifications: `decreasing_by` sees
+`normalizeTarget` rewrites the goal; it does not introduce anything.
+This matters for recursive specifications: `decreasing_by` sees
 the hypotheses that the proof term binds around the recursive call. If we introduced
 `h : uncurry' (…) x` and simplified it afterwards, the proof term would still bind `h` with
 its original, unsplit type, and that is what the termination proof would get. Rewriting the
-goal first makes the proof term bind the split facts directly
-(see `Tests/IntroRecursion.lean`).
+goal first makes the proof term bind the split facts directly.
 -/
 
 namespace Aeneas.Step.Intro
 
 open Lean Meta Elab Tactic
 
-/-! ## Step 1: markers -/
+/-! ## Step 1: reduction -/
 
 /-- Whether `e` consists only of outputs, projections, and constructors. -/
 meta partial def isOutputLike (e : Expr) : MetaM Bool := do
@@ -54,14 +47,8 @@ meta partial def isOutputLike (e : Expr) : MetaM Bool := do
         return ← isOutputLike args[info.numParams]
   return false
 
-/-- Reduce `e` if it is an application of one of the `markers`, the definitions the
-postcondition notation of the judgment wraps its body in: `uncurry' p x` reduces to
-`p x.1 x.2`.
-
-A marker is only reduced if it unfolds to a match with a single alternative on outputs
-(see `isOutputLike`), so that program computations are never evaluated. -/
+/-- Reduce `e` if it is an application of one of the `markers` by unfolding the marker. -/
 meta def reduceMarker? (markers : Array Name) (e : Expr) : MetaM (Option Expr) := do
-  let e := (← instantiateMVars e).consumeMData.headBeta
   let .const name _ := e.getAppFn | return none
   unless markers.contains name do return none
   let some unfolded ← unfoldDefinition? e | return none
@@ -70,27 +57,11 @@ meta def reduceMarker? (markers : Array Name) (e : Expr) : MetaM (Option Expr) :
   for discr in matcher.discrs do
     unless ← isOutputLike discr do return none
   match ← Lean.Meta.reduceMatcher? unfolded with
-  | .reduced reduced => return some reduced
+  | .reduced reduced => return some reduced.headBeta
   | _ => return none
 
-/-- Reduce up to `fuel` markers at the head of `e`. -/
-meta partial def reduceMarkers (markers : Array Name) (e : Expr) (fuel : Nat := 16) :
-    MetaM Expr := do
-  let e := (← instantiateMVars e).consumeMData.headBeta
-  match fuel with
-  | 0 => return e
-  | fuel + 1 =>
-    match ← reduceMarker? markers e with
-    | some e' => reduceMarkers markers e' fuel
-    | none => return e
-
-/-! ## Step 2: simplification -/
-
-theorem forall_unit {p : Prop} : (Unit → p) ↔ p :=
-  ⟨fun h => h (), fun h _ => h⟩
-
-/-- Whether `normalizeFact` looks inside `e`: logical connectives, and matches (which are
-entered, but not split). -/
+/-- Whether `reduceFact` and `normalizeFact` look inside `e`: logical connectives, and
+matches (which are entered, but not split). -/
 private meta def isLogical (e : Expr) : MetaM Bool := do
   if e.isForall || e.isLambda || e.isLet then return true
   if [``And, ``Or, ``Exists, ``Not, ``Eq, ``Iff, ``ite, ``dite].any e.isAppOf then return true
@@ -110,11 +81,27 @@ meta partial def unfoldReducibleFact? (e : Expr) : MetaM (Option Expr) := do
   if e'.isAppOfArity ``And 2 || e'.isAppOfArity ``Exists 2 then return some e'
   unfoldReducibleFact? e'
 
-/-- Normalize a fact: reduce the markers anywhere in its logical structure (see
-`isLogical`), unfold the reducible definitions standing for a conjunction or an existential,
-eliminate defining existentials, and drop trivial conjuncts and premises. Other program
-terms are left alone, so that bundled postconditions stay bundled. -/
-meta def normalizeFact (markers : Array Name) (type : Expr) : MetaM Simp.Result := do
+/-- Reduce the markers and unfold the reducible definitions standing for a conjunction or an
+existential, anywhere in the logical structure of `e` (see `isLogical`). The result is
+definitionally equal to `e`. -/
+meta def reduceFact (markers : Array Name) (e : Expr) : MetaM Expr := do
+  let pre (e : Expr) : MetaM TransformStep := do
+    if e.isMData then return .continue
+    if let some e' ← reduceMarker? markers e then return .visit e'
+    if ← isLogical e then return .continue
+    if let some e' ← unfoldReducibleFact? e then return .visit e'
+    return .done e
+  withTransparency .default <| Meta.transform (← instantiateMVars e) (pre := pre)
+
+/-! ## Step 2: simplification -/
+
+theorem forall_unit {p : Prop} : (Unit → p) ↔ p :=
+  ⟨fun h => h (), fun h _ => h⟩
+
+/-- Simplify a fact, in its logical structure (see `isLogical`): eliminate defining
+existentials, and drop trivial conjuncts and premises. Other program terms are left alone,
+so that bundled postconditions stay bundled. -/
+meta def normalizeFact (type : Expr) : MetaM Simp.Result := do
   let names := #[
     /- Defining existentials: `∃ y, y = e ∧ P y` becomes `P e`. -/
     ``exists_eq_left, ``exists_eq_left', ``exists_eq_right, ``exists_eq_right',
@@ -126,11 +113,7 @@ meta def normalizeFact (markers : Array Name) (type : Expr) : MetaM Simp.Result 
   let ctx ← Simp.mkContext { iota := false, zeta := false, dsimp := false }
     (simpTheorems := #[thms])
   let pre : Simp.Simproc := fun e => do
-    /- Simp runs with reducible transparency, which would not unfold the markers. -/
-    if let some e' ← withTransparency .default (reduceMarker? markers e) then
-      return .visit { expr := e'.headBeta }
     if ← isLogical e then return ← Simp.preDefault #[] e
-    if let some e' ← unfoldReducibleFact? e then return .visit { expr := e' }
     return .done { expr := e }
   let (result, _) ← Simp.main type ctx (methods := { Simp.mkDefaultMethodsCore #[] with pre })
   return result
@@ -224,11 +207,12 @@ meta def normalizeTarget (markers : Array Name) (goal : MVarId) :
 
     /- Steps 1–2: reduce the markers and simplify the fact, with `factEq? : dom = fact`.
        When the continuation depends on the proof of the fact, the fact can only be changed
-       up to definitional equality: we then only reduce the markers at its head. -/
+       up to definitional equality: we then skip the simplification. -/
+    let dom ← reduceFact markers dom
     let (fact, factEq?) ←
-      if body.hasLooseBVars then pure (← reduceMarkers markers dom, none)
+      if body.hasLooseBVars then pure (dom, none)
       else
-        let result ← normalizeFact markers dom
+        let result ← normalizeFact dom
         pure (result.expr, result.proof?)
     /- Example: `fact = ∃ y, P x.1 x.2 ∧ Q x.1 x.2 y`. -/
 
