@@ -883,7 +883,7 @@ end Aeneas.Std
 namespace Aeneas.Std.WP
 
 /-- The `intro_tactic` of `spec` and `dspec`. -/
-meta def introTactic : IntroFn := do
+elab (name := introTactic) "intro_spec" : tactic => do
   let markers := #[``Aeneas.Std.WP.uncurry', ``Aeneas.Std.uncurry]
   if let some goal ← Aeneas.Step.Intro.normalizeTarget markers
       (← Lean.Elab.Tactic.getMainGoal) then
@@ -893,7 +893,6 @@ meta def introTactic : IntroFn := do
     { addSimpThms := #[``and_imp, ``exists_imp, ``true_imp_iff,
         ``Aeneas.Step.Intro.forall_unit] }
     (.targets #[] true)
-  return 0
 
 #register_spec_info {
     spec_name := ``Std.WP.spec

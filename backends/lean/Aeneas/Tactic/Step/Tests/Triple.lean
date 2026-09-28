@@ -62,10 +62,8 @@ theorem triple_step_bind {P Pm : Pre} {next : α → TestM β}
 
 /- intro tactic: expose the binders of `Post.entails`, and let `Std.WP.introTactic` normalize
    and split the facts among them. -/
-open Lean Elab Tactic in
-meta def introEntails : Aeneas.IntroFn := do
-  evalTactic (← `(tactic| try rw [Post.entails_iff]))
-  Aeneas.Std.WP.introTactic
+macro (name := introEntails) "intro_entails" : tactic =>
+  `(tactic| (try rw [Post.entails_iff]; intro_spec))
 
 #register_spec_info {
     spec_name := ``triple

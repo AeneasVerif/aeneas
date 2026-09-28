@@ -56,16 +56,16 @@ theorem triple_true (P : Prop) (m : Id α) :
 /- intro tactic: it is responsible for the whole normalization of the mono and bind
    premises, so it exposes the binders of `Post.entails` itself, introduces them — `step`
    reverts what it introduces — and pulls the precondition of the continuation. -/
-open Lean Elab Tactic in
-meta def pullPre : Aeneas.IntroFn := do
-  evalTactic (← `(tactic| (
-    try rw [Post.entails_iff]
-    intros
-    first
-    | exact triple_true _ _
-    | (rw [triple_pull]; try rw [and_imp])
-    | skip)))
-  return 0
+syntax (name := pullPre) "pull_pre" : tactic
+macro_rules
+  | `(tactic| pull_pre) =>
+    `(tactic| (
+        try rw [Post.entails_iff]
+        intros
+        first
+        | exact triple_true _ _
+        | (rw [triple_pull]; try rw [and_imp])
+        | skip))
 
 #register_spec_info {
     spec_name := ``triple
@@ -77,25 +77,6 @@ meta def pullPre : Aeneas.IntroFn := do
     mk_spec_bind := ``triple_step_bind
     mk_spec_bind_skip_args := 6
     intro_tactic := some ``pullPre
-    to_mvcgen := none
-    liftings := #[]
-  }
-
-/- `intro_tactic` must name an `IntroFn`, not a tactic. -/
-/--
-error: `intro_tactic` must be a function of type `Aeneas.IntroFn`, but `Lean.Parser.Tactic.assumption` has type Lean.ParserDescr
--/
-#guard_msgs in
-#register_spec_info {
-    spec_name := ``triple
-    arity := 4
-    program_index := 2
-    post_index := 3
-    mk_spec_mono := ``triple_step_mono
-    mk_spec_mono_skip_args := 4
-    mk_spec_bind := ``triple_step_bind
-    mk_spec_bind_skip_args := 6
-    intro_tactic := some ``Lean.Parser.Tactic.assumption
     to_mvcgen := none
     liftings := #[]
   }
@@ -157,13 +138,8 @@ example (value : Nat) :
 
 /-! ## `runIntroTactic` contract -/
 
-open Lean Elab Tactic in
-meta def constructorFn : Aeneas.IntroFn := do
-  evalTactic (← `(tactic| constructor))
-  return 0
-
 elab "run_constructor" : tactic => do
-  discard <| Step.runIntroTactic ``constructorFn
+  Step.runIntroTactic ``Lean.Parser.Tactic.constructor
 
 /- `runIntroTactic` rejects tactics that create multiple goals. -/
 /--
@@ -173,20 +149,15 @@ error: `intro_tactic` must not create multiple goals
 example (P Q : Prop) : P ∧ Q := by
   run_constructor
 
-open Lean Elab Tactic in
-meta def assumptionFn : Aeneas.IntroFn := do
-  evalTactic (← `(tactic| assumption))
-  return 0
-
 elab "run_assumption" : tactic => do
-  discard <| Step.runIntroTactic ``assumptionFn
+  Step.runIntroTactic ``Lean.Parser.Tactic.assumption
 
 /- `runIntroTactic` permits tactics that solve the goal completely. -/
 example (P : Prop) (h : P) : P := by
   run_assumption
 
 elab "run_intro_split" : tactic => do
-  discard <| Step.runIntroTactic ``Aeneas.Std.WP.introTactic
+  Step.runIntroTactic ``Aeneas.Std.WP.introTactic
 
 open Lean Meta Elab Tactic in
 elab "run_intro_pending " n:ident : tactic => withMainContext do
@@ -195,7 +166,7 @@ elab "run_intro_pending " n:ident : tactic => withMainContext do
   let goal ← getMainGoal
   let worker ← mkFreshExprSyntheticOpaqueMVar ((← goal.getType).replaceFVar n pending)
   setGoals [worker.mvarId!]
-  discard <| Step.runIntroTactic ``Aeneas.Std.WP.introTactic
+  Step.runIntroTactic ``Aeneas.Std.WP.introTactic
   let proof ← instantiateMVars worker
   if proof.getAppFn.isConst then
     throwError "Output normalization generalized a pending obligation"
@@ -262,7 +233,7 @@ example (Q R : Prop) (hR : R) : (Q ∧ ∃ f : Unit → Nat, f () = 0) → R := 
 
 elab "run_intro_split_compact" : tactic => do
   let goal ← Lean.Elab.Tactic.getMainGoal
-  discard <| Step.runIntroTactic ``Aeneas.Std.WP.introTactic
+  Step.runIntroTactic ``Aeneas.Std.WP.introTactic
   let proof ← Lean.instantiateMVars (Lean.mkMVar goal)
   if (proof.find? fun e =>
       e.isConstOf ``And.casesOn || e.isConstOf ``And.rec ||
@@ -463,10 +434,9 @@ example (m : Id Nat) (P Q : Nat → Prop)
   guard_hyp post : P result ∧ Q result
   exact post.1
 
-open Lean Elab Tactic in
-meta def keepBundled : Aeneas.IntroFn := do
-  evalTactic (← `(tactic| (intros; try rw [triple_pull])))
-  return 0
+syntax (name := keepBundled) "keep_bundled" : tactic
+macro_rules
+  | `(tactic| keep_bundled) => `(tactic| (intros; try rw [triple_pull]))
 
 #register_spec_info { bundledSpecInfo with intro_tactic := some ``keepBundled }
 

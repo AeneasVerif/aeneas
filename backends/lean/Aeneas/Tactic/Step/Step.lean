@@ -710,29 +710,19 @@ meta def getCallSiteTree (info : SpecInfo) (isLet : Bool) (goal : MVarId) :
   else
     getContInput specArgs[info.post_index]!
 
--- we have to use unsafe since solving for a tactic using a name cannot guarantee
--- having introFn
-meta unsafe def evalIntroFnUnsafe (name : Name) : TacticM IntroFn :=
-  evalConstCheck IntroFn ``IntroFn name
-
-@[implemented_by evalIntroFnUnsafe]
-meta opaque evalIntroFn (name : Name) : TacticM IntroFn
-
-/-- Run the function registered as an `intro_tactic` on the main goal, revert what it
-introduced, and return the index of the output (see `IntroFn`). -/
-meta def runIntroTactic (fn : Name) : TacticM Nat := do
-  withTraceNode `Step (fun _ => pure m!"intro_tactic: {fn}") do
-  let run ← evalIntroFn fn
+/-- Run the tactic registered as an `intro_tactic` on the main goal, and revert what it
+introduced. -/
+meta def runIntroTactic (tac : Name) : TacticM Unit := do
+  withTraceNode `Step (fun _ => pure m!"intro_tactic: {tac}") do
   let last? := (← (← getMainGoal).getDecl).lctx.lastDecl.map LocalDecl.fvarId
-  let outputIndex ← run
+  evalTactic (mkNode tac #[])
   match ← getUnsolvedGoals with
-  | [] => return 0
+  | [] => return
   | [nextGoal] =>
     let nextGoal ← match last? with
       | some last => Prod.snd <$> nextGoal.revertAfter last
       | none => Prod.snd <$> nextGoal.revert (← nextGoal.withContext do pure (← getLCtx).getFVarIds)
     setGoals [nextGoal]
-    return outputIndex
   | _ => throwError "`intro_tactic` must not create multiple goals"
 
 meta def reduceOutputProjections : TacticM Unit := do
@@ -777,20 +767,15 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTr
   traceGoalWithNode "goal after folding back the scalar types"
 
   /- Run the intro_tactic. -/
-  let outputIndex ← match info.intro_tactic with
-    | some fn => runIntroTactic fn
-    | none => pure 0
+  if let some tac := info.intro_tactic then
+    runIntroTactic tac
   if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after running `intro_tactic`"
 
-  /- Introduce the single output and recursively destructure it according to the
-     merged binder tree. We use a fresh internal name here and rename leaves to
-     user-provided names later. -/
+  /- Introduce the single output, i.e., the first binder, and recursively destructure it
+     according to the merged binder tree. We use a fresh internal name here and rename
+     leaves to user-provided names later. -/
   let mut outputFVars : Array FVarId := #[]
-  /- The `intro_tactic` may have put binders before the output (see `IntroFn`): introduce
-     them first. -/
-  let (witnessFVars, goal) ← (← getMainGoal).introNP outputIndex
-  setGoals [goal]
   let goal ← getMainGoal
   let goalTy ← instantiateMVars (← goal.getType)
   let goalTy := goalTy.consumeMData
@@ -816,7 +801,7 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTr
     reduceOutputProjections
     if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
 
-  let prefixFVars := witnessFVars ++ outputFVars
+  let prefixFVars := outputFVars
   let prefixLength := prefixFVars.size
   let prefixIsProp ← withMainContext do
     prefixFVars.mapM fun fv => do isProp (← fv.getType)
