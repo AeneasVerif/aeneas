@@ -11,4 +11,4 @@ import Aeneas.Tactic.Step.Tests.UncurryBind
 import Aeneas.Tactic.Step.Tests.IntroTactic
 import Aeneas.Tactic.Step.Tests.DspecInduction
 import Aeneas.Tactic.Step.Tests.IntroRecursion
-import Aeneas.Tactic.Step.Tests.IntroCompat
+import Aeneas.Tactic.Step.Tests.IntroSpec
