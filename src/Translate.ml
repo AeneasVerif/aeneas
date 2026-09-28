@@ -1474,6 +1474,91 @@ let full_extraction_config () : gen_config =
     interface = false;
   }
 
+(** Per-file extraction ([-split-files]): write the files of [components] (see
+    {!FilePlan} for what components and layers are), in dependency order. *)
+let extract_by_file (ctx : gen_ctx) (crate : crate) ~(namespace : string)
+    ~(crate_name : string) ~(fg : FileGraph.t)
+    ~(components : FilePlan.component list) : unit =
+  let component_of_scc =
+    List.fold_left
+      (fun acc (m : FilePlan.component) -> SCC.SccId.Map.add m.scc_id m acc)
+      SCC.SccId.Map.empty components
+  in
+
+  let base_config =
+    {
+      (full_extraction_config ()) with
+      (* Not supported with [-split-files] (CLI rejects this combination). *)
+      extract_decreases_clauses = false;
+      extract_template_decreases_clauses = false;
+    }
+  in
+
+  List.iter
+    (fun (m : FilePlan.component) ->
+      if not m.is_dropped then begin
+        (* The first layer imports the components this one depends on, except
+           the dropped ones, which have no file. *)
+        let deps =
+          Option.value
+            (SCC.SccId.Map.find_opt m.scc_id fg.sccs.scc_deps)
+            ~default:SCC.SccId.Set.empty
+        in
+        let dep_imports =
+          List.filter_map
+            (fun dep_id ->
+              let dep = SCC.SccId.Map.find dep_id component_of_scc in
+              if dep.is_dropped then None else Some dep.import_name)
+            (SCC.SccId.Set.elements deps)
+        in
+        (* A component with several source files lists them in its header. *)
+        let sources_msg =
+          if List.length m.source_files > 1 then
+            ": merged from " ^ String.concat ", " m.source_files
+          else ""
+        in
+        (* Each subsequent layer just imports the previous one. *)
+        ignore
+          (List.fold_left
+             (fun custom_includes (layer : FilePlan.component_layer) ->
+               let config =
+                 { base_config with interface = layer.is_opaque_layer }
+               in
+               let custom_msg =
+                 if layer.is_opaque_layer then
+                   (if m.is_external then ": external declarations"
+                    else ": opaque declarations")
+                   ^ ".\n\
+                      -- This is a template file: rename it to drop the \
+                      \"_Template\" suffix and fill the holes."
+                 else sources_msg
+               in
+               let file_info =
+                 {
+                   filename = layer.filename;
+                   namespace;
+                   in_namespace = not m.is_external;
+                   (* Local modules are in the crate namespace. An external
+                      module can't open it. *)
+                   open_namespace = false;
+                   crate_name;
+                   rust_module_name = crate.name;
+                   module_name = layer.import_name;
+                   custom_msg;
+                   custom_imports = [];
+                   custom_includes;
+                   noncomputable = layer.noncomputable;
+                 }
+               in
+               (* Create the (possibly nested) directory for the file. *)
+               let dir = Filename.dirname layer.filename in
+               if not (Sys.file_exists dir) then Core_unix.mkdir_p dir;
+               extract_file ~groups:layer.groups config ctx file_info;
+               [ layer.import_name ])
+             dep_imports m.layers)
+      end)
+    components
+
 let extract_translated_crate (filename : string) (dest_dir : string)
     (subdir : string option) (crate : crate) (trans_ctx : trans_ctx)
     (trans_crate : translated_crate) (extracted_opaque : bool ref) : unit =
