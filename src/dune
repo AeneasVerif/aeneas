@@ -60,6 +60,7 @@
   ExtractErrors
   ExtractName
   ExtractTypes
+  FileGraph
   FileMapping
   FormatCompat
   FunsAnalysis
