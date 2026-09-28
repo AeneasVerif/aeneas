@@ -670,6 +670,28 @@ meta partial def withOutputTuple {α β} (ty : Expr) (tree : BTree α)
         k (xs ++ ys) (← mkAppM ``Prod.mk #[x, y])
     | _ => throwError "Expected a product for the output pattern, got {ty}"
 
+/-- Skip explicit output binders, then simplify the premise of `WP.imp` or a nondependent
+implication with `step_simps`. The entailment RHS must put the applied spec's premise first.
+Do not unfold continuation wrappers or simplify the output binders and conclusion. -/
+meta partial def simpOutputPost (type : Expr) : MetaM Expr := do
+  let simpPost (post : Expr) := do
+    let (ctx, simprocs) ← Simp.mkSimpCtx true { iota := false } .simp
+      { simpThms := #[← stepSimpExt.getTheorems] }
+    return (← Lean.Meta.simp post ctx simprocs).1.expr
+  match_expr type.consumeMData with
+  | Std.WP.imp post cont =>
+    return mkApp2 (mkConst ``Std.WP.imp) (← simpPost post) cont
+  | _ =>
+    match type.consumeMData with
+    | .forallE name ty body bi =>
+      if ← isProp ty then
+        /- A dependent implication would also require transporting its proof argument. -/
+        if body.hasLooseBVars then return type
+        return .forallE name (← simpPost ty) body bi
+      withLocalDecl name bi ty fun x => do
+        mkForallFVars #[x] (← simpOutputPost (body.instantiate1 x))
+    | _ => return type
+
 /-- Expose the output quantifier using a registered entailment lemma, then replace it
 with binders matching `tree`. A leading Prop binder is left for postcondition introduction.
 For `∀ p : (A × B) × C, R p` and pattern `((a, b), c)`, return
@@ -693,9 +715,10 @@ meta def mkOutputTarget (info : SpecInfo) (type : Expr) (tree : NameTree) : Meta
         if rhs.isForall then return rhs
     throwError "No registered entailment lemma exposes the outputs of:\n{type}" : MetaM Expr)
   let .forallE _ ty body _ := type | return (type, 0)
-  if ← isProp ty then return (type, 0)
+  if ← isProp ty then return (← simpOutputPost type, 0)
   withOutputTuple ty tree fun xs tuple => do
-    return (← mkForallFVars xs (body.instantiate1 tuple), xs.size)
+    let body ← simpOutputPost (body.instantiate1 tuple)
+    return (← mkForallFVars xs body, xs.size)
 
 /-- Return a proof that the generated output target is equivalent to the step goal,
 using one `simp` call. For example, prove `qimp P Q ↔ ∀ a b, imp (P (a, b)) (Q (a, b))`
@@ -703,8 +726,10 @@ using the registered entailment lemmas and `Prod.forall`. -/
 meta def proveOutputEquiv (info : SpecInfo) (goalTy target : Expr) : TacticM Expr := do
   let equiv ← mkFreshExprSyntheticOpaqueMVar (← mkAppM ``Iff #[goalTy, target])
   let remaining ← Tactic.run equiv.mvarId! do
+    /- `step_simps` is safe in this proof: it does not change the generated target. -/
     let _ ← Simp.simpAt true { failIfUnchanged := false, iota := false }
-      { addSimpThms := info.qimp_elim_tactics ++
+      { simpThms := #[← stepSimpExt.getTheorems],
+        addSimpThms := info.qimp_elim_tactics ++
           #[``Prod.forall, ``forall_punit, ``and_imp, ``exists_imp],
         declsToUnfold := #[``Std.WP.imp] }
       (.targets #[] true)

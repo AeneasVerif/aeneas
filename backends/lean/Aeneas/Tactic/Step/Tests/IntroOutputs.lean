@@ -617,3 +617,69 @@ example (f : Result Nat) (h : f ⦃ n => n = 0 ⦄) :
   step with h as ⟨n, hn⟩
   intro k
   simp [hn]
+
+/- Instantiating a Boolean input with `true` must not leave `True ∧ P` inside an iff. -/
+example (f : Bool → Result Bool) (P : Prop)
+    (h : ∀ valid, f valid ⦃ b => b = true ↔ valid = true ∧ P ⦄) :
+    f true ⦃ b => b = true ↔ P ⦄ := by
+  step with h as ⟨b, hb⟩
+  guard_hyp hb : b = true ↔ P
+  exact hb
+
+/- Normalize equality-defined existentials below matches, without reordering tuple outputs. -/
+example (f : Result (Nat × Bool)) (compute : Nat → Nat) (P R : Nat → Prop)
+    (hR : ∀ k, R k)
+    (h : f ⦃ n b => match b with
+      | true => ∃ s, s = compute n ∧ P s
+      | false => True ⦄) :
+    (do let (n, b) ← f; ok (n, b))
+      ⦃ n b => ∀ k : Nat, b = true → P (compute n) ∧ R k ⦄ := by
+  step with h as ⟨n, b, hp⟩
+  guard_hyp n : Nat
+  guard_hyp b : Bool
+  guard_hyp hp : match b with | true => P (compute n) | false => True
+  intro k hb
+  simp [hb] at hp
+  exact ⟨hp, hR k⟩
+
+/- Even a trivial postcondition must preserve the output and leave final quantifiers alone. -/
+example (f : Result Nat) (R : Nat → Prop) (hR : ∀ k, R k)
+    (h : f ⦃ _ => True ∧ True ⦄) :
+    (do let n ← f; ok n) ⦃ _ => ∀ k : Nat, R k ⦄ := by
+  step with h as ⟨n⟩
+  guard_hyp n : Nat
+  intro k
+  exact hR k
+
+example (f : Bool → Result Bool) (P : Prop)
+    (h : ∀ valid, f valid ⦃ b => b = true ↔ valid = true ∧ P ⦄div) :
+    (do let b ← f true; ok b) ⦃ b => b = true ↔ P ⦄div := by
+  step with h as ⟨b, hb⟩
+  guard_hyp hb : b = true ↔ P
+  simpa only [WP.dspec_ok] using hb
+
+/- Normalization must preserve even unused outputs and simplifiable final postconditions.
+Also check native implications, as used by custom WPs. -/
+abbrev normalizationFinalGoal (n : Nat) : Prop := (True ∧ True) → ∀ k : Nat, k = n
+
+run_cmd Lean.Elab.Command.liftTermElabM do
+  let cases ← #[
+    (← `(∀ n : Nat, WP.imp (True ∧ True) (∀ k : Nat, True ∧ k = n)),
+     ← `(∀ n : Nat, WP.imp True (∀ k : Nat, True ∧ k = n))),
+    (← `(∀ _ : Nat, WP.imp (False ∧ True) (∀ _ : Nat, True ∧ True)),
+     ← `(∀ _ : Nat, WP.imp False (∀ _ : Nat, True ∧ True))),
+    (← `(∀ n : Nat, (True ∧ n = 0) → (∀ k : Nat, True ∧ k = n)),
+     ← `(∀ n : Nat, n = 0 → (∀ k : Nat, True ∧ k = n))),
+    (← `(∀ n : Nat, normalizationFinalGoal n),
+     ← `(∀ n : Nat, normalizationFinalGoal n)),
+    (← `(∀ h : True ∧ True, h.1 = h.2),
+     ← `(∀ h : True ∧ True, h.1 = h.2))
+  ].mapM fun (input, expected) => do
+    return (← Lean.Elab.Term.elabTerm input none, ← Lean.Elab.Term.elabTerm expected none)
+  Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
+  for (input, expected) in cases do
+    let input ← Lean.instantiateMVars input
+    let expected ← Lean.instantiateMVars expected
+    let target ← Aeneas.Step.simpOutputPost input
+    unless target == expected do
+      throwError "Unexpected normalized output target:\n{target}\nExpected:\n{expected}"
