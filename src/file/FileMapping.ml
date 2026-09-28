@@ -128,19 +128,26 @@ let module_components_of_file (path : string) : string list =
   in
   List.map (fun p -> StringUtils.to_camel_case (String.map sanitize p)) parts
 
+(** The number of files from which a merged module is called [Extracted] instead
+    of being named after its files. *)
+let max_bundle_name_files = 8
+
 (** The module-path components for a merged (multi-file) SCC.
 
     The name is derived from the member files: each path is camel-cased like a
     single-file module, and the results are sorted alphabetically, joined with
     ["_"] and given a ["_Bundle"] suffix, e.g. [Ping_Pong_Bundle] for [ping.rs]
-    and [pong.rs]. *)
+    and [pong.rs]. With [max_bundle_name_files] files or more we call it
+    [Extracted] instead. *)
 let merged_module_components (paths : string list) : string list =
   if paths = [] then
     [%craise_opt_span] None "Empty file set for a merged (multi-file) module";
-  let stems =
-    List.map (fun p -> String.concat "" (module_components_of_file p)) paths
-  in
-  [ String.concat "_" (List.sort String.compare stems) ^ "_Bundle" ]
+  if List.length paths >= max_bundle_name_files then [ "Extracted" ]
+  else
+    let stems =
+      List.map (fun p -> String.concat "" (module_components_of_file p)) paths
+    in
+    [ String.concat "_" (List.sort String.compare stems) ^ "_Bundle" ]
 
 (** The module path of layer number [index] of the module [base]. Whether or not
     the name is an opaque layer or not is determined by [is_opaque]. *)
