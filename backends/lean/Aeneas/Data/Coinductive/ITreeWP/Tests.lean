@@ -1,10 +1,76 @@
 module
-import Aeneas.Data.Coinductive.Spec.SpecDerived
+import Aeneas.Data.Coinductive.ITreeWP.Taxonomy
 import all Init.Internal.Order.Basic
 
-/-! # Tests for the generic total- and partial-correctness specifications -/
+
+namespace Aeneas.Data.Coinductive.TotalTests
+
+variable {E : Effect} {θ : EffectWP E}
+variable [θ.Monotone]
+
+/-! # Liberal versus total WPs under event health conditions -/
+
+/-- Perform `event` forever, ignoring its answers. -/
+def forever (event : E.I) : ITree E Unit :=
+  .vis event fun _ => forever event
+partial_fixpoint
+
+/-- DWLP accepts a productive infinite program, as long as its event is safe. -/
+theorem forever_partial {event : E.I} (hSafe : ∀ s, θ.wp event (fun _ _ => True) s)
+    (Q : θ.Post Unit) (s : θ.State) : DWLP θ (forever event) Q s := by
+  refine DWLP.coinduction (fun t _ => t = forever event) ?_ rfl
+  rintro _ s' rfl
+  rw [forever, FunctionalWP.vis]
+  exact θ.wp_mono (fun _ _ _ => forever.eq_1 event) (hSafe s')
+
+/-- DWP rejects a productive infinite program: since no event can guarantee
+    `False`, a tree that never returns is never totally correct. -/
+theorem forever_not_total [θ.NoMiracle] (event : E.I) (Q : θ.Post Unit) (s : θ.State) :
+    ¬ DWP θ (forever event) Q s := by
+  intro hSpec
+  refine DWP.induction (P := fun t _ => t = forever event → False)
+    (fun _ _ _ hEq => ?_) (fun _ k s' hWp hEq => ?_) hSpec rfl
+  · rw [forever] at hEq
+    exact not_vis_ret hEq
+  · rw [forever] at hEq
+    obtain ⟨rfl, hk⟩ := vis_inj hEq
+    obtain rfl := eq_of_heq hk
+    exact θ.wp_noMiracle _ s' (θ.wp_mono (fun _ _ h => h rfl) hWp)
+
+example [θ.Conjunctive] [θ.NoMiracle] {event : E.I}
+    (hSafe : ∀ s, θ.wp event (fun _ _ => True) s) (Q : θ.Post Unit) (s : θ.State) :
+    ¬ DWP θ (forever event) Q s :=
+  dwp_no_loops (forever_partial hSafe (fun _ _ => False) s)
+
+/-- A silent infinite program -/
+def silentLoop : ITree E Unit := do
+  let _ ← (pure () : ITree E Unit)
+  silentLoop
+partial_fixpoint
+
+theorem silentLoop_eq_div : (silentLoop : ITree E Unit) = ITree.div := by
+  apply ITree.le_div_is_div
+  refine silentLoop.fixpoint_induct (fun x => Lean.Order.PartialOrder.rel x ITree.div)
+    (fun _ hc h => Lean.Order.csup_le hc h) ?_
+  intro x hx
+  simpa only [Bind.bind, ITree.pure_eq_ret, itree_ret_bind] using hx
+
+/-- DWP rejects a silent infinite program. -/
+example (Q : θ.Post Unit) (s : θ.State) : ¬ DWP θ silentLoop Q s := by
+  rw [silentLoop_eq_div]
+  exact DWP.div_false
+
+/-- DWLP accepts a silent infinite program. -/
+example (Q : θ.Post Unit) (s : θ.State) : DWLP θ silentLoop Q s := by
+  rw [silentLoop_eq_div]
+  exact DWLP.div
+
+end Aeneas.Data.Coinductive.TotalTests
 
 namespace Aeneas.Data.Coinductive.StateTest
+
+
+/-! # Instantiate DWP and DWLP with multiple effects -/
 
 inductive StateEvent : Type 1 where
   | get
@@ -25,7 +91,7 @@ def StateEffect : Effect where
   O := StateEvent.output
 
 @[reducible]
-def effectSpec : EffectSpec StateEffect where
+def effectSpec : EffectWP StateEffect where
   State := Nat
   wp event C state :=
     match event with
@@ -33,6 +99,8 @@ def effectSpec : EffectSpec StateEffect where
     | .put value => C ⟨()⟩ value
     | .fail => False
     | .choose α => Nonempty α ∧ ∀ answer, C ⟨answer⟩ state
+
+instance : EffectWP.Monotone effectSpec where
   wp_mono := by
     rintro event C C' hC state hWp
     cases event
@@ -40,6 +108,8 @@ def effectSpec : EffectSpec StateEffect where
     · exact hC _ _ hWp
     · exact hWp.elim
     · exact ⟨hWp.1, fun answer => hC _ _ (hWp.2 answer)⟩
+
+instance : EffectWP.Conjunctive effectSpec where
   wp_conj := by
     rintro event state Demands ⟨C₀, hC₀⟩ hAll
     cases event
@@ -47,6 +117,8 @@ def effectSpec : EffectSpec StateEffect where
     · exact fun C hC => hAll C hC
     · exact (hAll C₀ hC₀).elim
     · exact ⟨(hAll C₀ hC₀).1, fun answer C hC => (hAll C hC).2 answer⟩
+
+instance : EffectWP.NoMiracle effectSpec where
   wp_noMiracle := by
     rintro (_ | _ | _ | _) _ h
     · exact h
@@ -54,16 +126,22 @@ def effectSpec : EffectSpec StateEffect where
     · exact h
     · exact h.1.elim h.2
 
+example (m : ITree StateEffect α) : effectSpec.Post α → effectSpec.Pre :=
+  DWP effectSpec m
+
+example (m : ITree StateEffect α) : effectSpec.Post α → effectSpec.Pre :=
+  DWLP effectSpec m
+
 def spec (m : ITree StateEffect α) (p : effectSpec.Post α) (state : Nat) : Prop :=
-  TotalSpec effectSpec p m state
+  DWP effectSpec m p state
 
 def dspec (m : ITree StateEffect α) (p : effectSpec.Post α) (state : Nat) : Prop :=
-  PartialSpec effectSpec p m state
+  DWLP effectSpec m p state
 
 example (Q : effectSpec.Post Nat) :
     Lean.Order.admissible fun computation : ITree StateEffect Nat =>
       dspec computation Q 0 :=
-  PartialSpec.admissible effectSpec Q 0
+  DWLP.admissible effectSpec Q 0
 
 def get : ITree StateEffect Nat :=
   .vis .get fun value => .ret value.down
@@ -97,9 +175,9 @@ theorem increment_spec (state : Nat) :
     spec increment (fun value state' => value = state ∧ state' = state + 1)
       state := by
   simp [spec, increment, get, put, Bind.bind]
-  apply TotalSpec.vis
-  apply TotalSpec.vis
-  exact TotalSpec.ret_iff.mpr ⟨rfl, rfl⟩
+  apply DWP.vis
+  apply DWP.vis
+  exact DWP.ret_iff.mpr ⟨rfl, rfl⟩
 
 example (state : Nat) :
     spec increment (fun value state' => value = state ∧ state' = state + 1)
@@ -109,21 +187,20 @@ example (state : Nat) :
 example (state : Nat) :
     dspec increment (fun value state' => value = state ∧ state' = state + 1)
       state :=
-  TotalSpec.toPartial (increment_spec state)
+  DWP.toPartial (increment_spec state)
 
 example (state : Nat) :
     spec flip (fun value state' => (value = 0 ∨ value = 1) ∧ state' = state)
       state := by
   simp [spec, flip, choose, Bind.bind]
-  apply TotalSpec.vis
+  apply DWP.vis
   change Nonempty Bool ∧ ∀ answer : Bool,
-    TotalSpec effectSpec
-      (fun value state' => (value = 0 ∨ value = 1) ∧ state' = state)
-      (.ret (if answer then 0 else 1)) state
+    DWP effectSpec (.ret (if answer then 0 else 1))
+      (fun value state' => (value = 0 ∨ value = 1) ∧ state' = state) state
   constructor
   · exact ⟨true⟩
   · intro answer
-    apply TotalSpec.ret_iff.mpr
+    apply DWP.ret_iff.mpr
     cases answer
     · simp
     · simp
@@ -131,19 +208,18 @@ example (state : Nat) :
 example (state : Nat) :
     dspec flip (fun value state' => (value = 0 ∨ value = 1) ∧ state' = state)
       state :=
-  TotalSpec.toPartial (show
+  DWP.toPartial (show
     spec flip (fun value state' => (value = 0 ∨ value = 1) ∧ state' = state)
       state by
     simp [spec, flip, choose, Bind.bind]
-    apply TotalSpec.vis
+    apply DWP.vis
     change Nonempty Bool ∧ ∀ answer : Bool,
-      TotalSpec effectSpec
-        (fun value state' => (value = 0 ∨ value = 1) ∧ state' = state)
-        (.ret (if answer then 0 else 1)) state
+      DWP effectSpec (.ret (if answer then 0 else 1))
+        (fun value state' => (value = 0 ∨ value = 1) ∧ state' = state) state
     constructor
     · exact ⟨true⟩
     · intro answer
-      apply TotalSpec.ret_iff.mpr
+      apply DWP.ret_iff.mpr
       cases answer
       · simp
       · simp)

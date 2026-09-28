@@ -446,8 +446,7 @@ theorem ITree.chain_vis_cases {c : ITree E R → Prop} (hc : chain c) {i : E.I}
 
     In a chain, all the trees which are not `div` start with the same node, so suprema can be
     computed one node at a time: if the chain `c` contains some `vis i k`, its supremum is
-    `vis i (fun o => csup (visChain c i o))` (see `ITree.csup_vis`). This is how we descend
-    into the supremum of a chain, e.g., to prove that `PartialSpec` is admissible. -/
+    `vis i (fun o => csup (visChain c i o))` (see `ITree.csup_vis`). -/
 def ITree.visChain (c : ITree E R → Prop) (i : E.I) (o : E.O i) :
     ITree E R → Prop :=
   fun t => ∃ k, c (ITree.vis i k) ∧ t = k o

@@ -8,7 +8,7 @@ public meta import Aeneas.Std.Spec
 public meta import Aeneas.Std.Delab
 public import Aeneas.Data.Coinductive.ITree
 public import Aeneas.Data.Coinductive.Effect
-public import Aeneas.Data.Coinductive.Spec
+public import Aeneas.Data.Coinductive.ITreeWP
 import all Init.Internal.Order.Basic
 public section
 
@@ -32,32 +32,38 @@ unseal Result
 @[expose] section
 
 @[reducible]
-def effectSpec : EffectSpec RustEffect where
+def effectSpec : EffectWP RustEffect where
   State := Unit
   wp event _ _ :=
     match event with
     | .fail _ => False
+
+instance : EffectWP.Monotone effectSpec where
   wp_mono _ := False.elim
+
+instance : EffectWP.Conjunctive effectSpec where
   wp_conj := by
     intro _ _ _ hNonempty hAll
     obtain ⟨C₀, hC₀⟩ := hNonempty
     exact (hAll C₀ hC₀).elim
+
+instance : EffectWP.NoMiracle effectSpec where
   wp_noMiracle := by
     rintro ⟨⟩ _ h
     exact h
 
 def spec (m : Result α) (p : Post α) : Prop :=
-  TotalSpec effectSpec (fun value _ => p value) m ()
+  DWP effectSpec m (fun value _ => p value) ()
 
 def dspec (m : Result α) (p : Post α) : Prop :=
-  PartialSpec effectSpec (fun value _ => p value) m ()
+  DWLP effectSpec m (fun value _ => p value) ()
 
 theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p :=
-  TotalSpec.toPartial
+  DWP.toPartial
 
 theorem dspec_admissible {α} (p : Post α) :
     admissible (fun x => dspec x p) :=
-  PartialSpec.admissible effectSpec _ ()
+  DWLP.admissible effectSpec _ ()
 
 end
 
@@ -87,16 +93,16 @@ def uncurry' {α β γ : Type _} (p : α → β → γ) : α × β → γ :=
 @[defeq] theorem uncurry'_eq x (p : α → β → γ) : uncurry' p x = p x.fst x.snd := by simp [uncurry']
 
 @[simp, grind =, agrind =]
-theorem spec_ok (x : α) : spec (ok x) p ↔ p x := TotalSpec.ret_iff
+theorem spec_ok (x : α) : spec (ok x) p ↔ p x := DWP.ret_iff
 
 @[simp, grind =, agrind =]
-theorem spec_vis (e k) : spec (.vis e k) p ↔ False := ⟨fun h => TotalSpec.vis_view h, False.elim⟩
+theorem spec_vis (e k) : spec (.vis e k) p ↔ False := ⟨fun h => DWP.vis_view h, False.elim⟩
 
 @[simp, grind =, agrind =]
 theorem spec_fail (e : Error) : spec (fail e) p ↔ False := by simp [Result.fail_eq_vis]
 
 @[simp, grind =, agrind =]
-theorem spec_div : spec div p ↔ False := ⟨TotalSpec.div_false, False.elim⟩
+theorem spec_div : spec div p ↔ False := ⟨DWP.div_false, False.elim⟩
 
 /-! ### `spec_*` for tuple posts
 
@@ -141,7 +147,7 @@ theorem qimp_iff {α} (P₀ P₁ : Post α) : qimp P₀ P₁ ↔ ∀ x, imp (P�
 /-- `spec_mono` controls the introduction of universal quantifiers by introducing `imp`. -/
 theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
   qimp P₀ P₁ → spec m P₁ :=
-  fun HMonPost => TotalSpec.mono h fun value _ => HMonPost value
+  fun HMonPost => DWP.mono h fun value _ => HMonPost value
 
 /-- Implication of a `spec` predicate with quantifier -/
 @[expose]
@@ -153,7 +159,7 @@ theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α}
   spec m Pₘ →
   (qimp_spec Pₘ k Pₖ) →
   spec (Std.bind m k) Pₖ :=
-  fun Hm Hk => TotalSpec.bind (k := k) Hm fun value _ => Hk value
+  fun Hm Hk => DWP.bind (k := k) Hm fun value _ => Hk value
 
 /-- We use this lemma to decompose nested `uncurry'` predicates into a sequence of universal quantifiers. -/
 @[simp]
@@ -199,7 +205,7 @@ theorem exists_imp_spec {m:Result α} {P:Post α} :
 -- `dspec` theorems
 theorem dspec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : dspec m P₀):
   qimp P₀ P₁ → dspec m P₁ :=
-  fun HMonPost => PartialSpec.mono h fun value _ => HMonPost value
+  fun HMonPost => DWLP.mono h fun value _ => HMonPost value
 
 /-- Implication of a `dspec` predicate with quantifier -/
 @[expose]
@@ -210,7 +216,7 @@ theorem dspec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α
   dspec m Pₘ →
   (qimp_dspec Pₘ k Pₖ) →
   dspec (Std.bind m k) Pₖ :=
-  fun Hm Hk => PartialSpec.bind (k := k) Hm fun value _ => Hk value
+  fun Hm Hk => DWLP.bind (k := k) Hm fun value _ => Hk value
 
 @[simp]
 def qimp_dspec_uncurry' {α₀ α₁ β} (P : α₀ → α₁ → Prop) (k : α₀ × α₁ → Result β) (Q : β → Prop) :
@@ -232,13 +238,13 @@ def qimp_dspec_iff {α β} (P : α → Prop) (k : α → Result β) (Q : β → 
   simp [qimp_dspec, imp]
 
 @[simp, grind =, agrind =]
-theorem dspec_ok (x : α) : dspec (ok x) p ↔ p x := PartialSpec.ret_iff
+theorem dspec_ok (x : α) : dspec (ok x) p ↔ p x := DWLP.ret_iff
 
 @[simp, grind =, agrind =]
-theorem dspec_vis (e k) : dspec (.vis e k) p ↔ False := ⟨fun h => PartialSpec.vis_view h, False.elim⟩
+theorem dspec_vis (e k) : dspec (.vis e k) p ↔ False := ⟨fun h => DWLP.vis_view h, False.elim⟩
 
 @[simp, grind =, agrind =]
-theorem dspec_div : dspec (div : Result α) p ↔ True := iff_true_intro PartialSpec.div
+theorem dspec_div : dspec (div : Result α) p ↔ True := iff_true_intro DWLP.div
 
 @[simp, grind =, agrind =]
 theorem dspec_fail (e : Error) : dspec (fail e) p ↔ False := by simp [Result.fail_eq_vis]
