@@ -61,6 +61,7 @@
   ExtractErrors
   ExtractName
   ExtractTypes
+  FileMapping
   FunsAnalysis
   GitVersion
   Identifiers
