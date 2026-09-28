@@ -4,6 +4,7 @@
 #![feature(register_tool)]
 #![register_tool(verify)]
 
+pub mod external;
 pub mod layered;
 pub mod ops;
 pub mod ping;
