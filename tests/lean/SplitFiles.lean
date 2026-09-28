@@ -2,6 +2,7 @@
 -- [split_files]: the library entry point: importing this module brings the whole crate into scope.
 module
 public import SplitFiles.ExternalMacros
+public import SplitFiles.External
 public import SplitFiles.Layered
 public import SplitFiles.Types
 public import SplitFiles.Ops
