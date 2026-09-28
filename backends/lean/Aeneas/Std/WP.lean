@@ -753,12 +753,10 @@ example (x : Nat) :
     add1 y) ⦃ y => y = x + 2 ⦄ := by
     -- step as ⟨ y, z ⟩
     apply spec_bind (add1_spec _)
-    simp -failIfUnchanged only -- introduce the quantifiers
     simp only [qimp_spec_iff] -- eliminate `qimp_spec`
     intro y h
     -- step as ⟨ y1, z1⟩
     apply spec_mono (add1_spec _)
-    simp -failIfUnchanged only -- introduce the quantifiers
     simp only [qimp_iff] -- eliminate `qimp_spec`
     simp only [imp] -- eliminate `imp`
     intro y' h
@@ -892,8 +890,6 @@ instance Result.instWP : WP Result.{u} (.except (ULift Error) (.except PUnit (.e
     conjunctiveRaw Q₁ Q₂ := by
       apply SPred.bientails.of_eq
       cases x <;> simp
-      try (rename_i i k)
-      try (cases i <;> simp)
   }
 set_option match.ignoreUnusedAlts false
 
@@ -924,7 +920,6 @@ theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
     have : heq = PEmpty.elim := by funext; contradiction
     simp [*] at *
     try trivial
-    try (all_goals simp at hspec)
 
 
 /-- Lift an Aeneas step spec to an mvcgen-compatible `Triple`. -/
