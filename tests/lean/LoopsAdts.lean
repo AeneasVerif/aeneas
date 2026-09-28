@@ -35,7 +35,7 @@ def nth_shared_loop
   {T : Type} (ls : List T) (i : Std.U32) : Result (Option T) := do
   match ls with
   | List.Cons x tl =>
-    if i = 0#u32
+    if (i = 0#u32 : Bool)
     then ok (some x)
     else let i1 ← i - 1#u32
          nth_shared_loop tl i1
@@ -59,7 +59,7 @@ def nth_mut_loop
   := do
   match ls with
   | List.Cons x tl =>
-    if i = 0#u32
+    if (i = 0#u32 : Bool)
     then
       ok (some x,
         fun o => let t := match o with

@@ -73,7 +73,7 @@ inductive CList (T : Type) where
 def list_nth {T : Type} (l : CList T) (i : Std.U32) : Result T := do
   match l with
   | CList.CCons x tl =>
-    if i = 0#u32
+    if (i = 0#u32 : Bool)
     then ok x
     else let i1 ← i - 1#u32
          list_nth tl i1
@@ -87,7 +87,7 @@ partial_fixpoint
 def list_nth1_loop {T : Type} (l : CList T) (i : Std.U32) : Result T := do
   match l with
   | CList.CCons x tl =>
-    if i = 0#u32
+    if (i = 0#u32 : Bool)
     then ok x
     else let i1 ← i - 1#u32
          list_nth1_loop tl i1
@@ -108,7 +108,7 @@ def list_nth_mut
   {T : Type} (l : CList T) (i : Std.U32) : Result (T × (T → CList T)) := do
   match l with
   | CList.CCons x tl =>
-    if i = 0#u32
+    if (i = 0#u32 : Bool)
     then let back := fun t => CList.CCons t tl
          ok (x, back)
     else
@@ -124,7 +124,7 @@ partial_fixpoint
     Source: 'tests/src/demo.rs', lines 83:0-89:1
     Visibility: public -/
 def i32_id (i : Std.I32) : Result Std.I32 := do
-  if i = 0#i32
+  if (i = 0#i32 : Bool)
   then ok 0#i32
   else let i1 ← i - 1#i32
        let i2 ← i32_id i1
@@ -178,8 +178,8 @@ def use_counter
 /-- [demo::mod_add]:
     Source: 'tests/src/demo.rs', lines 117:0-125:1 -/
 def mod_add (a : Std.U32) (b : Std.U32) : Result Std.U32 := do
-  massert (a < 3329#u32)
-  massert (b < 3329#u32)
+  massert (a < 3329#u32 : Bool)
+  massert (b < 3329#u32 : Bool)
   let sum ← a + b
   let res ← lift (core.num.U32.wrapping_sub sum 3329#u32)
   let mask ← res >>> 16#i32

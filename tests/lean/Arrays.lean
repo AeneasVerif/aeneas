@@ -465,7 +465,7 @@ def sum_loop.body
   Result (ControlFlow (Std.U32 × Std.Usize) Std.U32)
   := do
   let i1 := Slice.len s
-  if i < i1
+  if (i < i1 : Bool)
   then
     let i2 ← Slice.index_usize s i
     let sum3 ← sum1 + i2
@@ -499,7 +499,7 @@ def sum2_loop.body
   Result (ControlFlow (Std.U32 × Std.Usize) Std.U32)
   := do
   let i1 := Slice.len s
-  if i < i1
+  if (i < i1 : Bool)
   then
     let i2 ← Slice.index_usize s i
     let i3 ← Slice.index_usize s2 i
@@ -527,7 +527,7 @@ def sum2_loop
 def sum2 (s : Slice Std.U32) (s2 : Slice Std.U32) : Result Std.U32 := do
   let i := Slice.len s
   let i1 := Slice.len s2
-  massert (i = i1)
+  massert (i = i1 : Bool)
   sum2_loop s s2 0#u32 0#usize
 
 /-- [arrays::f0]:
@@ -605,7 +605,7 @@ def zero_slice_loop.body
   (len : Std.Usize) (a : Slice Std.U8) (i : Std.Usize) :
   Result (ControlFlow ((Slice Std.U8) × Std.Usize) (Slice Std.U8))
   := do
-  if i < len
+  if (i < len : Bool)
   then let s ← Slice.update a i 0#u8
        let i1 ← i + 1#usize
        ok (cont (s, i1))
@@ -636,7 +636,7 @@ def zero_slice (a : Slice Std.U8) : Result (Slice Std.U8) := do
 @[rust_loop_body]
 def iter_mut_slice_loop.body
   (len : Std.Usize) (i : Std.Usize) : Result (ControlFlow Std.Usize Unit) := do
-  if i < len
+  if (i < len : Bool)
   then let i1 ← i + 1#usize
        ok (cont i1)
   else ok (done ())
@@ -667,7 +667,7 @@ def sum_mut_slice_loop.body
   Result (ControlFlow (Std.Usize × Std.U32) Std.U32)
   := do
   let i1 := Slice.len a
-  if i < i1
+  if (i < i1 : Bool)
   then
     let i2 ← Slice.index_usize a i
     let s1 ← s + i2
@@ -702,7 +702,7 @@ def add_acc_loop.body
   Result (ControlFlow ((Array Std.U32 256#usize) × (Array Std.U32 256#usize)
     × Std.Usize) ((Array Std.U32 256#usize) × (Array Std.U32 256#usize)))
   := do
-  if i < 256#usize
+  if (i < 256#usize : Bool)
   then
     let a ← Array.index_usize paSrc i
     let a1 ← Array.update paSrc i 0#u32

@@ -82,7 +82,7 @@ def key_expand_loop0.body
   Result (ControlFlow (Key × (Array Std.U8 8#usize) × (Array Std.U8 1#usize)
     × Std.I32) (Key × (Array Std.U8 8#usize) × (Array Std.U8 1#usize)))
   := do
-  if i < 32#i32
+  if (i < 32#i32 : Bool)
   then
     let i1 ← lift (IScalar.hcast .U8 i)
     let sample_buffer1 ← Array.update sample_buffer 0#usize i1
@@ -124,7 +124,7 @@ def key_expand_loop1.body
   Result (ControlFlow (Key × (Array Std.U8 8#usize) × (Array Std.U8 1#usize)
     × Std.I32) (Key × (Array Std.U8 8#usize)))
   := do
-  if i < 32#i32
+  if (i < 32#i32 : Bool)
   then
     let i1 ← lift (IScalar.hcast .U8 i)
     let sample_buffer1 ← Array.update sample_buffer 0#usize i1

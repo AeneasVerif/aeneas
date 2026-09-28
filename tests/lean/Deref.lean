@@ -38,7 +38,7 @@ def test_deref_box : Result Unit := do
   let (_, deref_mut_back) ← lift (alloc.boxed.Box.deref_mut 0#i32)
   let b := deref_mut_back 1#i32
   let x ← lift (alloc.boxed.Box.deref b)
-  massert (x = 1#i32)
+  massert (x = 1#i32 : Bool)
 
 /-- [deref::use_deref_vec]:
     Source: 'tests/src/deref.rs', lines 24:0-26:1

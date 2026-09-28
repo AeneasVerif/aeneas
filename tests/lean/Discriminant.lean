@@ -46,7 +46,7 @@ def AlertLevel.Insts.CoreCmpPartialEqAlertLevel.eq
   (self : AlertLevel) (other : AlertLevel) : Result Bool := do
   let self1 := read_discriminant self
   let other1 := read_discriminant other
-  ok (self1 = other1)
+  ok (self1 = other1 : Bool)
 
 /-- Trait implementation: [discriminant::{impl core::cmp::PartialEq<discriminant::AlertLevel> for discriminant::AlertLevel}]
     Source: 'tests/src/discriminant.rs', lines 6:9-6:18 -/
@@ -78,7 +78,7 @@ def AlertLevelU8.Insts.CoreCmpPartialEqAlertLevelU8.eq
   (self : AlertLevelU8) (other : AlertLevelU8) : Result Bool := do
   let self1 := read_discriminant self
   let other1 := read_discriminant other
-  ok (self1 = other1)
+  ok (self1 = other1 : Bool)
 
 /-- Trait implementation: [discriminant::{impl core::cmp::PartialEq<discriminant::AlertLevelU8> for discriminant::AlertLevelU8}]
     Source: 'tests/src/discriminant.rs', lines 12:9-12:18 -/

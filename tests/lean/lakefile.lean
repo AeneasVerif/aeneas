@@ -53,6 +53,7 @@ package «tests» {}
 @[default_target] lean_lib Issue1207ClosureSignatureRegions
 @[default_target] lean_lib Issue1250AnonymousConst
 @[default_target] lean_lib Issue1260EliminateSharedLoans
+@[default_target] lean_lib Issue1279ComparisonPropType
 @[default_target] lean_lib Issue134LoopSharedBorrows
 @[default_target] lean_lib Issue194RecursiveStructProjector
 @[default_target] lean_lib Issue270LoopList

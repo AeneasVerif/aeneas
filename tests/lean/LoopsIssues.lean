@@ -41,7 +41,7 @@ def loop_access_array_loop.body
   (k : Std.Usize) (start : Std.Usize) :
   Result (ControlFlow Std.Usize Unit)
   := do
-  if start < 4#usize
+  if (start < 4#usize : Bool)
   then
     let _ ← Array.index_usize CARRAY k
     let start1 ← start + 1#usize
@@ -139,7 +139,7 @@ def read_global_loop_loop (b : Bool) : Result Unit := do
 /-- [loops_issues::read_global_loop]:
     Source: 'tests/src/loops-issues.rs', lines 46:0-49:1 -/
 def read_global_loop (b : Bool) (n_rows : Std.Usize) : Result Unit := do
-  massert (n_rows <= MAX_NROWS)
+  massert (n_rows <= MAX_NROWS : Bool)
   read_global_loop_loop b
 
 /-- [loops_issues::mut_loop_len]: loop body 0:
@@ -153,7 +153,7 @@ def mut_loop_len_loop.body
   then
     let s ← lift (Array.to_slice buf)
     let i := Slice.len s
-    massert (0#usize <= i)
+    massert (0#usize <= i : Bool)
     ok (cont true)
   else ok (done ())
 

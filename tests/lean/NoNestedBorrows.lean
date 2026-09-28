@@ -102,7 +102,7 @@ def test2 : Result Unit := do
     Source: 'tests/src/no_nested_borrows.rs', lines 76:0-82:1
     Visibility: public -/
 def get_max (x : Std.U32) (y : Std.U32) : Result Std.U32 := do
-  if x >= y
+  if (x >= y : Bool)
   then ok x
   else ok y
 
@@ -113,7 +113,7 @@ def test3 : Result Unit := do
   let x ← get_max 4#u32 3#u32
   let y ← get_max 10#u32 11#u32
   let z ← x + y
-  massert (z = 15#u32)
+  massert (z = 15#u32 : Bool)
 
 /- Unit test for [no_nested_borrows::test3] -/
 #assert (test3).reducesTo ()
@@ -123,7 +123,7 @@ def test3 : Result Unit := do
     Visibility: public -/
 def test_neg1 : Result Unit := do
   let y ← -. 3#i32
-  massert (y = (-3)#i32)
+  massert (y = (-3)#i32 : Bool)
 
 /- Unit test for [no_nested_borrows::test_neg1] -/
 #assert (test_neg1).reducesTo ()
@@ -132,7 +132,7 @@ def test_neg1 : Result Unit := do
     Source: 'tests/src/no_nested_borrows.rs', lines 101:0-110:1
     Visibility: public -/
 def refs_test1 : Result Unit := do
-  massert (1#i32 = 1#i32)
+  massert (1#i32 = 1#i32 : Bool)
 
 /- Unit test for [no_nested_borrows::refs_test1] -/
 #assert (refs_test1).reducesTo ()
@@ -141,10 +141,10 @@ def refs_test1 : Result Unit := do
     Source: 'tests/src/no_nested_borrows.rs', lines 113:0-125:1
     Visibility: public -/
 def refs_test2 : Result Unit := do
-  massert (2#i32 = 2#i32)
-  massert (0#i32 = 0#i32)
-  massert (2#i32 = 2#i32)
-  massert (2#i32 = 2#i32)
+  massert (2#i32 = 2#i32 : Bool)
+  massert (0#i32 = 0#i32 : Bool)
+  massert (2#i32 = 2#i32 : Bool)
+  massert (2#i32 = 2#i32 : Bool)
 
 /- Unit test for [no_nested_borrows::refs_test2] -/
 #assert (refs_test2).reducesTo ()
@@ -168,26 +168,26 @@ def copy_int (x : Std.I32) : Result Std.I32 := do
     Source: 'tests/src/no_nested_borrows.rs', lines 140:0-144:1
     Visibility: public -/
 def test_unreachable (b : Bool) : Result Unit := do
-  massert (¬ b)
+  massert (! b)
 
 /-- [no_nested_borrows::test_panic]:
     Source: 'tests/src/no_nested_borrows.rs', lines 147:0-151:1
     Visibility: public -/
 def test_panic (b : Bool) : Result Unit := do
-  massert (¬ b)
+  massert (! b)
 
 /-- [no_nested_borrows::test_panic_msg]:
     Source: 'tests/src/no_nested_borrows.rs', lines 155:0-159:1
     Visibility: public -/
 def test_panic_msg (b : Bool) : Result Unit := do
-  massert (¬ b)
+  massert (! b)
 
 /-- [no_nested_borrows::test_copy_int]:
     Source: 'tests/src/no_nested_borrows.rs', lines 163:0-168:1
     Visibility: public -/
 def test_copy_int : Result Unit := do
   let y ← copy_int 0#i32
-  massert (0#i32 = y)
+  massert (0#i32 = y : Bool)
 
 /- Unit test for [no_nested_borrows::test_copy_int] -/
 #assert (test_copy_int).reducesTo ()
@@ -223,7 +223,7 @@ def split_list {T : Type} (l : List T) : Result (T × (List T)) := do
     Visibility: public -/
 def test_split_list : Result Unit := do
   let (hd, _) ← split_list (List.Cons 0#i32 List.Nil)
-  massert (hd = 0#i32)
+  massert (hd = 0#i32 : Bool)
 
 /- Unit test for [no_nested_borrows::test_split_list] -/
 #assert (test_split_list).reducesTo ()
@@ -245,10 +245,10 @@ def choose
 def choose_test : Result Unit := do
   let (z, choose_back) ← choose true 0#i32 0#i32
   let z1 ← z + 1#i32
-  massert (z1 = 1#i32)
+  massert (z1 = 1#i32 : Bool)
   let (x, y) := choose_back z1
-  massert (x = 1#i32)
-  massert (y = 0#i32)
+  massert (x = 1#i32 : Bool)
+  massert (y = 0#i32 : Bool)
 
 /- Unit test for [no_nested_borrows::choose_test] -/
 #assert (choose_test).reducesTo ()
@@ -301,7 +301,7 @@ partial_fixpoint
 def list_nth_shared {T : Type} (l : List T) (i : Std.U32) : Result T := do
   match l with
   | List.Cons x tl =>
-    if i = 0#u32
+    if (i = 0#u32 : Bool)
     then ok x
     else let i1 ← i - 1#u32
          list_nth_shared tl i1
@@ -315,7 +315,7 @@ def list_nth_mut
   {T : Type} (l : List T) (i : Std.U32) : Result (T × (T → List T)) := do
   match l with
   | List.Cons x tl =>
-    if i = 0#u32
+    if (i = 0#u32 : Bool)
     then let back := fun t => List.Cons t tl
          ok (x, back)
     else
@@ -349,29 +349,29 @@ def list_rev {T : Type} (l : List T) : Result (List T) := do
 def test_list_functions : Result Unit := do
   let i ←
     list_length (List.Cons 0#i32 (List.Cons 1#i32 (List.Cons 2#i32 List.Nil)))
-  massert (i = 3#u32)
+  massert (i = 3#u32 : Bool)
   let i1 ←
     list_nth_shared (List.Cons 0#i32 (List.Cons 1#i32 (List.Cons 2#i32
       List.Nil))) 0#u32
-  massert (i1 = 0#i32)
+  massert (i1 = 0#i32 : Bool)
   let i2 ←
     list_nth_shared (List.Cons 0#i32 (List.Cons 1#i32 (List.Cons 2#i32
       List.Nil))) 1#u32
-  massert (i2 = 1#i32)
+  massert (i2 = 1#i32 : Bool)
   let i3 ←
     list_nth_shared (List.Cons 0#i32 (List.Cons 1#i32 (List.Cons 2#i32
       List.Nil))) 2#u32
-  massert (i3 = 2#i32)
+  massert (i3 = 2#i32 : Bool)
   let (_, list_nth_mut_back) ←
     list_nth_mut (List.Cons 0#i32 (List.Cons 1#i32 (List.Cons 2#i32 List.Nil)))
       1#u32
   let ls := list_nth_mut_back 3#i32
   let i4 ← list_nth_shared ls 0#u32
-  massert (i4 = 0#i32)
+  massert (i4 = 0#i32 : Bool)
   let i5 ← list_nth_shared ls 1#u32
-  massert (i5 = 3#i32)
+  massert (i5 = 3#i32 : Bool)
   let i6 ← list_nth_shared ls 2#u32
-  massert (i6 = 2#i32)
+  massert (i6 = 2#i32 : Bool)
 
 /- Unit test for [no_nested_borrows::test_list_functions] -/
 #assert (test_list_functions).reducesTo ()
@@ -454,15 +454,15 @@ def new_pair1 : Result (StructWithPair Std.U32 Std.U32) := do
 def test_constants : Result Unit := do
   let swt ← new_tuple1
   let (i, _) := swt.p
-  massert (i = 1#u32)
+  massert (i = 1#u32 : Bool)
   let swt1 ← new_tuple2
   let (i1, _) := swt1.p
-  massert (i1 = 1#i16)
+  massert (i1 = 1#i16 : Bool)
   let swt2 ← new_tuple3
   let (i2, _) := swt2.p
-  massert (i2 = 1#u64)
+  massert (i2 = 1#u64 : Bool)
   let swp ← new_pair1
-  massert (swp.p.x = 1#u32)
+  massert (swp.p.x = 1#u32 : Bool)
 
 /- Unit test for [no_nested_borrows::test_constants] -/
 #assert (test_constants).reducesTo ()
@@ -481,7 +481,7 @@ def test_weird_borrows1 : Result Unit := do
     Visibility: public -/
 def test_mem_replace (px : Std.U32) : Result Std.U32 := do
   let (y, _) := core.mem.replace px 1#u32
-  massert (y = 0#u32)
+  massert (y = 0#u32 : Bool)
   ok 2#u32
 
 /-- [no_nested_borrows::test_shared_borrow_bool1]:
@@ -594,7 +594,7 @@ def create_id_type {T : Type} (x : T) : Result (IdType T) := do
     Source: 'tests/src/no_nested_borrows.rs', lines 523:0-525:1
     Visibility: public -/
 def not_bool (x : Bool) : Result Bool := do
-  ok (¬ x)
+  ok (! x)
 
 /-- [no_nested_borrows::not_u32]:
     Source: 'tests/src/no_nested_borrows.rs', lines 527:0-529:1

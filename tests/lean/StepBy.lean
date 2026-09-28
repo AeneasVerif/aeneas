@@ -34,27 +34,27 @@ def test_step_by_1 : Result Unit := do
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
   let i1 ← core.option.Option.unwrap o
-  massert (i1 = 0#u32)
+  massert (i1 = 0#u32 : Bool)
   let (o1, it2) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it1
   let i2 ← core.option.Option.unwrap o1
-  massert (i2 = 1#u32)
+  massert (i2 = 1#u32 : Bool)
   let (o2, it3) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it2
   let i3 ← core.option.Option.unwrap o2
-  massert (i3 = 2#u32)
+  massert (i3 = 2#u32 : Bool)
   let (o3, it4) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it3
   let i4 ← core.option.Option.unwrap o3
-  massert (i4 = 3#u32)
+  massert (i4 = 3#u32 : Bool)
   let (o4, it5) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it4
   let i5 ← core.option.Option.unwrap o4
-  massert (i5 = 4#u32)
+  massert (i5 = 4#u32 : Bool)
   let (o5, _) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it5
@@ -79,17 +79,17 @@ def test_step_by_2 : Result Unit := do
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
   let i1 ← core.option.Option.unwrap o
-  massert (i1 = 0#u32)
+  massert (i1 = 0#u32 : Bool)
   let (o1, it2) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it1
   let i2 ← core.option.Option.unwrap o1
-  massert (i2 = 2#u32)
+  massert (i2 = 2#u32 : Bool)
   let (o2, it3) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it2
   let i3 ← core.option.Option.unwrap o2
-  massert (i3 = 4#u32)
+  massert (i3 = 4#u32 : Bool)
   let (o3, _) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it3
@@ -114,17 +114,17 @@ def test_step_by_3 : Result Unit := do
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
   let i1 ← core.option.Option.unwrap o
-  massert (i1 = 0#u32)
+  massert (i1 = 0#u32 : Bool)
   let (o1, it2) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it1
   let i2 ← core.option.Option.unwrap o1
-  massert (i2 = 3#u32)
+  massert (i2 = 3#u32 : Bool)
   let (o2, it3) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it2
   let i3 ← core.option.Option.unwrap o2
-  massert (i3 = 6#u32)
+  massert (i3 = 6#u32 : Bool)
   let (o3, _) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it3
@@ -147,7 +147,7 @@ def test_step_by_larger_than_len : Result Unit := do
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
   let i1 ← core.option.Option.unwrap o
-  massert (i1 = 0#u32)
+  massert (i1 = 0#u32 : Bool)
   let (o1, _) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it1
@@ -188,7 +188,7 @@ def test_step_by_single : Result Unit := do
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
   let i1 ← core.option.Option.unwrap o
-  massert (i1 = 42#u32)
+  massert (i1 = 42#u32 : Bool)
   let (o1, _) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it1
@@ -211,7 +211,7 @@ def test_step_by_single_step_2 : Result Unit := do
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
   let i1 ← core.option.Option.unwrap o
-  massert (i1 = 42#u32)
+  massert (i1 = 42#u32 : Bool)
   let (o1, _) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it1
@@ -234,7 +234,7 @@ def test_step_by_eq_len : Result Unit := do
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
   let i1 ← core.option.Option.unwrap o
-  massert (i1 = 0#u32)
+  massert (i1 = 0#u32 : Bool)
   let (o1, _) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it1
@@ -257,12 +257,12 @@ def test_step_by_len_minus_1 : Result Unit := do
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
   let i1 ← core.option.Option.unwrap o
-  massert (i1 = 0#u32)
+  massert (i1 = 0#u32 : Bool)
   let (o1, it2) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it1
   let i2 ← core.option.Option.unwrap o1
-  massert (i2 = 2#u32)
+  massert (i2 = 2#u32 : Bool)
   let (o2, _) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it2
@@ -285,7 +285,7 @@ def test_step_by_two_elements : Result Unit := do
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
   let i1 ← core.option.Option.unwrap o
-  massert (i1 = 0#u32)
+  massert (i1 = 0#u32 : Bool)
   let (o1, _) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it1
@@ -313,17 +313,17 @@ def test_step_by_4_on_longer : Result Unit := do
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it
   let i1 ← core.option.Option.unwrap o
-  massert (i1 = 0#u32)
+  massert (i1 = 0#u32 : Bool)
   let (o1, it2) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it1
   let i2 ← core.option.Option.unwrap o1
-  massert (i2 = 4#u32)
+  massert (i2 = 4#u32 : Bool)
   let (o2, it3) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it2
   let i3 ← core.option.Option.unwrap o2
-  massert (i3 = 8#u32)
+  massert (i3 = 8#u32 : Bool)
   let (o3, _) ←
     core.iter.adapters.step_by.IteratorStepBy.next
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it3
