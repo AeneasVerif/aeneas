@@ -142,6 +142,13 @@ let merged_module_components (paths : string list) : string list =
   in
   [ String.concat "_" (List.sort String.compare stems) ^ "_Bundle" ]
 
+(** The module path of layer number [index] of the module [base]. Whether or not
+    the name is an opaque layer or not is determined by [is_opaque]. *)
+let layer_module_components (base : string list) ~(is_opaque : bool)
+    ~(index : int) : string list =
+  let word = if is_opaque then "Opaques" else "Part" in
+  base @ [ word ^ string_of_int index ]
+
 (** Assemble a dotted Lean module name from its components, e.g.
     [["Happy"; "Baz"; "Bang"]] -> ["Happy.Baz.Bang"]. *)
 let dotted_module_name (components : string list) : string =
