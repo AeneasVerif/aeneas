@@ -149,6 +149,15 @@ let layer_module_components (base : string list) ~(is_opaque : bool)
   let word = if is_opaque then "Opaques" else "Part" in
   base @ [ word ^ string_of_int index ]
 
+(** The module path [base] with [_index] added to its last component, to tell
+    apart two modules with the same name. This is used when we need to disambiguate
+    Lean modules that are generated with the same base path. *)
+let indexed_module_components (base : string list) ~(index : int) : string list
+    =
+  match List.rev base with
+  | last :: rest -> List.rev ((last ^ "_" ^ string_of_int index) :: rest)
+  | [] -> [ "_" ^ string_of_int index ]
+
 (** Assemble a dotted Lean module name from its components, e.g.
     [["Happy"; "Baz"; "Bang"]] -> ["Happy.Baz.Bang"]. *)
 let dotted_module_name (components : string list) : string =
