@@ -10,3 +10,4 @@ pub mod ping;
 pub mod pong;
 pub mod types;
 pub mod uses_layered;
+pub mod viamacro;
