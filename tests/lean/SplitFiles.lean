@@ -5,3 +5,4 @@ public import SplitFiles.Layered
 public import SplitFiles.Types
 public import SplitFiles.Ops
 public import SplitFiles.Ping_Pong_Bundle
+public import SplitFiles.UsesLayered
