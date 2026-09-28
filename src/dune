@@ -62,6 +62,7 @@
   ExtractTypes
   FileGraph
   FileMapping
+  FilePlan
   FormatCompat
   FunsAnalysis
   GitVersion
