@@ -9,3 +9,4 @@ pub mod ops;
 pub mod ping;
 pub mod pong;
 pub mod types;
+pub mod uses_layered;
