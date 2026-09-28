@@ -17,6 +17,10 @@ type component_layer = {
   filename : string;  (** The path we write ([_Template] included). *)
   groups : LlbcAst.declaration_group list;
       (** Its declaration groups, in [crate.declarations] order. *)
+  noncomputable : bool;
+      (** Whether the file needs Lean's [noncomputable section]. This happens
+          when the component depends on an axiom (either directly or
+          transitively). This is [false] for opaque layers. *)
 }
 
 (** One strongly connected component of the file graph: source files that use
@@ -196,32 +200,34 @@ let file_of_components ~(module_root_dir : string) ~(is_opaque_layer : bool)
     and an aggregator at [base] that imports them all. *)
 let module_files ~(import_prefix : string) ~(module_root_dir : string)
     (base : string list) (layers : (bool * LlbcAst.declaration_group list) list)
-    : string option * component_layer list =
+    ~(noncomputable : bool list) : string option * component_layer list =
   (* The layer for the module [components], holding [groups]. *)
   let layer ~(is_opaque_layer : bool) (components : string list)
-      (groups : LlbcAst.declaration_group list) : component_layer =
+      (groups : LlbcAst.declaration_group list) (noncomputable : bool) :
+      component_layer =
     {
       is_opaque_layer;
       import_name = import_prefix ^ FileMapping.dotted_module_name components;
       filename = file_of_components ~module_root_dir ~is_opaque_layer components;
       groups;
+      noncomputable;
     }
   in
-  match layers with
+  match List.combine layers noncomputable with
   | [] ->
       (* Nothing to write, so no file. *)
       (None, [])
-  | [ (is_opaque_layer, groups) ] ->
-      (None, [ layer ~is_opaque_layer base groups ])
+  | [ ((is_opaque_layer, groups), noncomputable) ] ->
+      (None, [ layer ~is_opaque_layer base groups noncomputable ])
   | layers ->
       let layers =
         List.mapi
-          (fun i (is_opaque_layer, groups) ->
+          (fun i ((is_opaque_layer, groups), noncomputable) ->
             let components =
               FileMapping.layer_module_components base
                 ~is_opaque:is_opaque_layer ~index:(i + 1)
             in
-            layer ~is_opaque_layer components groups)
+            layer ~is_opaque_layer components groups noncomputable)
           layers
       in
       ( Some (file_of_components ~module_root_dir ~is_opaque_layer:false base),
@@ -236,7 +242,8 @@ let module_files ~(import_prefix : string) ~(module_root_dir : string)
     Declarations without metadata are left out ({!FileGraph.compute} warns about
     them). *)
 let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
-    ~(import_prefix : string) ~(module_root_dir : string) : component list =
+    ~(import_prefix : string) ~(module_root_dir : string)
+    ~(all_computable : bool) : component list =
   let scc_list = SCC.SccId.Map.bindings fg.sccs.sccs in
   let is_builtin = LlbcAstUtils.item_is_builtin crate in
   let is_opaque = LlbcAstUtils.item_is_opaque crate in
@@ -311,6 +318,30 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
       (LlbcAstUtils.declaration_group_to_list g)
   in
 
+  (* The SCCs each SCC depends on. *)
+  let scc_deps (scc_id : SCC.SccId.id) : SCC.SccId.Set.t =
+    Option.value
+      (SCC.SccId.Map.find_opt scc_id fg.sccs.scc_deps)
+      ~default:SCC.SccId.Set.empty
+  in
+  (* Whether each SCC has an opaque declaration, or depends on one
+     transitively. [scc_list] is in dependency order, so the dependencies of an
+     SCC are already in [acc]. *)
+  let has_opaques : bool SCC.SccId.Map.t =
+    List.fold_left
+      (fun acc (scc_id, _) ->
+        let groups =
+          Option.value (SCC.SccId.Map.find_opt scc_id groups_by_scc) ~default:[]
+        in
+        SCC.SccId.Map.add scc_id
+          (List.exists group_has_opaques groups
+          || SCC.SccId.Set.exists
+               (fun dep -> SCC.SccId.Map.find dep acc)
+               (scc_deps scc_id))
+          acc)
+      SCC.SccId.Map.empty scc_list
+  in
+
   List.map
     (fun (scc_id, buckets) ->
       let source_files =
@@ -374,8 +405,23 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
           [ (List.exists group_has_opaques groups, groups) ]
         else cut_layers ~opacity ~deps:group_deps groups
       in
+      (* A layer is noncomputable if an SCC it imports has opaques, or if it or
+         an earlier layer does. Opaque layers never are. *)
+      let noncomputable =
+        let imports_opaques =
+          SCC.SccId.Set.exists
+            (fun dep -> SCC.SccId.Map.find dep has_opaques)
+            (scc_deps scc_id)
+        in
+        snd
+          (List.fold_left_map
+             (fun seen (is_opaque_layer, groups) ->
+               let seen = seen || List.exists group_has_opaques groups in
+               (seen, seen && (not is_opaque_layer) && not all_computable))
+             imports_opaques layers)
+      in
       let aggregator, layers =
-        module_files ~import_prefix ~module_root_dir base layers
+        module_files ~import_prefix ~module_root_dir base layers ~noncomputable
       in
       {
         scc_id;
