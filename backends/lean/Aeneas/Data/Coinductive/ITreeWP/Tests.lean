@@ -8,7 +8,7 @@ namespace Aeneas.Data.Coinductive.TotalTests
 variable {E : Effect} {θ : EffectWP E}
 variable [θ.Monotone]
 
-/-! # Liberal versus total WPs under event health conditions -/
+/-! # Liberal versus total WPs under wp health conditions -/
 
 /-- Perform `event` forever, ignoring its answers. -/
 def forever (event : E.I) : ITree E Unit :=
