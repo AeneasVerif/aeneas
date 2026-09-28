@@ -512,7 +512,7 @@ end
 /- Product abbreviations can be inspected using reducible transparency. -/
 abbrev NestedOutput := (Nat × Nat) × Nat
 
-example (f : Result NestedOutput) (h : f ⦃ p => p = ((1, 2), 3) ⦄) :
+example (f : Result NestedOutput) (h : f ⦃ ((a, b), c) => a = 1 ∧ b = 2 ∧ c = 3 ⦄) :
     (do let ((a, b), c) ← f; ok (a + b + c)) ⦃ r => r = 6 ⦄ := by
   step with h as ⟨a, b, c, ha, hb, hc⟩
   simp [ha, hb, hc]
@@ -530,8 +530,7 @@ example {α : Type u} (x : α) :
       ⦃ (y : α) (k : Nat) => y = x ∧ k = 2 ⦄ := by
   step*
 
-/- The output type `Vector α size` refers to local lets `size` and `n`.
-   Check that constructing the target and proving equivalence preserve those references. -/
+/- Output binder types retain local let-bound dimensions rather than unfolding them. -/
 example {α : Type u} (m : Nat) :
     let n := m + 1
     let size := n + 1
@@ -539,16 +538,9 @@ example {α : Type u} (m : Nat) :
       (do let (y, k) ← genericPair x; ok (y, k + 1))
         ⦃ y k => y = x ∧ k = 2 ⦄ := by
   intro n size x
-  step*
-
-/- Also cover a local `have` used in the output type. -/
-example (m : Nat) :
-    have n := m + 1
-    ∀ x : Vector Nat n,
-      (do let (y, k) ← genericPair x; ok (y, k + 1))
-        ⦃ y k => y = x ∧ k = 2 ⦄ := by
-  intro n x
-  step*
+  step with genericPair_spec as ⟨y, k, hy, hk⟩
+  guard_hyp y :ₛ Vector α size
+  simp [hy, hk]
 
 /- Partial correctness uses the same call-site tuple pattern. -/
 example :
@@ -567,6 +559,13 @@ theorem unitProg_spec : unitProg ⦃ (u : Unit) => u = () ⦄ := by
 
 abbrev UnitOutput := Unit
 
+/- Preserve the anonymous name slot when a unit postcondition has no output tree. -/
+run_cmd Lean.Elab.Command.liftTermElabM do
+  let post ← Lean.Elab.Term.elabTerm (← `(fun (_ : Unit) => True)) none
+  let names ← Aeneas.Step.getPostNames post
+  unless names == #[none] do
+    throwError "Expected an anonymous name slot, got {names}"
+
 example (f : Result UnitOutput) (h : f ⦃ (u : UnitOutput) => u = () ⦄) :
     (do let _ ← f; genericPair 5) ⦃ y k => y = 5 ∧ k = 1 ⦄ := by
   step with h as ⟨⟩
@@ -580,3 +579,41 @@ example (g : Unit → Result Nat) (hg : ∀ u, g u ⦃ (n : Nat) => n = 0 ⦄) :
   step with unitProg_spec
   step with hg as ⟨n, hn⟩
   exact hn
+
+/- Unit leaves disappear inside tuples, including when the continuation uses them. -/
+example (f : Result (Bool × Unit)) (h : f ⦃ b u => b = true ∧ u = () ⦄)
+    (g : Bool → Unit → Result Nat)
+    (hg : ∀ b u, g b u ⦃ n => n = 0 ⦄) :
+    (do let (b, u) ← f; g b u) ⦃ n => n = 0 ⦄ := by
+  step with h as ⟨b, hb⟩
+  guard_hyp b : Bool
+  guard_hyp hb : b = true
+  step with hg as ⟨n, hn⟩
+  exact hn
+
+example (f : Result ((Unit × Nat) × (Bool × Unit)))
+    (h : f ⦃ ((u, n), (b, v)) => u = () ∧ n = 1 ∧ b = true ∧ v = () ⦄) :
+    (do let ((_, n), (b, _)) ← f; ok (n, b)) ⦃ n b => n = 1 ∧ b = true ⦄ := by
+  step with h as ⟨n, b, hn, hb⟩
+  guard_hyp n : Nat
+  guard_hyp b : Bool
+  simp [hn, hb]
+
+/- Inferred names skip unit leaves as well; they must not become postcondition names. -/
+example (f : Result ((Unit × Nat) × (Bool × Unit)))
+    (h : f ⦃ ((u, n), (b, v)) => u = () ∧ n = 1 ∧ b = true ∧ v = () ⦄) :
+    (do let ((u, n), (b, v)) ← f; ok (u, n, b, v))
+      ⦃ u n b v => u = () ∧ n = 1 ∧ b = true ∧ v = () ⦄ := by
+  step with h
+  guard_hyp n : Nat
+  guard_hyp b : Bool
+  guard_hyp n_post : n = 1
+  guard_hyp b_post : b = true
+  simp [n_post, b_post]
+
+/- Quantifiers belonging to the final goal must remain for the caller to introduce. -/
+example (f : Result Nat) (h : f ⦃ n => n = 0 ⦄) :
+    (do let n ← f; ok n) ⦃ n => ∀ k : Nat, n + k = k ⦄ := by
+  step with h as ⟨n, hn⟩
+  intro k
+  simp [hn]

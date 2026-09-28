@@ -27,7 +27,10 @@ structure SpecInfo where
   mk_spec_bind : Name
   mk_spec_bind_skip_args : Nat
 
-  uncurry_elim_tactics : Array Lean.Name
+  /-- Deprecated compatibility field; ignored by `step`. Use `qimp_elim_tactics` instead. -/
+  uncurry_elim_tactics : Array Lean.Name := #[]
+  /-- Lemmas for proving output-target equivalence. The first matching `Iff` lemma
+  whose RHS exposes a `∀` at reducible transparency supplies the output telescope. -/
   qimp_elim_tactics : Array Lean.Name
 
   to_mvcgen: Option Name

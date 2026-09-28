@@ -76,7 +76,7 @@ example (xs : List Nat) :
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, c, a_post, b_post, c_post ⟩ ← readNested_spec
+  [apply]     let* ⟨ a, b, c, a_post ⟩ ← readNested_spec
     let* ⟨ ⟩ ← readSingle_spec
 -/
 #guard_msgs in

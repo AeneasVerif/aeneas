@@ -426,9 +426,15 @@ meta def getContInput (e : Expr) : MetaM NameTree := do
     | some tree => tree.mapM fvarNameSlot
     | none => return .leaf none
 
-/-- Extract names from a post-condition or bind-continuation expression. -/
+/-- Extract names from a post-condition or bind-continuation, omitting unit leaves
+in the same order as `withOutputTuple`. Keep the anonymous slot when no tree is found. -/
 meta def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
-  return (← getContInput e).flatten
+  uncurryTelescope e fun optTree _ => do
+    let some tree := optTree | return #[none]
+    tree.flatten.filterMapM fun fv => do
+      let ty ← withReducible <| whnf (← inferType fv)
+      if ty.isConstOf ``PUnit then return none
+      return some (← fvarNameSlot fv)
 
 /-- Extract the variable names from the bind continuation in the current goal.
     Returns an empty array if the goal is not a bind. -/
@@ -646,36 +652,68 @@ meta def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array E
   Utils.addDeclTac name e (← inferType e) (asLet := false) fun e => do
     trace[Step] "Introduced the \"pretty\" let binding: {← inferType e}"
 
-/-- Introduce one local variable per leaf of `tree`, then pass the variables and their
+/-- Introduce one local variable per non-unit leaf of `tree`, then pass the variables and their
 tuple to `k`. For type `(A × B) × C` and pattern `((a, b), c)`, call
-`k #[a, b, c] ((a, b), c)`. A leaf of type `A × B` stays a single variable. -/
+`k #[a, b, c] ((a, b), c)`. Unit leaves become `()`; an unsplit product stays a single variable. -/
 meta partial def withOutputTuple {α β} (ty : Expr) (tree : BTree α)
     (k : Array Expr → Expr → MetaM β) : MetaM β := do
+  let reducedTy ← withReducible <| whnf ty
+  if reducedTy.isConstOf ``PUnit then
+    return ← k #[] (mkConst ``PUnit.unit reducedTy.constLevels!)
   match tree with
   | .leaf _ => withLocalDeclD `x ty fun x => k #[x] x
   | .pair l r =>
-    let ty ← withReducible <| whnf ty
-    match_expr ty with
+    match_expr reducedTy with
     | Prod a b =>
       withOutputTuple a l fun xs x =>
       withOutputTuple b r fun ys y => do
         k (xs ++ ys) (← mkAppM ``Prod.mk #[x, y])
     | _ => throwError "Expected a product for the output pattern, got {ty}"
 
-/-- Replace the quantified output with binders matching `tree`.
+/-- Expose the output quantifier using a registered entailment lemma, then replace it
+with binders matching `tree`. A leading Prop binder is left for postcondition introduction.
 For `∀ p : (A × B) × C, R p` and pattern `((a, b), c)`, return
 `(∀ a b c, R ((a, b), c), 3)`. Unit outputs are replaced with `()`. -/
-meta def mkOutputTarget (type : Expr) (tree : NameTree) : MetaM (Expr × Nat) := do
-  let type ← withTransparency .all <| whnf type
+meta def mkOutputTarget (info : SpecInfo) (type : Expr) (tree : NameTree) : MetaM (Expr × Nat) := do
+  let type ← withReducible <| whnf type
+  /- Read the registered entailment lemma's RHS rather than unfolding the WP.
+     For example, `qimp_spec_iff` supplies `∀ x, imp (P x) (spec (k x) Q)`. -/
+  let type ← (do
+    if type.isForall then return type
+    for name in info.qimp_elim_tactics do
+      let rhs? ← withoutModifyingState do
+        let thm ← mkConstWithFreshMVarLevels name
+        let (params, _, lemmaTy) ← forallMetaTelescope (← inferType thm)
+        let_expr Iff lhs rhs := lemmaTy | return none
+        unless ← withReducible <| isDefEq lhs type do return none
+        unless ← params.allM (fun p => p.mvarId!.isAssigned) do return none
+        return some (← instantiateMVars rhs)
+      if let some rhs := rhs? then
+        let rhs ← withReducible <| whnf rhs
+        if rhs.isForall then return rhs
+    throwError "No registered entailment lemma exposes the outputs of:\n{type}" : MetaM Expr)
   let .forallE _ ty body _ := type | return (type, 0)
   if ← isProp ty then return (type, 0)
-  let reducedTy ← withReducible <| whnf ty
-  if reducedTy.isConstOf ``PUnit then
-    return (body.instantiate1 (mkConst ``PUnit.unit reducedTy.constLevels!), 0)
   withOutputTuple ty tree fun xs tuple => do
     return (← mkForallFVars xs (body.instantiate1 tuple), xs.size)
 
-/-- Read the output pattern from the continuation, or the final postcondition. -/
+/-- Return a proof that the generated output target is equivalent to the step goal,
+using one `simp` call. For example, prove `qimp P Q ↔ ∀ a b, imp (P (a, b)) (Q (a, b))`
+using the registered entailment lemmas and `Prod.forall`. -/
+meta def proveOutputEquiv (info : SpecInfo) (goalTy target : Expr) : TacticM Expr := do
+  let equiv ← mkFreshExprSyntheticOpaqueMVar (← mkAppM ``Iff #[goalTy, target])
+  let remaining ← Tactic.run equiv.mvarId! do
+    let _ ← Simp.simpAt true { failIfUnchanged := false, iota := false }
+      { addSimpThms := info.qimp_elim_tactics ++
+          #[``Prod.forall, ``forall_punit, ``and_imp, ``exists_imp],
+        declsToUnfold := #[``Std.WP.imp] }
+      (.targets #[] true)
+  unless remaining.isEmpty do
+    throwError "Could not prove the output target equivalent to the step goal:\n{remaining}"
+  return ← instantiateMVars equiv
+
+/-- Read the output pattern from the continuation, or the final postcondition.
+Keep unit leaves in this tree: `withOutputTuple` needs their positions to reconstruct the tuple. -/
 meta def extractCallSiteTree (goalTy : Expr) : MetaM (Option NameTree) := do
   match_expr goalTy.consumeMData with
   | Std.WP.qimp_spec _ _ _ k _ => return some (← getContInput k)
@@ -686,7 +724,8 @@ meta def extractCallSiteTree (goalTy : Expr) : MetaM (Option NameTree) := do
 /-- Update the target so that outputs are quantified in call-site order.
 For example, `qimp_spec P k Q` with pattern `((a, b), c)` becomes
 `∀ a b c, P ((a, b), c) → k ((a, b), c) ⦃ Q ⦄`.
-Prove equivalence with `simp`, then introduce outputs and postconditions. -/
+We prove an equivalence theorem with `simp`, then apply it before introducing the
+outputs and postconditions. -/
 meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState : StepState) :
   TacticM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"introOutputs") do
@@ -694,34 +733,29 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
   traceGoalWithNode "Initial goal"
   let goal ← getMainGoal
   let goalTy ← instantiateMVars (← goal.getType)
+  /- Capture the call-site pattern before exposing the quantifiers, which loses
+     the continuation's tuple structure. -/
   let tree := (← extractCallSiteTree goalTy).getD (.leaf none)
-  let (target, prefixLength) ← mkOutputTarget goalTy tree
+  let (target, prefixLength) ← mkOutputTarget info goalTy tree
   let (ctx, simprocs) ← Simp.mkSimpCtx true { iota := false } .dsimp
     { addSimpThms := scalar_eqs }
   let (target, _) ← Lean.Meta.dsimp target ctx simprocs
   trace[Step] "Output target: {target}"
-  let equiv ← mkFreshExprSyntheticOpaqueMVar (← mkAppM ``Iff #[goalTy, target])
-  let remaining ← Tactic.run equiv.mvarId! do
-    let _ ← Simp.simpAt true { failIfUnchanged := false }
-      { addSimpThms := info.qimp_elim_tactics ++
-          #[``Prod.forall, ``forall_punit, ``and_imp, ``exists_imp],
-        declsToUnfold := #[``Std.WP.imp] }
-      (.targets #[] true)
-  unless remaining.isEmpty do
-    throwError "Could not prove the output target equivalent to the step goal:\n{remaining}"
+  let equiv ← proveOutputEquiv info goalTy target
   let next ← mkFreshExprSyntheticOpaqueMVar target (← goal.getTag)
   goal.assign (← mkAppM ``Iff.mpr #[equiv, next])
   let (outputFVars, next) ← next.mvarId!.introN prefixLength
   setGoals [next]
   traceGoalWithNode "goal after introducing the output"
 
-  /- Normalize postconditions only after the output binders are fixed. -/
+  /- Reduce `uncurry` applications exposed by the output tuple and flatten postconditions.
+     Restrict rewriting to Prop-valued applications so bind continuations stay intact.
+     Do not use `step_simps` here: reducing `spec (ok x) Q` would expose quantifiers
+     in the final goal and introduce them as if they were postconditions. -/
   let _ ← withTraceNode `Step (fun _ => pure m!"simpAt: normalizing postconditions") do
     Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
-            { simpThms := #[← stepSimpExt.getTheorems],
-              declsToUnfold := #[``Std.WP.imp],
-              addSimpThms := info.uncurry_elim_tactics ++
-                #[``Std.uncurry_apply_pair,
+            { declsToUnfold := #[``Std.WP.imp],
+              addSimpThms := #[``Std.uncurry_apply_pair,
                   ``Std.uncurry_eq_prop, ``Std.uncurry_eq_prop_arrow,
                   ``Std.WP.uncurry'_pair, ``Std.WP.uncurry'_eq,
                   ``and_imp, ``exists_imp, ``forall_unit, ``true_imp_iff] ++ scalar_eqs }
