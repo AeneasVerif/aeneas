@@ -1,2 +1,2 @@
 [!lean] skip
-[lean] aeneas-args=-split-files
+[lean] aeneas-args=-split-files-legacy
