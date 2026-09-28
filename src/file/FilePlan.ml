@@ -56,6 +56,15 @@ let module_root_dir ~(subdir : string option) ~(full_dest_dir : string)
   | Some _ -> full_dest_dir
   | None -> Filename.concat full_dest_dir crate_name
 
+(** The [Crate.lean] entry point, next to the [Crate/] directory, which imports
+    every local module. There is none with [-subdir]: the code is then part of a
+    larger Lean project, which decides how to import it. *)
+let entry_point_file ~(subdir : string option) ~(dest_dir : string)
+    ~(crate_name : string) : string option =
+  match subdir with
+  | Some _ -> None
+  | None -> Some (Filename.concat dest_dir (crate_name ^ ".lean"))
+
 (** Whether a declaration group is extracted as a file with generated Lean defs
     ([GroupTransparent]), as a file the user fills in ([GroupOpaque]), or not at
     all ([BuiltinOnly]). A group mixing opaque and transparent members cannot be
@@ -482,3 +491,56 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
         layers;
       })
     scc_list
+
+(** The generated-files section of the [-dump-file-graph] report: the files the
+    [-split-files] emitter writes, with paths relative to [dest_dir]. *)
+let placement_to_string ~(dest_dir : string) ~(entry_point : string option)
+    (components : component list) : string =
+  let buf = Buffer.create 256 in
+  let line fmt =
+    Printf.ksprintf (fun s -> Buffer.add_string buf (s ^ "\n")) fmt
+  in
+  let relative (filename : string) : string =
+    let prefix = Filename.concat dest_dir "" in
+    if String.starts_with ~prefix filename then
+      String.sub filename (String.length prefix)
+        (String.length filename - String.length prefix)
+    else filename
+  in
+  let components =
+    List.filter (fun (c : component) -> not c.is_dropped) components
+  in
+  let file_count =
+    List.fold_left
+      (fun n (c : component) ->
+        n + List.length c.layers + if c.aggregator = None then 0 else 1)
+      (if entry_point = None then 0 else 1)
+      components
+  in
+  line "================ GENERATED FILES (-split-files) ================";
+  line "The %d file(s) the emitter will write:" file_count;
+  line "";
+  Option.iter
+    (fun filename -> line "  file: %s (entry point)" (relative filename))
+    entry_point;
+  List.iter
+    (fun (c : component) ->
+      let role =
+        if c.is_external then "external declarations"
+        else
+          let src = String.concat " + " c.source_files in
+          if List.length c.source_files > 1 then "merged: " ^ src else src
+      in
+      line "  %s" c.import_name;
+      line "      %s" role;
+      (match c.aggregator with
+      | Some filename -> line "      file: %s (aggregator)" (relative filename)
+      | None -> ());
+      List.iter
+        (fun (l : component_layer) ->
+          line "      file: %s%s" (relative l.filename)
+            (if l.is_opaque_layer then "  (template)" else ""))
+        c.layers)
+    components;
+  line "=======================================================================";
+  Buffer.contents buf

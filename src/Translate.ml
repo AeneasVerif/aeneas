@@ -1475,9 +1475,10 @@ let full_extraction_config () : gen_config =
   }
 
 (** Per-file extraction ([-split-files]): write the files of [components] (see
-    {!FilePlan} for what components and layers are), in dependency order. *)
-let extract_by_file (ctx : gen_ctx) (crate : crate) ~(dest_dir : string)
-    ~(subdir : string option) ~(namespace : string) ~(crate_name : string)
+    {!FilePlan} for what components and layers are), in dependency order, and
+    the [entry_point] if there is one. *)
+let extract_by_file (ctx : gen_ctx) (crate : crate)
+    ~(entry_point : string option) ~(namespace : string) ~(crate_name : string)
     ~(fg : FileGraph.t) ~(components : FilePlan.component list) : unit =
   let component_of_scc =
     List.fold_left
@@ -1591,36 +1592,34 @@ let extract_by_file (ctx : gen_ctx) (crate : crate) ~(dest_dir : string)
       end)
     components;
 
-  (* The entry point: [Crate.lean], next to the [Crate/] directory, imports
-     every local module, so that [import Crate] imports the whole crate. We
-     don't write it when the [-subdir] option is set, since this means the
-     extracted code is part of a larger Lean project which should decide how
-     to handle the imports. *)
-  if Option.is_none subdir then (
-    let local_modules =
-      List.filter_map
-        (fun (m : FilePlan.component) ->
-          (* This also skips the dropped components, which are external. *)
-          if m.is_external then None else Some m.import_name)
-        components
-    in
-    let filename = Filename.concat dest_dir (crate_name ^ ".lean") in
-    (* Don't overwrite a file we didn't generate (e.g. one the user wrote). *)
-    if Sys.file_exists filename then (
-      let ic = open_in filename in
-      let first_line = try input_line ic with End_of_file -> "" in
-      close_in ic;
-      if first_line <> generated_header then
-        [%craise_opt_span] None
-          ("Refusing to overwrite " ^ filename
-         ^ ": it does not start with the \"" ^ generated_header
-         ^ "\" header, so it does not look like a file Aeneas generated. Move \
-            or delete it and rerun."));
-    write_imports_file ~filename
-      ~custom_msg:
-        ": the library entry point: importing this module brings the whole \
-         crate into scope."
-      ~imports:local_modules)
+  (* The entry point (see {!FilePlan.entry_point_file}), so that [import Crate]
+     imports the whole crate. *)
+  match entry_point with
+  | None -> ()
+  | Some filename ->
+      let local_modules =
+        List.filter_map
+          (fun (m : FilePlan.component) ->
+            (* This also skips the dropped components, which are external. *)
+            if m.is_external then None else Some m.import_name)
+          components
+      in
+      (* Don't overwrite a file we didn't generate (e.g. one the user wrote). *)
+      if Sys.file_exists filename then (
+        let ic = open_in filename in
+        let first_line = try input_line ic with End_of_file -> "" in
+        close_in ic;
+        if first_line <> generated_header then
+          [%craise_opt_span] None
+            ("Refusing to overwrite " ^ filename
+           ^ ": it does not start with the \"" ^ generated_header
+           ^ "\" header, so it does not look like a file Aeneas generated. \
+              Move or delete it and rerun."));
+      write_imports_file ~filename
+        ~custom_msg:
+          ": the library entry point: importing this module brings the whole \
+           crate into scope."
+        ~imports:local_modules
 
 let extract_translated_crate (filename : string) (dest_dir : string)
     (subdir : string option) (crate : crate) (trans_ctx : trans_ctx)
@@ -2037,7 +2036,10 @@ let extract_translated_crate (filename : string) (dest_dir : string)
     else None
   in
 
-  (* Diagnostic: print the file-dependency graph, then continue extraction. *)
+  let entry_point = FilePlan.entry_point_file ~subdir ~dest_dir ~crate_name in
+
+  (* Diagnostic: print the file-dependency graph, and in [-split-files] mode
+     the files that will be written, then continue extraction. *)
   if !Config.dump_file_graph then (
     let get_name (id : Types.item_id) : string =
       match LlbcAstUtils.crate_get_item_meta crate id with
@@ -2045,13 +2047,18 @@ let extract_translated_crate (filename : string) (dest_dir : string)
       | None -> "<unknown item>"
     in
     print_string (FileGraph.graph_to_string (Lazy.force file_graph) ~get_name);
+    Option.iter
+      (fun components ->
+        print_string
+          (FilePlan.placement_to_string ~dest_dir ~entry_point components))
+      placement;
     flush stdout);
 
   (* Extract one or several files, depending on the configuration.
      [placement] is [Some] exactly in [-split-files] mode. *)
   (match placement with
   | Some components ->
-      extract_by_file ctx crate ~dest_dir ~subdir ~namespace ~crate_name
+      extract_by_file ctx crate ~entry_point ~namespace ~crate_name
         ~fg:(Lazy.force file_graph) ~components
   | None ->
       if !Config.split_files_legacy then (
