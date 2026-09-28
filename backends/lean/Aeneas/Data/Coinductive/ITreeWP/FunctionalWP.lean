@@ -20,10 +20,10 @@ abbrev ITreePred (θ : EffectWP E) (α : Type u) := θ.Post (ITree E α)
 private noncomputable instance ITreePred.instCompleteLattice : CompleteLattice (ITreePred θ α) :=
   inferInstanceAs (CompleteLattice (ITree E α → θ.State → Prop))
 
--- EffectWP      : (event : E.I) →           (E.O event → State → Prop) → (State → Prop)
--- FunctionalWP  : (X : ITree E α -> Prop) → (E.O event → State → Prop) → (ITree E α → Prop)
+-- EffectWP      : (effect : E.I) →           (E.O effect → State → Prop) → (State → Prop)
+-- FunctionalWP  : (X : ITree E α -> Prop) → (E.O effect → State → Prop) → (ITree E α → Prop)
 
-/-- Lift the WP of an event (`EffectWP`) to a WP for ITrees. -/
+/-- Lift the WP of an effect (`EffectWP`) to a WP for ITrees. -/
 @[expose] def FunctionalWP (allowDivergence : Prop) (θ : EffectWP E) (Q : θ.Post α)
     (X : ITreePred θ α) : ITreePred θ α :=
   fun m s =>
@@ -31,7 +31,7 @@ private noncomputable instance ITreePred.instCompleteLattice : CompleteLattice (
       (motive := fun _ => Prop)
       (fun value => Q value s)
       allowDivergence
-      (fun event k => θ.wp event (fun answer s' => X (k answer) s') s)
+      (fun effect k => θ.wp effect (fun answer s' => X (k answer) s') s)
       m
 
 theorem FunctionalWP.ret :
@@ -43,8 +43,8 @@ theorem FunctionalWP.div :
   simp only [FunctionalWP, ITree.cases.div]
 
 theorem FunctionalWP.vis :
-    FunctionalWP allowDivergence θ Q X (.vis event k) s =
-      θ.wp event (fun answer s' => X (k answer) s') s := by
+    FunctionalWP allowDivergence θ Q X (.vis effect k) s =
+      θ.wp effect (fun answer s' => X (k answer) s') s := by
   simp only [FunctionalWP, ITree.cases.vis]
 
 theorem FunctionalWP.mono [θ.Monotone]
@@ -60,7 +60,7 @@ theorem FunctionalWP.mono [θ.Monotone]
   | div =>
       simp only [FunctionalWP.div]
       exact hDiv
-  | vis event k =>
+  | vis effect k =>
       simp only [FunctionalWP.vis]
       exact θ.wp_mono fun answer s' => hX (k answer) s'
 

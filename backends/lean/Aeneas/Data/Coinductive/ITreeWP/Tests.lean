@@ -10,25 +10,25 @@ variable [θ.Monotone]
 
 /-! # Liberal versus total WPs under wp health conditions -/
 
-/-- Perform `event` forever, ignoring its answers. -/
-def forever (event : E.I) : ITree E Unit :=
-  .vis event fun _ => forever event
+/-- Perform `effect` forever, ignoring its answers. -/
+def forever (effect : E.I) : ITree E Unit :=
+  .vis effect fun _ => forever effect
 partial_fixpoint
 
-/-- DWLP accepts a productive infinite program, as long as its event is safe. -/
-theorem forever_partial {event : E.I} (hSafe : ∀ s, θ.wp event (fun _ _ => True) s)
-    (Q : θ.Post Unit) (s : θ.State) : DWLP θ (forever event) Q s := by
-  refine DWLP.coinduction (fun t _ => t = forever event) ?_ rfl
+/-- DWLP accepts a productive infinite program, as long as its effect is safe. -/
+theorem forever_partial {effect : E.I} (hSafe : ∀ s, θ.wp effect (fun _ _ => True) s)
+    (Q : θ.Post Unit) (s : θ.State) : DWLP θ (forever effect) Q s := by
+  refine DWLP.coinduction (fun t _ => t = forever effect) ?_ rfl
   rintro _ s' rfl
   rw [forever, FunctionalWP.vis]
-  exact θ.wp_mono (fun _ _ _ => forever.eq_1 event) (hSafe s')
+  exact θ.wp_mono (fun _ _ _ => forever.eq_1 effect) (hSafe s')
 
-/-- DWP rejects a productive infinite program: since no event can guarantee
+/-- DWP rejects a productive infinite program: since no effect can guarantee
     `False`, a tree that never returns is never totally correct. -/
-theorem forever_not_total [θ.NoMiracle] (event : E.I) (Q : θ.Post Unit) (s : θ.State) :
-    ¬ DWP θ (forever event) Q s := by
+theorem forever_not_total [θ.NoMiracle] (effect : E.I) (Q : θ.Post Unit) (s : θ.State) :
+    ¬ DWP θ (forever effect) Q s := by
   intro hSpec
-  refine DWP.induction (P := fun t _ => t = forever event → False)
+  refine DWP.induction (P := fun t _ => t = forever effect → False)
     (fun _ _ _ hEq => ?_) (fun _ k s' hWp hEq => ?_) hSpec rfl
   · rw [forever] at hEq
     exact not_vis_ret hEq
@@ -37,9 +37,9 @@ theorem forever_not_total [θ.NoMiracle] (event : E.I) (Q : θ.Post Unit) (s : �
     obtain rfl := eq_of_heq hk
     exact θ.wp_noMiracle _ s' (θ.wp_mono (fun _ _ h => h rfl) hWp)
 
-example [θ.Conjunctive] [θ.NoMiracle] {event : E.I}
-    (hSafe : ∀ s, θ.wp event (fun _ _ => True) s) (Q : θ.Post Unit) (s : θ.State) :
-    ¬ DWP θ (forever event) Q s :=
+example [θ.Conjunctive] [θ.NoMiracle] {effect : E.I}
+    (hSafe : ∀ s, θ.wp effect (fun _ _ => True) s) (Q : θ.Post Unit) (s : θ.State) :
+    ¬ DWP θ (forever effect) Q s :=
   dwp_no_loops (forever_partial hSafe (fun _ _ => False) s)
 
 /-- A silent infinite program -/
@@ -72,14 +72,14 @@ namespace Aeneas.Data.Coinductive.StateTest
 
 /-! # Instantiate DWP and DWLP with multiple effects -/
 
-inductive StateEvent : Type 1 where
+inductive StateEffect.Input : Type 1 where
   | get
   | put (value : Nat)
   | fail
   | choose (α : Type)
 
 @[reducible]
-def StateEvent.output : StateEvent → Type 1
+def StateEffect.Output : StateEffect.Input → Type 1
   | .get => ULift Nat
   | .put _ => ULift Unit
   | .fail => ULift Unit
@@ -87,14 +87,14 @@ def StateEvent.output : StateEvent → Type 1
 
 @[reducible]
 def StateEffect : Effect where
-  I := StateEvent
-  O := StateEvent.output
+  I := StateEffect.Input
+  O := StateEffect.Output
 
 @[reducible]
 def effectSpec : EffectWP StateEffect where
   State := Nat
-  wp event C state :=
-    match event with
+  wp effect C state :=
+    match effect with
     | .get => C ⟨state⟩ state
     | .put value => C ⟨()⟩ value
     | .fail => False
@@ -102,8 +102,8 @@ def effectSpec : EffectWP StateEffect where
 
 instance : EffectWP.Monotone effectSpec where
   wp_mono := by
-    rintro event C C' hC state hWp
-    cases event
+    rintro effect C C' hC state hWp
+    cases effect
     · exact hC _ _ hWp
     · exact hC _ _ hWp
     · exact hWp.elim
@@ -111,8 +111,8 @@ instance : EffectWP.Monotone effectSpec where
 
 instance : EffectWP.Conjunctive effectSpec where
   wp_conj := by
-    rintro event state Demands ⟨C₀, hC₀⟩ hAll
-    cases event
+    rintro effect state Demands ⟨C₀, hC₀⟩ hAll
+    cases effect
     · exact fun C hC => hAll C hC
     · exact fun C hC => hAll C hC
     · exact (hAll C₀ hC₀).elim

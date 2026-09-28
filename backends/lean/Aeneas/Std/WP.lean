@@ -34,8 +34,8 @@ unseal Result
 @[reducible]
 def effectSpec : EffectWP RustEffect where
   State := Unit
-  wp event _ _ :=
-    match event with
+  wp effect _ _ :=
+    match effect with
     | .fail _ => False
 
 instance : EffectWP.Monotone effectSpec where

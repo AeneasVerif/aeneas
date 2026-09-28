@@ -16,7 +16,7 @@ variable [θ.Monotone]
 
 local infix:50 " ≤ " => entails
 
-/-! ## `DWLP` defined as a greatest fixed point -/
+/-! ## Demonic Weakest Liberal Precondition defined as a greatest fixed point -/
 
 def DWLP (θ : EffectWP E) [θ.Monotone] (m : ITree E α) (Q : θ.Post α) : θ.Pre :=
   (FunctionalWP.hom True θ Q).gfp m
@@ -57,8 +57,8 @@ theorem DWLP.div :
   intro (by simp only [FunctionalWP.div])
 
 theorem DWLP.vis
-    (hWp : θ.wp event (fun answer s' => DWLP θ (k answer) Q s') s) :
-    DWLP θ (.vis event k) Q s :=
+    (hWp : θ.wp effect (fun answer s' => DWLP θ (k answer) Q s') s) :
+    DWLP θ (.vis effect k) Q s :=
   intro (by simpa only [FunctionalWP.vis] using hWp)
 
 @[simp]
@@ -66,8 +66,8 @@ theorem DWLP.ret_iff :
     DWLP θ (.ret value) Q s ↔ Q value s := by
   rw [DWLP.fixedPoint, FunctionalWP.ret]
 
-theorem DWLP.vis_view (hSpec : DWLP θ (.vis event k) Q s) :
-    θ.wp event (fun answer s' => DWLP θ (k answer) Q s') s := by
+theorem DWLP.vis_view (hSpec : DWLP θ (.vis effect k) Q s) :
+    θ.wp effect (fun answer s' => DWLP θ (k answer) Q s') s := by
   simpa only [FunctionalWP.vis] using hSpec.step
 
 theorem DWLP.mono (hSpec : DWLP θ m Q s) (hQ : Q ≤ Q') :
@@ -91,7 +91,7 @@ theorem DWLP.bind
         intro hSpec
         exact ((hK value s' (DWLP.ret_iff.mp hSpec)).step).mono id (fun _ _ => id) fun _ _ => Or.inr
     | div => simp only [itree_div_bind, FunctionalWP.div, implies_true]
-    | vis event k' =>
+    | vis effect k' =>
         simp only [itree_vis_bind, FunctionalWP.vis]
         intro hSpec
         exact θ.wp_mono (fun _ _ hChild => Or.inl ⟨_, rfl, hChild⟩) hSpec.vis_view
@@ -113,22 +113,22 @@ theorem DWLP.admissible (θ : EffectWP E) [θ.Monotone] [θ.Conjunctive]
       simp only [ITree.pure_eq_ret, FunctionalWP.ret]
       exact DWLP.ret_iff.mp (hAll' _ (ITree.csup_ret_mem hc' hEq))
   | div => simp only [FunctionalWP.div]
-  | vis event k =>
+  | vis effect k =>
       simp only [FunctionalWP.vis]
       -- Combine every approximation's demand.
       obtain ⟨k₀, hMem₀⟩ := ITree.csup_vis_mem hc' hEq
       have hChildren :
-          θ.wp event (fun answer u' =>
-            ∀ k' : { k' : E.O event → ITree E α // c' (ITree.vis event k') },
+          θ.wp effect (fun answer u' =>
+            ∀ k' : { k' : E.O effect → ITree E α // c' (ITree.vis effect k') },
               DWLP θ (k'.val answer) Q u') u :=
         θ.wp_forall ⟨k₀, hMem₀⟩ fun k' => (hAll' _ k'.property).vis_view
       -- Limit children are suprema of approximation children.
-      obtain rfl : k = fun o => CCPO.csup (ITree.visChain_chain hc' event o) := by
+      obtain rfl : k = fun o => CCPO.csup (ITree.visChain_chain hc' effect o) := by
         rw [ITree.csup_vis hc' hMem₀] at hEq
         obtain ⟨-, hCont⟩ := vis_inj hEq.symm
         exact eq_of_heq hCont
       refine θ.wp_mono (fun answer u' hChild => ?_) hChildren
-      exact ⟨ITree.visChain c' event answer, ITree.visChain_chain hc' event answer,
+      exact ⟨ITree.visChain c' effect answer, ITree.visChain_chain hc' effect answer,
         by rintro _ ⟨k', hMem', rfl⟩; exact hChild ⟨k', hMem'⟩, rfl⟩
 
 end

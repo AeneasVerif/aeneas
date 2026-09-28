@@ -336,14 +336,14 @@ theorem ret_inj {E} {α} {x y} : (@ITree.ret α E x = ITree.ret y) ↔ (x = y) :
 theorem vis_inj_effect {E} {α} {e1 e2 k1 k2} : @ITree.vis α E e1 k1 = ITree.vis e2 k2
   → e1 = e2 := by grind
 
-/-- The event *and* the continuations of two equal `vis` nodes agree. -/
+/-- The effect *and* the continuations of two equal `vis` nodes agree. -/
 theorem vis_inj {R : Type w} {E : Effect.{v}} {i i' : E.I} {k : E.O i → ITree E R}
     {k' : E.O i' → ITree E R} (hEq : ITree.vis i k = ITree.vis i' k') :
     i = i' ∧ HEq k k' := by
   have hUnfold := congrArg ITree.unfold hEq
   simp only [unfold_vis] at hUnfold
-  injection hUnfold with hEvent hCont
-  exact ⟨hEvent, hCont⟩
+  injection hUnfold with hEffect hCont
+  exact ⟨hEffect, hCont⟩
 
 -- Theorems to make ITree.cases compute:
 @[simp]
@@ -408,7 +408,7 @@ theorem ITree.le_ret_cases {t : ITree E R} {value : R} (hLe : t ⊑ ITree.ret va
   · exact Or.inr (by rw [ret_inj.mp hRet])
   · exact absurd hVis not_vis_ret
 
-/-- A tree below a `vis` node performs the same event, or is `div`. -/
+/-- A tree below a `vis` node performs the same effect, or is `div`. -/
 theorem ITree.le_vis_cases {t : ITree E R} {i : E.I} {k : E.O i → ITree E R}
     (hLe : t ⊑ ITree.vis i k) :
     t = ITree.div ∨ ∃ k', t = ITree.vis i k' ∧ ∀ o, k' o ⊑ k o := by
@@ -420,7 +420,7 @@ theorem ITree.le_vis_cases {t : ITree E R} {i : E.I} {k : E.O i → ITree E R}
     obtain rfl := eq_of_heq hHEq
     exact Or.inr ⟨k₁, rfl, hCont⟩
 
-/-- A tree above a `vis` node performs that event too. -/
+/-- A tree above a `vis` node performs that effect too. -/
 theorem ITree.vis_le_cases {t : ITree E R} {i : E.I} {k : E.O i → ITree E R}
     (hLe : ITree.vis i k ⊑ t) :
     ∃ k', t = ITree.vis i k' ∧ ∀ o, k o ⊑ k' o := by
@@ -433,7 +433,7 @@ theorem ITree.vis_le_cases {t : ITree E R} {i : E.I} {k : E.O i → ITree E R}
     exact ⟨k₂, rfl, hCont⟩
 
 /-- Every element of a chain that contains a `vis` node is `div` or a `vis` node
-on the same event. -/
+on the same effect. -/
 theorem ITree.chain_vis_cases {c : ITree E R → Prop} (hc : chain c) {i : E.I}
     {k' : E.O i → ITree E R} (hMem : c (ITree.vis i k')) {u : ITree E R}
     (hu : c u) : u = ITree.div ∨ ∃ k'', u = ITree.vis i k'' := by
@@ -442,7 +442,7 @@ theorem ITree.chain_vis_cases {c : ITree E R → Prop} (hc : chain c) {i : E.I}
   · exact Or.inr ((ITree.vis_le_cases hLe).imp fun k'' h => h.1)
 
 /-- The chain obtained by following answer `o` into the subtrees of a chain which starts with
-    event `i`.
+    effect `i`.
 
     In a chain, all the trees which are not `div` start with the same node, so suprema can be
     computed one node at a time: if the chain `c` contains some `vis i k`, its supremum is
@@ -478,7 +478,7 @@ theorem ITree.csup_ret_mem {c : ITree E R → Prop} (hc : chain c) {value : R}
     · exact absurd hy hNot
   exact not_ret_div (ITree.le_div_is_div _ (hEq ▸ csup_le hc hDiv))
 
-/-- A chain whose supremum performs an event contains a tree that performs it. -/
+/-- A chain whose supremum performs an effect contains a tree that performs it. -/
 theorem ITree.csup_vis_mem {c : ITree E R → Prop} (hc : chain c) {i : E.I}
     {k : E.O i → ITree E R} (hEq : CCPO.csup hc = ITree.vis i k) :
     ∃ k', c (ITree.vis i k') := by

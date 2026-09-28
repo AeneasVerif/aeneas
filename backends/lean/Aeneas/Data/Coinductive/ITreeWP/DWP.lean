@@ -16,7 +16,7 @@ variable [θ.Monotone]
 
 local infix:50 " ≤ " => entails
 
-/-! ## `DWP` defined as a least fixed point -/
+/-! ## Demonic Weakest Precondition defined as a least fixed point -/
 
 def DWP (θ : EffectWP E) [θ.Monotone] (m : ITree E α) (Q : θ.Post α) : θ.Pre :=
   (FunctionalWP.hom False θ Q).lfp m
@@ -45,8 +45,8 @@ theorem DWP.fixedPoint : DWP θ m Q s ↔ FunctionalWP False θ Q (fun m => DWP 
 /-- Prove `P m s` by induction on total correctness, given `DWP θ m Q s`. -/
 theorem DWP.induction {P : ITreePred θ α}
     (hRet : ∀ value s, Q value s → P (.ret value) s)
-    (hVis : ∀ (event : E.I) (k : E.O event → ITree E α) (s : θ.State),
-      θ.wp event (fun answer s' => P (k answer) s') s → P (.vis event k) s)
+    (hVis : ∀ (effect : E.I) (k : E.O effect → ITree E α) (s : θ.State),
+      θ.wp effect (fun answer s' => P (k answer) s') s → P (.vis effect k) s)
     (hSpec : DWP θ m Q s) : P m s := by
   refine DWP.least (X := P) (fun m' s' hLayer => ?_) m s hSpec
   revert hLayer
@@ -57,15 +57,15 @@ theorem DWP.induction {P : ITreePred θ α}
   | div =>
       simp only [FunctionalWP.div]
       exact False.elim
-  | vis event k =>
+  | vis effect k =>
       simp only [FunctionalWP.vis]
-      exact hVis event k s'
+      exact hVis effect k s'
 
 /-! ## Constructors and destructors of `DWP` -/
 
 theorem DWP.vis
-    (hWp : θ.wp event (fun answer s' => DWP θ (k answer) Q s') s) :
-    DWP θ (.vis event k) Q s :=
+    (hWp : θ.wp effect (fun answer s' => DWP θ (k answer) Q s') s) :
+    DWP θ (.vis effect k) Q s :=
   intro (by simpa only [FunctionalWP.vis] using hWp)
 
 @[simp]
@@ -77,8 +77,8 @@ theorem DWP.ret_iff :
 theorem DWP.div_false (hSpec : DWP θ (ITree.div : ITree E α) Q s) : False := by
   simpa only [FunctionalWP.div] using hSpec.step
 
-theorem DWP.vis_view (hSpec : DWP θ (.vis event k) Q s) :
-    θ.wp event (fun answer s' => DWP θ (k answer) Q s') s := by
+theorem DWP.vis_view (hSpec : DWP θ (.vis effect k) Q s) :
+    θ.wp effect (fun answer s' => DWP θ (k answer) Q s') s := by
   simpa only [FunctionalWP.vis] using hSpec.step
 
 /-! ## Structural rules -/
