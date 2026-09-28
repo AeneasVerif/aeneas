@@ -2054,259 +2054,270 @@ let extract_translated_crate (filename : string) (dest_dir : string)
       extract_by_file ctx crate ~dest_dir ~subdir ~namespace ~crate_name
         ~fg:(Lazy.force file_graph) ~components
   | None ->
-  if !Config.split_files_legacy then (
-     let base_gen_config =
-       {
-         extract_types = false;
-         extract_decreases_clauses = !Config.extract_decreases_clauses;
-         extract_template_decreases_clauses = false;
-         extract_fun_decls = false;
-         extract_trait_decls = false;
-         extract_trait_impls = false;
-         extract_transparent = true;
-         extract_opaque = false;
-         extract_globals = false;
-         interface = false;
-       }
-     in
+      if !Config.split_files_legacy then (
+        let base_gen_config =
+          {
+            extract_types = false;
+            extract_decreases_clauses = !Config.extract_decreases_clauses;
+            extract_template_decreases_clauses = false;
+            extract_fun_decls = false;
+            extract_trait_decls = false;
+            extract_trait_impls = false;
+            extract_transparent = true;
+            extract_opaque = false;
+            extract_globals = false;
+            interface = false;
+          }
+        in
 
-     (*
+        (*
       * Extract the types
       *)
-     (* If there are opaque types, we extract in an interface *)
-     (* Extract the opaque type declarations, if needed *)
-     let opaque_types_module =
-       if has_opaque_types then (
-         (* For F*, we generate an .fsti, and let the user write the .fst.
+        (* If there are opaque types, we extract in an interface *)
+        (* Extract the opaque type declarations, if needed *)
+        let opaque_types_module =
+          if has_opaque_types then (
+            (* For F*, we generate an .fsti, and let the user write the .fst.
             For the other backends, we generate a template file as a model
             for the file the user has to provide. *)
-         let module_suffix, opaque_imported_suffix, custom_msg =
-           match Config.backend () with
-           | FStar ->
-               ("TypesExternal", "TypesExternal", ": external type declarations")
-           | HOL4 | Coq | Lean ->
-               ( (* The name of the file we generate *)
-                 "TypesExternal_Template",
-                 (* The name of the file that will be imported by the Types
+            let module_suffix, opaque_imported_suffix, custom_msg =
+              match Config.backend () with
+              | FStar ->
+                  ( "TypesExternal",
+                    "TypesExternal",
+                    ": external type declarations" )
+              | HOL4 | Coq | Lean ->
+                  ( (* The name of the file we generate *)
+                    "TypesExternal_Template",
+                    (* The name of the file that will be imported by the Types
                     module, and that the user has to provide. *)
-                 "TypesExternal",
-                 ": external types.\n\
-                  -- This is a template file: rename it to \"TypesExternal"
-                 ^ ext ^ "\" and fill the holes." )
-         in
-         let opaque_filename =
-           extract_filebasename ^ module_suffix ^ opaque_ext
-         in
-         let opaque_module = import_prefix ^ module_suffix in
-         let opaque_imported_module = import_prefix ^ opaque_imported_suffix in
-         let opaque_config =
-           {
-             base_gen_config with
-             extract_opaque = true;
-             extract_transparent = false;
-             extract_types = true;
-             extract_trait_decls = true;
-             interface = true;
-           }
-         in
-         let file_info =
-           {
-             filename = opaque_filename;
-             namespace;
-             in_namespace = false;
-             open_namespace = false;
-             crate_name;
-             rust_module_name = crate.name;
-             module_name = opaque_module;
-             custom_msg;
-             custom_imports = [];
-             custom_includes = [];
-             noncomputable = false;
-           }
-         in
-         extract_file opaque_config ctx file_info;
-         (* Return the additional dependencies *)
-         [ opaque_imported_module ])
-       else []
-     in
-
-     (* Extract the non opaque types *)
-     let types_filename_ext =
-       match Config.backend () with
-       | FStar -> ".fst"
-       | Coq -> ".v"
-       | Lean -> ".lean"
-       | HOL4 -> "Script.sml"
-     in
-     let types_filename = extract_filebasename ^ "Types" ^ types_filename_ext in
-     let types_module = import_prefix ^ "Types" in
-     let types_config =
-       {
-         base_gen_config with
-         extract_types = true;
-         extract_trait_decls = true;
-         extract_opaque = false;
-         interface = has_opaque_types;
-       }
-     in
-     let file_info =
-       {
-         filename = types_filename;
-         namespace;
-         in_namespace = true;
-         open_namespace = false;
-         crate_name;
-         rust_module_name = crate.name;
-         module_name = types_module;
-         custom_msg = ": type definitions";
-         custom_imports = [];
-         custom_includes = opaque_types_module;
-         noncomputable = false;
-       }
-     in
-     extract_file types_config ctx file_info;
-
-     (* Extract the template clauses *)
-     (if needs_clauses_module && !Config.extract_template_decreases_clauses then
-        let template_clauses_filename =
-          extract_filebasename ^ "Clauses" ^ file_delimiter ^ "Template" ^ ext
+                    "TypesExternal",
+                    ": external types.\n\
+                     -- This is a template file: rename it to \"TypesExternal"
+                    ^ ext ^ "\" and fill the holes." )
+            in
+            let opaque_filename =
+              extract_filebasename ^ module_suffix ^ opaque_ext
+            in
+            let opaque_module = import_prefix ^ module_suffix in
+            let opaque_imported_module =
+              import_prefix ^ opaque_imported_suffix
+            in
+            let opaque_config =
+              {
+                base_gen_config with
+                extract_opaque = true;
+                extract_transparent = false;
+                extract_types = true;
+                extract_trait_decls = true;
+                interface = true;
+              }
+            in
+            let file_info =
+              {
+                filename = opaque_filename;
+                namespace;
+                in_namespace = false;
+                open_namespace = false;
+                crate_name;
+                rust_module_name = crate.name;
+                module_name = opaque_module;
+                custom_msg;
+                custom_imports = [];
+                custom_includes = [];
+                noncomputable = false;
+              }
+            in
+            extract_file opaque_config ctx file_info;
+            (* Return the additional dependencies *)
+            [ opaque_imported_module ])
+          else []
         in
-        let template_clauses_module =
-          import_prefix ^ "Clauses" ^ module_delimiter ^ "Template"
+
+        (* Extract the non opaque types *)
+        let types_filename_ext =
+          match Config.backend () with
+          | FStar -> ".fst"
+          | Coq -> ".v"
+          | Lean -> ".lean"
+          | HOL4 -> "Script.sml"
         in
-        let template_clauses_config =
-          { base_gen_config with extract_template_decreases_clauses = true }
+        let types_filename =
+          extract_filebasename ^ "Types" ^ types_filename_ext
+        in
+        let types_module = import_prefix ^ "Types" in
+        let types_config =
+          {
+            base_gen_config with
+            extract_types = true;
+            extract_trait_decls = true;
+            extract_opaque = false;
+            interface = has_opaque_types;
+          }
         in
         let file_info =
           {
-            filename = template_clauses_filename;
+            filename = types_filename;
             namespace;
             in_namespace = true;
             open_namespace = false;
             crate_name;
             rust_module_name = crate.name;
-            module_name = template_clauses_module;
-            custom_msg = ": templates for the decreases clauses";
-            custom_imports = [ types_module ];
-            custom_includes = [];
+            module_name = types_module;
+            custom_msg = ": type definitions";
+            custom_imports = [];
+            custom_includes = opaque_types_module;
             noncomputable = false;
           }
         in
-        extract_file template_clauses_config ctx file_info);
+        extract_file types_config ctx file_info;
 
-     (* Extract the opaque fun declarations, if needed *)
-     let opaque_funs_module =
-       if has_opaque_funs then (
-         (* For F*, we generate an .fsti, and let the user write the .fst.
+        (* Extract the template clauses *)
+        (if needs_clauses_module && !Config.extract_template_decreases_clauses
+         then
+           let template_clauses_filename =
+             extract_filebasename ^ "Clauses" ^ file_delimiter ^ "Template"
+             ^ ext
+           in
+           let template_clauses_module =
+             import_prefix ^ "Clauses" ^ module_delimiter ^ "Template"
+           in
+           let template_clauses_config =
+             { base_gen_config with extract_template_decreases_clauses = true }
+           in
+           let file_info =
+             {
+               filename = template_clauses_filename;
+               namespace;
+               in_namespace = true;
+               open_namespace = false;
+               crate_name;
+               rust_module_name = crate.name;
+               module_name = template_clauses_module;
+               custom_msg = ": templates for the decreases clauses";
+               custom_imports = [ types_module ];
+               custom_includes = [];
+               noncomputable = false;
+             }
+           in
+           extract_file template_clauses_config ctx file_info);
+
+        (* Extract the opaque fun declarations, if needed *)
+        let opaque_funs_module =
+          if has_opaque_funs then (
+            (* For F*, we generate an .fsti, and let the user write the .fst.
             For the other backends, we generate a template file as a model
             for the file the user has to provide. *)
-         let module_suffix, opaque_imported_suffix, custom_msg =
-           match Config.backend () with
-           | FStar ->
-               ( "FunsExternal",
-                 "FunsExternal",
-                 ": external function declarations" )
-           | HOL4 | Coq | Lean ->
-               ( (* The name of the file we generate *)
-                 "FunsExternal_Template",
-                 (* The name of the file that will be imported by the Funs
+            let module_suffix, opaque_imported_suffix, custom_msg =
+              match Config.backend () with
+              | FStar ->
+                  ( "FunsExternal",
+                    "FunsExternal",
+                    ": external function declarations" )
+              | HOL4 | Coq | Lean ->
+                  ( (* The name of the file we generate *)
+                    "FunsExternal_Template",
+                    (* The name of the file that will be imported by the Funs
                     module, and that the user has to provide. *)
-                 "FunsExternal",
-                 ": external functions.\n\
-                  -- This is a template file: rename it to \
-                  \"FunsExternal.lean\" and fill the holes." )
-         in
-         let opaque_filename =
-           extract_filebasename ^ module_suffix ^ opaque_ext
-         in
-         let opaque_module = import_prefix ^ module_suffix in
-         let opaque_imported_module = import_prefix ^ opaque_imported_suffix in
-         let opaque_config =
-           {
-             base_gen_config with
-             extract_fun_decls = true;
-             extract_trait_impls = true;
-             extract_globals = true;
-             extract_transparent = false;
-             extract_opaque = true;
-             interface = true;
-           }
-         in
-         let file_info =
-           {
-             filename = opaque_filename;
-             namespace;
-             in_namespace = false;
-             open_namespace = true;
-             crate_name;
-             rust_module_name = crate.name;
-             module_name = opaque_module;
-             custom_msg;
-             custom_imports = [];
-             custom_includes = [ types_module ];
-             noncomputable = false;
-           }
-         in
-         extract_file opaque_config ctx file_info;
-         (* Return the additional dependencies *)
-         [ opaque_imported_module ])
-       else []
-     in
+                    "FunsExternal",
+                    ": external functions.\n\
+                     -- This is a template file: rename it to \
+                     \"FunsExternal.lean\" and fill the holes." )
+            in
+            let opaque_filename =
+              extract_filebasename ^ module_suffix ^ opaque_ext
+            in
+            let opaque_module = import_prefix ^ module_suffix in
+            let opaque_imported_module =
+              import_prefix ^ opaque_imported_suffix
+            in
+            let opaque_config =
+              {
+                base_gen_config with
+                extract_fun_decls = true;
+                extract_trait_impls = true;
+                extract_globals = true;
+                extract_transparent = false;
+                extract_opaque = true;
+                interface = true;
+              }
+            in
+            let file_info =
+              {
+                filename = opaque_filename;
+                namespace;
+                in_namespace = false;
+                open_namespace = true;
+                crate_name;
+                rust_module_name = crate.name;
+                module_name = opaque_module;
+                custom_msg;
+                custom_imports = [];
+                custom_includes = [ types_module ];
+                noncomputable = false;
+              }
+            in
+            extract_file opaque_config ctx file_info;
+            (* Return the additional dependencies *)
+            [ opaque_imported_module ])
+          else []
+        in
 
-     (* Extract the functions *)
-     let fun_filename = extract_filebasename ^ "Funs" ^ ext in
-     let fun_module = import_prefix ^ "Funs" in
-     let fun_config =
-       {
-         base_gen_config with
-         extract_fun_decls = true;
-         extract_trait_impls = true;
-         extract_globals = true;
-       }
-     in
-     let clauses_module =
-       if needs_clauses_module then
-         let clauses_submodule =
-           if Config.backend () = Lean then "Clauses" ^ module_delimiter else ""
-         in
-         [ import_prefix ^ clauses_submodule ^ "Clauses" ]
-       else []
-     in
-     let file_info =
-       {
-         filename = fun_filename;
-         namespace;
-         in_namespace = true;
-         open_namespace = false;
-         crate_name;
-         rust_module_name = crate.name;
-         module_name = fun_module;
-         custom_msg = ": function definitions";
-         custom_imports = [];
-         custom_includes =
-           [ types_module ] @ opaque_funs_module @ clauses_module;
-         noncomputable = has_opaque && not !Config.all_computable;
-       }
-     in
-     extract_file fun_config ctx file_info)
-   else
-     let gen_config = full_extraction_config () in
-     let file_info =
-       {
-         filename = extract_filebasename ^ ext;
-         namespace;
-         in_namespace = true;
-         open_namespace = false;
-         crate_name;
-         rust_module_name = crate.name;
-         module_name = crate_name;
-         custom_msg = "";
-         custom_imports = [];
-         custom_includes = [];
-         noncomputable = has_opaque && not !Config.all_computable;
-       }
-     in
-     extract_file gen_config ctx file_info);
+        (* Extract the functions *)
+        let fun_filename = extract_filebasename ^ "Funs" ^ ext in
+        let fun_module = import_prefix ^ "Funs" in
+        let fun_config =
+          {
+            base_gen_config with
+            extract_fun_decls = true;
+            extract_trait_impls = true;
+            extract_globals = true;
+          }
+        in
+        let clauses_module =
+          if needs_clauses_module then
+            let clauses_submodule =
+              if Config.backend () = Lean then "Clauses" ^ module_delimiter
+              else ""
+            in
+            [ import_prefix ^ clauses_submodule ^ "Clauses" ]
+          else []
+        in
+        let file_info =
+          {
+            filename = fun_filename;
+            namespace;
+            in_namespace = true;
+            open_namespace = false;
+            crate_name;
+            rust_module_name = crate.name;
+            module_name = fun_module;
+            custom_msg = ": function definitions";
+            custom_imports = [];
+            custom_includes =
+              [ types_module ] @ opaque_funs_module @ clauses_module;
+            noncomputable = has_opaque && not !Config.all_computable;
+          }
+        in
+        extract_file fun_config ctx file_info)
+      else
+        let gen_config = full_extraction_config () in
+        let file_info =
+          {
+            filename = extract_filebasename ^ ext;
+            namespace;
+            in_namespace = true;
+            open_namespace = false;
+            crate_name;
+            rust_module_name = crate.name;
+            module_name = crate_name;
+            custom_msg = "";
+            custom_imports = [];
+            custom_includes = [];
+            noncomputable = has_opaque && not !Config.all_computable;
+          }
+        in
+        extract_file gen_config ctx file_info);
 
   (* Emit translation.json. *)
   EmitJson.write_if_enabled ~crate_name:crate.name
