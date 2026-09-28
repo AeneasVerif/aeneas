@@ -126,6 +126,11 @@ let () =
         " Do not generate templates for the required decreases \
          clauses/termination measures, in a dedicated file, if you also put \
          the option -decreases-clauses" );
+      ( "-split-files",
+        Arg.Set split_files,
+        " Split the definitions into one module per Rust source file, \
+         mirroring the crate structure. Mutually exclusive with \
+         -split-files-legacy." );
       ( "-split-files-legacy",
         Arg.Set split_files_legacy,
         " Legacy split mode: split the definitions between different files by \
@@ -484,6 +489,16 @@ let () =
       "The -max-recdepth option is valid only for the Lean backend";
   if !emit_json && not (backend () = Lean) then
     fail_with_error "The -emit-json option is valid only for the Lean backend";
+  check_arg_not !split_files_legacy "-split-files-legacy" !split_files
+    "-split-files";
+  if !split_files && not (backend () = Lean) then
+    fail_with_error
+      "The -split-files option is valid only for the Lean backend. For the \
+       by-kind split (Types/Funs/...), use -split-files-legacy";
+  (* Fail on this combination of flags until -decreases-clauses is deprecated. *)
+  if !split_files && !extract_decreases_clauses then
+    fail_with_error
+      "The -split-files option is incompatible with -decreases-clauses";
 
   check_arg_implies !diagnose_detailed "-diagnose-detailed"
     !diagnose_micro_passes "-diagnose-micro-passes";
@@ -774,14 +789,17 @@ let () =
           false)
       in
 
-      (* Print a warning if we had to extract opaque definitions and the option
-         [-split-files-legacy] is not on *)
-      if !extracted_opaque && not !split_files_legacy then
+      (* Print a warning if we had to extract opaque definitions and no split
+         mode is on *)
+      if !extracted_opaque && not (!split_files || !split_files_legacy) then
         log#lwarning
           (lazy
-            "The crate contains extracted external, unknown definitions: we \
-             advise using the option -split-files-legacy to allow manually \
-             providing these definitions in separate files.");
+            ("The crate contains extracted external, unknown definitions: we \
+              advise using the option "
+            ^ (if backend () = Lean then "-split-files"
+               else "-split-files-legacy")
+            ^ " to allow manually providing these definitions in separate \
+               files."));
 
       (* Print error diagnostics *)
       (if !print_error_diagnostics && !Errors.error_list <> [] then
