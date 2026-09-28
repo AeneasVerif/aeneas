@@ -233,6 +233,51 @@ let module_files ~(import_prefix : string) ~(module_root_dir : string)
       ( Some (file_of_components ~module_root_dir ~is_opaque_layer:false base),
         layers )
 
+(** {!module_files}, but if one of the Lean modules of [base] is already in
+    [used], [base] is renamed to [base_2], [base_3], ... (with a warning). Adds
+    the modules to [used], and returns the base we used. *)
+let unique_module_files ~(import_prefix : string) ~(module_root_dir : string)
+    ~(used : Collections.StringSet.t ref) ~(source_files : string list)
+    (base : string list) (layers : (bool * LlbcAst.declaration_group list) list)
+    ~(noncomputable : bool list) :
+    string list * (string option * component_layer list) =
+  (* The Lean modules we write for [base]: its plain name, and its layers. *)
+  let modules base (layers : component_layer list) : string list =
+    if layers = [] then []
+    else
+      (import_prefix ^ FileMapping.dotted_module_name base)
+      :: List.map (fun (l : component_layer) -> l.import_name) layers
+  in
+  let rec find index =
+    let base' =
+      if index = 1 then base
+      else FileMapping.indexed_module_components base ~index
+    in
+    let aggregator, layers' =
+      module_files ~import_prefix ~module_root_dir base' layers ~noncomputable
+    in
+    if
+      List.exists
+        (fun m -> Collections.StringSet.mem m !used)
+        (modules base' layers')
+    then find (index + 1)
+    else (base', (aggregator, layers'))
+  in
+  let base', ((_, layers') as files) = find 1 in
+  if base' <> base then
+    [%warn_opt_span] None
+      ("Multi-file extraction: two modules are named " ^ import_prefix
+      ^ FileMapping.dotted_module_name base
+      ^ "; the one for "
+      ^ (if source_files = [] then "external declarations"
+         else String.concat ", " source_files)
+      ^ " is renamed to " ^ import_prefix
+      ^ FileMapping.dotted_module_name base');
+  used :=
+    Collections.StringSet.union !used
+      (Collections.StringSet.of_list (modules base' layers'));
+  (base', files)
+
 (** The Lean files to write for each component of the file graph, dependencies
     first.
 
@@ -342,6 +387,8 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
       SCC.SccId.Map.empty scc_list
   in
 
+  (* The Lean modules of the components placed so far. *)
+  let used = ref Collections.StringSet.empty in
   List.map
     (fun (scc_id, buckets) ->
       let source_files =
@@ -420,8 +467,9 @@ let place_by_file (fg : FileGraph.t) ~(crate : LlbcAst.crate)
                (seen, seen && (not is_opaque_layer) && not all_computable))
              imports_opaques layers)
       in
-      let aggregator, layers =
-        module_files ~import_prefix ~module_root_dir base layers ~noncomputable
+      let base, (aggregator, layers) =
+        unique_module_files ~import_prefix ~module_root_dir ~used ~source_files
+          base layers ~noncomputable
       in
       {
         scc_id;
