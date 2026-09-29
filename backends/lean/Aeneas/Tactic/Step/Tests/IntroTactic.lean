@@ -54,18 +54,18 @@ theorem triple_true (P : Prop) (m : Id α) :
   trivial
 
 /- intro tactic: it is responsible for the whole normalization of the mono and bind
-   premises, so it exposes the binders of `Post.entails` itself, introduces them — `step`
-   reverts what it introduces — and pulls the precondition of the continuation. -/
+   premises, so it exposes the binders of `Post.entails` itself, and pulls the precondition
+   of the continuation — reverting the output it introduces to do so. -/
 syntax (name := pullPre) "pull_pre" : tactic
 macro_rules
   | `(tactic| pull_pre) =>
-    `(tactic| (
-        try rw [Post.entails_iff]
-        intros
+    `(tactic|
         first
-        | exact triple_true _ _
-        | (rw [triple_pull]; try rw [and_imp])
-        | skip))
+        | rw [Post.entails_iff]
+        | (intro value
+           first
+           | exact triple_true _ _
+           | (rw [triple_pull]; (try rw [and_imp]); revert value)))
 
 #register_spec_info {
     spec_name := ``triple
@@ -192,7 +192,7 @@ example (m : Id Nat) (P Q : Nat → Prop)
 
 syntax (name := keepBundled) "keep_bundled" : tactic
 macro_rules
-  | `(tactic| keep_bundled) => `(tactic| (intros; try rw [triple_pull]))
+  | `(tactic| keep_bundled) => `(tactic| try (intro value; rw [triple_pull]; revert value))
 
 #register_spec_info { bundledSpecInfo with intro_tactic := some ``keepBundled }
 

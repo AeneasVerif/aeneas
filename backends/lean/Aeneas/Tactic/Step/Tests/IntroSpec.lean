@@ -82,9 +82,9 @@ elab "run_intro_pending " n:ident : tactic => withMainContext do
   let worker ← mkFreshExprSyntheticOpaqueMVar ((← goal.getType).replaceFVar n pending)
   setGoals [worker.mvarId!]
   Step.runIntroTactic ``Aeneas.Std.WP.introTactic
-  let proof ← instantiateMVars worker
-  if proof.getAppFn.isConst then
-    throwError "Output normalization generalized a pending obligation"
+  let target ← instantiateMVars (← (← getMainGoal).getType)
+  if (target.find? (· == pending)).isNone then
+    throwError "Output normalization did not preserve a pending obligation"
   pending.mvarId!.assign n
   goal.assign worker
 

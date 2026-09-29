@@ -710,20 +710,12 @@ meta def getCallSiteTree (info : SpecInfo) (isLet : Bool) (goal : MVarId) :
   else
     getContInput specArgs[info.post_index]!
 
-/-- Run the tactic registered as an `intro_tactic` on the main goal, and revert what it
-introduced. -/
+/-- Run the tactic registered as an `intro_tactic` on the main goal. -/
 meta def runIntroTactic (tac : Name) : TacticM Unit := do
   withTraceNode `Step (fun _ => pure m!"intro_tactic: {tac}") do
-  let last? := (← (← getMainGoal).getDecl).lctx.lastDecl.map LocalDecl.fvarId
   evalTactic (mkNode tac #[])
-  match ← getUnsolvedGoals with
-  | [] => return
-  | [nextGoal] =>
-    let nextGoal ← match last? with
-      | some last => Prod.snd <$> nextGoal.revertAfter last
-      | none => Prod.snd <$> nextGoal.revert (← nextGoal.withContext do pure (← getLCtx).getFVarIds)
-    setGoals [nextGoal]
-  | _ => throwError "`intro_tactic` must not create multiple goals"
+  unless (← getUnsolvedGoals).length ≤ 1 do
+    throwError "`intro_tactic` must not create multiple goals"
 
 meta def reduceOutputProjections : TacticM Unit := do
   Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}

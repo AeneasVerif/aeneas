@@ -1,14 +1,14 @@
 module
 public import Lean
-public import AeneasMeta.Utils
-public import Aeneas.Std.Spec
+public import Mathlib.Logic.Basic
 public section
 
 /-!
 
 After applying a step theorem, `step` is left with a target `∀ outputs, fact → k outputs`,
-which the `intro_tactic` can process how the shape `step` introduces the hypothesis
-For instance, it rewrites
+which the `intro_tactic` can process how the shape `step` introduces the hypothesis.
+This module provides the building blocks for it. For instance, the `intro_tactic` of `spec`
+and `dspec` (`Aeneas.Std.WP.introTactic`) rewrites
 ```
 ∀ x, uncurry' (fun a b => ∃ y, P a b ∧ Q a b y) x → k x ⦃ r => R r ⦄
 ```
@@ -17,7 +17,7 @@ to
 ∀ x y, P x.1 x.2 → Q x.1 x.2 y → k x ⦃ r => R r ⦄
 ```
 
-`normalizeTarget` rewrites the goal; it does not introduce anything.
+`rewriteFirstFact` rewrites the goal; it does not introduce anything.
 This matters for recursive specifications: `decreasing_by` sees
 the hypotheses that the proof term binds around the recursive call. If we introduced
 `h : uncurry' (…) x` and simplified it afterwards, the proof term would still bind `h` with
@@ -120,10 +120,6 @@ meta def normalizeFact (type : Expr) : MetaM Simp.Result := do
 
 /-! ## Step 3: splitting -/
 
-theorem forall_and_index {a b : Prop} {p : a ∧ b → Prop} :
-    (∀ h, p h) ↔ ∀ (ha : a) (hb : b), p ⟨ha, hb⟩ :=
-  ⟨fun h ha hb => h ⟨ha, hb⟩, fun h ⟨ha, hb⟩ => h ha hb⟩
-
 /-- Split the premise `∀ h : fact, rest h` into the witnesses and conjuncts `fact` stands for:
 - `∀ h : True, rest h` becomes `rest trivial`;
 - `∀ h : a ∧ b, rest h` becomes `∀ (ha : a) (hb : b), rest ⟨ha, hb⟩`, and `a` and `b` are
@@ -174,6 +170,21 @@ meta partial def splitFact (name : Name) (fact rest : Expr) : MetaM (Expr × Exp
       mkForallFVars #[h] (mkApp rest h).headBeta
     return (premise, ← mkAppM ``Iff.refl #[premise])
 
+/-- Split the premise `∀ h : dom, body` into binders, once its fact `dom` is rewritten into
+`fact`, with `factEq? : dom = fact` (`none` when `fact` is definitionally equal to `dom`; `body`
+must then not depend on `h`). Returns the new premise, and a proof that it is equivalent to
+`∀ h : dom, body`. -/
+meta def splitPremise (name : Name) (fact body : Expr) (bi : BinderInfo)
+    (factEq? : Option Expr) : MetaM (Expr × Expr) := do
+  let (premise, splitProof) ← splitFact name fact (.lam name fact body bi)
+  let proof ← match factEq? with
+    | none => pure splitProof
+    | some eq =>
+      let congr ← mkAppOptM ``imp_congr_left
+        #[none, none, some body, some (← mkAppM ``Iff.of_eq #[eq])]
+      mkAppM ``Iff.trans #[congr, splitProof]
+  return (premise, proof)
+
 /-! ## Putting it together -/
 
 /-- Introduce the outputs, i.e. the leading binders of `e` which are not propositions, and
@@ -186,55 +197,27 @@ private meta partial def withOutputs {α} (e : Expr) (k : Array Expr → Expr �
         withOutputs (body.instantiate1 x) k (xs.push x)
   k xs e.consumeMData
 
-/-- Normalize the first fact of the target, as described in the module doc. `markers` are
-the definitions to reduce in step 1.
-
-Returns the new goal, or `none` if the target is already normalized. The outputs remain the
-leading binders of the new goal.
-
-The `Example:` comments follow the example of the module doc. -/
-meta def normalizeTarget (markers : Array Name) (goal : MVarId) :
-    MetaM (Option MVarId) := goal.withContext do
+/-- Replace the goal `∀ xs, original` by `∀ xs, premise`, given `proof : original ↔ premise`,
+where the outputs `xs` are introduced by `withOutputs`. -/
+meta def replaceUnderOutputs (goal : MVarId) (xs : Array Expr) (premise proof : Expr) :
+    MetaM MVarId := do
+  let result : Simp.Result := { expr := premise, proof? := some (← mkAppM ``propext #[proof]) }
   /- The new goal lives in the context of the original one, not under the outputs. -/
-  let lctx ← getLCtx
-  let localInsts ← getLocalInstances
-  /- Introduce the outputs `xs`, and split the rest of the target into the fact `dom` and
-     the continuation `body`. -/
+  applySimpResultToTarget goal (← instantiateMVars (← goal.getType)) (← result.addForalls xs)
+
+/-- Rewrite the first fact of the target `∀ xs, fact → k xs`, where `xs` are the outputs.
+`rewrite name fact body bi` returns the new premise, and a proof that it is equivalent to
+`∀ h : fact, body`, where `body` may refer to `h` as a loose bound variable.
+
+Returns the new goal, or `none` if the premise is unchanged. The outputs remain the leading
+binders of the new goal. -/
+meta def rewriteFirstFact (goal : MVarId)
+    (rewrite : Name → Expr → Expr → BinderInfo → MetaM (Expr × Expr)) :
+    MetaM (Option MVarId) := goal.withContext do
   withOutputs (← instantiateMVars (← goal.getType)) fun xs original => do
-    let .forallE name dom body bi := original | return none
-    /- Example: `xs = #[x]`, `dom = uncurry' (fun a b => ∃ y, P a b ∧ Q a b y) x`, and
-       `body = k x ⦃ r => R r ⦄`. -/
-
-    /- Steps 1–2: reduce the markers and simplify the fact, with `factEq? : dom = fact`.
-       When the continuation depends on the proof of the fact, the fact can only be changed
-       up to definitional equality: we then skip the simplification. -/
-    let dom ← reduceFact markers dom
-    let (fact, factEq?) ←
-      if body.hasLooseBVars then pure (dom, none)
-      else
-        let result ← normalizeFact dom
-        pure (result.expr, result.proof?)
-    /- Example: `fact = ∃ y, P x.1 x.2 ∧ Q x.1 x.2 y`. -/
-
-    /- Step 3: split `fact` into binders, with `proof : original ↔ premise`. -/
-    let (premise, splitProof) ← splitFact name fact (.lam name fact body bi)
-    let proof ← match factEq? with
-      | none => pure splitProof
-      | some eq =>
-        let congr ← mkAppOptM ``imp_congr_left
-          #[none, none, some body, some (← mkAppM ``Iff.of_eq #[eq])]
-        mkAppM ``Iff.trans #[congr, splitProof]
-    /- Example: `premise = ∀ y, P x.1 x.2 → Q x.1 x.2 y → k x ⦃ r => R r ⦄`. -/
-
+    let .forallE name fact body bi := original | return none
+    let (premise, proof) ← rewrite name fact body bi
     if premise == original then return none
-
-    /- Replace `goal : ∀ xs, original` by `newGoal : ∀ xs, premise`, with
-       `goal := fun xs => proof.mpr (newGoal xs)`. -/
-    let newTarget ← mkForallFVars xs premise
-    let newGoal ← withLCtx lctx localInsts do
-      mkFreshExprSyntheticOpaqueMVar newTarget (← goal.getTag)
-    /- Example: `newTarget = ∀ x y, P x.1 x.2 → Q x.1 x.2 y → k x ⦃ r => R r ⦄`. -/
-    goal.assign (← mkLambdaFVars xs (← mkAppM ``Iff.mpr #[proof, mkAppN newGoal xs]))
-    return some newGoal.mvarId!
+    return some (← replaceUnderOutputs goal xs premise proof)
 
 end Aeneas.Step.Intro
