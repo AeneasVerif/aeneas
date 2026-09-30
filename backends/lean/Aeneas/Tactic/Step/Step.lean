@@ -524,11 +524,10 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
      in the final goal and introduce them as if they were postconditions. -/
   let _ ← withTraceNode `Step (fun _ => pure m!"simpAt: normalizing postconditions") do
     Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
-            { addSimprocs := #[``existsImpNamed],
-              addSimpThms := #[``Std.uncurry_apply_pair,
+            { addSimpThms := #[``Std.uncurry_apply_pair,
                   ``Std.uncurry_eq_prop, ``Std.uncurry_eq_prop_arrow,
                   ``Std.WP.uncurry'_pair, ``Std.WP.uncurry'_eq,
-                  ``and_imp, ``forall_unit, ``true_imp_iff] ++ scalar_eqs }
+                  ``and_imp, ``exists_imp_named, ``forall_unit, ``true_imp_iff] ++ scalar_eqs }
             (.targets #[] true)
   if (← getUnsolvedGoals).isEmpty then trace[Step] "Main goal solved by cleanup simp!"; return none
 

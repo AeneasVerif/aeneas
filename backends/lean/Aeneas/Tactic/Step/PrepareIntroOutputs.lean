@@ -17,17 +17,8 @@ theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
 theorem forall_punit (p : PUnit.{u} → Prop) : (∀ x, p x) ↔ p PUnit.unit :=
   ⟨fun h => h _, fun h _ => h⟩
 
-simproc_decl existsImpNamed ((∃ _, _) → _) := fun e => do
-  let .forallE _ d b _ := e | return .continue
-  if b.hasLooseBVars then return .continue
-  let_expr Exists α p := d | return .continue
-  let n := match p with
-    | .lam n .. => n
-    | _ => `x
-  let e' ← withLocalDeclD n α fun x => do
-    mkForallFVars #[x] (← mkArrow (p.beta #[x]) b)
-  let proof ← mkPropExt (← mkAppOptM ``exists_imp #[α, p, b])
-  return .visit { expr := e', proof? := proof }
+theorem exists_imp_named {α : Sort u} {p : α → Prop} {b : Prop} :
+    (Exists p → b) ↔ ∀ x, binderNameHint x p (p x → b) := exists_imp
 
 /-- Names introduced by the `do` elaborator's `mkPatContinuation` as a
     fallback (`_xN`) when no leaf name is available — e.g. all leaves are
