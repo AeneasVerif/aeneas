@@ -374,20 +374,22 @@ meta partial def Script.toSyntax (script : Script) : MetaM (Array Syntax.Tactic)
     pure (s0 ++ s1)
 
 inductive TargetKind where
-| bind (names : Array (Option Name)) (dischargeTac : Option (TSyntax `tactic))
+| bind (names : Array (Option Name))
 | switch (info : Bifurcation.Info)
-| result (dischargeTac : Option (TSyntax `tactic))
+| result
 | unknown
 
+structure TargetInfo where
+  kind : TargetKind
+  dischargeTac : Option (TSyntax `tactic)
+
 /- Smaller helper which we use to check in which situation we are -/
-meta def analyzeTarget : TacticM TargetKind := do
-  withTraceNode `Step (fun _ => do pure m!"analyzeTarget") do
+meta def analyzeTargetKind (goalTy : Expr) : TacticM TargetKind := do
   try
-    let goalTy ← getMainTarget
     -- Dive into a registered specification
     let some program ← observing? (Step.getSpecProgram goalTy)
       | trace[Step] "not an application of a registered specification statement: {goalTy}"
-        return .result none
+        return .result
     trace[Step] "application of a registered specification statement about: {program}"
     let e ← Utils.normalizeLetBindings program
     -- Check whether this is a bind
@@ -396,15 +398,23 @@ meta def analyzeTarget : TacticM TargetKind := do
       let some (_, cont) := Step.getBindArgs? e
         | throwError "Expected bind to have {arity} arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
       let names ← Step.getPostNames cont
-      pure (.bind names (← Step.getDischargeTactic goalTy))
+      pure (.bind names)
     else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
       pure (.switch bfInfo)
     else
       trace[Step] "not a registered spec"
-      pure (.result (← Step.getDischargeTactic goalTy))
+      pure .result
   catch _ =>
     trace[Step] "exception caught"
     pure .unknown
+
+meta def analyzeTarget : TacticM TargetInfo := do
+  withTraceNode `Step (fun _ => do pure m!"analyzeTarget") do
+  let goalTy ← getMainTarget
+  let dischargeTac ←
+    if (← observing? (Step.getSpecInfoArgs goalTy)).isSome then Step.getDischargeTactic goalTy
+    else pure none
+  pure { kind := ← analyzeTargetKind goalTy, dischargeTac }
 
 meta partial def evalStepStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
   withMainContext do focus do
@@ -487,9 +497,9 @@ where
       | some fuel =>
         if fuel = 0 then return { script := .tacs #[], unassignedVars := #[], subgoals := #[(← getMainGoal, none)] }
         else pure (some (fuel - 1))
-    let targetKind ← analyzeTarget
-    match targetKind with
-    | .bind names dischargeTac => do
+    let { kind, dischargeTac } ← analyzeTarget
+    match kind with
+    | .bind names => do
       let (info, mainGoalAndState) ← onBind cfg names ss
       /- Continue, if necessary -/
       match mainGoalAndState with
@@ -510,6 +520,7 @@ where
         /- Check if there are unassigned meta-variables which are not `Prop`:
            if it is the case it means there are meta-variables we could not infer, so we stop -/
         if info.unassignedVars.isEmpty then
+          -- Check if still in spec, and if not then try to apply discharge tactic
           if (← observing? (Step.getSpecProgram (← getMainTarget))).isSome then
             let restInfo ← traverseProgram cfg fuel ss
             return (info ++ restInfo)
@@ -553,7 +564,7 @@ where
       /- Put everything together — after branches, state is discarded (we can't merge
          divergent e-graphs). Use the pre-branch state going forward. -/
       mkStx branchInfos
-    | .result dischargeTac => do
+    | .result => do
       let (info, mainGoal) ← onResult cfg ss dischargeTac
       let mainGoal ← match mainGoal with
         | none => pure #[]
