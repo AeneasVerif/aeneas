@@ -151,8 +151,8 @@ example : (do let (a, b) ← quadProg
 /--
 error: unsolved goals
 case a
-c : ℕ × ℕ
 a b : ℕ
+c : ℕ × ℕ
 a_post : a = 8
 b_post : b = 9
 a_post1 : c.1 = 10
@@ -446,9 +446,7 @@ h : y = z + 1
 example : (do let (x, y) ← existentialProg; ok (x + y)) ⦃ res => res > 2 ⦄ := by
   step with existentialProg_spec as ⟨ x, y, hx, z, hz, h ⟩
 
-/- A *nested*-tuple result combined with a *leading* existential in the post.
-   The post's `∃` only becomes visible after the output is destructured, so it
-   must be split by the post-destructure cleanup pass. -/
+/- Outputs must precede existentially quantified variables, including when using nested tuples. -/
 def nestedExistentialProg : Result ((Nat × Nat) × Nat) := ok ((1, 2), 3)
 
 @[step]
@@ -471,7 +469,7 @@ example :
 /--
 error: unsolved goals
 case a
-c a b : ℕ
+a b c : ℕ
 ha : a = 1
 hb : b = 2
 hc : c = 3
@@ -510,3 +508,178 @@ example :
   step with quadProg_spec
 
 end
+
+/- Abbreviations can be inspected using reducible transparency. -/
+abbrev NestedOutput := (Nat × Nat) × Nat
+
+example (f : Result NestedOutput) (h : f ⦃ ((a, b), c) => a = 1 ∧ b = 2 ∧ c = 3 ⦄) :
+    (do let ((a, b), c) ← f; ok (a + b + c)) ⦃ r => r = 6 ⦄ := by
+  step with h as ⟨a, b, c, ha, hb, hc⟩
+  simp [ha, hb, hc]
+
+def genericPair {α : Type u} (x : α) : Result (α × Nat) := ok (x, 1)
+
+@[step]
+theorem genericPair_spec {α : Type u} (x : α) :
+    genericPair x ⦃ (y : α) (k : Nat) => y = x ∧ k = 1 ⦄ := by
+  unfold genericPair
+  step*
+
+example {α : Type u} (x : α) :
+    (do let (y, k) ← genericPair x; ok (y, k + 1))
+      ⦃ (y : α) (k : Nat) => y = x ∧ k = 2 ⦄ := by
+  step*
+
+/- Output binder types retain local let-bound variables. -/
+example {α : Type u} (m : Nat) :
+    let n := m + 1
+    let size := n + 1
+    ∀ x : Vector α size,
+      (do let (y, k) ← genericPair x; ok (y, k + 1))
+        ⦃ y k => y = x ∧ k = 2 ⦄ := by
+  intro n size x
+  step with genericPair_spec as ⟨y, k, hy, hk⟩
+  guard_hyp y :ₛ Vector α size
+  simp [hy, hk]
+
+/- Test with the partial correctness predicate. -/
+example :
+    (do let ((a, b), c) ← nestedProg; ok (a + b + c))
+      ⦃ (r : Nat) => r = 18 ⦄div := by
+  step with nestedProg_spec as ⟨a, b, c, ha, hb, hc⟩
+  simp [ha, hb, hc]
+
+/- Outputs of type unit disappear even when the postcondition uses them explicitly. -/
+def unitProg : Result Unit := ok ()
+
+@[step]
+theorem unitProg_spec : unitProg ⦃ (u : Unit) => u = () ⦄ := by
+  unfold unitProg
+  step*
+
+abbrev UnitOutput := Unit
+
+/- We preserve the anonymous name slots -/
+run_cmd Lean.Elab.Command.liftTermElabM do
+  let post ← Lean.Elab.Term.elabTerm (← `(fun (_ : Unit) => True)) none
+  let names ← Aeneas.Step.getPostNames post
+  unless names == #[none] do
+    throwError "Expected an anonymous name slot, got {names}"
+
+example (f : Result UnitOutput) (h : f ⦃ (u : UnitOutput) => u = () ⦄) :
+    (do let _ ← f; genericPair 5) ⦃ y k => y = 5 ∧ k = 1 ⦄ := by
+  step with h as ⟨⟩
+  step*
+
+example : (do let _ ← unitProg; genericPair 5) ⦃ y k => y = 5 ∧ k = 1 ⦄ := by
+  step*
+
+example (g : Unit → Result Nat) (hg : ∀ u, g u ⦃ (n : Nat) => n = 0 ⦄) :
+    (do let u ← unitProg; g u) ⦃ (n : Nat) => n = 0 ⦄ := by
+  step with unitProg_spec
+  step with hg as ⟨n, hn⟩
+  exact hn
+
+/- Outputs of type unit get eliminated, even when they are used in the post-condition. -/
+example (f : Result (Bool × Unit)) (h : f ⦃ b u => b = true ∧ u = () ⦄)
+    (g : Bool → Unit → Result Nat)
+    (hg : ∀ b u, g b u ⦃ n => n = 0 ⦄) :
+    (do let (b, u) ← f; g b u) ⦃ n => n = 0 ⦄ := by
+  step with h as ⟨b, hb⟩
+  guard_hyp b : Bool
+  guard_hyp hb : b = true
+  step with hg as ⟨n, hn⟩
+  exact hn
+
+example (f : Result ((Unit × Nat) × (Bool × Unit)))
+    (h : f ⦃ ((u, n), (b, v)) => u = () ∧ n = 1 ∧ b = true ∧ v = () ⦄) :
+    (do let ((_, n), (b, _)) ← f; ok (n, b)) ⦃ n b => n = 1 ∧ b = true ⦄ := by
+  step with h as ⟨n, b, hn, hb⟩
+  guard_hyp n : Nat
+  guard_hyp b : Bool
+  simp [hn, hb]
+
+/- Inferred names skip outputs of type unit; they must not become postcondition names. -/
+example (f : Result ((Unit × Nat) × (Bool × Unit)))
+    (h : f ⦃ ((u, n), (b, v)) => u = () ∧ n = 1 ∧ b = true ∧ v = () ⦄) :
+    (do let ((u, n), (b, v)) ← f; ok (u, n, b, v))
+      ⦃ u n b v => u = () ∧ n = 1 ∧ b = true ∧ v = () ⦄ := by
+  step with h
+  guard_hyp n : Nat
+  guard_hyp b : Bool
+  guard_hyp n_post : n = 1
+  guard_hyp b_post : b = true
+  simp [n_post, b_post]
+
+/- Quantifiers belonging to the final goal must remain for the caller to introduce. -/
+example (f : Result Nat) (h : f ⦃ n => n = 0 ⦄) :
+    (do let n ← f; ok n) ⦃ n => ∀ k : Nat, n + k = k ⦄ := by
+  step with h as ⟨n, hn⟩
+  intro k
+  simp [hn]
+
+/- Instantiating a Boolean input with `true` must not leave `True ∧ P` inside an iff. -/
+example (f : Bool → Result Bool) (P : Prop)
+    (h : ∀ valid, f valid ⦃ b => b = true ↔ valid = true ∧ P ⦄) :
+    f true ⦃ b => b = true ↔ P ⦄ := by
+  step with h as ⟨b, hb⟩
+  guard_hyp hb : b = true ↔ P
+  exact hb
+
+/- We normalize equality-defined existentials below matches, without reordering tuple outputs. -/
+example (f : Result (Nat × Bool)) (compute : Nat → Nat) (P R : Nat → Prop)
+    (hR : ∀ k, R k)
+    (h : f ⦃ n b => match b with
+      | true => ∃ s, s = compute n ∧ P s
+      | false => True ⦄) :
+    (do let (n, b) ← f; ok (n, b))
+      ⦃ n b => ∀ k : Nat, b = true → P (compute n) ∧ R k ⦄ := by
+  step with h as ⟨n, b, hp⟩
+  guard_hyp n : Nat
+  guard_hyp b : Bool
+  guard_hyp hp : match b with | true => P (compute n) | false => True
+  intro k hb
+  simp [hb] at hp
+  exact ⟨hp, hR k⟩
+
+/- Even a trivial postcondition must preserve the output and leave final quantifiers alone. -/
+example (f : Result Nat) (R : Nat → Prop) (hR : ∀ k, R k)
+    (h : f ⦃ _ => True ∧ True ⦄) :
+    (do let n ← f; ok n) ⦃ _ => ∀ k : Nat, R k ⦄ := by
+  step with h as ⟨n⟩
+  guard_hyp n : Nat
+  intro k
+  exact hR k
+
+example (f : Bool → Result Bool) (P : Prop)
+    (h : ∀ valid, f valid ⦃ b => b = true ↔ valid = true ∧ P ⦄div) :
+    (do let b ← f true; ok b) ⦃ b => b = true ↔ P ⦄div := by
+  step with h as ⟨b, hb⟩
+  guard_hyp hb : b = true ↔ P
+  simpa only [WP.dspec_ok] using hb
+
+/- Normalization must preserve even unused outputs and simplifiable final postconditions.
+Also check native implications, as used by custom WPs. -/
+abbrev normalizationFinalGoal (n : Nat) : Prop := (True ∧ True) → ∀ k : Nat, k = n
+
+run_cmd Lean.Elab.Command.liftTermElabM do
+  let cases ← #[
+    (← `(∀ n : Nat, WP.imp (True ∧ True) (∀ k : Nat, True ∧ k = n)),
+     ← `(∀ n : Nat, WP.imp True (∀ k : Nat, True ∧ k = n))),
+    (← `(∀ _ : Nat, WP.imp (False ∧ True) (∀ _ : Nat, True ∧ True)),
+     ← `(∀ _ : Nat, WP.imp False (∀ _ : Nat, True ∧ True))),
+    (← `(∀ n : Nat, (True ∧ n = 0) → (∀ k : Nat, True ∧ k = n)),
+     ← `(∀ n : Nat, n = 0 → (∀ k : Nat, True ∧ k = n))),
+    (← `(∀ n : Nat, normalizationFinalGoal n),
+     ← `(∀ n : Nat, normalizationFinalGoal n)),
+    (← `(∀ h : True ∧ True, h.1 = h.2),
+     ← `(∀ h : True ∧ True, h.1 = h.2))
+  ].mapM fun (input, expected) => do
+    return (← Lean.Elab.Term.elabTerm input none, ← Lean.Elab.Term.elabTerm expected none)
+  Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
+  for (input, expected) in cases do
+    let input ← Lean.instantiateMVars input
+    let expected ← Lean.instantiateMVars expected
+    let target ← Aeneas.Step.simpOutputPost input
+    unless target == expected do
+      throwError "Unexpected normalized output target:\n{target}\nExpected:\n{expected}"

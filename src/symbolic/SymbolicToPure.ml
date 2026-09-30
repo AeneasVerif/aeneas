@@ -196,6 +196,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     consts;
     types;
     methods = _;
+    is_unsafe = _;
     vtable = _;
   } : A.trait_decl =
     trait_decl
@@ -288,6 +289,8 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     consts;
     types = _;
     methods;
+    is_unsafe = _;
+    is_negative = _;
     vtable = _;
   } =
     trait_impl
