@@ -231,6 +231,18 @@ structure Args where
   /- Syntax of the tactic provided by the user to solve the remaining proof obligations -/
   byTacSyntax : Option Syntax
 
+/-- Introduce a spec's outputs and postconditions in the current goal, recording
+their names and the updated step state. The callback owns target construction
+and its equivalence proof; it returns `none` if it closes the goal. -/
+abbrev IntroOutputs := Args → Expr → StepState → TacticM (Option MainGoal)
+
+private meta unsafe def evalIntroOutputsUnsafe (name : Name) : TacticM IntroOutputs :=
+  Lean.evalConstCheck IntroOutputs ``IntroOutputs name
+
+/-- Load a registered callback, checking its type before evaluating it. -/
+@[implemented_by evalIntroOutputsUnsafe]
+private meta opaque evalIntroOutputs (name : Name) : TacticM IntroOutputs
+
 /-- Recognize both the monad-class bind and `Result`'s heterogeneous bind. -/
 meta def getBindArgs? (program : Expr) : Option (Expr × Expr) :=
   match_expr program.consumeMData with
@@ -426,8 +438,8 @@ meta def getContInput (e : Expr) : MetaM NameTree := do
     | some tree => tree.mapM fvarNameSlot
     | none => return .leaf none
 
-/-- Extract names from a post-condition or bind-continuation, omitting unit leaves
-in the same order as `withOutputTuple`. Keep the anonymous slot when no tree is found. -/
+/-- Extract names from a post-condition or bind-continuation, omitting vars of type unit
+in the same order as `withOutputTuple`. -/
 meta def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
   uncurryTelescope e fun optTree _ => do
     let some tree := optTree | return #[none]
@@ -652,16 +664,18 @@ meta def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array E
   Utils.addDeclTac name e (← inferType e) (asLet := false) fun e => do
     trace[Step] "Introduced the \"pretty\" let binding: {← inferType e}"
 
-/-- Introduce one local variable per non-unit leaf of `tree`, then pass the variables and their
+/-- Introduce one free variable per slot that has not the type unit, then pass the variables and their
 tuple to `k`. For type `(A × B) × C` and pattern `((a, b), c)`, call
-`k #[a, b, c] ((a, b), c)`. Unit leaves become `()`; an unsplit product stays a single variable. -/
+`k #[a, b, c] ((a, b), c)`. Slots of type unit become `()`. -/
 meta partial def withOutputTuple {α β} (ty : Expr) (tree : BTree α)
     (k : Array Expr → Expr → MetaM β) : MetaM β := do
   let reducedTy ← withReducible <| whnf ty
-  if reducedTy.isConstOf ``PUnit then
-    return ← k #[] (mkConst ``PUnit.unit reducedTy.constLevels!)
   match tree with
-  | .leaf _ => withLocalDeclD `x ty fun x => k #[x] x
+  | .leaf _ =>
+    if reducedTy.isConstOf ``PUnit then
+      k #[] (mkConst ``PUnit.unit reducedTy.constLevels!)
+    else
+      withLocalDeclD `x ty fun x => k #[x] x
   | .pair l r =>
     match_expr reducedTy with
     | Prod a b =>
@@ -670,9 +684,16 @@ meta partial def withOutputTuple {α β} (ty : Expr) (tree : BTree α)
         k (xs ++ ys) (← mkAppM ``Prod.mk #[x, y])
     | _ => throwError "Expected a product for the output pattern, got {ty}"
 
-/-- Skip explicit output binders, then simplify the premise of `WP.imp` or a nondependent
-implication with `step_simps`. The entailment RHS must put the applied spec's premise first.
-Do not unfold continuation wrappers or simplify the output binders and conclusion. -/
+/-- Normalize the applied spec's postcondition before constructing the equivalence goal.
+For example, turn `∀ n, imp (∃ s, s = compute n ∧ P s) (Q n)` into
+`∀ n, imp (P (compute n)) (Q n)`. Otherwise those existentials, or redundant `True`
+conjuncts, would survive in the hypotheses introduced by `step`.
+
+Skip explicit output binders, then simplify only the first premise with `step_simps`.
+Do not unfold continuation wrappers or simplify output binders and the conclusion:
+the latter may contain the caller's own quantifiers. Preserve dependent premises,
+e.g. `∀ h : True ∧ True, h.1 = h.2`, because simplifying their type would require
+transporting the proof used in the conclusion. -/
 meta partial def simpOutputPost (type : Expr) : MetaM Expr := do
   let simpPost (post : Expr) := do
     let (ctx, simprocs) ← Simp.mkSimpCtx true { iota := false } .simp
@@ -683,90 +704,59 @@ meta partial def simpOutputPost (type : Expr) : MetaM Expr := do
     return mkApp2 (mkConst ``Std.WP.imp) (← simpPost post) cont
   | _ =>
     match type.consumeMData with
-    | .forallE name ty body bi =>
-      if ← isProp ty then
-        /- A dependent implication would also require transporting its proof argument. -/
-        if body.hasLooseBVars then return type
-        return .forallE name (← simpPost ty) body bi
-      withLocalDecl name bi ty fun x => do
-        mkForallFVars #[x] (← simpOutputPost (body.instantiate1 x))
+    | .forallE .. =>
+      forallBoundedTelescope type (some 1) fun xs body => do
+        let x := xs[0]!
+        let ty ← inferType x
+        if ← isProp ty then
+          if body.containsFVar x.fvarId! then return type
+          return ← mkArrow (← simpPost ty) body
+        mkForallFVars xs (← simpOutputPost body)
     | _ => return type
 
-/-- Expose the output quantifier using a registered entailment lemma, then replace it
-with binders matching `tree`. A leading Prop binder is left for postcondition introduction.
+/-- Replace the first output quantifier with binders matching `tree`.
+A leading Prop binder is left for postcondition introduction.
 For `∀ p : (A × B) × C, R p` and pattern `((a, b), c)`, return
 `(∀ a b c, R ((a, b), c), 3)`. Unit outputs are replaced with `()`. -/
-meta def mkOutputTarget (info : SpecInfo) (type : Expr) (tree : NameTree) : MetaM (Expr × Nat) := do
+meta def mkOutputTarget (type : Expr) (tree : NameTree) : MetaM (Expr × Nat) := do
   let type ← withReducible <| whnf type
-  /- Read the registered entailment lemma's RHS rather than unfolding the WP.
-     For example, `qimp_spec_iff` supplies `∀ x, imp (P x) (spec (k x) Q)`. -/
-  let type ← (do
-    if type.isForall then return type
-    for name in info.qimp_elim_tactics do
-      let rhs? ← withoutModifyingState do
-        let thm ← mkConstWithFreshMVarLevels name
-        let (params, _, lemmaTy) ← forallMetaTelescope (← inferType thm)
-        let_expr Iff lhs rhs := lemmaTy | return none
-        unless ← withReducible <| isDefEq lhs type do return none
-        unless ← params.allM (fun p => p.mvarId!.isAssigned) do return none
-        return some (← instantiateMVars rhs)
-      if let some rhs := rhs? then
-        let rhs ← withReducible <| whnf rhs
-        if rhs.isForall then return rhs
-    throwError "No registered entailment lemma exposes the outputs of:\n{type}" : MetaM Expr)
+  unless type.isForall do
+    throwError "Expected an output quantifier:\n{type}"
   let .forallE _ ty body _ := type | return (type, 0)
   if ← isProp ty then return (← simpOutputPost type, 0)
   withOutputTuple ty tree fun xs tuple => do
     let body ← simpOutputPost (body.instantiate1 tuple)
     return (← mkForallFVars xs body, xs.size)
 
-/-- Return a proof that the generated output target is equivalent to the step goal,
-using one `simp` call. For example, prove `qimp P Q ↔ ∀ a b, imp (P (a, b)) (Q (a, b))`
-using the registered entailment lemmas and `Prod.forall`. -/
-meta def proveOutputEquiv (info : SpecInfo) (goalTy target : Expr) : TacticM Expr := do
+/-- Use the supplied tactic to prove that the generated output target is equivalent
+to the step goal. For example, the `spec` tactic proves
+`qimp P Q ↔ ∀ a b, imp (P (a, b)) (Q (a, b))` with one `simp` call. -/
+meta def proveOutputEquiv (goalTy target : Expr) (prove : TacticM Unit) : TacticM Expr := do
   let equiv ← mkFreshExprSyntheticOpaqueMVar (← mkAppM ``Iff #[goalTy, target])
   let remaining ← Tactic.run equiv.mvarId! do
-    /- `step_simps` is safe in this proof: it does not change the generated target. -/
-    let _ ← Simp.simpAt true { failIfUnchanged := false, iota := false }
-      { simpThms := #[← stepSimpExt.getTheorems],
-        addSimpThms := info.qimp_elim_tactics ++
-          #[``Prod.forall, ``forall_punit, ``and_imp, ``exists_imp],
-        declsToUnfold := #[``Std.WP.imp] }
-      (.targets #[] true)
+    withoutRecover prove
   unless remaining.isEmpty do
     throwError "Could not prove the output target equivalent to the step goal:\n{remaining}"
   return ← instantiateMVars equiv
 
-/-- Read the output pattern from the continuation, or the final postcondition.
-Keep unit leaves in this tree: `withOutputTuple` needs their positions to reconstruct the tuple. -/
-meta def extractCallSiteTree (goalTy : Expr) : MetaM (Option NameTree) := do
-  match_expr goalTy.consumeMData with
-  | Std.WP.qimp_spec _ _ _ k _ => return some (← getContInput k)
-  | Std.WP.qimp_dspec _ _ _ k _ => return some (← getContInput k)
-  | Std.WP.qimp _ _ Q => return some (← getContInput Q)
-  | _ => return none
-
-/-- Update the target so that outputs are quantified in call-site order.
-For example, `qimp_spec P k Q` with pattern `((a, b), c)` becomes
-`∀ a b c, P ((a, b), c) → k ((a, b), c) ⦃ Q ⦄`.
-We prove an equivalence theorem with `simp`, then apply it before introducing the
-outputs and postconditions. -/
-meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState : StepState) :
-  TacticM (Option MainGoal) := do
+/-- Shared implementation for output-introduction callbacks. Given a quantified
+`type` and a call-site pattern, build the target, prove its equivalence using `prove`,
+then introduce and name outputs and postconditions. For example, with
+`type = ∀ p, imp (P p) (Q p)` and pattern `(a, b)`, the target is
+`∀ a b, imp (P (a, b)) (Q (a, b))`. -/
+meta def introOutputsWith (args : Args) (fExpr : Expr) (stepState : StepState)
+    (type : Expr) (tree : NameTree) (prove : TacticM Unit) : TacticM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"introOutputs") do
   withMainContext do
   traceGoalWithNode "Initial goal"
   let goal ← getMainGoal
   let goalTy ← instantiateMVars (← goal.getType)
-  /- Capture the call-site pattern before exposing the quantifiers, which loses
-     the continuation's tuple structure. -/
-  let tree := (← extractCallSiteTree goalTy).getD (.leaf none)
-  let (target, prefixLength) ← mkOutputTarget info goalTy tree
+  let (target, prefixLength) ← mkOutputTarget type tree
   let (ctx, simprocs) ← Simp.mkSimpCtx true { iota := false } .dsimp
     { addSimpThms := scalar_eqs }
   let (target, _) ← Lean.Meta.dsimp target ctx simprocs
   trace[Step] "Output target: {target}"
-  let equiv ← proveOutputEquiv info goalTy target
+  let equiv ← proveOutputEquiv goalTy target prove
   let next ← mkFreshExprSyntheticOpaqueMVar target (← goal.getTag)
   goal.assign (← mkAppM ``Iff.mpr #[equiv, next])
   let (outputFVars, next) ← next.mvarId!.introN prefixLength
@@ -898,6 +888,41 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
   let introducedVars := outputInfos ++ postInfos
 
   pure (some { goal := ← getMainGoal, outputs := introducedVars, stepState })
+
+/-- Output introduction shared by `spec` and `dspec`. Construct the target directly
+from `qimp_spec`, `qimp_dspec`, or `qimp`, without a preliminary simplification.
+For `qimp_spec P k Q` with pattern `((a, b), c)`, construct
+`∀ a b c, imp (P ((a, b), c)) (spec (k ((a, b), c)) Q)`,
+then prove equivalence with one `simp` call. -/
+meta def introOutputs : IntroOutputs := fun args fExpr stepState => do
+  withMainContext do
+  let goalTy ← instantiateMVars (← getMainTarget)
+  let (type, tree) ← match_expr goalTy.consumeMData with
+    | Std.WP.qimp_spec α _ P k Q =>
+      withLocalDeclD `x α fun x => do
+        let body ← mkAppM ``Std.WP.spec #[mkApp k x, Q]
+        let type ← mkForallFVars #[x] (mkApp2 (mkConst ``Std.WP.imp) (mkApp P x) body)
+        return (type, ← getContInput k)
+    | Std.WP.qimp_dspec α _ P k Q =>
+      withLocalDeclD `x α fun x => do
+        let body ← mkAppM ``Std.WP.dspec #[mkApp k x, Q]
+        let type ← mkForallFVars #[x] (mkApp2 (mkConst ``Std.WP.imp) (mkApp P x) body)
+        return (type, ← getContInput k)
+    | Std.WP.qimp α P Q =>
+      withLocalDeclD `x α fun x => do
+        let type ← mkForallFVars #[x] (mkApp2 (mkConst ``Std.WP.imp) (mkApp P x) (mkApp Q x))
+        return (type, ← getContInput Q)
+    | _ => throwError "Expected qimp_spec, qimp_dspec, or qimp, got:\n{goalTy}"
+  introOutputsWith args fExpr stepState type tree do
+    let _ ← Simp.simpAt true { failIfUnchanged := false, iota := false }
+      { simpThms := #[← stepSimpExt.getTheorems],
+        addSimpThms := #[``Std.WP.qimp_spec_iff, ``Std.WP.qimp_dspec_iff, ``Std.WP.qimp_iff,
+          ``Std.WP.imp_and_iff, ``Std.uncurry_apply_pair,
+          ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair, ``Std.WP.imp_exists_iff,
+          ``Std.WP.forall_unit, ``true_imp_iff, ``Prod.forall, ``forall_punit,
+          ``and_imp, ``exists_imp],
+        declsToUnfold := #[``Std.WP.imp] }
+      (.targets #[] true)
 
 /-- Attempt to solve the preconditions.
 
@@ -1034,7 +1059,7 @@ meta def stepWith (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args)
   /- Process the main goal -/
   -- Introduce the outputs, including the post-conditions, into the context
   setGoals [mainGoal]
-  let mainGoal ← introOutputs info args fExpr stepState
+  let mainGoal ← withoutRecover <| (← evalIntroOutputs info.intro_outputs) args fExpr stepState
   /- Simplify the post-conditions in the main goal - note that we waited until now
       because by solving the preconditions we may have instantiated meta-variables.
       We also simplify the goal again (to simplify let-bindings, etc.) -/

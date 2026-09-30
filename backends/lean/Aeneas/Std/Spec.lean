@@ -27,11 +27,12 @@ structure SpecInfo where
   mk_spec_bind : Name
   mk_spec_bind_skip_args : Nat
 
-  /-- Deprecated compatibility field; ignored by `step`. Use `qimp_elim_tactics` instead. -/
-  uncurry_elim_tactics : Array Lean.Name := #[]
-  /-- Lemmas for proving output-target equivalence. The first matching `Iff` lemma
-  whose RHS exposes a `∀` at reducible transparency supplies the output telescope. -/
-  qimp_elim_tactics : Array Lean.Name
+  /-- Name of a callback of type `Aeneas.Step.IntroOutputs`. It constructs the
+  output target, proves equivalence with the entailment left by `mk_spec_mono`
+  or `mk_spec_bind`, and introduces the outputs and postconditions.
+  `spec` and `dspec` both use `Aeneas.Step.introOutputs`.
+  The name allows WP registrations to precede the tactic implementation. -/
+  intro_outputs : Name
 
   to_mvcgen: Option Name
 

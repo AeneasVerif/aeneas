@@ -1009,17 +1009,7 @@ theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
     mk_spec_mono_skip_args := 2
     mk_spec_bind := ``Std.WP.spec_bind
     mk_spec_bind_skip_args := 4
-    uncurry_elim_tactics := #[
-      ``Std.WP.qimp_spec_unit, ``Std.WP.qimp_unit,
-      ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
-      ``forall_unit, ``true_imp_iff
-    ]
-    qimp_elim_tactics := #[
-      ``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
-      ``Std.WP.imp_and_iff, ``Std.uncurry_apply_pair,
-      ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
-      ``Std.WP.imp_exists_iff,
-      ``forall_unit, ``true_imp_iff]
+    intro_outputs := `Aeneas.Step.introOutputs
     to_mvcgen := .some ``Std.WP.spec_to_mvcgen
     liftings := #[]
   }
@@ -1033,17 +1023,7 @@ theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
     mk_spec_mono_skip_args := 2
     mk_spec_bind := ``Std.WP.dspec_bind
     mk_spec_bind_skip_args := 4
-    uncurry_elim_tactics := #[
-      ``Std.WP.qimp_dspec_unit, ``Std.WP.qimp_unit,
-      ``Std.WP.qimp_dspec_exists, ``Std.WP.qimp_exists,
-      ``forall_unit, ``true_imp_iff
-    ]
-    qimp_elim_tactics := #[
-      ``Std.WP.qimp_dspec_iff, ``Std.WP.qimp_iff,
-      ``Std.WP.imp_and_iff, ``Std.uncurry_apply_pair,
-      ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
-      ``Std.WP.imp_exists_iff,
-      ``forall_unit, ``true_imp_iff]
+    intro_outputs := `Aeneas.Step.introOutputs
     to_mvcgen := .some ``Std.WP.dspec_to_mvcgen
     liftings := #[
       { from_statement := ``Std.WP.spec

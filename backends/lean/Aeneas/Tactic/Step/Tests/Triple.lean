@@ -59,6 +59,24 @@ theorem triple_step_bind {P Pm : Pre} {next : α → TestM β}
   fun state hP =>
     hNext (m state).2 (m state).1 (hStep state (hPre state hP)) (m state).2 rfl
 
+open Lean Meta Elab Tactic in
+meta def introOutputs : Step.IntroOutputs := fun args fExpr stepState => do
+  withMainContext do
+  let goalTy ← instantiateMVars (← getMainTarget)
+  let type ← match_expr goalTy with
+    | Post.entails α P Q =>
+      withLocalDeclD `state (mkConst ``State) fun state =>
+      withLocalDeclD `value α fun value => do
+        let body ← mkArrow (mkApp2 P state value) (mkApp2 Q state value)
+        mkForallFVars #[state, value] body
+    | _ =>
+      if goalTy.isForall then pure goalTy
+      else throwError "Expected Post.entails or a quantified continuation, got:\n{goalTy}"
+  Step.introOutputsWith args fExpr stepState type (.leaf none) do
+    evalTactic (← `(tactic|
+      simp only [step_simps, Post.entails_iff, true_imp_iff,
+        Prod.forall, Step.forall_punit, and_imp, exists_imp, Std.WP.imp]))
+
 #register_spec_info {
     spec_name := ``triple
     arity := 4
@@ -68,8 +86,7 @@ theorem triple_step_bind {P Pm : Pre} {next : α → TestM β}
     mk_spec_mono_skip_args := 4
     mk_spec_bind := ``triple_step_bind
     mk_spec_bind_skip_args := 6
-    uncurry_elim_tactics := #[``true_imp_iff]
-    qimp_elim_tactics := #[``Post.entails_iff, ``true_imp_iff]
+    intro_outputs := ``introOutputs
     to_mvcgen := none
     liftings := #[]
   }

@@ -123,6 +123,23 @@ theorem coinSpec_ret {α p} (x : α) : coinSpec p (ITree.ret x) ↔ p x := by
     apply coinSpec.ret
     assumption
 
+open Lean Meta Elab Tactic in
+meta def introOutputs : Step.IntroOutputs := fun args fExpr stepState => do
+  withMainContext do
+  let goalTy ← instantiateMVars (← getMainTarget)
+  match_expr goalTy with
+  | qimp_coinSpec α _ P k Q =>
+    let type ← withLocalDeclD `x α fun x => do
+      let body ← mkAppM ``coinSpec #[Q, mkApp k x]
+      mkForallFVars #[x] (mkApp2 (mkConst ``Std.WP.imp) (mkApp P x) body)
+    Step.introOutputsWith args fExpr stepState type (← Step.getContInput k) do
+      evalTactic (← `(tactic|
+        simp -iota only [step_simps, qimp_coinSpec_iff, Std.WP.imp_and_iff,
+          Std.uncurry_apply_pair, Std.WP.uncurry'_eq, Std.WP.uncurry'_pair,
+          Std.WP.imp_exists_iff, forall_unit, true_imp_iff,
+          Prod.forall, Step.forall_punit, and_imp, exists_imp, Std.WP.imp]))
+  | _ => Step.introOutputs args fExpr stepState
+
 #register_spec_info {
   spec_name := ``coinSpec
   arity := 3
@@ -132,21 +149,7 @@ theorem coinSpec_ret {α p} (x : α) : coinSpec p (ITree.ret x) ↔ p x := by
   mk_spec_mono_skip_args := 2
   mk_spec_bind := ``coinSpec_bind
   mk_spec_bind_skip_args := 4
-  uncurry_elim_tactics := #[
-    ``qimp_coinSpec_unit,
-    ``Std.WP.qimp_unit,
-    ``qimp_coinSpec_exists,
-    ``Std.WP.qimp_exists,
-    ``forall_unit, ``true_imp_iff
-  ]
-  qimp_elim_tactics := #[
-    ``qimp_coinSpec_iff,
-    ``Std.WP.qimp_iff,
-    ``Std.WP.imp_and_iff, ``Std.uncurry_apply_pair,
-    ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
-    ``Std.WP.imp_exists_iff,
-    ``forall_unit, ``true_imp_iff
-  ]
+  intro_outputs := ``introOutputs
   to_mvcgen := .none
   liftings := #[
     { from_statement := ``Std.WP.spec

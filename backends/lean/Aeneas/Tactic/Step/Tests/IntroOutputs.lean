@@ -446,7 +446,7 @@ h : y = z + 1
 example : (do let (x, y) ← existentialProg; ok (x + y)) ⦃ res => res > 2 ⦄ := by
   step with existentialProg_spec as ⟨ x, y, hx, z, hz, h ⟩
 
-/- Outputs must precede existentially quantified variables, including in nested tuples. -/
+/- Outputs must precede existentially quantified variables, including when using nested tuples. -/
 def nestedExistentialProg : Result ((Nat × Nat) × Nat) := ok ((1, 2), 3)
 
 @[step]
