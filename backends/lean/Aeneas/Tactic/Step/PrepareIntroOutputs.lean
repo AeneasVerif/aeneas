@@ -3,9 +3,9 @@ public import Lean
 public import Mathlib.Logic.Basic
 public section
 
-/-! This module provides building blocks to write an intro_tactic. -/
+/-! This module provides building blocks to write a prepare_intro_outputs tactic. -/
 
-namespace Aeneas.Step.Intro
+namespace Aeneas.Step.PrepareIntroOutputs
 
 open Lean Meta Elab Tactic
 
@@ -183,4 +183,4 @@ meta def rewritePost (goal : MVarId) (rewrite : Expr → Expr → MetaM (Expr ×
     if newTarget == target then return none
     return some (← rewriteUnderOutputs goal xs newTarget proof)
 
-end Aeneas.Step.Intro
+end Aeneas.Step.PrepareIntroOutputs

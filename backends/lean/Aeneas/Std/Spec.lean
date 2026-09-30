@@ -29,7 +29,7 @@ structure SpecInfo where
 
   /-- Name of a tactic run on the premise as it stands: it may
   transform or solve it, but must not create multiple goals. -/
-  intro_tactic : Option Lean.Name := none
+  prepare_intro_outputs : Option Lean.Name := none
 
   to_mvcgen: Option Name
 

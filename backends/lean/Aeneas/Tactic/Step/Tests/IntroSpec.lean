@@ -5,7 +5,7 @@ public meta import Aeneas.Tactic.Step
 import Aeneas.Tactic.Solver.ScalarTac
 
 /-!
-# Tests for `intro_spec`, the `intro_tactic` of `spec` and `dspec`
+# Tests for `intro_spec`, the `prepare_intro_outputs` tactic of `spec` and `dspec`
 
 Proofs written against earlier versions of `step` (e.g. the VCR proofs) rely on the order
 and names of the introduced variables, and on the shape of the remaining goal. Many tests
@@ -90,7 +90,7 @@ elab "run_intro_pending " n:ident : tactic => withMainContext do
   let goal ← getMainGoal
   let worker ← mkFreshExprSyntheticOpaqueMVar ((← goal.getType).replaceFVar n pending)
   setGoals [worker.mvarId!]
-  Step.runIntroTactic ``Aeneas.Std.WP.introTactic
+  Step.runPrepareIntroOutputs ``Aeneas.Std.WP.introTactic
   let target ← instantiateMVars (← (← getMainGoal).getType)
   if (target.find? (· == pending)).isNone then
     throwError "Output normalization did not preserve a pending obligation"
@@ -107,7 +107,7 @@ example (n : Nat) (P : Nat → Prop) (R : Prop) (hR : R) :
 
 elab "run_intro_split_compact" : tactic => do
   let goal ← Lean.Elab.Tactic.getMainGoal
-  Step.runIntroTactic ``Aeneas.Std.WP.introTactic
+  Step.runPrepareIntroOutputs ``Aeneas.Std.WP.introTactic
   let proof ← Lean.instantiateMVars (Lean.mkMVar goal)
   if (proof.find? fun e =>
       e.isConstOf ``And.casesOn || e.isConstOf ``And.rec ||

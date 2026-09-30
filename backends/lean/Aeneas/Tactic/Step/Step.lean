@@ -67,7 +67,7 @@ meta def scalar_eqs := #[
 theorem forall_unit_intro {p : Unit → Prop} (h : p ()) : ∀ value, p value :=
   fun value => match value with | () => h
 
-export Intro (forall_unit)
+export PrepareIntroOutputs (forall_unit)
 
 attribute [step_simps]
   bind_assoc Std.bind_tc_ok Std.bind_tc_vis Std.bind_tc_div
@@ -710,12 +710,12 @@ meta def getCallSiteTree (info : SpecInfo) (isLet : Bool) (goal : MVarId) :
   else
     getContInput specArgs[info.post_index]!
 
-/-- Run the tactic registered as an `intro_tactic` on the main goal. -/
-meta def runIntroTactic (tac : Name) : TacticM Unit := do
-  withTraceNode `Step (fun _ => pure m!"intro_tactic: {tac}") do
+/-- Run the tactic registered as `prepare_intro_outputs` on the main goal. -/
+meta def runPrepareIntroOutputs (tac : Name) : TacticM Unit := do
+  withTraceNode `Step (fun _ => pure m!"prepare_intro_outputs: {tac}") do
   evalTactic (mkNode tac #[])
   unless (← getUnsolvedGoals).length ≤ 1 do
-    throwError "`intro_tactic` must not create multiple goals"
+    throwError "`prepare_intro_outputs` must not create multiple goals"
 
 meta def reduceOutputProjections : TacticM Unit := do
   Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
@@ -732,8 +732,8 @@ meta def foldScalarTypes : TacticM Unit := do
     After application of the step theorem, the target is the judgment's mono/bind premise,
     e.g. `∀ x, P x → k x ⦃ Q ⦄` or `∀ x, P₀ x → P₁ x`.
 
-    The `intro_tactic` registered by the specification statement first normalizes it to a
-    target of the shape:
+    The `prepare_intro_outputs` tactic registered by the specification statement first
+    normalizes it to a target of the shape:
     `∀ x, P' x → P₀ → ... → Pₘ → k ⦃ Q ⦄`
 
     We then introduce the single output `x`, destructured according to the
@@ -758,11 +758,11 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (callSiteTr
   if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after folding back the scalar types"
 
-  /- Run the intro_tactic. -/
-  if let some tac := info.intro_tactic then
-    runIntroTactic tac
+  /- Run the prepare_intro_outputs tactic. -/
+  if let some tac := info.prepare_intro_outputs then
+    runPrepareIntroOutputs tac
   if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
-  traceGoalWithNode "goal after running `intro_tactic`"
+  traceGoalWithNode "goal after running `prepare_intro_outputs`"
 
   /- Introduce the single output, i.e., the first binder, and recursively destructure it
      according to the merged binder tree. We use a fresh internal name here and rename

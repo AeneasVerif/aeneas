@@ -7,7 +7,7 @@ public import Aeneas.Tactic.Solver.Grind.Init
 public import Aeneas.Tactic.Step.DspecInduction
 public meta import Aeneas.Std.Spec
 public meta import Aeneas.Std.Delab
-public meta import Aeneas.Tactic.Step.Intro
+public meta import Aeneas.Tactic.Step.PrepareIntroOutputs
 public import Aeneas.Data.Coinductive.ITree
 public import Aeneas.Data.Coinductive.Effect
 import all Init.Internal.Order.Basic
@@ -882,7 +882,7 @@ end Aeneas.Std
 
 namespace Aeneas.Std.WP
 
-open Lean Meta Aeneas.Step.Intro in
+open Lean Meta Aeneas.Step.PrepareIntroOutputs in
 
 meta def normalizePost (hyp body : Expr) : MetaM (Expr × Expr) := do
   /- The target `∀ h : hyp, body h`,
@@ -897,15 +897,15 @@ meta def normalizePost (hyp body : Expr) : MetaM (Expr × Expr) := do
   splitHyp body hyp₂
   /- splitting: newTarget = ∀ y, P y (x.1 + 1) → Q x.2 → body _ -/
 
-/-- The `intro_tactic` of `spec` and `dspec`. -/
+/-- The `prepare_intro_outputs` tactic of `spec` and `dspec`. -/
 elab (name := introTactic) "intro_spec" : tactic => do
-  if let some goal ← Aeneas.Step.Intro.rewritePost
+  if let some goal ← Aeneas.Step.PrepareIntroOutputs.rewritePost
       (← Lean.Elab.Tactic.getMainGoal) normalizePost then
     Lean.Elab.Tactic.replaceMainGoal [goal]
   let _ ← Aeneas.Simp.simpAt true
     { maxDischargeDepth := 1, failIfUnchanged := false, iota := false }
     { addSimpThms := #[``and_imp, ``exists_imp, ``true_imp_iff,
-        ``Aeneas.Step.Intro.forall_unit] }
+        ``Aeneas.Step.PrepareIntroOutputs.forall_unit] }
     (.targets #[] true)
 
 #register_spec_info {
@@ -917,7 +917,7 @@ elab (name := introTactic) "intro_spec" : tactic => do
     mk_spec_mono_skip_args := 2
     mk_spec_bind := ``Std.WP.spec_bind
     mk_spec_bind_skip_args := 4
-    intro_tactic := some ``Aeneas.Std.WP.introTactic
+    prepare_intro_outputs := some ``Aeneas.Std.WP.introTactic
     to_mvcgen := .some ``Std.WP.spec_to_mvcgen
     liftings := #[]
   }
@@ -931,7 +931,7 @@ elab (name := introTactic) "intro_spec" : tactic => do
     mk_spec_mono_skip_args := 2
     mk_spec_bind := ``Std.WP.dspec_bind
     mk_spec_bind_skip_args := 4
-    intro_tactic := some ``Aeneas.Std.WP.introTactic
+    prepare_intro_outputs := some ``Aeneas.Std.WP.introTactic
     to_mvcgen := .some ``Std.WP.dspec_to_mvcgen
     liftings := #[
       { from_statement := ``Std.WP.spec

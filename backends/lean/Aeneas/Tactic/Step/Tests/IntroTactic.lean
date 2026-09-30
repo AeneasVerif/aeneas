@@ -6,9 +6,9 @@ public meta import Aeneas.Tactic.Step
 open Aeneas
 
 /-!
-# Tests for `SpecInfo.intro_tactic`
+# Tests for `SpecInfo.prepare_intro_outputs`
 
-The fixture is irreducible so that the tests depend on defining an `intro_tactic`.
+The fixture is irreducible so that the tests depend on defining a `prepare_intro_outputs` tactic.
 -/
 
 namespace Aeneas.Tactic.Step.Tests.IntroTactic
@@ -73,7 +73,7 @@ macro_rules
     mk_spec_mono_skip_args := 4
     mk_spec_bind := ``triple_step_bind
     mk_spec_bind_skip_args := 6
-    intro_tactic := some ``pullPre
+    prepare_intro_outputs := some ``pullPre
     to_mvcgen := none
     liftings := #[]
   }
@@ -96,7 +96,7 @@ attribute [irreducible] triple
   let once ← incr value
   incr once
 
-/- `step as` names the result and the hypothesis exposed by `intro_tactic`. -/
+/- `step as` names the result and the hypothesis exposed by `prepare_intro_outputs`. -/
 /--
 trace: case hNext
 value once : ℕ
@@ -113,7 +113,7 @@ example (value : Nat) :
   guard_hyp hOnce : once = value + 1
   step*
 
-/- `step*?` includes hypotheses exposed by `intro_tactic` in its suggestion. -/
+/- `step*?` includes hypotheses exposed by `prepare_intro_outputs` in its suggestion. -/
 /--
 info: Try this:
 
@@ -127,29 +127,29 @@ example (value : Nat) :
   unfold incrTwice
   step*?
 
-/- `intro_tactic` may solve a prepared continuation completely. -/
+/- `prepare_intro_outputs` may solve a prepared continuation completely. -/
 example (value : Nat) :
     triple True (incrTwice value) (fun _ => True) := by
   unfold incrTwice
   step
 
-/-! ## `runIntroTactic` contract -/
+/-! ## `runPrepareIntroOutputs` contract -/
 
 elab "run_constructor" : tactic => do
-  Step.runIntroTactic ``Lean.Parser.Tactic.constructor
+  Step.runPrepareIntroOutputs ``Lean.Parser.Tactic.constructor
 
-/- `runIntroTactic` rejects tactics that create multiple goals. -/
+/- `runPrepareIntroOutputs` rejects tactics that create multiple goals. -/
 /--
-error: `intro_tactic` must not create multiple goals
+error: `prepare_intro_outputs` must not create multiple goals
 -/
 #guard_msgs in
 example (P Q : Prop) : P ∧ Q := by
   run_constructor
 
 elab "run_assumption" : tactic => do
-  Step.runIntroTactic ``Lean.Parser.Tactic.assumption
+  Step.runPrepareIntroOutputs ``Lean.Parser.Tactic.assumption
 
-/- `runIntroTactic` permits tactics that solve the goal completely. -/
+/- `runPrepareIntroOutputs` permits tactics that solve the goal completely. -/
 example (P : Prop) (h : P) : P := by
   run_assumption
 
@@ -191,7 +191,7 @@ syntax (name := keepBundled) "keep_bundled" : tactic
 macro_rules
   | `(tactic| keep_bundled) => `(tactic| try (intro value; rw [triple_pull]; revert value))
 
-#register_spec_info { bundledSpecInfo with intro_tactic := some ``keepBundled }
+#register_spec_info { bundledSpecInfo with prepare_intro_outputs := some ``keepBundled }
 
 example (m : Id Nat) (next : Nat → Id Nat) (P Q S : Nat → Prop)
     (h : triple True m (fun r => P r ∧ Q r))

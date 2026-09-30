@@ -60,7 +60,7 @@ theorem triple_step_bind {P Pm : Pre} {next : α → TestM β}
   fun state hP =>
     hNext (m state).2 (m state).1 (hStep state (hPre state hP)) (m state).2 rfl
 
-/- intro tactic: expose the binders of `Post.entails`, and let `Std.WP.introTactic` normalize
+/- Output preparation: expose the binders of `Post.entails`, and let `Std.WP.introTactic` normalize
    and split the facts among them. -/
 macro (name := introEntails) "intro_entails" : tactic =>
   `(tactic| (try rw [Post.entails_iff]; intro_spec))
@@ -74,7 +74,7 @@ macro (name := introEntails) "intro_entails" : tactic =>
     mk_spec_mono_skip_args := 4
     mk_spec_bind := ``triple_step_bind
     mk_spec_bind_skip_args := 6
-    intro_tactic := some ``introEntails
+    prepare_intro_outputs := some ``introEntails
     to_mvcgen := none
     liftings := #[]
   }
