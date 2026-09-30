@@ -591,13 +591,7 @@ where
       TacticM (List (String × Syntax.Tactic × TacticM Unit)) := do
     match dischargeTac with
     | none => pure []
-    | some tac =>
-      let simpThenTac ← `(tactic| subst_vars <;> $tac)
-      pure [
-        ("equality substitution followed by the specification discharge tactic",
-          simpThenTac, evalTactic simpThenTac),
-        ("specification discharge tactic", tac, evalTactic tac)
-      ]
+    | some tac => pure [("specification discharge tactic", tac, evalTactic tac)]
 
   onFinish (cfg : Config) (mvarId : MVarId)
       (extraTacl : List (String × Syntax.Tactic × TacticM Unit) := []) :
