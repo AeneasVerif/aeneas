@@ -1,6 +1,7 @@
 module
 public import Aeneas.Std.WP
 public meta import AeneasMeta.Simp.Simp
+public import Aeneas.Tactic.Step.Simp
 public import Aeneas.Tactic.Step.Trace
 public section
 
@@ -8,19 +9,6 @@ namespace Aeneas.Step
 
 open Lean Elab Term Meta Tactic
 open Utils
-
-/-!
-# Attribute: `step_simps`
--/
-
-/-- The `step_simps` simp attribute. -/
-meta initialize stepSimpExt : SimpExtension ←
-  registerSimpAttr `step_simps "\
-    The `step_simps` attribute registers simp lemmas to be used by `step`
-    to simplify the goal before looking up lemmas. If often happens that some
-    monadic function calls, if given some specific parameters (in particuler,
-    specific trait instances), can be simplified to far simpler functions: this
-    is the main purpose of this attribute."
 
 /-- Note that `forall_const` is too general: it can eliminate unused outputs that we actually
 want to introduce in the context -/
@@ -306,39 +294,3 @@ meta def prepareIntroOutputs : PrepareIntroOutputs := do
       (.targets #[] true)
 
 end Aeneas.Step
-
-namespace Aeneas.Std.WP
-
-/- Register after defining the preparation callback so its name is checked here. -/
-#register_spec_info {
-    spec_name := ``Std.WP.spec
-    arity := 3
-    program_index := 1
-    post_index := 2
-    mk_spec_mono := ``Std.WP.spec_mono
-    mk_spec_mono_skip_args := 2
-    mk_spec_bind := ``Std.WP.spec_bind
-    mk_spec_bind_skip_args := 4
-    prepare_intro_outputs := ``Aeneas.Step.prepareIntroOutputs
-    to_mvcgen := .some ``Std.WP.spec_to_mvcgen
-    liftings := #[]
-  }
-
-#register_spec_info {
-    spec_name := ``Std.WP.dspec
-    arity := 3
-    program_index := 1
-    post_index := 2
-    mk_spec_mono := ``Std.WP.dspec_mono
-    mk_spec_mono_skip_args := 2
-    mk_spec_bind := ``Std.WP.dspec_bind
-    mk_spec_bind_skip_args := 4
-    prepare_intro_outputs := ``Aeneas.Step.prepareIntroOutputs
-    to_mvcgen := .some ``Std.WP.dspec_to_mvcgen
-    liftings := #[
-      { from_statement := ``Std.WP.spec
-        conversion_thm := ``Std.WP.spec_dspec
-        conversion_thm_inferred_args := 3 }
-    ]
-  }
-end Aeneas.Std.WP

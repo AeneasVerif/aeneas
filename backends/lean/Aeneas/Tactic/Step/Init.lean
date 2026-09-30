@@ -4,7 +4,7 @@ public import AeneasMeta.Utils
 public import Aeneas.Std.Primitives
 public import AeneasMeta.Extensions
 public import Aeneas.Tactic.Step.Trace
-public import Aeneas.Tactic.Step.PrepareIntroOutputs
+public import Aeneas.Tactic.Step.SpecInfo
 public import AeneasMeta.OptionConfig
 public section
 
