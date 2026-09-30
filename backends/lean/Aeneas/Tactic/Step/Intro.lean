@@ -7,16 +7,7 @@ public section
 
 After applying a step theorem, `step` is left with a target `∀ outputs, fact → k outputs`,
 which the `intro_tactic` can process how the shape `step` introduces the hypothesis.
-This module provides the building blocks for it. For instance, the `intro_tactic` of `spec`
-and `dspec` (`Aeneas.Std.WP.introTactic`) rewrites
-```
-∀ x, uncurry' (fun a b => ∃ y, P a b ∧ Q a b y) x → k x ⦃ r => R r ⦄
-```
-to
-```
-∀ x y, P x.1 x.2 → Q x.1 x.2 y → k x ⦃ r => R r ⦄
-```
-
+This module provides the building blocks for it. -/
 `rewriteFirstFact` rewrites the goal; it does not introduce anything.
 This matters for recursive specifications: `decreasing_by` sees
 the hypotheses that the proof term binds around the recursive call. If we introduced
@@ -197,9 +188,9 @@ private meta partial def withOutputs {α} (e : Expr) (k : Array Expr → Expr �
         withOutputs (body.instantiate1 x) k (xs.push x)
   k xs e.consumeMData
 
-/-- Replace the goal `∀ xs, original` by `∀ xs, premise`, given `proof : original ↔ premise`,
+/-- Rewrite the goal `∀ xs, original` into `∀ xs, premise`, given `proof : original ↔ premise`,
 where the outputs `xs` are introduced by `withOutputs`. -/
-meta def replaceUnderOutputs (goal : MVarId) (xs : Array Expr) (premise proof : Expr) :
+meta def rewriteUnderOutputs (goal : MVarId) (xs : Array Expr) (premise proof : Expr) :
     MetaM MVarId := do
   let result : Simp.Result := { expr := premise, proof? := some (← mkAppM ``propext #[proof]) }
   /- The new goal lives in the context of the original one, not under the outputs. -/
@@ -218,6 +209,6 @@ meta def rewriteFirstFact (goal : MVarId)
     let .forallE name fact body bi := original | return none
     let (premise, proof) ← rewrite name fact body bi
     if premise == original then return none
-    return some (← replaceUnderOutputs goal xs premise proof)
+    return some (← rewriteUnderOutputs goal xs premise proof)
 
 end Aeneas.Step.Intro
