@@ -3,24 +3,11 @@ public import Lean
 public import Mathlib.Logic.Basic
 public section
 
-/-!
-
-After applying a step theorem, `step` is left with a target `∀ outputs, fact → k outputs`,
-which the `intro_tactic` can process how the shape `step` introduces the hypothesis.
-This module provides the building blocks for it. -/
-`rewriteFirstFact` rewrites the goal; it does not introduce anything.
-This matters for recursive specifications: `decreasing_by` sees
-the hypotheses that the proof term binds around the recursive call. If we introduced
-`h : uncurry' (…) x` and simplified it afterwards, the proof term would still bind `h` with
-its original, unsplit type, and that is what the termination proof would get. Rewriting the
-goal first makes the proof term bind the split facts directly.
--/
+/-! This module provides building blocks to write an intro_tactic. -/
 
 namespace Aeneas.Step.Intro
 
 open Lean Meta Elab Tactic
-
-/-! ## Step 1: reduction -/
 
 /-- Whether `e` consists only of outputs, projections, and constructors. -/
 meta partial def isOutputLike (e : Expr) : MetaM Bool := do
@@ -51,8 +38,8 @@ meta def reduceMarker? (markers : Array Name) (e : Expr) : MetaM (Option Expr) :
   | .reduced reduced => return some reduced.headBeta
   | _ => return none
 
-/-- Whether `reduceFact` and `normalizeFact` look inside `e`: logical connectives, and
-matches (which are entered, but not split). -/
+/-- Whether `e` consists of logical connectives,
+and matches (which are entered, but not split). -/
 private meta def isLogical (e : Expr) : MetaM Bool := do
   if e.isForall || e.isLambda || e.isLet then return true
   if [``And, ``Or, ``Exists, ``Not, ``Eq, ``Iff, ``ite, ``dite].any e.isAppOf then return true
@@ -60,9 +47,8 @@ private meta def isLogical (e : Expr) : MetaM Bool := do
   return false
 
 /-- Unfold `e` if it is an application of reducible definitions (e.g., `abbrev`s) standing
-for a conjunction or an existential, which `splitFact` then splits. Matches are not
-unfolded, so that postconditions destructuring a value stay bundled. -/
-meta partial def unfoldReducibleFact? (e : Expr) : MetaM (Option Expr) := do
+for a conjunction or an existential. Matches are not unfolded. -/
+meta partial def unfoldReducibleHyp? (e : Expr) : MetaM (Option Expr) := do
   let e := e.consumeMData
   let .const name _ := e.getAppFn | return none
   if ← isMatcher name then return none
@@ -70,29 +56,26 @@ meta partial def unfoldReducibleFact? (e : Expr) : MetaM (Option Expr) := do
   let some e' ← unfoldDefinition? e | return none
   let e' := e'.headBeta.consumeMData
   if e'.isAppOfArity ``And 2 || e'.isAppOfArity ``Exists 2 then return some e'
-  unfoldReducibleFact? e'
+  unfoldReducibleHyp? e'
 
 /-- Reduce the markers and unfold the reducible definitions standing for a conjunction or an
 existential, anywhere in the logical structure of `e` (see `isLogical`). The result is
 definitionally equal to `e`. -/
-meta def reduceFact (markers : Array Name) (e : Expr) : MetaM Expr := do
+meta def reduceHyp (markers : Array Name) (e : Expr) : MetaM Expr := do
   let pre (e : Expr) : MetaM TransformStep := do
     if e.isMData then return .continue
     if let some e' ← reduceMarker? markers e then return .visit e'
     if ← isLogical e then return .continue
-    if let some e' ← unfoldReducibleFact? e then return .visit e'
+    if let some e' ← unfoldReducibleHyp? e then return .visit e'
     return .done e
   withTransparency .default <| Meta.transform (← instantiateMVars e) (pre := pre)
-
-/-! ## Step 2: simplification -/
 
 theorem forall_unit {p : Prop} : (Unit → p) ↔ p :=
   ⟨fun h => h (), fun h _ => h⟩
 
-/-- Simplify a fact, in its logical structure (see `isLogical`): eliminate defining
-existentials, and drop trivial conjuncts and premises. Other program terms are left alone,
-so that bundled postconditions stay bundled. -/
-meta def normalizeFact (type : Expr) : MetaM Simp.Result := do
+/-- Simplify a hypothesis, in its logical structure: eliminate defining
+existentials, and drop trivial conjuncts and premises. -/
+meta def simpHyp (type : Expr) : MetaM Simp.Result := do
   let names := #[
     /- Defining existentials: `∃ y, y = e ∧ P y` becomes `P e`. -/
     ``exists_eq_left, ``exists_eq_left', ``exists_eq_right, ``exists_eq_right',
@@ -109,74 +92,70 @@ meta def normalizeFact (type : Expr) : MetaM Simp.Result := do
   let (result, _) ← Simp.main type ctx (methods := { Simp.mkDefaultMethodsCore #[] with pre })
   return result
 
-/-! ## Step 3: splitting -/
-
-/-- Split the premise `∀ h : fact, rest h` into the witnesses and conjuncts `fact` stands for:
-- `∀ h : True, rest h` becomes `rest trivial`;
-- `∀ h : a ∧ b, rest h` becomes `∀ (ha : a) (hb : b), rest ⟨ha, hb⟩`, and `a` and `b` are
+/-- Split the hypothesis of `∀ h : hyp, body h` into the witnesses and conjuncts `hyp` stands
+for:
+- `∀ h : True, body h` becomes `body trivial`;
+- `∀ h : a ∧ b, body h` becomes `∀ (ha : a) (hb : b), body ⟨ha, hb⟩`, and `a` and `b` are
   split in turn;
-- `∀ h : ∃ x, p x, rest h` becomes `∀ x (h : p x), rest ⟨x, h⟩`, and `p x` is split in turn;
+- `∀ h : ∃ x, p x, body h` becomes `∀ x (h : p x), body ⟨x, h⟩`, and `p x` is split in turn;
   the witness keeps the name of the existential binder;
 - a reducible definition standing for one of the above is unfolded first;
-- any other fact is left alone.
+- any other hypothesis is left alone.
 
-`rest` is a function of the proof of the fact. Returns the new premise, and a proof that it
-is equivalent to `∀ h : fact, rest h`. -/
-meta partial def splitFact (name : Name) (fact rest : Expr) : MetaM (Expr × Expr) := do
-  let fact := (← unfoldReducibleFact? fact).getD fact.consumeMData
-  if fact.isConstOf ``True then
-    return ((mkApp rest (mkConst ``True.intro)).headBeta,
-      mkApp3 (mkConst ``forall_prop_of_true) fact rest (mkConst ``True.intro))
-  match_expr fact with
+`body` is a function of the proof of the hypothesis. Returns `newTarget`, and a proof of
+`(∀ h : hyp, body h) ↔ newTarget`. -/
+meta partial def splitHypAux (name : Name) (hyp body : Expr) : MetaM (Expr × Expr) := do
+  let hyp := (← unfoldReducibleHyp? hyp).getD hyp.consumeMData
+  if hyp.isConstOf ``True then
+    return ((mkApp body (mkConst ``True.intro)).headBeta,
+      mkApp3 (mkConst ``forall_prop_of_true) hyp body (mkConst ``True.intro))
+  match_expr hyp with
   | And a b =>
-    /- (∀ h : a ∧ b, rest h)
-         ↔ ∀ (ha : a) (hb : b), rest ⟨ha, hb⟩     -- `forall_and_index`
+    /- (∀ h : a ∧ b, body h)
+         ↔ ∀ (ha : a) (hb : b), body ⟨ha, hb⟩     -- `forall_and_index`
          ↔ ∀ (ha : a), splitB ha                   -- split `b`, under `ha`
-         ↔ premise                                 -- split `a` -/
-    let step₁ ← mkAppOptM ``forall_and_index #[a, b, rest]
+         ↔ newTarget                               -- split `a` -/
+    let step₁ ← mkAppOptM ``forall_and_index #[a, b, body]
     let (splitB, step₂) ← withLocalDeclD name a fun ha => do
-      let restB ← withLocalDeclD name b fun hb => do
-        mkLambdaFVars #[hb] (mkApp rest (mkApp4 (mkConst ``And.intro) a b ha hb)).headBeta
-      let (splitB, proofB) ← splitFact name b restB
+      let bodyB ← withLocalDeclD name b fun hb => do
+        mkLambdaFVars #[hb] (mkApp body (mkApp4 (mkConst ``And.intro) a b ha hb)).headBeta
+      let (splitB, proofB) ← splitHypAux name b bodyB
       return (← mkLambdaFVars #[ha] splitB,
         ← mkAppM ``forall_congr' #[← mkLambdaFVars #[ha] proofB])
-    let (premise, step₃) ← splitFact name a splitB
-    return (premise, ← mkAppM ``Iff.trans #[step₁, ← mkAppM ``Iff.trans #[step₂, step₃]])
+    let (newTarget, step₃) ← splitHypAux name a splitB
+    return (newTarget, ← mkAppM ``Iff.trans #[step₁, ← mkAppM ``Iff.trans #[step₂, step₃]])
   | Exists α p =>
-    /- (∀ h : ∃ x, p x, rest h)
-         ↔ ∀ x (h : p x), rest ⟨x, h⟩     -- `forall_exists_index`
+    /- (∀ h : ∃ x, p x, body h)
+         ↔ ∀ x (h : p x), body ⟨x, h⟩     -- `forall_exists_index`
          ↔ ∀ x, splitP x                   -- split `p x`, under `x` -/
-    let step₁ ← mkAppOptM ``forall_exists_index #[α, p, rest]
+    let step₁ ← mkAppOptM ``forall_exists_index #[α, p, body]
     let witness := if let .lam n .. := p then n else `x
     withLocalDeclD witness α fun x => do
       let px := (mkApp p x).headBeta
-      let restX ← withLocalDeclD name px fun h => do
+      let bodyX ← withLocalDeclD name px fun h => do
         mkLambdaFVars #[h]
-          (mkApp rest (mkApp4 (mkConst ``Exists.intro [← getLevel α]) α p x h)).headBeta
-      let (splitP, proofP) ← splitFact name px restX
+          (mkApp body (mkApp4 (mkConst ``Exists.intro [← getLevel α]) α p x h)).headBeta
+      let (splitP, proofP) ← splitHypAux name px bodyX
       let step₂ ← mkAppM ``forall_congr' #[← mkLambdaFVars #[x] proofP]
       return (← mkForallFVars #[x] splitP, ← mkAppM ``Iff.trans #[step₁, step₂])
   | _ =>
-    let premise ← withLocalDeclD name fact fun h => do
-      mkForallFVars #[h] (mkApp rest h).headBeta
-    return (premise, ← mkAppM ``Iff.refl #[premise])
+    let newTarget ← withLocalDeclD name hyp fun h => do
+      mkForallFVars #[h] (mkApp body h).headBeta
+    return (newTarget, ← mkAppM ``Iff.refl #[newTarget])
 
-/-- Split the premise `∀ h : dom, body` into binders, once its fact `dom` is rewritten into
-`fact`, with `factEq? : dom = fact` (`none` when `fact` is definitionally equal to `dom`; `body`
-must then not depend on `h`). Returns the new premise, and a proof that it is equivalent to
-`∀ h : dom, body`. -/
-meta def splitPremise (name : Name) (fact body : Expr) (bi : BinderInfo)
-    (factEq? : Option Expr) : MetaM (Expr × Expr) := do
-  let (premise, splitProof) ← splitFact name fact (.lam name fact body bi)
-  let proof ← match factEq? with
-    | none => pure splitProof
-    | some eq =>
-      let congr ← mkAppOptM ``imp_congr_left
-        #[none, none, some body, some (← mkAppM ``Iff.of_eq #[eq])]
-      mkAppM ``Iff.trans #[congr, splitProof]
-  return (premise, proof)
+/-- Split the hypothesis of `∀ h : hyp, body h` into binders (see `splitHypAux`).
 
-/-! ## Putting it together -/
+Returns `newTarget`, and a proof of `(∀ h : hyp, body h) ↔ newTarget`. -/
+meta def splitHyp (body : Expr) (hyp' : Simp.Result) : MetaM (Expr × Expr) := do
+  let .lam name _ b bi := body | throwError "splitHyp: expected a function, got {body}"
+  let (newTarget, splitProof) ← splitHypAux name hyp'.expr (.lam name hyp'.expr b bi)
+  let some eq := hyp'.proof? | return (newTarget, splitProof)
+  if body.bindingBody!.hasLooseBVars then
+    throwError "splitHyp: the hypothesis can not be rewritten, as the body uses it"
+  /- `(∀ h : hyp, body h) ↔ (∀ h : hyp'.expr, body h)` -/
+  let congr ← mkAppOptM ``imp_congr_left
+    #[none, none, some b, some (← mkAppM ``Iff.of_eq #[eq])]
+  return (newTarget, ← mkAppM ``Iff.trans #[congr, splitProof])
 
 /-- Introduce the outputs, i.e. the leading binders of `e` which are not propositions, and
 pass them to `k` together with the remainder of `e`. -/
@@ -188,27 +167,20 @@ private meta partial def withOutputs {α} (e : Expr) (k : Array Expr → Expr �
         withOutputs (body.instantiate1 x) k (xs.push x)
   k xs e.consumeMData
 
-/-- Rewrite the goal `∀ xs, original` into `∀ xs, premise`, given `proof : original ↔ premise`,
-where the outputs `xs` are introduced by `withOutputs`. -/
-meta def rewriteUnderOutputs (goal : MVarId) (xs : Array Expr) (premise proof : Expr) :
+/-- Rewrite the goal `∀ xs, target` into `∀ xs, newTarget`, given `target ↔ newTarget` -/
+meta def rewriteUnderOutputs (goal : MVarId) (xs : Array Expr) (newTarget proof : Expr) :
     MetaM MVarId := do
-  let result : Simp.Result := { expr := premise, proof? := some (← mkAppM ``propext #[proof]) }
-  /- The new goal lives in the context of the original one, not under the outputs. -/
+  let result : Simp.Result :=
+    { expr := newTarget, proof? := some (← mkAppM ``propext #[proof]) }
   applySimpResultToTarget goal (← instantiateMVars (← goal.getType)) (← result.addForalls xs)
 
-/-- Rewrite the first fact of the target `∀ xs, fact → k xs`, where `xs` are the outputs.
-`rewrite name fact body bi` returns the new premise, and a proof that it is equivalent to
-`∀ h : fact, body`, where `body` may refer to `h` as a loose bound variable.
-
-Returns the new goal, or `none` if the premise is unchanged. The outputs remain the leading
-binders of the new goal. -/
-meta def rewriteFirstFact (goal : MVarId)
-    (rewrite : Name → Expr → Expr → BinderInfo → MetaM (Expr × Expr)) :
+/-- Rewrite specialized for rewriting only post in goals like `forall xs. post -> _` -/
+meta def rewritePost (goal : MVarId) (rewrite : Expr → Expr → MetaM (Expr × Expr)) :
     MetaM (Option MVarId) := goal.withContext do
-  withOutputs (← instantiateMVars (← goal.getType)) fun xs original => do
-    let .forallE name fact body bi := original | return none
-    let (premise, proof) ← rewrite name fact body bi
-    if premise == original then return none
-    return some (← rewriteUnderOutputs goal xs premise proof)
+  withOutputs (← instantiateMVars (← goal.getType)) fun xs target => do
+    let .forallE name post b bi := target | return none
+    let (newTarget, proof) ← rewrite post (.lam name post b bi)
+    if newTarget == target then return none
+    return some (← rewriteUnderOutputs goal xs newTarget proof)
 
 end Aeneas.Step.Intro

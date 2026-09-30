@@ -883,35 +883,24 @@ end Aeneas.Std
 namespace Aeneas.Std.WP
 
 open Lean Meta Aeneas.Step.Intro in
-/-- Normalize the first fact `dom` of the target of `spec` and `dspec`, whose continuation is
-`body` (see `rewriteFirstFact`). Returns the new premise, and a proof that it is equivalent to
-`∀ h : dom, body`.
 
-The `Example:` comments follow the example of the module doc of `Aeneas.Step.Intro`. -/
-meta def normalizeFirstFact (name : Name) (dom body : Expr) (bi : BinderInfo) :
-    MetaM (Expr × Expr) := do
-  /- Example: `dom = uncurry' (fun a b => ∃ y, P a b ∧ Q a b y) x`, and
-     `body = k x ⦃ r => R r ⦄`. -/
+meta def normalizePost (hyp body : Expr) : MetaM (Expr × Expr) := do
+  /- The target `∀ h : hyp, body h`,
+     where hyp could be `uncurry' (fun a b => ∃ y z, z = a + 1 ∧ P y z ∧ Q b) x` -/
 
-  /- Steps 1–2: reduce the markers and simplify the fact, with `factEq? : dom = fact`.
-     When the continuation depends on the proof of the fact, the fact can only be changed
-     up to definitional equality: we then skip the simplification. -/
-  let dom ← reduceFact #[``Aeneas.Std.WP.uncurry', ``Aeneas.Std.uncurry] dom
-  let (fact, factEq?) ←
-    if body.hasLooseBVars then pure (dom, none)
-    else
-      let result ← normalizeFact dom
-      pure (result.expr, result.proof?)
-  /- Example: `fact = ∃ y, P x.1 x.2 ∧ Q x.1 x.2 y`. -/
+  let hyp₁ ← reduceHyp #[``Aeneas.Std.WP.uncurry', ``Aeneas.Std.uncurry] hyp
+  /- reduction: hyp₁ = ∃ y z, z = x.1 + 1 ∧ P y z ∧ Q x.2 -/
 
-  /- Step 3: split `fact` into binders.
-     Example: the new premise is `∀ y, P x.1 x.2 → Q x.1 x.2 y → k x ⦃ r => R r ⦄`. -/
-  splitPremise name fact body bi factEq?
+  let hyp₂ ← if body.bindingBody!.hasLooseBVars then pure { expr := hyp₁ } else simpHyp hyp₁
+  /- simplification: hyp₂ = ∃ y, P y (x.1 + 1) ∧ Q x.2 -/
+
+  splitHyp body hyp₂
+  /- splitting: newTarget = ∀ y, P y (x.1 + 1) → Q x.2 → body _ -/
 
 /-- The `intro_tactic` of `spec` and `dspec`. -/
 elab (name := introTactic) "intro_spec" : tactic => do
-  if let some goal ← Aeneas.Step.Intro.rewriteFirstFact
-      (← Lean.Elab.Tactic.getMainGoal) normalizeFirstFact then
+  if let some goal ← Aeneas.Step.Intro.rewritePost
+      (← Lean.Elab.Tactic.getMainGoal) normalizePost then
     Lean.Elab.Tactic.replaceMainGoal [goal]
   let _ ← Aeneas.Simp.simpAt true
     { maxDischargeDepth := 1, failIfUnchanged := false, iota := false }

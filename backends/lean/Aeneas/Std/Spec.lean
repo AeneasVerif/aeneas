@@ -27,12 +27,8 @@ structure SpecInfo where
   mk_spec_bind : Name
   mk_spec_bind_skip_args : Nat
 
-  /-- Name of a tactic (i.e., its syntax kind) run on the premise as it stands: it may
-  transform or solve it, but must not create multiple goals. It should not introduce anything
-  in the context, so that `step` can introduce the outputs and hypotheses later with the names
-  provided by the user.
-
-  The output is the first binder of the resulting goal. -/
+  /-- Name of a tactic run on the premise as it stands: it may
+  transform or solve it, but must not create multiple goals. -/
   intro_tactic : Option Lean.Name := none
 
   to_mvcgen: Option Name

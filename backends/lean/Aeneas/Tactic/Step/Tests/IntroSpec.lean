@@ -74,6 +74,15 @@ example (compute : Nat → Nat × Nat) (P : Nat → Nat → Nat → Prop) (R : P
   intro _ _
   exact hR
 
+/- The example of `normalizePost`, which goes through its three steps. -/
+example (P : Nat → Nat → Prop) (Q : Nat → Prop) (R : Prop) (hR : R) :
+    ∀ x : Nat × Nat,
+      Aeneas.Std.WP.uncurry' (fun a b => ∃ y z, z = a + 1 ∧ P y z ∧ Q b) x → R := by
+  intro_spec
+  guard_target = ∀ x : Nat × Nat, ∀ y, P y (x.1 + 1) → Q x.2 → R
+  intro _ _ _ _
+  exact hR
+
 open Lean Meta Elab Tactic in
 elab "run_intro_pending " n:ident : tactic => withMainContext do
   let n := mkFVar (← getFVarId n)

@@ -53,9 +53,6 @@ theorem triple_true (P : Prop) (m : Id α) :
   intro _
   trivial
 
-/- intro tactic: it is responsible for the whole normalization of the mono and bind
-   premises, so it exposes the binders of `Post.entails` itself, and pulls the precondition
-   of the continuation — reverting the output it introduces to do so. -/
 syntax (name := pullPre) "pull_pre" : tactic
 macro_rules
   | `(tactic| pull_pre) =>
