@@ -31,7 +31,7 @@ error: Unknown output-preparation callback `missingPrepareIntroOutputs`
 
 theorem paramSpec_mono' {α : Type} {tag : Nat} {P₁ : α → Prop} {m : Result α}
     {P₀ : α → Prop} (h : paramSpec tag m P₀) :
-    Std.WP.qimp P₀ P₁ → paramSpec tag m P₁ := by
+    (∀ x, P₀ x → P₁ x) → paramSpec tag m P₁ := by
   intro hq
   unfold paramSpec at h ⊢
   exact ⟨rfl, Std.WP.spec_mono h.2 hq⟩
@@ -74,8 +74,7 @@ meta def prepareIntroOutputs : PrepareIntroOutputs := do
         { simpThms := #[← Step.stepSimpExt.getTheorems],
           addSimpThms := #[``qimpParam_iff, ``Prod.forall, ``Step.forall_punit, ``true_imp_iff,
             ``and_imp, ``exists_imp, ``Std.uncurry_apply_pair,
-            ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair],
-          declsToUnfold := #[``Std.WP.imp] }
+            ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair] }
         (.targets #[] true)
   | _ => Step.prepareIntroOutputs
 
@@ -122,7 +121,7 @@ example (tag : Nat) (f : Result (Bool × Unit))
   guard_hyp hb : b = true
   simp [paramSpec, Std.WP.spec_ok, hb]
 
-/- The mono rule delegates its `qimp` premise to the standard callback. -/
+/- The mono rule delegates its premise to the standard callback. -/
 example (tag n : Nat) : paramSpec tag (op n) (fun r => r = n) := by
   step with op_spec as ⟨r, hr⟩
   exact hr

@@ -76,8 +76,7 @@ meta def prepareIntroOutputs : PrepareIntroOutputs := do
     let _ ← Simp.simpAt true { failIfUnchanged := false }
       { simpThms := #[← Step.stepSimpExt.getTheorems],
         addSimpThms := #[``Post.entails_iff, ``true_imp_iff,
-          ``Prod.forall, ``Step.forall_punit, ``and_imp, ``exists_imp],
-        declsToUnfold := #[``Std.WP.imp] }
+          ``Prod.forall, ``Step.forall_punit, ``and_imp, ``exists_imp] }
       (.targets #[] true)
 
 #register_spec_info {

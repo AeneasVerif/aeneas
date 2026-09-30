@@ -372,8 +372,8 @@ meta def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) :=
       pure mvar
 
 /-- Attempt to match a given theorem with the monadic call in the target.
-The resulting target should be of the shape:
-`qimp_spec P k Q` (or `qimp P Q`)
+The resulting target should be mono's or bind's premise:
+e.g. `∀ x, P₀ x → P₁ x` or `∀ x, P x → k x ⦃ Q ⦄`
 -/
 meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th : Expr) :
   TacticM (Array MVarId) := do
@@ -506,6 +506,9 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
   withTraceNode `Step (fun _ => pure m!"introOutputs") do
   withMainContext do
   let prefixLength ← withoutRecover <| (← evalPrepareIntroOutputs info.prepare_intro_outputs)
+  if (← getUnsolvedGoals).isEmpty then
+    trace[Step] "Main goal solved by prepare_intro_outputs!"
+    return none
   let goal ← getMainGoal
   let (ctx, simprocs) ← Simp.mkSimpCtx true { iota := false } .dsimp
     { addSimpThms := scalar_eqs }
@@ -521,11 +524,11 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
      in the final goal and introduce them as if they were postconditions. -/
   let _ ← withTraceNode `Step (fun _ => pure m!"simpAt: normalizing postconditions") do
     Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
-            { declsToUnfold := #[``Std.WP.imp],
+            { addSimprocs := #[``existsImpNamed],
               addSimpThms := #[``Std.uncurry_apply_pair,
                   ``Std.uncurry_eq_prop, ``Std.uncurry_eq_prop_arrow,
                   ``Std.WP.uncurry'_pair, ``Std.WP.uncurry'_eq,
-                  ``and_imp, ``exists_imp, ``forall_unit, ``true_imp_iff] ++ scalar_eqs }
+                  ``and_imp, ``forall_unit, ``true_imp_iff] ++ scalar_eqs }
             (.targets #[] true)
   if (← getUnsolvedGoals).isEmpty then trace[Step] "Main goal solved by cleanup simp!"; return none
 
@@ -584,7 +587,8 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
             mkFreshAnon tyIsProp
           else if ¬ tyIsProp then
             -- Generate a name for an existential variable
-            mkFreshUserName `x
+            let n ← fvars[i]!.fvarId!.getUserName
+            if n.isAnonymous || n.hasMacroScopes then mkFreshUserName `x else pure n
           else
             -- Generate a name for a post-condition
             let nameSpec :=
