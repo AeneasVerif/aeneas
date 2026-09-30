@@ -16,6 +16,11 @@ structure LiftingInfo where
   conversion_thm : Name
   conversion_thm_inferred_args : Nat
 
+/-- Reshape the current entailment into an equivalent quantified target, without
+introducing variables. Return the number of leading output binders; `step` introduces
+these before the postconditions. Declare callbacks with this type alias. -/
+abbrev PrepareIntroOutputs := Elab.Tactic.TacticM Nat
+
 structure SpecInfo where
   spec_name : Lean.Name
   arity : Nat
@@ -27,17 +32,25 @@ structure SpecInfo where
   mk_spec_bind : Name
   mk_spec_bind_skip_args : Nat
 
-  /-- Name of a callback of type `Aeneas.Step.IntroOutputs`. It constructs the
-  output target, proves equivalence with the entailment left by `mk_spec_mono`
-  or `mk_spec_bind`, and introduces the outputs and postconditions.
-  `spec` and `dspec` both use `Aeneas.Step.introOutputs`.
-  The name allows WP registrations to precede the tactic implementation. -/
-  intro_outputs : Name
+  /-- Name of a `PrepareIntroOutputs` callback. For example, given `qimp_spec P k Q`
+  with call-site pattern `(a, b)`, `Aeneas.Step.prepareIntroOutputs` changes the goal
+  to `∀ a b, imp (P (a, b)) (spec (k (a, b)) Q)` and returns `2`.
+  It proves equivalence before changing the goal; `step` then introduces variables.
+  Both `spec` and `dspec` register `prepare_intro_outputs := ``Aeneas.Step.prepareIntroOutputs`. -/
+  prepare_intro_outputs : Name
 
   to_mvcgen: Option Name
 
   liftings : Array LiftingInfo
   deriving Inhabited
+
+private meta unsafe def evalPrepareIntroOutputsUnsafe (name : Name) :
+    Elab.Tactic.TacticM PrepareIntroOutputs :=
+  Lean.evalConstCheck PrepareIntroOutputs ``PrepareIntroOutputs name
+
+/-- Load a registered preparation callback, checking its type before evaluating it. -/
+@[implemented_by evalPrepareIntroOutputsUnsafe]
+meta opaque evalPrepareIntroOutputs (name : Name) : Elab.Tactic.TacticM PrepareIntroOutputs
 
 meta structure SpecInfoExtensionState where
   specInfos : Std.HashMap Name SpecInfo
@@ -65,6 +78,11 @@ meta unsafe def register_spec_info : Lean.Elab.Command.CommandElab := fun stx =>
     elabTerm info (some (mkConst ``SpecInfo))
   let value ← Lean.Elab.Command.liftTermElabM do
     Lean.Meta.evalExpr SpecInfo (mkConst ``SpecInfo) expr
+  let some callback := (← getEnv).find? value.prepare_intro_outputs
+    | throwErrorAt info "Unknown output-preparation callback `{value.prepare_intro_outputs}`"
+  unless callback.type == Lean.mkConst ``PrepareIntroOutputs do
+    throwErrorAt info "Invalid output-preparation callback `{value.prepare_intro_outputs}`: \
+      declare it with type `Aeneas.PrepareIntroOutputs`"
   specAttr.add value
 
 meta def specInfoLookup (n : Name) : MetaM (Option SpecInfo) := do

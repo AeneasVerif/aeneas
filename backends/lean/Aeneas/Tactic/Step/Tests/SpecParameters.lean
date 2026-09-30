@@ -1,9 +1,29 @@
 module
+public import Lean.Elab.Tactic.Basic
 import Aeneas.Tactic.Step
 
 open Aeneas Aeneas.Std Result
 
 namespace Aeneas.Tactic.Step.Tests.SpecParameters
+
+/- Invalid callbacks must fail at registration, not later when `step` loads them. -/
+public meta def expandedPreparationType : Lean.Elab.Tactic.TacticM Nat := pure 0
+
+meta def defaultSpecInfo : SpecInfo := default
+
+/--
+error: Invalid output-preparation callback `Aeneas.Tactic.Step.Tests.SpecParameters.expandedPreparationType`: declare it with type `Aeneas.PrepareIntroOutputs`
+-/
+#guard_msgs in
+#register_spec_info { defaultSpecInfo with
+  prepare_intro_outputs := ``expandedPreparationType }
+
+/--
+error: Unknown output-preparation callback `missingPrepareIntroOutputs`
+-/
+#guard_msgs in
+#register_spec_info { defaultSpecInfo with
+  prepare_intro_outputs := `missingPrepareIntroOutputs }
 
 /- A custom spec with an extra parameter that must be shared across binds. -/
 @[irreducible] def paramSpec {α : Type} (tag : Nat) (x : Result α) (Q : α → Prop) : Prop :=
@@ -41,7 +61,7 @@ theorem paramSpec_bind' {α β : Type} {k : α → Result β} {Pₖ : β → Pro
   exact hk.2
 
 open Lean Meta Elab Tactic in
-meta def introOutputs : Step.IntroOutputs := fun args fExpr stepState => do
+meta def prepareIntroOutputs : PrepareIntroOutputs := do
   withMainContext do
   let goalTy ← instantiateMVars (← getMainTarget)
   match_expr goalTy with
@@ -49,12 +69,15 @@ meta def introOutputs : Step.IntroOutputs := fun args fExpr stepState => do
     let type ← withLocalDeclD `x α fun x => do
       let body ← mkAppM ``paramSpec #[tag, mkApp k x, Q]
       mkForallFVars #[x] (← mkArrow (mkApp P x) body)
-    Step.introOutputsWith args fExpr stepState type (← Step.getContInput k) do
-      evalTactic (← `(tactic|
-        simp -iota only [qimpParam_iff, step_simps, Std.WP.imp, Prod.forall,
-          Step.forall_punit, and_imp, exists_imp, Std.uncurry_apply_pair,
-          Std.WP.uncurry'_eq, Std.WP.uncurry'_pair]))
-  | _ => Step.introOutputs args fExpr stepState
+    Step.prepareIntroOutputsWith type (← Step.getContInput k) do
+      let _ ← Simp.simpAt true { failIfUnchanged := false, iota := false }
+        { simpThms := #[← Step.stepSimpExt.getTheorems],
+          addSimpThms := #[``qimpParam_iff, ``Prod.forall, ``Step.forall_punit, ``true_imp_iff,
+            ``and_imp, ``exists_imp, ``Std.uncurry_apply_pair,
+            ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair],
+          declsToUnfold := #[``Std.WP.imp] }
+        (.targets #[] true)
+  | _ => Step.prepareIntroOutputs
 
 #register_spec_info {
     spec_name := ``paramSpec
@@ -65,7 +88,7 @@ meta def introOutputs : Step.IntroOutputs := fun args fExpr stepState => do
     mk_spec_mono_skip_args := 3
     mk_spec_bind := ``paramSpec_bind'
     mk_spec_bind_skip_args := 5
-    intro_outputs := ``introOutputs
+    prepare_intro_outputs := ``prepareIntroOutputs
     to_mvcgen := none
     liftings := #[]
   }

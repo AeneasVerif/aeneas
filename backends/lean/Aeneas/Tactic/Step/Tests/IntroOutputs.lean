@@ -509,7 +509,7 @@ example :
 
 end
 
-/- Product abbreviations can be inspected using reducible transparency. -/
+/- Abbreviations can be inspected using reducible transparency. -/
 abbrev NestedOutput := (Nat × Nat) × Nat
 
 example (f : Result NestedOutput) (h : f ⦃ ((a, b), c) => a = 1 ∧ b = 2 ∧ c = 3 ⦄) :
@@ -580,7 +580,7 @@ example (g : Unit → Result Nat) (hg : ∀ u, g u ⦃ (n : Nat) => n = 0 ⦄) :
   step with hg as ⟨n, hn⟩
   exact hn
 
-/- Unit leaves disappear inside tuples, including when the continuation uses them. -/
+/- Outputs of type unit get eliminated, even when they are used in the post-condition. -/
 example (f : Result (Bool × Unit)) (h : f ⦃ b u => b = true ∧ u = () ⦄)
     (g : Bool → Unit → Result Nat)
     (hg : ∀ b u, g b u ⦃ n => n = 0 ⦄) :
@@ -599,7 +599,7 @@ example (f : Result ((Unit × Nat) × (Bool × Unit)))
   guard_hyp b : Bool
   simp [hn, hb]
 
-/- Inferred names skip unit leaves as well; they must not become postcondition names. -/
+/- Inferred names skip outputs of type unit; they must not become postcondition names. -/
 example (f : Result ((Unit × Nat) × (Bool × Unit)))
     (h : f ⦃ ((u, n), (b, v)) => u = () ∧ n = 1 ∧ b = true ∧ v = () ⦄) :
     (do let ((u, n), (b, v)) ← f; ok (u, n, b, v))

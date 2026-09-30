@@ -4,7 +4,7 @@ public import AeneasMeta.Utils
 public import Aeneas.Std.Primitives
 public import AeneasMeta.Extensions
 public import Aeneas.Tactic.Step.Trace
-public import Aeneas.Std.WP
+public import Aeneas.Tactic.Step.PrepareIntroOutputs
 public import AeneasMeta.OptionConfig
 public section
 
@@ -14,19 +14,6 @@ namespace Step
 
 open Lean Elab Term Meta
 open Utils Extensions
-
-/-!
-# Attribute: `step_simps`
--/
-
-/-- The `step_simps` simp attribute. -/
-initialize stepSimpExt : SimpExtension ←
-  registerSimpAttr `step_simps "\
-    The `step_simps` attribute registers simp lemmas to be used by `step`
-    to simplify the goal before looking up lemmas. If often happens that some
-    monadic function calls, if given some specific parameters (in particuler,
-    specific trait instances), can be simplified to far simpler functions: this
-    is the main purpose of this attribute."
 
 /-!
 # Attribute: `step_pre_simps`

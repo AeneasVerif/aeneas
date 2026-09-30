@@ -60,7 +60,7 @@ theorem triple_step_bind {P Pm : Pre} {next : α → TestM β}
     hNext (m state).2 (m state).1 (hStep state (hPre state hP)) (m state).2 rfl
 
 open Lean Meta Elab Tactic in
-meta def introOutputs : Step.IntroOutputs := fun args fExpr stepState => do
+meta def prepareIntroOutputs : PrepareIntroOutputs := do
   withMainContext do
   let goalTy ← instantiateMVars (← getMainTarget)
   let type ← match_expr goalTy with
@@ -72,10 +72,13 @@ meta def introOutputs : Step.IntroOutputs := fun args fExpr stepState => do
     | _ =>
       if goalTy.isForall then pure goalTy
       else throwError "Expected Post.entails or a quantified continuation, got:\n{goalTy}"
-  Step.introOutputsWith args fExpr stepState type (.leaf none) do
-    evalTactic (← `(tactic|
-      simp only [step_simps, Post.entails_iff, true_imp_iff,
-        Prod.forall, Step.forall_punit, and_imp, exists_imp, Std.WP.imp]))
+  Step.prepareIntroOutputsWith type (.leaf none) do
+    let _ ← Simp.simpAt true { failIfUnchanged := false }
+      { simpThms := #[← Step.stepSimpExt.getTheorems],
+        addSimpThms := #[``Post.entails_iff, ``true_imp_iff,
+          ``Prod.forall, ``Step.forall_punit, ``and_imp, ``exists_imp],
+        declsToUnfold := #[``Std.WP.imp] }
+      (.targets #[] true)
 
 #register_spec_info {
     spec_name := ``triple
@@ -86,7 +89,7 @@ meta def introOutputs : Step.IntroOutputs := fun args fExpr stepState => do
     mk_spec_mono_skip_args := 4
     mk_spec_bind := ``triple_step_bind
     mk_spec_bind_skip_args := 6
-    intro_outputs := ``introOutputs
+    prepare_intro_outputs := ``prepareIntroOutputs
     to_mvcgen := none
     liftings := #[]
   }

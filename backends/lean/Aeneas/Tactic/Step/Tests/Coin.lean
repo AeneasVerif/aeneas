@@ -124,7 +124,7 @@ theorem coinSpec_ret {α p} (x : α) : coinSpec p (ITree.ret x) ↔ p x := by
     assumption
 
 open Lean Meta Elab Tactic in
-meta def introOutputs : Step.IntroOutputs := fun args fExpr stepState => do
+meta def prepareIntroOutputs : PrepareIntroOutputs := do
   withMainContext do
   let goalTy := (← instantiateMVars (← getMainTarget)).consumeMData
   let (type, tree) ← match_expr goalTy with
@@ -136,12 +136,15 @@ meta def introOutputs : Step.IntroOutputs := fun args fExpr stepState => do
     | _ =>
       if goalTy.isForall then pure (goalTy, .leaf none)
       else throwError "Expected qimp_coinSpec or a quantified mono premise, got:\n{goalTy}"
-  Step.introOutputsWith args fExpr stepState type tree do
-    evalTactic (← `(tactic|
-      simp -iota only [step_simps, qimp_coinSpec_iff, Std.WP.imp_and_iff,
-        Std.uncurry_apply_pair, Std.WP.uncurry'_eq, Std.WP.uncurry'_pair,
-        Std.WP.imp_exists_iff, forall_unit, true_imp_iff,
-        Prod.forall, Step.forall_punit, and_imp, exists_imp, Std.WP.imp]))
+  Step.prepareIntroOutputsWith type tree do
+    let _ ← Simp.simpAt true { failIfUnchanged := false, iota := false }
+      { simpThms := #[← Step.stepSimpExt.getTheorems],
+        addSimpThms := #[``qimp_coinSpec_iff, ``Std.WP.imp_and_iff,
+          ``Std.uncurry_apply_pair, ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
+          ``Std.WP.imp_exists_iff, ``forall_unit, ``true_imp_iff,
+          ``Prod.forall, ``Step.forall_punit, ``and_imp, ``exists_imp],
+        declsToUnfold := #[``Std.WP.imp] }
+      (.targets #[] true)
 
 #register_spec_info {
   spec_name := ``coinSpec
@@ -152,7 +155,7 @@ meta def introOutputs : Step.IntroOutputs := fun args fExpr stepState => do
   mk_spec_mono_skip_args := 2
   mk_spec_bind := ``coinSpec_bind
   mk_spec_bind_skip_args := 4
-  intro_outputs := ``introOutputs
+  prepare_intro_outputs := ``prepareIntroOutputs
   to_mvcgen := .none
   liftings := #[
     { from_statement := ``Std.WP.spec
