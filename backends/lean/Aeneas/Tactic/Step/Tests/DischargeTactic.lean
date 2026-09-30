@@ -60,7 +60,7 @@ elab "discharge_equality_marker" : tactic => Lean.Elab.Tactic.withMainContext do
 elab "discharge_markers" : tactic => do
   Lean.Elab.Tactic.evalTactic (← `(tactic| first
     | exact dischargeMarker
-    | exact terminalZero
+    | (subst_vars; exact terminalZero)
     | discharge_equality_marker
     | assumption))
 
@@ -127,12 +127,12 @@ theorem triple_finishValue (value : Nat) (Q : Post Nat) :
 
 attribute [local step_simps] triple_finishValue
 
-/- The mono goal needs equality substitution before the registered tactic can finish. -/
+/- The mono goal needs equality substitution, which the registered tactic performs. -/
 /--
 info: Try this:
 
   [apply]     let* ⟨ value, value_post ⟩ ← zero_spec
-    subst_vars <;> discharge_markers
+    discharge_markers
 -/
 #guard_msgs in
 example : triple True zero (fun value => Terminal value) := by
@@ -143,7 +143,7 @@ example : triple True zero (fun value => Terminal value) := by
 info: Try this:
 
   [apply]     let* ⟨ value, value_post ⟩ ← zero_spec
-    subst_vars <;> discharge_markers
+    discharge_markers
 -/
 #guard_msgs in
 example : triple True (zero >>= fun value => finishValue value) Terminal := by
@@ -153,7 +153,7 @@ example : triple True (zero >>= fun value => finishValue value) Terminal := by
 example : triple True (zero >>= fun _ => zero >>= finishValue) Terminal := by
   step*
 
-/- The plain discharge tactic must still see equalities if substitution fails. -/
+/- The discharge tactic sees the equalities, which `step*` does not substitute. -/
 example : triple True zero (fun _ => EqualityMarker) := by
   step*
 
@@ -167,16 +167,14 @@ info: Try this:
 example : triple True (zero >>= fun value => finishValue value) (fun _ => EqualityMarker) := by
   step*?
 
-/- Replay the generated scripts, including the fallback without substitution. -/
-set_option linter.unnecessarySeqFocus false in
+/- Replay the generated scripts. -/
 example : triple True zero (fun value => Terminal value) := by
   let* ⟨ value, value_post ⟩ ← zero_spec
-  subst_vars <;> discharge_markers
+  discharge_markers
 
-set_option linter.unnecessarySeqFocus false in
 example : triple True (zero >>= fun value => finishValue value) Terminal := by
   let* ⟨ value, value_post ⟩ ← zero_spec
-  subst_vars <;> discharge_markers
+  discharge_markers
 
 example : triple True (zero >>= fun value => finishValue value) (fun _ => EqualityMarker) := by
   let* ⟨ value, value_post ⟩ ← zero_spec
