@@ -134,17 +134,13 @@ theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α}
   spec (Std.bind m k) Pₖ :=
   fun Hm Hk => DWP.bind (k := k) Hm fun value _ => Hk value
 
-theorem spec_equiv_exists (m:Result α) (P:Post α) :
-  spec m P ↔ (∃ y, m = ok y ∧ P y) := by
-  cases m <;> simp
+theorem spec_and {m : Result α} {p q : Post α} (h₁ : spec m p) (h₂ : spec m q) :
+    spec m (fun value => p value ∧ q value) :=
+  DWP.and_iff.mpr ⟨h₁, h₂⟩
 
-theorem spec_imp_exists {m:Result α} {P:Post α} :
-  spec m P → (∃ y, m = ok y ∧ P y) := by
-  exact (spec_equiv_exists m P).1
-
-theorem exists_imp_spec {m:Result α} {P:Post α} :
-  (∃ y, m = ok y ∧ P y) → spec m P := by
-  exact (spec_equiv_exists m P).2
+theorem spec_exists {m : Result α} {p : Post α} (h : spec m p) : ∃ value, p value :=
+  let ⟨value, _, hp⟩ := DWP.exists h
+  ⟨value, hp⟩
 
 -- `dspec` theorems
 theorem dspec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : dspec m P₀):
@@ -169,9 +165,9 @@ theorem dspec_div : dspec (div : Result α) p ↔ True := iff_true_intro DWLP.di
 @[simp, grind =, agrind =]
 theorem dspec_fail (e : Error) : dspec (fail e) p ↔ False := by simp [Result.fail_eq_vis]
 
-theorem dspec_imp_forall {m:Result α} {P:Post α} :
-  dspec m P → (∀ y, m = ok y → P y) := by
-  grind only [= dspec_ok]
+theorem dspec_and {m : Result α} {p q : Post α} (h₁ : dspec m p) (h₂ : dspec m q) :
+    dspec m (fun value => p value ∧ q value) :=
+  DWLP.and_iff.mpr ⟨h₁, h₂⟩
 
 end ResultImplementation
 
@@ -735,9 +731,7 @@ theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
 theorem spec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
     (h : spec x Q) :
     ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
-  obtain ⟨v, hx, hQv⟩ := spec_imp_exists h
-  subst hx
-  simp [Triple, WP.wp, PredTrans.apply, hQv]
+  cases x <;> simp_all [Triple, WP.wp, PredTrans.apply]
 
 theorem dspec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
     (h : dspec x Q) :
@@ -777,13 +771,14 @@ theorem loop.spec {α : Type u} {β : Type v} {γ : Type w}
   apply @wf.wf.fix γ (fun x' =>
     ∀ x, measure x = x' →
     inv x → loop body x ⦃ post ⦄)
-  intros y h x eq ix
-  have hBody' := hBody x ix; clear hBody
-  rw [WP.spec_equiv_exists] at hBody'
-  rcases hBody' with ⟨y, p, yc⟩
+  intro y ih x eq ix
+  subst eq
   unfold loop
-  simp [p]
-  grind
+  apply WP.spec_bind (hBody x ix)
+  intro r hr
+  cases r with
+  | done z => simpa using hr
+  | cont x' => exact ih (measure x') hr.2 x' rfl hr.1
 
 theorem loop.spec_decr_nat {α : Type u} {β : Type v}
   (measure : α → Nat)
