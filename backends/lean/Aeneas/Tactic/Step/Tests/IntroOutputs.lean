@@ -530,7 +530,7 @@ example {α : Type u} (x : α) :
       ⦃ (y : α) (k : Nat) => y = x ∧ k = 2 ⦄ := by
   step*
 
-/- Output binder types retain local let-bound dimensions rather than unfolding them. -/
+/- Output binder types retain local let-bound variables. -/
 example {α : Type u} (m : Nat) :
     let n := m + 1
     let size := n + 1
@@ -542,7 +542,7 @@ example {α : Type u} (m : Nat) :
   guard_hyp y :ₛ Vector α size
   simp [hy, hk]
 
-/- Partial correctness uses the same call-site tuple pattern. -/
+/- Test with the partial correctness predicate. -/
 example :
     (do let ((a, b), c) ← nestedProg; ok (a + b + c))
       ⦃ (r : Nat) => r = 18 ⦄div := by
@@ -559,7 +559,7 @@ theorem unitProg_spec : unitProg ⦃ (u : Unit) => u = () ⦄ := by
 
 abbrev UnitOutput := Unit
 
-/- Preserve the anonymous name slot when a unit postcondition has no output tree. -/
+/- We preserve the anonymous name slots -/
 run_cmd Lean.Elab.Command.liftTermElabM do
   let post ← Lean.Elab.Term.elabTerm (← `(fun (_ : Unit) => True)) none
   let names ← Aeneas.Step.getPostNames post
@@ -626,7 +626,7 @@ example (f : Bool → Result Bool) (P : Prop)
   guard_hyp hb : b = true ↔ P
   exact hb
 
-/- Normalize equality-defined existentials below matches, without reordering tuple outputs. -/
+/- We normalize equality-defined existentials below matches, without reordering tuple outputs. -/
 example (f : Result (Nat × Bool)) (compute : Nat → Nat) (P R : Nat → Prop)
     (hR : ∀ k, R k)
     (h : f ⦃ n b => match b with

@@ -16,9 +16,10 @@ structure LiftingInfo where
   conversion_thm : Name
   conversion_thm_inferred_args : Nat
 
-/-- Reshape the current entailment into an equivalent quantified target, without
-introducing variables. Return the number of leading output binders; `step` introduces
-these before the postconditions. Declare callbacks with this type alias. -/
+/-- Type of a function that `step` uses to reshape the target before introducing
+the outputs.
+
+See `SpecInfo.prepare_intro_output` -/
 abbrev PrepareIntroOutputs := Elab.Tactic.TacticM Nat
 
 structure SpecInfo where
@@ -32,11 +33,17 @@ structure SpecInfo where
   mk_spec_bind : Name
   mk_spec_bind_skip_args : Nat
 
-  /-- Name of a `PrepareIntroOutputs` callback. For example, given `qimp_spec P k Q`
-  with call-site pattern `(a, b)`, `Aeneas.Step.prepareIntroOutputs` changes the goal
-  to `∀ a b, imp (P (a, b)) (spec (k (a, b)) Q)` and returns `2`.
-  It proves equivalence before changing the goal; `step` then introduces variables.
-  Both `spec` and `dspec` register `prepare_intro_outputs := ``Aeneas.Step.prepareIntroOutputs`. -/
+  /-- Name of a `PrepareIntroOutputs` callback.
+
+  The `step` tactic uses this callback to reshape the target before introducing the outputs,
+  so that we have the proper number of properly named local variables.
+
+  For instance, it should turn a goal of the shape:
+  `forall x, ((a, b) c => P a b c) x → e ⦃ Q ⦄`, where `x` is the output and
+  `((a, b) c => P a b c)` the post-condition of a let-binder we just processed,
+  while `e ⦃ Q ⦄` is the goal we have to prove about the remaining continuation,
+  into: `forall a b c, P a b c → e ⦃ Q ⦄`, so that `step` can then introduce the
+  `a`, `b` and `c` into the context. -/
   prepare_intro_outputs : Name
 
   to_mvcgen: Option Name

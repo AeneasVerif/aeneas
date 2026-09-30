@@ -6,7 +6,7 @@ open Aeneas Aeneas.Std Result
 
 namespace Aeneas.Tactic.Step.Tests.SpecParameters
 
-/- Invalid callbacks must fail at registration, not later when `step` loads them. -/
+/- Invalid callbacks must fail at registration -/
 public meta def expandedPreparationType : Lean.Elab.Tactic.TacticM Nat := pure 0
 
 meta def defaultSpecInfo : SpecInfo := default

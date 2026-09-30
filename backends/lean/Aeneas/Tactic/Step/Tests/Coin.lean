@@ -169,7 +169,7 @@ instance {T} : Lean.Order.PartialOrder (ITreeC T) := instPartialOrderCoIndOfInha
 noncomputable instance {T} : Lean.Order.CCPO (ITreeC T) := instCCPOCoIndOfInhabitedPUnit _
 instance : MonoBind ITreeC := instMonoBindITree
 
-/- Exercise both the native quantified mono premise and the wrapped bind premise. -/
+/- Exercise both reasoning about a terminal call and about a let-binding. -/
 example (n : Nat) (f : ITreeC Nat) (h : coinSpec (fun x => x = n) f) :
     coinSpec (fun x => x = n) f := by
   step with h as ⟨x, hx⟩
