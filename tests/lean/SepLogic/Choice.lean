@@ -1,4 +1,4 @@
-import Aeneas.Data.Coinductive.Spec
+import Aeneas.Data.Coinductive.ITreeWP
 
 /-!
 # A choice event, angelic and demonic
@@ -9,8 +9,8 @@ postconditions, conjunctivity, and admissibility. Execution and adequacy tests
 belong with the operational semantics on `cezar/sm-semantics`.
 
 The angelic machine is the interesting one, because it is the reading
-`Aeneas.Std.WP.handler` already uses — a heap event is answered by
-an existential. `handler` is nevertheless conjunctive, and
+`Aeneas.Std.WP.effectWP` already uses — a heap event is answered by
+an existential. `effectWP` is nevertheless conjunctive, and
 `angelic_conjunctive_of_subsingleton` is why: the guard of a heap event is a
 *proposition*, so the machine chooses from a subsingleton, which is no choice at
 all.  Widen that guard to a real type — add `choice` to `RustEffect.Input` — and
@@ -32,22 +32,24 @@ open Lean.Order
 
 /-- The **angelic** reading: the machine answers a demand whenever *some*
 element of `a` meets it. This is the reading of
-`Aeneas.Std.WP.handler`, and the choice operator of
+`Aeneas.Std.WP.effectWP`, and the choice operator of
 *Program Logics à la Carte*. -/
-@[reducible] def angelic : Handler ChoiceEffect where
+@[reducible] def angelic : EffectWP ChoiceEffect where
   State := Unit
-  handle a s C := ∃ x : a, C ⟨x⟩ s
-  handle_mono := by rintro a s C C' hC ⟨x, hOutcome⟩; exact ⟨x, hC _ _ hOutcome⟩
+  wp a C s := ∃ x : a, C ⟨x⟩ s
+
+instance : EffectWP.Monotone angelic where
+  wp_mono {_ _ _} hC {_} := fun ⟨x, hOutcome⟩ => ⟨x, hC _ _ hOutcome⟩
 
 /-- The **demonic** reading: the machine answers a demand only when *every*
 element of `a` meets it.  The event must still have an answer, or the machine
 would meet every demand, including the impossible one. -/
-@[reducible] def demonic : Handler ChoiceEffect where
+@[reducible] def demonic : EffectWP ChoiceEffect where
   State := Unit
-  handle a s C := Nonempty a ∧ ∀ x : a, C ⟨x⟩ s
-  handle_mono := by
-    rintro a s C C' hC ⟨hNonempty, hAll⟩
-    exact ⟨hNonempty, fun x => hC _ _ (hAll x)⟩
+  wp a C s := Nonempty a ∧ ∀ x : a, C ⟨x⟩ s
+
+instance : EffectWP.Monotone demonic where
+  wp_mono {_ _ _} hC {_} := fun ⟨hNonempty, hAll⟩ => ⟨hNonempty, fun x => hC _ _ (hAll x)⟩
 
 /-- The program the two machines disagree about: it chooses a boolean and
 returns `0` or `1` accordingly. -/
@@ -57,10 +59,10 @@ def flip : ITree ChoiceEffect Nat :=
 /-! ## Angelic total and partial correctness -/
 
 /-- The angel picks the branch that meets the specification. -/
-theorem angelic_flip_total : TotalSpec angelic (fun value _ => value = 0) flip () :=
-  .vis ⟨true, .ret rfl⟩
+theorem angelic_flip_total : DWP angelic flip (fun value _ => value = 0) () :=
+  .vis ⟨true, DWP.ret_iff.mpr rfl⟩
 
-theorem angelic_flip_partial : PartialSpec angelic (fun value _ => value = 0) flip () :=
+theorem angelic_flip_partial : DWLP angelic flip (fun value _ => value = 0) () :=
   angelic_flip_total.toPartial
 
 /-! ## What the angel breaks: two demands on one event
@@ -74,7 +76,7 @@ and no single element need suit them all. -/
 theorem not_angelic_conjunctive : ¬ angelic.Conjunctive := by
   intro hConj
   obtain ⟨b, hTrue, hFalse⟩ :=
-    hConj.handle_and (H := angelic) (event := Bool) (s := ())
+    EffectWP.wp_and (θ := angelic) (effect := Bool) (s := ())
       (C₁ := fun answer _ => answer.down = true)
       (C₂ := fun answer _ => answer.down = false) ⟨true, rfl⟩ ⟨false, rfl⟩
   simp_all
@@ -82,15 +84,15 @@ theorem not_angelic_conjunctive : ¬ angelic.Conjunctive := by
 /-- What the angel does have: a choice from a *subsingleton* is no choice, so
 the machine is conjunctive at such an event however angelically it is read.
 
-This is exactly the situation of `handler`: it answers a heap event
+This is exactly the situation of `effectWP`: it answers a heap event
 by `∃ hPre : pre h, …`, and `pre h` being a `Prop` there is only one `hPre` to
-be had. It is what `handler_conjunctive` proves, and the
+be had. It is what the `Conjunctive` instance of `effectWP` proves, and the
 only reason the machine of `Result` gets to be both angelic and conjunctive. -/
 theorem angelic_conjunctive_of_subsingleton (a : Type) [Subsingleton a]
     (s : Unit) (Demands : (ChoiceEffect.O a → Unit → Prop) → Prop)
     (hNonempty : ∃ C, Demands C)
-    (hAll : ∀ C, Demands C → angelic.handle a s C) :
-    angelic.handle a s fun answer s' => ∀ C, Demands C → C answer s' := by
+    (hAll : ∀ C, Demands C → angelic.wp a C s) :
+    angelic.wp a (fun answer s' => ∀ C, Demands C → C answer s') s := by
   obtain ⟨C₀, hC₀⟩ := hNonempty
   obtain ⟨x₀, -⟩ := hAll C₀ hC₀
   refine ⟨x₀, fun C hC => ?_⟩
@@ -134,7 +136,7 @@ theorem approxChain_chain : chain approxChain := by
 
 /-- Every approximation diverges on some answer, and the angel takes it. -/
 theorem approx_partial (i : Nat) :
-    PartialSpec angelic (fun value _ => value = 0) (approx i) () := by
+    DWLP angelic (approx i) (fun value _ => value = 0) () := by
   refine .vis ⟨i, ?_⟩
   simp only [Nat.lt_irrefl, if_false]
   exact .div
@@ -162,34 +164,35 @@ theorem csup_approxChain :
 
 theorem not_admissible :
     ¬ Lean.Order.admissible fun m : ITree ChoiceEffect Nat =>
-        PartialSpec angelic (fun value _ => value = 0) m () := by
+        DWLP angelic m (fun value _ => value = 0) () := by
   intro hAdmissible
   have hLimit := hAdmissible approxChain approxChain_chain (by rintro _ ⟨i, rfl⟩; exact approx_partial i)
   rw [csup_approxChain] at hLimit
   obtain ⟨-, hSpec⟩ := hLimit.vis_view
-  exact absurd hSpec.ret_post (by decide)
+  exact absurd (DWLP.ret_iff.mp hSpec) (by decide)
 
 /-! ## Demonic choice is conjunctive
 
 The postcondition must hold for every answer, so the handler can combine
 demands and partial correctness is admissible. -/
 
-theorem demonic_conjunctive : demonic.Conjunctive := by
-  rintro a s Demands ⟨C₀, hC₀⟩ hAll
-  exact ⟨(hAll C₀ hC₀).1, fun x C hC => (hAll C hC).2 x⟩
+instance demonic_conjunctive : demonic.Conjunctive where
+  wp_conj {_ _} _ := by
+    rintro ⟨C₀, hC₀⟩ hAll
+    exact ⟨(hAll C₀ hC₀).1, fun x C hC => (hAll C hC).2 x⟩
 
 theorem not_demonic_flip_total :
-    ¬ TotalSpec demonic (fun value _ => value = 0) flip () := by
+    ¬ DWP demonic flip (fun value _ => value = 0) () := by
   intro hSpec
-  exact absurd ((hSpec.vis_view).2 false).ret_post (by decide)
+  exact absurd (DWP.ret_iff.mp ((hSpec.vis_view).2 false)) (by decide)
 
 theorem not_demonic_flip_partial :
-    ¬ PartialSpec demonic (fun value _ => value = 0) flip () := by
+    ¬ DWLP demonic flip (fun value _ => value = 0) () := by
   intro hSpec
-  exact absurd ((hSpec.vis_view).2 false).ret_post (by decide)
+  exact absurd (DWLP.ret_iff.mp ((hSpec.vis_view).2 false)) (by decide)
 
 example (Q : Nat → Unit → Prop) :
-    Lean.Order.admissible fun m : ITree ChoiceEffect Nat => PartialSpec demonic Q m () :=
-  PartialSpec.admissible demonic_conjunctive Q ()
+    Lean.Order.admissible fun m : ITree ChoiceEffect Nat => DWLP demonic m Q () :=
+  DWLP.admissible demonic Q ()
 
 end Aeneas.Data.Coinductive.ChoiceTest
