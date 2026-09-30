@@ -281,10 +281,13 @@ meta def prepareIntroOutputs : PrepareIntroOutputs := do
     let x := xs[0]!
     if (← isProp (← inferType x)) || !(← isProp (← inferType xs[1]!)) then
       throwError "Expected a goal of the shape `∀ x, P x → Q x`, got:\n{goalTy}"
-    let cont := match_expr body with
-      | Std.WP.spec _ m _ => m
-      | Std.WP.dspec _ m _ => m
-      | _ => body
+    let (head, args) := body.consumeMData.withApp fun head args => (head, args)
+    let info? ← match head.constName? with
+      | some name => specInfoLookup name
+      | none => pure none
+    let cont := match info? with
+      | some info => if args.size == info.arity then args[info.program_index]! else body
+      | none => body
     getContInput (← mkLambdaFVars #[x] cont).eta
   prepareIntroOutputsWith goalTy tree do
     let _ ← Simp.simpAt true { failIfUnchanged := false, iota := false }
