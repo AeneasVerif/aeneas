@@ -479,7 +479,10 @@ meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool
       let liftingThm ← Term.mkConst lifting.conversion_thm
       trace[Step] "Trying to lift by {liftingThm}"
       let liftingThmTy ← inferType liftingThm
-      let (liftThmVars, _, _liftThmTy) ← forallMetaBoundedTelescope liftingThmTy lifting.conversion_thm_inferred_args
+      let (liftThmVars, _, liftThmTy) ← forallMetaBoundedTelescope liftingThmTy lifting.conversion_thm_inferred_args
+      if let .forallE _ premise _ _ := liftThmTy then
+        unless ← withTransparency .instances <| isDefEq premise thTy do
+          throwError "Could not lift the theorem by {liftingThm}"
       let liftingThmPartiallyApplied ← mkAppOptM' liftingThm (liftThmVars.map some)
       let liftingThmApplied := mkAppN liftingThmPartiallyApplied #[th]
       let liftingThmAppliedTy ← inferType liftingThmApplied
@@ -607,6 +610,15 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
                   ``and_imp, ``exists_imp_named, ``forall_unit, ``true_imp_iff] ++ scalar_eqs }
             (.targets #[] true)
   if (← getUnsolvedGoals).isEmpty then trace[Step] "Main goal solved by cleanup simp!"; return none
+
+  /- The `post_intro_tactic` normalizes the goal. -/
+  if let some tac := info.post_intro_tactic then
+    withTraceNode `Step (fun _ => pure m!"post_intro_tactic: {tac}") do
+      evalTactic (mkNode tac #[])
+    if (← getUnsolvedGoals).length > 1 then
+      throwError "`post_intro_tactic` must not create multiple goals"
+    if (← getUnsolvedGoals).isEmpty then trace[Step] "Main goal solved by post-intro tactic!"; return none
+    traceGoalWithNode "goal after the post-intro tactic"
 
   let mkFreshAnon (isProp : Bool) :=
     if isProp then mkFreshAnonPropUserName else mkFreshUserName `x

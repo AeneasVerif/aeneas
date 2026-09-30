@@ -5,11 +5,10 @@ public meta import AeneasMeta.Simp
 public import Aeneas.Tactic.Solver.Grind.Init
 public import Aeneas.Tactic.Step.DspecInduction
 public meta import Aeneas.Std.Spec
-public import Aeneas.Tactic.Step.Intro
 public meta import Aeneas.Std.Delab
 public import Aeneas.Data.Coinductive.ITree
 public import Aeneas.Data.Coinductive.Effect
-public import Aeneas.Data.Coinductive.Spec
+public import Aeneas.Data.Coinductive.ITreeWP
 public import Aeneas.SepLogic
 public import Aeneas.Tactic.SepLogic.Intro
 public import Aeneas.Tactic.SepLogic.Rewrite
@@ -37,27 +36,36 @@ unseal Result
 @[expose] section
 
 @[reducible]
-def handler : Handler RustEffect where
+def effectWP : EffectWP RustEffect where
   State := Heap
-  handle
-    | .guardedModify _ pre modify, h, C =>
+  wp effect C h :=
+    match effect with
+    | .guardedModify _ pre modify =>
         ∃ hPre : pre h, C (.up (modify h hPre).1) (modify h hPre).2
-    | .fail _, _, _ => False
-  handle_mono := by
-    intro event h C C' hC hEvent
-    cases event with
+    | .fail _ => False
+
+instance : EffectWP.Monotone effectWP where
+  wp_mono {effect} _ _ hC _ hEvent := by
+    cases effect with
     | guardedModify => exact hEvent.imp fun _ hNext => hC _ _ hNext
     | fail => exact hEvent.elim
 
-theorem handler_conjunctive : handler.Conjunctive := by
-  intro event h Demands ⟨C₀, hC₀⟩ hAll
-  cases event with
-  | guardedModify EventResult pre modify =>
-      exact ⟨(hAll C₀ hC₀).1, fun C hC => (hAll C hC).2⟩
-  | fail error => exact (hAll C₀ hC₀).elim
+instance : EffectWP.Conjunctive effectWP where
+  wp_conj {effect} _ Demands := by
+    rintro ⟨C₀, hC₀⟩ hAll
+    cases effect with
+    | guardedModify => exact ⟨(hAll C₀ hC₀).1, fun C hC => (hAll C hC).2⟩
+    | fail => exact (hAll C₀ hC₀).elim
+
+instance : EffectWP.NoMiracle effectWP where
+  wp_noMiracle effect _ hWp := by
+    cases effect with
+    | guardedModify => exact hWp.2
+    | fail => exact hWp
 
 abbrev rawIwp (total:Bool) (m : Result α) (Q : IPost α) (h : Heap) : Prop :=
-  (if total then TotalSpec else PartialSpec) handler (fun value h' => Q value h') m h
+  if total then DWP effectWP m (fun value h' => Q value h') h
+  else DWLP effectWP m (fun value h' => Q value h') h
 
 def iwp (total:Bool) (m : Result α) (Q : IPost α) : IProp where
   holds owned :=
@@ -85,7 +93,7 @@ def dspec (m : Result α) (p : Post α) : Prop :=
 
 theorem ispec_iff {P : IPre} {m : Result α} {Q : IPost α} :
     ispec P m Q ↔
-      ∀ F h, (P ∗ F) h → TotalSpec handler (fun value h' => (Q ∗+ F) value h') m h := by
+      ∀ F h, (P ∗ F) h → DWP effectWP m (fun value h' => (Q ∗+ F) value h') h := by
   constructor
   · rintro hSpec F _ ⟨h₁, h₂, hDisjoint, rfl, hP, hF⟩
     exact hSpec h₁ hP F _ ⟨h₁, h₂, hDisjoint, rfl, Heap.Sub.refl _, hF⟩
@@ -95,7 +103,7 @@ theorem ispec_iff {P : IPre} {m : Result α} {Q : IPost α} :
 
 theorem dispec_iff {P : IPre} {m : Result α} {Q : IPost α} :
     dispec P m Q ↔
-      ∀ F h, (P ∗ F) h → PartialSpec handler (fun value h' => (Q ∗+ F) value h') m h := by
+      ∀ F h, (P ∗ F) h → DWLP effectWP m (fun value h' => (Q ∗+ F) value h') h := by
   constructor
   · rintro hSpec F _ ⟨h₁, h₂, hDisjoint, rfl, hP, hF⟩
     exact hSpec h₁ hP F _ ⟨h₁, h₂, hDisjoint, rfl, Heap.Sub.refl _, hF⟩
@@ -130,7 +138,7 @@ theorem dispec_dspec (m : Result α) (Q : Post α) :
 
 private theorem rawIwp_admissible (Q : IPost α) (h : Heap) :
     admissible (fun m : Result α => rawIwp false m Q h) :=
-  PartialSpec.admissible handler_conjunctive _ h
+  DWLP.admissible effectWP _ h
 
 theorem dispec_admissible {α : Type u} (P : IPre) (Q : IPost α) :
     admissible (fun m : Result α => dispec P m Q) := by
@@ -190,12 +198,12 @@ theorem ispec_ok (x : α) : ispec P (ok x) Q ↔ P ⊢ Q x := by
   constructor
   · intro hTriple h hP
     rw [ispec_iff] at hTriple
-    have hPost := (hTriple emp h ((sep_emp_r P).mpr h hP)).ret_post
+    have hPost := DWP.ret_iff.mp (hTriple emp h ((sep_emp_r P).mpr h hP))
     exact (sep_emp_r (Q x)).mp h hPost
   · intro hPost
     rw [ispec_iff]
     intro F h hPre
-    exact .ret (sep_mono hPost (entails_refl F) h hPre)
+    exact DWP.ret_iff.mpr (sep_mono hPost (entails_refl F) h hPre)
 
 /-- A guarded modification is correct exactly when it is *local* at every heap `P`
 describes: for every disjoint frame, the guard holds and the output splits into an
@@ -212,10 +220,10 @@ theorem ispec_guardedModify {α : Type} {pre : Heap → Prop}
   rw [ispec_iff]
   rintro F h ⟨owned, framed, hDisjoint, rfl, hP, hF⟩
   obtain ⟨hPre, h', hDisjoint', hModify, hPost⟩ := hLocal owned hP framed hDisjoint
-  refine TotalSpec.vis (H := handler)
-    (event := RustEffect.Input.guardedModify _ pre modify) ⟨hPre, ?_⟩
+  refine DWP.vis (θ := effectWP)
+    (effect := RustEffect.Input.guardedModify _ pre modify) ⟨hPre, ?_⟩
   rw [hModify]
-  exact .ret ⟨h', framed, hDisjoint', rfl, hPost, hF⟩
+  exact DWP.ret_iff.mpr ⟨h', framed, hDisjoint', rfl, hPost, hF⟩
 
 @[simp, grind =, agrind =]
 theorem ispec_fail (e : Error) : ispec P (fail e) Q ↔ P ⊢ ⌜False⌝ := by
@@ -276,7 +284,7 @@ theorem ispec_and {α : Type u} {P : IPre} {m : Result α} {Q₁ Q₂ : IPost α
   rintro F _ ⟨owned, framed, hCompatible, rfl, hP, hF⟩
   have hPre : (P ∗ owns framed) (owned ∪ framed) :=
     ⟨owned, framed, hCompatible, rfl, hP, Heap.Sub.refl framed⟩
-  have hBoth := (TotalSpec.and_iff handler_conjunctive).mpr
+  have hBoth := DWP.and_iff.mpr
     ⟨h₁ (owns framed) _ hPre, h₂ (owns framed) _ hPre⟩
   refine hBoth.mono fun value heap hPost => ?_
   exact (sep_mono (entails_refl _) (fun _ hSub => F.up_closed hF hSub)) heap
@@ -349,12 +357,12 @@ theorem dispec_ok {α : Type u} {P : IPre} {Q : IPost α} (x : α) :
   constructor
   · intro hTriple h hP
     rw [dispec_iff] at hTriple
-    have hPost := (hTriple emp h ((sep_emp_r P).mpr h hP)).ret_post
+    have hPost := DWLP.ret_iff.mp (hTriple emp h ((sep_emp_r P).mpr h hP))
     exact (sep_emp_r (Q x)).mp h hPost
   · intro hPost
     rw [dispec_iff]
     intro F h hPre
-    exact .ret (sep_mono hPost (entails_refl F) h hPre)
+    exact DWLP.ret_iff.mpr (sep_mono hPost (entails_refl F) h hPre)
 
 /-- Divergence satisfies every partial ispec: nothing is claimed of a run that
 does not stop, not even that it owns anything. -/
@@ -362,7 +370,7 @@ theorem dispec_div {P : IPre} {Q : IPost α} :
     dispec P (div : Result α) Q := by
   rw [dispec_iff]
   intro _ _ _
-  exact PartialSpec.div
+  exact DWLP.div
 
 /-- Failure has no partial ispec either: divergence is permitted, not stuckness. -/
 @[simp, grind =, agrind =]
@@ -398,7 +406,7 @@ theorem dispec_and {α : Type u} {P : IPre} {m : Result α} {Q₁ Q₂ : IPost �
   rintro F _ ⟨owned, framed, hCompatible, rfl, hP, hF⟩
   have hPre : (P ∗ owns framed) (owned ∪ framed) :=
     ⟨owned, framed, hCompatible, rfl, hP, Heap.Sub.refl framed⟩
-  have hBoth := (PartialSpec.and_iff handler_conjunctive).mpr
+  have hBoth := DWLP.and_iff.mpr
     ⟨h₁ (owns framed) _ hPre, h₂ (owns framed) _ hPre⟩
   refine hBoth.mono fun value heap hPost => ?_
   exact (sep_mono (entails_refl _) (fun _ hSub => F.up_closed hF hSub)) heap
@@ -462,7 +470,7 @@ The rules a partial specification is for: an invariant that the body re-establis
 proves the loop, with no measure and no termination argument. A recursion in
 `Result` is proved with `dispec_admissible` and the `fixpoint_induct` principle
 `partial_fixpoint` attaches to it, and anything else by
-`PartialSpec.coinduction` itself. -/
+`DWLP.coinduction` itself. -/
 
 
 /-- The same for a family of ispecs about a recursive *function*, which is the
@@ -549,14 +557,8 @@ theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α}
 satisfying it, even when nothing says it is syntactically an `ok`. -/
 theorem spec_exists {m : Result α} {p : Post α} (h : spec m p) : ∃ value, p value := by
   have hEmp : ((emp : IPre) ∗ emp) (∅ : Heap) := (sep_emp_r emp).mpr ∅ trivial
-  refine TotalSpec.induction
-    (P := fun _ _ => ∃ value, p value)
-    (fun value heap hPost =>
-      ⟨value, (pure_holds heap).mp ((sep_emp_r _).mp heap hPost)⟩)
-    (fun event _ _ hHandle => ?_) (ispec_iff.mp h emp ∅ hEmp)
-  cases event with
-  | guardedModify => exact hHandle.2
-  | fail => exact hHandle.elim
+  obtain ⟨value, heap, hPost⟩ := DWP.exists (ispec_iff.mp h emp ∅ hEmp)
+  exact ⟨value, (pure_holds heap).mp ((sep_emp_r _).mp heap hPost)⟩
 
 
 /-! ### `dspec` theorems -/
@@ -593,7 +595,7 @@ theorem dspec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α
 
 /- `dispec` unfolds to a nested `∀`, and the `admissible` search behind
 `dspec_func_admissible` otherwise walks straight past the judgment into its
-denotation.  The old `spec` was an opaque `TotalSpec` application and did not
+denotation.  The old `spec` was an opaque `DWP` application and did not
 have this problem. -/
 attribute [irreducible] dispec
 
@@ -1137,16 +1139,60 @@ theorem forall_unit {p : Unit → Prop} : (∀ value, p value) ↔ p () :=
 * a ramified entailment `P ⊢ Pm ∗ (Qm -∗+ Q)`, whose matched resources are
   cancelled and whose residual postcondition wand is introduced by `isimp`.
 
-The facts of a pure judgment are the binders of the premise, and `Step.Intro`
-handles them; here they have to be extracted from an assertion first, which is
-what this section adds. The postcondition of a callee reaches the goal wrapped
-in the markers of the `⦃⇓ x y => … ⦄` notation, and `Step.Intro.reduceMarkers`
-reduces those *definitionally*, which is why no rewriting lemma about them is
+The facts of a pure judgment are the binders of the premise, and
+`Step.prepareIntroOutputs` handles them; here they have to be extracted from an
+assertion first, which is what this section adds. The postcondition of a callee
+reaches the goal wrapped in the markers of the `⦃⇓ x y => … ⦄` notation, and
+`Intro.reduceMarkers` reduces those *definitionally*, which is why no rewriting lemma about them is
 needed. -/
 
 namespace Intro
 
-open Aeneas.Step.Intro (reduceMarkers)
+/-- Whether `e` consists only of outputs, projections, and constructors. -/
+meta partial def isOutputLike (e : Expr) : MetaM Bool := do
+  let e := e.consumeMData
+  if e.isFVar || e.isLit || e.isSort then return true
+  if e.isProj then return ← isOutputLike e.projExpr!
+  if ← isConstructorApp e then
+    return (← e.getAppArgs.allM (fun arg => isOutputLike arg))
+  let f := e.getAppFn.consumeMData
+  if f.isFVar then return true
+  if let .const name _ := f then
+    if let some info ← getProjectionFnInfo? name then
+      let args := e.getAppArgs
+      if h : info.numParams < args.size then
+        return ← isOutputLike args[info.numParams]
+  return false
+
+/-- Reduce `e` if it is an application of one of the `markers`, the definitions the
+postcondition notation of the judgment wraps its body in: `uncurry' p x` reduces to
+`p x.1 x.2`.
+
+A marker is only reduced if it unfolds to a match with a single alternative on outputs
+(see `isOutputLike`), so that program computations are never evaluated. -/
+meta def reduceMarker? (markers : Array Name) (e : Expr) : MetaM (Option Expr) := do
+  let e := (← instantiateMVars e).consumeMData.headBeta
+  let .const name _ := e.getAppFn | return none
+  unless markers.contains name do return none
+  let some unfolded ← unfoldDefinition? e | return none
+  let some matcher ← matchMatcherApp? unfolded | return none
+  unless matcher.alts.size == 1 do return none
+  for discr in matcher.discrs do
+    unless ← isOutputLike discr do return none
+  match ← Lean.Meta.reduceMatcher? unfolded with
+  | .reduced reduced => return some reduced
+  | _ => return none
+
+/-- Reduce up to `fuel` markers at the head of `e`. -/
+meta partial def reduceMarkers (markers : Array Name) (e : Expr) (fuel : Nat := 20) :
+    MetaM Expr := do
+  let e := (← instantiateMVars e).consumeMData.headBeta
+  match fuel with
+  | 0 => return e
+  | fuel + 1 =>
+    match ← reduceMarker? markers e with
+    | some e' => reduceMarkers markers e' fuel
+    | none => return e
 
 /-- The markers the separation-logic postcondition notation wraps its body in. -/
 meta def slMarkers : Array Name := #[``Aeneas.Std.WP.uncurry', ``Aeneas.Std.uncurry]
@@ -1355,7 +1401,7 @@ A no-op on a goal which is neither.
 
 See the section above for the shapes it normalizes, and for why it needs no
 lemma about the markers of the postcondition notation. -/
-meta def introIspec : IntroFn := do
+meta def introIspec : TacticM Unit := do
   withMainContext do
     let before ← Intro.localHypotheses
     replaceMainGoal [(← (← getMainGoal).intros).2]
@@ -1380,10 +1426,9 @@ meta def introIspec : IntroFn := do
               ``and_imp, ``exists_imp, ``forall_unit, ``true_imp_iff] }
         (.targets #[] true)
     Intro.simplifySpatialGoal
-  return 0
 
 @[inherit_doc introIspec]
-elab (name := intro_ispec) "intro_ispec" : tactic => discard introIspec
+elab (name := intro_ispec) "intro_ispec" : tactic => introIspec
 
 /-- Normalize after output destructuring, then frame spatial goals exposed by
 reducing the remaining postcondition markers. The earlier pass in `intro_ispec`
@@ -1395,113 +1440,9 @@ elab (name := intro_step_post) "intro_step_post" : tactic => do
         #[``Aeneas.Std.uncurry_apply_pair,
           ``Aeneas.Std.uncurry_eq_prop, ``Aeneas.Std.uncurry_eq_prop_arrow,
           ``Aeneas.Std.WP.uncurry'_pair, ``Aeneas.Std.WP.uncurry'_eq,
-          ``and_imp, ``exists_imp, ``Aeneas.Step.Intro.forall_unit, ``true_imp_iff] }
+          ``and_imp, ``exists_imp, ``Aeneas.Std.WP.forall_unit, ``true_imp_iff] }
     (.targets #[] true)
   Intro.simplifySpatialGoal
-
-#register_spec_info {
-    spec_name := ``ispec
-    arity := 4
-    program_index := 2
-    post_index := 3
-    mk_spec_mono := ``ispec_mono
-    mk_spec_mono_skip_args := 4
-    mk_spec_bind := ``ispec_bind
-    mk_spec_bind_skip_args := 7
-    intro_tactic := some ``introIspec
-    post_intro_tactic := some ``intro_step_post
-    discharge_tactic := some `iframe
-    to_mvcgen := none
-    liftings := #[
-      { from_statement := ``spec
-        conversion_thm := ``spec_ispec
-        conversion_thm_inferred_args := 3 }
-    ]
-  }
-
-#register_spec_info {
-    spec_name := ``dispec
-    arity := 4
-    program_index := 2
-    post_index := 3
-    mk_spec_mono := ``dispec_mono
-    mk_spec_mono_skip_args := 4
-    mk_spec_bind := ``dispec_bind
-    mk_spec_bind_skip_args := 7
-    intro_tactic := some ``introIspec
-    post_intro_tactic := some ``intro_step_post
-    discharge_tactic := some `iframe
-    to_mvcgen := none
-    liftings := #[
-      { from_statement := ``ispec
-        conversion_thm := ``ispec_dispec
-        conversion_thm_inferred_args := 4 },
-      { from_statement := ``spec
-        conversion_thm := ``spec_dispec
-        conversion_thm_inferred_args := 3 },
-      { from_statement := ``dspec
-        conversion_thm := ``dspec_dispec
-        conversion_thm_inferred_args := 3 }
-    ]
-  }
-
-/-- The `intro_tactic` of `spec` and `dspec`: their premise is a plain `∀ x, P x → …`, and
-normalizing the fact `P x` is all there is to do. The markers are the definitions the
-postcondition notation `⦃ … ⦄` wraps its body in. -/
-meta def introTactic : IntroFn := do
-  let markers := #[``Aeneas.Std.WP.uncurry', ``Aeneas.Std.uncurry]
-  let index ← match ← Aeneas.Step.Intro.normalizeTarget markers
-      (← Lean.Elab.Tactic.getMainGoal) with
-    | some (goal, index) => Lean.Elab.Tactic.replaceMainGoal [goal]; pure index
-    | none => pure 0
-  let _ ← Aeneas.Simp.simpAt true
-    { maxDischargeDepth := 1, failIfUnchanged := false, iota := false }
-    { addSimpThms := #[``and_imp, ``exists_imp, ``true_imp_iff,
-        ``Aeneas.Step.Intro.forall_unit] }
-    (.targets #[] true)
-  return index
-
-#register_spec_info {
-    spec_name := ``spec
-    arity := 3
-    program_index := 1
-    post_index := 2
-    mk_spec_mono := ``spec_mono
-    mk_spec_mono_skip_args := 2
-    mk_spec_bind := ``spec_bind
-    mk_spec_bind_skip_args := 4
-    intro_tactic := some ``Aeneas.Std.WP.introTactic
-    to_mvcgen := none
-    liftings := #[
-      { from_statement := ``ispec
-        conversion_thm := ``ispec_spec
-        conversion_thm_inferred_args := 3 }
-    ]
-  }
-
-#register_spec_info {
-    spec_name := ``dspec
-    arity := 3
-    program_index := 1
-    post_index := 2
-    mk_spec_mono := ``dspec_mono
-    mk_spec_mono_skip_args := 2
-    mk_spec_bind := ``dspec_bind
-    mk_spec_bind_skip_args := 4
-    intro_tactic := some ``Aeneas.Std.WP.introTactic
-    to_mvcgen := none
-    liftings := #[
-      { from_statement := ``spec
-        conversion_thm := ``spec_dspec
-        conversion_thm_inferred_args := 3 },
-      { from_statement := ``ispec
-        conversion_thm := ``ispec_dspec
-        conversion_thm_inferred_args := 3 },
-      { from_statement := ``dispec
-        conversion_thm := ``dispec_dspec
-        conversion_thm_inferred_args := 3 }
-    ]
-  }
 
 /-! ## Weakest-precondition tactics -/
 
@@ -1749,14 +1690,14 @@ end Aeneas.Std.WP
 plus `spec_to_mvcgen`/`dspec_to_mvcgen`, which let `@[step]` theorems generate
 companion `@[spec]` lemmas (see `info.to_mvcgen` in `Aeneas.Tactic.Step.Init`).
 
-Both lifts are *false* under this handler.  The instance sent every effect other
+Both lifts are *false* under this `EffectWP`.  The instance sent every effect other
 than `fail` to `False`, so a `Triple` rules out `guardedModify`; `spec`/`dspec`
 do not, because an event that only extends the heap preserves every frame it is
 asked to.  The `vis` case of the old proofs is exactly the gap.
 
 Restoring the bridge means teaching the `WP` instance to *model* `guardedModify`
-rather than discard it.  Until then every `#register_spec_info` above keeps
-`to_mvcgen := none`, and `Aeneas/Tactic/Step/Tests/MvcgenSpec.lean` -- the only
+rather than discard it.  Until then every `#register_spec_info` in
+`Aeneas.Tactic.Step.SpecInfo` keeps `to_mvcgen := none`, and `Aeneas/Tactic/Step/Tests/MvcgenSpec.lean` -- the only
 file in the repo that calls `mvcgen` -- has to be dropped or reworked when this
 file replaces `WP.lean`.
 
