@@ -725,8 +725,7 @@ let remove_useless_joins (crate : crate) (f : fun_decl) : fun_decl =
                 (can_inline, st :: ls)
             | BinaryOp _ | UnaryOp _ | Discriminant _ | Len _ | Repeat _ ->
                 (false, st :: ls))
-        | SetDiscriminant _ | Assert (_, _, _) | Call (_, _) | Error _ ->
-            (false, st :: ls)
+        | SetDiscriminant _ | Assert (_, _, _) | Call (_, _) -> (false, st :: ls)
         | _ ->
             [%craise] st.span
               ("unsupported statement: " ^ show_statement_kind st.kind))
@@ -1259,6 +1258,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
               local_ty = ty;
               name = None;
               span = f.item_meta.span;
+              drop_flag_for = None;
             }
           in
           new_locals := local :: !new_locals;
@@ -1519,6 +1519,7 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
               local_ty = ty;
               name = None;
               span = f.item_meta.span;
+              drop_flag_for = None;
             }
           in
           new_locals := local :: !new_locals;
@@ -1587,8 +1588,7 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
             | Continue _
             | Nop
             | Switch _
-            | Loop _
-            | Error _ -> st.kind
+            | Loop _ -> st.kind
             | _ ->
                 [%craise] st.span
                   ("unsupported statement: " ^ show_statement_kind st.kind)

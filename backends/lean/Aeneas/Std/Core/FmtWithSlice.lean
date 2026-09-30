@@ -6,7 +6,7 @@ public section
 
 namespace Aeneas.Std
 
-@[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_fields_finish"]
+@[expose, rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_fields_finish"]
 def core.fmt.Formatter.debug_struct_fields_finish :
   core.fmt.Formatter → Str → Slice Str →
     Slice (Dyn (fun _dyn => core.fmt.Debug _dyn)) →

@@ -10,7 +10,7 @@ open Result
 
 /-- Returns the contained `some` value. The message is ignored: on `none`, this
     fails with `Error.panic`, which is the same behavior as `unwrap`. -/
-@[rust_fun "core::option::{core::option::Option<@T>}::expect"]
+@[expose, rust_fun "core::option::{core::option::Option<@T>}::expect"]
 def core.option.Option.expect {T : Type} (x : Option T) (_msg: Str) : Result T :=
   Result.ofOption x Error.panic
 

@@ -679,12 +679,10 @@ example (x : Nat) :
     add1 y) ⦃ y => y = x + 2 ⦄ := by
     -- step as ⟨ y, z ⟩
     apply spec_bind (add1_spec _)
-    simp -failIfUnchanged only -- introduce the quantifiers
     simp only [qimp_spec_iff] -- eliminate `qimp_spec`
     intro y h
     -- step as ⟨ y1, z1⟩
     apply spec_mono (add1_spec _)
-    simp -failIfUnchanged only -- introduce the quantifiers
     simp only [qimp_iff] -- eliminate `qimp_spec`
     simp only [imp] -- eliminate `imp`
     intro y' h
@@ -818,8 +816,6 @@ instance Result.instWP : WP Result.{u} (.except (ULift Error) (.except PUnit (.e
     conjunctiveRaw Q₁ Q₂ := by
       apply SPred.bientails.of_eq
       cases x <;> simp
-      try (rename_i i k)
-      try (cases i <;> simp)
   }
 set_option match.ignoreUnusedAlts false
 
@@ -850,7 +846,6 @@ theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
     have : heq = PEmpty.elim := by funext; contradiction
     simp [*] at *
     try trivial
-    try (all_goals simp at hspec)
 
 
 /-- Lift an Aeneas step spec to an mvcgen-compatible `Triple`. -/
@@ -930,56 +925,4 @@ namespace Aeneas.Std.WP
 want to introduce in the context -/
 theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
 
--- registers the spec info for use in the step tactic, see Spec.lean
-#register_spec_info {
-    spec_name := ``Std.WP.spec
-    arity := 3
-    program_index := 1
-    post_index := 2
-    mk_spec_mono := ``Std.WP.spec_mono
-    mk_spec_mono_skip_args := 2
-    mk_spec_bind := ``Std.WP.spec_bind
-    mk_spec_bind_skip_args := 4
-    uncurry_elim_tactics := #[
-      ``Std.WP.qimp_spec_unit, ``Std.WP.qimp_unit,
-      ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
-      ``forall_unit, ``true_imp_iff
-    ]
-    qimp_elim_tactics := #[
-      ``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
-      ``Std.WP.imp_and_iff, ``Std.uncurry_apply_pair,
-      ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
-      ``Std.WP.imp_exists_iff,
-      ``forall_unit, ``true_imp_iff]
-    to_mvcgen := .some ``Std.WP.spec_to_mvcgen
-    liftings := #[]
-  }
-
-#register_spec_info {
-    spec_name := ``Std.WP.dspec
-    arity := 3
-    program_index := 1
-    post_index := 2
-    mk_spec_mono := ``Std.WP.dspec_mono
-    mk_spec_mono_skip_args := 2
-    mk_spec_bind := ``Std.WP.dspec_bind
-    mk_spec_bind_skip_args := 4
-    uncurry_elim_tactics := #[
-      ``Std.WP.qimp_dspec_unit, ``Std.WP.qimp_unit,
-      ``Std.WP.qimp_dspec_exists, ``Std.WP.qimp_exists,
-      ``forall_unit, ``true_imp_iff
-    ]
-    qimp_elim_tactics := #[
-      ``Std.WP.qimp_dspec_iff, ``Std.WP.qimp_iff,
-      ``Std.WP.imp_and_iff, ``Std.uncurry_apply_pair,
-      ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
-      ``Std.WP.imp_exists_iff,
-      ``forall_unit, ``true_imp_iff]
-    to_mvcgen := .some ``Std.WP.dspec_to_mvcgen
-    liftings := #[
-      { from_statement := ``Std.WP.spec
-        conversion_thm := ``Std.WP.spec_dspec
-        conversion_thm_inferred_args := 3 }
-    ]
-  }
 end Aeneas.Std.WP

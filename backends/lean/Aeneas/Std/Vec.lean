@@ -170,14 +170,19 @@ theorem Vec.push_spec {α : Type u} (v : Vec α) (x : α) (h : v.val.length < Us
 @[expose, rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::insert" (keepParams := [true, false])]
 def Vec.insert {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
   if i.val < v.length then
-    ok (.from (v.val.set i x) (by have := v.property; simp [*]))
+    if h : v.length < Usize.max then
+      ok (.from (v.val.insertIdx i x)
+        (List.length_insertIdx_le_succ.trans (Nat.succ_le_of_lt h)))
+    else
+      fail maximumSizeExceeded
   else
     fail arrayOutOfBounds
 
 @[step]
 theorem Vec.insert_spec {α : Type u} (v: Vec α) (i: Usize) (x: α)
-  (hbound : i.val < v.length) :
-  v.insert i x ⦃ nv => nv.val = v.val.set i x ⦄ := by
+  (hbound : i.val < v.length)
+  (hsize : v.length < Usize.max) :
+  v.insert i x ⦃ nv => nv.val = v.val.insertIdx i x ⦄ := by
   simp [insert, *]
 
 @[expose] def Vec.index_usize {α : Type u} (v: Vec α) (i: Usize) : Result α :=

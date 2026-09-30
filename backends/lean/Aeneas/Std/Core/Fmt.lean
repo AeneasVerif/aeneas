@@ -52,16 +52,16 @@ def core.fmt.Arguments : Type := Unit
 @[expose, rust_type "core::fmt::rt::Argument"]
 def core.fmt.rt.Argument : Type := Unit
 
-@[rust_fun "core::fmt::{core::fmt::Arguments<'a>}::from_str"]
+@[expose, rust_fun "core::fmt::{core::fmt::Arguments<'a>}::from_str"]
 def core.fmt.Arguments.from_str : Str → Result core.fmt.Arguments := fun _ => Result.ok ()
 
-@[rust_fun "core::fmt::{core::fmt::Arguments<'a>}::new"]
+@[expose, rust_fun "core::fmt::{core::fmt::Arguments<'a>}::new"]
 def core.fmt.Arguments.new {N : Std.Usize} {M : Std.Usize}
   (_ : Std.Array Std.U8 N) (_ : Std.Array core.fmt.rt.Argument M) : Result core.fmt.Arguments :=
   -- TODO
   Result.ok ()
 
-@[rust_fun "core::fmt::rt::{core::fmt::rt::Argument<'0>}::new_debug"]
+@[expose, rust_fun "core::fmt::rt::{core::fmt::rt::Argument<'0>}::new_debug"]
 def core.fmt.rt.Argument.new_debug
   {T : Type} (_DebugInst : core.fmt.Debug T) (_ : T) : Result core.fmt.rt.Argument :=
   -- TODO
@@ -75,45 +75,45 @@ structure core.fmt.Display (Self : Type) where
 structure core.fmt.LowerHex (Self : Type) where
   fmt : Self → core.fmt.Formatter → Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter)
 
-@[rust_fun "core::fmt::rt::{core::fmt::rt::Argument<'0>}::new_lower_hex"]
+@[expose, rust_fun "core::fmt::rt::{core::fmt::rt::Argument<'0>}::new_lower_hex"]
 def core.fmt.rt.Argument.new_lower_hex
   {T : Type} (_LowerHexInst : core.fmt.LowerHex T) (_ : T) :
   Result core.fmt.rt.Argument :=
   -- TODO
   .ok ()
 
-@[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::write_str"]
+@[expose, rust_fun "core::fmt::{core::fmt::Formatter<'a>}::write_str"]
 def core.fmt.Formatter.write_str (fmt : core.fmt.Formatter) (_ : Str) :
   Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter) :=
   -- TODO: this is a simplistic model
   .ok (.Ok (), fmt)
 
-@[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::write_fmt"]
+@[expose, rust_fun "core::fmt::{core::fmt::Formatter<'a>}::write_fmt"]
 def core.fmt.Formatter.write_fmt
   (fmt : core.fmt.Formatter) (_ : core.fmt.Arguments) :
   Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter) :=
   -- TODO: we should update something in the formatter, once we have a model for it
   .ok (.Ok (), fmt)
 
-@[rust_fun "core::fmt::{core::fmt::Debug<&'0 @T>}::fmt"]
+@[expose, rust_fun "core::fmt::{core::fmt::Debug<&'0 @T>}::fmt"]
 def core.fmt.DebugShared.fmt {T : Type} (DebugInst : core.fmt.Debug T) (x : T)
   (fmt : core.fmt.Formatter) :
   Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter) :=
   DebugInst.fmt x fmt
 
-@[rust_fun "core::fmt::{core::fmt::Debug<bool>}::fmt"]
+@[expose, rust_fun "core::fmt::{core::fmt::Debug<bool>}::fmt"]
 def core.fmt.DebugBool.fmt (_ : Bool) (fmt : core.fmt.Formatter) :
   Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter) :=
   -- TODO: this is a simplistic model
   .ok (.Ok (), fmt)
 
-@[rust_fun "core::fmt::{core::fmt::Debug<()>}::fmt"]
+@[expose, rust_fun "core::fmt::{core::fmt::Debug<()>}::fmt"]
 def core.fmt.DebugUnit.fmt (_ : Unit) (fmt : core.fmt.Formatter) :
   Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter) :=
   -- TODO: this is a simplistic model
   .ok (.Ok (), fmt)
 
-@[rust_fun "core::result::{core::result::Result<@T, @E>}::expect"]
+@[expose, rust_fun "core::result::{core::result::Result<@T, @E>}::expect"]
 def core.result.Result.expect {T : Type} {E : Type} (_DebugInst : core.fmt.Debug E)
   (r : core.result.Result T E) (_ : Str) : Std.Result T :=
   match r with
@@ -122,14 +122,14 @@ def core.result.Result.expect {T : Type} {E : Type} (_DebugInst : core.fmt.Debug
     /- TODO: this is a simplistic model -/
     .fail .panic
 
-@[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field1_finish", simp]
+@[expose, rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field1_finish", simp]
 def core.fmt.Formatter.debug_struct_field1_finish
   (fmt : core.fmt.Formatter) (_ : Str) (_ : Str) (_ : Dyn (fun dyn => core.fmt.Debug dyn)) :
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
   -- TODO: more precise model that actually uses the `Debug` instance
   .ok (.Ok (), fmt)
 
-@[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field2_finish", simp]
+@[expose, rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field2_finish", simp]
 def core.fmt.Formatter.debug_struct_field2_finish (fmt : core.fmt.Formatter) (_ : Str)
   (_ : Str) (_ : Dyn (fun dyn => core.fmt.Debug dyn))
   (_ : Str) (_ : Dyn (fun dyn => core.fmt.Debug dyn)) :
@@ -137,7 +137,7 @@ def core.fmt.Formatter.debug_struct_field2_finish (fmt : core.fmt.Formatter) (_ 
   -- TODO: more precise model that actually uses the `Debug` instance
   .ok (.Ok (), fmt)
 
-@[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field3_finish", simp]
+@[expose, rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field3_finish", simp]
 def core.fmt.Formatter.debug_struct_field3_finish (fmt : core.fmt.Formatter) (_ : Str) :
   Str → Dyn (fun dyn => core.fmt.Debug dyn) →
   Str → Dyn (fun dyn => core.fmt.Debug dyn) →
@@ -147,7 +147,7 @@ def core.fmt.Formatter.debug_struct_field3_finish (fmt : core.fmt.Formatter) (_ 
   fun _ _ _ _ _ _ =>
   .ok (.Ok (), fmt)
 
-@[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field4_finish", simp]
+@[expose, rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field4_finish", simp]
 def core.fmt.Formatter.debug_struct_field4_finish (fmt : core.fmt.Formatter) (_ : Str) :
   Str → Dyn (fun dyn => core.fmt.Debug dyn) →
   Str → Dyn (fun dyn => core.fmt.Debug dyn) →
@@ -158,7 +158,7 @@ def core.fmt.Formatter.debug_struct_field4_finish (fmt : core.fmt.Formatter) (_ 
   fun _ _ _ _ _ _ _ _ =>
   .ok (.Ok (), fmt)
 
-@[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field5_finish", simp]
+@[expose, rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field5_finish", simp]
 def core.fmt.Formatter.debug_struct_field5_finish (fmt : core.fmt.Formatter) (_ : Str) :
   Str → Dyn (fun dyn => core.fmt.Debug dyn) →
   Str → Dyn (fun dyn => core.fmt.Debug dyn) →
@@ -168,7 +168,7 @@ def core.fmt.Formatter.debug_struct_field5_finish (fmt : core.fmt.Formatter) (_ 
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
   fun _ _ _ _ _ _ _ _ _ _ => .ok (.Ok (), fmt)
 
-@[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_tuple_field1_finish", simp]
+@[expose, rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_tuple_field1_finish", simp]
 def core.fmt.Formatter.debug_tuple_field1_finish :
   core.fmt.Formatter → Str → Dyn (fun dyn => core.fmt.Debug dyn) →
     Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
@@ -176,23 +176,23 @@ def core.fmt.Formatter.debug_tuple_field1_finish :
   fun fmt _ _ =>
   .ok (.Ok (), fmt)
 
-@[reducible, rust_trait_impl "core::fmt::Debug<&'0 @T>"]
+@[expose, reducible, rust_trait_impl "core::fmt::Debug<&'0 @T>"]
 def core.fmt.DebugShared {T : Type} (DebugInst : core.fmt.Debug T) :
   core.fmt.Debug T := {
   fmt := core.fmt.DebugShared.fmt DebugInst
 }
 
-@[reducible, rust_trait_impl "core::fmt::Debug<()>"]
+@[expose, reducible, rust_trait_impl "core::fmt::Debug<()>"]
 def core.fmt.DebugUnit : core.fmt.Debug Unit := {
   fmt := core.fmt.DebugUnit.fmt
 }
 
-@[reducible, rust_trait_impl "core::fmt::Debug<bool>"]
+@[expose, reducible, rust_trait_impl "core::fmt::Debug<bool>"]
 def core.fmt.DebugBool : core.fmt.Debug Bool := {
   fmt := core.fmt.DebugBool.fmt
 }
 
-@[rust_fun "core::fmt::rt::{core::fmt::rt::Argument<'0>}::new_display"]
+@[expose, rust_fun "core::fmt::rt::{core::fmt::rt::Argument<'0>}::new_display"]
 def core.fmt.rt.Argument.new_display
   {T : Type} (_DisplayInst : core.fmt.Display T) :
   T → Result core.fmt.rt.Argument :=
