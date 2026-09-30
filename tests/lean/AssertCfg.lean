@@ -38,7 +38,9 @@ def f : Result Unit := do
     Source: 'tests/src/assert-cfg.rs', lines 15:0-18:1
     Visibility: public -/
 def assert_or (b0 : Bool) (b1 : Bool) : Result Unit := do
-  massert (b0 || b1)
+  if b0
+  then ok ()
+  else massert b1
   f
 
 /-- [assert_cfg::assert_and]:
@@ -61,28 +63,36 @@ def assert_not_or (b0 : Bool) (b1 : Bool) : Result Unit := do
     Source: 'tests/src/assert-cfg.rs', lines 30:0-33:1
     Visibility: public -/
 def assert_not_and (b0 : Bool) (b1 : Bool) : Result Unit := do
-  massert ((¬ b0) || (¬ b1))
+  if b0
+  then massert (¬ b1)
+  else ok ()
   f
 
 /-- [assert_cfg::assert_not_b0_or_b1]:
     Source: 'tests/src/assert-cfg.rs', lines 35:0-38:1
     Visibility: public -/
 def assert_not_b0_or_b1 (b0 : Bool) (b1 : Bool) : Result Unit := do
-  massert ((¬ b0) || b1)
+  if b0
+  then massert b1
+  else ok ()
   f
 
 /-- [assert_cfg::assert_b0_or_not_b1]:
     Source: 'tests/src/assert-cfg.rs', lines 40:0-43:1
     Visibility: public -/
 def assert_b0_or_not_b1 (b0 : Bool) (b1 : Bool) : Result Unit := do
-  massert (b0 || (¬ b1))
+  if b0
+  then ok ()
+  else massert (¬ b1)
   f
 
 /-- [assert_cfg::assert_not_b0_or_not_b1]:
     Source: 'tests/src/assert-cfg.rs', lines 45:0-48:1
     Visibility: public -/
 def assert_not_b0_or_not_b1 (b0 : Bool) (b1 : Bool) : Result Unit := do
-  massert ((¬ b0) || (¬ b1))
+  if b0
+  then massert (¬ b1)
+  else ok ()
   f
 
 /-- [assert_cfg::assert_not_b0_and_b1]:
