@@ -64,12 +64,18 @@ elab "discharge_markers" : tactic => do
     | discharge_equality_marker
     | assumption))
 
-/- Reuse the standard premise normalization while customizing the triple and its
-   discharge tactic. -/
-run_cmd Lean.Elab.Command.liftTermElabM do
-  let some info ← specInfoLookup ``Std.WP.spec
-    | Lean.throwError "The standard WP specification is not registered"
-  specAttr.add { info with
+open Lean Meta Elab Tactic in
+meta def prepareIntroOutputs : PrepareIntroOutputs := do
+  withMainContext do
+  let goalTy ← instantiateMVars (← getMainTarget)
+  unless goalTy.isForall do
+    throwError "Expected a quantified continuation, got:\n{goalTy}"
+  Step.prepareIntroOutputsWith goalTy (.leaf none) do
+    let _ ← Simp.simpAt true { failIfUnchanged := false }
+      { simpThms := #[← Step.stepSimpExt.getTheorems] }
+      (.targets #[] true)
+
+#register_spec_info {
     spec_name := ``triple
     arity := 4
     program_index := 2
@@ -78,6 +84,7 @@ run_cmd Lean.Elab.Command.liftTermElabM do
     mk_spec_mono_skip_args := 4
     mk_spec_bind := ``triple_step_bind
     mk_spec_bind_skip_args := 6
+    prepare_intro_outputs := ``prepareIntroOutputs
     discharge_tactic := some `discharge_markers
     to_mvcgen := none
     liftings := #[]
