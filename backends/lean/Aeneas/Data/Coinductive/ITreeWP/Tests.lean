@@ -91,7 +91,7 @@ def StateEffect : Effect where
   O := StateEffect.Output
 
 @[reducible]
-def effectSpec : EffectWP StateEffect where
+def effectWP : EffectWP StateEffect where
   State := Nat
   wp effect C state :=
     match effect with
@@ -100,7 +100,7 @@ def effectSpec : EffectWP StateEffect where
     | .fail => False
     | .choose α => Nonempty α ∧ ∀ answer, C ⟨answer⟩ state
 
-instance : EffectWP.Monotone effectSpec where
+instance : EffectWP.Monotone effectWP where
   wp_mono := by
     rintro effect C C' hC state hWp
     cases effect
@@ -109,7 +109,7 @@ instance : EffectWP.Monotone effectSpec where
     · exact hWp.elim
     · exact ⟨hWp.1, fun answer => hC _ _ (hWp.2 answer)⟩
 
-instance : EffectWP.Conjunctive effectSpec where
+instance : EffectWP.Conjunctive effectWP where
   wp_conj := by
     rintro effect state Demands ⟨C₀, hC₀⟩ hAll
     cases effect
@@ -118,7 +118,7 @@ instance : EffectWP.Conjunctive effectSpec where
     · exact (hAll C₀ hC₀).elim
     · exact ⟨(hAll C₀ hC₀).1, fun answer C hC => (hAll C hC).2 answer⟩
 
-instance : EffectWP.NoMiracle effectSpec where
+instance : EffectWP.NoMiracle effectWP where
   wp_noMiracle := by
     rintro (_ | _ | _ | _) _ h
     · exact h
@@ -126,22 +126,22 @@ instance : EffectWP.NoMiracle effectSpec where
     · exact h
     · exact h.1.elim h.2
 
-example (m : ITree StateEffect α) : effectSpec.Post α → effectSpec.Pre :=
-  DWP effectSpec m
+example (m : ITree StateEffect α) : effectWP.Post α → effectWP.Pre :=
+  DWP effectWP m
 
-example (m : ITree StateEffect α) : effectSpec.Post α → effectSpec.Pre :=
-  DWLP effectSpec m
+example (m : ITree StateEffect α) : effectWP.Post α → effectWP.Pre :=
+  DWLP effectWP m
 
-def spec (m : ITree StateEffect α) (p : effectSpec.Post α) (state : Nat) : Prop :=
-  DWP effectSpec m p state
+def spec (m : ITree StateEffect α) (p : effectWP.Post α) (state : Nat) : Prop :=
+  DWP effectWP m p state
 
-def dspec (m : ITree StateEffect α) (p : effectSpec.Post α) (state : Nat) : Prop :=
-  DWLP effectSpec m p state
+def dspec (m : ITree StateEffect α) (p : effectWP.Post α) (state : Nat) : Prop :=
+  DWLP effectWP m p state
 
-example (Q : effectSpec.Post Nat) :
+example (Q : effectWP.Post Nat) :
     Lean.Order.admissible fun computation : ITree StateEffect Nat =>
       dspec computation Q 0 :=
-  DWLP.admissible effectSpec Q 0
+  DWLP.admissible effectWP Q 0
 
 def get : ITree StateEffect Nat :=
   .vis .get fun value => .ret value.down
@@ -195,7 +195,7 @@ example (state : Nat) :
   simp [spec, flip, choose, Bind.bind]
   apply DWP.vis
   change Nonempty Bool ∧ ∀ answer : Bool,
-    DWP effectSpec (.ret (if answer then 0 else 1))
+    DWP effectWP (.ret (if answer then 0 else 1))
       (fun value state' => (value = 0 ∨ value = 1) ∧ state' = state) state
   constructor
   · exact ⟨true⟩
@@ -214,7 +214,7 @@ example (state : Nat) :
     simp [spec, flip, choose, Bind.bind]
     apply DWP.vis
     change Nonempty Bool ∧ ∀ answer : Bool,
-      DWP effectSpec (.ret (if answer then 0 else 1))
+      DWP effectWP (.ret (if answer then 0 else 1))
         (fun value state' => (value = 0 ∨ value = 1) ∧ state' = state) state
     constructor
     · exact ⟨true⟩
@@ -224,13 +224,13 @@ example (state : Nat) :
       · simp
       · simp)
 
-example (state : Nat) (Q : effectSpec.Post Unit) :
+example (state : Nat) (Q : effectWP.Post Unit) :
     ¬ spec failure Q state := by
   intro hSpec
   simp [spec, failure, fail, Bind.bind] at hSpec
   exact hSpec.vis_view
 
-example (state : Nat) (Q : effectSpec.Post Unit) :
+example (state : Nat) (Q : effectWP.Post Unit) :
     ¬ dspec failure Q state := by
   intro hSpec
   simp [dspec, failure, fail, Bind.bind] at hSpec

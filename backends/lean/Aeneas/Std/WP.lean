@@ -32,38 +32,38 @@ unseal Result
 @[expose] section
 
 @[reducible]
-def effectSpec : EffectWP RustEffect where
+def effectWP : EffectWP RustEffect where
   State := Unit
   wp effect _ _ :=
     match effect with
     | .fail _ => False
 
-instance : EffectWP.Monotone effectSpec where
+instance : EffectWP.Monotone effectWP where
   wp_mono _ := False.elim
 
-instance : EffectWP.Conjunctive effectSpec where
+instance : EffectWP.Conjunctive effectWP where
   wp_conj := by
     intro _ _ _ hNonempty hAll
     obtain ⟨C₀, hC₀⟩ := hNonempty
     exact (hAll C₀ hC₀).elim
 
-instance : EffectWP.NoMiracle effectSpec where
+instance : EffectWP.NoMiracle effectWP where
   wp_noMiracle := by
     rintro ⟨⟩ _ h
     exact h
 
 def spec (m : Result α) (p : Post α) : Prop :=
-  DWP effectSpec m (fun value _ => p value) ()
+  DWP effectWP m (fun value _ => p value) ()
 
 def dspec (m : Result α) (p : Post α) : Prop :=
-  DWLP effectSpec m (fun value _ => p value) ()
+  DWLP effectWP m (fun value _ => p value) ()
 
 theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p :=
   DWP.toPartial
 
 theorem dspec_admissible {α} (p : Post α) :
     admissible (fun x => dspec x p) :=
-  DWLP.admissible effectSpec _ ()
+  DWLP.admissible effectWP _ ()
 
 end
 
