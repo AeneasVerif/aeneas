@@ -99,4 +99,9 @@ example (tag : Nat) (f : Result (Bool × Unit))
   guard_hyp hb : b = true
   simp [paramSpec, Std.WP.spec_ok, hb]
 
+/- The mono rule delegates its `qimp` premise to the standard callback. -/
+example (tag n : Nat) : paramSpec tag (op n) (fun r => r = n) := by
+  step with op_spec as ⟨r, hr⟩
+  exact hr
+
 end Aeneas.Tactic.Step.Tests.SpecParameters

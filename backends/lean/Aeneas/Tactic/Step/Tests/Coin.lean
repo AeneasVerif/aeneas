@@ -126,19 +126,22 @@ theorem coinSpec_ret {α p} (x : α) : coinSpec p (ITree.ret x) ↔ p x := by
 open Lean Meta Elab Tactic in
 meta def introOutputs : Step.IntroOutputs := fun args fExpr stepState => do
   withMainContext do
-  let goalTy ← instantiateMVars (← getMainTarget)
-  match_expr goalTy with
-  | qimp_coinSpec α _ P k Q =>
-    let type ← withLocalDeclD `x α fun x => do
-      let body ← mkAppM ``coinSpec #[Q, mkApp k x]
-      mkForallFVars #[x] (mkApp2 (mkConst ``Std.WP.imp) (mkApp P x) body)
-    Step.introOutputsWith args fExpr stepState type (← Step.getContInput k) do
-      evalTactic (← `(tactic|
-        simp -iota only [step_simps, qimp_coinSpec_iff, Std.WP.imp_and_iff,
-          Std.uncurry_apply_pair, Std.WP.uncurry'_eq, Std.WP.uncurry'_pair,
-          Std.WP.imp_exists_iff, forall_unit, true_imp_iff,
-          Prod.forall, Step.forall_punit, and_imp, exists_imp, Std.WP.imp]))
-  | _ => Step.introOutputs args fExpr stepState
+  let goalTy := (← instantiateMVars (← getMainTarget)).consumeMData
+  let (type, tree) ← match_expr goalTy with
+    | qimp_coinSpec α _ P k Q =>
+      let type ← withLocalDeclD `x α fun x => do
+        let body ← mkAppM ``coinSpec #[Q, mkApp k x]
+        mkForallFVars #[x] (mkApp2 (mkConst ``Std.WP.imp) (mkApp P x) body)
+      pure (type, ← Step.getContInput k)
+    | _ =>
+      if goalTy.isForall then pure (goalTy, .leaf none)
+      else throwError "Expected qimp_coinSpec or a quantified mono premise, got:\n{goalTy}"
+  Step.introOutputsWith args fExpr stepState type tree do
+    evalTactic (← `(tactic|
+      simp -iota only [step_simps, qimp_coinSpec_iff, Std.WP.imp_and_iff,
+        Std.uncurry_apply_pair, Std.WP.uncurry'_eq, Std.WP.uncurry'_pair,
+        Std.WP.imp_exists_iff, forall_unit, true_imp_iff,
+        Prod.forall, Step.forall_punit, and_imp, exists_imp, Std.WP.imp]))
 
 #register_spec_info {
   spec_name := ``coinSpec
@@ -162,5 +165,19 @@ instance : Monad ITreeC := instMonadITree
 instance {T} : Lean.Order.PartialOrder (ITreeC T) := instPartialOrderCoIndOfInhabitedPUnit _
 noncomputable instance {T} : Lean.Order.CCPO (ITreeC T) := instCCPOCoIndOfInhabitedPUnit _
 instance : MonoBind ITreeC := instMonoBindITree
+
+/- Exercise both the native quantified mono premise and the wrapped bind premise. -/
+example (n : Nat) (f : ITreeC Nat) (h : coinSpec (fun x => x = n) f) :
+    coinSpec (fun x => x = n) f := by
+  step with h as ⟨x, hx⟩
+  exact hx
+
+example (n : Nat) (f : ITreeC Nat) (g : Nat → ITreeC Nat)
+    (h : coinSpec (fun x => x = n) f)
+    (hg : ∀ x, coinSpec (fun y => y = x) (g x)) :
+    coinSpec (fun y => y = n) (do let x ← f; g x) := by
+  step with h as ⟨x, hx⟩
+  step with hg as ⟨y, hy⟩
+  exact hy.trans hx
 
 end Aeneas.Tactic.Step.Tests.Coin
