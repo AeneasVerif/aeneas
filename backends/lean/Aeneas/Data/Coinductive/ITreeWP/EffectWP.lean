@@ -78,6 +78,15 @@ theorem EffectWP.wp_forall [θ.Monotonic] [θ.Conjunctive] {ι : Sort u'}
   rintro X ⟨i, rfl⟩
   exact hWp i
 
+theorem EffectWP.wp_and [θ.Monotone] [θ.Conjunctive]
+    {C₁ C₂ : θ.Post (E.O effect)} (h₁ : θ.wp effect C₁ s) (h₂ : θ.wp effect C₂ s) :
+    θ.wp effect (fun answer s' => C₁ answer s' ∧ C₂ answer s') s := by
+  refine θ.wp_mono (fun _ _ hAll => ⟨hAll C₁ (.inl rfl), hAll C₂ (.inr rfl)⟩)
+    (θ.wp_conj (fun X => X = C₁ ∨ X = C₂) ⟨C₁, .inl rfl⟩ ?_)
+  rintro X (rfl | rfl)
+  · exact h₁
+  · exact h₂
+
 end Aeneas.Data.Coinductive
 
 end
