@@ -142,7 +142,7 @@ meta def prepareIntroOutputs : PrepareIntroOutputs := do
         addSimpThms := #[``qimp_coinSpec_iff,
           ``Std.uncurry_apply_pair, ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
           ``forall_unit, ``true_imp_iff,
-          ``Prod.forall, ``Step.forall_punit, ``and_imp, ``exists_imp] }
+          ``Prod.forall, ``Step.forall_punit, ``and_imp, ``Step.exists_imp_named] }
       (.targets #[] true)
 
 #register_spec_info {

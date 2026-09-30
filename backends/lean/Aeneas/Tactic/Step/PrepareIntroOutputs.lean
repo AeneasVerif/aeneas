@@ -286,7 +286,7 @@ meta def prepareIntroOutputs : PrepareIntroOutputs := do
         addSimpThms := #[``Std.uncurry_apply_pair,
           ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
           ``Std.WP.forall_unit, ``true_imp_iff, ``Prod.forall, ``forall_punit,
-          ``and_imp, ``exists_imp] }
+          ``and_imp, ``exists_imp_named] }
       (.targets #[] true)
 
 end Aeneas.Step

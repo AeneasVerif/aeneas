@@ -73,7 +73,7 @@ meta def prepareIntroOutputs : PrepareIntroOutputs := do
       let _ ← Simp.simpAt true { failIfUnchanged := false, iota := false }
         { simpThms := #[← Step.stepSimpExt.getTheorems],
           addSimpThms := #[``qimpParam_iff, ``Prod.forall, ``Step.forall_punit, ``true_imp_iff,
-            ``and_imp, ``exists_imp, ``Std.uncurry_apply_pair,
+            ``and_imp, ``Step.exists_imp_named, ``Std.uncurry_apply_pair,
             ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair] }
         (.targets #[] true)
   | _ => Step.prepareIntroOutputs
