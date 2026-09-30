@@ -810,7 +810,6 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
       let eval_loop_body = eval_block config loop_body in
       InterpLoops.eval_loop config st.span eval_loop_body ctx
   | Switch (data, branches) -> eval_switch config st.span data branches ctx
-  | Error s -> [%craise] st.span s
   | _ ->
       [%craise] st.span ("unsupported statement: " ^ show_statement_kind st.kind)
 
