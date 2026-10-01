@@ -123,9 +123,13 @@ meta def parseStepArraySpec
     -- Elaborate the full theorem
     elabCommand
       (← `(command| $vis:declModifiers theorem $thm_name:ident $i (_ : Aeneas.Std.UScalar.val $i < Aeneas.Std.Array.length $array) :
-            Aeneas.Std.WP.spec (Aeneas.Std.Array.index_usize $array $i) (fun $x:ident => $pred) :=
-            Aeneas.Std.Array.index_usize_const_spec (fun $i:ident $x:ident => $pred) (fun $i:ident $x:ident => $pred)
-            $array (by simp) (by $tac) $i (by scalar_tac) (by scalar_tac)))
+            Aeneas.Std.WP.spec (Aeneas.Std.Array.index_usize $array $i) (fun $x:ident => $pred) := by
+            apply Aeneas.Std.Array.index_usize_const_spec
+              (fun $i:ident $x:ident => $pred) (fun $i:ident $x:ident => $pred) $array
+            · simp
+            · $tac
+            · scalar_tac
+            · scalar_tac))
   | _ => throwUnsupportedSyntax
 
 elab tk:stepArraySpec : command => do
@@ -142,6 +146,15 @@ def const_array : Array U32 8#usize := Array.make 8#usize [
 step_array_spec (name := const_array_spec) const_array[i]!
   { x => x.val = i.val }
   by native_decide -- The tactic to prove the proof obligation (expressed in terms of `Array.allIdx`)
+
+@[irreducible]
+def const_u16_array : Array U16 4#usize :=
+  Array.make 4#usize [1#u16, 2#u16, 3#u16, 4#u16]
+
+set_option maxHeartbeats 200000 in
+local step_array_spec (name := const_u16_array_spec) const_u16_array[i]!
+  { x => x.val ≤ 4 }
+  by native_decide
 
 end Tests
 
