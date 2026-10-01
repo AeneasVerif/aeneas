@@ -650,7 +650,7 @@ def add1 (x : Nat) := Result.ok (x + 1)
 theorem  add1_spec (x : Nat) : add1 x ⦃ y => y = x + 1⦄ :=
   by simp [add1]
 
-/-- Example with a tuple output. -/
+/-- Example with a single output. -/
 example (x : Nat) :
   (do
     let y ← add1 x
