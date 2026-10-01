@@ -103,8 +103,8 @@ theorem qimp_coinSpec_exists {α β γ} (P : γ → α → Prop) (k : α → ITr
   simp only [qimp_coinSpec, forall_exists_index]; grind
 
 def qimp_coinSpec_iff {α β} (P : α → Prop) (k : α → ITreeC β) (Q : β → Prop) :
-  qimp_coinSpec P k Q ↔ ∀ x, imp (P x) (coinSpec Q (k x)) := by
-  simp [qimp_coinSpec, imp]
+  qimp_coinSpec P k Q ↔ ∀ x, P x → coinSpec Q (k x) := by
+  simp [qimp_coinSpec]
 
 @[simp, grind =, agrind =]
 theorem coinSpec_ret {α p} (x : α) : coinSpec p (ITree.ret x) ↔ p x := by
@@ -131,7 +131,7 @@ meta def prepareIntroOutputs : PrepareIntroOutputs := do
     | qimp_coinSpec α _ P k Q =>
       let type ← withLocalDeclD `x α fun x => do
         let body ← mkAppM ``coinSpec #[Q, mkApp k x]
-        mkForallFVars #[x] (mkApp2 (mkConst ``Std.WP.imp) (mkApp P x) body)
+        mkForallFVars #[x] (← mkArrow (mkApp P x) body)
       pure (type, ← Step.getContInput k)
     | _ =>
       if goalTy.isForall then pure (goalTy, .leaf none)
@@ -139,11 +139,10 @@ meta def prepareIntroOutputs : PrepareIntroOutputs := do
   Step.prepareIntroOutputsWith type tree do
     let _ ← Simp.simpAt true { failIfUnchanged := false, iota := false }
       { simpThms := #[← Step.stepSimpExt.getTheorems],
-        addSimpThms := #[``qimp_coinSpec_iff, ``Std.WP.imp_and_iff,
+        addSimpThms := #[``qimp_coinSpec_iff,
           ``Std.uncurry_apply_pair, ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
-          ``Std.WP.imp_exists_iff, ``forall_unit, ``true_imp_iff,
-          ``Prod.forall, ``Step.forall_punit, ``and_imp, ``exists_imp],
-        declsToUnfold := #[``Std.WP.imp] }
+          ``forall_unit, ``true_imp_iff,
+          ``Prod.forall, ``Step.forall_punit, ``and_imp, ``Step.exists_imp_named] }
       (.targets #[] true)
 
 #register_spec_info {
