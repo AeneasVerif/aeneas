@@ -1,5 +1,5 @@
 module
-public import Aeneas.Tactic.SepLogic.Intro
+public import Aeneas.Tactic.SepLogic.IIntro
 public section
 
 /-!
@@ -9,7 +9,7 @@ Specification-wrapper coverage lives with the module that defines those
 wrappers.
 -/
 
-namespace Aeneas.Tactic.SepLogic.Tests.Intro
+namespace Aeneas.Tactic.SepLogic.Tests.IIntro
 
 open Aeneas.SepLogic
 open Aeneas.Std (Ref)
@@ -59,4 +59,4 @@ example (P : Prop) (H : IProp) :
   unfold wrappedEntails
   iframe
 
-end Aeneas.Tactic.SepLogic.Tests.Intro
+end Aeneas.Tactic.SepLogic.Tests.IIntro

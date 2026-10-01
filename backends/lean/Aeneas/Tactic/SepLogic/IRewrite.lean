@@ -1,5 +1,5 @@
 module
-public import Aeneas.Tactic.SepLogic.Frame
+public import Aeneas.Tactic.SepLogic.IFrame
 public meta import Lean
 public meta import AeneasMeta.Simp
 public section

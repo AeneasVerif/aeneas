@@ -1,8 +1,9 @@
 module
 public import Aeneas.Std.RawPtr
 public import Aeneas.Std.Slice
-public import Aeneas.Tactic.SepLogic.Frame
-public import Aeneas.Tactic.SepLogic.Intro
+public import Aeneas.Tactic.SepLogic.IFrame
+public import Aeneas.Tactic.SepLogic.IIntro
+public import Aeneas.Tactic.SepLogic.ISimp
 public import Aeneas.Tactic.Step.Init
 @[expose] public section
 
