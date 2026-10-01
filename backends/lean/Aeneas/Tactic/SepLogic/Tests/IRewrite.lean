@@ -1,12 +1,12 @@
 module
-public import Aeneas.Tactic.SepLogic.Rewrite
+public import Aeneas.Tactic.SepLogic.IRewrite
 public section
 
 /-!
 # Regression tests for `irewrite`
 -/
 
-namespace Aeneas.Tactic.SepLogic.Tests.Rewrite
+namespace Aeneas.Tactic.SepLogic.Tests.IRewrite
 
 open Aeneas.SepLogic
 
@@ -65,4 +65,4 @@ example (P Q R : IProp) (h : P ⊢ Q) :
   unfold wrappedEntails
   iframe
 
-end Aeneas.Tactic.SepLogic.Tests.Rewrite
+end Aeneas.Tactic.SepLogic.Tests.IRewrite
