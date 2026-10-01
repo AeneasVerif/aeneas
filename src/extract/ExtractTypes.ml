@@ -1544,14 +1544,16 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
          if
            List.for_all
              (fun b -> b)
-             (List.mapi (fun i (v : variant) -> v.discriminant = i) variants)
+             (List.mapi
+                (fun i (v : variant) -> Z.equal v.discriminant (Z.of_int i))
+                variants)
          then [ "discriminant " ^ discr_ty ]
          else
            [
              "discriminant " ^ discr_ty ^ " ["
              ^ String.concat ","
                  (List.map
-                    (fun (v : variant) -> string_of_int v.discriminant)
+                    (fun (v : variant) -> Z.to_string v.discriminant)
                     variants)
              ^ "]";
            ]
