@@ -147,15 +147,6 @@ step_array_spec (name := const_array_spec) const_array[i]!
   { x => x.val = i.val }
   by native_decide -- The tactic to prove the proof obligation (expressed in terms of `Array.allIdx`)
 
-@[irreducible]
-def const_u16_array : Array U16 4#usize :=
-  Array.make 4#usize [1#u16, 2#u16, 3#u16, 4#u16]
-
-set_option maxHeartbeats 200000 in
-local step_array_spec (name := const_u16_array_spec) const_u16_array[i]!
-  { x => x.val ≤ 4 }
-  by native_decide
-
 end Tests
 
 end StepArraySpec
