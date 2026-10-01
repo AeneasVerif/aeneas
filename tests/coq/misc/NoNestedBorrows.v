@@ -671,19 +671,7 @@ mkExpandSimpliy_Wrapper2_t {
     Visibility: public *)
 Definition expandSimpliy_check_expand_simplify_symb2
   (x : ExpandSimpliy_Wrapper2_t) : result ExpandSimpliy_Wrapper2_t :=
-  if x.(expandSimpliy_Wrapper2_b)
-  then
-    Ok
-      {|
-        expandSimpliy_Wrapper2_b := true;
-        expandSimpliy_Wrapper2_x := x.(expandSimpliy_Wrapper2_x)
-      |}
-  else
-    Ok
-      {|
-        expandSimpliy_Wrapper2_b := false;
-        expandSimpliy_Wrapper2_x := x.(expandSimpliy_Wrapper2_x)
-      |}
+  if x.(expandSimpliy_Wrapper2_b) then Ok x else Ok x
 .
 
 End NoNestedBorrows.
