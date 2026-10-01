@@ -47,13 +47,6 @@ meta def esplitMatchAtSpecTac (h : Name) (names : Option (List (List (Option Nam
   TacticM (List (MVarId)) := do
   (← esplitMatchAtSpec h names).mapM fun (_, _, g) => pure g
 
-elab "spec_split": tactic => do setGoals (← esplitMatchAtSpecTac (← mkFreshUserName `h) (some []))
-elab "spec_split" "as" h:ident : tactic => do setGoals (← esplitMatchAtSpecTac h.getId (some []))
-
-example {α} (x : Option α) :
-  Std.WP.spec (match x with | none => .ok 0 | some _ => .ok 1) (fun _ => True) := by
-  spec_split <;> simp
-
 theorem dite_true: (dite True t e) = t (by simp) := by simp
 theorem dite_false : (dite False t e) = e (by simp) := by simp
 
@@ -154,6 +147,10 @@ meta def esplitAtSpecTac (h : Name) : TacticM (List MVarId) := do
 
 elab "spec_split": tactic => do setGoals (← esplitAtSpecTac (← mkFreshUserName `h))
 elab "spec_split" "as" h:ident : tactic => do setGoals (← esplitAtSpecTac h.getId)
+
+example {α} (x : Option α) :
+  Std.WP.spec (match x with | none => .ok 0 | some _ => .ok 1) (fun _ => True) := by
+  spec_split <;> simp
 
 namespace Bifurcation
 meta section
@@ -856,7 +853,7 @@ meta def parseArgs: TSyntax `Aeneas.StepStar.«step*_args» → TermElabM (Confi
       match fuel.raw.isNatLit? with
       | some fuel => pure fuel
       | none => throwUnsupportedSyntax
-  let stepConfig ← Step.elabPartialConfig config
+  let stepConfig ← Term.withoutErrToSorry <| Step.elabPartialConfig config
   -- TODO: find a simpler way of checking whether the syntax is empty
   let configSyntax := if (Aeneas.Meta.OptionConfig.decomposeOptConfig config).isEmpty then none else some config
   let preconditionTac ← do
