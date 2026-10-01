@@ -57,7 +57,7 @@ def bool_to_trait (b : Bool) : Result Bool := do
     Source: 'tests/src/dyn.rs', lines 23:0-29:1 -/
 def mk_trait (b : Bool) : Result (Dyn (fun _dyn => Trait _dyn)) := do
   if b
-  then ok (Dyn.mk _ Bool.Insts.DynTrait true)
+  then ok (Dyn.mk _ Bool.Insts.DynTrait b)
   else ok (Dyn.mk _ U32.Insts.DynTrait 0#u32)
 
 /-- Trait declaration: [dyn::Into]

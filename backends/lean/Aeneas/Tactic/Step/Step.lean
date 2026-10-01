@@ -64,10 +64,6 @@ meta def scalar_eqs := #[
   ``iscalar_isize_eq, ``iscalar_i8_eq, ``iscalar_i16_eq, ``iscalar_i32_eq, ``iscalar_i64_eq, ``iscalar_i128_eq
 ]
 
-/-- Note that `forall_const` is too general: it can eliminate unused outputs that we actually
-want to introduce in the context -/
-theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
-
 attribute [step_simps]
   bind_assoc Std.bind_tc_ok Std.bind_tc_vis Std.bind_tc_div
   Std.bind_assoc Std.bind_ok Std.bind_vis Std.bind_div
@@ -277,155 +273,15 @@ meta def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr × SpecInfo) := do
   | some (m, _) => pure (true, m, info)
   | none => pure (false, compTy, info)
 
-/-- Names introduced by the `do` elaborator's `mkPatContinuation` as a
-    fallback (`_xN`) when no leaf name is available — e.g. all leaves are
-    `_`. These get filtered out so we fall back to spec post-condition names. -/
-meta def Name.isElabSynthesized : Name → Bool
-  | .str .anonymous s => s.startsWith "_x" && s.length > 2 && (s.drop 2).all Char.isDigit
-  | _ => false
-
-/-- Convert an fvar's user name into the `Option Name` slot used by `step*`.
-    Returns `none` for macro-scoped names and `_xN` placeholders. -/
-meta def fvarNameSlot (fv : Expr) : MetaM (Option Name) := do
-  let n ← fv.fvarId!.getUserName
-  pure (if n.hasMacroScopes ∨ Name.isElabSynthesized n then none else some n)
-
-meta section
-/-- A generic binary tree with data at the leaves. Underlies `FVarTree` and `NameTree`. -/
-inductive BTree (α : Type) where
-  | leaf (val : α)
-  | pair (left right : BTree α)
-deriving Inhabited, Repr
-end
-
-/-- Flatten a `BTree` into a left-to-right array of leaf values. -/
-meta def BTree.flatten {α} : BTree α → Array α
-  | .leaf v => #[v]
-  | .pair l r => l.flatten ++ r.flatten
-
-/-- Monadic map over the leaf values of a `BTree`. -/
-meta def BTree.mapM {m} [Monad m] {α β} (f : α → m β) : BTree α → m (BTree β)
-  | .leaf v => return .leaf (← f v)
-  | .pair l r => return .pair (← l.mapM f) (← r.mapM f)
-
-/-- A tree of fvars reflecting the decomposition structure of a continuation's input.
-See `uncurryTelescope`. -/
-abbrev FVarTree := BTree Expr
-
-/-- A tree of binder names, obtained from an `FVarTree`. -/
-abbrev NameTree := BTree (Option Name)
-
-/-- Peel `uncurry`/`uncurry'`/lambda wrappers from a continuation expression,
-introducing fvars into the local context, and call `k` with the resulting
-`FVarTree` and remaining body. `k` receives `none` when no binder structure
-is found.
-
-See the examples and state descriptions below for the full specification.
-
-## States
-
-- **A** (`uncurryTelescope`): entry — dispatch on `uncurry`/`uncurry'`/lambda/other
-- **B** (`intoUncurry`): inside uncurry — peel up to 2 lambdas from `f`
-- **C** (`decomposeFVar`): check if an fvar is destructured by applied `uncurry` in body -/
-meta partial def uncurryTelescope (e : Expr) (k : Option FVarTree → Expr → MetaM α) : MetaM α := do
-  /- ## State A: Entry
-     - `e = uncurry f` or `e = uncurry' f`: go to B(f, ...).
-     - `e = fun x => body`: plain lambda, introduce fvar, call k.
-     - Otherwise: call k none e. -/
-  let e := e.consumeMData
-  match_expr e with
-  | Std.WP.uncurry' _ _ _ f =>
-    intoUncurry f.consumeMData (fun tree body => k (some tree) body)
-  | Std.uncurry _ _ _ f =>
-    intoUncurry f.consumeMData (fun tree body => k (some tree) body)
-  | _ =>
-    if e.isLambda then
-      Meta.lambdaBoundedTelescope e 1 fun args body => do
-        if args.size == 0 then return ← k none e
-        let x := args[0]!
-        let ty ← x.fvarId!.getType
-        if ty.isConstOf ``Unit || ty.isConstOf ``PUnit then
-          k none body
-        else
-          k (some (.leaf x)) body
-    else
-      k none e
-where
-  /- ## State B: Peel uncurry — enter the lambda telescope
-     Input: `f` is the function inside `uncurry`/`uncurry'`. After stripping,
-     `f` is one of:
-       | 2 | `fun a b => body`
-       | 3 | `fun x => uncurry' (fun y z => body)`
-       | 4 | `uncurry (fun a b c => body)`
-       | 5 | `fun a => uncurry (fun b c => body)`
-       | 6 | `fun _p c => (uncurry (fun a b => body)) _p`
-       | 7 | `fun _p₀ _p₁ => (uncurry (fun a b => (uncurry (fun c d => body)) _p₁)) _p₀`
-       | 8 | `fun _p d => (uncurry (fun _q c => (uncurry (fun a b => body)) _q)) _p`
-  -/
-  intoUncurry (f : Expr) (k : FVarTree → Expr → MetaM α) : MetaM α := do
-    let f := f.consumeMData
-    if f.isLambda then
-      Meta.lambdaBoundedTelescope f 2 fun args body => do
-        if args.size == 2 then
-          /- 2 lambdas (cases 2, 6, 7, 8): resolve each fvar via C. -/
-          decomposeFVar args[0]! body fun left body' =>
-            decomposeFVar args[1]! body' fun right body'' =>
-              k (.pair left right) body''
-        else if args.size == 1 then
-          /- 1 lambda (cases 3, 5): x₀ is the first element. The body starts
-             with uncurry'/uncurry (Lean didn't eta-expand). Go to A on body
-             to get the second subtree. -/
-          let x₀ := args[0]!
-          uncurryTelescope body fun optRight body' =>
-            match optRight with
-            | some right => k (.pair (.leaf x₀) right) body'
-            | none => k (.leaf x₀) body'
-        else
-          do k (.leaf (.fvar (← Lean.mkFreshFVarId))) f
-    else
-      /- No lambdas — must be a nested uncurry (case 4: `f = uncurry g`).
-         Go to A(f) to decompose the first element, then A(rest) for the
-         second element. -/
-      uncurryTelescope f fun optLeft rest =>
-        uncurryTelescope rest fun optRight body' =>
-          match optLeft, optRight with
-          | some left, some right => k (.pair left right) body'
-          | some left, none => k left body'
-          | none, some right => k right body'
-          | none, none => k (.leaf (.fvar default)) body'
-  /- ## State C: Decompose one fvar
-     Check if `x` is destructured by `uncurry g x` (5-arg applied uncurry)
-     in `body`. If so, strip `x`, go to A(uncurry g) to decompose it.
-     Otherwise return `leaf x`. -/
-  decomposeFVar (x : Expr) (body : Expr) (k : FVarTree → Expr → MetaM α) : MetaM α := do
-    let body := body.consumeMData
-    match_expr body with
-    | Std.uncurry _ _ _ _f arg =>
-      let arg := arg.consumeMData
-      if arg.isFVar && arg == x then
-        /- `body = uncurry g x`: strip x to get `uncurry g` (4-arg app).
-           Go to A to fully decompose. -/
-        let uncurryG := body.appFn!
-        uncurryTelescope uncurryG fun optTree body' =>
-          match optTree with
-          | some tree => k tree body'
-          | none => k (.leaf x) body'
-      else
-        k (.leaf x) body
-    | _ =>
-      k (.leaf x) body
-
-/-- Analyze a continuation expression to compute a `NameTree`.
-Wrapper around `uncurryTelescope` that extracts names from the `FVarTree`. -/
-meta def getContInput (e : Expr) : MetaM NameTree := do
-  uncurryTelescope e fun optTree _body => do
-    match optTree with
-    | some tree => tree.mapM fvarNameSlot
-    | none => return .leaf none
-
-/-- Extract names from a post-condition or bind-continuation expression. -/
+/-- Extract names from a post-condition or bind-continuation, omitting vars of type unit
+in the same order as `withOutputTuple`. -/
 meta def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
-  return (← getContInput e).flatten
+  uncurryTelescope e fun optTree _ => do
+    let some tree := optTree | return #[none]
+    tree.flatten.filterMapM fun fv => do
+      let ty ← withReducible <| whnf (← inferType fv)
+      if ty.isConstOf ``PUnit then return none
+      return some (← fvarNameSlot fv)
 
 /-- Extract the variable names from the bind continuation in the current goal.
     Returns an empty array if the goal is not a bind. -/
@@ -516,8 +372,8 @@ meta def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) :=
       pure mvar
 
 /-- Attempt to match a given theorem with the monadic call in the target.
-The resulting target should be of the shape:
-`qimp_spec P k Q` (or `qimp P Q`)
+The resulting target should be mono's or bind's premise:
+e.g. `∀ x, P₀ x → P₁ x` or `∀ x, P x → k x ⦃ Q ⦄`
 -/
 meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th : Expr) :
   TacticM (Array MVarId) := do
@@ -643,159 +499,37 @@ meta def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array E
   Utils.addDeclTac name e (← inferType e) (asLet := false) fun e => do
     trace[Step] "Introduced the \"pretty\" let binding: {← inferType e}"
 
-/-- Recursively destructure an introduced fvar of a Prod type according to the
-shape of a `BTree`. Returns the leaf fvars and the updated goal. The destructured FVars
-are named later in `introOutputs`.
-
-NOTE: We are using `cases` to break up the FVar which could be slow for nested
-goals or when the goal context gets large. Something to keep an eye on.
--/
-meta partial def destructureFVar {α} (goal : MVarId) (fv : FVarId) (tree : BTree α) :
-    TacticM (Array FVarId × MVarId) := do
-  match tree with
-  | .leaf _ => return (#[fv], goal)
-  | .pair l r =>
-    let subgoals ← goal.cases fv
-    if _ : subgoals.size = 1 then
-      let subgoal := subgoals[0]
-      let fields := subgoal.fields
-      if fields.size < 2 then
-        throwError "destructureFVar: cases on Prod produced {fields.size} fields, expected 2"
-      let leftFV := fields[0]!.fvarId!
-      let rightFV := fields[1]!.fvarId!
-      let (lFVs, g1) ← destructureFVar subgoal.mvarId leftFV l
-      let (rFVs, g2) ← destructureFVar g1 rightFV r
-      return (lFVs ++ rFVs, g2)
-    else
-      throwError "destructureFVar: cases on Prod returned {subgoals.size} subgoals, expected 1"
-
-/-- Introduce one universally-quantified output and destructure it according to
-the tree's shape. The destructured FVars are named later in `introOutputs`.
--/
-meta def introOneSurfaceBinder {α} (goal : MVarId) (tree : BTree α) :
-    TacticM (Array FVarId × MVarId) := do
-  let tmp ← mkFreshUserName `_x
-  let (fv, goal') ← goal.intro tmp
-  destructureFVar goal' fv tree
-
-/-- Extract the call-site destructure tree from the current goal, which should
-have shape `qimp_spec P k Q` or `qimp P Q`.
-
-Returns the bind continuation `k`'s tree (for `qimp_spec`) or the outer post
-`Q`'s tree (for `qimp`) -/
-meta def extractCallSiteTree (goalTy : Expr) : MetaM (Option NameTree) := do
-  match_expr goalTy.consumeMData with
-  | Std.WP.qimp_spec _ _ _ k _ => return some (← getContInput k)
-  | Std.WP.qimp _ _ Q => return some (← getContInput Q)
-  | _ => return none
-
-/-- Introduce the outputs (variables and postconditions) into the context after applying
-    the step theorem.
-
-    After application of the step theorem, the target should be of the shape:
-    `qimp_spec P k Q` (or `qimp P Q`)
-
-    We transform it to a target of the shape:
-    `∀ x, P' x → P₀ → ... → Pₘ → k ⦃ Q ⦄`
-
-    where the single output `x` is destructured according to the call-site
-    tree.
-
-    The post `(uncurry' f) x` left after `qimp_spec_iff` is reduced via `uncurry'_eq`
-    to `f x.fst x.snd` (or via `uncurry'_pair`/`uncurry_apply_pair` when `x` was destructured).
-
-    If a grind state is provided, it is updated with the newly introduced hypotheses so that
-    subsequent steps can reuse it.
--/
+/-- Prepare the output target using the registered callback, then introduce and name
+outputs and postconditions and record the updated step state. -/
 meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState : StepState) :
-  TacticM (Option MainGoal) := do
+    TacticM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"introOutputs") do
-  traceGoalWithNode "Initial goal"
-  /- Inspect the goal before simp to capture the call-site tree. The simp passes
-     below destroy this structure, so we must record it now. -/
-  let callSiteTree : NameTree ← do
-    let goal ← getMainGoal
-    let goalTy ← instantiateMVars (← goal.getType)
-    match (← extractCallSiteTree goalTy) with
-    | some tree =>
-      trace[Step] "call-site tree: {repr tree}"
-      pure tree
-    | none =>
-      trace[Step] "Could not extract qimp_spec/qimp from goal; falling back to a single leaf"
-      pure (.leaf none)
-
-  /- First simp pass handles Unit binders, existentials, and standard step simps. -/
-  let some _ ← withTraceNode `Step (fun _ => pure m!"simpAt: monadic/unit/exists preprocessing") do
-    Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
-            { simpThms := #[← stepSimpExt.getTheorems],
-              addSimpThms :=
-                info.uncurry_elim_tactics }
-            (.targets #[] true)
-    | trace[Step] "The main goal was solved!"; return none
-  traceGoalWithNode "goal after monadic preprocessing"
-
-  /- Eliminate `qimp_spec`/`qimp` to reveal a single `∀ x, imp (P x) (...)`.
-     `Std.WP.uncurry'_eq` rewrites the leftover `(uncurry' f) x` into the nicer
-     `f x.fst x.snd` form. `Std.uncurry_apply_pair` handles the case where `x`
-     is a literal pair. -/
-  let some _ ← withTraceNode `Step (fun _ => pure m!"simpAt: eliminating `qimp_spec` and `qimp`") do
-    Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
-            { addSimpThms := info.qimp_elim_tactics }
-            (.targets #[] true)
-    | trace[Step] "The main goal was solved!"; return none
-  traceGoalWithNode "goal after eliminating `qimp_spec`/`qimp`"
-
-  /- Eliminate `imp`
-
-  Some types get unfolded too much (e.g., `U32` sometimes gets unfolded to `U32) so we use this call
-  to `dsimp` to also fold them back. -/
-  withTraceNode `Step (fun _ => pure m!"dsimpAt: eliminating `imp` and folding back scalar types") do
-    Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
-      { declsToUnfold := #[``Std.WP.imp], addSimpThms := scalar_eqs } (.targets #[] true)
-  if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
-  traceGoalWithNode "goal after eliminating `imp` and folding back the scalar types"
-
-  /- Introduce the single output and recursively destructure it according to the
-     merged binder tree. We use a fresh internal name here and rename leaves to
-     user-provided names later. -/
-  let mut outputFVars : Array FVarId := #[]
+  withMainContext do
+  let prefixLength ← withoutRecover <| (← evalPrepareIntroOutputs info.prepare_intro_outputs)
+  if (← getUnsolvedGoals).isEmpty then
+    trace[Step] "Main goal solved by prepare_intro_outputs!"
+    return none
   let goal ← getMainGoal
-  let goalTy ← instantiateMVars (← goal.getType)
-  let goalTy := goalTy.consumeMData
-
-  -- There might be no quantifier if the function outputs `()`, in which case we
-  -- eliminate the `forall` quantifier (via `forall_unit`) when doing the simplification above.
-  if goalTy.isForall then
-    if ¬ (← isProp goalTy.bindingDomain!) then
-      let (fvs, goal') ← introOneSurfaceBinder goal callSiteTree
-      setGoals [goal']
-      outputFVars := fvs
-    else
-      trace[Step] "leading quantifier is a Prop — no output to introduce"
-  else
-    trace[Step] "no leading quantifier — skipping output introduction"
+  let (ctx, simprocs) ← Simp.mkSimpCtx true { iota := false } .dsimp
+    { addSimpThms := scalar_eqs }
+  let (target, _) ← Lean.Meta.dsimp (← goal.getType) ctx simprocs
+  let goal ← goal.replaceTargetDefEq target
+  let (outputFVars, next) ← goal.introN prefixLength
+  setGoals [next]
   traceGoalWithNode "goal after introducing the output"
 
-  /- After destructuring, any `uncurry`-applied pair patterns can now
-     reduce, exposing inner conjunctions and implications. We re-run
-     simp to flatten these. `uncurry_eq_prop` / `uncurry_eq_prop_arrow` /
-     `uncurry'_eq` rewrite remaining `uncurry` and `uncurry'`s that
-     eventually return `Prop` into `p x.fst x.snd`.
-
-     The `Prop` restriction keeps these from firing on bind continuations
-     elsewhere in the goal. -/
-  let _ ← withTraceNode `Step (fun _ => pure m!"simpAt: cleanup after destructure") do
+  /- Reduce `uncurry` applications exposed by the output tuple and flatten postconditions.
+     Restrict rewriting to Prop-valued applications so bind continuations stay intact.
+     Do not use `step_simps` here: reducing `spec (ok x) Q` would expose quantifiers
+     in the final goal and introduce them as if they were postconditions. -/
+  let _ ← withTraceNode `Step (fun _ => pure m!"simpAt: normalizing postconditions") do
     Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
-            { addSimpThms :=
-                #[``Std.uncurry_apply_pair,
+            { addSimpThms := #[``Std.uncurry_apply_pair,
                   ``Std.uncurry_eq_prop, ``Std.uncurry_eq_prop_arrow,
                   ``Std.WP.uncurry'_pair, ``Std.WP.uncurry'_eq,
-                  ``and_imp, ``exists_imp, ``forall_unit, ``true_imp_iff] ++ scalar_eqs }
+                  ``and_imp, ``exists_imp_named, ``forall_unit, ``true_imp_iff] ++ scalar_eqs }
             (.targets #[] true)
   if (← getUnsolvedGoals).isEmpty then trace[Step] "Main goal solved by cleanup simp!"; return none
-
-  /- The prefix length is the number of leaf fvars produced by destructuring the outputs. -/
-  let prefixLength := outputFVars.size
 
   let mkFreshAnon (isProp : Bool) :=
     if isProp then mkFreshAnonPropUserName else mkFreshUserName `x
@@ -819,7 +553,7 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
      the post-conditions and existential variables to introduce).
 
      We prefer user-provided names, and for non-Props we generate fresh names. For Props we
-     analyze the type of the hypothesis: if it is of the form `<id> <binrel> _` (or `_<binrel><id>`)
+     analyze the type of the hypothesis: if it is of the form `<id> <binrel> _` (or `_ <binrel> <id>`)
      then we prefer using `<id>_post<idx>`, so that each post-condition is named after the output
      it constrains. We compute the names here, while the binders' types are still at hand,
      and use them further below when actually introducing the binders. -/
@@ -852,7 +586,8 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
             mkFreshAnon tyIsProp
           else if ¬ tyIsProp then
             -- Generate a name for an existential variable
-            mkFreshUserName `x
+            let n ← fvars[i]!.fvarId!.getUserName
+            if n.isAnonymous || n.hasMacroScopes then mkFreshUserName `x else pure n
           else
             -- Generate a name for a post-condition
             let nameSpec :=
@@ -2066,11 +1801,11 @@ case a
 x : U32
 f : U32 → Result U32
 h : ∀ (x : U32), f x ⦃ y => ∃ z > 0, ↑y = ↑x + z ⦄
-y : ℕ
-z : U32
-_✝¹ : y > 0
-_✝ : ↑z = ↑x + y
-⊢ ↑z > ↑x
+y : U32
+z : ℕ
+_✝¹ : z > 0
+_✝ : ↑y = ↑x + z
+⊢ ↑y > ↑x
   -/
   #guard_msgs in
   example (x : U32) (f : U32 → Result U32) (h : ∀ x, f x ⦃ y => ∃ z, z > 0 ∧ y.val = x.val + z ⦄) :

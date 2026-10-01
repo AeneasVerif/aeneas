@@ -22,8 +22,9 @@ namespace join_duplicate
 /-- [join_duplicate::join_nested_shared]:
     Source: 'tests/src/join-duplicate.rs', lines 3:0-10:1 -/
 def join_nested_shared (b : Bool) : Result Unit := do
+  massert ((¬ b) || (1#i32 > 0#i32))
   if b
-  then massert (1#i32 > 0#i32)
+  then ok ()
   else massert (2#i32 > 0#i32)
 
 /-- [join_duplicate::join_nested_shared_in_loop]: loop body 0:

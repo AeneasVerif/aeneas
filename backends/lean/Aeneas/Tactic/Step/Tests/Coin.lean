@@ -103,8 +103,8 @@ theorem qimp_coinSpec_exists {α β γ} (P : γ → α → Prop) (k : α → ITr
   simp only [qimp_coinSpec, forall_exists_index]; grind
 
 def qimp_coinSpec_iff {α β} (P : α → Prop) (k : α → ITreeC β) (Q : β → Prop) :
-  qimp_coinSpec P k Q ↔ ∀ x, imp (P x) (coinSpec Q (k x)) := by
-  simp [qimp_coinSpec, imp]
+  qimp_coinSpec P k Q ↔ ∀ x, P x → coinSpec Q (k x) := by
+  simp [qimp_coinSpec]
 
 @[simp, grind =, agrind =]
 theorem coinSpec_ret {α p} (x : α) : coinSpec p (ITree.ret x) ↔ p x := by
@@ -123,6 +123,28 @@ theorem coinSpec_ret {α p} (x : α) : coinSpec p (ITree.ret x) ↔ p x := by
     apply coinSpec.ret
     assumption
 
+open Lean Meta Elab Tactic in
+meta def prepareIntroOutputs : PrepareIntroOutputs := do
+  withMainContext do
+  let goalTy := (← instantiateMVars (← getMainTarget)).consumeMData
+  let (type, tree) ← match_expr goalTy with
+    | qimp_coinSpec α _ P k Q =>
+      let type ← withLocalDeclD `x α fun x => do
+        let body ← mkAppM ``coinSpec #[Q, mkApp k x]
+        mkForallFVars #[x] (← mkArrow (mkApp P x) body)
+      pure (type, ← Step.getContInput k)
+    | _ =>
+      if goalTy.isForall then pure (goalTy, .leaf none)
+      else throwError "Expected qimp_coinSpec or a quantified mono premise, got:\n{goalTy}"
+  Step.prepareIntroOutputsWith type tree do
+    let _ ← Simp.simpAt true { failIfUnchanged := false, iota := false }
+      { simpThms := #[← Step.stepSimpExt.getTheorems],
+        addSimpThms := #[``qimp_coinSpec_iff,
+          ``Std.uncurry_apply_pair, ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
+          ``forall_unit, ``true_imp_iff,
+          ``Prod.forall, ``Step.forall_punit, ``and_imp, ``Step.exists_imp_named] }
+      (.targets #[] true)
+
 #register_spec_info {
   spec_name := ``coinSpec
   arity := 3
@@ -132,21 +154,7 @@ theorem coinSpec_ret {α p} (x : α) : coinSpec p (ITree.ret x) ↔ p x := by
   mk_spec_mono_skip_args := 2
   mk_spec_bind := ``coinSpec_bind
   mk_spec_bind_skip_args := 4
-  uncurry_elim_tactics := #[
-    ``qimp_coinSpec_unit,
-    ``Std.WP.qimp_unit,
-    ``qimp_coinSpec_exists,
-    ``Std.WP.qimp_exists,
-    ``forall_unit, ``true_imp_iff
-  ]
-  qimp_elim_tactics := #[
-    ``qimp_coinSpec_iff,
-    ``Std.WP.qimp_iff,
-    ``Std.WP.imp_and_iff, ``Std.uncurry_apply_pair,
-    ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
-    ``Std.WP.imp_exists_iff,
-    ``forall_unit, ``true_imp_iff
-  ]
+  prepare_intro_outputs := ``prepareIntroOutputs
   to_mvcgen := .none
   liftings := #[
     { from_statement := ``Std.WP.spec
@@ -159,5 +167,19 @@ instance : Monad ITreeC := instMonadITree
 instance {T} : Lean.Order.PartialOrder (ITreeC T) := instPartialOrderCoIndOfInhabitedPUnit _
 noncomputable instance {T} : Lean.Order.CCPO (ITreeC T) := instCCPOCoIndOfInhabitedPUnit _
 instance : MonoBind ITreeC := instMonoBindITree
+
+/- Exercise both reasoning about a terminal call and about a let-binding. -/
+example (n : Nat) (f : ITreeC Nat) (h : coinSpec (fun x => x = n) f) :
+    coinSpec (fun x => x = n) f := by
+  step with h as ⟨x, hx⟩
+  exact hx
+
+example (n : Nat) (f : ITreeC Nat) (g : Nat → ITreeC Nat)
+    (h : coinSpec (fun x => x = n) f)
+    (hg : ∀ x, coinSpec (fun y => y = x) (g x)) :
+    coinSpec (fun y => y = n) (do let x ← f; g x) := by
+  step with h as ⟨x, hx⟩
+  step with hg as ⟨y, hy⟩
+  exact hy.trans hx
 
 end Aeneas.Tactic.Step.Tests.Coin

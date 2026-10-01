@@ -66,9 +66,9 @@ def loop_access_array (k : Std.Usize) : Result Unit := do
 /-- [loops_issues::loop_array_len]: loop body 0:
     Source: 'tests/src/loops-issues.rs', lines 26:4-28:5 -/
 @[rust_loop_body]
-def loop_array_len_loop.body (b : Bool) : Result (ControlFlow Bool Unit) := do
+def loop_array_len_loop.body (b : Bool) : Result (ControlFlow Unit Unit) := do
   if b
-  then ok (cont true)
+  then ok (cont ())
   else ok (done ())
 
 /-- [loops_issues::loop_array_len]: loop 0:
@@ -76,8 +76,8 @@ def loop_array_len_loop.body (b : Bool) : Result (ControlFlow Bool Unit) := do
 @[rust_loop]
 def loop_array_len_loop (b : Bool) : Result Unit := do
   loop
-    (fun b1 => loop_array_len_loop.body b1)
-    b
+    (fun () => loop_array_len_loop.body b)
+    ()
 
 /-- [loops_issues::loop_array_len]:
     Source: 'tests/src/loops-issues.rs', lines 22:0-29:1 -/
@@ -90,14 +90,13 @@ def loop_array_len (b : Bool) : Result Unit := do
 @[rust_loop_body]
 def loop_array_len_write_loop.body
   (b0 : Bool) (b1 : Bool) (buf : Array Std.U8 4#usize) :
-  Result (ControlFlow (Bool × Bool × (Array Std.U8 4#usize)) Unit)
+  Result (ControlFlow (Array Std.U8 4#usize) Unit)
   := do
   if b0
-  then
-    if b1
-    then let buf1 ← write buf
-         ok (cont (true, true, buf1))
-    else ok (cont (true, false, buf))
+  then if b1
+       then let buf1 ← write buf
+            ok (cont buf1)
+       else ok (cont buf)
   else ok (done ())
 
 /-- [loops_issues::loop_array_len_write]: loop 0:
@@ -106,8 +105,8 @@ def loop_array_len_write_loop.body
 def loop_array_len_write_loop
   (b0 : Bool) (b1 : Bool) (buf : Array Std.U8 4#usize) : Result Unit := do
   loop
-    (fun (b01, b11, buf1) => loop_array_len_write_loop.body b01 b11 buf1)
-    (b0, b1, buf)
+    (fun buf1 => loop_array_len_write_loop.body b0 b1 buf1)
+    buf
 
 /-- [loops_issues::loop_array_len_write]:
     Source: 'tests/src/loops-issues.rs', lines 32:0-41:1 -/
@@ -123,9 +122,9 @@ def loop_array_len_write (b0 : Bool) (b1 : Bool) : Result Unit := do
     Source: 'tests/src/loops-issues.rs', lines 48:4-48:14 -/
 @[rust_loop_body]
 def read_global_loop_loop.body
-  (b : Bool) : Result (ControlFlow Bool Unit) := do
+  (b : Bool) : Result (ControlFlow Unit Unit) := do
   if b
-  then ok (cont true)
+  then ok (cont ())
   else ok (done ())
 
 /-- [loops_issues::read_global_loop]: loop 0:
@@ -133,8 +132,8 @@ def read_global_loop_loop.body
 @[rust_loop]
 def read_global_loop_loop (b : Bool) : Result Unit := do
   loop
-    (fun b1 => read_global_loop_loop.body b1)
-    b
+    (fun () => read_global_loop_loop.body b)
+    ()
 
 /-- [loops_issues::read_global_loop]:
     Source: 'tests/src/loops-issues.rs', lines 46:0-49:1 -/
@@ -146,15 +145,14 @@ def read_global_loop (b : Bool) (n_rows : Std.Usize) : Result Unit := do
     Source: 'tests/src/loops-issues.rs', lines 55:10-55:11 -/
 @[rust_loop_body]
 def mut_loop_len_loop.body
-  (buf : Array Std.U8 4#usize) (b : Bool) :
-  Result (ControlFlow Bool Unit)
+  (b : Bool) (buf : Array Std.U8 4#usize) :
+  Result (ControlFlow Unit Unit)
   := do
+  let s ← lift (Array.to_slice buf)
+  let i := Slice.len s
+  massert ((¬ b) || (0#usize <= i))
   if b
-  then
-    let s ← lift (Array.to_slice buf)
-    let i := Slice.len s
-    massert (0#usize <= i)
-    ok (cont true)
+  then ok (cont ())
   else ok (done ())
 
 /-- [loops_issues::mut_loop_len]: loop 0:
@@ -163,8 +161,8 @@ def mut_loop_len_loop.body
 def mut_loop_len_loop
   (b : Bool) (buf : Array Std.U8 4#usize) : Result Unit := do
   loop
-    (fun b1 => mut_loop_len_loop.body buf b1)
-    b
+    (fun () => mut_loop_len_loop.body b buf)
+    ()
 
 /-- [loops_issues::mut_loop_len]:
     Source: 'tests/src/loops-issues.rs', lines 52:0-58:1 -/
@@ -177,16 +175,15 @@ def mut_loop_len (i : Std.U32) (b : Bool) : Result Std.U32 := do
     Source: 'tests/src/loops-issues.rs', lines 65:4-71:5 -/
 @[rust_loop_body]
 def test_loop.body
-  (b1 : Bool) (b0 : Bool) (buf : Array Std.U8 4#usize) :
-  Result (ControlFlow (Bool × (Array Std.U8 4#usize)) Unit)
+  (b0 : Bool) (b1 : Bool) (buf : Array Std.U8 4#usize) :
+  Result (ControlFlow (Array Std.U8 4#usize) Unit)
   := do
   if b0
-  then
-    let buf1 ← if b1
-                 then write buf
-                 else ok buf
-    read buf1
-    ok (cont (true, buf1))
+  then let buf1 ← if b1
+                    then write buf
+                    else ok buf
+       read buf1
+       ok (cont buf1)
   else ok (done ())
 
 /-- [loops_issues::test]: loop 0:
@@ -195,8 +192,8 @@ def test_loop.body
 def test_loop
   (b0 : Bool) (b1 : Bool) (buf : Array Std.U8 4#usize) : Result Unit := do
   loop
-    (fun (b01, buf1) => test_loop.body b1 b01 buf1)
-    (b0, buf)
+    (fun buf1 => test_loop.body b0 b1 buf1)
+    buf
 
 /-- [loops_issues::test]:
     Source: 'tests/src/loops-issues.rs', lines 61:0-72:1 -/
@@ -218,31 +215,29 @@ def consume_u32 (eta : Std.U32) : Result Unit := do
     Source: 'tests/src/loops-issues.rs', lines 84:4-86:5 -/
 @[rust_loop_body]
 def loop_consume_u32_loop.body
-  (params : WrapperU32) (iter : core.ops.range.Range Std.I32) :
+  (x : Std.U32) (iter : core.ops.range.Range Std.I32) :
   Result (ControlFlow (core.ops.range.Range Std.I32) Unit)
   := do
   let (o, iter1) ←
     core.iter.range.IteratorRange.next core.iter.range.StepI32 iter
   match o with
   | none => ok (done ())
-  | some _ => consume_u32 params.x
+  | some _ => consume_u32 x
               ok (cont iter1)
 
 /-- [loops_issues::loop_consume_u32]: loop 0:
     Source: 'tests/src/loops-issues.rs', lines 84:4-86:5 -/
 @[rust_loop]
 def loop_consume_u32_loop
-  (params : WrapperU32) (iter : core.ops.range.Range Std.I32) :
-  Result Unit
-  := do
+  (iter : core.ops.range.Range Std.I32) (x : Std.U32) : Result Unit := do
   loop
-    (fun iter1 => loop_consume_u32_loop.body params iter1)
+    (fun iter1 => loop_consume_u32_loop.body x iter1)
     iter
 
 /-- [loops_issues::loop_consume_u32]:
     Source: 'tests/src/loops-issues.rs', lines 81:0-87:1 -/
 @[reducible]
 def loop_consume_u32 (params : WrapperU32) : Result Unit := do
-  loop_consume_u32_loop params { start := 0#i32, «end» := 32#i32 }
+  loop_consume_u32_loop { start := 0#i32, «end» := 32#i32 } params.x
 
 end loops_issues

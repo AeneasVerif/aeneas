@@ -725,8 +725,7 @@ let remove_useless_joins (crate : crate) (f : fun_decl) : fun_decl =
                 (can_inline, st :: ls)
             | BinaryOp _ | UnaryOp _ | Discriminant _ | Len _ | Repeat _ ->
                 (false, st :: ls))
-        | SetDiscriminant _ | Assert (_, _, _) | Call (_, _) | Error _ ->
-            (false, st :: ls)
+        | SetDiscriminant _ | Assert (_, _, _) | Call (_, _) -> (false, st :: ls)
         | _ ->
             [%craise] st.span
               ("unsupported statement: " ^ show_statement_kind st.kind))
@@ -1576,10 +1575,10 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
             | Assert ({ cond; expected; check_kind }, on_failure, on_unwind) ->
                 let cond = visitor#visit_operand mk_unit_ty cond in
                 Assert ({ cond; expected; check_kind }, on_failure, on_unwind)
-            | Call ({ func; args; dest }, on_unwind) ->
+            | Call (({ func; args; _ } as call), on_unwind) ->
                 let func = visitor#visit_fn_operand mk_unit_ty func in
                 let args = List.map (visitor#visit_operand mk_unit_ty) args in
-                Call ({ func; args; dest }, on_unwind)
+                Call ({ call with func; args }, on_unwind)
             | SetDiscriminant _ | StorageLive _ | StorageDead _ | PlaceMention _
             | Drop (_, _, _, _)
             | Abort _
@@ -1589,8 +1588,7 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
             | Continue _
             | Nop
             | Switch _
-            | Loop _
-            | Error _ -> st.kind
+            | Loop _ -> st.kind
             | _ ->
                 [%craise] st.span
                   ("unsupported statement: " ^ show_statement_kind st.kind)
