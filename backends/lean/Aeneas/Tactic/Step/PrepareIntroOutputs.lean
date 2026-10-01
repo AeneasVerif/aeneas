@@ -17,6 +17,8 @@ theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
 theorem forall_punit (p : PUnit.{u} → Prop) : (∀ x, p x) ↔ p PUnit.unit :=
   ⟨fun h => h _, fun h _ => h⟩
 
+/-- The same equivalence as `exists_imp`, with a `binderNameHint` so that `simp`
+preserves the existential binder's name when introducing the universal quantifier. -/
 theorem exists_imp_named {α : Sort u} {p : α → Prop} {b : Prop} :
     (Exists p → b) ↔ ∀ x, binderNameHint x p (p x → b) := exists_imp
 

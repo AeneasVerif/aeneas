@@ -677,20 +677,20 @@ example (x : Nat) :
     -- step as ⟨ y, z ⟩
     apply spec_bind
     . apply add2_spec
-    rintro ⟨y, z⟩ h
-    simp at h
+    simp only [Prod.forall, uncurry_apply_pair, and_imp]
+    intro y z h0 h1
     -- step as ⟨ y1, z1⟩
     apply spec_mono
     . apply add2_spec
-    rintro ⟨y1, z1⟩ h
-    simp at h
+    simp only [Prod.forall, uncurry_apply_pair, and_imp]
+    intro y1 z1 h2 h3
     grind
 
 theorem  add2_spec' (x : Nat) : add2 x ⦃ y z => y = x + 1 ∧ z = x + 2⦄ :=
   by simp [add2]
 
 /-- The same with separate binders: the post-condition is wrapped in the `uncurry'` marker,
-which is reduced by destructuring the output. -/
+which is reduced when rewriting the goal with separate output quantifiers. -/
 example (x : Nat) :
   (do
     let (y, _) ← add2 x
@@ -698,12 +698,13 @@ example (x : Nat) :
     -- step as ⟨ y, z ⟩
     apply spec_bind
     . apply add2_spec'
-    rintro ⟨y, z⟩ ⟨h, _⟩
+    simp only [Prod.forall, uncurry'_pair, and_imp]
+    intro y z h0 h1
     -- step as ⟨ y1, z1⟩
     apply spec_mono
     . apply add2_spec'
-    rintro ⟨y1, z1⟩ ⟨h1, _⟩
-    simp only [uncurry'_pair]
+    simp only [Prod.forall, uncurry'_pair, and_imp]
+    intro y1 z1 h2 h3
     grind
 
 private theorem massert_spec' (b : Prop) [Decidable b] (h : b) :
@@ -719,13 +720,12 @@ example :
   := by
   --
   apply spec_bind
-  · apply massert_spec'; omega
-  intro _ _
+  · apply massert_spec'; decide
+  simp only [forall_const]
   --
   apply spec_mono
-  · apply massert_spec'; omega
-  intro _ _
-  trivial
+  · apply massert_spec'; decide
+  simp only [forall_const]
 
 /- Example with a post-condition manipulating an ∃ -/
 example (zero : List Nat → Result (List Nat))
