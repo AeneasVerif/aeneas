@@ -8,6 +8,7 @@ public import Aeneas.Std.Scalar.CloneCopy
 public import Aeneas.Std.Scalar.EqOrd
 public import Aeneas.Std.Scalar.CheckedOps
 public import Aeneas.Std.Core.Core
+public import Aeneas.Std.Core.Ops
 public section
 
 @[expose] section
@@ -50,6 +51,12 @@ structure core.iter.adapters.take.Take (I : Type u) where
 @[rust_type "core::iter::adapters::rev::Rev"]
 structure core.iter.adapters.rev.Rev (T : Type u) where
   iter : T
+
+@[rust_type "core::iter::adapters::take_while::TakeWhile"]
+structure core.iter.adapters.take_while.TakeWhile (I : Type u) (P : Type u) where
+  iter : I
+  flag : Bool
+  predicate : P
 
 /-- `core::iter::adapters::zip::Zip` — the `a.zip(b)` adapter.
 
@@ -723,6 +730,20 @@ def core.iter.traits.iterator.Iterator.rev.trait_default
   Self → Result (core.iter.adapters.rev.Rev Self) :=
   core.iter.traits.iterator.Iterator.rev.default
 
+/-- `Iterator::take_while` default body: `TakeWhile { iter: self, flag: false, predicate }`. -/
+def core.iter.traits.iterator.Iterator.take_while.default
+  {Self P : Type} :
+  Self → P → Result (core.iter.adapters.take_while.TakeWhile Self P) :=
+  fun self predicate => ok ⟨self, false, predicate⟩
+
+@[trait_default, rust_fun "core::iter::traits::iterator::Iterator::take_while"]
+def core.iter.traits.iterator.Iterator.take_while.trait_default
+  {Self P Item : Type}
+  (_IteratorInst : core.iter.traits.iterator.Iterator Self Item)
+  (_PredInst : core.ops.function.FnMut P Item Bool) :
+  Self → P → Result (core.iter.adapters.take_while.TakeWhile Self P) :=
+  core.iter.traits.iterator.Iterator.take_while.default
+
 /-! ## `@[step]` specs for the default-method constructors -/
 
 @[step]
@@ -785,6 +806,25 @@ theorem core.iter.traits.iterator.Iterator.rev.default.spec
   simp [WP.spec_ok]
 
 @[step]
+theorem core.iter.traits.iterator.Iterator.take_while.default.spec
+    {Self P : Type} (self : Self) (predicate : P) :
+    core.iter.traits.iterator.Iterator.take_while.default self predicate
+    ⦃ t => t.iter = self ∧ t.flag = false ∧ t.predicate = predicate ⦄ := by
+  unfold core.iter.traits.iterator.Iterator.take_while.default
+  simp [WP.spec_ok]
+
+@[step]
+theorem core.iter.traits.iterator.Iterator.take_while.trait_default.spec
+    {Self P Item : Type}
+    (inst : core.iter.traits.iterator.Iterator Self Item)
+    (predInst : core.ops.function.FnMut P Item Bool)
+    (self : Self) (predicate : P) :
+    core.iter.traits.iterator.Iterator.take_while.trait_default inst predInst self predicate
+    ⦃ t => t.iter = self ∧ t.flag = false ∧ t.predicate = predicate ⦄ := by
+  unfold core.iter.traits.iterator.Iterator.take_while.trait_default
+  exact core.iter.traits.iterator.Iterator.take_while.default.spec self predicate
+
+@[step]
 theorem core.iter.traits.iterator.Iterator.rev.trait_default.spec
     {Self Item0 Item1 : Type}
     (inst : core.iter.traits.iterator.Iterator Self Item0)
@@ -819,6 +859,27 @@ theorem core.iter.traits.iterator.Iterator.zip.trait_default.spec
   unfold core.iter.traits.iterator.Iterator.zip.trait_default
   exact core.iter.traits.iterator.Iterator.zip.default.spec
     IntoIterInst.into_iter self other h_into
+
+/-- `Iterator::next` on `TakeWhile<I, P>`: yields until the predicate first fails,
+    then latches `flag` and yields nothing further. -/
+@[rust_fun
+  "core::iter::adapters::take_while::{core::iter::traits::iterator::Iterator<core::iter::adapters::take_while::TakeWhile<@I, @P>, @Clause0_Item>}::next"]
+def core.iter.adapters.take_while.TakeWhile.Insts.CoreIterTraitsIteratorIterator.next
+  {I P Item : Type}
+  (IterInst : core.iter.traits.iterator.Iterator I Item)
+  (PredInst : core.ops.function.FnMut P Item Bool) :
+  core.iter.adapters.take_while.TakeWhile I P →
+    Result ((Option Item) × core.iter.adapters.take_while.TakeWhile I P) :=
+  fun self =>
+    if self.flag then ok (none, self)
+    else do
+      let (o, it) ← IterInst.next self.iter
+      match o with
+      | none => ok (none, ⟨it, self.flag, self.predicate⟩)
+      | some x => do
+        let (b, p) ← PredInst.call_mut self.predicate x
+        if b then ok (some x, ⟨it, false, p⟩)
+        else ok (none, ⟨it, true, p⟩)
 
 /-- `Iterator::next` on `Rev<I>`: delegates to the inner `next_back`. -/
 @[rust_fun
