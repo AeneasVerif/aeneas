@@ -663,10 +663,10 @@ abbrev normalizationFinalGoal (n : Nat) : Prop := (True ∧ True) → ∀ k : Na
 
 run_cmd Lean.Elab.Command.liftTermElabM do
   let cases ← #[
-    (← `(∀ n : Nat, WP.imp (True ∧ True) (∀ k : Nat, True ∧ k = n)),
-     ← `(∀ n : Nat, WP.imp True (∀ k : Nat, True ∧ k = n))),
-    (← `(∀ _ : Nat, WP.imp (False ∧ True) (∀ _ : Nat, True ∧ True)),
-     ← `(∀ _ : Nat, WP.imp False (∀ _ : Nat, True ∧ True))),
+    (← `(∀ n : Nat, (True ∧ True) → (∀ k : Nat, True ∧ k = n)),
+     ← `(∀ n : Nat, True → (∀ k : Nat, True ∧ k = n))),
+    (← `(∀ _ : Nat, (False ∧ True) → (∀ _ : Nat, True ∧ True)),
+     ← `(∀ _ : Nat, False → (∀ _ : Nat, True ∧ True))),
     (← `(∀ n : Nat, (True ∧ n = 0) → (∀ k : Nat, True ∧ k = n)),
      ← `(∀ n : Nat, n = 0 → (∀ k : Nat, True ∧ k = n))),
     (← `(∀ n : Nat, normalizationFinalGoal n),
@@ -682,3 +682,144 @@ run_cmd Lean.Elab.Command.liftTermElabM do
     let target ← Aeneas.Step.simpOutputPost input
     unless target == expected do
       throwError "Unexpected normalized output target:\n{target}\nExpected:\n{expected}"
+
+def dup (n : Nat) : Result (Nat × Nat) := ok (n, n)
+
+def id' (n : Nat) : Result Nat := ok n
+
+@[local step]
+theorem id'_spec (n : Nat) : id' n ⦃ r => r = n ⦄ := by simp [id']
+
+def bundled (compute : Nat → Nat × Nat) (n : Nat) : Result (Nat × Nat) :=
+  ok (compute n)
+
+@[local step]
+theorem bundled_spec (compute : Nat → Nat × Nat) (n : Nat) :
+    bundled compute n ⦃ a b =>
+      let (x, y) := compute n
+      a = x ∧ b = y ⦄ := by
+  simp [bundled, Aeneas.Std.WP.uncurry']
+
+example (compute : Nat → Nat × Nat) (n : Nat) :
+    (do let (a, b) ← bundled compute n; ok (a, b)) ⦃ out => out = compute n ⦄ := by
+  step as ⟨a, b, h⟩
+  guard_hyp h : a = (compute n).1 ∧ b = (compute n).2
+  obtain ⟨ha, hb⟩ := h
+  exact Prod.ext ha hb
+
+/- Facts which become trivial after instantiation are kept. -/
+def conditional (bound : U32) : Result Bool := ok (bound.val = bound.val)
+
+@[local step]
+theorem conditional_spec (bound : U32) :
+    conditional bound ⦃ result => bound.val = 0 → result = true ⦄ := by
+  simp [conditional]
+
+example : conditional 0#u32 ⦃ result => result = true ⦄ := by
+  step as ⟨result, h⟩
+  guard_hyp h : True → result = true
+  exact h trivial
+
+/-! ### Leading existentials of a postcondition come after the outputs -/
+
+theorem dup_witness_spec (n : Nat) :
+    dup n ⦃ a b => ∃ (w : Bool) (k : Nat), a = n + k ∧ b = n ∧ w = (k == 0) ⦄ := by
+  simp [dup, Aeneas.Std.WP.uncurry']
+
+example (n : Nat) :
+    (do let (a, b) ← dup n; ok (a, b)) ⦃ _ b => b = n ⦄ := by
+  step with dup_witness_spec as ⟨a, b, w, k, ha, hb, hw⟩
+  guard_hyp a : Nat
+  guard_hyp b : Nat
+  guard_hyp w : Bool
+  guard_hyp k : Nat
+  guard_hyp ha : a = n + k
+  guard_hyp hb : b = n
+  guard_hyp hw : w = (k == 0)
+  exact hb
+
+example (f : Result (Nat × Nat × Nat))
+    (h : f ⦃ p =>
+      ∃ witness : Bool × Nat, p.1 = witness.1.toNat ∧ p.2.1 = witness.2 ∧ p.2.1 = p.2.2 ⦄) :
+    (do let (a, b, c) ← f; ok (a, b, c)) ⦃ _ b c => b = c ⦄ := by
+  let* ⟨a, b, c, witness, ha, hb, hbc⟩ ← h
+  guard_hyp witness : Bool × Nat
+  guard_hyp ha : a = witness.1.toNat
+  guard_hyp hb : b = witness.2
+  exact hbc
+
+example (f : Result Unit) (h : f ⦃ _ => ∃ witness : Nat, witness > 0 ⦄) :
+    f ⦃ _ => ∃ witness : Nat, witness > 0 ⦄ := by
+  let* ⟨witness, hw⟩ ← h
+  guard_hyp witness : Nat
+  guard_hyp hw : witness > 0
+  exact ⟨witness, hw⟩
+
+example (f : Result (Nat × Nat))
+    (h : f ⦃ p => ∃ witness : Bool, p.1 = witness.toNat ∧ p.1 = p.2 ⦄div) :
+    (do let (a, b) ← f; ok (a, b)) ⦃ a b => a = b ⦄div := by
+  let* ⟨a, b, witness, hw, hab⟩ ← h
+  guard_hyp witness : Bool
+  guard_hyp hw : a = witness.toNat
+  simpa using hab
+
+example (f : Result (List Nat)) (n : Nat)
+    (h : f ⦃ result => ∃ hlen : result.length = n, n = result.length ∧ hlen = hlen ⦄) :
+    f ⦃ result => result.length = n ⦄ := by
+  step with h as ⟨result, hlen, hlen'⟩
+  guard_hyp result : List Nat
+  guard_hyp hlen : result.length = n
+  guard_hyp hlen' : n = result.length
+  exact hlen
+
+/-! ### Facts about existential witnesses are named after the binder
+
+The facts about the witness of `∃ s, …` are named `s_post`, `s_post1`, ... -/
+
+theorem dup_nested_spec (n : Nat) :
+    dup n ⦃ a b => a = n ∧ ∃ s, s ≥ a ∧ s = a + b ∧ b = n ⦄ := by
+  simp [dup, Aeneas.Std.WP.uncurry']
+
+example (n : Nat) :
+    (do let (a, b) ← dup n; ok (a + b)) ⦃ r => r = n + n ⦄ := by
+  step with dup_nested_spec
+  guard_hyp s : Nat
+  guard_hyp s_post : s ≥ a
+  guard_hyp s_post1 : s = a + b
+  guard_hyp b_post : b = n
+  simp [a_post, b_post]
+
+/-! ### The facts and the postcondition of the goal are normalized
+
+Conjunctive and existential premises are curried, and `True` premises are dropped. -/
+
+theorem id'_curried_spec (n : Nat) : id' n ⦃ r => ∀ j, (_h : j ≤ r ∧ r ≤ j) → j = n ⦄ := by
+  simp only [id', WP.spec_ok]
+  intro j h
+  agrind
+
+example (n : Nat) : (do let r ← id' n; ok r) ⦃ r => r = n ⦄ := by
+  step with id'_curried_spec as ⟨r, h⟩
+  exact h r (Nat.le_refl r) (Nat.le_refl r)
+
+example (n : Nat) :
+    (do let r ← id' n; id' r)
+      ⦃ r => True → ∀ j, (_h : j ≤ r ∧ r ≤ j) → (∃ k, k + j = r) → j = n ⦄ := by
+  step
+  apply WP.spec_mono (id'_spec r)
+  intro r' hr' j h1 h2 k hk
+  guard_hyp h1 : j ≤ r'
+  guard_hyp h2 : r' ≤ j
+  guard_hyp hk : k + j = r'
+  agrind
+
+example (r : core.result.Result Never Nat) (e : Nat) (hr : r = .Err e) :
+    (do
+      let out ← core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
+        Unit (core.convert.FromSame Nat) r
+      ok (out, ()))
+      ⦃ status state =>
+        match status with
+        | .Ok _ => False
+        | .Err error => error = e ∧ state = () ⦄ := by
+  step*

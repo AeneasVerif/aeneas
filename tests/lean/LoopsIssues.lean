@@ -148,12 +148,11 @@ def mut_loop_len_loop.body
   (b : Bool) (buf : Array Std.U8 4#usize) :
   Result (ControlFlow Unit Unit)
   := do
+  let s ← lift (Array.to_slice buf)
+  let i := Slice.len s
+  massert ((¬ b) || (0#usize <= i))
   if b
-  then
-    let s ← lift (Array.to_slice buf)
-    let i := Slice.len s
-    massert (0#usize <= i)
-    ok (cont ())
+  then ok (cont ())
   else ok (done ())
 
 /-- [loops_issues::mut_loop_len]: loop 0:
