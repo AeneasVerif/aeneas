@@ -2003,15 +2003,22 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) ~(can_end : bool)
         | AEndedMutLoan
             { child = child_av; given_back = _; given_back_meta = _ }
         | AEndedIgnoredMutLoan
-            { child = child_av; given_back = _; given_back_meta = _ }
-        | AIgnoredSharedLoan child_av ->
+            { child = child_av; given_back = _; given_back_meta = _ } ->
             (* We don't support nested borrows for now *)
             [%cassert] span
               (not
                  (ty_has_borrows (Some span) ctx.type_ctx.type_infos child_av.ty))
               "Nested borrows are not supported yet";
             (* Simply explore the child *)
-            list_avalues 0 push_fail child_av)
+            list_avalues 0 push_fail child_av
+        | AIgnoredSharedLoan child_av ->
+            (* The shared loan is ignored (it belongs to another abstraction),
+               but its content may itself contain borrows or loans: this happens
+               with nested borrows below a shared borrow (e.g. an ignored shared
+               loan wrapping the inner shared loan of a [&&T] value). As
+               everything below a shared borrow is frozen, we explore the child
+               and keep the (frozen) borrows/loans it contains. *)
+            list_avalues allow_borrows push child_av)
     | ABorrow bc -> (
         (* Sanity check - rem.: may be redundant with [push_fail] *)
         [%sanity_check] span (allow_borrows > 0);
@@ -2043,11 +2050,15 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) ~(can_end : bool)
             list_avalues allow_borrows push_avalue child_av;
             list_avalues allow_borrows push_avalue given_back
         | AProjSharedBorrow asb ->
-            (* We don't support nested borrows *)
-            [%cassert] span (asb = [])
-              "Found a case of unsupported nested borrows";
-            (* Nothing specific to do *)
-            ()
+            if asb = [] then (* Nothing specific to do *)
+              ()
+            else
+              (* Nested borrows below a shared borrow: keep the projected shared
+                 reborrows as they are. They track the inner reborrows which were
+                 introduced when the shared borrow (whose shared value contains
+                 borrows) was projected. As everything below a shared borrow is
+                 frozen, there is nothing to destructure here. *)
+              push av
         | AEndedMutBorrow _ | AEndedSharedBorrow ->
             (* If we get there it means the abstraction ended: it should not
                be in the context anymore (if we end *one* borrow in an abstraction,
@@ -2107,16 +2118,21 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) ~(can_end : bool)
         *)
         ([], v)
     | VBorrow _ ->
-        (* We don't support nested borrows for now *)
-        [%craise] span "Unreachable"
+        (* Nested borrows below a shared borrow: the borrow is frozen, so we
+           keep it in place inside the shared value rather than lifting it into
+           a separate avalue. *)
+        ([], v)
     | VLoan lc -> (
         match lc with
         | VSharedLoan (bids, sv) ->
             let avl, sv = list_values sv in
-            if destructure_shared_values then (
+            (* We only lift the inner shared loan into a separate avalue when its
+               shared value doesn't contain borrows. Otherwise (nested borrows
+               below a shared borrow) we keep the shared loan in place: as
+               everything below a shared borrow is frozen, there is no need to
+               lift it. *)
+            if destructure_shared_values && ty_no_regions ty then
               (* Rem.: the shared value can't contain loans nor borrows *)
-              [%cassert] span (ty_no_regions ty)
-                "Nested borrows are not supported yet";
               let av : tavalue =
                 [%sanity_check] span
                   (not (value_has_loans_or_borrows (Some span) ctx sv.value));
@@ -2148,7 +2164,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) ~(can_end : bool)
                 { value; ty }
               in
               let avl = List.append [ av ] avl in
-              (avl, sv))
+              (avl, sv)
             else (avl, { v with value = VLoan (VSharedLoan (bids, sv)) })
         | VMutLoan _ -> [%craise] span "Unreachable")
     | VSymbolic _ ->
