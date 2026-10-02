@@ -46,6 +46,11 @@ structure SpecInfo where
   `a`, `b` and `c` into the context. -/
   prepare_intro_outputs : Name
 
+  /-- Tactic applied on mono's and bind's preconditions in `step`
+      and mono's and bind's final goals in `step*`.
+      If not solved, then the precondition/goal stay unchanged. -/
+  discharge_tactic : Option Name := none
+
   to_mvcgen: Option Name
 
   liftings : Array LiftingInfo
