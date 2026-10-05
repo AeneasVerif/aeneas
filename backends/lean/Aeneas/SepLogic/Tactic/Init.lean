@@ -1,5 +1,6 @@
 module
-public import Aeneas.SepLogic.Basic
+public import Aeneas.SepLogic.Lemmas
+public import Aeneas.SepLogic.Delab
 public import AeneasMeta.Simp
 public section
 

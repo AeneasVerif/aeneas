@@ -1,5 +1,6 @@
 module
 public import Aeneas.Std.Delab
+public import Aeneas.Std.RawPtrDef
 public import Aeneas.Std.Scalar.Core
 public import Aeneas.Std.Scalar.Notations
 public import Aeneas.Std.SliceDef
@@ -16,33 +17,7 @@ namespace Aeneas.Std
 
 open WP
 
-inductive Mutability where
-| Mut | Const
-
-/-- A Rust raw pointer: an allocation identifier and an offset into it. -/
-structure RawPtr (T : Type) (M : Mutability) where
-  base : AllocId
-  offset : Nat
-  deriving Inhabited, DecidableEq
-
-abbrev MutRawPtr (T : Type _) := RawPtr T .Mut
-abbrev ConstRawPtr (T : Type _) := RawPtr T .Const
-
 namespace RawPtr
-
-def ref (q : RawPtr T M) : Ref T := (q.base, q.offset)
-
-def add (q : RawPtr T M) (i : Nat) : RawPtr T M :=
-  ⟨q.base, q.offset + i⟩
-
-def sameBase (q₁ : RawPtr T M₁) (q₂ : RawPtr U M₂) : Prop :=
-  q₁.base = q₂.base
-
-def distance (q₁ : RawPtr T M₁) (q₂ : RawPtr U M₂) : Nat :=
-  q₂.offset - q₁.offset
-
-def toConst (q : MutRawPtr T) : ConstRawPtr T :=
-  ⟨q.base, q.offset⟩
 
 @[simp] theorem base_add (q : RawPtr T M) (i : Nat) :
     (q.add i).base = q.base := rfl
@@ -65,19 +40,7 @@ theorem add_add (q : RawPtr T M) (i j : Nat) :
     (q.add i).add j = q.add (i + j) := by
   simp [add, Nat.add_assoc]
 
-/-- `q` owns the `values.length` slots from `q` on. -/
-def pointsToRange (q : RawPtr T M) (values : List T) : IProp :=
-  owns (Heap.rangeHeap q.ref values)
-
-def pointsTo (q : RawPtr T M) (value : T) : IProp :=
-  Ref.pointsTo q.ref value
-
 end RawPtr
-
-instance instPointsToRawPtr {T : Type} {M : Mutability} :
-    PointsTo (RawPtr T M) T := ⟨RawPtr.pointsTo⟩
-
-notation:50 q:50 " ↦* " values:50 => RawPtr.pointsToRange q values
 
 theorem RawPtr.pointsTo_eq_ref (q : RawPtr T M) (value : T) :
     (q ↦ value) = Ref.pointsTo q.ref value := rfl
@@ -171,10 +134,6 @@ theorem disjoint_singleton {q r : RawPtr T M} {value₁ value₂ : T} (hNe : q �
 
 end RawPtr
 
-def RawPtr.allocArray {β : Type} (values : List T) (mk : Ref T → β) : Result β :=
-  Result.guardedModify (fun _ => True) fun h _ =>
-    (mk (Heap.freshRef T h), Heap.freshHeap h values)
-
 @[step]
 theorem RawPtr.allocArray.spec {β : Type} (values : List T) (mk : Ref T → β)
     (post : β → IProp)
@@ -194,17 +153,11 @@ theorem RawPtr.allocArray.spec {β : Type} (values : List T) (mk : Ref T → β)
     (PartialCommMonoid.union_assoc hFreshH hFreshFrame).symm,
     hPost _ _ (Heap.Sub.union_left hFreshH)⟩
 
-def RawPtr.materialize (values : List T) : Result (RawPtr T M) :=
-  RawPtr.allocArray values fun r => ⟨r.base, r.offset⟩
-
 @[step]
 theorem RawPtr.materialize.spec (values : List T) :
     ⦃ emp ⦄ RawPtr.materialize (M := M) values
       ⦃⇓ p => p ↦* values⦄ :=
   RawPtr.allocArray.spec _ _ _ fun _ => entails_refl _
-
-def MutRawPtr.alloc (value : T) : Result (MutRawPtr T) :=
-  RawPtr.allocArray [value] fun r => ⟨r.base, r.offset⟩
 
 @[step]
 theorem MutRawPtr.alloc.spec (value : T) :
@@ -215,16 +168,9 @@ theorem MutRawPtr.alloc.spec (value : T) :
 
 namespace RawPtr
 
-structure Readable (q : RawPtr T M) (h : Heap) : Prop where
-  contains : Heap.contains h q.ref
-
 theorem readable_of_pointsTo {q : RawPtr T M} {value : T} {h : Heap}
     (hPointsTo : (q ↦ value) h) : q.Readable h :=
   ⟨Heap.contains_of_sub hPointsTo⟩
-
-def read (q : RawPtr T M) : Result T :=
-  Result.guardedModify (fun h => q.Readable h) fun h hReadable =>
-    (Heap.read q.ref h hReadable.contains, h)
 
 @[step]
 theorem read.spec (q : RawPtr T M) (value : T) :
@@ -241,10 +187,6 @@ theorem read.spec (q : RawPtr T M) (value : T) :
     ⟨Heap.read_of_sub hPointsToFrame hReadable.contains, hPointsTo⟩
 
 end RawPtr
-
-def MutRawPtr.write (q : MutRawPtr T) (value : T) : Result Unit :=
-  Result.guardedModify (fun h => Heap.contains h q.ref) fun h hContains =>
-    ((), Heap.update q.ref value h hContains)
 
 @[step]
 theorem MutRawPtr.write.spec (q : MutRawPtr T) (oldValue newValue : T) :
@@ -270,10 +212,6 @@ theorem MutRawPtr.write.spec (q : MutRawPtr T) (oldValue newValue : T) :
       Subsingleton.elim _ _, Heap.update_union_left q.ref newValue hContainsSlot,
       Heap.update_singleton]
     exact Heap.Sub.union_left hCompatibleNew
-
-def MutRawPtr.free (q : MutRawPtr T) : Result Unit :=
-  Result.guardedModify (fun h => Heap.contains h q.ref) fun h hContains =>
-    ((), Heap.free q.ref h hContains)
 
 @[step]
 theorem MutRawPtr.free.spec (q : MutRawPtr T) (value : T) :
@@ -512,9 +450,6 @@ theorem RawPtr.compareRange.spec [DecidableEq T]
             simp only [List.cons.injEq, hxy, false_and]
             iframe
 
-def MutRawPtr.mut_to_raw (value : T) : Result (MutRawPtr T) :=
-  MutRawPtr.alloc value
-
 @[step]
 theorem MutRawPtr.mut_to_raw.spec (value : T) :
     ⦃ emp ⦄ MutRawPtr.mut_to_raw value ⦃⇓ q => q ↦ value⦄ :=
@@ -569,11 +504,6 @@ theorem MutRawPtr.takeRange.spec_of_length (q : MutRawPtr T)
   subst n
   exact MutRawPtr.takeRange.spec q values
 
-def MutRawPtr.end_mut_to_raw (q : MutRawPtr T) : Result T := do
-  let value ← q.read
-  MutRawPtr.free q
-  pure value
-
 @[step]
 theorem MutRawPtr.end_mut_to_raw.spec {value : T} (q : MutRawPtr T) :
     ⦃ q ↦ value ⦄ MutRawPtr.end_mut_to_raw q
@@ -589,16 +519,6 @@ theorem MutRawPtr.end_mut_to_raw.spec {value : T} (q : MutRawPtr T) :
     · intro _
       apply (ispec_ok _).2
       iframe
-
-inductive ScalarKind where
-| Signed (ty : IScalarTy)
-| Unsigned (ty : UScalarTy)
-
-class IsScalar (T : Type) where
-  isScalar : (∃ ty, T = UScalar ty) ∨ (∃ ty, T = IScalar ty)
-  size : Usize
-  toBytes : Slice T → Result (Slice U8)
-  fromBytes : Slice U8 → Result (Slice T)
 
 namespace IsScalar
 
@@ -661,12 +581,6 @@ theorem toBytes_u8 (s : Slice U8) : toBytes s = .ok s := rfl
 theorem fromBytes_u8 (s : Slice U8) : fromBytes (T := U8) s = .ok s := rfl
 
 end IsScalar
-
-/-- Unsupported: changing the element type requires reinterpreting the typed heap. -/
-def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability)
-    [IsScalar T] [IsScalar T'] (_ : RawPtr T M) :
-    Result (RawPtr T' M') :=
-  .fail .undef
 
 end Aeneas.Std
 

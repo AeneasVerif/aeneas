@@ -13,17 +13,7 @@ open WP
 
 variable {T : Type}
 
-/-- A bounded mutable view into a heap allocation, modelling `&mut [T]`. -/
-structure Buffer (T : Type) where
-  base : AllocId
-  offset : Nat
-  length : Nat
-  deriving Inhabited, DecidableEq
-
 namespace Buffer
-
-def ptr (b : Buffer T) : MutRawPtr T :=
-  ⟨b.base, b.offset⟩
 
 def ptrAt (b : Buffer T) (i : Nat) : MutRawPtr T :=
   ⟨b.base, b.offset + i⟩
@@ -36,16 +26,6 @@ def split (b : Buffer T) (i : Nat) : Buffer T × Buffer T :=
 
 def join (b₁ b₂ : Buffer T) : Buffer T :=
   ⟨b₁.base, b₁.offset, b₁.length + b₂.length⟩
-
-def pointsTo (b : Buffer T) (values : List T) : IProp :=
-  iprop(⌜values.length = b.length⌝ ∗ b.ptr ↦* values)
-
-end Buffer
-
-instance instPointsToBuffer {T : Type} :
-    PointsTo (Buffer T) (List T) := ⟨Buffer.pointsTo⟩
-
-namespace Buffer
 
 def alloc (n : Nat) (value : T) : Result (Buffer T) :=
   RawPtr.allocArray (List.replicate n value) fun r =>
