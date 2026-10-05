@@ -926,6 +926,9 @@ and translate_end_abs (ectx : C.eval_ctx) (abs : V.abs)
   | V.RawPtrView view ->
       [%cassert] ctx.span (abs_level = 0) "Unexpected";
       translate_end_raw_ptr_view ectx view e ctx
+  | V.RawPtrParked parked ->
+      [%cassert] ctx.span (abs_level = 0) "Unexpected";
+      translate_end_raw_ptr_parked ectx parked e ctx
 
 and check_can_perform_heap_op (ctx : bs_ctx) : unit =
   let effect_info = ctx_get_effect_info ctx in
@@ -939,10 +942,45 @@ and check_can_perform_heap_op (ctx : bs_ctx) : unit =
 and raw_ptr_view_elem_ty (ctx : bs_ctx) (view : V.raw_ptr_view)
     (original : texpr) : ty =
   match view.rpv_kind with
-  | RpvSlice -> (
-      match original.ty with
-      | TAdt (TBuiltin TSlice, { types = [ ty ]; _ }) -> ty
-      | _ -> [%internal_error] ctx.span)
+  | RpvSlice -> slice_elem_ty ctx original
+
+and slice_elem_ty (ctx : bs_ctx) (slice : texpr) : ty =
+  match slice.ty with
+  | TAdt (TBuiltin TSlice, { types = [ ty ]; _ }) -> ty
+  | _ -> [%internal_error] ctx.span
+
+and mk_raw_ptr_builtin_call (ctx : bs_ctx) (builtin : pure_builtin_fun_id)
+    (elem_ty : ty) (args : texpr list) (ret_ty : ty) : texpr =
+  let func =
+    {
+      id = FunOrOp (Fun (Pure builtin));
+      generics = mk_generic_args_from_types [ elem_ty ];
+    }
+  in
+  let func : texpr =
+    {
+      e = Qualif func;
+      ty =
+        mk_arrows
+          (List.map (fun (e : texpr) -> e.ty) args)
+          (mk_result_ty ret_ty);
+    }
+  in
+  [%add_loc] mk_apps ctx.span func args
+
+and translate_end_raw_ptr_parked (ectx : C.eval_ctx) (parked : V.raw_ptr_parked)
+    (e : S.expr) (ctx : bs_ctx) : texpr =
+  check_can_perform_heap_op ctx;
+  let slice = tvalue_to_texpr ctx ectx parked.rpp_slice in
+  let ptr = symbolic_value_to_texpr ctx parked.rpp_ptr in
+  let call =
+    mk_raw_ptr_builtin_call ctx FreeRawPtrOfSlice (slice_elem_ty ctx slice)
+      [ slice; ptr ] mk_unit_ty
+  in
+  let next_e = translate_expr e ctx in
+  [%add_loc] mk_closed_checked_let ctx true
+    (mk_ignored_pat mk_unit_ty)
+    call next_e
 
 and translate_end_raw_ptr_view (ectx : C.eval_ctx) (view : V.raw_ptr_view)
     (e : S.expr) (ctx : bs_ctx) : texpr =
@@ -961,21 +999,19 @@ and translate_end_raw_ptr_view (ectx : C.eval_ctx) (view : V.raw_ptr_view)
         [%sanity_check] ctx.span (not view.rpv_mut);
         (ctx, mk_ignored_pat mk_unit_ty)
   in
-  let func =
-    {
-      id = FunOrOp (Fun (Pure (EndRawPtrOfSlice mut)));
-      generics = mk_generic_args_from_types [ elem_ty ];
-    }
+  let builtin =
+    match view.rpv_origin with
+    | None -> Some (EndRawPtrOfSlice mut)
+    | Some _ -> if view.rpv_mut then Some SyncRawPtrOfSlice else None
   in
-  let func : texpr =
-    {
-      e = Qualif func;
-      ty = mk_arrows [ original.ty; ptr.ty ] (mk_result_ty pat.ty);
-    }
-  in
-  let call = [%add_loc] mk_apps ctx.span func [ original; ptr ] in
   let next_e = translate_expr e ctx in
-  [%add_loc] mk_closed_checked_let ctx true pat call next_e
+  match builtin with
+  | None -> next_e
+  | Some builtin ->
+      let call =
+        mk_raw_ptr_builtin_call ctx builtin elem_ty [ original; ptr ] pat.ty
+      in
+      [%add_loc] mk_closed_checked_let ctx true pat call next_e
 
 and translate_raw_ptr_write (ectx : C.eval_ctx) (ptr : V.tvalue) (v : V.tvalue)
     (e : S.expr) (ctx : bs_ctx) : texpr =
@@ -1758,9 +1794,10 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         let elem_ty = raw_ptr_view_elem_ty ctx view original in
         let mut = if view.rpv_mut then Mut else Const in
         let args =
-          match view.rpv_align with
-          | None -> [ original ]
-          | Some align ->
+          match (view.rpv_reuse, view.rpv_align) with
+          | Some ptr, _ -> [ symbolic_value_to_texpr ctx ptr; original ]
+          | None, None -> [ original ]
+          | None, Some align ->
               [
                 {
                   e = Const (VPureNat (Z.of_int align));
@@ -1770,9 +1807,10 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
               ]
         in
         let builtin =
-          match view.rpv_align with
-          | None -> RawPtrOfSlice mut
-          | Some _ -> RawPtrOfSliceAligned mut
+          match (view.rpv_reuse, view.rpv_align) with
+          | Some _, _ -> RawPtrOfSliceReuse mut
+          | None, None -> RawPtrOfSlice mut
+          | None, Some _ -> RawPtrOfSliceAligned mut
         in
         let func =
           {

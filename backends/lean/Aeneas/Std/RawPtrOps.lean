@@ -211,6 +211,53 @@ attribute [step_simps] core.ptr.read_unaligned core.ptr.const_ptr.RawPtrConstT.r
   core.ptr.mut_ptr.RawPtrMutT.read_unaligned core.ptr.write_unaligned
   core.ptr.mut_ptr.RawPtrMutT.write_unaligned
 
+/-! ## Distances between pointers -/
+
+/-- The distance from `origin` to `p`, in elements: undefined if the pointers
+are not in the same allocation, or if the distance in bytes is not a multiple of
+the size of the elements. -/
+def RawPtr.offsetFrom [ByteRepr T] {M M'} (p : RawPtr T M) (origin : RawPtr T M') :
+    Result Isize :=
+  let diff : Int := (p.offset : Int) - origin.offset
+  if p.base = origin.base ∧ 0 < ByteRepr.size T ∧ (ByteRepr.size T : Int) ∣ diff then
+    IScalar.tryMk .Isize (diff / ByteRepr.size T)
+  else fail .undef
+
+@[step]
+theorem RawPtr.offsetFrom.spec [ByteRepr T] {M M'} (p : RawPtr T M) (origin : RawPtr T M')
+    (k : Int) (hBase : p.base = origin.base) (hSize : 0 < ByteRepr.size T)
+    (hOffset : (p.offset : Int) = origin.offset + k * ByteRepr.size T)
+    (hk : IScalar.inBounds .Isize k) :
+    ⦃ emp ⦄ p.offsetFrom origin ⦃⇓ r => ⌜r.val = k⌝⦄ := by
+  unfold RawPtr.offsetFrom
+  have hDiff : (p.offset : Int) - origin.offset = k * ByteRepr.size T := by omega
+  have hDvd : (ByteRepr.size T : Int) ∣ (p.offset : Int) - origin.offset :=
+    ⟨k, by rw [hDiff, Int.mul_comm]⟩
+  have hDiv : ((p.offset : Int) - origin.offset) / ByteRepr.size T = k := by
+    rw [hDiff]; exact Int.mul_ediv_cancel _ (by omega)
+  simp only [hBase, hSize, hDvd, and_self, ↓reduceIte, hDiv]
+  have h := IScalar.tryMkOpt_eq .Isize k
+  unfold IScalar.tryMk
+  split at h
+  · rename_i y hy
+    rw [hy]
+    apply (ispec_ok _).2
+    exact (entails_emp_ipure_iff _).mpr h.1
+  · exact absurd hk h
+
+@[rust_fun "core::ptr::const_ptr::{*const @T}::offset_from"]
+def core.ptr.const_ptr.RawPtrConstT.offset_from [ByteRepr T] (p origin : ConstRawPtr T) :
+    Result Isize :=
+  p.offsetFrom origin
+
+@[rust_fun "core::ptr::mut_ptr::{*mut @T}::offset_from"]
+def core.ptr.mut_ptr.RawPtrMutT.offset_from [ByteRepr T] (p : MutRawPtr T)
+    (origin : ConstRawPtr T) : Result Isize :=
+  p.offsetFrom origin
+
+attribute [step_simps] core.ptr.const_ptr.RawPtrConstT.offset_from
+  core.ptr.mut_ptr.RawPtrMutT.offset_from
+
 /-! ## Filling memory -/
 
 /-- Set `count * size_of::<T>()` bytes to `val`, from `p` on. -/

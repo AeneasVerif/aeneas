@@ -589,7 +589,7 @@ let env_has_raw_ptr_views (env : env) : bool =
   env_iter_abs
     (fun abs ->
       match abs.kind with
-      | RawPtrView _ -> found := true
+      | RawPtrView _ | RawPtrParked _ -> found := true
       | _ -> ())
     env;
   !found

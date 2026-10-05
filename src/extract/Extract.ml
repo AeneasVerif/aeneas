@@ -1053,6 +1053,9 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
               ( RawPtrOfSlice _
               | RawPtrOfSliceAligned _
               | EndRawPtrOfSlice _
+              | RawPtrOfSliceReuse _
+              | SyncRawPtrOfSlice
+              | FreeRawPtrOfSlice
               | RawPtrRead
               | RawPtrWrite ) ->
               Some

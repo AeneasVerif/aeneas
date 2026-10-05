@@ -208,6 +208,9 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
           | RawPtrOfSlice _
           | RawPtrOfSliceAligned _
           | EndRawPtrOfSlice _
+          | RawPtrOfSliceReuse _
+          | SyncRawPtrOfSlice
+          | FreeRawPtrOfSlice
           | RawPtrRead
           | RawPtrWrite -> (f.ty, mk_known (), false)
           | GetTarget -> (f.ty, mk_known (), false)

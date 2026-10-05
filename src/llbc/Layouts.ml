@@ -11,6 +11,12 @@ open LlbcAst
     anymore when we evaluate the calls. *)
 let view_alignment_hints : (Meta.span, int) Hashtbl.t = Hashtbl.create 16
 
+(** The places some calls to [as_ptr] and [as_mut_ptr] convert to raw pointers,
+    when the same place is converted several times in the same function: those
+    raw pointers share the same allocation (see [PrePasses.compute_view_hints]).
+*)
+let view_origin_hints : (Meta.span, string) Hashtbl.t = Hashtbl.create 16
+
 let size_expr_constant (e : size_expr) : int option =
   match e with
   | SizeExprConstant { kind = CInteger (UnsignedInteger (_, v)); _ } ->

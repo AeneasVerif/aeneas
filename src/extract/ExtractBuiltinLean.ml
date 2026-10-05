@@ -1057,6 +1057,9 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 38 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::offset"
       "core.ptr.const_ptr.RawPtrConstT.offset";
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 248 *)
+    mk_fun "core::ptr::const_ptr::{*const @T}::offset_from"
+      "core.ptr.const_ptr.RawPtrConstT.offset_from";
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 193 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::read_unaligned"
       "core.ptr.const_ptr.RawPtrConstT.read_unaligned";
@@ -1076,13 +1079,16 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 34 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::offset"
       "core.ptr.mut_ptr.RawPtrMutT.offset";
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 253 *)
+    mk_fun "core::ptr::mut_ptr::{*mut @T}::offset_from"
+      "core.ptr.mut_ptr.RawPtrMutT.offset_from";
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 197 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::read_unaligned"
       "core.ptr.mut_ptr.RawPtrMutT.read_unaligned";
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 26 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::sub"
       "core.ptr.mut_ptr.RawPtrMutT.sub";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 235 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 282 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::write_bytes"
       "core.ptr.mut_ptr.RawPtrMutT.write_bytes";
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 205 *)
@@ -1090,7 +1096,7 @@ let lean_builtin_funs =
       "core.ptr.mut_ptr.RawPtrMutT.write_unaligned";
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 190 *)
     mk_fun "core::ptr::read_unaligned" "core.ptr.read_unaligned";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 230 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 277 *)
     mk_fun "core::ptr::write_bytes" "core.ptr.write_bytes";
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 201 *)
     mk_fun "core::ptr::write_unaligned" "core.ptr.write_unaligned";
@@ -1304,9 +1310,9 @@ let lean_builtin_funs =
     mk_fun
       "core::slice::iter::{core::slice::iter::ChunksExact<'a, @T>}::remainder"
       "core.slice.iter.ChunksExact.getRemainder";
-    (* file: "Aeneas/Std/Buffer.lean", line: 545 *)
+    (* file: "Aeneas/Std/Buffer.lean", line: 630 *)
     mk_fun "core::slice::raw::from_raw_parts" "core.slice.raw.from_raw_parts";
-    (* file: "Aeneas/Std/Buffer.lean", line: 560 *)
+    (* file: "Aeneas/Std/Buffer.lean", line: 645 *)
     mk_fun "core::slice::raw::from_raw_parts_mut"
       "core.slice.raw.from_raw_parts_mut";
     (* file: "Aeneas/Std/Slice.lean", line: 77 *)

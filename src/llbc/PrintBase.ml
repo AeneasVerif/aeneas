@@ -839,6 +839,7 @@ module Values = struct
         ^ ", mut:"
         ^ string_of_bool view.rpv_mut
         ^ ")"
+    | RawPtrParked parked -> "RawPtrParked(" ^ parked.rpp_origin ^ ")"
 
   let abs_cont_to_string ?(span : Meta.span option = None) (env : fmt_env)
       ?(with_ended : bool = false) (indent : string) (indent_incr : string)

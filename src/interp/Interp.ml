@@ -448,6 +448,7 @@ let rec end_dead_borrows_and_abs (config : config) (span : Meta.span) : cm_fun =
                         (InterpBorrowsCore.get_first_non_ignored_aloan_in_abs
                            span abs 0 (-1))
                    && has_ended_loans abs -> Some abs.abs_id
+            | RawPtrParked _ -> Some abs.abs_id
             | _ -> None)
           ctx.env
       in
@@ -607,6 +608,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
      backward function of a region group which has no parent region groups \
      (otherwise the heap operations would be performed several times)";
   let ctx, cc = comp cc (end_abs config span current_abs_id 0 ctx) in
+  let ctx, cc = comp cc (InterpBorrows.end_raw_ptr_parked config span ctx) in
   (* Generate the Return node *)
   let return_expr = SA.Return (ctx, None) in
   (* Apply *)

@@ -269,8 +269,27 @@ type raw_ptr_view = {
           [Layouts.view_alignment_hints]) *)
   rpv_dirty : bool;
   rpv_given_back : msymbolic_value option;
+  rpv_origin : string option;
+      (** If the converted place is converted to raw pointers several times in
+          the function: when the view ends, we keep its memory so that the other
+          raw pointers can share it (see [RawPtrParked]) *)
+  rpv_reuse : msymbolic_value option;
+      (** The raw pointer whose memory is reused for this view *)
 }
 [@@deriving show, ord]
+
+(** The memory of a raw pointer view which ended, but which may be reused by a
+    later view of the same place (see [raw_ptr_view.rpv_origin]). Ending the
+    corresponding abstraction frees the memory. *)
+type raw_ptr_parked = {
+  rpp_origin : string;
+  rpp_ptr : msymbolic_value;
+  rpp_slice : mvalue;  (** The last value of the slice *)
+}
+[@@deriving show, ord]
+
+let equal_raw_ptr_parked (x : raw_ptr_parked) (y : raw_ptr_parked) =
+  x.rpp_ptr.sv_id = y.rpp_ptr.sv_id
 
 let equal_raw_ptr_view (x : raw_ptr_view) (y : raw_ptr_view) =
   x.rpv_loan = y.rpv_loan
@@ -317,6 +336,7 @@ type abs_kind =
       (** The abstraction was introduced after joining contexts, typically after
           an [if then else] or a [match] *)
   | RawPtrView of raw_ptr_view
+  | RawPtrParked of raw_ptr_parked
 [@@deriving show, eq, ord]
 
 module AbsBVarId = IdGen ()

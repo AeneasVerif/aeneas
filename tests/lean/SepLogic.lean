@@ -3,6 +3,7 @@ import SepLogic.Choice
 import SepLogic.CurryIntroQimp
 import SepLogic.ExtractedCasts
 import SepLogic.ExtractedLayouts
+import SepLogic.ExtractedOffsets
 import SepLogic.Fixtures
 import SepLogic.Partial
 import SepLogic.PureSpec

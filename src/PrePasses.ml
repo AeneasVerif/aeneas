@@ -2345,11 +2345,13 @@ let fix_closure_signature_regions (crate : crate) (f : fun_decl) : fun_decl =
       else f
   | _ -> f
 
-(** Record the alignment of the places converted to raw pointers with
-    [place.as_slice().as_ptr()] (or [as_mut_slice]/[as_mut_ptr]), when it is
-    larger than the alignment of the elements: see
-    [Layouts.view_alignment_hints]. *)
-let compute_view_alignment_hints (crate : crate) (f : fun_decl) : fun_decl =
+(** Record information about the places converted to raw pointers with
+    [place.as_ptr()] or [place.as_slice().as_ptr()] (or the [mut] variants):
+    - their alignment, when it is larger than the alignment of the elements (see
+      [Layouts.view_alignment_hints])
+    - the places which are converted several times in the same function (see
+      [Layouts.view_origin_hints]) *)
+let compute_view_hints (crate : crate) (f : fun_decl) : fun_decl =
   match (f.body, Layouts.target_ptr_size crate) with
   | StructuredBody body, Some ptr_size ->
       let matches (pat : string) (fid : FunDeclId.id) : bool =
@@ -2379,6 +2381,16 @@ let compute_view_alignment_hints (crate : crate) (f : fun_decl) : fun_decl =
             Some id
         | _ -> None
       in
+      let fmt_env = Charon.Print.crate_to_fmt_env crate in
+      let origins : (Meta.span * string) list ref = ref [] in
+      let record_origin (span : Meta.span) (place : place) =
+        let key =
+          FunDeclId.to_string f.def_id
+          ^ ":"
+          ^ Charon.Print.place_to_string fmt_env place
+        in
+        origins := (span, key) :: !origins
+      in
       let visit_statements (sts : statement list) : unit =
         let refs = ref LocalId.Map.empty in
         let slices = ref LocalId.Map.empty in
@@ -2397,8 +2409,11 @@ let compute_view_alignment_hints (crate : crate) (f : fun_decl) : fun_decl =
                     | _ -> ())
                 | Some fid, [ arg ], _ when is_as_ptr fid -> (
                     match local_of_operand arg with
+                    | Some t when LocalId.Map.mem t !refs ->
+                        record_origin st.span (LocalId.Map.find t !refs)
                     | Some u when LocalId.Map.mem u !slices -> (
                         let place = LocalId.Map.find u !slices in
+                        record_origin st.span place;
                         let elem_align =
                           match place.ty with
                           | TArray (ty, _, _) ->
@@ -2427,6 +2442,12 @@ let compute_view_alignment_hints (crate : crate) (f : fun_decl) : fun_decl =
         end
       in
       visitor#visit_block () body.body;
+      (* Record the places which are converted several times *)
+      List.iter
+        (fun (span, key) ->
+          if List.length (List.filter (fun (_, k) -> k = key) !origins) > 1 then
+            Hashtbl.replace Layouts.view_origin_hints span key)
+        !origins;
       f
   | _ -> f
 
@@ -2448,7 +2469,7 @@ let apply_passes (crate : crate) : crate =
       ("simplify_panics", simplify_panics);
       ("decompose_global_accesses", decompose_global_accesses);
       ("refresh_statement_ids", refresh_statement_ids);
-      ("compute_view_alignment_hints", compute_view_alignment_hints);
+      ("compute_view_hints", compute_view_hints);
     ]
   in
   (* Attempt to apply a pass: if it fails we replace the body by [None] *)

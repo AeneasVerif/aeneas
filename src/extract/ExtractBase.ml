@@ -1262,6 +1262,10 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (RawPtrOfSliceAligned Const, "Slice.as_ptr_aligned");
         (EndRawPtrOfSlice Mut, "Slice.end_as_mut_ptr");
         (EndRawPtrOfSlice Const, "Slice.end_as_ptr");
+        (RawPtrOfSliceReuse Mut, "Slice.as_mut_ptr_reuse");
+        (RawPtrOfSliceReuse Const, "Slice.as_ptr_reuse");
+        (SyncRawPtrOfSlice, "Slice.sync_as_mut_ptr");
+        (FreeRawPtrOfSlice, "Slice.free_as_ptr");
         (RawPtrRead, "RawPtr.read");
         (RawPtrWrite, "MutRawPtr.write");
         (GetTarget, "get_target");

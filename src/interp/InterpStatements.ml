@@ -832,14 +832,21 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
       else ([], cf_empty __FILE__ __LINE__ st.span SA.Panic)
   | Return -> ([ (ctx, Return) ], cf_singleton __FILE__ __LINE__ st.span)
   | UnwindResume -> [%craise] st.span "unwinding is not supported by Aeneas"
-  | Break i -> ([ (ctx, Break i) ], cf_singleton __FILE__ __LINE__ st.span)
-  | Continue i -> ([ (ctx, Continue i) ], cf_singleton __FILE__ __LINE__ st.span)
+  | Break i ->
+      let ctx, cc = InterpBorrows.end_raw_ptr_parked config st.span ctx in
+      ([ (ctx, Break i) ], cc_singleton __FILE__ __LINE__ st.span cc)
+  | Continue i ->
+      let ctx, cc = InterpBorrows.end_raw_ptr_parked config st.span ctx in
+      ([ (ctx, Continue i) ], cc_singleton __FILE__ __LINE__ st.span cc)
   | StorageLive _ | Nop ->
       ([ (ctx, Unit) ], cf_singleton __FILE__ __LINE__ st.span)
   | Loop loop_body ->
+      let ctx, cc = InterpBorrows.end_raw_ptr_parked config st.span ctx in
       let eval_loop_body = eval_block config loop_body in
-      InterpLoops.eval_loop config st.span eval_loop_body ctx
-  | Switch (data, branches) -> eval_switch config st.span data branches ctx
+      comp cc (InterpLoops.eval_loop config st.span eval_loop_body ctx)
+  | Switch (data, branches) ->
+      let ctx, cc = InterpBorrows.end_raw_ptr_parked config st.span ctx in
+      comp cc (eval_switch config st.span data branches ctx)
   | _ ->
       [%craise] st.span ("unsupported statement: " ^ show_statement_kind st.kind)
 
@@ -1385,6 +1392,34 @@ and eval_raw_ptr_view_creation (config : config) (span : Meta.span)
          which have a byte representation (integers, and arrays and structures \
          of those)");
   let ptr_sv = mk_fresh_symbolic_value span ctx call.dest.ty in
+  let rpv_origin = Hashtbl.find_opt Layouts.view_origin_hints span in
+  (* Reuse the memory of a previous view of the same place, if there is one *)
+  let rpv_reuse, ctx =
+    let parked =
+      match rpv_origin with
+      | None -> None
+      | Some origin ->
+          List.find_map
+            (fun (e : env_elem) ->
+              match e with
+              | EAbs { abs_id; kind = RawPtrParked parked; _ }
+                when parked.rpp_origin = origin -> Some (abs_id, parked)
+              | _ -> None)
+            ctx.env
+    in
+    match parked with
+    | None -> (None, ctx)
+    | Some (abs_id, parked) ->
+        let env =
+          List.filter
+            (fun (e : env_elem) ->
+              match e with
+              | EAbs abs -> abs.abs_id <> abs_id
+              | _ -> true)
+            ctx.env
+        in
+        (Some parked.rpp_ptr, { ctx with env })
+  in
   let view : raw_ptr_view =
     {
       rpv_kind = RpvSlice;
@@ -1395,6 +1430,8 @@ and eval_raw_ptr_view_creation (config : config) (span : Meta.span)
       rpv_align = Hashtbl.find_opt Layouts.view_alignment_hints span;
       rpv_dirty = false;
       rpv_given_back = None;
+      rpv_origin;
+      rpv_reuse;
     }
   in
   let rid = ctx.fresh_region_id () in

@@ -140,6 +140,12 @@ type pure_builtin_fun_id =
       (** Same as [RawPtrOfSlice], but the memory is aligned to the value given
           as first argument *)
   | EndRawPtrOfSlice of mutability
+  | RawPtrOfSliceReuse of mutability
+      (** Same as [RawPtrOfSlice], but reuses the memory of the raw pointer
+          given as first argument *)
+  | SyncRawPtrOfSlice
+      (** Same as [EndRawPtrOfSlice Mut], but doesn't free the memory *)
+  | FreeRawPtrOfSlice
   | RawPtrRead
   | RawPtrWrite
   | ResultUnwrapMut

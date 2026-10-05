@@ -30,6 +30,9 @@ val end_abs :
 val end_abs_set :
   config -> Meta.span -> ?snapshots:bool -> AbsIdWithLevelSet.t -> cm_fun
 
+(** End the parked raw pointer views, freeing their memory *)
+val end_raw_ptr_parked : config -> Meta.span -> cm_fun
+
 (** End a borrow and return the resulting environment, ignoring synthesis *)
 val end_borrow_no_synth :
   config ->

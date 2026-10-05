@@ -1248,6 +1248,7 @@ and end_abs_aux (config : config) (span : Meta.span) ~(snapshots : bool)
       in
 
       let ctx = end_raw_ptr_view_update span abs_id ctx in
+      let parked = raw_ptr_view_parked abs_id ctx in
 
       (* Synthesize the symbolic expression to save the fact that we ended a (sub-)
          abstraction.
@@ -1255,6 +1256,24 @@ and end_abs_aux (config : config) (span : Meta.span) ~(snapshots : bool)
          If the sub-abstraction is at level 0, we remove the abstraction from the
          context all-together. *)
       let ctx, cc = comp cc (end_abs_synthesize config span abs_id level ctx) in
+      let ctx =
+        match parked with
+        | None -> ctx
+        | Some parked ->
+            let abs =
+              {
+                abs_id = ctx.fresh_abs_id ();
+                kind = RawPtrParked parked;
+                can_end = true;
+                parents = AbsId.Set.empty;
+                regions = { owned = RegionId.Set.empty };
+                ended_subabs = AbsLevelSet.empty;
+                avalues = [];
+                cont = None;
+              }
+            in
+            { ctx with env = EAbs abs :: ctx.env }
+      in
 
       (* Debugging *)
       [%ltrace
@@ -1537,6 +1556,21 @@ and end_abs_borrows (config : config) (span : Meta.span) ~(snapshots : bool)
       (* Reexplore *)
       end_abs_borrows config span ~snapshots chain abs_id level ctx
 
+(** If the abstraction is a raw pointer view whose memory should be kept when it
+    ends, return the information to park it (see [raw_ptr_view.rpv_origin]) *)
+and raw_ptr_view_parked (abs_id : AbsId.id) (ctx : eval_ctx) :
+    raw_ptr_parked option =
+  match (ctx_lookup_abs ctx abs_id).kind with
+  | RawPtrView
+      { rpv_origin = Some origin; rpv_ptr; rpv_original; rpv_given_back; _ } ->
+      let rpp_slice =
+        match rpv_given_back with
+        | Some sv -> mk_tvalue_from_symbolic_value sv
+        | None -> rpv_original
+      in
+      Some { rpp_origin = origin; rpp_ptr = rpv_ptr; rpp_slice }
+  | _ -> None
+
 (** Remove an abstraction from the context, as well as all its references *)
 and end_raw_ptr_view_update (span : Meta.span) (abs_id : AbsId.id)
     (ctx : eval_ctx) : eval_ctx =
@@ -1700,6 +1734,22 @@ let end_abs config span ?(snapshots = true) =
 
 let end_abs_set config span ?(snapshots = true) =
   end_abs_set_aux config ~snapshots span []
+
+(** End the parked raw pointer views (see [RawPtrParked]), freeing their memory
+*)
+let end_raw_ptr_parked config span : cm_fun =
+ fun ctx ->
+  let ids =
+    env_filter_map_abs
+      (fun abs ->
+        match abs.kind with
+        | RawPtrParked _ -> Some abs.abs_id
+        | _ -> None)
+      ctx.env
+  in
+  fold_left_apply_continuation
+    (fun id ctx -> end_abs config span id 0 ctx)
+    ids ctx
 
 let end_borrow_no_synth config span ?(snapshots = true) id ctx =
   fst (end_borrow config span ~snapshots id ctx)

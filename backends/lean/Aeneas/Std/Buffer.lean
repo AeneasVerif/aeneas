@@ -542,6 +542,91 @@ theorem Slice.end_as_ptr.spec [ByteRepr T] (s : Slice T) (p : ConstRawPtr T) :
   simp only [Buffer.pointsTo_def, RawPtr.toBuffer_length]
   iframe
 
+/-- Read back the slice converted to a raw pointer with `Slice.as_mut_ptr`, but
+keep the memory: we use this when the place the slice comes from is converted
+to raw pointers again later in the function, so that the raw pointers share the
+same allocation (see `Slice.as_ptr_reuse`). -/
+def Slice.sync_as_mut_ptr [ByteRepr T] (s : Slice T) (p : MutRawPtr T) : Result (Slice T) :=
+  Aeneas.Std.bind (Buffer.readRange p s.length) fun values =>
+    Result.ok (s.setSlice! 0 values)
+
+@[step]
+theorem Slice.sync_as_mut_ptr.spec [ByteRepr T] (s : Slice T) (p : MutRawPtr T)
+    (values : List T) (hLength : values.length = s.length) :
+    ⦃ p ↦* values ⦄ Slice.sync_as_mut_ptr s p
+      ⦃⇓ result => ⌜result.val = values⌝ ∗ p ↦* values⦄ := by
+  unfold Slice.sync_as_mut_ptr
+  have := Buffer.readRange.spec p values
+  rw [hLength] at this
+  apply WP.ispec_bind this (sep_emp_r _).mpr
+  intro r
+  rw [sep_emp_r_eq]
+  iintro hr
+  subst r
+  apply (ispec_ok _).2
+  have hSet : s.val.setSlice! 0 values = values := by
+    apply List.ext_getElem <;> simp_all [List.setSlice!]
+  simp only [Slice.setSlice!_val, hSet]
+  iframe
+
+/-- Convert a slice to a raw pointer, reusing the memory of a previous raw
+pointer to the same place (see `Slice.sync_as_mut_ptr`): we write the current
+value of the slice into it. -/
+def Slice.as_raw_ptr_reuse [ByteRepr T] {M M'} (p : RawPtr T M) (s : Slice T) :
+    Result (RawPtr T M') :=
+  Aeneas.Std.bind (Buffer.writeRange (p.retype : MutRawPtr T) s.val) fun _ =>
+    Result.ok p.retype
+
+theorem Slice.as_raw_ptr_reuse.spec [ByteRepr T] {M M'} (p : RawPtr T M) (s : Slice T)
+    (old : List T) (hLength : old.length = s.length) :
+    ⦃ p ↦* old ⦄ (Slice.as_raw_ptr_reuse p s : Result (RawPtr T M'))
+      ⦃⇓ q => ⌜q = p.retype⌝ ∗ q ↦* s.val⦄ := by
+  unfold Slice.as_raw_ptr_reuse
+  have := Buffer.writeRange.spec (p.retype : MutRawPtr T) old s.val hLength
+  rw [RawPtr.pointsToRange_retype_eq] at this
+  apply WP.ispec_bind this (sep_emp_r _).mpr
+  intro _
+  rw [sep_emp_r_eq]
+  apply (ispec_ok _).2
+  have h₁ : ((p.retype : RawPtr T M') ↦* s.val) = (p ↦* s.val) :=
+    RawPtr.pointsToRange_retype_eq p s.val
+  have h₂ : ((p.retype : MutRawPtr T) ↦* s.val) = (p ↦* s.val) :=
+    RawPtr.pointsToRange_retype_eq p s.val
+  rw [h₁, h₂]
+  iframe
+
+def Slice.as_ptr_reuse [ByteRepr T] {M} (p : RawPtr T M) (s : Slice T) :
+    Result (ConstRawPtr T) :=
+  Slice.as_raw_ptr_reuse p s
+
+@[step]
+theorem Slice.as_ptr_reuse.spec [ByteRepr T] {M} (p : RawPtr T M) (s : Slice T)
+    (old : List T) (hLength : old.length = s.length) :
+    ⦃ p ↦* old ⦄ Slice.as_ptr_reuse p s ⦃⇓ q => ⌜q = p.retype⌝ ∗ q ↦* s.val⦄ :=
+  Slice.as_raw_ptr_reuse.spec p s old hLength
+
+def Slice.as_mut_ptr_reuse [ByteRepr T] {M} (p : RawPtr T M) (s : Slice T) :
+    Result (MutRawPtr T) :=
+  Slice.as_raw_ptr_reuse p s
+
+@[step]
+theorem Slice.as_mut_ptr_reuse.spec [ByteRepr T] {M} (p : RawPtr T M) (s : Slice T)
+    (old : List T) (hLength : old.length = s.length) :
+    ⦃ p ↦* old ⦄ Slice.as_mut_ptr_reuse p s ⦃⇓ q => ⌜q = p.retype⌝ ∗ q ↦* s.val⦄ :=
+  Slice.as_raw_ptr_reuse.spec p s old hLength
+
+/-- Free the memory of a raw pointer obtained by converting a slice (see
+`Slice.sync_as_mut_ptr`). -/
+def Slice.free_as_ptr [ByteRepr T] {M} (s : Slice T) (p : RawPtr T M) : Result Unit :=
+  Slice.end_as_ptr s p.retype
+
+@[step]
+theorem Slice.free_as_ptr.spec [ByteRepr T] {M} (s : Slice T) (p : RawPtr T M) :
+    ⦃ p ↦* s.val ⦄ Slice.free_as_ptr s p ⦃⇓ emp⦄ := by
+  unfold Slice.free_as_ptr
+  have := Slice.end_as_ptr.spec s (p.retype : ConstRawPtr T)
+  rwa [RawPtr.pointsToRange_retype_eq] at this
+
 @[rust_fun "core::slice::raw::from_raw_parts"]
 def core.slice.raw.from_raw_parts [ByteRepr T] (p : ConstRawPtr T) (len : Usize) : Result (Slice T) :=
   Buffer.readSlice (p.toBuffer len.val)
