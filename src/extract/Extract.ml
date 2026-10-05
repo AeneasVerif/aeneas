@@ -3769,7 +3769,7 @@ let extract_unit_test_if_marked (ctx : extraction_ctx) (fmt : F.formatter)
             F.pp_print_space fmt ());
           F.pp_print_string fmt ")%return."
       | Lean ->
-          F.pp_print_string fmt "#assert";
+          F.pp_print_string fmt "#guard";
           F.pp_print_space fmt ();
           F.pp_print_string fmt "(";
           let fun_name =
