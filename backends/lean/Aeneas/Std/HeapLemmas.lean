@@ -27,24 +27,19 @@ end Aeneas
 
 namespace Aeneas.Std
 
-namespace Ref
+namespace Loc
 
-@[simp] theorem base_add {α : Type} (r : Ref α) (i : Nat) :
-    (r.add i).base = r.base := rfl
+@[simp] theorem add_fst (l : Loc) (i : Nat) : (l.add i).1 = l.1 := rfl
 
-@[simp] theorem offset_add {α : Type} (r : Ref α) (i : Nat) :
-    (r.add i).offset = r.offset + i := rfl
+@[simp] theorem add_snd (l : Loc) (i : Nat) : (l.add i).2 = l.2 + i := rfl
 
-@[simp] theorem add_zero {α : Type} (r : Ref α) : r.add 0 = r := rfl
+@[simp] theorem add_zero (l : Loc) : l.add 0 = l := rfl
 
-theorem add_add {α : Type} (r : Ref α) (i j : Nat) :
-    (r.add i).add j = r.add (i + j) := by
-  simp [Ref.add, Ref.base, Ref.offset, Ref.addr, Nat.add_assoc]
+theorem add_add (l : Loc) (i j : Nat) :
+    (l.add i).add j = l.add (i + j) := by
+  simp [Loc.add, Nat.add_assoc]
 
-theorem addr_add {α : Type} (r : Ref α) (i : Nat) :
-    (r.add i).addr = (r.base, r.offset + i) := rfl
-
-end Ref
+end Loc
 
 namespace Heap
 
@@ -138,43 +133,43 @@ theorem union_right_cancel {h₁ h₂ frame : Heap}
   apply Heap.ext_impl
   exact (Finmap.union_cancel hCompatible₁ hCompatible₂).mp (congrArg Heap.impl hEq)
 
-theorem mem_singleton {α : Type} {r : Ref α} {value : α} {address : Loc} :
-    address ∈ singleton r value ↔ address = r.addr := by
-  show address ∈ (Finmap.singleton r.addr (⟨α, value⟩ : HeapCell) : HeapImpl) ↔ _
+theorem mem_singleton {α : Type} {l : Loc} {value : α} {address : Loc} :
+    address ∈ singleton l value ↔ address = l := by
+  show address ∈ (Finmap.singleton l (⟨α, value⟩ : HeapCell) : HeapImpl) ↔ _
   exact Finmap.mem_singleton _ _ _
 
 @[simp]
-theorem not_contains_empty {α : Type} (r : Ref α) :
-    ¬ contains (∅ : Heap) r := by
-  change ¬ match Finmap.lookup r.addr (∅ : HeapImpl) with
+theorem not_contains_empty {α : Type} (l : Loc) :
+    ¬ contains (∅ : Heap) α l := by
+  change ¬ match Finmap.lookup l (∅ : HeapImpl) with
     | none => False
     | some ⟨β, _⟩ => β = α
   simp
 
-@[simp] theorem rangeHeap_nil {α : Type} (r : Ref α) :
-    rangeHeap r ([] : List α) = empty := rfl
+@[simp] theorem rangeHeap_nil {α : Type} (l : Loc) :
+    rangeHeap l ([] : List α) = empty := rfl
 
-@[simp] theorem rangeHeap_cons {α : Type} (r : Ref α) (value : α)
+@[simp] theorem rangeHeap_cons {α : Type} (l : Loc) (value : α)
     (rest : List α) :
-    rangeHeap r (value :: rest) = singleton r value ∪ rangeHeap (r.add 1) rest :=
+    rangeHeap l (value :: rest) = singleton l value ∪ rangeHeap (l.add 1) rest :=
   rfl
 
-@[simp] theorem rangeHeap_singleton {α : Type} (r : Ref α) (value : α) :
-    rangeHeap r [value] = singleton r value := by
+@[simp] theorem rangeHeap_singleton {α : Type} (l : Loc) (value : α) :
+    rangeHeap l [value] = singleton l value := by
   rw [rangeHeap_cons, rangeHeap_nil, Heap.union_empty]
 
-theorem mem_rangeHeap {α : Type} {r : Ref α} {values : List α} {address : Loc} :
-    address ∈ rangeHeap r values ↔
-      ∃ i, i < values.length ∧ address = (r.add i).addr := by
-  induction values generalizing r with
+theorem mem_rangeHeap {α : Type} {l : Loc} {values : List α} {address : Loc} :
+    address ∈ rangeHeap l values ↔
+      ∃ i, i < values.length ∧ address = l.add i := by
+  induction values generalizing l with
   | nil =>
       simp only [rangeHeap_nil, List.length_nil, Nat.not_lt_zero, false_and,
         exists_false, iff_false]
       intro hMem
       exact (Finmap.notMem_empty (a := address)) hMem
   | cons value rest ih =>
-      have hShift : ∀ i : Nat, (r.add 1).add i = r.add (i + 1) := by
-        intro i; rw [Ref.add_add, Nat.add_comm]
+      have hShift : ∀ i : Nat, (l.add 1).add i = l.add (i + 1) := by
+        intro i; rw [Loc.add_add, Nat.add_comm]
       rw [rangeHeap_cons, Heap.mem_union, mem_singleton, ih]
       constructor
       · rintro (rfl | ⟨i, hi, rfl⟩)
@@ -185,26 +180,25 @@ theorem mem_rangeHeap {α : Type} {r : Ref α} {values : List α} {address : Loc
         | zero => exact Or.inl rfl
         | succ j => exact Or.inr ⟨j, by simpa using hi, by rw [hShift]⟩
 
-theorem rangeHeap_append {α : Type} (r : Ref α) (xs ys : List α) :
-    rangeHeap r (xs ++ ys) =
-      rangeHeap r xs ∪ rangeHeap (r.add xs.length) ys := by
-  induction xs generalizing r with
+theorem rangeHeap_append {α : Type} (l : Loc) (xs ys : List α) :
+    rangeHeap l (xs ++ ys) =
+      rangeHeap l xs ∪ rangeHeap (l.add xs.length) ys := by
+  induction xs generalizing l with
   | nil => simp
   | cons value rest ih =>
-      have hShift : (r.add 1).add rest.length = r.add (rest.length + 1) := by
-        rw [Ref.add_add, Nat.add_comm]
+      have hShift : (l.add 1).add rest.length = l.add (rest.length + 1) := by
+        rw [Loc.add_add, Nat.add_comm]
       rw [List.cons_append, rangeHeap_cons, rangeHeap_cons, ih, List.length_cons,
         hShift, Heap.union_assoc']
 
-theorem compatible_rangeHeap_append {α : Type} (r : Ref α) (xs ys : List α) :
-    PartialCommMonoid.Compatible (rangeHeap r xs)
-      (rangeHeap (r.add xs.length) ys) := by
+theorem compatible_rangeHeap_append {α : Type} (l : Loc) (xs ys : List α) :
+    PartialCommMonoid.Compatible (rangeHeap l xs)
+      (rangeHeap (l.add xs.length) ys) := by
   intro address hLeft hRight
   obtain ⟨i, hi, hL⟩ := mem_rangeHeap.mp hLeft
   obtain ⟨j, -, hR⟩ := mem_rangeHeap.mp hRight
-  rw [Ref.add_add, Ref.addr_add] at hR
-  rw [Ref.addr_add] at hL
-  have hOffset : r.offset + i = r.offset + (xs.length + j) :=
+  rw [Loc.add_add] at hR
+  have hOffset : l.2 + i = l.2 + (xs.length + j) :=
     (congrArg Prod.snd hL).symm.trans (congrArg Prod.snd hR)
   omega
 
@@ -220,8 +214,8 @@ theorem not_mem_freshBase {h : Heap} {address : Loc}
       (h.keys.image Prod.fst).sup id := hLe
   exact Nat.not_succ_le_self _ hSucc
 
-theorem compatible_freshRef {α : Type} (h : Heap) (values : List α) :
-    PartialCommMonoid.Compatible (rangeHeap (freshRef α h) values) h := by
+theorem compatible_freshLoc {α : Type} (h : Heap) (values : List α) :
+    PartialCommMonoid.Compatible (rangeHeap (freshLoc h) values) h := by
   intro address hFresh hMem
   obtain ⟨i, -, rfl⟩ := mem_rangeHeap.mp hFresh
   exact not_mem_freshBase (h := h) rfl hMem
@@ -331,33 +325,33 @@ theorem union_mono {A B h₁ h₂ : Heap}
 
 end Sub
 
-theorem mem_of_contains {α : Type} {h : Heap} {r : Ref α}
-    (hContains : contains h r) : r.addr ∈ h := by
+theorem mem_of_contains {α : Type} {h : Heap} {l : Loc}
+    (hContains : contains h α l) : l ∈ h := by
   unfold contains at hContains
   split at hContains
   · contradiction
   · rename_i cell hLookup
     exact Finmap.mem_of_lookup_eq_some hLookup
 
-theorem disjoint_contains_false {α : Type} {h₁ h₂ : Heap} {r : Ref α}
+theorem disjoint_contains_false {α : Type} {h₁ h₂ : Heap} {l : Loc}
     (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
-    (hContains₁ : contains h₁ r)
-    (hContains₂ : contains h₂ r) : False :=
-  hCompatible r.addr (mem_of_contains hContains₁)
+    (hContains₁ : contains h₁ α l)
+    (hContains₂ : contains h₂ α l) : False :=
+  hCompatible l (mem_of_contains hContains₁)
     (mem_of_contains hContains₂)
 
-theorem contains_union_left {α : Type} {h₁ h₂ : Heap} {r : Ref α}
-    (hContains : contains h₁ r) : contains (h₁ ∪ h₂) r := by
-  have hMem : r.addr ∈ h₁ := mem_of_contains hContains
+theorem contains_union_left {α : Type} {h₁ h₂ : Heap} {l : Loc}
+    (hContains : contains h₁ α l) : contains (h₁ ∪ h₂) α l := by
+  have hMem : l ∈ h₁ := mem_of_contains hContains
   unfold contains at hContains ⊢
   rw [Heap.lookup_union_left hMem]
   exact hContains
 
-theorem read_union_left {α : Type} {h₁ h₂ : Heap} {r : Ref α}
-    (hContains : contains h₁ r) :
-    Heap.read r (h₁ ∪ h₂) (contains_union_left hContains) =
-      Heap.read r h₁ hContains := by
-  have hMem : r.addr ∈ h₁ := by
+theorem read_union_left {α : Type} {h₁ h₂ : Heap} {l : Loc}
+    (hContains : contains h₁ α l) :
+    Heap.read l (h₁ ∪ h₂) (contains_union_left hContains) =
+      Heap.read l h₁ hContains := by
+  have hMem : l ∈ h₁ := by
     unfold contains at hContains
     split at hContains
     · contradiction
@@ -382,62 +376,62 @@ theorem read_union_left {α : Type} {h₁ h₂ : Heap} {r : Ref α}
       rfl
 
 theorem update_union_left {α : Type} {h₁ h₂ : Heap}
-    (r : Ref α) (value : α) (hContains : contains h₁ r) :
-    Heap.update r value (h₁ ∪ h₂) (contains_union_left hContains) =
-      Heap.update r value h₁ hContains ∪ h₂ := by
+    (l : Loc) (value : α) (hContains : contains h₁ α l) :
+    Heap.update l value (h₁ ∪ h₂) (contains_union_left hContains) =
+      Heap.update l value h₁ hContains ∪ h₂ := by
   exact Heap.insert_union
 
-theorem disjoint_update_left {α : Type} {r : Ref α} {value : α}
+theorem disjoint_update_left {α : Type} {l : Loc} {value : α}
     {h₁ h₂ : Heap}
     (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
-    (hContains : contains h₁ r) :
+    (hContains : contains h₁ α l) :
     PartialCommMonoid.Compatible
-      (Heap.update r value h₁ hContains) h₂ := by
-  have hUnallocated : r.addr ∉ h₂ := by
+      (Heap.update l value h₁ hContains) h₂ := by
+  have hUnallocated : l ∉ h₂ := by
     intro hMem₂
     unfold contains at hContains
     split at hContains
     · contradiction
     · rename_i cell hLookup
-      exact hCompatible r.addr
+      exact hCompatible l
         (Finmap.mem_of_lookup_eq_some hLookup) hMem₂
   intro address hMem₁ hMem₂
-  change address ∈ h₁.insert r.addr ⟨α, value⟩ at hMem₁
+  change address ∈ h₁.insert l ⟨α, value⟩ at hMem₁
   rw [Heap.mem_insert] at hMem₁
   rcases hMem₁ with hEq | hMem₁
   · exact hUnallocated (hEq ▸ hMem₂)
   · exact hCompatible address hMem₁ hMem₂
 
-theorem disjoint_free_left {α : Type} {r : Ref α}
+theorem disjoint_free_left {α : Type} {l : Loc}
     {h₁ h₂ : Heap}
     (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
-    (hContains : contains h₁ r) :
-    PartialCommMonoid.Compatible (Heap.free r h₁ hContains) h₂ := by
+    (hContains : contains h₁ α l) :
+    PartialCommMonoid.Compatible (Heap.free l h₁ hContains) h₂ := by
   intro address hMem₁ hMem₂
-  change address ∈ h₁.erase r.addr at hMem₁
+  change address ∈ h₁.erase l at hMem₁
   exact hCompatible address (Heap.mem_erase.mp hMem₁).right hMem₂
 
 theorem free_union_left {α : Type} {h₁ h₂ : Heap}
-    (r : Ref α) (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
-    (hContains : contains h₁ r) :
-    Heap.free r (h₁ ∪ h₂) (contains_union_left hContains) =
-      Heap.free r h₁ hContains ∪ h₂ := by
-  have hMem : r.addr ∈ h₁ := by
+    (l : Loc) (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
+    (hContains : contains h₁ α l) :
+    Heap.free l (h₁ ∪ h₂) (contains_union_left hContains) =
+      Heap.free l h₁ hContains ∪ h₂ := by
+  have hMem : l ∈ h₁ := by
     unfold contains at hContains
     split at hContains
     · contradiction
     · rename_i cell hLookup
       exact Finmap.mem_of_lookup_eq_some hLookup
-  have hNotMem : r.addr ∉ h₂ :=
-    fun hMem₂ => hCompatible r.addr hMem hMem₂
+  have hNotMem : l ∉ h₂ :=
+    fun hMem₂ => hCompatible l hMem hMem₂
   unfold Heap.free
   apply Heap.ext_impl
   apply Finmap.ext_lookup
   intro address
   change
-    Finmap.lookup address (h₁.impl ∪ h₂.impl |>.erase r.addr) =
-      Finmap.lookup address (h₁.impl.erase r.addr ∪ h₂.impl)
-  by_cases hEq : address = r.addr
+    Finmap.lookup address (h₁.impl ∪ h₂.impl |>.erase l) =
+      Finmap.lookup address (h₁.impl.erase l ∪ h₂.impl)
+  by_cases hEq : address = l
   · subst address
     rw [Finmap.lookup_erase, Finmap.lookup_union_right
       Finmap.notMem_erase_self]
@@ -451,65 +445,65 @@ theorem free_union_left {α : Type} {h₁ h₂ : Heap}
         Finmap.lookup_union_right
           (fun hMem => hMem₁ (Finmap.mem_erase.mp hMem).right)]
 
-theorem disjoint_singleton {α : Type} {r s : Ref α} {value₁ value₂ : α}
-    (hNe : r ≠ s) :
+theorem disjoint_singleton {α : Type} {l l' : Loc} {value₁ value₂ : α}
+    (hNe : l ≠ l') :
     PartialCommMonoid.Compatible
-      (singleton r value₁) (singleton s value₂) := by
+      (singleton l value₁) (singleton l' value₂) := by
   intro address hMem₁ hMem₂
   change address ∈
-    (Finmap.singleton r.addr ⟨α, value₁⟩ : HeapImpl) at hMem₁
+    (Finmap.singleton l ⟨α, value₁⟩ : HeapImpl) at hMem₁
   change address ∈
-    (Finmap.singleton s.addr ⟨α, value₂⟩ : HeapImpl) at hMem₂
+    (Finmap.singleton l' ⟨α, value₂⟩ : HeapImpl) at hMem₂
   rw [Finmap.mem_singleton] at hMem₁
   rw [Finmap.mem_singleton] at hMem₂
   exact hNe (hMem₁.symm.trans hMem₂)
 
-theorem contains_singleton {α : Type} (r : Ref α) (value : α) :
-    contains (singleton r value) r := by
+theorem contains_singleton {α : Type} (l : Loc) (value : α) :
+    contains (singleton l value) α l := by
   simp [contains, singleton, Heap.lookup]
 
-theorem read_singleton {α : Type} (r : Ref α) (value : α)
-    (hContains : contains (singleton r value) r) :
-    Heap.read r (singleton r value) hContains = value := by
+theorem read_singleton {α : Type} (l : Loc) (value : α)
+    (hContains : contains (singleton l value) α l) :
+    Heap.read l (singleton l value) hContains = value := by
   unfold Heap.read
   split
   · rename_i hLookup
     change
-      Finmap.lookup r.addr
-          (Finmap.singleton r.addr ⟨α, value⟩ : HeapImpl) =
+      Finmap.lookup l
+          (Finmap.singleton l ⟨α, value⟩ : HeapImpl) =
         none at hLookup
     rw [Finmap.lookup_singleton_eq] at hLookup
     contradiction
   · rename_i β stored hLookup
     change
-      Finmap.lookup r.addr
-          (Finmap.singleton r.addr ⟨α, value⟩ : HeapImpl) =
+      Finmap.lookup l
+          (Finmap.singleton l ⟨α, value⟩ : HeapImpl) =
         some (⟨β, stored⟩ : HeapCell) at hLookup
     rw [Finmap.lookup_singleton_eq] at hLookup
     cases hLookup
     rfl
 
-theorem update_singleton {α : Type} (r : Ref α)
+theorem update_singleton {α : Type} (l : Loc)
     (oldValue newValue : α)
-    (hContains : contains (singleton r oldValue) r) :
-    Heap.update r newValue (singleton r oldValue) hContains =
-      singleton r newValue := by
+    (hContains : contains (singleton l oldValue) α l) :
+    Heap.update l newValue (singleton l oldValue) hContains =
+      singleton l newValue := by
   apply Heap.ext_impl
   simp [Heap.update, singleton, Heap.insert]
 
-theorem free_singleton {α : Type} (r : Ref α) (value : α)
-    (hContains : contains (singleton r value) r) :
-    Heap.free r (singleton r value) hContains = empty := by
+theorem free_singleton {α : Type} (l : Loc) (value : α)
+    (hContains : contains (singleton l value) α l) :
+    Heap.free l (singleton l value) hContains = empty := by
   unfold Heap.free
   apply Heap.ext_impl
   apply Finmap.ext_lookup
   intro address
   change
     Finmap.lookup address
-        ((Finmap.singleton r.addr ⟨α, value⟩ : HeapImpl).erase
-          r.addr) =
+        ((Finmap.singleton l ⟨α, value⟩ : HeapImpl).erase
+          l) =
       Finmap.lookup address (∅ : HeapImpl)
-  by_cases hEq : address = r.addr
+  by_cases hEq : address = l
   · subst address
     simp
   · rw [Finmap.lookup_erase_ne hEq]
@@ -517,16 +511,16 @@ theorem free_singleton {α : Type} (r : Ref α) (value : α)
     apply Finmap.lookup_eq_none.mpr
     simpa [singleton, Finmap.mem_singleton] using hEq
 
-theorem contains_of_sub {α : Type} {r : Ref α} {value : α} {h : Heap}
-    (hSub : Heap.Sub (singleton r value) h) : contains h r := by
+theorem contains_of_sub {α : Type} {l : Loc} {value : α} {h : Heap}
+    (hSub : Heap.Sub (singleton l value) h) : contains h α l := by
   obtain ⟨rest, -, rfl⟩ := hSub
-  exact contains_union_left (contains_singleton r value)
+  exact contains_union_left (contains_singleton l value)
 
-theorem read_of_sub {α : Type} {r : Ref α} {value : α} {h : Heap}
-    (hSub : Heap.Sub (singleton r value) h)
-    (hContains : contains h r) : Heap.read r h hContains = value := by
+theorem read_of_sub {α : Type} {l : Loc} {value : α} {h : Heap}
+    (hSub : Heap.Sub (singleton l value) h)
+    (hContains : contains h α l) : Heap.read l h hContains = value := by
   obtain ⟨rest, hCompatible, rfl⟩ := hSub
-  have hContainsSingleton := contains_singleton r value
+  have hContainsSingleton := contains_singleton l value
   rw [show hContains = contains_union_left hContainsSingleton from
       Subsingleton.elim _ _,
     read_union_left hContainsSingleton, read_singleton]

@@ -24,7 +24,7 @@ abbrev ConstRawPtr (T : Type) := RawPtr T .Const
 
 namespace RawPtr
 
-def ref (q : RawPtr T M) : Ref T := (q.base, q.offset)
+def addr (q : RawPtr T M) : Loc := (q.base, q.offset)
 
 def add (q : RawPtr T M) (i : Nat) : RawPtr T M :=
   ⟨q.base, q.offset + i⟩
@@ -34,10 +34,10 @@ def toConst (q : MutRawPtr T) : ConstRawPtr T :=
 
 /-- `q` owns the `values.length` slots from `q` on. -/
 def pointsToRange (q : RawPtr T M) (values : List T) : IProp :=
-  owns (Heap.rangeHeap q.ref values)
+  owns (Heap.rangeHeap q.addr values)
 
 def pointsTo (q : RawPtr T M) (value : T) : IProp :=
-  Ref.pointsTo q.ref value
+  owns (Heap.singleton q.addr value)
 
 end RawPtr
 
@@ -46,34 +46,34 @@ instance instPointsToRawPtr {T : Type} {M : Mutability} :
 
 notation:50 q:50 " ↦* " values:50 => RawPtr.pointsToRange q values
 
-def RawPtr.allocArray {β : Type} (values : List T) (mk : Ref T → β) : Result β :=
+def RawPtr.allocArray {β : Type} (values : List T) (mk : Loc → β) : Result β :=
   Result.guardedModify (fun _ => True) fun h _ =>
-    (mk (Heap.freshRef T h), Heap.freshHeap h values)
+    (mk (Heap.freshLoc h), Heap.freshHeap h values)
 
 def RawPtr.materialize (values : List T) : Result (RawPtr T M) :=
-  RawPtr.allocArray values fun r => ⟨r.base, r.offset⟩
+  RawPtr.allocArray values fun l => ⟨l.1, l.2⟩
 
 def MutRawPtr.alloc (value : T) : Result (MutRawPtr T) :=
-  RawPtr.allocArray [value] fun r => ⟨r.base, r.offset⟩
+  RawPtr.allocArray [value] fun l => ⟨l.1, l.2⟩
 
 namespace RawPtr
 
 structure Readable (q : RawPtr T M) (h : Heap) : Prop where
-  contains : Heap.contains h q.ref
+  contains : Heap.contains h T q.addr
 
 def read (q : RawPtr T M) : Result T :=
   Result.guardedModify (fun h => q.Readable h) fun h hReadable =>
-    (Heap.read q.ref h hReadable.contains, h)
+    (Heap.read q.addr h hReadable.contains, h)
 
 end RawPtr
 
 def MutRawPtr.write (q : MutRawPtr T) (value : T) : Result Unit :=
-  Result.guardedModify (fun h => Heap.contains h q.ref) fun h hContains =>
-    ((), Heap.update q.ref value h hContains)
+  Result.guardedModify (fun h => Heap.contains h T q.addr) fun h hContains =>
+    ((), Heap.update q.addr value h hContains)
 
 def MutRawPtr.free (q : MutRawPtr T) : Result Unit :=
-  Result.guardedModify (fun h => Heap.contains h q.ref) fun h hContains =>
-    ((), Heap.free q.ref h hContains)
+  Result.guardedModify (fun h => Heap.contains h T q.addr) fun h hContains =>
+    ((), Heap.free q.addr h hContains)
 
 def MutRawPtr.mut_to_raw (value : T) : Result (MutRawPtr T) :=
   MutRawPtr.alloc value

@@ -28,8 +28,8 @@ def join (b₁ b₂ : Buffer T) : Buffer T :=
   ⟨b₁.base, b₁.offset, b₁.length + b₂.length⟩
 
 def alloc (n : Nat) (value : T) : Result (Buffer T) :=
-  RawPtr.allocArray (List.replicate n value) fun r =>
-    ⟨r.base, r.offset, n⟩
+  RawPtr.allocArray (List.replicate n value) fun l =>
+    ⟨l.1, l.2, n⟩
 
 @[step]
 theorem alloc.spec (n : Nat) (value : T) :
@@ -222,8 +222,8 @@ theorem writeSlice.spec (b : Buffer T) (old s : Slice T)
   iframe
 
 def ofList (values : List T) : Result (Buffer T) :=
-  RawPtr.allocArray values fun r =>
-    ⟨r.base, r.offset, values.length⟩
+  RawPtr.allocArray values fun l =>
+    ⟨l.1, l.2, values.length⟩
 
 @[step]
 theorem ofList.spec (values : List T) :
@@ -406,8 +406,8 @@ theorem writeRange_sub.spec (p : MutRawPtr T) (old : List T) (i : Nat)
   iframe
 
 def mut_to_raw (slice : Slice T) : Result (Buffer T) :=
-  RawPtr.allocArray slice.val fun r =>
-    ⟨r.base, r.offset, slice.val.length⟩
+  RawPtr.allocArray slice.val fun l =>
+    ⟨l.1, l.2, slice.val.length⟩
 
 @[step]
 theorem mut_to_raw.spec (slice : Slice T) :

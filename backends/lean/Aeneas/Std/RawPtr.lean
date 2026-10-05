@@ -31,10 +31,10 @@ namespace RawPtr
 
 @[simp] theorem offset_toConst (q : MutRawPtr T) : q.toConst.offset = q.offset := rfl
 
-@[simp] theorem ref_toConst (q : MutRawPtr T) : q.toConst.ref = q.ref := rfl
+@[simp] theorem addr_toConst (q : MutRawPtr T) : q.toConst.addr = q.addr := rfl
 
-theorem ref_add (q : RawPtr T M) (i : Nat) :
-    (q.add i).ref = q.ref.add i := rfl
+theorem addr_add (q : RawPtr T M) (i : Nat) :
+    (q.add i).addr = q.addr.add i := rfl
 
 theorem add_add (q : RawPtr T M) (i j : Nat) :
     (q.add i).add j = q.add (i + j) := by
@@ -42,13 +42,12 @@ theorem add_add (q : RawPtr T M) (i j : Nat) :
 
 end RawPtr
 
-theorem RawPtr.pointsTo_eq_ref (q : RawPtr T M) (value : T) :
-    (q ↦ value) = Ref.pointsTo q.ref value := rfl
+theorem RawPtr.pointsTo_eq_singleton (q : RawPtr T M) (value : T) :
+    (q ↦ value) = owns (Heap.singleton q.addr value) := rfl
 
 theorem RawPtr.pointsTo_eq_range (q : RawPtr T M) (value : T) :
     (q ↦ value) = (q ↦* [value]) := by
-  rw [RawPtr.pointsTo_eq_ref, RawPtr.pointsToRange, Heap.rangeHeap_singleton]
-  rfl
+  rw [RawPtr.pointsTo_eq_singleton, RawPtr.pointsToRange, Heap.rangeHeap_singleton]
 
 @[simp] theorem RawPtr.pointsTo_toConst (q : MutRawPtr T) (value : T) :
     (q.toConst ↦ value) = (q ↦ value) := rfl
@@ -60,9 +59,9 @@ namespace RawPtr
 
 theorem pointsToRange_append (q : RawPtr T M) (xs ys : List T) :
     q ↦* (xs ++ ys) ⊣⊢ q ↦* xs ∗ (q.add xs.length) ↦* ys := by
-  rw [pointsToRange, pointsToRange, pointsToRange, ref_add,
-    Heap.rangeHeap_append q.ref xs ys]
-  exact owns_union _ _ (Heap.compatible_rangeHeap_append q.ref xs ys)
+  rw [pointsToRange, pointsToRange, pointsToRange, addr_add,
+    Heap.rangeHeap_append q.addr xs ys]
+  exact owns_union _ _ (Heap.compatible_rangeHeap_append q.addr xs ys)
 
 theorem pointsToRange_split (q : RawPtr T M) (values : List T) (i : Nat) :
     q ↦* values ⊣⊢
@@ -100,54 +99,54 @@ end RawPtr
 
 theorem RawPtr.pointsTo_exclusive (q : RawPtr T M) (value₁ value₂ : T) :
     q ↦ value₁ ∗ q ↦ value₂ ⊢ ⌜False⌝ := by
-  rw [RawPtr.pointsTo_eq_ref, RawPtr.pointsTo_eq_ref]
-  exact Ref.pointsTo_exclusive q.ref value₁ value₂
+  rw [RawPtr.pointsTo_eq_singleton, RawPtr.pointsTo_eq_singleton]
+  exact owns_singleton_exclusive q.addr value₁ value₂
 
 namespace RawPtr
 
 def singleton (q : RawPtr T M) (value : T) : Heap :=
-  Heap.singleton q.ref value
+  Heap.singleton q.addr value
 
 def contains (h : Heap) (q : RawPtr T M) : Prop :=
-  Heap.contains h q.ref
+  Heap.contains h T q.addr
 
 @[simp]
 theorem not_contains_empty (q : RawPtr T M) :
     ¬ RawPtr.contains (∅ : Heap) q :=
-  Heap.not_contains_empty q.ref
+  Heap.not_contains_empty q.addr
 
 theorem contains_of_pointsTo {q : RawPtr T M} {value : T} {h : Heap}
     (hPointsTo : (q ↦ value) h) : RawPtr.contains h q :=
   Heap.contains_of_sub hPointsTo
 
-theorem ref_injective {q r : RawPtr T M} (hEq : q.ref = r.ref) : q = r := by
+theorem addr_injective {q r : RawPtr T M} (hEq : q.addr = r.addr) : q = r := by
   cases q
   cases r
   have hBase := congrArg Prod.fst hEq
   have hOffset := congrArg Prod.snd hEq
-  simp only [RawPtr.ref] at hBase hOffset
+  simp only [RawPtr.addr] at hBase hOffset
   simp_all
 
 theorem disjoint_singleton {q r : RawPtr T M} {value₁ value₂ : T} (hNe : q ≠ r) :
     PartialCommMonoid.Compatible (q.singleton value₁) (r.singleton value₂) :=
-  Heap.disjoint_singleton fun hEq => hNe (ref_injective hEq)
+  Heap.disjoint_singleton fun hEq => hNe (addr_injective hEq)
 
 end RawPtr
 
 @[step]
-theorem RawPtr.allocArray.spec {β : Type} (values : List T) (mk : Ref T → β)
+theorem RawPtr.allocArray.spec {β : Type} (values : List T) (mk : Loc → β)
     (post : β → IProp)
-    (hPost : ∀ r : Ref T, owns (Heap.rangeHeap r values) ⊢ post (mk r)) :
+    (hPost : ∀ l : Loc, owns (Heap.rangeHeap l values) ⊢ post (mk l)) :
     ⦃ emp ⦄ RawPtr.allocArray values mk ⦃⇓ result => post result⦄ := by
   apply ispec_guardedModify
   intro h _ frame hCompatible
   have hFresh :
       PartialCommMonoid.Compatible
-        (Heap.rangeHeap (Heap.freshRef T (h ∪ frame)) values) (h ∪ frame) :=
-    Heap.compatible_freshRef _ _
+        (Heap.rangeHeap (Heap.freshLoc (h ∪ frame)) values) (h ∪ frame) :=
+    Heap.compatible_freshLoc _ _
   obtain ⟨hFreshH, hFreshFrame⟩ :=
     (PartialCommMonoid.compatible_assoc
-      (Heap.rangeHeap (Heap.freshRef T (h ∪ frame)) values) h frame).mpr
+      (Heap.rangeHeap (Heap.freshLoc (h ∪ frame)) values) h frame).mpr
         ⟨hCompatible, hFresh⟩
   exact ⟨trivial, _, hFreshFrame,
     (PartialCommMonoid.union_assoc hFreshH hFreshFrame).symm,
@@ -194,22 +193,22 @@ theorem MutRawPtr.write.spec (q : MutRawPtr T) (oldValue newValue : T) :
   apply ispec_guardedModify
   intro h hPointsTo frame hCompatible
   obtain ⟨rest, hCompatibleRest, rfl⟩ := hPointsTo
-  have hContainsSlot := Heap.contains_singleton q.ref oldValue
-  have hContains : Heap.contains (Heap.singleton q.ref oldValue ∪ rest) q.ref :=
+  have hContainsSlot := Heap.contains_singleton q.addr oldValue
+  have hContains : Heap.contains (Heap.singleton q.addr oldValue ∪ rest) T q.addr :=
     Heap.contains_union_left hContainsSlot
   refine ⟨Heap.contains_union_left hContains,
-    Heap.update q.ref newValue _ hContains,
+    Heap.update q.addr newValue _ hContains,
     Heap.disjoint_update_left hCompatible hContains, ?_, ?_⟩
   · simpa only [show Heap.contains_union_left hContains =
         Heap.contains_union_left (h₂ := frame) hContains from rfl] using
-      Heap.update_union_left q.ref newValue hContains
+      Heap.update_union_left q.addr newValue hContains
   · have hCompatibleNew :
-        PartialCommMonoid.Compatible (Heap.singleton q.ref newValue) rest := by
+        PartialCommMonoid.Compatible (Heap.singleton q.addr newValue) rest := by
       have hUpdated := Heap.disjoint_update_left (value := newValue)
         hCompatibleRest hContainsSlot
       rwa [Heap.update_singleton] at hUpdated
     rw [show hContains = Heap.contains_union_left hContainsSlot from
-      Subsingleton.elim _ _, Heap.update_union_left q.ref newValue hContainsSlot,
+      Subsingleton.elim _ _, Heap.update_union_left q.addr newValue hContainsSlot,
       Heap.update_singleton]
     exact Heap.Sub.union_left hCompatibleNew
 
@@ -218,12 +217,12 @@ theorem MutRawPtr.free.spec (q : MutRawPtr T) (value : T) :
     ⦃ q ↦ value ⦄ q.free ⦃⇓ emp⦄ := by
   apply ispec_guardedModify
   intro h hPointsTo frame hCompatible
-  have hContains : Heap.contains h q.ref := Heap.contains_of_sub hPointsTo
-  refine ⟨Heap.contains_union_left hContains, Heap.free q.ref h hContains,
+  have hContains : Heap.contains h T q.addr := Heap.contains_of_sub hPointsTo
+  refine ⟨Heap.contains_union_left hContains, Heap.free q.addr h hContains,
     Heap.disjoint_free_left hCompatible hContains, ?_, trivial⟩
   simpa only [show Heap.contains_union_left hContains =
       Heap.contains_union_left (h₂ := frame) hContains from rfl] using
-    Heap.free_union_left q.ref hCompatible hContains
+    Heap.free_union_left q.addr hCompatible hContains
 
 def MutRawPtr.freeRange (q : MutRawPtr T) : Nat → Result Unit
   | 0 => pure ()

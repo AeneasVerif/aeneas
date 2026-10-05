@@ -7,7 +7,7 @@ namespace Aeneas.SepLogic
 
 universe u
 
-open Aeneas.Std (Heap Ref)
+open Aeneas.Std (Heap)
 
 /-- Heap predicates, closed under heap extension (affine), like Iris's `uPred`. -/
 structure IProp where
@@ -42,15 +42,9 @@ def owns (A : Heap) : IProp where
   holds h := Heap.Sub A h
   up_closed := fun hSub hExtend => hSub.trans hExtend
 
-def Ref.pointsTo {α : Type} (r : Ref α) (value : α) : IProp :=
-  owns (Heap.singleton r value)
-
-/-- The overloaded `↦` of references, pointers and buffers. -/
+/-- The overloaded `↦` of pointers and buffers. -/
 class PointsTo (ρ : Type u) (β : outParam (Type v)) where
   pointsTo : ρ → β → IProp
-
-instance instPointsToRef {α : Type} : PointsTo (Ref α) α :=
-  ⟨Ref.pointsTo⟩
 
 /-- Additive conjunction: both assertions hold of the same heap fragment. -/
 def iand (P Q : IProp) : IProp where

@@ -49,8 +49,9 @@ example (P Q R : IProp) : iprop((P ∧ Q) ∧ R) ⊣⊢ iprop(P ∧ (Q ∧ R)) :
 example (P Q : Prop) : iprop(⌜P⌝ ∧ ⌜Q⌝) = ⌜P ∧ Q⌝ := by
   simp
 
-example {α : Type} (r : Aeneas.Std.Ref α) (value : α) :
-    iprop((r ↦ value) ∧ (r ↦ value)) = (r ↦ value) := by
+example {α : Type} (r : Aeneas.Std.Loc) (value : α) :
+    iprop(owns (Aeneas.Std.Heap.singleton r value) ∧ owns (Aeneas.Std.Heap.singleton r value))
+      = owns (Aeneas.Std.Heap.singleton r value) := by
   simp
 
 example (P Q : IProp) (frame : Aeneas.Std.Heap) :
@@ -72,7 +73,9 @@ example (P Q : IProp) : P ∗ (P -∗ Q) ⊢ Q :=
 example (Q₁ Q₂ : IPost Nat) : Q₁ ∗+ (Q₁ -∗+ Q₂) ⊢+ Q₂ :=
   postWand_cancel Q₁ Q₂
 
-example {α : Type} (r : Aeneas.Std.Ref α) (x y : α) : r ↦ x ∗ r ↦ y ⊢ ⌜False⌝ :=
-  Ref.pointsTo_exclusive r x y
+example {α : Type} (l : Aeneas.Std.Loc) (x y : α) :
+    owns (Aeneas.Std.Heap.singleton l x) ∗ owns (Aeneas.Std.Heap.singleton l y)
+      ⊢ ⌜False⌝ :=
+  owns_singleton_exclusive l x y
 
 end Aeneas.SepLogic.Tests

@@ -6,7 +6,7 @@ namespace Aeneas.SepLogic
 
 universe u
 
-open Aeneas.Std (Heap Ref)
+open Aeneas.Std (Heap Loc)
 
 @[ext]
 theorem IProp.ext {H₁ H₂ : IProp} (hIff : ∀ h, H₁ h ↔ H₂ h) : H₁ = H₂ := by
@@ -188,10 +188,6 @@ theorem entails_emp_ipure_iff (P : Prop) : (emp ⊢ ⌜P⌝) ↔ P := by
 theorem entails_ipure_iff (P Q : Prop) : (⌜P⌝ ⊢ ⌜Q⌝) ↔ (P → Q) :=
   ⟨fun h hP => h ∅ hP, fun h _ hP => h hP⟩
 
-theorem Ref.pointsTo_holds {α : Type} (r : Ref α) (value : α)
-    (h : Heap) : (r ↦ value) h ↔ Heap.Sub (Heap.singleton r value) h :=
-  Iff.rfl
-
 theorem owns_union (A B : Heap)
     (hCompatible : PartialCommMonoid.Compatible A B) :
     owns (A ∪ B) ⊣⊢ owns A ∗ owns B := by
@@ -206,8 +202,8 @@ theorem owns_union (A B : Heap)
   · rintro h ⟨h₁, h₂, hCompatibleHeaps, rfl, hSub₁, hSub₂⟩
     exact Heap.Sub.union_mono hSub₁ hSub₂ hCompatibleHeaps
 
-theorem Ref.pointsTo_exclusive {α : Type} (r : Ref α) (value₁ value₂ : α) :
-    r ↦ value₁ ∗ r ↦ value₂ ⊢ ⌜False⌝ := by
+theorem owns_singleton_exclusive {α : Type} (l : Loc) (value₁ value₂ : α) :
+    owns (Heap.singleton l value₁) ∗ owns (Heap.singleton l value₂) ⊢ ⌜False⌝ := by
   rintro h ⟨h₁, h₂, hCompatible, -, hSingle₁, hSingle₂⟩
   exact Heap.disjoint_contains_false hCompatible (Heap.contains_of_sub hSingle₁)
     (Heap.contains_of_sub hSingle₂)

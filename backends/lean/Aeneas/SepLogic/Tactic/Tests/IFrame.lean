@@ -5,7 +5,7 @@ public section
 namespace Aeneas.SepLogic.Tactic.Tests.IFrame
 
 open Aeneas.SepLogic
-open Aeneas.Std (Ref)
+open Aeneas.Std (Heap Loc)
 
 example (P Q : IProp) : P ∗ Q ⊢ Q ∗ P := by
   iframe
@@ -26,18 +26,20 @@ example {α : Type} (P : α → IProp) :
     iprop(∀ x, P x) ⊢ iprop(∀ x, P x) := by
   iframe
 
-example {α : Type} (r : Ref α) (value : α) :
-    r ↦ value ⊢ r ↦ value := by
+example {α : Type} (r : Loc) (value : α) :
+    owns (Heap.singleton r value) ⊢ owns (Heap.singleton r value) := by
   iframe
 
 example (P : IProp) : P ⊢ ⌜8 = 8⌝ := by
   iframe
 
-example {α : Type} (r s : Ref α) (x y : α) :
-    r ↦ x ∗ s ↦ y ⊢ s ↦ y ∗ r ↦ x := by
+example {α : Type} (r s : Loc) (x y : α) :
+    owns (Heap.singleton r x) ∗ owns (Heap.singleton s y)
+      ⊢ owns (Heap.singleton s y) ∗ owns (Heap.singleton r x) := by
   iframe
 
-example {α : Type} (r s : Ref α) (x y : α) : r ↦ x ∗ s ↦ y ⊢ s ↦ y := by
+example {α : Type} (r s : Loc) (x y : α) :
+    owns (Heap.singleton r x) ∗ owns (Heap.singleton s y) ⊢ owns (Heap.singleton s y) := by
   iframe
 
 example (cell : Nat → Nat → IProp) (p q value : Nat) :
