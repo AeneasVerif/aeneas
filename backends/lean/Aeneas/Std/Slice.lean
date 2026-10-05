@@ -12,7 +12,6 @@ public section
 namespace Aeneas.Std
 
 open Result Error core.ops.range WP
-open Aeneas.SepLogic
 
 local macro_rules
 | `(tactic| get_elem_tactic) => `(tactic| grind)

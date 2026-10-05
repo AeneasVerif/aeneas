@@ -1,9 +1,7 @@
 module
 public import Aeneas.Std.RawPtr
 public import Aeneas.Std.Slice
-public import Aeneas.SepLogic.Tactic.IFrame
-public import Aeneas.SepLogic.Tactic.IIntro
-public import Aeneas.SepLogic.Tactic.ISimp
+public import Aeneas.SepLogic
 public import Aeneas.Tactic.Step.Init
 @[expose] public section
 
@@ -18,8 +16,7 @@ Views and pointer arithmetic are total. Invalid reads or writes have no
 provable specification because their guarded heap operations are stuck.
 -/
 
-open Aeneas
-open Aeneas.SepLogic
+open Aeneas SepLogic
 
 namespace Aeneas.Std
 

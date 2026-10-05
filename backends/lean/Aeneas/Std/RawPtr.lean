@@ -7,8 +7,6 @@ public import Aeneas.Data.BitVec
 public import Aeneas.Std.WP
 public import Aeneas.Std.Primitives
 public import Aeneas.SepLogic
-public import Aeneas.SepLogic.Tactic.IFrame
-public import Aeneas.SepLogic.Tactic.IIntro
 public import Aeneas.Tactic.Step.Init
 @[expose] public section
 
@@ -27,8 +25,7 @@ Reads accept both mutable and const pointers. Allocation, writes and
 deallocation require a mutable pointer.
 -/
 
-open Aeneas
-open Aeneas.SepLogic
+open Aeneas SepLogic
 
 namespace Aeneas.Std
 

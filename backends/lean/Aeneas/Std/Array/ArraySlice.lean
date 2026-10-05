@@ -14,7 +14,6 @@ public section
 namespace Aeneas.Std
 
 open Result Error core.ops.range WP
-open Aeneas.SepLogic
 
 attribute [-simp] List.getElem!_eq_getElem?_getD
 
