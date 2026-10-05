@@ -18,12 +18,12 @@ of integers.
 namespace Aeneas.Std
 
 theorem UScalarTy.numBits_mod_eight (ty : UScalarTy) : ty.numBits % 8 = 0 := by
-  cases ty <;> simp only [UScalarTy.numBits] <;>
-    rcases System.Platform.numBits_eq with h | h <;> simp [h]
+  cases ty <;> simp only [UScalarTy.numBits]
+  rcases System.Platform.numBits_eq with h | h <;> simp [h]
 
 theorem IScalarTy.numBits_mod_eight (ty : IScalarTy) : ty.numBits % 8 = 0 := by
-  cases ty <;> simp only [IScalarTy.numBits] <;>
-    rcases System.Platform.numBits_eq with h | h <;> simp [h]
+  cases ty <;> simp only [IScalarTy.numBits]
+  rcases System.Platform.numBits_eq with h | h <;> simp [h]
 
 instance UScalar.instByteRepr (ty : UScalarTy) : ByteRepr (UScalar ty) where
   size := ty.numBits / 8

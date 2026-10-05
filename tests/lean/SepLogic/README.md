@@ -230,7 +230,9 @@ Storing values as bytes changes two interfaces that extracted code relies on:
   integer types have.  Extraction therefore rejects `as_ptr` and `as_mut_ptr`
   on slices of a generic or non-integer element type, with the error
   `[as_ptr] and [as_mut_ptr] are only supported on slices of integers` (see
-  `tests/src/raw_pointers_generic.rs`);
+  `tests/src/raw_pointers_generic.rs`, `tests/src/raw_pointers_generic_mut.rs`,
+  `tests/src/raw_pointers_non_integer.rs` and
+  `tests/src/raw_pointers_non_integer_mut.rs`);
 * `Slice.as_mut_ptr` returns the pointer together with the unchanged slice,
   `Result (MutRawPtr T × Slice T)`, instead of the pointer alone, and its
   specification is `⦃emp⦄ s.as_mut_ptr ⦃⇓ r => ⌜r.2 = s⌝ ∗ r.1 ↦* s.val⦄`.

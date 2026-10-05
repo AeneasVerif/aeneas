@@ -693,6 +693,24 @@ example (p : MutRawPtr U8) (hAlign : 4 ∣ p.offset) (x : U32) :
   simp [RawPtr.Aligned, Aeneas.Std.UScalarTy.numBits] at hShifted
   omega
 
+example (p : MutRawPtr U8) (hBase : p.base.align = 1) (x : U32) (P : IProp)
+    (Q : Unit → IProp) (hSpec : ⦃ P ⦄ MutRawPtr.write (p.retype : MutRawPtr U32) x ⦃⇓ r => Q r⦄) :
+    P ⊢ ⌜False⌝ := by
+  refine entails_trans (MutRawPtr.write.aligned_of_spec hSpec) ?_
+  rw [entails_ipure_iff]
+  intro hWide
+  simp [RawPtr.Aligned, Aeneas.Std.UScalarTy.numBits, hBase] at hWide
+
+example (p : MutRawPtr U8) (hAlign : 4 ∣ p.offset) (x : U32) (P : IProp)
+    (Q : Unit → IProp)
+    (hSpec : ⦃ P ⦄ MutRawPtr.write ((p.add 1).retype : MutRawPtr U32) x ⦃⇓ r => Q r⦄) :
+    P ⊢ ⌜False⌝ := by
+  refine entails_trans (MutRawPtr.write.aligned_of_spec hSpec) ?_
+  rw [entails_ipure_iff]
+  intro hShifted
+  simp [RawPtr.Aligned, Aeneas.Std.UScalarTy.numBits] at hShifted
+  omega
+
 def reinterpret (x : U32) : Result I32 := do
   let p ← MutRawPtr.alloc x
   let q ← RawPtr.cast_scalar I32 .Mut p

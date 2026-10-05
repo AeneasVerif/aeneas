@@ -201,15 +201,6 @@ theorem RawPtr.pointsTo_eq_range [ByteRepr T] (q : RawPtr T M) (value : T) :
 @[simp] theorem RawPtr.pointsTo_toConst [ByteRepr T] (q : MutRawPtr T) (value : T) :
     (q.toConst ↦ value) = (q ↦ value) := rfl
 
-theorem ByteRepr.length_flatMap_encode [ByteRepr T] (values : List T) :
-    (values.flatMap ByteRepr.encode).length = values.length * ByteRepr.size T := by
-  induction values with
-  | nil => simp
-  | cons value rest ih =>
-      simp only [List.flatMap_cons, List.length_append, ByteRepr.length_encode, ih,
-        List.length_cons, Nat.succ_mul]
-      omega
-
 private theorem owns_empty_eq : owns Heap.empty = emp :=
   bientails_eq ⟨fun _ _ => trivial, fun h _ => Heap.Sub.of_empty h⟩
 
@@ -485,6 +476,13 @@ end RawPtr
 def MutRawPtr.write [ByteRepr T] (q : MutRawPtr T) (value : T) : Result Unit :=
   Result.guardedModify (fun h => RawPtr.contains h q ∧ q.Aligned) fun h _ =>
     ((), h.writeBytes q.loc (ByteRepr.encode value))
+
+theorem MutRawPtr.write.aligned_of_spec [ByteRepr T] {q : MutRawPtr T} {value : T}
+    {P : IProp} {Q : Unit → IProp} (hSpec : ⦃ P ⦄ q.write value ⦃⇓ r => Q r⦄) :
+    P ⊢ ⌜q.Aligned⌝ := by
+  intro h hP
+  rw [ispec_iff] at hSpec
+  exact (hSpec emp h ((sep_emp_r P).mpr h hP)).vis_view.1.2
 
 @[step]
 theorem MutRawPtr.write.spec [ByteRepr T] (q : MutRawPtr T) (oldValue newValue : T) :
@@ -840,89 +838,6 @@ theorem MutRawPtr.end_mut_to_raw.spec [ByteRepr T] {value : T} (q : MutRawPtr T)
       apply (ispec_ok _).2
       iframe
 
-inductive ScalarKind where
-| Signed (ty : IScalarTy)
-| Unsigned (ty : UScalarTy)
-
-class IsScalar (T : Type) [ByteRepr T] : Prop where
-  isScalar : (∃ ty, T = UScalar ty) ∨ (∃ ty, T = IScalar ty)
-
-namespace IsScalar
-
-def size {T : Type} [ByteRepr T] [IsScalar T] : Usize :=
-  ⟨BitVec.ofNat _ (ByteRepr.size T)⟩
-
-def numElems (T : Type) [ByteRepr T] [IsScalar T] (numBytes : Nat) : Nat :=
-  (numBytes + (size (T := T)).val - 1) / (size (T := T)).val
-
-def toBytes {T : Type} [ByteRepr T] [IsScalar T] (s : Slice T) : Result (Slice U8) :=
-  let bytes := (s.val.flatMap ByteRepr.encode).map (UScalar.mk (ty := .U8))
-  if h : bytes.length ≤ Usize.max then .ok (Slice.from bytes h)
-  else .fail .arrayOutOfBounds
-
-def fromBytes {T : Type} [ByteRepr T] [IsScalar T] (s : Slice U8) : Result (Slice T) :=
-  match ByteRepr.decodeAll T (s.val.map UScalar.bv) with
-  | none => .fail .undef
-  | some values =>
-    if h : values.length ≤ Usize.max then .ok (Slice.from values h)
-    else .fail .arrayOutOfBounds
-
-end IsScalar
-
-instance {ty} : IsScalar (UScalar ty) where
-  isScalar := by simp
-
-instance {ty} : IsScalar (IScalar ty) where
-  isScalar := by simp
-
-namespace IsScalar
-
-theorem fromBytes_toBytes {T : Type} [ByteRepr T] [IsScalar T] (hSize : 0 < ByteRepr.size T)
-    {s : Slice T} {bytes : Slice U8} (h : toBytes s = .ok bytes) : fromBytes bytes = .ok s := by
-  simp only [toBytes] at h
-  split at h
-  · rw [Result.ok.injEq] at h
-    subst h
-    simp only [fromBytes, Slice.from_val, List.map_map]
-    rw [show UScalar.bv ∘ UScalar.mk (ty := .U8) = id from rfl, List.map_id,
-      ByteRepr.decodeAll_flatMap_encode hSize]
-    simp only [dif_pos s.property, Slice.val_from]
-  · simp at h
-
-theorem toBytes_fromBytes {T : Type} [ByteRepr T] [IsScalar T] {s : Slice T}
-    {bytes : Slice U8} (h : fromBytes bytes = .ok s) : toBytes s = .ok bytes := by
-  unfold fromBytes at h
-  split at h
-  · simp at h
-  · rename_i values hDecode
-    split at h
-    · rw [Result.ok.injEq] at h
-      subst h
-      simp only [toBytes, Slice.from_val, ByteRepr.flatMap_encode_of_decodeAll hDecode,
-        List.map_map, show UScalar.mk (ty := .U8) ∘ UScalar.bv = id from rfl, List.map_id]
-      rw [dif_pos bytes.property, Slice.val_from]
-    · simp at h
-
-@[simp]
-theorem size_u8 : size (T := U8) = 1#usize := by
-  change (⟨BitVec.ofNat _ 1⟩ : Usize) = 1#usize
-  apply UScalar.eq_of_val_eq
-  simp [UScalar.val]
-
-@[simp]
-theorem numElems_u8 (numBytes : Nat) : numElems U8 numBytes = numBytes := by
-  simp [numElems]
-
-@[simp, step_simps]
-theorem toBytes_u8 (s : Slice U8) : toBytes s = .ok s := by
-  simp only [toBytes, UScalar.map_mk_flatMap_encode_u8, dif_pos s.property, Slice.val_from]
-
-@[simp, step_simps]
-theorem fromBytes_u8 (s : Slice U8) : fromBytes (T := U8) s = .ok s :=
-  fromBytes_toBytes (UScalar.byteRepr_size_pos _) (toBytes_u8 s)
-
-end IsScalar
-
 /-- Reinterpret the bytes a pointer addresses at another element type and
 mutability.  The address is unchanged and the heap is untouched: `spec`, the
 one `step` uses, only records the address, and the others transfer ownership
@@ -967,77 +882,3 @@ theorem RawPtr.cast_scalar.spec_of_dvd [ByteRepr T] [ByteRepr T'] (p : RawPtr T 
     (RawPtr.aligned_retype_of_dvd hAlign)
 
 end Aeneas.Std
-
-namespace Aeneas.Std.IsScalar.Tests
-
-def bytes : Slice U8 := Slice.from [52#u8, 18#u8, 255#u8, 255#u8] (by scalar_tac)
-
-def words : Slice U16 := Slice.from [4660#u16, 65535#u16] (by scalar_tac)
-
-def signedWords : Slice I16 := Slice.from [4660#i16, (-1)#i16] (by scalar_tac)
-
-example (s : Slice U8) : toBytes s = .ok s := by simp
-
-example (s : Slice U8) : fromBytes (T := U8) s = .ok s := by simp
-
-theorem toBytes_words : toBytes words = .ok bytes := by
-  simp [toBytes, words, bytes, BitVec.toLEBytes,
-    show 4 ≤ Usize.max by scalar_tac]
-  rfl
-
-example : fromBytes (T := U16) bytes = .ok words :=
-  fromBytes_toBytes (UScalar.byteRepr_size_pos _) toBytes_words
-
-theorem toBytes_signedWords : toBytes signedWords = .ok bytes := by
-  simp [toBytes, signedWords, bytes, BitVec.toLEBytes,
-    show 4 ≤ Usize.max by scalar_tac]
-  rfl
-
-example : fromBytes (T := I16) bytes = .ok signedWords :=
-  fromBytes_toBytes (IScalar.byteRepr_size_pos _) toBytes_signedWords
-
-example : fromBytes (T := U16) (Slice.from [1#u8] (by scalar_tac)) = .fail .undef := by
-  simp only [fromBytes, Slice.from_val, List.map_cons, List.map_nil]
-  rw [ByteRepr.decodeAll]
-  simp [ByteRepr.decode, BitVec.decodeLE]
-
-example : fromBytes (T := I32) (Slice.from [1#u8, 2#u8, 3#u8] (by scalar_tac)) =
-    .fail .undef := by
-  simp only [fromBytes, Slice.from_val, List.map_cons, List.map_nil]
-  rw [ByteRepr.decodeAll]
-  simp [ByteRepr.decode, BitVec.decodeLE]
-
-example : fromBytes (T := U32) (Slice.from [] (by scalar_tac)) =
-    .ok (Slice.from [] (by scalar_tac)) := by
-  simp only [fromBytes, Slice.from_val, List.map_nil]
-  rw [ByteRepr.decodeAll]
-  simp
-
-example : numElems U8 16 = 16 := by simp
-
-example : numElems U32 16 = 4 := by
-  rcases System.Platform.numBits_eq with h | h
-  · simp [numElems, size, UScalar.val, h]
-  · simp [numElems, size, UScalar.val, h]
-
-example : numElems U64 17 = 3 := by
-  rcases System.Platform.numBits_eq with h | h
-  · simp [numElems, size, UScalar.val, h]
-  · simp [numElems, size, UScalar.val, h]
-
-example : numElems U128 0 = 0 := by
-  rcases System.Platform.numBits_eq with h | h
-  · simp [numElems, size, UScalar.val, h]
-  · simp [numElems, size, UScalar.val, h]
-
-example : (size (T := U128)).val = 16 := by
-  rcases System.Platform.numBits_eq with h | h
-  · simp [size, UScalar.val, h]
-  · simp [size, UScalar.val, h]
-
-example : (size (T := Isize)).val = System.Platform.numBits / 8 := by
-  rcases System.Platform.numBits_eq with h | h
-  · simp [size, UScalar.val, h]
-  · simp [size, UScalar.val, h]
-
-end Aeneas.Std.IsScalar.Tests

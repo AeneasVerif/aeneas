@@ -22,6 +22,15 @@ class ByteRepr (α : Type) where
 
 namespace ByteRepr
 
+theorem length_flatMap_encode {T : Type} [ByteRepr T] (values : List T) :
+    (values.flatMap encode).length = values.length * size T := by
+  induction values with
+  | nil => simp
+  | cons value rest ih =>
+      simp only [List.flatMap_cons, List.length_append, length_encode, ih,
+        List.length_cons, Nat.succ_mul]
+      omega
+
 def decodeAll (T : Type) [ByteRepr T] (bytes : List Byte) : Option (List T) :=
   match bytes with
   | [] => some []

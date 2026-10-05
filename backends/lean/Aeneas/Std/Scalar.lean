@@ -19,4 +19,6 @@ public import Aeneas.Std.Scalar.OverflowingOps
 public import Aeneas.Std.Scalar.Pow
 public import Aeneas.Std.Scalar.Rotate
 public import Aeneas.Std.Scalar.SaturatingOps
+public import Aeneas.Std.Scalar.SliceCodec
+public import Aeneas.Std.Scalar.SliceCodec.Tests
 public import Aeneas.Std.Scalar.WrappingOps
