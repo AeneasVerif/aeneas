@@ -1114,8 +1114,10 @@ theorem forall_unit {p : Unit → Prop} : (∀ value, p value) ↔ p () :=
 
 /-! ### The introduction tactic of the separation-logic judgments
 
-`step` leaves two shapes behind, and `intro_ispec` turns both of them into the
-`∀ outputs, facts → …` form the tactic introduces the outputs from:
+`step` leaves two shapes behind, and `intro_ispec` extracts the outputs, existentials
+and pure facts of both of them into the context, from which
+`Step.prepareIntroIspec` reverts them into the `∀ outputs, facts → …` form the
+tactic splits and introduces:
 
 * a continuation `∀ value, ispec (Qm value ∗ F) (next value) Q`, whose pure
   facts and existentials become hypotheses;
@@ -1180,138 +1182,10 @@ meta partial def reduceMarkers (markers : Array Name) (e : Expr) (fuel : Nat := 
 /-- The markers the separation-logic postcondition notation wraps its body in. -/
 meta def slMarkers : Array Name := #[``Aeneas.Std.WP.uncurry', ``Aeneas.Std.uncurry]
 
-/-! The facts of a separation-logic judgment are extracted from an assertion into the
-context, and split there. -/
-
-/-- Normalize the type of a fact in place, reducing the markers at its head. -/
-meta def normalizeFactInPlace (goal : MVarId) (fvarId : FVarId) : MetaM MVarId := do
-  goal.withContext do
-    let type ← instantiateMVars (← fvarId.getType)
-    let type' ← reduceMarkers slMarkers type
-    if type' == type.consumeMData then pure goal else goal.replaceLocalDeclDefEq fvarId type'
-
-/-- Prove trivial assumptions without evaluating program terms. -/
-meta def trivialProof? (type : Expr) : MetaM (Option Expr) := do
-  let type := type.consumeMData
-  if type.isConstOf ``True then return some (mkConst ``True.intro)
-  if type.isConstOf ``Unit then return some (mkConst ``Unit.unit)
-  match_expr type with
-  | Eq _ lhs rhs =>
-    if lhs == rhs then return some (← mkEqRefl lhs) else return none
-  | _ => return none
-
-/-- Normalize defining existentials before splitting facts. -/
-meta def normalizeExists (goal : MVarId) (fvarId : FVarId) : MetaM (MVarId × FVarId) := do
-  let goal ← normalizeFactInPlace goal fvarId
-  goal.withContext do
-    let type ← instantiateMVars (← fvarId.getType)
-    unless ← isProp type do return (goal, fvarId)
-    if (type.find? (·.isAppOfArity ``Exists 2)).isNone then return (goal, fvarId)
-    let thms ← #[``exists_eq_left, ``exists_eq_left', ``exists_eq_right, ``exists_eq_right']
-      |>.foldlM (fun thms name => thms.addConst name (post := false)) ({} : SimpTheorems)
-    let ctx ← Simp.mkContext { iota := false, zeta := false, dsimp := false }
-      (simpTheorems := #[thms])
-    let pre : Simp.Simproc := fun e => do
-      if e.isForall || e.isLambda || e.isLet ||
-          e.isAppOf ``And || e.isAppOf ``Or || e.isAppOf ``Exists ||
-          e.isAppOf ``ite || e.isAppOf ``dite then
-        return ← Simp.preDefault #[] e
-      if let .const name _ := e.getAppFn then
-        if ← isMatcher name then
-          return ← Simp.preDefault #[] e
-      return .done { expr := e }
-    let (result, _) ← Simp.main type ctx (methods := { Simp.mkDefaultMethodsCore #[] with pre })
-    let some proof := result.proof?
-      | return (← goal.replaceLocalDeclDefEq fvarId result.expr, fvarId)
-    let result ← goal.assertAfter fvarId (← fvarId.getUserName) result.expr
-      (← mkEqMP proof (.fvar fvarId))
-    return (← result.mvarId.tryClear fvarId, result.fvarId)
-
-/-- Collect conjuncts and discharge vacuous assumptions. -/
-meta partial def collectFacts (type proof : Expr) (name : Name) : MetaM (Array Hypothesis) := do
-  let type ← reduceMarkers slMarkers type
-  if type.isConstOf ``True then return #[]
-  if let .forallE _ domain body _ := type then
-    unless body.hasLooseBVars do
-      if let some witness ← trivialProof? domain then
-        return ← collectFacts body (mkApp proof witness) name
-  match_expr type with
-  | And p q =>
-    let left ← collectFacts p (mkApp3 (mkConst ``And.left) p q proof) name
-    let right ← collectFacts q (mkApp3 (mkConst ``And.right) p q proof) name
-    return left ++ right
-  | _ => return #[{ userName := name, type, value := proof }]
-
-private meta def witnessNames : Array AltVarNames := #[{ varNames := [`x] }]
-
-/-- Eliminate existentials without wrapping nondependent continuations in `casesOn`. -/
-meta def elimExists (goal : MVarId) (fvarId : FVarId) : MetaM (Array FVarId × MVarId) :=
-  goal.withContext do
-    let target ← goal.getType
-    if ← exprDependsOn target fvarId then
-      let #[subgoal] ← goal.cases fvarId witnessNames |
-        throwError "intro_split: expected a single existential constructor"
-      return (subgoal.fields.map Expr.fvarId!, subgoal.mvarId)
-    let type ← instantiateMVars (← fvarId.getType)
-    let_expr Exists α p := type |
-      throwError "intro_split: expected an existential"
-    let contType ← withLocalDeclD `x α fun x => do
-      mkForallFVars #[x] (← mkArrow (mkApp p x).headBeta target)
-    let cont ← mkFreshExprSyntheticOpaqueMVar contType (← goal.getTag)
-    goal.assign (mkApp5 (mkConst ``Exists.elim [← getLevel α]) α p target (.fvar fvarId) cont)
-    let (fields, goal) ← cont.mvarId!.introNP 2
-    return (fields, ← goal.tryClear fvarId)
-
-/-- Normalize and recursively split a fact into witnesses and conjuncts. -/
-meta partial def splitHypothesis (goal : MVarId) (fvarId : FVarId) : MetaM MVarId := do
-  let goal ← normalizeFactInPlace goal fvarId
-  let type ← goal.withContext do instantiateMVars (← fvarId.getType)
-  unless ← goal.withContext (isProp type) do return goal
-  if type.consumeMData.isConstOf ``True then
-    return (← goal.tryClear fvarId)
-  let facts ← goal.withContext do collectFacts type (.fvar fvarId) (← fvarId.getUserName)
-  let isExists := type.consumeMData.isAppOfArity ``Exists 2
-  unless isExists do
-    if let #[fact] := facts then
-      if fact.type == type then return goal
-  let (reverted, goal) ← goal.revertAfter fvarId
-  let dependent ← goal.withContext do exprDependsOn (← goal.getType) fvarId
-  let (fields, goal) ←
-    if isExists then
-      elimExists goal fvarId
-    else if dependent && type.consumeMData.isAppOfArity ``And 2 then do
-      let subgoals ← goal.cases fvarId witnessNames
-      let #[subgoal] := subgoals |
-        throwError "intro_split: expected a single constructor"
-      pure (subgoal.fields.map Expr.fvarId!, subgoal.mvarId)
-    else do
-      let (fields, goal) ← goal.assertHypotheses facts
-      pure (fields, ← goal.tryClear fvarId)
-  let mut goal := goal
-  /- Each edit invalidates later hypotheses. -/
-  for field in fields.reverse do
-    goal ← splitHypothesis goal field
-  return (← goal.introNP reverted.size).2
-
 /-- The hypotheses of the main goal, to be compared with the context a later step reaches. -/
 meta def localHypotheses : TacticM (Std.HashSet FVarId) := do
   (← getMainGoal).withContext do
     pure <| (← getLCtx).foldl (init := ∅) fun acc decl => acc.insert decl.fvarId
-
-/-- Normalize and split the hypotheses which appeared since `before` was taken. -/
-meta def splitNewHypotheses (before : Std.HashSet FVarId) : TacticM Unit := do
-  let goal ← getMainGoal
-  let introduced ← goal.withContext do
-    pure <| (← getLCtx).foldl (init := #[]) fun acc decl =>
-      if decl.isImplementationDetail || before.contains decl.fvarId then acc
-      else acc.push decl.fvarId
-  let mut goal := goal
-  for fvarId in introduced.reverse do
-    let (goal', fvarId) ← normalizeExists goal fvarId
-    goal := goal'
-    goal ← splitHypothesis goal fvarId
-  replaceMainGoal [goal]
-
 
 /-- Expose the structure of an assertion by reducing the markers it holds: those
 of the separating conjunctions it is built from, and those of the propositions
@@ -1367,15 +1241,12 @@ private meta def normalizeGoal : TacticM Unit := do
 single-continuation contract. Ambiguous witnesses remain for explicit `isimp`. -/
 private meta def simplifySpatialGoal : TacticM Unit := do
   unless (← getUnsolvedGoals).isEmpty do
-    let before ← Intro.localHypotheses
     let saved ← saveState
     evalTactic (← `(tactic| isimp only))
     let goals ← getUnsolvedGoals
     if goals.length > 1 || (← goals.anyM fun goal =>
         goal.withContext do return !(← isProp (← goal.getType))) then
       saved.restore
-    else unless goals.isEmpty do
-      Intro.splitNewHypotheses before
 
 end Intro
 
@@ -1386,19 +1257,16 @@ See the section above for the shapes it normalizes, and for why it needs no
 lemma about the markers of the postcondition notation. -/
 meta def introIspec : TacticM Unit := do
   withMainContext do
-    let before ← Intro.localHypotheses
     replaceMainGoal [(← (← getMainGoal).intros).2]
     withMainContext do
     Intro.normalizeGoal
     evalTactic (← `(tactic| iintro_shallow_post))
     unless (← getUnsolvedGoals).isEmpty do
       withMainContext do
-      Intro.splitNewHypotheses before
-      withMainContext do
       /- Collapse what is left of a ramified entailment between pure
          postconditions, and of a triple with a pure precondition.  The pure facts
          of a collapsed entailment are still in the goal, hence `and_imp` and
-         `exists_imp`: the ones extracted into the context were split above. -/
+         `exists_imp`. -/
       let _ ← Aeneas.Simp.simpAt true
         { dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1 }
         { addSimpThms :=

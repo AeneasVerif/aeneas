@@ -1,5 +1,5 @@
 module
-public import Aeneas.Tactic.Step.PrepareIntroIspec
+public import Aeneas.Tactic.Step.PrepareIntroOutputs
 public section
 
 namespace Aeneas.Std.WP

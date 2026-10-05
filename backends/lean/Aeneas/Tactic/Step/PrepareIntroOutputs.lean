@@ -259,6 +259,40 @@ meta def prepareIntroOutputsWith (type : Expr) (tree : NameTree) (prove : Tactic
   setGoals [next.mvarId!]
   return prefixLength
 
+/-- Read the pattern with which the program destructures the output from the goal the mono
+or bind rule leaves:
+- `∀ x, P x → spec (k x) Q` or `∀ v, ispec (Qm v ∗ F) (k v) Q`: from the continuation `k`;
+- `∀ x, P x → Q x`: from the caller's postcondition `Q`;
+- `P ⊢ Pm ∗ (Qm -∗+ Q)`: from the caller's postcondition `Q`. -/
+meta def getOutputTree (goalTy : Expr) : MetaM NameTree := do
+  let goalTy := (← instantiateMVars goalTy).consumeMData
+  unless goalTy.isForall do
+    return ← match goalTy.find? (·.isAppOfArity ``SepLogic.postWand 3) with
+      | some wand => getContInput wand.getAppArgs[2]!
+      | none => pure (.leaf none)
+  forallBoundedTelescope goalTy (some 1) fun xs body => do
+    let mut body := body.consumeMData
+    if body.isArrow && (← isProp body.bindingDomain!) then
+      body := body.bindingBody!.consumeMData
+    let (head, args) := body.withApp fun head args => (head, args)
+    let info? ← match head.constName? with
+      | some name => specInfoLookup name
+      | none => pure none
+    let cont := match info? with
+      | some info => if args.size == info.arity then args[info.program_index]! else body
+      | none => body
+    getContInput (← mkLambdaFVars xs cont).eta
+
+/-- Prove the equivalence built by `prepareIntroOutputsWith` with one `simp` call. -/
+meta def simpOutputEquiv : TacticM Unit := do
+  let _ ← Simp.simpAt true { failIfUnchanged := false, iota := false }
+    { simpThms := #[← stepSimpExt.getTheorems],
+      addSimpThms := #[``Std.uncurry_apply_pair,
+        ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
+        ``Std.WP.forall_unit, ``true_imp_iff, ``Prod.forall, ``forall_punit,
+        ``and_imp, ``exists_imp_named] }
+    (.targets #[] true)
+
 /-- Goal preparation shared by `spec` and `dspec`. The goal produced by the mono and bind
 rules has the shape `∀ x, P x → Q x`, where `Q x` is either the caller's postcondition or
 `spec (k x) Q'`. The output pattern is read from `Q` (or from the continuation `k`).
@@ -268,27 +302,28 @@ then prove equivalence with one `simp` call. -/
 meta def prepareIntroOutputs : PrepareIntroOutputs := do
   withMainContext do
   let goalTy ← instantiateMVars (← getMainTarget)
-  let tree ← forallBoundedTelescope goalTy (some 2) fun xs body => do
-    unless xs.size == 2 do
-      throwError "Expected a goal of the shape `∀ x, P x → Q x`, got:\n{goalTy}"
-    let x := xs[0]!
-    if (← isProp (← inferType x)) || !(← isProp (← inferType xs[1]!)) then
-      throwError "Expected a goal of the shape `∀ x, P x → Q x`, got:\n{goalTy}"
-    let (head, args) := body.consumeMData.withApp fun head args => (head, args)
-    let info? ← match head.constName? with
-      | some name => specInfoLookup name
-      | none => pure none
-    let cont := match info? with
-      | some info => if args.size == info.arity then args[info.program_index]! else body
-      | none => body
-    getContInput (← mkLambdaFVars #[x] cont).eta
-  prepareIntroOutputsWith goalTy tree do
-    let _ ← Simp.simpAt true { failIfUnchanged := false, iota := false }
-      { simpThms := #[← stepSimpExt.getTheorems],
-        addSimpThms := #[``Std.uncurry_apply_pair,
-          ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
-          ``Std.WP.forall_unit, ``true_imp_iff, ``Prod.forall, ``forall_punit,
-          ``and_imp, ``exists_imp_named] }
-      (.targets #[] true)
+  prepareIntroOutputsWith goalTy (← getOutputTree goalTy) simpOutputEquiv
+
+/-- Goal preparation shared by `ispec` and `dispec`. `Std.WP.introIspec` extracts the
+output and the pure facts and existentials of the premise into the context. We revert
+them to obtain the `∀ v, facts → …` shape of `prepareIntroOutputs`, and destructure `v`
+in the same way. -/
+meta def prepareIntroIspec : PrepareIntroOutputs := do
+  withMainContext do
+  let tree ← getOutputTree (← getMainTarget)
+  let before ← Std.WP.Intro.localHypotheses
+  Std.WP.introIspec
+  let goal ← match ← getUnsolvedGoals with
+    | [] => return 0
+    | [goal] => pure goal
+    | _ => throwError "prepareIntroIspec: expected a single goal"
+  let introduced ← goal.withContext do
+    pure <| (← getLCtx).getFVarIds.filter (!before.contains ·)
+  let (_, goal) ← goal.revert introduced (preserveOrder := true)
+  setGoals [goal]
+  let goalTy ← instantiateMVars (← goal.getType)
+  let .forallE _ domain _ _ := goalTy.consumeMData | return 0
+  if ← isProp domain then return 0
+  prepareIntroOutputsWith goalTy tree simpOutputEquiv
 
 end Aeneas.Step
