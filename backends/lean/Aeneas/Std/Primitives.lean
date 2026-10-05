@@ -18,32 +18,6 @@ namespace Std
 open Lean Elab Command Term Meta
 open Aeneas.Data.Coinductive
 
-/-- `#assert e` checks that the boolean expression `e` evaluates to `true`, raising an error
-otherwise (like a Rust `assert!`). It is emitted by the extraction engine for functions marked
-`#[verify::test]`.
-
-**Note:** `#assert` *compiles and runs* `e` (via `evalTerm`), so
-- everything used directly in the expression must be meta-accessible
-- and everything called transitively by the expression must have its code available. -/
-syntax (name := assert) "#assert" term: command
-
-@[command_elab assert]
-meta unsafe
-def assertImpl : CommandElab := fun (stx: Syntax) => do
-  runTermElabM (fun _ => do
-    let r ← evalTerm Bool (mkConst ``Bool) stx[1]
-    if not r then
-      logInfo ("Assertion failed for:\n" ++ stx[1])
-      throwError ("Expression reduced to false:\n"  ++ stx[1])
-    pure ())
-
-/--
-info: true
--/
-#guard_msgs in
-#eval 2 == 2
-#assert (2 == 2)
-
 syntax (name := elabSyntax) "#elab" term: command
 
 @[command_elab elabSyntax]
