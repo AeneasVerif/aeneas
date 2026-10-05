@@ -34,6 +34,13 @@ val update_ctx_along_write_place :
 val read_place :
   Meta.span -> access_kind -> place -> eval_ctx -> loan_id option * tvalue
 
+val read_place_opt :
+  Meta.span ->
+  access_kind ->
+  place ->
+  eval_ctx ->
+  (loan_id option * tvalue) option
+
 (** Update the value at a given place, provided the place **does not refer to a
     global** (globals are handled elsewhere).
 

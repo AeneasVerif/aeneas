@@ -721,6 +721,26 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->
   [%ltrace "statement:\n" ^ statement_to_string_with_tab ctx st ^ "\n"];
   match st.kind with
+  | Assign (p, rvalue)
+    when Option.is_some (raw_ptr_deref_place st.span p)
+         && not (ExpressionsUtils.rvalue_accesses_global rvalue) ->
+      let q = Option.get (raw_ptr_deref_place st.span p) in
+      let res, ctx, cc = eval_rvalue_not_global config st.span rvalue ctx in
+      begin
+        match res with
+        | Error EPanic -> ([ (ctx, Panic) ], cc_singleton __FILE__ __LINE__ st.span cc)
+        | Ok rv ->
+            [%cassert] st.span
+              (not (ty_has_borrows (Some st.span) ctx.type_ctx.type_infos rv.ty))
+              "Unsupported: writing a value containing borrows through a raw \
+               pointer";
+            let ptr, ctx, cc = comp2 cc (eval_operand config st.span (Copy q) ctx) in
+            let ctx = ctx_mark_raw_ptr_views_dirty ctx in
+            let cc =
+              cc_comp cc (fun e -> SymbolicAst.RawPtrWrite (ctx, ptr, rv, e))
+            in
+            ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span cc)
+      end
   | Assign (p, rvalue) ->
       if
         (* We handle global assignments separately as a specific case. *)
@@ -1288,7 +1308,11 @@ and eval_raw_ptr_view_creation (config : config) (span : Meta.span)
   let is_direct_borrow =
     match arg with
     | Move p | Copy p -> (
-        let v = try Some (snd (read_place span Read p ctx)) with _ -> None in
+        let v =
+          match read_place_opt span Read p ctx with
+          | Some (_, v) -> Some v
+          | None -> None
+        in
         match v with
         | Some { value = VBorrow (VSharedBorrow _ | VReservedMutBorrow _); _ }
           -> true

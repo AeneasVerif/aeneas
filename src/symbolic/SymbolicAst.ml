@@ -260,6 +260,7 @@ type expr =
               ... }
           ]} *)
   | Meta of (emeta[@opaque]) * expr  (** Meta information *)
+  | RawPtrWrite of (Contexts.eval_ctx[@opaque]) * tvalue * tvalue * expr
   | Error of Meta.span option * string
   | TargetDispatch of symbolic_value list * (string * Types.fun_decl_ref) list
       (** Multi-target dispatch: the function body dispatches to one of several
@@ -346,6 +347,7 @@ and value_aggregate =
           an unsized cast: we need the trait reference to perform the cast. *)
   | VaFnDef of fn_ptr  (** Function pointer of a top-level definition *)
   | VaRawPtrView of raw_ptr_view
+  | VaRawPtrRead of tvalue
 [@@deriving
   show,
   visitors

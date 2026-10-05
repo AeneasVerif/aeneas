@@ -137,6 +137,8 @@ type pure_builtin_fun_id =
   | Discriminant  (** Discriminant read *)
   | RawPtrOfSlice of mutability
   | EndRawPtrOfSlice of mutability
+  | RawPtrRead
+  | RawPtrWrite
   | ResultUnwrapMut
       (** Temporary fix: the
           [core::result::{core::result::Result<@T, @E>}::unwrap] instantiated

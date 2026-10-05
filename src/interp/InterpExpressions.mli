@@ -66,6 +66,8 @@ val eval_rvalue_not_global :
   * eval_ctx
   * (SymbolicAst.expr -> SymbolicAst.expr)
 
+val raw_ptr_deref_place : Meta.span -> place -> place option
+
 val eval_rvalue_ref :
   config ->
   Meta.span ->

@@ -261,6 +261,7 @@ let rec translate_expr (e : S.expr) (ctx : bs_ctx) : texpr =
   | SubstituteAbsIds (eid, aids, e) ->
       translate_substitute_abs_ids ctx eid aids e
   | Meta (meta, e) -> translate_emeta meta e ctx
+  | RawPtrWrite (ectx, ptr, v, e) -> translate_raw_ptr_write ectx ptr v e ctx
   | ForwardEnd (return_value, ectx, e, back_e) ->
       (* Translate the end of a function (this is introduced when we reach a [return] statement). *)
       translate_forward_end return_value ectx e back_e ctx
@@ -980,6 +981,25 @@ and translate_end_raw_ptr_view (ectx : C.eval_ctx) (view : V.raw_ptr_view)
   let call = [%add_loc] mk_apps ctx.span func [ original; ptr ] in
   let next_e = translate_expr e ctx in
   [%add_loc] mk_closed_checked_let ctx true pat call next_e
+
+and translate_raw_ptr_write (ectx : C.eval_ctx) (ptr : V.tvalue) (v : V.tvalue)
+    (e : S.expr) (ctx : bs_ctx) : texpr =
+  check_can_perform_heap_op ctx;
+  let ptr = tvalue_to_texpr ctx ectx ptr in
+  let v = tvalue_to_texpr ctx ectx v in
+  let func =
+    {
+      id = FunOrOp (Fun (Pure RawPtrWrite));
+      generics = mk_generic_args_from_types [ v.ty ];
+    }
+  in
+  let func : texpr =
+    { e = Qualif func; ty = mk_arrows [ ptr.ty; v.ty ] (mk_result_ty mk_unit_ty) }
+  in
+  let call = [%add_loc] mk_apps ctx.span func [ ptr; v ] in
+  let next_e = translate_expr e ctx in
+  [%add_loc] mk_closed_checked_let ctx true (mk_ignored_pat mk_unit_ty) call
+    next_e
 
 and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expr) (ctx : bs_ctx) (rg_id : T.RegionGroupId.id)
@@ -1748,6 +1768,19 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
           { e = Qualif func; ty = mk_arrow original.ty (mk_result_ty var.ty) }
         in
         ([%add_loc] mk_app ctx.span func original, true)
+    | VaRawPtrRead ptr ->
+        check_can_perform_heap_op ctx;
+        let ptr = tvalue_to_texpr ctx ectx ptr in
+        let func =
+          {
+            id = FunOrOp (Fun (Pure RawPtrRead));
+            generics = mk_generic_args_from_types [ var.ty ];
+          }
+        in
+        let func : texpr =
+          { e = Qualif func; ty = mk_arrow ptr.ty (mk_result_ty var.ty) }
+        in
+        ([%add_loc] mk_app ctx.span func ptr, true)
   in
 
   (* Make the let-binding *)

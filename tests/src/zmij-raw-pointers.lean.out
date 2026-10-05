@@ -1,5 +1,5 @@
-[[92mInfo[39m ] Imported: tests/llbc/raw_pointers_generic.llbc
+[[92mInfo[39m ] Imported: tests/llbc/zmij_raw_pointers.llbc
 [[91mError[39m] [as_ptr] and [as_mut_ptr] are only supported on slices of integers
-Source: 'tests/src/raw_pointers_generic.rs', lines 5:4-5:17
+Source: 'tests/src/zmij-raw-pointers.rs', lines 125:26-125:46
 Compiler source: interp/InterpStatements.ml, line 1378
 

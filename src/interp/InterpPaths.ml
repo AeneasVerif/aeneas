@@ -344,6 +344,12 @@ let try_read_place (span : Meta.span) (access : access_kind) (p : place)
          original one. *)
       Ok (lid, read_value)
 
+let read_place_opt (span : Meta.span) (access : access_kind) (p : place)
+    (ctx : eval_ctx) : (loan_id option * tvalue) option =
+  match try_read_place span access p ctx with
+  | Error _ -> None
+  | Ok res -> Some res
+
 let read_place (span : Meta.span) (access : access_kind) (p : place)
     (ctx : eval_ctx) : loan_id option * tvalue =
   match try_read_place span access p ctx with

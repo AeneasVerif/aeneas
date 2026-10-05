@@ -1048,6 +1048,30 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Core.lean", line: 104 *)
     mk_fun "core::option::{core::option::Option<@T>}::unwrap_or"
       "core.option.Option.unwrap_or" ~can_fail:false;
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 21 *)
+    mk_fun "core::ptr::const_ptr::{*const @T}::add"
+      "core.ptr.const_ptr.RawPtrConstT.add";
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 37 *)
+    mk_fun "core::ptr::const_ptr::{*const @T}::offset"
+      "core.ptr.const_ptr.RawPtrConstT.offset";
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 29 *)
+    mk_fun "core::ptr::const_ptr::{*const @T}::sub"
+      "core.ptr.const_ptr.RawPtrConstT.sub";
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 45 *)
+    mk_fun "core::ptr::copy"
+      "core.ptr.copy";
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 41 *)
+    mk_fun "core::ptr::copy_nonoverlapping"
+      "core.ptr.copy_nonoverlapping";
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 17 *)
+    mk_fun "core::ptr::mut_ptr::{*mut @T}::add"
+      "core.ptr.mut_ptr.RawPtrMutT.add";
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 33 *)
+    mk_fun "core::ptr::mut_ptr::{*mut @T}::offset"
+      "core.ptr.mut_ptr.RawPtrMutT.offset";
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 25 *)
+    mk_fun "core::ptr::mut_ptr::{*mut @T}::sub"
+      "core.ptr.mut_ptr.RawPtrMutT.sub";
     (* file: "Aeneas/Std/Core/Convert.lean", line: 113 *)
     mk_fun
       "core::result::{core::ops::try_trait::FromResidual<core::result::Result<@T, \

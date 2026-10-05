@@ -1260,6 +1260,8 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (RawPtrOfSlice Const, "Slice.as_ptr");
         (EndRawPtrOfSlice Mut, "Slice.end_as_mut_ptr");
         (EndRawPtrOfSlice Const, "Slice.end_as_ptr");
+        (RawPtrRead, "RawPtr.read");
+        (RawPtrWrite, "MutRawPtr.write");
         (GetTarget, "get_target");
         (TargetFeatureEnabled, "target_feature_enabled");
       ]

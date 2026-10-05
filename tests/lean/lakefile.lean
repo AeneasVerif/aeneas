@@ -100,8 +100,10 @@ package «tests» {}
 @[default_target] lean_lib Print
 @[default_target] lean_lib Range
 @[default_target] lean_lib RawPointerCasts
+@[default_target] lean_lib RawPointers
 @[default_target] lean_lib RenameAttribute
 @[default_target] lean_lib RustBorrowCheckIssues
+@[default_target] lean_lib RyuRawPointers
 @[default_target] lean_lib Scalars
 @[default_target] lean_lib SepLogic
 @[default_target] lean_lib Slices

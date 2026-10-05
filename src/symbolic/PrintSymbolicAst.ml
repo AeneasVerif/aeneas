@@ -48,6 +48,7 @@ let value_aggregate_to_string (env : fmt_env) (v : value_aggregate) : string =
       (if view.rpv_mut then "@as_mut_ptr(" else "@as_ptr(")
       ^ Values.tvalue_to_string env view.rpv_original
       ^ ")"
+  | VaRawPtrRead ptr -> "*" ^ Values.tvalue_to_string env ptr
 
 let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
     (e : expr) : string =
@@ -125,6 +126,13 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       join_to_string env indent indent_incr ectx values abs
   | Let lete -> let_expr_to_string env indent indent_incr lete
   | Meta (_, next) -> expr_to_string env indent indent_incr next
+  | RawPtrWrite (_, ptr, v, next) ->
+      indent ^ "*"
+      ^ Values.tvalue_to_string env ptr
+      ^ " := "
+      ^ Values.tvalue_to_string env v
+      ^ "\n"
+      ^ expr_to_string env indent indent_incr next
   | Error (_, error) -> indent ^ "ERROR(" ^ error ^ ")"
   | TargetDispatch (input_svs, targets) ->
       let inputs =

@@ -1,4 +1,3 @@
-//@ [lean] known-failure
 //@ [!lean] skip
 
 fn read_via_ptr(data: &[u16; 8]) -> u16 {

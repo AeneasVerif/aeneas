@@ -347,10 +347,38 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
     function parameters. Still, it is better for soundness purposes, and
     corresponds to what we do in the formalization (because we don't enforce the
     same constraints as MIR in the formalization). *)
+let raw_ptr_deref_place (span : Meta.span) (p : place) : place option =
+  let rec derefs_raw_ptr (p : place) : bool =
+    match p.kind with
+    | PlaceProjection (p', Deref) -> (
+        match p'.ty with
+        | TRawPtr _ -> true
+        | _ -> derefs_raw_ptr p')
+    | PlaceProjection (p', _) -> derefs_raw_ptr p'
+    | PlaceLocal _ | PlaceGlobal _ -> false
+  in
+  match p.kind with
+  | PlaceProjection (({ ty = TRawPtr _; _ } as q), Deref) ->
+      [%cassert] span
+        (not (derefs_raw_ptr q))
+        "Aeneas does not yet support dereferencing raw pointers which are \
+         themselves reached through raw pointers";
+      Some q
+  | _ ->
+      [%cassert] span
+        (not (derefs_raw_ptr p))
+        "Aeneas does not yet support projections through dereferenced raw \
+         pointers";
+      None
+
 let rec prepare_eval_operand_reorganize (config : config) (span : Meta.span)
     (op : operand) : cm_fun =
  fun ctx ->
   match op with
+  | (Copy p | Move p) when Option.is_some (raw_ptr_deref_place span p) ->
+      prepare_eval_operand_reorganize config span
+        (Copy (Option.get (raw_ptr_deref_place span p)))
+        ctx
   | Constant _ ->
       (* No need to reorganize the context *)
       (ctx, fun e -> e)
@@ -383,8 +411,9 @@ and end_dirty_raw_ptr_views_at_place (config : config) (span : Meta.span)
     (ctx, fun e -> e)
   else
     let loans =
-      try
-        let lid, v = read_place span Read p ctx in
+      match read_place_opt span Read p ctx with
+      | None -> BorrowId.Set.empty
+      | Some (lid, v) ->
         let loans = ref (BorrowId.Set.of_list (Option.to_list lid)) in
         let visitor =
           object (self)
@@ -397,7 +426,6 @@ and end_dirty_raw_ptr_views_at_place (config : config) (span : Meta.span)
         in
         visitor#visit_tvalue () v;
         !loans
-      with _ -> BorrowId.Set.empty
     in
     let abs_ids =
       env_filter_map_abs
@@ -414,7 +442,7 @@ and end_dirty_raw_ptr_views_at_place (config : config) (span : Meta.span)
       abs_ids ctx
 
 (** Evaluate an operand, without reorganizing the context before *)
-let eval_operand_no_reorganize (config : config) (span : Meta.span)
+let rec eval_operand_no_reorganize (config : config) (span : Meta.span)
     (op : operand) (ctx : eval_ctx) :
     tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Debug *)
@@ -423,6 +451,19 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
     ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* Evaluate *)
   match op with
+  | (Copy p | Move p) when Option.is_some (raw_ptr_deref_place span p) ->
+      let q = Option.get (raw_ptr_deref_place span p) in
+      let ptr, ctx, cc = eval_operand_no_reorganize config span (Copy q) ctx in
+      [%cassert] span
+        (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos p.ty))
+        "Unsupported: reading a value containing borrows through a raw pointer";
+      let sv = mk_fresh_symbolic_value span ctx p.ty in
+      let cc =
+        cc_comp cc (fun e ->
+            SymbolicAst.IntroSymbolic
+              (ctx, None, sv, SymbolicAst.VaRawPtrRead ptr, e))
+      in
+      (mk_tvalue_from_symbolic_value sv, ctx, cc)
   | Constant cv -> begin
       [%ldebug "constant of type: " ^ ty_to_string ctx cv.ty];
       match cv.kind with
