@@ -1,4 +1,3 @@
-//@ [lean] known-failure
 //@ [!lean] skip
 
 fn generic_ptr<T>(data: &[T]) -> *const T {

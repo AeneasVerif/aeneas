@@ -1789,10 +1789,19 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
   (* Open a box for the generics *)
   F.pp_open_hovbox fmt 0;
   let explicit = def.signature.explicit_info in
+  let byte_repr_params =
+    let params =
+      Layouts.get_byte_repr_type_params ctx.trans_ctx.crate def.def_id
+    in
+    List.filter_map
+      (fun ((tp : type_param), name) ->
+        if TypeVarId.Set.mem tp.index params then Some name else None)
+      (List.combine def.signature.generics.types type_params)
+  in
   (let space = Some space in
    extract_generic_params def.item_meta.span ctx fmt TypeDeclId.Set.empty ~space
-     Item def.signature.generics (Some explicit) type_params cg_params
-     trait_clauses);
+     ~byte_repr_params Item def.signature.generics (Some explicit) type_params
+     cg_params trait_clauses);
   (* Close the box for the generics *)
   F.pp_close_box fmt ();
   (* The input parameters - note that doing this adds bindings to the context *)

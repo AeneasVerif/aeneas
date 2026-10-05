@@ -246,7 +246,153 @@ let get_byte_repr_structs (crate : crate) : TypeDeclId.Set.t =
 let rec has_byte_repr (crate : crate) (ty : ty) : bool =
   match ty with
   | TScalar (TInteger _) -> true
+  | TVar (Free _) ->
+      (* The functions which manipulate the values of a type parameter through
+         raw pointers require a byte representation for it (see
+         [get_byte_repr_type_params]) *)
+      true
   | TArray (ty, _, _) -> has_byte_repr crate ty
   | TAdt { id; builtin = None; _ } ->
       TypeDeclId.Set.mem id (get_byte_repr_structs crate)
   | _ -> false
+
+(** {1 Byte representations of type parameters}
+
+    The generic functions which manipulate values of a type parameter [T]
+    through raw pointers require a byte representation of [T]: we add an
+    instance argument [[ByteRepr T]] to their signatures. *)
+
+(** The indices of the type parameters of a type declaration which occur in
+    pointee types of raw pointers in its fields *)
+let rec decl_pointee_params (crate : crate) (visiting : TypeDeclId.Set.t)
+    (memo : (TypeDeclId.id, TypeVarId.Set.t) Hashtbl.t) (id : TypeDeclId.id) :
+    TypeVarId.Set.t =
+  match Hashtbl.find_opt memo id with
+  | Some s -> s
+  | None ->
+      if TypeDeclId.Set.mem id visiting then TypeVarId.Set.empty
+      else
+        let visiting = TypeDeclId.Set.add id visiting in
+        let s =
+          match TypeDeclId.Map.find_opt id crate.type_decls with
+          | Some { kind = Struct fields; _ } ->
+              List.fold_left
+                (fun s (f : field) ->
+                  TypeVarId.Set.union s
+                    (pointee_vars crate visiting memo false f.field_ty))
+                TypeVarId.Set.empty fields
+          | Some { kind = Enum variants; _ } ->
+              List.fold_left
+                (fun s (v : variant) ->
+                  List.fold_left
+                    (fun s (f : field) ->
+                      TypeVarId.Set.union s
+                        (pointee_vars crate visiting memo false f.field_ty))
+                    s v.fields)
+                TypeVarId.Set.empty variants
+          | _ -> TypeVarId.Set.empty
+        in
+        Hashtbl.replace memo id s;
+        s
+
+(** The type variables which occur in pointee types of raw pointers in a type
+    ([under_ptr]: are we under a raw pointer?) *)
+and pointee_vars (crate : crate) (visiting : TypeDeclId.Set.t)
+    (memo : (TypeDeclId.id, TypeVarId.Set.t) Hashtbl.t) (under_ptr : bool)
+    (ty : ty) : TypeVarId.Set.t =
+  let explore = pointee_vars crate visiting memo in
+  let union_map f l =
+    List.fold_left
+      (fun s x -> TypeVarId.Set.union s (f x))
+      TypeVarId.Set.empty l
+  in
+  match ty with
+  | TVar (Free v) ->
+      if under_ptr then TypeVarId.Set.singleton v else TypeVarId.Set.empty
+  | TRawPtr (ty, _) -> explore true ty
+  | TRef (_, ty, _) | TArray (ty, _, _) | TSlice (ty, _) -> explore under_ptr ty
+  | TAdt { id; builtin = None; generics } ->
+      let params = decl_pointee_params crate visiting memo id in
+      union_map
+        (fun (i, ty) ->
+          explore
+            (under_ptr || TypeVarId.Set.mem (TypeVarId.of_int i) params)
+            ty)
+        (List.mapi (fun i ty -> (i, ty)) generics.types)
+  | TAdt { generics; _ } -> union_map (explore under_ptr) generics.types
+  | _ -> TypeVarId.Set.empty
+
+(** Compute, for every function, the type parameters which require a byte
+    representation *)
+let compute_byte_repr_type_params (crate : crate) :
+    TypeVarId.Set.t FunDeclId.Map.t =
+  let memo = Hashtbl.create 16 in
+  let pointee_vars = pointee_vars crate TypeDeclId.Set.empty memo in
+  let needs = ref FunDeclId.Map.empty in
+  let get (id : FunDeclId.id) =
+    Option.value ~default:TypeVarId.Set.empty (FunDeclId.Map.find_opt id !needs)
+  in
+  let compute (d : fun_decl) : TypeVarId.Set.t =
+    (* We leave the signatures of the opaque functions unchanged *)
+    if
+      not
+        (match d.body with
+        | StructuredBody _ -> true
+        | _ -> false)
+    then TypeVarId.Set.empty
+    else
+      let s = ref TypeVarId.Set.empty in
+      let add ty = s := TypeVarId.Set.union !s (pointee_vars false ty) in
+      List.iter add (d.signature.output :: d.signature.inputs);
+      (match d.body with
+      | StructuredBody body ->
+          List.iter (fun (l : local) -> add l.local_ty) body.locals.locals;
+          let visitor =
+            object
+              inherit [_] iter_statement as super
+
+              method! visit_Call env call on_unwind =
+                (match call.func with
+                | FnOpRegular { kind = Fun g; generics } ->
+                    let params = get g in
+                    List.iteri
+                      (fun i ty ->
+                        if TypeVarId.Set.mem (TypeVarId.of_int i) params then
+                          s := TypeVarId.Set.union !s (pointee_vars true ty))
+                      generics.types
+                | _ -> ());
+                super#visit_Call env call on_unwind
+            end
+          in
+          visitor#visit_block () body.body
+      | _ -> ());
+      !s
+  in
+  let changed = ref true in
+  while !changed do
+    changed := false;
+    FunDeclId.Map.iter
+      (fun id d ->
+        let s = compute d in
+        if not (TypeVarId.Set.equal s (get id)) then (
+          changed := true;
+          needs := FunDeclId.Map.add id s !needs))
+      crate.fun_decls
+  done;
+  !needs
+
+let byte_repr_type_params_memo :
+    (crate * TypeVarId.Set.t FunDeclId.Map.t) option ref =
+  ref None
+
+let get_byte_repr_type_params (crate : crate) (id : FunDeclId.id) :
+    TypeVarId.Set.t =
+  let m =
+    match !byte_repr_type_params_memo with
+    | Some (c, m) when c == crate -> m
+    | _ ->
+        let m = compute_byte_repr_type_params crate in
+        byte_repr_type_params_memo := Some (crate, m);
+        m
+  in
+  Option.value ~default:TypeVarId.Set.empty (FunDeclId.Map.find_opt id m)

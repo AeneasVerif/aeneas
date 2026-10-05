@@ -1318,7 +1318,8 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ?(use_forall = false)
     ?(use_fun = false) ?(use_forall_use_sep = true) ?(use_arrows = false)
     ?(as_implicits : bool = false) ?(space : bool ref option = None)
-    (origin : generic_origin) (generics : generic_params)
+    ?(byte_repr_params : string list = []) (origin : generic_origin)
+    (generics : generic_params)
     (explicit : explicit_info option) (type_params : string list)
     (cg_params : string list) (trait_clauses : string list) : unit =
   let all_params = List.concat [ type_params; cg_params; trait_clauses ] in
@@ -1379,6 +1380,14 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
           if use_arrows then (
             F.pp_print_space fmt ();
             F.pp_print_string fmt "->"));
+        (* Print the byte representations required by the type parameters (see
+           [Layouts.get_byte_repr_type_params]) *)
+        if backend () = Lean then
+          List.iter
+            (fun s ->
+              insert_req_space ();
+              F.pp_print_string fmt ("[ByteRepr " ^ s ^ "]"))
+            byte_repr_params;
         (* Print the const generic parameters *)
         List.iter
           (fun ((expl, var) : explicit * const_generic_param) ->

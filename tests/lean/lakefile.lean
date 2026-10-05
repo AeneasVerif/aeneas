@@ -43,6 +43,7 @@ package «tests» {}
 @[default_target] lean_lib GenericUnitOutput
 @[default_target] lean_lib Hashmap
 @[default_target] lean_lib HigherRankedTraitBounds
+@[default_target] lean_lib InPlaceOrDisjointBuffer
 @[default_target] lean_lib Into
 @[default_target] lean_lib Issue1043IteratorMethods
 @[default_target] lean_lib Issue1044OpaqueTuple
@@ -102,6 +103,8 @@ package «tests» {}
 @[default_target] lean_lib RawPointerCasts
 @[default_target] lean_lib RawPointerLayouts
 @[default_target] lean_lib RawPointers
+@[default_target] lean_lib RawPointersGeneric
+@[default_target] lean_lib RawPointersGenericMut
 @[default_target] lean_lib RenameAttribute
 @[default_target] lean_lib RustBorrowCheckIssues
 @[default_target] lean_lib RyuRawPointers

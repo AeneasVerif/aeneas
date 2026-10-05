@@ -1,4 +1,3 @@
-//@ [lean] known-failure
 //@ [!lean] skip
 //@ [lean] subdir=InPlaceOrDisjointBuffer
 use std::marker::PhantomData;
