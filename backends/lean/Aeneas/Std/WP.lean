@@ -124,6 +124,15 @@ theorem dspec_func_admissible {α : Sort v} {β} (arg : α) (p : Post β) :
 @[simp] theorem uncurry'_pair x y (p : α → β → γ) : uncurry' p (x, y) = p x y := by simp [uncurry']
 @[defeq] theorem uncurry'_eq x (p : α → β → γ) : uncurry' p x = p x.fst x.snd := by simp [uncurry']
 
+/-- The spatial counterparts of `Std.uncurry_eq_prop` and `Std.uncurry_eq_prop_arrow`,
+for postconditions of the separation logic judgments applied to a returned tuple
+which is not a literal. -/
+theorem uncurry_eq_iprop {α β} (x : α × β) (p : α → β → IProp) :
+    Std.uncurry p x = p x.fst x.snd := by cases x; rfl
+
+theorem uncurry_eq_iprop_arrow {α β σ} (x : α × β) (p : α → β → σ → IProp) :
+    Std.uncurry p x = p x.fst x.snd := by cases x; rfl
+
 @[simp, grind =, agrind =]
 theorem ispec_ok (x : α) : ispec P (ok x) Q ↔ P ⊢ Q x := by
   constructor
