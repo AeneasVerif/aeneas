@@ -57,7 +57,7 @@ example (P Q R : IProp) : iprop((P ∧ Q) ∧ R) ⊣⊢ iprop(P ∧ (Q ∧ R)) :
 example (P Q : Prop) : iprop(⌜P⌝ ∧ ⌜Q⌝) = ⌜P ∧ Q⌝ := by
   simp
 
-example {α : Type} (r : Aeneas.Std.Ref α) (value : α) :
+example {α : Type} [Aeneas.Std.ByteRepr α] (r : Aeneas.Std.Ref α) (value : α) :
     iprop((r ↦ value) ∧ (r ↦ value)) = (r ↦ value) := by
   simp
 
@@ -81,7 +81,8 @@ example (Q₁ Q₂ : IPost Nat) : Q₁ ∗+ (Q₁ -∗+ Q₂) ⊢+ Q₂ :=
   postWand_cancel Q₁ Q₂
 
 /-- A slot cannot be owned twice: separation is still separation. -/
-example {α : Type} (r : Aeneas.Std.Ref α) (x y : α) : r ↦ x ∗ r ↦ y ⊢ ⌜False⌝ :=
-  Ref.pointsTo_exclusive r x y
+example {α : Type} [Aeneas.Std.ByteRepr α] (r : Aeneas.Std.Ref α) (x y : α)
+    (hSize : 0 < Aeneas.Std.ByteRepr.size α) : r ↦ x ∗ r ↦ y ⊢ ⌜False⌝ :=
+  Ref.pointsTo_exclusive r x y hSize
 
 end Aeneas.SepLogic.Tests

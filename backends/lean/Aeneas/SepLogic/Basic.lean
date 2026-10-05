@@ -30,9 +30,9 @@ namespace Aeneas.SepLogic
 
 universe u
 
-open Aeneas.Std (Heap Ref)
+open Aeneas.Std (Heap Ref ByteRepr)
 
-open Aeneas.Std (Heap Ref)
+open Aeneas.Std (Heap Ref ByteRepr)
 
 /-- Heap predicates describe heap fragments.  Like Iris's `uPred`, an assertion
 is closed under heap extension: it constrains the cells it owns, and says
@@ -84,17 +84,17 @@ def owns (A : Heap) : IProp where
   holds h := Heap.Sub A h
   up_closed := fun hSub hExtend => hSub.trans hExtend
 
-/-- The points-to assertion of a reference: the heap owns the slot `r`, and it
-holds `value`. -/
-def Ref.pointsTo {α : Type} (r : Ref α) (value : α) : IProp :=
-  owns (Heap.singleton r value)
+/-- The points-to assertion of a reference: the heap owns the bytes from `r` on,
+and they encode `value`. -/
+def Ref.pointsTo {α : Type} [ByteRepr α] (r : Ref α) (value : α) : IProp :=
+  owns (Heap.bytes r.addr (ByteRepr.encode value))
 
 /-- What `↦` means, overloaded: a reference points to the slot it names, a
 pointer to the value it addresses, and a buffer to the values it spans. -/
 class PointsTo (ρ : Type u) (β : outParam (Type v)) where
   pointsTo : ρ → β → IProp
 
-instance instPointsToRef {α : Type} : PointsTo (Ref α) α :=
+instance instPointsToRef {α : Type} [ByteRepr α] : PointsTo (Ref α) α :=
   ⟨Ref.pointsTo⟩
 
 /-- Additive conjunction: both assertions hold of the same heap fragment. -/
@@ -358,8 +358,9 @@ side owns anything, so no heap is involved. -/
 theorem entails_ipure_iff (P Q : Prop) : (⌜P⌝ ⊢ ⌜Q⌝) ↔ (P → Q) :=
   ⟨fun h hP => h ∅ hP, fun h _ hP => h hP⟩
 
-theorem Ref.pointsTo_holds {α : Type} (r : Ref α) (value : α)
-    (h : Heap) : (r ↦ value) h ↔ Heap.Sub (Heap.singleton r value) h :=
+theorem Ref.pointsTo_holds {α : Type} [ByteRepr α] (r : Ref α) (value : α)
+    (h : Heap) :
+    (r ↦ value) h ↔ Heap.Sub (Heap.bytes r.addr (ByteRepr.encode value)) h :=
   Iff.rfl
 
 /-- Splitting and joining a heap fragment: owning two compatible fragments is
@@ -381,11 +382,13 @@ theorem owns_union (A B : Heap)
 
 /-- Points-to is exclusive: affinity lets resources be *dropped*, never
 duplicated, so a slot still cannot be owned twice. -/
-theorem Ref.pointsTo_exclusive {α : Type} (r : Ref α) (value₁ value₂ : α) :
+theorem Ref.pointsTo_exclusive {α : Type} [ByteRepr α] (r : Ref α)
+    (value₁ value₂ : α) (hSize : 0 < ByteRepr.size α) :
     r ↦ value₁ ∗ r ↦ value₂ ⊢ ⌜False⌝ := by
   rintro h ⟨h₁, h₂, hCompatible, -, hSingle₁, hSingle₂⟩
-  exact Heap.disjoint_contains_false hCompatible (Heap.contains_of_sub hSingle₁)
-    (Heap.contains_of_sub hSingle₂)
+  exact Heap.not_compatible_of_sub_bytes
+    (by rw [ByteRepr.length_encode]; exact hSize)
+    (by rw [ByteRepr.length_encode]; exact hSize) hSingle₁ hSingle₂ hCompatible
 
 theorem sep_holds (H₁ H₂ : IProp) (h : Heap) :
     (H₁ ∗ H₂) h ↔

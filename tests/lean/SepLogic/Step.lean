@@ -10,7 +10,7 @@ namespace SepLogic.Tests.Step
 
 open Aeneas.Std.WP
 
-open Aeneas.Std (MutRawPtr RawPtr Result)
+open Aeneas.Std (MutRawPtr RawPtr Result U32)
 open Aeneas.Std.MutRawPtr (alloc free write)
 open Aeneas.Std.RawPtr (read)
 
@@ -25,16 +25,16 @@ returned value and makes it framable — so an unbounded `step*` closes this on
 its own.
 -/
 
-def allocAndReturn : Result (MutRawPtr Nat) := do
-  let p ← alloc 1
+def allocAndReturn : Result (MutRawPtr U32) := do
+  let p ← alloc 1#u32
   pure p
 
-example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => p ↦ 1⦄ := by
+example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => p ↦ 1#u32⦄ := by
   unfold allocAndReturn
   step*
 
 /-- The same goal reached one step at a time. -/
-example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => p ↦ 1⦄ := by
+example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => p ↦ 1#u32⦄ := by
   unfold allocAndReturn
   step
   step
@@ -47,17 +47,17 @@ unbounded `step*` reaches an entailment that only becomes frameable after
 the user unfolds or simplifies the postcondition.
 -/
 
-def opaqueStepResult (actual expected : Nat) : Prop :=
+def opaqueStepResult {α : Type} (actual expected : α) : Prop :=
   actual = expected
 
-def readFreeReturn (p : MutRawPtr Nat) : Result Nat := do
+def readFreeReturn (p : MutRawPtr U32) : Result Nat := do
   let value ← read p
   free p
-  pure (value + 1)
+  pure (value.val + 1)
 
-example (p : MutRawPtr Nat) (value : Nat) :
+example (p : MutRawPtr U32) (value : U32) :
     ⦃ p ↦ value ⦄ readFreeReturn p
-      ⦃⇓ result => ⌜opaqueStepResult result (value + 1)⌝⦄ := by
+      ⦃⇓ result => ⌜opaqueStepResult result (value.val + 1)⌝⦄ := by
   unfold readFreeReturn
   fail_if_success
     step*
@@ -75,7 +75,7 @@ unresolved pure facts for the caller.
 -/
 
 /-- Matching spatial resources are cancelled, leaving the unresolved pure fact. -/
-example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => iprop(⌜opaqueStepResult 1 1⌝ ∗ p ↦ 1)⦄ := by
+example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => iprop(⌜opaqueStepResult 1 1⌝ ∗ p ↦ 1#u32)⦄ := by
   unfold allocAndReturn
   step* 1
   step
@@ -87,7 +87,7 @@ example (n : Nat) : ⦃ emp ⦄ Result.ok n ⦃⇓ result => ⌜result = n⌝⦄
   step
 
 /-- A `Unit` result is no different. -/
-example (p : MutRawPtr Nat) : ⦃ p ↦ 0 ⦄ (pure () : Result Unit) ⦃⇓ p ↦ 0⦄ := by
+example (p : MutRawPtr U32) : ⦃ p ↦ 0#u32 ⦄ (pure () : Result Unit) ⦃⇓ p ↦ 0#u32⦄ := by
   step
 
 def namedReturn (n : Nat) : Result Nat :=
@@ -115,9 +115,9 @@ the star also proves the terminal entailment, so the following tactic fails
 with no goals.
 -/
 
-example (p : MutRawPtr Nat) (value : Nat) :
+example (p : MutRawPtr U32) (value : U32) :
     ⦃ p ↦ value ⦄ readFreeReturn p
-      ⦃⇓ result => ⌜result = value + 1⌝⦄ := by
+      ⦃⇓ result => ⌜result = value.val + 1⌝⦄ := by
   unfold readFreeReturn
   step*
 
@@ -128,18 +128,18 @@ A bounded star leaves the branch for the caller, who relates the read value
 to the original value before choosing a branch.
 -/
 
-def branchAfterRead (p : MutRawPtr Nat) : Result Nat := do
+def branchAfterRead (p : MutRawPtr U32) : Result Nat := do
   let value ← read p
-  if value = 0 then pure 1 else pure 2
+  if value = 0#u32 then pure 1 else pure 2
 
-example (p : MutRawPtr Nat) (initial : Nat) :
+example (p : MutRawPtr U32) (initial : U32) :
     ⦃ p ↦ initial ⦄ branchAfterRead p
       ⦃⇓ result =>
-        iprop(⌜result = if initial = 0 then 1 else 2⌝ ∗ p ↦ initial)⦄ := by
+        iprop(⌜result = if initial = 0#u32 then 1 else 2⌝ ∗ p ↦ initial)⦄ := by
   unfold branchAfterRead
   step* 1
   subst value
-  by_cases h : initial = 0
+  by_cases h : initial = 0#u32
   · simp only [h, ↓reduceIte]
     step
   · simp only [h, ↓reduceIte]
@@ -158,21 +158,21 @@ structure Ghost where
 inductive NeedsWitness : Prop where
   | mk : Ghost → NeedsWitness
 
-def ghostHelper (_p : MutRawPtr Nat) : Result Unit :=
+def ghostHelper (_p : MutRawPtr U32) : Result Unit :=
   pure ()
 
 @[step]
-theorem ghostHelper.spec (p : MutRawPtr Nat) (_witness : NeedsWitness) :
-    ⦃ p ↦ 0 ⦄ ghostHelper p ⦃⇓ p ↦ 0⦄ := by
+theorem ghostHelper.spec (p : MutRawPtr U32) (_witness : NeedsWitness) :
+    ⦃ p ↦ 0#u32 ⦄ ghostHelper p ⦃⇓ p ↦ 0#u32⦄ := by
   unfold ghostHelper
   step
 
-def ghostCaller (p : MutRawPtr Nat) : Result Unit := do
+def ghostCaller (p : MutRawPtr U32) : Result Unit := do
   ghostHelper p
   pure ()
 
-example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 0 ⦄ ghostCaller p ⦃⇓ p ↦ 0⦄ := by
+example (p : MutRawPtr U32) :
+    ⦃ p ↦ 0#u32 ⦄ ghostCaller p ⦃⇓ p ↦ 0#u32⦄ := by
   unfold ghostCaller
   fail_if_success
     step*
@@ -186,7 +186,7 @@ attribute [local irreducible] opaqueStepResult in
 /-- Matching the points-to assertions infers the value argument of `read.spec`.
 The remaining pure fact does not roll back that inference. Keep the predicate
 irreducible here so automatic discharge cannot close it by reflexivity. -/
-example (p : MutRawPtr Nat) (value : Nat) :
+example (p : MutRawPtr U32) (value : U32) :
     ⦃ p ↦ value ⦄ read p
       ⦃⇓ result => iprop(⌜opaqueStepResult result value⌝ ∗ p ↦ value)⦄ := by
   step as ⟨result, hResult⟩
@@ -201,20 +201,20 @@ This minimizes the explicit steps in `UnitTest`,
 select a theorem absent from the step database.
 -/
 
-def unregisteredHelper (p : MutRawPtr Nat) : Result Unit :=
+def unregisteredHelper (p : MutRawPtr U32) : Result Unit :=
   Fixtures.incr_ptr p
 
-theorem unregisteredHelper.spec (p : MutRawPtr Nat) (value : Nat) :
-    ⦃ p ↦ value ⦄ unregisteredHelper p ⦃⇓ p ↦ value + 1⦄ := by
+theorem unregisteredHelper.spec (p : MutRawPtr U32) (value : U32) :
+    ⦃ p ↦ value ⦄ unregisteredHelper p ⦃⇓ p ↦ value.wrapping_add 1#u32⦄ := by
   unfold unregisteredHelper
   step*
 
-def unregisteredCaller (p : MutRawPtr Nat) : Result Unit := do
+def unregisteredCaller (p : MutRawPtr U32) : Result Unit := do
   unregisteredHelper p
   pure ()
 
-example (p : MutRawPtr Nat) (value : Nat) :
-    ⦃ p ↦ value ⦄ unregisteredCaller p ⦃⇓ p ↦ value + 1⦄ := by
+example (p : MutRawPtr U32) (value : U32) :
+    ⦃ p ↦ value ⦄ unregisteredCaller p ⦃⇓ p ↦ value.wrapping_add 1#u32⦄ := by
   unfold unregisteredCaller
   fail_if_success
     step*

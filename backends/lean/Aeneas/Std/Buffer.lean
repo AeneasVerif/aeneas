@@ -11,8 +11,9 @@ public import Aeneas.Tactic.Step.Init
 # Buffers
 
 `Buffer T` models a mutable Rust slice `&mut [T]`: a bounded view into an
-allocation, represented by a base address, an offset, and a length. The value
-itself carries no permission; `b ↦ values` owns the slots it spans.
+allocation, represented by a base address, a byte offset, and a length in
+elements. The value itself carries no permission; `b ↦ values` owns the slots
+it spans.
 
 Views and pointer arithmetic are total. Invalid reads or writes have no
 provable specification because their guarded heap operations are stuck.
@@ -41,15 +42,15 @@ def ptr (b : Buffer T) : MutRawPtr T :=
   ⟨b.base, b.offset⟩
 
 /-- The mutable pointer to slot `i` of the view. -/
-def ptrAt (b : Buffer T) (i : Nat) : MutRawPtr T :=
-  ⟨b.base, b.offset + i⟩
+def ptrAt [ByteRepr T] (b : Buffer T) (i : Nat) : MutRawPtr T :=
+  b.ptr.add i
 
 /-- The sub-view of `n` slots starting at index `i`. -/
-def sub (b : Buffer T) (i n : Nat) : Buffer T :=
-  ⟨b.base, b.offset + i, n⟩
+def sub [ByteRepr T] (b : Buffer T) (i n : Nat) : Buffer T :=
+  ⟨b.base, b.offset + i * ByteRepr.size T, n⟩
 
 /-- Split a view at index `i`. -/
-def split (b : Buffer T) (i : Nat) : Buffer T × Buffer T :=
+def split [ByteRepr T] (b : Buffer T) (i : Nat) : Buffer T × Buffer T :=
   (b.sub 0 i, b.sub i (b.length - i))
 
 /-- Join adjacent views. Ownership lemmas establish when the join is valid. -/
@@ -57,60 +58,60 @@ def join (b₁ b₂ : Buffer T) : Buffer T :=
   ⟨b₁.base, b₁.offset, b₁.length + b₂.length⟩
 
 /-- `b` owns its slots, holding `values`. -/
-def pointsTo (b : Buffer T) (values : List T) : IProp :=
+def pointsTo [ByteRepr T] (b : Buffer T) (values : List T) : IProp :=
   iprop(⌜values.length = b.length⌝ ∗ b.ptr ↦* values)
 
 end Buffer
 
-instance instPointsToBuffer {T : Type} :
+instance instPointsToBuffer {T : Type} [ByteRepr T] :
     PointsTo (Buffer T) (List T) := ⟨Buffer.pointsTo⟩
 
 namespace Buffer
 
 /-- Allocate `n` slots holding `value`. -/
-def alloc (n : Nat) (value : T) : Result (Buffer T) :=
-  RawPtr.allocArray (List.replicate n value) fun r =>
-    ⟨r.base, r.offset, n⟩
+def alloc [ByteRepr T] (n : Nat) (value : T) : Result (Buffer T) :=
+  RawPtr.allocArray (List.replicate n value) fun q =>
+    ⟨q.base, q.offset, n⟩
 
 @[step]
-theorem alloc.spec (n : Nat) (value : T) :
+theorem alloc.spec [ByteRepr T] (n : Nat) (value : T) :
     ⦃ emp ⦄ Buffer.alloc n value
       ⦃⇓ b => b ↦ List.replicate n value⦄ := by
-  refine RawPtr.allocArray.spec _ _ _ fun r h hOwns => ?_
+  refine RawPtr.allocArray.spec _ _ _ fun q h hOwns => ?_
   exact (sep_pure_l _ _ h).mpr ⟨by simp, hOwns⟩
 
 /-- A buffer owns exactly the range addressed by its pointer. -/
 @[iris_simps]
-theorem pointsTo_def (b : Buffer T) (values : List T) :
+theorem pointsTo_def [ByteRepr T] (b : Buffer T) (values : List T) :
     (b ↦ values) =
       iprop(⌜values.length = b.length⌝ ∗ b.ptr ↦* values) := rfl
 
 /-- Read slot `i`. -/
-def read (b : Buffer T) (i : Nat) : Result T :=
+def read [ByteRepr T] (b : Buffer T) (i : Nat) : Result T :=
   RawPtr.read (b.ptrAt i)
 
 @[step]
-theorem read.spec (b : Buffer T) (i : Nat) (value : T) :
+theorem read.spec [ByteRepr T] (b : Buffer T) (i : Nat) (value : T) :
     ⦃ b.ptrAt i ↦ value ⦄ b.read i
       ⦃⇓ result => ⌜result = value⌝ ∗ b.ptrAt i ↦ value⦄ :=
   RawPtr.read.spec (b.ptrAt i) value
 
 /-- Write slot `i`. -/
-def write (b : Buffer T) (i : Nat) (value : T) : Result Unit :=
+def write [ByteRepr T] (b : Buffer T) (i : Nat) (value : T) : Result Unit :=
   MutRawPtr.write (b.ptrAt i) value
 
 @[step]
-theorem write.spec (b : Buffer T) (i : Nat) (oldValue newValue : T) :
+theorem write.spec [ByteRepr T] (b : Buffer T) (i : Nat) (oldValue newValue : T) :
     ⦃ b.ptrAt i ↦ oldValue ⦄ b.write i newValue
       ⦃⇓ b.ptrAt i ↦ newValue⦄ :=
   MutRawPtr.write.spec (b.ptrAt i) oldValue newValue
 
 /-- Release every slot spanned by the view. -/
-def free (b : Buffer T) : Result Unit :=
+def free [ByteRepr T] (b : Buffer T) : Result Unit :=
   MutRawPtr.freeRange b.ptr b.length
 
 @[step]
-theorem free.spec (b : Buffer T) (values : List T) :
+theorem free.spec [ByteRepr T] (b : Buffer T) (values : List T) :
     ⦃ b ↦ values ⦄ b.free ⦃⇓ emp⦄ := by
   unfold Buffer.free
   simp only [pointsTo_def]
@@ -119,11 +120,11 @@ theorem free.spec (b : Buffer T) (values : List T) :
   exact MutRawPtr.freeRange.spec b.ptr values
 
 /-- A view spans as many slots as the values it owns. -/
-theorem length_of_pointsTo {b : Buffer T} {values : List T} {h : Heap}
+theorem length_of_pointsTo [ByteRepr T] {b : Buffer T} {values : List T} {h : Heap}
     (hPointsTo : (b ↦ values) h) : values.length = b.length :=
   ((sep_pure_l _ _ h).mp hPointsTo).1
 
-theorem read.spec_buffer (b : Buffer T) (values : List T) (i : Nat)
+theorem read.spec_buffer [ByteRepr T] (b : Buffer T) (values : List T) (i : Nat)
     (hIndex : i < values.length) :
     ⦃ b ↦ values ⦄ b.read i
       ⦃⇓ result => ⌜result = values[i]⌝ ∗ b ↦ values⦄ := by
@@ -133,7 +134,7 @@ theorem read.spec_buffer (b : Buffer T) (values : List T) (i : Nat)
   apply WP.ispec_mono (RawPtr.read.spec_range b.ptr values i hIndex)
   iframe
 
-theorem write.spec_buffer (b : Buffer T) (values : List T) (i : Nat)
+theorem write.spec_buffer [ByteRepr T] (b : Buffer T) (values : List T) (i : Nat)
     (value : T) (hIndex : i < values.length) :
     ⦃ b ↦ values ⦄ b.write i value
       ⦃⇓ b ↦ values.set i value⦄ := by
@@ -145,7 +146,7 @@ theorem write.spec_buffer (b : Buffer T) (values : List T) (i : Nat)
   iframe
 
 /-- Snapshot `n` consecutive slots without consuming their ownership. -/
-def readRange (p : RawPtr T M) : Nat → Result (List T)
+def readRange [ByteRepr T] (p : RawPtr T M) : Nat → Result (List T)
   | 0 => pure []
   | n + 1 => do
       let value ← p.read
@@ -153,7 +154,7 @@ def readRange (p : RawPtr T M) : Nat → Result (List T)
       pure (value :: rest)
 
 @[step]
-theorem readRange.spec (p : RawPtr T M) (values : List T) :
+theorem readRange.spec [ByteRepr T] (p : RawPtr T M) (values : List T) :
     ⦃ p ↦* values ⦄ readRange p values.length
       ⦃⇓ result => ⌜result = values⌝ ∗ p ↦* values⦄ := by
   induction values generalizing p with
@@ -181,14 +182,14 @@ theorem readRange.spec (p : RawPtr T M) (values : List T) :
           iframe
 
 /-- Overwrite consecutive mutable slots with the supplied values. -/
-def writeRange (p : MutRawPtr T) : List T → Result Unit
+def writeRange [ByteRepr T] (p : MutRawPtr T) : List T → Result Unit
   | [] => pure ()
   | value :: rest => do
       p.write value
       writeRange (p.add 1) rest
 
 @[step]
-theorem writeRange.spec (p : MutRawPtr T) (old values : List T)
+theorem writeRange.spec [ByteRepr T] (p : MutRawPtr T) (old values : List T)
     (hLength : old.length = values.length) :
     ⦃ p ↦* old ⦄ writeRange p values ⦃⇓ p ↦* values⦄ := by
   induction values generalizing p old with
@@ -231,12 +232,12 @@ theorem toSlice.spec (s : Slice T) :
   simp
 
 /-- Snapshot the complete buffer as a functional slice. -/
-def readSlice (b : Buffer T) : Result (Slice T) := do
+def readSlice [ByteRepr T] (b : Buffer T) : Result (Slice T) := do
   let values ← readRange b.ptr b.length
   toSlice values
 
 @[step]
-theorem readSlice.spec (b : Buffer T) (s : Slice T) :
+theorem readSlice.spec [ByteRepr T] (b : Buffer T) (s : Slice T) :
     ⦃ b ↦ s.val ⦄ readSlice b
       ⦃⇓ result => ⌜result = s⌝ ∗ b ↦ s.val⦄ := by
   simp only [pointsTo_def]
@@ -254,14 +255,14 @@ theorem readSlice.spec (b : Buffer T) (s : Slice T) :
     (entails_sep_postWand _ (by intro result; iframe))
 
 /-- Write a functional slice into the existing buffer allocation. -/
-def writeSlice (b : Buffer T) (s : Slice T) : Result Unit :=
+def writeSlice [ByteRepr T] (b : Buffer T) (s : Slice T) : Result Unit :=
   if s.length = b.length then
     writeRange b.ptr s.val
   else
     Result.fail .assertionFailure
 
 @[step]
-theorem writeSlice.spec (b : Buffer T) (old s : Slice T)
+theorem writeSlice.spec [ByteRepr T] (b : Buffer T) (old s : Slice T)
     (hLength : s.length = old.length) :
     ⦃ b ↦ old.val ⦄ writeSlice b s ⦃⇓ b ↦ s.val⦄ := by
   simp only [pointsTo_def]
@@ -273,22 +274,22 @@ theorem writeSlice.spec (b : Buffer T) (old s : Slice T)
   iframe
 
 /-- Allocate a view containing exactly `values`. -/
-def ofList (values : List T) : Result (Buffer T) :=
-  RawPtr.allocArray values fun r =>
-    ⟨r.base, r.offset, values.length⟩
+def ofList [ByteRepr T] (values : List T) : Result (Buffer T) :=
+  RawPtr.allocArray values fun q =>
+    ⟨q.base, q.offset, values.length⟩
 
 @[step]
-theorem ofList.spec (values : List T) :
+theorem ofList.spec [ByteRepr T] (values : List T) :
     ⦃ emp ⦄ Buffer.ofList values ⦃⇓ b => b ↦ values⦄ := by
-  refine RawPtr.allocArray.spec _ _ _ fun r h hOwns => ?_
+  refine RawPtr.allocArray.spec _ _ _ fun q h hOwns => ?_
   exact (sep_pure_l _ _ h).mpr ⟨rfl, hOwns⟩
 
 /-- Overwrite every slot with `value`. -/
-def fill (b : Buffer T) (value : T) : Result Unit :=
+def fill [ByteRepr T] (b : Buffer T) (value : T) : Result Unit :=
   MutRawPtr.fillRange b.ptr value b.length
 
 @[step]
-theorem fill.spec (b : Buffer T) (values : List T) (value : T) :
+theorem fill.spec [ByteRepr T] (b : Buffer T) (values : List T) (value : T) :
     ⦃ b ↦ values ⦄ b.fill value
       ⦃⇓ b ↦ List.replicate b.length value⦄ := by
   unfold Buffer.fill
@@ -299,7 +300,7 @@ theorem fill.spec (b : Buffer T) (values : List T) (value : T) :
   iframe
 
 /-- Extract the length facts and underlying ranges of two owned buffers. -/
-theorem pointsTo_pair_entails (b₁ b₂ : Buffer T)
+theorem pointsTo_pair_entails [ByteRepr T] (b₁ b₂ : Buffer T)
     (values₁ values₂ : List T) :
     b₁ ↦ values₁ ∗ b₂ ↦ values₂ ⊢
       iprop(⌜values₁.length = b₁.length ∧
@@ -308,7 +309,7 @@ theorem pointsTo_pair_entails (b₁ b₂ : Buffer T)
   isimp
 
 /-- Reassemble two buffer ownership assertions from their ranges. -/
-theorem pair_entails_pointsTo {b₁ b₂ : Buffer T}
+theorem pair_entails_pointsTo [ByteRepr T] {b₁ b₂ : Buffer T}
     {values₁ values₂ : List T}
     (hLength₁ : values₁.length = b₁.length)
     (hLength₂ : values₂.length = b₂.length) :
@@ -317,11 +318,11 @@ theorem pair_entails_pointsTo {b₁ b₂ : Buffer T}
   isimp
 
 /-- Copy every slot of `src` into `dst`. -/
-def copy (dst src : Buffer T) : Result Unit :=
+def copy [ByteRepr T] (dst src : Buffer T) : Result Unit :=
   MutRawPtr.copyRange dst.ptr src.ptr src.length
 
 @[step]
-theorem copy.spec (dst src : Buffer T) (dstValues srcValues : List T)
+theorem copy.spec [ByteRepr T] (dst src : Buffer T) (dstValues srcValues : List T)
     (hLength : dst.length = src.length) :
     ⦃ dst ↦ dstValues ∗ src ↦ srcValues ⦄ dst.copy src
       ⦃⇓ dst ↦ srcValues ∗ src ↦ srcValues⦄ := by
@@ -335,11 +336,11 @@ theorem copy.spec (dst src : Buffer T) (dstValues srcValues : List T)
   iframe
 
 /-- Whether two views hold equal values. -/
-def compare [DecidableEq T] (left right : Buffer T) : Result Bool :=
+def compare [ByteRepr T] [DecidableEq T] (left right : Buffer T) : Result Bool :=
   RawPtr.compareRange left.ptr right.ptr left.length
 
 @[step]
-theorem compare.spec [DecidableEq T] (left right : Buffer T)
+theorem compare.spec [ByteRepr T] [DecidableEq T] (left right : Buffer T)
     (leftValues rightValues : List T)
     (hLength : left.length = right.length) :
     ⦃ left ↦ leftValues ∗ right ↦ rightValues ⦄
@@ -357,14 +358,14 @@ theorem compare.spec [DecidableEq T] (left right : Buffer T)
   iframe
 
 /-- Exchange the values at indices `i` and `j`. -/
-def swap (b : Buffer T) (i j : Nat) : Result Unit := do
+def swap [ByteRepr T] (b : Buffer T) (i j : Nat) : Result Unit := do
   let x ← b.read i
   let y ← b.read j
   b.write i y
   b.write j x
 
 @[step]
-theorem swap.spec (b : Buffer T) (values : List T) (i j : Nat)
+theorem swap.spec [ByteRepr T] (b : Buffer T) (values : List T) (i j : Nat)
     (hi : i < values.length) (hj : j < values.length) :
     ⦃ b ↦ values ⦄ b.swap i j
       ⦃⇓ b ↦ (values.set i values[j]).set j values[i]⦄ := by
@@ -387,24 +388,25 @@ theorem swap.spec (b : Buffer T) (values : List T) (i j : Nat)
     (by simpa using hj)
 
 /-- Forget the recorded length and retain ownership of the underlying range. -/
-theorem pointsTo_entails_range (b : Buffer T) (values : List T) :
+theorem pointsTo_entails_range [ByteRepr T] (b : Buffer T) (values : List T) :
     b ↦ values ⊢ b.ptr ↦* values := by
   isimp
 
 /-- Package ownership of a range as ownership of a buffer of matching length. -/
-theorem range_entails_pointsTo {b : Buffer T} {values : List T}
+theorem range_entails_pointsTo [ByteRepr T] {b : Buffer T} {values : List T}
     (hLength : values.length = b.length) :
     b.ptr ↦* values ⊢ b ↦ values := by
   isimp
 
-theorem pointsTo_split (b : Buffer T) (values : List T) (i : Nat) :
+theorem pointsTo_split [ByteRepr T] (b : Buffer T) (values : List T) (i : Nat) :
     b.ptr ↦* values ⊣⊢
       (b.split i).1.ptr ↦* values.take i ∗
         (b.sub (values.take i).length (values.length - i)).ptr ↦*
-          values.drop i :=
-  RawPtr.pointsToRange_split b.ptr values i
+          values.drop i := by
+  rw [show (b.split i).1.ptr = b.ptr by simp [split, sub, ptr]]
+  exact RawPtr.pointsToRange_split b.ptr values i
 
-theorem pointsTo_join (b₁ b₂ : Buffer T) (xs ys : List T)
+theorem pointsTo_join [ByteRepr T] (b₁ b₂ : Buffer T) (xs ys : List T)
     (hAdjacent : b₂.ptr = b₁.ptr.add xs.length) :
     b₁.ptr ↦* xs ∗ b₂.ptr ↦* ys ⊣⊢
       (b₁.join b₂).ptr ↦* (xs ++ ys) := by
@@ -412,7 +414,7 @@ theorem pointsTo_join (b₁ b₂ : Buffer T) (xs ys : List T)
   exact ⟨(RawPtr.pointsToRange_append b₁.ptr xs ys).mpr,
     (RawPtr.pointsToRange_append b₁.ptr xs ys).mp⟩
 
-theorem pointsTo_sub (b : Buffer T) (values : List T) (i : Nat) :
+theorem pointsTo_sub [ByteRepr T] (b : Buffer T) (values : List T) (i : Nat) :
     b.ptr ↦* values ⊣⊢
       b.ptr ↦* values.take i ∗
         (b.sub (values.take i).length (values.length - i)).ptr ↦*
@@ -420,7 +422,7 @@ theorem pointsTo_sub (b : Buffer T) (values : List T) (i : Nat) :
   RawPtr.pointsToRange_split b.ptr values i
 
 /-- Read a bounded subrange while framing the untouched prefix and suffix. -/
-theorem readRange_sub.spec (p : RawPtr T M) (values : List T) (i n : Nat)
+theorem readRange_sub.spec [ByteRepr T] (p : RawPtr T M) (values : List T) (i n : Nat)
     (hBounds : i + n ≤ values.length) :
     ⦃ p ↦* values ⦄ readRange (p.add i) n
       ⦃⇓ result =>
@@ -441,7 +443,7 @@ theorem readRange_sub.spec (p : RawPtr T M) (values : List T) (i n : Nat)
   iframe
 
 /-- Write a bounded subrange while framing the untouched prefix and suffix. -/
-theorem writeRange_sub.spec (p : MutRawPtr T) (old : List T) (i : Nat)
+theorem writeRange_sub.spec [ByteRepr T] (p : MutRawPtr T) (old : List T) (i : Nat)
     (values : List T) (hBounds : i + values.length ≤ old.length) :
     ⦃ p ↦* old ⦄ writeRange (p.add i) values
       ⦃⇓ p ↦* old.setSlice! i values⦄ := by
@@ -468,24 +470,24 @@ theorem writeRange_sub.spec (p : MutRawPtr T) (old : List T) (i : Nat)
   iframe
 
 /-- Materialize a functional slice as fresh mutable memory. -/
-def mut_to_raw (slice : Slice T) : Result (Buffer T) :=
-  RawPtr.allocArray slice.val fun r =>
-    ⟨r.base, r.offset, slice.val.length⟩
+def mut_to_raw [ByteRepr T] (slice : Slice T) : Result (Buffer T) :=
+  RawPtr.allocArray slice.val fun q =>
+    ⟨q.base, q.offset, slice.val.length⟩
 
 @[step]
-theorem mut_to_raw.spec (slice : Slice T) :
+theorem mut_to_raw.spec [ByteRepr T] (slice : Slice T) :
     ⦃ emp ⦄ mut_to_raw slice ⦃⇓ b => b ↦ slice.val⦄ := by
-  refine RawPtr.allocArray.spec _ _ _ fun r h hOwns => ?_
+  refine RawPtr.allocArray.spec _ _ _ fun q h hOwns => ?_
   exact (sep_pure_l _ _ h).mpr ⟨rfl, hOwns⟩
 
 /-- Refunctionalize a buffer and consume all of its memory ownership. -/
-def end_mut_to_raw (original : Slice T) (b : Buffer T) :
+def end_mut_to_raw [ByteRepr T] (original : Slice T) (b : Buffer T) :
     Result (Slice T) := do
   let values ← MutRawPtr.takeRange b.ptr b.length
   pure (original.setSlice! 0 values)
 
 @[step]
-theorem end_mut_to_raw.spec (original : Slice T) (b : Buffer T)
+theorem end_mut_to_raw.spec [ByteRepr T] (original : Slice T) (b : Buffer T)
     (values : List T) :
     ⦃ b ↦ values ⦄ end_mut_to_raw original b
       ⦃⇓ result =>

@@ -612,6 +612,20 @@ theorem BitVec.getElem_toLEBytes_eq_false {w : ℕ} (b : BitVec w) (i j : ℕ)
   exact BitVec.getElem!_eq_false b (8 * i + j) hij
 
 @[simp, simp_lists_safe, grind =]
+theorem BitVec.toLEBytes_fromLEBytes (l : List Byte) :
+  (BitVec.fromLEBytes l).toLEBytes = l := by
+  apply List.ext_getElem (by simp only [toLEBytes_length]; omega)
+  intro i hi hi'
+  apply BitVec.eq_of_getElem_eq
+  intro j hj
+  have hij : 8 * i + j < 8 * l.length := by omega
+  rw [BitVec.getElem_toLEBytes_eq_getElem _ i j hi hj hij, BitVec.fromLEBytes_getElem _ _ hij,
+    BitVec.getElem_eq_testBit_toNat]
+  have h0 : (8 * i + j) / 8 = i := by omega
+  have h1 : (8 * i + j) % 8 = j := by omega
+  simp only [h0, h1, Byte.testBit]
+
+@[simp, simp_lists_safe, grind =]
 theorem BitVec.testBit_getElem_toLEBytes_eq_getElem {w:ℕ} (x : BitVec w) (i j : ℕ)
   (hi : i < x.toLEBytes.length) (h : j < 8 ∧ 8 * i + j < w) :
   x.toLEBytes[i].testBit j = x[8 * i + j] := by

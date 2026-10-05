@@ -62,11 +62,11 @@ theorem Slice.len_val {α : Type u} (v : Slice α) : (Slice.len v).val = v.lengt
 to its first slot. Unlike Rust's `as_ptr`, this allocates because the functional
 slice model has no address. -/
 @[rust_fun "core::slice::{[@T]}::as_ptr"]
-def Slice.as_ptr {T : Type} (s : Slice T) : Result (ConstRawPtr T) :=
+def Slice.as_ptr {T : Type} [ByteRepr T] (s : Slice T) : Result (ConstRawPtr T) :=
   RawPtr.materialize s.val
 
 @[step]
-theorem Slice.as_ptr.spec {T : Type} (s : Slice T) :
+theorem Slice.as_ptr.spec {T : Type} [ByteRepr T] (s : Slice T) :
     ⦃ emp ⦄ s.as_ptr ⦃⇓ p => p ↦* s.val⦄ :=
   RawPtr.materialize.spec s.val
 
@@ -74,11 +74,11 @@ theorem Slice.as_ptr.spec {T : Type} (s : Slice T) :
 to its first slot. Unlike Rust's `as_mut_ptr`, this allocates because the
 functional slice model has no address. -/
 @[rust_fun "core::slice::{[@T]}::as_mut_ptr"]
-def Slice.as_mut_ptr {T : Type} (s : Slice T) : Result (MutRawPtr T) :=
+def Slice.as_mut_ptr {T : Type} [ByteRepr T] (s : Slice T) : Result (MutRawPtr T) :=
   RawPtr.materialize s.val
 
 @[step]
-theorem Slice.as_mut_ptr.spec {T : Type} (s : Slice T) :
+theorem Slice.as_mut_ptr.spec {T : Type} [ByteRepr T] (s : Slice T) :
     ⦃ emp ⦄ s.as_mut_ptr ⦃⇓ p => p ↦* s.val⦄ :=
   RawPtr.materialize.spec s.val
 

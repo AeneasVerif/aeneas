@@ -1,6 +1,7 @@
 module
 
 public import Mathlib.Data.Finmap
+public import Aeneas.Data.Byte
 
 public section
 
@@ -30,55 +31,69 @@ namespace Aeneas.Std
 /-!
 # The heap
 
-An **address** is an allocation identifier together with a slot index into that
-allocation, and a heap is a finite map from addresses to the values they hold:
+The heap is byte-addressed.  An **address** is an allocation identifier
+together with a byte offset into that allocation, and a heap is a finite map
+from addresses to the bytes they hold:
 
 ```text
-Loc      = AllocId × Nat
-HeapCell = (α : Type) × α
-Heap     = Loc ⇀ HeapCell            (finitely supported)
+Loc  = AllocId × Nat
+Heap = Loc ⇀ Byte            (finitely supported)
 ```
 
-Two heaps compose when the addresses they use are disjoint, so `∪` is a plain
-disjoint union: it computes, and no type equality has to be decided.  Ownership
-is *slot-granular*, which is what lets one allocation be owned a part at a
-time — the `(α : Type) × List α` view of an allocation is what
-`Ptr.pointsToRange` owns, the list of the values at consecutive addresses, and
-it splits and joins by regrouping a separating conjunction.
+A value lives in the heap through its `ByteRepr`: a fixed-size encoding as a
+list of bytes.  Reading at a type decodes the bytes found at an address, so
+reinterpreting memory at another type is only a matter of decoding the same
+bytes differently: casting a pointer does not touch the heap.
 
-[`RawPtr`](RawPtr.lean) builds the Rust pointer view on this heap: it allocates
-runs of slots and addresses their interiors. The mutable-data prototypes under
-`tests/lean/SepLogic/MutableData/` build bounded buffers and statically sized
-arrays on top of those raw pointers.
+Two heaps compose when the addresses they use are disjoint, so `∪` is a plain
+disjoint union.  Ownership is *byte-granular*, which is what lets one
+allocation be owned a part at a time, and a value of any size be viewed as the
+bytes it is made of.
+
+[`RawPtr`](RawPtr.lean) builds the Rust pointer view on this heap.
 -/
 
 /- An allocation identifier is fresh and behaves like a monotonic
    counter, not a concrete address in machine memory. -/
 abbrev AllocId := Nat
 
-/-- An address: the allocation, and the slot of it this address names. -/
+/-- An address: the allocation, and the byte of it this address names. -/
 abbrev Loc := AllocId × Nat
 
-/- Heap entries store the Lean type and the value of one slot. -/
-abbrev HeapCell := Σ α : Type, α
+/-- The address `i` bytes past `a`, in the same allocation. -/
+@[expose]
+def Loc.add (a : Loc) (i : Nat) : Loc := (a.1, a.2 + i)
 
-abbrev HeapImpl := Finmap fun _ : Loc => HeapCell
+@[simp] theorem Loc.fst_add (a : Loc) (i : Nat) : (a.add i).1 = a.1 := rfl
 
-/-- A finite collection of dynamically typed heap cells. -/
-structure Heap where
-  private mk ::
-  private impl : HeapImpl
+@[simp] theorem Loc.snd_add (a : Loc) (i : Nat) : (a.add i).2 = a.2 + i := rfl
+
+@[simp] theorem Loc.add_zero (a : Loc) : a.add 0 = a := rfl
+
+theorem Loc.add_add (a : Loc) (i j : Nat) : (a.add i).add j = a.add (i + j) := by
+  simp [Loc.add, Nat.add_assoc]
+
+/-- A fixed-size encoding of the values of `α` as bytes: what lets a value of `α`
+live in the heap.  Decoding accepts exactly the encodings, so the bytes found
+at an address determine the value they hold. -/
+class ByteRepr (α : Type) where
+  size : Nat
+  encode : α → List Byte
+  decode : List Byte → Option α
+  length_encode (x : α) : (encode x).length = size
+  decode_encode (x : α) : decode (encode x) = some x
+  encode_of_decode {bytes : List Byte} {x : α} :
+    decode bytes = some x → encode x = bytes
 
 /-! ## References -/
 
-/-- A reference to one slot: a bare address, the type being a phantom index
-that constrains specifications only. -/
+/-- A reference to a value in the heap: a bare address, the type being a
+phantom index that constrains specifications only. -/
 @[expose]
 def Ref (_ : Type) := Loc
 
 namespace Ref
 
-/-- Addresses are pairs of natural numbers, so references are inhabited. -/
 instance instInhabited {α : Type} : Inhabited (Ref α) := ⟨((0 : AllocId), 0)⟩
 
 instance instDecidableEq {α : Type} : DecidableEq (Ref α) :=
@@ -87,48 +102,19 @@ instance instDecidableEq {α : Type} : DecidableEq (Ref α) :=
 @[expose]
 def addr {α : Type} (r : Ref α) : Loc := r
 
-/-- The allocation `r` is interior to. -/
-@[expose]
-def base {α : Type} (r : Ref α) : AllocId := r.addr.1
-
-/-- The slot of that allocation `r` names. -/
-@[expose]
-def offset {α : Type} (r : Ref α) : Nat := r.addr.2
-
-/-- Pointer arithmetic: same allocation, later slot. -/
-@[expose]
-def add {α : Type} (r : Ref α) (i : Nat) : Ref α := (r.base, r.offset + i)
-
-@[simp] theorem base_add {α : Type} (r : Ref α) (i : Nat) :
-    (r.add i).base = r.base := rfl
-
-@[simp] theorem offset_add {α : Type} (r : Ref α) (i : Nat) :
-    (r.add i).offset = r.offset + i := rfl
-
-@[simp] theorem add_zero {α : Type} (r : Ref α) : r.add 0 = r := rfl
-
-theorem add_add {α : Type} (r : Ref α) (i j : Nat) :
-    (r.add i).add j = r.add (i + j) := by
-  simp [Ref.add, Ref.base, Ref.offset, Ref.addr, Nat.add_assoc]
-
-/-- The address `r.add i` names. -/
-theorem addr_add {α : Type} (r : Ref α) (i : Nat) :
-    (r.add i).addr = (r.base, r.offset + i) := rfl
-
 end Ref
+
+abbrev HeapImpl := Finmap fun _ : Loc => Byte
+
+/-- A finite collection of bytes. -/
+structure Heap where
+  private mk ::
+  private impl : HeapImpl
 
 namespace Heap
 
-private instance : Coe Heap HeapImpl := ⟨Heap.impl⟩
-private instance : Coe HeapImpl Heap := ⟨Heap.mk⟩
-
-private def lookup (h : Heap) (address : Loc) :
-    Option HeapCell :=
+private def lookup (h : Heap) (address : Loc) : Option Byte :=
   h.impl.lookup address
-
-private def insert (h : Heap) (address : Loc)
-    (cell : HeapCell) : Heap :=
-  ⟨h.impl.insert address cell⟩
 
 private def erase (h : Heap) (address : Loc) : Heap :=
   ⟨h.impl.erase address⟩
@@ -142,6 +128,10 @@ private theorem ext_impl {h₁ h₂ : Heap}
   cases h₂
   cases hEq
   rfl
+
+private theorem ext_lookup {h₁ h₂ : Heap}
+    (hEq : ∀ address, h₁.lookup address = h₂.lookup address) : h₁ = h₂ :=
+  ext_impl (Finmap.ext_lookup hEq)
 
 def empty : Heap := ⟨∅⟩
 
@@ -157,7 +147,7 @@ def mem (address : Loc) (h : Heap) : Prop :=
 instance instMembership : Membership Loc Heap :=
   ⟨fun h address => Heap.mem address h⟩
 
-/-- The number of slots the heap owns. -/
+/-- The number of bytes the heap owns. -/
 def size (h : Heap) : Nat :=
   h.impl.keys.card
 
@@ -173,25 +163,31 @@ private theorem lookup_union_left {address : Loc}
     (h₁ ∪ h₂).lookup address = h₁.lookup address :=
   Finmap.lookup_union_left hMem
 
-private theorem mem_insert {address insertedAddress : Loc}
-    {cell : HeapCell} {h : Heap} :
-    address ∈ h.insert insertedAddress cell ↔
-      address = insertedAddress ∨ address ∈ h :=
-  Finmap.mem_insert
+private theorem lookup_union_right {address : Loc}
+    {h₁ h₂ : Heap} (hMem : address ∉ h₁) :
+    (h₁ ∪ h₂).lookup address = h₂.lookup address :=
+  Finmap.lookup_union_right hMem
+
+private theorem lookup_eq_none {address : Loc} {h : Heap} :
+    h.lookup address = none ↔ address ∉ h :=
+  Finmap.lookup_eq_none
+
+private theorem mem_of_lookup_eq_some {address : Loc} {h : Heap} {b : Byte}
+    (hLookup : h.lookup address = some b) : address ∈ h :=
+  Finmap.mem_of_lookup_eq_some hLookup
 
 private theorem mem_erase {address erasedAddress : Loc} {h : Heap} :
     address ∈ h.erase erasedAddress ↔
       address ≠ erasedAddress ∧ address ∈ h :=
   Finmap.mem_erase
 
-private theorem insert_union {address : Loc}
-    {cell : HeapCell} {h₁ h₂ : Heap} :
-    (h₁ ∪ h₂).insert address cell =
-      h₁.insert address cell ∪ h₂ := by
-  apply Heap.ext_impl
-  exact Finmap.insert_union
+private theorem lookup_erase_ne {address erasedAddress : Loc} {h : Heap}
+    (hNe : address ≠ erasedAddress) :
+    (h.erase erasedAddress).lookup address = h.lookup address :=
+  Finmap.lookup_erase_ne hNe
 
-private theorem union_assoc' (h₁ h₂ h₃ : Heap) :
+/-- Union is associative, compatible or not: it is left-biased. -/
+theorem union_assoc (h₁ h₂ h₃ : Heap) :
     (h₁ ∪ h₂) ∪ h₃ = h₁ ∪ (h₂ ∪ h₃) := by
   apply Heap.ext_impl
   exact Finmap.union_assoc
@@ -245,139 +241,130 @@ theorem union_right_cancel {h₁ h₂ frame : Heap}
   apply Heap.ext_impl
   exact (Finmap.union_cancel hCompatible₁ hCompatible₂).mp (congrArg Heap.impl hEq)
 
+theorem mem_of_sub_left {address : Loc} {h₁ h₂ : Heap} (hMem : address ∈ h₁) :
+    address ∈ h₁ ∪ h₂ :=
+  mem_union.mpr (Or.inl hMem)
 
-/-- The heap of the single slot `r`, holding `value`. -/
-def singleton {α : Type} (r : Ref α) (value : α) : Heap :=
-  ⟨Finmap.singleton r.addr ⟨α, value⟩⟩
+/-! ## Runs of bytes
 
-theorem mem_singleton {α : Type} {r : Ref α} {value : α} {address : Loc} :
-    address ∈ singleton r value ↔ address = r.addr := by
-  show address ∈ (Finmap.singleton r.addr (⟨α, value⟩ : HeapCell) : HeapImpl) ↔ _
-  exact Finmap.mem_singleton _ _ _
+The heap of a value is the run of bytes encoding it, and the heap of a run is
+the union of the heaps of its bytes. -/
 
-/-- `h` has a slot at `r`, and it holds a value of type `α`.  This is the
-definedness guard of every operation on `r`: it is what makes the value
-available as a value of `α`, and a heap operation is *stuck* without it rather
-than erroneous. -/
-def contains {α : Type} (h : Heap) (r : Ref α) : Prop :=
-  match h.lookup r.addr with
-  | none => False
-  | some ⟨β, _⟩ => β = α
+/-- The heap of the single byte at `address`. -/
+def singleton (address : Loc) (b : Byte) : Heap :=
+  ⟨Finmap.singleton address b⟩
 
-@[simp]
-theorem not_contains_empty {α : Type} (r : Ref α) :
-    ¬ contains (∅ : Heap) r := by
-  change ¬ match Finmap.lookup r.addr (∅ : HeapImpl) with
-    | none => False
-    | some ⟨β, _⟩ => β = α
-  simp
+theorem mem_singleton {address : Loc} {b : Byte} {other : Loc} :
+    other ∈ singleton address b ↔ other = address :=
+  Finmap.mem_singleton _ _ _
 
-/-! ### Runs of slots
+private theorem lookup_singleton (address : Loc) (b : Byte) :
+    (singleton address b).lookup address = some b :=
+  Finmap.lookup_singleton_eq
 
-An allocation is owned a slot at a time, so the heap of a whole run is the
-union of the heaps of its slots.  This is what allocation produces and what a
-range assertion owns. -/
-
-/-- The heap of the run `values`, starting at `r`. -/
-@[expose]
-def rangeHeap {α : Type} (r : Ref α) : List α → Heap
+/-- The heap of the bytes `bs`, starting at `address`. -/
+def bytes (address : Loc) : List Byte → Heap
   | [] => empty
-  | value :: rest => singleton r value ∪ rangeHeap (r.add 1) rest
+  | b :: rest => singleton address b ∪ bytes (address.add 1) rest
 
-@[simp] theorem rangeHeap_nil {α : Type} (r : Ref α) :
-    rangeHeap r ([] : List α) = empty := rfl
+@[simp] theorem bytes_nil (address : Loc) : bytes address [] = empty := by
+  unfold bytes; rfl
 
-@[simp] theorem rangeHeap_cons {α : Type} (r : Ref α) (value : α)
-    (rest : List α) :
-    rangeHeap r (value :: rest) = singleton r value ∪ rangeHeap (r.add 1) rest :=
-  rfl
+theorem bytes_cons (address : Loc) (b : Byte) (rest : List Byte) :
+    bytes address (b :: rest) = singleton address b ∪ bytes (address.add 1) rest := by
+  rw [bytes]
 
-
-@[simp] theorem rangeHeap_singleton {α : Type} (r : Ref α) (value : α) :
-    rangeHeap r [value] = singleton r value := by
-  rw [rangeHeap_cons, rangeHeap_nil, Heap.union_empty]
-
-theorem mem_rangeHeap {α : Type} {r : Ref α} {values : List α} {address : Loc} :
-    address ∈ rangeHeap r values ↔
-      ∃ i, i < values.length ∧ address = (r.add i).addr := by
-  induction values generalizing r with
+theorem mem_bytes {address : Loc} {bs : List Byte} {other : Loc} :
+    other ∈ bytes address bs ↔ ∃ i, i < bs.length ∧ other = address.add i := by
+  induction bs generalizing address with
   | nil =>
-      simp only [rangeHeap_nil, List.length_nil, Nat.not_lt_zero, false_and,
+      simp only [bytes_nil, List.length_nil, Nat.not_lt_zero, false_and,
         exists_false, iff_false]
       intro hMem
-      exact (Finmap.notMem_empty (a := address)) hMem
-  | cons value rest ih =>
-      have hShift : ∀ i : Nat, (r.add 1).add i = r.add (i + 1) := by
-        intro i; rw [Ref.add_add, Nat.add_comm]
-      rw [rangeHeap_cons, Heap.mem_union, mem_singleton, ih]
+      exact (Finmap.notMem_empty (a := other)) hMem
+  | cons b rest ih =>
+      rw [bytes_cons, Heap.mem_union, mem_singleton, ih]
       constructor
       · rintro (rfl | ⟨i, hi, rfl⟩)
         · exact ⟨0, by simp, rfl⟩
-        · exact ⟨i + 1, by simpa using hi, by rw [hShift]⟩
+        · exact ⟨i + 1, by simpa using hi, by rw [Loc.add_add, Nat.add_comm]⟩
       · rintro ⟨i, hi, rfl⟩
         cases i with
         | zero => exact Or.inl rfl
-        | succ j => exact Or.inr ⟨j, by simpa using hi, by rw [hShift]⟩
+        | succ j =>
+            exact Or.inr ⟨j, by simpa using hi, by rw [Loc.add_add, Nat.add_comm]⟩
+
+/-- Which addresses a run owns depends on its length only. -/
+theorem mem_bytes_of_length_eq {address other : Loc} {bs bs' : List Byte}
+    (hLength : bs'.length = bs.length) :
+    other ∈ bytes address bs' ↔ other ∈ bytes address bs := by
+  rw [mem_bytes, mem_bytes, hLength]
+
+private theorem lookup_bytes_add {address : Loc} {bs : List Byte} {i : Nat}
+    (hi : i < bs.length) :
+    (bytes address bs).lookup (address.add i) = some bs[i] := by
+  induction bs generalizing address i with
+  | nil => simp at hi
+  | cons b rest ih =>
+      rw [bytes_cons]
+      cases i with
+      | zero =>
+          rw [Loc.add_zero, lookup_union_left (mem_singleton.mpr rfl),
+            lookup_singleton]
+          rfl
+      | succ j =>
+          have hNotMem : address.add (j + 1) ∉ singleton address b := by
+            rw [mem_singleton]
+            intro hEq
+            have := congrArg Prod.snd hEq
+            simp at this
+          rw [lookup_union_right hNotMem,
+            show address.add (j + 1) = (address.add 1).add j by
+              rw [Loc.add_add, Nat.add_comm]]
+          exact ih (by simpa using hi)
 
 /-- Splitting a run into two adjacent ones splits its heap. -/
-theorem rangeHeap_append {α : Type} (r : Ref α) (xs ys : List α) :
-    rangeHeap r (xs ++ ys) =
-      rangeHeap r xs ∪ rangeHeap (r.add xs.length) ys := by
-  induction xs generalizing r with
+theorem bytes_append (address : Loc) (xs ys : List Byte) :
+    bytes address (xs ++ ys) = bytes address xs ∪ bytes (address.add xs.length) ys := by
+  induction xs generalizing address with
   | nil => simp
-  | cons value rest ih =>
-      have hShift : (r.add 1).add rest.length = r.add (rest.length + 1) := by
-        rw [Ref.add_add, Nat.add_comm]
-      rw [List.cons_append, rangeHeap_cons, rangeHeap_cons, ih, List.length_cons,
-        hShift, Heap.union_assoc']
+  | cons b rest ih =>
+      rw [List.cons_append, bytes_cons, bytes_cons, ih, List.length_cons,
+        Loc.add_add, Nat.add_comm 1, Heap.union_assoc]
 
-/-- The two halves of a split run own disjoint slots. -/
-theorem compatible_rangeHeap_append {α : Type} (r : Ref α) (xs ys : List α) :
-    PartialCommMonoid.Compatible (rangeHeap r xs)
-      (rangeHeap (r.add xs.length) ys) := by
-  intro address hLeft hRight
-  obtain ⟨i, hi, hL⟩ := mem_rangeHeap.mp hLeft
-  obtain ⟨j, -, hR⟩ := mem_rangeHeap.mp hRight
-  rw [Ref.add_add, Ref.addr_add] at hR
-  rw [Ref.addr_add] at hL
-  have hOffset : r.offset + i = r.offset + (xs.length + j) :=
-    (congrArg Prod.snd hL).symm.trans (congrArg Prod.snd hR)
+/-- The two halves of a split run own disjoint bytes. -/
+theorem compatible_bytes_append (address : Loc) (xs ys : List Byte) :
+    PartialCommMonoid.Compatible (bytes address xs)
+      (bytes (address.add xs.length) ys) := by
+  intro other hLeft hRight
+  obtain ⟨i, hi, hL⟩ := mem_bytes.mp hLeft
+  obtain ⟨j, -, hR⟩ := mem_bytes.mp hRight
+  rw [Loc.add_add] at hR
+  have hOffset := (congrArg Prod.snd hL).symm.trans (congrArg Prod.snd hR)
+  simp at hOffset
   omega
 
-/-! ## Allocation -/
+/-- A frame disjoint from a run is disjoint from every run of the same length
+at the same address. -/
+theorem compatible_bytes_of_length_eq {address : Loc} {bs bs' : List Byte}
+    {frame : Heap} (hLength : bs'.length = bs.length)
+    (hCompatible : PartialCommMonoid.Compatible (bytes address bs) frame) :
+    PartialCommMonoid.Compatible (bytes address bs') frame := by
+  intro other hMem hFrame
+  exact hCompatible other
+    ((mem_bytes_of_length_eq (address := address) hLength).mp hMem) hFrame
 
-/-- The allocation identifier this heap will hand out next: one past every
-identifier it uses.  Allocation is deterministic, which is what lets a program
-be *run* and not only related to its outcomes. -/
-def freshBase (h : Heap) : AllocId :=
-  (h.keys.image Prod.fst).sup id + 1
-
-/-- The address the next allocation starts at. -/
-def freshRef (α : Type) (h : Heap) : Ref α := (freshBase h, 0)
-
-theorem not_mem_freshBase {h : Heap} {address : Loc}
-    (hBase : address.1 = freshBase h) : address ∉ h := by
-  intro hMem
-  have hMemKeys : address ∈ h.keys := Finmap.mem_keys.mpr hMem
-  have hImage : freshBase h ∈ h.keys.image Prod.fst :=
-    Finset.mem_image.mpr ⟨_, hMemKeys, hBase⟩
-  have hLe : freshBase h ≤ (h.keys.image Prod.fst).sup id :=
-    Finset.le_sup (f := fun a : AllocId => a) hImage
-  have hSucc : (h.keys.image Prod.fst).sup id + 1 ≤
-      (h.keys.image Prod.fst).sup id := hLe
-  exact Nat.not_succ_le_self _ hSucc
-
-/-- The run a fresh allocation occupies is disjoint from everything the heap
-already owns. -/
-theorem compatible_freshRef {α : Type} (h : Heap) (values : List α) :
-    PartialCommMonoid.Compatible (rangeHeap (freshRef α h) values) h := by
-  intro address hFresh hMem
-  obtain ⟨i, -, rfl⟩ := mem_rangeHeap.mp hFresh
-  exact not_mem_freshBase (h := h) rfl hMem
-
-/-- The heap `freshRef` allocates into. -/
-@[expose] def freshHeap {α : Type} (h : Heap) (values : List α) : Heap :=
-  rangeHeap (freshRef α h) values ∪ h
+/-- Runs in different allocations are disjoint. -/
+theorem compatible_bytes_of_fst_ne {address address' : Loc} {bs bs' : List Byte}
+    (hNe : address.1 ≠ address'.1) :
+    PartialCommMonoid.Compatible (bytes address bs) (bytes address' bs') := by
+  intro other hLeft hRight
+  obtain ⟨_, -, hL⟩ := mem_bytes.mp hLeft
+  obtain ⟨_, -, hR⟩ := mem_bytes.mp hRight
+  have hL' := congrArg Prod.fst hL
+  have hR' := congrArg Prod.fst hR
+  simp only [Loc.fst_add] at hL' hR'
+  exact hNe (hL'.symm.trans hR')
 
 /-! ## Sub-heaps
 
@@ -500,241 +487,167 @@ theorem union_mono {A B h₁ h₂ : Heap}
 
 end Sub
 
-
-/-- The value the slot `r` holds.  The guard supplies the type equality, so no
-default value has to be invented and this computes. -/
-def read {α : Type} (r : Ref α) (h : Heap)
-    (hContains : contains h r) : α :=
-  match hlookup : h.lookup r.addr with
-  | none => by simp [contains, hlookup] at hContains
-  | some ⟨β, value⟩ => by
-      have htype : β = α := by
-        simpa [contains, hlookup] using hContains
-      exact htype ▸ value
-
-/-- Replace the value the slot `r` holds. -/
-def update {α : Type} (r : Ref α) (value : α) (h : Heap)
-    (_ : contains h r) : Heap :=
-  h.insert r.addr ⟨α, value⟩
-
-/-- Release the slot `r`: the address goes away, so what a heap still holds is
-exactly what has not been freed. -/
-def free {α : Type} (r : Ref α) (h : Heap)
-    (_ : contains h r) : Heap :=
-  h.erase r.addr
-
-theorem mem_of_contains {α : Type} {h : Heap} {r : Ref α}
-    (hContains : contains h r) : r.addr ∈ h := by
-  unfold contains at hContains
-  split at hContains
-  · contradiction
-  · rename_i cell hLookup
-    exact Finmap.mem_of_lookup_eq_some hLookup
-
-/-- Two heaps that both contain the cell `r` are not disjoint. -/
-theorem disjoint_contains_false {α : Type} {h₁ h₂ : Heap} {r : Ref α}
-    (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
-    (hContains₁ : contains h₁ r)
-    (hContains₂ : contains h₂ r) : False :=
-  hCompatible r.addr (mem_of_contains hContains₁)
-    (mem_of_contains hContains₂)
-
-theorem contains_union_left {α : Type} {h₁ h₂ : Heap} {r : Ref α}
-    (hContains : contains h₁ r) : contains (h₁ ∪ h₂) r := by
-  have hMem : r.addr ∈ h₁ := mem_of_contains hContains
-  unfold contains at hContains ⊢
-  rw [Heap.lookup_union_left hMem]
-  exact hContains
-
-theorem read_union_left {α : Type} {h₁ h₂ : Heap} {r : Ref α}
-    (hContains : contains h₁ r) :
-    Heap.read r (h₁ ∪ h₂) (contains_union_left hContains) =
-      Heap.read r h₁ hContains := by
-  have hMem : r.addr ∈ h₁ := by
-    unfold contains at hContains
-    split at hContains
-    · contradiction
-    · rename_i cell hLookup
-      exact Finmap.mem_of_lookup_eq_some hLookup
-  unfold Heap.read
-  split
-  · rename_i hLookup
-    have hContainsUnion := contains_union_left (h₂ := h₂) hContains
-    simp [contains, hLookup] at hContainsUnion
-  · rename_i β value hLookup
-    split
-    · rename_i hLookup₁
-      simp [contains, hLookup₁] at hContains
-    · rename_i β₁ value₁ hLookup₁
-      have hCells :
-          (⟨β, value⟩ : HeapCell) = ⟨β₁, value₁⟩ := by
-        apply Option.some.inj
-        exact hLookup.symm.trans
-          ((Finmap.lookup_union_left hMem).trans hLookup₁)
-      cases hCells
-      rfl
-
-theorem update_union_left {α : Type} {h₁ h₂ : Heap}
-    (r : Ref α) (value : α) (hContains : contains h₁ r) :
-    Heap.update r value (h₁ ∪ h₂) (contains_union_left hContains) =
-      Heap.update r value h₁ hContains ∪ h₂ := by
-  exact Heap.insert_union
-
-theorem disjoint_update_left {α : Type} {r : Ref α} {value : α}
-    {h₁ h₂ : Heap}
-    (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
-    (hContains : contains h₁ r) :
-    PartialCommMonoid.Compatible
-      (Heap.update r value h₁ hContains) h₂ := by
-  have hUnallocated : r.addr ∉ h₂ := by
-    intro hMem₂
-    unfold contains at hContains
-    split at hContains
-    · contradiction
-    · rename_i cell hLookup
-      exact hCompatible r.addr
-        (Finmap.mem_of_lookup_eq_some hLookup) hMem₂
-  intro address hMem₁ hMem₂
-  change address ∈ h₁.insert r.addr ⟨α, value⟩ at hMem₁
-  rw [Heap.mem_insert] at hMem₁
-  rcases hMem₁ with hEq | hMem₁
-  · exact hUnallocated (hEq ▸ hMem₂)
-  · exact hCompatible address hMem₁ hMem₂
-
-theorem disjoint_free_left {α : Type} {r : Ref α}
-    {h₁ h₂ : Heap}
-    (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
-    (hContains : contains h₁ r) :
-    PartialCommMonoid.Compatible (Heap.free r h₁ hContains) h₂ := by
-  intro address hMem₁ hMem₂
-  change address ∈ h₁.erase r.addr at hMem₁
-  exact hCompatible address (Heap.mem_erase.mp hMem₁).right hMem₂
-
-theorem free_union_left {α : Type} {h₁ h₂ : Heap}
-    (r : Ref α) (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
-    (hContains : contains h₁ r) :
-    Heap.free r (h₁ ∪ h₂) (contains_union_left hContains) =
-      Heap.free r h₁ hContains ∪ h₂ := by
-  have hMem : r.addr ∈ h₁ := by
-    unfold contains at hContains
-    split at hContains
-    · contradiction
-    · rename_i cell hLookup
-      exact Finmap.mem_of_lookup_eq_some hLookup
-  have hNotMem : r.addr ∉ h₂ :=
-    fun hMem₂ => hCompatible r.addr hMem hMem₂
-  unfold Heap.free
-  apply Heap.ext_impl
-  apply Finmap.ext_lookup
-  intro address
-  change
-    Finmap.lookup address (h₁.impl ∪ h₂.impl |>.erase r.addr) =
-      Finmap.lookup address (h₁.impl.erase r.addr ∪ h₂.impl)
-  by_cases hEq : address = r.addr
-  · subst address
-    rw [Finmap.lookup_erase, Finmap.lookup_union_right
-      Finmap.notMem_erase_self]
-    exact Finmap.lookup_eq_none.mpr hNotMem |>.symm
-  · rw [Finmap.lookup_erase_ne hEq]
-    by_cases hMem₁ : address ∈ h₁
-    · rw [Finmap.lookup_union_left hMem₁,
-        Finmap.lookup_union_left (Finmap.mem_erase.mpr ⟨hEq, hMem₁⟩),
-        Finmap.lookup_erase_ne hEq]
-    · rw [Finmap.lookup_union_right hMem₁,
-        Finmap.lookup_union_right
-          (fun hMem => hMem₁ (Finmap.mem_erase.mp hMem).right)]
-
-/-- Two cells at different references are disjoint. -/
-theorem disjoint_singleton {α : Type} {r s : Ref α} {value₁ value₂ : α}
-    (hNe : r ≠ s) :
-    PartialCommMonoid.Compatible
-      (singleton r value₁) (singleton s value₂) := by
-  intro address hMem₁ hMem₂
-  change address ∈
-    (Finmap.singleton r.addr ⟨α, value₁⟩ : HeapImpl) at hMem₁
-  change address ∈
-    (Finmap.singleton s.addr ⟨α, value₂⟩ : HeapImpl) at hMem₂
-  rw [Finmap.mem_singleton] at hMem₁
-  rw [Finmap.mem_singleton] at hMem₂
-  exact hNe (hMem₁.symm.trans hMem₂)
-
-theorem contains_singleton {α : Type} (r : Ref α) (value : α) :
-    contains (singleton r value) r := by
-  simp [contains, singleton, Heap.lookup]
-
-theorem read_singleton {α : Type} (r : Ref α) (value : α)
-    (hContains : contains (singleton r value) r) :
-    Heap.read r (singleton r value) hContains = value := by
-  unfold Heap.read
-  split
-  · rename_i hLookup
-    change
-      Finmap.lookup r.addr
-          (Finmap.singleton r.addr ⟨α, value⟩ : HeapImpl) =
-        none at hLookup
-    rw [Finmap.lookup_singleton_eq] at hLookup
-    contradiction
-  · rename_i β stored hLookup
-    change
-      Finmap.lookup r.addr
-          (Finmap.singleton r.addr ⟨α, value⟩ : HeapImpl) =
-        some (⟨β, stored⟩ : HeapCell) at hLookup
-    rw [Finmap.lookup_singleton_eq] at hLookup
-    cases hLookup
-    rfl
-
-theorem update_singleton {α : Type} (r : Ref α)
-    (oldValue newValue : α)
-    (hContains : contains (singleton r oldValue) r) :
-    Heap.update r newValue (singleton r oldValue) hContains =
-      singleton r newValue := by
-  apply Heap.ext_impl
-  simp [Heap.update, singleton, Heap.insert]
-
-theorem free_singleton {α : Type} (r : Ref α) (value : α)
-    (hContains : contains (singleton r value) r) :
-    Heap.free r (singleton r value) hContains = empty := by
-  unfold Heap.free
-  apply Heap.ext_impl
-  apply Finmap.ext_lookup
-  intro address
-  change
-    Finmap.lookup address
-        ((Finmap.singleton r.addr ⟨α, value⟩ : HeapImpl).erase
-          r.addr) =
-      Finmap.lookup address (∅ : HeapImpl)
-  by_cases hEq : address = r.addr
-  · subst address
-    simp
-  · rw [Finmap.lookup_erase_ne hEq]
-    simp only [Finmap.lookup_empty]
-    apply Finmap.lookup_eq_none.mpr
-    simpa [singleton, Finmap.mem_singleton] using hEq
-
-/-! ## What a points-to assertion gives
-
-An affine assertion owns the slots it describes and says nothing about the
-others, so it is closed under `Heap.Sub`.  These are the lemmas that turn such
-an assertion into the guard of an operation, and back. -/
-
-/-- A heap that extends a slot owns that slot: this is what an affine points-to
-assertion gives, the rest of the heap being unconstrained. -/
-theorem contains_of_sub {α : Type} {r : Ref α} {value : α} {h : Heap}
-    (hSub : Heap.Sub (singleton r value) h) : contains h r := by
+theorem mem_of_sub {address : Loc} {h h' : Heap} (hSub : Heap.Sub h h')
+    (hMem : address ∈ h) : address ∈ h' := by
   obtain ⟨rest, -, rfl⟩ := hSub
-  exact contains_union_left (contains_singleton r value)
+  exact mem_union.mpr (Or.inl hMem)
 
-/-- The value a heap extending `singleton r value` holds at `r` is `value`
-itself: slots compose by disjoint union, so nothing else can hold that slot and
-the points-to assertion is exact. -/
-theorem read_of_sub {α : Type} {r : Ref α} {value : α} {h : Heap}
-    (hSub : Heap.Sub (singleton r value) h)
-    (hContains : contains h r) : Heap.read r h hContains = value := by
-  obtain ⟨rest, hCompatible, rfl⟩ := hSub
-  have hContainsSingleton := contains_singleton r value
-  rw [show hContains = contains_union_left hContainsSingleton from
-      Subsingleton.elim _ _,
-    read_union_left hContainsSingleton, read_singleton]
+/-- Two heaps that both own the first byte of a run are not disjoint. -/
+theorem not_compatible_of_sub_bytes {address : Loc} {bs bs' : List Byte}
+    {h₁ h₂ : Heap} (hLength : 0 < bs.length) (hLength' : 0 < bs'.length)
+    (hSub₁ : Heap.Sub (bytes address bs) h₁)
+    (hSub₂ : Heap.Sub (bytes address bs') h₂) :
+    ¬ PartialCommMonoid.Compatible h₁ h₂ := fun hCompatible =>
+  hCompatible address
+    (mem_of_sub hSub₁ (mem_bytes.mpr ⟨0, hLength, rfl⟩))
+    (mem_of_sub hSub₂ (mem_bytes.mpr ⟨0, hLength', rfl⟩))
+
+/-! ## Reading, writing and releasing runs -/
+
+/-- The `n` bytes from `address` on, if the heap holds them all.  This is the
+definedness guard of every operation: an operation on bytes the heap does not
+hold is *stuck* rather than erroneous. -/
+def readBytes (h : Heap) (address : Loc) : Nat → Option (List Byte)
+  | 0 => some []
+  | n + 1 =>
+      match h.lookup address, h.readBytes (address.add 1) n with
+      | some b, some rest => some (b :: rest)
+      | _, _ => none
+
+private theorem readBytes_eq_some {h : Heap} {address : Loc} {bs : List Byte}
+    (hLookup : ∀ i (hi : i < bs.length), h.lookup (address.add i) = some bs[i]) :
+    h.readBytes address bs.length = some bs := by
+  induction bs generalizing address with
+  | nil => rfl
+  | cons b rest ih =>
+      have hFirst := hLookup 0 (by simp)
+      rw [Loc.add_zero] at hFirst
+      have hRest : h.readBytes (address.add 1) rest.length = some rest :=
+        ih fun i hi => by
+          rw [Loc.add_add, Nat.add_comm]
+          exact hLookup (i + 1) (by simpa using hi)
+      simp only [List.length_cons, readBytes, hFirst, hRest, List.getElem_cons_zero]
+
+/-- The empty heap holds no byte. -/
+theorem readBytes_empty_succ (address : Loc) (n : Nat) :
+    readBytes empty address (n + 1) = none := by
+  have hLookup : (empty : Heap).lookup address = none :=
+    lookup_eq_none.mpr fun hMem => Finmap.notMem_empty hMem
+  simp only [readBytes, hLookup]
+
+/-- A heap extending a run holds that run. -/
+theorem readBytes_of_sub {address : Loc} {bs : List Byte} {h : Heap}
+    (hSub : Heap.Sub (bytes address bs) h) :
+    h.readBytes address bs.length = some bs := by
+  obtain ⟨rest, -, rfl⟩ := hSub
+  apply readBytes_eq_some
+  intro i hi
+  rw [lookup_union_left (mem_bytes.mpr ⟨i, hi, rfl⟩), lookup_bytes_add hi]
+
+/-- Overwrite the bytes from `address` on with `bs`. -/
+def writeBytes (h : Heap) (address : Loc) (bs : List Byte) : Heap :=
+  bytes address bs ∪ h
+
+theorem writeBytes_union (h₁ h₂ : Heap) (address : Loc) (bs : List Byte) :
+    writeBytes (h₁ ∪ h₂) address bs = writeBytes h₁ address bs ∪ h₂ :=
+  (union_assoc _ _ _).symm
+
+/-- Overwriting a run with one of the same length replaces it. -/
+theorem writeBytes_bytes_union {address : Loc} {bs bs' : List Byte} (rest : Heap)
+    (hLength : bs'.length = bs.length) :
+    writeBytes (bytes address bs ∪ rest) address bs' = bytes address bs' ∪ rest := by
+  unfold writeBytes
+  apply ext_lookup
+  intro other
+  by_cases hMem : other ∈ bytes address bs'
+  · rw [lookup_union_left hMem, lookup_union_left hMem]
+  · have hMem' : other ∉ bytes address bs := fun hOld =>
+      hMem ((mem_bytes_of_length_eq hLength).mpr hOld)
+    rw [lookup_union_right hMem, lookup_union_right hMem,
+      lookup_union_right hMem']
+
+/-- Release the `n` bytes from `address` on: the addresses go away, so what a
+heap still holds is exactly what has not been freed. -/
+def freeBytes (h : Heap) (address : Loc) : Nat → Heap
+  | 0 => h
+  | n + 1 => (h.erase address).freeBytes (address.add 1) n
+
+private theorem lookup_freeBytes_of_not {h : Heap} {address other : Loc}
+    {n : Nat} (hRange : ¬ ∃ i, i < n ∧ other = address.add i) :
+    (freeBytes h address n).lookup other = h.lookup other := by
+  induction n generalizing h address with
+  | zero => rfl
+  | succ n ih =>
+      have hNe : other ≠ address := fun hEq =>
+        hRange ⟨0, Nat.succ_pos n, by rw [Loc.add_zero]; exact hEq⟩
+      have hRest : ¬ ∃ i, i < n ∧ other = (address.add 1).add i := by
+        rintro ⟨i, hi, hEq⟩
+        exact hRange ⟨i + 1, by omega, by rw [hEq, Loc.add_add, Nat.add_comm]⟩
+      simp only [freeBytes]
+      rw [ih hRest, lookup_erase_ne hNe]
+
+private theorem lookup_freeBytes_of_mem {h : Heap} {address other : Loc}
+    {n : Nat} (hRange : ∃ i, i < n ∧ other = address.add i) :
+    (freeBytes h address n).lookup other = none := by
+  induction n generalizing h address with
+  | zero => obtain ⟨i, hi, -⟩ := hRange; omega
+  | succ n ih =>
+      obtain ⟨i, hi, rfl⟩ := hRange
+      simp only [freeBytes]
+      cases i with
+      | zero =>
+          rw [Loc.add_zero, lookup_freeBytes_of_not]
+          · exact lookup_eq_none.mpr fun hMem => (mem_erase.mp hMem).1 rfl
+          · rintro ⟨j, -, hEq⟩
+            have := congrArg Prod.snd hEq
+            simp at this
+            omega
+      | succ j =>
+          exact ih ⟨j, by omega, by rw [Loc.add_add, Nat.add_comm]⟩
+
+/-- Releasing a run removes exactly that run. -/
+theorem freeBytes_bytes_union {address : Loc} {bs : List Byte} {rest : Heap}
+    (hCompatible : PartialCommMonoid.Compatible (bytes address bs) rest) :
+    freeBytes (bytes address bs ∪ rest) address bs.length = rest := by
+  apply ext_lookup
+  intro other
+  by_cases hRange : ∃ i, i < bs.length ∧ other = address.add i
+  · rw [lookup_freeBytes_of_mem hRange]
+    exact (lookup_eq_none.mpr fun hRest =>
+      hCompatible other (mem_bytes.mpr hRange) hRest).symm
+  · rw [lookup_freeBytes_of_not hRange,
+      lookup_union_right fun hMem => hRange (mem_bytes.mp hMem)]
+
+/-! ## Allocation -/
+
+/-- The allocation identifier this heap will hand out next: one past every
+identifier it uses.  Allocation is deterministic, which is what lets a program
+be *run* and not only related to its outcomes. -/
+def freshBase (h : Heap) : AllocId :=
+  (h.keys.image Prod.fst).sup id + 1
+
+/-- The address the next allocation starts at. -/
+def freshLoc (h : Heap) : Loc := (freshBase h, 0)
+
+theorem not_mem_freshBase {h : Heap} {address : Loc}
+    (hBase : address.1 = freshBase h) : address ∉ h := by
+  intro hMem
+  have hMemKeys : address ∈ h.keys := Finmap.mem_keys.mpr hMem
+  have hImage : freshBase h ∈ h.keys.image Prod.fst :=
+    Finset.mem_image.mpr ⟨_, hMemKeys, hBase⟩
+  have hLe : freshBase h ≤ (h.keys.image Prod.fst).sup id :=
+    Finset.le_sup (f := fun a : AllocId => a) hImage
+  have hSucc : (h.keys.image Prod.fst).sup id + 1 ≤
+      (h.keys.image Prod.fst).sup id := hLe
+  exact Nat.not_succ_le_self _ hSucc
+
+/-- The run a fresh allocation occupies is disjoint from everything the heap
+already owns. -/
+theorem compatible_fresh (h : Heap) (bs : List Byte) :
+    PartialCommMonoid.Compatible (bytes (freshLoc h) bs) h := by
+  intro address hFresh hMem
+  obtain ⟨i, -, rfl⟩ := mem_bytes.mp hFresh
+  exact not_mem_freshBase (h := h) rfl hMem
 
 end Heap
 

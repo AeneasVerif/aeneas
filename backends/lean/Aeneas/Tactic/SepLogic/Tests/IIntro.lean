@@ -21,7 +21,7 @@ private def hiddenPure (P : Prop) : IProp := ⌜P⌝
 example (P Q : IProp) : P ∗ Q ⊢ Q ∗ P := by
   isimpl
 
-example {α : Type} (r : Ref α) (x : α) : (r ↦ x ⊢ r ↦ x) ∧ 1 = 1 := by
+example {α : Type} [Aeneas.Std.ByteRepr α] (r : Ref α) (x : α) : (r ↦ x ⊢ r ↦ x) ∧ 1 = 1 := by
   refine ⟨by isimpl, rfl⟩
 
 /-- `iintro_entail` moves the pure facts of the left-hand side into the local

@@ -30,7 +30,7 @@ example {α : Type} (P : α → IProp) :
     iprop(∀ x, P x) ⊢ iprop(∀ x, P x) := by
   iframe
 
-example {α : Type} (r : Ref α) (value : α) :
+example {α : Type} [Aeneas.Std.ByteRepr α] (r : Ref α) (value : α) :
     r ↦ value ⊢ r ↦ value := by
   iframe
 
@@ -39,12 +39,12 @@ logic is affine. -/
 example (P : IProp) : P ⊢ ⌜8 = 8⌝ := by
   iframe
 
-example {α : Type} (r s : Ref α) (x y : α) :
+example {α : Type} [Aeneas.Std.ByteRepr α] (r s : Ref α) (x y : α) :
     r ↦ x ∗ s ↦ y ⊢ s ↦ y ∗ r ↦ x := by
   iframe
 
 /-- Unmatched spatial assertions of the left-hand side are discarded too. -/
-example {α : Type} (r s : Ref α) (x y : α) : r ↦ x ∗ s ↦ y ⊢ s ↦ y := by
+example {α : Type} [Aeneas.Std.ByteRepr α] (r s : Ref α) (x y : α) : r ↦ x ∗ s ↦ y ⊢ s ↦ y := by
   iframe
 
 /-- Equalities extracted from ownership must be available during cancellation. -/

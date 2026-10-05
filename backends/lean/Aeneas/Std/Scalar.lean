@@ -1,6 +1,7 @@
 module
 public import Aeneas.Std.Scalar.Bitwise
 public import Aeneas.Std.Scalar.BvComp
+public import Aeneas.Std.Scalar.ByteRepr
 public import Aeneas.Std.Scalar.Casts
 public import Aeneas.Std.Scalar.CheckedOps
 public import Aeneas.Std.Scalar.CloneCopy

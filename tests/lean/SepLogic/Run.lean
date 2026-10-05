@@ -15,26 +15,28 @@ open Aeneas.SepLogic
 namespace SepLogic
 
 open Aeneas.Std.WP
-open Aeneas.Std (Heap MutRawPtr RawPtr Result)
+open Aeneas.Std (Heap MutRawPtr RawPtr Result U32)
 open Aeneas.Std.MutRawPtr (alloc free write)
 open Aeneas.Std.RawPtr (read)
 
 /-! ## A closed program -/
 
-def roundTrip : Result Nat := do
-  let p ← alloc (1 : Nat)
+def roundTrip : Result U32 := do
+  let p ← alloc 1#u32
   let value ← read p
-  write p (value + 41)
+  write p (value.wrapping_add 41#u32)
   let result ← read p
   free p
   pure result
 
-theorem roundTrip.spec : ⦃ emp ⦄ roundTrip ⦃⇓ result => ⌜result = 42⌝⦄ := by
+theorem roundTrip.spec : ⦃ emp ⦄ roundTrip ⦃⇓ result => ⌜result = 42#u32⌝⦄ := by
   unfold roundTrip
   step*
+  subst_vars
+  rfl
 
 def leaky : Result Unit := do
-  let _ ← alloc (1 : Nat)
+  let _ ← alloc 1#u32
   pure ()
 
 theorem leaky.spec : ⦃ emp ⦄ leaky ⦃⇓ emp⦄ := by
@@ -43,38 +45,38 @@ theorem leaky.spec : ⦃ emp ⦄ leaky ⦃⇓ emp⦄ := by
 
 /-! ## A program with an unchanged frame -/
 
-private def source : MutRawPtr Nat := ⟨0, 0⟩
-private def spare : MutRawPtr Nat := ⟨1, 0⟩
+private def source : MutRawPtr U32 := ⟨0, 0⟩
+private def spare : MutRawPtr U32 := ⟨1, 0⟩
 
-/-- The heap of the single slot `q` addresses, holding `value`. -/
-private def cell (q : MutRawPtr Nat) (value : Nat) : Heap := q.singleton value
+/-- The heap of the bytes `q` addresses, encoding `value`. -/
+private def cell (q : MutRawPtr U32) (value : U32) : Heap := q.singleton value
 
-/-- Ownership is slot-granular and slots compose by disjoint union, so this
-computes. -/
+/-- Ownership is byte-granular and runs of bytes compose by disjoint union, so
+this computes. -/
 private def initial : Heap :=
-  cell source 1 ∪ cell spare 7
+  cell source 1#u32 ∪ cell spare 7#u32
 
-private theorem source_ne_spare : source ≠ spare := by decide
+private theorem source_ne_spare : source.base ≠ spare.base := by decide
 
 private theorem initial_disjoint :
-    PartialCommMonoid.Compatible (cell source 1) (cell spare 7) :=
+    PartialCommMonoid.Compatible (cell source 1#u32) (cell spare 7#u32) :=
   RawPtr.disjoint_singleton source_ne_spare
 
-private theorem initial_pre : (source ↦ 1) initial :=
+private theorem initial_pre : (source ↦ 1#u32) initial :=
   Heap.Sub.union_left initial_disjoint
 
-example : iwp true (Fixtures.incr_ptr source) (fun _ => source ↦ 2) initial :=
-  Fixtures.incr_ptr.spec source 1 initial initial_pre
+example : iwp true (Fixtures.incr_ptr source) (fun _ => source ↦ 2#u32) initial :=
+  Fixtures.incr_ptr.spec source 1#u32 initial initial_pre
 
 example :
-    ⦃ source ↦ 1 ∗ spare ↦ 7 ⦄ Fixtures.incr_ptr source
-      ⦃⇓ source ↦ 2 ∗ spare ↦ 7⦄ := by
+    ⦃ source ↦ 1#u32 ∗ spare ↦ 7#u32 ⦄ Fixtures.incr_ptr source
+      ⦃⇓ source ↦ 2#u32 ∗ spare ↦ 7#u32⦄ := by
   step*
 
 example : iwp true (Fixtures.incr_ptr source)
-    (fun _ => source ↦ 2 ∗ spare ↦ 7) initial :=
-  ispec_frame (Fixtures.incr_ptr.spec source 1) (spare ↦ 7) initial
-    ⟨cell source 1, cell spare 7, initial_disjoint, rfl,
+    (fun _ => source ↦ 2#u32 ∗ spare ↦ 7#u32) initial :=
+  ispec_frame (Fixtures.incr_ptr.spec source 1#u32) (spare ↦ 7#u32) initial
+    ⟨cell source 1#u32, cell spare 7#u32, initial_disjoint, rfl,
       Heap.Sub.refl _, Heap.Sub.refl _⟩
 
 end SepLogic

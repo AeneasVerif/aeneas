@@ -2,6 +2,7 @@ module
 public import Aeneas.Std.Delab
 public import Aeneas.Std.Scalar.Core
 public import Aeneas.Std.Scalar.Notations
+public import Aeneas.Std.Scalar.ByteRepr
 public import Aeneas.Std.SliceDef
 public import Aeneas.Data.BitVec
 public import Aeneas.Std.WP
@@ -15,13 +16,19 @@ public import Aeneas.Tactic.Step.Init
 /-!
 # Raw pointers
 
-`RawPtr T M` is a Rust raw pointer: a base allocation identifier and an offset
-into that allocation. The mutability index distinguishes `*mut T` from
+`RawPtr T M` is a Rust raw pointer: a base allocation identifier and a byte
+offset into that allocation. The mutability index distinguishes `*mut T` from
 `*const T`; permissions are carried by separation-logic assertions rather than
 by the pointer value.
 
-* `q ↦ value` owns exactly the slot `q` addresses;
-* `q ↦* values` owns the consecutive slots starting at `q`.
+The element type must have a byte representation (`ByteRepr T`):
+
+* `q ↦ value` owns the bytes from `q` on that encode `value`;
+* `q ↦* values` owns the consecutive elements starting at `q`.
+
+Since ownership is of bytes, the type a pointer views its bytes at is a
+matter of specification only: `RawPtr.cast_scalar` is the identity on
+addresses, and its specification reinterprets the bytes it owns.
 
 Reads accept both mutable and const pointers. Allocation, writes and
 deallocation require a mutable pointer.
@@ -48,18 +55,21 @@ abbrev ConstRawPtr (T : Type) := RawPtr T .Const
 
 namespace RawPtr
 
-/-- The heap reference addressed by a raw pointer. -/
-def ref (q : RawPtr T M) : Ref T := (q.base, q.offset)
+/-- The byte address of a raw pointer. -/
+def loc (q : RawPtr T M) : Loc := (q.base, q.offset)
 
-/-- Pointer arithmetic within the same allocation. -/
-def add (q : RawPtr T M) (i : Nat) : RawPtr T M :=
-  ⟨q.base, q.offset + i⟩
+/-- The heap reference addressed by a raw pointer. -/
+def ref (q : RawPtr T M) : Ref T := q.loc
+
+/-- Pointer arithmetic within the same allocation, in elements. -/
+def add [ByteRepr T] (q : RawPtr T M) (i : Nat) : RawPtr T M :=
+  ⟨q.base, q.offset + i * ByteRepr.size T⟩
 
 /-- Whether two pointers are interior to the same allocation. -/
 def sameBase (q₁ : RawPtr T M₁) (q₂ : RawPtr U M₂) : Prop :=
   q₁.base = q₂.base
 
-/-- How far `q₂` is past `q₁`. -/
+/-- How many bytes `q₂` is past `q₁`. -/
 def distance (q₁ : RawPtr T M₁) (q₂ : RawPtr U M₂) : Nat :=
   q₂.offset - q₁.offset
 
@@ -67,13 +77,18 @@ def distance (q₁ : RawPtr T M₁) (q₂ : RawPtr U M₂) : Nat :=
 def toConst (q : MutRawPtr T) : ConstRawPtr T :=
   ⟨q.base, q.offset⟩
 
-@[simp] theorem base_add (q : RawPtr T M) (i : Nat) :
+/-- The same address, viewed at another element type and mutability. -/
+def retype (q : RawPtr T M) : RawPtr U M' :=
+  ⟨q.base, q.offset⟩
+
+@[simp] theorem base_add [ByteRepr T] (q : RawPtr T M) (i : Nat) :
     (q.add i).base = q.base := rfl
 
-@[simp] theorem offset_add (q : RawPtr T M) (i : Nat) :
-    (q.add i).offset = q.offset + i := rfl
+@[simp] theorem offset_add [ByteRepr T] (q : RawPtr T M) (i : Nat) :
+    (q.add i).offset = q.offset + i * ByteRepr.size T := rfl
 
-@[simp] theorem add_zero (q : RawPtr T M) : q.add 0 = q := rfl
+@[simp] theorem add_zero [ByteRepr T] (q : RawPtr T M) : q.add 0 = q := by
+  simp [add]
 
 @[simp] theorem base_toConst (q : MutRawPtr T) : q.toConst.base = q.base := rfl
 
@@ -81,163 +96,238 @@ def toConst (q : MutRawPtr T) : ConstRawPtr T :=
 
 @[simp] theorem ref_toConst (q : MutRawPtr T) : q.toConst.ref = q.ref := rfl
 
-theorem ref_add (q : RawPtr T M) (i : Nat) :
-    (q.add i).ref = q.ref.add i := rfl
+@[simp] theorem loc_toConst (q : MutRawPtr T) : q.toConst.loc = q.loc := rfl
 
-theorem add_add (q : RawPtr T M) (i j : Nat) :
+@[simp] theorem base_retype (q : RawPtr T M) :
+    (q.retype : RawPtr U M').base = q.base := rfl
+
+@[simp] theorem offset_retype (q : RawPtr T M) :
+    (q.retype : RawPtr U M').offset = q.offset := rfl
+
+@[simp] theorem loc_retype (q : RawPtr T M) :
+    (q.retype : RawPtr U M').loc = q.loc := rfl
+
+@[simp] theorem retype_retype (q : RawPtr T M) :
+    ((q.retype : RawPtr U M').retype : RawPtr V M'') = q.retype := rfl
+
+@[simp] theorem retype_self (q : RawPtr T M) : (q.retype : RawPtr T M) = q := rfl
+
+theorem loc_add [ByteRepr T] (q : RawPtr T M) (i : Nat) :
+    (q.add i).loc = q.loc.add (i * ByteRepr.size T) := rfl
+
+theorem ref_add [ByteRepr T] (q : RawPtr T M) (i : Nat) :
+    (q.add i).ref = q.ref.add (i * ByteRepr.size T) := rfl
+
+theorem add_add [ByteRepr T] (q : RawPtr T M) (i j : Nat) :
     (q.add i).add j = q.add (i + j) := by
-  simp [add, Nat.add_assoc]
+  simp [add, Nat.add_mul, Nat.add_assoc]
 
-/-- `q` owns the `values.length` slots from `q` on. -/
-def pointsToRange (q : RawPtr T M) (values : List T) : IProp :=
-  owns (Heap.rangeHeap q.ref values)
-
-/-- `q` owns exactly the slot it addresses. -/
-def pointsTo (q : RawPtr T M) (value : T) : IProp :=
+/-- `q` owns the bytes encoding `value` from the address it holds on. -/
+def pointsTo [ByteRepr T] (q : RawPtr T M) (value : T) : IProp :=
   Ref.pointsTo q.ref value
+
+/-- `q` owns the `values.length` consecutive elements from `q` on. -/
+def pointsToRange [ByteRepr T] (q : RawPtr T M) : List T → IProp
+  | [] => emp
+  | value :: rest => pointsTo q value ∗ pointsToRange (q.add 1) rest
 
 end RawPtr
 
-instance instPointsToRawPtr {T : Type} {M : Mutability} :
+instance instPointsToRawPtr {T : Type} {M : Mutability} [ByteRepr T] :
     PointsTo (RawPtr T M) T := ⟨RawPtr.pointsTo⟩
 
 @[inherit_doc RawPtr.pointsToRange]
 notation:50 q:50 " ↦* " values:50 => RawPtr.pointsToRange q values
 
-theorem RawPtr.pointsTo_eq_ref (q : RawPtr T M) (value : T) :
+theorem RawPtr.pointsTo_eq_ref [ByteRepr T] (q : RawPtr T M) (value : T) :
     (q ↦ value) = Ref.pointsTo q.ref value := rfl
 
-theorem RawPtr.pointsTo_eq_range (q : RawPtr T M) (value : T) :
-    (q ↦ value) = (q ↦* [value]) := by
-  rw [RawPtr.pointsTo_eq_ref, RawPtr.pointsToRange, Heap.rangeHeap_singleton]
-  rfl
+theorem RawPtr.pointsTo_eq_owns [ByteRepr T] (q : RawPtr T M) (value : T) :
+    (q ↦ value) = owns (Heap.bytes q.loc (ByteRepr.encode value)) := rfl
 
-@[simp] theorem RawPtr.pointsTo_toConst (q : MutRawPtr T) (value : T) :
+theorem RawPtr.pointsTo_eq_range [ByteRepr T] (q : RawPtr T M) (value : T) :
+    (q ↦ value) = (q ↦* [value]) :=
+  (sep_emp_r_eq _).symm
+
+@[simp] theorem RawPtr.pointsTo_toConst [ByteRepr T] (q : MutRawPtr T) (value : T) :
     (q.toConst ↦ value) = (q ↦ value) := rfl
 
-@[simp] theorem RawPtr.pointsToRange_toConst (q : MutRawPtr T) (values : List T) :
-    (q.toConst ↦* values) = (q ↦* values) := rfl
+theorem ByteRepr.length_flatMap_encode [ByteRepr T] (values : List T) :
+    (values.flatMap ByteRepr.encode).length = values.length * ByteRepr.size T := by
+  induction values with
+  | nil => simp
+  | cons value rest ih =>
+      simp only [List.flatMap_cons, List.length_append, ByteRepr.length_encode, ih,
+        List.length_cons, Nat.succ_mul]
+      omega
+
+private theorem owns_empty_eq : owns Heap.empty = emp :=
+  bientails_eq ⟨fun _ _ => trivial, fun h _ => Heap.Sub.of_empty h⟩
 
 namespace RawPtr
 
-theorem pointsToRange_append (q : RawPtr T M) (xs ys : List T) :
-    q ↦* (xs ++ ys) ⊣⊢ q ↦* xs ∗ (q.add xs.length) ↦* ys := by
-  rw [pointsToRange, pointsToRange, pointsToRange, ref_add,
-    Heap.rangeHeap_append q.ref xs ys]
-  exact owns_union _ _ (Heap.compatible_rangeHeap_append q.ref xs ys)
+/-- A range owns the concatenated encodings of its values. -/
+theorem pointsToRange_eq_owns [ByteRepr T] (q : RawPtr T M) (values : List T) :
+    (q ↦* values) = owns (Heap.bytes q.loc (values.flatMap ByteRepr.encode)) := by
+  induction values generalizing q with
+  | nil =>
+      rw [List.flatMap_nil, Heap.bytes_nil, owns_empty_eq]
+      rfl
+  | cons value rest ih =>
+      change iprop(q ↦ value ∗ (q.add 1) ↦* rest) = _
+      rw [ih, List.flatMap_cons, Heap.bytes_append,
+        bientails_eq (owns_union _ _ (Heap.compatible_bytes_append _ _ _)),
+        ByteRepr.length_encode, loc_add, Nat.one_mul]
+      rfl
 
-theorem pointsToRange_split (q : RawPtr T M) (values : List T) (i : Nat) :
+@[simp] theorem pointsToRange_toConst [ByteRepr T] (q : MutRawPtr T) (values : List T) :
+    (q.toConst ↦* values) = (q ↦* values) := by
+  rw [pointsToRange_eq_owns, pointsToRange_eq_owns, loc_toConst]
+
+theorem pointsToRange_append [ByteRepr T] (q : RawPtr T M) (xs ys : List T) :
+    q ↦* (xs ++ ys) ⊣⊢ q ↦* xs ∗ (q.add xs.length) ↦* ys := by
+  rw [pointsToRange_eq_owns, pointsToRange_eq_owns, pointsToRange_eq_owns,
+    List.flatMap_append, Heap.bytes_append, loc_add, ← ByteRepr.length_flatMap_encode]
+  exact owns_union _ _ (Heap.compatible_bytes_append _ _ _)
+
+theorem pointsToRange_split [ByteRepr T] (q : RawPtr T M) (values : List T) (i : Nat) :
     q ↦* values ⊣⊢
       q ↦* values.take i ∗ (q.add (values.take i).length) ↦* values.drop i := by
   conv_lhs => rw [← List.take_append_drop i values]
   exact pointsToRange_append q (values.take i) (values.drop i)
 
-theorem pointsToRange_eq_take_get_drop {q : RawPtr T M} {values : List T} {i : Nat}
-    (hIndex : i < values.length) :
+theorem pointsToRange_cons [ByteRepr T] (q : RawPtr T M) (value : T) (rest : List T) :
+    (q ↦* (value :: rest)) = iprop(q ↦ value ∗ (q.add 1) ↦* rest) := rfl
+
+theorem pointsToRange_eq_take_get_drop [ByteRepr T] {q : RawPtr T M} {values : List T}
+    {i : Nat} (hIndex : i < values.length) :
     (q ↦* values) =
       iprop(q ↦* values.take i ∗
         ((q.add i) ↦ values[i] ∗ (q.add (i + 1)) ↦* values.drop (i + 1))) := by
   have hTake : (values.take i).length = i := by simp; omega
   have hSplit := bientails_eq (pointsToRange_split q values i)
   rw [hTake] at hSplit
-  rw [hSplit, List.drop_eq_getElem_cons hIndex,
-    show values[i] :: values.drop (i + 1)
-      = [values[i]] ++ values.drop (i + 1) from rfl,
-    bientails_eq
-      (pointsToRange_append (q.add i) [values[i]] (values.drop (i + 1))),
-    ← pointsTo_eq_range]
-  rfl
+  rw [hSplit, List.drop_eq_getElem_cons hIndex, pointsToRange_cons, add_add]
 
-theorem pointsToRange_cons (q : RawPtr T M) (value : T) (rest : List T) :
-    (q ↦* (value :: rest)) = iprop(q ↦ value ∗ (q.add 1) ↦* rest) := by
-  rw [show (value :: rest) = [value] ++ rest from rfl,
-    bientails_eq (pointsToRange_append q [value] rest), ← pointsTo_eq_range]
-  rfl
+@[simp] theorem pointsToRange_nil [ByteRepr T] (q : RawPtr T M) :
+    (q ↦* ([] : List T)) = emp := rfl
 
-@[simp] theorem pointsToRange_nil (q : RawPtr T M) :
-    (q ↦* ([] : List T)) = emp :=
-  bientails_eq ⟨fun _ _ => trivial, fun h _ => Heap.Sub.of_empty h⟩
+/-! ## Changing the view of owned bytes
+
+Ownership is of bytes, so owning bytes at one type is owning them at any type
+whose values encode to the same bytes. -/
+
+theorem pointsToRange_retype [ByteRepr T] [ByteRepr U] (q : RawPtr T M)
+    (xs : List T) (ys : List U)
+    (hBytes : xs.flatMap ByteRepr.encode = ys.flatMap ByteRepr.encode) :
+    ((q.retype : RawPtr U M') ↦* ys) = (q ↦* xs) := by
+  rw [pointsToRange_eq_owns, pointsToRange_eq_owns, hBytes, loc_retype]
+
+theorem pointsTo_retype [ByteRepr T] [ByteRepr U] (q : RawPtr T M) (x : T) (y : U)
+    (hBytes : ByteRepr.encode x = ByteRepr.encode y) :
+    ((q.retype : RawPtr U M') ↦ y) = (q ↦ x) := by
+  rw [pointsTo_eq_owns, pointsTo_eq_owns, hBytes, loc_retype]
+
+theorem pointsTo_retype_of_decode [ByteRepr T] [ByteRepr U] (q : RawPtr T M)
+    (x : T) (y : U) (hDecode : ByteRepr.decode (ByteRepr.encode x) = some y) :
+    ((q.retype : RawPtr U M') ↦ y) = (q ↦ x) :=
+  pointsTo_retype q x y (ByteRepr.encode_of_decode hDecode).symm
 
 end RawPtr
 
-theorem RawPtr.pointsTo_exclusive (q : RawPtr T M) (value₁ value₂ : T) :
+theorem RawPtr.pointsTo_exclusive [ByteRepr T] (q : RawPtr T M) (value₁ value₂ : T)
+    (hSize : 0 < ByteRepr.size T) :
     q ↦ value₁ ∗ q ↦ value₂ ⊢ ⌜False⌝ := by
   rw [RawPtr.pointsTo_eq_ref, RawPtr.pointsTo_eq_ref]
-  exact Ref.pointsTo_exclusive q.ref value₁ value₂
+  exact Ref.pointsTo_exclusive q.ref value₁ value₂ hSize
 
 namespace RawPtr
 
-/-- The heap containing only the slot addressed by `q`. -/
-def singleton (q : RawPtr T M) (value : T) : Heap :=
-  Heap.singleton q.ref value
+/-- The heap containing only the bytes `q ↦ value` owns. -/
+def singleton [ByteRepr T] (q : RawPtr T M) (value : T) : Heap :=
+  Heap.bytes q.loc (ByteRepr.encode value)
 
-/-- Whether `h` contains a value of the pointer's element type at `q`. -/
-def contains (h : Heap) (q : RawPtr T M) : Prop :=
-  Heap.contains h q.ref
+/-- The value of type `T` the bytes of `h` at `q` decode to, if any. -/
+def readValue? [ByteRepr T] (h : Heap) (q : RawPtr T M) : Option T :=
+  (h.readBytes q.loc (ByteRepr.size T)).bind ByteRepr.decode
+
+/-- Whether `h` holds a value of the pointer's element type at `q`. -/
+def contains [ByteRepr T] (h : Heap) (q : RawPtr T M) : Prop :=
+  (readValue? h q).isSome
+
+theorem readValue?_of_pointsTo [ByteRepr T] {q : RawPtr T M} {value : T} {h : Heap}
+    (hPointsTo : (q ↦ value) h) : readValue? h q = some value := by
+  have hRead := Heap.readBytes_of_sub
+    (show Heap.Sub (Heap.bytes q.loc (ByteRepr.encode value)) h from hPointsTo)
+  rw [ByteRepr.length_encode] at hRead
+  rw [readValue?, hRead, Option.bind_some, ByteRepr.decode_encode]
 
 @[simp]
-theorem not_contains_empty (q : RawPtr T M) :
-    ¬ RawPtr.contains (∅ : Heap) q :=
-  Heap.not_contains_empty q.ref
+theorem not_contains_empty [ByteRepr T] (q : RawPtr T M)
+    (hSize : 0 < ByteRepr.size T) : ¬ RawPtr.contains (∅ : Heap) q := by
+  obtain ⟨n, hn⟩ : ∃ n, ByteRepr.size T = n + 1 := ⟨_, (Nat.succ_pred_eq_of_pos hSize).symm⟩
+  simp only [contains, readValue?, hn]
+  rw [show (∅ : Heap) = Heap.empty from rfl, Heap.readBytes_empty_succ]
+  simp
 
-theorem contains_of_pointsTo {q : RawPtr T M} {value : T} {h : Heap}
-    (hPointsTo : (q ↦ value) h) : RawPtr.contains h q :=
-  Heap.contains_of_sub hPointsTo
+theorem contains_of_pointsTo [ByteRepr T] {q : RawPtr T M} {value : T} {h : Heap}
+    (hPointsTo : (q ↦ value) h) : RawPtr.contains h q := by
+  simp [contains, readValue?_of_pointsTo hPointsTo]
 
-theorem ref_injective {q r : RawPtr T M} (hEq : q.ref = r.ref) : q = r := by
-  cases q
-  cases r
-  have hBase := congrArg Prod.fst hEq
-  have hOffset := congrArg Prod.snd hEq
-  simp only [RawPtr.ref] at hBase hOffset
-  simp_all
-
-theorem disjoint_singleton {q r : RawPtr T M} {value₁ value₂ : T} (hNe : q ≠ r) :
-    PartialCommMonoid.Compatible (q.singleton value₁) (r.singleton value₂) :=
-  Heap.disjoint_singleton fun hEq => hNe (ref_injective hEq)
+theorem disjoint_singleton [ByteRepr T] {q r : RawPtr T M} {value₁ value₂ : T}
+    (hNe : q.base ≠ r.base) :
+    PartialCommMonoid.Compatible (q.singleton value₁) (r.singleton value₂) := by
+  exact Heap.compatible_bytes_of_fst_ne hNe
 
 end RawPtr
 
-/-- Allocate `values` consecutively and pass their first reference to `mk`. -/
-def RawPtr.allocArray {β : Type} (values : List T) (mk : Ref T → β) : Result β :=
+/-- Allocate `values` consecutively and pass a pointer to the first one to `mk`. -/
+def RawPtr.allocArray [ByteRepr T] {β : Type} (values : List T) (mk : MutRawPtr T → β) :
+    Result β :=
   Result.guardedModify (fun _ => True) fun h _ =>
-    (mk (Heap.freshRef T h), Heap.freshHeap h values)
+    (mk ⟨(Heap.freshLoc h).1, (Heap.freshLoc h).2⟩,
+      Heap.bytes (Heap.freshLoc h) (values.flatMap ByteRepr.encode) ∪ h)
 
 @[step]
-theorem RawPtr.allocArray.spec {β : Type} (values : List T) (mk : Ref T → β)
-    (post : β → IProp)
-    (hPost : ∀ r : Ref T, owns (Heap.rangeHeap r values) ⊢ post (mk r)) :
+theorem RawPtr.allocArray.spec [ByteRepr T] {β : Type} (values : List T)
+    (mk : MutRawPtr T → β) (post : β → IProp)
+    (hPost : ∀ q : MutRawPtr T, q ↦* values ⊢ post (mk q)) :
     ⦃ emp ⦄ RawPtr.allocArray values mk ⦃⇓ result => post result⦄ := by
   apply ispec_guardedModify
   intro h _ frame hCompatible
   have hFresh :
       PartialCommMonoid.Compatible
-        (Heap.rangeHeap (Heap.freshRef T (h ∪ frame)) values) (h ∪ frame) :=
-    Heap.compatible_freshRef _ _
+        (Heap.bytes (Heap.freshLoc (h ∪ frame)) (values.flatMap ByteRepr.encode))
+        (h ∪ frame) :=
+    Heap.compatible_fresh _ _
   obtain ⟨hFreshH, hFreshFrame⟩ :=
     (PartialCommMonoid.compatible_assoc
-      (Heap.rangeHeap (Heap.freshRef T (h ∪ frame)) values) h frame).mpr
-        ⟨hCompatible, hFresh⟩
-  exact ⟨trivial, _, hFreshFrame,
-    (PartialCommMonoid.union_assoc hFreshH hFreshFrame).symm,
-    hPost _ _ (Heap.Sub.union_left hFreshH)⟩
+      (Heap.bytes (Heap.freshLoc (h ∪ frame)) (values.flatMap ByteRepr.encode))
+        h frame).mpr ⟨hCompatible, hFresh⟩
+  refine ⟨trivial, _, hFreshFrame,
+    (PartialCommMonoid.union_assoc hFreshH hFreshFrame).symm, ?_⟩
+  apply hPost
+  rw [RawPtr.pointsToRange_eq_owns]
+  exact Heap.Sub.union_left hFreshH
 
 /-- Materialize a list as fresh memory with the requested pointer mutability. -/
-def RawPtr.materialize (values : List T) : Result (RawPtr T M) :=
-  RawPtr.allocArray values fun r => ⟨r.base, r.offset⟩
+def RawPtr.materialize [ByteRepr T] (values : List T) : Result (RawPtr T M) :=
+  RawPtr.allocArray values fun q => q.retype
 
 @[step]
-theorem RawPtr.materialize.spec (values : List T) :
+theorem RawPtr.materialize.spec [ByteRepr T] (values : List T) :
     ⦃ emp ⦄ RawPtr.materialize (M := M) values
       ⦃⇓ p => p ↦* values⦄ :=
-  RawPtr.allocArray.spec _ _ _ fun _ => entails_refl _
+  RawPtr.allocArray.spec _ _ _ fun q => by
+    rw [← RawPtr.pointsToRange_retype q values values rfl]
+    exact entails_refl _
 
 /-- Allocate one mutable slot. -/
-def MutRawPtr.alloc (value : T) : Result (MutRawPtr T) :=
-  RawPtr.allocArray [value] fun r => ⟨r.base, r.offset⟩
+def MutRawPtr.alloc [ByteRepr T] (value : T) : Result (MutRawPtr T) :=
+  RawPtr.allocArray [value] id
 
 @[step]
-theorem MutRawPtr.alloc.spec (value : T) :
+theorem MutRawPtr.alloc.spec [ByteRepr T] (value : T) :
     ⦃ emp ⦄ MutRawPtr.alloc value ⦃⇓ q => q ↦ value⦄ :=
   RawPtr.allocArray.spec _ _ _ fun _ => by
     rw [RawPtr.pointsTo_eq_range]
@@ -245,90 +335,90 @@ theorem MutRawPtr.alloc.spec (value : T) :
 
 namespace RawPtr
 
-structure Readable (q : RawPtr T M) (h : Heap) : Prop where
-  contains : Heap.contains h q.ref
+structure Readable [ByteRepr T] (q : RawPtr T M) (h : Heap) : Prop where
+  contains : RawPtr.contains h q
 
-theorem readable_of_pointsTo {q : RawPtr T M} {value : T} {h : Heap}
+theorem readable_of_pointsTo [ByteRepr T] {q : RawPtr T M} {value : T} {h : Heap}
     (hPointsTo : (q ↦ value) h) : q.Readable h :=
-  ⟨Heap.contains_of_sub hPointsTo⟩
+  ⟨contains_of_pointsTo hPointsTo⟩
 
-/-- Read through either a mutable or const pointer. -/
-def read (q : RawPtr T M) : Result T :=
+/-- Read through either a mutable or const pointer: decode the bytes at `q`. -/
+def read [ByteRepr T] (q : RawPtr T M) : Result T :=
   Result.guardedModify (fun h => q.Readable h) fun h hReadable =>
-    (Heap.read q.ref h hReadable.contains, h)
+    ((readValue? h q).get hReadable.contains, h)
 
 @[step]
-theorem read.spec (q : RawPtr T M) (value : T) :
+theorem read.spec [ByteRepr T] (q : RawPtr T M) (value : T) :
     ⦃ q ↦ value ⦄ q.read
       ⦃⇓ result => ⌜result = value⌝ ∗ q ↦ value⦄ := by
   apply ispec_guardedModify
   intro h hPointsTo frame hCompatible
   have hPointsToFrame : (q ↦ value) (h ∪ frame) :=
     (q ↦ value).up_closed hPointsTo (Heap.Sub.union_left hCompatible)
-  have hReadable : q.Readable (h ∪ frame) :=
-    readable_of_pointsTo hPointsToFrame
-  refine ⟨hReadable, h, hCompatible, rfl, ?_⟩
+  refine ⟨readable_of_pointsTo hPointsToFrame, h, hCompatible, rfl, ?_⟩
   exact (sep_pure_l _ _ h).mpr
-    ⟨Heap.read_of_sub hPointsToFrame hReadable.contains, hPointsTo⟩
+    ⟨by simp only [readValue?_of_pointsTo hPointsToFrame, Option.get_some], hPointsTo⟩
 
 end RawPtr
 
-/-- Write through a mutable pointer. -/
-def MutRawPtr.write (q : MutRawPtr T) (value : T) : Result Unit :=
-  Result.guardedModify (fun h => Heap.contains h q.ref) fun h hContains =>
-    ((), Heap.update q.ref value h hContains)
+/-- Write through a mutable pointer: overwrite the bytes at `q`. -/
+def MutRawPtr.write [ByteRepr T] (q : MutRawPtr T) (value : T) : Result Unit :=
+  Result.guardedModify (fun h => RawPtr.contains h q) fun h _ =>
+    ((), h.writeBytes q.loc (ByteRepr.encode value))
 
 @[step]
-theorem MutRawPtr.write.spec (q : MutRawPtr T) (oldValue newValue : T) :
+theorem MutRawPtr.write.spec [ByteRepr T] (q : MutRawPtr T) (oldValue newValue : T) :
     ⦃ q ↦ oldValue ⦄ q.write newValue ⦃⇓ q ↦ newValue⦄ := by
   apply ispec_guardedModify
   intro h hPointsTo frame hCompatible
-  obtain ⟨rest, hCompatibleRest, rfl⟩ := hPointsTo
-  have hContainsSlot := Heap.contains_singleton q.ref oldValue
-  have hContains : Heap.contains (Heap.singleton q.ref oldValue ∪ rest) q.ref :=
-    Heap.contains_union_left hContainsSlot
-  refine ⟨Heap.contains_union_left hContains,
-    Heap.update q.ref newValue _ hContains,
-    Heap.disjoint_update_left hCompatible hContains, ?_, ?_⟩
-  · simpa only [show Heap.contains_union_left hContains =
-        Heap.contains_union_left (h₂ := frame) hContains from rfl] using
-      Heap.update_union_left q.ref newValue hContains
-  · have hCompatibleNew :
-        PartialCommMonoid.Compatible (Heap.singleton q.ref newValue) rest := by
-      have hUpdated := Heap.disjoint_update_left (value := newValue)
-        hCompatibleRest hContainsSlot
-      rwa [Heap.update_singleton] at hUpdated
-    rw [show hContains = Heap.contains_union_left hContainsSlot from
-      Subsingleton.elim _ _, Heap.update_union_left q.ref newValue hContainsSlot,
-      Heap.update_singleton]
-    exact Heap.Sub.union_left hCompatibleNew
+  have hContains : RawPtr.contains (h ∪ frame) q :=
+    RawPtr.contains_of_pointsTo
+      ((q ↦ oldValue).up_closed hPointsTo (Heap.Sub.union_left hCompatible))
+  obtain ⟨rest, hCompatibleRest, rfl⟩ :
+      Heap.Sub (Heap.bytes q.loc (ByteRepr.encode oldValue)) h := hPointsTo
+  have hLength : (ByteRepr.encode newValue).length = (ByteRepr.encode oldValue).length := by
+    rw [ByteRepr.length_encode, ByteRepr.length_encode]
+  obtain ⟨hRestFrame, hOldRestFrame⟩ :=
+    (PartialCommMonoid.compatible_assoc _ rest frame).mp ⟨hCompatibleRest, hCompatible⟩
+  obtain ⟨hNewRest, hNewFrame⟩ :=
+    (PartialCommMonoid.compatible_assoc (Heap.bytes q.loc (ByteRepr.encode newValue))
+      rest frame).mpr ⟨hRestFrame, Heap.compatible_bytes_of_length_eq hLength hOldRestFrame⟩
+  refine ⟨hContains, Heap.bytes q.loc (ByteRepr.encode newValue) ∪ rest, hNewFrame, ?_,
+    Heap.Sub.union_left hNewRest⟩
+  change Heap.writeBytes _ q.loc _ = _
+  rw [Heap.writeBytes_union, Heap.writeBytes_bytes_union _ hLength]
 
-/-- Release the slot addressed by a mutable pointer. -/
-def MutRawPtr.free (q : MutRawPtr T) : Result Unit :=
-  Result.guardedModify (fun h => Heap.contains h q.ref) fun h hContains =>
-    ((), Heap.free q.ref h hContains)
+/-- Release the bytes addressed by a mutable pointer. -/
+def MutRawPtr.free [ByteRepr T] (q : MutRawPtr T) : Result Unit :=
+  Result.guardedModify (fun h => RawPtr.contains h q) fun h _ =>
+    ((), h.freeBytes q.loc (ByteRepr.size T))
 
 @[step]
-theorem MutRawPtr.free.spec (q : MutRawPtr T) (value : T) :
+theorem MutRawPtr.free.spec [ByteRepr T] (q : MutRawPtr T) (value : T) :
     ⦃ q ↦ value ⦄ q.free ⦃⇓ emp⦄ := by
   apply ispec_guardedModify
   intro h hPointsTo frame hCompatible
-  have hContains : Heap.contains h q.ref := Heap.contains_of_sub hPointsTo
-  refine ⟨Heap.contains_union_left hContains, Heap.free q.ref h hContains,
-    Heap.disjoint_free_left hCompatible hContains, ?_, trivial⟩
-  simpa only [show Heap.contains_union_left hContains =
-      Heap.contains_union_left (h₂ := frame) hContains from rfl] using
-    Heap.free_union_left q.ref hCompatible hContains
+  have hContains : RawPtr.contains (h ∪ frame) q :=
+    RawPtr.contains_of_pointsTo
+      ((q ↦ value).up_closed hPointsTo (Heap.Sub.union_left hCompatible))
+  obtain ⟨rest, hCompatibleRest, rfl⟩ :
+      Heap.Sub (Heap.bytes q.loc (ByteRepr.encode value)) h := hPointsTo
+  obtain ⟨hRestFrame, hOldRestFrame⟩ :=
+    (PartialCommMonoid.compatible_assoc _ rest frame).mp ⟨hCompatibleRest, hCompatible⟩
+  refine ⟨hContains, rest, hRestFrame, ?_, trivial⟩
+  change Heap.freeBytes _ q.loc _ = _
+  rw [PartialCommMonoid.union_assoc hCompatibleRest hCompatible,
+    ← ByteRepr.length_encode value, Heap.freeBytes_bytes_union hOldRestFrame]
 
 /-- Release `n` consecutive slots. -/
-def MutRawPtr.freeRange (q : MutRawPtr T) : Nat → Result Unit
+def MutRawPtr.freeRange [ByteRepr T] (q : MutRawPtr T) : Nat → Result Unit
   | 0 => pure ()
   | n + 1 => do
       MutRawPtr.free q
       MutRawPtr.freeRange (q.add 1) n
 
 @[step]
-theorem MutRawPtr.freeRange.spec (q : MutRawPtr T) (values : List T) :
+theorem MutRawPtr.freeRange.spec [ByteRepr T] (q : MutRawPtr T) (values : List T) :
     ⦃ q ↦* values ⦄ q.freeRange values.length ⦃⇓ emp⦄ := by
   induction values generalizing q with
   | nil =>
@@ -361,7 +451,7 @@ theorem drop_set (values : List T) (i : Nat) (value : T) :
   simp only [List.getElem_drop, List.getElem_set,
     if_neg (show ¬ i = i + 1 + n by omega)]
 
-theorem read.spec_range (q : RawPtr T M) (values : List T) (i : Nat)
+theorem read.spec_range [ByteRepr T] (q : RawPtr T M) (values : List T) (i : Nat)
     (hIndex : i < values.length) :
     ⦃ q ↦* values ⦄ (q.add i).read
       ⦃⇓ result => ⌜result = values[i]⌝ ∗ q ↦* values⦄ := by
@@ -369,7 +459,7 @@ theorem read.spec_range (q : RawPtr T M) (values : List T) (i : Nat)
   apply WP.ispec_mono (read.spec (q.add i) values[i])
   iframe
 
-theorem read.spec_frame (q : RawPtr T M) (value : T) (H : IProp) :
+theorem read.spec_frame [ByteRepr T] (q : RawPtr T M) (value : T) (H : IProp) :
     ⦃ q ↦ value ∗ H ⦄ q.read
       ⦃⇓ result => ⌜result = value⌝ ∗ (q ↦ value ∗ H)⦄ := by
   apply WP.ispec_mono (WP.ispec_frame (read.spec q value) H)
@@ -379,7 +469,7 @@ theorem read.spec_frame (q : RawPtr T M) (value : T) (H : IProp) :
 
 end RawPtr
 
-theorem MutRawPtr.write.spec_range (q : MutRawPtr T) (values : List T)
+theorem MutRawPtr.write.spec_range [ByteRepr T] (q : MutRawPtr T) (values : List T)
     (i : Nat) (value : T) (hIndex : i < values.length) :
     ⦃ q ↦* values ⦄ MutRawPtr.write (q.add i) value
       ⦃⇓ q ↦* values.set i value⦄ := by
@@ -391,14 +481,14 @@ theorem MutRawPtr.write.spec_range (q : MutRawPtr T) (values : List T)
   iframe
 
 /-- Fill `n` consecutive mutable slots. -/
-def MutRawPtr.fillRange (q : MutRawPtr T) (value : T) : Nat → Result Unit
+def MutRawPtr.fillRange [ByteRepr T] (q : MutRawPtr T) (value : T) : Nat → Result Unit
   | 0 => pure ()
   | n + 1 => do
       MutRawPtr.write q value
       MutRawPtr.fillRange (q.add 1) value n
 
 @[step]
-theorem MutRawPtr.fillRange.spec (q : MutRawPtr T) (values : List T) (value : T) :
+theorem MutRawPtr.fillRange.spec [ByteRepr T] (q : MutRawPtr T) (values : List T) (value : T) :
     ⦃ q ↦* values ⦄ q.fillRange value values.length
       ⦃⇓ q ↦* List.replicate values.length value⦄ := by
   induction values generalizing q with
@@ -420,7 +510,7 @@ theorem MutRawPtr.fillRange.spec (q : MutRawPtr T) (values : List T) (value : T)
           (entails_sep_postWand _ (by intro _; iframe))
 
 /-- Copy `n` slots from a pointer of either mutability into mutable storage. -/
-def MutRawPtr.copyRange (dst : MutRawPtr T) (src : RawPtr T M) : Nat → Result Unit
+def MutRawPtr.copyRange [ByteRepr T] (dst : MutRawPtr T) (src : RawPtr T M) : Nat → Result Unit
   | 0 => pure ()
   | n + 1 => do
       let value ← src.read
@@ -428,7 +518,7 @@ def MutRawPtr.copyRange (dst : MutRawPtr T) (src : RawPtr T M) : Nat → Result 
       MutRawPtr.copyRange (dst.add 1) (src.add 1) n
 
 @[step]
-theorem MutRawPtr.copyRange.spec (dst : MutRawPtr T) (src : RawPtr T M)
+theorem MutRawPtr.copyRange.spec [ByteRepr T] (dst : MutRawPtr T) (src : RawPtr T M)
     (dstValues srcValues : List T)
     (hLength : dstValues.length = srcValues.length) :
     ⦃ dst ↦* dstValues ∗ src ↦* srcValues ⦄
@@ -483,7 +573,7 @@ theorem MutRawPtr.copyRange.spec (dst : MutRawPtr T) (src : RawPtr T M)
           iframe
 
 /-- Compare two ranges through pointers of either mutability. -/
-def RawPtr.compareRange [DecidableEq T]
+def RawPtr.compareRange [ByteRepr T] [DecidableEq T]
     (left : RawPtr T M₁) (right : RawPtr T M₂) : Nat → Result Bool
   | 0 => pure true
   | n + 1 => do
@@ -495,7 +585,7 @@ def RawPtr.compareRange [DecidableEq T]
         pure false
 
 @[step]
-theorem RawPtr.compareRange.spec [DecidableEq T]
+theorem RawPtr.compareRange.spec [ByteRepr T] [DecidableEq T]
     (left : RawPtr T M₁) (right : RawPtr T M₂)
     (leftValues rightValues : List T)
     (hLength : leftValues.length = rightValues.length) :
@@ -550,16 +640,16 @@ theorem RawPtr.compareRange.spec [DecidableEq T]
             iframe
 
 /-- Materialize a mutable value as one mutable heap slot. -/
-def MutRawPtr.mut_to_raw (value : T) : Result (MutRawPtr T) :=
+def MutRawPtr.mut_to_raw [ByteRepr T] (value : T) : Result (MutRawPtr T) :=
   MutRawPtr.alloc value
 
 @[step]
-theorem MutRawPtr.mut_to_raw.spec (value : T) :
+theorem MutRawPtr.mut_to_raw.spec [ByteRepr T] (value : T) :
     ⦃ emp ⦄ MutRawPtr.mut_to_raw value ⦃⇓ q => q ↦ value⦄ :=
   MutRawPtr.alloc.spec value
 
 /-- Read and release `n` consecutive mutable slots. -/
-def MutRawPtr.takeRange (q : MutRawPtr T) : Nat → Result (List T)
+def MutRawPtr.takeRange [ByteRepr T] (q : MutRawPtr T) : Nat → Result (List T)
   | 0 => pure []
   | n + 1 => do
       let value ← q.read
@@ -568,7 +658,7 @@ def MutRawPtr.takeRange (q : MutRawPtr T) : Nat → Result (List T)
       pure (value :: rest)
 
 @[step]
-theorem MutRawPtr.takeRange.spec (q : MutRawPtr T) (values : List T) :
+theorem MutRawPtr.takeRange.spec [ByteRepr T] (q : MutRawPtr T) (values : List T) :
     ⦃ q ↦* values ⦄ MutRawPtr.takeRange q values.length
       ⦃⇓ result => ⌜result = values⌝⦄ := by
   induction values generalizing q with
@@ -601,7 +691,7 @@ theorem MutRawPtr.takeRange.spec (q : MutRawPtr T) (values : List T) :
           subst result
           iframe
 
-theorem MutRawPtr.takeRange.spec_of_length (q : MutRawPtr T)
+theorem MutRawPtr.takeRange.spec_of_length [ByteRepr T] (q : MutRawPtr T)
     (values : List T) (n : Nat) (hLength : values.length = n) :
     ⦃ q ↦* values ⦄ MutRawPtr.takeRange q n
       ⦃⇓ result => ⌜result = values⌝⦄ := by
@@ -609,13 +699,13 @@ theorem MutRawPtr.takeRange.spec_of_length (q : MutRawPtr T)
   exact MutRawPtr.takeRange.spec q values
 
 /-- Read and release one mutable slot. -/
-def MutRawPtr.end_mut_to_raw (q : MutRawPtr T) : Result T := do
+def MutRawPtr.end_mut_to_raw [ByteRepr T] (q : MutRawPtr T) : Result T := do
   let value ← q.read
   MutRawPtr.free q
   pure value
 
 @[step]
-theorem MutRawPtr.end_mut_to_raw.spec {value : T} (q : MutRawPtr T) :
+theorem MutRawPtr.end_mut_to_raw.spec [ByteRepr T] {value : T} (q : MutRawPtr T) :
     ⦃ q ↦ value ⦄ MutRawPtr.end_mut_to_raw q
       ⦃⇓ result => ⌜result = value⌝⦄ := by
   unfold MutRawPtr.end_mut_to_raw
@@ -702,13 +792,37 @@ theorem fromBytes_u8 (s : Slice U8) : fromBytes (T := U8) s = .ok s := rfl
 
 end IsScalar
 
-/-- Scalar pointer casts remain unsupported: changing the element type also
-    requires reinterpreting the typed heap, not just scaling the offset.
-    `IsScalar.toBytes` and `IsScalar.fromBytes` convert values, not ownership. -/
-def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability)
-    [IsScalar T] [IsScalar T'] (_ : RawPtr T M) :
+/-- Reinterpret the bytes a pointer addresses at another element type and
+mutability.  The address is unchanged and the heap is untouched: the
+specifications below only transfer ownership from one view of the bytes to
+another. -/
+def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability) (p : RawPtr T M) :
     Result (RawPtr T' M') :=
-  .fail .undef
+  .ok p.retype
+
+theorem RawPtr.cast_scalar.spec_range [ByteRepr T] [ByteRepr T'] (p : RawPtr T M)
+    (xs : List T) (ys : List T')
+    (hBytes : xs.flatMap ByteRepr.encode = ys.flatMap ByteRepr.encode) :
+    ⦃ p ↦* xs ⦄ RawPtr.cast_scalar T' M' p
+      ⦃⇓ q => ⌜q = p.retype⌝ ∗ q ↦* ys⦄ := by
+  apply (ispec_ok _).2
+  rw [RawPtr.pointsToRange_retype p xs ys hBytes]
+  iframe
+
+theorem RawPtr.cast_scalar.spec_of_decode [ByteRepr T] [ByteRepr T'] (p : RawPtr T M)
+    (x : T) (y : T') (hDecode : ByteRepr.decode (ByteRepr.encode x) = some y) :
+    ⦃ p ↦ x ⦄ RawPtr.cast_scalar T' M' p
+      ⦃⇓ q => ⌜q = p.retype⌝ ∗ q ↦ y⦄ := by
+  apply (ispec_ok _).2
+  rw [RawPtr.pointsTo_retype_of_decode p x y hDecode]
+  iframe
+
+@[step]
+theorem RawPtr.cast_scalar.spec [ByteRepr T] [ByteRepr T'] (p : RawPtr T M) (x : T)
+    (hDecode : (ByteRepr.decode (α := T') (ByteRepr.encode x)).isSome) :
+    ⦃ p ↦ x ⦄ RawPtr.cast_scalar T' M' p
+      ⦃⇓ q => ⌜q = p.retype⌝ ∗ q ↦ (ByteRepr.decode (ByteRepr.encode x)).get hDecode⦄ :=
+  RawPtr.cast_scalar.spec_of_decode p x _ (Option.some_get hDecode).symm
 
 end Aeneas.Std
 

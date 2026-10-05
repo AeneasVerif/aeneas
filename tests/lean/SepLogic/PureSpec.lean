@@ -30,7 +30,7 @@ notation closes.
 namespace PureSpecNotationTests
 
 open Aeneas
-open Aeneas.Std (Error Result RustEffect RawPtr MutRawPtr)
+open Aeneas.Std (Error Result RustEffect RawPtr MutRawPtr U32)
 open Aeneas.SepLogic
 open Aeneas.Std.WP
 
@@ -182,121 +182,121 @@ example : Result.ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄div := by
   step*
 
 /-- error: unsolved goals
-p : MutRawPtr ℕ
-⊢ ⦃ p ↦ 1 ⦄
-    Result.ok (0, 1)
-    ⦃⇓ (x, y) => p ↦ x + y ⦄ -/
+p : MutRawPtr U32
+⊢ ⦃ p ↦ 1#u32 ⦄
+    Result.ok (0#u32, 1#u32)
+    ⦃⇓ (x, y) => p ↦ x.wrapping_add y ⦄ -/
 #guard_msgs in
-example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ (x, y) =>
-      p ↦ (x + y)
+example (p : MutRawPtr U32) :
+    ⦃ p ↦ 1#u32 ⦄ Result.ok (0#u32, 1#u32) ⦃⇓ (x, y) =>
+      p ↦ (x.wrapping_add y)
     ⦄ := by done
 
 /-- error: unsolved goals
-p : MutRawPtr ℕ
-⊢ ⦃ p ↦ 1 ⦄
-    Result.ok (0, 1)
-    ⦃⇓ x y => p ↦ x + y ⦄ -/
+p : MutRawPtr U32
+⊢ ⦃ p ↦ 1#u32 ⦄
+    Result.ok (0#u32, 1#u32)
+    ⦃⇓ x y => p ↦ x.wrapping_add y ⦄ -/
 #guard_msgs in
-example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ x y =>
-      p ↦ (x + y)
+example (p : MutRawPtr U32) :
+    ⦃ p ↦ 1#u32 ⦄ Result.ok (0#u32, 1#u32) ⦃⇓ x y =>
+      p ↦ (x.wrapping_add y)
     ⦄ := by done
 
 /-- error: unsolved goals
-p : MutRawPtr ℕ
-⊢ ⦃ p ↦ 1 ⦄
-    Result.ok (0, 1)
-    ⦃⇓ x y => p ↦ x + y ⦄div -/
+p : MutRawPtr U32
+⊢ ⦃ p ↦ 1#u32 ⦄
+    Result.ok (0#u32, 1#u32)
+    ⦃⇓ x y => p ↦ x.wrapping_add y ⦄div -/
 #guard_msgs in
-example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ x y =>
-      p ↦ (x + y)
+example (p : MutRawPtr U32) :
+    ⦃ p ↦ 1#u32 ⦄ Result.ok (0#u32, 1#u32) ⦃⇓ x y =>
+      p ↦ (x.wrapping_add y)
     ⦄div := by done
 
 /-- error: unsolved goals
-p : MutRawPtr ℕ
-⊢ ⦃ p ↦ 3 ⦄
-    Result.ok ((0, 1), 2)
-    ⦃⇓ (a, b) c => p ↦ a + b + c ⦄ -/
+p : MutRawPtr U32
+⊢ ⦃ p ↦ 3#u32 ⦄
+    Result.ok ((0#u32, 1#u32), 2#u32)
+    ⦃⇓ (a, b) c => p ↦ (a.wrapping_add b).wrapping_add c ⦄ -/
 #guard_msgs in
-example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 3 ⦄ Result.ok ((0, 1), 2) ⦃⇓ (a, b) c =>
-      p ↦ (a + b + c)
+example (p : MutRawPtr U32) :
+    ⦃ p ↦ 3#u32 ⦄ Result.ok ((0#u32, 1#u32), 2#u32) ⦃⇓ (a, b) c =>
+      p ↦ ((a.wrapping_add b).wrapping_add c)
     ⦄ := by done
 
 /-- error: unsolved goals
-p : MutRawPtr ℕ
-⊢ ⦃ p ↦ 3 ⦄
-    Result.ok (0, 1, 2)
-    ⦃⇓ a b c => p ↦ a + b + c ⦄ -/
+p : MutRawPtr U32
+⊢ ⦃ p ↦ 3#u32 ⦄
+    Result.ok (0#u32, 1#u32, 2#u32)
+    ⦃⇓ a b c => p ↦ (a.wrapping_add b).wrapping_add c ⦄ -/
 #guard_msgs in
-example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ a b c =>
-      p ↦ (a + b + c)
+example (p : MutRawPtr U32) :
+    ⦃ p ↦ 3#u32 ⦄ Result.ok (0#u32, 1#u32, 2#u32) ⦃⇓ a b c =>
+      p ↦ ((a.wrapping_add b).wrapping_add c)
     ⦄ := by done
 
 /-- error: unsolved goals
-p : MutRawPtr ℕ
-⊢ ⦃ p ↦ 3 ⦄
-    Result.ok (0, 1, 2)
-    ⦃⇓ a (b, c) => p ↦ a + b + c ⦄ -/
+p : MutRawPtr U32
+⊢ ⦃ p ↦ 3#u32 ⦄
+    Result.ok (0#u32, 1#u32, 2#u32)
+    ⦃⇓ a (b, c) => p ↦ (a.wrapping_add b).wrapping_add c ⦄ -/
 #guard_msgs in
-example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ a (b, c) =>
-      p ↦ (a + b + c)
+example (p : MutRawPtr U32) :
+    ⦃ p ↦ 3#u32 ⦄ Result.ok (0#u32, 1#u32, 2#u32) ⦃⇓ a (b, c) =>
+      p ↦ ((a.wrapping_add b).wrapping_add c)
     ⦄ := by done
 
 /-- error: unsolved goals
-p : MutRawPtr ℕ
-⊢ ⦃ p ↦ 3 ⦄
-    Result.ok (0, 1, 2)
-    ⦃⇓ (a, (b, c)) => p ↦ a + b + c ⦄ -/
+p : MutRawPtr U32
+⊢ ⦃ p ↦ 3#u32 ⦄
+    Result.ok (0#u32, 1#u32, 2#u32)
+    ⦃⇓ (a, (b, c)) => p ↦ (a.wrapping_add b).wrapping_add c ⦄ -/
 #guard_msgs in
-example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ (a, (b, c)) =>
-      p ↦ (a + b + c)
+example (p : MutRawPtr U32) :
+    ⦃ p ↦ 3#u32 ⦄ Result.ok (0#u32, 1#u32, 2#u32) ⦃⇓ (a, (b, c)) =>
+      p ↦ ((a.wrapping_add b).wrapping_add c)
     ⦄ := by done
 
-example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ (x, y) =>
-      p ↦ (x + y)
+example (p : MutRawPtr U32) :
+    ⦃ p ↦ 1#u32 ⦄ Result.ok (0#u32, 1#u32) ⦃⇓ (x, y) =>
+      p ↦ (x.wrapping_add y)
     ⦄ := by
   step
 
-example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ (x, y) =>
-      p ↦ (x + y)
+example (p : MutRawPtr U32) :
+    ⦃ p ↦ 1#u32 ⦄ Result.ok (0#u32, 1#u32) ⦃⇓ (x, y) =>
+      p ↦ (x.wrapping_add y)
     ⦄div := by
   step
 
-example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ x y =>
-      p ↦ (x + y)
+example (p : MutRawPtr U32) :
+    ⦃ p ↦ 1#u32 ⦄ Result.ok (0#u32, 1#u32) ⦃⇓ x y =>
+      p ↦ (x.wrapping_add y)
     ⦄ := by
   step
 
-example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ x y =>
-      p ↦ (x + y)
+example (p : MutRawPtr U32) :
+    ⦃ p ↦ 1#u32 ⦄ Result.ok (0#u32, 1#u32) ⦃⇓ x y =>
+      p ↦ (x.wrapping_add y)
     ⦄div := by
   step
 
-example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 3 ⦄ Result.ok ((0, 1), 2) ⦃⇓ ((x, y), z) =>
-      p ↦ (x + y + z)
+example (p : MutRawPtr U32) :
+    ⦃ p ↦ 3#u32 ⦄ Result.ok ((0#u32, 1#u32), 2#u32) ⦃⇓ ((x, y), z) =>
+      p ↦ ((x.wrapping_add y).wrapping_add z)
     ⦄ := by
   step
 
-example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 3 ⦄ Result.ok ((0, 1), 2) ⦃⇓ (x, y) z =>
-      p ↦ (x + y + z)
+example (p : MutRawPtr U32) :
+    ⦃ p ↦ 3#u32 ⦄ Result.ok ((0#u32, 1#u32), 2#u32) ⦃⇓ (x, y) z =>
+      p ↦ ((x.wrapping_add y).wrapping_add z)
     ⦄ := by
   step
 
-example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ x (y, z) =>
-      p ↦ (x + y + z)
+example (p : MutRawPtr U32) :
+    ⦃ p ↦ 3#u32 ⦄ Result.ok (0#u32, 1#u32, 2#u32) ⦃⇓ x (y, z) =>
+      p ↦ ((x.wrapping_add y).wrapping_add z)
     ⦄div := by
   step
 
@@ -438,15 +438,15 @@ example (makeIncrement : Result (Nat → Result Nat)) : Prop :=
     ⌜∀ x, ⦃ emp ⦄ increment x ⦃⇓ value => ⌜value = x + 1⌝ ⦄⌝
   ⦄
 
-def increment (p : MutRawPtr Nat) (_ : Unit) : Result Nat := do
+def increment (p : MutRawPtr U32) (_ : Unit) : Result U32 := do
   let value ← RawPtr.read p
-  MutRawPtr.write p (value + 1)
-  pure (value + 1)
+  MutRawPtr.write p (value.wrapping_add 1#u32)
+  pure (value.wrapping_add 1#u32)
 
 @[step]
-theorem increment.spec (p : MutRawPtr Nat) (n : Nat) :
+theorem increment.spec (p : MutRawPtr U32) (n : U32) :
     ⦃ p ↦ n ⦄ increment p () ⦃⇓ value =>
-      p ↦ (n + 1) ∗ ⌜value = n + 1⌝
+      p ↦ (n.wrapping_add 1#u32) ∗ ⌜value = n.wrapping_add 1#u32⌝
     ⦄ := by
   unfold increment
   step*
@@ -458,66 +458,68 @@ implication. The same scalar, tuple, `Unit`, and existential shapes are handled
 directly by `step`.
 -/
 
-def incrementTwiceSL (p : MutRawPtr Nat) : Result Nat := do
+def incrementTwiceSL (p : MutRawPtr U32) : Result U32 := do
   let _ ← increment p ()
   increment p ()
 
-example (p : MutRawPtr Nat) (n : Nat) :
+example (p : MutRawPtr U32) (n : U32) :
     ⦃ p ↦ n ⦄ incrementTwiceSL p ⦃⇓ value =>
-      p ↦ (n + 2) ∗ ⌜value = n + 2⌝
+      p ↦ ((n.wrapping_add 1#u32).wrapping_add 1#u32) ∗
+        ⌜value = (n.wrapping_add 1#u32).wrapping_add 1#u32⌝
     ⦄ := by
   unfold incrementTwiceSL
   step*
 
-def readPairSL (p : MutRawPtr Nat) : Result (Nat × Nat) := do
+def readPairSL (p : MutRawPtr U32) : Result (U32 × U32) := do
   let value ← RawPtr.read p
-  pure (value, value + 1)
+  pure (value, value.wrapping_add 1#u32)
 
 @[step]
-theorem readPairSL.spec (p : MutRawPtr Nat) (n : Nat) :
+theorem readPairSL.spec (p : MutRawPtr U32) (n : U32) :
     ⦃ p ↦ n ⦄ readPairSL p ⦃⇓ first second =>
-      p ↦ n ∗ ⌜first = n ∧ second = n + 1⌝
+      p ↦ n ∗ ⌜first = n ∧ second = n.wrapping_add 1#u32⌝
     ⦄ := by
   unfold readPairSL
   step*
 
-def usePairSL (p : MutRawPtr Nat) : Result Unit := do
+def usePairSL (p : MutRawPtr U32) : Result Unit := do
   let (_, next) ← readPairSL p
   MutRawPtr.write p next
 
-example (p : MutRawPtr Nat) (n : Nat) :
-    ⦃ p ↦ n ⦄ usePairSL p ⦃⇓ p ↦ (n + 1)⦄ := by
+example (p : MutRawPtr U32) (n : U32) :
+    ⦃ p ↦ n ⦄ usePairSL p ⦃⇓ p ↦ (n.wrapping_add 1#u32)⦄ := by
   unfold usePairSL
   step*
 
-def updateTwiceSL (p : MutRawPtr Nat) (n : Nat) : Result Unit := do
-  MutRawPtr.write p (n + 1)
-  MutRawPtr.write p (n + 2)
+def updateTwiceSL (p : MutRawPtr U32) (n : U32) : Result Unit := do
+  MutRawPtr.write p (n.wrapping_add 1#u32)
+  MutRawPtr.write p (n.wrapping_add 2#u32)
 
-example (p : MutRawPtr Nat) (n : Nat) :
-    ⦃ p ↦ n ⦄ updateTwiceSL p n ⦃⇓ p ↦ (n + 2)⦄ := by
+example (p : MutRawPtr U32) (n : U32) :
+    ⦃ p ↦ n ⦄ updateTwiceSL p n ⦃⇓ p ↦ (n.wrapping_add 2#u32)⦄ := by
   unfold updateTwiceSL
   step*
 
 /- `Aeneas.Std.bind` is the heterogeneous bind: the allocated pointer is in
-`Type 0`, while a function returning `Result Nat` lives in `Type 1`. -/
-def makeCounter : Result (Unit → Result Nat) :=
-  Aeneas.Std.bind (MutRawPtr.alloc 0) fun p =>
+`Type 0`, while a function returning `Result U32` lives in `Type 1`. -/
+def makeCounter : Result (Unit → Result U32) :=
+  Aeneas.Std.bind (MutRawPtr.alloc 0#u32) fun p =>
     Result.ok (increment p)
 
 @[step]
 theorem makeCounter.spec :
   ⦃ emp ⦄ makeCounter ⦃⇓ increment =>
-    ∃ p : MutRawPtr Nat,
-      p ↦ 0 ∗
-      ⌜∀ n, ⦃ p ↦ n ⦄ increment () ⦃⇓ value => p ↦ (n + 1) ∗ ⌜value = n + 1⌝ ⦄⌝
+    ∃ p : MutRawPtr U32,
+      p ↦ 0#u32 ∗
+      ⌜∀ n, ⦃ p ↦ n ⦄ increment () ⦃⇓ value =>
+        p ↦ (n.wrapping_add 1#u32) ∗ ⌜value = n.wrapping_add 1#u32⌝ ⦄⌝
   ⦄ := by
   unfold makeCounter
   step as ⟨p⟩
   have hIncrement := increment.spec p
   step*
 
-def countToFive : Result Nat :=
+def countToFive : Result U32 :=
   Aeneas.Std.bind makeCounter fun increment => do
     let _ ← increment ()
     let _ ← increment ()
@@ -526,9 +528,11 @@ def countToFive : Result Nat :=
     increment ()
 
 theorem countToFive.spec :
-    ⦃ emp ⦄ countToFive ⦃⇓ value => ⌜value = 5⌝⦄ := by
+    ⦃ emp ⦄ countToFive ⦃⇓ value => ⌜value = 5#u32⌝⦄ := by
   unfold countToFive
   step*
+  subst_vars
+  exact fun _ _ => (pure_holds _).mpr rfl
 
 /-! ## 4. The gap the notation closes
 
@@ -594,19 +598,22 @@ The four registrations and their liftings drive these `step`/`step*` proofs. -/
 
 namespace Ex
 
-def bump (x : Nat) : Result Nat := pure (x + 1)
+def bump (x : U32) : Result U32 := pure (x.wrapping_add 1#u32)
 
 @[step]
-theorem bump.spec (x : Nat) : bump x ⦃ y => y = x + 1 ⦄ := by
+theorem bump.spec (x : U32) : bump x ⦃ y => y = x.wrapping_add 1#u32 ⦄ := by
   unfold bump; step*
 
-def bumps (x : Nat) : Result (Nat × Nat) := pure (x + 1, x + 2)
+def bumps (x : U32) : Result (U32 × U32) := pure (x.wrapping_add 1#u32, x.wrapping_add 2#u32)
 
 @[step]
-theorem bumps.spec (x : Nat) : bumps x ⦃ y z => y = x + 1 ∧ z = x + 2 ⦄ := by
+theorem bumps.spec (x : U32) :
+    bumps x ⦃ y z => y = x.wrapping_add 1#u32 ∧ z = x.wrapping_add 2#u32 ⦄ := by
   unfold bumps; step*
 
-example (x : Nat) : (do let p ← bumps x; bump p.1) ⦃ r => r = x + 2 ⦄ := by
+example (x : U32) :
+    (do let p ← bumps x; bump p.1)
+      ⦃ r => r = (x.wrapping_add 1#u32).wrapping_add 1#u32 ⦄ := by
   step*
 
 /-! ### A pure specification inside a heap proof
@@ -614,14 +621,14 @@ example (x : Nat) : (do let p ← bumps x; bump p.1) ⦃ r => r = x + 2 ⦄ := b
 The pure-to-SL lifting exposes `bump.spec` as an `ispec`, so `step`'s ramified-frame
 rule carries `p ↦ v` around it. -/
 
-def bumpCell (p : MutRawPtr Nat) : Result Unit := do
+def bumpCell (p : MutRawPtr U32) : Result Unit := do
   let v ← RawPtr.read p
   let w ← bump v
   MutRawPtr.write p w
 
 @[step]
-theorem bumpCell.spec (p : MutRawPtr Nat) (v : Nat) :
-    ⦃ p ↦ v ⦄ bumpCell p ⦃⇓ p ↦ v + 1⦄ := by
+theorem bumpCell.spec (p : MutRawPtr U32) (v : U32) :
+    ⦃ p ↦ v ⦄ bumpCell p ⦃⇓ p ↦ v.wrapping_add 1#u32⦄ := by
   unfold bumpCell
   step*
 
@@ -630,7 +637,7 @@ theorem bumpCell.spec (p : MutRawPtr Nat) (v : Nat) :
 `bumpBoxed` allocates, mutates and frees. Its proof uses an SL ispec so that
 intermediate postconditions can carry the allocated cell. -/
 
-def bumpBoxed (v : Nat) : Result Nat := do
+def bumpBoxed (v : U32) : Result U32 := do
   let p ← MutRawPtr.alloc v
   bumpCell p
   let w ← RawPtr.read p
@@ -638,32 +645,35 @@ def bumpBoxed (v : Nat) : Result Nat := do
   pure w
 
 @[step]
-theorem bumpBoxed.spec (v : Nat) :
-    ⦃ emp ⦄ bumpBoxed v ⦃⇓ r => ⌜r = v + 1⌝⦄ := by
+theorem bumpBoxed.spec (v : U32) :
+    ⦃ emp ⦄ bumpBoxed v ⦃⇓ r => ⌜r = v.wrapping_add 1#u32⌝⦄ := by
   unfold bumpBoxed
   step*
 
 /-! ### Spatial and pure calls in one SL proof -/
 
-def mixedCall (p : MutRawPtr Nat) : Result Nat := do
+def mixedCall (p : MutRawPtr U32) : Result U32 := do
   bumpCell p
   let v ← RawPtr.read p
   bumpBoxed v
 
 @[step]
-theorem mixedCall.spec (p : MutRawPtr Nat) (v : Nat) :
-    ⦃ p ↦ v ⦄ mixedCall p ⦃⇓ r => ⌜r = v + 2⌝ ∗ p ↦ v + 1⦄ := by
+theorem mixedCall.spec (p : MutRawPtr U32) (v : U32) :
+    ⦃ p ↦ v ⦄ mixedCall p
+      ⦃⇓ r => ⌜r = (v.wrapping_add 1#u32).wrapping_add 1#u32⌝ ∗ p ↦ v.wrapping_add 1#u32⦄ := by
   unfold mixedCall
   step*
 
 /-- A caller that owns nothing can still use SL ispecs for its allocating
 callees and lift the pure specification of `bump` between them. -/
-def pureCall (x : Nat) : Result Nat := do
+def pureCall (x : U32) : Result U32 := do
   let y ← bumpBoxed x
   let z ← bump y
   bumpBoxed z
 
-example (x : Nat) : ⦃ emp ⦄ pureCall x ⦃⇓ r => ⌜r = x + 3⌝⦄ := by
+example (x : U32) :
+    ⦃ emp ⦄ pureCall x
+      ⦃⇓ r => ⌜r = ((x.wrapping_add 1#u32).wrapping_add 1#u32).wrapping_add 1#u32⌝⦄ := by
   unfold pureCall
   step*
 
@@ -672,12 +682,12 @@ example (x : Nat) : ⦃ emp ⦄ pureCall x ⦃⇓ r => ⌜r = x + 3⌝⦄ := by
 `⦃ ⦄div` denotes `dspec`, defined by `dispec` at `emp`. The registered
 total-to-partial liftings cross the pure/heap boundary too. -/
 
-example (x : Nat) : bump x ⦃ y => y = x + 1 ⦄div := by step*
+example (x : U32) : bump x ⦃ y => y = x.wrapping_add 1#u32 ⦄div := by step*
 
-example (v : Nat) : ⦃ emp ⦄ bumpBoxed v ⦃⇓ r => ⌜r = v + 1⌝⦄div := by step*
+example (v : U32) : ⦃ emp ⦄ bumpBoxed v ⦃⇓ r => ⌜r = v.wrapping_add 1#u32⌝⦄div := by step*
 
-example (p : MutRawPtr Nat) (v : Nat) :
-    ⦃ p ↦ v ⦄ bumpCell p ⦃⇓ p ↦ v + 1⦄div :=
+example (p : MutRawPtr U32) (v : U32) :
+    ⦃ p ↦ v ⦄ bumpCell p ⦃⇓ p ↦ v.wrapping_add 1#u32⦄div :=
   ispec_dispec (bumpCell.spec p v)
 
 /-! ## 7. Higher order
@@ -686,52 +696,52 @@ A combinator states its callee's contract once, as a precondition/postcondition
 pair, and the pure case is that contract at `emp`.  With two disjoint judgments
 each combinator needs two specifications and no call site may mix them. -/
 
-def callWith (f : Nat → Result Nat) (x : Nat) : Result Nat := f x
+def callWith (f : U32 → Result U32) (x : U32) : Result U32 := f x
 
 /-- A *pure* contract. -/
-theorem callWith.spec_pure (f : Nat → Result Nat) (x : Nat) (post : Nat → Prop)
+theorem callWith.spec_pure (f : U32 → Result U32) (x : U32) (post : U32 → Prop)
     (hf : f x ⦃ y => post y ⦄) :
     callWith f x ⦃ y => post y ⦄ := by
   unfold callWith; exact hf
 
 /-- A pure closure meets the pure contract. -/
-example (x : Nat) : callWith bump x ⦃ y => y = x + 1 ⦄ := by
+example (x : U32) : callWith bump x ⦃ y => y = x.wrapping_add 1#u32 ⦄ := by
   apply callWith.spec_pure
   step*
 
 /-- A callee's SL ispec at `emp` with a pure postcondition also meets the
 pure contract; its spatial implementation is already verified separately. -/
-example (x : Nat) : ⦃ emp ⦄ callWith bumpBoxed x ⦃⇓ y => ⌜y = x + 1⌝⦄ := by
+example (x : U32) : ⦃ emp ⦄ callWith bumpBoxed x ⦃⇓ y => ⌜y = x.wrapping_add 1#u32⌝⦄ := by
   apply callWith.spec_pure
   step*
 
 /-- The whole higher-order call, pure contract and all, framed into a heap
 proof by `step` — framing an `ispec` is what `step` already does. -/
-example (p : MutRawPtr Nat) (v x : Nat) :
-    ⦃ p ↦ v ⦄ callWith bumpBoxed x ⦃⇓ y => ⌜y = x + 1⌝ ∗ p ↦ v⦄ := by
-  step with (callWith.spec_pure (post := fun y => y = x + 1))
+example (p : MutRawPtr U32) (v x : U32) :
+    ⦃ p ↦ v ⦄ callWith bumpBoxed x ⦃⇓ y => ⌜y = x.wrapping_add 1#u32⌝ ∗ p ↦ v⦄ := by
+  step with (callWith.spec_pure (post := fun y => y = x.wrapping_add 1#u32))
   · step*
 
 /-- A *separating* contract.  One specification covers a pure closure, a heap
 closure, and a closure that mixes them. -/
-theorem callWith.spec (f : Nat → Result Nat) (x : Nat) (P : IPre) (Q : IPost Nat)
+theorem callWith.spec (f : U32 → Result U32) (x : U32) (P : IPre) (Q : IPost U32)
     (hf : ⦃ P ⦄ f x ⦃⇓ y => Q y⦄) :
     ⦃ P ⦄ callWith f x ⦃⇓ y => Q y⦄ := by
   unfold callWith; exact hf
 
-example (x : Nat) : callWith bump x ⦃ y => y = x + 1 ⦄ := by
+example (x : U32) : callWith bump x ⦃ y => y = x.wrapping_add 1#u32 ⦄ := by
   apply callWith.spec
   step
 
-example (p : MutRawPtr Nat) (v w : Nat) :
+example (p : MutRawPtr U32) (v w : U32) :
     ⦃ p ↦ v ⦄ callWith (fun n => do MutRawPtr.write p n; RawPtr.read p) w
       ⦃⇓ y => ⌜y = w⌝ ∗ p ↦ w⦄ := by
   apply callWith.spec
   step*
 
-example (p : MutRawPtr Nat) (v w : Nat) :
+example (p : MutRawPtr U32) (v w : U32) :
     ⦃ p ↦ v ⦄ callWith (fun n => do let m ← bump n; MutRawPtr.write p m; RawPtr.read p) w
-      ⦃⇓ y => ⌜y = w + 1⌝ ∗ p ↦ w + 1⦄ := by
+      ⦃⇓ y => ⌜y = w.wrapping_add 1#u32⌝ ∗ p ↦ w.wrapping_add 1#u32⦄ := by
   apply callWith.spec
   step*
 
@@ -740,13 +750,13 @@ example (p : MutRawPtr Nat) (v w : Nat) :
 `f` must own nothing — a real restriction, but one expressed in the same logic
 as everything else, and `step` frames `p ↦ v` around it by itself. -/
 
-def updateWith (f : Nat → Result Nat) (p : MutRawPtr Nat) : Result Unit := do
+def updateWith (f : U32 → Result U32) (p : MutRawPtr U32) : Result Unit := do
   let v ← RawPtr.read p
   let w ← f v
   MutRawPtr.write p w
 
 @[step]
-theorem updateWith.spec (f : Nat → Result Nat) (p : MutRawPtr Nat) (v w : Nat)
+theorem updateWith.spec (f : U32 → Result U32) (p : MutRawPtr U32) (v w : U32)
     (hf : f v ⦃ r => r = w ⦄) :
     ⦃ p ↦ v ⦄ updateWith f p ⦃⇓ p ↦ w⦄ := by
   unfold updateWith
@@ -754,23 +764,23 @@ theorem updateWith.spec (f : Nat → Result Nat) (p : MutRawPtr Nat) (v w : Nat)
   subst v'
   step*
 
-example (p : MutRawPtr Nat) (v : Nat) :
-    ⦃ p ↦ v ⦄ updateWith bump p ⦃⇓ p ↦ v + 1⦄ := by
+example (p : MutRawPtr U32) (v : U32) :
+    ⦃ p ↦ v ⦄ updateWith bump p ⦃⇓ p ↦ v.wrapping_add 1#u32⦄ := by
   step* +inferPost
 
 /-- The already-proved SL specification of `bumpBoxed` supplies the pure
 callback contract, without opening its spatial implementation in a pure goal. -/
-example (p : MutRawPtr Nat) (v : Nat) :
-    ⦃ p ↦ v ⦄ updateWith bumpBoxed p ⦃⇓ p ↦ v + 1⦄ := by
+example (p : MutRawPtr U32) (v : U32) :
+    ⦃ p ↦ v ⦄ updateWith bumpBoxed p ⦃⇓ p ↦ v.wrapping_add 1#u32⦄ := by
   step* +inferPost
 
 /-- Nesting: a higher-order call inside a higher-order call, pure contract on
 the inside and a separating one on the outside. -/
-example (p : MutRawPtr Nat) (v : Nat) :
+example (p : MutRawPtr U32) (v : U32) :
     ⦃ p ↦ v ⦄ callWith (fun n => do updateWith bump p; bump n) v
-      ⦃⇓ y => ⌜y = v + 1⌝ ∗ p ↦ v + 1⦄ := by
+      ⦃⇓ y => ⌜y = v.wrapping_add 1#u32⌝ ∗ p ↦ v.wrapping_add 1#u32⦄ := by
   apply callWith.spec
-  step with (updateWith.spec (w := v + 1))
+  step with (updateWith.spec (w := v.wrapping_add 1#u32))
   · step*
   · step*
 
@@ -782,12 +792,12 @@ An SL ispec at `emp` does not determine the program: an event that needs no
 owned resources is still permitted. -/
 
 /-- Allocation satisfies an SL ispec owning nothing initially. -/
-example : ⦃ emp ⦄ MutRawPtr.alloc (0 : Nat) ⦃⇓ _ => ⌜True⌝⦄ := by
+example : ⦃ emp ⦄ MutRawPtr.alloc 0#u32 ⦃⇓ _ => ⌜True⌝⦄ := by
   step*
 
 /-- But it is not a `Result.ok`.  This no longer follows from the specification
 -- allocation satisfies one -- only from the program. -/
-example : ¬ ∃ q, MutRawPtr.alloc (0 : Nat) = Result.ok q := by
+example : ¬ ∃ q, MutRawPtr.alloc 0#u32 = Result.ok q := by
   rintro ⟨q, hq⟩
   simp [Aeneas.Std.MutRawPtr.alloc, Aeneas.Std.RawPtr.allocArray,
     Result.guardedModify] at hq

@@ -44,7 +44,7 @@ tactic rather than replacing the test with automation that bypasses it.
 |---|---|
 | [`Coinductive/Spec.lean`](../../../backends/lean/Aeneas/Data/Coinductive/Spec.lean) | Generic `Handler`, `TotalSpec`, and `PartialSpec`, their shared layer `SpecF`, structural rules, and admissibility for conjunctive handlers. Shared with `Std/WP.lean`. |
 | [`StateMachine.lean`](../../../backends/lean/Aeneas/Data/Coinductive/StateMachine.lean) | Operational semantics for those handlers (after "Program Logics à la Carte"): `Exec`, `Handler.Runs`, and `Handler.Evaluates`, with the adequacy proofs connecting the generic correctness judgments to runs. |
-| [`Heap.lean`](../../../backends/lean/Aeneas/Std/Heap.lean) | Defines addresses (`AllocId × Nat`), finite heaps of slots under disjoint union, the `PartialCommMonoid` class and the heap's instance of it, references and their arithmetic, the heap of a run of slots, allocation, and the sub-heap order the affine assertions are closed under. |
+| [`Heap.lean`](../../../backends/lean/Aeneas/Std/Heap.lean) | Defines byte addresses (`AllocId × Nat`), the `ByteRepr` class of types with a byte encoding, finite heaps of bytes under disjoint union, the `PartialCommMonoid` class and the heap's instance of it, references and their arithmetic, the heap of a run of slots, allocation, and the sub-heap order the affine assertions are closed under. |
 | [`Primitives.lean`](../../../backends/lean/Aeneas/Std/Primitives.lean) | Defines `Result`, the interaction-tree monad over the `RustEffect` heap events (`guardedModify` and `fail`), its monad and partial-fixpoint instances, and the `loop` combinator. |
 | [`MutableData/Array.lean`](MutableData/Array.lean) | Arrays `Array α n`, the Rust `[α; n]`: the length lives in the type.  `toBuffer` is the coercion to a slice, and every operation and specification is the buffer one with `n` for the length. |
 | [`MutableData/Ptr.lean`](MutableData/Ptr.lean) | The first layer: allocation of a run of slots, interior pointers `Ptr α`, pointer arithmetic, range and slot ownership, splitting and joining, read, write and free of one slot, the range operations `freeRange`/`fillRange`/`copyRange`/`compareRange`, and the raw-pointer borrow.  A `Ref` never escapes this directory. |
@@ -108,23 +108,27 @@ What affinity does *not* change: separation is still separation, so `p ↦ v ∗
 w ⊢ ⌜False⌝`, and a specification still has to own what it reads or writes.
 Leak-freedom claims are out of scope, as they already were.
 
-## The memory model: a slot at a time
+## The memory model: a byte at a time
 
-An **address** is an allocation identifier together with a slot index into that
-allocation, and a heap is a finite map from addresses to the values they hold:
+An **address** is an allocation identifier together with a byte offset into
+that allocation, and a heap is a finite map from addresses to the bytes they
+hold:
 
 ```text
-Loc      = AllocId × Nat
-HeapCell = (α : Type) × α
-Heap     = Loc ⇀ HeapCell            (finitely supported)
+Loc  = AllocId × Nat
+Heap = Loc ⇀ Byte            (finitely supported)
 ```
 
+Only types with a byte representation can be stored.  `ByteRepr α` gives a
+fixed `size`, an `encode : α → List Byte` of that length and a `decode` that
+inverts it; the scalars have instances, encoded little-endian.  `q ↦ v` owns
+the `size α` bytes from `q`'s address and says they are `encode v`.
+
 Two heaps compose when the addresses they use are disjoint, so `∪` is a plain
-disjoint union — no PCM, and no type equality to decide.  Ownership is
-*slot-granular*, which is what lets one allocation be owned a part at a time:
-the `(α : Type) × List α` view of an allocation is `Ptr.pointsToRange`, the
-values at consecutive addresses, and it splits and joins by regrouping a
-separating conjunction.  One lemma does all of it:
+disjoint union.  Ownership is *byte-granular*, which is what lets one
+allocation be owned a part at a time: `RawPtr.pointsToRange` owns the
+encodings of a list of values laid out one after the other, and it splits and
+joins by regrouping a separating conjunction.  One lemma does all of it:
 
 ```text
 owns_union : Compatible A B → owns (A ∪ B) ⊣⊢ owns A ∗ owns B
@@ -175,10 +179,27 @@ functions of their arguments.  What may go wrong is caught by the separation
 logic and by the *definedness guard* of the event an operation triggers: a read
 through a dangling or unowned pointer is stuck, not erroneous.
 
-Deallocation releases the slots it owns — `Buffer.free` is `Ptr.freeRange` over
+Deallocation releases the bytes it owns — `Buffer.free` is `Ptr.freeRange` over
 the range the view spans — so freeing part of an allocation is expressible and
-frame-preserving.  `Heap.size` counts the slots a heap still holds, which is
+frame-preserving.  `Heap.size` counts the bytes a heap still holds, which is
 what tells a leak from a clean run.
+
+### Pointer casts
+
+Since ownership is of bytes, the type a pointer views them at is not part of
+the heap.  `RawPtr.cast_scalar` is `ok p.retype`: it neither allocates nor
+moves the pointer, and its specifications only change the view:
+
+```text
+RawPtr.pointsToRange_retype :
+  xs.flatMap encode = ys.flatMap encode → (q.retype ↦* ys) = (q ↦* xs)
+cast_scalar.spec :
+  ⦃q ↦ x⦄ cast_scalar U .. q ⦃⇓ r => ⌜r = q.retype⌝ ∗ r ↦ (decode (encode x)).get _⦄
+```
+
+A same-size cast between scalars reinterprets the bits, and a `u32` can be
+owned as the four `u8`s of its encoding and back.  See the "Pointer casts"
+section of [`Tests/UnitTest.lean`](Tests/UnitTest.lean).
 
 ## Four semantics for `Result`
 
@@ -203,23 +224,22 @@ continuation. Nothing proves `ITree.div` correct, so every proved program
 terminates. `TotalSpec.mono_le` connects this judgment to the interaction-tree
 approximation order used by `partial_fixpoint`.
 
-`Result` cannot be interpreted unconditionally either: a heap cell stores its own
-Lean type (`HeapCell = Σ α : Type, α`), so `Ptr.contains h p` is not decidable
-and a read through a dangling or mistyped pointer is stuck rather than
-erroneous. The program logic supplies what is missing, so `run` takes the
+`Result` cannot be interpreted unconditionally either: a read through a
+dangling pointer, or one whose bytes do not decode at the type it is read at,
+is stuck rather than erroneous. The program logic supplies what is missing, so `run` takes the
 weakest precondition as an argument and reads the ownership witnesses off it —
 the interpreter `runOpt` it is built from is a `partial_fixpoint` of the tree,
 not a structural recursion.  Proofs are erased at run time, so this computes:
 
 ```lean
-theorem roundTrip.spec : (roundTrip) ⦃⇓ result => result = 42⦄ := by
-  unfold roundTrip; step*
+theorem roundTrip.spec : (roundTrip) ⦃⇓ result => result = 42#u32⦄ := by
+  unfold roundTrip; step*; subst_vars; rfl
 
-#eval (execClosed roundTrip roundTrip.spec).1  -- 42
+#eval (execClosed roundTrip roundTrip.spec).1  -- 42#u32
 ```
 
 `run` is certified: it returns the postcondition and the `Evaluates` derivation
-alongside the answer, so `(execClosed roundTrip roundTrip.spec).1 = 42` is
+alongside the answer, so `(execClosed roundTrip roundTrip.spec).1 = 42#u32` is
 `execClosed_post`, with nothing executed and nothing re-proved.
 
 Execution also shows what an affine triple cannot state. `⦃emp⦄ m ⦃⇓ emp⦄` holds
@@ -267,7 +287,7 @@ theory and live with the rest of it in
 `dtriple_iter` is the loop rule an invariant alone discharges:
 
 ```lean
-theorem incrForever.spec (p : Ptr Nat) (value : Nat) :
+theorem incrForever.spec (p : MutRawPtr U32) (value : U32) :
     ⦃ p ↦ value ⦄ incrForever p ⦃⇓ emp⦄div
 ```
 

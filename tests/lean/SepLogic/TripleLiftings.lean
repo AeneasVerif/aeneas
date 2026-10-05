@@ -10,7 +10,7 @@ specifications, including local contracts and framing pure calls in SL goals.
 
 namespace TripleLiftingTests
 
-open Aeneas.Std (Result RawPtr MutRawPtr)
+open Aeneas.Std (Result RawPtr MutRawPtr U32)
 open Aeneas.SepLogic
 open Aeneas
 open Aeneas.Std.WP
@@ -169,25 +169,25 @@ example (x : Nat) (P : IProp) :
 /-! SL goals carry resources through allocating callees, including callees
 that have only a partial specification. -/
 
-example (x : Nat) :
+example (x : U32) :
     ispec emp (do
       let p ← MutRawPtr.alloc x
       let y ← RawPtr.read p
       MutRawPtr.free p
-      totalPure y) (fun z => ⌜z = x⌝) := by step*
+      totalPure y.val) (fun z => ⌜z = x.val⌝) := by step*
 
-def partialAlloc (x : Nat) := MutRawPtr.alloc x
+def partialAlloc (x : U32) := MutRawPtr.alloc x
 
-@[step] theorem partialAlloc.spec (x : Nat) :
+@[step] theorem partialAlloc.spec (x : U32) :
     ⦃ emp ⦄ partialAlloc x ⦃⇓ p => p ↦ x ⦄div :=
   ispec_dispec (MutRawPtr.alloc.spec x)
 
-example (x : Nat) :
+example (x : U32) :
     dispec emp (do
       let p ← partialAlloc x
       let y ← RawPtr.read p
       MutRawPtr.free p
-      partialPure y) (fun z => ⌜z = x⌝) := by step*
+      partialPure y.val) (fun z => ⌜z = x.val⌝) := by step*
 
 /-! Local contracts and explicit theorem selection use the same liftings. -/
 
@@ -310,9 +310,9 @@ example (x : Nat) (P : IProp) :
   unfold partialSpatial
   step*
 
-example (m : Result Nat) (p : MutRawPtr Nat)
+example (m : Result Nat) (p : MutRawPtr U32)
     (hPure : m ⦃ n => n = 0 ⦄)
-    (_hSpatial : ⦃ p ↦ 0 ⦄ m ⦃⇓ n => p ↦ 0 ∗ ⌜n = 0⌝ ⦄) :
+    (_hSpatial : ⦃ p ↦ 0#u32 ⦄ m ⦃⇓ n => p ↦ 0#u32 ∗ ⌜n = 0⌝ ⦄) :
     m ⦃ n => n = 0 ⦄ := by
   fail_if_success solve | step with _hSpatial
   step with hPure
@@ -325,9 +325,9 @@ example : totalPure 0 ⦃ n => n = 0 ⦄ := by
 
 example : True := by
   fail_if_success
-    have : MutRawPtr.alloc (0 : Nat) ⦃ _ => True ⦄ := by step*
+    have : MutRawPtr.alloc 0#u32 ⦃ _ => True ⦄ := by step*
   fail_if_success
-    have : MutRawPtr.alloc (0 : Nat) ⦃ _ => True ⦄div := by step*
+    have : MutRawPtr.alloc 0#u32 ⦃ _ => True ⦄div := by step*
   trivial
 
 end TripleLiftingTests
