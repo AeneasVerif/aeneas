@@ -8,6 +8,7 @@ public meta import Aeneas.Std.Spec
 public meta import Aeneas.Std.Delab
 public import Aeneas.Data.Coinductive.ITree
 public import Aeneas.Data.Coinductive.Effect
+public import Aeneas.Data.Coinductive.ITreeWP
 import all Init.Internal.Order.Basic
 public section
 
@@ -24,81 +25,47 @@ open Lean.Order
 
 @[expose] def wp_return (x:α) : Wp α := fun p => p x
 
-@[expose] section
-
-@[grind]
-inductive spec {α} : (x : Result α) → (p : Post α) →  Prop where
-| ret : ∀ {p x}, p x → spec (.ok x) p
-
-
-inductive dspec {α} : (x : Result α) → (p : Post α) →  Prop where
-| ret : ∀ {p x}, p x → dspec (.ok x) p
-| div : ∀ p, dspec div p
-
-end
-
-theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p := by
-  intros s
-  cases s
-  apply dspec.ret
-  assumption
+section ResultImplementation
 
 unseal Result
-theorem dspec_admissible {α} (p : Post α )
-  : admissible (fun x => dspec x p) := by
-  intro c hchain h
-  simp at h
-  by_cases (∃ a, c a) <;> rename_i h1
-  · have : c (CCPO.csup hchain) := by
-      by_cases (∃ a, c (.ok a))
-      · rename_i h2
-        rcases h2 with ⟨a, ca⟩
-        have dir1 := csup_le (x:=.ok a) hchain (by
-          intros y cy
-          have h := h y cy
-          cases h
-          · have order := hchain _ _ ca cy
-            cases order <;> try assumption
-            rename_i h
-            simp [ok] at *
-            rw [ITree.le_ret_inj _ _ h]
-            exact PartialOrder.rel_refl
-          · simp [div, ok]
-            rw [← ITree.div_is_bot]
-            apply bot_le
-          )
-        have dir2 := le_csup hchain ca
-        rw [PartialOrder.rel_antisymm dir1 dir2]
-        assumption
-      · have := CCPO.csup_spec hchain
-        simp [is_sup] at this
-        have this := (this .div).mpr
-        have only_div : ∀ a, c a → a = div := by
-          intros a ca
-          have h := h a ca
-          cases h <;> grind
-        have this := this (by
-          intros y cy
-          simp [only_div y cy]
-          apply PartialOrder.rel_refl
-          )
-        simp [Result, instCCPOResult]
-        rw [ITree.le_div_is_div (CCPO.csup (c:=c) hchain) this]
-        rcases h1 with ⟨a, ca⟩
-        have h := h a ca
-        simp [div] at only_div
-        rw [← only_div a ca]
-        assumption
-    grind
-  · have : CCPO.csup hchain = bot := by
-      unfold bot empty_chain
-      congr
-      grind
-    rw [this]
-    unfold Result
-    rw [ITree.div_is_bot]
-    constructor
-seal Result
+
+@[expose] section
+
+@[reducible]
+def effectWP : EffectWP RustEffect where
+  State := Unit
+  wp effect _ _ :=
+    match effect with
+    | .fail _ => False
+
+instance : EffectWP.Monotone effectWP where
+  wp_mono _ := False.elim
+
+instance : EffectWP.Conjunctive effectWP where
+  wp_conj := by
+    intro _ _ _ hNonempty hAll
+    obtain ⟨C₀, hC₀⟩ := hNonempty
+    exact (hAll C₀ hC₀).elim
+
+instance : EffectWP.NoMiracle effectWP where
+  wp_noMiracle := by
+    rintro ⟨⟩ _ h
+    exact h
+
+def spec (m : Result α) (p : Post α) : Prop :=
+  DWP effectWP m (fun value _ => p value) ()
+
+def dspec (m : Result α) (p : Post α) : Prop :=
+  DWLP effectWP m (fun value _ => p value) ()
+
+theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p :=
+  DWP.toPartial
+
+theorem dspec_admissible {α} (p : Post α) :
+    admissible (fun x => dspec x p) :=
+  DWLP.admissible effectWP _ ()
+
+end
 
 /-- The shape the `dspec_induction` tactic needs to discharge the admissibility
 side-goal it generates for a partial specification about a recursive function. -/
@@ -126,26 +93,16 @@ def uncurry' {α β γ : Type _} (p : α → β → γ) : α × β → γ :=
 @[defeq] theorem uncurry'_eq x (p : α → β → γ) : uncurry' p x = p x.fst x.snd := by simp [uncurry']
 
 @[simp, grind =, agrind =]
-theorem spec_ok (x : α) : spec (ok x) p ↔ p x := by
-  constructor
-  · intros s
-    generalize H : ok x = v at s
-    cases s
-    simp at H
-    grind
-  · intros px
-    constructor
-    assumption
+theorem spec_ok (x : α) : spec (ok x) p ↔ p x := DWP.ret_iff
 
 @[simp, grind =, agrind =]
-theorem spec_vis (e k) : spec (.vis e k) p ↔ False := by grind [ok_not_vis, vis_not_ok]
+theorem spec_vis (e k) : spec (.vis e k) p ↔ False := ⟨fun h => DWP.vis_view h, False.elim⟩
 
 @[simp, grind =, agrind =]
-theorem spec_fail (e : Error) : spec (fail e) p ↔ False := by
-  simp [Result.fail_eq_vis]
+theorem spec_fail (e : Error) : spec (fail e) p ↔ False := by simp [Result.fail_eq_vis]
 
 @[simp, grind =, agrind =]
-theorem spec_div : spec div p ↔ False := by grind [ok_not_div, div_not_ok]
+theorem spec_div : spec div p ↔ False := ⟨DWP.div_false, False.elim⟩
 
 /-! ### `spec_*` for tuple posts
 
@@ -158,97 +115,28 @@ theorem spec_ok_pair {α β} (a : α) (b : β) (f : α → β → Prop) :
 
 @[simp, grind =, agrind =]
 theorem spec_fail_pair (e : Error) (f : α → β → Prop) :
-    spec (fail e) (uncurry f) ↔ False := by grind
+    spec (fail e) (uncurry f) ↔ False := by simp
 
 @[simp, grind =, agrind =]
 theorem spec_div_pair (f : α → β → Prop) :
     spec div (uncurry f) ↔ False := by simp
 
-/-- Small helper to currify functions -/
-def curry {α β γ} (f : α × β → γ) (x : α) : β → γ := fun y => f (x, y)
-
-/-- Implication -/
-@[expose]
-def imp (P Q : Prop) : Prop := P → Q
-
-@[simp]
-theorem imp_and_iff (P0 P1 Q : Prop) : imp (P0 ∧ P1) Q ↔ P0 → imp P1 Q := by simp [imp]
-
-/-- Implication with quantifier -/
-@[expose]
-def qimp {α} (P₀ P₁ : Post α) : Prop := ∀ x, P₀ x → P₁ x
-
-/-- We use this lemma to decompose nested `uncurry'` predicates into a sequence of universal quantifiers. -/
-@[simp]
-def qimp_uncurry' {α₀ α₁} (P : α₀ → α₁ → Prop) (Q : α₀ × α₁ → Prop) :
-  qimp (uncurry' P) Q ↔ ∀ x, qimp (P x) (curry Q x) := by
-  simp [qimp, curry]
-
-/-- We use this lemma to eliminate `imp` after we decomposed the nested `uncurry'` -/
-theorem qimp_iff {α} (P₀ P₁ : Post α) : qimp P₀ P₁ ↔ ∀ x, imp (P₀ x) (P₁ x) := by simp [qimp, imp]
-
-/-- `spec_mono` controls the introduction of universal quantifiers by introducing `imp`. -/
+/-- Mono rule used by `step`. -/
 theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
-  qimp P₀ P₁ → spec m P₁ := by
-  intros HMonPost
-  revert h
-  intros s
-  cases s
-  constructor
-  grind only [qimp]
+  (∀ x, P₀ x → P₁ x) → spec m P₁ :=
+  fun HMonPost => DWP.mono h fun value _ => HMonPost value
 
-/-- Implication of a `spec` predicate with quantifier -/
-@[expose]
-def qimp_spec {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) : Prop :=
-  ∀ x, P x → spec (k x) Q
-
-/-- `spec_bind` controls the introduction of universal quantifiers with `qimp_spec`. -/
+/-- Bind rule used by `step`. It is stated on `Std.bind` rather than on `>>=`, which is
+what a translated program binds with. -/
 theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
   spec m Pₘ →
-  (qimp_spec Pₘ k Pₖ) →
-  spec (Std.bind m k) Pₖ := by
-  intro Hm Hk
-  simp only [qimp_spec] at *
-  cases Hm
-  simp
-  grind only
-
-/-- We use this lemma to decompose nested `uncurry'` predicates into a sequence of universal quantifiers. -/
-@[simp]
-def qimp_spec_uncurry' {α₀ α₁ β} (P : α₀ → α₁ → Prop) (k : α₀ × α₁ → Result β) (Q : β → Prop) :
-  qimp_spec (uncurry' P) k Q ↔ ∀ x, qimp_spec (P x) (curry k x) Q := by
-  simp [qimp_spec, curry]
-
-/-- We use this lemma to eliminate `imp_spec` after we decomposed the nested `uncurry'` -/
-def qimp_spec_iff {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) :
-  qimp_spec P k Q ↔ ∀ x, imp (P x) (spec (k x) Q) := by
-  simp [qimp_spec, imp]
-
-/--
-error: unsolved goals
-⊢ ∀ (x : Nat), qimp_spec (fun y => 0 < x + y) (curry (fun x => ok (x.fst + x.snd)) x) fun z => 0 < z
--/
-#guard_msgs in
-example : qimp_spec (uncurry' fun x y => x + y > 0) (fun (x, y) => .ok (x + y)) (fun z => z > 0) := by
-  simp
-
-@[simp]
-theorem qimp_exists {α β} (P₀ : β → Post α) (P₁ : Post α) :
-  qimp (fun x => ∃ y, P₀ y x) P₁ ↔ ∀ x, qimp (P₀ x) P₁ := by
-  simp only [qimp, forall_exists_index]; grind
-
-@[simp]
-theorem qimp_spec_exists {α β γ} (P : γ → α → Prop) (k : α → Result β) (Q : β → Prop) :
-  qimp_spec (fun x => ∃ y, P y x) k Q ↔ ∀ x, qimp_spec (P x) k Q := by
-  simp only [qimp_spec, forall_exists_index]; grind
+  (∀ x, Pₘ x → spec (k x) Pₖ) →
+  spec (Std.bind m k) Pₖ :=
+  fun Hm Hk => DWP.bind (k := k) Hm fun value _ => Hk value
 
 theorem spec_equiv_exists (m:Result α) (P:Post α) :
   spec m P ↔ (∃ y, m = ok y ∧ P y) := by
-  constructor
-  · intros s
-    cases s
-    grind only [ok]
-  · grind
+  cases m <;> simp
 
 theorem spec_imp_exists {m:Result α} {P:Post α} :
   spec m P → (∃ y, m = ok y ∧ P y) := by
@@ -260,74 +148,32 @@ theorem exists_imp_spec {m:Result α} {P:Post α} :
 
 -- `dspec` theorems
 theorem dspec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : dspec m P₀):
-  qimp P₀ P₁ → dspec m P₁ := by
-  intros HMonPost
-  revert h
-  intros s
-  cases s <;> constructor
-  grind only [qimp]
-
-/-- Implication of a `dspec` predicate with quantifier -/
-@[expose]
-def qimp_dspec {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) : Prop :=
-  ∀ x, P x → dspec (k x) Q
+  (∀ x, P₀ x → P₁ x) → dspec m P₁ :=
+  fun HMonPost => DWLP.mono h fun value _ => HMonPost value
 
 theorem dspec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
   dspec m Pₘ →
-  (qimp_dspec Pₘ k Pₖ) →
-  dspec (Std.bind m k) Pₖ := by
-  intro Hm Hk
-  simp only [qimp_dspec] at *
-  cases Hm
-  · simp
-    grind only
-  · simp
-    constructor
-
-@[simp]
-def qimp_dspec_uncurry' {α₀ α₁ β} (P : α₀ → α₁ → Prop) (k : α₀ × α₁ → Result β) (Q : β → Prop) :
-  qimp_dspec (uncurry' P) k Q ↔ ∀ x, qimp_dspec (P x) (curry k x) Q := by
-  simp [qimp_dspec, curry]
-
-@[simp]
-theorem qimp_dspec_unit {α} (P : Unit → Prop) (k : Unit → Result α) (Q : α → Prop) :
-  qimp_dspec P k Q ↔ (P () → dspec (k ()) Q) := by
-  grind [qimp_dspec]
-
-@[simp]
-theorem qimp_dspec_exists {α β γ} (P : γ → α → Prop) (k : α → Result β) (Q : β → Prop) :
-  qimp_dspec (fun x => ∃ y, P y x) k Q ↔ ∀ x, qimp_dspec (P x) k Q := by
-  simp only [qimp_dspec, forall_exists_index]; grind
-
-def qimp_dspec_iff {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) :
-  qimp_dspec P k Q ↔ ∀ x, imp (P x) (dspec (k x) Q) := by
-  simp [qimp_dspec, imp]
+  (∀ x, Pₘ x → dspec (k x) Pₖ) →
+  dspec (Std.bind m k) Pₖ :=
+  fun Hm Hk => DWLP.bind (k := k) Hm fun value _ => Hk value
 
 @[simp, grind =, agrind =]
-theorem dspec_ok (x : α) : dspec (ok x) p ↔ p x := by
-  constructor
-  · intros s
-    generalize h : Result.ok x = v at s
-    cases s <;> simp at *; grind
-  · intros px
-    constructor
-    assumption
+theorem dspec_ok (x : α) : dspec (ok x) p ↔ p x := DWLP.ret_iff
 
 @[simp, grind =, agrind =]
-theorem dspec_vis (e k) : dspec (.vis e k) p ↔ False := by
-  constructor
-  · intros s
-    generalize h : Result.vis e k = v at s
-    cases s <;> simp at *
-  · intros; contradiction
+theorem dspec_vis (e k) : dspec (.vis e k) p ↔ False := ⟨fun h => DWLP.vis_view h, False.elim⟩
 
 @[simp, grind =, agrind =]
-theorem dspec_fail (e : Error) : dspec (fail e) p ↔ False := by
-  simp [Result.fail_eq_vis]
+theorem dspec_div : dspec (div : Result α) p ↔ True := iff_true_intro DWLP.div
+
+@[simp, grind =, agrind =]
+theorem dspec_fail (e : Error) : dspec (fail e) p ↔ False := by simp [Result.fail_eq_vis]
 
 theorem dspec_imp_forall {m:Result α} {P:Post α} :
   dspec m P → (∀ y, m = ok y → P y) := by
   grind only [= dspec_ok]
+
+end ResultImplementation
 
 end Aeneas.Std.WP
 
@@ -732,7 +578,7 @@ def add1 (x : Nat) := Result.ok (x + 1)
 theorem  add1_spec (x : Nat) : add1 x ⦃ y => y = x + 1⦄ :=
   by simp [add1]
 
-/-- Example without `imp` -/
+/-- Example with a single output. -/
 example (x : Nat) :
   (do
     let y ← add1 x
@@ -742,25 +588,6 @@ example (x : Nat) :
     intro y h
     -- step as ⟨ y1, z1⟩
     apply spec_mono (add1_spec _)
-    intro y' h
-    --
-    grind
-
-/-- Example with `imp` -/
-example (x : Nat) :
-  (do
-    let y ← add1 x
-    add1 y) ⦃ y => y = x + 2 ⦄ := by
-    -- step as ⟨ y, z ⟩
-    apply spec_bind (add1_spec _)
-    simp -failIfUnchanged only -- introduce the quantifiers
-    simp only [qimp_spec_iff] -- eliminate `qimp_spec`
-    intro y h
-    -- step as ⟨ y1, z1⟩
-    apply spec_mono (add1_spec _)
-    simp -failIfUnchanged only -- introduce the quantifiers
-    simp only [qimp_iff] -- eliminate `qimp_spec`
-    simp only [imp] -- eliminate `imp`
     intro y' h
     --
     grind
@@ -770,7 +597,7 @@ def add2 (x : Nat) := Result.ok (x + 1, x + 2)
 theorem  add2_spec (x : Nat) : add2 x ⦃ (y, z) => y = x + 1 ∧ z = x + 2⦄ :=
   by simp [add2]
 
-/-- Example without `imp` -/
+/-- Example with a tuple output. -/
 example (x : Nat) :
   (do
     let (y, _) ← add2 x
@@ -778,19 +605,20 @@ example (x : Nat) :
     -- step as ⟨ y, z ⟩
     apply spec_bind
     . apply add2_spec
-    rintro ⟨y, z⟩ h
-    simp at h
+    simp only [Prod.forall, uncurry_apply_pair, and_imp]
+    intro y z h0 h1
     -- step as ⟨ y1, z1⟩
     apply spec_mono
     . apply add2_spec
-    rintro ⟨y1, z1⟩ h
-    simp at h
+    simp only [Prod.forall, uncurry_apply_pair, and_imp]
+    intro y1 z1 h2 h3
     grind
 
 theorem  add2_spec' (x : Nat) : add2 x ⦃ y z => y = x + 1 ∧ z = x + 2⦄ :=
   by simp [add2]
 
-/-- Example with `imp` -/
+/-- The same with separate binders: the post-condition is wrapped in the `uncurry'` marker,
+which is reduced when rewriting the goal with separate output quantifiers. -/
 example (x : Nat) :
   (do
     let (y, _) ← add2 x
@@ -798,38 +626,18 @@ example (x : Nat) :
     -- step as ⟨ y, z ⟩
     apply spec_bind
     . apply add2_spec'
-    simp -failIfUnchanged only [qimp_spec_uncurry'] -- introduce the quantifiers
-    simp only [qimp_spec_iff, curry] -- eliminate `qimp_spec` and `curry`
-    simp only [imp] -- eliminate `imp`
-    intro y z h0
+    simp only [Prod.forall, uncurry'_pair, and_imp]
+    intro y z h0 h1
     -- step as ⟨ y1, z1⟩
     apply spec_mono
     . apply add2_spec'
-    simp -failIfUnchanged only [qimp_uncurry'] -- introduce the quantifiers
-    simp only [qimp_iff, curry, uncurry'] -- eliminate `qimp_spec` and `curry`
-    simp only [imp]
-    intros y z h
-    --
+    simp only [Prod.forall, uncurry'_pair, and_imp]
+    intro y1 z1 h2 h3
     grind
 
 private theorem massert_spec' (b : Prop) [Decidable b] (h : b) :
   massert b ⦃ _ => True ⦄ := by
   grind [massert]
-
-@[simp]
-theorem qimp_spec_unit {α} (P : Unit → Prop) (k : Unit → Result α) (Q : α → Prop) :
-  qimp_spec P k Q ↔ (P () → k () ⦃ Q ⦄) := by
-  grind [qimp_spec]
-
-@[simp]
-theorem qimp_unit (P Q : Unit → Prop) :
-  qimp P Q ↔ (P () → Q ()) := by
-  grind [qimp]
-
-@[simp]
-theorem imp_exists_iff {α} (P : α → Prop) (Q : Prop) :
-  imp (∃ x, P x) Q ↔ (∀ x, imp (P x) Q) := by
-  simp only [imp, forall_exists_index]
 
 /-- Example with a function outputting `()` (we need to eliminate the quantifier) -/
 example :
@@ -840,12 +648,12 @@ example :
   := by
   --
   apply spec_bind
-  · apply massert_spec'; omega
-  simp -failIfUnchanged only [qimp_spec_unit, forall_const]
+  · apply massert_spec'; decide
+  simp only [forall_const]
   --
   apply spec_mono
-  · apply massert_spec'; omega
-  simp -failIfUnchanged only [qimp_unit, forall_const]
+  · apply massert_spec'; decide
+  simp only [forall_const]
 
 /- Example with a post-condition manipulating an ∃ -/
 example (zero : List Nat → Result (List Nat))
@@ -858,8 +666,7 @@ example (zero : List Nat → Result (List Nat))
       pure ()) ⦃ _ => True ⦄ := by
   apply spec_bind
   · apply zero_spec
-  simp -failIfUnchanged only [qimp_spec_iff, imp_exists_iff]
-  rintro s' h0 h1
+  rintro _ ⟨_, _⟩
   --
   simp only [pure, spec_ok]
 
@@ -892,8 +699,6 @@ instance Result.instWP : WP Result.{u} (.except (ULift Error) (.except PUnit (.e
     conjunctiveRaw Q₁ Q₂ := by
       apply SPred.bientails.of_eq
       cases x <;> simp
-      try (rename_i i k)
-      try (cases i <;> simp)
   }
 set_option match.ignoreUnusedAlts false
 
@@ -924,7 +729,6 @@ theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
     have : heq = PEmpty.elim := by funext; contradiction
     simp [*] at *
     try trivial
-    try (all_goals simp at hspec)
 
 
 /-- Lift an Aeneas step spec to an mvcgen-compatible `Triple`. -/
@@ -1004,56 +808,4 @@ namespace Aeneas.Std.WP
 want to introduce in the context -/
 theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
 
--- registers the spec info for use in the step tactic, see Spec.lean
-#register_spec_info {
-    spec_name := ``Std.WP.spec
-    arity := 3
-    program_index := 1
-    post_index := 2
-    mk_spec_mono := ``Std.WP.spec_mono
-    mk_spec_mono_skip_args := 2
-    mk_spec_bind := ``Std.WP.spec_bind
-    mk_spec_bind_skip_args := 4
-    uncurry_elim_tactics := #[
-      ``Std.WP.qimp_spec_unit, ``Std.WP.qimp_unit,
-      ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
-      ``forall_unit, ``true_imp_iff
-    ]
-    qimp_elim_tactics := #[
-      ``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
-      ``Std.WP.imp_and_iff, ``Std.uncurry_apply_pair,
-      ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
-      ``Std.WP.imp_exists_iff,
-      ``forall_unit, ``true_imp_iff]
-    to_mvcgen := .some ``Std.WP.spec_to_mvcgen
-    liftings := #[]
-  }
-
-#register_spec_info {
-    spec_name := ``Std.WP.dspec
-    arity := 3
-    program_index := 1
-    post_index := 2
-    mk_spec_mono := ``Std.WP.dspec_mono
-    mk_spec_mono_skip_args := 2
-    mk_spec_bind := ``Std.WP.dspec_bind
-    mk_spec_bind_skip_args := 4
-    uncurry_elim_tactics := #[
-      ``Std.WP.qimp_dspec_unit, ``Std.WP.qimp_unit,
-      ``Std.WP.qimp_dspec_exists, ``Std.WP.qimp_exists,
-      ``forall_unit, ``true_imp_iff
-    ]
-    qimp_elim_tactics := #[
-      ``Std.WP.qimp_dspec_iff, ``Std.WP.qimp_iff,
-      ``Std.WP.imp_and_iff, ``Std.uncurry_apply_pair,
-      ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
-      ``Std.WP.imp_exists_iff,
-      ``forall_unit, ``true_imp_iff]
-    to_mvcgen := .some ``Std.WP.dspec_to_mvcgen
-    liftings := #[
-      { from_statement := ``Std.WP.spec
-        conversion_thm := ``Std.WP.spec_dspec
-        conversion_thm_inferred_args := 3 }
-    ]
-  }
 end Aeneas.Std.WP

@@ -50,12 +50,11 @@ def unnecessary_error_2 (b0 : Bool) (b1 : Bool) : Result Unit := do
   let i ← if b0
             then ok 0#u32
             else ok 1#u32
-  let _ ←
-    if b1
-    then do
-         core.mem.drop 2#u32
-         ok (true, 2#u32)
-    else ok (false, 0#u32)
+  let _ ← if b1
+            then do
+                 core.mem.drop 2#u32
+                 ok 2#u32
+            else ok 0#u32
   let _ ← 2#u32 + 1#u32
   core.mem.drop i
 
@@ -167,8 +166,8 @@ def conditional_with_indirection : Result Unit := do
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 102:4-106:5 -/
 @[rust_loop_body]
 def conditional_with_indirection_2_loop.body
-  (p : Option X) (back : Option X → Option X) (b0 : Bool) :
-  Result (ControlFlow ((Option X) × (Option X → Option X) × Bool) Unit)
+  (b0 : Bool) (p : Option X) (back : Option X → Option X) :
+  Result (ControlFlow ((Option X) × (Option X → Option X)) Unit)
   := do
   match p with
   | none => ok (done ())
@@ -181,8 +180,8 @@ def conditional_with_indirection_2_loop.body
         fun o1 =>
           let o2 := unwrap_option_mut_back (X.mk o1)
           let o3 := as_mut_back o2
-          back o3, true))
-    else ok (cont (p, back, false))
+          back o3))
+    else ok (cont (p, back))
 
 /-- [rust_borrow_check_issues::conditional_with_indirection_2]: loop 0:
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 102:4-106:5 -/
@@ -190,9 +189,8 @@ def conditional_with_indirection_2_loop.body
 def conditional_with_indirection_2_loop
   (p : Option X) (back : Option X → Option X) (b0 : Bool) : Result Unit := do
   loop
-    (fun (p1, back1, b01) => conditional_with_indirection_2_loop.body p1 back1
-      b01)
-    (p, back, b0)
+    (fun (p1, back1) => conditional_with_indirection_2_loop.body b0 p1 back1)
+    (p, back)
 
 /-- [rust_borrow_check_issues::conditional_with_indirection_2]:
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 99:0-107:1 -/

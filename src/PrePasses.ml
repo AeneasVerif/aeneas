@@ -88,10 +88,10 @@ let erase_body_regions (crate : crate) (f : fun_decl) : fun_decl =
   f
 
 (** Replace the occurrences of [core::intrinsics::unreachable] with
-    [Abort UndefinedBehavior]. This helps with the analyzes and the symbolic
+    [UndefinedBehavior]. This helps with the analyzes and the symbolic
     evaluation (in particular, we stop the evaluation when encountering an
-    [Abort] - this can help us avoid merging control-flow after a match for
-    instance *)
+    [UndefinedBehavior] - this can help us avoid merging control-flow after a
+    match for instance *)
 let remove_unreachable (crate : crate) (f : fun_decl) : fun_decl =
   let impl_pat = NameMatcher.parse_pattern "core::intrinsics::unreachable" in
   let match_name = ExtractName.match_name crate in
@@ -116,7 +116,7 @@ let remove_unreachable (crate : crate) (f : fun_decl) : fun_decl =
     match stl with
     | [] -> []
     | st :: stl ->
-        if is_unreachable st then [ { st with kind = Abort UndefinedBehavior } ]
+        if is_unreachable st then [ { st with kind = UndefinedBehavior } ]
         else st :: update stl
   in
   let visitor =
@@ -578,7 +578,7 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
                   | st :: after -> (
                       match st.kind with
                       | Return -> [ { st with kind = Break 0 } ]
-                      | Abort _ -> [ st ]
+                      | Panic _ | UnwindTerminate | UndefinedBehavior -> [ st ]
                       | _ -> st :: decompose_after after)
                 in
                 let after = decompose_after after in
@@ -702,8 +702,13 @@ let remove_useless_joins (crate : crate) (f : fun_decl) : fun_decl =
         match st.kind with
         | Nop | StorageLive _ | StorageDead _ | PlaceMention _ | Borrowck _
         | Drop (_, _, _, _) -> (can_inline, st :: ls)
-        | Abort _ | Return | UnwindResume | Break _ | Continue _ ->
-            (true, [ st ])
+        | Panic _
+        | UnwindTerminate
+        | UndefinedBehavior
+        | Return
+        | UnwindResume
+        | Break _
+        | Continue _ -> (true, [ st ])
         | Switch (data, branches) ->
             [%ldebug "Switch: can_inline: " ^ Print.bool_to_string can_inline];
             (* Attempt to inline inside the body *)
@@ -1466,8 +1471,7 @@ let simplify_panics (crate : crate) (f : fun_decl) : fun_decl =
               match skip_storage_dead stl with
               | st1 :: stl1 -> (
                   match st1.kind with
-                  | Abort (Panic _) ->
-                      self#visit_statement env st1 :: update stl1
+                  | Panic _ -> self#visit_statement env st1 :: update stl1
                   | _ -> self#visit_statement env st0 :: update stl)
               | [] -> self#visit_statement env st0 :: update stl)
           | st0 :: stl -> self#visit_statement env st0 :: update stl
@@ -1575,13 +1579,15 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
             | Assert ({ cond; expected; check_kind }, on_failure, on_unwind) ->
                 let cond = visitor#visit_operand mk_unit_ty cond in
                 Assert ({ cond; expected; check_kind }, on_failure, on_unwind)
-            | Call ({ func; args; dest }, on_unwind) ->
+            | Call (({ func; args; _ } as call), on_unwind) ->
                 let func = visitor#visit_fn_operand mk_unit_ty func in
                 let args = List.map (visitor#visit_operand mk_unit_ty) args in
-                Call ({ func; args; dest }, on_unwind)
+                Call ({ call with func; args }, on_unwind)
             | SetDiscriminant _ | StorageLive _ | StorageDead _ | PlaceMention _
             | Drop (_, _, _, _)
-            | Abort _
+            | Panic _
+            | UnwindTerminate
+            | UndefinedBehavior
             | Return
             | UnwindResume
             | Break _

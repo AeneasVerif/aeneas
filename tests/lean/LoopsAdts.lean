@@ -100,16 +100,16 @@ def update_array_mut_borrow
     Visibility: public -/
 @[rust_loop_body]
 def array_mut_borrow_loop1_loop.body
-  (back : Array Std.U32 32#usize → Array Std.U32 32#usize) (b : Bool)
+  (b : Bool) (back : Array Std.U32 32#usize → Array Std.U32 32#usize)
   (a : Array Std.U32 32#usize) :
   Result (ControlFlow ((Array Std.U32 32#usize → Array Std.U32 32#usize) ×
-    Bool × (Array Std.U32 32#usize)) (Array Std.U32 32#usize))
+    (Array Std.U32 32#usize)) (Array Std.U32 32#usize))
   := do
   if b
   then
     let (a1, update_array_mut_borrow_back) ← update_array_mut_borrow a
     ok (cont (fun a2 => let a3 := update_array_mut_borrow_back a2
-                        back a3, true, a1))
+                        back a3, a1))
   else ok (done (back a))
 
 /-- [loops_adts::array_mut_borrow_loop1]: loop 0:
@@ -122,8 +122,8 @@ def array_mut_borrow_loop1_loop
   Result (Array Std.U32 32#usize)
   := do
   loop
-    (fun (back1, b1, a1) => array_mut_borrow_loop1_loop.body back1 b1 a1)
-    (back, b, a)
+    (fun (back1, a1) => array_mut_borrow_loop1_loop.body b back1 a1)
+    (back, a)
 
 /-- [loops_adts::array_mut_borrow_loop1]:
     Source: 'tests/src/loops-adts.rs', lines 36:0-40:1
@@ -140,17 +140,17 @@ def array_mut_borrow_loop1
     Visibility: public -/
 @[rust_loop_body]
 def array_mut_borrow_loop2_loop.body
-  (back : Array Std.U32 32#usize → Array Std.U32 32#usize) (b : Bool)
+  (b : Bool) (back : Array Std.U32 32#usize → Array Std.U32 32#usize)
   (a : Array Std.U32 32#usize) :
   Result (ControlFlow ((Array Std.U32 32#usize → Array Std.U32 32#usize) ×
-    Bool × (Array Std.U32 32#usize)) ((Array Std.U32 32#usize) × (Array
-    Std.U32 32#usize → Array Std.U32 32#usize)))
+    (Array Std.U32 32#usize)) ((Array Std.U32 32#usize) × (Array Std.U32
+    32#usize → Array Std.U32 32#usize)))
   := do
   if b
   then
     let (a1, update_array_mut_borrow_back) ← update_array_mut_borrow a
     ok (cont (fun a2 => let a3 := update_array_mut_borrow_back a2
-                        back a3, true, a1))
+                        back a3, a1))
   else ok (done (a, back))
 
 /-- [loops_adts::array_mut_borrow_loop2]: loop 0:
@@ -164,8 +164,8 @@ def array_mut_borrow_loop2_loop
     32#usize))
   := do
   loop
-    (fun (back1, b1, a1) => array_mut_borrow_loop2_loop.body back1 b1 a1)
-    (back, b, a)
+    (fun (back1, a1) => array_mut_borrow_loop2_loop.body b back1 a1)
+    (back, a)
 
 /-- [loops_adts::array_mut_borrow_loop2]:
     Source: 'tests/src/loops-adts.rs', lines 42:0-47:1
@@ -191,11 +191,11 @@ def copy_shared_array
 @[rust_loop_body]
 def array_shared_borrow_loop1_loop.body
   (b : Bool) (a : Array Std.U32 32#usize) :
-  Result (ControlFlow (Bool × (Array Std.U32 32#usize)) Unit)
+  Result (ControlFlow (Array Std.U32 32#usize) Unit)
   := do
   if b
   then let a1 ← copy_shared_array a
-       ok (cont (true, a1))
+       ok (cont a1)
   else ok (done ())
 
 /-- [loops_adts::array_shared_borrow_loop1]: loop 0:
@@ -205,8 +205,8 @@ def array_shared_borrow_loop1_loop.body
 def array_shared_borrow_loop1_loop
   (b : Bool) (a : Array Std.U32 32#usize) : Result Unit := do
   loop
-    (fun (b1, a1) => array_shared_borrow_loop1_loop.body b1 a1)
-    (b, a)
+    (fun a1 => array_shared_borrow_loop1_loop.body b a1)
+    a
 
 /-- [loops_adts::array_shared_borrow_loop1]:
     Source: 'tests/src/loops-adts.rs', lines 53:0-57:1
@@ -222,12 +222,11 @@ def array_shared_borrow_loop1
 @[rust_loop_body]
 def array_shared_borrow_loop2_loop.body
   (b : Bool) (a : Array Std.U32 32#usize) :
-  Result (ControlFlow (Bool × (Array Std.U32 32#usize)) (Array Std.U32
-    32#usize))
+  Result (ControlFlow (Array Std.U32 32#usize) (Array Std.U32 32#usize))
   := do
   if b
   then let a1 ← copy_shared_array a
-       ok (cont (true, a1))
+       ok (cont a1)
   else ok (done a)
 
 /-- [loops_adts::array_shared_borrow_loop2]: loop 0:
@@ -239,8 +238,8 @@ def array_shared_borrow_loop2_loop
   Result (Array Std.U32 32#usize)
   := do
   loop
-    (fun (b1, a1) => array_shared_borrow_loop2_loop.body b1 a1)
-    (b, a)
+    (fun a1 => array_shared_borrow_loop2_loop.body b a1)
+    a
 
 /-- [loops_adts::array_shared_borrow_loop2]:
     Source: 'tests/src/loops-adts.rs', lines 59:0-64:1
