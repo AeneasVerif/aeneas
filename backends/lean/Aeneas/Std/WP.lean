@@ -10,9 +10,9 @@ public import Aeneas.Data.Coinductive.ITree
 public import Aeneas.Data.Coinductive.Effect
 public import Aeneas.Data.Coinductive.ITreeWP
 public import Aeneas.SepLogic
-public import Aeneas.Tactic.SepLogic.IIntro
-public import Aeneas.Tactic.SepLogic.IRewrite
-public import Aeneas.Tactic.SepLogic.ISimp
+public import Aeneas.SepLogic.Tactic.IIntro
+public import Aeneas.SepLogic.Tactic.IRewrite
+public import Aeneas.SepLogic.Tactic.ISimp
 import all Init.Internal.Order.Basic
 public section
 

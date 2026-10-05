@@ -1,12 +1,12 @@
 module
-public import Aeneas.Tactic.SepLogic.IFrame
+public import Aeneas.SepLogic.Tactic.IFrame
 public section
 
 /-!
 # Regression tests for `iframe`
 -/
 
-namespace Aeneas.Tactic.SepLogic.Tests.IFrame
+namespace Aeneas.SepLogic.Tactic.Tests.IFrame
 
 open Aeneas.SepLogic
 open Aeneas.Std (Ref)
@@ -76,4 +76,4 @@ example (cell : IProp) : cell ⊢ cell := by
     have : cell ⊢ cell ∗ cell := by iframe
   iframe
 
-end Aeneas.Tactic.SepLogic.Tests.IFrame
+end Aeneas.SepLogic.Tactic.Tests.IFrame

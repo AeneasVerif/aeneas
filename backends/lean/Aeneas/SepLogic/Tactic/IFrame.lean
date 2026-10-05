@@ -1,6 +1,6 @@
 module
-public import Aeneas.Tactic.SepLogic.Init
-public meta import Aeneas.Tactic.SepLogic.Init
+public import Aeneas.SepLogic.Tactic.Init
+public meta import Aeneas.SepLogic.Tactic.Init
 public import Lean.Meta.Tactic.AC
 public meta import Lean
 public meta import AeneasMeta.Simp

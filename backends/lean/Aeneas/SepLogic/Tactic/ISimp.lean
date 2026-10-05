@@ -1,6 +1,6 @@
 module
-public import Aeneas.Tactic.SepLogic.IFrame
-public meta import Aeneas.Tactic.SepLogic.IFrame
+public import Aeneas.SepLogic.Tactic.IFrame
+public meta import Aeneas.SepLogic.Tactic.IFrame
 public meta import Lean
 public meta import AeneasMeta.Simp
 public meta section

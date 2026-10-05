@@ -7,8 +7,8 @@ public import Aeneas.Data.BitVec
 public import Aeneas.Std.WP
 public import Aeneas.Std.Primitives
 public import Aeneas.SepLogic
-public import Aeneas.Tactic.SepLogic.IFrame
-public import Aeneas.Tactic.SepLogic.IIntro
+public import Aeneas.SepLogic.Tactic.IFrame
+public import Aeneas.SepLogic.Tactic.IIntro
 public import Aeneas.Tactic.Step.Init
 @[expose] public section
 

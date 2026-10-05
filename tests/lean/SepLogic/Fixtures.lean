@@ -1,5 +1,5 @@
 import Aeneas.Std.RawPtr
-import Aeneas.Tactic.SepLogic
+import Aeneas.SepLogic.Tactic
 import Aeneas.Tactic.Step.StepStar
 
 /-! Small verified programs shared by the separation-logic regression tests. -/

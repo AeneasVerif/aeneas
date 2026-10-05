@@ -6,7 +6,7 @@ public section
 /-!
 # Setup for the separation-logic proof mode
 
-The simp set the proof-mode tactics of `Aeneas.Tactic.SepLogic` normalize
+The simp set the proof-mode tactics of `Aeneas.SepLogic.Tactic` normalize
 assertions with, registered here so that every tactic module can reach it.
 -/
 

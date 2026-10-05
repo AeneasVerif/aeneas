@@ -6,7 +6,7 @@ public section
 # Regression tests for the separation logic itself
 
 The lemmas of the assertion language, proved without the proof mode.  The
-tactic tests are in `Aeneas.Tactic.SepLogic.Tests`.
+tactic tests are in `Aeneas.SepLogic.Tactic.Tests`.
 -/
 
 namespace Aeneas.SepLogic.Tests

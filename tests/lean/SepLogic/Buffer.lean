@@ -1,6 +1,6 @@
 import Aeneas.Std.Buffer
 import Aeneas.Std.Array.ArraySlice
-import Aeneas.Tactic.SepLogic
+import Aeneas.SepLogic.Tactic
 import Aeneas.Tactic.Step.StepStar
 
 /-!

@@ -23,7 +23,7 @@ Additive conjunction `iprop(P ∧ Q)` asserts both predicates on the same heap
 fragment; separating conjunction `P ∗ Q` splits it into disjoint fragments.
 
 The proof-mode tactics (`iframe`, `iintro`, `isimpl`, `irewrite`) built on
-these assertions are in `Aeneas.Tactic.SepLogic`.
+these assertions are in `Aeneas.SepLogic.Tactic`.
 -/
 
 namespace Aeneas.SepLogic

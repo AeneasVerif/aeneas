@@ -1,12 +1,12 @@
 module
-public import Aeneas.Tactic.SepLogic.ISimp
+public import Aeneas.SepLogic.Tactic.ISimp
 public section
 
 /-!
 # Regression tests for `isimp`
 -/
 
-namespace Aeneas.Tactic.SepLogic.Tests.ISimp
+namespace Aeneas.SepLogic.Tactic.Tests.ISimp
 
 open Aeneas.SepLogic
 
@@ -143,4 +143,4 @@ example : emp ⊢
   · exact value
   · rfl
 
-end Aeneas.Tactic.SepLogic.Tests.ISimp
+end Aeneas.SepLogic.Tactic.Tests.ISimp
