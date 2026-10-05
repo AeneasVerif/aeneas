@@ -1056,6 +1056,8 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
               | RawPtrOfSliceReuse _
               | SyncRawPtrOfSlice
               | FreeRawPtrOfSlice
+              | RawPtrOfValue _
+              | EndRawPtrOfValue _
               | RawPtrRead
               | RawPtrWrite ) ->
               Some

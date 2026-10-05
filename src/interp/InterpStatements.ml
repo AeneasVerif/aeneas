@@ -745,6 +745,20 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
             in
             ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span cc)
       end
+  | Assign (dest, RawPtr (place, rk, _))
+    when not (ExpressionsUtils.place_accesses_global place) -> (
+      match raw_ptr_deref_place st.span place with
+      | Some q ->
+          (* [&raw *q] where [q] is a raw pointer *)
+          let op = Copy q in
+          let rvalue =
+            if q.ty = dest.ty then Use (op, NoRetag)
+            else UnaryOp (Cast (CastRawPtr (q.ty, dest.ty)), op)
+          in
+          eval_statement_raw config { st with kind = Assign (dest, rvalue) } ctx
+      | None ->
+          eval_raw_ptr_of_place config st.span ~is_mut:(rk = RMut) place dest
+            ctx)
   | Assign (p, rvalue) ->
       if
         (* We handle global assignments separately as a specific case. *)
@@ -1314,7 +1328,6 @@ and eval_raw_ptr_view_creation (config : config) (span : Meta.span)
     | [ arg ] -> arg
     | _ -> [%internal_error] span
   in
-  let dest_place = Some (S.mk_mplace span call.dest ctx) in
   let is_direct_borrow =
     match arg with
     | Move p | Copy p -> (
@@ -1350,6 +1363,25 @@ and eval_raw_ptr_view_creation (config : config) (span : Meta.span)
         eval_rvalue_ref config span deref_p bkind ctx
     | Constant _ -> [%craise] span "Unexpected constant operand"
   in
+  create_raw_ptr_view config span ~is_mut ~kind:RpvSlice call.dest (v, ctx, cc)
+
+(** [&raw const place] or [&raw mut place] *)
+and eval_raw_ptr_of_place (config : config) (span : Meta.span) ~(is_mut : bool)
+    (place : place) (dest : place) : stl_cm_fun =
+ fun ctx ->
+  let bkind = if is_mut then BMut else BShared in
+  let v, ctx, cc = eval_rvalue_ref config span place bkind ctx in
+  create_raw_ptr_view config span ~is_mut ~kind:RpvValue dest (v, ctx, cc)
+
+(** Convert a borrow to a raw pointer: we introduce a raw pointer view (see
+    [raw_ptr_view]) *)
+and create_raw_ptr_view (config : config) (span : Meta.span) ~(is_mut : bool)
+    ~(kind : raw_ptr_view_kind) (dest : place)
+    ((v, ctx, cc) : tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr))
+    :
+    (eval_ctx * statement_eval_res) list
+    * (SymbolicAst.expr list -> SymbolicAst.expr) =
+  let dest_place = Some (S.mk_mplace span dest ctx) in
   let lid, sid, ctx =
     match v.value with
     | VBorrow (VSharedBorrow (lid, sid) | VReservedMutBorrow (lid, sid)) ->
@@ -1383,16 +1415,25 @@ and eval_raw_ptr_view_creation (config : config) (span : Meta.span)
     (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos original.ty))
     "Unsupported: converting to a raw pointer a borrow of a value which \
      contains borrows";
-  (match original.ty with
-  | (TSlice (ty, _) | TArray (ty, _, _)) when Layouts.has_byte_repr ctx.crate ty
-    -> ()
-  | _ ->
+  (match (kind, original.ty) with
+  | RpvSlice, (TSlice (ty, _) | TArray (ty, _, _))
+    when Layouts.has_byte_repr ctx.crate ty -> ()
+  | RpvSlice, _ ->
       [%craise] span
         "[as_ptr] and [as_mut_ptr] are only supported on slices of values \
          which have a byte representation (integers, and arrays and structures \
-         of those)");
-  let ptr_sv = mk_fresh_symbolic_value span ctx call.dest.ty in
-  let rpv_origin = Hashtbl.find_opt Layouts.view_origin_hints span in
+         of those)"
+  | RpvValue, ty when Layouts.has_byte_repr ctx.crate ty -> ()
+  | RpvValue, _ ->
+      [%craise] span
+        "Raw pointers to places are only supported on values which have a byte \
+         representation (integers, and arrays and structures of those)");
+  let ptr_sv = mk_fresh_symbolic_value span ctx dest.ty in
+  let rpv_origin =
+    match kind with
+    | RpvSlice -> Hashtbl.find_opt Layouts.view_origin_hints span
+    | RpvValue -> None
+  in
   (* Reuse the memory of a previous view of the same place, if there is one *)
   let rpv_reuse, ctx =
     let parked =
@@ -1422,12 +1463,15 @@ and eval_raw_ptr_view_creation (config : config) (span : Meta.span)
   in
   let view : raw_ptr_view =
     {
-      rpv_kind = RpvSlice;
+      rpv_kind = kind;
       rpv_mut = is_mut;
       rpv_loan = lid;
       rpv_original = original;
       rpv_ptr = ptr_sv;
-      rpv_align = Hashtbl.find_opt Layouts.view_alignment_hints span;
+      rpv_align =
+        (match kind with
+        | RpvSlice -> Hashtbl.find_opt Layouts.view_alignment_hints span
+        | RpvValue -> None);
       rpv_dirty = false;
       rpv_given_back = None;
       rpv_origin;
@@ -1467,7 +1511,7 @@ and eval_raw_ptr_view_creation (config : config) (span : Meta.span)
     comp cc
       (assign_to_place config span
          (mk_tvalue_from_symbolic_value ptr_sv)
-         call.dest ctx)
+         dest ctx)
   in
   ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span cc)
 

@@ -255,7 +255,10 @@ type eended_mut_borrow_meta = {
 }
 [@@deriving show, eq, ord]
 
-type raw_ptr_view_kind = RpvSlice [@@deriving show, eq, ord]
+type raw_ptr_view_kind =
+  | RpvSlice  (** [as_ptr] or [as_mut_ptr] on a slice *)
+  | RpvValue  (** [&raw const place] or [&raw mut place] *)
+[@@deriving show, eq, ord]
 
 type raw_ptr_view = {
   rpv_kind : raw_ptr_view_kind;

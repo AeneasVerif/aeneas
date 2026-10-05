@@ -943,6 +943,7 @@ and raw_ptr_view_elem_ty (ctx : bs_ctx) (view : V.raw_ptr_view)
     (original : texpr) : ty =
   match view.rpv_kind with
   | RpvSlice -> slice_elem_ty ctx original
+  | RpvValue -> original.ty
 
 and slice_elem_ty (ctx : bs_ctx) (slice : texpr) : ty =
   match slice.ty with
@@ -1000,9 +1001,10 @@ and translate_end_raw_ptr_view (ectx : C.eval_ctx) (view : V.raw_ptr_view)
         (ctx, mk_ignored_pat mk_unit_ty)
   in
   let builtin =
-    match view.rpv_origin with
-    | None -> Some (EndRawPtrOfSlice mut)
-    | Some _ -> if view.rpv_mut then Some SyncRawPtrOfSlice else None
+    match (view.rpv_kind, view.rpv_origin) with
+    | RpvValue, _ -> Some (EndRawPtrOfValue mut)
+    | RpvSlice, None -> Some (EndRawPtrOfSlice mut)
+    | RpvSlice, Some _ -> if view.rpv_mut then Some SyncRawPtrOfSlice else None
   in
   let next_e = translate_expr e ctx in
   match builtin with
@@ -1807,10 +1809,11 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
               ]
         in
         let builtin =
-          match (view.rpv_reuse, view.rpv_align) with
-          | Some _, _ -> RawPtrOfSliceReuse mut
-          | None, None -> RawPtrOfSlice mut
-          | None, Some _ -> RawPtrOfSliceAligned mut
+          match (view.rpv_kind, view.rpv_reuse, view.rpv_align) with
+          | RpvValue, _, _ -> RawPtrOfValue mut
+          | RpvSlice, Some _, _ -> RawPtrOfSliceReuse mut
+          | RpvSlice, None, None -> RawPtrOfSlice mut
+          | RpvSlice, None, Some _ -> RawPtrOfSliceAligned mut
         in
         let func =
           {

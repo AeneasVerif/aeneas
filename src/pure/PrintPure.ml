@@ -878,6 +878,10 @@ let pure_builtin_fun_id_to_string (fid : pure_builtin_fun_id) : string =
   | RawPtrOfSliceReuse Const -> "@sliceAsPtrReuse"
   | SyncRawPtrOfSlice -> "@sliceSyncAsMutPtr"
   | FreeRawPtrOfSlice -> "@sliceFreeAsPtr"
+  | RawPtrOfValue Mut -> "@rawPtrAddrOfMut"
+  | RawPtrOfValue Const -> "@rawPtrAddrOf"
+  | EndRawPtrOfValue Mut -> "@rawPtrEndAddrOfMut"
+  | EndRawPtrOfValue Const -> "@rawPtrEndAddrOf"
   | GetTarget -> "@getTarget"
   | TargetFeatureEnabled -> "@targetFeatureEnabled"
 

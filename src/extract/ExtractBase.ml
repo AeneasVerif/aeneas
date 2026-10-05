@@ -1266,6 +1266,10 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (RawPtrOfSliceReuse Const, "Slice.as_ptr_reuse");
         (SyncRawPtrOfSlice, "Slice.sync_as_mut_ptr");
         (FreeRawPtrOfSlice, "Slice.free_as_ptr");
+        (RawPtrOfValue Mut, "RawPtr.addr_of_mut");
+        (RawPtrOfValue Const, "RawPtr.addr_of");
+        (EndRawPtrOfValue Mut, "RawPtr.end_addr_of_mut");
+        (EndRawPtrOfValue Const, "RawPtr.end_addr_of");
         (RawPtrRead, "RawPtr.read");
         (RawPtrWrite, "MutRawPtr.write");
         (GetTarget, "get_target");

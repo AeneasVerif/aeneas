@@ -1,6 +1,7 @@
 import SepLogic.Buffer
 import SepLogic.Choice
 import SepLogic.CurryIntroQimp
+import SepLogic.ExtractedAddrOf
 import SepLogic.ExtractedCasts
 import SepLogic.ExtractedLayouts
 import SepLogic.ExtractedOffsets

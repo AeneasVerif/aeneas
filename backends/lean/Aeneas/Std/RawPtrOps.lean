@@ -289,4 +289,58 @@ attribute [step_simps] core.ptr.write_bytes core.ptr.mut_ptr.RawPtrMutT.write_by
 @[simp] theorem RawPtr.bytesPtr_retype {T U : Type} {M M'} (q : RawPtr T M) :
     ((q.retype : RawPtr U M').bytesPtr : RawPtr U8 M') = q.retype := rfl
 
+
+/-! ## Raw pointers to values (`&raw const v`, `&raw mut v`) -/
+
+/-- Convert a value to a raw pointer: the value is copied into fresh memory. -/
+def RawPtr.addr_of [ByteRepr T] (v : T) : Result (ConstRawPtr T) :=
+  RawPtr.materialize [v]
+
+@[step]
+theorem RawPtr.addr_of.spec [ByteRepr T] (v : T) :
+    ⦃ emp ⦄ RawPtr.addr_of v ⦃⇓ p => p ↦ v⦄ := by
+  unfold RawPtr.addr_of
+  simp only [RawPtr.pointsTo_eq_range]
+  exact RawPtr.materialize.spec [v]
+
+def RawPtr.addr_of_mut [ByteRepr T] (v : T) : Result (MutRawPtr T) :=
+  RawPtr.materialize [v]
+
+@[step]
+theorem RawPtr.addr_of_mut.spec [ByteRepr T] (v : T) :
+    ⦃ emp ⦄ RawPtr.addr_of_mut v ⦃⇓ p => p ↦ v⦄ := by
+  unfold RawPtr.addr_of_mut
+  simp only [RawPtr.pointsTo_eq_range]
+  exact RawPtr.materialize.spec [v]
+
+/-- End a raw pointer created with `RawPtr.addr_of`: free its memory. -/
+def RawPtr.end_addr_of [ByteRepr T] (_v : T) (p : ConstRawPtr T) : Result Unit :=
+  MutRawPtr.free p.toMut
+
+@[step]
+theorem RawPtr.end_addr_of.spec [ByteRepr T] (v : T) (p : ConstRawPtr T) :
+    ⦃ p ↦ v ⦄ RawPtr.end_addr_of v p ⦃⇓ emp⦄ := by
+  unfold RawPtr.end_addr_of
+  have := MutRawPtr.free.spec p.toMut v
+  rwa [RawPtr.pointsTo_toMut] at this
+
+/-- End a raw pointer created with `RawPtr.addr_of_mut`: read the value back
+and free its memory. -/
+def RawPtr.end_addr_of_mut [ByteRepr T] (_v : T) (p : MutRawPtr T) : Result T := do
+  let v ← p.read
+  MutRawPtr.free p
+  ok v
+
+@[step]
+theorem RawPtr.end_addr_of_mut.spec [ByteRepr T] (v' v : T) (p : MutRawPtr T) :
+    ⦃ p ↦ v ⦄ RawPtr.end_addr_of_mut v' p ⦃⇓ r => ⌜r = v⌝⦄ := by
+  unfold RawPtr.end_addr_of_mut
+  apply WP.ispec_bind (RawPtr.read.spec p v) (sep_emp_r _).mpr
+  intro r
+  rw [sep_emp_r_eq, sep_comm_eq]
+  apply WP.ispec_bind (MutRawPtr.free.spec p v) (entails_refl _)
+  intro _
+  rw [sep_emp_l_eq]
+  exact (ispec_ok _).2 (entails_refl _)
+
 end Aeneas.Std

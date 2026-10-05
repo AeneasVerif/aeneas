@@ -146,6 +146,10 @@ type pure_builtin_fun_id =
   | SyncRawPtrOfSlice
       (** Same as [EndRawPtrOfSlice Mut], but doesn't free the memory *)
   | FreeRawPtrOfSlice
+  | RawPtrOfValue of mutability
+      (** [&raw const v] and [&raw mut v]: the value is copied into fresh memory
+      *)
+  | EndRawPtrOfValue of mutability
   | RawPtrRead
   | RawPtrWrite
   | ResultUnwrapMut
