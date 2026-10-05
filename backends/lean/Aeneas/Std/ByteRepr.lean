@@ -74,4 +74,94 @@ theorem flatMap_encode_of_decodeAll {T : Type} [ByteRepr T] {bytes : List Byte}
 
 end ByteRepr
 
+/-- A fixed-size encoding of the values of `α` as bytes: a `ByteRepr` without the
+alignment.  Codecs compose, which is how the byte representations of arrays and
+structs are built. -/
+structure Codec (α : Type) where
+  size : Nat
+  encode : α → List Byte
+  decode : List Byte → Option α
+  length_encode (x : α) : (encode x).length = size
+  decode_encode (x : α) : decode (encode x) = some x
+  encode_of_decode {bytes : List Byte} {x : α} :
+    decode bytes = some x → encode x = bytes
+
+namespace Codec
+
+/-- The codec of a type with a byte representation. -/
+def ofByteRepr (α : Type) [ByteRepr α] : Codec α where
+  size := ByteRepr.size α
+  encode := ByteRepr.encode
+  decode := ByteRepr.decode
+  length_encode := ByteRepr.length_encode
+  decode_encode := ByteRepr.decode_encode
+  encode_of_decode := ByteRepr.encode_of_decode
+
+/-- `n` padding bytes, which are zero. -/
+def pad (n : Nat) : Codec Unit where
+  size := n
+  encode _ := List.replicate n 0
+  decode bytes := if bytes = List.replicate n 0 then some () else none
+  length_encode _ := by simp
+  decode_encode _ := by simp
+  encode_of_decode {bytes x} h := by
+    split at h
+    · simp_all
+    · cases h
+
+/-- The concatenation of two codecs. -/
+def prod (ca : Codec α) (cb : Codec β) : Codec (α × β) where
+  size := ca.size + cb.size
+  encode p := ca.encode p.1 ++ cb.encode p.2
+  decode bytes := do
+    let a ← ca.decode (bytes.take ca.size)
+    let b ← cb.decode (bytes.drop ca.size)
+    pure (a, b)
+  length_encode p := by simp [ca.length_encode, cb.length_encode]
+  decode_encode p := by
+    have h := ca.length_encode p.1
+    simp [List.take_left' h, List.drop_left' h, ca.decode_encode, cb.decode_encode]
+  encode_of_decode {bytes x} h := by
+    simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def,
+      Option.some.injEq] at h
+    obtain ⟨a, ha, b, hb, rfl⟩ := h
+    simp [ca.encode_of_decode ha, cb.encode_of_decode hb]
+
+/-- Transport a codec along a bijection. -/
+def map (c : Codec β) (f : α → β) (g : β → α)
+    (hgf : ∀ a, g (f a) = a) (hfg : ∀ b, f (g b) = b) : Codec α where
+  size := c.size
+  encode a := c.encode (f a)
+  decode bytes := (c.decode bytes).map g
+  length_encode a := c.length_encode (f a)
+  decode_encode a := by simp [c.decode_encode, hgf]
+  encode_of_decode {bytes x} h := by
+    simp only [Option.map_eq_some_iff] at h
+    obtain ⟨b, hb, rfl⟩ := h
+    rw [hfg]; exact c.encode_of_decode hb
+
+end Codec
+
+/-- A byte representation from a codec and an alignment. -/
+@[reducible] def ByteRepr.ofCodec (c : Codec α) (align : Nat) (h : align ∣ c.size) : ByteRepr α where
+  size := c.size
+  align := align
+  align_dvd_size := h
+  encode := c.encode
+  decode := c.decode
+  length_encode := c.length_encode
+  decode_encode := c.decode_encode
+  encode_of_decode := c.encode_of_decode
+
+
+/-- In a type with a zero-sized byte representation, all values are equal. -/
+theorem ByteRepr.eq_of_size_zero [ByteRepr T] (h : ByteRepr.size T = 0) (x y : T) : x = y := by
+  have hx : ByteRepr.encode x = [] :=
+    List.eq_nil_of_length_eq_zero (by rw [ByteRepr.length_encode, h])
+  have hy : ByteRepr.encode y = [] :=
+    List.eq_nil_of_length_eq_zero (by rw [ByteRepr.length_encode, h])
+  have := ByteRepr.decode_encode x
+  rw [hx, ← hy, ByteRepr.decode_encode] at this
+  exact (Option.some.inj this).symm
+
 end Aeneas.Std

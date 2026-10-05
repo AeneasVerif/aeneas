@@ -800,7 +800,7 @@ example : ⦃ emp ⦄ MutRawPtr.alloc 0#u32 ⦃⇓ _ => ⌜True⌝⦄ := by
 example : ¬ ∃ q, MutRawPtr.alloc 0#u32 = Result.ok q := by
   rintro ⟨q, hq⟩
   simp [Aeneas.Std.MutRawPtr.alloc, Aeneas.Std.RawPtr.allocArray,
-    Result.guardedModify] at hq
+    Aeneas.Std.RawPtr.allocArrayAligned, Result.guardedModify] at hq
 
 /-! ## 9. Examples carried over from `Aeneas.Std.WP`
 

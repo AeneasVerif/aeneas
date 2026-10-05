@@ -2345,6 +2345,91 @@ let fix_closure_signature_regions (crate : crate) (f : fun_decl) : fun_decl =
       else f
   | _ -> f
 
+(** Record the alignment of the places converted to raw pointers with
+    [place.as_slice().as_ptr()] (or [as_mut_slice]/[as_mut_ptr]), when it is
+    larger than the alignment of the elements: see
+    [Layouts.view_alignment_hints]. *)
+let compute_view_alignment_hints (crate : crate) (f : fun_decl) : fun_decl =
+  match (f.body, Layouts.target_ptr_size crate) with
+  | StructuredBody body, Some ptr_size ->
+      let matches (pat : string) (fid : FunDeclId.id) : bool =
+        match FunDeclId.Map.find_opt fid crate.fun_decls with
+        | None -> false
+        | Some d ->
+            ExtractName.match_name crate
+              (NameMatcher.parse_pattern pat)
+              d.item_meta.name
+      in
+      let is_as_slice fid =
+        matches "core::array::{[@T; @N]}::as_slice" fid
+        || matches "core::array::{[@T; @N]}::as_mut_slice" fid
+      in
+      let is_as_ptr fid =
+        matches "core::slice::{[@T]}::as_ptr" fid
+        || matches "core::slice::{[@T]}::as_mut_ptr" fid
+      in
+      let call_fid (call : call) : FunDeclId.id option =
+        match call.func with
+        | FnOpRegular { kind = Fun fid; _ } -> Some fid
+        | _ -> None
+      in
+      let local_of_operand (op : operand) : LocalId.id option =
+        match op with
+        | Move { kind = PlaceLocal id; _ } | Copy { kind = PlaceLocal id; _ } ->
+            Some id
+        | _ -> None
+      in
+      let visit_statements (sts : statement list) : unit =
+        let refs = ref LocalId.Map.empty in
+        let slices = ref LocalId.Map.empty in
+        List.iter
+          (fun (st : statement) ->
+            match st.kind with
+            | Assign ({ kind = PlaceLocal t; _ }, RvRef (place, _, _)) ->
+                refs := LocalId.Map.add t place !refs
+            | Call (call, _) -> (
+                match (call_fid call, call.args, call.dest.kind) with
+                | Some fid, [ arg ], PlaceLocal u when is_as_slice fid -> (
+                    match local_of_operand arg with
+                    | Some t when LocalId.Map.mem t !refs ->
+                        slices :=
+                          LocalId.Map.add u (LocalId.Map.find t !refs) !slices
+                    | _ -> ())
+                | Some fid, [ arg ], _ when is_as_ptr fid -> (
+                    match local_of_operand arg with
+                    | Some u when LocalId.Map.mem u !slices -> (
+                        let place = LocalId.Map.find u !slices in
+                        let elem_align =
+                          match place.ty with
+                          | TArray (ty, _, _) ->
+                              Layouts.type_align crate ptr_size ty
+                          | _ -> None
+                        in
+                        match
+                          (Layouts.place_align crate ptr_size place, elem_align)
+                        with
+                        | Some align, Some elem_align when align > elem_align ->
+                            Hashtbl.replace Layouts.view_alignment_hints st.span
+                              align
+                        | _ -> ())
+                    | _ -> ())
+                | _ -> ())
+            | _ -> ())
+          sts
+      in
+      let visitor =
+        object
+          inherit [_] iter_statement as super
+
+          method! visit_block env block =
+            visit_statements block.statements;
+            super#visit_block env block
+        end
+      in
+      visitor#visit_block () body.body;
+      f
+  | _ -> f
+
 let apply_passes (crate : crate) : crate =
   (* Passes that apply to the whole crate *)
   let crate = update_array_default crate in
@@ -2363,6 +2448,7 @@ let apply_passes (crate : crate) : crate =
       ("simplify_panics", simplify_panics);
       ("decompose_global_accesses", decompose_global_accesses);
       ("refresh_statement_ids", refresh_statement_ids);
+      ("compute_view_alignment_hints", compute_view_alignment_hints);
     ]
   in
   (* Attempt to apply a pass: if it fails we replace the body by [None] *)

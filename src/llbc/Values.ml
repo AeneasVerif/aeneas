@@ -263,6 +263,10 @@ type raw_ptr_view = {
   rpv_loan : loan_id;
   rpv_original : mvalue;
   rpv_ptr : msymbolic_value;
+  rpv_align : int option;
+      (** The alignment of the address converted to a raw pointer, if it is
+          larger than the alignment of the elements (see
+          [Layouts.view_alignment_hints]) *)
   rpv_dirty : bool;
   rpv_given_back : msymbolic_value option;
 }

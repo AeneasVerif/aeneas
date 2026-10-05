@@ -136,6 +136,9 @@ type pure_builtin_fun_id =
           simplified away (in a backend like Lean). *)
   | Discriminant  (** Discriminant read *)
   | RawPtrOfSlice of mutability
+  | RawPtrOfSliceAligned of mutability
+      (** Same as [RawPtrOfSlice], but the memory is aligned to the value given
+          as first argument *)
   | EndRawPtrOfSlice of mutability
   | RawPtrRead
   | RawPtrWrite

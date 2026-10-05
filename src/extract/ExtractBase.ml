@@ -1258,6 +1258,8 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (ResultUnwrapMut, "core.result.Result.unwrap.mut");
         (RawPtrOfSlice Mut, "Slice.as_mut_ptr");
         (RawPtrOfSlice Const, "Slice.as_ptr");
+        (RawPtrOfSliceAligned Mut, "Slice.as_mut_ptr_aligned");
+        (RawPtrOfSliceAligned Const, "Slice.as_ptr_aligned");
         (EndRawPtrOfSlice Mut, "Slice.end_as_mut_ptr");
         (EndRawPtrOfSlice Const, "Slice.end_as_ptr");
         (RawPtrRead, "RawPtr.read");

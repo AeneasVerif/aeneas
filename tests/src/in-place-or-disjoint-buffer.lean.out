@@ -1,5 +1,5 @@
 [[92mInfo[39m ] Imported: tests/llbc/in_place_or_disjoint_buffer.llbc
-[[91mError[39m] [as_ptr] and [as_mut_ptr] are only supported on slices of integers
+[[91mError[39m] [as_ptr] and [as_mut_ptr] are only supported on slices of values which have a byte representation (integers, and arrays and structures of those)
 Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 15:18-15:37
-Compiler source: interp/InterpStatements.ml, line 1382
+Compiler source: interp/InterpStatements.ml, line 1383
 

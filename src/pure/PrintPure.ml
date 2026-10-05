@@ -870,6 +870,8 @@ let pure_builtin_fun_id_to_string (fid : pure_builtin_fun_id) : string =
   | RawPtrWrite -> "@rawPtrWrite"
   | RawPtrOfSlice Mut -> "@sliceAsMutPtr"
   | RawPtrOfSlice Const -> "@sliceAsPtr"
+  | RawPtrOfSliceAligned Mut -> "@sliceAsMutPtrAligned"
+  | RawPtrOfSliceAligned Const -> "@sliceAsPtrAligned"
   | EndRawPtrOfSlice Mut -> "@sliceEndAsMutPtr"
   | EndRawPtrOfSlice Const -> "@sliceEndAsPtr"
   | GetTarget -> "@getTarget"

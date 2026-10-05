@@ -83,6 +83,30 @@ theorem Slice.as_mut_ptr.spec {T : Type} [ByteRepr T] (s : Slice T) :
     ⦃ emp ⦄ s.as_mut_ptr ⦃⇓ p => p ↦* s.val⦄ :=
   RawPtr.materialize.spec s.val
 
+/-- `Slice.as_ptr`, for a slice stored at an address aligned to `align`: we use
+this when the alignment of the place the slice comes from is larger than that
+of its elements (for instance because of `#[repr(align(n))]`). -/
+def Slice.as_ptr_aligned {T : Type} [ByteRepr T] (align : Nat) (s : Slice T) :
+    Result (ConstRawPtr T) :=
+  RawPtr.materializeAligned align s.val
+
+@[step]
+theorem Slice.as_ptr_aligned.spec {T : Type} [ByteRepr T] (align : Nat) (s : Slice T) :
+    ⦃ emp ⦄ s.as_ptr_aligned align
+      ⦃⇓ p => ⌜p.AlignedTo (Nat.lcm align (ByteRepr.align T))⌝ ∗ p ↦* s.val⦄ :=
+  RawPtr.materializeAligned.spec align s.val
+
+/-- See `Slice.as_ptr_aligned`. -/
+def Slice.as_mut_ptr_aligned {T : Type} [ByteRepr T] (align : Nat) (s : Slice T) :
+    Result (MutRawPtr T) :=
+  RawPtr.materializeAligned align s.val
+
+@[step]
+theorem Slice.as_mut_ptr_aligned.spec {T : Type} [ByteRepr T] (align : Nat) (s : Slice T) :
+    ⦃ emp ⦄ s.as_mut_ptr_aligned align
+      ⦃⇓ p => ⌜p.AlignedTo (Nat.lcm align (ByteRepr.align T))⌝ ∗ p ↦* s.val⦄ :=
+  RawPtr.materializeAligned.spec align s.val
+
 instance {α : Type u} : GetElem (Slice α) Nat α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i h
 

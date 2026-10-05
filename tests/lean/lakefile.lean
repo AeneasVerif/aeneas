@@ -100,6 +100,7 @@ package «tests» {}
 @[default_target] lean_lib Print
 @[default_target] lean_lib Range
 @[default_target] lean_lib RawPointerCasts
+@[default_target] lean_lib RawPointerLayouts
 @[default_target] lean_lib RawPointers
 @[default_target] lean_lib RenameAttribute
 @[default_target] lean_lib RustBorrowCheckIssues
@@ -117,3 +118,4 @@ package «tests» {}
 @[default_target] lean_lib Tutorial
 @[default_target] lean_lib Vec
 @[default_target] lean_lib VecIter
+@[default_target] lean_lib ZmijRawPointers

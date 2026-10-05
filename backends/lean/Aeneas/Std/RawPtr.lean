@@ -87,6 +87,11 @@ def toMut (q : ConstRawPtr T) : MutRawPtr T :=
 def retype (q : RawPtr T M) : RawPtr U M' :=
   ⟨q.base, q.offset⟩
 
+/-- Whether the address of `q` is a multiple of `n`: `n` divides both the
+alignment of the allocation and the offset into it. -/
+def AlignedTo (q : RawPtr T M) (n : Nat) : Prop :=
+  n ∣ q.base.align ∧ n ∣ q.offset
+
 /-- Whether the address of `q` is a multiple of the alignment of `T`: the
 alignment of `T` divides both the alignment of the allocation, which is that of
 the type it was allocated at, and the offset into it. -/
@@ -159,6 +164,13 @@ theorem add_add [ByteRepr T] (q : RawPtr T M) (i j : Nat) :
 
 @[simp] theorem aligned_retype_self [ByteRepr T] (q : RawPtr T M) :
     (q.retype : RawPtr T M').Aligned ↔ q.Aligned := Iff.rfl
+
+@[simp] theorem alignedTo_retype (q : RawPtr T M) (n : Nat) :
+    (q.retype : RawPtr U M').AlignedTo n ↔ q.AlignedTo n := Iff.rfl
+
+theorem aligned_of_alignedTo [ByteRepr T] {q : RawPtr T M} {n : Nat}
+    (h : q.AlignedTo n) (hn : ByteRepr.align T ∣ n) : q.Aligned :=
+  ⟨Nat.dvd_trans hn h.1, Nat.dvd_trans hn h.2⟩
 
 theorem aligned_retype_of_dvd [ByteRepr T] [ByteRepr T'] {q : RawPtr T M}
     (hAlign : ByteRepr.align T' ∣ ByteRepr.align T) (hAligned : q.Aligned) :
@@ -405,36 +417,55 @@ theorem disjoint_singleton [ByteRepr T] {q r : RawPtr T M} {value₁ value₂ : 
 
 end RawPtr
 
-/-- Allocate `values` consecutively and pass a pointer to the first one to `mk`. -/
-def RawPtr.allocArray [ByteRepr T] {β : Type} (values : List T) (mk : MutRawPtr T → β) :
-    Result β :=
+/-- Allocate `values` consecutively, at an address aligned to `align` (and to the
+alignment of `T`), and pass a pointer to the first one to `mk`.  The alignment
+of the allocation is that of the place the values come from, which may be
+larger than that of `T` (for instance because of `#[repr(align(n))]`). -/
+def RawPtr.allocArrayAligned [ByteRepr T] {β : Type} (align : Nat) (values : List T)
+    (mk : MutRawPtr T → β) : Result β :=
   Result.guardedModify (fun _ => True) fun h _ =>
-    (mk ⟨(Heap.freshLoc h (ByteRepr.align T)).1, (Heap.freshLoc h (ByteRepr.align T)).2⟩,
-      Heap.bytes (Heap.freshLoc h (ByteRepr.align T)) (values.flatMap ByteRepr.encode) ∪ h)
+    let loc := Heap.freshLoc h (Nat.lcm align (ByteRepr.align T))
+    (mk ⟨loc.1, loc.2⟩, Heap.bytes loc (values.flatMap ByteRepr.encode) ∪ h)
 
 @[step]
-theorem RawPtr.allocArray.spec [ByteRepr T] {β : Type} (values : List T)
+theorem RawPtr.allocArrayAligned.spec [ByteRepr T] {β : Type} (align : Nat) (values : List T)
     (mk : MutRawPtr T → β) (post : β → IProp)
-    (hPost : ∀ q : MutRawPtr T, q ↦* values ⊢ post (mk q)) :
-    ⦃ emp ⦄ RawPtr.allocArray values mk ⦃⇓ result => post result⦄ := by
+    (hPost : ∀ q : MutRawPtr T, ⌜q.AlignedTo (Nat.lcm align (ByteRepr.align T))⌝ ∗
+      q ↦* values ⊢ post (mk q)) :
+    ⦃ emp ⦄ RawPtr.allocArrayAligned align values mk ⦃⇓ result => post result⦄ := by
   apply ispec_guardedModify
   intro h _ frame hCompatible
   have hFresh :
       PartialCommMonoid.Compatible
-        (Heap.bytes (Heap.freshLoc (h ∪ frame) (ByteRepr.align T))
+        (Heap.bytes (Heap.freshLoc (h ∪ frame) (Nat.lcm align (ByteRepr.align T)))
           (values.flatMap ByteRepr.encode))
         (h ∪ frame) :=
     Heap.compatible_fresh _ _ _
   obtain ⟨hFreshH, hFreshFrame⟩ :=
     (PartialCommMonoid.compatible_assoc
-      (Heap.bytes (Heap.freshLoc (h ∪ frame) (ByteRepr.align T))
+      (Heap.bytes (Heap.freshLoc (h ∪ frame) (Nat.lcm align (ByteRepr.align T)))
         (values.flatMap ByteRepr.encode))
         h frame).mpr ⟨hCompatible, hFresh⟩
   refine ⟨trivial, _, hFreshFrame,
     (PartialCommMonoid.union_assoc hFreshH hFreshFrame).symm, ?_⟩
   apply hPost
-  rw [RawPtr.pointsToRange_eq_owns _ _ ⟨by simp, by simp⟩]
+  apply (sep_pure_l _ _ _).mpr
+  refine ⟨⟨by simp, by simp⟩, ?_⟩
+  rw [RawPtr.pointsToRange_eq_owns _ _ ⟨by simp [Nat.dvd_lcm_right], by simp⟩]
   exact Heap.Sub.union_left hFreshH
+
+/-- Allocate `values` consecutively and pass a pointer to the first one to `mk`. -/
+def RawPtr.allocArray [ByteRepr T] {β : Type} (values : List T) (mk : MutRawPtr T → β) :
+    Result β :=
+  RawPtr.allocArrayAligned (ByteRepr.align T) values mk
+
+@[step]
+theorem RawPtr.allocArray.spec [ByteRepr T] {β : Type} (values : List T)
+    (mk : MutRawPtr T → β) (post : β → IProp)
+    (hPost : ∀ q : MutRawPtr T, q ↦* values ⊢ post (mk q)) :
+    ⦃ emp ⦄ RawPtr.allocArray values mk ⦃⇓ result => post result⦄ :=
+  RawPtr.allocArrayAligned.spec _ _ _ _ fun q h hq =>
+    hPost q h ((sep_pure_l _ _ h).mp hq).2
 
 /-- Materialize a list as fresh memory with the requested pointer mutability. -/
 def RawPtr.materialize [ByteRepr T] (values : List T) : Result (RawPtr T M) :=
@@ -445,6 +476,20 @@ theorem RawPtr.materialize.spec [ByteRepr T] (values : List T) :
     ⦃ emp ⦄ RawPtr.materialize (M := M) values
       ⦃⇓ p => p ↦* values⦄ :=
   RawPtr.allocArray.spec _ _ _ fun q => by
+    rw [RawPtr.pointsToRange_retype_eq]
+    exact entails_refl _
+
+/-- Materialize a list as fresh memory aligned to `align` (and to the alignment of
+`T`). -/
+def RawPtr.materializeAligned [ByteRepr T] (align : Nat) (values : List T) :
+    Result (RawPtr T M) :=
+  RawPtr.allocArrayAligned align values fun q => q.retype
+
+@[step]
+theorem RawPtr.materializeAligned.spec [ByteRepr T] (align : Nat) (values : List T) :
+    ⦃ emp ⦄ RawPtr.materializeAligned (M := M) align values
+      ⦃⇓ p => ⌜p.AlignedTo (Nat.lcm align (ByteRepr.align T))⌝ ∗ p ↦* values⦄ :=
+  RawPtr.allocArrayAligned.spec _ _ _ _ fun q => by
     rw [RawPtr.pointsToRange_retype_eq]
     exact entails_refl _
 

@@ -2157,6 +2157,124 @@ let extract_type_decl_record_field_projectors_simp_lemmas (ctx : extraction_ctx)
 
     Note that all the names used for extraction should already have been
     registered. *)
+(** Extract the byte representation of a structure whose values are accessed
+    through raw pointers (see [Layouts.byte_repr_structs]): the encodings of
+    the fields, in the order of their offsets, separated by zero padding, as
+    given by the layout computed by rustc. *)
+let extract_type_decl_byte_repr (ctx : extraction_ctx) (fmt : F.formatter)
+    (decl : type_decl) (layout : Layouts.struct_layout) : unit =
+  let span = decl.item_meta.span in
+  match decl.kind with
+  | Opaque | Enum _ -> ()
+  | Struct fields ->
+      let def_name = ctx_get_local_type span decl.def_id ctx in
+      (* The segments of the encoding *)
+      let segments =
+        let cur = ref 0 in
+        let segs =
+          List.concat_map
+            (fun (field_id, offset) ->
+              let field = FieldId.nth fields field_id in
+              let size =
+                [%unwrap_with_span] span
+                  (Layouts.fixed_size ctx.trans_ctx.crate
+                     (FieldId.nth
+                        (match
+                           (TypeDeclId.Map.find decl.def_id
+                              ctx.trans_ctx.crate.type_decls)
+                             .kind
+                         with
+                        | Struct fields -> fields
+                        | _ -> [%internal_error] span)
+                        field_id)
+                       .field_ty)
+                  "Internal error"
+              in
+              let pad = if offset > !cur then [ `Pad (offset - !cur) ] else [] in
+              cur := offset + size;
+              pad @ [ `Field (field_id, field) ])
+            layout.fields
+        in
+        if layout.size > !cur then segs @ [ `Pad (layout.size - !cur) ]
+        else if segs = [] then [ `Pad 0 ]
+        else segs
+      in
+      let num = List.length segments in
+      let codec_to_string (seg : [ `Pad of int | `Field of FieldId.id * field ])
+          : string =
+        match seg with
+        | `Pad n -> "(Codec.pad " ^ string_of_int n ^ ")"
+        | `Field (_, field) ->
+            let ty =
+              let buf = Buffer.create 16 in
+              let bfmt = F.formatter_of_buffer buf in
+              F.pp_set_margin bfmt 10000;
+              extract_ty span ctx bfmt TypeDeclId.Set.empty ~inside:true
+                field.field_ty;
+              F.pp_print_flush bfmt ();
+              Buffer.contents buf
+            in
+            "(Codec.ofByteRepr " ^ ty ^ ")"
+      in
+      let rec codec (segs : _ list) : string =
+        match segs with
+        | [] -> [%internal_error] span
+        | [ seg ] -> codec_to_string seg
+        | seg :: segs -> "(Codec.prod " ^ codec_to_string seg ^ " " ^ codec segs ^ ")"
+      in
+      let to_tuple =
+        "(fun x => ("
+        ^ String.concat ", "
+            (List.map
+               (fun seg ->
+                 match seg with
+                 | `Pad _ -> "()"
+                 | `Field (field_id, _) ->
+                     "x."
+                     ^ ctx_get_field span (TAdtId decl.def_id) field_id ctx)
+               segments)
+        ^ "))"
+      in
+      let of_tuple =
+        let access i =
+          let rec snds k = if k = 0 then "p" else snds (k - 1) ^ ".2" in
+          if num = 1 then "p" else if i < num - 1 then snds i ^ ".1" else snds i
+        in
+        let positions =
+          List.filter_map
+            (fun x -> x)
+            (List.mapi
+               (fun i seg ->
+                 match seg with
+                 | `Field (field_id, _) -> Some (field_id, access i)
+                 | `Pad _ -> None)
+               segments)
+        in
+        let args =
+          List.map
+            (fun (field_id, _) -> List.assoc field_id positions)
+            (List.mapi (fun i _ -> (FieldId.of_int i, ())) fields)
+        in
+        "(fun p => ⟨" ^ String.concat ", " args ^ "⟩)"
+      in
+      F.pp_print_space fmt ();
+      F.pp_open_vbox fmt ctx.indent_incr;
+      F.pp_print_string fmt
+        ("instance " ^ def_name ^ ".instByteRepr : ByteRepr " ^ def_name ^ " :=");
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "ByteRepr.ofCodec";
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt ("  (" ^ codec segments ^ ".map");
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt ("    " ^ to_tuple ^ " " ^ of_tuple);
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "    (by intro x; cases x; rfl) (by intro p; rfl))";
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt
+        ("  " ^ string_of_int layout.align ^ " (by decide)");
+      F.pp_close_box fmt ();
+      F.pp_print_break fmt 0 0
+
 let extract_type_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (decl : type_decl) : unit =
   match backend () with
@@ -2170,6 +2288,12 @@ let extract_type_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
         if backend () = Coq then
           extract_type_decl_coq_arguments ctx fmt kind decl;
         extract_type_decl_record_field_projectors ctx fmt kind decl;
-        if backend () = Lean then
+        if backend () = Lean then (
           extract_type_decl_record_field_projectors_simp_lemmas ctx fmt kind
-            decl)
+            decl;
+          let crate = ctx.trans_ctx.crate in
+          if TypeDeclId.Set.mem decl.def_id (Layouts.get_byte_repr_structs crate)
+          then
+            match Layouts.struct_layout crate decl.def_id with
+            | Some layout -> extract_type_decl_byte_repr ctx fmt decl layout
+            | None -> ()))

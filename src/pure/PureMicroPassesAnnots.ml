@@ -205,8 +205,11 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
               in
               (known_f_ty, [ collection_ty; TLiteral (TUInt Usize) ], false)
           | ResultUnwrapMut -> (hole, mk_holes (), false)
-          | RawPtrOfSlice _ | EndRawPtrOfSlice _ | RawPtrRead | RawPtrWrite ->
-              (f.ty, mk_known (), false)
+          | RawPtrOfSlice _
+          | RawPtrOfSliceAligned _
+          | EndRawPtrOfSlice _
+          | RawPtrRead
+          | RawPtrWrite -> (f.ty, mk_known (), false)
           | GetTarget -> (f.ty, mk_known (), false)
           | TargetFeatureEnabled -> (f.ty, mk_known (), false)
         end

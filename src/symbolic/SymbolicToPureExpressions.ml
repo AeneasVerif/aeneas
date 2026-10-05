@@ -1757,16 +1757,39 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         let original = tvalue_to_texpr ctx ectx view.rpv_original in
         let elem_ty = raw_ptr_view_elem_ty ctx view original in
         let mut = if view.rpv_mut then Mut else Const in
+        let args =
+          match view.rpv_align with
+          | None -> [ original ]
+          | Some align ->
+              [
+                {
+                  e = Const (VPureNat (Z.of_int align));
+                  ty = TLiteral TPureNat;
+                };
+                original;
+              ]
+        in
+        let builtin =
+          match view.rpv_align with
+          | None -> RawPtrOfSlice mut
+          | Some _ -> RawPtrOfSliceAligned mut
+        in
         let func =
           {
-            id = FunOrOp (Fun (Pure (RawPtrOfSlice mut)));
+            id = FunOrOp (Fun (Pure builtin));
             generics = mk_generic_args_from_types [ elem_ty ];
           }
         in
         let func : texpr =
-          { e = Qualif func; ty = mk_arrow original.ty (mk_result_ty var.ty) }
+          {
+            e = Qualif func;
+            ty =
+              mk_arrows
+                (List.map (fun (e : texpr) -> e.ty) args)
+                (mk_result_ty var.ty);
+          }
         in
-        ([%add_loc] mk_app ctx.span func original, true)
+        ([%add_loc] mk_apps ctx.span func args, true)
     | VaRawPtrRead ptr ->
         check_can_perform_heap_op ctx;
         let ptr = tvalue_to_texpr ctx ectx ptr in

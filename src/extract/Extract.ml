@@ -1050,8 +1050,11 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
               Some
                 { explicit_types = [ Implicit ]; explicit_const_generics = [] }
           | Pure
-              (RawPtrOfSlice _ | EndRawPtrOfSlice _ | RawPtrRead | RawPtrWrite)
-            ->
+              ( RawPtrOfSlice _
+              | RawPtrOfSliceAligned _
+              | EndRawPtrOfSlice _
+              | RawPtrRead
+              | RawPtrWrite ) ->
               Some
                 { explicit_types = [ Implicit ]; explicit_const_generics = [] }
           | Pure ResultUnwrapMut ->

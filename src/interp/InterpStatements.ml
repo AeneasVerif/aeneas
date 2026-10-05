@@ -1377,10 +1377,13 @@ and eval_raw_ptr_view_creation (config : config) (span : Meta.span)
     "Unsupported: converting to a raw pointer a borrow of a value which \
      contains borrows";
   (match original.ty with
-  | TSlice (TScalar (TInteger _), _) | TArray (TScalar (TInteger _), _, _) -> ()
+  | (TSlice (ty, _) | TArray (ty, _, _)) when Layouts.has_byte_repr ctx.crate ty
+    -> ()
   | _ ->
       [%craise] span
-        "[as_ptr] and [as_mut_ptr] are only supported on slices of integers");
+        "[as_ptr] and [as_mut_ptr] are only supported on slices of values \
+         which have a byte representation (integers, and arrays and structures \
+         of those)");
   let ptr_sv = mk_fresh_symbolic_value span ctx call.dest.ty in
   let view : raw_ptr_view =
     {
@@ -1389,6 +1392,7 @@ and eval_raw_ptr_view_creation (config : config) (span : Meta.span)
       rpv_loan = lid;
       rpv_original = original;
       rpv_ptr = ptr_sv;
+      rpv_align = Hashtbl.find_opt Layouts.view_alignment_hints span;
       rpv_dirty = false;
       rpv_given_back = None;
     }

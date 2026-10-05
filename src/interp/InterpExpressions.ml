@@ -1294,6 +1294,23 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
     (bkind : borrow_kind) (ctx : eval_ctx) :
     tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   match bkind with
+  | (BShared | BShallow) when Option.is_some (raw_ptr_deref_place span p) ->
+      (* A shared reference to the value a raw pointer points to ([&*p]): we
+         read the value, and borrow it. This is sound because the value can't be
+         modified while the reference is live. *)
+      let v, ctx, cc = eval_operand config span (Copy p) ctx in
+      let bid = ctx.fresh_borrow_id () in
+      let sid = ctx.fresh_shared_borrow_id () in
+      let loan : tvalue = { value = VLoan (VSharedLoan (bid, v)); ty = v.ty } in
+      let borrow : tvalue =
+        {
+          value = VBorrow (VSharedBorrow (bid, sid));
+          ty = TRef (RErased, v.ty, RShared);
+        }
+      in
+      let dummy_id = ctx.fresh_dummy_var_id () in
+      let ctx = ctx_push_dummy_var ctx dummy_id loan in
+      (borrow, ctx, cc)
   | BShared | BTwoPhaseMut | BShallow ->
       (* **REMARK**: we initially treated shallow borrows like shared borrows.
          In practice this restricted the behaviour too much, so for now we

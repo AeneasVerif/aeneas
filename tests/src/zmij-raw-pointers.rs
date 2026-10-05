@@ -1,4 +1,3 @@
-//@ [lean] known-failure
 //@ [!lean] skip
 //@ charon-args=--rustc-arg=--cfg=miri
 // Verbatim excerpt of https://github.com/dtolnay/zmij at
