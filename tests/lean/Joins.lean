@@ -33,11 +33,8 @@ def opt_add_2 (b : Bool) (x : Std.U32) : Result Std.U32 := do
   let y ← if b
             then ok 1#u32
             else ok 0#u32
-  let z ← if b
-            then ok 1#u32
-            else ok 0#u32
   let i ← x + y
-  i + z
+  i + y
 
 /-- [joins::opt_add_1_or_panic]:
     Source: 'tests/src/joins.rs', lines 15:0-18:1 -/
@@ -90,5 +87,32 @@ def call_choose
     else ok (y, fun i => (x, i))
   let z1 ← z + 1#u32
   ok (back z1)
+
+/-- [joins::SharedBool]
+    Source: 'tests/src/joins.rs', lines 58:0-60:1 -/
+structure SharedBool where
+  value : Bool
+
+/-- [joins::shared_bool_scrutinee]:
+    Source: 'tests/src/joins.rs', lines 62:0-69:1 -/
+def shared_bool_scrutinee
+  (k : SharedBool) (x : Std.U32) (y : Std.U32) : Result Std.U32 := do
+  let f ← if k.value
+            then ok x
+            else ok y
+  if x >= f
+  then ok 1#u32
+  else ok 0#u32
+
+/-- [joins::shared_integer_scrutinee]:
+    Source: 'tests/src/joins.rs', lines 71:0-82:1 -/
+def shared_integer_scrutinee
+  (n : Std.U8) (x : Std.U32) (y : Std.U32) : Result Std.U32 := do
+  let f ← match n with
+            | 0#uscalar => ok x
+            | _ => ok y
+  if x >= f
+  then ok 1#u32
+  else ok 0#u32
 
 end joins

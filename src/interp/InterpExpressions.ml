@@ -221,8 +221,16 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
       (* Check if the symbolic value contains borrows: if it does, we need to
          introduce au auxiliary region abstraction (see document of the function) *)
       if not (ty_has_borrows (Some span) ctx.type_ctx.type_infos v.ty) then
-        (* No borrows: do nothing *)
-        (v, v, ctx, fun e -> e)
+        (* No borrows: refresh the copied value. This prevents a later
+           expansion of the copy from also expanding the copied value,
+           which may be stored in a frozen abstraction. *)
+        let copied_sv = mk_fresh_symbolic_value span ctx sp.sv_ty in
+        let copied = mk_tvalue_from_symbolic_value copied_sv in
+        let cf e =
+          SymbolicAst.IntroSymbolic
+            (ctx, None, copied_sv, SymbolicAst.VaSingleValue v, e)
+        in
+        (v, copied, ctx, cf)
       else begin
         (* There are borrows: check that they are all live (i.e., the symbolic
            value doesn't contain bottom) *)
