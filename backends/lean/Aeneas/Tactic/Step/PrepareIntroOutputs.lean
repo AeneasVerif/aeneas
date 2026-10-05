@@ -272,8 +272,9 @@ meta def getOutputTree (goalTy : Expr) : MetaM NameTree := do
       | none => pure (.leaf none)
   forallBoundedTelescope goalTy (some 1) fun xs body => do
     let mut body := body.consumeMData
-    if body.isArrow && (← isProp body.bindingDomain!) then
-      body := body.bindingBody!.consumeMData
+    if body.isArrow then
+      if ← isProp body.bindingDomain! then
+        body := body.bindingBody!.consumeMData
     let (head, args) := body.withApp fun head args => (head, args)
     let info? ← match head.constName? with
       | some name => specInfoLookup name
