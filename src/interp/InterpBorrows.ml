@@ -1562,13 +1562,26 @@ and raw_ptr_view_parked (abs_id : AbsId.id) (ctx : eval_ctx) :
     raw_ptr_parked option =
   match (ctx_lookup_abs ctx abs_id).kind with
   | RawPtrView
-      { rpv_origin = Some origin; rpv_ptr; rpv_original; rpv_given_back; _ } ->
+      {
+        rpv_origin = Some origin;
+        rpv_ptr;
+        rpv_original;
+        rpv_given_back;
+        rpv_uninit;
+        _;
+      } ->
       let rpp_slice =
         match rpv_given_back with
         | Some sv -> mk_tvalue_from_symbolic_value sv
         | None -> rpv_original
       in
-      Some { rpp_origin = origin; rpp_ptr = rpv_ptr; rpp_slice }
+      Some
+        {
+          rpp_origin = origin;
+          rpp_ptr = rpv_ptr;
+          rpp_slice;
+          rpp_uninit = rpv_uninit;
+        }
   | _ -> None
 
 (** Remove an abstraction from the context, as well as all its references *)
@@ -1582,7 +1595,16 @@ and end_raw_ptr_view_update (span : Meta.span) (abs_id : AbsId.id)
           (List.for_all
              (fun (abs' : abs) ->
                match abs'.kind with
-               | FunCall _ -> AbsId.to_int abs'.abs_id < AbsId.to_int abs_id
+               | FunCall _ ->
+                   AbsId.to_int abs'.abs_id < AbsId.to_int abs_id
+                   (* Abstractions which only contain shared borrows don't
+                      have backward functions *)
+                   || not
+                        (List.exists
+                           (fun (v : tavalue) ->
+                             TypesUtils.ty_has_mut_borrow_for_region_in_set
+                               ctx.type_ctx.type_infos abs'.regions.owned v.ty)
+                           abs'.avalues)
                | _ -> true)
              (env_filter_map_abs (fun a -> Some a) ctx.env))
           "Unsupported: ending a borrow converted to a raw pointer while some \

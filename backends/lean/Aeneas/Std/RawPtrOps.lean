@@ -343,4 +343,16 @@ theorem RawPtr.end_addr_of_mut.spec [ByteRepr T] (v' v : T) (p : MutRawPtr T) :
   rw [sep_emp_l_eq]
   exact (ispec_ok _).2 (entails_refl _)
 
+/-! ## `ptr::read` and `ptr::write` -/
+
+@[rust_fun "core::ptr::read"]
+def core.ptr.read [ByteRepr T] (p : ConstRawPtr T) : Result T :=
+  p.read
+
+@[rust_fun "core::ptr::write"]
+def core.ptr.write [ByteRepr T] (p : MutRawPtr T) (v : T) : Result Unit :=
+  MutRawPtr.write p v
+
+attribute [step_simps] core.ptr.read core.ptr.write
+
 end Aeneas.Std

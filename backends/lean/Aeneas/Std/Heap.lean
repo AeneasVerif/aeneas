@@ -38,8 +38,13 @@ from addresses to the bytes they hold:
 
 ```text
 Loc  = AllocId × Nat
-Heap = Loc ⇀ Byte            (finitely supported)
+Cell = Option Byte           (none: uninitialized)
+Heap = Loc ⇀ Cell            (finitely supported)
 ```
+
+A cell is either initialized, holding a byte, or uninitialized: memory which
+has been allocated but not written (`MaybeUninit`).  Writing a cell is allowed
+whatever it holds, while reading it requires it to be initialized.
 
 A value lives in the heap through its `ByteRepr`: a fixed-size encoding as a
 list of bytes.  Reading at a type decodes the bytes found at an address, so
@@ -102,16 +107,19 @@ def addr {α : Type} (r : Ref α) : Loc := r
 
 end Ref
 
-abbrev HeapImpl := Finmap fun _ : Loc => Byte
+/-- The content of an address: a byte, or `none` if it is uninitialized. -/
+abbrev Cell := Option Byte
 
-/-- A finite collection of bytes. -/
+abbrev HeapImpl := Finmap fun _ : Loc => Cell
+
+/-- A finite collection of cells. -/
 structure Heap where
   private mk ::
   private impl : HeapImpl
 
 namespace Heap
 
-private def lookup (h : Heap) (address : Loc) : Option Byte :=
+private def lookup (h : Heap) (address : Loc) : Option Cell :=
   h.impl.lookup address
 
 private def erase (h : Heap) (address : Loc) : Heap :=
@@ -170,7 +178,7 @@ private theorem lookup_eq_none {address : Loc} {h : Heap} :
     h.lookup address = none ↔ address ∉ h :=
   Finmap.lookup_eq_none
 
-private theorem mem_of_lookup_eq_some {address : Loc} {h : Heap} {b : Byte}
+private theorem mem_of_lookup_eq_some {address : Loc} {h : Heap} {b : Cell}
     (hLookup : h.lookup address = some b) : address ∈ h :=
   Finmap.mem_of_lookup_eq_some hLookup
 
@@ -248,40 +256,55 @@ theorem mem_of_sub_left {address : Loc} {h₁ h₂ : Heap} (hMem : address ∈ h
 The heap of a value is the run of bytes encoding it, and the heap of a run is
 the union of the heaps of its bytes. -/
 
-/-- The heap of the single byte at `address`. -/
-def singleton (address : Loc) (b : Byte) : Heap :=
-  ⟨Finmap.singleton address b⟩
+/-- The heap of the single cell at `address`. -/
+def singleton (address : Loc) (c : Cell) : Heap :=
+  ⟨Finmap.singleton address c⟩
 
-theorem mem_singleton {address : Loc} {b : Byte} {other : Loc} :
-    other ∈ singleton address b ↔ other = address :=
+theorem mem_singleton {address : Loc} {c : Cell} {other : Loc} :
+    other ∈ singleton address c ↔ other = address :=
   Finmap.mem_singleton _ _ _
 
-private theorem lookup_singleton (address : Loc) (b : Byte) :
-    (singleton address b).lookup address = some b :=
+private theorem lookup_singleton (address : Loc) (c : Cell) :
+    (singleton address c).lookup address = some c :=
   Finmap.lookup_singleton_eq
 
-/-- The heap of the bytes `bs`, starting at `address`. -/
-def bytes (address : Loc) : List Byte → Heap
+/-- The heap of the cells `cs`, starting at `address`. -/
+def cells (address : Loc) : List Cell → Heap
   | [] => empty
-  | b :: rest => singleton address b ∪ bytes (address.add 1) rest
+  | c :: rest => singleton address c ∪ cells (address.add 1) rest
 
-@[simp] theorem bytes_nil (address : Loc) : bytes address [] = empty := by
+/-- The heap of the (initialized) bytes `bs`, starting at `address`. -/
+def bytes (address : Loc) (bs : List Byte) : Heap :=
+  cells address (bs.map some)
+
+theorem bytes_eq_cells (address : Loc) (bs : List Byte) :
+    bytes address bs = cells address (bs.map some) := by
   unfold bytes; rfl
 
-theorem bytes_cons (address : Loc) (b : Byte) (rest : List Byte) :
-    bytes address (b :: rest) = singleton address b ∪ bytes (address.add 1) rest := by
-  rw [bytes]
+@[simp] theorem cells_nil (address : Loc) : cells address [] = empty := by
+  unfold cells; rfl
 
-theorem mem_bytes {address : Loc} {bs : List Byte} {other : Loc} :
-    other ∈ bytes address bs ↔ ∃ i, i < bs.length ∧ other = address.add i := by
-  induction bs generalizing address with
+theorem cells_cons (address : Loc) (c : Cell) (rest : List Cell) :
+    cells address (c :: rest) = singleton address c ∪ cells (address.add 1) rest := by
+  rw [cells]
+
+@[simp] theorem bytes_nil (address : Loc) : bytes address [] = empty := by
+  simp [bytes]
+
+theorem bytes_cons (address : Loc) (b : Byte) (rest : List Byte) :
+    bytes address (b :: rest) = singleton address (some b) ∪ bytes (address.add 1) rest := by
+  simp only [bytes, List.map_cons, cells_cons]
+
+theorem mem_cells {address : Loc} {cs : List Cell} {other : Loc} :
+    other ∈ cells address cs ↔ ∃ i, i < cs.length ∧ other = address.add i := by
+  induction cs generalizing address with
   | nil =>
-      simp only [bytes_nil, List.length_nil, Nat.not_lt_zero, false_and,
+      simp only [cells_nil, List.length_nil, Nat.not_lt_zero, false_and,
         exists_false, iff_false]
       intro hMem
       exact (Finmap.notMem_empty (a := other)) hMem
-  | cons b rest ih =>
-      rw [bytes_cons, Heap.mem_union, mem_singleton, ih]
+  | cons c rest ih =>
+      rw [cells_cons, Heap.mem_union, mem_singleton, ih]
       constructor
       · rintro (rfl | ⟨i, hi, rfl⟩)
         · exact ⟨0, by simp, rfl⟩
@@ -292,26 +315,35 @@ theorem mem_bytes {address : Loc} {bs : List Byte} {other : Loc} :
         | succ j =>
             exact Or.inr ⟨j, by simpa using hi, by rw [Loc.add_add, Nat.add_comm]⟩
 
+theorem mem_bytes {address : Loc} {bs : List Byte} {other : Loc} :
+    other ∈ bytes address bs ↔ ∃ i, i < bs.length ∧ other = address.add i := by
+  rw [bytes, mem_cells, List.length_map]
+
 /-- Which addresses a run owns depends on its length only. -/
+theorem mem_cells_of_length_eq {address other : Loc} {cs cs' : List Cell}
+    (hLength : cs'.length = cs.length) :
+    other ∈ cells address cs' ↔ other ∈ cells address cs := by
+  rw [mem_cells, mem_cells, hLength]
+
 theorem mem_bytes_of_length_eq {address other : Loc} {bs bs' : List Byte}
     (hLength : bs'.length = bs.length) :
     other ∈ bytes address bs' ↔ other ∈ bytes address bs := by
   rw [mem_bytes, mem_bytes, hLength]
 
-private theorem lookup_bytes_add {address : Loc} {bs : List Byte} {i : Nat}
-    (hi : i < bs.length) :
-    (bytes address bs).lookup (address.add i) = some bs[i] := by
-  induction bs generalizing address i with
+private theorem lookup_cells_add {address : Loc} {cs : List Cell} {i : Nat}
+    (hi : i < cs.length) :
+    (cells address cs).lookup (address.add i) = some cs[i] := by
+  induction cs generalizing address i with
   | nil => simp at hi
-  | cons b rest ih =>
-      rw [bytes_cons]
+  | cons c rest ih =>
+      rw [cells_cons]
       cases i with
       | zero =>
           rw [Loc.add_zero, lookup_union_left (mem_singleton.mpr rfl),
             lookup_singleton]
           rfl
       | succ j =>
-          have hNotMem : address.add (j + 1) ∉ singleton address b := by
+          have hNotMem : address.add (j + 1) ∉ singleton address c := by
             rw [mem_singleton]
             intro hEq
             have := congrArg Prod.snd hEq
@@ -322,47 +354,68 @@ private theorem lookup_bytes_add {address : Loc} {bs : List Byte} {i : Nat}
           exact ih (by simpa using hi)
 
 /-- Splitting a run into two adjacent ones splits its heap. -/
-theorem bytes_append (address : Loc) (xs ys : List Byte) :
-    bytes address (xs ++ ys) = bytes address xs ∪ bytes (address.add xs.length) ys := by
+theorem cells_append (address : Loc) (xs ys : List Cell) :
+    cells address (xs ++ ys) = cells address xs ∪ cells (address.add xs.length) ys := by
   induction xs generalizing address with
   | nil => simp
-  | cons b rest ih =>
-      rw [List.cons_append, bytes_cons, bytes_cons, ih, List.length_cons,
+  | cons c rest ih =>
+      rw [List.cons_append, cells_cons, cells_cons, ih, List.length_cons,
         Loc.add_add, Nat.add_comm 1, Heap.union_assoc]
 
-/-- The two halves of a split run own disjoint bytes. -/
-theorem compatible_bytes_append (address : Loc) (xs ys : List Byte) :
-    PartialCommMonoid.Compatible (bytes address xs)
-      (bytes (address.add xs.length) ys) := by
+theorem bytes_append (address : Loc) (xs ys : List Byte) :
+    bytes address (xs ++ ys) = bytes address xs ∪ bytes (address.add xs.length) ys := by
+  simp only [bytes, List.map_append, cells_append, List.length_map]
+
+/-- The two halves of a split run own disjoint cells. -/
+theorem compatible_cells_append (address : Loc) (xs ys : List Cell) :
+    PartialCommMonoid.Compatible (cells address xs)
+      (cells (address.add xs.length) ys) := by
   intro other hLeft hRight
-  obtain ⟨i, hi, hL⟩ := mem_bytes.mp hLeft
-  obtain ⟨j, -, hR⟩ := mem_bytes.mp hRight
+  obtain ⟨i, hi, hL⟩ := mem_cells.mp hLeft
+  obtain ⟨j, -, hR⟩ := mem_cells.mp hRight
   rw [Loc.add_add] at hR
   have hOffset := (congrArg Prod.snd hL).symm.trans (congrArg Prod.snd hR)
   simp at hOffset
   omega
 
+theorem compatible_bytes_append (address : Loc) (xs ys : List Byte) :
+    PartialCommMonoid.Compatible (bytes address xs)
+      (bytes (address.add xs.length) ys) := by
+  have := compatible_cells_append address (xs.map some) (ys.map some)
+  rwa [List.length_map] at this
+
 /-- A frame disjoint from a run is disjoint from every run of the same length
 at the same address. -/
+theorem compatible_cells_of_length_eq {address : Loc} {cs cs' : List Cell}
+    {frame : Heap} (hLength : cs'.length = cs.length)
+    (hCompatible : PartialCommMonoid.Compatible (cells address cs) frame) :
+    PartialCommMonoid.Compatible (cells address cs') frame := by
+  intro other hMem hFrame
+  exact hCompatible other
+    ((mem_cells_of_length_eq (address := address) hLength).mp hMem) hFrame
+
 theorem compatible_bytes_of_length_eq {address : Loc} {bs bs' : List Byte}
     {frame : Heap} (hLength : bs'.length = bs.length)
     (hCompatible : PartialCommMonoid.Compatible (bytes address bs) frame) :
-    PartialCommMonoid.Compatible (bytes address bs') frame := by
-  intro other hMem hFrame
-  exact hCompatible other
-    ((mem_bytes_of_length_eq (address := address) hLength).mp hMem) hFrame
+    PartialCommMonoid.Compatible (bytes address bs') frame :=
+  compatible_cells_of_length_eq (by simpa using hLength) hCompatible
 
 /-- Runs in different allocations are disjoint. -/
-theorem compatible_bytes_of_fst_ne {address address' : Loc} {bs bs' : List Byte}
+theorem compatible_cells_of_fst_ne {address address' : Loc} {cs cs' : List Cell}
     (hNe : address.1 ≠ address'.1) :
-    PartialCommMonoid.Compatible (bytes address bs) (bytes address' bs') := by
+    PartialCommMonoid.Compatible (cells address cs) (cells address' cs') := by
   intro other hLeft hRight
-  obtain ⟨_, -, hL⟩ := mem_bytes.mp hLeft
-  obtain ⟨_, -, hR⟩ := mem_bytes.mp hRight
+  obtain ⟨_, -, hL⟩ := mem_cells.mp hLeft
+  obtain ⟨_, -, hR⟩ := mem_cells.mp hRight
   have hL' := congrArg Prod.fst hL
   have hR' := congrArg Prod.fst hR
   simp only [Loc.fst_add] at hL' hR'
   exact hNe (hL'.symm.trans hR')
+
+theorem compatible_bytes_of_fst_ne {address address' : Loc} {bs bs' : List Byte}
+    (hNe : address.1 ≠ address'.1) :
+    PartialCommMonoid.Compatible (bytes address bs) (bytes address' bs') :=
+  compatible_cells_of_fst_ne hNe
 
 /-! ## Sub-heaps
 
@@ -490,30 +543,70 @@ theorem mem_of_sub {address : Loc} {h h' : Heap} (hSub : Heap.Sub h h')
   obtain ⟨rest, -, rfl⟩ := hSub
   exact mem_union.mpr (Or.inl hMem)
 
-/-- Two heaps that both own the first byte of a run are not disjoint. -/
+/-- Two heaps that both own the first cell of a run are not disjoint. -/
+theorem not_compatible_of_sub_cells {address : Loc} {cs cs' : List Cell}
+    {h₁ h₂ : Heap} (hLength : 0 < cs.length) (hLength' : 0 < cs'.length)
+    (hSub₁ : Heap.Sub (cells address cs) h₁)
+    (hSub₂ : Heap.Sub (cells address cs') h₂) :
+    ¬ PartialCommMonoid.Compatible h₁ h₂ := fun hCompatible =>
+  hCompatible address
+    (mem_of_sub hSub₁ (mem_cells.mpr ⟨0, hLength, rfl⟩))
+    (mem_of_sub hSub₂ (mem_cells.mpr ⟨0, hLength', rfl⟩))
+
 theorem not_compatible_of_sub_bytes {address : Loc} {bs bs' : List Byte}
     {h₁ h₂ : Heap} (hLength : 0 < bs.length) (hLength' : 0 < bs'.length)
     (hSub₁ : Heap.Sub (bytes address bs) h₁)
     (hSub₂ : Heap.Sub (bytes address bs') h₂) :
-    ¬ PartialCommMonoid.Compatible h₁ h₂ := fun hCompatible =>
-  hCompatible address
-    (mem_of_sub hSub₁ (mem_bytes.mpr ⟨0, hLength, rfl⟩))
-    (mem_of_sub hSub₂ (mem_bytes.mpr ⟨0, hLength', rfl⟩))
+    ¬ PartialCommMonoid.Compatible h₁ h₂ :=
+  not_compatible_of_sub_cells (by simpa using hLength) (by simpa using hLength')
+    hSub₁ hSub₂
 
 /-! ## Reading, writing and releasing runs -/
 
-/-- The `n` bytes from `address` on, if the heap holds them all.  This is the
-definedness guard of every operation: an operation on bytes the heap does not
-hold is *stuck* rather than erroneous. -/
+/-- The `n` bytes from `address` on, if the heap holds them all and they are
+initialized.  This is the definedness guard of every read: reading bytes the
+heap does not hold, or uninitialized ones, is *stuck* rather than erroneous. -/
 def readBytes (h : Heap) (address : Loc) : Nat → Option (List Byte)
   | 0 => some []
   | n + 1 =>
       match h.lookup address, h.readBytes (address.add 1) n with
-      | some b, some rest => some (b :: rest)
+      | some (some b), some rest => some (b :: rest)
       | _, _ => none
 
+/-- The `n` cells from `address` on, initialized or not, if the heap holds them
+all. -/
+def readCells (h : Heap) (address : Loc) : Nat → Option (List Cell)
+  | 0 => some []
+  | n + 1 =>
+      match h.lookup address, h.readCells (address.add 1) n with
+      | some c, some rest => some (c :: rest)
+      | _, _ => none
+
+private theorem readCells_eq_some {h : Heap} {address : Loc} {cs : List Cell}
+    (hLookup : ∀ i (hi : i < cs.length), h.lookup (address.add i) = some cs[i]) :
+    h.readCells address cs.length = some cs := by
+  induction cs generalizing address with
+  | nil => rfl
+  | cons c rest ih =>
+      have hFirst := hLookup 0 (by simp)
+      rw [Loc.add_zero] at hFirst
+      have hRest : h.readCells (address.add 1) rest.length = some rest :=
+        ih fun i hi => by
+          rw [Loc.add_add, Nat.add_comm]
+          exact hLookup (i + 1) (by simpa using hi)
+      simp only [List.length_cons, readCells, hFirst, hRest, List.getElem_cons_zero]
+
+/-- A heap extending a run of cells holds that run. -/
+theorem readCells_of_sub {address : Loc} {cs : List Cell} {h : Heap}
+    (hSub : Heap.Sub (cells address cs) h) :
+    h.readCells address cs.length = some cs := by
+  obtain ⟨rest, -, rfl⟩ := hSub
+  apply readCells_eq_some
+  intro i hi
+  rw [lookup_union_left (mem_cells.mpr ⟨i, hi, rfl⟩), lookup_cells_add hi]
+
 private theorem readBytes_eq_some {h : Heap} {address : Loc} {bs : List Byte}
-    (hLookup : ∀ i (hi : i < bs.length), h.lookup (address.add i) = some bs[i]) :
+    (hLookup : ∀ i (hi : i < bs.length), h.lookup (address.add i) = some (some bs[i])) :
     h.readBytes address bs.length = some bs := by
   induction bs generalizing address with
   | nil => rfl
@@ -540,7 +633,8 @@ theorem readBytes_of_sub {address : Loc} {bs : List Byte} {h : Heap}
   obtain ⟨rest, -, rfl⟩ := hSub
   apply readBytes_eq_some
   intro i hi
-  rw [lookup_union_left (mem_bytes.mpr ⟨i, hi, rfl⟩), lookup_bytes_add hi]
+  rw [lookup_union_left (mem_bytes.mpr ⟨i, hi, rfl⟩), bytes,
+    lookup_cells_add (by simpa using hi), List.getElem_map]
 
 /-- Overwrite the bytes from `address` on with `bs`. -/
 def writeBytes (h : Heap) (address : Loc) (bs : List Byte) : Heap :=
@@ -550,19 +644,40 @@ theorem writeBytes_union (h₁ h₂ : Heap) (address : Loc) (bs : List Byte) :
     writeBytes (h₁ ∪ h₂) address bs = writeBytes h₁ address bs ∪ h₂ :=
   (union_assoc _ _ _).symm
 
+/-- Overwrite the cells from `address` on with `cs`. -/
+def writeCells (h : Heap) (address : Loc) (cs : List Cell) : Heap :=
+  cells address cs ∪ h
+
+theorem writeBytes_eq_writeCells (h : Heap) (address : Loc) (bs : List Byte) :
+    writeBytes h address bs = writeCells h address (bs.map some) := by
+  unfold writeBytes writeCells bytes; rfl
+
 /-- Overwriting a run with one of the same length replaces it. -/
-theorem writeBytes_bytes_union {address : Loc} {bs bs' : List Byte} (rest : Heap)
-    (hLength : bs'.length = bs.length) :
-    writeBytes (bytes address bs ∪ rest) address bs' = bytes address bs' ∪ rest := by
-  unfold writeBytes
+theorem writeCells_cells_union {address : Loc} {cs cs' : List Cell} (rest : Heap)
+    (hLength : cs'.length = cs.length) :
+    writeCells (cells address cs ∪ rest) address cs' = cells address cs' ∪ rest := by
+  unfold writeCells
   apply ext_lookup
   intro other
-  by_cases hMem : other ∈ bytes address bs'
+  by_cases hMem : other ∈ cells address cs'
   · rw [lookup_union_left hMem, lookup_union_left hMem]
-  · have hMem' : other ∉ bytes address bs := fun hOld =>
-      hMem ((mem_bytes_of_length_eq hLength).mpr hOld)
+  · have hMem' : other ∉ cells address cs := fun hOld =>
+      hMem ((mem_cells_of_length_eq hLength).mpr hOld)
     rw [lookup_union_right hMem, lookup_union_right hMem,
       lookup_union_right hMem']
+
+/-- Writing bytes over a run of cells (initialized or not) of the same
+length replaces it. -/
+theorem writeBytes_cells_union {address : Loc} {cs : List Cell} {bs : List Byte}
+    (rest : Heap) (hLength : bs.length = cs.length) :
+    writeBytes (cells address cs ∪ rest) address bs = bytes address bs ∪ rest := by
+  rw [writeBytes_eq_writeCells, writeCells_cells_union rest (by simpa using hLength)]
+  rfl
+
+theorem writeBytes_bytes_union {address : Loc} {bs bs' : List Byte} (rest : Heap)
+    (hLength : bs'.length = bs.length) :
+    writeBytes (bytes address bs ∪ rest) address bs' = bytes address bs' ∪ rest :=
+  writeBytes_cells_union rest (by simpa using hLength)
 
 /-- Release the `n` bytes from `address` on: the addresses go away, so what a
 heap still holds is exactly what has not been freed. -/
@@ -604,17 +719,23 @@ private theorem lookup_freeBytes_of_mem {h : Heap} {address other : Loc}
           exact ih ⟨j, by omega, by rw [Loc.add_add, Nat.add_comm]⟩
 
 /-- Releasing a run removes exactly that run. -/
+theorem freeBytes_cells_union {address : Loc} {cs : List Cell} {rest : Heap}
+    (hCompatible : PartialCommMonoid.Compatible (cells address cs) rest) :
+    freeBytes (cells address cs ∪ rest) address cs.length = rest := by
+  apply ext_lookup
+  intro other
+  by_cases hRange : ∃ i, i < cs.length ∧ other = address.add i
+  · rw [lookup_freeBytes_of_mem hRange]
+    exact (lookup_eq_none.mpr fun hRest =>
+      hCompatible other (mem_cells.mpr hRange) hRest).symm
+  · rw [lookup_freeBytes_of_not hRange,
+      lookup_union_right fun hMem => hRange (mem_cells.mp hMem)]
+
 theorem freeBytes_bytes_union {address : Loc} {bs : List Byte} {rest : Heap}
     (hCompatible : PartialCommMonoid.Compatible (bytes address bs) rest) :
     freeBytes (bytes address bs ∪ rest) address bs.length = rest := by
-  apply ext_lookup
-  intro other
-  by_cases hRange : ∃ i, i < bs.length ∧ other = address.add i
-  · rw [lookup_freeBytes_of_mem hRange]
-    exact (lookup_eq_none.mpr fun hRest =>
-      hCompatible other (mem_bytes.mpr hRange) hRest).symm
-  · rw [lookup_freeBytes_of_not hRange,
-      lookup_union_right fun hMem => hRange (mem_bytes.mp hMem)]
+  have := freeBytes_cells_union hCompatible
+  rwa [List.length_map] at this
 
 /-! ## Allocation -/
 
@@ -649,11 +770,15 @@ theorem not_mem_freshBase {h : Heap} {align : Nat} {address : Loc}
 
 /-- The run a fresh allocation occupies is disjoint from everything the heap
 already owns. -/
-theorem compatible_fresh (h : Heap) (align : Nat) (bs : List Byte) :
-    PartialCommMonoid.Compatible (bytes (freshLoc h align) bs) h := by
+theorem compatible_fresh_cells (h : Heap) (align : Nat) (cs : List Cell) :
+    PartialCommMonoid.Compatible (cells (freshLoc h align) cs) h := by
   intro address hFresh hMem
-  obtain ⟨i, -, rfl⟩ := mem_bytes.mp hFresh
+  obtain ⟨i, -, rfl⟩ := mem_cells.mp hFresh
   exact not_mem_freshBase (h := h) (align := align) rfl hMem
+
+theorem compatible_fresh (h : Heap) (align : Nat) (bs : List Byte) :
+    PartialCommMonoid.Compatible (bytes (freshLoc h align) bs) h :=
+  compatible_fresh_cells h align _
 
 end Heap
 

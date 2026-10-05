@@ -50,6 +50,9 @@ let lean_builtin_types =
     (* file: "Aeneas/Std/Core/Iter.lean", line: 58 *)
     mk_type "core::iter::adapters::zip::Zip" "core.iter.adapters.zip.Zip"
       ~kind:(KStruct [ ("fst", Some "fst"); ("snd", Some "snd") ]);
+    (* file: "Aeneas/Std/MaybeUninitDef.lean", line: 19 *)
+    mk_type "core::mem::maybe_uninit::MaybeUninit" "MaybeUninit"
+      ~kind:(KEnum [ ("Uninit", Some "uninit"); ("Init", Some "init") ]);
     (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 805 *)
     mk_type "core::num::error::TryFromIntError" "core.num.error.TryFromIntError";
     (* file: "Aeneas/Std/Core/Ops.lean", line: 92 *)
@@ -873,6 +876,30 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Iter.lean", line: 704 *)
     mk_fun "core::iter::traits::iterator::Iterator::zip"
       "core.iter.traits.iterator.Iterator.zip.trait_default";
+    (* file: "Aeneas/Std/MaybeUninit.lean", line: 423 *)
+    mk_fun
+      "core::mem::maybe_uninit::{core::clone::Clone<core::mem::maybe_uninit::MaybeUninit<@T>>}::clone"
+      "core.mem.maybe_uninit.MaybeUninit.Insts.CoreCloneClone.clone";
+    (* file: "Aeneas/Std/MaybeUninit.lean", line: 207 *)
+    mk_fun
+      "core::mem::maybe_uninit::{core::mem::maybe_uninit::MaybeUninit<@T>}::as_mut_ptr"
+      "MaybeUninit.as_mut_ptr";
+    (* file: "Aeneas/Std/MaybeUninit.lean", line: 217 *)
+    mk_fun
+      "core::mem::maybe_uninit::{core::mem::maybe_uninit::MaybeUninit<@T>}::as_ptr"
+      "MaybeUninit.as_ptr";
+    (* file: "Aeneas/Std/MaybeUninitDef.lean", line: 114 *)
+    mk_fun
+      "core::mem::maybe_uninit::{core::mem::maybe_uninit::MaybeUninit<@T>}::assume_init"
+      "core.mem.maybe_uninit.MaybeUninit.assume_init";
+    (* file: "Aeneas/Std/MaybeUninitDef.lean", line: 109 *)
+    mk_fun
+      "core::mem::maybe_uninit::{core::mem::maybe_uninit::MaybeUninit<@T>}::new"
+      "core.mem.maybe_uninit.MaybeUninit.new";
+    (* file: "Aeneas/Std/MaybeUninitDef.lean", line: 105 *)
+    mk_fun
+      "core::mem::maybe_uninit::{core::mem::maybe_uninit::MaybeUninit<@T>}::uninit"
+      "core.mem.maybe_uninit.MaybeUninit.uninit";
     (* file: "Aeneas/Std/Core/Core.lean", line: 77 *)
     mk_fun "core::mem::replace" "core.mem.replace" ~can_fail:false ~lift:false;
     (* file: "Aeneas/Std/Core/Core.lean", line: 81 *)
@@ -1094,8 +1121,12 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 205 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::write_unaligned"
       "core.ptr.mut_ptr.RawPtrMutT.write_unaligned";
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 348 *)
+    mk_fun "core::ptr::read" "core.ptr.read";
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 190 *)
     mk_fun "core::ptr::read_unaligned" "core.ptr.read_unaligned";
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 352 *)
+    mk_fun "core::ptr::write" "core.ptr.write";
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 277 *)
     mk_fun "core::ptr::write_bytes" "core.ptr.write_bytes";
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 201 *)
@@ -1583,6 +1614,9 @@ let lean_builtin_trait_impls =
       ~keep_trait_clauses:(Some [ true; false ]);
     (* file: "Aeneas/Std/Core/Core.lean", line: 46 *)
     mk_trait_impl "core::clone::Clone<bool>" "core.clone.CloneBool";
+    (* file: "Aeneas/Std/MaybeUninit.lean", line: 429 *)
+    mk_trait_impl "core::clone::Clone<core::mem::maybe_uninit::MaybeUninit<@T>>"
+      "core.mem.maybe_uninit.MaybeUninit.Insts.CoreCloneClone";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 254 *)
     mk_trait_impl "core::cmp::PartialEq<&'a @A, &'b @B>"
       "core.cmp.PartialEqShared";
@@ -1775,6 +1809,9 @@ let lean_builtin_trait_impls =
     mk_trait_impl "core::marker::Copy<[@T; @N]>" "Array.Insts.CoreMarkerCopy";
     (* file: "Aeneas/Std/Core/Core.lean", line: 67 *)
     mk_trait_impl "core::marker::Copy<bool>" "core.core.marker.CopyBool";
+    (* file: "Aeneas/Std/MaybeUninit.lean", line: 434 *)
+    mk_trait_impl "core::marker::Copy<core::mem::maybe_uninit::MaybeUninit<@T>>"
+      "core.mem.maybe_uninit.MaybeUninit.Insts.CoreMarkerCopy";
     (* file: "Aeneas/Std/Core/Ops.lean", line: 31 *)
     mk_trait_impl "core::ops::deref::Deref<Box<@T>, @T>"
       "core.ops.deref.DerefBoxInst"

@@ -4,6 +4,7 @@ import SepLogic.CurryIntroQimp
 import SepLogic.ExtractedAddrOf
 import SepLogic.ExtractedCasts
 import SepLogic.ExtractedLayouts
+import SepLogic.ExtractedMaybeUninit
 import SepLogic.ExtractedOffsets
 import SepLogic.Fixtures
 import SepLogic.Partial

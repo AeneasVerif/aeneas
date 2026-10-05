@@ -150,6 +150,16 @@ type pure_builtin_fun_id =
       (** [&raw const v] and [&raw mut v]: the value is copied into fresh memory
       *)
   | EndRawPtrOfValue of mutability
+  | RawPtrOfMaybeUninit of mutability
+      (** [MaybeUninit::as_ptr] and [MaybeUninit::as_mut_ptr] *)
+  | EndRawPtrOfMaybeUninit of mutability
+  | RawPtrOfUninitSlice of mutability
+      (** Same as [RawPtrOfSlice], for slices of values of type [MaybeUninit<T>]
+      *)
+  | EndRawPtrOfUninitSlice of mutability
+  | RawPtrOfUninitSliceReuse of mutability
+  | SyncRawPtrOfUninitSlice
+  | FreeRawPtrOfUninitSlice
   | RawPtrRead
   | RawPtrWrite
   | ResultUnwrapMut

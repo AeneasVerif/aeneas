@@ -1270,6 +1270,18 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (RawPtrOfValue Const, "RawPtr.addr_of");
         (EndRawPtrOfValue Mut, "RawPtr.end_addr_of_mut");
         (EndRawPtrOfValue Const, "RawPtr.end_addr_of");
+        (RawPtrOfMaybeUninit Mut, "MaybeUninit.as_mut_ptr");
+        (RawPtrOfMaybeUninit Const, "MaybeUninit.as_ptr");
+        (EndRawPtrOfMaybeUninit Mut, "MaybeUninit.end_as_mut_ptr");
+        (EndRawPtrOfMaybeUninit Const, "MaybeUninit.end_as_ptr");
+        (RawPtrOfUninitSlice Mut, "Slice.as_mut_ptr_uninit");
+        (RawPtrOfUninitSlice Const, "Slice.as_ptr_uninit");
+        (EndRawPtrOfUninitSlice Mut, "Slice.end_as_mut_ptr_uninit");
+        (EndRawPtrOfUninitSlice Const, "Slice.end_as_ptr_uninit");
+        (RawPtrOfUninitSliceReuse Mut, "Slice.as_mut_ptr_reuse_uninit");
+        (RawPtrOfUninitSliceReuse Const, "Slice.as_ptr_reuse_uninit");
+        (SyncRawPtrOfUninitSlice, "Slice.sync_as_mut_ptr_uninit");
+        (FreeRawPtrOfUninitSlice, "Slice.free_as_ptr_uninit");
         (RawPtrRead, "RawPtr.read");
         (RawPtrWrite, "MutRawPtr.write");
         (GetTarget, "get_target");

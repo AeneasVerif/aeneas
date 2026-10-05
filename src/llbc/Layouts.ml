@@ -46,6 +46,26 @@ let decl_align (crate : crate) (id : TypeDeclId.id) : int option =
       | Some { align = { chosen = Some e; _ }; _ } -> size_expr_constant e
       | _ -> None)
 
+(** If [ty] is [MaybeUninit<T>], return [T] *)
+let maybe_uninit_inner (crate : crate) (ty : ty) : ty option =
+  match ty with
+  | TAdt { id; builtin = None; generics = { types = [ inner ]; _ } } -> (
+      match TypeDeclId.Map.find_opt id crate.type_decls with
+      | Some decl ->
+          let idents =
+            List.filter_map
+              (fun (e : path_elem) ->
+                match e with
+                | PeIdent (s, _) -> Some s
+                | _ -> None)
+              decl.item_meta.name
+          in
+          if idents = [ "core"; "mem"; "maybe_uninit"; "MaybeUninit" ] then
+            Some inner
+          else None
+      | None -> None)
+  | _ -> None
+
 (** The alignment of a type, if it is known *)
 let rec type_align (crate : crate) (ptr_size : int) (ty : ty) : int option =
   match ty with
@@ -62,6 +82,8 @@ let rec type_align (crate : crate) (ptr_size : int) (ty : ty) : int option =
   | TArray (ty, _, _) | TSlice (ty, _) -> type_align crate ptr_size ty
   | TAdt { id; builtin = None; generics } when generics.types = [] ->
       decl_align crate id
+  | TAdt _ when Option.is_some (maybe_uninit_inner crate ty) ->
+      type_align crate ptr_size (Option.get (maybe_uninit_inner crate ty))
   | _ -> None
 
 (** The offset of a field of a structure, if it is known *)
@@ -261,6 +283,13 @@ let rec has_byte_repr (crate : crate) (ty : ty) : bool =
   | TAdt { id; builtin = None; _ } ->
       TypeDeclId.Set.mem id (get_byte_repr_structs crate)
   | _ -> false
+
+(** Is the type [MaybeUninit<T>] where [T] has a byte representation? Such
+    values can be stored in memory, uninitialized or not. *)
+let has_uninit_repr (crate : crate) (ty : ty) : bool =
+  match maybe_uninit_inner crate ty with
+  | Some ty -> has_byte_repr crate ty
+  | None -> false
 
 (** {1 Byte representations of type parameters}
 

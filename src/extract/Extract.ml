@@ -1058,6 +1058,13 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
               | FreeRawPtrOfSlice
               | RawPtrOfValue _
               | EndRawPtrOfValue _
+              | RawPtrOfMaybeUninit _
+              | EndRawPtrOfMaybeUninit _
+              | RawPtrOfUninitSlice _
+              | EndRawPtrOfUninitSlice _
+              | RawPtrOfUninitSliceReuse _
+              | SyncRawPtrOfUninitSlice
+              | FreeRawPtrOfUninitSlice
               | RawPtrRead
               | RawPtrWrite ) ->
               Some

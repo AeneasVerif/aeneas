@@ -258,6 +258,9 @@ type eended_mut_borrow_meta = {
 type raw_ptr_view_kind =
   | RpvSlice  (** [as_ptr] or [as_mut_ptr] on a slice *)
   | RpvValue  (** [&raw const place] or [&raw mut place] *)
+  | RpvMaybeUninit
+      (** [MaybeUninit::as_ptr] or [MaybeUninit::as_mut_ptr]: the pointer has
+          type [*T] while the value has type [MaybeUninit<T>] *)
 [@@deriving show, eq, ord]
 
 type raw_ptr_view = {
@@ -278,6 +281,8 @@ type raw_ptr_view = {
           raw pointers can share it (see [RawPtrParked]) *)
   rpv_reuse : msymbolic_value option;
       (** The raw pointer whose memory is reused for this view *)
+  rpv_uninit : bool;
+      (** The elements of the slice are of type [MaybeUninit<T>] *)
 }
 [@@deriving show, ord]
 
@@ -288,6 +293,7 @@ type raw_ptr_parked = {
   rpp_origin : string;
   rpp_ptr : msymbolic_value;
   rpp_slice : mvalue;  (** The last value of the slice *)
+  rpp_uninit : bool;  (** See [raw_ptr_view.rpv_uninit] *)
 }
 [@@deriving show, ord]
 

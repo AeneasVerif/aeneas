@@ -213,6 +213,13 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
           | FreeRawPtrOfSlice
           | RawPtrOfValue _
           | EndRawPtrOfValue _
+          | RawPtrOfMaybeUninit _
+          | EndRawPtrOfMaybeUninit _
+          | RawPtrOfUninitSlice _
+          | EndRawPtrOfUninitSlice _
+          | RawPtrOfUninitSliceReuse _
+          | SyncRawPtrOfUninitSlice
+          | FreeRawPtrOfUninitSlice
           | RawPtrRead
           | RawPtrWrite -> (f.ty, mk_known (), false)
           | GetTarget -> (f.ty, mk_known (), false)

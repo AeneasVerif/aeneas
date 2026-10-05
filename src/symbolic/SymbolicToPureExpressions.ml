@@ -944,6 +944,10 @@ and raw_ptr_view_elem_ty (ctx : bs_ctx) (view : V.raw_ptr_view)
   match view.rpv_kind with
   | RpvSlice -> slice_elem_ty ctx original
   | RpvValue -> original.ty
+  | RpvMaybeUninit -> (
+      match original.ty with
+      | TAdt (_, { types = [ ty ]; _ }) -> ty
+      | _ -> [%internal_error] ctx.span)
 
 and slice_elem_ty (ctx : bs_ctx) (slice : texpr) : ty =
   match slice.ty with
@@ -975,8 +979,9 @@ and translate_end_raw_ptr_parked (ectx : C.eval_ctx) (parked : V.raw_ptr_parked)
   let slice = tvalue_to_texpr ctx ectx parked.rpp_slice in
   let ptr = symbolic_value_to_texpr ctx parked.rpp_ptr in
   let call =
-    mk_raw_ptr_builtin_call ctx FreeRawPtrOfSlice (slice_elem_ty ctx slice)
-      [ slice; ptr ] mk_unit_ty
+    mk_raw_ptr_builtin_call ctx
+      (if parked.rpp_uninit then FreeRawPtrOfUninitSlice else FreeRawPtrOfSlice)
+      (slice_elem_ty ctx slice) [ slice; ptr ] mk_unit_ty
   in
   let next_e = translate_expr e ctx in
   [%add_loc] mk_closed_checked_let ctx true
@@ -1003,8 +1008,14 @@ and translate_end_raw_ptr_view (ectx : C.eval_ctx) (view : V.raw_ptr_view)
   let builtin =
     match (view.rpv_kind, view.rpv_origin) with
     | RpvValue, _ -> Some (EndRawPtrOfValue mut)
-    | RpvSlice, None -> Some (EndRawPtrOfSlice mut)
-    | RpvSlice, Some _ -> if view.rpv_mut then Some SyncRawPtrOfSlice else None
+    | RpvMaybeUninit, _ -> Some (EndRawPtrOfMaybeUninit mut)
+    | RpvSlice, None ->
+        if view.rpv_uninit then Some (EndRawPtrOfUninitSlice mut)
+        else Some (EndRawPtrOfSlice mut)
+    | RpvSlice, Some _ ->
+        if not view.rpv_mut then None
+        else if view.rpv_uninit then Some SyncRawPtrOfUninitSlice
+        else Some SyncRawPtrOfSlice
   in
   let next_e = translate_expr e ctx in
   match builtin with
@@ -1811,8 +1822,13 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         let builtin =
           match (view.rpv_kind, view.rpv_reuse, view.rpv_align) with
           | RpvValue, _, _ -> RawPtrOfValue mut
-          | RpvSlice, Some _, _ -> RawPtrOfSliceReuse mut
-          | RpvSlice, None, None -> RawPtrOfSlice mut
+          | RpvMaybeUninit, _, _ -> RawPtrOfMaybeUninit mut
+          | RpvSlice, Some _, _ ->
+              if view.rpv_uninit then RawPtrOfUninitSliceReuse mut
+              else RawPtrOfSliceReuse mut
+          | RpvSlice, None, None ->
+              if view.rpv_uninit then RawPtrOfUninitSlice mut
+              else RawPtrOfSlice mut
           | RpvSlice, None, Some _ -> RawPtrOfSliceAligned mut
         in
         let func =

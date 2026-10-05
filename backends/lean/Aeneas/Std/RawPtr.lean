@@ -4,6 +4,7 @@ public import Aeneas.Std.Scalar.Core
 public import Aeneas.Std.Scalar.Notations
 public import Aeneas.Std.Scalar.ByteRepr
 public import Aeneas.Std.SliceDef
+public import Aeneas.Std.MaybeUninitDef
 public import Aeneas.Data.BitVec
 public import Aeneas.Std.WP
 public import Aeneas.Std.Primitives
@@ -542,9 +543,82 @@ theorem read.aligned_of_spec [ByteRepr T] {q : RawPtr T M} {P : IProp} {Q : T �
 
 end RawPtr
 
-/-- Write through a mutable pointer: overwrite the bytes at an aligned `q`. -/
+/-! ## Possibly uninitialized memory -/
+
+namespace RawPtr
+
+/-- `q` is aligned and owns the cells of `m` from the address it holds on: the
+memory is uninitialized if `m` is. -/
+def pointsToUninit [ByteRepr T] (q : RawPtr T M) (m : MaybeUninit T) : IProp :=
+  iprop(⌜q.Aligned⌝ ∗ owns (Heap.cells q.loc m.cells))
+
+/-- `q` owns the `ms.length` consecutive, possibly uninitialized, elements from
+`q` on. -/
+def pointsToUninitRange [ByteRepr T] (q : RawPtr T M) : List (MaybeUninit T) → IProp
+  | [] => emp
+  | m :: rest => iprop(pointsToUninit q m ∗ pointsToUninitRange (q.add 1) rest)
+
+end RawPtr
+
+@[inherit_doc RawPtr.pointsToUninit]
+notation:50 q:50 " ↦? " m:50 => RawPtr.pointsToUninit q m
+
+@[inherit_doc RawPtr.pointsToUninitRange]
+notation:50 q:50 " ↦?* " ms:50 => RawPtr.pointsToUninitRange q ms
+
+namespace RawPtr
+
+theorem pointsToUninit_holds [ByteRepr T] (q : RawPtr T M) (m : MaybeUninit T) (h : Heap) :
+    (q ↦? m) h ↔ q.Aligned ∧ Heap.Sub (Heap.cells q.loc m.cells) h :=
+  sep_pure_l _ _ h
+
+@[simp] theorem pointsToUninit_init [ByteRepr T] (q : RawPtr T M) (value : T) :
+    (q ↦? .init value) = (q ↦ value) := by
+  rw [pointsToUninit, pointsTo_eq_owns, Heap.bytes_eq_cells, MaybeUninit.cells_init]
+
+@[simp] theorem pointsToUninitRange_nil [ByteRepr T] (q : RawPtr T M) :
+    (q ↦?* ([] : List (MaybeUninit T))) = emp := rfl
+
+theorem pointsToUninitRange_cons [ByteRepr T] (q : RawPtr T M) (m : MaybeUninit T)
+    (rest : List (MaybeUninit T)) :
+    (q ↦?* (m :: rest)) = iprop(q ↦? m ∗ (q.add 1) ↦?* rest) := rfl
+
+@[simp] theorem pointsToUninitRange_map_init [ByteRepr T] (q : RawPtr T M) (values : List T) :
+    (q ↦?* values.map MaybeUninit.init) = (q ↦* values) := by
+  induction values generalizing q with
+  | nil => rfl
+  | cons v rest ih =>
+    simp only [List.map_cons, pointsToUninitRange_cons, pointsToUninit_init, ih]
+    rfl
+
+theorem pointsToUninitRange_retype_eq [ByteRepr T] (q : RawPtr T M) (ms : List (MaybeUninit T)) :
+    ((q.retype : RawPtr T M') ↦?* ms) = (q ↦?* ms) := by
+  induction ms generalizing q with
+  | nil => rfl
+  | cons m rest ih =>
+    simp only [pointsToUninitRange_cons]
+    have := ih (q.add 1)
+    simp only [show ((q.retype : RawPtr T M').add 1) = (q.add 1).retype from rfl] at *
+    rw [this]
+    rfl
+
+/-- Whether `h` holds the cells of a value of the pointer's element type at
+`q`, initialized or not. -/
+def allocated [ByteRepr T] (h : Heap) (q : RawPtr T M) : Prop :=
+  (h.readCells q.loc (ByteRepr.size T)).isSome
+
+theorem allocated_of_pointsToUninit [ByteRepr T] {q : RawPtr T M} {m : MaybeUninit T}
+    {h : Heap} (hPointsTo : (q ↦? m) h) : allocated h q := by
+  have hRead := Heap.readCells_of_sub ((pointsToUninit_holds q m h).mp hPointsTo).2
+  rw [MaybeUninit.length_cells] at hRead
+  simp [allocated, hRead]
+
+end RawPtr
+
+/-- Write through a mutable pointer: overwrite the bytes at an aligned `q`. The
+memory may be uninitialized. -/
 def MutRawPtr.write [ByteRepr T] (q : MutRawPtr T) (value : T) : Result Unit :=
-  Result.guardedModify (fun h => RawPtr.contains h q ∧ q.Aligned) fun h _ =>
+  Result.guardedModify (fun h => RawPtr.allocated h q ∧ q.Aligned) fun h _ =>
     ((), h.writeBytes q.loc (ByteRepr.encode value))
 
 theorem MutRawPtr.write.aligned_of_spec [ByteRepr T] {q : MutRawPtr T} {value : T}
@@ -554,28 +628,41 @@ theorem MutRawPtr.write.aligned_of_spec [ByteRepr T] {q : MutRawPtr T} {value : 
   rw [ispec_iff] at hSpec
   exact (hSpec emp h ((sep_emp_r P).mpr h hP)).vis_view.1.2
 
-@[step]
-theorem MutRawPtr.write.spec [ByteRepr T] (q : MutRawPtr T) (oldValue newValue : T) :
-    ⦃ q ↦ oldValue ⦄ q.write newValue ⦃⇓ q ↦ newValue⦄ := by
+/-- Writing to possibly uninitialized memory initializes it. -/
+theorem MutRawPtr.write.spec_uninit [ByteRepr T] (q : MutRawPtr T) (old : MaybeUninit T)
+    (newValue : T) :
+    ⦃ q ↦? old ⦄ q.write newValue ⦃⇓ q ↦ newValue⦄ := by
   apply ispec_guardedModify
   intro h hPointsTo frame hCompatible
-  have hContains : RawPtr.contains (h ∪ frame) q :=
-    RawPtr.contains_of_pointsTo
-      ((q ↦ oldValue).up_closed hPointsTo (Heap.Sub.union_left hCompatible))
+  have hAllocated : RawPtr.allocated (h ∪ frame) q :=
+    RawPtr.allocated_of_pointsToUninit
+      ((q ↦? old).up_closed hPointsTo (Heap.Sub.union_left hCompatible))
   obtain ⟨hAlign, rest, hCompatibleRest, rfl⟩ :=
-    (RawPtr.pointsTo_holds q oldValue h).mp hPointsTo
-  have hLength : (ByteRepr.encode newValue).length = (ByteRepr.encode oldValue).length := by
-    rw [ByteRepr.length_encode, ByteRepr.length_encode]
+    (RawPtr.pointsToUninit_holds q old h).mp hPointsTo
+  have hLength : (ByteRepr.encode newValue).length = old.cells.length := by
+    rw [ByteRepr.length_encode, MaybeUninit.length_cells]
+  have hLength' : ((ByteRepr.encode newValue).map some).length = old.cells.length := by
+    rw [List.length_map, hLength]
   obtain ⟨hRestFrame, hOldRestFrame⟩ :=
     (PartialCommMonoid.compatible_assoc _ rest frame).mp ⟨hCompatibleRest, hCompatible⟩
+  have hNewOld : PartialCommMonoid.Compatible
+      (Heap.bytes q.loc (ByteRepr.encode newValue)) (rest ∪ frame) := by
+    rw [Heap.bytes_eq_cells]
+    exact Heap.compatible_cells_of_length_eq hLength' hOldRestFrame
   obtain ⟨hNewRest, hNewFrame⟩ :=
     (PartialCommMonoid.compatible_assoc (Heap.bytes q.loc (ByteRepr.encode newValue))
-      rest frame).mpr ⟨hRestFrame, Heap.compatible_bytes_of_length_eq hLength hOldRestFrame⟩
-  refine ⟨⟨hContains, hAlign⟩, Heap.bytes q.loc (ByteRepr.encode newValue) ∪ rest,
+      rest frame).mpr ⟨hRestFrame, hNewOld⟩
+  refine ⟨⟨hAllocated, hAlign⟩, Heap.bytes q.loc (ByteRepr.encode newValue) ∪ rest,
     hNewFrame, ?_, (RawPtr.pointsTo_holds q newValue _).mpr
       ⟨hAlign, Heap.Sub.union_left hNewRest⟩⟩
   change Heap.writeBytes _ q.loc _ = _
-  rw [Heap.writeBytes_union, Heap.writeBytes_bytes_union _ hLength]
+  rw [Heap.writeBytes_union, Heap.writeBytes_cells_union _ hLength]
+
+@[step]
+theorem MutRawPtr.write.spec [ByteRepr T] (q : MutRawPtr T) (oldValue newValue : T) :
+    ⦃ q ↦ oldValue ⦄ q.write newValue ⦃⇓ q ↦ newValue⦄ := by
+  have := MutRawPtr.write.spec_uninit q (.init oldValue) newValue
+  rwa [RawPtr.pointsToUninit_init] at this
 
 /-- Release the bytes addressed by a mutable pointer. -/
 def MutRawPtr.free [ByteRepr T] (q : MutRawPtr T) : Result Unit :=

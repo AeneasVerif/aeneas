@@ -654,6 +654,16 @@ let slice_as_mut_ptr_pattern =
 let slice_as_ptr_pattern =
   lazy (NameMatcher.parse_pattern "core::slice::{[@T]}::as_ptr")
 
+let maybe_uninit_as_mut_ptr_pattern =
+  lazy
+    (NameMatcher.parse_pattern
+       "core::mem::maybe_uninit::{core::mem::maybe_uninit::MaybeUninit<@T>}::as_mut_ptr")
+
+let maybe_uninit_as_ptr_pattern =
+  lazy
+    (NameMatcher.parse_pattern
+       "core::mem::maybe_uninit::{core::mem::maybe_uninit::MaybeUninit<@T>}::as_ptr")
+
 let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->
   (* Debugging *)
@@ -1304,8 +1314,8 @@ and eval_function_call_symbolic (config : config) (span : Meta.span)
   match call.func with
   | FnOpDynamic _ -> [%craise] span "Function pointers are not supported yet"
   | FnOpRegular func when Option.is_some (raw_ptr_view_builtin span ctx func) ->
-      let is_mut = Option.get (raw_ptr_view_builtin span ctx func) in
-      eval_raw_ptr_view_creation config span ~is_mut call ctx
+      let kind, is_mut = Option.get (raw_ptr_view_builtin span ctx func) in
+      eval_raw_ptr_view_creation config span ~kind ~is_mut call ctx
   | FnOpRegular func ->
       [%ltrace
         "function call:\n- call: " ^ call_to_string ctx call ^ "\n- fn_ptr : "
@@ -1321,7 +1331,7 @@ and eval_function_call_symbolic (config : config) (span : Meta.span)
         call.dest ctx
 
 and eval_raw_ptr_view_creation (config : config) (span : Meta.span)
-    ~(is_mut : bool) (call : call) : stl_cm_fun =
+    ~(kind : raw_ptr_view_kind) ~(is_mut : bool) (call : call) : stl_cm_fun =
  fun ctx ->
   let arg =
     match call.args with
@@ -1363,7 +1373,7 @@ and eval_raw_ptr_view_creation (config : config) (span : Meta.span)
         eval_rvalue_ref config span deref_p bkind ctx
     | Constant _ -> [%craise] span "Unexpected constant operand"
   in
-  create_raw_ptr_view config span ~is_mut ~kind:RpvSlice call.dest (v, ctx, cc)
+  create_raw_ptr_view config span ~is_mut ~kind call.dest (v, ctx, cc)
 
 (** [&raw const place] or [&raw mut place] *)
 and eval_raw_ptr_of_place (config : config) (span : Meta.span) ~(is_mut : bool)
@@ -1415,9 +1425,21 @@ and create_raw_ptr_view (config : config) (span : Meta.span) ~(is_mut : bool)
     (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos original.ty))
     "Unsupported: converting to a raw pointer a borrow of a value which \
      contains borrows";
+  let uninit =
+    match (kind, original.ty) with
+    | RpvSlice, (TSlice (ty, _) | TArray (ty, _, _)) ->
+        Layouts.has_uninit_repr ctx.crate ty
+    | _ -> false
+  in
   (match (kind, original.ty) with
   | RpvSlice, (TSlice (ty, _) | TArray (ty, _, _))
-    when Layouts.has_byte_repr ctx.crate ty -> ()
+    when Layouts.has_byte_repr ctx.crate ty || uninit -> ()
+  | RpvMaybeUninit, ty when Layouts.has_uninit_repr ctx.crate ty -> ()
+  | RpvMaybeUninit, _ ->
+      [%craise] span
+        "[MaybeUninit::as_ptr] and [MaybeUninit::as_mut_ptr] are only \
+         supported on values of type [MaybeUninit<T>] where [T] has a byte \
+         representation (integers, and arrays and structures of those)"
   | RpvSlice, _ ->
       [%craise] span
         "[as_ptr] and [as_mut_ptr] are only supported on slices of values \
@@ -1432,7 +1454,7 @@ and create_raw_ptr_view (config : config) (span : Meta.span) ~(is_mut : bool)
   let rpv_origin =
     match kind with
     | RpvSlice -> Hashtbl.find_opt Layouts.view_origin_hints span
-    | RpvValue -> None
+    | RpvValue | RpvMaybeUninit -> None
   in
   (* Reuse the memory of a previous view of the same place, if there is one *)
   let rpv_reuse, ctx =
@@ -1470,12 +1492,14 @@ and create_raw_ptr_view (config : config) (span : Meta.span) ~(is_mut : bool)
       rpv_ptr = ptr_sv;
       rpv_align =
         (match kind with
-        | RpvSlice -> Hashtbl.find_opt Layouts.view_alignment_hints span
-        | RpvValue -> None);
+        | RpvSlice when not uninit ->
+            Hashtbl.find_opt Layouts.view_alignment_hints span
+        | _ -> None);
       rpv_dirty = false;
       rpv_given_back = None;
       rpv_origin;
       rpv_reuse;
+      rpv_uninit = uninit;
     }
   in
   let rid = ctx.fresh_region_id () in
@@ -1543,7 +1567,7 @@ and ctx_mark_raw_ptr_views_dirty (ctx : eval_ctx) : eval_ctx =
   { ctx with env }
 
 and raw_ptr_view_builtin (_span : Meta.span) (ctx : eval_ctx) (func : fn_ptr) :
-    bool option =
+    (raw_ptr_view_kind * bool) option =
   match func.kind with
   | Fun fid -> (
       match FunDeclId.Map.find_opt fid ctx.crate.fun_decls with
@@ -1553,8 +1577,12 @@ and raw_ptr_view_builtin (_span : Meta.span) (ctx : eval_ctx) (func : fn_ptr) :
             ExtractName.match_name ctx.crate (Lazy.force pat)
               decl.item_meta.name
           in
-          if matches slice_as_mut_ptr_pattern then Some true
-          else if matches slice_as_ptr_pattern then Some false
+          if matches slice_as_mut_ptr_pattern then Some (RpvSlice, true)
+          else if matches slice_as_ptr_pattern then Some (RpvSlice, false)
+          else if matches maybe_uninit_as_mut_ptr_pattern then
+            Some (RpvMaybeUninit, true)
+          else if matches maybe_uninit_as_ptr_pattern then
+            Some (RpvMaybeUninit, false)
           else None)
   | TraitMethod _ -> None
 
