@@ -23,12 +23,15 @@ by the pointer value.
 
 The element type must have a byte representation (`ByteRepr T`):
 
-* `q ↦ value` owns the bytes from `q` on that encode `value`;
+* `q ↦ value` says that `q` is aligned for `T` and owns the bytes from `q` on
+  that encode `value`;
 * `q ↦* values` owns the consecutive elements starting at `q`.
 
 Since ownership is of bytes, the type a pointer views its bytes at is a
 matter of specification only: `RawPtr.cast_scalar` is the identity on
-addresses, and its specification reinterprets the bytes it owns.
+addresses, and its specification reinterprets the bytes it owns, provided the
+address is aligned for the new type.  Reads and writes are only defined at
+aligned addresses.
 
 Reads accept both mutable and const pointers. Allocation, writes and
 deallocation require a mutable pointer.
@@ -81,6 +84,11 @@ def toConst (q : MutRawPtr T) : ConstRawPtr T :=
 def retype (q : RawPtr T M) : RawPtr U M' :=
   ⟨q.base, q.offset⟩
 
+/-- Whether the address of `q` is a multiple of the alignment of `T`.
+Allocations start at offset `0`, so they are aligned at their base. -/
+def Aligned [ByteRepr T] (q : RawPtr T M) : Prop :=
+  ByteRepr.align T ∣ q.offset
+
 @[simp] theorem base_add [ByteRepr T] (q : RawPtr T M) (i : Nat) :
     (q.add i).base = q.base := rfl
 
@@ -122,28 +130,67 @@ theorem add_add [ByteRepr T] (q : RawPtr T M) (i j : Nat) :
     (q.add i).add j = q.add (i + j) := by
   simp [add, Nat.add_mul, Nat.add_assoc]
 
-/-- `q` owns the bytes encoding `value` from the address it holds on. -/
-def pointsTo [ByteRepr T] (q : RawPtr T M) (value : T) : IProp :=
-  Ref.pointsTo q.ref value
+theorem aligned_of_offset_eq_zero [ByteRepr T] {q : RawPtr T M} (hOffset : q.offset = 0) :
+    q.Aligned := by
+  simp [Aligned, hOffset]
 
-/-- `q` owns the `values.length` consecutive elements from `q` on. -/
-def pointsToRange [ByteRepr T] (q : RawPtr T M) : List T → IProp
-  | [] => emp
-  | value :: rest => pointsTo q value ∗ pointsToRange (q.add 1) rest
+@[simp] theorem aligned_add [ByteRepr T] (q : RawPtr T M) (i : Nat) :
+    (q.add i).Aligned ↔ q.Aligned :=
+  (Nat.dvd_add_left (Nat.dvd_trans ByteRepr.align_dvd_size (Nat.dvd_mul_left _ i))).trans
+    Iff.rfl
+
+@[simp] theorem aligned_toConst [ByteRepr T] (q : MutRawPtr T) :
+    q.toConst.Aligned ↔ q.Aligned := Iff.rfl
+
+@[simp] theorem aligned_retype_self [ByteRepr T] (q : RawPtr T M) :
+    (q.retype : RawPtr T M').Aligned ↔ q.Aligned := Iff.rfl
+
+/-- `q` is aligned and owns the bytes encoding `value` from the address it
+holds on. -/
+def pointsTo [ByteRepr T] (q : RawPtr T M) (value : T) : IProp :=
+  iprop(⌜q.Aligned⌝ ∗ Ref.pointsTo q.ref value)
 
 end RawPtr
 
 instance instPointsToRawPtr {T : Type} {M : Mutability} [ByteRepr T] :
     PointsTo (RawPtr T M) T := ⟨RawPtr.pointsTo⟩
 
+namespace RawPtr
+
+/-- `q` owns the `values.length` consecutive elements from `q` on. -/
+def pointsToRange [ByteRepr T] (q : RawPtr T M) : List T → IProp
+  | [] => emp
+  | value :: rest => iprop(q ↦ value ∗ pointsToRange (q.add 1) rest)
+
+end RawPtr
+
 @[inherit_doc RawPtr.pointsToRange]
 notation:50 q:50 " ↦* " values:50 => RawPtr.pointsToRange q values
 
 theorem RawPtr.pointsTo_eq_ref [ByteRepr T] (q : RawPtr T M) (value : T) :
-    (q ↦ value) = Ref.pointsTo q.ref value := rfl
+    (q ↦ value) = iprop(⌜q.Aligned⌝ ∗ Ref.pointsTo q.ref value) := rfl
 
 theorem RawPtr.pointsTo_eq_owns [ByteRepr T] (q : RawPtr T M) (value : T) :
-    (q ↦ value) = owns (Heap.bytes q.loc (ByteRepr.encode value)) := rfl
+    (q ↦ value) = iprop(⌜q.Aligned⌝ ∗ owns (Heap.bytes q.loc (ByteRepr.encode value))) :=
+  rfl
+
+theorem RawPtr.pointsTo_holds [ByteRepr T] (q : RawPtr T M) (value : T) (h : Heap) :
+    (q ↦ value) h ↔ q.Aligned ∧ Heap.Sub (Heap.bytes q.loc (ByteRepr.encode value)) h :=
+  sep_pure_l _ _ h
+
+theorem RawPtr.aligned_of_pointsTo [ByteRepr T] {q : RawPtr T M} {value : T} {h : Heap}
+    (hPointsTo : (q ↦ value) h) : q.Aligned :=
+  ((RawPtr.pointsTo_holds q value h).mp hPointsTo).1
+
+theorem RawPtr.pointsTo_aligned [ByteRepr T] (q : RawPtr T M) (value : T) :
+    q ↦ value ⊢ ⌜q.Aligned⌝ ∗ q ↦ value :=
+  fun h hPointsTo => (sep_pure_l _ _ h).mpr ⟨RawPtr.aligned_of_pointsTo hPointsTo, hPointsTo⟩
+
+theorem RawPtr.pointsTo_eq_owns_of_aligned [ByteRepr T] {q : RawPtr T M} (value : T)
+    (hAlign : q.Aligned) :
+    (q ↦ value) = owns (Heap.bytes q.loc (ByteRepr.encode value)) :=
+  bientails_eq ⟨fun h hPointsTo => ((RawPtr.pointsTo_holds q value h).mp hPointsTo).2,
+    fun h hOwns => (RawPtr.pointsTo_holds q value h).mpr ⟨hAlign, hOwns⟩⟩
 
 theorem RawPtr.pointsTo_eq_range [ByteRepr T] (q : RawPtr T M) (value : T) :
     (q ↦ value) = (q ↦* [value]) :=
@@ -166,8 +213,13 @@ private theorem owns_empty_eq : owns Heap.empty = emp :=
 
 namespace RawPtr
 
-/-- A range owns the concatenated encodings of its values. -/
-theorem pointsToRange_eq_owns [ByteRepr T] (q : RawPtr T M) (values : List T) :
+private theorem loc_add_size [ByteRepr T] (q : RawPtr T M) :
+    q.loc.add (ByteRepr.size T) = (q.add 1).loc := by
+  rw [loc_add, Nat.one_mul]
+
+/-- An aligned range owns the concatenated encodings of its values. -/
+theorem pointsToRange_eq_owns [ByteRepr T] (q : RawPtr T M) (values : List T)
+    (hAlign : q.Aligned) :
     (q ↦* values) = owns (Heap.bytes q.loc (values.flatMap ByteRepr.encode)) := by
   induction values generalizing q with
   | nil =>
@@ -175,20 +227,63 @@ theorem pointsToRange_eq_owns [ByteRepr T] (q : RawPtr T M) (values : List T) :
       rfl
   | cons value rest ih =>
       change iprop(q ↦ value ∗ (q.add 1) ↦* rest) = _
-      rw [ih, List.flatMap_cons, Heap.bytes_append,
+      rw [pointsTo_eq_owns_of_aligned value hAlign, ih _ ((aligned_add q 1).mpr hAlign),
+        List.flatMap_cons, Heap.bytes_append,
         bientails_eq (owns_union _ _ (Heap.compatible_bytes_append _ _ _)),
-        ByteRepr.length_encode, loc_add, Nat.one_mul]
-      rfl
+        ByteRepr.length_encode, loc_add_size]
+
+/-- A range owns the concatenated encodings of its values. -/
+theorem pointsToRange_owns [ByteRepr T] (q : RawPtr T M) (values : List T) :
+    q ↦* values ⊢ owns (Heap.bytes q.loc (values.flatMap ByteRepr.encode)) := by
+  induction values generalizing q with
+  | nil =>
+      rw [List.flatMap_nil, Heap.bytes_nil, owns_empty_eq]
+      exact entails_refl _
+  | cons value rest ih =>
+      change iprop(q ↦ value ∗ (q.add 1) ↦* rest) ⊢ _
+      rw [List.flatMap_cons, Heap.bytes_append,
+        bientails_eq (owns_union _ _ (Heap.compatible_bytes_append _ _ _)),
+        ByteRepr.length_encode, loc_add_size]
+      exact sep_mono (fun h hPointsTo => ((pointsTo_holds q value h).mp hPointsTo).2) (ih _)
+
+theorem aligned_of_pointsToRange [ByteRepr T] {q : RawPtr T M} {values : List T} {h : Heap}
+    (hPointsTo : (q ↦* values) h) (hValues : values ≠ []) : q.Aligned := by
+  cases values with
+  | nil => exact absurd rfl hValues
+  | cons value rest =>
+      obtain ⟨_, _, _, _, hFirst, -⟩ := hPointsTo
+      exact aligned_of_pointsTo hFirst
+
+theorem pointsToRange_aligned [ByteRepr T] (q : RawPtr T M) (values : List T) :
+    q ↦* values ⊢ ⌜values ≠ [] → q.Aligned⌝ ∗ q ↦* values :=
+  fun h hPointsTo => (sep_pure_l _ _ h).mpr ⟨aligned_of_pointsToRange hPointsTo, hPointsTo⟩
+
+theorem pointsToRange_retype_eq [ByteRepr T] (q : RawPtr T M) (values : List T) :
+    ((q.retype : RawPtr T M') ↦* values) = (q ↦* values) := by
+  induction values generalizing q with
+  | nil => rfl
+  | cons value rest ih =>
+      change iprop(q ↦ value ∗ ((q.add 1).retype : RawPtr T M') ↦* rest) =
+        iprop(q ↦ value ∗ (q.add 1) ↦* rest)
+      rw [ih]
 
 @[simp] theorem pointsToRange_toConst [ByteRepr T] (q : MutRawPtr T) (values : List T) :
-    (q.toConst ↦* values) = (q ↦* values) := by
-  rw [pointsToRange_eq_owns, pointsToRange_eq_owns, loc_toConst]
+    (q.toConst ↦* values) = (q ↦* values) :=
+  pointsToRange_retype_eq q values
 
 theorem pointsToRange_append [ByteRepr T] (q : RawPtr T M) (xs ys : List T) :
     q ↦* (xs ++ ys) ⊣⊢ q ↦* xs ∗ (q.add xs.length) ↦* ys := by
-  rw [pointsToRange_eq_owns, pointsToRange_eq_owns, pointsToRange_eq_owns,
-    List.flatMap_append, Heap.bytes_append, loc_add, ← ByteRepr.length_flatMap_encode]
-  exact owns_union _ _ (Heap.compatible_bytes_append _ _ _)
+  induction xs generalizing q with
+  | nil =>
+      rw [List.nil_append, List.length_nil, add_zero]
+      exact ⟨(sep_emp_l _).mpr, (sep_emp_l _).mp⟩
+  | cons x xs ih =>
+      change iprop(q ↦ x ∗ (q.add 1) ↦* (xs ++ ys)) ⊣⊢
+        iprop((q ↦ x ∗ (q.add 1) ↦* xs) ∗ (q.add (xs.length + 1)) ↦* ys)
+      rw [show q.add (xs.length + 1) = (q.add 1).add xs.length by
+          rw [add_add, Nat.add_comm],
+        bientails_eq (ih (q.add 1)), sep_assoc_eq]
+      exact ⟨entails_refl _, entails_refl _⟩
 
 theorem pointsToRange_split [ByteRepr T] (q : RawPtr T M) (values : List T) (i : Nat) :
     q ↦* values ⊣⊢
@@ -215,31 +310,43 @@ theorem pointsToRange_eq_take_get_drop [ByteRepr T] {q : RawPtr T M} {values : L
 /-! ## Changing the view of owned bytes
 
 Ownership is of bytes, so owning bytes at one type is owning them at any type
-whose values encode to the same bytes. -/
+whose values encode to the same bytes, at an address aligned for that type. -/
 
 theorem pointsToRange_retype [ByteRepr T] [ByteRepr U] (q : RawPtr T M)
     (xs : List T) (ys : List U)
-    (hBytes : xs.flatMap ByteRepr.encode = ys.flatMap ByteRepr.encode) :
-    ((q.retype : RawPtr U M') ↦* ys) = (q ↦* xs) := by
-  rw [pointsToRange_eq_owns, pointsToRange_eq_owns, hBytes, loc_retype]
+    (hBytes : xs.flatMap ByteRepr.encode = ys.flatMap ByteRepr.encode)
+    (hAlign : ys ≠ [] → (q.retype : RawPtr U M').Aligned) :
+    q ↦* xs ⊢ (q.retype : RawPtr U M') ↦* ys := by
+  intro h hPointsTo
+  cases ys with
+  | nil => trivial
+  | cons y rest =>
+      rw [pointsToRange_eq_owns _ _ (hAlign (List.cons_ne_nil _ _)), ← hBytes, loc_retype]
+      exact pointsToRange_owns q xs h hPointsTo
 
 theorem pointsTo_retype [ByteRepr T] [ByteRepr U] (q : RawPtr T M) (x : T) (y : U)
-    (hBytes : ByteRepr.encode x = ByteRepr.encode y) :
-    ((q.retype : RawPtr U M') ↦ y) = (q ↦ x) := by
-  rw [pointsTo_eq_owns, pointsTo_eq_owns, hBytes, loc_retype]
+    (hBytes : ByteRepr.encode x = ByteRepr.encode y)
+    (hAlign : (q.retype : RawPtr U M').Aligned) :
+    q ↦ x ⊢ (q.retype : RawPtr U M') ↦ y := by
+  intro h hPointsTo
+  rw [pointsTo_eq_owns_of_aligned y hAlign, ← hBytes, loc_retype]
+  exact ((pointsTo_holds q x h).mp hPointsTo).2
 
 theorem pointsTo_retype_of_decode [ByteRepr T] [ByteRepr U] (q : RawPtr T M)
-    (x : T) (y : U) (hDecode : ByteRepr.decode (ByteRepr.encode x) = some y) :
-    ((q.retype : RawPtr U M') ↦ y) = (q ↦ x) :=
-  pointsTo_retype q x y (ByteRepr.encode_of_decode hDecode).symm
+    (x : T) (y : U) (hDecode : ByteRepr.decode (ByteRepr.encode x) = some y)
+    (hAlign : (q.retype : RawPtr U M').Aligned) :
+    q ↦ x ⊢ (q.retype : RawPtr U M') ↦ y :=
+  pointsTo_retype q x y (ByteRepr.encode_of_decode hDecode).symm hAlign
 
 end RawPtr
 
 theorem RawPtr.pointsTo_exclusive [ByteRepr T] (q : RawPtr T M) (value₁ value₂ : T)
     (hSize : 0 < ByteRepr.size T) :
-    q ↦ value₁ ∗ q ↦ value₂ ⊢ ⌜False⌝ := by
-  rw [RawPtr.pointsTo_eq_ref, RawPtr.pointsTo_eq_ref]
-  exact Ref.pointsTo_exclusive q.ref value₁ value₂ hSize
+    q ↦ value₁ ∗ q ↦ value₂ ⊢ ⌜False⌝ :=
+  entails_trans
+    (sep_mono (fun h hPointsTo => ((RawPtr.pointsTo_holds q value₁ h).mp hPointsTo).2)
+      (fun h hPointsTo => ((RawPtr.pointsTo_holds q value₂ h).mp hPointsTo).2))
+    (Ref.pointsTo_exclusive q.ref value₁ value₂ hSize)
 
 namespace RawPtr
 
@@ -257,8 +364,7 @@ def contains [ByteRepr T] (h : Heap) (q : RawPtr T M) : Prop :=
 
 theorem readValue?_of_pointsTo [ByteRepr T] {q : RawPtr T M} {value : T} {h : Heap}
     (hPointsTo : (q ↦ value) h) : readValue? h q = some value := by
-  have hRead := Heap.readBytes_of_sub
-    (show Heap.Sub (Heap.bytes q.loc (ByteRepr.encode value)) h from hPointsTo)
+  have hRead := Heap.readBytes_of_sub ((pointsTo_holds q value h).mp hPointsTo).2
   rw [ByteRepr.length_encode] at hRead
   rw [readValue?, hRead, Option.bind_some, ByteRepr.decode_encode]
 
@@ -307,7 +413,8 @@ theorem RawPtr.allocArray.spec [ByteRepr T] {β : Type} (values : List T)
   refine ⟨trivial, _, hFreshFrame,
     (PartialCommMonoid.union_assoc hFreshH hFreshFrame).symm, ?_⟩
   apply hPost
-  rw [RawPtr.pointsToRange_eq_owns]
+  rw [RawPtr.pointsToRange_eq_owns _ _
+    (RawPtr.aligned_of_offset_eq_zero (Heap.freshLoc_snd _))]
   exact Heap.Sub.union_left hFreshH
 
 /-- Materialize a list as fresh memory with the requested pointer mutability. -/
@@ -319,7 +426,7 @@ theorem RawPtr.materialize.spec [ByteRepr T] (values : List T) :
     ⦃ emp ⦄ RawPtr.materialize (M := M) values
       ⦃⇓ p => p ↦* values⦄ :=
   RawPtr.allocArray.spec _ _ _ fun q => by
-    rw [← RawPtr.pointsToRange_retype q values values rfl]
+    rw [RawPtr.pointsToRange_retype_eq]
     exact entails_refl _
 
 /-- Allocate one mutable slot. -/
@@ -337,12 +444,14 @@ namespace RawPtr
 
 structure Readable [ByteRepr T] (q : RawPtr T M) (h : Heap) : Prop where
   contains : RawPtr.contains h q
+  aligned : q.Aligned
 
 theorem readable_of_pointsTo [ByteRepr T] {q : RawPtr T M} {value : T} {h : Heap}
     (hPointsTo : (q ↦ value) h) : q.Readable h :=
-  ⟨contains_of_pointsTo hPointsTo⟩
+  ⟨contains_of_pointsTo hPointsTo, aligned_of_pointsTo hPointsTo⟩
 
-/-- Read through either a mutable or const pointer: decode the bytes at `q`. -/
+/-- Read through either a mutable or const pointer: decode the bytes at an
+aligned `q`. -/
 def read [ByteRepr T] (q : RawPtr T M) : Result T :=
   Result.guardedModify (fun h => q.Readable h) fun h hReadable =>
     ((readValue? h q).get hReadable.contains, h)
@@ -359,11 +468,19 @@ theorem read.spec [ByteRepr T] (q : RawPtr T M) (value : T) :
   exact (sep_pure_l _ _ h).mpr
     ⟨by simp only [readValue?_of_pointsTo hPointsToFrame, Option.get_some], hPointsTo⟩
 
+/-- Reads are only defined at aligned addresses: the precondition of any
+specification of a read forces the address to be aligned. -/
+theorem read.aligned_of_spec [ByteRepr T] {q : RawPtr T M} {P : IProp} {Q : T → IProp}
+    (hSpec : ⦃ P ⦄ q.read ⦃⇓ result => Q result⦄) : P ⊢ ⌜q.Aligned⌝ := by
+  intro h hP
+  rw [ispec_iff] at hSpec
+  exact (hSpec emp h ((sep_emp_r P).mpr h hP)).vis_view.1.aligned
+
 end RawPtr
 
-/-- Write through a mutable pointer: overwrite the bytes at `q`. -/
+/-- Write through a mutable pointer: overwrite the bytes at an aligned `q`. -/
 def MutRawPtr.write [ByteRepr T] (q : MutRawPtr T) (value : T) : Result Unit :=
-  Result.guardedModify (fun h => RawPtr.contains h q) fun h _ =>
+  Result.guardedModify (fun h => RawPtr.contains h q ∧ q.Aligned) fun h _ =>
     ((), h.writeBytes q.loc (ByteRepr.encode value))
 
 @[step]
@@ -374,8 +491,8 @@ theorem MutRawPtr.write.spec [ByteRepr T] (q : MutRawPtr T) (oldValue newValue :
   have hContains : RawPtr.contains (h ∪ frame) q :=
     RawPtr.contains_of_pointsTo
       ((q ↦ oldValue).up_closed hPointsTo (Heap.Sub.union_left hCompatible))
-  obtain ⟨rest, hCompatibleRest, rfl⟩ :
-      Heap.Sub (Heap.bytes q.loc (ByteRepr.encode oldValue)) h := hPointsTo
+  obtain ⟨hAlign, rest, hCompatibleRest, rfl⟩ :=
+    (RawPtr.pointsTo_holds q oldValue h).mp hPointsTo
   have hLength : (ByteRepr.encode newValue).length = (ByteRepr.encode oldValue).length := by
     rw [ByteRepr.length_encode, ByteRepr.length_encode]
   obtain ⟨hRestFrame, hOldRestFrame⟩ :=
@@ -383,8 +500,9 @@ theorem MutRawPtr.write.spec [ByteRepr T] (q : MutRawPtr T) (oldValue newValue :
   obtain ⟨hNewRest, hNewFrame⟩ :=
     (PartialCommMonoid.compatible_assoc (Heap.bytes q.loc (ByteRepr.encode newValue))
       rest frame).mpr ⟨hRestFrame, Heap.compatible_bytes_of_length_eq hLength hOldRestFrame⟩
-  refine ⟨hContains, Heap.bytes q.loc (ByteRepr.encode newValue) ∪ rest, hNewFrame, ?_,
-    Heap.Sub.union_left hNewRest⟩
+  refine ⟨⟨hContains, hAlign⟩, Heap.bytes q.loc (ByteRepr.encode newValue) ∪ rest,
+    hNewFrame, ?_, (RawPtr.pointsTo_holds q newValue _).mpr
+      ⟨hAlign, Heap.Sub.union_left hNewRest⟩⟩
   change Heap.writeBytes _ q.loc _ = _
   rw [Heap.writeBytes_union, Heap.writeBytes_bytes_union _ hLength]
 
@@ -401,8 +519,7 @@ theorem MutRawPtr.free.spec [ByteRepr T] (q : MutRawPtr T) (value : T) :
   have hContains : RawPtr.contains (h ∪ frame) q :=
     RawPtr.contains_of_pointsTo
       ((q ↦ value).up_closed hPointsTo (Heap.Sub.union_left hCompatible))
-  obtain ⟨rest, hCompatibleRest, rfl⟩ :
-      Heap.Sub (Heap.bytes q.loc (ByteRepr.encode value)) h := hPointsTo
+  obtain ⟨-, rest, hCompatibleRest, rfl⟩ := (RawPtr.pointsTo_holds q value h).mp hPointsTo
   obtain ⟨hRestFrame, hOldRestFrame⟩ :=
     (PartialCommMonoid.compatible_assoc _ rest frame).mp ⟨hCompatibleRest, hCompatible⟩
   refine ⟨hContains, rest, hRestFrame, ?_, trivial⟩
@@ -795,34 +912,40 @@ end IsScalar
 /-- Reinterpret the bytes a pointer addresses at another element type and
 mutability.  The address is unchanged and the heap is untouched: the
 specifications below only transfer ownership from one view of the bytes to
-another. -/
+another, which requires the address to be aligned for the new type. -/
 def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability) (p : RawPtr T M) :
     Result (RawPtr T' M') :=
   .ok p.retype
 
 theorem RawPtr.cast_scalar.spec_range [ByteRepr T] [ByteRepr T'] (p : RawPtr T M)
     (xs : List T) (ys : List T')
-    (hBytes : xs.flatMap ByteRepr.encode = ys.flatMap ByteRepr.encode) :
+    (hBytes : xs.flatMap ByteRepr.encode = ys.flatMap ByteRepr.encode)
+    (hAlign : (xs ≠ [] → p.Aligned) → ys ≠ [] → (p.retype : RawPtr T' M').Aligned) :
     ⦃ p ↦* xs ⦄ RawPtr.cast_scalar T' M' p
       ⦃⇓ q => ⌜q = p.retype⌝ ∗ q ↦* ys⦄ := by
   apply (ispec_ok _).2
-  rw [RawPtr.pointsToRange_retype p xs ys hBytes]
-  iframe
+  intro h hPointsTo
+  exact (sep_pure_l _ _ h).mpr ⟨rfl, RawPtr.pointsToRange_retype p xs ys hBytes
+    (hAlign (RawPtr.aligned_of_pointsToRange hPointsTo)) h hPointsTo⟩
 
 theorem RawPtr.cast_scalar.spec_of_decode [ByteRepr T] [ByteRepr T'] (p : RawPtr T M)
-    (x : T) (y : T') (hDecode : ByteRepr.decode (ByteRepr.encode x) = some y) :
+    (x : T) (y : T') (hDecode : ByteRepr.decode (ByteRepr.encode x) = some y)
+    (hAlign : p.Aligned → (p.retype : RawPtr T' M').Aligned) :
     ⦃ p ↦ x ⦄ RawPtr.cast_scalar T' M' p
       ⦃⇓ q => ⌜q = p.retype⌝ ∗ q ↦ y⦄ := by
   apply (ispec_ok _).2
-  rw [RawPtr.pointsTo_retype_of_decode p x y hDecode]
-  iframe
+  intro h hPointsTo
+  exact (sep_pure_l _ _ h).mpr ⟨rfl, RawPtr.pointsTo_retype_of_decode p x y hDecode
+    (hAlign (RawPtr.aligned_of_pointsTo hPointsTo)) h hPointsTo⟩
 
 @[step]
 theorem RawPtr.cast_scalar.spec [ByteRepr T] [ByteRepr T'] (p : RawPtr T M) (x : T)
-    (hDecode : (ByteRepr.decode (α := T') (ByteRepr.encode x)).isSome) :
+    (hDecode : (ByteRepr.decode (α := T') (ByteRepr.encode x)).isSome)
+    (hAlign : ByteRepr.align T' ∣ ByteRepr.align T) :
     ⦃ p ↦ x ⦄ RawPtr.cast_scalar T' M' p
       ⦃⇓ q => ⌜q = p.retype⌝ ∗ q ↦ (ByteRepr.decode (ByteRepr.encode x)).get hDecode⦄ :=
   RawPtr.cast_scalar.spec_of_decode p x _ (Option.some_get hDecode).symm
+    (Nat.dvd_trans hAlign)
 
 end Aeneas.Std
 

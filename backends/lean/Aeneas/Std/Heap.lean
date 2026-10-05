@@ -75,9 +75,13 @@ theorem Loc.add_add (a : Loc) (i j : Nat) : (a.add i).add j = a.add (i + j) := b
 
 /-- A fixed-size encoding of the values of `α` as bytes: what lets a value of `α`
 live in the heap.  Decoding accepts exactly the encodings, so the bytes found
-at an address determine the value they hold. -/
+at an address determine the value they hold.  A value of `α` may only be read
+or written at an offset that is a multiple of `align`, which divides `size` as
+in Rust. -/
 class ByteRepr (α : Type) where
   size : Nat
+  align : Nat
+  align_dvd_size : align ∣ size
   encode : α → List Byte
   decode : List Byte → Option α
   length_encode (x : α) : (encode x).length = size
@@ -626,8 +630,12 @@ be *run* and not only related to its outcomes. -/
 def freshBase (h : Heap) : AllocId :=
   (h.keys.image Prod.fst).sup id + 1
 
-/-- The address the next allocation starts at. -/
+/-- The address the next allocation starts at.  Its offset is `0`, which every
+alignment divides: allocations are suitably aligned for any type at their base. -/
 def freshLoc (h : Heap) : Loc := (freshBase h, 0)
+
+@[simp] theorem freshLoc_snd (h : Heap) : (freshLoc h).2 = 0 := by
+  simp [freshLoc]
 
 theorem not_mem_freshBase {h : Heap} {address : Loc}
     (hBase : address.1 = freshBase h) : address ∉ h := by

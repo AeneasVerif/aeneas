@@ -219,6 +219,34 @@ let compute_back_fun_name (ctx : bs_ctx) (decl : LlbcAst.fun_decl) : string =
           (* We shouldn't get there *)
           [%craise] decl.item_meta.span "Unexpected")
 
+(** The Lean models of [as_ptr] and [as_mut_ptr] store the elements of the slice
+    as bytes, which requires a byte representation of the element type: only
+    integers have one. *)
+let check_slice_as_ptr_call (ctx : bs_ctx) (call : S.call) : unit =
+  match call.call_id with
+  | S.Fun (Fun fid, _) when Config.backend () = Lean -> (
+      match FunDeclId.Map.find_opt fid ctx.decls_ctx.fun_ctx.fun_decls with
+      | None -> ()
+      | Some fun_decl -> (
+          let is_as_ptr =
+            List.exists
+              (fun pat ->
+                ExtractName.match_name ctx.decls_ctx.crate
+                  (NameMatcher.parse_pattern pat)
+                  fun_decl.item_meta.name)
+              [
+                "core::slice::{[@T]}::as_ptr"; "core::slice::{[@T]}::as_mut_ptr";
+              ]
+          in
+          match call.generics.types with
+          | [ TScalar (TInteger _) ] -> ()
+          | _ ->
+              if is_as_ptr then
+                [%craise] ctx.span
+                  "[as_ptr] and [as_mut_ptr] are only supported on slices of \
+                   integers"))
+  | _ -> ()
+
 let rec translate_expr (e : S.expr) (ctx : bs_ctx) : texpr =
   [%ldebug "e:\n" ^ bs_ctx_expr_to_string ctx e];
   match e with
@@ -383,6 +411,7 @@ and translate_function_call (call : S.call) (e : S.expr) (ctx : bs_ctx) : texpr
 (** Handle the function call cases which are not unsized casts *)
 and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
     texpr =
+  check_slice_as_ptr_call ctx call;
   (* Register the consumed mutable borrows to compute default values *)
   let ctx =
     List.fold_left (register_consumed_mut_borrows call.ctx) ctx call.args

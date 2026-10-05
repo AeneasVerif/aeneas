@@ -11,6 +11,8 @@ Scalars are stored in the heap as their little-endian bytes.  Decoding accepts
 exactly `numBits / 8` bytes, so a run of bytes decodes to at most one scalar of
 each type, and any run of the right length decodes to some scalar: reading a
 scalar through a pointer of another scalar type of the same size is defined.
+A scalar is aligned to its size, which is at least as strict as Rust's alignment
+of integers.
 -/
 
 namespace Aeneas.Std
@@ -51,6 +53,8 @@ theorem IScalarTy.numBits_mod_eight (ty : IScalarTy) : ty.numBits % 8 = 0 := by
 
 instance UScalar.instByteRepr (ty : UScalarTy) : ByteRepr (UScalar ty) where
   size := ty.numBits / 8
+  align := ty.numBits / 8
+  align_dvd_size := Nat.dvd_refl _
   encode x := x.bv.toLEBytes
   decode bytes := (BitVec.decodeLE ty.numBits bytes).map UScalar.mk
   length_encode x := by
@@ -65,6 +69,8 @@ instance UScalar.instByteRepr (ty : UScalarTy) : ByteRepr (UScalar ty) where
 
 instance IScalar.instByteRepr (ty : IScalarTy) : ByteRepr (IScalar ty) where
   size := ty.numBits / 8
+  align := ty.numBits / 8
+  align_dvd_size := Nat.dvd_refl _
   encode x := x.bv.toLEBytes
   decode bytes := (BitVec.decodeLE ty.numBits bytes).map IScalar.mk
   length_encode x := by
@@ -80,8 +86,14 @@ instance IScalar.instByteRepr (ty : IScalarTy) : ByteRepr (IScalar ty) where
 @[simp] theorem UScalar.byteRepr_size (ty : UScalarTy) :
     ByteRepr.size (UScalar ty) = ty.numBits / 8 := rfl
 
+@[simp] theorem UScalar.byteRepr_align (ty : UScalarTy) :
+    ByteRepr.align (UScalar ty) = ty.numBits / 8 := rfl
+
 @[simp] theorem IScalar.byteRepr_size (ty : IScalarTy) :
     ByteRepr.size (IScalar ty) = ty.numBits / 8 := rfl
+
+@[simp] theorem IScalar.byteRepr_align (ty : IScalarTy) :
+    ByteRepr.align (IScalar ty) = ty.numBits / 8 := rfl
 
 @[simp] theorem UScalar.encode_eq {ty : UScalarTy} (x : UScalar ty) :
     ByteRepr.encode x = x.bv.toLEBytes := rfl

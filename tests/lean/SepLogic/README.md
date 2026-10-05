@@ -177,7 +177,10 @@ None of the pointer or buffer operations has a precondition: pointer
 arithmetic, buffer views, allocation, reads, writes and deallocation are total
 functions of their arguments.  What may go wrong is caught by the separation
 logic and by the *definedness guard* of the event an operation triggers: a read
-through a dangling or unowned pointer is stuck, not erroneous.
+through a dangling or unowned pointer is stuck, not erroneous.  So is a read
+or write at an address that is not a multiple of the alignment of its type
+(`ByteRepr.align`): `q ↦ x` includes `⌜q.Aligned⌝`, and allocations start at
+offset `0`, so they are aligned at their base.
 
 Deallocation releases the bytes it owns — `Buffer.free` is `Ptr.freeRange` over
 the range the view spans — so freeing part of an allocation is expressible and
@@ -188,17 +191,21 @@ what tells a leak from a clean run.
 
 Since ownership is of bytes, the type a pointer views them at is not part of
 the heap.  `RawPtr.cast_scalar` is `ok p.retype`: it neither allocates nor
-moves the pointer, and its specifications only change the view:
+moves the pointer, and its specifications only change the view, at an address
+aligned for the new type:
 
 ```text
 RawPtr.pointsToRange_retype :
-  xs.flatMap encode = ys.flatMap encode → (q.retype ↦* ys) = (q ↦* xs)
+  xs.flatMap encode = ys.flatMap encode → (ys ≠ [] → q.retype.Aligned) →
+    q ↦* xs ⊢ q.retype ↦* ys
 cast_scalar.spec :
-  ⦃q ↦ x⦄ cast_scalar U .. q ⦃⇓ r => ⌜r = q.retype⌝ ∗ r ↦ (decode (encode x)).get _⦄
+  align U ∣ align T →
+    ⦃q ↦ x⦄ cast_scalar U .. q ⦃⇓ r => ⌜r = q.retype⌝ ∗ r ↦ (decode (encode x)).get _⦄
 ```
 
 A same-size cast between scalars reinterprets the bits, and a `u32` can be
-owned as the four `u8`s of its encoding and back.  See the "Pointer casts"
+owned as the four `u8`s of its encoding and back, at an address aligned for
+`u32`.  See the "Pointer casts"
 section of [`Tests/UnitTest.lean`](Tests/UnitTest.lean).
 
 ## Four semantics for `Result`

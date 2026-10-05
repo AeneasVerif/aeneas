@@ -575,7 +575,7 @@ example (p : MutRawPtr U32) :
 example (p : MutRawPtr U32) (x : U32) :
     ⦃ p ↦ x ⦄ RawPtr.cast_scalar I32 .Const p
       ⦃⇓ q => ⌜q = p.retype⌝ ∗ q ↦ (⟨x.bv⟩ : I32)⦄ :=
-  RawPtr.cast_scalar.spec_of_decode p x _ (UScalar.decode_encode_iscalar x rfl)
+  RawPtr.cast_scalar.spec_of_decode p x _ (UScalar.decode_encode_iscalar x rfl) id
 
 /-- Different size: a `u32` is owned as the four `u8`s of its little-endian
 encoding. -/
@@ -585,15 +585,37 @@ example (p : MutRawPtr U32) (x : U32) :
   rw [RawPtr.pointsTo_eq_range]
   exact RawPtr.cast_scalar.spec_range p [x] _ (by
     simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil]
-    exact (UScalar.flatMap_encode_u8 _).symm)
+    exact (UScalar.flatMap_encode_u8 _).symm) (fun _ _ => by simp [RawPtr.Aligned])
 
-/-- Viewing owned bytes at another type is an equality of assertions, so it can
-be undone. -/
-example (p : MutRawPtr U32) (x : U32) :
-    ((p.retype : MutRawPtr U8) ↦* x.bv.toLEBytes.map UScalar.mk) = (p ↦* [x]) :=
-  RawPtr.pointsToRange_retype p [x] _ (by
+/-- Viewing owned bytes at another type can be undone, at an address aligned for
+the original type. -/
+example (p : MutRawPtr U32) (x : U32) (hAlign : p.Aligned) :
+    (p.retype : MutRawPtr U8) ↦* x.bv.toLEBytes.map UScalar.mk ⊣⊢ p ↦* [x] := by
+  have hBytes : [x].flatMap Aeneas.Std.ByteRepr.encode =
+      (x.bv.toLEBytes.map (UScalar.mk (ty := .U8))).flatMap Aeneas.Std.ByteRepr.encode := by
     simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil]
-    exact (UScalar.flatMap_encode_u8 _).symm)
+    exact (UScalar.flatMap_encode_u8 _).symm
+  exact ⟨RawPtr.pointsToRange_retype _ _ _ hBytes.symm fun _ => hAlign,
+    RawPtr.pointsToRange_retype p _ _ hBytes fun _ => by simp [RawPtr.Aligned]⟩
+
+/-- Reads are only defined at aligned addresses: the four bytes one past an
+address aligned for `u32` have no read specification at `u32`. -/
+example (p : MutRawPtr U8) (hAlign : 4 ∣ p.offset) (P : IProp) (Q : U32 → IProp)
+    (hSpec : ⦃ P ⦄ ((p.add 1).retype : MutRawPtr U32).read ⦃⇓ y => Q y⦄) :
+    P ⊢ ⌜False⌝ := by
+  refine entails_trans (RawPtr.read.aligned_of_spec hSpec) ?_
+  rw [entails_ipure_iff]
+  intro hShifted
+  simp [RawPtr.Aligned, Aeneas.Std.UScalarTy.numBits] at hShifted
+  omega
+
+/-- Nor can they be owned at `u32`. -/
+example (p : MutRawPtr U8) (hAlign : 4 ∣ p.offset) (x : U32) :
+    ((p.add 1).retype : MutRawPtr U32) ↦ x ⊢ ⌜False⌝ := by
+  intro h hPointsTo
+  have hShifted := RawPtr.aligned_of_pointsTo hPointsTo
+  simp [RawPtr.Aligned, Aeneas.Std.UScalarTy.numBits] at hShifted
+  omega
 
 def reinterpret (x : U32) : Result I32 := do
   let p ← MutRawPtr.alloc x
