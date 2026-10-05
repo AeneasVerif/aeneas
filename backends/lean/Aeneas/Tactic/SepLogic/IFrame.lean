@@ -117,19 +117,16 @@ def mkStar (atoms : Array Expr) : Expr :=
       mkApp2 (mkConst ``sep) atom rest
 
 def removeMatches (available required : Array Expr) :
-    MetaM (Option (Array Expr)) := do
-  let initial ← saveState
+    MetaM (Option (Array Expr)) := commitWhenSome? do
   let mut remaining := available
   for expected in required do
     let mut found := none
     for h : i in [:remaining.size] do
-      let candidate ← saveState
       if ← isDefEq expected remaining[i] then
         found := some i
         break
-      candidate.restore
     let some i := found
-      | initial.restore; return none
+      | return none
     remaining :=
       remaining.extract 0 i ++ remaining.extract (i + 1) remaining.size
   return some remaining
@@ -436,17 +433,16 @@ partial def solveHimpl (discharger : Option Syntax.Tactic) (goal : MVarId) :
         #[← instantiateMVars weakening, ← mkAppM ``entails_refl #[frame]]
       goal.assign (← mkAppM ``entails_trans #[reorder, weaken])
       return true
-    let state ← saveState
     /- First try the callee precondition as it stands: it may well be owned as a
        single opaque assertion (an `isList`, say) by the caller.  Only if that
        fails do we open its existentials. -/
-    unless ← solveWith original (← mkAppM ``entails_refl #[original]) #[] do
-      state.restore
+    let solvePeeled : TacticM Bool := do
       let (peeled, weakening, witnesses) ← peelRequiredExists original
-      unless ← solveWith peeled weakening witnesses do
-        state.restore
-        throwError "required spatial assertions are not present in the precondition\
-          \nsource: {source}\ndestination: {destination}"
+      solveWith peeled weakening witnesses
+    unless ← commitWhen (solveWith original (← mkAppM ``entails_refl #[original]) #[]) <||>
+        commitWhen solvePeeled do
+      throwError "required spatial assertions are not present in the precondition\
+        \nsource: {source}\ndestination: {destination}"
   else
     let destinationAtoms ← flatten destination
     let mut remaining := sourceAtoms
@@ -566,10 +562,8 @@ partial def solveGoal (discharger : Option Syntax.Tactic) (goal : MVarId) :
         let goal ← exposeGoal goal
         let goal ← if decomposing then exposeGoal (← decompose goal) else pure goal
         solveHimpl discharger goal
-    let state ← saveState
     try pass false
     catch firstError =>
-      state.restore
       try pass true
       catch secondError =>
         throwError "iframe failed.\n\

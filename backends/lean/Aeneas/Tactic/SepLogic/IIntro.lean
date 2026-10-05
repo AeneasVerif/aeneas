@@ -182,11 +182,9 @@ private partial def pullPrecondition (goal : MVarId) : TacticM MVarId := goal.wi
   let some entailment ← IFrame.exposeEntailment? target | return goal
   unless isPullable entailment.getAppArgs[0]! do return goal
   setGoals [goal]
-  let state ← saveState
   try
     evalTactic (← `(tactic| iintro_step))
   catch _ =>
-    state.restore
     return goal
   let (_, goal) ← (← getMainGoal).intro1P
   pullPrecondition goal

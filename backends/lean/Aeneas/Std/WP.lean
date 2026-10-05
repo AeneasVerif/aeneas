@@ -860,8 +860,7 @@ private meta partial def enterUncurryOnce (acc : Array Std.Delab.BinderEntry)
       if acc'.size >= 2 then k acc'
       else if (← getExpr).isAppOfArity ``Std.uncurry 4 then
         withAppArg <| enterUncurryOnce acc' k
-      else
-        enterUncurryOnce acc' k
+      else enterUncurryOnce acc' k
   | _ => k acc
 
 /-- Is the expression an `uncurry'` or `uncurry` wrapper? -/
@@ -871,34 +870,58 @@ private meta def isPostBinderWrapper (e : Expr) : Bool :=
   | uncurry _ _ _ _ => true
   | _ => false
 
-/-- Recover separate binders, explicit tuple binders, and the final pure body
-from the transparent marker chain produced by `mkPurePost`. -/
-private meta partial def delabPurePost : DelabM (Array Term × Term) := do
+/-- Walk the postcondition expression, peeling `uncurry'`/`uncurry`/lambda layers.
+Returns `(binders, bodyTerm)` where each binder is a `Term` (either a plain
+name like `x` or a (potentially nested) tuple pattern like `(a, b)`).
+-/
+private meta partial def delabPostBinders : DelabM (Array Term × Term) := do
   match_expr (← getExpr).consumeMData with
   | uncurry' _ _ _ _ =>
-    withAppArg do
+    /- `uncurry' f`: dive into `f` (arg 3) and peel one binder.
+       If `f = uncurry g`, the binder is a tuple `(a, b)`.
+       If `f = fun x => rest`, the binder is scalar `x`. -/
+    withNaryArg 3 do
       match_expr (← getExpr).consumeMData with
-      | Std.uncurry _ _ _ _ =>
+      | uncurry _ _ _ _ =>
+        -- Tuple binder: peel one uncurry level, then recurse for more binders
         withAppArg <| enterUncurryOnce #[] fun tupleBinders => do
-          let (patterns, (moreBinders, body)) ←
-            delabBinders tupleBinders.toList delabPurePost
-          return (#[← buildTupleTerm patterns] ++ moreBinders, body)
+          let (pats, (moreBinders, body)) ← delabBinders tupleBinders.toList delabPostBinders
+          let tupleTerm ← buildTupleTerm pats
+          return (#[tupleTerm] ++ moreBinders, body)
       | _ => delabLamsThenRecurse
-  | Std.uncurry _ _ _ _ =>
+  | uncurry _ _ _ _ =>
+    /- Single tuple binder `(a, b) => body` (no `uncurry'` wrapper). -/
+    let tuplePos ← getPos
     withAppArg do
-      let (tupleBinder, body) ← delabUncurryAsTuple delab
-      return (#[tupleBinder], body)
+      let (tupleTerm, body) ← delabUncurryAsTuple delab
+      let tupleTerm : Term := annotatePos tuplePos tupleTerm
+      addTermInfo tuplePos tupleTerm.raw (← getExpr) (isBinder := true)
+      return (#[tupleTerm], body)
   | _ => delabLamsThenRecurse
 where
+  /-- Peel plain lambda binders, then either recurse or terminate.
+
+  This is used in two situations:
+  - Inside `uncurry'`, when the argument is a plain lambda (not `uncurry`):
+    e.g., `uncurry' (fun x => uncurry' (fun y z => body))` — after entering
+    `fun x =>`, the body starts with another `uncurry'`, so we recurse.
+  - At the top level, when the postcondition is a plain lambda without any
+    `uncurry'`/`uncurry` wrapper: e.g., `fun r => body`.
+
+  The key logic: if `enterLams` peels exactly one lambda and the body is a
+  wrapper (`uncurry'` or `uncurry`), this lambda is a scalar binder in a
+  multi-binder postcondition — recurse via `delabPostBinders` to peel more.
+  Otherwise these are terminal binders (e.g., `fun y z => body` at the last
+  `uncurry'` level) — delab the body directly. -/
   delabLamsThenRecurse : DelabM (Array Term × Term) := do
     if (← getExpr).consumeMData.isLambda then
       enterLams #[] fun binders => do
         if binders.size == 1 && isPostBinderWrapper (← getExpr) then
-          let (patterns, (moreBinders, body)) ←
-            delabBinders binders.toList delabPurePost
-          return (patterns ++ moreBinders, body)
+          let (pats, (moreBinders, body)) ← delabBinders binders.toList delabPostBinders
+          return (pats ++ moreBinders, body)
         else
-          delabBinders binders.toList delab
+          let (pats, body) ← delabBinders binders.toList delab
+          return (pats, body)
     else
       return (#[], ← delab)
 
@@ -964,27 +987,27 @@ meta def delabSLISpec : Delab :=
 meta def delabSLDispec : Delab :=
   delabSLISpecCore ``Aeneas.Std.WP.dispec true
 
-private meta def delabPureSpecCore (specName : Name) (isPartial : Bool) : Delab := do
-  guard ((← getExpr).isAppOfArity specName 3)
-  let monadExpr ← withNaryArg 1 delab
-  let (binders, body) ← withNaryArg 2 delabPurePost
-  if h : binders.size > 0 then
-    if isPartial then
-      `($monadExpr ⦃ $(binders[0]) $(binders.drop 1)* => $body ⦄div)
-    else
-      `($monadExpr ⦃ $(binders[0]) $(binders.drop 1)* => $body ⦄)
-  else if isPartial then
-    `($monadExpr ⦃ $body ⦄div)
-  else
-    `($monadExpr ⦃ $body ⦄)
-
+/-- Delaborator for `WP.spec e post` → `e ⦃ binders => body ⦄`. -/
 @[scoped delab app.Aeneas.Std.WP.spec]
-meta def delabPureSpec : Delab :=
-  delabPureSpecCore ``Aeneas.Std.WP.spec false
+meta def delabSpec : Delab := do
+  guard $ (← getExpr).isAppOfArity' ``spec 3
+  let monadExpr ← withNaryArg 1 delab
+  let (binders, bodyTerm) ← withNaryArg 2 delabPostBinders
+  if binders.size == 0 then
+    `($monadExpr ⦃ $bodyTerm ⦄)
+  else
+    `($monadExpr ⦃ $(binders[0]!) $(binders.drop 1)* => $bodyTerm ⦄)
 
+/-- Delaborator for `WP.dspec e post` → `e ⦃ binders => body ⦄div`. -/
 @[scoped delab app.Aeneas.Std.WP.dspec]
-meta def delabPureDspec : Delab :=
-  delabPureSpecCore ``Aeneas.Std.WP.dspec true
+meta def delabDSpec : Delab := do
+  guard $ (← getExpr).isAppOfArity' ``dspec 3
+  let monadExpr ← withNaryArg 1 delab
+  let (binders, bodyTerm) ← withNaryArg 2 delabPostBinders
+  if binders.size == 0 then
+    `($monadExpr ⦃ $bodyTerm ⦄div)
+  else
+    `($monadExpr ⦃ $(binders[0]!) $(binders.drop 1)* => $bodyTerm ⦄div)
 
 /-!
 # Tests
@@ -1241,12 +1264,11 @@ private meta def normalizeGoal : TacticM Unit := do
 single-continuation contract. Ambiguous witnesses remain for explicit `isimp`. -/
 private meta def simplifySpatialGoal : TacticM Unit := do
   unless (← getUnsolvedGoals).isEmpty do
-    let saved ← saveState
-    evalTactic (← `(tactic| isimp only))
-    let goals ← getUnsolvedGoals
-    if goals.length > 1 || (← goals.anyM fun goal =>
-        goal.withContext do return !(← isProp (← goal.getType))) then
-      saved.restore
+    discard <| commitWhen do
+      evalTactic (← `(tactic| isimp only))
+      let goals ← getUnsolvedGoals
+      return !(goals.length > 1 || (← goals.anyM fun goal =>
+        goal.withContext do return !(← isProp (← goal.getType))))
 
 end Intro
 

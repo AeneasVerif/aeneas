@@ -391,7 +391,6 @@ private meta def inferSpatialGhosts (info : SpecInfo) (goalTy thTy : Expr) : Tac
   let thArgs := (← instantiateMVars thTy).consumeMData.getAppArgs
   unless goalArgs.size == info.arity && thArgs.size == info.arity do return
   unless thArgs[1]!.hasExprMVar do return
-  let saved ← saveState
   let goals ← getGoals
   try
     let frame ← mkFreshExprMVar (mkConst ``SepLogic.IProp)
@@ -404,7 +403,6 @@ private meta def inferSpatialGhosts (info : SpecInfo) (goalTy thTy : Expr) : Tac
       throwError "spatial ghost inference left an unresolved framing obligation"
     setGoals goals
   catch error =>
-    saved.restore
     trace[Step] "Spatial ghost inference did not match: {error.toMessageData}"
 
 /-- Attempt to match a given theorem with the monadic call in the target.

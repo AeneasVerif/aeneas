@@ -33,11 +33,9 @@ private def cancelGoal (goal : MVarId) : TacticM MVarId := goal.withContext do
   for expected in ← flatten destination do
     let mut found := none
     for h : i in [:remaining.size] do
-      let candidate ← saveState
       if ← isDefEq expected remaining[i] then
         found := some i
         break
-      candidate.restore
     match found with
     | some i =>
       matched := matched.push expected

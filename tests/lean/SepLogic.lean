@@ -1,10 +1,7 @@
 import SepLogic.Buffer
-import SepLogic.Choice
-import SepLogic.CurryIntroQimp
 import SepLogic.Fixtures
 import SepLogic.Partial
 import SepLogic.PureSpec
-import SepLogic.Run
 import SepLogic.Solutions
 import SepLogic.Step
 import SepLogic.TripleLiftings
