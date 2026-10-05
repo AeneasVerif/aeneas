@@ -36,3 +36,11 @@ fn words_of_bytes_method(data: &[u8]) -> *const u32 {
 fn word_of_array(p: *const [u8; 4]) -> *const u32 {
     p as *const u32
 }
+
+fn zero_prefix(buf: &mut [u8; 4]) {
+    unsafe { core::ptr::write_bytes(buf.as_mut_ptr(), 0, 2) }
+}
+
+fn fill_words(buf: &mut [u16; 2]) {
+    unsafe { buf.as_mut_ptr().write_bytes(0xff, 2) }
+}

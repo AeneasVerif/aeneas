@@ -211,6 +211,34 @@ attribute [step_simps] core.ptr.read_unaligned core.ptr.const_ptr.RawPtrConstT.r
   core.ptr.mut_ptr.RawPtrMutT.read_unaligned core.ptr.write_unaligned
   core.ptr.mut_ptr.RawPtrMutT.write_unaligned
 
+/-! ## Filling memory -/
+
+/-- Set `count * size_of::<T>()` bytes to `val`, from `p` on. -/
+def RawPtr.writeBytes [ByteRepr T] (p : MutRawPtr T) (val : U8) (count : Usize) :
+    Result Unit :=
+  MutRawPtr.fillRange p.bytesPtr val (count.val * ByteRepr.size T)
+
+@[step]
+theorem RawPtr.writeBytes.spec [ByteRepr T] (p : MutRawPtr T) (val : U8) (count : Usize)
+    (old : List U8) (hLen : old.length = count.val * ByteRepr.size T) :
+    ⦃ p.bytesPtr ↦* old ⦄ RawPtr.writeBytes p val count
+      ⦃⇓ p.bytesPtr ↦* List.replicate (count.val * ByteRepr.size T) val ⦄ := by
+  unfold RawPtr.writeBytes
+  rw [← hLen]
+  exact MutRawPtr.fillRange.spec p.bytesPtr old val
+
+@[rust_fun "core::ptr::write_bytes"]
+def core.ptr.write_bytes [ByteRepr T] (p : MutRawPtr T) (val : U8) (count : Usize) :
+    Result Unit :=
+  RawPtr.writeBytes p val count
+
+@[rust_fun "core::ptr::mut_ptr::{*mut @T}::write_bytes"]
+def core.ptr.mut_ptr.RawPtrMutT.write_bytes [ByteRepr T] (p : MutRawPtr T) (val : U8)
+    (count : Usize) : Result Unit :=
+  RawPtr.writeBytes p val count
+
+attribute [step_simps] core.ptr.write_bytes core.ptr.mut_ptr.RawPtrMutT.write_bytes
+
 @[simp] theorem RawPtr.bytesPtr_retype {T U : Type} {M M'} (q : RawPtr T M) :
     ((q.retype : RawPtr U M').bytesPtr : RawPtr U8 M') = q.retype := rfl
 

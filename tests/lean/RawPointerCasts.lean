@@ -91,4 +91,24 @@ def word_of_array
   (p : ConstRawPtr (Array Std.U8 4#usize)) : Result (ConstRawPtr Std.U32) := do
   RawPtr.cast_scalar Std.U32 .Const p
 
+/-- [raw_pointer_casts::zero_prefix]:
+    Source: 'tests/src/raw_pointer_casts.rs', lines 40:0-42:1 -/
+def zero_prefix
+  (buf : Array Std.U8 4#usize) : Result (Array Std.U8 4#usize) := do
+  let (s, to_slice_mut_back) ← lift (Array.to_slice_mut buf)
+  let p ← Slice.as_mut_ptr s
+  core.ptr.write_bytes p 0#u8 2#usize
+  let s1 ← Slice.end_as_mut_ptr s p
+  ok (to_slice_mut_back s1)
+
+/-- [raw_pointer_casts::fill_words]:
+    Source: 'tests/src/raw_pointer_casts.rs', lines 44:0-46:1 -/
+def fill_words
+  (buf : Array Std.U16 2#usize) : Result (Array Std.U16 2#usize) := do
+  let (s, to_slice_mut_back) ← lift (Array.to_slice_mut buf)
+  let p ← Slice.as_mut_ptr s
+  core.ptr.mut_ptr.RawPtrMutT.write_bytes p 255#u8 2#usize
+  let s1 ← Slice.end_as_mut_ptr s p
+  ok (to_slice_mut_back s1)
+
 end raw_pointer_casts

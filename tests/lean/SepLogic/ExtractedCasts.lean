@@ -61,4 +61,23 @@ theorem write_read_unaligned.spec (buf : Array U8 3#usize) (v : U16) :
   subst hBack
   simp [i_post, s1_post, hBuf, Array.from_slice]
 
+theorem zero_prefix.spec (buf : Array U8 4#usize) :
+    ⦃ emp ⦄ zero_prefix buf
+      ⦃⇓ r => ⌜r.val = [0#u8, 0#u8, buf.val[2]!, buf.val[3]!]⌝⦄ := by
+  obtain ⟨b0, b1, b2, b3, hBuf⟩ : ∃ b0 b1 b2 b3, buf.val = [b0, b1, b2, b3] := by
+    have h := buf.property
+    match hv : buf.val, h with
+    | [b0, b1, b2, b3], _ => exact ⟨b0, b1, b2, b3, rfl⟩
+  unfold zero_prefix
+  step as ⟨s, back, hs, hBack⟩
+  step as ⟨p⟩
+  simp only [hs, hBuf]
+  step with RawPtr.writeBytes.spec p 0#u8 2#usize [b0, b1] (by simp)
+  simp only [RawPtr.bytesPtr, RawPtr.retype_self]
+  step with Slice.end_as_mut_ptr.spec s p [0#u8, 0#u8, b2, b3] (by simp [hs, hBuf])
+  apply (ispec_ok _).2
+  iintro
+  subst hBack
+  simp [s1_post, Array.from_slice]
+
 end SepLogic.ExtractedCasts
