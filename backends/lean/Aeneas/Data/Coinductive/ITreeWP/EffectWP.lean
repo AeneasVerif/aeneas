@@ -1,12 +1,24 @@
 module
 public import Aeneas.Data.Coinductive.Effect
 
+/-!
+# Weakest preconditions for effects
+
+This file defines `EffectWP`, the basic building block of our generic weakest precondition (WP)
+calculus for ITrees. An `EffectWP E` specifies, for every effect of `E`, how this effect
+behaves in terms of a WP.
+-/
+
 public section
 
 namespace Aeneas.Data.Coinductive
 
 universe u u' v w
 
+/-- The weakest precondition of the effects in `E`.
+
+`wp effect C s` holds if performing `effect` in state `s` is guaranteed to produce an answer
+and a new state satisfying `C`. -/
 structure EffectWP (E : Effect.{v}) where
   State : Type u -- the state threaded through effects
   wp : (effect : E.I) → (E.O effect → State → Prop) → (State → Prop)
@@ -17,17 +29,22 @@ abbrev EffectWP.Pre (θ : EffectWP E) := θ.State → Prop
 
 abbrev EffectWP.Post (θ : EffectWP E) (α : Type u) := α → θ.State → Prop
 
+/-- Pointwise implication between postconditions. -/
 @[expose] def entails (P P' : θ.Post α) : Prop :=
   ∀ r s, P r s → P' r s
 
 namespace EffectWP
 
+/-- The WP of every effect is monotone in its postcondition.
+    This is needed to compute the fixed points of `FunctionalWP`. -/
 class Monotone (θ : EffectWP E) : Prop where
   wp_mono :
     ∀ {effect : E.I} {C C' : E.O effect → θ.State → Prop},
       (∀ answer s', C answer s' → C' answer s') →
       ∀ {s : θ.State}, θ.wp effect C s → θ.wp effect C' s
 
+/-- The WP of every effect distributes over (non-empty) conjunctions of postconditions.
+    Necessary for defining total and partial correctness, which require a demonic interpretation. -/
 class Conjunctive (θ : EffectWP E) : Prop where
   /- Reading: if `m {C₁} ∧ m {C₂} ∧ … `, then `m {fun a s' => C₁ a s' ∧ C₂ a s' ∧ … } -/
   wp_conj :
@@ -35,6 +52,8 @@ class Conjunctive (θ : EffectWP E) : Prop where
       (∃ C, Demands C) → (∀ C, Demands C → θ.wp effect C s) →
       θ.wp effect (fun answer s' => ∀ C, Demands C → C answer s') s
 
+/-- No effect can guarantee the unsatisfiable postcondition `False`.
+    Necessary property of θ for total correctness. -/
 class NoMiracle (θ : EffectWP E) : Prop where
   wp_noMiracle : ∀ (effect : E.I) (s : θ.State), ¬ θ.wp effect (fun _ _ => False) s
 

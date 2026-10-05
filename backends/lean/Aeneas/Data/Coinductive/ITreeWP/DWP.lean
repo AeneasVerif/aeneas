@@ -3,6 +3,20 @@ public import Aeneas.Data.Coinductive.ITreeWP.FunctionalWP
 import all Aeneas.Data.Coinductive.ITreeWP.FunctionalWP
 import all Init.Internal.Order.Basic
 
+/-!
+# Demonic Weakest Precondition
+
+`DWP θ m Q` is the weakest-precondition which guarantees that
+the ITree `m` terminates and that its result satisfies `Q`.
+We later use `DWP` to define Hoare triples for **total correctness**.
+`θ` is the wp of individual effects (see `EffectWP.lean`), and it has to be monotonic,
+conjunctive (to be demonic) and without miracles (to reject all loops).
+"Demonic" means that the specification must hold for all possible answers of the effects,
+guaranteeing that `Q` is satisfied for all final results of `m`.
+
+`DWP` is defined as the least fixed point of `FunctionalWP` with divergence disallowed.
+-/
+
 public section
 
 namespace Aeneas.Data.Coinductive
@@ -15,8 +29,6 @@ variable {E : Effect.{v}} {α : Type u} {β : Type u'} {θ : EffectWP.{w, v} E}
 variable [θ.Monotone]
 
 local infix:50 " ≤ " => entails
-
-/-! ## Demonic Weakest Precondition defined as a least fixed point -/
 
 def DWP (θ : EffectWP E) [θ.Monotone] (m : ITree E α) (Q : θ.Post α) : θ.Pre :=
   (FunctionalWP.hom False θ Q).lfp m

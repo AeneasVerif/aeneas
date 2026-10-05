@@ -31,6 +31,7 @@ unseal Result
 
 @[expose] section
 
+/-- The WP of the effects of Rust programs (`RustEffect`). -/
 @[reducible]
 def effectWP : EffectWP RustEffect where
   State := Unit

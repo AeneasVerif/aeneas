@@ -20,18 +20,30 @@ abbrev ITreePred (θ : EffectWP E) (α : Type u) := θ.Post (ITree E α)
 private noncomputable instance ITreePred.instCompleteLattice : CompleteLattice (ITreePred θ α) :=
   inferInstanceAs (CompleteLattice (ITree E α → θ.State → Prop))
 
--- EffectWP      : (effect : E.I) →           (E.O effect → State → Prop) → (State → Prop)
+-- EffectWP      : (effect : E.I) →          (E.O effect → State → Prop) → (State → Prop)
 -- FunctionalWP  : (X : ITree E α -> Prop) → (E.O effect → State → Prop) → (ITree E α → Prop)
 
-/-- Lift the WP of an effect (`EffectWP`) to a WP for ITrees. -/
+/-- `FunctionalWP` is a "one-step" weakest-precondition for ITrees,
+    built from the WP of individual effects (`EffectWP`).
+
+Given a candidate WP `X` for the continuations, `FunctionalWP allowDivergence θ Q X m s`
+describes what must hold for `m` in state `s` by inspecting only its head constructor:
+- `ret value`: the postcondition `Q value s` must hold;
+- `div`: holds iff `allowDivergence` (i.e., whether divergence is acceptable);
+- `vis effect k`: the effect WP `θ.wp effect` must guarantee that, for every answer and
+  resulting state, `X` holds on the continuation `k answer`.
+
+This functional is monotone in `X`, so it has least and greatest fixed points: the least
+fixed point with `allowDivergence := False` is `DWP` (total correctness), and the greatest
+fixed point with `allowDivergence := True` is `DWLP` (partial correctness). -/
 @[expose] def FunctionalWP (allowDivergence : Prop) (θ : EffectWP E) (Q : θ.Post α)
     (X : ITreePred θ α) : ITreePred θ α :=
   fun m s =>
     ITree.cases
       (motive := fun _ => Prop)
-      (fun value => Q value s)
-      allowDivergence
-      (fun effect k => θ.wp effect (fun answer s' => X (k answer) s') s)
+      (fun value => Q value s) -- ret case
+      allowDivergence          -- div case
+      (fun effect k => θ.wp effect (fun answer s' => X (k answer) s') s) -- vis caes
       m
 
 theorem FunctionalWP.ret :
@@ -64,7 +76,10 @@ theorem FunctionalWP.mono [θ.Monotone]
       simp only [FunctionalWP.vis]
       exact θ.wp_mono fun answer s' => hX (k answer) s'
 
-/-- We plug into Mathlib's generic fixed-point library. -/
+/-- `FunctionalWP` bundled as a monotone map (an order homomorphism `→o`) on the complete
+lattice of ITree predicates. By packaging it this way, we can leverage Mathlib's generic
+fixed-point library (`OrderHom.lfp`, `OrderHom.gfp`, Knaster–Tarski) to define `DWP` and
+`DWLP` and obtain their (co)induction principles for free. -/
 private def FunctionalWP.hom (allowDivergence : Prop) (θ : EffectWP E) [θ.Monotone] (Q : θ.Post α) :
     ITreePred θ α →o ITreePred θ α :=
   ⟨FunctionalWP allowDivergence θ Q, fun _ _ hX _ _ => FunctionalWP.mono id (fun _ _ => id) hX⟩

@@ -3,6 +3,22 @@ public import Aeneas.Data.Coinductive.ITreeWP.FunctionalWP
 import all Aeneas.Data.Coinductive.ITreeWP.FunctionalWP
 import all Init.Internal.Order.Basic
 
+/-!
+# Demonic Weakest Liberal Precondition
+
+`DWLP θ m Q` is the weakest-precondition which guarantees that,
+*if* the ITree `m` terminates, then its result satisfies `Q`.
+We later use DWLP to define Hoare triples for **partial correctness**.
+`θ` is the wp of individual effects (see `EffectWP.lean`), and it has to be monotonic,
+and conjunctive (to be demonic).
+"Demonic" means that the specification must hold for all possible answers of the effects,
+guaranteeing that `Q` is satisfied for all final results of `m`.
+"liberal" means that divergence is allowed and no guarantees are provided when `m`
+diverges.
+
+`DWLP` is defined as the greatest fixed point of `FunctionalWP` with divergence allowed.
+-/
+
 public section
 
 namespace Aeneas.Data.Coinductive
@@ -15,8 +31,6 @@ variable {E : Effect.{v}} {α : Type u} {β : Type u'} {θ : EffectWP.{w, v} E}
 variable [θ.Monotone]
 
 local infix:50 " ≤ " => entails
-
-/-! ## Demonic Weakest Liberal Precondition defined as a greatest fixed point -/
 
 def DWLP (θ : EffectWP E) [θ.Monotone] (m : ITree E α) (Q : θ.Post α) : θ.Pre :=
   (FunctionalWP.hom True θ Q).gfp m
