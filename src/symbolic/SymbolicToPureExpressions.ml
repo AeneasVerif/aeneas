@@ -588,6 +588,10 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               let src_ty = translate_literal_type src_ty in
               let tgt_ty = translate_literal_type tgt_ty in
               (CastRawPtr ((src_ty, src_mut), (tgt_ty, tgt_mut)), true)
+          | CastPtrExposeProvenance _ ->
+              [%craise] ctx.span "Unsupported: pointer to address casts"
+          | CastPtrWithExposedProvenance _ ->
+              [%craise] ctx.span "Unsupported: address to pointer casts"
           | CastFnPtr _ -> [%craise] ctx.span "TODO: function casts"
           | CastUnsize _ ->
               (* We shouldn't get there: this case should have been detected before
