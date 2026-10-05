@@ -728,13 +728,17 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
       let res, ctx, cc = eval_rvalue_not_global config st.span rvalue ctx in
       begin
         match res with
-        | Error EPanic -> ([ (ctx, Panic) ], cc_singleton __FILE__ __LINE__ st.span cc)
+        | Error EPanic ->
+            ([ (ctx, Panic) ], cc_singleton __FILE__ __LINE__ st.span cc)
         | Ok rv ->
             [%cassert] st.span
-              (not (ty_has_borrows (Some st.span) ctx.type_ctx.type_infos rv.ty))
+              (not
+                 (ty_has_borrows (Some st.span) ctx.type_ctx.type_infos rv.ty))
               "Unsupported: writing a value containing borrows through a raw \
                pointer";
-            let ptr, ctx, cc = comp2 cc (eval_operand config st.span (Copy q) ctx) in
+            let ptr, ctx, cc =
+              comp2 cc (eval_operand config st.span (Copy q) ctx)
+            in
             let ctx = ctx_mark_raw_ptr_views_dirty ctx in
             let cc =
               cc_comp cc (fun e -> SymbolicAst.RawPtrWrite (ctx, ptr, rv, e))
@@ -1278,8 +1282,7 @@ and eval_function_call_symbolic (config : config) (span : Meta.span)
  fun ctx ->
   match call.func with
   | FnOpDynamic _ -> [%craise] span "Function pointers are not supported yet"
-  | FnOpRegular func when Option.is_some (raw_ptr_view_builtin span ctx func)
-    ->
+  | FnOpRegular func when Option.is_some (raw_ptr_view_builtin span ctx func) ->
       let is_mut = Option.get (raw_ptr_view_builtin span ctx func) in
       eval_raw_ptr_view_creation config span ~is_mut call ctx
   | FnOpRegular func ->
@@ -1349,7 +1352,8 @@ and eval_raw_ptr_view_creation (config : config) (span : Meta.span)
         let sid = ctx.fresh_shared_borrow_id () in
         let ctx =
           InterpBorrowsCore.update_loan span InterpBorrowsCore.ek_all bid
-            (VSharedLoan (lid, bv)) ctx
+            (VSharedLoan (lid, bv))
+            ctx
         in
         (lid, sid, ctx)
     | _ ->
@@ -1358,11 +1362,11 @@ and eval_raw_ptr_view_creation (config : config) (span : Meta.span)
   in
   let original =
     match
-      snd (InterpBorrowsCore.lookup_loan span InterpBorrowsCore.ek_all lid ctx.env)
+      snd
+        (InterpBorrowsCore.lookup_loan span InterpBorrowsCore.ek_all lid ctx.env)
     with
     | Concrete (VSharedLoan (_, v)) -> v
-    | Abstract (ASharedLoan (_, _, v, _)) when not is_mut ->
-        v
+    | Abstract (ASharedLoan (_, _, v, _)) when not is_mut -> v
     | _ ->
         [%craise] span
           "Unsupported: converting to a raw pointer a borrow which belongs to \

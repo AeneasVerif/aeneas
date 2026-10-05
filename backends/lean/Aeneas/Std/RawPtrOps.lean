@@ -119,4 +119,78 @@ theorem core.ptr.copy_nonoverlapping.spec [ByteRepr T] (src : ConstRawPtr T) (ds
   rw [hSrc] at this
   exact this
 
+/-! ## Unaligned accesses
+
+They read and write the bytes of the address through a `u8` view, so they do
+not require the address to be aligned for `T`. -/
+
+/-- The bytes of `p`'s address, viewed as `u8`s. -/
+abbrev RawPtr.bytesPtr {M} (p : RawPtr T M) : RawPtr U8 M := p.retype
+
+/-- Read a `T` from any address: decode the `size T` bytes it starts. -/
+def RawPtr.readUnaligned [ByteRepr T] {M} (p : RawPtr T M) : Result T :=
+  Aeneas.Std.bind (Buffer.readRange p.bytesPtr (ByteRepr.size T)) fun bytes =>
+    match ByteRepr.decode (bytes.map UScalar.bv) with
+    | some v => ok v
+    | none => fail .undef
+
+/-- Write a `T` at any address: overwrite the `size T` bytes it starts. -/
+def MutRawPtr.writeUnaligned [ByteRepr T] (p : MutRawPtr T) (v : T) : Result Unit :=
+  Buffer.writeRange p.bytesPtr ((ByteRepr.encode v).map (UScalar.mk (ty := .U8)))
+
+@[step]
+theorem RawPtr.readUnaligned.spec [ByteRepr T] {M} (p : RawPtr T M) (v : T) :
+    ⦃ p.bytesPtr ↦* (ByteRepr.encode v).map (UScalar.mk (ty := .U8)) ⦄ p.readUnaligned
+      ⦃⇓ r => ⌜r = v⌝ ∗ p.bytesPtr ↦* (ByteRepr.encode v).map (UScalar.mk (ty := .U8)) ⦄ := by
+  unfold RawPtr.readUnaligned
+  have hLen : ((ByteRepr.encode v).map (UScalar.mk (ty := .U8))).length = ByteRepr.size T := by
+    simp [ByteRepr.length_encode]
+  have := Buffer.readRange.spec p.bytesPtr ((ByteRepr.encode v).map (UScalar.mk (ty := .U8)))
+  rw [hLen] at this
+  apply WP.ispec_bind this (sep_emp_r _).mpr
+  intro bytes
+  rw [sep_emp_r_eq]
+  iintro hBytes
+  subst bytes
+  have hDec : ByteRepr.decode (((ByteRepr.encode v).map (UScalar.mk (ty := .U8))).map UScalar.bv) = some v := by
+    rw [List.map_map]
+    simp [ByteRepr.decode_encode]
+  simp only [hDec]
+  apply (ispec_ok _).2
+  iframe
+
+@[step]
+theorem MutRawPtr.writeUnaligned.spec [ByteRepr T] (p : MutRawPtr T) (old : List U8) (v : T)
+    (hLen : old.length = ByteRepr.size T) :
+    ⦃ p.bytesPtr ↦* old ⦄ p.writeUnaligned v
+      ⦃⇓ p.bytesPtr ↦* (ByteRepr.encode v).map (UScalar.mk (ty := .U8)) ⦄ :=
+  Buffer.writeRange.spec p.bytesPtr old _ (by simp [hLen, ByteRepr.length_encode])
+
+@[rust_fun "core::ptr::read_unaligned"]
+def core.ptr.read_unaligned [ByteRepr T] (p : ConstRawPtr T) : Result T := p.readUnaligned
+
+@[rust_fun "core::ptr::const_ptr::{*const @T}::read_unaligned"]
+def core.ptr.const_ptr.RawPtrConstT.read_unaligned [ByteRepr T] (p : ConstRawPtr T) : Result T :=
+  p.readUnaligned
+
+@[rust_fun "core::ptr::mut_ptr::{*mut @T}::read_unaligned"]
+def core.ptr.mut_ptr.RawPtrMutT.read_unaligned [ByteRepr T] (p : MutRawPtr T) : Result T :=
+  p.readUnaligned
+
+@[rust_fun "core::ptr::write_unaligned"]
+def core.ptr.write_unaligned [ByteRepr T] (p : MutRawPtr T) (v : T) : Result Unit :=
+  p.writeUnaligned v
+
+@[rust_fun "core::ptr::mut_ptr::{*mut @T}::write_unaligned"]
+def core.ptr.mut_ptr.RawPtrMutT.write_unaligned [ByteRepr T] (p : MutRawPtr T) (v : T) :
+    Result Unit :=
+  p.writeUnaligned v
+
+attribute [step_simps] core.ptr.read_unaligned core.ptr.const_ptr.RawPtrConstT.read_unaligned
+  core.ptr.mut_ptr.RawPtrMutT.read_unaligned core.ptr.write_unaligned
+  core.ptr.mut_ptr.RawPtrMutT.write_unaligned
+
+@[simp] theorem RawPtr.bytesPtr_retype {T U : Type} {M M'} (q : RawPtr T M) :
+    ((q.retype : RawPtr U M').bytesPtr : RawPtr U8 M') = q.retype := rfl
+
 end Aeneas.Std

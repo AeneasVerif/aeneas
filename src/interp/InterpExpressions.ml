@@ -414,18 +414,18 @@ and end_dirty_raw_ptr_views_at_place (config : config) (span : Meta.span)
       match read_place_opt span Read p ctx with
       | None -> BorrowId.Set.empty
       | Some (lid, v) ->
-        let loans = ref (BorrowId.Set.of_list (Option.to_list lid)) in
-        let visitor =
-          object (self)
-            inherit [_] iter_tvalue
+          let loans = ref (BorrowId.Set.of_list (Option.to_list lid)) in
+          let visitor =
+            object (self)
+              inherit [_] iter_tvalue
 
-            method! visit_VSharedLoan env lid sv =
-              loans := BorrowId.Set.add lid !loans;
-              self#visit_tvalue env sv
-          end
-        in
-        visitor#visit_tvalue () v;
-        !loans
+              method! visit_VSharedLoan env lid sv =
+                loans := BorrowId.Set.add lid !loans;
+                self#visit_tvalue env sv
+            end
+          in
+          visitor#visit_tvalue () v;
+          !loans
     in
     let abs_ids =
       env_filter_map_abs
@@ -1304,7 +1304,8 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
 
       let ctx, cc =
         match bkind with
-        | BShared | BShallow -> end_dirty_raw_ptr_views_at_place config span p ctx
+        | BShared | BShallow ->
+            end_dirty_raw_ptr_views_at_place config span p ctx
         | _ -> (ctx, fun e -> e)
       in
 

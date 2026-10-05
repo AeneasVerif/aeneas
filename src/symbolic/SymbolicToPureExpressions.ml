@@ -595,8 +595,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               let src_ty = translate_literal_type src_ty in
               let tgt_ty = translate_literal_type tgt_ty in
               (CastLit (src_ty, tgt_ty), not (Config.backend () = Lean))
-          | CastRawPtr
-              (TRawPtr (src_ty, src_rkind), TRawPtr (tgt_ty, tgt_rkind))
+          | CastRawPtr (TRawPtr (src_ty, src_rkind), TRawPtr (tgt_ty, tgt_rkind))
             when Substitute.erase_regions src_ty
                  = Substitute.erase_regions tgt_ty ->
               let mut (rkind : T.ref_kind) =
@@ -994,12 +993,16 @@ and translate_raw_ptr_write (ectx : C.eval_ctx) (ptr : V.tvalue) (v : V.tvalue)
     }
   in
   let func : texpr =
-    { e = Qualif func; ty = mk_arrows [ ptr.ty; v.ty ] (mk_result_ty mk_unit_ty) }
+    {
+      e = Qualif func;
+      ty = mk_arrows [ ptr.ty; v.ty ] (mk_result_ty mk_unit_ty);
+    }
   in
   let call = [%add_loc] mk_apps ctx.span func [ ptr; v ] in
   let next_e = translate_expr e ctx in
-  [%add_loc] mk_closed_checked_let ctx true (mk_ignored_pat mk_unit_ty) call
-    next_e
+  [%add_loc] mk_closed_checked_let ctx true
+    (mk_ignored_pat mk_unit_ty)
+    call next_e
 
 and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expr) (ctx : bs_ctx) (rg_id : T.RegionGroupId.id)

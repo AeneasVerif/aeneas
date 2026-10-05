@@ -509,8 +509,7 @@ let extract_cast_kind_gen (span : Meta.span)
         (backend () = Lean)
         "Casts between raw pointers are only supported in the Lean backend";
       match (src_mut, tgt_mut) with
-      | Mut, Mut | Const, Const ->
-          extract_expr ~inside arg
+      | Mut, Mut | Const, Const -> extract_expr ~inside arg
       | _ ->
           if inside then F.pp_print_string fmt "(";
           F.pp_print_string fmt
