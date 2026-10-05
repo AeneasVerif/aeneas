@@ -1256,6 +1256,10 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (IndexMutAtIndex Array, "Array.index_mut_usize");
         (ToResult, "lift");
         (ResultUnwrapMut, "core.result.Result.unwrap.mut");
+        (RawPtrOfSlice Mut, "Slice.as_mut_ptr");
+        (RawPtrOfSlice Const, "Slice.as_ptr");
+        (EndRawPtrOfSlice Mut, "Slice.end_as_mut_ptr");
+        (EndRawPtrOfSlice Const, "Slice.end_as_ptr");
         (GetTarget, "get_target");
         (TargetFeatureEnabled, "target_feature_enabled");
       ]

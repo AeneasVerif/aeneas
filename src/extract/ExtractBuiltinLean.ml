@@ -1258,6 +1258,11 @@ let lean_builtin_funs =
     mk_fun
       "core::slice::iter::{core::slice::iter::ChunksExact<'a, @T>}::remainder"
       "core.slice.iter.ChunksExact.getRemainder";
+    (* file: "Aeneas/Std/Buffer.lean", line: 562 *)
+    mk_fun "core::slice::raw::from_raw_parts" "core.slice.raw.from_raw_parts";
+    (* file: "Aeneas/Std/Buffer.lean", line: 579 *)
+    mk_fun "core::slice::raw::from_raw_parts_mut"
+      "core.slice.raw.from_raw_parts_mut";
     (* file: "Aeneas/Std/Slice.lean", line: 76 *)
     mk_fun "core::slice::{[@T]}::as_mut_ptr" "Slice.as_mut_ptr";
     (* file: "Aeneas/Std/Slice.lean", line: 64 *)

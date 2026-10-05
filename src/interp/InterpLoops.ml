@@ -346,6 +346,10 @@ let eval_loop_symbolic (config : config) (span : span)
  fun ctx ->
   (* Debug *)
   [%ltrace "Context:\n" ^ eval_ctx_to_string ~span:(Some span) ctx ^ "\n"];
+  [%cassert] span
+    (not (env_has_raw_ptr_views ctx.env))
+    "Unsupported: entering a loop while borrows converted to raw pointers are \
+     live";
 
   (* Generate a fresh loop id *)
   let loop_id = ctx.fresh_loop_id () in

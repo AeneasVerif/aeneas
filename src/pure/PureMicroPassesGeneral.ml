@@ -722,7 +722,7 @@ let simplify_duplicate_calls =
 (** A helper predicate *)
 let lift_unop (unop : unop) : bool =
   match unop with
-  | Not None -> false
+  | Not None | Cast (CastRawPtrMut _) -> false
   | Not (Some _) | Neg _ | Cast _ | ArrayToSlice -> true
 
 (** A helper predicate *)

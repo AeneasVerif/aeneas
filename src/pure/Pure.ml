@@ -135,6 +135,8 @@ type pure_builtin_fun_id =
           We use this when using `ok ...` would result in let-bindings getting
           simplified away (in a backend like Lean). *)
   | Discriminant  (** Discriminant read *)
+  | RawPtrOfSlice of mutability
+  | EndRawPtrOfSlice of mutability
   | ResultUnwrapMut
       (** Temporary fix: the
           [core::result::{core::result::Result<@T, @E>}::unwrap] instantiated
@@ -1218,6 +1220,7 @@ and cast_kind =
   | CastRawPtr of (literal_type * mutability) * (literal_type * mutability)
       (** When casting between raw pointers, we only support a subset of casts
       *)
+  | CastRawPtrMut of mutability * mutability
 
 and fn_ptr_kind =
   | FunId of fun_decl_id

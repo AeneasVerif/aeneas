@@ -1247,6 +1247,8 @@ and end_abs_aux (config : config) (span : Meta.span) ~(snapshots : bool)
         { ctx with ended_regions }
       in
 
+      let ctx = end_raw_ptr_view_update span abs_id ctx in
+
       (* Synthesize the symbolic expression to save the fact that we ended a (sub-)
          abstraction.
 
@@ -1536,6 +1538,34 @@ and end_abs_borrows (config : config) (span : Meta.span) ~(snapshots : bool)
       end_abs_borrows config span ~snapshots chain abs_id level ctx
 
 (** Remove an abstraction from the context, as well as all its references *)
+and end_raw_ptr_view_update (span : Meta.span) (abs_id : AbsId.id)
+    (ctx : eval_ctx) : eval_ctx =
+  let abs = ctx_lookup_abs ctx abs_id in
+  match abs.kind with
+  | RawPtrView view when view.rpv_mut ->
+      if view.rpv_dirty then
+        [%cassert] span
+          (List.for_all
+             (fun (abs' : abs) ->
+               match abs'.kind with
+               | FunCall _ -> AbsId.to_int abs'.abs_id < AbsId.to_int abs_id
+               | _ -> true)
+             (env_filter_map_abs (fun a -> Some a) ctx.env))
+          "Unsupported: ending a borrow converted to a raw pointer while some \
+           function calls which may have written to the heap through this \
+           pointer are still pending (i.e., their outputs are still live)";
+      let sv = mk_fresh_symbolic_value span ctx view.rpv_original.ty in
+      let ctx =
+        update_loan span ek_all view.rpv_loan
+          (VSharedLoan (view.rpv_loan, mk_tvalue_from_symbolic_value sv))
+          ctx
+      in
+      let abs =
+        { abs with kind = RawPtrView { view with rpv_given_back = Some sv } }
+      in
+      fst (ctx_subst_abs span ctx abs_id abs)
+  | _ -> ctx
+
 and end_abs_synthesize (_config : config) (span : Meta.span) (abs_id : AbsId.id)
     (level : int) : cm_fun =
  fun ctx ->

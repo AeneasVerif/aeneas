@@ -44,6 +44,10 @@ let value_aggregate_to_string (env : fmt_env) (v : value_aggregate) : string =
       ^ Values.tvalue_to_string env v
       ^ ", " ^ trait_ref_to_string env tr ^ ")"
   | VaFnDef fn_ptr -> "@fn_def(" ^ fn_ptr_to_string env fn_ptr ^ ")"
+  | VaRawPtrView view ->
+      (if view.rpv_mut then "@as_mut_ptr(" else "@as_ptr(")
+      ^ Values.tvalue_to_string env view.rpv_original
+      ^ ")"
 
 let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
     (e : expr) : string =

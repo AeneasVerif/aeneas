@@ -495,15 +495,22 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
           let ctx =
             let backs, ignored =
               List.partition
-                (fun (_, v) -> Option.is_some v)
-                (List.combine call.abstractions back_vars)
+                (fun (_, (v, _)) -> Option.is_some v)
+                (List.combine call.abstractions
+                   (List.combine back_vars back_tys))
             in
             let ignored = List.map fst ignored in
             let backs =
               List.map
-                (fun (aid, fv) ->
+                (fun (aid, (fv, back_ty)) ->
                   let fvar = mk_texpr_from_fvar (Option.get fv) in
-                  (aid, { fvar; can_fail = false }))
+                  let can_fail =
+                    match back_ty with
+                    | Some ((back_sg : back_sg_info), _) ->
+                        back_sg.effect_info.can_fail && back_sg.inputs <> []
+                    | None -> false
+                  in
+                  (aid, { fvar; can_fail }))
                 backs
             in
             let ctx =
@@ -587,6 +594,16 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               let src_ty = translate_literal_type src_ty in
               let tgt_ty = translate_literal_type tgt_ty in
               (CastLit (src_ty, tgt_ty), not (Config.backend () = Lean))
+          | CastRawPtr
+              (TRawPtr (src_ty, src_rkind), TRawPtr (tgt_ty, tgt_rkind))
+            when Substitute.erase_regions src_ty
+                 = Substitute.erase_regions tgt_ty ->
+              let mut (rkind : T.ref_kind) =
+                match rkind with
+                | RMut -> Mut
+                | RShared -> Const
+              in
+              (CastRawPtrMut (mut src_rkind, mut tgt_rkind), false)
           | CastRawPtr (src_ty, tgt_ty) ->
               (* We only support casts between pointers to literal types for now *)
               let get_ty (ty : T.ty) =
@@ -910,6 +927,59 @@ and translate_end_abs (ectx : C.eval_ctx) (abs : V.abs)
   | V.WithCont -> translate_end_abstraction_with_cont ectx abs abs_level e ctx
   | V.Identity | V.CopySymbolicValue ->
       translate_end_abs_identity ectx abs abs_level e ctx
+  | V.RawPtrView view ->
+      [%cassert] ctx.span (abs_level = 0) "Unexpected";
+      translate_end_raw_ptr_view ectx view e ctx
+
+and check_can_perform_heap_op (ctx : bs_ctx) : unit =
+  let effect_info = ctx_get_effect_info ctx in
+  [%cassert] ctx.span effect_info.can_fail
+    "Unsupported: the backward function generated here needs to perform heap \
+     operations (because of raw pointers), but its signature does not allow \
+     it. Backward functions can perform heap operations only if their region \
+     appears at the top-level of the function signature (i.e., not under a \
+     reference)."
+
+and raw_ptr_view_elem_ty (ctx : bs_ctx) (view : V.raw_ptr_view)
+    (original : texpr) : ty =
+  match view.rpv_kind with
+  | RpvSlice -> (
+      match original.ty with
+      | TAdt (TBuiltin TSlice, { types = [ ty ]; _ }) -> ty
+      | _ -> [%internal_error] ctx.span)
+
+and translate_end_raw_ptr_view (ectx : C.eval_ctx) (view : V.raw_ptr_view)
+    (e : S.expr) (ctx : bs_ctx) : texpr =
+  check_can_perform_heap_op ctx;
+  let original = tvalue_to_texpr ctx ectx view.rpv_original in
+  let ptr = symbolic_value_to_texpr ctx view.rpv_ptr in
+  let elem_ty = raw_ptr_view_elem_ty ctx view original in
+  let mut = if view.rpv_mut then Mut else Const in
+  let ctx, pat =
+    match view.rpv_given_back with
+    | Some sv ->
+        [%sanity_check] ctx.span view.rpv_mut;
+        let ctx, v = fresh_var_for_symbolic_value sv ctx in
+        (ctx, mk_tpat_from_fvar None v)
+    | None ->
+        [%sanity_check] ctx.span (not view.rpv_mut);
+        (ctx, mk_ignored_pat mk_unit_ty)
+  in
+  let func =
+    {
+      id = FunOrOp (Fun (Pure (EndRawPtrOfSlice mut)));
+      generics = mk_generic_args_from_types [ elem_ty ];
+    }
+  in
+  let func : texpr =
+    {
+      e = Qualif func;
+      ty = mk_arrows [ original.ty; ptr.ty ] (mk_result_ty pat.ty);
+    }
+  in
+  let call = [%add_loc] mk_apps ctx.span func [ original; ptr ] in
+  let next_e = translate_expr e ctx in
+  [%add_loc] mk_closed_checked_let ctx true pat call next_e
 
 and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expr) (ctx : bs_ctx) (rg_id : T.RegionGroupId.id)
@@ -1158,6 +1228,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
           ^ "\nfunc type: "
           ^ pure_ty_to_string ctx info.fvar.ty
           ^ "\n\nargs:\n" ^ String.concat "\n" args];
+        if info.can_fail then check_can_perform_heap_op ctx;
         let call = [%add_loc] mk_apps ctx.span info.fvar args in
         (* Introduce a match if necessary *)
         let ctx, (output, call) = decompose_let_match ctx output call in
@@ -1323,6 +1394,7 @@ and translate_end_abstraction_join_or_loop (ectx : C.eval_ctx) (abs : V.abs)
         || (back_inputs = [] && outputs = []));
       next_e ctx
   | Some { fvar = func; can_fail } ->
+      if can_fail then check_can_perform_heap_op ctx;
       [%ltrace
         let args = List.map (texpr_to_string ctx) args in
         "func: " ^ texpr_to_string ctx func ^ "\nfunc type: "
@@ -1347,6 +1419,7 @@ and translate_end_abstraction_with_cont (ectx : C.eval_ctx) (abs : V.abs)
   let ctx, can_fail, output, abs_e =
     translate_ended_abs_to_texpr ctx ectx abs abs_level
   in
+  if can_fail then check_can_perform_heap_op ctx;
   [%ldebug
     "- output:\n" ^ tpat_to_string ctx output ^ "\n- abs_e:\n"
     ^ texpr_to_string ctx abs_e];
@@ -1660,6 +1733,21 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
           | T.TraitMethod _ -> [%craise] ctx.span "Unimplemented"
         in
         ({ e = qualif; ty }, false)
+    | VaRawPtrView view ->
+        check_can_perform_heap_op ctx;
+        let original = tvalue_to_texpr ctx ectx view.rpv_original in
+        let elem_ty = raw_ptr_view_elem_ty ctx view original in
+        let mut = if view.rpv_mut then Mut else Const in
+        let func =
+          {
+            id = FunOrOp (Fun (Pure (RawPtrOfSlice mut)));
+            generics = mk_generic_args_from_types [ elem_ty ];
+          }
+        in
+        let func : texpr =
+          { e = Qualif func; ty = mk_arrow original.ty (mk_result_ty var.ty) }
+        in
+        ([%add_loc] mk_app ctx.span func original, true)
   in
 
   (* Make the let-binding *)

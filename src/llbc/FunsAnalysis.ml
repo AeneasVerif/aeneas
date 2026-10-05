@@ -55,9 +55,62 @@ let lookup_fn_ptr_info (infos : modules_funs_info) (kind : fn_ptr_kind) :
     fun_info option =
   Option.bind (fun_or_method_id_of_fn_ptr kind) (lookup_fun_info infos)
 
+let mk_ty_contains_raw_ptr (m : crate) : Types.ty -> bool =
+  let open Types in
+  let memo : bool TypeDeclId.Map.t ref = ref TypeDeclId.Map.empty in
+  let rec ty_contains (visiting : TypeDeclId.Set.t) (ty : ty) : bool =
+    let found = ref false in
+    let visitor =
+      object
+        inherit [_] iter_ty as super
+
+        method! visit_ty env ty =
+          if not !found then
+            match ty with
+            | TRawPtr _ -> found := true
+            | TAdt { id; builtin = None; _ } ->
+                if decl_contains visiting id then found := true
+                else super#visit_ty env ty
+            | _ -> super#visit_ty env ty
+      end
+    in
+    visitor#visit_ty () ty;
+    !found
+  and decl_contains (visiting : TypeDeclId.Set.t) (id : TypeDeclId.id) : bool =
+    match TypeDeclId.Map.find_opt id !memo with
+    | Some b -> b
+    | None ->
+        if TypeDeclId.Set.mem id visiting then false
+        else
+          let visiting = TypeDeclId.Set.add id visiting in
+          let b =
+            match TypeDeclId.Map.find_opt id m.type_decls with
+            | None -> false
+            | Some decl -> (
+                match decl.kind with
+                | Struct fields | Union fields ->
+                    List.exists
+                      (fun (f : field) -> ty_contains visiting f.field_ty)
+                      fields
+                | Enum variants ->
+                    List.exists
+                      (fun (v : variant) ->
+                        List.exists
+                          (fun (f : field) -> ty_contains visiting f.field_ty)
+                          v.fields)
+                      variants
+                | Alias ty -> ty_contains visiting ty
+                | Opaque | TDeclError _ -> false)
+          in
+          memo := TypeDeclId.Map.add id b !memo;
+          b
+  in
+  ty_contains TypeDeclId.Set.empty
+
 let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     modules_funs_info =
   let fmt_env = Charon.Print.crate_to_fmt_env m in
+  let ty_contains_raw_ptr = mk_ty_contains_raw_ptr m in
   let infos = ref { infos = FunOrMethodId.Map.empty } in
   let register_info (id : FunOrMethodId.id) (info : fun_info) : unit =
     assert (not (FunOrMethodId.Map.mem id !infos.infos));
@@ -137,7 +190,8 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
                    use of --exclude)"
               in
               self#may_fail info.can_fail;
-              stateful := !stateful || info.stateful;
+              if not (fun_decl_is_global_initializer f) then
+                self#maybe_stateful info.stateful;
               can_diverge := !can_diverge || info.can_diverge
 
           method! visit_Assert env a =
@@ -210,6 +264,19 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
       let builtin_info = get_builtin_info f in
       let has_builtin_info = builtin_info <> None in
       group_has_builtin_info := !group_has_builtin_info || has_builtin_info;
+      if not (fun_decl_is_global_initializer f) then begin
+        let sg = f.signature in
+        if List.exists ty_contains_raw_ptr (sg.output :: sg.inputs) then
+          obj#maybe_stateful true;
+        match f.body with
+        | StructuredBody body ->
+            if
+              List.exists
+                (fun (v : local) -> ty_contains_raw_ptr v.local_ty)
+                body.locals.locals
+            then obj#maybe_stateful true
+        | _ -> ()
+      end;
       match f.body with
       | StructuredBody body -> obj#visit_block body.body.span body.body
       | TargetDispatchBody targets ->

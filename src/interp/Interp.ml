@@ -377,6 +377,86 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx)
   (* Return *)
   (ctx, input_svs, inst_sg)
 
+let fun_decl_is_stateful (ctx : eval_ctx) (fdef : fun_decl) : bool =
+  match FunsAnalysis.lookup_fun_decl_info ctx.fun_ctx.fun_infos fdef.def_id with
+  | Some info -> info.stateful
+  | None -> false
+
+let rec end_dead_borrows_and_abs (config : config) (span : Meta.span) : cm_fun =
+ fun ctx ->
+  let borrows = ref [] in
+  List.iter
+    (fun (b : env_elem) ->
+      match b with
+      | EBinding (BDummy _, v) when not (value_has_loans v.value) ->
+          let visitor =
+            object
+              inherit [_] iter_tvalue as super
+
+              method! visit_VMutBorrow env bid bv =
+                (match
+                   InterpBorrowsCore.lookup_loan_opt span
+                     InterpBorrowsCore.ek_all bid ctx.env
+                 with
+                | Some (AbsId abs_id, _) -> (
+                    match (ctx_lookup_abs ctx abs_id).kind with
+                    | SynthInput _ -> ()
+                    | _ -> borrows := bid :: !borrows)
+                | Some _ -> borrows := bid :: !borrows
+                | None -> ());
+                super#visit_VMutBorrow env bid bv
+            end
+          in
+          visitor#visit_tvalue () v
+      | _ -> ())
+    ctx.env;
+  match !borrows with
+  | bid :: _ ->
+      let ctx, cc = end_borrow config span (UMut bid) ctx in
+      comp cc (end_dead_borrows_and_abs config span ctx)
+  | [] -> (
+      let has_ended_loans (abs : abs) : bool =
+        let found = ref false in
+        let visitor =
+          object
+            inherit [_] iter_abs as super
+
+            method! visit_aloan_content env lc =
+              (match lc with
+              | AEndedMutLoan _ -> found := true
+              | _ -> ());
+              super#visit_aloan_content env lc
+
+            method! visit_aproj env proj =
+              (match proj with
+              | AEndedProjLoans { consumed = _ :: _; _ } -> found := true
+              | _ -> ());
+              super#visit_aproj env proj
+          end
+        in
+        visitor#visit_abs () abs;
+        !found
+      in
+      let to_end =
+        env_filter_map_abs
+          (fun abs ->
+            match abs.kind with
+            | FunCall _
+              when abs.can_end
+                   && AbsId.Set.is_empty abs.parents
+                   && Option.is_none
+                        (InterpBorrowsCore.get_first_non_ignored_aloan_in_abs
+                           span abs 0 (-1))
+                   && has_ended_loans abs -> Some abs.abs_id
+            | _ -> None)
+          ctx.env
+      in
+      match to_end with
+      | abs_id :: _ ->
+          let ctx, cc = end_abs config span abs_id 0 ctx in
+          comp cc (end_dead_borrows_and_abs config span ctx)
+      | [] -> (ctx, fun e -> e))
+
 (** Small helper.
 
     This is a continuation function called by the symbolic interpreter upon
@@ -480,15 +560,53 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
 
   let target_abs_ids = List.append parent_input_abs_ids [ current_abs_id ] in
 
+  let ctx, cc =
+    if fun_decl_is_stateful ctx fdef then
+      let ret_abs_ids =
+        env_filter_map_abs
+          (fun abs ->
+            match abs.kind with
+            | SynthRet rg_id
+              when rg_id = back_id && AbsId.Set.is_empty abs.parents ->
+                Some abs.abs_id
+            | _ -> None)
+          ctx.env
+      in
+      let ctx, cc =
+        fold_left_apply_continuation
+          (fun id ctx -> end_abs config span id 0 ctx)
+          (List.rev ret_abs_ids) ctx
+      in
+      comp cc (end_dead_borrows_and_abs config span ctx)
+    else (ctx, fun e -> e)
+  in
+
   (* Set the abstrations as endable *)
   let ctx = InterpBorrowsCore.update_endable ctx target_abs_ids ~can_end:true in
 
   (* Actually end them *)
-  let ctx, cc =
-    fold_left_apply_continuation
-      (fun id ctx -> end_abs config span id 0 ctx)
-      target_abs_ids ctx
+  let raw_ptr_views (ctx : eval_ctx) : AbsId.Set.t =
+    AbsId.Set.of_list
+      (env_filter_map_abs
+         (fun abs ->
+           match abs.kind with
+           | RawPtrView _ -> Some abs.abs_id
+           | _ -> None)
+         ctx.env)
   in
+  let views_before = raw_ptr_views ctx in
+  let ctx, cc =
+    comp cc
+      (fold_left_apply_continuation
+         (fun id ctx -> end_abs config span id 0 ctx)
+         parent_input_abs_ids ctx)
+  in
+  [%cassert] span
+    (AbsId.Set.subset views_before (raw_ptr_views ctx))
+    "Unsupported: a borrow converted to a raw pointer must be ended in the \
+     backward function of a region group which has no parent region groups \
+     (otherwise the heap operations would be performed several times)";
+  let ctx, cc = comp cc (end_abs config span current_abs_id 0 ctx) in
   (* Generate the Return node *)
   let return_expr = SA.Return (ctx, None) in
   (* Apply *)
@@ -560,6 +678,13 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
           pop_frame config span ~pop_locals ~pop_return_value:true ctx
         in
         let ret_value = Option.get ret_value in
+        let stateful = fun_decl_is_stateful ctx fdef in
+        let ctx, cc_pop_outer, cc_pop =
+          if stateful then
+            let ctx, cc_dead = end_dead_borrows_and_abs config span ctx in
+            (ctx, cc_comp cc_pop cc_dead, fun e -> e)
+          else (ctx, (fun e -> e), cc_pop)
+        in
         let ctx_return = ctx in
         [%ltrace
           "after popping the frame:\n- returned value:\n"
@@ -584,7 +709,8 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
         in
         let back_el = RegionGroupId.Map.of_list back_el in
         (* Put everything together *)
-        SA.ForwardEnd (Some (ctx_return, ret_value), ctx0, fwd_e, back_el)
+        cc_pop_outer
+          (SA.ForwardEnd (Some (ctx_return, ret_value), ctx0, fwd_e, back_el))
     | Panic ->
         (* Note that as we explore all the execution branches, one of
          * the executions can lead to a panic *)

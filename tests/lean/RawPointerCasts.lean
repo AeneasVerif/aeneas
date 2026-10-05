@@ -29,8 +29,9 @@ def bytes_of_words (data : Slice Std.U32) : Result (ConstRawPtr Std.U8) := do
     Source: 'tests/src/raw_pointer_casts.rs', lines 7:0-9:1 -/
 def mut_bytes_of_words
   (data : Slice Std.U32) : Result ((MutRawPtr Std.U8) × (Slice Std.U32)) := do
-  let (p, data1) ← Slice.as_mut_ptr data
+  let p ← Slice.as_mut_ptr data
   let p1 ← RawPtr.cast_scalar Std.U8 .Mut p
+  let data1 ← Slice.end_as_mut_ptr data p
   ok (p1, data1)
 
 /-- [raw_pointer_casts::const_bytes_of_mut_words]:
@@ -39,8 +40,9 @@ def const_bytes_of_mut_words
   (data : Slice Std.U32) :
   Result ((ConstRawPtr Std.U8) × (Slice Std.U32))
   := do
-  let (p, data1) ← Slice.as_mut_ptr data
+  let p ← Slice.as_mut_ptr data
   let p1 ← RawPtr.cast_scalar Std.U8 .Const p
+  let data1 ← Slice.end_as_mut_ptr data p
   ok (p1, data1)
 
 /-- [raw_pointer_casts::signed_of_unsigned]:
@@ -49,8 +51,9 @@ def signed_of_unsigned
   (data : Slice Std.U16) :
   Result ((MutRawPtr Std.I16) × (Slice Std.U16))
   := do
-  let (p, data1) ← Slice.as_mut_ptr data
+  let p ← Slice.as_mut_ptr data
   let p1 ← RawPtr.cast_scalar Std.I16 .Mut p
+  let data1 ← Slice.end_as_mut_ptr data p
   ok (p1, data1)
 
 /-- [raw_pointer_casts::words_of_bytes]:

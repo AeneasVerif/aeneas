@@ -506,4 +506,92 @@ theorem end_mut_to_raw.spec [ByteRepr T] (original : Slice T) (b : Buffer T)
 
 end Buffer
 
+def RawPtr.toBuffer {M} (p : RawPtr T M) (n : Nat) : Buffer T := ⟨p.base, p.offset, n⟩
+
+@[simp] theorem RawPtr.toBuffer_ptr (p : MutRawPtr T) (n : Nat) :
+    (p.toBuffer n).ptr = p := rfl
+
+@[simp] theorem RawPtr.toBuffer_ptr_const (p : ConstRawPtr T) (n : Nat) :
+    (p.toBuffer n).ptr = p.toMut := rfl
+
+@[simp] theorem RawPtr.toBuffer_length {M} (p : RawPtr T M) (n : Nat) :
+    (p.toBuffer n).length = n := rfl
+
+def Slice.end_as_mut_ptr [ByteRepr T] (s : Slice T) (p : MutRawPtr T) : Result (Slice T) :=
+  Buffer.end_mut_to_raw s (p.toBuffer s.length)
+
+@[step]
+theorem Slice.end_as_mut_ptr.spec [ByteRepr T] (s : Slice T) (p : MutRawPtr T) (values : List T)
+    (hLength : values.length = s.length) :
+    ⦃ p ↦* values ⦄ Slice.end_as_mut_ptr s p ⦃⇓ result => ⌜result.val = values⌝⦄ := by
+  unfold Slice.end_as_mut_ptr
+  apply WP.ispec_mono (Buffer.end_mut_to_raw.spec s (p.toBuffer s.length) values)
+  have hSet : s.val.setSlice! 0 values = values := by
+    apply List.ext_getElem <;> simp_all [List.setSlice!]
+  simp only [Buffer.pointsTo_def, hSet, RawPtr.toBuffer_ptr, RawPtr.toBuffer_length, hLength]
+  iframe
+
+def Slice.end_as_ptr [ByteRepr T] (s : Slice T) (p : ConstRawPtr T) : Result Unit :=
+  Buffer.free (p.toBuffer s.length)
+
+@[step]
+theorem Slice.end_as_ptr.spec [ByteRepr T] (s : Slice T) (p : ConstRawPtr T) :
+    ⦃ p ↦* s.val ⦄ Slice.end_as_ptr s p ⦃⇓ emp⦄ := by
+  unfold Slice.end_as_ptr
+  apply WP.ispec_mono (Buffer.free.spec (p.toBuffer s.length) s.val)
+  simp only [Buffer.pointsTo_def, RawPtr.toBuffer_length]
+  iframe
+
+@[rust_fun "core::slice::raw::from_raw_parts"]
+def core.slice.raw.from_raw_parts [ByteRepr T] (p : ConstRawPtr T) (len : Usize) : Result (Slice T) :=
+  Buffer.readSlice (p.toBuffer len.val)
+
+@[step]
+theorem core.slice.raw.from_raw_parts.spec [ByteRepr T] (p : ConstRawPtr T) (len : Usize) (s : Slice T)
+    (hLength : s.length = len.val) :
+    ⦃ p ↦* s.val ⦄ core.slice.raw.from_raw_parts p len
+      ⦃⇓ result => ⌜result = s⌝ ∗ p ↦* s.val⦄ := by
+  unfold core.slice.raw.from_raw_parts
+  apply WP.ispec_mono (Buffer.readSlice.spec (p.toBuffer len.val) s)
+  simp only [Buffer.pointsTo_def, RawPtr.toBuffer_ptr_const, RawPtr.toBuffer_length, hLength,
+    RawPtr.pointsToRange_toMut]
+  iframe
+
+@[rust_fun "core::slice::raw::from_raw_parts_mut"]
+def core.slice.raw.from_raw_parts_mut [ByteRepr T] (p : MutRawPtr T) (len : Usize) :
+    Result (Slice T × (Slice T → Result Unit)) :=
+  Aeneas.Std.bind (Buffer.readSlice (p.toBuffer len.val)) fun s =>
+    Result.ok (s, Buffer.writeSlice (p.toBuffer len.val))
+
+@[step]
+theorem core.slice.raw.from_raw_parts_mut.spec [ByteRepr T] (p : MutRawPtr T) (len : Usize) (s : Slice T)
+    (hLength : s.length = len.val) :
+    ⦃ p ↦* s.val ⦄ core.slice.raw.from_raw_parts_mut p len
+      ⦃⇓ result => ⌜result.1 = s ∧
+        ∀ (old s' : Slice T), s'.length = old.length → old.length = len.val →
+          ⦃ p ↦* old.val ⦄ result.2 s' ⦃⇓ p ↦* s'.val ⦄⌝ ∗ p ↦* s.val⦄ := by
+  have hBack : ∀ (old s' : Slice T), s'.length = old.length → old.length = len.val →
+      ⦃ p ↦* old.val ⦄ Buffer.writeSlice (p.toBuffer len.val) s' ⦃⇓ p ↦* s'.val ⦄ := by
+    intro old s' h1 h2
+    apply WP.ispec_mono (Buffer.writeSlice.spec (p.toBuffer len.val) old s' h1)
+    simp only [Buffer.pointsTo_def, RawPtr.toBuffer_ptr, RawPtr.toBuffer_length, h2,
+      Slice.length, h1]
+    iframe
+  have hPre : p ↦* s.val ⊢ (p.toBuffer len.val) ↦ s.val ∗ emp := by
+    simp only [Buffer.pointsTo_def, RawPtr.toBuffer_ptr, RawPtr.toBuffer_length, ← hLength]
+    iframe
+  unfold core.slice.raw.from_raw_parts_mut
+  apply WP.ispec_bind (Buffer.readSlice.spec (p.toBuffer len.val) s) hPre
+  intro r
+  rw [sep_emp_r_eq]
+  iintro hr
+  subst r
+  rw [ispec_ok]
+  simp only [Buffer.pointsTo_def, RawPtr.toBuffer_ptr, RawPtr.toBuffer_length]
+  iintro hl
+  have hPure : (s, Buffer.writeSlice (p.toBuffer len.val)).1 = s ∧
+      ∀ (old s' : Slice T), s'.length = old.length → old.length = len.val →
+        ⦃ p ↦* old.val ⦄ (s, Buffer.writeSlice (p.toBuffer len.val)).2 s' ⦃⇓ p ↦* s'.val ⦄ :=
+    ⟨rfl, hBack⟩
+  iframe
 end Aeneas.Std

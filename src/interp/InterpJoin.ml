@@ -636,6 +636,10 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
     ^ "\n\n- ctx1:\n"
     ^ eval_ctx_to_string ~span:(Some span) ~filter:true ctx1
     ^ "\n"];
+  [%cassert] span
+    (not (env_has_raw_ptr_views ctx0.env || env_has_raw_ptr_views ctx1.env))
+    "Unsupported: joining contexts (after a branching or in a loop) while \
+     borrows converted to raw pointers are live";
 
   (* Split the environments in two:
      - we preserve the dummy variables and abstractions which appear in both

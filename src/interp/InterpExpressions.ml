@@ -347,7 +347,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
     function parameters. Still, it is better for soundness purposes, and
     corresponds to what we do in the formalization (because we don't enforce the
     same constraints as MIR in the formalization). *)
-let prepare_eval_operand_reorganize (config : config) (span : Meta.span)
+let rec prepare_eval_operand_reorganize (config : config) (span : Meta.span)
     (op : operand) : cm_fun =
  fun ctx ->
   match op with
@@ -355,16 +355,63 @@ let prepare_eval_operand_reorganize (config : config) (span : Meta.span)
       (* No need to reorganize the context *)
       (ctx, fun e -> e)
   | Copy p ->
+      let ctx, cc = end_dirty_raw_ptr_views_at_place config span p ctx in
       (* Access the value *)
       let access = Read in
       (* Expand the symbolic values, if necessary *)
       let greedy_expand = true in
-      access_rplace_reorganize config span greedy_expand access p ctx
+      comp cc (access_rplace_reorganize config span greedy_expand access p ctx)
   | Move p ->
       (* Access the value *)
       let access = Move in
       let greedy_expand = false in
       access_rplace_reorganize config span greedy_expand access p ctx
+
+and end_dirty_raw_ptr_views_at_place (config : config) (span : Meta.span)
+    (p : place) : cm_fun =
+ fun ctx ->
+  let rec derefs_raw_ptr (p : place) : bool =
+    match p.kind with
+    | PlaceProjection (p', Deref) -> (
+        match p'.ty with
+        | TRawPtr _ -> true
+        | _ -> derefs_raw_ptr p')
+    | PlaceProjection (p', _) -> derefs_raw_ptr p'
+    | PlaceLocal _ | PlaceGlobal _ -> false
+  in
+  if (not (env_has_raw_ptr_views ctx.env)) || derefs_raw_ptr p then
+    (ctx, fun e -> e)
+  else
+    let loans =
+      try
+        let lid, v = read_place span Read p ctx in
+        let loans = ref (BorrowId.Set.of_list (Option.to_list lid)) in
+        let visitor =
+          object (self)
+            inherit [_] iter_tvalue
+
+            method! visit_VSharedLoan env lid sv =
+              loans := BorrowId.Set.add lid !loans;
+              self#visit_tvalue env sv
+          end
+        in
+        visitor#visit_tvalue () v;
+        !loans
+      with _ -> BorrowId.Set.empty
+    in
+    let abs_ids =
+      env_filter_map_abs
+        (fun abs ->
+          match abs.kind with
+          | RawPtrView view
+            when view.rpv_mut && view.rpv_dirty
+                 && BorrowId.Set.mem view.rpv_loan loans -> Some abs.abs_id
+          | _ -> None)
+        ctx.env
+    in
+    fold_left_apply_continuation
+      (fun abs_id ctx -> InterpBorrows.end_abs config span abs_id 0 ctx)
+      abs_ids ctx
 
 (** Evaluate an operand, without reorganizing the context before *)
 let eval_operand_no_reorganize (config : config) (span : Meta.span)
@@ -1214,6 +1261,12 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
       *)
       [%sanity_check] span (bkind <> BShallow);
 
+      let ctx, cc =
+        match bkind with
+        | BShared | BShallow -> end_dirty_raw_ptr_views_at_place config span p ctx
+        | _ -> (ctx, fun e -> e)
+      in
+
       (* Access the value *)
       let access =
         match bkind with
@@ -1223,9 +1276,10 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
       in
 
       let greedy_expand = false in
-      let lid, v, ctx, cc =
+      let lid, v, ctx, cc' =
         access_rplace_reorganize_and_read config span greedy_expand access p ctx
       in
+      let cc = cc_comp cc cc' in
       (* Generate the fresh shared borrow id *)
       let sid = ctx.fresh_shared_borrow_id () in
       (* Compute the loan value, with which to replace the value at place p *)

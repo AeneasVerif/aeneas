@@ -66,6 +66,14 @@ val eval_rvalue_not_global :
   * eval_ctx
   * (SymbolicAst.expr -> SymbolicAst.expr)
 
+val eval_rvalue_ref :
+  config ->
+  Meta.span ->
+  place ->
+  borrow_kind ->
+  eval_ctx ->
+  tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)
+
 (** Evaluate a fake read (update the context so that we can read a place) *)
 val eval_fake_read : config -> Meta.span -> place -> cm_fun
 

@@ -833,6 +833,9 @@ module Values = struct
     | CopySymbolicValue -> "CopySymbolicValue"
     | Join -> "Join"
     | WithCont -> "WithCont"
+    | RawPtrView view ->
+        "RawPtrView(loan:" ^ BorrowId.to_string view.rpv_loan ^ ", mut:"
+        ^ string_of_bool view.rpv_mut ^ ")"
 
   let abs_cont_to_string ?(span : Meta.span option = None) (env : fmt_env)
       ?(with_ended : bool = false) (indent : string) (indent_incr : string)

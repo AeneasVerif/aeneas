@@ -80,6 +80,9 @@ def distance (q₁ : RawPtr T M₁) (q₂ : RawPtr U M₂) : Nat :=
 def toConst (q : MutRawPtr T) : ConstRawPtr T :=
   ⟨q.base, q.offset⟩
 
+def toMut (q : ConstRawPtr T) : MutRawPtr T :=
+  ⟨q.base, q.offset⟩
+
 /-- The same address, viewed at another element type and mutability. -/
 def retype (q : RawPtr T M) : RawPtr U M' :=
   ⟨q.base, q.offset⟩
@@ -106,6 +109,21 @@ def Aligned [ByteRepr T] (q : RawPtr T M) : Prop :=
 @[simp] theorem ref_toConst (q : MutRawPtr T) : q.toConst.ref = q.ref := rfl
 
 @[simp] theorem loc_toConst (q : MutRawPtr T) : q.toConst.loc = q.loc := rfl
+
+@[simp] theorem base_toMut (q : ConstRawPtr T) : q.toMut.base = q.base := rfl
+
+@[simp] theorem offset_toMut (q : ConstRawPtr T) : q.toMut.offset = q.offset := rfl
+
+@[simp] theorem ref_toMut (q : ConstRawPtr T) : q.toMut.ref = q.ref := rfl
+
+@[simp] theorem loc_toMut (q : ConstRawPtr T) : q.toMut.loc = q.loc := rfl
+
+@[simp] theorem toMut_toConst (q : MutRawPtr T) : q.toConst.toMut = q := rfl
+
+@[simp] theorem toConst_toMut (q : ConstRawPtr T) : q.toMut.toConst = q := rfl
+
+@[simp] theorem aligned_toMut [ByteRepr T] (q : ConstRawPtr T) :
+    q.toMut.Aligned ↔ q.Aligned := Iff.rfl
 
 @[simp] theorem base_retype (q : RawPtr T M) :
     (q.retype : RawPtr U M').base = q.base := rfl
@@ -201,6 +219,9 @@ theorem RawPtr.pointsTo_eq_range [ByteRepr T] (q : RawPtr T M) (value : T) :
 @[simp] theorem RawPtr.pointsTo_toConst [ByteRepr T] (q : MutRawPtr T) (value : T) :
     (q.toConst ↦ value) = (q ↦ value) := rfl
 
+@[simp] theorem RawPtr.pointsTo_toMut [ByteRepr T] (q : ConstRawPtr T) (value : T) :
+    (q.toMut ↦ value) = (q ↦ value) := rfl
+
 private theorem owns_empty_eq : owns Heap.empty = emp :=
   bientails_eq ⟨fun _ _ => trivial, fun h _ => Heap.Sub.of_empty h⟩
 
@@ -262,6 +283,10 @@ theorem pointsToRange_retype_eq [ByteRepr T] (q : RawPtr T M) (values : List T) 
 
 @[simp] theorem pointsToRange_toConst [ByteRepr T] (q : MutRawPtr T) (values : List T) :
     (q.toConst ↦* values) = (q ↦* values) :=
+  pointsToRange_retype_eq q values
+
+@[simp] theorem pointsToRange_toMut [ByteRepr T] (q : ConstRawPtr T) (values : List T) :
+    (q.toMut ↦* values) = (q ↦* values) :=
   pointsToRange_retype_eq q values
 
 theorem pointsToRange_append [ByteRepr T] (q : RawPtr T M) (xs ys : List T) :

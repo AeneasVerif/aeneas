@@ -255,6 +255,24 @@ type eended_mut_borrow_meta = {
 }
 [@@deriving show, eq, ord]
 
+type raw_ptr_view_kind =
+  | RpvSlice
+[@@deriving show, eq, ord]
+
+type raw_ptr_view = {
+  rpv_kind : raw_ptr_view_kind;
+  rpv_mut : bool;
+  rpv_loan : loan_id;
+  rpv_original : mvalue;
+  rpv_ptr : msymbolic_value;
+  rpv_dirty : bool;
+  rpv_given_back : msymbolic_value option;
+}
+[@@deriving show, ord]
+
+let equal_raw_ptr_view (x : raw_ptr_view) (y : raw_ptr_view) =
+  x.rpv_loan = y.rpv_loan
+
 (** The kind of an abstraction, which keeps track of its origin *)
 type abs_kind =
   | FunCall of (FunCallId.id * RegionGroupId.id)
@@ -296,6 +314,7 @@ type abs_kind =
   | Join
       (** The abstraction was introduced after joining contexts, typically after
           an [if then else] or a [match] *)
+  | RawPtrView of raw_ptr_view
 [@@deriving show, eq, ord]
 
 module AbsBVarId = IdGen ()

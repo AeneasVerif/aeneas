@@ -810,6 +810,42 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
         | None -> [%internal_error_opt_span] span)
   in
 
+  let fun_stateful =
+    match lookup_pure_fn_ptr_info fun_infos fun_id with
+    | Some info -> info.stateful
+    | None -> false
+  in
+  let fun_stateful =
+    fun_stateful
+    &&
+    match fun_id with
+    | FunId fid -> (
+        match A.FunDeclId.Map.find_opt fid decls_ctx.crate.fun_decls with
+        | Some { src = TraitImplFun _ | TraitDefaultFun _; _ } -> false
+        | _ -> true)
+    | _ -> false
+  in
+  let top_level_groups =
+    let groups = ref T.RegionGroupId.Set.empty in
+    let add (r : T.region) =
+      match r with
+      | RVar (Free rid) when T.RegionId.Map.mem rid rg_to_gr_id ->
+          groups := T.RegionGroupId.Set.add (get_region_group r) !groups
+      | _ -> ()
+    in
+    let rec explore (ty : T.ty) : unit =
+      match ty with
+      | TRef (r, _, _) -> add r
+      | TAdt { generics; _ } ->
+          List.iter add generics.regions;
+          List.iter explore generics.types
+      | TArray (ty, _, _) | TSlice (ty, _) | TRawPtr (ty, _) -> explore ty
+      | _ -> ()
+    in
+    if fun_stateful then List.iter explore (sg.output :: sg.inputs);
+    !groups
+  in
+
   (* Compute the type information for the backward function *)
   (* Small helper to translate types for backward functions.
      - [to_input] controls whether we compute an input type or an output type.
@@ -956,7 +992,11 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     *)
     let back_effect_info =
       let b = inputs <> [] in
-      { back_effect_info with can_fail = back_effect_info.can_fail && b }
+      let heap = fun_stateful && T.RegionGroupId.Set.mem gid top_level_groups in
+      {
+        back_effect_info with
+        can_fail = (back_effect_info.can_fail && b) || heap;
+      }
     in
     let outputs = compute_back_outputs_for_gid gid in
     let filter =

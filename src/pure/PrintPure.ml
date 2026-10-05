@@ -866,6 +866,10 @@ let pure_builtin_fun_id_to_string (fid : pure_builtin_fun_id) : string =
     end
   | Discriminant -> "@discriminant"
   | ResultUnwrapMut -> "@resultUnwrapMut"
+  | RawPtrOfSlice Mut -> "@sliceAsMutPtr"
+  | RawPtrOfSlice Const -> "@sliceAsPtr"
+  | EndRawPtrOfSlice Mut -> "@sliceEndAsMutPtr"
+  | EndRawPtrOfSlice Const -> "@sliceEndAsPtr"
   | GetTarget -> "@getTarget"
   | TargetFeatureEnabled -> "@targetFeatureEnabled"
 
@@ -898,6 +902,9 @@ let cast_kind_to_string (env : fmt_env) (kind : cast_kind) : string =
                  mk_generic_args_from_types [ TLiteral ty ] ))
         in
         (mk src src_mut, mk tgt tgt_mut)
+    | CastRawPtrMut (src_mut, tgt_mut) ->
+        let mk mut = ty_to_string env false (TAdt (TBuiltin (TRawPtr mut), empty_generic_args)) in
+        (mk src_mut, mk tgt_mut)
   in
   "cast<" ^ src ^ "," ^ tgt ^ ">"
 

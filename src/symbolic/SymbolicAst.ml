@@ -101,6 +101,7 @@ class ['self] iter_expr_base =
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
     method visit_emeta : 'env -> emeta -> unit = fun _ _ -> ()
     method visit_abs_level : 'env -> abs_level -> unit = fun _ _ -> ()
+    method visit_raw_ptr_view : 'env -> raw_ptr_view -> unit = fun _ _ -> ()
 
     method visit_region_group_id_map :
         'a. ('env -> 'a -> unit) -> 'env -> 'a region_group_id_map -> unit =
@@ -344,6 +345,7 @@ and value_aggregate =
           element of a known type to a box of an element of type [dyn] through
           an unsized cast: we need the trait reference to perform the cast. *)
   | VaFnDef of fn_ptr  (** Function pointer of a top-level definition *)
+  | VaRawPtrView of raw_ptr_view
 [@@deriving
   show,
   visitors

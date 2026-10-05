@@ -648,6 +648,12 @@ let eval_global_as_fresh_symbolic_value (span : Meta.span)
       (ctx, mk_tvalue_from_symbolic_value sval, cc)
 
 (** Evaluate a statement. *)
+let slice_as_mut_ptr_pattern =
+  lazy (NameMatcher.parse_pattern "core::slice::{[@T]}::as_mut_ptr")
+
+let slice_as_ptr_pattern =
+  lazy (NameMatcher.parse_pattern "core::slice::{[@T]}::as_ptr")
+
 let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->
   (* Debugging *)
@@ -1252,6 +1258,10 @@ and eval_function_call_symbolic (config : config) (span : Meta.span)
  fun ctx ->
   match call.func with
   | FnOpDynamic _ -> [%craise] span "Function pointers are not supported yet"
+  | FnOpRegular func when Option.is_some (raw_ptr_view_builtin span ctx func)
+    ->
+      let is_mut = Option.get (raw_ptr_view_builtin span ctx func) in
+      eval_raw_ptr_view_creation config span ~is_mut call ctx
   | FnOpRegular func ->
       [%ltrace
         "function call:\n- call: " ^ call_to_string ctx call ^ "\n- fn_ptr : "
@@ -1265,6 +1275,175 @@ and eval_function_call_symbolic (config : config) (span : Meta.span)
       (* Evaluate the function call *)
       eval_function_call_symbolic_from_inst_sig config call_info call.args
         call.dest ctx
+
+and eval_raw_ptr_view_creation (config : config) (span : Meta.span)
+    ~(is_mut : bool) (call : call) : stl_cm_fun =
+ fun ctx ->
+  let arg =
+    match call.args with
+    | [ arg ] -> arg
+    | _ -> [%internal_error] span
+  in
+  let dest_place = Some (S.mk_mplace span call.dest ctx) in
+  let is_direct_borrow =
+    match arg with
+    | Move p | Copy p -> (
+        let v = try Some (snd (read_place span Read p ctx)) with _ -> None in
+        match v with
+        | Some { value = VBorrow (VSharedBorrow _ | VReservedMutBorrow _); _ }
+          -> true
+        | Some { value = VBorrow (VMutBorrow (bid, _)); _ } -> (
+            match
+              InterpBorrowsCore.lookup_loan_opt span InterpBorrowsCore.ek_all
+                bid ctx.env
+            with
+            | Some (_, Concrete (VMutLoan _)) -> true
+            | _ -> false)
+        | _ -> false)
+    | Constant _ -> false
+  in
+  let v, ctx, cc =
+    match arg with
+    | _ when is_direct_borrow -> eval_operand config span arg ctx
+    | Move p | Copy p ->
+        let pointee_ty =
+          match p.ty with
+          | TRef (_, ty, _) -> ty
+          | _ -> [%internal_error] span
+        in
+        let deref_p = { kind = PlaceProjection (p, Deref); ty = pointee_ty } in
+        let bkind = if is_mut then BTwoPhaseMut else BShared in
+        eval_rvalue_ref config span deref_p bkind ctx
+    | Constant _ -> [%craise] span "Unexpected constant operand"
+  in
+  let lid, sid, ctx =
+    match v.value with
+    | VBorrow (VSharedBorrow (lid, sid) | VReservedMutBorrow (lid, sid)) ->
+        (lid, sid, ctx)
+    | VBorrow (VMutBorrow (bid, bv)) ->
+        let lid = ctx.fresh_borrow_id () in
+        let sid = ctx.fresh_shared_borrow_id () in
+        let ctx =
+          InterpBorrowsCore.update_loan span InterpBorrowsCore.ek_all bid
+            (VSharedLoan (lid, bv)) ctx
+        in
+        (lid, sid, ctx)
+    | _ ->
+        [%craise] span
+          "Unexpected value when converting a borrow to a raw pointer"
+  in
+  let original =
+    match
+      snd (InterpBorrowsCore.lookup_loan span InterpBorrowsCore.ek_all lid ctx.env)
+    with
+    | Concrete (VSharedLoan (_, v)) -> v
+    | Abstract (ASharedLoan (_, _, v, _)) when not is_mut ->
+        v
+    | _ ->
+        [%craise] span
+          "Unsupported: converting to a raw pointer a borrow which belongs to \
+           a region abstraction"
+  in
+  [%cassert] span
+    (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos original.ty))
+    "Unsupported: converting to a raw pointer a borrow of a value which \
+     contains borrows";
+  (match original.ty with
+  | TSlice (TScalar (TInteger _), _) | TArray (TScalar (TInteger _), _, _) -> ()
+  | _ ->
+      [%craise] span
+        "[as_ptr] and [as_mut_ptr] are only supported on slices of integers");
+  let ptr_sv = mk_fresh_symbolic_value span ctx call.dest.ty in
+  let view : raw_ptr_view =
+    {
+      rpv_kind = RpvSlice;
+      rpv_mut = is_mut;
+      rpv_loan = lid;
+      rpv_original = original;
+      rpv_ptr = ptr_sv;
+      rpv_dirty = false;
+      rpv_given_back = None;
+    }
+  in
+  let rid = ctx.fresh_region_id () in
+  let abs =
+    {
+      abs_id = ctx.fresh_abs_id ();
+      kind = RawPtrView view;
+      can_end = true;
+      parents = AbsId.Set.empty;
+      regions = { owned = RegionId.Set.singleton rid };
+      ended_subabs = AbsLevelSet.empty;
+      avalues =
+        [
+          {
+            value = ABorrow (ASharedBorrow (PNone, lid, sid));
+            ty = TRef (RVar (Free rid), original.ty, RShared);
+          };
+        ];
+      cont =
+        Some
+          {
+            output = Some (mk_etuple ~borrow_proj:true []);
+            input = Some (mk_etuple ~borrow_proj:false []);
+          };
+    }
+  in
+  let ctx = { ctx with env = EAbs abs :: ctx.env } in
+  let cc =
+    cc_comp cc (fun e ->
+        SymbolicAst.IntroSymbolic (ctx, dest_place, ptr_sv, VaRawPtrView view, e))
+  in
+  let ctx, cc =
+    comp cc
+      (assign_to_place config span
+         (mk_tvalue_from_symbolic_value ptr_sv)
+         call.dest ctx)
+  in
+  ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span cc)
+
+and call_may_modify_heap (ctx : eval_ctx) (fid : fn_ptr_kind)
+    (inst_sg : inst_fun_sig) : bool =
+  let stateful =
+    match fid with
+    | Fun fid -> (
+        match FunsAnalysis.lookup_fun_decl_info ctx.fun_ctx.fun_infos fid with
+        | Some info -> info.stateful
+        | None -> true)
+    | TraitMethod _ -> true
+  in
+  stateful
+  ||
+  let contains_raw_ptr = FunsAnalysis.mk_ty_contains_raw_ptr ctx.crate in
+  List.exists contains_raw_ptr (inst_sg.output :: inst_sg.inputs)
+
+and ctx_mark_raw_ptr_views_dirty (ctx : eval_ctx) : eval_ctx =
+  let env =
+    List.map
+      (fun (e : env_elem) ->
+        match e with
+        | EAbs ({ kind = RawPtrView view; _ } as abs) ->
+            EAbs { abs with kind = RawPtrView { view with rpv_dirty = true } }
+        | _ -> e)
+      ctx.env
+  in
+  { ctx with env }
+
+and raw_ptr_view_builtin (_span : Meta.span) (ctx : eval_ctx) (func : fn_ptr) :
+    bool option =
+  match func.kind with
+  | Fun fid -> (
+      match FunDeclId.Map.find_opt fid ctx.crate.fun_decls with
+      | None -> None
+      | Some decl ->
+          let matches pat =
+            ExtractName.match_name ctx.crate (Lazy.force pat)
+              decl.item_meta.name
+          in
+          if matches slice_as_mut_ptr_pattern then Some true
+          else if matches slice_as_ptr_pattern then Some false
+          else None)
+  | TraitMethod _ -> None
 
 (** Evaluate a local (i.e., non-builtin) function call in concrete mode *)
 and eval_non_builtin_function_call_concrete (config : config) (span : Meta.span)
@@ -1389,6 +1568,12 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
     ^ "\n- args:\n"
     ^ String.concat ", " (List.map (operand_to_string ctx) args)
     ^ "\n- dest:\n" ^ place_to_string ctx dest];
+
+  let ctx =
+    if env_has_raw_ptr_views ctx.env && call_may_modify_heap ctx fid inst_sg
+    then ctx_mark_raw_ptr_views_dirty ctx
+    else ctx
+  in
 
   (* Unique identifier for the call *)
   let call_id = ctx.fresh_fun_call_id () in

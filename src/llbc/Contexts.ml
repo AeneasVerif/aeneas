@@ -584,6 +584,16 @@ let env_map_abs (f : abs -> abs) (env : env) : env =
       | EAbs abs -> EAbs (f abs))
     env
 
+let env_has_raw_ptr_views (env : env) : bool =
+  let found = ref false in
+  env_iter_abs
+    (fun abs ->
+      match abs.kind with
+      | RawPtrView _ -> found := true
+      | _ -> ())
+    env;
+  !found
+
 let env_filter_map_abs (f : abs -> 'a option) (env : env) : 'a list =
   List.filter_map
     (fun (ee : env_elem) ->

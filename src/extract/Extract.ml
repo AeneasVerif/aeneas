@@ -417,7 +417,7 @@ let extract_cast_kind_hol4 (span : Meta.span)
       extract_expr ~inside:true arg;
       F.pp_print_string fmt ")";
       if inside then F.pp_print_string fmt ")"
-  | CastRawPtr _ ->
+  | CastRawPtr _ | CastRawPtrMut _ ->
       [%craise] span "Raw pointer casts are not implemented for HOL4"
 
 (** Extract a cast when the backend is not HOL4 (which receives a special
@@ -504,6 +504,22 @@ let extract_cast_kind_gen (span : Meta.span)
       F.pp_print_space fmt ();
       extract_expr ~inside:true arg;
       if inside then F.pp_print_string fmt ")"
+  | CastRawPtrMut (src_mut, tgt_mut) -> (
+      [%cassert] span
+        (backend () = Lean)
+        "Casts between raw pointers are only supported in the Lean backend";
+      match (src_mut, tgt_mut) with
+      | Mut, Mut | Const, Const ->
+          extract_expr ~inside arg
+      | _ ->
+          if inside then F.pp_print_string fmt "(";
+          F.pp_print_string fmt
+            (match tgt_mut with
+            | Const -> "RawPtr.toConst"
+            | Mut -> "RawPtr.toMut");
+          F.pp_print_space fmt ();
+          extract_expr ~inside:true arg;
+          if inside then F.pp_print_string fmt ")")
   | CastRawPtr ((_, _), (tgt_ty, tgt_mut)) ->
       [%cassert] span
         (backend () = Lean)
@@ -1044,6 +1060,9 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
               Some
                 { explicit_types = [ Implicit ]; explicit_const_generics = [] }
           | Pure ToResult ->
+              Some
+                { explicit_types = [ Implicit ]; explicit_const_generics = [] }
+          | Pure (RawPtrOfSlice _ | EndRawPtrOfSlice _) ->
               Some
                 { explicit_types = [ Implicit ]; explicit_const_generics = [] }
           | Pure ResultUnwrapMut ->
