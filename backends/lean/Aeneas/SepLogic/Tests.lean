@@ -1,4 +1,6 @@
-import Aeneas.SepLogic.Basic
+module
+public import Aeneas.SepLogic.Basic
+public section
 
 /-!
 # Regression tests for the separation logic itself

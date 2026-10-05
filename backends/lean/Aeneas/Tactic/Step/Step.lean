@@ -34,7 +34,7 @@ theorem bind_assoc_mixed {α : Type u} {β γ : Type v}
     (x : Result α) (f : α → Result β) (g : β → Result γ) :
     ((do let b ← ((do let a ← x; f a) : Result β); g b) : Result γ) =
       ((do let a ← x; let b ← f a; g b) : Result γ) :=
-  bind_assoc_poly x f g
+  Std.bind_assoc x f g
 
 end Std
 
@@ -90,7 +90,7 @@ meta def scalar_eqs := #[
 
 attribute [step_simps]
   bind_assoc Std.bind_tc_ok Std.bind_tc_vis Std.bind_tc_div
-  Std.bind_assoc Std.bind_ok Std.bind_vis Std.bind_div
+  Std.bind_assoc Std.bind_ok Std.bind_vis Std.bind_fail Std.bind_div
   /- Those are quite useful to simplify the goal further by eliminating existential quantifiers for instance. -/
   and_assoc Std.Result.ok.injEq Prod.mk.injEq
   exists_eq_left exists_eq_left' exists_eq_right exists_eq_right' exists_eq exists_eq' true_and and_true
