@@ -71,16 +71,17 @@ theorem Slice.as_ptr.spec {T : Type} [ByteRepr T] (s : Slice T) :
   RawPtr.materialize.spec s.val
 
 /-- Materialize a functional slice as fresh memory and return a mutable pointer
-to its first slot. Unlike Rust's `as_mut_ptr`, this allocates because the
-functional slice model has no address. -/
+to its first slot, with the unchanged slice. Unlike Rust's `as_mut_ptr`, this
+allocates because the functional slice model has no address. -/
 @[rust_fun "core::slice::{[@T]}::as_mut_ptr"]
-def Slice.as_mut_ptr {T : Type} [ByteRepr T] (s : Slice T) : Result (MutRawPtr T) :=
-  RawPtr.materialize s.val
+def Slice.as_mut_ptr {T : Type} [ByteRepr T] (s : Slice T) :
+    Result (MutRawPtr T × Slice T) :=
+  RawPtr.allocArray s.val fun p => (p, s)
 
 @[step]
 theorem Slice.as_mut_ptr.spec {T : Type} [ByteRepr T] (s : Slice T) :
-    ⦃ emp ⦄ s.as_mut_ptr ⦃⇓ p => p ↦* s.val⦄ :=
-  RawPtr.materialize.spec s.val
+    ⦃ emp ⦄ s.as_mut_ptr ⦃⇓ r => ⌜r.2 = s⌝ ∗ r.1 ↦* s.val⦄ :=
+  RawPtr.allocArray.spec _ _ _ fun _ h hPointsTo => (sep_pure_l _ _ h).mpr ⟨rfl, hPointsTo⟩
 
 instance {α : Type u} : GetElem (Slice α) Nat α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i h

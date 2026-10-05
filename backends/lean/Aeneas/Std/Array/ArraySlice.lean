@@ -147,13 +147,12 @@ theorem Array.as_ptr.spec {T : Type} [ByteRepr T] {N : Usize} (a : Array T N) :
 first slot. -/
 def Array.as_mut_ptr {T : Type} [ByteRepr T] {N : Usize} (a : Array T N) :
     Result (MutRawPtr T) :=
-  a.to_slice.as_mut_ptr
+  RawPtr.materialize a.val
 
 @[step]
 theorem Array.as_mut_ptr.spec {T : Type} [ByteRepr T] {N : Usize} (a : Array T N) :
-    ⦃ emp ⦄ a.as_mut_ptr ⦃⇓ p => p ↦* a.val⦄ := by
-  simpa only [Array.as_mut_ptr, Array.val_to_slice] using
-    Slice.as_mut_ptr.spec a.to_slice
+    ⦃ emp ⦄ a.as_mut_ptr ⦃⇓ p => p ↦* a.val⦄ :=
+  RawPtr.materialize.spec a.val
 
 @[simp, simp_lists_safe, simp_scalar_safe, scalar_tac a.to_slice, grind =, agrind =]
 theorem Array.length_to_slice (a : Array α n) :

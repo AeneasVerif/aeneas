@@ -43,6 +43,12 @@ example {α : Type} [Aeneas.Std.ByteRepr α] (r s : Ref α) (x y : α) :
     r ↦ x ∗ s ↦ y ⊢ s ↦ y ∗ r ↦ x := by
   iframe
 
+private def sameRef {α : Type} (r : Ref α) : Ref α := r
+
+example {α : Type} [Aeneas.Std.ByteRepr α] (r s : Ref α) (x y : α) :
+    sameRef r ↦ x ∗ s ↦ y ⊢ s ↦ y ∗ r ↦ x := by
+  iframe
+
 /-- Unmatched spatial assertions of the left-hand side are discarded too. -/
 example {α : Type} [Aeneas.Std.ByteRepr α] (r s : Ref α) (x y : α) : r ↦ x ∗ s ↦ y ⊢ s ↦ y := by
   iframe

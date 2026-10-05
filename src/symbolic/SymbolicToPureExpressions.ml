@@ -223,28 +223,21 @@ let compute_back_fun_name (ctx : bs_ctx) (decl : LlbcAst.fun_decl) : string =
     as bytes, which requires a byte representation of the element type: only
     integers have one. *)
 let check_slice_as_ptr_call (ctx : bs_ctx) (call : S.call) : unit =
-  match call.call_id with
-  | S.Fun (Fun fid, _) when Config.backend () = Lean -> (
+  match (call.call_id, call.generics.types) with
+  | _, [ TScalar (TInteger _) ] -> ()
+  | S.Fun (Fun fid, _), _ when Config.backend () = Lean -> (
       match FunDeclId.Map.find_opt fid ctx.decls_ctx.fun_ctx.fun_decls with
       | None -> ()
       | Some fun_decl -> (
-          let is_as_ptr =
-            List.exists
-              (fun pat ->
-                ExtractName.match_name ctx.decls_ctx.crate
-                  (NameMatcher.parse_pattern pat)
-                  fun_decl.item_meta.name)
-              [
-                "core::slice::{[@T]}::as_ptr"; "core::slice::{[@T]}::as_mut_ptr";
-              ]
-          in
-          match call.generics.types with
-          | [ TScalar (TInteger _) ] -> ()
-          | _ ->
-              if is_as_ptr then
-                [%craise] ctx.span
-                  "[as_ptr] and [as_mut_ptr] are only supported on slices of \
-                   integers"))
+          match
+            match_name_find_opt ctx.decls_ctx fun_decl.item_meta.name
+              (ExtractBuiltin.builtin_funs_map ())
+          with
+          | Some { extract_name = "Slice.as_ptr" | "Slice.as_mut_ptr"; _ } ->
+              [%craise] ctx.span
+                "[as_ptr] and [as_mut_ptr] are only supported on slices of \
+                 integers"
+          | _ -> ()))
   | _ -> ()
 
 let rec translate_expr (e : S.expr) (ctx : bs_ctx) : texpr =

@@ -623,6 +623,49 @@ example (p : MutRawPtr U32) (x : U32) :
     hBytes.symm (fun _ => hAlign (List.cons_ne_nil _ _)) h₁ hBytesOwned)
     (Heap.Sub.union_left hDisjoint)
 
+def patchByte (x y : U32) : Result (U32 × U32) := do
+  let p ← RawPtr.materialize (M := .Mut) [x, y]
+  let q ← RawPtr.cast_scalar U8 .Mut p
+  MutRawPtr.write (q.add 1) 0xaa#u8
+  let r ← RawPtr.cast_scalar U32 .Mut q
+  let x' ← RawPtr.read r
+  let y' ← RawPtr.read (r.add 1)
+  pure (x', y')
+
+theorem patchByte.spec (y : U32) :
+    ⦃ emp ⦄ patchByte 0x11223344#u32 y ⦃⇓ r => ⌜r = (0x1122aa44#u32, y)⌝⦄ := by
+  unfold patchByte
+  step as ⟨p⟩
+  irewrite (RawPtr.pointsToRange_aligned p _)
+  iintro hAligned
+  have hLow : (((0x11223344#u32).bv.toLEBytes.map (UScalar.mk (ty := .U8))).set 1
+      0xaa#u8).flatMap Aeneas.Std.ByteRepr.encode = (0x1122aa44#u32).bv.toLEBytes := by
+    decide +kernel
+  have hBytes : [0x11223344#u32, y].flatMap Aeneas.Std.ByteRepr.encode =
+      ((0x11223344#u32).bv.toLEBytes.map (UScalar.mk (ty := .U8)) ++
+        y.bv.toLEBytes.map (UScalar.mk (ty := .U8))).flatMap Aeneas.Std.ByteRepr.encode := by
+    rw [List.flatMap_append, UScalar.flatMap_encode_u8, UScalar.flatMap_encode_u8]
+    simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil]
+    rfl
+  step with RawPtr.cast_scalar.spec_range p _ _ hBytes (by intro _ _; simp [RawPtr.Aligned])
+    as ⟨q, hq⟩
+  step with MutRawPtr.write.spec_range q
+    ((0x11223344#u32).bv.toLEBytes.map (UScalar.mk (ty := .U8)) ++
+      y.bv.toLEBytes.map (UScalar.mk (ty := .U8))) 1 0xaa#u8 (by simp)
+  have hBytes' : (((0x11223344#u32).bv.toLEBytes.map (UScalar.mk (ty := .U8)) ++
+        y.bv.toLEBytes.map (UScalar.mk (ty := .U8))).set 1 0xaa#u8).flatMap
+          Aeneas.Std.ByteRepr.encode =
+      [0x1122aa44#u32, y].flatMap Aeneas.Std.ByteRepr.encode := by
+    rw [List.set_append_left _ _ (by simp), List.flatMap_append, hLow,
+      UScalar.flatMap_encode_u8]
+    simp
+  step with RawPtr.cast_scalar.spec_range q _ _ hBytes' (by
+    intro _ _
+    subst hq
+    simpa using hAligned (by simp)) as ⟨r, hr⟩
+  simp only [RawPtr.pointsToRange_cons, RawPtr.pointsToRange_nil]
+  step*
+
 /-- Bytes give no alignment guarantee: viewing an allocation made at `u8` at
 `u32` has no read specification, even at offset `0`. -/
 example (p : MutRawPtr U8) (hBase : p.base.align = 1) (P : IProp) (Q : U32 → IProp)

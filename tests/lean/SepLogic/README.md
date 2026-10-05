@@ -203,14 +203,15 @@ RawPtr.pointsToRange_retype :
   xs.flatMap encode = ys.flatMap encode → (ys ≠ [] → q.retype.Aligned) →
     q ↦* xs ⊢ q.retype ↦* ys
 cast_scalar.spec :
-  align U ∣ align T →
-    ⦃q ↦ x⦄ cast_scalar U .. q ⦃⇓ r => ⌜r = q.retype⌝ ∗ r ↦ (decode (encode x)).get _⦄
+  (hDecode : (decode (α := U) (encode x)).isSome) → align U ∣ align T →
+    ⦃q ↦ x⦄ cast_scalar U .. q
+      ⦃⇓ r => ⌜r = q.retype⌝ ∗ r ↦ (decode (encode x)).get hDecode⦄
 ```
 
 A same-size cast between scalars reinterprets the bits, and a `u32` can be
 owned as the four `u8`s of its encoding and back, at an address aligned for
 `u32`.  See the "Pointer casts"
-section of [`Tests/UnitTest.lean`](Tests/UnitTest.lean).
+section of [`UnitTest.lean`](UnitTest.lean).
 
 ## Four semantics for `Result`
 
