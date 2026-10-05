@@ -84,10 +84,11 @@ def toConst (q : MutRawPtr T) : ConstRawPtr T :=
 def retype (q : RawPtr T M) : RawPtr U M' :=
   ⟨q.base, q.offset⟩
 
-/-- Whether the address of `q` is a multiple of the alignment of `T`.
-Allocations start at offset `0`, so they are aligned at their base. -/
+/-- Whether the address of `q` is a multiple of the alignment of `T`: the
+alignment of `T` divides both the alignment of the allocation, which is that of
+the type it was allocated at, and the offset into it. -/
 def Aligned [ByteRepr T] (q : RawPtr T M) : Prop :=
-  ByteRepr.align T ∣ q.offset
+  ByteRepr.align T ∣ q.base.align ∧ ByteRepr.align T ∣ q.offset
 
 @[simp] theorem base_add [ByteRepr T] (q : RawPtr T M) (i : Nat) :
     (q.add i).base = q.base := rfl
@@ -130,20 +131,21 @@ theorem add_add [ByteRepr T] (q : RawPtr T M) (i j : Nat) :
     (q.add i).add j = q.add (i + j) := by
   simp [add, Nat.add_mul, Nat.add_assoc]
 
-theorem aligned_of_offset_eq_zero [ByteRepr T] {q : RawPtr T M} (hOffset : q.offset = 0) :
-    q.Aligned := by
-  simp [Aligned, hOffset]
-
 @[simp] theorem aligned_add [ByteRepr T] (q : RawPtr T M) (i : Nat) :
     (q.add i).Aligned ↔ q.Aligned :=
-  (Nat.dvd_add_left (Nat.dvd_trans ByteRepr.align_dvd_size (Nat.dvd_mul_left _ i))).trans
-    Iff.rfl
+  and_congr Iff.rfl
+    (Nat.dvd_add_left (Nat.dvd_trans ByteRepr.align_dvd_size (Nat.dvd_mul_left _ i)))
 
 @[simp] theorem aligned_toConst [ByteRepr T] (q : MutRawPtr T) :
     q.toConst.Aligned ↔ q.Aligned := Iff.rfl
 
 @[simp] theorem aligned_retype_self [ByteRepr T] (q : RawPtr T M) :
     (q.retype : RawPtr T M').Aligned ↔ q.Aligned := Iff.rfl
+
+theorem aligned_retype_of_dvd [ByteRepr T] [ByteRepr T'] {q : RawPtr T M}
+    (hAlign : ByteRepr.align T' ∣ ByteRepr.align T) (hAligned : q.Aligned) :
+    (q.retype : RawPtr T' M').Aligned :=
+  ⟨Nat.dvd_trans hAlign hAligned.1, Nat.dvd_trans hAlign hAligned.2⟩
 
 /-- `q` is aligned and owns the bytes encoding `value` from the address it
 holds on. -/
@@ -391,8 +393,8 @@ end RawPtr
 def RawPtr.allocArray [ByteRepr T] {β : Type} (values : List T) (mk : MutRawPtr T → β) :
     Result β :=
   Result.guardedModify (fun _ => True) fun h _ =>
-    (mk ⟨(Heap.freshLoc h).1, (Heap.freshLoc h).2⟩,
-      Heap.bytes (Heap.freshLoc h) (values.flatMap ByteRepr.encode) ∪ h)
+    (mk ⟨(Heap.freshLoc h (ByteRepr.align T)).1, (Heap.freshLoc h (ByteRepr.align T)).2⟩,
+      Heap.bytes (Heap.freshLoc h (ByteRepr.align T)) (values.flatMap ByteRepr.encode) ∪ h)
 
 @[step]
 theorem RawPtr.allocArray.spec [ByteRepr T] {β : Type} (values : List T)
@@ -403,18 +405,19 @@ theorem RawPtr.allocArray.spec [ByteRepr T] {β : Type} (values : List T)
   intro h _ frame hCompatible
   have hFresh :
       PartialCommMonoid.Compatible
-        (Heap.bytes (Heap.freshLoc (h ∪ frame)) (values.flatMap ByteRepr.encode))
+        (Heap.bytes (Heap.freshLoc (h ∪ frame) (ByteRepr.align T))
+          (values.flatMap ByteRepr.encode))
         (h ∪ frame) :=
-    Heap.compatible_fresh _ _
+    Heap.compatible_fresh _ _ _
   obtain ⟨hFreshH, hFreshFrame⟩ :=
     (PartialCommMonoid.compatible_assoc
-      (Heap.bytes (Heap.freshLoc (h ∪ frame)) (values.flatMap ByteRepr.encode))
+      (Heap.bytes (Heap.freshLoc (h ∪ frame) (ByteRepr.align T))
+        (values.flatMap ByteRepr.encode))
         h frame).mpr ⟨hCompatible, hFresh⟩
   refine ⟨trivial, _, hFreshFrame,
     (PartialCommMonoid.union_assoc hFreshH hFreshFrame).symm, ?_⟩
   apply hPost
-  rw [RawPtr.pointsToRange_eq_owns _ _
-    (RawPtr.aligned_of_offset_eq_zero (Heap.freshLoc_snd _))]
+  rw [RawPtr.pointsToRange_eq_owns _ _ ⟨by simp, by simp⟩]
   exact Heap.Sub.union_left hFreshH
 
 /-- Materialize a list as fresh memory with the requested pointer mutability. -/
@@ -945,7 +948,7 @@ theorem RawPtr.cast_scalar.spec [ByteRepr T] [ByteRepr T'] (p : RawPtr T M) (x :
     ⦃ p ↦ x ⦄ RawPtr.cast_scalar T' M' p
       ⦃⇓ q => ⌜q = p.retype⌝ ∗ q ↦ (ByteRepr.decode (ByteRepr.encode x)).get hDecode⦄ :=
   RawPtr.cast_scalar.spec_of_decode p x _ (Option.some_get hDecode).symm
-    (Nat.dvd_trans hAlign)
+    (RawPtr.aligned_retype_of_dvd hAlign)
 
 end Aeneas.Std
 

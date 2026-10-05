@@ -598,6 +598,41 @@ example (p : MutRawPtr U32) (x : U32) (hAlign : p.Aligned) :
   exact ⟨RawPtr.pointsToRange_retype _ _ _ hBytes.symm fun _ => hAlign,
     RawPtr.pointsToRange_retype p _ _ hBytes fun _ => by simp [RawPtr.Aligned]⟩
 
+def castBytesBack (p : MutRawPtr U32) : Result (MutRawPtr U32) := do
+  let q ← RawPtr.cast_scalar U8 .Mut p
+  RawPtr.cast_scalar U32 .Mut q
+
+/-- Casting to bytes and back keeps the alignment the original pointer had, so
+the bytes can be read at `u32` again. -/
+example (p : MutRawPtr U32) (x : U32) :
+    ⦃ p ↦ x ⦄ castBytesBack p ⦃⇓ r => r ↦ x⦄ := by
+  unfold castBytesBack
+  have hBytes : [x].flatMap Aeneas.Std.ByteRepr.encode =
+      (x.bv.toLEBytes.map (UScalar.mk (ty := .U8))).flatMap Aeneas.Std.ByteRepr.encode := by
+    simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil]
+    exact (UScalar.flatMap_encode_u8 _).symm
+  rw [RawPtr.pointsTo_eq_range]
+  refine ispec_bind
+    (RawPtr.cast_scalar.spec_range p [x] _ hBytes fun _ _ => by simp [RawPtr.Aligned])
+    (entails_trans (RawPtr.pointsToRange_aligned p [x]) (sep_comm _ _).1) fun q => ?_
+  refine (ispec_ok _).2 ?_
+  rintro h ⟨h₁, h₂, hDisjoint, rfl, hCast, hAlign⟩
+  obtain ⟨rfl, hBytesOwned⟩ := (sep_pure_l _ _ h₁).mp hCast
+  rw [RawPtr.pointsTo_eq_range]
+  exact IProp.up_closed _ (RawPtr.pointsToRange_retype (p.retype : MutRawPtr U8) _ [x]
+    hBytes.symm (fun _ => hAlign (List.cons_ne_nil _ _)) h₁ hBytesOwned)
+    (Heap.Sub.union_left hDisjoint)
+
+/-- Bytes give no alignment guarantee: viewing an allocation made at `u8` at
+`u32` has no read specification, even at offset `0`. -/
+example (p : MutRawPtr U8) (hBase : p.base.align = 1) (P : IProp) (Q : U32 → IProp)
+    (hSpec : ⦃ P ⦄ (p.retype : MutRawPtr U32).read ⦃⇓ y => Q y⦄) :
+    P ⊢ ⌜False⌝ := by
+  refine entails_trans (RawPtr.read.aligned_of_spec hSpec) ?_
+  rw [entails_ipure_iff]
+  intro hWide
+  simp [RawPtr.Aligned, Aeneas.Std.UScalarTy.numBits, hBase] at hWide
+
 /-- Reads are only defined at aligned addresses: the four bytes one past an
 address aligned for `u32` have no read specification at `u32`. -/
 example (p : MutRawPtr U8) (hAlign : 4 ∣ p.offset) (P : IProp) (Q : U32 → IProp)

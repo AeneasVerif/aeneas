@@ -179,8 +179,12 @@ functions of their arguments.  What may go wrong is caught by the separation
 logic and by the *definedness guard* of the event an operation triggers: a read
 through a dangling or unowned pointer is stuck, not erroneous.  So is a read
 or write at an address that is not a multiple of the alignment of its type
-(`ByteRepr.align`): `q ↦ x` includes `⌜q.Aligned⌝`, and allocations start at
-offset `0`, so they are aligned at their base.
+(`ByteRepr.align`): `q ↦ x` includes `⌜q.Aligned⌝`.  An allocation identifier
+records the alignment of the address the allocation starts at, which is that of
+the type it was allocated at, and is kept by pointer arithmetic and casts: `q`
+is aligned for `T` when `align T` divides both it and the offset of `q`.  So
+bytes allocated as `u8`s are never aligned for `u32`, while a `u32` viewed as
+bytes and back still is.
 
 Deallocation releases the bytes it owns — `Buffer.free` is `Ptr.freeRange` over
 the range the view spans — so freeing part of an allocation is expressible and

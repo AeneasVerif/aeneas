@@ -45,6 +45,10 @@ list of bytes.  Reading at a type decodes the bytes found at an address, so
 reinterpreting memory at another type is only a matter of decoding the same
 bytes differently: casting a pointer does not touch the heap.
 
+An allocation identifier records the alignment of the address the allocation
+starts at, so an address is aligned for a type when both the allocation and
+the offset are.
+
 Two heaps compose when the addresses they use are disjoint, so `∪` is a plain
 disjoint union.  Ownership is *byte-granular*, which is what lets one
 allocation be owned a part at a time, and a value of any size be viewed as the
@@ -55,7 +59,12 @@ bytes it is made of.
 
 /- An allocation identifier is fresh and behaves like a monotonic
    counter, not a concrete address in machine memory. -/
-abbrev AllocId := Nat
+/-- An allocation identifier, together with the alignment the address the
+allocation starts at is guaranteed to have. -/
+structure AllocId where
+  id : Nat
+  align : Nat
+  deriving DecidableEq, Inhabited, Repr
 
 /-- An address: the allocation, and the byte of it this address names. -/
 abbrev Loc := AllocId × Nat
@@ -76,7 +85,7 @@ theorem Loc.add_add (a : Loc) (i j : Nat) : (a.add i).add j = a.add (i + j) := b
 /-- A fixed-size encoding of the values of `α` as bytes: what lets a value of `α`
 live in the heap.  Decoding accepts exactly the encodings, so the bytes found
 at an address determine the value they hold.  A value of `α` may only be read
-or written at an offset that is a multiple of `align`, which divides `size` as
+or written at an address that is a multiple of `align`, which divides `size` as
 in Rust. -/
 class ByteRepr (α : Type) where
   size : Nat
@@ -98,7 +107,7 @@ def Ref (_ : Type) := Loc
 
 namespace Ref
 
-instance instInhabited {α : Type} : Inhabited (Ref α) := ⟨((0 : AllocId), 0)⟩
+instance instInhabited {α : Type} : Inhabited (Ref α) := ⟨((default : AllocId), 0)⟩
 
 instance instDecidableEq {α : Type} : DecidableEq (Ref α) :=
   inferInstanceAs (DecidableEq Loc)
@@ -624,38 +633,42 @@ theorem freeBytes_bytes_union {address : Loc} {bs : List Byte} {rest : Heap}
 
 /-! ## Allocation -/
 
-/-- The allocation identifier this heap will hand out next: one past every
-identifier it uses.  Allocation is deterministic, which is what lets a program
-be *run* and not only related to its outcomes. -/
-def freshBase (h : Heap) : AllocId :=
-  (h.keys.image Prod.fst).sup id + 1
+/-- The allocation identifier this heap will hand out next, starting at an
+address aligned to `align`: one past every identifier it uses.  Allocation is
+deterministic, which is what lets a program be *run* and not only related to
+its outcomes. -/
+def freshBase (h : Heap) (align : Nat) : AllocId :=
+  ⟨(h.keys.image fun address : Loc => address.1.id).sup id + 1, align⟩
 
-/-- The address the next allocation starts at.  Its offset is `0`, which every
-alignment divides: allocations are suitably aligned for any type at their base. -/
-def freshLoc (h : Heap) : Loc := (freshBase h, 0)
+/-- The address the next allocation, aligned to `align`, starts at. -/
+def freshLoc (h : Heap) (align : Nat) : Loc := (freshBase h align, 0)
 
-@[simp] theorem freshLoc_snd (h : Heap) : (freshLoc h).2 = 0 := by
+@[simp] theorem freshLoc_fst_align (h : Heap) (align : Nat) :
+    (freshLoc h align).1.align = align := by
+  simp [freshLoc, freshBase]
+
+@[simp] theorem freshLoc_snd (h : Heap) (align : Nat) : (freshLoc h align).2 = 0 := by
   simp [freshLoc]
 
-theorem not_mem_freshBase {h : Heap} {address : Loc}
-    (hBase : address.1 = freshBase h) : address ∉ h := by
+theorem not_mem_freshBase {h : Heap} {align : Nat} {address : Loc}
+    (hBase : address.1 = freshBase h align) : address ∉ h := by
   intro hMem
   have hMemKeys : address ∈ h.keys := Finmap.mem_keys.mpr hMem
-  have hImage : freshBase h ∈ h.keys.image Prod.fst :=
-    Finset.mem_image.mpr ⟨_, hMemKeys, hBase⟩
-  have hLe : freshBase h ≤ (h.keys.image Prod.fst).sup id :=
-    Finset.le_sup (f := fun a : AllocId => a) hImage
-  have hSucc : (h.keys.image Prod.fst).sup id + 1 ≤
-      (h.keys.image Prod.fst).sup id := hLe
+  have hImage : (freshBase h align).id ∈ h.keys.image fun address : Loc => address.1.id :=
+    Finset.mem_image.mpr ⟨_, hMemKeys, congrArg AllocId.id hBase⟩
+  have hLe : (freshBase h align).id ≤ (h.keys.image fun address : Loc => address.1.id).sup id :=
+    Finset.le_sup (f := fun a : Nat => a) hImage
+  have hSucc : (h.keys.image fun address : Loc => address.1.id).sup id + 1 ≤
+      (h.keys.image fun address : Loc => address.1.id).sup id := hLe
   exact Nat.not_succ_le_self _ hSucc
 
 /-- The run a fresh allocation occupies is disjoint from everything the heap
 already owns. -/
-theorem compatible_fresh (h : Heap) (bs : List Byte) :
-    PartialCommMonoid.Compatible (bytes (freshLoc h) bs) h := by
+theorem compatible_fresh (h : Heap) (align : Nat) (bs : List Byte) :
+    PartialCommMonoid.Compatible (bytes (freshLoc h align) bs) h := by
   intro address hFresh hMem
   obtain ⟨i, -, rfl⟩ := mem_bytes.mp hFresh
-  exact not_mem_freshBase (h := h) rfl hMem
+  exact not_mem_freshBase (h := h) (align := align) rfl hMem
 
 end Heap
 
