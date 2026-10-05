@@ -73,19 +73,15 @@ def iwp (total:Bool) (m : Result α) (Q : IPost α) : IProp where
       (fun _ hOwns => hSub.trans hOwns)
       (entails_refl F) h hPre)
 
-/-- Total-correctness separation-logic specification -/
 def ispec (P : IPre) (m : Result α) (Q : IPost α) : Prop :=
   P ⊢ iwp true m Q
 
-/-- Partial-correctness separation-logic specification -/
 def dispec (P : IPre) (m : Result α) (Q : IPost α) : Prop :=
   P ⊢ iwp false m Q
 
-/-- Total-correctness pure specification -/
 def spec (m : Result α) (p : Post α) : Prop :=
   ispec emp m (fun value => ⌜p value⌝)
 
-/-- Partial-correctness pure specification -/
 def dspec (m : Result α) (p : Post α) : Prop :=
   dispec emp m (fun value => ⌜p value⌝)
 
@@ -144,8 +140,6 @@ theorem dispec_admissible {α : Type u} (P : IPre) (Q : IPost α) :
   intro c hc hAll F h hPre
   exact rawIwp_admissible (Q ∗+ F) h c hc fun x hx => hAll x hx F h hPre
 
-/-- The shape the `dspec_induction` tactic needs to discharge the admissibility
-side-goal it generates for a separation-logic partial specification. -/
 @[dspec_admissible]
 theorem dispec_func_admissible {ι : Sort v} {α : Type u} (arg : ι) (P : IPre) (Q : IPost α) :
     admissible (fun f : ι → Result α => dispec P (f arg) Q) :=
@@ -157,7 +151,8 @@ theorem dspec_admissible {α} (p : Post α) :
 
 end
 
-/-- The same as `dispec_func_admissible`, for the pure partial specification. -/
+/-- The shape the `dspec_induction` tactic needs to discharge the admissibility
+side-goal it generates for a partial specification about a recursive function. -/
 @[dspec_admissible]
 theorem dspec_func_admissible {α : Sort v} {β} (arg : α) (p : Post β) :
     admissible (fun f : α → Result β => dspec (f arg) p) :=
@@ -181,7 +176,6 @@ def uncurry' {α β γ : Type _} (p : α → β → γ) : α × β → γ :=
 @[simp] theorem uncurry'_pair x y (p : α → β → γ) : uncurry' p (x, y) = p x y := by simp [uncurry']
 @[defeq] theorem uncurry'_eq x (p : α → β → γ) : uncurry' p x = p x.fst x.snd := by simp [uncurry']
 
-/-! ### `ispec` theorems -/
 @[simp, grind =, agrind =]
 theorem ispec_ok (x : α) : ispec P (ok x) Q ↔ P ⊢ Q x := by
   constructor
@@ -194,10 +188,6 @@ theorem ispec_ok (x : α) : ispec P (ok x) Q ↔ P ⊢ Q x := by
     intro F h hPre
     exact DWP.ret_iff.mpr (sep_mono hPost (entails_refl F) h hPre)
 
-/-- A guarded modification is correct exactly when it is *local* at every heap `P`
-describes: for every disjoint frame, the guard holds and the output splits into an
-owned result and the unchanged frame.  Quantifying over frames here is what
-validates the frame rule — the frame an `ispec` carries is already one of them. -/
 theorem ispec_guardedModify {α : Type} {pre : Heap → Prop}
     {modify : (h : Heap) → pre h → α × Heap} {P : IPre} {Q : IPost α}
     (hLocal : ∀ h, P h → ∀ frame, PartialCommMonoid.Compatible h frame →
@@ -241,7 +231,6 @@ theorem ispec_frame {P : IPre} {m : Result α} {Q : IPost α}
   have hSpec := hTriple (H ∗ F) h ((sep_assoc P H F).mp h hPre)
   exact hSpec.mono fun value heap => (sep_assoc (Q value) H F).mpr heap
 
-/-- The frame rule, framing on the left. -/
 theorem ispec_frame_left {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : ispec P m Q) (H : IProp) :
     ispec (H ∗ P) m (fun value => H ∗ Q value) := by
@@ -254,7 +243,6 @@ theorem ispec_frame_left {P : IPre} {m : Result α} {Q : IPost α}
   exact (sep_mono (sep_comm (Q value) H).mp (entails_refl F)) heap
     ((sep_assoc (Q value) H F).mpr heap hPost)
 
-/-- Mono rule used by `step` -/
 theorem ispec_mono {α : Type u} {P Pm : IPre} {Q : IPost α} {m : Result α} {Qm : IPost α}
     (hStep : ispec Pm m Qm)
     (hRamified : P ⊢ Pm ∗ (Qm -∗+ Q)) :
@@ -265,7 +253,6 @@ theorem ispec_mono {α : Type u} {P Pm : IPre} {Q : IPost α} {m : Result α} {Q
   have hSpec := hFramed F h (sep_mono hRamified (entails_refl F) h hPre)
   exact hSpec.mono fun value => sep_mono (postWand_cancel Qm Q value) (entails_refl F)
 
-/-- Combine postconditions on the same owned heap, keeping the frame unchanged. -/
 theorem ispec_and {α : Type u} {P : IPre} {m : Result α} {Q₁ Q₂ : IPost α}
     (h₁ : ispec P m Q₁) (h₂ : ispec P m Q₂) :
     ispec P m (fun value => iprop(Q₁ value ∧ Q₂ value)) := by
@@ -279,7 +266,6 @@ theorem ispec_and {α : Type u} {P : IPre} {m : Result α} {Q₁ Q₂ : IPost α
   exact (sep_mono (entails_refl _) (fun _ hSub => F.up_closed hF hSub)) heap
     ((sep_iand_owns (Q₁ value) (Q₂ value) framed).mpr heap hPost)
 
-/-- Bind rule used by `step`. It is stated on `Aeneas.Std.bind` rather than on `>>=` -/
 theorem ispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
     {next : α → Result β} {Q : IPost β} {m : Result α} {Qm : IPost α}
     (hStep : ispec Pm m Qm)
@@ -313,9 +299,6 @@ theorem ispec_ipure_iff {P : Prop} {m : Result α} {Q : IPost α} :
   rw [← sep_emp_r_eq ⌜P⌝]
   exact ispec_ipure
 
-/-- Copy a pure fact of the precondition into the local context *without*
-consuming it: the precondition is unchanged, so the fact stays available to the
-framing of the later steps.  This is `ispec_ipure` used in both directions. -/
 theorem ispec_ipure_keep {P : Prop} {H : IPre} {m : Result α} {Q : IPost α} :
     ispec (⌜P⌝ ∗ H) m Q ↔ (P → ispec (⌜P⌝ ∗ H) m Q) :=
   ⟨fun hTriple _ => hTriple,
@@ -332,7 +315,6 @@ theorem ispec_exists {ι : Sort _} {J : ι → IPre} {m : Result α} {Q : IPost 
     obtain ⟨h₁, h₂, hDisjoint, rfl, ⟨x, hJ⟩, hF⟩ := hPre
     exact hTriple x F _ ⟨h₁, h₂, hDisjoint, rfl, hJ, hF⟩
 
-/-! ### `dispec` theorems -/
 private theorem dispec_apply {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : dispec P m Q) {h : Heap} (hPre : P h) :
     rawIwp false m Q h := by
@@ -353,8 +335,6 @@ theorem dispec_ok {α : Type u} {P : IPre} {Q : IPost α} (x : α) :
     intro F h hPre
     exact DWLP.ret_iff.mpr (sep_mono hPost (entails_refl F) h hPre)
 
-/-- Divergence satisfies every partial ispec: nothing is claimed of a run that
-does not stop, not even that it owns anything. -/
 theorem dispec_div {P : IPre} {Q : IPost α} :
     dispec P (div : Result α) Q := by
   rw [dispec_iff]
@@ -368,7 +348,6 @@ theorem dispec_frame {P : IPre} {m : Result α} {Q : IPost α}
   have hSpec := hTriple (H ∗ F) h ((sep_assoc P H F).mp h hPre)
   exact hSpec.mono fun value heap => (sep_assoc (Q value) H F).mpr heap
 
-/-- Mono rule used by `step` on a partial goal.  See `ispec_mono`. -/
 theorem dispec_mono {α : Type u} {P Pm : IPre} {Q : IPost α} {m : Result α} {Qm : IPost α}
     (hStep : dispec Pm m Qm)
     (hRamified : P ⊢ Pm ∗ (Qm -∗+ Q)) :
@@ -392,7 +371,6 @@ theorem dispec_and {α : Type u} {P : IPre} {m : Result α} {Q₁ Q₂ : IPost �
   exact (sep_mono (entails_refl _) (fun _ hSub => F.up_closed hF hSub)) heap
     ((sep_iand_owns (Q₁ value) (Q₂ value) framed).mpr heap hPost)
 
-/-- Bind rule used by `step` on a partial goal.  See `ispec_bind`. -/
 theorem dispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
     {next : α → Result β} {Q : IPost β} {m : Result α} {Qm : IPost α}
     (hStep : dispec Pm m Qm)
@@ -408,7 +386,6 @@ theorem dispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
   intro value h' hPost
   exact hNext value frame h' hPost
 
-/-- Partial counterpart of `ispec_ipure`. -/
 theorem dispec_ipure {P : Prop} {H : IPre} {m : Result α} {Q : IPost α} :
     dispec (⌜P⌝ ∗ H) m Q ↔ (P → dispec H m Q) := by
   constructor
@@ -421,13 +398,11 @@ theorem dispec_ipure {P : Prop} {H : IPre} {m : Result α} {Q : IPost α} :
     have ⟨hP, hHF⟩ := (sep_pure_l P (H ∗ F) h).mp ((sep_assoc _ _ _).mp h hPre)
     exact hTriple hP F h hHF
 
-/-- Partial counterpart of `ispec_ipure_iff`. -/
 theorem dispec_ipure_iff {P : Prop} {m : Result α} {Q : IPost α} :
     dispec ⌜P⌝ m Q ↔ (P → dispec emp m Q) := by
   rw [← sep_emp_r_eq ⌜P⌝]
   exact dispec_ipure
 
-/-- Partial counterpart of `ispec_ipure_keep`. -/
 theorem dispec_ipure_keep {P : Prop} {H : IPre} {m : Result α} {Q : IPost α} :
     dispec (⌜P⌝ ∗ H) m Q ↔ (P → dispec (⌜P⌝ ∗ H) m Q) :=
   ⟨fun hTriple _ => hTriple,
@@ -444,50 +419,23 @@ theorem dispec_exists {ι : Sort _} {J : ι → IPre} {m : Result α} {Q : IPost
     obtain ⟨h₁, h₂, hDisjoint, rfl, ⟨x, hJ⟩, hF⟩ := hPre
     exact hTriple x F _ ⟨h₁, h₂, hDisjoint, rfl, hJ, hF⟩
 
-/-! ## Reasoning about loops
 
-The rules a partial specification is for: an invariant that the body re-establishes
-proves the loop, with no measure and no termination argument. A recursion in
-`Result` is proved with `dispec_admissible` and the `fixpoint_induct` principle
-`partial_fixpoint` attaches to it, and anything else by
-`DWLP.coinduction` itself. -/
-
-
-/-- The same for a family of ispecs about a recursive *function*, which is the
-shape `fixpoint_induct` expects. -/
 theorem dispec_admissible_pi {ι : Type v} {α : Type u} (P : ι → IPre) (Q : ι → IPost α) :
     Lean.Order.admissible
       (fun f : ι → Result α => ∀ x, dispec (P x) (f x) (Q x)) :=
   Lean.Order.admissible_pi_apply (fun x m => dispec (P x) m (Q x))
     fun x => dispec_admissible (P x) (Q x)
 
-/-- And the same for a specification that quantifies over parameters of its own
-— a ghost value, an old contents — which is the shape `fixpoint_induct` takes
-when the argument of the recursion does not change. -/
 theorem dispec_admissible_forall {ι : Type v} {α : Type u} (P : ι → IPre) (Q : ι → IPost α) :
     Lean.Order.admissible (fun m : Result α => ∀ x, dispec (P x) m (Q x)) :=
   Lean.Order.admissible_pi _ fun x => dispec_admissible (P x) (Q x)
 
-/- `sep_ipure_true_r_eq`, `entails_emp_ipure_iff` and `entails_refl` are registered
-with `@[step_simps]` in `Aeneas.Tactic.Step.Step`: that attribute is declared in
-`Aeneas.Tactic.Step.Init`, which imports this file. -/
 attribute [simp] entails_emp_ipure_iff
 
-/-! ### `spec` theorems
-
-`spec` and `dspec` are named judgments with ordinary `α → Prop` postconditions,
-defined as the SL judgments at `emp` with a pure postcondition, so each rule
-below reads the corresponding `ispec`/`dispec` one.
-
-Each judgment has its own `step` registration. Pure specifications lift to SL
-specifications for framing; SL specifications lift back only when their
-precondition is `emp`. Total specifications also lift to partial ones, never
-conversely. -/
 @[simp, grind =, agrind =]
 theorem spec_ok (x : α) : spec (ok x) p ↔ p x :=
   (ispec_ok x).trans (entails_emp_ipure_iff (p x))
 
-/-- Failure has no total pure specification. -/
 @[simp, grind =, agrind =]
 theorem spec_fail (e : Error) : spec (fail e) p ↔ False :=
   (ispec_fail e).trans (entails_emp_ipure_iff False)
@@ -522,7 +470,7 @@ theorem spec_and {m : Result α} {p q : Post α} (h₁ : spec m p) (h₂ : spec 
     spec m (fun value => p value ∧ q value) :=
   ispec_and h₁ h₂
 
-/-- Bind rule used by `step`. It is stated on `Aeneas.Std.bind` rather than on `>>=`, which is
+/-- Bind rule used by `step`. It is stated on `Std.bind` rather than on `>>=`, which is
 what a translated program binds with. -/
 theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
     spec m Pₘ →
@@ -533,21 +481,16 @@ theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α}
       ispec_mono (ispec_ipure_iff.mpr (hk value)) (entails_trans (sep_emp_r _).mp
         (entails_sep_postWand _ (fun _ => entails_refl _)))
 
-/-- A total specification is inhabited: the computation evaluates to some value
-satisfying it, even when nothing says it is syntactically an `ok`. -/
 theorem spec_exists {m : Result α} {p : Post α} (h : spec m p) : ∃ value, p value := by
   have hEmp : ((emp : IPre) ∗ emp) (∅ : Heap) := (sep_emp_r emp).mpr ∅ trivial
   obtain ⟨value, heap, hPost⟩ := DWP.exists (ispec_iff.mp h emp ∅ hEmp)
   exact ⟨value, (pure_holds heap).mp ((sep_emp_r _).mp heap hPost)⟩
 
-
-/-! ### `dspec` theorems -/
+-- `dspec` theorems
 @[simp, grind =, agrind =]
 theorem dspec_ok (x : α) : dspec (ok x) p ↔ p x :=
   (dispec_ok x).trans (entails_emp_ipure_iff (p x))
 
-/-- Failure has no partial pure specification: divergence is permitted, not
-stuckness. -/
 @[simp, grind =, agrind =]
 theorem dspec_fail (e : Error) : dspec (fail e) p ↔ False :=
   iff_false_intro fun hSpec => (dispec_apply hSpec (h := ∅) trivial).vis_view
@@ -573,10 +516,6 @@ theorem dspec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α
       dispec_mono (dispec_ipure_iff.mpr (hk value)) (entails_trans (sep_emp_r _).mp
         (entails_sep_postWand _ (fun _ => entails_refl _)))
 
-/- `dispec` unfolds to a nested `∀`, and the `admissible` search behind
-`dspec_func_admissible` otherwise walks straight past the judgment into its
-denotation.  The old `spec` was an opaque `DWP` application and did not
-have this problem. -/
 attribute [irreducible] dispec
 
 end ResultImplementation
@@ -596,9 +535,6 @@ open Std WP Result
 -/
 
 
-/- The `⇓` is inside `atomic` so that the parser backtracks when it is absent:
-`(m) ⦃ value => p ⦄`, the pure-computation notation of `Aeneas.Std.WP`,
-starts with exactly the same tokens and must stay parseable. -/
 syntax:lead (name := specSyntax)
   atomic("(" term:lead ")" " ⦃" "⇓ ") term+ " => " term " ⦄" : term
 syntax:lead (name := specSyntaxPred)
@@ -611,7 +547,10 @@ syntax:lead (name := slSpecSyntaxPred)
 
 open Lean PrettyPrinter
 
-/-- Build a marker chain for the leaves of a possibly nested tuple pattern. -/
+/-- Build a `Std.uncurry` chain wrapping a curried lambda over `xs`.
+
+Given `x0`, ..., `xn` and `body`, generates the (syntactic) term `fun (x0, ..., xn) => body`.
+-/
 private meta partial def buildPostUncurryLamWith (uncurryName : Name)
     (xs : List Term) (body : Term) : MacroM Term := do
   let uncurryIdent := mkIdent uncurryName
@@ -623,8 +562,7 @@ private meta partial def buildPostUncurryLamWith (uncurryName : Name)
     let inner ← buildPostUncurryLamWith uncurryName rest body
     `($uncurryIdent (fun $a => $inner))
 
-/-- Elaborate one possibly nested tuple binder without generating a matcher
-function, so `step` and the delaborator can recover its structure. -/
+/-- Helper to elaborate `binder => body` when binder is a tuple - this supports nested tuples. -/
 private meta partial def mkPostBinderFunWith (uncurryName : Name) (depth : Nat)
     (binder : Term) (body : Term) : MacroM Term := do
   match binder with
@@ -635,6 +573,7 @@ private meta partial def mkPostBinderFunWith (uncurryName : Name) (depth : Nat)
     for (x, idx) in xs.zipIdx.reverse do
       match x with
       | `( ($_, $_,*) ) =>
+        -- Fresh identifier from depth + index
         let freshIdent := mkIdent $ .mkSimple s!"_p_{depth}_{idx}"
         let inner ← mkPostBinderFunWith uncurryName (depth + 1) x wrappedBody
         wrappedBody ← `($inner $freshIdent)
@@ -644,8 +583,6 @@ private meta partial def mkPostBinderFunWith (uncurryName : Name) (depth : Nat)
     buildPostUncurryLamWith uncurryName leafIdents wrappedBody
   | _ => `(fun $binder => $body)
 
-/-- Preserve boundaries between separate binders with `curryName`, while using
-`uncurryName` inside each explicit tuple binder. -/
 private meta partial def mkPostSyntaxWith (curryName uncurryName : Name)
     (body : Term) (depth : Nat) (binders : List Term) : MacroM Term := do
   match binders with
@@ -690,8 +627,8 @@ private meta def expandBinders (xs : List Term) : MacroM (List Term) := do
     out := out ++ (← expandGroupedBinder x).toArray
   pure out.toList
 
-/-- Build a marked postcondition from the parsed binder array, expanding grouped
-binders into one component per name first. -/
+/-- Build the postcondition term for `⦃ xs => p ⦄`, expanding grouped binders
+into one component per name first. -/
 private meta def mkPostWith (curryName uncurryName : Name)
     (binders : Array Term) (body : Term) : MacroM Term := do
   mkPostSyntaxWith curryName uncurryName body 0 (← expandBinders binders.toList)
@@ -756,57 +693,29 @@ macro_rules
   | `(⦃$P⦄ $m ⦃⇓ $Q⦄div) =>
       `(dispec iprop($P) $m (fun _ => iprop($Q)))
 
-/-!
-# Pure specification notation
-
-`⦃ ⦄` writes a pure specification the way a Rust programmer reads a return
-value: `f x ⦃ y => y > 0 ⦄` is the `ispec` that owns nothing,
-`ispec emp (f x) (fun y => ⌜y > 0⌝)`, and several binders destructure a
-returned tuple, so `f x ⦃ y z => ... ⦄` names the two components of a pair
-without a pattern match of its own.
-
-The notation expands to the named judgments `spec` and `dspec`, whose
-definitions are the separation-logic ispecs at `emp` with a pure postcondition:
-
-```
-m ⦃ x => p ⦄      is      ⦃ emp ⦄ m ⦃⇓ x => ⌜p⌝ ⦄
-m ⦃ x => p ⦄div   is      ⦃ emp ⦄ m ⦃⇓ x => ⌜p⌝ ⦄div
-```
-
-The two forms remain definitionally equal. Their separate registrations and
-liftings let `step` use pure rules for pure calls and spatial rules for heap calls.
-
-The syntax is `scoped` in `Aeneas.Std.WP`: a file enables it by opening that
-namespace.
--/
-
 /- We use a priority of 55 for the inner term, which is exactly the priority for `|||`.
-This way we can write expressions like `x + y ⦃ z => ... ⦄` without having to put
-parentheses around `x + y`. -/
+This way we can expressions like: `x + y ⦃ z => ... ⦄` without having to put parentheses around `x + y`. -/
 scoped syntax:54 (name := pureSpecBinders)
   term:55 " ⦃ " term+ " => " term " ⦄" : term
 scoped syntax:54 (name := pureSpecPred)
   term:55 " ⦃ " term " ⦄" : term
 
--- for partial correctness
+-- for dspec
 scoped syntax:54 (name := pureDspecBinders)
   term:55 " ⦃ " term+ " => " term " ⦄div" : term
 scoped syntax:54 (name := pureDspecPred)
   term:55 " ⦃ " term " ⦄div" : term
 
-/-- The predicate a pure postcondition denotes. Transparent marker functions
-record whether each product came from separate binders or an explicit tuple
-pattern, allowing the delaborator to reproduce the original surface syntax. -/
 private meta def mkPurePost (binders : Array Term) (p : Term) : MacroM Term := do
   mkPostWith ``Aeneas.Std.WP.uncurry' ``Aeneas.Std.uncurry binders p
 
-/-- Macro expansion for a single binder. -/
+/-- Macro expansion for a single element (may expand to several via a grouped binder) -/
 scoped macro_rules (kind := pureSpecBinders)
   | `($m ⦃ $x => $p ⦄) => do
     let post ← mkPurePost #[x] p
     `(Aeneas.Std.WP.spec $m $post)
 
-/-- Macro expansion for several binders. -/
+/-- Macro expansion for multiple elements -/
 scoped macro_rules (kind := pureSpecBinders)
   | `($m ⦃ $x $xs:term* => $p ⦄) => do
     let post ← mkPurePost (#[x] ++ xs) p
@@ -822,7 +731,7 @@ scoped macro_rules (kind := pureDspecBinders)
     let post ← mkPurePost (#[x] ++ xs) p
     `(Aeneas.Std.WP.dspec $m $post)
 
-/-- Macro expansion for a postcondition given as a predicate. -/
+/-- Macro expansion for predicate with no arrow -/
 scoped macro_rules (kind := pureSpecPred)
   | `($m ⦃ $p ⦄) => `(Aeneas.Std.WP.spec $m $p)
 
@@ -832,9 +741,33 @@ scoped macro_rules (kind := pureDspecPred)
 /-!
 # Pretty-printing
 
-The named pure judgments print their predicate postconditions directly.
-SL ispecs always use the separating notation, including ispecs at `emp`
-with pure postconditions.
+The `⦃ ⦄` macro produces postconditions using three wrappers:
+- `uncurry' (fun x => ...)` — separate binders, printed as `x y z => ...`
+- `uncurry (fun a b => ...)` — tuple binder, printed as `(a, b) => ...`
+- Plain `fun x => ...` — scalar binder
+
+`uncurry'` is never nested: it only appears at the outermost level to separate
+top-level product components. `uncurry` can be nested inside `uncurry'` or other
+`uncurry` applications (for sub-tuples like `((a, b), c)`).
+
+**Examples of elaborated postconditions:**
+
+| Source | Elaborated form |
+|---|---|
+| `⦃ r => body ⦄` | `fun r => body` |
+| `⦃ (a, b) => body ⦄` | `uncurry (fun a b => body)` |
+| `⦃ x y z => body ⦄` | `uncurry' (fun x => uncurry' (fun y z => body))` |
+| `⦃ (a, b) c => body ⦄` | `uncurry' (uncurry (fun a b => fun c => body))` |
+| `⦃ a (b, c) => body ⦄` | `uncurry' (fun a => uncurry (fun b c => body))` |
+| `⦃ ((a,b), c) => body ⦄` | `uncurry (fun _p c => (uncurry (fun a b => body)) _p)` |
+| `⦃ ((a,b), (c,d)) => body ⦄` | `uncurry (fun _p₀ _p₁ => (uncurry (fun a b => (uncurry (fun c d => body)) _p₁)) _p₀)` |
+
+The delaborator reverses this: given a `spec e post` expression, it peels the
+wrapper layers to recover the binder patterns and body, producing `⦃ ... => ... ⦄`.
+
+The `uncurry`/lambda machinery (`enterLams`, `delabBinders`)
+is reused from `Do.Delab` (which handles the same `uncurry` chains in `do`-notation).
+The only WP-specific logic is the `uncurry'`-peeling loop on top.
 -/
 
 open Lean PrettyPrinter
@@ -922,8 +855,6 @@ where
     else
       return (#[], ← delab)
 
-/-- Recover separate binders, explicit tuple binders, and the final spatial
-postcondition from the marker chain produced by `mkPostSyntaxWith`. -/
 private meta partial def delabSLPost : DelabM (Array Term × Term) := do
   match_expr (← getExpr).consumeMData with
   | uncurry' _ _ _ _ =>
@@ -952,8 +883,6 @@ private meta partial def delabSLPost : DelabM (Array Term × Term) := do
     else
       return (#[], ← delab)
 
-/-- Print an arbitrary separation-logic postcondition using binder syntax when
-it is a lambda and predicate syntax otherwise. -/
 private meta def delabSLISpecPost (pre monadExpr : Term) (isPartial : Bool) :
     DelabM Term := do
   let (binders, body) ← delabSLPost
@@ -967,19 +896,16 @@ private meta def delabSLISpecPost (pre monadExpr : Term) (isPartial : Bool) :
   else
     `(⦃$pre⦄ $monadExpr ⦃⇓ $body⦄)
 
-/-- Print an arbitrary ispec using the general separation-logic notation. -/
 private meta def delabSLISpecCore (ispecName : Name) (isPartial : Bool) : Delab := do
   guard ((← getExpr).isAppOfArity ispecName 4)
   let monadExpr ← withNaryArg 2 delab
   let pre ← withNaryArg 1 delab
   withNaryArg 3 <| delabSLISpecPost pre monadExpr isPartial
 
-/-- Delaborator for total separation-logic ispecs. -/
 @[app_delab Aeneas.Std.WP.ispec]
 meta def delabSLISpec : Delab :=
   delabSLISpecCore ``Aeneas.Std.WP.ispec false
 
-/-- Delaborator for partial separation-logic ispecs. -/
 @[app_delab Aeneas.Std.WP.dispec]
 meta def delabSLDispec : Delab :=
   delabSLISpecCore ``Aeneas.Std.WP.dispec true
@@ -1132,28 +1058,8 @@ open Lean Elab Meta Tactic
 theorem forall_unit {p : Unit → Prop} : (∀ value, p value) ↔ p () :=
   ⟨fun h => h (), fun h value => match value with | () => h⟩
 
-/-! ### The introduction tactic of the separation-logic judgments
-
-`step` leaves two shapes behind, and `intro_ispec` extracts the outputs, existentials
-and pure facts of both of them into the context, from which
-`Step.prepareIntroIspec` reverts them into the `∀ outputs, facts → …` form the
-tactic splits and introduces:
-
-* a continuation `∀ value, ispec (Qm value ∗ F) (next value) Q`, whose pure
-  facts and existentials become hypotheses;
-* a ramified entailment `P ⊢ Pm ∗ (Qm -∗+ Q)`, whose matched resources are
-  cancelled and whose residual postcondition wand is introduced by `isimp`.
-
-The facts of a pure judgment are the binders of the premise, and
-`Step.prepareIntroOutputs` handles them; here they have to be extracted from an
-assertion first, which is what this section adds. The postcondition of a callee
-reaches the goal wrapped in the markers of the `⦃⇓ x y => … ⦄` notation, and
-`Intro.reduceMarkers` reduces those *definitionally*, which is why no rewriting lemma about them is
-needed. -/
-
 namespace Intro
 
-/-- Whether `e` consists only of outputs, projections, and constructors. -/
 meta partial def isOutputLike (e : Expr) : MetaM Bool := do
   let e := e.consumeMData
   if e.isFVar || e.isLit || e.isSort then return true
@@ -1169,12 +1075,6 @@ meta partial def isOutputLike (e : Expr) : MetaM Bool := do
         return ← isOutputLike args[info.numParams]
   return false
 
-/-- Reduce `e` if it is an application of one of the `markers`, the definitions the
-postcondition notation of the judgment wraps its body in: `uncurry' p x` reduces to
-`p x.1 x.2`.
-
-A marker is only reduced if it unfolds to a match with a single alternative on outputs
-(see `isOutputLike`), so that program computations are never evaluated. -/
 meta def reduceMarker? (markers : Array Name) (e : Expr) : MetaM (Option Expr) := do
   let e := (← instantiateMVars e).consumeMData.headBeta
   let .const name _ := e.getAppFn | return none
@@ -1188,7 +1088,6 @@ meta def reduceMarker? (markers : Array Name) (e : Expr) : MetaM (Option Expr) :
   | .reduced reduced => return some reduced
   | _ => return none
 
-/-- Reduce up to `fuel` markers at the head of `e`. -/
 meta partial def reduceMarkers (markers : Array Name) (e : Expr) (fuel : Nat := 20) :
     MetaM Expr := do
   let e := (← instantiateMVars e).consumeMData.headBeta
@@ -1199,17 +1098,12 @@ meta partial def reduceMarkers (markers : Array Name) (e : Expr) (fuel : Nat := 
     | some e' => reduceMarkers markers e' fuel
     | none => return e
 
-/-- The markers the separation-logic postcondition notation wraps its body in. -/
 meta def slMarkers : Array Name := #[``Aeneas.Std.WP.uncurry', ``Aeneas.Std.uncurry]
 
-/-- The hypotheses of the main goal, to be compared with the context a later step reaches. -/
 meta def localHypotheses : TacticM (Std.HashSet FVarId) := do
   (← getMainGoal).withContext do
     pure <| (← getLCtx).foldl (init := ∅) fun acc decl => acc.insert decl.fvarId
 
-/-- Expose the structure of an assertion by reducing the markers it holds: those
-of the separating conjunctions it is built from, and those of the propositions
-they hold. -/
 private meta partial def normalizeAssertion (e : Expr) : MetaM Expr := do
   let e ← reduceMarkers slMarkers e
   if e.isAppOfArity ``sep 2 then
@@ -1220,17 +1114,12 @@ private meta partial def normalizeAssertion (e : Expr) : MetaM Expr := do
     return mkApp (mkConst ``ipure) (← reduceMarkers slMarkers e.appArg!)
   return e
 
-/-- Expose the assertion a postcondition maps its result to.  The notation
-builds a postcondition as a marker applied to a function, so eta-expanding it is
-what lets that marker reduce. -/
 private meta def normalizePost (e : Expr) : MetaM Expr := do
   let e := (← instantiateMVars e).consumeMData
   let .forallE name domain _ binfo := ← whnf (← inferType e) | return e
   withLocalDecl name binfo domain fun value => do
     mkLambdaFVars #[value] (← normalizeAssertion (mkApp e value))
 
-/-- Expose the postconditions of the ramified wand of an entailment's
-destination, which `step` builds as `Pm ∗ (Qm -∗+ Q)`. -/
 private meta partial def normalizeRamified (e : Expr) : MetaM Expr := do
   let e := (← instantiateMVars e).consumeMData
   let args := e.getAppArgs
@@ -1240,10 +1129,6 @@ private meta partial def normalizeRamified (e : Expr) : MetaM Expr := do
     return mkApp2 e.getAppFn args[0]! (← normalizeRamified args[1]!)
   return e
 
-/-- Normalize the goal `step` prepared: the precondition of a continuation, and
-the two postconditions a ramified entailment relates.  The postcondition of the
-triple being proved is deliberately left alone — it is the goal the user
-stated. -/
 private meta def normalizeGoal : TacticM Unit := do
   let goal ← getMainGoal
   let target := (← instantiateMVars (← goal.getType)).consumeMData
@@ -1257,8 +1142,6 @@ private meta def normalizeGoal : TacticM Unit := do
   if newTarget != target then
     replaceMainGoal [← goal.change newTarget]
 
-/-- Normalize spatial obligations without exceeding the introduction hook's
-single-continuation contract. Ambiguous witnesses remain for explicit `isimp`. -/
 private meta def simplifySpatialGoal : TacticM Unit := do
   unless (← getUnsolvedGoals).isEmpty do
     discard <| commitWhen do
@@ -1269,11 +1152,6 @@ private meta def simplifySpatialGoal : TacticM Unit := do
 
 end Intro
 
-/-- The tactic `step` runs on the goals it prepares for `ispec` and `dispec`.
-A no-op on a goal which is neither.
-
-See the section above for the shapes it normalizes, and for why it needs no
-lemma about the markers of the postcondition notation. -/
 meta def introIspec : TacticM Unit := do
   withMainContext do
     replaceMainGoal [(← (← getMainGoal).intros).2]
@@ -1282,10 +1160,6 @@ meta def introIspec : TacticM Unit := do
     evalTactic (← `(tactic| iintro_shallow_post))
     unless (← getUnsolvedGoals).isEmpty do
       withMainContext do
-      /- Collapse what is left of a ramified entailment between pure
-         postconditions, and of a triple with a pure precondition.  The pure facts
-         of a collapsed entailment are still in the goal, hence `and_imp` and
-         `exists_imp`. -/
       let _ ← Aeneas.Simp.simpAt true
         { dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1 }
         { addSimpThms :=
@@ -1297,16 +1171,10 @@ meta def introIspec : TacticM Unit := do
         (.targets #[] true)
     Intro.simplifySpatialGoal
 
-@[inherit_doc introIspec]
 elab (name := intro_ispec) "intro_ispec" : tactic => introIspec
 
-/-! ## Weakest-precondition tactics -/
-
-/-- Reduce an `ispec` about a terminal `pure v` to the entailment `P ⊢ Q v`. -/
 macro "wp_pures" : tactic => `(tactic| apply (ispec_ok _).mpr)
 
-/-- Apply a specification to the goal, frame the resources it does not need,
-and discharge the resulting entailment with `isimpl`. -/
 syntax "wp_apply" (ppSpace colGt term)? (" by " tacticSeq)? : tactic
 
 macro_rules
@@ -1319,16 +1187,11 @@ macro_rules
     | none => `(tactic| ($apply; isimpl))
     | some tac => `(tactic| ($apply; isimpl by $tac))
 
-/-- Re-state an already-proved ispec under a weaker postcondition. -/
 macro "wp_mono " thm:term : tactic =>
   `(tactic| (refine ispec_mono $thm ?_ <;> iframe))
 
-/-- Reduce a partial ispec about a terminal `pure v` to the entailment
-`P ⊢ Q v`. -/
 macro "dwp_pures" : tactic => `(tactic| apply (dispec_ok _).mpr)
 
-/-- Apply a partial specification to the goal, frame the resources it does not
-need, and discharge the resulting entailment with `isimpl`. -/
 syntax "dwp_apply" (ppSpace colGt term)? (" by " tacticSeq)? : tactic
 
 macro_rules
@@ -1341,12 +1204,8 @@ macro_rules
     | none => `(tactic| ($apply; isimpl))
     | some tac => `(tactic| ($apply; isimpl by $tac))
 
-/-- Re-state an already-proved partial ispec under a weaker postcondition. -/
 macro "dwp_mono " thm:term : tactic =>
   `(tactic| (refine dispec_mono $thm ?_ <;> iframe))
-
-/- The four rules below are registered with `@[step]` in `Aeneas.Tactic.Step.Step`:
-that attribute is declared in `Aeneas.Tactic.Step.Init`, which imports this file. -/
 
 theorem ret.spec (value : α) :
     ⦃ emp ⦄ Result.ok value ⦃⇓ result => ⌜result = value⌝⦄ :=
@@ -1356,8 +1215,6 @@ theorem pure.spec (value : α) :
     ⦃ emp ⦄ (Pure.pure value : Result α) ⦃⇓ result => ⌜result = value⌝⦄ :=
   ret.spec value
 
-/-- Pure returns stay in the pure judgment, allowing `step` to infer ordinary
-predicate postconditions without introducing spatial entailments. -/
 theorem ok_spec (value : α) :
     spec (Result.ok value) (fun result => result = value) :=
   ret.spec value
@@ -1538,25 +1395,5 @@ example (zero : List Nat → Result (List Nat))
 
 end Aeneas.Std.WP
 
-/- TODO: mvcgen support is dropped for now.
-
-`import Std.Do` went with it; it is needed again to restore the bridge.
-
-`WP.lean` carried a bridge to `Std.Do`: a `WP`/`WPMonad` instance for `Result`
-plus `spec_to_mvcgen`/`dspec_to_mvcgen`, which let `@[step]` theorems generate
-companion `@[spec]` lemmas (see `info.to_mvcgen` in `Aeneas.Tactic.Step.Init`).
-
-Both lifts are *false* under this `EffectWP`.  The instance sent every effect other
-than `fail` to `False`, so a `Triple` rules out `guardedModify`; `spec`/`dspec`
-do not, because an event that only extends the heap preserves every frame it is
-asked to.  The `vis` case of the old proofs is exactly the gap.
-
-Restoring the bridge means teaching the `WP` instance to *model* `guardedModify`
-rather than discard it.  Until then every `#register_spec_info` in
-`Aeneas.Tactic.Step.SpecInfo` keeps `to_mvcgen := none`, and `Aeneas/Tactic/Step/Tests/MvcgenSpec.lean` -- the only
-file in the repo that calls `mvcgen` -- has to be dropped or reworked when this
-file replaces `WP.lean`.
-
-Its `Triple` notation also collides with the separation-logic `⦃P⦄ m ⦃⇓ x => Q⦄`
-declared here, as does `Std.Do`'s `⌜⌝` with `SepLogic.ipure`; any future mvcgen
-code in this file must apply `Triple`/`SPred.pure`/`PostCond.noThrow` directly. -/
+/- TODO: restore the mvcgen bridge (`spec_to_mvcgen`, `dspec_to_mvcgen`): the `WP` instance
+must model `guardedModify` rather than send it to `False`. -/

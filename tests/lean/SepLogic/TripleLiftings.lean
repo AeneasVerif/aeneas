@@ -1,13 +1,6 @@
 import Aeneas.Std.RawPtr
 import Aeneas.Tactic.Step
 
-/-!
-# Registered pure and spatial judgments
-
-Exercise the supported edges between total/partial and pure/spatial
-specifications, including local contracts and framing pure calls in SL goals.
--/
-
 namespace TripleLiftingTests
 
 open Aeneas.Std (Result RawPtr MutRawPtr)
@@ -69,8 +62,6 @@ run_meta do
     unless info.spec_name == judgment do
       Lean.throwError "{specName} registered under the wrong judgment"
 
-/-! Total pure specifications work in all four judgments. -/
-
 example (x : Nat) : totalPure x ⦃ y => y = x ⦄ := by step*
 example (x : Nat) : totalPure x ⦃ y => y = x ⦄div := by step*
 example (x : Nat) (P : IProp) :
@@ -78,16 +69,12 @@ example (x : Nat) (P : IProp) :
 example (x : Nat) (P : IProp) :
     ⦃ P ⦄ totalPure x ⦃⇓ y => P ∗ ⌜y = x⌝ ⦄div := by step*
 
-/-! Legacy pure specifications lift directly to spatial judgments. -/
-
 example (x : Nat) (P : IProp) :
     ⦃ P ⦄ legacyTotalPure x ⦃⇓ y => P ∗ ⌜y = x⌝ ⦄ := by step*
 example (x : Nat) (P : IProp) :
     ⦃ P ⦄ legacyTotalPure x ⦃⇓ y => P ∗ ⌜y = x⌝ ⦄div := by step*
 example (x : Nat) (P : IProp) :
     ⦃ P ⦄ legacyPartialPure x ⦃⇓ y => P ∗ ⌜y = x⌝ ⦄div := by step*
-
-/-! Legacy lifting preserves a single pair binder from the call site. -/
 
 def useLegacyPair (x : Nat) : Result Nat := do
   let pair ← legacyPair x
@@ -102,8 +89,6 @@ example (x : Nat) :
     guard_hyp hSecond : pair.2 = x + 1
     simp [hFirst, hSecond]
 
-/-! A terminal call likewise follows the single binder in the outer postcondition. -/
-
 example (recur : Nat → Result (Nat × Nat))
     (hRecur : ∀ x,
       ⦃ emp ⦄ recur x
@@ -116,13 +101,9 @@ example (recur : Nat → Result (Nat × Nat))
   guard_hyp hSecond : pair.2 = x + 1
   simp [hFirst, hSecond]
 
-/-! Partial pure specifications work only in partial judgments. -/
-
 example (x : Nat) : partialPure x ⦃ y => y = x ⦄div := by step*
 example (x : Nat) (P : IProp) :
     ⦃ P ⦄ partialPure x ⦃⇓ y => P ∗ ⌜y = x⌝ ⦄div := by step*
-
-/-! SL specifications at `emp` with pure postconditions also work in pure goals. -/
 
 example (x : Nat) : totalSpatial x ⦃ y => y = x ⦄ := by step*
 example (x : Nat) : totalSpatial x ⦃ y => y = x ⦄div := by step*
@@ -133,8 +114,6 @@ example (x : Nat) (P : IProp) :
 example (x : Nat) : partialSpatial x ⦃ y => y = x ⦄div := by step*
 example (x : Nat) (P : IProp) :
     ⦃ P ⦄ partialSpatial x ⦃⇓ y => P ∗ ⌜y = x⌝ ⦄div := by step*
-
-/-! Bind rules preserve the judgment of the continuation. -/
 
 example (x : Nat) :
     (do let y ← totalPure x; totalPure y) ⦃ z => z = x ⦄ := by step*
@@ -166,9 +145,6 @@ example (x : Nat) (P : IProp) :
   unfold twicePartialPure
   step*
 
-/-! SL goals carry resources through allocating callees, including callees
-that have only a partial specification. -/
-
 example (x : Nat) :
     ispec emp (do
       let p ← MutRawPtr.alloc x
@@ -188,8 +164,6 @@ example (x : Nat) :
       let y ← RawPtr.read p
       MutRawPtr.free p
       partialPure y) (fun z => ⌜z = x⌝) := by step*
-
-/-! Local contracts and explicit theorem selection use the same liftings. -/
 
 example (m : Result Nat) (h : m ⦃ n => n = 7 ⦄) (P : IProp) :
     ⦃ P ⦄ m ⦃⇓ n => P ∗ ⌜n = 7⌝ ⦄ := by
@@ -218,9 +192,6 @@ example {α : Type u} {β : Type v} (m : Result α) (next : α → Result β)
     (P : α → Prop) (Q : β → Prop)
     (hm : m ⦃ P ⦄div) (hn : ∀ x, P x → next x ⦃ Q ⦄div) :
     Aeneas.Std.bind m next ⦃ Q ⦄div := by step*
-
-/-! Lifting tuple postconditions must preserve both components and their
-pure hypotheses before the continuation is introduced. -/
 
 def partialPair (x : Nat) : Result (Nat × Nat) := Result.ok (x, x + 1)
 
@@ -284,9 +255,6 @@ Q : ℕ → Prop
 ⊢ m ⦃ Q ⦄div -/
 #guard_msgs in
 example (m : Result Nat) (Q : Nat → Prop) : dspec m Q := by done
-
-/-! No lifting may upgrade partial correctness or turn a spatial contract into
-a pure one by discarding its owned resources. -/
 
 example (x : Nat) : partialPure x ⦃ y => y = x ⦄ := by
   fail_if_success step with partialPure.spec

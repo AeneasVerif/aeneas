@@ -6,8 +6,6 @@ public section
 
 namespace Aeneas
 
-/-- A partial commutative monoid (PCM), represented by a total union operation
-whose meaningful inputs are selected by `Compatible`. -/
 class PartialCommMonoid (α : Type u) [EmptyCollection α] [Union α] where
   Compatible : α → α → Prop
   compatible_comm {a b : α} : Compatible a b → Compatible b a
@@ -27,58 +25,23 @@ end Aeneas
 
 namespace Aeneas.Std
 
-/-!
-# The heap
-
-An **address** is an allocation identifier together with a slot index into that
-allocation, and a heap is a finite map from addresses to the values they hold:
-
-```text
-Loc      = AllocId × Nat
-HeapCell = (α : Type) × α
-Heap     = Loc ⇀ HeapCell            (finitely supported)
-```
-
-Two heaps compose when the addresses they use are disjoint, so `∪` is a plain
-disjoint union: it computes, and no type equality has to be decided.  Ownership
-is *slot-granular*, which is what lets one allocation be owned a part at a
-time — the `(α : Type) × List α` view of an allocation is what
-`Ptr.pointsToRange` owns, the list of the values at consecutive addresses, and
-it splits and joins by regrouping a separating conjunction.
-
-[`RawPtr`](RawPtr.lean) builds the Rust pointer view on this heap: it allocates
-runs of slots and addresses their interiors. The mutable-data prototypes under
-`tests/lean/SepLogic/MutableData/` build bounded buffers and statically sized
-arrays on top of those raw pointers.
--/
-
-/- An allocation identifier is fresh and behaves like a monotonic
-   counter, not a concrete address in machine memory. -/
 abbrev AllocId := Nat
 
-/-- An address: the allocation, and the slot of it this address names. -/
 abbrev Loc := AllocId × Nat
 
-/- Heap entries store the Lean type and the value of one slot. -/
 abbrev HeapCell := Σ α : Type, α
 
 abbrev HeapImpl := Finmap fun _ : Loc => HeapCell
 
-/-- A finite collection of dynamically typed heap cells. -/
 structure Heap where
   private mk ::
   private impl : HeapImpl
 
-/-! ## References -/
-
-/-- A reference to one slot: a bare address, the type being a phantom index
-that constrains specifications only. -/
 @[expose]
 def Ref (_ : Type) := Loc
 
 namespace Ref
 
-/-- Addresses are pairs of natural numbers, so references are inhabited. -/
 instance instInhabited {α : Type} : Inhabited (Ref α) := ⟨((0 : AllocId), 0)⟩
 
 instance instDecidableEq {α : Type} : DecidableEq (Ref α) :=
@@ -87,15 +50,12 @@ instance instDecidableEq {α : Type} : DecidableEq (Ref α) :=
 @[expose]
 def addr {α : Type} (r : Ref α) : Loc := r
 
-/-- The allocation `r` is interior to. -/
 @[expose]
 def base {α : Type} (r : Ref α) : AllocId := r.addr.1
 
-/-- The slot of that allocation `r` names. -/
 @[expose]
 def offset {α : Type} (r : Ref α) : Nat := r.addr.2
 
-/-- Pointer arithmetic: same allocation, later slot. -/
 @[expose]
 def add {α : Type} (r : Ref α) (i : Nat) : Ref α := (r.base, r.offset + i)
 
@@ -111,7 +71,6 @@ theorem add_add {α : Type} (r : Ref α) (i j : Nat) :
     (r.add i).add j = r.add (i + j) := by
   simp [Ref.add, Ref.base, Ref.offset, Ref.addr, Nat.add_assoc]
 
-/-- The address `r.add i` names. -/
 theorem addr_add {α : Type} (r : Ref α) (i : Nat) :
     (r.add i).addr = (r.base, r.offset + i) := rfl
 
@@ -157,7 +116,6 @@ def mem (address : Loc) (h : Heap) : Prop :=
 instance instMembership : Membership Loc Heap :=
   ⟨fun h address => Heap.mem address h⟩
 
-/-- The number of slots the heap owns. -/
 def size (h : Heap) : Nat :=
   h.impl.keys.card
 
@@ -206,7 +164,6 @@ theorem union_empty (h : Heap) : h ∪ empty = h := by
   apply Heap.ext_impl
   exact Finmap.union_empty
 
-/-- Heaps form a PCM under disjoint union. -/
 instance instPartialCommMonoid : PartialCommMonoid Heap where
   Compatible := Heap.compatible
   compatible_comm hCompatible := by
@@ -246,7 +203,6 @@ theorem union_right_cancel {h₁ h₂ frame : Heap}
   exact (Finmap.union_cancel hCompatible₁ hCompatible₂).mp (congrArg Heap.impl hEq)
 
 
-/-- The heap of the single slot `r`, holding `value`. -/
 def singleton {α : Type} (r : Ref α) (value : α) : Heap :=
   ⟨Finmap.singleton r.addr ⟨α, value⟩⟩
 
@@ -255,10 +211,6 @@ theorem mem_singleton {α : Type} {r : Ref α} {value : α} {address : Loc} :
   show address ∈ (Finmap.singleton r.addr (⟨α, value⟩ : HeapCell) : HeapImpl) ↔ _
   exact Finmap.mem_singleton _ _ _
 
-/-- `h` has a slot at `r`, and it holds a value of type `α`.  This is the
-definedness guard of every operation on `r`: it is what makes the value
-available as a value of `α`, and a heap operation is *stuck* without it rather
-than erroneous. -/
 def contains {α : Type} (h : Heap) (r : Ref α) : Prop :=
   match h.lookup r.addr with
   | none => False
@@ -272,13 +224,6 @@ theorem not_contains_empty {α : Type} (r : Ref α) :
     | some ⟨β, _⟩ => β = α
   simp
 
-/-! ### Runs of slots
-
-An allocation is owned a slot at a time, so the heap of a whole run is the
-union of the heaps of its slots.  This is what allocation produces and what a
-range assertion owns. -/
-
-/-- The heap of the run `values`, starting at `r`. -/
 @[expose]
 def rangeHeap {α : Type} (r : Ref α) : List α → Heap
   | [] => empty
@@ -319,7 +264,6 @@ theorem mem_rangeHeap {α : Type} {r : Ref α} {values : List α} {address : Loc
         | zero => exact Or.inl rfl
         | succ j => exact Or.inr ⟨j, by simpa using hi, by rw [hShift]⟩
 
-/-- Splitting a run into two adjacent ones splits its heap. -/
 theorem rangeHeap_append {α : Type} (r : Ref α) (xs ys : List α) :
     rangeHeap r (xs ++ ys) =
       rangeHeap r xs ∪ rangeHeap (r.add xs.length) ys := by
@@ -331,7 +275,6 @@ theorem rangeHeap_append {α : Type} (r : Ref α) (xs ys : List α) :
       rw [List.cons_append, rangeHeap_cons, rangeHeap_cons, ih, List.length_cons,
         hShift, Heap.union_assoc']
 
-/-- The two halves of a split run own disjoint slots. -/
 theorem compatible_rangeHeap_append {α : Type} (r : Ref α) (xs ys : List α) :
     PartialCommMonoid.Compatible (rangeHeap r xs)
       (rangeHeap (r.add xs.length) ys) := by
@@ -344,15 +287,9 @@ theorem compatible_rangeHeap_append {α : Type} (r : Ref α) (xs ys : List α) :
     (congrArg Prod.snd hL).symm.trans (congrArg Prod.snd hR)
   omega
 
-/-! ## Allocation -/
-
-/-- The allocation identifier this heap will hand out next: one past every
-identifier it uses.  Allocation is deterministic, which is what lets a program
-be *run* and not only related to its outcomes. -/
 def freshBase (h : Heap) : AllocId :=
   (h.keys.image Prod.fst).sup id + 1
 
-/-- The address the next allocation starts at. -/
 def freshRef (α : Type) (h : Heap) : Ref α := (freshBase h, 0)
 
 theorem not_mem_freshBase {h : Heap} {address : Loc}
@@ -367,26 +304,15 @@ theorem not_mem_freshBase {h : Heap} {address : Loc}
       (h.keys.image Prod.fst).sup id := hLe
   exact Nat.not_succ_le_self _ hSucc
 
-/-- The run a fresh allocation occupies is disjoint from everything the heap
-already owns. -/
 theorem compatible_freshRef {α : Type} (h : Heap) (values : List α) :
     PartialCommMonoid.Compatible (rangeHeap (freshRef α h) values) h := by
   intro address hFresh hMem
   obtain ⟨i, -, rfl⟩ := mem_rangeHeap.mp hFresh
   exact not_mem_freshBase (h := h) rfl hMem
 
-/-- The heap `freshRef` allocates into. -/
 @[expose] def freshHeap {α : Type} (h : Heap) (values : List α) : Heap :=
   rangeHeap (freshRef α h) values ∪ h
 
-/-! ## Sub-heaps
-
-The assertions of `Aeneas.SepLogic` are *affine*: they own the cells they
-describe and say nothing about the rest of the heap.  Semantically that means
-they are closed under the extension order below, the way Iris's `uPred` is
-monotone in its resource. -/
-
-/-- `Heap.Sub h h'`: `h'` is `h` extended with cells that `h` does not own. -/
 @[expose] def Sub (h h' : Heap) : Prop :=
   ∃ rest, PartialCommMonoid.Compatible h rest ∧ h' = h ∪ rest
 
@@ -424,8 +350,6 @@ theorem union_right {h₁ h₂ : Heap}
   ⟨h₁, PartialCommMonoid.compatible_comm hCompatible,
     PartialCommMonoid.union_comm_of_compatible hCompatible⟩
 
-/-- An extension of a split heap splits the same way, the extra cells going to
-the right-hand side. -/
 theorem split {h₁ h₂ h' : Heap}
     (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
     (hSub : Heap.Sub (h₁ ∪ h₂) h') :
@@ -439,7 +363,6 @@ theorem split {h₁ h₂ h' : Heap}
     PartialCommMonoid.union_assoc hCompatible hCompatibleRest,
     ⟨rest, hCompatible₂, rfl⟩⟩
 
-/-- A heap disjoint from an extension is disjoint from the heap extended. -/
 theorem disjoint_of_sub {h h' frame : Heap} (hSub : Heap.Sub h h')
     (hCompatible : PartialCommMonoid.Compatible h' frame) :
     PartialCommMonoid.Compatible h frame := by
@@ -453,7 +376,6 @@ theorem disjoint_of_sub {h h' frame : Heap} (hSub : Heap.Sub h h')
         PartialCommMonoid.compatible_comm hRestFrame'⟩
   exact PartialCommMonoid.compatible_comm hFrame
 
-/-- Extending on one side of a union extends the union. -/
 theorem union_mono_left {h h' frame : Heap} (hSub : Heap.Sub h h')
     (hCompatible : PartialCommMonoid.Compatible h' frame) :
     Heap.Sub (h ∪ frame) (h' ∪ frame) := by
@@ -479,7 +401,6 @@ theorem union_mono_left {h h' frame : Heap} (hSub : Heap.Sub h h')
       (PartialCommMonoid.union_assoc
         hCompatibleFrame hCompatibleCombined).symm
 
-/-- Two extensions of compatible heaps extend their union. -/
 theorem union_mono {A B h₁ h₂ : Heap}
     (hSub₁ : Heap.Sub A h₁) (hSub₂ : Heap.Sub B h₂)
     (hCompatible : PartialCommMonoid.Compatible h₁ h₂) :
@@ -501,8 +422,6 @@ theorem union_mono {A B h₁ h₂ : Heap}
 end Sub
 
 
-/-- The value the slot `r` holds.  The guard supplies the type equality, so no
-default value has to be invented and this computes. -/
 def read {α : Type} (r : Ref α) (h : Heap)
     (hContains : contains h r) : α :=
   match hlookup : h.lookup r.addr with
@@ -512,13 +431,10 @@ def read {α : Type} (r : Ref α) (h : Heap)
         simpa [contains, hlookup] using hContains
       exact htype ▸ value
 
-/-- Replace the value the slot `r` holds. -/
 def update {α : Type} (r : Ref α) (value : α) (h : Heap)
     (_ : contains h r) : Heap :=
   h.insert r.addr ⟨α, value⟩
 
-/-- Release the slot `r`: the address goes away, so what a heap still holds is
-exactly what has not been freed. -/
 def free {α : Type} (r : Ref α) (h : Heap)
     (_ : contains h r) : Heap :=
   h.erase r.addr
@@ -531,7 +447,6 @@ theorem mem_of_contains {α : Type} {h : Heap} {r : Ref α}
   · rename_i cell hLookup
     exact Finmap.mem_of_lookup_eq_some hLookup
 
-/-- Two heaps that both contain the cell `r` are not disjoint. -/
 theorem disjoint_contains_false {α : Type} {h₁ h₂ : Heap} {r : Ref α}
     (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
     (hContains₁ : contains h₁ r)
@@ -644,7 +559,6 @@ theorem free_union_left {α : Type} {h₁ h₂ : Heap}
         Finmap.lookup_union_right
           (fun hMem => hMem₁ (Finmap.mem_erase.mp hMem).right)]
 
-/-- Two cells at different references are disjoint. -/
 theorem disjoint_singleton {α : Type} {r s : Ref α} {value₁ value₂ : α}
     (hNe : r ≠ s) :
     PartialCommMonoid.Compatible
@@ -711,22 +625,11 @@ theorem free_singleton {α : Type} (r : Ref α) (value : α)
     apply Finmap.lookup_eq_none.mpr
     simpa [singleton, Finmap.mem_singleton] using hEq
 
-/-! ## What a points-to assertion gives
-
-An affine assertion owns the slots it describes and says nothing about the
-others, so it is closed under `Heap.Sub`.  These are the lemmas that turn such
-an assertion into the guard of an operation, and back. -/
-
-/-- A heap that extends a slot owns that slot: this is what an affine points-to
-assertion gives, the rest of the heap being unconstrained. -/
 theorem contains_of_sub {α : Type} {r : Ref α} {value : α} {h : Heap}
     (hSub : Heap.Sub (singleton r value) h) : contains h r := by
   obtain ⟨rest, -, rfl⟩ := hSub
   exact contains_union_left (contains_singleton r value)
 
-/-- The value a heap extending `singleton r value` holds at `r` is `value`
-itself: slots compose by disjoint union, so nothing else can hold that slot and
-the points-to assertion is exact. -/
 theorem read_of_sub {α : Type} {r : Ref α} {value : α} {h : Heap}
     (hSub : Heap.Sub (singleton r value) h)
     (hContains : contains h r) : Heap.read r h hContains = value := by

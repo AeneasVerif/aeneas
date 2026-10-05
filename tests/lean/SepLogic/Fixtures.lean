@@ -2,8 +2,6 @@ import Aeneas.Std.RawPtr
 import Aeneas.SepLogic.Tactic
 import Aeneas.Tactic.Step.StepStar
 
-/-! Small verified programs shared by the separation-logic regression tests. -/
-
 open Aeneas Aeneas.SepLogic Aeneas.Std.WP
 open Aeneas.Std (MutRawPtr RawPtr Result)
 

@@ -10,21 +10,6 @@ public import Aeneas.SepLogic
 public import Aeneas.Tactic.Step.Init
 @[expose] public section
 
-/-!
-# Raw pointers
-
-`RawPtr T M` is a Rust raw pointer: a base allocation identifier and an offset
-into that allocation. The mutability index distinguishes `*mut T` from
-`*const T`; permissions are carried by separation-logic assertions rather than
-by the pointer value.
-
-* `q ↦ value` owns exactly the slot `q` addresses;
-* `q ↦* values` owns the consecutive slots starting at `q`.
-
-Reads accept both mutable and const pointers. Allocation, writes and
-deallocation require a mutable pointer.
--/
-
 open Aeneas SepLogic
 
 namespace Aeneas.Std
@@ -34,7 +19,6 @@ open WP
 inductive Mutability where
 | Mut | Const
 
-/-- A raw pointer into a heap allocation. -/
 structure RawPtr (T : Type) (M : Mutability) where
   base : AllocId
   offset : Nat
@@ -45,22 +29,17 @@ abbrev ConstRawPtr (T : Type _) := RawPtr T .Const
 
 namespace RawPtr
 
-/-- The heap reference addressed by a raw pointer. -/
 def ref (q : RawPtr T M) : Ref T := (q.base, q.offset)
 
-/-- Pointer arithmetic within the same allocation. -/
 def add (q : RawPtr T M) (i : Nat) : RawPtr T M :=
   ⟨q.base, q.offset + i⟩
 
-/-- Whether two pointers are interior to the same allocation. -/
 def sameBase (q₁ : RawPtr T M₁) (q₂ : RawPtr U M₂) : Prop :=
   q₁.base = q₂.base
 
-/-- How far `q₂` is past `q₁`. -/
 def distance (q₁ : RawPtr T M₁) (q₂ : RawPtr U M₂) : Nat :=
   q₂.offset - q₁.offset
 
-/-- Forget write capability while preserving the address. -/
 def toConst (q : MutRawPtr T) : ConstRawPtr T :=
   ⟨q.base, q.offset⟩
 
@@ -85,11 +64,9 @@ theorem add_add (q : RawPtr T M) (i j : Nat) :
     (q.add i).add j = q.add (i + j) := by
   simp [add, Nat.add_assoc]
 
-/-- `q` owns the `values.length` slots from `q` on. -/
 def pointsToRange (q : RawPtr T M) (values : List T) : IProp :=
   owns (Heap.rangeHeap q.ref values)
 
-/-- `q` owns exactly the slot it addresses. -/
 def pointsTo (q : RawPtr T M) (value : T) : IProp :=
   Ref.pointsTo q.ref value
 
@@ -98,7 +75,6 @@ end RawPtr
 instance instPointsToRawPtr {T : Type} {M : Mutability} :
     PointsTo (RawPtr T M) T := ⟨RawPtr.pointsTo⟩
 
-@[inherit_doc RawPtr.pointsToRange]
 notation:50 q:50 " ↦* " values:50 => RawPtr.pointsToRange q values
 
 theorem RawPtr.pointsTo_eq_ref (q : RawPtr T M) (value : T) :
@@ -164,11 +140,9 @@ theorem RawPtr.pointsTo_exclusive (q : RawPtr T M) (value₁ value₂ : T) :
 
 namespace RawPtr
 
-/-- The heap containing only the slot addressed by `q`. -/
 def singleton (q : RawPtr T M) (value : T) : Heap :=
   Heap.singleton q.ref value
 
-/-- Whether `h` contains a value of the pointer's element type at `q`. -/
 def contains (h : Heap) (q : RawPtr T M) : Prop :=
   Heap.contains h q.ref
 
@@ -195,7 +169,6 @@ theorem disjoint_singleton {q r : RawPtr T M} {value₁ value₂ : T} (hNe : q �
 
 end RawPtr
 
-/-- Allocate `values` consecutively and pass their first reference to `mk`. -/
 def RawPtr.allocArray {β : Type} (values : List T) (mk : Ref T → β) : Result β :=
   Result.guardedModify (fun _ => True) fun h _ =>
     (mk (Heap.freshRef T h), Heap.freshHeap h values)
@@ -219,7 +192,6 @@ theorem RawPtr.allocArray.spec {β : Type} (values : List T) (mk : Ref T → β)
     (PartialCommMonoid.union_assoc hFreshH hFreshFrame).symm,
     hPost _ _ (Heap.Sub.union_left hFreshH)⟩
 
-/-- Materialize a list as fresh memory with the requested pointer mutability. -/
 def RawPtr.materialize (values : List T) : Result (RawPtr T M) :=
   RawPtr.allocArray values fun r => ⟨r.base, r.offset⟩
 
@@ -229,7 +201,6 @@ theorem RawPtr.materialize.spec (values : List T) :
       ⦃⇓ p => p ↦* values⦄ :=
   RawPtr.allocArray.spec _ _ _ fun _ => entails_refl _
 
-/-- Allocate one mutable slot. -/
 def MutRawPtr.alloc (value : T) : Result (MutRawPtr T) :=
   RawPtr.allocArray [value] fun r => ⟨r.base, r.offset⟩
 
@@ -249,7 +220,6 @@ theorem readable_of_pointsTo {q : RawPtr T M} {value : T} {h : Heap}
     (hPointsTo : (q ↦ value) h) : q.Readable h :=
   ⟨Heap.contains_of_sub hPointsTo⟩
 
-/-- Read through either a mutable or const pointer. -/
 def read (q : RawPtr T M) : Result T :=
   Result.guardedModify (fun h => q.Readable h) fun h hReadable =>
     (Heap.read q.ref h hReadable.contains, h)
@@ -270,7 +240,6 @@ theorem read.spec (q : RawPtr T M) (value : T) :
 
 end RawPtr
 
-/-- Write through a mutable pointer. -/
 def MutRawPtr.write (q : MutRawPtr T) (value : T) : Result Unit :=
   Result.guardedModify (fun h => Heap.contains h q.ref) fun h hContains =>
     ((), Heap.update q.ref value h hContains)
@@ -300,7 +269,6 @@ theorem MutRawPtr.write.spec (q : MutRawPtr T) (oldValue newValue : T) :
       Heap.update_singleton]
     exact Heap.Sub.union_left hCompatibleNew
 
-/-- Release the slot addressed by a mutable pointer. -/
 def MutRawPtr.free (q : MutRawPtr T) : Result Unit :=
   Result.guardedModify (fun h => Heap.contains h q.ref) fun h hContains =>
     ((), Heap.free q.ref h hContains)
@@ -317,7 +285,6 @@ theorem MutRawPtr.free.spec (q : MutRawPtr T) (value : T) :
       Heap.contains_union_left (h₂ := frame) hContains from rfl] using
     Heap.free_union_left q.ref hCompatible hContains
 
-/-- Release `n` consecutive slots. -/
 def MutRawPtr.freeRange (q : MutRawPtr T) : Nat → Result Unit
   | 0 => pure ()
   | n + 1 => do
@@ -387,7 +354,6 @@ theorem MutRawPtr.write.spec_range (q : MutRawPtr T) (values : List T)
   apply WP.ispec_mono (MutRawPtr.write.spec (q.add i) values[i] value)
   iframe
 
-/-- Fill `n` consecutive mutable slots. -/
 def MutRawPtr.fillRange (q : MutRawPtr T) (value : T) : Nat → Result Unit
   | 0 => pure ()
   | n + 1 => do
@@ -416,7 +382,6 @@ theorem MutRawPtr.fillRange.spec (q : MutRawPtr T) (values : List T) (value : T)
         exact entails_trans (by iframe)
           (entails_sep_postWand _ (by intro _; iframe))
 
-/-- Copy `n` slots from a pointer of either mutability into mutable storage. -/
 def MutRawPtr.copyRange (dst : MutRawPtr T) (src : RawPtr T M) : Nat → Result Unit
   | 0 => pure ()
   | n + 1 => do
@@ -479,7 +444,6 @@ theorem MutRawPtr.copyRange.spec (dst : MutRawPtr T) (src : RawPtr T M)
               (src ↦ value ∗ (src.add 1) ↦* rest))
           iframe
 
-/-- Compare two ranges through pointers of either mutability. -/
 def RawPtr.compareRange [DecidableEq T]
     (left : RawPtr T M₁) (right : RawPtr T M₂) : Nat → Result Bool
   | 0 => pure true
@@ -546,7 +510,6 @@ theorem RawPtr.compareRange.spec [DecidableEq T]
             simp only [List.cons.injEq, hxy, false_and]
             iframe
 
-/-- Materialize a mutable value as one mutable heap slot. -/
 def MutRawPtr.mut_to_raw (value : T) : Result (MutRawPtr T) :=
   MutRawPtr.alloc value
 
@@ -555,7 +518,6 @@ theorem MutRawPtr.mut_to_raw.spec (value : T) :
     ⦃ emp ⦄ MutRawPtr.mut_to_raw value ⦃⇓ q => q ↦ value⦄ :=
   MutRawPtr.alloc.spec value
 
-/-- Read and release `n` consecutive mutable slots. -/
 def MutRawPtr.takeRange (q : MutRawPtr T) : Nat → Result (List T)
   | 0 => pure []
   | n + 1 => do
@@ -605,7 +567,6 @@ theorem MutRawPtr.takeRange.spec_of_length (q : MutRawPtr T)
   subst n
   exact MutRawPtr.takeRange.spec q values
 
-/-- Read and release one mutable slot. -/
 def MutRawPtr.end_mut_to_raw (q : MutRawPtr T) : Result T := do
   let value ← q.read
   MutRawPtr.free q
@@ -699,9 +660,6 @@ theorem fromBytes_u8 (s : Slice U8) : fromBytes (T := U8) s = .ok s := rfl
 
 end IsScalar
 
-/-- Scalar pointer casts remain unsupported: changing the element type also
-    requires reinterpreting the typed heap, not just scaling the offset.
-    `IsScalar.toBytes` and `IsScalar.fromBytes` convert values, not ownership. -/
 def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability)
     [IsScalar T] [IsScalar T'] (_ : RawPtr T M) :
     Result (RawPtr T' M') :=

@@ -5,22 +5,12 @@ public meta import Lean
 public meta import AeneasMeta.Simp
 public meta section
 
-/-!
-# `isimp`
-
-Partial simplification of separation-logic entailments, built on the `IFrame`
-engine: unlike `iframe`, it leaves the obligations it cannot solve as goals.
--/
-
 namespace Aeneas.SepLogic
 
 open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic
 
 namespace IFrame
 
-/-- Cancel matching atoms without requiring the residual entailment to be
-provable. Every atom is consumed at most once; unmatched resources stay in the
-residual goal. -/
 private def cancelGoal (goal : MVarId) : TacticM MVarId := goal.withContext do
   let target := (← instantiateMVars (← goal.getType)).consumeMData
   let args := target.getAppArgs
@@ -53,9 +43,6 @@ private def cancelGoal (goal : MVarId) : TacticM MVarId := goal.withContext do
   goal.assign (← mkAppM ``entails_trans #[← mkAppM ``entails_of_eq #[leftEq], finish])
   return residual.mvarId!
 
-/-- Extract facts before cancellation, so framing an owned predicate does not
-lose the information it contained. Keep frame-inference goals untouched: their
-metavariables were created outside the extracted witnesses' scope. -/
 partial def simplifyGoal (goal : MVarId) (useHyps : Bool := true) : TacticM (List MVarId) := do
   let target := (← instantiateMVars (← goal.getType)).consumeMData
   if target.isAppOfArity ``postEntails 3 then
@@ -106,16 +93,7 @@ partial def simplifyGoal (goal : MVarId) (useHyps : Bool := true) : TacticM (Lis
 
 end IFrame
 
-/-- Normalize and cancel spatial resources, leaving unsolved pure assertions as
-ordinary Lean goals. Facts are extracted before their ownership is framed away.
-Residual postcondition wands are introduced pointwise, retaining the unmatched
-resources as a frame for the antecedent. Uninferred existential witnesses remain
-explicit goals.
-`isimp [lemmas]` also opens representation predicates with the supplied lemmas.
-`isimp only [lemmas]` omits `iris_simps` and hypothesis-based rewriting, keeping
-the residual mathematical goal in its original form.
-Unlike `iframe` (and its alias `isimpl`), this tactic does not require all
-remaining obligations to be solved. -/
+/-- Like `iframe`, but leaves unsolved pure obligations as goals. -/
 syntax (name := iSimp) "isimp" (" only")? (" [" term,* "]")? : tactic
 
 private def evalISimp (lemmas : Array (TSyntax `term)) (simpOnly : Bool := false) : TacticM Unit :=

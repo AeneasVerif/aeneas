@@ -50,8 +50,6 @@ deriving Repr, BEq
 open Error
 
 inductive RustEffect.Input : Type 1 where
--- We represent partially defined stateful operations as guarded operations.
--- This avoids either duplicating syntax or requiring decidable equality for types.
 | guardedModify (α : Type) (pre : Heap → Prop)
     (modify : (h : Heap) → pre h → α × Heap) : RustEffect.Input
 | fail : Error → RustEffect.Input

@@ -259,11 +259,6 @@ meta def prepareIntroOutputsWith (type : Expr) (tree : NameTree) (prove : Tactic
   setGoals [next.mvarId!]
   return prefixLength
 
-/-- Read the pattern with which the program destructures the output from the goal the mono
-or bind rule leaves:
-- `∀ x, P x → spec (k x) Q` or `∀ v, ispec (Qm v ∗ F) (k v) Q`: from the continuation `k`;
-- `∀ x, P x → Q x`: from the caller's postcondition `Q`;
-- `P ⊢ Pm ∗ (Qm -∗+ Q)`: from the caller's postcondition `Q`. -/
 meta def getOutputTree (goalTy : Expr) : MetaM NameTree := do
   let goalTy := (← instantiateMVars goalTy).consumeMData
   unless goalTy.isForall do
@@ -284,7 +279,6 @@ meta def getOutputTree (goalTy : Expr) : MetaM NameTree := do
       | none => body
     getContInput (← mkLambdaFVars xs cont).eta
 
-/-- Prove the equivalence built by `prepareIntroOutputsWith` with one `simp` call. -/
 meta def simpOutputEquiv : TacticM Unit := do
   let _ ← Simp.simpAt true { failIfUnchanged := false, iota := false }
     { simpThms := #[← stepSimpExt.getTheorems],
@@ -305,10 +299,6 @@ meta def prepareIntroOutputs : PrepareIntroOutputs := do
   let goalTy ← instantiateMVars (← getMainTarget)
   prepareIntroOutputsWith goalTy (← getOutputTree goalTy) simpOutputEquiv
 
-/-- Goal preparation shared by `ispec` and `dispec`. `Std.WP.introIspec` extracts the
-output and the pure facts and existentials of the premise into the context. We revert
-them to obtain the `∀ v, facts → …` shape of `prepareIntroOutputs`, and destructure `v`
-in the same way. -/
 meta def prepareIntroIspec : PrepareIntroOutputs := do
   withMainContext do
   let tree ← getOutputTree (← getMainTarget)

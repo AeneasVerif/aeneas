@@ -2,30 +2,6 @@ module
 public import Aeneas.Std.Heap
 @[expose] public section
 
-/-!
-# Iris-compatible first-order separation logic
-
-The affine, first-order separation logic Aeneas verification is built on. Its
-public vocabulary and notation follow Iris-Lean. It deliberately does not import
-Iris-Lean or instantiate Iris-Lean with Aeneas's model. A client can switch
-implementations by changing its import while continuing to use the `IProp`,
-`iprop(...)`, `∗`, `-∗`, `⊢`, `⊣⊢`, and `↦` surface.
-
-The logic is *affine*, as Iris's is: an assertion owns the cells it describes
-and says nothing about the rest of the heap, so `emp` is the affine top and the
-entailment `⊢` weakens — `H ⊢ emp` for every `H`.  Resources may therefore be
-discarded anywhere.  Following Iris's `uPred`, affinity is a property of the
-*model*:
-`IProp` bundles closure under `Heap.Sub`, which is what makes `emp ∗ H ⊣⊢ H`
-provable once `emp` holds of every heap.
-
-Additive conjunction `iprop(P ∧ Q)` asserts both predicates on the same heap
-fragment; separating conjunction `P ∗ Q` splits it into disjoint fragments.
-
-The proof-mode tactics (`iframe`, `iintro`, `isimpl`, `irewrite`) built on
-these assertions are in `Aeneas.SepLogic.Tactic`.
--/
-
 namespace Aeneas.SepLogic
 
 universe u
@@ -34,9 +10,6 @@ open Aeneas.Std (Heap Ref)
 
 open Aeneas.Std (Heap Ref)
 
-/-- Heap predicates describe heap fragments.  Like Iris's `uPred`, an assertion
-is closed under heap extension: it constrains the cells it owns, and says
-nothing about the others. -/
 structure IProp where
   holds : Heap → Prop
   up_closed : ∀ {h h' : Heap}, holds h → Heap.Sub h h' → holds h'
@@ -52,10 +25,8 @@ theorem IProp.ext {H₁ H₂ : IProp} (hIff : ∀ h, H₁ h ↔ H₂ h) : H₁ =
   subst hEq
   rfl
 
-/- Preconditions are separation-logic propositions. -/
 abbrev IPre := IProp
 
-/- Postconditions describe both a returned value and a heap fragment. -/
 abbrev IPost (α : Type u) := α → IProp
 
 def Entails (H₁ H₂ : IProp) : Prop :=
@@ -65,39 +36,27 @@ structure BiEntails (H₁ H₂ : IProp) : Prop where
   mp : Entails H₁ H₂
   mpr : Entails H₂ H₁
 
-/-- The empty assertion owns nothing.  Being affine it holds of *every* heap,
-exactly like Iris's `emp`, which coincides with `True` there. -/
 def emp : IProp where
   holds _ := True
   up_closed := fun _ _ => trivial
 
-/-- A pure fact owns nothing, so it says nothing about the heap it is asserted
-of. -/
 def ipure (P : Prop) : IProp where
   holds _ := P
   up_closed := fun hP _ => hP
 
-/-- The assertion that owns the heap fragment `A`.  Being affine it says
-nothing about the slots `A` does not describe, which is exactly closure under
-`Heap.Sub`. -/
 def owns (A : Heap) : IProp where
   holds h := Heap.Sub A h
   up_closed := fun hSub hExtend => hSub.trans hExtend
 
-/-- The points-to assertion of a reference: the heap owns the slot `r`, and it
-holds `value`. -/
 def Ref.pointsTo {α : Type} (r : Ref α) (value : α) : IProp :=
   owns (Heap.singleton r value)
 
-/-- What `↦` means, overloaded: a reference points to the slot it names, a
-pointer to the value it addresses, and a buffer to the values it spans. -/
 class PointsTo (ρ : Type u) (β : outParam (Type v)) where
   pointsTo : ρ → β → IProp
 
 instance instPointsToRef {α : Type} : PointsTo (Ref α) α :=
   ⟨Ref.pointsTo⟩
 
-/-- Additive conjunction: both assertions hold of the same heap fragment. -/
 def iand (P Q : IProp) : IProp where
   holds h := P h ∧ Q h
   up_closed := fun hPQ hSub =>
@@ -155,7 +114,6 @@ notation:50 r:50 " ↦ " value:50 => PointsTo.pointsTo r value
 
 open Lean PrettyPrinter Delaborator SubExpr
 
-/-- Print pure assertions using separation-logic quotation syntax. -/
 @[app_delab ipure]
 meta def delabIpure : Delab := do
   guard ((← getExpr).isAppOfArity ``ipure 1)
@@ -168,7 +126,6 @@ meta def delabIand : Delab := do
   let rhs ← withNaryArg 1 delab
   `(iprop($lhs ∧ $rhs))
 
-/-- Print separation-logic entailment using its surface notation. -/
 @[app_delab Entails]
 meta def delabEntails : Delab := do
   guard ((← getExpr).isAppOfArity ``Entails 2)
@@ -321,16 +278,8 @@ instance : Std.LawfulIdentity sep emp where
   left_id := sep_emp_l_eq
   right_id := sep_emp_r_eq
 
-/-- Affinity: every assertion may be discarded, so the affine top is simply
-`emp` here. -/
 theorem entails_emp_r (H : IProp) : H ⊢ emp :=
   fun _ _ => trivial
-
-/-! ### The model, spelled out
-
-`H h` reduces to the right-hand sides below by `rfl`; these lemmas let `simp`
-and `rw` see through the `IProp` structure when a proof does go down to the
-heap. -/
 
 @[simp]
 theorem emp_holds (h : Heap) : (emp : IProp) h ↔ True :=
@@ -344,7 +293,6 @@ theorem pure_holds {P : Prop} (h : Heap) : (⌜P⌝ : IProp) h ↔ P :=
 theorem iand_holds (P Q : IProp) (h : Heap) : iprop(P ∧ Q) h ↔ P h ∧ Q h :=
   Iff.rfl
 
-/-- An entailment from `emp` to a pure assertion is exactly the pure fact. -/
 theorem entails_emp_ipure_iff (P : Prop) : (emp ⊢ ⌜P⌝) ↔ P := by
   constructor
   · intro h
@@ -352,8 +300,6 @@ theorem entails_emp_ipure_iff (P : Prop) : (emp ⊢ ⌜P⌝) ↔ P := by
   · intro h _ _
     exact h
 
-/-- An entailment between pure assertions is exactly the implication: neither
-side owns anything, so no heap is involved. -/
 @[simp]
 theorem entails_ipure_iff (P Q : Prop) : (⌜P⌝ ⊢ ⌜Q⌝) ↔ (P → Q) :=
   ⟨fun h hP => h ∅ hP, fun h _ hP => h hP⟩
@@ -362,9 +308,6 @@ theorem Ref.pointsTo_holds {α : Type} (r : Ref α) (value : α)
     (h : Heap) : (r ↦ value) h ↔ Heap.Sub (Heap.singleton r value) h :=
   Iff.rfl
 
-/-- Splitting and joining a heap fragment: owning two compatible fragments is
-owning their union.  Every range-splitting lemma of `MutableData/` is this one
-applied to a run of slots. -/
 theorem owns_union (A B : Heap)
     (hCompatible : PartialCommMonoid.Compatible A B) :
     owns (A ∪ B) ⊣⊢ owns A ∗ owns B := by
@@ -379,8 +322,6 @@ theorem owns_union (A B : Heap)
   · rintro h ⟨h₁, h₂, hCompatibleHeaps, rfl, hSub₁, hSub₂⟩
     exact Heap.Sub.union_mono hSub₁ hSub₂ hCompatibleHeaps
 
-/-- Points-to is exclusive: affinity lets resources be *dropped*, never
-duplicated, so a slot still cannot be owned twice. -/
 theorem Ref.pointsTo_exclusive {α : Type} (r : Ref α) (value₁ value₂ : α) :
     r ↦ value₁ ∗ r ↦ value₂ ⊢ ⌜False⌝ := by
   rintro h ⟨h₁, h₂, hCompatible, -, hSingle₁, hSingle₂⟩
@@ -393,8 +334,6 @@ theorem sep_holds (H₁ H₂ : IProp) (h : Heap) :
         h = h₁ ∪ h₂ ∧ H₁ h₁ ∧ H₂ h₂ :=
   Iff.rfl
 
-/-- An owned frame can be chosen exactly, moving its extra cells to the other
-factor by upward closure. -/
 theorem sep_owns_holds (P : IProp) (frame heap : Heap) :
     (P ∗ owns frame) heap ↔
       ∃ owned, PartialCommMonoid.Compatible owned frame ∧
@@ -412,9 +351,6 @@ theorem sep_owns_holds (P : IProp) (frame heap : Heap) :
   · rintro ⟨owned, hCompatible, rfl, hP⟩
     exact ⟨owned, frame, hCompatible, rfl, hP, Heap.Sub.refl frame⟩
 
-/-- Conjunction distributes over a fixed owned frame: heap cancellation makes
-the remaining fragment the same for both assertions. This need not hold for an
-arbitrary assertion in place of `owns frame`. -/
 theorem sep_iand_owns (P Q : IProp) (frame : Heap) :
     iprop(P ∧ Q) ∗ owns frame ⊣⊢ iprop((P ∗ owns frame) ∧ (Q ∗ owns frame)) := by
   constructor
@@ -442,8 +378,6 @@ theorem sep_exists {α : Sort _} (J : α → IProp) (H : IProp) :
     rintro ⟨x, h₁, h₂, hDisjoint, hEq, hJ, hH⟩
     exact ⟨h₁, h₂, hDisjoint, hEq, ⟨x, hJ⟩, hH⟩
 
-/-- A pure fact on the left of a separating conjunction: since pure facts own
-nothing, they can be read off, and put back, without touching the heap. -/
 theorem sep_pure_l (P : Prop) (H : IProp) (h : Heap) :
     (⌜P⌝ ∗ H) h ↔ P ∧ H h := by
   constructor
@@ -470,32 +404,24 @@ theorem pure_sep_intro {P : Prop} (H : IProp) (hP : P) :
   intro h hH
   exact (sep_pure_l P H h).mpr ⟨hP, hH⟩
 
-/-- Extraction of a pure fact from the left-hand side of an entailment. -/
 theorem entails_pure_l {P : Prop} {H H' : IProp} (h : P → H ⊢ H') :
     ⌜P⌝ ∗ H ⊢ H' := by
   intro heap hStar
   have ⟨hP, hH⟩ := (sep_pure_l P H heap).mp hStar
   exact h hP heap hH
 
-/-- Introduction of an existential quantifier on the left-hand side of an
-entailment. -/
 theorem entails_exists_l {ι : Sort _} {H : IProp} {J : ι → IProp}
     (h : ∀ x, J x ⊢ H) : iexists J ⊢ H :=
   fun heap hJ => h hJ.choose heap hJ.choose_spec
 
-/-- Instantiation of an existential quantifier on the right-hand side of an
-entailment. `isimpl` uses it with a metavariable for `x`, which the cancellation
-phase then instantiates by unification. -/
 theorem entails_exists_r {ι : Sort _} {H : IProp} {J : ι → IProp} (x : ι)
     (h : H ⊢ J x) : H ⊢ iexists J :=
   fun heap hH => ⟨x, h heap hH⟩
 
-/-- Float an existential out of the left factor of a separating conjunction. -/
 theorem sep_exists_l_eq {ι : Sort _} (J : ι → IProp) (H : IProp) :
     (iexists J ∗ H) = iprop(∃ x, J x ∗ H) :=
   bientails_eq (sep_exists J H)
 
-/-- Float an existential out of the right factor of a separating conjunction. -/
 theorem sep_exists_r_eq {ι : Sort _} (H : IProp) (J : ι → IProp) :
     (H ∗ iexists J) = iprop(∃ x, H ∗ J x) := by
   rw [sep_comm_eq, sep_exists_l_eq]
@@ -503,35 +429,23 @@ theorem sep_exists_r_eq {ι : Sort _} (H : IProp) (J : ι → IProp) :
     fun heap ⟨x, hx⟩ => ⟨x, (sep_comm (J x) H).mp heap hx⟩,
     fun heap ⟨x, hx⟩ => ⟨x, (sep_comm (J x) H).mpr heap hx⟩⟩
 
-/-- Discard a pure fact. This is a special case of `entails_emp_r`. -/
 theorem pure_elim (P : Prop) :
     ⌜P⌝ ⊢ emp :=
   entails_emp_r _
 
-/-- Drop the right factor of a separating conjunction. Affinity makes the
-discardability hypothesis (`F ⊢ emp`) vacuous. -/
 theorem sep_elim_right (P F : IProp) :
     P ∗ F ⊢ P :=
   entails_trans (sep_mono (entails_refl P) (entails_emp_r F))
     (sep_emp_r P).mp
 
-/-- Drop the left factor of a separating conjunction. -/
 theorem sep_elim_left (P F : IProp) :
     F ∗ P ⊢ P :=
   entails_trans (sep_comm F P).mp (sep_elim_right P F)
 
-/-! ## The magic wand
-
-`H₁ -∗ H₂` describes the heap fragments that, extended with a disjoint fragment
-satisfying `H₁`, satisfy `H₂`. In the affine model this Kripke-style reading is
-the right adjoint of the separating conjunction. -/
-
-/-- Universal quantification over heap predicates. -/
 def iforall {ι : Sort _} (J : ι → IProp) : IProp where
   holds h := ∀ x, J x h
   up_closed := fun hJ hExtend x => (J x).up_closed (hJ x) hExtend
 
-/-- Separating implication, or magic wand. -/
 def wand (H₁ H₂ : IProp) : IProp where
   holds h :=
     ∀ h', PartialCommMonoid.Compatible h h' → H₁ h' → H₂ (h ∪ h')
@@ -542,13 +456,11 @@ def wand (H₁ H₂ : IProp) : IProp where
     exact H₂.up_closed (hWand h' hDisjoint' hH₁)
       (Heap.Sub.union_mono_left hExtend hDisjoint)
 
-/-- The magic wand between postconditions. Note that it is a heap predicate,
-not a postcondition. -/
 def postWand {α : Type u} (Q₁ Q₂ : IPost α) : IProp :=
   iforall fun value => wand (Q₁ value) (Q₂ value)
 
-@[inherit_doc wand] infixr:25 " -∗ " => wand
-@[inherit_doc postWand] infixr:25 " -∗+ " => postWand
+infixr:25 " -∗ " => wand
+infixr:25 " -∗+ " => postWand
 macro_rules
   | `(iprop($P -∗ $Q)) => `(iprop($P) -∗ iprop($Q))
   | `(iprop(∀ $x:ident, $H)) => `(iforall fun $x => iprop($H))
@@ -565,8 +477,6 @@ theorem forall_specialize {ι : Sort _} {J : ι → IProp} (x : ι) :
     iforall J ⊢ J x :=
   fun _ hJ => hJ x
 
-/-- The wand is the right adjoint of the separating conjunction. Every other
-property of the wand follows from it. -/
 theorem wand_equiv (H₀ H₁ H₂ : IProp) :
     (H₀ ⊢ H₁ -∗ H₂) ↔ (H₁ ∗ H₀ ⊢ H₂) := by
   constructor
@@ -581,11 +491,9 @@ theorem wand_equiv (H₀ H₁ H₂ : IProp) :
       ⟨h₁, h₀, PartialCommMonoid.compatible_comm hDisjoint,
         PartialCommMonoid.union_comm_of_compatible hDisjoint, hH₁, hH₀⟩
 
-/-- Introduction rule for the wand. -/
 theorem wand_intro {H₀ H₁ H₂ : IProp} (h : H₁ ∗ H₀ ⊢ H₂) : H₀ ⊢ H₁ -∗ H₂ :=
   (wand_equiv H₀ H₁ H₂).mpr h
 
-/-- Elimination rule for the wand. -/
 theorem wand_cancel (H₁ H₂ : IProp) : H₁ ∗ (H₁ -∗ H₂) ⊢ H₂ :=
   (wand_equiv (H₁ -∗ H₂) H₁ H₂).mp (entails_refl _)
 
@@ -594,7 +502,6 @@ theorem wand_mono {H₁ H₁' H₂ H₂' : IProp} (h₁ : H₁' ⊢ H₁) (h₂ 
   wand_intro (entails_trans (sep_mono h₁ (entails_refl _))
     (entails_trans (wand_cancel H₁ H₂) h₂))
 
-/-- The postcondition wand is right adjoint to postcondition separation. -/
 theorem postWand_equiv {α : Type u} (H : IProp) (Q₁ Q₂ : IPost α) :
     (H ⊢ Q₁ -∗+ Q₂) ↔ (Q₁ ∗+ H ⊢+ Q₂) := by
   constructor
@@ -606,27 +513,20 @@ theorem postWand_equiv {α : Type u} (H : IProp) (Q₁ Q₂ : IPost α) :
     exact forall_intro fun value =>
       wand_intro (h value)
 
-/-- Introduction rule for a postcondition wand. -/
 theorem postWand_intro {α : Type u} {H : IProp} {Q₁ Q₂ : IPost α}
     (h : Q₁ ∗+ H ⊢+ Q₂) : H ⊢ Q₁ -∗+ Q₂ :=
   (postWand_equiv H Q₁ Q₂).mpr h
 
-/-- Elimination rule for a postcondition wand. -/
 theorem postWand_cancel {α : Type u} (Q₁ Q₂ : IPost α) :
     Q₁ ∗+ (Q₁ -∗+ Q₂) ⊢+ Q₂ :=
   (postWand_equiv (Q₁ -∗+ Q₂) Q₁ Q₂).mp (entails_refl _)
 
-/-- A postcondition weakening owns nothing, so it is always available as a
-ramified wand.  This is what lets a ramified frame rule subsume the rule of
-consequence: weakening `P` to `P'` and `Q'` to `Q` ramifies as
-`hP.trans (entails_sep_postWand _ hQ)`. -/
 theorem entails_sep_postWand {α : Type u} (H : IProp) {Q₁ Q₂ : IPost α}
     (hQ : Q₁ ⊢+ Q₂) : H ⊢ H ∗ (Q₁ -∗+ Q₂) :=
   entails_trans (sep_emp_r H).mpr
     (sep_mono (entails_refl H)
       (postWand_intro fun value => entails_trans (sep_emp_r (Q₁ value)).mp (hQ value)))
 
-/-- A postcondition wand yields a heap wand at every value. -/
 theorem postWand_specialize {α : Type u} {Q₁ Q₂ : IPost α} (value : α) :
     (Q₁ -∗+ Q₂) ⊢ (Q₁ value -∗ Q₂ value) :=
   forall_specialize value
@@ -640,8 +540,6 @@ theorem entails_postWand_pure_eq {α : Type u} (H : IProp) (value : α) (Q : IPo
   · intro h _
     exact entails_pure_l fun hEq => hEq ▸ h
 
-/-- A postcondition wand between pure postconditions, owned from `emp`, is
-pointwise implication between the underlying propositions. -/
 theorem entails_emp_postWand_ipure_iff {α : Type u} (P Q : α → Prop) :
     (emp ⊢ (fun value => ⌜P value⌝) -∗+ fun value => ⌜Q value⌝) ↔
       ∀ value, P value → Q value := by

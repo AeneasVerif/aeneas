@@ -372,10 +372,6 @@ meta def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) :=
       trace[Step] "Could not decompose application"
       pure mvar
 
-/-- Infer separation-logic ghost arguments from the resources being consumed,
-before pure preconditions can select an earlier view. Use the same frame
-inference as a bind, including the caller's pointer equalities. Failure leaves
-all metavariables untouched; the usual precondition solver is still available. -/
 private meta def inferSpatialGhosts (info : SpecInfo) (goalTy thTy : Expr) : TacticM Unit := do
   unless info.spec_name == ``Std.WP.ispec || info.spec_name == ``Std.WP.dispec do
     return
@@ -2135,12 +2131,6 @@ end Test
 end Step
 
 end Aeneas
-
-/-! ## Separation-logic registrations
-
-`Aeneas.Std.WP` proves these but cannot register them: `@[step]` and
-`@[step_simps]` are declared in `Aeneas.Tactic.Step.Init`, which imports
-`Aeneas.Std.WP`.  This file is the first point where both are in scope. -/
 
 attribute [step_simps] Aeneas.SepLogic.sep_ipure_true_r_eq
 attribute [step_simps] Aeneas.SepLogic.entails_emp_ipure_iff

@@ -130,8 +130,6 @@ def core.array.TryFromSliceError := Unit
 theorem Array.val_to_slice {α} {n} (a : Array α n) : a.to_slice.val = a.val := by
   simp only [Array.to_slice, Slice.from_val]
 
-/-- Materialize an array as fresh memory and return a const pointer to its
-first slot. -/
 def Array.as_ptr {T : Type} {N : Usize} (a : Array T N) :
     Result (ConstRawPtr T) :=
   a.to_slice.as_ptr
@@ -142,8 +140,6 @@ theorem Array.as_ptr.spec {T : Type} {N : Usize} (a : Array T N) :
   simpa only [Array.as_ptr, Array.val_to_slice] using
     Slice.as_ptr.spec a.to_slice
 
-/-- Materialize an array as fresh memory and return a mutable pointer to its
-first slot. -/
 def Array.as_mut_ptr {T : Type} {N : Usize} (a : Array T N) :
     Result (MutRawPtr T) :=
   a.to_slice.as_mut_ptr

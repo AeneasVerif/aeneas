@@ -3,14 +3,6 @@ import Aeneas.Std.Array.ArraySlice
 import Aeneas.SepLogic.Tactic
 import Aeneas.Tactic.Step.StepStar
 
-/-!
-# Buffer operations and functional/memory interoperability
-
-These tests use the standard-library buffer directly. The fixed-length mutable
-array prototype lives on `cezar/fosl-examples`; interpreter checks live on
-`cezar/sm-semantics`.
--/
-
 open Aeneas Aeneas.SepLogic Aeneas.Std.WP
 open Aeneas.Std (Buffer Heap RawPtr Result)
 
@@ -21,8 +13,6 @@ attribute [local step] Buffer.read.spec_buffer Buffer.write.spec_buffer Buffer.s
 private theorem buffer_length {T : Type} (b : Buffer T) (values : List T) :
     b ↦ values ⊢ ⌜b.length = values.length⌝ ∗ b ↦ values :=
   fun heap h => (sep_pure_l _ _ heap).mpr ⟨(Buffer.length_of_pointsTo h).symm, h⟩
-
-/-! ## Allocation, indexed access and release -/
 
 def bufferRoundTrip : Result Nat := do
   let b ← Buffer.alloc 3 (0 : Nat)
@@ -38,8 +28,6 @@ theorem bufferRoundTrip.spec :
   unfold bufferRoundTrip
   step*
   simp [*]
-
-/-! ## `ofList`, `swap` and `fill` -/
 
 def bufferSwap : Result (Nat × Nat) := do
   let b ← Buffer.ofList [7, 8]
@@ -69,8 +57,6 @@ theorem bufferFill.spec : ⦃ emp ⦄ bufferFill ⦃⇓ result => ⌜result = 5�
   step*
   simp [*]
 
-/-! ## `copy` and `compare` on separate allocations -/
-
 def bufferCopyCompare : Result Bool := do
   let src ← Buffer.ofList [1, 2, 3]
   let dst ← Buffer.alloc 3 (0 : Nat)
@@ -89,8 +75,6 @@ theorem bufferCopyCompare.spec :
   irewrite (buffer_length dst _)
   iintro
   step*
-
-/-! ## Buffer ownership and its underlying range -/
 
 example (b : Buffer Nat) (values : List Nat) :
     (b ↦ values) = iprop(⌜values.length = b.length⌝ ∗ b.ptr ↦* values) :=
@@ -111,8 +95,6 @@ example (b : Buffer Nat) (values : List Nat) (hLength : values.length = b.length
 example (b : Buffer Nat) (xs ys : List Nat) :
     b.ptr ↦* (xs ++ ys) ⊣⊢ b.ptr ↦* xs ∗ (b.ptr.add xs.length) ↦* ys :=
   RawPtr.pointsToRange_append b.ptr xs ys
-
-/-! ## Functional/memory interoperability -/
 
 private def functionalArray :
     Aeneas.Std.Array Nat (Aeneas.Std.Usize.ofNat 3) :=

@@ -83,11 +83,6 @@ instance : MonadLift Result ITreeC where
   | .ok a => .ret a
   | _ => .div -- TODO
 
-/- The `spec → coinSpec` lifting is gone: `spec` no longer rules out every event
--- one that only extends the heap satisfies it -- while the coercion above sends
-every `vis` to `.div`, which `coinSpec` rejects.  Reinstating it needs `coinSpec`
-to model the effects, which is beside the point of this demo. -/
-
 @[simp]
 theorem qimp_coinSpec_unit {α} (P : Unit → Prop) (k : Unit → ITreeC α) (Q : α → Prop) :
   qimp_coinSpec P k Q ↔ (P () → coinSpec Q (k ())) := by
