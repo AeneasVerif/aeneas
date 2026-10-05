@@ -6,6 +6,7 @@ public section
 
 namespace Aeneas
 
+/-- A partial commutative monoid: a total `∪`, meaningful on `Compatible` inputs. -/
 class PartialCommMonoid (α : Type u) [EmptyCollection α] [Union α] where
   Compatible : α → α → Prop
   compatible_comm {a b : α} : Compatible a b → Compatible b a
@@ -211,6 +212,7 @@ theorem mem_singleton {α : Type} {r : Ref α} {value : α} {address : Loc} :
   show address ∈ (Finmap.singleton r.addr (⟨α, value⟩ : HeapCell) : HeapImpl) ↔ _
   exact Finmap.mem_singleton _ _ _
 
+/-- The definedness guard of operations on `r`: `h` holds a value of type `α` at `r`. -/
 def contains {α : Type} (h : Heap) (r : Ref α) : Prop :=
   match h.lookup r.addr with
   | none => False
@@ -287,6 +289,7 @@ theorem compatible_rangeHeap_append {α : Type} (r : Ref α) (xs ys : List α) :
     (congrArg Prod.snd hL).symm.trans (congrArg Prod.snd hR)
   omega
 
+/-- The next allocation identifier, past every one in use: allocation is deterministic. -/
 def freshBase (h : Heap) : AllocId :=
   (h.keys.image Prod.fst).sup id + 1
 
@@ -313,6 +316,7 @@ theorem compatible_freshRef {α : Type} (h : Heap) (values : List α) :
 @[expose] def freshHeap {α : Type} (h : Heap) (values : List α) : Heap :=
   rangeHeap (freshRef α h) values ∪ h
 
+/-- `h'` is `h` extended with cells that `h` does not own. -/
 @[expose] def Sub (h h' : Heap) : Prop :=
   ∃ rest, PartialCommMonoid.Compatible h rest ∧ h' = h ∪ rest
 

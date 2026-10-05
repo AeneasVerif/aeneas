@@ -73,15 +73,19 @@ def iwp (total:Bool) (m : Result α) (Q : IPost α) : IProp where
       (fun _ hOwns => hSub.trans hOwns)
       (entails_refl F) h hPre)
 
+/-- Total-correctness separation-logic specification -/
 def ispec (P : IPre) (m : Result α) (Q : IPost α) : Prop :=
   P ⊢ iwp true m Q
 
+/-- Partial-correctness separation-logic specification -/
 def dispec (P : IPre) (m : Result α) (Q : IPost α) : Prop :=
   P ⊢ iwp false m Q
 
+/-- Total-correctness pure specification -/
 def spec (m : Result α) (p : Post α) : Prop :=
   ispec emp m (fun value => ⌜p value⌝)
 
+/-- Partial-correctness pure specification -/
 def dspec (m : Result α) (p : Post α) : Prop :=
   dispec emp m (fun value => ⌜p value⌝)
 
@@ -188,6 +192,7 @@ theorem ispec_ok (x : α) : ispec P (ok x) Q ↔ P ⊢ Q x := by
     intro F h hPre
     exact DWP.ret_iff.mpr (sep_mono hPost (entails_refl F) h hPre)
 
+/-- A guarded modification is correct iff it is local: the guard holds and every frame is kept. -/
 theorem ispec_guardedModify {α : Type} {pre : Heap → Prop}
     {modify : (h : Heap) → pre h → α × Heap} {P : IPre} {Q : IPost α}
     (hLocal : ∀ h, P h → ∀ frame, PartialCommMonoid.Compatible h frame →
@@ -243,6 +248,7 @@ theorem ispec_frame_left {P : IPre} {m : Result α} {Q : IPost α}
   exact (sep_mono (sep_comm (Q value) H).mp (entails_refl F)) heap
     ((sep_assoc (Q value) H F).mpr heap hPost)
 
+/-- Mono rule used by `step`. -/
 theorem ispec_mono {α : Type u} {P Pm : IPre} {Q : IPost α} {m : Result α} {Qm : IPost α}
     (hStep : ispec Pm m Qm)
     (hRamified : P ⊢ Pm ∗ (Qm -∗+ Q)) :
@@ -266,6 +272,7 @@ theorem ispec_and {α : Type u} {P : IPre} {m : Result α} {Q₁ Q₂ : IPost α
   exact (sep_mono (entails_refl _) (fun _ hSub => F.up_closed hF hSub)) heap
     ((sep_iand_owns (Q₁ value) (Q₂ value) framed).mpr heap hPost)
 
+/-- Bind rule used by `step`. -/
 theorem ispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
     {next : α → Result β} {Q : IPost β} {m : Result α} {Qm : IPost α}
     (hStep : ispec Pm m Qm)
@@ -299,6 +306,7 @@ theorem ispec_ipure_iff {P : Prop} {m : Result α} {Q : IPost α} :
   rw [← sep_emp_r_eq ⌜P⌝]
   exact ispec_ipure
 
+/-- Copy a pure fact of the precondition into the context without consuming it. -/
 theorem ispec_ipure_keep {P : Prop} {H : IPre} {m : Result α} {Q : IPost α} :
     ispec (⌜P⌝ ∗ H) m Q ↔ (P → ispec (⌜P⌝ ∗ H) m Q) :=
   ⟨fun hTriple _ => hTriple,
@@ -1152,6 +1160,7 @@ private meta def simplifySpatialGoal : TacticM Unit := do
 
 end Intro
 
+/-- The tactic `step` runs on the goals it prepares for `ispec` and `dispec`. -/
 meta def introIspec : TacticM Unit := do
   withMainContext do
     replaceMainGoal [(← (← getMainGoal).intros).2]
@@ -1173,8 +1182,10 @@ meta def introIspec : TacticM Unit := do
 
 elab (name := intro_ispec) "intro_ispec" : tactic => introIspec
 
+/-- Reduce an `ispec` about `pure v` to the entailment `P ⊢ Q v`. -/
 macro "wp_pures" : tactic => `(tactic| apply (ispec_ok _).mpr)
 
+/-- Apply a specification, frame unused resources, and discharge the entailment with `isimpl`. -/
 syntax "wp_apply" (ppSpace colGt term)? (" by " tacticSeq)? : tactic
 
 macro_rules
@@ -1187,11 +1198,14 @@ macro_rules
     | none => `(tactic| ($apply; isimpl))
     | some tac => `(tactic| ($apply; isimpl by $tac))
 
+/-- Re-state a proved `ispec` under a weaker postcondition. -/
 macro "wp_mono " thm:term : tactic =>
   `(tactic| (refine ispec_mono $thm ?_ <;> iframe))
 
+/-- `wp_pures` for `dispec`. -/
 macro "dwp_pures" : tactic => `(tactic| apply (dispec_ok _).mpr)
 
+/-- `wp_apply` for `dispec`. -/
 syntax "dwp_apply" (ppSpace colGt term)? (" by " tacticSeq)? : tactic
 
 macro_rules
@@ -1204,6 +1218,7 @@ macro_rules
     | none => `(tactic| ($apply; isimpl))
     | some tac => `(tactic| ($apply; isimpl by $tac))
 
+/-- `wp_mono` for `dispec`. -/
 macro "dwp_mono " thm:term : tactic =>
   `(tactic| (refine dispec_mono $thm ?_ <;> iframe))
 
@@ -1215,6 +1230,7 @@ theorem pure.spec (value : α) :
     ⦃ emp ⦄ (Pure.pure value : Result α) ⦃⇓ result => ⌜result = value⌝⦄ :=
   ret.spec value
 
+/-- Keeps pure returns in the pure judgment, so `step` introduces no spatial entailment for them. -/
 theorem ok_spec (value : α) :
     spec (Result.ok value) (fun result => result = value) :=
   ret.spec value

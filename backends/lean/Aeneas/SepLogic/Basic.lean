@@ -10,6 +10,7 @@ open Aeneas.Std (Heap Ref)
 
 open Aeneas.Std (Heap Ref)
 
+/-- Heap predicates, closed under heap extension (affine), like Iris's `uPred`. -/
 structure IProp where
   holds : Heap → Prop
   up_closed : ∀ {h h' : Heap}, holds h → Heap.Sub h h' → holds h'
@@ -36,6 +37,7 @@ structure BiEntails (H₁ H₂ : IProp) : Prop where
   mp : Entails H₁ H₂
   mpr : Entails H₂ H₁
 
+/-- Owns nothing; being affine, it holds of every heap. -/
 def emp : IProp where
   holds _ := True
   up_closed := fun _ _ => trivial
@@ -44,6 +46,7 @@ def ipure (P : Prop) : IProp where
   holds _ := P
   up_closed := fun hP _ => hP
 
+/-- Owns the heap fragment `A`, and says nothing about the other slots. -/
 def owns (A : Heap) : IProp where
   holds h := Heap.Sub A h
   up_closed := fun hSub hExtend => hSub.trans hExtend
@@ -51,12 +54,14 @@ def owns (A : Heap) : IProp where
 def Ref.pointsTo {α : Type} (r : Ref α) (value : α) : IProp :=
   owns (Heap.singleton r value)
 
+/-- The overloaded `↦` of references, pointers and buffers. -/
 class PointsTo (ρ : Type u) (β : outParam (Type v)) where
   pointsTo : ρ → β → IProp
 
 instance instPointsToRef {α : Type} : PointsTo (Ref α) α :=
   ⟨Ref.pointsTo⟩
 
+/-- Additive conjunction: both assertions hold of the same heap fragment. -/
 def iand (P Q : IProp) : IProp where
   holds h := P h ∧ Q h
   up_closed := fun hPQ hSub =>
@@ -278,6 +283,7 @@ instance : Std.LawfulIdentity sep emp where
   left_id := sep_emp_l_eq
   right_id := sep_emp_r_eq
 
+/-- Affinity: every assertion may be discarded. -/
 theorem entails_emp_r (H : IProp) : H ⊢ emp :=
   fun _ _ => trivial
 
@@ -414,6 +420,7 @@ theorem entails_exists_l {ι : Sort _} {H : IProp} {J : ι → IProp}
     (h : ∀ x, J x ⊢ H) : iexists J ⊢ H :=
   fun heap hJ => h hJ.choose heap hJ.choose_spec
 
+/-- `isimpl` uses this with a metavariable witness, instantiated by cancellation. -/
 theorem entails_exists_r {ι : Sort _} {H : IProp} {J : ι → IProp} (x : ι)
     (h : H ⊢ J x) : H ⊢ iexists J :=
   fun heap hH => ⟨x, h heap hH⟩
@@ -446,6 +453,7 @@ def iforall {ι : Sort _} (J : ι → IProp) : IProp where
   holds h := ∀ x, J x h
   up_closed := fun hJ hExtend x => (J x).up_closed (hJ x) hExtend
 
+/-- Separating implication (magic wand). -/
 def wand (H₁ H₂ : IProp) : IProp where
   holds h :=
     ∀ h', PartialCommMonoid.Compatible h h' → H₁ h' → H₂ (h ∪ h')
@@ -456,6 +464,7 @@ def wand (H₁ H₂ : IProp) : IProp where
     exact H₂.up_closed (hWand h' hDisjoint' hH₁)
       (Heap.Sub.union_mono_left hExtend hDisjoint)
 
+/-- The magic wand between postconditions; a heap predicate, not a postcondition. -/
 def postWand {α : Type u} (Q₁ Q₂ : IPost α) : IProp :=
   iforall fun value => wand (Q₁ value) (Q₂ value)
 
@@ -477,6 +486,7 @@ theorem forall_specialize {ι : Sort _} {J : ι → IProp} (x : ι) :
     iforall J ⊢ J x :=
   fun _ hJ => hJ x
 
+/-- The wand is right adjoint to `∗`. -/
 theorem wand_equiv (H₀ H₁ H₂ : IProp) :
     (H₀ ⊢ H₁ -∗ H₂) ↔ (H₁ ∗ H₀ ⊢ H₂) := by
   constructor
@@ -521,6 +531,7 @@ theorem postWand_cancel {α : Type u} (Q₁ Q₂ : IPost α) :
     Q₁ ∗+ (Q₁ -∗+ Q₂) ⊢+ Q₂ :=
   (postWand_equiv (Q₁ -∗+ Q₂) Q₁ Q₂).mp (entails_refl _)
 
+/-- Postcondition weakening as a ramified wand, so the ramified frame rule subsumes consequence. -/
 theorem entails_sep_postWand {α : Type u} (H : IProp) {Q₁ Q₂ : IPost α}
     (hQ : Q₁ ⊢+ Q₂) : H ⊢ H ∗ (Q₁ -∗+ Q₂) :=
   entails_trans (sep_emp_r H).mpr

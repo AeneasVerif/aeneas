@@ -372,6 +372,7 @@ meta def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) :=
       trace[Step] "Could not decompose application"
       pure mvar
 
+/-- Infer separation-logic ghost arguments by frame inference, before solving pure preconditions. -/
 private meta def inferSpatialGhosts (info : SpecInfo) (goalTy thTy : Expr) : TacticM Unit := do
   unless info.spec_name == ``Std.WP.ispec || info.spec_name == ``Std.WP.dispec do
     return
@@ -2131,6 +2132,8 @@ end Test
 end Step
 
 end Aeneas
+
+/-! Registered here since `@[step]` and `@[step_simps]` are declared in a module importing `WP`. -/
 
 attribute [step_simps] Aeneas.SepLogic.sep_ipure_true_r_eq
 attribute [step_simps] Aeneas.SepLogic.entails_emp_ipure_iff

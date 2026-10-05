@@ -6,6 +6,7 @@ public section
 
 namespace Aeneas.SepLogic
 
+/-- Marks the frame inferred by `step`, so that `iintro_shallow` does not traverse it. -/
 @[expose] def introFrame (F : IProp) : IProp := F
 
 theorem introFrame_eq (F : IProp) : introFrame F = F := by
@@ -136,6 +137,7 @@ macro_rules
       let steps ← ps.mapM fun p => `(tactic| (iintro_step; rintro $p:rintroPat))
       `(tactic| ($[$steps]*))
 
+/-- Whether `pre` exposes a fact without opening a predicate a later `step` must match. -/
 private partial def isPullable (pre : Expr) : Bool :=
   let pre := pre.consumeMData
   if pre.isAppOfArity ``iexists 2 || pre.isAppOfArity ``ipure 1 then true
@@ -210,8 +212,10 @@ elab "iintro_keep_step" : tactic => withMainContext do
   let (_, next) ← next.mvarId!.intro1P
   replaceMainGoal [next]
 
+/-- Copy the pure facts of the precondition into the context without consuming them. -/
 macro "iintro_keep" : tactic => `(tactic| repeat (iintro_keep_step; rename_i _))
 
+/-- Alias of `iframe`. -/
 syntax "isimpl" (" by " tacticSeq)? : tactic
 
 macro_rules

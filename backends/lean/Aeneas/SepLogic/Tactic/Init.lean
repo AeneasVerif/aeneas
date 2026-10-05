@@ -7,6 +7,7 @@ namespace Aeneas.SepLogic
 
 open Lean Lean.Meta
 
+/-- Lemmas (un)folding representation predicates, used by `iframe` and `iintro`. -/
 initialize irisSimpExt : SimpExtension ←
   registerSimpAttr `iris_simps "\
     The `iris_simps` attribute registers simp lemmas used by `iframe` and \

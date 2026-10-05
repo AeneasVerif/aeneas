@@ -19,6 +19,7 @@ open WP
 inductive Mutability where
 | Mut | Const
 
+/-- A Rust raw pointer: an allocation identifier and an offset into it. -/
 structure RawPtr (T : Type) (M : Mutability) where
   base : AllocId
   offset : Nat
@@ -64,6 +65,7 @@ theorem add_add (q : RawPtr T M) (i j : Nat) :
     (q.add i).add j = q.add (i + j) := by
   simp [add, Nat.add_assoc]
 
+/-- `q` owns the `values.length` slots from `q` on. -/
 def pointsToRange (q : RawPtr T M) (values : List T) : IProp :=
   owns (Heap.rangeHeap q.ref values)
 
@@ -660,6 +662,7 @@ theorem fromBytes_u8 (s : Slice U8) : fromBytes (T := U8) s = .ok s := rfl
 
 end IsScalar
 
+/-- Unsupported: changing the element type requires reinterpreting the typed heap. -/
 def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability)
     [IsScalar T] [IsScalar T'] (_ : RawPtr T M) :
     Result (RawPtr T' M') :=

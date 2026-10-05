@@ -139,6 +139,7 @@ private def provePure (discharger : Option Syntax.Tactic) (proposition : Expr) :
     throwError "could not prove pure assertion {proposition}"
   return proof
 
+/-- Is `destination` a frame-inference shape `Hcallee ∗ ?F`? Then no side may be reorganized. -/
 private def frameMVar? (destination : Expr) : MetaM (Option MVarId) := do
   let (destFn, destArgs) :=
     destination.consumeMData.withApp fun fn args => (fn, args)

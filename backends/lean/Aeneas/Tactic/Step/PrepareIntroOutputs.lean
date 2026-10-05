@@ -259,6 +259,7 @@ meta def prepareIntroOutputsWith (type : Expr) (tree : NameTree) (prove : Tactic
   setGoals [next.mvarId!]
   return prefixLength
 
+/-- Read the pattern destructuring the output from the goal left by the mono or bind rule. -/
 meta def getOutputTree (goalTy : Expr) : MetaM NameTree := do
   let goalTy := (← instantiateMVars goalTy).consumeMData
   unless goalTy.isForall do

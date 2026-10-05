@@ -13,6 +13,7 @@ open WP
 
 variable {T : Type}
 
+/-- A bounded mutable view into a heap allocation, modelling `&mut [T]`. -/
 structure Buffer (T : Type) where
   base : AllocId
   offset : Nat
