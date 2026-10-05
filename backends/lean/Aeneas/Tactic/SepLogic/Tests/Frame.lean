@@ -1,4 +1,6 @@
-import Aeneas.Tactic.SepLogic.Frame
+module
+public import Aeneas.Tactic.SepLogic.Frame
+public section
 
 /-!
 # Regression tests for `iframe` and `isimp`
