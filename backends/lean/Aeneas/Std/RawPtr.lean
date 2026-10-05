@@ -7,7 +7,12 @@ public import Aeneas.Std.SliceDef
 public import Aeneas.Data.BitVec
 public import Aeneas.Std.WP
 public import Aeneas.Std.Primitives
-public import Aeneas.SepLogic
+public import Aeneas.SepLogic.Lemmas
+public import Aeneas.SepLogic.Delab
+public import Aeneas.SepLogic.Tactic.IFrame
+public import Aeneas.SepLogic.Tactic.IIntro
+public import Aeneas.SepLogic.Tactic.IRewrite
+public import Aeneas.SepLogic.Tactic.ISimp
 public import Aeneas.Tactic.Step.Init
 @[expose] public section
 

@@ -1,6 +1,7 @@
 module
 public import Aeneas.SepLogic.Lemmas
 public import Aeneas.SepLogic.Delab
+public import Aeneas.Std.RawPtrDef
 public section
 
 namespace Aeneas.SepLogic.Tests
@@ -49,9 +50,8 @@ example (P Q R : IProp) : iprop((P ∧ Q) ∧ R) ⊣⊢ iprop(P ∧ (Q ∧ R)) :
 example (P Q : Prop) : iprop(⌜P⌝ ∧ ⌜Q⌝) = ⌜P ∧ Q⌝ := by
   simp
 
-example {α : Type} (r : Aeneas.Std.Loc) (value : α) :
-    iprop(owns (Aeneas.Std.Heap.singleton r value) ∧ owns (Aeneas.Std.Heap.singleton r value))
-      = owns (Aeneas.Std.Heap.singleton r value) := by
+example {α : Type} (r : Aeneas.Std.MutRawPtr α) (value : α) :
+    iprop((r ↦ value) ∧ (r ↦ value)) = (r ↦ value) := by
   simp
 
 example (P Q : IProp) (frame : Aeneas.Std.Heap) :
