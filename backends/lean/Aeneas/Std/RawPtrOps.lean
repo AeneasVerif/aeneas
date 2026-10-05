@@ -119,6 +119,27 @@ theorem core.ptr.copy_nonoverlapping.spec [ByteRepr T] (src : ConstRawPtr T) (ds
   rw [hSrc] at this
   exact this
 
+/-! ## Pointer casts -/
+
+@[rust_fun "core::ptr::mut_ptr::{*mut @T}::cast"]
+def core.ptr.mut_ptr.RawPtrMutT.cast (U : Type) (p : MutRawPtr T) : Result (MutRawPtr U) :=
+  RawPtr.cast_scalar U .Mut p
+
+@[rust_fun "core::ptr::const_ptr::{*const @T}::cast"]
+def core.ptr.const_ptr.RawPtrConstT.cast (U : Type) (p : ConstRawPtr T) :
+    Result (ConstRawPtr U) :=
+  RawPtr.cast_scalar U .Const p
+
+@[step]
+theorem core.ptr.mut_ptr.RawPtrMutT.cast.spec (U : Type) (p : MutRawPtr T) :
+    ⦃ emp ⦄ core.ptr.mut_ptr.RawPtrMutT.cast U p ⦃⇓ q => ⌜q = p.retype⌝⦄ :=
+  RawPtr.cast_scalar.spec p
+
+@[step]
+theorem core.ptr.const_ptr.RawPtrConstT.cast.spec (U : Type) (p : ConstRawPtr T) :
+    ⦃ emp ⦄ core.ptr.const_ptr.RawPtrConstT.cast U p ⦃⇓ q => ⌜q = p.retype⌝⦄ :=
+  RawPtr.cast_scalar.spec p
+
 /-! ## Unaligned accesses
 
 They read and write the bytes of the address through a `u8` view, so they do

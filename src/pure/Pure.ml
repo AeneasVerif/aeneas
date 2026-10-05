@@ -1219,9 +1219,10 @@ type unop =
 
 and cast_kind =
   | CastLit of literal_type * literal_type
-  | CastRawPtr of (literal_type * mutability) * (literal_type * mutability)
-      (** When casting between raw pointers, we only support a subset of casts
-      *)
+  | CastRawPtr of (ty * mutability) * (ty * mutability)
+      (** A cast between raw pointers whose pointee types differ: the pairs are
+          the pointee types and the mutabilities of the source and target
+          pointers *)
   | CastRawPtrMut of mutability * mutability
 
 and fn_ptr_kind =

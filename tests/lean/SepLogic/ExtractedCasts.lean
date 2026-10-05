@@ -36,4 +36,29 @@ theorem words_of_bytes.spec (data : Slice U8) :
   unfold words_of_bytes
   step*
 
+theorem write_read_unaligned.spec (buf : Array U8 3#usize) (v : U16) :
+    ⦃ emp ⦄ write_read_unaligned buf v
+      ⦃⇓ r => ⌜r.1 = v ∧
+        r.2.val = buf.val[0]! :: (ByteRepr.encode v).map (UScalar.mk (ty := .U8))⌝⦄ := by
+  obtain ⟨b0, b1, b2, hBuf⟩ : ∃ b0 b1 b2, buf.val = [b0, b1, b2] := by
+    have h := buf.property
+    match hv : buf.val, h with
+    | [b0, b1, b2], _ => exact ⟨b0, b1, b2, rfl⟩
+  unfold write_read_unaligned
+  step as ⟨s, back, hs, hBack⟩
+  step as ⟨p⟩
+  step as ⟨p1, hp1⟩
+  step as ⟨q, hq⟩
+  subst hp1 hq
+  step with MutRawPtr.writeUnaligned.spec ((p.add 1).retype : MutRawPtr U16) [b1, b2] v (by simp)
+  simp only [RawPtr.bytesPtr_retype, RawPtr.pointsToRange_retype_eq]
+  step with RawPtr.readUnaligned.spec ((p.add 1).retype : MutRawPtr U16) v
+  simp only [RawPtr.bytesPtr_retype, RawPtr.pointsToRange_retype_eq]
+  step with Slice.end_as_mut_ptr.spec s p (b0 :: (ByteRepr.encode v).map (UScalar.mk (ty := .U8)))
+    (by simp [hs, hBuf])
+  apply (ispec_ok _).2
+  iintro
+  subst hBack
+  simp [i_post, s1_post, hBuf, Array.from_slice]
+
 end SepLogic.ExtractedCasts

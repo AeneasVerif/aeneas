@@ -62,4 +62,33 @@ def words_of_bytes (data : Slice Std.U8) : Result (ConstRawPtr Std.U32) := do
   let p ← Slice.as_ptr data
   RawPtr.cast_scalar Std.U32 .Const p
 
+/-- [raw_pointer_casts::write_read_unaligned]:
+    Source: 'tests/src/raw_pointer_casts.rs', lines 23:0-30:1 -/
+def write_read_unaligned
+  (buf : Array Std.U8 3#usize) (v : Std.U16) :
+  Result (Std.U16 × (Array Std.U8 3#usize))
+  := do
+  let (s, to_slice_mut_back) ← lift (Array.to_slice_mut buf)
+  let p ← Slice.as_mut_ptr s
+  let p1 ← core.ptr.mut_ptr.RawPtrMutT.add p 1#usize
+  let q ← core.ptr.mut_ptr.RawPtrMutT.cast Std.U16 p1
+  core.ptr.mut_ptr.RawPtrMutT.write_unaligned q v
+  let i ← core.ptr.mut_ptr.RawPtrMutT.read_unaligned q
+  let s1 ← Slice.end_as_mut_ptr s p
+  let buf1 := to_slice_mut_back s1
+  ok (i, buf1)
+
+/-- [raw_pointer_casts::words_of_bytes_method]:
+    Source: 'tests/src/raw_pointer_casts.rs', lines 32:0-34:1 -/
+def words_of_bytes_method
+  (data : Slice Std.U8) : Result (ConstRawPtr Std.U32) := do
+  let p ← Slice.as_ptr data
+  core.ptr.const_ptr.RawPtrConstT.cast Std.U32 p
+
+/-- [raw_pointer_casts::word_of_array]:
+    Source: 'tests/src/raw_pointer_casts.rs', lines 36:0-38:1 -/
+def word_of_array
+  (p : ConstRawPtr (Array Std.U8 4#usize)) : Result (ConstRawPtr Std.U32) := do
+  RawPtr.cast_scalar Std.U32 .Const p
+
 end raw_pointer_casts

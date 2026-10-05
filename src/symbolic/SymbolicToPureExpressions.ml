@@ -605,27 +605,23 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               in
               (CastRawPtrMut (mut src_rkind, mut tgt_rkind), false)
           | CastRawPtr (src_ty, tgt_ty) ->
-              (* We only support casts between pointers to literal types for now *)
               let get_ty (ty : T.ty) =
                 match ty with
-                | TRawPtr (TScalar scalar_ty, rkind) ->
+                | TRawPtr (ty, rkind) ->
                     let mut =
                       match rkind with
                       | RMut -> Mut
                       | RShared -> Const
                     in
-                    (scalar_ty, mut)
+                    (ctx_translate_fwd_ty ctx ty, mut)
                 | _ ->
                     let env = bs_ctx_to_fmt_env ctx in
                     [%craise] ctx.span
-                      ("Raw ptr casts are only supported between pointers to \
-                        literal types; found: "
+                      ("Unexpected raw pointer cast: "
                       ^ Charon.Print.cast_kind_to_string env kind)
               in
               let src_ty, src_mut = get_ty src_ty in
               let tgt_ty, tgt_mut = get_ty tgt_ty in
-              let src_ty = translate_literal_type src_ty in
-              let tgt_ty = translate_literal_type tgt_ty in
               (CastRawPtr ((src_ty, src_mut), (tgt_ty, tgt_mut)), true)
           | CastPtrExposeProvenance _ ->
               [%craise] ctx.span "Unsupported: pointer to address casts"

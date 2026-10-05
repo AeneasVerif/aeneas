@@ -899,9 +899,7 @@ let cast_kind_to_string (env : fmt_env) (kind : cast_kind) : string =
     | CastRawPtr ((src, src_mut), (tgt, tgt_mut)) ->
         let mk ty mut =
           ty_to_string env false
-            (TAdt
-               ( TBuiltin (TRawPtr mut),
-                 mk_generic_args_from_types [ TLiteral ty ] ))
+            (TAdt (TBuiltin (TRawPtr mut), mk_generic_args_from_types [ ty ]))
         in
         (mk src src_mut, mk tgt tgt_mut)
     | CastRawPtrMut (src_mut, tgt_mut) ->

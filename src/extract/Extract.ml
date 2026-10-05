@@ -423,7 +423,8 @@ let extract_cast_kind_hol4 (span : Meta.span)
 (** Extract a cast when the backend is not HOL4 (which receives a special
     treatment) *)
 let extract_cast_kind_gen (span : Meta.span)
-    (extract_expr : inside:bool -> texpr -> unit) (fmt : F.formatter)
+    (extract_expr : inside:bool -> texpr -> unit)
+    (extract_ty : inside:bool -> ty -> unit) (fmt : F.formatter)
     ~(inside : bool) (kind : cast_kind) (arg : texpr) : unit =
   match kind with
   | CastLit (src, tgt) ->
@@ -527,25 +528,8 @@ let extract_cast_kind_gen (span : Meta.span)
       (* Print the name of the function *)
       F.pp_print_string fmt "RawPtr.cast_scalar";
       (* Print the target type argument and mutability *)
-      let tgt_ty : integer_type =
-        match tgt_ty with
-        | TInt ty -> Signed ty
-        | TUInt ty -> Unsigned ty
-        | _ ->
-            [%craise] span "Can only generate code for casts between integers"
-      in
-      let integer_type_to_string (ty : integer_type) : string =
-        if backend () = Lean then
-          match ty with
-          | Unsigned _ -> "Std." ^ int_name ty
-          | Signed _ -> "Std." ^ int_name ty
-        else
-          StringUtils.capitalize_first_letter
-            (PrintPure.integer_type_to_string ty)
-      in
-      let tgt = integer_type_to_string tgt_ty in
       F.pp_print_space fmt ();
-      F.pp_print_string fmt tgt;
+      extract_ty ~inside:true tgt_ty;
       let tgt_mut =
         match tgt_mut with
         | Mut -> ".Mut"
@@ -559,13 +543,14 @@ let extract_cast_kind_gen (span : Meta.span)
       if inside then F.pp_print_string fmt ")"
 
 let extract_cast_kind (span : Meta.span)
-    (extract_expr : inside:bool -> texpr -> unit) (fmt : F.formatter)
+    (extract_expr : inside:bool -> texpr -> unit)
+    (extract_ty : inside:bool -> ty -> unit) (fmt : F.formatter)
     ~(inside : bool) (kind : cast_kind) (arg : texpr) : unit =
   (* HOL4 has a special treatment *)
   match backend () with
   | HOL4 -> extract_cast_kind_hol4 span extract_expr fmt ~inside kind arg
   | FStar | Coq | Lean ->
-      extract_cast_kind_gen span extract_expr fmt ~inside kind arg
+      extract_cast_kind_gen span extract_expr extract_ty fmt ~inside kind arg
 
 (** Format a unary operation
 
@@ -578,7 +563,8 @@ let extract_cast_kind (span : Meta.span)
     - unop
     - argument *)
 let extract_unop (span : Meta.span)
-    (extract_expr : inside:bool -> texpr -> unit) (fmt : F.formatter)
+    (extract_expr : inside:bool -> texpr -> unit)
+    (extract_ty : inside:bool -> ty -> unit) (fmt : F.formatter)
     ~(inside : bool) (unop : unop) (arg : texpr) : unit =
   match unop with
   | Not _ | Neg _ | ArrayToSlice ->
@@ -588,7 +574,8 @@ let extract_unop (span : Meta.span)
       F.pp_print_space fmt ();
       extract_expr ~inside:true arg;
       if inside then F.pp_print_string fmt ")"
-  | Cast kind -> extract_cast_kind span extract_expr fmt ~inside kind arg
+  | Cast kind ->
+      extract_cast_kind span extract_expr extract_ty fmt ~inside kind arg
 
 (** Format a binary operation
 
@@ -929,6 +916,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
        * and no AST transformation introduces partial calls). *)
       extract_unop span
         (extract_texpr span ctx fmt ~inside_do)
+        (extract_ty span ctx fmt TypeDeclId.Set.empty)
         fmt ~inside unop arg
   | Binop binop, [ arg0; arg1 ] ->
       (* Number of arguments: similar to unop *)
