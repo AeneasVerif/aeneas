@@ -573,15 +573,6 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
             (.targets #[] true)
   if (← getUnsolvedGoals).isEmpty then trace[Step] "Main goal solved by cleanup simp!"; return none
 
-  /- The `post_intro_tactic` normalizes the goal. -/
-  if let some tac := info.post_intro_tactic then
-    withTraceNode `Step (fun _ => pure m!"post_intro_tactic: {tac}") do
-      evalTactic (mkNode tac #[])
-    if (← getUnsolvedGoals).length > 1 then
-      throwError "`post_intro_tactic` must not create multiple goals"
-    if (← getUnsolvedGoals).isEmpty then trace[Step] "Main goal solved by post-intro tactic!"; return none
-    traceGoalWithNode "goal after the post-intro tactic"
-
   let mkFreshAnon (isProp : Bool) :=
     if isProp then mkFreshAnonPropUserName else mkFreshUserName `x
 

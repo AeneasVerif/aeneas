@@ -92,7 +92,7 @@ example (cell : Nat → IProp) (n : Nat) (P : Nat → Prop) (hP : Unit → P n) 
   guard_target = P n
   exact hP ()
 
-/- Larger returns need the post-introduction framing pass: the initial marker
+/- Larger returns need the cleanup pass of `intro_ispec`: the initial marker
    reduction cannot expose the existential within its fuel budget. -/
 example (cell : Nat → IProp) (n : Nat) (P : Nat → Prop) (hP : Unit → P n) :
     ⦃ cell n ⦄

@@ -1405,27 +1405,13 @@ meta def introIspec : TacticM Unit := do
             #[``sep_emp_l_eq, ``sep_emp_r_eq,
               ``sep_ipure_true_l_eq, ``sep_ipure_true_r_eq,
               ``entails_emp_postWand_ipure_iff, ``entails_emp_ipure_iff, ``entails_refl,
-              ``ispec_ipure_iff, ``dispec_ipure_iff,
+              ``ispec_ipure_iff, ``dispec_ipure_iff, ``uncurry'_pair,
               ``and_imp, ``exists_imp, ``forall_unit, ``true_imp_iff] }
         (.targets #[] true)
     Intro.simplifySpatialGoal
 
 @[inherit_doc introIspec]
 elab (name := intro_ispec) "intro_ispec" : tactic => introIspec
-
-/-- Normalize after output destructuring, then frame spatial goals exposed by
-reducing the remaining postcondition markers. The earlier pass in `intro_ispec`
-is still needed to introduce wand-bound results before they are destructured. -/
-elab (name := intro_step_post) "intro_step_post" : tactic => do
-  let _ ← Aeneas.Simp.simpAt true
-    { maxDischargeDepth := 1, failIfUnchanged := false, iota := false }
-    { addSimpThms :=
-        #[``Aeneas.Std.uncurry_apply_pair,
-          ``Aeneas.Std.uncurry_eq_prop, ``Aeneas.Std.uncurry_eq_prop_arrow,
-          ``Aeneas.Std.WP.uncurry'_pair, ``Aeneas.Std.WP.uncurry'_eq,
-          ``and_imp, ``exists_imp, ``Aeneas.Std.WP.forall_unit, ``true_imp_iff] }
-    (.targets #[] true)
-  Intro.simplifySpatialGoal
 
 /-! ## Weakest-precondition tactics -/
 

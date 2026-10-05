@@ -56,7 +56,6 @@ namespace Aeneas.Std.WP
     mk_spec_bind := ``Std.WP.ispec_bind
     mk_spec_bind_skip_args := 7
     prepare_intro_outputs := ``Aeneas.Step.prepareIntroIspec
-    post_intro_tactic := some ``Std.WP.intro_step_post
     discharge_tactic := some `iframe
     to_mvcgen := none
     liftings := #[
@@ -76,7 +75,6 @@ namespace Aeneas.Std.WP
     mk_spec_bind := ``Std.WP.dispec_bind
     mk_spec_bind_skip_args := 7
     prepare_intro_outputs := ``Aeneas.Step.prepareIntroIspec
-    post_intro_tactic := some ``Std.WP.intro_step_post
     discharge_tactic := some `iframe
     to_mvcgen := none
     liftings := #[
