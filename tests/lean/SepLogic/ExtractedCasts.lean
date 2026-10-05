@@ -50,4 +50,9 @@ theorem signed_of_unsigned.spec (data : Slice U16) :
       exact RawPtr.aligned_retype_of_dvd (Nat.dvd_refl _) this)
   step*
 
+theorem words_of_bytes.spec (data : Slice U8) :
+    ⦃ emp ⦄ words_of_bytes data ⦃⇓ q => (q.retype : ConstRawPtr U8) ↦* data.val⦄ := by
+  unfold words_of_bytes
+  step*
+
 end SepLogic.ExtractedCasts

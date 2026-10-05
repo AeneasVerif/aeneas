@@ -612,16 +612,14 @@ example (p : MutRawPtr U32) (x : U32) :
     simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil]
     exact (UScalar.flatMap_encode_u8 _).symm
   rw [RawPtr.pointsTo_eq_range]
-  refine ispec_bind
-    (RawPtr.cast_scalar.spec_range p [x] _ hBytes fun _ _ => by simp [RawPtr.Aligned])
-    (entails_trans (RawPtr.pointsToRange_aligned p [x]) (sep_comm _ _).1) fun q => ?_
-  refine (ispec_ok _).2 ?_
-  rintro h ⟨h₁, h₂, hDisjoint, rfl, hCast, hAlign⟩
-  obtain ⟨rfl, hBytesOwned⟩ := (sep_pure_l _ _ h₁).mp hCast
-  rw [RawPtr.pointsTo_eq_range]
-  exact IProp.up_closed _ (RawPtr.pointsToRange_retype (p.retype : MutRawPtr U8) _ [x]
-    hBytes.symm (fun _ => hAlign (List.cons_ne_nil _ _)) h₁ hBytesOwned)
-    (Heap.Sub.union_left hDisjoint)
+  irewrite (RawPtr.pointsToRange_aligned p [x])
+  iintro hAligned
+  step with RawPtr.cast_scalar.spec_range p [x] _ hBytes (by intro _ _; simp [RawPtr.Aligned])
+    as ⟨q, hq⟩
+  step with RawPtr.cast_scalar.spec_range q _ [x] hBytes.symm (by
+    intro _ _
+    subst hq
+    simpa using hAligned (by simp))
 
 def patchByte (x y : U32) : Result (U32 × U32) := do
   let p ← RawPtr.materialize (M := .Mut) [x, y]
@@ -707,6 +705,9 @@ end to end. -/
 theorem reinterpret.spec (x : U32) :
     ⦃ emp ⦄ reinterpret x ⦃⇓ y => ⌜y.bv = x.bv⌝⦄ := by
   unfold reinterpret
+  step as ⟨p⟩
+  step with RawPtr.cast_scalar.spec_of_decode (T' := I32) (M' := .Mut) p x _
+    (UScalar.decode_encode_iscalar x rfl) id
   step*
   all_goals simp_all
 

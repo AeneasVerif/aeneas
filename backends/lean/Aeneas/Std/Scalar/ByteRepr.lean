@@ -17,32 +17,6 @@ of integers.
 
 namespace Aeneas.Std
 
-theorem BitVec.toLEBytes_cast {w w' : Nat} (h : w = w') (b : BitVec w) :
-    (b.cast h).toLEBytes = b.toLEBytes := by
-  subst h
-  rfl
-
-/-- Decode exactly `w / 8` little-endian bytes. -/
-def BitVec.decodeLE (w : Nat) (bytes : List Byte) : Option (BitVec w) :=
-  if h : 8 * bytes.length = w then some ((BitVec.fromLEBytes bytes).cast h)
-  else none
-
-theorem BitVec.decodeLE_toLEBytes {w : Nat} (hw : w % 8 = 0) (b : BitVec w) :
-    BitVec.decodeLE w b.toLEBytes = some b := by
-  have hLength : 8 * b.toLEBytes.length = w := by
-    simp only [BitVec.toLEBytes_length]
-    omega
-  simp only [BitVec.decodeLE, hLength, ↓reduceDIte, BitVec.fromLEBytes_toLEBytes hw]
-  rfl
-
-theorem BitVec.toLEBytes_of_decodeLE {w : Nat} {bytes : List Byte} {b : BitVec w}
-    (hDecode : BitVec.decodeLE w bytes = some b) : b.toLEBytes = bytes := by
-  unfold BitVec.decodeLE at hDecode
-  split at hDecode
-  · cases hDecode
-    rw [BitVec.toLEBytes_cast, BitVec.toLEBytes_fromLEBytes]
-  · cases hDecode
-
 theorem UScalarTy.numBits_mod_eight (ty : UScalarTy) : ty.numBits % 8 = 0 := by
   cases ty <;> simp only [UScalarTy.numBits] <;>
     rcases System.Platform.numBits_eq with h | h <;> simp [h]
@@ -109,10 +83,6 @@ theorem IScalar.byteRepr_size_pos (ty : IScalarTy) : 0 < ByteRepr.size (IScalar 
   cases ty <;> simp only [IScalar.byteRepr_size, IScalarTy.numBits] <;>
     rcases System.Platform.numBits_eq with h | h <;> simp [h]
 
-theorem BitVec.toLEBytes_byte (b : Byte) : b.toLEBytes = [b] := by
-  unfold BitVec.toLEBytes
-  simp [BitVec.toLEBytes]
-
 /-- Bytes stored as `u8`s encode to themselves. -/
 @[simp] theorem UScalar.flatMap_encode_u8 (bytes : List Byte) :
     (bytes.map (UScalar.mk (ty := .U8))).flatMap ByteRepr.encode = bytes := by
@@ -121,6 +91,14 @@ theorem BitVec.toLEBytes_byte (b : Byte) : b.toLEBytes = [b] := by
   | cons b rest ih =>
       simp only [List.map_cons, List.flatMap_cons, ih]
       exact congrArg (· ++ rest) (BitVec.toLEBytes_byte b)
+
+theorem UScalar.map_mk_flatMap_encode_u8 (values : List U8) :
+    (values.flatMap ByteRepr.encode).map (UScalar.mk (ty := .U8)) = values := by
+  induction values with
+  | nil => rfl
+  | cons value rest ih =>
+    rw [List.flatMap_cons, UScalar.encode_eq, BitVec.toLEBytes_byte, List.map_append, ih]
+    rfl
 
 /-! ## Reinterpreting a scalar as a scalar of the same size -/
 

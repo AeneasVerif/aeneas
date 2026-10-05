@@ -625,6 +625,36 @@ theorem BitVec.toLEBytes_fromLEBytes (l : List Byte) :
   have h1 : (8 * i + j) % 8 = j := by omega
   simp only [h0, h1, Byte.testBit]
 
+theorem BitVec.toLEBytes_cast {w w' : Nat} (h : w = w') (b : BitVec w) :
+    (b.cast h).toLEBytes = b.toLEBytes := by
+  subst h
+  rfl
+
+theorem BitVec.toLEBytes_byte (b : Byte) : b.toLEBytes = [b] := by
+  unfold BitVec.toLEBytes
+  simp [BitVec.toLEBytes]
+
+/-- Decode exactly `w / 8` little-endian bytes. -/
+@[expose] def BitVec.decodeLE (w : Nat) (bytes : List Byte) : Option (BitVec w) :=
+  if h : 8 * bytes.length = w then some ((BitVec.fromLEBytes bytes).cast h)
+  else none
+
+theorem BitVec.decodeLE_toLEBytes {w : Nat} (hw : w % 8 = 0) (b : BitVec w) :
+    BitVec.decodeLE w b.toLEBytes = some b := by
+  have hLength : 8 * b.toLEBytes.length = w := by
+    simp only [BitVec.toLEBytes_length]
+    omega
+  simp only [BitVec.decodeLE, hLength, ↓reduceDIte, BitVec.fromLEBytes_toLEBytes hw]
+  rfl
+
+theorem BitVec.toLEBytes_of_decodeLE {w : Nat} {bytes : List Byte} {b : BitVec w}
+    (hDecode : BitVec.decodeLE w bytes = some b) : b.toLEBytes = bytes := by
+  unfold BitVec.decodeLE at hDecode
+  split at hDecode
+  · cases hDecode
+    rw [BitVec.toLEBytes_cast, BitVec.toLEBytes_fromLEBytes]
+  · cases hDecode
+
 @[simp, simp_lists_safe, grind =]
 theorem BitVec.testBit_getElem_toLEBytes_eq_getElem {w:ℕ} (x : BitVec w) (i j : ℕ)
   (hi : i < x.toLEBytes.length) (h : j < 8 ∧ 8 * i + j < w) :

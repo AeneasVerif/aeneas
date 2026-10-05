@@ -44,7 +44,8 @@ tactic rather than replacing the test with automation that bypasses it.
 |---|---|
 | [`Coinductive/Spec.lean`](../../../backends/lean/Aeneas/Data/Coinductive/Spec.lean) | Generic `Handler`, `TotalSpec`, and `PartialSpec`, their shared layer `SpecF`, structural rules, and admissibility for conjunctive handlers. Shared with `Std/WP.lean`. |
 | [`StateMachine.lean`](../../../backends/lean/Aeneas/Data/Coinductive/StateMachine.lean) | Operational semantics for those handlers (after "Program Logics à la Carte"): `Exec`, `Handler.Runs`, and `Handler.Evaluates`, with the adequacy proofs connecting the generic correctness judgments to runs. |
-| [`Heap.lean`](../../../backends/lean/Aeneas/Std/Heap.lean) | Defines byte addresses (`AllocId × Nat`), the `ByteRepr` class of types with a byte encoding, finite heaps of bytes under disjoint union, the `PartialCommMonoid` class and the heap's instance of it, references and their arithmetic, the heap of a run of slots, allocation, and the sub-heap order the affine assertions are closed under. |
+| [`ByteRepr.lean`](../../../backends/lean/Aeneas/Std/ByteRepr.lean) | The `ByteRepr` class of types with a byte encoding, and `ByteRepr.decodeAll`, which decodes a run of bytes as consecutive values. |
+| [`Heap.lean`](../../../backends/lean/Aeneas/Std/Heap.lean) | Defines byte addresses (`AllocId × Nat`), finite heaps of bytes under disjoint union, the `PartialCommMonoid` class and the heap's instance of it, references and their arithmetic, the heap of a run of slots, allocation, and the sub-heap order the affine assertions are closed under. |
 | [`Primitives.lean`](../../../backends/lean/Aeneas/Std/Primitives.lean) | Defines `Result`, the interaction-tree monad over the `RustEffect` heap events (`guardedModify` and `fail`), its monad and partial-fixpoint instances, and the `loop` combinator. |
 | [`MutableData/Array.lean`](MutableData/Array.lean) | Arrays `Array α n`, the Rust `[α; n]`: the length lives in the type.  `toBuffer` is the coercion to a slice, and every operation and specification is the buffer one with `n` for the length. |
 | [`MutableData/Ptr.lean`](MutableData/Ptr.lean) | The first layer: allocation of a run of slots, interior pointers `Ptr α`, pointer arithmetic, range and slot ownership, splitting and joining, read, write and free of one slot, the range operations `freeRange`/`fillRange`/`copyRange`/`compareRange`, and the raw-pointer borrow.  A `Ref` never escapes this directory. |
@@ -105,7 +106,9 @@ Consequently:
   postcondition, and unused resources may still be discarded from either side.
 
 What affinity does *not* change: separation is still separation, so `p ↦ v ∗ p ↦
-w ⊢ ⌜False⌝`, and a specification still has to own what it reads or writes.
+w ⊢ ⌜False⌝` whenever `0 < ByteRepr.size T` (`RawPtr.pointsTo_exclusive`; a
+zero-sized representation owns no bytes, so two of its points-to assertions
+compose), and a specification still has to own what it reads or writes.
 Leak-freedom claims are out of scope, as they already were.
 
 ## The memory model: a byte at a time
@@ -195,23 +198,42 @@ what tells a leak from a clean run.
 
 Since ownership is of bytes, the type a pointer views them at is not part of
 the heap.  `RawPtr.cast_scalar` is `ok p.retype`: it neither allocates nor
-moves the pointer, and its specifications only change the view, at an address
-aligned for the new type:
+moves the pointer.  The specification registered with `step` has no
+precondition and only records the address, so a cast that is never
+dereferenced costs nothing.  The others are applied with `step with` and
+change the view of owned bytes, at an address aligned for the new type:
 
 ```text
+cast_scalar.spec : ⦃emp⦄ cast_scalar U .. q ⦃⇓ r => ⌜r = q.retype⌝⦄
 RawPtr.pointsToRange_retype :
   xs.flatMap encode = ys.flatMap encode → (ys ≠ [] → q.retype.Aligned) →
     q ↦* xs ⊢ q.retype ↦* ys
-cast_scalar.spec :
+cast_scalar.spec_of_dvd :
   (hDecode : (decode (α := U) (encode x)).isSome) → align U ∣ align T →
     ⦃q ↦ x⦄ cast_scalar U .. q
       ⦃⇓ r => ⌜r = q.retype⌝ ∗ r ↦ (decode (encode x)).get hDecode⦄
 ```
 
+`cast_scalar.spec_range` and `cast_scalar.spec_of_decode` are the range and
+the decoding variants of `spec_of_dvd`.
+
 A same-size cast between scalars reinterprets the bits, and a `u32` can be
 owned as the four `u8`s of its encoding and back, at an address aligned for
 `u32`.  See the "Pointer casts"
 section of [`UnitTest.lean`](UnitTest.lean).
+
+### Compatibility with the slot-based model
+
+Storing values as bytes changes two interfaces that extracted code relies on:
+
+* `Slice.as_ptr` and `Slice.as_mut_ptr` require `ByteRepr T`, which only the
+  integer types have.  Extraction therefore rejects `as_ptr` and `as_mut_ptr`
+  on slices of a generic or non-integer element type, with the error
+  `[as_ptr] and [as_mut_ptr] are only supported on slices of integers` (see
+  `tests/src/raw_pointers_generic.rs`);
+* `Slice.as_mut_ptr` returns the pointer together with the unchanged slice,
+  `Result (MutRawPtr T × Slice T)`, instead of the pointer alone, and its
+  specification is `⦃emp⦄ s.as_mut_ptr ⦃⇓ r => ⌜r.2 = s⌝ ∗ r.1 ↦* s.val⦄`.
 
 ## Four semantics for `Result`
 

@@ -2,6 +2,7 @@ module
 
 public import Mathlib.Data.Finmap
 public import Aeneas.Data.Byte
+public import Aeneas.Std.ByteRepr
 
 public section
 
@@ -81,22 +82,6 @@ def Loc.add (a : Loc) (i : Nat) : Loc := (a.1, a.2 + i)
 
 theorem Loc.add_add (a : Loc) (i j : Nat) : (a.add i).add j = a.add (i + j) := by
   simp [Loc.add, Nat.add_assoc]
-
-/-- A fixed-size encoding of the values of `α` as bytes: what lets a value of `α`
-live in the heap.  Decoding accepts exactly the encodings, so the bytes found
-at an address determine the value they hold.  A value of `α` may only be read
-or written at an address that is a multiple of `align`, which divides `size` as
-in Rust. -/
-class ByteRepr (α : Type) where
-  size : Nat
-  align : Nat
-  align_dvd_size : align ∣ size
-  encode : α → List Byte
-  decode : List Byte → Option α
-  length_encode (x : α) : (encode x).length = size
-  decode_encode (x : α) : decode (encode x) = some x
-  encode_of_decode {bytes : List Byte} {x : α} :
-    decode bytes = some x → encode x = bytes
 
 /-! ## References -/
 

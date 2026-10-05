@@ -29,9 +29,9 @@ The element type must have a byte representation (`ByteRepr T`):
 
 Since ownership is of bytes, the type a pointer views its bytes at is a
 matter of specification only: `RawPtr.cast_scalar` is the identity on
-addresses, and its specification reinterprets the bytes it owns, provided the
-address is aligned for the new type.  Reads and writes are only defined at
-aligned addresses.
+addresses.  Its `step` specification only records the address; the optional
+ones reinterpret the bytes it owns, provided the address is aligned for the new
+type.  Reads and writes are only defined at aligned addresses.
 
 Reads accept both mutable and const pointers. Allocation, writes and
 deallocation require a mutable pointer.
@@ -855,23 +855,13 @@ def size {T : Type} [ByteRepr T] [IsScalar T] : Usize :=
 def numElems (T : Type) [ByteRepr T] [IsScalar T] (numBytes : Nat) : Nat :=
   (numBytes + (size (T := T)).val - 1) / (size (T := T)).val
 
-def decodeAll (T : Type) [ByteRepr T] (bytes : List Byte) : Option (List T) :=
-  if bytes = [] then some []
-  else if hSize : 0 < ByteRepr.size T ∧ ByteRepr.size T ≤ bytes.length then do
-    let value ← ByteRepr.decode (bytes.take (ByteRepr.size T))
-    let rest ← decodeAll T (bytes.drop (ByteRepr.size T))
-    pure (value :: rest)
-  else none
-termination_by bytes.length
-decreasing_by simp only [List.length_drop]; omega
-
 def toBytes {T : Type} [ByteRepr T] [IsScalar T] (s : Slice T) : Result (Slice U8) :=
   let bytes := (s.val.flatMap ByteRepr.encode).map (UScalar.mk (ty := .U8))
   if h : bytes.length ≤ Usize.max then .ok (Slice.from bytes h)
   else .fail .arrayOutOfBounds
 
 def fromBytes {T : Type} [ByteRepr T] [IsScalar T] (s : Slice U8) : Result (Slice T) :=
-  match decodeAll T (s.val.map UScalar.bv) with
+  match ByteRepr.decodeAll T (s.val.map UScalar.bv) with
   | none => .fail .undef
   | some values =>
     if h : values.length ≤ Usize.max then .ok (Slice.from values h)
@@ -887,33 +877,6 @@ instance {ty} : IsScalar (IScalar ty) where
 
 namespace IsScalar
 
-theorem decodeAll_flatMap_encode {T : Type} [ByteRepr T] (hSize : 0 < ByteRepr.size T)
-    (values : List T) : decodeAll T (values.flatMap ByteRepr.encode) = some values := by
-  induction values with
-  | nil => rw [decodeAll]; rfl
-  | cons value rest ih =>
-    have hLength := ByteRepr.length_encode value
-    rw [decodeAll, List.flatMap_cons, if_neg (by
-        intro h
-        have := congrArg List.length h
-        simp only [List.length_append, List.length_nil] at this
-        omega),
-      dif_pos ⟨hSize, by simp only [List.length_append]; omega⟩,
-      List.take_left' hLength, List.drop_left' hLength, ByteRepr.decode_encode, ih]
-    rfl
-
-theorem flatMap_encode_of_decodeAll {T : Type} [ByteRepr T] {bytes : List Byte}
-    {values : List T} (h : decodeAll T bytes = some values) :
-    values.flatMap ByteRepr.encode = bytes := by
-  fun_induction decodeAll T bytes generalizing values with
-  | case1 => cases h; rfl
-  | case2 bytes hNonEmpty hSize ih =>
-    simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def,
-      Option.some.injEq] at h
-    obtain ⟨value, hValue, rest, hRest, rfl⟩ := h
-    rw [List.flatMap_cons, ByteRepr.encode_of_decode hValue, ih hRest, List.take_append_drop]
-  | case3 => cases h
-
 theorem fromBytes_toBytes {T : Type} [ByteRepr T] [IsScalar T] (hSize : 0 < ByteRepr.size T)
     {s : Slice T} {bytes : Slice U8} (h : toBytes s = .ok bytes) : fromBytes bytes = .ok s := by
   simp only [toBytes] at h
@@ -922,7 +885,7 @@ theorem fromBytes_toBytes {T : Type} [ByteRepr T] [IsScalar T] (hSize : 0 < Byte
     subst h
     simp only [fromBytes, Slice.from_val, List.map_map]
     rw [show UScalar.bv ∘ UScalar.mk (ty := .U8) = id from rfl, List.map_id,
-      decodeAll_flatMap_encode hSize]
+      ByteRepr.decodeAll_flatMap_encode hSize]
     simp only [dif_pos s.property, Slice.val_from]
   · simp at h
 
@@ -935,8 +898,8 @@ theorem toBytes_fromBytes {T : Type} [ByteRepr T] [IsScalar T] {s : Slice T}
     split at h
     · rw [Result.ok.injEq] at h
       subst h
-      simp only [toBytes, Slice.from_val, flatMap_encode_of_decodeAll hDecode, List.map_map,
-        show UScalar.mk (ty := .U8) ∘ UScalar.bv = id from rfl, List.map_id]
+      simp only [toBytes, Slice.from_val, ByteRepr.flatMap_encode_of_decodeAll hDecode,
+        List.map_map, show UScalar.mk (ty := .U8) ∘ UScalar.bv = id from rfl, List.map_id]
       rw [dif_pos bytes.property, Slice.val_from]
     · simp at h
 
@@ -950,17 +913,9 @@ theorem size_u8 : size (T := U8) = 1#usize := by
 theorem numElems_u8 (numBytes : Nat) : numElems U8 numBytes = numBytes := by
   simp [numElems]
 
-theorem map_mk_flatMap_encode_u8 (values : List U8) :
-    (values.flatMap ByteRepr.encode).map (UScalar.mk (ty := .U8)) = values := by
-  induction values with
-  | nil => rfl
-  | cons value rest ih =>
-    rw [List.flatMap_cons, UScalar.encode_eq, BitVec.toLEBytes_byte, List.map_append, ih]
-    rfl
-
 @[simp, step_simps]
 theorem toBytes_u8 (s : Slice U8) : toBytes s = .ok s := by
-  simp only [toBytes, map_mk_flatMap_encode_u8, dif_pos s.property, Slice.val_from]
+  simp only [toBytes, UScalar.map_mk_flatMap_encode_u8, dif_pos s.property, Slice.val_from]
 
 @[simp, step_simps]
 theorem fromBytes_u8 (s : Slice U8) : fromBytes (T := U8) s = .ok s :=
@@ -969,12 +924,18 @@ theorem fromBytes_u8 (s : Slice U8) : fromBytes (T := U8) s = .ok s :=
 end IsScalar
 
 /-- Reinterpret the bytes a pointer addresses at another element type and
-mutability.  The address is unchanged and the heap is untouched: the
-specifications below only transfer ownership from one view of the bytes to
-another, which requires the address to be aligned for the new type. -/
+mutability.  The address is unchanged and the heap is untouched: `spec`, the
+one `step` uses, only records the address, and the others transfer ownership
+from one view of the bytes to another, which requires the address to be aligned
+for the new type. -/
 def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability) (p : RawPtr T M) :
     Result (RawPtr T' M') :=
   .ok p.retype
+
+@[step]
+theorem RawPtr.cast_scalar.spec (p : RawPtr T M) :
+    ⦃ emp ⦄ RawPtr.cast_scalar T' M' p ⦃⇓ q => ⌜q = p.retype⌝⦄ :=
+  (ispec_ok _).2 fun _ _ => rfl
 
 theorem RawPtr.cast_scalar.spec_range [ByteRepr T] [ByteRepr T'] (p : RawPtr T M)
     (xs : List T) (ys : List T')
@@ -997,8 +958,7 @@ theorem RawPtr.cast_scalar.spec_of_decode [ByteRepr T] [ByteRepr T'] (p : RawPtr
   exact (sep_pure_l _ _ h).mpr ⟨rfl, RawPtr.pointsTo_retype_of_decode p x y hDecode
     (hAlign (RawPtr.aligned_of_pointsTo hPointsTo)) h hPointsTo⟩
 
-@[step]
-theorem RawPtr.cast_scalar.spec [ByteRepr T] [ByteRepr T'] (p : RawPtr T M) (x : T)
+theorem RawPtr.cast_scalar.spec_of_dvd [ByteRepr T] [ByteRepr T'] (p : RawPtr T M) (x : T)
     (hDecode : (ByteRepr.decode (α := T') (ByteRepr.encode x)).isSome)
     (hAlign : ByteRepr.align T' ∣ ByteRepr.align T) :
     ⦃ p ↦ x ⦄ RawPtr.cast_scalar T' M' p
@@ -1038,19 +998,19 @@ example : fromBytes (T := I16) bytes = .ok signedWords :=
 
 example : fromBytes (T := U16) (Slice.from [1#u8] (by scalar_tac)) = .fail .undef := by
   simp only [fromBytes, Slice.from_val, List.map_cons, List.map_nil]
-  rw [decodeAll]
-  simp
+  rw [ByteRepr.decodeAll]
+  simp [ByteRepr.decode, BitVec.decodeLE]
 
 example : fromBytes (T := I32) (Slice.from [1#u8, 2#u8, 3#u8] (by scalar_tac)) =
     .fail .undef := by
   simp only [fromBytes, Slice.from_val, List.map_cons, List.map_nil]
-  rw [decodeAll]
-  simp
+  rw [ByteRepr.decodeAll]
+  simp [ByteRepr.decode, BitVec.decodeLE]
 
 example : fromBytes (T := U32) (Slice.from [] (by scalar_tac)) =
     .ok (Slice.from [] (by scalar_tac)) := by
   simp only [fromBytes, Slice.from_val, List.map_nil]
-  rw [decodeAll]
+  rw [ByteRepr.decodeAll]
   simp
 
 example : numElems U8 16 = 16 := by simp
