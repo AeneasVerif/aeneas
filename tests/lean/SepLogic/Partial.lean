@@ -15,11 +15,11 @@ open Aeneas.Std.MutRawPtr (alloc free write)
 open Aeneas.Std.RawPtr (read)
 
 example (p : MutRawPtr Nat) (value : Nat) :
-    ⦃ p ↦ value ⦄ Fixtures.incr_ptr p ⦃⇓ p ↦ value + 1⦄div := by
+    ⦃ p ↦ value ⦄ Fixtures.incr_ptr p ⦃ p ↦ value + 1⦄div := by
   step*
 
 example (value : Nat) :
-    ⦃ emp ⦄ Fixtures.incr_borrow value ⦃⇓ result => ⌜result = value + 1⌝⦄div := by
+    ⦃ emp ⦄ Fixtures.incr_borrow value ⦃ result => ⌜result = value + 1⌝⦄div := by
   step*
 
 example (x : Nat) :
@@ -37,23 +37,23 @@ def roundTripPartial : Result Nat := do
   pure result
 
 theorem roundTripPartial.spec :
-    ⦃ emp ⦄ roundTripPartial ⦃⇓ result => ⌜result = 42⌝⦄div := by
+    ⦃ emp ⦄ roundTripPartial ⦃ result => ⌜result = 42⌝⦄div := by
   unfold roundTripPartial
   step*
 
-example : ⦃ emp ⦄ Fixtures.incr_borrow 1 ⦃⇓ result => ⌜result = 2⌝⦄div :=
+example : ⦃ emp ⦄ Fixtures.incr_borrow 1 ⦃ result => ⌜result = 2⌝⦄div :=
   ispec_dispec (Fixtures.incr_borrow.spec 1)
 
-example (p : MutRawPtr Nat) : ⦃ p ↦ 1 ⦄ (pure 5 : Result Nat) ⦃⇓ v => ⌜v = 5⌝ ∗ p ↦ 1⦄div := by
+example (p : MutRawPtr Nat) : ⦃ p ↦ 1 ⦄ (pure 5 : Result Nat) ⦃ v => ⌜v = 5⌝ ∗ p ↦ 1⦄div := by
   dwp_pures
   isimpl
 
 example (p q : MutRawPtr Nat) (x : Nat) :
-    ⦃ iprop(p ↦ x ∗ q ↦ 9) ⦄ Fixtures.incr_ptr p ⦃⇓ iprop(q ↦ 9 ∗ p ↦ (x + 1))⦄div := by
+    ⦃ iprop(p ↦ x ∗ q ↦ 9) ⦄ Fixtures.incr_ptr p ⦃ iprop(q ↦ 9 ∗ p ↦ (x + 1))⦄div := by
   dwp_apply (ispec_dispec (Fixtures.incr_ptr.spec p x))
 
 example (p : MutRawPtr Nat) (value : Nat) :
-    ⦃ p ↦ value ⦄ Fixtures.incr_ptr p ⦃⇓ emp⦄div := by
+    ⦃ p ↦ value ⦄ Fixtures.incr_ptr p ⦃ emp⦄div := by
   dwp_mono (ispec_dispec (Fixtures.incr_ptr.spec p value))
 
 section
@@ -85,10 +85,10 @@ def incrForever (p : MutRawPtr Nat) : Result Empty := do
 partial_fixpoint
 
 theorem incrForever.spec (p : MutRawPtr Nat) (value : Nat) :
-    ⦃ p ↦ value ⦄ incrForever p ⦃⇓ emp⦄div := by
+    ⦃ p ↦ value ⦄ incrForever p ⦃ emp⦄div := by
   revert value
   refine incrForever.fixpoint_induct p
-    (fun loop => ∀ v, ⦃ p ↦ v ⦄ loop ⦃⇓ emp⦄div)
+    (fun loop => ∀ v, ⦃ p ↦ v ⦄ loop ⦃ emp⦄div)
     (dispec_admissible_forall (fun v : Nat => iprop(p ↦ v)) (fun _ _ => emp)) ?_
   intro loop hLoop v
   step*
@@ -103,10 +103,10 @@ def countdown (p : MutRawPtr Nat) : Result Unit := do
 partial_fixpoint
 
 theorem countdown.spec (p : MutRawPtr Nat) (value : Nat) :
-    ⦃ p ↦ value ⦄ countdown p ⦃⇓ p ↦ 0⦄div := by
+    ⦃ p ↦ value ⦄ countdown p ⦃ p ↦ 0⦄div := by
   revert value
   refine countdown.fixpoint_induct p
-    (fun loop => ∀ v, ⦃ p ↦ v ⦄ loop ⦃⇓ p ↦ 0⦄div)
+    (fun loop => ∀ v, ⦃ p ↦ v ⦄ loop ⦃ p ↦ 0⦄div)
     (dispec_admissible_forall (fun v : Nat => iprop(p ↦ v))
       (fun _ _ => iprop(p ↦ 0))) ?_
   intro loop hLoop v
@@ -118,7 +118,7 @@ def waitZero (p : MutRawPtr Nat) (rounds : Nat) : Result Nat := do
 partial_fixpoint
 
 theorem waitZero.spec (p : MutRawPtr Nat) (value rounds : Nat) :
-    ⦃ p ↦ value ⦄ waitZero p rounds ⦃⇓ _ => p ↦ value⦄div := by
+    ⦃ p ↦ value ⦄ waitZero p rounds ⦃ _ => p ↦ value⦄div := by
   revert rounds
   dspec_induction waitZero
   intro loop hLoop rounds

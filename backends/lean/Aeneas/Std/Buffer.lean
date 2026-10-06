@@ -129,7 +129,7 @@ def end_mut_to_raw (original : Slice T) (b : Buffer T) :
 @[step]
 theorem alloc.spec (n : Nat) (value : T) :
     ⦃ emp ⦄ Buffer.alloc n value
-      ⦃⇓ b => b ↦ List.replicate n value⦄ := by
+      ⦃ b => b ↦ List.replicate n value⦄ := by
   refine RawPtr.allocArray.spec _ _ _ fun r h hOwns => ?_
   exact (sep_pure_l _ _ h).mpr ⟨by simp, hOwns⟩
 
@@ -141,18 +141,18 @@ theorem pointsTo_def (b : Buffer T) (values : List T) :
 @[step]
 theorem read.spec (b : Buffer T) (i : Nat) (value : T) :
     ⦃ b.ptrAt i ↦ value ⦄ b.read i
-      ⦃⇓ result => ⌜result = value⌝ ∗ b.ptrAt i ↦ value⦄ :=
+      ⦃ result => ⌜result = value⌝ ∗ b.ptrAt i ↦ value⦄ :=
   RawPtr.read.spec (b.ptrAt i) value
 
 @[step]
 theorem write.spec (b : Buffer T) (i : Nat) (oldValue newValue : T) :
     ⦃ b.ptrAt i ↦ oldValue ⦄ b.write i newValue
-      ⦃⇓ b.ptrAt i ↦ newValue⦄ :=
+      ⦃ b.ptrAt i ↦ newValue⦄ :=
   MutRawPtr.write.spec (b.ptrAt i) oldValue newValue
 
 @[step]
 theorem free.spec (b : Buffer T) (values : List T) :
-    ⦃ b ↦ values ⦄ b.free ⦃⇓ emp⦄ := by
+    ⦃ b ↦ values ⦄ b.free ⦃ emp⦄ := by
   unfold Buffer.free
   simp only [pointsTo_def]
   iintro hLength
@@ -166,7 +166,7 @@ theorem length_of_pointsTo {b : Buffer T} {values : List T} {h : Heap}
 theorem read.spec_buffer (b : Buffer T) (values : List T) (i : Nat)
     (hIndex : i < values.length) :
     ⦃ b ↦ values ⦄ b.read i
-      ⦃⇓ result => ⌜result = values[i]⌝ ∗ b ↦ values⦄ := by
+      ⦃ result => ⌜result = values[i]⌝ ∗ b ↦ values⦄ := by
   change ispec _ (RawPtr.read (b.ptr.add i)) _
   simp only [pointsTo_def]
   iintro hLength
@@ -176,7 +176,7 @@ theorem read.spec_buffer (b : Buffer T) (values : List T) (i : Nat)
 theorem write.spec_buffer (b : Buffer T) (values : List T) (i : Nat)
     (value : T) (hIndex : i < values.length) :
     ⦃ b ↦ values ⦄ b.write i value
-      ⦃⇓ b ↦ values.set i value⦄ := by
+      ⦃ b ↦ values.set i value⦄ := by
   change ispec _ (MutRawPtr.write (b.ptr.add i) value) _
   simp only [pointsTo_def]
   iintro hLength
@@ -187,7 +187,7 @@ theorem write.spec_buffer (b : Buffer T) (values : List T) (i : Nat)
 @[step]
 theorem readRange.spec (p : RawPtr T M) (values : List T) :
     ⦃ p ↦* values ⦄ readRange p values.length
-      ⦃⇓ result => ⌜result = values⌝ ∗ p ↦* values⦄ := by
+      ⦃ result => ⌜result = values⌝ ∗ p ↦* values⦄ := by
   induction values generalizing p with
   | nil =>
       simp only [List.length_nil, readRange, RawPtr.pointsToRange_nil]
@@ -215,7 +215,7 @@ theorem readRange.spec (p : RawPtr T M) (values : List T) :
 @[step]
 theorem writeRange.spec (p : MutRawPtr T) (old values : List T)
     (hLength : old.length = values.length) :
-    ⦃ p ↦* old ⦄ writeRange p values ⦃⇓ p ↦* values⦄ := by
+    ⦃ p ↦* old ⦄ writeRange p values ⦃ p ↦* values⦄ := by
   induction values generalizing p old with
   | nil =>
       obtain rfl : old = [] := by simpa using hLength
@@ -243,7 +243,7 @@ theorem writeRange.spec (p : MutRawPtr T) (old values : List T)
 
 @[step]
 theorem toSlice.spec (s : Slice T) :
-    ⦃ emp ⦄ toSlice s.val ⦃⇓ result => ⌜result = s⌝⦄ := by
+    ⦃ emp ⦄ toSlice s.val ⦃ result => ⌜result = s⌝⦄ := by
   simp only [toSlice, s.property, ↓reduceDIte]
   apply (ispec_ok _).2
   simp
@@ -251,7 +251,7 @@ theorem toSlice.spec (s : Slice T) :
 @[step]
 theorem readSlice.spec (b : Buffer T) (s : Slice T) :
     ⦃ b ↦ s.val ⦄ readSlice b
-      ⦃⇓ result => ⌜result = s⌝ ∗ b ↦ s.val⦄ := by
+      ⦃ result => ⌜result = s⌝ ∗ b ↦ s.val⦄ := by
   simp only [pointsTo_def]
   iintro hLength
   unfold readSlice
@@ -269,7 +269,7 @@ theorem readSlice.spec (b : Buffer T) (s : Slice T) :
 @[step]
 theorem writeSlice.spec (b : Buffer T) (old s : Slice T)
     (hLength : s.length = old.length) :
-    ⦃ b ↦ old.val ⦄ writeSlice b s ⦃⇓ b ↦ s.val⦄ := by
+    ⦃ b ↦ old.val ⦄ writeSlice b s ⦃ b ↦ s.val⦄ := by
   simp only [pointsTo_def]
   iintro hOld
   have hNew : s.length = b.length := hLength.trans hOld
@@ -280,14 +280,14 @@ theorem writeSlice.spec (b : Buffer T) (old s : Slice T)
 
 @[step]
 theorem ofList.spec (values : List T) :
-    ⦃ emp ⦄ Buffer.ofList values ⦃⇓ b => b ↦ values⦄ := by
+    ⦃ emp ⦄ Buffer.ofList values ⦃ b => b ↦ values⦄ := by
   refine RawPtr.allocArray.spec _ _ _ fun r h hOwns => ?_
   exact (sep_pure_l _ _ h).mpr ⟨rfl, hOwns⟩
 
 @[step]
 theorem fill.spec (b : Buffer T) (values : List T) (value : T) :
     ⦃ b ↦ values ⦄ b.fill value
-      ⦃⇓ b ↦ List.replicate b.length value⦄ := by
+      ⦃ b ↦ List.replicate b.length value⦄ := by
   unfold Buffer.fill
   simp only [pointsTo_def]
   iintro hLength
@@ -315,7 +315,7 @@ theorem pair_entails_pointsTo {b₁ b₂ : Buffer T}
 theorem copy.spec (dst src : Buffer T) (dstValues srcValues : List T)
     (hLength : dst.length = src.length) :
     ⦃ dst ↦ dstValues ∗ src ↦ srcValues ⦄ dst.copy src
-      ⦃⇓ dst ↦ srcValues ∗ src ↦ srcValues⦄ := by
+      ⦃ dst ↦ srcValues ∗ src ↦ srcValues⦄ := by
   unfold Buffer.copy
   simp only [pointsTo_def]
   iintro hDst hSrc
@@ -331,7 +331,7 @@ theorem compare.spec [DecidableEq T] (left right : Buffer T)
     (hLength : left.length = right.length) :
     ⦃ left ↦ leftValues ∗ right ↦ rightValues ⦄
       Buffer.compare left right
-      ⦃⇓ result => ⌜result = decide (leftValues = rightValues)⌝ ∗
+      ⦃ result => ⌜result = decide (leftValues = rightValues)⌝ ∗
         (left ↦ leftValues ∗ right ↦ rightValues)⦄ := by
   unfold Buffer.compare
   simp only [pointsTo_def]
@@ -347,7 +347,7 @@ theorem compare.spec [DecidableEq T] (left right : Buffer T)
 theorem swap.spec (b : Buffer T) (values : List T) (i j : Nat)
     (hi : i < values.length) (hj : j < values.length) :
     ⦃ b ↦ values ⦄ b.swap i j
-      ⦃⇓ b ↦ (values.set i values[j]).set j values[i]⦄ := by
+      ⦃ b ↦ (values.set i values[j]).set j values[i]⦄ := by
   unfold Buffer.swap
   apply WP.ispec_bind (read.spec_buffer b values i hi) (sep_emp_r _).mpr
   intro x
@@ -400,7 +400,7 @@ theorem pointsTo_sub (b : Buffer T) (values : List T) (i : Nat) :
 theorem readRange_sub.spec (p : RawPtr T M) (values : List T) (i n : Nat)
     (hBounds : i + n ≤ values.length) :
     ⦃ p ↦* values ⦄ readRange (p.add i) n
-      ⦃⇓ result =>
+      ⦃ result =>
         ⌜result = (values.drop i).take n⌝ ∗ p ↦* values⦄ := by
   have hi : i ≤ values.length := by omega
   have hRest : n ≤ (values.drop i).length := by
@@ -420,7 +420,7 @@ theorem readRange_sub.spec (p : RawPtr T M) (values : List T) (i n : Nat)
 theorem writeRange_sub.spec (p : MutRawPtr T) (old : List T) (i : Nat)
     (values : List T) (hBounds : i + values.length ≤ old.length) :
     ⦃ p ↦* old ⦄ writeRange (p.add i) values
-      ⦃⇓ p ↦* old.setSlice! i values⦄ := by
+      ⦃ p ↦* old.setSlice! i values⦄ := by
   have hi : i ≤ old.length := by omega
   have hRest : values.length ≤ (old.drop i).length := by
     simp only [List.length_drop]
@@ -445,7 +445,7 @@ theorem writeRange_sub.spec (p : MutRawPtr T) (old : List T) (i : Nat)
 
 @[step]
 theorem mut_to_raw.spec (slice : Slice T) :
-    ⦃ emp ⦄ mut_to_raw slice ⦃⇓ b => b ↦ slice.val⦄ := by
+    ⦃ emp ⦄ mut_to_raw slice ⦃ b => b ↦ slice.val⦄ := by
   refine RawPtr.allocArray.spec _ _ _ fun r h hOwns => ?_
   exact (sep_pure_l _ _ h).mpr ⟨rfl, hOwns⟩
 
@@ -453,7 +453,7 @@ theorem mut_to_raw.spec (slice : Slice T) :
 theorem end_mut_to_raw.spec (original : Slice T) (b : Buffer T)
     (values : List T) :
     ⦃ b ↦ values ⦄ end_mut_to_raw original b
-      ⦃⇓ result =>
+      ⦃ result =>
         ⌜result.val = original.val.setSlice! 0 values⌝⦄ := by
   simp only [end_mut_to_raw, pointsTo_def]
   iintro hLength

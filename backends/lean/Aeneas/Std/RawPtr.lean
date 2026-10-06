@@ -320,7 +320,7 @@ end RawPtr
 theorem RawPtr.allocArray.spec {β : Type} (values : List T) (mk : Loc → β)
     (post : β → IProp)
     (hPost : ∀ l : Loc, owns (Heap.rangeHeap l values) ⊢ post (mk l)) :
-    ⦃ emp ⦄ RawPtr.allocArray values mk ⦃⇓ result => post result⦄ := by
+    ⦃ emp ⦄ RawPtr.allocArray values mk ⦃ result => post result⦄ := by
   apply ispec_guardedModify
   intro h _ frame hCompatible
   have hFresh :
@@ -338,12 +338,12 @@ theorem RawPtr.allocArray.spec {β : Type} (values : List T) (mk : Loc → β)
 @[step]
 theorem RawPtr.materialize.spec (values : List T) :
     ⦃ emp ⦄ RawPtr.materialize (M := M) values
-      ⦃⇓ p => p ↦* values⦄ :=
+      ⦃ p => p ↦* values⦄ :=
   RawPtr.allocArray.spec _ _ _ fun _ => entails_refl _
 
 @[step]
 theorem MutRawPtr.alloc.spec (value : T) :
-    ⦃ emp ⦄ MutRawPtr.alloc value ⦃⇓ q => q ↦ value⦄ :=
+    ⦃ emp ⦄ MutRawPtr.alloc value ⦃ q => q ↦ value⦄ :=
   RawPtr.allocArray.spec _ _ _ fun _ => by
     rw [RawPtr.pointsTo_eq_range]
     exact entails_refl _
@@ -357,7 +357,7 @@ theorem readable_of_pointsTo {q : RawPtr T M} {value : T} {h : Heap}
 @[step]
 theorem read.spec (q : RawPtr T M) (value : T) :
     ⦃ q ↦ value ⦄ q.read
-      ⦃⇓ result => ⌜result = value⌝ ∗ q ↦ value⦄ := by
+      ⦃ result => ⌜result = value⌝ ∗ q ↦ value⦄ := by
   apply ispec_guardedModify
   intro h hPointsTo frame hCompatible
   have hPointsToFrame : (q ↦ value) (h ∪ frame) :=
@@ -372,7 +372,7 @@ end RawPtr
 
 @[step]
 theorem MutRawPtr.write.spec (q : MutRawPtr T) (oldValue newValue : T) :
-    ⦃ q ↦ oldValue ⦄ q.write newValue ⦃⇓ q ↦ newValue⦄ := by
+    ⦃ q ↦ oldValue ⦄ q.write newValue ⦃ q ↦ newValue⦄ := by
   apply ispec_guardedModify
   intro h hPointsTo frame hCompatible
   obtain ⟨rest, hCompatibleRest, rfl⟩ := hPointsTo
@@ -397,7 +397,7 @@ theorem MutRawPtr.write.spec (q : MutRawPtr T) (oldValue newValue : T) :
 
 @[step]
 theorem MutRawPtr.free.spec (q : MutRawPtr T) (value : T) :
-    ⦃ q ↦ value ⦄ q.free ⦃⇓ emp⦄ := by
+    ⦃ q ↦ value ⦄ q.free ⦃ emp⦄ := by
   apply ispec_guardedModify
   intro h hPointsTo frame hCompatible
   have hContains : Heap.contains h T q.addr := Heap.contains_of_sub hPointsTo
@@ -409,7 +409,7 @@ theorem MutRawPtr.free.spec (q : MutRawPtr T) (value : T) :
 
 @[step]
 theorem MutRawPtr.freeRange.spec (q : MutRawPtr T) (values : List T) :
-    ⦃ q ↦* values ⦄ q.freeRange values.length ⦃⇓ emp⦄ := by
+    ⦃ q ↦* values ⦄ q.freeRange values.length ⦃ emp⦄ := by
   induction values generalizing q with
   | nil =>
       simp only [List.length_nil, MutRawPtr.freeRange]
@@ -444,14 +444,14 @@ theorem drop_set (values : List T) (i : Nat) (value : T) :
 theorem read.spec_range (q : RawPtr T M) (values : List T) (i : Nat)
     (hIndex : i < values.length) :
     ⦃ q ↦* values ⦄ (q.add i).read
-      ⦃⇓ result => ⌜result = values[i]⌝ ∗ q ↦* values⦄ := by
+      ⦃ result => ⌜result = values[i]⌝ ∗ q ↦* values⦄ := by
   rw [pointsToRange_eq_take_get_drop hIndex]
   apply WP.ispec_mono (read.spec (q.add i) values[i])
   iframe
 
 theorem read.spec_frame (q : RawPtr T M) (value : T) (H : IProp) :
     ⦃ q ↦ value ∗ H ⦄ q.read
-      ⦃⇓ result => ⌜result = value⌝ ∗ (q ↦ value ∗ H)⦄ := by
+      ⦃ result => ⌜result = value⌝ ∗ (q ↦ value ∗ H)⦄ := by
   apply WP.ispec_mono (WP.ispec_frame (read.spec q value) H)
   apply entails_sep_postWand
   intro _
@@ -462,7 +462,7 @@ end RawPtr
 theorem MutRawPtr.write.spec_range (q : MutRawPtr T) (values : List T)
     (i : Nat) (value : T) (hIndex : i < values.length) :
     ⦃ q ↦* values ⦄ MutRawPtr.write (q.add i) value
-      ⦃⇓ q ↦* values.set i value⦄ := by
+      ⦃ q ↦* values.set i value⦄ := by
   rw [RawPtr.pointsToRange_eq_take_get_drop hIndex,
     RawPtr.pointsToRange_eq_take_get_drop
       (show i < (values.set i value).length by simpa using hIndex),
@@ -473,7 +473,7 @@ theorem MutRawPtr.write.spec_range (q : MutRawPtr T) (values : List T)
 @[step]
 theorem MutRawPtr.fillRange.spec (q : MutRawPtr T) (values : List T) (value : T) :
     ⦃ q ↦* values ⦄ q.fillRange value values.length
-      ⦃⇓ q ↦* List.replicate values.length value⦄ := by
+      ⦃ q ↦* List.replicate values.length value⦄ := by
   induction values generalizing q with
   | nil =>
       simp only [List.length_nil, MutRawPtr.fillRange]
@@ -498,7 +498,7 @@ theorem MutRawPtr.copyRange.spec (dst : MutRawPtr T) (src : RawPtr T M)
     (hLength : dstValues.length = srcValues.length) :
     ⦃ dst ↦* dstValues ∗ src ↦* srcValues ⦄
       MutRawPtr.copyRange dst src srcValues.length
-      ⦃⇓ dst ↦* srcValues ∗ src ↦* srcValues⦄ := by
+      ⦃ dst ↦* srcValues ∗ src ↦* srcValues⦄ := by
   induction srcValues generalizing dst src dstValues with
   | nil =>
       obtain rfl : dstValues = [] := by simpa using hLength
@@ -554,7 +554,7 @@ theorem RawPtr.compareRange.spec [DecidableEq T]
     (hLength : leftValues.length = rightValues.length) :
     ⦃ left ↦* leftValues ∗ right ↦* rightValues ⦄
       left.compareRange right leftValues.length
-      ⦃⇓ result => ⌜result = decide (leftValues = rightValues)⌝ ∗
+      ⦃ result => ⌜result = decide (leftValues = rightValues)⌝ ∗
         (left ↦* leftValues ∗ right ↦* rightValues)⦄ := by
   induction leftValues generalizing left right rightValues with
   | nil =>
@@ -604,13 +604,13 @@ theorem RawPtr.compareRange.spec [DecidableEq T]
 
 @[step]
 theorem MutRawPtr.mut_to_raw.spec (value : T) :
-    ⦃ emp ⦄ MutRawPtr.mut_to_raw value ⦃⇓ q => q ↦ value⦄ :=
+    ⦃ emp ⦄ MutRawPtr.mut_to_raw value ⦃ q => q ↦ value⦄ :=
   MutRawPtr.alloc.spec value
 
 @[step]
 theorem MutRawPtr.takeRange.spec (q : MutRawPtr T) (values : List T) :
     ⦃ q ↦* values ⦄ MutRawPtr.takeRange q values.length
-      ⦃⇓ result => ⌜result = values⌝⦄ := by
+      ⦃ result => ⌜result = values⌝⦄ := by
   induction values generalizing q with
   | nil =>
       simp only [List.length_nil, MutRawPtr.takeRange]
@@ -644,14 +644,14 @@ theorem MutRawPtr.takeRange.spec (q : MutRawPtr T) (values : List T) :
 theorem MutRawPtr.takeRange.spec_of_length (q : MutRawPtr T)
     (values : List T) (n : Nat) (hLength : values.length = n) :
     ⦃ q ↦* values ⦄ MutRawPtr.takeRange q n
-      ⦃⇓ result => ⌜result = values⌝⦄ := by
+      ⦃ result => ⌜result = values⌝⦄ := by
   subst n
   exact MutRawPtr.takeRange.spec q values
 
 @[step]
 theorem MutRawPtr.end_mut_to_raw.spec {value : T} (q : MutRawPtr T) :
     ⦃ q ↦ value ⦄ MutRawPtr.end_mut_to_raw q
-      ⦃⇓ result => ⌜result = value⌝⦄ := by
+      ⦃ result => ⌜result = value⌝⦄ := by
   unfold MutRawPtr.end_mut_to_raw
   apply WP.ispec_bind (RawPtr.read.spec q value)
   · iframe

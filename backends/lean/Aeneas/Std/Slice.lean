@@ -64,7 +64,7 @@ def Slice.as_ptr {T : Type} (s : Slice T) : Result (ConstRawPtr T) :=
 
 @[step]
 theorem Slice.as_ptr.spec {T : Type} (s : Slice T) :
-    ⦃ emp ⦄ s.as_ptr ⦃⇓ p => p ↦* s.val⦄ :=
+    ⦃ emp ⦄ s.as_ptr ⦃ p => p ↦* s.val⦄ :=
   RawPtr.materialize.spec s.val
 
 /-- Unlike Rust's `as_mut_ptr`, this allocates: the functional slice model has no address. -/
@@ -74,7 +74,7 @@ def Slice.as_mut_ptr {T : Type} (s : Slice T) : Result (MutRawPtr T) :=
 
 @[step]
 theorem Slice.as_mut_ptr.spec {T : Type} (s : Slice T) :
-    ⦃ emp ⦄ s.as_mut_ptr ⦃⇓ p => p ↦* s.val⦄ :=
+    ⦃ emp ⦄ s.as_mut_ptr ⦃ p => p ↦* s.val⦄ :=
   RawPtr.materialize.spec s.val
 
 instance {α : Type u} : GetElem (Slice α) Nat α (fun a i => i < a.val.length) where

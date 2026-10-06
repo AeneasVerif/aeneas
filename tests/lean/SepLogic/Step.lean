@@ -19,11 +19,11 @@ def allocAndReturn : Result (MutRawPtr Nat) := do
   let p ← alloc 1
   pure p
 
-example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => p ↦ 1⦄ := by
+example : ⦃ emp ⦄ allocAndReturn ⦃ p => p ↦ 1⦄ := by
   unfold allocAndReturn
   step*
 
-example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => p ↦ 1⦄ := by
+example : ⦃ emp ⦄ allocAndReturn ⦃ p => p ↦ 1⦄ := by
   unfold allocAndReturn
   step
   step
@@ -38,7 +38,7 @@ def readFreeReturn (p : MutRawPtr Nat) : Result Nat := do
 
 example (p : MutRawPtr Nat) (value : Nat) :
     ⦃ p ↦ value ⦄ readFreeReturn p
-      ⦃⇓ result => ⌜opaqueStepResult result (value + 1)⌝⦄ := by
+      ⦃ result => ⌜opaqueStepResult result (value + 1)⌝⦄ := by
   unfold readFreeReturn
   fail_if_success
     step*
@@ -48,17 +48,17 @@ example (p : MutRawPtr Nat) (value : Nat) :
   simp only [opaqueStepResult]
   agrind
 
-example : ⦃ emp ⦄ allocAndReturn ⦃⇓ p => iprop(⌜opaqueStepResult 1 1⌝ ∗ p ↦ 1)⦄ := by
+example : ⦃ emp ⦄ allocAndReturn ⦃ p => iprop(⌜opaqueStepResult 1 1⌝ ∗ p ↦ 1)⦄ := by
   unfold allocAndReturn
   step* 1
   step
   guard_target = opaqueStepResult 1 1
   rfl
 
-example (n : Nat) : ⦃ emp ⦄ Result.ok n ⦃⇓ result => ⌜result = n⌝⦄ := by
+example (n : Nat) : ⦃ emp ⦄ Result.ok n ⦃ result => ⌜result = n⌝⦄ := by
   step
 
-example (p : MutRawPtr Nat) : ⦃ p ↦ 0 ⦄ (pure () : Result Unit) ⦃⇓ p ↦ 0⦄ := by
+example (p : MutRawPtr Nat) : ⦃ p ↦ 0 ⦄ (pure () : Result Unit) ⦃ p ↦ 0⦄ := by
   step
 
 def namedReturn (n : Nat) : Result Nat :=
@@ -66,19 +66,19 @@ def namedReturn (n : Nat) : Result Nat :=
 
 @[step]
 theorem namedReturn.spec (n : Nat) :
-    ⦃ emp ⦄ namedReturn n ⦃⇓ result => ⌜result = n⌝⦄ := by
+    ⦃ emp ⦄ namedReturn n ⦃ result => ⌜result = n⌝⦄ := by
   unfold namedReturn
   step
 
-example (n : Nat) : ⦃ emp ⦄ namedReturn n ⦃⇓ result => ⌜result = n⌝⦄ := by
+example (n : Nat) : ⦃ emp ⦄ namedReturn n ⦃ result => ⌜result = n⌝⦄ := by
   step
 
-example (n : Nat) : ⦃ emp ⦄ (pure n : Result Nat) ⦃⇓ result => ⌜result = n⌝⦄ := by
+example (n : Nat) : ⦃ emp ⦄ (pure n : Result Nat) ⦃ result => ⌜result = n⌝⦄ := by
   step with pure.spec
 
 example (p : MutRawPtr Nat) (value : Nat) :
     ⦃ p ↦ value ⦄ readFreeReturn p
-      ⦃⇓ result => ⌜result = value + 1⌝⦄ := by
+      ⦃ result => ⌜result = value + 1⌝⦄ := by
   unfold readFreeReturn
   step*
 
@@ -88,7 +88,7 @@ def branchAfterRead (p : MutRawPtr Nat) : Result Nat := do
 
 example (p : MutRawPtr Nat) (initial : Nat) :
     ⦃ p ↦ initial ⦄ branchAfterRead p
-      ⦃⇓ result =>
+      ⦃ result =>
         iprop(⌜result = if initial = 0 then 1 else 2⌝ ∗ p ↦ initial)⦄ := by
   unfold branchAfterRead
   step* 1
@@ -110,7 +110,7 @@ def ghostHelper (_p : MutRawPtr Nat) : Result Unit :=
 
 @[step]
 theorem ghostHelper.spec (p : MutRawPtr Nat) (_witness : NeedsWitness) :
-    ⦃ p ↦ 0 ⦄ ghostHelper p ⦃⇓ p ↦ 0⦄ := by
+    ⦃ p ↦ 0 ⦄ ghostHelper p ⦃ p ↦ 0⦄ := by
   unfold ghostHelper
   step
 
@@ -119,7 +119,7 @@ def ghostCaller (p : MutRawPtr Nat) : Result Unit := do
   pure ()
 
 example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 0 ⦄ ghostCaller p ⦃⇓ p ↦ 0⦄ := by
+    ⦃ p ↦ 0 ⦄ ghostCaller p ⦃ p ↦ 0⦄ := by
   unfold ghostCaller
   fail_if_success
     step*
@@ -130,7 +130,7 @@ example (p : MutRawPtr Nat) :
 attribute [local irreducible] opaqueStepResult in
 example (p : MutRawPtr Nat) (value : Nat) :
     ⦃ p ↦ value ⦄ read p
-      ⦃⇓ result => iprop(⌜opaqueStepResult result value⌝ ∗ p ↦ value)⦄ := by
+      ⦃ result => iprop(⌜opaqueStepResult result value⌝ ∗ p ↦ value)⦄ := by
   step as ⟨result, hResult⟩
   guard_hyp hResult : result = value
   guard_target = opaqueStepResult result value
@@ -140,7 +140,7 @@ def unregisteredHelper (p : MutRawPtr Nat) : Result Unit :=
   Fixtures.incr_ptr p
 
 theorem unregisteredHelper.spec (p : MutRawPtr Nat) (value : Nat) :
-    ⦃ p ↦ value ⦄ unregisteredHelper p ⦃⇓ p ↦ value + 1⦄ := by
+    ⦃ p ↦ value ⦄ unregisteredHelper p ⦃ p ↦ value + 1⦄ := by
   unfold unregisteredHelper
   step*
 
@@ -149,7 +149,7 @@ def unregisteredCaller (p : MutRawPtr Nat) : Result Unit := do
   pure ()
 
 example (p : MutRawPtr Nat) (value : Nat) :
-    ⦃ p ↦ value ⦄ unregisteredCaller p ⦃⇓ p ↦ value + 1⦄ := by
+    ⦃ p ↦ value ⦄ unregisteredCaller p ⦃ p ↦ value + 1⦄ := by
   unfold unregisteredCaller
   fail_if_success
     step*

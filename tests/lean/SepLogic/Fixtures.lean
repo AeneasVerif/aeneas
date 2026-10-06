@@ -21,7 +21,7 @@ def incr_ptr (p : MutRawPtr Nat) : Result Unit := do
 
 @[step]
 theorem incr_ptr.spec (p : MutRawPtr Nat) (value : Nat) :
-    ⦃ p ↦ value ⦄ incr_ptr p ⦃⇓ p ↦ value + 1⦄ := by
+    ⦃ p ↦ value ⦄ incr_ptr p ⦃ p ↦ value + 1⦄ := by
   unfold incr_ptr
   step*
 
@@ -32,7 +32,7 @@ def incr_borrow (value : Nat) : Result Nat := do
 
 @[step]
 theorem incr_borrow.spec (value : Nat) :
-    ⦃ emp ⦄ incr_borrow value ⦃⇓ result => ⌜result = value + 1⌝⦄ := by
+    ⦃ emp ⦄ incr_borrow value ⦃ result => ⌜result = value + 1⌝⦄ := by
   unfold incr_borrow
   step*
 

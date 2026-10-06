@@ -12,19 +12,19 @@ example (m : Result Nat) (p : Nat → Prop) :
     (m ⦃ x => p x ⦄) = ispec emp m (fun x => ⌜p x⌝) := rfl
 
 example (m : Result Nat) (p : Nat → Prop) :
-    (m ⦃ x => p x ⦄) = (⦃ emp ⦄ m ⦃⇓ x => ⌜p x⌝⦄) := rfl
+    (m ⦃ x => p x ⦄) = (⦃ emp ⦄ m ⦃ x => ⌜p x⌝⦄) := rfl
 
 example (m : Result Nat) (p : Nat → Prop) :
-    (m ⦃ x => p x ⦄div) = (⦃ emp ⦄ m ⦃⇓ x => ⌜p x⌝⦄div) := rfl
+    (m ⦃ x => p x ⦄div) = (⦃ emp ⦄ m ⦃ x => ⌜p x⌝⦄div) := rfl
 
 example (m : Result (Nat × Nat)) (p : Nat → Nat → Prop) :
     (m ⦃ x y => p x y ⦄) = ispec emp m (fun (x, y) => ⌜p x y⌝) := rfl
 
 example (P : IProp) (m : Result (Nat × Nat)) (Q : Nat → Nat → IProp) :
-    (⦃ P ⦄ m ⦃⇓ x y => Q x y ⦄) = ispec P m (fun (x, y) => Q x y) := rfl
+    (⦃ P ⦄ m ⦃ x y => Q x y ⦄) = ispec P m (fun (x, y) => Q x y) := rfl
 
 example (P : IProp) (m : Result (Nat × Nat)) (Q : Nat → Nat → IProp) :
-    (⦃ P ⦄ m ⦃⇓ (x, y) => Q x y ⦄) = ispec P m (fun (x, y) => Q x y) := rfl
+    (⦃ P ⦄ m ⦃ (x, y) => Q x y ⦄) = ispec P m (fun (x, y) => Q x y) := rfl
 
 example (m : Result Nat) (p : Nat → Prop) :
     (m ⦃ p ⦄) = ispec emp m (fun value => ⌜p value⌝) := rfl
@@ -56,36 +56,36 @@ example (P Q : Nat → Prop) :
 /-- error: unsolved goals
 ⊢ ⦃ emp ⦄
     Result.ok 0
-    ⦃⇓ x => ⌜True⌝ ⦄ -/
+    ⦃ x => ⌜True⌝ ⦄ -/
 #guard_msgs in example : ispec emp (Result.ok 0) (fun _ => ⌜True⌝) := by done
 
 /-- error: unsolved goals
 ⊢ ⦃ emp ⦄
     Result.ok 0
-    ⦃⇓ r => ⌜r = 0⌝ ⦄ -/
+    ⦃ r => ⌜r = 0⌝ ⦄ -/
 #guard_msgs in
-example : ⦃ emp ⦄ Result.ok 0 ⦃⇓ r => ⌜r = 0⌝ ⦄ := by done
+example : ⦃ emp ⦄ Result.ok 0 ⦃ r => ⌜r = 0⌝ ⦄ := by done
 
 /-- error: unsolved goals
 ⊢ ⦃ emp ⦄
     Result.ok 0
-    ⦃⇓ r => ⌜r = 0⌝ ⦄div -/
+    ⦃ r => ⌜r = 0⌝ ⦄div -/
 #guard_msgs in
 example : dispec emp (Result.ok 0) (fun r => ⌜r = 0⌝) := by done
 
 /-- error: unsolved goals
 ⊢ ⦃ emp ⦄
     Result.ok (0, 1)
-    ⦃⇓ x y => ⌜x = 0 ∧ y = 1⌝ ⦄ -/
+    ⦃ x y => ⌜x = 0 ∧ y = 1⌝ ⦄ -/
 #guard_msgs in
-example : ⦃ emp ⦄ Result.ok (0, 1) ⦃⇓ x y => ⌜x = 0 ∧ y = 1⌝ ⦄ := by done
+example : ⦃ emp ⦄ Result.ok (0, 1) ⦃ x y => ⌜x = 0 ∧ y = 1⌝ ⦄ := by done
 
 /-- error: unsolved goals
 ⊢ ⦃ emp ⦄
     Result.ok (0, 1)
-    ⦃⇓ (x, y) => ⌜x = 0 ∧ y = 1⌝ ⦄div -/
+    ⦃ (x, y) => ⌜x = 0 ∧ y = 1⌝ ⦄div -/
 #guard_msgs in
-example : ⦃ emp ⦄ Result.ok (0, 1) ⦃⇓ (x, y) => ⌜x = 0 ∧ y = 1⌝ ⦄div := by done
+example : ⦃ emp ⦄ Result.ok (0, 1) ⦃ (x, y) => ⌜x = 0 ∧ y = 1⌝ ⦄div := by done
 
 /-- error: unsolved goals
 ⊢ Result.ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄ -/
@@ -142,10 +142,10 @@ example : Result.ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄div := by
 p : MutRawPtr ℕ
 ⊢ ⦃ p ↦ 1 ⦄
     Result.ok (0, 1)
-    ⦃⇓ (x, y) => p ↦ x + y ⦄ -/
+    ⦃ (x, y) => p ↦ x + y ⦄ -/
 #guard_msgs in
 example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ (x, y) =>
+    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃ (x, y) =>
       p ↦ (x + y)
     ⦄ := by done
 
@@ -153,10 +153,10 @@ example (p : MutRawPtr Nat) :
 p : MutRawPtr ℕ
 ⊢ ⦃ p ↦ 1 ⦄
     Result.ok (0, 1)
-    ⦃⇓ x y => p ↦ x + y ⦄ -/
+    ⦃ x y => p ↦ x + y ⦄ -/
 #guard_msgs in
 example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ x y =>
+    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃ x y =>
       p ↦ (x + y)
     ⦄ := by done
 
@@ -164,10 +164,10 @@ example (p : MutRawPtr Nat) :
 p : MutRawPtr ℕ
 ⊢ ⦃ p ↦ 1 ⦄
     Result.ok (0, 1)
-    ⦃⇓ x y => p ↦ x + y ⦄div -/
+    ⦃ x y => p ↦ x + y ⦄div -/
 #guard_msgs in
 example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ x y =>
+    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃ x y =>
       p ↦ (x + y)
     ⦄div := by done
 
@@ -175,10 +175,10 @@ example (p : MutRawPtr Nat) :
 p : MutRawPtr ℕ
 ⊢ ⦃ p ↦ 3 ⦄
     Result.ok ((0, 1), 2)
-    ⦃⇓ (a, b) c => p ↦ a + b + c ⦄ -/
+    ⦃ (a, b) c => p ↦ a + b + c ⦄ -/
 #guard_msgs in
 example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 3 ⦄ Result.ok ((0, 1), 2) ⦃⇓ (a, b) c =>
+    ⦃ p ↦ 3 ⦄ Result.ok ((0, 1), 2) ⦃ (a, b) c =>
       p ↦ (a + b + c)
     ⦄ := by done
 
@@ -186,10 +186,10 @@ example (p : MutRawPtr Nat) :
 p : MutRawPtr ℕ
 ⊢ ⦃ p ↦ 3 ⦄
     Result.ok (0, 1, 2)
-    ⦃⇓ a b c => p ↦ a + b + c ⦄ -/
+    ⦃ a b c => p ↦ a + b + c ⦄ -/
 #guard_msgs in
 example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ a b c =>
+    ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃ a b c =>
       p ↦ (a + b + c)
     ⦄ := by done
 
@@ -197,10 +197,10 @@ example (p : MutRawPtr Nat) :
 p : MutRawPtr ℕ
 ⊢ ⦃ p ↦ 3 ⦄
     Result.ok (0, 1, 2)
-    ⦃⇓ a (b, c) => p ↦ a + b + c ⦄ -/
+    ⦃ a (b, c) => p ↦ a + b + c ⦄ -/
 #guard_msgs in
 example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ a (b, c) =>
+    ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃ a (b, c) =>
       p ↦ (a + b + c)
     ⦄ := by done
 
@@ -208,51 +208,51 @@ example (p : MutRawPtr Nat) :
 p : MutRawPtr ℕ
 ⊢ ⦃ p ↦ 3 ⦄
     Result.ok (0, 1, 2)
-    ⦃⇓ (a, (b, c)) => p ↦ a + b + c ⦄ -/
+    ⦃ (a, (b, c)) => p ↦ a + b + c ⦄ -/
 #guard_msgs in
 example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ (a, (b, c)) =>
+    ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃ (a, (b, c)) =>
       p ↦ (a + b + c)
     ⦄ := by done
 
 example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ (x, y) =>
+    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃ (x, y) =>
       p ↦ (x + y)
     ⦄ := by
   step
 
 example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ (x, y) =>
+    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃ (x, y) =>
       p ↦ (x + y)
     ⦄div := by
   step
 
 example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ x y =>
+    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃ x y =>
       p ↦ (x + y)
     ⦄ := by
   step
 
 example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃⇓ x y =>
+    ⦃ p ↦ 1 ⦄ Result.ok (0, 1) ⦃ x y =>
       p ↦ (x + y)
     ⦄div := by
   step
 
 example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 3 ⦄ Result.ok ((0, 1), 2) ⦃⇓ ((x, y), z) =>
+    ⦃ p ↦ 3 ⦄ Result.ok ((0, 1), 2) ⦃ ((x, y), z) =>
       p ↦ (x + y + z)
     ⦄ := by
   step
 
 example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 3 ⦄ Result.ok ((0, 1), 2) ⦃⇓ (x, y) z =>
+    ⦃ p ↦ 3 ⦄ Result.ok ((0, 1), 2) ⦃ (x, y) z =>
       p ↦ (x + y + z)
     ⦄ := by
   step
 
 example (p : MutRawPtr Nat) :
-    ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃⇓ x (y, z) =>
+    ⦃ p ↦ 3 ⦄ Result.ok (0, 1, 2) ⦃ x (y, z) =>
       p ↦ (x + y + z)
     ⦄div := by
   step
@@ -262,7 +262,7 @@ def incr (value : Nat) : Result Nat :=
 
 @[step]
 theorem incr.spec (value : Nat) :
-    ⦃ emp ⦄ incr value ⦃⇓ result =>
+    ⦃ emp ⦄ incr value ⦃ result =>
       ⌜result = value + 1⌝
     ⦄ := by
   unfold incr
@@ -286,7 +286,7 @@ def incrPair (value : Nat) : Result Nat := do
 example (value : Nat) :
     ⦃ emp ⦄
       incrPair value
-    ⦃⇓ result => ⌜result = value + (value + 1) + 1⌝ ⦄ := by
+    ⦃ result => ⌜result = value + (value + 1) + 1⌝ ⦄ := by
   unfold incrPair
   step as ⟨ output, hFirst, hSecond ⟩
   guard_hyp hFirst : output.1 = value
@@ -298,7 +298,7 @@ def pureSLTwice (value : Nat) : Result Nat := do
   incr next
 
 example (value : Nat) :
-    ⦃ emp ⦄ pureSLTwice value ⦃⇓ result => ⌜result = value + 2⌝⦄ := by
+    ⦃ emp ⦄ pureSLTwice value ⦃ result => ⌜result = value + 2⌝⦄ := by
   unfold pureSLTwice
   step*
 
@@ -307,7 +307,7 @@ def pureSLPair (value : Nat) : Result Nat := do
   incr first
 
 example (value : Nat) :
-    ⦃ emp ⦄ pureSLPair value ⦃⇓ result => ⌜result = value + 1⌝⦄ := by
+    ⦃ emp ⦄ pureSLPair value ⦃ result => ⌜result = value + 1⌝⦄ := by
   unfold pureSLPair
   step*
 
@@ -316,7 +316,7 @@ def pureSLUnit (value : Nat) : Result Nat := do
   incr value
 
 example (value : Nat) :
-    ⦃ emp ⦄ pureSLUnit value ⦃⇓ result => ⌜result = value + 1⌝⦄ := by
+    ⦃ emp ⦄ pureSLUnit value ⦃ result => ⌜result = value + 1⌝⦄ := by
   unfold pureSLUnit
   step*
 
@@ -325,7 +325,7 @@ def pureSLExists (value : Nat) : Result Nat :=
 
 @[step]
 theorem pureSLExists.spec (value : Nat) :
-    ⦃ emp ⦄ pureSLExists value ⦃⇓ result =>
+    ⦃ emp ⦄ pureSLExists value ⦃ result =>
       ∃ witness : Nat, ⌜result = witness ∧ witness = value⌝
     ⦄ := by
   unfold pureSLExists
@@ -339,7 +339,7 @@ def consumePureSLExists (value : Nat) : Result Nat := do
 
 example (value : Nat) :
     ⦃ emp ⦄ consumePureSLExists value
-      ⦃⇓ result => ⌜result = value + 1⌝⦄ := by
+      ⦃ result => ⌜result = value + 1⌝⦄ := by
   unfold consumePureSLExists
   step*
 
@@ -347,7 +347,7 @@ example (value : Nat) :
 P : IProp
 ⊢ ⦃ P ⦄
     Result.ok 0
-    ⦃⇓ value => P ∗ ⌜value = 0⌝ ⦄ -/
+    ⦃ value => P ∗ ⌜value = 0⌝ ⦄ -/
 #guard_msgs in
 example (P : IProp) :
     ispec P (Result.ok 0) (fun value => P ∗ ⌜value = 0⌝) := by done
@@ -356,7 +356,7 @@ example (P : IProp) :
 P : IProp
 ⊢ ⦃ P ⦄
     Result.ok 0
-    ⦃⇓ value => P ∗ ⌜value = 0⌝ ⦄div -/
+    ⦃ value => P ∗ ⌜value = 0⌝ ⦄div -/
 #guard_msgs in
 example (P : IProp) :
     dispec P (Result.ok 0) (fun value => P ∗ ⌜value = 0⌝) := by done
@@ -367,19 +367,19 @@ Q : IPost ℕ
 m : Result ℕ
 ⊢ ⦃ P ⦄
     m
-    ⦃⇓ Q ⦄ -/
+    ⦃ Q ⦄ -/
 #guard_msgs in
 example (P : IProp) (Q : IPost Nat) (m : Result Nat) :
     ispec P m Q := by done
 
 example (makeIncrement : Result (Nat → Result Nat)) : Prop :=
-  ⦃ emp ⦄ makeIncrement ⦃⇓ increment =>
-    ⌜⦃ emp ⦄ increment 0 ⦃⇓ value => ⌜value = 1⌝ ⦄⌝
+  ⦃ emp ⦄ makeIncrement ⦃ increment =>
+    ⌜⦃ emp ⦄ increment 0 ⦃ value => ⌜value = 1⌝ ⦄⌝
   ⦄
 
 example (makeIncrement : Result (Nat → Result Nat)) : Prop :=
-  ⦃ emp ⦄ makeIncrement ⦃⇓ increment =>
-    ⌜∀ x, ⦃ emp ⦄ increment x ⦃⇓ value => ⌜value = x + 1⌝ ⦄⌝
+  ⦃ emp ⦄ makeIncrement ⦃ increment =>
+    ⌜∀ x, ⦃ emp ⦄ increment x ⦃ value => ⌜value = x + 1⌝ ⦄⌝
   ⦄
 
 def increment (p : MutRawPtr Nat) (_ : Unit) : Result Nat := do
@@ -389,7 +389,7 @@ def increment (p : MutRawPtr Nat) (_ : Unit) : Result Nat := do
 
 @[step]
 theorem increment.spec (p : MutRawPtr Nat) (n : Nat) :
-    ⦃ p ↦ n ⦄ increment p () ⦃⇓ value =>
+    ⦃ p ↦ n ⦄ increment p () ⦃ value =>
       p ↦ (n + 1) ∗ ⌜value = n + 1⌝
     ⦄ := by
   unfold increment
@@ -400,7 +400,7 @@ def incrementTwiceSL (p : MutRawPtr Nat) : Result Nat := do
   increment p ()
 
 example (p : MutRawPtr Nat) (n : Nat) :
-    ⦃ p ↦ n ⦄ incrementTwiceSL p ⦃⇓ value =>
+    ⦃ p ↦ n ⦄ incrementTwiceSL p ⦃ value =>
       p ↦ (n + 2) ∗ ⌜value = n + 2⌝
     ⦄ := by
   unfold incrementTwiceSL
@@ -412,7 +412,7 @@ def readPairSL (p : MutRawPtr Nat) : Result (Nat × Nat) := do
 
 @[step]
 theorem readPairSL.spec (p : MutRawPtr Nat) (n : Nat) :
-    ⦃ p ↦ n ⦄ readPairSL p ⦃⇓ first second =>
+    ⦃ p ↦ n ⦄ readPairSL p ⦃ first second =>
       p ↦ n ∗ ⌜first = n ∧ second = n + 1⌝
     ⦄ := by
   unfold readPairSL
@@ -423,7 +423,7 @@ def usePairSL (p : MutRawPtr Nat) : Result Unit := do
   MutRawPtr.write p next
 
 example (p : MutRawPtr Nat) (n : Nat) :
-    ⦃ p ↦ n ⦄ usePairSL p ⦃⇓ p ↦ (n + 1)⦄ := by
+    ⦃ p ↦ n ⦄ usePairSL p ⦃ p ↦ (n + 1)⦄ := by
   unfold usePairSL
   step*
 
@@ -432,7 +432,7 @@ def updateTwiceSL (p : MutRawPtr Nat) (n : Nat) : Result Unit := do
   MutRawPtr.write p (n + 2)
 
 example (p : MutRawPtr Nat) (n : Nat) :
-    ⦃ p ↦ n ⦄ updateTwiceSL p n ⦃⇓ p ↦ (n + 2)⦄ := by
+    ⦃ p ↦ n ⦄ updateTwiceSL p n ⦃ p ↦ (n + 2)⦄ := by
   unfold updateTwiceSL
   step*
 
@@ -442,10 +442,10 @@ def makeCounter : Result (Unit → Result Nat) :=
 
 @[step]
 theorem makeCounter.spec :
-  ⦃ emp ⦄ makeCounter ⦃⇓ increment =>
+  ⦃ emp ⦄ makeCounter ⦃ increment =>
     ∃ p : MutRawPtr Nat,
       p ↦ 0 ∗
-      ⌜∀ n, ⦃ p ↦ n ⦄ increment () ⦃⇓ value => p ↦ (n + 1) ∗ ⌜value = n + 1⌝ ⦄⌝
+      ⌜∀ n, ⦃ p ↦ n ⦄ increment () ⦃ value => p ↦ (n + 1) ∗ ⌜value = n + 1⌝ ⦄⌝
   ⦄ := by
   unfold makeCounter
   step as ⟨p⟩
@@ -461,7 +461,7 @@ def countToFive : Result Nat :=
     increment ()
 
 theorem countToFive.spec :
-    ⦃ emp ⦄ countToFive ⦃⇓ value => ⌜value = 5⌝⦄ := by
+    ⦃ emp ⦄ countToFive ⦃ value => ⌜value = 5⌝⦄ := by
   unfold countToFive
   step*
 
@@ -473,7 +473,7 @@ theorem old_add1.spec (x : Nat) :
   simp [old_add1]
 
 example (v : Nat) (P : IProp) :
-    ⦃ P ⦄ old_add1 v ⦃⇓ y => P ∗ ⌜y = v + 1⌝ ⦄ := by
+    ⦃ P ⦄ old_add1 v ⦃ y => P ∗ ⌜y = v + 1⌝ ⦄ := by
   step*
 
 example (v : Nat) : old_add1 v ⦃ y => y = v + 1 ⦄ := by
@@ -524,7 +524,7 @@ def bumpCell (p : MutRawPtr Nat) : Result Unit := do
 
 @[step]
 theorem bumpCell.spec (p : MutRawPtr Nat) (v : Nat) :
-    ⦃ p ↦ v ⦄ bumpCell p ⦃⇓ p ↦ v + 1⦄ := by
+    ⦃ p ↦ v ⦄ bumpCell p ⦃ p ↦ v + 1⦄ := by
   unfold bumpCell
   step*
 
@@ -537,7 +537,7 @@ def bumpBoxed (v : Nat) : Result Nat := do
 
 @[step]
 theorem bumpBoxed.spec (v : Nat) :
-    ⦃ emp ⦄ bumpBoxed v ⦃⇓ r => ⌜r = v + 1⌝⦄ := by
+    ⦃ emp ⦄ bumpBoxed v ⦃ r => ⌜r = v + 1⌝⦄ := by
   unfold bumpBoxed
   step*
 
@@ -548,7 +548,7 @@ def mixedCall (p : MutRawPtr Nat) : Result Nat := do
 
 @[step]
 theorem mixedCall.spec (p : MutRawPtr Nat) (v : Nat) :
-    ⦃ p ↦ v ⦄ mixedCall p ⦃⇓ r => ⌜r = v + 2⌝ ∗ p ↦ v + 1⦄ := by
+    ⦃ p ↦ v ⦄ mixedCall p ⦃ r => ⌜r = v + 2⌝ ∗ p ↦ v + 1⦄ := by
   unfold mixedCall
   step*
 
@@ -557,16 +557,16 @@ def pureCall (x : Nat) : Result Nat := do
   let z ← bump y
   bumpBoxed z
 
-example (x : Nat) : ⦃ emp ⦄ pureCall x ⦃⇓ r => ⌜r = x + 3⌝⦄ := by
+example (x : Nat) : ⦃ emp ⦄ pureCall x ⦃ r => ⌜r = x + 3⌝⦄ := by
   unfold pureCall
   step*
 
 example (x : Nat) : bump x ⦃ y => y = x + 1 ⦄div := by step*
 
-example (v : Nat) : ⦃ emp ⦄ bumpBoxed v ⦃⇓ r => ⌜r = v + 1⌝⦄div := by step*
+example (v : Nat) : ⦃ emp ⦄ bumpBoxed v ⦃ r => ⌜r = v + 1⌝⦄div := by step*
 
 example (p : MutRawPtr Nat) (v : Nat) :
-    ⦃ p ↦ v ⦄ bumpCell p ⦃⇓ p ↦ v + 1⦄div :=
+    ⦃ p ↦ v ⦄ bumpCell p ⦃ p ↦ v + 1⦄div :=
   ispec_dispec (bumpCell.spec p v)
 
 def callWith (f : Nat → Result Nat) (x : Nat) : Result Nat := f x
@@ -580,18 +580,18 @@ example (x : Nat) : callWith bump x ⦃ y => y = x + 1 ⦄ := by
   apply callWith.spec_pure
   step*
 
-example (x : Nat) : ⦃ emp ⦄ callWith bumpBoxed x ⦃⇓ y => ⌜y = x + 1⌝⦄ := by
+example (x : Nat) : ⦃ emp ⦄ callWith bumpBoxed x ⦃ y => ⌜y = x + 1⌝⦄ := by
   apply callWith.spec_pure
   step*
 
 example (p : MutRawPtr Nat) (v x : Nat) :
-    ⦃ p ↦ v ⦄ callWith bumpBoxed x ⦃⇓ y => ⌜y = x + 1⌝ ∗ p ↦ v⦄ := by
+    ⦃ p ↦ v ⦄ callWith bumpBoxed x ⦃ y => ⌜y = x + 1⌝ ∗ p ↦ v⦄ := by
   step with (callWith.spec_pure (post := fun y => y = x + 1))
   · step*
 
 theorem callWith.spec (f : Nat → Result Nat) (x : Nat) (P : IPre) (Q : IPost Nat)
-    (hf : ⦃ P ⦄ f x ⦃⇓ y => Q y⦄) :
-    ⦃ P ⦄ callWith f x ⦃⇓ y => Q y⦄ := by
+    (hf : ⦃ P ⦄ f x ⦃ y => Q y⦄) :
+    ⦃ P ⦄ callWith f x ⦃ y => Q y⦄ := by
   unfold callWith; exact hf
 
 example (x : Nat) : callWith bump x ⦃ y => y = x + 1 ⦄ := by
@@ -600,13 +600,13 @@ example (x : Nat) : callWith bump x ⦃ y => y = x + 1 ⦄ := by
 
 example (p : MutRawPtr Nat) (v w : Nat) :
     ⦃ p ↦ v ⦄ callWith (fun n => do MutRawPtr.write p n; RawPtr.read p) w
-      ⦃⇓ y => ⌜y = w⌝ ∗ p ↦ w⦄ := by
+      ⦃ y => ⌜y = w⌝ ∗ p ↦ w⦄ := by
   apply callWith.spec
   step*
 
 example (p : MutRawPtr Nat) (v w : Nat) :
     ⦃ p ↦ v ⦄ callWith (fun n => do let m ← bump n; MutRawPtr.write p m; RawPtr.read p) w
-      ⦃⇓ y => ⌜y = w + 1⌝ ∗ p ↦ w + 1⦄ := by
+      ⦃ y => ⌜y = w + 1⌝ ∗ p ↦ w + 1⦄ := by
   apply callWith.spec
   step*
 
@@ -618,23 +618,23 @@ def updateWith (f : Nat → Result Nat) (p : MutRawPtr Nat) : Result Unit := do
 @[step]
 theorem updateWith.spec (f : Nat → Result Nat) (p : MutRawPtr Nat) (v w : Nat)
     (hf : f v ⦃ r => r = w ⦄) :
-    ⦃ p ↦ v ⦄ updateWith f p ⦃⇓ p ↦ w⦄ := by
+    ⦃ p ↦ v ⦄ updateWith f p ⦃ p ↦ w⦄ := by
   unfold updateWith
   step as ⟨v', hv'⟩
   subst v'
   step*
 
 example (p : MutRawPtr Nat) (v : Nat) :
-    ⦃ p ↦ v ⦄ updateWith bump p ⦃⇓ p ↦ v + 1⦄ := by
+    ⦃ p ↦ v ⦄ updateWith bump p ⦃ p ↦ v + 1⦄ := by
   step* +inferPost
 
 example (p : MutRawPtr Nat) (v : Nat) :
-    ⦃ p ↦ v ⦄ updateWith bumpBoxed p ⦃⇓ p ↦ v + 1⦄ := by
+    ⦃ p ↦ v ⦄ updateWith bumpBoxed p ⦃ p ↦ v + 1⦄ := by
   step* +inferPost
 
 example (p : MutRawPtr Nat) (v : Nat) :
     ⦃ p ↦ v ⦄ callWith (fun n => do updateWith bump p; bump n) v
-      ⦃⇓ y => ⌜y = v + 1⌝ ∗ p ↦ v + 1⦄ := by
+      ⦃ y => ⌜y = v + 1⌝ ∗ p ↦ v + 1⦄ := by
   apply callWith.spec
   step with (updateWith.spec (w := v + 1))
   · step*
@@ -642,7 +642,7 @@ example (p : MutRawPtr Nat) (v : Nat) :
 
 end Ex
 
-example : ⦃ emp ⦄ MutRawPtr.alloc (0 : Nat) ⦃⇓ _ => ⌜True⌝⦄ := by
+example : ⦃ emp ⦄ MutRawPtr.alloc (0 : Nat) ⦃ _ => ⌜True⌝⦄ := by
   step*
 
 example : ¬ ∃ q, MutRawPtr.alloc (0 : Nat) = Result.ok q := by

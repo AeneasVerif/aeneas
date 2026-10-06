@@ -24,7 +24,7 @@ def bufferRoundTrip : Result Nat := do
   pure (x + y)
 
 theorem bufferRoundTrip.spec :
-    ⦃ emp ⦄ bufferRoundTrip ⦃⇓ result => ⌜result = 42⌝⦄ := by
+    ⦃ emp ⦄ bufferRoundTrip ⦃ result => ⌜result = 42⌝⦄ := by
   unfold bufferRoundTrip
   step*
   simp [*]
@@ -37,7 +37,7 @@ def bufferSwap : Result (Nat × Nat) := do
   b.free
   pure (x, y)
 
-theorem bufferSwap.spec : ⦃ emp ⦄ bufferSwap ⦃⇓ result => ⌜result = (8, 7)⌝⦄ := by
+theorem bufferSwap.spec : ⦃ emp ⦄ bufferSwap ⦃ result => ⌜result = (8, 7)⌝⦄ := by
   unfold bufferSwap
   step*
   simp [*]
@@ -49,7 +49,7 @@ def bufferFill : Result Nat := do
   b.free
   pure value
 
-theorem bufferFill.spec : ⦃ emp ⦄ bufferFill ⦃⇓ result => ⌜result = 5⌝⦄ := by
+theorem bufferFill.spec : ⦃ emp ⦄ bufferFill ⦃ result => ⌜result = 5⌝⦄ := by
   unfold bufferFill
   step as ⟨b⟩
   irewrite (buffer_length b _)
@@ -67,7 +67,7 @@ def bufferCopyCompare : Result Bool := do
   pure same
 
 theorem bufferCopyCompare.spec :
-    ⦃ emp ⦄ bufferCopyCompare ⦃⇓ result => ⌜result = true⌝⦄ := by
+    ⦃ emp ⦄ bufferCopyCompare ⦃ result => ⌜result = true⌝⦄ := by
   unfold bufferCopyCompare
   step as ⟨src⟩
   step as ⟨dst⟩
@@ -108,7 +108,7 @@ def arrayMutToRawRoundTrip :
   pure (functionalArray.from_slice updated)
 
 theorem arrayMutToRawRoundTrip.spec :
-    ⦃ emp ⦄ arrayMutToRawRoundTrip ⦃⇓ result => ⌜result.val = [1, 9, 3]⌝⦄ := by
+    ⦃ emp ⦄ arrayMutToRawRoundTrip ⦃ result => ⌜result.val = [1, 9, 3]⌝⦄ := by
   unfold arrayMutToRawRoundTrip
   step as ⟨b⟩
   step with Buffer.write.spec_buffer b [1, 2, 3] 1 9 (by simp)
@@ -128,7 +128,7 @@ def bufferMutToRawRoundTrip : Result (Aeneas.Std.Slice Nat) := do
   Buffer.end_mut_to_raw functionalSlice b
 
 theorem bufferMutToRawRoundTrip.spec :
-    ⦃ emp ⦄ bufferMutToRawRoundTrip ⦃⇓ result => ⌜result.val = [4, 5, 7]⌝⦄ := by
+    ⦃ emp ⦄ bufferMutToRawRoundTrip ⦃ result => ⌜result.val = [4, 5, 7]⌝⦄ := by
   unfold bufferMutToRawRoundTrip
   step as ⟨b⟩
   step with Buffer.write.spec_buffer b [4, 5, 6] 2 7 (by simp)

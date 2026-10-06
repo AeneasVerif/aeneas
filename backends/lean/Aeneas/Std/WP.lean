@@ -624,13 +624,13 @@ private meta def delabSLISpecPost (pre monadExpr : Term) (isPartial : Bool) :
   let (binders, body) ← delabSLPost
   if h : binders.size > 0 then
     if isPartial then
-      `(⦃$pre⦄ $monadExpr ⦃⇓ $(binders[0]) $(binders.drop 1)* => $body⦄div)
+      `(⦃$pre⦄ $monadExpr ⦃ $(binders[0]) $(binders.drop 1)* => $body⦄div)
     else
-      `(⦃$pre⦄ $monadExpr ⦃⇓ $(binders[0]) $(binders.drop 1)* => $body⦄)
+      `(⦃$pre⦄ $monadExpr ⦃ $(binders[0]) $(binders.drop 1)* => $body⦄)
   else if isPartial then
-    `(⦃$pre⦄ $monadExpr ⦃⇓ $body⦄div)
+    `(⦃$pre⦄ $monadExpr ⦃ $body⦄div)
   else
-    `(⦃$pre⦄ $monadExpr ⦃⇓ $body⦄)
+    `(⦃$pre⦄ $monadExpr ⦃ $body⦄)
 
 private meta def delabSLISpecCore (ispecName : Name) (isPartial : Bool) : Delab := do
   guard ((← getExpr).isAppOfArity ispecName 4)
@@ -951,11 +951,11 @@ macro "dwp_mono " thm:term : tactic =>
   `(tactic| (refine dispec_mono $thm ?_ <;> iframe))
 
 theorem ret.spec (value : α) :
-    ⦃ emp ⦄ Result.ok value ⦃⇓ result => ⌜result = value⌝⦄ :=
+    ⦃ emp ⦄ Result.ok value ⦃ result => ⌜result = value⌝⦄ :=
   (ispec_ok value).mpr fun _ _ => rfl
 
 theorem pure.spec (value : α) :
-    ⦃ emp ⦄ (Pure.pure value : Result α) ⦃⇓ result => ⌜result = value⌝⦄ :=
+    ⦃ emp ⦄ (Pure.pure value : Result α) ⦃ result => ⌜result = value⌝⦄ :=
   ret.spec value
 
 /-- Keeps pure returns in the pure judgment, so `step` introduces no spatial entailment for them. -/

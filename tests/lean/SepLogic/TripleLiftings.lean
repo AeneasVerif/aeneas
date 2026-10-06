@@ -25,12 +25,12 @@ def legacyPair (x : Nat) : Result (Nat × Nat) := Result.ok (x, x + 1)
   step*
 
 @[step] theorem totalSpatial.spec (x : Nat) :
-    ⦃ emp ⦄ totalSpatial x ⦃⇓ y => ⌜y = x⌝ ⦄ := by
+    ⦃ emp ⦄ totalSpatial x ⦃ y => ⌜y = x⌝ ⦄ := by
   unfold totalSpatial
   step*
 
 @[step] theorem partialSpatial.spec (x : Nat) :
-    ⦃ emp ⦄ partialSpatial x ⦃⇓ y => ⌜y = x⌝ ⦄div := by
+    ⦃ emp ⦄ partialSpatial x ⦃ y => ⌜y = x⌝ ⦄div := by
   unfold partialSpatial
   step*
 
@@ -65,16 +65,16 @@ run_meta do
 example (x : Nat) : totalPure x ⦃ y => y = x ⦄ := by step*
 example (x : Nat) : totalPure x ⦃ y => y = x ⦄div := by step*
 example (x : Nat) (P : IProp) :
-    ⦃ P ⦄ totalPure x ⦃⇓ y => P ∗ ⌜y = x⌝ ⦄ := by step*
+    ⦃ P ⦄ totalPure x ⦃ y => P ∗ ⌜y = x⌝ ⦄ := by step*
 example (x : Nat) (P : IProp) :
-    ⦃ P ⦄ totalPure x ⦃⇓ y => P ∗ ⌜y = x⌝ ⦄div := by step*
+    ⦃ P ⦄ totalPure x ⦃ y => P ∗ ⌜y = x⌝ ⦄div := by step*
 
 example (x : Nat) (P : IProp) :
-    ⦃ P ⦄ legacyTotalPure x ⦃⇓ y => P ∗ ⌜y = x⌝ ⦄ := by step*
+    ⦃ P ⦄ legacyTotalPure x ⦃ y => P ∗ ⌜y = x⌝ ⦄ := by step*
 example (x : Nat) (P : IProp) :
-    ⦃ P ⦄ legacyTotalPure x ⦃⇓ y => P ∗ ⌜y = x⌝ ⦄div := by step*
+    ⦃ P ⦄ legacyTotalPure x ⦃ y => P ∗ ⌜y = x⌝ ⦄div := by step*
 example (x : Nat) (P : IProp) :
-    ⦃ P ⦄ legacyPartialPure x ⦃⇓ y => P ∗ ⌜y = x⌝ ⦄div := by step*
+    ⦃ P ⦄ legacyPartialPure x ⦃ y => P ∗ ⌜y = x⌝ ⦄div := by step*
 
 def useLegacyPair (x : Nat) : Result Nat := do
   let pair ← legacyPair x
@@ -82,7 +82,7 @@ def useLegacyPair (x : Nat) : Result Nat := do
 
 example (x : Nat) :
     ⦃ emp ⦄ useLegacyPair x
-        ⦃⇓ result => ⌜result = x + (x + 1)⌝ ⦄ := by
+        ⦃ result => ⌜result = x + (x + 1)⌝ ⦄ := by
     unfold useLegacyPair
     step as ⟨pair, hFirst, hSecond⟩
     guard_hyp hFirst : pair.1 = x
@@ -92,10 +92,10 @@ example (x : Nat) :
 example (recur : Nat → Result (Nat × Nat))
     (hRecur : ∀ x,
       ⦃ emp ⦄ recur x
-        ⦃⇓ (first, second) => ⌜first = x ∧ second = x + 1⌝ ⦄)
+        ⦃ (first, second) => ⌜first = x ∧ second = x + 1⌝ ⦄)
     (x : Nat) :
     ⦃ emp ⦄ recur x
-      ⦃⇓ pair => ⌜pair.1 + pair.2 = x + (x + 1)⌝ ⦄ := by
+      ⦃ pair => ⌜pair.1 + pair.2 = x + (x + 1)⌝ ⦄ := by
   step with hRecur x as ⟨pair, hFirst, hSecond⟩
   guard_hyp hFirst : pair.1 = x
   guard_hyp hSecond : pair.2 = x + 1
@@ -103,17 +103,17 @@ example (recur : Nat → Result (Nat × Nat))
 
 example (x : Nat) : partialPure x ⦃ y => y = x ⦄div := by step*
 example (x : Nat) (P : IProp) :
-    ⦃ P ⦄ partialPure x ⦃⇓ y => P ∗ ⌜y = x⌝ ⦄div := by step*
+    ⦃ P ⦄ partialPure x ⦃ y => P ∗ ⌜y = x⌝ ⦄div := by step*
 
 example (x : Nat) : totalSpatial x ⦃ y => y = x ⦄ := by step*
 example (x : Nat) : totalSpatial x ⦃ y => y = x ⦄div := by step*
 example (x : Nat) (P : IProp) :
-    ⦃ P ⦄ totalSpatial x ⦃⇓ y => P ∗ ⌜y = x⌝ ⦄ := by step*
+    ⦃ P ⦄ totalSpatial x ⦃ y => P ∗ ⌜y = x⌝ ⦄ := by step*
 example (x : Nat) (P : IProp) :
-    ⦃ P ⦄ totalSpatial x ⦃⇓ y => P ∗ ⌜y = x⌝ ⦄div := by step*
+    ⦃ P ⦄ totalSpatial x ⦃ y => P ∗ ⌜y = x⌝ ⦄div := by step*
 example (x : Nat) : partialSpatial x ⦃ y => y = x ⦄div := by step*
 example (x : Nat) (P : IProp) :
-    ⦃ P ⦄ partialSpatial x ⦃⇓ y => P ∗ ⌜y = x⌝ ⦄div := by step*
+    ⦃ P ⦄ partialSpatial x ⦃ y => P ∗ ⌜y = x⌝ ⦄div := by step*
 
 example (x : Nat) :
     (do let y ← totalPure x; totalPure y) ⦃ z => z = x ⦄ := by step*
@@ -137,11 +137,11 @@ def twicePartialPure (x : Nat) : Result Nat := do
   totalPure y
 
 example (x : Nat) (P : IProp) :
-    ⦃ P ⦄ twiceTotalPure x ⦃⇓ z => P ∗ ⌜z = x⌝ ⦄ := by
+    ⦃ P ⦄ twiceTotalPure x ⦃ z => P ∗ ⌜z = x⌝ ⦄ := by
   unfold twiceTotalPure
   step*
 example (x : Nat) (P : IProp) :
-    ⦃ P ⦄ twicePartialPure x ⦃⇓ z => P ∗ ⌜z = x⌝ ⦄div := by
+    ⦃ P ⦄ twicePartialPure x ⦃ z => P ∗ ⌜z = x⌝ ⦄div := by
   unfold twicePartialPure
   step*
 
@@ -155,7 +155,7 @@ example (x : Nat) :
 def partialAlloc (x : Nat) := MutRawPtr.alloc x
 
 @[step] theorem partialAlloc.spec (x : Nat) :
-    ⦃ emp ⦄ partialAlloc x ⦃⇓ p => p ↦ x ⦄div :=
+    ⦃ emp ⦄ partialAlloc x ⦃ p => p ↦ x ⦄div :=
   ispec_dispec (MutRawPtr.alloc.spec x)
 
 example (x : Nat) :
@@ -166,16 +166,16 @@ example (x : Nat) :
       partialPure y) (fun z => ⌜z = x⌝) := by step*
 
 example (m : Result Nat) (h : m ⦃ n => n = 7 ⦄) (P : IProp) :
-    ⦃ P ⦄ m ⦃⇓ n => P ∗ ⌜n = 7⌝ ⦄ := by
+    ⦃ P ⦄ m ⦃ n => P ∗ ⌜n = 7⌝ ⦄ := by
   step with h
 example (m : Result Nat) (h : m ⦃ n => n = 7 ⦄div) (P : IProp) :
-    ⦃ P ⦄ m ⦃⇓ n => P ∗ ⌜n = 7⌝ ⦄div := by
+    ⦃ P ⦄ m ⦃ n => P ∗ ⌜n = 7⌝ ⦄div := by
   step with h
-example (m : Result Nat) (h : ⦃ emp ⦄ m ⦃⇓ n => ⌜n = 7⌝ ⦄) :
+example (m : Result Nat) (h : ⦃ emp ⦄ m ⦃ n => ⌜n = 7⌝ ⦄) :
     m ⦃ n => n = 7 ⦄div := by
   step with h
   assumption
-example (m : Result Nat) (h : ⦃ emp ⦄ m ⦃⇓ n => ⌜n = 7⌝ ⦄div) :
+example (m : Result Nat) (h : ⦃ emp ⦄ m ⦃ n => ⌜n = 7⌝ ⦄div) :
     m ⦃ n => n = 7 ⦄div := by step*
 
 universe u v
@@ -213,7 +213,7 @@ example (x : Nat) :
   step*
 
 example (x : Nat) (P : IProp) :
-    ⦃ P ⦄ usePartialPair x ⦃⇓ z => P ∗ ⌜z = x + (x + 1)⌝ ⦄div := by
+    ⦃ P ⦄ usePartialPair x ⦃ z => P ∗ ⌜z = x + (x + 1)⌝ ⦄div := by
   unfold usePartialPair
   step as ⟨pair⟩
   apply dispec_ipure.mpr
@@ -267,20 +267,20 @@ example (x : Nat) : partialSpatial x ⦃ y => y = x ⦄ := by
   step*
 
 example (x : Nat) (P : IProp) :
-    ⦃ P ⦄ partialPure x ⦃⇓ y => P ∗ ⌜y = x⌝ ⦄ := by
+    ⦃ P ⦄ partialPure x ⦃ y => P ∗ ⌜y = x⌝ ⦄ := by
   fail_if_success step with partialPure.spec
   unfold partialPure
   step*
 
 example (x : Nat) (P : IProp) :
-    ⦃ P ⦄ partialSpatial x ⦃⇓ y => P ∗ ⌜y = x⌝ ⦄ := by
+    ⦃ P ⦄ partialSpatial x ⦃ y => P ∗ ⌜y = x⌝ ⦄ := by
   fail_if_success step with partialSpatial.spec
   unfold partialSpatial
   step*
 
 example (m : Result Nat) (p : MutRawPtr Nat)
     (hPure : m ⦃ n => n = 0 ⦄)
-    (_hSpatial : ⦃ p ↦ 0 ⦄ m ⦃⇓ n => p ↦ 0 ∗ ⌜n = 0⌝ ⦄) :
+    (_hSpatial : ⦃ p ↦ 0 ⦄ m ⦃ n => p ↦ 0 ∗ ⌜n = 0⌝ ⦄) :
     m ⦃ n => n = 0 ⦄ := by
   fail_if_success solve | step with _hSpatial
   step with hPure

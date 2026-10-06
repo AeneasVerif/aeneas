@@ -54,7 +54,7 @@ open CList
 /-- Theorem about `list_nth_mut1`: verbose version -/
 theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
-  ⦃ emp ⦄ list_nth_mut1 l i ⦃⇓ x back => ⌜
+  ⦃ emp ⦄ list_nth_mut1 l i ⦃ x back => ⌜
     x = l.toList[i.val] ∧
     ∀ x', (back x').toList = l.toList.set i.val x' ⌝ ⦄ := by
   unfold list_nth_mut1 list_nth_mut1_loop
@@ -103,7 +103,7 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
  -/
 theorem list_nth_mut1_spec' {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
-  ⦃ emp ⦄ list_nth_mut1 l i ⦃⇓ x back => ⌜
+  ⦃ emp ⦄ list_nth_mut1 l i ⦃ x back => ⌜
     x = l.toList[i.val] ∧
     ∀ x', (back x').toList = l.toList.set i.val x' ⌝ ⦄ := by
   unfold list_nth_mut1 list_nth_mut1_loop
@@ -132,7 +132,7 @@ attribute [agrind =] List.getElem_cons_zero List.set_cons_zero
 /- Even simpler: `step*` can do most of the work -/
 theorem list_nth_mut1_spec'' {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
-  ⦃ emp ⦄ list_nth_mut1 l i ⦃⇓ x back => ⌜
+  ⦃ emp ⦄ list_nth_mut1 l i ⦃ x back => ⌜
     x = l.toList[i.val] ∧
     ∀ x', (back x').toList = l.toList.set i.val x' ⌝ ⦄ := by
   unfold list_nth_mut1 list_nth_mut1_loop
@@ -146,7 +146,7 @@ theorem list_nth_mut1_spec'' {T: Type} [Inhabited T] (l : CList T) (i : U32)
 /-- Theorem about `list_tail_loop`: verbose version -/
 @[step]
 theorem list_tail_loop_spec {T : Type} (l : CList T) :
-  ⦃ emp ⦄ list_tail_loop l ⦃⇓ back => ⌜
+  ⦃ emp ⦄ list_tail_loop l ⦃ back => ⌜
     ∀ tl', (back tl').toList = l.toList ++ tl'.toList ⌝ ⦄ := by
   unfold list_tail_loop
   cases h: l
@@ -165,14 +165,14 @@ theorem list_tail_loop_spec {T : Type} (l : CList T) :
 /-- Theorem about `list_tail_loop: simple version -/
 @[step]
 theorem list_tail_loop_spec' {T : Type} (l : CList T) :
-  ⦃ emp ⦄ list_tail_loop l ⦃⇓ back => ⌜
+  ⦃ emp ⦄ list_tail_loop l ⦃ back => ⌜
     ∀ tl', (back tl').toList = l.toList ++ tl'.toList ⌝ ⦄ := by
   unfold list_tail_loop
   step*
 
 @[step]
 theorem list_tail_spec {T : Type} (l : CList T) :
-  ⦃ emp ⦄ list_tail l ⦃⇓ tl back => ⌜
+  ⦃ emp ⦄ list_tail l ⦃ tl back => ⌜
     tl = CNil ∧
     ∀ tl', (back tl').toList = l.toList ++ tl'.toList ⌝ ⦄ := by
   unfold list_tail
@@ -181,14 +181,14 @@ theorem list_tail_spec {T : Type} (l : CList T) :
 /-- Theorem about `append_in_place` -/
 @[step]
 theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
-  ⦃ emp ⦄ append_in_place l0 l1 ⦃⇓ l2 => ⌜
+  ⦃ emp ⦄ append_in_place l0 l1 ⦃ l2 => ⌜
     l2.toList = l0.toList ++ l1.toList ⌝ ⦄ := by
   unfold append_in_place
   step*
 
 -- Verbose version
 theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
-  ⦃ emp ⦄ reverse_loop l out ⦃⇓ l' => ⌜
+  ⦃ emp ⦄ reverse_loop l out ⦃ l' => ⌜
     l'.toList = l.toList.reverse ++ out.toList ⌝ ⦄ := by
   unfold reverse_loop
   cases h: l
@@ -200,7 +200,7 @@ theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
 -- Simple version
 @[step]
 theorem reverse_loop_spec' {T : Type} (l : CList T) (out : CList T) :
-  ⦃ emp ⦄ reverse_loop l out ⦃⇓ l' => ⌜
+  ⦃ emp ⦄ reverse_loop l out ⦃ l' => ⌜
     l'.toList = l.toList.reverse ++ out.toList ⌝ ⦄ := by
   unfold reverse_loop
   step*
@@ -208,7 +208,7 @@ theorem reverse_loop_spec' {T : Type} (l : CList T) (out : CList T) :
 
 
 theorem reverse_spec {T : Type} (l : CList T) :
-  ⦃ emp ⦄ reverse l ⦃⇓ l' => ⌜
+  ⦃ emp ⦄ reverse l ⦃ l' => ⌜
     l'.toList = l.toList.reverse ⌝ ⦄ := by
   unfold reverse
   step*
@@ -231,7 +231,7 @@ def toInt (l : List U32) : Int :=
 @[step]
 theorem zero_loop_spec
   (x : alloc.vec.Vec U32) (i : Usize) (h : i.val ≤ x.length) :
-  ⦃ emp ⦄ zero_loop x i ⦃⇓ x' => ⌜
+  ⦃ emp ⦄ zero_loop x i ⦃ x' => ⌜
     ∃ (h : x'.length = x.length),
     (∀ j, (_ : j < i.val) → x'[j] = x[j]) ∧
     (∀ j, (_ : i.val ≤ j) → (_ : j < x.length) → x'[j] = 0#u32) ⌝ ⦄ := by
@@ -274,7 +274,7 @@ theorem all_nil_impl_toInt_eq_zero
 
 /-- The theorem about `zero` -/
 theorem zero_spec (x : alloc.vec.Vec U32) :
-  ⦃ emp ⦄ zero x ⦃⇓ x' => ⌜
+  ⦃ emp ⦄ zero x ⦃ x' => ⌜
     x'.length = x.length ∧
     toInt x' = 0 ⌝ ⦄ := by
   unfold zero
@@ -344,7 +344,7 @@ theorem add_no_overflow_loop_spec
   (hLength : x.length = y.length)
   -- No overflow occurs when we add the individual thunks
   (hNoOverflow : ∀ (j : Nat), (_ : i.val ≤ j) → (_ : j < x.length) → x[j].val + y[j].val ≤ U32.max) :
-  ⦃ emp ⦄ add_no_overflow_loop x y i ⦃⇓ x' => ⌜
+  ⦃ emp ⦄ add_no_overflow_loop x y i ⦃ x' => ⌜
     x'.length = x.length ∧
     toInt x' = toInt x + 2 ^ (32 * i.val) * toInt (y.val.drop i.val) ⌝ ⦄ := by
   unfold add_no_overflow_loop
@@ -368,7 +368,7 @@ decreasing_by scalar_decr_tac
 theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   (hLength : x.length = y.length)
   (hNoOverflow : ∀ (j : Nat), j < x.length → x[j]!.val + y[j]!.val ≤ U32.max) :
-  ⦃ emp ⦄ add_no_overflow x y ⦃⇓ x' => ⌜
+  ⦃ emp ⦄ add_no_overflow x y ⦃ x' => ⌜
     x'.length = y.length ∧
     toInt x' = toInt x + toInt y ⌝ ⦄ := by
   unfold add_no_overflow
@@ -383,7 +383,7 @@ theorem add_with_carry_loop_spec
   (hLength : x.length = y.length)
   (hi : i.val ≤ x.length)
   (hCarryLe : c0.val ≤ 1) :
-  ⦃ emp ⦄ add_with_carry_loop x y c0 i ⦃⇓ c1 x' => ⌜
+  ⦃ emp ⦄ add_with_carry_loop x y c0 i ⦃ c1 x' => ⌜
     x'.length = x.length ∧
     c1.val ≤ 1 ∧
     toInt x' + c1.val * 2 ^ (32 * x'.length) =
@@ -447,7 +447,7 @@ decreasing_by scalar_decr_tac
 theorem add_with_carry_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   (hLength : x.length = y.length) :
-  ⦃ emp ⦄ add_with_carry x y ⦃⇓ c x' => ⌜
+  ⦃ emp ⦄ add_with_carry x y ⦃ c x' => ⌜
     x'.length = x.length ∧
     c.val ≤ 1 ∧
     toInt x' + c.val * 2 ^ (32 * x'.length) = toInt x + toInt y ⌝ ⦄ := by
@@ -457,9 +457,9 @@ theorem add_with_carry_spec
 
 
 theorem pseudo_random_spec {T} {h : Hash T}
-  (hash_spec : ∀ x, ⦃ emp ⦄ h.hash x ⦃⇓ _ => ⌜True⌝ ⦄div)
+  (hash_spec : ∀ x, ⦃ emp ⦄ h.hash x ⦃ _ => ⌜True⌝ ⦄div)
   :
-  ⦃ emp ⦄ pseudo_random h ⦃⇓ x => ⌜x.val >= 100⌝ ⦄div := by
+  ⦃ emp ⦄ pseudo_random h ⦃ x => ⌜x.val >= 100⌝ ⦄div := by
   unfold pseudo_random
   -- unfold pseudo_random_loop
   -- if we proceed by unfolding `pseudo_random_loop`, then the proof will be non-terminating.

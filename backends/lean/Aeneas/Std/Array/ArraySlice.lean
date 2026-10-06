@@ -136,7 +136,7 @@ def Array.as_ptr {T : Type} {N : Usize} (a : Array T N) :
 
 @[step]
 theorem Array.as_ptr.spec {T : Type} {N : Usize} (a : Array T N) :
-    ⦃ emp ⦄ a.as_ptr ⦃⇓ p => p ↦* a.val⦄ := by
+    ⦃ emp ⦄ a.as_ptr ⦃ p => p ↦* a.val⦄ := by
   simpa only [Array.as_ptr, Array.val_to_slice] using
     Slice.as_ptr.spec a.to_slice
 
@@ -146,7 +146,7 @@ def Array.as_mut_ptr {T : Type} {N : Usize} (a : Array T N) :
 
 @[step]
 theorem Array.as_mut_ptr.spec {T : Type} {N : Usize} (a : Array T N) :
-    ⦃ emp ⦄ a.as_mut_ptr ⦃⇓ p => p ↦* a.val⦄ := by
+    ⦃ emp ⦄ a.as_mut_ptr ⦃ p => p ↦* a.val⦄ := by
   simpa only [Array.as_mut_ptr, Array.val_to_slice] using
     Slice.as_mut_ptr.spec a.to_slice
 
