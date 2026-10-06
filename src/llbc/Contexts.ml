@@ -23,10 +23,14 @@ type interpreter_mode = ConcreteMode | SymbolicMode [@@deriving show]
 type config = {
   mode : interpreter_mode;
       (** Concrete mode (interpreter) or symbolic mode (for synthesis) **)
+  live_locals : (StatementId.id, LocalId.Set.t) Hashtbl.t option; [@opaque]
+      (** For every statement of the body: an over-approximation of the local
+          variables which are live before it *)
 }
 [@@deriving show]
 
-let mk_config (mode : interpreter_mode) : config = { mode }
+let mk_config ?(live_locals = None) (mode : interpreter_mode) : config =
+  { mode; live_locals }
 
 type type_ctx = {
   type_decls_groups : type_declaration_group TypeDeclId.Map.t;

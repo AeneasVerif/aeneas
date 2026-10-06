@@ -297,6 +297,18 @@ let has_uninit_repr (crate : crate) (ty : ty) : bool =
     through raw pointers require a byte representation of [T]: we add an
     instance argument [[ByteRepr T]] to their signatures. *)
 
+let non_null_pattern =
+  Charon.NameMatcher.parse_pattern "core::ptr::non_null::NonNull"
+
+(** [NonNull<T>] is treated as a raw pointer *)
+let is_non_null_decl (crate : crate) (id : TypeDeclId.id) : bool =
+  match TypeDeclId.Map.find_opt id crate.type_decls with
+  | Some decl ->
+      Charon.NameMatcher.match_name
+        (Charon.NameMatcher.ctx_from_crate crate)
+        ExtractName.default_match_config non_null_pattern decl.item_meta.name
+  | None -> false
+
 (** The indices of the type parameters of a type declaration which occur in
     pointee types of raw pointers in its fields *)
 let rec decl_pointee_params (crate : crate) (visiting : TypeDeclId.Set.t)
@@ -346,6 +358,8 @@ and pointee_vars (crate : crate) (visiting : TypeDeclId.Set.t)
       if under_ptr then TypeVarId.Set.singleton v else TypeVarId.Set.empty
   | TRawPtr (ty, _) -> explore true ty
   | TRef (_, ty, _) | TArray (ty, _, _) | TSlice (ty, _) -> explore under_ptr ty
+  | TAdt { id; builtin = None; generics = { types = [ ty ]; _ } }
+    when is_non_null_decl crate id -> explore true ty
   | TAdt { id; builtin = None; generics } ->
       let params = decl_pointee_params crate visiting memo id in
       union_map

@@ -840,6 +840,8 @@ module Values = struct
         ^ string_of_bool view.rpv_mut
         ^ ")"
     | RawPtrParked parked -> "RawPtrParked(" ^ parked.rpp_origin ^ ")"
+    | RawPtrBorrow borrow ->
+        "RawPtrBorrow(loan:" ^ BorrowId.to_string borrow.rpb_loan ^ ")"
 
   let abs_cont_to_string ?(span : Meta.span option = None) (env : fmt_env)
       ?(with_ended : bool = false) (indent : string) (indent_incr : string)

@@ -12,6 +12,54 @@ open ValuesUtils
 (** The local logger *)
 let log = Logging.interp_log
 
+(** Compute, for every statement of a body, an over-approximation of the local
+    variables which are live before it *)
+let compute_live_locals (body : block) :
+    (StatementId.id, LocalId.Set.t) Hashtbl.t =
+  let tbl = Hashtbl.create 64 in
+  let uses (st : statement) : LocalId.Set.t =
+    let s = ref LocalId.Set.empty in
+    let visitor =
+      object
+        inherit [_] iter_statement
+        method! visit_StorageLive _ _ = ()
+        method! visit_StorageDead _ _ = ()
+        method! visit_PlaceLocal _ id = s := LocalId.Set.add id !s
+      end
+    in
+    visitor#visit_statement () st;
+    !s
+  in
+  let rec live_block (loops : LocalId.Set.t list) (b : block)
+      (after : LocalId.Set.t) : LocalId.Set.t =
+    List.fold_right (live_statement loops) b.statements after
+  and live_statement (loops : LocalId.Set.t list) (st : statement)
+      (after : LocalId.Set.t) : LocalId.Set.t =
+    let live =
+      match st.kind with
+      | Switch (_, branches) ->
+          List.fold_left
+            (fun acc b -> LocalId.Set.union acc (live_block loops b after))
+            (uses st) branches
+      | Loop body ->
+          let live = LocalId.Set.union (uses st) after in
+          ignore (live_block (live :: loops) body live);
+          live
+      | Break i | Continue i -> (
+          match List.nth_opt loops i with
+          | Some live -> live
+          | None -> after)
+      | Return -> LocalId.Set.singleton LocalId.zero
+      | Panic _ | UnwindTerminate | UnwindResume | UndefinedBehavior ->
+          LocalId.Set.empty
+      | _ -> LocalId.Set.union (uses st) after
+    in
+    Hashtbl.replace tbl st.statement_id live;
+    live
+  in
+  ignore (live_block [] body LocalId.Set.empty);
+  tbl
+
 (** Wrapper around {!Charon.GAstUtils.get_target_information} that handles
     multi-layout crates by raising a recoverable [CFailure] instead of an
     uncaught [Failure]. *)

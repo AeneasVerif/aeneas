@@ -221,7 +221,9 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
           | SyncRawPtrOfUninitSlice
           | FreeRawPtrOfUninitSlice
           | RawPtrRead
-          | RawPtrWrite -> (f.ty, mk_known (), false)
+          | RawPtrWrite
+          | RawPtrTake
+          | RawPtrRestore -> (f.ty, mk_known (), false)
           | GetTarget -> (f.ty, mk_known (), false)
           | TargetFeatureEnabled -> (f.ty, mk_known (), false)
         end

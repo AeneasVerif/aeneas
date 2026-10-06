@@ -10,6 +10,15 @@
 let log = Logging.errors_log
 let error_mutex = Mutex.create ()
 
+(** When set, errors are neither registered nor printed: this is used to attempt
+    operations which are allowed to fail *)
+let silent : bool Domain.DLS.key = Domain.DLS.new_key (fun () -> false)
+
+let with_silent_errors (f : unit -> 'a) : 'a =
+  let prev = Domain.DLS.get silent in
+  Domain.DLS.set silent true;
+  Fun.protect ~finally:(fun () -> Domain.DLS.set silent prev) f
+
 let span_data_to_string (span_data : Meta.span_data) =
   let file =
     match span_data.file.name with
@@ -100,6 +109,7 @@ let push_error (file : string) (line : int) (span : Meta.span option)
 (** Register an error, and throw an exception if [throw] is true *)
 let save_error_opt_span (file : string) (line : int) (span : Meta.span option)
     (msg : string) =
+  if Domain.DLS.get silent then raise (CFailure { span; file; line; msg });
   push_error file line span msg;
   if !Config.fail_hard then (
     let msg = format_error_message_with_file_line file line span msg in
@@ -114,7 +124,8 @@ let add_loc (file : string) (line : int) (x : string -> int -> 'a) : 'a =
 
 let craise_opt_span (file : string) (line : int) (span : Meta.span option)
     (msg : string) =
-  if !Config.fail_hard then (
+  if Domain.DLS.get silent then raise (CFailure { span; file; line; msg })
+  else if !Config.fail_hard then (
     let msg = format_error_message_with_file_line file line span msg in
     log#serror (msg ^ "\n");
     raise (Failure msg))

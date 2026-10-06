@@ -310,6 +310,99 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
           cf )
       end
 
+let ctx_mark_raw_ptr_views_dirty ?(back_call : fun_call_id option = None)
+    (ctx : eval_ctx) : eval_ctx =
+  let env =
+    List.map
+      (fun (e : env_elem) ->
+        match e with
+        | EAbs ({ kind = RawPtrView view; _ } as abs) ->
+            let rpv_back_calls =
+              match back_call with
+              | None -> view.rpv_back_calls
+              | Some id -> id :: view.rpv_back_calls
+            in
+            EAbs
+              {
+                abs with
+                kind = RawPtrView { view with rpv_dirty = true; rpv_back_calls };
+              }
+        | _ -> e)
+      ctx.env
+  in
+  { ctx with env }
+
+(** Read the value a raw pointer points to *)
+let raw_ptr_read (span : Meta.span) ~(take : bool) (ptr : tvalue) (ty : ty)
+    (ctx : eval_ctx) : tvalue * (SymbolicAst.expr -> SymbolicAst.expr) =
+  [%cassert] span
+    (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty))
+    "Unsupported: reading a value containing borrows through a raw pointer";
+  let sv = mk_fresh_symbolic_value span ctx ty in
+  let va =
+    if take then SymbolicAst.VaRawPtrTake ptr else SymbolicAst.VaRawPtrRead ptr
+  in
+  let cc e = SymbolicAst.IntroSymbolic (ctx, None, sv, va, e) in
+  (mk_tvalue_from_symbolic_value sv, cc)
+
+(** [&*p]: we read the value, and borrow it. This is sound because the value
+    can't be modified while the reference is live. *)
+let raw_ptr_shared_ref (span : Meta.span) (ptr : tvalue) (ty : ty)
+    (ctx : eval_ctx) :
+    tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
+  let v, cc = raw_ptr_read span ~take:false ptr ty ctx in
+  let bid = ctx.fresh_borrow_id () in
+  let sid = ctx.fresh_shared_borrow_id () in
+  let loan : tvalue = { value = VLoan (VSharedLoan (bid, v)); ty = v.ty } in
+  let borrow : tvalue =
+    {
+      value = VBorrow (VSharedBorrow (bid, sid));
+      ty = TRef (RErased, v.ty, RShared);
+    }
+  in
+  let dummy_id = ctx.fresh_dummy_var_id () in
+  let ctx = ctx_push_dummy_var ctx dummy_id loan in
+  (borrow, ctx, cc)
+
+(** [&mut *p]: the value is moved out of the heap, and written back when the
+    borrow ends (see [RawPtrBorrow]) *)
+let raw_ptr_mut_ref (span : Meta.span) (ptr : tvalue) (ty : ty) (ctx : eval_ctx)
+    : tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
+  let v, cc = raw_ptr_read span ~take:true ptr ty ctx in
+  let bid = ctx.fresh_borrow_id () in
+  let rid = ctx.fresh_region_id () in
+  let abs =
+    {
+      abs_id = ctx.fresh_abs_id ();
+      kind =
+        RawPtrBorrow { rpb_ptr = ptr; rpb_loan = bid; rpb_restored = false };
+      can_end = true;
+      parents = AbsId.Set.empty;
+      regions = { owned = RegionId.Set.singleton rid };
+      ended_subabs = AbsLevelSet.empty;
+      avalues =
+        [
+          {
+            value = ALoan (AMutLoan (PNone, bid, mk_aignored span ty None));
+            ty = mk_ref_ty (RVar (Free rid)) ty RMut;
+          };
+        ];
+      cont =
+        Some
+          {
+            output = Some (mk_etuple ~borrow_proj:true []);
+            input = Some (mk_etuple ~borrow_proj:false []);
+          };
+    }
+  in
+  let ctx =
+    ctx_mark_raw_ptr_views_dirty { ctx with env = EAbs abs :: ctx.env }
+  in
+  let borrow : tvalue =
+    { value = VBorrow (VMutBorrow (bid, v)); ty = TRef (RErased, ty, RMut) }
+  in
+  (borrow, ctx, cc)
+
 (** Reorganize the environment in preparation for the evaluation of an operand.
 
     Evaluating an operand requires reorganizing the environment to get access to
@@ -454,16 +547,8 @@ let rec eval_operand_no_reorganize (config : config) (span : Meta.span)
   | (Copy p | Move p) when Option.is_some (raw_ptr_deref_place span p) ->
       let q = Option.get (raw_ptr_deref_place span p) in
       let ptr, ctx, cc = eval_operand_no_reorganize config span (Copy q) ctx in
-      [%cassert] span
-        (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos p.ty))
-        "Unsupported: reading a value containing borrows through a raw pointer";
-      let sv = mk_fresh_symbolic_value span ctx p.ty in
-      let cc =
-        cc_comp cc (fun e ->
-            SymbolicAst.IntroSymbolic
-              (ctx, None, sv, SymbolicAst.VaRawPtrRead ptr, e))
-      in
-      (mk_tvalue_from_symbolic_value sv, ctx, cc)
+      let v, cc' = raw_ptr_read span ~take:false ptr p.ty ctx in
+      (v, ctx, cc_comp cc cc')
   | Constant cv -> begin
       [%ldebug "constant of type: " ^ ty_to_string ctx cv.ty];
       match cv.kind with
@@ -1295,22 +1380,15 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
     tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   match bkind with
   | (BShared | BShallow) when Option.is_some (raw_ptr_deref_place span p) ->
-      (* A shared reference to the value a raw pointer points to ([&*p]): we
-         read the value, and borrow it. This is sound because the value can't be
-         modified while the reference is live. *)
-      let v, ctx, cc = eval_operand config span (Copy p) ctx in
-      let bid = ctx.fresh_borrow_id () in
-      let sid = ctx.fresh_shared_borrow_id () in
-      let loan : tvalue = { value = VLoan (VSharedLoan (bid, v)); ty = v.ty } in
-      let borrow : tvalue =
-        {
-          value = VBorrow (VSharedBorrow (bid, sid));
-          ty = TRef (RErased, v.ty, RShared);
-        }
-      in
-      let dummy_id = ctx.fresh_dummy_var_id () in
-      let ctx = ctx_push_dummy_var ctx dummy_id loan in
-      (borrow, ctx, cc)
+      let q = Option.get (raw_ptr_deref_place span p) in
+      let ptr, ctx, cc = eval_operand config span (Copy q) ctx in
+      let borrow, ctx, cc' = raw_ptr_shared_ref span ptr p.ty ctx in
+      (borrow, ctx, cc_comp cc cc')
+  | (BMut | BTwoPhaseMut) when Option.is_some (raw_ptr_deref_place span p) ->
+      let q = Option.get (raw_ptr_deref_place span p) in
+      let ptr, ctx, cc = eval_operand config span (Copy q) ctx in
+      let borrow, ctx, cc' = raw_ptr_mut_ref span ptr p.ty ctx in
+      (borrow, ctx, cc_comp cc cc')
   | BShared | BTwoPhaseMut | BShallow ->
       (* **REMARK**: we initially treated shallow borrows like shared borrows.
          In practice this restricted the behaviour too much, so for now we

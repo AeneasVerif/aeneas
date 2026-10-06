@@ -162,6 +162,8 @@ type pure_builtin_fun_id =
   | FreeRawPtrOfUninitSlice
   | RawPtrRead
   | RawPtrWrite
+  | RawPtrTake
+  | RawPtrRestore
   | ResultUnwrapMut
       (** Temporary fix: the
           [core::result::{core::result::Result<@T, @E>}::unwrap] instantiated

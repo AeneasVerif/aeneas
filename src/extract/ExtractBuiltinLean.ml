@@ -170,6 +170,8 @@ let lean_builtin_types =
              ("_Align1Shl62", Some "_Align1Shl62");
              ("_Align1Shl63", Some "_Align1Shl63");
            ]);
+    (* file: "Aeneas/Std/NonNull.lean", line: 11 *)
+    mk_type "core::ptr::non_null::NonNull" "core.ptr.non_null.NonNull";
     (* file: "Aeneas/Std/Core/Result.lean", line: 7 *)
     mk_type "core::result::Result" "core.result.Result"
       ~kind:(KEnum [ ("Ok", Some "Ok"); ("Err", Some "Err") ]);
@@ -1097,76 +1099,97 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Core.lean", line: 104 *)
     mk_fun "core::option::{core::option::Option<@T>}::unwrap_or"
       "core.option.Option.unwrap_or" ~can_fail:false;
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 22 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 23 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::add"
       "core.ptr.const_ptr.RawPtrConstT.add";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 128 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 129 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::cast"
       "core.ptr.const_ptr.RawPtrConstT.cast";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 38 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 39 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::offset"
       "core.ptr.const_ptr.RawPtrConstT.offset";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 248 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 249 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::offset_from"
       "core.ptr.const_ptr.RawPtrConstT.offset_from";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 193 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 194 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::read_unaligned"
       "core.ptr.const_ptr.RawPtrConstT.read_unaligned";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 371 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 372 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::read_volatile"
       "core.ptr.const_ptr.RawPtrConstT.read_volatile";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 30 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 31 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::sub"
       "core.ptr.const_ptr.RawPtrConstT.sub";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 46 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 47 *)
     mk_fun "core::ptr::copy" "core.ptr.copy";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 42 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 43 *)
     mk_fun "core::ptr::copy_nonoverlapping" "core.ptr.copy_nonoverlapping";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 359 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 360 *)
     mk_fun "core::ptr::drop_in_place" "core.ptr.drop_in_place";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 18 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 19 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::add"
       "core.ptr.mut_ptr.RawPtrMutT.add";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 124 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 125 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::cast"
       "core.ptr.mut_ptr.RawPtrMutT.cast";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 34 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 35 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::offset"
       "core.ptr.mut_ptr.RawPtrMutT.offset";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 253 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 254 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::offset_from"
       "core.ptr.mut_ptr.RawPtrMutT.offset_from";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 197 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 198 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::read_unaligned"
       "core.ptr.mut_ptr.RawPtrMutT.read_unaligned";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 376 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 377 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::read_volatile"
       "core.ptr.mut_ptr.RawPtrMutT.read_volatile";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 26 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 27 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::sub"
       "core.ptr.mut_ptr.RawPtrMutT.sub";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 282 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 283 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::write_bytes"
       "core.ptr.mut_ptr.RawPtrMutT.write_bytes";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 205 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 206 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::write_unaligned"
       "core.ptr.mut_ptr.RawPtrMutT.write_unaligned";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 380 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 381 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::write_volatile"
       "core.ptr.mut_ptr.RawPtrMutT.write_volatile";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 348 *)
+    (* file: "Aeneas/Std/NonNull.lean", line: 48 *)
+    mk_fun
+      "core::ptr::non_null::{core::cmp::PartialEq<core::ptr::non_null::NonNull<@T>, \
+       core::ptr::non_null::NonNull<@T>>}::eq"
+      "core.ptr.non_null.NonNull.Insts.CoreCmpPartialEqNonNull.eq";
+    (* file: "Aeneas/Std/NonNull.lean", line: 35 *)
+    mk_fun
+      "core::ptr::non_null::{core::fmt::Debug<core::ptr::non_null::NonNull<@T>>}::fmt"
+      "core.ptr.non_null.NonNull.Insts.CoreFmtDebug.fmt";
+    (* file: "Aeneas/Std/NonNull.lean", line: 30 *)
+    mk_fun "core::ptr::non_null::{core::ptr::non_null::NonNull<@T>}::as_mut"
+      "core.ptr.non_null.NonNull.as_mut";
+    (* file: "Aeneas/Std/NonNull.lean", line: 20 *)
+    mk_fun "core::ptr::non_null::{core::ptr::non_null::NonNull<@T>}::as_ptr"
+      "core.ptr.non_null.NonNull.as_ptr";
+    (* file: "Aeneas/Std/NonNull.lean", line: 25 *)
+    mk_fun "core::ptr::non_null::{core::ptr::non_null::NonNull<@T>}::as_ref"
+      "core.ptr.non_null.NonNull.as_ref";
+    (* file: "Aeneas/Std/NonNull.lean", line: 16 *)
+    mk_fun "core::ptr::non_null::{core::ptr::non_null::NonNull<@T>}::dangling"
+      "core.ptr.non_null.NonNull.dangling";
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 349 *)
     mk_fun "core::ptr::read" "core.ptr.read";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 190 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 191 *)
     mk_fun "core::ptr::read_unaligned" "core.ptr.read_unaligned";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 363 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 364 *)
     mk_fun "core::ptr::read_volatile" "core.ptr.read_volatile";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 352 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 353 *)
     mk_fun "core::ptr::write" "core.ptr.write";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 277 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 278 *)
     mk_fun "core::ptr::write_bytes" "core.ptr.write_bytes";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 201 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 202 *)
     mk_fun "core::ptr::write_unaligned" "core.ptr.write_unaligned";
-    (* file: "Aeneas/Std/RawPtrOps.lean", line: 367 *)
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 368 *)
     mk_fun "core::ptr::write_volatile" "core.ptr.write_volatile";
     (* file: "Aeneas/Std/Core/Convert.lean", line: 113 *)
     mk_fun
@@ -1670,6 +1693,11 @@ let lean_builtin_trait_impls =
       ~keep_params:(Some [ true; true; false; false ]);
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 239 *)
     mk_trait_impl "core::cmp::PartialEq<bool, bool>" "core.cmp.PartialEqBool";
+    (* file: "Aeneas/Std/NonNull.lean", line: 54 *)
+    mk_trait_impl
+      "core::cmp::PartialEq<core::ptr::non_null::NonNull<@T>, \
+       core::ptr::non_null::NonNull<@T>>"
+      "core.ptr.non_null.NonNull.Insts.CoreCmpPartialEqNonNull";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 286 *)
     mk_trait_impl "core::cmp::PartialOrd<&'a @A, &'b @B>"
       "core.cmp.PartialOrdShared";
@@ -1722,6 +1750,9 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 313 *)
     mk_trait_impl "core::fmt::Debug<core::array::TryFromSliceError>"
       "core.fmt.DebugTryFromSliceError";
+    (* file: "Aeneas/Std/NonNull.lean", line: 42 *)
+    mk_trait_impl "core::fmt::Debug<core::ptr::non_null::NonNull<@T>>"
+      "core.ptr.non_null.NonNull.Insts.CoreFmtDebug";
     (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 136 *)
     mk_trait_impl "core::fmt::Debug<i128>" "core.fmt.DebugI128";
     (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 121 *)

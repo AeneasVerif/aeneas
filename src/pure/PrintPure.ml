@@ -867,6 +867,8 @@ let pure_builtin_fun_id_to_string (fid : pure_builtin_fun_id) : string =
   | Discriminant -> "@discriminant"
   | ResultUnwrapMut -> "@resultUnwrapMut"
   | RawPtrRead -> "@rawPtrRead"
+  | RawPtrTake -> "@rawPtrTake"
+  | RawPtrRestore -> "@rawPtrRestore"
   | RawPtrWrite -> "@rawPtrWrite"
   | RawPtrOfSlice Mut -> "@sliceAsMutPtr"
   | RawPtrOfSlice Const -> "@sliceAsPtr"

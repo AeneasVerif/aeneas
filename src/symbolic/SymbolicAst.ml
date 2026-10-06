@@ -348,6 +348,9 @@ and value_aggregate =
   | VaFnDef of fn_ptr  (** Function pointer of a top-level definition *)
   | VaRawPtrView of raw_ptr_view
   | VaRawPtrRead of tvalue
+  | VaRawPtrTake of tvalue
+      (** [&mut *p]: the value is moved out of the heap until the borrow ends
+          (see [Values.RawPtrBorrow]) *)
 [@@deriving
   show,
   visitors

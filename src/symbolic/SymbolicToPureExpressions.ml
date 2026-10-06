@@ -929,6 +929,9 @@ and translate_end_abs (ectx : C.eval_ctx) (abs : V.abs)
   | V.RawPtrParked parked ->
       [%cassert] ctx.span (abs_level = 0) "Unexpected";
       translate_end_raw_ptr_parked ectx parked e ctx
+  | V.RawPtrBorrow borrow ->
+      [%cassert] ctx.span (abs_level = 0) "Unexpected";
+      translate_end_raw_ptr_borrow ectx abs borrow e ctx
 
 and check_can_perform_heap_op (ctx : bs_ctx) : unit =
   let effect_info = ctx_get_effect_info ctx in
@@ -1025,6 +1028,33 @@ and translate_end_raw_ptr_view (ectx : C.eval_ctx) (view : V.raw_ptr_view)
         mk_raw_ptr_builtin_call ctx builtin elem_ty [ original; ptr ] pat.ty
       in
       [%add_loc] mk_closed_checked_let ctx true pat call next_e
+
+and translate_end_raw_ptr_borrow (ectx : C.eval_ctx) (abs : V.abs)
+    (borrow : V.raw_ptr_borrow) (e : S.expr) (ctx : bs_ctx) : texpr =
+  if borrow.rpb_restored then translate_expr e ctx
+  else (
+    check_can_perform_heap_op ctx;
+    let given_back =
+      List.find_map
+        (fun (av : V.tavalue) ->
+          match av.value with
+          | ALoan (AEndedMutLoan { given_back_meta; _ }) -> Some given_back_meta
+          | _ -> None)
+        abs.avalues
+    in
+    let given_back =
+      [%unwrap_with_span] ctx.span given_back
+        "Internal error: please file an issue"
+    in
+    let ptr = tvalue_to_texpr ctx ectx borrow.rpb_ptr in
+    let v = tvalue_to_texpr ctx ectx given_back in
+    let call =
+      mk_raw_ptr_builtin_call ctx RawPtrRestore v.ty [ ptr; v ] mk_unit_ty
+    in
+    let next_e = translate_expr e ctx in
+    [%add_loc] mk_closed_checked_let ctx true
+      (mk_ignored_pat mk_unit_ty)
+      call next_e)
 
 and translate_raw_ptr_write (ectx : C.eval_ctx) (ptr : V.tvalue) (v : V.tvalue)
     (e : S.expr) (ctx : bs_ctx) : texpr =
@@ -1847,12 +1877,17 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
           }
         in
         ([%add_loc] mk_apps ctx.span func args, true)
-    | VaRawPtrRead ptr ->
+    | VaRawPtrRead ptr | VaRawPtrTake ptr ->
         check_can_perform_heap_op ctx;
+        let builtin =
+          match v with
+          | VaRawPtrTake _ -> RawPtrTake
+          | _ -> RawPtrRead
+        in
         let ptr = tvalue_to_texpr ctx ectx ptr in
         let func =
           {
-            id = FunOrOp (Fun (Pure RawPtrRead));
+            id = FunOrOp (Fun (Pure builtin));
             generics = mk_generic_args_from_types [ var.ty ];
           }
         in

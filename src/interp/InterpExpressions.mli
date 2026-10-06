@@ -68,6 +68,23 @@ val eval_rvalue_not_global :
 
 val raw_ptr_deref_place : Meta.span -> place -> place option
 
+val ctx_mark_raw_ptr_views_dirty :
+  ?back_call:fun_call_id option -> eval_ctx -> eval_ctx
+
+val raw_ptr_shared_ref :
+  Meta.span ->
+  tvalue ->
+  ty ->
+  eval_ctx ->
+  tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)
+
+val raw_ptr_mut_ref :
+  Meta.span ->
+  tvalue ->
+  ty ->
+  eval_ctx ->
+  tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)
+
 val eval_rvalue_ref :
   config ->
   Meta.span ->

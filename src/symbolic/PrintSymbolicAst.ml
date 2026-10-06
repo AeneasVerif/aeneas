@@ -49,6 +49,7 @@ let value_aggregate_to_string (env : fmt_env) (v : value_aggregate) : string =
       ^ Values.tvalue_to_string env view.rpv_original
       ^ ")"
   | VaRawPtrRead ptr -> "*" ^ Values.tvalue_to_string env ptr
+  | VaRawPtrTake ptr -> "take *" ^ Values.tvalue_to_string env ptr
 
 let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
     (e : expr) : string =

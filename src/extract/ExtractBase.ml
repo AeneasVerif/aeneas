@@ -1284,6 +1284,8 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (FreeRawPtrOfUninitSlice, "Slice.free_as_ptr_uninit");
         (RawPtrRead, "RawPtr.read");
         (RawPtrWrite, "MutRawPtr.write");
+        (RawPtrTake, "MutRawPtr.take");
+        (RawPtrRestore, "MutRawPtr.restore");
         (GetTarget, "get_target");
         (TargetFeatureEnabled, "target_feature_enabled");
       ]

@@ -69,6 +69,8 @@ let mk_ty_contains_raw_ptr (m : crate) : Types.ty -> bool =
           if not !found then
             match ty with
             | TRawPtr _ -> found := true
+            | TAdt { id; builtin = None; _ } when Layouts.is_non_null_decl m id
+              -> found := true
             | TAdt { id; builtin = None; _ } ->
                 if decl_contains visiting id then found := true
                 else super#visit_ty env ty

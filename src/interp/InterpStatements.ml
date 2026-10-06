@@ -657,6 +657,14 @@ let slice_as_mut_ptr_pattern =
 let slice_as_ptr_pattern =
   NameMatcher.parse_pattern "core::slice::{[@T]}::as_ptr"
 
+let non_null_as_ref_pattern =
+  NameMatcher.parse_pattern
+    "core::ptr::non_null::{core::ptr::non_null::NonNull<@T>}::as_ref"
+
+let non_null_as_mut_pattern =
+  NameMatcher.parse_pattern
+    "core::ptr::non_null::{core::ptr::non_null::NonNull<@T>}::as_mut"
+
 let maybe_uninit_as_mut_ptr_pattern =
   NameMatcher.parse_pattern
     "core::mem::maybe_uninit::{core::mem::maybe_uninit::MaybeUninit<@T>}::as_mut_ptr"
@@ -700,6 +708,70 @@ let read_only_raw_ptr_patterns =
         "core::slice::raw::from_raw_parts";
       ])
 
+(** End the mutable borrows of values raw pointers point to (see [RawPtrBorrow])
+    which can be ended without ending borrows held by live variables: this
+    writes their values back to the heap before it is accessed again *)
+let end_dead_raw_ptr_borrows (config : config) (st : statement) : cm_fun =
+ fun ctx ->
+  let has_borrows =
+    List.exists
+      (function
+        | EAbs { kind = RawPtrBorrow _; _ } -> true
+        | _ -> false)
+      ctx.env
+  in
+  match config.live_locals with
+  | Some tbl when has_borrows ->
+      let live =
+        Option.value ~default:LocalId.Set.empty
+          (Hashtbl.find_opt tbl st.statement_id)
+      in
+      let count_live_bottoms (ctx : eval_ctx) : int =
+        let n = ref 0 in
+        let visitor =
+          object
+            inherit [_] iter_tvalue
+            method! visit_VBottom _ = incr n
+          end
+        in
+        List.iter
+          (function
+            | EBinding (BVar var, v) when LocalId.Set.mem var.index live ->
+                visitor#visit_tvalue () v
+            | _ -> ())
+          ctx.env;
+        !n
+      in
+      let bottoms = count_live_bottoms ctx in
+      let rec loop (tried : AbsId.Set.t) (ctx, cc) =
+        let candidate =
+          List.find_map
+            (function
+              | EAbs { abs_id; kind = RawPtrBorrow _; _ }
+                when not (AbsId.Set.mem abs_id tried) -> Some abs_id
+              | _ -> None)
+            ctx.env
+        in
+        match candidate with
+        | None -> (ctx, cc)
+        | Some abs_id -> (
+            let attempt =
+              try
+                Some
+                  (Errors.with_silent_errors (fun () ->
+                       InterpBorrows.end_abs config st.span abs_id 0 ctx))
+              with Errors.CFailure _ | Failure _ | Errors.RFailure -> None
+            in
+            let tried = AbsId.Set.add abs_id tried in
+            match attempt with
+            | Some (ctx', cc') when count_live_bottoms ctx' = bottoms ->
+                let ctx' = ctx_mark_raw_ptr_views_dirty ctx' in
+                loop tried (ctx', cc_comp cc cc')
+            | _ -> loop tried (ctx, cc))
+      in
+      loop AbsId.Set.empty (ctx, fun e -> e)
+  | _ -> (ctx, fun e -> e)
+
 let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->
   (* Debugging *)
@@ -717,6 +789,7 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
   (* Expand the symbolic values if necessary - we need to do that before
      checking the invariants *)
   let ctx, cc = comp cc (greedy_expand_symbolic_values st.span ctx) in
+  let ctx, cc = comp cc (end_dead_raw_ptr_borrows config st ctx) in
   (* Sanity check *)
   Invariants.check_invariants st.span ctx;
 
@@ -1352,6 +1425,9 @@ and eval_function_call_symbolic (config : config) (span : Meta.span)
   | FnOpRegular func when Option.is_some (raw_ptr_view_builtin span ctx func) ->
       let kind, is_mut = Option.get (raw_ptr_view_builtin span ctx func) in
       eval_raw_ptr_view_creation config span ~kind ~is_mut call ctx
+  | FnOpRegular func when Option.is_some (non_null_deref_builtin ctx func) ->
+      let is_mut = Option.get (non_null_deref_builtin ctx func) in
+      eval_non_null_deref config span ~is_mut call ctx
   | FnOpRegular func ->
       [%ltrace
         "function call:\n- call: " ^ call_to_string ctx call ^ "\n- fn_ptr : "
@@ -1605,28 +1681,6 @@ and call_may_modify_heap (ctx : eval_ctx) (fid : fn_ptr_kind)
   let contains_raw_ptr = FunsAnalysis.mk_ty_contains_raw_ptr ctx.crate in
   List.exists contains_raw_ptr (inst_sg.output :: inst_sg.inputs)
 
-and ctx_mark_raw_ptr_views_dirty ?(back_call : fun_call_id option = None)
-    (ctx : eval_ctx) : eval_ctx =
-  let env =
-    List.map
-      (fun (e : env_elem) ->
-        match e with
-        | EAbs ({ kind = RawPtrView view; _ } as abs) ->
-            let rpv_back_calls =
-              match back_call with
-              | None -> view.rpv_back_calls
-              | Some id -> id :: view.rpv_back_calls
-            in
-            EAbs
-              {
-                abs with
-                kind = RawPtrView { view with rpv_dirty = true; rpv_back_calls };
-              }
-        | _ -> e)
-      ctx.env
-  in
-  { ctx with env }
-
 and call_back_may_modify_heap (ctx : eval_ctx) (fid : fn_ptr_kind) : bool =
   match fid with
   | Fun fid -> (
@@ -1634,6 +1688,52 @@ and call_back_may_modify_heap (ctx : eval_ctx) (fid : fn_ptr_kind) : bool =
       | Some info -> info.back_heap_ops
       | None -> true)
   | TraitMethod _ -> true
+
+(** [NonNull::as_ref] and [NonNull::as_mut] *)
+and eval_non_null_deref (config : config) (span : Meta.span) ~(is_mut : bool)
+    (call : call) : stl_cm_fun =
+ fun ctx ->
+  let p =
+    match call.args with
+    | [ (Move p | Copy p) ] -> p
+    | _ -> [%internal_error] span
+  in
+  let non_null_ty =
+    match p.ty with
+    | TRef (_, ty, _) -> ty
+    | _ -> [%internal_error] span
+  in
+  let pointee_ty =
+    match non_null_ty with
+    | TAdt { generics = { types = [ ty ]; _ }; _ } -> ty
+    | _ -> [%internal_error] span
+  in
+  let ptr, ctx, cc =
+    eval_operand config span
+      (Copy { kind = PlaceProjection (p, Deref); ty = non_null_ty })
+      ctx
+  in
+  let borrow, ctx, cc =
+    comp2 cc
+      ((if is_mut then raw_ptr_mut_ref else raw_ptr_shared_ref)
+         span ptr pointee_ty ctx)
+  in
+  let ctx, cc = comp cc (assign_to_place config span borrow call.dest ctx) in
+  ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span cc)
+
+and non_null_deref_builtin (ctx : eval_ctx) (func : fn_ptr) : bool option =
+  match func.kind with
+  | Fun fid -> (
+      match FunDeclId.Map.find_opt fid ctx.crate.fun_decls with
+      | None -> None
+      | Some decl ->
+          let matches pat =
+            ExtractName.match_name ctx.crate pat decl.item_meta.name
+          in
+          if matches non_null_as_mut_pattern then Some true
+          else if matches non_null_as_ref_pattern then Some false
+          else None)
+  | TraitMethod _ -> None
 
 and raw_ptr_view_builtin (_span : Meta.span) (ctx : eval_ctx) (func : fn_ptr) :
     (raw_ptr_view_kind * bool) option =

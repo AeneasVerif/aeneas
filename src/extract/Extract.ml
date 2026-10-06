@@ -1066,7 +1066,9 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
               | SyncRawPtrOfUninitSlice
               | FreeRawPtrOfUninitSlice
               | RawPtrRead
-              | RawPtrWrite ) ->
+              | RawPtrWrite
+              | RawPtrTake
+              | RawPtrRestore ) ->
               Some
                 { explicit_types = [ Implicit ]; explicit_const_generics = [] }
           | Pure ResultUnwrapMut ->

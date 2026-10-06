@@ -304,6 +304,18 @@ let equal_raw_ptr_parked (x : raw_ptr_parked) (y : raw_ptr_parked) =
 let equal_raw_ptr_view (x : raw_ptr_view) (y : raw_ptr_view) =
   x.rpv_loan = y.rpv_loan
 
+type raw_ptr_borrow = {
+  rpb_ptr : mvalue;
+  rpb_loan : loan_id;
+  rpb_restored : bool;
+      (** The value was already written back by the backward function of a
+          parent region group *)
+}
+[@@deriving show, ord]
+
+let equal_raw_ptr_borrow (x : raw_ptr_borrow) (y : raw_ptr_borrow) =
+  x.rpb_loan = y.rpb_loan
+
 (** The kind of an abstraction, which keeps track of its origin *)
 type abs_kind =
   | FunCall of (FunCallId.id * RegionGroupId.id)
@@ -347,6 +359,7 @@ type abs_kind =
           an [if then else] or a [match] *)
   | RawPtrView of raw_ptr_view
   | RawPtrParked of raw_ptr_parked
+  | RawPtrBorrow of raw_ptr_borrow
 [@@deriving show, eq, ord]
 
 module AbsBVarId = IdGen ()

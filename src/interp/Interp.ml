@@ -395,17 +395,20 @@ let rec end_dead_borrows_and_abs ?(end_dead_views = false) (config : config)
               inherit [_] iter_tvalue as super
 
               method! visit_VMutBorrow env bid bv =
-                (match
-                   InterpBorrowsCore.lookup_loan_opt span
-                     InterpBorrowsCore.ek_all bid ctx.env
-                 with
+                match
+                  InterpBorrowsCore.lookup_loan_opt span
+                    InterpBorrowsCore.ek_all bid ctx.env
+                with
                 | Some (AbsId abs_id, _) -> (
                     match (ctx_lookup_abs ctx abs_id).kind with
                     | SynthInput _ -> ()
-                    | _ -> borrows := bid :: !borrows)
-                | Some _ -> borrows := bid :: !borrows
-                | None -> ());
-                super#visit_VMutBorrow env bid bv
+                    | _ ->
+                        borrows := bid :: !borrows;
+                        super#visit_VMutBorrow env bid bv)
+                | Some _ ->
+                    borrows := bid :: !borrows;
+                    super#visit_VMutBorrow env bid bv
+                | None -> super#visit_VMutBorrow env bid bv
             end
           in
           visitor#visit_tvalue () v
@@ -450,6 +453,10 @@ let rec end_dead_borrows_and_abs ?(end_dead_views = false) (config : config)
                            span abs 0 (-1))
                    && has_ended_loans abs -> Some abs.abs_id
             | RawPtrParked _ -> Some abs.abs_id
+            | RawPtrBorrow _
+              when Option.is_none
+                     (InterpBorrowsCore.get_first_non_ignored_aloan_in_abs span
+                        abs 0 (-1)) -> Some abs.abs_id
             (* The raw pointer views whose pointer is not used anymore *)
             | RawPtrView view
               when end_dead_views
@@ -568,24 +575,76 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
 
   let target_abs_ids = List.append parent_input_abs_ids [ current_abs_id ] in
 
+  let raw_ptr_borrows (ctx : eval_ctx) : AbsId.Set.t =
+    AbsId.Set.of_list
+      (env_filter_map_abs
+         (fun abs ->
+           match abs.kind with
+           | RawPtrBorrow _ -> Some abs.abs_id
+           | _ -> None)
+         ctx.env)
+  in
   let ctx, cc =
     if fun_decl_is_stateful ctx fdef then
-      let ret_abs_ids =
+      let ret_abs_ids (in_rgs : RegionGroupId.id -> bool) (ctx : eval_ctx) =
         env_filter_map_abs
           (fun abs ->
             match abs.kind with
-            | SynthRet rg_id
-              when rg_id = back_id && AbsId.Set.is_empty abs.parents ->
-                Some abs.abs_id
+            | SynthRet rg_id when in_rgs rg_id -> Some abs.abs_id
             | _ -> None)
           ctx.env
       in
-      let ctx, cc =
-        fold_left_apply_continuation
-          (fun id ctx -> end_abs config span id 0 ctx)
-          (List.rev ret_abs_ids) ctx
+      let end_ret_abs (ids : AbsId.id list) (ctx : eval_ctx) =
+        let ctx, cc =
+          fold_left_apply_continuation
+            (fun id ctx -> end_abs config span id 0 ctx)
+            (List.rev ids) ctx
+        in
+        comp cc (end_dead_borrows_and_abs config span ctx)
       in
-      comp cc (end_dead_borrows_and_abs config span ctx)
+      (* The heap borrows which are ended because of the parent region groups
+         are written back by the backward functions of those region groups *)
+      let ctx, cc =
+        if AbsId.Set.is_empty (raw_ptr_borrows ctx) then (ctx, fun e -> e)
+        else
+          let parent_ret_abs_ids =
+            ret_abs_ids (fun rg -> RegionGroupId.Set.mem rg parent_rgs) ctx
+          in
+          let restored =
+            try
+              let ctx' =
+                Errors.with_silent_errors (fun () ->
+                    fst (end_ret_abs parent_ret_abs_ids ctx))
+              in
+              AbsId.Set.diff (raw_ptr_borrows ctx) (raw_ptr_borrows ctx')
+            with Errors.CFailure _ | Failure _ | Errors.RFailure ->
+              AbsId.Set.empty
+          in
+          let env =
+            List.map
+              (fun (e : env_elem) ->
+                match e with
+                | EAbs ({ kind = RawPtrBorrow b; _ } as abs)
+                  when AbsId.Set.mem abs.abs_id restored ->
+                    EAbs
+                      {
+                        abs with
+                        kind = RawPtrBorrow { b with rpb_restored = true };
+                      }
+                | _ -> e)
+              ctx.env
+          in
+          end_ret_abs parent_ret_abs_ids { ctx with env }
+      in
+      let ret_abs_ids =
+        List.filter
+          (fun id ->
+            AbsId.Set.for_all
+              (fun pid -> Option.is_none (ctx_lookup_abs_opt ctx pid))
+              (ctx_lookup_abs ctx id).parents)
+          (ret_abs_ids (fun rg -> rg = back_id) ctx)
+      in
+      comp cc (end_ret_abs ret_abs_ids ctx)
     else (ctx, fun e -> e)
   in
 
@@ -655,7 +714,13 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
   in
 
   (* Create the continuation to finish the evaluation *)
-  let config = mk_config SymbolicMode in
+  let live_locals =
+    match fdef.body with
+    | StructuredBody body when fun_decl_is_stateful ctx fdef ->
+        Some (InterpUtils.compute_live_locals body.body)
+    | _ -> None
+  in
+  let config = mk_config ~live_locals SymbolicMode in
   let finish (res : statement_eval_res) (ctx : eval_ctx) =
     let ctx0 = ctx in
     [%ltrace

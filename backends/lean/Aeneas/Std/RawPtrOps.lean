@@ -1,5 +1,6 @@
 module
 public import Aeneas.Std.Buffer
+public import Aeneas.Std.MaybeUninit
 @[expose] public section
 
 open Aeneas Aeneas.SepLogic
@@ -385,5 +386,73 @@ def core.ptr.mut_ptr.RawPtrMutT.write_volatile [ByteRepr T] (p : MutRawPtr T) (v
 attribute [step_simps] core.ptr.read_volatile core.ptr.write_volatile
   core.ptr.const_ptr.RawPtrConstT.read_volatile core.ptr.mut_ptr.RawPtrMutT.read_volatile
   core.ptr.mut_ptr.RawPtrMutT.write_volatile
+
+/-! ## Mutable borrows of the values raw pointers point to -/
+
+/-- `&mut *q`: the value is moved out of the heap, which leaves its memory
+uninitialized until the borrow ends (see `MutRawPtr.restore`), so that
+accessing it through another pointer while the borrow is live fails. -/
+def MutRawPtr.take [ByteRepr T] (q : MutRawPtr T) : Result T := do
+  let v ← q.read
+  q.writeUninitRange [MaybeUninit.uninit]
+  ok v
+
+@[step]
+theorem MutRawPtr.take.spec [ByteRepr T] (q : MutRawPtr T) (v : T) :
+    ⦃ q ↦ v ⦄ q.take ⦃⇓ r => ⌜r = v⌝ ∗ q ↦? .uninit⦄ := by
+  unfold MutRawPtr.take
+  apply WP.ispec_bind (RawPtr.read.spec q v) (sep_emp_r _).mpr
+  intro r
+  rw [sep_emp_r_eq, WP.ispec_ipure]
+  intro hr
+  subst hr
+  have hWrite := RawPtr.writeUninitRange.spec q [.init r] [.uninit] rfl
+  simp only [RawPtr.pointsToUninitRange_cons, RawPtr.pointsToUninitRange_nil, sep_emp_r_eq,
+    RawPtr.pointsToUninit_init] at hWrite
+  apply WP.ispec_bind hWrite (sep_emp_r _).mpr
+  intro _
+  rw [sep_emp_r_eq]
+  exact (WP.ispec_ok _).2 (pure_sep_intro _ rfl)
+
+/-- The end of a borrow created by `MutRawPtr.take`: the value is written back.
+This fails if the memory was written to through another pointer while the
+borrow was live. -/
+def MutRawPtr.restore [ByteRepr T] (q : MutRawPtr T) (value : T) : Result Unit :=
+  Result.guardedModify
+    (fun h => h.readCells q.loc (ByteRepr.size T) = some (MaybeUninit.uninit : MaybeUninit T).cells
+      ∧ q.Aligned)
+    fun h _ => ((), h.writeBytes q.loc (ByteRepr.encode value))
+
+@[step]
+theorem MutRawPtr.restore.spec [ByteRepr T] (q : MutRawPtr T) (value : T) :
+    ⦃ q ↦? .uninit ⦄ q.restore value ⦃⇓ q ↦ value⦄ := by
+  apply ispec_guardedModify
+  intro h hPointsTo frame hCompatible
+  obtain ⟨hAlign, rest, hCompatibleRest, rfl⟩ :=
+    (RawPtr.pointsToUninit_holds q .uninit h).mp hPointsTo
+  have hSub : Heap.Sub (Heap.cells q.loc (MaybeUninit.uninit : MaybeUninit T).cells)
+      ((Heap.cells q.loc (MaybeUninit.uninit : MaybeUninit T).cells ∪ rest) ∪ frame) :=
+    Heap.Sub.trans (Heap.Sub.union_left hCompatibleRest) (Heap.Sub.union_left hCompatible)
+  have hRead := Heap.readCells_of_sub hSub
+  rw [MaybeUninit.length_cells] at hRead
+  have hLength : (ByteRepr.encode value).length = (MaybeUninit.uninit : MaybeUninit T).cells.length := by
+    rw [ByteRepr.length_encode, MaybeUninit.length_cells]
+  have hLength' : ((ByteRepr.encode value).map some).length =
+      (MaybeUninit.uninit : MaybeUninit T).cells.length := by
+    rw [List.length_map, hLength]
+  obtain ⟨hRestFrame, hOldRestFrame⟩ :=
+    (PartialCommMonoid.compatible_assoc _ rest frame).mp ⟨hCompatibleRest, hCompatible⟩
+  have hNewOld : PartialCommMonoid.Compatible
+      (Heap.bytes q.loc (ByteRepr.encode value)) (rest ∪ frame) := by
+    rw [Heap.bytes_eq_cells]
+    exact Heap.compatible_cells_of_length_eq hLength' hOldRestFrame
+  obtain ⟨hNewRest, hNewFrame⟩ :=
+    (PartialCommMonoid.compatible_assoc (Heap.bytes q.loc (ByteRepr.encode value))
+      rest frame).mpr ⟨hRestFrame, hNewOld⟩
+  refine ⟨⟨hRead, hAlign⟩, Heap.bytes q.loc (ByteRepr.encode value) ∪ rest,
+    hNewFrame, ?_, (RawPtr.pointsTo_holds q value _).mpr
+      ⟨hAlign, Heap.Sub.union_left hNewRest⟩⟩
+  change Heap.writeBytes _ q.loc _ = _
+  rw [Heap.writeBytes_union, Heap.writeBytes_cells_union _ hLength]
 
 end Aeneas.Std
