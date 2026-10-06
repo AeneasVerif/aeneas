@@ -13,7 +13,7 @@ We later use DWLP to define Hoare triples for **partial correctness**.
 and conjunctive (to be demonic).
 "Demonic" means that the specification must hold for all possible answers of the effects,
 guaranteeing that `Q` is satisfied for all final results of `m`.
-"liberal" means that divergence is allowed and no guarantees are provided when `m`
+"Liberal" means that divergence is allowed and no guarantees are provided when `m`
 diverges.
 
 `DWLP` is defined as the greatest fixed point of `FunctionalWP` with divergence allowed.
