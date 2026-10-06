@@ -1,6 +1,7 @@
 module
 public import Aeneas.Std.WPDef
 public import Aeneas.Std.Primitives
+public import Std.Do
 public import Aeneas.Std.Delab
 public meta import AeneasMeta.Simp
 public import Aeneas.Tactic.Solver.Grind.Init
@@ -215,6 +216,19 @@ theorem ispec_and {α : Type u} {P : IPre} {m : Result α} {Q₁ Q₂ : IPost α
   exact (sep_mono (entails_refl _) (fun _ hSub => F.up_closed hF hSub)) heap
     ((sep_iand_owns (Q₁ value) (Q₂ value) framed).mpr heap hPost)
 
+theorem ispec_and_dispec {α : Type u} {P : IPre} {m : Result α} {Q₁ Q₂ : IPost α}
+    (h₁ : ispec P m Q₁) (h₂ : dispec P m Q₂) :
+    ispec P m (fun value => iprop(Q₁ value ∧ Q₂ value)) := by
+  rw [ispec_iff] at h₁ ⊢
+  rw [dispec_iff] at h₂
+  rintro F _ ⟨owned, framed, hCompatible, rfl, hP, hF⟩
+  have hPre : (P ∗ owns framed) (owned ∪ framed) :=
+    ⟨owned, framed, hCompatible, rfl, hP, Heap.Sub.refl framed⟩
+  have hBoth := DWP.and_partial (h₁ (owns framed) _ hPre) (h₂ (owns framed) _ hPre)
+  refine hBoth.mono fun value heap hPost => ?_
+  exact (sep_mono (entails_refl _) (fun _ hSub => F.up_closed hF hSub)) heap
+    ((sep_iand_owns (Q₁ value) (Q₂ value) framed).mpr heap hPost)
+
 /-- Bind rule used by `step`. -/
 theorem ispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
     {next : α → Result β} {Q : IPost β} {m : Result α} {Qm : IPost α}
@@ -419,6 +433,10 @@ theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : sp
 theorem spec_and {m : Result α} {p q : Post α} (h₁ : spec m p) (h₂ : spec m q) :
     spec m (fun value => p value ∧ q value) :=
   ispec_and h₁ h₂
+
+theorem spec_and_dspec {m : Result α} {p q : Post α} (h₁ : spec m p) (h₂ : dspec m q) :
+    spec m (fun value => p value ∧ q value) :=
+  ispec_and_dispec h₁ h₂
 
 /-- Bind rule used by `step`. It is stated on `Std.bind` rather than on `>>=`, which is
 what a translated program binds with. -/
@@ -1138,5 +1156,104 @@ example (zero : List Nat → Result (List Nat))
 
 end Aeneas.Std.WP
 
-/- TODO: restore the mvcgen bridge (`spec_to_mvcgen`, `dspec_to_mvcgen`): the `WP` instance
-must model `guardedModify` rather than send it to `False`. -/
+namespace Aeneas.Std.WP
+
+/-!
+# mvcgen
+-/
+
+open Std Result
+open _root_.Std.Do
+
+def _root_.Aeneas.Std.Result.terminates {α : Type u} (x : Result α) : Prop :=
+  spec x (fun _ => True)
+
+instance Result.instWP : WP Result.{u} (.except PUnit .pure) where
+  wp x := {
+    trans Q := ⟨spec x (fun a => (Q.1 a).down) ∨
+      ((Q.2.1 ⟨⟩).down ∧ dspec x (fun a => (Q.1 a).down))⟩
+    conjunctiveRaw Q₁ Q₂ := by
+      simp only [SPred.bientails_nil, SPred.and_nil, ExceptConds.and]
+      constructor
+      · rintro (h | ⟨⟨d₁, d₂⟩, h⟩)
+        · exact ⟨.inl (spec_mono h fun _ h => h.1), .inl (spec_mono h fun _ h => h.2)⟩
+        · exact ⟨.inr ⟨d₁, dspec_mono h fun _ h => h.1⟩, .inr ⟨d₂, dspec_mono h fun _ h => h.2⟩⟩
+      · rintro ⟨h₁ | ⟨d₁, h₁⟩, h₂ | ⟨d₂, h₂⟩⟩
+        · exact .inl (spec_and h₁ h₂)
+        · exact .inl (spec_and_dspec h₁ h₂)
+        · exact .inl (spec_mono (spec_and_dspec h₂ h₁) fun _ h => ⟨h.2, h.1⟩)
+        · exact .inr ⟨⟨d₁, d₂⟩, dspec_and h₁ h₂⟩
+  }
+
+theorem Result.wp_down {α : Type u} (x : Result α) (Q : PostCond α (.except PUnit .pure)) :
+    (wp⟦x⟧ Q).down ↔
+      spec x (fun a => (Q.1 a).down) ∨ ((Q.2.1 ⟨⟩).down ∧ dspec x (fun a => (Q.1 a).down)) :=
+  Iff.rfl
+
+theorem spec_iff_mvcgen {α : Type u} {x : Result α} {Q : α → Prop} :
+    spec x Q ↔ Triple x (SPred.pure True) (PostCond.noThrow fun r => SPred.pure (Q r)) := by
+  simp only [Triple, SPred.entails_nil, Result.wp_down]
+  exact ⟨fun h _ => .inl h, fun h => (h trivial).elim id fun h => h.1.elim⟩
+
+theorem dspec_iff_mvcgen {α : Type u} {x : Result α} {Q : α → Prop} :
+    dspec x Q ↔ Triple x (SPred.pure True) (PostCond.mayThrow fun r => SPred.pure (Q r)) := by
+  simp only [Triple, SPred.entails_nil, Result.wp_down]
+  exact ⟨fun h _ => .inr ⟨trivial, h⟩, fun h => (h trivial).elim (spec_dspec _ _ _) And.right⟩
+
+/-- Lift an Aeneas step spec to an mvcgen-compatible `Triple`. -/
+theorem spec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop} (h : spec x Q) :
+    Triple x (SPred.pure True) (PostCond.noThrow fun r => SPred.pure (Q r)) :=
+  spec_iff_mvcgen.mp h
+
+theorem dspec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop} (h : dspec x Q) :
+    Triple (ps := .except PUnit .pure) x (SPred.pure True)
+      (fun r => SPred.pure (Q r), fun _ => SPred.pure (¬ x.terminates), ⟨⟩) := by
+  intro _
+  by_cases hTerm : x.terminates
+  · exact .inl (spec_mono (spec_and_dspec hTerm h) fun _ h => h.2)
+  · exact .inr ⟨hTerm, h⟩
+
+@[spec]
+theorem Result.ok_mvcgen_spec {α : Type u} {a : α} {Q : PostCond α (.except PUnit .pure)} :
+    Triple (Result.ok a) (Q.1 a) Q :=
+  fun h => .inl ((spec_ok a).mpr h)
+
+@[spec]
+theorem Result.pure_mvcgen_spec {α : Type u} {a : α} {Q : PostCond α (.except PUnit .pure)} :
+    Triple (pure a : Result α) (Q.1 a) Q :=
+  Result.ok_mvcgen_spec
+
+@[spec]
+theorem Result.fail_mvcgen_spec {α : Type u} {e : Error} {Q : PostCond α (.except PUnit .pure)} :
+    Triple (Result.fail e : Result α) (SPred.pure False) Q :=
+  False.elim
+
+@[spec]
+theorem Result.div_mvcgen_spec {α : Type u} {Q : PostCond α (.except PUnit .pure)} :
+    Triple (ps := .except PUnit .pure) (Result.div : Result α) (Q.2.1 ⟨⟩) Q :=
+  fun h => .inr ⟨h, dspec_div.mpr trivial⟩
+
+theorem Result.bind_wp {α β : Type u} {x : Result α} {f : α → Result β}
+    {Q : PostCond β (.except PUnit .pure)} :
+    (wp⟦x⟧ (fun a => wp⟦f a⟧ Q, Q.2)).down → (wp⟦Std.bind x f⟧ Q).down := by
+  simp only [Result.wp_down]
+  rintro (h | ⟨d, h⟩)
+  · by_cases d : (Q.2.1 ⟨⟩).down
+    · refine .inr ⟨d, dspec_bind (spec_dspec _ _ _ h) fun _ h => ?_⟩
+      exact h.elim (spec_dspec _ _ _) And.right
+    · exact .inl (spec_bind h fun _ h => h.resolve_right fun h => d h.1)
+  · exact .inr ⟨d, dspec_bind h fun _ h => h.elim (spec_dspec _ _ _) And.right⟩
+
+@[spec]
+theorem Result.std_bind_mvcgen_spec {α β : Type u} {x : Result α} {f : α → Result β}
+    {Q : PostCond β (.except PUnit .pure)} :
+    Triple (Std.bind x f) (wp⟦x⟧ (fun a => wp⟦f a⟧ Q, Q.2)) Q :=
+  Result.bind_wp
+
+@[spec]
+theorem Result.bind_mvcgen_spec {α β : Type u} {x : Result α} {f : α → Result β}
+    {Q : PostCond β (.except PUnit .pure)} :
+    Triple (x >>= f) (wp⟦x⟧ (fun a => wp⟦f a⟧ Q, Q.2)) Q :=
+  Result.bind_wp
+
+end Aeneas.Std.WP
