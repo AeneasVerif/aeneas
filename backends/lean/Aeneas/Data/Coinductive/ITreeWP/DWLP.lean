@@ -111,6 +111,20 @@ theorem DWLP.bind
         exact θ.wp_monotonic (fun _ _ hChild => Or.inl ⟨_, rfl, hChild⟩) hSpec.vis_view
   · exact hSpec.step.mono id (fun _ _ => id) fun _ _ => Or.inr
 
+theorem DWLP.and_iff [θ.Conjunctive] :
+    DWLP θ m (fun value s' => Q₁ value s' ∧ Q₂ value s') s ↔ DWLP θ m Q₁ s ∧ DWLP θ m Q₂ s := by
+  refine ⟨fun h => ⟨h.mono fun _ _ hq => hq.1, h.mono fun _ _ hq => hq.2⟩, fun ⟨h₁, h₂⟩ => ?_⟩
+  refine coinduction (fun t u => DWLP θ t Q₁ u ∧ DWLP θ t Q₂ u) ?_ ⟨h₁, h₂⟩
+  rintro t u ⟨hSpec₁, hSpec₂⟩
+  cases t using ITree.cases with
+  | ret value =>
+      simp only [ITree.pure_eq_ret, FunctionalWP.ret]
+      exact ⟨DWLP.ret_iff.mp hSpec₁, DWLP.ret_iff.mp hSpec₂⟩
+  | div => simp only [FunctionalWP.div]
+  | vis effect k =>
+      simp only [FunctionalWP.vis]
+      exact EffectWP.wp_and hSpec₁.vis_view hSpec₂.vis_view
+
 /-- Partial correctness is admissible. -/
 theorem DWLP.admissible (θ : EffectWP E) [θ.Monotonic] [θ.Conjunctive]
     (Q : θ.Post α) (s : θ.State) :
