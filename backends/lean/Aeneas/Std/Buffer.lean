@@ -14,10 +14,7 @@ open Aeneas SepLogic
 
 namespace Aeneas.Std
 
-/-! ### Trusted definitions
-
-The definitions between this marker and the matching end marker are part of the TCB:
-they give the meaning of the buffer points-to assertion. -/
+/-! ### START Trusted definitions -/
 
 /-- A bounded mutable view into a heap allocation, modelling `&mut [T]`. -/
 structure Buffer (T : Type) where
@@ -39,7 +36,7 @@ end Buffer
 instance instPointsToBuffer {T : Type} :
     PointsTo (Buffer T) (List T) := ⟨Buffer.pointsTo⟩
 
-/-! ### End of trusted definitions -/
+/-! ### END Trusted definitions -/
 
 open WP
 
