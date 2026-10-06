@@ -2983,23 +2983,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
   let compute_loop_fun_expr (loop : loop) (generics_filter : generics_filter)
       (constant_inputs : ty list) : texpr =
     let generic_args = generic_args_of_params def.signature.generics in
-    let { types; const_generics; trait_refs } : generic_args = generic_args in
-    let types =
-      List.filter_map
-        (fun (b, x) -> if b then Some x else None)
-        (List.combine generics_filter.types types)
-    in
-    let const_generics =
-      List.filter_map
-        (fun (b, x) -> if b then Some x else None)
-        (List.combine generics_filter.const_generics const_generics)
-    in
-    let trait_refs =
-      List.filter_map
-        (fun (b, x) -> if b then Some x else None)
-        (List.combine generics_filter.trait_clauses trait_refs)
-    in
-    let generics : generic_args = { types; const_generics; trait_refs } in
+    let generics = filter_generic_args generics_filter generic_args in
 
     let output_ty = mk_result_ty (mk_simpl_tuple_ty loop.output_tys) in
     let input_tys = List.map (fun (e : texpr) -> e.ty) loop.inputs in
