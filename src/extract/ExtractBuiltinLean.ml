@@ -50,6 +50,10 @@ let lean_builtin_types =
     (* file: "Aeneas/Std/Core/Iter.lean", line: 58 *)
     mk_type "core::iter::adapters::zip::Zip" "core.iter.adapters.zip.Zip"
       ~kind:(KStruct [ ("fst", Some "fst"); ("snd", Some "snd") ]);
+    (* file: "Aeneas/Std/ManuallyDrop.lean", line: 16 *)
+    mk_type "core::mem::manually_drop::ManuallyDrop"
+      "core.mem.manually_drop.ManuallyDrop"
+      ~kind:(KStruct [ ("value", Some "value") ]);
     (* file: "Aeneas/Std/MaybeUninitDef.lean", line: 19 *)
     mk_type "core::mem::maybe_uninit::MaybeUninit" "MaybeUninit"
       ~kind:(KEnum [ ("Uninit", Some "uninit"); ("Init", Some "init") ]);
@@ -876,7 +880,25 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Iter.lean", line: 704 *)
     mk_fun "core::iter::traits::iterator::Iterator::zip"
       "core.iter.traits.iterator.Iterator.zip.trait_default";
-    (* file: "Aeneas/Std/MaybeUninit.lean", line: 423 *)
+    (* file: "Aeneas/Std/ManuallyDrop.lean", line: 25 *)
+    mk_fun
+      "core::mem::manually_drop::{core::mem::manually_drop::ManuallyDrop<@T>}::into_inner"
+      "core.mem.manually_drop.ManuallyDrop.into_inner";
+    (* file: "Aeneas/Std/ManuallyDrop.lean", line: 20 *)
+    mk_fun
+      "core::mem::manually_drop::{core::mem::manually_drop::ManuallyDrop<@T>}::new"
+      "core.mem.manually_drop.ManuallyDrop.new";
+    (* file: "Aeneas/Std/ManuallyDrop.lean", line: 30 *)
+    mk_fun
+      "core::mem::manually_drop::{core::ops::deref::Deref<core::mem::manually_drop::ManuallyDrop<@T>, \
+       @T>}::deref"
+      "core.mem.manually_drop.ManuallyDrop.Insts.CoreOpsDerefDeref.deref";
+    (* file: "Aeneas/Std/ManuallyDrop.lean", line: 36 *)
+    mk_fun
+      "core::mem::manually_drop::{core::ops::deref::DerefMut<core::mem::manually_drop::ManuallyDrop<@T>, \
+       @T>}::deref_mut"
+      "core.mem.manually_drop.ManuallyDrop.Insts.CoreOpsDerefDerefMut.deref_mut";
+    (* file: "Aeneas/Std/MaybeUninit.lean", line: 435 *)
     mk_fun
       "core::mem::maybe_uninit::{core::clone::Clone<core::mem::maybe_uninit::MaybeUninit<@T>>}::clone"
       "core.mem.maybe_uninit.MaybeUninit.Insts.CoreCloneClone.clone";
@@ -1097,6 +1119,8 @@ let lean_builtin_funs =
     mk_fun "core::ptr::copy" "core.ptr.copy";
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 42 *)
     mk_fun "core::ptr::copy_nonoverlapping" "core.ptr.copy_nonoverlapping";
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 359 *)
+    mk_fun "core::ptr::drop_in_place" "core.ptr.drop_in_place";
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 18 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::add"
       "core.ptr.mut_ptr.RawPtrMutT.add";
@@ -1614,7 +1638,7 @@ let lean_builtin_trait_impls =
       ~keep_trait_clauses:(Some [ true; false ]);
     (* file: "Aeneas/Std/Core/Core.lean", line: 46 *)
     mk_trait_impl "core::clone::Clone<bool>" "core.clone.CloneBool";
-    (* file: "Aeneas/Std/MaybeUninit.lean", line: 429 *)
+    (* file: "Aeneas/Std/MaybeUninit.lean", line: 441 *)
     mk_trait_impl "core::clone::Clone<core::mem::maybe_uninit::MaybeUninit<@T>>"
       "core.mem.maybe_uninit.MaybeUninit.Insts.CoreCloneClone";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 254 *)
@@ -1809,7 +1833,7 @@ let lean_builtin_trait_impls =
     mk_trait_impl "core::marker::Copy<[@T; @N]>" "Array.Insts.CoreMarkerCopy";
     (* file: "Aeneas/Std/Core/Core.lean", line: 67 *)
     mk_trait_impl "core::marker::Copy<bool>" "core.core.marker.CopyBool";
-    (* file: "Aeneas/Std/MaybeUninit.lean", line: 434 *)
+    (* file: "Aeneas/Std/MaybeUninit.lean", line: 446 *)
     mk_trait_impl "core::marker::Copy<core::mem::maybe_uninit::MaybeUninit<@T>>"
       "core.mem.maybe_uninit.MaybeUninit.Insts.CoreMarkerCopy";
     (* file: "Aeneas/Std/Core/Ops.lean", line: 31 *)

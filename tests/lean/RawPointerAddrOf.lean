@@ -72,8 +72,12 @@ def read_static (i : Std.Usize) : Result Std.U16 := do
   let p ← RawPtr.addr_of TABLE
   let p1 ← core.ptr.const_ptr.RawPtrConstT.cast Std.U16 p
   if i < 4#usize
-  then let p2 ← core.ptr.const_ptr.RawPtrConstT.add p1 i
-       RawPtr.read p2
-  else ok 0#u16
+  then
+    let p2 ← core.ptr.const_ptr.RawPtrConstT.add p1 i
+    let i1 ← RawPtr.read p2
+    RawPtr.end_addr_of TABLE p
+    ok i1
+  else RawPtr.end_addr_of TABLE p
+       ok 0#u16
 
 end raw_pointer_addr_of

@@ -103,6 +103,7 @@ package «tests» {}
 @[default_target] lean_lib Range
 @[default_target] lean_lib RawPointerAddrOf
 @[default_target] lean_lib RawPointerCasts
+@[default_target] lean_lib RawPointerGuards
 @[default_target] lean_lib RawPointerLayouts
 @[default_target] lean_lib RawPointerOffsets
 @[default_target] lean_lib RawPointers

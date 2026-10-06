@@ -382,7 +382,8 @@ let fun_decl_is_stateful (ctx : eval_ctx) (fdef : fun_decl) : bool =
   | Some info -> info.stateful
   | None -> false
 
-let rec end_dead_borrows_and_abs (config : config) (span : Meta.span) : cm_fun =
+let rec end_dead_borrows_and_abs ?(end_dead_views = false) (config : config)
+    (span : Meta.span) : cm_fun =
  fun ctx ->
   let borrows = ref [] in
   List.iter
@@ -413,7 +414,7 @@ let rec end_dead_borrows_and_abs (config : config) (span : Meta.span) : cm_fun =
   match !borrows with
   | bid :: _ ->
       let ctx, cc = end_borrow config span (UMut bid) ctx in
-      comp cc (end_dead_borrows_and_abs config span ctx)
+      comp cc (end_dead_borrows_and_abs ~end_dead_views config span ctx)
   | [] -> (
       let has_ended_loans (abs : abs) : bool =
         let found = ref false in
@@ -449,13 +450,18 @@ let rec end_dead_borrows_and_abs (config : config) (span : Meta.span) : cm_fun =
                            span abs 0 (-1))
                    && has_ended_loans abs -> Some abs.abs_id
             | RawPtrParked _ -> Some abs.abs_id
+            (* The raw pointer views whose pointer is not used anymore *)
+            | RawPtrView view
+              when end_dead_views
+                   && not (symbolic_value_id_in_ctx view.rpv_ptr.sv_id ctx) ->
+                Some abs.abs_id
             | _ -> None)
           ctx.env
       in
       match to_end with
       | abs_id :: _ ->
           let ctx, cc = end_abs config span abs_id 0 ctx in
-          comp cc (end_dead_borrows_and_abs config span ctx)
+          comp cc (end_dead_borrows_and_abs ~end_dead_views config span ctx)
       | [] -> (ctx, fun e -> e))
 
 (** Small helper.
@@ -683,7 +689,17 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
         let stateful = fun_decl_is_stateful ctx fdef in
         let ctx, cc_pop_outer, cc_pop =
           if stateful then
-            let ctx, cc_dead = end_dead_borrows_and_abs config span ctx in
+            (* We end the raw pointer views which are not used anymore, unless
+               the function returns raw pointers (which may have been derived
+               from them) *)
+            let end_dead_views =
+              not
+                (FunsAnalysis.mk_ty_contains_raw_ptr ctx.crate
+                   fdef.signature.output)
+            in
+            let ctx, cc_dead =
+              end_dead_borrows_and_abs ~end_dead_views config span ctx
+            in
             (ctx, cc_comp cc_pop cc_dead, fun e -> e)
           else (ctx, (fun e -> e), cc_pop)
         in

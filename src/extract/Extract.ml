@@ -3571,8 +3571,19 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     ctx_add_generic_params span impl.item_meta.name Item impl.llbc_generics
       impl.generics ctx
   in
-  extract_generic_params span ctx fmt TypeDeclId.Set.empty Item impl.generics
-    (Some impl.explicit_info) type_params cg_params trait_clauses;
+  let byte_repr_params =
+    let params =
+      Layouts.get_trait_impl_byte_repr_type_params ctx.trans_ctx.crate
+        impl.def_id
+    in
+    List.filter_map
+      (fun ((tp : type_param), name) ->
+        if TypeVarId.Set.mem tp.index params then Some name else None)
+      (List.combine impl.generics.types type_params)
+  in
+  extract_generic_params span ctx fmt TypeDeclId.Set.empty ~byte_repr_params
+    Item impl.generics (Some impl.explicit_info) type_params cg_params
+    trait_clauses;
 
   (* Print the type *)
   F.pp_print_space fmt ();

@@ -355,4 +355,9 @@ def core.ptr.write [ByteRepr T] (p : MutRawPtr T) (v : T) : Result Unit :=
 
 attribute [step_simps] core.ptr.read core.ptr.write
 
+/-- Drops are no-ops in the model. -/
+@[rust_fun "core::ptr::drop_in_place"]
+def core.ptr.drop_in_place {T : Type} (_p : MutRawPtr T) : Result Unit :=
+  ok ()
+
 end Aeneas.Std

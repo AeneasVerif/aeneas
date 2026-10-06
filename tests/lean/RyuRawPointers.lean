@@ -76,7 +76,9 @@ def pretty.exponent.write_exponent3
     let p1 ← core.ptr.mut_ptr.RawPtrMutT.add result1 1#usize
     core.ptr.copy_nonoverlapping d p1 2#usize
     let i4 ← lift (UScalar.cast_fromBool .Usize (k < 0#isize))
-    i4 + 3#usize
+    let i5 ← i4 + 3#usize
+    Slice.end_as_ptr s p
+    ok i5
   else
     if k1 >= 10#isize
     then
@@ -86,7 +88,9 @@ def pretty.exponent.write_exponent3
       let d ← core.ptr.const_ptr.RawPtrConstT.offset p i
       core.ptr.copy_nonoverlapping d result1 2#usize
       let i1 ← lift (UScalar.cast_fromBool .Usize (k < 0#isize))
-      i1 + 2#usize
+      let i2 ← i1 + 2#usize
+      Slice.end_as_ptr s p
+      ok i2
     else
       let i ← lift (IScalar.hcast .U8 k1)
       let i1 ← 48#u8 + i
@@ -117,7 +121,9 @@ def pretty.exponent.write_exponent2
     let d ← core.ptr.const_ptr.RawPtrConstT.offset p i
     core.ptr.copy_nonoverlapping d result1 2#usize
     let i1 ← lift (UScalar.cast_fromBool .Usize (k < 0#isize))
-    i1 + 2#usize
+    let i2 ← i1 + 2#usize
+    Slice.end_as_ptr s p
+    ok i2
   else
     let i ← lift (IScalar.hcast .U8 k1)
     let i1 ← 48#u8 + i

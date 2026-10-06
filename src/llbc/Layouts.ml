@@ -357,15 +357,52 @@ and pointee_vars (crate : crate) (visiting : TypeDeclId.Set.t)
   | TAdt { generics; _ } -> union_map (explore under_ptr) generics.types
   | _ -> TypeVarId.Set.empty
 
-(** Compute, for every function, the type parameters which require a byte
-    representation *)
+(** The free type variables of a type *)
+let free_vars (ty : ty) : TypeVarId.Set.t =
+  let s = ref TypeVarId.Set.empty in
+  let visitor =
+    object
+      inherit [_] iter_ty
+
+      method! visit_TVar _ v =
+        match v with
+        | Free v -> s := TypeVarId.Set.add v !s
+        | _ -> ()
+    end
+  in
+  visitor#visit_ty () ty;
+  !s
+
+(** Compute, for every function and every trait implementation, the type
+    parameters which require a byte representation *)
 let compute_byte_repr_type_params (crate : crate) :
-    TypeVarId.Set.t FunDeclId.Map.t =
+    TypeVarId.Set.t FunDeclId.Map.t * TypeVarId.Set.t TraitImplId.Map.t =
   let memo = Hashtbl.create 16 in
   let pointee_vars = pointee_vars crate TypeDeclId.Set.empty memo in
   let needs = ref FunDeclId.Map.empty in
+  let impl_needs = ref TraitImplId.Map.empty in
   let get (id : FunDeclId.id) =
     Option.value ~default:TypeVarId.Set.empty (FunDeclId.Map.find_opt id !needs)
+  in
+  let get_impl (id : TraitImplId.id) =
+    Option.value ~default:TypeVarId.Set.empty
+      (TraitImplId.Map.find_opt id !impl_needs)
+  in
+  (* The type parameters of a trait implementation which require a byte
+     representation: those which are required by its methods *)
+  let compute_impl (impl : trait_impl) : TypeVarId.Set.t =
+    TraitMethodId.Map.fold
+      (fun _ (m : fun_decl_ref binder) s ->
+        let fref = m.binder_value in
+        let params = get fref.id in
+        List.fold_left
+          (fun s (i, ty) ->
+            if TypeVarId.Set.mem (TypeVarId.of_int i) params then
+              TypeVarId.Set.union s (free_vars ty)
+            else s)
+          s
+          (List.mapi (fun i ty -> (i, ty)) fref.generics.types))
+      impl.methods TypeVarId.Set.empty
   in
   let compute (d : fun_decl) : TypeVarId.Set.t =
     (* We leave the signatures of the opaque functions unchanged *)
@@ -397,6 +434,15 @@ let compute_byte_repr_type_params (crate : crate) :
                       generics.types
                 | _ -> ());
                 super#visit_Call env call on_unwind
+
+              method! visit_trait_impl_ref env (iref : trait_impl_ref) =
+                let params = get_impl iref.id in
+                List.iteri
+                  (fun i ty ->
+                    if TypeVarId.Set.mem (TypeVarId.of_int i) params then
+                      s := TypeVarId.Set.union !s (pointee_vars true ty))
+                  iref.generics.types;
+                super#visit_trait_impl_ref env iref
             end
           in
           visitor#visit_block () body.body
@@ -412,22 +458,38 @@ let compute_byte_repr_type_params (crate : crate) :
         if not (TypeVarId.Set.equal s (get id)) then (
           changed := true;
           needs := FunDeclId.Map.add id s !needs))
-      crate.fun_decls
+      crate.fun_decls;
+    TraitImplId.Map.iter
+      (fun id impl ->
+        let s = compute_impl impl in
+        if not (TypeVarId.Set.equal s (get_impl id)) then (
+          changed := true;
+          impl_needs := TraitImplId.Map.add id s !impl_needs))
+      crate.trait_impls
   done;
-  !needs
+  (!needs, !impl_needs)
 
 let byte_repr_type_params_memo :
-    (crate * TypeVarId.Set.t FunDeclId.Map.t) option ref =
+    (crate
+    * (TypeVarId.Set.t FunDeclId.Map.t * TypeVarId.Set.t TraitImplId.Map.t))
+    option
+    ref =
   ref None
+
+let get_byte_repr_maps (crate : crate) =
+  match !byte_repr_type_params_memo with
+  | Some (c, m) when c == crate -> m
+  | _ ->
+      let m = compute_byte_repr_type_params crate in
+      byte_repr_type_params_memo := Some (crate, m);
+      m
 
 let get_byte_repr_type_params (crate : crate) (id : FunDeclId.id) :
     TypeVarId.Set.t =
-  let m =
-    match !byte_repr_type_params_memo with
-    | Some (c, m) when c == crate -> m
-    | _ ->
-        let m = compute_byte_repr_type_params crate in
-        byte_repr_type_params_memo := Some (crate, m);
-        m
-  in
-  Option.value ~default:TypeVarId.Set.empty (FunDeclId.Map.find_opt id m)
+  Option.value ~default:TypeVarId.Set.empty
+    (FunDeclId.Map.find_opt id (fst (get_byte_repr_maps crate)))
+
+let get_trait_impl_byte_repr_type_params (crate : crate) (id : TraitImplId.id) :
+    TypeVarId.Set.t =
+  Option.value ~default:TypeVarId.Set.empty
+    (TraitImplId.Map.find_opt id (snd (get_byte_repr_maps crate)))

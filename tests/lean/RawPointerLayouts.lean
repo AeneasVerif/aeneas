@@ -37,7 +37,9 @@ def digits2 (value : Std.Usize) : Result Std.U16 := do
   let p ← Slice.as_ptr_aligned 2 s
   let p1 ← core.ptr.const_ptr.RawPtrConstT.cast Std.U16 p
   let p2 ← core.ptr.const_ptr.RawPtrConstT.add p1 value
-  RawPtr.read p2
+  let i ← RawPtr.read p2
+  Slice.end_as_ptr s p
+  ok i
 
 /-- [raw_pointer_layouts::Mixed]
     Source: 'tests/src/raw_pointer_layouts.rs', lines 17:0-21:1 -/
@@ -79,6 +81,7 @@ def read_mixed (xs : Slice Mixed) (i : Std.Usize) : Result Std.U64 := do
   let p ← Slice.as_ptr xs
   let m ← core.ptr.const_ptr.RawPtrConstT.add p i
   let m1 ← RawPtr.read m
+  Slice.end_as_ptr xs p
   ok m1.b
 
 end raw_pointer_layouts

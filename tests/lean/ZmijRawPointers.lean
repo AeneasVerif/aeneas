@@ -306,6 +306,7 @@ def Pow10SignificandTable.get_unchecked
       let i10 ← i8 + i9
       let p3 ← core.ptr.const_ptr.RawPtrConstT.offset p1 i10
       let i11 ← RawPtr.read p3
+      Slice.free_as_ptr s p
       ok { hi := i6, lo := i11 }
     else
       let s ← lift (Array.to_slice self.data)
@@ -316,6 +317,7 @@ def Pow10SignificandTable.get_unchecked
       let p2 ← RawPtr.read p1
       let p3 ← core.ptr.const_ptr.RawPtrConstT.add p1 1#usize
       let i3 ← RawPtr.read p3
+      Slice.free_as_ptr s p
       ok { hi := p2, lo := i3 }
 
 end zmij_raw_pointers
