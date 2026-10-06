@@ -1507,14 +1507,14 @@ let lean_builtin_trait_decls =
 let lean_builtin_trait_impls =
   [
     (* file: "Aeneas/Std/Core/Core.lean", line: 57 *)
-    mk_trait_impl "core::clone::Clone<Box<@T>>" "core.core.clone.CloneBox"
+    mk_trait_impl "core::clone::Clone<Box<@T>>" "core.clone.CloneBox"
       ~keep_params:(Some [ true; false ])
       ~keep_trait_clauses:(Some [ true; false ]);
     (* file: "Aeneas/Std/Array/Array.lean", line: 379 *)
     mk_trait_impl "core::clone::Clone<[@T; @N]>" "core.clone.CloneArray";
     (* file: "Aeneas/Std/Core/Core.lean", line: 37 *)
     mk_trait_impl "core::clone::Clone<alloc::alloc::Global>"
-      "core.core.clone.CloneGlobal";
+      "core.clone.CloneGlobal";
     (* file: "Aeneas/Std/Vec.lean", line: 614 *)
     mk_trait_impl "core::clone::Clone<alloc::vec::Vec<@T>>"
       "core.clone.CloneallocvecVec"
@@ -1713,7 +1713,7 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Array/Array.lean", line: 477 *)
     mk_trait_impl "core::marker::Copy<[@T; @N]>" "Array.Insts.CoreMarkerCopy";
     (* file: "Aeneas/Std/Core/Core.lean", line: 67 *)
-    mk_trait_impl "core::marker::Copy<bool>" "core.core.marker.CopyBool";
+    mk_trait_impl "core::marker::Copy<bool>" "core.marker.CopyBool";
     (* file: "Aeneas/Std/Core/Ops.lean", line: 31 *)
     mk_trait_impl "core::ops::deref::Deref<Box<@T>, @T>"
       "core.ops.deref.DerefBoxInst"
