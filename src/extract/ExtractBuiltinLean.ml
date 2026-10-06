@@ -50,6 +50,8 @@ let lean_builtin_types =
     (* file: "Aeneas/Std/Core/Iter.lean", line: 58 *)
     mk_type "core::iter::adapters::zip::Zip" "core.iter.adapters.zip.Zip"
       ~kind:(KStruct [ ("fst", Some "fst"); ("snd", Some "snd") ]);
+    (* file: "Aeneas/Std/Core/OptionTraits.lean", line: 99 *)
+    mk_type "core::marker::PhantomData" "core.marker.PhantomData";
     (* file: "Aeneas/Std/ManuallyDrop.lean", line: 16 *)
     mk_type "core::mem::manually_drop::ManuallyDrop"
       "core.mem.manually_drop.ManuallyDrop"
@@ -574,6 +576,9 @@ let lean_builtin_funs =
     mk_fun "core::fmt::{core::fmt::Debug<()>}::fmt" "core.fmt.DebugUnit.fmt";
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 104 *)
     mk_fun "core::fmt::{core::fmt::Debug<bool>}::fmt" "core.fmt.DebugBool.fmt";
+    (* file: "Aeneas/Std/Core/OptionTraits.lean", line: 102 *)
+    mk_fun "core::fmt::{core::fmt::Debug<core::marker::PhantomData<@T>>}::fmt"
+      "core.marker.PhantomData.Insts.CoreFmtDebug.fmt";
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 125 *)
     mk_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field1_finish"
       "core.fmt.Formatter.debug_struct_field1_finish";
@@ -1082,6 +1087,30 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Iter.lean", line: 643 *)
     mk_fun "core::ops::range::{core::ops::range::RangeInclusive<@Idx>}::new"
       "core.ops.range.RangeInclusive.new";
+    (* file: "Aeneas/Std/Core/OptionTraits.lean", line: 23 *)
+    mk_fun "core::option::{core::clone::Clone<core::option::Option<@T>>}::clone"
+      "core.option.Option.Insts.CoreCloneClone.clone";
+    (* file: "Aeneas/Std/Core/OptionTraits.lean", line: 36 *)
+    mk_fun
+      "core::option::{core::cmp::PartialEq<core::option::Option<@T>, \
+       core::option::Option<@T>>}::eq"
+      "core.option.Option.Insts.CoreCmpPartialEqOption.eq";
+    (* file: "Aeneas/Std/Core/OptionTraits.lean", line: 87 *)
+    mk_fun "core::option::{core::fmt::Debug<core::option::Option<@T>>}::fmt"
+      "core.option.Option.Insts.CoreFmtDebug.fmt";
+    (* file: "Aeneas/Std/Core/OptionTraits.lean", line: 52 *)
+    mk_fun
+      "core::option::{core::ops::try_trait::FromResidual<core::option::Option<@T>, \
+       core::option::Option<!>>}::from_residual"
+      "core.option.Option.Insts.CoreOpsTry_traitFromResidualOptionNever.from_residual";
+    (* file: "Aeneas/Std/Core/OptionTraits.lean", line: 65 *)
+    mk_fun
+      "core::option::{core::ops::try_trait::Try<core::option::Option<@T>>}::branch"
+      "core.option.Option.Insts.CoreOpsTry_traitTry.branch";
+    (* file: "Aeneas/Std/Core/OptionTraits.lean", line: 72 *)
+    mk_fun
+      "core::option::{core::ops::try_trait::Try<core::option::Option<@T>>}::from_output"
+      "core.option.Option.Insts.CoreOpsTry_traitTry.from_output";
     (* file: "Aeneas/Std/Core/CoreOption.lean", line: 13 *)
     mk_fun "core::option::{core::option::Option<@T>}::expect"
       "core.option.Option.expect";
@@ -1091,6 +1120,9 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Core.lean", line: 123 *)
     mk_fun "core::option::{core::option::Option<@T>}::is_some"
       "core.option.Option.is_some" ~can_fail:false ~lift:false;
+    (* file: "Aeneas/Std/Core/OptionTraits.lean", line: 16 *)
+    mk_fun "core::option::{core::option::Option<@T>}::map"
+      "core.option.Option.map";
     (* file: "Aeneas/Std/Core/CoreOption.lean", line: 23 *)
     mk_fun "core::option::{core::option::Option<@T>}::ok_or"
       "core.option.Option.ok_or";
@@ -1685,6 +1717,9 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/MaybeUninit.lean", line: 441 *)
     mk_trait_impl "core::clone::Clone<core::mem::maybe_uninit::MaybeUninit<@T>>"
       "core.mem.maybe_uninit.MaybeUninit.Insts.CoreCloneClone";
+    (* file: "Aeneas/Std/Core/OptionTraits.lean", line: 30 *)
+    mk_trait_impl "core::clone::Clone<core::option::Option<@T>>"
+      "core.option.Option.Insts.CoreCloneClone";
     (* file: "Aeneas/Std/NonNull.lean", line: 53 *)
     mk_trait_impl "core::clone::Clone<core::ptr::non_null::NonNull<@T>>"
       "core.ptr.non_null.NonNull.Insts.CoreCloneClone";
@@ -1704,6 +1739,10 @@ let lean_builtin_trait_impls =
       ~keep_params:(Some [ true; true; false; false ]);
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 239 *)
     mk_trait_impl "core::cmp::PartialEq<bool, bool>" "core.cmp.PartialEqBool";
+    (* file: "Aeneas/Std/Core/OptionTraits.lean", line: 45 *)
+    mk_trait_impl
+      "core::cmp::PartialEq<core::option::Option<@T>, core::option::Option<@T>>"
+      "core.option.Option.Insts.CoreCmpPartialEqOption";
     (* file: "Aeneas/Std/NonNull.lean", line: 71 *)
     mk_trait_impl
       "core::cmp::PartialEq<core::ptr::non_null::NonNull<@T>, \
@@ -1761,6 +1800,12 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 313 *)
     mk_trait_impl "core::fmt::Debug<core::array::TryFromSliceError>"
       "core.fmt.DebugTryFromSliceError";
+    (* file: "Aeneas/Std/Core/OptionTraits.lean", line: 108 *)
+    mk_trait_impl "core::fmt::Debug<core::marker::PhantomData<@T>>"
+      "core.marker.PhantomData.Insts.CoreFmtDebug";
+    (* file: "Aeneas/Std/Core/OptionTraits.lean", line: 93 *)
+    mk_trait_impl "core::fmt::Debug<core::option::Option<@T>>"
+      "core.option.Option.Insts.CoreFmtDebug";
     (* file: "Aeneas/Std/NonNull.lean", line: 42 *)
     mk_trait_impl "core::fmt::Debug<core::ptr::non_null::NonNull<@T>>"
       "core.ptr.non_null.NonNull.Insts.CoreFmtDebug";
@@ -1930,6 +1975,14 @@ let lean_builtin_trait_impls =
     mk_trait_impl "core::ops::index::IndexMut<alloc::vec::Vec<@T>, @T, @O>"
       "alloc.vec.Vec.IndexMut"
       ~keep_params:(Some [ true; true; false; true ]);
+    (* file: "Aeneas/Std/Core/OptionTraits.lean", line: 58 *)
+    mk_trait_impl
+      "core::ops::try_trait::FromResidual<core::option::Option<@T>, \
+       core::option::Option<!>>"
+      "core.option.Option.Insts.CoreOpsTry_traitFromResidualOptionNever";
+    (* file: "Aeneas/Std/Core/OptionTraits.lean", line: 77 *)
+    mk_trait_impl "core::ops::try_trait::Try<core::option::Option<@T>>"
+      "core.option.Option.Insts.CoreOpsTry_traitTry";
     (* file: "Aeneas/Std/Slice.lean", line: 480 *)
     mk_trait_impl
       "core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], \

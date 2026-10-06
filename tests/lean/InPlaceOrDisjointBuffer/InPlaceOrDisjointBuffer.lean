@@ -19,13 +19,6 @@ set_option maxRecDepth 2048
 
 namespace in_place_or_disjoint_buffer
 
-/-- [core::marker::PhantomData]
-    Source: '/rustc/library/core/src/marker.rs', lines 811:0-811:39
-    Name pattern: [core::marker::PhantomData]
-    Visibility: public -/
-@[reducible, rust_type "core::marker::PhantomData"]
-def core.marker.PhantomData (T : Type) := Unit
-
 /-- [in_place_or_disjoint_buffer::InPlaceOrDisjointBuffer]
     Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 8:0-13:1
     Visibility: public -/
