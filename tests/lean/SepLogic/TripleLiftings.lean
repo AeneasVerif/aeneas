@@ -1,4 +1,4 @@
-import Aeneas.Std.RawPtr
+import Aeneas.Std.RawPtrLemmas
 import Aeneas.Tactic.Step
 
 namespace TripleLiftingTests

@@ -1,6 +1,6 @@
 module
 public import Aeneas.SepLogic.Tactic.IIntro
-public import Aeneas.Std.RawPtrDef
+public import Aeneas.Std.RawPtr
 public section
 
 namespace Aeneas.SepLogic.Tactic.Tests.IIntro

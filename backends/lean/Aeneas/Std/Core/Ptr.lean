@@ -1,6 +1,6 @@
 module
 public import Aeneas.Std.Core.Core
-public import Aeneas.Std.RawPtr
+public import Aeneas.Std.RawPtrLemmas
 public section
 
 namespace Aeneas.Std

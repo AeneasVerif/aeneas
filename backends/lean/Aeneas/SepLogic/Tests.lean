@@ -1,7 +1,7 @@
 module
 public import Aeneas.SepLogic.Lemmas
 public import Aeneas.SepLogic.Delab
-public import Aeneas.Std.RawPtrDef
+public import Aeneas.Std.RawPtr
 public section
 
 namespace Aeneas.SepLogic.Tests

@@ -1,5 +1,5 @@
 module
-public import Aeneas.Std.RawPtr
+public import Aeneas.Std.RawPtrLemmas
 public import Aeneas.Std.Slice
 public import Aeneas.SepLogic.Lemmas
 public import Aeneas.SepLogic.Delab

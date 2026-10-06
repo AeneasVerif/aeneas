@@ -7,7 +7,7 @@ public import Aeneas.Std.Heap
 public import Aeneas.Std.HeapLemmas
 public import Aeneas.Std.Primitives
 public import Aeneas.Std.PrimitivesLemmas
-public import Aeneas.Std.RawPtr
+public import Aeneas.Std.RawPtrLemmas
 public import Aeneas.Std.Scalar
 public import Aeneas.Std.Slice
 public import Aeneas.Std.SliceDef

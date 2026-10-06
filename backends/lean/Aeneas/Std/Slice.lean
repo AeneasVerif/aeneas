@@ -4,7 +4,7 @@ public import Aeneas.Data.List
 public import Aeneas.Std.Array.Core
 public import Aeneas.Std.Range
 public import Aeneas.Std.Core.Ops
-public import Aeneas.Std.RawPtr
+public import Aeneas.Std.RawPtrLemmas
 public import Aeneas.Tactic.Simp.SimpScalar.SimpScalar
 public import Aeneas.Std.SliceDef
 public section
