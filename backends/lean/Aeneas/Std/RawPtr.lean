@@ -21,10 +21,7 @@ open Aeneas SepLogic
 
 namespace Aeneas.Std
 
-/-! ### Trusted definitions
-
-The definitions between this marker and the matching end marker are part of the TCB:
-they give the semantics of raw pointers and of their points-to assertions. -/
+/-! ### START Trusted definitions -/
 
 inductive Mutability where
 | Mut | Const
@@ -115,7 +112,7 @@ def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability)
     Result (RawPtr T' M') :=
   .fail .undef
 
-/-! ### End of trusted definitions -/
+/-! ### END Trusted definitions -/
 
 namespace RawPtr
 
