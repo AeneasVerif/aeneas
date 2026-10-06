@@ -116,15 +116,15 @@ theorem DWP.and_iff [θ.Conjunctive] :
   refine ⟨fun h => ⟨h.mono fun _ _ hq => hq.1, h.mono fun _ _ hq => hq.2⟩, fun ⟨h₁, h₂⟩ => ?_⟩
   exact h₁.induction (P := fun t u => DWP θ t Q₂ u → DWP θ t (fun value s' => Q₁ value s' ∧ Q₂ value s') u)
     (fun _ _ hPost hOther => DWP.ret_iff.mpr ⟨hPost, DWP.ret_iff.mp hOther⟩)
-    (fun _ _ _ hWp hOther => .vis (θ.wp_mono (fun _ _ h => h.1 h.2)
+    (fun _ _ _ hWp hOther => .vis (θ.wp_monotonic (fun _ _ h => h.1 h.2)
       (EffectWP.wp_and hWp hOther.vis_view)))
     h₂
 
-theorem DWP.exists [θ.NoMiracle] (hSpec : DWP θ m Q s) : ∃ value s', Q value s' :=
+theorem DWP.exists [θ.ExcludedMiracle] (hSpec : DWP θ m Q s) : ∃ value s', Q value s' :=
   hSpec.induction (P := fun _ _ => ∃ value s', Q value s')
     (fun value s' hPost => ⟨value, s', hPost⟩)
     fun effect _ s' hWp => Classical.byContradiction fun hNone =>
-      θ.wp_noMiracle effect s' (θ.wp_mono (fun _ _ h => hNone h) hWp)
+      θ.wp_excludedMiracle effect s' (θ.wp_monotonic (fun _ _ h => hNone h) hWp)
 
 end
 
