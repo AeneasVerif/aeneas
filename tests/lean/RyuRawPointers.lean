@@ -48,7 +48,7 @@ def digit_table.DIGIT_TABLE : Array Std.U8 200#usize :=
     ]
 
 /-- [ryu_raw_pointers::pretty::exponent::write_exponent3]:
-    Source: 'tests/src/ryu-raw-pointers.rs', lines 43:8-66:9
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 45:8-68:9
     Visibility: public -/
 def pretty.exponent.write_exponent3
   (k : Std.Isize) (result : MutRawPtr Std.U8) : Result Std.Usize := do
@@ -99,7 +99,7 @@ def pretty.exponent.write_exponent3
       i2 + 1#usize
 
 /-- [ryu_raw_pointers::pretty::exponent::write_exponent2]:
-    Source: 'tests/src/ryu-raw-pointers.rs', lines 69:8-86:9
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 71:8-88:9
     Visibility: public -/
 def pretty.exponent.write_exponent2
   (k : Std.Isize) (result : MutRawPtr Std.U8) : Result Std.Usize := do
@@ -130,5 +130,246 @@ def pretty.exponent.write_exponent2
     MutRawPtr.write result1 i1
     let i2 ← lift (UScalar.cast_fromBool .Usize (k < 0#isize))
     i2 + 1#usize
+
+/-- [ryu_raw_pointers::pretty::format64_zero]:
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 91:4-100:5
+    Visibility: public -/
+def pretty.format64_zero
+  (sign : Bool) (result : MutRawPtr Std.U8) : Result Std.Usize := do
+  let index ←
+    if sign
+    then do
+         MutRawPtr.write result 45#u8
+         0#isize + 1#isize
+    else ok 0#isize
+  let s ← lift (Array.to_slice (Array.make 3#usize [ 48#u8, 46#u8, 48#u8 ]))
+  let p ← Slice.as_ptr s
+  let p1 ← core.ptr.mut_ptr.RawPtrMutT.offset result index
+  core.ptr.copy_nonoverlapping p p1 3#usize
+  let i ← lift (UScalar.cast_fromBool .Usize sign)
+  let i1 ← i + 3#usize
+  Slice.end_as_ptr s p
+  ok i1
+
+/-- [ryu_raw_pointers::pretty::format64_point]:
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 102:4-106:5
+    Visibility: public -/
+def pretty.format64_point
+  (result : MutRawPtr Std.U8) (index : Std.Isize) (length : Std.Isize)
+  (kk : Std.Isize) :
+  Result Std.Usize
+  := do
+  let i ← index + 1#isize
+  let p ← core.ptr.mut_ptr.RawPtrMutT.offset result i
+  let p1 ← core.ptr.mut_ptr.RawPtrMutT.offset result index
+  let i1 ← lift (IScalar.hcast .Usize kk)
+  core.ptr.copy (RawPtr.toConst p) p1 i1
+  let i2 ← index + kk
+  let p2 ← core.ptr.mut_ptr.RawPtrMutT.offset result i2
+  MutRawPtr.write p2 46#u8
+  let i3 ← lift (IScalar.hcast .Usize index)
+  let i4 ← lift (IScalar.hcast .Usize length)
+  let i5 ← i3 + i4
+  i5 + 1#usize
+
+/-- [ryu_raw_pointers::pretty::format64_exp]:
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 108:4-116:5
+    Visibility: public -/
+def pretty.format64_exp
+  (result : MutRawPtr Std.U8) (index : Std.Isize) (length : Std.Isize)
+  (kk : Std.Isize) :
+  Result Std.Usize
+  := do
+  let i ← index + 1#isize
+  let p ← core.ptr.mut_ptr.RawPtrMutT.offset result i
+  let i1 ← RawPtr.read p
+  let p1 ← core.ptr.mut_ptr.RawPtrMutT.offset result index
+  MutRawPtr.write p1 i1
+  let p2 ← core.ptr.mut_ptr.RawPtrMutT.offset result i
+  MutRawPtr.write p2 46#u8
+  let i2 ← index + length
+  let i3 ← i2 + 1#isize
+  let p3 ← core.ptr.mut_ptr.RawPtrMutT.offset result i3
+  MutRawPtr.write p3 101#u8
+  let i4 ← lift (IScalar.hcast .Usize index)
+  let i5 ← lift (IScalar.hcast .Usize length)
+  let i6 ← i4 + i5
+  let i7 ← i6 + 2#usize
+  let i8 ← kk - 1#isize
+  let i9 ← i2 + 2#isize
+  let p4 ← core.ptr.mut_ptr.RawPtrMutT.offset result i9
+  let i10 ← pretty.exponent.write_exponent3 i8 p4
+  i7 + i10
+
+/-- [ryu_raw_pointers::d2s_intrinsics::mul_shift_64]:
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 125:4-129:5
+    Visibility: public -/
+def d2s_intrinsics.mul_shift_64
+  (m : Std.U64) (mul : (Std.U64 × Std.U64)) (j : Std.U32) :
+  Result Std.U64
+  := do
+  let i ← lift (UScalar.cast .U128 m)
+  let (i1, i2) := mul
+  let i3 ← lift (UScalar.cast .U128 i1)
+  let b0 ← i * i3
+  let i4 ← lift (UScalar.cast .U128 m)
+  let i5 ← lift (UScalar.cast .U128 i2)
+  let b2 ← i4 * i5
+  let i6 ← b0 >>> 64#i32
+  let i7 ← i6 + b2
+  let i8 ← j - 64#u32
+  let i9 ← i7 >>> i8
+  ok (UScalar.cast .U64 i9)
+
+/-- [ryu_raw_pointers::d2s_intrinsics::mul_shift_all_64]:
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 132:4-143:5
+    Visibility: public -/
+def d2s_intrinsics.mul_shift_all_64
+  (m : Std.U64) (mul : (Std.U64 × Std.U64)) (j : Std.U32)
+  (vp : MutRawPtr Std.U64) (vm : MutRawPtr Std.U64) (mm_shift : Std.U32) :
+  Result Std.U64
+  := do
+  let i ← 4#u64 * m
+  let i1 ← i + 2#u64
+  let i2 ← d2s_intrinsics.mul_shift_64 i1 mul j
+  core.ptr.write vp i2
+  let i3 ← i - 1#u64
+  let i4 ← lift (UScalar.cast .U64 mm_shift)
+  let i5 ← i3 - i4
+  let i6 ← d2s_intrinsics.mul_shift_64 i5 mul j
+  core.ptr.write vm i6
+  d2s_intrinsics.mul_shift_64 i mul j
+
+/-- [ryu_raw_pointers::d2s::mul_shift_all]:
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 150:4-169:5
+    Visibility: public -/
+def d2s.mul_shift_all
+  (m2 : Std.U64) (mul : (Std.U64 × Std.U64)) (j : Std.U32)
+  (mm_shift : Std.U32) :
+  Result (Std.U64 × Std.U64 × Std.U64)
+  := do
+  let vp_uninit ← core.mem.maybe_uninit.MaybeUninit.uninit Std.U64
+  let p ← MaybeUninit.as_mut_ptr vp_uninit
+  let p1 ← MaybeUninit.as_mut_ptr vp_uninit
+  let vr ← d2s_intrinsics.mul_shift_all_64 m2 mul j p p1 mm_shift
+  let vp_uninit1 ← MaybeUninit.end_as_mut_ptr vp_uninit p
+  let vp ← core.mem.maybe_uninit.MaybeUninit.assume_init vp_uninit1
+  let vm_uninit ← MaybeUninit.end_as_mut_ptr vp_uninit p1
+  let vm ← core.mem.maybe_uninit.MaybeUninit.assume_init vm_uninit
+  ok (vr, vp, vm)
+
+/-- [ryu_raw_pointers::buffer::Buffer]
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 176:4-178:5
+    Visibility: public -/
+structure buffer.Buffer where
+  bytes : Array (MaybeUninit Std.U8) 24#usize
+
+/-- [ryu_raw_pointers::buffer::{ryu_raw_pointers::buffer::Buffer}::new]:
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 183:8-186:9
+    Visibility: public -/
+def buffer.Buffer.new : Result buffer.Buffer := do
+  let mu ← core.mem.maybe_uninit.MaybeUninit.uninit Std.U8
+  let bytes := Array.repeat 24#usize mu
+  ok { bytes }
+
+/-- Trait declaration: [ryu_raw_pointers::buffer::Sealed]
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 202:4-204:5
+    Visibility: public -/
+structure buffer.Sealed (Self : Type) where
+  coremarkerCopyInst : core.marker.Copy Self
+  write_to_ryu_buffer : Self → MutRawPtr Std.U8 → Result Std.Usize
+
+/-- Trait declaration: [ryu_raw_pointers::buffer::Float]
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 200:4-200:30
+    Visibility: public -/
+structure buffer.Float (Self : Type) where
+  SealedInst : buffer.Sealed Self
+
+/-- [ryu_raw_pointers::buffer::{ryu_raw_pointers::buffer::Buffer}::format_finite]:
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 190:8-197:9
+    Visibility: public -/
+def buffer.Buffer.format_finite
+  {F : Type} (FloatInst : buffer.Float F) (self : buffer.Buffer) (f : F) :
+  Result ((Slice Std.U8) × buffer.Buffer)
+  := do
+  let (s, to_slice_mut_back) ← lift (Array.to_slice_mut self.bytes)
+  let p ← Slice.as_mut_ptr_uninit s
+  let p1 ← core.ptr.mut_ptr.RawPtrMutT.cast Std.U8 p
+  let n ← FloatInst.SealedInst.write_to_ryu_buffer f p1
+  let s1 ← Slice.sync_as_mut_ptr_uninit s p
+  let a := to_slice_mut_back s1
+  let s2 ← lift (Array.to_slice a)
+  let i := Slice.len s2
+  massert (n <= i)
+  let s3 ← lift (Array.to_slice a)
+  let p2 ← Slice.as_ptr_reuse_uninit p s3
+  let p3 ← core.ptr.const_ptr.RawPtrConstT.cast Std.U8 p2
+  let slice ← core.slice.raw.from_raw_parts p3 n
+  Slice.free_as_ptr_uninit s3 p2
+  ok (slice, { bytes := a })
+
+/-- [ryu_raw_pointers::buffer::Exponent]
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 207:4-207:35
+    Visibility: public -/
+@[reducible]
+def buffer.Exponent := Std.Isize
+
+/-- [ryu_raw_pointers::buffer::{impl core::clone::Clone for ryu_raw_pointers::buffer::Exponent}::clone]:
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 206:19-206:24
+    Visibility: public -/
+def buffer.Exponent.Insts.CoreCloneClone.clone
+  (self : buffer.Exponent) : Result buffer.Exponent := do
+  ok self
+
+/-- Trait implementation: [ryu_raw_pointers::buffer::{impl core::clone::Clone for ryu_raw_pointers::buffer::Exponent}]
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 206:19-206:24 -/
+@[reducible]
+def buffer.Exponent.Insts.CoreCloneClone : core.clone.Clone buffer.Exponent
+  := {
+  clone := buffer.Exponent.Insts.CoreCloneClone.clone
+}
+
+/-- Trait implementation: [ryu_raw_pointers::buffer::{impl core::marker::Copy for ryu_raw_pointers::buffer::Exponent}]
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 206:13-206:17 -/
+@[reducible]
+def buffer.Exponent.Insts.CoreMarkerCopy : core.marker.Copy buffer.Exponent
+  := {
+  cloneInst := buffer.Exponent.Insts.CoreCloneClone
+}
+
+/-- [ryu_raw_pointers::buffer::{impl ryu_raw_pointers::buffer::Sealed for ryu_raw_pointers::buffer::Exponent}::write_to_ryu_buffer]:
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 211:8-213:9
+    Visibility: public -/
+def buffer.Exponent.Insts.Ryu_raw_pointersBufferSealed.write_to_ryu_buffer
+  (self : buffer.Exponent) (result : MutRawPtr Std.U8) : Result Std.Usize := do
+  pretty.exponent.write_exponent3 self result
+
+/-- Trait implementation: [ryu_raw_pointers::buffer::{impl ryu_raw_pointers::buffer::Sealed for ryu_raw_pointers::buffer::Exponent}]
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 209:4-214:5 -/
+@[reducible]
+def buffer.Exponent.Insts.Ryu_raw_pointersBufferSealed : buffer.Sealed
+  buffer.Exponent := {
+  coremarkerCopyInst := buffer.Exponent.Insts.CoreMarkerCopy
+  write_to_ryu_buffer :=
+    buffer.Exponent.Insts.Ryu_raw_pointersBufferSealed.write_to_ryu_buffer
+}
+
+/-- Trait implementation: [ryu_raw_pointers::buffer::{impl ryu_raw_pointers::buffer::Float for ryu_raw_pointers::buffer::Exponent}]
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 216:4-216:30 -/
+@[reducible]
+def buffer.Exponent.Insts.Ryu_raw_pointersBufferFloat : buffer.Float
+  buffer.Exponent := {
+  SealedInst := buffer.Exponent.Insts.Ryu_raw_pointersBufferSealed
+}
+
+/-- [ryu_raw_pointers::buffer::format_exponent]:
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 218:4-222:5
+    Visibility: public -/
+def buffer.format_exponent (k : Std.Isize) : Result Std.U8 := do
+  let buf ← buffer.Buffer.new
+  let (s, _) ←
+    buffer.Buffer.format_finite
+      buffer.Exponent.Insts.Ryu_raw_pointersBufferFloat buf k
+  Slice.index_usize s 0#usize
 
 end ryu_raw_pointers

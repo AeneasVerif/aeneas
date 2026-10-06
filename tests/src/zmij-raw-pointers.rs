@@ -1,6 +1,6 @@
 //@ [!lean] skip
 //@ charon-args=--rustc-arg=--cfg=miri
-// Verbatim excerpt of https://github.com/dtolnay/zmij at
+// Excerpts of https://github.com/dtolnay/zmij at
 // 35355256734db2c69a19aba4cae98c7fd8e14adf (MIT), in its scalar configuration
 // (`--cfg miri`).
 #![allow(dead_code)]
@@ -50,7 +50,6 @@ const fn umul128(x: u64, y: u64) -> u128 {
 const fn umul128_hi64(x: u64, y: u64) -> u64 {
     (umul128(x, y) >> 64) as u64
 }
-
 
 #[rustfmt::skip]
 const POW10_MINOR: [u64; 28] = [
@@ -209,3 +208,171 @@ impl Pow10SignificandTable {
     }
 }
 
+// Align data since unaligned access may be slower when crossing a
+// hardware-specific boundary.
+#[repr(C, align(2))]
+struct Digits2([u8; 200]);
+
+static DIGITS2: Digits2 = Digits2(
+    *b"0001020304050607080910111213141516171819\
+       2021222324252627282930313233343536373839\
+       4041424344454647484950515253545556575859\
+       6061626364656667686970717273747576777879\
+       8081828384858687888990919293949596979899",
+);
+
+// Converts value in the range [0, 100) to a string. GCC generates a bit better
+// code when value is pointer-size (https://www.godbolt.org/z/5fEPMT1cc).
+#[cfg_attr(feature = "no-panic", no_panic)]
+unsafe fn digits2(value: usize) -> &'static u16 {
+    debug_assert!(value < 100);
+
+    #[allow(clippy::cast_ptr_alignment)]
+    unsafe {
+        &*DIGITS2.0.as_ptr().cast::<u16>().add(value)
+    }
+}
+
+unsafe fn read_digits2(value: usize) -> u16 {
+    debug_assert!(value < 100);
+
+    #[allow(clippy::cast_ptr_alignment)]
+    unsafe {
+        *DIGITS2.0.as_ptr().cast::<u16>().add(value)
+    }
+}
+
+const DIV100_EXP: i32 = 19;
+const DIV100_SIG: u32 = (1 << DIV100_EXP) / 100 + 1;
+
+use core::mem::MaybeUninit;
+use core::{ptr, slice};
+
+unsafe fn write_digits(buffer: *mut u8, has_extra_digit: bool, digits: u64, last_digit: u8) {
+    let bcd_size = 16;
+    unsafe {
+        buffer
+            .add(usize::from(has_extra_digit))
+            .cast::<u64>()
+            .write_unaligned(digits);
+        ptr::write(
+            buffer.add(usize::from(has_extra_digit) + bcd_size),
+            b'0' + last_digit,
+        );
+    }
+}
+
+unsafe fn write_fixed(buffer: *mut u8, length: usize, dec_exp: i32) -> *mut u8 {
+    if length as i32 - 1 <= dec_exp {
+        // 1234e7 -> 12340000000.0
+        return unsafe {
+            ptr::copy(buffer.add(1), buffer, length);
+            ptr::write_bytes(buffer.add(length), b'0', dec_exp as usize + 3 - length);
+            *buffer.add(dec_exp as usize + 1) = b'.';
+            buffer.add(dec_exp as usize + 3)
+        };
+    } else if 0 <= dec_exp {
+        // 1234e-2 -> 12.34
+        return unsafe {
+            ptr::copy(buffer.add(1), buffer, dec_exp as usize + 1);
+            *buffer.add(dec_exp as usize + 1) = b'.';
+            buffer.add(length + 1)
+        };
+    } else {
+        // 1234e-6 -> 0.001234
+        return unsafe {
+            ptr::copy(buffer.add(1), buffer.add((1 - dec_exp) as usize), length);
+            ptr::write_bytes(buffer, b'0', (1 - dec_exp) as usize);
+            *buffer.add(1) = b'.';
+            buffer.add((1 - dec_exp) as usize + length)
+        };
+    }
+}
+
+unsafe fn write_exponent_data(buffer: *mut u8, exp_data: u64) -> *mut u8 {
+    let len = (exp_data >> 48) as usize;
+    unsafe {
+        ptr::copy_nonoverlapping(ptr::addr_of!(exp_data).cast::<u8>(), buffer, 5);
+        return buffer.add(len);
+    }
+}
+
+unsafe fn write_exponent(mut buffer: *mut u8, mut dec_exp: i32) -> *mut u8 {
+    let sign_ptr = buffer;
+    let e_sign = if dec_exp >= 0 {
+        (u16::from(b'+') << 8) | u16::from(b'e')
+    } else {
+        (u16::from(b'-') << 8) | u16::from(b'e')
+    };
+    buffer = unsafe { buffer.add(1) };
+    dec_exp = if dec_exp >= 0 { dec_exp } else { -dec_exp };
+    buffer = unsafe { buffer.add(usize::from(dec_exp >= 10)) };
+    // digit = dec_exp / 100
+    let digit = if USE_UMUL128_HI64 {
+        umul128_hi64(dec_exp as u64, 0x290000000000000) as u32
+    } else {
+        (dec_exp as u32 * DIV100_SIG) >> DIV100_EXP
+    };
+    unsafe {
+        *buffer = b'0' + digit as u8;
+    }
+    buffer = unsafe { buffer.add(usize::from(dec_exp >= 100)) };
+    dec_exp -= (digit * 100) as i32;
+    unsafe {
+        buffer
+            .cast::<u16>()
+            .write_unaligned(read_digits2(dec_exp as usize));
+        sign_ptr.cast::<u16>().write_unaligned(e_sign);
+        buffer.add(2)
+    }
+}
+
+const BUFFER_SIZE: usize = 24;
+
+pub struct Buffer {
+    bytes: [MaybeUninit<u8>; BUFFER_SIZE],
+}
+
+impl Buffer {
+    #[inline]
+    #[cfg_attr(feature = "no-panic", no_panic)]
+    pub fn new() -> Self {
+        let bytes = [MaybeUninit::<u8>::uninit(); BUFFER_SIZE];
+        Buffer { bytes }
+    }
+
+    #[cfg_attr(feature = "no-panic", no_panic)]
+    pub fn format_finite<F: Float>(&mut self, f: F) -> &[u8] {
+        unsafe {
+            let end = f.write_to_zmij_buffer(self.bytes.as_mut_ptr().cast::<u8>());
+            let len = end.offset_from(self.bytes.as_ptr().cast::<u8>()) as usize;
+            let slice = slice::from_raw_parts(self.bytes.as_ptr().cast::<u8>(), len);
+            slice
+        }
+    }
+}
+
+pub trait Float: private::Sealed {}
+
+mod private {
+    pub trait Sealed: Copy {
+        unsafe fn write_to_zmij_buffer(self, buffer: *mut u8) -> *mut u8;
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct Exponent(pub i32);
+
+impl private::Sealed for Exponent {
+    unsafe fn write_to_zmij_buffer(self, buffer: *mut u8) -> *mut u8 {
+        unsafe { write_exponent(buffer, self.0) }
+    }
+}
+
+impl Float for Exponent {}
+
+pub fn format_exponent(dec_exp: i32) -> u8 {
+    let mut buffer = Buffer::new();
+    let s = buffer.format_finite(Exponent(dec_exp));
+    s[0]
+}

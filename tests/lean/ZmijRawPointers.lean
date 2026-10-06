@@ -71,7 +71,7 @@ def umul128_hi64 (x : Std.U64) (y : Std.U64) : Result Std.U64 := do
   ok (UScalar.cast .U64 i1)
 
 /-- [zmij_raw_pointers::POW10_MINOR]
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 56:0-67:2 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 55:0-66:2 -/
 @[global_simps, irreducible]
 def POW10_MINOR : Array Std.U64 28#usize :=
   Array.make 28#usize [
@@ -92,7 +92,7 @@ def POW10_MINOR : Array Std.U64 28#usize :=
     ]
 
 /-- [zmij_raw_pointers::POW10_MAJOR]
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 70:0-94:2 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 69:0-93:2 -/
 @[global_simps, irreducible]
 def POW10_MAJOR : Array uint128 23#usize :=
   Array.make 23#usize [
@@ -122,7 +122,7 @@ def POW10_MAJOR : Array uint128 23#usize :=
     ]
 
 /-- [zmij_raw_pointers::POW10_FIXUPS]
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 97:0-102:2 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 96:0-101:2 -/
 @[global_simps, irreducible]
 def POW10_FIXUPS : Array Std.U32 20#usize :=
   Array.make 20#usize [
@@ -133,16 +133,16 @@ def POW10_FIXUPS : Array Std.U32 20#usize :=
     ]
 
 /-- [zmij_raw_pointers::Pow10SignificandTable]
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 106:0-112:1 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 105:0-111:1 -/
 structure Pow10SignificandTable where
   data : Array Std.U64 1236#usize
 
 /-- [zmij_raw_pointers::{zmij_raw_pointers::Pow10SignificandTable}::COMPRESS]
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 115:4-115:49 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 114:4-114:49 -/
 @[global_simps, irreducible] def Pow10SignificandTable.COMPRESS : Bool := false
 
 /-- [zmij_raw_pointers::{zmij_raw_pointers::Pow10SignificandTable}::SPLIT_TABLES]
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 116:4-116:80 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 115:4-115:80 -/
 @[global_simps, irreducible]
 def Pow10SignificandTable.SPLIT_TABLES : Bool :=
   if Pow10SignificandTable.COMPRESS
@@ -150,12 +150,12 @@ def Pow10SignificandTable.SPLIT_TABLES : Bool :=
   else false
 
 /-- [zmij_raw_pointers::{zmij_raw_pointers::Pow10SignificandTable}::NUM_POW10S]
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 117:4-117:34 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 116:4-116:34 -/
 @[global_simps, irreducible]
 def Pow10SignificandTable.NUM_POW10S : Std.Usize := 618#usize
 
 /-- [zmij_raw_pointers::{zmij_raw_pointers::Pow10SignificandTable}::compute::STRIDE]
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 122:8-122:53 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 121:8-121:53 -/
 @[global_simps, irreducible]
 def Pow10SignificandTable.compute.STRIDE : Result Std.U32 := do
   let s ← lift (Array.to_slice POW10_MINOR)
@@ -163,7 +163,7 @@ def Pow10SignificandTable.compute.STRIDE : Result Std.U32 := do
   ok (UScalar.cast .U32 i)
 
 /-- [zmij_raw_pointers::{zmij_raw_pointers::Pow10SignificandTable}::compute]:
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 121:4-143:5 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 120:4-142:5 -/
 def Pow10SignificandTable.compute (i : Std.U32) : Result uint128 := do
   let s ← lift (Array.to_slice POW10_MINOR)
   let p ← Slice.as_ptr s
@@ -219,7 +219,7 @@ def Pow10SignificandTable.compute (i : Std.U32) : Result uint128 := do
   ok { hi := i11, lo := i20 }
 
 /-- [zmij_raw_pointers::{zmij_raw_pointers::Pow10SignificandTable}::new]: loop body 0:
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 1:0-163:9 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 1:0-162:9 -/
 @[rust_loop_body]
 def Pow10SignificandTable.new_loop.body
   (data : Array Std.U64 1236#usize) (i : Std.Usize) :
@@ -255,7 +255,7 @@ def Pow10SignificandTable.new_loop.body
   else ok (done data)
 
 /-- [zmij_raw_pointers::{zmij_raw_pointers::Pow10SignificandTable}::new]: loop 0:
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 1:0-163:9 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 1:0-162:9 -/
 @[rust_loop]
 def Pow10SignificandTable.new_loop
   (data : Array Std.U64 1236#usize) (i : Std.Usize) :
@@ -266,19 +266,19 @@ def Pow10SignificandTable.new_loop
     (data, i)
 
 /-- [zmij_raw_pointers::{zmij_raw_pointers::Pow10SignificandTable}::new]:
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 145:4-166:5 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 144:4-165:5 -/
 def Pow10SignificandTable.new : Result Pow10SignificandTable := do
   let data := Array.repeat 1236#usize 0#u64
   let data1 ← Pow10SignificandTable.new_loop data 0#usize
   ok { data := data1 }
 
 /-- [zmij_raw_pointers::{zmij_raw_pointers::Pow10SignificandTable}::get_unchecked::DEC_EXP_MIN]
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 170:8-170:38 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 169:8-169:38 -/
 @[global_simps, irreducible]
 def Pow10SignificandTable.get_unchecked.DEC_EXP_MIN : Std.I32 := (-293)#i32
 
 /-- [zmij_raw_pointers::{zmij_raw_pointers::Pow10SignificandTable}::get_unchecked]:
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 169:4-202:5 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 168:4-201:5 -/
 def Pow10SignificandTable.get_unchecked
   (self : Pow10SignificandTable) (dec_exp : Std.I32) : Result uint128 := do
   let i ← dec_exp - Pow10SignificandTable.get_unchecked.DEC_EXP_MIN
@@ -319,5 +319,332 @@ def Pow10SignificandTable.get_unchecked
       let i3 ← RawPtr.read p3
       Slice.free_as_ptr s p
       ok { hi := p2, lo := i3 }
+
+/-- [zmij_raw_pointers::Digits2]
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 214:0-214:26 -/
+@[reducible]
+def Digits2 := Array Std.U8 200#usize
+
+/-- [zmij_raw_pointers::DIGITS2]
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 216:0-222:2 -/
+@[global_simps, irreducible]
+def DIGITS2 : Digits2 :=
+  Array.make 200#usize [
+    48#u8, 48#u8, 48#u8, 49#u8, 48#u8, 50#u8, 48#u8, 51#u8, 48#u8, 52#u8,
+    48#u8, 53#u8, 48#u8, 54#u8, 48#u8, 55#u8, 48#u8, 56#u8, 48#u8, 57#u8,
+    49#u8, 48#u8, 49#u8, 49#u8, 49#u8, 50#u8, 49#u8, 51#u8, 49#u8, 52#u8,
+    49#u8, 53#u8, 49#u8, 54#u8, 49#u8, 55#u8, 49#u8, 56#u8, 49#u8, 57#u8,
+    50#u8, 48#u8, 50#u8, 49#u8, 50#u8, 50#u8, 50#u8, 51#u8, 50#u8, 52#u8,
+    50#u8, 53#u8, 50#u8, 54#u8, 50#u8, 55#u8, 50#u8, 56#u8, 50#u8, 57#u8,
+    51#u8, 48#u8, 51#u8, 49#u8, 51#u8, 50#u8, 51#u8, 51#u8, 51#u8, 52#u8,
+    51#u8, 53#u8, 51#u8, 54#u8, 51#u8, 55#u8, 51#u8, 56#u8, 51#u8, 57#u8,
+    52#u8, 48#u8, 52#u8, 49#u8, 52#u8, 50#u8, 52#u8, 51#u8, 52#u8, 52#u8,
+    52#u8, 53#u8, 52#u8, 54#u8, 52#u8, 55#u8, 52#u8, 56#u8, 52#u8, 57#u8,
+    53#u8, 48#u8, 53#u8, 49#u8, 53#u8, 50#u8, 53#u8, 51#u8, 53#u8, 52#u8,
+    53#u8, 53#u8, 53#u8, 54#u8, 53#u8, 55#u8, 53#u8, 56#u8, 53#u8, 57#u8,
+    54#u8, 48#u8, 54#u8, 49#u8, 54#u8, 50#u8, 54#u8, 51#u8, 54#u8, 52#u8,
+    54#u8, 53#u8, 54#u8, 54#u8, 54#u8, 55#u8, 54#u8, 56#u8, 54#u8, 57#u8,
+    55#u8, 48#u8, 55#u8, 49#u8, 55#u8, 50#u8, 55#u8, 51#u8, 55#u8, 52#u8,
+    55#u8, 53#u8, 55#u8, 54#u8, 55#u8, 55#u8, 55#u8, 56#u8, 55#u8, 57#u8,
+    56#u8, 48#u8, 56#u8, 49#u8, 56#u8, 50#u8, 56#u8, 51#u8, 56#u8, 52#u8,
+    56#u8, 53#u8, 56#u8, 54#u8, 56#u8, 55#u8, 56#u8, 56#u8, 56#u8, 57#u8,
+    57#u8, 48#u8, 57#u8, 49#u8, 57#u8, 50#u8, 57#u8, 51#u8, 57#u8, 52#u8,
+    57#u8, 53#u8, 57#u8, 54#u8, 57#u8, 55#u8, 57#u8, 56#u8, 57#u8, 57#u8
+    ]
+
+/-- [zmij_raw_pointers::digits2]:
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 227:0-234:1 -/
+def digits2 (value : Std.Usize) : Result Std.U16 := do
+  massert (value < 100#usize)
+  let a := DIGITS2
+  let s ← lift (Array.to_slice a)
+  let p ← Slice.as_ptr_aligned 2 s
+  let p1 ← core.ptr.const_ptr.RawPtrConstT.cast Std.U16 p
+  let p2 ← core.ptr.const_ptr.RawPtrConstT.add p1 value
+  let i ← RawPtr.read p2
+  Slice.end_as_ptr s p
+  ok i
+
+/-- [zmij_raw_pointers::read_digits2]:
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 236:0-243:1 -/
+def read_digits2 (value : Std.Usize) : Result Std.U16 := do
+  massert (value < 100#usize)
+  let a := DIGITS2
+  let s ← lift (Array.to_slice a)
+  let p ← Slice.as_ptr_aligned 2 s
+  let p1 ← core.ptr.const_ptr.RawPtrConstT.cast Std.U16 p
+  let p2 ← core.ptr.const_ptr.RawPtrConstT.add p1 value
+  let i ← RawPtr.read p2
+  Slice.end_as_ptr s p
+  ok i
+
+/-- [zmij_raw_pointers::DIV100_EXP]
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 245:0-245:27 -/
+@[global_simps, irreducible] def DIV100_EXP : Std.I32 := 19#i32
+
+/-- [zmij_raw_pointers::DIV100_SIG]
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 246:0-246:52 -/
+@[global_simps, irreducible]
+def DIV100_SIG : Result Std.U32 := do
+  let i ← 1#u32 <<< DIV100_EXP
+  let i1 ← i / 100#u32
+  i1 + 1#u32
+
+/-- [zmij_raw_pointers::write_digits]:
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 251:0-263:1 -/
+def write_digits
+  (buffer : MutRawPtr Std.U8) (has_extra_digit : Bool) (digits : Std.U64)
+  (last_digit : Std.U8) :
+  Result Unit
+  := do
+  let i ← lift (core.convert.num.FromUsizeBool.from has_extra_digit)
+  let p ← core.ptr.mut_ptr.RawPtrMutT.add buffer i
+  let p1 ← core.ptr.mut_ptr.RawPtrMutT.cast Std.U64 p
+  core.ptr.mut_ptr.RawPtrMutT.write_unaligned p1 digits
+  let i1 ← lift (core.convert.num.FromUsizeBool.from has_extra_digit)
+  let i2 ← i1 + 16#usize
+  let p2 ← core.ptr.mut_ptr.RawPtrMutT.add buffer i2
+  let i3 ← 48#u8 + last_digit
+  core.ptr.write p2 i3
+
+/-- [zmij_raw_pointers::write_fixed]:
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 265:0-290:1 -/
+def write_fixed
+  (buffer : MutRawPtr Std.U8) (length : Std.Usize) (dec_exp : Std.I32) :
+  Result (MutRawPtr Std.U8)
+  := do
+  let i ← lift (UScalar.hcast .I32 length)
+  let i1 ← i - 1#i32
+  if i1 <= dec_exp
+  then
+    let p ← core.ptr.mut_ptr.RawPtrMutT.add buffer 1#usize
+    core.ptr.copy (RawPtr.toConst p) buffer length
+    let p1 ← core.ptr.mut_ptr.RawPtrMutT.add buffer length
+    let i2 ← lift (IScalar.hcast .Usize dec_exp)
+    let i3 ← i2 + 3#usize
+    let i4 ← i3 - length
+    core.ptr.write_bytes p1 48#u8 i4
+    let i5 ← lift (IScalar.hcast .Usize dec_exp)
+    let i6 ← i5 + 1#usize
+    let p2 ← core.ptr.mut_ptr.RawPtrMutT.add buffer i6
+    MutRawPtr.write p2 46#u8
+    let i7 ← lift (IScalar.hcast .Usize dec_exp)
+    let i8 ← i7 + 3#usize
+    core.ptr.mut_ptr.RawPtrMutT.add buffer i8
+  else
+    if 0#i32 <= dec_exp
+    then
+      let p ← core.ptr.mut_ptr.RawPtrMutT.add buffer 1#usize
+      let i2 ← lift (IScalar.hcast .Usize dec_exp)
+      let i3 ← i2 + 1#usize
+      core.ptr.copy (RawPtr.toConst p) buffer i3
+      let i4 ← lift (IScalar.hcast .Usize dec_exp)
+      let i5 ← i4 + 1#usize
+      let p1 ← core.ptr.mut_ptr.RawPtrMutT.add buffer i5
+      MutRawPtr.write p1 46#u8
+      let i6 ← length + 1#usize
+      core.ptr.mut_ptr.RawPtrMutT.add buffer i6
+    else
+      let p ← core.ptr.mut_ptr.RawPtrMutT.add buffer 1#usize
+      let i2 ← 1#i32 - dec_exp
+      let i3 ← lift (IScalar.hcast .Usize i2)
+      let p1 ← core.ptr.mut_ptr.RawPtrMutT.add buffer i3
+      core.ptr.copy (RawPtr.toConst p) p1 length
+      let i4 ← lift (IScalar.hcast .Usize i2)
+      core.ptr.write_bytes buffer 48#u8 i4
+      MutRawPtr.write p 46#u8
+      let i5 ← lift (IScalar.hcast .Usize i2)
+      let i6 ← i5 + length
+      core.ptr.mut_ptr.RawPtrMutT.add buffer i6
+
+/-- [zmij_raw_pointers::write_exponent_data]:
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 292:0-298:1 -/
+def write_exponent_data
+  (buffer : MutRawPtr Std.U8) (exp_data : Std.U64) :
+  Result (MutRawPtr Std.U8)
+  := do
+  let i ← exp_data >>> 48#i32
+  let len ← lift (UScalar.cast .Usize i)
+  let p ← RawPtr.addr_of exp_data
+  let p1 ← core.ptr.const_ptr.RawPtrConstT.cast Std.U8 p
+  core.ptr.copy_nonoverlapping p1 buffer 5#usize
+  let p2 ← core.ptr.mut_ptr.RawPtrMutT.add buffer len
+  RawPtr.end_addr_of exp_data p
+  ok p2
+
+/-- [zmij_raw_pointers::write_exponent]:
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 300:0-328:1 -/
+def write_exponent
+  (buffer : MutRawPtr Std.U8) (dec_exp : Std.I32) :
+  Result (MutRawPtr Std.U8)
+  := do
+  let e_sign ←
+    if dec_exp >= 0#i32
+    then
+      do
+      let i ← lift (core.convert.num.FromU16U8.from 43#u8)
+      let i1 ← i <<< 8#i32
+      let i2 ← lift (core.convert.num.FromU16U8.from 101#u8)
+      ok (i1 ||| i2)
+    else
+      do
+      let i ← lift (core.convert.num.FromU16U8.from 45#u8)
+      let i1 ← i <<< 8#i32
+      let i2 ← lift (core.convert.num.FromU16U8.from 101#u8)
+      ok (i1 ||| i2)
+  let buffer1 ← core.ptr.mut_ptr.RawPtrMutT.add buffer 1#usize
+  let dec_exp1 ← if dec_exp >= 0#i32
+                   then ok dec_exp
+                   else -. dec_exp
+  let i ← lift (core.convert.num.FromUsizeBool.from (dec_exp1 >= 10#i32))
+  let buffer2 ← core.ptr.mut_ptr.RawPtrMutT.add buffer1 i
+  let digit ←
+    if USE_UMUL128_HI64
+    then
+      do
+      let i1 ← lift (IScalar.hcast .U64 dec_exp1)
+      let i2 ← umul128_hi64 i1 184647584722190336#u64
+      ok (UScalar.cast .U32 i2)
+    else
+      do
+      let i1 ← lift (IScalar.hcast .U32 dec_exp1)
+      let i2 ← DIV100_SIG
+      let i3 ← i1 * i2
+      i3 >>> DIV100_EXP
+  let i1 ← lift (UScalar.cast .U8 digit)
+  let i2 ← 48#u8 + i1
+  MutRawPtr.write buffer2 i2
+  let i3 ← lift (core.convert.num.FromUsizeBool.from (dec_exp1 >= 100#i32))
+  let buffer3 ← core.ptr.mut_ptr.RawPtrMutT.add buffer2 i3
+  let i4 ← digit * 100#u32
+  let i5 ← lift (UScalar.hcast .I32 i4)
+  let dec_exp2 ← dec_exp1 - i5
+  let p ← core.ptr.mut_ptr.RawPtrMutT.cast Std.U16 buffer3
+  let i6 ← lift (IScalar.hcast .Usize dec_exp2)
+  let i7 ← read_digits2 i6
+  core.ptr.mut_ptr.RawPtrMutT.write_unaligned p i7
+  let p1 ← core.ptr.mut_ptr.RawPtrMutT.cast Std.U16 buffer
+  core.ptr.mut_ptr.RawPtrMutT.write_unaligned p1 e_sign
+  core.ptr.mut_ptr.RawPtrMutT.add buffer3 2#usize
+
+/-- [zmij_raw_pointers::BUFFER_SIZE]
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 330:0-330:30 -/
+@[global_simps, irreducible] def BUFFER_SIZE : Std.Usize := 24#usize
+
+/-- [zmij_raw_pointers::Buffer]
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 332:0-334:1
+    Visibility: public -/
+structure Buffer where
+  bytes : Array (MaybeUninit Std.U8) 24#usize
+
+/-- [zmij_raw_pointers::{zmij_raw_pointers::Buffer}::new]:
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 339:4-342:5
+    Visibility: public -/
+def Buffer.new : Result Buffer := do
+  let mu ← core.mem.maybe_uninit.MaybeUninit.uninit Std.U8
+  let bytes := Array.repeat 24#usize mu
+  ok { bytes }
+
+/-- Trait declaration: [zmij_raw_pointers::private::Sealed]
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 358:4-360:5
+    Visibility: public -/
+structure private.Sealed (Self : Type) where
+  coremarkerCopyInst : core.marker.Copy Self
+  write_to_zmij_buffer : Self → MutRawPtr Std.U8 → Result (MutRawPtr
+    Std.U8)
+
+/-- Trait declaration: [zmij_raw_pointers::Float]
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 355:0-355:35
+    Visibility: public -/
+structure Float (Self : Type) where
+  privateSealedInst : private.Sealed Self
+
+/-- [zmij_raw_pointers::{zmij_raw_pointers::Buffer}::format_finite]:
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 345:4-352:5
+    Visibility: public -/
+def Buffer.format_finite
+  {F : Type} (FloatInst : Float F) (self : Buffer) (f : F) :
+  Result ((Slice Std.U8) × Buffer)
+  := do
+  let (s, to_slice_mut_back) ← lift (Array.to_slice_mut self.bytes)
+  let p ← Slice.as_mut_ptr_uninit s
+  let p1 ← core.ptr.mut_ptr.RawPtrMutT.cast Std.U8 p
+  let «end» ← FloatInst.privateSealedInst.write_to_zmij_buffer f p1
+  let s1 ← Slice.sync_as_mut_ptr_uninit s p
+  let a := to_slice_mut_back s1
+  let s2 ← lift (Array.to_slice a)
+  let p2 ← Slice.as_ptr_reuse_uninit p s2
+  let p3 ← core.ptr.const_ptr.RawPtrConstT.cast Std.U8 p2
+  let i ← core.ptr.mut_ptr.RawPtrMutT.offset_from «end» p3
+  let len ← lift (IScalar.hcast .Usize i)
+  let s3 ← lift (Array.to_slice a)
+  let p4 ← Slice.as_ptr_uninit s3
+  let p5 ← core.ptr.const_ptr.RawPtrConstT.cast Std.U8 p4
+  let slice ← core.slice.raw.from_raw_parts p5 len
+  Slice.free_as_ptr_uninit s3 p4
+  Slice.free_as_ptr_uninit s2 p2
+  ok (slice, { bytes := a })
+
+/-- [zmij_raw_pointers::Exponent]
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 364:0-364:29
+    Visibility: public -/
+@[reducible]
+def Exponent := Std.I32
+
+/-- [zmij_raw_pointers::{impl core::clone::Clone for zmij_raw_pointers::Exponent}::clone]:
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 363:15-363:20
+    Visibility: public -/
+def Exponent.Insts.CoreCloneClone.clone
+  (self : Exponent) : Result Exponent := do
+  ok self
+
+/-- Trait implementation: [zmij_raw_pointers::{impl core::clone::Clone for zmij_raw_pointers::Exponent}]
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 363:15-363:20 -/
+@[reducible]
+def Exponent.Insts.CoreCloneClone : core.clone.Clone Exponent := {
+  clone := Exponent.Insts.CoreCloneClone.clone
+}
+
+/-- Trait implementation: [zmij_raw_pointers::{impl core::marker::Copy for zmij_raw_pointers::Exponent}]
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 363:9-363:13 -/
+@[reducible]
+def Exponent.Insts.CoreMarkerCopy : core.marker.Copy Exponent := {
+  cloneInst := Exponent.Insts.CoreCloneClone
+}
+
+/-- [zmij_raw_pointers::{impl zmij_raw_pointers::private::Sealed for zmij_raw_pointers::Exponent}::write_to_zmij_buffer]:
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 367:4-369:5
+    Visibility: public -/
+def Exponent.Insts.Zmij_raw_pointersPrivateSealed.write_to_zmij_buffer
+  (self : Exponent) (buffer : MutRawPtr Std.U8) :
+  Result (MutRawPtr Std.U8)
+  := do
+  write_exponent buffer self
+
+/-- Trait implementation: [zmij_raw_pointers::{impl zmij_raw_pointers::private::Sealed for zmij_raw_pointers::Exponent}]
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 366:0-370:1 -/
+@[reducible]
+def Exponent.Insts.Zmij_raw_pointersPrivateSealed : private.Sealed Exponent
+  := {
+  coremarkerCopyInst := Exponent.Insts.CoreMarkerCopy
+  write_to_zmij_buffer :=
+    Exponent.Insts.Zmij_raw_pointersPrivateSealed.write_to_zmij_buffer
+}
+
+/-- Trait implementation: [zmij_raw_pointers::{impl zmij_raw_pointers::Float for zmij_raw_pointers::Exponent}]
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 372:0-372:26 -/
+@[reducible]
+def Exponent.Insts.Zmij_raw_pointersFloat : Float Exponent := {
+  privateSealedInst := Exponent.Insts.Zmij_raw_pointersPrivateSealed
+}
+
+/-- [zmij_raw_pointers::format_exponent]:
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 374:0-378:1
+    Visibility: public -/
+def format_exponent (dec_exp : Std.I32) : Result Std.U8 := do
+  let buffer ← Buffer.new
+  let (s, _) ←
+    Buffer.format_finite Exponent.Insts.Zmij_raw_pointersFloat buffer dec_exp
+  Slice.index_usize s 0#usize
 
 end zmij_raw_pointers

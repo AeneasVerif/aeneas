@@ -27,7 +27,7 @@ namespace in_place_or_disjoint_buffer
 def core.marker.PhantomData (T : Type) := Unit
 
 /-- [in_place_or_disjoint_buffer::InPlaceOrDisjointBuffer]
-    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 5:0-10:1
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 8:0-13:1
     Visibility: public -/
 structure InPlaceOrDisjointBuffer (T : Type) where
   src : ConstRawPtr T
@@ -36,7 +36,7 @@ structure InPlaceOrDisjointBuffer (T : Type) where
   _phantom : core.marker.PhantomData (Slice T)
 
 /-- [in_place_or_disjoint_buffer::{in_place_or_disjoint_buffer::InPlaceOrDisjointBuffer<'a, T>}::new_in_place]:
-    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 13:4-21:5
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 16:4-24:5
     Visibility: public -/
 def InPlaceOrDisjointBuffer.new_in_place
   {T : Type} [ByteRepr T] (buffer : Slice T) :
@@ -50,7 +50,7 @@ def InPlaceOrDisjointBuffer.new_in_place
     back)
 
 /-- [in_place_or_disjoint_buffer::{in_place_or_disjoint_buffer::InPlaceOrDisjointBuffer<'a, T>}::new_disjoint]:
-    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 23:4-30:5
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 26:4-33:5
     Visibility: public -/
 def InPlaceOrDisjointBuffer.new_disjoint
   {T : Type} [ByteRepr T] {N : Std.Usize} (src : Array T N) (dst : Array T N) :
@@ -70,7 +70,7 @@ def InPlaceOrDisjointBuffer.new_disjoint
   ok ({ src := p, dst := p1, len := N, _phantom := () }, back)
 
 /-- [in_place_or_disjoint_buffer::{in_place_or_disjoint_buffer::InPlaceOrDisjointBuffer<'a, T>}::new_disjoint_from_slices]:
-    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 32:4-40:5
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 35:4-43:5
     Visibility: public -/
 def InPlaceOrDisjointBuffer.new_disjoint_from_slices
   {T : Type} [ByteRepr T] (src : Slice T) (dst : Slice T) :
@@ -89,8 +89,20 @@ def InPlaceOrDisjointBuffer.new_disjoint_from_slices
                  Slice.end_as_mut_ptr dst p1
   ok ({ src := p, dst := p1, len := i, _phantom := () }, back)
 
+/-- [in_place_or_disjoint_buffer::{in_place_or_disjoint_buffer::InPlaceOrDisjointBuffer<'a, T>}::from_raw_parts]:
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 45:4-52:5
+    Visibility: public -/
+def InPlaceOrDisjointBuffer.from_raw_parts
+  {T : Type} [ByteRepr T] (src : ConstRawPtr T) (dst : MutRawPtr T)
+  (len : Std.Usize) :
+  Result ((InPlaceOrDisjointBuffer T) × (InPlaceOrDisjointBuffer T → Result
+    Unit))
+  := do
+  let back := fun ipodb => ok ()
+  ok ({ src, dst, len, _phantom := () }, back)
+
 /-- [in_place_or_disjoint_buffer::{in_place_or_disjoint_buffer::InPlaceOrDisjointBuffer<'a, T>}::len]:
-    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 42:4-44:5
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 54:4-56:5
     Visibility: public -/
 def InPlaceOrDisjointBuffer.impl.len
   {T : Type} [ByteRepr T] (self : InPlaceOrDisjointBuffer T) :
@@ -98,8 +110,47 @@ def InPlaceOrDisjointBuffer.impl.len
   := do
   ok self.len
 
+/-- [in_place_or_disjoint_buffer::{in_place_or_disjoint_buffer::InPlaceOrDisjointBuffer<'a, T>}::loadu_block_src]:
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 58:4-60:5
+    Visibility: public -/
+def InPlaceOrDisjointBuffer.loadu_block_src
+  {T : Type} [ByteRepr T] (self : InPlaceOrDisjointBuffer T)
+  (offset : Std.Usize) :
+  Result (Array Std.U8 16#usize)
+  := do
+  let p ← core.ptr.const_ptr.RawPtrConstT.add self.src offset
+  let p1 ← RawPtr.cast_scalar (Array Std.U8 16#usize) .Const p
+  core.ptr.read_unaligned p1
+
+/-- [in_place_or_disjoint_buffer::{in_place_or_disjoint_buffer::InPlaceOrDisjointBuffer<'a, T>}::loadu_block_dst]:
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 62:4-64:5
+    Visibility: public -/
+def InPlaceOrDisjointBuffer.loadu_block_dst
+  {T : Type} [ByteRepr T] (self : InPlaceOrDisjointBuffer T)
+  (offset : Std.Usize) :
+  Result (Array Std.U8 16#usize)
+  := do
+  let p ← core.ptr.mut_ptr.RawPtrMutT.add self.dst offset
+  let p1 ← RawPtr.cast_scalar (Array Std.U8 16#usize) .Const p
+  core.ptr.read_unaligned p1
+
+/-- [in_place_or_disjoint_buffer::{in_place_or_disjoint_buffer::InPlaceOrDisjointBuffer<'a, T>}::storeu_block]:
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 66:4-68:5
+    Visibility: public -/
+def InPlaceOrDisjointBuffer.storeu_block
+  {T : Type} [ByteRepr T] (self : InPlaceOrDisjointBuffer T)
+  (offset : Std.Usize) (value : Array Std.U8 16#usize) :
+  Result ((InPlaceOrDisjointBuffer T) × (InPlaceOrDisjointBuffer T →
+    InPlaceOrDisjointBuffer T))
+  := do
+  let p ← core.ptr.mut_ptr.RawPtrMutT.add self.dst offset
+  let p1 ← RawPtr.cast_scalar (Array Std.U8 16#usize) .Mut p
+  core.ptr.write_unaligned p1 value
+  let back'a := fun self1 => { self with _phantom := () }
+  ok ({ self with _phantom := () }, back'a)
+
 /-- [in_place_or_disjoint_buffer::{in_place_or_disjoint_buffer::InPlaceOrDisjointBuffer<'a, T>}::src]:
-    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 46:4-48:5
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 70:4-72:5
     Visibility: public -/
 def InPlaceOrDisjointBuffer.impl.src
   {T : Type} [ByteRepr T] (self : InPlaceOrDisjointBuffer T) :
@@ -108,7 +159,7 @@ def InPlaceOrDisjointBuffer.impl.src
   core.slice.raw.from_raw_parts self.src self.len
 
 /-- [in_place_or_disjoint_buffer::{in_place_or_disjoint_buffer::InPlaceOrDisjointBuffer<'a, T>}::dst]:
-    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 50:4-52:5
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 74:4-76:5
     Visibility: public -/
 def InPlaceOrDisjointBuffer.impl.dst
   {T : Type} [ByteRepr T] (self : InPlaceOrDisjointBuffer T) :
@@ -125,7 +176,7 @@ def InPlaceOrDisjointBuffer.impl.dst
   ok (s, back, back'a)
 
 /-- [in_place_or_disjoint_buffer::zero_first_in_place]:
-    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 55:0-60:1
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 79:0-84:1
     Visibility: public -/
 def zero_first_in_place
   (buf : Slice Std.U8) : Result (Std.Usize × (Slice Std.U8)) := do
@@ -139,7 +190,7 @@ def zero_first_in_place
   ok (i, buf1)
 
 /-- [in_place_or_disjoint_buffer::copy_first]:
-    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 62:0-66:1
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 86:0-90:1
     Visibility: public -/
 def copy_first
   (src : Slice Std.U8) (dst : Slice Std.U8) : Result (Slice Std.U8) := do
@@ -154,7 +205,7 @@ def copy_first
   new_disjoint_from_slices_back { b with _phantom := () }
 
 /-- [in_place_or_disjoint_buffer::copy_first_disjoint]:
-    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 68:0-72:1
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 92:0-96:1
     Visibility: public -/
 def copy_first_disjoint
   (src : Array Std.U8 4#usize) (dst : Array Std.U8 4#usize) :
@@ -170,7 +221,7 @@ def copy_first_disjoint
   new_disjoint_back { b with _phantom := () }
 
 /-- [in_place_or_disjoint_buffer::write_through_raw_ptr]:
-    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 74:0-79:1
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 98:0-103:1
     Visibility: public -/
 def write_through_raw_ptr (x : Slice Std.U8) : Result (Slice Std.U8) := do
   let n := Slice.len x
@@ -179,5 +230,211 @@ def write_through_raw_ptr (x : Slice Std.U8) : Result (Slice Std.U8) := do
   let s1 ← Slice.update s 0#usize 1#u8
   from_raw_parts_mut_back s1
   Slice.end_as_mut_ptr x p
+
+/-- [in_place_or_disjoint_buffer::wipe]:
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 105:0-107:1
+    Visibility: public -/
+def wipe (pb_data : MutRawPtr Std.U8) (cb_data : Std.Usize) : Result Unit := do
+  core.ptr.write_bytes pb_data 0#u8 cb_data
+
+/-- [in_place_or_disjoint_buffer::wipe_words]:
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 109:0-111:1
+    Visibility: public -/
+def wipe_words (pb_dst : Slice Std.U32) : Result (Slice Std.U32) := do
+  let p ← Slice.as_mut_ptr pb_dst
+  let p1 ← core.ptr.mut_ptr.RawPtrMutT.cast Std.U8 p
+  let i := Slice.len pb_dst
+  let i1 ← i * 4#usize
+  wipe p1 i1
+  Slice.end_as_mut_ptr pb_dst p
+
+/-- [in_place_or_disjoint_buffer::copy_block_in_place]:
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 113:0-119:1
+    Visibility: public -/
+def copy_block_in_place
+  (data : Array Std.U8 32#usize) : Result (Array Std.U8 32#usize) := do
+  let (s, to_slice_mut_back) ← lift (Array.to_slice_mut data)
+  let (b, new_in_place_back) ← InPlaceOrDisjointBuffer.new_in_place s
+  let v ←
+    InPlaceOrDisjointBuffer.loadu_block_src { b with _phantom := () } 0#usize
+  let _ ←
+    InPlaceOrDisjointBuffer.storeu_block { b with _phantom := () } 16#usize v
+  let s1 ← new_in_place_back { b with _phantom := () }
+  ok (to_slice_mut_back s1)
+
+/-- [in_place_or_disjoint_buffer::xor_block_disjoint]:
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 121:0-129:1
+    Visibility: public -/
+def xor_block_disjoint
+  (src : Array Std.U8 16#usize) (dst : Array Std.U8 16#usize) :
+  Result (Array Std.U8 16#usize)
+  := do
+  let (b, new_disjoint_back) ← InPlaceOrDisjointBuffer.new_disjoint src dst
+  let s ←
+    InPlaceOrDisjointBuffer.loadu_block_src { b with _phantom := () } 0#usize
+  let d ←
+    InPlaceOrDisjointBuffer.loadu_block_dst { b with _phantom := () } 0#usize
+  let i ← Array.index_usize s 0#usize
+  let i1 ← Array.index_usize d 0#usize
+  let i2 ← lift (i1 ^^^ i)
+  let d1 ← Array.update d 0#usize i2
+  let _ ←
+    InPlaceOrDisjointBuffer.storeu_block { b with _phantom := () } 0#usize d1
+  new_disjoint_back { b with _phantom := () }
+
+/-- [in_place_or_disjoint_buffer::copy_words_from_raw_parts]:
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 131:0-137:1
+    Visibility: public -/
+def copy_words_from_raw_parts
+  (src : Array Std.U32 4#usize) (dst : Array Std.U32 4#usize) :
+  Result (Array Std.U32 4#usize)
+  := do
+  let s ← lift (Array.to_slice src)
+  let p ← Slice.as_ptr s
+  let (s1, to_slice_mut_back) ← lift (Array.to_slice_mut dst)
+  let p1 ← Slice.as_mut_ptr s1
+  let (b, _) ← InPlaceOrDisjointBuffer.from_raw_parts p p1 4#usize
+  let v ←
+    InPlaceOrDisjointBuffer.loadu_block_src { b with _phantom := () } 0#usize
+  let _ ←
+    InPlaceOrDisjointBuffer.storeu_block { b with _phantom := () } 0#usize v
+  let s2 ← Slice.end_as_mut_ptr s1 p1
+  Slice.end_as_ptr s p
+  ok (to_slice_mut_back s2)
+
+/-- [in_place_or_disjoint_buffer::const_time_slices_equal_impl]: loop body 0:
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 150:4-154:5 -/
+@[rust_loop_body]
+def const_time_slices_equal_impl_loop.body
+  (a : Slice Std.U8) (b : Slice Std.U8) (iter : core.ops.range.Range Std.Usize)
+  (diff : Std.U8) :
+  Result (ControlFlow ((core.ops.range.Range Std.Usize) × Std.U8) Std.U8)
+  := do
+  let (o, iter1) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepUsize iter
+  match o with
+  | none => ok (done diff)
+  | some i =>
+    let p ← Slice.as_ptr a
+    let p1 ← core.ptr.const_ptr.RawPtrConstT.add p i
+    let ai ← core.ptr.read_volatile p1
+    let p2 ← Slice.as_ptr b
+    let p3 ← core.ptr.const_ptr.RawPtrConstT.add p2 i
+    let bi ← core.ptr.read_volatile p3
+    let i1 ← lift (ai ^^^ bi)
+    let diff1 ← lift (diff ||| i1)
+    Slice.end_as_ptr b p2
+    Slice.end_as_ptr a p
+    ok (cont (iter1, diff1))
+
+/-- [in_place_or_disjoint_buffer::const_time_slices_equal_impl]: loop 0:
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 150:4-154:5 -/
+@[rust_loop]
+def const_time_slices_equal_impl_loop
+  (iter : core.ops.range.Range Std.Usize) (a : Slice Std.U8) (b : Slice Std.U8)
+  (diff : Std.U8) :
+  Result Std.U8
+  := do
+  loop
+    (fun (iter1, diff1) => const_time_slices_equal_impl_loop.body a b iter1
+      diff1)
+    (iter, diff)
+
+/-- [in_place_or_disjoint_buffer::const_time_slices_equal_impl]:
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 144:0-157:1 -/
+def const_time_slices_equal_impl
+  (a : Slice Std.U8) (b : Slice Std.U8) : Result Bool := do
+  let left_val := Slice.len a
+  let right_val := Slice.len b
+  massert (left_val = right_val)
+  let len := Slice.len a
+  let diff ←
+    const_time_slices_equal_impl_loop { start := 0#usize, «end» := len } a b
+      0#u8
+  ok (diff = 0#u8)
+
+/-- [in_place_or_disjoint_buffer::const_time_slices_equal]:
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 139:0-142:1
+    Visibility: public -/
+def const_time_slices_equal
+  (a : Slice Std.U8) (b : Slice Std.U8) : Result Bool := do
+  let left_val := Slice.len a
+  let right_val := Slice.len b
+  massert (left_val = right_val)
+  const_time_slices_equal_impl a b
+
+/-- [in_place_or_disjoint_buffer::const_time_slice_copy_impl]: loop body 0:
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 171:4-177:5 -/
+@[rust_loop_body]
+def const_time_slice_copy_impl_loop.body
+  (a : Slice Std.U8) (copy_size : Std.U32)
+  (iter : core.ops.range.Range Std.Usize) (b : Slice Std.U8) :
+  Result (ControlFlow ((core.ops.range.Range Std.Usize) × (Slice Std.U8))
+    (Slice Std.U8))
+  := do
+  let (o, iter1) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepUsize iter
+  match o with
+  | none => ok (done b)
+  | some i =>
+    let p ← Slice.as_ptr a
+    let p1 ← core.ptr.const_ptr.RawPtrConstT.add p i
+    let ai ← core.ptr.read_volatile p1
+    let p2 ← Slice.as_ptr b
+    let p3 ← core.ptr.const_ptr.RawPtrConstT.add p2 i
+    let bi ← core.ptr.read_volatile p3
+    let i1 ← lift (UScalar.cast .U32 i)
+    let i2 ← lift (core.num.U32.wrapping_sub i1 copy_size)
+    let i3 ← lift (UScalar.hcast .I32 i2)
+    let i4 ← i3 >>> 31#i32
+    let mask ← lift (IScalar.hcast .U8 i4)
+    let i5 ← lift (ai ^^^ bi)
+    let i6 ← lift (i5 &&& mask)
+    let bi1 ← lift (bi ^^^ i6)
+    let p4 ← Slice.as_mut_ptr_reuse p2 b
+    let p5 ← core.ptr.mut_ptr.RawPtrMutT.add p4 i
+    core.ptr.write_volatile p5 bi1
+    let b1 ← Slice.sync_as_mut_ptr b p4
+    Slice.free_as_ptr b1 p4
+    Slice.end_as_ptr a p
+    ok (cont (iter1, b1))
+
+/-- [in_place_or_disjoint_buffer::const_time_slice_copy_impl]: loop 0:
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 171:4-177:5 -/
+@[rust_loop]
+def const_time_slice_copy_impl_loop
+  (iter : core.ops.range.Range Std.Usize) (a : Slice Std.U8) (b : Slice Std.U8)
+  (copy_size : Std.U32) :
+  Result (Slice Std.U8)
+  := do
+  loop
+    (fun (iter1, b1) => const_time_slice_copy_impl_loop.body a copy_size iter1
+      b1)
+    (iter, b)
+
+/-- [in_place_or_disjoint_buffer::const_time_slice_copy_impl]:
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 166:0-178:1 -/
+def const_time_slice_copy_impl
+  (a : Slice Std.U8) (b : Slice Std.U8) (copy_size : Std.U32) :
+  Result (Slice Std.U8)
+  := do
+  let left_val := Slice.len a
+  let right_val := Slice.len b
+  massert (left_val = right_val)
+  let len := Slice.len a
+  const_time_slice_copy_impl_loop { start := 0#usize, «end» := len } a b
+    copy_size
+
+/-- [in_place_or_disjoint_buffer::const_time_slice_copy]:
+    Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 159:0-164:1
+    Visibility: public -/
+def const_time_slice_copy
+  (a : Slice Std.U8) (b : Slice Std.U8) (copy_size : Std.U32) :
+  Result (Slice Std.U8)
+  := do
+  let left_val := Slice.len a
+  let right_val := Slice.len b
+  massert (left_val = right_val)
+  const_time_slice_copy_impl a b copy_size
 
 end in_place_or_disjoint_buffer
