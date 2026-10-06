@@ -360,4 +360,30 @@ attribute [step_simps] core.ptr.read core.ptr.write
 def core.ptr.drop_in_place {T : Type} (_p : MutRawPtr T) : Result Unit :=
   ok ()
 
+@[rust_fun "core::ptr::read_volatile"]
+def core.ptr.read_volatile [ByteRepr T] (p : ConstRawPtr T) : Result T :=
+  p.read
+
+@[rust_fun "core::ptr::write_volatile"]
+def core.ptr.write_volatile [ByteRepr T] (p : MutRawPtr T) (v : T) : Result Unit :=
+  MutRawPtr.write p v
+
+@[rust_fun "core::ptr::const_ptr::{*const @T}::read_volatile"]
+def core.ptr.const_ptr.RawPtrConstT.read_volatile [ByteRepr T] (p : ConstRawPtr T) :
+    Result T :=
+  p.read
+
+@[rust_fun "core::ptr::mut_ptr::{*mut @T}::read_volatile"]
+def core.ptr.mut_ptr.RawPtrMutT.read_volatile [ByteRepr T] (p : MutRawPtr T) : Result T :=
+  p.read
+
+@[rust_fun "core::ptr::mut_ptr::{*mut @T}::write_volatile"]
+def core.ptr.mut_ptr.RawPtrMutT.write_volatile [ByteRepr T] (p : MutRawPtr T) (v : T) :
+    Result Unit :=
+  MutRawPtr.write p v
+
+attribute [step_simps] core.ptr.read_volatile core.ptr.write_volatile
+  core.ptr.const_ptr.RawPtrConstT.read_volatile core.ptr.mut_ptr.RawPtrMutT.read_volatile
+  core.ptr.mut_ptr.RawPtrMutT.write_volatile
+
 end Aeneas.Std

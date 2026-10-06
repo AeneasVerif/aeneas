@@ -30,6 +30,7 @@ type fun_info = {
   *)
   is_rec : bool;
       (* [true] if the function is recursive (or in a mutually recursive group) *)
+  back_heap_ops : bool;
 }
 [@@deriving show]
 
@@ -107,6 +108,29 @@ let mk_ty_contains_raw_ptr (m : crate) : Types.ty -> bool =
   in
   ty_contains TypeDeclId.Set.empty
 
+let raw_ptr_view_patterns =
+  List.map Charon.NameMatcher.parse_pattern
+    [
+      "core::slice::{[@T]}::as_mut_ptr";
+      "core::slice::{[@T]}::as_ptr";
+      "core::mem::maybe_uninit::{core::mem::maybe_uninit::MaybeUninit<@T>}::as_mut_ptr";
+      "core::mem::maybe_uninit::{core::mem::maybe_uninit::MaybeUninit<@T>}::as_ptr";
+    ]
+
+let ty_has_mut_ref (ty : Types.ty) : bool =
+  let found = ref false in
+  let visitor =
+    object
+      inherit [_] Types.iter_ty as super
+
+      method! visit_TRef env r ty kind =
+        if kind = Types.RMut then found := true;
+        super#visit_TRef env r ty kind
+    end
+  in
+  visitor#visit_ty () ty;
+  !found
+
 let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     modules_funs_info =
   let fmt_env = Charon.Print.crate_to_fmt_env m in
@@ -123,7 +147,13 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
       (method_id : Types.TraitMethodId.id) : unit =
     register_info
       (FunOrMethodId.Method (trait_decl_id, method_id))
-      { can_fail = true; stateful = false; can_diverge = false; is_rec = false }
+      {
+        can_fail = true;
+        stateful = false;
+        can_diverge = false;
+        is_rec = false;
+        back_heap_ops = true;
+      }
   in
 
   TraitDeclId.Map.iter
@@ -146,6 +176,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
       fun_info =
     let can_fail = ref false in
     let stateful = ref false in
+    let back_heap_ops = ref false in
     let can_diverge = ref false in
     let is_rec = ref false in
     let group_has_builtin_info = ref false in
@@ -174,6 +205,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
           inherit [_] iter_statement as super
           method may_fail b = can_fail := !can_fail || b
           method maybe_stateful b = stateful := !stateful || b
+          method may_heap_back b = back_heap_ops := !back_heap_ops || b
           method! visit_statement _ st = super#visit_statement st.span st
 
           (* Custom function called by hand, this isn't visit_fun_decl_id! *)
@@ -190,8 +222,18 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
                    use of --exclude)"
               in
               self#may_fail info.can_fail;
-              if not (fun_decl_is_global_initializer f) then
+              if not (fun_decl_is_global_initializer f) then (
                 self#maybe_stateful info.stateful;
+                self#may_heap_back info.back_heap_ops;
+                match FunDeclId.Map.find_opt id m.fun_decls with
+                | Some d
+                  when List.exists
+                         (fun pat ->
+                           Charon.NameMatcher.match_name name_matcher_ctx
+                             ExtractName.default_match_config pat
+                             d.item_meta.name)
+                         raw_ptr_view_patterns -> self#may_heap_back true
+                | _ -> ());
               can_diverge := !can_diverge || info.can_diverge
 
           method! visit_Assert env a =
@@ -206,12 +248,9 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
                 self#may_fail true
             | Use _
             | RvRef ({ kind = PlaceLocal _ | PlaceProjection _; _ }, _, _)
-            | Discriminant _
-            | Aggregate _
-            | Len _
-            | NullaryOp _
-            | RawPtr _
-            | Repeat _ -> ()
+            | Discriminant _ | Aggregate _ | Len _ | NullaryOp _ | Repeat _ ->
+                ()
+            | RawPtr _ -> self#may_heap_back true
             | RvRef ({ kind = PlaceGlobal gref; _ }, _, _) -> (
                 (* A reference to a global: propagate can_fail.
 
@@ -245,7 +284,8 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
                     (* We consider trait functions can fail, but can not diverge and are not stateful.
                        TODO: this may cause issues if we use use a fuel parameter.
                     *)
-                    can_fail := true));
+                    can_fail := true;
+                    self#may_heap_back true));
             super#visit_Call env call on_unwind
 
           method! visit_Panic env =
@@ -293,7 +333,12 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
             | None -> true
             | Some { can_fail } -> can_fail
           in
-          obj#may_fail info_can_fail
+          obj#may_fail info_can_fail;
+          let sg = f.signature in
+          if
+            List.exists ty_contains_raw_ptr (sg.output :: sg.inputs)
+            && ty_has_mut_ref sg.output
+          then obj#may_heap_back true
     in
     List.iter visit_fun d;
     (* We need to know if the declaration group contains a global - note that
@@ -321,6 +366,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
       stateful = !stateful;
       can_diverge = !can_diverge;
       is_rec = !is_rec;
+      back_heap_ops = !back_heap_ops;
     }
   in
 

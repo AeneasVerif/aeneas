@@ -1584,32 +1584,37 @@ and raw_ptr_view_parked (abs_id : AbsId.id) (ctx : eval_ctx) :
         }
   | _ -> None
 
+and raw_ptr_view_can_end (abs_id : AbsId.id) (view : raw_ptr_view)
+    (ctx : eval_ctx) : bool =
+  (not view.rpv_dirty)
+  || List.for_all
+       (fun (abs' : abs) ->
+         match abs'.kind with
+         | FunCall (call_id, _) ->
+             AbsId.to_int abs'.abs_id < AbsId.to_int abs_id
+             || (not (List.mem call_id view.rpv_back_calls))
+             (* Abstractions which only contain shared borrows don't have
+                backward functions *)
+             || not
+                  (List.exists
+                     (fun (v : tavalue) ->
+                       TypesUtils.ty_has_mut_borrow_for_region_in_set
+                         ctx.type_ctx.type_infos abs'.regions.owned v.ty)
+                     abs'.avalues)
+         | _ -> true)
+       (env_filter_map_abs (fun a -> Some a) ctx.env)
+
 (** Remove an abstraction from the context, as well as all its references *)
 and end_raw_ptr_view_update (span : Meta.span) (abs_id : AbsId.id)
     (ctx : eval_ctx) : eval_ctx =
   let abs = ctx_lookup_abs ctx abs_id in
   match abs.kind with
   | RawPtrView view when view.rpv_mut ->
-      if view.rpv_dirty then
-        [%cassert] span
-          (List.for_all
-             (fun (abs' : abs) ->
-               match abs'.kind with
-               | FunCall _ ->
-                   AbsId.to_int abs'.abs_id < AbsId.to_int abs_id
-                   (* Abstractions which only contain shared borrows don't
-                      have backward functions *)
-                   || not
-                        (List.exists
-                           (fun (v : tavalue) ->
-                             TypesUtils.ty_has_mut_borrow_for_region_in_set
-                               ctx.type_ctx.type_infos abs'.regions.owned v.ty)
-                           abs'.avalues)
-               | _ -> true)
-             (env_filter_map_abs (fun a -> Some a) ctx.env))
-          "Unsupported: ending a borrow converted to a raw pointer while some \
-           function calls which may have written to the heap through this \
-           pointer are still pending (i.e., their outputs are still live)";
+      [%cassert] span
+        (raw_ptr_view_can_end abs_id view ctx)
+        "Unsupported: ending a borrow converted to a raw pointer while some \
+         function calls which may have written to the heap through this \
+         pointer are still pending (i.e., their outputs are still live)";
       let sv = mk_fresh_symbolic_value span ctx view.rpv_original.ty in
       let ctx =
         update_loan span ek_all view.rpv_loan

@@ -30,6 +30,8 @@ val end_abs :
 val end_abs_set :
   config -> Meta.span -> ?snapshots:bool -> AbsIdWithLevelSet.t -> cm_fun
 
+val raw_ptr_view_can_end : AbsId.id -> raw_ptr_view -> eval_ctx -> bool
+
 (** End the parked raw pointer views, freeing their memory *)
 val end_raw_ptr_parked : config -> Meta.span -> cm_fun
 

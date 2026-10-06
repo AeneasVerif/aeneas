@@ -283,6 +283,7 @@ type raw_ptr_view = {
       (** The raw pointer whose memory is reused for this view *)
   rpv_uninit : bool;
       (** The elements of the slice are of type [MaybeUninit<T>] *)
+  rpv_back_calls : fun_call_id list;
 }
 [@@deriving show, ord]
 

@@ -453,7 +453,8 @@ let rec end_dead_borrows_and_abs ?(end_dead_views = false) (config : config)
             (* The raw pointer views whose pointer is not used anymore *)
             | RawPtrView view
               when end_dead_views
-                   && not (symbolic_value_id_in_ctx view.rpv_ptr.sv_id ctx) ->
+                   && (not (symbolic_value_id_in_ctx view.rpv_ptr.sv_id ctx))
+                   && InterpBorrows.raw_ptr_view_can_end abs.abs_id view ctx ->
                 Some abs.abs_id
             | _ -> None)
           ctx.env

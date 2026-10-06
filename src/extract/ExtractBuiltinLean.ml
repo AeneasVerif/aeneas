@@ -1112,6 +1112,9 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 193 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::read_unaligned"
       "core.ptr.const_ptr.RawPtrConstT.read_unaligned";
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 371 *)
+    mk_fun "core::ptr::const_ptr::{*const @T}::read_volatile"
+      "core.ptr.const_ptr.RawPtrConstT.read_volatile";
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 30 *)
     mk_fun "core::ptr::const_ptr::{*const @T}::sub"
       "core.ptr.const_ptr.RawPtrConstT.sub";
@@ -1136,6 +1139,9 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 197 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::read_unaligned"
       "core.ptr.mut_ptr.RawPtrMutT.read_unaligned";
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 376 *)
+    mk_fun "core::ptr::mut_ptr::{*mut @T}::read_volatile"
+      "core.ptr.mut_ptr.RawPtrMutT.read_volatile";
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 26 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::sub"
       "core.ptr.mut_ptr.RawPtrMutT.sub";
@@ -1145,16 +1151,23 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 205 *)
     mk_fun "core::ptr::mut_ptr::{*mut @T}::write_unaligned"
       "core.ptr.mut_ptr.RawPtrMutT.write_unaligned";
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 380 *)
+    mk_fun "core::ptr::mut_ptr::{*mut @T}::write_volatile"
+      "core.ptr.mut_ptr.RawPtrMutT.write_volatile";
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 348 *)
     mk_fun "core::ptr::read" "core.ptr.read";
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 190 *)
     mk_fun "core::ptr::read_unaligned" "core.ptr.read_unaligned";
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 363 *)
+    mk_fun "core::ptr::read_volatile" "core.ptr.read_volatile";
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 352 *)
     mk_fun "core::ptr::write" "core.ptr.write";
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 277 *)
     mk_fun "core::ptr::write_bytes" "core.ptr.write_bytes";
     (* file: "Aeneas/Std/RawPtrOps.lean", line: 201 *)
     mk_fun "core::ptr::write_unaligned" "core.ptr.write_unaligned";
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 367 *)
+    mk_fun "core::ptr::write_volatile" "core.ptr.write_volatile";
     (* file: "Aeneas/Std/Core/Convert.lean", line: 113 *)
     mk_fun
       "core::result::{core::ops::try_trait::FromResidual<core::result::Result<@T, \

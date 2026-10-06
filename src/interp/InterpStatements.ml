@@ -665,6 +665,41 @@ let maybe_uninit_as_ptr_pattern =
   NameMatcher.parse_pattern
     "core::mem::maybe_uninit::{core::mem::maybe_uninit::MaybeUninit<@T>}::as_ptr"
 
+let read_only_raw_ptr_patterns =
+  List.map NameMatcher.parse_pattern
+    (List.concat_map
+       (fun ptr ->
+         List.map
+           (fun f ->
+             "core::ptr::" ^ ptr ^ "::{*"
+             ^ (if ptr = "mut_ptr" then "mut" else "const")
+             ^ " @T}::" ^ f)
+           [
+             "cast";
+             "add";
+             "sub";
+             "offset";
+             "wrapping_add";
+             "wrapping_sub";
+             "wrapping_offset";
+             "offset_from";
+             "read";
+             "read_unaligned";
+             "read_volatile";
+             "is_null";
+           ])
+       [ "const_ptr"; "mut_ptr" ]
+    @ [
+        "core::ptr::read";
+        "core::ptr::read_unaligned";
+        "core::ptr::read_volatile";
+        "core::ptr::null";
+        "core::ptr::null_mut";
+        "core::ptr::const_ptr::{*const @T}::cast_mut";
+        "core::ptr::mut_ptr::{*mut @T}::cast_const";
+        "core::slice::raw::from_raw_parts";
+      ])
+
 let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->
   (* Debugging *)
@@ -1501,6 +1536,7 @@ and create_raw_ptr_view (config : config) (span : Meta.span) ~(is_mut : bool)
       rpv_origin;
       rpv_reuse;
       rpv_uninit = uninit;
+      rpv_back_calls = [];
     }
   in
   let rid = ctx.fresh_region_id () in
@@ -1542,6 +1578,20 @@ and create_raw_ptr_view (config : config) (span : Meta.span) ~(is_mut : bool)
 
 and call_may_modify_heap (ctx : eval_ctx) (fid : fn_ptr_kind)
     (inst_sg : inst_fun_sig) : bool =
+  let read_only =
+    match fid with
+    | Fun fid -> (
+        match FunDeclId.Map.find_opt fid ctx.crate.fun_decls with
+        | Some decl ->
+            List.exists
+              (fun pat ->
+                ExtractName.match_name ctx.crate pat decl.item_meta.name)
+              read_only_raw_ptr_patterns
+        | None -> false)
+    | TraitMethod _ -> false
+  in
+  (not read_only)
+  &&
   let stateful =
     match fid with
     | Fun fid -> (
@@ -1555,17 +1605,35 @@ and call_may_modify_heap (ctx : eval_ctx) (fid : fn_ptr_kind)
   let contains_raw_ptr = FunsAnalysis.mk_ty_contains_raw_ptr ctx.crate in
   List.exists contains_raw_ptr (inst_sg.output :: inst_sg.inputs)
 
-and ctx_mark_raw_ptr_views_dirty (ctx : eval_ctx) : eval_ctx =
+and ctx_mark_raw_ptr_views_dirty ?(back_call : fun_call_id option = None)
+    (ctx : eval_ctx) : eval_ctx =
   let env =
     List.map
       (fun (e : env_elem) ->
         match e with
         | EAbs ({ kind = RawPtrView view; _ } as abs) ->
-            EAbs { abs with kind = RawPtrView { view with rpv_dirty = true } }
+            let rpv_back_calls =
+              match back_call with
+              | None -> view.rpv_back_calls
+              | Some id -> id :: view.rpv_back_calls
+            in
+            EAbs
+              {
+                abs with
+                kind = RawPtrView { view with rpv_dirty = true; rpv_back_calls };
+              }
         | _ -> e)
       ctx.env
   in
   { ctx with env }
+
+and call_back_may_modify_heap (ctx : eval_ctx) (fid : fn_ptr_kind) : bool =
+  match fid with
+  | Fun fid -> (
+      match FunsAnalysis.lookup_fun_decl_info ctx.fun_ctx.fun_infos fid with
+      | Some info -> info.back_heap_ops
+      | None -> true)
+  | TraitMethod _ -> true
 
 and raw_ptr_view_builtin (_span : Meta.span) (ctx : eval_ctx) (func : fn_ptr) :
     (raw_ptr_view_kind * bool) option =
@@ -1710,14 +1778,18 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
     ^ String.concat ", " (List.map (operand_to_string ctx) args)
     ^ "\n- dest:\n" ^ place_to_string ctx dest];
 
-  let ctx =
-    if env_has_raw_ptr_views ctx.env && call_may_modify_heap ctx fid inst_sg
-    then ctx_mark_raw_ptr_views_dirty ctx
-    else ctx
-  in
-
   (* Unique identifier for the call *)
   let call_id = ctx.fresh_fun_call_id () in
+
+  let ctx =
+    if env_has_raw_ptr_views ctx.env && call_may_modify_heap ctx fid inst_sg
+    then
+      let back_call =
+        if call_back_may_modify_heap ctx fid then Some call_id else None
+      in
+      ctx_mark_raw_ptr_views_dirty ~back_call ctx
+    else ctx
+  in
 
   (* Generate a fresh symbolic value for the return value *)
   let ret_sv_ty = inst_sg.output in
