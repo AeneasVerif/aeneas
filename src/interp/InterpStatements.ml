@@ -647,22 +647,23 @@ let eval_global_as_fresh_symbolic_value (span : Meta.span)
       let cc = S.synthesize_global_eval gref sval in
       (ctx, mk_tvalue_from_symbolic_value sval, cc)
 
+(* The patterns are not lazy: functions are translated in parallel, and
+   forcing a lazy value concurrently raises [Lazy.Undefined] *)
+
 (** Evaluate a statement. *)
 let slice_as_mut_ptr_pattern =
-  lazy (NameMatcher.parse_pattern "core::slice::{[@T]}::as_mut_ptr")
+  NameMatcher.parse_pattern "core::slice::{[@T]}::as_mut_ptr"
 
 let slice_as_ptr_pattern =
-  lazy (NameMatcher.parse_pattern "core::slice::{[@T]}::as_ptr")
+  NameMatcher.parse_pattern "core::slice::{[@T]}::as_ptr"
 
 let maybe_uninit_as_mut_ptr_pattern =
-  lazy
-    (NameMatcher.parse_pattern
-       "core::mem::maybe_uninit::{core::mem::maybe_uninit::MaybeUninit<@T>}::as_mut_ptr")
+  NameMatcher.parse_pattern
+    "core::mem::maybe_uninit::{core::mem::maybe_uninit::MaybeUninit<@T>}::as_mut_ptr"
 
 let maybe_uninit_as_ptr_pattern =
-  lazy
-    (NameMatcher.parse_pattern
-       "core::mem::maybe_uninit::{core::mem::maybe_uninit::MaybeUninit<@T>}::as_ptr")
+  NameMatcher.parse_pattern
+    "core::mem::maybe_uninit::{core::mem::maybe_uninit::MaybeUninit<@T>}::as_ptr"
 
 let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->
@@ -1574,8 +1575,7 @@ and raw_ptr_view_builtin (_span : Meta.span) (ctx : eval_ctx) (func : fn_ptr) :
       | None -> None
       | Some decl ->
           let matches pat =
-            ExtractName.match_name ctx.crate (Lazy.force pat)
-              decl.item_meta.name
+            ExtractName.match_name ctx.crate pat decl.item_meta.name
           in
           if matches slice_as_mut_ptr_pattern then Some (RpvSlice, true)
           else if matches slice_as_ptr_pattern then Some (RpvSlice, false)
