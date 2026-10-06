@@ -14,7 +14,7 @@ namespace Aeneas.Std.WP
     mk_spec_bind := ``Std.WP.spec_bind
     mk_spec_bind_skip_args := 4
     prepare_intro_outputs := ``Aeneas.Step.prepareIntroOutputs
-    to_mvcgen := some ``Std.WP.spec_to_mvcgen
+    to_mvcgen := .some ``Std.WP.spec_to_mvcgen
     liftings := #[
       { from_statement := ``Std.WP.ispec
         conversion_thm := ``Std.WP.ispec_spec
@@ -32,7 +32,7 @@ namespace Aeneas.Std.WP
     mk_spec_bind := ``Std.WP.dspec_bind
     mk_spec_bind_skip_args := 4
     prepare_intro_outputs := ``Aeneas.Step.prepareIntroOutputs
-    to_mvcgen := some ``Std.WP.dspec_to_mvcgen
+    to_mvcgen := .some ``Std.WP.dspec_to_mvcgen
     liftings := #[
       { from_statement := ``Std.WP.spec
         conversion_thm := ``Std.WP.spec_dspec
