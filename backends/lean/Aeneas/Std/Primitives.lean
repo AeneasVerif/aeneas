@@ -147,6 +147,14 @@ theorem Result.match.fail {α : Type u} {e} :
   (Result.fail e : Result α).match = .vis (.fail e) PEmpty.elim := by
   simp [Result.fail_eq_vis]
 
+/-- `Result` is a `@[irreducible]` alias for `ITree`, so it no longer inherits a `Repr` instance. Provide one manually, mirroring the old `deriving Repr` output, so that `#eval` on `Result`-producing expressions still prints `Aeneas.Std.Result.ok`/`fail`/`div`. -/
+instance instReprResult {α : Type u} [Repr α] : Repr (Result α) where
+  reprPrec r _ :=
+    match Result.match r with
+    | .ok a => "Aeneas.Std.Result.ok " ++ repr a
+    | .div => "Aeneas.Std.Result.div"
+    | .vis (.fail e) _ => "Aeneas.Std.Result.fail " ++ repr e
+
 /-!
 `Result` not being an inductive type it has no built-in constructor facts that grind
 can leverage. As we do not want to abuse e-matching, because it risks saturating
