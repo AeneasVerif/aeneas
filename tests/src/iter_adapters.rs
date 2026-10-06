@@ -349,3 +349,22 @@ pub fn test_range_inclusive_empty() {
     let mut it = 5usize..=3usize;
     assert!(it.next().is_none());
 }
+
+// ============================================================================
+// TakeWhile
+// ============================================================================
+
+// Not `#[verify::test]`: a closure predicate is noncomputable, and a named `fn` one
+// aborts under `-checks` (TypesAnalysis.ml:968).
+
+pub fn take_while_lt_ten(v: &[u32]) -> Option<u32> {
+    let mut it = v.iter().take_while(|x| **x < 10);
+    it.next().copied()
+}
+
+pub fn take_while_twice(v: &[u32]) -> (Option<u32>, Option<u32>) {
+    let mut it = v.iter().take_while(|x| **x < 10);
+    let a = it.next().copied();
+    let b = it.next().copied();
+    (a, b)
+}
