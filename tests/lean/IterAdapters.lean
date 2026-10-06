@@ -19,6 +19,19 @@ set_option maxRecDepth 2048
 
 namespace iter_adapters
 
+/-- Trait implementation: [core::slice::iter::{impl core::iter::traits::double_ended::DoubleEndedIterator<&'_ T> for core::slice::iter::Iter<'a, T>}]
+    Source: '/rustc/library/core/src/slice/iter/macros.rs', lines 431:8-431:56
+    Name pattern: [core::iter::traits::double_ended::DoubleEndedIterator<core::slice::iter::Iter<'a, @T>, &'_ @T>] -/
+@[reducible, rust_trait_impl
+  "core::iter::traits::double_ended::DoubleEndedIterator<core::slice::iter::Iter<'a, @T>, &'_ @T>"]
+def
+  core.slice.iter.Iter.Insts.CoreIterTraitsDouble_endedDoubleEndedIteratorSharedT
+  (T : Type) : core.iter.traits.double_ended.DoubleEndedIterator
+  (core.slice.iter.Iter T) T := {
+  iteratorInst := core.iter.traits.iterator.IteratorSliceIter T
+  next_back := core.slice.iter.IteratorSliceIter.next_back
+}
+
 /-- [iter_adapters::test_enumerate_slice]:
     Source: 'tests/src/iter_adapters.rs', lines 14:0-24:1
     Visibility: public -/
@@ -890,5 +903,65 @@ def test_range_inclusive_empty : Result Unit := do
 
 /- Unit test for [iter_adapters::test_range_inclusive_empty] -/
 #guard (test_range_inclusive_empty).reducesTo ()
+
+/-- [iter_adapters::test_rev_slice]:
+    Source: 'tests/src/iter_adapters.rs', lines 359:0-366:1
+    Visibility: public -/
+def test_rev_slice : Result Unit := do
+  let s ← lift (Array.to_slice (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ]))
+  let i ← core.slice.Slice.iter s
+  let it ←
+    core.iter.traits.iterator.Iterator.rev.trait_default
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32)
+      (core.slice.iter.Iter.Insts.CoreIterTraitsDouble_endedDoubleEndedIteratorSharedT
+      Std.U32) i
+  let (o, it1) ←
+    core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next
+      (core.slice.iter.Iter.Insts.CoreIterTraitsDouble_endedDoubleEndedIteratorSharedT
+      Std.U32) it
+  let i1 ← core.option.Option.unwrap o
+  massert (i1 = 3#u32)
+  let (o1, it2) ←
+    core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next
+      (core.slice.iter.Iter.Insts.CoreIterTraitsDouble_endedDoubleEndedIteratorSharedT
+      Std.U32) it1
+  let i2 ← core.option.Option.unwrap o1
+  massert (i2 = 2#u32)
+  let (o2, it3) ←
+    core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next
+      (core.slice.iter.Iter.Insts.CoreIterTraitsDouble_endedDoubleEndedIteratorSharedT
+      Std.U32) it2
+  let i3 ← core.option.Option.unwrap o2
+  massert (i3 = 1#u32)
+  let (o3, _) ←
+    core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next
+      (core.slice.iter.Iter.Insts.CoreIterTraitsDouble_endedDoubleEndedIteratorSharedT
+      Std.U32) it3
+  let b := core.option.Option.is_none o3
+  massert b
+
+/- Unit test for [iter_adapters::test_rev_slice] -/
+#assert (test_rev_slice).reducesTo ()
+
+/-- [iter_adapters::test_rev_empty_slice]:
+    Source: 'tests/src/iter_adapters.rs', lines 369:0-373:1
+    Visibility: public -/
+def test_rev_empty_slice : Result Unit := do
+  let s ← lift (Array.to_slice (Std.Array.empty Std.U32))
+  let i ← core.slice.Slice.iter s
+  let it ←
+    core.iter.traits.iterator.Iterator.rev.trait_default
+      (core.iter.traits.iterator.IteratorSliceIter Std.U32)
+      (core.slice.iter.Iter.Insts.CoreIterTraitsDouble_endedDoubleEndedIteratorSharedT
+      Std.U32) i
+  let (o, _) ←
+    core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next
+      (core.slice.iter.Iter.Insts.CoreIterTraitsDouble_endedDoubleEndedIteratorSharedT
+      Std.U32) it
+  let b := core.option.Option.is_none o
+  massert b
+
+/- Unit test for [iter_adapters::test_rev_empty_slice] -/
+#assert (test_rev_empty_slice).reducesTo ()
 
 end iter_adapters

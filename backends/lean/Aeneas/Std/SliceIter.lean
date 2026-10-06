@@ -73,6 +73,33 @@ def core.slice.iter.IteratorSliceIter.next
     ok (some x, it)
   else ok (none, it)
 
+/-- `DoubleEndedIterator::next_back` on `slice::Iter`: yields the last element and drops it.
+
+    The iterator already carries the whole slice plus a front index, so consuming from the
+    back shortens the slice rather than needing a second index. -/
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::double_ended::DoubleEndedIterator<core::slice::iter::Iter<'a, @T>, &'_ @T>}::next_back"]
+def core.slice.iter.IteratorSliceIter.next_back
+  {T : Type} (it : core.slice.iter.Iter T) : Result ((Option T) × (core.slice.iter.Iter T)) :=
+  if h : it.i < it.slice.val.length then
+    let n := it.slice.val.length - 1
+    let x := it.slice[n]'(by scalar_tac)
+    let s := Slice.from (it.slice.val.take n) (by scalar_tac)
+    ok (some x, { it with slice := s })
+  else ok (none, it)
+
+@[step]
+theorem core.slice.iter.IteratorSliceIter.next_back.spec
+    {T : Type} (it : core.slice.iter.Iter T) (h : it.i < it.slice.val.length) :
+    core.slice.iter.IteratorSliceIter.next_back it
+    ⦃ r => r.1 = it.slice.val.getLast? ∧
+           r.2.slice.val = it.slice.val.take (it.slice.val.length - 1) ∧
+           r.2.i = it.i ⦄ := by
+  unfold core.slice.iter.IteratorSliceIter.next_back
+  simp [h, WP.spec_ok, List.getLast?_eq_getElem?]
+  rw [List.getElem?_eq_getElem (by scalar_tac), Slice.getElem_Nat_eq]
+  scalar_tac
+
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>"]
 impl_def core.iter.traits.iterator.IteratorSliceIter (T : Type) :
