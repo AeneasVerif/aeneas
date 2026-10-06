@@ -60,6 +60,72 @@ def alloc (n : Nat) (value : T) : Result (Buffer T) :=
   RawPtr.allocArray (List.replicate n value) fun l =>
     ⟨l.1, l.2, n⟩
 
+def read (b : Buffer T) (i : Nat) : Result T :=
+  RawPtr.read (b.ptrAt i)
+
+def write (b : Buffer T) (i : Nat) (value : T) : Result Unit :=
+  MutRawPtr.write (b.ptrAt i) value
+
+def free (b : Buffer T) : Result Unit :=
+  MutRawPtr.freeRange b.ptr b.length
+
+def readRange (p : RawPtr T M) : Nat → Result (List T)
+  | 0 => pure []
+  | n + 1 => do
+      let value ← p.read
+      let rest ← readRange (p.add 1) n
+      pure (value :: rest)
+
+def writeRange (p : MutRawPtr T) : List T → Result Unit
+  | [] => pure ()
+  | value :: rest => do
+      p.write value
+      writeRange (p.add 1) rest
+
+def toSlice (values : List T) : Result (Slice T) :=
+  if h : values.length ≤ Usize.max then
+    pure (Slice.from values h)
+  else
+    Result.fail .maximumSizeExceeded
+
+def readSlice (b : Buffer T) : Result (Slice T) := do
+  let values ← readRange b.ptr b.length
+  toSlice values
+
+def writeSlice (b : Buffer T) (s : Slice T) : Result Unit :=
+  if s.length = b.length then
+    writeRange b.ptr s.val
+  else
+    Result.fail .assertionFailure
+
+def ofList (values : List T) : Result (Buffer T) :=
+  RawPtr.allocArray values fun l =>
+    ⟨l.1, l.2, values.length⟩
+
+def fill (b : Buffer T) (value : T) : Result Unit :=
+  MutRawPtr.fillRange b.ptr value b.length
+
+def copy (dst src : Buffer T) : Result Unit :=
+  MutRawPtr.copyRange dst.ptr src.ptr src.length
+
+def compare [DecidableEq T] (left right : Buffer T) : Result Bool :=
+  RawPtr.compareRange left.ptr right.ptr left.length
+
+def swap (b : Buffer T) (i j : Nat) : Result Unit := do
+  let x ← b.read i
+  let y ← b.read j
+  b.write i y
+  b.write j x
+
+def mut_to_raw (slice : Slice T) : Result (Buffer T) :=
+  RawPtr.allocArray slice.val fun l =>
+    ⟨l.1, l.2, slice.val.length⟩
+
+def end_mut_to_raw (original : Slice T) (b : Buffer T) :
+    Result (Slice T) := do
+  let values ← MutRawPtr.takeRange b.ptr b.length
+  pure (original.setSlice! 0 values)
+
 @[step]
 theorem alloc.spec (n : Nat) (value : T) :
     ⦃ emp ⦄ Buffer.alloc n value
@@ -72,26 +138,17 @@ theorem pointsTo_def (b : Buffer T) (values : List T) :
     (b ↦ values) =
       iprop(⌜values.length = b.length⌝ ∗ b.ptr ↦* values) := rfl
 
-def read (b : Buffer T) (i : Nat) : Result T :=
-  RawPtr.read (b.ptrAt i)
-
 @[step]
 theorem read.spec (b : Buffer T) (i : Nat) (value : T) :
     ⦃ b.ptrAt i ↦ value ⦄ b.read i
       ⦃⇓ result => ⌜result = value⌝ ∗ b.ptrAt i ↦ value⦄ :=
   RawPtr.read.spec (b.ptrAt i) value
 
-def write (b : Buffer T) (i : Nat) (value : T) : Result Unit :=
-  MutRawPtr.write (b.ptrAt i) value
-
 @[step]
 theorem write.spec (b : Buffer T) (i : Nat) (oldValue newValue : T) :
     ⦃ b.ptrAt i ↦ oldValue ⦄ b.write i newValue
       ⦃⇓ b.ptrAt i ↦ newValue⦄ :=
   MutRawPtr.write.spec (b.ptrAt i) oldValue newValue
-
-def free (b : Buffer T) : Result Unit :=
-  MutRawPtr.freeRange b.ptr b.length
 
 @[step]
 theorem free.spec (b : Buffer T) (values : List T) :
@@ -127,13 +184,6 @@ theorem write.spec_buffer (b : Buffer T) (values : List T) (i : Nat)
     (MutRawPtr.write.spec_range b.ptr values i value hIndex)
   iframe
 
-def readRange (p : RawPtr T M) : Nat → Result (List T)
-  | 0 => pure []
-  | n + 1 => do
-      let value ← p.read
-      let rest ← readRange (p.add 1) n
-      pure (value :: rest)
-
 @[step]
 theorem readRange.spec (p : RawPtr T M) (values : List T) :
     ⦃ p ↦* values ⦄ readRange p values.length
@@ -161,12 +211,6 @@ theorem readRange.spec (p : RawPtr T M) (values : List T) :
           subst readRest
           apply (ispec_ok _).2
           iframe
-
-def writeRange (p : MutRawPtr T) : List T → Result Unit
-  | [] => pure ()
-  | value :: rest => do
-      p.write value
-      writeRange (p.add 1) rest
 
 @[step]
 theorem writeRange.spec (p : MutRawPtr T) (old values : List T)
@@ -197,22 +241,12 @@ theorem writeRange.spec (p : MutRawPtr T) (old values : List T)
         exact entails_trans (by iframe)
           (entails_sep_postWand _ (by intro _; iframe))
 
-def toSlice (values : List T) : Result (Slice T) :=
-  if h : values.length ≤ Usize.max then
-    pure (Slice.from values h)
-  else
-    Result.fail .maximumSizeExceeded
-
 @[step]
 theorem toSlice.spec (s : Slice T) :
     ⦃ emp ⦄ toSlice s.val ⦃⇓ result => ⌜result = s⌝⦄ := by
   simp only [toSlice, s.property, ↓reduceDIte]
   apply (ispec_ok _).2
   simp
-
-def readSlice (b : Buffer T) : Result (Slice T) := do
-  let values ← readRange b.ptr b.length
-  toSlice values
 
 @[step]
 theorem readSlice.spec (b : Buffer T) (s : Slice T) :
@@ -232,12 +266,6 @@ theorem readSlice.spec (b : Buffer T) (s : Slice T) :
   exact entails_trans (by iframe)
     (entails_sep_postWand _ (by intro result; iframe))
 
-def writeSlice (b : Buffer T) (s : Slice T) : Result Unit :=
-  if s.length = b.length then
-    writeRange b.ptr s.val
-  else
-    Result.fail .assertionFailure
-
 @[step]
 theorem writeSlice.spec (b : Buffer T) (old s : Slice T)
     (hLength : s.length = old.length) :
@@ -250,18 +278,11 @@ theorem writeSlice.spec (b : Buffer T) (old s : Slice T)
     (writeRange.spec b.ptr old.val s.val hLength.symm)
   iframe
 
-def ofList (values : List T) : Result (Buffer T) :=
-  RawPtr.allocArray values fun l =>
-    ⟨l.1, l.2, values.length⟩
-
 @[step]
 theorem ofList.spec (values : List T) :
     ⦃ emp ⦄ Buffer.ofList values ⦃⇓ b => b ↦ values⦄ := by
   refine RawPtr.allocArray.spec _ _ _ fun r h hOwns => ?_
   exact (sep_pure_l _ _ h).mpr ⟨rfl, hOwns⟩
-
-def fill (b : Buffer T) (value : T) : Result Unit :=
-  MutRawPtr.fillRange b.ptr value b.length
 
 @[step]
 theorem fill.spec (b : Buffer T) (values : List T) (value : T) :
@@ -290,9 +311,6 @@ theorem pair_entails_pointsTo {b₁ b₂ : Buffer T}
       b₁ ↦ values₁ ∗ b₂ ↦ values₂ := by
   isimp
 
-def copy (dst src : Buffer T) : Result Unit :=
-  MutRawPtr.copyRange dst.ptr src.ptr src.length
-
 @[step]
 theorem copy.spec (dst src : Buffer T) (dstValues srcValues : List T)
     (hLength : dst.length = src.length) :
@@ -306,9 +324,6 @@ theorem copy.spec (dst src : Buffer T) (dstValues srcValues : List T)
   apply WP.ispec_mono
     (MutRawPtr.copyRange.spec dst.ptr src.ptr dstValues srcValues hValues)
   iframe
-
-def compare [DecidableEq T] (left right : Buffer T) : Result Bool :=
-  RawPtr.compareRange left.ptr right.ptr left.length
 
 @[step]
 theorem compare.spec [DecidableEq T] (left right : Buffer T)
@@ -327,12 +342,6 @@ theorem compare.spec [DecidableEq T] (left right : Buffer T)
     (RawPtr.compareRange.spec left.ptr right.ptr
       leftValues rightValues hValues)
   iframe
-
-def swap (b : Buffer T) (i j : Nat) : Result Unit := do
-  let x ← b.read i
-  let y ← b.read j
-  b.write i y
-  b.write j x
 
 @[step]
 theorem swap.spec (b : Buffer T) (values : List T) (i j : Nat)
@@ -434,20 +443,11 @@ theorem writeRange_sub.spec (p : MutRawPtr T) (old : List T) (i : Nat)
       values hBlock)
   iframe
 
-def mut_to_raw (slice : Slice T) : Result (Buffer T) :=
-  RawPtr.allocArray slice.val fun l =>
-    ⟨l.1, l.2, slice.val.length⟩
-
 @[step]
 theorem mut_to_raw.spec (slice : Slice T) :
     ⦃ emp ⦄ mut_to_raw slice ⦃⇓ b => b ↦ slice.val⦄ := by
   refine RawPtr.allocArray.spec _ _ _ fun r h hOwns => ?_
   exact (sep_pure_l _ _ h).mpr ⟨rfl, hOwns⟩
-
-def end_mut_to_raw (original : Slice T) (b : Buffer T) :
-    Result (Slice T) := do
-  let values ← MutRawPtr.takeRange b.ptr b.length
-  pure (original.setSlice! 0 values)
 
 @[step]
 theorem end_mut_to_raw.spec (original : Slice T) (b : Buffer T)
