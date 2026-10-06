@@ -382,14 +382,16 @@ let fun_decl_is_stateful (ctx : eval_ctx) (fdef : fun_decl) : bool =
   | Some info -> info.stateful
   | None -> false
 
-let rec end_dead_borrows_and_abs ?(end_dead_views = false) (config : config)
-    (span : Meta.span) : cm_fun =
+let rec end_dead_borrows_and_abs ?(end_dead_views = false)
+    ?(keep : DummyVarId.id option = None) (config : config) (span : Meta.span) :
+    cm_fun =
  fun ctx ->
   let borrows = ref [] in
   List.iter
     (fun (b : env_elem) ->
       match b with
-      | EBinding (BDummy _, v) when not (value_has_loans v.value) ->
+      | EBinding (BDummy id, v)
+        when (not (value_has_loans v.value)) && Some id <> keep ->
           let visitor =
             object
               inherit [_] iter_tvalue as super
@@ -417,7 +419,7 @@ let rec end_dead_borrows_and_abs ?(end_dead_views = false) (config : config)
   match !borrows with
   | bid :: _ ->
       let ctx, cc = end_borrow config span (UMut bid) ctx in
-      comp cc (end_dead_borrows_and_abs ~end_dead_views config span ctx)
+      comp cc (end_dead_borrows_and_abs ~end_dead_views ~keep config span ctx)
   | [] -> (
       let has_ended_loans (abs : abs) : bool =
         let found = ref false in
@@ -469,7 +471,8 @@ let rec end_dead_borrows_and_abs ?(end_dead_views = false) (config : config)
       match to_end with
       | abs_id :: _ ->
           let ctx, cc = end_abs config span abs_id 0 ctx in
-          comp cc (end_dead_borrows_and_abs ~end_dead_views config span ctx)
+          comp cc
+            (end_dead_borrows_and_abs ~end_dead_views ~keep config span ctx)
       | [] -> (ctx, fun e -> e))
 
 (** Small helper.
@@ -763,9 +766,15 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
                 (FunsAnalysis.mk_ty_contains_raw_ptr ctx.crate
                    fdef.signature.output)
             in
+            (* The returned value is put back in the context, so that the
+               borrows it contains are accounted for *)
+            let ret_id = ctx.fresh_dummy_var_id () in
+            let ctx = ctx_push_dummy_var ctx ret_id ret_value in
             let ctx, cc_dead =
-              end_dead_borrows_and_abs ~end_dead_views config span ctx
+              end_dead_borrows_and_abs ~end_dead_views ~keep:(Some ret_id)
+                config span ctx
             in
+            let ctx, _ = ctx_remove_dummy_var span ctx ret_id in
             (ctx, cc_comp cc_pop cc_dead, fun e -> e)
           else (ctx, (fun e -> e), cc_pop)
         in

@@ -709,68 +709,75 @@ let read_only_raw_ptr_patterns =
       ])
 
 (** End the mutable borrows of values raw pointers point to (see [RawPtrBorrow])
-    which can be ended without ending borrows held by live variables: this
+    and the function calls whose backward functions perform heap operations,
+    when they can be ended without ending borrows held by live variables: this
     writes their values back to the heap before it is accessed again *)
-let end_dead_raw_ptr_borrows (config : config) (st : statement) : cm_fun =
+let end_dead_raw_ptr_borrows (config : config) (span : Meta.span)
+    (live : LocalId.Set.t) : cm_fun =
  fun ctx ->
+  let is_candidate (abs : abs) : bool =
+    match abs.kind with
+    | RawPtrBorrow _ -> true
+    | FunCall (call_id, _) ->
+        Hashtbl.mem config.heap_back_calls call_id
+        && abs.can_end
+        && AbsId.Set.is_empty abs.parents
+    | _ -> false
+  in
   let has_borrows =
     List.exists
       (function
-        | EAbs { kind = RawPtrBorrow _; _ } -> true
+        | EAbs abs -> is_candidate abs
         | _ -> false)
       ctx.env
   in
-  match config.live_locals with
-  | Some tbl when has_borrows ->
-      let live =
-        Option.value ~default:LocalId.Set.empty
-          (Hashtbl.find_opt tbl st.statement_id)
+  if not has_borrows then (ctx, fun e -> e)
+  else
+    let count_live_bottoms (ctx : eval_ctx) : int =
+      let n = ref 0 in
+      let visitor =
+        object
+          inherit [_] iter_tvalue
+          method! visit_VBottom _ = incr n
+        end
       in
-      let count_live_bottoms (ctx : eval_ctx) : int =
-        let n = ref 0 in
-        let visitor =
-          object
-            inherit [_] iter_tvalue
-            method! visit_VBottom _ = incr n
-          end
-        in
-        List.iter
+      List.iter
+        (function
+          | EBinding (BVar var, v) when LocalId.Set.mem var.index live ->
+              visitor#visit_tvalue () v
+          | _ -> ())
+        ctx.env;
+      !n
+    in
+    let bottoms = count_live_bottoms ctx in
+    let rec loop (tried : AbsId.Set.t) (ctx, cc) =
+      let candidate =
+        List.find_map
           (function
-            | EBinding (BVar var, v) when LocalId.Set.mem var.index live ->
-                visitor#visit_tvalue () v
-            | _ -> ())
-          ctx.env;
-        !n
+            | EAbs ({ abs_id; _ } as abs)
+              when is_candidate abs && not (AbsId.Set.mem abs_id tried) ->
+                Some abs_id
+            | _ -> None)
+          ctx.env
       in
-      let bottoms = count_live_bottoms ctx in
-      let rec loop (tried : AbsId.Set.t) (ctx, cc) =
-        let candidate =
-          List.find_map
-            (function
-              | EAbs { abs_id; kind = RawPtrBorrow _; _ }
-                when not (AbsId.Set.mem abs_id tried) -> Some abs_id
-              | _ -> None)
-            ctx.env
-        in
-        match candidate with
-        | None -> (ctx, cc)
-        | Some abs_id -> (
-            let attempt =
-              try
-                Some
-                  (Errors.with_silent_errors (fun () ->
-                       InterpBorrows.end_abs config st.span abs_id 0 ctx))
-              with Errors.CFailure _ | Failure _ | Errors.RFailure -> None
-            in
-            let tried = AbsId.Set.add abs_id tried in
-            match attempt with
-            | Some (ctx', cc') when count_live_bottoms ctx' = bottoms ->
-                let ctx' = ctx_mark_raw_ptr_views_dirty ctx' in
-                loop tried (ctx', cc_comp cc cc')
-            | _ -> loop tried (ctx, cc))
-      in
-      loop AbsId.Set.empty (ctx, fun e -> e)
-  | _ -> (ctx, fun e -> e)
+      match candidate with
+      | None -> (ctx, cc)
+      | Some abs_id -> (
+          let attempt =
+            try
+              Some
+                (Errors.with_silent_errors (fun () ->
+                     InterpBorrows.end_abs config span abs_id 0 ctx))
+            with Errors.CFailure _ | Failure _ | Errors.RFailure -> None
+          in
+          let tried = AbsId.Set.add abs_id tried in
+          match attempt with
+          | Some (ctx', cc') when count_live_bottoms ctx' = bottoms ->
+              let ctx' = ctx_mark_raw_ptr_views_dirty ctx' in
+              loop tried (ctx', cc_comp cc cc')
+          | _ -> loop tried (ctx, cc))
+    in
+    loop AbsId.Set.empty (ctx, fun e -> e)
 
 let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->
@@ -789,7 +796,15 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
   (* Expand the symbolic values if necessary - we need to do that before
      checking the invariants *)
   let ctx, cc = comp cc (greedy_expand_symbolic_values st.span ctx) in
-  let ctx, cc = comp cc (end_dead_raw_ptr_borrows config st ctx) in
+  let ctx, cc =
+    match config.live_locals with
+    | Some tbl -> (
+        match Hashtbl.find_opt tbl st.statement_id with
+        | Some (live, _) ->
+            comp cc (end_dead_raw_ptr_borrows config st.span live ctx)
+        | None -> (ctx, cc))
+    | None -> (ctx, cc)
+  in
   (* Sanity check *)
   Invariants.check_invariants st.span ctx;
 
@@ -834,7 +849,25 @@ and eval_block (config : config) (b : block) : stl_cm_fun =
     ^ "):\n"
     ^ block_to_string_with_tab ctx b
     ^ "\n"];
-  eval_statement_list config b.span b.statements ctx
+  match config.block_end_live with
+  | None -> eval_statement_list config b.span b.statements ctx
+  | Some live ->
+      (* The block is a branch of a switch: before joining the branches, we
+         end the borrows which are not used anymore *)
+      let config = { config with block_end_live = None } in
+      let ctx_resl, cc = eval_statement_list config b.span b.statements ctx in
+      let ctx_resl =
+        List.map
+          (fun (ctx, res) ->
+            match res with
+            | Unit ->
+                let ctx, cc = end_dead_raw_ptr_borrows config b.span live ctx in
+                ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ b.span cc)
+            | _ -> ([ (ctx, res) ], cf_singleton __FILE__ __LINE__ b.span))
+          ctx_resl
+      in
+      let ctx_resl, cc' = comp_seqs __FILE__ __LINE__ b.span ctx_resl in
+      (ctx_resl, cc_comp cc cc')
 
 and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->
@@ -979,6 +1012,12 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
       comp cc (InterpLoops.eval_loop config st.span eval_loop_body ctx)
   | Switch (data, branches) ->
       let ctx, cc = InterpBorrows.end_raw_ptr_parked config st.span ctx in
+      let block_end_live =
+        match config.live_locals with
+        | Some tbl -> Option.map snd (Hashtbl.find_opt tbl st.statement_id)
+        | None -> None
+      in
+      let config = { config with block_end_live } in
       comp cc (eval_switch config st.span data branches ctx)
   | _ ->
       [%craise] st.span ("unsupported statement: " ^ show_statement_kind st.kind)
@@ -1880,6 +1919,16 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
 
   (* Unique identifier for the call *)
   let call_id = ctx.fresh_fun_call_id () in
+  (* We only end those calls eagerly if they return a mutable borrow: we can
+     then check that the borrow is not used anymore (see
+     [end_dead_raw_ptr_borrows]) *)
+  (match (fid, inst_sg.output) with
+  | Fun id, TRef (_, _, RMut) -> (
+      match FunsAnalysis.lookup_fun_decl_info ctx.fun_ctx.fun_infos id with
+      | Some info when info.back_heap_ops ->
+          Hashtbl.replace config.heap_back_calls call_id ()
+      | _ -> ())
+  | _ -> ());
 
   let ctx =
     if env_has_raw_ptr_views ctx.env && call_may_modify_heap ctx fid inst_sg

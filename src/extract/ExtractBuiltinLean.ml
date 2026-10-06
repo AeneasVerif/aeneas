@@ -882,6 +882,8 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Iter.lean", line: 704 *)
     mk_fun "core::iter::traits::iterator::Iterator::zip"
       "core.iter.traits.iterator.Iterator.zip.trait_default";
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 466 *)
+    mk_fun "core::mem::align_of" "core.mem.align_of";
     (* file: "Aeneas/Std/ManuallyDrop.lean", line: 25 *)
     mk_fun
       "core::mem::manually_drop::{core::mem::manually_drop::ManuallyDrop<@T>}::into_inner"
@@ -926,6 +928,8 @@ let lean_builtin_funs =
       "core.mem.maybe_uninit.MaybeUninit.uninit";
     (* file: "Aeneas/Std/Core/Core.lean", line: 77 *)
     mk_fun "core::mem::replace" "core.mem.replace" ~can_fail:false ~lift:false;
+    (* file: "Aeneas/Std/RawPtrOps.lean", line: 460 *)
+    mk_fun "core::mem::size_of" "core.mem.size_of";
     (* file: "Aeneas/Std/Core/Core.lean", line: 81 *)
     mk_fun "core::mem::swap" "core.mem.swap" ~can_fail:false ~lift:false;
     (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 696 *)
@@ -1157,6 +1161,10 @@ let lean_builtin_funs =
     mk_fun "core::ptr::mut_ptr::{*mut @T}::write_volatile"
       "core.ptr.mut_ptr.RawPtrMutT.write_volatile";
     (* file: "Aeneas/Std/NonNull.lean", line: 48 *)
+    mk_fun
+      "core::ptr::non_null::{core::clone::Clone<core::ptr::non_null::NonNull<@T>>}::clone"
+      "core.ptr.non_null.NonNull.Insts.CoreCloneClone.clone";
+    (* file: "Aeneas/Std/NonNull.lean", line: 65 *)
     mk_fun
       "core::ptr::non_null::{core::cmp::PartialEq<core::ptr::non_null::NonNull<@T>, \
        core::ptr::non_null::NonNull<@T>>}::eq"
@@ -1677,6 +1685,9 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/MaybeUninit.lean", line: 441 *)
     mk_trait_impl "core::clone::Clone<core::mem::maybe_uninit::MaybeUninit<@T>>"
       "core.mem.maybe_uninit.MaybeUninit.Insts.CoreCloneClone";
+    (* file: "Aeneas/Std/NonNull.lean", line: 53 *)
+    mk_trait_impl "core::clone::Clone<core::ptr::non_null::NonNull<@T>>"
+      "core.ptr.non_null.NonNull.Insts.CoreCloneClone";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 254 *)
     mk_trait_impl "core::cmp::PartialEq<&'a @A, &'b @B>"
       "core.cmp.PartialEqShared";
@@ -1693,7 +1704,7 @@ let lean_builtin_trait_impls =
       ~keep_params:(Some [ true; true; false; false ]);
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 239 *)
     mk_trait_impl "core::cmp::PartialEq<bool, bool>" "core.cmp.PartialEqBool";
-    (* file: "Aeneas/Std/NonNull.lean", line: 54 *)
+    (* file: "Aeneas/Std/NonNull.lean", line: 71 *)
     mk_trait_impl
       "core::cmp::PartialEq<core::ptr::non_null::NonNull<@T>, \
        core::ptr::non_null::NonNull<@T>>"
@@ -1880,6 +1891,9 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/MaybeUninit.lean", line: 446 *)
     mk_trait_impl "core::marker::Copy<core::mem::maybe_uninit::MaybeUninit<@T>>"
       "core.mem.maybe_uninit.MaybeUninit.Insts.CoreMarkerCopy";
+    (* file: "Aeneas/Std/NonNull.lean", line: 59 *)
+    mk_trait_impl "core::marker::Copy<core::ptr::non_null::NonNull<@T>>"
+      "core.ptr.non_null.NonNull.Insts.CoreMarkerCopy";
     (* file: "Aeneas/Std/Core/Ops.lean", line: 31 *)
     mk_trait_impl "core::ops::deref::Deref<Box<@T>, @T>"
       "core.ops.deref.DerefBoxInst"

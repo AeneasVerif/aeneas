@@ -127,6 +127,23 @@ def prod (ca : Codec α) (cb : Codec β) : Codec (α × β) where
     obtain ⟨a, ha, b, hb, rfl⟩ := h
     simp [ca.encode_of_decode ha, cb.encode_of_decode hb]
 
+/-- A codec padded with zeros to occupy exactly `n` bytes. -/
+def padTo (n : Nat) (c : Codec α) (h : c.size ≤ n) : Codec α where
+  size := n
+  encode a := c.encode a ++ List.replicate (n - c.size) 0
+  decode bytes :=
+    if bytes.drop c.size = List.replicate (n - c.size) 0 then c.decode (bytes.take c.size)
+    else none
+  length_encode a := by simp [c.length_encode]; omega
+  decode_encode a := by
+    have hl := c.length_encode a
+    simp [List.take_left' hl, List.drop_left' hl, c.decode_encode]
+  encode_of_decode {bytes x} hd := by
+    split at hd
+    · rename_i hz
+      rw [c.encode_of_decode hd, ← hz, List.take_append_drop]
+    · cases hd
+
 /-- Transport a codec along a bijection. -/
 def map (c : Codec β) (f : α → β) (g : β → α)
     (hgf : ∀ a, g (f a) = a) (hfg : ∀ b, f (g b) = b) : Codec α where

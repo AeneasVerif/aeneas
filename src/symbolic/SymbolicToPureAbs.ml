@@ -1261,7 +1261,6 @@ let ended_abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
     einput_to_texpr ctx ectx abs.regions.owned empty_bound_borrows_loans
       fvar_to_texpr abs_level input
   in
-  [%sanity_check] span (not can_fail);
   let ctx, pat =
     tevalue_to_given_back abs.regions.owned abs_level None output ctx
   in

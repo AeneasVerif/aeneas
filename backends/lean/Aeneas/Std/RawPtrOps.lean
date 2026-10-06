@@ -455,4 +455,18 @@ theorem MutRawPtr.restore.spec [ByteRepr T] (q : MutRawPtr T) (value : T) :
   change Heap.writeBytes _ q.loc _ = _
   rw [Heap.writeBytes_union, Heap.writeBytes_cells_union _ hLength]
 
+/-! ## Sizes -/
+
+@[rust_fun "core::mem::size_of"]
+def core.mem.size_of (T : Type) [ByteRepr T] : Result Usize :=
+  if h : ByteRepr.size T < 2 ^ UScalarTy.Usize.numBits then
+    ok (Usize.ofNatCore (ByteRepr.size T) h)
+  else fail .integerOverflow
+
+@[rust_fun "core::mem::align_of"]
+def core.mem.align_of (T : Type) [ByteRepr T] : Result Usize :=
+  if h : ByteRepr.align T < 2 ^ UScalarTy.Usize.numBits then
+    ok (Usize.ofNatCore (ByteRepr.align T) h)
+  else fail .integerOverflow
+
 end Aeneas.Std

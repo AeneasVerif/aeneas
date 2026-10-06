@@ -130,4 +130,14 @@ theorem UScalar.map_mk_flatMap_encode_u8 (values : List U8) :
   rw [← BitVec.toLEBytes_cast h x.bv, BitVec.decodeLE_toLEBytes ty'.numBits_mod_eight]
   rfl
 
+theorem Usize.byteRepr_size_le_eight : ByteRepr.size Usize ≤ 8 := by
+  show UScalarTy.numBits .Usize / 8 ≤ 8
+  simp only [UScalarTy.numBits]
+  rcases System.Platform.numBits_eq with h | h <;> simp [h]
+
+theorem Isize.byteRepr_size_le_eight : ByteRepr.size Isize ≤ 8 := by
+  show IScalarTy.numBits .Isize / 8 ≤ 8
+  simp only [IScalarTy.numBits]
+  rcases System.Platform.numBits_eq with h | h <;> simp [h]
+
 end Aeneas.Std

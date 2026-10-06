@@ -141,9 +141,10 @@ let const_int (c : constant_expr) : int option =
   | CInteger (UnsignedInteger (_, v)) -> Some (Z.to_int v)
   | _ -> None
 
-(** The size of a type which has a byte representation which does not depend on
-    the target (we exclude [usize] and [isize], whose size depends on the
-    platform in the Lean model). *)
+(** The size of a type which has a byte representation, in the layouts of the
+    target. The size of [usize] and [isize] depends on the platform in the Lean
+    model: we only support them on 64-bit targets, where their encodings are
+    padded to 8 bytes. *)
 let rec fixed_size (crate : crate) (ty : ty) : int option =
   match ty with
   | TScalar (TInteger ity) -> (
@@ -153,7 +154,9 @@ let rec fixed_size (crate : crate) (ty : ty) : int option =
       | Unsigned U32 | Signed I32 -> Some 4
       | Unsigned U64 | Signed I64 -> Some 8
       | Unsigned U128 | Signed I128 -> Some 16
-      | Unsigned Usize | Signed Isize -> None)
+      | Unsigned Usize | Signed Isize ->
+          if target_ptr_size crate = Some 8 then Some 8 else None)
+  | TArray (TScalar (TInteger (Unsigned Usize | Signed Isize)), _, _) -> None
   | TArray (ty, n, _) -> (
       match (fixed_size crate ty, const_int n) with
       | Some size, Some n -> Some (size * n)
@@ -219,6 +222,10 @@ and struct_layout (crate : crate) (id : TypeDeclId.id) : struct_layout option =
       | _ -> None)
   | _ -> None
 
+(** The types instantiating type parameters which require a byte representation
+    (set below, once those parameters are computed) *)
+let byte_repr_instantiations : (crate -> ty list) ref = ref (fun _ -> [])
+
 (** The structures whose values are accessed through raw pointers: those are the
     structures for which we generate byte representations. *)
 let byte_repr_structs (crate : crate) : TypeDeclId.Set.t =
@@ -258,6 +265,7 @@ let byte_repr_structs (crate : crate) : TypeDeclId.Set.t =
           visitor#visit_block () body.body
       | _ -> ())
     crate.fun_decls;
+  List.iter add_ty (!byte_repr_instantiations crate);
   !found
 
 let byte_repr_structs_memo : (crate * TypeDeclId.Set.t) option ref = ref None
@@ -393,6 +401,23 @@ let compute_byte_repr_type_params (crate : crate) :
     TypeVarId.Set.t FunDeclId.Map.t * TypeVarId.Set.t TraitImplId.Map.t =
   let memo = Hashtbl.create 16 in
   let pointee_vars = pointee_vars crate TypeDeclId.Set.empty memo in
+  (* The builtin functions whose models require byte representations of their
+     type parameters *)
+  let builtin_pats =
+    List.map Charon.NameMatcher.parse_pattern
+      [ "core::mem::size_of"; "core::mem::align_of" ]
+  in
+  let builtin_needs (id : FunDeclId.id) : TypeVarId.Set.t =
+    match FunDeclId.Map.find_opt id crate.fun_decls with
+    | Some d
+      when List.exists
+             (fun pat ->
+               Charon.NameMatcher.match_name
+                 (Charon.NameMatcher.ctx_from_crate crate)
+                 ExtractName.default_match_config pat d.item_meta.name)
+             builtin_pats -> TypeVarId.Set.singleton TypeVarId.zero
+    | _ -> TypeVarId.Set.empty
+  in
   let needs = ref FunDeclId.Map.empty in
   let impl_needs = ref TraitImplId.Map.empty in
   let get (id : FunDeclId.id) =
@@ -405,6 +430,23 @@ let compute_byte_repr_type_params (crate : crate) :
   (* The type parameters of a trait implementation which require a byte
      representation: those which are required by its methods *)
   let compute_impl (impl : trait_impl) : TypeVarId.Set.t =
+    let s = ref TypeVarId.Set.empty in
+    (* The implementations referenced by the parent clauses *)
+    let visitor =
+      object
+        inherit [_] iter_ty as super
+
+        method! visit_trait_impl_ref env (iref : trait_impl_ref) =
+          let params = get_impl iref.id in
+          List.iteri
+            (fun i ty ->
+              if TypeVarId.Set.mem (TypeVarId.of_int i) params then
+                s := TypeVarId.Set.union !s (free_vars ty))
+            iref.generics.types;
+          super#visit_trait_impl_ref env iref
+      end
+    in
+    List.iter (visitor#visit_trait_ref ()) impl.implied_trait_refs;
     TraitMethodId.Map.fold
       (fun _ (m : fun_decl_ref binder) s ->
         let fref = m.binder_value in
@@ -416,7 +458,7 @@ let compute_byte_repr_type_params (crate : crate) :
             else s)
           s
           (List.mapi (fun i ty -> (i, ty)) fref.generics.types))
-      impl.methods TypeVarId.Set.empty
+      impl.methods !s
   in
   let compute (d : fun_decl) : TypeVarId.Set.t =
     (* We leave the signatures of the opaque functions unchanged *)
@@ -440,7 +482,9 @@ let compute_byte_repr_type_params (crate : crate) :
               method! visit_Call env call on_unwind =
                 (match call.func with
                 | FnOpRegular { kind = Fun g; generics } ->
-                    let params = get g in
+                    let params =
+                      TypeVarId.Set.union (get g) (builtin_needs g)
+                    in
                     List.iteri
                       (fun i ty ->
                         if TypeVarId.Set.mem (TypeVarId.of_int i) params then
@@ -507,3 +551,40 @@ let get_trait_impl_byte_repr_type_params (crate : crate) (id : TraitImplId.id) :
     TypeVarId.Set.t =
   Option.value ~default:TypeVarId.Set.empty
     (TraitImplId.Map.find_opt id (snd (get_byte_repr_maps crate)))
+
+let () =
+  byte_repr_instantiations :=
+    fun crate ->
+      let tys = ref [] in
+      let add_generics params (generics : generic_args) =
+        List.iteri
+          (fun i ty ->
+            if TypeVarId.Set.mem (TypeVarId.of_int i) params then
+              tys := ty :: !tys)
+          generics.types
+      in
+      let visitor =
+        object
+          inherit [_] iter_statement as super
+
+          method! visit_fn_ptr env (fptr : fn_ptr) =
+            (match fptr.kind with
+            | Fun id ->
+                add_generics (get_byte_repr_type_params crate id) fptr.generics
+            | TraitMethod _ -> ());
+            super#visit_fn_ptr env fptr
+
+          method! visit_trait_impl_ref env (iref : trait_impl_ref) =
+            add_generics
+              (get_trait_impl_byte_repr_type_params crate iref.id)
+              iref.generics;
+            super#visit_trait_impl_ref env iref
+        end
+      in
+      FunDeclId.Map.iter
+        (fun _ (d : fun_decl) ->
+          match d.body with
+          | StructuredBody body -> visitor#visit_block () body.body
+          | _ -> ())
+        crate.fun_decls;
+      !tys

@@ -2223,7 +2223,15 @@ let extract_type_decl_byte_repr (ctx : extraction_ctx) (fmt : F.formatter)
               F.pp_print_flush bfmt ();
               Buffer.contents buf
             in
-            "(Codec.ofByteRepr " ^ ty ^ ")"
+            let codec = "(Codec.ofByteRepr " ^ ty ^ ")" in
+            (* The size of [usize] and [isize] depends on the platform in the
+               Lean model: we pad them to their size on the target *)
+            match field.field_ty with
+            | TLiteral (TUInt Usize) ->
+                "(Codec.padTo 8 " ^ codec ^ " Usize.byteRepr_size_le_eight)"
+            | TLiteral (TInt Isize) ->
+                "(Codec.padTo 8 " ^ codec ^ " Isize.byteRepr_size_le_eight)"
+            | _ -> codec
       in
       let rec codec (segs : _ list) : string =
         match segs with
@@ -2284,10 +2292,51 @@ let extract_type_decl_byte_repr (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_close_box fmt ();
       F.pp_print_break fmt 0 0
 
+(** The byte representation of a tuple structure with a single field, which is
+    extracted to a type abbreviation: it is the one of its field *)
+let extract_type_decl_newtype_byte_repr (ctx : extraction_ctx)
+    (fmt : F.formatter) (decl : type_decl) : unit =
+  let span = decl.item_meta.span in
+  let crate = ctx.trans_ctx.crate in
+  let llbc_field_ty =
+    match TypeDeclId.Map.find_opt decl.def_id crate.type_decls with
+    | Some { kind = Struct [ f ]; _ } -> Some f.field_ty
+    | _ -> None
+  in
+  match decl.kind with
+  | Struct [ field ]
+    when TypeDeclId.Set.mem decl.def_id (Layouts.get_byte_repr_structs crate)
+         && Option.is_some llbc_field_ty
+         && Option.is_some (Layouts.struct_layout crate decl.def_id)
+         && Layouts.fixed_size crate (Option.get llbc_field_ty)
+            = Option.map
+                (fun (l : Layouts.struct_layout) -> l.size)
+                (Layouts.struct_layout crate decl.def_id) ->
+      let def_name = ctx_get_local_type span decl.def_id ctx in
+      let ty =
+        let buf = Buffer.create 16 in
+        let bfmt = F.formatter_of_buffer buf in
+        F.pp_set_margin bfmt 10000;
+        extract_ty span ctx bfmt TypeDeclId.Set.empty ~inside:true
+          field.field_ty;
+        F.pp_print_flush bfmt ();
+        Buffer.contents buf
+      in
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt
+        ("instance " ^ def_name ^ ".instByteRepr : ByteRepr " ^ def_name
+       ^ " := inferInstanceAs (ByteRepr " ^ ty ^ ")");
+      F.pp_print_break fmt 0 0
+  | _ -> ()
+
 let extract_type_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (decl : type_decl) : unit =
   match backend () with
   | FStar | HOL4 -> ()
+  | Lean
+    when TypesUtils.type_decl_from_decl_id_is_tuple_struct
+           ctx.trans_ctx.type_ctx.type_infos decl.def_id ->
+      extract_type_decl_newtype_byte_repr ctx fmt decl
   | Lean | Coq ->
       if
         not

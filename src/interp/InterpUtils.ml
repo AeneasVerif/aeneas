@@ -13,48 +13,79 @@ open ValuesUtils
 let log = Logging.interp_log
 
 (** Compute, for every statement of a body, an over-approximation of the local
-    variables which are live before it *)
+    variables which are live before and after it *)
 let compute_live_locals (body : block) :
-    (StatementId.id, LocalId.Set.t) Hashtbl.t =
+    (StatementId.id, LocalId.Set.t * LocalId.Set.t) Hashtbl.t =
   let tbl = Hashtbl.create 64 in
-  let uses (st : statement) : LocalId.Set.t =
-    let s = ref LocalId.Set.empty in
-    let visitor =
-      object
-        inherit [_] iter_statement
-        method! visit_StorageLive _ _ = ()
-        method! visit_StorageDead _ _ = ()
-        method! visit_PlaceLocal _ id = s := LocalId.Set.add id !s
-      end
-    in
-    visitor#visit_statement () st;
-    !s
+  let visitor s =
+    object
+      inherit [_] iter_statement
+      method! visit_block _ _ = ()
+      method! visit_StorageLive _ _ = ()
+      method! visit_StorageDead _ _ = ()
+      method! visit_PlaceLocal _ id = s := LocalId.Set.add id !s
+    end
   in
-  let rec live_block (loops : LocalId.Set.t list) (b : block)
+  (* The locals used by a statement, ignoring the nested blocks, and the local
+     it overwrites, if any *)
+  let uses_defs (st : statement) : LocalId.Set.t * LocalId.id option =
+    let s = ref LocalId.Set.empty in
+    let v = visitor s in
+    match st.kind with
+    | Assign ({ kind = PlaceLocal x; _ }, rv) ->
+        v#visit_rvalue () rv;
+        (!s, Some x)
+    | Call (({ dest = { kind = PlaceLocal x; _ }; _ } as call), _) ->
+        v#visit_fn_operand () call.func;
+        List.iter (v#visit_operand ()) call.args;
+        (!s, Some x)
+    | Switch (sd, _) ->
+        v#visit_switch_data () sd;
+        (!s, None)
+    | _ ->
+        v#visit_statement () st;
+        (!s, None)
+  in
+  let rec live_block (loops : (LocalId.Set.t * LocalId.Set.t) list) (b : block)
       (after : LocalId.Set.t) : LocalId.Set.t =
     List.fold_right (live_statement loops) b.statements after
-  and live_statement (loops : LocalId.Set.t list) (st : statement)
-      (after : LocalId.Set.t) : LocalId.Set.t =
+  and live_statement (loops : (LocalId.Set.t * LocalId.Set.t) list)
+      (st : statement) (after : LocalId.Set.t) : LocalId.Set.t =
+    let used, def = uses_defs st in
     let live =
       match st.kind with
       | Switch (_, branches) ->
           List.fold_left
             (fun acc b -> LocalId.Set.union acc (live_block loops b after))
-            (uses st) branches
+            used branches
       | Loop body ->
-          let live = LocalId.Set.union (uses st) after in
-          ignore (live_block (live :: loops) body live);
-          live
-      | Break i | Continue i -> (
+          (* The live variables at the head of the loop: a fixed point *)
+          let rec fix head =
+            let head' = live_block ((head, after) :: loops) body head in
+            if LocalId.Set.subset head' head then head
+            else fix (LocalId.Set.union head head')
+          in
+          fix LocalId.Set.empty
+      | Break i -> (
           match List.nth_opt loops i with
-          | Some live -> live
+          | Some (_, after) -> after
+          | None -> after)
+      | Continue i -> (
+          match List.nth_opt loops i with
+          | Some (head, _) -> head
           | None -> after)
       | Return -> LocalId.Set.singleton LocalId.zero
       | Panic _ | UnwindTerminate | UnwindResume | UndefinedBehavior ->
           LocalId.Set.empty
-      | _ -> LocalId.Set.union (uses st) after
+      | _ ->
+          let after =
+            match def with
+            | Some x -> LocalId.Set.remove x after
+            | None -> after
+          in
+          LocalId.Set.union used after
     in
-    Hashtbl.replace tbl st.statement_id live;
+    Hashtbl.replace tbl st.statement_id (live, after);
     live
   in
   ignore (live_block [] body LocalId.Set.empty);

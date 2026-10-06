@@ -45,6 +45,23 @@ def core.ptr.non_null.NonNull.Insts.CoreFmtDebug (T : Type) :
   fmt := core.ptr.non_null.NonNull.Insts.CoreFmtDebug.fmt
 }
 
+@[rust_fun "core::ptr::non_null::{core::clone::Clone<core::ptr::non_null::NonNull<@T>>}::clone"]
+def core.ptr.non_null.NonNull.Insts.CoreCloneClone.clone {T : Type}
+    (p : core.ptr.non_null.NonNull T) : Result (core.ptr.non_null.NonNull T) :=
+  ok p
+
+@[reducible, rust_trait_impl "core::clone::Clone<core::ptr::non_null::NonNull<@T>>"]
+def core.ptr.non_null.NonNull.Insts.CoreCloneClone (T : Type) :
+    core.clone.Clone (core.ptr.non_null.NonNull T) := {
+  clone := core.ptr.non_null.NonNull.Insts.CoreCloneClone.clone
+}
+
+@[reducible, rust_trait_impl "core::marker::Copy<core::ptr::non_null::NonNull<@T>>"]
+def core.ptr.non_null.NonNull.Insts.CoreMarkerCopy (T : Type) :
+    core.marker.Copy (core.ptr.non_null.NonNull T) := {
+  cloneInst := core.ptr.non_null.NonNull.Insts.CoreCloneClone T
+}
+
 @[rust_fun
   "core::ptr::non_null::{core::cmp::PartialEq<core::ptr::non_null::NonNull<@T>, core::ptr::non_null::NonNull<@T>>}::eq"]
 def core.ptr.non_null.NonNull.Insts.CoreCmpPartialEqNonNull.eq {T : Type}
@@ -60,5 +77,6 @@ def core.ptr.non_null.NonNull.Insts.CoreCmpPartialEqNonNull (T : Type) :
 
 attribute [step_simps] core.ptr.non_null.NonNull.dangling core.ptr.non_null.NonNull.as_ptr
   core.ptr.non_null.NonNull.as_ref core.ptr.non_null.NonNull.Insts.CoreCmpPartialEqNonNull.eq
+  core.ptr.non_null.NonNull.Insts.CoreCloneClone.clone
 
 end Aeneas.Std

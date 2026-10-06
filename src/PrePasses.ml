@@ -2451,6 +2451,176 @@ let compute_view_hints (crate : crate) (f : fun_decl) : fun_decl =
       f
   | _ -> f
 
+(** Charon desugars the uses of a place containing an array or slice index into
+    calls to [Index::index], which are repeated every time the place is used.
+    For instance, [if let Some(x) = a[i] { ... }] calls [index] once to match on
+    the value, and once again in the branch to read the field: the symbolic
+    interpreter then doesn't know that the second value is a [Some]. We reuse
+    the result of the first call when the array and the index are unchanged in
+    between. *)
+let reuse_index_results (crate : crate) (f : fun_decl) : fun_decl =
+  let pats =
+    List.map NameMatcher.parse_pattern
+      [
+        "core::array::{core::ops::index::Index<[@T; @N], @I, @O>}::index";
+        "core::slice::index::{core::ops::index::Index<[@T], @I, @O>}::index";
+      ]
+  in
+  let is_index_fn (func : fn_operand) : bool =
+    match func with
+    | FnOpRegular { kind = Fun fid; _ } -> (
+        match FunDeclId.Map.find_opt fid crate.fun_decls with
+        | Some d ->
+            List.exists
+              (fun pat -> ExtractName.match_name crate pat d.item_meta.name)
+              pats
+        | None -> false)
+    | _ -> false
+  in
+  let rec root (p : place) : local_id option =
+    match p.kind with
+    | PlaceLocal l -> Some l
+    | PlaceProjection (p, _) -> root p
+    | PlaceGlobal _ -> None
+  in
+  let rec has_deref (p : place) : bool =
+    match p.kind with
+    | PlaceProjection (_, Deref) -> true
+    | PlaceProjection (p, _) -> has_deref p
+    | _ -> false
+  in
+  (* The available results: the indexed place, the index, and the result *)
+  let forget_local (l : local_id) avail =
+    List.filter
+      (fun (p, idx, k) -> root p <> Some l && idx <> l && k <> l)
+      avail
+  in
+  let is_terminator (st : statement) : bool =
+    match st.kind with
+    | Return
+    | Panic _
+    | Break _
+    | Continue _
+    | UnwindResume
+    | UnwindTerminate
+    | UndefinedBehavior -> true
+    | _ -> false
+  in
+  let rec block avail (b : block) : _ * block =
+    let avail, statements = stmts avail b.statements in
+    (avail, { b with statements })
+  and stmts avail (stl : statement list) : _ * statement list =
+    match stl with
+    | [] -> (avail, [])
+    | ({ kind = Assign ({ kind = PlaceLocal r; _ }, RvRef (p, BShared, _)); _ }
+       as st_ref)
+      :: rest -> (
+        let rec skip_live (l : statement list) =
+          match l with
+          | ({ kind = StorageLive _; _ } as st) :: l ->
+              let lives, l = skip_live l in
+              (st :: lives, l)
+          | _ -> ([], l)
+        in
+        let lives, after = skip_live rest in
+        match after with
+        | ({
+             kind =
+               Call
+                 ( ({
+                      args =
+                        [
+                          Move { kind = PlaceLocal r'; _ };
+                          Copy { kind = PlaceLocal idx; _ };
+                        ];
+                      dest = { kind = PlaceLocal k; _ } as dest;
+                      _;
+                    } as call),
+                   _ );
+             _;
+           } as st_call)
+          :: after
+          when r = r' && is_index_fn call.func -> (
+            let avail = forget_local k (forget_local r avail) in
+            match
+              List.find_opt (fun (p', idx', _) -> p' = p && idx' = idx) avail
+            with
+            | Some (_, _, k0) ->
+                let st =
+                  {
+                    st_call with
+                    kind =
+                      Assign
+                        ( dest,
+                          Use
+                            ( Copy { kind = PlaceLocal k0; ty = dest.ty },
+                              NoRetag ) );
+                  }
+                in
+                let avail, after = stmts avail after in
+                (avail, lives @ (st :: after))
+            | None ->
+                let avail, after = stmts ((p, idx, k) :: avail) after in
+                (avail, (st_ref :: lives) @ (st_call :: after)))
+        | _ ->
+            let avail, rest = stmts (forget_local r avail) rest in
+            (avail, st_ref :: rest))
+    | st :: rest ->
+        let avail, st = stmt avail st in
+        let avail, rest = stmts avail rest in
+        (avail, st :: rest)
+  and stmt avail (st : statement) : _ * statement =
+    match st.kind with
+    | StorageLive _ | Borrowck _ | PlaceMention _ | Nop | Assert _ -> (avail, st)
+    | StorageDead l -> (forget_local l avail, st)
+    | Assign (dest, rv) ->
+        let avail =
+          match rv with
+          | RvRef (_, BShared, _)
+          | Use _
+          | BinaryOp _
+          | UnaryOp _
+          | NullaryOp _
+          | Discriminant _
+          | Aggregate _ -> avail
+          | _ -> []
+        in
+        let avail =
+          if has_deref dest then []
+          else
+            match root dest with
+            | Some l -> forget_local l avail
+            | None -> []
+        in
+        (avail, st)
+    | Switch (sd, branches) ->
+        let results = List.map (block avail) branches in
+        let branches = List.map snd results in
+        let falling =
+          List.filter_map
+            (fun ((avail, b) : _ * block) ->
+              match List.rev b.statements with
+              | last :: _ when is_terminator last -> None
+              | _ -> Some avail)
+            results
+        in
+        let avail =
+          List.filter
+            (fun e -> List.for_all (fun a -> List.mem e a) falling)
+            avail
+        in
+        (avail, { st with kind = Switch (sd, branches) })
+    | Loop body ->
+        let _, body = block [] body in
+        ([], { st with kind = Loop body })
+    | _ -> ([], st)
+  in
+  match f.body with
+  | StructuredBody body ->
+      let _, b = block [] body.body in
+      { f with body = StructuredBody { body with body = b } }
+  | _ -> f
+
 let apply_passes (crate : crate) : crate =
   (* Passes that apply to the whole crate *)
   let crate = update_array_default crate in
@@ -2468,6 +2638,7 @@ let apply_passes (crate : crate) : crate =
       ("decompose_str_borrows", decompose_str_borrows);
       ("simplify_panics", simplify_panics);
       ("decompose_global_accesses", decompose_global_accesses);
+      ("reuse_index_results", reuse_index_results);
       ("refresh_statement_ids", refresh_statement_ids);
       ("compute_view_hints", compute_view_hints);
     ]

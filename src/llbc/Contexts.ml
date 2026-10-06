@@ -23,14 +23,26 @@ type interpreter_mode = ConcreteMode | SymbolicMode [@@deriving show]
 type config = {
   mode : interpreter_mode;
       (** Concrete mode (interpreter) or symbolic mode (for synthesis) **)
-  live_locals : (StatementId.id, LocalId.Set.t) Hashtbl.t option; [@opaque]
+  live_locals :
+    (StatementId.id, LocalId.Set.t * LocalId.Set.t) Hashtbl.t option;
+      [@opaque]
       (** For every statement of the body: an over-approximation of the local
-          variables which are live before it *)
+          variables which are live before and after it *)
+  block_end_live : LocalId.Set.t option; [@opaque]
+      (** The variables which are live at the end of the block being evaluated,
+          if it is a branch of a switch *)
+  heap_back_calls : (FunCallId.id, unit) Hashtbl.t; [@opaque]
+      (** The function calls whose backward functions perform heap operations *)
 }
 [@@deriving show]
 
 let mk_config ?(live_locals = None) (mode : interpreter_mode) : config =
-  { mode; live_locals }
+  {
+    mode;
+    live_locals;
+    block_end_live = None;
+    heap_back_calls = Hashtbl.create 16;
+  }
 
 type type_ctx = {
   type_decls_groups : type_declaration_group TypeDeclId.Map.t;
