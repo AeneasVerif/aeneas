@@ -133,7 +133,7 @@ theorem alloc.spec (n : Nat) (value : T) :
   refine RawPtr.allocArray.spec _ _ _ fun r h hOwns => ?_
   exact (sep_pure_l _ _ h).mpr ⟨by simp, hOwns⟩
 
-@[iris_simps]
+@[isimps]
 theorem pointsTo_def (b : Buffer T) (values : List T) :
     (b ↦ values) =
       iprop(⌜values.length = b.length⌝ ∗ b.ptr ↦* values) := rfl

@@ -3,7 +3,7 @@ public import Aeneas.Std.Primitives
 public import Aeneas.Data.Coinductive.ITree
 public import Aeneas.Data.Coinductive.Effect
 public import Aeneas.Data.Coinductive.ITreeWP
-public import Aeneas.SepLogic.Basic
+public import Aeneas.SepLogic.IProp
 public import Aeneas.SepLogic.Lemmas
 public section
 

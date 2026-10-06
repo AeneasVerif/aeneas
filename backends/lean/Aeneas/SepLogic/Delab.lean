@@ -1,5 +1,5 @@
 module
-public import Aeneas.SepLogic.Basic
+public import Aeneas.SepLogic.IProp
 @[expose] public section
 
 namespace Aeneas.SepLogic

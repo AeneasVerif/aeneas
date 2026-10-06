@@ -130,8 +130,8 @@ private def provePure (discharger : Option Syntax.Tactic) (proposition : Expr) :
       `(tactic|
         first
           | grind
-          | (simp only [iris_simps, *]; done)
-          | (simp only [iris_simps, *]; grind)
+          | (simp only [isimps, *]; done)
+          | (simp only [isimps, *]; grind)
           | (simp_all; done)
           | (simp_all; grind))
   let (goals, _) ← runTactic proofId tactic
@@ -175,7 +175,7 @@ private def floatExists (goal : MVarId) : TacticM MVarId :=
           ``sep_exists_l_eq, ``sep_exists_r_eq] }
 
 private def decompose (goal : MVarId) : TacticM MVarId := do
-  simpEntailment goal false { simpThms := #[← irisSimpExt.getTheorems] }
+  simpEntailment goal false { simpThms := #[← isimpsExt.getTheorems] }
 
 private partial def exposeAll (e : Expr) : MetaM Expr := do
   let e ← reducePostApplication e
@@ -446,7 +446,7 @@ partial def solveGoal (discharger : Option Syntax.Tactic) (goal : MVarId) :
       catch secondError =>
         throwError "iframe failed.\n\
           {firstError.toMessageData}\n\
-          and, after decomposing the assertions with `iris_simps`:\n\
+          and, after decomposing the assertions with `isimps`:\n\
           {secondError.toMessageData}"
 
 partial def pullGoal (goal : MVarId) : TacticM MVarId := do

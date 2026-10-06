@@ -9,13 +9,21 @@ universe u
 
 open Aeneas.Std (Heap)
 
-/-- Heap predicates, closed under heap extension (affine), like Iris's `uPred`. -/
+/-- Heap predicates, closed under heap extension (affine). -/
 structure IProp where
   holds : Heap → Prop
   up_closed : ∀ {h h' : Heap}, holds h → Heap.Sub h h' → holds h'
 
 instance : CoeFun IProp (fun _ => Heap → Prop) :=
   ⟨IProp.holds⟩
+
+@[ext]
+theorem IProp.ext {H₁ H₂ : IProp} (hIff : ∀ h, H₁ h ↔ H₂ h) : H₁ = H₂ := by
+  obtain ⟨holds₁, _⟩ := H₁
+  obtain ⟨holds₂, _⟩ := H₂
+  have hEq : holds₁ = holds₂ := funext fun h => propext (hIff h)
+  subst hEq
+  rfl
 
 abbrev IPre := IProp
 

@@ -9,9 +9,9 @@ namespace Aeneas.SepLogic
 open Lean Lean.Meta
 
 /-- Lemmas (un)folding representation predicates, used by `iframe` and `iintro`. -/
-initialize irisSimpExt : SimpExtension ←
-  registerSimpAttr `iris_simps "\
-    The `iris_simps` attribute registers simp lemmas used by `iframe` and \
+initialize isimpsExt : SimpExtension ←
+  registerSimpAttr `isimps "\
+    The `isimps` attribute registers simp lemmas used by `iframe` and \
     `iintro` to normalize separation-logic assertions (typically, lemmas that \
     decompose a representation predicate into the cells it owns)."
 

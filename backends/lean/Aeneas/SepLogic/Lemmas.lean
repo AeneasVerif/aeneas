@@ -1,5 +1,5 @@
 module
-public import Aeneas.SepLogic.Basic
+public import Aeneas.SepLogic.IProp
 @[expose] public section
 
 namespace Aeneas.SepLogic
@@ -7,14 +7,6 @@ namespace Aeneas.SepLogic
 universe u
 
 open Aeneas.Std (Heap Loc)
-
-@[ext]
-theorem IProp.ext {H₁ H₂ : IProp} (hIff : ∀ h, H₁ h ↔ H₂ h) : H₁ = H₂ := by
-  obtain ⟨holds₁, _⟩ := H₁
-  obtain ⟨holds₂, _⟩ := H₂
-  have hEq : holds₁ = holds₂ := funext fun h => propext (hIff h)
-  subst hEq
-  rfl
 
 theorem entails_refl (H : IProp) : H ⊢ H :=
   fun _ hH => hH

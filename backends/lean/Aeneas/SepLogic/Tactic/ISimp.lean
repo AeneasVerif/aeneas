@@ -106,7 +106,7 @@ private def evalISimp (lemmas : Array (TSyntax `term)) (simpOnly : Bool := false
     if spatial && !frameInference && !simpOnly then
       evalTactic (← `(tactic|
         simp (config := { failIfUnchanged := false, dsimp := false }) only
-          [iris_simps, $simpLemmas,*]))
+          [isimps, $simpLemmas,*]))
     else if !lemmas.isEmpty then
       evalTactic (← `(tactic|
         simp (config := { failIfUnchanged := false, dsimp := false }) only [$simpLemmas,*]))

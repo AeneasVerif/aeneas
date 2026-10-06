@@ -1,7 +1,7 @@
 module
 public import Aeneas.Std.Delab
 public import Aeneas.Std.Heap
-public import Aeneas.SepLogic.Basic
+public import Aeneas.SepLogic.IProp
 public import Aeneas.Std.Scalar.Core
 public import Aeneas.Std.Scalar.Notations
 public import Aeneas.Std.SliceDef
