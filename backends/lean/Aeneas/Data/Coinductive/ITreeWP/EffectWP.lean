@@ -35,10 +35,17 @@ abbrev EffectWP.Post (θ : EffectWP E) (α : Type u) := α → θ.State → Prop
 
 namespace EffectWP
 
+/-!
+The following classes correspond to Dijkstra's original healthiness conditions for weakest
+preconditions ("A Discipline of Programming", 1976): monotonicity, conjunctivity, and the Law of
+the Excluded Miracle. Our `Conjunctive` generalizes Dijkstra's binary conjunctivity to arbitrary
+non-empty families of postconditions.
+-/
+
 /-- The WP of every effect is monotone in its postcondition.
     This is needed to compute the fixed points of `FunctionalWP`. -/
-class Monotone (θ : EffectWP E) : Prop where
-  wp_mono :
+class Monotonic (θ : EffectWP E) : Prop where
+  wp_monotonic :
     ∀ {effect : E.I} {C C' : E.O effect → θ.State → Prop},
       (∀ answer s', C answer s' → C' answer s') →
       ∀ {s : θ.State}, θ.wp effect C s → θ.wp effect C' s
@@ -54,19 +61,19 @@ class Conjunctive (θ : EffectWP E) : Prop where
 
 /-- No effect can guarantee the unsatisfiable postcondition `False`.
     Necessary property of θ for total correctness. -/
-class NoMiracle (θ : EffectWP E) : Prop where
-  wp_noMiracle : ∀ (effect : E.I) (s : θ.State), ¬ θ.wp effect (fun _ _ => False) s
+class ExcludedMiracle (θ : EffectWP E) : Prop where
+  wp_excludedMiracle : ∀ (effect : E.I) (s : θ.State), ¬ θ.wp effect (fun _ _ => False) s
 
-export Monotone (wp_mono)
+export Monotonic (wp_monotonic)
 export Conjunctive (wp_conj)
-export NoMiracle (wp_noMiracle)
+export ExcludedMiracle (wp_excludedMiracle)
 
 end EffectWP
 
-theorem EffectWP.wp_forall [θ.Monotone] [θ.Conjunctive] {ι : Sort u'}
+theorem EffectWP.wp_forall [θ.Monotonic] [θ.Conjunctive] {ι : Sort u'}
     {C : ι → θ.Post (E.O effect)} (i₀ : ι) (hWp : ∀ i, θ.wp effect (C i) s) :
     θ.wp effect (fun answer s' => ∀ i, C i answer s') s := by
-  refine θ.wp_mono (fun _ _ hAll i => hAll (C i) ⟨i, rfl⟩)
+  refine θ.wp_monotonic (fun _ _ hAll i => hAll (C i) ⟨i, rfl⟩)
     (θ.wp_conj (fun X => ∃ i, X = C i) ⟨C i₀, i₀, rfl⟩ ?_)
   rintro X ⟨i, rfl⟩
   exact hWp i

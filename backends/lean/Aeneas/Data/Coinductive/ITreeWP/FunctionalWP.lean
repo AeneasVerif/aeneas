@@ -59,7 +59,7 @@ theorem FunctionalWP.vis :
       θ.wp effect (fun answer s' => X (k answer) s') s := by
   simp only [FunctionalWP, ITree.cases.vis]
 
-theorem FunctionalWP.mono [θ.Monotone]
+theorem FunctionalWP.mono [θ.Monotonic]
     (hDiv : allowDivergence → allowDivergence')
     (hQ : Q ≤ Q')
     (hX : X ≤ X') :
@@ -74,13 +74,13 @@ theorem FunctionalWP.mono [θ.Monotone]
       exact hDiv
   | vis effect k =>
       simp only [FunctionalWP.vis]
-      exact θ.wp_mono fun answer s' => hX (k answer) s'
+      exact θ.wp_monotonic fun answer s' => hX (k answer) s'
 
 /-- `FunctionalWP` bundled as a monotone map (an order homomorphism `→o`) on the complete
 lattice of ITree predicates. By packaging it this way, we can leverage Mathlib's generic
 fixed-point library (`OrderHom.lfp`, `OrderHom.gfp`, Knaster–Tarski) to define `DWP` and
 `DWLP` and obtain their (co)induction principles for free. -/
-private def FunctionalWP.hom (allowDivergence : Prop) (θ : EffectWP E) [θ.Monotone] (Q : θ.Post α) :
+private def FunctionalWP.hom (allowDivergence : Prop) (θ : EffectWP E) [θ.Monotonic] (Q : θ.Post α) :
     ITreePred θ α →o ITreePred θ α :=
   ⟨FunctionalWP allowDivergence θ Q, fun _ _ hX _ _ => FunctionalWP.mono id (fun _ _ => id) hX⟩
 

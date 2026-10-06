@@ -28,11 +28,11 @@ open Lean.Order
 universe u u' v w
 
 variable {E : Effect.{v}} {α : Type u} {β : Type u'} {θ : EffectWP.{w, v} E}
-variable [θ.Monotone]
+variable [θ.Monotonic]
 
 local infix:50 " ≤ " => entails
 
-def DWLP (θ : EffectWP E) [θ.Monotone] (m : ITree E α) (Q : θ.Post α) : θ.Pre :=
+def DWLP (θ : EffectWP E) [θ.Monotonic] (m : ITree E α) (Q : θ.Post α) : θ.Pre :=
   (FunctionalWP.hom True θ Q).gfp m
 
 /-- Unfolding of `DWLP` into its impredicative definition. -/
@@ -108,11 +108,11 @@ theorem DWLP.bind
     | vis effect k' =>
         simp only [itree_vis_bind, FunctionalWP.vis]
         intro hSpec
-        exact θ.wp_mono (fun _ _ hChild => Or.inl ⟨_, rfl, hChild⟩) hSpec.vis_view
+        exact θ.wp_monotonic (fun _ _ hChild => Or.inl ⟨_, rfl, hChild⟩) hSpec.vis_view
   · exact hSpec.step.mono id (fun _ _ => id) fun _ _ => Or.inr
 
 /-- Partial correctness is admissible. -/
-theorem DWLP.admissible (θ : EffectWP E) [θ.Monotone] [θ.Conjunctive]
+theorem DWLP.admissible (θ : EffectWP E) [θ.Monotonic] [θ.Conjunctive]
     (Q : θ.Post α) (s : θ.State) :
     Lean.Order.admissible (fun m : ITree E α => DWLP θ m Q s) := by
   intro c hc hAll
@@ -141,7 +141,7 @@ theorem DWLP.admissible (θ : EffectWP E) [θ.Monotone] [θ.Conjunctive]
         rw [ITree.csup_vis hc' hMem₀] at hEq
         obtain ⟨-, hCont⟩ := vis_inj hEq.symm
         exact eq_of_heq hCont
-      refine θ.wp_mono (fun answer u' hChild => ?_) hChildren
+      refine θ.wp_monotonic (fun answer u' hChild => ?_) hChildren
       exact ⟨ITree.visChain c' effect answer, ITree.visChain_chain hc' effect answer,
         by rintro _ ⟨k', hMem', rfl⟩; exact hChild ⟨k', hMem'⟩, rfl⟩
 

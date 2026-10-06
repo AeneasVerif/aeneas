@@ -6,7 +6,7 @@ import all Init.Internal.Order.Basic
 namespace Aeneas.Data.Coinductive.TotalTests
 
 variable {E : Effect} {θ : EffectWP E}
-variable [θ.Monotone]
+variable [θ.Monotonic]
 
 /-! # Liberal versus total WPs under wp health conditions -/
 
@@ -21,11 +21,11 @@ theorem forever_partial {effect : E.I} (hSafe : ∀ s, θ.wp effect (fun _ _ => 
   refine DWLP.coinduction (fun t _ => t = forever effect) ?_ rfl
   rintro _ s' rfl
   rw [forever, FunctionalWP.vis]
-  exact θ.wp_mono (fun _ _ _ => forever.eq_1 effect) (hSafe s')
+  exact θ.wp_monotonic (fun _ _ _ => forever.eq_1 effect) (hSafe s')
 
 /-- DWP rejects a productive infinite program: since no effect can guarantee
     `False`, a tree that never returns is never totally correct. -/
-theorem forever_not_total [θ.NoMiracle] (effect : E.I) (Q : θ.Post Unit) (s : θ.State) :
+theorem forever_not_total [θ.ExcludedMiracle] (effect : E.I) (Q : θ.Post Unit) (s : θ.State) :
     ¬ DWP θ (forever effect) Q s := by
   intro hSpec
   refine DWP.induction (P := fun t _ => t = forever effect → False)
@@ -35,9 +35,9 @@ theorem forever_not_total [θ.NoMiracle] (effect : E.I) (Q : θ.Post Unit) (s : 
   · rw [forever] at hEq
     obtain ⟨rfl, hk⟩ := vis_inj hEq
     obtain rfl := eq_of_heq hk
-    exact θ.wp_noMiracle _ s' (θ.wp_mono (fun _ _ h => h rfl) hWp)
+    exact θ.wp_excludedMiracle _ s' (θ.wp_monotonic (fun _ _ h => h rfl) hWp)
 
-example [θ.Conjunctive] [θ.NoMiracle] {effect : E.I}
+example [θ.Conjunctive] [θ.ExcludedMiracle] {effect : E.I}
     (hSafe : ∀ s, θ.wp effect (fun _ _ => True) s) (Q : θ.Post Unit) (s : θ.State) :
     ¬ DWP θ (forever effect) Q s :=
   dwp_no_loops (forever_partial hSafe (fun _ _ => False) s)
@@ -100,8 +100,8 @@ def effectWP : EffectWP StateEffect where
     | .fail => False
     | .choose α => Nonempty α ∧ ∀ answer, C ⟨answer⟩ state
 
-instance : EffectWP.Monotone effectWP where
-  wp_mono := by
+instance : EffectWP.Monotonic effectWP where
+  wp_monotonic := by
     rintro effect C C' hC state hWp
     cases effect
     · exact hC _ _ hWp
@@ -118,8 +118,8 @@ instance : EffectWP.Conjunctive effectWP where
     · exact (hAll C₀ hC₀).elim
     · exact ⟨(hAll C₀ hC₀).1, fun answer C hC => (hAll C hC).2 answer⟩
 
-instance : EffectWP.NoMiracle effectWP where
-  wp_noMiracle := by
+instance : EffectWP.ExcludedMiracle effectWP where
+  wp_excludedMiracle := by
     rintro (_ | _ | _ | _) _ h
     · exact h
     · exact h

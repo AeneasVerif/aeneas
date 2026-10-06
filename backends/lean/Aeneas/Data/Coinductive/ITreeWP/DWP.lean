@@ -26,11 +26,11 @@ open Lean.Order
 universe u u' v w
 
 variable {E : Effect.{v}} {α : Type u} {β : Type u'} {θ : EffectWP.{w, v} E}
-variable [θ.Monotone]
+variable [θ.Monotonic]
 
 local infix:50 " ≤ " => entails
 
-def DWP (θ : EffectWP E) [θ.Monotone] (m : ITree E α) (Q : θ.Post α) : θ.Pre :=
+def DWP (θ : EffectWP E) [θ.Monotonic] (m : ITree E α) (Q : θ.Post α) : θ.Pre :=
   (FunctionalWP.hom False θ Q).lfp m
 
 /-- Unfolding of `DWP` into its impredicative definition. -/

@@ -39,8 +39,8 @@ def effectWP : EffectWP RustEffect where
     match effect with
     | .fail _ => False
 
-instance : EffectWP.Monotone effectWP where
-  wp_mono _ := False.elim
+instance : EffectWP.Monotonic effectWP where
+  wp_monotonic _ := False.elim
 
 instance : EffectWP.Conjunctive effectWP where
   wp_conj := by
@@ -48,8 +48,8 @@ instance : EffectWP.Conjunctive effectWP where
     obtain ⟨C₀, hC₀⟩ := hNonempty
     exact (hAll C₀ hC₀).elim
 
-instance : EffectWP.NoMiracle effectWP where
-  wp_noMiracle := by
+instance : EffectWP.ExcludedMiracle effectWP where
+  wp_excludedMiracle := by
     rintro ⟨⟩ _ h
     exact h
 

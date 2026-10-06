@@ -11,7 +11,7 @@ namespace Aeneas.Data.Coinductive
 universe u u' v w
 
 variable {E : Effect.{v}} {α : Type u} {β : Type u'} {θ : EffectWP.{w, v} E}
-variable [θ.Monotone]
+variable [θ.Monotonic]
 
 /-- DWP implies DWLP. -/
 theorem DWP.toPartial (hSpec : DWP θ m Q s) : DWLP θ m Q s :=
@@ -19,7 +19,7 @@ theorem DWP.toPartial (hSpec : DWP θ m Q s) : DWLP θ m Q s :=
     fun _ _ _ hWp => .vis hWp
 
 /-- DWP rejects all loops -/
-theorem dwp_no_loops [θ.Conjunctive] [θ.NoMiracle]
+theorem dwp_no_loops [θ.Conjunctive] [θ.ExcludedMiracle]
     (hNever : DWLP θ m (fun _ _ => False) s) : ¬ DWP θ m Q s := by
   intro hSpec
   refine hSpec.induction (P := fun m s => DWLP θ m (fun _ _ => False) s → False)
@@ -32,7 +32,7 @@ theorem dwp_no_loops [θ.Conjunctive] [θ.NoMiracle]
       cases b
       · exact hHandle
       · exact h.vis_view)
-  exact θ.wp_noMiracle effect s (θ.wp_mono (fun _ _ h => h false (h true)) hBoth)
+  exact θ.wp_excludedMiracle effect s (θ.wp_monotonic (fun _ _ h => h false (h true)) hBoth)
 
 end Aeneas.Data.Coinductive
 
