@@ -1,5 +1,5 @@
 module
-public import Aeneas.Std.RawPtrLemmas
+public import Aeneas.Std.RawPtr
 public import Aeneas.Std.Slice
 public import Aeneas.SepLogic.Lemmas
 public import Aeneas.SepLogic.Delab
@@ -13,6 +13,33 @@ public import Aeneas.Tactic.Step.Init
 open Aeneas SepLogic
 
 namespace Aeneas.Std
+
+/-! ### Trusted definitions
+
+The definitions between this marker and the matching end marker are part of the TCB:
+they give the meaning of the buffer points-to assertion. -/
+
+/-- A bounded mutable view into a heap allocation, modelling `&mut [T]`. -/
+structure Buffer (T : Type) where
+  base : AllocId
+  offset : Nat
+  length : Nat
+  deriving Inhabited, DecidableEq
+
+namespace Buffer
+
+def ptr (b : Buffer T) : MutRawPtr T :=
+  ⟨b.base, b.offset⟩
+
+def pointsTo (b : Buffer T) (values : List T) : IProp :=
+  iprop(⌜values.length = b.length⌝ ∗ b.ptr ↦* values)
+
+end Buffer
+
+instance instPointsToBuffer {T : Type} :
+    PointsTo (Buffer T) (List T) := ⟨Buffer.pointsTo⟩
+
+/-! ### End of trusted definitions -/
 
 open WP
 

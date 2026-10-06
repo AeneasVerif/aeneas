@@ -1,4 +1,4 @@
-import Aeneas.Std.RawPtrLemmas
+import Aeneas.Std.RawPtr
 import Aeneas.SepLogic.Tactic
 import Aeneas.Tactic.Step.StepStar
 
