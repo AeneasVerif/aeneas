@@ -148,7 +148,7 @@ theorem Result.match.fail {α : Type u} {e} :
   simp [Result.fail_eq_vis]
 
 /-- The `Repr` instance for `Result`, so that `#eval` on `Result`-producing expressions prints `Aeneas.Std.Result.ok`/`fail`/`div`. -/
-instance instReprResult {α : Type u} [Repr α] : Repr (Result α) where
+instance Result.reprInst {α : Type u} [Repr α] : Repr (Result α) where
   reprPrec r _ :=
     match Result.match r with
     | .ok a => "Aeneas.Std.Result.ok " ++ repr a
