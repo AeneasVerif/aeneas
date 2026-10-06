@@ -46,27 +46,27 @@ implemented by the `Int.tdiv`, `Int.tmod`, etc. definitions.
 
 namespace Tests
   -- Checking that the division over signed integers agrees with Rust
-  #assert Int.tdiv 3 2 = 1
-  #assert Int.tdiv (-3) 2 = -1
-  #assert Int.tdiv 3 (-2) = -1
-  #assert Int.tdiv (-3) (-2) = 1
-  #assert Int.tdiv 7 3 = 2
-  #assert Int.tdiv (-7) 3 = -2
-  #assert Int.tdiv 7 (-3) = -2
-  #assert Int.tdiv (-7) (-3) = 2
+  #guard Int.tdiv 3 2 = 1
+  #guard Int.tdiv (-3) 2 = -1
+  #guard Int.tdiv 3 (-2) = -1
+  #guard Int.tdiv (-3) (-2) = 1
+  #guard Int.tdiv 7 3 = 2
+  #guard Int.tdiv (-7) 3 = -2
+  #guard Int.tdiv 7 (-3) = -2
+  #guard Int.tdiv (-7) (-3) = 2
 
   -- Checking that the signed division over bit-vectors agrees with Rust
   private def bv_sdiv (x y : Int) : Int :=
     (BitVec.sdiv (BitVec.ofInt 32 x) (BitVec.ofInt 32 y)).toInt
 
-  #assert bv_sdiv 3 2 = 1
-  #assert bv_sdiv (-3) 2 = -1
-  #assert bv_sdiv 3 (-2) = -1
-  #assert bv_sdiv (-3) (-2) = 1
-  #assert bv_sdiv 7 3 = 2
-  #assert bv_sdiv (-7) 3 = -2
-  #assert bv_sdiv 7 (-3) = -2
-  #assert bv_sdiv (-7) (-3) = 2
+  #guard bv_sdiv 3 2 = 1
+  #guard bv_sdiv (-3) 2 = -1
+  #guard bv_sdiv 3 (-2) = -1
+  #guard bv_sdiv (-3) (-2) = 1
+  #guard bv_sdiv 7 3 = 2
+  #guard bv_sdiv (-7) 3 = -2
+  #guard bv_sdiv 7 (-3) = -2
+  #guard bv_sdiv (-7) (-3) = 2
 end Tests
 
 /-!
