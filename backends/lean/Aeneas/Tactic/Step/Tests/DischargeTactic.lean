@@ -1,6 +1,6 @@
 module
 public import Lean.Elab.Tactic.Basic
-import Aeneas.Tactic.Step
+public import Aeneas.Tactic.Step
 
 open Aeneas
 
@@ -57,8 +57,9 @@ elab "discharge_equality_marker" : tactic => Lean.Elab.Tactic.withMainContext do
     Lean.throwError "Expected an equality hypothesis"
   Lean.Elab.Tactic.evalTactic (← `(tactic| exact EqualityMarker.intro))
 
-elab "discharge_markers" : tactic => do
-  Lean.Elab.Tactic.evalTactic (← `(tactic| first
+open Lean Elab Tactic in
+public meta def dischargeMarkers : DischargeTactic := do
+  evalTactic (← `(tactic| first
     | exact dischargeMarker
     | (subst_vars; exact terminalZero)
     | discharge_equality_marker
@@ -75,7 +76,7 @@ meta def prepareIntroOutputs : PrepareIntroOutputs := do
       { simpThms := #[← Step.stepSimpExt.getTheorems] }
       (.targets #[] true)
 
-#register_spec_info {
+meta def tripleSpecInfo : SpecInfo := {
     spec_name := ``triple
     arity := 4
     program_index := 2
@@ -85,10 +86,37 @@ meta def prepareIntroOutputs : PrepareIntroOutputs := do
     mk_spec_bind := ``triple_step_bind
     mk_spec_bind_skip_args := 6
     prepare_intro_outputs := ``prepareIntroOutputs
-    discharge_tactic := some `discharge_markers
     to_mvcgen := none
     liftings := #[]
   }
+
+public meta def expandedDischargeType : Lean.Elab.Tactic.TacticM Unit := pure ()
+
+/--
+error: Invalid discharge tactic `Aeneas.Tactic.Step.Tests.DischargeTactic.expandedDischargeType`: declare it with type `Aeneas.DischargeTactic`
+-/
+#guard_msgs in
+#register_spec_info { tripleSpecInfo with
+  discharge_tactic := some ``expandedDischargeType }
+
+/--
+error: Unknown discharge tactic `missingDischargeTactic`
+-/
+#guard_msgs in
+#register_spec_info { tripleSpecInfo with
+  discharge_tactic := some `missingDischargeTactic }
+
+meta def privateDischarge : DischargeTactic := pure ()
+
+/--
+error: Private discharge tactic `Aeneas.Tactic.Step.Tests.DischargeTactic.privateDischarge`: declare it with `public meta def`
+-/
+#guard_msgs in
+#register_spec_info { tripleSpecInfo with
+  discharge_tactic := some ``privateDischarge }
+
+#register_spec_info { tripleSpecInfo with
+  discharge_tactic := some ``dischargeMarkers }
 
 def pureValue (value : Nat) : Id Nat :=
   value
@@ -113,7 +141,8 @@ example (value : Nat) :
 info: Try this:
 
   [apply]     let* ⟨ _, _ ⟩ ← pureValue_spec
-    agrind
+    run_tac
+      Aeneas.Tactic.Step.Tests.DischargeTactic.dischargeMarkers
 -/
 #guard_msgs in
 example (value : Nat) :
@@ -139,7 +168,8 @@ attribute [local step_simps] triple_finishValue
 info: Try this:
 
   [apply]     let* ⟨ value, value_post ⟩ ← zero_spec
-    discharge_markers
+    run_tac
+      Aeneas.Tactic.Step.Tests.DischargeTactic.dischargeMarkers
 -/
 #guard_msgs in
 example : triple True zero (fun value => Terminal value) := by
@@ -150,7 +180,8 @@ example : triple True zero (fun value => Terminal value) := by
 info: Try this:
 
   [apply]     let* ⟨ value, value_post ⟩ ← zero_spec
-    discharge_markers
+    run_tac
+      Aeneas.Tactic.Step.Tests.DischargeTactic.dischargeMarkers
 -/
 #guard_msgs in
 example : triple True (zero >>= fun value => finishValue value) Terminal := by
@@ -168,7 +199,8 @@ example : triple True zero (fun _ => EqualityMarker) := by
 info: Try this:
 
   [apply]     let* ⟨ value, value_post ⟩ ← zero_spec
-    discharge_markers
+    run_tac
+      Aeneas.Tactic.Step.Tests.DischargeTactic.dischargeMarkers
 -/
 #guard_msgs in
 example : triple True (zero >>= fun value => finishValue value) (fun _ => EqualityMarker) := by
@@ -177,14 +209,14 @@ example : triple True (zero >>= fun value => finishValue value) (fun _ => Equali
 /- Replay the generated scripts. -/
 example : triple True zero (fun value => Terminal value) := by
   let* ⟨ value, value_post ⟩ ← zero_spec
-  discharge_markers
+  run_tac Aeneas.Tactic.Step.Tests.DischargeTactic.dischargeMarkers
 
 example : triple True (zero >>= fun value => finishValue value) Terminal := by
   let* ⟨ value, value_post ⟩ ← zero_spec
-  discharge_markers
+  run_tac Aeneas.Tactic.Step.Tests.DischargeTactic.dischargeMarkers
 
 example : triple True (zero >>= fun value => finishValue value) (fun _ => EqualityMarker) := by
   let* ⟨ value, value_post ⟩ ← zero_spec
-  discharge_markers
+  run_tac Aeneas.Tactic.Step.Tests.DischargeTactic.dischargeMarkers
 
 end Aeneas.Tactic.Step.Tests.DischargeTactic

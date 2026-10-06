@@ -294,6 +294,7 @@ structure Config where
   /-- We need the original configuration syntax to generate the proof script -/
   configSyntax : Option (TSyntax `Lean.Parser.Tactic.optConfig)
   preconditionTac: Option Syntax.Tactic := none
+  dischargeTac : Option Name := none
   /-- Should we use the special syntax `let* ⟨ ...⟩ ← ...` or the more standard syntax `step with ... as ⟨ ... ⟩`? -/
   prettyPrintedStep : Bool := true
   useCase : Bool := false
@@ -376,13 +377,11 @@ inductive TargetKind where
 | result
 | unknown
 
-structure TargetInfo where
-  kind : TargetKind
-  dischargeTac : Option (TSyntax `tactic)
-
 /- Smaller helper which we use to check in which situation we are -/
-meta def analyzeTargetKind (goalTy : Expr) : TacticM TargetKind := do
+meta def analyzeTarget : TacticM TargetKind := do
+  withTraceNode `Step (fun _ => do pure m!"analyzeTarget") do
   try
+    let goalTy ← getMainTarget
     -- Dive into a registered specification
     let some program ← observing? (Step.getSpecProgram goalTy)
       | trace[Step] "not an application of a registered specification statement: {goalTy}"
@@ -405,17 +404,13 @@ meta def analyzeTargetKind (goalTy : Expr) : TacticM TargetKind := do
     trace[Step] "exception caught"
     pure .unknown
 
-meta def analyzeTarget : TacticM TargetInfo := do
-  withTraceNode `Step (fun _ => do pure m!"analyzeTarget") do
-  let goalTy ← getMainTarget
-  let dischargeTac ←
-    if (← observing? (Step.getSpecInfoArgs goalTy)).isSome then Step.getDischargeTactic goalTy
-    else pure none
-  pure { kind := ← analyzeTargetKind goalTy, dischargeTac }
-
 meta partial def evalStepStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
   withMainContext do focus do
   withTraceNode `Step (fun _ => do pure m!"evalStepStar") do
+  let cfg ← do
+    match ← observing? (Step.getSpecInfoArgs (← instantiateMVars (← getMainTarget))) with
+    | some (info, _) => pure { cfg with dischargeTac := info.discharge_tactic }
+    | none => pure cfg
   -- Initialize the step state (grind threading)
   let initState : Step.StepState ←
     if cfg.stepConfig.threadGrindState then
@@ -494,8 +489,8 @@ where
       | some fuel =>
         if fuel = 0 then return { script := .tacs #[], unassignedVars := #[], subgoals := #[(← getMainGoal, none)] }
         else pure (some (fuel - 1))
-    let { kind, dischargeTac } ← analyzeTarget
-    match kind with
+    let targetKind ← analyzeTarget
+    match targetKind with
     | .bind names => do
       let (info, mainGoalAndState) ← onBind cfg names ss
       /- Continue, if necessary -/
@@ -517,14 +512,8 @@ where
         /- Check if there are unassigned meta-variables which are not `Prop`:
            if it is the case it means there are meta-variables we could not infer, so we stop -/
         if info.unassignedVars.isEmpty then
-          -- Check if still in spec, and if not then try to apply discharge tactic
-          if (← observing? (Step.getSpecProgram (← getMainTarget))).isSome then
-            let restInfo ← traverseProgram cfg fuel ss
-            return (info ++ restInfo)
-          else
-            let dischargeTactics ← mkDischargeTactics dischargeTac
-            let (finishInfo, _) ← onFinish cfg mainGoal dischargeTactics
-            return (info ++ finishInfo)
+          let restInfo ← traverseProgram cfg fuel ss
+          return (info ++ restInfo)
         else
           trace[Step] "Found unassigned meta-variables of type ≠ Prop: stopping"
           let info' : Info ← pure
@@ -562,21 +551,20 @@ where
          divergent e-graphs). Use the pre-branch state going forward. -/
       mkStx branchInfos
     | .result => do
-      let (info, mainGoal) ← onResult cfg ss dischargeTac
+      let (info, mainGoal) ← onResult cfg ss
       let mainGoal ← match mainGoal with
         | none => pure #[]
         | some mainGoal => pure #[(mainGoal, none)]
       pure { info with subgoals := info.subgoals ++ mainGoal }
     | .unknown => do
       trace[Step] "don't know what to do: it may be a terminal goal, attempting to solve it with grind"
-      let (info, mainGoal) ← onResult cfg ss none
+      let (info, mainGoal) ← onResult cfg ss
       let mainGoal ← match mainGoal with
         | none => pure #[]
         | some mainGoal => pure #[(mainGoal, none)]
       pure { info with subgoals := info.subgoals ++ mainGoal }
 
-  onResult (cfg : Config) (ss : Step.StepState)
-      (dischargeTac : Option (TSyntax `tactic)) : TacticM (Info × Option MVarId) := do
+  onResult (cfg : Config) (ss : Step.StepState) : TacticM (Info × Option MVarId) := do
     withTraceNode `Step (fun _ => pure m!"onResult") do
     /- If we encounter `(do f a)` we process it as if it were `(do let res ← f a; return res)`
        since (id = (· >>= pure)) and when we desugar the do block we have that
@@ -594,19 +582,10 @@ where
       trace[Step] "done"
       pure (info, none)
     | some (mvarId, _) =>
-      let dischargeTactics ← mkDischargeTactics dischargeTac
-      let (info', mvarId) ← onFinish cfg mvarId dischargeTactics
+      let (info', mvarId) ← onFinish cfg mvarId
       pure (info ++ info', mvarId)
 
-  mkDischargeTactics (dischargeTac : Option (TSyntax `tactic)) :
-      TacticM (List (String × Syntax.Tactic × TacticM Unit)) := do
-    match dischargeTac with
-    | none => pure []
-    | some tac => pure [("specification discharge tactic", tac, evalTactic tac)]
-
-  onFinish (cfg : Config) (mvarId : MVarId)
-      (extraTacl : List (String × Syntax.Tactic × TacticM Unit) := []) :
-      TacticM (Info × Option MVarId) := do
+  onFinish (cfg : Config) (mvarId : MVarId) : TacticM (Info × Option MVarId) := do
     withTraceNode `Step (fun _ => pure m!"onFinish") do
     setGoals [mvarId]
     traceGoalWithNode "goal"
@@ -642,8 +621,14 @@ where
             trace[Step] "goal solved"
             tacStx.resolve stx
           | none => tryFinish tacl
+      let dischargeTacl ← do
+        match cfg.dischargeTac with
+        | none => pure []
+        | some name =>
+          pure [(s!"discharge tactic `{name}`", ← `(tactic| run_tac $(mkIdent name):ident),
+            do (← evalDischargeTactic name))]
       let finishTactics :=
-        [("grind", ← `(tactic| agrind), grindTac)] ++ extraTacl ++
+        dischargeTacl ++ [("grind", ← `(tactic| agrind), grindTac)] ++
         match cfg.preconditionTac with
         | none => []
         | some tac => [("user tactic", tac, evalTactic tac)]
