@@ -61,19 +61,23 @@ theorem core.option.Option.map_none
   {T U F : Type} (fnOnce : core.ops.function.FnOnce F T U) (f : F) :
   core.option.Option.map fnOnce (none : Option T) f = ok (none : Option U) := rfl
 
-/-- Spec for `Option::map`. -/
+/-- Step spec for `Option::map`: `post` is the postcondition of the closure, which
+    `step` can infer with `+inferPost`. -/
+@[step]
 theorem core.option.Option.map.spec {T U F : Type}
-  (fnOnce : core.ops.function.FnOnce F T U) (x : Option T) (f : F) (post : Option U → Prop)
-  (hNone : x = none → post none)
-  (hSome : ∀ value, x = some value → fnOnce.call_once f value ⦃ y => post (some y) ⦄) :
-  core.option.Option.map fnOnce x f ⦃ post ⦄ := by
+  (fnOnce : core.ops.function.FnOnce F T U) (x : Option T) (f : F) {post : T → U → Prop}
+  (hf : ∀ value, x = some value → fnOnce.call_once f value ⦃ post value ⦄) :
+  core.option.Option.map fnOnce x f ⦃ y =>
+    match x with
+    | none => y = none
+    | some value => ∃ mapped, y = some mapped ∧ post value mapped ⦄ := by
   cases x with
-  | none => simp [core.option.Option.map, WP.spec_ok, hNone]
+  | none => simp [core.option.Option.map]
   | some value =>
     simp only [core.option.Option.map]
-    apply WP.spec_bind (hSome value rfl)
-    intro y hy
-    simp [WP.spec_ok, hy]
+    apply WP.spec_bind (hf value rfl)
+    intro mapped h
+    simp [h]
 
 /-- Pure model of `Option::is_some_and`: `false` on `none`, and the result of
     `fnOnce` on the payload of `some`. -/
@@ -96,15 +100,22 @@ theorem core.option.Option.is_some_and_none
   {T F : Type} (fnOnce : core.ops.function.FnOnce F T Bool) (f : F) :
   core.option.Option.is_some_and fnOnce (none : Option T) f = ok false := rfl
 
-/-- Spec for `Option::is_some_and`. -/
+/-- Step spec for `Option::is_some_and`: `post` is the postcondition of the closure,
+    which `step` can infer with `+inferPost`. -/
+@[step]
 theorem core.option.Option.is_some_and.spec {T F : Type}
-  (fnOnce : core.ops.function.FnOnce F T Bool) (x : Option T) (f : F) (post : Bool → Prop)
-  (hNone : x = none → post false)
-  (hSome : ∀ value, x = some value → fnOnce.call_once f value ⦃ post ⦄) :
-  core.option.Option.is_some_and fnOnce x f ⦃ post ⦄ := by
+  (fnOnce : core.ops.function.FnOnce F T Bool) (x : Option T) (f : F)
+  {post : T → Bool → Prop}
+  (hf : ∀ value, x = some value → fnOnce.call_once f value ⦃ post value ⦄) :
+  core.option.Option.is_some_and fnOnce x f ⦃ b =>
+    match x with
+    | none => b = false
+    | some value => post value b ⦄ := by
   cases x with
-  | none => simp [core.option.Option.is_some_and, WP.spec_ok, hNone]
-  | some value => exact hSome value rfl
+  | none => simp [core.option.Option.is_some_and]
+  | some value =>
+    simp only [core.option.Option.is_some_and]
+    exact hf value rfl
 
 /-- Pure model of `bool::then`: `none` on `false`, and on `true` the result of
     `fnOnce` wrapped in `some`. -/
@@ -130,18 +141,20 @@ theorem core.bool.Bool.then_false
   {T F : Type} (fnOnce : core.ops.function.FnOnce F Unit T) (f : F) :
   core.bool.Bool.then fnOnce false f = ok (none : Option T) := rfl
 
-/-- Spec for `bool::then`. -/
+/-- Step spec for `bool::then`: `post` is the postcondition of the closure, which
+    `step` can infer with `+inferPost`. -/
+@[step]
 theorem core.bool.Bool.then.spec {T F : Type}
-  (fnOnce : core.ops.function.FnOnce F Unit T) (b : Bool) (f : F) (post : Option T → Prop)
-  (hFalse : b = false → post none)
-  (hTrue : b = true → fnOnce.call_once f () ⦃ y => post (some y) ⦄) :
-  core.bool.Bool.then fnOnce b f ⦃ post ⦄ := by
+  (fnOnce : core.ops.function.FnOnce F Unit T) (b : Bool) (f : F) {post : T → Prop}
+  (hf : b = true → fnOnce.call_once f () ⦃ post ⦄) :
+  core.bool.Bool.then fnOnce b f ⦃ y =>
+    if b then ∃ value, y = some value ∧ post value else y = none ⦄ := by
   cases b with
-  | false => simp [core.bool.Bool.then, WP.spec_ok, hFalse]
+  | false => simp [core.bool.Bool.then]
   | true =>
     simp only [core.bool.Bool.then]
-    apply WP.spec_bind (hTrue rfl)
-    intro y hy
-    simp [WP.spec_ok, hy]
+    apply WP.spec_bind (hf rfl)
+    intro value h
+    simp [h]
 
 end Aeneas.Std
