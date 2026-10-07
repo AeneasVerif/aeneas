@@ -52,7 +52,7 @@ namespace Aeneas.Std.WP
     program_index := 2
     post_index := 3
     mk_spec_mono := ``Std.WP.ispec_mono
-    mk_spec_mono_skip_args := 4
+    mk_spec_mono_skip_args := 5
     mk_spec_bind := ``Std.WP.ispec_bind
     mk_spec_bind_skip_args := 7
     prepare_intro_outputs := ``Aeneas.Step.prepareIntroIspec
@@ -71,7 +71,7 @@ namespace Aeneas.Std.WP
     program_index := 2
     post_index := 3
     mk_spec_mono := ``Std.WP.dispec_mono
-    mk_spec_mono_skip_args := 4
+    mk_spec_mono_skip_args := 5
     mk_spec_bind := ``Std.WP.dispec_bind
     mk_spec_bind_skip_args := 7
     prepare_intro_outputs := ``Aeneas.Step.prepareIntroIspec

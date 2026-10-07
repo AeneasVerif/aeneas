@@ -446,16 +446,12 @@ theorem read.spec_range (q : RawPtr T M) (values : List T) (i : Nat)
     ⦃ q ↦* values ⦄ (q.add i).read
       ⦃ result => ⌜result = values[i]⌝ ∗ q ↦* values⦄ := by
   rw [pointsToRange_eq_take_get_drop hIndex]
-  apply WP.ispec_mono (read.spec (q.add i) values[i])
-  iframe
+  apply WP.ispec_mono (read.spec (q.add i) values[i]) <;> iframe
 
 theorem read.spec_frame (q : RawPtr T M) (value : T) (H : IProp) :
     ⦃ q ↦ value ∗ H ⦄ q.read
       ⦃ result => ⌜result = value⌝ ∗ (q ↦ value ∗ H)⦄ := by
-  apply WP.ispec_mono (WP.ispec_frame (read.spec q value) H)
-  apply entails_sep_postWand
-  intro _
-  iframe
+  apply WP.ispec_mono (read.spec q value) <;> iframe
 
 end RawPtr
 
@@ -467,8 +463,7 @@ theorem MutRawPtr.write.spec_range (q : MutRawPtr T) (values : List T)
     RawPtr.pointsToRange_eq_take_get_drop
       (show i < (values.set i value).length by simpa using hIndex),
     RawPtr.take_set, RawPtr.drop_set, List.getElem_set_self]
-  apply WP.ispec_mono (MutRawPtr.write.spec (q.add i) values[i] value)
-  iframe
+  apply WP.ispec_mono (MutRawPtr.write.spec (q.add i) values[i] value) <;> iframe
 
 @[step]
 theorem MutRawPtr.fillRange.spec (q : MutRawPtr T) (values : List T) (value : T) :
@@ -487,10 +482,7 @@ theorem MutRawPtr.fillRange.spec (q : MutRawPtr T) (values : List T) (value : T)
       apply WP.ispec_bind (MutRawPtr.write.spec q old value)
       · iframe
       · intro _
-        apply WP.ispec_mono
-          (WP.ispec_frame (ih (q := q.add 1)) (q ↦ value))
-        exact entails_trans (by iframe)
-          (entails_sep_postWand _ (by intro _; iframe))
+        apply WP.ispec_mono (ih (q := q.add 1)) <;> iframe
 
 @[step]
 theorem MutRawPtr.copyRange.spec (dst : MutRawPtr T) (src : RawPtr T M)
@@ -534,11 +526,9 @@ theorem MutRawPtr.copyRange.spec (dst : MutRawPtr T) (src : RawPtr T M)
         · iframe
         · intro _
           apply WP.ispec_mono
-            (WP.ispec_frame
-              (ih (dst := dst.add 1) (src := src.add 1)
-                (dstValues := oldRest) hRest)
-              (iprop(dst ↦ value ∗ src ↦ value)))
-          refine entails_trans (by iframe) (entails_sep_postWand _ ?_)
+            (ih (dst := dst.add 1) (src := src.add 1) (dstValues := oldRest) hRest)
+          · iframe
+          apply postWand_intro
           intro _
           change
             iprop(((dst.add 1) ↦* rest ∗ (src.add 1) ↦* rest) ∗
@@ -591,12 +581,8 @@ theorem RawPtr.compareRange.spec [DecidableEq T]
           · subst y
             simp only [List.cons.injEq, true_and]
             apply WP.ispec_mono
-              (WP.ispec_frame
-                (ih (left := left.add 1) (right := right.add 1)
-                  (rightValues := rightRest) hRest)
-                (iprop(left ↦ x ∗ right ↦ x)))
-            exact entails_trans (by iframe)
-              (entails_sep_postWand _ (by intro _; iframe))
+              (ih (left := left.add 1) (right := right.add 1) (rightValues := rightRest) hRest)
+              <;> iframe
           · simp only [if_neg hxy]
             apply (ispec_ok _).2
             simp only [List.cons.injEq, hxy, false_and]

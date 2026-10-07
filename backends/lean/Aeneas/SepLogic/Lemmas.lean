@@ -291,6 +291,11 @@ theorem entails_exists_r {ι : Sort _} {H : IProp} {J : ι → IProp} (x : ι)
     (h : H ⊢ J x) : H ⊢ iexists J :=
   fun heap hH => ⟨x, h heap hH⟩
 
+theorem entails_exists_frame {ι : Sort _} {R : IProp} {J F : ι → IProp}
+    (h : ∀ x, J x ⊢ R ∗ F x) : iexists J ⊢ R ∗ iexists F :=
+  entails_exists_l fun x =>
+    entails_trans (h x) (sep_mono (entails_refl R) (entails_exists_r x (entails_refl _)))
+
 theorem sep_exists_l_eq {ι : Sort _} (J : ι → IProp) (H : IProp) :
     (iexists J ∗ H) = iprop(∃ x, J x ∗ H) :=
   bientails_eq (sep_exists J H)
@@ -367,13 +372,6 @@ theorem postWand_intro {α : Type u} {H : IProp} {Q₁ Q₂ : IPost α}
 theorem postWand_cancel {α : Type u} (Q₁ Q₂ : IPost α) :
     Q₁ ∗+ (Q₁ -∗+ Q₂) ⊢+ Q₂ :=
   (postWand_equiv (Q₁ -∗+ Q₂) Q₁ Q₂).mp (entails_refl _)
-
-/-- Postcondition weakening as a ramified wand, so the ramified frame rule subsumes consequence. -/
-theorem entails_sep_postWand {α : Type u} (H : IProp) {Q₁ Q₂ : IPost α}
-    (hQ : Q₁ ⊢+ Q₂) : H ⊢ H ∗ (Q₁ -∗+ Q₂) :=
-  entails_trans (sep_emp_r H).mpr
-    (sep_mono (entails_refl H)
-      (postWand_intro fun value => entails_trans (sep_emp_r (Q₁ value)).mp (hQ value)))
 
 theorem postWand_specialize {α : Type u} {Q₁ Q₂ : IPost α} (value : α) :
     (Q₁ -∗+ Q₂) ⊢ (Q₁ value -∗ Q₂ value) :=

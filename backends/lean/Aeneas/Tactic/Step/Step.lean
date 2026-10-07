@@ -372,34 +372,12 @@ meta def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) :=
       trace[Step] "Could not decompose application"
       pure mvar
 
-/-- Infer separation-logic ghost arguments by frame inference, before solving pure preconditions. -/
-private meta def inferSpatialGhosts (info : SpecInfo) (goalTy thTy : Expr) : TacticM Unit := do
-  unless info.spec_name == ``Std.WP.ispec || info.spec_name == ``Std.WP.dispec do
-    return
-  let goalArgs := (← instantiateMVars goalTy).consumeMData.getAppArgs
-  let thArgs := (← instantiateMVars thTy).consumeMData.getAppArgs
-  unless goalArgs.size == info.arity && thArgs.size == info.arity do return
-  unless thArgs[1]!.hasExprMVar do return
-  let goals ← getGoals
-  try
-    let frame ← mkFreshExprMVar (mkConst ``SepLogic.IProp)
-    let destination ← mkAppM ``SepLogic.sep #[thArgs[1]!, frame]
-    let obligation ← mkAppM ``SepLogic.Entails #[goalArgs[1]!, destination]
-    let proof ← mkFreshExprSyntheticOpaqueMVar obligation
-    setGoals [proof.mvarId!]
-    evalTactic (← `(tactic| iframe))
-    unless (← getUnsolvedGoals).isEmpty do
-      throwError "spatial ghost inference left an unresolved framing obligation"
-    setGoals goals
-  catch error =>
-    trace[Step] "Spatial ghost inference did not match: {error.toMessageData}"
-
 /-- Attempt to match a given theorem with the monadic call in the target.
 The resulting target should be mono's or bind's premise:
 e.g. `∀ x, P₀ x → P₁ x` or `∀ x, P x → k x ⦃ Q ⦄`
 -/
 meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th : Expr) :
-  TacticM (Array MVarId × Expr × Expr) := do
+  TacticM (Array MVarId) := do
   withTraceNode `Step (fun _ => pure m!"tryMatch") do
   /- Apply the theorem
      We try to match the theorem with the goal
@@ -505,7 +483,7 @@ meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool
   setGoals [ngoal]
 
   --
-  pure (mvarsIds, goalTy, thTy)
+  pure mvarsIds
 
 /-- Small helper: introduce the pretty equality (e.g., `[> let z ← x + y <]`) -/
 meta def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) :
@@ -684,9 +662,8 @@ meta def firstPhaseTac (info : SpecInfo) (args : Args) : Option (TacticM Unit) :
 /-- Attempt to solve the preconditions.
 
     We proceed in two phases:
-    - If `Args.inferGhostVars` is set, we first infer the separation-logic ghost arguments
-      by frame inference (see `inferSpatialGhosts`). We then sort the preconditions by decreasing
-      number of meta-variables (this is a way of avoiding spurious instantiations).
+    - We sort the preconditions by decreasing number of meta-variables
+      (this is a way of avoiding spurious instantiations).
       We attempt to solve each precondition with the registered discharge tactic (if there is one),
       and, if that does not solve it, with the assumption tactic (`singleAssumptionTac`).
       If the precondition is not solved, then any changes are reverted. After the first phase, the remaining
@@ -699,12 +676,10 @@ meta def firstPhaseTac (info : SpecInfo) (args : Args) : Option (TacticM Unit) :
 meta def trySolvePreconditions (info : SpecInfo) (args : Args) (config : Config)
     (originalGoal : MVarId) (stepState : StepState)
     (solvePreconditionTac : Option StepGrindState → TacticM Unit)
-    (newPropGoals : List MVarId) (goalTy specTy : Expr)
+    (newPropGoals : List MVarId)
     : TacticM (StepState × List (MVarId × OptTask (Option Expr))) := do
   withTraceNode `Step (fun _ => pure m!"trySolvePreconditions") do
-  /- **Phase 1**: spatial ghost inference, discharge tactic and assumption tactic -/
-  if args.inferGhostVars then
-    originalGoal.withContext (inferSpatialGhosts info goalTy specTy)
+  /- **Phase 1**: discharge tactic and assumption tactic -/
   let ordPropGoals ←
     newPropGoals.mapM (fun g => do
       let ty ← g.getType
@@ -808,7 +783,7 @@ meta def stepWith (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args)
   -- Save the main goal before tryMatch (needed for lazy grind state initialization)
   let originalGoal ← getMainGoal
   -- Attempt to instantiate the theorem and introduce it in the context
-  let (newGoals, goalTy, specTy) ← tryMatch info lifting isLet th
+  let newGoals ← tryMatch info lifting isLet th
   --
   withMainContext do
   traceGoalWithNode "current goal"
@@ -824,7 +799,7 @@ meta def stepWith (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args)
   withTraceNode `Step (fun _ => pure m!"non prop goals") do
     trace[Step] "{← newNonPropGoals.mapM fun mvarId => do pure ((← mvarId.getDecl).userName, mvarId)}"
   -- Attempt to solve the goals which are propositions
-  let (stepState, newPropGoals) ← trySolvePreconditions info args args.config originalGoal args.stepState args.solvePreconditionTac newPropGoals goalTy specTy
+  let (stepState, newPropGoals) ← trySolvePreconditions info args args.config originalGoal args.stepState args.solvePreconditionTac newPropGoals
   /- Process the main goal -/
   -- Introduce the outputs, including the post-conditions, into the context
   setGoals [mainGoal]

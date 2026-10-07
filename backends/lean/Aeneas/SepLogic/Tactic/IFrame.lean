@@ -342,8 +342,25 @@ partial def solveHimpl (discharger : Option Syntax.Tactic) (goal : MVarId) :
     let solvePeeled : TacticM Bool := do
       let (peeled, weakening, witnesses) ← peelRequiredExists original
       solveWith peeled weakening witnesses
+    let openSourceExists : TacticM Bool := do
+      let (sourceFn, sourceArgs) := source.consumeMData.withApp fun fn args => (fn, args)
+      unless sourceFn.isConstOf ``iexists && sourceArgs.size = 2 do return false
+      let some u := sourceFn.constLevels!.head? | return false
+      let ι := sourceArgs[0]!
+      let J := sourceArgs[1]!
+      let some (body, frameFn) ← withLocalDeclD (← mkFreshUserName `x) ι fun x => do
+        let innerFrame ← mkFreshExprMVar (mkConst ``IProp)
+        let innerGoal ← mkFreshExprSyntheticOpaqueMVar (← mkAppM ``Entails
+          #[← Core.betaReduce (mkApp J x), mkApp2 (mkConst ``sep) original innerFrame])
+        try solveHimpl discharger innerGoal.mvarId! catch _ => return none
+        return some (← mkLambdaFVars #[x] (← instantiateMVars innerGoal),
+          ← mkLambdaFVars #[x] (← instantiateMVars innerFrame))
+        | return false
+      frameMVar.assign (mkApp2 (mkConst ``iexists [u]) ι frameFn)
+      goal.assign (mkAppN (mkConst ``entails_exists_frame [u]) #[ι, original, J, frameFn, body])
+      return true
     unless ← commitWhen (solveWith original (← mkAppM ``entails_refl #[original]) #[]) <||>
-        commitWhen solvePeeled do
+        commitWhen solvePeeled <||> commitWhen openSourceExists do
       throwError "required spatial assertions are not present in the precondition\
         \nsource: {source}\ndestination: {destination}"
   else

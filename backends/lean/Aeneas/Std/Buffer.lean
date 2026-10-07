@@ -170,8 +170,7 @@ theorem read.spec_buffer (b : Buffer T) (values : List T) (i : Nat)
   change ispec _ (RawPtr.read (b.ptr.add i)) _
   simp only [pointsTo_def]
   iintro hLength
-  apply WP.ispec_mono (RawPtr.read.spec_range b.ptr values i hIndex)
-  iframe
+  apply WP.ispec_mono (RawPtr.read.spec_range b.ptr values i hIndex) <;> iframe
 
 theorem write.spec_buffer (b : Buffer T) (values : List T) (i : Nat)
     (value : T) (hIndex : i < values.length) :
@@ -181,8 +180,7 @@ theorem write.spec_buffer (b : Buffer T) (values : List T) (i : Nat)
   simp only [pointsTo_def]
   iintro hLength
   apply WP.ispec_mono
-    (MutRawPtr.write.spec_range b.ptr values i value hIndex)
-  iframe
+    (MutRawPtr.write.spec_range b.ptr values i value hIndex) <;> iframe
 
 @[step]
 theorem readRange.spec (p : RawPtr T M) (values : List T) :
@@ -234,12 +232,7 @@ theorem writeRange.spec (p : MutRawPtr T) (old values : List T)
         (MutRawPtr.write.spec p previous value)
       · iframe
       · intro _
-        apply WP.ispec_mono
-          (WP.ispec_frame
-            (ih (p := p.add 1) (old := oldRest) hRest)
-            (p ↦ value))
-        exact entails_trans (by iframe)
-          (entails_sep_postWand _ (by intro _; iframe))
+        apply WP.ispec_mono (ih (p := p.add 1) (old := oldRest) hRest) <;> iframe
 
 @[step]
 theorem toSlice.spec (s : Slice T) :
@@ -261,10 +254,7 @@ theorem readSlice.spec (b : Buffer T) (s : Slice T) :
   rw [sep_emp_r_eq]
   iintro hValues
   subst values
-  apply WP.ispec_mono
-    (WP.ispec_frame (toSlice.spec s) (b.ptr ↦* s.val))
-  exact entails_trans (by iframe)
-    (entails_sep_postWand _ (by intro result; iframe))
+  apply WP.ispec_mono (toSlice.spec s) <;> iframe
 
 @[step]
 theorem writeSlice.spec (b : Buffer T) (old s : Slice T)
@@ -275,8 +265,7 @@ theorem writeSlice.spec (b : Buffer T) (old s : Slice T)
   have hNew : s.length = b.length := hLength.trans hOld
   simp only [writeSlice, hNew, ↓reduceIte]
   apply WP.ispec_mono
-    (writeRange.spec b.ptr old.val s.val hLength.symm)
-  iframe
+    (writeRange.spec b.ptr old.val s.val hLength.symm) <;> iframe
 
 @[step]
 theorem ofList.spec (values : List T) :
@@ -292,8 +281,7 @@ theorem fill.spec (b : Buffer T) (values : List T) (value : T) :
   simp only [pointsTo_def]
   iintro hLength
   rw [← hLength]
-  apply WP.ispec_mono (MutRawPtr.fillRange.spec b.ptr values value)
-  iframe
+  apply WP.ispec_mono (MutRawPtr.fillRange.spec b.ptr values value) <;> iframe
 
 theorem pointsTo_pair_entails (b₁ b₂ : Buffer T)
     (values₁ values₂ : List T) :
@@ -322,8 +310,7 @@ theorem copy.spec (dst src : Buffer T) (dstValues srcValues : List T)
   have hValues : dstValues.length = srcValues.length := by omega
   rw [← hSrc]
   apply WP.ispec_mono
-    (MutRawPtr.copyRange.spec dst.ptr src.ptr dstValues srcValues hValues)
-  iframe
+    (MutRawPtr.copyRange.spec dst.ptr src.ptr dstValues srcValues hValues) <;> iframe
 
 @[step]
 theorem compare.spec [DecidableEq T] (left right : Buffer T)
@@ -340,8 +327,7 @@ theorem compare.spec [DecidableEq T] (left right : Buffer T)
   rw [← hLeft]
   apply WP.ispec_mono
     (RawPtr.compareRange.spec left.ptr right.ptr
-      leftValues rightValues hValues)
-  iframe
+      leftValues rightValues hValues) <;> iframe
 
 @[step]
 theorem swap.spec (b : Buffer T) (values : List T) (i j : Nat)
@@ -414,8 +400,7 @@ theorem readRange_sub.spec (p : RawPtr T M) (values : List T) (i n : Nat)
       (RawPtr.pointsToRange_split (p.add i) (values.drop i) n)]
   have hRead := readRange.spec (p.add i) ((values.drop i).take n)
   rw [hBlock] at hRead
-  apply WP.ispec_mono hRead
-  iframe
+  apply WP.ispec_mono hRead <;> iframe
 
 theorem writeRange_sub.spec (p : MutRawPtr T) (old : List T) (i : Nat)
     (values : List T) (hBounds : i + values.length ≤ old.length) :
@@ -440,8 +425,7 @@ theorem writeRange_sub.spec (p : MutRawPtr T) (old : List T) (i : Nat)
     List.length_append, hTake, hBlock, RawPtr.add_add, List.drop_drop]
   apply WP.ispec_mono
     (writeRange.spec (p.add i) ((old.drop i).take values.length)
-      values hBlock)
-  iframe
+      values hBlock) <;> iframe
 
 @[step]
 theorem mut_to_raw.spec (slice : Slice T) :
