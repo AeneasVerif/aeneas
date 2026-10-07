@@ -972,7 +972,7 @@ meta def parseStepArgs
   withMainContext do
   withTraceNode `Step (fun _ => do pure m!"stepArgs") do
   trace[Step] "Step arguments: {args.raw}"
-  let config ← elabPartialConfig config
+  let config ← Term.withoutErrToSorry <| elabPartialConfig config
   trace[Step] "config: {repr config}"
   let withTh?: Option Expr ← Option.sequence <| pspec.map fun
     /- We have to make a case disjunction, because if we treat identifiers like
@@ -991,7 +991,8 @@ meta def parseStepArgs
         return e
     | term => do
       trace[Step] "With arg (term): {term}"
-      Tactic.elabTerm term none
+      /- Failed specification arguments must throw, not become synthetic sorry terms. -/
+      withoutRecover <| Tactic.elabTerm term none
   if let .some pspec := withTh? then trace[Step] "With arg: elaborated expression {pspec}"
   let userGaveIds := ids.isSome
   let ids := ids.getD ∅
@@ -1336,7 +1337,7 @@ meta def parseLetStep
         pure (none, true)
       else
         trace[Step] "With arg (term): {term}"
-        pure (some (← Tactic.elabTerm term none), false)
+        pure (some (← withoutRecover <| Tactic.elabTerm term none), false)
   let numIds := ids.getElems.size
   let ids := ids.getElems.map fun
       | `(binderIdent| $name:ident) => some name.getId
@@ -1346,7 +1347,7 @@ meta def parseLetStep
     if h: ids.size = 1 then ids[0]
     else none
   let config ← match config with | some cfg => pure cfg | none => `(Lean.Parser.Tactic.optConfig|)
-  let config ← elabPartialConfig config
+  let config ← Term.withoutErrToSorry <| elabPartialConfig config
   let byTac : Option Syntax.Tactic := match byTac with
     | none => none
     | some byTac => some ⟨byTac.raw⟩
@@ -1354,7 +1355,9 @@ meta def parseLetStep
   return (config, withThm, suggest, ids, postsBasename, byTac)
 | _ => throwUnsupportedSyntax
 
-elab tk:letStep : tactic => do
+@[tactic letStep]
+meta def evalLetStep : Tactic := fun stx => do
+  let tk : TSyntax ``letStep := ⟨stx⟩
   withMainContext do
   let (config, withArg, suggest, ids, postsBasename, byTac) ← parseLetStep tk
   let idsUserProvided := true

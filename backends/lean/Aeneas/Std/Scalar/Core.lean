@@ -15,7 +15,7 @@ namespace Aeneas
 
 namespace Std
 
--- Deactivate the warnings which appear when we use `#assert`
+-- Deactivate the warnings which appear when we use `#guard`
 set_option linter.hashCommand false
 
 /-!
@@ -343,7 +343,7 @@ reduce at compile-time). Whenever we perform an arithmetic operation like
 addition we need to check that the result is in bounds: we first compare
 to the conservative bounds, which reduces, then compare to the real bounds.
 
-This is useful for the various #asserts that we want to reduce at
+This is useful for the various #guards that we want to reduce at
 type-checking time, or when defining constants.
 -/
 

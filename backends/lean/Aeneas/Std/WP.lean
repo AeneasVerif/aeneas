@@ -8,6 +8,7 @@ public meta import Aeneas.Std.Spec
 public meta import Aeneas.Std.Delab
 public import Aeneas.Data.Coinductive.ITree
 public import Aeneas.Data.Coinductive.Effect
+public import Aeneas.Data.Coinductive.ITreeWP
 import all Init.Internal.Order.Basic
 public section
 
@@ -24,81 +25,48 @@ open Lean.Order
 
 @[expose] def wp_return (x:α) : Wp α := fun p => p x
 
-@[expose] section
-
-@[grind]
-inductive spec {α} : (x : Result α) → (p : Post α) →  Prop where
-| ret : ∀ {p x}, p x → spec (.ok x) p
-
-
-inductive dspec {α} : (x : Result α) → (p : Post α) →  Prop where
-| ret : ∀ {p x}, p x → dspec (.ok x) p
-| div : ∀ p, dspec div p
-
-end
-
-theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p := by
-  intros s
-  cases s
-  apply dspec.ret
-  assumption
+section ResultImplementation
 
 unseal Result
-theorem dspec_admissible {α} (p : Post α )
-  : admissible (fun x => dspec x p) := by
-  intro c hchain h
-  simp at h
-  by_cases (∃ a, c a) <;> rename_i h1
-  · have : c (CCPO.csup hchain) := by
-      by_cases (∃ a, c (.ok a))
-      · rename_i h2
-        rcases h2 with ⟨a, ca⟩
-        have dir1 := csup_le (x:=.ok a) hchain (by
-          intros y cy
-          have h := h y cy
-          cases h
-          · have order := hchain _ _ ca cy
-            cases order <;> try assumption
-            rename_i h
-            simp [ok] at *
-            rw [ITree.le_ret_inj _ _ h]
-            exact PartialOrder.rel_refl
-          · simp [div, ok]
-            rw [← ITree.div_is_bot]
-            apply bot_le
-          )
-        have dir2 := le_csup hchain ca
-        rw [PartialOrder.rel_antisymm dir1 dir2]
-        assumption
-      · have := CCPO.csup_spec hchain
-        simp [is_sup] at this
-        have this := (this .div).mpr
-        have only_div : ∀ a, c a → a = div := by
-          intros a ca
-          have h := h a ca
-          cases h <;> grind
-        have this := this (by
-          intros y cy
-          simp [only_div y cy]
-          apply PartialOrder.rel_refl
-          )
-        simp [Result, instCCPOResult]
-        rw [ITree.le_div_is_div (CCPO.csup (c:=c) hchain) this]
-        rcases h1 with ⟨a, ca⟩
-        have h := h a ca
-        simp [div] at only_div
-        rw [← only_div a ca]
-        assumption
-    grind
-  · have : CCPO.csup hchain = bot := by
-      unfold bot empty_chain
-      congr
-      grind
-    rw [this]
-    unfold Result
-    rw [ITree.div_is_bot]
-    constructor
-seal Result
+
+@[expose] section
+
+/-- The WP of the effects of Rust programs (`RustEffect`). -/
+@[reducible]
+def effectWP : EffectWP RustEffect where
+  State := Unit
+  wp effect _ _ :=
+    match effect with
+    | .fail _ => False
+
+instance : EffectWP.Monotonic effectWP where
+  wp_monotonic _ := False.elim
+
+instance : EffectWP.Conjunctive effectWP where
+  wp_conj := by
+    intro _ _ _ hNonempty hAll
+    obtain ⟨C₀, hC₀⟩ := hNonempty
+    exact (hAll C₀ hC₀).elim
+
+instance : EffectWP.ExcludedMiracle effectWP where
+  wp_excludedMiracle := by
+    rintro ⟨⟩ _ h
+    exact h
+
+def spec (m : Result α) (p : Post α) : Prop :=
+  DWP effectWP m (fun value _ => p value) ()
+
+def dspec (m : Result α) (p : Post α) : Prop :=
+  DWLP effectWP m (fun value _ => p value) ()
+
+theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p :=
+  DWP.toPartial
+
+theorem dspec_admissible {α} (p : Post α) :
+    admissible (fun x => dspec x p) :=
+  DWLP.admissible effectWP _ ()
+
+end
 
 /-- The shape the `dspec_induction` tactic needs to discharge the admissibility
 side-goal it generates for a partial specification about a recursive function. -/
@@ -126,26 +94,16 @@ def uncurry' {α β γ : Type _} (p : α → β → γ) : α × β → γ :=
 @[defeq] theorem uncurry'_eq x (p : α → β → γ) : uncurry' p x = p x.fst x.snd := by simp [uncurry']
 
 @[simp, grind =, agrind =]
-theorem spec_ok (x : α) : spec (ok x) p ↔ p x := by
-  constructor
-  · intros s
-    generalize H : ok x = v at s
-    cases s
-    simp at H
-    grind
-  · intros px
-    constructor
-    assumption
+theorem spec_ok (x : α) : spec (ok x) p ↔ p x := DWP.ret_iff
 
 @[simp, grind =, agrind =]
-theorem spec_vis (e k) : spec (.vis e k) p ↔ False := by grind [ok_not_vis, vis_not_ok]
+theorem spec_vis (e k) : spec (.vis e k) p ↔ False := ⟨fun h => DWP.vis_view h, False.elim⟩
 
 @[simp, grind =, agrind =]
-theorem spec_fail (e : Error) : spec (fail e) p ↔ False := by
-  simp [Result.fail_eq_vis]
+theorem spec_fail (e : Error) : spec (fail e) p ↔ False := by simp [Result.fail_eq_vis]
 
 @[simp, grind =, agrind =]
-theorem spec_div : spec div p ↔ False := by grind [ok_not_div, div_not_ok]
+theorem spec_div : spec div p ↔ False := ⟨DWP.div_false, False.elim⟩
 
 /-! ### `spec_*` for tuple posts
 
@@ -158,7 +116,7 @@ theorem spec_ok_pair {α β} (a : α) (b : β) (f : α → β → Prop) :
 
 @[simp, grind =, agrind =]
 theorem spec_fail_pair (e : Error) (f : α → β → Prop) :
-    spec (fail e) (uncurry f) ↔ False := by grind
+    spec (fail e) (uncurry f) ↔ False := by simp
 
 @[simp, grind =, agrind =]
 theorem spec_div_pair (f : α → β → Prop) :
@@ -166,86 +124,53 @@ theorem spec_div_pair (f : α → β → Prop) :
 
 /-- Mono rule used by `step`. -/
 theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
-  (∀ x, P₀ x → P₁ x) → spec m P₁ := by
-  intros HMonPost
-  revert h
-  intros s
-  cases s
-  constructor
-  grind only
+  (∀ x, P₀ x → P₁ x) → spec m P₁ :=
+  fun HMonPost => DWP.mono h fun value _ => HMonPost value
 
 /-- Bind rule used by `step`. It is stated on `Std.bind` rather than on `>>=`, which is
 what a translated program binds with. -/
 theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
   spec m Pₘ →
   (∀ x, Pₘ x → spec (k x) Pₖ) →
-  spec (Std.bind m k) Pₖ := by
-  intro Hm Hk
-  cases Hm
-  simp
-  grind only
+  spec (Std.bind m k) Pₖ :=
+  fun Hm Hk => DWP.bind (k := k) Hm fun value _ => Hk value
 
-theorem spec_equiv_exists (m:Result α) (P:Post α) :
-  spec m P ↔ (∃ y, m = ok y ∧ P y) := by
-  constructor
-  · intros s
-    cases s
-    grind only [ok]
-  · grind
+theorem spec_and {m : Result α} {p q : Post α} (h₁ : spec m p) (h₂ : spec m q) :
+    spec m (fun value => p value ∧ q value) :=
+  DWP.and_iff.mpr ⟨h₁, h₂⟩
 
-theorem spec_imp_exists {m:Result α} {P:Post α} :
-  spec m P → (∃ y, m = ok y ∧ P y) := by
-  exact (spec_equiv_exists m P).1
-
-theorem exists_imp_spec {m:Result α} {P:Post α} :
-  (∃ y, m = ok y ∧ P y) → spec m P := by
-  exact (spec_equiv_exists m P).2
+theorem spec_exists {m : Result α} {p : Post α} (h : spec m p) : ∃ value, p value :=
+  let ⟨value, _, hp⟩ := DWP.exists h
+  ⟨value, hp⟩
 
 -- `dspec` theorems
 theorem dspec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : dspec m P₀):
-  (∀ x, P₀ x → P₁ x) → dspec m P₁ := by
-  intros HMonPost
-  revert h
-  intros s
-  cases s <;> constructor
-  grind only
+  (∀ x, P₀ x → P₁ x) → dspec m P₁ :=
+  fun HMonPost => DWLP.mono h fun value _ => HMonPost value
 
 theorem dspec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
   dspec m Pₘ →
   (∀ x, Pₘ x → dspec (k x) Pₖ) →
-  dspec (Std.bind m k) Pₖ := by
-  intro Hm Hk
-  cases Hm
-  · simp
-    grind only
-  · simp
-    constructor
+  dspec (Std.bind m k) Pₖ :=
+  fun Hm Hk => DWLP.bind (k := k) Hm fun value _ => Hk value
 
 @[simp, grind =, agrind =]
-theorem dspec_ok (x : α) : dspec (ok x) p ↔ p x := by
-  constructor
-  · intros s
-    generalize h : Result.ok x = v at s
-    cases s <;> simp at *; grind
-  · intros px
-    constructor
-    assumption
+theorem dspec_ok (x : α) : dspec (ok x) p ↔ p x := DWLP.ret_iff
 
 @[simp, grind =, agrind =]
-theorem dspec_vis (e k) : dspec (.vis e k) p ↔ False := by
-  constructor
-  · intros s
-    generalize h : Result.vis e k = v at s
-    cases s <;> simp at *
-  · intros; contradiction
+theorem dspec_vis (e k) : dspec (.vis e k) p ↔ False := ⟨fun h => DWLP.vis_view h, False.elim⟩
 
 @[simp, grind =, agrind =]
-theorem dspec_fail (e : Error) : dspec (fail e) p ↔ False := by
-  simp [Result.fail_eq_vis]
+theorem dspec_div : dspec (div : Result α) p ↔ True := iff_true_intro DWLP.div
 
-theorem dspec_imp_forall {m:Result α} {P:Post α} :
-  dspec m P → (∀ y, m = ok y → P y) := by
-  grind only [= dspec_ok]
+@[simp, grind =, agrind =]
+theorem dspec_fail (e : Error) : dspec (fail e) p ↔ False := by simp [Result.fail_eq_vis]
+
+theorem dspec_and {m : Result α} {p q : Post α} (h₁ : dspec m p) (h₂ : dspec m q) :
+    dspec m (fun value => p value ∧ q value) :=
+  DWLP.and_iff.mpr ⟨h₁, h₂⟩
+
+end ResultImplementation
 
 end Aeneas.Std.WP
 
@@ -807,9 +732,7 @@ theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
 theorem spec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
     (h : spec x Q) :
     ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
-  obtain ⟨v, hx, hQv⟩ := spec_imp_exists h
-  subst hx
-  simp [Triple, WP.wp, PredTrans.apply, hQv]
+  cases x <;> simp_all [Triple, WP.wp, PredTrans.apply]
 
 theorem dspec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
     (h : dspec x Q) :
@@ -849,13 +772,14 @@ theorem loop.spec {α : Type u} {β : Type v} {γ : Type w}
   apply @wf.wf.fix γ (fun x' =>
     ∀ x, measure x = x' →
     inv x → loop body x ⦃ post ⦄)
-  intros y h x eq ix
-  have hBody' := hBody x ix; clear hBody
-  rw [WP.spec_equiv_exists] at hBody'
-  rcases hBody' with ⟨y, p, yc⟩
+  intro y ih x eq ix
+  subst eq
   unfold loop
-  simp [p]
-  grind
+  apply WP.spec_bind (hBody x ix)
+  intro r hr
+  cases r with
+  | done z => simpa using hr
+  | cont x' => exact ih (measure x') hr.2 x' rfl hr.1
 
 theorem loop.spec_decr_nat {α : Type u} {β : Type v}
   (measure : α → Nat)

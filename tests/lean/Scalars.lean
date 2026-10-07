@@ -192,7 +192,7 @@ def test_is_multiple_of_true : Result Unit := do
   massert b
 
 /- Unit test for [scalars::test_is_multiple_of_true] -/
-#assert (test_is_multiple_of_true).reducesTo ()
+#guard (test_is_multiple_of_true).reducesTo ()
 
 /-- [scalars::test_is_multiple_of_false]:
     Source: 'tests/src/scalars.rs', lines 142:0-144:1
@@ -202,7 +202,7 @@ def test_is_multiple_of_false : Result Unit := do
   massert (¬ b)
 
 /- Unit test for [scalars::test_is_multiple_of_false] -/
-#assert (test_is_multiple_of_false).reducesTo ()
+#guard (test_is_multiple_of_false).reducesTo ()
 
 /-- [scalars::test_is_multiple_of_zero_divisor]:
     Source: 'tests/src/scalars.rs', lines 147:0-151:1
@@ -214,7 +214,7 @@ def test_is_multiple_of_zero_divisor : Result Unit := do
   massert (¬ b1)
 
 /- Unit test for [scalars::test_is_multiple_of_zero_divisor] -/
-#assert (test_is_multiple_of_zero_divisor).reducesTo ()
+#guard (test_is_multiple_of_zero_divisor).reducesTo ()
 
 /-- [scalars::test_is_power_of_two_u8]:
     Source: 'tests/src/scalars.rs', lines 158:0-161:1
@@ -226,7 +226,7 @@ def test_is_power_of_two_u8 : Result Unit := do
   massert (¬ b1)
 
 /- Unit test for [scalars::test_is_power_of_two_u8] -/
-#assert (test_is_power_of_two_u8).reducesTo ()
+#guard (test_is_power_of_two_u8).reducesTo ()
 
 /-- [scalars::test_is_power_of_two_u16]:
     Source: 'tests/src/scalars.rs', lines 164:0-167:1
@@ -238,7 +238,7 @@ def test_is_power_of_two_u16 : Result Unit := do
   massert (¬ b1)
 
 /- Unit test for [scalars::test_is_power_of_two_u16] -/
-#assert (test_is_power_of_two_u16).reducesTo ()
+#guard (test_is_power_of_two_u16).reducesTo ()
 
 /-- [scalars::test_is_power_of_two_u32]:
     Source: 'tests/src/scalars.rs', lines 170:0-174:1
@@ -252,7 +252,7 @@ def test_is_power_of_two_u32 : Result Unit := do
   massert (¬ b2)
 
 /- Unit test for [scalars::test_is_power_of_two_u32] -/
-#assert (test_is_power_of_two_u32).reducesTo ()
+#guard (test_is_power_of_two_u32).reducesTo ()
 
 /-- [scalars::test_is_power_of_two_u64]:
     Source: 'tests/src/scalars.rs', lines 177:0-180:1
@@ -264,7 +264,7 @@ def test_is_power_of_two_u64 : Result Unit := do
   massert (¬ b1)
 
 /- Unit test for [scalars::test_is_power_of_two_u64] -/
-#assert (test_is_power_of_two_u64).reducesTo ()
+#guard (test_is_power_of_two_u64).reducesTo ()
 
 /-- [scalars::test_is_power_of_two_u128]:
     Source: 'tests/src/scalars.rs', lines 183:0-185:1
@@ -274,7 +274,7 @@ def test_is_power_of_two_u128 : Result Unit := do
   massert b
 
 /- Unit test for [scalars::test_is_power_of_two_u128] -/
-#assert (test_is_power_of_two_u128).reducesTo ()
+#guard (test_is_power_of_two_u128).reducesTo ()
 
 /-- [scalars::test_is_power_of_two_usize]:
     Source: 'tests/src/scalars.rs', lines 188:0-191:1
@@ -286,7 +286,7 @@ def test_is_power_of_two_usize : Result Unit := do
   massert (¬ b1)
 
 /- Unit test for [scalars::test_is_power_of_two_usize] -/
-#assert (test_is_power_of_two_usize).reducesTo ()
+#guard (test_is_power_of_two_usize).reducesTo ()
 
 /-- [scalars::test_try_from_usize_u32_ok]:
     Source: 'tests/src/scalars.rs', lines 198:0-200:1
@@ -298,7 +298,7 @@ def test_try_from_usize_u32_ok : Result Unit := do
   massert b
 
 /- Unit test for [scalars::test_try_from_usize_u32_ok] -/
-#assert (test_try_from_usize_u32_ok).reducesTo ()
+#guard (test_try_from_usize_u32_ok).reducesTo ()
 
 /-- [scalars::checked_div]:
     Source: 'tests/src/scalars.rs', lines 206:0-211:1 -/
@@ -334,7 +334,7 @@ def test_question_mark_ok : Result Unit := do
   massert (i = 6#u32)
 
 /- Unit test for [scalars::test_question_mark_ok] -/
-#assert (test_question_mark_ok).reducesTo ()
+#guard (test_question_mark_ok).reducesTo ()
 
 /-- [scalars::test_question_mark_err]:
     Source: 'tests/src/scalars.rs', lines 226:0-229:1
@@ -345,6 +345,6 @@ def test_question_mark_err : Result Unit := do
   massert (¬ b)
 
 /- Unit test for [scalars::test_question_mark_err] -/
-#assert (test_question_mark_err).reducesTo ()
+#guard (test_question_mark_err).reducesTo ()
 
 end scalars
