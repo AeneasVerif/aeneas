@@ -73,6 +73,7 @@ theorem MVal.valid_for.variant_proj {d v ts} (h : MVal.valid_for (.variant d v) 
 macro "has_layout_retract_embed" : tactic => `(tactic| (
   intro x
   cases x
+  repeat cases ‹_ × _›
   all_goals simp
 ))
 
@@ -104,6 +105,44 @@ class HasLayout (α : Type u) where
 
 attribute [simp] HasLayout.retract_embed HasLayout.embed_retract
 
+@[simp] theorem HasLayout.embed_valid {α : Type u} [HasLayout α] (x : α) :
+    (HasLayout.embed x).val.valid_for (HasLayout.ty α) :=
+  (HasLayout.embed x).property
+
+@[expose, inline, simp]
+def HasLayout.mkTuple {ts : List MType} (vs : List MVal)
+    (h : List.Forall₂ MVal.valid_for vs ts := by simp) :
+    { v : MVal // v.valid_for (.tuple ts) } :=
+  ⟨.tuple vs, .tuple vs ts h⟩
+
+@[expose, inline, simp]
+def HasLayout.mkVariant {ts : List MType} (d : Nat) (v : MVal)
+    (hb : d < ts.length := by simp)
+    (hv : v.valid_for (ts[d]'hb) := by simp) :
+    { v : MVal // v.valid_for (.enum ts) } :=
+  ⟨.variant d v, .enum d v ts hb hv⟩
+
+@[expose, inline, simp]
+def MVal.valid_for.field {vs : List MVal} {ts : List MType}
+    (h : MVal.valid_for (.tuple vs) (.tuple ts)) (i : Fin vs.length) :
+    { v : MVal // v.valid_for (ts[i]'(by rw [←h.tuple_len]; exact i.isLt)) } :=
+  ⟨vs[i], h.tuple_proj i⟩
+
+
+@[expose, inline, simp]
+def MVal.valid_for.vdata {d : Nat} {v : MVal} {ts : List MType}
+    (h : MVal.valid_for (.variant d v) (.enum ts)) :
+    { v : MVal // v.valid_for (ts[d]'(h.variant_bound)) } :=
+  ⟨v, h.variant_proj⟩
+
+@[expose, inline, simp]
+def MVal.valid_for.vfield {d : Nat} {vs : List MVal} {ts vts : List MType}
+    (h : MVal.valid_for (.variant d (.tuple vs)) (.enum ts))
+    (i : Fin vs.length)
+    (hv : ts[d]'(h.variant_bound) = .tuple vts := by rfl) :
+    { v : MVal // v.valid_for (vts[i]'(by
+        have hp := h.variant_proj; rw [hv] at hp; rw [←hp.tuple_len]; exact i.isLt)) } :=
+  ⟨vs[i], (hv ▸ h.variant_proj).tuple_proj i⟩
 
 -- the "special" instances for leaf integers
 instance {ty : Std.UScalarTy} : HasLayout (Std.UScalar ty) where
@@ -124,26 +163,26 @@ instance {ty : Std.IScalarTy} : HasLayout (Std.IScalar ty) where
 
 instance : HasLayout Unit where
   ty := .tuple []
-  embed := λ _ ↦ ⟨.tuple [], by simp⟩
+  embed := λ _ ↦ HasLayout.mkTuple []
   retract := λ _ ↦ ()
 
 instance : HasLayout Bool where
   ty := .enum [.tuple [], .tuple []]
-  embed := λ | true => ⟨ .variant 0 (.tuple []), by simp⟩
-             | false => ⟨ .variant 1 (.tuple []), by simp⟩
+  embed := λ | true => HasLayout.mkVariant 0 (.tuple [])
+             | false => HasLayout.mkVariant 1 (.tuple [])
   retract := λ | ⟨.variant 0 _, _⟩ => true
                | ⟨.variant 1 _, _⟩ => false
 
 instance {T1 : Type u} {T2 : Type v} [HasLayout T1] [HasLayout T2] : HasLayout (T1 × T2) where
   ty := .tuple [HasLayout.ty T1, HasLayout.ty T2]
-  embed := λ (x0, x1) => ⟨.tuple [HasLayout.embed x0, HasLayout.embed x1], by simp [(HasLayout.embed x0).2, (HasLayout.embed x1).2]⟩
+  embed := λ (x0, x1) => HasLayout.mkTuple [HasLayout.embed x0, HasLayout.embed x1]
   retract := λ | ⟨.tuple [x0, x1], h⟩ =>
-                  (HasLayout.retract ⟨x0, h.tuple_proj (0 : Fin 2)⟩, HasLayout.retract ⟨x1, h.tuple_proj (1 : Fin 2)⟩)
+                  (HasLayout.retract (h.field 0), HasLayout.retract (h.field 1))
 
 instance {T1 : Type u} [HasLayout T1] : HasLayout (Option T1) where
   ty := .enum [.tuple [], HasLayout.ty T1]
-  embed := λ | .none => ⟨.variant 0 (.tuple []), by simp⟩
-             | .some x => ⟨.variant 1 (HasLayout.embed x), by simp [(HasLayout.embed x).2]⟩
+  embed := λ | .none => HasLayout.mkVariant 0 (.tuple [])
+             | .some x => HasLayout.mkVariant 1 (HasLayout.embed x)
   retract := λ | ⟨.variant 0 _, _⟩ => .none
                | ⟨.variant 1 v, h⟩ =>
                   .some (HasLayout.retract ⟨v, h.variant_proj⟩)
@@ -155,14 +194,14 @@ inductive Bazinga (T1 : Type u) (T2 : Type v) (T3 : Type w) : Type _ where
 | foo4 (b : Bool)
 
 instance {T1 : Type u} {T2 : Type v} {T3 : Type w} [HasLayout T1] [HasLayout T2] [HasLayout T3] : HasLayout (Bazinga T1 T2 T3) where
-  ty := .enum [.tuple [], .tuple [HasLayout.ty Std.Usize, HasLayout.ty T1], .tuple [HasLayout.ty T2, HasLayout.ty T3], HasLayout.ty Bool]
-  embed := λ | .foo1 => ⟨.variant 0 (.tuple []), by simp⟩
-             | .foo2 x y => ⟨.variant 1 (.tuple [HasLayout.embed x, HasLayout.embed y]), by simp [(HasLayout.embed x).2, (HasLayout.embed y).2]⟩
-             | .foo3 x y => ⟨.variant 2 (.tuple [HasLayout.embed x, HasLayout.embed y]), by simp [(HasLayout.embed x).2, (HasLayout.embed y).2]⟩
-             | .foo4 x => ⟨.variant 3 (HasLayout.embed x), by simp [(HasLayout.embed x).2]⟩
-  retract := λ | ⟨.variant 0 v, h⟩ => .foo1
-               | ⟨.variant 1 (.tuple [v0, v1]), h⟩ => .foo2 (HasLayout.retract ⟨v0, h.variant_proj.tuple_proj (0 : Fin 2)⟩) (HasLayout.retract ⟨v1, h.variant_proj.tuple_proj (1 : Fin 2)⟩)
-               | ⟨.variant 2 (.tuple [v0, v1]), h⟩ => .foo3 (HasLayout.retract ⟨v0, h.variant_proj.tuple_proj (0 : Fin 2)⟩) (HasLayout.retract ⟨v1, h.variant_proj.tuple_proj (1 : Fin 2)⟩)
-               | ⟨.variant 3 v, h⟩ => .foo4 (HasLayout.retract ⟨v, h.variant_proj⟩)
+  ty := .enum [.tuple [], .tuple [HasLayout.ty Std.Usize, HasLayout.ty T1], .tuple [HasLayout.ty T2, HasLayout.ty T3], .tuple [HasLayout.ty Bool]]
+  embed := λ | .foo1 => HasLayout.mkVariant 0 (.tuple [])
+             | .foo2 x y => HasLayout.mkVariant 1 (.tuple [HasLayout.embed x, HasLayout.embed y])
+             | .foo3 x y => HasLayout.mkVariant 2 (.tuple [HasLayout.embed x, HasLayout.embed y])
+             | .foo4 x => HasLayout.mkVariant 3 (.tuple [HasLayout.embed x])
+  retract := λ | ⟨.variant 0 (.tuple []), _⟩ => .foo1
+               | ⟨.variant 1 (.tuple [v0, v1]), h⟩ => .foo2 (HasLayout.retract (h.vfield 0)) (HasLayout.retract (h.vfield 1))
+               | ⟨.variant 2 (.tuple [v0, v1]), h⟩ => .foo3 (HasLayout.retract (h.vfield 0)) (HasLayout.retract (h.vfield 1))
+               | ⟨.variant 3 (.tuple [v0]), h⟩ => .foo4 (HasLayout.retract (h.vfield 0))
 
 end Aeneas
