@@ -2,6 +2,7 @@ module
 import Aeneas.Tactic.Step.Tests.Triple
 import Aeneas.Tactic.Step.Tests.Coin
 import Aeneas.Tactic.Step.Tests.HigherOrder
+import Aeneas.Tactic.Step.Tests.HigherOrderOption
 import Aeneas.Tactic.Step.Tests.IntroOutputs
 import Aeneas.Tactic.Step.Tests.MaxRecDepthMetavar
 import Aeneas.Tactic.Step.Tests.MvcgenSpec
