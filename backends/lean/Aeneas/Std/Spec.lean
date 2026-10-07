@@ -53,14 +53,18 @@ structure SpecInfo where
 
   /-- Name of a `DischargeTactic` callback (optional).
 
-  This allows the specification to come with a dedicated tactic to solve the goals
-  it generates. For instance, when using separation logic, it can be used to apply `iframe` to each entailment.
+  This lets a specification come with a dedicated tactic for the goals it generates
+  (e.g., with separation logic, applying `iframe` to each entailment).
 
-  `step` attempts to discharge the preconditions of the mono and bind theorems with it.
-  `step*` also attempts to discharge the final goal with it,
-  which usually is a simple entailment (for instance, a magic wand application).
+  When `step` applies the mono or bind theorem, the theorem's preconditions become
+  new goals, and its ghost variables become metavariables.
+  `step` first tries this callback on each precondition, before `singleAssumptionTac` and
+  the generic solvers (simp, grind, `scalar_tac`). Ghost variables are filled in when a
+  precondition that mentions them is solved.
+  `step*` also tries it on the final goal, which usually has the same shape as those
+  preconditions (for instance, a magic wand application).
 
-  If the tactic does not solve the goal, `step` reverts any modification it performed. -/
+  If the tactic does not solve the goal, `step`/`step*` revert any modification it performed. -/
   discharge_tactic : Option Name := none
 
   to_mvcgen: Option Name
