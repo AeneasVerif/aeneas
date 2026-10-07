@@ -66,7 +66,7 @@ def test_map_some : Result Unit := do
   massert (i = 2#u32)
 
 /- Unit test for [options::test_map_some] -/
-#assert (test_map_some).reducesTo ()
+#guard (test_map_some).reducesTo ()
 
 /-- [options::test_map_none::{closure}]
     Source: 'tests/src/options.rs', lines 30:18-30:41 -/
@@ -99,7 +99,7 @@ def test_map_none : Result Unit := do
   massert b
 
 /- Unit test for [options::test_map_none] -/
-#assert (test_map_none).reducesTo ()
+#guard (test_map_none).reducesTo ()
 
 /-- [options::test_map_capture::{closure}]
     Source: 'tests/src/options.rs', lines 37:27-37:36 -/
@@ -133,7 +133,7 @@ def test_map_capture : Result Unit := do
   massert (i = 4#u32)
 
 /- Unit test for [options::test_map_capture] -/
-#assert (test_map_capture).reducesTo ()
+#guard (test_map_capture).reducesTo ()
 
 /-- [options::test_is_some_and_true::{closure}]
     Source: 'tests/src/options.rs', lines 46:35-46:44 -/
@@ -169,7 +169,7 @@ def test_is_some_and_true : Result Unit := do
   massert b
 
 /- Unit test for [options::test_is_some_and_true] -/
-#assert (test_is_some_and_true).reducesTo ()
+#guard (test_is_some_and_true).reducesTo ()
 
 /-- [options::test_is_some_and_false::{closure}]
     Source: 'tests/src/options.rs', lines 51:36-51:45 -/
@@ -205,7 +205,7 @@ def test_is_some_and_false : Result Unit := do
   massert (¬ b)
 
 /- Unit test for [options::test_is_some_and_false] -/
-#assert (test_is_some_and_false).reducesTo ()
+#guard (test_is_some_and_false).reducesTo ()
 
 /-- [options::test_is_some_and_none::{closure}]
     Source: 'tests/src/options.rs', lines 58:27-58:39 -/
@@ -241,7 +241,7 @@ def test_is_some_and_none : Result Unit := do
   massert (¬ b)
 
 /- Unit test for [options::test_is_some_and_none] -/
-#assert (test_is_some_and_none).reducesTo ()
+#guard (test_is_some_and_none).reducesTo ()
 
 /-- [options::test_bool_then_true::{closure}]
     Source: 'tests/src/options.rs', lines 67:22-67:29 -/
@@ -274,7 +274,7 @@ def test_bool_then_true : Result Unit := do
   massert (i = 1#u32)
 
 /- Unit test for [options::test_bool_then_true] -/
-#assert (test_bool_then_true).reducesTo ()
+#guard (test_bool_then_true).reducesTo ()
 
 /-- [options::test_bool_then_false::{closure}]
     Source: 'tests/src/options.rs', lines 73:23-73:45 -/
@@ -307,7 +307,7 @@ def test_bool_then_false : Result Unit := do
   massert b
 
 /- Unit test for [options::test_bool_then_false] -/
-#assert (test_bool_then_false).reducesTo ()
+#guard (test_bool_then_false).reducesTo ()
 
 /-- [options::ok_if_even]:
     Source: 'tests/src/options.rs', lines 80:0-86:1 -/
@@ -327,7 +327,7 @@ def test_result_unwrap_or_ok : Result Unit := do
   massert (i = 2#u32)
 
 /- Unit test for [options::test_result_unwrap_or_ok] -/
-#assert (test_result_unwrap_or_ok).reducesTo ()
+#guard (test_result_unwrap_or_ok).reducesTo ()
 
 /-- [options::test_result_unwrap_or_err]:
     Source: 'tests/src/options.rs', lines 94:0-96:1
@@ -338,6 +338,6 @@ def test_result_unwrap_or_err : Result Unit := do
   massert (i = 0#u32)
 
 /- Unit test for [options::test_result_unwrap_or_err] -/
-#assert (test_result_unwrap_or_err).reducesTo ()
+#guard (test_result_unwrap_or_err).reducesTo ()
 
 end options

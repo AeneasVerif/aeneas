@@ -389,7 +389,7 @@ let lean_builtin_funs =
     mk_fun
       "core::array::{core::ops::index::IndexMut<[@T; @N], @I, @O>}::index_mut"
       "core.array.Array.index_mut";
-    (* file: "Aeneas/Std/Core/CoreOption.lean", line: 111 *)
+    (* file: "Aeneas/Std/Core/CoreOption.lean", line: 122 *)
     mk_fun "core::bool::{bool}::then" "core.bool.Bool.then";
     (* file: "Aeneas/Std/Core/Core.lean", line: 136 *)
     mk_fun "core::clone::impls::{core::clone::Clone<&'0 @T>}::clone"
@@ -1038,7 +1038,7 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Core.lean", line: 123 *)
     mk_fun "core::option::{core::option::Option<@T>}::is_some"
       "core.option.Option.is_some" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Core/CoreOption.lean", line: 80 *)
+    (* file: "Aeneas/Std/Core/CoreOption.lean", line: 84 *)
     mk_fun "core::option::{core::option::Option<@T>}::is_some_and"
       "core.option.Option.is_some_and";
     (* file: "Aeneas/Std/Core/CoreOption.lean", line: 41 *)
