@@ -42,8 +42,8 @@ instance : EffectWP.Conjunctive effectWP where
     | guardedModify => exact ⟨(hAll C₀ hC₀).1, fun C hC => (hAll C hC).2⟩
     | fail => exact (hAll C₀ hC₀).elim
 
-instance : EffectWP.NoMiracle effectWP where
-  wp_noMiracle effect _ hWp := by
+instance : EffectWP.ExcludedMiracle effectWP where
+  wp_excludedMiracle effect _ hWp := by
     cases effect with
     | guardedModify => exact hWp.2
     | fail => exact hWp

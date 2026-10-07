@@ -318,4 +318,7 @@ meta def prepareIntroIspec : PrepareIntroOutputs := do
   if ← isProp domain then return 0
   prepareIntroOutputsWith goalTy tree simpOutputEquiv
 
+public meta def iframeDischarge : DischargeTactic := do
+  evalTactic (← `(tactic| iframe))
+
 end Aeneas.Step

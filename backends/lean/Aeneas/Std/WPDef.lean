@@ -26,6 +26,7 @@ unseal Result
 
 @[expose] section
 
+/-- The WP of the effects of Rust programs (`RustEffect`). -/
 @[reducible]
 def effectWP : EffectWP RustEffect where
   State := Heap
@@ -35,8 +36,8 @@ def effectWP : EffectWP RustEffect where
         ∃ hPre : pre h, C (.up (modify h hPre).1) (modify h hPre).2
     | .fail _ => False
 
-instance : EffectWP.Monotone effectWP where
-  wp_mono {effect} _ _ hC _ hEvent := by
+instance : EffectWP.Monotonic effectWP where
+  wp_monotonic {effect} _ _ hC _ hEvent := by
     cases effect with
     | guardedModify => exact hEvent.imp fun _ hNext => hC _ _ hNext
     | fail => exact hEvent.elim

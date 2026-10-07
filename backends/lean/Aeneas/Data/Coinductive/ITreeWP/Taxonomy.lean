@@ -22,7 +22,7 @@ theorem DWP.and_partial [θ.Conjunctive] (h₁ : DWP θ m Q₁ s) (h₂ : DWLP �
     DWP θ m (fun value s' => Q₁ value s' ∧ Q₂ value s') s :=
   h₁.induction (P := fun t u => DWLP θ t Q₂ u → DWP θ t (fun value s' => Q₁ value s' ∧ Q₂ value s') u)
     (fun _ _ hPost hOther => DWP.ret_iff.mpr ⟨hPost, DWLP.ret_iff.mp hOther⟩)
-    (fun _ _ _ hWp hOther => .vis (θ.wp_mono (fun _ _ h => h.1 h.2)
+    (fun _ _ _ hWp hOther => .vis (θ.wp_monotonic (fun _ _ h => h.1 h.2)
       (EffectWP.wp_and hWp hOther.vis_view)))
     h₂
 

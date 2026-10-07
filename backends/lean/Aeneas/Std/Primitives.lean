@@ -139,6 +139,7 @@ instance Result.reprInst {α : Type u} [Repr α] : Repr (Result α) where
     | .ok a => "Aeneas.Std.Result.ok " ++ repr a
     | .div => "Aeneas.Std.Result.div"
     | .vis (.fail e) _ => "Aeneas.Std.Result.fail " ++ repr e
+    | .vis (.guardedModify ..) _ => "Aeneas.Std.Result.guardedModify"
 
 /-!
 `Result` not being an inductive type it has no built-in constructor facts that grind
