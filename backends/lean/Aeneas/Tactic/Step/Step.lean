@@ -252,6 +252,16 @@ meta def getSpecPost (ty : Expr) : MetaM Expr := do
   let (info, args) ← getSpecInfoArgs ty
   return args[info.post_index]!
 
+/-- The discharge tactic registered for a specification statement. -/
+meta def getDischargeTactic (ty : Expr) : MetaM (Option Name) := do
+  let (info, _) ← getSpecInfoArgs ty
+  return info.discharge_tactic
+
+/-- The discharge tactic registered for the specification statement in the current goal. -/
+meta def getDischargeTacticFromGoal : TacticM (Option Name) := do
+  withMainContext do
+  getDischargeTactic (← getMainTarget)
+
 /- Analyze a goal comp
 
    If comp = bind m k then return true and m
@@ -647,13 +657,12 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
 /-- Attempt to solve the preconditions.
 
     We do this in several phases:
-    - we first use the discharge tactic registered for the specification predicate (if there is one)
-      and the "assumption" tactic to instantiate as many meta-variables as possible,
+    - we first use the "assumption" tactic to instantiate as many meta-variables as possible,
       and we do so by starting with the preconditions with the highest number of meta-variables
       (this is a way of avoiding spurious instantiations). This helps with the second phase.
     - we then use the other tactic on the preconditions
  -/
-meta def trySolvePreconditions (info : SpecInfo) (args : Args) (config : Config)
+meta def trySolvePreconditions (args : Args) (config : Config)
     (originalGoal : MVarId) (stepState : StepState)
     (solvePreconditionTac : Option StepGrindState → TacticM Unit)
     (newPropGoals : List MVarId)
@@ -665,19 +674,9 @@ meta def trySolvePreconditions (info : SpecInfo) (args : Args) (config : Config)
       pure ((← Utils.getMVarIds ty).size, g))
   let ordPropGoals := (ordPropGoals.mergeSort (fun (mvars0, _) (mvars1, _) => mvars0 ≤ mvars1)).reverse
   setGoals (ordPropGoals.map Prod.snd)
-  let dischargeTac ← info.discharge_tactic.mapM fun name => do
-    let tac ← evalDischargeTactic name
-    pure do
-      withTraceNode `Step (fun _ => pure m!"Attempting to solve with the discharge tactic `{name}`") do
-      firstTacSolve [tac]
-  let assumTac : Option (TacticM Unit) :=
-    match dischargeTac, args.assumTac with
-    | some dischargeTac, some assumTac => some (try dischargeTac catch _ => assumTac)
-    | some dischargeTac, none => some dischargeTac
-    | none, assumTac => assumTac
-  /- First attempt to solve the preconditions in a *synchronous* manner by using the discharge
-     tactic and the `singleAssumptionTac`. We do this to instantiate meta-variables -/
-  if let some assumTac := assumTac then
+  /- First attempt to solve the preconditions in a *synchronous* manner by using the `singleAssumptionTac`.
+     We do this to instantiate meta-variables -/
+  if let some assumTac := args.assumTac then
     allGoalsNoRecover (tryTac assumTac)
     /- Attempt to resolve the typeclass instances again (we already tried once, but maybe we couldn't
       because some meta-variables were not resolved) -/
@@ -786,7 +785,7 @@ meta def stepWith (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args)
   withTraceNode `Step (fun _ => pure m!"non prop goals") do
     trace[Step] "{← newNonPropGoals.mapM fun mvarId => do pure ((← mvarId.getDecl).userName, mvarId)}"
   -- Attempt to solve the goals which are propositions
-  let (stepState, newPropGoals) ← trySolvePreconditions info args args.config originalGoal args.stepState args.solvePreconditionTac newPropGoals
+  let (stepState, newPropGoals) ← trySolvePreconditions args args.config originalGoal args.stepState args.solvePreconditionTac newPropGoals
   /- Process the main goal -/
   -- Introduce the outputs, including the post-conditions, into the context
   setGoals [mainGoal]
@@ -1046,6 +1045,32 @@ meta def evalAGrindWithPreprocess (withGroundSimprocs : Bool) (config : Grind.Co
       Aeneas.Grind.agrindEval config params mvarId
     catch e => trace[Step] "Grind failed:\n{e.toMessageData}"
 
+/-- Prepare the tactics used to discharge preconditions and infer ghost variables. -/
+meta def prepareAssumTac (config : Config) : TacticM (Option (TacticM Unit)) := do
+  /- **The specification's discharge tactic**: -/
+  let dischargeTac : List (TacticM Unit) ← do
+    match ← getDischargeTacticFromGoal with
+    | none => pure []
+    | some name =>
+      let tac ← evalDischargeTactic name
+      pure [
+        withTraceNode `Step
+          (fun _ => pure m!"Attempting to solve with the discharge tactic: `{name}`") do
+        tac
+      ]
+
+  let customAssumTacs : List (TacticM Unit) ← do
+    if config.assumTac then
+      /- Preprocessing step for `singleAssumptionTac` -/
+      let singleAssumptionTacDtree ← singleAssumptionTacPreprocess
+      pure [do
+        withTraceNode `Step (fun _ => pure m!"Attempting to solve with `singleAssumptionTac`") do
+        singleAssumptionTacCore singleAssumptionTacDtree (instMVars := config.inferGhostVars)]
+    else pure []
+
+  let assumTacs := dischargeTac ++ customAssumTacs
+  return if assumTacs.isEmpty then none else some (firstTacSolve assumTacs)
+
 meta def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option Expr)
   (ids : Array (Option Name)) (idsUserProvided : Bool) (postsBasename : Option Name := none)
   (byTacStx : Option Syntax.Tactic)
@@ -1059,20 +1084,13 @@ meta def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Op
   withMainContext do
 
   /- **Assumption tactic**:
-
     We use it to:
     - discharge preconditions by using local assumptions (this is activated by `Config.assumTac`)
+      and the registered discharge tactic
     - more importantly, instantiate meta-variables introduced because of ghost variables, by matching
       preconditions against local assumptions (this is activated by `Config.inferGhostVars`)
   -/
-  let customAssumTac : Option (TacticM Unit) ← do
-    if config.assumTac then
-      /- Preprocessing step for `singleAssumptionTac` -/
-      let singleAssumptionTacDtree ← singleAssumptionTacPreprocess
-      pure (some do
-        withTraceNode `Step (fun _ => pure m!"Attempting to solve with `singleAssumptionTac`") do
-        singleAssumptionTacCore singleAssumptionTacDtree (instMVars := config.inferGhostVars))
-    else pure none
+  let assumTac ← prepareAssumTac config
 
   /- **Grind tactic**: Excluded from allTacs when `threadGrindState = true` -/
   let grindTac : List (TacticM Unit) :=
@@ -1167,7 +1185,7 @@ meta def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Op
     async := config.async,
     inferGhostVars := config.inferGhostVars,
     inferPost := config.inferPost,
-    keepPretty, ids, idsUserProvided, postsBasename, assumTac := customAssumTac,
+    keepPretty, ids, idsUserProvided, postsBasename, assumTac,
     solvePreconditionTac,
     config,
     stepState := if config.threadGrindState then stepState else {},
