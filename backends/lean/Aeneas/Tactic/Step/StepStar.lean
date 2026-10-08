@@ -407,10 +407,9 @@ meta def analyzeTarget : TacticM TargetKind := do
 meta partial def evalStepStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
   withMainContext do focus do
   withTraceNode `Step (fun _ => do pure m!"evalStepStar") do
-  let cfg ← do
-    match ← observing? (Step.getSpecInfoArgs (← instantiateMVars (← getMainTarget))) with
-    | some (info, _) => pure { cfg with dischargeTac := info.discharge_tactic }
-    | none => pure cfg
+  -- Lookup the registered discharge tactic
+  let info? ← observing? (Step.getSpecInfoArgs (← instantiateMVars (← getMainTarget)))
+  let cfg := { cfg with dischargeTac := info?.bind (·.1.discharge_tactic) }
   -- Initialize the step state (grind threading)
   let initState : Step.StepState ←
     if cfg.stepConfig.threadGrindState then
@@ -621,12 +620,11 @@ where
             trace[Step] "goal solved"
             tacStx.resolve stx
           | none => tryFinish tacl
-      let dischargeTacl ← do
-        match cfg.dischargeTac with
-        | none => pure []
-        | some name =>
-          pure [(s!"discharge tactic `{name}`", ← `(tactic| run_tac $(mkIdent name):ident),
-            do (← evalDischargeTactic name))]
+      let dischargeTacl ← cfg.dischargeTac.toList.mapM fun name => do
+        pure (
+          s!"discharge tactic `{name}`",
+          ← `(tactic| run_tac $(mkIdent name):ident),
+          do (← evalDischargeTactic name))
       let finishTactics :=
         dischargeTacl ++ [("grind", ← `(tactic| agrind), grindTac)] ++
         match cfg.preconditionTac with

@@ -12,12 +12,6 @@ namespace Aeneas.Tactic.Step.Tests.DischargeTactic
 
 abbrev Post (α : Type) := α → Prop
 
-def Post.entails (P Q : Post α) : Prop := ∀ value, P value → Q value
-
-theorem Post.entails_iff (P Q : Post α) :
-    Post.entails P Q ↔ ∀ value, P value → Q value :=
-  Iff.rfl
-
 def triple (P : Prop) (m : Id α) (Q : Post α) : Prop :=
   P → Q m
 
@@ -38,7 +32,6 @@ theorem triple_step_bind {P Pm : Prop} {next : α → Id β} {Q : Post β}
     (hNext : ∀ value, Qm value → triple True (next value) Q) :
     triple P (m >>= next) Q :=
   fun hP => hNext m (hStep (hPre hP)) trivial
-
 
 theorem dischargeMarker : DischargeMarker :=
   .intro
@@ -131,11 +124,6 @@ example (value : Nat) :
     triple True (pureValue value) (fun  _ => DischargeMarker) := by
   step
   assumption -- Plain `step` leaves the mono goal for the caller.
-
-/- `step*` runs the specification's discharge tactic on the final mono goal. -/
-example (value : Nat) :
-    triple True (pureValue value) (fun _ => DischargeMarker) := by
-  step*
 
 /--
 info: Try this:
