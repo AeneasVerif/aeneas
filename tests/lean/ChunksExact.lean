@@ -51,7 +51,7 @@ def test_chunks_exact_exact_fit : Result Unit := do
   massert (i6 = 0#usize)
 
 /- Unit test for [chunks_exact::test_chunks_exact_exact_fit] -/
-#assert (test_chunks_exact_exact_fit).reducesTo ()
+#guard (test_chunks_exact_exact_fit).reducesTo ()
 
 /-- [chunks_exact::test_chunks_exact_with_remainder]:
     Source: 'tests/src/chunks_exact.rs', lines 26:0-41:1
@@ -87,7 +87,7 @@ def test_chunks_exact_with_remainder : Result Unit := do
   massert (i7 = 7#u32)
 
 /- Unit test for [chunks_exact::test_chunks_exact_with_remainder] -/
-#assert (test_chunks_exact_with_remainder).reducesTo ()
+#guard (test_chunks_exact_with_remainder).reducesTo ()
 
 /-- [chunks_exact::test_chunks_exact_remainder_2]:
     Source: 'tests/src/chunks_exact.rs', lines 45:0-57:1
@@ -117,7 +117,7 @@ def test_chunks_exact_remainder_2 : Result Unit := do
   massert (i5 = 50#u32)
 
 /- Unit test for [chunks_exact::test_chunks_exact_remainder_2] -/
-#assert (test_chunks_exact_remainder_2).reducesTo ()
+#guard (test_chunks_exact_remainder_2).reducesTo ()
 
 /-- [chunks_exact::test_chunks_exact_size_1]:
     Source: 'tests/src/chunks_exact.rs', lines 61:0-73:1
@@ -146,7 +146,7 @@ def test_chunks_exact_size_1 : Result Unit := do
   massert (i3 = 0#usize)
 
 /- Unit test for [chunks_exact::test_chunks_exact_size_1] -/
-#assert (test_chunks_exact_size_1).reducesTo ()
+#guard (test_chunks_exact_size_1).reducesTo ()
 
 /-- [chunks_exact::test_chunks_exact_empty]:
     Source: 'tests/src/chunks_exact.rs', lines 77:0-83:1
@@ -162,7 +162,7 @@ def test_chunks_exact_empty : Result Unit := do
   massert (i = 0#usize)
 
 /- Unit test for [chunks_exact::test_chunks_exact_empty] -/
-#assert (test_chunks_exact_empty).reducesTo ()
+#guard (test_chunks_exact_empty).reducesTo ()
 
 /-- [chunks_exact::test_chunks_exact_chunk_larger_than_slice]:
     Source: 'tests/src/chunks_exact.rs', lines 87:0-95:1
@@ -182,7 +182,7 @@ def test_chunks_exact_chunk_larger_than_slice : Result Unit := do
   massert (i2 = 2#u32)
 
 /- Unit test for [chunks_exact::test_chunks_exact_chunk_larger_than_slice] -/
-#assert (test_chunks_exact_chunk_larger_than_slice).reducesTo ()
+#guard (test_chunks_exact_chunk_larger_than_slice).reducesTo ()
 
 /-- [chunks_exact::test_chunks_exact_chunk_equals_slice]:
     Source: 'tests/src/chunks_exact.rs', lines 99:0-109:1
@@ -206,7 +206,7 @@ def test_chunks_exact_chunk_equals_slice : Result Unit := do
   massert (i3 = 0#usize)
 
 /- Unit test for [chunks_exact::test_chunks_exact_chunk_equals_slice] -/
-#assert (test_chunks_exact_chunk_equals_slice).reducesTo ()
+#guard (test_chunks_exact_chunk_equals_slice).reducesTo ()
 
 /-- [chunks_exact::test_chunks_exact_2_odd]:
     Source: 'tests/src/chunks_exact.rs', lines 113:0-126:1
@@ -238,7 +238,7 @@ def test_chunks_exact_2_odd : Result Unit := do
   massert (i5 = 5#u32)
 
 /- Unit test for [chunks_exact::test_chunks_exact_2_odd] -/
-#assert (test_chunks_exact_2_odd).reducesTo ()
+#guard (test_chunks_exact_2_odd).reducesTo ()
 
 /-- [chunks_exact::test_chunks_exact_2_single_element]:
     Source: 'tests/src/chunks_exact.rs', lines 130:0-137:1
@@ -256,6 +256,6 @@ def test_chunks_exact_2_single_element : Result Unit := do
   massert (i1 = 42#u32)
 
 /- Unit test for [chunks_exact::test_chunks_exact_2_single_element] -/
-#assert (test_chunks_exact_2_single_element).reducesTo ()
+#guard (test_chunks_exact_2_single_element).reducesTo ()
 
 end chunks_exact

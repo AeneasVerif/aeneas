@@ -54,7 +54,7 @@ def test_enumerate_slice : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_enumerate_slice] -/
-#assert (test_enumerate_slice).reducesTo ()
+#guard (test_enumerate_slice).reducesTo ()
 
 /-- [iter_adapters::test_enumerate_empty]:
     Source: 'tests/src/iter_adapters.rs', lines 28:0-32:1
@@ -72,7 +72,7 @@ def test_enumerate_empty : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_enumerate_empty] -/
-#assert (test_enumerate_empty).reducesTo ()
+#guard (test_enumerate_empty).reducesTo ()
 
 /-- [iter_adapters::test_take_2]:
     Source: 'tests/src/iter_adapters.rs', lines 40:0-46:1
@@ -102,7 +102,7 @@ def test_take_2 : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_take_2] -/
-#assert (test_take_2).reducesTo ()
+#guard (test_take_2).reducesTo ()
 
 /-- [iter_adapters::test_take_0]:
     Source: 'tests/src/iter_adapters.rs', lines 50:0-54:1
@@ -121,7 +121,7 @@ def test_take_0 : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_take_0] -/
-#assert (test_take_0).reducesTo ()
+#guard (test_take_0).reducesTo ()
 
 /-- [iter_adapters::test_take_more_than_available]:
     Source: 'tests/src/iter_adapters.rs', lines 58:0-65:1
@@ -154,7 +154,7 @@ def test_take_more_than_available : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_take_more_than_available] -/
-#assert (test_take_more_than_available).reducesTo ()
+#guard (test_take_more_than_available).reducesTo ()
 
 /-- [iter_adapters::test_range_u8]: loop body 0:
     Source: 'tests/src/iter_adapters.rs', lines 75:4-77:5
@@ -189,7 +189,7 @@ def test_range_u8 : Result Unit := do
   massert (count = 5#u32)
 
 /- Unit test for [iter_adapters::test_range_u8] -/
-#assert (test_range_u8).reducesTo ()
+#guard (test_range_u8).reducesTo ()
 
 /-- [iter_adapters::test_range_u16]: loop body 0:
     Source: 'tests/src/iter_adapters.rs', lines 85:4-87:5
@@ -226,7 +226,7 @@ def test_range_u16 : Result Unit := do
   massert (count = 4#u32)
 
 /- Unit test for [iter_adapters::test_range_u16] -/
-#assert (test_range_u16).reducesTo ()
+#guard (test_range_u16).reducesTo ()
 
 /-- [iter_adapters::test_range_u32]: loop body 0:
     Source: 'tests/src/iter_adapters.rs', lines 95:4-97:5
@@ -263,7 +263,7 @@ def test_range_u32 : Result Unit := do
   massert (count = 3#u32)
 
 /- Unit test for [iter_adapters::test_range_u32] -/
-#assert (test_range_u32).reducesTo ()
+#guard (test_range_u32).reducesTo ()
 
 /-- [iter_adapters::test_range_u64]: loop body 0:
     Source: 'tests/src/iter_adapters.rs', lines 105:4-107:5
@@ -300,7 +300,7 @@ def test_range_u64 : Result Unit := do
   massert (count = 4#u64)
 
 /- Unit test for [iter_adapters::test_range_u64] -/
-#assert (test_range_u64).reducesTo ()
+#guard (test_range_u64).reducesTo ()
 
 /-- [iter_adapters::test_range_usize]: loop body 0:
     Source: 'tests/src/iter_adapters.rs', lines 115:4-117:5
@@ -339,7 +339,7 @@ def test_range_usize : Result Unit := do
   massert (count = 5#usize)
 
 /- Unit test for [iter_adapters::test_range_usize] -/
-#assert (test_range_usize).reducesTo ()
+#guard (test_range_usize).reducesTo ()
 
 /-- [iter_adapters::test_range_empty]: loop body 0:
     Source: 'tests/src/iter_adapters.rs', lines 125:4-127:5
@@ -374,7 +374,7 @@ def test_range_empty : Result Unit := do
   massert (count = 0#u32)
 
 /- Unit test for [iter_adapters::test_range_empty] -/
-#assert (test_range_empty).reducesTo ()
+#guard (test_range_empty).reducesTo ()
 
 /-- [iter_adapters::test_array_into_iter]:
     Source: 'tests/src/iter_adapters.rs', lines 137:0-144:1
@@ -397,7 +397,7 @@ def test_array_into_iter : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_array_into_iter] -/
-#assert (test_array_into_iter).reducesTo ()
+#guard (test_array_into_iter).reducesTo ()
 
 /-- [iter_adapters::test_slice_into_iter]:
     Source: 'tests/src/iter_adapters.rs', lines 148:0-157:1
@@ -423,7 +423,7 @@ def test_slice_into_iter : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_slice_into_iter] -/
-#assert (test_slice_into_iter).reducesTo ()
+#guard (test_slice_into_iter).reducesTo ()
 
 /-- [iter_adapters::test_enumerate_step_by]:
     Source: 'tests/src/iter_adapters.rs', lines 165:0-172:1
@@ -456,7 +456,7 @@ def test_enumerate_step_by : Result Unit := do
   massert (x1 = 30#u32)
 
 /- Unit test for [iter_adapters::test_enumerate_step_by] -/
-#assert (test_enumerate_step_by).reducesTo ()
+#guard (test_enumerate_step_by).reducesTo ()
 
 /-- [iter_adapters::test_enumerate_take]:
     Source: 'tests/src/iter_adapters.rs', lines 176:0-184:1
@@ -495,7 +495,7 @@ def test_enumerate_take : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_enumerate_take] -/
-#assert (test_enumerate_take).reducesTo ()
+#guard (test_enumerate_take).reducesTo ()
 
 /-- [iter_adapters::test_take_exhausted_then_next]:
     Source: 'tests/src/iter_adapters.rs', lines 188:0-197:1
@@ -523,7 +523,7 @@ def test_take_exhausted_then_next : Result Unit := do
   massert b1
 
 /- Unit test for [iter_adapters::test_take_exhausted_then_next] -/
-#assert (test_take_exhausted_then_next).reducesTo ()
+#guard (test_take_exhausted_then_next).reducesTo ()
 
 /-- [iter_adapters::test_range_single_element]:
     Source: 'tests/src/iter_adapters.rs', lines 206:0-210:1
@@ -539,7 +539,7 @@ def test_range_single_element : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_range_single_element] -/
-#assert (test_range_single_element).reducesTo ()
+#guard (test_range_single_element).reducesTo ()
 
 /-- [iter_adapters::test_range_u8_near_max]:
     Source: 'tests/src/iter_adapters.rs', lines 214:0-218:1
@@ -555,7 +555,7 @@ def test_range_u8_near_max : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_range_u8_near_max] -/
-#assert (test_range_u8_near_max).reducesTo ()
+#guard (test_range_u8_near_max).reducesTo ()
 
 /-- [iter_adapters::test_range_u8_start_gt_end]:
     Source: 'tests/src/iter_adapters.rs', lines 222:0-225:1
@@ -568,7 +568,7 @@ def test_range_u8_start_gt_end : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_range_u8_start_gt_end] -/
-#assert (test_range_u8_start_gt_end).reducesTo ()
+#guard (test_range_u8_start_gt_end).reducesTo ()
 
 /-- [iter_adapters::test_range_u8_start_eq_end]:
     Source: 'tests/src/iter_adapters.rs', lines 229:0-232:1
@@ -581,7 +581,7 @@ def test_range_u8_start_eq_end : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_range_u8_start_eq_end] -/
-#assert (test_range_u8_start_eq_end).reducesTo ()
+#guard (test_range_u8_start_eq_end).reducesTo ()
 
 /-- [iter_adapters::test_range_u16_boundary]:
     Source: 'tests/src/iter_adapters.rs', lines 236:0-242:1
@@ -606,7 +606,7 @@ def test_range_u16_boundary : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_range_u16_boundary] -/
-#assert (test_range_u16_boundary).reducesTo ()
+#guard (test_range_u16_boundary).reducesTo ()
 
 /-- [iter_adapters::test_range_u32_boundary]:
     Source: 'tests/src/iter_adapters.rs', lines 246:0-251:1
@@ -627,7 +627,7 @@ def test_range_u32_boundary : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_range_u32_boundary] -/
-#assert (test_range_u32_boundary).reducesTo ()
+#guard (test_range_u32_boundary).reducesTo ()
 
 /-- [iter_adapters::test_range_u64_boundary]:
     Source: 'tests/src/iter_adapters.rs', lines 255:0-261:1
@@ -652,7 +652,7 @@ def test_range_u64_boundary : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_range_u64_boundary] -/
-#assert (test_range_u64_boundary).reducesTo ()
+#guard (test_range_u64_boundary).reducesTo ()
 
 /-- [iter_adapters::test_range_usize_start_gt_end]:
     Source: 'tests/src/iter_adapters.rs', lines 265:0-268:1
@@ -665,7 +665,7 @@ def test_range_usize_start_gt_end : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_range_usize_start_gt_end] -/
-#assert (test_range_usize_start_gt_end).reducesTo ()
+#guard (test_range_usize_start_gt_end).reducesTo ()
 
 /-- [iter_adapters::test_step_by_larger_than_range]:
     Source: 'tests/src/iter_adapters.rs', lines 272:0-276:1
@@ -687,7 +687,7 @@ def test_step_by_larger_than_range : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_step_by_larger_than_range] -/
-#assert (test_step_by_larger_than_range).reducesTo ()
+#guard (test_step_by_larger_than_range).reducesTo ()
 
 /-- [iter_adapters::test_step_by_exact_range]:
     Source: 'tests/src/iter_adapters.rs', lines 280:0-284:1
@@ -709,7 +709,7 @@ def test_step_by_exact_range : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_step_by_exact_range] -/
-#assert (test_step_by_exact_range).reducesTo ()
+#guard (test_step_by_exact_range).reducesTo ()
 
 /-- [iter_adapters::test_step_by_one]:
     Source: 'tests/src/iter_adapters.rs', lines 288:0-295:1
@@ -746,7 +746,7 @@ def test_step_by_one : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_step_by_one] -/
-#assert (test_step_by_one).reducesTo ()
+#guard (test_step_by_one).reducesTo ()
 
 /-- [iter_adapters::test_step_by_empty]:
     Source: 'tests/src/iter_adapters.rs', lines 299:0-302:1
@@ -763,7 +763,7 @@ def test_step_by_empty : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_step_by_empty] -/
-#assert (test_step_by_empty).reducesTo ()
+#guard (test_step_by_empty).reducesTo ()
 
 /-- [iter_adapters::test_step_by_odd_range]:
     Source: 'tests/src/iter_adapters.rs', lines 306:0-312:1
@@ -795,7 +795,7 @@ def test_step_by_odd_range : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_step_by_odd_range] -/
-#assert (test_step_by_odd_range).reducesTo ()
+#guard (test_step_by_odd_range).reducesTo ()
 
 /-- [iter_adapters::test_step_by_u8_near_max]:
     Source: 'tests/src/iter_adapters.rs', lines 316:0-322:1
@@ -827,7 +827,7 @@ def test_step_by_u8_near_max : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_step_by_u8_near_max] -/
-#assert (test_step_by_u8_near_max).reducesTo ()
+#guard (test_step_by_u8_near_max).reducesTo ()
 
 /-- [iter_adapters::test_range_inclusive_basic]:
     Source: 'tests/src/iter_adapters.rs', lines 330:0-336:1
@@ -856,7 +856,7 @@ def test_range_inclusive_basic : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_range_inclusive_basic] -/
-#assert (test_range_inclusive_basic).reducesTo ()
+#guard (test_range_inclusive_basic).reducesTo ()
 
 /-- [iter_adapters::test_range_inclusive_singleton]:
     Source: 'tests/src/iter_adapters.rs', lines 340:0-344:1
@@ -875,7 +875,7 @@ def test_range_inclusive_singleton : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_range_inclusive_singleton] -/
-#assert (test_range_inclusive_singleton).reducesTo ()
+#guard (test_range_inclusive_singleton).reducesTo ()
 
 /-- [iter_adapters::test_range_inclusive_empty]:
     Source: 'tests/src/iter_adapters.rs', lines 348:0-351:1
@@ -889,6 +889,6 @@ def test_range_inclusive_empty : Result Unit := do
   massert b
 
 /- Unit test for [iter_adapters::test_range_inclusive_empty] -/
-#assert (test_range_inclusive_empty).reducesTo ()
+#guard (test_range_inclusive_empty).reducesTo ()
 
 end iter_adapters
