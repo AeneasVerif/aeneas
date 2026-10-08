@@ -7,16 +7,14 @@ public meta section
 
 namespace Aeneas.SepLogic
 
-open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic
+open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic Normalize Common
 
 namespace IFrame
 
 private def cancelGoal (goal : MVarId) : TacticM MVarId := goal.withContext do
-  let target := (← instantiateMVars (← goal.getType)).consumeMData
-  let args := target.getAppArgs
-  unless target.isAppOfArity ``Entails 2 do return goal
-  let source ← reducePostApplication args[0]!
-  let destination ← reducePostApplication args[1]!
+  let some (source, destination) ← entailment? goal | return goal
+  let source ← reducePostApplication source
+  let destination ← reducePostApplication destination
   let (matched, unmatched, remaining) ← matchAtoms (← flatten source) (← flatten destination)
   if matched.isEmpty then return goal
   let frame := mkStar matched
@@ -30,6 +28,8 @@ private def cancelGoal (goal : MVarId) : TacticM MVarId := goal.withContext do
   goal.assign (← mkAppM ``entails_trans #[← mkAppM ``entails_of_eq #[leftEq], finish])
   return residual.mvarId!
 
+/-- Like `solveGoal`, but stops at what it cannot prove instead of failing; with
+`useHyps := false`, the goal is never rewritten with the hypotheses. -/
 partial def simplifyGoal (goal : MVarId) (useHyps : Bool := true) : TacticM (List MVarId) := do
   let target := (← instantiateMVars (← goal.getType)).consumeMData
   if target.isAppOfArity ``postEntails 3 then
@@ -37,50 +37,34 @@ partial def simplifyGoal (goal : MVarId) (useHyps : Bool := true) : TacticM (Lis
     return ← simplifyGoal next useHyps
   unless target.isAppOfArity ``Entails 2 do return [goal]
   if ← isFrameInference goal then return [goal]
-  let before ← goal.withContext do
-    return (← getLCtx).foldl (init := (∅ : Std.HashSet FVarId))
-      fun ids decl => ids.insert decl.fvarId
-  let goal ← pullLeft goal
-  let facts ← goal.withContext do
-    return (← (← getLCtx).getAssumptions).filterMap fun decl =>
-      if before.contains decl.fvarId then none else some decl.fvarId
-  let some goal ← if useHyps then rewritePureFacts goal facts.toArray else pure (some goal)
-    | return []
+  let some goal ← pullAndRewrite goal useHyps | return []
   let (goal, witnesses) ← instantiateRightExists goal
   let goal ← cancelGoal (← exposeGoal goal)
   let wandGoal? ← goal.withContext do
-    let target := (← instantiateMVars (← goal.getType)).consumeMData
-    let args := target.getAppArgs
-    unless target.isAppOfArity ``Entails 2 do return none
-    let destination ← reducePostApplication args[1]!
-    unless destination.isAppOfArity ``postWand 3 do return none
-    let wandArgs := destination.getAppArgs
-    let premise ← mkAppM ``postEntails
-      #[← mkAppM ``postSep #[wandArgs[1]!, args[0]!], wandArgs[2]!]
+    let some (source, destination) ← entailment? goal | return none
+    let some (lemmaName, premise) ← wandIntro? source (← reducePostApplication destination)
+      | return none
     let next ← mkFreshExprSyntheticOpaqueMVar premise
-    goal.assign (← mkAppM ``postWand_intro #[next])
+    goal.assign (← mkAppM lemmaName #[next])
     return some next.mvarId!
-  if let some wandGoal := wandGoal? then
-    let goals ← simplifyGoal wandGoal useHyps
-    return ← (witnesses.toList ++ goals).filterM fun goal => return !(← goal.isAssigned)
-  let finish ← if useHyps then
-    `(tactic| (
-      simp (config := { failIfUnchanged := false }) only
-        [sep_emp_l_eq, sep_emp_r_eq, sep_ipure_eq, entails_emp_ipure_iff, entails_refl,
-          and_true, true_and, *];
-      try assumption))
-    else
-    `(tactic| (
-      simp (config := { failIfUnchanged := false }) only
-        [sep_emp_l_eq, sep_emp_r_eq, sep_ipure_eq, entails_emp_ipure_iff, entails_refl,
-          and_true, true_and];
-      try assumption))
-  let (goals, _) ← runTactic goal finish
-  return ← (witnesses.toList ++ goals).filterM fun goal => return !(← goal.isAssigned)
+  let goals ← match wandGoal? with
+    | some wandGoal => simplifyGoal wandGoal useHyps
+    | none => do
+      let hyps ← if useHyps then goal.withContext do
+          return (← (← getLCtx).getAssumptions).map (·.fvarId) |>.toArray
+        else pure #[]
+      let some goal ← simpGoal goal true
+          { addSimpThms := #[``sep_emp_l_eq, ``sep_emp_r_eq, ``sep_ipure_eq,
+              ``entails_emp_ipure_iff, ``entails_refl, ``and_true, ``true_and],
+            hypsToUse := hyps }
+        | pure []
+      if ← goal.withContext goal.assumptionCore then pure [] else pure [goal]
+  (witnesses.toList ++ goals).filterM fun goal => return !(← goal.isAssigned)
 
 end IFrame
 
-/-- Like `iframe`, but leaves unsolved pure obligations as goals. -/
+/-- Like `iframe`, but leaves unsolved pure obligations as goals. `isimp only` neither unfolds
+with `isimps` nor rewrites with the hypotheses. -/
 syntax (name := iSimp) "isimp" (" only")? (" [" term,* "]")? : tactic
 
 private def evalISimp (lemmas : Array (TSyntax `term)) (simpOnly : Bool := false) : TacticM Unit :=
@@ -89,7 +73,7 @@ private def evalISimp (lemmas : Array (TSyntax `term)) (simpOnly : Bool := false
     let goal ← getMainGoal
     let target := (← instantiateMVars (← goal.getType)).consumeMData
     let spatial := target.isAppOfArity ``Entails 2 || target.isAppOfArity ``postEntails 3
-    let frameInference ← IFrame.isFrameInference goal
+    let frameInference ← isFrameInference goal
     if spatial && !frameInference && !simpOnly then
       evalTactic (← `(tactic|
         simp (config := { failIfUnchanged := false, dsimp := false }) only

@@ -44,7 +44,7 @@ example (P Q R : IProp) (h : P ⊢ Q) : R ∗ P ⊢ Q ∗ R := by
 
 example (P Q : IProp) : emp ⊢ (P ∗ (P -∗ Q)) -∗ Q := by
   apply wand_intro
-  irewrite (wand_cancel P Q)
+  irewrite wand_cancel
   iframe
 
 example (P Q R : IProp) (h : P ⊢ Q) :

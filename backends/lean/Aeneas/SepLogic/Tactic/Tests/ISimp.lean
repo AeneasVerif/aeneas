@@ -130,4 +130,7 @@ example (cell : Nat → IProp) (a b : Nat) :
     cell a ∗ cell b ⊢ iprop(∃ m : Nat, cell m ∗ cell a) := by
   isimp
 
+example (P R : IProp) : R ⊢ P -∗ (P ∗ R) := by
+  isimp
+
 end Aeneas.SepLogic.Tactic.Tests.ISimp

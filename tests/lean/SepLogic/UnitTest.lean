@@ -300,7 +300,7 @@ example (p : MutRawPtr Nat) :
   rename_i x hx
   refine entails_exists_r (x - 1) ?_
   rw [show x - 1 + 1 = x by agrind]
-  isimpl
+  iframe
 
 theorem cellPair (p q : MutRawPtr Nat) : iprop(p ↦ 1 ∗ q ↦ 2) ⊢ iprop(∃ n, p ↦ n ∗ q ↦ 2) :=
   entails_exists_r 1 (entails_refl _)
@@ -308,7 +308,7 @@ theorem cellPair (p q : MutRawPtr Nat) : iprop(p ↦ 1 ∗ q ↦ 2) ⊢ iprop(�
 example (p q r : MutRawPtr Nat) :
     iprop(r ↦ 0 ∗ (p ↦ 1 ∗ q ↦ 2)) ⊢ iprop(∃ n, r ↦ 0 ∗ (p ↦ n ∗ q ↦ 2)) := by
   irewrite (cellPair p q)
-  isimpl
+  iframe
 
 theorem swapEq (p q : MutRawPtr Nat) : iprop(p ↦ 1 ∗ q ↦ 2) = iprop(q ↦ 2 ∗ p ↦ 1) :=
   sep_comm_eq _ _
@@ -321,7 +321,7 @@ example (p q : MutRawPtr Nat) :
 
 example (p : MutRawPtr Nat) : ⦃ p ↦ 1 ⦄ (pure 5 : Result Nat) ⦃ v => ⌜v = 5⌝ ∗ p ↦ 1⦄ := by
   wp_pures
-  isimpl
+  iframe
 
 example (p q : MutRawPtr Nat) (x : Nat) :
     ⦃ iprop(p ↦ x ∗ q ↦ 9) ⦄ Fixtures.incr_ptr p ⦃ iprop(q ↦ 9 ∗ p ↦ (x + 1))⦄ := by

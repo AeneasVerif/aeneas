@@ -26,22 +26,22 @@ public meta section
 
 namespace Aeneas.SepLogic
 
-open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic
+open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic Normalize Common
 
-elab "iintro_step" : tactic => withMainContext do
+/-- Move one existential or pure fact of the precondition into the goal, as a `∀`/`→`. With
+`unfold := false`, only syntactic `⌜P⌝` atoms count as pure facts, so that the predicates a later
+`step` must match are never opened. -/
+private def introStep (unfold : Bool) : TacticM Unit := withMainContext do
   let goal ← getMainGoal
   let target ← instantiateMVars (← goal.getType)
-  let some entailment ← IFrame.exposeEntailment? target
+  let some entailment ← exposeEntailment? target
     | throwError "iintro_step: the goal is not a separation-logic entailment"
   let args := entailment.getAppArgs
   let source := args[0]!
   let destination := args[1]!
   let (simpCtx, simprocs) ← Aeneas.Simp.mkSimpCtx true
     { dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1 }
-    .simp
-    { addSimpThms :=
-        #[``sep_exists_l_eq, ``sep_exists_r_eq,
-          ``sep_emp_l_eq, ``sep_emp_r_eq] }
+    .simp { addSimpThms := sepNormThms }
   let (simpResult, _) ← Lean.Meta.simp source simpCtx simprocs
   let normalizedSource ← instantiateMVars simpResult.expr
   let (goal, target, source) ←
@@ -49,7 +49,7 @@ elab "iintro_step" : tactic => withMainContext do
       pure (goal, target, source)
     else
       let normalizedTarget ←
-        IFrame.mkEntailmentLike target source destination normalizedSource
+        mkEntailmentLike target source destination normalizedSource
       let next ← mkFreshExprSyntheticOpaqueMVar normalizedTarget
       let hEq ←
         match simpResult.proof? with
@@ -58,7 +58,7 @@ elab "iintro_step" : tactic => withMainContext do
       goal.assign (← mkAppM ``entails_trans
         #[← mkAppM ``entails_of_eq #[hEq], next])
       pure (next.mvarId!, normalizedTarget, normalizedSource)
-  let precondition ← IFrame.exposeConnective source
+  let precondition ← if unfold then exposeConnective source else pure source
   let head := precondition.consumeMData.getAppFn
   if head.isConstOf ``iexists then
     let some u := head.constLevels!.head?
@@ -68,18 +68,19 @@ elab "iintro_step" : tactic => withMainContext do
     let body := preArgs[1]!
     let newType ← withLocalDeclD `x ι fun x => do
       let newSource ← Lean.Core.betaReduce (mkApp body x)
-      let newTarget ← IFrame.mkEntailmentLike target source destination newSource
+      let newTarget ← mkEntailmentLike target source destination newSource
       mkForallFVars #[x] newTarget
     let next ← mkFreshExprSyntheticOpaqueMVar newType
     goal.assign (mkAppN (mkConst ``entails_exists_l [u])
       #[ι, destination, body, next])
     replaceMainGoal [next.mvarId!]
   else
-    let some (props, rest, eq) ← IFrame.splitPures precondition (limit := some 1)
+    let some (props, rest, eq) ←
+        splitPures precondition (limit := some 1) (unfold := unfold)
       | throwError "iintro_step: the precondition has no quantifier or pure fact \
           left to extract:\n{precondition}"
     let proposition := props[0]!
-    let newTarget ← IFrame.mkEntailmentLike target source destination rest
+    let newTarget ← mkEntailmentLike target source destination rest
     let newType ← withLocalDeclD `h proposition fun h =>
       mkForallFVars #[h] newTarget
     let next ← mkFreshExprSyntheticOpaqueMVar newType
@@ -87,6 +88,8 @@ elab "iintro_step" : tactic => withMainContext do
       #[proposition, rest, destination, next]
     goal.assign (← mkAppM ``entails_trans #[← mkAppM ``entails_of_eq #[eq], extract])
     replaceMainGoal [next.mvarId!]
+
+elab "iintro_step" : tactic => introStep true
 
 /-- Move the existentials and pure facts of an entailment's precondition into the context. -/
 syntax (name := iIntro) "iintro" (ppSpace colGt rintroPat)* : tactic
@@ -109,13 +112,10 @@ private partial def isPullable (pre : Expr) : Bool :=
 
 private partial def pullPrecondition (goal : MVarId) : TacticM MVarId := goal.withContext do
   let target ← instantiateMVars (← goal.getType)
-  let some entailment ← IFrame.exposeEntailment? target | return goal
+  let some entailment ← exposeEntailment? target | return goal
   unless isPullable entailment.getAppArgs[0]! do return goal
   setGoals [goal]
-  try
-    evalTactic (← `(tactic| iintro_step))
-  catch _ =>
-    return goal
+  introStep (unfold := false)
   let (_, goal) ← (← getMainGoal).intro1P
   pullPrecondition goal
 
@@ -125,7 +125,7 @@ elab "iintro_shallow" : tactic => withMainContext do
 elab "iintro_shallow_post" : tactic => withMainContext do
   let goal ← getMainGoal
   let target ← instantiateMVars (← goal.getType)
-  let some entailment ← IFrame.exposeEntailment? target
+  let some entailment ← exposeEntailment? target
     | normalizeSep
       return
   let args := entailment.getAppArgs
@@ -138,7 +138,7 @@ elab "iintro_shallow_post" : tactic => withMainContext do
   let sourceArgs := source.getAppArgs
   let markedSource := mkApp2 (mkConst ``sep) sourceArgs[0]!
     (mkApp (mkConst ``introFrame) sourceArgs[1]!)
-  let markedTarget ← IFrame.mkEntailmentLike target args[0]! args[1]! markedSource
+  let markedTarget ← mkEntailmentLike target args[0]! args[1]! markedSource
   let goal ← goal.change markedTarget
   replaceMainGoal [goal]
   normalizeSep
@@ -151,15 +151,16 @@ elab "iintro_shallow_post" : tactic => withMainContext do
 elab "iintro_keep_step" : tactic => withMainContext do
   let goal ← getMainGoal
   let target ← instantiateMVars (← goal.getType)
-  let some entailment ← IFrame.exposeEntailment? target
+  let some entailment ← exposeEntailment? target
     | throwError "iintro_keep_step: the goal is not a separation-logic entailment"
   let args := entailment.getAppArgs
   let source := args[0]!
-  let precondition ← IFrame.exposeConnective source
+  let precondition ← exposeConnective source
   let lctx ← getLCtx
   let inContext (proposition : Expr) : MetaM Bool := lctx.anyM fun decl =>
-    pure !decl.isImplementationDetail <&&> isDefEq decl.type proposition
-  let some (props, rest, eq) ← IFrame.splitPures precondition (limit := some 1)
+    pure !decl.isImplementationDetail <&&>
+      withNewMCtxDepth (isDefEq decl.type proposition)
+  let some (props, rest, eq) ← splitPures precondition (limit := some 1)
       (select := fun proposition => return !(← inContext proposition))
     | throwError "iintro_keep_step: the precondition has no pure fact left to copy"
   let proposition := props[0]!
@@ -175,7 +176,16 @@ elab "iintro_keep_step" : tactic => withMainContext do
 /-- Copy the pure facts of the precondition into the context without consuming them. -/
 macro "iintro_keep" : tactic => `(tactic| repeat (iintro_keep_step; rename_i _))
 
+/-- Move the existentials and pure facts of an `Entails`/`postEntails` precondition into the
+context. -/
 elab "iintro_entail" : tactic => Tactic.focus do withMainContext do
-  replaceMainGoal [← IFrame.pullGoal (← getMainGoal)]
+  let goal ← getMainGoal
+  if ← isFrameInference goal then
+    throwError "iintro_entail: this is a frame-inference goal.  Extracting anything \
+      from its left-hand side would lose it from the frame, which was created in \
+      an outer context; pull at the level of the specification instead, with `iintro`."
+  let goal ← if (← instantiateMVars (← goal.getType)).consumeMData.isAppOfArity ``postEntails 3
+    then pure (← goal.intro1P).2 else pure goal
+  replaceMainGoal [← pullLeft goal]
 
 end Aeneas.SepLogic

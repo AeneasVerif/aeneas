@@ -286,7 +286,7 @@ theorem entails_exists_l {ι : Sort _} {H : IProp} {J : ι → IProp}
     (h : ∀ x, J x ⊢ H) : iexists J ⊢ H :=
   fun heap hJ => h hJ.choose heap hJ.choose_spec
 
-/-- `isimpl` uses this with a metavariable witness, instantiated by cancellation. -/
+/-- `iframe` uses this with a metavariable witness, instantiated by cancellation. -/
 theorem entails_exists_r {ι : Sort _} {H : IProp} {J : ι → IProp} (x : ι)
     (h : H ⊢ J x) : H ⊢ iexists J :=
   fun heap hH => ⟨x, h heap hH⟩

@@ -46,7 +46,7 @@ example : ⦃ emp ⦄ Fixtures.incr_borrow 1 ⦃ result => ⌜result = 2⌝⦄di
 
 example (p : MutRawPtr Nat) : ⦃ p ↦ 1 ⦄ (pure 5 : Result Nat) ⦃ v => ⌜v = 5⌝ ∗ p ↦ 1⦄div := by
   dwp_pures
-  isimpl
+  iframe
 
 example (p q : MutRawPtr Nat) (x : Nat) :
     ⦃ iprop(p ↦ x ∗ q ↦ 9) ⦄ Fixtures.incr_ptr p ⦃ iprop(q ↦ 9 ∗ p ↦ (x + 1))⦄div := by

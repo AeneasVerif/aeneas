@@ -74,7 +74,7 @@ namespace Aeneas.SepLogic
 
 open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic
 
-namespace IFrame
+namespace Normalize
 
 private def isConnective (e : Expr) : Bool :=
   let head := e.consumeMData.getAppFn
@@ -140,7 +140,8 @@ private partial def reifySep (e : Expr) : StateT (Array Expr) MetaM (Expr × Lis
   return (mkApp (mkConst ``SepAC.Tree.atom) (mkNatLit i), [i])
 
 /-- Prove `lhs = rhs` for two `sep` trees with the same atoms, with one `SepAC.Tree.denote_eq`;
-fall back to `ac_rfl`/`rfl` when the atoms only agree up to more than instance unfolding. -/
+fall back to `ac_rfl`/`rfl` when the atoms only agree up to more than instance unfolding
+(`ac_rfl` also removes `emp` units, through the `Std.LawfulIdentity sep emp` instance). -/
 def proveEqAC (lhs rhs : Expr) : TacticM Expr := do
   let lhs ← instantiateMVars lhs
   let rhs ← instantiateMVars rhs
@@ -155,16 +156,17 @@ def proveEqAC (lhs rhs : Expr) : TacticM Expr := do
   let proof ← mkFreshExprSyntheticOpaqueMVar eqType
   let .mvar proofId := proof.consumeMData
     | throwError "failed to create an equality proof goal"
-  let tactic ← `(tactic|
-    first
-      | ac_rfl
-      | rfl
-      | (simp only [sep_emp_l_eq, sep_emp_r_eq] <;>
-          first | ac_rfl | rfl))
+  let tactic ← `(tactic| first | ac_rfl | rfl)
   let (goals, _) ← runTactic proofId tactic
   unless goals.isEmpty do
     throwError "could not prove {eqType}"
   return proof
+
+/-- The precondition and the postcondition of `goal`, if it is an `Entails`. -/
+def entailment? (goal : MVarId) : MetaM (Option (Expr × Expr)) := do
+  let target := (← instantiateMVars (← goal.getType)).consumeMData
+  unless target.isAppOfArity ``Entails 2 do return none
+  return some (target.appFn!.appArg!, target.appArg!)
 
 /-- Is `destination` a frame-inference shape `Hcallee ∗ ?F`? Then no side may be reorganized. -/
 def frameMVar? (destination : Expr) : MetaM (Option MVarId) := do
@@ -176,30 +178,37 @@ def frameMVar? (destination : Expr) : MetaM (Option MVarId) := do
   | _ => pure none
 
 def isFrameInference (goal : MVarId) : MetaM Bool := goal.withContext do
-  let target ← instantiateMVars (← goal.getType)
-  let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
-  unless fn.isConstOf ``Entails && args.size = 2 do return false
-  return (← frameMVar? (← reducePostApplication args[1]!)).isSome
+  let some (_, destination) ← entailment? goal | return false
+  return (← frameMVar? (← reducePostApplication destination)).isSome
 
-private def simpEntailment (goal : MVarId) (simpOnly : Bool)
-    (args : Aeneas.Simp.SimpArgs) : TacticM MVarId := do
+/-- Simplify `goal`; `none` if this closed it. -/
+def simpGoal (goal : MVarId) (simpOnly : Bool) (args : Aeneas.Simp.SimpArgs) :
+    TacticM (Option MVarId) := do
   let saved ← getGoals
   try
     setGoals [goal]
     let _ ← Aeneas.Simp.simpAt simpOnly
       { dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1 }
       args (.targets #[] true)
-    match ← getGoals with
-    | [] => throwError "the entailment was unexpectedly closed while normalizing it"
-    | goal :: _ => pure goal
+    match ← getUnsolvedGoals with
+    | [] => return none
+    | [goal] => return some goal
+    | _ => throwError "simplifying the entailment produced multiple goals"
   finally
     setGoals saved
 
+private def simpEntailment (goal : MVarId) (simpOnly : Bool)
+    (args : Aeneas.Simp.SimpArgs) : TacticM MVarId := do
+  let some goal ← simpGoal goal simpOnly args
+    | throwError "the entailment was unexpectedly closed while normalizing it"
+  return goal
+
+/-- Remove `emp` units and float existentials out of `∗`. -/
+def sepNormThms : Array Name :=
+  #[``sep_emp_l_eq, ``sep_emp_r_eq, ``sep_exists_l_eq, ``sep_exists_r_eq]
+
 def floatExists (goal : MVarId) : TacticM MVarId :=
-  simpEntailment goal true
-    { addSimpThms :=
-        #[``sep_emp_l_eq, ``sep_emp_r_eq,
-          ``sep_exists_l_eq, ``sep_exists_r_eq] }
+  simpEntailment goal true { addSimpThms := sepNormThms }
 
 def decompose (goal : MVarId) : TacticM MVarId := do
   simpEntailment goal false { simpThms := #[← isimpsExt.getTheorems] }
@@ -213,26 +222,25 @@ private partial def exposeAll (e : Expr) : MetaM Expr := do
   return e
 
 def exposeGoal (goal : MVarId) : TacticM MVarId := goal.withContext do
-  let target ← instantiateMVars (← goal.getType)
-  let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
-  unless fn.isConstOf ``Entails && args.size = 2 do return goal
-  let exposed ← mkAppM ``Entails #[← exposeAll args[0]!, ← exposeAll args[1]!]
-  if exposed == target then return goal
-  try goal.change exposed catch _ => pure goal
+  let some (source, destination) ← entailment? goal | return goal
+  let source' ← exposeAll source
+  let destination' ← exposeAll destination
+  if source' == source && destination' == destination then return goal
+  try goal.change (mkApp2 (mkConst ``Entails) source' destination') catch _ => pure goal
 
 /-- Split out the pure atoms of `assertion` (the first `limit` ones whose proposition satisfies
 `select`). Returns the propositions, the assertion of the other atoms `rest`, and a proof of
 `assertion = A₁ ∗ … ∗ Aₖ ∗ rest`, where `Aᵢ` is the original atom of `⌜Pᵢ⌝` (possibly a
-definition unfolding to it). -/
+definition unfolding to it, unless `unfold` is false). -/
 def splitPures (assertion : Expr) (limit : Option Nat := none)
-    (select : Expr → MetaM Bool := fun _ => pure true) :
+    (select : Expr → MetaM Bool := fun _ => pure true) (unfold := true) :
     TacticM (Option (Array Expr × Expr × Expr)) := do
   let assertion ← reducePostApplication assertion
   let mut pures := #[]
   let mut props := #[]
   let mut others := #[]
   for atom in ← flatten assertion do
-    let exposed := (← exposeConnective atom).consumeMData
+    let exposed := (← if unfold then exposeConnective atom else pure atom).consumeMData
     if limit.all (props.size < ·) && exposed.isAppOfArity ``ipure 1 then
       if ← select exposed.appArg! then
         pures := pures.push atom
@@ -261,11 +269,9 @@ where
 /-- Open the leading existentials of the precondition. -/
 private partial def openLeftExists (goal : MVarId) (opened := false) :
     MetaM (MVarId × Bool) := goal.withContext do
-  let target ← instantiateMVars (← goal.getType)
-  let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
-  unless fn.isConstOf ``Entails && args.size = 2 do return (goal, opened)
-  let source ← reducePostApplication args[0]!
-  let destination ← reducePostApplication args[1]!
+  let some (source, destination) ← entailment? goal | return (goal, opened)
+  let source ← reducePostApplication source
+  let destination ← reducePostApplication destination
   let (sourceFn, sourceArgs) :=
     source.consumeMData.withApp fun fn args => (fn, args)
   unless sourceFn.isConstOf ``iexists && sourceArgs.size = 2 do return (goal, opened)
@@ -282,18 +288,16 @@ private partial def openLeftExists (goal : MVarId) (opened := false) :
 
 /-- Move all the pure facts of the precondition into the context, with one reordering. -/
 private def pullPures (goal : MVarId) : TacticM (MVarId × Bool) := goal.withContext do
-  let target ← instantiateMVars (← goal.getType)
-  let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
-  unless fn.isConstOf ``Entails && args.size = 2 do return (goal, false)
-  let destination ← reducePostApplication args[1]!
-  let some (props, rest, eq) ← splitPures args[0]! | return (goal, false)
+  let some (source, destination) ← entailment? goal | return (goal, false)
+  let destination ← reducePostApplication destination
+  let some (props, rest, eq) ← splitPures source | return (goal, false)
   let newType ← props.foldrM (init := mkApp2 (mkConst ``Entails) rest destination)
     fun P acc => return mkForall (← mkFreshUserName `h) .default P acc
   let newGoal ← mkFreshExprSyntheticOpaqueMVar newType
   let extract ← introPures props rest destination newGoal
   let reordered := (← inferType eq).appArg!
   goal.assign (mkAppN (mkConst ``entails_trans)
-    #[args[0]!, reordered, destination, mkAppN (mkConst ``entails_of_eq) #[args[0]!, reordered, eq],
+    #[source, reordered, destination, mkAppN (mkConst ``entails_of_eq) #[source, reordered, eq],
       extract])
   let (_, next) ← newGoal.mvarId!.introNP props.size
   return (next, true)
@@ -309,15 +313,12 @@ partial def pullLeft (goal : MVarId) : TacticM MVarId := do
   let (goal, pulled) ← pullPures goal
   if opened || pulled then pullLeft goal else return goal
 
-end IFrame
-
 def normalizeSep : TacticM Unit := withMainContext do
   let _ ← Aeneas.Simp.simpAt true
     { dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1 }
-    { addSimpThms :=
-        #[``sep_emp_l_eq, ``sep_emp_r_eq,
-          ``sep_exists_l_eq, ``sep_exists_r_eq, ``sep_assoc_eq,
-          ``entails_postWand_pure_eq] }
+    { addSimpThms := sepNormThms ++ #[``sep_assoc_eq, ``entails_postWand_pure_eq] }
     (.targets #[] true)
+
+end Normalize
 
 end Aeneas.SepLogic

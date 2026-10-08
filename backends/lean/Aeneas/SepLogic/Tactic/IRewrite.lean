@@ -6,9 +6,9 @@ public meta section
 
 namespace Aeneas.SepLogic
 
-open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic
+open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic Normalize Common
 
-namespace IFrame
+namespace IRewrite
 
 def rewriteAssertion (assertion : Expr) (rule : Expr) : TacticM (Expr × Expr) := do
   let ruleType ← instantiateMVars (← inferType rule)
@@ -37,25 +37,28 @@ def rewriteAssertion (assertion : Expr) (rule : Expr) : TacticM (Expr × Expr) :
   let change ← mkAppM ``sep_mono #[entailment, ← mkAppM ``entails_refl #[rest]]
   return (rewritten, ← mkAppM ``entails_trans #[reorder, change])
 
-end IFrame
+end IRewrite
 
 /-- Rewrite an atom `A` of the precondition with `M : A ⊢ B` (or `M : A = B`; `← M` rewrites
-with `M : B = A`). -/
+with `M : B = A`). Explicit arguments of `M` are found by matching, or become new goals. -/
 elab "irewrite " symm:("← ")? rule:term : tactic => Tactic.focus do withMainContext do
   let rule ← Tactic.elabTerm rule none
+  let (premises, _, _) ← forallMetaTelescope (← inferType rule)
+  let rule := mkAppN rule premises
   let rule ← if symm.isNone then pure rule else
     unless (← instantiateMVars (← inferType rule)).consumeMData.isAppOfArity ``Eq 3 do
       throwError "irewrite ← expects an equality `A = B`, got {← inferType rule}"
     mkEqSymm rule
   let goal ← getMainGoal
   let target ← instantiateMVars (← goal.getType)
-  let some entailment ← IFrame.exposeEntailment? target
+  let some entailment ← exposeEntailment? target
     | throwError "irewrite expects an entailment, got\n{target}"
   let args := entailment.getAppArgs
-  let (rewritten, proof) ← IFrame.rewriteAssertion args[0]! rule
-  let nextType ← IFrame.mkEntailmentLike target args[0]! args[1]! rewritten
+  let (rewritten, proof) ← IRewrite.rewriteAssertion args[0]! rule
+  let nextType ← mkEntailmentLike target args[0]! args[1]! rewritten
   let next ← mkFreshExprSyntheticOpaqueMVar nextType
   goal.assign (← mkAppM ``entails_trans #[proof, next])
-  replaceMainGoal [next.mvarId!]
+  let premises ← premises.filterM fun premise => return !(← premise.mvarId!.isAssigned)
+  replaceMainGoal (next.mvarId! :: premises.toList.map Expr.mvarId!)
 
 end Aeneas.SepLogic

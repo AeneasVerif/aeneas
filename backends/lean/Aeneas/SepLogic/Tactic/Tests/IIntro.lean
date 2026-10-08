@@ -12,10 +12,10 @@ private def wrappedEntails (P Q : IProp) : Prop := P ⊢ Q
 private def hiddenPure (P : Prop) : IProp := ⌜P⌝
 
 example (P Q : IProp) : P ∗ Q ⊢ Q ∗ P := by
-  isimpl
+  iframe
 
 example {α : Type} (r : MutRawPtr α) (x : α) : (r ↦ x ⊢ r ↦ x) ∧ 1 = 1 := by
-  refine ⟨by isimpl, rfl⟩
+  refine ⟨by iframe, rfl⟩
 
 example (P : Prop) (H : IProp) (hEmp : P → H ⊢ emp) : iprop(⌜P⌝ ∗ H) ⊢ emp := by
   iintro_entail
@@ -35,6 +35,14 @@ example (P : Prop) (H : IProp) : wrappedEntails iprop(⌜P⌝ ∗ H) H := by
 example (H : IProp) : wrappedEntails (hiddenPure False ∗ H) H := by
   iintro hFalse
   contradiction
+
+-- `iintro_shallow` pulls the real `⌜P⌝`, not the pure fact hidden in `hiddenPure`.
+example (P Q : Prop) (H : IProp) : wrappedEntails (hiddenPure Q ∗ ⌜P⌝ ∗ H) H := by
+  iintro_shallow
+  guard_hyp h : P
+  guard_target = wrappedEntails (hiddenPure Q ∗ H) H
+  unfold wrappedEntails hiddenPure
+  iframe
 
 example (P : Prop) (H : IProp) :
     wrappedEntails iprop(⌜P⌝ ∗ H) iprop(⌜P⌝ ∗ H) := by

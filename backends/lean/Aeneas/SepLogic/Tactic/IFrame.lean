@@ -1,81 +1,32 @@
 module
-public import Aeneas.SepLogic.Tactic.Normalize
-public meta import Aeneas.SepLogic.Tactic.Normalize
+public import Aeneas.SepLogic.Tactic.Common
+public meta import Aeneas.SepLogic.Tactic.Common
 public meta import Lean
 public meta import AeneasMeta.Simp
 public meta section
 
 namespace Aeneas.SepLogic
 
-open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic
+open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic Normalize Common
 
 namespace IFrame
 
-private def wand? (e : Expr) : Option Bool :=
+private def isWand (e : Expr) : Bool :=
   let e := e.consumeMData
-  if e.isAppOfArity ``postWand 3 then some true
-  else if e.isAppOfArity ``wand 2 then some false
-  else none
+  e.isAppOfArity ``postWand 3 || e.isAppOfArity ``wand 2
 
-partial def exposeEntailment? (e : Expr) : MetaM (Option Expr) := do
-  let e := (← instantiateMVars e).consumeMData
-  if e.isAppOfArity ``Entails 2 then return some e
-  match ← unfoldDefinition? e with
-  | some e' => exposeEntailment? e'
-  | none => return none
-
-def mkEntailmentLike (target source destination newSource : Expr) : MetaM Expr := do
-  let (fn, targetArgs) :=
-    target.consumeMData.withApp fun fn args => (fn, args)
-  let newSourceType ← inferType newSource
-  for h : i in [:targetArgs.size] do
-    let argType ← inferType targetArgs[i]
-    if ← isDefEq argType newSourceType then
-      let candidate := mkAppN fn (targetArgs.set! i newSource)
-      if let some exposed ← exposeEntailment? candidate then
-        let args := exposed.getAppArgs
-        if ← isDefEq args[0]! newSource then
-          if ← isDefEq args[1]! destination then
-            return candidate
-  let replacement := target.replace fun e =>
-    if e == source then some newSource else none
-  if let some exposed ← exposeEntailment? replacement then
-    let args := exposed.getAppArgs
-    if ← isDefEq args[0]! newSource then
-      if ← isDefEq args[1]! destination then
-        return replacement
-  mkAppM ``Entails #[newSource, destination]
-
-/-- Match each `required` atom with a distinct `available` atom, by unification. Atoms without
-metavariables go first, so that a flexible atom `P ?w` cannot take the match a rigid atom needs.
-Returns the matched and the unmatched required atoms, and the unused available atoms. -/
-def matchAtoms (available required : Array Expr) :
-    MetaM (Array Expr × Array Expr × Array Expr) := do
-  let mut rigid := #[]
-  let mut flexible := #[]
-  for atom in required do
-    if (← instantiateMVars atom).hasExprMVar then flexible := flexible.push atom
-    else rigid := rigid.push atom
-  let mut remaining := available
-  let mut matched := #[]
-  let mut unmatched := #[]
-  for expected in rigid ++ flexible do
-    let mut found := none
-    for h : i in [:remaining.size] do
-      if ← isDefEq expected remaining[i] then
-        found := some i
-        break
-    match found with
-    | some i =>
-      matched := matched.push expected
-      remaining := remaining.eraseIdx! i
-    | none => unmatched := unmatched.push expected
-  return (matched, unmatched, remaining)
-
-def removeMatches (available required : Array Expr) :
-    MetaM (Option (Array Expr)) := commitWhenSome? do
-  let (_, unmatched, remaining) ← matchAtoms available required
-  return if unmatched.isEmpty then some remaining else none
+/-- For `H₁ -∗ H₂` (resp. `Q₁ -∗+ Q₂`), the introduction lemma and its premise
+`H₁ ∗ residual ⊢ H₂` (resp. `Q₁ ∗+ residual ⊢+ Q₂`). -/
+def wandIntro? (residual wand : Expr) : MetaM (Option (Name × Expr)) := do
+  let wand := wand.consumeMData
+  let args := wand.getAppArgs
+  if wand.isAppOfArity ``postWand 3 then
+    return some (``postWand_intro,
+      ← mkAppM ``postEntails #[← mkAppM ``postSep #[args[1]!, residual], args[2]!])
+  if wand.isAppOfArity ``wand 2 then
+    return some (``wand_intro,
+      ← mkAppM ``Entails #[mkApp2 (mkConst ``sep) args[0]! residual, args[1]!])
+  return none
 
 private def provePure (discharger : Option Syntax.Tactic) (proposition : Expr) :
     TacticM Expr := do
@@ -86,33 +37,11 @@ private def provePure (discharger : Option Syntax.Tactic) (proposition : Expr) :
     match discharger with
     | some tactic => pure tactic
     | none =>
-      `(tactic|
-        first
-          | grind
-          | (simp only [isimps, *]; done)
-          | (simp only [isimps, *]; grind)
-          | (simp_all; done)
-          | (simp_all; grind))
+      `(tactic| first | grind | (simp only [isimps, *] <;> grind) | (simp_all <;> grind))
   let (goals, _) ← runTactic proofId tactic
   unless goals.isEmpty do
     throwError "could not prove pure assertion {proposition}"
   return proof
-
-def rewritePureFacts (goal : MVarId) (facts : Array FVarId) :
-    TacticM (Option MVarId) := goal.withContext do
-  if facts.isEmpty then return some goal
-  let saved ← getGoals
-  try
-    setGoals [goal]
-    let _ ← Aeneas.Simp.simpAt true
-      { dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1 }
-      { hypsToUse := facts } (.targets #[] true)
-    match ← getUnsolvedGoals with
-    | [] => return none
-    | [goal] => return some goal
-    | _ => throwError "normalizing pure facts produced multiple goals"
-  finally
-    setGoals saved
 
 /-- Assign the witnesses fixed by a pure equation `⌜?w = t⌝` (or `⌜t = ?w⌝`) of the destination,
 so that cancellation does not commit them greedily to the wrong atom. -/
@@ -134,11 +63,8 @@ partial def instantiateRightExists (goal : MVarId)
   let goal ← floatExists (← exposeGoal goal)
   if ← isFrameInference goal then return (goal, witnesses)
   goal.withContext do
-  let target ← instantiateMVars (← goal.getType)
-  let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
-  unless fn.isConstOf ``Entails && args.size = 2 do return (goal, witnesses)
-  let source := args[0]!
-  let destination ← reducePostApplication args[1]!
+  let some (source, destination) ← entailment? goal | return (goal, witnesses)
+  let destination ← reducePostApplication destination
   let (destFn, destArgs) :=
     destination.consumeMData.withApp fun fn args => (fn, args)
   unless destFn.isConstOf ``iexists && destArgs.size = 2 do
@@ -177,28 +103,18 @@ mutual
 
 partial def proveWand (discharger : Option Syntax.Tactic)
     (residual wand : Expr) : TacticM Expr := do
-  let some isPostcondition := wand? wand
+  let some (lemmaName, premise) ← wandIntro? residual wand
     | throwError "expected a magic wand, got {wand}"
-  let args := wand.consumeMData.getAppArgs
-  let (lemmaName, premise) ←
-    if isPostcondition then
-      pure (``postWand_intro,
-        ← mkAppM ``postEntails #[← mkAppM ``postSep #[args[1]!, residual], args[2]!])
-    else
-      pure (``wand_intro,
-        ← mkAppM ``Entails #[mkApp2 (mkConst ``sep) args[0]! residual, args[1]!])
   let premiseGoal ← mkFreshExprSyntheticOpaqueMVar premise
   solveGoal discharger premiseGoal.mvarId!
   mkAppM lemmaName #[premiseGoal]
 
 partial def solveHimpl (discharger : Option Syntax.Tactic) (goal : MVarId) :
     TacticM Unit := goal.withContext do
-  let target ← instantiateMVars (← goal.getType)
-  let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
-  unless fn.isConstOf ``Entails && args.size = 2 do
-    throwError "expected a separation-logic entailment"
-  let source ← reducePostApplication args[0]!
-  let destination ← reducePostApplication args[1]!
+  let some (source, destination) ← entailment? goal
+    | throwError "expected a separation-logic entailment"
+  let source ← reducePostApplication source
+  let destination ← reducePostApplication destination
   let sourceAtoms ← flatten source
 
   if let some frameMVar := ← frameMVar? destination then
@@ -250,7 +166,7 @@ partial def solveHimpl (discharger : Option Syntax.Tactic) (goal : MVarId) :
     for expected in unmatched do
       if expected.consumeMData.isAppOfArity ``ipure 1 then
         deferredPure := deferredPure.push expected
-      else if (wand? expected).isSome then
+      else if isWand expected then
         if absorbing.isSome then
           throwError "cannot handle more than one magic wand on the right-hand \
             side\ndestination: {destination}"
@@ -314,14 +230,7 @@ partial def solveGoal (discharger : Option Syntax.Tactic) (goal : MVarId) :
         let goal ← if decomposing then exposeGoal (← decompose goal) else pure goal
         solveHimpl discharger goal
       else
-        let before ← goal.withContext do
-          return (← getLCtx).foldl (init := (∅ : Std.HashSet FVarId))
-            fun ids decl => ids.insert decl.fvarId
-        let goal ← pullLeft goal
-        let facts ← goal.withContext do
-          return (← (← getLCtx).getAssumptions).filterMap fun decl =>
-            if before.contains decl.fvarId then none else some decl.fvarId
-        let some goal ← rewritePureFacts goal facts.toArray | return
+        let some goal ← pullAndRewrite goal | return
         let (goal, witnesses) ← instantiateRightExists goal
         let goal ← exposeGoal goal
         let goal ← if decomposing then exposeGoal (← decompose goal) else pure goal
@@ -338,18 +247,6 @@ partial def solveGoal (discharger : Option Syntax.Tactic) (goal : MVarId) :
           {firstError.toMessageData}\n\
           and, after decomposing the assertions with `isimps`:\n\
           {secondError.toMessageData}"
-
-partial def pullGoal (goal : MVarId) : TacticM MVarId := do
-  if ← isFrameInference goal then
-    throwError "iintro_entail: this is a frame-inference goal.  Extracting anything \
-      from its left-hand side would lose it from the frame, which was created in \
-      an outer context; pull at the level of the specification instead, with `iintro`."
-  let target ← instantiateMVars (← goal.getType)
-  if target.consumeMData.isAppOfArity ``postEntails 3 then
-    let (_, next) ← goal.intro1P
-    pullLeft next
-  else
-    pullLeft goal
 
 end
 
@@ -371,12 +268,5 @@ elab_rules : tactic
     let goal ← getMainGoal
     IFrame.solveGoal discharger goal
     replaceMainGoal []
-
-/-- Alias of `iframe`. -/
-syntax "isimpl" (" by " tacticSeq)? : tactic
-
-macro_rules
-  | `(tactic| isimpl) => `(tactic| iframe)
-  | `(tactic| isimpl by $tac) => `(tactic| iframe by $tac)
 
 end Aeneas.SepLogic
