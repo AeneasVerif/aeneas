@@ -57,8 +57,8 @@ def join (b₁ b₂ : Buffer T) : Buffer T :=
   ⟨b₁.base, b₁.offset, b₁.length + b₂.length⟩
 
 def alloc (n : Nat) (value : T) : Result (Buffer T) :=
-  RawPtr.allocArray (List.replicate n value) fun l =>
-    ⟨l.1, l.2, n⟩
+  RawPtr.allocArray (List.replicate n value) fun q =>
+    ⟨q.base, q.offset, n⟩
 
 def read (b : Buffer T) (i : Nat) : Result T :=
   RawPtr.read (b.ptrAt i)
@@ -99,8 +99,8 @@ def writeSlice (b : Buffer T) (s : Slice T) : Result Unit :=
     Result.fail .assertionFailure
 
 def ofList (values : List T) : Result (Buffer T) :=
-  RawPtr.allocArray values fun l =>
-    ⟨l.1, l.2, values.length⟩
+  RawPtr.allocArray values fun q =>
+    ⟨q.base, q.offset, values.length⟩
 
 def fill (b : Buffer T) (value : T) : Result Unit :=
   MutRawPtr.fillRange b.ptr value b.length
@@ -118,8 +118,8 @@ def swap (b : Buffer T) (i j : Nat) : Result Unit := do
   b.write j x
 
 def mut_to_raw (slice : Slice T) : Result (Buffer T) :=
-  RawPtr.allocArray slice.val fun l =>
-    ⟨l.1, l.2, slice.val.length⟩
+  RawPtr.allocArray slice.val fun q =>
+    ⟨q.base, q.offset, slice.val.length⟩
 
 def end_mut_to_raw (original : Slice T) (b : Buffer T) :
     Result (Slice T) := do
@@ -388,44 +388,27 @@ theorem readRange_sub.spec (p : RawPtr T M) (values : List T) (i n : Nat)
     ⦃ p ↦* values ⦄ readRange (p.add i) n
       ⦃ result =>
         ⌜result = (values.drop i).take n⌝ ∗ p ↦* values⦄ := by
-  have hi : i ≤ values.length := by omega
-  have hRest : n ≤ (values.drop i).length := by
-    simp only [List.length_drop]
-    omega
-  have hTake : (values.take i).length = i := List.length_take_of_le hi
-  have hBlock : ((values.drop i).take n).length = n :=
-    List.length_take_of_le hRest
-  rw [bientails_eq (RawPtr.pointsToRange_split p values i), hTake,
-    bientails_eq
-      (RawPtr.pointsToRange_split (p.add i) (values.drop i) n)]
+  have hLen : ((values.drop i).take n).length = n := by simp; omega
   have hRead := readRange.spec (p.add i) ((values.drop i).take n)
-  rw [hBlock] at hRead
-  apply WP.ispec_mono hRead <;> iframe
+  rw [hLen] at hRead
+  have hSegment := RawPtr.ispec_segment p values ((values.drop i).take n) i (by omega) emp
+    (readRange (p.add i) n) (fun result => ⌜result = (values.drop i).take n⌝)
+    (by rw [hLen]; apply WP.ispec_mono hRead <;> iframe)
+  have hSet : values.setSlice! i ((values.drop i).take n) = values := by
+    rw [List.setSlice!, hLen, Nat.min_eq_left (by omega), List.take_take, Nat.min_self,
+      List.append_assoc, ← List.drop_drop, List.take_append_drop, List.take_append_drop]
+  rw [hSet] at hSegment
+  apply WP.ispec_mono hSegment <;> iframe
 
 theorem writeRange_sub.spec (p : MutRawPtr T) (old : List T) (i : Nat)
     (values : List T) (hBounds : i + values.length ≤ old.length) :
     ⦃ p ↦* old ⦄ writeRange (p.add i) values
       ⦃ p ↦* old.setSlice! i values⦄ := by
-  have hi : i ≤ old.length := by omega
-  have hRest : values.length ≤ (old.drop i).length := by
-    simp only [List.length_drop]
-    omega
-  have hTake : (old.take i).length = i := List.length_take_of_le hi
-  have hBlock : ((old.drop i).take values.length).length = values.length :=
-    List.length_take_of_le hRest
-  have hReplace : old.setSlice! i values =
-      old.take i ++ values ++ old.drop (i + values.length) := by
-    have hSize : values.length ≤ old.length - i := by simpa using hRest
-    simp only [List.setSlice!, Nat.min_eq_left hSize, List.take_length]
-  rw [bientails_eq (RawPtr.pointsToRange_split p old i), hTake,
-    bientails_eq
-      (RawPtr.pointsToRange_split (p.add i) (old.drop i) values.length),
-    hReplace]
-  simp only [bientails_eq (RawPtr.pointsToRange_append _ _ _),
-    List.length_append, hTake, hBlock, RawPtr.add_add, List.drop_drop]
-  apply WP.ispec_mono
-    (writeRange.spec (p.add i) ((old.drop i).take values.length)
-      values hBlock) <;> iframe
+  have hSegment := RawPtr.ispec_segment p old values i hBounds emp
+    (writeRange (p.add i) values) (fun _ => emp)
+    (by apply WP.ispec_mono (writeRange.spec (p.add i) ((old.drop i).take values.length)
+          values (by simp; omega)) <;> iframe)
+  apply WP.ispec_mono hSegment <;> iframe
 
 @[step]
 theorem mut_to_raw.spec (slice : Slice T) :

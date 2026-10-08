@@ -45,6 +45,9 @@ def add (q : RawPtr T M) (i : Nat) : RawPtr T M :=
 def toConst (q : MutRawPtr T) : ConstRawPtr T :=
   ⟨q.base, q.offset⟩
 
+def retype (q : RawPtr T M) : RawPtr U M' :=
+  ⟨q.base, q.offset⟩
+
 /-- `q` owns the `values.length` slots from `q` on. -/
 def pointsToRange (q : RawPtr T M) (values : List T) : IProp :=
   owns (Heap.rangeHeap q.addr values)
@@ -59,15 +62,15 @@ instance instPointsToRawPtr {T : Type} {M : Mutability} :
 
 notation:50 q:50 " ↦* " values:50 => RawPtr.pointsToRange q values
 
-def RawPtr.allocArray {β : Type} (values : List T) (mk : Loc → β) : Result β :=
+def RawPtr.allocArray {β : Type} (values : List T) (mk : MutRawPtr T → β) : Result β :=
   Result.guardedModify (fun _ => True) fun h _ =>
-    (mk (Heap.freshLoc h), Heap.freshHeap h values)
+    (mk ⟨(Heap.freshLoc h).1, (Heap.freshLoc h).2⟩, Heap.freshHeap h values)
 
 def RawPtr.materialize (values : List T) : Result (RawPtr T M) :=
-  RawPtr.allocArray values fun l => ⟨l.1, l.2⟩
+  RawPtr.allocArray values fun q => q.retype
 
 def MutRawPtr.alloc (value : T) : Result (MutRawPtr T) :=
-  RawPtr.allocArray [value] fun l => ⟨l.1, l.2⟩
+  RawPtr.allocArray [value] id
 
 namespace RawPtr
 
@@ -106,11 +109,13 @@ class IsScalar (T : Type) where
   toBytes : Slice T → Result (Slice U8)
   fromBytes : Slice U8 → Result (Slice T)
 
-/-- Unsupported: changing the element type requires reinterpreting the typed heap. -/
+/-- Keeps the address. Only casts between scalars of the same size are supported:
+`add` counts in slots of the pointee type. -/
 def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability)
-    [IsScalar T] [IsScalar T'] (_ : RawPtr T M) :
+    [IsScalar T] [IsScalar T'] (p : RawPtr T M) :
     Result (RawPtr T' M') :=
-  .fail .undef
+  if IsScalar.size (T := T) = IsScalar.size (T := T') then .ok p.retype
+  else .fail .undef
 
 /-! ### END Trusted definitions -/
 
@@ -222,6 +227,13 @@ namespace RawPtr
 
 @[simp] theorem addr_toConst (q : MutRawPtr T) : q.toConst.addr = q.addr := rfl
 
+@[simp] theorem base_retype (q : RawPtr T M) : (q.retype : RawPtr U M').base = q.base := rfl
+
+@[simp] theorem offset_retype (q : RawPtr T M) :
+    (q.retype : RawPtr U M').offset = q.offset := rfl
+
+@[simp] theorem addr_retype (q : RawPtr T M) : (q.retype : RawPtr U M').addr = q.addr := rfl
+
 theorem addr_add (q : RawPtr T M) (i : Nat) :
     (q.add i).addr = q.addr.add i := rfl
 
@@ -243,6 +255,12 @@ theorem RawPtr.pointsTo_eq_range (q : RawPtr T M) (value : T) :
 
 @[simp] theorem RawPtr.pointsToRange_toConst (q : MutRawPtr T) (values : List T) :
     (q.toConst ↦* values) = (q ↦* values) := rfl
+
+@[simp] theorem RawPtr.pointsTo_retype (q : RawPtr T M) (value : T) :
+    ((q.retype : RawPtr T M') ↦ value) = (q ↦ value) := rfl
+
+@[simp] theorem RawPtr.pointsToRange_retype (q : RawPtr T M) (values : List T) :
+    ((q.retype : RawPtr T M') ↦* values) = (q ↦* values) := rfl
 
 namespace RawPtr
 
@@ -317,9 +335,9 @@ theorem disjoint_singleton {q r : RawPtr T M} {value₁ value₂ : T} (hNe : q �
 end RawPtr
 
 @[step]
-theorem RawPtr.allocArray.spec {β : Type} (values : List T) (mk : Loc → β)
+theorem RawPtr.allocArray.spec {β : Type} (values : List T) (mk : MutRawPtr T → β)
     (post : β → IProp)
-    (hPost : ∀ l : Loc, owns (Heap.rangeHeap l values) ⊢ post (mk l)) :
+    (hPost : ∀ q : MutRawPtr T, q ↦* values ⊢ post (mk q)) :
     ⦃ emp ⦄ RawPtr.allocArray values mk ⦃ result => post result⦄ := by
   apply ispec_guardedModify
   intro h _ frame hCompatible
@@ -344,7 +362,7 @@ theorem RawPtr.materialize.spec (values : List T) :
 @[step]
 theorem MutRawPtr.alloc.spec (value : T) :
     ⦃ emp ⦄ MutRawPtr.alloc value ⦃ q => q ↦ value⦄ :=
-  RawPtr.allocArray.spec _ _ _ fun _ => by
+  RawPtr.allocArray.spec _ _ _ fun q => by
     rw [RawPtr.pointsTo_eq_range]
     exact entails_refl _
 
@@ -464,6 +482,32 @@ theorem MutRawPtr.write.spec_range (q : MutRawPtr T) (values : List T)
       (show i < (values.set i value).length by simpa using hIndex),
     RawPtr.take_set, RawPtr.drop_set, List.getElem_set_self]
   apply WP.ispec_mono (MutRawPtr.write.spec (q.add i) values[i] value) <;> iframe
+
+/-- An operation on the slots `[i, i + ws.length)` of a range, which may also use `R`,
+acts on the whole range. -/
+theorem RawPtr.ispec_segment {α : Type} (q : RawPtr T M) (values ws : List T) (i : Nat)
+    (hBounds : i + ws.length ≤ values.length) (R : IProp) (m : Result α) (Q : α → IProp)
+    (hm : ⦃ (q.add i) ↦* (values.drop i).take ws.length ∗ R ⦄ m
+      ⦃ r => (q.add i) ↦* ws ∗ Q r ⦄) :
+    ⦃ q ↦* values ∗ R ⦄ m ⦃ r => q ↦* values.setSlice! i ws ∗ Q r ⦄ := by
+  have hTake : (values.take i).length = i := by simp; omega
+  have hMid : ((values.drop i).take ws.length).length = ws.length := by simp; omega
+  have hSplit : (q ↦* values) = iprop(q ↦* values.take i ∗
+      ((q.add i) ↦* (values.drop i).take ws.length ∗
+        (q.add (i + ws.length)) ↦* values.drop (i + ws.length))) := by
+    conv_lhs => rw [← List.take_append_drop i values,
+      ← List.take_append_drop ws.length (values.drop i)]
+    rw [bientails_eq (RawPtr.pointsToRange_append _ _ _), hTake,
+      bientails_eq (RawPtr.pointsToRange_append _ _ _), hMid, RawPtr.add_add,
+      List.drop_drop]
+  have hSet : (q ↦* values.setSlice! i ws) = iprop(q ↦* values.take i ∗
+      ((q.add i) ↦* ws ∗ (q.add (i + ws.length)) ↦* values.drop (i + ws.length))) := by
+    have hMin : min ws.length (values.length - i) = ws.length := by omega
+    rw [List.setSlice!, hMin, List.take_length, List.append_assoc,
+      bientails_eq (RawPtr.pointsToRange_append _ _ _), hTake,
+      bientails_eq (RawPtr.pointsToRange_append _ _ _), RawPtr.add_add]
+  rw [hSplit, hSet]
+  apply WP.ispec_mono hm <;> iframe
 
 @[step]
 theorem MutRawPtr.fillRange.spec (q : MutRawPtr T) (values : List T) (value : T) :
@@ -650,6 +694,14 @@ theorem MutRawPtr.end_mut_to_raw.spec {value : T} (q : MutRawPtr T) :
       apply (ispec_ok _).2
       iframe
 
+@[step]
+theorem RawPtr.cast_scalar.spec [IsScalar T] [IsScalar T'] (p : RawPtr T M)
+    (hSize : IsScalar.size (T := T) = IsScalar.size (T := T')) :
+    ⦃ emp ⦄ RawPtr.cast_scalar T' M' p ⦃ q => ⌜q = p.retype⌝⦄ := by
+  simp only [RawPtr.cast_scalar, hSize, ↓reduceIte]
+  apply (ispec_ok _).2
+  iframe
+
 namespace IsScalar
 
 @[simp]
@@ -657,6 +709,18 @@ theorem size_u8 : size (T := U8) = 1#usize := by
   change (⟨BitVec.ofNat _ 1⟩ : Usize) = 1#usize
   apply UScalar.eq_of_val_eq
   simp [UScalar.val]
+
+@[simp, scalar_tac_simps]
+theorem size_val_uscalar (ty : UScalarTy) : (size (T := UScalar ty)).val = ty.numBits / 8 := by
+  change (BitVec.ofNat System.Platform.numBits (ty.numBits / 8)).toNat = _
+  rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt]
+  cases ty <;> rcases System.Platform.numBits_eq with h | h <;> simp [UScalarTy.numBits, h]
+
+@[simp, scalar_tac_simps]
+theorem size_val_iscalar (ty : IScalarTy) : (size (T := IScalar ty)).val = ty.numBits / 8 := by
+  change (BitVec.ofNat System.Platform.numBits (ty.numBits / 8)).toNat = _
+  rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt]
+  cases ty <;> rcases System.Platform.numBits_eq with h | h <;> simp [IScalarTy.numBits, h]
 
 @[simp]
 theorem numElems_u8 (numBytes : Nat) : numElems U8 numBytes = numBytes := by

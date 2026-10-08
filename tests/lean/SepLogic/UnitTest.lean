@@ -424,4 +424,20 @@ theorem bufferOne.spec : ⦃ emp ⦄ bufferOne ⦃ result => ⌜result = 42⌝�
   irewrite (Buffer.pointsTo_entails_range b _)
   step*
 
+def castRead (p : MutRawPtr Aeneas.Std.U32) : Result Aeneas.Std.U32 := do
+  let q ← RawPtr.cast_scalar Aeneas.Std.I32 .Const p
+  let r ← RawPtr.cast_scalar Aeneas.Std.U32 .Const q
+  r.read
+
+example (p : MutRawPtr Aeneas.Std.U32) (x : Aeneas.Std.U32) :
+    ⦃ p ↦ x ⦄ castRead p ⦃ r => ⌜r = x⌝ ∗ p ↦ x⦄ := by
+  unfold castRead
+  step*
+
+example (p : MutRawPtr Aeneas.Std.U32) :
+    RawPtr.cast_scalar Aeneas.Std.U8 .Mut p = .fail .undef := by
+  rw [RawPtr.cast_scalar, if_neg]
+  intro hSize
+  simpa using congrArg Aeneas.Std.UScalar.val hSize
+
 end SepLogic
