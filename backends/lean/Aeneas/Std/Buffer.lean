@@ -31,19 +31,6 @@ def ptr (b : Buffer T) : MutRawPtr T :=
 def pointsTo (b : Buffer T) (values : List T) : IProp :=
   iprop(⌜values.length = b.length⌝ ∗ b.ptr ↦* values)
 
-end Buffer
-
-instance instPointsToBuffer {T : Type} :
-    PointsTo (Buffer T) (List T) := ⟨Buffer.pointsTo⟩
-
-/-! ### END Trusted definitions -/
-
-open WP
-
-variable {T : Type}
-
-namespace Buffer
-
 def ptrAt (b : Buffer T) (i : Nat) : MutRawPtr T :=
   ⟨b.base, b.offset + i⟩
 
@@ -125,6 +112,19 @@ def end_mut_to_raw (original : Slice T) (b : Buffer T) :
     Result (Slice T) := do
   let values ← MutRawPtr.takeRange b.ptr b.length
   pure (original.setSlice! 0 values)
+
+end Buffer
+
+instance instPointsToBuffer {T : Type} :
+    PointsTo (Buffer T) (List T) := ⟨Buffer.pointsTo⟩
+
+/-! ### END Trusted definitions -/
+
+open WP
+
+variable {T : Type}
+
+namespace Buffer
 
 @[step]
 theorem alloc.spec (n : Nat) (value : T) :

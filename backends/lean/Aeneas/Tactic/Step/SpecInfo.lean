@@ -46,6 +46,37 @@ namespace Aeneas.Std.WP
     ]
   }
 
+open Lean Elab Meta Tactic Step in
+/-- Goal preparation shared by `ispec` and `dispec`. The bind rule leaves
+`∀ v, ispec (Qm v ∗ F) (k v) Q`, whose output pattern comes from `k`; the mono rule leaves
+`F ⊢ Qm -∗+ Q`, whose pattern comes from the caller's postcondition `Q`. -/
+meta def ispecPrepareIntro : PrepareIntroOutputs := do
+  withMainContext do
+  let goalTy ← instantiateMVars (← getMainTarget)
+  let tree ← if goalTy.consumeMData.isForall then getOutputTree goalTy
+    else match goalTy.find? (·.isAppOfArity ``SepLogic.postWand 3) with
+      | some wand => getContInput wand.getAppArgs[2]!
+      | none => pure (.leaf none)
+  let before ← Intro.localHypotheses
+  introIspec
+  let goal ← match ← getUnsolvedGoals with
+    | [] => return 0
+    | [goal] => pure goal
+    | _ => throwError "ispecPrepareIntro: expected a single goal"
+  let introduced ← goal.withContext do
+    pure <| (← getLCtx).getFVarIds.filter (!before.contains ·)
+  let (_, goal) ← goal.revert introduced (preserveOrder := true)
+  setGoals [goal]
+  let goalTy ← instantiateMVars (← goal.getType)
+  let .forallE _ domain _ _ := goalTy.consumeMData | return 0
+  if ← isProp domain then return 0
+  prepareIntroOutputsWith goalTy tree simpOutputEquiv
+
+open Lean Elab Tactic in
+/-- Discharge the entailments `step` generates for `ispec` and `dispec`. -/
+public meta def ispec_discharge : DischargeTactic := do
+  evalTactic (← `(tactic| iframe))
+
 #register_spec_info {
     spec_name := ``Std.WP.ispec
     arity := 4
@@ -55,8 +86,8 @@ namespace Aeneas.Std.WP
     mk_spec_mono_skip_args := 5
     mk_spec_bind := ``Std.WP.ispec_bind
     mk_spec_bind_skip_args := 7
-    prepare_intro_outputs := ``Aeneas.Step.prepareIntroIspec
-    discharge_tactic := some ``Aeneas.Step.iframeDischarge
+    prepare_intro_outputs := ``Std.WP.ispecPrepareIntro
+    discharge_tactic := some ``Std.WP.ispec_discharge
     to_mvcgen := none
     liftings := #[
       { from_statement := ``Std.WP.spec
@@ -74,8 +105,8 @@ namespace Aeneas.Std.WP
     mk_spec_mono_skip_args := 5
     mk_spec_bind := ``Std.WP.dispec_bind
     mk_spec_bind_skip_args := 7
-    prepare_intro_outputs := ``Aeneas.Step.prepareIntroIspec
-    discharge_tactic := some ``Aeneas.Step.iframeDischarge
+    prepare_intro_outputs := ``Std.WP.ispecPrepareIntro
+    discharge_tactic := some ``Std.WP.ispec_discharge
     to_mvcgen := none
     liftings := #[
       { from_statement := ``Std.WP.ispec

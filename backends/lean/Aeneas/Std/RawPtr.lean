@@ -5,7 +5,7 @@ public import Aeneas.SepLogic.IProp
 public import Aeneas.Std.Scalar.Core
 public import Aeneas.Std.Scalar.Notations
 public import Aeneas.Std.SliceDef
-public import Aeneas.Data.BitVec
+public import Aeneas.Data.List.List
 public import Aeneas.Std.WP
 public import Aeneas.Std.Primitives
 public import Aeneas.SepLogic.Lemmas
@@ -99,36 +99,6 @@ def MutRawPtr.end_mut_to_raw (q : MutRawPtr T) : Result T := do
   MutRawPtr.free q
   pure value
 
-inductive ScalarKind where
-| Signed (ty : IScalarTy)
-| Unsigned (ty : UScalarTy)
-
-class IsScalar (T : Type) where
-  isScalar : (∃ ty, T = UScalar ty) ∨ (∃ ty, T = IScalar ty)
-  size : Usize
-  toBytes : Slice T → Result (Slice U8)
-  fromBytes : Slice U8 → Result (Slice T)
-
-/-- Keeps the address. Only casts between scalars of the same size are supported:
-`add` counts in slots of the pointee type. -/
-def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability)
-    [IsScalar T] [IsScalar T'] (p : RawPtr T M) :
-    Result (RawPtr T' M') :=
-  if IsScalar.size (T := T) = IsScalar.size (T := T') then .ok p.retype
-  else .fail .undef
-
-/-! ### END Trusted definitions -/
-
-namespace RawPtr
-
-def singleton (q : RawPtr T M) (value : T) : Heap :=
-  Heap.singleton q.addr value
-
-def contains (h : Heap) (q : RawPtr T M) : Prop :=
-  Heap.contains h T q.addr
-
-end RawPtr
-
 def MutRawPtr.freeRange (q : MutRawPtr T) : Nat → Result Unit
   | 0 => pure ()
   | n + 1 => do
@@ -167,47 +137,41 @@ def MutRawPtr.takeRange (q : MutRawPtr T) : Nat → Result (List T)
       let rest ← MutRawPtr.takeRange (q.add 1) n
       pure (value :: rest)
 
-namespace IsScalar
+inductive ScalarKind where
+| Signed (ty : IScalarTy)
+| Unsigned (ty : UScalarTy)
 
-def numElems (T : Type) [IsScalar T] (numBytes : Nat) : Nat :=
-  (numBytes + (size (T := T)).val - 1) / (size (T := T)).val
+class IsScalar (T : Type) where
+  isScalar : (∃ ty, T = UScalar ty) ∨ (∃ ty, T = IScalar ty)
+  size : Usize
 
-def encode (toBytes : T → List U8) (s : Slice T) : Result (Slice U8) :=
-  let bytes := s.val.flatMap toBytes
-  if h : bytes.length ≤ Usize.max then .ok (Slice.from bytes h)
-  else .fail .arrayOutOfBounds
+/-- Keeps the address. Only casts between scalars of the same size are supported:
+`add` counts in slots of the pointee type. -/
+def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability)
+    [IsScalar T] [IsScalar T'] (p : RawPtr T M) :
+    Result (RawPtr T' M') :=
+  if IsScalar.size (T := T) = IsScalar.size (T := T') then .ok p.retype
+  else .fail .undef
 
-def decode (size : Nat) (fromBytes : List U8 → T) (s : Slice U8) :
-    Result (Slice T) :=
-  if size = 0 ∨ s.val.length % size ≠ 0 then .fail .undef
-  else
-    let values := (s.val.toChunks size).map fromBytes
-    if h : values.length ≤ Usize.max then .ok (Slice.from values h)
-    else .fail .arrayOutOfBounds
+/-! ### END Trusted definitions -/
 
-end IsScalar
+namespace RawPtr
+
+def singleton (q : RawPtr T M) (value : T) : Heap :=
+  Heap.singleton q.addr value
+
+def contains (h : Heap) (q : RawPtr T M) : Prop :=
+  Heap.contains h T q.addr
+
+end RawPtr
 
 instance {ty} : IsScalar (UScalar ty) where
   isScalar := by simp
   size := ⟨BitVec.ofNat _ (ty.numBits / 8)⟩
-  toBytes :=
-    match ty with
-    | .U8 => Result.ok
-    | ty => IsScalar.encode fun (x : UScalar ty) =>
-        x.bv.toLEBytes.map (@UScalar.mk .U8)
-  fromBytes :=
-    match ty with
-    | .U8 => Result.ok
-    | ty => IsScalar.decode (ty.numBits / 8) fun bytes =>
-        ⟨(BitVec.fromLEBytes (bytes.map UScalar.bv)).setWidth ty.numBits⟩
 
 instance {ty} : IsScalar (IScalar ty) where
   isScalar := by simp
   size := ⟨BitVec.ofNat _ (ty.numBits / 8)⟩
-  toBytes := IsScalar.encode fun (x : IScalar ty) =>
-    x.bv.toLEBytes.map (@UScalar.mk .U8)
-  fromBytes := IsScalar.decode (ty.numBits / 8) fun bytes =>
-    ⟨(BitVec.fromLEBytes (bytes.map UScalar.bv)).setWidth ty.numBits⟩
 
 open WP
 
@@ -722,77 +686,11 @@ theorem size_val_iscalar (ty : IScalarTy) : (size (T := IScalar ty)).val = ty.nu
   rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt]
   cases ty <;> rcases System.Platform.numBits_eq with h | h <;> simp [IScalarTy.numBits, h]
 
-@[simp]
-theorem numElems_u8 (numBytes : Nat) : numElems U8 numBytes = numBytes := by
-  simp [numElems]
-
-@[simp, step_simps]
-theorem toBytes_u8 (s : Slice U8) : toBytes s = .ok s := rfl
-
-@[simp, step_simps]
-theorem fromBytes_u8 (s : Slice U8) : fromBytes (T := U8) s = .ok s := rfl
-
 end IsScalar
 
 end Aeneas.Std
 
 namespace Aeneas.Std.IsScalar.Tests
-
-def bytes : Slice U8 := Slice.from [52#u8, 18#u8, 255#u8, 255#u8] (by scalar_tac)
-
-def words : Slice U16 := Slice.from [4660#u16, 65535#u16] (by scalar_tac)
-
-def signedWords : Slice I16 := Slice.from [4660#i16, (-1)#i16] (by scalar_tac)
-
-example (s : Slice U8) : toBytes s = .ok s := rfl
-
-example (s : Slice U8) : fromBytes (T := U8) s = .ok s := rfl
-
-example : toBytes words = .ok bytes := by
-  simp [toBytes, encode, words, bytes, BitVec.toLEBytes,
-    show 4 ≤ Usize.max by scalar_tac]
-  rfl
-
-example : fromBytes (T := U16) bytes = .ok words := by
-  change (if _ : 2 ≤ Usize.max then Result.ok words else .fail .arrayOutOfBounds) = _
-  simp [show 2 ≤ Usize.max by scalar_tac]
-
-example : toBytes signedWords = .ok bytes := by
-  simp [toBytes, encode, signedWords, bytes, BitVec.toLEBytes,
-    show 4 ≤ Usize.max by scalar_tac]
-  rfl
-
-example : fromBytes (T := I16) bytes = .ok signedWords := by
-  change (if _ : 2 ≤ Usize.max then Result.ok signedWords else .fail .arrayOutOfBounds) = _
-  simp [show 2 ≤ Usize.max by scalar_tac]
-
-example : fromBytes (T := U16) (Slice.from [1#u8] (by scalar_tac)) = .fail .undef := by
-  simp [fromBytes, decode]
-
-example : fromBytes (T := I32) (Slice.from [1#u8, 2#u8, 3#u8] (by scalar_tac)) =
-    .fail .undef := by
-  simp [fromBytes, decode]
-
-example : fromBytes (T := U32) (Slice.from [] (by scalar_tac)) =
-    .ok (Slice.from [] (by scalar_tac)) := by
-  simp [fromBytes, decode, List.toChunks]
-
-example : numElems U8 16 = 16 := by simp
-
-example : numElems U32 16 = 4 := by
-  rcases System.Platform.numBits_eq with h | h
-  · simp [numElems, size, UScalar.val, h]
-  · simp [numElems, size, UScalar.val, h]
-
-example : numElems U64 17 = 3 := by
-  rcases System.Platform.numBits_eq with h | h
-  · simp [numElems, size, UScalar.val, h]
-  · simp [numElems, size, UScalar.val, h]
-
-example : numElems U128 0 = 0 := by
-  rcases System.Platform.numBits_eq with h | h
-  · simp [numElems, size, UScalar.val, h]
-  · simp [numElems, size, UScalar.val, h]
 
 example : (size (T := U128)).val = 16 := by
   rcases System.Platform.numBits_eq with h | h

@@ -259,13 +259,12 @@ meta def prepareIntroOutputsWith (type : Expr) (tree : NameTree) (prove : Tactic
   setGoals [next.mvarId!]
   return prefixLength
 
-/-- Read the pattern destructuring the output from the goal left by the mono or bind rule. -/
+/-- Read the pattern destructuring the output from a goal `∀ x, [P x →] Q x` left by the
+mono or bind rule, where `Q x` is the caller's postcondition or `spec (k x) Q'`.
+Goals that do not quantify over the output yield an anonymous leaf. -/
 meta def getOutputTree (goalTy : Expr) : MetaM NameTree := do
   let goalTy := (← instantiateMVars goalTy).consumeMData
-  unless goalTy.isForall do
-    return ← match goalTy.find? (·.isAppOfArity ``SepLogic.postWand 3) with
-      | some wand => getContInput wand.getAppArgs[2]!
-      | none => pure (.leaf none)
+  unless goalTy.isForall do return .leaf none
   forallBoundedTelescope goalTy (some 1) fun xs body => do
     let mut body := body.consumeMData
     if body.isArrow then
@@ -299,26 +298,5 @@ meta def prepareIntroOutputs : PrepareIntroOutputs := do
   withMainContext do
   let goalTy ← instantiateMVars (← getMainTarget)
   prepareIntroOutputsWith goalTy (← getOutputTree goalTy) simpOutputEquiv
-
-meta def prepareIntroIspec : PrepareIntroOutputs := do
-  withMainContext do
-  let tree ← getOutputTree (← getMainTarget)
-  let before ← Std.WP.Intro.localHypotheses
-  Std.WP.introIspec
-  let goal ← match ← getUnsolvedGoals with
-    | [] => return 0
-    | [goal] => pure goal
-    | _ => throwError "prepareIntroIspec: expected a single goal"
-  let introduced ← goal.withContext do
-    pure <| (← getLCtx).getFVarIds.filter (!before.contains ·)
-  let (_, goal) ← goal.revert introduced (preserveOrder := true)
-  setGoals [goal]
-  let goalTy ← instantiateMVars (← goal.getType)
-  let .forallE _ domain _ _ := goalTy.consumeMData | return 0
-  if ← isProp domain then return 0
-  prepareIntroOutputsWith goalTy tree simpOutputEquiv
-
-public meta def iframeDischarge : DischargeTactic := do
-  evalTactic (← `(tactic| iframe))
 
 end Aeneas.Step
