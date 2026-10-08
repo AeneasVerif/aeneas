@@ -87,10 +87,20 @@ def mkStar (atoms : Array Expr) : Expr :=
     atoms.pop.foldr (init := last) fun atom rest =>
       mkApp2 (mkConst ``sep) atom rest
 
+/-- Atoms without metavariables first, so that a flexible atom `P ?w` cannot take the match a
+rigid atom needs. -/
+def rigidFirst (atoms : Array Expr) : MetaM (Array Expr) := do
+  let mut rigid := #[]
+  let mut flexible := #[]
+  for atom in atoms do
+    if (← instantiateMVars atom).hasExprMVar then flexible := flexible.push atom
+    else rigid := rigid.push atom
+  return rigid ++ flexible
+
 def removeMatches (available required : Array Expr) :
     MetaM (Option (Array Expr)) := commitWhenSome? do
   let mut remaining := available
-  for expected in required do
+  for expected in ← rigidFirst required do
     let mut found := none
     for h : i in [:remaining.size] do
       if ← isDefEq expected remaining[i] then
@@ -250,6 +260,20 @@ def rewritePureFacts (goal : MVarId) (facts : Array FVarId) :
   finally
     setGoals saved
 
+/-- Assign the witnesses fixed by a pure equation `⌜?w = t⌝` (or `⌜t = ?w⌝`) of the destination,
+so that cancellation does not commit them greedily to the wrong atom. -/
+private def solveWitnessEqs (destination : Expr) (witnesses : Array MVarId) : MetaM Unit := do
+  if witnesses.isEmpty then return
+  let isWitness (e : Expr) : Bool := match e.consumeMData with
+    | .mvar id => witnesses.contains id
+    | _ => false
+  for atom in ← flatten destination do
+    let atom := atom.consumeMData
+    unless atom.isAppOfArity ``ipure 1 do continue
+    let some (_, lhs, rhs) := (← instantiateMVars atom.appArg!).consumeMData.eq? | continue
+    if isWitness lhs || isWitness rhs then
+      discard <| isDefEq lhs rhs
+
 partial def instantiateRightExists (goal : MVarId)
     (witnesses : Array MVarId := #[]) : TacticM (MVarId × Array MVarId) := do
   if ← isFrameInference goal then return (goal, witnesses)
@@ -263,7 +287,9 @@ partial def instantiateRightExists (goal : MVarId)
   let destination ← reducePostApplication args[1]!
   let (destFn, destArgs) :=
     destination.consumeMData.withApp fun fn args => (fn, args)
-  unless destFn.isConstOf ``iexists && destArgs.size = 2 do return (goal, witnesses)
+  unless destFn.isConstOf ``iexists && destArgs.size = 2 do
+    solveWitnessEqs destination witnesses
+    return (goal, witnesses)
   let some u := destFn.constLevels!.head?
     | throwError "could not determine the universe of {destination}"
   let ι := destArgs[0]!
@@ -369,7 +395,7 @@ partial def solveHimpl (discharger : Option Syntax.Tactic) (goal : MVarId) :
     let mut matched : Array Expr := #[]
     let mut deferredPure : Array Expr := #[]
     let mut absorbing : Option Expr := none
-    for expected in destinationAtoms do
+    for expected in ← rigidFirst destinationAtoms do
       let mut found := none
       for h : i in [:remaining.size] do
         if ← isDefEq expected remaining[i] then
@@ -453,10 +479,14 @@ partial def solveGoal (discharger : Option Syntax.Tactic) (goal : MVarId) :
           return (← (← getLCtx).getAssumptions).filterMap fun decl =>
             if before.contains decl.fvarId then none else some decl.fvarId
         let some goal ← rewritePureFacts goal facts.toArray | return
-        let (goal, _) ← instantiateRightExists goal
+        let (goal, witnesses) ← instantiateRightExists goal
         let goal ← exposeGoal goal
         let goal ← if decomposing then exposeGoal (← decompose goal) else pure goal
         solveHimpl discharger goal
+        for witness in witnesses do
+          unless ← witness.isAssigned do
+            throwError "could not determine the witness {mkMVar witness} of an existential \
+              on the right-hand side"
     try pass false
     catch firstError =>
       try pass true

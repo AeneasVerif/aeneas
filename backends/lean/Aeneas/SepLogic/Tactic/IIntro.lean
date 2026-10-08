@@ -194,21 +194,27 @@ elab "iintro_keep_step" : tactic => withMainContext do
   let args := entailment.getAppArgs
   let source := args[0]!
   let precondition ← IFrame.exposeConnective source
-  unless precondition.consumeMData.isAppOfArity ``sep 2 do
-    throwError "iintro_keep_step: the precondition is not a separating conjunction"
-  let leading ← IFrame.exposeConnective precondition.consumeMData.appFn!.appArg!
-  unless leading.consumeMData.isAppOfArity ``ipure 1 do
-    throwError "iintro_keep_step: the precondition does not start with a pure fact"
-  let proposition := leading.consumeMData.appArg!
-  if ← (← getLCtx).anyM fun decl =>
-      pure !decl.isImplementationDetail <&&> isDefEq decl.type proposition then
-    throwError "iintro_keep_step: this pure fact is already in the context"
-  let exposed := mkApp2 (mkConst ``sep) leading precondition.consumeMData.appArg!
+  let atoms ← IFrame.flatten precondition
+  let lctx ← getLCtx
+  let mut fact := none
+  for h : i in [:atoms.size] do
+    let atom ← IFrame.exposeConnective atoms[i]
+    unless atom.consumeMData.isAppOfArity ``ipure 1 do continue
+    let proposition := atom.consumeMData.appArg!
+    unless ← lctx.anyM fun decl =>
+        pure !decl.isImplementationDetail <&&> isDefEq decl.type proposition do
+      fact := some (i, proposition)
+      break
+  let some (i, proposition) := fact
+    | throwError "iintro_keep_step: the precondition has no pure fact left to copy"
+  let rest := IFrame.mkStar (atoms.eraseIdx! i)
+  let exposed := mkApp2 (mkConst ``sep) atoms[i]! rest
   let hExtract ← mkAppM ``entails_of_eq #[← IFrame.proveEqAC precondition exposed]
   let newType ← withLocalDeclD .anonymous proposition fun h =>
     mkForallFVars #[h] target
   let next ← mkFreshExprSyntheticOpaqueMVar newType
-  goal.assign (← mkAppM ``entails_pure_keep #[hExtract, next])
+  goal.assign (mkAppN (mkConst ``entails_pure_keep)
+    #[proposition, rest, args[1]!, source, hExtract, next])
   let (_, next) ← next.mvarId!.intro1P
   replaceMainGoal [next]
 

@@ -20,7 +20,7 @@ private def cancelGoal (goal : MVarId) : TacticM MVarId := goal.withContext do
   let mut remaining ← flatten source
   let mut matched := #[]
   let mut unmatched := #[]
-  for expected in ← flatten destination do
+  for expected in ← rigidFirst (← flatten destination) do
     let mut found := none
     for h : i in [:remaining.size] do
       if ← isDefEq expected remaining[i] then

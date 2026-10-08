@@ -45,4 +45,22 @@ example (P : Prop) (H : IProp) :
   unfold wrappedEntails
   iframe
 
+example (P Q : Prop) (H : IProp) :
+    wrappedEntails iprop(⌜P⌝ ∗ H ∗ ⌜Q⌝) H := by
+  iintro_keep
+  rename_i hP hQ
+  guard_hyp hP : P
+  guard_hyp hQ : Q
+  guard_target = wrappedEntails iprop(⌜P⌝ ∗ H ∗ ⌜Q⌝) H
+  unfold wrappedEntails
+  iframe
+
+example (P Q : Prop) (H : IProp) (_ : P) :
+    wrappedEntails iprop(⌜P⌝ ∗ H ∗ ⌜Q⌝) H := by
+  iintro_keep
+  rename_i hQ
+  guard_hyp hQ : Q
+  unfold wrappedEntails
+  iframe
+
 end Aeneas.SepLogic.Tactic.Tests.IIntro

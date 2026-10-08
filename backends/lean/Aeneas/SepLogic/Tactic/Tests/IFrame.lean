@@ -66,4 +66,12 @@ example (cell : IProp) : cell ⊢ cell := by
     have : cell ⊢ cell ∗ cell := by iframe
   iframe
 
+example (cell : Nat → IProp) (a b : Nat) :
+    cell a ∗ cell b ⊢ iprop(∃ m : Nat, ⌜m = b⌝ ∗ cell m) := by
+  iframe
+
+example : (emp : IProp) ⊢ iexists fun _ : Nat => (emp : IProp) := by
+  fail_if_success iframe
+  exact entails_exists_r 0 (entails_refl _)
+
 end Aeneas.SepLogic.Tactic.Tests.IFrame

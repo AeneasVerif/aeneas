@@ -70,9 +70,6 @@ example (H : IProp) (run : Result Nat)
     (hrun : ⦃ H ⦄ run ⦃ _ => H ⦄) :
     ⦃ H ⦄ run ⦃ result => ∃ witness : Nat, ⌜witness = result⌝ ∗ H ⦄ := by
   step with hrun
-  isimp only
-  · exact value
-  · rfl
 
 example (cell : Nat → IProp) (n : Nat) (P : Nat → Prop) (hP : Unit → P n) :
     ⦃ cell n ⦄

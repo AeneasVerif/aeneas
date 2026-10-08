@@ -120,8 +120,14 @@ example (H : IProp) : emp ⊢ ((fun _ : Nat => H) -∗+ fun _ => H) := by
 example : emp ⊢
     ((fun _ : Nat => emp) -∗+ fun n => iprop(∃ m : Nat, ⌜m = n⌝)) := by
   isimp only
-  guard_target = Nat
-  · exact value
-  · rfl
+
+example (cell : Nat → IProp) (a b : Nat) :
+    cell a ∗ cell b ⊢ iprop(∃ m : Nat, ⌜m = b⌝ ∗ cell m) := by
+  isimp
+  iframe
+
+example (cell : Nat → IProp) (a b : Nat) :
+    cell a ∗ cell b ⊢ iprop(∃ m : Nat, cell m ∗ cell a) := by
+  isimp
 
 end Aeneas.SepLogic.Tactic.Tests.ISimp

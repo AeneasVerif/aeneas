@@ -54,4 +54,9 @@ example (P Q R : IProp) (h : P ⊢ Q) :
   unfold wrappedEntails
   iframe
 
+example (Q : Nat → IProp) (H R : IProp) (v : Nat) (h : H ⊢ R) :
+    postSep Q H v ⊢ R ∗ Q v := by
+  irewrite h
+  iframe
+
 end Aeneas.SepLogic.Tactic.Tests.IRewrite

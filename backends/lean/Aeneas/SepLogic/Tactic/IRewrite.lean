@@ -33,6 +33,7 @@ def rewriteAssertion (assertion : Expr) (rule : Expr) : TacticM (Expr × Expr) :
     else
       throwError "irewrite expects an entailment `A ⊢ B` or an equality \
         `A = B`, got {ruleType}"
+  let assertion ← reducePostApplication assertion
   let atoms ← flatten assertion
   let some restAtoms ← removeMatches atoms (← flatten lhs)
     | throwError "irewrite: {lhs}\nis not part of\n{assertion}"
