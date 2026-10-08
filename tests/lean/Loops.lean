@@ -1126,7 +1126,7 @@ def reborrow_const.reborrow (x : Std.U64) : Result Std.U64 := do
   ok x
 
 /-- [loops::reborrow_const]: loop body 0:
-    Source: 'tests/src/loops.rs', lines 0:0-542:5 -/
+    Source: 'tests/src/loops.rs', lines 540:4-542:5 -/
 @[rust_loop_body]
 def reborrow_const_loop.body : Result (ControlFlow Unit Unit) := do
   if 0#i32 < 5#i32
@@ -1135,7 +1135,7 @@ def reborrow_const_loop.body : Result (ControlFlow Unit Unit) := do
   else ok (done ())
 
 /-- [loops::reborrow_const]: loop 0:
-    Source: 'tests/src/loops.rs', lines 0:0-542:5 -/
+    Source: 'tests/src/loops.rs', lines 540:4-542:5 -/
 @[rust_loop]
 def reborrow_const_loop : Result Unit := do
   loop

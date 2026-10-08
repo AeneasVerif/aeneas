@@ -951,7 +951,7 @@ def reborrow_const.reborrow (x : Std.U64) : Result Std.U64 := do
   ok x
 
 /-- [loops_rec::reborrow_const]: loop 0:
-    Source: 'tests/src/loops-rec.rs', lines 0:0-544:5 -/
+    Source: 'tests/src/loops-rec.rs', lines 542:4-544:5 -/
 @[rust_loop]
 def reborrow_const_loop : Result Unit := do
   if 0#i32 < 5#i32
