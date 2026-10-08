@@ -28,30 +28,6 @@ namespace Aeneas.SepLogic
 
 open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic
 
-private partial def extractPure? (pre : Expr) : Option (Expr × Expr) :=
-  let pre := pre.consumeMData
-  if pre.isAppOfArity ``ipure 1 then
-    none
-  else if pre.isAppOfArity ``sep 2 then
-    let args := pre.getAppArgs
-    let left := args[0]!.consumeMData
-    let right := args[1]!.consumeMData
-    if left.isAppOfArity ``ipure 1 then
-      some (left.appArg!, right)
-    else if right.isAppOfArity ``ipure 1 then
-      some (right.appArg!, left)
-    else
-      match extractPure? left with
-      | some (proposition, rest) =>
-        some (proposition, mkApp2 (mkConst ``sep) rest right)
-      | none =>
-        match extractPure? right with
-        | some (proposition, rest) =>
-          some (proposition, mkApp2 (mkConst ``sep) left rest)
-        | none => none
-  else
-    none
-
 elab "iintro_step" : tactic => withMainContext do
   let goal ← getMainGoal
   let target ← instantiateMVars (← goal.getType)
@@ -84,18 +60,6 @@ elab "iintro_step" : tactic => withMainContext do
       pure (next.mvarId!, normalizedTarget, normalizedSource)
   let precondition ← IFrame.exposeConnective source
   let head := precondition.consumeMData.getAppFn
-  let pure? ←
-    if precondition.consumeMData.isAppOfArity ``ipure 1 then
-      pure (some (precondition.consumeMData.appArg!, mkConst `Aeneas.SepLogic.emp))
-    else if precondition.consumeMData.isAppOfArity ``sep 2 then
-      let preArgs := precondition.consumeMData.getAppArgs
-      let leading ← IFrame.exposeConnective preArgs[0]!
-      if leading.consumeMData.isAppOfArity ``ipure 1 then
-        pure (some (leading.consumeMData.appArg!, preArgs[1]!))
-      else
-        pure (extractPure? precondition)
-    else
-      pure none
   if head.isConstOf ``iexists then
     let some u := head.constLevels!.head?
       | throwError "could not determine the universe of {precondition}"
@@ -110,21 +74,19 @@ elab "iintro_step" : tactic => withMainContext do
     goal.assign (mkAppN (mkConst ``entails_exists_l [u])
       #[ι, destination, body, next])
     replaceMainGoal [next.mvarId!]
-  else if let some (proposition, rest) := pure? then
-    let normalized := mkApp2 (mkConst ``sep)
-      (mkApp (mkConst ``ipure) proposition) rest
-    let reorder ← mkAppM ``entails_of_eq #[← IFrame.proveEqAC precondition normalized]
+  else
+    let some (props, rest, eq) ← IFrame.splitPures precondition (limit := some 1)
+      | throwError "iintro_step: the precondition has no quantifier or pure fact \
+          left to extract:\n{precondition}"
+    let proposition := props[0]!
     let newTarget ← IFrame.mkEntailmentLike target source destination rest
     let newType ← withLocalDeclD `h proposition fun h =>
       mkForallFVars #[h] newTarget
     let next ← mkFreshExprSyntheticOpaqueMVar newType
     let extract := mkAppN (mkConst ``entails_pure_l)
       #[proposition, rest, destination, next]
-    goal.assign (← mkAppM ``entails_trans #[reorder, extract])
+    goal.assign (← mkAppM ``entails_trans #[← mkAppM ``entails_of_eq #[eq], extract])
     replaceMainGoal [next.mvarId!]
-  else
-    throwError "iintro_step: the precondition has no quantifier or pure fact \
-      left to extract:\n{precondition}"
 
 /-- Move the existentials and pure facts of an entailment's precondition into the context. -/
 syntax (name := iIntro) "iintro" (ppSpace colGt rintroPat)* : tactic
@@ -194,22 +156,14 @@ elab "iintro_keep_step" : tactic => withMainContext do
   let args := entailment.getAppArgs
   let source := args[0]!
   let precondition ← IFrame.exposeConnective source
-  let atoms ← IFrame.flatten precondition
   let lctx ← getLCtx
-  let mut fact := none
-  for h : i in [:atoms.size] do
-    let atom ← IFrame.exposeConnective atoms[i]
-    unless atom.consumeMData.isAppOfArity ``ipure 1 do continue
-    let proposition := atom.consumeMData.appArg!
-    unless ← lctx.anyM fun decl =>
-        pure !decl.isImplementationDetail <&&> isDefEq decl.type proposition do
-      fact := some (i, proposition)
-      break
-  let some (i, proposition) := fact
+  let inContext (proposition : Expr) : MetaM Bool := lctx.anyM fun decl =>
+    pure !decl.isImplementationDetail <&&> isDefEq decl.type proposition
+  let some (props, rest, eq) ← IFrame.splitPures precondition (limit := some 1)
+      (select := fun proposition => return !(← inContext proposition))
     | throwError "iintro_keep_step: the precondition has no pure fact left to copy"
-  let rest := IFrame.mkStar (atoms.eraseIdx! i)
-  let exposed := mkApp2 (mkConst ``sep) atoms[i]! rest
-  let hExtract ← mkAppM ``entails_of_eq #[← IFrame.proveEqAC precondition exposed]
+  let proposition := props[0]!
+  let hExtract ← mkAppM ``entails_of_eq #[eq]
   let newType ← withLocalDeclD .anonymous proposition fun h =>
     mkForallFVars #[h] target
   let next ← mkFreshExprSyntheticOpaqueMVar newType
@@ -220,13 +174,6 @@ elab "iintro_keep_step" : tactic => withMainContext do
 
 /-- Copy the pure facts of the precondition into the context without consuming them. -/
 macro "iintro_keep" : tactic => `(tactic| repeat (iintro_keep_step; rename_i _))
-
-/-- Alias of `iframe`. -/
-syntax "isimpl" (" by " tacticSeq)? : tactic
-
-macro_rules
-  | `(tactic| isimpl) => `(tactic| iframe)
-  | `(tactic| isimpl by $tac) => `(tactic| iframe by $tac)
 
 elab "iintro_entail" : tactic => Tactic.focus do withMainContext do
   replaceMainGoal [← IFrame.pullGoal (← getMainGoal)]

@@ -74,4 +74,10 @@ example : (emp : IProp) ⊢ iexists fun _ : Nat => (emp : IProp) := by
   fail_if_success iframe
   exact entails_exists_r 0 (entails_refl _)
 
+example (P R : IProp) : R ⊢ iprop(P -∗ (P ∗ R)) := by
+  iframe
+
+example (P R S : IProp) : R ∗ S ⊢ iprop(S ∗ (P -∗ (R ∗ P))) := by
+  iframe
+
 end Aeneas.SepLogic.Tactic.Tests.IFrame

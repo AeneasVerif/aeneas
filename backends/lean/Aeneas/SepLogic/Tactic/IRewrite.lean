@@ -2,18 +2,6 @@ module
 public import Aeneas.SepLogic.Tactic.IFrame
 public meta import Lean
 public meta import AeneasMeta.Simp
-public section
-
-namespace Aeneas.SepLogic
-
-theorem entails_rewrite {H₁ H₂ H₃ H₄ : IProp} (hPart : H₁ ⊢ H₂)
-    (hRest : H₂ ∗ H₃ ⊢ H₄) : H₁ ∗ H₃ ⊢ H₄ :=
-  entails_trans (sep_mono hPart (entails_refl H₃)) hRest
-
-end Aeneas.SepLogic
-
-end
-
 public meta section
 
 namespace Aeneas.SepLogic
@@ -51,9 +39,14 @@ def rewriteAssertion (assertion : Expr) (rule : Expr) : TacticM (Expr × Expr) :
 
 end IFrame
 
-/-- Rewrite an atom `A` of the precondition with `M : A ⊢ B` (or `M : A = B`). -/
-elab "irewrite" rule:term : tactic => Tactic.focus do withMainContext do
+/-- Rewrite an atom `A` of the precondition with `M : A ⊢ B` (or `M : A = B`; `← M` rewrites
+with `M : B = A`). -/
+elab "irewrite " symm:("← ")? rule:term : tactic => Tactic.focus do withMainContext do
   let rule ← Tactic.elabTerm rule none
+  let rule ← if symm.isNone then pure rule else
+    unless (← instantiateMVars (← inferType rule)).consumeMData.isAppOfArity ``Eq 3 do
+      throwError "irewrite ← expects an equality `A = B`, got {← inferType rule}"
+    mkEqSymm rule
   let goal ← getMainGoal
   let target ← instantiateMVars (← goal.getType)
   let some entailment ← IFrame.exposeEntailment? target

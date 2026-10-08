@@ -1,7 +1,6 @@
 module
-public import Aeneas.SepLogic.Tactic.Init
-public meta import Aeneas.SepLogic.Tactic.Init
-public import Lean.Meta.Tactic.AC
+public import Aeneas.SepLogic.Tactic.Normalize
+public meta import Aeneas.SepLogic.Tactic.Normalize
 public meta import Lean
 public meta import AeneasMeta.Simp
 public meta section
@@ -12,27 +11,11 @@ open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic
 
 namespace IFrame
 
-private def isConnective (e : Expr) : Bool :=
-  let head := e.consumeMData.getAppFn
-  head.isConstOf ``sep || head.isConstOf ``iand || head.isConstOf ``ipure ||
-    head.isConstOf ``iexists || head.isConstOf `Aeneas.SepLogic.emp ||
-    head.isConstOf ``wand || head.isConstOf ``postWand || head.isConstOf ``iforall
-
 private def wand? (e : Expr) : Option Bool :=
   let e := e.consumeMData
   if e.isAppOfArity ``postWand 3 then some true
   else if e.isAppOfArity ``wand 2 then some false
   else none
-
-def exposeConnective? (e : Expr) : MetaM (Option Expr) := do
-  let e := (← instantiateMVars e).consumeMData
-  if isConnective e then return some e
-  match ← unfoldDefinition? e with
-  | some e' => if isConnective e' then return some e' else return none
-  | none => return none
-
-def exposeConnective (e : Expr) : MetaM Expr :=
-  return (← exposeConnective? e).getD e
 
 partial def exposeEntailment? (e : Expr) : MetaM (Option Expr) := do
   let e := (← instantiateMVars e).consumeMData
@@ -63,70 +46,36 @@ def mkEntailmentLike (target source destination newSource : Expr) : MetaM Expr :
         return replacement
   mkAppM ``Entails #[newSource, destination]
 
-def reducePostApplication (e : Expr) : MetaM Expr := do
-  let e ← instantiateMVars e
-  let e ← Lean.Core.betaReduce e
-  let (fn, args) := e.consumeMData.withApp fun fn args => (fn, args)
-  if fn.isConstOf ``postSep && args.size = 4 then
-    return mkApp2 (mkConst ``sep) (mkApp args[1]! args[3]!) args[2]!
-  return e
-
-partial def flatten (e : Expr) : MetaM (Array Expr) := do
-  let e ← reducePostApplication e
-  let (fn, args) := e.consumeMData.withApp fun fn args => (fn, args)
-  if fn.isConstOf ``sep && args.size = 2 then
-    return (← flatten args[0]!) ++ (← flatten args[1]!)
-  if fn.isConstOf `Aeneas.SepLogic.emp then
-    return #[]
-  return #[e]
-
-def mkStar (atoms : Array Expr) : Expr :=
-  match atoms.back? with
-  | none => mkConst `Aeneas.SepLogic.emp
-  | some last =>
-    atoms.pop.foldr (init := last) fun atom rest =>
-      mkApp2 (mkConst ``sep) atom rest
-
-/-- Atoms without metavariables first, so that a flexible atom `P ?w` cannot take the match a
-rigid atom needs. -/
-def rigidFirst (atoms : Array Expr) : MetaM (Array Expr) := do
+/-- Match each `required` atom with a distinct `available` atom, by unification. Atoms without
+metavariables go first, so that a flexible atom `P ?w` cannot take the match a rigid atom needs.
+Returns the matched and the unmatched required atoms, and the unused available atoms. -/
+def matchAtoms (available required : Array Expr) :
+    MetaM (Array Expr × Array Expr × Array Expr) := do
   let mut rigid := #[]
   let mut flexible := #[]
-  for atom in atoms do
+  for atom in required do
     if (← instantiateMVars atom).hasExprMVar then flexible := flexible.push atom
     else rigid := rigid.push atom
-  return rigid ++ flexible
-
-def removeMatches (available required : Array Expr) :
-    MetaM (Option (Array Expr)) := commitWhenSome? do
   let mut remaining := available
-  for expected in ← rigidFirst required do
+  let mut matched := #[]
+  let mut unmatched := #[]
+  for expected in rigid ++ flexible do
     let mut found := none
     for h : i in [:remaining.size] do
       if ← isDefEq expected remaining[i] then
         found := some i
         break
-    let some i := found
-      | return none
-    remaining :=
-      remaining.extract 0 i ++ remaining.extract (i + 1) remaining.size
-  return some remaining
+    match found with
+    | some i =>
+      matched := matched.push expected
+      remaining := remaining.eraseIdx! i
+    | none => unmatched := unmatched.push expected
+  return (matched, unmatched, remaining)
 
-def proveEqAC (lhs rhs : Expr) : TacticM Expr := do
-  let eqType ← mkEq lhs rhs
-  let proof ← mkFreshExprSyntheticOpaqueMVar eqType
-  let .mvar proofId := proof.consumeMData
-    | throwError "failed to create an equality proof goal"
-  let tactic ← `(tactic|
-    first
-      | rfl
-      | ac_rfl
-      | (simp only [sep_emp_l_eq, sep_emp_r_eq] <;>
-          first | rfl | ac_rfl))
-  let (goals, _) ← runTactic proofId tactic
-  unless goals.isEmpty do
-    throwError "could not prove {eqType}"
-  return proof
+def removeMatches (available required : Array Expr) :
+    MetaM (Option (Array Expr)) := commitWhenSome? do
+  let (_, unmatched, remaining) ← matchAtoms available required
+  return if unmatched.isEmpty then some remaining else none
 
 private def provePure (discharger : Option Syntax.Tactic) (proposition : Expr) :
     TacticM Expr := do
@@ -148,101 +97,6 @@ private def provePure (discharger : Option Syntax.Tactic) (proposition : Expr) :
   unless goals.isEmpty do
     throwError "could not prove pure assertion {proposition}"
   return proof
-
-/-- Is `destination` a frame-inference shape `Hcallee ∗ ?F`? Then no side may be reorganized. -/
-private def frameMVar? (destination : Expr) : MetaM (Option MVarId) := do
-  let (destFn, destArgs) :=
-    destination.consumeMData.withApp fun fn args => (fn, args)
-  unless destFn.isConstOf ``sep && destArgs.size = 2 do return none
-  match (← instantiateMVars destArgs[1]!).consumeMData with
-  | .mvar mvarId => if ← mvarId.isAssigned then pure none else pure (some mvarId)
-  | _ => pure none
-
-def isFrameInference (goal : MVarId) : MetaM Bool := goal.withContext do
-  let target ← instantiateMVars (← goal.getType)
-  let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
-  unless fn.isConstOf ``Entails && args.size = 2 do return false
-  return (← frameMVar? (← reducePostApplication args[1]!)).isSome
-
-private def simpEntailment (goal : MVarId) (simpOnly : Bool)
-    (args : Aeneas.Simp.SimpArgs) : TacticM MVarId := do
-  let saved ← getGoals
-  try
-    setGoals [goal]
-    let _ ← Aeneas.Simp.simpAt simpOnly
-      { dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1 }
-      args (.targets #[] true)
-    match ← getGoals with
-    | [] => throwError "the entailment was unexpectedly closed while normalizing it"
-    | goal :: _ => pure goal
-  finally
-    setGoals saved
-
-private def floatExists (goal : MVarId) : TacticM MVarId :=
-  simpEntailment goal true
-    { addSimpThms :=
-        #[``sep_emp_l_eq, ``sep_emp_r_eq,
-          ``sep_exists_l_eq, ``sep_exists_r_eq] }
-
-private def decompose (goal : MVarId) : TacticM MVarId := do
-  simpEntailment goal false { simpThms := #[← isimpsExt.getTheorems] }
-
-private partial def exposeAll (e : Expr) : MetaM Expr := do
-  let e ← reducePostApplication e
-  let e := (← exposeConnective? e).getD e
-  let (fn, args) := e.consumeMData.withApp fun fn args => (fn, args)
-  if fn.isConstOf ``sep && args.size = 2 then
-    return mkApp2 (mkConst ``sep) (← exposeAll args[0]!) (← exposeAll args[1]!)
-  return e
-
-def exposeGoal (goal : MVarId) : TacticM MVarId := goal.withContext do
-  let target ← instantiateMVars (← goal.getType)
-  let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
-  unless fn.isConstOf ``Entails && args.size = 2 do return goal
-  let exposed ← mkAppM ``Entails #[← exposeAll args[0]!, ← exposeAll args[1]!]
-  if exposed == target then return goal
-  try goal.change exposed catch _ => pure goal
-
-partial def pullLeft (goal : MVarId) : TacticM MVarId := do
-  if ← isFrameInference goal then return goal
-  let goal ← floatExists (← exposeGoal goal)
-  if ← isFrameInference goal then return goal
-  goal.withContext do
-  let target ← instantiateMVars (← goal.getType)
-  let (fn, args) := target.consumeMData.withApp fun fn args => (fn, args)
-  unless fn.isConstOf ``Entails && args.size = 2 do return goal
-  let source ← reducePostApplication args[0]!
-  let destination ← reducePostApplication args[1]!
-  let (sourceFn, sourceArgs) :=
-    source.consumeMData.withApp fun fn args => (fn, args)
-  if sourceFn.isConstOf ``iexists && sourceArgs.size = 2 then
-    let some u := sourceFn.constLevels!.head?
-      | throwError "could not determine the universe of {source}"
-    let ι := sourceArgs[0]!
-    let J := sourceArgs[1]!
-    let newType ← withLocalDeclD (← mkFreshUserName `x) ι fun x => do
-      mkForallFVars #[x] (← mkAppM ``Entails #[← Core.betaReduce (mkApp J x), destination])
-    let newGoal ← mkFreshExprSyntheticOpaqueMVar newType
-    goal.assign (mkAppN (mkConst ``entails_exists_l [u]) #[ι, destination, J, newGoal])
-    let (_, next) ← newGoal.mvarId!.intro1P
-    return ← pullLeft next
-  let atoms ← flatten source
-  let some i := atoms.findIdx? fun atom =>
-      atom.consumeMData.isAppOfArity ``ipure 1
-    | return goal
-  let atom := atoms[i]!
-  let proposition := atom.consumeMData.appArg!
-  let rest := mkStar (atoms.eraseIdx! i)
-  let newType ← withLocalDeclD (← mkFreshUserName `h) proposition fun h => do
-    mkForallFVars #[h] (← mkAppM ``Entails #[rest, destination])
-  let newGoal ← mkFreshExprSyntheticOpaqueMVar newType
-  let extract := mkAppN (mkConst ``entails_pure_l)
-    #[proposition, rest, destination, newGoal]
-  let reordered := mkApp2 (mkConst ``sep) atom rest
-  let reorder ← mkAppM ``entails_of_eq #[← proveEqAC source reordered]
-  goal.assign (← mkAppM ``entails_trans #[reorder, extract])
-  let (_, next) ← newGoal.mvarId!.intro1P
-  pullLeft next
 
 def rewritePureFacts (goal : MVarId) (facts : Array FVarId) :
     TacticM (Option MVarId) := goal.withContext do
@@ -390,22 +244,11 @@ partial def solveHimpl (discharger : Option Syntax.Tactic) (goal : MVarId) :
       throwError "required spatial assertions are not present in the precondition\
         \nsource: {source}\ndestination: {destination}"
   else
-    let destinationAtoms ← flatten destination
-    let mut remaining := sourceAtoms
-    let mut matched : Array Expr := #[]
+    let (matched, unmatched, remaining) ← matchAtoms sourceAtoms (← flatten destination)
     let mut deferredPure : Array Expr := #[]
     let mut absorbing : Option Expr := none
-    for expected in ← rigidFirst destinationAtoms do
-      let mut found := none
-      for h : i in [:remaining.size] do
-        if ← isDefEq expected remaining[i] then
-          found := some i
-          break
-      if let some i := found then
-        matched := matched.push expected
-        remaining :=
-          remaining.extract 0 i ++ remaining.extract (i + 1) remaining.size
-      else if expected.consumeMData.isAppOfArity ``ipure 1 then
+    for expected in unmatched do
+      if expected.consumeMData.isAppOfArity ``ipure 1 then
         deferredPure := deferredPure.push expected
       else if (wand? expected).isSome then
         if absorbing.isSome then
@@ -529,13 +372,11 @@ elab_rules : tactic
     IFrame.solveGoal discharger goal
     replaceMainGoal []
 
-def normalizeSep : TacticM Unit := withMainContext do
-  let _ ← Aeneas.Simp.simpAt true
-    { dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1 }
-    { addSimpThms :=
-        #[``sep_emp_l_eq, ``sep_emp_r_eq,
-          ``sep_exists_l_eq, ``sep_exists_r_eq, ``sep_assoc_eq,
-          ``entails_postWand_pure_eq] }
-    (.targets #[] true)
+/-- Alias of `iframe`. -/
+syntax "isimpl" (" by " tacticSeq)? : tactic
+
+macro_rules
+  | `(tactic| isimpl) => `(tactic| iframe)
+  | `(tactic| isimpl by $tac) => `(tactic| iframe by $tac)
 
 end Aeneas.SepLogic

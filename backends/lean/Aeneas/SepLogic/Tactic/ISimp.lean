@@ -17,20 +17,7 @@ private def cancelGoal (goal : MVarId) : TacticM MVarId := goal.withContext do
   unless target.isAppOfArity ``Entails 2 do return goal
   let source ← reducePostApplication args[0]!
   let destination ← reducePostApplication args[1]!
-  let mut remaining ← flatten source
-  let mut matched := #[]
-  let mut unmatched := #[]
-  for expected in ← rigidFirst (← flatten destination) do
-    let mut found := none
-    for h : i in [:remaining.size] do
-      if ← isDefEq expected remaining[i] then
-        found := some i
-        break
-    match found with
-    | some i =>
-      matched := matched.push expected
-      remaining := remaining.eraseIdx! i
-    | none => unmatched := unmatched.push expected
+  let (matched, unmatched, remaining) ← matchAtoms (← flatten source) (← flatten destination)
   if matched.isEmpty then return goal
   let frame := mkStar matched
   let left := mkStar remaining

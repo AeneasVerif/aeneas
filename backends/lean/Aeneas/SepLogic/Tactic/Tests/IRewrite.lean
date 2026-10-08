@@ -59,4 +59,9 @@ example (Q : Nat → IProp) (H R : IProp) (v : Nat) (h : H ⊢ R) :
   irewrite h
   iframe
 
+example (P Q R : IProp) (h : Q = P) : R ∗ P ⊢ Q ∗ R := by
+  irewrite ← h
+  guard_target = (Q ∗ R ⊢ Q ∗ R)
+  iframe
+
 end Aeneas.SepLogic.Tactic.Tests.IRewrite
