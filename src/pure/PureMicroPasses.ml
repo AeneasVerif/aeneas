@@ -20,6 +20,8 @@ let passes :
        Remark: some passes below use the fact that we removed the meta-data
        (otherwise we would have to "unmeta" expressions before matching) *)
     (None, "remove_meta_def", remove_meta);
+    (* Inline the initializers of the anonymous constants (promoted constants) *)
+    (None, "inline_anon_const_initializers", inline_anon_const_initializers);
     (* Introduce the assertions checking that the required target features
        are enabled *)
     ( Some (fun _ -> !Config.feature_gates),

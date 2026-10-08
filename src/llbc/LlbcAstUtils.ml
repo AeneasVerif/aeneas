@@ -33,6 +33,23 @@ let fun_decl_global_initializer (f : fun_decl) : global_decl_ref option =
 let fun_decl_is_global_initializer (f : fun_decl) : bool =
   Option.is_some (fun_decl_global_initializer f)
 
+(** Is a global an anonymous constant (i.e., a promoted constant)? *)
+let global_decl_is_anon_const (g : global_decl) : bool =
+  match g.global_kind with
+  | AnonConst -> true
+  | _ -> false
+
+(** Is a function the initializer of an anonymous constant (i.e., a promoted
+    constant)? *)
+let fun_decl_is_anon_const_initializer
+    (global_decls : global_decl GlobalDeclId.Map.t) (f : fun_decl) : bool =
+  match f.src with
+  | GlobalInitializerFun gref -> (
+      match GlobalDeclId.Map.find_opt gref.id global_decls with
+      | Some g -> global_decl_is_anon_const g
+      | None -> false)
+  | _ -> false
+
 (** Return the opaque declarations found in the crate, which are also *not
     builtin*.
 
