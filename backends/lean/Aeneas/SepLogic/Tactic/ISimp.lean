@@ -3,6 +3,13 @@ public import Aeneas.SepLogic.Tactic.IFrame
 public meta import Aeneas.SepLogic.Tactic.IFrame
 public meta import Lean
 public meta import AeneasMeta.Simp
+
+/-! `isimp` is the non-failing `iframe`: it simplifies an entailment and leaves what it cannot prove
+as goals. It runs the `isimps` simp set and `normalizeSep`, then `prepareGoal` (shared with
+`iframe`), cancels only atoms with a unique match (`cancelGoal (unique := true)`), introduces
+wands and simplifies the residue. Like CFML `xsimpl` leaving a residual entailment; refusing to
+choose among ambiguous matches is specific to this tactic. -/
+
 public meta section
 
 namespace Aeneas.SepLogic

@@ -3,6 +3,13 @@ public import Aeneas.SepLogic.Tactic.Matchers
 public meta import Aeneas.SepLogic.Tactic.Matchers
 public meta import Lean
 public meta import AeneasMeta.Simp
+
+/-! `iframe` proves `H₁ ⊢ H₂` / `Q₁ ⊢+ Q₂`, and infers `?F` in `step`'s goals `H ⊢ Hcallee ∗ ?F`.
+It simps with the local hypotheses, pulls left `∃`/`⌜⌝` into the context, turns right `∃` into
+metavariables, cancels atoms by unification (backtracking `matchAll`), reorders with reflective AC
+proofs (`proveEqAC`) and proves pure residues with `grind`. Same algorithm as CFML `xsimpl` / SPlean
+`xsimp`; ours adds frame metavariables, matching up to unfolding and hypothesis rewriting. -/
+
 public meta section
 
 namespace Aeneas.SepLogic

@@ -2,6 +2,13 @@ module
 public import Aeneas.SepLogic.Tactic.IFrame
 public meta import Lean
 public meta import AeneasMeta.Simp
+
+/-! `iintro` moves the `∃` witnesses and `⌜P⌝` facts of a precondition into the Lean context
+(optionally through `rintro` patterns), keeping the rest of the `∗` tree and folded definitions.
+Implemented by `Normalize.pullLeft`: one round per binder, re-flattening and reordering with a
+reflective AC proof; variants (`_shallow`, `_keep`, `_entail`) toggle unfolding and copying. Same
+role as CFML `xpull` / Iris `iIntros "[%x %H]"`, without Iris's named hypothesis context. -/
+
 public section
 
 namespace Aeneas.SepLogic

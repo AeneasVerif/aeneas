@@ -2,6 +2,13 @@ module
 public import Aeneas.SepLogic.Tactic.IFrame
 public meta import Lean
 public meta import AeneasMeta.Simp
+
+/-! `irewrite M` replaces atoms `A` of the precondition by `B`, given `M : A ⊢ B` or `M : A = B`.
+It finds `A` with `iframe`'s frame inference on `pre ⊢ A ∗ ?F`, then concludes with `sep_mono`;
+the premises of `M` are found by unification or become goals. Same design as CFML `xchange` (which
+reuses `xsimpl`), Bedrock2 `seprewrite_in` and VST `sep_apply`; Iris selects hypotheses by name
+instead, which this logic, without modalities or persistence, does not need. -/
+
 public meta section
 
 namespace Aeneas.SepLogic
