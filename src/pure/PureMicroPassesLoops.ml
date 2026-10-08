@@ -3176,7 +3176,11 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
       }
     in
 
-    let explicit_info = compute_explicit_info generics input_tys in
+    let explicit_info =
+      compute_explicit_info
+        ~params_in_fields:(tuple_struct_params_in_fields ctx.trans_ctx)
+        generics input_tys
+    in
     let known_from_trait_refs = compute_known_info explicit_info generics in
     let loop_sig : fun_sig =
       {
@@ -3488,7 +3492,11 @@ let decompose_loop_body_aux (ctx : ctx) (def : fun_decl) (body : fun_body)
   in
 
   let input_tys = List.map (fun (v : tpat) -> v.ty) body_fun_body.inputs in
-  let explicit_info = compute_explicit_info generics input_tys in
+  let explicit_info =
+    compute_explicit_info
+      ~params_in_fields:(tuple_struct_params_in_fields ctx.trans_ctx)
+      generics input_tys
+  in
   let known_from_trait_refs = compute_known_info explicit_info generics in
   let llbc_generics : T.generic_params =
     let { types; const_generics; trait_clauses; trait_type_constraints; _ } :

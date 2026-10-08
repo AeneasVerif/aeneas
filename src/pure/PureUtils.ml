@@ -1747,16 +1747,36 @@ let adjust_explicit_info (explicit : explicit_info) (is_trait_method : bool)
     }
   else explicit
 
-let mk_visited_params_visitor () =
+(** [params_in_fields]: see {!compute_explicit_info} *)
+let mk_visited_params_visitor
+    ?(params_in_fields : TypeDeclId.id -> (bool list * bool list) option =
+      fun _ -> None) () =
   let tys = ref Pure.TypeVarId.Set.empty in
   let cgs = ref Pure.ConstGenericVarId.Set.empty in
   let visitor =
-    object
-      inherit [_] Pure.iter_type_decl
+    object (self)
+      inherit [_] Pure.iter_type_decl as super
       method! visit_type_var_id _ id = tys := Pure.TypeVarId.Set.add id !tys
 
       method! visit_const_generic_var_id _ id =
         cgs := Pure.ConstGenericVarId.Set.add id !cgs
+
+      method! visit_TAdt env id generics =
+        match
+          match id with
+          | TAdtId id -> params_in_fields id
+          | TTuple | TBuiltin _ -> None
+        with
+        | Some (in_tys, in_cgs)
+          when List.length in_tys = List.length generics.types
+               && List.length in_cgs = List.length generics.const_generics ->
+            List.iter2
+              (fun used ty -> if used then self#visit_ty env ty)
+              in_tys generics.types;
+            List.iter2
+              (fun used cg -> if used then self#visit_const_generic env cg)
+              in_cgs generics.const_generics
+        | _ -> super#visit_TAdt env id generics
     end
   in
   (visitor, tys, cgs)
@@ -1782,23 +1802,58 @@ let mk_visited_params_visitor () =
     and this may have an impact on which parameters should be explicit or not.
     For now, we only filter trait clauses of the shape [A : Allocator], while
     filtering the corresponding argument at the same time, so this should not be
-    a problem, but it may be in the future. *)
-let compute_explicit_info (generics : Pure.generic_params) (input_tys : ty list)
-    : explicit_info =
-  let visitor, implicit_tys, implicit_cgs = mk_visited_params_visitor () in
+    a problem, but it may be in the future.
+
+    [params_in_fields] gives, for a tuple struct, which of its parameters appear
+    in its fields (see {!TypesUtils.tuple_struct_params_in_fields}). An input
+    doesn't determine a parameter which only appears in it as a parameter of a
+    tuple struct, not used by the fields, because the tuple struct is extracted
+    as a type definition which drops it. For instance:
+    {[
+      struct Wrap<const N : usize>;
+      fn f<const N : usize>(w : &Wrap<N>) { ... }
+      // is extracted to:
+      def Wrap (N : Usize) := Unit
+      def f (N : Usize) (w : Wrap N) := ...
+             ^^^^^^^^^^
+      explicit: [f ()] would have to infer [N] from [Unit]
+    ]}
+    This doesn't apply to the trait clauses: the type of an instance keeps the
+    parameters. *)
+let compute_explicit_info
+    ?(params_in_fields : TypeDeclId.id -> (bool list * bool list) option =
+      fun _ -> None) (generics : Pure.generic_params) (input_tys : ty list) :
+    explicit_info =
+  let visitor, clauses_tys, clauses_cgs = mk_visited_params_visitor () in
   List.iter (visitor#visit_trait_param ()) generics.trait_clauses;
+  let visitor, inputs_tys, inputs_cgs =
+    mk_visited_params_visitor ~params_in_fields ()
+  in
   List.iter (visitor#visit_ty ()) input_tys;
   let make_explicit_ty (v : type_param) : Pure.explicit =
-    if Pure.TypeVarId.Set.mem v.index !implicit_tys then Implicit else Explicit
+    if
+      Pure.TypeVarId.Set.mem v.index !clauses_tys
+      || Pure.TypeVarId.Set.mem v.index !inputs_tys
+    then Implicit
+    else Explicit
   in
   let make_explicit_cg (v : const_generic_param) : Pure.explicit =
-    if Pure.ConstGenericVarId.Set.mem v.index !implicit_cgs then Implicit
+    if
+      Pure.ConstGenericVarId.Set.mem v.index !clauses_cgs
+      || Pure.ConstGenericVarId.Set.mem v.index !inputs_cgs
+    then Implicit
     else Explicit
   in
   {
     explicit_types = List.map make_explicit_ty generics.types;
     explicit_const_generics = List.map make_explicit_cg generics.const_generics;
   }
+
+(** The [params_in_fields] argument of {!compute_explicit_info} *)
+let tuple_struct_params_in_fields (ctx : Contexts.decls_ctx) :
+    TypeDeclId.id -> (bool list * bool list) option =
+  TypesUtils.tuple_struct_params_in_fields ctx.type_ctx.type_decls
+    ctx.type_ctx.type_infos
 
 let explicit_info_has_explicit (info : explicit_info) : bool =
   let { explicit_types; explicit_const_generics } = info in

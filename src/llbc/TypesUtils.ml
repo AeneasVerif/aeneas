@@ -498,6 +498,69 @@ let type_decl_from_decl_id_is_tuple_struct (ctx : TypesAnalysis.type_infos)
   let info = TypeDeclId.Map.find id ctx in
   info.is_tuple_struct
 
+(** A tuple struct is extracted as a type definition: [unit] if it has no
+    fields, the type of its field if it has one, and the product of the types of
+    its fields otherwise. This definition drops the parameters which don't
+    appear in the fields, so they can't be inferred from a value of the type.
+    For instance:
+    {[
+      struct Wrap<const N : usize>;
+      // is extracted to (Lean):
+      def Wrap (N : Usize) := Unit
+    ]}
+
+    Return, for each type parameter and each const generic parameter of a tuple
+    struct, whether it appears in the fields, and [None] if the type is not a
+    tuple struct. *)
+let rec tuple_struct_params_in_fields (type_decls : type_decl TypeDeclId.Map.t)
+    (infos : TypesAnalysis.type_infos) (id : TypeDeclId.id) :
+    (bool list * bool list) option =
+  match
+    (TypeDeclId.Map.find_opt id type_decls, TypeDeclId.Map.find_opt id infos)
+  with
+  | Some ({ kind = Struct fields; _ } as decl), Some info
+    when info.is_tuple_struct ->
+      let tys = ref TypeVarId.Set.empty in
+      let cgs = ref ConstGenericVarId.Set.empty in
+      let visitor =
+        object (self)
+          inherit [_] iter_ty as super
+          method! visit_type_var_id _ id = tys := TypeVarId.Set.add id !tys
+
+          method! visit_const_generic_var_id _ id =
+            cgs := ConstGenericVarId.Set.add id !cgs
+
+          (* The fields may themselves use tuple structs *)
+          method! visit_TAdt env tref =
+            match
+              if tref.builtin = None then
+                tuple_struct_params_in_fields type_decls infos tref.id
+              else None
+            with
+            | Some (in_tys, in_cgs)
+              when List.length in_tys = List.length tref.generics.types
+                   && List.length in_cgs
+                      = List.length tref.generics.const_generics ->
+                List.iter2
+                  (fun used ty -> if used then self#visit_ty env ty)
+                  in_tys tref.generics.types;
+                List.iter2
+                  (fun used cg -> if used then self#visit_constant_expr env cg)
+                  in_cgs tref.generics.const_generics
+            | _ -> super#visit_TAdt env tref
+        end
+      in
+      List.iter (fun (f : field) -> visitor#visit_ty () f.field_ty) fields;
+      Some
+        ( List.map
+            (fun (p : type_param) -> TypeVarId.Set.mem p.index !tys)
+            decl.generics.types,
+          List.map
+            (fun (p : const_generic_param) ->
+              ConstGenericVarId.Set.mem p.index !cgs)
+            decl.generics.const_generics )
+  | _ -> None
+
 (** A trait instance id refers to a local clause if it only uses the variants:
     [Self], [Clause], [ParentClause] *)
 let rec trait_ref_kind_is_local_clause (id : trait_ref_kind) : bool =

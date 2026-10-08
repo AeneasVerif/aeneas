@@ -1040,11 +1040,11 @@ and translate_fun_sigs (span : span option) (decls_ctx : C.decls_ctx)
   let dsg =
     { generics; llbc_generics = sg.item_binder_params; preds; fun_ty }
   in
-  translate_fun_sigs_from_decomposed dsg
+  translate_fun_sigs_from_decomposed decls_ctx dsg
 
-and translate_fun_sigs_from_decomposed (dsg : Pure.decomposed_fun_sig) :
-    fun_sigs =
-  let sg = translate_fun_sig_from_decomposed dsg in
+and translate_fun_sigs_from_decomposed (decls_ctx : C.decls_ctx)
+    (dsg : Pure.decomposed_fun_sig) : fun_sigs =
+  let sg = translate_fun_sig_from_decomposed decls_ctx dsg in
   let ty = mk_arrows sg.inputs sg.output in
   { dsg; sg; ty }
 
@@ -1100,7 +1100,11 @@ and translate_trait_method_sig (decls_ctx : C.decls_ctx)
   let inputs = List.map (ty_substitute subst) flat_sig.inputs in
   let output = ty_substitute subst flat_sig.output in
 
-  let explicit_info = compute_explicit_info method_generics inputs in
+  let explicit_info =
+    compute_explicit_info
+      ~params_in_fields:(tuple_struct_params_in_fields decls_ctx)
+      method_generics inputs
+  in
   let known_from_trait_refs =
     compute_known_info explicit_info method_generics
   in
@@ -1196,8 +1200,8 @@ and compute_output_ty_from_decomposed (dsg : Pure.decomposed_fun_type) : ty =
   in
   mk_output_ty_from_effect_info effect_info output
 
-and translate_fun_sig_from_decomposed (dsg : Pure.decomposed_fun_sig) : fun_sig
-    =
+and translate_fun_sig_from_decomposed (decls_ctx : C.decls_ctx)
+    (dsg : Pure.decomposed_fun_sig) : fun_sig =
   let generics = dsg.generics in
   let llbc_generics = dsg.llbc_generics in
   let preds = dsg.preds in
@@ -1216,7 +1220,11 @@ and translate_fun_sig_from_decomposed (dsg : Pure.decomposed_fun_sig) : fun_sig
     (inputs, output)
   in
   (* Compute which input type parameters are explicit/implicit *)
-  let explicit_info = compute_explicit_info generics inputs in
+  let explicit_info =
+    compute_explicit_info
+      ~params_in_fields:(tuple_struct_params_in_fields decls_ctx)
+      generics inputs
+  in
   let known_from_trait_refs = compute_known_info explicit_info generics in
   (* Put together *)
   {

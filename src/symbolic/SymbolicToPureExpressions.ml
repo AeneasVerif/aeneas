@@ -290,7 +290,7 @@ and translate_target_dispatch (input_svs : V.symbolic_value list)
 
   (* The output type of the function *)
   let result_ty =
-    let sg = translate_fun_sig_from_decomposed ctx.sg in
+    let sg = translate_fun_sig_from_decomposed ctx.decls_ctx ctx.sg in
     sg.output
   in
 
