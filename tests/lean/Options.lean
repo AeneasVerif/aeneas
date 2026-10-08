@@ -20,18 +20,324 @@ set_option maxRecDepth 2048
 namespace options
 
 /-- [options::test_unwrap_or]:
-    Source: 'tests/src/options.rs', lines 3:0-5:1 -/
+    Source: 'tests/src/options.rs', lines 5:0-7:1 -/
 def test_unwrap_or {T : Type} (x : Option T) (default : T) : Result T := do
   ok (core.option.Option.unwrap_or x default)
 
 /-- [options::test_expect]:
-    Source: 'tests/src/options.rs', lines 7:0-9:1 -/
+    Source: 'tests/src/options.rs', lines 9:0-11:1 -/
 def test_expect {T : Type} (x : Option T) (msg : Str) : Result T := do
   core.option.Option.expect x msg
 
 /-- [options::test_is_some]:
-    Source: 'tests/src/options.rs', lines 11:0-13:1 -/
+    Source: 'tests/src/options.rs', lines 13:0-15:1 -/
 def test_is_some {T : Type} (x : Option T) : Result Bool := do
   ok (core.option.Option.is_some x)
+
+/-- [options::test_map_some::{closure}]
+    Source: 'tests/src/options.rs', lines 23:27-23:36 -/
+@[reducible]
+def test_map_some.closure := Unit
+
+/-- [options::test_map_some::{impl core::ops::function::FnOnce<(u32,), u32> for options::test_map_some::{closure}}::call_once]:
+    Source: 'tests/src/options.rs', lines 23:27-23:36 -/
+def test_map_some.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32.call_once
+  (c : test_map_some.closure) (tupled_args : Std.U32) : Result Std.U32 := do
+  tupled_args + 1#u32
+
+/-- Trait implementation: [options::test_map_some::{impl core::ops::function::FnOnce<(u32,), u32> for options::test_map_some::{closure}}]
+    Source: 'tests/src/options.rs', lines 23:27-23:36 -/
+@[reducible]
+def test_map_some.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32 :
+  core.ops.function.FnOnce test_map_some.closure Std.U32 Std.U32 := {
+  call_once :=
+    test_map_some.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32.call_once
+}
+
+/-- [options::test_map_some]:
+    Source: 'tests/src/options.rs', lines 22:0-24:1
+    Visibility: public -/
+def test_map_some : Result Unit := do
+  let o ←
+    core.option.Option.map
+      test_map_some.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32 (some 1#u32)
+      ()
+  let i ← core.option.Option.unwrap o
+  massert (i = 2#u32)
+
+/- Unit test for [options::test_map_some] -/
+#guard (test_map_some).reducesTo ()
+
+/-- [options::test_map_none::{closure}]
+    Source: 'tests/src/options.rs', lines 30:18-30:41 -/
+@[reducible]
+def test_map_none.closure := Unit
+
+/-- [options::test_map_none::{impl core::ops::function::FnOnce<(u32,), u32> for options::test_map_none::{closure}}::call_once]:
+    Source: 'tests/src/options.rs', lines 30:18-30:41 -/
+def test_map_none.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32.call_once
+  (c : test_map_none.closure) (tupled_args : Std.U32) : Result Std.U32 := do
+  fail panic
+
+/-- Trait implementation: [options::test_map_none::{impl core::ops::function::FnOnce<(u32,), u32> for options::test_map_none::{closure}}]
+    Source: 'tests/src/options.rs', lines 30:18-30:41 -/
+@[reducible]
+def test_map_none.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32 :
+  core.ops.function.FnOnce test_map_none.closure Std.U32 Std.U32 := {
+  call_once :=
+    test_map_none.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32.call_once
+}
+
+/-- [options::test_map_none]:
+    Source: 'tests/src/options.rs', lines 28:0-31:1
+    Visibility: public -/
+def test_map_none : Result Unit := do
+  let o ←
+    core.option.Option.map
+      test_map_none.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32 none ()
+  let b := core.option.Option.is_none o
+  massert b
+
+/- Unit test for [options::test_map_none] -/
+#guard (test_map_none).reducesTo ()
+
+/-- [options::test_map_capture::{closure}]
+    Source: 'tests/src/options.rs', lines 37:27-37:36 -/
+@[reducible]
+def test_map_capture.closure := Std.U32
+
+/-- [options::test_map_capture::{impl core::ops::function::FnOnce<(u32,), u32> for options::test_map_capture::{closure}<'_0>}::call_once]:
+    Source: 'tests/src/options.rs', lines 37:27-37:36 -/
+def test_map_capture.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32.call_once
+  (c : test_map_capture.closure) (tupled_args : Std.U32) : Result Std.U32 := do
+  tupled_args + c
+
+/-- Trait implementation: [options::test_map_capture::{impl core::ops::function::FnOnce<(u32,), u32> for options::test_map_capture::{closure}<'_0>}]
+    Source: 'tests/src/options.rs', lines 37:27-37:36 -/
+@[reducible]
+def test_map_capture.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32 :
+  core.ops.function.FnOnce test_map_capture.closure Std.U32 Std.U32 := {
+  call_once :=
+    test_map_capture.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32.call_once
+}
+
+/-- [options::test_map_capture]:
+    Source: 'tests/src/options.rs', lines 35:0-38:1
+    Visibility: public -/
+def test_map_capture : Result Unit := do
+  let o ←
+    core.option.Option.map
+      test_map_capture.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32 (some
+      1#u32) 3#u32
+  let i ← core.option.Option.unwrap o
+  massert (i = 4#u32)
+
+/- Unit test for [options::test_map_capture] -/
+#guard (test_map_capture).reducesTo ()
+
+/-- [options::test_is_some_and_true::{closure}]
+    Source: 'tests/src/options.rs', lines 46:35-46:44 -/
+@[reducible]
+def test_is_some_and_true.closure := Unit
+
+/-- [options::test_is_some_and_true::{impl core::ops::function::FnOnce<(u32,), bool> for options::test_is_some_and_true::{closure}}::call_once]:
+    Source: 'tests/src/options.rs', lines 46:35-46:44 -/
+def
+  test_is_some_and_true.closure.Insts.CoreOpsFunctionFnOnceTupleU32Bool.call_once
+  (c : test_is_some_and_true.closure) (tupled_args : Std.U32) :
+  Result Bool
+  := do
+  ok (tupled_args > 1#u32)
+
+/-- Trait implementation: [options::test_is_some_and_true::{impl core::ops::function::FnOnce<(u32,), bool> for options::test_is_some_and_true::{closure}}]
+    Source: 'tests/src/options.rs', lines 46:35-46:44 -/
+@[reducible]
+def test_is_some_and_true.closure.Insts.CoreOpsFunctionFnOnceTupleU32Bool :
+  core.ops.function.FnOnce test_is_some_and_true.closure Std.U32 Bool := {
+  call_once :=
+    test_is_some_and_true.closure.Insts.CoreOpsFunctionFnOnceTupleU32Bool.call_once
+}
+
+/-- [options::test_is_some_and_true]:
+    Source: 'tests/src/options.rs', lines 45:0-47:1
+    Visibility: public -/
+def test_is_some_and_true : Result Unit := do
+  let b ←
+    core.option.Option.is_some_and
+      test_is_some_and_true.closure.Insts.CoreOpsFunctionFnOnceTupleU32Bool
+      (some 2#u32) ()
+  massert b
+
+/- Unit test for [options::test_is_some_and_true] -/
+#guard (test_is_some_and_true).reducesTo ()
+
+/-- [options::test_is_some_and_false::{closure}]
+    Source: 'tests/src/options.rs', lines 51:36-51:45 -/
+@[reducible]
+def test_is_some_and_false.closure := Unit
+
+/-- [options::test_is_some_and_false::{impl core::ops::function::FnOnce<(u32,), bool> for options::test_is_some_and_false::{closure}}::call_once]:
+    Source: 'tests/src/options.rs', lines 51:36-51:45 -/
+def
+  test_is_some_and_false.closure.Insts.CoreOpsFunctionFnOnceTupleU32Bool.call_once
+  (c : test_is_some_and_false.closure) (tupled_args : Std.U32) :
+  Result Bool
+  := do
+  ok (tupled_args > 1#u32)
+
+/-- Trait implementation: [options::test_is_some_and_false::{impl core::ops::function::FnOnce<(u32,), bool> for options::test_is_some_and_false::{closure}}]
+    Source: 'tests/src/options.rs', lines 51:36-51:45 -/
+@[reducible]
+def test_is_some_and_false.closure.Insts.CoreOpsFunctionFnOnceTupleU32Bool :
+  core.ops.function.FnOnce test_is_some_and_false.closure Std.U32 Bool := {
+  call_once :=
+    test_is_some_and_false.closure.Insts.CoreOpsFunctionFnOnceTupleU32Bool.call_once
+}
+
+/-- [options::test_is_some_and_false]:
+    Source: 'tests/src/options.rs', lines 50:0-52:1
+    Visibility: public -/
+def test_is_some_and_false : Result Unit := do
+  let b ←
+    core.option.Option.is_some_and
+      test_is_some_and_false.closure.Insts.CoreOpsFunctionFnOnceTupleU32Bool
+      (some 0#u32) ()
+  massert (¬ b)
+
+/- Unit test for [options::test_is_some_and_false] -/
+#guard (test_is_some_and_false).reducesTo ()
+
+/-- [options::test_is_some_and_none::{closure}]
+    Source: 'tests/src/options.rs', lines 58:27-58:39 -/
+@[reducible]
+def test_is_some_and_none.closure := Unit
+
+/-- [options::test_is_some_and_none::{impl core::ops::function::FnOnce<(u32,), bool> for options::test_is_some_and_none::{closure}}::call_once]:
+    Source: 'tests/src/options.rs', lines 58:27-58:39 -/
+def
+  test_is_some_and_none.closure.Insts.CoreOpsFunctionFnOnceTupleU32Bool.call_once
+  (c : test_is_some_and_none.closure) (tupled_args : Std.U32) :
+  Result Bool
+  := do
+  fail panic
+
+/-- Trait implementation: [options::test_is_some_and_none::{impl core::ops::function::FnOnce<(u32,), bool> for options::test_is_some_and_none::{closure}}]
+    Source: 'tests/src/options.rs', lines 58:27-58:39 -/
+@[reducible]
+def test_is_some_and_none.closure.Insts.CoreOpsFunctionFnOnceTupleU32Bool :
+  core.ops.function.FnOnce test_is_some_and_none.closure Std.U32 Bool := {
+  call_once :=
+    test_is_some_and_none.closure.Insts.CoreOpsFunctionFnOnceTupleU32Bool.call_once
+}
+
+/-- [options::test_is_some_and_none]:
+    Source: 'tests/src/options.rs', lines 56:0-59:1
+    Visibility: public -/
+def test_is_some_and_none : Result Unit := do
+  let b ←
+    core.option.Option.is_some_and
+      test_is_some_and_none.closure.Insts.CoreOpsFunctionFnOnceTupleU32Bool
+      none ()
+  massert (¬ b)
+
+/- Unit test for [options::test_is_some_and_none] -/
+#guard (test_is_some_and_none).reducesTo ()
+
+/-- [options::test_bool_then_true::{closure}]
+    Source: 'tests/src/options.rs', lines 67:22-67:29 -/
+@[reducible]
+def test_bool_then_true.closure := Unit
+
+/-- [options::test_bool_then_true::{impl core::ops::function::FnOnce<(), u32> for options::test_bool_then_true::{closure}}::call_once]:
+    Source: 'tests/src/options.rs', lines 67:22-67:29 -/
+def test_bool_then_true.closure.Insts.CoreOpsFunctionFnOnceTupleU32.call_once
+  (c : test_bool_then_true.closure) (_ : Unit) : Result Std.U32 := do
+  ok 1#u32
+
+/-- Trait implementation: [options::test_bool_then_true::{impl core::ops::function::FnOnce<(), u32> for options::test_bool_then_true::{closure}}]
+    Source: 'tests/src/options.rs', lines 67:22-67:29 -/
+@[reducible]
+def test_bool_then_true.closure.Insts.CoreOpsFunctionFnOnceTupleU32 :
+  core.ops.function.FnOnce test_bool_then_true.closure Unit Std.U32 := {
+  call_once :=
+    test_bool_then_true.closure.Insts.CoreOpsFunctionFnOnceTupleU32.call_once
+}
+
+/-- [options::test_bool_then_true]:
+    Source: 'tests/src/options.rs', lines 66:0-68:1
+    Visibility: public -/
+def test_bool_then_true : Result Unit := do
+  let o ←
+    core.bool.Bool.then
+      test_bool_then_true.closure.Insts.CoreOpsFunctionFnOnceTupleU32 true ()
+  let i ← core.option.Option.unwrap o
+  massert (i = 1#u32)
+
+/- Unit test for [options::test_bool_then_true] -/
+#guard (test_bool_then_true).reducesTo ()
+
+/-- [options::test_bool_then_false::{closure}]
+    Source: 'tests/src/options.rs', lines 73:23-73:45 -/
+@[reducible]
+def test_bool_then_false.closure := Unit
+
+/-- [options::test_bool_then_false::{impl core::ops::function::FnOnce<(), u32> for options::test_bool_then_false::{closure}}::call_once]:
+    Source: 'tests/src/options.rs', lines 73:23-73:45 -/
+def test_bool_then_false.closure.Insts.CoreOpsFunctionFnOnceTupleU32.call_once
+  (c : test_bool_then_false.closure) (_ : Unit) : Result Std.U32 := do
+  fail panic
+
+/-- Trait implementation: [options::test_bool_then_false::{impl core::ops::function::FnOnce<(), u32> for options::test_bool_then_false::{closure}}]
+    Source: 'tests/src/options.rs', lines 73:23-73:45 -/
+@[reducible]
+def test_bool_then_false.closure.Insts.CoreOpsFunctionFnOnceTupleU32 :
+  core.ops.function.FnOnce test_bool_then_false.closure Unit Std.U32 := {
+  call_once :=
+    test_bool_then_false.closure.Insts.CoreOpsFunctionFnOnceTupleU32.call_once
+}
+
+/-- [options::test_bool_then_false]:
+    Source: 'tests/src/options.rs', lines 72:0-74:1
+    Visibility: public -/
+def test_bool_then_false : Result Unit := do
+  let o ←
+    core.bool.Bool.then
+      test_bool_then_false.closure.Insts.CoreOpsFunctionFnOnceTupleU32 false ()
+  let b := core.option.Option.is_none o
+  massert b
+
+/- Unit test for [options::test_bool_then_false] -/
+#guard (test_bool_then_false).reducesTo ()
+
+/-- [options::ok_if_even]:
+    Source: 'tests/src/options.rs', lines 80:0-86:1 -/
+def ok_if_even
+  (x : Std.U32) : Result (core.result.Result Std.U32 Std.U32) := do
+  let i ← x % 2#u32
+  if i = 0#u32
+  then ok (core.result.Result.Ok x)
+  else ok (core.result.Result.Err x)
+
+/-- [options::test_result_unwrap_or_ok]:
+    Source: 'tests/src/options.rs', lines 89:0-91:1
+    Visibility: public -/
+def test_result_unwrap_or_ok : Result Unit := do
+  let r ← ok_if_even 2#u32
+  let i ← lift (core.result.Result.unwrap_or r 0#u32)
+  massert (i = 2#u32)
+
+/- Unit test for [options::test_result_unwrap_or_ok] -/
+#guard (test_result_unwrap_or_ok).reducesTo ()
+
+/-- [options::test_result_unwrap_or_err]:
+    Source: 'tests/src/options.rs', lines 94:0-96:1
+    Visibility: public -/
+def test_result_unwrap_or_err : Result Unit := do
+  let r ← ok_if_even 3#u32
+  let i ← lift (core.result.Result.unwrap_or r 0#u32)
+  massert (i = 0#u32)
+
+/- Unit test for [options::test_result_unwrap_or_err] -/
+#guard (test_result_unwrap_or_err).reducesTo ()
 
 end options
