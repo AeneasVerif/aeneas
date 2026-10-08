@@ -232,6 +232,14 @@ let rec project_value (span : Meta.span) (access : projection_access)
       [%craise] span ("Inconsistent projection:\n" ^ pe ^ "\n" ^ v ^ "\n" ^ ty)
     end
 
+(** Returns [true] if the projection [pe] dereferences a shared borrow in [v]
+    (possibly under shared loans). *)
+let rec is_shared_borrow_deref (pe : projection_elem) (v : tvalue) : bool =
+  match (pe, v.value) with
+  | Deref, VBorrow (VSharedBorrow _) -> true
+  | _, VLoan (VSharedLoan (_, sv)) -> is_shared_borrow_deref pe sv
+  | _ -> false
+
 (** Generic function to access (read/write) the value inside a place, provided
     the place **does not refer to a global** (globals are handled elsewhere).
 
@@ -270,7 +278,18 @@ let rec access_place (span : Meta.span) (access : projection_access)
           match project_value span access ek p' ctx pe v with
           | Error err -> Error err
           | Ok (lid, pv, new_back) -> begin
-              let backward = Core.Fn.compose backward new_back in
+              let backward =
+                if is_shared_borrow_deref pe v then
+                  (* The update is applied directly to the shared loan in the
+                     context. The enclosing values are unchanged, and the
+                     enclosing backward functions would rebuild them from stale
+                     copies, overwriting the update (this happens if the loan
+                     is itself located inside another shared loan). *)
+                  fun (ctx, updated) ->
+                  let ctx, _ = new_back (ctx, updated) in
+                  (ctx, v)
+                else Core.Fn.compose backward new_back
+              in
               Ok (lid, pv, backward)
             end
         end
