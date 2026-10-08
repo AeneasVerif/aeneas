@@ -59,7 +59,7 @@ structure SpecInfo where
   When `step` applies the mono or bind theorem, the theorem's preconditions become
   new goals, and its ghost variables become metavariables.
   `step` first tries this callback on each precondition, before `singleAssumptionTac` and
-  the generic solvers (simp, grind, `scalar_tac`). Ghost variables are filled in when a
+  the generic solvers (`simp`, `grind`, `scalar_tac`). Ghost variables are filled in when a
   precondition that mentions them is solved.
   `step*` also tries it on the final goal, which usually has the same shape as those
   preconditions (for instance, a magic wand application).

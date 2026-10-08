@@ -407,7 +407,7 @@ meta def analyzeTarget : TacticM TargetKind := do
 meta partial def evalStepStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
   withMainContext do focus do
   withTraceNode `Step (fun _ => do pure m!"evalStepStar") do
-  -- Lookup the registered discharge tactic
+  -- Lookup the registered discharge tactic by analyzing which spec is in the target
   let info? ← observing? (Step.getSpecInfoArgs (← instantiateMVars (← getMainTarget)))
   let cfg := { cfg with dischargeTac := info?.bind (·.1.discharge_tactic) }
   -- Initialize the step state (grind threading)
