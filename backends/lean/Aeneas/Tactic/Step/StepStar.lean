@@ -294,6 +294,7 @@ structure Config where
   /-- We need the original configuration syntax to generate the proof script -/
   configSyntax : Option (TSyntax `Lean.Parser.Tactic.optConfig)
   preconditionTac: Option Syntax.Tactic := none
+  dischargeTac : Option Name := none
   /-- Should we use the special syntax `let* ⟨ ...⟩ ← ...` or the more standard syntax `step with ... as ⟨ ... ⟩`? -/
   prettyPrintedStep : Bool := true
   useCase : Bool := false
@@ -406,6 +407,9 @@ meta def analyzeTarget : TacticM TargetKind := do
 meta partial def evalStepStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
   withMainContext do focus do
   withTraceNode `Step (fun _ => do pure m!"evalStepStar") do
+  -- Lookup the registered discharge tactic by analyzing which spec is in the target
+  let info? ← observing? (Step.getSpecInfoArgs (← instantiateMVars (← getMainTarget)))
+  let cfg := { cfg with dischargeTac := info?.bind (·.1.discharge_tactic) }
   -- Initialize the step state (grind threading)
   let initState : Step.StepState ←
     if cfg.stepConfig.threadGrindState then
@@ -616,8 +620,13 @@ where
             trace[Step] "goal solved"
             tacStx.resolve stx
           | none => tryFinish tacl
+      let dischargeTacl ← cfg.dischargeTac.toList.mapM fun name => do
+        pure (
+          s!"discharge tactic `{name}`",
+          ← `(tactic| run_tac $(mkIdent name):ident),
+          do (← evalDischargeTactic name))
       let finishTactics :=
-        [("grind", ← `(tactic| agrind), grindTac)] ++
+        dischargeTacl ++ [("grind", ← `(tactic| agrind), grindTac)] ++
         match cfg.preconditionTac with
         | none => []
         | some tac => [("user tactic", tac, evalTactic tac)]
