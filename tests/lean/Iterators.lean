@@ -85,9 +85,9 @@ def iter_range_step_by (n : Std.Usize) : Result Unit := do
     Source: 'tests/src/iterators.rs', lines 15:8-15:18 -/
 @[rust_loop_body]
 def slice_iter_mut_while_loop0_loop0.body
-  (b : Bool) : Result (ControlFlow Bool Unit) := do
+  (b : Bool) : Result (ControlFlow Unit Unit) := do
   if b
-  then ok (cont true)
+  then ok (cont ())
   else ok (done ())
 
 /-- [iterators::slice_iter_mut_while]: loop 1:
@@ -95,19 +95,19 @@ def slice_iter_mut_while_loop0_loop0.body
 @[rust_loop]
 def slice_iter_mut_while_loop0_loop0 (b : Bool) : Result Unit := do
   loop
-    (fun b1 => slice_iter_mut_while_loop0_loop0.body b1)
-    b
+    (fun () => slice_iter_mut_while_loop0_loop0.body b)
+    ()
 
 /-- [iterators::slice_iter_mut_while]: loop body 0:
     Source: 'tests/src/iterators.rs', lines 14:4-16:5 -/
 @[rust_loop_body]
 def slice_iter_mut_while_loop0.body
-  (it : core.slice.iter.IterMut Std.U16)
+  (b : Bool) (it : core.slice.iter.IterMut Std.U16)
   (back : core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16)
-  (b : Bool) :
+  :
   Result (ControlFlow ((core.slice.iter.IterMut Std.U16) ×
-    (core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16) ×
-    Bool) (core.slice.iter.IterMut Std.U16))
+    (core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16))
+    (core.slice.iter.IterMut Std.U16))
   := do
   let (o, it1, next_back) ← core.slice.iter.IteratorIterMut.next it
   match o with
@@ -116,7 +116,7 @@ def slice_iter_mut_while_loop0.body
   | some _ =>
     slice_iter_mut_while_loop0_loop0 b
     ok (cont (it1, fun im => let im1 := next_back im o
-                             back im1, false))
+                             back im1))
 
 /-- [iterators::slice_iter_mut_while]: loop 0:
     Source: 'tests/src/iterators.rs', lines 14:4-16:5 -/
@@ -128,8 +128,8 @@ def slice_iter_mut_while_loop0
   Result (core.slice.iter.IterMut Std.U16)
   := do
   loop
-    (fun (it1, back1, b1) => slice_iter_mut_while_loop0.body it1 back1 b1)
-    (it, back, b)
+    (fun (it1, back1) => slice_iter_mut_while_loop0.body b it1 back1)
+    (it, back)
 
 /-- [iterators::slice_iter_mut_while]:
     Source: 'tests/src/iterators.rs', lines 12:0-17:1 -/
@@ -143,9 +143,9 @@ def slice_iter_mut_while
     Source: 'tests/src/iterators.rs', lines 22:8-22:18 -/
 @[rust_loop_body]
 def slice_iter_while_loop0_loop0.body
-  (b : Bool) : Result (ControlFlow Bool Unit) := do
+  (b : Bool) : Result (ControlFlow Unit Unit) := do
   if b
-  then ok (cont true)
+  then ok (cont ())
   else ok (done ())
 
 /-- [iterators::slice_iter_while]: loop 1:
@@ -153,21 +153,21 @@ def slice_iter_while_loop0_loop0.body
 @[rust_loop]
 def slice_iter_while_loop0_loop0 (b : Bool) : Result Unit := do
   loop
-    (fun b1 => slice_iter_while_loop0_loop0.body b1)
-    b
+    (fun () => slice_iter_while_loop0_loop0.body b)
+    ()
 
 /-- [iterators::slice_iter_while]: loop body 0:
     Source: 'tests/src/iterators.rs', lines 21:4-23:5 -/
 @[rust_loop_body]
 def slice_iter_while_loop0.body
-  (it : core.slice.iter.Iter Std.U16) (b : Bool) :
-  Result (ControlFlow ((core.slice.iter.Iter Std.U16) × Bool) Unit)
+  (b : Bool) (it : core.slice.iter.Iter Std.U16) :
+  Result (ControlFlow (core.slice.iter.Iter Std.U16) Unit)
   := do
   let (o, it1) ← core.slice.iter.IteratorSliceIter.next it
   match o with
   | none => ok (done ())
   | some _ => slice_iter_while_loop0_loop0 b
-              ok (cont (it1, false))
+              ok (cont it1)
 
 /-- [iterators::slice_iter_while]: loop 0:
     Source: 'tests/src/iterators.rs', lines 21:4-23:5 -/
@@ -175,8 +175,8 @@ def slice_iter_while_loop0.body
 def slice_iter_while_loop0
   (it : core.slice.iter.Iter Std.U16) (b : Bool) : Result Unit := do
   loop
-    (fun (it1, b1) => slice_iter_while_loop0.body it1 b1)
-    (it, b)
+    (fun it1 => slice_iter_while_loop0.body b it1)
+    it
 
 /-- [iterators::slice_iter_while]:
     Source: 'tests/src/iterators.rs', lines 19:0-24:1 -/
@@ -188,9 +188,9 @@ def slice_iter_while (b : Bool) (s : Slice Std.U16) : Result Unit := do
     Source: 'tests/src/iterators.rs', lines 29:8-29:18 -/
 @[rust_loop_body]
 def slice_iter_mut_while_early_return_loop0_loop0.body
-  (b : Bool) : Result (ControlFlow Bool Unit) := do
+  (b : Bool) : Result (ControlFlow Unit Unit) := do
   if b
-  then ok (cont true)
+  then ok (cont ())
   else ok (done ())
 
 /-- [iterators::slice_iter_mut_while_early_return]: loop 1:
@@ -199,19 +199,19 @@ def slice_iter_mut_while_early_return_loop0_loop0.body
 def slice_iter_mut_while_early_return_loop0_loop0
   (b : Bool) : Result Unit := do
   loop
-    (fun b1 => slice_iter_mut_while_early_return_loop0_loop0.body b1)
-    b
+    (fun () => slice_iter_mut_while_early_return_loop0_loop0.body b)
+    ()
 
 /-- [iterators::slice_iter_mut_while_early_return]: loop body 0:
     Source: 'tests/src/iterators.rs', lines 28:4-35:1 -/
 @[rust_loop_body]
 def slice_iter_mut_while_early_return_loop0.body
-  (it : core.slice.iter.IterMut Std.U16)
+  (b : Bool) (it : core.slice.iter.IterMut Std.U16)
   (back : core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16)
-  (b : Bool) :
+  :
   Result (ControlFlow ((core.slice.iter.IterMut Std.U16) ×
-    (core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16) ×
-    Bool) (core.slice.iter.IterMut Std.U16))
+    (core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16))
+    (core.slice.iter.IterMut Std.U16))
   := do
   let (o, it1, next_back) ← core.slice.iter.IteratorIterMut.next it
   match o with
@@ -219,8 +219,11 @@ def slice_iter_mut_while_early_return_loop0.body
                       back im))
   | some _ =>
     slice_iter_mut_while_early_return_loop0_loop0 b
-    ok (cont (it1, fun im => let im1 := next_back im o
-                             back im1, false))
+    if b
+    then ok (done (let im := next_back it1 o
+                   back im))
+    else ok (cont (it1, fun im => let im1 := next_back im o
+                                  back im1))
 
 /-- [iterators::slice_iter_mut_while_early_return]: loop 0:
     Source: 'tests/src/iterators.rs', lines 28:4-35:1 -/
@@ -232,9 +235,9 @@ def slice_iter_mut_while_early_return_loop0
   Result (core.slice.iter.IterMut Std.U16)
   := do
   loop
-    (fun (it1, back1, b1) => slice_iter_mut_while_early_return_loop0.body it1
-      back1 b1)
-    (it, back, b)
+    (fun (it1, back1) => slice_iter_mut_while_early_return_loop0.body b it1
+      back1)
+    (it, back)
 
 /-- [iterators::slice_iter_mut_while_early_return]:
     Source: 'tests/src/iterators.rs', lines 26:0-35:1 -/
@@ -252,9 +255,9 @@ def slice_iter_mut_while_early_return
     Source: 'tests/src/iterators.rs', lines 40:8-40:19 -/
 @[rust_loop_body]
 def slice_iter_mut_while_early_return_two_bools_loop0_loop0.body
-  (b0 : Bool) : Result (ControlFlow Bool Unit) := do
+  (b0 : Bool) : Result (ControlFlow Unit Unit) := do
   if b0
-  then ok (cont true)
+  then ok (cont ())
   else ok (done ())
 
 /-- [iterators::slice_iter_mut_while_early_return_two_bools]: loop 1:
@@ -263,20 +266,19 @@ def slice_iter_mut_while_early_return_two_bools_loop0_loop0.body
 def slice_iter_mut_while_early_return_two_bools_loop0_loop0
   (b0 : Bool) : Result Unit := do
   loop
-    (fun b01 => slice_iter_mut_while_early_return_two_bools_loop0_loop0.body
-      b01)
-    b0
+    (fun () => slice_iter_mut_while_early_return_two_bools_loop0_loop0.body b0)
+    ()
 
 /-- [iterators::slice_iter_mut_while_early_return_two_bools]: loop body 0:
     Source: 'tests/src/iterators.rs', lines 39:4-46:1 -/
 @[rust_loop_body]
 def slice_iter_mut_while_early_return_two_bools_loop0.body
-  (it : core.slice.iter.IterMut Std.U16)
+  (b0 : Bool) (b1 : Bool) (it : core.slice.iter.IterMut Std.U16)
   (back : core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16)
-  (b0 : Bool) (b1 : Bool) :
+  :
   Result (ControlFlow ((core.slice.iter.IterMut Std.U16) ×
-    (core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16) ×
-    Bool × Bool) (core.slice.iter.IterMut Std.U16))
+    (core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16))
+    (core.slice.iter.IterMut Std.U16))
   := do
   let (o, it1, next_back) ← core.slice.iter.IteratorIterMut.next it
   match o with
@@ -287,9 +289,8 @@ def slice_iter_mut_while_early_return_two_bools_loop0.body
     if b1
     then ok (done (let im := next_back it1 o
                    back im))
-    else
-      ok (cont (it1, fun im => let im1 := next_back im o
-                               back im1, false, false))
+    else ok (cont (it1, fun im => let im1 := next_back im o
+                                  back im1))
 
 /-- [iterators::slice_iter_mut_while_early_return_two_bools]: loop 0:
     Source: 'tests/src/iterators.rs', lines 39:4-46:1 -/
@@ -301,9 +302,9 @@ def slice_iter_mut_while_early_return_two_bools_loop0
   Result (core.slice.iter.IterMut Std.U16)
   := do
   loop
-    (fun (it1, back1, b01, b11) =>
-      slice_iter_mut_while_early_return_two_bools_loop0.body it1 back1 b01 b11)
-    (it, back, b0, b1)
+    (fun (it1, back1) => slice_iter_mut_while_early_return_two_bools_loop0.body
+      b0 b1 it1 back1)
+    (it, back)
 
 /-- [iterators::slice_iter_mut_while_early_return_two_bools]:
     Source: 'tests/src/iterators.rs', lines 37:0-46:1 -/

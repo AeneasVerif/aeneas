@@ -17,20 +17,7 @@ set_option maxHeartbeats 1000000
 /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
 set_option maxRecDepth 2048
 
-/- You can remove the following line by using the CLI option `-all-computable`: -/
-noncomputable section
-
 namespace issue_767_adt_constructor
-
-/-- [core::option::{core::option::Option<T>}::map]:
-    Source: '/rustc/library/core/src/option.rs', lines 1160:4-1162:53
-    Name pattern: [core::option::{core::option::Option<@T>}::map]
-    Visibility: public -/
-@[rust_fun "core::option::{core::option::Option<@T>}::map"]
-axiom core.option.Option.map
-  {T : Type} {U : Type} {F : Type} (opsfunctionFnOnceFTupleTUInst :
-  core.ops.function.FnOnce F T U) :
-  Option T → F → Result (Option U)
 
 /-- [issue_767_adt_constructor::Struct]
     Source: 'tests/src/issue-767-adt-constructor.rs', lines 5:0-5:19 -/
@@ -102,7 +89,7 @@ def test_tuple_struct_constructor : Result Unit := do
   ok ()
 
 /- Unit test for [issue_767_adt_constructor::test_tuple_struct_constructor] -/
-#assert (test_tuple_struct_constructor).reducesTo ()
+#guard (test_tuple_struct_constructor).reducesTo ()
 
 /-- [issue_767_adt_constructor::test_enum_constructor]:
     Source: 'tests/src/issue-767-adt-constructor.rs', lines 26:0-28:1 -/
@@ -110,6 +97,6 @@ def test_enum_constructor : Result Unit := do
   ok ()
 
 /- Unit test for [issue_767_adt_constructor::test_enum_constructor] -/
-#assert (test_enum_constructor).reducesTo ()
+#guard (test_enum_constructor).reducesTo ()
 
 end issue_767_adt_constructor

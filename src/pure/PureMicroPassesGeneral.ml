@@ -23,7 +23,7 @@ let remove_meta (ctx : ctx) (def : fun_decl) : fun_decl =
         ~~> massert (¬e0 || e1); if e0 then cont else e_else
 
       if e0 then e_then else (massert e1; cont)
-        ~~> massert (¬e0 || e1); if e0 then cont else e_else
+        ~~> massert (e0 || e1); if e0 then e_then else cont
     ]}
     This eventually allows properly reconstructing the or patterns in
     assertions. *)
@@ -36,6 +36,50 @@ let intro_massert_visitor (_ctx : ctx) (def : fun_decl) =
     match e.e with
     | App ({ e = Qualif { id = FunOrOp (Fun (Pure Assert)); _ }; _ }, scrut_arg)
       -> Some scrut_arg
+    | _ -> None
+  in
+  (* Look for a [massert] call, possibly hidden behind a chain of leading
+     non-monadic let-bindings of the shape:
+     {[
+       let x0 = v0 in
+       ...
+       let xn = vn in
+       let _ = massert e1 in
+       cont
+     ]}
+     A non-monadic let-binding ([monadic = false]) can never fail: by
+     construction of the translation, its right-hand side is a pure
+     computation (e.g. a plain variable, as introduced by [IntroSymbolic]
+     when the symbolic execution copies a value, but also, more generally,
+     any pure operation such as [buf.len ()]). Such bindings can therefore
+     always be hoisted out of a branch without changing the semantics of the
+     program, which is what lets us peel them off to expose the (monadic)
+     [massert] call beneath, so that the merging below can fire.
+
+     If we find a match, we return the pattern of the [massert] call, its
+     argument [e1], the expression which follows it, and a function that
+     rebuilds the (possibly peeled) wrapping let-bindings around a
+     replacement expression. If there is no leading non-monadic let, the
+     rebuilding function is the identity. *)
+  let rec find_massert_let (branch_ty : ty) (e : texpr) :
+      (tpat * texpr * texpr * (expr -> expr)) option =
+    match e.e with
+    | Let (true, pat, rhs, cont) -> (
+        (* Monadic binding: we're allowed to dive into the rhs to extract an assertion *)
+        match get_massert_arg rhs with
+        | Some e1 -> Some (pat, e1, cont, fun inner -> inner)
+        | None -> None)
+    | Let (false, ({ pat = POpen _; _ } as lv), rhs, cont) -> (
+        (* Pure binding: we're allowed to dive into the continuation to extract an assertion *)
+        match find_massert_let branch_ty cont with
+        | Some (pat, e1, inner_cont, rebuild) ->
+            Some
+              ( pat,
+                e1,
+                inner_cont,
+                fun inner ->
+                  Let (false, lv, rhs, { e = rebuild inner; ty = branch_ty }) )
+        | None -> None)
     | _ -> None
   in
   object
@@ -72,42 +116,46 @@ let intro_massert_visitor (_ctx : ctx) (def : fun_decl) =
                    ~~> massert (¬e0 || e1); if e0 then cont else e_else
 
                  if e0 then e_then else (massert e1; cont)
-                   ~~> massert (¬e0 || e1); if e0 then cont else e_else
+                   ~~> massert (e0 || e1); if e0 then e_then else cont
                ]}
-               This is valid because when [e0 = false], [¬e0 || e1 = true]
-               so the massert trivially succeeds, preserving the semantics. *)
-            let check_else_branch () =
-              match e_false.e with
-              | Let (true, pat, rhs, cont_else) -> (
-                  match get_massert_arg rhs with
-                  | Some e1 ->
-                      let new_scrut = mk_bool_or scrut e1 in
-                      let massert = mk_massert new_scrut in
-                      let remaining_switch =
-                        {
-                          e = Switch (scrut, If (e_true, cont_else));
-                          ty = e_false.ty;
-                        }
-                      in
-                      Let (true, pat, massert, remaining_switch)
-                  | None -> Switch (scrut, If (e_true, e_false)))
-              | _ -> Switch (scrut, If (e_true, e_false))
+               This is valid because in the first case, when [e0 = false],
+               [¬e0 || e1 = true] so the massert trivially succeeds (and
+               similarly for the second case when [e0 = true]), preserving
+               the semantics.
+
+               [negate] tells us whether [scrut] must be negated before being
+               combined with [e1] (this is the case when we are looking at
+               the "then" branch, as illustrated above). [mk_if] rebuilds the
+               [If] switch, plugging the transformed branch ([cont]) and the
+               untouched branch ([other]) back in the right slots. *)
+            let try_hoist_massert ~(negate : bool) (branch : texpr)
+                (other : texpr) (mk_if : texpr -> texpr -> switch_body) :
+                expr option =
+              match find_massert_let branch.ty branch with
+              | Some (pat, e1, cont, rebuild) ->
+                  let massert_scrut =
+                    if negate then mk_bool_not scrut else scrut
+                  in
+                  let new_scrut = mk_bool_or massert_scrut e1 in
+                  let massert = mk_massert new_scrut in
+                  let remaining_switch =
+                    { e = Switch (scrut, mk_if cont other); ty = branch.ty }
+                  in
+                  Some (rebuild (Let (true, pat, massert, remaining_switch)))
+              | None -> None
             in
-            match e_true.e with
-            | Let (true, pat, rhs, cont_then) -> (
-                match get_massert_arg rhs with
-                | Some e1 ->
-                    let new_scrut = mk_bool_or (mk_bool_not scrut) e1 in
-                    let massert = mk_massert new_scrut in
-                    let remaining_switch =
-                      {
-                        e = Switch (scrut, If (cont_then, e_false));
-                        ty = e_true.ty;
-                      }
-                    in
-                    Let (true, pat, massert, remaining_switch)
-                | None -> check_else_branch ())
-            | _ -> check_else_branch ()
+            match
+              try_hoist_massert ~negate:true e_true e_false (fun cont other ->
+                  If (cont, other))
+            with
+            | Some e -> e
+            | None -> (
+                match
+                  try_hoist_massert ~negate:false e_false e_true
+                    (fun cont other -> If (other, cont))
+                with
+                | Some e -> e
+                | None -> Switch (scrut, If (e_true, e_false)))
           end
       | _ -> super#visit_Switch env scrut switch
   end
@@ -3635,3 +3683,61 @@ let update_match_over_isize_usize_visitor (_ctx : ctx) (f : fun_decl) =
 
 let update_match_over_isize_usize =
   lift_expr_map_visitor update_match_over_isize_usize_visitor
+
+(** Inline the calls to the initializers of the anonymous constants (i.e., the
+    promoted constants).
+
+    The pre-pass [PrePasses.anon_consts_to_calls] replaces the reads of the
+    anonymous constants with calls to their initializers: we inline the bodies
+    of those initializers (the anonymous constants are not extracted). If the
+    call is bound by a let-binding, we flatten the let-bindings of the inlined
+    body, i.e., we transform:
+    {[
+      let x = (let y = v; e1) in e2 ~~> let y = v in let x = e1 in e2
+    ]} *)
+let inline_anon_const_initializers_visitor (ctx : ctx) (def : fun_decl) =
+  let span = def.item_meta.span in
+  (* Return the (refreshed and instantiated) body of the initializer if the
+     expression is a call to an anonymous constant initializer *)
+  let get_anon_const_body (e : texpr) : texpr option =
+    match opt_destruct_function_call e with
+    | Some (Fun (FromLlbc (FunId fid, None)), generics, []) -> (
+        match FunDeclId.Map.find_opt fid ctx.fun_decls with
+        | Some
+            { src = GlobalInitializerFun gref; body = Some body; signature; _ }
+          when match
+                 GlobalDeclId.Map.find_opt gref.id ctx.crate.global_decls
+               with
+               | Some g -> LlbcAstUtils.global_decl_is_anon_const g
+               | None -> false ->
+            let body =
+              open_all_texpr ctx span (PureUtils.remove_meta body.body)
+            in
+            let subst = make_subst_from_generics signature.generics generics in
+            Some ((new subst_visitor)#visit_texpr subst body)
+        | _ -> None)
+    | _ -> None
+  in
+  object
+    inherit [_] map_expr as super
+
+    method! visit_Let env monadic pat re next =
+      match get_anon_const_body re with
+      | Some body ->
+          let rec flatten (body : texpr) : texpr =
+            match body.e with
+            | Let (monadic', pat', re', next') ->
+                mk_opened_let monadic' pat' re' (flatten next')
+            | _ -> mk_opened_let monadic pat body next
+          in
+          (super#visit_texpr env (flatten body)).e
+      | None -> super#visit_Let env monadic pat re next
+
+    method! visit_texpr env e =
+      match get_anon_const_body e with
+      | Some body -> super#visit_texpr env body
+      | None -> super#visit_texpr env e
+  end
+
+let inline_anon_const_initializers =
+  lift_expr_map_visitor inline_anon_const_initializers_visitor

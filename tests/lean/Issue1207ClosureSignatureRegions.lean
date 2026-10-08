@@ -65,52 +65,6 @@ def make.closure := Std.U8
 def make (x : Std.U8) : Result make.closure := do
   ok x
 
-/-- [issue_1207_closure_signature_regions::make::{impl core::ops::function::Fn<(), u8> for issue_1207_closure_signature_regions::make::{closure}<'_0>}::call]:
-    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 12:4-12:14 -/
-def make.closure.Insts.CoreOpsFunctionFnTupleU8.call
-  (c : make.closure) (_ : Unit) : Result Std.U8 := do
-  ok c
-
-/-- [issue_1207_closure_signature_regions::make::{impl core::ops::function::FnMut<(), u8> for issue_1207_closure_signature_regions::make::{closure}<'_0>}::call_mut]:
-    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 12:4-12:14 -/
-def make.closure.Insts.CoreOpsFunctionFnMutTupleU8.call_mut
-  (state : make.closure) (_ : Unit) : Result (Std.U8 × make.closure) := do
-  let i ← make.closure.Insts.CoreOpsFunctionFnTupleU8.call state ()
-  ok (i, state)
-
-/-- [issue_1207_closure_signature_regions::make::{impl core::ops::function::FnOnce<(), u8> for issue_1207_closure_signature_regions::make::{closure}<'_0>}::call_once]:
-    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 12:4-12:14 -/
-def make.closure.Insts.CoreOpsFunctionFnOnceTupleU8.call_once
-  (c : make.closure) (_ : Unit) : Result Std.U8 := do
-  let (i, _) ← make.closure.Insts.CoreOpsFunctionFnMutTupleU8.call_mut c ()
-  ok i
-
-/-- Trait implementation: [issue_1207_closure_signature_regions::make::{impl core::ops::function::FnOnce<(), u8> for issue_1207_closure_signature_regions::make::{closure}<'_0>}]
-    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 12:4-12:14 -/
-@[reducible]
-def make.closure.Insts.CoreOpsFunctionFnOnceTupleU8 : core.ops.function.FnOnce
-  make.closure Unit Std.U8 := {
-  call_once := make.closure.Insts.CoreOpsFunctionFnOnceTupleU8.call_once
-}
-
-/-- Trait implementation: [issue_1207_closure_signature_regions::make::{impl core::ops::function::FnMut<(), u8> for issue_1207_closure_signature_regions::make::{closure}<'_0>}]
-    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 12:4-12:14 -/
-@[reducible]
-def make.closure.Insts.CoreOpsFunctionFnMutTupleU8 : core.ops.function.FnMut
-  make.closure Unit Std.U8 := {
-  FnOnceInst := make.closure.Insts.CoreOpsFunctionFnOnceTupleU8
-  call_mut := make.closure.Insts.CoreOpsFunctionFnMutTupleU8.call_mut
-}
-
-/-- Trait implementation: [issue_1207_closure_signature_regions::make::{impl core::ops::function::Fn<(), u8> for issue_1207_closure_signature_regions::make::{closure}<'_0>}]
-    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 12:4-12:14 -/
-@[reducible]
-def make.closure.Insts.CoreOpsFunctionFnTupleU8 : core.ops.function.Fn
-  make.closure Unit Std.U8 := {
-  FnMutInst := make.closure.Insts.CoreOpsFunctionFnMutTupleU8
-  call := make.closure.Insts.CoreOpsFunctionFnTupleU8.call
-}
-
 /-- [issue_1207_closure_signature_regions::iter_of::{closure}]
     Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 17:15-17:26 -/
 @[reducible]
@@ -185,51 +139,5 @@ def nested.closure := Std.U8
     Visibility: public -/
 def nested (x : Std.U8) : Result (Holder nested.closure) := do
   ok x
-
-/-- [issue_1207_closure_signature_regions::nested::{impl core::ops::function::Fn<(), u8> for issue_1207_closure_signature_regions::nested::{closure}<'_0>}::call]:
-    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 31:11-31:21 -/
-def nested.closure.Insts.CoreOpsFunctionFnTupleU8.call
-  (c : nested.closure) (_ : Unit) : Result Std.U8 := do
-  ok c
-
-/-- [issue_1207_closure_signature_regions::nested::{impl core::ops::function::FnMut<(), u8> for issue_1207_closure_signature_regions::nested::{closure}<'_0>}::call_mut]:
-    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 31:11-31:21 -/
-def nested.closure.Insts.CoreOpsFunctionFnMutTupleU8.call_mut
-  (state : nested.closure) (_ : Unit) : Result (Std.U8 × nested.closure) := do
-  let i ← nested.closure.Insts.CoreOpsFunctionFnTupleU8.call state ()
-  ok (i, state)
-
-/-- [issue_1207_closure_signature_regions::nested::{impl core::ops::function::FnOnce<(), u8> for issue_1207_closure_signature_regions::nested::{closure}<'_0>}::call_once]:
-    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 31:11-31:21 -/
-def nested.closure.Insts.CoreOpsFunctionFnOnceTupleU8.call_once
-  (c : nested.closure) (_ : Unit) : Result Std.U8 := do
-  let (i, _) ← nested.closure.Insts.CoreOpsFunctionFnMutTupleU8.call_mut c ()
-  ok i
-
-/-- Trait implementation: [issue_1207_closure_signature_regions::nested::{impl core::ops::function::FnOnce<(), u8> for issue_1207_closure_signature_regions::nested::{closure}<'_0>}]
-    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 31:11-31:21 -/
-@[reducible]
-def nested.closure.Insts.CoreOpsFunctionFnOnceTupleU8 :
-  core.ops.function.FnOnce nested.closure Unit Std.U8 := {
-  call_once := nested.closure.Insts.CoreOpsFunctionFnOnceTupleU8.call_once
-}
-
-/-- Trait implementation: [issue_1207_closure_signature_regions::nested::{impl core::ops::function::FnMut<(), u8> for issue_1207_closure_signature_regions::nested::{closure}<'_0>}]
-    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 31:11-31:21 -/
-@[reducible]
-def nested.closure.Insts.CoreOpsFunctionFnMutTupleU8 : core.ops.function.FnMut
-  nested.closure Unit Std.U8 := {
-  FnOnceInst := nested.closure.Insts.CoreOpsFunctionFnOnceTupleU8
-  call_mut := nested.closure.Insts.CoreOpsFunctionFnMutTupleU8.call_mut
-}
-
-/-- Trait implementation: [issue_1207_closure_signature_regions::nested::{impl core::ops::function::Fn<(), u8> for issue_1207_closure_signature_regions::nested::{closure}<'_0>}]
-    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 31:11-31:21 -/
-@[reducible]
-def nested.closure.Insts.CoreOpsFunctionFnTupleU8 : core.ops.function.Fn
-  nested.closure Unit Std.U8 := {
-  FnMutInst := nested.closure.Insts.CoreOpsFunctionFnMutTupleU8
-  call := nested.closure.Insts.CoreOpsFunctionFnTupleU8.call
-}
 
 end issue_1207_closure_signature_regions

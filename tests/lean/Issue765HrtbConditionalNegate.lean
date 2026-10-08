@@ -134,12 +134,6 @@ def SharedAF.Insts.CoreOpsArithNegF : core.ops.arith.Neg F F := {
   neg := SharedAF.Insts.CoreOpsArithNegF.neg
 }
 
-/-- Trait declaration: [issue_765_hrtb_conditional_negate::ext::ConditionallyNegatable]
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 45:4-47:5
-    Visibility: public -/
-structure ext.ConditionallyNegatable (Self : Type) where
-  conditional_negate : Self → Choice → Result Self
-
 /-- [issue_765_hrtb_conditional_negate::ext::{impl issue_765_hrtb_conditional_negate::ext::ConditionallyNegatable for T}::conditional_negate]:
     Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 54:8-57:9
     Visibility: public -/
@@ -147,16 +141,6 @@ axiom ext.ConditionallyNegatable.Blanket.conditional_negate
   {T : Type} (ConditionallySelectableInst : ConditionallySelectable T)
   (coreopsarithNegShared0TTInst : core.ops.arith.Neg T T) :
   T → Choice → Result T
-
-/-- Trait implementation: [issue_765_hrtb_conditional_negate::ext::{impl issue_765_hrtb_conditional_negate::ext::ConditionallyNegatable for T}]
-    Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 49:4-58:5 -/
-@[reducible]
-def ext.ConditionallyNegatable.Blanket {T : Type} (ConditionallySelectableInst
-  : ConditionallySelectable T) (coreopsarithNegSharedTTInst :
-  core.ops.arith.Neg T T) : ext.ConditionallyNegatable T := {
-  conditional_negate := ext.ConditionallyNegatable.Blanket.conditional_negate
-    ConditionallySelectableInst coreopsarithNegSharedTTInst
-}
 
 /-- Trait declaration: [issue_765_hrtb_conditional_negate::local::ConditionallyNegatable]
     Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 66:4-68:5

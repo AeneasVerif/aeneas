@@ -214,9 +214,9 @@ namespace Test
   #eval generateReadDiscriminant ``Foo2 .I16 none
   #eval generateReadDiscriminant ``Foo3 .Isize (some [3, 4])
 
-  #assert read_discriminant Foo2.Variant1 = 0#i16
-  #assert read_discriminant Foo3.Variant1 = 3#isize
-  #assert read_discriminant Foo3.Variant2 = 4#isize
+  #guard read_discriminant Foo2.Variant1 = 0#i16
+  #guard read_discriminant Foo3.Variant1 = 3#isize
+  #guard read_discriminant Foo3.Variant2 = 4#isize
 
 end Test
 
