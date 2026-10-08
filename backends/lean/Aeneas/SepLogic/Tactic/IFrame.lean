@@ -11,10 +11,6 @@ open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic Normalize Matchers
 
 namespace IFrame
 
-private def isWand (e : Expr) : Bool :=
-  let e := e.consumeMData
-  e.isAppOfArity ``postWand 3 || e.isAppOfArity ``wand 2
-
 /-- For `H₁ -∗ H₂` (resp. `Q₁ -∗+ Q₂`), the introduction lemma and its premise
 `H₁ ∗ residual ⊢ H₂` (resp. `Q₁ ∗+ residual ⊢+ Q₂`). -/
 def wandIntro? (residual wand : Expr) : MetaM (Option (Name × Expr)) := do

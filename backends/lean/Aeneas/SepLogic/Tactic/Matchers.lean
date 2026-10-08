@@ -14,6 +14,10 @@ open Lean Lean.Meta Normalize
 
 namespace Matchers
 
+def isWand (e : Expr) : Bool :=
+  let e := e.consumeMData
+  e.isAppOfArity ``postWand 3 || e.isAppOfArity ``wand 2
+
 /-- The indices of `atoms`, those with the head symbol of `atom` first: they are the likely
 matches, and failing unifications across different heads may unfold a lot. -/
 private def candidates (atoms : Array Expr) (atom : Expr) : Array Nat :=
@@ -81,14 +85,25 @@ where
       return none
 
 /-- Frame away the atoms of the destination that unify with atoms of the source (see
-`matchAtoms`, and `unique`). Returns the residual goal `left ⊢ right` over the other atoms, or
-`goal` itself if nothing matched. -/
+`matchAtoms`, and `unique`). Without `unique`, the spatial atoms (neither pure nor wands), which
+must all be cancelled, are first matched with `matchAll`, so that the witnesses chosen for
+flexible atoms do not depend on the order of the atoms. Returns the residual goal `left ⊢ right`
+over the other atoms, or `goal` itself if nothing matched. -/
 def cancelGoal (goal : MVarId) (unique := false) : MetaM MVarId := goal.withContext do
   let some (source, destination) ← entailment? goal | return goal
   let source ← reducePostApplication source
   let destination ← reducePostApplication destination
-  let (matched, unmatched, remaining) ←
-    matchAtoms (← flatten source) (← flatten destination) unique
+  let available ← flatten source
+  let required ← flatten destination
+  let (spatial, other) := required.partition fun atom =>
+    !(atom.consumeMData.isAppOfArity ``ipure 1 || isWand atom)
+  let (matched, unmatched, remaining) ← do
+    if !unique then
+      if let some (matched, remaining) ← matchAll available spatial then
+        let (matched', unmatched, remaining) ← matchAtoms remaining other
+        pure (matched ++ matched', unmatched, remaining)
+      else matchAtoms available required
+    else matchAtoms available required unique
   if matched.isEmpty then return goal
   let frame := mkStar (matched.map (·.1))
   let left := mkStar remaining

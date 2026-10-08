@@ -92,4 +92,9 @@ private def wrap' (P : IProp) : IProp := P
 example (P : IProp) : P ∗ wrap' P ⊢ wrap P ∗ P := by
   iframe
 
+-- `P x` unifies with `P a` first, but only `x := b` leaves a match for `Q x`
+example {α : Type} (a b : α) (P Q : α → IProp) :
+    P a ∗ P b ∗ Q b ⊢ iprop(∃ x, P x ∗ Q x) := by
+  iframe
+
 end Aeneas.SepLogic.Tactic.Tests.IFrame
