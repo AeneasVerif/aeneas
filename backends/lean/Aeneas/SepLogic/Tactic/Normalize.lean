@@ -1,7 +1,6 @@
 module
 public import Aeneas.SepLogic.Tactic.Init
 public meta import Aeneas.SepLogic.Tactic.Init
-public import Lean.Meta.Tactic.AC
 public meta import Lean
 public meta import AeneasMeta.Simp
 
@@ -100,11 +99,13 @@ def reducePostApplication (e : Expr) : MetaM Expr := do
     return mkApp2 (mkConst ``sep) (mkApp args[1]! args[3]!) args[2]!
   return e
 
-partial def flatten (e : Expr) : MetaM (Array Expr) := do
+/-- The atoms of the `sep` tree `e`; `frame` is kept as one atom. -/
+partial def flatten (e : Expr) (frame : Option Expr := none) : MetaM (Array Expr) := do
   let e ← reducePostApplication e
+  if frame == some e.consumeMData then return #[e]
   let (fn, args) := e.consumeMData.withApp fun fn args => (fn, args)
   if fn.isConstOf ``sep && args.size = 2 then
-    return (← flatten args[0]!) ++ (← flatten args[1]!)
+    return (← flatten args[0]! frame) ++ (← flatten args[1]! frame)
   if fn.isConstOf `Aeneas.SepLogic.emp then
     return #[]
   return #[e]
@@ -116,11 +117,12 @@ def mkStar (atoms : Array Expr) : Expr :=
     atoms.pop.foldr (init := last) fun atom rest =>
       mkApp2 (mkConst ``sep) atom rest
 
-/-- Reify the `sep` structure of `e` as a `SepAC.Tree`, numbering its atoms in the state. Atoms
-are identified up to unfolding of instances (without assigning metavariables), since the same
-`p ↦ v` may come with syntactically different instance arguments. Also returns the atom
-indices, in order. -/
-private partial def reifySep (e : Expr) : StateT (Array Expr) MetaM (Expr × List Nat) := do
+/-- The atoms of a reification, and the index of each (syntactic) atom. -/
+private abbrev AtomEnv := Array Expr × Std.HashMap Expr Nat
+
+/-- Reify the `sep` structure of `e` as a `SepAC.Tree`, numbering its atoms in the state. Also
+returns the atom indices, in order. -/
+private partial def reifySep (e : Expr) : StateT AtomEnv MetaM (Expr × List Nat) := do
   let e ← reducePostApplication e
   let (fn, args) := e.consumeMData.withApp fun fn args => (fn, args)
   if fn.isConstOf ``sep && args.size = 2 then
@@ -129,38 +131,35 @@ private partial def reifySep (e : Expr) : StateT (Array Expr) MetaM (Expr × Lis
     return (mkApp2 (mkConst ``SepAC.Tree.node) l r, li ++ ri)
   if fn.isConstOf `Aeneas.SepLogic.emp then return (mkConst ``SepAC.Tree.unit, [])
   let atom := e.consumeMData
-  let atoms ← get
-  let i ← match atoms.findIdx? (· == atom) with
+  let (atoms, index) ← get
+  let i ← match index[atom]? with
     | some i => pure i
-    | none =>
-      match ← atoms.findIdxM? fun known =>
-          withNewMCtxDepth <| withTransparency .instances <| isDefEq known atom with
-      | some i => pure i
-      | none => do set (atoms.push atom); pure atoms.size
+    | none => do set (atoms.push atom, index.insert atom atoms.size); pure atoms.size
   return (mkApp (mkConst ``SepAC.Tree.atom) (mkNatLit i), [i])
 
-/-- Prove `lhs = rhs` for two `sep` trees with the same atoms, with one `SepAC.Tree.denote_eq`;
-fall back to `ac_rfl`/`rfl` when the atoms only agree up to more than instance unfolding
-(`ac_rfl` also removes `emp` units, through the `Std.LawfulIdentity sep emp` instance). -/
-def proveEqAC (lhs rhs : Expr) : TacticM Expr := do
+/-- Prove `lhs = rhs` for two `sep` trees over the same atoms, with one `SepAC.Tree.denote_eq`.
+Atoms are compared syntactically, except that the pairs `(a, b)` of `aliases` (atoms that the
+matcher unified) put `a` and `b` in the same class: the kernel checks that they are defeq. -/
+def proveEqAC (lhs rhs : Expr) (aliases : Array (Expr × Expr) := #[]) : MetaM Expr := do
   let lhs ← instantiateMVars lhs
   let rhs ← instantiateMVars rhs
   if lhs == rhs then return ← mkEqRefl lhs
-  let eqType ← mkEq lhs rhs
-  let (((l, li), (r, ri)), atoms) ← (do return (← reifySep lhs, ← reifySep rhs)).run #[]
-  if li.toArray.qsort (· < ·) == ri.toArray.qsort (· < ·) then
-    let env ← mkListLit (mkConst ``IProp) atoms.toList
-    let proof := mkAppN (mkConst ``SepAC.Tree.denote_eq)
-      #[env, l, r, ← mkEqRefl (mkConst ``Bool.true)]
-    return ← mkExpectedTypeHint proof eqType
-  let proof ← mkFreshExprSyntheticOpaqueMVar eqType
-  let .mvar proofId := proof.consumeMData
-    | throwError "failed to create an equality proof goal"
-  let tactic ← `(tactic| first | ac_rfl | rfl)
-  let (goals, _) ← runTactic proofId tactic
-  unless goals.isEmpty do
-    throwError "could not prove {eqType}"
-  return proof
+  let mut env : AtomEnv := (#[], {})
+  for (a, b) in aliases do
+    let a := (← instantiateMVars a).consumeMData
+    let b := (← instantiateMVars b).consumeMData
+    env := match env.2[a]?, env.2[b]? with
+      | some i, some j => (env.1, env.2.map fun _ k => if k == j then i else k)
+      | some i, none => (env.1, env.2.insert b i)
+      | none, some j => (env.1, env.2.insert a j)
+      | none, none => (env.1.push b, (env.2.insert b env.1.size).insert a env.1.size)
+  let (((l, li), (r, ri)), (atoms, _)) ← (do return (← reifySep lhs, ← reifySep rhs)).run env
+  unless li.toArray.qsort (· < ·) == ri.toArray.qsort (· < ·) do
+    throwError "the assertions do not have the same atoms:\n{lhs}\nand\n{rhs}"
+  let atomList ← mkListLit (mkConst ``IProp) atoms.toList
+  let proof := mkAppN (mkConst ``SepAC.Tree.denote_eq)
+    #[atomList, l, r, ← mkEqRefl (mkConst ``Bool.true)]
+  mkExpectedTypeHint proof (← mkEq lhs rhs)
 
 /-- The precondition and the postcondition of `goal`, if it is an `Entails`. -/
 def entailment? (goal : MVarId) : MetaM (Option (Expr × Expr)) := do
@@ -207,18 +206,18 @@ private def simpEntailment (goal : MVarId) (simpOnly : Bool)
 def sepNormThms : Array Name :=
   #[``sep_emp_l_eq, ``sep_emp_r_eq, ``sep_exists_l_eq, ``sep_exists_r_eq]
 
-def floatExists (goal : MVarId) : TacticM MVarId :=
-  simpEntailment goal true { addSimpThms := sepNormThms }
-
 def decompose (goal : MVarId) : TacticM MVarId := do
   simpEntailment goal false { simpThms := #[← isimpsExt.getTheorems] }
 
-private partial def exposeAll (e : Expr) : MetaM Expr := do
+/-- `e` with the definitions hiding connectives unfolded along its `sep` spine, except in
+`frame`. -/
+private partial def exposeAll (e : Expr) (frame : Option Expr := none) : MetaM Expr := do
   let e ← reducePostApplication e
+  if frame == some e.consumeMData then return e
   let e := (← exposeConnective? e).getD e
   let (fn, args) := e.consumeMData.withApp fun fn args => (fn, args)
   if fn.isConstOf ``sep && args.size = 2 then
-    return mkApp2 (mkConst ``sep) (← exposeAll args[0]!) (← exposeAll args[1]!)
+    return mkApp2 (mkConst ``sep) (← exposeAll args[0]! frame) (← exposeAll args[1]! frame)
   return e
 
 def exposeGoal (goal : MVarId) : TacticM MVarId := goal.withContext do
@@ -228,20 +227,19 @@ def exposeGoal (goal : MVarId) : TacticM MVarId := goal.withContext do
   if source' == source && destination' == destination then return goal
   try goal.change (mkApp2 (mkConst ``Entails) source' destination') catch _ => pure goal
 
-/-- Split out the pure atoms of `assertion` (the first `limit` ones whose proposition satisfies
-`select`). Returns the propositions, the assertion of the other atoms `rest`, and a proof of
+/-- Split out the pure atoms of `assertion` (those whose proposition satisfies `select`). Returns
+the propositions, the assertion of the other atoms `rest`, and a proof of
 `assertion = A₁ ∗ … ∗ Aₖ ∗ rest`, where `Aᵢ` is the original atom of `⌜Pᵢ⌝` (possibly a
-definition unfolding to it, unless `unfold` is false). -/
-def splitPures (assertion : Expr) (limit : Option Nat := none)
-    (select : Expr → MetaM Bool := fun _ => pure true) (unfold := true) :
+definition unfolding to it). -/
+def splitPures (assertion : Expr) (select : Expr → MetaM Bool := fun _ => pure true) :
     TacticM (Option (Array Expr × Expr × Expr)) := do
   let assertion ← reducePostApplication assertion
   let mut pures := #[]
   let mut props := #[]
   let mut others := #[]
   for atom in ← flatten assertion do
-    let exposed := (← if unfold then exposeConnective atom else pure atom).consumeMData
-    if limit.all (props.size < ·) && exposed.isAppOfArity ``ipure 1 then
+    let exposed := (← exposeConnective atom).consumeMData
+    if exposed.isAppOfArity ``ipure 1 then
       if ← select exposed.appArg! then
         pures := pures.push atom
         props := props.push exposed.appArg!
@@ -254,64 +252,156 @@ def splitPures (assertion : Expr) (limit : Option Nat := none)
 
 /-- A proof of `⌜P₁⌝ ∗ … ∗ ⌜Pₖ⌝ ∗ rest ⊢ destination` from
 `next : P₁ → … → Pₖ → rest ⊢ destination`. -/
-def introPures (props : Array Expr) (rest destination next : Expr) : MetaM Expr :=
-  go props.toList next
+def introPures (props : Array Expr) (rest destination next : Expr) : MetaM Expr := do
+  -- the tails `⌜Pᵢ₊₁⌝ ∗ … ∗ rest`, sharing their subterms
+  let tails := props.foldr (init := [rest]) fun P tails =>
+    mkApp2 (mkConst ``sep) (mkApp (mkConst ``ipure) P) tails.head! :: tails
+  go props.toList tails.tail! next
 where
-  go : List Expr → Expr → MetaM Expr
-    | [], next => return next
-    | proposition :: more, next => do
-      let tail := more.foldr
-        (fun P acc => mkApp2 (mkConst ``sep) (mkApp (mkConst ``ipure) P) acc) rest
+  go : List Expr → List Expr → Expr → MetaM Expr
+    | proposition :: more, tail :: tails, next => do
       let body ← withLocalDeclD (← mkFreshUserName `h) proposition fun h => do
-        mkLambdaFVars #[h] (← go more (mkApp next h))
+        mkLambdaFVars #[h] (← go more tails (mkApp next h))
       return mkAppN (mkConst ``entails_pure_l) #[proposition, tail, destination, body]
+    | _, _, next => return next
 
-/-- Open the leading existentials of the precondition. -/
-private partial def openLeftExists (goal : MVarId) (opened := false) :
-    MetaM (MVarId × Bool) := goal.withContext do
-  let some (source, destination) ← entailment? goal | return (goal, opened)
-  let source ← reducePostApplication source
-  let destination ← reducePostApplication destination
-  let (sourceFn, sourceArgs) :=
-    source.consumeMData.withApp fun fn args => (fn, args)
-  unless sourceFn.isConstOf ``iexists && sourceArgs.size = 2 do return (goal, opened)
-  let some u := sourceFn.constLevels!.head?
-    | throwError "could not determine the universe of {source}"
-  let ι := sourceArgs[0]!
-  let J := sourceArgs[1]!
-  let newType ← withLocalDeclD (← mkFreshUserName `x) ι fun x => do
-    mkForallFVars #[x] (← mkAppM ``Entails #[← Core.betaReduce (mkApp J x), destination])
-  let newGoal ← mkFreshExprSyntheticOpaqueMVar newType
-  goal.assign (mkAppN (mkConst ``entails_exists_l [u]) #[ι, destination, J, newGoal])
-  let (_, next) ← newGoal.mvarId!.intro1P
-  openLeftExists next true
+partial def exposeEntailment? (e : Expr) : MetaM (Option Expr) := do
+  let e := (← instantiateMVars e).consumeMData
+  if e.isAppOfArity ``Entails 2 then return some e
+  match ← unfoldDefinition? e with
+  | some e' => exposeEntailment? e'
+  | none => return none
 
-/-- Move all the pure facts of the precondition into the context, with one reordering. -/
-private def pullPures (goal : MVarId) : TacticM (MVarId × Bool) := goal.withContext do
-  let some (source, destination) ← entailment? goal | return (goal, false)
-  let destination ← reducePostApplication destination
-  let some (props, rest, eq) ← splitPures source | return (goal, false)
-  let newType ← props.foldrM (init := mkApp2 (mkConst ``Entails) rest destination)
-    fun P acc => return mkForall (← mkFreshUserName `h) .default P acc
-  let newGoal ← mkFreshExprSyntheticOpaqueMVar newType
-  let extract ← introPures props rest destination newGoal
-  let reordered := (← inferType eq).appArg!
-  goal.assign (mkAppN (mkConst ``entails_trans)
-    #[source, reordered, destination, mkAppN (mkConst ``entails_of_eq) #[source, reordered, eq],
-      extract])
-  let (_, next) ← newGoal.mvarId!.introNP props.size
-  return (next, true)
+/-- `target`, an entailment `source ⊢ destination` possibly behind definitions, with the source
+replaced by `newSource`. -/
+def mkEntailmentLike (target source destination newSource : Expr) : MetaM Expr := do
+  let (fn, targetArgs) :=
+    target.consumeMData.withApp fun fn args => (fn, args)
+  let newSourceType ← inferType newSource
+  for h : i in [:targetArgs.size] do
+    let argType ← inferType targetArgs[i]
+    if ← isDefEq argType newSourceType then
+      let candidate := mkAppN fn (targetArgs.set! i newSource)
+      if let some exposed ← exposeEntailment? candidate then
+        let args := exposed.getAppArgs
+        if ← isDefEq args[0]! newSource then
+          if ← isDefEq args[1]! destination then
+            return candidate
+  let replacement := target.replace fun e =>
+    if e == source then some newSource else none
+  if let some exposed ← exposeEntailment? replacement then
+    let args := exposed.getAppArgs
+    if ← isDefEq args[0]! newSource then
+      if ← isDefEq args[1]! destination then
+        return replacement
+  mkAppM ``Entails #[newSource, destination]
 
-/-- Move the existentials and pure facts of the precondition into the context. Each round
-normalizes once, then opens every leading `∃` and pulls every `⌜P⌝`; a new round runs only if
-the previous one exposed something. -/
-partial def pullLeft (goal : MVarId) : TacticM MVarId := do
+/-- `e` with its `k`-th atom (in the order of `flatten`, after the unfolding of `exposeAll` if
+`unfold`) replaced by `f k atom`, or dropped if `none`. The rest is unchanged: same `sep`
+structure, and the definitions whose atoms are all kept stay folded. `none` if no atom is left. -/
+private partial def mapAtoms (unfold : Bool) (frame : Option Expr)
+    (f : Nat → Expr → Option Expr) (e : Expr) : StateT Nat MetaM (Option Expr) := do
+  let e ← reducePostApplication e
+  let atom : StateT Nat MetaM (Option Expr) := modifyGet fun k => (f k e, k + 1)
+  if frame == some e.consumeMData then return ← atom
+  let exposed ← if unfold then pure ((← exposeConnective? e).getD e) else pure e
+  let (fn, args) := exposed.consumeMData.withApp fun fn args => (fn, args)
+  if fn.isConstOf ``sep && args.size = 2 then
+    let l ← mapAtoms unfold frame f args[0]!
+    let r ← mapAtoms unfold frame f args[1]!
+    if l == some args[0]! && r == some args[1]! then return some e
+    return match l, r with
+      | some l, some r => some (mkApp2 (mkConst ``sep) l r)
+      | l, none => l
+      | none, r => r
+  if fn.isConstOf `Aeneas.SepLogic.emp then return some e
+  atom
+
+/-- Move the existentials and pure facts of the precondition of `goal` (an entailment, possibly
+behind definitions) into the context, without simp: each round either opens the first `∃` atom
+(existentials come before the pure facts, wherever they are), replacing it by its body in place,
+or removes the `⌜P⌝` atoms, from left to right; the rest of the precondition is unchanged. At
+most `limit` items are moved. With `unfold`, definitions hiding connectives are looked into; the
+atom `frame` is never looked into; with `names`, the binder names (`h` for the facts) stay
+accessible. -/
+partial def pullLeft (goal : MVarId) (unfold := true) (frame : Option Expr := none)
+    (names := false) (limit : Option Nat := none) : TacticM MVarId := goal.withContext do
+  if limit == some 0 then return goal
   if ← isFrameInference goal then return goal
-  let goal ← floatExists (← exposeGoal goal)
-  if ← isFrameInference goal then return goal
-  let (goal, opened) ← openLeftExists goal
-  let (goal, pulled) ← pullPures goal
-  if opened || pulled then pullLeft goal else return goal
+  let target ← instantiateMVars (← goal.getType)
+  let some entailment ← exposeEntailment? target | return goal
+  let source := entailment.appFn!.appArg!
+  let destination := entailment.appArg!
+  let expose (e : Expr) : MetaM Expr :=
+    if unfold then exposeAll e frame else reducePostApplication e
+  let atoms ← flatten (← expose source) frame
+  let edit (f : Nat → Expr → Option Expr) : MetaM Expr := do
+    return ((← (mapAtoms unfold frame f source).run' 0).getD (mkConst `Aeneas.SepLogic.emp))
+  -- `a ⊢ b` for assertions with the same atoms
+  let reorder (a b : Expr) : MetaM Expr := do
+    return mkApp3 (mkConst ``entails_of_eq) a b (← proveEqAC (← expose a) (← expose b))
+  let trans (a b c pab pbc : Expr) := mkApp5 (mkConst ``entails_trans) a b c pab pbc
+  let binderName (n : Name) : MetaM Name := if names then pure n else mkFreshUserName n
+  let next (newSource : Expr) := mkEntailmentLike target source destination newSource
+  let is (name : Name) (arity : Nat) (atom : Expr) :=
+    frame != some atom.consumeMData && atom.consumeMData.isAppOfArity name arity
+  if let some i := atoms.findIdx? (is ``iexists 2) then
+    let atom := atoms[i]!.consumeMData
+    let some u := atom.getAppFn.constLevels!.head?
+      | throwError "could not determine the universe of {atom}"
+    let ι := atom.appFn!.appArg!
+    let J := atom.appArg!
+    let rest ← edit fun k atom => if k == i then none else some atom
+    let inPlace (x : Expr) : MetaM Expr := do
+      let body ← Core.betaReduce (mkApp J x)
+      edit fun k atom => if k == i then some body else some atom
+    let x := match J with | .lam n .. => n | _ => `x
+    let newType ← withLocalDeclD (← binderName x) ι fun x => do
+      mkForallFVars #[x] (← next (← inPlace x))
+    let newGoal ← mkFreshExprSyntheticOpaqueMVar newType
+    -- `∀ x, J x ∗ rest ⊢ destination`, through `J x ∗ rest ⊢ inPlace x`
+    let opened ← withLocalDeclD `x ι fun x => do
+      let bodyRest := mkApp2 (mkConst ``sep) (← Core.betaReduce (mkApp J x)) rest
+      let inPlace ← inPlace x
+      mkLambdaFVars #[x] (trans bodyRest inPlace destination (← reorder bodyRest inPlace)
+        (mkApp newGoal x))
+    let reordered := mkApp2 (mkConst ``sep) atom rest
+    goal.assign (trans source reordered destination (← reorder source reordered)
+      (mkAppN (mkConst ``entails_exists_sep_l [u]) #[ι, rest, destination, J, opened]))
+    let (_, newGoal) ← newGoal.mvarId!.intro1P
+    return ← pullLeft newGoal unfold frame names (limit.map (· - 1))
+  let selected := (Array.range atoms.size).filter (is ``ipure 1 atoms[·]!)
+  let selected := match limit with | some n => selected.take n | none => selected
+  if selected.isEmpty then return goal
+  let props := selected.map (atoms[·]!.consumeMData.appArg!)
+  let rest ← edit fun k atom => if selected.contains k then none else some atom
+  let reordered := selected.foldr (mkApp2 (mkConst ``sep) atoms[·]! ·) rest
+  let newType ← props.foldrM (init := ← next rest)
+    fun P acc => return mkForall (← binderName `h) .default P acc
+  let newGoal ← mkFreshExprSyntheticOpaqueMVar newType
+  goal.assign (trans source reordered destination (← reorder source reordered)
+    (← introPures props rest destination newGoal))
+  let (_, newGoal) ← newGoal.mvarId!.introNP props.size
+  pullLeft newGoal unfold frame names (limit.map (· - props.size))
+
+/-- `pullLeft`, also returning the hypotheses it introduced, in order. -/
+def pullLeftFVars (goal : MVarId) (unfold := true) (frame : Option Expr := none)
+    (names := false) (limit : Option Nat := none) : TacticM (MVarId × Array FVarId) := do
+  let before ← goal.withContext getLCtx
+  let goal ← pullLeft goal unfold frame names limit
+  let new ← goal.withContext do
+    return (← getLCtx).foldl (init := #[]) fun new decl =>
+      if before.contains decl.fvarId then new else new.push decl.fvarId
+  return (goal, new)
+
+/-- `pullLeft`, then rewrite the goal with the facts this introduced (if `useFacts`); `none` if
+that closed the goal. -/
+def pullAndRewrite (goal : MVarId) (useFacts := true) : TacticM (Option MVarId) := do
+  let (goal, new) ← pullLeftFVars goal
+  if !useFacts then return some goal
+  let facts ← goal.withContext <| new.filterM fun fvar => do isProp (← fvar.getType)
+  if facts.isEmpty then return some goal
+  goal.withContext <| simpGoal goal true { hypsToUse := facts }
 
 def normalizeSep : TacticM Unit := withMainContext do
   let _ ← Aeneas.Simp.simpAt true

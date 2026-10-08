@@ -307,6 +307,16 @@ theorem sep_exists_r_eq {ι : Sort _} (H : IProp) (J : ι → IProp) :
     fun heap ⟨x, hx⟩ => ⟨x, (sep_comm (J x) H).mp heap hx⟩,
     fun heap ⟨x, hx⟩ => ⟨x, (sep_comm (J x) H).mpr heap hx⟩⟩
 
+theorem entails_exists_sep_l {ι : Sort _} {H H' : IProp} {J : ι → IProp}
+    (h : ∀ x, J x ∗ H ⊢ H') : iexists J ∗ H ⊢ H' := by
+  rw [sep_exists_l_eq]
+  exact entails_exists_l h
+
+theorem entails_exists_sep_r {ι : Sort _} {H H' : IProp} {J : ι → IProp} (x : ι)
+    (h : H ⊢ J x ∗ H') : H ⊢ iexists J ∗ H' := by
+  rw [sep_exists_l_eq]
+  exact entails_exists_r x h
+
 theorem pure_elim (P : Prop) :
     ⌜P⌝ ⊢ emp :=
   entails_emp_r _

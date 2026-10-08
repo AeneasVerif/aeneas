@@ -1,5 +1,5 @@
 module
-public import Aeneas.SepLogic.Tactic.Common
+public import Aeneas.SepLogic.Tactic.Matchers
 public import Aeneas.SepLogic.Tactic.IFrame
 public import Aeneas.SepLogic.Tactic.Init
 public import Aeneas.SepLogic.Tactic.IIntro

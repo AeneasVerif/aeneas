@@ -80,4 +80,16 @@ example (P R : IProp) : R ⊢ iprop(P -∗ (P ∗ R)) := by
 example (P R S : IProp) : R ∗ S ⊢ iprop(S ∗ (P -∗ (R ∗ P))) := by
   iframe
 
+private def wrap (P : IProp) : IProp := P
+
+-- `P` matches `wrap P` only by unfolding, and the atoms must be reordered
+example (P R : IProp) : wrap P ∗ R ⊢ R ∗ P := by
+  iframe
+
+private def wrap' (P : IProp) : IProp := P
+
+-- `P` is matched with `wrap P` and with `wrap' P`: all three are one atom of the reordering
+example (P : IProp) : P ∗ wrap' P ⊢ wrap P ∗ P := by
+  iframe
+
 end Aeneas.SepLogic.Tactic.Tests.IFrame

@@ -64,4 +64,31 @@ example (P Q R : IProp) (h : Q = P) : R ∗ P ⊢ Q ∗ R := by
   guard_target = (Q ∗ R ⊢ Q ∗ R)
   iframe
 
+private def wrap (P : IProp) : IProp := P
+
+-- `P` matches `wrap P` only by unfolding, and the precondition must be reordered
+example (P Q R : IProp) (h : R ∗ P ⊢ Q) : wrap P ∗ R ⊢ Q := by
+  irewrite h
+  guard_target = (Q ⊢ Q)
+  iframe
+
+private def wrap' (P : IProp) : IProp := P
+
+-- `P` is matched with `wrap P` and with `wrap' P`: all three are one atom of the reordering
+example (P Q : IProp) (h : wrap P ∗ P ⊢ Q) : P ∗ wrap' P ⊢ Q := by
+  irewrite h
+  guard_target = (Q ⊢ Q)
+  iframe
+
+-- `P ?x` first matches `P a`, which `Q ?x` then rules out
+example (P Q R : Nat → IProp) (a b : Nat) (h : ∀ x, P x ∗ Q x ⊢ R x) :
+    P a ∗ P b ∗ Q b ⊢ P a ∗ R b := by
+  irewrite h
+  iframe
+
+-- instance arguments are synthesized, not left as goals
+example (P : Nat → IProp) (Q : IProp) (h : ∀ (n : Nat) [NeZero n], P n ⊢ Q) : P 1 ⊢ Q := by
+  irewrite h
+  iframe
+
 end Aeneas.SepLogic.Tactic.Tests.IRewrite

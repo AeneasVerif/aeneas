@@ -133,4 +133,11 @@ example (cell : Nat → IProp) (a b : Nat) :
 example (P R : IProp) : R ⊢ P -∗ (P ∗ R) := by
   isimp
 
+-- the witness of `cell ?m` is ambiguous: it is left to the user, not committed to `a`
+example (cell : Nat → IProp) (P : Nat → Prop) (a b : Nat) (h : P b) :
+    cell a ∗ cell b ⊢ iprop(∃ m : Nat, cell m ∗ ⌜P m⌝) := by
+  isimp only
+  exact b
+  iframe
+
 end Aeneas.SepLogic.Tactic.Tests.ISimp

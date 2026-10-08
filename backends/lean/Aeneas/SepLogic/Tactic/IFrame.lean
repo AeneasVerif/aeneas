@@ -1,13 +1,13 @@
 module
-public import Aeneas.SepLogic.Tactic.Common
-public meta import Aeneas.SepLogic.Tactic.Common
+public import Aeneas.SepLogic.Tactic.Matchers
+public meta import Aeneas.SepLogic.Tactic.Matchers
 public meta import Lean
 public meta import AeneasMeta.Simp
 public meta section
 
 namespace Aeneas.SepLogic
 
-open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic Normalize Common
+open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic Normalize Matchers
 
 namespace IFrame
 
@@ -57,27 +57,40 @@ private def solveWitnessEqs (destination : Expr) (witnesses : Array MVarId) : Me
     if isWitness lhs || isWitness rhs then
       discard <| isDefEq lhs rhs
 
+/-- Replace each `∃` atom of the destination by its body at a fresh witness metavariable, with
+one reflective reordering per `∃` (no simp). -/
 partial def instantiateRightExists (goal : MVarId)
     (witnesses : Array MVarId := #[]) : TacticM (MVarId × Array MVarId) := do
   if ← isFrameInference goal then return (goal, witnesses)
-  let goal ← floatExists (← exposeGoal goal)
+  let goal ← exposeGoal goal
   if ← isFrameInference goal then return (goal, witnesses)
   goal.withContext do
   let some (source, destination) ← entailment? goal | return (goal, witnesses)
   let destination ← reducePostApplication destination
-  let (destFn, destArgs) :=
-    destination.consumeMData.withApp fun fn args => (fn, args)
-  unless destFn.isConstOf ``iexists && destArgs.size = 2 do
-    solveWitnessEqs destination witnesses
-    return (goal, witnesses)
-  let some u := destFn.constLevels!.head?
-    | throwError "could not determine the universe of {destination}"
-  let ι := destArgs[0]!
-  let J := destArgs[1]!
+  let atoms ← flatten destination
+  let some i := atoms.findIdx? (·.consumeMData.isAppOfArity ``iexists 2)
+    | solveWitnessEqs destination witnesses
+      return (goal, witnesses)
+  let atom := atoms[i]!.consumeMData
+  let some u := atom.getAppFn.constLevels!.head?
+    | throwError "could not determine the universe of {atom}"
+  let ι := atom.appFn!.appArg!
+  let J := atom.appArg!
   let witness ← mkFreshExprMVar ι
-  let newType ← mkAppM ``Entails #[source, ← Core.betaReduce (mkApp J witness)]
-  let newGoal ← mkFreshExprSyntheticOpaqueMVar newType
-  goal.assign (mkAppN (mkConst ``entails_exists_r [u]) #[ι, source, J, witness, newGoal])
+  let body ← Core.betaReduce (mkApp J witness)
+  let others := atoms.eraseIdx! i
+  let (reordered, newDestination, intro) :=
+    if others.isEmpty then (atom, body, fun newGoal =>
+      mkAppN (mkConst ``entails_exists_r [u]) #[ι, source, J, witness, newGoal])
+    else
+      let rest := mkStar others
+      (mkApp2 (mkConst ``sep) atom rest, mkApp2 (mkConst ``sep) body rest, fun newGoal =>
+        mkAppN (mkConst ``entails_exists_sep_r [u]) #[ι, source, rest, J, witness, newGoal])
+  let newGoal ← mkFreshExprSyntheticOpaqueMVar (mkApp2 (mkConst ``Entails) source newDestination)
+  let reorder := mkApp3 (mkConst ``entails_of_eq) reordered destination
+    (← proveEqAC reordered destination)
+  goal.assign (mkApp5 (mkConst ``entails_trans) source reordered destination
+    (intro newGoal) reorder)
   instantiateRightExists newGoal.mvarId! (witnesses.push witness.mvarId!)
 
 private partial def peelRequiredExists (required : Expr) :
@@ -115,22 +128,20 @@ partial def solveHimpl (discharger : Option Syntax.Tactic) (goal : MVarId) :
     | throwError "expected a separation-logic entailment"
   let source ← reducePostApplication source
   let destination ← reducePostApplication destination
-  let sourceAtoms ← flatten source
-
   if let some frameMVar := ← frameMVar? destination then
     let destArgs := destination.consumeMData.getAppArgs
     let original ← reducePostApplication destArgs[0]!
+    let sourceAtoms ← flatten source
     let solveWith (required weakening : Expr) (witnesses : Array MVarId) :
         TacticM Bool := do
-      let requiredAtoms ← flatten required
-      let some frameAtoms ← removeMatches sourceAtoms requiredAtoms
+      let some (pairs, frameAtoms) ← matchAll sourceAtoms (← flatten required)
         | return false
       for witness in witnesses do
         unless ← witness.isAssigned do return false
       let frame := mkStar frameAtoms
       frameMVar.assign frame
       let cancelled := mkApp2 (mkConst ``sep) (← instantiateMVars required) frame
-      let reorder ← mkAppM ``entails_of_eq #[← proveEqAC source cancelled]
+      let reorder ← mkAppM ``entails_of_eq #[← proveEqAC source cancelled pairs]
       let weaken ← mkAppM ``sep_mono
         #[← instantiateMVars weakening, ← mkAppM ``entails_refl #[frame]]
       goal.assign (← mkAppM ``entails_trans #[reorder, weaken])
@@ -160,60 +171,41 @@ partial def solveHimpl (discharger : Option Syntax.Tactic) (goal : MVarId) :
       throwError "required spatial assertions are not present in the precondition\
         \nsource: {source}\ndestination: {destination}"
   else
-    let (matched, unmatched, remaining) ← matchAtoms sourceAtoms (← flatten destination)
-    let mut deferredPure : Array Expr := #[]
-    let mut absorbing : Option Expr := none
-    for expected in unmatched do
-      if expected.consumeMData.isAppOfArity ``ipure 1 then
-        deferredPure := deferredPure.push expected
-      else if isWand expected then
-        if absorbing.isSome then
-          throwError "cannot handle more than one magic wand on the right-hand \
-            side\ndestination: {destination}"
-        absorbing := some expected
-      else
-        throwError "required spatial assertions are not present\
-          \nsource: {source}\ndestination: {destination}\nmissing: {expected}"
-    let mut generatedPure : Array (Expr × Expr) := #[]
-    for expected in deferredPure do
-      let proposition ← instantiateMVars expected.consumeMData.appArg!
-      generatedPure := generatedPure.push (expected, ← provePure discharger proposition)
-    let matchedAssertion := mkStar matched
-    let (matchedAssertion, sourceToMatched) ←
-      match absorbing with
-      | some absorbingAtom =>
-        let residual := mkStar remaining
-        let reordered := mkApp2 (mkConst ``sep) matchedAssertion residual
-        let reorderProof ← mkAppM ``entails_of_eq #[← proveEqAC source reordered]
-        let residualToAbsorber ← proveWand discharger residual absorbingAtom
-        let absorbProof ← mkAppM ``sep_mono
-          #[← mkAppM ``entails_refl #[matchedAssertion], residualToAbsorber]
-        pure (mkApp2 (mkConst ``sep) matchedAssertion absorbingAtom,
-          ← mkAppM ``entails_trans #[reorderProof, absorbProof])
-      | none =>
-        let discardedAtoms := remaining
-        let proof ←
-          if discardedAtoms.isEmpty then
-            mkAppM ``entails_of_eq #[← proveEqAC source matchedAssertion]
-          else
-            let discarded := mkStar discardedAtoms
-            let reordered := mkApp2 (mkConst ``sep) matchedAssertion discarded
-            let reorderProof ← mkAppM ``entails_of_eq #[← proveEqAC source reordered]
-            let eliminateProof ← mkAppM ``sep_elim_right
-              #[matchedAssertion, discarded]
-            mkAppM ``entails_trans #[reorderProof, eliminateProof]
-        pure (matchedAssertion, proof)
-    let mut current := matchedAssertion
-    let mut insertionProof ← mkAppM ``entails_refl #[current]
-    for (pureAtom, pureProof) in generatedPure do
-      let insertProof ← mkAppM ``pure_sep_intro #[current, pureProof]
-      insertionProof ← mkAppM ``entails_trans #[insertionProof, insertProof]
-      current := mkApp2 (mkConst ``sep) pureAtom current
-    let destination ← instantiateMVars destination
-    let eqProof ← proveEqAC current destination
-    let reorderProof ← mkAppM ``entails_of_eq #[eqProof]
-    let matchedToDestination ← mkAppM ``entails_trans #[insertionProof, reorderProof]
-    goal.assign (← mkAppM ``entails_trans #[sourceToMatched, matchedToDestination])
+    solveResidual discharger (← cancelGoal goal)
+
+/-- Prove the residual `left ⊢ right` of `cancelGoal`, where `right` may only have pure atoms,
+which are proved, and one magic wand, which absorbs `left` (dropped otherwise). -/
+partial def solveResidual (discharger : Option Syntax.Tactic) (goal : MVarId) :
+    TacticM Unit := goal.withContext do
+  let some (left, right) ← entailment? goal
+    | throwError "expected a separation-logic entailment"
+  let left ← reducePostApplication left
+  let right ← reducePostApplication right
+  let mut pures : Array Expr := #[]
+  let mut absorbing : Option Expr := none
+  for expected in ← flatten right do
+    if expected.consumeMData.isAppOfArity ``ipure 1 then
+      pures := pures.push expected
+    else if isWand expected then
+      if absorbing.isSome then
+        throwError "cannot handle more than one magic wand on the right-hand side\
+          \ndestination: {right}"
+      absorbing := some expected
+    else
+      throwError "required spatial assertions are not present\
+        \nsource: {left}\ndestination: {right}\nmissing: {expected}"
+  let pureProofs ← pures.mapM fun expected => do
+    provePure discharger (← instantiateMVars expected.consumeMData.appArg!)
+  let (current, proof) ← match absorbing with
+    | some wand => pure (wand, ← proveWand discharger left wand)
+    | none => pure (mkConst `Aeneas.SepLogic.emp, mkApp (mkConst ``entails_emp_r) left)
+  let mut current := current
+  let mut proof := proof
+  for expected in pures, pureProof in pureProofs do
+    proof ← mkAppM ``entails_trans #[proof, ← mkAppM ``pure_sep_intro #[current, pureProof]]
+    current := mkApp2 (mkConst ``sep) expected current
+  goal.assign (← mkAppM ``entails_trans
+    #[proof, ← mkAppM ``entails_of_eq #[← proveEqAC current right]])
 
 partial def solveGoal (discharger : Option Syntax.Tactic) (goal : MVarId) :
     TacticM Unit := do

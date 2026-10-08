@@ -7,26 +7,9 @@ public meta section
 
 namespace Aeneas.SepLogic
 
-open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic Normalize Common
+open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic Normalize Matchers
 
 namespace IFrame
-
-private def cancelGoal (goal : MVarId) : TacticM MVarId := goal.withContext do
-  let some (source, destination) ← entailment? goal | return goal
-  let source ← reducePostApplication source
-  let destination ← reducePostApplication destination
-  let (matched, unmatched, remaining) ← matchAtoms (← flatten source) (← flatten destination)
-  if matched.isEmpty then return goal
-  let frame := mkStar matched
-  let left := mkStar remaining
-  let right := mkStar unmatched
-  let residual ← mkFreshExprSyntheticOpaqueMVar (← mkAppM ``Entails #[left, right])
-  let leftEq ← proveEqAC source (← mkAppM ``sep #[frame, left])
-  let rightEq ← proveEqAC (← mkAppM ``sep #[frame, right]) destination
-  let framed ← mkAppM ``sep_mono #[← mkAppM ``entails_refl #[frame], residual]
-  let finish ← mkAppM ``entails_trans #[framed, ← mkAppM ``entails_of_eq #[rightEq]]
-  goal.assign (← mkAppM ``entails_trans #[← mkAppM ``entails_of_eq #[leftEq], finish])
-  return residual.mvarId!
 
 /-- Like `solveGoal`, but stops at what it cannot prove instead of failing; with
 `useHyps := false`, the goal is never rewritten with the hypotheses. -/
@@ -39,7 +22,7 @@ partial def simplifyGoal (goal : MVarId) (useHyps : Bool := true) : TacticM (Lis
   if ← isFrameInference goal then return [goal]
   let some goal ← pullAndRewrite goal useHyps | return []
   let (goal, witnesses) ← instantiateRightExists goal
-  let goal ← cancelGoal (← exposeGoal goal)
+  let goal ← cancelGoal (← exposeGoal goal) (unique := true)
   let wandGoal? ← goal.withContext do
     let some (source, destination) ← entailment? goal | return none
     let some (lemmaName, premise) ← wandIntro? source (← reducePostApplication destination)
