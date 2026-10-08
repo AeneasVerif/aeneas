@@ -2,6 +2,11 @@ module
 
 public import Mathlib.Data.Finmap
 
+/-! The heap model behind the separation logic: a finite map from locations (allocation id,
+offset) to dynamically typed cells `Σ α, α`, kept abstract behind `Heap`. Provides disjoint
+union (`compatible`, `∪`), the extension order `Sub`, deterministic allocation (`freshBase`), and
+typed `read`/`update`/`free` guarded by `contains`. -/
+
 public section
 
 namespace Aeneas.Std

@@ -1,6 +1,11 @@
 module
 public import Aeneas.Std.Heap
 public import Aeneas.Std.HeapLemmas
+
+/-! `IProp`: affine heap predicates (closed under heap extension), the assertions of the
+first-order separation logic: `⊢`, `emp`, `⌜P⌝`, `∗`, `∧`, `∃`, `∀`, `-∗`, `↦`, and their
+lifts to postconditions (`∗+`, `⊢+`, `-∗+`). No modalities, resource algebras or ghost state. -/
+
 @[expose] public section
 
 namespace Aeneas.SepLogic
