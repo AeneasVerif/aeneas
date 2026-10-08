@@ -383,6 +383,66 @@ theorem FromI128I128.from_val_eq (x : I128) : (FromI128I128.from x).val = x.val 
 end num -- core.convert.num
 
 @[expose, reducible]
+def FromUsizeBool : core.convert.From Usize Bool := {
+  «from» := fun b => ok (num.FromUsizeBool.from b)
+}
+
+@[expose, reducible]
+def FromU8Bool : core.convert.From U8 Bool := {
+  «from» := fun b => ok (num.FromU8Bool.from b)
+}
+
+@[expose, reducible]
+def FromU16Bool : core.convert.From U16 Bool := {
+  «from» := fun b => ok (num.FromU16Bool.from b)
+}
+
+@[expose, reducible]
+def FromU32Bool : core.convert.From U32 Bool := {
+  «from» := fun b => ok (num.FromU32Bool.from b)
+}
+
+@[expose, reducible]
+def FromU64Bool : core.convert.From U64 Bool := {
+  «from» := fun b => ok (num.FromU64Bool.from b)
+}
+
+@[expose, reducible]
+def FromU128Bool : core.convert.From U128 Bool := {
+  «from» := fun b => ok (num.FromU128Bool.from b)
+}
+
+@[expose, reducible]
+def FromIsizeBool : core.convert.From Isize Bool := {
+  «from» := fun b => ok (num.FromIsizeBool.from b)
+}
+
+@[expose, reducible]
+def FromI8Bool : core.convert.From I8 Bool := {
+  «from» := fun b => ok (num.FromI8Bool.from b)
+}
+
+@[expose, reducible]
+def FromI16Bool : core.convert.From I16 Bool := {
+  «from» := fun b => ok (num.FromI16Bool.from b)
+}
+
+@[expose, reducible]
+def FromI32Bool : core.convert.From I32 Bool := {
+  «from» := fun b => ok (num.FromI32Bool.from b)
+}
+
+@[expose, reducible]
+def FromI64Bool : core.convert.From I64 Bool := {
+  «from» := fun b => ok (num.FromI64Bool.from b)
+}
+
+@[expose, reducible]
+def FromI128Bool : core.convert.From I128 Bool := {
+  «from» := fun b => ok (num.FromI128Bool.from b)
+}
+
+@[expose, reducible]
 def FromUsizeU8 : core.convert.From Usize U8 := {
   «from» := fun x => ok (num.FromUsizeU8.from x)
 }
