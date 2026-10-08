@@ -89,6 +89,17 @@ partial def instantiateRightExists (goal : MVarId)
     (intro newGoal) reorder)
   instantiateRightExists newGoal.mvarId! (witnesses.push witness.mvarId!)
 
+/-- The shared start of `iframe` and `isimp` on an entailment that is not frame inference: pull
+the ∃ and ⌜⌝ of the precondition into the context, and replace the ∃ of the postcondition by
+witness metavariables (returned). `none` if this closed the goal. -/
+def prepareGoal (goal : MVarId) (useFacts := true) (decomposing := false) :
+    TacticM (Option (MVarId × Array MVarId)) := do
+  let some goal ← pullAndRewrite goal useFacts | return none
+  let (goal, witnesses) ← instantiateRightExists goal
+  let goal ← exposeGoal goal
+  let goal ← if decomposing then exposeGoal (← decompose goal) else pure goal
+  return some (goal, witnesses)
+
 private partial def peelRequiredExists (required : Expr) :
     MetaM (Expr × Expr × Array MVarId) := do
   let required ← reducePostApplication required
@@ -218,10 +229,7 @@ partial def solveGoal (discharger : Option Syntax.Tactic) (goal : MVarId) :
         let goal ← if decomposing then exposeGoal (← decompose goal) else pure goal
         solveHimpl discharger goal
       else
-        let some goal ← pullAndRewrite goal | return
-        let (goal, witnesses) ← instantiateRightExists goal
-        let goal ← exposeGoal goal
-        let goal ← if decomposing then exposeGoal (← decompose goal) else pure goal
+        let some (goal, witnesses) ← prepareGoal goal (decomposing := decomposing) | return
         solveHimpl discharger goal
         for witness in witnesses do
           unless ← witness.isAssigned do

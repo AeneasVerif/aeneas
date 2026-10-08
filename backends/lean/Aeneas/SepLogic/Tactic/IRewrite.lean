@@ -22,24 +22,25 @@ def rewriteAssertion (assertion : Expr) (rule : Expr) : TacticM (Expr × Expr) :
       throwError "irewrite expects an entailment `A ⊢ B` or an equality \
         `A = B`, got {ruleType}"
   let assertion ← reducePostApplication assertion
-  let some (pairs, restAtoms) ← matchAll (← flatten assertion) (← flatten lhs)
-    | throwError "irewrite: {lhs}\nis not part of\n{assertion}"
+  -- find `lhs` in `assertion` by frame inference: `assertion ⊢ lhs ∗ ?frame`
+  let frame ← mkFreshExprMVar (mkConst ``IProp)
+  let lhsFrame := mkApp2 (mkConst ``sep) lhs frame
+  let framing ← mkFreshExprSyntheticOpaqueMVar (mkApp2 (mkConst ``Entails) assertion lhsFrame)
+  try IFrame.solveHimpl none framing.mvarId!
+  catch _ => throwError "irewrite: {lhs}\nis not part of\n{assertion}"
   let lhs ← instantiateMVars lhs
   let rhs ← instantiateMVars rhs
   let entailment ← instantiateMVars entailment
+  let frame ← instantiateMVars frame
+  let lhsFrame := mkApp2 (mkConst ``sep) lhs frame
   let trans (a b c pab pbc : Expr) := mkApp5 (mkConst ``entails_trans) a b c pab pbc
-  if restAtoms.isEmpty then
-    let reorder := mkApp3 (mkConst ``entails_of_eq) assertion lhs
-      (← proveEqAC assertion lhs pairs)
-    return (rhs, trans assertion lhs rhs reorder entailment)
-  let rest := mkStar restAtoms
-  let reordered := mkApp2 (mkConst ``sep) lhs rest
-  let reorder := mkApp3 (mkConst ``entails_of_eq) assertion reordered
-    (← proveEqAC assertion reordered pairs)
-  let rewritten := mkApp2 (mkConst ``sep) rhs rest
-  let change := mkApp6 (mkConst ``sep_mono) lhs rhs rest rest entailment
-    (mkApp (mkConst ``entails_refl) rest)
-  return (rewritten, trans assertion reordered rewritten reorder change)
+  let rewritten := mkApp2 (mkConst ``sep) rhs frame
+  let change := mkApp6 (mkConst ``sep_mono) lhs rhs frame frame entailment
+    (mkApp (mkConst ``entails_refl) frame)
+  let proof := trans assertion lhsFrame rewritten (← instantiateMVars framing) change
+  unless frame.consumeMData.isConstOf `Aeneas.SepLogic.emp do return (rewritten, proof)
+  return (rhs, trans assertion rewritten rhs proof
+    (mkApp3 (mkConst ``entails_of_eq) rewritten rhs (mkApp (mkConst ``sep_emp_r_eq) rhs)))
 
 end IRewrite
 

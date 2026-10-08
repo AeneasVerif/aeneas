@@ -20,9 +20,8 @@ partial def simplifyGoal (goal : MVarId) (useHyps : Bool := true) : TacticM (Lis
     return ← simplifyGoal next useHyps
   unless target.isAppOfArity ``Entails 2 do return [goal]
   if ← isFrameInference goal then return [goal]
-  let some goal ← pullAndRewrite goal useHyps | return []
-  let (goal, witnesses) ← instantiateRightExists goal
-  let goal ← cancelGoal (← exposeGoal goal) (unique := true)
+  let some (goal, witnesses) ← prepareGoal goal useHyps | return []
+  let goal ← cancelGoal goal (unique := true)
   let wandGoal? ← goal.withContext do
     let some (source, destination) ← entailment? goal | return none
     let some (lemmaName, premise) ← wandIntro? source (← reducePostApplication destination)
