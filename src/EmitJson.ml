@@ -160,10 +160,7 @@ let full_lean_name (basename : string) : string =
 (** Extract the Rust source location (file + line range) from a span. *)
 let source_of_span (span : Meta.span) : source =
   let data = span.data in
-  let file =
-    match data.file.name with
-    | Virtual s | Local s | NotReal s -> s
-  in
+  let file = Meta.path_of_file_name data.file.name in
   { file; begin_line = data.beg_loc.line; end_line = data.end_loc.line }
 
 let function_entry_of_fun_decl (ctx : ExtractBase.extraction_ctx)
@@ -276,12 +273,12 @@ let trait_impl_entry_of_trait_impl (ctx : ExtractBase.extraction_ctx)
 let begin_file_if_enabled ~(filename : string) ~(namespace : string)
     ~(in_namespace : bool) : unit =
   if !Config.emit_json then begin
-    (* Record the Lean file relative to dest_dir. *)
-    let basename = Filename.basename filename in
+    (* The path of the file relative to [dest_dir], e.g. [Crate/A/Part1.lean].
+       If it is not under [dest_dir] (not expected), keep the basename. *)
     let rel =
-      match !Config.subdir with
-      | None -> basename
-      | Some subdir -> Filename.concat subdir basename
+      Option.value
+        (FileMapping.relative_to ~dir:state.dest_dir filename)
+        ~default:(Filename.basename filename)
     in
     state.current_lean_file <- rel;
     state.current_lean_namespace <- namespace;

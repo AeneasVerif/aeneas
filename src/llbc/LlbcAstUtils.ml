@@ -88,6 +88,86 @@ let crate_has_opaque_non_builtin_decls (k : crate) (filter_builtin : bool)
   crate_get_opaque_non_builtin_decls k filter_builtin type_decls fun_decls
   <> ([], [])
 
+(** Decides whether an item is a builtin, i.e. one that Aeneas has a model for,
+    so that we don't extract it.
+
+    This is figured out by looking in the [ExtractBuiltin] map for its kind. We
+    do not use {!crate_get_opaque_non_builtin_decls} because it only looks at
+    types and functions (missing globals, trait decls, and trait impls).
+
+    The type declarations Charon introduces for the builtin types (tuples,
+    [Box], [str]) are builtin too: like {!Interp.compute_contexts}, we recognize
+    them by their [BuiltinType] source. *)
+let item_is_builtin (k : crate) : item_id -> bool =
+  let open ExtractBuiltin in
+  let ctx = Charon.NameMatcher.ctx_from_crate k in
+  fun (id : item_id) : bool ->
+    (* Whether the item's name is in the given builtin map. *)
+    let name_in map =
+      match crate_get_item_meta k id with
+      | None -> false
+      | Some meta -> NameMatcherMap.mem ctx meta.name (map ())
+    in
+    match id with
+    | IdType tid -> (
+        match TypeDeclId.Map.find_opt tid k.type_decls with
+        | Some { src = BuiltinType _; _ } -> true
+        | _ -> name_in builtin_types_map)
+    | IdFun _ ->
+        (* A global's initializer function has the same name as the global, so
+           the initializer of a builtin global is builtin too. *)
+        name_in builtin_funs_map || name_in builtin_globals_map
+    | IdGlobal _ -> name_in builtin_globals_map
+    | IdTraitDecl _ -> name_in builtin_trait_decls_map
+    | IdTraitImpl iid -> (
+        match TraitImplId.Map.find_opt iid k.trait_impls with
+        | None -> false
+        | Some d -> (
+            match TraitDeclId.Map.find_opt d.impl_trait.id k.trait_decls with
+            | None -> false
+            | Some trait_decl ->
+                Option.is_some
+                  (NameMatcherMap.find_with_generics_opt ctx
+                     trait_decl.item_meta.name d.impl_trait.generics
+                     (builtin_trait_impls_map ()))))
+
+(** Whether an item is opaque, i.e. extracted as an axiom. An item whose
+    declaration can't be found is not opaque.
+
+    We look at the declaration itself rather than at [item_meta.opacity]: all
+    the ways of making an item opaque ([extern] blocks, [--opaque] patterns,
+    foreign items) end up as a missing body or field list, and that is also what
+    the emitter looks at when it decides to emit an axiom. *)
+let item_is_opaque (k : crate) (id : item_id) : bool =
+  (* A function is opaque if its body can't be translated. A multi-target
+     dispatch body counts as translatable, as in the translation itself (see
+     {!body_is_translatable}). *)
+  let fun_is_opaque (fid : FunDeclId.id) : bool =
+    match FunDeclId.Map.find_opt fid k.fun_decls with
+    | None -> false
+    | Some d -> not (body_is_translatable d.body)
+  in
+  match id with
+  | IdType tid -> (
+      (* A type is opaque if its fields or variants were not translated. *)
+      match TypeDeclId.Map.find_opt tid k.type_decls with
+      | None -> false
+      | Some d -> TypesUtils.type_decl_is_opaque d)
+  | IdFun fid -> fun_is_opaque fid
+  | IdGlobal gid -> (
+      (* A global's value is computed by its initializer function, so the global
+         is opaque if that function is. *)
+      match GlobalDeclId.Map.find_opt gid k.global_decls with
+      | None -> false
+      | Some d -> (
+          match init_fun_id_of_global d with
+          | None -> false
+          | Some fid -> fun_is_opaque fid))
+  | IdTraitDecl _ | IdTraitImpl _ ->
+      (* Charon ignores opacity annotations on trait declarations and
+         implementations, so they are never opaque. *)
+      false
+
 (** Strip trailing [PeTarget] elements from a name.
 
     Multi-target extraction appends [PeTarget] to per-target function names.

@@ -615,7 +615,8 @@ type extraction_ctx = {
   extracted_opaque : bool ref;
       (** Set to true if at some point we extract a definition which is opaque,
           meaning we generate an axiom. If yes, and in case the user does not
-          use the option [-split-files] we suggest it to the user. *)
+          use a split mode ([-split-files] or [-split-files-legacy]), we suggest
+          one to the user. *)
 }
 
 let extraction_ctx_to_fmt_env (ctx : extraction_ctx) : PrintPure.fmt_env =

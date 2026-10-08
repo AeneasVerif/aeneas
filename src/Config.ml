@@ -216,13 +216,22 @@ let always_deconstruct_adts_with_matches = ref false
 (** Controls whether we use fuel to control termination. *)
 let use_fuel = ref false
 
-(** Controls whether we split the generated definitions between different files
-    for the types, clauses and functions, or if we group them in one file. *)
+(** [-split-files-legacy]: split the generated definitions into one file per
+    kind (functions, types), instead of one file per Rust module like
+    [-split-files]. This is the only split mode for the backends other than
+    Lean. *)
+let split_files_legacy = ref false
+
+(** Split the generated definitions into one module per Rust source file,
+    mirroring the crate structure. Source files that form a usage cycle are
+    merged into a single module. Mutually exclusive with [split_files_legacy].
+*)
 let split_files = ref false
 
-(** Only for Lean: generate the library entry point, if the crate is split
-    between different files. The entry point is simply a file with the name of
-    the crate and which includes all the other files. *)
+(** Legacy flag, for Lean with [-split-files-legacy] only: generate an entry
+    point, a file named after the crate that imports [Crate.Funs]. It only
+    resolves when the files are in a [Crate/] directory ([-subdir Crate]), so it
+    is off by default. [-split-files] always writes its own entry point. *)
 let generate_lib_entry_point = ref false
 
 (** For Lean, controls whether we generate a lakefile or not. *)
@@ -230,6 +239,11 @@ let lean_gen_lakefile = ref false
 
 (** Only for Lean: emit a translation.json file alongside the Lean files. *)
 let emit_json = ref false
+
+(** Print the file-dependency graph and its strongly-connected components before
+    normal extraction. This previews which Rust source files would need to share
+    a Lean module when opting for multi-file extraction. *)
+let dump_file_graph = ref false
 
 (** If true, treat the unit functions (function taking no inputs and returning
     no outputs) as unit tests: evaluate them with the interpreter and check that

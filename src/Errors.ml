@@ -11,10 +11,7 @@ let log = Logging.errors_log
 let error_mutex = Mutex.create ()
 
 let span_data_to_string (span_data : Meta.span_data) =
-  let file =
-    match span_data.file.name with
-    | Virtual s | Local s | NotReal s -> s
-  in
+  let file = Meta.path_of_file_name span_data.file.name in
   let loc_to_string (l : Meta.loc) : string =
     string_of_int l.line ^ ":" ^ string_of_int l.col
   in
