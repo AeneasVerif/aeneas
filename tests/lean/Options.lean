@@ -309,32 +309,24 @@ def test_bool_then_false : Result Unit := do
 /- Unit test for [options::test_bool_then_false] -/
 #guard (test_bool_then_false).reducesTo ()
 
-/-- [options::ok_if_even]:
-    Source: 'tests/src/options.rs', lines 80:0-86:1 -/
-def ok_if_even
-  (x : Std.U32) : Result (core.result.Result Std.U32 Std.U32) := do
-  let i ← x % 2#u32
-  if i = 0#u32
-  then ok (core.result.Result.Ok x)
-  else ok (core.result.Result.Err x)
-
 /-- [options::test_result_unwrap_or_ok]:
-    Source: 'tests/src/options.rs', lines 89:0-91:1
+    Source: 'tests/src/options.rs', lines 81:0-84:1
     Visibility: public -/
 def test_result_unwrap_or_ok : Result Unit := do
-  let r ← ok_if_even 2#u32
-  let i ← lift (core.result.Result.unwrap_or r 0#u32)
+  let i ←
+    lift (core.result.Result.unwrap_or (core.result.Result.Ok 2#u32 :
+      core.result.Result Std.U32 Std.U32) 0#u32)
   massert (i = 2#u32)
 
 /- Unit test for [options::test_result_unwrap_or_ok] -/
 #guard (test_result_unwrap_or_ok).reducesTo ()
 
 /-- [options::test_result_unwrap_or_err]:
-    Source: 'tests/src/options.rs', lines 94:0-96:1
+    Source: 'tests/src/options.rs', lines 87:0-90:1
     Visibility: public -/
 def test_result_unwrap_or_err : Result Unit := do
-  let r ← ok_if_even 3#u32
-  let i ← lift (core.result.Result.unwrap_or r 0#u32)
+  let i ←
+    lift (core.result.Result.unwrap_or (core.result.Result.Err 3#u32) 0#u32)
   massert (i = 0#u32)
 
 /- Unit test for [options::test_result_unwrap_or_err] -/
