@@ -1502,8 +1502,11 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
       Note that we need the [reducible] attribute in Lean, otherwise Lean sometimes
       doesn't manage to typecheck the expressions when it needs to coerce the type. *)
    let reducible_attr =
-     if is_tuple_struct_one_or_zero_field && backend () = Lean then
-       [ "reducible" ]
+     if
+       is_tuple_struct_one_or_zero_field
+       && backend () = Lean
+       && not !Config.generate_has_layout
+     then [ "reducible" ]
      else []
    in
    (* The attribute to automatically generate the [read_discriminant] function *)
@@ -2152,6 +2155,176 @@ let extract_type_decl_record_field_projectors_simp_lemmas (ctx : extraction_ctx)
 
         FieldId.iteri extract_field_proj_simp_lemma fields
 
+let extract_type_decl_has_layout (ctx : extraction_ctx) (fmt : F.formatter)
+    (kind : decl_kind) (decl : type_decl) : unit =
+  let span = decl.item_meta.span in
+  [%sanity_check] span (backend () = Lean);
+  let is_rec = decl_is_from_rec_group kind in
+  let has_unsupported_generics =
+    decl.generics.const_generics <> [] || decl.generics.trait_clauses <> []
+  in
+  let should_extract =
+    (not is_rec)
+    && (not has_unsupported_generics)
+    &&
+    match decl.kind with
+    | Opaque | Enum [] -> false
+    | Struct _ | Enum _ -> true
+  in
+  if should_extract then (
+    let ctx, type_params, _, _ =
+      ctx_add_generic_params span decl.item_meta.name Item decl.llbc_generics
+        decl.generics ctx
+    in
+    let def_name = ctx_get_local_type span decl.def_id ctx in
+    let is_tuple_struct =
+      TypesUtils.type_decl_from_decl_id_is_tuple_struct
+        ctx.trans_ctx.type_ctx.type_infos decl.def_id
+    in
+    let print_field_ty (f : field) =
+      F.pp_print_string fmt "HasLayout.ty ";
+      extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:true f.field_ty
+    in
+    let print_tuple_ty (fields : field list) =
+      F.pp_print_string fmt ".tuple [";
+      Collections.List.iter_link
+        (fun () -> F.pp_print_string fmt ", ")
+        print_field_ty fields;
+      F.pp_print_string fmt "]"
+    in
+    let field_vars prefix fields =
+      List.mapi (fun i _ -> prefix ^ string_of_int i) fields
+    in
+    F.pp_print_space fmt ();
+    F.pp_open_vbox fmt ctx.indent_incr;
+    F.pp_open_hovbox fmt ctx.indent_incr;
+    F.pp_print_string fmt "instance";
+    List.iter
+      (fun tp ->
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt ("{" ^ tp ^ " : Type}"))
+      type_params;
+    List.iter
+      (fun tp ->
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt ("[HasLayout " ^ tp ^ "]"))
+      type_params;
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt ":";
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "HasLayout ";
+    if type_params = [] then F.pp_print_string fmt def_name
+    else (
+      F.pp_print_string fmt ("(" ^ def_name);
+      List.iter (fun tp -> F.pp_print_string fmt (" " ^ tp)) type_params;
+      F.pp_print_string fmt ")");
+    F.pp_print_string fmt " where";
+    F.pp_close_box fmt ();
+    (match decl.kind with
+    | Struct fields ->
+        F.pp_print_space fmt ();
+        F.pp_open_hovbox fmt ctx.indent_incr;
+        F.pp_print_string fmt "ty := ";
+        print_tuple_ty fields;
+        F.pp_close_box fmt ();
+        let xs = field_vars "x" fields in
+        let vs = field_vars "v" fields in
+        F.pp_print_space fmt ();
+        F.pp_open_hovbox fmt ctx.indent_incr;
+        F.pp_print_string fmt "embed := λ ";
+        if is_tuple_struct then
+          match (xs, fields) with
+          | [], _ -> F.pp_print_string fmt "_"
+          | [ x ], [ f ] ->
+              F.pp_print_string fmt ("(" ^ x ^ " : ");
+              extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:false
+                f.field_ty;
+              F.pp_print_string fmt ")"
+          | _ -> F.pp_print_string fmt ("(" ^ String.concat ", " xs ^ ")")
+        else F.pp_print_string fmt ("⟨" ^ String.concat ", " xs ^ "⟩");
+        F.pp_print_string fmt
+          (" => HasLayout.mkTuple ["
+          ^ String.concat ", " (List.map (fun x -> "HasLayout.embed " ^ x) xs)
+          ^ "]");
+        F.pp_close_box fmt ();
+        F.pp_print_space fmt ();
+        F.pp_open_hovbox fmt ctx.indent_incr;
+        let h_pat = if vs = [] then "_" else "h" in
+        F.pp_print_string fmt
+          ("retract := λ | ⟨.tuple [" ^ String.concat ", " vs ^ "], " ^ h_pat
+         ^ "⟩ => ");
+        let retracted =
+          List.mapi
+            (fun i _ -> "HasLayout.retract (h.field " ^ string_of_int i ^ ")")
+            fields
+        in
+        if is_tuple_struct then
+          match (retracted, fields) with
+          | [], _ -> F.pp_print_string fmt "()"
+          | [ r ], [ f ] ->
+              F.pp_print_string fmt ("(" ^ r ^ " : ");
+              extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:false
+                f.field_ty;
+              F.pp_print_string fmt ")"
+          | _ -> F.pp_print_string fmt ("(" ^ String.concat ", " retracted ^ ")")
+        else F.pp_print_string fmt ("⟨" ^ String.concat ", " retracted ^ "⟩");
+        F.pp_close_box fmt ()
+    | Enum variants ->
+        F.pp_print_space fmt ();
+        F.pp_open_hovbox fmt ctx.indent_incr;
+        F.pp_print_string fmt "ty := .enum [";
+        Collections.List.iter_link
+          (fun () -> F.pp_print_string fmt ", ")
+          (fun (v : variant) -> print_tuple_ty v.fields)
+          variants;
+        F.pp_print_string fmt "]";
+        F.pp_close_box fmt ();
+        F.pp_print_space fmt ();
+        F.pp_open_vbox fmt ctx.indent_incr;
+        F.pp_print_string fmt "embed := λ";
+        VariantId.iteri
+          (fun vid (v : variant) ->
+            let d = VariantId.to_int vid in
+            let cons_name = ctx_get_variant span (TAdtId decl.def_id) vid ctx in
+            let xs = field_vars "x" v.fields in
+            F.pp_print_space fmt ();
+            F.pp_open_hovbox fmt ctx.indent_incr;
+            F.pp_print_string fmt ("| " ^ cons_name);
+            List.iter (fun x -> F.pp_print_string fmt (" " ^ x)) xs;
+            F.pp_print_string fmt
+              (" => HasLayout.mkVariant " ^ string_of_int d ^ " (.tuple ["
+              ^ String.concat ", "
+                  (List.map (fun x -> "HasLayout.embed " ^ x) xs)
+              ^ "])");
+            F.pp_close_box fmt ())
+          variants;
+        F.pp_close_box fmt ();
+        F.pp_print_space fmt ();
+        F.pp_open_vbox fmt ctx.indent_incr;
+        F.pp_print_string fmt "retract := λ";
+        VariantId.iteri
+          (fun vid (v : variant) ->
+            let d = VariantId.to_int vid in
+            let cons_name = ctx_get_variant span (TAdtId decl.def_id) vid ctx in
+            let vs = field_vars "v" v.fields in
+            let h_pat = if vs = [] then "_" else "h" in
+            F.pp_print_space fmt ();
+            F.pp_open_hovbox fmt ctx.indent_incr;
+            F.pp_print_string fmt
+              ("| ⟨.variant " ^ string_of_int d ^ " (.tuple ["
+             ^ String.concat ", " vs ^ "]), " ^ h_pat ^ "⟩ => " ^ cons_name);
+            List.iteri
+              (fun i _ ->
+                F.pp_print_string fmt
+                  (" (HasLayout.retract (h.vfield " ^ string_of_int i ^ "))"))
+              v.fields;
+            F.pp_close_box fmt ())
+          variants;
+        F.pp_close_box fmt ()
+    | Opaque -> [%internal_error] span);
+    F.pp_close_box fmt ();
+    F.pp_print_break fmt 0 0)
+
 (** Extract extra information for a type (e.g., [Arguments] instructions in
     Coq).
 
@@ -2172,4 +2345,6 @@ let extract_type_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
         extract_type_decl_record_field_projectors ctx fmt kind decl;
         if backend () = Lean then
           extract_type_decl_record_field_projectors_simp_lemmas ctx fmt kind
-            decl)
+            decl);
+      if backend () = Lean && !Config.generate_has_layout then
+        extract_type_decl_has_layout ctx fmt kind decl
