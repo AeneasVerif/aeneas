@@ -75,7 +75,7 @@ def alloc.vec.FromIteratorVec.from_iter
   "core::iter::traits::collect::FromIterator<alloc::vec::Vec<@T>, @T>"]
 def core.iter.traits.collect.FromIteratorVec (T : Type _) :
   core.iter.traits.collect.FromIterator (alloc.vec.Vec T) T := {
-  from_iter := fun {I : Type _} {IntoIter : Type _}
+  from_iter := fun {I : Type} {IntoIter : Type}
     (IntoIteratorInst : core.iter.traits.collect.IntoIterator I T IntoIter) =>
     alloc.vec.FromIteratorVec.from_iter IntoIteratorInst
 }

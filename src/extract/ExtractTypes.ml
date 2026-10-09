@@ -1372,8 +1372,9 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
               F.pp_print_space fmt ();
               F.pp_print_string fmt ":";
               F.pp_print_space fmt ();
-              (* ponytail: generic trait methods stay in [Type]; give the trait
-                 structure a named universe if they must accept fn items *)
+              (* Generic trait-method parameters are bound inside a structure
+                 field, where Lean can't infer a universe for [Type _]: they
+                 stay in [Type]. *)
               F.pp_print_string fmt (type_keyword ~poly:(origin = Item) span);
               (* ) *)
               right_bracket expl)

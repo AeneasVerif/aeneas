@@ -9,7 +9,9 @@ public import Aeneas.Std.Scalar.EqOrd
 public import Aeneas.Std.Scalar.CheckedOps
 public import Aeneas.Std.Core.Core
 -- Generic models below bind values of different universes: they need the
--- universe-heterogeneous `do` elaborator.
+-- universe-heterogeneous `do` elaborator. Note that this changes the `do` of every module
+-- importing this one: their `do` blocks elaborate to `Std.bind` (simp with `bind_ok`, ...)
+-- rather than `Bind.bind` (`bind_tc_ok`, ...), like extracted code.
 public import Aeneas.Do.Elab
 public section
 
@@ -59,7 +61,7 @@ structure core.iter.adapters.rev.Rev (T : Type u) where
     The real Rust struct also carries `index`/`len` fields used for instance
     by the `TrustedRandomAccess` specialisation; for now we omit them. -/
 @[rust_type "core::iter::adapters::zip::Zip"]
-structure core.iter.adapters.zip.Zip (A : Type u) (B : Type u) where
+structure core.iter.adapters.zip.Zip (A : Type u) (B : Type v) where
   mk ::
   fst : A
   snd : B
@@ -200,7 +202,7 @@ def core.iter.traits.collect.IntoIterator.Blanket {I : Type _} {Item : Type _}
 
 @[rust_fun "core::iter::traits::iterator::Iterator::collect"]
 def core.iter.traits.iterator.Iterator.collect.default
-  {Self : Type _} {B : Type _} {Item : Type _} (IteratorInst :
+  {Self : Type} {B : Type _} {Item : Type _} (IteratorInst :
   core.iter.traits.iterator.Iterator Self Item)
   (collectFromIteratorInst : core.iter.traits.collect.FromIterator B Item) :
   Self → Result B :=

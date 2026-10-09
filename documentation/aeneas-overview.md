@@ -81,7 +81,7 @@ fn choose<'a, T>(b: bool, x: &'a mut T, y: &'a mut T) -> &'a mut T {
 
 **Lean (generated):**
 ```lean
-def choose {T : Type} (b : Bool) (x : T) (y : T) :
+def choose {T : Type _} (b : Bool) (x : T) (y : T) :
     Result (T × (T → T × T)) :=
   if b
   then ok (x, fun z => (z, y))
@@ -133,11 +133,13 @@ Each `←` is a monadic bind: if the addition overflows, the whole computation
 short-circuits to `fail`.
 
 Type parameters are extracted as `Type _` (e.g. `def id {T : Type _} (x : T) : Result T`), so
-generic code also accepts types outside `Type`, such as function items (`A → Result B`). Aeneas'
-`do` elaborator (`Aeneas.Do.Elab`) binds with the universe-polymorphic `Std.bind`, so a `do` block
-may bind values of different universes. Two exceptions stay in `Type`: the type parameters of
-generic trait methods (they are bound inside a structure field) and the result sort of opaque
-types (`axiom Foo : Type`).
+that generic code keeps working when `Result` lives in a higher universe than its argument (see
+#1352): function items (`A → Result B`) are then outside `Type`. Aeneas' `do` elaborator
+(`Aeneas.Do.Elab`) binds with the universe-polymorphic `Std.bind`, so a `do` block may bind
+values of different universes. Some types stay in `Type`: the type parameters of generic trait
+methods and the associated types that are trait-structure fields (both are bound inside a
+structure field, where Lean can't infer a universe), and the result sort of opaque types
+(`axiom Foo : Type`).
 
 ### 2.4 Loop Translation
 
