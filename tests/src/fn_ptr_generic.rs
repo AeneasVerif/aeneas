@@ -1,7 +1,9 @@
 //@ [!lean] skip
 //! Generic code instantiated with function items. A function item is
-//! extracted as `A → Result B`, so generic type binders must accept types
-//! outside of `Type 0` (`Result` may live in a higher universe).
+//! extracted as `A → Result B`; once `Result` lives in a higher universe than
+//! its argument (see #1352), this type is not in `Type`, so generic type
+//! binders must be universe-polymorphic. The universe-polymorphism itself is
+//! checked in `tests/lean/FnPtrGenericUniverses.lean`.
 //!
 //! Note: function pointer types (`fn(u8) -> u8`) are not supported by Aeneas;
 //! we use function items instead.
@@ -45,11 +47,15 @@ pub fn use_id(x: u8) -> u8 {
     apply(id(incr), x)
 }
 
-pub fn use_some(x: u8) -> Option<u8> {
-    match Some(incr) {
-        Some(f) => Some(apply(f, x)),
-        None => None,
+fn unwrap_or<T>(o: Option<T>, d: T) -> T {
+    match o {
+        Some(x) => x,
+        None => d,
     }
+}
+
+pub fn use_some(x: u8) -> u8 {
+    apply(unwrap_or(Some(incr), incr), x)
 }
 
 pub fn use_holder(x: u8) -> u8 {

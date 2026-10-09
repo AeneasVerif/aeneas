@@ -50,7 +50,7 @@ the model must be provided in `FunsExternal.lean` (or `TypesExternal.lean` respe
 ### The backward continuation pattern
 When a Rust function returns a mutable borrow, the Lean translation returns a tuple `(value, backward_fn)`:
 ```lean
-def choose {T : Type} (b : Bool) (x : T) (y : T) :
+def choose {T : Type _} (b : Bool) (x : T) (y : T) :
   Result (T × (T → T × T)) :=
   if b then ok (x, fun z => (z, y))
   else ok (y, fun z => (x, z))
