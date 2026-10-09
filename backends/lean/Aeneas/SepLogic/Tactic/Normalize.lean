@@ -318,9 +318,9 @@ private partial def mapAtoms (unfold : Bool) (frame : Option Expr)
   atom
 
 /-- Move the existentials and pure facts of the precondition of `goal` (an entailment, possibly
-behind definitions) into the context, without simp: each round either opens the first `∃` atom
-(existentials come before the pure facts, wherever they are), replacing it by its body in place,
-or removes the `⌜P⌝` atoms, from left to right; the rest of the precondition is unchanged. At
+behind definitions) into the context, without simp, from left to right: each round either removes
+the `⌜P⌝` atoms before the first `∃`, or, if there are none, opens that `∃`, replacing it by its
+body in place; the rest of the precondition is unchanged. At
 most `limit` items are moved. With `unfold`, definitions hiding connectives are looked into; the
 atom `frame` is never looked into; with `names`, the binder names (`h` for the facts) stay
 accessible. -/
@@ -345,7 +345,10 @@ partial def pullLeft (goal : MVarId) (unfold := true) (frame : Option Expr := no
   let next (newSource : Expr) := mkEntailmentLike target source destination newSource
   let is (name : Name) (arity : Nat) (atom : Expr) :=
     frame != some atom.consumeMData && atom.consumeMData.isAppOfArity name arity
-  if let some i := atoms.findIdx? (is ``iexists 2) then
+  let firstExists := atoms.findIdx? (is ``iexists 2)
+  let selected := (Array.range atoms.size).filter fun k =>
+    is ``ipure 1 atoms[k]! && firstExists.all (k < ·)
+  if let some i := firstExists.filter (fun _ => selected.isEmpty) then
     let atom := atoms[i]!.consumeMData
     let some u := atom.getAppFn.constLevels!.head?
       | throwError "could not determine the universe of {atom}"
@@ -370,7 +373,6 @@ partial def pullLeft (goal : MVarId) (unfold := true) (frame : Option Expr := no
       (mkAppN (mkConst ``entails_exists_sep_l [u]) #[ι, rest, destination, J, opened]))
     let (_, newGoal) ← newGoal.mvarId!.intro1P
     return ← pullLeft newGoal unfold frame names (limit.map (· - 1))
-  let selected := (Array.range atoms.size).filter (is ``ipure 1 atoms[·]!)
   let selected := match limit with | some n => selected.take n | none => selected
   if selected.isEmpty then return goal
   let props := selected.map (atoms[·]!.consumeMData.appArg!)

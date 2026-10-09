@@ -273,7 +273,7 @@ example (p : MutRawPtr Nat) (value : Nat) : ¬ (emp ⊢ p ↦ value) := by
 example (p : MutRawPtr Nat) : ¬ (⦃ emp ⦄ read p ⦃ _ => emp⦄) := by
   intro hTriple
   rw [ispec_iff] at hTriple
-  have hSpec := hTriple emp ∅ ((sep_emp_r emp).mpr ∅ trivial)
+  have hSpec := hTriple emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
   simp only [Aeneas.Std.RawPtr.read, Result.guardedModify] at hSpec
   obtain ⟨hReadable, -⟩ := hSpec.vis_view
   exact RawPtr.not_contains_empty p hReadable.contains
@@ -296,7 +296,7 @@ example (Q1 Q2 : IPost Nat) : Q1 ∗+ (Q1 -∗+ Q2) ⊢+ Q2 := postWand_cancel Q
 
 example (p : MutRawPtr Nat) :
     iprop(∃ n, ⌜0 < n⌝ ∗ p ↦ n) ⊢ iprop(∃ m, p ↦ (m + 1)) := by
-  iintro_entail
+  iintro
   rename_i x hx
   refine entails_exists_r (x - 1) ?_
   rw [show x - 1 + 1 = x by agrind]
@@ -343,7 +343,7 @@ example (p q : MutRawPtr Nat) (x : Nat) :
   unfold touchThenSet
   apply Aeneas.Std.WP.ispec_bind (m := touchAny p) (touchAny.spec p)
   case hPre =>
-    fail_if_success iintro_entail
+    fail_if_success iintro
     iframe
   case hNext =>
     intro _
@@ -397,7 +397,7 @@ example (p : MutRawPtr Nat) (n : Nat) (b : Bool) (hb : b = true) (hguard : b = t
   step* -grind -threadGrindState
 
 example (q : MutRawPtr Nat) (x y : Nat) :
-    q ↦* [x, y] ⊣⊢ q ↦ x ∗ (q.shift 1) ↦ y :=
+    (q ↦* [x, y]) = iprop(q ↦ x ∗ (q.shift 1) ↦ y) :=
   RawPtr.pointsToRange_append q [x] [y]
 
 example (q : MutRawPtr Nat) (i : Nat) : (q.shift i).base = q.base := rfl
@@ -409,7 +409,7 @@ example (q : MutRawPtr Nat) (x y : Nat) : q ↦ x ∗ q ↦ y ⊢ ⌜False⌝ :=
   pointsTo_exclusive q x y
 
 example (q : MutRawPtr Nat) (x y : Nat) : q ↦ x ∗ (q.shift 1) ↦ y ⊢ q ↦* [x, y] :=
-  (RawPtr.pointsToRange_append q [x] [y]).mpr
+  entails_of_eq (RawPtr.pointsToRange_append q [x] [y]).symm
 
 def slicePtrWrite (s : Aeneas.Std.Slice Nat) : Result (Nat × Aeneas.Std.Slice Nat) := do
   let (p, s) ← s.as_mut_ptr
@@ -427,21 +427,5 @@ theorem slicePtrWrite.spec (s : Aeneas.Std.Slice Nat) (h : 1 < s.length) :
   step with MutRawPtr.write.spec_range p s.val 1 42 (by simpa using h)
   step with RawPtr.read.spec_range p (s.val.set 1 42) 1 (by simpa using h)
   step*
-
-def castRead (p : MutRawPtr Aeneas.Std.U32) : Result Aeneas.Std.U32 := do
-  let q ← RawPtr.cast_scalar Aeneas.Std.I32 .Const p
-  let r ← RawPtr.cast_scalar Aeneas.Std.U32 .Const q
-  r.read
-
-example (p : MutRawPtr Aeneas.Std.U32) (x : Aeneas.Std.U32) :
-    ⦃ p ↦ x ⦄ castRead p ⦃ r => ⌜r = x⌝ ∗ p ↦ x⦄ := by
-  unfold castRead
-  step*
-
-example (p : MutRawPtr Aeneas.Std.U32) :
-    RawPtr.cast_scalar Aeneas.Std.U8 .Mut p = .fail .undef := by
-  rw [RawPtr.cast_scalar, if_neg]
-  intro hSize
-  simpa using congrArg Aeneas.Std.UScalar.val hSize
 
 end SepLogic

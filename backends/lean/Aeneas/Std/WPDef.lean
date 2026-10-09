@@ -103,10 +103,6 @@ open Std WP Result
 # Hoare triple notation and elaboration
 -/
 
-syntax:lead (name := specSyntax)
-  atomic("(" term:lead ")" " ⦃" "⇓ ") term+ " => " term " ⦄" : term
-syntax:lead (name := specSyntaxPred)
-  atomic("(" term:lead ")" " ⦃" "⇓ ") term " ⦄" : term
 syntax:lead (name := slSpecSyntax)
   "⦃ " term " ⦄" ppLine term:lead ppLine
   "⦃ " term+ " => " term " ⦄" : term
@@ -202,34 +198,21 @@ private meta def mkPostWith (curryName uncurryName : Name)
   mkPostSyntaxWith curryName uncurryName body 0 (← expandBinders binders.toList)
 
 macro_rules
-  | `(($m) ⦃⇓ $result => $Q⦄) => do
-      let post ← mkPostWith ``Aeneas.Std.WP.uncurry' ``Aeneas.Std.uncurry #[result] Q
-      `(spec $m $post)
   | `(⦃$P⦄ $m ⦃ $result => $Q⦄) => do
       let post ←
         mkPostWith ``Aeneas.Std.WP.uncurry' ``Aeneas.Std.uncurry #[result] (← `(iprop($Q)))
       `(ispec iprop($P) $m $post)
 
 macro_rules
-  | `(($m) ⦃⇓ $result $results:term* => $Q⦄) => do
-      let post ← mkPostWith ``Aeneas.Std.WP.uncurry' ``Aeneas.Std.uncurry
-        (#[result] ++ results) Q
-      `(spec $m $post)
   | `(⦃$P⦄ $m ⦃ $result $results:term* => $Q⦄) => do
       let post ← mkPostWith ``Aeneas.Std.WP.uncurry' ``Aeneas.Std.uncurry
         (#[result] ++ results) (← `(iprop($Q)))
       `(ispec iprop($P) $m $post)
 
 macro_rules
-  | `(($m) ⦃⇓ $Q:term⦄) =>
-      `(spec $m (fun _ => $Q))
   | `(⦃$P⦄ $m ⦃ $Q⦄) =>
       `(ispec iprop($P) $m (fun _ => iprop($Q)))
 
-syntax:lead (name := dspecSyntax)
-  atomic("(" term:lead ")" " ⦃" "⇓ ") term+ " => " term " ⦄div" : term
-syntax:lead (name := dspecSyntaxPred)
-  atomic("(" term:lead ")" " ⦃" "⇓ ") term " ⦄div" : term
 syntax:lead (name := slDspecSyntax)
   "⦃ " term " ⦄" ppLine term:lead ppLine
   "⦃ " term+ " => " term " ⦄div" : term
@@ -237,27 +220,18 @@ syntax:lead (name := slDspecSyntaxPred)
   "⦃ " term " ⦄" ppLine term:lead ppLine "⦃ " term " ⦄div" : term
 
 macro_rules
-  | `(($m) ⦃⇓ $result => $Q⦄div) => do
-      let post ← mkPostWith ``Aeneas.Std.WP.uncurry' ``Aeneas.Std.uncurry #[result] Q
-      `(dspec $m $post)
   | `(⦃$P⦄ $m ⦃ $result => $Q⦄div) => do
       let post ←
         mkPostWith ``Aeneas.Std.WP.uncurry' ``Aeneas.Std.uncurry #[result] (← `(iprop($Q)))
       `(dispec iprop($P) $m $post)
 
 macro_rules
-  | `(($m) ⦃⇓ $result $results:term* => $Q⦄div) => do
-      let post ← mkPostWith ``Aeneas.Std.WP.uncurry' ``Aeneas.Std.uncurry
-        (#[result] ++ results) Q
-      `(dspec $m $post)
   | `(⦃$P⦄ $m ⦃ $result $results:term* => $Q⦄div) => do
       let post ← mkPostWith ``Aeneas.Std.WP.uncurry' ``Aeneas.Std.uncurry
         (#[result] ++ results) (← `(iprop($Q)))
       `(dispec iprop($P) $m $post)
 
 macro_rules
-  | `(($m) ⦃⇓ $Q:term⦄div) =>
-      `(dspec $m (fun _ => $Q))
   | `(⦃$P⦄ $m ⦃ $Q⦄div) =>
       `(dispec iprop($P) $m (fun _ => iprop($Q)))
 

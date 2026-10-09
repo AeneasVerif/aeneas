@@ -6,7 +6,7 @@ public meta import AeneasMeta.Simp
 /-! `iintro` moves the `∃` witnesses and `⌜P⌝` facts of a precondition into the Lean context
 (optionally through `rintro` patterns), keeping the rest of the `∗` tree and folded definitions.
 Implemented by `Normalize.pullLeft`: one round per binder, re-flattening and reordering with a
-reflective AC proof; variants (`_shallow`, `_keep`, `_entail`) toggle unfolding and copying. Same
+reflective AC proof; variants (`_shallow`, `_keep`) toggle unfolding and copying. Same
 role as CFML `xpull` / Iris `iIntros "[%x %H]"`, without Iris's named hypothesis context. -/
 
 public section
@@ -29,17 +29,27 @@ namespace Aeneas.SepLogic
 
 open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic Normalize
 
-/-- Move the existentials and pure facts of an entailment's precondition into the context,
-leaving the rest of the precondition as it is. The existentials come first, wherever they are
-(an `∃` is opened before any pure fact, even one to its left), then the pure facts, from left to
-right. Without patterns, moves all of them, with inaccessible names; with patterns, moves one for
-each pattern. -/
+/-- Move the existentials and pure facts of an entailment's precondition (`H ⊢ H'` or `Q ⊢+ Q'`)
+into the context, from left to right, leaving the rest of the precondition as it is. Without
+patterns, moves all of them, with inaccessible names; with patterns, moves one for each pattern.
+Refuses frame-inference goals: what it extracts would be lost from the frame, which was created in
+an outer context. -/
 syntax (name := iIntro) "iintro" (ppSpace colGt rintroPat)* : tactic
 
 elab_rules : tactic
-  | `(tactic| iintro $ps:rintroPat*) => withMainContext do
+  | `(tactic| iintro $ps:rintroPat*) => Tactic.focus do withMainContext do
+    let goal ← getMainGoal
+    if ← isFrameInference goal then
+      throwError "iintro: this is a frame-inference goal. Extracting anything from its \
+        left-hand side would lose it from the frame, which was created in an outer context; \
+        use `iintro` at the level of the specification instead."
+    let goal ← if (← instantiateMVars (← goal.getType)).consumeMData.isAppOfArity ``postEntails 3
+      then pure (← goal.intro1P).2 else pure goal
+    let target ← goal.withContext do instantiateMVars (← goal.getType)
+    if (← goal.withContext (exposeEntailment? target)).isNone then
+      throwError "iintro: the goal is not a separation-logic entailment:\n{target}"
     let limit := if ps.isEmpty then none else some ps.size
-    let (goal, new) ← pullLeftFVars (← getMainGoal) (limit := limit)
+    let (goal, new) ← pullLeftFVars goal (limit := limit)
     if ps.isEmpty then
       replaceMainGoal [goal]
       return
@@ -116,17 +126,5 @@ elab "iintro_keep" : tactic => withMainContext do
   let next ← mkFreshExprSyntheticOpaqueMVar newType
   goal.assign (← keepPures source destination next #[] steps.toList)
   replaceMainGoal [(← next.mvarId!.introNP props.size).2]
-
-/-- Move the existentials and pure facts of an `Entails`/`postEntails` precondition into the
-context. -/
-elab "iintro_entail" : tactic => Tactic.focus do withMainContext do
-  let goal ← getMainGoal
-  if ← isFrameInference goal then
-    throwError "iintro_entail: this is a frame-inference goal.  Extracting anything \
-      from its left-hand side would lose it from the frame, which was created in \
-      an outer context; pull at the level of the specification instead, with `iintro`."
-  let goal ← if (← instantiateMVars (← goal.getType)).consumeMData.isAppOfArity ``postEntails 3
-    then pure (← goal.intro1P).2 else pure goal
-  replaceMainGoal [← pullLeft goal]
 
 end Aeneas.SepLogic

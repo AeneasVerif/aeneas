@@ -19,8 +19,8 @@ theorem entails_of_eq {P Q : IProp} (hEq : P = Q) : P ⊢ Q := by
   subst Q
   exact entails_refl P
 
-theorem bientails_eq {P Q : IProp} (hEquiv : P ⊣⊢ Q) : P = Q :=
-  IProp.ext fun h => ⟨hEquiv.mp h, hEquiv.mpr h⟩
+theorem entails_antisymm {P Q : IProp} (hPQ : P ⊢ Q) (hQP : Q ⊢ P) : P = Q :=
+  IProp.ext fun h => ⟨hPQ h, hQP h⟩
 
 theorem iand_intro {H P Q : IProp} (hP : H ⊢ P) (hQ : H ⊢ Q) :
     H ⊢ iprop(P ∧ Q) :=
@@ -36,24 +36,24 @@ theorem iand_mono {P₁ P₂ Q₁ Q₂ : IProp} (hP : P₁ ⊢ P₂) (hQ : Q₁ 
     iprop(P₁ ∧ Q₁) ⊢ iprop(P₂ ∧ Q₂) :=
   iand_intro (entails_trans iand_elim_left hP) (entails_trans iand_elim_right hQ)
 
-theorem iand_comm (P Q : IProp) : iprop(P ∧ Q) ⊣⊢ iprop(Q ∧ P) :=
-  ⟨iand_intro iand_elim_right iand_elim_left,
-   iand_intro iand_elim_right iand_elim_left⟩
+theorem iand_comm (P Q : IProp) : iprop(P ∧ Q) = iprop(Q ∧ P) :=
+  entails_antisymm (iand_intro iand_elim_right iand_elim_left)
+    (iand_intro iand_elim_right iand_elim_left)
 
-theorem iand_assoc (P Q R : IProp) : iprop((P ∧ Q) ∧ R) ⊣⊢ iprop(P ∧ (Q ∧ R)) :=
-  ⟨fun _ h => ⟨h.1.1, h.1.2, h.2⟩, fun _ h => ⟨⟨h.1, h.2.1⟩, h.2.2⟩⟩
+theorem iand_assoc (P Q R : IProp) : iprop((P ∧ Q) ∧ R) = iprop(P ∧ (Q ∧ R)) :=
+  entails_antisymm (fun _ h => ⟨h.1.1, h.1.2, h.2⟩) (fun _ h => ⟨⟨h.1, h.2.1⟩, h.2.2⟩)
 
 @[simp]
 theorem iand_self_eq (P : IProp) : iprop(P ∧ P) = P :=
-  bientails_eq ⟨iand_elim_left, iand_intro (entails_refl P) (entails_refl P)⟩
+  entails_antisymm iand_elim_left (iand_intro (entails_refl P) (entails_refl P))
 
 @[simp]
 theorem iand_ipure_eq (P Q : Prop) : iprop(⌜P⌝ ∧ ⌜Q⌝) = ⌜P ∧ Q⌝ :=
   rfl
 
-theorem sep_assoc (H₁ H₂ H₃ : IProp) :
-    (H₁ ∗ H₂) ∗ H₃ ⊣⊢ H₁ ∗ (H₂ ∗ H₃) := by
-  constructor
+theorem sep_assoc_eq (H₁ H₂ H₃ : IProp) :
+    ((H₁ ∗ H₂) ∗ H₃) = (H₁ ∗ (H₂ ∗ H₃)) := by
+  apply entails_antisymm
   · intro h
     rintro ⟨h₁₂, h₃, hDisjoint₁₂₃, hEq, hStar₁₂, hH₃⟩
     rcases hStar₁₂ with ⟨h₁, h₂, hDisjoint₁₂, hEq₁₂, hH₁, hH₂⟩
@@ -89,9 +89,9 @@ theorem sep_assoc (H₁ H₂ H₃ : IProp) :
             hDisjoint₁₂ hDisjoint₁₂₃'').symm
     · exact ⟨h₁, h₂, hDisjoint₁₂, rfl, hH₁, hH₂⟩
 
-theorem sep_comm (H₁ H₂ : IProp) :
-    H₁ ∗ H₂ ⊣⊢ H₂ ∗ H₁ := by
-  constructor
+theorem sep_comm_eq (H₁ H₂ : IProp) :
+    (H₁ ∗ H₂) = (H₂ ∗ H₁) := by
+  apply entails_antisymm
   · intro h
     rintro ⟨h₁, h₂, hDisjoint, hEq, hH₁, hH₂⟩
     exact ⟨h₂, h₁, PartialCommMonoid.compatible_comm (α := Heap) hDisjoint,
@@ -102,14 +102,6 @@ theorem sep_comm (H₁ H₂ : IProp) :
     exact ⟨h₁, h₂, PartialCommMonoid.compatible_comm (α := Heap) hDisjoint,
       hEq.trans (PartialCommMonoid.union_comm_of_compatible hDisjoint),
       hH₁, hH₂⟩
-
-theorem sep_assoc_eq (H₁ H₂ H₃ : IProp) :
-    ((H₁ ∗ H₂) ∗ H₃) = (H₁ ∗ (H₂ ∗ H₃)) :=
-  bientails_eq (sep_assoc H₁ H₂ H₃)
-
-theorem sep_comm_eq (H₁ H₂ : IProp) :
-    (H₁ ∗ H₂) = (H₂ ∗ H₁) :=
-  bientails_eq (sep_comm H₁ H₂)
 
 instance : Std.Associative sep where
   assoc := sep_assoc_eq
@@ -124,9 +116,10 @@ theorem sep_mono {P₁ P₂ Q₁ Q₂ : IProp}
   rintro ⟨h₁, h₂, hDisjoint, hEq, hP₁, hQ₁⟩
   exact ⟨h₁, h₂, hDisjoint, hEq, hP h₁ hP₁, hQ h₂ hQ₁⟩
 
-theorem sep_emp_l (H : IProp) :
-    emp ∗ H ⊣⊢ H := by
-  constructor
+@[simp]
+theorem sep_emp_l_eq (H : IProp) :
+    (emp ∗ H) = H := by
+  apply entails_antisymm
   · intro h
     rintro ⟨h₁, h₂, hDisjoint, rfl, -, hH⟩
     exact H.up_closed hH (Heap.Sub.union_right hDisjoint)
@@ -134,26 +127,21 @@ theorem sep_emp_l (H : IProp) :
     exact ⟨∅, h, PartialCommMonoid.compatible_empty_left h,
       (PartialCommMonoid.empty_union h).symm, trivial, hH⟩
 
-theorem sep_emp_r (H : IProp) :
-    H ∗ emp ⊣⊢ H := by
-  exact ⟨
-    entails_trans (sep_comm H emp).mp (sep_emp_l H).mp,
-    entails_trans (sep_emp_l H).mpr (sep_comm H emp).mpr⟩
+@[simp]
+theorem sep_emp_r_eq (H : IProp) :
+    (H ∗ emp) = H := by
+  rw [sep_comm_eq, sep_emp_l_eq]
 
 @[simp]
-theorem sep_emp_l_eq (H : IProp) :
-    (emp ∗ H) = H :=
-  bientails_eq (sep_emp_l H)
-
-theorem sep_emp_r_eq (H : IProp) :
-    (H ∗ emp) = H :=
-  bientails_eq (sep_emp_r H)
+theorem ipure_true_eq_emp : (⌜True⌝ : IProp) = emp :=
+  rfl
 
 instance : Std.LawfulIdentity sep emp where
   left_id := sep_emp_l_eq
   right_id := sep_emp_r_eq
 
 /-- Affinity: every assertion may be discarded. -/
+@[simp]
 theorem entails_emp_r (H : IProp) : H ⊢ emp :=
   fun _ _ => trivial
 
@@ -182,8 +170,8 @@ theorem entails_ipure_iff (P Q : Prop) : (⌜P⌝ ⊢ ⌜Q⌝) ↔ (P → Q) :=
 
 theorem owns_union (A B : Heap)
     (hCompatible : PartialCommMonoid.Compatible A B) :
-    owns (A ∪ B) ⊣⊢ owns A ∗ owns B := by
-  constructor
+    owns (A ∪ B) = (owns A ∗ owns B) := by
+  apply entails_antisymm
   · rintro h ⟨rest, hCompatibleRest, rfl⟩
     obtain ⟨hCompatibleBRest, hCompatibleARest⟩ :=
       (PartialCommMonoid.compatible_assoc A B rest).mp
@@ -224,8 +212,8 @@ theorem sep_owns_holds (P : IProp) (frame heap : Heap) :
     exact ⟨owned, frame, hCompatible, rfl, hP, Heap.Sub.refl frame⟩
 
 theorem sep_iand_owns (P Q : IProp) (frame : Heap) :
-    iprop(P ∧ Q) ∗ owns frame ⊣⊢ iprop((P ∗ owns frame) ∧ (Q ∗ owns frame)) := by
-  constructor
+    (iprop(P ∧ Q) ∗ owns frame) = iprop((P ∗ owns frame) ∧ (Q ∗ owns frame)) := by
+  apply entails_antisymm
   · exact iand_intro
       (sep_mono iand_elim_left (entails_refl _))
       (sep_mono iand_elim_right (entails_refl _))
@@ -240,16 +228,6 @@ theorem exists_holds {ι : Sort _} (J : ι → IProp) (h : Heap) :
     iexists J h ↔ ∃ x, J x h :=
   Iff.rfl
 
-theorem sep_exists {α : Sort _} (J : α → IProp) (H : IProp) :
-    iprop(∃ x, J x) ∗ H ⊣⊢ iprop(∃ x, J x ∗ H) := by
-  constructor
-  · intro h
-    rintro ⟨h₁, h₂, hDisjoint, hEq, ⟨x, hJ⟩, hH⟩
-    exact ⟨x, h₁, h₂, hDisjoint, hEq, hJ, hH⟩
-  · intro h
-    rintro ⟨x, h₁, h₂, hDisjoint, hEq, hJ, hH⟩
-    exact ⟨h₁, h₂, hDisjoint, hEq, ⟨x, hJ⟩, hH⟩
-
 theorem sep_pure_l (P : Prop) (H : IProp) (h : Heap) :
     (⌜P⌝ ∗ H) h ↔ P ∧ H h := by
   constructor
@@ -258,18 +236,6 @@ theorem sep_pure_l (P : Prop) (H : IProp) (h : Heap) :
   · rintro ⟨hP, hH⟩
     exact ⟨∅, h, PartialCommMonoid.compatible_empty_left h,
       (PartialCommMonoid.empty_union h).symm, hP, hH⟩
-
-@[simp]
-theorem sep_ipure_true_l_eq (H : IProp) :
-    (⌜True⌝ ∗ H) = H := by
-  apply IProp.ext
-  intro h
-  simpa using sep_pure_l True H h
-
-@[simp]
-theorem sep_ipure_true_r_eq (H : IProp) :
-    (H ∗ ⌜True⌝) = H := by
-  rw [sep_comm_eq, sep_ipure_true_l_eq]
 
 theorem pure_sep_intro {P : Prop} (H : IProp) (hP : P) :
     H ⊢ ⌜P⌝ ∗ H := by
@@ -297,15 +263,21 @@ theorem entails_exists_frame {ι : Sort _} {R : IProp} {J F : ι → IProp}
     entails_trans (h x) (sep_mono (entails_refl R) (entails_exists_r x (entails_refl _)))
 
 theorem sep_exists_l_eq {ι : Sort _} (J : ι → IProp) (H : IProp) :
-    (iexists J ∗ H) = iprop(∃ x, J x ∗ H) :=
-  bientails_eq (sep_exists J H)
+    (iexists J ∗ H) = iprop(∃ x, J x ∗ H) := by
+  apply entails_antisymm
+  · intro h
+    rintro ⟨h₁, h₂, hDisjoint, hEq, ⟨x, hJ⟩, hH⟩
+    exact ⟨x, h₁, h₂, hDisjoint, hEq, hJ, hH⟩
+  · intro h
+    rintro ⟨x, h₁, h₂, hDisjoint, hEq, hJ, hH⟩
+    exact ⟨h₁, h₂, hDisjoint, hEq, ⟨x, hJ⟩, hH⟩
 
 theorem sep_exists_r_eq {ι : Sort _} (H : IProp) (J : ι → IProp) :
     (H ∗ iexists J) = iprop(∃ x, H ∗ J x) := by
   rw [sep_comm_eq, sep_exists_l_eq]
-  exact bientails_eq ⟨
-    fun heap ⟨x, hx⟩ => ⟨x, (sep_comm (J x) H).mp heap hx⟩,
-    fun heap ⟨x, hx⟩ => ⟨x, (sep_comm (J x) H).mpr heap hx⟩⟩
+  congr 1
+  funext x
+  exact sep_comm_eq _ _
 
 theorem entails_exists_sep_l {ι : Sort _} {H H' : IProp} {J : ι → IProp}
     (h : ∀ x, J x ∗ H ⊢ H') : iexists J ∗ H ⊢ H' := by
@@ -317,18 +289,14 @@ theorem entails_exists_sep_r {ι : Sort _} {H H' : IProp} {J : ι → IProp} (x 
   rw [sep_exists_l_eq]
   exact entails_exists_r x h
 
-theorem pure_elim (P : Prop) :
-    ⌜P⌝ ⊢ emp :=
-  entails_emp_r _
-
 theorem sep_elim_right (P F : IProp) :
     P ∗ F ⊢ P :=
   entails_trans (sep_mono (entails_refl P) (entails_emp_r F))
-    (sep_emp_r P).mp
+    (entails_of_eq (sep_emp_r_eq P))
 
 theorem sep_elim_left (P F : IProp) :
     F ∗ P ⊢ P :=
-  entails_trans (sep_comm F P).mp (sep_elim_right P F)
+  entails_trans (entails_of_eq (sep_comm_eq F P)) (sep_elim_right P F)
 
 theorem forall_intro {ι : Sort _} {H : IProp} {J : ι → IProp}
     (h : ∀ x, H ⊢ J x) : H ⊢ iforall J :=
@@ -402,8 +370,8 @@ theorem entails_emp_postWand_ipure_iff {α : Type u} (P Q : α → Prop) :
   rw [postWand_equiv]
   constructor
   · intro h value hP
-    exact h value ∅ ((sep_emp_r ⌜P value⌝).mpr ∅ hP)
+    exact h value ∅ ((entails_of_eq (sep_emp_r_eq ⌜P value⌝).symm) ∅ hP)
   · intro h value heap hPre
-    exact h value ((sep_emp_r ⌜P value⌝).mp heap hPre)
+    exact h value ((entails_of_eq (sep_emp_r_eq ⌜P value⌝)) heap hPre)
 
 end Aeneas.SepLogic

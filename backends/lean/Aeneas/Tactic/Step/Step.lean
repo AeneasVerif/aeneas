@@ -2110,11 +2110,10 @@ end Aeneas
 
 /-! Registered here since `@[step]` and `@[step_simps]` are declared in a module importing `WP`. -/
 
-attribute [step_simps] Aeneas.SepLogic.sep_ipure_true_r_eq
+attribute [step_simps] Aeneas.SepLogic.ipure_true_eq_emp
+attribute [step_simps] Aeneas.SepLogic.sep_emp_r_eq
 attribute [step_simps] Aeneas.SepLogic.entails_emp_ipure_iff
 attribute [step_simps] Aeneas.SepLogic.entails_refl
 
-attribute [step] Aeneas.Std.WP.ret.spec
-attribute [step] Aeneas.Std.WP.pure.spec
 attribute [step] Aeneas.Std.WP.ok_spec
 attribute [step] Aeneas.Std.WP.pure_spec

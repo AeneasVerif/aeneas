@@ -26,7 +26,7 @@ example (value : Nat) :
 example (x : Nat) :
     (do
       let y ← Fixtures.add1 x
-      Fixtures.add1 y) ⦃⇓ y => y = x + 2⦄div := by
+      Fixtures.add1 y) ⦃ y => y = x + 2⦄div := by
   step*
 
 def roundTripPartial : Result Nat := do
@@ -64,7 +64,7 @@ unseal Result
 example (p : MutRawPtr Nat) (Q : IPost Nat) : ¬ dispec emp (read p) Q := by
   intro hTriple
   rw [dispec_iff] at hTriple
-  have hSpec := hTriple emp ∅ ((sep_emp_r emp).mpr ∅ trivial)
+  have hSpec := hTriple emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
   simp only [Aeneas.Std.RawPtr.read, Result.guardedModify] at hSpec
   obtain ⟨hReadable, -⟩ := hSpec.vis_view
   exact RawPtr.not_contains_empty p hReadable.contains
@@ -77,7 +77,7 @@ example (Q : IPost Nat) : dispec emp (Result.div : Result Nat) Q :=
 example (Q : IPost Nat) : ¬ ispec emp (Result.div : Result Nat) Q := by
   rw [ispec_iff]
   intro hTriple
-  exact (hTriple emp Heap.empty ((sep_emp_r emp).mpr Heap.empty trivial)).div_false
+  exact (hTriple emp Heap.empty ((entails_of_eq (sep_emp_r_eq emp).symm) Heap.empty trivial)).div_false
 
 def incrForever (p : MutRawPtr Nat) : Result Empty := do
   let value ← read p

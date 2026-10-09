@@ -33,8 +33,9 @@ def rewriteAssertion (assertion : Expr) (rule : Expr) : TacticM (Expr × Expr) :
   let frame ← mkFreshExprMVar (mkConst ``IProp)
   let lhsFrame := mkApp2 (mkConst ``sep) lhs frame
   let framing ← mkFreshExprSyntheticOpaqueMVar (mkApp2 (mkConst ``Entails) assertion lhsFrame)
-  try IFrame.solveHimpl none framing.mvarId!
-  catch _ => throwError "irewrite: {lhs}\nis not part of\n{assertion}"
+  try IFrame.solveGoal none framing.mvarId!
+  catch e => throwError "irewrite: {lhs}\nis not part of\n{assertion}\n(open its existentials \
+    with `iintro` first)\n{e.toMessageData}"
   let lhs ← instantiateMVars lhs
   let rhs ← instantiateMVars rhs
   let entailment ← instantiateMVars entailment

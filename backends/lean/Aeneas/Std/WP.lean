@@ -129,8 +129,8 @@ theorem ispec_ok (x : α) : ispec P (ok x) Q ↔ P ⊢ Q x := by
   constructor
   · intro hTriple h hP
     rw [ispec_iff] at hTriple
-    have hPost := DWP.ret_iff.mp (hTriple emp h ((sep_emp_r P).mpr h hP))
-    exact (sep_emp_r (Q x)).mp h hPost
+    have hPost := DWP.ret_iff.mp (hTriple emp h ((entails_of_eq (sep_emp_r_eq P).symm) h hP))
+    exact (entails_of_eq (sep_emp_r_eq (Q x))) h hPost
   · intro hPost
     rw [ispec_iff]
     intro F h hPre
@@ -158,7 +158,7 @@ theorem ispec_fail (e : Error) : ispec P (fail e) Q ↔ P ⊢ ⌜False⌝ := by
   constructor
   · intro hTriple h hP
     rw [ispec_iff] at hTriple
-    exact (hTriple emp h ((sep_emp_r P).mpr h hP)).vis_view
+    exact (hTriple emp h ((entails_of_eq (sep_emp_r_eq P).symm) h hP)).vis_view
   · intro hFalse h hP
     exact (hFalse h hP).elim
 
@@ -168,7 +168,7 @@ theorem ispec_div :
   constructor
   · intro hTriple h hP
     rw [ispec_iff] at hTriple
-    exact (hTriple emp h ((sep_emp_r P).mpr h hP)).div_false
+    exact (hTriple emp h ((entails_of_eq (sep_emp_r_eq P).symm) h hP)).div_false
   · intro hFalse h hP
     exact (hFalse h hP).elim
 
@@ -177,8 +177,8 @@ theorem ispec_frame {P : IPre} {m : Result α} {Q : IPost α}
     ispec (P ∗ H) m (Q ∗+ H) := by
   rw [ispec_iff] at hTriple ⊢
   intro F h hPre
-  have hSpec := hTriple (H ∗ F) h ((sep_assoc P H F).mp h hPre)
-  exact hSpec.mono fun value heap => (sep_assoc (Q value) H F).mpr heap
+  have hSpec := hTriple (H ∗ F) h ((entails_of_eq (sep_assoc_eq P H F)) h hPre)
+  exact hSpec.mono fun value heap => (entails_of_eq (sep_assoc_eq (Q value) H F).symm) heap
 
 theorem ispec_frame_left {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : ispec P m Q) (H : IProp) :
@@ -186,11 +186,11 @@ theorem ispec_frame_left {P : IPre} {m : Result α} {Q : IPost α}
   rw [ispec_iff] at hTriple ⊢
   intro F h hPre
   have hSwapped : (P ∗ (H ∗ F)) h :=
-    (sep_assoc P H F).mp h
-      ((sep_mono (sep_comm H P).mp (entails_refl F)) h hPre)
+    (entails_of_eq (sep_assoc_eq P H F)) h
+      ((sep_mono (entails_of_eq (sep_comm_eq H P)) (entails_refl F)) h hPre)
   refine (hTriple (H ∗ F) h hSwapped).mono fun value heap hPost => ?_
-  exact (sep_mono (sep_comm (Q value) H).mp (entails_refl F)) heap
-    ((sep_assoc (Q value) H F).mpr heap hPost)
+  exact (sep_mono (entails_of_eq (sep_comm_eq (Q value) H)) (entails_refl F)) heap
+    ((entails_of_eq (sep_assoc_eq (Q value) H F).symm) heap hPost)
 
 /-- Mono rule used by `step`. -/
 theorem ispec_mono {α : Type u} {P Pm F : IPre} {Q : IPost α} {m : Result α} {Qm : IPost α}
@@ -216,7 +216,7 @@ theorem ispec_and {α : Type u} {P : IPre} {m : Result α} {Q₁ Q₂ : IPost α
     ⟨h₁ (owns framed) _ hPre, h₂ (owns framed) _ hPre⟩
   refine hBoth.mono fun value heap hPost => ?_
   exact (sep_mono (entails_refl _) (fun _ hSub => F.up_closed hF hSub)) heap
-    ((sep_iand_owns (Q₁ value) (Q₂ value) framed).mpr heap hPost)
+    ((entails_of_eq (sep_iand_owns (Q₁ value) (Q₂ value) framed).symm) heap hPost)
 
 theorem ispec_and_dispec {α : Type u} {P : IPre} {m : Result α} {Q₁ Q₂ : IPost α}
     (h₁ : ispec P m Q₁) (h₂ : dispec P m Q₂) :
@@ -229,7 +229,7 @@ theorem ispec_and_dispec {α : Type u} {P : IPre} {m : Result α} {Q₁ Q₂ : I
   have hBoth := DWP.and_partial (h₁ (owns framed) _ hPre) (h₂ (owns framed) _ hPre)
   refine hBoth.mono fun value heap hPost => ?_
   exact (sep_mono (entails_refl _) (fun _ hSub => F.up_closed hF hSub)) heap
-    ((sep_iand_owns (Q₁ value) (Q₂ value) framed).mpr heap hPost)
+    ((entails_of_eq (sep_iand_owns (Q₁ value) (Q₂ value) framed).symm) heap hPost)
 
 /-- Bind rule used by `step`. -/
 theorem ispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
@@ -250,13 +250,13 @@ theorem ispec_ipure {P : Prop} {H : IPre} {m : Result α} {Q : IPost α} :
     ispec (⌜P⌝ ∗ H) m Q ↔ (P → ispec H m Q) := by
   constructor
   · intro hTriple hP
-    exact ispec_mono hTriple (entails_trans (pure_sep_intro H hP) (sep_emp_r _).mpr)
-      (postWand_intro fun _ => (sep_emp_r _).mp)
+    exact ispec_mono hTriple (entails_trans (pure_sep_intro H hP) (entails_of_eq (sep_emp_r_eq _).symm))
+      (postWand_intro fun _ => (entails_of_eq (sep_emp_r_eq _)))
   · intro hTriple
     simp only [ispec_iff] at hTriple ⊢
     intro F h hPre
     have ⟨hP, hHF⟩ :=
-      (sep_pure_l P (H ∗ F) h).mp ((sep_assoc _ _ _).mp h hPre)
+      (sep_pure_l P (H ∗ F) h).mp ((entails_of_eq (sep_assoc_eq _ _ _)) h hPre)
     exact hTriple hP F h hHF
 
 theorem ispec_ipure_iff {P : Prop} {m : Result α} {Q : IPost α} :
@@ -285,7 +285,7 @@ private theorem dispec_apply {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : dispec P m Q) {h : Heap} (hPre : P h) :
     rawIwp false m Q h := by
   rw [dispec_iff] at hTriple
-  have hSpec := hTriple emp h ((sep_emp_r P).mpr h hPre)
+  have hSpec := hTriple emp h ((entails_of_eq (sep_emp_r_eq P).symm) h hPre)
   exact hSpec.mono fun value => sep_elim_right (Q value) emp
 
 @[simp, grind =, agrind =]
@@ -294,12 +294,22 @@ theorem dispec_ok {α : Type u} {P : IPre} {Q : IPost α} (x : α) :
   constructor
   · intro hTriple h hP
     rw [dispec_iff] at hTriple
-    have hPost := DWLP.ret_iff.mp (hTriple emp h ((sep_emp_r P).mpr h hP))
-    exact (sep_emp_r (Q x)).mp h hPost
+    have hPost := DWLP.ret_iff.mp (hTriple emp h ((entails_of_eq (sep_emp_r_eq P).symm) h hP))
+    exact (entails_of_eq (sep_emp_r_eq (Q x))) h hPost
   · intro hPost
     rw [dispec_iff]
     intro F h hPre
     exact DWLP.ret_iff.mpr (sep_mono hPost (entails_refl F) h hPre)
+
+@[simp, grind =, agrind =]
+theorem dispec_fail {P : IPre} {Q : IPost α} (e : Error) :
+    dispec P (fail e) Q ↔ P ⊢ ⌜False⌝ := by
+  constructor
+  · intro hTriple h hP
+    rw [dispec_iff] at hTriple
+    exact (hTriple emp h ((entails_of_eq (sep_emp_r_eq P).symm) h hP)).vis_view
+  · intro hFalse h hP
+    exact (hFalse h hP).elim
 
 theorem dispec_div {P : IPre} {Q : IPost α} :
     dispec P (div : Result α) Q := by
@@ -311,8 +321,8 @@ theorem dispec_frame {P : IPre} {m : Result α} {Q : IPost α}
     (hTriple : dispec P m Q) (H : IProp) : dispec (P ∗ H) m (Q ∗+ H) := by
   rw [dispec_iff] at hTriple ⊢
   intro F h hPre
-  have hSpec := hTriple (H ∗ F) h ((sep_assoc P H F).mp h hPre)
-  exact hSpec.mono fun value heap => (sep_assoc (Q value) H F).mpr heap
+  have hSpec := hTriple (H ∗ F) h ((entails_of_eq (sep_assoc_eq P H F)) h hPre)
+  exact hSpec.mono fun value heap => (entails_of_eq (sep_assoc_eq (Q value) H F).symm) heap
 
 /-- Mono rule used by `step`. -/
 theorem dispec_mono {α : Type u} {P Pm F : IPre} {Q : IPost α} {m : Result α} {Qm : IPost α}
@@ -338,7 +348,7 @@ theorem dispec_and {α : Type u} {P : IPre} {m : Result α} {Q₁ Q₂ : IPost �
     ⟨h₁ (owns framed) _ hPre, h₂ (owns framed) _ hPre⟩
   refine hBoth.mono fun value heap hPost => ?_
   exact (sep_mono (entails_refl _) (fun _ hSub => F.up_closed hF hSub)) heap
-    ((sep_iand_owns (Q₁ value) (Q₂ value) framed).mpr heap hPost)
+    ((entails_of_eq (sep_iand_owns (Q₁ value) (Q₂ value) framed).symm) heap hPost)
 
 theorem dispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
     {next : α → Result β} {Q : IPost β} {m : Result α} {Qm : IPost α}
@@ -358,12 +368,12 @@ theorem dispec_ipure {P : Prop} {H : IPre} {m : Result α} {Q : IPost α} :
     dispec (⌜P⌝ ∗ H) m Q ↔ (P → dispec H m Q) := by
   constructor
   · intro hTriple hP
-    exact dispec_mono hTriple (entails_trans (pure_sep_intro H hP) (sep_emp_r _).mpr)
-      (postWand_intro fun _ => (sep_emp_r _).mp)
+    exact dispec_mono hTriple (entails_trans (pure_sep_intro H hP) (entails_of_eq (sep_emp_r_eq _).symm))
+      (postWand_intro fun _ => (entails_of_eq (sep_emp_r_eq _)))
   · intro hTriple
     simp only [dispec_iff] at hTriple ⊢
     intro F h hPre
-    have ⟨hP, hHF⟩ := (sep_pure_l P (H ∗ F) h).mp ((sep_assoc _ _ _).mp h hPre)
+    have ⟨hP, hHF⟩ := (sep_pure_l P (H ∗ F) h).mp ((entails_of_eq (sep_assoc_eq _ _ _)) h hPre)
     exact hTriple hP F h hHF
 
 theorem dispec_ipure_iff {P : Prop} {m : Result α} {Q : IPost α} :
@@ -431,8 +441,8 @@ theorem spec_div_pair (f : α → β → Prop) :
 /-- Mono rule used by `step`. -/
 theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
     (∀ x, P₀ x → P₁ x) → spec m P₁ :=
-  fun hMonPost => ispec_mono h (sep_emp_r _).mpr
-    (postWand_intro fun value => entails_trans (sep_emp_r _).mp fun _ => hMonPost value)
+  fun hMonPost => ispec_mono h (entails_of_eq (sep_emp_r_eq _).symm)
+    (postWand_intro fun value => entails_trans (entails_of_eq (sep_emp_r_eq _)) fun _ => hMonPost value)
 
 theorem spec_and {m : Result α} {p q : Post α} (h₁ : spec m p) (h₂ : spec m q) :
     spec m (fun value => p value ∧ q value) :=
@@ -449,14 +459,14 @@ theorem spec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α}
     (∀ x, Pₘ x → spec (k x) Pₖ) →
     spec (Std.bind m k) Pₖ :=
   fun hm hk =>
-    ispec_bind hm (sep_emp_r emp).mpr fun value =>
+    ispec_bind hm (entails_of_eq (sep_emp_r_eq emp).symm) fun value =>
       ispec_mono (ispec_ipure_iff.mpr (hk value)) (entails_refl _)
-        (postWand_intro fun _ => (sep_emp_r _).mp)
+        (postWand_intro fun _ => (entails_of_eq (sep_emp_r_eq _)))
 
 theorem spec_exists {m : Result α} {p : Post α} (h : spec m p) : ∃ value, p value := by
-  have hEmp : ((emp : IPre) ∗ emp) (∅ : Heap) := (sep_emp_r emp).mpr ∅ trivial
+  have hEmp : ((emp : IPre) ∗ emp) (∅ : Heap) := (entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial
   obtain ⟨value, heap, hPost⟩ := DWP.exists (ispec_iff.mp h emp ∅ hEmp)
-  exact ⟨value, (pure_holds heap).mp ((sep_emp_r _).mp heap hPost)⟩
+  exact ⟨value, (pure_holds heap).mp ((entails_of_eq (sep_emp_r_eq _)) heap hPost)⟩
 
 -- `dspec` theorems
 @[simp, grind =, agrind =]
@@ -473,8 +483,8 @@ theorem dspec_div : dspec (div : Result α) p ↔ True :=
 
 theorem dspec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : dspec m P₀):
     (∀ x, P₀ x → P₁ x) → dspec m P₁ :=
-  fun hMonPost => dispec_mono h (sep_emp_r _).mpr
-    (postWand_intro fun value => entails_trans (sep_emp_r _).mp fun _ => hMonPost value)
+  fun hMonPost => dispec_mono h (entails_of_eq (sep_emp_r_eq _).symm)
+    (postWand_intro fun value => entails_trans (entails_of_eq (sep_emp_r_eq _)) fun _ => hMonPost value)
 
 theorem dspec_and {m : Result α} {p q : Post α} (h₁ : dspec m p) (h₂ : dspec m q) :
     dspec m (fun value => p value ∧ q value) :=
@@ -485,9 +495,9 @@ theorem dspec_bind {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α
     (∀ x, Pₘ x → dspec (k x) Pₖ) →
     dspec (Std.bind m k) Pₖ :=
   fun hm hk =>
-    dispec_bind hm (sep_emp_r emp).mpr fun value =>
+    dispec_bind hm (entails_of_eq (sep_emp_r_eq emp).symm) fun value =>
       dispec_mono (dispec_ipure_iff.mpr (hk value)) (entails_refl _)
-        (postWand_intro fun _ => (sep_emp_r _).mp)
+        (postWand_intro fun _ => (entails_of_eq (sep_emp_r_eq _)))
 
 end ResultImplementation
 
@@ -923,8 +933,7 @@ meta def introIspec : TacticM Unit := do
       let _ ← Aeneas.Simp.simpAt true
         { dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1 }
         { addSimpThms :=
-            #[``sep_emp_l_eq, ``sep_emp_r_eq,
-              ``sep_ipure_true_l_eq, ``sep_ipure_true_r_eq,
+            #[``sep_emp_l_eq, ``sep_emp_r_eq, ``ipure_true_eq_emp,
               ``entails_emp_ipure_iff, ``entails_refl,
               ``ispec_ipure_iff, ``dispec_ipure_iff, ``uncurry'_pair,
               ``and_imp, ``exists_imp, ``forall_unit, ``true_imp_iff] }
@@ -1174,6 +1183,12 @@ open Std.Do
 def _root_.Aeneas.Std.Result.terminates {α : Type u} (x : Result α) : Prop :=
   spec x (fun _ => True)
 
+/-- The `Std.Do` view of `Result` used by `mvcgen`: `x` satisfies `Q` when it terminates in `Q.1`
+(`spec`), or, if `Q.2.1` holds, when its terminating runs end in `Q.1` (`dspec`, which allows
+divergence). The exception layer is `PUnit`, so postconditions cannot mention which `Error` was
+raised. There is no `WPMonad` instance (hence no `Result.of_wp`, nor the `Std.Do` lemmas that
+require one): `spec` quantifies over all heaps, so `wp (x >>= f)` is not `wp x` followed by
+`wp (f ·)`. For example `into_raw v >>= read` satisfies `spec`, but `read p` does not for every `p`. -/
 instance Result.instWP : WP Result.{u} (.except PUnit .pure) where
   wp x := {
     trans Q := ⟨spec x (fun a => (Q.1 a).down) ∨

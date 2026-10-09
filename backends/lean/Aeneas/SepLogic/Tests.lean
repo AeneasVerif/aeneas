@@ -44,7 +44,7 @@ example (J : Nat → IProp) (P : IProp) :
 example (H P Q : IProp) (hP : H ⊢ P) (hQ : H ⊢ Q) : H ⊢ iprop(P ∧ Q) :=
   iand_intro hP hQ
 
-example (P Q R : IProp) : iprop((P ∧ Q) ∧ R) ⊣⊢ iprop(P ∧ (Q ∧ R)) :=
+example (P Q R : IProp) : iprop((P ∧ Q) ∧ R) = iprop(P ∧ (Q ∧ R)) :=
   iand_assoc P Q R
 
 example (P Q : Prop) : iprop(⌜P⌝ ∧ ⌜Q⌝) = ⌜P ∧ Q⌝ := by
@@ -56,15 +56,18 @@ example {α : Type} (r : Aeneas.Std.MutRawPtr α) (value : α) :
 
 example (P Q : IProp) (frame : Aeneas.Std.Heap) :
     iprop((P ∗ owns frame) ∧ (Q ∗ owns frame)) ⊢ iprop(P ∧ Q) ∗ owns frame :=
-  (sep_iand_owns P Q frame).mpr
+  entails_of_eq (sep_iand_owns P Q frame).symm
 
-example (P Q : IProp) : (P ∗ Q) ⊣⊢ (Q ∗ P) :=
-  sep_comm P Q
+example (P Q : IProp) : (P ∗ Q) = (Q ∗ P) :=
+  sep_comm_eq P Q
 
 example (P : IProp) : (emp ∗ P) = P := by
   simp
 
 example (P : IProp) : (⌜True⌝ ∗ P) = P := by
+  simp
+
+example (P : IProp) : (P ∗ emp) = P := by
   simp
 
 example (P Q : IProp) : P ∗ (P -∗ Q) ⊢ Q :=

@@ -46,20 +46,13 @@ syntax:25 term:29 " ⊢ " term:25 : term
 macro_rules
   | `($P ⊢ $Q) => `(Entails $P $Q)
 
-structure BiEntails (H₁ H₂ : IProp) : Prop where
-  mp : Entails H₁ H₂
-  mpr : Entails H₂ H₁
-
-syntax:25 term:29 " ⊣⊢ " term:29 : term
-macro_rules
-  | `($P ⊣⊢ $Q) => `(BiEntails $P $Q)
-
 /-- Owns nothing; being affine, it holds of every heap. -/
 def emp : IProp where
   holds _ := True
   up_closed := fun _ _ => trivial
 
-notation "emp" => emp
+macro_rules
+  | `(iprop(emp)) => `(emp)
 
 def ipure (P : Prop) : IProp where
   holds _ := P

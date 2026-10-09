@@ -26,7 +26,7 @@ namespace Aeneas.Std
 Every executable definition below models a Rust function (see its `rust_fun` pattern), with the
 signature Aeneas gives that function: `Box<T>` is `T`, and a `&mut T` argument is returned updated
 next to the result. The exceptions are `RawPtr.materialize`, the allocation primitive behind
-them, and `RawPtr.cast_scalar`, which models `as` casts between raw pointers. -/
+them, and `RawPtr.cast_scalar`, the `as` cast between raw pointers, which always fails. -/
 
 inductive Mutability where
 | Mut | Const
@@ -124,15 +124,11 @@ inductive ScalarKind where
 
 class IsScalar (T : Type) where
   isScalar : (∃ ty, T = UScalar ty) ∨ (∃ ty, T = IScalar ty)
-  size : Usize
 
-/-- Keeps the address. Only casts between scalars of the same size are supported:
-`add` counts in slots of the pointee type. -/
-def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability)
-    [IsScalar T] [IsScalar T'] (p : RawPtr T M) :
-    Result (RawPtr T' M') :=
-  if IsScalar.size (T := T) = IsScalar.size (T := T') then .ok p.retype
-  else .fail .undef
+-- TODO: the typed heap cannot read a cell at another scalar type, so casts are not modelled
+def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability) [IsScalar T] [IsScalar T']
+    (_ : RawPtr T M) : Result (RawPtr T' M') :=
+  .fail .undef
 
 /-! ### END Trusted definitions -/
 
@@ -148,11 +144,9 @@ end RawPtr
 
 instance {ty} : IsScalar (UScalar ty) where
   isScalar := by simp
-  size := ⟨BitVec.ofNat _ (ty.numBits / 8)⟩
 
 instance {ty} : IsScalar (IScalar ty) where
   isScalar := by simp
-  size := ⟨BitVec.ofNat _ (ty.numBits / 8)⟩
 
 open WP
 
@@ -203,14 +197,14 @@ theorem RawPtr.pointsTo_eq_range (q : RawPtr T M) (value : T) :
 namespace RawPtr
 
 theorem pointsToRange_append (q : RawPtr T M) (xs ys : List T) :
-    q ↦* (xs ++ ys) ⊣⊢ q ↦* xs ∗ (q.shift xs.length) ↦* ys := by
+    (q ↦* (xs ++ ys)) = iprop(q ↦* xs ∗ (q.shift xs.length) ↦* ys) := by
   rw [pointsToRange, pointsToRange, pointsToRange, addr_shift,
     Heap.rangeHeap_append q.addr xs ys]
   exact owns_union _ _ (Heap.compatible_rangeHeap_append q.addr xs ys)
 
 theorem pointsToRange_split (q : RawPtr T M) (values : List T) (i : Nat) :
-    q ↦* values ⊣⊢
-      q ↦* values.take i ∗ (q.shift (values.take i).length) ↦* values.drop i := by
+    (q ↦* values) =
+      iprop(q ↦* values.take i ∗ (q.shift (values.take i).length) ↦* values.drop i) := by
   conv_lhs => rw [← List.take_append_drop i values]
   exact pointsToRange_append q (values.take i) (values.drop i)
 
@@ -220,25 +214,24 @@ theorem pointsToRange_eq_take_get_drop {q : RawPtr T M} {values : List T} {i : N
       iprop(q ↦* values.take i ∗
         ((q.shift i) ↦ values[i] ∗ (q.shift (i + 1)) ↦* values.drop (i + 1))) := by
   have hTake : (values.take i).length = i := by simp; omega
-  have hSplit := bientails_eq (pointsToRange_split q values i)
+  have hSplit := pointsToRange_split q values i
   rw [hTake] at hSplit
   rw [hSplit, List.drop_eq_getElem_cons hIndex,
     show values[i] :: values.drop (i + 1)
       = [values[i]] ++ values.drop (i + 1) from rfl,
-    bientails_eq
-      (pointsToRange_append (q.shift i) [values[i]] (values.drop (i + 1))),
+    pointsToRange_append (q.shift i) [values[i]] (values.drop (i + 1)),
     ← pointsTo_eq_range]
   rfl
 
 theorem pointsToRange_cons (q : RawPtr T M) (value : T) (rest : List T) :
     (q ↦* (value :: rest)) = iprop(q ↦ value ∗ (q.shift 1) ↦* rest) := by
   rw [show (value :: rest) = [value] ++ rest from rfl,
-    bientails_eq (pointsToRange_append q [value] rest), ← pointsTo_eq_range]
+    pointsToRange_append q [value] rest, ← pointsTo_eq_range]
   rfl
 
 @[simp] theorem pointsToRange_nil (q : RawPtr T M) :
     (q ↦* ([] : List T)) = emp :=
-  bientails_eq ⟨fun _ _ => trivial, fun h _ => Heap.Sub.of_empty h⟩
+  entails_antisymm (fun _ _ => trivial) (fun h _ => Heap.Sub.of_empty h)
 
 end RawPtr
 
@@ -410,48 +403,4 @@ theorem core.ptr.from_mut.spec (value : T) :
     apply (ispec_ok _).2
     iframe
 
-@[step]
-theorem RawPtr.cast_scalar.spec [IsScalar T] [IsScalar T'] (p : RawPtr T M)
-    (hSize : IsScalar.size (T := T) = IsScalar.size (T := T')) :
-    ⦃ emp ⦄ RawPtr.cast_scalar T' M' p ⦃ q => ⌜q = p.retype⌝⦄ := by
-  simp only [RawPtr.cast_scalar, hSize, ↓reduceIte]
-  apply (ispec_ok _).2
-  iframe
-
-namespace IsScalar
-
-@[simp]
-theorem size_u8 : size (T := U8) = 1#usize := by
-  change (⟨BitVec.ofNat _ 1⟩ : Usize) = 1#usize
-  apply UScalar.eq_of_val_eq
-  simp [UScalar.val]
-
-@[simp, scalar_tac_simps]
-theorem size_val_uscalar (ty : UScalarTy) : (size (T := UScalar ty)).val = ty.numBits / 8 := by
-  change (BitVec.ofNat System.Platform.numBits (ty.numBits / 8)).toNat = _
-  rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt]
-  cases ty <;> rcases System.Platform.numBits_eq with h | h <;> simp [UScalarTy.numBits, h]
-
-@[simp, scalar_tac_simps]
-theorem size_val_iscalar (ty : IScalarTy) : (size (T := IScalar ty)).val = ty.numBits / 8 := by
-  change (BitVec.ofNat System.Platform.numBits (ty.numBits / 8)).toNat = _
-  rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt]
-  cases ty <;> rcases System.Platform.numBits_eq with h | h <;> simp [IScalarTy.numBits, h]
-
-end IsScalar
-
 end Aeneas.Std
-
-namespace Aeneas.Std.IsScalar.Tests
-
-example : (size (T := U128)).val = 16 := by
-  rcases System.Platform.numBits_eq with h | h
-  · simp [size, UScalar.val, h]
-  · simp [size, UScalar.val, h]
-
-example : (size (T := Isize)).val = System.Platform.numBits / 8 := by
-  rcases System.Platform.numBits_eq with h | h
-  · simp [size, UScalar.val, h]
-  · simp [size, UScalar.val, h]
-
-end Aeneas.Std.IsScalar.Tests

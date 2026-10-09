@@ -18,11 +18,11 @@ example {α : Type} (r : MutRawPtr α) (x : α) : (r ↦ x ⊢ r ↦ x) ∧ 1 = 
   refine ⟨by iframe, rfl⟩
 
 example (P : Prop) (H : IProp) (hEmp : P → H ⊢ emp) : iprop(⌜P⌝ ∗ H) ⊢ emp := by
-  iintro_entail
+  iintro
   exact hEmp ‹P›
 
 example {α : Type} (P : α → IProp) : iprop(∃ x, P x) ⊢ iprop(∃ x, P x) := by
-  iintro_entail
+  iintro
   iframe
 
 example (P : Prop) (H : IProp) : wrappedEntails iprop(⌜P⌝ ∗ H) H := by
@@ -97,6 +97,19 @@ example {α : Type} (P : α → IProp) (Q : IProp) (h : ∀ x, P x ⊢ Q) : ipro
   iintro y
   guard_target = (P y ⊢ Q)
   exact h y
+
+-- patterns bind from left to right
+example {α : Type} (P : Prop) (Q : α → IProp) (R : IProp) (h : P → ∀ x, Q x ⊢ R) :
+    ⌜P⌝ ∗ iprop(∃ x, Q x) ⊢ R := by
+  iintro hP x
+  guard_hyp hP : P
+  guard_hyp x : α
+  exact h hP x
+
+example (P : Prop) (Q : IPost Nat) (h : P → Q ⊢+ Q) : (fun v => ⌜P⌝ ∗ Q v) ⊢+ Q := by
+  iintro hP
+  guard_hyp hP : P
+  exact h hP _
 
 -- the frame, the right operand of the precondition, is left untouched
 example (P F : Prop) (H : IProp) (hFrame : P → H ∗ ⌜F⌝ ⊢ H ∗ ⌜F⌝) :

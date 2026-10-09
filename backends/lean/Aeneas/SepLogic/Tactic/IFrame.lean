@@ -41,7 +41,11 @@ private def provePure (discharger : Option Syntax.Tactic) (proposition : Expr) :
     | some tactic => pure tactic
     | none =>
       `(tactic| first | grind | (simp only [isimps, *] <;> grind) | (simp_all <;> grind))
-  let (goals, _) ← runTactic proofId tactic
+  -- without recovery, a failing `first` alternative throws instead of logging and admitting
+  let goals ← try
+      Term.withSynthesize <| Tactic.run proofId
+        (Tactic.withoutRecover (Tactic.evalTactic tactic *> Tactic.pruneSolvedGoals))
+    catch e => throwError "could not prove pure assertion {proposition}\n{e.toMessageData}"
   unless goals.isEmpty do
     throwError "could not prove pure assertion {proposition}"
   return proof
