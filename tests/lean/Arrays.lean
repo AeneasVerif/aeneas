@@ -37,14 +37,14 @@ def incr (x : Std.U32) : Result Std.U32 := do
     Source: 'tests/src/arrays.rs', lines 21:0-23:1
     Visibility: public -/
 def array_to_shared_slice_
-  {T : Type} (s : Array T 32#usize) : Result (Slice T) := do
+  {T : Type _} (s : Array T 32#usize) : Result (Slice T) := do
   ok (Array.to_slice s)
 
 /-- [arrays::array_to_mut_slice_]:
     Source: 'tests/src/arrays.rs', lines 26:0-28:1
     Visibility: public -/
 def array_to_mut_slice_
-  {T : Type} (s : Array T 32#usize) :
+  {T : Type _} (s : Array T 32#usize) :
   Result ((Slice T) × (Slice T → Array T 32#usize))
   := do
   ok (Array.to_slice_mut s)
@@ -52,28 +52,29 @@ def array_to_mut_slice_
 /-- [arrays::array_len]:
     Source: 'tests/src/arrays.rs', lines 30:0-32:1
     Visibility: public -/
-def array_len {T : Type} (s : Array T 32#usize) : Result Std.Usize := do
+def array_len {T : Type _} (s : Array T 32#usize) : Result Std.Usize := do
   let s1 ← lift (Array.to_slice s)
   ok (Slice.len s1)
 
 /-- [arrays::shared_array_len]:
     Source: 'tests/src/arrays.rs', lines 34:0-36:1
     Visibility: public -/
-def shared_array_len {T : Type} (s : Array T 32#usize) : Result Std.Usize := do
+def shared_array_len
+  {T : Type _} (s : Array T 32#usize) : Result Std.Usize := do
   let s1 ← lift (Array.to_slice s)
   ok (Slice.len s1)
 
 /-- [arrays::shared_slice_len]:
     Source: 'tests/src/arrays.rs', lines 38:0-40:1
     Visibility: public -/
-def shared_slice_len {T : Type} (s : Slice T) : Result Std.Usize := do
+def shared_slice_len {T : Type _} (s : Slice T) : Result Std.Usize := do
   ok (Slice.len s)
 
 /-- [arrays::index_array_shared]:
     Source: 'tests/src/arrays.rs', lines 42:0-44:1
     Visibility: public -/
 def index_array_shared
-  {T : Type} (s : Array T 32#usize) (i : Std.Usize) : Result T := do
+  {T : Type _} (s : Array T 32#usize) (i : Std.Usize) : Result T := do
   Array.index_usize s i
 
 /-- [arrays::index_array_u32]:
@@ -93,7 +94,7 @@ def index_array_copy (x : Array Std.U32 32#usize) : Result Std.U32 := do
     Source: 'tests/src/arrays.rs', lines 57:0-59:1
     Visibility: public -/
 def index_mut_array
-  {T : Type} (s : Array T 32#usize) (i : Std.Usize) :
+  {T : Type _} (s : Array T 32#usize) (i : Std.Usize) :
   Result (T × (T → Array T 32#usize))
   := do
   Array.index_mut_usize s i
@@ -101,14 +102,14 @@ def index_mut_array
 /-- [arrays::index_slice]:
     Source: 'tests/src/arrays.rs', lines 61:0-63:1
     Visibility: public -/
-def index_slice {T : Type} (s : Slice T) (i : Std.Usize) : Result T := do
+def index_slice {T : Type _} (s : Slice T) (i : Std.Usize) : Result T := do
   Slice.index_usize s i
 
 /-- [arrays::index_mut_slice]:
     Source: 'tests/src/arrays.rs', lines 65:0-67:1
     Visibility: public -/
 def index_mut_slice
-  {T : Type} (s : Slice T) (i : Std.Usize) :
+  {T : Type _} (s : Slice T) (i : Std.Usize) :
   Result (T × (T → Slice T))
   := do
   Slice.index_mut_usize s i
@@ -174,13 +175,13 @@ def array_subslice_mut_
 /-- [arrays::index_slice_0]:
     Source: 'tests/src/arrays.rs', lines 93:0-95:1
     Visibility: public -/
-def index_slice_0 {T : Type} (s : Slice T) : Result T := do
+def index_slice_0 {T : Type _} (s : Slice T) : Result T := do
   Slice.index_usize s 0#usize
 
 /-- [arrays::index_array_0]:
     Source: 'tests/src/arrays.rs', lines 97:0-99:1
     Visibility: public -/
-def index_array_0 {T : Type} (s : Array T 32#usize) : Result T := do
+def index_array_0 {T : Type _} (s : Array T 32#usize) : Result T := do
   Array.index_usize s 0#usize
 
 /-- [arrays::index_index_array]:

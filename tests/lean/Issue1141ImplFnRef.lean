@@ -22,7 +22,7 @@ namespace issue_1141_impl_fn_ref
 /-- [issue_1141_impl_fn_ref::f]:
     Source: 'tests/src/issue-1141-impl-fn-ref.rs', lines 4:0-6:1 -/
 def f
-  {T0 : Type} (coreopsfunctionFnT0TupleSharedTupleTupleInst :
+  {T0 : Type _} (coreopsfunctionFnT0TupleSharedTupleTupleInst :
   core.ops.function.Fn T0 Unit Unit) (g : T0) :
   Result Unit
   := do

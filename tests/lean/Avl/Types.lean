@@ -31,40 +31,43 @@ inductive Ordering where
 /-- Trait declaration: [avl::Ord]
     Source: 'src/avl.rs', lines 24:0-26:1
     Visibility: public -/
-structure Ord (Self : Type) where
+structure Ord (Self : Type _) where
   cmp : Self → Self → Result Ordering
 
 /-- [avl::Node]
     Source: 'src/avl.rs', lines 28:0-33:1 -/
-inductive Node (T : Type) where
+inductive Node (T : Type _) where
 | mk : T → Option (Node T) → Option (Node T) → Std.I8 → Node T
 
-def Node.value {T : Type} (x : Node T) := match x with | Node.mk x1 _ _ _ => x1
+def Node.value {T : Type _} (x : Node T) :=
+  match x with | Node.mk x1 _ _ _ => x1
 
-def Node.left {T : Type} (x : Node T) := match x with | Node.mk _ x1 _ _ => x1
+def Node.left {T : Type _} (x : Node T) :=
+  match x with | Node.mk _ x1 _ _ => x1
 
-def Node.right {T : Type} (x : Node T) := match x with | Node.mk _ _ x1 _ => x1
+def Node.right {T : Type _} (x : Node T) :=
+  match x with | Node.mk _ _ x1 _ => x1
 
-def Node.balance_factor {T : Type} (x : Node T) :=
+def Node.balance_factor {T : Type _} (x : Node T) :=
   match x with | Node.mk _ _ _ x1 => x1
 
 @[simp]
-theorem Node.value._simpLemma_ {T : Type} (value : T) (left : Option (Node T))
-  (right : Option (Node T)) (balance_factor : Std.I8) :
+theorem Node.value._simpLemma_ {T : Type _} (value : T) (left : Option (Node
+  T)) (right : Option (Node T)) (balance_factor : Std.I8) :
   (Node.mk value left right balance_factor).value = value := by rfl
 
 @[simp]
-theorem Node.left._simpLemma_ {T : Type} (value : T) (left : Option (Node T))
+theorem Node.left._simpLemma_ {T : Type _} (value : T) (left : Option (Node T))
   (right : Option (Node T)) (balance_factor : Std.I8) :
   (Node.mk value left right balance_factor).left = left := by rfl
 
 @[simp]
-theorem Node.right._simpLemma_ {T : Type} (value : T) (left : Option (Node T))
-  (right : Option (Node T)) (balance_factor : Std.I8) :
+theorem Node.right._simpLemma_ {T : Type _} (value : T) (left : Option (Node
+  T)) (right : Option (Node T)) (balance_factor : Std.I8) :
   (Node.mk value left right balance_factor).right = right := by rfl
 
 @[simp]
-theorem Node.balance_factor._simpLemma_ {T : Type} (value : T) (left : Option
+theorem Node.balance_factor._simpLemma_ {T : Type _} (value : T) (left : Option
   (Node T)) (right : Option (Node T)) (balance_factor : Std.I8) :
   (Node.mk value left right balance_factor).balance_factor = balance_factor :=
   by rfl
@@ -72,7 +75,7 @@ theorem Node.balance_factor._simpLemma_ {T : Type} (value : T) (left : Option
 /-- [avl::Tree]
     Source: 'src/avl.rs', lines 35:0-37:1
     Visibility: public -/
-structure Tree (T : Type) where
+structure Tree (T : Type _) where
   root : Option (Node T)
 
 end avl

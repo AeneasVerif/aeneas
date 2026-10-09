@@ -28,7 +28,7 @@ namespace issue_804_closure_return_ref
     Visibility: public -/
 @[rust_fun "core::array::from_fn"]
 axiom core.array.from_fn
-  {T : Type} {F : Type} (N : Std.Usize) (opsfunctionFnMutFTupleUsizeTInst :
+  {T : Type _} {F : Type _} (N : Std.Usize) (opsfunctionFnMutFTupleUsizeTInst :
   core.ops.function.FnMut F Std.Usize T) :
   F → Result (Array T N)
 

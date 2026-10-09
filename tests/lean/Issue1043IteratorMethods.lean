@@ -28,8 +28,8 @@ namespace issue_1043_iterator_methods
     Visibility: public -/
 @[trait_default, rust_fun "core::iter::traits::iterator::Iterator::map"]
 axiom core.iter.traits.iterator.Iterator.map.default
-  {Self : Type} {B : Type} {F : Type} {Clause0_Item : Type} (IteratorInst :
-  core.iter.traits.iterator.Iterator Self Clause0_Item)
+  {Self : Type _} {B : Type _} {F : Type _} {Clause0_Item : Type _}
+  (IteratorInst : core.iter.traits.iterator.Iterator Self Clause0_Item)
   (opsfunctionFnMutFTupleClause0_ItemBInst : core.ops.function.FnMut F
   Clause0_Item B) :
   Self → F → Result (core.iter.adapters.map.Map Self F)
@@ -41,7 +41,7 @@ axiom core.iter.traits.iterator.Iterator.map.default
 @[rust_fun
   "core::iter::adapters::map::{core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, @F>, @B>}::next"]
 axiom core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.next
-  {B : Type} {I : Type} {F : Type} {Clause0_Item : Type}
+  {B : Type _} {I : Type _} {F : Type _} {Clause0_Item : Type _}
   (traitsiteratorIteratorInst : core.iter.traits.iterator.Iterator I
   Clause0_Item) (opsfunctionFnMutFTupleClause0_ItemBInst :
   core.ops.function.FnMut F Clause0_Item B) :
@@ -54,11 +54,11 @@ axiom core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.next
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, @F>, @B>"]
 impl_def core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator {B :
-  Type} {I : Type} {F : Type} {Clause0_Item : Type} (traitsiteratorIteratorInst
-  : core.iter.traits.iterator.Iterator I Clause0_Item)
-  (opsfunctionFnMutFTupleClause0_ItemBInst : core.ops.function.FnMut F
-  Clause0_Item B) : core.iter.traits.iterator.Iterator
-  (core.iter.adapters.map.Map I F) B := {
+  Type _} {I : Type _} {F : Type _} {Clause0_Item : Type _}
+  (traitsiteratorIteratorInst : core.iter.traits.iterator.Iterator I
+  Clause0_Item) (opsfunctionFnMutFTupleClause0_ItemBInst :
+  core.ops.function.FnMut F Clause0_Item B) :
+  core.iter.traits.iterator.Iterator (core.iter.adapters.map.Map I F) B := {
   next := core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.next
     traitsiteratorIteratorInst opsfunctionFnMutFTupleClause0_ItemBInst
   enumerate := core.iter.traits.iterator.Iterator.enumerate.trait_default
@@ -69,13 +69,13 @@ impl_def core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator {B :
 /-- [issue_1043_iterator_methods::indexed_squares::{closure}]
     Source: 'tests/src/issue-1043-iterator-methods.rs', lines 10:25-10:46 -/
 @[reducible]
-def indexed_squares.closure (I : Type) := Unit
+def indexed_squares.closure (I : Type _) := Unit
 
 /-- [issue_1043_iterator_methods::indexed_squares::{impl core::ops::function::FnMut<((usize, u32),), u32> for issue_1043_iterator_methods::indexed_squares::{closure}<I>}::call_mut]:
     Source: 'tests/src/issue-1043-iterator-methods.rs', lines 10:25-10:46 -/
 def
   indexed_squares.closure.Insts.CoreOpsFunctionFnMutTuplePairUsizeU32U32.call_mut
-  {I : Type} (coreitertraitsiteratorIteratorIU32Inst :
+  {I : Type _} (coreitertraitsiteratorIteratorIU32Inst :
   core.iter.traits.iterator.Iterator I Std.U32) (c : indexed_squares.closure I)
   (tupled_args : (Std.Usize × Std.U32)) :
   Result (Std.U32 × (indexed_squares.closure I))
@@ -89,7 +89,7 @@ def
     Source: 'tests/src/issue-1043-iterator-methods.rs', lines 10:25-10:46 -/
 def
   indexed_squares.closure.Insts.CoreOpsFunctionFnOnceTuplePairUsizeU32U32.call_once
-  {I : Type} (coreitertraitsiteratorIteratorIU32Inst :
+  {I : Type _} (coreitertraitsiteratorIteratorIU32Inst :
   core.iter.traits.iterator.Iterator I Std.U32) (c : indexed_squares.closure I)
   (p : (Std.Usize × Std.U32)) :
   Result Std.U32
@@ -103,7 +103,7 @@ def
     Source: 'tests/src/issue-1043-iterator-methods.rs', lines 10:25-10:46 -/
 @[reducible]
 def indexed_squares.closure.Insts.CoreOpsFunctionFnOnceTuplePairUsizeU32U32 {I
-  : Type} (coreitertraitsiteratorIteratorIU32Inst :
+  : Type _} (coreitertraitsiteratorIteratorIU32Inst :
   core.iter.traits.iterator.Iterator I Std.U32) : core.ops.function.FnOnce
   (indexed_squares.closure I) (Std.Usize × Std.U32) Std.U32 := {
   call_once :=
@@ -115,7 +115,7 @@ def indexed_squares.closure.Insts.CoreOpsFunctionFnOnceTuplePairUsizeU32U32 {I
     Source: 'tests/src/issue-1043-iterator-methods.rs', lines 10:25-10:46 -/
 @[reducible]
 def indexed_squares.closure.Insts.CoreOpsFunctionFnMutTuplePairUsizeU32U32 {I :
-  Type} (coreitertraitsiteratorIteratorIU32Inst :
+  Type _} (coreitertraitsiteratorIteratorIU32Inst :
   core.iter.traits.iterator.Iterator I Std.U32) : core.ops.function.FnMut
   (indexed_squares.closure I) (Std.Usize × Std.U32) Std.U32 := {
   FnOnceInst :=
@@ -130,7 +130,7 @@ def indexed_squares.closure.Insts.CoreOpsFunctionFnMutTuplePairUsizeU32U32 {I :
     Source: 'tests/src/issue-1043-iterator-methods.rs', lines 9:0-11:1
     Visibility: public -/
 def indexed_squares
-  {I : Type} (coreitertraitsiteratorIteratorIU32Inst :
+  {I : Type _} (coreitertraitsiteratorIteratorIU32Inst :
   core.iter.traits.iterator.Iterator I Std.U32) (iter : I) :
   Result (alloc.vec.Vec Std.U32)
   := do

@@ -5,7 +5,7 @@ public section
 namespace Aeneas.Std
 
 @[rust_trait "core::error::Error" (parentClauses := ["fmtDebugInst", "fmtDisplayInst"])]
-structure core.error.Error (Self : Type) where
+structure core.error.Error (Self : Type _) where
   fmtDebugInst : core.fmt.Debug Self
   fmtDisplayInst : core.fmt.Display Self
 

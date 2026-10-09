@@ -19,10 +19,10 @@ attribute [rust_type "alloc::string::String" (body := .opaque)] String
 inductive Global where | mk
 
 @[expose, rust_fun "alloc::boxed::{core::ops::deref::Deref<Box<@T>, @T>}::deref" -canFail (keepParams := [true, false])]
-def alloc.boxed.Box.deref {T : Type} (x : T) : T := x
+def alloc.boxed.Box.deref {T : Type _} (x : T) : T := x
 
 @[expose, rust_fun "alloc::boxed::{core::ops::deref::DerefMut<Box<@T>, @T>}::deref_mut" -canFail (keepParams := [true, false])]
-def alloc.boxed.Box.deref_mut {T : Type} (x : T) : (T × (T → T)) := (x, λ x => x)
+def alloc.boxed.Box.deref_mut {T : Type _} (x : T) : (T × (T → T)) := (x, λ x => x)
 
 @[expose, rust_fun "alloc::alloc::{core::clone::Clone<alloc::alloc::Global>}::clone"]
 def alloc.alloc.CloneGlobal.clone (_ : Global) : Result Global := .ok .mk

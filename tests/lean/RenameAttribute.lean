@@ -22,7 +22,7 @@ namespace rename_attribute
 /-- Trait declaration: [rename_attribute::BoolTrait]
     Source: 'tests/src/rename_attribute.rs', lines 10:0-20:1
     Visibility: public -/
-structure BoolTest (Self : Type) where
+structure BoolTest (Self : Type _) where
   getTest : Self → Result Bool
   retTest : Self → Result Bool
 
@@ -30,7 +30,7 @@ structure BoolTest (Self : Type) where
     Source: 'tests/src/rename_attribute.rs', lines 17:4-19:5
     Visibility: public -/
 @[trait_default]
-def BoolTrait.retTest.default {Self : Type} (self : Self) : Result Bool := do
+def BoolTrait.retTest.default {Self : Type _} (self : Self) : Result Bool := do
   ok true
 
 /-- [rename_attribute::{impl rename_attribute::BoolTrait for bool}::get_bool]:
@@ -50,7 +50,7 @@ def BoolImpl : BoolTest Bool := {
 /-- [rename_attribute::test_bool_trait]:
     Source: 'tests/src/rename_attribute.rs', lines 30:0-32:1
     Visibility: public -/
-def BoolFn (T : Type) (x : Bool) : Result Bool := do
+def BoolFn (T : Type _) (x : Bool) : Result Bool := do
   let b ← BoolImpl.getTest x
   if b
   then BoolTrait.retTest.default x

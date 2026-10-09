@@ -27,7 +27,7 @@ namespace issue_765_hrtb_conditional_negate
     Name pattern: [core::ops::arith::Neg]
     Visibility: public -/
 @[rust_trait "core::ops::arith::Neg"]
-structure core.ops.arith.Neg (Self : Type) (Self_Output : Type) where
+structure core.ops.arith.Neg (Self : Type _) (Self_Output : Type _) where
   neg : Self → Result Self_Output
 
 /-- [issue_765_hrtb_conditional_negate::Choice]
@@ -59,7 +59,7 @@ def Choice.Insts.CoreMarkerCopy : core.marker.Copy Choice := {
 /-- Trait declaration: [issue_765_hrtb_conditional_negate::ConditionallySelectable]
     Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 15:0-21:1
     Visibility: public -/
-structure ConditionallySelectable (Self : Type) where
+structure ConditionallySelectable (Self : Type _) where
   coremarkerCopyInst : core.marker.Copy Self
   conditional_select : Self → Self → Choice → Result Self
   conditional_assign : Self → Self → Choice → Result Self
@@ -69,7 +69,7 @@ structure ConditionallySelectable (Self : Type) where
     Visibility: public -/
 @[trait_default]
 def ConditionallySelectable.conditional_assign.default
-  {Self : Type} (ConditionallySelectableInst : ConditionallySelectable Self)
+  {Self : Type _} (ConditionallySelectableInst : ConditionallySelectable Self)
   (self : Self) (other : Self) (choice : Choice) :
   Result Self
   := do
@@ -138,21 +138,21 @@ def SharedAF.Insts.CoreOpsArithNegF : core.ops.arith.Neg F F := {
     Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 54:8-57:9
     Visibility: public -/
 axiom ext.ConditionallyNegatable.Blanket.conditional_negate
-  {T : Type} (ConditionallySelectableInst : ConditionallySelectable T)
+  {T : Type _} (ConditionallySelectableInst : ConditionallySelectable T)
   (coreopsarithNegShared0TTInst : core.ops.arith.Neg T T) :
   T → Choice → Result T
 
 /-- Trait declaration: [issue_765_hrtb_conditional_negate::local::ConditionallyNegatable]
     Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 66:4-68:5
     Visibility: public -/
-structure local.ConditionallyNegatable (Self : Type) where
+structure local.ConditionallyNegatable (Self : Type _) where
   conditional_negate : Self → Choice → Result Self
 
 /-- [issue_765_hrtb_conditional_negate::local::{impl issue_765_hrtb_conditional_negate::local::ConditionallyNegatable for T}::conditional_negate]:
     Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 75:8-78:9
     Visibility: public -/
 def local.ConditionallyNegatable.Blanket.conditional_negate
-  {T : Type} (ConditionallySelectableInst : ConditionallySelectable T)
+  {T : Type _} (ConditionallySelectableInst : ConditionallySelectable T)
   (coreopsarithNegShared0TTInst : core.ops.arith.Neg T T) (self : T)
   (choice : Choice) :
   Result T
@@ -163,7 +163,7 @@ def local.ConditionallyNegatable.Blanket.conditional_negate
 /-- Trait implementation: [issue_765_hrtb_conditional_negate::local::{impl issue_765_hrtb_conditional_negate::local::ConditionallyNegatable for T}]
     Source: 'tests/src/issue-765-hrtb-conditional-negate.rs', lines 70:4-79:5 -/
 @[reducible]
-def local.ConditionallyNegatable.Blanket {T : Type}
+def local.ConditionallyNegatable.Blanket {T : Type _}
   (ConditionallySelectableInst : ConditionallySelectable T)
   (coreopsarithNegSharedTTInst : core.ops.arith.Neg T T) :
   local.ConditionallyNegatable T := {

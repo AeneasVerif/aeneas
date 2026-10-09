@@ -72,7 +72,7 @@ def P.Insts.CoreOpsFunctionFnOnceTupleU32Enum : core.ops.function.FnOnce
 /-- [issue_767_adt_constructor::make_tuple_struct_with_constructor]:
     Source: 'tests/src/issue-767-adt-constructor.rs', lines 12:0-14:1 -/
 def make_tuple_struct_with_constructor
-  (T : Type) (x : Option Std.U32) : Result (Option Struct) := do
+  (T : Type _) (x : Option Std.U32) : Result (Option Struct) := do
   core.option.Option.map P.Insts.CoreOpsFunctionFnOnceTupleU32Struct x
     (Struct.constructor)
 

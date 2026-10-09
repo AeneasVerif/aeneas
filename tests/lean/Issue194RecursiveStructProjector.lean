@@ -21,41 +21,41 @@ namespace issue_194_recursive_struct_projector
 
 /-- [issue_194_recursive_struct_projector::AVLNode]
     Source: 'tests/src/issue-194-recursive-struct-projector.rs', lines 2:0-6:1 -/
-inductive AVLNode (T : Type) where
+inductive AVLNode (T : Type _) where
 | mk : T → Option (AVLNode T) → Option (AVLNode T) → AVLNode T
 
-def AVLNode.value {T : Type} (x : AVLNode T) :=
+def AVLNode.value {T : Type _} (x : AVLNode T) :=
   match x with | AVLNode.mk x1 _ _ => x1
 
-def AVLNode.left {T : Type} (x : AVLNode T) :=
+def AVLNode.left {T : Type _} (x : AVLNode T) :=
   match x with | AVLNode.mk _ x1 _ => x1
 
-def AVLNode.right {T : Type} (x : AVLNode T) :=
+def AVLNode.right {T : Type _} (x : AVLNode T) :=
   match x with | AVLNode.mk _ _ x1 => x1
 
 @[simp]
-theorem AVLNode.value._simpLemma_ {T : Type} (value : T) (left : Option
+theorem AVLNode.value._simpLemma_ {T : Type _} (value : T) (left : Option
   (AVLNode T)) (right : Option (AVLNode T)) :
   (AVLNode.mk value left right).value = value := by rfl
 
 @[simp]
-theorem AVLNode.left._simpLemma_ {T : Type} (value : T) (left : Option (AVLNode
-  T)) (right : Option (AVLNode T)) : (AVLNode.mk value left right).left = left
-  := by rfl
+theorem AVLNode.left._simpLemma_ {T : Type _} (value : T) (left : Option
+  (AVLNode T)) (right : Option (AVLNode T)) :
+  (AVLNode.mk value left right).left = left := by rfl
 
 @[simp]
-theorem AVLNode.right._simpLemma_ {T : Type} (value : T) (left : Option
+theorem AVLNode.right._simpLemma_ {T : Type _} (value : T) (left : Option
   (AVLNode T)) (right : Option (AVLNode T)) :
   (AVLNode.mk value left right).right = right := by rfl
 
 /-- [issue_194_recursive_struct_projector::get_val]:
     Source: 'tests/src/issue-194-recursive-struct-projector.rs', lines 10:0-12:1 -/
-def get_val {T : Type} (x : AVLNode T) : Result T := do
+def get_val {T : Type _} (x : AVLNode T) : Result T := do
   ok x.value
 
 /-- [issue_194_recursive_struct_projector::get_left]:
     Source: 'tests/src/issue-194-recursive-struct-projector.rs', lines 14:0-16:1 -/
-def get_left {T : Type} (x : AVLNode T) : Result (Option (AVLNode T)) := do
+def get_left {T : Type _} (x : AVLNode T) : Result (Option (AVLNode T)) := do
   ok x.left
 
 end issue_194_recursive_struct_projector

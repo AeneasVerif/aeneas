@@ -17,7 +17,7 @@ opaque core.str.iter.IteratorChars.next (_iter : core.str.iter.Chars) : Result (
 -- TODO:
 @[rust_fun "core::str::iter::{core::iter::traits::iterator::Iterator<core::str::iter::Chars<'a>, char>}::collect"]
 opaque core.str.iter.IteratorChars.collect
-  {B : Type} (itertraitscollectFromIteratorBCharInst :
+  {B : Type _} (itertraitscollectFromIteratorBCharInst :
   core.iter.traits.collect.FromIterator B Char) :
   core.str.iter.Chars → Result B
 

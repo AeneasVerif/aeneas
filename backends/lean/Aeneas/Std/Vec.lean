@@ -232,13 +232,13 @@ theorem Vec.index_mut_usize_spec {α : Type u} (v: Vec α) (i: Usize)
 
 @[expose, rust_fun "alloc::vec::{core::ops::index::Index<alloc::vec::Vec<@T>, @I, @O>}::index"
   (keepParams := [true,true,false, true])]
-def Vec.index {T I Output : Type} (inst : core.slice.index.SliceIndex I (Slice T) Output)
+def Vec.index {T I Output : Type _} (inst : core.slice.index.SliceIndex I (Slice T) Output)
   (self : Vec T) (i : I) : Result Output :=
   inst.index i self.slice
 
 @[expose, rust_fun "alloc::vec::{core::ops::index::IndexMut<alloc::vec::Vec<@T>, @I, @O>}::index_mut"
   (keepParams := [true,true,false, true])]
-def Vec.index_mut {T I Output : Type} (inst : core.slice.index.SliceIndex I (Slice T) Output)
+def Vec.index_mut {T I Output : Type _} (inst : core.slice.index.SliceIndex I (Slice T) Output)
   (self : Vec T) (i : I) :
   Result (Output × (Output → Vec T)) := do
   let ⟨o, back⟩ ← inst.index_mut i self.slice
@@ -246,7 +246,7 @@ def Vec.index_mut {T I Output : Type} (inst : core.slice.index.SliceIndex I (Sli
 
 @[expose, reducible,
   rust_trait_impl "core::ops::index::Index<alloc::vec::Vec<@T>, @T, @O>" (keepParams := [true, true, false, true])]
-def Vec.Index {T I Output : Type}
+def Vec.Index {T I Output : Type _}
   (inst : core.slice.index.SliceIndex I (Slice T) Output) :
   core.ops.index.Index (alloc.vec.Vec T) I Output := {
   index := Vec.index inst
@@ -254,7 +254,7 @@ def Vec.Index {T I Output : Type}
 
 @[expose, reducible,
   rust_trait_impl "core::ops::index::IndexMut<alloc::vec::Vec<@T>, @T, @O>" (keepParams := [true, true, false, true])]
-def Vec.IndexMut {T I Output : Type}
+def Vec.IndexMut {T I Output : Type _}
   (inst : core.slice.index.SliceIndex I (Slice T) Output) :
   core.ops.index.IndexMut (alloc.vec.Vec T) I Output := {
   indexInst := Vec.Index inst
@@ -262,14 +262,14 @@ def Vec.IndexMut {T I Output : Type}
 }
 
 @[simp, step_simps]
-theorem Vec.index_slice_index {α : Type} (v : Vec α) (i : Usize) :
+theorem Vec.index_slice_index {α : Type _} (v : Vec α) (i : Usize) :
   Vec.index (core.slice.index.SliceIndexUsizeSlice α) v i =
   Vec.index_usize v i := by
   simp [Vec.index, Vec.index_usize, Slice.index_usize]
   rfl
 
 @[simp, step_simps]
-theorem Vec.index_mut_slice_index {α : Type} (v : Vec α) (i : Usize) :
+theorem Vec.index_mut_slice_index {α : Type _} (v : Vec α) (i : Usize) :
   Vec.index_mut (core.slice.index.SliceIndexUsizeSlice α) v i =
   index_mut_usize v i := by
   simp [Vec.index_mut, Vec.index_mut_usize, Slice.index_mut_usize]
@@ -284,7 +284,7 @@ theorem Vec.index_mut_slice_index {α : Type} (v : Vec α) (i : Usize) :
 -- Vec index/index_mut with RangeTo
 
 @[step]
-theorem Vec.index_RangeTo_spec {α : Type} (v : Vec α) (r : core.ops.range.RangeTo Usize)
+theorem Vec.index_RangeTo_spec {α : Type _} (v : Vec α) (r : core.ops.range.RangeTo Usize)
     (h : r.end ≤ v.length) :
     Vec.index (core.slice.index.SliceIndexRangeToUsizeSlice α) v r
     ⦃ s1 =>
@@ -295,7 +295,7 @@ theorem Vec.index_RangeTo_spec {α : Type} (v : Vec α) (r : core.ops.range.Rang
   exact this
 
 @[step]
-theorem Vec.index_mut_RangeTo_spec {α : Type} (v : Vec α) (r : core.ops.range.RangeTo Usize)
+theorem Vec.index_mut_RangeTo_spec {α : Type _} (v : Vec α) (r : core.ops.range.RangeTo Usize)
     (h : r.end ≤ v.length) :
     Vec.index_mut (core.slice.index.SliceIndexRangeToUsizeSlice α) v r
     ⦃ (s1 : Slice α) (back : Slice α → Vec α) =>
@@ -313,7 +313,7 @@ theorem Vec.index_mut_RangeTo_spec {α : Type} (v : Vec α) (r : core.ops.range.
 -- Vec index/index_mut with RangeFrom
 
 @[step]
-theorem Vec.index_RangeFrom_spec {α : Type} (v : Vec α) (r : core.ops.range.RangeFrom Usize)
+theorem Vec.index_RangeFrom_spec {α : Type _} (v : Vec α) (r : core.ops.range.RangeFrom Usize)
     (h : r.start ≤ v.length) :
     Vec.index (core.slice.index.SliceIndexRangeFromUsizeSlice α) v r
     ⦃ s1 =>
@@ -324,7 +324,7 @@ theorem Vec.index_RangeFrom_spec {α : Type} (v : Vec α) (r : core.ops.range.Ra
   exact this
 
 @[step]
-theorem Vec.index_mut_RangeFrom_spec {α : Type} (v : Vec α) (r : core.ops.range.RangeFrom Usize)
+theorem Vec.index_mut_RangeFrom_spec {α : Type _} (v : Vec α) (r : core.ops.range.RangeFrom Usize)
     (h : r.start ≤ v.length) :
     Vec.index_mut (core.slice.index.SliceIndexRangeFromUsizeSlice α) v r
     ⦃ (s1 : Slice α) (back : Slice α → Vec α) =>
@@ -342,7 +342,7 @@ theorem Vec.index_mut_RangeFrom_spec {α : Type} (v : Vec α) (r : core.ops.rang
 -- Vec index/index_mut with Range
 
 @[step]
-theorem Vec.index_Range_spec {α : Type} (v : Vec α) (r : core.ops.range.Range Usize)
+theorem Vec.index_Range_spec {α : Type _} (v : Vec α) (r : core.ops.range.Range Usize)
     (h0 : r.start ≤ r.end) (h1 : r.end ≤ v.length) :
     Vec.index (core.slice.index.SliceIndexRangeUsizeSlice α) v r
     ⦃ s1 =>
@@ -356,7 +356,7 @@ theorem Vec.index_Range_spec {α : Type} (v : Vec α) (r : core.ops.range.Range 
   {slice := Slice.setSlice! s.slice i s'}
 
 @[step]
-theorem Vec.index_mut_Range_spec {α : Type} (v : Vec α) (r : core.ops.range.Range Usize)
+theorem Vec.index_mut_Range_spec {α : Type _} (v : Vec α) (r : core.ops.range.Range Usize)
     (h0 : r.start ≤ r.end) (h1 : r.end ≤ v.length) :
     Vec.index_mut (core.slice.index.SliceIndexRangeUsizeSlice α) v r
     ⦃ (s1 : Slice α) (back : Slice α → Vec α) =>
@@ -375,12 +375,12 @@ end alloc.vec
 
 @[expose, rust_fun "alloc::slice::{[@T]}::to_vec"]
 def alloc.slice.Slice.to_vec
-  {T : Type} (cloneInst : core.clone.Clone T) (s : Slice T) : Result (alloc.vec.Vec T) := do
+  {T : Type _} (cloneInst : core.clone.Clone T) (s : Slice T) : Result (alloc.vec.Vec T) := do
   let s ← Slice.clone cloneInst.clone s
   ok {slice := s}
 
 @[step]
-theorem alloc.slice.Slice.to_vec_spec {T : Type} (cloneInst : core.clone.Clone T) (s : Slice T)
+theorem alloc.slice.Slice.to_vec_spec {T : Type _} (cloneInst : core.clone.Clone T) (s : Slice T)
   (h : ∀ x ∈ s.val, cloneInst.clone x = ok x) :
   alloc.slice.Slice.to_vec cloneInst s ⦃ s' => s = s'.slice ⦄ := by
   simp only [to_vec]
@@ -390,17 +390,17 @@ theorem alloc.slice.Slice.to_vec_spec {T : Type} (cloneInst : core.clone.Clone T
 
 @[expose, rust_fun "alloc::slice::{[@T]}::into_vec" -canFail -lift (keepParams := [true, false])]
 def alloc.slice.Slice.into_vec
-  {T : Type} (s: Slice T) : (alloc.vec.Vec T) := {slice := s}
+  {T : Type _} (s: Slice T) : (alloc.vec.Vec T) := {slice := s}
 
 @[expose, rust_fun "alloc::vec::from_elem"]
 def alloc.vec.from_elem
-  {T : Type} (cloneInst : core.clone.Clone T)
+  {T : Type _} (cloneInst : core.clone.Clone T)
   (x : T) (n : Usize) : Result (alloc.vec.Vec T) := do
   let l ← List.clone cloneInst.clone (List.replicate n.val x)
   ok (.from l.val (by have := l.property; scalar_tac))
 
 @[step]
-theorem alloc.vec.from_elem_spec {T : Type} (cloneInst : core.clone.Clone T)
+theorem alloc.vec.from_elem_spec {T : Type _} (cloneInst : core.clone.Clone T)
   (x : T) (n : Usize) (h : cloneInst.clone x = ok x) :
   alloc.vec.from_elem cloneInst x n ⦃ v =>
   v.val = List.replicate n.val x ∧
@@ -411,10 +411,10 @@ theorem alloc.vec.from_elem_spec {T : Type} (cloneInst : core.clone.Clone T)
   simp [hl]
 
 @[expose, rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::with_capacity" -canFail -lift]
-def alloc.vec.Vec.with_capacity (T : Type) (_ : Usize) : alloc.vec.Vec T := Vec.new T
+def alloc.vec.Vec.with_capacity (T : Type _) (_ : Usize) : alloc.vec.Vec T := Vec.new T
 
 @[expose, rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::extend_from_slice" (keepParams := [true, false])]
-def alloc.vec.Vec.extend_from_slice {T : Type} (cloneInst : core.clone.Clone T)
+def alloc.vec.Vec.extend_from_slice {T : Type _} (cloneInst : core.clone.Clone T)
   (v : alloc.vec.Vec T) (s : Slice T) : Result (alloc.vec.Vec T) :=
   if h : v.length + s.length ≤ Usize.max then do
     let s' ← List.clone cloneInst.clone s.val
@@ -425,29 +425,29 @@ def alloc.vec.Vec.extend_from_slice {T : Type} (cloneInst : core.clone.Clone T)
 
 @[expose, rust_fun "alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>}::deref"
            -canFail -lift (keepParams := [true, false])]
-def alloc.vec.Vec.deref {T : Type} (v : alloc.vec.Vec T) : Slice T :=
+def alloc.vec.Vec.deref {T : Type _} (v : alloc.vec.Vec T) : Slice T :=
   .from v.val v.property
 
 @[expose, reducible, rust_trait_impl "core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>" (keepParams := [true, false])]
-def core.ops.deref.DerefVec {T : Type} : core.ops.deref.Deref (alloc.vec.Vec T) (Slice T) := {
+def core.ops.deref.DerefVec {T : Type _} : core.ops.deref.Deref (alloc.vec.Vec T) (Slice T) := {
   deref := fun v => ok (alloc.vec.Vec.deref v)
 }
 
 @[expose, rust_fun "alloc::vec::{core::ops::deref::DerefMut<alloc::vec::Vec<@T>, [@T]>}::deref_mut"
            -canFail (keepParams := [true, false])]
-def alloc.vec.Vec.deref_mut {T : Type} (v :  alloc.vec.Vec T) :
+def alloc.vec.Vec.deref_mut {T : Type _} (v :  alloc.vec.Vec T) :
    (Slice T) × (Slice T → alloc.vec.Vec T) :=
    (v.slice, λ s => {slice := s})
 
 @[expose, reducible, rust_trait_impl "core::ops::deref::DerefMut<alloc::vec::Vec<@T>, [@T]>" (keepParams := [true, false])]
-def core.ops.deref.DerefMutVec {T : Type} :
+def core.ops.deref.DerefMutVec {T : Type _} :
   core.ops.deref.DerefMut (alloc.vec.Vec T) (Slice T):= {
   derefInst := core.ops.deref.DerefVec
   deref_mut v := ok (alloc.vec.Vec.deref_mut v)
 }
 
 @[expose, rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::resize" (keepParams := [true,false])]
-def alloc.vec.Vec.resize {T : Type} (cloneInst : core.clone.Clone T)
+def alloc.vec.Vec.resize {T : Type _} (cloneInst : core.clone.Clone T)
   (v : alloc.vec.Vec T) (new_len : Usize) (value : T) : Result (alloc.vec.Vec T) := do
   if new_len.val < v.length then
     ok (.from (v.val.resize new_len value) (by scalar_tac))
@@ -508,27 +508,27 @@ theorem alloc.vec.Vec.getElem_set_neq α (v : alloc.vec.Vec α) (i j : Usize) (x
 @[expose, rust_fun
   "alloc::vec::{core::convert::From<alloc::vec::Vec<@T>, [@T; @N]>}::from"]
 def alloc.vec.FromVecArray.from
-  {T : Type} {N : Std.Usize} (a: Array T N) : Result (alloc.vec.Vec T) :=
+  {T : Type _} {N : Std.Usize} (a: Array T N) : Result (alloc.vec.Vec T) :=
   ok (.from a.val (by scalar_tac))
 
 @[expose, reducible, rust_trait_impl
   "core::convert::From<alloc::vec::Vec<@T>, [@T; @N]>"]
-def core.convert.FromVecArray (T : Type) (N : Std.Usize) : core.convert.From
+def core.convert.FromVecArray (T : Type _) (N : Std.Usize) : core.convert.From
   (alloc.vec.Vec T) (Array T N) := {
   «from» := alloc.vec.FromVecArray.from
 }
 
 /- Source: '/rustc/library/alloc/src/vec/mod.rs', lines 3967:4-3967:33 -/
 @[expose, rust_fun "alloc::vec::{core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>}::from" (keepParams := [true,false])]
-def alloc.vec.FromBoxSliceVec.from {T : Type} (v : alloc.vec.Vec T) : Result (Slice T) := ok v.slice
+def alloc.vec.FromBoxSliceVec.from {T : Type _} (v : alloc.vec.Vec T) : Result (Slice T) := ok v.slice
 
 @[step]
-theorem alloc.vec.FromBoxSliceVec.from_spec {T : Type} (v : alloc.vec.Vec T) :
+theorem alloc.vec.FromBoxSliceVec.from_spec {T : Type _} (v : alloc.vec.Vec T) :
   alloc.vec.FromBoxSliceVec.from v ⦃ s => s.length = v.length ∧ s.val = v.val⦄ := by
   simp [Vec.val, alloc.vec.FromBoxSliceVec.from]
 
 @[expose, reducible, rust_trait_impl "core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>" (keepParams := [true, false])]
-def core.convert.FromBoxSliceVec (T : Type) :
+def core.convert.FromBoxSliceVec (T : Type _) :
   core.convert.From (Slice T) (alloc.vec.Vec T) := {
   «from» := alloc.vec.FromBoxSliceVec.from
 }
@@ -606,14 +606,14 @@ theorem alloc.vec.Vec.setSlice!_getElem_suffix {α}
 
 @[expose, rust_fun "alloc::vec::{core::clone::Clone<alloc::vec::Vec<@T>>}::clone"
     (keepParams := [true, false]) (keepTraitClauses := [true, false])]
-def alloc.vec.CloneVec.clone {T : Type} (cloneInst : core.clone.Clone T)
+def alloc.vec.CloneVec.clone {T : Type _} (cloneInst : core.clone.Clone T)
   (v : alloc.vec.Vec T) : Result (alloc.vec.Vec T) := do
   let s ← Slice.clone cloneInst.clone v.slice
   ok {slice := s}
 
 @[expose, reducible, rust_trait_impl "core::clone::Clone<alloc::vec::Vec<@T>>"
     (keepParams := [true, false]) (keepTraitClauses := [true, false])]
-def core.clone.CloneallocvecVec {T : Type} (cloneInst : core.clone.Clone T) :
+def core.clone.CloneallocvecVec {T : Type _} (cloneInst : core.clone.Clone T) :
   core.clone.Clone (alloc.vec.Vec T) := {
   clone := alloc.vec.CloneVec.clone cloneInst
 }
@@ -622,7 +622,7 @@ def core.clone.CloneallocvecVec {T : Type} (cloneInst : core.clone.Clone T) :
   "alloc::vec::partial_eq::{core::cmp::PartialEq<alloc::vec::Vec<@T>, alloc::vec::Vec<@U>>}::eq"
   (keepParams := [true, true, false, false])]
 def alloc.vec.partial_eq.PartialEqVec.eq
-  {T : Type} {U : Type} (PartialEqInst : core.cmp.PartialEq T U)
+  {T : Type _} {U : Type _} (PartialEqInst : core.cmp.PartialEq T U)
   (v0 : alloc.vec.Vec T) (v1 : alloc.vec.Vec U) : Result Bool :=
   if v0.length = v1.length then
     List.allM (fun (x0, x1) => PartialEqInst.eq x0 x1) (List.zip v0.val v1.val)
@@ -632,7 +632,7 @@ def alloc.vec.partial_eq.PartialEqVec.eq
   "alloc::vec::partial_eq::{core::cmp::PartialEq<alloc::vec::Vec<@T>, alloc::vec::Vec<@U>>}::ne"
   (keepParams := [true, true, false, false])]
 def alloc.vec.partial_eq.PartialEqVec.ne
-  {T : Type} {U : Type} (PartialEqInst : core.cmp.PartialEq T U)
+  {T : Type _} {U : Type _} (PartialEqInst : core.cmp.PartialEq T U)
   (v0 : alloc.vec.Vec T) (v1 : alloc.vec.Vec U) : Result Bool :=
   if v0.length = v1.length then
     List.anyM (fun (x0, x1) => PartialEqInst.ne x0 x1) (List.zip v0.val v1.val)
@@ -642,7 +642,7 @@ def alloc.vec.partial_eq.PartialEqVec.ne
   rust_trait_impl
     "core::cmp::PartialEq<alloc::vec::Vec<@T>, alloc::vec::Vec<@U>>"
     (keepParams := [true, true, false, false])]
-def core.cmp.PartialEqVec {T : Type} {U : Type}
+def core.cmp.PartialEqVec {T : Type _} {U : Type _}
  (PartialEqInst : core.cmp.PartialEq T U) :
   core.cmp.PartialEq (alloc.vec.Vec T) (alloc.vec.Vec U) := {
   eq := alloc.vec.partial_eq.PartialEqVec.eq PartialEqInst
@@ -652,7 +652,7 @@ def core.cmp.PartialEqVec {T : Type} {U : Type}
 @[expose, rust_fun "alloc::vec::{core::fmt::Debug<alloc::vec::Vec<@T>>}::fmt"
   (keepParams := [true, false])]
 def alloc.vec.DebugVec.fmt
-  {T : Type} (_DebugInst : core.fmt.Debug T) :
+  {T : Type _} (_DebugInst : core.fmt.Debug T) :
   alloc.vec.Vec T → core.fmt.Formatter →
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
   -- TODO: more precise model
@@ -661,14 +661,14 @@ def alloc.vec.DebugVec.fmt
 
 @[expose, reducible,
   rust_trait_impl "core::fmt::Debug<alloc::vec::Vec<@T>>" (keepParams := [true, false])]
-def core.fmt.DebugVec {T : Type} (DebugInst : core.fmt.Debug
+def core.fmt.DebugVec {T : Type _} (DebugInst : core.fmt.Debug
   T) : core.fmt.Debug (alloc.vec.Vec T) := {
   fmt := alloc.vec.DebugVec.fmt DebugInst
 }
 
 namespace Tests
   example
-    (α : Type)
+    (α : Type _)
     (slots : alloc.vec.Vec (List α))
     (n : Usize)
     (_ : ∀ i < slots.length, slots.val[i]! = .nil)
@@ -684,7 +684,7 @@ namespace Tests
     scalar_tac
 
   example
-    (α : Type)
+    (α : Type _)
     (capacity : Usize)
     (dividend divisor : Usize)
     (Hfactor : 0 < (↑dividend : ℕ) ∧
@@ -712,7 +712,7 @@ namespace Tests
 
   attribute [-simp] List.getElem!_eq_getElem?_getD
   example
-    (α : Type)
+    (α : Type _)
     (slots : alloc.vec.Vec (List α))
     (Hslots : ∀ i < slots.length, slots[i]! = [])
     (slots1 : alloc.vec.Vec (List α))

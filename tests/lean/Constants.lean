@@ -54,7 +54,7 @@ def mk_pair0 (x : Std.U32) (y : Std.U32) : Result (Std.U32 × Std.U32) := do
 /-- [constants::Pair]
     Source: 'tests/src/constants.rs', lines 37:0-40:1
     Visibility: public -/
-structure Pair (T1 : Type) (T2 : Type) where
+structure Pair (T1 : Type _) (T2 : Type _) where
   x : T1
   y : T2
 
@@ -90,13 +90,13 @@ def P3 : Pair Std.U32 Std.U32 := { x := 0#u32, y := 1#u32 }
 /-- [constants::Wrap]
     Source: 'tests/src/constants.rs', lines 50:0-52:1
     Visibility: public -/
-structure Wrap (T : Type) where
+structure Wrap (T : Type _) where
   value : T
 
 /-- [constants::{constants::Wrap<T>}::new]:
     Source: 'tests/src/constants.rs', lines 55:4-57:5
     Visibility: public -/
-def Wrap.new {T : Type} (value : T) : Result (Wrap T) := do
+def Wrap.new {T : Type _} (value : T) : Result (Wrap T) := do
   ok { value }
 
 /-- [constants::Y]
@@ -180,19 +180,19 @@ def S4 : Result (Pair Std.U32 Std.U32) := mk_pair1 7#u32 8#u32
 /-- [constants::V]
     Source: 'tests/src/constants.rs', lines 87:0-89:1
     Visibility: public -/
-structure V (T : Type) (N : Std.Usize) where
+structure V (T : Type _) (N : Std.Usize) where
   x : Array T N
 
 /-- [constants::{constants::V<T, N>}::LEN]
     Source: 'tests/src/constants.rs', lines 92:4-92:29
     Visibility: public -/
 @[global_simps, irreducible]
-def V.LEN (T : Type) (N : Std.Usize) : Std.Usize := N
+def V.LEN (T : Type _) (N : Std.Usize) : Std.Usize := N
 
 /-- [constants::use_v]:
     Source: 'tests/src/constants.rs', lines 95:0-97:1
     Visibility: public -/
-def use_v (T : Type) (N : Std.Usize) : Result Std.Usize := do
+def use_v (T : Type _) (N : Std.Usize) : Result Std.Usize := do
   ok (V.LEN T N)
 
 end constants

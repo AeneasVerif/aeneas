@@ -22,13 +22,13 @@ namespace static
 /-- Trait declaration: [static::WithSlice]
     Source: 'tests/src/static.rs', lines 3:0-5:1
     Visibility: public -/
-structure WithSlice (Self : Type) where
+structure WithSlice (Self : Type _) where
   SLICE : Result (Slice Std.U16)
 
 /-- [static::read]:
     Source: 'tests/src/static.rs', lines 27:0-29:1 -/
 def read
-  {S : Type} (WithSliceInst : WithSlice S) (t : S) (i : Std.Usize) :
+  {S : Type _} (WithSliceInst : WithSlice S) (t : S) (i : Std.Usize) :
   Result Std.U16
   := do
   let s ← WithSliceInst.SLICE

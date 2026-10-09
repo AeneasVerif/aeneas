@@ -29,7 +29,8 @@ namespace vec_iter
 @[rust_fun
   "alloc::vec::{core::iter::traits::collect::IntoIterator<&'a alloc::vec::Vec<@T>, &'a @T, core::slice::iter::Iter<'a, @T>>}::into_iter"]
 axiom SharedAVec.Insts.CoreIterTraitsCollectIntoIteratorSharedATIter.into_iter
-  {T : Type} (A : Type) : alloc.vec.Vec T → Result (core.slice.iter.Iter T)
+  {T : Type _} (A : Type _) :
+  alloc.vec.Vec T → Result (core.slice.iter.Iter T)
 
 /-- [vec_iter::sum_by_value]: loop body 0:
     Source: 'tests/src/vec-iter.rs', lines 6:4-8:5

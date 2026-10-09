@@ -24,7 +24,7 @@ namespace multi_target
 
 /-- Trait declaration: [multi_target::SimdTrait]
     Source: 'tests/src/multi-target.rs', lines 5:0-8:1 -/
-structure SimdTrait (Self : Type) (Self_Vec : Type) where
+structure SimdTrait (Self : Type _) (Self_Vec : Type _) where
   coremarkerCopyInst : core.marker.Copy Self_Vec
   add : Self_Vec → Self_Vec → Result Self_Vec
 
@@ -71,7 +71,7 @@ def arm.Neon.Insts.Multi_targetSimdTraitU128 : SimdTrait arm.Neon Std.U128 := {
 /-- [multi_target::add_vec]:
     Source: 'tests/src/multi-target.rs', lines 40:0-42:1 -/
 def add_vec
-  {T : Type} {Clause0_Vec : Type} (SimdTraitInst : SimdTrait T Clause0_Vec)
+  {T : Type _} {Clause0_Vec : Type _} (SimdTraitInst : SimdTrait T Clause0_Vec)
   (a : Clause0_Vec) (b : Clause0_Vec) :
   Result Clause0_Vec
   := do

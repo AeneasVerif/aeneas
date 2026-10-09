@@ -28,7 +28,7 @@ def alloc_slice (N : Std.Usize) : Result (Slice Std.U8) := do
 /-- [dynamic_size::Wrapper]
     Source: 'tests/src/dynamic_size.rs', lines 7:0-9:1
     Visibility: public -/
-structure Wrapper (T : Type) where
+structure Wrapper (T : Type _) where
   data : T
 
 /-- [dynamic_size::alloc_wrapper]:

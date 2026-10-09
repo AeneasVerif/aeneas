@@ -372,7 +372,11 @@ elab mods:declModifiers "impl_def " id:declId sig:optDeclSig val:declVal : comma
       Term.synthesizeSyntheticMVarsNoPostponing
 
       let fullType ← mkForallFVars xs type
-      let fullType ← instantiateMVars fullType
+      -- Turn the universe metavariables of the header (e.g., from `Type _` binders) into
+      -- parameters before elaborating the body: the self-reference is typed with `fullType`,
+      -- which therefore can't contain metavariables.
+      let fullType ← Term.levelMVarToParam (← instantiateMVars fullType)
+      let type ← instantiateMVars type
 
       -- Introduce a local variable so the body can mention the name being defined
       withAuxDecl shortDeclName fullType declName fun selfFvar => do

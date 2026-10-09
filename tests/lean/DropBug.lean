@@ -24,7 +24,7 @@ namespace drop_bug
 
 /-- [drop_bug::wipe_slice]:
     Source: 'tests/src/drop_bug.rs', lines 20:0-24:1 -/
-axiom wipe_slice {T : Type} : Slice T → Result (Slice T)
+axiom wipe_slice {T : Type _} : Slice T → Result (Slice T)
 
 /-- [drop_bug::Inner]
     Source: 'tests/src/drop_bug.rs', lines 26:0-28:1 -/

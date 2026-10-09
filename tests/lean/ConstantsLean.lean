@@ -21,14 +21,14 @@ namespace constants_lean
 
 /-- Trait declaration: [constants_lean::Params]
     Source: 'tests/src/constants-lean.rs', lines 3:0-6:1 -/
-structure Params (Self : Type) where
+structure Params (Self : Type _) where
   N : Result Std.Usize
   M : Result Std.Usize
 
 /-- [constants_lean::use_params]:
     Source: 'tests/src/constants-lean.rs', lines 8:0-10:1 -/
 def use_params
-  {P : Type} (ParamsInst : Params P) (n : Std.Usize) : Result Bool := do
+  {P : Type _} (ParamsInst : Params P) (n : Std.Usize) : Result Bool := do
   let i ← ParamsInst.N
   let i1 ← ParamsInst.M
   let i2 ← i * i1
@@ -58,7 +58,7 @@ def Wrapper.NM (N1 : Std.Usize) (M1 : Std.Usize) : Result Std.Usize := N1 * M1
 
 /-- Trait declaration: [constants_lean::Trait]
     Source: 'tests/src/constants-lean.rs', lines 22:0-24:1 -/
-structure Trait (Self : Type) where
+structure Trait (Self : Type _) where
   NM : Result Std.Usize
 
 /-- [constants_lean::{impl constants_lean::Trait for constants_lean::Wrapper<N, M>}::NM]
@@ -78,7 +78,7 @@ def Wrapper.Insts.Constants_leanTrait (N1 : Std.Usize) (M1 : Std.Usize) : Trait
 
 /-- Trait declaration: [constants_lean::Trait1]
     Source: 'tests/src/constants-lean.rs', lines 30:0-34:1 -/
-structure Trait1 (Self : Type) where
+structure Trait1 (Self : Type _) where
   N : Result Std.Usize
   M : Result Std.Usize
   NM : Result Std.Usize
@@ -86,7 +86,7 @@ structure Trait1 (Self : Type) where
 /-- [constants_lean::Trait1::NM]
     Source: 'tests/src/constants-lean.rs', lines 33:4-33:40 -/
 @[global_simps, irreducible, trait_default]
-def Trait1.NM.default {Self : Type} (Trait1Inst : Trait1 Self)
+def Trait1.NM.default {Self : Type _} (Trait1Inst : Trait1 Self)
   : Result Std.Usize := do
   let i ← Trait1Inst.N
   let i1 ← Trait1Inst.M
@@ -113,7 +113,7 @@ impl_def Bool.Insts.Constants_leanTrait1 : Trait1 Bool := {
 
 /-- Trait declaration: [constants_lean::Params1]
     Source: 'tests/src/constants-lean.rs', lines 41:0-47:1 -/
-structure Params1 (Self : Type) where
+structure Params1 (Self : Type _) where
   N : Result Std.Usize
   LOGQ : Result Std.Usize
   PACKED_LEN : Result Std.Usize
@@ -122,7 +122,7 @@ structure Params1 (Self : Type) where
 /-- [constants_lean::Params1::PACKED_LEN]
     Source: 'tests/src/constants-lean.rs', lines 45:4-45:57 -/
 @[global_simps, irreducible, trait_default]
-def Params1.PACKED_LEN.default {Self : Type} (Params1Inst : Params1 Self)
+def Params1.PACKED_LEN.default {Self : Type _} (Params1Inst : Params1 Self)
   : Result Std.Usize := do
   let i ← Params1Inst.N
   let i1 ← Params1Inst.LOGQ
@@ -132,7 +132,7 @@ def Params1.PACKED_LEN.default {Self : Type} (Params1Inst : Params1 Self)
 /-- [constants_lean::Params1::CT1_LEN]
     Source: 'tests/src/constants-lean.rs', lines 46:4-46:44 -/
 @[global_simps, irreducible, trait_default]
-def Params1.CT1_LEN.default {Self : Type} (Params1Inst : Params1 Self)
+def Params1.CT1_LEN.default {Self : Type _} (Params1Inst : Params1 Self)
   : Result Std.Usize :=
   Params1Inst.PACKED_LEN
 
