@@ -185,8 +185,9 @@ theorem owns_union (A B : Heap)
 theorem owns_singleton_exclusive {α : Type} (l : Loc) (value₁ value₂ : α) :
     owns (Heap.singleton l value₁) ∗ owns (Heap.singleton l value₂) ⊢ ⌜False⌝ := by
   rintro h ⟨h₁, h₂, hCompatible, -, hSingle₁, hSingle₂⟩
-  exact Heap.disjoint_contains_false hCompatible (Heap.contains_of_sub hSingle₁)
-    (Heap.contains_of_sub hSingle₂)
+  exact Heap.disjoint_contains_false hCompatible
+    (Heap.Sub.contains hSingle₁ (Heap.contains_singleton l value₁))
+    (Heap.Sub.contains hSingle₂ (Heap.contains_singleton l value₂))
 
 theorem sep_holds (H₁ H₂ : IProp) (h : Heap) :
     (H₁ ∗ H₂) h ↔

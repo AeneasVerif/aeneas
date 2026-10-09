@@ -82,11 +82,15 @@ def RawPtr.materialize (values : List T) : Result (RawPtr T M) :=
   Result.guardedModify (fun _ => True) fun h _ =>
     (⟨(Heap.freshLoc h).1, (Heap.freshLoc h).2⟩, Heap.freshHeap h values)
 
-@[rust_fun "core::ptr::mut_ptr::{*mut @T}::add" -canFail -lift]
-def RawPtr.add (q : RawPtr T M) (count : Usize) : RawPtr T M :=
-  q.shift count.val
+/-- `add` stays in bounds. -/
+def RawPtr.InBounds (q : RawPtr T M) (count : Nat) (h : Heap) : Prop :=
+  ∀ i < count, ∃ α, Heap.contains h α (q.addr.add i)
 
-attribute [rust_fun "core::ptr::const_ptr::{*const @T}::add" -canFail -lift] RawPtr.add
+@[rust_fun "core::ptr::mut_ptr::{*mut @T}::add"]
+def RawPtr.add (q : RawPtr T M) (count : Usize) : Result (RawPtr T M) :=
+  Result.guardedModify (fun h => q.InBounds count.val h) fun h _ => (q.shift count.val, h)
+
+attribute [rust_fun "core::ptr::const_ptr::{*const @T}::add"] RawPtr.add
 
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::cast_const" -canFail -lift]
 def RawPtr.cast_const (q : MutRawPtr T) : ConstRawPtr T :=
@@ -171,9 +175,6 @@ namespace RawPtr
     (q.shift i).offset = q.offset + i := rfl
 
 @[simp] theorem shift_zero (q : RawPtr T M) : q.shift 0 = q := rfl
-
-@[simp] theorem add_eq_shift (q : RawPtr T M) (count : Usize) :
-    q.add count = q.shift count.val := rfl
 
 @[simp] theorem cast_const_eq_retype (q : MutRawPtr T) : q.cast_const = q.retype := rfl
 
@@ -261,7 +262,7 @@ theorem not_contains_empty (q : RawPtr T M) :
 
 theorem contains_of_pointsTo {q : RawPtr T M} {value : T} {h : Heap}
     (hPointsTo : (q ↦ value) h) : RawPtr.contains h q :=
-  Heap.contains_of_sub hPointsTo
+  Heap.Sub.contains hPointsTo (Heap.contains_singleton q.addr value)
 
 theorem addr_injective {q r : RawPtr T M} (hEq : q.addr = r.addr) : q = r := by
   cases q
@@ -305,7 +306,7 @@ namespace RawPtr
 
 theorem readable_of_pointsTo {q : RawPtr T M} {value : T} {h : Heap}
     (hPointsTo : (q ↦ value) h) : q.Readable h :=
-  ⟨Heap.contains_of_sub hPointsTo⟩
+  ⟨contains_of_pointsTo hPointsTo⟩
 
 @[step]
 theorem read.spec (q : RawPtr T M) (value : T) :
@@ -354,7 +355,7 @@ theorem alloc.boxed.Box.from_raw.spec {value : T} (q : MutRawPtr T) :
       ⦃ result => ⌜result = value⌝⦄ := by
   apply ispec_guardedModify
   intro h hPointsTo frame hCompatible
-  have hContains : Heap.contains h T q.addr := Heap.contains_of_sub hPointsTo
+  have hContains : Heap.contains h T q.addr := RawPtr.contains_of_pointsTo hPointsTo
   have hPointsToFrame : (q ↦ value) (h ∪ frame) :=
     (q ↦ value).up_closed hPointsTo (Heap.Sub.union_left hCompatible)
   refine ⟨Heap.contains_union_left hContains, Heap.free q.addr h hContains,
@@ -392,6 +393,17 @@ theorem read.spec_frame (q : RawPtr T M) (value : T) (H : IProp) :
     ⦃ q ↦ value ∗ H ⦄ q.read
       ⦃ result => ⌜result = value⌝ ∗ (q ↦ value ∗ H)⦄ := by
   apply WP.ispec_mono (read.spec q value) <;> iframe
+
+@[step]
+theorem add.spec (q : RawPtr T M) (values : List T) (count : Usize)
+    (hCount : count.val ≤ values.length) :
+    ⦃ q ↦* values ⦄ q.add count
+      ⦃ result => ⌜result = q.shift count.val⌝ ∗ q ↦* values⦄ := by
+  apply ispec_guardedModify
+  intro h hRange frame hCompatible
+  refine ⟨fun i hi => ⟨T, ?_⟩, h, hCompatible, rfl, (sep_pure_l _ _ h).mpr ⟨rfl, hRange⟩⟩
+  exact Heap.Sub.contains ((show Heap.Sub (Heap.rangeHeap q.addr values) h from hRange).trans
+    (Heap.Sub.union_left hCompatible)) (Heap.contains_rangeHeap (by omega))
 
 end RawPtr
 

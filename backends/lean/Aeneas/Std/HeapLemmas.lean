@@ -504,10 +504,26 @@ theorem update_singleton {α : Type} (l : Loc)
   apply Heap.ext_impl
   simp [Heap.update, singleton, Heap.insert]
 
-theorem contains_of_sub {α : Type} {l : Loc} {value : α} {h : Heap}
-    (hSub : Heap.Sub (singleton l value) h) : contains h α l := by
+theorem Sub.contains {α : Type} {A h : Heap} {l : Loc} (hSub : Heap.Sub A h)
+    (hContains : contains A α l) : contains h α l := by
   obtain ⟨rest, -, rfl⟩ := hSub
-  exact contains_union_left (contains_singleton l value)
+  exact contains_union_left hContains
+
+theorem contains_rangeHeap {α : Type} {l : Loc} {values : List α} {i : Nat}
+    (hIndex : i < values.length) : contains (rangeHeap l values) α (l.add i) := by
+  induction values generalizing l i with
+  | nil => simp at hIndex
+  | cons value rest ih =>
+    rw [rangeHeap_cons]
+    cases i with
+    | zero => exact contains_union_left (contains_singleton l value)
+    | succ j =>
+      have hCompatible :
+          PartialCommMonoid.Compatible (singleton l value) (rangeHeap (l.add 1) rest) := by
+        simpa using compatible_rangeHeap_append l [value] rest
+      rw [PartialCommMonoid.union_comm_of_compatible hCompatible,
+        show l.add (j + 1) = (l.add 1).add j by rw [Loc.add_add, Nat.add_comm]]
+      exact contains_union_left (ih (by simpa using hIndex))
 
 theorem read_of_sub {α : Type} {l : Loc} {value : α} {h : Heap}
     (hSub : Heap.Sub (singleton l value) h)

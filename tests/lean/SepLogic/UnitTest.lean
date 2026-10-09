@@ -464,8 +464,9 @@ example (q : MutRawPtr Nat) (x y : Nat) : q ↦ x ∗ (q.shift 1) ↦ y ⊢ q �
 
 def slicePtrWrite (s : Aeneas.Std.Slice Nat) : Result (Nat × Aeneas.Std.Slice Nat) := do
   let (p, s) ← s.as_mut_ptr
-  write (p.add 1#usize) 42
-  let value ← read (p.add 1#usize)
+  let q ← p.add 1#usize
+  write q 42
+  let value ← read q
   pure (value, s)
 
 /-- `as_mut_ptr` copies: the write is seen through the pointer, not in the returned slice. -/
@@ -474,9 +475,30 @@ theorem slicePtrWrite.spec (s : Aeneas.Std.Slice Nat) (h : 1 < s.length) :
   unfold slicePtrWrite
   step as ⟨r, hr⟩
   obtain ⟨p, s'⟩ := r
-  simp only [RawPtr.add_eq_shift, show (1#usize).val = 1 by simp]
+  step as ⟨q, hq⟩
+  simp only [hq, show (1#usize).val = 1 by simp]
   step with MutRawPtr.write.spec_range p s.val 1 42 (by simpa using h)
   step with RawPtr.read.spec_range p (s.val.set 1 42) 1 (by simpa using h)
   step*
+
+/-! `add` stays within the allocation, up to one past its end. -/
+
+example : ⦃ emp ⦄ (do
+    let p ← RawPtr.materialize (M := .Mut) [1, 2]
+    p.add 2#usize) ⦃ _ => ⌜True⌝ ⦄ := by
+  step*
+
+/-- Two past the end of a one-cell allocation: `add` steps over the dead end marker. -/
+example : ¬ ⦃ emp ⦄ (do
+    let p ← into_raw (5 : Nat)
+    p.add 2#usize) ⦃ _ => ⌜True⌝ ⦄ := by
+  intro hTriple
+  have hSpec := (ispec_iff.mp hTriple) emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
+  simp only [into_raw, RawPtr.add, RawPtr.materialize, Result.guardedModify,
+    Std.bind_tc_vis, Std.bind_tc_ok] at hSpec
+  obtain ⟨_, hSpec⟩ := hSpec.vis_view
+  obtain ⟨hInBounds, -⟩ := hSpec.vis_view
+  obtain ⟨α, hLive⟩ := hInBounds 1 (by simp)
+  exact Heap.not_contains_freshHeap_end (α := α) (h := ∅) [(5 : Nat)] hLive
 
 end SepLogic
