@@ -70,6 +70,12 @@ def RustEffect : Effect := {
 -- types. Heap cells only hold values in `Type`, so a value containing a `Result`-returning function
 -- (a closure, a function pointer, a trait-instance structure) cannot be stored behind a raw pointer:
 -- that would need a higher-order store. Such pointers fail with a universe error.
+--
+-- Universes: since `A → Result B` is not in `Type`, generic code must accept types in any
+-- universe. Convention: extracted code and the Std models bind type parameters as `Type _`
+-- (except the type parameters of generic trait methods, which live in a structure field and
+-- stay in `Type`), and Std models whose `do` blocks bind values of different universes import
+-- `Aeneas.Do.Elab`, whose `do` uses the universe-heterogeneous `Std.bind`.
 @[irreducible]
 def Result (α : Type u) : Type (max u 1) := ITree RustEffect α
 unseal Result

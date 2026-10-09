@@ -31,14 +31,16 @@ them, and `RawPtr.cast_scalar`, the `as` cast between raw pointers, which always
 inductive Mutability where
 | Mut | Const
 
-/-- A Rust raw pointer: an allocation identifier and an offset into it. -/
-structure RawPtr (T : Type) (M : Mutability) where
+/-- A Rust raw pointer: an allocation identifier and an offset into it. `T` is a phantom
+    parameter, universe-polymorphic like the other type parameters (only the heap cells a
+    pointer reads or writes need to live in `Type`). -/
+structure RawPtr (T : Type _) (M : Mutability) where
   base : AllocId
   offset : Nat
   deriving Inhabited, DecidableEq
 
-abbrev MutRawPtr (T : Type) := RawPtr T .Mut
-abbrev ConstRawPtr (T : Type) := RawPtr T .Const
+abbrev MutRawPtr (T : Type _) := RawPtr T .Mut
+abbrev ConstRawPtr (T : Type _) := RawPtr T .Const
 
 open Lean PrettyPrinter Delaborator SubExpr in
 @[app_delab RawPtr]
