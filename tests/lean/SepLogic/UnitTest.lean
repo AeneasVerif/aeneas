@@ -1,4 +1,3 @@
-import Aeneas.Std.Buffer
 import SepLogic.Fixtures
 
 open Aeneas
@@ -11,8 +10,9 @@ open Aeneas.Data.Coinductive
 
 open Aeneas.Std.WP
 
-open Aeneas.Std (Buffer Heap MutRawPtr RawPtr Result RustEffect)
-open Aeneas.Std.MutRawPtr (alloc free write)
+open Aeneas.Std (Heap MutRawPtr RawPtr Result RustEffect)
+open Aeneas.Std.MutRawPtr (write)
+open Aeneas.Std.alloc.boxed.Box (into_raw from_raw)
 open Aeneas.Std.RawPtr (read pointsTo_exclusive)
 
 unseal Result
@@ -196,7 +196,7 @@ example (p : MutRawPtr Nat) (value : Nat) :
 
 def readAndFree (p : MutRawPtr Nat) : Result Nat := do
   let v ← read p
-  free p
+  let _ ← from_raw p
   pure (v + 1)
 
 example (p : MutRawPtr Nat) (value : Nat) :
@@ -209,7 +209,7 @@ def opaqueStepResult (actual expected : Nat) : Prop :=
 
 def readFreeReturn (p : MutRawPtr Nat) : Result Nat := do
   let value ← read p
-  free p
+  let _ ← from_raw p
   pure (value + 1)
 
 example (p : MutRawPtr Nat) (value : Nat) :
@@ -279,7 +279,7 @@ example (p : MutRawPtr Nat) : ¬ (⦃ emp ⦄ read p ⦃ _ => emp⦄) := by
   exact RawPtr.not_contains_empty p hReadable.contains
 
 def allocAndForget (value : Nat) : Result Unit := do
-  let _ ← alloc value
+  let _ ← into_raw value
   pure ()
 
 example (value : Nat) :
@@ -333,7 +333,7 @@ example (p q : MutRawPtr Nat) :
   step with read.spec p 3
 
 example (q : MutRawPtr Nat) :
-    ⦃ iexists (fun n => iprop(q ↦ n)) ⦄ alloc 5
+    ⦃ iexists (fun n => iprop(q ↦ n)) ⦄ into_raw 5
       ⦃ r => iprop(r ↦ 5 ∗ iexists (fun n => iprop(q ↦ n)))⦄ := by
   step*
 
@@ -397,10 +397,10 @@ example (p : MutRawPtr Nat) (n : Nat) (b : Bool) (hb : b = true) (hguard : b = t
   step* -grind -threadGrindState
 
 example (q : MutRawPtr Nat) (x y : Nat) :
-    q ↦* [x, y] ⊣⊢ q ↦ x ∗ (q.add 1) ↦ y :=
+    q ↦* [x, y] ⊣⊢ q ↦ x ∗ (q.shift 1) ↦ y :=
   RawPtr.pointsToRange_append q [x] [y]
 
-example (q : MutRawPtr Nat) (i : Nat) : (q.add i).base = q.base := rfl
+example (q : MutRawPtr Nat) (i : Nat) : (q.shift i).base = q.base := rfl
 
 example (q : MutRawPtr Nat) : (q ↦* ([] : List Nat)) = emp :=
   RawPtr.pointsToRange_nil q
@@ -408,20 +408,24 @@ example (q : MutRawPtr Nat) : (q ↦* ([] : List Nat)) = emp :=
 example (q : MutRawPtr Nat) (x y : Nat) : q ↦ x ∗ q ↦ y ⊢ ⌜False⌝ :=
   pointsTo_exclusive q x y
 
-example (q : MutRawPtr Nat) (x y : Nat) : q ↦ x ∗ (q.add 1) ↦ y ⊢ q ↦* [x, y] :=
+example (q : MutRawPtr Nat) (x y : Nat) : q ↦ x ∗ (q.shift 1) ↦ y ⊢ q ↦* [x, y] :=
   (RawPtr.pointsToRange_append q [x] [y]).mpr
 
-def bufferOne : Result Nat := do
-  let b ← Buffer.alloc 1 (0 : Nat)
-  b.write 0 42
-  let value ← b.read 0
-  free (b.ptrAt 0)
-  pure value
+def slicePtrWrite (s : Aeneas.Std.Slice Nat) : Result (Nat × Aeneas.Std.Slice Nat) := do
+  let (p, s) ← s.as_mut_ptr
+  write (p.add 1#usize) 42
+  let value ← read (p.add 1#usize)
+  pure (value, s)
 
-theorem bufferOne.spec : ⦃ emp ⦄ bufferOne ⦃ result => ⌜result = 42⌝⦄ := by
-  unfold bufferOne
-  step as ⟨b⟩
-  irewrite (Buffer.pointsTo_entails_range b _)
+/-- `as_mut_ptr` copies: the write is seen through the pointer, not in the returned slice. -/
+theorem slicePtrWrite.spec (s : Aeneas.Std.Slice Nat) (h : 1 < s.length) :
+    ⦃ emp ⦄ slicePtrWrite s ⦃ (value, s') => ⌜value = 42 ∧ s' = s⌝⦄ := by
+  unfold slicePtrWrite
+  step as ⟨r, hr⟩
+  obtain ⟨p, s'⟩ := r
+  simp only [RawPtr.add_eq_shift, show (1#usize).val = 1 by simp]
+  step with MutRawPtr.write.spec_range p s.val 1 42 (by simpa using h)
+  step with RawPtr.read.spec_range p (s.val.set 1 42) 1 (by simpa using h)
   step*
 
 def castRead (p : MutRawPtr Aeneas.Std.U32) : Result Aeneas.Std.U32 := do

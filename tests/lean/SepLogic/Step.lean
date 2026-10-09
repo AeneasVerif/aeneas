@@ -11,12 +11,13 @@ namespace SepLogic.Tests.Step
 open Aeneas.Std.WP
 
 open Aeneas.Std (MutRawPtr RawPtr Result)
-open Aeneas.Std.MutRawPtr (alloc free write)
+open Aeneas.Std.MutRawPtr (write)
+open Aeneas.Std.alloc.boxed.Box (into_raw from_raw)
 open Aeneas.Std.RawPtr (read)
 
 
 def allocAndReturn : Result (MutRawPtr Nat) := do
-  let p ← alloc 1
+  let p ← into_raw 1
   pure p
 
 example : ⦃ emp ⦄ allocAndReturn ⦃ p => p ↦ 1⦄ := by
@@ -33,7 +34,7 @@ def opaqueStepResult (actual expected : Nat) : Prop :=
 
 def readFreeReturn (p : MutRawPtr Nat) : Result Nat := do
   let value ← read p
-  free p
+  let _ ← from_raw p
   pure (value + 1)
 
 example (p : MutRawPtr Nat) (value : Nat) :

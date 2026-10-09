@@ -1,4 +1,3 @@
-import SepLogic.Buffer
 import SepLogic.Fixtures
 import SepLogic.Partial
 import SepLogic.PureSpec

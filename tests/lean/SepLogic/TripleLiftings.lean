@@ -7,6 +7,7 @@ open Aeneas.Std (Result RawPtr MutRawPtr)
 open Aeneas.SepLogic
 open Aeneas
 open Aeneas.Std.WP
+open Aeneas.Std.alloc.boxed.Box (into_raw from_raw)
 
 def totalPure (x : Nat) : Result Nat := Result.ok x
 def partialPure (x : Nat) : Result Nat := Result.ok x
@@ -147,22 +148,22 @@ example (x : Nat) (P : IProp) :
 
 example (x : Nat) :
     ispec emp (do
-      let p ← MutRawPtr.alloc x
+      let p ← into_raw x
       let y ← RawPtr.read p
-      MutRawPtr.free p
+      let _ ← from_raw p
       totalPure y) (fun z => ⌜z = x⌝) := by step*
 
-def partialAlloc (x : Nat) := MutRawPtr.alloc x
+def partialAlloc (x : Nat) := into_raw x
 
 @[step] theorem partialAlloc.spec (x : Nat) :
     ⦃ emp ⦄ partialAlloc x ⦃ p => p ↦ x ⦄div :=
-  ispec_dispec (MutRawPtr.alloc.spec x)
+  ispec_dispec (into_raw.spec x)
 
 example (x : Nat) :
     dispec emp (do
       let p ← partialAlloc x
       let y ← RawPtr.read p
-      MutRawPtr.free p
+      let _ ← from_raw p
       partialPure y) (fun z => ⌜z = x⌝) := by step*
 
 example (m : Result Nat) (h : m ⦃ n => n = 7 ⦄) (P : IProp) :
@@ -293,9 +294,9 @@ example : totalPure 0 ⦃ n => n = 0 ⦄ := by
 
 example : True := by
   fail_if_success
-    have : MutRawPtr.alloc (0 : Nat) ⦃ _ => True ⦄ := by step*
+    have : into_raw (0 : Nat) ⦃ _ => True ⦄ := by step*
   fail_if_success
-    have : MutRawPtr.alloc (0 : Nat) ⦃ _ => True ⦄div := by step*
+    have : into_raw (0 : Nat) ⦃ _ => True ⦄div := by step*
   trivial
 
 end TripleLiftingTests

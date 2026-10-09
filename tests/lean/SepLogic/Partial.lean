@@ -11,7 +11,8 @@ open Aeneas.Data.Coinductive
 open Aeneas.Std.WP
 
 open Aeneas.Std (Heap MutRawPtr RawPtr Result loop)
-open Aeneas.Std.MutRawPtr (alloc free write)
+open Aeneas.Std.MutRawPtr (write)
+open Aeneas.Std.alloc.boxed.Box (into_raw from_raw)
 open Aeneas.Std.RawPtr (read)
 
 example (p : MutRawPtr Nat) (value : Nat) :
@@ -29,11 +30,11 @@ example (x : Nat) :
   step*
 
 def roundTripPartial : Result Nat := do
-  let p ← alloc (1 : Nat)
+  let p ← into_raw (1 : Nat)
   let value ← read p
   write p (value + 41)
   let result ← read p
-  free p
+  let _ ← from_raw p
   pure result
 
 theorem roundTripPartial.spec :

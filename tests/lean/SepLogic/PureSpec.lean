@@ -7,6 +7,7 @@ open Aeneas
 open Aeneas.Std (Error Result RustEffect RawPtr MutRawPtr)
 open Aeneas.SepLogic
 open Aeneas.Std.WP
+open Aeneas.Std.alloc.boxed.Box (into_raw from_raw)
 
 example (m : Result Nat) (p : Nat → Prop) :
     (m ⦃ x => p x ⦄) = ispec emp m (fun x => ⌜p x⌝) := rfl
@@ -437,7 +438,7 @@ example (p : MutRawPtr Nat) (n : Nat) :
   step*
 
 def makeCounter : Result (Unit → Result Nat) :=
-  Aeneas.Std.bind (MutRawPtr.alloc 0) fun p =>
+  Aeneas.Std.bind (into_raw 0) fun p =>
     Result.ok (increment p)
 
 @[step]
@@ -529,10 +530,10 @@ theorem bumpCell.spec (p : MutRawPtr Nat) (v : Nat) :
   step*
 
 def bumpBoxed (v : Nat) : Result Nat := do
-  let p ← MutRawPtr.alloc v
+  let p ← into_raw v
   bumpCell p
   let w ← RawPtr.read p
-  MutRawPtr.free p
+  let _ ← from_raw p
   pure w
 
 @[step]
@@ -642,12 +643,12 @@ example (p : MutRawPtr Nat) (v : Nat) :
 
 end Ex
 
-example : ⦃ emp ⦄ MutRawPtr.alloc (0 : Nat) ⦃ _ => ⌜True⌝⦄ := by
+example : ⦃ emp ⦄ into_raw (0 : Nat) ⦃ _ => ⌜True⌝⦄ := by
   step*
 
-example : ¬ ∃ q, MutRawPtr.alloc (0 : Nat) = Result.ok q := by
+example : ¬ ∃ q, into_raw (0 : Nat) = Result.ok q := by
   rintro ⟨q, hq⟩
-  simp [Aeneas.Std.MutRawPtr.alloc, Aeneas.Std.RawPtr.allocArray,
+  simp [into_raw, Aeneas.Std.RawPtr.materialize,
     Result.guardedModify] at hq
 
 namespace LegacyWPExamples
