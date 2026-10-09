@@ -2,10 +2,10 @@ module
 
 public import Mathlib.Data.Finmap
 
-/-! The heap model behind the separation logic: a finite map from locations (allocation id,
-offset) to dynamically typed cells `Σ α, α`, kept abstract behind `Heap`. Provides disjoint
-union (`compatible`, `∪`), the extension order `Sub`, deterministic allocation (`freshBase`), and
-typed `read`/`update`/`free` guarded by `contains`. -/
+/-! Block-based heap: finite map from (allocation id, offset) to typed cells `Σ α, α`.
+Supports interior pointers, stored pointers, provenance by allocation id. Not supported:
+uninitialized memory, byte-level representation/type punning, pointer-integer casts, allocation
+bounds (interior free undetected), allocation-id reuse checks, higher-order store, permissions. -/
 
 public section
 
