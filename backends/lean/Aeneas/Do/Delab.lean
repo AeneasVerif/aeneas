@@ -1,7 +1,8 @@
 module
 public import Lean
 public import Aeneas.Do.Elab
-public import Aeneas.Std.Delab
+public import Aeneas.Std
+public meta import Aeneas.Std.Delab
 public section
 
 /-! # Delaborator for new `do` pattern matching logic -/

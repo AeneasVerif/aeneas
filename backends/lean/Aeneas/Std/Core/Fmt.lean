@@ -20,7 +20,7 @@ structure core.fmt.Debug (T : Type u) where
 
 -- TODO: move?
 @[expose, rust_fun "core::result::{core::result::Result<@T, @E>}::unwrap"]
-def core.result.Result.unwrap {T E : Type}
+def core.result.Result.unwrap {T E : Type _}
   (_ : core.fmt.Debug E) (e : core.result.Result T E) : Std.Result T :=
   match e with
   | .Ok x => .ok x
@@ -28,7 +28,7 @@ def core.result.Result.unwrap {T E : Type}
 
 @[step]
 theorem core.result.Result.unwrap.step_spec
-    {T E : Type} (inst : core.fmt.Debug E)
+    {T E : Type _} (inst : core.fmt.Debug E)
     (r : core.result.Result T E)
     (h : ∃ v, r = core.result.Result.Ok v) :
     core.result.Result.unwrap inst r
@@ -38,7 +38,7 @@ theorem core.result.Result.unwrap.step_spec
     simp [core.result.Result.unwrap, WP.spec_ok]
 
 -- TODO: add pattern once we support partial monomorphization
-def core.result.Result.unwrap.mut {T E : Type}
+def core.result.Result.unwrap.mut {T E : Type _}
   (_ : core.fmt.Debug E) (e : core.result.Result T E) : Std.Result (T × (T → core.result.Result T E)) :=
   match e with
   | .Ok x => .ok (x, fun x => .Ok x)
@@ -63,21 +63,21 @@ def core.fmt.Arguments.new {N : Std.Usize} {M : Std.Usize}
 
 @[expose, rust_fun "core::fmt::rt::{core::fmt::rt::Argument<'0>}::new_debug"]
 def core.fmt.rt.Argument.new_debug
-  {T : Type} (_DebugInst : core.fmt.Debug T) (_ : T) : Result core.fmt.rt.Argument :=
+  {T : Type _} (_DebugInst : core.fmt.Debug T) (_ : T) : Result core.fmt.rt.Argument :=
   -- TODO
   Result.ok ()
 
 @[rust_trait "core::fmt::Display"]
-structure core.fmt.Display (Self : Type) where
+structure core.fmt.Display (Self : Type _) where
   fmt : Self → core.fmt.Formatter → Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter)
 
 @[rust_trait "core::fmt::LowerHex"]
-structure core.fmt.LowerHex (Self : Type) where
+structure core.fmt.LowerHex (Self : Type _) where
   fmt : Self → core.fmt.Formatter → Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter)
 
 @[expose, rust_fun "core::fmt::rt::{core::fmt::rt::Argument<'0>}::new_lower_hex"]
 def core.fmt.rt.Argument.new_lower_hex
-  {T : Type} (_LowerHexInst : core.fmt.LowerHex T) (_ : T) :
+  {T : Type _} (_LowerHexInst : core.fmt.LowerHex T) (_ : T) :
   Result core.fmt.rt.Argument :=
   -- TODO
   .ok ()
@@ -96,7 +96,7 @@ def core.fmt.Formatter.write_fmt
   .ok (.Ok (), fmt)
 
 @[expose, rust_fun "core::fmt::{core::fmt::Debug<&'0 @T>}::fmt"]
-def core.fmt.DebugShared.fmt {T : Type} (DebugInst : core.fmt.Debug T) (x : T)
+def core.fmt.DebugShared.fmt {T : Type _} (DebugInst : core.fmt.Debug T) (x : T)
   (fmt : core.fmt.Formatter) :
   Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter) :=
   DebugInst.fmt x fmt
@@ -114,7 +114,7 @@ def core.fmt.DebugUnit.fmt (_ : Unit) (fmt : core.fmt.Formatter) :
   .ok (.Ok (), fmt)
 
 @[expose, rust_fun "core::result::{core::result::Result<@T, @E>}::expect"]
-def core.result.Result.expect {T : Type} {E : Type} (_DebugInst : core.fmt.Debug E)
+def core.result.Result.expect {T : Type _} {E : Type _} (_DebugInst : core.fmt.Debug E)
   (r : core.result.Result T E) (_ : Str) : Std.Result T :=
   match r with
   | .Ok x => .ok x
@@ -177,7 +177,7 @@ def core.fmt.Formatter.debug_tuple_field1_finish :
   .ok (.Ok (), fmt)
 
 @[expose, reducible, rust_trait_impl "core::fmt::Debug<&'0 @T>"]
-def core.fmt.DebugShared {T : Type} (DebugInst : core.fmt.Debug T) :
+def core.fmt.DebugShared {T : Type _} (DebugInst : core.fmt.Debug T) :
   core.fmt.Debug T := {
   fmt := core.fmt.DebugShared.fmt DebugInst
 }
@@ -194,7 +194,7 @@ def core.fmt.DebugBool : core.fmt.Debug Bool := {
 
 @[expose, rust_fun "core::fmt::rt::{core::fmt::rt::Argument<'0>}::new_display"]
 def core.fmt.rt.Argument.new_display
-  {T : Type} (_DisplayInst : core.fmt.Display T) :
+  {T : Type _} (_DisplayInst : core.fmt.Display T) :
   T → Result core.fmt.rt.Argument :=
   -- TODO: we should at least call the `fmt` method somewhere
   fun _ => Result.ok ()

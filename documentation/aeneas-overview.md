@@ -132,6 +132,13 @@ def sum_three (a b c : U32) : Result U32 := do
 Each `←` is a monadic bind: if the addition overflows, the whole computation
 short-circuits to `fail`.
 
+Type parameters are extracted as `Type _` (e.g. `def id {T : Type _} (x : T) : Result T`), so
+generic code also accepts types outside `Type`, such as function items (`A → Result B`). Aeneas'
+`do` elaborator (`Aeneas.Do.Elab`) binds with the universe-polymorphic `Std.bind`, so a `do` block
+may bind values of different universes. Two exceptions stay in `Type`: the type parameters of
+generic trait methods (they are bound inside a structure field) and the result sort of opaque
+types (`axiom Foo : Type`).
+
 ### 2.4 Loop Translation
 
 Rust loops (`loop`, `while`, `for`) are translated to **auxiliary `_loop` functions**. The parent function calls the `_loop` function to enter the loop. For example, a Rust function `zero` with a loop becomes `zero` (which calls `zero_loop`) and `zero_loop` (which contains the loop body).

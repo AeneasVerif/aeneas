@@ -24,12 +24,12 @@ namespace opaque_mut_region
 
 /-- [opaque_mut_region::Wrapper]
     Source: 'tests/src/opaque-mut-region.rs', lines 6:0-6:33 -/
-axiom Wrapper (T : Type) : Type
+axiom Wrapper (T : Type _) : Type
 
 /-- [opaque_mut_region::{opaque_mut_region::Wrapper<'a, T>}::id]:
     Source: 'tests/src/opaque-mut-region.rs', lines 9:4-11:5 -/
 def Wrapper.id
-  {T : Type} (self : Wrapper T) :
+  {T : Type _} (self : Wrapper T) :
   Result ((Wrapper T) × (Wrapper T → Wrapper T))
   := do
   ok (self, fun self1 => self1)
@@ -37,12 +37,12 @@ def Wrapper.id
 /-- [opaque_mut_region::WrapperRaw]
     Source: 'tests/src/opaque-mut-region.rs', lines 15:0-19:1
     Visibility: public -/
-axiom WrapperRaw (T : Type) : Type
+axiom WrapperRaw (T : Type _) : Type
 
 /-- [opaque_mut_region::{opaque_mut_region::WrapperRaw<'a, T>}::id]:
     Source: 'tests/src/opaque-mut-region.rs', lines 22:4-24:5 -/
 def WrapperRaw.id
-  {T : Type} (self : WrapperRaw T) :
+  {T : Type _} (self : WrapperRaw T) :
   Result ((WrapperRaw T) × (WrapperRaw T → WrapperRaw T))
   := do
   ok (self, fun self1 => self1)

@@ -23,7 +23,7 @@ namespace order
     Source: 'tests/src/order.rs', lines 7:0-9:1
     Visibility: public -/
 def compare
-  {T : Type} (corecmpOrdInst : core.cmp.Ord T) (x : T) (y : T) :
+  {T : Type _} (corecmpOrdInst : core.cmp.Ord T) (x : T) (y : T) :
   Result Ordering
   := do
   corecmpOrdInst.cmp x y

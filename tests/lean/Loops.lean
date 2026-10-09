@@ -216,7 +216,7 @@ def clear (v : alloc.vec.Vec Std.U32) : Result (alloc.vec.Vec Std.U32) := do
     Source: 'tests/src/loops.rs', lines 80:0-83:1
     Visibility: public -/
 @[discriminant isize]
-inductive List (T : Type) where
+inductive List (T : Type _) where
 | Cons : T → List T → List T
 | Nil : List T
 
@@ -244,7 +244,7 @@ def list_mem (x : Std.U32) (ls : List Std.U32) : Result Bool := do
     Visibility: public -/
 @[rust_loop]
 def list_nth_mut_loop
-  {T : Type} (ls : List T) (i : Std.U32) : Result (T × (T → List T)) := do
+  {T : Type _} (ls : List T) (i : Std.U32) : Result (T × (T → List T)) := do
   match ls with
   | List.Cons x tl =>
     if i = 0#u32
@@ -263,7 +263,7 @@ partial_fixpoint
     Visibility: public -/
 @[reducible]
 def list_nth_mut
-  {T : Type} (ls : List T) (i : Std.U32) : Result (T × (T → List T)) := do
+  {T : Type _} (ls : List T) (i : Std.U32) : Result (T × (T → List T)) := do
   list_nth_mut_loop ls i
 
 /-- [loops::list_nth_shared]: loop 0:
@@ -271,7 +271,7 @@ def list_nth_mut
     Visibility: public -/
 @[rust_loop]
 def list_nth_shared_loop
-  {T : Type} (ls : List T) (i : Std.U32) : Result T := do
+  {T : Type _} (ls : List T) (i : Std.U32) : Result T := do
   match ls with
   | List.Cons x tl =>
     if i = 0#u32
@@ -285,7 +285,7 @@ partial_fixpoint
     Source: 'tests/src/loops.rs', lines 110:0-120:1
     Visibility: public -/
 @[reducible]
-def list_nth_shared {T : Type} (ls : List T) (i : Std.U32) : Result T := do
+def list_nth_shared {T : Type _} (ls : List T) (i : Std.U32) : Result T := do
   list_nth_shared_loop ls i
 
 /-- [loops::get_elem_mut]: loop 0:
@@ -352,13 +352,13 @@ def get_elem_shared
     Source: 'tests/src/loops.rs', lines 154:0-156:1
     Visibility: public -/
 def id_mut
-  {T : Type} (ls : List T) : Result ((List T) × (List T → List T)) := do
+  {T : Type _} (ls : List T) : Result ((List T) × (List T → List T)) := do
   ok (ls, fun ls1 => ls1)
 
 /-- [loops::id_shared]:
     Source: 'tests/src/loops.rs', lines 158:0-160:1
     Visibility: public -/
-def id_shared {T : Type} (ls : List T) : Result (List T) := do
+def id_shared {T : Type _} (ls : List T) : Result (List T) := do
   ok ls
 
 /-- [loops::list_nth_mut_with_id]: loop 0:
@@ -366,7 +366,7 @@ def id_shared {T : Type} (ls : List T) : Result (List T) := do
     Visibility: public -/
 @[rust_loop]
 def list_nth_mut_with_id_loop
-  {T : Type} (i : Std.U32) (ls : List T) : Result (T × (T → List T)) := do
+  {T : Type _} (i : Std.U32) (ls : List T) : Result (T × (T → List T)) := do
   match ls with
   | List.Cons x tl =>
     if i = 0#u32
@@ -384,7 +384,7 @@ partial_fixpoint
     Source: 'tests/src/loops.rs', lines 163:0-174:1
     Visibility: public -/
 def list_nth_mut_with_id
-  {T : Type} (ls : List T) (i : Std.U32) : Result (T × (T → List T)) := do
+  {T : Type _} (ls : List T) (i : Std.U32) : Result (T × (T → List T)) := do
   let (ls1, id_mut_back) ← id_mut ls
   let (t, back) ← list_nth_mut_with_id_loop i ls1
   let back1 := fun t1 => let l := back t1
@@ -396,7 +396,7 @@ def list_nth_mut_with_id
     Visibility: public -/
 @[rust_loop]
 def list_nth_shared_with_id_loop
-  {T : Type} (i : Std.U32) (ls : List T) : Result T := do
+  {T : Type _} (i : Std.U32) (ls : List T) : Result T := do
   match ls with
   | List.Cons x tl =>
     if i = 0#u32
@@ -410,7 +410,7 @@ partial_fixpoint
     Source: 'tests/src/loops.rs', lines 177:0-188:1
     Visibility: public -/
 def list_nth_shared_with_id
-  {T : Type} (ls : List T) (i : Std.U32) : Result T := do
+  {T : Type _} (ls : List T) (i : Std.U32) : Result T := do
   let ls1 ← id_shared ls
   list_nth_shared_with_id_loop i ls1
 
@@ -419,7 +419,7 @@ def list_nth_shared_with_id
     Visibility: public -/
 @[rust_loop]
 def list_nth_mut_pair_loop
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
+  {T : Type _} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T) × (T → List T))
   := do
   match ls0 with
@@ -444,7 +444,7 @@ partial_fixpoint
     Source: 'tests/src/loops.rs', lines 193:0-214:1
     Visibility: public -/
 def list_nth_mut_pair
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
+  {T : Type _} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result ((T × T) × (T → List T) × (T → List T))
   := do
   let (t, t1, back, back1) ← list_nth_mut_pair_loop ls0 ls1 i
@@ -455,7 +455,7 @@ def list_nth_mut_pair
     Visibility: public -/
 @[rust_loop]
 def list_nth_shared_pair_loop
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
+  {T : Type _} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T)
   := do
   match ls0 with
@@ -475,7 +475,7 @@ partial_fixpoint
     Visibility: public -/
 @[reducible]
 def list_nth_shared_pair
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
+  {T : Type _} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T)
   := do
   list_nth_shared_pair_loop ls0 ls1 i
@@ -485,7 +485,7 @@ def list_nth_shared_pair
     Visibility: public -/
 @[rust_loop]
 def list_nth_mut_pair_merge_loop
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
+  {T : Type _} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T) × (T → List T))
   := do
   match ls0 with
@@ -510,7 +510,7 @@ partial_fixpoint
     Source: 'tests/src/loops.rs', lines 242:0-257:1
     Visibility: public -/
 def list_nth_mut_pair_merge
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
+  {T : Type _} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result ((T × T) × ((T × T) → ((List T) × (List T))))
   := do
   let (t, t1, back, back1) ← list_nth_mut_pair_merge_loop ls0 ls1 i
@@ -527,7 +527,7 @@ def list_nth_mut_pair_merge
     Visibility: public -/
 @[rust_loop]
 def list_nth_shared_pair_merge_loop
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
+  {T : Type _} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T)
   := do
   match ls0 with
@@ -547,7 +547,7 @@ partial_fixpoint
     Visibility: public -/
 @[reducible]
 def list_nth_shared_pair_merge
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
+  {T : Type _} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T)
   := do
   list_nth_shared_pair_merge_loop ls0 ls1 i
@@ -557,7 +557,7 @@ def list_nth_shared_pair_merge
     Visibility: public -/
 @[rust_loop]
 def list_nth_mut_shared_pair_loop
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
+  {T : Type _} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T))
   := do
   match ls0 with
@@ -580,7 +580,7 @@ partial_fixpoint
     Source: 'tests/src/loops.rs', lines 278:0-293:1
     Visibility: public -/
 def list_nth_mut_shared_pair
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
+  {T : Type _} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result ((T × T) × (T → List T))
   := do
   let (t, t1, back) ← list_nth_mut_shared_pair_loop ls0 ls1 i
@@ -591,7 +591,7 @@ def list_nth_mut_shared_pair
     Visibility: public -/
 @[rust_loop]
 def list_nth_mut_shared_pair_merge_loop
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
+  {T : Type _} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T))
   := do
   match ls0 with
@@ -614,7 +614,7 @@ partial_fixpoint
     Source: 'tests/src/loops.rs', lines 297:0-312:1
     Visibility: public -/
 def list_nth_mut_shared_pair_merge
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
+  {T : Type _} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result ((T × T) × (T → List T))
   := do
   let (t, t1, back) ← list_nth_mut_shared_pair_merge_loop ls0 ls1 i
@@ -625,7 +625,7 @@ def list_nth_mut_shared_pair_merge
     Visibility: public -/
 @[rust_loop]
 def list_nth_shared_mut_pair_loop
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
+  {T : Type _} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T))
   := do
   match ls0 with
@@ -648,7 +648,7 @@ partial_fixpoint
     Source: 'tests/src/loops.rs', lines 316:0-331:1
     Visibility: public -/
 def list_nth_shared_mut_pair
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
+  {T : Type _} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result ((T × T) × (T → List T))
   := do
   let (t, t1, back) ← list_nth_shared_mut_pair_loop ls0 ls1 i
@@ -659,7 +659,7 @@ def list_nth_shared_mut_pair
     Visibility: public -/
 @[rust_loop]
 def list_nth_shared_mut_pair_merge_loop
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
+  {T : Type _} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T))
   := do
   match ls0 with
@@ -682,7 +682,7 @@ partial_fixpoint
     Source: 'tests/src/loops.rs', lines 335:0-350:1
     Visibility: public -/
 def list_nth_shared_mut_pair_merge
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
+  {T : Type _} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result ((T × T) × (T → List T))
   := do
   let (t, t1, back) ← list_nth_shared_mut_pair_merge_loop ls0 ls1 i
@@ -874,7 +874,7 @@ def issue351 (h : Std.U8) (t : List Std.U8) : Result Std.U8 := do
 
 /-- [loops::issue270::box_get_borrow]:
     Source: 'tests/src/loops.rs', lines 420:4-422:5 -/
-def issue270.box_get_borrow {T : Type} (x : T) : Result T := do
+def issue270.box_get_borrow {T : Type _} (x : T) : Result T := do
   ok x
 
 /-- [loops::issue270]: loop body 0:
@@ -1089,7 +1089,7 @@ def iter_local_shared_borrow : Result Unit := do
     Source: 'tests/src/loops.rs', lines 506:0-509:1
     Visibility: public -/
 @[discriminant isize]
-inductive AList (T : Type) where
+inductive AList (T : Type _) where
 | Cons : Std.Usize → T → AList T → AList T
 | Nil : AList T
 
@@ -1097,7 +1097,7 @@ inductive AList (T : Type) where
     Source: 'tests/src/loops.rs', lines 1:0-528:5 -/
 @[rust_loop]
 def insert_in_list_loop
-  {T : Type} (key : Std.Usize) (value : T) (ls : AList T) :
+  {T : Type _} (key : Std.Usize) (value : T) (ls : AList T) :
   Result (Bool × (AList T))
   := do
   match ls with
@@ -1115,7 +1115,7 @@ partial_fixpoint
     Source: 'tests/src/loops.rs', lines 512:0-529:1 -/
 @[reducible]
 def insert_in_list
-  {T : Type} (key : Std.Usize) (value : T) (ls : AList T) :
+  {T : Type _} (key : Std.Usize) (value : T) (ls : AList T) :
   Result (Bool × (AList T))
   := do
   insert_in_list_loop key value ls

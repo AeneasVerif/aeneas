@@ -10,7 +10,7 @@ namespace Aeneas.Std
 @[rust_trait "core::marker::DiscriminantKind"
   (parentClauses := ["cloneInst", "copyInst", "debugInst", "partialEqInst", "eqInst", "hashInst"])
   (types := ["Discriminant"])]
-structure DiscriminantKind (Self : Type) where
+structure DiscriminantKind (Self : Type _) where
   Discriminant : Type -- TODO: this should be a parameter
   cloneInst : core.clone.Clone Discriminant
   copyInst : core.marker.Copy Discriminant
@@ -27,7 +27,7 @@ this definition, while it is actually not used in the extracted model: we just w
 it as builtin so that it doesn't generate any axiom for it (this is a way of ignoring it). -/
 @[expose, rust_fun "core::intrinsics::discriminant_value"]
 def core.intrinsics.discriminant_value
-  {T : Type} (DiscrInst : DiscriminantKind T) (_ : T) :
+  {T : Type _} (DiscrInst : DiscriminantKind T) (_ : T) :
   Result (DiscrInst.Discriminant) := .fail .undef -- TODO: we need
 
 end Aeneas.Std

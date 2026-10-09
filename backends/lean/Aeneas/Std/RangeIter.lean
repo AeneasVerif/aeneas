@@ -30,10 +30,10 @@ theorem core.iter.range.IteratorRange.next_UScalar_some_spec {ty : UScalarTy}
       range'.start.val = range.start.val + 1 ∧
       range'.end = range.end ⦄ := by
   simp only [core.iter.range.IteratorRange.next, core.iter.range.UScalarStep,
-    core.iter.range.UScalarStep.forward_checked, bind_tc_ok,
+    core.iter.range.UScalarStep.forward_checked, bind_ok,
     h_lt, h_clone, hlt, decide_true, ↓reduceIte]
   have hfwd : range.start.val + (1#usize).val ≤ UScalar.max ty := by scalar_tac
-  simp only [hfwd, ↓reduceDIte, bind_tc_ok, spec_ok]
+  simp only [hfwd, ↓reduceDIte, bind_ok, spec_ok]
   simp [UScalar.ofNatCore_val_eq]
 
 /-- Generic `IteratorRange.next` on `Range (UScalar ty)`, none case
@@ -49,7 +49,7 @@ theorem core.iter.range.IteratorRange.next_UScalar_none_spec {ty : UScalarTy}
     ⦃ (opt : Option (UScalar ty)) (range' : core.ops.range.Range (UScalar ty)) =>
       opt = none ∧ range' = range ⦄ := by
   simp only [core.iter.range.IteratorRange.next, core.iter.range.UScalarStep,
-    core.iter.range.UScalarStep.forward_checked, bind_tc_ok, h_lt,
+    core.iter.range.UScalarStep.forward_checked, bind_ok, h_lt,
     show ¬ (range.start.val < range.end.val) from by omega,
     decide_false, Bool.false_eq_true, ↓reduceIte]
   simp [spec_ok]
@@ -122,7 +122,7 @@ theorem core.iter.adapters.step_by.skipN_Range_UScalar_spec {ty : UScalarTy}
       simp only [core.iter.traits.iterator.IteratorRange,
         core.iter.range.IteratorRange.next,
         core.iter.range.UScalarStep, core.iter.range.UScalarStep.forward_checked,
-        h_lt, bind_tc_ok,
+        h_lt, bind_ok,
         show ¬ (range.start.val < range.end.val) from hlt,
         decide_false, Bool.false_eq_true, ↓reduceIte, spec_ok, Nat.min_def]
       simp_all [Nat.min_def]
@@ -181,7 +181,7 @@ theorem core.iter.adapters.step_by.IteratorStepBy.next_Range_UScalar_none_spec
   simp only [core.iter.traits.iterator.IteratorRange,
     core.iter.range.IteratorRange.next,
     core.iter.range.UScalarStep, core.iter.range.UScalarStep.forward_checked,
-    h_lt, bind_tc_ok,
+    h_lt, bind_ok,
     show ¬ (it.iter.start.val < it.iter.end.val) from by omega,
     decide_false, Bool.false_eq_true, ↓reduceIte, spec_ok]
   simp [uncurry'_pair]
@@ -343,7 +343,7 @@ theorem core.iter.adapters.step_by.IteratorStepBy.next_Range_'S_spec
     When the inner iterator yields `some a`, enumerate returns `(count, a)`
     and increments count. -/
 theorem core.iter.adapters.enumerate.IteratorEnumerate.next_some_spec
-    {I : Type} {Item : Type}
+    {I : Type _} {Item : Type _}
     (IteratorInst : core.iter.traits.iterator.Iterator I Item)
     (self : core.iter.adapters.enumerate.Enumerate I)
     (a : Item) (iter' : I)
@@ -364,14 +364,14 @@ theorem core.iter.adapters.enumerate.IteratorEnumerate.next_some_spec
   · rename_i z heq
     simp at heq
     obtain ⟨_, hval, _⟩ := hadd
-    simp [heq, bind_tc_ok, spec_ok, uncurry', hval]
+    simp [heq, bind_ok, spec_ok, uncurry', hval]
   · exfalso; simp [UScalar.inBounds] at hadd; scalar_tac
   · exact hadd.elim
 
 /-- `Enumerate.next` — none case.  No `@[step]` — see the merged `next_spec`.
     When the inner iterator yields `none`, enumerate propagates none. -/
 theorem core.iter.adapters.enumerate.IteratorEnumerate.next_none_spec
-    {I : Type} {Item : Type}
+    {I : Type _} {Item : Type _}
     (IteratorInst : core.iter.traits.iterator.Iterator I Item)
     (self : core.iter.adapters.enumerate.Enumerate I)
     (iter' : I)
@@ -394,7 +394,7 @@ theorem core.iter.adapters.enumerate.IteratorEnumerate.next_none_spec
     explicit use. -/
 @[step]
 theorem core.iter.adapters.enumerate.IteratorEnumerate.next_spec
-    {I : Type} {Item : Type}
+    {I : Type _} {Item : Type _}
     (IteratorInst : core.iter.traits.iterator.Iterator I Item)
     (self : core.iter.adapters.enumerate.Enumerate I)
     (o : Option Item) (iter' : I)
@@ -431,7 +431,7 @@ theorem core.iter.adapters.enumerate.IteratorEnumerate.next_spec
     When `n = 0`, returns `none` unchanged.
     When `n > 0`, delegates to `ChunksExact::next` and decrements `n`. -/
 @[step]
-theorem core.iter.adapters.take.IteratorTake.next_ChunksExact_spec {T : Type}
+theorem core.iter.adapters.take.IteratorTake.next_ChunksExact_spec {T : Type _}
     (iter : core.iter.adapters.take.Take (core.slice.iter.ChunksExact T)) :
     core.iter.adapters.take.IteratorTake.next
       (core.iter.traits.iterator.IteratorChunksExact T) iter
@@ -460,7 +460,7 @@ theorem core.iter.adapters.take.IteratorTake.next_ChunksExact_spec {T : Type}
         exfalso; scalar_tac
       next => exact h.elim
     obtain ⟨z, hsub_eq, hzval⟩ := hsub
-    simp only [hsub_eq, bind_tc_ok]
+    simp only [hsub_eq, bind_ok]
     split <;> simp_all
 
 -- ============================================================================
@@ -469,7 +469,7 @@ theorem core.iter.adapters.take.IteratorTake.next_ChunksExact_spec {T : Type}
 
 /-- `RangeInclusive::new a b` yields `⟨a, b, exhausted := false⟩`. -/
 @[step]
-theorem core.ops.range.RangeInclusive.new_spec {Idx : Type} (a b : Idx) :
+theorem core.ops.range.RangeInclusive.new_spec {Idx : Type _} (a b : Idx) :
     core.ops.range.RangeInclusive.new a b
     ⦃ (r : core.ops.range.RangeInclusive Idx) =>
       r.start = a ∧ r.«end» = b ∧ r.exhausted = false ⦄ := by
@@ -504,11 +504,11 @@ theorem core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next_
     by_cases he : r.exhausted = true
     · simp [he]
     · simp only [Bool.not_eq_true] at he
-      simp only [he, Bool.false_or, h_le, bind_tc_ok]
+      simp only [he, Bool.false_or, h_le, bind_ok]
       simp [pure, ← decide_not]
   unfold core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
   simp only [core.iter.range.UScalarStep,
-    core.iter.range.UScalarStep.forward_checked, h_lt, h_clone, bind_tc_ok, h_empty]
+    core.iter.range.UScalarStep.forward_checked, h_lt, h_clone, bind_ok, h_empty]
   by_cases hexh : r.exhausted = true
   · simp only [hexh, Bool.true_or, ↓reduceIte, spec_ok, true_or]
     simp
@@ -525,7 +525,7 @@ theorem core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next_
       by_cases hlt : r.start.val < r.«end».val
       · simp only [hlt, decide_true, ↓reduceIte]
         have hfwd : r.start.val + (1#usize).val ≤ UScalar.max ty := by scalar_tac
-        simp only [hfwd, ↓reduceDIte, bind_tc_ok]
+        simp only [hfwd, ↓reduceDIte, bind_ok]
         simp only [spec_ok, hnotempty, ↓reduceIte, UScalar.ofNatCore_val_eq]
         exact ⟨rfl, by scalar_tac, rfl, by simpa using hexh⟩
       · simp only [hlt, decide_false, Bool.false_eq_true, ↓reduceIte]
@@ -554,7 +554,7 @@ theorem core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next_
 @[expose, reducible,
   rust_trait_impl "core::iter::traits::double_ended::DoubleEndedIterator<core::ops::range::Range<@A>, @A>"]
 def core.ops.range.Range.Insts.DoubleEndedIterator
-  {A : Type} (StepInst : core.iter.range.Step A) :
+  {A : Type _} (StepInst : core.iter.range.Step A) :
   core.iter.traits.double_ended.DoubleEndedIterator (core.ops.range.Range A) A
   := {
   iteratorInst := core.iter.traits.iterator.IteratorRange StepInst
@@ -565,7 +565,7 @@ def core.ops.range.Range.Insts.DoubleEndedIterator
 @[reducible,
   rust_trait_impl "core::iter::traits::iterator::Iterator<core::ops::range::RangeInclusive<@A>, @A>"]
 impl_def core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator
-  {A : Type} (StepInst : core.iter.range.Step A) :
+  {A : Type _} (StepInst : core.iter.range.Step A) :
   core.iter.traits.iterator.Iterator (core.ops.range.RangeInclusive A) A := {
   next :=
     core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next StepInst

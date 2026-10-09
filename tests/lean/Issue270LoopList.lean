@@ -23,7 +23,7 @@ namespace issue_270_loop_list
     Source: 'tests/src/issue-270-loop-list.rs', lines 2:0-5:1
     Visibility: public -/
 @[discriminant isize]
-inductive List (T : Type) where
+inductive List (T : Type _) where
 | Cons : T → List T → List T
 | Nil : List T
 

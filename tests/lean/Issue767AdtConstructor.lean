@@ -17,7 +17,20 @@ set_option maxHeartbeats 1000000
 /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
 set_option maxRecDepth 2048
 
+/- You can remove the following line by using the CLI option `-all-computable`: -/
+noncomputable section
+
 namespace issue_767_adt_constructor
+
+/-- [core::option::{core::option::Option<T>}::map]:
+    Source: '/rustc/library/core/src/option.rs', lines 1160:4-1162:53
+    Name pattern: [core::option::{core::option::Option<@T>}::map]
+    Visibility: public -/
+@[rust_fun "core::option::{core::option::Option<@T>}::map"]
+axiom core.option.Option.map
+  {T : Type _} {U : Type _} {F : Type _} (opsfunctionFnOnceFTupleTUInst :
+  core.ops.function.FnOnce F T U) :
+  Option T → F → Result (Option U)
 
 /-- [issue_767_adt_constructor::Struct]
     Source: 'tests/src/issue-767-adt-constructor.rs', lines 5:0-5:19 -/
@@ -72,7 +85,7 @@ def P.Insts.CoreOpsFunctionFnOnceTupleU32Enum : core.ops.function.FnOnce
 /-- [issue_767_adt_constructor::make_tuple_struct_with_constructor]:
     Source: 'tests/src/issue-767-adt-constructor.rs', lines 12:0-14:1 -/
 def make_tuple_struct_with_constructor
-  (T : Type) (x : Option Std.U32) : Result (Option Struct) := do
+  (T : Type _) (x : Option Std.U32) : Result (Option Struct) := do
   core.option.Option.map P.Insts.CoreOpsFunctionFnOnceTupleU32Struct x
     (Struct.constructor)
 

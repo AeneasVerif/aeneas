@@ -62,6 +62,12 @@ def RustEffect : Effect := {
 
 -- We need Result to be irreducble outside this file (to not break metaprograms which normalize types),
 -- but reducible within. The `unseal` command only affects the local scope.
+--
+-- Universes: `A → Result B` need not live in `Type`, so generic code must accept types in any
+-- universe. Convention: extracted code and the Std models bind type parameters as `Type _`
+-- (except the type parameters of generic trait methods, which live in a structure field and
+-- stay in `Type`), and Std models whose `do` blocks bind values of different universes import
+-- `Aeneas.Do.Elab`, whose `do` uses the universe-heterogeneous `Std.bind`.
 @[irreducible]
 def Result (α : Type u) : Type u := ITree RustEffect α
 unseal Result
@@ -212,7 +218,7 @@ theorem Result.match.isDiv {α : Type u} {r : Result α} : (r.match = .div) ↔ 
   cases r <;> grind
 
 /-- `r.reducesTo expected` is `true` iff `r` evaluates to `ok expected`. -/
-def Result.reducesTo {R : Type} [BEq R] (r : Result R) (expected : R) : Bool :=
+def Result.reducesTo {R : Type _} [BEq R] (r : Result R) (expected : R) : Bool :=
   match r.match with
   | .ok x => x == expected
   | _ => false
@@ -239,7 +245,7 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
   | none => fail e
 
 @[simp] abbrev liftFun1 {α β} (f : α → β) : α → Result β := fun x => ok (f x)
-@[simp] abbrev liftFun2 {α β γ : Type} (f : α → β → γ) : α → β → Result γ := fun x y => ok (f x y)
+@[simp] abbrev liftFun2 {α β γ : Type _} (f : α → β → γ) : α → β → Result γ := fun x y => ok (f x y)
 @[simp] abbrev liftFun3 {α β γ δ} (f : α → β → γ → δ) : α → β → γ → Result δ := fun x y z => ok (f x y z)
 @[simp] abbrev liftFun4 {α β γ δ ε} (f : α → β → γ → δ → ε) : α → β → γ → δ → Result ε := fun x y z a => ok (f x y z a)
 
@@ -259,8 +265,6 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
   exact x.elim
 
 @[simp] theorem bind_div (f : α → Result β) : bind .div f = .div := by simp [bind, div]
-
-
 
 /-- Left identity. -/
 protected theorem pure_bind {α : Type u} {β : Type v} (x : α) (f : α → Result β) :

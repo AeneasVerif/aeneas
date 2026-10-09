@@ -28,8 +28,8 @@ namespace closures
     Visibility: public -/
 @[trait_default, rust_fun "core::iter::traits::iterator::Iterator::map"]
 axiom core.iter.traits.iterator.Iterator.map.default
-  {Self : Type} {B : Type} {F : Type} {Clause0_Item : Type} (IteratorInst :
-  core.iter.traits.iterator.Iterator Self Clause0_Item)
+  {Self : Type _} {B : Type _} {F : Type _} {Clause0_Item : Type _}
+  (IteratorInst : core.iter.traits.iterator.Iterator Self Clause0_Item)
   (opsfunctionFnMutFTupleClause0_ItemBInst : core.ops.function.FnMut F
   Clause0_Item B) :
   Self → F → Result (core.iter.adapters.map.Map Self F)
@@ -69,7 +69,7 @@ def call_fn_shared (a : Slice Std.U8) (i : Std.Usize) : Result Std.U8 := do
 /-- [closures::call_closure]:
     Source: 'tests/src/closures.rs', lines 30:0-32:1 -/
 def call_closure
-  {F : Type} (coreopsfunctionFnFTupleU32Inst : core.ops.function.Fn F Unit
+  {F : Type _} (coreopsfunctionFnFTupleU32Inst : core.ops.function.Fn F Unit
   Std.U32) (f : F) :
   Result Std.U32
   := do

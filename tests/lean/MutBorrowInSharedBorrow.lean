@@ -27,7 +27,7 @@ namespace mut_borrow_in_shared_borrow
     Name pattern: [core::slice::{[@T]}::first]
     Visibility: public -/
 @[rust_fun "core::slice::{[@T]}::first"]
-axiom core.slice.Slice.first {T : Type} : Slice T → Result (Option T)
+axiom core.slice.Slice.first {T : Type _} : Slice T → Result (Option T)
 
 /-- [mut_borrow_in_shared_borrow::MutFieldAccessViaShared]
     Source: 'tests/src/mut-borrow-in-shared-borrow.rs', lines 15:0-17:1 -/
@@ -55,19 +55,19 @@ def use_mut_field_access_via_shared_param
 
 /-- [mut_borrow_in_shared_borrow::SliceWrapper]
     Source: 'tests/src/mut-borrow-in-shared-borrow.rs', lines 44:0-46:1 -/
-structure SliceWrapper (T : Type) where
+structure SliceWrapper (T : Type _) where
   buf : Slice T
 
 /-- [mut_borrow_in_shared_borrow::{mut_borrow_in_shared_borrow::SliceWrapper<'a, T>}::len]:
     Source: 'tests/src/mut-borrow-in-shared-borrow.rs', lines 49:4-51:5 -/
 def SliceWrapper.len
-  {T : Type} (self : SliceWrapper T) : Result Std.Usize := do
+  {T : Type _} (self : SliceWrapper T) : Result Std.Usize := do
   ok (Slice.len self.buf)
 
 /-- [mut_borrow_in_shared_borrow::{mut_borrow_in_shared_borrow::SliceWrapper<'a, T>}::first]:
     Source: 'tests/src/mut-borrow-in-shared-borrow.rs', lines 53:4-55:5 -/
 def SliceWrapper.first
-  {T : Type} (self : SliceWrapper T) : Result (Option T) := do
+  {T : Type _} (self : SliceWrapper T) : Result (Option T) := do
   core.slice.Slice.first self.buf
 
 /-- [mut_borrow_in_shared_borrow::use_slice_wrapper]:
@@ -87,20 +87,20 @@ def use_slice_wrapper_param
 
 /-- [mut_borrow_in_shared_borrow::MixedBorrows]
     Source: 'tests/src/mut-borrow-in-shared-borrow.rs', lines 75:0-78:1 -/
-structure MixedBorrows (T : Type) where
+structure MixedBorrows (T : Type _) where
   shared : Slice T
   mutable : Slice T
 
 /-- [mut_borrow_in_shared_borrow::{mut_borrow_in_shared_borrow::MixedBorrows<'a, T>}::shared_len]:
     Source: 'tests/src/mut-borrow-in-shared-borrow.rs', lines 81:4-83:5 -/
 def MixedBorrows.shared_len
-  {T : Type} (self : MixedBorrows T) : Result Std.Usize := do
+  {T : Type _} (self : MixedBorrows T) : Result Std.Usize := do
   ok (Slice.len self.shared)
 
 /-- [mut_borrow_in_shared_borrow::{mut_borrow_in_shared_borrow::MixedBorrows<'a, T>}::mutable_len]:
     Source: 'tests/src/mut-borrow-in-shared-borrow.rs', lines 85:4-87:5 -/
 def MixedBorrows.mutable_len
-  {T : Type} (self : MixedBorrows T) : Result Std.Usize := do
+  {T : Type _} (self : MixedBorrows T) : Result Std.Usize := do
   ok (Slice.len self.mutable)
 
 /-- [mut_borrow_in_shared_borrow::use_mixed_borrows]:

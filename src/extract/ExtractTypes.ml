@@ -1372,7 +1372,9 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
               F.pp_print_space fmt ();
               F.pp_print_string fmt ":";
               F.pp_print_space fmt ();
-              F.pp_print_string fmt (type_keyword span);
+              (* ponytail: generic trait methods stay in [Type]; give the trait
+                 structure a named universe if they must accept fn items *)
+              F.pp_print_string fmt (type_keyword ~poly:(origin = Item) span);
               (* ) *)
               right_bracket expl)
             type_params;
@@ -1632,7 +1634,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_print_space fmt ();
       F.pp_print_string fmt ":");
     F.pp_print_space fmt ();
-    F.pp_print_string fmt (type_keyword span));
+    F.pp_print_string fmt (type_keyword ~poly:false span));
   (* Close the box for "type TYPE_NAME (TYPE_PARAMS) =" *)
   F.pp_close_box fmt ();
   (if extract_body then

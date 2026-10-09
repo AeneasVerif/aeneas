@@ -27,7 +27,7 @@ namespace builtin_auto
     Name pattern: [core::ptr::null]
     Visibility: public -/
 @[rust_fun "core::ptr::null"]
-axiom core.ptr.null (T : Type) : Result (ConstRawPtr T)
+axiom core.ptr.null (T : Type _) : Result (ConstRawPtr T)
 
 /-- [builtin_auto::Inner]
     Source: 'tests/src/builtin-auto.rs', lines 7:0-9:1 -/
@@ -43,7 +43,7 @@ def make : Result Inner := do
 
 /-- Trait declaration: [builtin_auto::SuperPointee]
     Source: 'tests/src/builtin-auto.rs', lines 17:0-17:30 -/
-structure SuperPointee (Self : Type) where
+structure SuperPointee (Self : Type _) where
 
 /-- Trait implementation: [builtin_auto::{impl builtin_auto::SuperPointee for u32}]
     Source: 'tests/src/builtin-auto.rs', lines 19:0-19:28 -/

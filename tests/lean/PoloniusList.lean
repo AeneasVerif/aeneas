@@ -23,7 +23,7 @@ namespace polonius_list
     Source: 'tests/src/polonius_list.rs', lines 5:0-8:1
     Visibility: public -/
 @[discriminant isize]
-inductive List (T : Type) where
+inductive List (T : Type _) where
 | Cons : T → List T → List T
 | Nil : List T
 

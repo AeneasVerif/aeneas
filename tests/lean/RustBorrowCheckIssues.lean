@@ -27,7 +27,7 @@ namespace rust_borrow_check_issues
     Name pattern: [core::mem::drop]
     Visibility: public -/
 @[rust_fun "core::mem::drop"]
-axiom core.mem.drop {T : Type} : T → Result Unit
+axiom core.mem.drop {T : Type _} : T → Result Unit
 
 /-- [core::option::{core::option::Option<T>}::as_mut]:
     Source: '/rustc/library/core/src/option.rs', lines 766:4-766:52
@@ -35,7 +35,7 @@ axiom core.mem.drop {T : Type} : T → Result Unit
     Visibility: public -/
 @[rust_fun "core::option::{core::option::Option<@T>}::as_mut"]
 axiom core.option.Option.as_mut
-  {T : Type} : Option T → Result ((Option T) × (Option T → Option T))
+  {T : Type _} : Option T → Result ((Option T) × (Option T → Option T))
 
 /-- [rust_borrow_check_issues::unnecessary_error]:
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 13:0-32:1 -/
@@ -124,7 +124,7 @@ def conditional : Result Unit := do
 /-- [rust_borrow_check_issues::unwrap_option_mut]:
     Source: 'tests/src/rust-borrow-check-issues.rs', lines 82:0-87:1 -/
 def unwrap_option_mut
-  {T : Type} (x : Option T) : Result (T × (T → Option T)) := do
+  {T : Type _} (x : Option T) : Result (T × (T → Option T)) := do
   match x with
   | none => fail panic
   | some x1 => ok (x1, some)

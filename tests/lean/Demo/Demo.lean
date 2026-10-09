@@ -23,7 +23,9 @@ namespace demo
     Source: 'tests/src/demo.rs', lines 8:0-14:1
     Visibility: public -/
 def choose
-  {T : Type} (b : Bool) (x : T) (y : T) : Result (T × (T → (T × T))) := do
+  {T : Type _} (b : Bool) (x : T) (y : T) :
+  Result (T × (T → (T × T)))
+  := do
   if b
   then let back := fun x1 => (x1, y)
        ok (x, back)
@@ -63,14 +65,14 @@ def use_incr : Result Unit := do
     Source: 'tests/src/demo.rs', lines 37:0-40:1
     Visibility: public -/
 @[discriminant isize]
-inductive CList (T : Type) where
+inductive CList (T : Type _) where
 | CCons : T → CList T → CList T
 | CNil : CList T
 
 /-- [demo::list_nth]:
     Source: 'tests/src/demo.rs', lines 42:0-55:1
     Visibility: public -/
-def list_nth {T : Type} (l : CList T) (i : Std.U32) : Result T := do
+def list_nth {T : Type _} (l : CList T) (i : Std.U32) : Result T := do
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
@@ -84,7 +86,7 @@ partial_fixpoint
     Source: 'tests/src/demo.rs', lines 58:4-66:1
     Visibility: public -/
 @[rust_loop]
-def list_nth1_loop {T : Type} (l : CList T) (i : Std.U32) : Result T := do
+def list_nth1_loop {T : Type _} (l : CList T) (i : Std.U32) : Result T := do
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
@@ -98,14 +100,16 @@ partial_fixpoint
     Source: 'tests/src/demo.rs', lines 57:0-66:1
     Visibility: public -/
 @[reducible]
-def list_nth1 {T : Type} (l : CList T) (i : Std.U32) : Result T := do
+def list_nth1 {T : Type _} (l : CList T) (i : Std.U32) : Result T := do
   list_nth1_loop l i
 
 /-- [demo::list_nth_mut]:
     Source: 'tests/src/demo.rs', lines 68:0-81:1
     Visibility: public -/
 def list_nth_mut
-  {T : Type} (l : CList T) (i : Std.U32) : Result (T × (T → CList T)) := do
+  {T : Type _} (l : CList T) (i : Std.U32) :
+  Result (T × (T → CList T))
+  := do
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
@@ -135,7 +139,9 @@ partial_fixpoint
     Source: 'tests/src/demo.rs', lines 91:0-96:1
     Visibility: public -/
 def list_tail
-  {T : Type} (l : CList T) : Result ((CList T) × (CList T → CList T)) := do
+  {T : Type _} (l : CList T) :
+  Result ((CList T) × (CList T → CList T))
+  := do
   match l with
   | CList.CCons t tl =>
     let (c, list_tail_back) ← list_tail tl
@@ -148,7 +154,7 @@ partial_fixpoint
 /-- Trait declaration: [demo::Counter]
     Source: 'tests/src/demo.rs', lines 100:0-102:1
     Visibility: public -/
-structure Counter (Self : Type) where
+structure Counter (Self : Type _) where
   incr : Self → Result (Std.Usize × Self)
 
 /-- [demo::{impl demo::Counter for usize}::incr]:
@@ -170,7 +176,7 @@ def Usize.Insts.DemoCounter : Counter Std.Usize := {
     Source: 'tests/src/demo.rs', lines 112:0-114:1
     Visibility: public -/
 def use_counter
-  {T : Type} (CounterInst : Counter T) (cnt : T) :
+  {T : Type _} (CounterInst : Counter T) (cnt : T) :
   Result (Std.Usize × T)
   := do
   CounterInst.incr cnt

@@ -73,7 +73,7 @@ def make_variant (x : Std.U32) : Result Keyword := do
 /-- [lean_keywords::type_variable]:
     Source: 'tests/src/lean-keywords.rs', lines 56:0-58:1
     Visibility: public -/
-def type_variable {«end» : Type} (x : «end») : Result «end» := do
+def type_variable {«end» : Type _} (x : «end») : Result «end» := do
   ok x
 
 /-- [lean_keywords::field]:
