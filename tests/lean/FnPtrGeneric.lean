@@ -29,16 +29,6 @@ namespace fn_ptr_generic
 @[rust_type "core::mem::maybe_uninit::MaybeUninit"]
 axiom core.mem.maybe_uninit.MaybeUninit (T : Type _) : Type
 
-/-- [core::option::{core::option::Option<T>}::map]:
-    Source: '/rustc/library/core/src/option.rs', lines 1160:4-1162:53
-    Name pattern: [core::option::{core::option::Option<@T>}::map]
-    Visibility: public -/
-@[rust_fun "core::option::{core::option::Option<@T>}::map"]
-axiom core.option.Option.map
-  {T : Type _} {U : Type _} {F : Type _} (opsfunctionFnOnceFTupleTUInst :
-  core.ops.function.FnOnce F T U) :
-  Option T → F → Result (Option U)
-
 /-- [fn_ptr_generic::incr]:
     Source: 'tests/src/fn_ptr_generic.rs', lines 11:0-13:1 -/
 def incr (x : Std.U8) : Result Std.U8 := do

@@ -39,17 +39,17 @@ theorem core.result.Result.map_err_err
 /-- Pure model of `Result::unwrap_or`: the payload of `Ok`, or `default` on
     `Err`. -/
 @[expose, step_pure_def, rust_fun "core::result::{core::result::Result<@T, @E>}::unwrap_or" -canFail]
-def core.result.Result.unwrap_or {T E : Type} (x : core.result.Result T E) (default : T) : T :=
+def core.result.Result.unwrap_or {T E : Type _} (x : core.result.Result T E) (default : T) : T :=
   match x with
   | .Ok value => value
   | .Err _ => default
 
 @[simp]
-theorem core.result.Result.unwrap_or_ok {T E : Type} (value default : T) :
+theorem core.result.Result.unwrap_or_ok {T E : Type _} (value default : T) :
   core.result.Result.unwrap_or (.Ok value : core.result.Result T E) default = value := rfl
 
 @[simp]
-theorem core.result.Result.unwrap_or_err {T E : Type} (error : E) (default : T) :
+theorem core.result.Result.unwrap_or_err {T E : Type _} (error : E) (default : T) :
   core.result.Result.unwrap_or (.Err error : core.result.Result T E) default = default := rfl
 
 end Aeneas.Std
