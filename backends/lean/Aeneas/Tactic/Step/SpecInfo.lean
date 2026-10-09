@@ -65,6 +65,15 @@ meta def ispecPrepareIntro : PrepareIntroOutputs := do
     | _ => throwError "ispecPrepareIntro: expected a single goal"
   let introduced ← goal.withContext do
     pure <| (← getLCtx).getFVarIds.filter (!before.contains ·)
+  /- Reduce the `match` of a destructuring `let` in the facts (`let (a, b) := p; A ∧ B`), so that
+  the conjunctions it hides are split into one hypothesis each. `dsimp` keeps the facts in place,
+  so their order, which the names of the call site follow, is unchanged. -/
+  let facts ← goal.withContext <| introduced.filterM fun fvar => do isProp (← fvar.getType)
+  Aeneas.Simp.dsimpAt true { failIfUnchanged := false } {} (.targets facts false)
+  let goal ← match ← getUnsolvedGoals with
+    | [] => return 0
+    | [goal] => pure goal
+    | _ => throwError "ispecPrepareIntro: expected a single goal"
   let (_, goal) ← goal.revert introduced (preserveOrder := true)
   setGoals [goal]
   let goalTy ← instantiateMVars (← goal.getType)
