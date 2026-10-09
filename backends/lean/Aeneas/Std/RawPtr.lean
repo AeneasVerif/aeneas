@@ -285,15 +285,15 @@ theorem RawPtr.materialize.spec (values : List T) :
   intro h _ frame hCompatible
   have hFresh :
       PartialCommMonoid.Compatible
-        (Heap.rangeHeap (Heap.freshLoc (h ∪ frame)) values) (h ∪ frame) :=
+        (Heap.allocation (Heap.freshLoc (h ∪ frame)) values) (h ∪ frame) :=
     Heap.compatible_freshLoc _ _
   obtain ⟨hFreshH, hFreshFrame⟩ :=
     (PartialCommMonoid.compatible_assoc
-      (Heap.rangeHeap (Heap.freshLoc (h ∪ frame)) values) h frame).mpr
+      (Heap.allocation (Heap.freshLoc (h ∪ frame)) values) h frame).mpr
         ⟨hCompatible, hFresh⟩
   exact ⟨trivial, _, hFreshFrame,
     (PartialCommMonoid.union_assoc hFreshH hFreshFrame).symm,
-    Heap.Sub.union_left hFreshH⟩
+    (Heap.sub_allocation _ _).trans (Heap.Sub.union_left hFreshH)⟩
 
 @[step]
 theorem alloc.boxed.Box.into_raw.spec (value : T) :

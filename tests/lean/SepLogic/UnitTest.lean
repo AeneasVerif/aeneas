@@ -278,6 +278,57 @@ example (p : MutRawPtr Nat) : ¬ (⦃ emp ⦄ read p ⦃ _ => emp⦄) := by
   obtain ⟨hReadable, -⟩ := hSpec.vis_view
   exact RawPtr.not_contains_empty p hReadable.contains
 
+/-! Allocation ids are never reused: freed slots and end markers stay in the heap as dead slots. -/
+
+/-- Use after free: the freed slot stays dead, and the next allocation gets a new id. -/
+example : ¬ ⦃ emp ⦄ (do
+    let p ← into_raw (1 : Nat)
+    let _ ← from_raw p
+    let _ ← into_raw (2 : Nat)
+    RawPtr.read p) ⦃ _ => ⌜True⌝ ⦄ := by
+  intro hTriple
+  have hSpec := (ispec_iff.mp hTriple) emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
+  simp only [into_raw, from_raw, RawPtr.read, RawPtr.materialize, Result.guardedModify,
+    Std.bind_tc_vis, Std.bind_tc_ok] at hSpec
+  obtain ⟨_, hSpec⟩ := hSpec.vis_view
+  obtain ⟨hContains, hSpec⟩ := hSpec.vis_view
+  obtain ⟨_, hSpec⟩ := hSpec.vis_view
+  obtain ⟨hReadable, -⟩ := hSpec.vis_view
+  exact Heap.not_contains_free hContains
+    ((Heap.contains_freshHeap_of_mem (Heap.mem_free hContains)).mp hReadable.contains)
+
+/-- Double free, with an allocation in between that must not reuse the freed id. -/
+example : ¬ ⦃ emp ⦄ (do
+    let p ← into_raw (1 : Nat)
+    let _ ← from_raw p
+    let _ ← into_raw (2 : Nat)
+    from_raw p) ⦃ _ => ⌜True⌝ ⦄ := by
+  intro hTriple
+  have hSpec := (ispec_iff.mp hTriple) emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
+  simp only [into_raw, from_raw, RawPtr.materialize, Result.guardedModify,
+    Std.bind_tc_vis, Std.bind_tc_ok] at hSpec
+  obtain ⟨_, hSpec⟩ := hSpec.vis_view
+  obtain ⟨hContains, hSpec⟩ := hSpec.vis_view
+  obtain ⟨_, hSpec⟩ := hSpec.vis_view
+  obtain ⟨hContains', -⟩ := hSpec.vis_view
+  exact Heap.not_contains_free hContains
+    ((Heap.contains_freshHeap_of_mem (Heap.mem_free hContains)).mp hContains')
+
+/-- A pointer into an empty slice does not alias the next allocation. -/
+example : ¬ ⦃ emp ⦄ (do
+    let p ← Aeneas.Std.Slice.as_ptr (Aeneas.Std.Slice.new Nat)
+    let _ ← into_raw (5 : Nat)
+    RawPtr.read p) ⦃ _ => ⌜True⌝ ⦄ := by
+  intro hTriple
+  have hSpec := (ispec_iff.mp hTriple) emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
+  simp only [Aeneas.Std.Slice.as_ptr, into_raw, RawPtr.read, RawPtr.materialize,
+    Result.guardedModify, Std.bind_tc_vis, Std.bind_tc_ok] at hSpec
+  obtain ⟨_, hSpec⟩ := hSpec.vis_view
+  obtain ⟨_, hSpec⟩ := hSpec.vis_view
+  obtain ⟨hReadable, -⟩ := hSpec.vis_view
+  exact Heap.not_contains_freshHeap_end (h := ∅) (values := (Aeneas.Std.Slice.new Nat).val)
+    ((Heap.contains_freshHeap_of_mem (Heap.mem_freshHeap_end _ _)).mp hReadable.contains)
+
 def allocAndForget (value : Nat) : Result Unit := do
   let _ ← into_raw value
   pure ()

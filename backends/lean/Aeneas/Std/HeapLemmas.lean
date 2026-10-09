@@ -60,21 +60,20 @@ private theorem mem_union {address : Loc} {h₁ h₂ : Heap} :
 private theorem lookup_union_left {address : Loc}
     {h₁ h₂ : Heap} (hMem : address ∈ h₁) :
     (h₁ ∪ h₂).lookup address = h₁.lookup address :=
-  Finmap.lookup_union_left hMem
+  congrArg Option.join (Finmap.lookup_union_left hMem)
+
+private theorem mem_of_lookup_eq_some {address : Loc} {h : Heap} {cell : HeapCell}
+    (hLookup : h.lookup address = some cell) : address ∈ h :=
+  Finmap.mem_of_lookup_eq_some (Option.join_eq_some_iff.mp hLookup)
 
 private theorem mem_insert {address insertedAddress : Loc}
-    {cell : HeapCell} {h : Heap} :
+    {cell : Option HeapCell} {h : Heap} :
     address ∈ h.insert insertedAddress cell ↔
       address = insertedAddress ∨ address ∈ h :=
   Finmap.mem_insert
 
-private theorem mem_erase {address erasedAddress : Loc} {h : Heap} :
-    address ∈ h.erase erasedAddress ↔
-      address ≠ erasedAddress ∧ address ∈ h :=
-  Finmap.mem_erase
-
 private theorem insert_union {address : Loc}
-    {cell : HeapCell} {h₁ h₂ : Heap} :
+    {cell : Option HeapCell} {h₁ h₂ : Heap} :
     (h₁ ∪ h₂).insert address cell =
       h₁.insert address cell ∪ h₂ := by
   apply Heap.ext_impl
@@ -135,13 +134,21 @@ theorem union_right_cancel {h₁ h₂ frame : Heap}
 
 theorem mem_singleton {α : Type} {l : Loc} {value : α} {address : Loc} :
     address ∈ singleton l value ↔ address = l := by
-  show address ∈ (Finmap.singleton l (⟨α, value⟩ : HeapCell) : HeapImpl) ↔ _
+  show address ∈ (Finmap.singleton l (some ⟨α, value⟩ : Option HeapCell) : HeapImpl) ↔ _
   exact Finmap.mem_singleton _ _ _
+
+theorem mem_endMarker {l address : Loc} : address ∈ endMarker l ↔ address = l := by
+  show address ∈ (Finmap.singleton l (none : Option HeapCell) : HeapImpl) ↔ _
+  exact Finmap.mem_singleton _ _ _
+
+private theorem lookup_singleton {α : Type} (l : Loc) (value : α) :
+    (singleton l value).lookup l = some ⟨α, value⟩ := by
+  simp [singleton, Heap.lookup]
 
 @[simp]
 theorem not_contains_empty {α : Type} (l : Loc) :
     ¬ contains (∅ : Heap) α l := by
-  change ¬ match Finmap.lookup l (∅ : HeapImpl) with
+  change ¬ match (Finmap.lookup l (∅ : HeapImpl)).join with
     | none => False
     | some ⟨β, _⟩ => β = α
   simp
@@ -215,10 +222,23 @@ theorem not_mem_freshBase {h : Heap} {address : Loc}
   exact Nat.not_succ_le_self _ hSucc
 
 theorem compatible_freshLoc {α : Type} (h : Heap) (values : List α) :
-    PartialCommMonoid.Compatible (rangeHeap (freshLoc h) values) h := by
+    PartialCommMonoid.Compatible (allocation (freshLoc h) values) h := by
   intro address hFresh hMem
-  obtain ⟨i, -, rfl⟩ := mem_rangeHeap.mp hFresh
-  exact not_mem_freshBase (h := h) rfl hMem
+  apply not_mem_freshBase (h := h) _ hMem
+  rcases Heap.mem_union.mp hFresh with hRange | hEnd
+  · obtain ⟨i, -, rfl⟩ := mem_rangeHeap.mp hRange
+    rfl
+  · rw [mem_endMarker.mp hEnd]
+    rfl
+
+theorem sub_allocation {α : Type} (l : Loc) (values : List α) :
+    Heap.Sub (rangeHeap l values) (allocation l values) := by
+  refine ⟨_, ?_, rfl⟩
+  intro address hRange hEnd
+  obtain ⟨i, hi, rfl⟩ := mem_rangeHeap.mp hRange
+  have hOffset := congrArg Prod.snd (mem_endMarker.mp hEnd)
+  simp only [Loc.add_snd] at hOffset
+  omega
 
 namespace Sub
 
@@ -331,7 +351,7 @@ theorem mem_of_contains {α : Type} {h : Heap} {l : Loc}
   split at hContains
   · contradiction
   · rename_i cell hLookup
-    exact Finmap.mem_of_lookup_eq_some hLookup
+    exact Heap.mem_of_lookup_eq_some hLookup
 
 theorem disjoint_contains_false {α : Type} {h₁ h₂ : Heap} {l : Loc}
     (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
@@ -351,12 +371,7 @@ theorem read_union_left {α : Type} {h₁ h₂ : Heap} {l : Loc}
     (hContains : contains h₁ α l) :
     Heap.read l (h₁ ∪ h₂) (contains_union_left hContains) =
       Heap.read l h₁ hContains := by
-  have hMem : l ∈ h₁ := by
-    unfold contains at hContains
-    split at hContains
-    · contradiction
-    · rename_i cell hLookup
-      exact Finmap.mem_of_lookup_eq_some hLookup
+  have hMem : l ∈ h₁ := mem_of_contains hContains
   unfold Heap.read
   split
   · rename_i hLookup
@@ -371,7 +386,7 @@ theorem read_union_left {α : Type} {h₁ h₂ : Heap} {l : Loc}
           (⟨β, value⟩ : HeapCell) = ⟨β₁, value₁⟩ := by
         apply Option.some.inj
         exact hLookup.symm.trans
-          ((Finmap.lookup_union_left hMem).trans hLookup₁)
+          ((Heap.lookup_union_left hMem).trans hLookup₁)
       cases hCells
       rfl
 
@@ -381,82 +396,88 @@ theorem update_union_left {α : Type} {h₁ h₂ : Heap}
       Heap.update l value h₁ hContains ∪ h₂ := by
   exact Heap.insert_union
 
+private theorem disjoint_insert_left {l : Loc} {cell : Option HeapCell}
+    {h₁ h₂ : Heap}
+    (hCompatible : PartialCommMonoid.Compatible h₁ h₂) (hMem : l ∈ h₁) :
+    PartialCommMonoid.Compatible (h₁.insert l cell) h₂ := by
+  intro address hMem₁ hMem₂
+  rcases Heap.mem_insert.mp hMem₁ with rfl | hMem₁
+  · exact hCompatible _ hMem hMem₂
+  · exact hCompatible address hMem₁ hMem₂
+
 theorem disjoint_update_left {α : Type} {l : Loc} {value : α}
     {h₁ h₂ : Heap}
     (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
     (hContains : contains h₁ α l) :
     PartialCommMonoid.Compatible
-      (Heap.update l value h₁ hContains) h₂ := by
-  have hUnallocated : l ∉ h₂ := by
-    intro hMem₂
-    unfold contains at hContains
-    split at hContains
-    · contradiction
-    · rename_i cell hLookup
-      exact hCompatible l
-        (Finmap.mem_of_lookup_eq_some hLookup) hMem₂
-  intro address hMem₁ hMem₂
-  change address ∈ h₁.insert l ⟨α, value⟩ at hMem₁
-  rw [Heap.mem_insert] at hMem₁
-  rcases hMem₁ with hEq | hMem₁
-  · exact hUnallocated (hEq ▸ hMem₂)
-  · exact hCompatible address hMem₁ hMem₂
+      (Heap.update l value h₁ hContains) h₂ :=
+  disjoint_insert_left hCompatible (mem_of_contains hContains)
 
 theorem disjoint_free_left {α : Type} {l : Loc}
     {h₁ h₂ : Heap}
     (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
     (hContains : contains h₁ α l) :
-    PartialCommMonoid.Compatible (Heap.free l h₁ hContains) h₂ := by
-  intro address hMem₁ hMem₂
-  change address ∈ h₁.erase l at hMem₁
-  exact hCompatible address (Heap.mem_erase.mp hMem₁).right hMem₂
+    PartialCommMonoid.Compatible (Heap.free l h₁ hContains) h₂ :=
+  disjoint_insert_left hCompatible (mem_of_contains hContains)
 
 theorem free_union_left {α : Type} {h₁ h₂ : Heap}
-    (l : Loc) (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
+    (l : Loc) (_ : PartialCommMonoid.Compatible h₁ h₂)
     (hContains : contains h₁ α l) :
     Heap.free l (h₁ ∪ h₂) (contains_union_left hContains) =
-      Heap.free l h₁ hContains ∪ h₂ := by
-  have hMem : l ∈ h₁ := by
-    unfold contains at hContains
-    split at hContains
-    · contradiction
-    · rename_i cell hLookup
-      exact Finmap.mem_of_lookup_eq_some hLookup
-  have hNotMem : l ∉ h₂ :=
-    fun hMem₂ => hCompatible l hMem hMem₂
-  unfold Heap.free
-  apply Heap.ext_impl
-  apply Finmap.ext_lookup
-  intro address
-  change
-    Finmap.lookup address (h₁.impl ∪ h₂.impl |>.erase l) =
-      Finmap.lookup address (h₁.impl.erase l ∪ h₂.impl)
-  by_cases hEq : address = l
-  · subst address
-    rw [Finmap.lookup_erase, Finmap.lookup_union_right
-      Finmap.notMem_erase_self]
-    exact Finmap.lookup_eq_none.mpr hNotMem |>.symm
-  · rw [Finmap.lookup_erase_ne hEq]
-    by_cases hMem₁ : address ∈ h₁
-    · rw [Finmap.lookup_union_left hMem₁,
-        Finmap.lookup_union_left (Finmap.mem_erase.mpr ⟨hEq, hMem₁⟩),
-        Finmap.lookup_erase_ne hEq]
-    · rw [Finmap.lookup_union_right hMem₁,
-        Finmap.lookup_union_right
-          (fun hMem => hMem₁ (Finmap.mem_erase.mp hMem).right)]
+      Heap.free l h₁ hContains ∪ h₂ :=
+  Heap.insert_union
+
+/-- A freed slot keeps its address, so its allocation id is never handed out again. -/
+theorem mem_free {α : Type} {l : Loc} {h : Heap} (hContains : contains h α l) :
+    l ∈ Heap.free l h hContains :=
+  Heap.mem_insert.mpr (Or.inl rfl)
+
+/-- A freed slot is dead: it cannot be read, written or freed again. -/
+theorem not_contains_free {α β : Type} {l : Loc} {h : Heap} (hContains : contains h α l) :
+    ¬ contains (Heap.free l h hContains) β l := by
+  simp [contains, Heap.free, Heap.insert, Heap.lookup]
+
+/-- Allocation leaves the slots already in the heap untouched. -/
+theorem contains_freshHeap_of_mem {α β : Type} {h : Heap} {values : List β} {l : Loc}
+    (hMem : l ∈ h) : contains (freshHeap h values) α l ↔ contains h α l := by
+  have hNotMem : l ∉ allocation (freshLoc h) values :=
+    fun hFresh => compatible_freshLoc h values l hFresh hMem
+  unfold contains
+  rw [show (freshHeap h values).lookup l = h.lookup l from
+    congrArg Option.join (Finmap.lookup_union_right hNotMem)]
+
+/-- The end marker of an allocation is in the heap, so even an empty allocation reserves its id. -/
+theorem mem_freshHeap_end {α : Type} (h : Heap) (values : List α) :
+    (freshLoc h).add values.length ∈ freshHeap h values :=
+  Heap.mem_union.mpr (Or.inl (Heap.mem_union.mpr (Or.inr (mem_endMarker.mpr rfl))))
+
+/-- The end marker of an allocation is dead. -/
+theorem not_contains_freshHeap_end {α β : Type} (h : Heap) (values : List β) :
+    ¬ contains (freshHeap h values) α ((freshLoc h).add values.length) := by
+  have hNotRange :
+      (freshLoc h).add values.length ∉ (rangeHeap (freshLoc h) values).impl := by
+    intro hRange
+    obtain ⟨i, hi, hEq⟩ := mem_rangeHeap.mp hRange
+    have hOffset := congrArg Prod.snd hEq
+    simp only [Loc.add_snd] at hOffset
+    omega
+  have hEnd : (freshLoc h).add values.length ∈
+      (endMarker ((freshLoc h).add values.length)).impl :=
+    mem_endMarker.mpr rfl
+  have hLookup : (freshHeap h values).lookup ((freshLoc h).add values.length) = none := by
+    show (Finmap.lookup _ (((rangeHeap (freshLoc h) values).impl ∪
+      (endMarker ((freshLoc h).add values.length)).impl) ∪ h.impl)).join = none
+    rw [Finmap.lookup_union_left (Finmap.mem_union.mpr (Or.inr hEnd)),
+      Finmap.lookup_union_right hNotRange]
+    simp [endMarker]
+  simp [contains, hLookup]
 
 theorem disjoint_singleton {α : Type} {l l' : Loc} {value₁ value₂ : α}
     (hNe : l ≠ l') :
     PartialCommMonoid.Compatible
       (singleton l value₁) (singleton l' value₂) := by
   intro address hMem₁ hMem₂
-  change address ∈
-    (Finmap.singleton l ⟨α, value₁⟩ : HeapImpl) at hMem₁
-  change address ∈
-    (Finmap.singleton l' ⟨α, value₂⟩ : HeapImpl) at hMem₂
-  rw [Finmap.mem_singleton] at hMem₁
-  rw [Finmap.mem_singleton] at hMem₂
-  exact hNe (hMem₁.symm.trans hMem₂)
+  exact hNe ((mem_singleton.mp hMem₁).symm.trans (mem_singleton.mp hMem₂))
 
 theorem contains_singleton {α : Type} (l : Loc) (value : α) :
     contains (singleton l value) α l := by
@@ -468,18 +489,10 @@ theorem read_singleton {α : Type} (l : Loc) (value : α)
   unfold Heap.read
   split
   · rename_i hLookup
-    change
-      Finmap.lookup l
-          (Finmap.singleton l ⟨α, value⟩ : HeapImpl) =
-        none at hLookup
-    rw [Finmap.lookup_singleton_eq] at hLookup
+    rw [lookup_singleton] at hLookup
     contradiction
   · rename_i β stored hLookup
-    change
-      Finmap.lookup l
-          (Finmap.singleton l ⟨α, value⟩ : HeapImpl) =
-        some (⟨β, stored⟩ : HeapCell) at hLookup
-    rw [Finmap.lookup_singleton_eq] at hLookup
+    rw [lookup_singleton] at hLookup
     cases hLookup
     rfl
 
@@ -490,26 +503,6 @@ theorem update_singleton {α : Type} (l : Loc)
       singleton l newValue := by
   apply Heap.ext_impl
   simp [Heap.update, singleton, Heap.insert]
-
-theorem free_singleton {α : Type} (l : Loc) (value : α)
-    (hContains : contains (singleton l value) α l) :
-    Heap.free l (singleton l value) hContains = empty := by
-  unfold Heap.free
-  apply Heap.ext_impl
-  apply Finmap.ext_lookup
-  intro address
-  change
-    Finmap.lookup address
-        ((Finmap.singleton l ⟨α, value⟩ : HeapImpl).erase
-          l) =
-      Finmap.lookup address (∅ : HeapImpl)
-  by_cases hEq : address = l
-  · subst address
-    simp
-  · rw [Finmap.lookup_erase_ne hEq]
-    simp only [Finmap.lookup_empty]
-    apply Finmap.lookup_eq_none.mpr
-    simpa [singleton, Finmap.mem_singleton] using hEq
 
 theorem contains_of_sub {α : Type} {l : Loc} {value : α} {h : Heap}
     (hSub : Heap.Sub (singleton l value) h) : contains h α l := by

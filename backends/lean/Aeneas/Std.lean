@@ -20,3 +20,4 @@ public import Aeneas.Std.Vec
 public import Aeneas.Std.VecIter
 public import Aeneas.Data.Tuples
 public import Aeneas.Std.RangeIter
+import Aeneas.Std.HeapTests
