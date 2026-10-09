@@ -40,6 +40,18 @@ structure RawPtr (T : Type) (M : Mutability) where
 abbrev MutRawPtr (T : Type) := RawPtr T .Mut
 abbrev ConstRawPtr (T : Type) := RawPtr T .Const
 
+open Lean PrettyPrinter Delaborator SubExpr in
+@[app_delab RawPtr]
+meta def delabRawPtr : Delab := do
+  let e ← getExpr
+  guard (e.isAppOfArity ``RawPtr 2)
+  let name ← match e.appArg! with
+    | .const ``Mutability.Mut _ => pure ``MutRawPtr
+    | .const ``Mutability.Const _ => pure ``ConstRawPtr
+    | _ => failure
+  let t ← withNaryArg 0 delab
+  `($(mkIdent (← unresolveNameGlobal name)) $t)
+
 namespace RawPtr
 
 def addr (q : RawPtr T M) : Loc := (q.base, q.offset)
