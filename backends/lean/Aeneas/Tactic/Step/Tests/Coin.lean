@@ -104,7 +104,7 @@ theorem qimp_coinSpec_exists {α β γ} (P : γ → α → Prop) (k : α → ITr
   qimp_coinSpec (fun x => ∃ y, P y x) k Q ↔ ∀ x, qimp_coinSpec (P x) k Q := by
   simp only [qimp_coinSpec, forall_exists_index]; grind
 
-def qimp_coinSpec_iff {α β} (P : α → Prop) (k : α → ITreeC β) (Q : β → Prop) :
+theorem qimp_coinSpec_iff {α β} (P : α → Prop) (k : α → ITreeC β) (Q : β → Prop) :
   qimp_coinSpec P k Q ↔ ∀ x, P x → coinSpec Q (k x) := by
   simp [qimp_coinSpec]
 

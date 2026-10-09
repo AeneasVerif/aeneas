@@ -131,7 +131,7 @@ elab "bv_tac" config:Parser.Tactic.optConfig n:(colGt term)? : tactic =>
 /-!
 # Tests
 -/
-open Std
+open Aeneas.Std
 
 example (x y : U8) (h : x.val ≤ y.val) : x.bv ≤ y.bv := by
   bv_tac

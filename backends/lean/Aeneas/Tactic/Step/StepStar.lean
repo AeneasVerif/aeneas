@@ -894,7 +894,7 @@ end StepStar
 
 section Examples
 
-open Std.WP
+open Aeneas.Std.WP
 
 /--
 info: Try this:
@@ -904,7 +904,7 @@ info: Try this:
 #guard_msgs in
 example : True := by step*?
 
-open Std Result
+open Aeneas.Std Result
 
 def add1 (x0 x1 : U32) : Std.Result U32 := do
   let x2 ← x0 + x1

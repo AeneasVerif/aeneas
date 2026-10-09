@@ -83,7 +83,7 @@ theorem getElem_setSlice!_same {α} (s : Array α) (s' : List α) (i j : ℕ)
   (s.setSlice! i s')[j] = s[j] := by
   cases h.1 <;> simp_lists [getElem_setSlice!_prefix, getElem_setSlice!_suffix]
 
-def Inhabited_getElem_eq_getElem! {α} [Inhabited α] (l : Array α) (i : ℕ) (hi : i < l.size) :
+theorem Inhabited_getElem_eq_getElem! {α} [Inhabited α] (l : Array α) (i : ℕ) (hi : i < l.size) :
   l[i] = l[i]! := by
   have : l.toList[i] = l.toList[i]! :=
     List.Inhabited_getElem_eq_getElem! l.toList i (by simpa using hi)

@@ -8,6 +8,8 @@ require mathlib from git
 package «aeneas» where
   preferReleaseBuild := true
   buildArchive := s!"lean-build-aeneas-{System.Platform.target}.tar.gz"
+  -- Models of the Rust standard library mirror Rust paths (e.g. `core.clone.Clone.clone`)
+  leanOptions := #[⟨`weak.linter.dupNamespace, false⟩]
 
 @[default_target] lean_lib «Aeneas» {}
 

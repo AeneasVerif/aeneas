@@ -14,7 +14,7 @@ public section
 
 namespace Aeneas.Std.WP
 
-open Std Result
+open Aeneas.Std Result
 open Aeneas.Data.Coinductive
 open Lean.Order
 
@@ -180,7 +180,7 @@ TODO: use https://github.com/leanprover/lean4/pull/11355
 -/
 namespace Aeneas
 
-open Std WP Result
+open Aeneas.Std WP Result
 
 /-!
 # Hoare triple notation and elaboration
@@ -676,7 +676,7 @@ namespace Aeneas.Std.WP
 # mvcgen
 -/
 
-open Std Result
+open Aeneas.Std Result
 open Std.Do
 
 -- mvcgen does not support all types of effects, and currently this implementation only works with fail and div.

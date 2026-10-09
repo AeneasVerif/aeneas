@@ -1373,7 +1373,7 @@ meta def evalLetStep : Tactic := fun stx => do
     Meta.Tactic.TryThis.addSuggestion tk stxArgs' (origSpan? := ← getRef)
 
 namespace Test
-  open Std Result
+  open Aeneas.Std Result
 
   -- Show the traces:
   -- set_option trace.Step true
@@ -1724,7 +1724,7 @@ x y : U32
 end Test
 
 namespace Test
-  open Std Result
+  open Aeneas.Std Result
 
   variable {α} (P : ℕ → List α → Prop)
   variable (f : List α → Std.Result Bool)
@@ -1743,7 +1743,7 @@ namespace Test
 end Test
 
 namespace Test
-  open Std Result
+  open Aeneas.Std Result
 
   /- Step using a term -/
   example (x y : U32) (h : 2 * x.val + 2 * y.val ≤ U32.max) :

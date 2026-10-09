@@ -17,7 +17,7 @@ private def threeNats : Result (Nat × Nat × Nat) :=
 private theorem twoNats_spec : twoNats ⦃ a b => a = 1 ∧ b = 2⦄ := by unfold twoNats; step*
 
 @[local step]
-private def threeNats_spec : threeNats ⦃ a b c => a = 1 ∧ b = 2 ∧ c = 3⦄ := by unfold threeNats; step*
+private theorem threeNats_spec : threeNats ⦃ a b c => a = 1 ∧ b = 2 ∧ c = 3⦄ := by unfold threeNats; step*
 
 private def fourNats : Result ((Nat × Nat) × (Nat × Nat)) :=
   ok ((3, 4), (5, 6))

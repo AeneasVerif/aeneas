@@ -137,7 +137,7 @@ elab tk:stepArraySpec : command => do
 
 namespace Tests
 
-open Std
+open Aeneas.Std
 
 def const_array : Array U32 8#usize := Array.make 8#usize [
   0#u32, 1#u32, 2#u32, 3#u32, 4#u32, 5#u32, 6#u32, 7#u32,
