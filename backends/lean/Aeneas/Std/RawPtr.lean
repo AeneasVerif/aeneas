@@ -75,7 +75,8 @@ end RawPtr
 instance instPointsToRawPtr {T : Type} {M : Mutability} :
     PointsTo (RawPtr T M) T := ⟨RawPtr.pointsTo⟩
 
-notation:50 q:50 " ↦* " values:50 => RawPtr.pointsToRange q values
+instance instPointsToRangeRawPtr {T : Type} {M : Mutability} :
+    PointsToRange (RawPtr T M) T := ⟨RawPtr.pointsToRange⟩
 
 /-- Not a Rust function: stores `values` in fresh slots. -/
 def RawPtr.materialize (values : List T) : Result (RawPtr T M) :=
@@ -197,9 +198,12 @@ end RawPtr
 theorem RawPtr.pointsTo_eq_singleton (q : RawPtr T M) (value : T) :
     (q ↦ value) = owns (Heap.singleton q.addr value) := rfl
 
+theorem RawPtr.pointsToRange_eq_rangeHeap (q : RawPtr T M) (values : List T) :
+    (q ↦* values) = owns (Heap.rangeHeap q.addr values) := rfl
+
 theorem RawPtr.pointsTo_eq_range (q : RawPtr T M) (value : T) :
     (q ↦ value) = (q ↦* [value]) := by
-  rw [RawPtr.pointsTo_eq_singleton, RawPtr.pointsToRange, Heap.rangeHeap_singleton]
+  rw [RawPtr.pointsTo_eq_singleton, RawPtr.pointsToRange_eq_rangeHeap, Heap.rangeHeap_singleton]
 
 @[simp] theorem RawPtr.pointsTo_retype (q : RawPtr T M) (value : T) :
     ((q.retype : RawPtr T M') ↦ value) = (q ↦ value) := rfl
@@ -211,7 +215,7 @@ namespace RawPtr
 
 theorem pointsToRange_append (q : RawPtr T M) (xs ys : List T) :
     (q ↦* (xs ++ ys)) = iprop(q ↦* xs ∗ (q.shift xs.length) ↦* ys) := by
-  rw [pointsToRange, pointsToRange, pointsToRange, addr_shift,
+  rw [pointsToRange_eq_rangeHeap, pointsToRange_eq_rangeHeap, pointsToRange_eq_rangeHeap, addr_shift,
     Heap.rangeHeap_append q.addr xs ys]
   exact owns_union _ _ (Heap.compatible_rangeHeap_append q.addr xs ys)
 

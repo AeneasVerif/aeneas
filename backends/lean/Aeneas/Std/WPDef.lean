@@ -103,10 +103,10 @@ open Std WP Result
 # Hoare triple notation and elaboration
 -/
 
-syntax:lead (name := slSpecSyntax)
+scoped syntax:lead (name := slSpecSyntax)
   "⦃ " term " ⦄" ppLine term:lead ppLine
   "⦃ " term+ " => " term " ⦄" : term
-syntax:lead (name := slSpecSyntaxPred)
+scoped syntax:lead (name := slSpecSyntaxPred)
   "⦃ " term " ⦄" ppLine term:lead ppLine "⦃ " term " ⦄" : term
 
 open Lean PrettyPrinter
@@ -213,10 +213,10 @@ macro_rules
   | `(⦃$P⦄ $m ⦃ $Q⦄) =>
       `(ispec iprop($P) $m (fun _ => iprop($Q)))
 
-syntax:lead (name := slDspecSyntax)
+scoped syntax:lead (name := slDspecSyntax)
   "⦃ " term " ⦄" ppLine term:lead ppLine
   "⦃ " term+ " => " term " ⦄div" : term
-syntax:lead (name := slDspecSyntaxPred)
+scoped syntax:lead (name := slDspecSyntaxPred)
   "⦃ " term " ⦄" ppLine term:lead ppLine "⦃ " term " ⦄div" : term
 
 macro_rules
