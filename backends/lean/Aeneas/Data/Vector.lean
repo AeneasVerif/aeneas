@@ -205,8 +205,7 @@ theorem set!_comm' {α} {i j : Nat} (h : j < i)
   (v : Vector α n) (x y : α) :
   (v.set! i x).set! j y = (v.set! j y).set! i x := by
   cases v; rename_i a h; cases a; simp
-  rw [List.set_comm']
-  assumption
+  rwa [List.set_comm']
 
 @[simp_lists_safe]
 theorem getElem!_ofFn {n : ℕ} {α : Type u} [Inhabited α] (f : Fin n → α) (i : ℕ) (hi : i < n) :

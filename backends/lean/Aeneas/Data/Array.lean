@@ -164,8 +164,7 @@ theorem getElem!_range_zero {n i : Nat}  (hi : n ≤ i) : (Array.range n)[i]! = 
 theorem set!_comm' {α} {i j : Nat} (h : j < i) (a : Array α) (x y : α) :
   (a.set! i x).set! j y = (a.set! j y).set! i x := by
   cases a; simp
-  rw [List.set_comm']
-  assumption
+  rwa [List.set_comm']
 
 @[simp_lists_safe]
 theorem getElem!_ofFn {n : ℕ} {α : Type u} [Inhabited α] (f : Fin n → α) (i : ℕ) (hi : i < n) :
