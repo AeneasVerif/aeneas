@@ -5,6 +5,7 @@ public import Aeneas.Extract
 public import AeneasMeta.BvEnumToBitVec
 public import Aeneas.Data.Coinductive.ITree
 public import Aeneas.Data.Coinductive.Effect
+public import Aeneas.Std.Heap
 public section
 
 namespace Aeneas
@@ -48,11 +49,14 @@ deriving Repr, BEq
 
 open Error
 
-inductive RustEffect.Input : Type where
+inductive RustEffect.Input : Type 1 where
+| guardedModify (α : Type) (pre : Heap → Prop)
+    (modify : (h : Heap) → pre h → α × Heap) : RustEffect.Input
 | fail : Error → RustEffect.Input
 
-def RustEffect.Output (i : RustEffect.Input) : Type :=
+def RustEffect.Output (i : RustEffect.Input) : Type 1 :=
   match i with
+  | .guardedModify α _ _ => ULift α
   | .fail _ => PEmpty
 
 def RustEffect : Effect := {
@@ -60,17 +64,20 @@ def RustEffect : Effect := {
   O := RustEffect.Output
 }
 
--- We need Result to be irreducble outside this file (to not break metaprograms which normalize types),
+-- We need Result to be irreducible outside this file (to not break metaprograms which normalize types),
 -- but reducible within. The `unseal` command only affects the local scope.
+-- `Result α` lives in `Type 1` even for `α : Type`, because `RustEffect.Input` quantifies over
+-- types. Heap cells only hold values in `Type`, so a value containing a `Result`-returning function
+-- (a closure, a function pointer, a trait-instance structure) cannot be stored behind a raw pointer:
+-- that would need a higher-order store. Such pointers fail with a universe error.
 --
--- Universes: `Result` may live in a higher universe than its argument (see #1352), in which
--- case `A → Result B` is not in `Type`: generic code must accept types in any universe.
--- Convention: extracted code and the Std models bind type parameters as `Type _`
+-- Universes: since `A → Result B` is not in `Type`, generic code must accept types in any
+-- universe. Convention: extracted code and the Std models bind type parameters as `Type _`
 -- (except the type parameters of generic trait methods, which live in a structure field and
 -- stay in `Type`), and Std models whose `do` blocks bind values of different universes import
 -- `Aeneas.Do.Elab`, whose `do` uses the universe-heterogeneous `Std.bind`.
 @[irreducible]
-def Result (α : Type u) : Type u := ITree RustEffect α
+def Result (α : Type u) : Type (max u 1) := ITree RustEffect α
 unseal Result
 
 def Result.ok {α} (a : α) : Result α := .ret a
@@ -103,7 +110,7 @@ def Result.cases {R}
     (div :  motive (Result.div))
     : motive t := ITree.cases ret div vis t
 
-inductive MatchResult (α : Type u) : Type u where
+inductive MatchResult (α : Type u) : Type (max u 1) where
 | ok : (a : α) → MatchResult α
 | div : MatchResult α
 | vis : (eff : RustEffect.Input) → (RustEffect.Output eff → Result α) → MatchResult α
@@ -111,7 +118,7 @@ inductive MatchResult (α : Type u) : Type u where
 /-!
 Can simulate a match on the Result type by matching on the output of this function.
 -/
-def Result.match.{u} {α : Type u} (r : Result α) : MatchResult α :=
+def Result.match {α : Type u} (r : Result α) : MatchResult α :=
   r.cases .ok .vis .div
 
 @[simp, grind =]
@@ -135,6 +142,7 @@ instance Result.reprInst {α : Type u} [Repr α] : Repr (Result α) where
     | .ok a => "Aeneas.Std.Result.ok " ++ repr a
     | .div => "Aeneas.Std.Result.div"
     | .vis (.fail e) _ => "Aeneas.Std.Result.fail " ++ repr e
+    | .vis (.guardedModify ..) _ => "Aeneas.Std.Result.guardedModify"
 
 /-!
 `Result` not being an inductive type it has no built-in constructor facts that grind
@@ -155,7 +163,10 @@ theorem Result.ok_injective {α} : Function.Injective (@Result.ok α) := by
 /-- `Result.fail` is opaque, so its injectivity has to be stated separately. -/
 @[grind inj]
 theorem Result.fail_injective {α} : Function.Injective (@Result.fail α) := by
-  intro a b h; simpa using congrArg Result.match h
+  intro a b h
+  have h := congrArg Result.match h
+  simp only [Result.match.fail, MatchResult.vis.injEq, RustEffect.Input.fail.injEq] at h
+  exact h.1
 
 /-! The disequality lemmas for the constructors of `Result`. They all follow from the fact that
 `Result.match` maps the constructors to *distinct* constructors of the inductive `MatchResult`. -/
@@ -335,6 +346,7 @@ open Result
 section Order
 
 open Lean.Order
+local notation "PartialOrder" => Lean.Order.PartialOrder
 
 instance : PartialOrder (Result α) := instPartialOrderCoIndOfInhabitedPUnit (ITreeF RustEffect α)
 noncomputable instance : CCPO (Result α) := instCCPOCoIndOfInhabitedPUnit (ITreeF RustEffect α)
@@ -459,6 +471,11 @@ def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) 
   | ControlFlow.cont x => loop body x
   | ControlFlow.done x => ok x
 partial_fixpoint
+
+def Result.guardedModify {α : Type} (pre : Heap → Prop)
+    (modify : (h : Heap) → pre h → α × Heap) : Result α :=
+  Result.vis (.guardedModify α pre modify) fun answer =>
+    Result.ok answer.down
 
 end
 

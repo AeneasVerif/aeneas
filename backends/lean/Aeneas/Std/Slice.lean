@@ -57,6 +57,32 @@ abbrev Slice.len {α : Type u} (v : Slice α) : Usize :=
 theorem Slice.len_val {α : Type u} (v : Slice α) : (Slice.len v).val = v.length :=
   by simp
 
+/-- Unlike Rust's `as_ptr`, this allocates: the functional slice model has no address. -/
+@[rust_fun "core::slice::{[@T]}::as_ptr"]
+def Slice.as_ptr {T : Type} (s : Slice T) : Result (ConstRawPtr T) :=
+  RawPtr.materialize s.val
+
+@[step]
+theorem Slice.as_ptr.spec {T : Type} (s : Slice T) :
+    ⦃ emp ⦄ s.as_ptr ⦃ p => p ↦* s.val⦄ :=
+  RawPtr.materialize.spec s.val
+
+/-- The pointer points to a fresh copy of `s`, and `s` is returned unchanged. -/
+@[rust_fun "core::slice::{[@T]}::as_mut_ptr"]
+def Slice.as_mut_ptr {T : Type} (s : Slice T) : Result (MutRawPtr T × Slice T) := do
+  let p ← RawPtr.materialize s.val
+  pure (p, s)
+
+@[step]
+theorem Slice.as_mut_ptr.spec {T : Type} (s : Slice T) :
+    ⦃ emp ⦄ s.as_mut_ptr ⦃ (p, back) => ⌜back = s⌝ ∗ p ↦* s.val⦄ := by
+  unfold Slice.as_mut_ptr
+  apply WP.ispec_bind (RawPtr.materialize.spec (M := .Mut) s.val)
+  · iframe
+  · intro p
+    apply (WP.ispec_ok _).2
+    iframe
+
 instance {α : Type u} : GetElem (Slice α) Nat α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i h
 

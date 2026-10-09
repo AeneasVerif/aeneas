@@ -66,7 +66,7 @@ meta def scalar_eqs := #[
 
 attribute [step_simps]
   bind_assoc Std.bind_tc_ok Std.bind_tc_vis Std.bind_tc_div
-  Std.bind_assoc Std.bind_ok Std.bind_vis Std.bind_div
+  Std.bind_assoc Std.bind_ok Std.bind_vis Std.bind_fail Std.bind_div
   /- Those are quite useful to simplify the goal further by eliminating existential quantifiers for instance. -/
   and_assoc Std.Result.ok.injEq Prod.mk.injEq
   exists_eq_left exists_eq_left' exists_eq_right exists_eq_right' exists_eq exists_eq' true_and and_true
@@ -405,7 +405,10 @@ meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool
       let liftingThm ← Term.mkConst lifting.conversion_thm
       trace[Step] "Trying to lift by {liftingThm}"
       let liftingThmTy ← inferType liftingThm
-      let (liftThmVars, _, _liftThmTy) ← forallMetaBoundedTelescope liftingThmTy lifting.conversion_thm_inferred_args
+      let (liftThmVars, _, liftThmTy) ← forallMetaBoundedTelescope liftingThmTy lifting.conversion_thm_inferred_args
+      if let .forallE _ premise _ _ := liftThmTy then
+        unless ← withTransparency .instances <| isDefEq premise thTy do
+          throwError "Could not lift the theorem by {liftingThm}"
       let liftingThmPartiallyApplied ← mkAppOptM' liftingThm (liftThmVars.map some)
       let liftingThmApplied := mkAppN liftingThmPartiallyApplied #[th]
       let liftingThmAppliedTy ← inferType liftingThmApplied
@@ -2104,3 +2107,13 @@ end Test
 end Step
 
 end Aeneas
+
+/-! Registered here since `@[step]` and `@[step_simps]` are declared in a module importing `WP`. -/
+
+attribute [step_simps] Aeneas.SepLogic.ipure_true_eq_emp
+attribute [step_simps] Aeneas.SepLogic.sep_emp_r_eq
+attribute [step_simps] Aeneas.SepLogic.entails_emp_ipure_iff
+attribute [step_simps] Aeneas.SepLogic.entails_refl
+
+attribute [step] Aeneas.Std.WP.ok_spec
+attribute [step] Aeneas.Std.WP.pure_spec

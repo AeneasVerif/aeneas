@@ -1,0 +1,84 @@
+module
+public import Aeneas.SepLogic.Lemmas
+public import Aeneas.SepLogic.Delab
+public import Aeneas.Std.RawPtr
+public section
+
+namespace Aeneas.SepLogic.Tests
+
+/-- error: unsolved goals
+P Q : IProp
+⊢ P ⊢ Q -/
+#guard_msgs in
+example (P Q : IProp) : Entails P Q := by done
+
+/-- error: unsolved goals
+P : Prop
+⊢ emp ⊢ ⌜P⌝ -/
+#guard_msgs in
+example (P : Prop) : Entails emp (ipure P) := by done
+
+example (P : IProp) : iprop(P) = P :=
+  rfl
+
+/-- error: unsolved goals
+P Q : IProp
+⊢ P ⊢ iprop(P ∧ Q) -/
+#guard_msgs in
+example (P Q : IProp) : Entails P (iand P Q) := by done
+
+example (P Q R : IProp) : iprop(P ∗ (Q ∧ R)) = (P ∗ iand Q R) :=
+  rfl
+
+example (P Q R : IProp) : iprop((P ∧ Q) -∗ R) = (iand P Q -∗ R) :=
+  rfl
+
+example (J : Nat → IProp) (P : IProp) :
+    iprop(∃ x, J x ∧ P) = iexists (fun x => iand (J x) P) :=
+  rfl
+
+example (J : Nat → IProp) (P : IProp) :
+    iprop(∀ x, J x ∧ P) = iforall (fun x => iand (J x) P) :=
+  rfl
+
+example (H P Q : IProp) (hP : H ⊢ P) (hQ : H ⊢ Q) : H ⊢ iprop(P ∧ Q) :=
+  iand_intro hP hQ
+
+example (P Q R : IProp) : iprop((P ∧ Q) ∧ R) = iprop(P ∧ (Q ∧ R)) :=
+  iand_assoc P Q R
+
+example (P Q : Prop) : iprop(⌜P⌝ ∧ ⌜Q⌝) = ⌜P ∧ Q⌝ := by
+  simp
+
+example {α : Type} (r : Aeneas.Std.MutRawPtr α) (value : α) :
+    iprop((r ↦ value) ∧ (r ↦ value)) = (r ↦ value) := by
+  simp
+
+example (P Q : IProp) (frame : Aeneas.Std.Heap) :
+    iprop((P ∗ owns frame) ∧ (Q ∗ owns frame)) ⊢ iprop(P ∧ Q) ∗ owns frame :=
+  entails_of_eq (sep_iand_owns P Q frame).symm
+
+example (P Q : IProp) : (P ∗ Q) = (Q ∗ P) :=
+  sep_comm_eq P Q
+
+example (P : IProp) : (emp ∗ P) = P := by
+  simp
+
+example (P : IProp) : (⌜True⌝ ∗ P) = P := by
+  simp
+
+example (P : IProp) : (P ∗ emp) = P := by
+  simp
+
+example (P Q : IProp) : P ∗ (P -∗ Q) ⊢ Q :=
+  wand_cancel P Q
+
+example (Q₁ Q₂ : IPost Nat) : Q₁ ∗+ (Q₁ -∗+ Q₂) ⊢+ Q₂ :=
+  postWand_cancel Q₁ Q₂
+
+example {α : Type} (l : Aeneas.Std.Loc) (x y : α) :
+    owns (Aeneas.Std.Heap.singleton l x) ∗ owns (Aeneas.Std.Heap.singleton l y)
+      ⊢ ⌜False⌝ :=
+  owns_singleton_exclusive l x y
+
+end Aeneas.SepLogic.Tests

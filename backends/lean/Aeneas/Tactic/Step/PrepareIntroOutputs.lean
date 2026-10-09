@@ -259,6 +259,35 @@ meta def prepareIntroOutputsWith (type : Expr) (tree : NameTree) (prove : Tactic
   setGoals [next.mvarId!]
   return prefixLength
 
+/-- Read the pattern destructuring the output from a goal `∀ x, [P x →] Q x` left by the
+mono or bind rule, where `Q x` is the caller's postcondition or `spec (k x) Q'`.
+Goals that do not quantify over the output yield an anonymous leaf. -/
+meta def getOutputTree (goalTy : Expr) : MetaM NameTree := do
+  let goalTy := (← instantiateMVars goalTy).consumeMData
+  unless goalTy.isForall do return .leaf none
+  forallBoundedTelescope goalTy (some 1) fun xs body => do
+    let mut body := body.consumeMData
+    if body.isArrow then
+      if ← isProp body.bindingDomain! then
+        body := body.bindingBody!.consumeMData
+    let (head, args) := body.withApp fun head args => (head, args)
+    let info? ← match head.constName? with
+      | some name => specInfoLookup name
+      | none => pure none
+    let cont := match info? with
+      | some info => if args.size == info.arity then args[info.program_index]! else body
+      | none => body
+    getContInput (← mkLambdaFVars xs cont).eta
+
+meta def simpOutputEquiv : TacticM Unit := do
+  let _ ← Simp.simpAt true { failIfUnchanged := false, iota := false }
+    { simpThms := #[← stepSimpExt.getTheorems],
+      addSimpThms := #[``Std.uncurry_apply_pair,
+        ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
+        ``Std.WP.forall_unit, ``true_imp_iff, ``Prod.forall, ``forall_punit,
+        ``and_imp, ``exists_imp_named] }
+    (.targets #[] true)
+
 /-- Goal preparation shared by `spec` and `dspec`. The goal produced by the mono and bind
 rules has the shape `∀ x, P x → Q x`, where `Q x` is either the caller's postcondition or
 `spec (k x) Q'`. The output pattern is read from `Q` (or from the continuation `k`).
@@ -268,27 +297,6 @@ then prove equivalence with one `simp` call. -/
 meta def prepareIntroOutputs : PrepareIntroOutputs := do
   withMainContext do
   let goalTy ← instantiateMVars (← getMainTarget)
-  let tree ← forallBoundedTelescope goalTy (some 2) fun xs body => do
-    unless xs.size == 2 do
-      throwError "Expected a goal of the shape `∀ x, P x → Q x`, got:\n{goalTy}"
-    let x := xs[0]!
-    if (← isProp (← inferType x)) || !(← isProp (← inferType xs[1]!)) then
-      throwError "Expected a goal of the shape `∀ x, P x → Q x`, got:\n{goalTy}"
-    let (head, args) := body.consumeMData.withApp fun head args => (head, args)
-    let info? ← match head.constName? with
-      | some name => specInfoLookup name
-      | none => pure none
-    let cont := match info? with
-      | some info => if args.size == info.arity then args[info.program_index]! else body
-      | none => body
-    getContInput (← mkLambdaFVars #[x] cont).eta
-  prepareIntroOutputsWith goalTy tree do
-    let _ ← Simp.simpAt true { failIfUnchanged := false, iota := false }
-      { simpThms := #[← stepSimpExt.getTheorems],
-        addSimpThms := #[``Std.uncurry_apply_pair,
-          ``Std.WP.uncurry'_eq, ``Std.WP.uncurry'_pair,
-          ``Std.WP.forall_unit, ``true_imp_iff, ``Prod.forall, ``forall_punit,
-          ``and_imp, ``exists_imp_named] }
-      (.targets #[] true)
+  prepareIntroOutputsWith goalTy (← getOutputTree goalTy) simpOutputEquiv
 
 end Aeneas.Step
