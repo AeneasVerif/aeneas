@@ -73,7 +73,7 @@ inductive core.ptr.alignment.AlignmentEnum where
 | _Align1Shl62 : core.ptr.alignment.AlignmentEnum
 | _Align1Shl63 : core.ptr.alignment.AlignmentEnum
 
-@[reducible, rust_type "core::ptr::alignment::Alignment"]
+@[expose, reducible, rust_type "core::ptr::alignment::Alignment"]
 def core.ptr.alignment.Alignment :=
 core.ptr.alignment.AlignmentEnum
 

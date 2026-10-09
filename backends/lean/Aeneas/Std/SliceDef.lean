@@ -41,6 +41,7 @@ theorem Slice.from_val {α} (l : List α) (h : l.length ≤ Usize.max)
   : (Slice.from l h).val = l := by
   simp [Slice.from, Slice.val, ListN.from_to_inverse]
 
+attribute [local implicit_reducible] Slice.val in
 @[simp, simp_lists_safe, grind =, agrind =]
 theorem Slice.val_from {α} (s : Slice α) h
   : Slice.from s.val h = s := by

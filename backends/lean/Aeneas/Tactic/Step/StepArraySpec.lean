@@ -110,7 +110,7 @@ meta def parseStepArraySpec
   match stx with
   | `($[$vis]? step_array_spec (name := $thm_name:ident) $array:ident [ $i:ident ]! { $x:ident => $pred:term } by $tac:tacticSeq) => do
     -- Compute the visibility of the `step` theorem
-    let vis : TSyntax `declModifiers ← do
+    let vis : TSyntax ``declModifiers ← do
       match vis with
       | none => `(declModifiers|@[step])
       | some vis =>

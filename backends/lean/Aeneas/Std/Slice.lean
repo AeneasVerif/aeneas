@@ -701,7 +701,7 @@ def core.slice.index.SliceIndexRangeFromUsizeSlice (T : Type) :
 /-- Small helper (this function doesn't model a specific Rust function) -/
 @[expose] def Slice.clone {T : Type} (clone : T → Result T) (s : Slice T) : Result (Slice T) := do
   let s' ← List.clone clone s.val
-  ok (.from s' (by simp))
+  ok (.from s'.val (by rw [s'.property]; exact s.property))
 
 theorem Slice.clone_length {T : Type} {clone : T → Result T} {s s' : Slice T} (h : Slice.clone clone s = ok s') :
   s'.length = s.length := by

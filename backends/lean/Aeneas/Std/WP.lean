@@ -18,10 +18,10 @@ open Std Result
 open Aeneas.Data.Coinductive
 open Lean.Order
 
-@[expose] def Post α := (α -> Prop)
-@[expose] def Pre := Prop
+@[expose, implicit_reducible] def Post α := (α -> Prop)
+@[expose, implicit_reducible] def Pre := Prop
 
-@[expose] def Wp α := Post α → Pre
+@[expose, implicit_reducible] def Wp α := Post α → Pre
 
 @[expose] def wp_return (x:α) : Wp α := fun p => p x
 

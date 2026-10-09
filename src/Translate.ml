@@ -1380,6 +1380,7 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
           "linter.style.whitespace";
           "linter.style.setOption";
           "linter.style.longLine";
+          "linter.internalConstructors";
         ];
       (* Max heart beats *)
       Printf.fprintf out

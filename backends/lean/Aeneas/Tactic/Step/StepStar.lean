@@ -237,11 +237,15 @@ meta def Info.ofExpr(e: Expr): MetaM (Option Info) := do
   let e := e.consumeMData
   if e.isIte || e.isDIte then
     let kind := if e.isIte then .ite else .dite
-    let e ← deltaExpand e (fun n => n == ``ite || n == ``dite)
-    let .const ``Decidable.casesOn uLevels := e.getAppFn
-      | throwError "Expected ``Decidable.casesOn, found {←ppExpr e.getAppFn}"
-    let #[prop, motive, dec, brFalse, brTrue] := e.getAppArgs
+    /- We do not unfold `ite`/`dite`: their implementation is an internal detail of the
+       `Decidable` class which changes between Lean versions. -/
+    let .const fn uLevels := e.getAppFn
+      | throwError "Expected a constant, found {←ppExpr e.getAppFn}"
+    let #[α, prop, dec, brTrue, brFalse] := e.getAppArgs
       | throwError "Wrong number of parameters for {e.getAppFn}: {e.getAppArgs.size} [{e.getAppArgs}]"
+    let (brTrue, brFalse) :=
+      if e.isIte then (Expr.lam `h prop brTrue .default, Expr.lam `h (mkNot prop) brFalse .default)
+      else (brTrue, brFalse)
     let name? ← if e.isDIte
       then some <$> Utils.lambdaOne brFalse fun x _ => x.fvarId!.getUserName
       else pure none
@@ -252,10 +256,10 @@ meta def Info.ofExpr(e: Expr): MetaM (Option Info) := do
         { toExpr := brTrue,  numArgs := 1, },
         { toExpr := brFalse, numArgs := 1, }
       ]
-      matcher := ``Decidable.casesOn,
+      matcher := fn,
       uLevels,
       params  := #[prop]
-      motive,
+      motive := α,
       scrut := dec,
     }
   else if let some ma ← Meta.matchMatcherApp? e (alsoCasesOn := true) then
@@ -399,8 +403,8 @@ meta def analyzeTarget : TacticM TargetKind := do
     else
       trace[Step] "not a registered spec"
       pure .result
-  catch _ =>
-    trace[Step] "exception caught"
+  catch ex =>
+    trace[Step] "exception caught: {ex.toMessageData}"
     pure .unknown
 
 meta partial def evalStepStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
@@ -457,7 +461,7 @@ where
       {simpThms := #[← Step.stepSimpExt.getTheorems]}
       (.targets #[] true)
     /- We may have proven the goal already -/
-    let tac : Array Syntax.Tactic ← do
+    let tac : Array (TaskOrDone (Option Syntax.Tactic)) ← do
       let genSimp : Bool ← do
         if r.isNone then pure true
         else do

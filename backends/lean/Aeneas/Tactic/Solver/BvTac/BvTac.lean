@@ -10,7 +10,7 @@ namespace Aeneas.BvTac
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 open Bvify Utils
 
-structure Config extends Lean.Elab.Tactic.BVDecide.Frontend.BVDecideConfig, Bvify.Config where
+structure Config extends Lean.Elab.Tactic.BVDecide.BVDecideConfig, Bvify.Config where
 
 meta section
 declare_config_elab elabConfig Config
@@ -84,7 +84,7 @@ meta partial def bvTacPreprocess (config : Config) (n : Option Expr): TacticM Un
 elab "bv_tac_preprocess" config:Parser.Tactic.optConfig n:(colGt term)? : tactic => do
   bvTacPreprocess (← elabConfig config) (← optElabTerm n)
 
-open Lean.Elab.Tactic.BVDecide.Frontend Lean.Elab in
+open Lean.Meta.Tactic.BVDecide Lean.Elab in
 /-- `bv_tac n` solves goals about bit-vectors.
 
 **Usage**: `bv_tac n` where `n` is the bitwidth to use for the bit-vectors.
@@ -123,9 +123,10 @@ elab "bv_tac" config:Parser.Tactic.optConfig n:(colGt term)? : tactic =>
   -- Call bv_decide
   IO.FS.withTempFile fun _ lratFile => do
     let config := config.toBVDecideConfig
-    let cfg ← BVDecide.Frontend.TacticContext.new lratFile config
+    let cfg ← Lean.Meta.Tactic.BVDecide.TacticContext.new lratFile config
     liftMetaFinishingTactic fun g => do
-      discard <| bvDecide g cfg
+      let params ← Grind.mkDefaultParams {}
+      discard <| Grind.GrindM.run (params := params) <| bvDecide (.mvarIdTarget g) cfg
 
 /-!
 # Tests

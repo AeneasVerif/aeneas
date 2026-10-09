@@ -833,6 +833,7 @@ meta def tryApply (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args)
           let res ← stepWith info lifting args isLet fExpr th
           pure (some res)
         catch _ => pure none
+      pure res
   match res with
   | some res => pure (some res)
   | none => pure none
