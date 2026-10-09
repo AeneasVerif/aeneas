@@ -1,7 +1,7 @@
 module
 public import Lean
 public meta import Mathlib.Control.Monad.Cont
-public import Aeneas.Std
+public import Aeneas.Std.Primitives
 public section
 
 /-! # New `do` Elaborator

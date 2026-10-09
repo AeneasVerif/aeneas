@@ -24,7 +24,9 @@ namespace tutorial
     Source: 'src/lib.rs', lines 1:0-7:1
     Visibility: public -/
 def choose
-  {T : Type} (b : Bool) (x : T) (y : T) : Result (T × (T → (T × T))) := do
+  {T : Type _} (b : Bool) (x : T) (y : T) :
+  Result (T × (T → (T × T)))
+  := do
   if b
   then let back := fun x1 => (x1, y)
        ok (x, back)
@@ -64,14 +66,14 @@ def use_incr : Result Unit := do
     Source: 'src/lib.rs', lines 30:0-33:1
     Visibility: public -/
 @[discriminant isize]
-inductive CList (T : Type) where
+inductive CList (T : Type _) where
 | CCons : T → CList T → CList T
 | CNil : CList T
 
 /-- [tutorial::list_nth]:
     Source: 'src/lib.rs', lines 35:0-48:1
     Visibility: public -/
-def list_nth {T : Type} (l : CList T) (i : Std.U32) : Result T := do
+def list_nth {T : Type _} (l : CList T) (i : Std.U32) : Result T := do
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
@@ -85,7 +87,9 @@ partial_fixpoint
     Source: 'src/lib.rs', lines 50:0-63:1
     Visibility: public -/
 def list_nth_mut
-  {T : Type} (l : CList T) (i : Std.U32) : Result (T × (T → CList T)) := do
+  {T : Type _} (l : CList T) (i : Std.U32) :
+  Result (T × (T → CList T))
+  := do
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
@@ -104,7 +108,7 @@ partial_fixpoint
     Source: 'src/lib.rs', lines 66:4-74:1
     Visibility: public -/
 @[rust_loop]
-def list_nth1_loop {T : Type} (l : CList T) (i : Std.U32) : Result T := do
+def list_nth1_loop {T : Type _} (l : CList T) (i : Std.U32) : Result T := do
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
@@ -118,7 +122,7 @@ partial_fixpoint
     Source: 'src/lib.rs', lines 65:0-74:1
     Visibility: public -/
 @[reducible]
-def list_nth1 {T : Type} (l : CList T) (i : Std.U32) : Result T := do
+def list_nth1 {T : Type _} (l : CList T) (i : Std.U32) : Result T := do
   list_nth1_loop l i
 
 /-- [tutorial::i32_id]:
@@ -159,7 +163,7 @@ end
 /-- Trait declaration: [tutorial::Counter]
     Source: 'src/lib.rs', lines 105:0-107:1
     Visibility: public -/
-structure Counter (Self : Type) where
+structure Counter (Self : Type _) where
   incr : Self → Result (Std.Usize × Self)
 
 /-- [tutorial::{impl tutorial::Counter for usize}::incr]:
@@ -181,7 +185,7 @@ def Usize.Insts.TutorialCounter : Counter Std.Usize := {
     Source: 'src/lib.rs', lines 117:0-119:1
     Visibility: public -/
 def use_counter
-  {T : Type} (CounterInst : Counter T) (cnt : T) :
+  {T : Type _} (CounterInst : Counter T) (cnt : T) :
   Result (Std.Usize × T)
   := do
   CounterInst.incr cnt
@@ -191,7 +195,9 @@ def use_counter
     Visibility: public -/
 @[rust_loop]
 def list_nth_mut1_loop
-  {T : Type} (l : CList T) (i : Std.U32) : Result (T × (T → CList T)) := do
+  {T : Type _} (l : CList T) (i : Std.U32) :
+  Result (T × (T → CList T))
+  := do
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
@@ -210,7 +216,9 @@ partial_fixpoint
     Visibility: public -/
 @[reducible]
 def list_nth_mut1
-  {T : Type} (l : CList T) (i : Std.U32) : Result (T × (T → CList T)) := do
+  {T : Type _} (l : CList T) (i : Std.U32) :
+  Result (T × (T → CList T))
+  := do
   list_nth_mut1_loop l i
 
 /-- [tutorial::list_tail]: loop 0:
@@ -218,7 +226,7 @@ def list_nth_mut1
     Visibility: public -/
 @[rust_loop]
 def list_tail_loop
-  {T : Type} (l : CList T) : Result (CList T → CList T) := do
+  {T : Type _} (l : CList T) : Result (CList T → CList T) := do
   match l with
   | CList.CCons t tl =>
     let back ← list_tail_loop tl
@@ -231,7 +239,9 @@ partial_fixpoint
     Source: 'src/lib.rs', lines 134:0-139:1
     Visibility: public -/
 def list_tail
-  {T : Type} (l : CList T) : Result ((CList T) × (CList T → CList T)) := do
+  {T : Type _} (l : CList T) :
+  Result ((CList T) × (CList T → CList T))
+  := do
   let back ← list_tail_loop l
   ok (CList.CNil, back)
 
@@ -239,7 +249,7 @@ def list_tail
     Source: 'src/lib.rs', lines 141:0-144:1
     Visibility: public -/
 def append_in_place
-  {T : Type} (l0 : CList T) (l1 : CList T) : Result (CList T) := do
+  {T : Type _} (l0 : CList T) (l1 : CList T) : Result (CList T) := do
   let (_, list_tail_back) ← list_tail l0
   ok (list_tail_back l1)
 
@@ -248,7 +258,7 @@ def append_in_place
     Visibility: public -/
 @[rust_loop]
 def reverse_loop
-  {T : Type} (l : CList T) (out : CList T) : Result (CList T) := do
+  {T : Type _} (l : CList T) (out : CList T) : Result (CList T) := do
   match l with
   | CList.CCons hd tl => reverse_loop tl (CList.CCons hd out)
   | CList.CNil => ok out
@@ -258,7 +268,7 @@ partial_fixpoint
     Source: 'src/lib.rs', lines 146:0-154:1
     Visibility: public -/
 @[reducible]
-def reverse {T : Type} (l : CList T) : Result (CList T) := do
+def reverse {T : Type _} (l : CList T) : Result (CList T) := do
   reverse_loop l CList.CNil
 
 /-- [tutorial::zero]: loop 0:
@@ -426,7 +436,7 @@ def add
 
 /-- Trait declaration: [tutorial::Hash]
     Source: 'src/lib.rs', lines 250:0-252:1 -/
-structure Hash (Self : Type) where
+structure Hash (Self : Type _) where
   hash : Std.U32 → Result Std.U32
 
 /-- [tutorial::pseudo_random]: loop 0:
@@ -434,7 +444,7 @@ structure Hash (Self : Type) where
     Visibility: public -/
 @[rust_loop]
 def pseudo_random_loop
-  {T : Type} (HashInst : Hash T) (state : Std.U32) : Result Std.U32 := do
+  {T : Type _} (HashInst : Hash T) (state : Std.U32) : Result Std.U32 := do
   if state < 100#u32
   then let state1 ← HashInst.hash state
        pseudo_random_loop HashInst state1
@@ -445,7 +455,7 @@ partial_fixpoint
     Source: 'src/lib.rs', lines 255:0-262:1
     Visibility: public -/
 @[reducible]
-def pseudo_random {T : Type} (HashInst : Hash T) : Result Std.U32 := do
+def pseudo_random {T : Type _} (HashInst : Hash T) : Result Std.U32 := do
   pseudo_random_loop HashInst 0#u32
 
 end tutorial

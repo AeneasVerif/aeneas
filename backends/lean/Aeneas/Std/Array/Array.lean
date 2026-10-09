@@ -350,11 +350,11 @@ theorem Array.clone_spec {α : Type u} {n : Usize} {clone : α → Result α} {s
 
 @[expose, rust_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone"]
 def core.array.CloneArray.clone
-  {T : Type} {N : Usize} (cloneInst : core.clone.Clone T) (a : Array T N) : Result (Array T N) :=
+  {T : Type _} {N : Usize} (cloneInst : core.clone.Clone T) (a : Array T N) : Result (Array T N) :=
   Array.clone cloneInst.clone a
 
 @[step]
-theorem core.array.CloneArray.clone_spec {T : Type} {N : Usize} (cloneInst : core.clone.Clone T) (a : Array T N)
+theorem core.array.CloneArray.clone_spec {T : Type _} {N : Usize} (cloneInst : core.clone.Clone T) (a : Array T N)
   (h : ∀ x ∈ a.val, cloneInst.clone x = ok x) :
   core.array.CloneArray.clone cloneInst a ⦃ a' => a = a' ⦄:= by
   unfold clone
@@ -363,12 +363,12 @@ theorem core.array.CloneArray.clone_spec {T : Type} {N : Usize} (cloneInst : cor
   exact ha'.symm
 
 @[expose, rust_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone_from"]
-def core.array.CloneArray.clone_from {T : Type} {N : Usize} (cloneInst : core.clone.Clone T)
+def core.array.CloneArray.clone_from {T : Type _} {N : Usize} (cloneInst : core.clone.Clone T)
   (_self source : Array T N) : Result (Array T N) :=
   Array.clone cloneInst.clone source
 
 @[step]
-theorem core.array.CloneArray.clone_from_spec {T : Type} {N : Usize} (cloneInst : core.clone.Clone T)
+theorem core.array.CloneArray.clone_from_spec {T : Type _} {N : Usize} (cloneInst : core.clone.Clone T)
   (self source : Array T N) (h : ∀ x ∈ source.val, cloneInst.clone x = ok x) :
   core.array.CloneArray.clone_from cloneInst self source ⦃ source' => source = source' ⦄ := by
   unfold clone_from
@@ -377,7 +377,7 @@ theorem core.array.CloneArray.clone_from_spec {T : Type} {N : Usize} (cloneInst 
   exact hsource'.symm
 
 @[expose, reducible, rust_trait_impl "core::clone::Clone<[@T; @N]>"]
-def core.clone.CloneArray {T : Type} (N : Usize)
+def core.clone.CloneArray {T : Type _} (N : Usize)
   (cloneCloneInst : core.clone.Clone T) : core.clone.Clone (Array T N) := {
   clone := core.array.CloneArray.clone cloneCloneInst
   clone_from := core.array.CloneArray.clone_from cloneCloneInst
@@ -449,7 +449,7 @@ theorem Array.setSlice!_getElem_suffix {α} {n}
   exact h1
 /- Remark: see the comment for `core.default.DefaultArray` -/
 @[expose, rust_fun "core::array::{core::default::Default<[@T; @N]>}::default"]
-def core.default.DefaultArray.default {T : Type} (N : Usize) (defaultInst : core.default.Default T) : Result (Array T N) := do
+def core.default.DefaultArray.default {T : Type _} (N : Usize) (defaultInst : core.default.Default T) : Result (Array T N) := do
   let x ← defaultInst.default
   .ok (Array.repeat N x)
 
@@ -459,23 +459,23 @@ def core.default.DefaultArray.default {T : Type} (N : Usize) (defaultInst : core
    the elements to have a default value). We factor the cases where `N` is ≠ 0 in the Lean model.
  -/
 @[expose, reducible, rust_trait_impl "core::default::Default<[@T; @N]>"]
-def core.default.DefaultArray {T : Type} (N : Usize)
+def core.default.DefaultArray {T : Type _} (N : Usize)
   (defaultInst : core.default.Default T) : core.default.Default (Array T N) := {
   default := core.default.DefaultArray.default N defaultInst
 }
 
 @[expose, rust_fun "core::array::{core::default::Default<[@T; 0]>}::default"]
-def core.default.DefaultArrayEmpty.default (T : Type) : Result (Array T (Usize.ofNat 0)) :=
+def core.default.DefaultArrayEmpty.default (T : Type _) : Result (Array T (Usize.ofNat 0)) :=
   ok (.from []  (by scalar_tac))
 
 /- See the comments for `core.default.DefaultArray` -/
 @[expose, reducible, rust_trait_impl "core::default::Default<[@T; 0]>"]
-def core.default.DefaultArrayEmpty (T : Type) : core.default.Default (Array T (Usize.ofNat 0)) := {
+def core.default.DefaultArrayEmpty (T : Type _) : core.default.Default (Array T (Usize.ofNat 0)) := {
   default := core.default.DefaultArrayEmpty.default T
 }
 
 @[expose, reducible, rust_trait_impl "core::marker::Copy<[@T; @N]>"]
-def Array.Insts.CoreMarkerCopy {T : Type} (N : Std.Usize)
+def Array.Insts.CoreMarkerCopy {T : Type _} (N : Std.Usize)
   (markerCopyInst : core.marker.Copy T) : core.marker.Copy (Array T N) := {
   cloneInst := core.clone.CloneArray N markerCopyInst.cloneInst
 }

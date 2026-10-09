@@ -8,6 +8,9 @@ public import Aeneas.Std.Scalar.CloneCopy
 public import Aeneas.Std.Scalar.EqOrd
 public import Aeneas.Std.Scalar.CheckedOps
 public import Aeneas.Std.Core.Core
+-- Generic models below bind values of different universes: they need the
+-- universe-heterogeneous `do` elaborator.
+public import Aeneas.Do.Elab
 public section
 
 @[expose] section
@@ -16,7 +19,7 @@ namespace Aeneas.Std
 
 @[rust_trait "core::iter::range::Step"
   (parentClauses := ["cloneInst", "partialOrdInst"])]
-structure core.iter.range.Step (Self : Type) where
+structure core.iter.range.Step (Self : Type _) where
   cloneInst : core.clone.Clone Self
   partialOrdInst : core.cmp.PartialOrd Self Self
   steps_between : Self → Self → Result (Usize × (Option Usize))
@@ -62,23 +65,23 @@ structure core.iter.adapters.zip.Zip (A : Type u) (B : Type u) where
   snd : B
 
 def core.iter.traits.iterator.Iterator.step_by.default
-  {Self : Type} (self: Self) (step_by : Std.Usize) :
+  {Self : Type _} (self: Self) (step_by : Std.Usize) :
   Result (core.iter.adapters.step_by.StepBy Self) :=
   if step_by.val = 0 then .fail .panic
   else .ok ⟨ self, step_by ⟩
 
 def core.iter.traits.iterator.Iterator.enumerate.default
-  {Self : Type} (self: Self) :
+  {Self : Type _} (self: Self) :
   Result (core.iter.adapters.enumerate.Enumerate Self) :=
   .ok { iter := self, count := 0#usize }
 
 def core.iter.traits.iterator.Iterator.take.default
-  {Self : Type} (self: Self) (n : Std.Usize) :
+  {Self : Type _} (self: Self) (n : Std.Usize) :
   Result (core.iter.adapters.take.Take Self) :=
   .ok ⟨ self, n ⟩
 
 @[rust_trait "core::iter::traits::iterator::Iterator"]
-structure core.iter.traits.iterator.Iterator (Self : Type) (Self_Item : Type)
+structure core.iter.traits.iterator.Iterator (Self : Type _) (Self_Item : Type _)
   where
   next : Self → Result ((Option Self_Item) × Self)
   step_by : Self → Usize → Result (core.iter.adapters.step_by.StepBy Self) := core.iter.traits.iterator.Iterator.step_by.default
@@ -94,7 +97,7 @@ structure core.iter.traits.iterator.Iterator (Self : Type) (Self_Item : Type)
 
 @[trait_default, rust_fun "core::iter::traits::iterator::Iterator::step_by"]
 def core.iter.traits.iterator.Iterator.step_by.trait_default
-  {Self Item : Type}
+  {Self Item : Type _}
   (_IteratorInst : core.iter.traits.iterator.Iterator Self Item)
   (self: Self) (step_by : Std.Usize) :
   Result (core.iter.adapters.step_by.StepBy Self) :=
@@ -102,7 +105,7 @@ def core.iter.traits.iterator.Iterator.step_by.trait_default
 
 @[trait_default, rust_fun "core::iter::traits::iterator::Iterator::enumerate"]
 def core.iter.traits.iterator.Iterator.enumerate.trait_default
-  {Self Item : Type}
+  {Self Item : Type _}
   (_IteratorInst : core.iter.traits.iterator.Iterator Self Item)
   (self: Self) :
   Result (core.iter.adapters.enumerate.Enumerate Self) :=
@@ -110,7 +113,7 @@ def core.iter.traits.iterator.Iterator.enumerate.trait_default
 
 @[trait_default, rust_fun "core::iter::traits::iterator::Iterator::take"]
 def core.iter.traits.iterator.Iterator.take.trait_default
-  {Self Item : Type}
+  {Self Item : Type _}
   (_IteratorInst : core.iter.traits.iterator.Iterator Self Item)
   (self: Self) (n : Std.Usize) :
   Result (core.iter.adapters.take.Take Self) :=
@@ -118,7 +121,7 @@ def core.iter.traits.iterator.Iterator.take.trait_default
 
 /-- Skip up to `n` elements from an iterator -/
 def core.iter.adapters.step_by.skipN
-    {I : Type} {Item : Type}
+    {I : Type _} {Item : Type _}
     (iterInst : core.iter.traits.iterator.Iterator I Item)
     (iter : I) : (n : Nat) → Result I
   | 0 => .ok iter
@@ -131,7 +134,7 @@ def core.iter.adapters.step_by.skipN
 @[rust_fun
   "core::iter::adapters::step_by::{core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, @Clause0_Item>}::next"]
 def core.iter.adapters.step_by.IteratorStepBy.next
-  {I : Type} {Item : Type}
+  {I : Type _} {Item : Type _}
   (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
   core.iter.adapters.step_by.StepBy I →
   Result ((Option Item) × (core.iter.adapters.step_by.StepBy I)) :=
@@ -145,7 +148,7 @@ def core.iter.adapters.step_by.IteratorStepBy.next
 
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, @Clause0_Item>"]
-impl_def core.iter.traits.iterator.IteratorStepBy {I : Type} {Item : Type}
+impl_def core.iter.traits.iterator.IteratorStepBy {I : Type _} {Item : Type _}
   (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
   core.iter.traits.iterator.Iterator (core.iter.adapters.step_by.StepBy I) Item := {
   next := core.iter.adapters.step_by.IteratorStepBy.next IteratorInst
@@ -158,22 +161,22 @@ impl_def core.iter.traits.iterator.IteratorStepBy {I : Type} {Item : Type}
 }
 
 @[rust_trait "core::iter::traits::accum::Sum"]
-structure core.iter.traits.accum.Sum (Self : Type) (A : Type) where
+structure core.iter.traits.accum.Sum (Self : Type _) (A : Type _) where
   sum : forall {I : Type} (_ : core.iter.traits.iterator.Iterator I A), I → Result Self
 
 @[rust_trait "core::iter::traits::accum::Product"]
-structure core.iter.traits.accum.Product (Self : Type) (A : Type) where
+structure core.iter.traits.accum.Product (Self : Type _) (A : Type _) where
   product : forall {I : Type} (_ : core.iter.traits.iterator.Iterator I A), I → Result Self
 
 @[rust_trait "core::iter::traits::collect::IntoIterator"
   (parentClauses := ["iteratorInst"])]
-structure core.iter.traits.collect.IntoIterator (Self : Type) (Item :
-  Type) (IntoIter : Type) where
+structure core.iter.traits.collect.IntoIterator (Self : Type _) (Item :
+  Type _) (IntoIter : Type _) where
   iteratorInst : core.iter.traits.iterator.Iterator IntoIter Item
   into_iter : Self → Result IntoIter
 
 @[rust_trait "core::iter::traits::collect::FromIterator"]
-structure core.iter.traits.collect.FromIterator (Self : Type) (A : Type) where
+structure core.iter.traits.collect.FromIterator (Self : Type _) (A : Type _) where
   from_iter : forall {T : Type} {IntoIter : Type}
     (_ : core.iter.traits.collect.IntoIterator T A IntoIter),
     T → Result Self
@@ -182,13 +185,13 @@ structure core.iter.traits.collect.FromIterator (Self : Type) (A : Type) where
   "core::iter::traits::collect::{core::iter::traits::collect::IntoIterator<@I, @Item, @I>}::into_iter",
   simp]
 def core.iter.traits.collect.IntoIterator.Blanket.into_iter
-  {I : Type} {Item : Type} (_ : core.iter.traits.iterator.Iterator I Item) :
+  {I : Type _} {Item : Type _} (_ : core.iter.traits.iterator.Iterator I Item) :
   I → Result I :=
     λ x => ok x
 
 @[reducible, rust_trait_impl
   "core::iter::traits::collect::IntoIterator<@I, @Item, @I>"]
-def core.iter.traits.collect.IntoIterator.Blanket {I : Type} {Item : Type}
+def core.iter.traits.collect.IntoIterator.Blanket {I : Type _} {Item : Type _}
   (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
     core.iter.traits.collect.IntoIterator I Item I := {
   iteratorInst := IteratorInst
@@ -197,7 +200,7 @@ def core.iter.traits.collect.IntoIterator.Blanket {I : Type} {Item : Type}
 
 @[rust_fun "core::iter::traits::iterator::Iterator::collect"]
 def core.iter.traits.iterator.Iterator.collect.default
-  {Self : Type} {B : Type} {Item : Type} (IteratorInst :
+  {Self : Type _} {B : Type _} {Item : Type _} (IteratorInst :
   core.iter.traits.iterator.Iterator Self Item)
   (collectFromIteratorInst : core.iter.traits.collect.FromIterator B Item) :
   Self → Result B :=
@@ -205,19 +208,19 @@ def core.iter.traits.iterator.Iterator.collect.default
     (core.iter.traits.collect.IntoIterator.Blanket IteratorInst) self
 
 @[rust_trait "core::iter::traits::collect::Extend"]
-structure core.iter.traits.collect.Extend (Self : Type) (A : Type) where
+structure core.iter.traits.collect.Extend (Self : Type _) (A : Type _) where
   extend : forall {T : Type} {IntoIter : Type}
     (_ : core.iter.traits.collect.IntoIterator T A IntoIter), Self → T → Result Self
 
 @[rust_trait "core::iter::traits::double_ended::DoubleEndedIterator"
   (parentClauses := ["iteratorInst"])]
-structure core.iter.traits.double_ended.DoubleEndedIterator (Self : Type) (Item : Type) where
+structure core.iter.traits.double_ended.DoubleEndedIterator (Self : Type _) (Item : Type _) where
   iteratorInst : core.iter.traits.iterator.Iterator Self Item
   next_back : Self → Result ((Option Item) × Self)
 
 @[rust_trait "core::iter::traits::exact_size::ExactSizeIterator"
   (parentClauses := ["iteratorInst"])]
-structure core.iter.traits.exact_size.ExactSizeIterator (Self : Type) (Item : Type) where
+structure core.iter.traits.exact_size.ExactSizeIterator (Self : Type _) (Item : Type _) where
   iteratorInst : core.iter.traits.iterator.Iterator Self Item
 
 -- ============================================================================
@@ -529,7 +532,7 @@ abbrev core.iter.range.StepI128 := IScalarStep .I128 core.clone.CloneI128 core.c
 @[rust_fun
   "core::iter::adapters::enumerate::{core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, (usize, @Clause0_Item)>}::next"]
 def core.iter.adapters.enumerate.IteratorEnumerate.next
-    {I : Type} {Item : Type}
+    {I : Type _} {Item : Type _}
     (IteratorInst : core.iter.traits.iterator.Iterator I Item)
     (self : core.iter.adapters.enumerate.Enumerate I) :
     Result ((Option (Usize × Item)) × (core.iter.adapters.enumerate.Enumerate I)) := do
@@ -542,7 +545,7 @@ def core.iter.adapters.enumerate.IteratorEnumerate.next
 
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, (usize, @Clause0_Item)>"]
-impl_def core.iter.traits.iterator.IteratorEnumerate {I : Type} {Item : Type}
+impl_def core.iter.traits.iterator.IteratorEnumerate {I : Type _} {Item : Type _}
     (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
     core.iter.traits.iterator.Iterator (core.iter.adapters.enumerate.Enumerate I) (Usize × Item) := {
   next := core.iter.adapters.enumerate.IteratorEnumerate.next IteratorInst
@@ -562,7 +565,7 @@ impl_def core.iter.traits.iterator.IteratorEnumerate {I : Type} {Item : Type}
 @[rust_fun
   "core::iter::adapters::take::{core::iter::traits::iterator::Iterator<core::iter::adapters::take::Take<@I>, @Clause0_Item>}::next"]
 def core.iter.adapters.take.IteratorTake.next
-    {I : Type} {Item : Type}
+    {I : Type _} {Item : Type _}
     (IteratorInst : core.iter.traits.iterator.Iterator I Item)
     (self : core.iter.adapters.take.Take I) :
     Result ((Option Item) × (core.iter.adapters.take.Take I)) :=
@@ -575,7 +578,7 @@ def core.iter.adapters.take.IteratorTake.next
 
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::iter::adapters::take::Take<@I>, @Clause0_Item>"]
-impl_def core.iter.traits.iterator.IteratorTake {I : Type} {Item : Type}
+impl_def core.iter.traits.iterator.IteratorTake {I : Type _} {Item : Type _}
     (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
     core.iter.traits.iterator.Iterator (core.iter.adapters.take.Take I) Item := {
   next := core.iter.adapters.take.IteratorTake.next IteratorInst
@@ -590,7 +593,7 @@ impl_def core.iter.traits.iterator.IteratorTake {I : Type} {Item : Type}
 @[rust_fun
   "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>}::next"]
 def core.iter.range.IteratorRange.next
-   {A : Type} (StepInst : core.iter.range.Step A) :
+   {A : Type _} (StepInst : core.iter.range.Step A) :
   core.ops.range.Range A → Result ((Option A) × (core.ops.range.Range A)) :=
   λ range => do
     let cmp ← StepInst.partialOrdInst.lt range.start range.end;
@@ -604,7 +607,7 @@ def core.iter.range.IteratorRange.next
 
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>"]
-impl_def core.iter.traits.iterator.IteratorRange {A : Type}
+impl_def core.iter.traits.iterator.IteratorRange {A : Type _}
   (StepInst : core.iter.range.Step A) : core.iter.traits.iterator.Iterator
   (core.ops.range.Range A) A := {
   next := core.iter.range.IteratorRange.next StepInst
@@ -626,7 +629,7 @@ impl_def core.iter.traits.iterator.IteratorRange {A : Type}
 @[rust_fun
   "core::iter::adapters::zip::{core::iter::traits::iterator::Iterator<core::iter::adapters::zip::Zip<@A, @B>, (@Clause0_Item, @Clause1_Item)>}::next"]
 def core.iter.adapters.zip.Zip.Insts.CoreIterTraitsIteratorIteratorPair.next
-  {A B Item_A Item_B : Type}
+  {A B Item_A Item_B : Type _}
   (IA : core.iter.traits.iterator.Iterator A Item_A)
   (IB : core.iter.traits.iterator.Iterator B Item_B)
   (z : core.iter.adapters.zip.Zip A B) :
@@ -641,12 +644,12 @@ def core.iter.adapters.zip.Zip.Insts.CoreIterTraitsIteratorIteratorPair.next
       | some b => ok (some (a, b), ⟨a', b'⟩)
 
 @[rust_fun "core::ops::range::{core::ops::range::RangeInclusive<@Idx>}::new"]
-def core.ops.range.RangeInclusive.new {Idx : Type}
+def core.ops.range.RangeInclusive.new {Idx : Type _}
     (start «end» : Idx) : Result (core.ops.range.RangeInclusive Idx) :=
   ok ⟨start, «end», false⟩
 
 @[rust_fun "core::ops::range::{core::ops::range::RangeInclusive<@Idx>}::is_empty"]
-def core.ops.range.RangeInclusive.is_empty {Idx : Type} (inst : core.cmp.PartialOrd Idx Idx)
+def core.ops.range.RangeInclusive.is_empty {Idx : Type _} (inst : core.cmp.PartialOrd Idx Idx)
   (self : core.ops.range.RangeInclusive Idx) : Result Bool := do
   if self.exhausted then ok true
   else
@@ -673,10 +676,11 @@ def core.ops.range.RangeInclusive.is_empty {Idx : Type} (inst : core.cmp.Partial
 @[rust_fun
   "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::RangeInclusive<@A>, @A>}::next"]
 def core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
-  {A : Type} (StepInst : core.iter.range.Step A)
+  {A : Type _} (StepInst : core.iter.range.Step A)
   (self : core.ops.range.RangeInclusive A) :
   Result ((Option A) × core.ops.range.RangeInclusive A) := do
-  if ← self.is_empty StepInst.partialOrdInst then .ok (none, self)
+  let empty ← self.is_empty StepInst.partialOrdInst
+  if empty then .ok (none, self)
   else
     let is_iterating ← StepInst.partialOrdInst.lt self.start self.«end»
     if is_iterating then
@@ -694,7 +698,7 @@ def core.ops.range.RangeInclusive.Insts.CoreIterTraitsIteratorIterator.next
 
 /-- `Iterator::zip` default body: `Zip::new(self, other.into_iter())`. -/
 def core.iter.traits.iterator.Iterator.zip.default
-  {Self U IntoIter : Type}
+  {Self U IntoIter : Type _}
   (into_iter : U → Result IntoIter) :
   Self → U → Result (core.iter.adapters.zip.Zip Self IntoIter) :=
   fun self other => do
@@ -703,7 +707,7 @@ def core.iter.traits.iterator.Iterator.zip.default
 
 @[trait_default, rust_fun "core::iter::traits::iterator::Iterator::zip"]
 def core.iter.traits.iterator.Iterator.zip.trait_default
-  {Self U Item0 Item1 IntoIter : Type}
+  {Self U Item0 Item1 IntoIter : Type _}
   (_IteratorInst : core.iter.traits.iterator.Iterator Self Item0)
   (IntoIterInst : core.iter.traits.collect.IntoIterator U Item1 IntoIter) :
   Self → U → Result (core.iter.adapters.zip.Zip Self IntoIter) :=
@@ -711,13 +715,13 @@ def core.iter.traits.iterator.Iterator.zip.trait_default
 
 /-- `Iterator::rev` default body: `Rev { iter: self }`. -/
 def core.iter.traits.iterator.Iterator.rev.default
-  {Self : Type} :
+  {Self : Type _} :
   Self → Result (core.iter.adapters.rev.Rev Self) :=
   fun self => ok ⟨self⟩
 
 @[trait_default, rust_fun "core::iter::traits::iterator::Iterator::rev"]
 def core.iter.traits.iterator.Iterator.rev.trait_default
-  {Self Item0 Item1 : Type}
+  {Self Item0 Item1 : Type _}
   (_IteratorInst : core.iter.traits.iterator.Iterator Self Item0)
   (_DEInst : core.iter.traits.double_ended.DoubleEndedIterator Self Item1) :
   Self → Result (core.iter.adapters.rev.Rev Self) :=
@@ -727,7 +731,7 @@ def core.iter.traits.iterator.Iterator.rev.trait_default
 
 @[step]
 theorem core.iter.traits.iterator.Iterator.step_by.default.spec
-    {Self : Type} (self : Self) (step : Std.Usize) (hstep : 0 < step.val) :
+    {Self : Type _} (self : Self) (step : Std.Usize) (hstep : 0 < step.val) :
     core.iter.traits.iterator.Iterator.step_by.default self step
     ⦃ sb => sb.iter = self ∧ sb.step_by = step ⦄ := by
   unfold core.iter.traits.iterator.Iterator.step_by.default
@@ -735,7 +739,7 @@ theorem core.iter.traits.iterator.Iterator.step_by.default.spec
 
 @[step]
 theorem core.iter.traits.iterator.Iterator.step_by.trait_default.spec
-    {Self Item : Type} (inst : core.iter.traits.iterator.Iterator Self Item)
+    {Self Item : Type _} (inst : core.iter.traits.iterator.Iterator Self Item)
     (self : Self) (step : Std.Usize) (hstep : 0 < step.val) :
     core.iter.traits.iterator.Iterator.step_by.trait_default inst self step
     ⦃ sb => sb.iter = self ∧ sb.step_by = step ⦄ := by
@@ -744,7 +748,7 @@ theorem core.iter.traits.iterator.Iterator.step_by.trait_default.spec
 
 @[step]
 theorem core.iter.traits.iterator.Iterator.enumerate.default.spec
-    {Self : Type} (self : Self) :
+    {Self : Type _} (self : Self) :
     core.iter.traits.iterator.Iterator.enumerate.default self
     ⦃ e => e.iter = self ∧ e.count = 0#usize ⦄ := by
   unfold core.iter.traits.iterator.Iterator.enumerate.default
@@ -752,7 +756,7 @@ theorem core.iter.traits.iterator.Iterator.enumerate.default.spec
 
 @[step]
 theorem core.iter.traits.iterator.Iterator.enumerate.trait_default.spec
-    {Self Item : Type} (inst : core.iter.traits.iterator.Iterator Self Item)
+    {Self Item : Type _} (inst : core.iter.traits.iterator.Iterator Self Item)
     (self : Self) :
     core.iter.traits.iterator.Iterator.enumerate.trait_default inst self
     ⦃ e => e.iter = self ∧ e.count = 0#usize ⦄ := by
@@ -761,7 +765,7 @@ theorem core.iter.traits.iterator.Iterator.enumerate.trait_default.spec
 
 @[step]
 theorem core.iter.traits.iterator.Iterator.take.default.spec
-    {Self : Type} (self : Self) (n : Std.Usize) :
+    {Self : Type _} (self : Self) (n : Std.Usize) :
     core.iter.traits.iterator.Iterator.take.default self n
     ⦃ t => t.iter = self ∧ t.n = n ⦄ := by
   unfold core.iter.traits.iterator.Iterator.take.default
@@ -769,7 +773,7 @@ theorem core.iter.traits.iterator.Iterator.take.default.spec
 
 @[step]
 theorem core.iter.traits.iterator.Iterator.take.trait_default.spec
-    {Self Item : Type} (inst : core.iter.traits.iterator.Iterator Self Item)
+    {Self Item : Type _} (inst : core.iter.traits.iterator.Iterator Self Item)
     (self : Self) (n : Std.Usize) :
     core.iter.traits.iterator.Iterator.take.trait_default inst self n
     ⦃ t => t.iter = self ∧ t.n = n ⦄ := by
@@ -778,7 +782,7 @@ theorem core.iter.traits.iterator.Iterator.take.trait_default.spec
 
 @[step]
 theorem core.iter.traits.iterator.Iterator.rev.default.spec
-    {Self : Type} (self : Self) :
+    {Self : Type _} (self : Self) :
     core.iter.traits.iterator.Iterator.rev.default self
     ⦃ r => r.iter = self ⦄ := by
   unfold core.iter.traits.iterator.Iterator.rev.default
@@ -786,7 +790,7 @@ theorem core.iter.traits.iterator.Iterator.rev.default.spec
 
 @[step]
 theorem core.iter.traits.iterator.Iterator.rev.trait_default.spec
-    {Self Item0 Item1 : Type}
+    {Self Item0 Item1 : Type _}
     (inst : core.iter.traits.iterator.Iterator Self Item0)
     (de : core.iter.traits.double_ended.DoubleEndedIterator Self Item1)
     (self : Self) :
@@ -797,7 +801,7 @@ theorem core.iter.traits.iterator.Iterator.rev.trait_default.spec
 
 @[step]
 theorem core.iter.traits.iterator.Iterator.zip.default.spec
-    {Self U IntoIter : Type}
+    {Self U IntoIter : Type _}
     (into_iter : U → Result IntoIter)
     (self : Self) (other : U)
     (h_into : ∃ other', into_iter other = ok other') :
@@ -809,7 +813,7 @@ theorem core.iter.traits.iterator.Iterator.zip.default.spec
 
 @[step]
 theorem core.iter.traits.iterator.Iterator.zip.trait_default.spec
-    {Self U Item0 Item1 IntoIter : Type}
+    {Self U Item0 Item1 IntoIter : Type _}
     (inst : core.iter.traits.iterator.Iterator Self Item0)
     (IntoIterInst : core.iter.traits.collect.IntoIterator U Item1 IntoIter)
     (self : Self) (other : U)
@@ -824,7 +828,7 @@ theorem core.iter.traits.iterator.Iterator.zip.trait_default.spec
 @[rust_fun
   "core::iter::adapters::rev::{core::iter::traits::iterator::Iterator<core::iter::adapters::rev::Rev<@I>, @Clause0_Clause0_Item>}::next"]
 def core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next
-  {I Item : Type}
+  {I Item : Type _}
   (DEInst : core.iter.traits.double_ended.DoubleEndedIterator I Item) :
   core.iter.adapters.rev.Rev I →
     Result ((Option Item) × core.iter.adapters.rev.Rev I) :=
@@ -837,7 +841,7 @@ def core.iter.adapters.rev.Rev.Insts.CoreIterTraitsIteratorIterator.next
 @[rust_fun
   "core::iter::range::{core::iter::traits::double_ended::DoubleEndedIterator<core::ops::range::Range<@A>, @A>}::next_back"]
 def core.ops.range.Range.Insts.CoreIterTraitsDoubleEndedIterator.next_back
-  {A : Type} (StepInst : core.iter.range.Step A) :
+  {A : Type _} (StepInst : core.iter.range.Step A) :
   core.ops.range.Range A → Result ((Option A) × core.ops.range.Range A) :=
   fun r => do
     let lt ← StepInst.partialOrdInst.lt r.start r.«end»
@@ -871,10 +875,11 @@ fn spec_next_back(&mut self) -> Option<A> {
 @[rust_fun
   "core::iter::range::{core::iter::traits::double_ended::DoubleEndedIterator<core::ops::range::RangeInclusive<@A>, @A>}::next_back"]
 def core.ops.range.RangeInclusive.Insts.CoreIterTraitsDoubleEndedIterator.next_back
-  {A : Type} (StepInst : core.iter.range.Step A)
+  {A : Type _} (StepInst : core.iter.range.Step A)
   (self : core.ops.range.RangeInclusive A) :
   Result ((Option A) × core.ops.range.RangeInclusive A) := do
-  if ← self.is_empty StepInst.partialOrdInst then .ok (none, self)
+  let empty ← self.is_empty StepInst.partialOrdInst
+  if empty then .ok (none, self)
   else
     let is_iterating ← StepInst.partialOrdInst.lt self.start self.«end»
     if is_iterating then

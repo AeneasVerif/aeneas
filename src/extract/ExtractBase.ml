@@ -1458,11 +1458,19 @@ let fun_decl_kind_to_post_qualif (kind : decl_kind) : string option =
 
 (** The type of types.
 
+    In Lean, [~poly:true] prints [Type _] so that type binders (generic
+    parameters, associated types) are universe-polymorphic: [A -> Result B] is
+    not necessarily in [Type], and generic code must accept it. Use
+    [~poly:false] where Lean can't infer the level: the result sort of an opaque
+    type (an axiom's [Type _] is a free level, ambiguous at every use) and type
+    parameters bound inside a structure field (generic trait methods).
+
     TODO: move inside the formatter? *)
-let type_keyword (span : Meta.span) =
+let type_keyword ~(poly : bool) (span : Meta.span) =
   match backend () with
   | FStar -> "Type0"
-  | Coq | Lean -> "Type"
+  | Coq -> "Type"
+  | Lean -> if poly then "Type _" else "Type"
   | HOL4 -> [%craise] span "Unexpected"
 
 (** Helper *)
