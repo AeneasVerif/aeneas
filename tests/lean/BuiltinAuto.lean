@@ -25,6 +25,9 @@ namespace builtin_auto
 structure Inner where
   ptr : ConstRawPtr Std.U8
 
+instance : NonZeroSized Inner := ⟨NonZeroSized.nonZero (ConstRawPtr
+  Std.U8)⟩
+
 /-- [builtin_auto::make]:
     Source: 'tests/src/builtin-auto.rs', lines 11:0-15:1
     Visibility: public -/
