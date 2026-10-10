@@ -2689,6 +2689,152 @@ let decompose_raw_ptr_derefs (crate : crate) : crate =
   in
   { crate with fun_decls; declarations; item_names }
 
+(** Charon desugars every use of a place [p[i]] into a fresh call to
+    [Index::index]. In [if let Some(x) = a[i] { ... }], the value matched on and
+    the value read in the branch come from two different calls: the symbolic
+    interpreter doesn't know that the second one is a [Some], and fails because
+    it can not expand an enumeration with several variants.
+
+    We replace [k = index(r, idx)], where [r = &p], with [k = copy k0] if [k0]
+    holds the result of an earlier [index(&p, idx)] and nothing which could
+    modify [p], [idx] or [k0] happened in between: we only allow the statements
+    which don't write through pointers nor call functions. The interpreter
+    additionally checks that the shared borrow [k0] is still valid. *)
+let reuse_index_results (crate : crate) (f : fun_decl) : fun_decl =
+  let index_pats =
+    List.map NameMatcher.parse_pattern
+      [
+        "core::array::{core::ops::index::Index<[@T; @N], @I, @O>}::index";
+        "core::slice::index::{core::ops::index::Index<[@T], @I, @O>}::index";
+      ]
+  in
+  let slice_index_pat =
+    NameMatcher.parse_pattern
+      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
+       @T>}::index"
+  in
+  (* If the call is an [index] call: the borrow of the indexed place, the index
+     and the destination *)
+  let index_args (call : call) : (local_id * local_id * local_id) option =
+    let name_matches pat =
+      match call.func with
+      | FnOpRegular { kind = Fun fid; _ } -> (
+          match FunDeclId.Map.find_opt fid crate.fun_decls with
+          | Some d -> ExtractName.match_name crate pat d.item_meta.name
+          | None -> false)
+      | _ -> false
+    in
+    match (call.args, call.dest.kind) with
+    | ( [ Move { kind = PlaceLocal r; _ }; Copy { kind = PlaceLocal idx; _ } ],
+        PlaceLocal k )
+      when List.exists name_matches index_pats -> Some (r, idx, k)
+    | ( [ Copy { kind = PlaceLocal idx; _ }; Move { kind = PlaceLocal r; _ } ],
+        PlaceLocal k )
+      when name_matches slice_index_pat -> Some (r, idx, k)
+    | _ -> None
+  in
+  let rec root (p : place) : local_id option =
+    match p.kind with
+    | PlaceLocal l -> Some l
+    | PlaceProjection (p, _) -> root p
+    | PlaceGlobal _ -> None
+  in
+  (* The facts we know: [`Ref (r, p)]: [r = &p]; [`Index (p, idx, k)]:
+     [k = index(&p, idx)] *)
+  let forget (l : local_id) facts =
+    List.filter
+      (function
+        | `Ref (r, p) -> r <> l && root p <> Some l
+        | `Index (p, idx, k) -> idx <> l && k <> l && root p <> Some l)
+      facts
+  in
+  let rec block facts (b : block) =
+    let facts, statements = List.fold_left_map stmt facts b.statements in
+    (facts, { b with statements = List.concat statements })
+  and stmt facts (st : statement) =
+    match st.kind with
+    | Nop | PlaceMention _ | Assert _ -> (facts, [ st ])
+    | StorageLive l | StorageDead l -> (forget l facts, [ st ])
+    | Assign ({ kind = PlaceLocal l; _ }, rv) -> (
+        let facts = forget l facts in
+        match rv with
+        | RvRef (p, BShared, _) when root p <> Some l ->
+            (`Ref (l, p) :: facts, [ st ])
+        | Use _
+        | BinaryOp _
+        | UnaryOp _
+        | NullaryOp _
+        | Discriminant _
+        | Aggregate _ -> (facts, [ st ])
+        | _ -> ([], [ st ]))
+    | Call (call, _) -> (
+        match index_args call with
+        | None -> ([], [ st ])
+        | Some (r, idx, k) -> (
+            let p =
+              List.find_map
+                (function
+                  | `Ref (r', p) when r' = r -> Some p
+                  | _ -> None)
+                facts
+            in
+            let facts = forget k (forget r facts) in
+            let k0 =
+              List.find_map
+                (function
+                  | `Index (p', idx', k0) when Some p' = p && idx' = idx ->
+                      Some k0
+                  | _ -> None)
+                facts
+            in
+            match (p, k0) with
+            | _, Some k0 ->
+                (* The borrow [r] was moved by the call: we drop it *)
+                let k0 = { kind = PlaceLocal k0; ty = call.dest.ty } in
+                let rv = Use (Copy k0, NoRetag) in
+                ( facts,
+                  [
+                    { st with kind = Assign (call.dest, rv) };
+                    { st with kind = StorageDead r };
+                  ] )
+            | Some p, None -> (`Index (p, idx, k) :: facts, [ st ])
+            | None, None -> (facts, [ st ])))
+    | Switch (data, branches) ->
+        let results = List.map (block facts) branches in
+        (* Only the branches which fall through matter *)
+        let rec falls (b : block) =
+          match List.rev b.statements with
+          | {
+              kind = Return | Panic _ | Break _ | Continue _ | UndefinedBehavior;
+              _;
+            }
+            :: _ -> false
+          | { kind = Switch (_, branches); _ } :: _ ->
+              List.exists falls branches
+          | _ -> true
+        in
+        let falling =
+          List.filter_map
+            (fun (facts, b) -> if falls b then Some facts else None)
+            results
+        in
+        let facts =
+          match falling with
+          | [] -> []
+          | f0 :: fl -> List.filter (fun x -> List.for_all (List.mem x) fl) f0
+        in
+        (facts, [ { st with kind = Switch (data, List.map snd results) } ])
+    | Loop body -> ([], [ { st with kind = Loop (snd (block [] body)) } ])
+    | _ -> ([], [ st ])
+  in
+  match f.body with
+  | StructuredBody body ->
+      {
+        f with
+        body = StructuredBody { body with body = snd (block [] body.body) };
+      }
+  | _ -> f
+
 let apply_passes (crate : crate) : crate =
   (* Passes that apply to the whole crate *)
   let crate = update_array_default crate in
@@ -2708,6 +2854,7 @@ let apply_passes (crate : crate) : crate =
         remove_shallow_borrows_storage_live_dead );
       ("simplify_panics", simplify_panics);
       ("decompose_global_accesses", decompose_global_accesses);
+      ("reuse_index_results", reuse_index_results);
       ("refresh_statement_ids", refresh_statement_ids);
     ]
   in

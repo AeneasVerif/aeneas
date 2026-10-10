@@ -87,6 +87,7 @@ package «tests» {}
 @[default_target] lean_lib LoopsNestedRec
 @[default_target] lean_lib LoopsRec
 @[default_target] lean_lib LoopsSequences
+@[default_target] lean_lib MatchIndex
 @[default_target] lean_lib MaybeUninit
 @[default_target] lean_lib MaybeUninitSpecs
 @[default_target] lean_lib MiniTree
