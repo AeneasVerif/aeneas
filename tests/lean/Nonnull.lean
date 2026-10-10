@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -384,14 +385,46 @@ def incr_either
     as_mut_unchecked_back (Node.mk i n.next n.prev)
     ok i
 
+/-- [nonnull::Chain]
+    Source: 'tests/src/nonnull.rs', lines 232:0-235:1
+    Visibility: public -/
+inductive Chain where
+| mk : Std.U32 → Option (NonNull Chain) → Chain
+
+def Chain.value (x : Chain) := match x with | Chain.mk x1 _ => x1
+
+def Chain.next (x : Chain) := match x with | Chain.mk _ x1 => x1
+
+@[simp]
+theorem Chain.value._simpLemma_ (value : Std.U32) (next : Option (NonNull
+  Chain)) : (Chain.mk value next).value = value := by rfl
+
+@[simp]
+theorem Chain.next._simpLemma_ (value : Std.U32) (next : Option (NonNull
+  Chain)) : (Chain.mk value next).next = next := by rfl
+
+instance : NonZeroSized Chain := ⟨NonZeroSized.nonZero Std.U32 ||
+  NonZeroSized.nonZero (Option (NonNull Chain))⟩
+
+/-- [nonnull::next_value]:
+    Source: 'tests/src/nonnull.rs', lines 239:0-247:1
+    Visibility: public -/
+def next_value (p : MutRawPtr Chain) : Result Std.U32 := do
+  let p1 ← RawPtr.read p
+  match p1.next with
+  | none => ok p1.value
+  | some n => let p2 := NonNull.as_ptr n
+              let c ← RawPtr.read p2
+              ok c.value
+
 /-- [nonnull::Empty]
-    Source: 'tests/src/nonnull.rs', lines 233:0-235:1
+    Source: 'tests/src/nonnull.rs', lines 250:0-252:1
     Visibility: public -/
 structure Empty where
   e : MaybeUninit Unit
 
 /-- [nonnull::compare_zero_sized]:
-    Source: 'tests/src/nonnull.rs', lines 239:0-247:1
+    Source: 'tests/src/nonnull.rs', lines 256:0-264:1
     Visibility: public -/
 def compare_zero_sized : Result Bool := do
   let mu ← core.mem.maybe_uninit.MaybeUninit.uninit Unit

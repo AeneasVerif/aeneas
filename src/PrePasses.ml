@@ -2699,7 +2699,14 @@ let decompose_raw_ptr_derefs (crate : crate) : crate =
     holds the result of an earlier [index(&p, idx)] and nothing which could
     modify [p], [idx] or [k0] happened in between: we only allow the statements
     which don't write through pointers nor call functions. The interpreter
-    additionally checks that the shared borrow [k0] is still valid. *)
+    additionally checks that the shared borrow [k0] is still valid.
+
+    Similarly, [decompose_raw_ptr_derefs] reads the value behind a raw pointer
+    [q] into a fresh local at every use of a field of [*q]: we replace
+    [k = copy *q] with [k = copy k0] if [k0 = copy *q] happened before and
+    nothing which could modify [q], [k0] or the value behind [q] happened in
+    between. The value behind [q] may be a local whose address is taken: we
+    forget the reads whenever such a local is modified. *)
 let reuse_index_results (crate : crate) (f : fun_decl) : fun_decl =
   let index_pats =
     List.map NameMatcher.parse_pattern
@@ -2739,13 +2746,41 @@ let reuse_index_results (crate : crate) (f : fun_decl) : fun_decl =
     | PlaceProjection (p, _) -> root p
     | PlaceGlobal _ -> None
   in
+  (* The locals whose address is taken: assigning them may modify the values
+     behind raw pointers *)
+  let addr_taken = ref LocalId.Set.empty in
+  let visitor =
+    object
+      inherit [_] iter_statement as super
+
+      method! visit_rvalue env rv =
+        (match rv with
+        | RvRef (p, _, _) | RawPtr (p, _, _) ->
+            Option.iter
+              (fun l -> addr_taken := LocalId.Set.add l !addr_taken)
+              (root p)
+        | _ -> ());
+        super#visit_rvalue env rv
+    end
+  in
+  (match f.body with
+  | StructuredBody body -> visitor#visit_block () body.body
+  | _ -> ());
+  let is_raw_ptr (ty : ty) =
+    match ty with
+    | TRawPtr _ -> true
+    | _ -> false
+  in
   (* The facts we know: [`Ref (r, p)]: [r = &p]; [`Index (p, idx, k)]:
-     [k = index(&p, idx)] *)
+     [k = index(&p, idx)]; [`Read (k, q)]: [k = copy *q] with [q] a raw pointer
+     (see [decompose_raw_ptr_derefs]) *)
   let forget (l : local_id) facts =
     List.filter
       (function
         | `Ref (r, p) -> r <> l && root p <> Some l
-        | `Index (p, idx, k) -> idx <> l && k <> l && root p <> Some l)
+        | `Index (p, idx, k) -> idx <> l && k <> l && root p <> Some l
+        | `Read (k, q) ->
+            k <> l && root q <> Some l && not (LocalId.Set.mem l !addr_taken))
       facts
   in
   let rec block facts (b : block) =
@@ -2755,9 +2790,22 @@ let reuse_index_results (crate : crate) (f : fun_decl) : fun_decl =
     match st.kind with
     | Nop | PlaceMention _ | Assert _ -> (facts, [ st ])
     | StorageLive l | StorageDead l -> (forget l facts, [ st ])
-    | Assign ({ kind = PlaceLocal l; _ }, rv) -> (
+    | Assign (({ kind = PlaceLocal l; _ } as dest), rv) -> (
         let facts = forget l facts in
         match rv with
+        | Use (Copy { kind = PlaceProjection (q, Deref); ty }, _)
+          when is_raw_ptr q.ty && root q <> Some l -> (
+            match
+              List.find_map
+                (function
+                  | `Read (k0, q') when q' = q -> Some k0
+                  | _ -> None)
+                facts
+            with
+            | Some k0 ->
+                let rv = Use (Copy { kind = PlaceLocal k0; ty }, NoRetag) in
+                (facts, [ { st with kind = Assign (dest, rv) } ])
+            | None -> (`Read (l, q) :: facts, [ st ]))
         | RvRef (p, BShared, _) when root p <> Some l ->
             (`Ref (l, p) :: facts, [ st ])
         | Use _
