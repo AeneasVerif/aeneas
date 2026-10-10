@@ -2155,6 +2155,69 @@ let extract_type_decl_record_field_projectors_simp_lemmas (ctx : extraction_ctx)
 
         FieldId.iteri extract_field_proj_simp_lemma fields
 
+(** Lean: the [NonZeroSized] instance of a structure (see [RawPtr.eq]): a
+    structure is not zero-sized if one of its fields is not. We only generate it
+    for the structures with fields which mention raw pointers, whose pointers
+    may be compared. *)
+let extract_type_decl_non_zero_sized_instance (ctx : extraction_ctx)
+    (fmt : F.formatter) (decl : type_decl) : unit =
+  let span = decl.item_meta.span in
+  match decl.kind with
+  | Opaque | Enum _ -> ()
+  | Struct fields ->
+      let mentions_raw_ptr (ty : ty) : bool =
+        let exception Found in
+        let visitor =
+          object
+            inherit [_] iter_ty as super
+
+            method! visit_ty env ty =
+              match ty with
+              | TAdt (TBuiltin (TRawPtr _), _) -> raise Found
+              | TAdt ((TAdtId _ as id), _)
+                when ctx_get_type (Some span) id ctx = "NonNull" -> raise Found
+              | _ -> super#visit_ty env ty
+          end
+        in
+        try
+          visitor#visit_ty () ty;
+          false
+        with Found -> true
+      in
+      if List.exists (fun (f : field) -> mentions_raw_ptr f.field_ty) fields
+      then (
+        let ctx, type_params, cg_params, trait_clauses =
+          ctx_add_generic_params span decl.item_meta.name Item
+            decl.llbc_generics decl.generics ctx
+        in
+        let extract_ty = extract_ty span ctx fmt TypeDeclId.Set.empty in
+        F.pp_print_space fmt ();
+        F.pp_open_hovbox fmt ctx.indent_incr;
+        F.pp_print_string fmt "instance";
+        extract_generic_params span ctx fmt TypeDeclId.Set.empty Item
+          ~as_implicits:true decl.generics None type_params cg_params
+          trait_clauses;
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt ": NonZeroSized";
+        F.pp_print_space fmt ();
+        extract_ty ~inside:true
+          (TAdt (TAdtId decl.def_id, generic_args_of_params decl.generics));
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt ":= ⟨";
+        List.iteri
+          (fun i (f : field) ->
+            if i > 0 then (
+              F.pp_print_space fmt ();
+              F.pp_print_string fmt "||";
+              F.pp_print_space fmt ());
+            F.pp_print_string fmt "NonZeroSized.nonZero";
+            F.pp_print_space fmt ();
+            extract_ty ~inside:true f.field_ty)
+          fields;
+        F.pp_print_string fmt "⟩";
+        F.pp_close_box fmt ();
+        F.pp_print_break fmt 0 0)
+
 (** Extract extra information for a type (e.g., [Arguments] instructions in
     Coq).
 
@@ -2175,4 +2238,6 @@ let extract_type_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
         extract_type_decl_record_field_projectors ctx fmt kind decl;
         if backend () = Lean then
           extract_type_decl_record_field_projectors_simp_lemmas ctx fmt kind
-            decl)
+            decl);
+      if backend () = Lean then
+        extract_type_decl_non_zero_sized_instance ctx fmt decl

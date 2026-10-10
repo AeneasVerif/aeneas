@@ -50,12 +50,18 @@ theorem Node.next._simpLemma_ (value : Std.U32) (next : NonNull Node) (prev :
 theorem Node.prev._simpLemma_ (value : Std.U32) (next : NonNull Node) (prev :
   NonNull Node) : (Node.mk value next prev).prev = prev := by rfl
 
+instance : NonZeroSized Node := ⟨NonZeroSized.nonZero Std.U32 ||
+  NonZeroSized.nonZero (NonNull Node) || NonZeroSized.nonZero (NonNull Node)⟩
+
 /-- [nonnull::List]
     Source: 'tests/src/nonnull.rs', lines 14:0-17:1
     Visibility: public -/
 structure List where
   head : Option (NonNull Node)
   len : Std.Usize
+
+instance : NonZeroSized List := ⟨NonZeroSized.nonZero (Option (NonNull Node))
+  || NonZeroSized.nonZero Std.Usize⟩
 
 /-- [nonnull::new_node]:
     Source: 'tests/src/nonnull.rs', lines 20:0-32:1
@@ -229,6 +235,10 @@ structure Iter where
   len : Std.Usize
   _marker : core.marker.PhantomData Node
 
+instance : NonZeroSized Iter := ⟨NonZeroSized.nonZero (Option (NonNull Node))
+  || NonZeroSized.nonZero Std.Usize || NonZeroSized.nonZero
+  (core.marker.PhantomData Node)⟩
+
 /-- [nonnull::{nonnull::Iter<'a>}::next]:
     Source: 'tests/src/nonnull.rs', lines 137:4-145:5
     Visibility: public -/
@@ -354,5 +364,20 @@ def compare_views : Result Bool := do
 def same_node (p : MutRawPtr Node) (q : ConstRawPtr Node) : Result Bool := do
   let p1 := RawPtr.cast_const p
   RawPtr.eq p1 q
+
+/-- [nonnull::Empty]
+    Source: 'tests/src/nonnull.rs', lines 221:0-223:1
+    Visibility: public -/
+structure Empty where
+  e : MaybeUninit Unit
+
+/-- [nonnull::compare_zero_sized]:
+    Source: 'tests/src/nonnull.rs', lines 227:0-235:1
+    Visibility: public -/
+def compare_zero_sized : Result Bool := do
+  let mu ← core.mem.maybe_uninit.MaybeUninit.uninit Unit
+  let p ← alloc.boxed.Box.into_raw ({ e := mu } : Empty)
+  let q ← alloc.boxed.Box.into_raw ({ e := mu } : Empty)
+  RawPtr.eq p q
 
 end nonnull
