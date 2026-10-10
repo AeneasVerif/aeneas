@@ -810,6 +810,20 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
         | None -> [%internal_error_opt_span] span)
   in
 
+  (* The region groups which appear at the top-level of the signature, i.e.,
+     not under a borrow *)
+  let top_level_groups_of (tys : T.ty list) =
+    T.RegionId.Set.fold
+      (fun rid groups ->
+        match T.RegionId.Map.find_opt rid rg_to_gr_id with
+        | Some gid -> T.RegionGroupId.Set.add gid groups
+        | None -> groups)
+      (RegionsHierarchy.top_level_regions tys)
+      T.RegionGroupId.Set.empty
+  in
+  let top_level_groups = top_level_groups_of (sg.output :: sg.inputs) in
+  let output_groups = top_level_groups_of [ sg.output ] in
+
   (* Compute the type information for the backward function *)
   (* Small helper to translate types for backward functions.
      - [to_input] controls whether we compute an input type or an output type.
@@ -933,9 +947,10 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
       compute_raw_fun_effect_info span fun_infos fun_id (Some gid)
     in
     let inputs = translate_back_inputs_for_gid gid in
-    (* We consider a backward function as stateful and potentially failing
-       **only if it has inputs** (for the "potentially failing": if it has
-       not inputs, we directly evaluate it in the body of the forward function).
+    (* We consider a (non stateful) backward function as potentially failing
+       **only if it has inputs**: if it has no inputs, we directly evaluate it
+       in the body of the forward function. The stateful backward functions
+       are handled below.
 
        For instance, we do the following:
        {[
@@ -958,11 +973,44 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
       let b = inputs <> [] in
       { back_effect_info with can_fail = back_effect_info.can_fail && b }
     in
-    let outputs = compute_back_outputs_for_gid gid in
-    let filter =
-      !Config.simplify_merged_fwd_backs && inputs = [] && outputs = []
+    (* Is the backward function stateful (i.e., does it access the heap)? *)
+    let stateful, deferred =
+      match lookup_pure_fn_ptr_info fun_infos fun_id with
+      | Some { stateful_region_groups = Some gids; _ } ->
+          (* Builtin function: the stateful lifetimes are given by the model *)
+          let b = List.mem gid gids in
+          (b, b)
+      | Some { stateful = true; _ } ->
+          (* Transparent function: the backward functions of the region groups
+             which appear at the top-level of the signature may access the
+             heap. The other ones (for the nested borrows) are pure: their
+             types appear inside the types of values.
+
+             If the region group appears in the output, the effects must
+             happen when the caller ends the region: we defer the backward
+             function (otherwise, it is evaluated at the end of the forward
+             function). *)
+          let stateful = T.RegionGroupId.Set.mem gid top_level_groups in
+          (stateful, stateful && T.RegionGroupId.Set.mem gid output_groups)
+      | _ -> (false, false)
     in
-    let info = { inputs; outputs; effect_info = back_effect_info; filter } in
+    let back_effect_info =
+      { back_effect_info with can_fail = back_effect_info.can_fail || stateful }
+    in
+    let outputs = compute_back_outputs_for_gid gid in
+    (* Remark: a stateful backward function without inputs which is not
+       deferred is evaluated at the end of the forward function: if it has no
+       outputs we can filter it (we still perform its effects there) *)
+    let filter =
+      !Config.simplify_merged_fwd_backs
+      && inputs = [] && outputs = [] && not deferred
+    in
+    [%cassert_opt_span] span
+      ((not stateful) || deferred || !Config.simplify_merged_fwd_backs)
+      "Stateful backward functions require [simplify_merged_fwd_backs]";
+    let info =
+      { inputs; outputs; effect_info = back_effect_info; deferred; filter }
+    in
     (gid, info)
   in
   let back_sg =
@@ -992,7 +1040,14 @@ and translate_fun_sigs (span : span option) (decls_ctx : C.decls_ctx)
     (input_names : string option list) : fun_sigs =
   (* Retrieve the list of parent backward functions *)
   let regions_hierarchy =
-    RegionsHierarchy.compute_regions_hierarchy_for_sig span decls_ctx.crate sg
+    let merge_groups =
+      match fun_id with
+      | FunId fid ->
+          FunsAnalysis.merge_region_groups decls_ctx.fun_ctx.fun_infos fid
+      | _ -> false
+    in
+    RegionsHierarchy.compute_regions_hierarchy_for_sig ~merge_groups span
+      decls_ctx.crate sg
   in
 
   let inst_sg : LlbcAst.inst_fun_sig =
@@ -1139,9 +1194,9 @@ and mk_output_ty_from_effect_info (effect_info : fun_effect_info) (ty : ty) : ty
     =
   if effect_info.can_fail then mk_result_ty ty else ty
 
-and mk_back_output_ty_from_effect_info (effect_info : fun_effect_info)
-    (inputs : ty list) (ty : ty) : ty =
-  if effect_info.can_fail && inputs <> [] then mk_result_ty ty else ty
+(** Does a backward function live in the [Result] monad? *)
+and back_sg_returns_result (back_sg : back_sg_info) : bool =
+  back_sg.effect_info.can_fail && (back_sg.inputs <> [] || back_sg.deferred)
 
 (** Compute the arrow types for all the backward functions.
 
@@ -1150,7 +1205,6 @@ and compute_back_tys_with_info (dsg : Pure.decomposed_fun_type) :
     (back_sg_info * ty) option list =
   List.map
     (fun (back_sg : back_sg_info) ->
-      let effect_info = back_sg.effect_info in
       (* Compute the input/output types *)
       let inputs =
         List.map
@@ -1163,12 +1217,11 @@ and compute_back_tys_with_info (dsg : Pure.decomposed_fun_type) :
           back_sg.outputs
       in
       (* Filter if necessary *)
-      if !Config.simplify_merged_fwd_backs && inputs = [] && outputs = [] then
-        None
+      if back_sg.filter then None
       else
         let output = mk_simpl_tuple_ty outputs in
         let output =
-          mk_back_output_ty_from_effect_info effect_info inputs output
+          if back_sg_returns_result back_sg then mk_result_ty output else output
         in
         let ty = mk_arrows inputs output in
         Some (back_sg, ty))

@@ -37,8 +37,40 @@ let log = Logging.regions_hierarchy_log
 
 type regions_hierarchy = region_var_groups [@@deriving show]
 
-let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
-    (sg : bound_fun_sig) : region_var_groups =
+(** The regions which appear at the top-level of some types (i.e., not under a
+    borrow). In the functions which manipulate raw pointers, the backward
+    functions of the region groups containing such regions may access the heap.
+*)
+let top_level_regions (tys : ty list) : RegionId.Set.t =
+  let regions = ref RegionId.Set.empty in
+  let add (r : region) =
+    match r with
+    | RVar (Free rid) -> regions := RegionId.Set.add rid !regions
+    | _ -> ()
+  in
+  let rec explore (ty : ty) : unit =
+    match ty with
+    | TRef (r, _, _) -> add r
+    | TAdt { generics; _ } ->
+        List.iter add generics.regions;
+        List.iter explore generics.types
+    | TArray (ty, _, _) | TSlice (ty, _) | TRawPtr (ty, _) -> explore ty
+    | _ -> ()
+  in
+  List.iter explore tys;
+  !regions
+
+(** Compute the regions hierarchy of a signature.
+
+    If [merge_groups] is [true], we merge all the region groups into a single
+    one. We do so for the functions which access the heap (because they
+    manipulate raw pointers): their backward functions may have side effects,
+    and if two backward functions end the same region abstraction (for instance
+    the abstraction of a function call which borrowed from two inputs of the
+    function) they would perform those side effects twice. *)
+let compute_regions_hierarchy_for_sig ~(merge_groups : bool)
+    (span : Meta.span option) (crate : crate) (sg : bound_fun_sig) :
+    region_var_groups =
   (* Create the dependency graph.
 
      An edge from 'long to 'short means that 'long outlives 'short (that is
@@ -269,29 +301,101 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
   (*
    * Compute the regions hierarchy
    *)
-  List.filter_map
-    (fun (scc_id, scc) ->
-      (* The region id *)
-      let i = SccId.to_int scc_id in
-      let id = RegionGroupId.of_int i in
+  let groups =
+    List.filter_map
+      (fun (scc_id, scc) ->
+        (* The region id *)
+        let i = SccId.to_int scc_id in
+        let id = RegionGroupId.of_int i in
 
-      (* Retrieve the set of regions in the group *)
-      let regions : RegionId.id list =
+        (* Retrieve the set of regions in the group *)
+        let regions : RegionId.id list =
+          List.map
+            (fun r ->
+              match r with
+              | RVar (Free rid) -> rid
+              | _ -> [%craise] (Option.get span) "Unreachable")
+            scc
+        in
+
+        (* Compute the set of parent region groups *)
+        let parents =
+          List.map
+            (fun id -> RegionGroupId.of_int (SccId.to_int id))
+            (SccId.Set.elements (SccId.Map.find scc_id sccs.scc_deps))
+        in
+
+        (* Put together *)
+        Some { id; regions; parents })
+      (SccId.Map.bindings sccs.sccs)
+  in
+  if not merge_groups then groups
+  else
+    (* Merge the groups which appear at the top-level of the signature (i.e.,
+       not under a borrow): those are the groups whose backward functions may
+       access the heap *)
+    let { Types.inputs; output; _ } = sg.item_binder_value in
+    let top_level = top_level_regions (output :: inputs) in
+    let is_top_level (g : region_var_group) =
+      List.exists (fun r -> RegionId.Set.mem r top_level) g.regions
+    in
+    let merged = List.filter is_top_level groups in
+    match List.rev merged with
+    | [] | [ _ ] -> groups
+    | last :: _ ->
+        let merged_ids = List.map (fun (g : region_var_group) -> g.id) merged in
+        let is_merged id = List.mem id merged_ids in
+        (* The merged groups must not be ancestors of each other *)
+        let rec ancestors (id : RegionGroupId.id) : RegionGroupId.id list =
+          let g = List.find (fun (g : region_var_group) -> g.id = id) groups in
+          g.parents @ List.concat_map ancestors g.parents
+        in
+        [%cassert_opt_span] span
+          (List.for_all
+             (fun (g : region_var_group) ->
+               not (List.exists is_merged (ancestors g.id)))
+             merged)
+          "Unsupported: a function which accesses the heap (because it \
+           manipulates raw pointers) and whose signature contains borrows \
+           nested inside each other at the top-level";
+        (* We put the merged group at the position of the last group we merge,
+           so that the parents of the groups appear before it *)
+        let merged_group : region_var_group =
+          {
+            id = last.id;
+            regions =
+              List.concat_map (fun (g : region_var_group) -> g.regions) merged;
+            parents =
+              List.sort_uniq compare
+                (List.concat_map
+                   (fun (g : region_var_group) -> g.parents)
+                   merged);
+          }
+        in
+        (* Renumber the groups: the ids are the indices in the list *)
+        let new_groups =
+          List.filter_map
+            (fun (g : region_var_group) ->
+              if g.id = last.id then Some merged_group
+              else if is_merged g.id then None
+              else Some g)
+            groups
+        in
+        let renumber (id : RegionGroupId.id) : RegionGroupId.id =
+          let id = if is_merged id then last.id else id in
+          let rec find i (l : region_var_group list) =
+            match l with
+            | [] -> [%craise_opt_span] span "Unreachable"
+            | g :: l ->
+                if g.id = id then RegionGroupId.of_int i else find (i + 1) l
+          in
+          find 0 new_groups
+        in
         List.map
-          (fun r ->
-            match r with
-            | RVar (Free rid) -> rid
-            | _ -> [%craise] (Option.get span) "Unreachable")
-          scc
-      in
-
-      (* Compute the set of parent region groups *)
-      let parents =
-        List.map
-          (fun id -> RegionGroupId.of_int (SccId.to_int id))
-          (SccId.Set.elements (SccId.Map.find scc_id sccs.scc_deps))
-      in
-
-      (* Put together *)
-      Some { id; regions; parents })
-    (SccId.Map.bindings sccs.sccs)
+          (fun (g : region_var_group) ->
+            {
+              id = renumber g.id;
+              regions = g.regions;
+              parents = List.sort_uniq compare (List.map renumber g.parents);
+            })
+          new_groups

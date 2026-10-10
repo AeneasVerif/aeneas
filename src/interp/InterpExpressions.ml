@@ -310,6 +310,17 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
           cf )
       end
 
+(** If [p] is a dereference of a raw pointer [*q], return [q].
+
+    We only support dereferencing raw pointers at the top-level of a place:
+    reading or writing a field through a raw pointer is not supported (those
+    dereferences of raw pointers are caught by [InterpPaths]). Note that [q] may
+    itself be a dereference of a raw pointer. *)
+let raw_ptr_deref_place (p : place) : place option =
+  match p.kind with
+  | PlaceProjection (({ ty = TRawPtr _; _ } as q), Deref) -> Some q
+  | _ -> None
+
 (** Reorganize the environment in preparation for the evaluation of an operand.
 
     Evaluating an operand requires reorganizing the environment to get access to
@@ -347,10 +358,15 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
     function parameters. Still, it is better for soundness purposes, and
     corresponds to what we do in the formalization (because we don't enforce the
     same constraints as MIR in the formalization). *)
-let prepare_eval_operand_reorganize (config : config) (span : Meta.span)
+let rec prepare_eval_operand_reorganize (config : config) (span : Meta.span)
     (op : operand) : cm_fun =
  fun ctx ->
   match op with
+  | (Copy p | Move p) when Option.is_some (raw_ptr_deref_place p) ->
+      (* Read through a raw pointer: we only need to read the pointer *)
+      prepare_eval_operand_reorganize config span
+        (Copy (Option.get (raw_ptr_deref_place p)))
+        ctx
   | Constant _ ->
       (* No need to reorganize the context *)
       (ctx, fun e -> e)
@@ -367,7 +383,7 @@ let prepare_eval_operand_reorganize (config : config) (span : Meta.span)
       access_rplace_reorganize config span greedy_expand access p ctx
 
 (** Evaluate an operand, without reorganizing the context before *)
-let eval_operand_no_reorganize (config : config) (span : Meta.span)
+let rec eval_operand_no_reorganize (config : config) (span : Meta.span)
     (op : operand) (ctx : eval_ctx) :
     tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Debug *)
@@ -376,6 +392,26 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
     ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* Evaluate *)
   match op with
+  | (Copy p | Move p) when Option.is_some (raw_ptr_deref_place p) ->
+      (* Read through a raw pointer: the value comes from the heap *)
+      [%cassert] span
+        (config.mode = SymbolicMode)
+        "Raw pointers are only supported in symbolic mode";
+      [%cassert] span
+        (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos p.ty))
+        "Unsupported: reading a value containing borrows through a raw pointer";
+      let q = Option.get (raw_ptr_deref_place p) in
+      let ptr, ctx, cc = eval_operand_no_reorganize config span (Copy q) ctx in
+      let res_sv = mk_fresh_symbolic_value span ctx p.ty in
+      let cc =
+        cc_comp cc
+          (synthesize_function_call span RawPtrRead ctx None []
+             (mk_generic_args_from_types [ p.ty ])
+             [ ptr ]
+             [ mk_opt_place_from_op span (Copy q) ctx ]
+             res_sv None)
+      in
+      (mk_tvalue_from_symbolic_value res_sv, ctx, cc)
   | Constant cv -> begin
       [%ldebug "constant of type: " ^ ty_to_string ctx cv.ty];
       match cv.kind with
@@ -780,6 +816,10 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
   (* There is a special case for casts which convert dyn traits (for instance:
      [Box<...>] to [Box<dyn ...>]) *)
   match unop with
+  | Cast (CastRawPtr (ty0, ty1))
+    when Substitute.erase_regions ty0 = Substitute.erase_regions ty1 ->
+      (* Casting a raw pointer to its own type: nothing to do *)
+      (Ok { v with ty = ty1 }, ctx, cc)
   | Cast (CastUnsize (ty0, ty1, MetaVTable (trait_ref, _))) -> (
       (* Casting a type to a dyn trait *)
       [%ltrace

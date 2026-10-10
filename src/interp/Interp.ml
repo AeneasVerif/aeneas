@@ -257,14 +257,17 @@ let compute_contexts (crate : crate) : decls_ctx =
 
     We return a new context because we compute and add the type normalization
     map in the same step. *)
-let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
-    (sg : bound_fun_sig) (_kind : fun_source) : eval_ctx * inst_fun_sig =
+let symbolic_instantiate_fun_sig ~(merge_groups : bool) (span : Meta.span)
+    (ctx : eval_ctx) (sg : bound_fun_sig) (_kind : fun_source) :
+    eval_ctx * inst_fun_sig =
   let tr_self = UnknownTrait "symbolic_instantiate_fun_sig" in
   let generics =
     Substitute.generic_args_of_params_erase_regions (Some span)
       sg.item_binder_params
   in
-  let inst_sg = instantiate_fun_sig (Some span) ctx generics tr_self sg in
+  let inst_sg =
+    instantiate_fun_sig ~merge_groups (Some span) ctx generics tr_self sg
+  in
   let region_groups =
     List.map (fun (g : region_var_group) -> g.id) inst_sg.regions_hierarchy
   in
@@ -310,7 +313,12 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx)
   (* Instantiate the signature. This updates the context because we compute
      at the same time the list of region groups. *)
   let ctx, inst_sg =
-    symbolic_instantiate_fun_sig span ctx (bound_fun_sig_of_decl fdef) fdef.src
+    symbolic_instantiate_fun_sig
+      ~merge_groups:
+        (FunsAnalysis.merge_region_groups ctx.fun_ctx.fun_infos fdef.def_id)
+      span ctx
+      (bound_fun_sig_of_decl fdef)
+      fdef.src
   in
   (* Create fresh symbolic values for the inputs *)
   let input_svs =
@@ -377,6 +385,204 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx)
   (* Return *)
   (ctx, input_svs, inst_sg)
 
+(** Before returning from a stateful function (i.e., a function which accesses
+    the heap because it manipulates raw pointers), end the region abstractions
+    introduced by function calls which are dead.
+
+    The backward functions of the called functions may access the heap: if we
+    don't call them, we lose their effects. For instance, the backward function
+    of [core::slice::raw::from_raw_parts_mut] writes the slice back to the heap.
+
+    An abstraction is dead if:
+    - it doesn't consume values borrowed from the inputs of the function. For
+      instance, if we convert an input borrow to a raw pointer with
+      [as_mut_ptr], we keep the abstraction introduced by this call alive: it is
+      ended in the backward function, as the raw pointer may outlive the call to
+      the current function (it may be stored in the returned value).
+    - ending it modifies neither the returned value, nor the region abstractions
+      which were not introduced by function calls.
+
+    We only consider abstractions without parents: the others are ended when
+    their parents are ended. *)
+let rec end_dead_fun_call_abs (config : config) (span : Meta.span)
+    (get_ret_value : eval_ctx -> tvalue option) : cm_fun =
+ fun ctx ->
+  (* Compute the borrows and symbolic values which are (transitively) derived
+     from the inputs *)
+  let input_borrows = ref BorrowId.Set.empty in
+  let input_svs = ref SymbolicValueId.Set.empty in
+  let input_abs_visitor =
+    object
+      inherit [_] iter_abs as super
+
+      method! visit_aloan_content env lc =
+        (match lc with
+        | AMutLoan (_, lid, _) | ASharedLoan (_, lid, _, _) ->
+            input_borrows := BorrowId.Set.add lid !input_borrows
+        | _ -> ());
+        super#visit_aloan_content env lc
+
+      method! visit_aproj env proj =
+        (match proj with
+        | AProjLoans { proj; _ } ->
+            input_svs := SymbolicValueId.Set.add proj.sv_id !input_svs
+        | _ -> ());
+        super#visit_aproj env proj
+    end
+  in
+  env_iter_abs
+    (fun abs ->
+      match abs.kind with
+      | SynthInput _ -> input_abs_visitor#visit_abs () abs
+      | _ -> ())
+    ctx.env;
+  (* The loans inside a value borrowed from the inputs are derived from the
+     inputs, as well as the loans of the abstractions which consume values
+     derived from the inputs: we compute a fixed point *)
+  let changed = ref true in
+  let add_loan (lid : BorrowId.id) =
+    if not (BorrowId.Set.mem lid !input_borrows) then (
+      input_borrows := BorrowId.Set.add lid !input_borrows;
+      changed := true)
+  in
+  let add_sv (id : SymbolicValueId.id) =
+    if not (SymbolicValueId.Set.mem id !input_svs) then (
+      input_svs := SymbolicValueId.Set.add id !input_svs;
+      changed := true)
+  in
+  let collect_loans_visitor =
+    object
+      inherit [_] iter_abs as super
+
+      method! visit_loan_content env lc =
+        (match lc with
+        | VSharedLoan (lid, _) | VMutLoan lid -> add_loan lid);
+        super#visit_loan_content env lc
+
+      method! visit_aloan_content env lc =
+        (match lc with
+        | AMutLoan (_, lid, _) | ASharedLoan (_, lid, _, _) -> add_loan lid
+        | _ -> ());
+        super#visit_aloan_content env lc
+
+      method! visit_aproj env proj =
+        (match proj with
+        | AProjLoans { proj; _ } -> add_sv proj.sv_id
+        | _ -> ());
+        super#visit_aproj env proj
+    end
+  in
+  (* Does an abstraction consume values derived from the inputs? *)
+  let consumes_inputs (abs : abs) : bool =
+    let found = ref false in
+    let visitor =
+      object
+        inherit [_] iter_abs as super
+
+        method! visit_aborrow_content env bc =
+          (match bc with
+          | AMutBorrow (_, bid, _) | ASharedBorrow (_, bid, _) ->
+              if BorrowId.Set.mem bid !input_borrows then found := true
+          | _ -> ());
+          super#visit_aborrow_content env bc
+
+        method! visit_borrow_content env bc =
+          (match bc with
+          | VSharedBorrow (bid, _)
+          | VMutBorrow (bid, _)
+          | VReservedMutBorrow (bid, _) ->
+              if BorrowId.Set.mem bid !input_borrows then found := true);
+          super#visit_borrow_content env bc
+
+        method! visit_symbolic_value_id _ id =
+          if SymbolicValueId.Set.mem id !input_svs then found := true
+      end
+    in
+    visitor#visit_abs () abs;
+    !found
+  in
+  let derived_visitor =
+    object
+      inherit [_] iter_env as super
+
+      method! visit_VMutBorrow env bid v =
+        if BorrowId.Set.mem bid !input_borrows then
+          collect_loans_visitor#visit_tvalue () v;
+        super#visit_VMutBorrow env bid v
+
+      method! visit_AMutBorrow env pm bid av =
+        if BorrowId.Set.mem bid !input_borrows then
+          collect_loans_visitor#visit_tavalue () av;
+        super#visit_AMutBorrow env pm bid av
+
+      method! visit_abs env abs =
+        (match abs.kind with
+        | FunCall _ when consumes_inputs abs ->
+            collect_loans_visitor#visit_abs () abs
+        | _ -> ());
+        super#visit_abs env abs
+    end
+  in
+  while !changed do
+    changed := false;
+    derived_visitor#visit_env () ctx.env
+  done;
+  let non_fun_call_abs (ctx : eval_ctx) : abs list =
+    env_filter_map_abs
+      (fun abs ->
+        match abs.kind with
+        | FunCall _ -> None
+        | _ -> Some abs)
+      ctx.env
+  in
+  (* Attempt to end an abstraction, then check that it had no influence on the
+     returned value nor on the other abstractions *)
+  let try_end (abs : abs) : (eval_ctx * (SA.expr -> SA.expr)) option =
+    match abs.kind with
+    | FunCall _
+      when abs.can_end
+           && AbsId.Set.is_empty abs.parents
+           && not (consumes_inputs abs) ->
+        let ctx', cc = end_abs config span abs.abs_id 0 ctx in
+        if
+          get_ret_value ctx' = get_ret_value ctx
+          && non_fun_call_abs ctx' = non_fun_call_abs ctx
+        then Some (ctx', cc)
+        else None
+    | _ -> None
+  in
+  (* We end the abstractions of the most recent function calls first: the raw
+     pointers manipulated by a function call may come from a previous call (for
+     instance, a slice created by [from_raw_parts] from a pointer given by
+     [as_mut_ptr]) *)
+  let call_id (abs : abs) =
+    match abs.kind with
+    | FunCall (call_id, _) -> FunCallId.to_int call_id
+    | _ -> -1
+  in
+  let abs_list =
+    List.sort
+      (fun a0 a1 -> Int.compare (call_id a1) (call_id a0))
+      (env_filter_map_abs (fun abs -> Some abs) ctx.env)
+  in
+  match List.find_map try_end abs_list with
+  | None -> (ctx, fun e -> e)
+  | Some (ctx, cc) ->
+      comp cc (end_dead_fun_call_abs config span get_ret_value ctx)
+
+(** Does a region group appear at the top-level of a signature (i.e., not under
+    a borrow)? The backward functions of such groups are the ones which may
+    access the heap in the functions which manipulate raw pointers (see
+    [SymbolicToPureTypes.translate_inst_fun_sig_to_decomposed_fun_type]). *)
+let back_group_is_top_level (inst_sg : inst_fun_sig)
+    (back_id : RegionGroupId.id) : bool =
+  let top_level =
+    RegionsHierarchy.top_level_regions (inst_sg.output :: inst_sg.inputs)
+  in
+  List.exists
+    (fun r -> RegionId.Set.mem r top_level)
+    (RegionGroupId.nth inst_sg.regions_hierarchy back_id).regions
+
 (** Small helper.
 
     This is a continuation function called by the symbolic interpreter upon
@@ -399,7 +605,12 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
    * an instantiation of the signature, so that we use fresh
    * region ids for the return abstractions. *)
   let _, ret_inst_sg =
-    symbolic_instantiate_fun_sig span ctx (bound_fun_sig_of_decl fdef) fdef.src
+    symbolic_instantiate_fun_sig
+      ~merge_groups:
+        (FunsAnalysis.merge_region_groups ctx.fun_ctx.fun_infos fdef.def_id)
+      span ctx
+      (bound_fun_sig_of_decl fdef)
+      fdef.src
   in
   let ret_rty = ret_inst_sg.output in
 
@@ -480,15 +691,54 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
 
   let target_abs_ids = List.append parent_input_abs_ids [ current_abs_id ] in
 
+  (* If the function accesses the heap:
+     - we first end the return abstractions of the region groups we are
+       interested in: because of the raw pointers, the input abstractions may
+       not depend on them (for instance, when returning a slice created from a
+       raw pointer stored in an input) but we still need to consume the values
+       given back to the function
+     - we then end the abstractions which are now dead, so as not to lose the
+       effects of their backward functions (see [end_dead_fun_call_abs]). We
+       do so before ending the input abstractions, so that the effects happen
+       in the proper order (for instance, a slice created from a raw pointer
+       with [from_raw_parts] must be given back before the borrow from which
+       the raw pointer was created ends).
+     - we end the remaining dead abstractions at the very end *)
+  let stateful =
+    FunsAnalysis.is_stateful ctx.fun_ctx.fun_infos fdef.def_id
+    && back_group_is_top_level inst_sg back_id
+  in
+  let end_ret_and_dead_abs ctx =
+    if stateful then
+      let ret_abs_ids =
+        env_filter_map_abs
+          (fun abs ->
+            match abs.kind with
+            | SynthRet _ when abs.can_end -> Some abs.abs_id
+            | _ -> None)
+          ctx.env
+      in
+      let ctx, cc =
+        fold_left_apply_continuation
+          (fun id ctx -> end_abs config span id 0 ctx)
+          ret_abs_ids ctx
+      in
+      comp cc (end_dead_fun_call_abs config span (fun _ -> None) ctx)
+    else (ctx, fun e -> e)
+  in
+  let ctx, cc = end_ret_and_dead_abs ctx in
+
   (* Set the abstrations as endable *)
   let ctx = InterpBorrowsCore.update_endable ctx target_abs_ids ~can_end:true in
 
   (* Actually end them *)
   let ctx, cc =
-    fold_left_apply_continuation
-      (fun id ctx -> end_abs config span id 0 ctx)
-      target_abs_ids ctx
+    comp cc
+      (fold_left_apply_continuation
+         (fun id ctx -> end_abs config span id 0 ctx)
+         target_abs_ids ctx)
   in
+  let ctx, cc = comp cc (end_ret_and_dead_abs ctx) in
   (* Generate the Return node *)
   let return_expr = SA.Return (ctx, None) in
   (* Apply *)
@@ -523,7 +773,10 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
   [%ltrace "initial context:\n" ^ eval_ctx_to_string ctx];
 
   let regions_hierarchy =
-    RegionsHierarchy.compute_regions_hierarchy_for_sig (Some span) ctx.crate
+    RegionsHierarchy.compute_regions_hierarchy_for_sig
+      ~merge_groups:
+        (FunsAnalysis.merge_region_groups ctx.fun_ctx.fun_infos fdef.def_id)
+      (Some span) ctx.crate
       (bound_fun_sig_of_decl fdef)
   in
 
@@ -549,6 +802,25 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
            abstractions to consume the return value, then end all the
            abstractions up to the one in which we are interested.
         *)
+        (* If the function accesses the heap, end the dead region abstractions
+           (see [end_dead_fun_call_abs]). We do so before popping the frame, so
+           that the abstractions are ended in the proper order (popping the
+           frame may end the abstractions which hold loans in the local
+           variables). Those effects happen before the function returns: we
+           thus put them (and the effects of popping the frame) before the
+           [ForwardEnd] node, which is shared by the forward and backward
+           functions. *)
+        let stateful =
+          FunsAnalysis.is_stateful ctx.fun_ctx.fun_infos fdef.def_id
+        in
+        let ctx, cc_end =
+          if stateful then
+            end_dead_fun_call_abs config span
+              (fun ctx ->
+                Some (ctx_lookup_var_value span ctx Expressions.LocalId.zero))
+              ctx
+          else (ctx, fun e -> e)
+        in
         (* Whatever the scenario, we need to pop the frame and retrieve the returned value *)
         let ret_value, ctx, cc_pop =
           (* Do not pop the locals if this is a global and [borrow_check_globals]
@@ -560,6 +832,10 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
           pop_frame config span ~pop_locals ~pop_return_value:true ctx
         in
         let ret_value = Option.get ret_value in
+        let cc_outer, cc_pop =
+          if stateful then (cc_comp cc_end cc_pop, fun e -> e)
+          else (cc_end, cc_pop)
+        in
         let ctx_return = ctx in
         [%ltrace
           "after popping the frame:\n- returned value:\n"
@@ -584,7 +860,8 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
         in
         let back_el = RegionGroupId.Map.of_list back_el in
         (* Put everything together *)
-        SA.ForwardEnd (Some (ctx_return, ret_value), ctx0, fwd_e, back_el)
+        cc_outer
+          (SA.ForwardEnd (Some (ctx_return, ret_value), ctx0, fwd_e, back_el))
     | Panic ->
         (* Note that as we explore all the execution branches, one of
          * the executions can lead to a panic *)

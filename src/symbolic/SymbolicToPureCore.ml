@@ -470,6 +470,17 @@ let ctx_get_effect_info_for_bid (ctx : bs_ctx) (bid : RegionGroupId.id option) :
 let ctx_get_effect_info (ctx : bs_ctx) : fun_effect_info =
   ctx_get_effect_info_for_bid ctx ctx.bid
 
+(** Check that we can call a stateful backward function in the current context
+    (backward functions are stateful if they access the heap, because of raw
+    pointers). *)
+let check_can_call_stateful_back (ctx : bs_ctx) (can_fail : bool) : unit =
+  [%cassert] ctx.span
+    ((not can_fail) || (ctx_get_effect_info ctx).can_fail)
+    "Unsupported: the backward function generated here needs to access the \
+     heap (because of raw pointers), but its signature does not allow it. A \
+     backward function can access the heap only if its region appears at the \
+     top-level of the function signature (i.e., not under a reference)."
+
 let bs_ctx_lookup_llbc_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) :
     T.type_decl =
   TypeDeclId.Map.find id ctx.type_ctx.llbc_type_decls

@@ -22,6 +22,12 @@ type fun_info = {
   can_fail : bool;
       (* Not used yet: all the extracted functions use an error monad *)
   stateful : bool;
+      (** The function accesses the heap: it manipulates raw pointers, or
+          (transitively) calls a function which does. *)
+  stateful_region_groups : Types.RegionGroupId.id list option;
+      (** For the builtin functions: the region groups whose backward functions
+          are stateful (see [Pure.builtin_fun_info.stateful_lifetimes]). [None]
+          for the other functions. *)
   can_diverge : bool;
   (* The function can diverge if:
      - it is recursive
@@ -55,6 +61,25 @@ let lookup_fn_ptr_info (infos : modules_funs_info) (kind : fn_ptr_kind) :
     fun_info option =
   Option.bind (fun_or_method_id_of_fn_ptr kind) (lookup_fun_info infos)
 
+(** Should we merge the region groups of a function? We do so for the
+    non-builtin functions which access the heap (see
+    [RegionsHierarchy.compute_regions_hierarchy_for_sig]). *)
+let merge_region_groups (infos : modules_funs_info) (id : FunDeclId.id) : bool =
+  match lookup_fun_decl_info infos id with
+  | Some { stateful = true; stateful_region_groups = None; _ } -> true
+  | _ -> false
+
+let is_stateful (infos : modules_funs_info) (id : FunDeclId.id) : bool =
+  match lookup_fun_decl_info infos id with
+  | Some info -> info.stateful
+  | None -> false
+
+(** Does the crate contain functions which access the heap? *)
+let crate_is_stateful (infos : modules_funs_info) : bool =
+  FunOrMethodId.Map.exists
+    (fun _ (info : fun_info) -> info.stateful)
+    infos.infos
+
 let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     modules_funs_info =
   let fmt_env = Charon.Print.crate_to_fmt_env m in
@@ -70,7 +95,13 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
       (method_id : Types.TraitMethodId.id) : unit =
     register_info
       (FunOrMethodId.Method (trait_decl_id, method_id))
-      { can_fail = true; stateful = false; can_diverge = false; is_rec = false }
+      {
+        can_fail = true;
+        stateful = false;
+        stateful_region_groups = None;
+        can_diverge = false;
+        is_rec = false;
+      }
   in
 
   TraitDeclId.Map.iter
@@ -79,6 +110,71 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
         (fun method_id _ -> register_trait_method_info trait_decl_id method_id)
         trait_decl.methods)
     m.trait_decls;
+
+  (* Does a type (transitively) contain a raw pointer? We first compute the set
+     of type declarations which contain raw pointers with a fixed point. *)
+  let ty_contains_raw_ptr : Types.ty -> bool =
+    let open Types in
+    let decls = ref TypeDeclId.Set.empty in
+    let ty_contains (ty : ty) : bool =
+      let found = ref false in
+      let visitor =
+        object
+          inherit [_] iter_ty as super
+
+          method! visit_ty env ty =
+            match ty with
+            | TRawPtr _ -> found := true
+            | TAdt { id; builtin = None; _ } when TypeDeclId.Set.mem id !decls
+              -> found := true
+            | _ -> super#visit_ty env ty
+        end
+      in
+      visitor#visit_ty () ty;
+      !found
+    in
+    let decl_contains (decl : type_decl) : bool =
+      let fields_contain (fields : field list) =
+        List.exists (fun (f : field) -> ty_contains f.field_ty) fields
+      in
+      match decl.kind with
+      | Struct fields | Union fields -> fields_contain fields
+      | Enum variants ->
+          List.exists (fun (v : variant) -> fields_contain v.fields) variants
+      | Alias ty -> ty_contains ty
+      | Opaque | TDeclError _ -> false
+    in
+    let changed = ref true in
+    while !changed do
+      changed := false;
+      TypeDeclId.Map.iter
+        (fun id decl ->
+          if (not (TypeDeclId.Set.mem id !decls)) && decl_contains decl then (
+            decls := TypeDeclId.Set.add id !decls;
+            changed := true))
+        m.type_decls
+    done;
+    ty_contains
+  in
+
+  (* Does the crate manipulate raw pointers (in its own functions)? If yes, the
+     trait methods and the function pointers we call may access the heap. *)
+  let crate_uses_raw_ptrs =
+    FunDeclId.Map.exists
+      (fun _ (f : fun_decl) ->
+        f.item_meta.is_local
+        &&
+        let sg = f.signature in
+        List.exists ty_contains_raw_ptr (sg.output :: sg.inputs)
+        ||
+        match f.body with
+        | StructuredBody body ->
+            List.exists
+              (fun (v : local) -> ty_contains_raw_ptr v.local_ty)
+              body.locals.locals
+        | _ -> false)
+      funs_map
+  in
 
   (* Analyze a group of mutually recursive functions.
    * As the functions can call each other, we compute the same information
@@ -95,6 +191,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     let stateful = ref false in
     let can_diverge = ref false in
     let is_rec = ref false in
+    let stateful_region_groups = ref None in
     let group_has_builtin_info = ref false in
     let name_matcher_ctx : Charon.NameMatcher.ctx =
       Charon.NameMatcher.ctx_from_crate m
@@ -137,7 +234,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
                    use of --exclude)"
               in
               self#may_fail info.can_fail;
-              stateful := !stateful || info.stateful;
+              self#maybe_stateful info.stateful;
               can_diverge := !can_diverge || info.can_diverge
 
           method! visit_Assert env a =
@@ -181,17 +278,21 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
           method! visit_Call env call on_unwind =
             (match call.func with
             | FnOpDynamic _ ->
-                (* Ignoring this: we lookup the called function upon creating
-                   the closure *)
-                ()
+                (* We lookup the called function upon creating the closure.
+                   We don't know which function we call: it may access the
+                   heap. *)
+                self#maybe_stateful crate_uses_raw_ptrs
             | FnOpRegular func -> (
                 match func.kind with
                 | Fun id -> self#visit_fid env id
                 | TraitMethod _ ->
-                    (* We consider trait functions can fail, but can not diverge and are not stateful.
+                    (* We consider trait functions can fail, but can not diverge.
                        TODO: this may cause issues if we use use a fuel parameter.
+                       We don't know which implementation we call: it may access
+                       the heap if the crate manipulates raw pointers.
                     *)
-                    can_fail := true));
+                    can_fail := true;
+                    self#maybe_stateful crate_uses_raw_ptrs));
             super#visit_Call env call on_unwind
 
           method! visit_Panic env =
@@ -201,15 +302,73 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
           method! visit_Loop env loop =
             can_diverge := true;
             super#visit_Loop env loop
+
+          method! visit_place env p =
+            (match p.kind with
+            | PlaceProjection ({ ty = TRawPtr _; _ }, Deref) ->
+                (* Dereferencing a raw pointer accesses the heap *)
+                self#maybe_stateful true
+            | _ -> ());
+            super#visit_place env p
         end
       in
-      (* Sanity check: global bodies don't contain stateful calls *)
-      [%cassert] f.item_meta.span
-        ((not (fun_decl_is_global_initializer f)) || not !stateful)
-        "Global definition containing a stateful call in its body";
       let builtin_info = get_builtin_info f in
       let has_builtin_info = builtin_info <> None in
       group_has_builtin_info := !group_has_builtin_info || has_builtin_info;
+      (* A function which manipulates raw pointers accesses the heap, except:
+         - the builtin functions which can not fail (they don't live in the
+           [Result] monad, so they can't access the heap): for instance,
+           [RawPtr.cast_const]
+         - the global initializers: they may manipulate raw pointers as values
+           (ex.: [const NULL: *const u8 = core::ptr::null()]), but the
+           dereferences (which would make them stateful) are rejected below. *)
+      let pure_builtin =
+        match builtin_info with
+        | Some { can_fail = false; _ } -> true
+        | _ -> false
+      in
+      if not (fun_decl_is_global_initializer f || pure_builtin) then begin
+        let sg = f.signature in
+        obj#maybe_stateful
+          (List.exists ty_contains_raw_ptr (sg.output :: sg.inputs));
+        match f.body with
+        | StructuredBody body ->
+            obj#maybe_stateful
+              (List.exists
+                 (fun (v : local) -> ty_contains_raw_ptr v.local_ty)
+                 body.locals.locals)
+        | _ -> ()
+      end;
+      (match builtin_info with
+      | Some info ->
+          (* Convert the indices of the lifetimes to region groups *)
+          let num_regions = List.length f.generics.regions in
+          let stateful_regions =
+            List.map
+              (fun i ->
+                [%cassert] f.item_meta.span
+                  (0 <= i && i < num_regions)
+                  "Invalid index in [stateful_lifetimes]";
+                Types.RegionId.of_int i)
+              info.stateful_lifetimes
+          in
+          let groups =
+            RegionsHierarchy.compute_regions_hierarchy_for_sig
+              ~merge_groups:false (Some f.item_meta.span) m
+              (bound_fun_sig_of_decl f)
+          in
+          stateful_region_groups :=
+            Some
+              (List.filter_map
+                 (fun (g : Types.region_var_group) ->
+                   if
+                     List.exists
+                       (fun r -> List.mem r g.regions)
+                       stateful_regions
+                   then Some g.id
+                   else None)
+                 groups)
+      | None -> ());
       match f.body with
       | StructuredBody body -> obj#visit_block body.body.span body.body
       | TargetDispatchBody targets ->
@@ -224,7 +383,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
           let info_can_fail =
             match builtin_info with
             | None -> true
-            | Some { can_fail } -> can_fail
+            | Some { can_fail; _ } -> can_fail
           in
           obj#may_fail info_can_fail
     in
@@ -232,6 +391,11 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     (* We need to know if the declaration group contains a global - note that
      * groups containing globals contain exactly one declaration *)
     let is_global_decl_body = List.exists fun_decl_is_global_initializer d in
+    (* Sanity check: global bodies don't access the heap *)
+    [%cassert] (List.hd d).item_meta.span
+      ((not is_global_decl_body) || not !stateful)
+      "Global definition accessing the heap (because it dereferences raw \
+       pointers, or calls a function which does)";
     [%cassert] (List.hd d).item_meta.span
       ((not is_global_decl_body) || List.length d = 1)
       "This global definition is in a group of mutually recursive definitions";
@@ -252,6 +416,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     {
       can_fail = !can_fail;
       stateful = !stateful;
+      stateful_region_groups = !stateful_region_groups;
       can_diverge = !can_diverge;
       is_rec = !is_rec;
     }

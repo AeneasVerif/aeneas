@@ -40,6 +40,11 @@ type call_id =
           operation) *)
   | Unop of unop
   | Binop of binop
+  | RawPtrRead
+      (** Read through a raw pointer: [x = *p]. The argument is the pointer. *)
+  | RawPtrWrite
+      (** Write through a raw pointer: [*p = x]. The arguments are the pointer
+          and the written value. *)
 [@@deriving show, ord]
 
 type call = {
