@@ -251,7 +251,11 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
                 register_edge (Pure lhs.id) 0 (Llbc lid)
             | _ -> ())
           (fst (opt_unmeta_mplace re));
-        register_assign lv re;
+        (* We don't link the variables if we bind the result of a monadic
+           computation stored in a variable (for instance, a stateful backward
+           function without inputs): the computation and its result are not the
+           same value *)
+        if not (monadic && is_result_ty re.ty) then register_assign lv re;
         (* Check if this is a loop call *)
         let f, args = destruct_apps re in
         begin

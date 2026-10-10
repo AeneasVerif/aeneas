@@ -135,6 +135,15 @@ type pure_builtin_fun_id =
           We use this when using `ok ...` would result in let-bindings getting
           simplified away (in a backend like Lean). *)
   | Discriminant  (** Discriminant read *)
+  | RawPtrRead
+      (** Read through a raw pointer. The type parameter is the type of the
+          pointed value. *)
+  | RawPtrWrite
+      (** Write through a mutable raw pointer. The type parameter is the type of
+          the pointed value. *)
+  | RawPtrCastConst
+      (** Cast a mutable raw pointer to a constant raw pointer ([p as *const T])
+      *)
   | ResultUnwrapMut
       (** Temporary fix: the
           [core::result::{core::result::Result<@T, @E>}::unwrap] instantiated
@@ -211,7 +220,14 @@ type builtin_fun_info = {
   keep_trait_clauses : bool list option;
   extract_name : string;
   can_fail : bool;
-  stateful : bool;
+  stateful_lifetimes : int list;
+      (** The indices (in the list of region parameters of the Rust function) of
+          the lifetimes whose backward functions are stateful: they live in the
+          [Result] monad because they access the heap (for instance, the
+          backward function of [core::slice::raw::from_raw_parts_mut] writes the
+          slice back to the memory it was created from). Such a backward
+          function is returned as a monadic computation even if it has no
+          inputs, so that its effects happen when the lifetime ends. *)
   lift : bool;
       (** If the function can not fail, should we still lift it to the [Result]
           monad? This can make reasonings easier, as we can then use [progress]
@@ -1641,6 +1657,15 @@ type back_sg_info = {
           - [result T]
           - [[result (T * T)]] *)
   effect_info : fun_effect_info;
+  deferred : bool;
+      (** [true] if the backward function is stateful (it accesses the heap) and
+          has to be returned as a monadic computation (of type [Result ...])
+          even if it has no inputs, so that its effects happen when its region
+          ends. This is the case of the stateful backward functions of the
+          builtin functions (see [builtin_fun_info.stateful_lifetimes]), and of
+          the stateful backward functions of the transparent functions whose
+          region appears in the output. The other stateful backward functions
+          without inputs are evaluated at the end of the forward function. *)
   filter : bool;  (** Should we filter this backward function? *)
 }
 [@@deriving show]

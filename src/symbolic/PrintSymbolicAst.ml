@@ -11,6 +11,8 @@ let call_id_to_string (env : fmt_env) (call_id : call_id) : string =
       fn_ptr_kind_to_string env fid ^ "@" ^ FunCallId.to_string call_id
   | Unop unop -> unop_to_string env unop
   | Binop binop -> binop_to_string binop
+  | RawPtrRead -> "@raw_ptr_read"
+  | RawPtrWrite -> "@raw_ptr_write"
 
 let call_to_string (env : fmt_env) (indent : string) (call : call) : string =
   let dest = Values.symbolic_value_to_string env call.dest in

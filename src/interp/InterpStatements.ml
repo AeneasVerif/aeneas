@@ -475,7 +475,13 @@ let mk_symbolic_fun_call_inst (span : Meta.span) (ctx : eval_ctx)
     call_span;
     call_sig = signature;
     call_inst_sig =
-      instantiate_fun_sig (Some span) ctx inst_generics tr_self signature;
+      (let merge_groups =
+         match call_kind with
+         | Fun fid -> FunsAnalysis.merge_region_groups ctx.fun_ctx.fun_infos fid
+         | TraitMethod _ -> false
+       in
+       instantiate_fun_sig ~merge_groups (Some span) ctx inst_generics tr_self
+         signature);
   }
 
 (** Auxiliary helper for [eval_function_call_symbolic] Instantiate the signature
@@ -697,6 +703,36 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->
   [%ltrace "statement:\n" ^ statement_to_string_with_tab ctx st ^ "\n"];
   match st.kind with
+  | Assign (p, rvalue) when Option.is_some (raw_ptr_deref_place p) ->
+      (* Write through a raw pointer: the value goes to the heap *)
+      [%cassert] st.span
+        (not (ExpressionsUtils.rvalue_accesses_global rvalue))
+        "Unsupported: writing a global through a raw pointer";
+      [%cassert] st.span
+        (not (ty_has_borrows (Some st.span) ctx.type_ctx.type_infos p.ty))
+        "Unsupported: writing a value containing borrows through a raw pointer";
+      let q = Option.get (raw_ptr_deref_place p) in
+      let res, ctx, cc = eval_rvalue_not_global config st.span rvalue ctx in
+      begin
+        match res with
+        | Error EPanic ->
+            ([ (ctx, Panic) ], cc_singleton __FILE__ __LINE__ st.span cc)
+        | Ok v ->
+            let ptr, ctx, cc =
+              comp2 cc (eval_operand config st.span (Copy q) ctx)
+            in
+            let unit_sv = mk_fresh_symbolic_value st.span ctx mk_unit_ty in
+            let cc =
+              cc_comp cc
+                (S.synthesize_function_call st.span SymbolicAst.RawPtrWrite ctx
+                   None []
+                   (mk_generic_args_from_types [ p.ty ])
+                   [ ptr; v ]
+                   [ S.mk_opt_place_from_op st.span (Copy q) ctx; None ]
+                   unit_sv None)
+            in
+            ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span cc)
+      end
   | Assign (p, rvalue) ->
       if
         (* We handle global assignments separately as a specific case. *)
