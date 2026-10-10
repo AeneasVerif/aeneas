@@ -365,14 +365,33 @@ def same_node (p : MutRawPtr Node) (q : ConstRawPtr Node) : Result Bool := do
   let p1 := RawPtr.cast_const p
   RawPtr.eq p1 q
 
+/-- [nonnull::incr_either]:
+    Source: 'tests/src/nonnull.rs', lines 222:0-230:1
+    Visibility: public -/
+def incr_either
+  (p : NonNull Node) (q : NonNull Node) (first : Bool) : Result Std.U32 := do
+  if first
+  then
+    let p1 := NonNull.as_ptr p
+    let (n, as_mut_unchecked_back) ← RawPtr.as_mut_unchecked p1
+    let i ← n.value + 1#u32
+    as_mut_unchecked_back (Node.mk i n.next n.prev)
+    ok i
+  else
+    let p1 := NonNull.as_ptr q
+    let (n, as_mut_unchecked_back) ← RawPtr.as_mut_unchecked p1
+    let i ← n.value + 1#u32
+    as_mut_unchecked_back (Node.mk i n.next n.prev)
+    ok i
+
 /-- [nonnull::Empty]
-    Source: 'tests/src/nonnull.rs', lines 221:0-223:1
+    Source: 'tests/src/nonnull.rs', lines 233:0-235:1
     Visibility: public -/
 structure Empty where
   e : MaybeUninit Unit
 
 /-- [nonnull::compare_zero_sized]:
-    Source: 'tests/src/nonnull.rs', lines 227:0-235:1
+    Source: 'tests/src/nonnull.rs', lines 239:0-247:1
     Visibility: public -/
 def compare_zero_sized : Result Bool := do
   let mu ← core.mem.maybe_uninit.MaybeUninit.uninit Unit
