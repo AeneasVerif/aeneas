@@ -213,6 +213,7 @@ def core.ptr.end_from_mut (repr : Repr T) (p : MutRawPtr T) : Result T := do
   .ok value
 
 /-- Exposes `r` as raw memory; the back computation runs when the borrow ends. -/
+@[rust_fun "core::ptr::from_mut" (statefulLifetimes := [0])]
 def core.ptr.from_mut (repr : Repr T) (r : T) : Result (MutRawPtr T × Result T) :=
   Aeneas.Std.bind (RawPtr.allocExposure repr [r]) fun p => .ok (p, core.ptr.end_from_mut repr p)
 
