@@ -537,7 +537,10 @@ let rec end_dead_fun_call_abs (config : config) (span : Meta.span)
       ctx.env
   in
   (* Attempt to end an abstraction, then check that it had no influence on the
-     returned value nor on the other abstractions *)
+     returned value nor on the other abstractions. Note that ending an
+     abstraction may leave the returned value unchanged while ending a region
+     which appears in the type of one of its symbolic values (for instance the
+     output of an opaque function): this invalidates the value. *)
   let try_end (abs : abs) : (eval_ctx * (SA.expr -> SA.expr)) option =
     match abs.kind with
     | FunCall _
@@ -545,8 +548,12 @@ let rec end_dead_fun_call_abs (config : config) (span : Meta.span)
            && AbsId.Set.is_empty abs.parents
            && not (consumes_inputs abs) ->
         let ctx', cc = end_abs config span abs.abs_id 0 ctx in
+        let ret = get_ret_value ctx' in
         if
-          get_ret_value ctx' = get_ret_value ctx
+          ret = get_ret_value ctx
+          && Option.fold ~none:true
+               ~some:(fun v -> not (bottom_in_value ctx'.ended_regions v))
+               ret
           && non_fun_call_abs ctx' = non_fun_call_abs ctx
         then Some (ctx', cc)
         else None

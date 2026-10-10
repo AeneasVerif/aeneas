@@ -94,6 +94,11 @@ pub fn sum(list: &List) -> u32 {
     s
 }
 
+/// The first node, with the `?` operator on the head pointer.
+pub fn front(list: &List) -> Option<&Node> {
+    Some(unsafe { list.head?.as_ref() })
+}
+
 /// Increment the values of the nodes.
 pub fn increment(list: &mut List) {
     if let Some(head) = list.head {
