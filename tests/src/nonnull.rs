@@ -217,6 +217,18 @@ pub fn same_node(p: *mut Node, q: *const Node) -> bool {
     p as *const Node == q
 }
 
+/// Borrows of values in the heap created in the branches of an `if` and used
+/// after it: we do not merge them (the code after the `if` is duplicated).
+pub fn incr_either(p: NonNull<Node>, q: NonNull<Node>, first: bool) -> u32 {
+    let n = if first {
+        unsafe { &mut *p.as_ptr() }
+    } else {
+        unsafe { &mut *q.as_ptr() }
+    };
+    n.value += 1;
+    n.value
+}
+
 /// A zero-sized type whose Lean model has two values.
 pub struct Empty {
     pub e: core::mem::MaybeUninit<()>,
