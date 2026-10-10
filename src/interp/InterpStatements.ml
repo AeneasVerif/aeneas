@@ -630,6 +630,166 @@ let eval_global_as_fresh_symbolic_value (span : Meta.span)
       let cc = S.synthesize_global_eval gref sval in
       (ctx, mk_tvalue_from_symbolic_value sval, ty, cc)
 
+(** Register the region abstractions of a function call which borrow values from
+    the heap, that is, the abstractions of the region groups whose backward
+    functions are stateful and which appear in the output as the regions of
+    references (for instance [NonNull::as_mut], or a function which returns a
+    borrow obtained from a raw pointer). See [end_dead_heap_borrows].
+
+    We ignore the regions which only appear as parameters of ADTs (for instance
+    [S<'a>] with a field of type [PhantomData<&'a mut T>]): we can not detect
+    when the values of those ADTs are dead (the expanded values do not carry the
+    regions), so the backward functions are called later (lazily, or when the
+    function returns). *)
+let register_heap_borrow_abs (ctx : eval_ctx) (fid : fn_ptr_kind)
+    (inst_sg : inst_fun_sig) : unit =
+  let stateful_groups =
+    match fid with
+    | Fun fid -> (
+        match FunsAnalysis.lookup_fun_decl_info ctx.fun_ctx.fun_infos fid with
+        | Some { stateful_region_groups = Some gids; _ } -> gids
+        | Some { stateful = true; _ } ->
+            List.map
+              (fun (rg : region_group) -> rg.id)
+              inst_sg.regions_hierarchy
+        | _ -> [])
+    | TraitMethod _ -> []
+  in
+  let output_regions = RegionsHierarchy.top_level_regions [ inst_sg.output ] in
+  let ref_regions = ref RegionId.Set.empty in
+  let visitor =
+    object
+      inherit [_] iter_ty as super
+
+      method! visit_TRef env r ty kind =
+        (match r with
+        | RVar (Free r) -> ref_regions := RegionId.Set.add r !ref_regions
+        | _ -> ());
+        super#visit_TRef env r ty kind
+    end
+  in
+  visitor#visit_ty () inst_sg.output;
+  List.iter
+    (fun gid ->
+      let rg = RegionGroupId.nth inst_sg.regions_hierarchy gid in
+      if
+        List.exists
+          (fun r ->
+            match r with
+            | RVar (Free r) ->
+                RegionId.Set.mem r output_regions
+                && RegionId.Set.mem r !ref_regions
+            | _ -> false)
+          rg.regions
+      then
+        Hashtbl.replace ctx.heap_borrow_abs
+          (RegionGroupId.nth inst_sg.abs_regions_hierarchy gid).id ())
+    stateful_groups
+
+(** In the functions which access the heap, end the region abstractions of the
+    function calls which borrow values from the heap (see
+    [register_heap_borrow_abs]) as soon as their borrows are dead: their
+    backward functions give the values back to the heap, which must happen
+    before the values are accessed again through other pointers (the heap model
+    fails if we access a value which is borrowed).
+
+    The borrows are dead if ending the abstraction modifies neither the live
+    local variables ([live]) nor the abstractions which were not introduced by
+    function calls, and if no live value has a type which mentions the regions
+    which ended (for instance, a structure with a [PhantomData<&'a mut T>]
+    field). We end the abstractions of the most recent calls first.
+
+    The liveness analysis does not need to be exact: if we end a borrow which is
+    used later, the symbolic execution fails when it is used (the borrow was
+    replaced with ⊥). *)
+let rec end_dead_heap_borrows (config : config) (span : Meta.span)
+    (live : LocalId.Set.t) : cm_fun =
+ fun ctx ->
+  let live_values (ctx : eval_ctx) : tvalue list =
+    List.filter_map
+      (fun (e : env_elem) ->
+        match e with
+        | EBinding (BVar { index; _ }, v) when LocalId.Set.mem index live ->
+            Some v
+        | _ -> None)
+      ctx.env
+  in
+  let non_fun_call_abs (ctx : eval_ctx) : abs list =
+    env_filter_map_abs
+      (fun abs ->
+        match abs.kind with
+        | FunCall _ -> None
+        | _ -> Some abs)
+      ctx.env
+  in
+  let try_end (abs : abs) :
+      (eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)) option =
+    if
+      Hashtbl.mem ctx.heap_borrow_abs abs.abs_id
+      && abs.can_end
+      && AbsId.Set.is_empty abs.parents
+    then
+      let ctx', cc = InterpBorrows.end_abs config span abs.abs_id 0 ctx in
+      (* The values whose types mention the regions which ended are dead *)
+      let ended = RegionId.Set.diff ctx'.ended_regions ctx.ended_regions in
+      let visitor =
+        object
+          inherit [_] iter_tvalue as super
+
+          method! visit_tvalue env v =
+            if
+              ty_has_regions_in_pred ctx.type_ctx.type_infos
+                (function
+                  | RVar (Free r) -> RegionId.Set.mem r ended
+                  | _ -> false)
+                v.ty
+            then raise Utils.Found
+            else super#visit_tvalue env v
+
+          method! visit_symbolic_value _ sv =
+            if symbolic_value_has_ended_regions ended sv then raise Utils.Found
+        end
+      in
+      let live_values' = live_values ctx' in
+      if
+        live_values' = live_values ctx
+        && non_fun_call_abs ctx' = non_fun_call_abs ctx
+        &&
+        try
+          List.iter (visitor#visit_tvalue ()) live_values';
+          true
+        with Utils.Found -> false
+      then Some (ctx', cc)
+      else None
+    else None
+  in
+  let call_id (abs : abs) =
+    match abs.kind with
+    | FunCall (call_id, _) -> FunCallId.to_int call_id
+    | _ -> -1
+  in
+  let abs_list =
+    List.sort
+      (fun a0 a1 -> Int.compare (call_id a1) (call_id a0))
+      (env_filter_map_abs (fun abs -> Some abs) ctx.env)
+  in
+  match List.find_map try_end abs_list with
+  | None -> (ctx, fun e -> e)
+  | Some (ctx, cc) -> comp cc (end_dead_heap_borrows config span live ctx)
+
+(** The configuration to evaluate the body of a function in symbolic mode. If
+    the function accesses the heap, we end the borrows of values in the heap as
+    soon as they are dead (see [end_dead_heap_borrows]): we need the liveness of
+    the locals. *)
+let mk_symbolic_fun_config (ctx : eval_ctx) (fdef : fun_decl) : config =
+  let live_locals =
+    match body_as_body fdef.body with
+    | Some body when FunsAnalysis.is_stateful ctx.fun_ctx.fun_infos fdef.def_id
+      -> Some (compute_live_locals body.body)
+    | _ -> None
+  in
+  mk_config ~live_locals SymbolicMode
+
 (** Evaluate a statement. *)
 let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->
@@ -651,8 +811,38 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
   (* Sanity check *)
   Invariants.check_invariants st.span ctx;
 
+  (* End the dead borrows of values in the heap, before and after the
+     statement (see [end_dead_heap_borrows]) *)
+  let live_before, live_after =
+    match config.live_locals with
+    | Some live -> (
+        match StatementId.Map.find_opt st.statement_id live with
+        | Some (before, after) -> (Some before, Some after)
+        | None -> (None, None))
+    | None -> (None, None)
+  in
+  let end_dead_borrows (live : LocalId.Set.t option) : cm_fun =
+   fun ctx ->
+    match live with
+    | Some live -> end_dead_heap_borrows config st.span live ctx
+    | None -> (ctx, fun e -> e)
+  in
+  let ctx, cc = comp cc (end_dead_borrows live_before ctx) in
+
   (* Evaluate the statement *)
-  comp cc (eval_statement_raw config st ctx)
+  let ctx_resl, cc = comp cc (eval_statement_raw config st ctx) in
+  let ctx_res_cfl =
+    List.map
+      (fun (ctx, res) ->
+        match res with
+        | Unit ->
+            let ctx, cf = end_dead_borrows live_after ctx in
+            ((ctx, res), cf)
+        | _ -> ((ctx, res), fun e -> e))
+      ctx_resl
+  in
+  let ctx_resl, cfl = List.split ctx_res_cfl in
+  (ctx_resl, cc_comp cc (fun el -> List.map2 (fun cf e -> cf e) cfl el))
 
 and eval_statement_list (config : config) span (stmts : statement list) :
     stl_cm_fun =
@@ -1509,6 +1699,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
       (fun rg_id -> FunCall (call_id, rg_id))
       inst_sg.abs_regions_hierarchy region_can_end compute_abs_avalues ctx
   in
+  register_heap_borrow_abs ctx fid inst_sg;
   (* Synthesize the symbolic AST *)
   let cc =
     cc_comp cc

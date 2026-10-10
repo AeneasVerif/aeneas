@@ -884,6 +884,7 @@ let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
     fresh_loop_id;
     fresh_meta_id;
     fresh_symbolic_expr_id;
+    heap_borrow_abs = Hashtbl.create 8;
   }
 
 (** Instantiate a function signature, introducing **fresh** abstraction ids and

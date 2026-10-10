@@ -146,8 +146,8 @@ def increment_first_in_place (buf : Slice Std.U8) : Result (Slice Std.U8) := do
   let (s, src_back) ←
     InPlaceOrDisjointBuffer.impl.src { b with _phantom := () }
   let x ← Slice.index_usize s 0#usize
-  let i ← lift (core.num.U8.wrapping_add x 1#u8)
   src_back
+  let i ← lift (core.num.U8.wrapping_add x 1#u8)
   let (s1, dst_back, _) ←
     InPlaceOrDisjointBuffer.impl.dst { b with _phantom := () }
   let s2 ← Slice.update s1 0#usize i

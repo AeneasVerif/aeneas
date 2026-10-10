@@ -795,7 +795,7 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
   in
 
   (* Create the continuation to finish the evaluation *)
-  let config = mk_config SymbolicMode in
+  let config = mk_symbolic_fun_config ctx fdef in
   let finish (res : statement_eval_res) (ctx : eval_ctx) =
     let ctx0 = ctx in
     [%ltrace
