@@ -432,6 +432,85 @@ theorem ispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
   intro value s' hPost
   exact hNext value frame s' (Realizes.mono (entails_of_eq rfl) hPost)
 
+/-! ### Failure
+
+`ifails P m`: `m` never succeeds from a heap which realizes `P` with some frame (it fails, or
+diverges), so that it has no total-correctness specification with precondition `P`
+(`not_ispec_of_ifails`), provided that `P` is realizable.
+
+As running out of memory satisfies every specification, a program which may run out of memory
+(i.e., which allocates) can't be shown to fail with `ifails`: its heap may be full. The rule for
+`bind` with a specification of the prefix (`ifails_bind`) thus requires that the prefix does not
+satisfy its postconditions vacuously (by running out of memory). To show that an allocating
+program fails, exhibit a failing execution instead (see `tests/lean/SafeUnsafe`). -/
+
+def ifails {α : Type u} (P : IPre) (m : Result α) : Prop :=
+  ∀ F s (Q : α → Heap → Prop), Realizes (P ∗ F) s → ¬ DWP effectWP m Q s
+
+theorem not_ispec_of_ifails {α : Type u} {P : IPre} {m : Result α} {Q : IPost α} {s : Heap}
+    (hFails : ifails P m) (hP : Realizes P s) : ¬ ispec P m Q := fun hTriple =>
+  hFails emp s _ (realizes_sep_emp.mpr hP) ((ispec_iff.mp hTriple) emp s (realizes_sep_emp.mpr hP))
+
+/-- A program which fails from `emp` has no specification from `emp`. -/
+theorem not_ispec_of_ifails_emp {α : Type u} {m : Result α} {Q : IPost α}
+    (hFails : ifails emp m) : ¬ ispec emp m Q :=
+  not_ispec_of_ifails hFails realizes_emp_empty
+
+/-- Sequencing: the prefix `m` has a specification, which it does not satisfy vacuously
+(`hProgress`: it does not run out of memory in every execution), and the continuation fails from its
+postcondition. -/
+theorem ifails_bind {α : Type u} {β : Type v} {P : IPre} {m : Result α} {R : IPost α}
+    {k : α → Result β} (hm : ispec P m R)
+    (hProgress : ∀ F s (Q : α → Heap → Prop), Realizes (P ∗ F) s → DWP effectWP m Q s →
+      ∃ x s', Q x s')
+    (hk : ∀ x, ifails (R x) (k x)) :
+    ifails P (Aeneas.Std.bind m k) := by
+  intro F s Q hPre hDwp
+  obtain ⟨x, s', hR, hK⟩ := hProgress F s _ hPre
+    (DWP.and_iff.mpr ⟨(ispec_iff.mp hm) F s hPre, DWP.bind_inv hDwp⟩)
+  exact hk x F s' Q hR hK
+
+theorem ifails_bind_left {α : Type u} {β : Type v} {P : IPre} {m : Result α}
+    {k : α → Result β} (hm : ifails P m) : ifails P (Aeneas.Std.bind m k) :=
+  fun F s _ hPre hDwp => hm F s _ hPre (DWP.bind_inv hDwp)
+
+theorem ifails_mono {α : Type u} {P P' : IPre} {m : Result α} (hPre : P ⊢ P')
+    (hFails : ifails P' m) : ifails P m :=
+  fun F s Q hP => hFails F s Q (Realizes.mono (sep_mono hPre (entails_refl F)) hP)
+
+theorem ifails_ipure {α : Type u} {p : Prop} {H : IPre} {m : Result α}
+    (hFails : p → ifails H m) : ifails (⌜p⌝ ∗ H) m := fun F s Q hPre => by
+  obtain ⟨hInv, h, hH, hMatches, hAuth⟩ := hPre
+  have ⟨hp, hHF⟩ := (sep_pure_l p (H ∗ F) h).mp ((entails_of_eq (sep_assoc_eq _ _ _)) h hH)
+  exact hFails hp F s Q ⟨hInv, h, hHF, hMatches, hAuth⟩
+
+/-- Failures other than running out of memory. -/
+theorem ifails_fail {α : Type u} {P : IPre} {e : Error} (he : e ≠ .oom) :
+    ifails P (fail e : Result α) :=
+  fun _ _ _ _ hDwp => he hDwp.vis_view
+
+/-- A heap operation which is never enabled from the heaps which realize the precondition (with any
+frame) fails. -/
+theorem ifails_guardedModify {α : Type} {modify : Heap → α → Heap → Prop} {P : IPre}
+    (hNot : ∀ s h frame, P h → h.Disjoint frame → Fragment.Matches s (h ∪ frame) → s.Inv →
+      AuthOK s (h ∪ frame) → ¬ ∃ x s', modify s x s') :
+    ifails P (Result.guardedModify modify) := by
+  rintro F s Q ⟨hInv, _, ⟨owned, framed, hDisjoint, rfl, hP, -⟩, hMatches, hAuth⟩ hDwp
+  exact hNot s owned framed hP hDisjoint hMatches hInv hAuth hDwp.vis_view.1
+
+/-- A checked heap operation which is never enabled from the heaps which realize the precondition
+(with any frame) fails with undefined behavior. -/
+theorem ifails_checkedModify {α : Type} {modify : Heap → α → Heap → Prop} {P : IPre}
+    (hNot : ∀ s h frame, P h → h.Disjoint frame → Fragment.Matches s (h ∪ frame) → s.Inv →
+      AuthOK s (h ∪ frame) → ¬ ∃ x s', modify s x s') :
+    ifails P (Result.checkedModify modify) := by
+  rintro F s Q ⟨hInv, _, ⟨owned, framed, hDisjoint, rfl, hP, -⟩, hMatches, hAuth⟩ hDwp
+  unfold Result.checkedModify at hDwp
+  have hNone : State.checked modify s none s :=
+    ⟨hNot s owned framed hP hDisjoint hMatches hInv hAuth, rfl⟩
+  have hNext := hDwp.vis_view.2 none s hNone
+  exact Error.noConfusion (hNext.vis_view : Error.undef = Error.oom)
+
 theorem ispec_ipure {P : Prop} {H : IPre} {m : Result α} {Q : IPost α} :
     ispec (⌜P⌝ ∗ H) m Q ↔ (P → ispec H m Q) := by
   constructor
