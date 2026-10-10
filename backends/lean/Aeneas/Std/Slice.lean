@@ -57,16 +57,49 @@ abbrev Slice.len {α : Type u} (v : Slice α) : Usize :=
 theorem Slice.len_val {α : Type u} (v : Slice α) : (Slice.len v).val = v.length :=
   by simp
 
-/-- Unlike Rust's `as_ptr`, this allocates: the functional slice model has no address. -/
-@[rust_fun "core::slice::{[@T]}::as_ptr"]
-def Slice.as_ptr {T : Type} (s : Slice T) : Result (ConstRawPtr T) :=
-  RawPtr.materialize s.val
+/-! Raw-pointer views of slices. The functional slice model has no address: `as_ptr`/`as_mut_ptr`
+copy the slice to fresh slots, and `from_raw_parts(_mut)` move the slots out (freeing them, so
+that raw accesses while the slice is live fail). The returned back computations run when the
+borrow ends (`statefulLifetimes`). -/
 
-/-- The pointer points to a fresh copy of `s`, and `s` is returned unchanged. -/
-@[rust_fun "core::slice::{[@T]}::as_mut_ptr"]
-def Slice.as_mut_ptr {T : Type} (s : Slice T) : Result (MutRawPtr T × Slice T) := do
-  let p ← RawPtr.materialize s.val
-  pure (p, s)
+/-- Not a Rust function: `takeRange` of `len` slots, as a slice. -/
+def RawPtr.takeSlice {T : Type} (q : RawPtr T M) (len : Usize) : Result (Slice T) := do
+  let values ← q.takeRange len.val
+  if h : values.length ≤ Usize.max then .ok (Slice.from values h) else .fail .undef
+
+/-- End of the shared borrow of `as_ptr`: the slots must still hold `s` (writing through a const
+pointer cast to mut is UB), and are freed. -/
+def Slice.end_as_ptr {T : Type} (s : Slice T) (p : ConstRawPtr T) : Result Unit := do
+  let values ← p.takeRange s.length
+  Result.require (values = s.val)
+
+/-- End of the mutable borrow of `as_mut_ptr`: the slots are freed and become the new slice. -/
+def Slice.end_as_mut_ptr {T : Type} (s : Slice T) (p : MutRawPtr T) : Result (Slice T) :=
+  p.takeSlice s.len
+
+@[rust_fun "core::slice::{[@T]}::as_ptr" (statefulLifetimes := [0])]
+def Slice.as_ptr {T : Type} (s : Slice T) : Result (ConstRawPtr T × Result Unit) :=
+  Aeneas.Std.bind (RawPtr.materialize s.val) fun p => .ok (p, Slice.end_as_ptr s p)
+
+@[rust_fun "core::slice::{[@T]}::as_mut_ptr" (statefulLifetimes := [0])]
+def Slice.as_mut_ptr {T : Type} (s : Slice T) : Result (MutRawPtr T × Result (Slice T)) :=
+  Aeneas.Std.bind (RawPtr.materialize s.val) fun p => .ok (p, Slice.end_as_mut_ptr s p)
+
+/-- Back function of `from_raw_parts_mut`: revives the slots with the final slice. -/
+def core.slice.raw.from_raw_parts_mut.back {T : Type} (p : MutRawPtr T) (len : Usize)
+    (s : Slice T) : Result Unit :=
+  if s.length = len.val then p.reviveRange s.val else .fail .undef
+
+@[rust_fun "core::slice::raw::from_raw_parts" (statefulLifetimes := [0])]
+def core.slice.raw.from_raw_parts {T : Type} (p : ConstRawPtr T) (len : Usize) :
+    Result (Slice T × Result Unit) :=
+  Aeneas.Std.bind (p.takeSlice len) fun s => .ok (s, p.reviveRange s.val)
+
+@[rust_fun "core::slice::raw::from_raw_parts_mut" (statefulLifetimes := [0])]
+def core.slice.raw.from_raw_parts_mut {T : Type} (p : MutRawPtr T) (len : Usize) :
+    Result (Slice T × (Slice T → Result Unit)) :=
+  Aeneas.Std.bind (p.takeSlice len) fun s =>
+    .ok (s, core.slice.raw.from_raw_parts_mut.back p len)
 
 instance {α : Type u} : GetElem (Slice α) Nat α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i h

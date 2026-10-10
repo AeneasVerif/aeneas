@@ -207,6 +207,22 @@ private def freedRange (l : Loc) : Nat → Heap
 def dealloc (h : Heap) (l : Loc) (n : Nat) (_ : CanDealloc h l n) : Heap :=
   freedRange l (n + 1) ∪ h
 
+/-- One freed slot at `l`. Owning it is the right to `revive` it. -/
+def freedSlot (l : Loc) : Heap :=
+  ⟨Finmap.singleton l .freed⟩
+
+def IsFreed (h : Heap) (l : Loc) : Prop :=
+  h.impl.lookup l = some .freed
+
+/-- Frees the slot of `q` alone, leaving the rest of its allocation alone. Not a Rust operation:
+it models moving the value out while a borrow holds it (`from_raw_parts`, the end of `from_mut`). -/
+def free (h : Heap) (q : RawPtr α M) (_ : IsValid h q) : Heap :=
+  h.insert q.loc .freed
+
+/-- Brings the freed slot of `q` back to life, holding `value`: the inverse of `free`. -/
+def revive (h : Heap) (q : RawPtr α M) (value : α) (_ : IsFreed h q.loc) : Heap :=
+  h.insert q.loc (.live ⟨α, value⟩)
+
 end Heap
 
 end Aeneas.Std

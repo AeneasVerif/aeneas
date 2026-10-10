@@ -705,6 +705,55 @@ theorem read_of_subheap {α : Type} {q : RawPtr α M} {value : α} {h : Heap}
       Subsingleton.elim _ _,
     read_union_left hValidSingleton, read_singleton]
 
+theorem isFreed_union_left {h₁ h₂ : Heap} {l : Loc} (hFreed : IsFreed h₁ l) :
+    IsFreed (h₁ ∪ h₂) l := by
+  show Finmap.lookup l (h₁.impl ∪ h₂.impl) = _
+  rw [Finmap.lookup_union_left (Finmap.mem_of_lookup_eq_some hFreed)]
+  exact hFreed
+
+theorem mem_freedSlot {l address : Loc} : address ∈ freedSlot l ↔ address = l := by
+  show address ∈ (Finmap.singleton l Slot.freed : HeapImpl) ↔ _
+  exact Finmap.mem_singleton _ _ _
+
+theorem isFreed_freedSlot (l : Loc) : IsFreed (freedSlot l) l := by
+  simp [IsFreed, freedSlot]
+
+theorem Subheap.isFreed {l : Loc} {h : Heap} (hSub : Heap.Subheap (freedSlot l) h) :
+    IsFreed h l := by
+  obtain ⟨rest, -, rfl⟩ := hSub
+  exact isFreed_union_left (isFreed_freedSlot l)
+
+theorem free_union_left {α : Type} {h₁ h₂ : Heap} (q : RawPtr α M) (hValid : IsValid h₁ q) :
+    (h₁ ∪ h₂).free q (isValid_union_left hValid) = h₁.free q hValid ∪ h₂ :=
+  Heap.insert_union
+
+theorem compatible_free_left {α : Type} {q : RawPtr α M} {h₁ h₂ : Heap}
+    (hCompatible : PartialCommMonoid.Compatible h₁ h₂) (hValid : IsValid h₁ q) :
+    PartialCommMonoid.Compatible (h₁.free q hValid) h₂ :=
+  compatible_insert_left hCompatible (mem_of_isValid hValid)
+
+theorem free_singleton {α : Type} (q : RawPtr α M) (value : α)
+    (hValid : IsValid (singleton q value) q) :
+    (singleton q value).free q hValid = freedSlot q.loc := by
+  apply Heap.ext_impl
+  simp [Heap.free, singleton, freedSlot, Heap.insert]
+
+theorem revive_union_left {α : Type} {h₁ h₂ : Heap} (q : RawPtr α M) (value : α)
+    (hFreed : IsFreed h₁ q.loc) :
+    (h₁ ∪ h₂).revive q value (isFreed_union_left hFreed) = h₁.revive q value hFreed ∪ h₂ :=
+  Heap.insert_union
+
+theorem compatible_revive_left {α : Type} {q : RawPtr α M} {value : α} {h₁ h₂ : Heap}
+    (hCompatible : PartialCommMonoid.Compatible h₁ h₂) (hFreed : IsFreed h₁ q.loc) :
+    PartialCommMonoid.Compatible (h₁.revive q value hFreed) h₂ :=
+  compatible_insert_left hCompatible (Finmap.mem_of_lookup_eq_some hFreed)
+
+theorem revive_freedSlot {α : Type} (q : RawPtr α M) (value : α)
+    (hFreed : IsFreed (freedSlot q.loc) q.loc) :
+    (freedSlot q.loc).revive q value hFreed = singleton q value := by
+  apply Heap.ext_impl
+  simp [Heap.revive, singleton, freedSlot, Heap.insert]
+
 end Heap
 
 end Aeneas.Std

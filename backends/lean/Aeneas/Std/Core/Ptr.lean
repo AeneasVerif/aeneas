@@ -142,10 +142,44 @@ def MutRawPtr.write (q : MutRawPtr T) (value : T) : Result Unit :=
 
 attribute [rust_fun "core::ptr::write"] MutRawPtr.write
 
-/-- The pointer points to a fresh copy of `r`, and `r` is returned unchanged. -/
-@[rust_fun "core::ptr::from_mut"]
-def core.ptr.from_mut (r : T) : Result (MutRawPtr T × T) := do
-  let p ← RawPtr.materialize [r]
-  pure (p, r)
+/-- Not a Rust function: moves the value out and frees its slot. -/
+def RawPtr.take (q : RawPtr T M) : Result T :=
+  Result.guardedModify (fun h => Heap.IsValid h q) fun h hValid =>
+    (h.read q hValid, h.free q hValid)
+
+/-- Not a Rust function: brings the freed slot of `q` back to life, holding `value`. -/
+def RawPtr.revive (q : RawPtr T M) (value : T) : Result Unit :=
+  Result.guardedModify (fun h => Heap.IsFreed h q.loc) fun h hFreed =>
+    ((), h.revive q value hFreed)
+
+/-- Not a Rust function: `take` on the `n` slots from `q` on. -/
+def RawPtr.takeRange (q : RawPtr T M) : Nat → Result (List T)
+  | 0 => .ok []
+  | n + 1 => do
+    let value ← q.take
+    let values ← (q.shift 1).takeRange n
+    .ok (value :: values)
+
+/-- Not a Rust function: `revive` on the `values.length` slots from `q` on. -/
+def RawPtr.reviveRange (q : RawPtr T M) : List T → Result Unit
+  | [] => .ok ()
+  | value :: values => do
+    q.revive value
+    (q.shift 1).reviveRange values
+
+/-- Not a Rust function: fails unless `p` holds (`p` need not be decidable). -/
+def Result.require (p : Prop) : Result Unit :=
+  Result.guardedModify (fun _ => p) fun h _ => ((), h)
+
+/-- Not a Rust function: end of the borrow given to `from_mut`; moves the value, with the writes
+made through the pointer, out of the slot and frees it, so that the pointer can't be used anymore. -/
+def core.ptr.end_from_mut (p : MutRawPtr T) : Result T :=
+  p.take
+
+/-- The pointer points to a fresh slot holding `r`; the back computation runs when the borrow
+ends (`statefulLifetimes`). -/
+@[rust_fun "core::ptr::from_mut" (statefulLifetimes := [0])]
+def core.ptr.from_mut (r : T) : Result (MutRawPtr T × Result T) :=
+  Aeneas.Std.bind (RawPtr.materialize [r]) fun p => .ok (p, core.ptr.end_from_mut p)
 
 end Aeneas.Std
