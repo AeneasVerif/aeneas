@@ -99,6 +99,29 @@ pub fn front(list: &List) -> Option<&Node> {
     Some(unsafe { list.head?.as_ref() })
 }
 
+/// The borrow of the node is dead after the `if`: it is given back to the heap
+/// at the end of both branches, before `q` (which may be equal to `p`) is
+/// accessed.
+pub fn set_values(p: NonNull<Node>, q: NonNull<Node>, b: bool) {
+    let n = unsafe { &mut *p.as_ptr() };
+    n.value = 1;
+    if b {
+        n.value = 2;
+        unsafe { (*q.as_ptr()).value = 3 };
+    }
+    unsafe { (*q.as_ptr()).value = 4 };
+}
+
+/// A borrow of a field of the node is live across the join: the node is given
+/// back to the heap after the join, when the borrow is dead.
+pub fn neighbour_value(p: NonNull<Node>, forward: bool) -> u32 {
+    let n = unsafe { &mut *p.as_ptr() };
+    let r = if forward { &n.next } else { &n.prev };
+    let q = *r;
+    n.value = n.value.wrapping_add(1);
+    unsafe { q.as_ref().value }
+}
+
 /// Increment the values of the nodes.
 pub fn increment(list: &mut List) {
     if let Some(head) = list.head {

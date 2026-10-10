@@ -29,11 +29,18 @@ type config = {
           live before and after each statement of the body. We use them to end
           the borrows of values in the heap as soon as they are dead (see
           [InterpStatements.end_dead_heap_borrows]). *)
+  live_after_switch : (LocalId.Set.t option[@opaque]);
+      (** When evaluating a switch in such a function: the local variables which
+          are live after the switch. We end the dead borrows of values in the
+          heap at the end of every branch before joining the branches: the join
+          would otherwise drop the region abstractions which were ended in some
+          branches only, together with the effects of their backward functions.
+      *)
 }
 [@@deriving show]
 
 let mk_config ?(live_locals = None) (mode : interpreter_mode) : config =
-  { mode; live_locals }
+  { mode; live_locals; live_after_switch = None }
 
 type type_ctx = {
   type_decls_groups : type_declaration_group TypeDeclId.Map.t;
