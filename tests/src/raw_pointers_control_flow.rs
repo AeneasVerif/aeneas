@@ -52,9 +52,8 @@ fn slice_in_branch(p: *mut u8, b: bool) {
     }
 }
 
-/// A slice created from a pointer to a local variable. The model always fails:
-/// the borrow converted to a raw pointer ends when the local variable goes out
-/// of scope, before the slice is given back.
+/// A slice created from a pointer to a local variable. The slice is given back
+/// as soon as it is dead, before the borrow converted to a raw pointer ends.
 fn local_view() -> u32 {
     let mut a = [0u32; 2];
     let p = a.as_mut_ptr();

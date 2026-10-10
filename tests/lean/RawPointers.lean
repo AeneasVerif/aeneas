@@ -102,9 +102,8 @@ def sum_via_slice
   let (s, from_raw_parts_back) ← core.slice.raw.from_raw_parts p len
   let i ← Slice.index_usize s 0#usize
   let i1 ← Slice.index_usize s 1#usize
-  let i2 ← lift (core.num.U8.wrapping_add i i1)
   from_raw_parts_back
-  ok i2
+  ok (core.num.U8.wrapping_add i i1)
 
 /-- [raw_pointers::boxed]:
     Source: 'tests/src/raw_pointers.rs', lines 67:0-73:1 -/
