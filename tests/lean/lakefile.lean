@@ -87,6 +87,8 @@ package «tests» {}
 @[default_target] lean_lib LoopsNestedRec
 @[default_target] lean_lib LoopsRec
 @[default_target] lean_lib LoopsSequences
+@[default_target] lean_lib MaybeUninit
+@[default_target] lean_lib MaybeUninitSpecs
 @[default_target] lean_lib MiniTree
 @[default_target] lean_lib MultiTarget
 @[default_target] lean_lib MutBorrowInSharedBorrow
@@ -103,6 +105,8 @@ package «tests» {}
 @[default_target] lean_lib Print
 @[default_target] lean_lib Range
 @[default_target] lean_lib RawPointers
+@[default_target] lean_lib RawPointersAlloc
+@[default_target] lean_lib RawPointersAllocSpecs
 @[default_target] lean_lib RawPointersControlFlow
 @[default_target] lean_lib RawPointersSpecs
 @[default_target] lean_lib RenameAttribute

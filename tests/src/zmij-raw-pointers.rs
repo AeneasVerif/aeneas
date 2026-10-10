@@ -1,7 +1,10 @@
 //@ [!lean] skip
 //! A simplified version of https://github.com/dtolnay/zmij (MIT): tables read
-//! through raw pointers, and digits written through raw pointers.
+//! through raw pointers, and digits written through raw pointers (to an
+//! uninitialized buffer).
 #![allow(non_camel_case_types)]
+use core::mem::MaybeUninit;
+use core::slice;
 
 #[derive(Copy, Clone)]
 struct uint128 {
@@ -43,5 +46,26 @@ pub fn format_small(d: u8, buf: &mut [u8; 8]) -> usize {
         let end = write_digit_dot(start, d);
         write_zeros(end, 2);
         4
+    }
+}
+
+/// The output buffer of zmij: uninitialized bytes, written through a `*mut u8`
+/// and read back with `from_raw_parts` (as in `Buffer::format_finite`).
+pub struct Buffer {
+    bytes: [MaybeUninit<u8>; 8],
+}
+
+impl Buffer {
+    pub fn new() -> Self {
+        let bytes = [MaybeUninit::<u8>::uninit(); 8];
+        Buffer { bytes }
+    }
+
+    /// Formats `d.` in the buffer.
+    pub fn format_digit(&mut self, d: u8) -> &[u8] {
+        unsafe {
+            write_digit_dot(self.bytes.as_mut_ptr() as *mut u8, d);
+            slice::from_raw_parts(self.bytes.as_ptr() as *const u8, 2)
+        }
     }
 }
