@@ -45,6 +45,7 @@ package «tests» {}
 @[default_target] lean_lib Hashmap
 @[default_target] lean_lib HigherRankedTraitBounds
 @[default_target] lean_lib InPlaceOrDisjointBuffer
+@[default_target] lean_lib InPlaceOrDisjointBufferSpecs
 @[default_target] lean_lib Into
 @[default_target] lean_lib Issue1043IteratorMethods
 @[default_target] lean_lib Issue1044OpaqueTuple
@@ -103,9 +104,11 @@ package «tests» {}
 @[default_target] lean_lib Range
 @[default_target] lean_lib RawPointers
 @[default_target] lean_lib RawPointersControlFlow
+@[default_target] lean_lib RawPointersSpecs
 @[default_target] lean_lib RenameAttribute
 @[default_target] lean_lib RustBorrowCheckIssues
 @[default_target] lean_lib RyuRawPointers
+@[default_target] lean_lib RyuRawPointersSpecs
 @[default_target] lean_lib Scalars
 @[default_target] lean_lib SepLogic
 @[default_target] lean_lib Slices
@@ -120,3 +123,4 @@ package «tests» {}
 @[default_target] lean_lib Vec
 @[default_target] lean_lib VecIter
 @[default_target] lean_lib ZmijRawPointers
+@[default_target] lean_lib ZmijRawPointersSpecs
