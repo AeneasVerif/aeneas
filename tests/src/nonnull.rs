@@ -216,3 +216,20 @@ pub fn compare_views() -> bool {
 pub fn same_node(p: *mut Node, q: *const Node) -> bool {
     p as *const Node == q
 }
+
+/// A zero-sized type whose Lean model has two values.
+pub struct Empty {
+    pub e: core::mem::MaybeUninit<()>,
+}
+
+/// Two boxes of a zero-sized type may have the same address: comparing them
+/// fails (`RawPtr.eq.fails_zero_sized`).
+pub fn compare_zero_sized() -> bool {
+    let p = Box::into_raw(Box::new(Empty {
+        e: core::mem::MaybeUninit::uninit(),
+    }));
+    let q = Box::into_raw(Box::new(Empty {
+        e: core::mem::MaybeUninit::uninit(),
+    }));
+    p == q
+}

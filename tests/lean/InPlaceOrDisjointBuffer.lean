@@ -36,6 +36,11 @@ structure InPlaceOrDisjointBuffer (T : Type _) where
   len : Std.Usize
   _phantom : core.marker.PhantomData (Slice T)
 
+instance {T : Type _} : NonZeroSized (InPlaceOrDisjointBuffer T)
+  := ⟨NonZeroSized.nonZero (ConstRawPtr T) || NonZeroSized.nonZero (MutRawPtr
+  T) || NonZeroSized.nonZero Std.Usize || NonZeroSized.nonZero
+  (core.marker.PhantomData (Slice T))⟩
+
 /-- [in_place_or_disjoint_buffer::{in_place_or_disjoint_buffer::InPlaceOrDisjointBuffer<'a, T>}::new_in_place]:
     Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 15:4-27:5
     Visibility: public -/

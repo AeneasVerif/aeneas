@@ -137,6 +137,9 @@ structure Counter (Self : Type _) where
 structure PtrCounter where
   p : MutRawPtr Std.U32
 
+instance : NonZeroSized PtrCounter := ⟨NonZeroSized.nonZero (MutRawPtr
+  Std.U32)⟩
+
 /-- [raw_pointers::{impl raw_pointers::Counter for raw_pointers::PtrCounter}::next]:
     Source: 'tests/src/raw_pointers.rs', lines 98:4-104:5 -/
 def PtrCounter.Insts.Raw_pointersCounter.next
