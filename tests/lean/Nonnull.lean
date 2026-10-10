@@ -180,8 +180,42 @@ def front (list : List) : Result ((Option Node) × (Result Unit)) := do
         Node residual
     ok (o, ok ())
 
+/-- [nonnull::set_values]:
+    Source: 'tests/src/nonnull.rs', lines 105:0-113:1
+    Visibility: public -/
+def set_values
+  (p : NonNull Node) (q : NonNull Node) (b : Bool) : Result Unit := do
+  let p1 := NonNull.as_ptr p
+  let (n, as_mut_unchecked_back) ← RawPtr.as_mut_unchecked p1
+  if b
+  then
+    do
+    as_mut_unchecked_back (Node.mk 2#u32 n.next n.prev)
+    let p2 := NonNull.as_ptr q
+    let n1 ← RawPtr.read p2
+    MutRawPtr.write p2 (Node.mk 3#u32 n1.next n1.prev)
+  else as_mut_unchecked_back (Node.mk 1#u32 n.next n.prev)
+  let p2 := NonNull.as_ptr q
+  let n1 ← RawPtr.read p2
+  MutRawPtr.write p2 (Node.mk 4#u32 n1.next n1.prev)
+
+/-- [nonnull::neighbour_value]:
+    Source: 'tests/src/nonnull.rs', lines 117:0-123:1
+    Visibility: public -/
+def neighbour_value (p : NonNull Node) (forward : Bool) : Result Std.U32 := do
+  let p1 := NonNull.as_ptr p
+  let (n, as_mut_unchecked_back) ← RawPtr.as_mut_unchecked p1
+  let q ← if forward
+            then ok n.next
+            else ok n.prev
+  let i ← lift (core.num.U32.wrapping_add n.value 1#u32)
+  as_mut_unchecked_back (Node.mk i n.next n.prev)
+  let (n1, as_ref_back) ← NonNull.as_ref q
+  as_ref_back
+  ok n1.value
+
 /-- [nonnull::increment]: loop body 0:
-    Source: 'tests/src/nonnull.rs', lines 107:8-112:9
+    Source: 'tests/src/nonnull.rs', lines 130:8-135:9
     Visibility: public -/
 @[rust_loop_body]
 def increment_loop.body
@@ -198,7 +232,7 @@ def increment_loop.body
   else ok (done ())
 
 /-- [nonnull::increment]: loop 0:
-    Source: 'tests/src/nonnull.rs', lines 107:8-112:9
+    Source: 'tests/src/nonnull.rs', lines 130:8-135:9
     Visibility: public -/
 @[rust_loop]
 def increment_loop
@@ -208,7 +242,7 @@ def increment_loop
     (cur, i1)
 
 /-- [nonnull::increment]:
-    Source: 'tests/src/nonnull.rs', lines 103:0-114:1
+    Source: 'tests/src/nonnull.rs', lines 126:0-137:1
     Visibility: public -/
 def increment (list : List) : Result List := do
   match list.head with
@@ -217,7 +251,7 @@ def increment (list : List) : Result List := do
                  ok list
 
 /-- [nonnull::test_list]:
-    Source: 'tests/src/nonnull.rs', lines 116:0-133:1
+    Source: 'tests/src/nonnull.rs', lines 139:0-156:1
     Visibility: public -/
 def test_list : Result Std.U32 := do
   let a ← new_node 1#u32
@@ -237,7 +271,7 @@ def test_list : Result Std.U32 := do
   ok s
 
 /-- [nonnull::aliasing_borrows]:
-    Source: 'tests/src/nonnull.rs', lines 137:0-142:1
+    Source: 'tests/src/nonnull.rs', lines 160:0-165:1
     Visibility: public -/
 def aliasing_borrows (p : NonNull Node) : Result Unit := do
   let p1 := NonNull.as_ptr p
@@ -248,7 +282,7 @@ def aliasing_borrows (p : NonNull Node) : Result Unit := do
   as_mut_unchecked_back1 (Node.mk 2#u32 b.next b.prev)
 
 /-- [nonnull::compare_views]:
-    Source: 'tests/src/nonnull.rs', lines 146:0-150:1
+    Source: 'tests/src/nonnull.rs', lines 169:0-173:1
     Visibility: public -/
 def compare_views : Result Bool := do
   let (nn, from_mut_back) ← NonNull.from_mut 0#u32
@@ -259,7 +293,7 @@ def compare_views : Result Bool := do
   ok b
 
 /-- [nonnull::same_node]:
-    Source: 'tests/src/nonnull.rs', lines 153:0-155:1
+    Source: 'tests/src/nonnull.rs', lines 176:0-178:1
     Visibility: public -/
 def same_node (p : MutRawPtr Node) (q : ConstRawPtr Node) : Result Bool := do
   let p1 := RawPtr.cast_const p
