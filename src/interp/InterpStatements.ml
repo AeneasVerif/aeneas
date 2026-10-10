@@ -630,6 +630,53 @@ let eval_global_as_fresh_symbolic_value (span : Meta.span)
       let cc = S.synthesize_global_eval gref sval in
       (ctx, mk_tvalue_from_symbolic_value sval, ty, cc)
 
+(** Repeatedly end a region abstraction without parents such that
+    [candidate ctx abs] holds and whose end is unobservable:
+    [unchanged ctx ctx'] holds and the abstractions which were not introduced by
+    function calls (nor by joins, if [ignore_joins]) are unchanged. We end the
+    abstractions of the most recent function calls first: the raw pointers
+    manipulated by a function call may come from a previous call (for instance,
+    a slice created by [from_raw_parts] from a pointer given by [as_mut_ptr]).
+*)
+let rec end_unobservable_abs (config : config) (span : Meta.span)
+    ~(ignore_joins : bool) (candidate : eval_ctx -> abs -> bool)
+    (unchanged : eval_ctx -> eval_ctx -> bool) : cm_fun =
+ fun ctx ->
+  let other_abs (ctx : eval_ctx) : abs list =
+    env_filter_map_abs
+      (fun abs ->
+        match abs.kind with
+        | FunCall _ -> None
+        | Join when ignore_joins -> None
+        | _ -> Some abs)
+      ctx.env
+  in
+  let is_candidate = candidate ctx in
+  let try_end (abs : abs) :
+      (eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)) option =
+    if is_candidate abs && abs.can_end && AbsId.Set.is_empty abs.parents then
+      let ctx', cc = InterpBorrows.end_abs config span abs.abs_id 0 ctx in
+      if unchanged ctx ctx' && other_abs ctx' = other_abs ctx then
+        Some (ctx', cc)
+      else None
+    else None
+  in
+  let call_id (abs : abs) =
+    match abs.kind with
+    | FunCall (call_id, _) -> FunCallId.to_int call_id
+    | _ -> -1
+  in
+  let abs_list =
+    List.sort
+      (fun a0 a1 -> Int.compare (call_id a1) (call_id a0))
+      (env_filter_map_abs (fun abs -> Some abs) ctx.env)
+  in
+  match List.find_map try_end abs_list with
+  | None -> (ctx, fun e -> e)
+  | Some (ctx, cc) ->
+      comp cc
+        (end_unobservable_abs config span ~ignore_joins candidate unchanged ctx)
+
 (** Register the region abstractions of a function call which borrow values from
     the heap, that is, the abstractions of the region groups whose backward
     functions are stateful and which appear in the output as the regions of
@@ -704,9 +751,8 @@ let register_heap_borrow_abs (ctx : eval_ctx) (fid : fn_ptr_kind)
     The liveness analysis does not need to be exact: if we end a borrow which is
     used later, the symbolic execution fails when it is used (the borrow was
     replaced with ⊥). *)
-let rec end_dead_heap_borrows (config : config) (span : Meta.span)
+let end_dead_heap_borrows (config : config) (span : Meta.span)
     (live : LocalId.Set.t) : cm_fun =
- fun ctx ->
   let live_values (ctx : eval_ctx) : tvalue list =
     List.filter_map
       (fun (e : env_elem) ->
@@ -716,68 +762,38 @@ let rec end_dead_heap_borrows (config : config) (span : Meta.span)
         | _ -> None)
       ctx.env
   in
-  let non_fun_call_abs (ctx : eval_ctx) : abs list =
-    env_filter_map_abs
-      (fun abs ->
-        match abs.kind with
-        | FunCall _ | Join -> None
-        | _ -> Some abs)
-      ctx.env
-  in
-  let try_end (abs : abs) :
-      (eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)) option =
-    if
-      Hashtbl.mem ctx.heap_borrow_abs abs.abs_id
-      && abs.can_end
-      && AbsId.Set.is_empty abs.parents
-    then
-      let ctx', cc = InterpBorrows.end_abs config span abs.abs_id 0 ctx in
-      (* The values whose types mention the regions which ended are dead *)
-      let ended = RegionId.Set.diff ctx'.ended_regions ctx.ended_regions in
-      let visitor =
-        object
-          inherit [_] iter_tvalue as super
+  let unchanged (ctx : eval_ctx) (ctx' : eval_ctx) : bool =
+    (* The values whose types mention the regions which ended are dead *)
+    let ended = RegionId.Set.diff ctx'.ended_regions ctx.ended_regions in
+    let visitor =
+      object
+        inherit [_] iter_tvalue as super
 
-          method! visit_tvalue env v =
-            if
-              ty_has_regions_in_pred ctx.type_ctx.type_infos
-                (function
-                  | RVar (Free r) -> RegionId.Set.mem r ended
-                  | _ -> false)
-                v.ty
-            then raise Utils.Found
-            else super#visit_tvalue env v
+        method! visit_tvalue env v =
+          if
+            ty_has_regions_in_pred ctx.type_ctx.type_infos
+              (function
+                | RVar (Free r) -> RegionId.Set.mem r ended
+                | _ -> false)
+              v.ty
+          then raise Utils.Found
+          else super#visit_tvalue env v
 
-          method! visit_symbolic_value _ sv =
-            if symbolic_value_has_ended_regions ended sv then raise Utils.Found
-        end
-      in
-      let live_values' = live_values ctx' in
-      if
-        live_values' = live_values ctx
-        && non_fun_call_abs ctx' = non_fun_call_abs ctx
-        &&
-        try
-          List.iter (visitor#visit_tvalue ()) live_values';
-          true
-        with Utils.Found -> false
-      then Some (ctx', cc)
-      else None
-    else None
+        method! visit_symbolic_value _ sv =
+          if symbolic_value_has_ended_regions ended sv then raise Utils.Found
+      end
+    in
+    let live_values' = live_values ctx' in
+    live_values' = live_values ctx
+    &&
+    try
+      List.iter (visitor#visit_tvalue ()) live_values';
+      true
+    with Utils.Found -> false
   in
-  let call_id (abs : abs) =
-    match abs.kind with
-    | FunCall (call_id, _) -> FunCallId.to_int call_id
-    | _ -> -1
-  in
-  let abs_list =
-    List.sort
-      (fun a0 a1 -> Int.compare (call_id a1) (call_id a0))
-      (env_filter_map_abs (fun abs -> Some abs) ctx.env)
-  in
-  match List.find_map try_end abs_list with
-  | None -> (ctx, fun e -> e)
-  | Some (ctx, cc) -> comp cc (end_dead_heap_borrows config span live ctx)
+  end_unobservable_abs config span ~ignore_joins:true
+    (fun ctx abs -> Hashtbl.mem ctx.heap_borrow_abs abs.abs_id)
+    unchanged
 
 (** The configuration to evaluate the body of a function in symbolic mode. If
     the function accesses the heap, we end the borrows of values in the heap as
