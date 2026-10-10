@@ -56,7 +56,8 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
       in
       let f = def.f in
       let fun_id = (Pure.FunId f.def_id, f.loop_id) in
-      ctx_add f.item_meta.span (FunId (FromLlbc fun_id)) info.extract_name ctx
+      ctx_add_builtin_fun f.item_meta.span (FunId (FromLlbc fun_id))
+        info.extract_name ctx
   | None ->
       (* Not builtin *)
       (* Register the decrease clauses, if necessary *)
@@ -1043,7 +1044,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
           | Pure Discriminant ->
               Some
                 { explicit_types = [ Implicit ]; explicit_const_generics = [] }
-          | Pure ToResult ->
+          | Pure (ToResult | RawPtrRead | RawPtrWrite) ->
               Some
                 { explicit_types = [ Implicit ]; explicit_const_generics = [] }
           | Pure ResultUnwrapMut ->
