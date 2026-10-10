@@ -21,39 +21,39 @@ set_option maxRecDepth 2048
 namespace zmij_raw_pointers
 
 /-- [zmij_raw_pointers::uint128]
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 7:0-10:1 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 10:0-13:1 -/
 structure uint128 where
   hi : Std.U64
   lo : Std.U64
 
 /-- [zmij_raw_pointers::{impl core::clone::Clone for zmij_raw_pointers::uint128}::clone]:
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 6:15-6:20
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 9:15-9:20
     Visibility: public -/
 def uint128.Insts.CoreCloneClone.clone (self : uint128) : Result uint128 := do
   ok self
 
 /-- Trait implementation: [zmij_raw_pointers::{impl core::clone::Clone for zmij_raw_pointers::uint128}]
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 6:15-6:20 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 9:15-9:20 -/
 @[reducible]
 def uint128.Insts.CoreCloneClone : core.clone.Clone uint128 := {
   clone := uint128.Insts.CoreCloneClone.clone
 }
 
 /-- Trait implementation: [zmij_raw_pointers::{impl core::marker::Copy for zmij_raw_pointers::uint128}]
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 6:9-6:13 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 9:9-9:13 -/
 @[reducible]
 def uint128.Insts.CoreMarkerCopy : core.marker.Copy uint128 := {
   cloneInst := uint128.Insts.CoreCloneClone
 }
 
 /-- [zmij_raw_pointers::POW10_MINOR]
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 12:0-12:49 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 15:0-15:49 -/
 @[global_simps, irreducible]
 def POW10_MINOR : Array Std.U64 4#usize :=
   Array.make 4#usize [ 1#u64, 10#u64, 100#u64, 1000#u64 ]
 
 /-- [zmij_raw_pointers::POW10_MAJOR]
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 14:0-14:87 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 17:0-17:87 -/
 @[global_simps, irreducible]
 def POW10_MAJOR : Array uint128 2#usize :=
   Array.make 2#usize [
@@ -61,7 +61,7 @@ def POW10_MAJOR : Array uint128 2#usize :=
     ]
 
 /-- [zmij_raw_pointers::pow10_minor]:
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 16:0-18:1 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 19:0-21:1 -/
 def pow10_minor (i : Std.Usize) : Result Std.U64 := do
   let s ← lift (Array.to_slice POW10_MINOR)
   let (p, as_ptr_back) ← Slice.as_ptr s
@@ -71,7 +71,7 @@ def pow10_minor (i : Std.Usize) : Result Std.U64 := do
   ok i1
 
 /-- [zmij_raw_pointers::pow10_major]:
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 20:0-22:1 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 23:0-25:1 -/
 def pow10_major (i : Std.Usize) : Result uint128 := do
   let s ← lift (Array.to_slice POW10_MAJOR)
   let (p, as_ptr_back) ← Slice.as_ptr s
@@ -81,7 +81,7 @@ def pow10_major (i : Std.Usize) : Result uint128 := do
   ok u
 
 /-- [zmij_raw_pointers::write_zeros]: loop body 0:
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 27:4-30:5 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 30:4-33:5 -/
 @[rust_loop_body]
 def write_zeros_loop.body
   (p : MutRawPtr Std.U8) (n : Std.Usize) (i : Std.Usize) :
@@ -96,7 +96,7 @@ def write_zeros_loop.body
   else ok (done ())
 
 /-- [zmij_raw_pointers::write_zeros]: loop 0:
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 27:4-30:5 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 30:4-33:5 -/
 @[rust_loop]
 def write_zeros_loop
   (p : MutRawPtr Std.U8) (n : Std.Usize) (i : Std.Usize) : Result Unit := do
@@ -105,13 +105,13 @@ def write_zeros_loop
     i
 
 /-- [zmij_raw_pointers::write_zeros]:
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 25:0-31:1 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 28:0-34:1 -/
 @[reducible]
 def write_zeros (p : MutRawPtr Std.U8) (n : Std.Usize) : Result Unit := do
   write_zeros_loop p n 0#usize
 
 /-- [zmij_raw_pointers::write_digit_dot]:
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 34:0-38:1 -/
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 37:0-41:1 -/
 def write_digit_dot
   (p : MutRawPtr Std.U8) (d : Std.U8) : Result (MutRawPtr Std.U8) := do
   let i ← 48#u8 + d
@@ -121,7 +121,7 @@ def write_digit_dot
   RawPtr.add p 2#usize
 
 /-- [zmij_raw_pointers::format_small]:
-    Source: 'tests/src/zmij-raw-pointers.rs', lines 40:0-47:1
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 43:0-50:1
     Visibility: public -/
 def format_small
   (d : Std.U8) (buf : Array Std.U8 8#usize) :
@@ -134,5 +134,42 @@ def format_small
   let s1 ← as_mut_ptr_back
   let buf1 := to_slice_mut_back s1
   ok (4#usize, buf1)
+
+/-- [zmij_raw_pointers::Buffer]
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 54:0-56:1
+    Visibility: public -/
+structure Buffer where
+  bytes : Array (MaybeUninit Std.U8) 8#usize
+
+/-- [zmij_raw_pointers::{zmij_raw_pointers::Buffer}::new]:
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 59:4-62:5
+    Visibility: public -/
+def Buffer.new : Result Buffer := do
+  let mu ← core.mem.maybe_uninit.MaybeUninit.uninit Std.U8
+  let bytes := Array.repeat 8#usize mu
+  ok { bytes }
+
+/-- [zmij_raw_pointers::{zmij_raw_pointers::Buffer}::format_digit]:
+    Source: 'tests/src/zmij-raw-pointers.rs', lines 65:4-70:5
+    Visibility: public -/
+def Buffer.format_digit
+  (self : Buffer) (d : Std.U8) :
+  Result ((Slice Std.U8) × (Result Buffer))
+  := do
+  let (s, to_slice_mut_back) ← lift (Array.to_slice_mut self.bytes)
+  let (p, as_mut_ptr_back) ← Slice.as_mut_ptr s
+  let p1 := RawPtr.cast Std.U8 p
+  let _ ← write_digit_dot p1 d
+  let s1 ← as_mut_ptr_back
+  let a := to_slice_mut_back s1
+  let s2 ← lift (Array.to_slice a)
+  let (p2, as_ptr_back) ← Slice.as_ptr s2
+  let p3 := RawPtr.cast Std.U8 p2
+  let (s3, from_raw_parts_back) ← core.slice.raw.from_raw_parts p3 2#usize
+  let r := do
+           from_raw_parts_back
+           as_ptr_back
+           ok ({ bytes := a } : Buffer)
+  ok (s3, r)
 
 end zmij_raw_pointers

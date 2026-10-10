@@ -79,21 +79,35 @@ theorem write_zeros.spec (q : MutRawPtr U8) (o : Nat) (n : Usize) (vs : List U8)
   apply ispec_mono (write_zeros_loop.spec (q.shift o) n _ 0#usize (vs.drop o) rfl
     (by simp) (by simp; omega)) <;> iframe
 
-/-- `c` is the digit character `'0' + d`. -/
+/-- `c` is the digit character `'0' + d`. The cells may be uninitialized. -/
+theorem write_digit_dot.spec_cells (p : MutRawPtr U8) (d c : U8) (cs : List (Option U8))
+    (hc : c.val = 48 + d.val) (hlen : 2 ≤ cs.length) :
+    ⦃ p ↦*? cs ⦄ write_digit_dot p d
+      ⦃ q => ⌜q = p.shift 2⌝ ∗ p ↦*? ((cs.set 0 (some c)).set 1 (some 46#u8)) ⦄ := by
+  unfold write_digit_dot
+  step* 1
+  have : i = c := by scalar_tac
+  subst this
+  have h0 := MutRawPtr.write.spec_cells p cs 0 i (by omega)
+  simp only [RawPtr.shift_zero, Pointee.toCell_default] at h0
+  step with h0
+  step with RawPtr.add.spec_cells p (cs.set 0 (some i)) 1#usize (by simp; omega)
+  subst_vars
+  have h1 := MutRawPtr.write.spec_cells p (cs.set 0 (some i)) 1 46#u8 (by simp; omega)
+  simp only [Pointee.toCell_default] at h1
+  step with h1
+  step with RawPtr.add.spec_cells p ((cs.set 0 (some i)).set 1 (some 46#u8)) 2#usize
+    (by simp; omega)
+
 @[step]
 theorem write_digit_dot.spec (p : MutRawPtr U8) (d c : U8) (vs : List U8)
     (hc : c.val = 48 + d.val) (hlen : 2 ≤ vs.length) :
     ⦃ p ↦* vs ⦄ write_digit_dot p d
       ⦃ q => ⌜q = p.shift 2⌝ ∗ p ↦* ((vs.set 0 c).set 1 46#u8) ⦄ := by
-  unfold write_digit_dot
-  step* 1
-  have : i = c := by scalar_tac
-  subst this
-  step with MutRawPtr.write.spec_head p vs i (by scalar_tac)
-  step* 1
-  subst_vars
-  step with MutRawPtr.write.spec_range p (vs.set 0 i) 1 46#u8 (by simp; scalar_tac)
-  step*
+  have h := write_digit_dot.spec_cells p d c (vs.map some) hc (by simpa)
+  simp only [← List.map_set] at h
+  rw [RawPtr.pointsToRange_eq, RawPtr.pointsToRange_eq]
+  exact h
 
 theorem format_small.spec (d c : U8) (buf : Array U8 8#usize) (hc : c.val = 48 + d.val) :
     ⦃ emp ⦄ format_small d buf
@@ -112,5 +126,39 @@ theorem format_small.spec (d c : U8) (buf : Array U8 8#usize) (hc : c.val = 48 +
   intro j _ _
   simp only [List.getElem_mapIdx, List.getElem_set]
   split_ifs <;> first | rfl | scalar_tac
+
+@[step]
+theorem Buffer.new.spec :
+    ⦃ emp ⦄ Buffer.new ⦃ b => ⌜b.bytes.val = List.replicate 8 .uninit⌝ ⦄ := by
+  unfold Buffer.new
+  step*
+  subst_vars
+  simp
+
+/-- `format_digit` writes `d.` (with `c = '0' + d`) to the uninitialized buffer and reads it back. -/
+theorem Buffer.format_digit.spec (self : Buffer) (d c : U8) (hc : c.val = 48 + d.val) :
+    ⦃ emp ⦄ Buffer.format_digit self d ⦃ (s, _) => ⌜s.val = [c, 46#u8]⌝ ⦄ := by
+  unfold Buffer.format_digit
+  step* 2
+  have hs : s.val.length = 8 := by simp [s_post]
+  rw [MaybeUninit.pointsToRange_eq]
+  step with write_digit_dot.spec_cells (p.cast U8) d c (s.val.map MaybeUninit.toOption) hc
+    (by simp [hs])
+  have hcells : ((s.val.map MaybeUninit.toOption).set 0 (some c)).set 1 (some 46#u8) =
+      ([c, 46#u8].map MaybeUninit.init ++ s.val.drop 2).map MaybeUninit.toOption := by
+    rcases hl : s.val with _ | ⟨a, _ | ⟨b, rest⟩⟩ <;> simp [hl] at hs ⊢
+  rw [hcells, ← MaybeUninit.pointsToRange_eq]
+  subst as_mut_ptr_back_post
+  step with Slice.end_as_mut_ptr.spec s p ([c, 46#u8].map MaybeUninit.init ++ s.val.drop 2)
+    (by simp; omega)
+  step* 2
+  subst to_slice_mut_back_post
+  have hs2 : s2.val = [c, 46#u8].map MaybeUninit.init ++ self.bytes.val.drop 2 := by
+    have hfs : (self.bytes.from_slice s1).val = s1.val :=
+      Std.Array.from_slice_val _ _ (by simp [s1_post]; omega)
+    simp [s2_post, Std.Array.to_slice, hfs, s1_post, s_post]
+  rw [hs2, MaybeUninit.pointsToRange_init]
+  step with core.slice.raw.from_raw_parts.spec (p2.cast U8) 2#usize [c, 46#u8] rfl
+  step*
 
 end zmij_raw_pointers
