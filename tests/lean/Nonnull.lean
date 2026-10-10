@@ -19,8 +19,15 @@ set_option maxRecDepth 2048
 
 namespace nonnull
 
+/-- [core::marker::PhantomData]
+    Source: '/rustc/library/core/src/marker.rs', lines 811:0-811:39
+    Name pattern: [core::marker::PhantomData]
+    Visibility: public -/
+@[reducible, rust_type "core::marker::PhantomData"]
+def core.marker.PhantomData (T : Type _) := Unit
+
 /-- [nonnull::Node]
-    Source: 'tests/src/nonnull.rs', lines 7:0-11:1
+    Source: 'tests/src/nonnull.rs', lines 8:0-12:1
     Visibility: public -/
 inductive Node where
 | mk : Std.U32 → NonNull Node → NonNull Node → Node
@@ -44,14 +51,14 @@ theorem Node.prev._simpLemma_ (value : Std.U32) (next : NonNull Node) (prev :
   NonNull Node) : (Node.mk value next prev).prev = prev := by rfl
 
 /-- [nonnull::List]
-    Source: 'tests/src/nonnull.rs', lines 13:0-16:1
+    Source: 'tests/src/nonnull.rs', lines 14:0-17:1
     Visibility: public -/
 structure List where
   head : Option (NonNull Node)
   len : Std.Usize
 
 /-- [nonnull::new_node]:
-    Source: 'tests/src/nonnull.rs', lines 19:0-31:1
+    Source: 'tests/src/nonnull.rs', lines 20:0-32:1
     Visibility: public -/
 def new_node (value : Std.U32) : Result (NonNull Node) := do
   let p ←
@@ -65,7 +72,7 @@ def new_node (value : Std.U32) : Result (NonNull Node) := do
   ok n
 
 /-- [nonnull::free_node]:
-    Source: 'tests/src/nonnull.rs', lines 34:0-37:1
+    Source: 'tests/src/nonnull.rs', lines 35:0-38:1
     Visibility: public -/
 def free_node (n : NonNull Node) : Result Std.U32 := do
   let p := NonNull.as_ptr n
@@ -73,7 +80,7 @@ def free_node (n : NonNull Node) : Result Std.U32 := do
   ok b.value
 
 /-- [nonnull::push_back]:
-    Source: 'tests/src/nonnull.rs', lines 40:0-60:1
+    Source: 'tests/src/nonnull.rs', lines 41:0-61:1
     Visibility: public -/
 def push_back (list : List) (node : NonNull Node) : Result List := do
   let nn ←
@@ -102,7 +109,7 @@ def push_back (list : List) (node : NonNull Node) : Result List := do
   ok { head := (some nn), len := i }
 
 /-- [nonnull::remove]:
-    Source: 'tests/src/nonnull.rs', lines 63:0-79:1
+    Source: 'tests/src/nonnull.rs', lines 64:0-80:1
     Visibility: public -/
 def remove (list : List) (node : NonNull Node) : Result List := do
   let (n, as_ref_back) ← NonNull.as_ref node
@@ -129,7 +136,7 @@ def remove (list : List) (node : NonNull Node) : Result List := do
   ok { head := o, len := i }
 
 /-- [nonnull::sum]: loop body 0:
-    Source: 'tests/src/nonnull.rs', lines 87:8-92:9
+    Source: 'tests/src/nonnull.rs', lines 88:8-93:9
     Visibility: public -/
 @[rust_loop_body]
 def sum_loop.body
@@ -146,7 +153,7 @@ def sum_loop.body
   else ok (done s)
 
 /-- [nonnull::sum]: loop 0:
-    Source: 'tests/src/nonnull.rs', lines 87:8-92:9
+    Source: 'tests/src/nonnull.rs', lines 88:8-93:9
     Visibility: public -/
 @[rust_loop]
 def sum_loop
@@ -158,7 +165,7 @@ def sum_loop
     (s, cur, i1)
 
 /-- [nonnull::sum]:
-    Source: 'tests/src/nonnull.rs', lines 82:0-95:1
+    Source: 'tests/src/nonnull.rs', lines 83:0-96:1
     Visibility: public -/
 def sum (list : List) : Result Std.U32 := do
   match list.head with
@@ -166,7 +173,7 @@ def sum (list : List) : Result Std.U32 := do
   | some head => sum_loop list.len 0#u32 head 0#usize
 
 /-- [nonnull::front]:
-    Source: 'tests/src/nonnull.rs', lines 98:0-100:1
+    Source: 'tests/src/nonnull.rs', lines 99:0-101:1
     Visibility: public -/
 def front (list : List) : Result ((Option Node) × (Result Unit)) := do
   let cf ← core.option.Option.Insts.CoreOpsTry.branch list.head
@@ -181,7 +188,7 @@ def front (list : List) : Result ((Option Node) × (Result Unit)) := do
     ok (o, ok ())
 
 /-- [nonnull::set_values]:
-    Source: 'tests/src/nonnull.rs', lines 105:0-113:1
+    Source: 'tests/src/nonnull.rs', lines 106:0-114:1
     Visibility: public -/
 def set_values
   (p : NonNull Node) (q : NonNull Node) (b : Bool) : Result Unit := do
@@ -200,7 +207,7 @@ def set_values
   MutRawPtr.write p2 (Node.mk 4#u32 n1.next n1.prev)
 
 /-- [nonnull::neighbour_value]:
-    Source: 'tests/src/nonnull.rs', lines 117:0-123:1
+    Source: 'tests/src/nonnull.rs', lines 118:0-124:1
     Visibility: public -/
 def neighbour_value (p : NonNull Node) (forward : Bool) : Result Std.U32 := do
   let p1 := NonNull.as_ptr p
@@ -214,8 +221,57 @@ def neighbour_value (p : NonNull Node) (forward : Bool) : Result Std.U32 := do
   as_ref_back
   ok n1.value
 
+/-- [nonnull::Iter]
+    Source: 'tests/src/nonnull.rs', lines 130:0-134:1
+    Visibility: public -/
+structure Iter where
+  cur : Option (NonNull Node)
+  len : Std.Usize
+  _marker : core.marker.PhantomData Node
+
+/-- [nonnull::{nonnull::Iter<'a>}::next]:
+    Source: 'tests/src/nonnull.rs', lines 137:4-145:5
+    Visibility: public -/
+def Iter.next
+  (self : Iter) : Result ((Option Std.U32) × Iter × (Result Unit)) := do
+  if self.len = 0#usize
+  then ok (none, { self with _marker := () }, ok ())
+  else
+    let cf ← core.option.Option.Insts.CoreOpsTry.branch self.cur
+    match cf with
+    | core.ops.control_flow.ControlFlow.Continue val =>
+      let (n, as_ref_back) ← NonNull.as_ref val
+      let i ← self.len - 1#usize
+      ok (some n.value, { cur := (some n.next), len := i, _marker := () },
+        as_ref_back)
+    | core.ops.control_flow.ControlFlow.Break residual =>
+      let o ←
+        core.option.Option.Insts.CoreOpsTry_traitFromResidualOption.from_residual
+          Std.U32 residual
+      ok (o, { self with _marker := () }, ok ())
+
+/-- [nonnull::iter]:
+    Source: 'tests/src/nonnull.rs', lines 148:0-154:1
+    Visibility: public -/
+def iter (list : List) : Result (Iter × (Result Unit)) := do
+  ok ({ cur := list.head, len := list.len, _marker := () }, ok ())
+
+/-- [nonnull::first_value]:
+    Source: 'tests/src/nonnull.rs', lines 157:0-163:1
+    Visibility: public -/
+def first_value (list : List) : Result Std.U32 := do
+  let (it, iter_back) ← iter list
+  let (o, _, next_back) ← Iter.next { it with _marker := () }
+  match o with
+  | none => next_back
+            iter_back
+            ok 0#u32
+  | some v => next_back
+              iter_back
+              ok v
+
 /-- [nonnull::increment]: loop body 0:
-    Source: 'tests/src/nonnull.rs', lines 130:8-135:9
+    Source: 'tests/src/nonnull.rs', lines 170:8-175:9
     Visibility: public -/
 @[rust_loop_body]
 def increment_loop.body
@@ -232,7 +288,7 @@ def increment_loop.body
   else ok (done ())
 
 /-- [nonnull::increment]: loop 0:
-    Source: 'tests/src/nonnull.rs', lines 130:8-135:9
+    Source: 'tests/src/nonnull.rs', lines 170:8-175:9
     Visibility: public -/
 @[rust_loop]
 def increment_loop
@@ -242,7 +298,7 @@ def increment_loop
     (cur, i1)
 
 /-- [nonnull::increment]:
-    Source: 'tests/src/nonnull.rs', lines 126:0-137:1
+    Source: 'tests/src/nonnull.rs', lines 166:0-177:1
     Visibility: public -/
 def increment (list : List) : Result List := do
   match list.head with
@@ -251,7 +307,7 @@ def increment (list : List) : Result List := do
                  ok list
 
 /-- [nonnull::test_list]:
-    Source: 'tests/src/nonnull.rs', lines 139:0-156:1
+    Source: 'tests/src/nonnull.rs', lines 179:0-196:1
     Visibility: public -/
 def test_list : Result Std.U32 := do
   let a ← new_node 1#u32
@@ -271,7 +327,7 @@ def test_list : Result Std.U32 := do
   ok s
 
 /-- [nonnull::aliasing_borrows]:
-    Source: 'tests/src/nonnull.rs', lines 160:0-165:1
+    Source: 'tests/src/nonnull.rs', lines 200:0-205:1
     Visibility: public -/
 def aliasing_borrows (p : NonNull Node) : Result Unit := do
   let p1 := NonNull.as_ptr p
@@ -282,7 +338,7 @@ def aliasing_borrows (p : NonNull Node) : Result Unit := do
   as_mut_unchecked_back1 (Node.mk 2#u32 b.next b.prev)
 
 /-- [nonnull::compare_views]:
-    Source: 'tests/src/nonnull.rs', lines 169:0-173:1
+    Source: 'tests/src/nonnull.rs', lines 209:0-213:1
     Visibility: public -/
 def compare_views : Result Bool := do
   let (nn, from_mut_back) ← NonNull.from_mut 0#u32
@@ -293,7 +349,7 @@ def compare_views : Result Bool := do
   ok b
 
 /-- [nonnull::same_node]:
-    Source: 'tests/src/nonnull.rs', lines 176:0-178:1
+    Source: 'tests/src/nonnull.rs', lines 216:0-218:1
     Visibility: public -/
 def same_node (p : MutRawPtr Node) (q : ConstRawPtr Node) : Result Bool := do
   let p1 := RawPtr.cast_const p

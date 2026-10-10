@@ -578,22 +578,6 @@ let rec end_dead_fun_call_abs (config : config) (span : Meta.span)
   | Some (ctx, cc) ->
       comp cc (end_dead_fun_call_abs config span get_ret_value ctx)
 
-(** Does a region group appear at the top-level of a signature (i.e., not under
-    a borrow)? The backward functions of such groups are the ones which may
-    access the heap in the functions which manipulate raw pointers (see
-    [SymbolicToPureTypes.translate_inst_fun_sig_to_decomposed_fun_type]). *)
-let back_group_is_top_level (inst_sg : inst_fun_sig)
-    (back_id : RegionGroupId.id) : bool =
-  let top_level =
-    RegionsHierarchy.top_level_regions (inst_sg.output :: inst_sg.inputs)
-  in
-  List.exists
-    (fun r ->
-      match r with
-      | RVar (Free rid) -> RegionId.Set.mem rid top_level
-      | _ -> false)
-    (RegionGroupId.nth inst_sg.regions_hierarchy back_id).regions
-
 (** Small helper.
 
     This is a continuation function called by the symbolic interpreter upon
@@ -718,7 +702,9 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
      - we end the remaining dead abstractions at the very end *)
   let stateful =
     FunsAnalysis.is_stateful ctx.fun_ctx.fun_infos fdef.def_id
-    && back_group_is_top_level inst_sg back_id
+    && RegionGroupId.Set.mem back_id
+         (RegionsHierarchy.stateful_groups inst_sg.regions_hierarchy
+            (inst_sg.output :: inst_sg.inputs))
   in
   let end_ret_and_dead_abs ctx =
     if stateful then
