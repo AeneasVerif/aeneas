@@ -112,7 +112,8 @@ let analyze_module (m : crate) (type_infos : TypesAnalysis.type_infos)
     m.trait_decls;
 
   (* Does a type (transitively) contain a raw pointer? We first compute the set
-     of type declarations which contain raw pointers with a fixed point. *)
+     of type declarations which contain raw pointers with a fixed point.
+     [NonNull<T>] is an opaque type which we model as a raw pointer. *)
   let ty_contains_raw_ptr : Types.ty -> bool =
     let open Types in
     let decls = ref TypeDeclId.Set.empty in
@@ -142,7 +143,11 @@ let analyze_module (m : crate) (type_infos : TypesAnalysis.type_infos)
       | Enum variants ->
           List.exists (fun (v : variant) -> fields_contain v.fields) variants
       | Alias ty -> ty_contains ty
-      | Opaque | TDeclError _ -> false
+      | Opaque ->
+          ExtractName.match_name m
+            (Charon.NameMatcher.parse_pattern "core::ptr::non_null::NonNull")
+            decl.item_meta.name
+      | TDeclError _ -> false
     in
     let changed = ref true in
     while !changed do

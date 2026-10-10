@@ -233,3 +233,93 @@ let compute_body_size (b : body) : int =
 (** Compute the size of a function - we count the number of statements and
     blocks *)
 let compute_fun_decl_size (f : fun_decl) : int = compute_body_size f.body
+
+(** Compute the local variables which are live before and after each statement
+    of a body (a local is live if its current value may be read later).
+
+    We use this analysis to end the borrows of values in the heap as soon as
+    they are dead (see [InterpStatements.end_dead_heap_borrows]). The analysis
+    may consider that some dead locals are live, which is conservative: the
+    borrows then end later. *)
+let compute_live_locals (body : block) :
+    (Expressions.LocalId.Set.t * Expressions.LocalId.Set.t) StatementId.Map.t =
+  let open Expressions in
+  let module S = LocalId.Set in
+  let results = ref StatementId.Map.empty in
+  let rec root (p : place) : LocalId.id option =
+    match p.kind with
+    | PlaceLocal id -> Some id
+    | PlaceGlobal _ -> None
+    | PlaceProjection (p, _) -> root p
+  in
+  let add_root (p : place) (live : S.t) : S.t =
+    match root p with
+    | Some id -> S.add id live
+    | None -> live
+  in
+  (* The locals read by a statement, without exploring the nested blocks *)
+  let uses (visit : < visit_place : unit -> place -> unit ; .. > -> unit) : S.t
+      =
+    let live = ref S.empty in
+    let visitor =
+      object
+        inherit [_] iter_statement
+        method! visit_block _ _ = ()
+        method! visit_place _ p = live := add_root p !live
+      end
+    in
+    visit visitor;
+    !live
+  in
+  (* The locals live before writing to a place *)
+  let write (p : place) (live : S.t) : S.t =
+    match p.kind with
+    | PlaceLocal id -> S.remove id live
+    | _ -> add_root p live
+  in
+  (* [stack]: the locals live after the enclosing loops (break targets) and at
+     their entries (continue targets) *)
+  let rec block (stack : (S.t * S.t) list) (b : block) (live_after : S.t) : S.t
+      =
+    List.fold_right (statement stack) b.statements live_after
+  and statement (stack : (S.t * S.t) list) (st : statement) (live_after : S.t) :
+      S.t =
+    let live_before =
+      match st.kind with
+      | Assign (p, rv) ->
+          S.union (uses (fun v -> v#visit_rvalue () rv)) (write p live_after)
+      | Call (call, _) ->
+          S.union
+            (uses (fun v ->
+                 v#visit_fn_operand () call.func;
+                 List.iter (v#visit_operand ()) call.args))
+            (write call.dest live_after)
+      | StorageLive id | StorageDead id -> S.remove id live_after
+      | Switch (data, branches) ->
+          List.fold_left
+            (fun live b -> S.union live (block stack b live_after))
+            (uses (fun v -> v#visit_switch_data () data))
+            branches
+      | Loop body ->
+          (* Least fixed point: reaching the end of the body continues the
+             loop *)
+          let rec fix (live_entry : S.t) : S.t =
+            let live =
+              S.union live_entry
+                (block ((live_after, live_entry) :: stack) body live_entry)
+            in
+            if S.equal live live_entry then live else fix live
+          in
+          fix S.empty
+      | Break i -> fst (List.nth stack i)
+      | Continue i -> snd (List.nth stack i)
+      | Return -> S.singleton LocalId.zero
+      | Panic _ | UnwindTerminate | UnwindResume | UndefinedBehavior -> S.empty
+      | _ -> S.union (uses (fun v -> v#visit_statement () st)) live_after
+    in
+    results :=
+      StatementId.Map.add st.statement_id (live_before, live_after) !results;
+    live_before
+  in
+  let _ = block [] body S.empty in
+  !results
