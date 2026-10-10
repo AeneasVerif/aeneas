@@ -405,7 +405,7 @@ let lean_builtin_funs =
     mk_fun
       "core::array::{core::ops::index::IndexMut<[@T; @N], @I, @O>}::index_mut"
       "core.array.Array.index_mut";
-    (* file: "Aeneas/Std/Core/CoreOption.lean", line: 122 *)
+    (* file: "Aeneas/Std/Core/CoreOption.lean", line: 140 *)
     mk_fun "core::bool::{bool}::then" "core.bool.Bool.then";
     (* file: "Aeneas/Std/Core/Core.lean", line: 115 *)
     mk_fun "core::clone::impls::{core::clone::Clone<&'0 @T>}::clone"
@@ -1078,6 +1078,15 @@ let lean_builtin_funs =
       "core::option::{core::cmp::PartialEq<core::option::Option<@T>, \
        core::option::Option<@T>>}::eq"
       "core.option.PartialEqOption.eq";
+    (* file: "Aeneas/Std/Core/CoreOption.lean", line: 131 *)
+    mk_fun
+      "core::option::{core::ops::try_trait::FromResidual<core::option::Option<@T>, \
+       core::option::Option<!>>}::from_residual"
+      "core.option.Option.Insts.CoreOpsTry_traitFromResidualOption.from_residual";
+    (* file: "Aeneas/Std/Core/CoreOption.lean", line: 122 *)
+    mk_fun
+      "core::option::{core::ops::try_trait::Try<core::option::Option<@T>>}::branch"
+      "core.option.Option.Insts.CoreOpsTry.branch";
     (* file: "Aeneas/Std/Core/CoreOption.lean", line: 14 *)
     mk_fun "core::option::{core::option::Option<@T>}::expect"
       "core.option.Option.expect";

@@ -18,30 +18,7 @@ set_option maxHeartbeats 1000000
 /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
 set_option maxRecDepth 2048
 
-/- You can remove the following line by using the CLI option `-all-computable`: -/
-noncomputable section
-
 namespace nested_shared_borrows
-
-/-- [core::option::{impl core::ops::try_trait::Try for core::option::Option<T>}::branch]:
-    Source: '/rustc/library/core/src/option.rs', lines 2875:4-2875:64
-    Name pattern: [core::option::{core::ops::try_trait::Try<core::option::Option<@T>>}::branch]
-    Visibility: public -/
-@[rust_fun
-  "core::option::{core::ops::try_trait::Try<core::option::Option<@T>>}::branch"]
-axiom core.option.Option.Insts.CoreOpsTry_traitTry.branch
-  {T : Type _} :
-  Option T → Result (core.ops.control_flow.ControlFlow (Option Never) T)
-
-/-- [core::option::{impl core::ops::try_trait::FromResidual<core::option::Option<!>> for core::option::Option<T>}::from_residual]:
-    Source: '/rustc/library/core/src/option.rs', lines 2889:4-2889:49
-    Name pattern: [core::option::{core::ops::try_trait::FromResidual<core::option::Option<@T>, core::option::Option<!>>}::from_residual]
-    Visibility: public -/
-@[rust_fun
-  "core::option::{core::ops::try_trait::FromResidual<core::option::Option<@T>, core::option::Option<!>>}::from_residual"]
-axiom
-  core.option.Option.Insts.CoreOpsTry_traitFromResidualOptionNever.from_residual
-  (T : Type _) : Option Never → Result (Option T)
 
 /-- [nested_shared_borrows::do_option]:
     Source: 'tests/src/nested-shared-borrows.rs', lines 12:0-14:1 -/
@@ -53,11 +30,11 @@ def do_option : Result (Option Unit) := do
     Visibility: public -/
 def double_ref_option (_arg : Std.U8) : Result (Option Unit) := do
   let o ← do_option
-  let cf ← core.option.Option.Insts.CoreOpsTry_traitTry.branch o
+  let cf ← core.option.Option.Insts.CoreOpsTry.branch o
   match cf with
   | core.ops.control_flow.ControlFlow.Continue _ => ok (some ())
   | core.ops.control_flow.ControlFlow.Break residual =>
-    core.option.Option.Insts.CoreOpsTry_traitFromResidualOptionNever.from_residual
+    core.option.Option.Insts.CoreOpsTry_traitFromResidualOption.from_residual
       Unit residual
 
 /-- [nested_shared_borrows::do_result]:

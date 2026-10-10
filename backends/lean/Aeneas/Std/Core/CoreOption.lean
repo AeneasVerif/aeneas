@@ -117,6 +117,24 @@ theorem core.option.Option.is_some_and.spec {T F : Type _}
     simp only [core.option.Option.is_some_and]
     exact hf value rfl
 
+/-- `Option::branch` (`Try`, the `?` operator): `some v ⇒ Continue v`,
+    `none ⇒ Break none`. -/
+@[expose, simp, step_simps, rust_fun
+  "core::option::{core::ops::try_trait::Try<core::option::Option<@T>>}::branch"]
+def core.option.Option.Insts.CoreOpsTry.branch {T : Type _} :
+  Option T → Result (core.ops.control_flow.ControlFlow (Option Never) T)
+  | some v => ok (.Continue v)
+  | none => ok (.Break none)
+
+/-- `Option::from_residual` (`FromResidual`, the `?` operator): the residual is
+    necessarily `none`. -/
+@[expose, simp, step_simps, rust_fun
+  "core::option::{core::ops::try_trait::FromResidual<core::option::Option<@T>, core::option::Option<!>>}::from_residual"]
+def core.option.Option.Insts.CoreOpsTry_traitFromResidualOption.from_residual
+  (T : Type _) : Option Never → Result (Option T)
+  | some x => x.casesOn
+  | none => ok none
+
 /-- Pure model of `bool::then`: `none` on `false`, and on `true` the result of
     `fnOnce` wrapped in `some`. -/
 @[expose, rust_fun "core::bool::{bool}::then"]
