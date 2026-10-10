@@ -793,6 +793,13 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
       (* A place mention just needs to check the place projections are valid; for
          now we treat this as a no-op *)
       ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span (fun e -> e))
+  | Drop (p, _, _, _) when Option.is_some (raw_ptr_deref_place p) ->
+      (* Dropping a value through a raw pointer (for instance, [*q = v] first
+         drops the old value of [*q]). We do not model the drop glue, but the
+         value must be valid: we read it (and ignore it), so that dropping
+         uninitialized memory fails. *)
+      let _, ctx, cc = eval_operand config st.span (Copy p) ctx in
+      ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span cc)
   | Drop (p, _, _, _) ->
       if !Config.drop_as_no_op then
         ([ (ctx, Unit) ], cf_singleton __FILE__ __LINE__ st.span)

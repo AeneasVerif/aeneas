@@ -144,6 +144,10 @@ type pure_builtin_fun_id =
   | RawPtrCastConst
       (** Cast a mutable raw pointer to a constant raw pointer ([p as *const T])
       *)
+  | RawPtrCast
+      (** Cast a raw pointer to a pointer to another type, which is equal up to
+          one [MaybeUninit] wrapper ([p as *mut U]). The type parameters are the
+          source and target pointee types. *)
   | ResultUnwrapMut
       (** Temporary fix: the
           [core::result::{core::result::Result<@T, @E>}::unwrap] instantiated

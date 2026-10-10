@@ -1259,6 +1259,7 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (RawPtrRead, "RawPtr.read");
         (RawPtrWrite, "MutRawPtr.write");
         (RawPtrCastConst, "RawPtr.cast_const");
+        (RawPtrCast, "RawPtr.cast");
         (GetTarget, "get_target");
         (TargetFeatureEnabled, "target_feature_enabled");
       ]
