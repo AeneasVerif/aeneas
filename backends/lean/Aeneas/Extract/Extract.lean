@@ -107,6 +107,12 @@ structure FunInfo where
   /-- If this is a trait method: does this method have a default
       implementation? If yes, we might want to register it as well. -/
   hasDefault : Bool := false
+  /-- The indices (in the list of lifetime parameters of the Rust function) of the lifetimes whose
+      backward functions are stateful: they access the heap, and live in the `Result` monad, even
+      if they have no inputs. For instance, the backward function of
+      `core::slice::raw::from_raw_parts_mut` writes the slice back to the memory it was created from.
+      By default, the backward functions of a model are pure. -/
+  statefulLifetimes : List Nat := []
 deriving Repr, Inhabited
 
 instance : ToMessageData FunInfo where
@@ -116,7 +122,8 @@ instance : ToMessageData FunInfo where
   keepTraitClauses : {x.keepTraitClauses},
   canFail : {x.canFail},
   lift : {x.lift},
-  hasDefault : {x.hasDefault} }"
+  hasDefault : {x.hasDefault},
+  statefulLifetimes : {x.statefulLifetimes} }"
 
 structure TraitConst where
   rust : String
@@ -619,6 +626,14 @@ The options are:
   let y ← (↑(foo x) : Result ...)
   ...
   ```
+- `statefulLifetimes`: `[]` by default, the indices (in the list of lifetime parameters of the Rust
+  function) of the lifetimes whose backward functions access the heap. Those backward functions
+  live in the `Result` monad, even if they have no inputs: in this case, the model returns a
+  `Result` computation, which is performed when the lifetime ends. For instance:
+  ```
+  @[rust_fun "core::slice::raw::from_raw_parts_mut" (statefulLifetimes := [0])]
+  def from_raw_parts_mut (p : MutRawPtr T) (len : Usize) : Result (Slice T × (Slice T → Result Unit))
+  ```
 -/
 syntax (name := rustFun) "rust_fun" str Parser.Tactic.optConfig : attr
 
@@ -800,7 +815,10 @@ def FunInfo.toExtract (info : FunInfo) : MessageData :=
   let canFail := if ¬ info.canFail then m!" ~can_fail:{info.canFail}" else m!""
   let lift := if ¬ info.lift then m!" ~lift:{info.lift}" else m!""
   let hasDefault := if info.hasDefault then m!" ~lift:{info.hasDefault}" else m!""
-  m!"{extract}{keepParams}{keepTraitClauses}{canFail}{lift}{hasDefault}"
+  let statefulLifetimes :=
+    if info.statefulLifetimes.isEmpty then m!""
+    else m!" ~stateful_lifetimes:{listToString info.statefulLifetimes}"
+  m!"{extract}{keepParams}{keepTraitClauses}{canFail}{lift}{hasDefault}{statefulLifetimes}"
 
 def TraitDecl.toExtract (info : TraitDecl) : MessageData :=
   let extract := info.extract.getD "ERROR_MISSING_FIELD"
