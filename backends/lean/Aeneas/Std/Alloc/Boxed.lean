@@ -68,21 +68,27 @@ def core.cmp.PartialEqBox {T : Type _} (PartialEqInst : core.cmp.PartialEq T T) 
 
 /-- Allocates a pointer using `Global.allocate`, as creating a Box in Rust would do --/
 @[rust_fun "alloc::boxed::{Box<@T>}::into_raw"]
-def alloc.boxed.Box.into_raw {T : Type} [Pointee T] (b : T) : Result (MutRawPtr T) :=
-  alloc.alloc.Global.mk.allocate [b]
+def alloc.boxed.Box.into_raw {T : Type} [Pointee T] (b : T) : Result (MutRawPtr T) := do
+  let p ← alloc.alloc.Global.mk.allocate [b]
+  ok p.ptr
 
 /-- Frees the `Box` using `Global.deallocate`, as dropping a Box in Rust would do --/
 @[rust_fun "alloc::boxed::{Box<@T>}::from_raw"]
 def alloc.boxed.Box.from_raw {T : Type} [Pointee T] (p : MutRawPtr T) : Result T := do
   let value ← RawPtr.read p
-  alloc.alloc.Global.mk.deallocate p 1
+  alloc.alloc.Global.mk.deallocate ⟨p⟩ 1
   pure value
 
 @[step]
 theorem alloc.boxed.Box.into_raw.spec {T : Type} [Pointee T] (value : T) :
     ⦃ emp ⦄ alloc.boxed.Box.into_raw value ⦃ q => q ↦ value ∗ q.freeable⦄ := by
-  simpa only [alloc.boxed.Box.into_raw, ← RawPtr.pointsTo_eq_range, List.length_singleton] using
-    alloc.alloc.Global.allocate.spec alloc.alloc.Global.mk [value]
+  unfold alloc.boxed.Box.into_raw
+  apply WP.ispec_bind (alloc.alloc.Global.allocate.spec alloc.alloc.Global.mk [value])
+  · iframe
+  · intro q
+    apply (WP.ispec_ok _).2
+    simp only [RawPtr.pointsTo_eq_range, List.length_singleton]
+    iframe
 
 /-- `q.freeable` is required: without it, `q` could be an interior pointer or point to a local
 behind a reference, and freeing it is undefined behaviour
@@ -94,7 +100,7 @@ theorem alloc.boxed.Box.from_raw.spec {T : Type} [Pointee T] {value : T} (q : Mu
   unfold alloc.boxed.Box.from_raw
   apply WP.ispec_bind (RawPtr.read.spec q value) (entails_refl _)
   intro result
-  apply WP.ispec_bind (alloc.alloc.Global.deallocate.spec alloc.alloc.Global.mk q [value] 1 rfl)
+  apply WP.ispec_bind (alloc.alloc.Global.deallocate.spec alloc.alloc.Global.mk ⟨q⟩ [value] 1 rfl)
   · rw [← RawPtr.pointsTo_eq_range]
     iframe
   · intro _
@@ -109,7 +115,7 @@ theorem alloc.boxed.Box.from_raw.spec_freed {T : Type} [Pointee T] {value : T} (
   apply WP.ispec_bind (RawPtr.read.spec q value) (entails_refl _)
   intro result
   apply WP.ispec_bind
-    (alloc.alloc.Global.deallocate.spec_freed alloc.alloc.Global.mk q [value] 1 rfl)
+    (alloc.alloc.Global.deallocate.spec_freed alloc.alloc.Global.mk ⟨q⟩ [value] 1 rfl)
   · rw [← RawPtr.pointsTo_eq_range]
     iframe
   · intro _
@@ -128,7 +134,7 @@ theorem alloc.boxed.Box.from_raw.fails_view {T : Type} [Pointee T] {value : T} (
   unfold alloc.boxed.Box.from_raw
   refine ifails_bind (ispec_frame (RawPtr.read.spec q value) (q.freeable 1 .view)) fun _ => ?_
   exact ifails_bind_left (ifails_mono (by iframe)
-    (alloc.alloc.Global.deallocate.fails_view alloc.alloc.Global.mk q 1))
+    (alloc.alloc.Global.deallocate.fails_view alloc.alloc.Global.mk ⟨q⟩ 1))
 
 /-- Freeing a pointer one past the cell of a box (an interior pointer) fails. -/
 theorem alloc.boxed.Box.from_raw.fails_end {T : Type} [Pointee T] (q : MutRawPtr T) :

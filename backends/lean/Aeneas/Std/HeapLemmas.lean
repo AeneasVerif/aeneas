@@ -1894,6 +1894,22 @@ theorem kind_eq_of_subheap_header {α : Type v} {h : Heap} {q : RawPtr α M} {ki
   cases hLookup
   exact hKind.symm
 
+/-- A fragment holding the header of a block knows its kind. -/
+theorem hasKind_of_subheap_header {α : Type v} {h : Heap} {q : RawPtr α M} {kind : AllocKind}
+    {len : Nat} (hSub : Heap.Subheap (header q kind len) h) : HasKind h q.allocId kind := by
+  obtain ⟨rest, -, rfl⟩ := hSub
+  unfold HasKind
+  rw [lookup_union_some (lookup_header q kind len)]
+
+theorem hasKind_unique {h : Heap} {a : AllocId} {kind kind' : AllocKind}
+    (hKind : HasKind h a kind) (hKind' : HasKind h a kind') : kind = kind' := by
+  unfold HasKind at hKind hKind'
+  split at hKind
+  · rename_i b hLookup
+    rw [hLookup] at hKind'
+    exact hKind.symm.trans hKind'
+  · exact hKind.elim
+
 theorem Subheap.isBorrowed {α : Type v} {h : Heap} {q : RawPtr α M} {kind : AllocKind}
     {len : Nat} (hSub : Heap.Subheap (borrowedBlock q kind len) h) (hOffset : q.offset < len) :
     IsBorrowed h q := by

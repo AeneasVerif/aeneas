@@ -280,6 +280,12 @@ def allocation (a : AllocId) (values : List (Option α)) (kind : AllocKind) : He
 
 def IsLive (h : Heap) (q : RawPtr T M) : Prop := (h.cell? q).isSome
 
+/-- The block `a` of `h` is of kind `kind`. -/
+def HasKind (h : Heap) (a : AllocId) (kind : AllocKind) : Prop :=
+  match h.lookup a with
+  | some b => b.kind = kind
+  | none => False
+
 def freshAllocId (h : Heap) : AllocId :=
   h.allocs.keys.sup id + 1
 

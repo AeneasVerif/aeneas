@@ -15,6 +15,7 @@ public import Aeneas.Std.Core.Hash
 public import Aeneas.Std.Core.Iter
 public import Aeneas.Std.Core.Marker
 public import Aeneas.Std.Core.MaybeUninit
+public import Aeneas.Std.Core.NonNull
 public import Aeneas.Std.Core.Ops
 public import Aeneas.Std.Core.Panic
 public import Aeneas.Std.Core.Pin

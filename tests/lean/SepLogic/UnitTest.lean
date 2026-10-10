@@ -396,8 +396,8 @@ example : ¬ ⦃ emp ⦄ (do
 allocation. -/
 example : ¬ ⦃ emp ⦄ (do
     let p ← Std.alloc.alloc.Global.mk.allocate [(1 : Nat), 2]
-    let q ← p.add 1#usize
-    Std.alloc.alloc.Global.mk.deallocate q 1) ⦃ _ => ⌜True⌝ ⦄ := by
+    let q ← p.ptr.add 1#usize
+    Std.alloc.alloc.Global.mk.deallocate ⟨q⟩ 1) ⦃ _ => ⌜True⌝ ⦄ := by
   intro hTriple
   have hSpec := (ispec_iff.mp hTriple) emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
   simp only [Std.alloc.alloc.Global.allocate, RawPtr.alloc, Std.alloc.alloc.Global.deallocate, RawPtr.add,
