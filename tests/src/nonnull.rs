@@ -2,6 +2,7 @@
 //! `NonNull`, borrows of places behind raw pointers and pointer comparisons, on
 //! an intrusive circular doubly linked list: the nodes are boxes which are
 //! linked through `NonNull` pointers stored in the nodes.
+use core::marker::PhantomData;
 use core::ptr::NonNull;
 
 pub struct Node {
@@ -120,6 +121,45 @@ pub fn neighbour_value(p: NonNull<Node>, forward: bool) -> u32 {
     let q = *r;
     n.value = n.value.wrapping_add(1);
     unsafe { q.as_ref().value }
+}
+
+/// An iterator over the values of the nodes. In `next`, the borrow of the
+/// iterator (`&mut self`) is nested inside the borrow of the nodes (`'a`): the
+/// backward function of `'a` gives the node back to the heap (it is deferred),
+/// the one of the borrow of the iterator is pure.
+pub struct Iter<'a> {
+    pub cur: Option<NonNull<Node>>,
+    pub len: usize,
+    pub _marker: PhantomData<&'a Node>,
+}
+
+impl<'a> Iter<'a> {
+    pub fn next(&mut self) -> Option<&'a u32> {
+        if self.len == 0 {
+            return None;
+        }
+        let n = unsafe { self.cur?.as_ref() };
+        self.len -= 1;
+        self.cur = Some(n.next);
+        Some(&n.value)
+    }
+}
+
+pub fn iter(list: &List) -> Iter<'_> {
+    Iter {
+        cur: list.head,
+        len: list.len,
+        _marker: PhantomData,
+    }
+}
+
+/// The value of the first node, using the iterator.
+pub fn first_value(list: &List) -> u32 {
+    let mut it = iter(list);
+    match it.next() {
+        Some(v) => *v,
+        None => 0,
+    }
 }
 
 /// Increment the values of the nodes.

@@ -813,8 +813,8 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
         | None -> [%internal_error_opt_span] span)
   in
 
-  (* The region groups which appear at the top-level of the signature, i.e.,
-     not under a borrow *)
+  (* The region groups which appear at the top-level of some types, i.e., not
+     under a borrow *)
   let top_level_groups_of (tys : T.ty list) =
     T.RegionId.Set.fold
       (fun rid groups ->
@@ -824,7 +824,10 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
       (RegionsHierarchy.top_level_regions tys)
       T.RegionGroupId.Set.empty
   in
-  let top_level_groups = top_level_groups_of (sg.output :: sg.inputs) in
+  let stateful_groups =
+    RegionsHierarchy.stateful_groups sg.regions_hierarchy
+      (sg.output :: sg.inputs)
+  in
   let output_groups = top_level_groups_of [ sg.output ] in
 
   (* Compute the type information for the backward function *)
@@ -985,15 +988,14 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
           (b, b)
       | Some { stateful = true; _ } ->
           (* Transparent function: the backward functions of the region groups
-             which appear at the top-level of the signature may access the
-             heap. The other ones (for the nested borrows) are pure: their
-             types appear inside the types of values.
+             given by [RegionsHierarchy.stateful_groups] may access the heap.
+             The other ones (for the nested borrows) are pure.
 
              If the region group appears in the output, the effects must
              happen when the caller ends the region: we defer the backward
              function (otherwise, it is evaluated at the end of the forward
              function). *)
-          let stateful = T.RegionGroupId.Set.mem gid top_level_groups in
+          let stateful = T.RegionGroupId.Set.mem gid stateful_groups in
           (stateful, stateful && T.RegionGroupId.Set.mem gid output_groups)
       | _ -> (false, false)
     in
