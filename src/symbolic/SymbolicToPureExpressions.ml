@@ -28,8 +28,11 @@ let fresh_back_vars_for_current_fun (ctx : bs_ctx) : bs_ctx * fvar option list =
     (* TODO: it's annoying that we have to recompute the regions hierarchy.
        Charon should do it for us. *)
     let regions_hierarchy =
-      RegionsHierarchy.compute_regions_hierarchy_for_sig (Some ctx.span)
-        ctx.decls_ctx.crate ctx.decls_ctx.type_ctx.type_infos
+      RegionsHierarchy.compute_regions_hierarchy_for_sig
+        ~merge_groups:
+          (FunsAnalysis.merge_region_groups ctx.decls_ctx.fun_ctx.fun_infos
+             ctx.fun_decl.def_id)
+        (Some ctx.span) ctx.decls_ctx.crate ctx.decls_ctx.type_ctx.type_infos
         (LlbcAstUtils.bound_fun_sig_of_decl ctx.fun_decl)
     in
     List.map
@@ -467,14 +470,17 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
                  (fun ty ->
                    match ty with
                    | None -> None
-                   | Some (_back_sg, ty) ->
+                   | Some (back_sg, ty) ->
                        (* We insert a name for the variable only if the type
-                          is an arrow type. If it is not, it means the backward
+                          is an arrow type, or a deferred (stateful) backward
+                          function. If it is not, it means the backward
                           function is degenerate (it takes no inputs) so it is
                           not a function anymore but a value: it doesn't make
                           sense to use a name like "back...". *)
                        let name =
-                         if is_arrow_ty ty then Some back_fun_name else None
+                         if is_arrow_ty ty || back_sg.deferred then
+                           Some back_fun_name
+                         else None
                        in
                        Some (name, ty))
                  back_tys)
@@ -488,15 +494,23 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
           let ctx =
             let backs, ignored =
               List.partition
-                (fun (_, v) -> Option.is_some v)
-                (List.combine call.abstractions back_vars)
+                (fun (_, (v, _)) -> Option.is_some v)
+                (List.combine call.abstractions
+                   (List.combine back_vars back_tys))
             in
             let ignored = List.map fst ignored in
             let backs =
               List.map
-                (fun (aid, fv) ->
+                (fun (aid, (fv, back_ty)) ->
                   let fvar = mk_texpr_from_fvar (Option.get fv) in
-                  (aid, { fvar; can_fail = false }))
+                  (* The backward function lives in the [Result] monad if it
+                     is stateful *)
+                  let can_fail =
+                    match back_ty with
+                    | Some (back_sg, _) -> back_sg_returns_result back_sg
+                    | None -> false
+                  in
+                  (aid, { fvar; can_fail }))
                 backs
             in
             let ctx =
@@ -573,6 +587,29 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
             let dest = mk_tpat_from_fvar dest_mplace dest in
             (ctx, Unop (Neg int_ty), effect_info, args, [], dest)
         | _ -> [%craise] ctx.span "Unreachable")
+    | S.Unop (E.Cast (CastRawPtr (TRawPtr (tgt_ty, tgt_rk))))
+      when match call.args with
+           | [ { ty = TRawPtr (src_ty, _); _ } ] ->
+               Substitute.erase_regions src_ty = Substitute.erase_regions tgt_ty
+           | _ -> false ->
+        (* A cast which only changes the mutability of a pointer. We do not
+           track the permissions in the heap: a pointer obtained from a shared
+           borrow must not be written through, so we only support casts from
+           [*mut T] to [*const T]. *)
+        let src_rk =
+          match call.args with
+          | [ { ty = TRawPtr (_, src_rk); _ } ] -> src_rk
+          | _ -> [%internal_error] ctx.span
+        in
+        [%cassert] ctx.span
+          (src_rk = RMut && tgt_rk = RShared)
+          "Unsupported: casting a raw pointer to a mutable raw pointer";
+        let effect_info =
+          { can_fail = false; can_diverge = false; is_rec = false }
+        in
+        let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
+        let dest = mk_tpat_from_fvar dest_mplace dest in
+        (ctx, Fun (Pure RawPtrCastConst), effect_info, args, [], dest)
     | S.Unop (E.Cast kind) -> begin
         let arg_ty =
           match call.args with
@@ -676,6 +713,14 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               | Expressions.BitOr ->
                   if arg0.ty = TLiteral TBool then BoolOr
                   else BitOr (get_single_int_ty ())
+              | (Expressions.Eq | Expressions.Ne)
+                when match arg0.ty with
+                     | TAdt (TBuiltin (TRawPtr _), _) -> true
+                     | _ -> false ->
+                  (* The heap model allocates fresh memory when converting a
+                     borrow to a raw pointer: comparing the addresses would not
+                     be sound *)
+                  [%craise] ctx.span "Unsupported: raw pointer comparisons"
               | Expressions.Eq ->
                   [%sanity_check] ctx.span (arg0.ty = arg1.ty);
                   Eq arg0.ty
@@ -703,6 +748,20 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
             in
             (ctx, Binop binop, effect_info, args, [], dest)
         | _ -> [%craise] ctx.span "Unreachable")
+    | S.RawPtrRead | S.RawPtrWrite ->
+        (* Reads and writes through raw pointers access the heap: they live in
+           the [Result] monad *)
+        let effect_info =
+          { can_fail = true; can_diverge = false; is_rec = false }
+        in
+        let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
+        let dest = mk_tpat_from_fvar dest_mplace dest in
+        let fid =
+          match call.call_id with
+          | S.RawPtrRead -> RawPtrRead
+          | _ -> RawPtrWrite
+        in
+        (ctx, Fun (Pure fid), effect_info, args, [], dest)
   in
   let func = { id = FunOrOp fun_id; generics } in
   let input_tys = (List.map (fun (x : texpr) -> x.ty)) args in
@@ -1190,6 +1249,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
           ^ "\nfunc type: "
           ^ pure_ty_to_string ctx info.fvar.ty
           ^ "\n\nargs:\n" ^ String.concat "\n" args];
+        check_can_call_stateful_back ctx info.can_fail;
         let call = [%add_loc] mk_apps ctx.span info.fvar args in
         (* Introduce a match if necessary *)
         let ctx, (output, call) = decompose_let_match ctx output call in
@@ -1360,6 +1420,7 @@ and translate_end_abstraction_join_or_loop (ectx : C.eval_ctx) (abs : V.abs)
         "func: " ^ texpr_to_string ctx func ^ "\nfunc type: "
         ^ pure_ty_to_string ctx func.ty
         ^ "\n\nargs:\n" ^ String.concat "\n" args];
+      check_can_call_stateful_back ctx can_fail;
       let call = [%add_loc] mk_apps ctx.span func args in
       (* Introduce a match if necessary *)
       let ctx, (output, call) = decompose_let_match ctx output call in
@@ -1385,6 +1446,7 @@ and translate_end_abstraction_with_cont (ectx : C.eval_ctx) (abs : V.abs)
   (* Translate the next expression *)
   let next_e = translate_expr e ctx in
   (* Put everything together *)
+  check_can_call_stateful_back ctx can_fail;
   [%add_loc] mk_closed_checked_let ctx can_fail output abs_e next_e
 
 and translate_global_eval (gid : A.GlobalDeclId.id) (generics : T.generic_args)
@@ -1895,16 +1957,6 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
      region is often used only for shared borrows), but its body may contain
      sub-abstractions which we don't support yet.
     *)
-  let back_el =
-    List.map2
-      (fun ((gid, _) : RegionGroupId.id * back_sg_info) back_ty ->
-        match back_ty with
-        | None -> None
-        | Some _ -> Some (translate_one_end ctx (Some gid)))
-      (RegionGroupId.Map.bindings ctx.sg.fun_ty.back_sg)
-      (compute_back_tys ctx.sg.fun_ty)
-  in
-
   (* Compute whether the backward expressions should be evaluated straight
      away or not (i.e., if we should bind them with monadic let-bindings
      or not). We evaluate them straight away if they can fail and have no
@@ -1913,9 +1965,23 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
     List.map
       (fun (sg : back_sg_info) ->
         if !Config.simplify_merged_fwd_backs then
-          sg.inputs = [] && sg.effect_info.can_fail
+          sg.inputs = [] && sg.effect_info.can_fail && not sg.deferred
         else false)
       (RegionGroupId.Map.values ctx.sg.fun_ty.back_sg)
+  in
+
+  let back_el =
+    List.map2
+      (fun (((gid, _) : RegionGroupId.id * back_sg_info), back_ty) eval ->
+        (* A filtered backward function which is stateful must still be
+           evaluated, to perform its effects *)
+        match back_ty with
+        | None when not eval -> None
+        | _ -> Some (translate_one_end ctx (Some gid)))
+      (List.combine
+         (RegionGroupId.Map.bindings ctx.sg.fun_ty.back_sg)
+         (compute_back_tys ctx.sg.fun_ty))
+      evaluate_backs
   in
 
   (* Introduce variables for the backward functions.
@@ -1948,16 +2014,18 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
     List.filter_map
       (fun (v, (eval, el)) ->
         match v with
-        | None -> None
-        | Some v -> Some (v, eval, Option.get el))
+        | None ->
+            (* A filtered backward function (it has no inputs and no outputs):
+               if it is stateful, we still need to perform its effects *)
+            if eval then Some (mk_ignored_pat mk_unit_ty, eval, Option.get el)
+            else None
+        | Some v -> Some (mk_tpat_from_fvar None v, eval, Option.get el))
       (List.combine back_vars (List.combine evaluate_backs back_el))
   in
   let e =
     List.fold_right
-      (fun (var, evaluate, back_e) e ->
-        [%add_loc] mk_closed_checked_let ctx evaluate
-          (mk_tpat_from_fvar None var)
-          back_e e)
+      (fun (pat, evaluate, back_e) e ->
+        [%add_loc] mk_closed_checked_let ctx evaluate pat back_e e)
       back_vars_els ret
   in
   [%ldebug "next:\n" ^ texpr_to_string ctx e];

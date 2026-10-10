@@ -56,6 +56,9 @@ val eval_operands :
   eval_ctx ->
   tvalue list * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)
 
+(** If a place is a dereference of a raw pointer [*q], return [q] *)
+val raw_ptr_deref_place : place -> place option
+
 (** Evaluate an rvalue which is not a global (globals are handled elsewhere).
 
     Transmits the computed rvalue to the received continuation.
