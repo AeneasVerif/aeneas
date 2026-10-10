@@ -229,6 +229,23 @@ pub fn incr_either(p: NonNull<Node>, q: NonNull<Node>, first: bool) -> u32 {
     n.value
 }
 
+pub struct Chain {
+    pub value: u32,
+    pub next: Option<NonNull<Chain>>,
+}
+
+/// Matching on a field read through a raw pointer: the value matched on and
+/// the value bound in the branch come from the same read.
+pub fn next_value(p: *mut Chain) -> u32 {
+    unsafe {
+        if let Some(n) = (*p).next {
+            (*n.as_ptr()).value
+        } else {
+            (*p).value
+        }
+    }
+}
+
 /// A zero-sized type whose Lean model has two values.
 pub struct Empty {
     pub e: core::mem::MaybeUninit<()>,
