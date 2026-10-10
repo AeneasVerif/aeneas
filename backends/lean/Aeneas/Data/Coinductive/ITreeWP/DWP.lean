@@ -112,6 +112,36 @@ theorem DWP.bind
       rw [itree_vis_bind]
       exact .vis hWp
 
+/-- Inversion of `DWP.bind`: the continuation is correct after the first computation. -/
+theorem DWP.bind_inv {k : α → ITree E β} {Q : θ.Post β}
+    (hSpec : DWP θ (ITree.bind m k) Q s) :
+    DWP θ m (fun value s' => DWP θ (k value) Q s') s := by
+  refine (hSpec.induction (P := fun t u => DWP θ t Q u ∧
+      ∀ m, t = ITree.bind m k → DWP θ m (fun value s' => DWP θ (k value) Q s') u)
+    ?_ ?_).2 m rfl
+  · intro value u hPost
+    refine ⟨DWP.ret_iff.mpr hPost, fun m hEq => ?_⟩
+    cases m using ITree.cases with
+    | ret w =>
+      rw [ITree.pure_eq_ret, itree_ret_bind] at hEq
+      exact DWP.ret_iff.mpr (hEq ▸ DWP.ret_iff.mpr hPost)
+    | div => simp at hEq
+    | vis i k' => simp at hEq
+  · intro effect k₁ u hWp
+    have hDwp : DWP θ (.vis effect k₁) Q u := .vis (θ.wp_monotonic (fun _ _ h => h.1) hWp)
+    refine ⟨hDwp, fun m hEq => ?_⟩
+    cases m using ITree.cases with
+    | ret w =>
+      rw [ITree.pure_eq_ret, itree_ret_bind] at hEq
+      exact DWP.ret_iff.mpr (hEq ▸ hDwp)
+    | div => simp [eq_comm] at hEq
+    | vis i k' =>
+      rw [itree_vis_bind] at hEq
+      obtain ⟨rfl, hK⟩ := vis_inj hEq
+      have hK : k₁ = fun o => ITree.bind (k' o) k := eq_of_heq hK
+      subst hK
+      exact .vis (θ.wp_monotonic (fun answer _ h => h.2 (k' answer) rfl) hWp)
+
 theorem DWP.and_iff [θ.Conjunctive] :
     DWP θ m (fun value s' => Q₁ value s' ∧ Q₂ value s') s ↔ DWP θ m Q₁ s ∧ DWP θ m Q₂ s := by
   refine ⟨fun h => ⟨h.mono fun _ _ hq => hq.1, h.mono fun _ _ hq => hq.2⟩, fun ⟨h₁, h₂⟩ => ?_⟩
