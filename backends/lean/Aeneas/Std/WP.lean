@@ -254,6 +254,58 @@ theorem ispec_bind {α : Type u} {β : Type v} {P Pm F : IPre}
   intro value h' hPost
   exact hNext value frame h' hPost
 
+/-! ### Failure
+
+`ifails P m`: `m` never succeeds from a heap with a part satisfying `P` (it fails, or diverges),
+so that it has no total-correctness specification with precondition `P` (`not_ispec_of_ifails`).
+We use it to show that the model rejects programs with undefined behavior. -/
+
+def ifails {α : Type u} (P : IPre) (m : Result α) : Prop :=
+  ∀ F h (Q : α → Heap → Prop), (P ∗ F) h → ¬ DWP effectWP m Q h
+
+theorem not_ispec_of_ifails {α : Type u} {P : IPre} {m : Result α} {Q : IPost α} {h : Heap}
+    (hFails : ifails P m) (hP : P h) : ¬ ispec P m Q := fun hTriple =>
+  hFails emp h _ ((entails_of_eq (sep_emp_r_eq P).symm) h hP)
+    ((ispec_iff.mp hTriple) emp h ((entails_of_eq (sep_emp_r_eq P).symm) h hP))
+
+/-- A program which fails from `emp` has no specification from `emp`. -/
+theorem not_ispec_of_ifails_emp {α : Type u} {m : Result α} {Q : IPost α}
+    (hFails : ifails emp m) : ¬ ispec emp m Q :=
+  not_ispec_of_ifails (h := ∅) hFails trivial
+
+theorem ifails_bind {α : Type u} {β : Type v} {P : IPre} {m : Result α} {R : IPost α}
+    {k : α → Result β} (hm : ispec P m R) (hk : ∀ x, ifails (R x) (k x)) :
+    ifails P (Aeneas.Std.bind m k) := by
+  intro F h Q hPre hDwp
+  obtain ⟨x, h', hR, hK⟩ :=
+    (DWP.and_iff.mpr ⟨(ispec_iff.mp hm) F h hPre, DWP.bind_inv hDwp⟩).exists
+  exact hk x F h' Q hR hK
+
+theorem ifails_bind_left {α : Type u} {β : Type v} {P : IPre} {m : Result α}
+    {k : α → Result β} (hm : ifails P m) : ifails P (Aeneas.Std.bind m k) :=
+  fun F h _ hPre hDwp => hm F h _ hPre (DWP.bind_inv hDwp)
+
+theorem ifails_mono {α : Type u} {P P' : IPre} {m : Result α} (hPre : P ⊢ P')
+    (hFails : ifails P' m) : ifails P m :=
+  fun F h Q hP => hFails F h Q (sep_mono hPre (entails_refl F) h hP)
+
+theorem ifails_ipure {α : Type u} {p : Prop} {H : IPre} {m : Result α}
+    (hFails : p → ifails H m) : ifails (⌜p⌝ ∗ H) m := fun F h Q hPre => by
+  have ⟨hp, hHF⟩ := (sep_pure_l p (H ∗ F) h).mp ((entails_of_eq (sep_assoc_eq _ _ _)) h hPre)
+  exact hFails hp F h Q hHF
+
+theorem ifails_fail {α : Type u} {P : IPre} (e : Error) : ifails P (fail e : Result α) :=
+  fun _ _ _ _ hDwp => hDwp.vis_view
+
+/-- A guarded modification fails if its guard fails on every heap containing the owned part. -/
+theorem ifails_guardedModify {α : Type} {pre : Heap → Prop}
+    {modify : (h : Heap) → pre h → α × Heap} {P : IPre}
+    (hNot : ∀ h, P h → ∀ h', Heap.Subheap h h' → ¬ pre h') :
+    ifails P (Result.guardedModify pre modify) := by
+  rintro F _ Q ⟨h₁, h₂, hDisjoint, rfl, hP, -⟩ hDwp
+  obtain ⟨hPre, -⟩ := hDwp.vis_view
+  exact hNot h₁ hP _ (Heap.Subheap.union_left hDisjoint) hPre
+
 theorem ispec_ipure {P : Prop} {H : IPre} {m : Result α} {Q : IPost α} :
     ispec (⌜P⌝ ∗ H) m Q ↔ (P → ispec H m Q) := by
   constructor
