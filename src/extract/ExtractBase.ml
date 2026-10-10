@@ -1260,6 +1260,9 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (IndexMutAtIndex Array, "Array.index_mut_usize");
         (ToResult, "lift");
         (ResultUnwrapMut, "core.result.Result.unwrap.mut");
+        (RawPtrRead, "RawPtr.read");
+        (RawPtrWrite, "MutRawPtr.write");
+        (RawPtrCastConst, "RawPtr.cast_const");
         (GetTarget, "get_target");
         (TargetFeatureEnabled, "target_feature_enabled");
       ]
@@ -2554,6 +2557,28 @@ let ctx_add_fun_decl (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
     let def_name = ctx_compute_fun_name def false ctx in
     let fun_id = (Pure.FunId def_id, def.loop_id) in
     ctx_add def.item_meta.span (FunId (FromLlbc fun_id)) def_name ctx
+
+(** Register the name of a builtin function.
+
+    Several Rust functions can be modeled by the same definition of the standard
+    library (for instance [core::ptr::mut_ptr::{*mut T}::add] and
+    [core::ptr::const_ptr::{*const T}::add]): we do not consider this as a
+    clash. *)
+let ctx_add_builtin_fun (span : Meta.span) (id : id) (name : string)
+    (ctx : extraction_ctx) : extraction_ctx =
+  let names_map = ctx.names_maps.names_map in
+  let is_builtin (fid : A.FunDeclId.id) =
+    match A.FunDeclId.Map.find_opt fid ctx.trans_funs with
+    | Some trans -> Option.is_some trans.f.builtin_info
+    | None -> false
+  in
+  match names_map_get_id_from_name name names_map with
+  | Some (FunId (FromLlbc (FunId fid, None)), _) when is_builtin fid ->
+      let names_map =
+        { names_map with id_to_name = IdMap.add id name names_map.id_to_name }
+      in
+      { ctx with names_maps = { ctx.names_maps with names_map } }
+  | _ -> ctx_add span id name ctx
 
 let ctx_compute_type_decl_name (ctx : extraction_ctx) (def : type_decl) : string
     =

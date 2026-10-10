@@ -252,7 +252,7 @@ let builtin_trait_decls_info () =
                 keep_trait_clauses = None;
                 extract_name = basename;
                 can_fail = true;
-                stateful = false;
+                stateful_lifetimes = [];
                 lift = true;
                 has_default;
               }
@@ -270,7 +270,7 @@ let builtin_trait_decls_info () =
                    keep_trait_clauses = None;
                    extract_name;
                    can_fail = true;
-                   stateful = false;
+                   stateful_lifetimes = [];
                    lift = true;
                    has_default = false;
                  }
@@ -509,8 +509,9 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
   (* Small utility. *)
   let mk_fun (rust_name : string) ?(keep_params : bool list option = None)
       ?(keep_trait_clauses : bool list option = None) ?(can_fail = true)
-      ?(stateful = false) ?(lift = true) ?(extract_name : string option = None)
-      () : pattern * Pure.builtin_fun_info =
+      ?(stateful_lifetimes = []) ?(lift = true)
+      ?(extract_name : string option = None) () :
+      pattern * Pure.builtin_fun_info =
     let rust_name =
       [%ldebug "About to parse pattern: " ^ rust_name];
       try
@@ -532,7 +533,7 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
         keep_trait_clauses;
         extract_name = basename;
         can_fail;
-        stateful;
+        stateful_lifetimes;
         lift;
         has_default = false;
       }
@@ -936,13 +937,18 @@ let mk_builtin_funs_map () =
 
 let builtin_funs_map = mk_memoized mk_builtin_funs_map
 
-type effect_info = { can_fail : bool }
+type effect_info = { can_fail : bool; stateful_lifetimes : int list }
 
 let mk_builtin_fun_effects () : (pattern * effect_info) list =
   let builtin_funs : (pattern * Pure.builtin_fun_info) list = builtin_funs () in
   List.map
     (fun ((pattern, info) : _ * Pure.builtin_fun_info) ->
-      let info = { can_fail = info.can_fail } in
+      let info =
+        {
+          can_fail = info.can_fail;
+          stateful_lifetimes = info.stateful_lifetimes;
+        }
+      in
       (pattern, info))
     builtin_funs
 
