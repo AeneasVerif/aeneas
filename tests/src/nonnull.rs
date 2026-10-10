@@ -143,3 +143,8 @@ pub fn compare_views() -> bool {
     let mut y = 0u32;
     NonNull::from(&mut x) == NonNull::from(&mut y)
 }
+
+/// `==` on raw pointers (see `RawPtr.eq`).
+pub fn same_node(p: *mut Node, q: *const Node) -> bool {
+    p as *const Node == q
+}

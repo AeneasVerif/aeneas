@@ -243,4 +243,11 @@ def compare_views : Result Bool := do
   let _ ← from_mut_back
   ok b
 
+/-- [nonnull::same_node]:
+    Source: 'tests/src/nonnull.rs', lines 148:0-150:1
+    Visibility: public -/
+def same_node (p : MutRawPtr Node) (q : ConstRawPtr Node) : Result Bool := do
+  let p1 := RawPtr.cast_const p
+  RawPtr.eq p1 q
+
 end nonnull
