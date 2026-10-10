@@ -709,6 +709,22 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
         let dest = mk_tpat_from_fvar dest_mplace dest in
         (ctx, Unop (Cast kind), effect_info, args, [], dest)
       end
+    | S.Binop ((Expressions.Eq | Expressions.Ne) as binop)
+      when match args with
+           | arg0 :: _ -> (
+               match arg0.ty with
+               | TAdt (TBuiltin (TRawPtr _), _) -> true
+               | _ -> false)
+           | [] -> false ->
+        (* Comparing raw pointers may fail (see [RawPtr.eq] in the Lean
+           library): the model does not know the addresses *)
+        let effect_info =
+          { can_fail = true; can_diverge = false; is_rec = false }
+        in
+        let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
+        let dest = mk_tpat_from_fvar dest_mplace dest in
+        let fid = if binop = Expressions.Eq then RawPtrEq else RawPtrNe in
+        (ctx, Fun (Pure fid), effect_info, args, [], dest)
     | S.Binop binop -> (
         [%ldebug
           "- binop: " ^ binop_to_string binop ^ "\n- args:\n"
@@ -751,14 +767,6 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               | Expressions.BitOr ->
                   if arg0.ty = TLiteral TBool then BoolOr
                   else BitOr (get_single_int_ty ())
-              | (Expressions.Eq | Expressions.Ne)
-                when match arg0.ty with
-                     | TAdt (TBuiltin (TRawPtr _), _) -> true
-                     | _ -> false ->
-                  (* The heap model allocates fresh memory when converting a
-                     borrow to a raw pointer: comparing the addresses would not
-                     be sound *)
-                  [%craise] ctx.span "Unsupported: raw pointer comparisons"
               | Expressions.Eq ->
                   [%sanity_check] ctx.span (arg0.ty = arg1.ty);
                   Eq arg0.ty

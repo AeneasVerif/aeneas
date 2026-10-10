@@ -871,6 +871,8 @@ let pure_builtin_fun_id_to_string (fid : pure_builtin_fun_id) : string =
   | RawPtrWrite -> "@rawPtrWrite"
   | RawPtrCastConst -> "@rawPtrCastConst"
   | RawPtrCast -> "@rawPtrCast"
+  | RawPtrEq -> "@rawPtrEq"
+  | RawPtrNe -> "@rawPtrNe"
   | ResultUnwrapMut -> "@resultUnwrapMut"
   | GetTarget -> "@getTarget"
   | TargetFeatureEnabled -> "@targetFeatureEnabled"
