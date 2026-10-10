@@ -148,6 +148,8 @@ type pure_builtin_fun_id =
       (** Cast a raw pointer to a pointer to another type, which is equal up to
           one [MaybeUninit] wrapper ([p as *mut U]). The type parameters are the
           source and target pointee types. *)
+  | RawPtrEq  (** [==] on raw pointers (see [RawPtr.eq] in the Lean library) *)
+  | RawPtrNe  (** [!=] on raw pointers *)
   | ResultUnwrapMut
       (** Temporary fix: the
           [core::result::{core::result::Result<@T, @E>}::unwrap] instantiated

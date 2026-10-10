@@ -690,7 +690,13 @@ let simplify_duplicate_calls_visitor (ctx : ctx) (def : fun_decl) =
   let crate_is_stateful = FunsAnalysis.crate_is_stateful fun_infos in
   let may_access_heap (bound : texpr) : bool =
     match (fst (destruct_apps bound)).e with
-    | Qualif { id = FunOrOp (Fun (Pure (RawPtrRead | RawPtrWrite))); _ } -> true
+    | Qualif
+        {
+          id =
+            FunOrOp
+              (Fun (Pure (RawPtrRead | RawPtrWrite | RawPtrEq | RawPtrNe)));
+          _;
+        } -> true
     | Qualif { id = FunOrOp (Fun (Pure _) | Unop _ | Binop _); _ } -> false
     | Qualif { id = FunOrOp (Fun (FromLlbc (FunId fid, _))); _ } ->
         FunsAnalysis.is_stateful fun_infos fid
