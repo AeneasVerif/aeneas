@@ -695,9 +695,11 @@ let register_heap_borrow_abs (ctx : eval_ctx) (fid : fn_ptr_kind)
 
     The borrows are dead if ending the abstraction modifies neither the live
     local variables ([live]) nor the abstractions which were not introduced by
-    function calls, and if no live value has a type which mentions the regions
-    which ended (for instance, a structure with a [PhantomData<&'a mut T>]
-    field). We end the abstractions of the most recent calls first.
+    function calls or joins (the joins may have merged the borrows of the dead
+    abstraction with other borrows, for instance shared borrows of the value in
+    the heap), and if no live value has a type which mentions the regions which
+    ended (for instance, a structure with a [PhantomData<&'a mut T>] field). We
+    end the abstractions of the most recent calls first.
 
     The liveness analysis does not need to be exact: if we end a borrow which is
     used later, the symbolic execution fails when it is used (the borrow was
@@ -718,7 +720,7 @@ let rec end_dead_heap_borrows (config : config) (span : Meta.span)
     env_filter_map_abs
       (fun abs ->
         match abs.kind with
-        | FunCall _ -> None
+        | FunCall _ | Join -> None
         | _ -> Some abs)
       ctx.env
   in
@@ -830,6 +832,11 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
   let ctx, cc = comp cc (end_dead_borrows live_before ctx) in
 
   (* Evaluate the statement *)
+  let config =
+    match st.kind with
+    | Switch _ -> { config with live_after_switch = live_after }
+    | _ -> config
+  in
   let ctx_resl, cc = comp cc (eval_statement_raw config st ctx) in
   let ctx_res_cfl =
     List.map
@@ -1295,6 +1302,22 @@ and eval_switch_with_join (config : config) (span : Meta.span)
      panic as once we reach a panic we stop the symbolic execution (we simply
      synthesize a panic node in the symbolic AST). *)
   [%sanity_check] span (List.for_all (fun (_, res) -> res = Unit) ctx_resl);
+  (* End the dead borrows of values in the heap at the end of every branch (see
+     [config.live_after_switch]) *)
+  let ctx_resl, cf =
+    match config.live_after_switch with
+    | None -> (ctx_resl, cf)
+    | Some live ->
+        let ctx_ccl =
+          List.map
+            (fun (ctx, res) ->
+              let ctx, cc = end_dead_heap_borrows config span live ctx in
+              ((ctx, res), cc))
+            ctx_resl
+        in
+        let ctx_resl, ccl = List.split ctx_ccl in
+        (ctx_resl, fun el -> cf (List.map2 (fun cc e -> cc e) ccl el))
+  in
   let ctxl = List.map fst ctx_resl in
   let num_units = List.length ctxl in
   if num_units = 0 then (
@@ -1335,6 +1358,23 @@ and eval_switch_with_join (config : config) (span : Meta.span)
     [%ldebug "Joined ctx:\n" ^ eval_ctx_to_string joined_ctx];
     let ctx0_aids = env_get_abs_ids ctx0.env in
     [%ldebug "ctx0_aids:\n" ^ AbsId.Set.to_string None ctx0_aids];
+    (* The join drops the abstractions which were ended in some branches only:
+       this would lose the effects of the backward functions which give values
+       back to the heap (see [end_dead_heap_borrows]). It also merges the
+       abstractions introduced in the branches into join abstractions, whose
+       continuations can not call (stateful, failing) backward functions. If
+       one of those happens, we do not join. *)
+    let joined_aids = env_get_abs_ids joined_ctx.env in
+    [%cassert_recover] !Config.recover_joins span
+      (List.for_all
+         (fun ctx ->
+           AbsId.Set.for_all
+             (fun id ->
+               (not (Hashtbl.mem ctx.heap_borrow_abs id))
+               || AbsId.Set.mem id joined_aids)
+             (env_get_abs_ids ctx.env))
+         ctx_to_join)
+      "Joining the branches would drop the borrow of a value in the heap";
 
     (* We need to update the fresh abstraction continuations in the joined context,
        to reflect the fact that in the symbolic AST they should be introduced by
