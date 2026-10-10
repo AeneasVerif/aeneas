@@ -165,8 +165,23 @@ def sum (list : List) : Result Std.U32 := do
   | none => ok 0#u32
   | some head => sum_loop list.len 0#u32 head 0#usize
 
+/-- [nonnull::front]:
+    Source: 'tests/src/nonnull.rs', lines 98:0-100:1
+    Visibility: public -/
+def front (list : List) : Result ((Option Node) × (Result Unit)) := do
+  let cf ← core.option.Option.Insts.CoreOpsTry.branch list.head
+  match cf with
+  | core.ops.control_flow.ControlFlow.Continue val =>
+    let (n, as_ref_back) ← NonNull.as_ref val
+    ok (some n, as_ref_back)
+  | core.ops.control_flow.ControlFlow.Break residual =>
+    let o ←
+      core.option.Option.Insts.CoreOpsTry_traitFromResidualOption.from_residual
+        Node residual
+    ok (o, ok ())
+
 /-- [nonnull::increment]: loop body 0:
-    Source: 'tests/src/nonnull.rs', lines 102:8-107:9
+    Source: 'tests/src/nonnull.rs', lines 107:8-112:9
     Visibility: public -/
 @[rust_loop_body]
 def increment_loop.body
@@ -183,7 +198,7 @@ def increment_loop.body
   else ok (done ())
 
 /-- [nonnull::increment]: loop 0:
-    Source: 'tests/src/nonnull.rs', lines 102:8-107:9
+    Source: 'tests/src/nonnull.rs', lines 107:8-112:9
     Visibility: public -/
 @[rust_loop]
 def increment_loop
@@ -193,7 +208,7 @@ def increment_loop
     (cur, i1)
 
 /-- [nonnull::increment]:
-    Source: 'tests/src/nonnull.rs', lines 98:0-109:1
+    Source: 'tests/src/nonnull.rs', lines 103:0-114:1
     Visibility: public -/
 def increment (list : List) : Result List := do
   match list.head with
@@ -202,7 +217,7 @@ def increment (list : List) : Result List := do
                  ok list
 
 /-- [nonnull::test_list]:
-    Source: 'tests/src/nonnull.rs', lines 111:0-128:1
+    Source: 'tests/src/nonnull.rs', lines 116:0-133:1
     Visibility: public -/
 def test_list : Result Std.U32 := do
   let a ← new_node 1#u32
@@ -222,7 +237,7 @@ def test_list : Result Std.U32 := do
   ok s
 
 /-- [nonnull::aliasing_borrows]:
-    Source: 'tests/src/nonnull.rs', lines 132:0-137:1
+    Source: 'tests/src/nonnull.rs', lines 137:0-142:1
     Visibility: public -/
 def aliasing_borrows (p : NonNull Node) : Result Unit := do
   let p1 := NonNull.as_ptr p
@@ -233,7 +248,7 @@ def aliasing_borrows (p : NonNull Node) : Result Unit := do
   as_mut_unchecked_back1 (Node.mk 2#u32 b.next b.prev)
 
 /-- [nonnull::compare_views]:
-    Source: 'tests/src/nonnull.rs', lines 141:0-145:1
+    Source: 'tests/src/nonnull.rs', lines 146:0-150:1
     Visibility: public -/
 def compare_views : Result Bool := do
   let (nn, from_mut_back) ← NonNull.from_mut 0#u32
@@ -244,7 +259,7 @@ def compare_views : Result Bool := do
   ok b
 
 /-- [nonnull::same_node]:
-    Source: 'tests/src/nonnull.rs', lines 148:0-150:1
+    Source: 'tests/src/nonnull.rs', lines 153:0-155:1
     Visibility: public -/
 def same_node (p : MutRawPtr Node) (q : ConstRawPtr Node) : Result Bool := do
   let p1 := RawPtr.cast_const p
