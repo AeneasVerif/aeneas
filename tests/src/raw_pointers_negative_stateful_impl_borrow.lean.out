@@ -1,0 +1,5 @@
+[[92mInfo[39m ] Imported: tests/llbc/raw_pointers_negative_stateful_impl_borrow.llbc
+[[91mError[39m] Unsupported: implementation of a trait method by a method which accesses the heap (it dereferences raw pointers, or calls a function which does) and returns a borrow
+Source: 'tests/src/raw_pointers_negative_stateful_impl_borrow.rs', lines 17:0-21:1
+Compiler source: symbolic/SymbolicToPure.ml, line 351
+
