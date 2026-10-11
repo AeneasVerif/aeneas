@@ -158,7 +158,7 @@ def partialAlloc (x : Nat) := into_raw x
 
 @[step] theorem partialAlloc.spec (x : Nat) :
     ⦃ emp ⦄ partialAlloc x ⦃ p => p ↦ x ∗ p.freeable ⦄div :=
-  ispec_dispec (into_raw.spec x)
+  ispec_dispec (ispec_mono (into_raw.spec x) (by iframe) (by iframe))
 
 example (x : Nat) :
     dispec emp (do

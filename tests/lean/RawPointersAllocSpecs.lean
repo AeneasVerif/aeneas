@@ -45,29 +45,29 @@ theorem write_uninit_box.spec : ⦃ emp ⦄ write_uninit_box ⦃ r => ⌜r = 1#u
 theorem double_free.fails (Q : IPost Unit) : ¬ ispec emp (double_free) Q := by
   apply not_ispec_of_ifails_emp
   unfold double_free
-  refine ifails_bind (alloc.boxed.Box.into_raw.spec _) fun p => ?_
-  refine ifails_bind (alloc.boxed.Box.from_raw.spec_freed p) fun _ => ?_
-  exact ifails_bind_left (ifails_mono (by iframe) (alloc.boxed.Box.from_raw.fails_freed p))
+  refine ifails_bind (alloc.boxed.Box.into_raw.spec _) fun p => ifails_ipure fun hAlign => ?_
+  refine ifails_bind (alloc.boxed.Box.from_raw.spec_freed p hAlign) fun _ => ?_
+  exact ifails_bind_left (ifails_mono (by iframe) (alloc.boxed.Box.from_raw.fails_freed p (by simp)))
 
 /-- Using a freed pointer fails. -/
 theorem use_after_free.fails (Q : IPost U32) : ¬ ispec emp (use_after_free) Q := by
   apply not_ispec_of_ifails_emp
   unfold use_after_free
-  refine ifails_bind (alloc.boxed.Box.into_raw.spec _) fun p => ?_
-  refine ifails_bind (alloc.boxed.Box.from_raw.spec_freed p) fun _ => ?_
-  exact ifails_mono (by iframe) (RawPtr.read.fails_freed p)
+  refine ifails_bind (alloc.boxed.Box.into_raw.spec _) fun p => ifails_ipure fun hAlign => ?_
+  refine ifails_bind (alloc.boxed.Box.from_raw.spec_freed p hAlign) fun _ => ?_
+  exact ifails_mono (by iframe) (RawPtr.read.fails_freed p (by simp))
 
 /-- Freeing an interior pointer fails. -/
 theorem free_interior.fails (Q : IPost Unit) : ¬ ispec emp (free_interior) Q := by
   apply not_ispec_of_ifails_emp
   unfold free_interior
-  refine ifails_bind (alloc.boxed.Box.into_raw.spec _) fun p => ?_
+  refine ifails_bind (alloc.boxed.Box.into_raw.spec _) fun p => ifails_ipure fun _ => ?_
   have hAdd := ispec_frame (RawPtr.add.spec p [1#u32] 1#usize (by simp)) p.freeable
   rw [← RawPtr.pointsTo_eq_range] at hAdd
   refine ifails_bind hAdd fun q => ?_
   refine ifails_mono (P' := iprop(⌜q = p.shift 1⌝ ∗ p.freeable)) (by iframe) (ifails_ipure ?_)
   rintro rfl
-  exact ifails_bind_left (alloc.boxed.Box.from_raw.fails_end p)
+  exact ifails_bind_left (alloc.boxed.Box.from_raw.fails_end p (by simp))
 
 /-- Freeing a pointer which does not come from a box fails. -/
 theorem free_borrowed.fails (x : U32) (Q : IPost U32) : ¬ ispec emp (free_borrowed x) Q := by

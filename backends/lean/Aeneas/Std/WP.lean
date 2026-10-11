@@ -306,6 +306,14 @@ theorem ifails_guardedModify {α : Type} {pre : Heap → Prop}
   obtain ⟨hPre, -⟩ := hDwp.vis_view
   exact hNot h₁ hP _ (Heap.Subheap.union_left hDisjoint) hPre
 
+/-- A check which does not modify the heap, followed by a computation which fails, fails. -/
+theorem ifails_bind_check {β : Type u} {pre : Heap → Prop} {k : Unit → Result β} {P : IPre}
+    (hk : ifails P (k ())) :
+    ifails P (Aeneas.Std.bind (Result.guardedModify pre fun h _ => ((), h)) k) := by
+  intro F h Q hP hDwp
+  obtain ⟨_, hRest⟩ := (DWP.bind_inv hDwp).vis_view
+  exact hk F h Q hP (DWP.ret_iff.mp hRest)
+
 theorem ispec_ipure {P : Prop} {H : IPre} {m : Result α} {Q : IPost α} :
     ispec (⌜P⌝ ∗ H) m Q ↔ (P → ispec H m Q) := by
   constructor
