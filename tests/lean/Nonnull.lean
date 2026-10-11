@@ -264,21 +264,19 @@ def Iter.next
 /-- [nonnull::iter]:
     Source: 'tests/src/nonnull.rs', lines 148:0-154:1
     Visibility: public -/
-def iter (list : List) : Result (Iter × (Result Unit)) := do
-  ok ({ cur := list.head, len := list.len, _marker := () }, ok ())
+def iter (list : List) : Result Iter := do
+  ok { cur := list.head, len := list.len, _marker := () }
 
 /-- [nonnull::first_value]:
     Source: 'tests/src/nonnull.rs', lines 157:0-163:1
     Visibility: public -/
 def first_value (list : List) : Result Std.U32 := do
-  let (it, iter_back) ← iter list
+  let it ← iter list
   let (o, _, next_back) ← Iter.next { it with _marker := () }
   match o with
   | none => next_back
-            iter_back
             ok 0#u32
   | some v => next_back
-              iter_back
               ok v
 
 /-- [nonnull::increment]: loop body 0:

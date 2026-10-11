@@ -82,9 +82,7 @@ def InPlaceOrDisjointBuffer.new_disjoint
     Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 43:4-45:5
     Visibility: public -/
 def InPlaceOrDisjointBuffer.impl.len
-  {T : Type _} [Pointee T] (self : InPlaceOrDisjointBuffer T) :
-  Result Std.Usize
-  := do
+  {T : Type _} (self : InPlaceOrDisjointBuffer T) : Result Std.Usize := do
   ok self.len
 
 /-- [in_place_or_disjoint_buffer::{in_place_or_disjoint_buffer::InPlaceOrDisjointBuffer<'a, T>}::src]:
