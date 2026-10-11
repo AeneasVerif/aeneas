@@ -383,9 +383,13 @@ meta def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) :=
 /-- Attempt to match a given theorem with the monadic call in the target.
 The resulting target should be mono's or bind's premise:
 e.g. `∀ x, P₀ x → P₁ x` or `∀ x, P x → k x ⦃ Q ⦄`
+
+With `unfold := some prog`, match the program of the theorem with the program `prog` of the
+target up to the unfolding of the definitions, then the rest up to instances (we only do so for
+the theorems given by the user, see #897).
 -/
-meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th : Expr) :
-  TacticM (Array MVarId) := do
+meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th : Expr)
+  (unfold : Option Expr := none) : TacticM (Array MVarId) := do
   withTraceNode `Step (fun _ => pure m!"tryMatch") do
   /- Apply the theorem
      We try to match the theorem with the goal
@@ -475,7 +479,14 @@ meta def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool
   /- We need to control transparency.
 
      See: https://github.com/AeneasVerif/aeneas/issues/897 -/
-  let ok ← withTransparency .instances <| isDefEq specMonoBindTy goalTy
+  let ok ← match unfold with
+    | none => withTransparency .instances <| isDefEq specMonoBindTy goalTy
+    | some prog => commitWhen do
+      unless ← isDefEq program prog do return false
+      -- The programs are now defeq: unify the rest, in which we replace the program of the goal
+      let program ← instantiateMVars program
+      let goalTy := (← instantiateMVars goalTy).replace fun e => if e == prog then some program else none
+      withTransparency .instances <| isDefEq specMonoBindTy goalTy
   if ¬ ok then
     trace[Step] "Could not unify the theorem with the target"
     throwError "Could not unify the theorem with the target:\n- theorem: {specMonoBindTy}\n- target: {goalTy}"
@@ -785,13 +796,14 @@ meta def inferPostMainGoal (args : Args) (mainGoal : Option MainGoal) : TacticM 
     let goal ← inferPost mg.goal (eliminate := fun decl => decl.type.isAppOf ``prettyMonadEq)
     pure (some { mg with goal := goal })
 
-meta def stepWith (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
+meta def stepWith (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr)
+  (unfold := false) :
   TacticM Goals := do
   withTraceNode `Step (fun _ => pure m!"stepWith") do
   -- Save the main goal before tryMatch (needed for lazy grind state initialization)
   let originalGoal ← getMainGoal
   -- Attempt to instantiate the theorem and introduce it in the context
-  let newGoals ← tryMatch info lifting isLet th
+  let newGoals ← tryMatch info lifting isLet th (if unfold then some fExpr else none)
   --
   withMainContext do
   traceGoalWithNode "current goal"
@@ -947,8 +959,21 @@ meta def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
   match withTh with
   | some th => do
     let lifting ← getLiftingForThm info th
-    let goals ← stepWith info lifting args goalIsLet fExpr th
-    return (goals, .givenExpr th)
+    /- The theorem may also be about the whole program, for instance if the program is the body
+       of an auxiliary definition. We try to match the first call then the whole program up to
+       instances, and only then up to the unfolding of the programs. -/
+    let wholeProg ← getSpecProgram goalTy
+    let targets := if goalIsLet then #[(true, fExpr), (false, wholeProg)] else #[(false, fExpr)]
+    let mut errors : Array MessageData := #[]
+    for unfold in [false, true] do
+      errors := #[]
+      for (isLet, prog) in targets do
+        try return (← stepWith info lifting args isLet prog th unfold, .givenExpr th)
+        catch e => errors := errors.push e.toMessageData
+    if h : errors.size = 2 then
+      throwError "Could not match the theorem with the first call:\n{errors[0]}\n\n\
+        Could not match the theorem with the whole program:\n{errors[1]}"
+    else throwError MessageData.joinSep errors.toList "\n"
   | none =>
     -- Try all the assumptions one by one and if it fails try to lookup a theorem.
     if let some res ← tryAssumptions info args goalIsLet fExpr then return res
