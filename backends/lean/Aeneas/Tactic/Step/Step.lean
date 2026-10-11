@@ -1068,6 +1068,37 @@ meta def evalAGrindWithPreprocess (withGroundSimprocs : Bool) (config : Grind.Co
       Aeneas.Grind.agrindEval config params mvarId
     catch e => trace[Step] "Grind failed:\n{e.toMessageData}"
 
+/-- If the first call of the goal is a call to a local function `f` for which there is an
+assumption `∀ xs, f xs = e` (or `∀ xs, e = f xs`), typically a backward function introduced by a
+previous call (`back = fun x => ...`), rewrite the goal with this assumption so that we can look up
+a specification for `e`. Return `true` if the goal was rewritten. -/
+meta def unfoldLocalFun : TacticM Bool := withMainContext do
+  let some (info, args) ← observing? (getSpecInfoArgs (← instantiateMVars (← getMainTarget)))
+    | return false
+  let prog := args[info.program_index]!
+  let first := (getBindArgs? prog).elim prog Prod.fst
+  let .fvar f := first.consumeMData.getAppFn.consumeMData | return false
+  let isF (e : Expr) := e.consumeMData.getAppFn.consumeMData == .fvar f
+  for decl in ← getLCtx do
+    if decl.isImplementationDetail then continue
+    -- `some symm` if the assumption defines `f` (unconditionally)
+    let symm? ← forallTelescope (← instantiateMVars decl.type) fun xs body => do
+      if ← xs.anyM fun x => do isProp (← inferType x) then return none
+      let some (_, lhs, rhs) := body.consumeMData.eq? | return none
+      if isF lhs && !rhs.containsFVar f then return some false
+      if isF rhs && !lhs.containsFVar f then return some true
+      return none
+    let some symm := symm? | continue
+    trace[Step] "Rewriting the target with {decl.userName} to unfold the local function"
+    let goal ← getMainGoal
+    let r ← goal.rewrite (← goal.getType) decl.toExpr (symm := symm)
+    replaceMainGoal ((← goal.replaceTargetEq r.eNew r.eqProof) :: r.mvarIds)
+    -- Beta-reduce and normalize the binds
+    let _ ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false }
+      {simpThms := #[← stepSimpExt.getTheorems]} (.targets #[] true)
+    return true
+  return false
+
 meta def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option Expr)
   (ids : Array (Option Name)) (idsUserProvided : Bool) (postsBasename : Option Name := none)
   (byTacStx : Option Syntax.Tactic)
@@ -1195,7 +1226,16 @@ meta def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Op
     stepState := if config.threadGrindState then stepState else {},
     byTacSyntax := byTacStx
   }
-  let (goals, usedTheorem) ← stepAsmsOrLookupTheorem args withArg
+  let (goals, usedTheorem) ←
+    try stepAsmsOrLookupTheorem args withArg
+    catch ex =>
+      /- Unfold a local function, but only if the specification we then apply determines all
+         its outputs: otherwise, we stop where we would have stopped without unfolding -/
+      let s ← saveState
+      unless ← unfoldLocalFun do throw ex
+      let r ← try stepAsmsOrLookupTheorem args withArg catch _ => s.restore; throw ex
+      unless r.1.unassignedVars.isEmpty do s.restore; throw ex
+      pure r
   trace[Step] "Step done"
   return ⟨ goals, usedTheorem ⟩
 

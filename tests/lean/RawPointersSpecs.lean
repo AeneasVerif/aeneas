@@ -110,11 +110,8 @@ theorem sum_via_slice.spec (p : ConstRawPtr U8) (len : Usize) (vs : List U8)
   step* 4
   try (case hNotNull => apply RawPtr.notNull_of_pos; simp; scalar_tac)
   try step* 1
-  subst from_raw_parts_back_post
-  rw [vs_post]
-  step*
   subst vs_post
-  simp [*, U8.size, U8.numBits]
+  exact pure_sep_intro _ (by simp [*, U8.size, U8.numBits])
 
 theorem boxed.spec : ⦃ emp ⦄ boxed ⦃ r => ⌜r = 4#u32⌝ ⦄ := by
   unfold boxed

@@ -20,12 +20,8 @@ theorem push_back_empty.spec (node : NonNull Node) (v : Std.U32) (next prev : No
   unfold push_back
   simp only [NonNull.as_ptr_eq]
   step*
-  obtain ⟨n, back⟩ := x
-  simp only at *
-  subst_vars
-  step*
-  simp only [List.mk.injEq, true_and]
-  scalar_tac
+  subst a_post
+  exact pure_sep_intro _ (by simp only [List.mk.injEq, true_and]; scalar_tac)
 
 attribute [local step] RawPtr.eq.spec_self
 
@@ -39,9 +35,6 @@ theorem remove_singleton.spec (node : NonNull Node) (v : Std.U32) :
   step*
   subst_vars
   simp only [Node.next._simpLemma_]
-  step*
-  subst_vars
-  simp only [if_true]
   step*
 
 /-- Two mutable borrows of the same node fail: the first one moved the node out of the heap. -/

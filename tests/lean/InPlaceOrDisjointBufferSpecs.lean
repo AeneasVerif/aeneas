@@ -80,11 +80,7 @@ theorem zero_first_in_place.spec (buf : Slice U8) (h : 0 < buf.length) :
   unfold zero_first_in_place
   step*
   iterate 2 (try (case hNotNull => apply RawPtr.notNull_of_pos; simp_all); try step*)
-  rw [b_post2]
-  step with Slice.end_as_mut_ptr.spec buf b.dst d1.val (by simp [d1_post, d_post])
-  step*
-  refine ⟨by simp [i_post, b1_post, b_post], Slice.ext _ _ ?_⟩
-  simp [buf1_post, d1_post, d_post]
+  exact ⟨by simp [i_post, b1_post, b_post], Slice.ext _ _ (by simp [buf1_post, d1_post, d_post])⟩
 
 theorem copy_first.spec (src dst : Slice U8) (h : src.length = dst.length)
     (h0 : 0 < src.length) :
@@ -92,14 +88,9 @@ theorem copy_first.spec (src dst : Slice U8) (h : src.length = dst.length)
   unfold copy_first
   step*
   iterate 2 (try (case hNotNull => apply RawPtr.notNull_of_pos; simp_all); try step*)
-  rw [src_back_post]
-  step with RawPtr.endBorrowRange.spec b.src src.val
-  step*
   case hNotNull => apply RawPtr.notNull_of_pos; simp [b_post]; scalar_tac
   step*
-  rw [b_post1]
-  step*
-  exact ⟨Slice.ext _ _ s_post, Slice.ext _ _ (by simp_all)⟩
+  exact ⟨Slice.ext _ _ r_post, Slice.ext _ _ (by simp [d_post, s2_post, s1_post, x_post, s_post])⟩
 
 theorem increment_first_in_place.spec (buf : Slice U8) (h : 0 < buf.length) :
     ⦃ emp ⦄ increment_first_in_place buf
@@ -111,13 +102,6 @@ theorem increment_first_in_place.spec (buf : Slice U8) (h : 0 < buf.length) :
   subst b_post1
   step*
   iterate 2 (try (case hNotNull => apply RawPtr.notNull_of_pos; simp_all); try step*)
-  rw [src_back_post]
-  step with RawPtr.endBorrowRange.spec (RawPtr.cast_const dst) buf.val
-  rw [RawPtr.pointsToRange_cast_const]
-  step*
-  iterate 2 (try (case hNotNull => apply RawPtr.notNull_of_pos; simp_all); try step*)
-  rw [b_post2]
-  step with Slice.end_as_mut_ptr.spec buf dst s2.val (by simp [s2_post, s1_post])
   apply Slice.ext
   rw [r_post, s2_post, i_post, x_post, List.getElem_of_eq s_post]
   simp [s1_post]
