@@ -102,6 +102,7 @@ package «tests» {}
 @[default_target] lean_lib Nonnull
 @[default_target] lean_lib NonnullSpecs
 @[default_target] lean_lib OpaqueMutRegion
+@[default_target] lean_lib OpaqueTraitDecl
 @[default_target] lean_lib Options
 @[default_target] lean_lib Order
 @[default_target] lean_lib OverflowingOps
