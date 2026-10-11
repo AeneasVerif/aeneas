@@ -22,3 +22,4 @@ import Aeneas.Tactic.Step.Tests.Membership
 import Aeneas.Tactic.Step.Tests.SplitNegation
 import Aeneas.Tactic.Step.Tests.AnyProgramAssumption
 import Aeneas.Tactic.Step.Tests.StepWithUnfold
+import Aeneas.Tactic.Step.Tests.SubstOutputs

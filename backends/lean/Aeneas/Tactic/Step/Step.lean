@@ -796,6 +796,35 @@ meta def inferPostMainGoal (args : Args) (mainGoal : Option MainGoal) : TacticM 
     let goal ← inferPost mg.goal (eliminate := fun decl => decl.type.isAppOf ``prettyMonadEq)
     pure (some { mg with goal := goal })
 
+/-- Substitute the post-conditions `x = e` (or `e = x`) which define an output `x` of the call
+(option `subst`). -/
+meta def substOutputs (mainGoal : Option MainGoal) : TacticM (Option MainGoal) := do
+  let some mg := mainGoal | return none
+  let mut goal := mg.goal
+  let mut outputs := mg.outputs
+  let mut i := 0
+  while h : i < outputs.size do
+    let post := outputs[i]
+    let vars := outputs.filterMap fun o => if o.isProp then none else some o.fvarId
+    let r? ← goal.withContext do
+      unless post.isProp do return none
+      let some (_, lhs, rhs) := (← instantiateMVars (← post.fvarId.getType)).consumeMData.eq?
+        | return none
+      let isOutput (e : Expr) := e.isFVar && vars.contains e.fvarId!
+      let (var, symm) ← if isOutput lhs then pure (lhs.fvarId!, false)
+        else if isOutput rhs then pure (rhs.fvarId!, true)
+        else return none
+      let some (subst, goal) ← substCore? goal post.fvarId symm | return none
+      return some (var, subst, goal)
+    let some (var, subst, goal') := r? | i := i + 1; continue
+    goal := goal'
+    outputs := (outputs.eraseIdx i).filterMap fun o =>
+      if o.fvarId == var then none
+      else match subst.get o.fvarId with
+        | .fvar fvarId => some { o with fvarId }
+        | _ => none
+  return some { mg with goal, outputs }
+
 meta def stepWith (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr)
   (unfold := false) :
   TacticM Goals := do
@@ -828,6 +857,7 @@ meta def stepWith (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args)
       because by solving the preconditions we may have instantiated meta-variables.
       We also simplify the goal again (to simplify let-bindings, etc.) -/
   let mainGoal ← postprocessMainGoal mainGoal
+  let mainGoal ← if args.config.subst then substOutputs mainGoal else pure mainGoal
   -- Update the grind state with newly introduced hypotheses.
   -- We do this AFTER postprocessMainGoal so that we internalize the simplified
   -- postconditions (not the raw ones that get replaced by simp).

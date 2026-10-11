@@ -99,13 +99,15 @@ structure Config where
       hypothesis. When `false`, hypotheses are added to the e-graph but satellite solvers
       and e-matching (`instantiate`) are not run until discharge time. -/
   preprocessGrind : Bool := false
+  /-- Substitute the post-conditions `x = e` (or `e = x`) which define an output `x` of the call. -/
+  subst : Bool := false
 deriving Repr
 
 def Config.toGrindConfig (cfg : Config) : Grind.Config :=
   let { async := _, assumTac := _, inferGhostVars := _, inferPost := _, scalarTac := _, simpStar := _,
         grind := _, withGroundSimprocs := _, nla := _,
         threadGrindState := _, grindPreprocessIters := _, grindPreprocessSplit := _,
-        preprocessGrind := _,
+        preprocessGrind := _, subst := _,
         splits, ematch, splitMatch, splitIte, splitIndPred, funext, gen, genLocal, instances, canonHeartbeats } := cfg
   { splits, ematch, splitMatch, splitIte, splitIndPred, funext, gen, genLocal, instances, canonHeartbeats }
 
