@@ -145,7 +145,8 @@ meta def esplitIteAtSpec (h : Name) : TacticM (List (FVarId × MVarId)) := do
     setGoals [goal]
     let args : Simp.SimpArgs := {
       hypsToUse := #[h],
-      addSimpThms := #[``Bool.false_eq_true, ``ite_false, ``ite_true, ``dite_true, ``dite_false] }
+      addSimpThms := #[``Bool.false_eq_true, ``not_true_eq_false, ``not_false_eq_true,
+        ``ite_false, ``ite_true, ``dite_true, ``dite_false] }
     match ← Simp.simpAt true {} args (.targets #[] true) with
     | none => pure none
     | some _ => pure (some (h, ← getMainGoal))
