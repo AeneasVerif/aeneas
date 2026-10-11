@@ -948,7 +948,14 @@ def zetaHaveReduce (e : Expr) : MetaM Expr := do
     let .fvar fvarId := e | return .continue
     let some localDecl := (← getLCtx).find? fvarId | return .done e
     let some value := localDecl.value? (allowNondep := true) | return .done e
-    return .visit (← instantiateMVars value)
+    -- Inlining proofs is useless
+    if ← isProp localDecl.type then return .done e
+    /- The value of a `have` introduced by a tactic may mention variables which were eliminated
+       since then (e.g., by `subst`): do not inline it. -/
+    let value ← instantiateMVars value
+    let lctx ← getLCtx
+    if value.hasAnyFVar (!lctx.contains ·) then return .done e
+    return .visit value
   transform e (pre := pre) (usedLetOnly := true)
 
 /-- Normalize the let-bindings by inlining them -/
