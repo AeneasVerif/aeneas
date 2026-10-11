@@ -18,3 +18,4 @@ import Aeneas.Tactic.Step.Tests.HaveValues
 import Aeneas.Tactic.Step.Tests.NestedBinds
 import Aeneas.Tactic.Step.Tests.Joins
 import Aeneas.Tactic.Step.Tests.LocalFunctions
+import Aeneas.Tactic.Step.Tests.Membership

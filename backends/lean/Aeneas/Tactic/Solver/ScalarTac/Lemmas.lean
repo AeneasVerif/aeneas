@@ -27,7 +27,7 @@ instance (x y : IScalar ty) : IsLinearIntProp (x ≥ y) where
 instance (x y : IScalar ty) : IsLinearIntProp (x ≥ y) where
 instance (x y : IScalar ty) : IsLinearIntProp (x = y) where
 
-attribute [scalar_tac_simps] Prod.mk.injEq Membership.mem Int.ofNat_toNat zero_add bne_iff_ne
+attribute [scalar_tac_simps] Prod.mk.injEq Int.ofNat_toNat zero_add bne_iff_ne
 
 local syntax "simp_scalar_consts" : tactic
 local macro_rules
@@ -370,6 +370,11 @@ attribute [scalar_tac_simps, simp_scalar_safe] ReduceZMod.reduceZMod
 /-!
 # Sets
 -/
+/- We only unfold the membership in sets: unfolding `Membership.mem` for all the instances would
+   prevent the solvers from using the lemmas about membership (e.g., `Finset.mem_erase`). -/
+@[scalar_tac_simps] theorem Set.mem_iff_Mem {α} (s : Set α) (a : α) : a ∈ s ↔ Set.Mem s a :=
+  Iff.rfl
+
 attribute [scalar_tac_simps] Set.Mem
 
 @[scalar_tac_simps] theorem Set.mem_insert_nat s x y :
