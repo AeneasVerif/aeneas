@@ -75,7 +75,7 @@ See the examples and state descriptions below for the full specification.
 meta partial def uncurryTelescope (e : Expr) (k : Option FVarTree → Expr → MetaM α) : MetaM α := do
   /- ## State A: Entry
      - `e = uncurry f` or `e = uncurry' f`: go to B(f, ...).
-     - `e = fun x => body`: plain lambda, introduce fvar, call k.
+     - `e = fun x => body`: plain lambda, introduce fvar, go to C(x, body).
      - Otherwise: call k none e. -/
   let e := e.consumeMData
   match_expr e with
@@ -92,7 +92,8 @@ meta partial def uncurryTelescope (e : Expr) (k : Option FVarTree → Expr → M
         if ty.isConstOf ``Unit || ty.isConstOf ``PUnit then
           k none body
         else
-          k (some (.leaf x)) body
+          -- `fun x => let (a, b) := x; body` (the `let` is an applied `uncurry`)
+          decomposeFVar x body fun tree body => k (some tree) body
     else
       k none e
 where

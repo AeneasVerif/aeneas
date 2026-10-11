@@ -75,7 +75,7 @@ attribute [step_simps]
   Std.WP.uncurry'_eq
 
 attribute [step_simps] Aeneas.Std.bind_assoc_eq
-attribute [step_simps] Aeneas.Std.uncurry_apply_pair
+attribute [step_simps] Aeneas.Std.uncurry_apply_pair Aeneas.Std.bind_uncurry
 attribute [step_simps] ite_self -- this is sometimes necessary
 
 /- Builtin simprocs cannot be added to a custom set directly via `attribute`.

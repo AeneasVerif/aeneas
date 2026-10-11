@@ -382,6 +382,13 @@ be directly manipulated by the user. -/
      to `step`. -/
   id rfl
 
+/-- Push a bind inside the destructuring of a tuple. `step` uses it to flatten nested `do`
+blocks: `let x ← (do let (a, b) ← f; g a b); k x`. -/
+theorem bind_uncurry {α β : Type _} {γ δ : Type _} (f : α → β → Result γ) (p : α × β)
+    (k : γ → Result δ) :
+    bind (uncurry f p) k = uncurry (fun a b => bind (f a b) k) p := by
+  cases p; rfl
+
 /- reduction lemmas for `uncurry` restricted to functions whose end
 result is `Prop`. Used by `step` to clean up spec post-conditions that
 arrived as `uncurry p x` but where the call site didn't destructure further.
