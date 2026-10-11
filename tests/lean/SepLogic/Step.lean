@@ -163,4 +163,10 @@ example (p : MutRawPtr Nat) (value : Nat) :
   step with unregisteredHelper.spec
   step*
 
+/- The equations which would make `simp` loop are not used to normalize the entailments -/
+example (p : MutRawPtr Nat) (m : List Nat) (y : Nat)
+    (_ : y = (m ++ [y])[m.length]'(by simp)) :
+    ⦃ p ↦ y ⦄ read p ⦃ r => iprop(⌜r = y⌝ ∗ p ↦ y)⦄ := by
+  step*
+
 end SepLogic.Tests.Step
