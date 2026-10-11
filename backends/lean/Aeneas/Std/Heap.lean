@@ -4,11 +4,16 @@ public import Mathlib.Data.Finmap
 
 /-! Block-based heap: a finite map from allocation ids to blocks. A block records how it was
 allocated (`AllocKind`), the type of its values, one `Cell` per value, and the right to deallocate
-it (`DeallocRight`). An owned cell holds a value, or is uninitialized (`none`). A heap is also a fragment of the memory: fragments combine (`∪`) cell by cell,
+it (`DeallocRight`). An owned cell holds a value, or is uninitialized (`none`). A heap is also a
+fragment of the memory: fragments combine (`∪`) cell by cell,
 so two fragments can own different cells of the same block. Deallocated blocks stay in the map as
 `freed`, so allocation ids are never reused.
 Supports interior pointers, stored pointers, uninitialized memory, provenance by allocation id.
-Not supported: byte-level representation/type punning,
+The byte representation of integers, `bool` and arrays of them (byte cells) is described by
+`Pointee` (see `Core/Ptr.lean`): a value is stored in several cells of a block (whose type is then
+`U8`), and memory can be read at another type with the same cells. Allocation ids tell the
+alignment of the allocations (`freshAllocId`).
+Not supported: byte layouts of structures and enums, the bytes of pointers,
 pointer-integer casts, higher-order store, the byte-level allocator API
 (`std::alloc::alloc`, `Layout`). -/
 
@@ -198,7 +203,9 @@ meta def delabRawPtr : Delab := do
 
 namespace RawPtr
 
-def shift (q : RawPtr T M) (i : Nat) : RawPtr T M :=
+/-- `q` moved `i` cells forward. Pointer arithmetic counts values (`RawPtr.shift`, which moves by
+the number of cells of the pointee): this is for the cells themselves. -/
+@[expose] def shiftCells (q : RawPtr T M) (i : Nat) : RawPtr T M :=
   ⟨q.allocId, q.offset + i⟩
 
 end RawPtr
@@ -286,27 +293,36 @@ def HasKind (h : Heap) (a : AllocId) (kind : AllocKind) : Prop :=
   | some b => b.kind = kind
   | none => False
 
-def freshAllocId (h : Heap) : AllocId :=
-  h.allocs.keys.sup id + 1
+/-- The next allocation identifier, past every one in the heap: allocation is deterministic. Since
+freed blocks stay in the heap, an identifier is never handed out twice.
+
+The identifier also tells how the allocation is aligned: it is an odd multiple of `align`
+(`align` is a power of two, the alignment of the type of the values stored in the allocation), so
+that the largest power of two dividing it is the alignment Rust guarantees for the allocation (see
+`RawPtr.Aligned`). It is never `0`, the allocation of the null pointer. -/
+def freshAllocId (h : Heap) (align : Nat) : AllocId :=
+  max align 1 * (2 * (h.allocs.keys.sup id + 1) + 1)
 
 /-- `h'` is `h` extended with a compatible fragment. -/
 def Subheap (h h' : Heap) : Prop :=
   ∃ rest, Heap.Compatible h rest ∧ h' = h ∪ rest
 
-/-- Creates a fresh block of kind `kind` holding `values` (`none` for an uninitialized cell): fresh
-memory is mutable in Rust. Use `alloc` or `newView`; the lemmas are stated on `allocBlock` and
-apply to both. -/
-def allocBlock (values : List (Option α)) (kind : AllocKind) (h : Heap) : MutRawPtr α × Heap :=
-  (⟨freshAllocId h, 0⟩, h.insert (freshAllocId h) ⟨kind, α, values.map .owned, .freeable⟩)
+/-- Creates a fresh block of kind `kind` holding `values` (`none` for an uninitialized cell),
+aligned to `align`: fresh memory is mutable in Rust. Use `alloc` or `newView`; the lemmas are
+stated on `allocBlock` and apply to both. -/
+def allocBlock (align : Nat) (values : List (Option α)) (kind : AllocKind) (h : Heap) :
+    MutRawPtr α × Heap :=
+  (⟨freshAllocId h align, 0⟩,
+    h.insert (freshAllocId h align) ⟨kind, α, values.map .owned, .freeable⟩)
 
 /-- Allocates `values` with the global allocator (`Box::into_raw`, `Global::allocate`). -/
-abbrev alloc (values : List (Option α)) (h : Heap) : MutRawPtr α × Heap :=
-  allocBlock values .heap h
+abbrev alloc (align : Nat) (values : List (Option α)) (h : Heap) : MutRawPtr α × Heap :=
+  allocBlock align values .heap h
 
 /-- Creates a raw-pointer view of a place that holds `values` (`from_mut`, `as_ptr`,
 `as_mut_ptr`). -/
-abbrev newView (values : List (Option α)) (h : Heap) : MutRawPtr α × Heap :=
-  allocBlock values .view h
+abbrev newView (align : Nat) (values : List (Option α)) (h : Heap) : MutRawPtr α × Heap :=
+  allocBlock align values .view h
 
 /-- `h` owns the cell of `q`, of type `α`, initialized or not. -/
 def IsValid (h : Heap) (q : RawPtr α M) : Prop :=
@@ -370,7 +386,8 @@ def CanDealloc (h : Heap) (q : RawPtr α M) (n : Nat) (kind : AllocKind) : Prop 
   q.offset = 0 ∧
     match h.lookup q.allocId with
     | some b =>
-      b.kind = kind ∧ b.cells.length = n ∧ (∀ i < n, IsLive h (q.shift i)) ∧ b.right = .freeable
+      b.kind = kind ∧ b.cells.length = n ∧ (∀ i < n, IsLive h (q.shiftCells i)) ∧
+        b.right = .freeable
     | _ => False
 
 /-- Frees the block of `q`: it stays in the heap as `freed`, owning none of its cells. Use

@@ -251,9 +251,30 @@ meta def ispecPrepareIntro : PrepareIntroOutputs := do
   prepareIntroOutputsWith goalTy tree simpOutputEquiv
 
 open Lean Elab Tactic in
-/-- Discharge the entailments `step` generates for `ispec` and `dispec`. -/
+/-- Discharge the entailments `step` generates for `ispec` and `dispec`, and the alignment and
+non-nullness preconditions of the raw-pointer specifications (`RawPtr.Aligned`,
+`RawPtr.NotNull`), which `simp` proves from the hypotheses (e.g. the alignment of the pointers
+given by `as_ptr`), or, for `NotNull q n`, from `0 < n`. -/
 public meta def ispec_discharge : DischargeTactic := do
-  evalTactic (← `(tactic| iframe))
+  let ty ← instantiateMVars (← (← getMainGoal).getType)
+  let ty := ty.consumeMData
+  let isAligned := ty.isAppOf `Aeneas.Std.RawPtr.Aligned
+  let isNotNull := ty.isAppOf `Aeneas.Std.RawPtr.NotNull
+  if isAligned || isNotNull then
+    -- The `Pointee` instances of the specification may not be synthesized yet
+    for m in (← Meta.getMVars ty) do
+      if (← Meta.isClass? (← m.getType)).isSome then
+        if let some inst ← (try Meta.synthInstance? (← m.getType) catch _ => pure none) then
+          m.assign inst
+    let ty ← instantiateMVars ty
+    if ty.hasExprMVar then throwError "ispec_discharge: the pointer is not known yet"
+    if isAligned then
+      evalTactic (← `(tactic| first | assumption | simp | simp_all))
+    else
+      evalTactic (← `(tactic| first | assumption | (simp; done) |
+        (apply Aeneas.Std.RawPtr.notNull_of_pos; simp_all <;> omega) | simp_all))
+  else
+    evalTactic (← `(tactic| iframe))
 
 #register_spec_info {
     spec_name := ``Std.WP.ispec
