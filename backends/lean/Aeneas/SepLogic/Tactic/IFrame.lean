@@ -179,6 +179,14 @@ private def frameByMatching (discharger : Option Syntax.Tactic) (goal frameMVar 
   goal.assign (← mkAppM ``entails_trans #[← mkAppM ``entails_trans #[proof, reorder], weaken])
   return true
 
+/-- `e` with its existentials floated out of the `∗` (`sep_exists_l_eq`, `sep_exists_r_eq`), and
+a proof that it entails `e`. -/
+private def floatExists (e : Expr) : MetaM (Expr × Expr) := do
+  let thms ← [``sep_exists_l_eq, ``sep_exists_r_eq].foldlM (·.addConst ·) ({} : SimpTheorems)
+  let ctx ← Simp.mkContext {} (simpTheorems := #[thms])
+  let (r, _) ← Lean.Meta.simp e ctx
+  return (r.expr, ← mkAppM ``entails_of_eq #[← mkEqSymm (← r.getProof)])
+
 mutual
 
 partial def proveWand (discharger : Option Syntax.Tactic)
@@ -202,7 +210,8 @@ partial def solveHimpl (discharger : Option Syntax.Tactic) (goal : MVarId) :
   | none => solveResidual discharger (← cancelGoal goal)
 
 /-- Frame inference for `source ⊢ callee ∗ ?F`: cancel `callee` directly, else after replacing its
-leading `∃`s by witness metavariables, else under the `∃` of `source`. -/
+leading `∃`s by witness metavariables, else under the `∃` of `source`, else after floating the `∃`s
+nested in `callee` out of the `∗` and fixing the witnesses determined by equations. -/
 partial def inferFrame (discharger : Option Syntax.Tactic) (goal frameMVar : MVarId)
     (source destination : Expr) : TacticM Unit := do
   let callee ← reducePostApplication destination.consumeMData.appFn!.appArg!
@@ -212,8 +221,18 @@ partial def inferFrame (discharger : Option Syntax.Tactic) (goal frameMVar : MVa
     let (pre, weakening, witnesses) ← peelRequiredExists callee
     if witnesses.isEmpty then return false
     frameByMatching discharger goal frameMVar source pre weakening witnesses
+  let floated : TacticM Bool := do
+    let (floatedCallee, floatedEntails) ← floatExists callee
+    let (pre, weakening, witnesses) ← peelRequiredExists floatedCallee
+    if witnesses.isEmpty then return false
+    solveWitnessEqs pre witnesses
+    try
+      frameByMatching discharger goal frameMVar source pre
+        (← mkAppM ``entails_trans #[weakening, floatedEntails]) witnesses
+    catch _ => return false
   unless ← commitWhen direct <||> commitWhen peeled <||>
-      commitWhen (frameUnderSourceExists discharger goal frameMVar source callee) do
+      commitWhen (frameUnderSourceExists discharger goal frameMVar source callee) <||>
+      commitWhen floated do
     throwError "required spatial assertions are not present in the precondition\
       \nsource: {source}\ndestination: {destination}"
 
@@ -234,6 +253,13 @@ partial def frameUnderSourceExists (discharger : Option Syntax.Tactic) (goal fra
     return some (← mkLambdaFVars #[x] (← instantiateMVars innerGoal),
       ← mkLambdaFVars #[x] (← instantiateMVars innerFrame))
     | return false
+  if let .lam _ _ frame _ := frameFn then
+    unless frame.hasLooseBVars do
+      -- The frame does not depend on the witness
+      frameMVar.assign frame
+      goal.assign (mkAppN (mkConst ``entails_exists_l [u])
+        #[ι, mkApp2 (mkConst ``sep) callee frame, J, body])
+      return true
   frameMVar.assign (mkApp2 (mkConst ``iexists [u]) ι frameFn)
   goal.assign (mkAppN (mkConst ``entails_exists_frame [u]) #[ι, callee, J, frameFn, body])
   return true

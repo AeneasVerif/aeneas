@@ -169,4 +169,24 @@ example (p : MutRawPtr Nat) (m : List Nat) (y : Nat)
     ⦃ p ↦ y ⦄ read p ⦃ r => iprop(⌜r = y⌝ ∗ p ↦ y)⦄ := by
   step*
 
+def cellOf (p : MutRawPtr Nat) (n : Nat) : IProp := ⌜n = 1⌝ ∗ iexists fun v => p ↦ v ∗ ⌜v = 3⌝
+
+def touch (_ : MutRawPtr Nat) : Result Unit := pure ()
+
+theorem touch.spec (p : MutRawPtr Nat) (n : Nat) :
+    ⦃ cellOf p n ⦄ touch p ⦃ _ => cellOf p n ⦄ := by
+  unfold touch
+  step*
+  subst_vars
+  iframe
+
+/- The frame is inferred when the precondition of the specification has pure facts, and
+existentials to instantiate -/
+example (p q : MutRawPtr Nat) :
+    ⦃ p ↦ 3 ∗ q ↦ 0 ⦄ (do touch p; pure 0 : Result Nat) ⦃ _ => cellOf p 1 ∗ q ↦ 0 ⦄ := by
+  step with touch.spec p 1
+  step*
+  subst_vars
+  iframe
+
 end SepLogic.Tests.Step
