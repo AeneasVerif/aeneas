@@ -908,6 +908,13 @@ where
   for decl in decls.reverse do
     trace[Step] "Trying assumption: {decl.userName} : {decl.type}"
     try
+      /- Skip the assumptions which apply to any program, such as
+         `∀ prog, P → spec prog Q`: they would be used for every call -/
+      let progIsVar ← withNewMCtxDepth do
+        let thTy ← normalizeLetBindings (← instantiateMVars decl.type)
+        let (prog, _) ← getStepSpecFunArgsExpr thTy
+        pure (← instantiateMVars prog).consumeMData.getAppFn.consumeMData.isMVar
+      if progIsVar then continue
       let lifting ← getLiftingForThm info decl.toExpr
       let goal ← stepWith info lifting args isLet fExpr decl.toExpr
       return (some (goal, .localHyp decl))

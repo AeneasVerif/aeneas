@@ -20,3 +20,4 @@ import Aeneas.Tactic.Step.Tests.Joins
 import Aeneas.Tactic.Step.Tests.LocalFunctions
 import Aeneas.Tactic.Step.Tests.Membership
 import Aeneas.Tactic.Step.Tests.SplitNegation
+import Aeneas.Tactic.Step.Tests.AnyProgramAssumption
