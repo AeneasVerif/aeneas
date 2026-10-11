@@ -46,8 +46,8 @@ end Loc
 
 namespace RawPtr
 
-@[simp] theorem loc_shift (q : RawPtr T M) (i : Nat) : (q.shift i).loc = q.loc.shift i := by
-  simp [RawPtr.shift]
+@[simp] theorem loc_shiftCells (q : RawPtr T M) (i : Nat) : (q.shiftCells i).loc = q.loc.shift i := by
+  simp [RawPtr.shiftCells]
 
 end RawPtr
 
@@ -271,27 +271,41 @@ theorem compatible_array_append {α : Type} (l : Loc) (xs ys : List (Option α))
     (congrArg Loc.offset hL).symm.trans (congrArg Loc.offset hR)
   omega
 
-theorem notMem_freshAllocId {h : Heap} {address : Loc}
-    (hBase : address.allocId = freshAllocId h) : address ∉ h := by
+/-- A fresh allocation is aligned (see `freshAllocId`). -/
+theorem dvd_freshAllocId (h : Heap) (align : Nat) : max align 1 ∣ freshAllocId h align :=
+  Dvd.intro _ rfl
+
+/-- The null allocation `0` is never allocated. -/
+theorem freshAllocId_ne_zero (h : Heap) (align : Nat) : freshAllocId h align ≠ 0 := by
+  unfold freshAllocId
+  exact Nat.mul_ne_zero (by omega) (by omega)
+
+theorem notMem_freshAllocId {h : Heap} {align : Nat} {address : Loc}
+    (hBase : address.allocId = freshAllocId h align) : address ∉ h := by
   intro hMem
   have hMemKeys : address ∈ h.keys := Finmap.mem_keys.mpr hMem
-  have hImage : freshAllocId h ∈ h.keys.image Loc.allocId :=
+  have hImage : freshAllocId h align ∈ h.keys.image Loc.allocId :=
     Finset.mem_image.mpr ⟨_, hMemKeys, hBase⟩
-  have hLe : freshAllocId h ≤ (h.keys.image Loc.allocId).sup id :=
+  have hLe : freshAllocId h align ≤ (h.keys.image Loc.allocId).sup id :=
     Finset.le_sup (f := fun a : AllocId => a) hImage
-  have hSucc : (h.keys.image Loc.allocId).sup id + 1 ≤
-      (h.keys.image Loc.allocId).sup id := hLe
-  exact Nat.not_succ_le_self _ hSucc
+  have hGe : 2 * ((h.keys.image Loc.allocId).sup id + 1) + 1 ≤ freshAllocId h align :=
+    Nat.le_mul_of_pos_left _ (by omega)
+  have hContra := Nat.le_trans hGe hLe
+  generalize (h.keys.image Loc.allocId).sup id = s at hContra
+  omega
 
-@[simp] theorem freshLoc_allocId (h : Heap) : (freshLoc h).allocId = freshAllocId h := by
+@[simp] theorem freshLoc_allocId (h : Heap) (align : Nat) :
+    (freshLoc h align).allocId = freshAllocId h align := by
   rw [freshLoc]
 
-@[simp] theorem freshLoc_offset (h : Heap) : (freshLoc h).offset = 0 := by
+@[simp] theorem freshLoc_offset (h : Heap) (align : Nat) : (freshLoc h align).offset = 0 := by
   rw [freshLoc]
 
 /-- A fresh allocation sits next to the heap it was allocated in. -/
-theorem alloc_eq {α : Type} (h : Heap) (values : List (Option α)) (kind : AllocKind) :
-    h.alloc values kind = (⟨freshLoc h⟩, allocation (freshLoc h) values kind ∪ h) := by
+theorem alloc_eq {α : Type} (h : Heap) (align : Nat) (values : List (Option α))
+    (kind : AllocKind) :
+    h.alloc align values kind =
+      (⟨freshLoc h align⟩, allocation (freshLoc h align) values kind ∪ h) := by
   rw [alloc]
 
 /-- An allocation is its cells followed by its end marker. -/
@@ -299,10 +313,11 @@ theorem allocation_eq {α : Type} (l : Loc) (values : List (Option α)) (kind : 
     allocation l values kind = array l values ∪ endMarker (l.shift values.length) kind := by
   rw [allocation]
 
-theorem compatible_freshLoc {α : Type} (h : Heap) (values : List (Option α)) (kind : AllocKind) :
-    PartialCommMonoid.Compatible (allocation (freshLoc h) values kind) h := by
+theorem compatible_freshLoc {α : Type} (h : Heap) (align : Nat) (values : List (Option α))
+    (kind : AllocKind) :
+    PartialCommMonoid.Compatible (allocation (freshLoc h align) values kind) h := by
   intro address hFresh hMem
-  apply notMem_freshAllocId (h := h) _ hMem
+  apply notMem_freshAllocId (h := h) (align := align) _ hMem
   rcases Heap.mem_union.mp hFresh with hRange | hEnd
   · obtain ⟨i, -, rfl⟩ := mem_array.mp hRange
     rfl
@@ -455,6 +470,19 @@ theorem isValid_union_left {α : Type} {h₁ h₂ : Heap} {q : RawPtr α M}
   rw [Heap.lookup_union_left hMem]
   exact hValid
 
+/-- A cell has a single type. -/
+theorem isValid_unique {α β : Type} {h : Heap} {q : RawPtr α M} {r : RawPtr β M'}
+    (hq : IsValid h q) (hr : IsValid h r) (hLoc : q.loc = r.loc) : α = β := by
+  unfold IsValid at hq hr
+  rw [hLoc] at hq
+  split at hq <;> simp_all
+
+/-- Validity depends only on the location and the type of the cell. -/
+theorem isValid_of_loc {α : Type} {h : Heap} {q : RawPtr α M} {r : RawPtr α M'}
+    (hValid : IsValid h q) (hLoc : q.loc = r.loc) : IsValid h r := by
+  unfold IsValid at hValid ⊢
+  rwa [← hLoc]
+
 theorem isLive_union_left {h₁ h₂ : Heap} {l : Loc}
     (hLive : IsLive h₁ l) : IsLive (h₁ ∪ h₂) l := by
   have hMem : l ∈ h₁ := mem_of_isLive hLive
@@ -591,47 +619,51 @@ theorem not_isBorrowed_dealloc {h : Heap} {q : RawPtr α M} {n i : Nat} {kind : 
   simp [IsBorrowed, lookup_dealloc hDealloc hi]
 
 /-- Allocation leaves the slots already in the heap untouched. -/
-theorem isLive_alloc_of_mem {β : Type} {h : Heap} {values : List (Option β)} {kind : AllocKind}
-    {l : Loc} (hMem : l ∈ h) : IsLive (h.alloc values kind).2 l ↔ IsLive h l := by
-  have hNotMem : l ∉ allocation (freshLoc h) values kind :=
-    fun hFresh => compatible_freshLoc h values kind l hFresh hMem
+theorem isLive_alloc_of_mem {β : Type} {h : Heap} {align : Nat} {values : List (Option β)}
+    {kind : AllocKind} {l : Loc} (hMem : l ∈ h) :
+    IsLive (h.alloc align values kind).2 l ↔ IsLive h l := by
+  have hNotMem : l ∉ allocation (freshLoc h align) values kind :=
+    fun hFresh => compatible_freshLoc h align values kind l hFresh hMem
   unfold IsLive
-  rw [show (h.alloc values kind).2.lookup l = h.lookup l from
+  rw [show (h.alloc align values kind).2.lookup l = h.lookup l from
     congrArg (Option.bind · Slot.cell?) (Finmap.lookup_union_right hNotMem)]
 
 /-- The end marker of an allocation is in the heap, so even an empty allocation reserves its id. -/
-theorem mem_alloc_end {α : Type} {kind : AllocKind} (h : Heap) (values : List (Option α)) :
-    (freshLoc h).shift values.length ∈ (h.alloc values kind).2 :=
+theorem mem_alloc_end {α : Type} {kind : AllocKind} (h : Heap) (align : Nat)
+    (values : List (Option α)) :
+    (freshLoc h align).shift values.length ∈ (h.alloc align values kind).2 :=
   Heap.mem_union.mpr (Or.inl (Heap.mem_union.mpr (Or.inr (mem_endMarker.mpr rfl))))
 
-private theorem lookup_alloc_end {α : Type} (h : Heap) (values : List (Option α)) (kind : AllocKind) :
-    (h.alloc values kind).2.impl.lookup ((freshLoc h).shift values.length) =
+private theorem lookup_alloc_end {α : Type} (h : Heap) (align : Nat) (values : List (Option α))
+    (kind : AllocKind) :
+    (h.alloc align values kind).2.impl.lookup ((freshLoc h align).shift values.length) =
       some (.endMarker kind) := by
   have hNotRange :
-      (freshLoc h).shift values.length ∉ (array (freshLoc h) values).impl := by
+      (freshLoc h align).shift values.length ∉ (array (freshLoc h align) values).impl := by
     intro hRange
     obtain ⟨i, hi, hEq⟩ := mem_array.mp hRange
     have hOffset := congrArg Loc.offset hEq
     simp only [Loc.offset_shift] at hOffset
     omega
-  have hEnd : (freshLoc h).shift values.length ∈
-      (endMarker ((freshLoc h).shift values.length) kind).impl :=
+  have hEnd : (freshLoc h align).shift values.length ∈
+      (endMarker ((freshLoc h align).shift values.length) kind).impl :=
     mem_endMarker.mpr rfl
-  show Finmap.lookup _ (((array (freshLoc h) values).impl ∪
-    (endMarker ((freshLoc h).shift values.length) kind).impl) ∪ h.impl) = _
+  show Finmap.lookup _ (((array (freshLoc h align) values).impl ∪
+    (endMarker ((freshLoc h align).shift values.length) kind).impl) ∪ h.impl) = _
   rw [Finmap.lookup_union_left (Finmap.mem_union.mpr (Or.inr hEnd)),
     Finmap.lookup_union_right hNotRange]
   simp [endMarker]
 
 /-- The end marker of a fresh allocation holds no value. -/
-theorem not_isLive_alloc_end {β : Type} {kind : AllocKind} (h : Heap) (values : List (Option β)) :
-    ¬ IsLive (h.alloc values kind).2 ((freshLoc h).shift values.length) := by
+theorem not_isLive_alloc_end {β : Type} {kind : AllocKind} (h : Heap) (align : Nat)
+    (values : List (Option β)) :
+    ¬ IsLive (h.alloc align values kind).2 ((freshLoc h align).shift values.length) := by
   simp [IsLive, Heap.lookup, lookup_alloc_end, Slot.cell?]
 
 /-- The end marker of a fresh allocation records the kind of the allocation. -/
-theorem isEndMarker_alloc_end_iff {α : Type} (h : Heap) (values : List (Option α))
+theorem isEndMarker_alloc_end_iff {α : Type} (h : Heap) (align : Nat) (values : List (Option α))
     (kind kind' : AllocKind) :
-    IsEndMarker (h.alloc values kind).2 ((freshLoc h).shift values.length) kind' ↔
+    IsEndMarker (h.alloc align values kind).2 ((freshLoc h align).shift values.length) kind' ↔
       kind = kind' := by
   simp [IsEndMarker, lookup_alloc_end]
 
@@ -707,12 +739,30 @@ theorem isLive_array {α : Type} {l : Loc} {values : List (Option α)} {i : Nat}
         show l.shift (j + 1) = (l.shift 1).shift j by rw [Loc.shift_shift, Nat.add_comm]]
       exact isLive_union_left (ih (by simpa using hIndex))
 
+/-- The cells of an array have the type of its values. -/
+theorem isValid_array {α : Type} {l : Loc} {values : List (Option α)} {i : Nat}
+    (hIndex : i < values.length) : IsValid (array l values) (⟨l.shift i⟩ : MutRawPtr α) := by
+  induction values generalizing l i with
+  | nil => simp at hIndex
+  | cons value rest ih =>
+    rw [array_cons]
+    cases i with
+    | zero => exact isValid_union_left (by simpa using isValid_cell (⟨l⟩ : MutRawPtr α) value)
+    | succ j =>
+      have hCompatible : PartialCommMonoid.Compatible (cell (⟨l⟩ : MutRawPtr α) value)
+          (array (l.shift 1) rest) := by
+        have hAppend := compatible_array_append l [value] rest
+        rwa [array_singleton] at hAppend
+      rw [PartialCommMonoid.union_comm_of_compatible hCompatible,
+        show l.shift (j + 1) = (l.shift 1).shift j by rw [Loc.shift_shift, Nat.add_comm]]
+      exact isValid_union_left (ih (by simpa using hIndex))
+
 /-- The values of a fresh allocation are live. -/
-theorem isLive_alloc {α : Type} {h : Heap} {values : List (Option α)} {kind : AllocKind} {i : Nat}
-    (hIndex : i < values.length) :
-    IsLive (h.alloc values kind).2 ((freshLoc h).shift i) :=
+theorem isLive_alloc {α : Type} {h : Heap} {align : Nat} {values : List (Option α)}
+    {kind : AllocKind} {i : Nat} (hIndex : i < values.length) :
+    IsLive (h.alloc align values kind).2 ((freshLoc h align).shift i) :=
   Subheap.isLive ((Subheap.union_left (compatible_array_endMarker _ _ _)).trans
-    (Subheap.union_left (compatible_freshLoc _ _ _))) (isLive_array hIndex)
+    (Subheap.union_left (compatible_freshLoc _ _ _ _))) (isLive_array hIndex)
 
 theorem read_of_subheap {α : Type} {q : RawPtr α M} {value : Option α} {h : Heap}
     (hSub : Heap.Subheap (cell q value) h)

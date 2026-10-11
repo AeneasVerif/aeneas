@@ -13,6 +13,7 @@ public import Aeneas.Std.Core.Fmt
 public import Aeneas.Std.Core.FmtWithSlice
 public import Aeneas.Std.Core.Hash
 public import Aeneas.Std.Core.Iter
+public import Aeneas.Std.Core.ManuallyDrop
 public import Aeneas.Std.Core.Marker
 public import Aeneas.Std.Core.MaybeUninit
 public import Aeneas.Std.Core.NonNull
