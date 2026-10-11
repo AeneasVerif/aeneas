@@ -6,6 +6,72 @@ open Lean Meta Elab Tactic
 
 namespace Aeneas
 
+/-- The program to split in a goal `spec program post`: the program itself, or the first
+computation if it is a bind (as in `let i ← if c then ok 1 else ok 0; k i`). -/
+meta def getSpecSplitProgram (tgt : Expr) : MetaM Expr := do
+  let prog ← Step.getSpecProgram tgt
+  match Step.getBindArgs? prog with
+  | some (m, _) => pure m.consumeMData
+  | none => pure prog
+
+/-- `(match x with | p₁ => ok a₁ | ...) = ok (match x with | p₁ => a₁ | ...)`: see
+`liftValueBranching`. The values must not depend on the variables bound by the patterns: we
+would otherwise lose the information that splitting gives (e.g., `some v => ok (.cont v)`). -/
+meta def liftValueMatch (e α : Expr) (value? : Expr → Nat → MetaM (Option Expr)) :
+    MetaM (Option (Expr × Expr)) := do
+  let some ma ← matchMatcherApp? e | return none
+  let some uPos := ma.uElimPos? | return none
+  unless ma.remaining.isEmpty do return none
+  -- The motive must not depend on the discriminants
+  let ty ← inferType e
+  let some motive ← lambdaBoundedTelescope ma.motive ma.discrs.size fun xs body => do
+      if body.consumeMData == ty.consumeMData then return some (← mkLambdaFVars xs α)
+      else return none
+    | return none
+  let mut alts := #[]
+  for alt in ma.alts, numParams in ma.altNumParams do
+    let some alt ← value? alt numParams | return none
+    if (numParams.fold (fun _ _ e => e.bindingBody!) alt).hasLooseBVars then return none
+    alts := alts.push alt
+  let matcherLevels := ma.matcherLevels.set! uPos (← getLevel α)
+  let lifted := { ma with motive, alts, matcherLevels }.toExpr
+  let proof ← mkFreshExprMVar (← mkEq e (← mkAppM ``Std.Result.ok #[lifted]))
+  for goal in ← Split.splitMatch proof.mvarId! e do goal.refl
+  return some (lifted, ← instantiateMVars proof)
+
+/-- If all the branches of the branching `e` are values, return `v` and a proof of `e = ok v`:
+`(if c then ok a else ok b) = ok (if c then a else b)`, and likewise for `dite` and the matches. -/
+meta def liftValueBranching (e : Expr) : MetaM (Option (Expr × Expr)) := do
+  let e := e.consumeMData
+  let_expr Std.Result α := (← inferType e).consumeMData | return none
+  -- The value of a branch `fun xs => ok v`
+  let value? (br : Expr) (n : Nat) : MetaM (Option Expr) :=
+    lambdaBoundedTelescope br n fun xs body => do
+      let_expr Std.Result.ok _ v := body.consumeMData | return none
+      return some (← mkLambdaFVars xs v)
+  match_expr e with
+  | ite _ c inst t f =>
+    let some a ← value? t 0 | return none
+    let some b ← value? f 0 | return none
+    return some (mkApp5 (.const ``ite [← getLevel α]) α c inst a b,
+      ← mkAppOptM ``Std.ite_ok #[α, c, inst, a, b])
+  | dite _ c inst t f =>
+    let some a ← value? t 1 | return none
+    let some b ← value? f 1 | return none
+    return some (mkApp5 (.const ``dite [← getLevel α]) α c inst a b,
+      ← mkAppOptM ``Std.dite_ok #[α, c, inst, a, b])
+  | _ => liftValueMatch e α value?
+
+/-- Lift a join whose branches are values out of the monad:
+`(let y ← if c then ok a else ok b; k y) = k (if c then a else b)`, and likewise for `dite` and
+the matches. `step*` uses it rather than splitting such joins, which would duplicate `k`. -/
+simproc_decl liftValueJoin (_) := fun e => do
+  let some (m, k) := Step.getBindArgs? e | return .continue
+  let some (v, h) ← (try liftValueBranching m catch _ => pure none) | return .continue
+  let bind := e.consumeMData.appFn!.appFn!
+  return .visit { expr := mkApp2 bind (← mkAppM ``Std.Result.ok #[v]) k,
+                  proof? := some (← mkCongrFun (← mkCongrArg bind h) k) }
+
 /-- Given a goal of the shape `spec (match ... with ...) post`, perform a case split
 and introduce an equality. -/
 meta def esplitMatchAtSpec (h : Name) (names : Option (List (List (Option Name)))) :
@@ -13,7 +79,7 @@ meta def esplitMatchAtSpec (h : Name) (names : Option (List (List (Option Name))
   withTraceNode `Utils (fun _ => do pure m!"esplitMatchAtSpec") do
   focus do withMainContext do
   let tgt ← getMainTarget
-  let prog ← Step.getSpecProgram tgt
+  let prog ← getSpecSplitProgram tgt
   -- Check that we have a matcher
   let some ma ← Meta.matchMatcherApp? prog (alsoCasesOn := true)
     | throwError "not a matcher: {prog}"
@@ -56,7 +122,7 @@ theorem dite_false : (dite False t e) = e (by simp) := by simp
 meta def esplitIteAtSpec (h : Name) : TacticM (List (FVarId × MVarId)) := do
   focus do withMainContext do
   let tgt ← getMainTarget
-  let prog ← Step.getSpecProgram tgt
+  let prog ← getSpecSplitProgram tgt
   -- Check that we have an if then else
   prog.withApp fun ite? args => do
   trace[Utils] "ite?: {ite?}, args: {args}"
@@ -131,7 +197,7 @@ meta def esplitAtSpec (h : Name) (names : Option (List (List (Option Name)))) : 
   withTraceNode `Utils (fun _ => do pure m!"esplitAtSpec") do
   focus do withMainContext do
   let tgt ← getMainTarget
-  let prog ← Step.getSpecProgram tgt
+  let prog ← getSpecSplitProgram tgt
   -- Check whether we have a matcher
   let ma ← Meta.matchMatcherApp? prog (alsoCasesOn := true)
   if ma.isSome
@@ -378,6 +444,8 @@ meta partial def Script.toSyntax (script : Script) : MetaM (Array Syntax.Tactic)
 inductive TargetKind where
 | bind (names : Array (Option Name))
 | switch (info : Bifurcation.Info)
+/-- A join whose branches are all values: `let y ← if c then ok a else ok b; k y` -/
+| valueJoin (info : Bifurcation.Info)
 | result
 | unknown
 
@@ -395,8 +463,15 @@ meta def analyzeTarget : TacticM TargetKind := do
     -- Check whether this is a bind
     if e.getAppFn.isConstOf ``Bind.bind || e.getAppFn.isConstOf ``Std.bind then
       let arity : Nat := if e.getAppFn.isConstOf ``Bind.bind then 6 else 4
-      let some (_, cont) := Step.getBindArgs? e
+      let some (m, cont) := Step.getBindArgs? e
         | throwError "Expected bind to have {arity} arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
+      /- The first computation may be a branching (`let i ← if c then ok 1 else ok 0; k i`).
+         If its branches are values we lift it (`liftValueJoin`), as splitting it duplicates the
+         continuation (the number of branches grows exponentially with the number of such
+         joins). Otherwise we split it. -/
+      if let some bfInfo ← Bifurcation.Info.ofExpr m then
+        let lifted ← try (·.isSome) <$> liftValueBranching m catch _ => pure false
+        return if lifted then .valueJoin bfInfo else .switch bfInfo
       let names ← Step.getPostNames cont
       pure (.bind names)
     else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
@@ -481,6 +556,21 @@ where
     let goal ← do if r.isSome then pure (some (← getMainGoal)) else pure none
     pure (info, goal)
 
+  /- Lift the join whose branches are values at the head of the program (`liftValueJoin`).
+     Return `none` if this does not change the goal. -/
+  onValueJoin : TacticM (Option Info) := do
+    withTraceNode `Step (fun _ => do pure m!"onValueJoin") do
+    let mvarId0 ← getMainGoal
+    let r ← Simp.simpAt (simpOnly := true)
+      { maxDischargeDepth := 1, failIfUnchanged := false}
+      {simpThms := #[← Step.stepSimpExt.getTheorems], addSimprocs := #[``liftValueJoin]}
+      (.targets #[] true)
+    if r.isSome && (← getMainGoal) == mvarId0 then return none
+    let stepSimps ← `(Parser.Tactic.simpLemma| $(mkIdent `step_simps):term)
+    let lift ← `(Parser.Tactic.simpLemma| $(mkIdent ``liftValueJoin):term)
+    let tac ← `(tactic|simp only [$stepSimps, $lift])
+    return some ⟨ .tacs #[TaskOrDone.mk (some tac)], #[], #[] ⟩
+
   traverseProgram (cfg : Config) (fuel : Option Nat) (ss : Step.StepState) : TacticM Info := do
     withMainContext do
     withTraceNode `Step (fun _ => do pure m!"traverseProgram") do
@@ -493,6 +583,10 @@ where
         if fuel = 0 then return { script := .tacs #[], unassignedVars := #[], subgoals := #[(← getMainGoal, none)] }
         else pure (some (fuel - 1))
     let targetKind ← analyzeTarget
+    if let .valueJoin _ := targetKind then
+      if let some info ← onValueJoin then
+        if (← getGoals).isEmpty then return info
+        return info ++ (← traverseProgram cfg fuel ss)
     match targetKind with
     | .bind names => do
       let (info, mainGoalAndState) ← onBind cfg names ss
@@ -524,7 +618,7 @@ where
               unassignedVars := #[],
               subgoals := #[(mainGoal, none)] }
           pure (info ++ info')
-    | .switch bfInfo => do
+    | .switch bfInfo | .valueJoin bfInfo => do
       let contsTaggedVals ←
         bfInfo.branches.mapM fun br => do
           Utils.lambdaTelescopeN br.toExpr br.numArgs fun xs _ => do

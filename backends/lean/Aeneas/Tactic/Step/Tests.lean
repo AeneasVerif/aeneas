@@ -16,3 +16,4 @@ import Aeneas.Tactic.Step.Tests.DspecInduction
 import Aeneas.Tactic.Step.Tests.IntroOutputsRecursion
 import Aeneas.Tactic.Step.Tests.HaveValues
 import Aeneas.Tactic.Step.Tests.NestedBinds
+import Aeneas.Tactic.Step.Tests.Joins

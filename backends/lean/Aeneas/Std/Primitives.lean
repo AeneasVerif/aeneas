@@ -331,6 +331,17 @@ theorem pure_tc_eq {α : Type u} (x : α) : (pure x : Result α) = .ok x := rfl
   (Bind.bind (Bind.bind e g) h) =
   (Bind.bind e (λ x => Bind.bind (g x) h)) := Std.bind_assoc e g h
 
+/-! Lift the branchings whose branches are values: `step*` uses them (see `liftValueJoin`) on the
+joins `let y ← if c then ok a else ok b; k y`, which it would otherwise split, duplicating `k`. -/
+
+theorem ite_ok {α : Type u} (c : Prop) [Decidable c] (a b : α) :
+    (if c then ok a else ok b) = ok (if c then a else b) := by
+  split <;> rfl
+
+theorem dite_ok {α : Type u} (c : Prop) [Decidable c] (a : c → α) (b : ¬ c → α) :
+    (if h : c then ok (a h) else ok (b h)) = ok (if h : c then a h else b h) := by
+  split <;> rfl
+
 end
 
 unseal Result
