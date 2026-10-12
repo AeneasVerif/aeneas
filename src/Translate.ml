@@ -1016,12 +1016,18 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     <> None
   in
 
+  (* We ignore the anonymous constants (i.e., the promoted constants): the
+     reads of those constants are replaced with calls to their initializers
+     (see [PrePasses.anon_consts_to_calls]), which are then inlined (see
+     [PureMicroPassesGeneral.inline_anon_const_initializers]) *)
+  let is_anon_const = LlbcAstUtils.global_decl_is_anon_const global in
+
   (* Check if we extract the global itself *)
   let extract =
     config.extract_globals
     && (((not is_opaque) && config.extract_transparent)
        || (is_opaque && config.extract_opaque))
-    && not is_builtin
+    && (not is_builtin) && not is_anon_const
   in
   if extract then (
     (* We don't wrap global declaration groups between calls to functions

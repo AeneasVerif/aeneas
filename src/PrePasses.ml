@@ -2345,14 +2345,240 @@ let fix_closure_signature_regions (crate : crate) (f : fun_decl) : fun_decl =
       else f
   | _ -> f
 
+(** Replace the reads of anonymous constants (i.e., the promoted constants) with
+    calls to their initializers. Ex.:
+
+    {[
+      // Before
+      x := copy { promoted_const }
+
+          ~~>
+
+      // After
+      tmp := promoted_const ();
+      x := move tmp
+    ]}
+
+    We need to introduce an auxiliary variable (rather than directly
+    transforming the above statement into [x := promoted_const ()]) because the
+    anonymous constant may appear anywhere in the statement, and in particular
+    inside an arbitrary place. For instance, we may have to read a field of the
+    constant through a dereference, like in [x := copy (( *promoted_const).f)]:
+    we then generate:
+    {[
+      tmp := promoted_const ();
+      x := copy (( *tmp).f)
+    ]}
+
+    This transformation is valid because the initializers of the anonymous
+    constants are not allowed to have side effects: evaluating the initializer
+    at the place where the constant is read (possibly several times) is thus
+    equivalent to reading a value which was computed once and for all.
+
+    We preserve the global declarations of the anonymous constants: we simply
+    ignore them at extraction time (the calls to their initializers are later
+    inlined, see [PureMicroPassesGeneral.inline_anon_const_initializers]).
+
+    Remark: the new statements all have the id 0: this pass requires to refresh
+    the ids later. *)
+let anon_consts_to_calls (crate : crate) : crate =
+  (* Retrieve the anonymous constants and their initializers *)
+  let anon_consts =
+    GlobalDeclId.Map.filter_map
+      (fun _ (g : global_decl) ->
+        match g.global_kind with
+        | AnonConst -> Charon.GAstUtils.init_fun_id_of_global g
+        | _ -> None)
+      crate.global_decls
+  in
+  let update_fun (f : fun_decl) : fun_decl =
+    match f.body with
+    | StructuredBody body ->
+        let new_locals = ref [] in
+        let _, gen =
+          LocalId.mk_stateful_generator_starting_at_id
+            (LocalId.of_int (List.length body.locals.locals))
+        in
+        let fresh_local ty =
+          let local =
+            {
+              index = gen ();
+              local_ty = ty;
+              name = None;
+              span = f.item_meta.span;
+              drop_flag_for = None;
+            }
+          in
+          new_locals := local :: !new_locals;
+          local.index
+        in
+        let update_statement (st : statement) : statement list =
+          let span = st.span in
+          let new_statements = ref [] in
+          (* Introduce a call to the initializer of the anonymous constant, if
+             the global is one *)
+          let call_initializer (gref : global_decl_ref) (ty : ty) : place option
+              =
+            match GlobalDeclId.Map.find_opt gref.id anon_consts with
+            | Some init_id ->
+                let dest = { kind = PlaceLocal (fresh_local ty); ty } in
+                let call =
+                  {
+                    func =
+                      FnOpRegular
+                        { kind = Fun init_id; generics = gref.generics };
+                    args = [];
+                    dest;
+                    safety = Inherit;
+                  }
+                in
+                let on_unwind =
+                  { span; block_id = BlockId.zero; statements = [] }
+                in
+                new_statements :=
+                  {
+                    span;
+                    statement_id = StatementId.zero;
+                    kind = Call (call, on_unwind);
+                    comments_before = [];
+                  }
+                  :: !new_statements;
+                Some dest
+            | None -> None
+          in
+          let visitor =
+            object
+              inherit [_] map_statement as super
+
+              (* The nested statements are handled by [map_statement] *)
+              method! visit_block _ b = b
+
+              method! visit_Constant env (cv : constant_expr) =
+                match cv.kind with
+                | CGlobal gref -> (
+                    match call_initializer gref cv.ty with
+                    | Some dest -> Move dest
+                    | None -> super#visit_Constant env cv)
+                | _ -> super#visit_Constant env cv
+
+              method! visit_place env (p : place) =
+                match p.kind with
+                | PlaceGlobal gref -> (
+                    match call_initializer gref p.ty with
+                    | Some dest -> dest
+                    | None -> super#visit_place env p)
+                | _ -> super#visit_place env p
+            end
+          in
+          let st = visitor#visit_statement () st in
+          List.rev (st :: !new_statements)
+        in
+        let body_body = map_statement update_statement body.body in
+        let body =
+          StructuredBody
+            {
+              body with
+              body = body_body;
+              locals =
+                {
+                  body.locals with
+                  locals = body.locals.locals @ List.rev !new_locals;
+                };
+            }
+        in
+        { f with body }
+    | _ -> f
+  in
+  { crate with fun_decls = FunDeclId.Map.map update_fun crate.fun_decls }
+
+(** The anonymous constants (i.e., the promoted constants) are replaced with
+    calls to their initializers by [anon_consts_to_calls]. The output type of
+    those initializers contains erased regions: we replace them with fresh
+    region parameters (and update the call sites accordingly) so that we can
+    treat them like normal function calls. *)
+let fix_anon_const_initializers (crate : crate) (f : fun_decl) : fun_decl =
+  let is_anon_const_initializer =
+    fun_decl_is_anon_const_initializer crate.global_decls
+  in
+  (* Count the erased regions in the output of a function *)
+  let count_erased (ty : ty) : int =
+    let n = ref 0 in
+    let visitor =
+      object
+        inherit [_] iter_ty
+        method! visit_RErased _ = incr n
+      end
+    in
+    visitor#visit_ty () ty;
+    !n
+  in
+  (* Update the calls to the anonymous constant initializers *)
+  let visitor =
+    object
+      inherit [_] map_statement as super
+
+      method! visit_fn_ptr env (fn_ptr : fn_ptr) =
+        match fn_ptr.kind with
+        | Fun fid -> (
+            match FunDeclId.Map.find_opt fid crate.fun_decls with
+            | Some callee when is_anon_const_initializer callee ->
+                let n = count_erased callee.signature.output in
+                let regions =
+                  fn_ptr.generics.regions @ List.init n (fun _ -> RErased)
+                in
+                { fn_ptr with generics = { fn_ptr.generics with regions } }
+            | _ -> super#visit_fn_ptr env fn_ptr)
+        | _ -> super#visit_fn_ptr env fn_ptr
+    end
+  in
+  let body =
+    match f.body with
+    | StructuredBody body ->
+        StructuredBody { body with body = visitor#visit_block () body.body }
+    | body -> body
+  in
+  let f = { f with body } in
+  (* Update the signature *)
+  if is_anon_const_initializer f then
+    let new_regions = ref [] in
+    let next_index =
+      ref
+        (List.fold_left
+           (fun n (rp : region_param) -> max n (RegionId.to_int rp.index + 1))
+           0 f.generics.regions)
+    in
+    let visitor =
+      object
+        inherit [_] map_ty
+
+        method! visit_RErased _ =
+          let index = RegionId.of_int !next_index in
+          incr next_index;
+          new_regions :=
+            { index; name = None; variance = VaUnknown; mutability = LtUnknown }
+            :: !new_regions;
+          RVar (Free index)
+      end
+    in
+    let output = visitor#visit_ty () f.signature.output in
+    let regions = f.generics.regions @ List.rev !new_regions in
+    {
+      f with
+      signature = { f.signature with output };
+      generics = { f.generics with regions };
+    }
+  else f
+
 let apply_passes (crate : crate) : crate =
   (* Passes that apply to the whole crate *)
   let crate = update_array_default crate in
+  let crate = anon_consts_to_calls crate in
   (* Passes that apply to individual function bodies *)
   let function_passes =
     [
       ("fix_closure_lifetimes", fix_closure_lifetimes);
       ("fix_closure_signature_regions", fix_closure_signature_regions);
+      ("fix_anon_const_initializers", fix_anon_const_initializers);
       ("erase_body_regions", erase_body_regions);
       ("remove_unreachable", remove_unreachable);
       ("update_loop", update_loops);

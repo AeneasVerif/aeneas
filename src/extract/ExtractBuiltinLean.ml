@@ -389,6 +389,8 @@ let lean_builtin_funs =
     mk_fun
       "core::array::{core::ops::index::IndexMut<[@T; @N], @I, @O>}::index_mut"
       "core.array.Array.index_mut";
+    (* file: "Aeneas/Std/Core/CoreOption.lean", line: 122 *)
+    mk_fun "core::bool::{bool}::then" "core.bool.Bool.then";
     (* file: "Aeneas/Std/Core/Core.lean", line: 136 *)
     mk_fun "core::clone::impls::{core::clone::Clone<&'0 @T>}::clone"
       "core.clone.impls.CloneShared.clone";
@@ -1027,7 +1029,7 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Iter.lean", line: 643 *)
     mk_fun "core::ops::range::{core::ops::range::RangeInclusive<@Idx>}::new"
       "core.ops.range.RangeInclusive.new";
-    (* file: "Aeneas/Std/Core/CoreOption.lean", line: 13 *)
+    (* file: "Aeneas/Std/Core/CoreOption.lean", line: 14 *)
     mk_fun "core::option::{core::option::Option<@T>}::expect"
       "core.option.Option.expect";
     (* file: "Aeneas/Std/Core/Core.lean", line: 119 *)
@@ -1036,7 +1038,13 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Core.lean", line: 123 *)
     mk_fun "core::option::{core::option::Option<@T>}::is_some"
       "core.option.Option.is_some" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Core/CoreOption.lean", line: 23 *)
+    (* file: "Aeneas/Std/Core/CoreOption.lean", line: 84 *)
+    mk_fun "core::option::{core::option::Option<@T>}::is_some_and"
+      "core.option.Option.is_some_and";
+    (* file: "Aeneas/Std/Core/CoreOption.lean", line: 41 *)
+    mk_fun "core::option::{core::option::Option<@T>}::map"
+      "core.option.Option.map";
+    (* file: "Aeneas/Std/Core/CoreOption.lean", line: 24 *)
     mk_fun "core::option::{core::option::Option<@T>}::ok_or"
       "core.option.Option.ok_or";
     (* file: "Aeneas/Std/Core/Core.lean", line: 116 *)
@@ -1064,12 +1072,15 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Convert.lean", line: 81 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::is_ok"
       "core.result.Result.is_ok";
-    (* file: "Aeneas/Std/Core/CoreResult.lean", line: 13 *)
+    (* file: "Aeneas/Std/Core/CoreResult.lean", line: 14 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::map_err"
       "core.result.Result.map_err";
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 22 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::unwrap"
       "core.result.Result.unwrap";
+    (* file: "Aeneas/Std/Core/CoreResult.lean", line: 41 *)
+    mk_fun "core::result::{core::result::Result<@T, @E>}::unwrap_or"
+      "core.result.Result.unwrap_or" ~can_fail:false;
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 156 *)
     mk_fun "core::slice::cmp::{core::cmp::PartialEq<[@T], [@U]>}::eq"
       "core.slice.cmp.PartialEqSlice.eq";

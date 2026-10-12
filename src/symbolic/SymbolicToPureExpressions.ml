@@ -215,6 +215,7 @@ let compute_back_fun_name (ctx : bs_ctx) (decl : LlbcAst.fun_decl) : string =
       match Collections.List.last name with
       | PeIdent (s, _) -> s
       | PeImpl _ -> "impl"
+      | PeBuiltin (b, _) -> TypesUtils.builtin_path_elem_ident b
       | _ ->
           (* We shouldn't get there *)
           [%craise] decl.item_meta.span "Unexpected")

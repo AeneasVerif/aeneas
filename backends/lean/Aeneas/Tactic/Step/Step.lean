@@ -212,7 +212,8 @@ structure Args where
       doesn't provide explicit names via `as ⟨...⟩`. -/
   postsBasename : Option Name := none
   /-- Tactic to use to prove preconditions while instantiating meta-variables by
-     matching these preconditions with the assumptions in the context. -/
+     matching these preconditions with the assumptions in the context.
+     We compute it once, because `singleAssumptionTac` needs to preprocess the context. -/
   assumTac : Option (TacticM Unit)
   /- Tactic to use to solve the preconditions.
      Takes an optional `StepGrindState` that is used when threading the grind state. -/
@@ -644,33 +645,53 @@ meta def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState 
 
   pure (some { goal := ← getMainGoal, outputs := introducedVars, stepState })
 
+/-- The tactic used in the first phase of `trySolvePreconditions`: it attempts to solve a precondition
+    with the registered discharge tactic, and, if that does not solve it, with the assumption
+    tactic (`Args.assumTac`). -/
+meta def firstPhaseTac (info : SpecInfo) (args : Args) : Option (TacticM Unit) :=
+  let dischargeTac := info.discharge_tactic.map fun name =>
+    withTraceNode `Step (fun _ => pure m!"Attempting to solve with the discharge tactic: `{name}`") do
+    (← evalDischargeTactic name)
+  match dischargeTac.toList ++ args.assumTac.toList with
+  | [] => none
+  | tacs => some (firstTacSolve tacs)
+
 /-- Attempt to solve the preconditions.
 
-    We do this in several phases:
-    - we first use the "assumption" tactic to instantiate as many meta-variables as possible,
-      and we do so by starting with the preconditions with the highest number of meta-variables
-      (this is a way of avoiding spurious instantiations). This helps with the second phase.
-    - we then use the other tactic on the preconditions
+    We proceed in two phases:
+    - We sort the preconditions by decreasing number of meta-variables
+      (this is a way of avoiding spurious instantiations).
+      We attempt to solve each precondition with the registered discharge tactic (if there is one),
+      and, if that does not solve it, with the assumption tactic (`singleAssumptionTac`).
+      If the precondition is not solved, then any changes are reverted. After the first phase, the remaining
+      preconditions should not contain meta-variables anymore because they got instantiated
+      by solving the other preconditions: this is necessary for the second phase, whose tactics
+      are not supposed to instantiate meta-variables.
+    - In the second phase, we use `solvePreconditionTac` (`simp`, `grind`, `scalar_tac`,
+      or the user-provided tactic) on the remaining preconditions, in their original order.
  -/
-meta def trySolvePreconditions (args : Args) (config : Config)
+meta def trySolvePreconditions (info : SpecInfo) (args : Args) (config : Config)
     (originalGoal : MVarId) (stepState : StepState)
     (solvePreconditionTac : Option StepGrindState → TacticM Unit)
     (newPropGoals : List MVarId)
     : TacticM (StepState × List (MVarId × OptTask (Option Expr))) := do
   withTraceNode `Step (fun _ => pure m!"trySolvePreconditions") do
+  /- **Phase 1**: discharge tactic and assumption tactic -/
   let ordPropGoals ←
     newPropGoals.mapM (fun g => do
       let ty ← g.getType
       pure ((← Utils.getMVarIds ty).size, g))
   let ordPropGoals := (ordPropGoals.mergeSort (fun (mvars0, _) (mvars1, _) => mvars0 ≤ mvars1)).reverse
   setGoals (ordPropGoals.map Prod.snd)
-  /- First attempt to solve the preconditions in a *synchronous* manner by using the `singleAssumptionTac`.
-     We do this to instantiate meta-variables -/
-  if let some assumTac := args.assumTac then
-    allGoalsNoRecover (tryTac assumTac)
+  /- First attempt to solve the preconditions in a *synchronous* manner by using the discharge
+     tactic and the assumption tactic. We do this to instantiate meta-variables -/
+  if let some firstPhaseTac := firstPhaseTac info args then
+    allGoalsNoRecover (tryTac firstPhaseTac)
     /- Attempt to resolve the typeclass instances again (we already tried once, but maybe we couldn't
       because some meta-variables were not resolved) -/
     setGoals (← trySolveTypeclasses (← getGoals))
+
+  /- **Phase 2**: `solvePreconditionTac` -/
   /- Retrieve the unsolved preconditions - make sure we recover them in the original order -/
   let goals ← newPropGoals.filterMapM (fun g => do if ← g.isAssigned then pure none else pure (some g))
   /- If `threadGrindState` is on but we don't have an already-initialized grind state,
@@ -775,7 +796,7 @@ meta def stepWith (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args)
   withTraceNode `Step (fun _ => pure m!"non prop goals") do
     trace[Step] "{← newNonPropGoals.mapM fun mvarId => do pure ((← mvarId.getDecl).userName, mvarId)}"
   -- Attempt to solve the goals which are propositions
-  let (stepState, newPropGoals) ← trySolvePreconditions args args.config originalGoal args.stepState args.solvePreconditionTac newPropGoals
+  let (stepState, newPropGoals) ← trySolvePreconditions info args args.config originalGoal args.stepState args.solvePreconditionTac newPropGoals
   /- Process the main goal -/
   -- Introduce the outputs, including the post-conditions, into the context
   setGoals [mainGoal]

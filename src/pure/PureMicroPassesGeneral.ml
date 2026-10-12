@@ -3683,3 +3683,61 @@ let update_match_over_isize_usize_visitor (_ctx : ctx) (f : fun_decl) =
 
 let update_match_over_isize_usize =
   lift_expr_map_visitor update_match_over_isize_usize_visitor
+
+(** Inline the calls to the initializers of the anonymous constants (i.e., the
+    promoted constants).
+
+    The pre-pass [PrePasses.anon_consts_to_calls] replaces the reads of the
+    anonymous constants with calls to their initializers: we inline the bodies
+    of those initializers (the anonymous constants are not extracted). If the
+    call is bound by a let-binding, we flatten the let-bindings of the inlined
+    body, i.e., we transform:
+    {[
+      let x = (let y = v; e1) in e2 ~~> let y = v in let x = e1 in e2
+    ]} *)
+let inline_anon_const_initializers_visitor (ctx : ctx) (def : fun_decl) =
+  let span = def.item_meta.span in
+  (* Return the (refreshed and instantiated) body of the initializer if the
+     expression is a call to an anonymous constant initializer *)
+  let get_anon_const_body (e : texpr) : texpr option =
+    match opt_destruct_function_call e with
+    | Some (Fun (FromLlbc (FunId fid, None)), generics, []) -> (
+        match FunDeclId.Map.find_opt fid ctx.fun_decls with
+        | Some
+            { src = GlobalInitializerFun gref; body = Some body; signature; _ }
+          when match
+                 GlobalDeclId.Map.find_opt gref.id ctx.crate.global_decls
+               with
+               | Some g -> LlbcAstUtils.global_decl_is_anon_const g
+               | None -> false ->
+            let body =
+              open_all_texpr ctx span (PureUtils.remove_meta body.body)
+            in
+            let subst = make_subst_from_generics signature.generics generics in
+            Some ((new subst_visitor)#visit_texpr subst body)
+        | _ -> None)
+    | _ -> None
+  in
+  object
+    inherit [_] map_expr as super
+
+    method! visit_Let env monadic pat re next =
+      match get_anon_const_body re with
+      | Some body ->
+          let rec flatten (body : texpr) : texpr =
+            match body.e with
+            | Let (monadic', pat', re', next') ->
+                mk_opened_let monadic' pat' re' (flatten next')
+            | _ -> mk_opened_let monadic pat body next
+          in
+          (super#visit_texpr env (flatten body)).e
+      | None -> super#visit_Let env monadic pat re next
+
+    method! visit_texpr env e =
+      match get_anon_const_body e with
+      | Some body -> super#visit_texpr env body
+      | None -> super#visit_texpr env e
+  end
+
+let inline_anon_const_initializers =
+  lift_expr_map_visitor inline_anon_const_initializers_visitor

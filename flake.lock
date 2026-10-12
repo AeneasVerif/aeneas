@@ -6,15 +6,16 @@
         "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
         "jail-nix": "jail-nix",
+        "minirust-src": "minirust-src",
         "nixpkgs": "nixpkgs",
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1790894892,
-        "narHash": "sha256-oy45Qfbeya3cJjlrUclpUiY5tdj2861MDvTyZHLMoEY=",
+        "lastModified": 1790993192,
+        "narHash": "sha256-A93YaZPMT/7jS1sKlALT5+ftw5VUT97okm0gFpQFryc=",
         "owner": "aeneasverif",
         "repo": "charon",
-        "rev": "c8f15d7d658c86a95658f71ad99cddd4be002e04",
+        "rev": "798016509139eb51f0d764645f76d068d34ba5f6",
         "type": "github"
       },
       "original": {
@@ -120,6 +121,23 @@
         "owner": "~alexdavid",
         "repo": "jail.nix",
         "type": "sourcehut"
+      }
+    },
+    "minirust-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1790949311,
+        "narHash": "sha256-HygsofFYPjSy/Q20DxV39hmUbwEBn5u6CzD+TomAeHE=",
+        "owner": "Nadrieril",
+        "repo": "minirust",
+        "rev": "c0b555e5b15accc6c1366b1d911a1bfd49c3d9d0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Nadrieril",
+        "repo": "minirust",
+        "rev": "c0b555e5b15accc6c1366b1d911a1bfd49c3d9d0",
+        "type": "github"
       }
     },
     "nixpkgs": {
