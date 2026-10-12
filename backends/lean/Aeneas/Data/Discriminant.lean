@@ -188,7 +188,7 @@ public meta initialize discriminantAttribute : AttributeImpl ← do
 
 namespace Test
 
-  open Std
+  open Aeneas.Std
 
   mutual
 

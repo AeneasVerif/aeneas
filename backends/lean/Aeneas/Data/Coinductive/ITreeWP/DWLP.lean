@@ -35,6 +35,7 @@ local infix:50 " ≤ " => entails
 def DWLP (θ : EffectWP E) [θ.Monotonic] (m : ITree E α) (Q : θ.Post α) : θ.Pre :=
   (FunctionalWP.hom True θ Q).gfp m
 
+attribute [local implicit_reducible] Monotone in
 /-- Unfolding of `DWLP` into its impredicative definition. -/
 theorem DWLP.def :
     DWLP θ m Q s ↔ ∃ X : ITreePred θ α, X ≤ FunctionalWP True θ Q X ∧ X m s := by

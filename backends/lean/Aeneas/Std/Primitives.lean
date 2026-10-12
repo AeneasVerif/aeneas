@@ -51,10 +51,12 @@ open Error
 inductive RustEffect.Input : Type where
 | fail : Error → RustEffect.Input
 
+@[implicit_reducible]
 def RustEffect.Output (i : RustEffect.Input) : Type :=
   match i with
   | .fail _ => PEmpty
 
+@[implicit_reducible]
 def RustEffect : Effect := {
   I := RustEffect.Input
   O := RustEffect.Output
@@ -65,6 +67,7 @@ def RustEffect : Effect := {
 @[irreducible]
 def Result (α : Type u) : Type u := ITree RustEffect α
 unseal Result
+attribute [local implicit_reducible] Result
 
 def Result.ok {α} (a : α) : Result α := .ret a
 
@@ -484,6 +487,7 @@ instance SubtypeLawfulBEq [BEq α] (p : α → Prop) [LawfulBEq α] : LawfulBEq 
 -/
 
 #define_bv_decide_toBitVec PUnit
+#define_bv_decide_toBitVec Ordering
 
 /-!
 # Dyn

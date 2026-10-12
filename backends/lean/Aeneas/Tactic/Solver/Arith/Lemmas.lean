@@ -284,7 +284,7 @@ theorem ZMod.mul_inv_eq_int_gcd {n : ℕ} (a : ℤ) :
     simp only [Nat.cast_inj]
     rfl
   else
-    have hn : 0 < n := by cases n <;> simp_all only [AddLeftCancelMonoid.add_eq_zero, one_ne_zero,
+    have hn : 0 < n := by cases n <;> simp_all only [Nat.add_eq_zero_iff, one_ne_zero,
       and_false, not_false_eq_true, lt_add_iff_pos_left, add_pos_iff,
       zero_lt_one, or_true, not_true_eq_false]
     rw [ZMod.mul_inv_eq_gcd]

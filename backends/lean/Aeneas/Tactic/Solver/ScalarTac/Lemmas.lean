@@ -238,7 +238,7 @@ end Std
 
 namespace ScalarTac
 
-open Std
+open Aeneas.Std
 
 attribute [scalar_tac_simps] Prod.mk.injEq gt_iff_lt
 

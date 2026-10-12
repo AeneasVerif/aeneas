@@ -13,7 +13,7 @@ namespace DspecInduction
 
 namespace Test
 
-open Std Result Aeneas.Step
+open Aeneas.Std Result Aeneas.Step
 
 def simple_diverge (x : Std.I32) : Result Std.I32 := do
   if x = 0#i32
