@@ -124,7 +124,7 @@ theorem core.iter.adapters.step_by.skipN_Range_UScalar_spec {ty : UScalarTy}
         core.iter.range.UScalarStep, core.iter.range.UScalarStep.forward_checked,
         h_lt, bind_ok,
         show ¬ (range.start.val < range.end.val) from hlt,
-        decide_false, Bool.false_eq_true, ↓reduceIte, spec_ok, Nat.min_def]
+        decide_false, Bool.false_eq_true, ↓reduceIte, Nat.min_def]
       simp_all [Nat.min_def]
 
 /-- Generic `IteratorStepBy.next` on `Range (UScalar ty)`, non-saturating some
@@ -183,7 +183,7 @@ theorem core.iter.adapters.step_by.IteratorStepBy.next_Range_UScalar_none_spec
     core.iter.range.UScalarStep, core.iter.range.UScalarStep.forward_checked,
     h_lt, bind_ok,
     show ¬ (it.iter.start.val < it.iter.end.val) from by omega,
-    decide_false, Bool.false_eq_true, ↓reduceIte, spec_ok]
+    decide_false, Bool.false_eq_true, ↓reduceIte]
   simp [uncurry'_pair]
 
 /-- Generic merged `IteratorStepBy.next` on `Range (UScalar ty)` (saturating,
