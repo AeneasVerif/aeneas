@@ -49,3 +49,16 @@ impl<'a> S<'a> {
         Ok(y)
     }
 }
+
+// Loop on a structure holding a reference to a slice
+pub struct RefSlice<'a> {
+    pub s: &'a [u8],
+}
+
+pub fn xor_slice(rs: &RefSlice<'_>) -> u8 {
+    let mut result = 0;
+    for x in rs.s {
+        result ^= x;
+    }
+    result
+}
