@@ -27,6 +27,7 @@ theorem ByteArray.length_toList (bs : ByteArray) :
   simp
 
 /-- TODO: we shouldn't use `decide +native` but it seems we can't reduce it otherwise. -/
+@[expose]
 def toStr (s : String) (h : s.toByteArray.size ≤ U32.max := by decide +native) : Str :=
   .from (s.toByteArray.toList.map
     (fun x => ⟨ x.toNat, by cases x; simp only [UInt8.toNat_ofBitVec, UScalarTy.U8_numBits_eq, Nat.reducePow]; omega  ⟩))
