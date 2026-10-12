@@ -57,57 +57,6 @@ def inhabited : MType → Bool
   | .tuple ts => ts.attach.all (λ ⟨t, _⟩ ↦ t.inhabited)
   | .enum vs => vs.attach.any (λ ⟨v, _⟩ ↦ v.inhabited)
 
-inductive isTuple : MType → Prop where
-  | tuple ts : isTuple (.tuple ts)
-
-attribute [class] isTuple
-attribute [instance] isTuple.tuple
-
-class AllTuple (l : List MType) : Prop where
-  out : ∀ idx : Fin l.length, l[idx].isTuple
-
-instance : AllTuple [] := ⟨λ idx ↦ Fin.elim0 idx⟩
-instance {x : MType} {xs : List MType} [hx : x.isTuple] [hxs : AllTuple xs] :
-    AllTuple (x :: xs) :=
-  ⟨λ | ⟨0, _⟩ => hx | ⟨n + 1, h⟩ => hxs.out ⟨n, Nat.lt_of_succ_lt_succ h⟩⟩
-
-/-! We talk about "Reasonable" types mostly because not all types have a layout, only reasonable ones.
-    Notably, we need to rule out enums with a galactic number of variants. -/
-inductive Reasonable : MType → Prop where
-  | int ty : Reasonable (.int ty)
-  | tuple ts :
-      (∀ idx : Fin ts.length, ts[idx].Reasonable) →
-      Reasonable (.tuple ts)
-  | enum vs :
-      vs.length ≤ Std.Usize.max →
-      (∀ idx : Fin vs.length, vs[idx].isTuple) →
-      (∀ idx : Fin vs.length, vs[idx].Reasonable) →
-      Reasonable (.enum vs)
-
-attribute [class] Reasonable
-attribute [instance] Reasonable.int
-
-class AllReasonable (l : List MType) : Prop where
-  out : ∀ idx : Fin l.length, l[idx].Reasonable
-
-instance : AllReasonable [] := ⟨λ idx ↦ Fin.elim0 idx⟩
-instance {x : MType} {xs : List MType} [hx : x.Reasonable] [hxs : AllReasonable xs] :
-    AllReasonable (x :: xs) :=
-  ⟨λ | ⟨0, _⟩ => hx | ⟨n + 1, h⟩ => hxs.out ⟨n, Nat.lt_of_succ_lt_succ h⟩⟩
-
-instance {ts : List MType} [h : AllReasonable ts] : (MType.tuple ts).Reasonable :=
-  .tuple ts h.out
-
-lemma Reasonable.enum_of_lt {vs : List MType}
-    (hl : vs.length ≤ 4294967295)
-    [ht : AllTuple vs]
-    [hr : AllReasonable vs] :
-    (MType.enum vs).Reasonable :=
-  .enum vs
-    (by rcases System.Platform.numBits_eq with hb | hb <;> simp [Std.Usize.max, Std.Usize.numBits, hb] <;> omega)
-    ht.out
-    hr.out
-
 end MType
 
 /-! ## Machine Values (`MVal`) and Validity (`MVal.valid_for`) -/
@@ -129,25 +78,43 @@ inductive valid_for : (v : MVal) → (ty : MType) → Prop where
 namespace valid_for
 
 attribute [simp] int tuple enum
+attribute [grind ←] int
 
 /-! We add some projection functions that allow getting properties out of validity proofs. -/
-theorem tuple_len {vs ts} (h : valid_for (.tuple vs) (.tuple ts)) :
+
+@[grind →] theorem int_can_repr {z ty} (h : valid_for (.int z) (.int ty)) :
+    ty.can_repr z :=
+  match h with | .int f => f
+
+@[grind →] theorem tuple_len {vs ts} (h : valid_for (.tuple vs) (.tuple ts)) :
     vs.length = ts.length :=
   match h with | .tuple _ _ f => f.length_eq
 
 theorem tuple_proj {vs ts} (h : valid_for (.tuple vs) (.tuple ts)) (idx : Fin vs.length) :
-    valid_for vs[idx] (ts[idx]'(by rw [←h.tuple_len]; exact idx.isLt)) :=
+    valid_for vs[idx] (ts[idx]'(by grind)) :=
   match h with | .tuple _ _ f => f.get _ _
 
-theorem variant_bound {d v ts} (h : valid_for (.variant d v) (.enum ts)) :
+@[grind ←] theorem tuple_proj_nat {vs ts} (h : valid_for (.tuple vs) (.tuple ts)) (n1 n2 : Nat) (he : n1 = n2) {h1 h2} :
+    valid_for (vs[n1]'(h1)) (ts[n2]'(h2)) :=
+  match h with | .tuple _ _ f => by subst n2; apply f.get
+
+@[grind →] theorem variant_bound {d v ts} (h : valid_for (.variant d v) (.enum ts)) :
     d < ts.length :=
   match h with | .enum _ _ _ hb _ => hb
 
-theorem variant_proj {d v ts} (h : valid_for (.variant d v) (.enum ts)) :
-    v.valid_for (ts[d]'(h.variant_bound)) :=
+@[grind .] theorem variant_proj {d v ts} (h : valid_for (.variant d v) (.enum ts)) :
+    v.valid_for (ts[d]'(by grind)) :=
   match h with | .enum _ _ _ _ hv => hv
 
-theorem empty_elim {v : MVal} {i : Nat} {h : i < ([] : List MType).length}
+grind_pattern variant_proj => valid_for (.variant d v) (.enum ts)
+
+@[grind .] theorem variant_proj_nat {d v ts} (h : valid_for (.variant d v) (.enum ts)) {hd} :
+    v.valid_for (ts[d]'(hd)) :=
+  match h with | .enum _ _ _ _ hv => hv
+
+grind_pattern variant_proj_nat => valid_for (.variant d v) (.enum ts)
+
+@[grind →] theorem empty_elim {v : MVal} {i : Nat} {h : i < ([] : List MType).length}
     (_ : valid_for v (([] : List MType)[i]'h)) : False :=
   absurd h (Nat.not_lt_zero i)
 
@@ -176,6 +143,74 @@ def vfield {d : Nat} {vs : List MVal} {ts vts : List MType}
 end valid_for
 end MVal
 
+namespace MType
+
+inductive isTuple : MType → Prop where
+  | tuple ts : isTuple (.tuple ts)
+
+attribute [class] isTuple
+attribute [instance] isTuple.tuple
+/-! We talk about "Reasonable" types mostly because not all types have a layout, only reasonable ones.
+    Notably, we need to rule out enums with a galactic number of variants. -/
+inductive Reasonable : MType → Prop where
+  | int ty : Reasonable (.int ty)
+  | tuple ts :
+      (∀ idx : Fin ts.length, ts[idx].Reasonable) →
+      Reasonable (.tuple ts)
+  | enum vs :
+      vs.length ≤ Std.Usize.max →
+      (∀ idx : Fin vs.length, vs[idx].isTuple) →
+      (∀ idx : Fin vs.length, vs[idx].Reasonable) →
+      Reasonable (.enum vs)
+
+attribute [class] Reasonable
+attribute [instance] Reasonable.int
+
+class AllReasonable (l : List MType) : Prop where
+  out : ∀ idx : Fin l.length, l[idx].Reasonable
+
+instance : AllReasonable [] := ⟨λ idx ↦ Fin.elim0 idx⟩
+instance {x : MType} {xs : List MType} [hx : x.Reasonable] [hxs : AllReasonable xs] :
+    AllReasonable (x :: xs) :=
+  ⟨λ | ⟨0, _⟩ => hx | ⟨n + 1, h⟩ => hxs.out ⟨n, Nat.lt_of_succ_lt_succ h⟩⟩
+
+instance {ts : List MType} [h : AllReasonable ts] : (MType.tuple ts).Reasonable :=
+  .tuple ts h.out
+
+
+class AllTuple (l : List MType) : Prop where
+  out : ∀ idx : Fin l.length, l[idx].isTuple
+
+instance : AllTuple [] := ⟨λ idx ↦ Fin.elim0 idx⟩
+instance {x : MType} {xs : List MType} [hx : x.isTuple] [hxs : AllTuple xs] :
+    AllTuple (x :: xs) :=
+  ⟨λ | ⟨0, _⟩ => hx | ⟨n + 1, h⟩ => hxs.out ⟨n, Nat.lt_of_succ_lt_succ h⟩⟩
+
+
+set_option checkBinderAnnotations false in
+class inductive ListLengthLe {α : Type _} : List α → Nat → Prop where
+  | nil {n} : ListLengthLe [] n
+  | cons {x xr n} : [ListLengthLe xr n] → ListLengthLe (x :: xr) (.succ n)
+
+attribute [instance] ListLengthLe.nil ListLengthLe.cons
+
+lemma ListLengthLe.sound [h : ListLengthLe vs n] : vs.length ≤ n := by
+  induction h with
+  | nil => grind
+  | cons ih => grind
+
+instance {vs : List MType}
+    [hl : ListLengthLe vs 4294967295] -- this is an astronomical bound
+    [ht : AllTuple vs]
+    [hr : AllReasonable vs] :
+    (MType.enum vs).Reasonable :=
+  .enum vs
+    (have hl := hl.sound; by rcases System.Platform.numBits_eq with hb | hb <;> simp [Std.Usize.max, Std.Usize.numBits, hb] <;> omega)
+    ht.out
+    hr.out
+
+end MType
+
 /-! ## The `HasLayout` Type Class -/
 
 macro "has_layout_retract_embed" : tactic => `(tactic| (
@@ -193,7 +228,7 @@ macro "has_layout_embed_retract" : tactic => `(tactic| (
     repeat' (
       first
       | exact False.elim (MVal.valid_for.empty_elim ‹_›)
-      | (cases ‹Nat› <;> dsimp (config := { iota := false, beta := false, proj := false, zeta := false }) only [Nat.zero_eq, Nat.succ_eq_add_one, List.getElem_cons_succ, List.getElem_cons_zero] at *)
+      | (cases ‹Nat› <;> dsimp (config := { iota := false, beta := false, zeta := false, proj := false }) only [Nat.zero_eq, Nat.succ_eq_add_one, List.getElem_cons_succ, List.getElem_cons_zero] at *)
     )
     all_goals (
       try cases ‹MVal.valid_for _ (.tuple _)›
@@ -203,19 +238,13 @@ macro "has_layout_embed_retract" : tactic => `(tactic| (
   )
 ))
 
-macro "has_layout_reasonable" : tactic => `(tactic| (
-  first
-  | infer_instance
-  | (apply MType.Reasonable.enum_of_lt; dsimp only [List.length_cons, List.length_nil]; decide)
-))
-
 /-! Type class associating a Lean type `α` with its machine `MType`.
     Lowering must be bijective. -/
 class HasLayout (α : Type u) where
   ty : MType
   embed : α → { v : MVal // v.valid_for ty }
   retract : { v : MVal // v.valid_for ty } → α
-  reasonable : ty.Reasonable := by has_layout_reasonable
+  reasonable : ty.Reasonable := by infer_instance
   retract_embed : ∀ x, retract (embed x) = x := by has_layout_retract_embed
   embed_retract : ∀ v, embed (retract v) = v := by has_layout_embed_retract
 
