@@ -1647,97 +1647,315 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
 
 (** We do not support static regions yet.
 
-    In order to support some printing functions, for now we update their
-    signature to replace ['static] with a region variable. This should be fine
-    as a temporary measure as we can pretend these functions copy the input
-    string they receive (the static references are references to strings).
+    As a temporary measure, we replace ['static] with a regular region variable
+    in the signatures of the function declarations which mention it, and update
+    the call sites accordingly (by adding an erased region to the generic
+    arguments).
+
+    This is what makes it possible to translate functions which return
+    references to static data, as in:
+    {[
+      const NAN: &str = "NaN";
+      fn nan() -> &'static str { NAN }
+      fn f(x: &mut Buffer) -> &str { nan() }
+    ]}
+    Without this pass, the borrow returned by [nan] has no corresponding loan
+    anywhere in the environment: reborrowing it (which is what the [&*_] MIR
+    introduces to coerce ['static] down to the lifetime of [x]) then fails with
+    an "Unreachable" error in [InterpBorrowsCore.lookup_loan].
+
+    Pretending that ['static] is a regular region is sound for our purposes
+    because a caller can never observe the difference: a ['static] reference
+    which is treated as a shorter-lived one is simply used less than it could
+    be. It does however mean that we can not (yet) translate functions which
+    *store* static references in a data structure outliving the call.
+
+    We update both top-level functions and trait methods. A trait method is the
+    motivating real-world case (e.g. [ryu]'s [Buffer::format], which returns the
+    ['static] result of the trait method [Float::format_nonfinite]): the call
+    goes through a trait clause, so the signature the interpreter types the call
+    with is the one in the *trait declaration*, not the one of any particular
+    impl. Rewriting a trait method therefore requires keeping several
+    declarations in sync (see the code below): the method binder in the trait
+    declaration, the [fun_decl] of every impl method (and of default method
+    bodies), the [fun_decl_ref] binders in the trait impls, the [default] of the
+    trait method, and every call site (both [TraitMethod] calls and direct
+    [Fun _] calls to impl methods).
+
+    The one subtlety is the region *index*. The region we introduce lives at the
+    method level. In a method binder (trait decl / trait impl) it is referenced
+    as [Bound (0, i)] where [i] counts only the method's own regions; in an impl
+    method's [fun_decl] the generics are impl-regions ++ method-regions
+    flattened into a single item-level binder, so there the same region sits at
+    a *larger* (flattened) index and is referenced as [Free i]. We compute each
+    index against the right list of regions.
+
+    We still leave the global initializers alone, as their signature has to
+    agree with the type of the global they initialize; those are already handled
+    specially by the interpreter (see [eval_global_as_fresh_symbolic_value]).
 
     TODO: remove once https://github.com/AeneasVerif/aeneas/issues/727 is fixed
 *)
 let replace_static (crate : crate) : crate =
-  (* We update the uses of: [core::fmt::{core::fmt::Arguments<'a>}::from_str] *)
-  let pat =
-    NameMatcher.parse_pattern "core::fmt::{core::fmt::Arguments<'a>}::from_str"
+  (* Does a signature contain a [&'static _]? If so, is it ever used for a
+     mutable borrow?
+
+     Note that we deliberately only look at the regions of *reference* types.
+     ['static] also shows up as the (implicit) lifetime bound of trait objects
+     ([Box<dyn Trait>] really is [Box<dyn Trait + 'static>]) and as a region
+     argument of type declarations; turning those into region variables would
+     introduce back-propagation functions for types we do not support (see
+     [tests/src/dyn.rs]) without fixing anything, as the problem we address here
+     is specifically that of borrows without a corresponding loan. *)
+  let sig_static_mutability (sg : fun_sig) : lifetime_mutability option =
+    let found = ref false in
+    let mutable_ = ref false in
+    let visitor =
+      object
+        inherit [_] iter_ty as super
+
+        method! visit_ty env ty =
+          (match ty with
+          | TRef (RStatic, _, rk) ->
+              found := true;
+              if rk = RMut then mutable_ := true
+          | _ -> ());
+          super#visit_ty env ty
+      end
+    in
+    visitor#visit_fun_sig () sg;
+    if not !found then None
+    else if !mutable_ then Some LtMutable
+    else Some LtShared
   in
 
-  (* Find the function [core::fmt::{core::fmt::Arguments<'a>}::from_str]:
-     - we want to update its signature to replace 'static with a lifetime variable
-     - we want to update its uses
-  *)
-  let in_set (d : fun_decl) : bool =
-    ExtractName.match_name crate pat d.item_meta.name
-  in
-  let decl_opt = ref None in
-  let in_set (_ : FunDeclId.id) (d : fun_decl) =
-    if in_set d then (
-      decl_opt := Some d;
-      true)
-    else false
+  (* Compute the (top-level and trait-method) function declarations to update,
+     together with the index of the region variable we introduce for ['static].
+     Impl methods and default method bodies are ordinary [fun_decl]s whose item
+     binder flattens impl-regions ++ method-regions, so the index is computed
+     against that flattened list. We still skip global initializers. *)
+  let updated : (RegionId.id * lifetime_mutability) FunDeclId.Map.t =
+    FunDeclId.Map.filter_map
+      (fun _ (d : fun_decl) ->
+        match d.src with
+        | NormalFun | TraitImplFun _ | TraitDefaultFun _ -> (
+            match sig_static_mutability d.signature with
+            | None -> None
+            | Some mutability ->
+                let index = RegionId.of_int (List.length d.generics.regions) in
+                Some (index, mutability))
+        | _ -> None)
+      crate.fun_decls
   in
 
-  if not (FunDeclId.Map.exists in_set crate.fun_decls) then crate
-  else (* The function [from_str] is used in the crate *)
-    let d = Option.get !decl_opt in
+  (* Compute the trait-declaration methods to update. The key point is that a
+     call through a trait clause is typed with the signature stored in the trait
+     declaration's method binder, not with any impl's signature; so we must
+     rewrite that binder too. The recorded index counts only the method's own
+     regions, as that is the shape of the method binder (both here and in the
+     trait impls). *)
+  let trait_updated :
+      (RegionId.id * lifetime_mutability) TraitMethodId.Map.t TraitDeclId.Map.t
+      =
+    TraitDeclId.Map.filter_map
+      (fun _ (td : trait_decl) ->
+        let methods =
+          TraitMethodId.Map.filter_map
+            (fun _ (b : trait_method binder) ->
+              match sig_static_mutability b.binder_value.signature with
+              | None -> None
+              | Some mutability ->
+                  let index =
+                    RegionId.of_int (List.length b.binder_params.regions)
+                  in
+                  Some (index, mutability))
+            td.methods
+        in
+        if TraitMethodId.Map.is_empty methods then None else Some methods)
+      crate.trait_decls
+  in
 
-    (* Update the signature *)
-    let generics =
+  if FunDeclId.Map.is_empty updated && TraitDeclId.Map.is_empty trait_updated
+  then crate
+  else
+    let region_param (index : RegionId.id) (mutability : lifetime_mutability) :
+        region_param =
+      { index; name = Some "'static_"; variance = VaUnknown; mutability }
+    in
+    (* Append a region argument referencing the region bound at index [index] in
+       the innermost (method) binder. Used to thread the region we introduce in a
+       trait method binder down into the [fun_decl_ref] that instantiates the
+       actual (impl or default) function. *)
+    let thread_region (index : RegionId.id) (r : fun_decl_ref) : fun_decl_ref =
       {
-        d.generics with
-        regions =
-          d.generics.regions
-          @ [
-              {
-                index = RegionId.of_int 1;
-                name = Some "'b";
-                variance = VaUnknown;
-                mutability = LtUnknown;
-              };
-            ];
+        r with
+        generics =
+          {
+            r.generics with
+            regions = r.generics.regions @ [ RVar (Bound (0, index)) ];
+          };
       }
     in
-    let signature =
-      let visitor =
-        object
-          inherit [_] map_ty
-          method! visit_RStatic _ = RVar (Free (RegionId.of_int 1))
-        end
-      in
-      visitor#visit_fun_sig () d.signature
-    in
 
-    let d = { d with generics; signature } in
-    [%ltrace
-      let env = Print.crate_to_fmt_env crate in
-      "Updated declaration:\n" ^ Print.fun_decl_to_string env "" " " d];
+    (* Update the signatures of the [fun_decl]s. These are item-level binders, so
+       the introduced region is referenced with a [Free] variable. *)
+    let update_sig (d : fun_decl) : fun_decl =
+      match FunDeclId.Map.find_opt d.def_id updated with
+      | None -> d
+      | Some (index, mutability) ->
+          let generics =
+            {
+              d.generics with
+              regions = d.generics.regions @ [ region_param index mutability ];
+            }
+          in
+          let signature =
+            let visitor =
+              object
+                inherit [_] map_ty as super
+
+                method! visit_ty env ty =
+                  match super#visit_ty env ty with
+                  | TRef (RStatic, ty, rk) -> TRef (RVar (Free index), ty, rk)
+                  | ty -> ty
+              end
+            in
+            visitor#visit_fun_sig () d.signature
+          in
+          let d = { d with generics; signature } in
+          [%ltrace
+            let env = Print.crate_to_fmt_env crate in
+            "Updated declaration:\n" ^ Print.fun_decl_to_string env "" " " d];
+          d
+    in
     let crate =
-      { crate with fun_decls = FunDeclId.Map.add d.def_id d crate.fun_decls }
+      { crate with fun_decls = FunDeclId.Map.map update_sig crate.fun_decls }
     in
 
-    (* Update the uses of this definition *)
+    (* Update the trait declarations: rewrite the method binder signature (the
+       region is bound in the method binder, hence referenced with [Bound (0,
+       _)]), and thread the region into the [default] method body reference if
+       there is one. *)
+    let update_trait_decl (td : trait_decl) : trait_decl =
+      match TraitDeclId.Map.find_opt td.def_id trait_updated with
+      | None -> td
+      | Some methods ->
+          let update_method (mid : TraitMethodId.id) (b : trait_method binder) :
+              trait_method binder =
+            match TraitMethodId.Map.find_opt mid methods with
+            | None -> b
+            | Some (index, mutability) ->
+                let binder_params =
+                  {
+                    b.binder_params with
+                    regions =
+                      b.binder_params.regions
+                      @ [ region_param index mutability ];
+                  }
+                in
+                let signature =
+                  let visitor =
+                    object
+                      inherit [_] map_ty as super
+
+                      method! visit_ty env ty =
+                        match super#visit_ty env ty with
+                        | TRef (RStatic, ty, rk) ->
+                            TRef (RVar (Bound (0, index)), ty, rk)
+                        | ty -> ty
+                    end
+                  in
+                  visitor#visit_fun_sig () b.binder_value.signature
+                in
+                let default =
+                  Option.map (thread_region index) b.binder_value.default
+                in
+                {
+                  binder_params;
+                  binder_value = { b.binder_value with signature; default };
+                }
+          in
+          { td with methods = TraitMethodId.Map.mapi update_method td.methods }
+    in
+    let crate =
+      {
+        crate with
+        trait_decls = TraitDeclId.Map.map update_trait_decl crate.trait_decls;
+      }
+    in
+
+    (* Update the trait implementations: for every method whose [fun_decl] was
+       rewritten, add a region to the method binder and thread it into the
+       [fun_decl_ref] that instantiates the impl (or default) function. The
+       binder index counts only the method's regions (matching the trait decl
+       binder), whereas the region argument is appended to the flat argument list
+       of the [fun_decl_ref], which already lines up with the flattened
+       impl-regions ++ method-regions of the target [fun_decl]. *)
+    let update_trait_impl (ti : trait_impl) : trait_impl =
+      let update_method (_ : TraitMethodId.id) (b : fun_decl_ref binder) :
+          fun_decl_ref binder =
+        match FunDeclId.Map.find_opt b.binder_value.id updated with
+        | None -> b
+        | Some (_, mutability) ->
+            let index = RegionId.of_int (List.length b.binder_params.regions) in
+            let binder_params =
+              {
+                b.binder_params with
+                regions =
+                  b.binder_params.regions @ [ region_param index mutability ];
+              }
+            in
+            { binder_params; binder_value = thread_region index b.binder_value }
+      in
+      { ti with methods = TraitMethodId.Map.mapi update_method ti.methods }
+    in
+    let crate =
+      {
+        crate with
+        trait_impls = TraitImplId.Map.map update_trait_impl crate.trait_impls;
+      }
+    in
+
+    (* Update the uses of those definitions: we have to provide a region
+       argument for the region variable we introduced. The regions of the
+       generic arguments are erased inside function bodies anyway (see
+       [erase_body_regions]), so we simply add an erased region. This covers both
+       direct calls to (top-level or impl) functions and calls dispatched through
+       a trait reference. *)
+    let is_updated_trait_method (trait_ref : trait_ref)
+        (method_id : TraitMethodId.id) : bool =
+      match
+        TraitDeclId.Map.find_opt trait_ref.trait_decl_ref.binder_value.id
+          trait_updated
+      with
+      | None -> false
+      | Some methods -> TraitMethodId.Map.mem method_id methods
+    in
     let update (f : fun_decl) : fun_decl =
       match f.body with
       | StructuredBody body ->
           let visitor =
             object
-              inherit [_] map_statement
+              inherit [_] map_statement as super
 
-              method! visit_Call _ call on_unwind =
-                match call.func with
-                | FnOpRegular { kind = Fun id as kind; generics }
-                  when id = d.def_id ->
-                    let func =
-                      FnOpRegular
-                        {
-                          kind;
-                          generics =
-                            {
-                              generics with
-                              regions = generics.regions @ [ RErased ];
-                            };
-                        }
-                    in
-                    Call ({ call with func }, on_unwind)
-                | _ -> Call (call, on_unwind)
+              method! visit_fn_ptr env fn_ptr =
+                let fn_ptr = super#visit_fn_ptr env fn_ptr in
+                let add_erased () =
+                  {
+                    fn_ptr with
+                    generics =
+                      {
+                        fn_ptr.generics with
+                        regions = fn_ptr.generics.regions @ [ RErased ];
+                      };
+                  }
+                in
+                match fn_ptr.kind with
+                | Fun id when FunDeclId.Map.mem id updated -> add_erased ()
+                | TraitMethod (trait_ref, method_id)
+                  when is_updated_trait_method trait_ref method_id ->
+                    add_erased ()
+                | _ -> fn_ptr
             end
           in
 
