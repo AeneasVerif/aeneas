@@ -9,7 +9,7 @@ namespace ReprC
 
 open SizeAndAlign
 
-/-! ## Part 1: Constructing the `#[repr(C)]` Layout -/
+/-! ## Part 1: Bounded Maximum (`natMax`) -/
 
 def natMax : (n : Nat) → ((i : Nat) → i < n → Nat) → Nat → Nat
   | 0, _, init => init
@@ -27,35 +27,135 @@ def natMax : (n : Nat) → ((i : Nat) → i < n → Nat) → Nat → Nat
 
 grind_pattern le_natMax => natMax n f init, i < n
 
+
+lemma lub_natMax : ∀ n (f : (i : Nat) → i < n → Nat) init z (_ : init ≤ z) (_ : ∀ i, (hi : i < n) → f i hi ≤ z), natMax n f init ≤ z
+  | 0, _, _, z, h1, _ => h1
+  | n + 1, _, init, z, h1, h2 => by
+    apply max_le_iff.mpr
+    constructor; apply lub_natMax
+    all_goals grind
+
+
 @[simp, grind .]
 lemma natMax_isPowerOfTwo : ∀ n (f : (i : Nat) → i < n → Nat) init,
     init.isPowerOfTwo → (∀ i (hi : i < n), (f i hi).isPowerOfTwo) → (natMax n f init).isPowerOfTwo
   | 0, _, _, h0, _ => h0
   | n + 1, f, init, h0, hf => by
     have := natMax_isPowerOfTwo n (λ i _ ↦ f i (by omega)) init h0 (by grind)
-    have := hf n (by omega)
     by_cases h : natMax n (λ i _ ↦ f i (by omega)) init ≤ f n (by omega)
     all_goals (simp [natMax]; grind)
 
+/-! ## Part 2: Shallow `#[repr(C)]` Tuple / Struct Layout (with Optional Packing) -/
+
+/-- Effective alignment when capped by an optional `#[repr(packed(P))]` bound. -/
+@[simp, grind =]
+def effAlign (max_align : Option { a : Nat // a.isPowerOfTwo }) (a : Nat) : Nat :=
+  match max_align with
+  | none => a
+  | some ⟨p, _⟩ => min a p
+
+@[simp, grind ←]
+lemma effAlign_isPowerOfTwo (max_align : Option { a : Nat // a.isPowerOfTwo })
+    {a : Nat} (ha : a.isPowerOfTwo) : (effAlign max_align a).isPowerOfTwo := by
+  cases max_align with
+  | none => exact ha
+  | some p =>
+    by_cases h : a ≤ p.val <;> simp [effAlign] <;> grind
+
 /-- Byte offset after placing the first `k` fields sequentially under `#[repr(C)]`. -/
-def tupleCursor {n : Nat} (fsa : (i : Nat) → i < n → SizeAndAlign) : (k : Nat) → k ≤ n → Nat
+def tupleCursor {n : Nat} (fsize falign : (i : Nat) → i < n → Nat) : (k : Nat) → k ≤ n → Nat
   | 0, _ => 0
   | k + 1, hk =>
-    alignUp (tupleCursor fsa k (Nat.le_of_succ_le hk)) (fsa k hk).align + (fsa k hk).size
+    alignUp (tupleCursor fsize falign k (Nat.le_of_succ_le hk)) (falign k hk) + fsize k hk
 
-/-- Byte offset of field `i` under `#[repr(C)]`: current cursor aligned up to `(fsa i hi).align`. -/
+/-- Byte offset of field `i` under `#[repr(C)]`: current cursor aligned up to `falign i hi`. -/
 @[grind =]
-def tupleFieldOffset {n : Nat} (fsa : (i : Nat) → i < n → SizeAndAlign) (i : Nat) (hi : i < n) : Nat :=
-  alignUp (tupleCursor fsa i (by omega)) (fsa i hi).align
+def tupleFieldOffset {n : Nat} (fsize falign : (i : Nat) → i < n → Nat) (i : Nat) (hi : i < n) : Nat :=
+  alignUp (tupleCursor fsize falign i (by omega)) (falign i hi)
 
-/-- `#[repr(C)]` layout for a tuple/struct given layouts for its fields. -/
-noncomputable def mkTuple (ts : List MType) (fl : (idx : Nat) → (h : idx < ts.length) → Layout ts[idx]) :
+@[grind ←] private lemma tupleCursor_mono {n : Nat} (fsize falign : (i : Nat) → i < n → Nat)
+    (h_pos : ∀ i (hi : i < n), 0 < falign i hi) :
+    ∀ {k1 k2 : Nat} (hk1 : k1 ≤ n) (hk2 : k2 ≤ n), k1 ≤ k2 →
+      tupleCursor fsize falign k1 hk1 ≤ tupleCursor fsize falign k2 hk2
+  | 0, 0, _, _, _ => Nat.le_refl _
+  | _ + 1, 0, _, _, h => nomatch h
+  | k1, k2 + 1, hk1, hk2, hle => by
+    rcases Nat.of_le_succ hle with h | rfl
+    · have := tupleCursor_mono fsize falign h_pos hk1 (by omega) h
+      simp [tupleCursor]; grind
+    · rfl
+
+grind_pattern tupleCursor_mono => tupleCursor fsize falign k1 _, tupleCursor fsize falign k2 _
+
+private lemma tupleFieldOffset_mono {n : Nat} (fsize falign : (i : Nat) → i < n → Nat)
+    (h_pos : ∀ i (hi : i < n), 0 < falign i hi)
+    {a b : Nat} (ha : a < n) (hb : b < n) (hab : a < b) :
+    tupleFieldOffset fsize falign a ha + fsize a ha ≤ tupleFieldOffset fsize falign b hb := by
+  have h1 : tupleFieldOffset fsize falign a ha + fsize a ha = tupleCursor fsize falign (a + 1) ha := rfl
+  grind
+
+grind_pattern tupleFieldOffset_mono => tupleFieldOffset fsize falign a ha, tupleFieldOffset fsize falign b hb
+
+private lemma tupleFieldOffset_le_end {n : Nat} (fsize falign : (i : Nat) → i < n → Nat)
+    (h_pos : ∀ i (hi : i < n), 0 < falign i hi)
+    (i : Nat) (hi : i < n) :
+    tupleFieldOffset fsize falign i hi + fsize i hi ≤ tupleCursor fsize falign n (Nat.le_refl n) :=
+  tupleCursor_mono fsize falign h_pos hi (Nat.le_refl n) hi
+
+grind_pattern tupleFieldOffset_le_end => tupleFieldOffset fsize falign i hi
+
+/-- Total `SizeAndAlign` of a `#[repr(C)]` tuple/struct with field sizes `fsize` and effective field alignments `falign`. -/
+@[grind =]
+def tupleSizeAndAlign {n : Nat} (fsize falign : (i : Nat) → i < n → Nat)
+    (h_align : ∀ i (hi : i < n), (falign i hi).isPowerOfTwo) : SizeAndAlign :=
+  let A := natMax n falign 1
+  let sz := alignUp (tupleCursor fsize falign n (Nat.le_refl _)) A
+  ⟨sz, A, by grind, by grind⟩
+
+@[grind ←]
+lemma tupleValid {n : Nat} (fsize falign : (i : Nat) → i < n → Nat)
+    (h_align : ∀ i (hi : i < n), (falign i hi).isPowerOfTwo) :
+    TupleValid n (tupleFieldOffset fsize falign) fsize (tupleSizeAndAlign fsize falign h_align) := by
+  grind
+
+/-- Shallow `#[repr(C)]` layout for a tuple/struct given arbitrary layouts for its fields,
+    with an optional `max_align` cap for `#[repr(C, packed(N))]`. -/
+@[grind =]
+noncomputable def mkTuple (ts : List MType)
+    (fl : (idx : Nat) → (h : idx < ts.length) → Layout ts[idx])
+    (max_align : Option { a : Nat // a.isPowerOfTwo } := none) :
     Layout (.tuple ts) :=
-  let fsa : (idx : Nat) → idx < ts.length → SizeAndAlign := λ idx h ↦ (fl idx h).size_and_align
-  let A := natMax ts.length (λ i hi ↦ (fsa i hi).align) 1
-  let sz := alignUp (tupleCursor fsa ts.length (Nat.le_refl _)) A
-  let sa : SizeAndAlign := ⟨sz, A, by grind, by grind⟩
-  .tuple (tupleFieldOffset fsa) fl sa
+  let fsize : (idx : Nat) → idx < ts.length → Nat := λ idx h ↦ (fl idx h).size
+  let falign : (idx : Nat) → idx < ts.length → Nat :=
+    λ idx h ↦ effAlign max_align (fl idx h).size_and_align.align
+  .tuple (tupleFieldOffset fsize falign) fl (tupleSizeAndAlign fsize falign (by grind))
+
+@[grind ←]
+lemma mkTuple_valid (ts : List MType)
+    (fl : (idx : Nat) → (h : idx < ts.length) → Layout ts[idx])
+    (max_align : Option { a : Nat // a.isPowerOfTwo } := none)
+    (h_fl : ∀ idx (h : idx < ts.length), (fl idx h).Valid) :
+    (mkTuple ts fl max_align).Valid :=
+  .tuple ts _ fl _ h_fl (tupleValid _ _ _)
+
+@[grind ←]
+lemma mkTuple_reasonablyAligned (ts : List MType)
+    (fl : (idx : Nat) → (h : idx < ts.length) → Layout ts[idx]) :
+    (mkTuple ts fl none).ReasonablyAligned :=
+  .tuple ts _ fl _ (by grind)
+
+-- having a packed(n) where n is greater than the existing alignment has no effect
+@[grind =]
+lemma mkTuple_large_packed_nop ts fl (a : { a : Nat // a.isPowerOfTwo })
+  (hge : a.val ≥ (mkTuple ts fl .none).size_and_align.align) :
+  mkTuple ts fl (.some a) = mkTuple ts fl .none := by grind
+
+@[grind ←]
+lemma mkTuple_packed_bounds_align ts fl (a : { a : Nat // a.isPowerOfTwo }) :
+  (mkTuple ts fl (max_align := .some a)).size_and_align.align ≤ ↑a := by
+  grind [lub_natMax]
+
+/-! ## Part 3: Shallow `#[repr(C)]` Enum Layout -/
 
 /-- Shifts a tuple variant's field offsets right by `payload_off` and sets its `SizeAndAlign` to `sa`,
     leaving prefix bytes `[0 ..< payload_off)` as padding for the discriminant tag. -/
@@ -64,65 +164,19 @@ def padVariantLayout : {t : MType} → Layout t → Nat → SizeAndAlign → Lay
       .tuple (λ j hj ↦ payload_off + vfo j hj) vfl sa
   | _, l, _, _ => l
 
-/-- `#[repr(C)]` layout for an enum given layouts for its tuple variants. -/
-noncomputable def mkEnum (vs : List MType) (cl : (idx : Nat) → (h : idx < vs.length) → Layout vs[idx]) :
+/-- `#[repr(C)]` layout for an enum given layouts for its tuple variants. Optional `tagTy` for `#[repr(C, u8)]` and relateds. -/
+noncomputable def mkEnum (tagTy : IUScalarTy := .unsigned .Usize) (vs : List MType) (cl : (idx : Nat) → (h : idx < vs.length) → Layout vs[idx]) :
     Layout (.enum vs) :=
   let fsa : (idx : Nat) → idx < vs.length → SizeAndAlign := λ idx h ↦ (cl idx h).size_and_align
-  let tagTy : IUScalarTy := .unsigned .Usize
   let A := natMax vs.length (λ i hi ↦ (fsa i hi).align) tagTy.size_and_align.align
   let payload_off := alignUp tagTy.size A
   let max_var_sz := natMax vs.length (λ i hi ↦ (fsa i hi).size) 0
   let sz := alignUp (payload_off + max_var_sz) A
   let sa : SizeAndAlign := ⟨sz, A, by grind, by grind⟩
   let vl : (idx : Nat) → (h : idx < vs.length) → Layout vs[idx] := λ idx h ↦ padVariantLayout (cl idx h) payload_off sa
-  let vt : (idx : Nat) → idx < vs.length → List TagToWrite := λ idx _ ↦ [⟨0, tagTy, ⟨BitVec.ofNat tagTy.numBits idx⟩⟩]
+  let vt : (idx : Nat) → idx < vs.length → List TagToWrite := λ idx _ ↦ [⟨0, tagTy, IUScalar.fromBv (BitVec.ofNat tagTy.numBits idx)⟩]
   let discr : Discriminator := .read 0 tagTy (λ bv ↦ if bv.toNat < vs.length then .known bv.toNat else .invalid)
   .enum vt vl discr sa
-
-/-- Constructs the `#[repr(C)]` layout for an `MType`.
-    Only `noncomputable` because scalar alignments (`IUScalarTy.size_and_align`) are `noncomputable`. -/
-noncomputable def mk : (ty : MType) → Layout ty
-  | .int _ => .int
-  | .tuple ts => mkTuple ts (λ idx h ↦ mk ts[idx])
-  | .enum vs => mkEnum vs (λ idx h ↦ mk vs[idx])
-termination_by ty => sizeOf ty
-decreasing_by all_goals simp_wf; have := List.sizeOf_lt_of_mem (List.getElem_mem h); omega
-
-/-! ## Part 2: Proving Layout Validity (`Valid`) -/
-
-@[grind ←] private lemma tupleCursor_mono {n : Nat} (fsa : (i : Nat) → i < n → SizeAndAlign) :
-    ∀ {k1 k2 : Nat} (hk1 : k1 ≤ n) (hk2 : k2 ≤ n), k1 ≤ k2 →
-      tupleCursor fsa k1 hk1 ≤ tupleCursor fsa k2 hk2
-  | 0, 0, _, _, _ => Nat.le_refl _
-  | _ + 1, 0, _, _, h => nomatch h
-  | k1, k2 + 1, hk1, hk2, hle => by
-    rcases Nat.of_le_succ hle with h | rfl
-    · have := tupleCursor_mono fsa hk1 (by omega) h
-      simp [tupleCursor]; grind
-    · rfl
-
-grind_pattern tupleCursor_mono => tupleCursor fsa k1 _, tupleCursor fsa k2 _
-
-private lemma tupleFieldOffset_mono {n : Nat} (fsa : (i : Nat) → i < n → SizeAndAlign)
-    {a b : Nat} (ha : a < n) (hb : b < n) (hab : a < b) :
-    tupleFieldOffset fsa a ha + (fsa a ha).size ≤ tupleFieldOffset fsa b hb := by
-  have h1 : tupleFieldOffset fsa a ha + (fsa a ha).size = tupleCursor fsa (a + 1) ha := rfl
-  grind
-
-grind_pattern tupleFieldOffset_mono => tupleFieldOffset fsa a ha, tupleFieldOffset fsa b hb
-
-private lemma tupleFieldOffset_le_end {n : Nat} (fsa : (i : Nat) → i < n → SizeAndAlign)
-    (i : Nat) (hi : i < n) :
-    tupleFieldOffset fsa i hi + (fsa i hi).size ≤ tupleCursor fsa n (Nat.le_refl n) :=
-  tupleCursor_mono fsa hi (Nat.le_refl n) hi
-
-grind_pattern tupleFieldOffset_le_end => tupleFieldOffset fsa i hi
-
-@[grind ←]
-lemma mkTuple_valid (ts : List MType) (fl : (idx : Nat) → (h : idx < ts.length) → Layout ts[idx])
-    (h_fl : ∀ idx (h : idx < ts.length), (fl idx h).Valid) :
-    (mkTuple ts fl).Valid :=
-  .tuple ts _ fl _ h_fl (by grind)
 
 private lemma encode_tuple_prefix_uninit {ts : List MType}
     (fo : (idx : Nat) → idx < ts.length → Nat)
@@ -166,20 +220,20 @@ private lemma usize_max_lt_two_pow : Std.Usize.max < 2 ^ (IUScalarTy.unsigned .U
 grind_pattern usize_max_lt_two_pow => Std.Usize.max
 
 @[grind ←]
-lemma mkEnum_valid (vs : List MType) (h_max : vs.length ≤ Std.Usize.max)
+lemma mkEnum_valid (tagTy : IUScalarTy := .unsigned .Usize)
+    (vs : List MType) (h_max : vs.length ≤ 2 ^ tagTy.numBits)
     (ht : ∀ idx (h : idx < vs.length), vs[idx].isTuple)
     (cl : (idx : Nat) → (h : idx < vs.length) → Layout vs[idx])
     (h_cl : ∀ idx (h : idx < vs.length), (cl idx h).Valid) :
-    (mkEnum vs cl).Valid := by
+    (mkEnum tagTy vs cl).Valid := by
   let fsa : (idx : Nat) → idx < vs.length → SizeAndAlign := λ idx h ↦ (cl idx h).size_and_align
-  let tagTy : IUScalarTy := .unsigned .Usize
   let A := natMax vs.length (λ i hi ↦ (fsa i hi).align) tagTy.size_and_align.align
   let payload_off := alignUp tagTy.size A
   let max_var_sz := natMax vs.length (λ i hi ↦ (fsa i hi).size) 0
   let sz := alignUp (payload_off + max_var_sz) A
   let sa : SizeAndAlign := ⟨sz, A, by grind, by grind⟩
   let vl : (idx : Nat) → (h : idx < vs.length) → Layout vs[idx] := λ idx h ↦ padVariantLayout (cl idx h) payload_off sa
-  let vt : (idx : Nat) → idx < vs.length → List TagToWrite := λ idx _ ↦ [⟨0, tagTy, ⟨BitVec.ofNat tagTy.numBits idx⟩⟩]
+  let vt : (idx : Nat) → idx < vs.length → List TagToWrite := λ idx _ ↦ [⟨0, tagTy, IUScalar.fromBv (BitVec.ofNat tagTy.numBits idx)⟩]
   let discr : Discriminator := .read 0 tagTy (λ bv ↦ if bv.toNat < vs.length then .known bv.toNat else .invalid)
   have hTagBounds : 0 + tagTy.size ≤ sa.size := by grind
   have h_pad := λ (idx : Nat) (h : idx < vs.length) ↦
@@ -192,12 +246,12 @@ lemma mkEnum_valid (vs : List MType) (h_max : vs.length ≤ Std.Usize.max)
   -- 1. `tags_preserve_payload`: tag writes into `[0 ..< tagTy.size) ⊆ [0 ..< payload_off)`, which is `.uninit`.
   · intro idx h_idx v hv payload_bs k hk
     have := (h_pad idx h_idx).2 v hv k
-    simp only [encode_discriminant, vt, List.foldl_cons, List.foldl_nil, IUScalar.bv]
+    simp only [encode_discriminant, vt, List.foldl_cons, List.foldl_nil]
     grind
   -- 2. `discr_complete`: reading `tagTy` back from `[0 ..< tagTy.size)` recovers `idx`.
   · intro idx h_idx v hv
     unfold decode_discriminant
-    simp [encode_discriminant, vt, IUScalar.bv]
+    simp [-IUScalarTy.numBits, encode_discriminant, vt, Nat.mod_eq_of_lt (by omega : idx < 2 ^ tagTy.numBits), h_idx]
     grind
   -- 3. `discr_tags_le_defined`: if `decode_discriminant bytes discr = some idx`, `bytes[0 ..< tagTy.size)` matches `vt idx`.
   · intro bytes idx h_idx h_dec
@@ -209,18 +263,8 @@ lemma mkEnum_valid (vs : List MType) (h_max : vs.length ≤ Std.Usize.max)
       have : Endianness.encode_bitvec tagTy.size (BitVec.ofNat tagTy.numBits idx) = bytes_data := by
         simp [← h_dec.2]
       intro k hk
-      simp only [encode_discriminant, vt, List.foldl_cons, List.foldl_nil, IUScalar.bv]
+      simp only [encode_discriminant, vt, List.foldl_cons, List.foldl_nil, IUScalar.bv_fromBv]
       grind
-
-theorem mk_valid (ty : MType) [hr : ty.Reasonable] : (mk ty).Valid := by
-  induction hr <;> grind [mk, Layout.Valid.int]
-
-/-! ## Part 3: Proving Reasonable Alignment (`ReasonablyAligned`) -/
-
-@[grind ←]
-lemma mkTuple_reasonablyAligned (ts : List MType) (fl : (idx : Nat) → (h : idx < ts.length) → Layout ts[idx]) :
-    (mkTuple ts fl).ReasonablyAligned :=
-  .tuple ts _ fl _ (by grind)
 
 @[grind ←]
 private lemma padVariantLayout_reasonablyAligned {t : MType} (ht : t.isTuple) (cl : Layout t)
@@ -237,11 +281,26 @@ private lemma padVariantLayout_reasonablyAligned {t : MType} (ht : t.isTuple) (c
          grind [Nat.dvd_trans, Nat.dvd_add]⟩
 
 @[grind ←]
-lemma mkEnum_reasonablyAligned (vs : List MType) (ht : ∀ idx (h : idx < vs.length), vs[idx].isTuple)
+lemma mkEnum_reasonablyAligned (tagTy : IUScalarTy := .unsigned .Usize)
+    (vs : List MType) (ht : ∀ idx (h : idx < vs.length), vs[idx].isTuple)
     (cl : (idx : Nat) → (h : idx < vs.length) → Layout vs[idx])
     (h_cl : ∀ idx (h : idx < vs.length), (cl idx h).ReasonablyAligned) :
-    (mkEnum vs cl).ReasonablyAligned :=
+    (mkEnum tagTy vs cl).ReasonablyAligned :=
   .enum vs _ _ _ _ (by grind)
+
+/-! ## Part 4: Deep `#[repr(C)]` Layout (`mk`) -/
+
+/-- Constructs the deep `#[repr(C)]` layout for an `MType` (assuming all composite types are `#[repr(C)]`).
+    Only `noncomputable` because scalar alignments (`IUScalarTy.size_and_align`) are `noncomputable`. -/
+noncomputable def mk : (ty : MType) → Layout ty
+  | .int _ => .int
+  | .tuple ts => mkTuple ts (λ idx h ↦ mk ts[idx]) none
+  | .enum vs => mkEnum (.unsigned .Usize) vs (λ idx h ↦ mk vs[idx])
+termination_by ty => sizeOf ty
+decreasing_by all_goals simp_wf; have := List.sizeOf_lt_of_mem (List.getElem_mem h); omega
+
+theorem mk_valid (ty : MType) [hr : ty.Reasonable] : (mk ty).Valid := by
+  induction hr <;> grind [mk, Layout.Valid.int]
 
 theorem mk_reasonablyAligned (ty : MType) [hr : ty.Reasonable] : (mk ty).ReasonablyAligned := by
   induction hr <;> grind [mk, Layout.ReasonablyAligned.int]

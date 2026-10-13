@@ -36,6 +36,14 @@ namespace IUScalar
   | .signed _ => Std.IScalar.val x
   | .unsigned _ => Std.UScalar.val x
 
+@[expose] def fromBv {ty} (bv : BitVec ty.numBits) : IUScalar ty :=
+  match ty with
+  | .signed _ => ⟨bv⟩
+  | .unsigned _ => ⟨bv⟩
+
+@[simp, grind =] lemma bv_fromBv {ty : IUScalarTy} (bv : BitVec ty.numBits) : (fromBv bv).bv = bv := by
+  cases ty <;> rfl
+
 end IUScalar
 
 @[expose, simp]
@@ -174,7 +182,8 @@ instance {x : MType} {xs : List MType} [hx : x.isTuple] [hxs : AllTuple xs] :
     AllTuple (x :: xs) :=
   ⟨λ | 0, _ => hx | n + 1, h => hxs.out n (Nat.lt_of_succ_lt_succ h)⟩
 
-
+-- This instance is better than relying on reduction because that might attempt to reduce (or even get stuck on)
+-- the data in this list. But we don't care about the data in the list.
 set_option checkBinderAnnotations false in
 class inductive ListLengthLe {α : Type _} : List α → Nat → Prop where
   | nil {n} : ListLengthLe [] n

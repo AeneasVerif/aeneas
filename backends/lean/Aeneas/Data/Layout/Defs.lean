@@ -9,6 +9,12 @@ import all Init.Data.Nat.Power2.Basic
 @[simp, grind ←]
 lemma one_isPowerOfTwo : Nat.isPowerOfTwo 1 := by decide
 
+
+@[simp, grind ←]
+lemma isPowerOfTwo_ge_one (n : Nat) : n.isPowerOfTwo → n ≥ 1 := by intro ⟨x, hx⟩; grind
+
+grind_pattern isPowerOfTwo_ge_one => n.isPowerOfTwo
+
 namespace Aeneas
 
 /-! ## Size and Alignment -/
@@ -153,6 +159,9 @@ noncomputable def size_and_align : {ty : MType} → Layout ty → SizeAndAlign
   by cases l <;> simp [size, size_and_align]
 
 grind_pattern size_known => l.size_and_align
+
+@[simp] lemma tuple_size_and_align ty ts fo sa : (@Layout.tuple ty ts fo sa).size_and_align = sa := rfl
+@[simp] lemma enum_size_and_align ty vt vl d sa : (@Layout.enum ty vt vl d sa).size_and_align = sa := rfl
 
 end Layout
 
