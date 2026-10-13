@@ -24,7 +24,7 @@ jobs:
           heartbeat_repository="AeneasVerif/charon"
           self_hosted='["self-hosted","linux","nix"]'
           github_hosted='["ubuntu-latest"]'
-          max_age_seconds=$((3 * 60 * 60))
+          max_age_seconds=$((12 * 60 * 60))
 
           # The self-hosted runner is only available on the main Aeneas repo.
           # On forks (and any other repo), always fall back to GitHub-hosted.
