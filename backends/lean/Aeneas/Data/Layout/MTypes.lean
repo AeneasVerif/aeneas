@@ -12,11 +12,14 @@ inductive IUScalarTy where
   | unsigned (ty : Std.UScalarTy)
 deriving Repr
 
-@[expose, implicit_reducible, simp]
+@[expose, implicit_reducible]
 def IUScalarTy.numBits (ty : IUScalarTy) : Nat :=
   match ty with
   | .signed ty => ty.numBits
   | .unsigned ty => ty.numBits
+
+@[simp, grind =] lemma IUScalarTy.numBits_signed (ty : Std.IScalarTy) : (IUScalarTy.signed ty).numBits = ty.numBits := rfl
+@[simp, grind =] lemma IUScalarTy.numBits_unsigned (ty : Std.UScalarTy) : (IUScalarTy.unsigned ty).numBits = ty.numBits := rfl
 
 @[expose, implicit_reducible]
 def IUScalar (ty : IUScalarTy) : Type :=

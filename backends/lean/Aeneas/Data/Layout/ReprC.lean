@@ -1,6 +1,7 @@
 module
 public import Aeneas.Data.Layout.Defs
 public import Aeneas.Data.Layout.GaloisConnection
+
 @[expose] public section
 
 namespace Aeneas
@@ -142,10 +143,16 @@ lemma tupleValid {n : Nat} (fsize falign : (i : Nat) → i < n → Nat)
 
 /-- All fields of a tuple layout are placed at byte offset `≥ min_off`
     (leaving `[0 ..< min_off)` untouched as prefix padding). -/
-@[grind =]
 def TupleMinOffset (min_off : Nat) : {t : MType} → Layout t → Prop
   | .tuple ts, .tuple vfo _ _ => ∀ j (hj : j < ts.length), min_off ≤ vfo j hj
   | _, _ => True
+
+@[simp, grind =]
+lemma tupleMinOffset_tuple (min_off : Nat) {ts : List MType}
+    (vfo : (idx : Nat) → idx < ts.length → Nat)
+    (vfl : (idx : Nat) → (h : idx < ts.length) → Layout ts[idx])
+    (sa : SizeAndAlign) :
+    TupleMinOffset min_off (.tuple vfo vfl sa) = (∀ j (hj : j < ts.length), min_off ≤ vfo j hj) := rfl
 
 @[simp, grind .]
 lemma tupleMinOffset_zero {t : MType} (cl : Layout t) : TupleMinOffset 0 cl := by
@@ -262,6 +269,12 @@ private lemma padVariantLayout_size_and_align {t : MType} (ht : t.isTuple) (cl :
 
 grind_pattern padVariantLayout_size_and_align => padVariantLayout cl payload_off sa
 
+@[simp]
+private lemma padVariantLayout_size {t : MType} (ht : t.isTuple) (cl : Layout t)
+    (payload_off : Nat) (sa : SizeAndAlign) :
+    (padVariantLayout cl payload_off sa).size = sa.size := by
+  rw [← size_known, padVariantLayout_size_and_align ht]
+
 private lemma padVariantLayout_spec {t : MType} (ht : t.isTuple) (cl : Layout t) (hcl : cl.Valid)
     (min_off payload_off : Nat) (h_min : TupleMinOffset min_off cl)
     (sa : SizeAndAlign) (h_size : payload_off + cl.size ≤ sa.size) :
@@ -313,13 +326,13 @@ lemma mkEnumCore_valid (tagTy : IUScalarTy) (shift_payload : Bool)
   · grind
   -- 1. `tags_preserve_payload`: tag writes into `[0 ..< tagTy.size) ⊆ [0 ..< min_off + payload_off)`, which is `.uninit`.
   · intro idx h_idx v hv payload_bs k hk
-    have := (h_pad idx h_idx).2 v hv k
-    simp only [encode_discriminant, vt, List.foldl_cons, List.foldl_nil]
+    have := (h_pad idx h_idx).2 v hv k (by simp [hk])
+    simp [encode_discriminant, vt, payload_bs, vl, hk]
     grind
   -- 2. `discr_complete`: reading `tagTy` back from `[0 ..< tagTy.size)` recovers `idx`.
   · intro idx h_idx v hv
     unfold decode_discriminant
-    simp [-IUScalarTy.numBits, encode_discriminant, vt, Nat.mod_eq_of_lt (by omega : idx < 2 ^ tagTy.numBits), h_idx]
+    simp [encode_discriminant, vt, Nat.mod_eq_of_lt (by omega : idx < 2 ^ tagTy.numBits), h_idx]
     grind
   -- 3. `discr_tags_le_defined`: if `decode_discriminant bytes discr = some idx`, `bytes[0 ..< tagTy.size)` matches `vt idx`.
   · intro bytes idx h_idx h_dec

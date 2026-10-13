@@ -143,13 +143,12 @@ inductive Layout : MType → Type 0 where
 
 namespace Layout
 
-@[reducible]
+@[implicit_reducible]
 def size : {ty : MType} → Layout ty → Nat
   | .int ty, .int => ty.size
   | _, .tuple _ _ sa => sa.size
   | _, .enum _ _ _ sa => sa.size
 
-@[grind =]
 noncomputable def size_and_align : {ty : MType} → Layout ty → SizeAndAlign
   | .int ty, .int => ty.size_and_align
   | _, .tuple _ _ sa => sa
@@ -159,9 +158,15 @@ noncomputable def size_and_align : {ty : MType} → Layout ty → SizeAndAlign
   by cases l <;> simp [size, size_and_align]
 
 grind_pattern size_known => l.size_and_align
+grind_pattern size_known => l.size
 
-@[simp] lemma tuple_size_and_align ty ts fo sa : (@Layout.tuple ty ts fo sa).size_and_align = sa := rfl
-@[simp] lemma enum_size_and_align ty vt vl d sa : (@Layout.enum ty vt vl d sa).size_and_align = sa := rfl
+@[simp, grind =] lemma int_size (ty : IUScalarTy) : (@Layout.int ty).size = ty.size := rfl
+@[simp, grind =] lemma tuple_size {ts} fo fl sa : (@Layout.tuple ts fo fl sa).size = sa.size := rfl
+@[simp, grind =] lemma enum_size {vs} vt vl d sa : (@Layout.enum vs vt vl d sa).size = sa.size := rfl
+
+@[simp, grind =] lemma int_size_and_align (ty : IUScalarTy) : (@Layout.int ty).size_and_align = ty.size_and_align := rfl
+@[simp, grind =] lemma tuple_size_and_align ty ts fo sa : (@Layout.tuple ty ts fo sa).size_and_align = sa := rfl
+@[simp, grind =] lemma enum_size_and_align ty vt vl d sa : (@Layout.enum ty vt vl d sa).size_and_align = sa := rfl
 
 end Layout
 
