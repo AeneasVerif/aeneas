@@ -68,8 +68,8 @@ def alloc.vec.FromIteratorVec.from_iter
   fun input => do
     let iter ← IntoIteratorInst.into_iter input
     let list ← alloc.vec.FromIteratorVec.iterToList IntoIteratorInst.iteratorInst iter []
-    (if h : list.length ≤ Usize.max then .ok (.from list h)
-     else .fail .panic)
+    if h : list.length ≤ Usize.max then .ok (.from list h)
+    else .fail .panic
 
 @[expose, reducible, rust_trait_impl
   "core::iter::traits::collect::FromIterator<alloc::vec::Vec<@T>, @T>"]

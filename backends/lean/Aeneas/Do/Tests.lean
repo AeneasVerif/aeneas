@@ -742,6 +742,20 @@ def unit_bind : Result Nat := do
   let () ← ok ()
   ok 1
 
+/- Dependent `if h : c` (the hypothesis is used in the `then` branch). -/
+def dite_get (l : List Nat) (i : Nat) : Result Nat := do
+  let j ← ok i
+  if h : j < l.length then ok l[j]
+  else if _ : j = l.length then ok 0
+  else fail .panic
+
+example (l : List Nat) (i : Nat) :
+    dite_get l i =
+      Aeneas.Std.bind (ok i) (fun j =>
+        if h : j < l.length then ok l[j]
+        else if _ : j = l.length then ok 0
+        else fail .panic) := rfl
+
 end Tests
 
 /- ## Regression tests for `elabDoMatch` with unresolved discriminant type metavars.
