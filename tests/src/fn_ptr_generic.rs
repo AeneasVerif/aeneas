@@ -24,9 +24,8 @@ fn get_x<T>(h: Holder<T>) -> T {
     h.x
 }
 
-// Methods take `self` by value: passing a borrow of a value containing a
-// function item to a function (e.g., `&Wrap<fn item>`) fails with "Arrow types
-// are not supported yet".
+// Aeneas fails on `w.get()` below ("Arrow types are not supported yet"),
+// because `w` contains a function item.
 pub trait HasOut {
     type Out;
     fn get(self) -> Self::Out;
