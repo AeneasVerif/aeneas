@@ -62,8 +62,8 @@ def RustEffect : Effect := {
   O := RustEffect.Output
 }
 
--- We need Result to be irreducible outside this file (to not break metaprograms which normalize types),
--- but reducible within. The `unseal` command only affects the local scope.
+-- We need Result to be irreducible outside this file (to not break metaprograms which normalize
+-- types), but reducible within. The `unseal` command only affects the local scope.
 @[irreducible]
 def Result (α : Type u) : Type u := ITree RustEffect α
 unseal Result
