@@ -6,6 +6,9 @@ public import Aeneas.Data.Layout.MTypes
 import all Init.Data.Nat.Power2.Basic
 @[expose] public section
 
+@[simp, grind ←]
+lemma one_isPowerOfTwo : Nat.isPowerOfTwo 1 := by decide
+
 namespace Aeneas
 
 /-! ## Size and Alignment -/
@@ -16,14 +19,23 @@ structure SizeAndAlign : Type 0 where
   wf_align : align.isPowerOfTwo
   wf_size : align ∣ size
 
-@[grind ←]
 lemma SizeAndAlign.grind_wf_align (sa : SizeAndAlign) : sa.align.isPowerOfTwo := sa.wf_align
+grind_pattern SizeAndAlign.grind_wf_align => sa.align
 
-@[grind ←]
 lemma SizeAndAlign.grind_wf_size (sa : SizeAndAlign) : sa.align ∣ sa.size := sa.wf_size
+grind_pattern SizeAndAlign.grind_wf_size => sa.size
 
 namespace SizeAndAlign
 
+lemma align_pos (sa : SizeAndAlign) : 0 < sa.align :=
+  Nat.pos_of_isPowerOfTwo sa.wf_align
+grind_pattern align_pos => sa.align
+
+@[grind ←]
+lemma pos_of_isPowerOfTwo {n : Nat} (h : n.isPowerOfTwo) : 0 < n :=
+  Nat.pos_of_isPowerOfTwo h
+
+@[grind ←]
 lemma dvd_of_isPowerOfTwo_le {a b : Nat} (ha : a.isPowerOfTwo) (hb : b.isPowerOfTwo) (hle : a ≤ b) :
     a ∣ b := by
   obtain ⟨ka, rfl⟩ := ha
@@ -34,17 +46,19 @@ lemma dvd_of_isPowerOfTwo_le {a b : Nat} (ha : a.isPowerOfTwo) (hb : b.isPowerOf
 
 def alignUp (x A : Nat) : Nat := ((x + A - 1) / A) * A
 
-@[simp, grind ←]
+@[simp]
 lemma le_alignUp (x : Nat) {A : Nat} (hA : 0 < A) : x ≤ alignUp x A := by
   have h := Nat.div_add_mod (x + A - 1) A
   rw [Nat.mul_comm] at h
   have := Nat.mod_lt (x + A - 1) hA
   dsimp [alignUp]
   omega
+grind_pattern le_alignUp => alignUp x A
 
-@[simp, grind ←]
+@[simp]
 lemma aligned_alignUp (x : Nat) {A : Nat} : A ∣ alignUp x A := by
   apply Nat.dvd_mul_left
+grind_pattern aligned_alignUp => alignUp x A
 
 lemma num_bytes_is_power_of_two {ty : IUScalarTy} : (ty.numBits / 8).isPowerOfTwo := by
   rcases ty with ⟨ty⟩ | ⟨ty⟩ <;>
@@ -68,7 +82,7 @@ lemma IUScalarTy.reasonablyAligned_isReasonable {ty : IUScalarTy} : ty.reasonabl
 noncomputable def IUScalarTy.size_and_align (ty : IUScalarTy) : SizeAndAlign :=
   @Classical.choose SizeAndAlign (·.ValidForScalar ty) ⟨_, ty.reasonablyAligned_isReasonable⟩
 
-@[simp] lemma IUScalarTy.knownSize {ty : IUScalarTy} : ty.size_and_align.size = ty.size :=
+@[simp, grind =] lemma IUScalarTy.knownSize {ty : IUScalarTy} : ty.size_and_align.size = ty.size :=
   @Classical.choose_spec SizeAndAlign (·.ValidForScalar ty) ⟨_, ty.reasonablyAligned_isReasonable⟩
 
 @[simp] lemma SizeAndAlign.sizeOneAlignOne (sa : SizeAndAlign) : sa.size = 1 → sa.align = 1 := by
@@ -85,6 +99,8 @@ noncomputable def IUScalarTy.size_and_align (ty : IUScalarTy) : SizeAndAlign :=
 
 @[simp] lemma IUScalarTy.knownAlignU8 : (IUScalarTy.unsigned .U8).size_and_align.align = 1 := by simp [IUScalarTy.size]
 
+@[simp, grind =] def SizeAndAlign.zero_sized_maximally_aligned : SizeAndAlign :=
+  ⟨0, 1, by grind, by grind⟩
 
 /-! ## Core Layout Representation (`Discriminator`, `TagToWrite`, `Layout`) -/
 
@@ -127,17 +143,16 @@ def size : {ty : MType} → Layout ty → Nat
   | _, .tuple _ _ sa => sa.size
   | _, .enum _ _ _ sa => sa.size
 
-@[simp] lemma size_int {ty} : (Layout.int : Layout (.int ty)).size = ty.size := rfl
-@[simp] lemma size_tuple {ts fo fl sa} : (Layout.tuple fo fl sa : Layout (.tuple ts)).size = sa.size := rfl
-@[simp] lemma size_enum {vs vt vl dc sa} : (Layout.enum vt vl dc sa : Layout (.enum vs)).size = sa.size := rfl
-
+@[grind =]
 noncomputable def size_and_align : {ty : MType} → Layout ty → SizeAndAlign
   | .int ty, .int => ty.size_and_align
   | _, .tuple _ _ sa => sa
   | _, .enum _ _ _ sa => sa
 
-@[simp] lemma size_known (l : Layout ty) : l.size_and_align.size = l.size :=
-  by cases l <;> simp [size_and_align]
+@[simp, grind =] lemma size_known (l : Layout ty) : l.size_and_align.size = l.size :=
+  by cases l <;> simp [size, size_and_align]
+
+grind_pattern size_known => l.size_and_align
 
 end Layout
 
@@ -179,6 +194,7 @@ end Endianness
 /-- Uses the `Discriminator` to decode the discriminant from the tag read out of the value's bytes.
     Returns `none` when reaching `Discriminator.invalid` and when any of the reads
     for `Discriminator.read` encounters uninitialized memory. -/
+@[grind =]
 def decode_discriminant {n : Nat} (bytes : Bytes n) : Discriminator → Option Nat
   | .known val => some val
   | .invalid => none
@@ -191,6 +207,11 @@ def decode_discriminant {n : Nat} (bytes : Bytes n) : Discriminator → Option N
         let bv := Endianness.decode_bitvec value_type bytes_data
         decode_discriminant bytes (matcher bv)
       else none
+
+@[simp, grind =] lemma decode_discriminant_known {n : Nat} (bytes : Bytes n) (v : Nat) :
+    decode_discriminant bytes (.known v) = some v := rfl
+@[simp, grind =] lemma decode_discriminant_invalid {n : Nat} (bytes : Bytes n) :
+    decode_discriminant bytes .invalid = none := rfl
 
 /-- Writes the tag described by the tagger into `bytes`. -/
 def encode_discriminant {n : Nat} (bytes : Bytes n) (tagger : List TagToWrite) : Bytes n :=
@@ -263,12 +284,15 @@ end Layout
 
 /-! ## Layout Validity -/
 
+@[grind]
 structure Layout.ScalarValidAt (st : IUScalarTy) (off : Nat) (sa : SizeAndAlign) where
   in_bounds : off + st.size ≤ sa.size
 
+@[grind =]
 def TagToWrite.Valid (t : TagToWrite) (sa : SizeAndAlign) :=
   Layout.ScalarValidAt t.ty t.offset sa
 
+@[grind]
 inductive Discriminator.Valid (sa : SizeAndAlign) (n : Nat) : Discriminator → Prop where
   | known d : d < n → Discriminator.Valid _ _ (.known d)
   | invalid : Discriminator.Valid _ _ .invalid
@@ -279,6 +303,7 @@ inductive Discriminator.Valid (sa : SizeAndAlign) (n : Nat) : Discriminator → 
 
 namespace Layout
 
+@[grind =]
 def disj_range (r1 r2 : Nat × Nat) : Prop :=
   ∀ n, r1.1 ≤ n → n < r1.2 → r2.1 ≤ n → n < r2.2 → False
 
@@ -323,21 +348,6 @@ inductive Valid : {ty : MType} → Layout ty → Prop where
       EnumValid vt vl dc sa →
       Valid (.enum vt vl dc sa : Layout (.enum vs))
 
-structure TupleReasonablyAligned (field_offs : Fin n → Nat) (field_layouts : Fin n → SizeAndAlign) (sa : SizeAndAlign) where
-  fields_aligned : ∀ i, sa.align ≥ (field_layouts i).align
-  offs_aligned : ∀ i, (field_layouts i).align ∣ field_offs i
-
-inductive ReasonablyAligned : {ty : MType} → Layout ty → Prop where
-  | int ty : ReasonablyAligned (.int : Layout (.int ty))
-  | tuple ts fo fl sa :
-      (∀ idx, (fl idx).ReasonablyAligned) →
-      TupleReasonablyAligned fo (λ i ↦ (fl i).size_and_align) sa →
-      ReasonablyAligned (.tuple fo fl sa : Layout (.tuple ts))
-  | enum vs vt vl dc sa :
-      (∀ idx, (vl idx).ReasonablyAligned) →
-      (∀ idx, (vt idx).Forall (λ t ↦ t.ty.size_and_align.align ∣ t.offset)) →
-      ReasonablyAligned (.enum vt vl dc sa : Layout (.enum vs))
-
 /-! ## Generic Representation Properties (Galois Connection)
     Following MiniRust's `spec/lang/representation.md` ("Generic properties"). -/
 
@@ -362,6 +372,37 @@ def DecodeEncode {ty : MType} (l : Layout ty) : Prop :=
 def EncodeDecodeLeDefined {ty : MType} (l : Layout ty) : Prop :=
   ∀ (bytes : Bytes l.size) (val : MVal) (hv : val.valid_for ty),
     decode l bytes = some val → (encode l val hv).le_defined bytes
+
+/-! ## Extra Properties that might be imposed on a layout -/
+
+structure TupleReasonablyAligned (field_offs : Fin n → Nat) (field_layouts : Fin n → SizeAndAlign) (sa : SizeAndAlign) where
+  fields_aligned : ∀ i, sa.align ≥ (field_layouts i).align
+  offs_aligned : ∀ i, (field_layouts i).align ∣ field_offs i
+
+--- A reasonably aligned layout is one that guaranees the fields are at "well-aligned" positions.
+--- In other words, it is not repr(packed).
+--- This is a non-recursive property, since this does not affect the layout of the contained fields
+inductive ReasonablyAligned : {ty : MType} → Layout ty → Prop where
+  | tuple ts fo fl sa :
+      TupleReasonablyAligned fo (λ i ↦ (fl i).size_and_align) sa →
+      ReasonablyAligned (.tuple fo fl sa : Layout (.tuple ts))
+  | enum vs vt vl dc sa :
+      -- It is intended that this recurses here, to control the layout of each variant.
+      (∀ idx, (vl idx).ReasonablyAligned) →
+      (∀ idx, (vt idx).Forall (λ t ↦ t.ty.size_and_align.align ∣ t.offset)) →
+      ReasonablyAligned (.enum vt vl dc sa : Layout (.enum vs))
+
+inductive Transparent : {ty : MType} → Layout ty → Prop where
+| tuple_zero_sized ts fo fl :
+    (∀ idx, (fl idx).size_and_align = .zero_sized_maximally_aligned) →
+    Transparent (.tuple fo fl .zero_sized_maximally_aligned : Layout (.tuple ts))
+| tuple_one_elem ts fo fl idnz :
+    (∀ idx, idx ≠ idnz → (fl idx).size_and_align = .zero_sized_maximally_aligned) →
+    Transparent (.tuple fo fl (fl idnz).size_and_align : Layout (.tuple ts))
+| enum v (vl : Layout v) :
+    Transparent vl →
+    Transparent (.enum (λ _ ↦ []) (λ ⟨0, _⟩ ↦ vl) (.known 0) vl.size_and_align : Layout (.enum [v]))
+
 
 end Layout
 
