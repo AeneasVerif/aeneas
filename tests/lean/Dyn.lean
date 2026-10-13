@@ -92,4 +92,13 @@ def dyn_closure
   {T0 : Type} (TrivialInst : Trivial T0) (t : T0) : Result Unit := do
   ok ()
 
+/-- [dyn::dyn_closure::{impl core::ops::function::Fn<(u32,), u32> for dyn::dyn_closure::{closure}<T0>}::call]:
+    Source: 'tests/src/dyn.rs', lines 51:12-51:33 -/
+def dyn_closure.closure.Insts.CoreOpsFunctionFnTupleU32U32.call
+  {T0 : Type} (TrivialInst : Trivial T0) (c : dyn_closure.closure T0)
+  (tupled_args : Std.U32) :
+  Result Std.U32
+  := do
+  ok tupled_args
+
 end dyn
