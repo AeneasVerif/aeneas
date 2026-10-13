@@ -157,4 +157,40 @@ theorem core.bool.Bool.then.spec {T F : Type}
     intro value h
     simp [h]
 
+/-- `Option::branch` (`Try`): `Some v ⇒ Continue v`, `None ⇒ Break None`. -/
+@[expose, rust_fun
+  "core::option::{core::ops::try_trait::Try<core::option::Option<@T>>}::branch"]
+def core.option.Option.Insts.CoreOpsTry.branch {T : Type} :
+  Option T → Result (core.ops.control_flow.ControlFlow (Option Never) T)
+  | some v => ok (.Continue v)
+  | none => ok (.Break none)
+
+/-- `Option::from_residual` (`FromResidual`): a `None` residual stays `None`. -/
+@[expose, rust_fun
+  "core::option::{core::ops::try_trait::FromResidual<core::option::Option<@T>, core::option::Option<!>>}::from_residual"]
+def core.option.Option.Insts.CoreOpsTry_traitFromResidualOption.from_residual
+  (T : Type) (r : Option Never) : Result (Option T) :=
+  match r with
+  | some x => x.casesOn
+  | none => ok none
+
+@[step]
+theorem core.option.Option.Insts.CoreOpsTry.branch.spec {T : Type} (o : Option T) :
+    core.option.Option.Insts.CoreOpsTry.branch o
+    ⦃ (cf : core.ops.control_flow.ControlFlow (Option Never) T) =>
+      cf = match o with
+        | some v => .Continue v
+        | none => .Break none ⦄ := by
+  cases o <;> simp [core.option.Option.Insts.CoreOpsTry.branch]
+
+@[step]
+theorem core.option.Option.Insts.CoreOpsTry_traitFromResidualOption.from_residual.spec
+    (T : Type) (r : Option Never) :
+    core.option.Option.Insts.CoreOpsTry_traitFromResidualOption.from_residual T r
+    ⦃ (x : Option T) => x = none ⦄ := by
+  cases r
+  · simp [core.option.Option.Insts.CoreOpsTry_traitFromResidualOption.from_residual]
+  · rename_i x
+    exact x.casesOn
+
 end Aeneas.Std
