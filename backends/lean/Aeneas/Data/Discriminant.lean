@@ -28,8 +28,17 @@ inductive ScalarTy where
 | U8 | U16 | U32 | U64 | U128 | Usize
 | I8 | I16 | I32 | I64 | I128 | Isize
 
-meta def mkScalarValue (ty : ScalarTy) (val : Nat) : TermElabM Term := do
-  let value := Syntax.mkNumLit (toString val)
+meta def mkScalarValue (ty : ScalarTy) (val : Int) : TermElabM Term := do
+  let value : Term ←
+    match val with
+    | .ofNat n => pure ⟨Syntax.mkNumLit (toString n)⟩
+    | .negSucc n =>
+      match ty with
+      | .U8 | .U16 | .U32 | .U64 | .U128 | .Usize =>
+        throwError "Negative discriminant {val} is invalid for an unsigned scalar"
+      | _ =>
+        let magnitude := Syntax.mkNumLit (toString (n + 1))
+        `((-$(magnitude)))
   match ty with
   | .U8 => `($(value)#u8)
   | .U16 => `($(value)#u16)
@@ -63,7 +72,7 @@ meta def mkScalarTy (ty : ScalarTy) : TermElabM Term := do
 
 This function is adapted from `Lean.Elab.Deriving.BEq`.
 -/
-meta def generateReadDiscriminantCmds (declName : Name) (ty : ScalarTy) (discrValues : Option (List Nat)) :
+meta def generateReadDiscriminantCmds (declName : Name) (ty : ScalarTy) (discrValues : Option (List Int)) :
   TermElabM (List Syntax) := do
   -- Lookup the declaration, which should be an inductive
   let env ← getEnv
@@ -92,7 +101,7 @@ meta def generateReadDiscriminantCmds (declName : Name) (ty : ScalarTy) (discrVa
   -- Generate the value of the discriminant for each variant
   let discrValues ← do
     match discrValues with
-    | none => pure (indVal.ctors.mapIdx (fun n _ => n))
+    | none => pure (indVal.ctors.mapIdx (fun n _ => Int.ofNat n))
     | some values =>
       if values.length ≠ indVal.ctors.length then
         throwError "Invalid number of values provided ({discrValues}): got {values.length}, expected {indVal.ctors.length}"
@@ -137,14 +146,18 @@ meta def generateReadDiscriminantCmds (declName : Name) (ty : ScalarTy) (discrVa
   --
   pure [defStx, instStx]
 
-/-- Given an inductive declaration name and an optional list of values, generate an instance
-of `Std.Discriminant`. If the list of values is not provided, we use values `0`, `1`, etc. -/
-meta def generateReadDiscriminant (declName : Name) (ty : ScalarTy) (discrValues : Option (List Nat)) :
+/-- Given an inductive declaration name and an optional list of signed values, generate an instance
+of `Std.Discriminant`. Values must fit the scalar type (negative unsigned values are rejected).
+If the list of values is not provided, we use values `0`, `1`, etc. -/
+meta def generateReadDiscriminant (declName : Name) (ty : ScalarTy) (discrValues : Option (List Int)) :
   CommandElabM Unit := do
   let cmds ← liftTermElabM (generateReadDiscriminantCmds declName ty discrValues)
   cmds.forM elabCommand
 
-syntax (name := readDiscriminant) "discriminant" ident ("["num,*"]")? : attr
+declare_syntax_cat discriminantValue
+syntax num : discriminantValue
+syntax "-" num : discriminantValue
+syntax (name := readDiscriminant) "discriminant" ident ("["discriminantValue,*"]")? : attr
 
 meta def elabTypeToken (stx : Syntax) : AttrM ScalarTy :=
   match stx.getId with
@@ -162,7 +175,13 @@ meta def elabTypeToken (stx : Syntax) : AttrM ScalarTy :=
   | `isize => pure ScalarTy.Isize
   | _ => throwUnsupportedSyntax
 
-meta def elabReadDiscriminantAttribute (stx : Syntax) : AttrM (ScalarTy × Option (List Nat)) :=
+meta def elabDiscriminantValue (stx : TSyntax `discriminantValue) : AttrM Int :=
+  match stx with
+  | `(discriminantValue| $n:num) => pure (Int.ofNat n.getNat)
+  | `(discriminantValue| -$n:num) => pure (-Int.ofNat n.getNat)
+  | _ => throwUnsupportedSyntax
+
+meta def elabReadDiscriminantAttribute (stx : Syntax) : AttrM (ScalarTy × Option (List Int)) :=
   withRef stx do
     match stx with
     | `(attr| discriminant $ty) => do
@@ -170,7 +189,7 @@ meta def elabReadDiscriminantAttribute (stx : Syntax) : AttrM (ScalarTy × Optio
       pure (← elabTypeToken ty, none)
     | `(attr| discriminant $ty [$x,*]) => do
       trace[Discriminant] "Elaborating discriminant attribute with values: {x.getElems}"
-      pure (← elabTypeToken ty, some ((x.getElems.toList.map Syntax.isNatLit?).map Option.get!))
+      pure (← elabTypeToken ty, some (← x.getElems.toList.mapM elabDiscriminantValue))
     | _ => throwUnsupportedSyntax
 
 public meta initialize discriminantAttribute : AttributeImpl ← do
