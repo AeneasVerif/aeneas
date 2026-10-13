@@ -4,7 +4,7 @@ public import Aeneas.Data.List
 public import Aeneas.Std.Array.Core
 public import Aeneas.Std.Range
 public import Aeneas.Std.Core.Ops
-public import Aeneas.Std.Heap
+public import Aeneas.Std.Core.Ptr
 public import Aeneas.Tactic.Simp.SimpScalar.SimpScalar
 public import Aeneas.Std.SliceDef
 public section
@@ -56,6 +56,17 @@ abbrev Slice.len {α : Type u} (v : Slice α) : Usize :=
 @[simp, scalar_tac_simps, simp_scalar_safe, simp_lists_safe, grind =, agrind =]
 theorem Slice.len_val {α : Type u} (v : Slice α) : (Slice.len v).val = v.length :=
   by simp
+
+/-- Unlike Rust's `as_ptr`, this allocates: the functional slice model has no address. -/
+@[rust_fun "core::slice::{[@T]}::as_ptr"]
+def Slice.as_ptr {T : Type} (s : Slice T) : Result (ConstRawPtr T) :=
+  RawPtr.materialize s.val
+
+/-- The pointer points to a fresh copy of `s`, and `s` is returned unchanged. -/
+@[rust_fun "core::slice::{[@T]}::as_mut_ptr"]
+def Slice.as_mut_ptr {T : Type} (s : Slice T) : Result (MutRawPtr T × Slice T) := do
+  let p ← RawPtr.materialize s.val
+  pure (p, s)
 
 instance {α : Type u} : GetElem (Slice α) Nat α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i h
