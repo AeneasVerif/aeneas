@@ -102,6 +102,8 @@ package «tests» {}
 @[default_target] lean_lib RenameAttribute
 @[default_target] lean_lib RustBorrowCheckIssues
 @[default_target] lean_lib Scalars
+@[default_target] lean_lib SliceGetUnchecked
+@[default_target] lean_lib SliceGetUncheckedTests
 @[default_target] lean_lib Slices
 @[default_target] lean_lib Static
 @[default_target] lean_lib StepBy
