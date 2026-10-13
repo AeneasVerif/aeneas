@@ -13,7 +13,7 @@ let lean_builtin_types =
     (* file: "Aeneas/Std/VecIter.lean", line: 10 *)
     mk_type "alloc::vec::into_iter::IntoIter" "alloc.vec.into_iter.IntoIter"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 80 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 101 *)
     mk_type "core::alloc::layout::Layout" "core.alloc.layout.Layout"
       ~kind:(KStruct [ ("size", Some "size"); ("align", Some "align") ]);
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 126 *)
@@ -90,9 +90,9 @@ let lean_builtin_types =
     mk_type "core::pin::Pin" "core.pin.Pin";
     (* file: "Aeneas/Std/Core/Pin.lean", line: 12 *)
     mk_type "core::pin::helper::PinHelper" "core.pin.helper.PinHelper";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 76 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 77 *)
     mk_type "core::ptr::alignment::Alignment" "core.ptr.alignment.Alignment";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 9 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 10 *)
     mk_type "core::ptr::alignment::AlignmentEnum"
       "core.ptr.alignment.AlignmentEnum"
       ~kind:
@@ -1319,7 +1319,7 @@ let lean_builtin_funs =
 
 let lean_builtin_trait_decls =
   [
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 85 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 106 *)
     mk_trait_decl "core::alloc::global::GlobalAlloc"
       "core.alloc.global.GlobalAlloc"
       ~methods:[ ("alloc", "alloc"); ("dealloc", "dealloc") ];

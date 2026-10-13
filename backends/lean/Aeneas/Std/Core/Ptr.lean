@@ -1,6 +1,7 @@
 module
 public import Aeneas.Std.Core.Core
-public import Aeneas.Std.RawPtr
+public import Aeneas.Std.Heap
+public import Aeneas.Std.Scalar.Core
 public section
 
 namespace Aeneas.Std
@@ -76,6 +77,26 @@ inductive core.ptr.alignment.AlignmentEnum where
 @[expose, reducible, rust_type "core::ptr::alignment::Alignment"]
 def core.ptr.alignment.Alignment :=
 core.ptr.alignment.AlignmentEnum
+
+class IsScalar (T : Type) where
+  isScalar : (∃ ty, T = UScalar ty) ∨ (∃ ty, T = IScalar ty)
+
+instance {ty} : IsScalar (UScalar ty) where
+  isScalar := by simp
+
+instance {ty} : IsScalar (IScalar ty) where
+  isScalar := by simp
+
+/-! ### START Trusted definitions -/
+
+/-- Not a Rust function: the `as` cast between scalar raw pointers, which the extractor emits by
+name. It always fails. TODO: the typed heap cannot read a cell at another scalar type, so casts are
+not modelled. -/
+def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability) [IsScalar T] [IsScalar T']
+    (_ : RawPtr T M) : Result (RawPtr T' M') :=
+  .fail .undef
+
+/-! ### END Trusted definitions -/
 
 @[rust_type "core::alloc::layout::Layout"]
 structure core.alloc.layout.Layout where
