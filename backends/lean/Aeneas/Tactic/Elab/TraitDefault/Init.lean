@@ -372,9 +372,10 @@ elab mods:declModifiers "impl_def " id:declId sig:optDeclSig val:declVal : comma
       Term.synthesizeSyntheticMVarsNoPostponing
 
       let fullType ← mkForallFVars xs type
-      -- Turn the universe metavariables of the header (e.g., from `Type _` binders) into
-      -- parameters before elaborating the body: the self-reference is typed with `fullType`,
-      -- which therefore can't contain metavariables.
+      -- `fullType` contains universe metavariables from `Type _` binders, thus, we turn them into
+      -- universe parameters (as `def` does) and propagate them to `type`.
+      -- We do the propagation before elaborating the body, which could instantiate them accidently,
+      -- probably with `Type`.
       let fullType ← Term.levelMVarToParam (← instantiateMVars fullType)
       let type ← instantiateMVars type
 

@@ -62,15 +62,8 @@ def RustEffect : Effect := {
   O := RustEffect.Output
 }
 
--- We need Result to be irreducble outside this file (to not break metaprograms which normalize types),
+-- We need Result to be irreducible outside this file (to not break metaprograms which normalize types),
 -- but reducible within. The `unseal` command only affects the local scope.
---
--- Universes: `Result` may live in a higher universe than its argument (see #1352), in which
--- case `A → Result B` is not in `Type`: generic code must accept types in any universe.
--- Convention: extracted code and the Std models bind type parameters as `Type _`
--- (except the type parameters of generic trait methods, which live in a structure field and
--- stay in `Type`), and Std models whose `do` blocks bind values of different universes import
--- `Aeneas.Do.Elab`, whose `do` uses the universe-heterogeneous `Std.bind`.
 @[irreducible]
 def Result (α : Type u) : Type u := ITree RustEffect α
 unseal Result

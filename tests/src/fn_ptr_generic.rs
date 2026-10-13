@@ -1,9 +1,5 @@
 //@ [!lean] skip
-//! Generic code instantiated with function items. A function item is
-//! extracted as `A → Result B`; once `Result` lives in a higher universe than
-//! its argument (see #1352), this type is not in `Type`, so generic type
-//! binders must be universe-polymorphic. The universe-polymorphism itself is
-//! checked in `tests/lean/FnPtrGenericUniverses.lean`.
+//! Generic code instantiated with function items (extracted as `A → Result B`).
 //!
 //! Note: function pointer types (`fn(u8) -> u8`) are not supported by Aeneas;
 //! we use function items instead.
@@ -28,7 +24,9 @@ fn get_x<T>(h: Holder<T>) -> T {
     h.x
 }
 
-// Methods take `self` by value: borrows of function items are not supported.
+// Methods take `self` by value: passing a borrow of a value containing a
+// function item to a function (e.g., `&Wrap<fn item>`) fails with "Arrow types
+// are not supported yet".
 pub trait HasOut {
     type Out;
     fn get(self) -> Self::Out;
