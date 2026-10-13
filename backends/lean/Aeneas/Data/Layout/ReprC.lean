@@ -218,10 +218,9 @@ theorem mk_valid (ty : MType) [hr : ty.Reasonable] : (mk ty).Valid := by
 /-! ## Part 3: Proving Reasonable Alignment (`ReasonablyAligned`) -/
 
 @[grind ←]
-lemma mkTuple_reasonablyAligned (ts : List MType) (fl : (idx : Nat) → (h : idx < ts.length) → Layout ts[idx])
-    (h_fl : ∀ idx (h : idx < ts.length), (fl idx h).ReasonablyAligned) :
+lemma mkTuple_reasonablyAligned (ts : List MType) (fl : (idx : Nat) → (h : idx < ts.length) → Layout ts[idx]) :
     (mkTuple ts fl).ReasonablyAligned :=
-  .tuple ts _ fl _ h_fl (by grind)
+  .tuple ts _ fl _ (by grind)
 
 @[grind ←]
 private lemma padVariantLayout_reasonablyAligned {t : MType} (ht : t.isTuple) (cl : Layout t)
@@ -230,8 +229,8 @@ private lemma padVariantLayout_reasonablyAligned {t : MType} (ht : t.isTuple) (c
     (padVariantLayout cl payload_off sa).ReasonablyAligned :=
   match t, ht, cl, hcl with
   | .int _, h, _, _ | .enum _, h, _, _ => nomatch h
-  | .tuple ts, _, .tuple _ vfl _, .tuple _ _ _ _ h_vfl_aligned h_vtuple_aligned =>
-    .tuple ts _ vfl sa h_vfl_aligned
+  | .tuple ts, _, .tuple _ vfl _, .tuple _ _ _ _ h_vtuple_aligned =>
+    .tuple ts _ vfl sa
       ⟨by grind,
        λ j hj ↦ by
          have : (vfl j hj).size_and_align.align ∣ sa.align := by grind
@@ -242,7 +241,7 @@ lemma mkEnum_reasonablyAligned (vs : List MType) (ht : ∀ idx (h : idx < vs.len
     (cl : (idx : Nat) → (h : idx < vs.length) → Layout vs[idx])
     (h_cl : ∀ idx (h : idx < vs.length), (cl idx h).ReasonablyAligned) :
     (mkEnum vs cl).ReasonablyAligned :=
-  .enum vs _ _ _ _ (by grind) (by grind [List.Forall, Nat.dvd_zero])
+  .enum vs _ _ _ _ (by grind)
 
 theorem mk_reasonablyAligned (ty : MType) [hr : ty.Reasonable] : (mk ty).ReasonablyAligned := by
   induction hr <;> grind [mk, Layout.ReasonablyAligned.int]

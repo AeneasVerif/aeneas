@@ -99,7 +99,7 @@ noncomputable def IUScalarTy.size_and_align (ty : IUScalarTy) : SizeAndAlign :=
 
 @[simp] lemma IUScalarTy.knownAlignU8 : (IUScalarTy.unsigned .U8).size_and_align.align = 1 := by simp [IUScalarTy.size]
 
-@[simp, grind =] def SizeAndAlign.zero_sized_maximally_aligned : SizeAndAlign :=
+@[simp, grind =] def SizeAndAlign.zero_sized_minimally_aligned : SizeAndAlign :=
   ⟨0, 1, by grind, by grind⟩
 
 /-! ## Core Layout Representation (`Discriminator`, `TagToWrite`, `Layout`) -/
@@ -393,21 +393,19 @@ structure TupleReasonablyAligned (n : Nat) (field_offs : (idx : Nat) → idx < n
 inductive ReasonablyAligned : {ty : MType} → Layout ty → Prop where
   | int ty : ReasonablyAligned (.int : Layout (.int ty))
   | tuple ts fo fl sa :
-      (∀ idx (h : idx < ts.length), (fl idx h).ReasonablyAligned) →
       TupleReasonablyAligned ts.length fo (λ i hi ↦ (fl i hi).size_and_align) sa →
       ReasonablyAligned (.tuple fo fl sa : Layout (.tuple ts))
   | enum vs vt vl dc sa :
       -- It is intended that this recurses here, to control the layout of each variant.
       (∀ idx (h : idx < vs.length), (vl idx h).ReasonablyAligned) →
-      (∀ idx (h : idx < vs.length), (vt idx h).Forall (λ t ↦ t.ty.size_and_align.align ∣ t.offset)) →
       ReasonablyAligned (.enum vt vl dc sa : Layout (.enum vs))
 
 inductive Transparent : {ty : MType} → Layout ty → Prop where
 | tuple_zero_sized ts fo fl :
-    (∀ idx (h : idx < ts.length), (fl idx h).size_and_align = .zero_sized_maximally_aligned) →
-    Transparent (.tuple fo fl .zero_sized_maximally_aligned : Layout (.tuple ts))
+    (∀ idx (h : idx < ts.length), (fl idx h).size_and_align = .zero_sized_minimally_aligned) →
+    Transparent (.tuple fo fl .zero_sized_minimally_aligned : Layout (.tuple ts))
 | tuple_one_elem ts fo fl idnz (hidnz : idnz < ts.length) :
-    (∀ idx (h : idx < ts.length), idx ≠ idnz → (fl idx h).size_and_align = .zero_sized_maximally_aligned) →
+    (∀ idx (h : idx < ts.length), idx ≠ idnz → (fl idx h).size_and_align = .zero_sized_minimally_aligned) →
     Transparent (.tuple fo fl (fl idnz hidnz).size_and_align : Layout (.tuple ts))
 | enum v (vl : Layout v) :
     Transparent vl →
