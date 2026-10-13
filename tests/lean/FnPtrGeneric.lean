@@ -108,74 +108,74 @@ def get_x {T : Type _} (h : Holder T) : Result T := do
   ok h.x
 
 /-- Trait declaration: [fn_ptr_generic::HasOut]
-    Source: 'tests/src/fn_ptr_generic.rs', lines 29:0-32:1
+    Source: 'tests/src/fn_ptr_generic.rs', lines 27:0-30:1
     Visibility: public -/
 structure HasOut (Self : Type _) (Self_Out : Type _) where
   get : Self → Result Self_Out
 
 /-- [fn_ptr_generic::Wrap]
-    Source: 'tests/src/fn_ptr_generic.rs', lines 34:0-34:22
+    Source: 'tests/src/fn_ptr_generic.rs', lines 32:0-32:22
     Visibility: public -/
 @[reducible]
 def Wrap (F : Type _) := F
 
 /-- [fn_ptr_generic::{impl fn_ptr_generic::HasOut<F> for fn_ptr_generic::Wrap<F>}::get]:
-    Source: 'tests/src/fn_ptr_generic.rs', lines 38:4-40:5
+    Source: 'tests/src/fn_ptr_generic.rs', lines 36:4-38:5
     Visibility: public -/
 def Wrap.Insts.Fn_ptr_genericHasOut.get
   {F : Type _} (self : Wrap F) : Result F := do
   ok self
 
 /-- Trait implementation: [fn_ptr_generic::{impl fn_ptr_generic::HasOut<F> for fn_ptr_generic::Wrap<F>}]
-    Source: 'tests/src/fn_ptr_generic.rs', lines 36:0-41:1 -/
+    Source: 'tests/src/fn_ptr_generic.rs', lines 34:0-39:1 -/
 @[reducible]
 def Wrap.Insts.Fn_ptr_genericHasOut (F : Type _) : HasOut (Wrap F) F := {
   get := Wrap.Insts.Fn_ptr_genericHasOut.get
 }
 
 /-- [fn_ptr_generic::use_id]:
-    Source: 'tests/src/fn_ptr_generic.rs', lines 43:0-45:1
+    Source: 'tests/src/fn_ptr_generic.rs', lines 41:0-43:1
     Visibility: public -/
 def use_id (x : Std.U8) : Result Std.U8 := do
   let f ← id (incr)
   apply P.Insts.CoreOpsFunctionFnTupleU8U8 f x
 
 /-- [fn_ptr_generic::unwrap_or]:
-    Source: 'tests/src/fn_ptr_generic.rs', lines 47:0-52:1 -/
+    Source: 'tests/src/fn_ptr_generic.rs', lines 45:0-50:1 -/
 def unwrap_or {T : Type _} (o : Option T) (d : T) : Result T := do
   match o with
   | none => ok d
   | some x => ok x
 
 /-- [fn_ptr_generic::use_some]:
-    Source: 'tests/src/fn_ptr_generic.rs', lines 54:0-56:1
+    Source: 'tests/src/fn_ptr_generic.rs', lines 52:0-54:1
     Visibility: public -/
 def use_some (x : Std.U8) : Result Std.U8 := do
   let f ← unwrap_or (some (incr)) (incr)
   apply P.Insts.CoreOpsFunctionFnTupleU8U8 f x
 
 /-- [fn_ptr_generic::use_holder]:
-    Source: 'tests/src/fn_ptr_generic.rs', lines 58:0-60:1
+    Source: 'tests/src/fn_ptr_generic.rs', lines 56:0-58:1
     Visibility: public -/
 def use_holder (x : Std.U8) : Result Std.U8 := do
   let f ← get_x { x := (incr) }
   apply P.Insts.CoreOpsFunctionFnTupleU8U8 f x
 
 /-- [fn_ptr_generic::use_assoc]:
-    Source: 'tests/src/fn_ptr_generic.rs', lines 62:0-65:1
+    Source: 'tests/src/fn_ptr_generic.rs', lines 60:0-63:1
     Visibility: public -/
 def use_assoc (x : Std.U8) : Result Std.U8 := do
   let f ← Wrap.Insts.Fn_ptr_genericHasOut.get (incr)
   apply P.Insts.CoreOpsFunctionFnTupleU8U8 f x
 
 /-- [fn_ptr_generic::use_option_map]:
-    Source: 'tests/src/fn_ptr_generic.rs', lines 67:0-69:1
+    Source: 'tests/src/fn_ptr_generic.rs', lines 65:0-67:1
     Visibility: public -/
 def use_option_map (o : Option Std.U8) : Result (Option Std.U8) := do
   core.option.Option.map P.Insts.CoreOpsFunctionFnOnceTupleU8U8 o (incr)
 
 /-- [fn_ptr_generic::use_vec]:
-    Source: 'tests/src/fn_ptr_generic.rs', lines 71:0-74:1
+    Source: 'tests/src/fn_ptr_generic.rs', lines 69:0-72:1
     Visibility: public -/
 def use_vec (x : Std.U8) : Result Std.U8 := do
   let y ←

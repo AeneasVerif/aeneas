@@ -24,8 +24,6 @@ fn get_x<T>(h: Holder<T>) -> T {
     h.x
 }
 
-// Aeneas fails on `w.get()` below ("Arrow types are not supported yet"),
-// because `w` contains a function item.
 pub trait HasOut {
     type Out;
     fn get(self) -> Self::Out;
