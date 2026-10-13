@@ -3,7 +3,7 @@ module
 public import Aeneas.Std.Core.Core
 public import Aeneas.Std.Heap
 public import Aeneas.Std.Scalar.Core
-public section
+@[expose] public section
 
 namespace Aeneas.Std
 
@@ -88,9 +88,116 @@ instance {ty} : IsScalar (UScalar ty) where
 instance {ty} : IsScalar (IScalar ty) where
   isScalar := by simp
 
--- TODO: we can properly define this once we have separation logic
-def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability) [IsScalar T] [IsScalar T'] (_ : RawPtr T M) :
-  Result (RawPtr T' M') :=
+/-! `core::ptr`: the raw-pointer methods (from `core::ptr::mut_ptr` and `core::ptr::const_ptr`) and
+the module functions. Each definition with a `rust_fun` pattern models that Rust function, with the
+signature Aeneas gives it: a `&mut T` argument is returned updated next to the result. The others
+are not Rust functions: `InBounds` is the precondition of `add`; `materialize` stores values in a
+fresh allocation (behind `from_mut`, `Slice::as_ptr`/`as_mut_ptr`, and the global allocator in
+`Alloc/Alloc.lean`); and `cast_scalar` is the `as` cast between scalar raw pointers that the
+extractor emits by name. -/
+
+/-- A fresh allocation holding `values`. If `freeable`, it comes from the global allocator and only
+`Global.deallocate` frees it; otherwise it is a local, behind a pointer from `from_mut` or
+`as_mut_ptr`. -/
+def RawPtr.materialize (values : List T) (freeable : Bool := false) : Result (RawPtr T M) :=
+  Result.guardedModify (fun _ => True) fun h _ =>
+    (⟨Heap.freshLoc h⟩, Heap.alloc h values freeable)
+
+/-- Always fails. TODO: the typed heap cannot read a cell at another scalar type, so casts are not
+modelled. -/
+def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability) [IsScalar T] [IsScalar T']
+    (_ : RawPtr T M) : Result (RawPtr T' M') :=
   .fail .undef
+
+/-- `add` stays in bounds: the slots it steps over hold values. -/
+def RawPtr.InBounds (q : RawPtr T M) (count : Nat) (h : Heap) : Prop :=
+  ∀ i < count, Heap.IsLive h (q.loc.shift i)
+
+@[rust_fun "core::ptr::mut_ptr::{*mut @T}::add"]
+def RawPtr.add (q : RawPtr T M) (count : Usize) : Result (RawPtr T M) :=
+  Result.guardedModify (fun h => q.InBounds count.val h) fun h _ => (q.shift count.val, h)
+
+attribute [rust_fun "core::ptr::const_ptr::{*const @T}::add"] RawPtr.add
+
+@[rust_fun "core::ptr::mut_ptr::{*mut @T}::cast_const" -canFail -lift]
+def RawPtr.cast_const (q : MutRawPtr T) : ConstRawPtr T :=
+  ⟨q.loc⟩
+
+namespace RawPtr
+
+@[rust_fun "core::ptr::const_ptr::{*const @T}::read"]
+def read (q : RawPtr T M) : Result T :=
+  Result.guardedModify (fun h => Heap.IsValid h q) fun h hValid =>
+    (h.read q hValid, h)
+
+attribute [rust_fun "core::ptr::mut_ptr::{*mut @T}::read"] read
+attribute [rust_fun "core::ptr::read"] read
+
+end RawPtr
+
+@[rust_fun "core::ptr::mut_ptr::{*mut @T}::write"]
+def MutRawPtr.write (q : MutRawPtr T) (value : T) : Result Unit :=
+  Result.guardedModify (fun h => Heap.IsValid h q) fun h hValid =>
+    ((), h.write q value hValid)
+
+attribute [rust_fun "core::ptr::write"] MutRawPtr.write
+
+/-- Not a Rust function: moves the value out into a borrow; the slot stays `borrowed` until
+`revive`. -/
+def RawPtr.take (q : RawPtr T M) : Result T :=
+  Result.guardedModify (fun h => Heap.IsValid h q) fun h hValid =>
+    (h.read q hValid, h.borrow q hValid)
+
+/-- Not a Rust function: ends the borrow of the slot of `q`, which holds `value` again. -/
+def RawPtr.revive (q : RawPtr T M) (value : T) : Result Unit :=
+  Result.guardedModify (fun h => Heap.IsBorrowed h q.loc) fun h hBorrowed =>
+    ((), h.revive q value hBorrowed)
+
+/-- Not a Rust function: `take` on the `n` slots from `q` on. -/
+def RawPtr.takeRange (q : RawPtr T M) : Nat → Result (List T)
+  | 0 => .ok []
+  | n + 1 => do
+    let value ← q.take
+    let values ← (q.shift 1).takeRange n
+    .ok (value :: values)
+
+/-- Not a Rust function: `revive` on the `values.length` slots from `q` on. -/
+def RawPtr.reviveRange (q : RawPtr T M) : List T → Result Unit
+  | [] => .ok ()
+  | value :: values => do
+    q.revive value
+    (q.shift 1).reviveRange values
+
+/-- Not a Rust function: `read` on the `n` slots from `q` on. -/
+def RawPtr.readRange (q : RawPtr T M) : Nat → Result (List T)
+  | 0 => .ok []
+  | n + 1 => do
+    let value ← q.read
+    let values ← (q.shift 1).readRange n
+    .ok (value :: values)
+
+/-- Not a Rust function: ends the view of a local behind `q` (`from_mut`, `as_ptr`,
+`as_mut_ptr`), which holds `count` values: the whole allocation is freed, so every later use of a
+pointer into it fails. -/
+def RawPtr.endLocal (q : RawPtr T M) (count : Nat) : Result Unit :=
+  Result.guardedModify (fun h => Heap.CanDealloc h q.loc count false) fun h hPre =>
+    ((), h.dealloc q.loc count false hPre)
+
+/-- Not a Rust function: fails unless `p` holds (`p` need not be decidable). -/
+def Result.require (p : Prop) : Result Unit :=
+  Result.guardedModify (fun _ => p) fun h _ => ((), h)
+
+/-- Not a Rust function: end of the borrow given to `from_mut`; reads the value, with the writes
+made through the pointer, and frees the local's allocation, so that the pointer can't be used
+anymore. -/
+def core.ptr.end_from_mut (p : MutRawPtr T) : Result T := do
+  let value ← p.read
+  p.endLocal 1
+  .ok value
+
+/-- The pointer points to a fresh slot holding `r`; the back computation runs when the borrow
+ends. -/
+def core.ptr.from_mut (r : T) : Result (MutRawPtr T × Result T) :=
+  Aeneas.Std.bind (RawPtr.materialize [r]) fun p => .ok (p, core.ptr.end_from_mut p)
 
 end Aeneas.Std
