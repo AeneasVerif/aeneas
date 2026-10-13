@@ -78,7 +78,7 @@ inductive valid_for : (v : MVal) → (ty : MType) → Prop where
 namespace valid_for
 
 attribute [simp] int tuple enum
-attribute [grind ←] int
+attribute [grind ←] int tuple enum
 
 /-! We add some projection functions that allow getting properties out of validity proofs. -/
 
@@ -90,29 +90,17 @@ attribute [grind ←] int
     vs.length = ts.length :=
   match h with | .tuple _ _ f => f.length_eq
 
-theorem tuple_proj {vs ts} (h : valid_for (.tuple vs) (.tuple ts)) (idx : Fin vs.length) :
+@[grind ←] theorem tuple_proj {vs ts} (h : valid_for (.tuple vs) (.tuple ts)) (idx : Nat) (h_idx : idx < vs.length) :
     valid_for vs[idx] (ts[idx]'(by grind)) :=
   match h with | .tuple _ _ f => f.get _ _
-
-@[grind ←] theorem tuple_proj_nat {vs ts} (h : valid_for (.tuple vs) (.tuple ts)) (n1 n2 : Nat) (he : n1 = n2) {h1 h2} :
-    valid_for (vs[n1]'(h1)) (ts[n2]'(h2)) :=
-  match h with | .tuple _ _ f => by subst n2; apply f.get
 
 @[grind →] theorem variant_bound {d v ts} (h : valid_for (.variant d v) (.enum ts)) :
     d < ts.length :=
   match h with | .enum _ _ _ hb _ => hb
 
-@[grind .] theorem variant_proj {d v ts} (h : valid_for (.variant d v) (.enum ts)) :
+@[grind →] theorem variant_proj {d v ts} (h : valid_for (.variant d v) (.enum ts)) :
     v.valid_for (ts[d]'(by grind)) :=
   match h with | .enum _ _ _ _ hv => hv
-
-grind_pattern variant_proj => valid_for (.variant d v) (.enum ts)
-
-@[grind .] theorem variant_proj_nat {d v ts} (h : valid_for (.variant d v) (.enum ts)) {hd} :
-    v.valid_for (ts[d]'(hd)) :=
-  match h with | .enum _ _ _ _ hv => hv
-
-grind_pattern variant_proj_nat => valid_for (.variant d v) (.enum ts)
 
 @[grind →] theorem empty_elim {v : MVal} {i : Nat} {h : i < ([] : List MType).length}
     (_ : valid_for v (([] : List MType)[i]'h)) : False :=
@@ -121,9 +109,9 @@ grind_pattern variant_proj_nat => valid_for (.variant d v) (.enum ts)
 /-! Helper functions for projecting valid fields out of valid values. -/
 @[expose, inline, simp]
 def field {vs : List MVal} {ts : List MType}
-    (h : valid_for (.tuple vs) (.tuple ts)) (i : Fin vs.length) :
-    { v : MVal // v.valid_for (ts[i]'(by rw [←h.tuple_len]; exact i.isLt)) } :=
-  ⟨vs[i], h.tuple_proj i⟩
+    (h : valid_for (.tuple vs) (.tuple ts)) (i : Nat) (hi : i < vs.length := by simp) :
+    { v : MVal // v.valid_for (ts[i]'(by grind)) } :=
+  ⟨vs[i], h.tuple_proj i hi⟩
 
 @[expose, inline, simp]
 def vdata {d : Nat} {v : MVal} {ts : List MType}
@@ -134,11 +122,11 @@ def vdata {d : Nat} {v : MVal} {ts : List MType}
 @[expose, inline, simp]
 def vfield {d : Nat} {vs : List MVal} {ts vts : List MType}
     (h : valid_for (.variant d (.tuple vs)) (.enum ts))
-    (i : Fin vs.length)
+    (i : Nat)
+    (hi : i < vs.length := by simp)
     (hv : ts[d]'(h.variant_bound) = .tuple vts := by rfl) :
-    { v : MVal // v.valid_for (vts[i]'(by
-        have hp := h.variant_proj; rw [hv] at hp; rw [←hp.tuple_len]; exact i.isLt)) } :=
-  ⟨vs[i], (hv ▸ h.variant_proj).tuple_proj i⟩
+    { v : MVal // v.valid_for (vts[i]'(by grind)) } :=
+  ⟨vs[i], (hv ▸ h.variant_proj).tuple_proj i hi⟩
 
 end valid_for
 end MVal
@@ -155,36 +143,36 @@ attribute [instance] isTuple.tuple
 inductive Reasonable : MType → Prop where
   | int ty : Reasonable (.int ty)
   | tuple ts :
-      (∀ idx : Fin ts.length, ts[idx].Reasonable) →
+      (∀ idx (h : idx < ts.length), ts[idx].Reasonable) →
       Reasonable (.tuple ts)
   | enum vs :
       vs.length ≤ Std.Usize.max →
-      (∀ idx : Fin vs.length, vs[idx].isTuple) →
-      (∀ idx : Fin vs.length, vs[idx].Reasonable) →
+      (∀ idx (h : idx < vs.length), vs[idx].isTuple) →
+      (∀ idx (h : idx < vs.length), vs[idx].Reasonable) →
       Reasonable (.enum vs)
 
 attribute [class] Reasonable
 attribute [instance] Reasonable.int
 
 class AllReasonable (l : List MType) : Prop where
-  out : ∀ idx : Fin l.length, l[idx].Reasonable
+  out : ∀ idx (h : idx < l.length), l[idx].Reasonable
 
-instance : AllReasonable [] := ⟨λ idx ↦ Fin.elim0 idx⟩
+instance : AllReasonable [] := ⟨λ _ h ↦ nomatch h⟩
 instance {x : MType} {xs : List MType} [hx : x.Reasonable] [hxs : AllReasonable xs] :
     AllReasonable (x :: xs) :=
-  ⟨λ | ⟨0, _⟩ => hx | ⟨n + 1, h⟩ => hxs.out ⟨n, Nat.lt_of_succ_lt_succ h⟩⟩
+  ⟨λ | 0, _ => hx | n + 1, h => hxs.out n (Nat.lt_of_succ_lt_succ h)⟩
 
 instance {ts : List MType} [h : AllReasonable ts] : (MType.tuple ts).Reasonable :=
   .tuple ts h.out
 
 
 class AllTuple (l : List MType) : Prop where
-  out : ∀ idx : Fin l.length, l[idx].isTuple
+  out : ∀ idx (h : idx < l.length), l[idx].isTuple
 
-instance : AllTuple [] := ⟨λ idx ↦ Fin.elim0 idx⟩
+instance : AllTuple [] := ⟨λ _ h ↦ nomatch h⟩
 instance {x : MType} {xs : List MType} [hx : x.isTuple] [hxs : AllTuple xs] :
     AllTuple (x :: xs) :=
-  ⟨λ | ⟨0, _⟩ => hx | ⟨n + 1, h⟩ => hxs.out ⟨n, Nat.lt_of_succ_lt_succ h⟩⟩
+  ⟨λ | 0, _ => hx | n + 1, h => hxs.out n (Nat.lt_of_succ_lt_succ h)⟩
 
 
 set_option checkBinderAnnotations false in

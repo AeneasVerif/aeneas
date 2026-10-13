@@ -85,7 +85,7 @@ noncomputable def IUScalarTy.size_and_align (ty : IUScalarTy) : SizeAndAlign :=
 @[simp, grind =] lemma IUScalarTy.knownSize {ty : IUScalarTy} : ty.size_and_align.size = ty.size :=
   @Classical.choose_spec SizeAndAlign (·.ValidForScalar ty) ⟨_, ty.reasonablyAligned_isReasonable⟩
 
-@[simp] lemma SizeAndAlign.sizeOneAlignOne (sa : SizeAndAlign) : sa.size = 1 → sa.align = 1 := by
+@[simp, grind →] lemma SizeAndAlign.sizeOneAlignOne (sa : SizeAndAlign) : sa.size = 1 → sa.align = 1 := by
   intros h
   apply Nat.le_antisymm
   · apply Nat.le_of_dvd
@@ -120,17 +120,17 @@ structure TagToWrite where
 inductive Layout : MType → Type 0 where
   | int : Layout (.int ty)
   | tuple
-      (field_offs : Fin ts.length → Nat)
+      (field_offs : (idx : Nat) → idx < ts.length → Nat)
       -- NB: Lean is sensitive to the specifics of this inductive definition.
       -- For example, merging `field_layouts` and `field_offs` into one function
       -- returning a pair is not possible, as that prevents Lean from seeing that
       -- the inductive is strictly positive.
-      (field_layouts : (idx : Fin ts.length) → Layout ts[idx])
+      (field_layouts : (idx : Nat) → (h : idx < ts.length) → Layout ts[idx])
       (sa : SizeAndAlign) :
       Layout (.tuple ts)
   | enum
-      (variant_tags : Fin vs.length → List TagToWrite)
-      (variant_layouts : (idx : Fin vs.length) → Layout vs[idx])
+      (variant_tags : (idx : Nat) → idx < vs.length → List TagToWrite)
+      (variant_layouts : (idx : Nat) → (h : idx < vs.length) → Layout vs[idx])
       (discr : Discriminator)
       (sa : SizeAndAlign) :
       Layout (.enum vs)
@@ -160,19 +160,20 @@ end Layout
 
 namespace Endianness
 
-@[simp] lemma mul_8_size_eq {ty : IUScalarTy} : 8 * ty.size = ty.numBits := by
+@[simp, grind =] lemma mul_8_size_eq {ty : IUScalarTy} : 8 * ty.size = ty.numBits := by
   rcases ty with ⟨t⟩ | ⟨t⟩ <;> cases t <;> rcases System.Platform.numBits_eq with h | h <;>
     simp [IUScalarTy.size, Std.IScalarTy.numBits, Std.UScalarTy.numBits, h]
 
 def encode_bitvec {w : Nat} (sz : Nat) (bv : BitVec w) (_ : w ≤ 8 * sz := by simp only [Aeneas.Endianness.mul_8_size_eq]; omega) : Vector Byte sz :=
-  Vector.ofFn λ (i : Fin sz) ↦ BitVec.extractLsb' (8 * i.val) 8 bv
+  Vector.ofFn λ i ↦ BitVec.extractLsb' (8 * i.val) 8 bv
 
+@[grind ←]
 lemma numBits_div_8_lt {ty : IUScalarTy} {k : Nat} (hk : k < ty.numBits) :
     k / 8 < ty.size := by
   have := mul_8_size_eq (ty := ty); omega
 
 def decode_bitvec (ty : IUScalarTy) (bytes_data : Vector Byte ty.size) : BitVec ty.numBits :=
-  BitVec.ofFn λ (k : Fin ty.numBits) ↦
+  BitVec.ofFn λ k ↦
     (bytes_data[k.val / 8]'(numBits_div_8_lt k.isLt))[k.val % 8]'(Nat.mod_lt _ (by omega))
 
 def encode (ty : IUScalarTy) (i : ℤ) (_ : ty.can_repr i) : Vector Byte ty.size :=
@@ -234,22 +235,21 @@ def decode : {ty : MType} → (l : Layout ty) → Bytes l.size → Option MVal
   -- Note in particular that `decode` ignores the bytes which are before, between, or after
   -- the fields (usually called "padding").
   | .tuple ts, .tuple fo fl sa, bytes =>
-    (List.finRange ts.length).mapM (λ (idx : Fin ts.length) ↦ do
-      let fsz := (fl idx).size
-      if h : fo idx + fsz ≤ sa.size then
-        decode (fl idx) (bytes.subslice_with_length (fo idx) fsz h)
+    (List.range ts.length).attach.mapM (λ (x : Subtype _) ↦ do
+      let fsz := (fl x.val (by grind)).size
+      if h : fo x.val (by grind) + fsz ≤ sa.size then
+        decode (fl x.val (by grind)) (bytes.subslice_with_length (fo x.val (by grind)) fsz h)
       else none)
     |>.map .tuple
   -- Enums:
   | .enum vs, .enum _ vl discriminator sa, bytes => do
     let discriminant ← decode_discriminant bytes discriminator
     if hd : discriminant < vs.length then
-      let idx : Fin vs.length := ⟨discriminant, hd⟩
-      let vsz := (vl idx).size
+      let vsz := (vl discriminant hd).size
       if hsz : 0 + vsz ≤ sa.size then
         -- Decode into the variant.
         -- Because the variant is the same size as the enum we pass the full slice.
-        let value ← decode (vl idx) (bytes.subslice_with_length 0 vsz hsz)
+        let value ← decode (vl discriminant hd) (bytes.subslice_with_length 0 vsz hsz)
         some (.variant discriminant value)
       else none
     else none
@@ -265,20 +265,19 @@ def encode : {ty : MType} → (l : Layout ty) → (val : MVal) → val.valid_for
   -- `encode` always and deterministically makes padding bytes `Uninit`.
   -- (The generic properties defined below make this the only possible choice for `encode`.)
   | .tuple ts, .tuple fo fl sa, .tuple values, hv =>
-    (List.finRange ts.length).foldl (init := Bytes.uninit sa.size)
-      λ (bytes : Bytes sa.size) (idx : Fin ts.length) ↦
-        let i : Fin values.length := ⟨idx.val, by rw [hv.tuple_len]; exact idx.isLt⟩
-        bytes.write_subslice_at_index (fo idx) (encode (fl idx) values[i] (by simpa [i] using hv.tuple_proj i))
+    (List.range ts.length).attach.foldl (init := Bytes.uninit sa.size)
+      λ (bytes : Bytes sa.size) x ↦
+        bytes.write_subslice_at_index (fo x.val (by grind))
+          (encode (fl x.val (by grind)) (values[x.val]'(by grind)) (by grind))
   -- Enums:
   -- Note that the discriminant may not be written into bytes that contain encoded data.
   -- This is to ensure that pointers to the data always contain valid values.
   | .enum vs, .enum vt vl _ sa, .variant discriminant data, hv =>
-    -- `idx` is guaranteed to be in bounds by the well-formed check on the value.
-    let idx : Fin vs.length := ⟨discriminant, hv.variant_bound⟩
-    let bytes := (Bytes.uninit sa.size).write_subslice_at_index 0 (encode (vl idx) data hv.variant_proj)
+    let bytes := (Bytes.uninit sa.size).write_subslice_at_index 0
+      (encode (vl discriminant hv.variant_bound) data hv.variant_proj)
     -- Write tag into the bytes around the data.
     -- This is fine as we don't allow encoded data and the tag to overlap.
-    encode_discriminant bytes (vt idx)
+    encode_discriminant bytes (vt discriminant hv.variant_bound)
 
 end Layout
 
@@ -307,44 +306,47 @@ namespace Layout
 def disj_range (r1 r2 : Nat × Nat) : Prop :=
   ∀ n, r1.1 ≤ n → n < r1.2 → r2.1 ≤ n → n < r2.2 → False
 
-structure TupleValid (field_offs : Fin n → Nat) (field_sizes : Fin n → Nat) (sa : SizeAndAlign) where
+@[grind]
+structure TupleValid (n : Nat) (field_offs : (idx : Nat) → idx < n → Nat)
+    (field_sizes : (idx : Nat) → idx < n → Nat) (sa : SizeAndAlign) where
   fields_disj :
-    let field_range := λ (i : Fin n) ↦ (field_offs i, field_offs i + field_sizes i)
-    ∀ (i1 i2 : Fin n), i1 ≠ i2 → disj_range (field_range i1) (field_range i2)
-  size_bounds : ∀ i, sa.size ≥ field_offs i + field_sizes i
+    ∀ (i1 i2 : Nat) (hi1 : i1 < n) (hi2 : i2 < n), i1 ≠ i2 →
+      disj_range (field_offs i1 hi1, field_offs i1 hi1 + field_sizes i1 hi1)
+                 (field_offs i2 hi2, field_offs i2 hi2 + field_sizes i2 hi2)
+  size_bounds : ∀ (i : Nat) (hi : i < n), sa.size ≥ field_offs i hi + field_sizes i hi
 
 structure EnumValid {vs : List MType}
-      (variant_tags : Fin vs.length → List TagToWrite)
-      (variant_layouts : (idx : Fin vs.length) → Layout vs[idx])
+      (variant_tags : (idx : Nat) → idx < vs.length → List TagToWrite)
+      (variant_layouts : (idx : Nat) → (h : idx < vs.length) → Layout vs[idx])
       (discr : Discriminator)
       (sa : SizeAndAlign) where
-  data_sizes : ∀ idx, (variant_layouts idx).size = sa.size
-  data_aligns : ∀ idx, (variant_layouts idx).size_and_align.align ≤ sa.align
-  taggers_valid : ∀ idx, (variant_tags idx).Forall (·.Valid sa)
+  data_sizes : ∀ idx (h : idx < vs.length), (variant_layouts idx h).size = sa.size
+  data_aligns : ∀ idx (h : idx < vs.length), (variant_layouts idx h).size_and_align.align ≤ sa.align
+  taggers_valid : ∀ idx (h : idx < vs.length), (variant_tags idx h).Forall (·.Valid sa)
   discriminator_valid : discr.Valid sa vs.length
   /-- Writing variant `idx`'s tags into the bytes around the data does not clobber any
       initialized byte written by `variant_layouts idx`. -/
-  tags_preserve_payload : ∀ (idx : Fin vs.length) (v : MVal) (hv : v.valid_for vs[idx]),
-    let payload_bs := (Bytes.uninit sa.size).write_subslice_at_index 0 (encode (variant_layouts idx) v hv)
-    payload_bs.le_defined (encode_discriminant payload_bs (variant_tags idx))
+  tags_preserve_payload : ∀ (idx : Nat) (h : idx < vs.length) (v : MVal) (hv : v.valid_for vs[idx]),
+    let payload_bs := (Bytes.uninit sa.size).write_subslice_at_index 0 (encode (variant_layouts idx h) v hv)
+    payload_bs.le_defined (encode_discriminant payload_bs (variant_tags idx h))
   /-- `decode_discriminant` recovers `idx` on any valid encoded payload + tags for variant `idx`. -/
-  discr_complete : ∀ (idx : Fin vs.length) (v : MVal) (hv : v.valid_for vs[idx]),
-    let payload_bs := (Bytes.uninit sa.size).write_subslice_at_index 0 (encode (variant_layouts idx) v hv)
-    decode_discriminant (encode_discriminant payload_bs (variant_tags idx)) discr = some idx.val
+  discr_complete : ∀ (idx : Nat) (h : idx < vs.length) (v : MVal) (hv : v.valid_for vs[idx]),
+    let payload_bs := (Bytes.uninit sa.size).write_subslice_at_index 0 (encode (variant_layouts idx h) v hv)
+    decode_discriminant (encode_discriminant payload_bs (variant_tags idx h)) discr = some idx
   /-- Whenever `decode_discriminant` selects variant `idx`, all tag bytes written by `variant_tags idx`
       are less-or-equally-defined as `bytes`. -/
-  discr_tags_le_defined : ∀ (bytes : Bytes sa.size) (idx : Fin vs.length),
-    decode_discriminant bytes discr = some idx.val →
-    (encode_discriminant (Bytes.uninit sa.size) (variant_tags idx)).le_defined bytes
+  discr_tags_le_defined : ∀ (bytes : Bytes sa.size) (idx : Nat) (h : idx < vs.length),
+    decode_discriminant bytes discr = some idx →
+    (encode_discriminant (Bytes.uninit sa.size) (variant_tags idx h)).le_defined bytes
 
 inductive Valid : {ty : MType} → Layout ty → Prop where
   | int ty : Valid (.int : Layout (.int ty))
   | tuple ts fo fl sa :
-      (∀ idx, (fl idx).Valid) →
-      TupleValid fo (λ i ↦ (fl i).size) sa →
+      (∀ idx (h : idx < ts.length), (fl idx h).Valid) →
+      TupleValid ts.length fo (λ i hi ↦ (fl i hi).size) sa →
       Valid (.tuple fo fl sa : Layout (.tuple ts))
   | enum vs vt vl dc sa :
-      (∀ idx, (vl idx).Valid) →
+      (∀ idx (h : idx < vs.length), (vl idx h).Valid) →
       EnumValid vt vl dc sa →
       Valid (.enum vt vl dc sa : Layout (.enum vs))
 
@@ -352,56 +354,64 @@ inductive Valid : {ty : MType} → Layout ty → Prop where
     Following MiniRust's `spec/lang/representation.md` ("Generic properties"). -/
 
 /-- Any decoded value is well-typed for `ty`. -/
+@[grind =]
 def DecodeValid {ty : MType} (l : Layout ty) : Prop :=
   ∀ (bytes : Bytes l.size) (val : MVal), decode l bytes = some val → val.valid_for ty
 
 /-- Monotonicity of `decode`:
     If `bytes1 <= bytes2`, then `l.decode(bytes1) <= l.decode(bytes2)`. -/
+@[grind =]
 def DecodeMono {ty : MType} (l : Layout ty) : Prop :=
   ∀ (bytes1 bytes2 : Bytes l.size),
     bytes1.le_defined bytes2 → Option.le_defined (decode l bytes1) (decode l bytes2)
 
 /-- First round-trip property (lossless encoding):
     If `val` is well-formed for `ty`, then `l.decode(l.encode(val)) == some val`. -/
+@[grind =]
 def DecodeEncode {ty : MType} (l : Layout ty) : Prop :=
   ∀ (val : MVal) (hv : val.valid_for ty), decode l (encode l val hv) = some val
 
 /-- Second round-trip property (bytes-value-bytes resets unused/padding bytes to `Uninit`):
     If `l.decode(bytes) == some val`, then `l.encode(val) <= bytes`
     (some bytes might have become `Uninit`, but otherwise it is the same). -/
+@[grind =]
 def EncodeDecodeLeDefined {ty : MType} (l : Layout ty) : Prop :=
   ∀ (bytes : Bytes l.size) (val : MVal) (hv : val.valid_for ty),
     decode l bytes = some val → (encode l val hv).le_defined bytes
 
 /-! ## Extra Properties that might be imposed on a layout -/
 
-structure TupleReasonablyAligned (field_offs : Fin n → Nat) (field_layouts : Fin n → SizeAndAlign) (sa : SizeAndAlign) where
-  fields_aligned : ∀ i, sa.align ≥ (field_layouts i).align
-  offs_aligned : ∀ i, (field_layouts i).align ∣ field_offs i
+@[grind]
+structure TupleReasonablyAligned (n : Nat) (field_offs : (idx : Nat) → idx < n → Nat)
+    (field_layouts : (idx : Nat) → idx < n → SizeAndAlign) (sa : SizeAndAlign) where
+  fields_aligned : ∀ i (hi : i < n), sa.align ≥ (field_layouts i hi).align
+  offs_aligned : ∀ i (hi : i < n), (field_layouts i hi).align ∣ field_offs i hi
 
 --- A reasonably aligned layout is one that guaranees the fields are at "well-aligned" positions.
 --- In other words, it is not repr(packed).
 --- This is a non-recursive property, since this does not affect the layout of the contained fields
 inductive ReasonablyAligned : {ty : MType} → Layout ty → Prop where
+  | int ty : ReasonablyAligned (.int : Layout (.int ty))
   | tuple ts fo fl sa :
-      TupleReasonablyAligned fo (λ i ↦ (fl i).size_and_align) sa →
+      (∀ idx (h : idx < ts.length), (fl idx h).ReasonablyAligned) →
+      TupleReasonablyAligned ts.length fo (λ i hi ↦ (fl i hi).size_and_align) sa →
       ReasonablyAligned (.tuple fo fl sa : Layout (.tuple ts))
   | enum vs vt vl dc sa :
       -- It is intended that this recurses here, to control the layout of each variant.
-      (∀ idx, (vl idx).ReasonablyAligned) →
-      (∀ idx, (vt idx).Forall (λ t ↦ t.ty.size_and_align.align ∣ t.offset)) →
+      (∀ idx (h : idx < vs.length), (vl idx h).ReasonablyAligned) →
+      (∀ idx (h : idx < vs.length), (vt idx h).Forall (λ t ↦ t.ty.size_and_align.align ∣ t.offset)) →
       ReasonablyAligned (.enum vt vl dc sa : Layout (.enum vs))
 
 inductive Transparent : {ty : MType} → Layout ty → Prop where
 | tuple_zero_sized ts fo fl :
-    (∀ idx, (fl idx).size_and_align = .zero_sized_maximally_aligned) →
+    (∀ idx (h : idx < ts.length), (fl idx h).size_and_align = .zero_sized_maximally_aligned) →
     Transparent (.tuple fo fl .zero_sized_maximally_aligned : Layout (.tuple ts))
-| tuple_one_elem ts fo fl idnz :
-    (∀ idx, idx ≠ idnz → (fl idx).size_and_align = .zero_sized_maximally_aligned) →
-    Transparent (.tuple fo fl (fl idnz).size_and_align : Layout (.tuple ts))
+| tuple_one_elem ts fo fl idnz (hidnz : idnz < ts.length) :
+    (∀ idx (h : idx < ts.length), idx ≠ idnz → (fl idx h).size_and_align = .zero_sized_maximally_aligned) →
+    Transparent (.tuple fo fl (fl idnz hidnz).size_and_align : Layout (.tuple ts))
 | enum v (vl : Layout v) :
     Transparent vl →
-    Transparent (.enum (λ _ ↦ []) (λ ⟨0, _⟩ ↦ vl) (.known 0) vl.size_and_align : Layout (.enum [v]))
+    Transparent (.enum (λ _ _ ↦ []) (λ | 0, _ => vl) (.known 0) vl.size_and_align : Layout (.enum [v]))
 
 
 end Layout

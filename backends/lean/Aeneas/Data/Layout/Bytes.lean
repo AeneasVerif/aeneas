@@ -51,37 +51,40 @@ abbrev Bytes (n : Nat) := Vector AbstractByte n
 
 namespace Bytes
 
-@[grind =]
 def uninit (n : Nat) : Bytes n := Vector.replicate n .uninit
 
 /-- The order on `Bytes` is bytewise `le_defined`. -/
 def le_defined {n : Nat} (self other : Bytes n) : Prop :=
-  ∀ i : Fin n, (self[i]).le_defined (other[i])
+  ∀ (i : Nat) (_ : i < n), (self[i]).le_defined (other[i])
 
-@[grind =]
 def subslice_with_length {n : Nat} (bytes : Bytes n) (offset length : Nat) (h : offset + length ≤ n) : Bytes length :=
-  Vector.ofFn λ (i : Fin length) ↦ bytes[offset + i.val]'(by omega)
+  Vector.ofFn λ i ↦ bytes[offset + i.val]'(by omega)
 
-@[grind =]
 def write_subslice_at_index {n m : Nat} (bytes : Bytes n) (offset : Nat) (subslice : Bytes m) : Bytes n :=
-  Vector.ofFn λ (j : Fin n) ↦
-    if h : offset ≤ j.val ∧ j.val < offset + m then subslice[j.val - offset]'(by omega) else bytes[j]
+  Vector.ofFn λ j ↦
+    if h : offset ≤ j.val ∧ j.val < offset + m then subslice[j.val - offset]'(by omega) else bytes[j.val]
 
 def toData {n : Nat} (bytes : Bytes n) : Option (Vector Byte n) :=
-  if h : ∀ i : Fin n, (bytes[i]).data.isSome
-  then some (Vector.ofFn λ i ↦ (bytes[i]).data.get (h i))
+  if h : ∀ (i : Nat) (_ : i < n), (bytes[i]).data.isSome
+  then some (Vector.ofFn λ i ↦ (bytes[i.val]).data.get (h i.val i.isLt))
   else none
 
 /-! ### Basic Lemmas on `Bytes` Operations -/
 
 @[simp, grind ←] theorem le_defined_refl {n : Nat} (bs : Bytes n) : bs.le_defined bs :=
-  λ i ↦ AbstractByte.le_defined_refl bs[i]
+  λ i _ ↦ AbstractByte.le_defined_refl bs[i]
 
 @[simp, grind ←] theorem uninit_le_defined {n : Nat} (bs : Bytes n) : (Bytes.uninit n).le_defined bs :=
-  by intro i; simp [uninit]
+  by intro i hi; simp [uninit]
 
-@[simp, grind =] theorem uninit_getElem (n : Nat) (j : Fin n) : (Bytes.uninit n)[j] = .uninit := by
+@[simp, grind =] theorem uninit_getElem (n : Nat) (j : Nat) (hj : j < n) : (Bytes.uninit n)[j] = .uninit := by
   simp [uninit]
+
+@[simp, grind =]
+theorem getElem_subslice_with_length {n : Nat} (bs : Bytes n) (off len : Nat) (h : off + len ≤ n)
+    (i : Nat) (hi : i < len) :
+    (bs.subslice_with_length off len h)[i] = bs[off + i] := by
+  simp [subslice_with_length]
 
 @[simp, grind =]
 theorem getElem_write_subslice_at_index {n m : Nat} (bs : Bytes n) (off : Nat) (sub : Bytes m)
@@ -104,11 +107,11 @@ theorem subslice_write_subslice_self {n m : Nat} (bs : Bytes n) (off : Nat) (sub
 theorem subslice_le_defined {n : Nat} {bs1 bs2 : Bytes n} (h_le : bs1.le_defined bs2)
     (off len : Nat) (h : off + len ≤ n) :
     (bs1.subslice_with_length off len h).le_defined (bs2.subslice_with_length off len h) :=
-  λ i ↦ by simpa [subslice_with_length] using h_le ⟨off + i.val, by omega⟩
+  λ i hi ↦ by simpa [subslice_with_length] using h_le (off + i) (by omega)
 
 @[simp, grind =]
 theorem toData_map_init {n : Nat} (v : Vector Byte n) : Bytes.toData (v.map AbstractByte.init) = some v := by
-  unfold toData; rw [dif_pos (by intro i; simp)]; congr 1; ext i hi; simp
+  unfold toData; rw [dif_pos (by intro i hi; simp)]; congr 1; ext i hi; simp
 
 theorem getElem_of_toData {n : Nat} {bs : Bytes n} {v : Vector Byte n}
     (h : bs.toData = some v) (i : Nat) (hi : i < n) : bs[i] = .init v[i] := by
@@ -119,15 +122,15 @@ theorem getElem_of_toData {n : Nat} {bs : Bytes n} {v : Vector Byte n}
   split at h
   all_goals grind
 
+grind_pattern getElem_of_toData => bs.toData, some v, bs[i]
+grind_pattern getElem_of_toData => bs.toData, some v, v[i]
+
+@[grind →]
 theorem eq_of_toData_some_le_defined {n : Nat} {bs1 bs2 : Bytes n} {v : Vector Byte n}
     (h_data : bs1.toData = some v) (h_le : bs1.le_defined bs2) : bs1 = bs2 := by
   ext i hi
-  have h1 := getElem_of_toData h_data i hi
-  have hle := h_le ⟨i, hi⟩
-  simp [h1] at hle ⊢
-  cases hb2 : bs2[i] with
-  | uninit => simp [hb2] at hle
-  | init b2 => simp [hb2] at hle; grind
+  have := h_le i hi
+  grind
 
 /-! ### Theory of Folding `write_subslice_at_index` over a List -/
 
@@ -144,7 +147,7 @@ theorem foldl_write_subslice_getElem_eq {α : Type u} {n : Nat}
 
 /-- If `[off0 ..< off0 + len0)` is disjoint from `[off x ..< off x + len x)` for every `x ∈ xs`,
     folding `write_subslice_at_index` over `xs` preserves that subslice. -/
-theorem foldl_write_subslice_subslice_eq {α : Type u} {n : Nat}
+@[simp] theorem foldl_write_subslice_subslice_eq {α : Type u} {n : Nat}
     (xs : List α) (off : α → Nat) {len : α → Nat} (sub : (x : α) → Bytes (len x))
     (acc : Bytes n) (off0 len0 : Nat) (h0 : off0 + len0 ≤ n)
     (h_disj : ∀ x ∈ xs, ∀ k, off0 ≤ k → k < off0 + len0 → off x ≤ k → k < off x + len x → False) :
@@ -152,8 +155,8 @@ theorem foldl_write_subslice_subslice_eq {α : Type u} {n : Nat}
       off0 len0 h0 =
     acc.subslice_with_length off0 len0 h0 := by
   ext i hi
-  simp only [subslice_with_length, Vector.getElem_ofFn]
-  exact foldl_write_subslice_getElem_eq xs off sub acc (off0 + i) (by grind) (by grind)
+  simp [subslice_with_length,
+    foldl_write_subslice_getElem_eq xs off sub acc (off0 + i) (by omega) (by grind)]
 
 /-- If `xs` has no duplicates and writes pairwise non-overlapping ranges `[off x ..< off x + len x)`,
     reading back `[off x ..< off x + len x)` for any `x ∈ xs` returns `sub x`. -/
@@ -170,9 +173,8 @@ theorem foldl_write_subslice_nodup_subslice {α : Type u} {n : Nat}
   | cons y ys ih =>
     rw [List.nodup_cons] at h_nodup
     rcases List.mem_cons.mp hx with rfl | h_in_ys
-    · rw [List.foldl_cons, foldl_write_subslice_subslice_eq]
-      all_goals grind
-    · exact ih _ h_in_ys (by grind) (by grind)
+    · simp [foldl_write_subslice_subslice_eq ys off sub _ (off x) (len x) _ (by grind)]
+    · apply ih <;> grind
 
 /-- If `acc.le_defined target` and every written slice `sub x` is `.le_defined` the corresponding
     subslice of `target`, then folding `write_subslice_at_index` over `xs` stays `.le_defined target`. -/
@@ -186,19 +188,17 @@ theorem foldl_write_subslice_le_defined {α : Type u} {n : Nat}
   induction xs generalizing acc with
   | nil => exact h_acc
   | cons x xs ih =>
-    refine ih _ (λ j ↦ ?_) (by grind) (by grind)
-    simp [write_subslice_at_index]
-    split
-    case isTrue hj =>
-      have := h_subs x List.mem_cons_self ⟨j.val - off x, by grind⟩
-      grind
-    case isFalse => exact h_acc j
+    refine ih _ (λ j hj ↦ ?_) (by grind) (by grind)
+    have := h_subs x List.mem_cons_self (j - off x)
+    have := h_acc j hj
+    grind
 
 /-- Pointwise dichotomy for folding `write_subslice_at_index`: at each byte index `j`,
     either every write leaves `j` untouched (`= acc[j]`), or some write overwrites `j`
     so the final byte at `j` is independent of the initial buffer `acc`. -/
 theorem foldl_write_subslice_dichotomy {α : Type u} {n : Nat}
-    (xs : List α) (off : α → Nat) {len : α → Nat} (sub : (x : α) → Bytes (len x)) (j : Fin n) :
+    (xs : List α) (off : α → Nat) {len : α → Nat} (sub : (x : α) → Bytes (len x))
+    (j : Nat) (hj : j < n) :
     (∀ b : Bytes n,
       (xs.foldl (init := b) λ bs x ↦ bs.write_subslice_at_index (off x) (sub x))[j] = b[j]) ∨
     (∀ b1 b2 : Bytes n,
@@ -208,9 +208,9 @@ theorem foldl_write_subslice_dichotomy {α : Type u} {n : Nat}
   | nil => exact .inl (λ _ ↦ rfl)
   | cons x xs ih =>
     rcases ih with h_id | h_const
-    · by_cases hj : off x ≤ j.val ∧ j.val < off x + len x
-      · exact .inr (λ b1 b2 ↦ by simp only [List.foldl_cons, h_id]; simp [write_subslice_at_index, hj])
-      · exact .inl (λ b ↦ by simp only [List.foldl_cons, h_id]; simp [write_subslice_at_index, hj])
+    · by_cases hjx : off x ≤ j ∧ j < off x + len x
+      · exact .inr (λ b1 b2 ↦ by simp only [List.foldl_cons, h_id]; simp [write_subslice_at_index, hjx])
+      · exact .inl (λ b ↦ by simp only [List.foldl_cons, h_id]; simp [write_subslice_at_index, hjx])
     · exact .inr (λ b1 b2 ↦ h_const _ _)
 
 /-- If both `base` and the slices written on top of `uninit n` are `.le_defined target`,
@@ -221,10 +221,10 @@ theorem foldl_write_subslice_overlay_le_defined {α : Type u} {n : Nat}
     (h_base : base.le_defined target)
     (h_over : (xs.foldl (init := Bytes.uninit n) λ bs x ↦ bs.write_subslice_at_index (off x) (sub x)).le_defined target) :
     (xs.foldl (init := base) λ bs x ↦ bs.write_subslice_at_index (off x) (sub x)).le_defined target :=
-  λ j ↦ by
-    rcases foldl_write_subslice_dichotomy xs off sub j with h | h
-    · rw [h base]; exact h_base j
-    · rw [h base (Bytes.uninit n)]; exact h_over j
+  λ j hj ↦ by
+    rcases foldl_write_subslice_dichotomy xs off sub j hj with h | h
+    · rw [h base]; exact h_base j hj
+    · rw [h base (Bytes.uninit n)]; exact h_over j hj
 
 end Bytes
 
@@ -237,12 +237,12 @@ def Option.le_defined {α : Type u} (self other : Option α) : Prop :=
 
 namespace Option.le_defined
 
-@[simp] theorem Option.le_defined_refl (o : Option α) : Option.le_defined o o := by
+@[simp, grind ←] theorem Option.le_defined_refl (o : Option α) : Option.le_defined o o := by
   cases o <;> simp [Option.le_defined]
-@[simp] theorem Option.le_defined_none (o : Option α) : Option.le_defined .none o := by
+@[simp, grind ←] theorem Option.le_defined_none (o : Option α) : Option.le_defined .none o := by
   cases o <;> simp [Option.le_defined]
 
-@[simp] theorem eq_of_some {α : Type u} {a : α} {o : Option α} :
+@[simp, grind =] theorem eq_of_some {α : Type u} {a : α} {o : Option α} :
     (Option.le_defined (some a) o) = (o = some a) := by
   ext; constructor <;> intros h
   · cases o <;> simp [Option.le_defined] at h; congr 1; exact h.symm

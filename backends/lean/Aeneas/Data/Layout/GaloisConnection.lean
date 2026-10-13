@@ -12,9 +12,8 @@ namespace Endianness
 lemma decode_bitvec_encode_bitvec (ty : IUScalarTy) (bv : BitVec ty.numBits) :
     decode_bitvec ty (encode_bitvec ty.size bv) = bv := by
   ext k hk
-  simp only [decode_bitvec, BitVec.getElem_ofFn, encode_bitvec, Vector.getElem_ofFn, BitVec.getElem_extractLsb']
-  change bv.getLsbD (8 * (k / 8) + k % 8) = bv.getLsbD k
-  congr 1; omega
+  simp [decode_bitvec, encode_bitvec]
+  congr 1; simp; omega
 
 @[simp, grind =]
 lemma encode_bitvec_decode_bitvec (ty : IUScalarTy) (bytes_data : Vector Byte ty.size) :
@@ -44,6 +43,7 @@ lemma decode_encode (ty : IUScalarTy) (i : ℤ) (h : ty.can_repr i) :
     simp only [decode, encode, decode_bitvec_encode_bitvec, IUScalar.val, Std.IScalar.val,
                BitVec.ofInt_toInt]
 
+@[simp, grind =]
 lemma encode_decode (ty : IUScalarTy) (bytes_data : Vector Byte ty.size) :
     encode ty (decode ty bytes_data) (decode_can_repr ty bytes_data) = bytes_data := by
   cases ty with
@@ -69,10 +69,11 @@ lemma decode_discriminant_mono {n : Nat} {bs1 bs2 : Bytes n} (h_le : bs1.le_defi
       cases h_data : (bs1.subslice_with_length offset value_type.size h).toData with
       | none => simp
       | some bytes_data =>
-        have h_sub_eq := Bytes.eq_of_toData_some_le_defined h_data (by apply Bytes.subslice_le_defined; trivial)
+        have h_sub_eq := Bytes.eq_of_toData_some_le_defined h_data (Bytes.subslice_le_defined h_le _ _ h)
         rw [← h_sub_eq, h_data]
-        apply decode_discriminant_mono; trivial
+        exact decode_discriminant_mono h_le _
 
+@[grind ←]
 lemma encode_discriminant_le_defined {n : Nat} (payload bytes : Bytes n) (tags : List TagToWrite)
     (h_pay : payload.le_defined bytes)
     (h_tag : (encode_discriminant (Bytes.uninit n) tags).le_defined bytes) :
@@ -88,7 +89,7 @@ namespace Layout
 
 /-! ## Helper Lemmas for Proving the Galois Connection Properties -/
 
-private lemma list_mapM_mono {α β : Type} {f1 f2 : α → Option β} (xs : List α)
+@[grind ←] private lemma list_mapM_mono {α β : Type} {f1 f2 : α → Option β} (xs : List α)
     (hf : ∀ x ∈ xs, Option.le_defined (f1 x) (f2 x)) :
     Option.le_defined (xs.mapM f1) (xs.mapM f2) := by
   induction xs with
@@ -129,39 +130,49 @@ private lemma list_mapM_mono {α β : Type} {f1 f2 : α → Option β} (xs : Lis
     have ih := list_mapM_eq_some_of_getElem (by grind) (λ i hi ↦ h_get (i + 1) (by grind))
     simp [h0, ih]
 
-private lemma list_mapM_finRange_eq_some {α : Type} {n : Nat} {f : Fin n → Option α} {ys : List α}
-    (h : (List.finRange n).mapM f = some ys) (idx : Fin n) :
-    f idx = some (ys[idx.val]'(by grind)) := by
-  -- this proof is a bit silly, why does grind not see this by itself?
-  have _ : f idx = f (List.finRange n)[↑idx] := by grind
+@[grind →] private lemma list_mapM_range_attach_eq_some {α : Type} {n : Nat}
+    {f : { x // x ∈ List.range n } → Option α} {ys : List α}
+    (h : (List.range n).attach.mapM f = some ys) (idx : Nat) (h_idx : idx < n) :
+    f ⟨idx, List.mem_range.mpr h_idx⟩ = some (ys[idx]'(by grind)) := by
+  have _ : f ⟨idx, List.mem_range.mpr h_idx⟩ = f ((List.range n).attach[idx]'(by grind)) := by grind
   grind
 
-private lemma list_mapM_finRange_of_getElem {α : Type} {n : Nat} {f : Fin n → Option α} {ys : List α}
+@[grind ←] private lemma list_mapM_range_attach_of_getElem {α : Type} {n : Nat}
+    {f : { x // x ∈ List.range n } → Option α} {ys : List α}
     (h_len : ys.length = n)
-    (h_get : ∀ (idx : Fin n), f idx = some (ys[idx.val]'(by grind))) :
-    (List.finRange n).mapM f = some ys := by grind
+    (h_get : ∀ (idx : Nat) (h_idx : idx < n),
+      f ⟨idx, List.mem_range.mpr h_idx⟩ = some (ys[idx]'(by grind))) :
+    (List.range n).attach.mapM f = some ys := by grind
 
-private lemma encode_tuple_subslice {ts : List MType} (fo : Fin ts.length → Nat)
-    (fl : (idx : Fin ts.length) → Layout ts[idx]) (sa : SizeAndAlign)
-    (h_tuple : TupleValid fo (λ i ↦ (fl i).size) sa)
+@[simp] private lemma encode_tuple_subslice {ts : List MType} (fo : (idx : Nat) → idx < ts.length → Nat)
+    (fl : (idx : Nat) → (h : idx < ts.length) → Layout ts[idx]) (sa : SizeAndAlign)
     (values : List MVal) (hv : (MVal.tuple values).valid_for (.tuple ts))
-    (idx : Fin ts.length) :
-    let i : Fin values.length := ⟨idx.val, by grind⟩
+    (idx : Nat) (h_idx : idx < ts.length)
+    (h_bound : fo idx h_idx + (fl idx h_idx).size ≤ sa.size)
+    (h_disj : ∀ (i1 i2 : Nat) (hi1 : i1 < ts.length) (hi2 : i2 < ts.length), i1 ≠ i2 →
+      disj_range (fo i1 hi1, fo i1 hi1 + (fl i1 hi1).size)
+                 (fo i2 hi2, fo i2 hi2 + (fl i2 hi2).size)) :
     (encode (.tuple fo fl sa) (.tuple values) hv).subslice_with_length
-      (fo idx) (fl idx).size (h_tuple.size_bounds idx) =
-    encode (fl idx) values[i] (by simpa [i] using hv.tuple_proj i) :=
-  Bytes.foldl_write_subslice_nodup_subslice _ _ _ _ idx
-    (List.mem_finRange idx) (List.nodup_finRange ts.length) (h_tuple.size_bounds idx)
-    (λ y _ ↦ h_tuple.fields_disj idx y)
+      (fo idx h_idx) (fl idx h_idx).size h_bound =
+    encode (fl idx h_idx) (values[idx]'(by grind)) (by grind) :=
+  Bytes.foldl_write_subslice_nodup_subslice (List.range ts.length).attach
+    (λ x ↦ fo x.val (by grind))
+    (λ x ↦ encode (fl x.val (by grind)) (values[x.val]'(by grind)) (by grind))
+    (Bytes.uninit sa.size) ⟨idx, List.mem_range.mpr h_idx⟩
+    (List.mem_attach _ _) (List.nodup_attach.mpr List.nodup_range)
+    h_bound (by grind)
 
-private lemma encode_tuple_le_defined {ts : List MType} (fo : Fin ts.length → Nat)
-    (fl : (idx : Fin ts.length) → Layout ts[idx]) (sa : SizeAndAlign)
+grind_pattern encode_tuple_subslice =>
+  (encode (.tuple fo fl sa) (.tuple values) hv).subslice_with_length (fo idx h_idx) (fl idx h_idx).size h_bound,
+  values[idx]
+
+@[grind ←] private lemma encode_tuple_le_defined {ts : List MType} (fo : (idx : Nat) → idx < ts.length → Nat)
+    (fl : (idx : Nat) → (h : idx < ts.length) → Layout ts[idx]) (sa : SizeAndAlign)
     (bytes : Bytes sa.size) (values : List MVal) (hv : (MVal.tuple values).valid_for (.tuple ts))
-    (h_bounds : ∀ idx : Fin ts.length, fo idx + (fl idx).size ≤ sa.size)
-    (h_fields : ∀ idx : Fin ts.length,
-      let i : Fin values.length := ⟨idx.val, by grind⟩
-      (encode (fl idx) values[i] (by grind)).le_defined
-        (bytes.subslice_with_length (fo idx) (fl idx).size (h_bounds idx))) :
+    (h_bounds : ∀ idx (h_idx : idx < ts.length), fo idx h_idx + (fl idx h_idx).size ≤ sa.size)
+    (h_fields : ∀ idx (h_idx : idx < ts.length),
+      (encode (fl idx h_idx) (values[idx]'(by grind)) (by grind)).le_defined
+        (bytes.subslice_with_length (fo idx h_idx) (fl idx h_idx).size (h_bounds idx h_idx))) :
     (encode (.tuple fo fl sa) (.tuple values) hv).le_defined bytes := by
   apply Bytes.foldl_write_subslice_le_defined <;> grind
 
@@ -172,22 +183,17 @@ theorem valid_decodeValid {ty : MType} (l : Layout ty) (hl : l.Valid) : l.Decode
   | int st =>
     intro bytes val h_dec
     simp only [decode, Option.bind_eq_bind] at h_dec
-    cases h_data : bytes.toData with
-    | none => grind
-    | some bytes_data =>
-      have := MVal.valid_for.int (Endianness.decode_can_repr st bytes_data)
-      grind
+    cases h_data : bytes.toData <;> grind
   | tuple ts fo fl sa _ _ ih =>
     intro bytes val h_dec
     simp [decode] at h_dec
     obtain ⟨values, h_mapM, rfl⟩ := h_dec
     apply MVal.valid_for.tuple
     apply List.forall₂_iff_get.mpr ⟨by grind, λ i hi1 hi2 ↦ ?_⟩
-    have h_item := list_mapM_finRange_eq_some h_mapM ⟨i, hi2⟩
+    have h_item := list_mapM_range_attach_eq_some h_mapM i hi2
     split at h_item
     case isFalse => nomatch h_item
-    case isTrue h_bound =>
-      exact ih ⟨i, hi2⟩ _ _ h_item
+    case isTrue h_bound => exact ih i hi2 _ _ h_item
   | enum vs vt vl dc sa _ _ ih =>
     intro bytes val h_dec
     simp only [decode, Option.bind_eq_bind] at h_dec
@@ -201,10 +207,11 @@ theorem valid_decodeValid {ty : MType} (l : Layout ty) (hl : l.Valid) : l.Decode
         split at h_dec
         case isFalse => nomatch h_dec
         case isTrue hsz =>
-          cases h_vdec : decode (vl ⟨d, hd⟩) (bytes.subslice_with_length 0 _ hsz) with
+          cases h_vdec : decode (vl d hd) (bytes.subslice_with_length 0 _ hsz) with
           | none => simp [h_vdec] at h_dec
           | some v =>
-            have := MVal.valid_for.enum d v vs hd (ih ⟨d, hd⟩ _ _ h_vdec)
+            have := ih d hd _ _ h_vdec
+            simp [h_vdec] at h_dec
             grind
 
 /-- Combines `decode` with a `DecodeValid` proof to return a subtype `{ val : MVal // val.valid_for ty }`. -/
@@ -219,24 +226,16 @@ theorem valid_decodeMono {ty : MType} (l : Layout ty) (hl : l.Valid) : l.DecodeM
   | int st =>
     intro bytes1 bytes2 h_le
     simp only [decode, Option.bind_eq_bind]
-    cases h_data1 : bytes1.toData with
-    | none => simp
-    | some data1 =>
-      rw [← Bytes.eq_of_toData_some_le_defined h_data1 h_le, h_data1]; simp
+    cases h_data1 : bytes1.toData <;> grind
   | tuple ts fo fl sa _ _ ih =>
     intro bytes1 bytes2 h_le
     apply Option.le_defined.map
-    refine list_mapM_mono (List.finRange ts.length) λ idx _ ↦ ?_
-    dsimp only; split
-    case isFalse => trivial
-    case isTrue h_bound =>
-      apply ih
-      all_goals grind
+    refine list_mapM_mono _ λ idx _ ↦ ?_
+    dsimp only; split <;> grind
   | enum vs vt vl dc sa _ _ ih =>
     intro bytes1 bytes2 h_le
     simp only [decode]
-    apply Option.le_defined.bind
-    { grind }
+    apply Option.le_defined.bind; grind
     intros d _
     split
     case isFalse => trivial
@@ -244,7 +243,7 @@ theorem valid_decodeMono {ty : MType} (l : Layout ty) (hl : l.Valid) : l.DecodeM
       split
       case isFalse => trivial
       case isTrue hsz =>
-        exact Option.le_defined.bind (ih ⟨d, hd⟩ _ _ (Bytes.subslice_le_defined h_le 0 _ hsz)) λ _ _ ↦ rfl
+        apply Option.le_defined.bind <;> grind
 
 theorem valid_decodeEncode {ty : MType} (l : Layout ty) (hl : l.Valid) : l.DecodeEncode := by
   induction hl with
@@ -252,33 +251,31 @@ theorem valid_decodeEncode {ty : MType} (l : Layout ty) (hl : l.Valid) : l.Decod
     intro val hv
     cases val with
     | tuple _ | variant _ _ => nomatch hv
-    | int i => simp [encode, decode, Endianness.decode_encode st i hv.int_can_repr]
+    | int i => grind [encode, decode]
   | tuple ts fo fl sa _ h_tuple ih =>
     intro val hv
     cases val with
     | int _ | variant _ _ => nomatch hv
     | tuple values =>
       simp only [decode]
-      rw [list_mapM_finRange_of_getElem hv.tuple_len]
+      rw [list_mapM_range_attach_of_getElem (ys := values) (by grind)]
       · rfl
-      · intro idx
-        simp only [h_tuple.size_bounds idx, ↓reduceDIte, encode_tuple_subslice fo fl sa h_tuple values hv idx]
-        apply ih
+      · intro idx h_idx
+        rw [dif_pos (h_tuple.size_bounds idx h_idx), encode_tuple_subslice]
+        all_goals grind
   | enum vs vt vl dc sa h_vl_valid h_enum ih =>
     intro val hv
     cases val with
     | int _ | tuple _ => nomatch hv
     | variant d data =>
-      let idx : Fin vs.length := ⟨d, hv.variant_bound⟩
-      have hsz : 0 + (vl idx).size ≤ sa.size := by have := h_enum.data_sizes idx; grind
+      have hd : d < vs.length := by grind
+      have hsz : 0 + (vl d hd).size ≤ sa.size := by have := h_enum.data_sizes d hd; grind
       simp only [encode, decode, Option.bind_eq_bind]
-      rw [h_enum.discr_complete idx data hv.variant_proj]
-      simp only [Option.bind_some, idx.isLt, hsz, ↓reduceDIte]
-      have h_le_sub := Bytes.subslice_le_defined (h_enum.tags_preserve_payload idx data hv.variant_proj) 0 _ hsz
-      have h_mono := valid_decodeMono (vl idx) (h_vl_valid idx) _ _ h_le_sub
-      simp only [Bytes.subslice_write_subslice_self, ih idx data hv.variant_proj,
-                 Option.le_defined.eq_of_some] at h_mono
-      rw [h_mono]; rfl
+      rw [h_enum.discr_complete d hd data (by grind)]
+      simp only [Option.bind_some, hd, hsz, ↓reduceDIte]
+      have h_mono := valid_decodeMono (vl d hd) (h_vl_valid d hd) _ _
+        (Bytes.subslice_le_defined (h_enum.tags_preserve_payload d hd data (by grind)) 0 _ hsz)
+      grind
 
 theorem valid_encodeDecodeLeDefined {ty : MType} (l : Layout ty) (hl : l.Valid) : l.EncodeDecodeLeDefined := by
   induction hl with
@@ -289,14 +286,12 @@ theorem valid_encodeDecodeLeDefined {ty : MType} (l : Layout ty) (hl : l.Valid) 
     | int i =>
       simp only [decode, Option.bind_eq_bind] at h_dec
       cases h_data : bytes.toData with
-      | none => rw [h_data] at h_dec; nomatch h_dec
+      | none => grind
       | some bytes_data =>
         rw [h_data] at h_dec; simp at h_dec; subst h_dec
         have h_eq : encode .int (.int (Endianness.decode st bytes_data)) hv = bytes := by
-          ext k hk
-          simp [encode, Endianness.encode_decode st bytes_data]
-          exact (Bytes.getElem_of_toData h_data k hk).symm
-        simp [h_eq]
+          ext k hk; grind [encode]
+        grind
   | tuple ts fo fl sa _ h_tuple ih =>
     intro bytes val hv h_dec
     cases val with
@@ -305,11 +300,7 @@ theorem valid_encodeDecodeLeDefined {ty : MType} (l : Layout ty) (hl : l.Valid) 
       simp only [decode, Option.map_eq_some_iff] at h_dec
       obtain ⟨dec_values, h_mapM, h_eq⟩ := h_dec
       injection h_eq with h_eq; subst h_eq
-      apply encode_tuple_le_defined fo fl sa bytes dec_values hv h_tuple.size_bounds
-      intro idx
-      have h_item := list_mapM_finRange_eq_some h_mapM idx
-      simp [h_tuple.size_bounds idx] at h_item
-      exact ih idx _ _ _ h_item
+      apply encode_tuple_le_defined <;> grind
   | enum vs vt vl dc sa _ h_enum ih =>
     intro bytes val hv h_dec
     cases val with
@@ -326,21 +317,19 @@ theorem valid_encodeDecodeLeDefined {ty : MType} (l : Layout ty) (hl : l.Valid) 
           split at h_dec
           case isFalse => nomatch h_dec
           case isTrue hsz =>
-            cases h_vdec : decode (vl ⟨d_dec, hd⟩) (bytes.subslice_with_length 0 _ hsz) with
+            cases h_vdec : decode (vl d_dec hd) (bytes.subslice_with_length 0 _ hsz) with
             | none => simp [h_vdec] at h_dec
             | some v_dec =>
               simp [h_vdec] at h_dec
               obtain ⟨rfl, rfl⟩ := h_dec
-              let idx : Fin vs.length := ⟨d_dec, hd⟩
-              let payload_bs := (Bytes.uninit sa.size).write_subslice_at_index 0 (encode (vl idx) v_dec hv.variant_proj)
-              have h_pay_le : payload_bs.le_defined bytes := λ k ↦ by
-                have h_ksz : k.val < (vl idx).size := by have := h_enum.data_sizes idx; grind
-                have hf := ih idx _ v_dec hv.variant_proj h_vdec ⟨k.val, h_ksz⟩
-                simpa [payload_bs, Bytes.subslice_with_length, h_ksz] using hf
-              exact encode_discriminant_le_defined payload_bs bytes (vt idx) h_pay_le
-                (h_enum.discr_tags_le_defined bytes idx h_discr)
+              let payload_bs := (Bytes.uninit sa.size).write_subslice_at_index 0 (encode (vl d_dec hd) v_dec (by grind))
+              have h_pay_le : payload_bs.le_defined bytes := λ k hk ↦ by
+                have h_ksz : k < (vl d_dec hd).size := by have := h_enum.data_sizes d_dec hd; grind
+                have hf := ih d_dec hd _ v_dec (by grind) h_vdec k h_ksz
+                grind
+              have := h_enum.discr_tags_le_defined bytes d_dec hd h_discr
+              grind [encode]
 
 end Layout
 
 end Aeneas
-
