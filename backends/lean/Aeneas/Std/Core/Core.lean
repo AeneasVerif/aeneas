@@ -3,7 +3,6 @@ public import Lean
 public import Aeneas.Std.Primitives
 public meta import Aeneas.Tactic.Step.Init
 public import Aeneas.Tactic.Elab.TraitDefault.Init
-public import Aeneas.Std.Alloc
 public section
 
 namespace Aeneas
@@ -13,10 +12,6 @@ namespace Std
 open Result
 
 attribute [rust_type "core::option::Option" -prefixVariantNames] Option
-
-@[expose, rust_fun "alloc::boxed::{core::convert::AsMut<Box<@T>, @T>}::as_mut" -canFail (keepParams := [true,false])]
-def alloc.boxed.AsMutBox.as_mut {T : Type _} (x : T) : T × (T → T) :=
-  (x, fun x => x)
 
 namespace core
 
@@ -34,11 +29,6 @@ def clone.Clone.clone_from.default {Self : Type _} (CloneInst : core.clone.Clone
   (_self source : Self) : Result Self :=
   CloneInst.clone source
 
-@[expose, reducible, rust_trait_impl "core::clone::Clone<alloc::alloc::Global>"]
-def clone.CloneGlobal : core.clone.Clone Global := {
-  clone := alloc.alloc.CloneGlobal.clone
-}
-
 /- [core::clone::impls::{(core::clone::Clone for bool)#19}::clone] -/
 @[expose, reducible, simp, step_simps]
 def clone.impls.CloneBool.clone (b : Bool) : Bool := b
@@ -47,17 +37,6 @@ def clone.impls.CloneBool.clone (b : Bool) : Bool := b
 def clone.CloneBool : clone.Clone Bool := {
   clone := fun b => ok (clone.impls.CloneBool.clone b)
   clone_from := fun _ b => ok (clone.impls.CloneBool.clone b)
-}
-
-@[expose, rust_fun "alloc::boxed::{core::clone::Clone<Box<@T>>}::clone"
-    (keepParams := [true, false]) (keepTraitClauses := [true, false])]
-def alloc.boxed.CloneBox.clone {T : Type _} (cloneInst : core.clone.Clone T) : T → Result T :=
-  cloneInst.clone
-
-@[expose, reducible, rust_trait_impl "core::clone::Clone<Box<@T>>"
-    (keepParams := [true, false]) (keepTraitClauses := [true, false])]
-def clone.CloneBox {T : Type _} (cloneInst : core.clone.Clone T) : core.clone.Clone T := {
-  clone := alloc.boxed.CloneBox.clone cloneInst
 }
 
 @[rust_trait "core::marker::Copy" (parentClauses := ["cloneInst"])]
