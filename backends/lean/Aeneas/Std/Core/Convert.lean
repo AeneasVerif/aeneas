@@ -72,11 +72,6 @@ def core.convert.TryInto.Blanket {T U E : Type _}
 structure core.convert.AsMut (Self : Type _) (T : Type _) where
   as_mut : Self → Result (T × (T → Self))
 
-@[expose, reducible, rust_trait_impl "core::convert::AsMut<Box<@T>, @T>"]
-def core.convert.AsMutBox (T : Type _) : core.convert.AsMut T T := {
-  as_mut := fun x => ok (alloc.boxed.AsMutBox.as_mut x)
-}
-
 /-- `Result::is_ok`: `true` on `Ok`, `false` on `Err`. -/
 @[expose, rust_fun "core::result::{core::result::Result<@T, @E>}::is_ok"]
 def core.result.Result.is_ok {T E : Type _} :

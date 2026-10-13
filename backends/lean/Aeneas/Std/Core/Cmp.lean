@@ -295,15 +295,4 @@ def core.cmp.PartialOrdShared {A : Type _} {B : Type _}
   ge := core.cmp.impls.PartialOrdShared.ge PartialOrdInst
 }
 
-@[expose, rust_fun "alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::eq" (keepParams := [true, false])]
-def alloc.boxed.PartialEqBox.eq
-  {T : Type _} (PartialEqInst : core.cmp.PartialEq T T) (x y : T) : Result Bool :=
-  PartialEqInst.eq x y
-
-@[expose, reducible, rust_trait_impl "core::cmp::PartialEq<Box<@T>, Box<@T>>" (keepParams := [true, false])]
-def core.cmp.PartialEqBox {T : Type _} (PartialEqInst : core.cmp.PartialEq T T) :
-  core.cmp.PartialEq T T := {
-  eq := alloc.boxed.PartialEqBox.eq PartialEqInst
-}
-
 end Aeneas.Std
