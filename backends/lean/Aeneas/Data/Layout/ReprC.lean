@@ -10,44 +10,6 @@ namespace ReprC
 
 open SizeAndAlign
 
-/-! ## Part 1: Bounded Maximum (`natMax`) -/
-
-def natMax : (n : Nat) → ((i : Nat) → i < n → Nat) → Nat → Nat
-  | 0, _, init => init
-  | n + 1, f, init => max (natMax n (λ i _ ↦ f i (by omega)) init) (f n (by omega))
-
-@[simp] lemma init_le_natMax : ∀ n (f : (i : Nat) → i < n → Nat) init, init ≤ natMax n f init
-  | 0, _, _ => Nat.le_refl _
-  | n + 1, _, init => Nat.le_trans (init_le_natMax n _ init) (Nat.le_max_left _ _)
-
-grind_pattern init_le_natMax => natMax n f init
-
-@[simp] lemma le_natMax : ∀ n (f : (i : Nat) → i < n → Nat) init (i : Nat) (hi : i < n), f i hi ≤ natMax n f init
-  | n + 1, f, init, i, hi => by
-    rcases Nat.lt_succ_iff_lt_or_eq.mp hi with hlt | rfl
-    · exact Nat.le_trans (le_natMax n (λ k _ ↦ f k (by omega)) init i hlt) (Nat.le_max_left _ _)
-    · exact Nat.le_max_right _ _
-
-grind_pattern le_natMax => natMax n f init, i < n
-
-
-lemma lub_natMax : ∀ n (f : (i : Nat) → i < n → Nat) init z (_ : init ≤ z) (_ : ∀ i, (hi : i < n) → f i hi ≤ z), natMax n f init ≤ z
-  | 0, _, _, z, h1, _ => h1
-  | n + 1, _, init, z, h1, h2 => by
-    apply max_le_iff.mpr
-    constructor; apply lub_natMax
-    all_goals grind
-
-
-@[simp, grind .]
-lemma natMax_isPowerOfTwo : ∀ n (f : (i : Nat) → i < n → Nat) init,
-    init.isPowerOfTwo → (∀ i (hi : i < n), (f i hi).isPowerOfTwo) → (natMax n f init).isPowerOfTwo
-  | 0, _, _, h0, _ => h0
-  | n + 1, f, init, h0, hf => by
-    have := natMax_isPowerOfTwo n (λ i _ ↦ f i (by omega)) init h0 (by grind)
-    by_cases h : natMax n (λ i _ ↦ f i (by omega)) init ≤ f n (by omega)
-    all_goals (simp [natMax]; grind)
-
 /-! ## Part 2: Shallow `#[repr(C)]` Tuple / Struct Layout (with Optional Packing) -/
 
 /-- Effective alignment when capped by an optional `#[repr(packed(P))]` bound. -/
@@ -206,6 +168,35 @@ lemma mkTuple_large_packed_nop ts fl (a : { a : Nat // a.isPowerOfTwo }) (init_o
 lemma mkTuple_packed_bounds_align ts fl (a : { a : Nat // a.isPowerOfTwo }) (init_off : Nat := 0) :
   (mkTuple ts fl (max_align := .some a) init_off).size_and_align.align ≤ ↑a := by
   grind [lub_natMax]
+
+private lemma tupleSizeAndAlign_size_eq_natMax : ∀ {n : Nat} (fsize falign : (i : Nat) → i < n → Nat)
+    (h_align : ∀ i (hi : i < n), (falign i hi).isPowerOfTwo),
+    let sa := tupleSizeAndAlign fsize falign 0 h_align
+    sa.size = natMax n (λ x hx ↦ alignUp (tupleFieldOffset fsize falign 0 x hx + fsize x hx) sa.align) 0
+  | 0, _, _, _ => by simp [tupleSizeAndAlign, tupleCursor, natMax]
+  | m + 1, fsize, falign, h_align => by
+    intro sa
+    apply Nat.le_antisymm
+    · trans; swap
+      apply le_natMax (i := m)
+      grind
+      trivial
+    · apply lub_natMax; grind
+      grind
+
+@[grind ←]
+lemma mkTuple_packed (ts : List MType)
+    (fl : (idx : Nat) → (h : idx < ts.length) → Layout ts[idx])
+    (a : { a : Nat // a.isPowerOfTwo }) :
+    (mkTuple ts fl (.some a) 0).Packed a.val := by
+  refine .tuple ts _ fl id _ a.property (mkTuple_packed_bounds_align ts fl a 0) Function.bijective_id ?_ ?_
+    (tupleSizeAndAlign_size_eq_natMax _ _ _) ?_
+  · intro i hle
+    simp [tupleFieldOffset, tupleCursor, effAlign]
+    grind
+  · intro hl
+    simp [tupleFieldOffset, tupleCursor]
+  · grind
 
 /-! ## Part 3: Shallow `#[repr(C)]` and `#[repr(primitive)]` Enum Layouts -/
 

@@ -15,6 +15,45 @@ lemma isPowerOfTwo_ge_one (n : Nat) : n.isPowerOfTwo → n ≥ 1 := by intro ⟨
 
 grind_pattern isPowerOfTwo_ge_one => n.isPowerOfTwo
 
+
+
+def natMax : (n : Nat) → ((i : Nat) → i < n → Nat) → Nat → Nat
+  | 0, _, init => init
+  | n + 1, f, init => max (natMax n (λ i _ ↦ f i (by omega)) init) (f n (by omega))
+
+@[simp] lemma init_le_natMax : ∀ n (f : (i : Nat) → i < n → Nat) init, init ≤ natMax n f init
+  | 0, _, _ => Nat.le_refl _
+  | n + 1, _, init => Nat.le_trans (init_le_natMax n _ init) (Nat.le_max_left _ _)
+
+grind_pattern init_le_natMax => natMax n f init
+
+@[simp] lemma le_natMax : ∀ n (f : (i : Nat) → i < n → Nat) init (i : Nat) (hi : i < n), f i hi ≤ natMax n f init
+  | n + 1, f, init, i, hi => by
+    rcases Nat.lt_succ_iff_lt_or_eq.mp hi with hlt | rfl
+    · exact Nat.le_trans (le_natMax n (λ k _ ↦ f k (by omega)) init i hlt) (Nat.le_max_left _ _)
+    · exact Nat.le_max_right _ _
+
+grind_pattern le_natMax => natMax n f init, i < n
+
+
+lemma lub_natMax : ∀ n (f : (i : Nat) → i < n → Nat) init z (_ : init ≤ z) (_ : ∀ i, (hi : i < n) → f i hi ≤ z), natMax n f init ≤ z
+  | 0, _, _, z, h1, _ => h1
+  | n + 1, _, init, z, h1, h2 => by
+    apply max_le_iff.mpr
+    constructor; apply lub_natMax
+    all_goals grind
+
+
+@[simp, grind .]
+lemma natMax_isPowerOfTwo : ∀ n (f : (i : Nat) → i < n → Nat) init,
+    init.isPowerOfTwo → (∀ i (hi : i < n), (f i hi).isPowerOfTwo) → (natMax n f init).isPowerOfTwo
+  | 0, _, _, h0, _ => h0
+  | n + 1, f, init, h0, hf => by
+    have := natMax_isPowerOfTwo n (λ i _ ↦ f i (by omega)) init h0 (by grind)
+    by_cases h : natMax n (λ i _ ↦ f i (by omega)) init ≤ f n (by omega)
+    all_goals (simp [natMax]; grind)
+
+
 namespace Aeneas
 
 /-! ## Size and Alignment -/
@@ -32,6 +71,13 @@ lemma SizeAndAlign.grind_wf_size (sa : SizeAndAlign) : sa.align ∣ sa.size := s
 grind_pattern SizeAndAlign.grind_wf_size => sa.size
 
 namespace SizeAndAlign
+
+lemma num_bytes_is_power_of_two {ty : IUScalarTy} : (ty.numBits / 8).isPowerOfTwo := by
+  rcases ty with ⟨ty⟩ | ⟨ty⟩ <;>
+    cases ty <;>
+    rcases System.Platform.numBits_eq with h | h <;>
+    simp [IUScalarTy.numBits, Std.IScalarTy.numBits, Std.UScalarTy.numBits, h] <;>
+    decide
 
 lemma align_pos (sa : SizeAndAlign) : 0 < sa.align :=
   Nat.pos_of_isPowerOfTwo sa.wf_align
@@ -66,12 +112,15 @@ lemma aligned_alignUp (x : Nat) {A : Nat} : A ∣ alignUp x A := by
   apply Nat.dvd_mul_left
 grind_pattern aligned_alignUp => alignUp x A
 
-lemma num_bytes_is_power_of_two {ty : IUScalarTy} : (ty.numBits / 8).isPowerOfTwo := by
-  rcases ty with ⟨ty⟩ | ⟨ty⟩ <;>
-    cases ty <;>
-    rcases System.Platform.numBits_eq with h | h <;>
-    simp [IUScalarTy.numBits, Std.IScalarTy.numBits, Std.UScalarTy.numBits, h] <;>
-    decide
+@[simp, grind =]
+lemma alignUp_zero (A : Nat) : alignUp 0 A = 0 := by
+  simp [alignUp]; omega
+
+@[simp]
+lemma alignUp_mono {x y : Nat} (hxy : x ≤ y) (A : Nat) : alignUp x A ≤ alignUp y A :=
+  Nat.mul_le_mul_right A (Nat.div_le_div_right (by omega))
+
+grind_pattern alignUp_mono => alignUp x A, alignUp y A
 
 end SizeAndAlign
 
@@ -425,6 +474,26 @@ inductive Transparent : {ty : MType} → Layout ty → Prop where
     Transparent vl →
     Transparent (.enum (λ _ _ ↦ []) (λ | 0, _ => vl) (.known 0) vl.size_and_align : Layout (.enum [v]))
 
+inductive Packed (n : Nat) : {ty : MType} → Layout ty → Prop where
+| tuple ts fo fl (ford : Fin ts.length → Fin ts.length) sa :
+    n.isPowerOfTwo →
+    sa.align ≤ n →
+    -- we have a bijection telling us the field order
+    Function.Bijective ford →
+    -- each field's offset is determined by the previous field using `alignUp`
+    (∀ i, (hle : i + 1 < ts.length) →
+      let cur := (ford ⟨i, by grind⟩);
+      let nxt := (ford ⟨i + 1, hle⟩)
+      fo nxt (by grind) = SizeAndAlign.alignUp
+        (fo cur (by grind) + (fl cur (by grind)).size)
+        (min n (fl nxt (by grind)).size_and_align.align)) →
+    -- the first field is at offset 0
+    ((hl : ts.length > 0) → fo (ford ⟨0, by grind⟩) (by grind) = 0) →
+    -- there is no extra padding at the end
+    sa.size = natMax ts.length (λ x hx ↦ SizeAndAlign.alignUp ((fo x hx) + (fl x hx).size) sa.align) 0 →
+    -- our alignment upper-bounds the fields
+    (∀ i (hi : i < ts.length), min n (fl i hi).size_and_align.align ≤ sa.align) →
+    Packed n (.tuple fo fl sa : Layout (.tuple ts))
 
 end Layout
 
