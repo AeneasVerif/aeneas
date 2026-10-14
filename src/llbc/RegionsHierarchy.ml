@@ -35,10 +35,31 @@ module Subst = Substitute
 (** The local logger *)
 let log = Logging.regions_hierarchy_log
 
-type regions_hierarchy = region_var_groups [@@deriving show]
+type regions_hierarchy = region_groups [@@deriving show]
+
+(** Check whether the static region is used in a signature (in the input and
+    output types, or in the region outlives constraints).
+
+    Note that we can't simply explore the types to look for the static region: a
+    borrow with lifetime 'static may be hidden inside an ADT (for instance:
+    [struct S { x : &'static u32 }]), in which case the static region doesn't
+    appear in the signature. We thus use the type information. *)
+let sig_uses_static (span : Meta.span option)
+    (type_infos : TypesAnalysis.type_infos) (sg : bound_fun_sig) : bool =
+  let ty_uses_static (ty : ty) : bool =
+    (TypesAnalysis.analyze_ty span type_infos ty).contains_static
+  in
+  List.exists ty_uses_static
+    (sg.item_binder_value.output :: sg.item_binder_value.inputs)
+  || List.exists
+       (fun (c : region_outlives region_binder) ->
+         let long, short = c.binder_value in
+         long = RStatic || short = RStatic)
+       sg.item_binder_params.regions_outlive
 
 let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
-    (sg : bound_fun_sig) : region_var_groups =
+    (type_infos : TypesAnalysis.type_infos) (sg : bound_fun_sig) : region_groups
+    =
   (* Create the dependency graph.
 
      An edge from 'long to 'short means that 'long outlives 'short (that is
@@ -209,23 +230,22 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
   let module Scc = SCC.Make (RegionOrderedType) in
   let sccs = Scc.compute (RegionMap.bindings !g) in
 
-  (* Remove the SCC containing the static region.
+  (* Remove the SCC containing the static region: we will add it back at the
+     end of the list of region groups if the static region is used in the
+     signature (we put it at the end so that the identifiers of the other
+     region groups don't depend on whether the static region is used or not).
 
-     For now, we don't handle cases where regions different from 'static
-     can live as long as 'static, so we check that if the group contains
-     'static then it is the only region it contains, and then we filter
-     the group.
-     TODO: general support for 'static
+     Note that this SCC may contain regions different from 'static, if they
+     outlive 'static (e.g., ['a : 'static]): those regions are then merged
+     with the static region (they belong to the same region group).
   *)
-  let sccs =
+  let sccs, (static_scc, static_deps) =
     (* Find the SCC which contains the static region *)
     let static_gr_id, static_scc =
       List.find
         (fun (_, scc) -> List.mem RStatic scc)
         (SccId.Map.bindings sccs.sccs)
     in
-    (* The SCC should only contain the 'static *)
-    [%sanity_check_opt_span] span (static_scc = [ RStatic ]);
     (* Remove the group as well as references to this group from the
        other SCCs *)
     let { sccs; scc_deps } = sccs in
@@ -251,47 +271,86 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
            (SccId.Map.bindings sccs))
     in
 
+    let convert_deps deps =
+      SccId.Set.of_list (List.filter_map convert_id (SccId.Set.elements deps))
+    in
+    let static_deps =
+      convert_deps
+        ([%silent_unwrap_opt_span] span
+           (SccId.Map.find_opt static_gr_id scc_deps))
+    in
     let scc_deps =
       List.filter_map
         (fun (id, deps) ->
           match convert_id id with
           | None -> None
-          | Some id ->
-              let deps = List.filter_map convert_id (SccId.Set.elements deps) in
-              Some (id, SccId.Set.of_list deps))
+          | Some id -> Some (id, convert_deps deps))
         (SccId.Map.bindings scc_deps)
     in
     let scc_deps = SccId.Map.of_list scc_deps in
 
-    { sccs; scc_deps }
+    ({ sccs; scc_deps }, (static_scc, static_deps))
   in
 
   (*
    * Compute the regions hierarchy
    *)
-  List.filter_map
-    (fun (scc_id, scc) ->
-      (* The region id *)
-      let i = SccId.to_int scc_id in
-      let id = RegionGroupId.of_int i in
+  let to_group_id (id : SccId.id) : RegionGroupId.id =
+    RegionGroupId.of_int (SccId.to_int id)
+  in
+  let groups =
+    List.map
+      (fun (scc_id, scc) ->
+        (* The region id *)
+        let id = to_group_id scc_id in
 
-      (* Retrieve the set of regions in the group *)
-      let regions : RegionId.id list =
-        List.map
-          (fun r ->
-            match r with
-            | RVar (Free rid) -> rid
-            | _ -> [%craise] (Option.get span) "Unreachable")
-          scc
-      in
+        (* Retrieve the set of regions in the group *)
+        let regions : region list =
+          List.map
+            (fun r ->
+              match r with
+              | RVar (Free _) -> r
+              | _ -> [%internal_error_opt_span] span)
+            scc
+        in
 
-      (* Compute the set of parent region groups *)
-      let parents =
-        List.map
-          (fun id -> RegionGroupId.of_int (SccId.to_int id))
-          (SccId.Set.elements (SccId.Map.find scc_id sccs.scc_deps))
-      in
+        (* Compute the set of parent region groups *)
+        let parents =
+          List.map to_group_id
+            (SccId.Set.elements (SccId.Map.find scc_id sccs.scc_deps))
+        in
 
-      (* Put together *)
-      Some { id; regions; parents })
-    (SccId.Map.bindings sccs.sccs)
+        (* Put together *)
+        ({ id; regions; parents } : region_group))
+      (SccId.Map.bindings sccs.sccs)
+  in
+
+  (* Add the group for the static region, if the static region is used in the
+     signature or if some region variables outlive the static region (in which
+     case they belong to the static region group). Note that the static region
+     outlives all the other regions: its parents are thus all the other region
+     groups (or, more precisely, the groups it directly outlives), meaning that
+     the backward function for the static region ends all the other regions
+     first.
+
+     We put the static region first in the list of regions of the group. *)
+  let static_vars = List.filter (fun r -> r <> RStatic) static_scc in
+  if static_vars <> [] || sig_uses_static span type_infos sg then
+    let id = RegionGroupId.of_int (List.length groups) in
+    let parents = List.map to_group_id (SccId.Set.elements static_deps) in
+    groups @ [ { id; regions = RStatic :: static_vars; parents } ]
+  else groups
+
+(** List the ancestors of a region group (this list doesn't include the region
+    group itself).
+
+    This is the same as {!Charon.GAstUtils.list_ancestor_region_groups}, but for
+    {!type:Types.region_groups}. *)
+let rec list_ancestor_region_groups (regions_hierarchy : region_groups)
+    (gid : RegionGroupId.id) : RegionGroupId.Set.t =
+  let rg = RegionGroupId.nth regions_hierarchy gid in
+  List.fold_left
+    (fun s gid ->
+      let parents = list_ancestor_region_groups regions_hierarchy gid in
+      RegionGroupId.Set.union s (RegionGroupId.Set.add gid parents))
+    RegionGroupId.Set.empty rg.parents

@@ -620,7 +620,6 @@ let analyze_ty (span : Meta.span option) (infos : type_infos) (ty : ty) :
   let ty = ty_replace_body_regions_with_free_regions ty in
   (* We don't use [updated] but need to give it as parameter *)
   let updated = ref false in
-  (* We don't need to compute whether the type contains 'static or not *)
   let ty_info =
     initialize_g_type_info false ~is_rec:false ~has_regions:false
       ~mut_regions:RegionId.Set.empty None

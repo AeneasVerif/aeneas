@@ -661,7 +661,7 @@ module Values = struct
           tevalue_to_string ~span ~with_ended env aenv indent indent_incr next
         in
         "let " ^ pat ^ " ="
-        ^ RegionId.Set.to_string None regions
+        ^ region_set_to_string regions
         ^ "\n" ^ indent1 ^ bound ^ "\n" ^ indent ^ "in\n" ^ indent ^ next
     | EJoinMarkers (left, right) ->
         "@join_markers("
@@ -831,6 +831,7 @@ module Values = struct
     | Loop lp_id -> "Loop(loop_id:" ^ LoopId.to_string lp_id ^ ")"
     | Identity -> "Identity"
     | CopySymbolicValue -> "CopySymbolicValue"
+    | Static -> "Static"
     | Join -> "Join"
     | WithCont -> "WithCont"
 
@@ -876,11 +877,17 @@ module Values = struct
     ^ "{" ^ kind ^ "parents="
     ^ AbsId.Set.to_string None abs.parents
     ^ ",regions="
-    ^ RegionId.Set.to_string None abs.regions.owned
+    ^ region_set_to_string abs.regions.owned
     ^ "," ^ can_end ^ "} {\n" ^ avs ^ "\n" ^ indent ^ "}" ^ cont
 
   let abs_region_group_to_string (gr : abs_region_group) : string =
-    g_region_group_to_string RegionId.to_string AbsId.to_string gr
+    g_region_group_to_string region_to_short_string AbsId.to_string gr
+
+  let region_group_to_string (gr : region_group) : string =
+    g_region_group_to_string region_to_short_string RegionGroupId.to_string gr
+
+  let region_groups_to_string (gl : region_groups) : string =
+    String.concat "\n" (List.map region_group_to_string gl)
 
   let abs_region_groups_to_string (gl : abs_region_groups) : string =
     String.concat "\n" (List.map abs_region_group_to_string gl)
@@ -895,7 +902,7 @@ module Values = struct
     in
     let output = ty_to_string sg.output in
     inputs ^ " -> " ^ output ^ "\n- regions_hierarchy:\n"
-    ^ region_var_groups_to_string sg.regions_hierarchy
+    ^ region_groups_to_string sg.regions_hierarchy
     ^ "\n- abs_regions_hierarchy:\n"
     ^ abs_region_groups_to_string sg.abs_regions_hierarchy
 

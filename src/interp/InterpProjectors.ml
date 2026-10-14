@@ -12,8 +12,7 @@ let log = Logging.projectors_log
 
 (** [ty] shouldn't contain erased regions *)
 let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
-    (regions : RegionId.Set.t) (v : tvalue) (ty : ty) : abstract_shared_borrows
-    =
+    (regions : region_set) (v : tvalue) (ty : ty) : abstract_shared_borrows =
   [%ldebug
     "- ty: " ^ ty_to_string ctx ty ^ "\n- v.ty: " ^ ty_to_string ctx v.ty];
   (* Sanity check - TODO: move those elsewhere (here we perform the check at every
@@ -89,8 +88,9 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
         (* Check that the projection doesn't contain ended regions *)
         [%sanity_check] span
           (not
-             (projections_intersect span ctx ctx.ended_regions s.sv_ty regions
-                ty));
+             (projections_intersect span ctx
+                (region_set_of_region_id_set ctx.ended_regions)
+                s.sv_ty regions ty));
         [ AsbProjReborrows { sv_id = s.sv_id; proj_ty = ty } ]
     | VAdt adt, TArray (ty, _, _) ->
         List.flatten
@@ -101,8 +101,7 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
     | _ -> [%craise] span ("Unexpected value: " ^ tvalue_to_string ctx v)
 
 let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
-    (ctx : eval_ctx) (regions : RegionId.Set.t) (v : tvalue) (ty : rty) :
-    tavalue =
+    (ctx : eval_ctx) (regions : region_set) (v : tvalue) (ty : rty) : tavalue =
   (* Sanity check - TODO: move this elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
   let ety = Substitute.erase_regions ty in
@@ -229,15 +228,13 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
            * if necessary *)
           if check_symbolic_no_ended then (
             let ty1 = s.sv_ty in
-            let rset1 = ctx.ended_regions in
+            let rset1 = region_set_of_region_id_set ctx.ended_regions in
             let ty2 = ty in
             let rset2 = regions in
             [%ltrace
               "- ty1: " ^ ty_to_string ctx ty1 ^ "\n- rset1: "
-              ^ RegionId.Set.to_string None rset1
-              ^ "\n- ty2: " ^ ty_to_string ctx ty2 ^ "\n- rset2: "
-              ^ RegionId.Set.to_string None rset2
-              ^ "\n"];
+              ^ region_set_to_string rset1 ^ "\n- ty2: " ^ ty_to_string ctx ty2
+              ^ "\n- rset2: " ^ region_set_to_string rset2 ^ "\n"];
             [%sanity_check] span
               (not (projections_intersect span ctx rset1 ty1 rset2 ty2)));
           ASymbolic
@@ -254,8 +251,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
     { value; ty }
 
 let rec apply_eproj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
-    (ctx : eval_ctx) (regions : RegionId.Set.t) (v : tvalue) (ty : rty) :
-    tevalue =
+    (ctx : eval_ctx) (regions : region_set) (v : tvalue) (ty : rty) : tevalue =
   (* Sanity check - TODO: move this elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
   let ety = Substitute.erase_regions ty in
@@ -357,15 +353,13 @@ let rec apply_eproj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
            * if necessary *)
           if check_symbolic_no_ended then (
             let ty1 = s.sv_ty in
-            let rset1 = ctx.ended_regions in
+            let rset1 = region_set_of_region_id_set ctx.ended_regions in
             let ty2 = ty in
             let rset2 = regions in
             [%ltrace
               "- ty1: " ^ ty_to_string ctx ty1 ^ "\n- rset1: "
-              ^ RegionId.Set.to_string None rset1
-              ^ "\n- ty2: " ^ ty_to_string ctx ty2 ^ "\n- rset2: "
-              ^ RegionId.Set.to_string None rset2
-              ^ "\n"];
+              ^ region_set_to_string rset1 ^ "\n- ty2: " ^ ty_to_string ctx ty2
+              ^ "\n- rset2: " ^ region_set_to_string rset2 ^ "\n"];
             [%sanity_check] span
               (not (projections_intersect span ctx rset1 ty1 rset2 ty2)));
           (* Only introduce a projection if the value contains mutable
@@ -418,7 +412,7 @@ let symbolic_expansion_non_shared_borrow_to_value (span : Meta.span)
 
     TODO: detailed comments. See [apply_proj_borrows] *)
 let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
-    (regions : RegionId.Set.t) (see : symbolic_expansion) (original_sv_ty : rty)
+    (regions : region_set) (see : symbolic_expansion) (original_sv_ty : rty)
     (proj_ty : rty) (ctx : eval_ctx) : tavalue =
   (* Sanity check: if we have a proj_loans over a symbolic value, it should
    * contain regions which we will project *)
@@ -481,7 +475,7 @@ let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
   { value; ty }
 
 let apply_eproj_loans_on_symbolic_expansion (span : Meta.span)
-    (regions : RegionId.Set.t) (see : symbolic_expansion) (original_sv_ty : rty)
+    (regions : region_set) (see : symbolic_expansion) (original_sv_ty : rty)
     (proj_ty : rty) (ctx : eval_ctx) : tevalue =
   (* Sanity check: if we have a proj_loans over a symbolic value, it should
    * contain regions which we will project *)
@@ -534,14 +528,14 @@ let apply_eproj_loans_on_symbolic_expansion (span : Meta.span)
 
 (** [ty] shouldn't have erased regions *)
 let apply_proj_borrows_on_input_value (span : Meta.span) (ctx : eval_ctx)
-    (regions : RegionId.Set.t) (v : tvalue) (ty : rty) : tavalue =
+    (regions : region_set) (v : tvalue) (ty : rty) : tavalue =
   [%ltrace "- v: " ^ tvalue_to_string ctx v ^ "\n- ty: " ^ ty_to_string ctx ty];
   [%sanity_check] span (ty_is_rty ty);
   let check_symbolic_no_ended = true in
   apply_proj_borrows span check_symbolic_no_ended ctx regions v ty
 
 let apply_eproj_borrows_on_input_value (span : Meta.span) (ctx : eval_ctx)
-    (regions : RegionId.Set.t) (v : tvalue) (ty : rty) : tevalue =
+    (regions : region_set) (v : tvalue) (ty : rty) : tevalue =
   [%ltrace "- v: " ^ tvalue_to_string ctx v ^ "\n- ty: " ^ ty_to_string ctx ty];
   [%sanity_check] span (ty_is_rty ty);
   let check_symbolic_no_ended = true in

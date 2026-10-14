@@ -35,7 +35,55 @@ let concat_generic_args (generics1 : generic_args) (generics2 : generic_args) :
     trait_refs = generics1.trait_refs @ generics2.trait_refs;
   }
 
-(** Return the set of regions in an type - TODO: add static?
+(** Check if a region belongs to a set of regions.
+
+    This shadows {!Charon.TypesUtils.region_in_set}: we use sets of regions
+    (which may contain the static region) rather than sets of region ids.
+
+    This function should be used on non-bound regions; it raises an exception if
+    this is not the case, or if the region is erased and [allow_erased] is
+    [false]. *)
+let region_in_set ?(allow_erased = false) (r : region) (rset : region_set) :
+    bool =
+  match r with
+  | RStatic | RVar (Free _) -> RegionSet.mem r rset
+  | RErased ->
+      if allow_erased then false
+      else
+        [%craise_opt_span] None
+          "region_in_set shouldn't be called on erased regions"
+  | RBody _ ->
+      [%craise_opt_span] None
+        "region_in_set shouldn't be called on body regions"
+  | RVar (Bound _) ->
+      [%craise_opt_span] None
+        "region_in_set shouldn't be called on bound regions"
+
+(** Convert a set of region ids to a set of (free) regions *)
+let region_set_of_region_id_set (rids : RegionId.Set.t) : region_set =
+  RegionSet.of_list
+    (List.map (fun rid -> RVar (Free rid)) (RegionId.Set.elements rids))
+
+(** Return the set of region ids appearing in a set of regions (we ignore the
+    static region) *)
+let region_set_get_region_ids (rset : region_set) : RegionId.Set.t =
+  RegionId.Set.of_list
+    (List.filter_map
+       (fun r ->
+         match r with
+         | RVar (Free rid) -> Some rid
+         | _ -> None)
+       (RegionSet.elements rset))
+
+(** Return [true] if a set of regions contains the static region *)
+let region_set_has_static (rset : region_set) : bool =
+  RegionSet.mem RStatic rset
+
+(** Return the set of region variables in an type.
+
+    We ignore the static region: this function is used to check whether a type
+    contains ended regions, and the static region never ends (several region
+    abstractions may own it at the same time - see [Contexts.eval_ctx]).
 
     This function should be used on non-erased and non-bound regions. For
     sanity, we raise exceptions if this is not the case. *)
@@ -43,7 +91,7 @@ let ty_regions (ty : ty) : RegionId.Set.t =
   let s = ref RegionId.Set.empty in
   let add_region (r : region) =
     match r with
-    | RStatic -> () (* TODO: static? *)
+    | RStatic -> ()
     | RErased | RBody _ ->
         raise
           (Failure "ty_regions shouldn't be called on erased or body regions")
@@ -91,7 +139,7 @@ let ty_has_regions_in_pred (pred : region -> bool) (ty : ty) : bool =
   with Found -> true
 
 (** Check if a {!type:Charon.Types.ty} contains regions from a given set *)
-let ty_has_regions_in_set (rset : RegionId.Set.t) (ty : ty) : bool =
+let ty_has_regions_in_set (rset : region_set) (ty : ty) : bool =
   ty_has_regions_in_pred (fun r -> region_in_set r rset) ty
 
 (** Check if a type has free (i.e., non erased) regions.
@@ -303,13 +351,12 @@ let ty_has_mut_borrow_for_region_in_pred (infos : TypesAnalysis.type_infos)
     a type. Note that a mutable borrow below a shared borrow is effectively
     shared. *)
 let ty_get_mutable_regions (infos : TypesAnalysis.type_infos)
-    (owned_regions : RegionId.Set.t) (ty : rty) : RegionId.Set.t =
-  let result = ref RegionId.Set.empty in
+    (owned_regions : region_set) (ty : rty) : region_set =
+  let result = ref RegionSet.empty in
   let add_region (r : region) =
     match r with
-    | RVar (Free rid) ->
-        if RegionId.Set.mem rid owned_regions then
-          result := RegionId.Set.add rid !result
+    | RVar (Free _) | RStatic ->
+        if RegionSet.mem r owned_regions then result := RegionSet.add r !result
     | _ -> ()
   in
 
@@ -346,10 +393,10 @@ let ty_get_mutable_regions (infos : TypesAnalysis.type_infos)
   !result
 
 let ty_has_mut_borrow_for_region_in_set (infos : TypesAnalysis.type_infos)
-    (regions : RegionId.Set.t) (ty : ty) : bool =
+    (regions : region_set) (ty : ty) : bool =
   ty_has_mut_borrow_for_region_in_pred infos
     (function
-      | RVar (Free rid) -> RegionId.Set.mem rid regions
+      | (RVar (Free _) | RStatic) as r -> RegionSet.mem r regions
       | _ -> false)
     ty
 

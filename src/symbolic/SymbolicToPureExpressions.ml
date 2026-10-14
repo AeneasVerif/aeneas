@@ -29,7 +29,7 @@ let fresh_back_vars_for_current_fun (ctx : bs_ctx) : bs_ctx * fvar option list =
        Charon should do it for us. *)
     let regions_hierarchy =
       RegionsHierarchy.compute_regions_hierarchy_for_sig (Some ctx.span)
-        ctx.decls_ctx.crate
+        ctx.decls_ctx.crate ctx.decls_ctx.type_ctx.type_infos
         (LlbcAstUtils.bound_fun_sig_of_decl ctx.fun_decl)
     in
     List.map
@@ -37,7 +37,12 @@ let fresh_back_vars_for_current_fun (ctx : bs_ctx) : bs_ctx * fvar option list =
         let rg = RegionGroupId.nth regions_hierarchy gid in
         let region_names =
           List.map
-            (fun rid -> (T.RegionId.nth ctx.fun_decl.generics.regions rid).name)
+            (fun (r : T.region) ->
+              match r with
+              | RVar (Free rid) ->
+                  (T.RegionId.nth ctx.fun_decl.generics.regions rid).name
+              | RStatic -> Some "'static"
+              | _ -> [%internal_error] ctx.span)
             rg.regions
         in
         let name =
@@ -887,7 +892,7 @@ and translate_end_abs (ectx : C.eval_ctx) (abs : V.abs)
   | V.Loop _ | V.Join ->
       translate_end_abstraction_join_or_loop ectx abs abs_level e ctx
   | V.WithCont -> translate_end_abstraction_with_cont ectx abs abs_level e ctx
-  | V.Identity | V.CopySymbolicValue ->
+  | V.Identity | V.CopySymbolicValue | V.Static ->
       translate_end_abs_identity ectx abs abs_level e ctx
 
 and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)

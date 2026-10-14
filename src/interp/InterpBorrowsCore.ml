@@ -493,8 +493,8 @@ let rec compare_rtys ?(allow_erased = false) (span : Meta.span) (ctx : eval_ctx)
     that the two abstractions have different views (in terms of regions) of the
     symbolic value (hence the two region types). *)
 let projections_intersect (span : Meta.span) (ctx : eval_ctx)
-    ?(allow_erased = false) (rset1 : RegionId.Set.t) (ty1 : rty)
-    (rset2 : RegionId.Set.t) (ty2 : rty) : bool =
+    ?(allow_erased = false) (rset1 : region_set) (ty1 : rty)
+    (rset2 : region_set) (ty2 : rty) : bool =
   let default = false in
   let combine b1 b2 = b1 || b2 in
   let compare_regions r1 r2 =
@@ -508,8 +508,8 @@ let projections_intersect (span : Meta.span) (ctx : eval_ctx)
     The regions in the types shouldn't be erased (this function will raise an
     exception otherwise). *)
 let projection_contains ?(allow_erased = false) (span : Meta.span)
-    (ctx : eval_ctx) (rset1 : RegionId.Set.t) (ty1 : rty)
-    (rset2 : RegionId.Set.t) (ty2 : rty) : bool =
+    (ctx : eval_ctx) (rset1 : region_set) (ty1 : rty) (rset2 : region_set)
+    (ty2 : rty) : bool =
   let default = true in
   let combine b1 b2 = b1 && b2 in
   let compare_regions r1 r2 =
@@ -1105,8 +1105,8 @@ let get_first_outer_loan_or_borrow_in_value (with_borrows : bool) (v : tvalue) :
   | FoundBorrowContent bc -> Some (BorrowContent bc)
 
 let proj_borrows_intersects_proj_loans (span : Meta.span) (ctx : eval_ctx)
-    (proj_borrows : RegionId.Set.t * symbolic_value_id * rty)
-    (proj_loans : RegionId.Set.t * symbolic_value_id * rty) : bool =
+    (proj_borrows : region_set * symbolic_value_id * rty)
+    (proj_loans : region_set * symbolic_value_id * rty) : bool =
   let b_regions, b_sv_id, b_ty = proj_borrows in
   let l_regions, l_sv_id, l_ty = proj_loans in
   if b_sv_id = l_sv_id then
@@ -1130,7 +1130,7 @@ type looked_up_aproj_borrows = {
 
     This is a helper function. *)
 let lookup_intersecting_aproj_borrows_opt (span : Meta.span)
-    (lookup_shared : bool) (regions : RegionId.Set.t) (proj : symbolic_proj)
+    (lookup_shared : bool) (regions : region_set) (proj : symbolic_proj)
     (ctx : eval_ctx) : looked_up_aproj_borrows option =
   let shared_projs = ref [] in
   let non_shared_projs = ref [] in
@@ -1215,7 +1215,7 @@ let update_intersecting_aproj_borrows (span : Meta.span)
        option)
     ~(update_mut : owned:bool -> outlive:bool -> abs -> aproj_borrows -> aproj)
     ~(update_emut : owned:bool -> outlive:bool -> abs -> eproj_borrows -> eproj)
-    (proj_regions : RegionId.Set.t) (proj : symbolic_proj) (ctx : eval_ctx) :
+    (proj_regions : region_set) (proj : symbolic_proj) (ctx : eval_ctx) :
     eval_ctx =
   (* Small helpers for sanity checks *)
   let shared = ref None in
@@ -1243,7 +1243,7 @@ let update_intersecting_aproj_borrows (span : Meta.span)
         ^ "\n- proj.proj_ty: "
         ^ ty_to_string ctx proj.proj_ty
         ^ "\n- proj'_ty: " ^ ty_to_string ctx proj'_ty ^ "\n- owned regions: "
-        ^ RegionId.Set.to_string None abs.regions.owned];
+        ^ region_set_to_string abs.regions.owned];
 
       (* We used to check that if the projectors use the same symbolic id then:
          1. either the projections intersect
@@ -1353,11 +1353,11 @@ let update_intersecting_aproj_borrows (span : Meta.span)
 
     This is a helper function: it might break invariants. *)
 let remove_intersecting_aproj_borrows_shared (span : Meta.span)
-    ~(include_owned : bool) ~(include_outlive : bool) (regions : RegionId.Set.t)
+    ~(include_owned : bool) ~(include_outlive : bool) (regions : region_set)
     (proj : symbolic_proj) (ctx : eval_ctx) : eval_ctx =
   [%ltrace
     "- regions: "
-    ^ RegionId.Set.to_string None regions
+    ^ region_set_to_string regions
     ^ "\n- proj: "
     ^ symbolic_proj_to_string ctx proj
     ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx];
@@ -1411,8 +1411,7 @@ let remove_intersecting_aproj_borrows_shared (span : Meta.span)
 *)
 let update_intersecting_aproj_loans (span : Meta.span)
     ~(fail_if_unchanged : bool) ~(include_owned : bool)
-    ~(include_outlive : bool) (proj_regions : RegionId.Set.t)
-    (proj : symbolic_proj)
+    ~(include_outlive : bool) (proj_regions : region_set) (proj : symbolic_proj)
     (subst : owned:bool -> outlive:bool -> abs -> aproj_loans -> aproj)
     (esubst : owned:bool -> outlive:bool -> abs -> eproj_loans -> eproj)
     (ctx : eval_ctx) : eval_ctx =
@@ -2224,17 +2223,17 @@ let marked_norm_symb_proj_to_unmarked (m : marked_norm_symb_proj) :
 
     For instance, when normalizing the projection type [S<'a, 'b>] for the
     projection region ['a]. *)
-let normalize_proj_ty (regions : RegionId.Set.t) (ty : rty) : rty =
+let normalize_proj_ty (regions : region_set) (ty : rty) : rty =
   let visitor =
     object
       inherit [_] map_ty
 
       method! visit_region _ r =
         match r with
-        | RVar (Free r) ->
-            if RegionId.Set.mem r regions then RVar (Free (RegionId.of_int 0))
+        | RVar (Free _) | RStatic ->
+            if RegionSet.mem r regions then RVar (Free (RegionId.of_int 0))
             else RErased
-        | RVar (Bound _) | RStatic | RErased -> r
+        | RVar (Bound _) | RErased -> r
         | RBody _ -> [%craise_opt_span] None "unsupported: Body region"
     end
   in
@@ -2382,12 +2381,12 @@ and norm_proj_const_generics_union (span : Meta.span) (cg1 : constant_expr)
   cg1
 
 let norm_proj_ty_contains span ctx (ty1 : rty) (ty2 : rty) : bool =
-  let set = RegionId.Set.singleton RegionId.zero in
+  let set = RegionSet.singleton (RVar (Free RegionId.zero)) in
   projection_contains span ~allow_erased:true ctx set ty1 set ty2
 
 let norm_proj_tys_intersect span ctx (ty1 : norm_proj_ty) (ty2 : norm_proj_ty) :
     bool =
-  let rset = RegionId.Set.singleton RegionId.zero in
+  let rset = RegionSet.singleton (RVar (Free RegionId.zero)) in
   projections_intersect ~allow_erased:true span ctx rset ty1 rset ty2
 
 (** Refresh the live region ids appearing in a type, and return the new type
@@ -2433,7 +2432,7 @@ let update_endable (ctx : eval_ctx) (abs_ids : abs_id list) ~(can_end : bool) :
   in
   { ctx with env = List.map update ctx.env }
 
-let normalize_symbolic_proj (regions : RegionId.Set.t) (proj : symbolic_proj) :
+let normalize_symbolic_proj (regions : region_set) (proj : symbolic_proj) :
     norm_symb_proj =
   let { sv_id; proj_ty } : symbolic_proj = proj in
   let norm_proj_ty = normalize_proj_ty regions proj_ty in
