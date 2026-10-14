@@ -709,10 +709,16 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
               check_symbolic_value_type proj.sv_id ty;
               let abs = Option.get info in
               [%sanity_check] span
-                (ty_has_regions_in_set abs.regions.owned proj.proj_ty)
+                (ty_has_regions_in_set ctx.type_ctx.type_infos abs.regions.owned
+                   proj.proj_ty)
           | AProjBorrows { proj; _ } ->
               check_symbolic_value_type proj.sv_id ty;
-              [%sanity_check] span (ty_has_free_regions proj.proj_ty)
+              [%sanity_check] span
+                (ty_has_regions_in_pred ctx.type_ctx.type_infos
+                   (function
+                     | RVar (Free _) | RStatic -> true
+                     | _ -> false)
+                   proj.proj_ty)
           | AEndedProjLoans { proj = _; consumed; borrows } ->
               List.iter
                 (fun (_, proj) ->

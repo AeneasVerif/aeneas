@@ -248,9 +248,10 @@ let push_value_to_static_shared_loan (span : Meta.span) (ctx : eval_ctx)
 
     Checks if the projector will actually project some regions. If not, returns
     {!Values.AIgnored} ([_]). *)
-let mk_aproj_loans_value_from_symbolic_value (proj_regions : region_set)
+let mk_aproj_loans_value_from_symbolic_value
+    (type_infos : TypesAnalysis.type_infos) (proj_regions : region_set)
     (svalue : symbolic_value) (proj_ty : ty) : tavalue =
-  if ty_has_regions_in_set proj_regions proj_ty then
+  if ty_has_regions_in_set type_infos proj_regions proj_ty then
     let av =
       ASymbolic
         ( PNone,
@@ -293,18 +294,18 @@ let mk_eproj_loans_value_from_symbolic_value env
 
 (** Create a borrows projector from a symbolic value *)
 let mk_aproj_borrows_from_symbolic_value (span : Meta.span)
-    (proj_regions : region_set) (svalue : symbolic_value) (proj_ty : ty) : aproj
-    =
+    (type_infos : TypesAnalysis.type_infos) (proj_regions : region_set)
+    (svalue : symbolic_value) (proj_ty : ty) : aproj =
   [%sanity_check] span (ty_is_rty proj_ty);
-  if ty_has_regions_in_set proj_regions proj_ty then
+  if ty_has_regions_in_set type_infos proj_regions proj_ty then
     AProjBorrows { proj = { sv_id = svalue.sv_id; proj_ty }; loans = [] }
   else AEmpty
 
 let mk_eproj_borrows_from_symbolic_value (span : Meta.span)
-    (proj_regions : region_set) (svalue : symbolic_value) (proj_ty : ty) : eproj
-    =
+    (type_infos : TypesAnalysis.type_infos) (proj_regions : region_set)
+    (svalue : symbolic_value) (proj_ty : ty) : eproj =
   [%sanity_check] span (ty_is_rty proj_ty);
-  if ty_has_regions_in_set proj_regions proj_ty then
+  if ty_has_regions_in_set type_infos proj_regions proj_ty then
     EProjBorrows { proj = { sv_id = svalue.sv_id; proj_ty }; loans = [] }
   else EEmpty
 

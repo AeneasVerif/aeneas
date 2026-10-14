@@ -436,8 +436,15 @@ let rec compare_rtys ?(allow_erased = false) (span : Meta.span) (ctx : eval_ctx)
        * If we didn't have the above property enforced by the rust compiler,
        * this check would still be a reasonable conservative approximation. *)
 
-      (* Check the region parameters *)
+      (* Check the region parameters. Note that the static region may be
+         hidden in the ADT (see {!TypesUtils.adt_has_hidden_static}): in this
+         case we treat it as an additional region parameter. *)
       let regions = List.combine generics1.regions generics2.regions in
+      let regions =
+        if adt_has_hidden_static ctx.type_ctx.type_infos tref1 then
+          (RStatic, RStatic) :: regions
+        else regions
+      in
       let params_b =
         List.fold_left
           (fun b (r1, r2) -> combine b (compare_regions r1 r2))

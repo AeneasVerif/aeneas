@@ -19,7 +19,14 @@ type expl_info = subtype_info [@@deriving show]
 
 type type_borrows_info = {
   contains_static : bool;
-      (** Does the type (transitively) contain a static borrow? *)
+      (** Does the type (transitively) contain a static borrow?
+
+          Remark: for a type declaration, this is [true] if one of its fields
+          (transitively) contains a static borrow. Note that in this case the
+          static region doesn't appear in the region parameters of the type
+          declaration: it is "hidden" in the type. *)
+  contains_static_mut : bool;
+      (** Does the type (transitively) contain a static mutable borrow? *)
   contains_borrow : bool;  (** Does the type (transitively) contain a borrow? *)
   contains_mut_borrow : bool;
       (** Does the type (transitively) contain a mutable borrow? *)
@@ -65,6 +72,7 @@ let expl_info_init = { under_borrow = false; under_mut_borrow = false }
 let type_borrows_info_init : type_borrows_info =
   {
     contains_static = false;
+    contains_static_mut = false;
     contains_borrow = false;
     contains_mut_borrow = false;
     contains_nested_borrows = false;
@@ -238,6 +246,10 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
     let contains_static =
       check_update_bool original.contains_static ty_b_info.contains_static
     in
+    let contains_static_mut =
+      check_update_bool original.contains_static_mut
+        ty_b_info.contains_static_mut
+    in
     let contains_borrow =
       check_update_bool original.contains_borrow ty_b_info.contains_borrow
     in
@@ -260,6 +272,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
     let updated_borrows_info =
       {
         contains_static;
+        contains_static_mut;
         contains_borrow;
         contains_mut_borrow;
         contains_nested_borrows;
@@ -332,12 +345,14 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
           | RShared -> (false, None)
         in
         let contains_mut_borrow = is_mut in
+        let contains_static_mut = contains_static && is_mut in
         let contains_nested_borrows = expl_info.under_borrow in
         let contains_borrow_under_mut = expl_info.under_mut_borrow in
         let contains_nested_mut = expl_info.under_mut_borrow && is_mut in
         let ty_b_info =
           {
             contains_static;
+            contains_static_mut;
             contains_borrow;
             contains_mut_borrow;
             contains_nested_borrows;
@@ -373,8 +388,15 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
         in
         (* Update the type info with the information from the adt *)
         let ty_info = update_ty_info ty_info None adt_info.borrows_info in
-        (* Check if there are regions, and if 'static appears in the region parameters *)
+        (* Check if there are regions, and if 'static appears in the region
+           parameters (and is used for mutable borrows) *)
         let found_static = List.exists r_is_static generics.regions in
+        let found_static_mut =
+          List.exists
+            (fun (adt_rid, r) ->
+              r_is_static r && RegionId.Set.mem adt_rid adt_info.mut_regions)
+            (RegionId.mapi (fun adt_rid r -> (adt_rid, r)) generics.regions)
+        in
         let borrows_info = ty_info.borrows_info in
         let borrows_info =
           {
@@ -383,6 +405,9 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
               borrows_info.contains_borrow || adt_info.has_regions;
             contains_static =
               check_update_bool borrows_info.contains_static found_static;
+            contains_static_mut =
+              check_update_bool borrows_info.contains_static_mut
+                found_static_mut;
           }
         in
         let ty_info = { ty_info with borrows_info } in
@@ -396,6 +421,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
               (* Below: we use only the information which we learn only
                * by taking the type parameter into account. *)
               let contains_static = false in
+              let contains_static_mut = false in
               let contains_borrow = param_info.under_borrow in
               let contains_mut_borrow = param_info.under_mut_borrow in
               let contains_nested_borrows =
@@ -410,6 +436,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
               let ty_b_info =
                 {
                   contains_static;
+                  contains_static_mut;
                   contains_borrow;
                   contains_mut_borrow;
                   contains_nested_borrows;

@@ -361,4 +361,79 @@ def incr_outlives_mut (x : Std.U32) : Result Std.U32 := do
   let i1 ← i + 1#u32
   ok (outlives_mut_back i1)
 
+/-- [static::read_static_ref]:
+    Source: 'tests/src/static.rs', lines 218:0-220:1 -/
+def read_static_ref (s : StaticRef) : Result Std.U32 := do
+  ok s.x
+
+/-- [static::read_mk_static_ref]:
+    Source: 'tests/src/static.rs', lines 222:0-224:1 -/
+def read_mk_static_ref : Result Std.U32 := do
+  let sr ← mk_static_ref
+  read_static_ref sr
+
+/-- [static::get_static_ref]:
+    Source: 'tests/src/static.rs', lines 226:0-228:1 -/
+def get_static_ref (s : StaticRef) : Result Std.U32 := do
+  ok s.x
+
+/-- [static::read_get_static_ref]:
+    Source: 'tests/src/static.rs', lines 230:0-232:1 -/
+def read_get_static_ref : Result Std.U32 := do
+  let sr ← mk_static_ref
+  get_static_ref sr
+
+/-- [static::ref_static_ref]:
+    Source: 'tests/src/static.rs', lines 234:0-236:1 -/
+def ref_static_ref (s : StaticRef) : Result Std.U32 := do
+  ok s.x
+
+/-- [static::ref_mut_static_ref]:
+    Source: 'tests/src/static.rs', lines 238:0-240:1 -/
+def ref_mut_static_ref (s : StaticRef) : Result StaticRef := do
+  ok { x := GLOBAL }
+
+/-- [static::StaticMut]
+    Source: 'tests/src/static.rs', lines 242:0-244:1 -/
+structure StaticMut where
+  x : Std.U32
+
+/-- [static::incr_hidden_static_mut]:
+    Source: 'tests/src/static.rs', lines 246:0-248:1 -/
+def incr_hidden_static_mut (s : StaticMut) : Result StaticMut := do
+  let i ← s.x + 1#u32
+  ok { x := i }
+
+/-- [static::get_hidden_static_mut]:
+    Source: 'tests/src/static.rs', lines 250:0-252:1 -/
+def get_hidden_static_mut
+  (s : StaticMut) : Result (Std.U32 × (Std.U32 → StaticMut)) := do
+  let back := fun i => ({ x := i } : StaticMut)
+  ok (s.x, back)
+
+/-- [static::Mixed]
+    Source: 'tests/src/static.rs', lines 254:0-257:1 -/
+structure Mixed where
+  x : Std.U32
+  y : Std.U32
+
+/-- [static::use_mixed]:
+    Source: 'tests/src/static.rs', lines 259:0-261:1 -/
+def use_mixed (m : Mixed) : Result Mixed := do
+  let i ← m.x + m.y
+  ok { m with x := i }
+
+/-- [static::get_mixed]:
+    Source: 'tests/src/static.rs', lines 263:0-265:1 -/
+def get_mixed
+  (m : Mixed) : Result ((Std.U32 × Std.U32) × (Std.U32 → Mixed)) := do
+  let back := fun i => { m with x := i }
+  ok ((m.x, m.y), back)
+
+/-- [static::call_mixed]:
+    Source: 'tests/src/static.rs', lines 267:0-269:1 -/
+def call_mixed (x : Std.U32) : Result Std.U32 := do
+  let m ← use_mixed { x, y := GLOBAL }
+  ok m.x
+
 end static

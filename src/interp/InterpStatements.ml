@@ -1439,8 +1439,8 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
     in
     (* Introduce the output value *)
     let ret_v =
-      mk_aproj_loans_value_from_symbolic_value abs.regions.owned ret_spc
-        ret_sv_ty
+      mk_aproj_loans_value_from_symbolic_value ctx.type_ctx.type_infos
+        abs.regions.owned ret_spc ret_sv_ty
     in
     (* Compute the continuation used in the translation *)
     let cont : abs_cont =

@@ -334,7 +334,7 @@ let convert_value_to_output_avalues (span : Meta.span) (ctx : eval_ctx)
           "Nested borrows are not supported yet";
 
         (* Check if there is an intersection with the current regions *)
-        if ty_has_regions_in_set regions proj_ty then
+        if ty_has_regions_in_set ctx.type_ctx.type_infos regions proj_ty then
           let proj : symbolic_proj = { sv_id = sv.sv_id; proj_ty } in
           let nv = ASymbolic (pm, AProjBorrows { proj; loans = [] }) in
           let nv : tavalue = { value = nv; ty = proj_ty } in
