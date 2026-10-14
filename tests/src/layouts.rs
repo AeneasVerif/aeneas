@@ -42,3 +42,30 @@ pub struct Scene {
     pub bg: Color,
     pub main_shape: Shape,
 }
+
+#[repr(C)]
+pub enum Repr1 {
+    Empty,
+    Circle(u32),
+    Rect { width: usize, height: usize },
+}
+
+#[repr(C, i8)]
+pub enum Repr2 {
+    Empty,
+    Circle(u32),
+    Rect { width: usize, height: usize },
+}
+
+#[repr(i8)]
+pub enum Repr3 {
+    Empty,
+    Circle(u32),
+    Rect { width: usize, height: usize },
+}
+
+fn main() {
+    let x1 = Repr1::Empty;
+    let x1 = Repr2::Empty;
+    let x1 = Repr3::Empty;
+}

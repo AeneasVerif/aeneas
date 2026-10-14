@@ -8,8 +8,6 @@ namespace Aeneas
 namespace Layout
 namespace ReprC
 
-open SizeAndAlign
-
 /-! ## Part 2: Shallow `#[repr(C)]` Tuple / Struct Layout (with Optional Packing) -/
 
 /-- Effective alignment when capped by an optional `#[repr(packed(P))]` bound. -/
@@ -197,6 +195,8 @@ lemma mkTuple_packed (ts : List MType)
   · intro hl
     simp [tupleFieldOffset, tupleCursor]
   · grind
+
+grind_pattern mkTuple_packed => mkTuple ts fl (.some a) 0
 
 /-! ## Part 3: Shallow `#[repr(C)]` and `#[repr(primitive)]` Enum Layouts -/
 

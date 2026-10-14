@@ -1,58 +1,10 @@
 module
 public import Aeneas.Data.Byte
 public import Aeneas.Data.BitVec
+public import Aeneas.Data.Layout.Prelims
 public import Aeneas.Data.Layout.Bytes
 public import Aeneas.Data.Layout.MTypes
-import all Init.Data.Nat.Power2.Basic
 @[expose] public section
-
-@[simp, grind ←]
-lemma one_isPowerOfTwo : Nat.isPowerOfTwo 1 := by decide
-
-
-@[simp, grind ←]
-lemma isPowerOfTwo_ge_one (n : Nat) : n.isPowerOfTwo → n ≥ 1 := by intro ⟨x, hx⟩; grind
-
-grind_pattern isPowerOfTwo_ge_one => n.isPowerOfTwo
-
-
-
-def natMax : (n : Nat) → ((i : Nat) → i < n → Nat) → Nat → Nat
-  | 0, _, init => init
-  | n + 1, f, init => max (natMax n (λ i _ ↦ f i (by omega)) init) (f n (by omega))
-
-@[simp] lemma init_le_natMax : ∀ n (f : (i : Nat) → i < n → Nat) init, init ≤ natMax n f init
-  | 0, _, _ => Nat.le_refl _
-  | n + 1, _, init => Nat.le_trans (init_le_natMax n _ init) (Nat.le_max_left _ _)
-
-grind_pattern init_le_natMax => natMax n f init
-
-@[simp] lemma le_natMax : ∀ n (f : (i : Nat) → i < n → Nat) init (i : Nat) (hi : i < n), f i hi ≤ natMax n f init
-  | n + 1, f, init, i, hi => by
-    rcases Nat.lt_succ_iff_lt_or_eq.mp hi with hlt | rfl
-    · exact Nat.le_trans (le_natMax n (λ k _ ↦ f k (by omega)) init i hlt) (Nat.le_max_left _ _)
-    · exact Nat.le_max_right _ _
-
-grind_pattern le_natMax => natMax n f init, i < n
-
-
-lemma lub_natMax : ∀ n (f : (i : Nat) → i < n → Nat) init z (_ : init ≤ z) (_ : ∀ i, (hi : i < n) → f i hi ≤ z), natMax n f init ≤ z
-  | 0, _, _, z, h1, _ => h1
-  | n + 1, _, init, z, h1, h2 => by
-    apply max_le_iff.mpr
-    constructor; apply lub_natMax
-    all_goals grind
-
-
-@[simp, grind .]
-lemma natMax_isPowerOfTwo : ∀ n (f : (i : Nat) → i < n → Nat) init,
-    init.isPowerOfTwo → (∀ i (hi : i < n), (f i hi).isPowerOfTwo) → (natMax n f init).isPowerOfTwo
-  | 0, _, _, h0, _ => h0
-  | n + 1, f, init, h0, hf => by
-    have := natMax_isPowerOfTwo n (λ i _ ↦ f i (by omega)) init h0 (by grind)
-    by_cases h : natMax n (λ i _ ↦ f i (by omega)) init ≤ f n (by omega)
-    all_goals (simp [natMax]; grind)
-
 
 namespace Aeneas
 
@@ -82,45 +34,6 @@ lemma num_bytes_is_power_of_two {ty : IUScalarTy} : (ty.numBits / 8).isPowerOfTw
 lemma align_pos (sa : SizeAndAlign) : 0 < sa.align :=
   Nat.pos_of_isPowerOfTwo sa.wf_align
 grind_pattern align_pos => sa.align
-
-@[grind ←]
-lemma pos_of_isPowerOfTwo {n : Nat} (h : n.isPowerOfTwo) : 0 < n :=
-  Nat.pos_of_isPowerOfTwo h
-
-@[grind ←]
-lemma dvd_of_isPowerOfTwo_le {a b : Nat} (ha : a.isPowerOfTwo) (hb : b.isPowerOfTwo) (hle : a ≤ b) :
-    a ∣ b := by
-  obtain ⟨ka, rfl⟩ := ha
-  obtain ⟨kb, rfl⟩ := hb
-  apply Nat.pow_dvd_pow
-  rw [Nat.pow_le_pow_iff_right] at hle
-  all_goals trivial
-
-def alignUp (x A : Nat) : Nat := ((x + A - 1) / A) * A
-
-@[simp]
-lemma le_alignUp (x : Nat) {A : Nat} (hA : 0 < A) : x ≤ alignUp x A := by
-  have h := Nat.div_add_mod (x + A - 1) A
-  rw [Nat.mul_comm] at h
-  have := Nat.mod_lt (x + A - 1) hA
-  dsimp [alignUp]
-  omega
-grind_pattern le_alignUp => alignUp x A
-
-@[simp]
-lemma aligned_alignUp (x : Nat) {A : Nat} : A ∣ alignUp x A := by
-  apply Nat.dvd_mul_left
-grind_pattern aligned_alignUp => alignUp x A
-
-@[simp, grind =]
-lemma alignUp_zero (A : Nat) : alignUp 0 A = 0 := by
-  simp [alignUp]; omega
-
-@[simp]
-lemma alignUp_mono {x y : Nat} (hxy : x ≤ y) (A : Nat) : alignUp x A ≤ alignUp y A :=
-  Nat.mul_le_mul_right A (Nat.div_le_div_right (by omega))
-
-grind_pattern alignUp_mono => alignUp x A, alignUp y A
 
 end SizeAndAlign
 
@@ -468,6 +381,7 @@ inductive Transparent : {ty : MType} → Layout ty → Prop where
     (∀ idx (h : idx < ts.length), (fl idx h).size_and_align = .zero_sized_minimally_aligned) →
     Transparent (.tuple fo fl .zero_sized_minimally_aligned : Layout (.tuple ts))
 | tuple_one_elem ts fo fl idnz (hidnz : idnz < ts.length) :
+    fo idnz hidnz = 0 →
     (∀ idx (h : idx < ts.length), idx ≠ idnz → (fl idx h).size_and_align = .zero_sized_minimally_aligned) →
     Transparent (.tuple fo fl (fl idnz hidnz).size_and_align : Layout (.tuple ts))
 | enum v (vl : Layout v) :
@@ -484,16 +398,80 @@ inductive Packed (n : Nat) : {ty : MType} → Layout ty → Prop where
     (∀ i, (hle : i + 1 < ts.length) →
       let cur := (ford ⟨i, by grind⟩);
       let nxt := (ford ⟨i + 1, hle⟩)
-      fo nxt (by grind) = SizeAndAlign.alignUp
+      fo nxt (by grind) = alignUp
         (fo cur (by grind) + (fl cur (by grind)).size)
         (min n (fl nxt (by grind)).size_and_align.align)) →
     -- the first field is at offset 0
     ((hl : ts.length > 0) → fo (ford ⟨0, by grind⟩) (by grind) = 0) →
     -- there is no extra padding at the end
-    sa.size = natMax ts.length (λ x hx ↦ SizeAndAlign.alignUp ((fo x hx) + (fl x hx).size) sa.align) 0 →
+    sa.size = natMax ts.length (λ x hx ↦ alignUp ((fo x hx) + (fl x hx).size) sa.align) 0 →
     -- our alignment upper-bounds the fields
     (∀ i (hi : i < ts.length), min n (fl i hi).size_and_align.align ≤ sa.align) →
     Packed n (.tuple fo fl sa : Layout (.tuple ts))
+
+structure Aligned (n : Nat) {ty : MType} (l : Layout ty) : Prop where
+  n_wf : n.isPowerOfTwo
+  aligned : l.size_and_align.align ≥ n
+
+@[grind .]
+lemma Transparent_ReasonablyAligned ty (l : Layout ty) : l.Transparent → l.ReasonablyAligned
+  | .tuple_zero_sized ts fo fl h =>
+    .tuple ts fo fl .zero_sized_minimally_aligned ⟨by grind, by intro i hi; simp [h i hi]⟩
+  | .tuple_one_elem ts fo fl idnz hidnz h0 h =>
+    .tuple ts fo fl (fl idnz hidnz).size_and_align
+      ⟨by grind,
+       by intro i hi
+          by_cases heq : i = idnz
+          · subst heq; simp [h0]
+          · simp [h i hi heq]⟩
+  | .enum v vl hvl =>
+    .enum [v] _ _ _ _ (λ | 0, _ => Transparent_ReasonablyAligned v vl hvl)
+
+def alignTupleUp {ts} (l : Layout (.tuple ts)) (a : Nat) (ha : a.isPowerOfTwo) : Layout (.tuple ts) := match ts, l with
+| ts, .tuple fo fl sa =>
+    let na := max sa.align a;
+    let ns := alignUp sa.size na;
+    .tuple fo fl ⟨ns, na, by grind, by grind⟩
+
+def alignEnumUp {vs} (l : Layout (.enum vs)) (a : Nat) (ha : a.isPowerOfTwo) (ht : vs.Forall MType.isTuple) : Layout (.enum vs) := match vs, l with
+| vs, .enum vt vl d sa =>
+    let na := max sa.align a;
+    let ns := alignUp sa.size na;
+    .enum vt (λ i hi ↦ match vs[i], vl i hi with
+      | .tuple ts, x => x.alignTupleUp a ha
+      | _, x  => x -- vacuous case
+    ) d ⟨ns, na, by grind, by grind⟩
+
+@[grind ←]
+lemma alignTupleUp_reasonablyAligned {ts} (l : Layout (.tuple ts)) (a : Nat) (ha : a.isPowerOfTwo)
+    (h : l.ReasonablyAligned) : (l.alignTupleUp a ha).ReasonablyAligned :=
+  match ts, l, h with
+  | ts, .tuple fo fl sa, .tuple _ _ _ _ h_tup =>
+    .tuple ts fo fl _ ⟨by grind, h_tup.offs_aligned⟩
+
+@[grind ←]
+lemma alignEnumUp_reasonablyAligned {vs} (l : Layout (.enum vs)) (a : Nat) (ha : a.isPowerOfTwo)
+    (ht : vs.Forall MType.isTuple) (h : l.ReasonablyAligned) :
+    (l.alignEnumUp a ha ht).ReasonablyAligned :=
+  match vs, l, h with
+  | vs, .enum vt vl d sa, .enum _ _ _ _ _ h_vl =>
+    .enum vs vt _ d _ (λ i hi ↦
+      match vs[i], vl i hi, h_vl i hi with
+      | .tuple _, x, hx => alignTupleUp_reasonablyAligned x a ha hx
+      | .int _, _, hx | .enum _, _, hx => hx)
+
+@[grind ←]
+lemma alignTupleUp_aligned {ts} (l : Layout (.tuple ts)) (a : Nat) (ha : a.isPowerOfTwo) :
+    (l.alignTupleUp a ha).Aligned a :=
+  match ts, l with
+  | _, .tuple _ _ _ => ⟨ha, by simp [alignTupleUp, size_and_align]⟩
+
+@[grind ←]
+lemma alignEnumUp_aligned {vs} (l : Layout (.enum vs)) (a : Nat) (ha : a.isPowerOfTwo)
+    (ht : vs.Forall MType.isTuple) :
+    (l.alignEnumUp a ha ht).Aligned a :=
+  match vs, l with
+  | _, .enum _ _ _ _ => ⟨ha, by simp [alignEnumUp, size_and_align]⟩
 
 end Layout
 
