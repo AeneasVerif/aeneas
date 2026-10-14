@@ -30,7 +30,7 @@ namespace issue_1207_closure_signature_regions
 @[rust_fun
   "core::iter::adapters::map::{core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, @F>, @B>}::next"]
 axiom core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.next
-  {B : Type} {I : Type} {F : Type} {Clause0_Item : Type}
+  {B : Type _} {I : Type _} {F : Type _} {Clause0_Item : Type _}
   (traitsiteratorIteratorInst : core.iter.traits.iterator.Iterator I
   Clause0_Item) (opsfunctionFnMutFTupleClause0_ItemBInst :
   core.ops.function.FnMut F Clause0_Item B) :
@@ -43,8 +43,8 @@ axiom core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.next
     Visibility: public -/
 @[trait_default, rust_fun "core::iter::traits::iterator::Iterator::map"]
 axiom core.iter.traits.iterator.Iterator.map.default
-  {Self : Type} {B : Type} {F : Type} {Clause0_Item : Type} (IteratorInst :
-  core.iter.traits.iterator.Iterator Self Clause0_Item)
+  {Self : Type _} {B : Type _} {F : Type _} {Clause0_Item : Type _}
+  (IteratorInst : core.iter.traits.iterator.Iterator Self Clause0_Item)
   (opsfunctionFnMutFTupleClause0_ItemBInst : core.ops.function.FnMut F
   Clause0_Item B) :
   Self → F → Result (core.iter.adapters.map.Map Self F)
@@ -53,7 +53,7 @@ axiom core.iter.traits.iterator.Iterator.map.default
     Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 8:0-8:24
     Visibility: public -/
 @[reducible]
-def Holder (F : Type) := F
+def Holder (F : Type _) := F
 
 /-- [issue_1207_closure_signature_regions::make::{closure}]
     Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 12:4-12:14 -/
@@ -65,6 +65,12 @@ def make.closure := Std.U8
     Visibility: public -/
 def make (x : Std.U8) : Result make.closure := do
   ok x
+
+/-- [issue_1207_closure_signature_regions::make::{impl core::ops::function::Fn<(), u8> for issue_1207_closure_signature_regions::make::{closure}<'_0>}::call]:
+    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 12:4-12:14 -/
+def make.closure.Insts.CoreOpsFunctionFnTupleU8.call
+  (c : make.closure) (_ : Unit) : Result Std.U8 := do
+  ok c
 
 /-- [issue_1207_closure_signature_regions::iter_of::{closure}]
     Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 17:15-17:26 -/
@@ -140,5 +146,11 @@ def nested.closure := Std.U8
     Visibility: public -/
 def nested (x : Std.U8) : Result (Holder nested.closure) := do
   ok x
+
+/-- [issue_1207_closure_signature_regions::nested::{impl core::ops::function::Fn<(), u8> for issue_1207_closure_signature_regions::nested::{closure}<'_0>}::call]:
+    Source: 'tests/src/issue-1207-closure-signature-regions.rs', lines 31:11-31:21 -/
+def nested.closure.Insts.CoreOpsFunctionFnTupleU8.call
+  (c : nested.closure) (_ : Unit) : Result Std.U8 := do
+  ok c
 
 end issue_1207_closure_signature_regions

@@ -15,22 +15,22 @@ open Result
 attribute [rust_type "core::option::Option" -prefixVariantNames] Option
 
 @[expose, rust_fun "alloc::boxed::{core::convert::AsMut<Box<@T>, @T>}::as_mut" -canFail (keepParams := [true,false])]
-def alloc.boxed.AsMutBox.as_mut {T : Type} (x : T) : T × (T → T) :=
+def alloc.boxed.AsMutBox.as_mut {T : Type _} (x : T) : T × (T → T) :=
   (x, fun x => x)
 
 namespace core
 
 @[rust_trait "core::convert::From"]
-structure convert.From (Self T : Type) where
+structure convert.From (Self T : Type _) where
   «from» : T → Result Self
 
 @[rust_trait "core::clone::Clone" (defaultMethods := ["clone_from"])]
-structure clone.Clone (Self : Type) where
+structure clone.Clone (Self : Type _) where
   clone : Self → Result Self
   clone_from : Self → Self → Result Self := fun _ => clone
 
 @[expose, trait_default]
-def clone.Clone.clone_from.default {Self : Type} (CloneInst : core.clone.Clone Self)
+def clone.Clone.clone_from.default {Self : Type _} (CloneInst : core.clone.Clone Self)
   (_self source : Self) : Result Self :=
   CloneInst.clone source
 
@@ -51,17 +51,17 @@ def clone.CloneBool : clone.Clone Bool := {
 
 @[expose, rust_fun "alloc::boxed::{core::clone::Clone<Box<@T>>}::clone"
     (keepParams := [true, false]) (keepTraitClauses := [true, false])]
-def alloc.boxed.CloneBox.clone {T : Type} (cloneInst : core.clone.Clone T) : T → Result T :=
+def alloc.boxed.CloneBox.clone {T : Type _} (cloneInst : core.clone.Clone T) : T → Result T :=
   cloneInst.clone
 
 @[expose, reducible, rust_trait_impl "core::clone::Clone<Box<@T>>"
     (keepParams := [true, false]) (keepTraitClauses := [true, false])]
-def clone.CloneBox {T : Type} (cloneInst : core.clone.Clone T) : core.clone.Clone T := {
+def clone.CloneBox {T : Type _} (cloneInst : core.clone.Clone T) : core.clone.Clone T := {
   clone := alloc.boxed.CloneBox.clone cloneInst
 }
 
 @[rust_trait "core::marker::Copy" (parentClauses := ["cloneInst"])]
-structure marker.Copy (Self : Type) where
+structure marker.Copy (Self : Type _) where
   cloneInst : core.clone.Clone Self
 
 @[expose, reducible, rust_trait_impl "core::marker::Copy<bool>"]
@@ -75,29 +75,29 @@ def marker.CopyBool : core.marker.Copy Bool := {
    We return the old value of `dst`, i.e. `dst` itself.
    The new value of `dst` is `src`. -/
 @[expose, simp, step_simps, rust_fun "core::mem::replace" (canFail := false) (lift := false)]
-def mem.replace {a : Type} (dst : a) (src : a) : a × a := (dst, src)
+def mem.replace {a : Type _} (dst : a) (src : a) : a × a := (dst, src)
 
 /- [core::mem::swap] -/
 @[expose, simp, step_simps, rust_fun "core::mem::swap" (canFail := false) (lift := false)]
-def mem.swap {T : Type} (a b : T): T × T := (b, a)
+def mem.swap {T : Type _} (a b : T): T × T := (b, a)
 
 end core
 
 /-- Builtin clone implementation (used for some builtin types) -/
-def BuiltinClone (Self : Type) : core.clone.Clone Self where
+def BuiltinClone (Self : Type _) : core.clone.Clone Self where
   clone := .ok
   clone_from := fun _ x => .ok x
 
 /-- Builtin clone implementation (used for some builtin types) -/
-def BuiltinCopy (Self : Type) : core.marker.Copy Self where
+def BuiltinCopy (Self : Type _) : core.marker.Copy Self where
   cloneInst := BuiltinClone Self
 
 @[expose, rust_fun "core::option::{core::option::Option<@T>}::unwrap"]
-def core.option.Option.unwrap {T : Type} (x : Option T) : Result T :=
+def core.option.Option.unwrap {T : Type _} (x : Option T) : Result T :=
   Result.ofOption x Error.panic
 
 @[step]
-theorem core.option.Option.unwrap.spec {T : Type} (x : Option T) (h : x.isSome) :
+theorem core.option.Option.unwrap.spec {T : Type _} (x : Option T) (h : x.isSome) :
   unwrap x ⦃ v => x = some v ⦄ := by
   simp only [unwrap, ofOption]; grind
 
@@ -114,17 +114,17 @@ def core.option.Option.unwrap_or (self : Option T) (default : T) : T :=
   core.option.Option.unwrap_or none default = default := by simp [unwrap_or]
 
 @[expose, simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::take" -canFail -lift]
-def core.option.Option.take {T: Type} (self: Option T): Option T × Option T := (self, .none)
+def core.option.Option.take {T: Type _} (self: Option T): Option T × Option T := (self, .none)
 
 @[expose, simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::is_none" -canFail -lift]
-def core.option.Option.is_none {T: Type} (self: Option T): Bool := self.isNone
+def core.option.Option.is_none {T: Type _} (self: Option T): Bool := self.isNone
 
 /-- Returns `true` if the option is `some`. -/
 @[expose, simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::is_some" -canFail -lift]
-def core.option.Option.is_some {T: Type} (self: Option T): Bool := self.isSome
+def core.option.Option.is_some {T: Type _} (self: Option T): Bool := self.isSome
 
 @[rust_type "core::ops::range::RangeFrom"]
-structure core.ops.range.RangeFrom (Idx : Type) where
+structure core.ops.range.RangeFrom (Idx : Type _) where
   start : Idx
 
 @[rust_type "core::panicking::AssertKind"]
@@ -134,7 +134,7 @@ inductive core.panicking.AssertKind where
 | Match : core.panicking.AssertKind
 
 @[expose, rust_fun "core::clone::impls::{core::clone::Clone<&'0 @T>}::clone"]
-def core.clone.impls.CloneShared.clone {T : Type} (x : T) : Result T := .ok x
+def core.clone.impls.CloneShared.clone {T : Type _} (x : T) : Result T := .ok x
 
 end Std
 
