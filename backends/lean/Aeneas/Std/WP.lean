@@ -558,7 +558,7 @@ end Aeneas
 namespace Aeneas.Std.WP
 
 section
-  variable (U32 : Type) [HAdd U32 U32 (Result U32)]
+  variable (U32 : Type _) [HAdd U32 U32 (Result U32)]
   variable (x y : U32)
 
   #elab x + y ⦃ _ => True ⦄

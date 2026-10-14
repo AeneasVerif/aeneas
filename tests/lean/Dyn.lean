@@ -22,7 +22,7 @@ namespace dyn
 
 /-- Trait declaration: [dyn::Trait]
     Source: 'tests/src/dyn.rs', lines 3:0-5:1 -/
-structure Trait (Self : Type) where
+structure Trait (Self : Type _) where
   get : Self → Result Std.U32
 
 /-- [dyn::{impl dyn::Trait for u32}::get]:
@@ -63,14 +63,14 @@ def mk_trait (b : Bool) : Result (Dyn (fun _dyn => Trait _dyn)) := do
 
 /-- Trait declaration: [dyn::Into]
     Source: 'tests/src/dyn.rs', lines 31:0-33:1 -/
-structure Into (Self : Type) (T : Type) where
+structure Into (Self : Type _) (T : Type _) where
   into : Self → Result T
 
 /-- [dyn::mk_into]:
     Source: 'tests/src/dyn.rs', lines 36:0-46:1 -/
 def mk_into
-  (U : Type) {V : Type} {T : Type} {W : Type} (IntoInst : Into T V) (IntoInst1
-  : Into W V) (b : Bool) (x : T) (y : W) :
+  (U : Type _) {V : Type _} {T : Type _} {W : Type _} (IntoInst : Into T V)
+  (IntoInst1 : Into W V) (b : Bool) (x : T) (y : W) :
   Result (Dyn (fun _dyn => Into _dyn V))
   := do
   if b
@@ -79,23 +79,23 @@ def mk_into
 
 /-- Trait declaration: [dyn::Trivial]
     Source: 'tests/src/dyn.rs', lines 48:0-48:16 -/
-structure Trivial (Self : Type) where
+structure Trivial (Self : Type _) where
 
 /-- [dyn::dyn_closure::{closure}]
     Source: 'tests/src/dyn.rs', lines 51:12-51:33 -/
 @[reducible]
-def dyn_closure.closure (T0 : Type) := Unit
+def dyn_closure.closure (T0 : Type _) := Unit
 
 /-- [dyn::dyn_closure]:
     Source: 'tests/src/dyn.rs', lines 50:0-52:1 -/
 def dyn_closure
-  {T0 : Type} (TrivialInst : Trivial T0) (t : T0) : Result Unit := do
+  {T0 : Type _} (TrivialInst : Trivial T0) (t : T0) : Result Unit := do
   ok ()
 
 /-- [dyn::dyn_closure::{impl core::ops::function::Fn<(u32,), u32> for dyn::dyn_closure::{closure}<T0>}::call]:
     Source: 'tests/src/dyn.rs', lines 51:12-51:33 -/
 def dyn_closure.closure.Insts.CoreOpsFunctionFnTupleU32U32.call
-  {T0 : Type} (TrivialInst : Trivial T0) (c : dyn_closure.closure T0)
+  {T0 : Type _} (TrivialInst : Trivial T0) (c : dyn_closure.closure T0)
   (tupled_args : Std.U32) :
   Result Std.U32
   := do
