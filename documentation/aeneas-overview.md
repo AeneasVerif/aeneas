@@ -132,18 +132,6 @@ def sum_three (a b c : U32) : Result U32 := do
 Each `←` is a monadic bind: if the addition overflows, the whole computation
 short-circuits to `fail`.
 
-Type parameters are extracted as `Type _` (e.g. `def id {T : Type _} (x : T) : Result T`), so
-that generic code can support types living in a higher universe. This is crucial to support
-function types `A → Result B` when `Result` itself lives in a higher universe. This happens
-when `Result` gains effects: e.g., an effect which nondeterministically picks a value of any
-type `a : Type` puts `Result α` in `Type 1`, making the entire function type `A → Result B`
-live in universe at least `Type 1`.
-Aeneas' `do` elaborator (`Aeneas.Do.Elab`) binds with the universe-polymorphic `Std.bind`, so
-a `do` block may bind values of different universes. Some types stay in `Type`: the type
-parameters of generic trait methods and the associated types that are trait-structure fields
-(both are bound inside a structure field, where Lean can't infer a universe), and the result
-sort of opaque types (`axiom Foo : Type`).
-
 ### 2.4 Loop Translation
 
 Rust loops (`loop`, `while`, `for`) are translated to **auxiliary `_loop` functions**. The parent function calls the `_loop` function to enter the loop. For example, a Rust function `zero` with a loop becomes `zero` (which calls `zero_loop`) and `zero_loop` (which contains the loop body).

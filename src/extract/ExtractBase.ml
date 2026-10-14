@@ -1460,10 +1460,12 @@ let fun_decl_kind_to_post_qualif (kind : decl_kind) : string option =
 
     In Lean, [~poly:true] prints [Type _] so that generic type parameters are
     universe-polymorphic: generic code sometimes needs to manipulate types which
-    live in universes higher than [Type]. Use [~poly:false] where Lean can't
-    infer the level: the result sort of an opaque type (an axiom's [Type _] is a
-    free level, ambiguous at every use) and types bound inside a structure field
-    (generic trait-method parameters, associated types that are fields).
+    live in universes higher than [Type]. For instance, adding effects to
+    [Result] can push it to a higher universe: an effect which
+    nondeterministically picks a value of any [Type] puts [Result] in
+    [Type 1], so a function type [A -> Result B] lives at least in [Type 1].
+
+    Use [~poly:false] where Lean can't infer the level.
 
     TODO: move inside the formatter? *)
 let type_keyword ~(poly : bool) (span : Meta.span) =
