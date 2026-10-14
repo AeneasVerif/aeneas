@@ -1462,8 +1462,8 @@ let fun_decl_kind_to_post_qualif (kind : decl_kind) : string option =
     universe-polymorphic: generic code sometimes needs to manipulate types which
     live in universes higher than [Type]. For instance, adding effects to
     [Result] can push it to a higher universe: an effect which
-    nondeterministically picks a value of any [Type] puts [Result] in
-    [Type 1], so a function type [A -> Result B] lives at least in [Type 1].
+    nondeterministically picks a value of any [Type] puts [Result] in [Type 1],
+    so a function type [A -> Result B] lives at least in [Type 1].
 
     Use [~poly:false] where Lean can't infer the level.
 
