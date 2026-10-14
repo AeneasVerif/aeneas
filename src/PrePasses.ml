@@ -987,17 +987,16 @@ let filter_marker_traits (crate : crate) : crate =
   if TraitDeclId.Set.is_empty filtered_ids then crate
   else
     let is_filtered_id id = TraitDeclId.Set.mem id filtered_ids in
-    let is_filtered_ref (tr : trait_ref) : bool =
-      is_filtered_id tr.trait_decl_ref.binder_value.id
+    let is_filtered_ref (tr : poly_trait_ref) : bool =
+      is_filtered_id tr.binder_value.trait_decl_ref.id
     in
     let is_filtered_clause (clause : trait_param) : bool =
       is_filtered_id clause.trait.binder_value.id
     in
     let check_not_filtered_type_constraint
         (c : trait_type_constraint region_binder) : unit =
-      if is_filtered_id c.binder_value.trait_ref.trait_decl_ref.binder_value.id
-      then
-        let span = c.binder_value.trait_ref.trait_decl_ref.binder_value in
+      if is_filtered_id c.binder_value.trait_ref.trait_decl_ref.id then
+        let span = c.binder_value.trait_ref.trait_decl_ref in
         [%craise_opt_span] None
           ("Unexpected trait type constraint referencing a filtered marker \
             trait (id: "
@@ -1166,7 +1165,9 @@ let filter_marker_traits (crate : crate) : crate =
                 List.filter (fun tr -> not (is_filtered_ref tr)) parent_refs
               in
               let parent_refs =
-                List.map (self#visit_trait_ref env) parent_refs
+                List.map
+                  (self#visit_region_binder self#visit_trait_ref env)
+                  parent_refs
               in
               let types =
                 AssocTypeId.Map.map
@@ -2032,8 +2033,9 @@ let simplify_trait_calls (crate : crate) : crate =
               (* There should be a single trait ref implementing [TryFrom] *)
               match generics.trait_refs with
               | [ trait_ref ] -> (
+                  [%sanity_check] span (trait_ref.binder_regions = []);
                   (* There are two cases depending on whether this is an impl or not *)
-                  match trait_ref.kind with
+                  match trait_ref.binder_value.kind with
                   | TraitImpl { id = impl_id; generics = impl_generics } ->
                       (* Lookup the impl to retrieve the method id *)
                       let impl =
@@ -2173,7 +2175,9 @@ let simplify_trait_calls (crate : crate) : crate =
     match TraitImplId.Map.find_opt id crate.trait_impls with
     | None -> ()
     | Some impl ->
-        List.iter (visitor#visit_trait_ref ()) impl.implied_trait_refs;
+        List.iter
+          (visitor#visit_region_binder visitor#visit_trait_ref ())
+          impl.implied_trait_refs;
         TraitMethodId.Map.iter
           (fun _ (x : fun_decl_ref binder) ->
             visitor#visit_fun_decl_id () x.binder_value.id)

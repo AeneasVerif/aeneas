@@ -180,13 +180,14 @@ let generic_args_of_params_erase_regions (span : Meta.span option)
   let regions = List.map (fun _ -> RErased) generics.regions in
   (* Erase the free regions in the trait clauses, but keep the bound regions.
      A trait clause may be higher-ranked (e.g. [for<'a> Trait<&'a _>]), in which
-     case its [trait_decl_ref] carries bound regions in [binder_regions]: we
+     case its [poly_trait_ref] carries bound regions in [binder_regions]: we
      preserve those (and their uses inside the binder) rather than erasing them.
      Lifetime constraints over the bound regions (e.g. [for<'a> 'a : 'b]) are not
      supported and are rejected elsewhere (outlives guards). *)
   let trait_refs =
     List.map
-      (st_substitute_visitor#visit_trait_ref erase_free_regions_subst)
+      (st_substitute_visitor#visit_region_binder
+         st_substitute_visitor#visit_trait_ref erase_free_regions_subst)
       generics.trait_refs
   in
   { generics with regions; trait_refs }

@@ -211,7 +211,7 @@ let compute_contexts (crate : crate) : decls_ctx =
         method! visit_fn_ptr env fn_ptr =
           (match fn_ptr.kind with
           | TraitMethod (trait_ref, method_id) ->
-              let trait_decl_id = trait_ref.trait_decl_ref.binder_value.id in
+              let trait_decl_id = trait_ref.trait_decl_ref.id in
               add_trait_method_id trait_decl_id method_id
           | _ -> ());
           super#visit_fn_ptr env fn_ptr

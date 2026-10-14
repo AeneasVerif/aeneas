@@ -781,6 +781,10 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
      [Box<...>] to [Box<dyn ...>]) *)
   match unop with
   | Cast (CastUnsize (ty0, ty1, MetaVTable (trait_ref, _))) -> (
+      [%cassert] span
+        (trait_ref.binder_regions = [])
+        "Higher-ranked vtables are not supported";
+      let trait_ref = Charon.Substitute.poly_trait_ref_erase_binder trait_ref in
       (* Casting a type to a dyn trait *)
       [%ltrace
         "dyn trait cast:" ^ "\n- ty0: " ^ ty_to_string ctx ty0 ^ "\n- ty1: "

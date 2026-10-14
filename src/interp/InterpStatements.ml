@@ -548,11 +548,7 @@ let eval_function_call_symbolic_inst (span : Meta.span) (func : fn_ptr)
         ~call_generics:func.generics ~call_span:def.item_meta.span
         ~inst_generics:func.generics ~tr_self signature
   | TraitMethod (trait_ref, method_id) ->
-      (* Check that there are no bound regions *)
-      [%cassert] span
-        (trait_ref.trait_decl_ref.binder_regions = [])
-        "Unexpected bound regions";
-      let trait_decl_ref = trait_ref.trait_decl_ref.binder_value in
+      let trait_decl_ref = trait_ref.trait_decl_ref in
       (* This should be a call to a trait clause method (if it were a method
          coming from an impl, there should be no indirection through the
          trait reference itself (Charon should have simplified this). *)

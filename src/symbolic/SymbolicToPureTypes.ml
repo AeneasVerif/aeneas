@@ -65,7 +65,9 @@ let rec translate_generic_args (span : Meta.span option)
       generics.const_generics
   in
   let trait_refs =
-    List.map (translate_trait_ref span translate_ty) generics.trait_refs
+    List.map
+      (translate_region_binder (translate_trait_ref span translate_ty))
+      generics.trait_refs
   in
   { types; const_generics; trait_refs }
 
@@ -73,9 +75,7 @@ and translate_trait_ref (span : Meta.span option) (translate_ty : T.ty -> ty)
     (tr : T.trait_ref) : trait_ref =
   let trait_id = translate_trait_ref_kind span translate_ty tr in
   let trait_decl_ref =
-    translate_region_binder
-      (translate_trait_decl_ref span translate_ty)
-      tr.trait_decl_ref
+    translate_trait_decl_ref span translate_ty tr.trait_decl_ref
   in
   { trait_id; trait_decl_ref }
 
@@ -115,7 +115,7 @@ and translate_trait_ref_kind (span : Meta.span option)
         | _ ->
             [%craise_opt_span] span
               ("Unhandled `BuiltinOrAuto` for trait "
-              ^ TraitDeclId.to_string tref.trait_decl_ref.binder_value.id
+              ^ TraitDeclId.to_string tref.trait_decl_ref.id
               ^ "; builtin_impl_data: "
               ^ Types.show_builtin_impl_data data)
       in
@@ -125,7 +125,7 @@ and translate_trait_ref_kind (span : Meta.span option)
       (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
   | ParentClause (tref, clause_id) ->
       let inst_id = translate_trait_ref_kind span translate_ty tref in
-      ParentClause (inst_id, tref.trait_decl_ref.binder_value.id, clause_id)
+      ParentClause (inst_id, tref.trait_decl_ref.id, clause_id)
   | ItemClause _ ->
       (* `ItemClause`s are removed by Charon's `--remove-associated-types`, except for GATs *)
       [%craise_opt_span] span "Generic Associated Types are not supported yet"
@@ -1052,16 +1052,11 @@ and translate_flat_trait_method_sigs (decls_ctx : C.decls_ctx)
     (trait_decl : A.trait_decl) (method_id : TraitMethodId.id)
     (_bound_method : A.trait_method T.binder) : fun_sigs =
   let span = trait_decl.item_meta.span in
-  let trait_decl_ref : T.trait_decl_ref T.region_binder =
+  let trait_decl_ref : T.trait_decl_ref =
     let generics =
       Charon.TypesUtils.generic_args_of_params (Some span) trait_decl.generics
     in
-    {
-      binder_regions = [];
-      regions_outlive = [];
-      types_outlive = [];
-      binder_value = ({ id = trait_decl.def_id; generics } : T.trait_decl_ref);
-    }
+    { id = trait_decl.def_id; generics }
   in
   let trait_ref = ({ kind = T.Self; trait_decl_ref } : T.trait_ref) in
   let trait_ref = translate_fwd_trait_ref (Some span) decls_ctx trait_ref in

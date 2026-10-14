@@ -443,7 +443,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
                     (FunDeclId.Map.find fid ctx.fun_ctx.llbc_fun_decls)
               | TraitMethod (trait_ref, method_id) ->
                   Charon.GAstUtils.get_method_name ctx.decls_ctx.crate
-                    trait_ref.trait_decl_ref.binder_value.id method_id
+                    trait_ref.trait_decl_ref.id method_id
             in
             name ^ "_back"
           in
