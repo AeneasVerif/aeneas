@@ -394,7 +394,7 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
         "Unimplemented";
       let trait_ref = translate_fwd_trait_ref span decls_ctx trait_ref in
       TTraitType (trait_ref, type_name)
-  | TFnDef { binder_regions; binder_value = { kind; generics } } -> (
+  | TFnDef { binder_regions; binder_value = { kind; generics }; _ } -> (
       [%cassert_opt_span] span (binder_regions = []) "Unimplemented";
       let generics = translate_fwd_generic_args span decls_ctx generics in
       match kind with
@@ -1058,6 +1058,8 @@ and translate_flat_trait_method_sigs (decls_ctx : C.decls_ctx)
     in
     {
       binder_regions = [];
+      regions_outlive = [];
+      types_outlive = [];
       binder_value = ({ id = trait_decl.def_id; generics } : T.trait_decl_ref);
     }
   in
