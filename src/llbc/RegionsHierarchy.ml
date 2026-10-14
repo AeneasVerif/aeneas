@@ -167,7 +167,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
         (* We can ignore the outer regions *)
         let { Types.inputs; output; _ } = binder.binder_value in
         List.iter (explore_ty []) (output :: inputs)
-    | TFnDef { binder_regions; binder_value = { kind = _; generics } } ->
+    | TFnDef { binder_regions; binder_value = { kind = _; generics }; _ } ->
         (* For now we check that there are no regions anywhere.
 
            TODO: the best would be to open all binders and then do a sanity

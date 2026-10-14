@@ -2279,6 +2279,8 @@ let rec norm_proj_tys_union (span : Meta.span) ?(strict : bool = true)
   | ( TFnPtr
         {
           binder_regions = binder_regions1;
+          regions_outlive = regions_outlive1;
+          types_outlive = types_outlive1;
           binder_value =
             {
               is_unsafe = false;
@@ -2291,6 +2293,8 @@ let rec norm_proj_tys_union (span : Meta.span) ?(strict : bool = true)
       TFnPtr
         {
           binder_regions = binder_regions2;
+          regions_outlive = regions_outlive2;
+          types_outlive = types_outlive2;
           binder_value =
             {
               is_unsafe = false;
@@ -2304,6 +2308,8 @@ let rec norm_proj_tys_union (span : Meta.span) ?(strict : bool = true)
       (* TODO: general case *)
       [%sanity_check] span (binder_regions1 = []);
       [%sanity_check] span (binder_regions2 = []);
+      [%sanity_check] span (regions_outlive1 = regions_outlive2);
+      [%sanity_check] span (types_outlive1 = types_outlive2);
       let binder_value =
         {
           is_unsafe = false;
@@ -2314,7 +2320,13 @@ let rec norm_proj_tys_union (span : Meta.span) ?(strict : bool = true)
           is_variadic = is_variadic1;
         }
       in
-      TFnPtr { binder_regions = []; binder_value }
+      TFnPtr
+        {
+          binder_regions = [];
+          regions_outlive = regions_outlive1;
+          types_outlive = types_outlive1;
+          binder_value;
+        }
   | TArray (ty0, len0, _), TArray (ty1, len1, _) ->
       [%sanity_check] span (len0 = len1);
       TArray (norm_proj_tys_union span ~strict ctx ty0 ty1, len0, None)
