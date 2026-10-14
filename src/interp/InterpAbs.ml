@@ -51,8 +51,8 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
   [%ltrace tvalue_to_string ctx v];
   (* Convert the value to a list of avalues *)
   let absl = ref [] in
-  let push_abs (r_id : RegionId.id) (avalues : tavalue list)
-      (output : tevalue option) (input : tevalue option) : unit =
+  let push_abs (r : region) (avalues : tavalue list) (output : tevalue option)
+      (input : tevalue option) : unit =
     if avalues = [] then ()
     else begin
       (* There should be output and input expressions *)
@@ -73,7 +73,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
           kind = abs_kind;
           can_end;
           parents = AbsId.Set.empty;
-          regions = { owned = RegionSet.singleton (RVar (Free r_id)) };
+          regions = { owned = RegionSet.singleton r };
           ended_subabs = AbsLevelSet.empty;
           avalues;
           cont = Some { output = Some output; input = Some input };
@@ -158,7 +158,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let value : tavalue = { value; ty } in
             let ev_out = Some (mk_etuple ~borrow_proj:true []) in
             let ev_in = Some (mk_etuple ~borrow_proj:false []) in
-            push_abs rid [ value ] ev_out ev_in
+            push_abs (RVar (Free rid)) [ value ] ev_out ev_in
         | VMutBorrow (bid, bv) ->
             (* We don't support nested borrows for now *)
             [%cassert] span
@@ -181,7 +181,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             (* Recursively explore the expression to look for shared loans
                and create the input expression *)
             let avl, input = to_inputs rid bv in
-            push_abs rid (av :: avl) (Some output) (Some input)
+            push_abs (RVar (Free rid)) (av :: avl) (Some output) (Some input)
         | VReservedMutBorrow _ ->
             (* This borrow should have been activated *)
             [%craise] span "Unexpected")
@@ -202,7 +202,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
         in
         (* *)
         let output = mk_eignored None mk_unit_ty in
-        push_abs rid avl (Some output) (Some input)
+        push_abs (RVar (Free rid)) avl (Some output) (Some input)
     | VSymbolic sv ->
         (* Check that there are no nested borrows in the symbolic value -
            we don't support this case yet *)
@@ -211,10 +211,23 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
              (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos sv.sv_ty))
           "Nested borrows are not supported yet";
 
-        (* Introduce one abstraction per live region *)
+        (* Introduce one abstraction per live region. Note that the static
+           region is not refreshed: if the type contains it (it may be hidden in
+           an ADT, see {!TypesUtils.adt_has_hidden_static}) we also need to
+           introduce an abstraction for the static region. *)
         let regions, ty = refresh_live_regions_in_ty span ctx sv.sv_ty in
-        RegionId.Map.iter
-          (fun _ rid ->
+        let regions =
+          List.map (fun rid -> RVar (Free rid)) (RegionId.Map.values regions)
+          @
+          if
+            ty_has_regions_in_set ctx.type_ctx.type_infos
+              (RegionSet.singleton RStatic)
+              ty
+          then [ RStatic ]
+          else []
+        in
+        List.iter
+          (fun r ->
             let proj : symbolic_proj = { sv_id = sv.sv_id; proj_ty = ty } in
             let nv = ASymbolic (PNone, AProjBorrows { proj; loans = [] }) in
             let nv : tavalue = { value = nv; ty } in
@@ -228,7 +241,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let output = { value = output; ty } in
             let input = { value = EValue (ctx.env, v); ty } in
             (* *)
-            push_abs rid [ nv ] (Some output) (Some input))
+            push_abs r [ nv ] (Some output) (Some input))
           regions
   in
 
@@ -2227,6 +2240,9 @@ let abs_static_is_demotable (span : Meta.span) (ctx : eval_ctx) (abs : abs) :
         | _ -> false)
     | ASymbolic (_, proj) -> (
         (not (ty_has_nested_borrows (Some span) infos av.ty))
+        (* We can't replace a static region which is hidden in an ADT (see
+           {!TypesUtils.adt_has_hidden_static}) *)
+        && (not (ty_has_hidden_static infos av.ty))
         &&
         match proj with
         | AProjLoans { borrows; _ } | AEndedProjLoans { borrows; _ } ->

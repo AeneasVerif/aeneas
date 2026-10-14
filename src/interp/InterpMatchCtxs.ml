@@ -662,8 +662,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     let sv_s = tvalue_as_symbolic span sv in
 
     (* Project the ADTs into different region abstractions *)
-    let project (rid : RegionId.id) =
-      let regions = RegionSet.singleton (RVar (Free rid)) in
+    let project (r : region) =
+      let regions = RegionSet.singleton r in
       let avl0, output0 =
         convert_value_to_output_avalues span ctx0 PLeft v0 regions
           ty_with_regions
@@ -743,7 +743,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
-          regions = { owned = RegionSet.singleton (RVar (Free rid)) };
+          regions = { owned = regions };
           ended_subabs = AbsLevelSet.empty;
           avalues = avl0 @ avl1 @ [ av ];
           cont;
@@ -752,7 +752,15 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       [%ldebug "Pushing abs:\n" ^ abs_to_string span ctx0 abs];
       push_abs abs
     in
-    List.iter project fresh_regions;
+    List.iter (fun rid -> project (RVar (Free rid))) fresh_regions;
+    (* The static region is not refreshed: if the type contains it (note that
+       it may be hidden in an ADT, see {!TypesUtils.adt_has_hidden_static}) we
+       also need to introduce an abstraction for the static region. *)
+    if
+      ty_has_regions_in_set ctx0.type_ctx.type_infos
+        (RegionSet.singleton RStatic)
+        ty_with_regions
+    then project RStatic;
 
     (* *)
     sv
@@ -1370,9 +1378,22 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         let svj = get_symbolic_tvalue span svj in
         let proj_svj = mk_aproj_loans PNone svj.sv_id proj_ty in
         let avalues = [ proj_s0; proj_s1; proj_svj ] in
+        (* Note that the static region is not refreshed: if the type contains it
+           (it may be hidden in an ADT, see {!TypesUtils.adt_has_hidden_static})
+           we also need to introduce an abstraction for the static region. *)
+        let regions =
+          List.map (fun rid -> RVar (Free rid)) fresh_regions
+          @
+          if
+            ty_has_regions_in_set ctx0.type_ctx.type_infos
+              (RegionSet.singleton RStatic)
+              proj_ty
+          then [ RStatic ]
+          else []
+        in
         List.iter
-          (fun rid ->
-            let owned = RegionSet.singleton (RVar (Free rid)) in
+          (fun r ->
+            let owned = RegionSet.singleton r in
             (* The abstraction expression continuation *)
             let cont : abs_cont option =
               if S.with_abs_conts then
@@ -1428,7 +1449,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
               }
             in
             push_abs abs)
-          fresh_regions;
+          regions;
         svj)
       else
         (* Otherwise we simply introduce a fresh symbolic value, or reuse a

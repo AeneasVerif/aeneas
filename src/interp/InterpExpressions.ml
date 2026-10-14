@@ -246,10 +246,24 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
         let updated_sv = mk_fresh_symbolic_value span ctx ty in
         let copied_sv = mk_fresh_symbolic_value span ctx ty in
 
+        (* Note that the static region is not refreshed: if the type contains
+           it (it may be hidden in an ADT, see
+           {!TypesUtils.adt_has_hidden_static}) we also need to introduce an
+           abstraction for the static region. *)
+        let regions =
+          List.map (fun rid -> RVar (Free rid)) (RegionId.Map.values regions)
+          @
+          if
+            ty_has_regions_in_set ctx.type_ctx.type_infos
+              (RegionSet.singleton RStatic)
+              ty
+          then [ RStatic ]
+          else []
+        in
         let abs =
           List.map
-            (fun rid ->
-              let owned = RegionSet.singleton (RVar (Free rid)) in
+            (fun r ->
+              let owned = RegionSet.singleton r in
 
               (* Create the continuation, for the translation *)
               let abs_cont : abs_cont =
@@ -292,7 +306,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
               (* *)
               abs
               (*mk_abs rid [ sv; updated_sv; copied_sv ]*))
-            (RegionId.Map.values regions)
+            regions
         in
         let abs = List.map (fun a -> EAbs a) (List.rev abs) in
         let ctx = { ctx with env = abs @ ctx.env } in

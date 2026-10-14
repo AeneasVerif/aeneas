@@ -766,6 +766,22 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
             match AbsId.Set.elements abs_ids1 with
             | [] -> None
             | abs_id1 :: _ ->
+                (* The loan and its corresponding borrow may be in the same
+                   abstraction. This can only happen with abstractions owning
+                   the static region: because we "promote" abstractions to the
+                   static region when merging them with abstractions owning
+                   the static region, there may be cycles between the
+                   abstractions owning the static region. When merging those,
+                   the loan/borrow pairs for which the borrow is in the left
+                   abstraction and the loan in the right abstraction are not
+                   eliminated (see
+                   {!InterpAbs.merge_abstractions_merge_loan_borrow_pairs}).
+
+                   TODO: find a solution *)
+                [%cassert] span (abs_id0 <> abs_id1)
+                  "Unimplemented: found a loan and its corresponding borrow in \
+                   the same region abstraction (this can happen in some \
+                   situations involving the 'static lifetime)";
                 [%ltrace
                   "merging abstraction " ^ AbsId.to_string abs_id1 ^ " into "
                   ^ AbsId.to_string abs_id0 ^ ":" ^ "\n- abs "

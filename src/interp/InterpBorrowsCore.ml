@@ -2229,7 +2229,15 @@ let marked_norm_symb_proj_to_unmarked (m : marked_norm_symb_proj) :
     the non-projected ones with ['_].
 
     For instance, when normalizing the projection type [S<'a, 'b>] for the
-    projection region ['a]. *)
+    projection region ['a].
+
+    Remark: the static region may be hidden in an ADT (see
+    {!TypesUtils.adt_has_hidden_static}), in which case the normalized type
+    doesn't record whether the static region is projected or not.
+
+    TODO: this is a limitation. For instance, {!norm_proj_tys_intersect}
+    considers that two normalized projections over
+    [struct S { x : &'static mut u32 }] never intersect. *)
 let normalize_proj_ty (regions : region_set) (ty : rty) : rty =
   let visitor =
     object

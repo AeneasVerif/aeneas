@@ -436,4 +436,456 @@ def call_mixed (x : Std.U32) : Result Std.U32 := do
   let m ← use_mixed { x, y := GLOBAL }
   ok m.x
 
+/-- [static::call_incr_hidden_static_mut]:
+    Source: 'tests/src/static.rs', lines 271:0-273:1 -/
+def call_incr_hidden_static_mut (x : Std.U32) : Result Std.U32 := do
+  let sm ← incr_hidden_static_mut { x }
+  ok sm.x
+
+/-- [static::call_get_hidden_static_mut]:
+    Source: 'tests/src/static.rs', lines 275:0-277:1 -/
+def call_get_hidden_static_mut (x : Std.U32) : Result Std.U32 := do
+  let (i, get_hidden_static_mut_back) ← get_hidden_static_mut { x }
+  let i1 ← i + 1#u32
+  ok (get_hidden_static_mut_back i1).x
+
+/-- [static::id_hidden_static_mut]:
+    Source: 'tests/src/static.rs', lines 279:0-281:1 -/
+def id_hidden_static_mut
+  (s : StaticMut) : Result (StaticMut × (StaticMut → StaticMut)) := do
+  ok (s, fun sm => sm)
+
+/-- [static::loop_hidden_static_mut]: loop body 0:
+    Source: 'tests/src/static.rs', lines 286:4-290:5 -/
+@[rust_loop_body]
+def loop_hidden_static_mut_loop.body
+  (n : Std.U32) (back : Std.U32 → Std.U32) (i : Std.U32) (i1 : Std.U32) :
+  Result (ControlFlow ((Std.U32 → Std.U32) × Std.U32 × Std.U32) Std.U32)
+  := do
+  if i1 < n
+  then
+    let (sm, id_hidden_static_mut_back) ← id_hidden_static_mut { x := i }
+    let i2 ← sm.x + 1#u32
+    let i3 ← i1 + 1#u32
+    ok (cont (fun i4 => back (id_hidden_static_mut_back { x := i4 }).x, i2,
+      i3))
+  else ok (done (back i))
+
+/-- [static::loop_hidden_static_mut]: loop 0:
+    Source: 'tests/src/static.rs', lines 286:4-290:5 -/
+@[rust_loop]
+def loop_hidden_static_mut_loop
+  (back : Std.U32 → Std.U32) (n : Std.U32) (i : Std.U32) (i1 : Std.U32) :
+  Result Std.U32
+  := do
+  loop
+    (fun (back1, i2, i3) => loop_hidden_static_mut_loop.body n back1 i2 i3)
+    (back, i, i1)
+
+/-- [static::loop_hidden_static_mut]:
+    Source: 'tests/src/static.rs', lines 283:0-291:1 -/
+def loop_hidden_static_mut
+  (s : StaticMut) (n : Std.U32) : Result StaticMut := do
+  let back ← loop_hidden_static_mut_loop (fun i => i) n s.x 0#u32
+  ok { x := back }
+
+/-- [static::loop_hidden_static_mut1]: loop body 0:
+    Source: 'tests/src/static.rs', lines 296:4-300:5 -/
+@[rust_loop_body]
+def loop_hidden_static_mut1_loop.body
+  (n : Std.U32) (back : Std.U32 → Std.U32) (r : Std.U32) (i : Std.U32) :
+  Result (ControlFlow ((Std.U32 → Std.U32) × Std.U32 × Std.U32) Std.U32)
+  := do
+  if i < n
+  then
+    let (r1, get_hidden_static_mut_back) ← get_hidden_static_mut { x := r }
+    let r2 ← r1 + 1#u32
+    let i1 ← i + 1#u32
+    ok (cont (fun i2 => back (get_hidden_static_mut_back i2).x, r2, i1))
+  else ok (done (back r))
+
+/-- [static::loop_hidden_static_mut1]: loop 0:
+    Source: 'tests/src/static.rs', lines 296:4-300:5 -/
+@[rust_loop]
+def loop_hidden_static_mut1_loop
+  (back : Std.U32 → Std.U32) (n : Std.U32) (r : Std.U32) (i : Std.U32) :
+  Result Std.U32
+  := do
+  loop
+    (fun (back1, r1, i1) => loop_hidden_static_mut1_loop.body n back1 r1 i1)
+    (back, r, i)
+
+/-- [static::loop_hidden_static_mut1]:
+    Source: 'tests/src/static.rs', lines 293:0-301:1 -/
+@[reducible]
+def loop_hidden_static_mut1 (x : Std.U32) (n : Std.U32) : Result Std.U32 := do
+  loop_hidden_static_mut1_loop (fun i => i) n x 0#u32
+
+/-- [static::branch_hidden_static_mut]:
+    Source: 'tests/src/static.rs', lines 303:0-306:1 -/
+def branch_hidden_static_mut
+  (s : StaticMut) (b : Bool) : Result StaticMut := do
+  let (i, back) ←
+    if b
+    then
+      do
+      let (s1, id_hidden_static_mut_back) ← id_hidden_static_mut s
+      ok (s1.x, fun i1 => (id_hidden_static_mut_back { x := i1 }).x)
+    else ok (s.x, fun i1 => i1)
+  let i1 ← i + 1#u32
+  let i2 := back i1
+  ok { x := i2 }
+
+/-- [static::loop_hidden_static_ref]: loop body 0:
+    Source: 'tests/src/static.rs', lines 312:4-316:5 -/
+@[rust_loop_body]
+def loop_hidden_static_ref_loop.body
+  (n : Std.U32) (i : Std.U32) (i1 : Std.U32) (acc : Std.U32) :
+  Result (ControlFlow (Std.U32 × Std.U32 × Std.U32) Std.U32)
+  := do
+  if i1 < n
+  then
+    let acc1 ← acc + GLOBAL
+    let i2 ← i1 + 1#u32
+    ok (cont (GLOBAL, i2, acc1))
+  else ok (done acc)
+
+/-- [static::loop_hidden_static_ref]: loop 0:
+    Source: 'tests/src/static.rs', lines 312:4-316:5 -/
+@[rust_loop]
+def loop_hidden_static_ref_loop
+  (n : Std.U32) (i : Std.U32) (i1 : Std.U32) (acc : Std.U32) :
+  Result Std.U32
+  := do
+  loop
+    (fun (i2, i3, acc1) => loop_hidden_static_ref_loop.body n i2 i3 acc1)
+    (i, i1, acc)
+
+/-- [static::loop_hidden_static_ref]:
+    Source: 'tests/src/static.rs', lines 308:0-318:1 -/
+@[reducible]
+def loop_hidden_static_ref (n : Std.U32) : Result Std.U32 := do
+  loop_hidden_static_ref_loop n GLOBAL 0#u32 0#u32
+
+/-- [static::read_opt_static]:
+    Source: 'tests/src/static.rs', lines 322:0-327:1 -/
+def read_opt_static (o : Option Std.U32) : Result Std.U32 := do
+  match o with
+  | none => ok 0#u32
+  | some x => ok x
+
+/-- [static::read_opt_static_ref]:
+    Source: 'tests/src/static.rs', lines 329:0-334:1 -/
+def read_opt_static_ref (o : Option StaticRef) : Result Std.U32 := do
+  match o with
+  | none => ok 0#u32
+  | some sr => ok sr.x
+
+/-- [static::Outer]
+    Source: 'tests/src/static.rs', lines 336:0-338:1 -/
+structure Outer where
+  s : StaticRef
+
+/-- [static::read_outer]:
+    Source: 'tests/src/static.rs', lines 340:0-342:1 -/
+def read_outer (o : Outer) : Result Std.U32 := do
+  ok o.s.x
+
+/-- [static::StaticEnum]
+    Source: 'tests/src/static.rs', lines 344:0-347:1 -/
+@[discriminant isize]
+inductive StaticEnum where
+| A : Std.U32 → StaticEnum
+| B : StaticEnum
+
+/-- [static::read_static_enum]:
+    Source: 'tests/src/static.rs', lines 349:0-354:1 -/
+def read_static_enum (e : StaticEnum) : Result Std.U32 := do
+  match e with
+  | StaticEnum.A x => ok x
+  | StaticEnum.B => ok 0#u32
+
+/-- [static::StaticList]
+    Source: 'tests/src/static.rs', lines 356:0-359:1 -/
+@[discriminant isize]
+inductive StaticList where
+| Cons : Std.U32 → StaticList → StaticList
+| Nil : StaticList
+
+/-- [static::static_list_head]:
+    Source: 'tests/src/static.rs', lines 361:0-366:1 -/
+def static_list_head (l : StaticList) : Result Std.U32 := do
+  match l with
+  | StaticList.Cons x _ => ok x
+  | StaticList.Nil => ok 0#u32
+
+/-- [static::Named]
+    Source: 'tests/src/static.rs', lines 369:0-372:1 -/
+structure Named where
+  «name» : Str
+  v : Std.U32
+
+/-- [static::get_name]:
+    Source: 'tests/src/static.rs', lines 374:0-376:1 -/
+def get_name (n : Named) : Result Str := do
+  ok n.name
+
+/-- [static::set_name]:
+    Source: 'tests/src/static.rs', lines 378:0-381:1 -/
+def set_name (n : Named) : Result Named := do
+  let i ← n.v + 1#u32
+  ok { «name» := (toStr "hello"), v := i }
+
+/-- [static::mk_named]:
+    Source: 'tests/src/static.rs', lines 383:0-385:1 -/
+def mk_named : Result Named := do
+  ok { «name» := (toStr "a"), v := 0#u32 }
+
+/-- [static::use_named]:
+    Source: 'tests/src/static.rs', lines 387:0-392:1 -/
+def use_named : Result Std.U32 := do
+  let n ← mk_named
+  let n1 ← set_name n
+  let _ ← get_name n1
+  ok n1.v
+
+/-- [static::C]
+    Source: 'tests/src/static.rs', lines 394:0-397:1
+    Visibility: public -/
+structure C where
+  d : Std.Usize
+  x : Std.Usize
+
+/-- [static::read_c]:
+    Source: 'tests/src/static.rs', lines 399:0-401:1
+    Visibility: public -/
+def read_c (c : C) : Result (Std.Usize × C) := do
+  ok (c.x, c)
+
+/-- [static::update_c]:
+    Source: 'tests/src/static.rs', lines 403:0-405:1
+    Visibility: public -/
+def update_c (c : C) : Result C := do
+  let i ← c.x + c.d
+  ok { c with x := i }
+
+/-- [static::call_read_c]:
+    Source: 'tests/src/static.rs', lines 407:0-409:1
+    Visibility: public -/
+def call_read_c (c : C) : Result (Std.Usize × C) := do
+  let (i, c1) ← read_c c
+  let (i1, c2) ← read_c c1
+  let i2 ← i + i1
+  ok (i2, c2)
+
+/-- [static::loop_opt_static]: loop body 0:
+    Source: 'tests/src/static.rs', lines 416:4-422:5 -/
+@[rust_loop_body]
+def loop_opt_static_loop.body
+  (o : Option Std.U32) (n : Std.U32) (i : Std.U32) (acc : Std.U32) :
+  Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
+  := do
+  if i < n
+  then
+    let acc1 ← match o with
+                 | none => ok acc
+                 | some x => acc + x
+    let i1 ← i + 1#u32
+    ok (cont (i1, acc1))
+  else ok (done acc)
+
+/-- [static::loop_opt_static]: loop 0:
+    Source: 'tests/src/static.rs', lines 416:4-422:5 -/
+@[rust_loop]
+def loop_opt_static_loop
+  (o : Option Std.U32) (n : Std.U32) (i : Std.U32) (acc : Std.U32) :
+  Result Std.U32
+  := do
+  loop
+    (fun (i1, acc1) => loop_opt_static_loop.body o n i1 acc1)
+    (i, acc)
+
+/-- [static::loop_opt_static]:
+    Source: 'tests/src/static.rs', lines 413:0-424:1 -/
+@[reducible]
+def loop_opt_static (o : Option Std.U32) (n : Std.U32) : Result Std.U32 := do
+  loop_opt_static_loop o n 0#u32 0#u32
+
+/-- [static::branch_opt_static]:
+    Source: 'tests/src/static.rs', lines 426:0-432:1 -/
+def branch_opt_static
+  (o : Option Std.U32) (p : Option Std.U32) (b : Bool) : Result Std.U32 := do
+  let q ← if b
+            then ok o
+            else ok p
+  match q with
+  | none => ok 0#u32
+  | some x => ok x
+
+/-- [static::copy_opt_static]:
+    Source: 'tests/src/static.rs', lines 434:0-441:1 -/
+def copy_opt_static (o : Option Std.U32) : Result Std.U32 := do
+  match o with
+  | none => ok 0#u32
+  | some x => match o with
+              | none => ok 0#u32
+              | some y => x + y
+
+/-- [static::dup_opt_static]:
+    Source: 'tests/src/static.rs', lines 443:0-445:1 -/
+def dup_opt_static
+  (o : Option Std.U32) : Result ((Option Std.U32) × (Option Std.U32)) := do
+  ok (o, o)
+
+/-- [static::CopyStaticRef]
+    Source: 'tests/src/static.rs', lines 448:0-450:1 -/
+structure CopyStaticRef where
+  x : Std.U32
+
+/-- [static::{impl core::clone::Clone for static::CopyStaticRef}::clone]:
+    Source: 'tests/src/static.rs', lines 447:9-447:14
+    Visibility: public -/
+def CopyStaticRef.Insts.CoreCloneClone.clone
+  (self : CopyStaticRef) : Result CopyStaticRef := do
+  ok self
+
+/-- Trait implementation: [static::{impl core::clone::Clone for static::CopyStaticRef}]
+    Source: 'tests/src/static.rs', lines 447:9-447:14 -/
+@[reducible]
+def CopyStaticRef.Insts.CoreCloneClone : core.clone.Clone CopyStaticRef := {
+  clone := CopyStaticRef.Insts.CoreCloneClone.clone
+}
+
+/-- Trait implementation: [static::{impl core::marker::Copy for static::CopyStaticRef}]
+    Source: 'tests/src/static.rs', lines 447:16-447:20 -/
+@[reducible]
+def CopyStaticRef.Insts.CoreMarkerCopy : core.marker.Copy CopyStaticRef := {
+  cloneInst := CopyStaticRef.Insts.CoreCloneClone
+}
+
+/-- [static::dup_copy_static_ref]:
+    Source: 'tests/src/static.rs', lines 452:0-454:1 -/
+def dup_copy_static_ref
+  (s : CopyStaticRef) : Result (CopyStaticRef × CopyStaticRef) := do
+  ok (s, s)
+
+/-- [static::loop_copy_static_ref]: loop body 0:
+    Source: 'tests/src/static.rs', lines 459:4-462:5 -/
+@[rust_loop_body]
+def loop_copy_static_ref_loop.body
+  (i : Std.U32) (n : Std.U32) (i1 : Std.U32) (acc : Std.U32) :
+  Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
+  := do
+  if i1 < n
+  then let acc1 ← acc + i
+       let i2 ← i1 + 1#u32
+       ok (cont (i2, acc1))
+  else ok (done acc)
+
+/-- [static::loop_copy_static_ref]: loop 0:
+    Source: 'tests/src/static.rs', lines 459:4-462:5 -/
+@[rust_loop]
+def loop_copy_static_ref_loop
+  (i : Std.U32) (n : Std.U32) (i1 : Std.U32) (acc : Std.U32) :
+  Result Std.U32
+  := do
+  loop
+    (fun (i2, acc1) => loop_copy_static_ref_loop.body i n i2 acc1)
+    (i1, acc)
+
+/-- [static::loop_copy_static_ref]:
+    Source: 'tests/src/static.rs', lines 456:0-464:1 -/
+@[reducible]
+def loop_copy_static_ref
+  (s : CopyStaticRef) (n : Std.U32) : Result Std.U32 := do
+  loop_copy_static_ref_loop s.x n 0#u32 0#u32
+
+/-- [static::join_concrete_static_ref]:
+    Source: 'tests/src/static.rs', lines 467:0-477:1 -/
+def join_concrete_static_ref (b : Bool) : Result Std.U32 := do
+  let o ← if b
+            then ok (some ({ x := GLOBAL } : StaticRef))
+            else ok none
+  match o with
+  | none => ok 0#u32
+  | some sr => ok sr.x
+
+/-- [static::join_concrete_static]:
+    Source: 'tests/src/static.rs', lines 479:0-485:1 -/
+def join_concrete_static (b : Bool) : Result Std.U32 := do
+  let o ← if b
+            then ok (some GLOBAL)
+            else ok none
+  match o with
+  | none => ok 0#u32
+  | some x => ok x
+
+/-- [static::opt_static_mut]:
+    Source: 'tests/src/static.rs', lines 488:0-493:1 -/
+def opt_static_mut (o : Option Std.U32) : Result (Option Std.U32) := do
+  match o with
+  | none => ok none
+  | some x => let x1 ← x + 1#u32
+              ok (some x1)
+
+/-- [static::branch_opt_static_mut]:
+    Source: 'tests/src/static.rs', lines 495:0-501:1 -/
+def branch_opt_static_mut
+  (o : Option Std.U32) (p : Option Std.U32) (b : Bool) :
+  Result ((Option Std.U32) × (Option Std.U32))
+  := do
+  let (q, back) ←
+    if b
+    then ok (o, fun o1 => (o1, p))
+    else ok (p, fun o1 => (o, o1))
+  match q with
+  | none => ok (back none)
+  | some x => let x1 ← x + 1#u32
+              ok (back (some x1))
+
+/-- [static::copy_in_loop_static]: loop body 0:
+    Source: 'tests/src/static.rs', lines 507:4-510:5 -/
+@[rust_loop_body]
+def copy_in_loop_static_loop.body
+  (o : Option Std.U32) (n : Std.U32) (i : Std.U32) (r : Option Std.U32) :
+  Result (ControlFlow (Std.U32 × (Option Std.U32)) (Option Std.U32))
+  := do
+  if i < n
+  then let i1 ← i + 1#u32
+       ok (cont (i1, o))
+  else ok (done r)
+
+/-- [static::copy_in_loop_static]: loop 0:
+    Source: 'tests/src/static.rs', lines 507:4-510:5 -/
+@[rust_loop]
+def copy_in_loop_static_loop
+  (o : Option Std.U32) (n : Std.U32) (i : Std.U32) (r : Option Std.U32) :
+  Result (Option Std.U32)
+  := do
+  loop
+    (fun (i1, r1) => copy_in_loop_static_loop.body o n i1 r1)
+    (i, r)
+
+/-- [static::copy_in_loop_static]:
+    Source: 'tests/src/static.rs', lines 504:0-512:1 -/
+@[reducible]
+def copy_in_loop_static
+  (o : Option Std.U32) (n : Std.U32) : Result (Option Std.U32) := do
+  copy_in_loop_static_loop o n 0#u32 none
+
+/-- [static::copy_in_branch_static]:
+    Source: 'tests/src/static.rs', lines 514:0-527:1 -/
+def copy_in_branch_static
+  (o : Option Std.U32) (b : Bool) : Result Std.U32 := do
+  let acc ←
+    if b
+    then match o with
+         | none => ok 0#u32
+         | some x => ok x
+    else ok 0#u32
+  let x ← match o with
+            | none => ok 0#u32
+            | some x1 => ok x1
+  acc + x
+
 end static

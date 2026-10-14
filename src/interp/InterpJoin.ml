@@ -300,7 +300,7 @@ let reborrow_symbolic_borrows (span : Meta.span) (loop_id : LoopId.id option)
     in
 
     (* Introduce the fresh regions *)
-    let push_abs (nrid : RegionId.id) =
+    let push_abs (nr : region) =
       let rty = ty in
 
       (* Create the symbolic borrow *)
@@ -334,17 +334,14 @@ let reborrow_symbolic_borrows (span : Meta.span) (loop_id : LoopId.id option)
         | None -> WithCont
       in
       let can_end = true in
-      let regions : abs_regions =
-        { owned = RegionSet.singleton (RVar (Free nrid)) }
-      in
+      let regions : abs_regions = { owned = RegionSet.singleton nr } in
       let cont : abs_cont option =
         if with_abs_conts then
           (* Create the symbolic borrow. We introduce borrows/loans only if the
              region projects *mutable* borrows/loans. *)
           if
             ty_has_mut_borrow_for_region_in_set ctx.type_ctx.type_infos
-              (RegionSet.singleton (RVar (Free nrid)))
-              rty
+              (RegionSet.singleton nr) rty
           then
             let borrow : tevalue =
               let value =
@@ -390,7 +387,16 @@ let reborrow_symbolic_borrows (span : Meta.span) (loop_id : LoopId.id option)
       fresh_absl := fresh_abs :: !fresh_absl
     in
 
-    List.iter push_abs fresh_regions;
+    List.iter (fun rid -> push_abs (RVar (Free rid))) fresh_regions;
+    (* The static region is not refreshed: if the type contains it (note that it
+       may be hidden in ADTs, see {!TypesUtils.adt_has_hidden_static}) we also
+       need to introduce an abstraction which reborrows the static part of the
+       symbolic value. *)
+    if
+      ty_has_regions_in_set ctx.type_ctx.type_infos
+        (RegionSet.singleton RStatic)
+        ty
+    then push_abs RStatic;
 
     let nsv : symbolic_value = { sv_id = nsid; sv_ty = ty } in
     sid_subst := (sv, nsv) :: !sid_subst;

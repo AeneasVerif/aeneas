@@ -144,12 +144,22 @@ let adt_has_hidden_static (infos : TypesAnalysis.type_infos)
   | None -> false
   | Some info -> info.borrows_info.contains_static
 
-(** Similar to {!adt_has_hidden_static} but for static mutable borrows *)
-let adt_has_hidden_static_mut (infos : TypesAnalysis.type_infos)
-    (tref : type_decl_ref) : bool =
-  match lookup_adt_info infos tref with
-  | None -> false
-  | Some info -> info.borrows_info.contains_static_mut
+(** Check whether a type contains an ADT in which the static region is hidden
+    (see {!adt_has_hidden_static}). *)
+let ty_has_hidden_static (infos : TypesAnalysis.type_infos) (ty : ty) : bool =
+  let obj =
+    object
+      inherit [_] iter_ty as super
+
+      method! visit_TAdt env tref =
+        if adt_has_hidden_static infos tref then raise Found;
+        super#visit_TAdt env tref
+    end
+  in
+  try
+    obj#visit_ty () ty;
+    false
+  with Found -> true
 
 (** Check if a {!type:Charon.Types.ty} contains regions which satisfy a
     predicate.
