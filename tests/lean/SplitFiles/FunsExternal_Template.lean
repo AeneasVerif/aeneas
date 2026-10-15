@@ -11,6 +11,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -23,7 +24,7 @@ set_option maxRecDepth 2048
     Name pattern: [core::fmt::Write]
     Visibility: public -/
 @[rust_trait "core::fmt::Write"]
-structure core.fmt.Write (Self : Type) where
+structure core.fmt.Write (Self : Type _) where
   write_str : Self → Str → Result ((core.result.Result Unit core.fmt.Error)
     × Self)
 
