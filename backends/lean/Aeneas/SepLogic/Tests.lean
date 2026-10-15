@@ -120,7 +120,7 @@ example (P Q : IProp) : P ∗ (P -∗ Q) ⊢ Q :=
 example (Q₁ Q₂ : IPost Nat) : Q₁ ∗+ (Q₁ -∗+ Q₂) ⊢+ Q₂ :=
   postWand_cancel Q₁ Q₂
 
-example (q : Aeneas.Std.MutRawPtr α) (x y : α) (kind : Aeneas.Std.AllocKind) (len : Nat)
+example (q : Aeneas.Std.MutRawPtr α) (x y : Option α) (kind : Aeneas.Std.AllocKind) (len : Nat)
     (hOffset : q.offset < len) :
     owns (Aeneas.Std.Heap.singleton q x kind len) ∗ owns (Aeneas.Std.Heap.singleton q y kind len)
       ⊢ ⌜False⌝ :=

@@ -183,7 +183,7 @@ theorem owns_union (A B : Heap)
   · rintro h ⟨h₁, h₂, hCompatibleHeaps, rfl, hSub₁, hSub₂⟩
     exact Heap.Subheap.union_mono hSub₁ hSub₂ hCompatibleHeaps
 
-theorem owns_singleton_exclusive (q : Std.RawPtr α M) (value₁ value₂ : α)
+theorem owns_singleton_exclusive (q : Std.RawPtr α M) (value₁ value₂ : Option α)
     {kind₁ kind₂ : Std.AllocKind} {len₁ len₂ : Nat}
     (hOffset₁ : q.offset < len₁) (hOffset₂ : q.offset < len₂) :
     owns (Heap.singleton q value₁ kind₁ len₁) ∗ owns (Heap.singleton q value₂ kind₂ len₂)

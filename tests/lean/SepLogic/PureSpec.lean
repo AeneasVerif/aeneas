@@ -596,7 +596,7 @@ example : ⦃ emp ⦄ into_raw (0 : Nat) ⦃ _ => ⌜True⌝⦄ := by
 
 example : ¬ ∃ q, into_raw (0 : Nat) = Result.ok q := by
   rintro ⟨q, hq⟩
-  simp [into_raw, Aeneas.Std.alloc.alloc.Global.allocate,
+  simp [into_raw, Aeneas.Std.alloc.alloc.Global.allocate, Aeneas.Std.RawPtr.alloc,
     Result.guardedModify] at hq
 
 namespace StepExamples
