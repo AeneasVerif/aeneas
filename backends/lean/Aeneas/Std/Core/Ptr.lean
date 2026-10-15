@@ -87,14 +87,6 @@ instance {ty} : IsScalar (UScalar ty) where
 instance {ty} : IsScalar (IScalar ty) where
   isScalar := by simp
 
-/-- A fresh allocation holding `values`. If `freeable`, it comes from the global allocator and only
-`Global.deallocate` frees it; otherwise it is a local, behind a pointer from `from_mut` or
-`as_mut_ptr`. -/
-def RawPtr.materialize (values : List T) (freeable : Bool := false) : Result (RawPtr T M) :=
-  Result.guardedModify (fun _ => True) fun h _ =>
-    let (l, h') := h.alloc values freeable
-    (⟨l⟩, h')
-
 /-- Always fails. TODO: the typed heap cannot read a cell at another scalar type, so casts are not
 modelled. -/
 def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability) [IsScalar T] [IsScalar T']
@@ -164,10 +156,15 @@ def RawPtr.readRange (q : RawPtr T M) : Nat → Result (List T)
     let values ← (q.shift 1).readRange n
     .ok (value :: values)
 
-/-- Not a Rust function: ends the view of a local behind `q` (`from_mut`, `as_ptr`,
-`as_mut_ptr`), which holds `count` values: the whole allocation is freed, so every later use of a
-pointer into it fails. -/
-def RawPtr.endLocal (q : RawPtr T M) (count : Nat) : Result Unit :=
+/-- Not a Rust function: a raw-pointer view of a place owned elsewhere (`from_mut`, `as_ptr`,
+`as_mut_ptr`). The functional model gives the place no address, so the view is a fresh allocation
+holding a copy of `values`, which only `endView` frees (`freeable = false`). -/
+def RawPtr.allocView (values : List T) : Result (MutRawPtr T) :=
+  Result.guardedModify (fun _ => True) fun h _ => h.alloc values false
+
+/-- Not a Rust function: ends the view behind `q`, which holds `count` values: the whole allocation
+is freed, so every later use of a pointer into it fails. -/
+def RawPtr.endView (q : RawPtr T M) (count : Nat) : Result Unit :=
   Result.guardedModify _ (Heap.dealloc q.loc count false)
 
 /-- Not a Rust function: fails unless `p` holds (`p` need not be decidable). -/
@@ -175,16 +172,14 @@ def Result.require (p : Prop) : Result Unit :=
   Result.guardedModify (fun _ => p) fun h _ => ((), h)
 
 /-- Not a Rust function: end of the borrow given to `from_mut`; reads the value, with the writes
-made through the pointer, and frees the local's allocation, so that the pointer can't be used
-anymore. -/
+made through the pointer, and ends the view, so that the pointer can't be used anymore. -/
 def core.ptr.end_from_mut (p : MutRawPtr T) : Result T := do
   let value ← p.read
-  p.endLocal 1
+  p.endView 1
   .ok value
 
-/-- The pointer points to a fresh slot holding `r`; the back computation runs when the borrow
-ends. -/
+/-- The pointer is a view of `r`; the back computation runs when the borrow ends. -/
 def core.ptr.from_mut (r : T) : Result (MutRawPtr T × Result T) :=
-  Aeneas.Std.bind (RawPtr.materialize [r]) fun p => .ok (p, core.ptr.end_from_mut p)
+  Aeneas.Std.bind (RawPtr.allocView [r]) fun p => .ok (p, core.ptr.end_from_mut p)
 
 end Aeneas.Std
