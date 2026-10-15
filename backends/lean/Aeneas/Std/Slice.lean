@@ -62,9 +62,9 @@ copy the slice to a fresh view (`allocView`), freed when the borrow ends;
 `from_raw_parts(_mut)` move the slots out into a borrow (so that raw accesses while the slice is
 live fail). The returned back computations run when the borrow ends. -/
 
-/-- Not a Rust function: `takeRange` of `len` slots, as a slice. -/
-def RawPtr.takeSlice {T : Type} (q : RawPtr T M) (len : Usize) : Result (Slice T) := do
-  let values ← q.takeRange len.val
+/-- `borrowRange` of `len` slots, as a slice. -/
+def RawPtr.borrowSlice {T : Type} (q : RawPtr T M) (len : Usize) : Result (Slice T) := do
+  let values ← q.borrowRange len.val
   if h : values.length ≤ Usize.max then .ok (Slice.from values h) else .fail .undef
 
 /-- End of the shared borrow of `as_ptr`: the slots must still hold `s` (writing through a const
@@ -95,11 +95,11 @@ def core.slice.raw.from_raw_parts_mut.back {T : Type} (p : MutRawPtr T) (len : U
 
 def core.slice.raw.from_raw_parts {T : Type} (p : ConstRawPtr T) (len : Usize) :
     Result (Slice T × Result Unit) :=
-  Aeneas.Std.bind (p.takeSlice len) fun s => .ok (s, p.endBorrowRange s.val)
+  Aeneas.Std.bind (p.borrowSlice len) fun s => .ok (s, p.endBorrowRange s.val)
 
 def core.slice.raw.from_raw_parts_mut {T : Type} (p : MutRawPtr T) (len : Usize) :
     Result (Slice T × (Slice T → Result Unit)) :=
-  Aeneas.Std.bind (p.takeSlice len) fun s =>
+  Aeneas.Std.bind (p.borrowSlice len) fun s =>
     .ok (s, core.slice.raw.from_raw_parts_mut.back p len)
 
 instance {α : Type u} : GetElem (Slice α) Nat α (fun a i => i < a.val.length) where

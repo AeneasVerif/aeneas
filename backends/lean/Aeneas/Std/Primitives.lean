@@ -474,6 +474,9 @@ def Result.guardedModify {α : Type} (pre : Heap → Prop)
   Result.vis (.guardedModify α pre modify) fun answer =>
     Result.ok answer.down
 
+def Result.require (p : Prop) : Result Unit :=
+  Result.guardedModify (fun _ => p) fun h _ => ((), h)
+
 end
 
 /-!

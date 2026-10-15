@@ -249,7 +249,7 @@ def IsBorrowed (h : Heap) (l : Loc) : Prop :=
   h.impl.lookup l = some .borrowed
 
 /-- Moves the value of `q` out into a borrow (`from_raw_parts`): the slot holds no value until
-`endBorrow`, so every access through a raw pointer fails meanwhile. Not a Rust operation. -/
+`endBorrow`, so every access through a raw pointer fails meanwhile. -/
 def borrow (q : RawPtr α M) (h : Heap) (hValid : IsValid h q) : α × Heap :=
   ((read q h hValid).1, h.insert q.loc .borrowed)
 
