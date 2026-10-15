@@ -26,9 +26,9 @@ private abbrev HeapCell := Σ α : Type, α
 
 private inductive Slot where
   | live (cell : HeapCell)
-  -- the value is held by a live borrow (`from_raw_parts`), and comes back with `revive`
+  -- the value is held by a live borrow (`from_raw_parts`), and comes back with `endBorrow`
   | borrowed
-  -- deallocated: final, no operation reads, writes, revives or deallocates it again
+  -- deallocated: final, no operation reads, writes, ends a borrow of or deallocates it again
   | freed
   -- one past the last value: `freeable` iff the allocation comes from the global allocator
   | endMarker (freeable : Bool)
@@ -84,7 +84,7 @@ to `live`, at the same address.
 | `dealloc _ _ true` | `live` → `freed`, whole allocation, global allocator only | `Box::from_raw` (drop), `Global::deallocate` |
 | `dealloc _ _ false` | `live` → `freed`, whole allocation, locals only | end of `from_mut`, `as_ptr`, `as_mut_ptr` |
 | `borrow` | `live` → `borrowed` | `from_raw_parts`, `from_raw_parts_mut` |
-| `revive` | `borrowed` → `live` | end of `from_raw_parts`, `from_raw_parts_mut` |
+| `endBorrow` | `borrowed` → `live` | end of `from_raw_parts`, `from_raw_parts_mut` |
 -/
 
 def Loc.shift (l : Loc) (i : Nat) : Loc := ⟨l.allocId, l.offset + i⟩
@@ -232,7 +232,7 @@ def dealloc (l : Loc) (n : Nat) (freeable : Bool) (h : Heap) (_ : CanDealloc h l
     Unit × Heap :=
   ((), freedRange l (n + 1) ∪ h)
 
-/-- One borrowed slot at `l`. Owning it is the right to `revive` it. -/
+/-- One borrowed slot at `l`. Owning it is the right to `endBorrow` it. -/
 def borrowedSlot (l : Loc) : Heap :=
   ⟨Finmap.singleton l .borrowed⟩
 
@@ -240,12 +240,12 @@ def IsBorrowed (h : Heap) (l : Loc) : Prop :=
   h.impl.lookup l = some .borrowed
 
 /-- Moves the value of `q` out into a borrow (`from_raw_parts`): the slot holds no value until
-`revive`, so every access through a raw pointer fails meanwhile. Not a Rust operation. -/
+`endBorrow`, so every access through a raw pointer fails meanwhile. Not a Rust operation. -/
 def borrow (q : RawPtr α M) (h : Heap) (hValid : IsValid h q) : α × Heap :=
   ((read q h hValid).1, h.insert q.loc .borrowed)
 
 /-- Ends the borrow of the slot of `q`, which holds `value` again: the inverse of `borrow`. -/
-def revive (q : RawPtr α M) (value : α) (h : Heap) (_ : IsBorrowed h q.loc) : Unit × Heap :=
+def endBorrow (q : RawPtr α M) (value : α) (h : Heap) (_ : IsBorrowed h q.loc) : Unit × Heap :=
   ((), h.insert q.loc (.live ⟨α, value⟩))
 
 end Heap

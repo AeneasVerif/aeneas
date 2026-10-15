@@ -750,7 +750,7 @@ theorem compatible_borrow_left {α : Type} {q : RawPtr α M} {h₁ h₂ : Heap}
     PartialCommMonoid.Compatible (h₁.borrow q hValid).2 h₂ :=
   compatible_insert_left hCompatible (mem_of_isValid hValid)
 
-/-- A borrowed slot holds no value: no access goes through it until `revive`. -/
+/-- A borrowed slot holds no value: no access goes through it until `endBorrow`. -/
 theorem not_isLive_borrow {α : Type} {h : Heap} {q : RawPtr α M} (hValid : IsValid h q) :
     ¬ IsLive (h.borrow q hValid).2 q.loc := by
   simp [IsLive, Heap.lookup, Heap.borrow, Heap.insert, Slot.cell?]
@@ -761,20 +761,20 @@ theorem borrow_singleton {α : Type} (q : RawPtr α M) (value : α)
   Prod.ext (congrArg Prod.fst (read_singleton q value hValid) :)
     (Heap.ext_impl (by simp [Heap.borrow, singleton, borrowedSlot, Heap.insert]))
 
-theorem revive_union_left {α : Type} {h₁ h₂ : Heap} (q : RawPtr α M) (value : α)
+theorem endBorrow_union_left {α : Type} {h₁ h₂ : Heap} (q : RawPtr α M) (value : α)
     (hBorrowed : IsBorrowed h₁ q.loc) :
-    (h₁ ∪ h₂).revive q value (isBorrowed_union_left hBorrowed) =
-      Prod.map id (· ∪ h₂) (h₁.revive q value hBorrowed) :=
+    (h₁ ∪ h₂).endBorrow q value (isBorrowed_union_left hBorrowed) =
+      Prod.map id (· ∪ h₂) (h₁.endBorrow q value hBorrowed) :=
   congrArg (Prod.mk ()) Heap.insert_union
 
-theorem compatible_revive_left {α : Type} {q : RawPtr α M} {value : α} {h₁ h₂ : Heap}
+theorem compatible_endBorrow_left {α : Type} {q : RawPtr α M} {value : α} {h₁ h₂ : Heap}
     (hCompatible : PartialCommMonoid.Compatible h₁ h₂) (hBorrowed : IsBorrowed h₁ q.loc) :
-    PartialCommMonoid.Compatible (h₁.revive q value hBorrowed).2 h₂ :=
+    PartialCommMonoid.Compatible (h₁.endBorrow q value hBorrowed).2 h₂ :=
   compatible_insert_left hCompatible (Finmap.mem_of_lookup_eq_some hBorrowed)
 
-theorem revive_borrowedSlot {α : Type} (q : RawPtr α M) (value : α)
+theorem endBorrow_borrowedSlot {α : Type} (q : RawPtr α M) (value : α)
     (hBorrowed : IsBorrowed (borrowedSlot q.loc) q.loc) :
-    (borrowedSlot q.loc).revive q value hBorrowed = ((), singleton q value) :=
+    (borrowedSlot q.loc).endBorrow q value hBorrowed = ((), singleton q value) :=
   congrArg (Prod.mk ()) (Heap.ext_impl (by simp [singleton, borrowedSlot, Heap.insert]))
 
 end Heap
