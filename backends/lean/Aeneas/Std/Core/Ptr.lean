@@ -3,7 +3,7 @@ module
 public import Aeneas.Std.Core.Core
 public import Aeneas.Std.Heap
 public import Aeneas.Std.Scalar.Core
-@[expose] public section
+public section
 
 namespace Aeneas.Std
 
