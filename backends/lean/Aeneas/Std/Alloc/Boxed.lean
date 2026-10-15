@@ -42,13 +42,13 @@ def core.convert.AsMutBox (T : Type _) : core.convert.AsMut T T := {
 
 @[expose, rust_fun "alloc::boxed::{core::clone::Clone<Box<@T>>}::clone"
     (keepParams := [true, false]) (keepTraitClauses := [true, false])]
-def core.alloc.boxed.CloneBox.clone {T : Type _} (cloneInst : core.clone.Clone T) : T → Result T :=
+def alloc.boxed.CloneBox.clone {T : Type _} (cloneInst : core.clone.Clone T) : T → Result T :=
   cloneInst.clone
 
 @[expose, reducible, rust_trait_impl "core::clone::Clone<Box<@T>>"
     (keepParams := [true, false]) (keepTraitClauses := [true, false])]
 def core.clone.CloneBox {T : Type _} (cloneInst : core.clone.Clone T) : core.clone.Clone T := {
-  clone := core.alloc.boxed.CloneBox.clone cloneInst
+  clone := alloc.boxed.CloneBox.clone cloneInst
 }
 
 @[expose, rust_fun "alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::eq" (keepParams := [true, false])]
