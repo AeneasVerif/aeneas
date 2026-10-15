@@ -205,7 +205,7 @@ class HasLayout (α : Type u) where
   reasonable : rty.1.Reasonable := by infer_instance
   retract_embed : ∀ x, retract (embed x) = x := by has_layout_retract_embed
   embed_retract : ∀ v, embed (retract v) = v := by has_layout_embed_retract
-  layout_meta_reasonable : Layout.satisfiable ty layout_meta.1 layout_meta.2 := by simp [Layout.satisfiable] <;> trivial
+  layout_meta_reasonable : Layout.satisfiable rty.1 layout_meta.1 layout_meta.2 := by simp [Layout.satisfiable] <;> trivial
   -- ... constraints on allowed_layout
 
 namespace HasLayout

@@ -2181,6 +2181,49 @@ let extract_type_decl_has_layout (ctx : extraction_ctx) (fmt : F.formatter)
       TypesUtils.type_decl_from_decl_id_is_tuple_struct
         ctx.trans_ctx.type_ctx.type_infos decl.def_id
     in
+    let extract_iuscalar_ty (int_ty : T.integer_type) : string =
+      match int_ty with
+      | Signed Isize -> "(.signed .Isize)"
+      | Signed I8 -> "(.signed .I8)"
+      | Signed I16 -> "(.signed .I16)"
+      | Signed I32 -> "(.signed .I32)"
+      | Signed I64 -> "(.signed .I64)"
+      | Signed I128 -> "(.signed .I128)"
+      | Unsigned Usize -> "(.unsigned .Usize)"
+      | Unsigned U8 -> "(.unsigned .U8)"
+      | Unsigned U16 -> "(.unsigned .U16)"
+      | Unsigned U32 -> "(.unsigned .U32)"
+      | Unsigned U64 -> "(.unsigned .U64)"
+      | Unsigned U128 -> "(.unsigned .U128)"
+    in
+    let extract_layout_kind (repr : T.repr_options) : string =
+      if repr.transparent then ".reprTransparent"
+      else
+        match (repr.repr_algo, repr.explicit_discr_type) with
+        | Rust, None -> ".reprRust"
+        | Rust, Some int_ty -> ".reprPrim " ^ extract_iuscalar_ty int_ty
+        | C, None -> ".reprC"
+        | C, Some int_ty -> ".reprC_prim " ^ extract_iuscalar_ty int_ty
+    in
+    let extract_layout_modifier (align_modif : T.alignment_modifier option) :
+        string =
+      match align_modif with
+      | None -> ".reasonablyAligned"
+      | Some (Align n) -> ".aligned " ^ string_of_int n ^ " (by decide)"
+      | Some (Pack n) -> ".packed " ^ string_of_int n ^ " (by decide)"
+    in
+    let layout_meta =
+      match
+        TypeDeclId.Map.find_opt decl.def_id ctx.trans_ctx.type_ctx.type_decls
+      with
+      | Some { layout = (_, layout) :: _; _ } ->
+          "("
+          ^ extract_layout_kind layout.repr
+          ^ ", "
+          ^ extract_layout_modifier layout.repr.align_modif
+          ^ ")"
+      | _ -> "(.reprRust, .reasonablyAligned)"
+    in
     let print_field_ty (f : field) =
       F.pp_print_string fmt "HasLayout.xty ";
       extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:true f.field_ty
@@ -2271,7 +2314,7 @@ let extract_type_decl_has_layout (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_close_box fmt ();
         F.pp_print_space fmt ();
         F.pp_open_hovbox fmt ctx.indent_incr;
-        F.pp_print_string fmt "layout_meta := (.reprRust, .reasonablyAligned)";
+        F.pp_print_string fmt ("layout_meta := " ^ layout_meta);
         F.pp_close_box fmt ()
     | Enum variants ->
         F.pp_print_space fmt ();
@@ -2328,7 +2371,7 @@ let extract_type_decl_has_layout (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_close_box fmt ();
         F.pp_print_space fmt ();
         F.pp_open_hovbox fmt ctx.indent_incr;
-        F.pp_print_string fmt "layout_meta := (.reprRust, .reasonablyAligned)";
+        F.pp_print_string fmt ("layout_meta := " ^ layout_meta);
         F.pp_close_box fmt ()
     | Opaque -> [%internal_error] span);
     F.pp_close_box fmt ();

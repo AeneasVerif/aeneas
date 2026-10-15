@@ -170,4 +170,72 @@ instance : HasLayout Scene where
   retract := λ | ⟨.tuple [v0, v1], h⟩ => ⟨HasLayout.retract (h.field 0), HasLayout.retract (h.field 1)⟩
   layout_meta := (.reprRust, .reasonablyAligned)
 
+/-- [layouts::Repr1]
+    Source: 'tests/src/layouts.rs', lines 47:0-51:1
+    Visibility: public -/
+@[discriminant isize]
+inductive Repr1 where
+| Empty : Repr1
+| Circle : Std.U32 → Repr1
+| Rect : Std.Usize → Std.Usize → Repr1
+
+instance : HasLayout Repr1 where
+  rty := RichMType.mkEnum [[], [HasLayout.xty Std.U32], [HasLayout.xty Std.Usize, HasLayout.xty Std.Usize]]
+  embed := λ
+    | Repr1.Empty => HasLayout.mkVariant 0 (.tuple [])
+    | Repr1.Circle x0 => HasLayout.mkVariant 1 (.tuple [HasLayout.embed x0])
+    | Repr1.Rect x0 x1 => HasLayout.mkVariant 2 (.tuple [HasLayout.embed x0, HasLayout.embed x1])
+  retract := λ
+    | ⟨.variant 0 (.tuple []), _⟩ => Repr1.Empty
+    | ⟨.variant 1 (.tuple [v0]), h⟩ => Repr1.Circle (HasLayout.retract (h.vfield 0 rfl))
+    | ⟨.variant 2 (.tuple [v0, v1]), h⟩ => Repr1.Rect (HasLayout.retract (h.vfield 0 rfl)) (HasLayout.retract (h.vfield 1 rfl))
+  layout_meta := (.reprC, .reasonablyAligned)
+
+/-- [layouts::Repr2]
+    Source: 'tests/src/layouts.rs', lines 54:0-58:1
+    Visibility: public -/
+@[discriminant i8]
+inductive Repr2 where
+| Empty : Repr2
+| Circle : Std.U32 → Repr2
+| Rect : Std.Usize → Std.Usize → Repr2
+
+instance : HasLayout Repr2 where
+  rty := RichMType.mkEnum [[], [HasLayout.xty Std.U32], [HasLayout.xty Std.Usize, HasLayout.xty Std.Usize]]
+  embed := λ
+    | Repr2.Empty => HasLayout.mkVariant 0 (.tuple [])
+    | Repr2.Circle x0 => HasLayout.mkVariant 1 (.tuple [HasLayout.embed x0])
+    | Repr2.Rect x0 x1 => HasLayout.mkVariant 2 (.tuple [HasLayout.embed x0, HasLayout.embed x1])
+  retract := λ
+    | ⟨.variant 0 (.tuple []), _⟩ => Repr2.Empty
+    | ⟨.variant 1 (.tuple [v0]), h⟩ => Repr2.Circle (HasLayout.retract (h.vfield 0 rfl))
+    | ⟨.variant 2 (.tuple [v0, v1]), h⟩ => Repr2.Rect (HasLayout.retract (h.vfield 0 rfl)) (HasLayout.retract (h.vfield 1 rfl))
+  layout_meta := (.reprC_prim (.signed .I8), .reasonablyAligned)
+
+/-- [layouts::Repr3]
+    Source: 'tests/src/layouts.rs', lines 61:0-65:1
+    Visibility: public -/
+@[discriminant i8]
+inductive Repr3 where
+| Empty : Repr3
+| Circle : Std.U32 → Repr3
+| Rect : Std.Usize → Std.Usize → Repr3
+
+instance : HasLayout Repr3 where
+  rty := RichMType.mkEnum [[], [HasLayout.xty Std.U32], [HasLayout.xty Std.Usize, HasLayout.xty Std.Usize]]
+  embed := λ
+    | Repr3.Empty => HasLayout.mkVariant 0 (.tuple [])
+    | Repr3.Circle x0 => HasLayout.mkVariant 1 (.tuple [HasLayout.embed x0])
+    | Repr3.Rect x0 x1 => HasLayout.mkVariant 2 (.tuple [HasLayout.embed x0, HasLayout.embed x1])
+  retract := λ
+    | ⟨.variant 0 (.tuple []), _⟩ => Repr3.Empty
+    | ⟨.variant 1 (.tuple [v0]), h⟩ => Repr3.Circle (HasLayout.retract (h.vfield 0 rfl))
+    | ⟨.variant 2 (.tuple [v0, v1]), h⟩ => Repr3.Rect (HasLayout.retract (h.vfield 0 rfl)) (HasLayout.retract (h.vfield 1 rfl))
+  layout_meta := (.reprPrim (.signed .I8), .reasonablyAligned)
+
+/-- [layouts::main]:
+    Source: 'tests/src/layouts.rs', lines 67:0-71:1 -/
+def main : Result Unit := do
+  ok ()
+
 end layouts
