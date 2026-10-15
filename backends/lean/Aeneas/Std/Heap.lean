@@ -2,12 +2,13 @@ module
 
 public import Mathlib.Data.Finmap
 
-/-! Block-based heap: finite map from (allocation id, offset) to typed cells `Σ α, α`.
-Supports interior pointers, stored pointers, provenance by allocation id.
+/-! Block-based heap: finite map from (allocation id, offset) to typed cells `Σ α, Option α`: a
+cell holds a value of type `α`, or is uninitialized (`none`).
+Supports interior pointers, stored pointers, uninitialized memory, provenance by allocation id.
 Freed slots stay in the map so allocation ids are never reused. The end of
 an allocation also records its `AllocKind`: whether it comes from the global allocator or is a
 raw-pointer view. Each kind is deallocated only its own way, and only whole, otherwise UB.
-Not supported: uninitialized memory, byte-level representation/type punning,
+Not supported: byte-level representation/type punning,
 pointer-integer casts, higher-order store, permissions, the byte-level allocator API
 (`std::alloc::alloc`, `Layout`). -/
 
@@ -22,7 +23,7 @@ structure Loc where
   offset : Nat
   deriving DecidableEq, Inhabited
 
-private abbrev HeapCell := Σ α : Type, α
+private abbrev HeapCell := Σ α : Type, Option α
 
 inductive AllocKind where
   /-- Allocated by the global allocator -/
@@ -84,8 +85,9 @@ See the safety section of
 /-
 The operations, and how they move slots between `live`, `borrowed` and `freed`. `freed` is final:
 no operation leaves it, so deallocated memory can never be used again. `borrowed` always returns
-to `live`, at the same address. An allocation is one `live` slot per value (`live*`), then an
-`endMarker` with its kind; `dealloc` frees all of it, end marker included, and only for that kind.
+to `live`, at the same address. An allocation is one `live` slot per cell (`live*`), initialized
+or not, then an `endMarker` with its kind; `dealloc` frees all of it, end marker included, and
+only for that kind. `write` initializes a live cell; reading an uninitialized cell is UB.
 
 | Operation             | Allocation                          | Used by                                       |
 |-----------------------|-------------------------------------|-----------------------------------------------|
@@ -160,8 +162,9 @@ def Mem (l : Loc) (h : Heap) : Prop := l ∈ h.impl
 
 def Compatible (h₁ h₂ : Heap) : Prop := Finmap.Disjoint h₁.impl h₂.impl
 
-def singleton (q : RawPtr α M) (value : α) : Heap :=
-  ⟨Finmap.singleton q.loc (.live ⟨α, value⟩)⟩
+/-- A live cell at `q` holding `content`, uninitialized if `content = none`. -/
+def cell (q : RawPtr α M) (content : Option α) : Heap :=
+  ⟨Finmap.singleton q.loc (.live ⟨α, content⟩)⟩
 
 def endMarker (l : Loc) (kind : AllocKind) : Heap :=
   ⟨Finmap.singleton l (.endMarker kind)⟩
@@ -172,12 +175,13 @@ def IsLive (h : Heap) (l : Loc) : Prop := (h.lookup l).isSome
 def IsEndMarker (h : Heap) (l : Loc) (kind : AllocKind) : Prop :=
   h.impl.lookup l = some (.endMarker kind)
 
-def array (l : Loc) : List α → Heap
+/-- The cells holding `contents` from `l` on. -/
+def array (l : Loc) : List (Option α) → Heap
   | [] => empty
-  | value :: rest => singleton (⟨l⟩ : MutRawPtr α) value ∪ array (l.shift 1) rest
+  | content :: rest => cell (⟨l⟩ : MutRawPtr α) content ∪ array (l.shift 1) rest
 
-def allocation (l : Loc) (values : List α) (kind : AllocKind) : Heap :=
-  array l values ∪ endMarker (l.shift values.length) kind
+def allocation (l : Loc) (contents : List (Option α)) (kind : AllocKind) : Heap :=
+  array l contents ∪ endMarker (l.shift contents.length) kind
 
 def freshAllocId (h : Heap) : AllocId :=
   (h.keys.image Loc.allocId).sup id + 1
@@ -189,24 +193,26 @@ def Subheap (h h' : Heap) : Prop :=
   ∃ rest, Heap.Compatible h rest ∧ h' = h ∪ rest
 
 /-- Creates a fresh allocation in the heap: fresh memory is mutable in Rust. -/
-def alloc (values : List α) (kind : AllocKind) (h : Heap) : MutRawPtr α × Heap :=
-  (⟨freshLoc h⟩, allocation (freshLoc h) values kind ∪ h)
+def alloc (contents : List (Option α)) (kind : AllocKind) (h : Heap) : MutRawPtr α × Heap :=
+  (⟨freshLoc h⟩, allocation (freshLoc h) contents kind ∪ h)
 
+/-- `q` points to a live cell of type `α`, initialized or not. -/
 def IsValid (h : Heap) (q : RawPtr α M) : Prop :=
   match h.lookup q.loc with
   | none => False
   | some ⟨β, _⟩ => β = α
 
-def read (q : RawPtr α M) (h : Heap) (hValid : IsValid h q) : α × Heap :=
+/-- The content of the cell at `q`: `none` if it is uninitialized. -/
+def read (q : RawPtr α M) (h : Heap) (hValid : IsValid h q) : Option α × Heap :=
   match hlookup : h.lookup q.loc with
   | none => by simp [IsValid, hlookup] at hValid
-  | some ⟨β, value⟩ => by
+  | some ⟨β, content⟩ => by
      have htype : β = α := by
        simpa [IsValid, hlookup] using hValid
-     exact (htype ▸ value, h)
+     exact (htype ▸ content, h)
 
-def write (q : RawPtr α M) (value : α) (h : Heap) (_ : IsValid h q) : Unit × Heap :=
-  ((), h.insert q.loc (.live ⟨α, value⟩))
+def write (q : RawPtr α M) (content : Option α) (h : Heap) (_ : IsValid h q) : Unit × Heap :=
+  ((), h.insert q.loc (.live ⟨α, content⟩))
 
 /-- The guard of `dealloc q n kind`: `q` starts an allocation of exactly `n` live slots, whose end
 marker records `kind`. So `Global.deallocate` (`.global`) fails on a view, and `endView` (`.view`)
@@ -234,14 +240,22 @@ def borrowedSlot (l : Loc) : Heap :=
 def IsBorrowed (h : Heap) (l : Loc) : Prop :=
   h.impl.lookup l = some .borrowed
 
-/-- Moves the value of `q` out into a borrow (`from_raw_parts`): the slot holds no value until
+/-- One freed slot at `l`. Owning it records that `l` was deallocated. -/
+def freedSlot (l : Loc) : Heap :=
+  ⟨Finmap.singleton l .freed⟩
+
+def IsFreed (h : Heap) (l : Loc) : Prop :=
+  h.impl.lookup l = some .freed
+
+/-- Moves the content of `q` out into a borrow (`from_raw_parts`): the slot holds no value until
 `endBorrow`, so every access through a raw pointer fails meanwhile. -/
-def borrow (q : RawPtr α M) (h : Heap) (hValid : IsValid h q) : α × Heap :=
+def borrow (q : RawPtr α M) (h : Heap) (hValid : IsValid h q) : Option α × Heap :=
   ((read q h hValid).1, h.insert q.loc .borrowed)
 
 /-- Ends the borrow of `q`. -/
-def endBorrow (q : RawPtr α M) (value : α) (h : Heap) (_ : IsBorrowed h q.loc) : Unit × Heap :=
-  ((), h.insert q.loc (.live ⟨α, value⟩))
+def endBorrow (q : RawPtr α M) (content : Option α) (h : Heap) (_ : IsBorrowed h q.loc) :
+    Unit × Heap :=
+  ((), h.insert q.loc (.live ⟨α, content⟩))
 
 end Heap
 
