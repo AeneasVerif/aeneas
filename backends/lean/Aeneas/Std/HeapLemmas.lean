@@ -291,7 +291,7 @@ theorem notMem_freshAllocId {h : Heap} {address : Loc}
 
 /-- A fresh allocation sits next to the heap it was allocated in. -/
 theorem alloc_eq {α : Type} (h : Heap) (values : List α) (freeable : Bool) :
-    h.alloc values freeable = (freshLoc h, allocation (freshLoc h) values freeable ∪ h) := by
+    h.alloc values freeable = (⟨freshLoc h⟩, allocation (freshLoc h) values freeable ∪ h) := by
   rw [alloc]
 
 /-- An allocation is its cells followed by its end marker. -/

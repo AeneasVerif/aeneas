@@ -59,7 +59,7 @@ example (value : Nat) : ¬ CanDealloc (alloc [value] false ∅).2 (freshLoc ∅)
     simpa using
       (isEndMarker_alloc_end_iff ∅ [value] false true).mp (canDealloc_iff.mp hDealloc).2.2
 
-/-- Conversely, memory from the global allocator cannot be released as a local. -/
+/-- Conversely, memory from the global allocator cannot be released as a view. -/
 example (value : Nat) : ¬ CanDealloc (alloc [value] true ∅).2 (freshLoc ∅) 1 false :=
   fun hDealloc => by
     simpa using
