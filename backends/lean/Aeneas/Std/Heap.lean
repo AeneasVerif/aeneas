@@ -185,25 +185,29 @@ def freshAllocId (h : Heap) : AllocId :=
 
 def freshLoc (h : Heap) : Loc := ⟨freshAllocId h, 0⟩
 
-def alloc (h : Heap) (values : List α) (freeable : Bool) : Heap :=
-  allocation (freshLoc h) values freeable ∪ h
+/-! The operations take their arguments, then the heap and the proof of their precondition, and
+return their result next to the new heap: partially applied, they are the `modify` of
+`Result.guardedModify`, which infers the precondition: `Result.guardedModify _ (read q)`. -/
+
+/-- Total, so it takes no precondition. Returns the start of the fresh allocation. -/
+def alloc (values : List α) (freeable : Bool) (h : Heap) : Loc × Heap :=
+  (freshLoc h, allocation (freshLoc h) values freeable ∪ h)
 
 /-- `h'` is `h` extended with cells that `h` does not own. -/
 def Subheap (h h' : Heap) : Prop :=
   ∃ rest, Heap.Compatible h rest ∧ h' = h ∪ rest
 
-def read (h : Heap) (q : RawPtr α M)
-    (hValid : IsValid h q) : α :=
-  match hlookup : h.lookup q.loc with
-  | none => by simp [IsValid, hlookup] at hValid
-  | some ⟨β, value⟩ => by
-      have htype : β = α := by
-        simpa [IsValid, hlookup] using hValid
-      exact htype ▸ value
+def read (q : RawPtr α M) (h : Heap) (hValid : IsValid h q) : α × Heap :=
+  (match hlookup : h.lookup q.loc with
+   | none => by simp [IsValid, hlookup] at hValid
+   | some ⟨β, value⟩ => by
+       have htype : β = α := by
+         simpa [IsValid, hlookup] using hValid
+       exact htype ▸ value,
+   h)
 
-def write (h : Heap) (q : RawPtr α M) (value : α)
-    (_ : IsValid h q) : Heap :=
-  h.insert q.loc (.live ⟨α, value⟩)
+def write (q : RawPtr α M) (value : α) (h : Heap) (_ : IsValid h q) : Unit × Heap :=
+  ((), h.insert q.loc (.live ⟨α, value⟩))
 
 /-- The guard of `dealloc l n freeable`: `l` starts an allocation of kind `freeable`, of exactly
 `n` live slots. With `freeable = true` this is the global allocator's `deallocate`; anything else
@@ -224,9 +228,9 @@ private def freedRange (l : Loc) : Nat → Heap
   | n + 1 => ⟨Finmap.singleton l .freed⟩ ∪ freedRange (l.shift 1) n
 
 -- Deallocates the `n` slots at `l` and the marker after them. They stay in the heap as freed slots.
-def dealloc (h : Heap) (l : Loc) (n : Nat) (freeable : Bool) (_ : CanDealloc h l n freeable) :
-    Heap :=
-  freedRange l (n + 1) ∪ h
+def dealloc (l : Loc) (n : Nat) (freeable : Bool) (h : Heap) (_ : CanDealloc h l n freeable) :
+    Unit × Heap :=
+  ((), freedRange l (n + 1) ∪ h)
 
 /-- One borrowed slot at `l`. Owning it is the right to `revive` it. -/
 def borrowedSlot (l : Loc) : Heap :=
@@ -235,14 +239,14 @@ def borrowedSlot (l : Loc) : Heap :=
 def IsBorrowed (h : Heap) (l : Loc) : Prop :=
   h.impl.lookup l = some .borrowed
 
-/-- Moves the slot of `q` into a borrow (`from_raw_parts`): it holds no value until `revive`, so
-every access through a raw pointer fails meanwhile. Not a Rust operation. -/
-def borrow (h : Heap) (q : RawPtr α M) (_ : IsValid h q) : Heap :=
-  h.insert q.loc .borrowed
+/-- Moves the value of `q` out into a borrow (`from_raw_parts`): the slot holds no value until
+`revive`, so every access through a raw pointer fails meanwhile. Not a Rust operation. -/
+def borrow (q : RawPtr α M) (h : Heap) (hValid : IsValid h q) : α × Heap :=
+  ((read q h hValid).1, h.insert q.loc .borrowed)
 
 /-- Ends the borrow of the slot of `q`, which holds `value` again: the inverse of `borrow`. -/
-def revive (h : Heap) (q : RawPtr α M) (value : α) (_ : IsBorrowed h q.loc) : Heap :=
-  h.insert q.loc (.live ⟨α, value⟩)
+def revive (q : RawPtr α M) (value : α) (h : Heap) (_ : IsBorrowed h q.loc) : Unit × Heap :=
+  ((), h.insert q.loc (.live ⟨α, value⟩))
 
 end Heap
 
