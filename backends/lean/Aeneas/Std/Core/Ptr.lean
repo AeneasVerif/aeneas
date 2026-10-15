@@ -166,7 +166,7 @@ def RawPtr.allocView (values : List T) : Result (MutRawPtr T) :=
   Result.guardedModify (fun _ => True) fun h _ => h.alloc values .view
 
 def RawPtr.endView (q : RawPtr T M) (count : Nat) : Result Unit :=
-  Result.guardedModify _ (Heap.dealloc q.loc count .view)
+  Result.guardedModify _ (Heap.dealloc q count .view)
 
 /-- Back function of `from_mut`: reads the value, with the writes made through the pointer, and
 ends the view, so that the pointer can't be used anymore. -/
