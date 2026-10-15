@@ -65,7 +65,7 @@ example (value : Nat) : ¬ CanDealloc (alloc [value] true ∅).2 (freshLoc ∅) 
     simpa using
       (isEndMarker_alloc_end_iff ∅ [value] true false).mp (canDealloc_iff.mp hDealloc).2.2
 
-/-- A deallocated slot can never be revived. -/
+/-- `endBorrow` never applies to a deallocated slot. -/
 example (h : Heap) (l : Loc) (freeable : Bool) (hDealloc : CanDealloc h l 1 freeable) :
     ¬ IsBorrowed (h.dealloc l 1 freeable hDealloc).2 l := by
   simpa using not_isBorrowed_dealloc hDealloc (Nat.zero_le 1)
