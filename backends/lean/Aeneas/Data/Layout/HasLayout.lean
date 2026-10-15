@@ -73,6 +73,7 @@ def satisfies : {ty : MType} → (l : Layout ty) → (k : LayoutKind) → (m : L
 | .enum _, l, .reprPrim prim, m => l.IsReprPrimEnum prim m
 | .int _, _, _, _ => False
 
+@[expose, simp]
 def satisfiable : (ty : MType) → (k : LayoutKind) → (m : LayoutModifier) → Prop
 | _, .reprRust, .reasonablyAligned => True   -- you can always be the default
 | .tuple _, .reprRust, .packed _ _ => True   -- tuples can be repr(Rust, packed)

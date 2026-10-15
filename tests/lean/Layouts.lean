@@ -25,9 +25,10 @@ namespace layouts
 def UnitStruct := Unit
 
 instance : HasLayout UnitStruct where
-  ty := .tuple []
+  rty := RichMType.mkTuple []
   embed := λ _ => HasLayout.mkTuple []
   retract := λ | ⟨.tuple [], _⟩ => ()
+  layout_meta := (.reprRust, .reasonablyAligned)
 
 /-- [layouts::Newtype]
     Source: 'tests/src/layouts.rs', lines 6:0-6:28
@@ -35,9 +36,10 @@ instance : HasLayout UnitStruct where
 def Newtype := Std.U32
 
 instance : HasLayout Newtype where
-  ty := .tuple [HasLayout.ty Std.U32]
+  rty := RichMType.mkTuple [HasLayout.xty Std.U32]
   embed := λ (x0 : Std.U32) => HasLayout.mkTuple [HasLayout.embed x0]
   retract := λ | ⟨.tuple [v0], h⟩ => (HasLayout.retract (h.field 0) : Std.U32)
+  layout_meta := (.reprRust, .reasonablyAligned)
 
 /-- [layouts::Point]
     Source: 'tests/src/layouts.rs', lines 8:0-11:1
@@ -47,9 +49,10 @@ structure Point where
   y : Std.U64
 
 instance : HasLayout Point where
-  ty := .tuple [HasLayout.ty Std.I32, HasLayout.ty Std.U64]
+  rty := RichMType.mkTuple [HasLayout.xty Std.I32, HasLayout.xty Std.U64]
   embed := λ ⟨x0, x1⟩ => HasLayout.mkTuple [HasLayout.embed x0, HasLayout.embed x1]
   retract := λ | ⟨.tuple [v0, v1], h⟩ => ⟨HasLayout.retract (h.field 0), HasLayout.retract (h.field 1)⟩
+  layout_meta := (.reprRust, .reasonablyAligned)
 
 /-- [layouts::Pair]
     Source: 'tests/src/layouts.rs', lines 13:0-13:34
@@ -57,9 +60,10 @@ instance : HasLayout Point where
 def Pair := Std.U8 × Bool
 
 instance : HasLayout Pair where
-  ty := .tuple [HasLayout.ty Std.U8, HasLayout.ty Bool]
+  rty := RichMType.mkTuple [HasLayout.xty Std.U8, HasLayout.xty Bool]
   embed := λ (x0, x1) => HasLayout.mkTuple [HasLayout.embed x0, HasLayout.embed x1]
   retract := λ | ⟨.tuple [v0, v1], h⟩ => (HasLayout.retract (h.field 0), HasLayout.retract (h.field 1))
+  layout_meta := (.reprRust, .reasonablyAligned)
 
 /-- [layouts::Triple]
     Source: 'tests/src/layouts.rs', lines 15:0-15:45
@@ -67,9 +71,10 @@ instance : HasLayout Pair where
 def Triple := Std.U8 × Std.U16 × Bool
 
 instance : HasLayout Triple where
-  ty := .tuple [HasLayout.ty Std.U8, HasLayout.ty Std.U16, HasLayout.ty Bool]
+  rty := RichMType.mkTuple [HasLayout.xty Std.U8, HasLayout.xty Std.U16, HasLayout.xty Bool]
   embed := λ (x0, x1, x2) => HasLayout.mkTuple [HasLayout.embed x0, HasLayout.embed x1, HasLayout.embed x2]
   retract := λ | ⟨.tuple [v0, v1, v2], h⟩ => (HasLayout.retract (h.field 0), HasLayout.retract (h.field 1), HasLayout.retract (h.field 2))
+  layout_meta := (.reprRust, .reasonablyAligned)
 
 /-- [layouts::Wrapper]
     Source: 'tests/src/layouts.rs', lines 17:0-20:1
@@ -80,9 +85,10 @@ structure Wrapper (T1 : Type) (T2 : Type) where
 
 instance {T1 : Type} {T2 : Type} [HasLayout T1] [HasLayout T2] :
   HasLayout (Wrapper T1 T2) where
-  ty := .tuple [HasLayout.ty T1, HasLayout.ty T2]
+  rty := RichMType.mkTuple [HasLayout.xty T1, HasLayout.xty T2]
   embed := λ ⟨x0, x1⟩ => HasLayout.mkTuple [HasLayout.embed x0, HasLayout.embed x1]
   retract := λ | ⟨.tuple [v0, v1], h⟩ => ⟨HasLayout.retract (h.field 0), HasLayout.retract (h.field 1)⟩
+  layout_meta := (.reprRust, .reasonablyAligned)
 
 /-- [layouts::Color]
     Source: 'tests/src/layouts.rs', lines 22:0-26:1
@@ -94,7 +100,7 @@ inductive Color where
 | Blue : Color
 
 instance : HasLayout Color where
-  ty := .enum [.tuple [], .tuple [], .tuple []]
+  rty := RichMType.mkEnum [[], [], []]
   embed := λ
     | Color.Red => HasLayout.mkVariant 0 (.tuple [])
     | Color.Green => HasLayout.mkVariant 1 (.tuple [])
@@ -103,6 +109,7 @@ instance : HasLayout Color where
     | ⟨.variant 0 (.tuple []), _⟩ => Color.Red
     | ⟨.variant 1 (.tuple []), _⟩ => Color.Green
     | ⟨.variant 2 (.tuple []), _⟩ => Color.Blue
+  layout_meta := (.reprRust, .reasonablyAligned)
 
 /-- [layouts::Shape]
     Source: 'tests/src/layouts.rs', lines 28:0-32:1
@@ -114,15 +121,16 @@ inductive Shape where
 | Rect : Std.Usize → Std.Usize → Shape
 
 instance : HasLayout Shape where
-  ty := .enum [.tuple [], .tuple [HasLayout.ty Std.U32], .tuple [HasLayout.ty Std.Usize, HasLayout.ty Std.Usize]]
+  rty := RichMType.mkEnum [[], [HasLayout.xty Std.U32], [HasLayout.xty Std.Usize, HasLayout.xty Std.Usize]]
   embed := λ
     | Shape.Empty => HasLayout.mkVariant 0 (.tuple [])
     | Shape.Circle x0 => HasLayout.mkVariant 1 (.tuple [HasLayout.embed x0])
     | Shape.Rect x0 x1 => HasLayout.mkVariant 2 (.tuple [HasLayout.embed x0, HasLayout.embed x1])
   retract := λ
     | ⟨.variant 0 (.tuple []), _⟩ => Shape.Empty
-    | ⟨.variant 1 (.tuple [v0]), h⟩ => Shape.Circle (HasLayout.retract (h.vfield 0))
-    | ⟨.variant 2 (.tuple [v0, v1]), h⟩ => Shape.Rect (HasLayout.retract (h.vfield 0)) (HasLayout.retract (h.vfield 1))
+    | ⟨.variant 1 (.tuple [v0]), h⟩ => Shape.Circle (HasLayout.retract (h.vfield 0 rfl))
+    | ⟨.variant 2 (.tuple [v0, v1]), h⟩ => Shape.Rect (HasLayout.retract (h.vfield 0 rfl)) (HasLayout.retract (h.vfield 1 rfl))
+  layout_meta := (.reprRust, .reasonablyAligned)
 
 /-- [layouts::Bazinga]
     Source: 'tests/src/layouts.rs', lines 34:0-39:1
@@ -136,7 +144,7 @@ inductive Bazinga (T1 : Type) (T2 : Type) (T3 : Type) where
 
 instance {T1 : Type} {T2 : Type} {T3 : Type} [HasLayout T1] [HasLayout T2]
   [HasLayout T3] : HasLayout (Bazinga T1 T2 T3) where
-  ty := .enum [.tuple [], .tuple [HasLayout.ty Std.Usize, HasLayout.ty T1], .tuple [HasLayout.ty T2, HasLayout.ty T3], .tuple [HasLayout.ty Bool]]
+  rty := RichMType.mkEnum [[], [HasLayout.xty Std.Usize, HasLayout.xty T1], [HasLayout.xty T2, HasLayout.xty T3], [HasLayout.xty Bool]]
   embed := λ
     | Bazinga.Foo1 => HasLayout.mkVariant 0 (.tuple [])
     | Bazinga.Foo2 x0 x1 => HasLayout.mkVariant 1 (.tuple [HasLayout.embed x0, HasLayout.embed x1])
@@ -144,9 +152,10 @@ instance {T1 : Type} {T2 : Type} {T3 : Type} [HasLayout T1] [HasLayout T2]
     | Bazinga.Foo4 x0 => HasLayout.mkVariant 3 (.tuple [HasLayout.embed x0])
   retract := λ
     | ⟨.variant 0 (.tuple []), _⟩ => Bazinga.Foo1
-    | ⟨.variant 1 (.tuple [v0, v1]), h⟩ => Bazinga.Foo2 (HasLayout.retract (h.vfield 0)) (HasLayout.retract (h.vfield 1))
-    | ⟨.variant 2 (.tuple [v0, v1]), h⟩ => Bazinga.Foo3 (HasLayout.retract (h.vfield 0)) (HasLayout.retract (h.vfield 1))
-    | ⟨.variant 3 (.tuple [v0]), h⟩ => Bazinga.Foo4 (HasLayout.retract (h.vfield 0))
+    | ⟨.variant 1 (.tuple [v0, v1]), h⟩ => Bazinga.Foo2 (HasLayout.retract (h.vfield 0 rfl)) (HasLayout.retract (h.vfield 1 rfl))
+    | ⟨.variant 2 (.tuple [v0, v1]), h⟩ => Bazinga.Foo3 (HasLayout.retract (h.vfield 0 rfl)) (HasLayout.retract (h.vfield 1 rfl))
+    | ⟨.variant 3 (.tuple [v0]), h⟩ => Bazinga.Foo4 (HasLayout.retract (h.vfield 0 rfl))
+  layout_meta := (.reprRust, .reasonablyAligned)
 
 /-- [layouts::Scene]
     Source: 'tests/src/layouts.rs', lines 41:0-44:1
@@ -156,8 +165,9 @@ structure Scene where
   main_shape : Shape
 
 instance : HasLayout Scene where
-  ty := .tuple [HasLayout.ty Color, HasLayout.ty Shape]
+  rty := RichMType.mkTuple [HasLayout.xty Color, HasLayout.xty Shape]
   embed := λ ⟨x0, x1⟩ => HasLayout.mkTuple [HasLayout.embed x0, HasLayout.embed x1]
   retract := λ | ⟨.tuple [v0, v1], h⟩ => ⟨HasLayout.retract (h.field 0), HasLayout.retract (h.field 1)⟩
+  layout_meta := (.reprRust, .reasonablyAligned)
 
 end layouts
