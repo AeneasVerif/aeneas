@@ -27,7 +27,7 @@ def core.clone.CloneGlobal : core.clone.Clone alloc.alloc.Global := {
 -- TODO: it should take a Layout and return a NonNull <u8>
 -- TODO: it should return an AllocError
 def Global.allocate (_ : Global) (values : List T) : Result (MutRawPtr T) :=
-  RawPtr.materialize values (freeable := true)
+  Result.guardedModify (fun _ => True) fun h _ => h.alloc values true
 
 -- [`Allocator::deallocate`](https://doc.rust-lang.org/std/alloc/trait.Allocator.html#tymethod.deallocate).
 -- This signature is different from Rust's signature in two ways:

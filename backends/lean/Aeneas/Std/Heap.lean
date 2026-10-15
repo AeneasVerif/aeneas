@@ -82,7 +82,7 @@ to `live`, at the same address.
 |---|---|---|
 | `alloc` | fresh id → `live` | `Box::into_raw`, `from_mut`, `as_ptr`, `as_mut_ptr` |
 | `dealloc _ _ true` | `live` → `freed`, whole allocation, global allocator only | `Box::from_raw` (drop), `Global::deallocate` |
-| `dealloc _ _ false` | `live` → `freed`, whole allocation, locals only | end of `from_mut`, `as_ptr`, `as_mut_ptr` |
+| `dealloc _ _ false` | `live` → `freed`, whole allocation, views only | end of `from_mut`, `as_ptr`, `as_mut_ptr` |
 | `borrow` | `live` → `borrowed` | `from_raw_parts`, `from_raw_parts_mut` |
 | `endBorrow` | `borrowed` → `live` | end of `from_raw_parts`, `from_raw_parts_mut` |
 -/
@@ -189,9 +189,10 @@ def freshLoc (h : Heap) : Loc := ⟨freshAllocId h, 0⟩
 return their result next to the new heap: partially applied, they are the `modify` of
 `Result.guardedModify`, which infers the precondition: `Result.guardedModify _ (read q)`. -/
 
-/-- Total, so it takes no precondition. Returns the start of the fresh allocation. -/
-def alloc (values : List α) (freeable : Bool) (h : Heap) : Loc × Heap :=
-  (freshLoc h, allocation (freshLoc h) values freeable ∪ h)
+/-- Total, so it takes no precondition. Returns a pointer to the start of the fresh allocation:
+fresh memory is mutable; `RawPtr.cast_const` gives a const view. -/
+def alloc (values : List α) (freeable : Bool) (h : Heap) : MutRawPtr α × Heap :=
+  (⟨freshLoc h⟩, allocation (freshLoc h) values freeable ∪ h)
 
 /-- `h'` is `h` extended with cells that `h` does not own. -/
 def Subheap (h h' : Heap) : Prop :=
@@ -215,9 +216,9 @@ is undefined behaviour in Rust: memory that the global allocator did not allocat
 the middle of an allocation, the wrong size, or memory already deallocated. See the safety section
 of [`Allocator::deallocate`](https://doc.rust-lang.org/std/alloc/trait.Allocator.html#tymethod.deallocate),
 which, unlike `GlobalAlloc::dealloc`, also allows zero-sized allocations (`n = 0`). With
-`freeable = false` it ends the view of a local (`end_from_mut`, `end_as_ptr`, `end_as_mut_ptr`):
-the model's copy of the local is dead, and every later use of the pointer fails. A borrowed slot
-is not live, so an allocation cannot be deallocated while a borrow holds part of it.
+`freeable = false` it ends a raw-pointer view (`end_from_mut`, `end_as_ptr`, `end_as_mut_ptr`):
+the model's copy of the viewed place is dead, and every later use of the pointer fails. A borrowed
+slot is not live, so an allocation cannot be deallocated while a borrow holds part of it.
 -/
 def CanDealloc (h : Heap) (l : Loc) (n : Nat) (freeable : Bool) : Prop :=
   l.offset = 0 ∧ (∀ i < n, IsLive h (l.shift i)) ∧ IsEndMarker h (l.shift n) freeable
