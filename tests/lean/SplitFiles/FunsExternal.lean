@@ -15,13 +15,14 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /-- Trait declaration: [core::fmt::Write]
     Source: '/rustc/library/core/src/fmt/mod.rs', lines 123:0-123:15
     Name pattern: [core::fmt::Write]
     Visibility: public -/
 @[rust_trait "core::fmt::Write"]
-structure core.fmt.Write (Self : Type) where
+structure core.fmt.Write (Self : Type _) where
   write_str : Self → Str → Result ((core.result.Result Unit core.fmt.Error)
     × Self)
 
