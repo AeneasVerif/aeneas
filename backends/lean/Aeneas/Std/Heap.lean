@@ -5,8 +5,8 @@ public import Mathlib.Data.Finmap
 /-! Block-based heap: finite map from (allocation id, offset) to typed cells `Σ α, α`.
 Supports interior pointers, stored pointers, provenance by allocation id.
 Freed slots stay in the map so allocation ids are never reused. The end of
-an allocation also records whether the allocation comes from the global allocator:
-only those can be deallocated through the allocator, and only whole, otherwise UB.
+an allocation also records its `AllocKind`: whether it comes from the global allocator or is a
+raw-pointer view. Each kind is deallocated only its own way, and only whole, otherwise UB.
 Not supported: uninitialized memory, byte-level representation/type punning,
 pointer-integer casts, higher-order store, permissions, the byte-level allocator API
 (`std::alloc::alloc`, `Layout`). -/
@@ -24,14 +24,22 @@ structure Loc where
 
 private abbrev HeapCell := Σ α : Type, α
 
+/-- The kind of an allocation, recorded in its end marker: each kind is freed only its own way. -/
+inductive AllocKind where
+  /-- From the global allocator; freed by `Global.deallocate`. -/
+  | global
+  /-- A raw-pointer view of a place owned elsewhere; freed by `endView`. -/
+  | view
+  deriving DecidableEq
+
 private inductive Slot where
   | live (cell : HeapCell)
   -- the value is held by a live borrow (`from_raw_parts`), and comes back with `endBorrow`
   | borrowed
   -- deallocated: final, no operation reads, writes, ends a borrow of or deallocates it again
   | freed
-  -- one past the last value: `freeable` iff the allocation comes from the global allocator
-  | endMarker (freeable : Bool)
+  -- one past the last value, with the kind of the allocation
+  | endMarker (kind : AllocKind)
 
 private def Slot.cell? : Slot → Option HeapCell
   | .live cell => some cell
@@ -49,22 +57,22 @@ starting from the empty heap; `a ↦ [ ... ]` is the allocation `a` with the slo
 pub fn boxed() -> u32 {
     // In Aeneas' model, `Box::new(1u32)` returns `1`, which gets allocated in memory
     // in `into_raw` by using the global allocator (because Rust's `Box::new` uses it),
-    // thus the allocation is recorded in the Heap with marker `endMarker true`.
+    // thus the allocation is recorded in the Heap with marker `endMarker .global`.
     let p = Box::into_raw(Box::new(1u32));
-    // 0 ↦ [ live 1 ; endMarker true ]
+    // 0 ↦ [ live 1 ; endMarker .global ]
     unsafe { *Box::from_raw(p) }
     // `from_raw` turns `p` into a new `Box` whose lifetime ends at the end of this statement,
     // so it is freed. Rust only lets a program free memory allocated by the global allocator,
-    // which is what `endMarker true` records. The model reads 1 and frees at once:
+    // which is what `endMarker .global` records. The model reads 1 and frees at once:
     // 0 ↦ [ freed ; freed ]
 }
 
 pub fn borrowed() -> u32 {
     let mut x = 1u32;
     let p = core::ptr::from_mut(&mut x);
-    // 0 ↦ [ live 1 ; endMarker false ]
+    // 0 ↦ [ live 1 ; endMarker .view ]
     // `p` points to the local `x`, which the global allocator did not hand out,
-    // so the marker is `endMarker false`.
+    // so the marker is `endMarker .view`.
     unsafe { *Box::from_raw(p) }
     // `from_raw` turns `p` into a `Box`. Its lifetime ends at the end of this statement, so it is
     // freed, but this is UB because Rust only lets a program free memory that the
@@ -81,8 +89,8 @@ to `live`, at the same address.
 | Operation | Slot transition | Used by |
 |---|---|---|
 | `alloc` | fresh id → `live` | `Box::into_raw`, `from_mut`, `as_ptr`, `as_mut_ptr` |
-| `dealloc _ _ true` | `live` → `freed`, whole allocation, global allocator only | `Box::from_raw` (drop), `Global::deallocate` |
-| `dealloc _ _ false` | `live` → `freed`, whole allocation, views only | end of `from_mut`, `as_ptr`, `as_mut_ptr` |
+| `dealloc _ _ .global` | `live` → `freed`, whole allocation, global allocator only | `Box::from_raw` (drop), `Global::deallocate` |
+| `dealloc _ _ .view` | `live` → `freed`, whole allocation, views only | end of `from_mut`, `as_ptr`, `as_mut_ptr` |
 | `borrow` | `live` → `borrowed` | `from_raw_parts`, `from_raw_parts_mut` |
 | `endBorrow` | `borrowed` → `live` | end of `from_raw_parts`, `from_raw_parts_mut` |
 -/
@@ -158,8 +166,8 @@ def Compatible (h₁ h₂ : Heap) : Prop :=
 def singleton (q : RawPtr α M) (value : α) : Heap :=
   ⟨Finmap.singleton q.loc (.live ⟨α, value⟩)⟩
 
-def endMarker (l : Loc) (freeable : Bool) : Heap :=
-  ⟨Finmap.singleton l (.endMarker freeable)⟩
+def endMarker (l : Loc) (kind : AllocKind) : Heap :=
+  ⟨Finmap.singleton l (.endMarker kind)⟩
 
 def IsValid (h : Heap) (q : RawPtr α M) : Prop :=
   match h.lookup q.loc with
@@ -169,16 +177,16 @@ def IsValid (h : Heap) (q : RawPtr α M) : Prop :=
 def IsLive (h : Heap) (l : Loc) : Prop :=
   (h.lookup l).isSome
 
-/-- `l` is the end marker of an allocation of kind `freeable`. -/
-def IsEndMarker (h : Heap) (l : Loc) (freeable : Bool) : Prop :=
-  h.impl.lookup l = some (.endMarker freeable)
+/-- `l` is the end marker of an allocation of kind `kind`. -/
+def IsEndMarker (h : Heap) (l : Loc) (kind : AllocKind) : Prop :=
+  h.impl.lookup l = some (.endMarker kind)
 
 def array (l : Loc) : List α → Heap
   | [] => empty
   | value :: rest => singleton (⟨l⟩ : MutRawPtr α) value ∪ array (l.shift 1) rest
 
-def allocation (l : Loc) (values : List α) (freeable : Bool) : Heap :=
-  array l values ∪ endMarker (l.shift values.length) freeable
+def allocation (l : Loc) (values : List α) (kind : AllocKind) : Heap :=
+  array l values ∪ endMarker (l.shift values.length) kind
 
 def freshAllocId (h : Heap) : AllocId :=
   (h.keys.image Loc.allocId).sup id + 1
@@ -191,8 +199,8 @@ return their result next to the new heap: partially applied, they are the `modif
 
 /-- Total, so it takes no precondition. Returns a pointer to the start of the fresh allocation:
 fresh memory is mutable; `RawPtr.cast_const` gives a const view. -/
-def alloc (values : List α) (freeable : Bool) (h : Heap) : MutRawPtr α × Heap :=
-  (⟨freshLoc h⟩, allocation (freshLoc h) values freeable ∪ h)
+def alloc (values : List α) (kind : AllocKind) (h : Heap) : MutRawPtr α × Heap :=
+  (⟨freshLoc h⟩, allocation (freshLoc h) values kind ∪ h)
 
 /-- `h'` is `h` extended with cells that `h` does not own. -/
 def Subheap (h h' : Heap) : Prop :=
@@ -210,18 +218,18 @@ def read (q : RawPtr α M) (h : Heap) (hValid : IsValid h q) : α × Heap :=
 def write (q : RawPtr α M) (value : α) (h : Heap) (_ : IsValid h q) : Unit × Heap :=
   ((), h.insert q.loc (.live ⟨α, value⟩))
 
-/-- The guard of `dealloc l n freeable`: `l` starts an allocation of kind `freeable`, of exactly
-`n` live slots. With `freeable = true` this is the global allocator's `deallocate`; anything else
+/-- The guard of `dealloc l n kind`: `l` starts an allocation of kind `kind`, of exactly
+`n` live slots. With `kind = .global` this is the global allocator's `deallocate`; anything else
 is undefined behaviour in Rust: memory that the global allocator did not allocate, a pointer into
 the middle of an allocation, the wrong size, or memory already deallocated. See the safety section
 of [`Allocator::deallocate`](https://doc.rust-lang.org/std/alloc/trait.Allocator.html#tymethod.deallocate),
 which, unlike `GlobalAlloc::dealloc`, also allows zero-sized allocations (`n = 0`). With
-`freeable = false` it ends a raw-pointer view (`end_from_mut`, `end_as_ptr`, `end_as_mut_ptr`):
+`kind = .view` it ends a raw-pointer view (`end_from_mut`, `end_as_ptr`, `end_as_mut_ptr`):
 the model's copy of the viewed place is dead, and every later use of the pointer fails. A borrowed
 slot is not live, so an allocation cannot be deallocated while a borrow holds part of it.
 -/
-def CanDealloc (h : Heap) (l : Loc) (n : Nat) (freeable : Bool) : Prop :=
-  l.offset = 0 ∧ (∀ i < n, IsLive h (l.shift i)) ∧ IsEndMarker h (l.shift n) freeable
+def CanDealloc (h : Heap) (l : Loc) (n : Nat) (kind : AllocKind) : Prop :=
+  l.offset = 0 ∧ (∀ i < n, IsLive h (l.shift i)) ∧ IsEndMarker h (l.shift n) kind
 
 /-- `n` freed slots from `l` on. -/
 private def freedRange (l : Loc) : Nat → Heap
@@ -229,7 +237,7 @@ private def freedRange (l : Loc) : Nat → Heap
   | n + 1 => ⟨Finmap.singleton l .freed⟩ ∪ freedRange (l.shift 1) n
 
 -- Deallocates the `n` slots at `l` and the marker after them. They stay in the heap as freed slots.
-def dealloc (l : Loc) (n : Nat) (freeable : Bool) (h : Heap) (_ : CanDealloc h l n freeable) :
+def dealloc (l : Loc) (n : Nat) (kind : AllocKind) (h : Heap) (_ : CanDealloc h l n kind) :
     Unit × Heap :=
   ((), freedRange l (n + 1) ∪ h)
 
