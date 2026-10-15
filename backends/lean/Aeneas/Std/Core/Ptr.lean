@@ -101,7 +101,8 @@ extractor emits by name. -/
 `as_mut_ptr`. -/
 def RawPtr.materialize (values : List T) (freeable : Bool := false) : Result (RawPtr T M) :=
   Result.guardedModify (fun _ => True) fun h _ =>
-    (⟨Heap.freshLoc h⟩, Heap.alloc h values freeable)
+    let (l, h') := h.alloc values freeable
+    (⟨l⟩, h')
 
 /-- Always fails. TODO: the typed heap cannot read a cell at another scalar type, so casts are not
 modelled. -/
@@ -127,8 +128,7 @@ namespace RawPtr
 
 @[rust_fun "core::ptr::const_ptr::{*const @T}::read"]
 def read (q : RawPtr T M) : Result T :=
-  Result.guardedModify (fun h => Heap.IsValid h q) fun h hValid =>
-    (h.read q hValid, h)
+  Result.guardedModify _ (Heap.read q)
 
 attribute [rust_fun "core::ptr::mut_ptr::{*mut @T}::read"] read
 attribute [rust_fun "core::ptr::read"] read
@@ -137,21 +137,18 @@ end RawPtr
 
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::write"]
 def MutRawPtr.write (q : MutRawPtr T) (value : T) : Result Unit :=
-  Result.guardedModify (fun h => Heap.IsValid h q) fun h hValid =>
-    ((), h.write q value hValid)
+  Result.guardedModify _ (Heap.write q value)
 
 attribute [rust_fun "core::ptr::write"] MutRawPtr.write
 
 /-- Not a Rust function: moves the value out into a borrow; the slot stays `borrowed` until
 `revive`. -/
 def RawPtr.take (q : RawPtr T M) : Result T :=
-  Result.guardedModify (fun h => Heap.IsValid h q) fun h hValid =>
-    (h.read q hValid, h.borrow q hValid)
+  Result.guardedModify _ (Heap.borrow q)
 
 /-- Not a Rust function: ends the borrow of the slot of `q`, which holds `value` again. -/
 def RawPtr.revive (q : RawPtr T M) (value : T) : Result Unit :=
-  Result.guardedModify (fun h => Heap.IsBorrowed h q.loc) fun h hBorrowed =>
-    ((), h.revive q value hBorrowed)
+  Result.guardedModify _ (Heap.revive q value)
 
 /-- Not a Rust function: `take` on the `n` slots from `q` on. -/
 def RawPtr.takeRange (q : RawPtr T M) : Nat → Result (List T)
@@ -180,8 +177,7 @@ def RawPtr.readRange (q : RawPtr T M) : Nat → Result (List T)
 `as_mut_ptr`), which holds `count` values: the whole allocation is freed, so every later use of a
 pointer into it fails. -/
 def RawPtr.endLocal (q : RawPtr T M) (count : Nat) : Result Unit :=
-  Result.guardedModify (fun h => Heap.CanDealloc h q.loc count false) fun h hPre =>
-    ((), h.dealloc q.loc count false hPre)
+  Result.guardedModify _ (Heap.dealloc q.loc count false)
 
 /-- Not a Rust function: fails unless `p` holds (`p` need not be decidable). -/
 def Result.require (p : Prop) : Result Unit :=
