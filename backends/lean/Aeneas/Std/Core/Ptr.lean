@@ -75,9 +75,8 @@ inductive core.ptr.alignment.AlignmentEnum where
 | _Align1Shl62 : core.ptr.alignment.AlignmentEnum
 | _Align1Shl63 : core.ptr.alignment.AlignmentEnum
 
-@[expose, reducible, rust_type "core::ptr::alignment::Alignment"]
-def core.ptr.alignment.Alignment :=
-core.ptr.alignment.AlignmentEnum
+@[reducible, rust_type "core::ptr::alignment::Alignment"]
+def core.ptr.alignment.Alignment := core.ptr.alignment.AlignmentEnum
 
 class IsScalar (T : Type) where
   isScalar : (∃ ty, T = UScalar ty) ∨ (∃ ty, T = IScalar ty)
@@ -87,14 +86,6 @@ instance {ty} : IsScalar (UScalar ty) where
 
 instance {ty} : IsScalar (IScalar ty) where
   isScalar := by simp
-
-/-! `core::ptr`: the raw-pointer methods (from `core::ptr::mut_ptr` and `core::ptr::const_ptr`) and
-the module functions. Each definition with a `rust_fun` pattern models that Rust function, with the
-signature Aeneas gives it: a `&mut T` argument is returned updated next to the result. The others
-are not Rust functions: `InBounds` is the precondition of `add`; `materialize` stores values in a
-fresh allocation (behind `from_mut`, `Slice::as_ptr`/`as_mut_ptr`, and the global allocator in
-`Alloc/Alloc.lean`); and `cast_scalar` is the `as` cast between scalar raw pointers that the
-extractor emits by name. -/
 
 /-- A fresh allocation holding `values`. If `freeable`, it comes from the global allocator and only
 `Global.deallocate` frees it; otherwise it is a local, behind a pointer from `from_mut` or
