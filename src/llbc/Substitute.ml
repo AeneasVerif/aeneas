@@ -74,7 +74,7 @@ let fresh_regions_with_substs_from_vars (region_vars : region_param list)
 let substitute_signature (asubst : RegionGroupId.id -> AbsId.id)
     (r_id_subst : RegionId.id -> RegionId.id) (ty_sb_subst : TypeVarId.id -> ty)
     (cg_sb_subst : ConstGenericVarId.id -> constant_expr_kind)
-    (tr_sb_subst : TraitClauseId.id -> trait_ref_kind)
+    (tr_sb_subst : TraitClauseId.id -> region_args -> trait_ref_kind)
     (tr_sb_self : trait_ref_kind) (sg : bound_fun_sig)
     (regions_hierarchy : region_groups) : inst_fun_sig =
   let { item_binder_params = generics; item_binder_value = sg } = sg in
@@ -219,13 +219,14 @@ let generic_args_of_params_erase_regions (span : Meta.span option)
   let regions = List.map (fun _ -> RErased) generics.regions in
   (* Erase the free regions in the trait clauses, but keep the bound regions.
      A trait clause may be higher-ranked (e.g. [for<'a> Trait<&'a _>]), in which
-     case its [trait_decl_ref] carries bound regions in [binder_regions]: we
+     case its [poly_trait_ref] carries bound regions in [binder_regions]: we
      preserve those (and their uses inside the binder) rather than erasing them.
      Lifetime constraints over the bound regions (e.g. [for<'a> 'a : 'b]) are not
      supported and are rejected elsewhere (outlives guards). *)
   let trait_refs =
     List.map
-      (st_substitute_visitor#visit_trait_ref erase_free_regions_subst)
+      (st_substitute_visitor#visit_region_binder
+         st_substitute_visitor#visit_trait_ref erase_free_regions_subst)
       generics.trait_refs
   in
   { generics with regions; trait_refs }

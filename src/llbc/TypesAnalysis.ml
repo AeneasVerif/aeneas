@@ -486,7 +486,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
             ty_info inputs
         in
         analyze span expl_info ty_info output
-    | TFnDef { binder_regions; binder_value = { kind = _; generics } } ->
+    | TFnDef { binder_regions; binder_value = { kind = _; generics }; _ } ->
         (* For now we check that there are no regions anywhere.
 
            TODO: the best would be to open all binders and then do a sanity

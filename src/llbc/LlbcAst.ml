@@ -16,7 +16,7 @@ module FunOrMethodId = struct
 
   let of_trait_method (trait_ref : trait_ref) (method_id : TraitMethodId.id) :
       id =
-    Method (trait_ref.trait_decl_ref.binder_value.id, method_id)
+    Method (trait_ref.trait_decl_ref.id, method_id)
 
   module Ord : Collections.OrderedType with type t = id = struct
     type t = id
