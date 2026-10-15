@@ -183,12 +183,12 @@ theorem owns_union (A B : Heap)
   · rintro h ⟨h₁, h₂, hCompatibleHeaps, rfl, hSub₁, hSub₂⟩
     exact Heap.Subheap.union_mono hSub₁ hSub₂ hCompatibleHeaps
 
-theorem owns_singleton_exclusive (q : Std.RawPtr α M) (value₁ value₂ : α) :
-    owns (Heap.singleton q value₁) ∗ owns (Heap.singleton q value₂) ⊢ ⌜False⌝ := by
-  rintro h ⟨h₁, h₂, hCompatible, -, hSingle₁, hSingle₂⟩
+theorem owns_cell_exclusive (q : Std.RawPtr α M) (content₁ content₂ : Option α) :
+    owns (Heap.cell q content₁) ∗ owns (Heap.cell q content₂) ⊢ ⌜False⌝ := by
+  rintro h ⟨h₁, h₂, hCompatible, -, hCell₁, hCell₂⟩
   exact Heap.not_compatible_of_isValid
-    (Heap.Subheap.isValid hSingle₁ (Heap.isValid_singleton q value₁))
-    (Heap.Subheap.isValid hSingle₂ (Heap.isValid_singleton q value₂)) hCompatible
+    (Heap.Subheap.isValid hCell₁ (Heap.isValid_cell q content₁))
+    (Heap.Subheap.isValid hCell₂ (Heap.isValid_cell q content₂)) hCompatible
 
 theorem sep_holds (H₁ H₂ : IProp) (h : Heap) :
     (H₁ ∗ H₂) h ↔

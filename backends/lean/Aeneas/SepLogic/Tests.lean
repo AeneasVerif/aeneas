@@ -120,9 +120,9 @@ example (P Q : IProp) : P ∗ (P -∗ Q) ⊢ Q :=
 example (Q₁ Q₂ : IPost Nat) : Q₁ ∗+ (Q₁ -∗+ Q₂) ⊢+ Q₂ :=
   postWand_cancel Q₁ Q₂
 
-example (q : Aeneas.Std.MutRawPtr α) (x y : α) :
-    owns (Aeneas.Std.Heap.singleton q x) ∗ owns (Aeneas.Std.Heap.singleton q y)
+example (q : Aeneas.Std.MutRawPtr α) (x y : Option α) :
+    owns (Aeneas.Std.Heap.cell q x) ∗ owns (Aeneas.Std.Heap.cell q y)
       ⊢ ⌜False⌝ :=
-  owns_singleton_exclusive q x y
+  owns_cell_exclusive q x y
 
 end Aeneas.SepLogic.Tests
