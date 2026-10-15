@@ -709,7 +709,7 @@ instance Result.instWPMonad : WPMonad Result (.except (ULift Error) (.except PUn
     · cbv
     · simp
       rename_i i k
-      cases i <;> cbv
+      cases i; cbv
     · cbv
 
 
