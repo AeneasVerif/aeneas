@@ -124,31 +124,34 @@ def MutRawPtr.write (q : MutRawPtr T) (value : T) : Result Unit :=
 
 attribute [rust_fun "core::ptr::write"] MutRawPtr.write
 
-/-- Not a Rust function: moves the value out into a borrow; the slot stays `borrowed` until
-`endBorrow`. -/
-def RawPtr.take (q : RawPtr T M) : Result T :=
+/-! ### Heap-model operations
+Aeneas builds its models of Rust's raw-pointer functions (`from_mut`, `as_ptr`, `as_mut_ptr`,
+`from_raw_parts`, `from_raw_parts_mut`) from the operations below, which act on the model's heap
+directly. -/
+
+/-- Dereferences `q` and marks its slot as borrowed, so that every access to the slot through a raw
+pointer fails until the borrow is ended with `endBorrow`. -/
+def RawPtr.borrow (q : RawPtr T M) : Result T :=
   Result.guardedModify _ (Heap.borrow q)
 
-/-- Not a Rust function: ends the borrow of the slot of `q`, which holds `value` again. -/
 def RawPtr.endBorrow (q : RawPtr T M) (value : T) : Result Unit :=
   Result.guardedModify _ (Heap.endBorrow q value)
 
-/-- Not a Rust function: `take` on the `n` slots from `q` on. -/
-def RawPtr.takeRange (q : RawPtr T M) : Nat → Result (List T)
+def RawPtr.borrowRange (q : RawPtr T M) : Nat → Result (List T)
   | 0 => .ok []
   | n + 1 => do
-    let value ← q.take
-    let values ← (q.shift 1).takeRange n
+    let value ← q.borrow
+    let values ← (q.shift 1).borrowRange n
     .ok (value :: values)
 
-/-- Not a Rust function: `endBorrow` on the `values.length` slots from `q` on. -/
+/-- `endBorrow` on the `values.length` slots from `q` on. -/
 def RawPtr.endBorrowRange (q : RawPtr T M) : List T → Result Unit
   | [] => .ok ()
   | value :: values => do
     q.endBorrow value
     (q.shift 1).endBorrowRange values
 
-/-- Not a Rust function: `read` on the `n` slots from `q` on. -/
+/-- `read` on the `n` slots from `q` on. -/
 def RawPtr.readRange (q : RawPtr T M) : Nat → Result (List T)
   | 0 => .ok []
   | n + 1 => do
@@ -156,23 +159,17 @@ def RawPtr.readRange (q : RawPtr T M) : Nat → Result (List T)
     let values ← (q.shift 1).readRange n
     .ok (value :: values)
 
-/-- Not a Rust function: a raw-pointer view of a place owned elsewhere (`from_mut`, `as_ptr`,
-`as_mut_ptr`). The functional model gives the place no address, so the view is a fresh allocation
-holding a copy of `values`, which only `endView` frees (`AllocKind.view`). -/
+/-- Allocates a raw-pointer view of a place that the functional translation represents as a plain
+value, without an address. Used by `from_mut`, `as_ptr` and `as_mut_ptr`. The view is a fresh
+allocation holding a copy of `values`, which only `endView` frees (`AllocKind.view`). -/
 def RawPtr.allocView (values : List T) : Result (MutRawPtr T) :=
   Result.guardedModify (fun _ => True) fun h _ => h.alloc values .view
 
-/-- Not a Rust function: ends the view behind `q`, which holds `count` values: the whole allocation
-is freed, so every later use of a pointer into it fails. -/
 def RawPtr.endView (q : RawPtr T M) (count : Nat) : Result Unit :=
   Result.guardedModify _ (Heap.dealloc q.loc count .view)
 
-/-- Not a Rust function: fails unless `p` holds (`p` need not be decidable). -/
-def Result.require (p : Prop) : Result Unit :=
-  Result.guardedModify (fun _ => p) fun h _ => ((), h)
-
-/-- Not a Rust function: end of the borrow given to `from_mut`; reads the value, with the writes
-made through the pointer, and ends the view, so that the pointer can't be used anymore. -/
+/-- Back function of `from_mut`: reads the value, with the writes made through the pointer, and
+ends the view, so that the pointer can't be used anymore. -/
 def core.ptr.end_from_mut (p : MutRawPtr T) : Result T := do
   let value ← p.read
   p.endView 1
