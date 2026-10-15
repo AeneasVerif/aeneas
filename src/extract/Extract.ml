@@ -399,7 +399,7 @@ let lets_require_wrap_in_do (span : Meta.span)
 
 (** HOL4 has a special treatment: because it doesn't support dependent types, we
     don't have a specific operator for the casts *)
-let extract_cast_kind_hol4 (span : Meta.span)
+let extract_cast_kind_hol4 (_ : Meta.span)
     (extract_expr : inside:bool -> texpr -> unit) (fmt : F.formatter)
     ~(inside : bool) (kind : cast_kind) (arg : texpr) : unit =
   match kind with
@@ -418,8 +418,6 @@ let extract_cast_kind_hol4 (span : Meta.span)
       extract_expr ~inside:true arg;
       F.pp_print_string fmt ")";
       if inside then F.pp_print_string fmt ")"
-  | CastRawPtr _ ->
-      [%craise] span "Raw pointer casts are not implemented for HOL4"
 
 (** Extract a cast when the backend is not HOL4 (which receives a special
     treatment) *)
@@ -501,44 +499,6 @@ let extract_cast_kind_gen (span : Meta.span)
        | Some tgt ->
            F.pp_print_space fmt ();
            F.pp_print_string fmt tgt);
-      (* Extract the argument *)
-      F.pp_print_space fmt ();
-      extract_expr ~inside:true arg;
-      if inside then F.pp_print_string fmt ")"
-  | CastRawPtr ((_, _), (tgt_ty, tgt_mut)) ->
-      [%cassert] span
-        (backend () = Lean)
-        "Casts between raw pointers are only supported in the Lean backend";
-      if inside then F.pp_print_string fmt "(";
-      (* Print the name of the function *)
-      F.pp_print_string fmt "RawPtr.cast_scalar";
-      (* Print the target type argument and mutability *)
-      let tgt_ty : integer_type =
-        match tgt_ty with
-        | TInt ty -> Signed ty
-        | TUInt ty -> Unsigned ty
-        | _ ->
-            [%craise] span "Can only generate code for casts between integers"
-      in
-      let integer_type_to_string (ty : integer_type) : string =
-        if backend () = Lean then
-          match ty with
-          | Unsigned _ -> "Std." ^ int_name ty
-          | Signed _ -> "Std." ^ int_name ty
-        else
-          StringUtils.capitalize_first_letter
-            (PrintPure.integer_type_to_string ty)
-      in
-      let tgt = integer_type_to_string tgt_ty in
-      F.pp_print_space fmt ();
-      F.pp_print_string fmt tgt;
-      let tgt_mut =
-        match tgt_mut with
-        | Mut -> ".Mut"
-        | Const -> ".Const"
-      in
-      F.pp_print_space fmt ();
-      F.pp_print_string fmt tgt_mut;
       (* Extract the argument *)
       F.pp_print_space fmt ();
       extract_expr ~inside:true arg;
@@ -1047,7 +1007,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
           | Pure (ToResult | RawPtrRead | RawPtrWrite) ->
               Some
                 { explicit_types = [ Implicit ]; explicit_const_generics = [] }
-          | Pure RawPtrCast ->
+          | Pure (RawPtrCast | Transmute) ->
               Some
                 {
                   explicit_types = [ Implicit; Explicit ];
@@ -1752,6 +1712,13 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
           (List.map snd supd.updates)
     | _ -> [%admit_raise] span "Unreachable" fmt
 
+(** The transparent functions which access the heap receive the [Pointee]
+    instances of their type parameters (Lean only) *)
+let fun_has_pointee_binders (ctx : extraction_ctx) (def : fun_decl) : bool =
+  backend () = Lean
+  && Option.is_some def.body
+  && FunsAnalysis.is_stateful ctx.trans_ctx.fun_ctx.fun_infos def.def_id
+
 (** A small utility to print the parameters of a function signature.
 
     We return two contexts:
@@ -1785,10 +1752,11 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
   (* Open a box for the generics *)
   F.pp_open_hovbox fmt 0;
   let explicit = def.signature.explicit_info in
+  let pointee_binders = fun_has_pointee_binders ctx def in
   (let space = Some space in
    extract_generic_params def.item_meta.span ctx fmt TypeDeclId.Set.empty ~space
-     Item def.signature.generics (Some explicit) type_params cg_params
-     trait_clauses);
+     ~pointee_binders Item def.signature.generics (Some explicit) type_params
+     cg_params trait_clauses);
   (* Close the box for the generics *)
   F.pp_close_box fmt ();
   (* The input parameters - note that doing this adds bindings to the context *)
@@ -3040,6 +3008,16 @@ let explicit_info_drop_prefix (g1 : generic_params) (g2 : explicit_info) :
   in
   { explicit_types; explicit_const_generics }
 
+(** The stateful method implementations may access the heap through the generic
+    parameters of the method: in stateful crates, the methods of the extracted
+    trait declarations receive the [Pointee] instances of their type parameters
+    (Lean only) *)
+let trait_decl_method_pointee_binders (ctx : extraction_ctx) (decl : trait_decl)
+    : bool =
+  backend () = Lean
+  && decl.builtin_info = None
+  && FunsAnalysis.crate_is_stateful ctx.trans_ctx.fun_ctx.fun_infos
+
 (** Small helper.
 
     Extract the items for a method in a trait decl. *)
@@ -3068,8 +3046,9 @@ let extract_trait_decl_method_items_aux (ctx : extraction_ctx)
     let use_forall = generics_not_empty && backend_uses_forall in
     let use_arrows = generics_not_empty && not backend_uses_forall in
     let use_forall_use_sep = false in
+    let pointee_binders = trait_decl_method_pointee_binders ctx decl in
     extract_generic_params span ctx fmt TypeDeclId.Set.empty ~use_forall
-      ~use_forall_use_sep ~use_arrows Method method_generics
+      ~use_forall_use_sep ~use_arrows ~pointee_binders Method method_generics
       (Some method_explicit_info) type_params cg_params trait_clauses;
     if use_forall then F.pp_print_string fmt ",";
 
@@ -3412,9 +3391,20 @@ let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
         method_llbc_generics method_generics ctx
     in
     let use_fun = method_generics <> empty_generic_params in
-    extract_generic_params span ctx fmt TypeDeclId.Set.empty ~use_fun Method
-      method_generics (Some method_explicit_info) method_tys method_cgs
-      method_tcs;
+    let pointee_binders =
+      trait_decl_method_pointee_binders ctx
+        (TraitDeclId.Map.find trait_decl_id ctx.trans_trait_decls)
+    in
+    (* Otherwise, the method would elaborate with the default [Pointee]
+       instances of its type parameters *)
+    [%cassert] span
+      (pointee_binders || method_generics.types = []
+      || not (fun_has_pointee_binders ctx trans.f))
+      "Stateful implementations of generic methods of builtin traits are not \
+       supported";
+    extract_generic_params span ctx fmt TypeDeclId.Set.empty ~use_fun
+      ~pointee_binders Method method_generics (Some method_explicit_info)
+      method_tys method_cgs method_tcs;
     if use_fun then (
       F.pp_print_space fmt ();
       F.pp_print_string fmt "=>");
@@ -3546,8 +3536,18 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     ctx_add_generic_params span impl.item_meta.name Item impl.llbc_generics
       impl.generics ctx
   in
-  extract_generic_params span ctx fmt TypeDeclId.Set.empty Item impl.generics
-    (Some impl.explicit_info) type_params cg_params trait_clauses;
+  (* The implementations of stateful methods receive the [Pointee] instances
+     of their type parameters, to pass them to the methods *)
+  let pointee_binders =
+    List.exists
+      (fun (_, _, (fn : fun_decl_ref binder)) ->
+        match ctx_lookup_fun_decl_info ctx fn.binder_value.fun_id with
+        | Some trans -> fun_has_pointee_binders ctx trans.f
+        | None -> false)
+      impl.methods
+  in
+  extract_generic_params span ctx fmt TypeDeclId.Set.empty ~pointee_binders Item
+    impl.generics (Some impl.explicit_info) type_params cg_params trait_clauses;
 
   (* Print the type *)
   F.pp_print_space fmt ();

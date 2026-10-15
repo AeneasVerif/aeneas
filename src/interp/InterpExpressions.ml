@@ -1013,7 +1013,8 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
            (otherwise it throws an exception) *)
             let _ = cast_unsize_to_modified_fields span ctx ty0 ty1 in
             ty1
-        | Cast (CastRawPtr (_, tgt_ty)), _ -> tgt_ty
+        | Cast (CastRawPtr (_, tgt_ty)), _ | Cast (CastTransmute (_, tgt_ty)), _
+          -> tgt_ty
         | _ ->
             [%craise] span
               ("Invalid input for unop: " ^ unop_to_string ctx unop ^ " on "
@@ -1519,6 +1520,11 @@ let eval_rvalue_not_global (config : config) (span : Meta.span)
       wrap_in_result (eval_rvalue_aggregate config span aggregate_kind ops ctx)
   | Discriminant p -> wrap_in_result (eval_discriminant config span p ctx)
   | Len _ -> [%craise] span "Unhandled Len"
+  | RawPtr _ ->
+      [%craise] span
+        ("Unsupported: raw borrows of places behind raw pointers with \
+          projections ([&raw const (*p).f]): "
+        ^ Print.EvalCtx.rvalue_to_string ctx rvalue)
   | _ ->
       [%craise] span
         ("Unsupported operation: " ^ Print.EvalCtx.rvalue_to_string ctx rvalue)

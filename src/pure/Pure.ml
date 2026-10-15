@@ -145,9 +145,12 @@ type pure_builtin_fun_id =
       (** Cast a mutable raw pointer to a constant raw pointer ([p as *const T])
       *)
   | RawPtrCast
-      (** Cast a raw pointer to a pointer to another type, which is equal up to
-          one [MaybeUninit] wrapper ([p as *mut U]). The type parameters are the
-          source and target pointee types. *)
+      (** Cast a raw pointer to a pointer to another type ([p as *mut U],
+          [p.cast::<U>()]). The type parameters are the source and target
+          pointee types. *)
+  | Transmute
+      (** [core::mem::transmute]. The type parameters are the source and target
+          types. *)
   | RawPtrEq  (** [==] on raw pointers (see [RawPtr.eq] in the Lean library) *)
   | RawPtrNe  (** [!=] on raw pointers *)
   | ResultUnwrapMut
@@ -1235,11 +1238,7 @@ type unop =
   | Cast of cast_kind
   | ArrayToSlice
 
-and cast_kind =
-  | CastLit of literal_type * literal_type
-  | CastRawPtr of (literal_type * mutability) * (literal_type * mutability)
-      (** When casting between raw pointers, we only support a subset of casts
-      *)
+and cast_kind = CastLit of literal_type * literal_type
 
 and fn_ptr_kind =
   | FunId of fun_decl_id

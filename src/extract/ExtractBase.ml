@@ -1260,6 +1260,7 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (RawPtrWrite, "MutRawPtr.write");
         (RawPtrCastConst, "RawPtr.cast_const");
         (RawPtrCast, "RawPtr.cast");
+        (Transmute, "core.mem.transmute");
         (RawPtrEq, "RawPtr.eq");
         (RawPtrNe, "RawPtr.ne");
         (GetTarget, "get_target");

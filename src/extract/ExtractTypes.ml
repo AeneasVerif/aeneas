@@ -1313,14 +1313,17 @@ let insert_req_space (fmt : F.formatter) (space : bool ref) : unit =
 
 (** - [as_implicits]: if [explicit] is [None], then we use this parameter to
       control whether the parameters should be extract as explicit or implicit.
-*)
+    - [pointee_binders]: Lean: add an instance binder [[Pointee T]] for every
+      type parameter [T] (the functions which access the heap receive the
+      [Pointee] instances of their callers, see [RawPtr.lean]). *)
 let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ?(use_forall = false)
     ?(use_fun = false) ?(use_forall_use_sep = true) ?(use_arrows = false)
     ?(as_implicits : bool = false) ?(space : bool ref option = None)
-    (origin : generic_origin) (generics : generic_params)
-    (explicit : explicit_info option) (type_params : string list)
-    (cg_params : string list) (trait_clauses : string list) : unit =
+    ?(pointee_binders = false) (origin : generic_origin)
+    (generics : generic_params) (explicit : explicit_info option)
+    (type_params : string list) (cg_params : string list)
+    (trait_clauses : string list) : unit =
   let all_params = List.concat [ type_params; cg_params; trait_clauses ] in
   (* HOL4 doesn't support const generics *)
   [%cassert] span
@@ -1379,6 +1382,12 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
               (* ) *)
               right_bracket expl)
             type_params;
+          if pointee_binders then
+            List.iter
+              (fun (_, s) ->
+                insert_req_space ();
+                F.pp_print_string fmt ("[Pointee " ^ s ^ "]"))
+              type_params;
           if use_arrows then (
             F.pp_print_space fmt ();
             F.pp_print_string fmt "->"));
@@ -2155,11 +2164,16 @@ let extract_type_decl_record_field_projectors_simp_lemmas (ctx : extraction_ctx)
 
         FieldId.iteri extract_field_proj_simp_lemma fields
 
-(** Lean: the [NonZeroSized] instance of a structure (see [RawPtr.eq]): a
-    structure is not zero-sized if one of its fields is not. We only generate it
-    for the structures with fields which mention raw pointers, whose pointers
-    may be compared. *)
-let extract_type_decl_non_zero_sized_instance (ctx : extraction_ctx)
+(** Lean: the [Pointee] instance of a structure (see [RawPtr.lean]): typed heap
+    cells, and the structure is not zero-sized if one of its fields is not (see
+    [RawPtr.eq]). We only generate it for the structures with fields which
+    mention raw pointers, directly or through other types (for instance, the
+    nodes of intrusive lists, which contain links which contain pointers), whose
+    pointers may be compared. We consider that the external (opaque) types may
+    contain raw pointers: their instances (if any) are given with their
+    definitions. The tuple structures with one field are reducible definitions:
+    they use the instance of their field. *)
+let extract_type_decl_pointee_instance (ctx : extraction_ctx)
     (fmt : F.formatter) (decl : type_decl) : unit =
   let span = decl.item_meta.span in
   match decl.kind with
@@ -2167,8 +2181,9 @@ let extract_type_decl_non_zero_sized_instance (ctx : extraction_ctx)
   | Struct fields ->
       let mentions_raw_ptr (ty : ty) : bool =
         let exception Found in
+        let visited = ref (TypeDeclId.Set.singleton decl.def_id) in
         let visitor =
-          object
+          object (self)
             inherit [_] iter_ty as super
 
             method! visit_ty env ty =
@@ -2176,6 +2191,25 @@ let extract_type_decl_non_zero_sized_instance (ctx : extraction_ctx)
               | TAdt (TBuiltin (TRawPtr _), _) -> raise Found
               | TAdt ((TAdtId _ as id), _)
                 when ctx_get_type (Some span) id ctx = "NonNull" -> raise Found
+              | TAdt (TAdtId id, _) ->
+                  if not (TypeDeclId.Set.mem id !visited) then (
+                    visited := TypeDeclId.Set.add id !visited;
+                    match TypeDeclId.Map.find_opt id ctx.trans_types with
+                    | Some { kind = Struct fields; _ } ->
+                        List.iter
+                          (fun (f : field) -> self#visit_ty env f.field_ty)
+                          fields
+                    | Some { kind = Enum variants; _ } ->
+                        List.iter
+                          (fun (v : variant) ->
+                            List.iter
+                              (fun (f : field) -> self#visit_ty env f.field_ty)
+                              v.fields)
+                          variants
+                    | Some { kind = Opaque; builtin_info = None; _ } ->
+                        raise Found
+                    | _ -> ());
+                  super#visit_ty env ty
               | _ -> super#visit_ty env ty
           end
         in
@@ -2184,7 +2218,14 @@ let extract_type_decl_non_zero_sized_instance (ctx : extraction_ctx)
           false
         with Found -> true
       in
-      if List.exists (fun (f : field) -> mentions_raw_ptr f.field_ty) fields
+      let is_alias =
+        List.length fields = 1
+        && TypesUtils.type_decl_from_decl_id_is_tuple_struct
+             ctx.trans_ctx.type_ctx.type_infos decl.def_id
+      in
+      if
+        (not is_alias)
+        && List.exists (fun (f : field) -> mentions_raw_ptr f.field_ty) fields
       then (
         let ctx, type_params, cg_params, trait_clauses =
           ctx_add_generic_params span decl.item_meta.name Item
@@ -2195,26 +2236,34 @@ let extract_type_decl_non_zero_sized_instance (ctx : extraction_ctx)
         F.pp_open_hovbox fmt ctx.indent_incr;
         F.pp_print_string fmt "instance";
         extract_generic_params span ctx fmt TypeDeclId.Set.empty Item
-          ~as_implicits:true decl.generics None type_params cg_params
-          trait_clauses;
+          ~as_implicits:true ~pointee_binders:true decl.generics None
+          type_params cg_params trait_clauses;
         F.pp_print_space fmt ();
-        F.pp_print_string fmt ": NonZeroSized";
+        F.pp_print_string fmt ": Pointee";
         F.pp_print_space fmt ();
-        extract_ty ~inside:true
-          (TAdt (TAdtId decl.def_id, generic_args_of_params decl.generics));
+        let adt_ty =
+          TAdt (TAdtId decl.def_id, generic_args_of_params decl.generics)
+        in
+        extract_ty ~inside:true adt_ty;
         F.pp_print_space fmt ();
-        F.pp_print_string fmt ":= ⟨";
+        F.pp_print_string fmt ":=";
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt "Pointee.typed";
+        F.pp_print_space fmt ();
+        extract_ty ~inside:true adt_ty;
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt "(";
         List.iteri
           (fun i (f : field) ->
             if i > 0 then (
               F.pp_print_space fmt ();
               F.pp_print_string fmt "||";
               F.pp_print_space fmt ());
-            F.pp_print_string fmt "NonZeroSized.nonZero";
+            F.pp_print_string fmt "Pointee.nonZero";
             F.pp_print_space fmt ();
             extract_ty ~inside:true f.field_ty)
           fields;
-        F.pp_print_string fmt "⟩";
+        F.pp_print_string fmt ")";
         F.pp_close_box fmt ();
         F.pp_print_break fmt 0 0)
 
@@ -2239,5 +2288,4 @@ let extract_type_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
         if backend () = Lean then
           extract_type_decl_record_field_projectors_simp_lemmas ctx fmt kind
             decl);
-      if backend () = Lean then
-        extract_type_decl_non_zero_sized_instance ctx fmt decl
+      if backend () = Lean then extract_type_decl_pointee_instance ctx fmt decl

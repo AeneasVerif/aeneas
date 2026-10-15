@@ -2372,35 +2372,22 @@ let decompose_raw_ptr_derefs (crate : crate) : crate =
             | None -> 0)
             crate.item_names))
   in
-  let new_decls : ((ref_kind * ref_kind) * fun_decl) list ref = ref [] in
-  let get_borrow_fun (template : fun_decl) (ptr_kind : ref_kind)
-      (ref_kind : ref_kind) : FunDeclId.id =
-    match List.assoc_opt (ptr_kind, ref_kind) !new_decls with
+  (* The declarations we add to the crate, indexed by a key *)
+  let new_decls : (string * fun_decl) list ref = ref [] in
+  (* Add the declaration of a builtin function with a region ['a] and a type
+     parameter [T], if needed: [mk_sig] receives [T] and ['a] *)
+  let get_fun (template : fun_decl) (key : string) (name : name)
+      ~(is_unsafe : bool) (mk_sig : ty -> region -> ty * ty) : FunDeclId.id =
+    match List.assoc_opt key !new_decls with
     | Some decl -> decl.def_id
     | None ->
         let def_id = !next_fun_id in
         next_fun_id := FunDeclId.of_int (FunDeclId.to_int def_id + 1);
-        let ident s = PeIdent (s, Disambiguator.zero) in
         let types : type_param list =
           [ { index = TypeVarId.zero; name = "T"; variance = VaUnknown } ]
         in
-        let pointee = TVar (Free TypeVarId.zero) in
-        let ptr_ty = TRawPtr (pointee, ptr_kind) in
-        let name =
-          [
-            ident "core";
-            ident "ptr";
-            ident (if ptr_kind = RMut then "mut_ptr" else "const_ptr");
-            PeImpl
-              (ImplElemTy
-                 {
-                   binder_params = { empty_generic_params with types };
-                   binder_value = ptr_ty;
-                 });
-            ident
-              (if ref_kind = RMut then "as_mut_unchecked"
-               else "as_ref_unchecked");
-          ]
+        let input, output =
+          mk_sig (TVar (Free TypeVarId.zero)) (RVar (Free RegionId.zero))
         in
         let regions : region_param list =
           [
@@ -2439,17 +2426,83 @@ let decompose_raw_ptr_derefs (crate : crate) : crate =
             signature =
               {
                 template.signature with
-                is_unsafe = true;
+                is_unsafe;
                 is_variadic = false;
-                inputs = [ ptr_ty ];
-                output = TRef (RVar (Free RegionId.zero), pointee, ref_kind);
+                inputs = [ input ];
+                output;
               };
             src = NormalFun;
             body = OpaqueBody;
           }
         in
-        new_decls := ((ptr_kind, ref_kind), decl) :: !new_decls;
+        new_decls := (key, decl) :: !new_decls;
         def_id
+  in
+  let ident s = PeIdent (s, Disambiguator.zero) in
+  let get_borrow_fun (template : fun_decl) (ptr_kind : ref_kind)
+      (ref_kind : ref_kind) : FunDeclId.id =
+    let ptr_ty (pointee : ty) = TRawPtr (pointee, ptr_kind) in
+    let types : type_param list =
+      [ { index = TypeVarId.zero; name = "T"; variance = VaUnknown } ]
+    in
+    let fun_name =
+      if ref_kind = RMut then "as_mut_unchecked" else "as_ref_unchecked"
+    in
+    let name =
+      [
+        ident "core";
+        ident "ptr";
+        ident (if ptr_kind = RMut then "mut_ptr" else "const_ptr");
+        PeImpl
+          (ImplElemTy
+             {
+               binder_params = { empty_generic_params with types };
+               binder_value = ptr_ty (TVar (Free TypeVarId.zero));
+             });
+        ident fun_name;
+      ]
+    in
+    let key =
+      (if ptr_kind = RMut then "mut_ptr::" else "const_ptr::") ^ fun_name
+    in
+    get_fun template key name ~is_unsafe:true (fun pointee r ->
+        (ptr_ty pointee, TRef (r, pointee, ref_kind)))
+  in
+  (* [core::ptr::from_ref] and [core::ptr::from_mut]: we use the declarations
+     of the crate if there are *)
+  let get_from_ref_fun (template : fun_decl) (kind : ref_kind) (pointee : ty) :
+      FunDeclId.id * generic_args =
+    let fun_name = if kind = RMut then "from_mut" else "from_ref" in
+    let pat = NameMatcher.parse_pattern ("core::ptr::" ^ fun_name) in
+    let existing =
+      FunDeclId.Map.fold
+        (fun _ (d : fun_decl) acc ->
+          match acc with
+          | None when ExtractName.match_name crate pat d.item_meta.name ->
+              Some d
+          | _ -> acc)
+        crate.fun_decls None
+    in
+    let mk_generics (num_regions : int) : generic_args =
+      {
+        empty_generic_args with
+        regions = List.init num_regions (fun _ -> RErased);
+        types = [ pointee ];
+      }
+    in
+    match existing with
+    | Some d ->
+        [%cassert] template.item_meta.span
+          (d.generics.trait_clauses = [] && List.length d.generics.types = 1)
+          ("Unexpected signature for core::ptr::" ^ fun_name);
+        (d.def_id, mk_generics (List.length d.generics.regions))
+    | None ->
+        let name = [ ident "core"; ident "ptr"; ident fun_name ] in
+        let id =
+          get_fun template fun_name name ~is_unsafe:false (fun pointee r ->
+              (TRef (r, pointee, kind), TRawPtr (pointee, kind)))
+        in
+        (id, mk_generics 1)
   in
   let update_fun (f : fun_decl) : fun_decl =
     match f.body with
@@ -2578,6 +2631,74 @@ let decompose_raw_ptr_derefs (crate : crate) : crate =
                 emit (Call (call, on_unwind));
                 rebuild (deref tmp)
           in
+          (* Raw borrows:
+             {[
+               &raw const *p  ~~>  copy p  (or [copy p as *const T])
+               &raw mut place ~~>  tmp = &mut place;
+                                   core::ptr::from_mut(move tmp)
+               &raw const place ~~> tmp = &place;
+                                   core::ptr::from_ref(move tmp)
+             ]}
+             We do not support the raw borrows of places behind raw pointers
+             with projections ([&raw const ( *p).f]): we leave them unchanged
+             (the interpreter raises an error). We reject the raw borrows of
+             (sub-)fields of [repr(packed)] ADTs: the field may be unaligned
+             ([&p.f] is not allowed in Rust) while [from_ref] assumes the
+             borrowed place is aligned. *)
+          let rec in_packed_field (p : place) : bool =
+            match p.kind with
+            | PlaceLocal _ | PlaceGlobal _ | PlaceProjection (_, Deref) -> false
+            | PlaceProjection (q, proj) ->
+                (match (proj, q.ty) with
+                | Field _, TAdt { id; builtin = None; _ } -> (
+                    match TypeDeclId.Map.find_opt id crate.type_decls with
+                    | Some decl ->
+                        List.exists
+                          (fun (_, (l : layout)) ->
+                            match l.repr.align_modif with
+                            | Some (Pack _) -> true
+                            | _ -> false)
+                          decl.layout
+                    | None -> false)
+                | _ -> false)
+                || in_packed_field q
+          in
+          let raw_borrow (p : place) (kind : ref_kind) (metadata : operand) :
+              rvalue =
+            let unchanged = RawPtr (p, kind, metadata) in
+            match p.kind with
+            | _ when in_packed_field p ->
+                [%craise] span
+                  "Unsupported: raw borrows of fields of packed types"
+            | PlaceProjection (q, Deref) when is_raw_ptr q.ty -> (
+                let q = read_raw_derefs q in
+                match q.ty with
+                | TRawPtr (_, q_kind) when q_kind = kind -> Use (Copy q, NoRetag)
+                | TRawPtr (ty, RMut) ->
+                    UnaryOp
+                      (Cast (CastRawPtr (q.ty, TRawPtr (ty, RShared))), Copy q)
+                | _ -> unchanged)
+            | _ when has_raw_deref p -> unchanged
+            | _ ->
+                let tmp = fresh_place (TRef (RErased, p.ty, kind)) in
+                let bkind = if kind = RMut then BMut else BShared in
+                emit (Assign (tmp, RvRef (p, bkind, metadata)));
+                let fid, generics = get_from_ref_fun f kind p.ty in
+                let ptr = fresh_place (TRawPtr (p.ty, kind)) in
+                let call =
+                  {
+                    func = FnOpRegular { kind = Fun fid; generics };
+                    args = [ Move tmp ];
+                    dest = ptr;
+                    safety = Inherit;
+                  }
+                in
+                let on_unwind =
+                  { span; block_id = BlockId.zero; statements = [] }
+                in
+                emit (Call (call, on_unwind));
+                Use (Move ptr, NoRetag)
+          in
           let visitor =
             object
               inherit [_] map_statement as super
@@ -2598,6 +2719,7 @@ let decompose_raw_ptr_derefs (crate : crate) : crate =
                     RvRef (borrow p kind, kind, metadata)
                 | Discriminant p when has_raw_deref p ->
                     Discriminant (read_raw_derefs p)
+                | RawPtr (p, kind, metadata) -> raw_borrow p kind metadata
                 | _ -> super#visit_rvalue env rv
 
               method! visit_SwitchDiscriminant env p =

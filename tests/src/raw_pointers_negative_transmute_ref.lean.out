@@ -1,0 +1,5 @@
+[[92mInfo[39m ] Imported: tests/llbc/raw_pointers_negative_transmute_ref.llbc
+[[91mError[39m] Unsupported: transmutes of a type which mentions boxes, references or packed/aligned types (found: &'4 u64)
+Source: 'tests/src/raw_pointers_negative_transmute_ref.rs', lines 5:0-7:1
+Compiler source: symbolic/SymbolicToPureExpressions.ml, line 402
+

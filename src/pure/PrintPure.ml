@@ -871,6 +871,7 @@ let pure_builtin_fun_id_to_string (fid : pure_builtin_fun_id) : string =
   | RawPtrWrite -> "@rawPtrWrite"
   | RawPtrCastConst -> "@rawPtrCastConst"
   | RawPtrCast -> "@rawPtrCast"
+  | Transmute -> "@transmute"
   | RawPtrEq -> "@rawPtrEq"
   | RawPtrNe -> "@rawPtrNe"
   | ResultUnwrapMut -> "@resultUnwrapMut"
@@ -893,19 +894,11 @@ let regular_fun_id_to_string (env : fmt_env) (fun_id : fun_id) : string =
       f ^ fun_suffix lp_id
   | Pure fid -> pure_builtin_fun_id_to_string fid
 
-let cast_kind_to_string (env : fmt_env) (kind : cast_kind) : string =
+let cast_kind_to_string (_ : fmt_env) (kind : cast_kind) : string =
   let src, tgt =
     match kind with
     | CastLit (src, tgt) ->
         (literal_type_to_string src, literal_type_to_string tgt)
-    | CastRawPtr ((src, src_mut), (tgt, tgt_mut)) ->
-        let mk ty mut =
-          ty_to_string env false
-            (TAdt
-               ( TBuiltin (TRawPtr mut),
-                 mk_generic_args_from_types [ TLiteral ty ] ))
-        in
-        (mk src src_mut, mk tgt tgt_mut)
   in
   "cast<" ^ src ^ "," ^ tgt ^ ">"
 

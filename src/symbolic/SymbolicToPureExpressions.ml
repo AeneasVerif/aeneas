@@ -389,14 +389,28 @@ and translate_function_call (call : S.call) (e : S.expr) (ctx : bs_ctx) : texpr
       translate_cast_unsize call e ty0 ty1 ctx
   | _ -> translate_function_call_aux call e ctx
 
-(** Pointer casts between [*T] and [*U] (the methods [<*mut T>::cast::<U>] and
-    [<*const T>::cast::<U>], and [as] casts): the accesses through the new
-    pointer check the Lean type of the heap cells, but several Rust types have
-    the same Lean type ([Box<T>] and [&T] are translated to [T]). We thus only
-    accept the casts which add or remove one [MaybeUninit] wrapper, since
-    [MaybeUninit<T>] has the same memory representation as [T] and its heap
-    cells are those of [T] (see [Pointee] in the Lean library). *)
-and raw_ptr_cast_is_supported (ctx : bs_ctx) (src : T.ty) (tgt : T.ty) : bool =
+(** Pointer casts between [*T] and [*U] ([<*mut T>::cast::<U>],
+    [<*const T>::cast::<U>], [as] casts), transmutes and [write_bytes]
+    reinterpret the memory of values. The heap model checks that the heap cells
+    are compatible (see [Pointee] in the Lean library), but the translation
+    erases [Box] and the references ([Box<u32>], [&u32], [u32] and
+    [struct W(&u32)] are all translated to [U32]) and doesn't model
+    [repr(packed)]/[repr(align)]: we reject the types which mention them (see
+    [TypesUtils.ty_has_unmodelled_layout]). The type parameters are fine:
+    generic code receives the [Pointee] instance of its caller. *)
+and check_reinterpreted_ty (ctx : bs_ctx) (what : string) (ty : T.ty) : unit =
+  [%cassert] ctx.span
+    (not
+       (TypesUtils.ty_has_unmodelled_layout ctx.decls_ctx.crate.type_decls ty))
+    ("Unsupported: " ^ what
+   ^ " of a type which mentions boxes, references or packed/aligned types \
+      (found: " ^ ty_to_string ctx ty ^ ")")
+
+(** Pointer casts from [*T] to [*U] (see [check_reinterpreted_ty]). We also
+    accept the casts which only add or remove one [MaybeUninit] wrapper:
+    [MaybeUninit<T>] has the same heap cells as [T], and the Rust types are the
+    same up to the wrapper. *)
+and check_raw_ptr_cast (ctx : bs_ctx) (src : T.ty) (tgt : T.ty) : unit =
   let crate = ctx.decls_ctx.crate in
   let unwrap_maybe_uninit (ty : T.ty) : T.ty option =
     match ty with
@@ -412,11 +426,20 @@ and raw_ptr_cast_is_supported (ctx : bs_ctx) (src : T.ty) (tgt : T.ty) : bool =
   in
   let src = Substitute.erase_regions src in
   let tgt = Substitute.erase_regions tgt in
-  src = tgt
-  || unwrap_maybe_uninit src = Some tgt
-  || unwrap_maybe_uninit tgt = Some src
+  if
+    not
+      (src = tgt
+      || unwrap_maybe_uninit src = Some tgt
+      || unwrap_maybe_uninit tgt = Some src)
+  then (
+    check_reinterpreted_ty ctx "pointer casts" src;
+    check_reinterpreted_ty ctx "pointer casts" tgt)
 
-and check_raw_ptr_cast (call : S.call) (ctx : bs_ctx) : unit =
+(** Check the type arguments of the calls which reinterpret memory (see
+    [check_reinterpreted_ty]). The transparent functions which access the heap
+    receive the [Pointee] instances of their type parameters (they may cast
+    pointers): we also check their type arguments. *)
+and check_call_reinterpreted_tys (call : S.call) (ctx : bs_ctx) : unit =
   match call.call_id with
   | S.Fun (Fun fid, _) -> (
       let crate = ctx.decls_ctx.crate in
@@ -424,19 +447,33 @@ and check_raw_ptr_cast (call : S.call) (ctx : bs_ctx) : unit =
         ExtractName.match_name crate (NameMatcher.parse_pattern pat) name
       in
       match FunDeclId.Map.find_opt fid ctx.decls_ctx.fun_ctx.fun_decls with
-      | Some fun_decl
-        when matches "core::ptr::mut_ptr::{*mut @T}::cast"
-               fun_decl.item_meta.name
-             || matches "core::ptr::const_ptr::{*const @T}::cast"
-                  fun_decl.item_meta.name -> (
+      | Some fun_decl -> (
+          let name = fun_decl.item_meta.name in
+          let check what = List.iter (check_reinterpreted_ty ctx what) in
+          let is_cast =
+            matches "core::ptr::mut_ptr::{*mut @T}::cast" name
+            || matches "core::ptr::const_ptr::{*const @T}::cast" name
+          in
           match call.generics.types with
-          | [ src; tgt ] ->
-              [%cassert] ctx.span
-                (raw_ptr_cast_is_supported ctx src tgt)
-                "Unsupported: pointer casts which change the pointee type \
-                 (other than by adding or removing one [MaybeUninit])"
-          | _ -> [%internal_error] ctx.span)
-      | _ -> ())
+          | [ src; tgt ] when is_cast -> check_raw_ptr_cast ctx src tgt
+          | _ when is_cast -> [%internal_error] ctx.span
+          | _ ->
+              if
+                matches "core::ptr::write_bytes" name
+                || matches "core::ptr::mut_ptr::{*mut @T}::write_bytes" name
+              then check "write_bytes" call.generics.types
+              else if matches "core::intrinsics::transmute" name then
+                check "transmutes" call.generics.types
+              else if
+                FunsAnalysis.is_stateful ctx.fun_ctx.fun_infos fid
+                &&
+                match fun_decl.body with
+                | StructuredBody _ -> true
+                | _ -> false
+              then
+                check "instantiation of a generic function accessing the heap"
+                  call.generics.types)
+      | None -> ())
   | _ -> ()
 
 (** Handle the function call cases which are not unsized casts *)
@@ -448,7 +485,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
   in
   (* Translate the function call *)
   let generics = ctx_translate_fwd_generic_args ctx call.generics in
-  check_raw_ptr_cast call ctx;
+  check_call_reinterpreted_tys call ctx;
   let args =
     let args = List.map (tvalue_to_texpr ctx call.ctx) call.args in
     let args_mplaces =
@@ -631,35 +668,60 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
         | _ -> [%craise] ctx.span "Unreachable")
     | S.Unop
         (E.Cast
-           (CastRawPtr (TRawPtr (src_ty, src_rk), TRawPtr (tgt_ty, tgt_rk))))
-      when src_rk = tgt_rk
-           && Substitute.erase_regions src_ty <> Substitute.erase_regions tgt_ty
-           && raw_ptr_cast_is_supported ctx src_ty tgt_ty ->
-        (* [p as *mut U] where [p : *mut T], and [T], [U] are equal up to one
-           [MaybeUninit] wrapper: the same as [p.cast::<U>()] *)
-        let effect_info =
-          { can_fail = false; can_diverge = false; is_rec = false }
-        in
-        let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
-        let dest = mk_tpat_from_fvar dest_mplace dest in
-        (ctx, Fun (Pure RawPtrCast), effect_info, args, [], dest)
-    | S.Unop
-        (E.Cast
-           (CastRawPtr (TRawPtr (src_ty, src_rk), TRawPtr (tgt_ty, tgt_rk))))
-      when Substitute.erase_regions src_ty = Substitute.erase_regions tgt_ty ->
-        (* A cast which only changes the mutability of a pointer. We do not
-           track the permissions in the heap: a pointer obtained from a shared
-           borrow must not be written through, so we only support casts from
-           [*mut T] to [*const T]. *)
+           (CastRawPtr (TRawPtr (src_ty, src_rk), TRawPtr (tgt_ty, tgt_rk)))) ->
+        (* We do not track the permissions in the heap: a pointer obtained
+           from a shared borrow must not be written through, so we do not
+           support casts from [*const T] to [*mut U]. *)
         [%cassert] ctx.span
-          (src_rk = RMut && tgt_rk = RShared)
-          "Unsupported: casting a raw pointer to a mutable raw pointer";
+          (not (src_rk = RShared && tgt_rk = RMut))
+          "Unsupported: casting a constant raw pointer to a mutable raw pointer";
         let effect_info =
           { can_fail = false; can_diverge = false; is_rec = false }
         in
         let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
         let dest = mk_tpat_from_fvar dest_mplace dest in
-        (ctx, Fun (Pure RawPtrCastConst), effect_info, args, [], dest)
+        let cast_const (arg : texpr) : texpr =
+          let ty = ctx_translate_fwd_ty ctx (TRawPtr (src_ty, RShared)) in
+          let f : texpr =
+            {
+              e =
+                Qualif
+                  {
+                    id = FunOrOp (Fun (Pure RawPtrCastConst));
+                    generics = empty_generic_args;
+                  };
+              ty = mk_arrow arg.ty ty;
+            }
+          in
+          [%add_loc] mk_app ctx.span f arg
+        in
+        let same_pointee =
+          Substitute.erase_regions src_ty = Substitute.erase_regions tgt_ty
+        in
+        if same_pointee && src_rk <> tgt_rk then
+          (* [p as *const T] where [p : *mut T] *)
+          (ctx, Fun (Pure RawPtrCastConst), effect_info, args, [], dest)
+        else (
+          (* [p as *mut U] where [p : *mut T]: the same as [p.cast::<U>()] *)
+          check_raw_ptr_cast ctx src_ty tgt_ty;
+          (* [p as *const U] where [p : *mut T]: [(p as *const T) as *const U] *)
+          let args =
+            if src_rk = tgt_rk then args
+            else
+              match args with
+              | [ arg ] -> [ cast_const arg ]
+              | _ -> [%internal_error] ctx.span
+          in
+          (ctx, Fun (Pure RawPtrCast), effect_info, args, [], dest))
+    | S.Unop (E.Cast (CastTransmute (src_ty, tgt_ty))) ->
+        check_reinterpreted_ty ctx "transmutes" src_ty;
+        check_reinterpreted_ty ctx "transmutes" tgt_ty;
+        let effect_info =
+          { can_fail = true; can_diverge = false; is_rec = false }
+        in
+        let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
+        let dest = mk_tpat_from_fvar dest_mplace dest in
+        (ctx, Fun (Pure Transmute), effect_info, args, [], dest)
     | S.Unop (E.Cast kind) -> begin
         let kind, can_fail =
           match kind with
@@ -667,29 +729,11 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               let src_ty = translate_literal_type src_ty in
               let tgt_ty = translate_literal_type tgt_ty in
               (CastLit (src_ty, tgt_ty), not (Config.backend () = Lean))
-          | CastRawPtr (src_ty, tgt_ty) ->
-              (* We only support casts between pointers to literal types for now *)
-              let get_ty (ty : T.ty) =
-                match ty with
-                | TRawPtr (TScalar scalar_ty, rkind) ->
-                    let mut =
-                      match rkind with
-                      | RMut -> Mut
-                      | RShared -> Const
-                    in
-                    (scalar_ty, mut)
-                | _ ->
-                    let env = bs_ctx_to_fmt_env ctx in
-                    [%craise] ctx.span
-                      ("Raw ptr casts are only supported between pointers to \
-                        literal types; found: "
-                      ^ Charon.Print.cast_kind_to_string env kind)
-              in
-              let src_ty, src_mut = get_ty src_ty in
-              let tgt_ty, tgt_mut = get_ty tgt_ty in
-              let src_ty = translate_literal_type src_ty in
-              let tgt_ty = translate_literal_type tgt_ty in
-              (CastRawPtr ((src_ty, src_mut), (tgt_ty, tgt_mut)), true)
+          | CastRawPtr _ ->
+              let env = bs_ctx_to_fmt_env ctx in
+              [%craise] ctx.span
+                ("Unsupported raw pointer cast: "
+                ^ Charon.Print.cast_kind_to_string env kind)
           | CastPtrExposeProvenance _ ->
               [%craise] ctx.span "Unsupported: pointer to address casts"
           | CastPtrWithExposedProvenance _ ->
@@ -699,7 +743,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               (* We shouldn't get there: this case should have been detected before
                and handled in [translate_cast_unsize] *)
               [%internal_error] ctx.span
-          | CastTransmute _ -> [%craise] ctx.span "Unsupported: transmute"
+          | CastTransmute _ -> [%internal_error] ctx.span
           | CastConcretize _ ->
               [%craise] ctx.span "Unsupported: `dyn Trait` concretization"
         in
@@ -817,7 +861,8 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
   let generics =
     match (fun_id, call.call_id) with
     | ( Fun (Pure RawPtrCast),
-        S.Unop (E.Cast (CastRawPtr (TRawPtr (src, _), TRawPtr (tgt, _)))) ) ->
+        S.Unop (E.Cast (CastRawPtr (TRawPtr (src, _), TRawPtr (tgt, _)))) )
+    | Fun (Pure Transmute), S.Unop (E.Cast (CastTransmute (src, tgt))) ->
         mk_generic_args_from_types
           [ ctx_translate_fwd_ty ctx src; ctx_translate_fwd_ty ctx tgt ]
     | _ -> generics

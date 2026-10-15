@@ -88,13 +88,12 @@ theorem write_digit_dot.spec_cells (p : MutRawPtr U8) (d c : U8) (cs : List (Opt
   step* 1
   have : i = c := by scalar_tac
   subst this
-  have h0 := MutRawPtr.write.spec_cells p cs 0 i (by omega)
-  simp only [RawPtr.shift_zero, Pointee.toCell_default] at h0
+  have h0 := MutRawPtr.write.spec_cells p cs 0 i (by omega) (by simp)
+  simp only [RawPtr.shift_zero] at h0
   step with h0
   step with RawPtr.add.spec_cells p (cs.set 0 (some i)) 1#usize (by simp; omega)
   subst_vars
-  have h1 := MutRawPtr.write.spec_cells p (cs.set 0 (some i)) 1 46#u8 (by simp; omega)
-  simp only [Pointee.toCell_default] at h1
+  have h1 := MutRawPtr.write.spec_cells p (cs.set 0 (some i)) 1 46#u8 (by simp; omega) (by simp)
   step with h1
   step with RawPtr.add.spec_cells p ((cs.set 0 (some i)).set 1 (some 46#u8)) 2#usize
     (by simp; omega)
@@ -106,7 +105,8 @@ theorem write_digit_dot.spec (p : MutRawPtr U8) (d c : U8) (vs : List U8)
       ⦃ q => ⌜q = p.shift 2⌝ ∗ p ↦* ((vs.set 0 c).set 1 46#u8) ⦄ := by
   have h := write_digit_dot.spec_cells p d c (vs.map some) hc (by simpa)
   simp only [← List.map_set] at h
-  exact h
+  rw [RawPtr.pointsToRange_eq]
+  simpa only [RawPtr.pointsToRange_eq] using h
 
 theorem format_small.spec (d c : U8) (buf : Array U8 8#usize) (hc : c.val = 48 + d.val) :
     ⦃ emp ⦄ format_small d buf

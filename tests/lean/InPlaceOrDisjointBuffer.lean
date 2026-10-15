@@ -36,16 +36,16 @@ structure InPlaceOrDisjointBuffer (T : Type _) where
   len : Std.Usize
   _phantom : core.marker.PhantomData (Slice T)
 
-instance {T : Type _} : NonZeroSized (InPlaceOrDisjointBuffer T)
-  := ⟨NonZeroSized.nonZero (ConstRawPtr T) || NonZeroSized.nonZero (MutRawPtr
-  T) || NonZeroSized.nonZero Std.Usize || NonZeroSized.nonZero
-  (core.marker.PhantomData (Slice T))⟩
+instance {T : Type _} [Pointee T] : Pointee (InPlaceOrDisjointBuffer T) :=
+  Pointee.typed (InPlaceOrDisjointBuffer T) (Pointee.nonZero (ConstRawPtr T) ||
+  Pointee.nonZero (MutRawPtr T) || Pointee.nonZero Std.Usize || Pointee.nonZero
+  (core.marker.PhantomData (Slice T)))
 
 /-- [in_place_or_disjoint_buffer::{in_place_or_disjoint_buffer::InPlaceOrDisjointBuffer<'a, T>}::new_in_place]:
     Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 15:4-27:5
     Visibility: public -/
 def InPlaceOrDisjointBuffer.new_in_place
-  {T : Type _} (buffer : Slice T) :
+  {T : Type _} [Pointee T] (buffer : Slice T) :
   Result ((InPlaceOrDisjointBuffer T) × (InPlaceOrDisjointBuffer T → Result
     (Slice T)))
   := do
@@ -59,7 +59,7 @@ def InPlaceOrDisjointBuffer.new_in_place
     Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 32:4-41:5
     Visibility: public -/
 def InPlaceOrDisjointBuffer.new_disjoint
-  {T : Type _} (src : Slice T) (dst : Slice T) :
+  {T : Type _} [Pointee T] (src : Slice T) (dst : Slice T) :
   Result ((InPlaceOrDisjointBuffer T) × (InPlaceOrDisjointBuffer T → Result
     ((Slice T) × (Slice T))))
   := do
@@ -82,14 +82,16 @@ def InPlaceOrDisjointBuffer.new_disjoint
     Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 43:4-45:5
     Visibility: public -/
 def InPlaceOrDisjointBuffer.impl.len
-  {T : Type _} (self : InPlaceOrDisjointBuffer T) : Result Std.Usize := do
+  {T : Type _} [Pointee T] (self : InPlaceOrDisjointBuffer T) :
+  Result Std.Usize
+  := do
   ok self.len
 
 /-- [in_place_or_disjoint_buffer::{in_place_or_disjoint_buffer::InPlaceOrDisjointBuffer<'a, T>}::src]:
     Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 47:4-49:5
     Visibility: public -/
 def InPlaceOrDisjointBuffer.impl.src
-  {T : Type _} (self : InPlaceOrDisjointBuffer T) :
+  {T : Type _} [Pointee T] (self : InPlaceOrDisjointBuffer T) :
   Result ((Slice T) × (Result Unit))
   := do
   core.slice.raw.from_raw_parts self.src self.len
@@ -98,7 +100,7 @@ def InPlaceOrDisjointBuffer.impl.src
     Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 51:4-53:5
     Visibility: public -/
 def InPlaceOrDisjointBuffer.impl.dst
-  {T : Type _} (self : InPlaceOrDisjointBuffer T) :
+  {T : Type _} [Pointee T] (self : InPlaceOrDisjointBuffer T) :
   Result ((Slice T) × (Slice T → Result (InPlaceOrDisjointBuffer T)) ×
     (InPlaceOrDisjointBuffer T → InPlaceOrDisjointBuffer T))
   := do
