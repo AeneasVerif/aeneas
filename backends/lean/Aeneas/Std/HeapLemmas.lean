@@ -291,7 +291,7 @@ theorem notMem_freshAllocId {h : Heap} {address : Loc}
 
 /-- A fresh allocation sits next to the heap it was allocated in. -/
 theorem alloc_eq {α : Type} (h : Heap) (values : List α) (freeable : Bool) :
-    alloc h values freeable = allocation (freshLoc h) values freeable ∪ h := by
+    h.alloc values freeable = (freshLoc h, allocation (freshLoc h) values freeable ∪ h) := by
   rw [alloc]
 
 /-- An allocation is its cells followed by its end marker. -/
@@ -462,11 +462,13 @@ theorem isLive_union_left {h₁ h₂ : Heap} {l : Loc}
   rw [Heap.lookup_union_left hMem]
   exact hLive
 
+/-- Framing: `read` on a bigger heap reads the same value and leaves the frame alone. -/
 theorem read_union_left {α : Type} {h₁ h₂ : Heap} {q : RawPtr α M}
     (hValid : IsValid h₁ q) :
-    (h₁ ∪ h₂).read q (isValid_union_left hValid) =
-      h₁.read q hValid := by
+    (h₁ ∪ h₂).read q (isValid_union_left hValid) = Prod.map id (· ∪ h₂) (h₁.read q hValid) := by
   have hMem : q.loc ∈ h₁ := mem_of_isValid hValid
+  refine Prod.ext ?_ rfl
+  show (Heap.read q (h₁ ∪ h₂) _).1 = (h₁.read q hValid).1
   unfold Heap.read
   split
   · rename_i hLookup
@@ -488,8 +490,8 @@ theorem read_union_left {α : Type} {h₁ h₂ : Heap} {q : RawPtr α M}
 theorem write_union_left {α : Type} {h₁ h₂ : Heap}
     (q : RawPtr α M) (value : α) (hValid : IsValid h₁ q) :
     (h₁ ∪ h₂).write q value (isValid_union_left hValid) =
-      h₁.write q value hValid ∪ h₂ := by
-  exact Heap.insert_union
+      Prod.map id (· ∪ h₂) (h₁.write q value hValid) :=
+  congrArg (Prod.mk ()) Heap.insert_union
 
 private theorem compatible_insert_left {l : Loc} {cell : Slot}
     {h₁ h₂ : Heap}
@@ -504,8 +506,7 @@ theorem compatible_write_left {α : Type} {q : RawPtr α M} {value : α}
     {h₁ h₂ : Heap}
     (hCompatible : PartialCommMonoid.Compatible h₁ h₂)
     (hValid : IsValid h₁ q) :
-    PartialCommMonoid.Compatible
-      (h₁.write q value hValid) h₂ :=
+    PartialCommMonoid.Compatible (h₁.write q value hValid).2 h₂ :=
   compatible_insert_left hCompatible (mem_of_isValid hValid)
 
 theorem isEndMarker_union_left {h₁ h₂ : Heap} {l : Loc} {freeable : Bool}
@@ -540,7 +541,7 @@ private theorem mem_of_canDealloc {h : Heap} {l : Loc} {n i : Nat} {freeable : B
 
 theorem compatible_dealloc_left {h₁ h₂ : Heap} {l : Loc} {n : Nat} {freeable : Bool}
     (hCompatible : PartialCommMonoid.Compatible h₁ h₂) (hDealloc : CanDealloc h₁ l n freeable) :
-    PartialCommMonoid.Compatible (h₁.dealloc l n freeable hDealloc) h₂ := by
+    PartialCommMonoid.Compatible (h₁.dealloc l n freeable hDealloc).2 h₂ := by
   intro address hMem hMem₂
   change address ∈ freedRange l (n + 1) ∪ h₁ at hMem
   rcases Heap.mem_union.mp hMem with hFreed | hMem₁
@@ -551,18 +552,18 @@ theorem compatible_dealloc_left {h₁ h₂ : Heap} {l : Loc} {n : Nat} {freeable
 theorem dealloc_union_left {h₁ h₂ : Heap} {l : Loc} {n : Nat} {freeable : Bool}
     (hDealloc : CanDealloc h₁ l n freeable) :
     (h₁ ∪ h₂).dealloc l n freeable (canDealloc_union_left hDealloc) =
-      h₁.dealloc l n freeable hDealloc ∪ h₂ :=
-  (Heap.union_assoc' _ _ _).symm
+      Prod.map id (· ∪ h₂) (h₁.dealloc l n freeable hDealloc) :=
+  congrArg (Prod.mk ()) (Heap.union_assoc' _ _ _).symm
 
 /-- Deallocated slots stay in the heap, so their allocation id is never handed out again. -/
 theorem mem_dealloc {h : Heap} {l : Loc} {n i : Nat} {freeable : Bool}
     (hDealloc : CanDealloc h l n freeable) (hi : i ≤ n) :
-    l.shift i ∈ h.dealloc l n freeable hDealloc :=
+    l.shift i ∈ (h.dealloc l n freeable hDealloc).2 :=
   Heap.mem_union.mpr (Or.inl (mem_freedRange.mpr ⟨i, by omega, rfl⟩))
 
 private theorem lookup_dealloc {h : Heap} {l : Loc} {n i : Nat} {freeable : Bool}
     (hDealloc : CanDealloc h l n freeable) (hi : i ≤ n) :
-    (h.dealloc l n freeable hDealloc).impl.lookup (l.shift i) = some .freed := by
+    (h.dealloc l n freeable hDealloc).2.impl.lookup (l.shift i) = some .freed := by
   show Finmap.lookup (l.shift i) ((freedRange l (n + 1)).impl ∪ h.impl) = _
   rw [Finmap.lookup_union_left (mem_freedRange.mpr ⟨i, by omega, rfl⟩)]
   exact lookup_freedRange (by omega)
@@ -570,37 +571,37 @@ private theorem lookup_dealloc {h : Heap} {l : Loc} {n i : Nat} {freeable : Bool
 /-- A deallocated slot cannot be read or written. -/
 theorem not_isLive_dealloc {h : Heap} {l : Loc} {n i : Nat} {freeable : Bool}
     (hDealloc : CanDealloc h l n freeable) (hi : i ≤ n) :
-    ¬ IsLive (h.dealloc l n freeable hDealloc) (l.shift i) := by
+    ¬ IsLive (h.dealloc l n freeable hDealloc).2 (l.shift i) := by
   simp [IsLive, Heap.lookup, lookup_dealloc hDealloc hi, Slot.cell?]
 
 /-- After `dealloc`, the allocation end is freed, so the allocation cannot be deallocated again. -/
 theorem not_isEndMarker_dealloc {h : Heap} {l : Loc} {n : Nat} {freeable freeable' : Bool}
     (hDealloc : CanDealloc h l n freeable) :
-    ¬ IsEndMarker (h.dealloc l n freeable hDealloc) (l.shift n) freeable' := by
+    ¬ IsEndMarker (h.dealloc l n freeable hDealloc).2 (l.shift n) freeable' := by
   simp [IsEndMarker, lookup_dealloc hDealloc (Nat.le_refl n)]
 
 /-- A deallocated slot cannot be borrowed back to life. -/
 theorem not_isBorrowed_dealloc {h : Heap} {l : Loc} {n i : Nat} {freeable : Bool}
     (hDealloc : CanDealloc h l n freeable) (hi : i ≤ n) :
-    ¬ IsBorrowed (h.dealloc l n freeable hDealloc) (l.shift i) := by
+    ¬ IsBorrowed (h.dealloc l n freeable hDealloc).2 (l.shift i) := by
   simp [IsBorrowed, lookup_dealloc hDealloc hi]
 
 /-- Allocation leaves the slots already in the heap untouched. -/
 theorem isLive_alloc_of_mem {β : Type} {h : Heap} {values : List β} {freeable : Bool}
-    {l : Loc} (hMem : l ∈ h) : IsLive (alloc h values freeable) l ↔ IsLive h l := by
+    {l : Loc} (hMem : l ∈ h) : IsLive (h.alloc values freeable).2 l ↔ IsLive h l := by
   have hNotMem : l ∉ allocation (freshLoc h) values freeable :=
     fun hFresh => compatible_freshLoc h values freeable l hFresh hMem
   unfold IsLive
-  rw [show (alloc h values freeable).lookup l = h.lookup l from
+  rw [show (h.alloc values freeable).2.lookup l = h.lookup l from
     congrArg (Option.bind · Slot.cell?) (Finmap.lookup_union_right hNotMem)]
 
 /-- The end marker of an allocation is in the heap, so even an empty allocation reserves its id. -/
 theorem mem_alloc_end {α : Type} {freeable : Bool} (h : Heap) (values : List α) :
-    (freshLoc h).shift values.length ∈ alloc h values freeable :=
+    (freshLoc h).shift values.length ∈ (h.alloc values freeable).2 :=
   Heap.mem_union.mpr (Or.inl (Heap.mem_union.mpr (Or.inr (mem_endMarker.mpr rfl))))
 
 private theorem lookup_alloc_end {α : Type} (h : Heap) (values : List α) (freeable : Bool) :
-    (alloc h values freeable).impl.lookup ((freshLoc h).shift values.length) =
+    (h.alloc values freeable).2.impl.lookup ((freshLoc h).shift values.length) =
       some (.endMarker freeable) := by
   have hNotRange :
       (freshLoc h).shift values.length ∉ (array (freshLoc h) values).impl := by
@@ -620,13 +621,13 @@ private theorem lookup_alloc_end {α : Type} (h : Heap) (values : List α) (free
 
 /-- The end marker of a fresh allocation holds no value. -/
 theorem not_isLive_alloc_end {β : Type} {freeable : Bool} (h : Heap) (values : List β) :
-    ¬ IsLive (alloc h values freeable) ((freshLoc h).shift values.length) := by
+    ¬ IsLive (h.alloc values freeable).2 ((freshLoc h).shift values.length) := by
   simp [IsLive, Heap.lookup, lookup_alloc_end, Slot.cell?]
 
 /-- The end marker of a fresh allocation records the kind of the allocation. -/
 theorem isEndMarker_alloc_end_iff {α : Type} (h : Heap) (values : List α)
     (freeable freeable' : Bool) :
-    IsEndMarker (alloc h values freeable) ((freshLoc h).shift values.length) freeable' ↔
+    IsEndMarker (h.alloc values freeable).2 ((freshLoc h).shift values.length) freeable' ↔
       freeable = freeable' := by
   simp [IsEndMarker, lookup_alloc_end]
 
@@ -643,7 +644,9 @@ theorem isValid_singleton {α : Type} (q : RawPtr α M) (value : α) :
 
 theorem read_singleton {α : Type} (q : RawPtr α M) (value : α)
     (hValid : IsValid (singleton q value) q) :
-    (singleton q value).read q hValid = value := by
+    (singleton q value).read q hValid = (value, singleton q value) := by
+  refine Prod.ext ?_ rfl
+  show (Heap.read q (singleton q value) hValid).1 = value
   unfold Heap.read
   split
   · rename_i hLookup
@@ -658,9 +661,8 @@ theorem write_singleton {α : Type} (q : RawPtr α M)
     (oldValue newValue : α)
     (hValid : IsValid (singleton q oldValue) q) :
     (singleton q oldValue).write q newValue hValid =
-      singleton q newValue := by
-  apply Heap.ext_impl
-  simp [Heap.write, singleton, Heap.insert]
+      ((), singleton q newValue) :=
+  congrArg (Prod.mk ()) (Heap.ext_impl (by simp [singleton, Heap.insert]))
 
 theorem Subheap.isValid {α : Type} {A h : Heap} {q : RawPtr α M} (hSub : Heap.Subheap A h)
     (hValid : IsValid A q) : IsValid h q := by
@@ -706,18 +708,19 @@ theorem isLive_array {α : Type} {l : Loc} {values : List α} {i : Nat}
 /-- The values of a fresh allocation are live. -/
 theorem isLive_alloc {α : Type} {h : Heap} {values : List α} {freeable : Bool} {i : Nat}
     (hIndex : i < values.length) :
-    IsLive (alloc h values freeable) ((freshLoc h).shift i) :=
+    IsLive (h.alloc values freeable).2 ((freshLoc h).shift i) :=
   Subheap.isLive ((Subheap.union_left (compatible_array_endMarker _ _ _)).trans
     (Subheap.union_left (compatible_freshLoc _ _ _))) (isLive_array hIndex)
 
 theorem read_of_subheap {α : Type} {q : RawPtr α M} {value : α} {h : Heap}
     (hSub : Heap.Subheap (singleton q value) h)
-    (hValid : IsValid h q) : h.read q hValid = value := by
+    (hValid : IsValid h q) : (h.read q hValid).1 = value := by
   obtain ⟨rest, hCompatible, rfl⟩ := hSub
   have hValidSingleton := isValid_singleton q value
   rw [show hValid = isValid_union_left hValidSingleton from
       Subsingleton.elim _ _,
     read_union_left hValidSingleton, read_singleton]
+  rfl
 
 theorem isBorrowed_union_left {h₁ h₂ : Heap} {l : Loc} (hBorrowed : IsBorrowed h₁ l) :
     IsBorrowed (h₁ ∪ h₂) l := by
@@ -738,40 +741,41 @@ theorem Subheap.isBorrowed {l : Loc} {h : Heap} (hSub : Heap.Subheap (borrowedSl
   exact isBorrowed_union_left (isBorrowed_borrowedSlot l)
 
 theorem borrow_union_left {α : Type} {h₁ h₂ : Heap} (q : RawPtr α M) (hValid : IsValid h₁ q) :
-    (h₁ ∪ h₂).borrow q (isValid_union_left hValid) = h₁.borrow q hValid ∪ h₂ :=
-  Heap.insert_union
+    (h₁ ∪ h₂).borrow q (isValid_union_left hValid) =
+      Prod.map id (· ∪ h₂) (h₁.borrow q hValid) :=
+  Prod.ext (congrArg Prod.fst (read_union_left (h₂ := h₂) hValid) :) Heap.insert_union
 
 theorem compatible_borrow_left {α : Type} {q : RawPtr α M} {h₁ h₂ : Heap}
     (hCompatible : PartialCommMonoid.Compatible h₁ h₂) (hValid : IsValid h₁ q) :
-    PartialCommMonoid.Compatible (h₁.borrow q hValid) h₂ :=
+    PartialCommMonoid.Compatible (h₁.borrow q hValid).2 h₂ :=
   compatible_insert_left hCompatible (mem_of_isValid hValid)
 
 /-- A borrowed slot holds no value: no access goes through it until `revive`. -/
 theorem not_isLive_borrow {α : Type} {h : Heap} {q : RawPtr α M} (hValid : IsValid h q) :
-    ¬ IsLive (h.borrow q hValid) q.loc := by
+    ¬ IsLive (h.borrow q hValid).2 q.loc := by
   simp [IsLive, Heap.lookup, Heap.borrow, Heap.insert, Slot.cell?]
 
 theorem borrow_singleton {α : Type} (q : RawPtr α M) (value : α)
     (hValid : IsValid (singleton q value) q) :
-    (singleton q value).borrow q hValid = borrowedSlot q.loc := by
-  apply Heap.ext_impl
-  simp [Heap.borrow, singleton, borrowedSlot, Heap.insert]
+    (singleton q value).borrow q hValid = (value, borrowedSlot q.loc) :=
+  Prod.ext (congrArg Prod.fst (read_singleton q value hValid) :)
+    (Heap.ext_impl (by simp [Heap.borrow, singleton, borrowedSlot, Heap.insert]))
 
 theorem revive_union_left {α : Type} {h₁ h₂ : Heap} (q : RawPtr α M) (value : α)
     (hBorrowed : IsBorrowed h₁ q.loc) :
-    (h₁ ∪ h₂).revive q value (isBorrowed_union_left hBorrowed) = h₁.revive q value hBorrowed ∪ h₂ :=
-  Heap.insert_union
+    (h₁ ∪ h₂).revive q value (isBorrowed_union_left hBorrowed) =
+      Prod.map id (· ∪ h₂) (h₁.revive q value hBorrowed) :=
+  congrArg (Prod.mk ()) Heap.insert_union
 
 theorem compatible_revive_left {α : Type} {q : RawPtr α M} {value : α} {h₁ h₂ : Heap}
     (hCompatible : PartialCommMonoid.Compatible h₁ h₂) (hBorrowed : IsBorrowed h₁ q.loc) :
-    PartialCommMonoid.Compatible (h₁.revive q value hBorrowed) h₂ :=
+    PartialCommMonoid.Compatible (h₁.revive q value hBorrowed).2 h₂ :=
   compatible_insert_left hCompatible (Finmap.mem_of_lookup_eq_some hBorrowed)
 
 theorem revive_borrowedSlot {α : Type} (q : RawPtr α M) (value : α)
     (hBorrowed : IsBorrowed (borrowedSlot q.loc) q.loc) :
-    (borrowedSlot q.loc).revive q value hBorrowed = singleton q value := by
-  apply Heap.ext_impl
-  simp [Heap.revive, singleton, borrowedSlot, Heap.insert]
+    (borrowedSlot q.loc).revive q value hBorrowed = ((), singleton q value) :=
+  congrArg (Prod.mk ()) (Heap.ext_impl (by simp [singleton, borrowedSlot, Heap.insert]))
 
 end Heap
 

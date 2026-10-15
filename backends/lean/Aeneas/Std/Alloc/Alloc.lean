@@ -39,7 +39,6 @@ already deallocated. See the safety section of
 [`Allocator::deallocate`](https://doc.rust-lang.org/std/alloc/trait.Allocator.html#tymethod.deallocate).
 -/
 def Global.deallocate (_ : Global) (p : MutRawPtr T) (count : Nat) : Result Unit :=
-  Result.guardedModify (fun h => Heap.CanDealloc h p.loc count true) fun h hPre =>
-    ((), h.dealloc p.loc count true hPre)
+  Result.guardedModify _ (Heap.dealloc p.loc count true)
 
 end Aeneas.Std
