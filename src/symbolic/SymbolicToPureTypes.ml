@@ -788,24 +788,27 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
 
   (* Compute the map from region id to region group id *)
   let rg_to_gr_id =
-    T.RegionId.Map.of_list
+    TypesUtils.RegionMap.of_list
       (List.flatten
          (List.map
-            (fun (gr : T.region_var_group) ->
-              List.map (fun rid -> (rid, gr.id)) gr.regions)
+            (fun (gr : T.region_group) ->
+              List.map (fun r -> (r, gr.id)) gr.regions)
             sg.regions_hierarchy))
   in
   let get_region_group (r : T.region) : T.RegionGroupId.id =
     match r with
-    | T.RStatic -> [%craise_opt_span] span "Unimplemented: static region"
+    | T.RStatic -> (
+        match TypesUtils.RegionMap.find_opt r rg_to_gr_id with
+        | Some gr -> gr
+        | None -> [%internal_error_opt_span] span)
     | RErased -> [%craise_opt_span] span "Unexpected erased region"
     | RVar (Bound _ as var) ->
         [%craise_opt_span] span
           ("Unexpected bound region: "
           ^ Charon.Print.region_db_var_to_pretty_string var)
     | RBody _ -> [%craise_opt_span] None "unsupported: Body region"
-    | RVar (Free rid) -> (
-        match T.RegionId.Map.find_opt rid rg_to_gr_id with
+    | RVar (Free _) -> (
+        match TypesUtils.RegionMap.find_opt r rg_to_gr_id with
         | Some gr -> gr
         | None -> [%internal_error_opt_span] span)
   in
@@ -926,7 +929,7 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
       ^ "\n- inputs: " ^ inputs ^ "\n- back outputs: " ^ outputs];
     outputs
   in
-  let compute_back_info_for_group (rg : T.region_var_group) :
+  let compute_back_info_for_group (rg : T.region_group) :
       RegionGroupId.id * back_sg_info =
     let gid = rg.id in
     let back_effect_info =
@@ -992,7 +995,8 @@ and translate_fun_sigs (span : span option) (decls_ctx : C.decls_ctx)
     (input_names : string option list) : fun_sigs =
   (* Retrieve the list of parent backward functions *)
   let regions_hierarchy =
-    RegionsHierarchy.compute_regions_hierarchy_for_sig span decls_ctx.crate sg
+    RegionsHierarchy.compute_regions_hierarchy_for_sig span decls_ctx.crate
+      decls_ctx.type_ctx.type_infos sg
   in
 
   let inst_sg : LlbcAst.inst_fun_sig =
@@ -1003,7 +1007,7 @@ and translate_fun_sigs (span : span option) (decls_ctx : C.decls_ctx)
     let _, fresh_abs_id = V.AbsId.fresh_stateful_generator () in
     let region_gr_id_abs_id_list =
       List.map
-        (fun (rg : T.region_var_group) -> (rg.id, fresh_abs_id ()))
+        (fun (rg : T.region_group) -> (rg.id, fresh_abs_id ()))
         regions_hierarchy
     in
     let region_gr_id_to_abs =
@@ -1012,7 +1016,7 @@ and translate_fun_sigs (span : span option) (decls_ctx : C.decls_ctx)
     let region_id_to_abs id = RegionGroupId.Map.find id region_gr_id_to_abs in
     let abs_regions_hierarchy =
       List.map
-        (fun (rg : T.region_var_group) ->
+        (fun (rg : T.region_group) ->
           let id = region_id_to_abs rg.id in
           let parents = List.map region_id_to_abs rg.parents in
           { T.id; parents; regions = rg.regions })

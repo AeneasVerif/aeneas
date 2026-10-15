@@ -51,8 +51,8 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
   [%ltrace tvalue_to_string ctx v];
   (* Convert the value to a list of avalues *)
   let absl = ref [] in
-  let push_abs (r_id : RegionId.id) (avalues : tavalue list)
-      (output : tevalue option) (input : tevalue option) : unit =
+  let push_abs (r : region) (avalues : tavalue list) (output : tevalue option)
+      (input : tevalue option) : unit =
     if avalues = [] then ()
     else begin
       (* There should be output and input expressions *)
@@ -73,7 +73,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
           kind = abs_kind;
           can_end;
           parents = AbsId.Set.empty;
-          regions = { owned = RegionId.Set.singleton r_id };
+          regions = { owned = RegionSet.singleton r };
           ended_subabs = AbsLevelSet.empty;
           avalues;
           cont = Some { output = Some output; input = Some input };
@@ -158,7 +158,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let value : tavalue = { value; ty } in
             let ev_out = Some (mk_etuple ~borrow_proj:true []) in
             let ev_in = Some (mk_etuple ~borrow_proj:false []) in
-            push_abs rid [ value ] ev_out ev_in
+            push_abs (RVar (Free rid)) [ value ] ev_out ev_in
         | VMutBorrow (bid, bv) ->
             (* We don't support nested borrows for now *)
             [%cassert] span
@@ -181,7 +181,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             (* Recursively explore the expression to look for shared loans
                and create the input expression *)
             let avl, input = to_inputs rid bv in
-            push_abs rid (av :: avl) (Some output) (Some input)
+            push_abs (RVar (Free rid)) (av :: avl) (Some output) (Some input)
         | VReservedMutBorrow _ ->
             (* This borrow should have been activated *)
             [%craise] span "Unexpected")
@@ -189,7 +189,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
         let rid = ctx.fresh_region_id () in
         let avl, input = to_inputs rid v in
         (* Create a let-binding to ignore the input *)
-        let rids = RegionId.Set.singleton rid in
+        let rids = RegionSet.singleton (RVar (Free rid)) in
         let input : tevalue =
           let value =
             ELet
@@ -202,7 +202,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
         in
         (* *)
         let output = mk_eignored None mk_unit_ty in
-        push_abs rid avl (Some output) (Some input)
+        push_abs (RVar (Free rid)) avl (Some output) (Some input)
     | VSymbolic sv ->
         (* Check that there are no nested borrows in the symbolic value -
            we don't support this case yet *)
@@ -211,10 +211,23 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
              (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos sv.sv_ty))
           "Nested borrows are not supported yet";
 
-        (* Introduce one abstraction per live region *)
+        (* Introduce one abstraction per live region. Note that the static
+           region is not refreshed: if the type contains it (it may be hidden in
+           an ADT, see {!TypesUtils.adt_has_hidden_static}) we also need to
+           introduce an abstraction for the static region. *)
         let regions, ty = refresh_live_regions_in_ty span ctx sv.sv_ty in
-        RegionId.Map.iter
-          (fun _ rid ->
+        let regions =
+          List.map (fun rid -> RVar (Free rid)) (RegionId.Map.values regions)
+          @
+          if
+            ty_has_regions_in_set ctx.type_ctx.type_infos
+              (RegionSet.singleton RStatic)
+              ty
+          then [ RStatic ]
+          else []
+        in
+        List.iter
+          (fun r ->
             let proj : symbolic_proj = { sv_id = sv.sv_id; proj_ty = ty } in
             let nv = ASymbolic (PNone, AProjBorrows { proj; loans = [] }) in
             let nv : tavalue = { value = nv; ty } in
@@ -228,7 +241,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let output = { value = output; ty } in
             let input = { value = EValue (ctx.env, v); ty } in
             (* *)
-            push_abs rid [ nv ] (Some output) (Some input))
+            push_abs r [ nv ] (Some output) (Some input))
           regions
   in
 
@@ -238,13 +251,13 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
   List.rev !absl
 
 let convert_value_to_output_avalues (span : Meta.span) (ctx : eval_ctx)
-    (pm : proj_marker) (v : tvalue) (regions : RegionId.Set.t) (proj_ty : ty) :
+    (pm : proj_marker) (v : tvalue) (regions : region_set) (proj_ty : ty) :
     tavalue list * tevalue =
   [%ltrace tvalue_to_string ctx v];
 
   let keep_region (r : region) =
     match r with
-    | RVar (Free rid) -> RegionId.Set.mem rid regions
+    | (RVar (Free _) | RStatic) as r' -> RegionSet.mem r' regions
     | _ -> false
   in
 
@@ -334,7 +347,7 @@ let convert_value_to_output_avalues (span : Meta.span) (ctx : eval_ctx)
           "Nested borrows are not supported yet";
 
         (* Check if there is an intersection with the current regions *)
-        if ty_has_regions_in_set regions proj_ty then
+        if ty_has_regions_in_set ctx.type_ctx.type_infos regions proj_ty then
           let proj : symbolic_proj = { sv_id = sv.sv_id; proj_ty } in
           let nv = ASymbolic (pm, AProjBorrows { proj; loans = [] }) in
           let nv : tavalue = { value = nv; ty = proj_ty } in
@@ -899,7 +912,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
     ]} *)
 let merge_abstractions_merge_markers (span : Meta.span)
     (merge_funs : merge_duplicates_funcs) (ctx : eval_ctx)
-    (owned_regions : RegionId.Set.t) (avalues : tavalue list) : tavalue list =
+    (owned_regions : region_set) (avalues : tavalue list) : tavalue list =
   [%ltrace
     "- avalues:\n"
     ^ String.concat ", " (List.map (tavalue_to_string ctx) avalues)];
@@ -1322,12 +1335,12 @@ let bound_inputs_outputs_update_input_symbolic (span : Meta.span)
     might have replaced some loans with free variables, in case the output of
     the corresponding borrows were bound elsewhere). *)
 let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
-    (regions : RegionId.Set.t) (bound : bound_inputs_outputs ref)
-    (output : tevalue) (input : tevalue) : tepat * tevalue =
+    (regions : region_set) (bound : bound_inputs_outputs ref) (output : tevalue)
+    (input : tevalue) : tepat * tevalue =
   (* Update the input value by substituting expressions (such as a mutable loan)
      whose input have been bound earlier (because we bound an abstraction continuation
      earlier which has a mutable borrow corresponding to this mutable loan) *)
-  let rec update_input (regions : RegionId.Set.t) (input : tevalue) : tevalue =
+  let rec update_input (regions : region_set) (input : tevalue) : tevalue =
     match input.value with
     | ELet (regions', pat, bvalue, next) ->
         (* Explore the bound expression *)
@@ -1416,7 +1429,7 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
         { input with value = EMutBorrowInput (update_input regions x) }
     | EValue _ | EIgnored _ -> input
   in
-  let rec bind_output (regions : RegionId.Set.t) (output : tevalue) : tepat =
+  let rec bind_output (regions : region_set) (output : tevalue) : tepat =
     match output.value with
     | ELet _ | EJoinMarkers _ | EBVar _ | EFVar _ | EApp _ | EMutBorrowInput _
       ->
@@ -1677,8 +1690,8 @@ let abs_cont_destructure_input_output_levels (span : Meta.span) (ctx : eval_ctx)
       (output, input)
 
 let abs_cont_bind_outputs (span : Meta.span) (ctx : eval_ctx)
-    (regions : RegionId.Set.t) (bound : bound_inputs_outputs ref)
-    (cont : abs_cont) : tepat * tevalue =
+    (regions : region_set) (bound : bound_inputs_outputs ref) (cont : abs_cont)
+    : tepat * tevalue =
   match (cont.output, cont.input) with
   | Some output, Some input ->
       let output, input =
@@ -1979,7 +1992,7 @@ let merge_abs_conts_aux (span : Meta.span) (ctx : eval_ctx) (abs0 : abs)
   (* Create the let-bindings (this is the input expression) *)
   let input = mk_let span abs0.regions.owned pat0 inputs0 output_input_expr in
   let input = mk_let span abs1.regions.owned pat1 inputs1 input in
-  let all_regions = RegionId.Set.union abs0.regions.owned abs1.regions.owned in
+  let all_regions = RegionSet.union abs0.regions.owned abs1.regions.owned in
   let input = mk_let span all_regions input_pat input_input input in
 
   (* Sanity check: no free variables in the expressions *)
@@ -2040,7 +2053,7 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
       (AbsId.Set.of_list [ abs0.abs_id; abs1.abs_id ])
   in
   let regions =
-    let owned = RegionId.Set.union abs0.regions.owned abs1.regions.owned in
+    let owned = RegionSet.union abs0.regions.owned abs1.regions.owned in
     { owned }
   in
 
@@ -2147,6 +2160,38 @@ let ctx_merge_regions (ctx : eval_ctx) (rid : RegionId.id)
   let env = Substitute.env_subst_rids rsubst ctx.env in
   { ctx with env }
 
+(** Merge some regions in a context into the static region *)
+let ctx_merge_regions_into_static (ctx : eval_ctx) (rids : RegionId.Set.t) :
+    eval_ctx =
+  let visitor =
+    object
+      inherit [_] map_eval_ctx
+
+      method! visit_RVar _ var =
+        match var with
+        | Free rid when RegionId.Set.mem rid rids -> RStatic
+        | _ -> RVar var
+    end
+  in
+  visitor#visit_eval_ctx () ctx
+
+(** Make a region abstraction own the static region, by merging all the regions
+    it owns into the static region (see {!ctx_merge_regions_into_static}). *)
+let ctx_promote_abs_to_static (span : Meta.span) (ctx : eval_ctx)
+    (abs_id : AbsId.id) : eval_ctx =
+  let abs = ctx_lookup_abs ctx abs_id in
+  let ctx =
+    ctx_merge_regions_into_static ctx
+      (region_set_get_region_ids abs.regions.owned)
+  in
+  (* Make sure the abstraction owns the static region (this is necessary if it
+     didn't own any region) *)
+  let abs = ctx_lookup_abs ctx abs_id in
+  let abs =
+    { abs with regions = { owned = RegionSet.add RStatic abs.regions.owned } }
+  in
+  fst (ctx_subst_abs span ctx abs_id abs)
+
 (** End the shared loans in a given abstraction which do not have corresponding
     shared borrows in the context *)
 let end_endable_shared_loans_at_abs (span : Meta.span) (ctx : eval_ctx)
@@ -2170,6 +2215,60 @@ let end_endable_shared_loans_at_abs (span : Meta.span) (ctx : eval_ctx)
   let abs = { abs with avalues } in
   fst (ctx_subst_abs span ctx abs_id abs)
 
+(** Check whether we can soundly "demote" a region abstraction which owns the
+    static region, that is replace the static region with a non-static region
+    (see {!merge_into_first_abstraction}).
+
+    This is sound only if the abstraction contains loans (or loan projections)
+    which do not contain nested borrows. Indeed, demoting the abstraction allows
+    ending it earlier: as the loans must have been ended (i.e., there are no
+    outstanding borrows) before we end the abstraction, ending it earlier gives
+    back nothing which is still in use. On the contrary, ending a borrow earlier
+    would give the borrowed value back to its lender while it may still be
+    aliased through the static region, and ending a loan of a value containing
+    borrows may introduce those borrows in the context (because of nested
+    mutable borrows: ending a loan in an abstraction might introduce children
+    projections for the inner borrows). *)
+let abs_static_is_demotable (span : Meta.span) (ctx : eval_ctx) (abs : abs) :
+    bool =
+  let infos = ctx.type_ctx.type_infos in
+  let check (av : tavalue) : bool =
+    match av.value with
+    | ALoan _ -> (
+        match av.ty with
+        | TRef (_, inner, _) -> not (ty_has_borrows (Some span) infos inner)
+        | _ -> false)
+    | ASymbolic (_, proj) -> (
+        (not (ty_has_nested_borrows (Some span) infos av.ty))
+        (* We can't replace a static region which is hidden in an ADT (see
+           {!TypesUtils.adt_has_hidden_static}) *)
+        && (not (ty_has_hidden_static infos av.ty))
+        &&
+        match proj with
+        | AProjLoans { borrows; _ } | AEndedProjLoans { borrows; _ } ->
+            borrows = []
+        | AEmpty -> true
+        | AProjBorrows _ | AEndedProjBorrows _ -> false)
+    | AIgnored _ -> true
+    | AAdt _ | ABorrow _ -> false
+  in
+  List.for_all check abs.avalues
+
+(** Demote a region abstraction which owns the static region (see
+    {!abs_static_is_demotable}), by replacing the static region with the region
+    [rid] inside the abstraction (and only inside the abstraction). *)
+let abs_demote_static (abs : abs) (rid : RegionId.id) : abs =
+  let r = RVar (Free rid) in
+  let visitor =
+    object
+      inherit [_] map_abs
+      method! visit_RStatic _ = r
+    end
+  in
+  let abs = visitor#visit_abs () abs in
+  let owned = RegionSet.add r (RegionSet.remove RStatic abs.regions.owned) in
+  { abs with regions = { owned } }
+
 let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
     ~(can_end : bool) ~(with_abs_conts : bool)
     (merge_funs : merge_duplicates_funcs option) (ctx : eval_ctx)
@@ -2186,6 +2285,28 @@ let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
 
   (* Small sanity check *)
   [%sanity_check] span (abs_id0 <> abs_id1);
+
+  (* If exactly one of the two abstractions owns the static region, we need to
+     decide which lifetime the merged abstraction should have. If it is sound
+     (see {!abs_static_is_demotable}) we "demote" the abstraction owning the
+     static region, so that the merged abstraction doesn't own the static region
+     (and can thus be ended). Otherwise we "promote" the merged abstraction: it
+     will own the static region (see below). *)
+  let abs0, abs1 =
+    let demote (abs : abs) (other : abs) : abs =
+      match
+        RegionId.Set.min_elt_opt (region_set_get_region_ids other.regions.owned)
+      with
+      | Some rid when abs_static_is_demotable span ctx abs ->
+          [%ltrace "Demoting abstraction " ^ AbsId.to_string abs.abs_id];
+          abs_demote_static abs rid
+      | _ -> abs
+    in
+    match (abs_owns_static abs0, abs_owns_static abs1) with
+    | true, false -> (demote abs0 abs1, abs1)
+    | false, true -> (abs0, demote abs1 abs0)
+    | _ -> (abs0, abs1)
+  in
 
   (* Merge them *)
   let nabs =
@@ -2204,14 +2325,24 @@ let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
      environment, as those regions may be referenced as ancestor regions by
      the other abstractions, and may be present in symbolic values, etc. (this
      is not the case if there are no nested borrows, but we anticipate).
+
+     If the abstraction owns the static region, we merge all its regions into
+     the static region (the abstraction then only owns the static region).
   *)
   let ctx =
-    let regions = nabs.regions.owned in
-    (* Pick the first region id (this is the smallest) *)
-    let rid = RegionId.Set.min_elt regions in
-    (* If there is only one region, do nothing *)
-    if RegionId.Set.cardinal regions = 1 then ctx
+    let has_static = abs_owns_static nabs in
+    let regions = region_set_get_region_ids nabs.regions.owned in
+    if has_static then
+      (* The abstraction owns the static region: we merge all the other regions
+         into the static region *)
+      ctx_merge_regions_into_static ctx regions
+    else if
+      (* If there is only one region (or none), do nothing *)
+      RegionId.Set.cardinal regions <= 1
+    then ctx
     else
+      (* Pick the first region id (this is the smallest) *)
+      let rid = RegionId.Set.min_elt regions in
       let rids = RegionId.Set.remove rid regions in
       ctx_merge_regions ctx rid rids
   in

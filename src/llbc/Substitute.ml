@@ -7,6 +7,40 @@ open Types
 open Values
 open LlbcAst
 
+(** Visitor to erase the static region *)
+let erase_static_visitor =
+  object
+    inherit [_] map_ty
+    method! visit_RStatic _ = RErased
+  end
+
+(** Erase the regions in a type.
+
+    This shadows {!Charon.Substitute.erase_regions}: the difference is that we
+    also erase the static region (the types of the values in the environment
+    should have all their regions erased). *)
+let erase_regions (ty : ty) : ty =
+  erase_static_visitor#visit_ty () (Charon.Substitute.erase_regions ty)
+
+(** Shadows {!Charon.Substitute.generic_args_erase_regions} (we also erase the
+    static region) *)
+let generic_args_erase_regions (generics : generic_args) : generic_args =
+  erase_static_visitor#visit_generic_args ()
+    (Charon.Substitute.generic_args_erase_regions generics)
+
+(** Shadows {!Charon.Substitute.erase_regions_substitute_types} (we also erase
+    the static region) *)
+let erase_regions_substitute_types (subst : subst) (ty : ty) : ty =
+  erase_static_visitor#visit_ty ()
+    (Charon.Substitute.erase_regions_substitute_types subst ty)
+
+(** Shadows {!Charon.Substitute.type_decl_get_instantiated_field_etypes} (we
+    also erase the static region) *)
+let type_decl_get_instantiated_field_etypes (def : type_decl)
+    (opt_variant_id : VariantId.id option) (generics : generic_args) : ty list =
+  List.map erase_regions
+    (type_decl_get_instantiated_field_types def opt_variant_id generics)
+
 (* Fails if the variable is bound *)
 let expect_free_var span (var : 'id de_bruijn_var) : 'id =
   match var with
@@ -42,7 +76,7 @@ let substitute_signature (asubst : RegionGroupId.id -> AbsId.id)
     (cg_sb_subst : ConstGenericVarId.id -> constant_expr_kind)
     (tr_sb_subst : TraitClauseId.id -> region_args -> trait_ref_kind)
     (tr_sb_self : trait_ref_kind) (sg : bound_fun_sig)
-    (regions_hierarchy : region_var_groups) : inst_fun_sig =
+    (regions_hierarchy : region_groups) : inst_fun_sig =
   let { item_binder_params = generics; item_binder_value = sg } = sg in
   let r_sb_subst id = RVar (Free (r_id_subst id)) in
   let subst =
@@ -51,20 +85,25 @@ let substitute_signature (asubst : RegionGroupId.id -> AbsId.id)
   in
   let inputs = List.map (ty_substitute subst) sg.inputs in
   let output = ty_substitute subst sg.output in
-  let subst_abs_region_group (rg : region_var_group) : abs_region_group =
+  let subst_region (r : region) : region =
+    match r with
+    | RVar (Free rid) -> RVar (Free (r_id_subst rid))
+    | _ -> r
+  in
+  let subst_abs_region_group (rg : region_group) : abs_region_group =
     let id = asubst rg.id in
-    let regions = List.map r_id_subst rg.regions in
+    let regions = List.map subst_region rg.regions in
     let parents = List.map asubst rg.parents in
     ({ id; regions; parents } : abs_region_group)
   in
   let abs_regions_hierarchy =
     List.map subst_abs_region_group regions_hierarchy
   in
-  let subst_region_group (rg : region_var_group) : region_var_group =
+  let subst_region_group (rg : region_group) : region_group =
     let id = rg.id in
-    let regions = List.map r_id_subst rg.regions in
+    let regions = List.map subst_region rg.regions in
     let parents = rg.parents in
-    ({ id; regions; parents } : region_var_group)
+    ({ id; regions; parents } : region_group)
   in
   let regions_hierarchy = List.map subst_region_group regions_hierarchy in
   let trait_type_constraints =
