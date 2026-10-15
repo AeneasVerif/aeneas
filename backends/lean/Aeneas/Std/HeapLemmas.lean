@@ -145,9 +145,9 @@ theorem mem_singleton {α : Type} {q : RawPtr α M} {value : α} {address : Loc}
   show address ∈ (Finmap.singleton q.loc (Slot.live ⟨α, value⟩) : HeapImpl) ↔ _
   exact Finmap.mem_singleton _ _ _
 
-theorem mem_endMarker {l address : Loc} {freeable : Bool} :
-    address ∈ endMarker l freeable ↔ address = l := by
-  show address ∈ (Finmap.singleton l (Slot.endMarker freeable) : HeapImpl) ↔ _
+theorem mem_endMarker {l address : Loc} {kind : AllocKind} :
+    address ∈ endMarker l kind ↔ address = l := by
+  show address ∈ (Finmap.singleton l (Slot.endMarker kind) : HeapImpl) ↔ _
   exact Finmap.mem_singleton _ _ _
 
 private theorem lookup_singleton {α : Type} (q : RawPtr α M) (value : α) :
@@ -290,17 +290,17 @@ theorem notMem_freshAllocId {h : Heap} {address : Loc}
   rw [freshLoc]
 
 /-- A fresh allocation sits next to the heap it was allocated in. -/
-theorem alloc_eq {α : Type} (h : Heap) (values : List α) (freeable : Bool) :
-    h.alloc values freeable = (⟨freshLoc h⟩, allocation (freshLoc h) values freeable ∪ h) := by
+theorem alloc_eq {α : Type} (h : Heap) (values : List α) (kind : AllocKind) :
+    h.alloc values kind = (⟨freshLoc h⟩, allocation (freshLoc h) values kind ∪ h) := by
   rw [alloc]
 
 /-- An allocation is its cells followed by its end marker. -/
-theorem allocation_eq {α : Type} (l : Loc) (values : List α) (freeable : Bool) :
-    allocation l values freeable = array l values ∪ endMarker (l.shift values.length) freeable := by
+theorem allocation_eq {α : Type} (l : Loc) (values : List α) (kind : AllocKind) :
+    allocation l values kind = array l values ∪ endMarker (l.shift values.length) kind := by
   rw [allocation]
 
-theorem compatible_freshLoc {α : Type} (h : Heap) (values : List α) (freeable : Bool) :
-    PartialCommMonoid.Compatible (allocation (freshLoc h) values freeable) h := by
+theorem compatible_freshLoc {α : Type} (h : Heap) (values : List α) (kind : AllocKind) :
+    PartialCommMonoid.Compatible (allocation (freshLoc h) values kind) h := by
   intro address hFresh hMem
   apply notMem_freshAllocId (h := h) _ hMem
   rcases Heap.mem_union.mp hFresh with hRange | hEnd
@@ -309,8 +309,8 @@ theorem compatible_freshLoc {α : Type} (h : Heap) (values : List α) (freeable 
   · rw [mem_endMarker.mp hEnd]
     rfl
 
-theorem compatible_array_endMarker {α : Type} (l : Loc) (values : List α) (freeable : Bool) :
-    PartialCommMonoid.Compatible (array l values) (endMarker (l.shift values.length) freeable) := by
+theorem compatible_array_endMarker {α : Type} (l : Loc) (values : List α) (kind : AllocKind) :
+    PartialCommMonoid.Compatible (array l values) (endMarker (l.shift values.length) kind) := by
   intro address hRange hEnd
   obtain ⟨i, hi, rfl⟩ := mem_array.mp hRange
   have hOffset := congrArg Loc.offset (mem_endMarker.mp hEnd)
@@ -509,39 +509,39 @@ theorem compatible_write_left {α : Type} {q : RawPtr α M} {value : α}
     PartialCommMonoid.Compatible (h₁.write q value hValid).2 h₂ :=
   compatible_insert_left hCompatible (mem_of_isValid hValid)
 
-theorem isEndMarker_union_left {h₁ h₂ : Heap} {l : Loc} {freeable : Bool}
-    (hEnd : IsEndMarker h₁ l freeable) : IsEndMarker (h₁ ∪ h₂) l freeable := by
+theorem isEndMarker_union_left {h₁ h₂ : Heap} {l : Loc} {kind : AllocKind}
+    (hEnd : IsEndMarker h₁ l kind) : IsEndMarker (h₁ ∪ h₂) l kind := by
   show Finmap.lookup l (h₁.impl ∪ h₂.impl) = _
   rw [Finmap.lookup_union_left (Finmap.mem_of_lookup_eq_some hEnd)]
   exact hEnd
 
 /-- An end marker holds no value. -/
-theorem not_isLive_of_isEndMarker {h : Heap} {l : Loc} {freeable : Bool}
-    (hEnd : IsEndMarker h l freeable) : ¬ IsLive h l := by
+theorem not_isLive_of_isEndMarker {h : Heap} {l : Loc} {kind : AllocKind}
+    (hEnd : IsEndMarker h l kind) : ¬ IsLive h l := by
   unfold IsEndMarker at hEnd
   simp [IsLive, Heap.lookup, hEnd, Slot.cell?]
 
-theorem canDealloc_iff {h : Heap} {l : Loc} {n : Nat} {freeable : Bool} :
-    CanDealloc h l n freeable ↔
-      l.offset = 0 ∧ (∀ i < n, IsLive h (l.shift i)) ∧ IsEndMarker h (l.shift n) freeable := by
+theorem canDealloc_iff {h : Heap} {l : Loc} {n : Nat} {kind : AllocKind} :
+    CanDealloc h l n kind ↔
+      l.offset = 0 ∧ (∀ i < n, IsLive h (l.shift i)) ∧ IsEndMarker h (l.shift n) kind := by
   rw [CanDealloc]
 
-theorem canDealloc_union_left {h₁ h₂ : Heap} {l : Loc} {n : Nat} {freeable : Bool}
-    (hDealloc : CanDealloc h₁ l n freeable) : CanDealloc (h₁ ∪ h₂) l n freeable :=
+theorem canDealloc_union_left {h₁ h₂ : Heap} {l : Loc} {n : Nat} {kind : AllocKind}
+    (hDealloc : CanDealloc h₁ l n kind) : CanDealloc (h₁ ∪ h₂) l n kind :=
   ⟨hDealloc.1, fun i hi => isLive_union_left (hDealloc.2.1 i hi),
     isEndMarker_union_left hDealloc.2.2⟩
 
 /-- The slots that `dealloc` kills are already in the heap. -/
-private theorem mem_of_canDealloc {h : Heap} {l : Loc} {n i : Nat} {freeable : Bool}
-    (hDealloc : CanDealloc h l n freeable)
+private theorem mem_of_canDealloc {h : Heap} {l : Loc} {n i : Nat} {kind : AllocKind}
+    (hDealloc : CanDealloc h l n kind)
     (hi : i < n + 1) : l.shift i ∈ h := by
   rcases Nat.lt_succ_iff_lt_or_eq.mp hi with hi | rfl
   · exact mem_of_isLive (hDealloc.2.1 i hi)
   · exact Finmap.mem_of_lookup_eq_some hDealloc.2.2
 
-theorem compatible_dealloc_left {h₁ h₂ : Heap} {l : Loc} {n : Nat} {freeable : Bool}
-    (hCompatible : PartialCommMonoid.Compatible h₁ h₂) (hDealloc : CanDealloc h₁ l n freeable) :
-    PartialCommMonoid.Compatible (h₁.dealloc l n freeable hDealloc).2 h₂ := by
+theorem compatible_dealloc_left {h₁ h₂ : Heap} {l : Loc} {n : Nat} {kind : AllocKind}
+    (hCompatible : PartialCommMonoid.Compatible h₁ h₂) (hDealloc : CanDealloc h₁ l n kind) :
+    PartialCommMonoid.Compatible (h₁.dealloc l n kind hDealloc).2 h₂ := by
   intro address hMem hMem₂
   change address ∈ freedRange l (n + 1) ∪ h₁ at hMem
   rcases Heap.mem_union.mp hMem with hFreed | hMem₁
@@ -549,60 +549,60 @@ theorem compatible_dealloc_left {h₁ h₂ : Heap} {l : Loc} {n : Nat} {freeable
     exact hCompatible _ (mem_of_canDealloc hDealloc hi) hMem₂
   · exact hCompatible _ hMem₁ hMem₂
 
-theorem dealloc_union_left {h₁ h₂ : Heap} {l : Loc} {n : Nat} {freeable : Bool}
-    (hDealloc : CanDealloc h₁ l n freeable) :
-    (h₁ ∪ h₂).dealloc l n freeable (canDealloc_union_left hDealloc) =
-      Prod.map id (· ∪ h₂) (h₁.dealloc l n freeable hDealloc) :=
+theorem dealloc_union_left {h₁ h₂ : Heap} {l : Loc} {n : Nat} {kind : AllocKind}
+    (hDealloc : CanDealloc h₁ l n kind) :
+    (h₁ ∪ h₂).dealloc l n kind (canDealloc_union_left hDealloc) =
+      Prod.map id (· ∪ h₂) (h₁.dealloc l n kind hDealloc) :=
   congrArg (Prod.mk ()) (Heap.union_assoc' _ _ _).symm
 
 /-- Deallocated slots stay in the heap, so their allocation id is never handed out again. -/
-theorem mem_dealloc {h : Heap} {l : Loc} {n i : Nat} {freeable : Bool}
-    (hDealloc : CanDealloc h l n freeable) (hi : i ≤ n) :
-    l.shift i ∈ (h.dealloc l n freeable hDealloc).2 :=
+theorem mem_dealloc {h : Heap} {l : Loc} {n i : Nat} {kind : AllocKind}
+    (hDealloc : CanDealloc h l n kind) (hi : i ≤ n) :
+    l.shift i ∈ (h.dealloc l n kind hDealloc).2 :=
   Heap.mem_union.mpr (Or.inl (mem_freedRange.mpr ⟨i, by omega, rfl⟩))
 
-private theorem lookup_dealloc {h : Heap} {l : Loc} {n i : Nat} {freeable : Bool}
-    (hDealloc : CanDealloc h l n freeable) (hi : i ≤ n) :
-    (h.dealloc l n freeable hDealloc).2.impl.lookup (l.shift i) = some .freed := by
+private theorem lookup_dealloc {h : Heap} {l : Loc} {n i : Nat} {kind : AllocKind}
+    (hDealloc : CanDealloc h l n kind) (hi : i ≤ n) :
+    (h.dealloc l n kind hDealloc).2.impl.lookup (l.shift i) = some .freed := by
   show Finmap.lookup (l.shift i) ((freedRange l (n + 1)).impl ∪ h.impl) = _
   rw [Finmap.lookup_union_left (mem_freedRange.mpr ⟨i, by omega, rfl⟩)]
   exact lookup_freedRange (by omega)
 
 /-- A deallocated slot cannot be read or written. -/
-theorem not_isLive_dealloc {h : Heap} {l : Loc} {n i : Nat} {freeable : Bool}
-    (hDealloc : CanDealloc h l n freeable) (hi : i ≤ n) :
-    ¬ IsLive (h.dealloc l n freeable hDealloc).2 (l.shift i) := by
+theorem not_isLive_dealloc {h : Heap} {l : Loc} {n i : Nat} {kind : AllocKind}
+    (hDealloc : CanDealloc h l n kind) (hi : i ≤ n) :
+    ¬ IsLive (h.dealloc l n kind hDealloc).2 (l.shift i) := by
   simp [IsLive, Heap.lookup, lookup_dealloc hDealloc hi, Slot.cell?]
 
 /-- After `dealloc`, the allocation end is freed, so the allocation cannot be deallocated again. -/
-theorem not_isEndMarker_dealloc {h : Heap} {l : Loc} {n : Nat} {freeable freeable' : Bool}
-    (hDealloc : CanDealloc h l n freeable) :
-    ¬ IsEndMarker (h.dealloc l n freeable hDealloc).2 (l.shift n) freeable' := by
+theorem not_isEndMarker_dealloc {h : Heap} {l : Loc} {n : Nat} {kind kind' : AllocKind}
+    (hDealloc : CanDealloc h l n kind) :
+    ¬ IsEndMarker (h.dealloc l n kind hDealloc).2 (l.shift n) kind' := by
   simp [IsEndMarker, lookup_dealloc hDealloc (Nat.le_refl n)]
 
 /-- A deallocated slot cannot be borrowed back to life. -/
-theorem not_isBorrowed_dealloc {h : Heap} {l : Loc} {n i : Nat} {freeable : Bool}
-    (hDealloc : CanDealloc h l n freeable) (hi : i ≤ n) :
-    ¬ IsBorrowed (h.dealloc l n freeable hDealloc).2 (l.shift i) := by
+theorem not_isBorrowed_dealloc {h : Heap} {l : Loc} {n i : Nat} {kind : AllocKind}
+    (hDealloc : CanDealloc h l n kind) (hi : i ≤ n) :
+    ¬ IsBorrowed (h.dealloc l n kind hDealloc).2 (l.shift i) := by
   simp [IsBorrowed, lookup_dealloc hDealloc hi]
 
 /-- Allocation leaves the slots already in the heap untouched. -/
-theorem isLive_alloc_of_mem {β : Type} {h : Heap} {values : List β} {freeable : Bool}
-    {l : Loc} (hMem : l ∈ h) : IsLive (h.alloc values freeable).2 l ↔ IsLive h l := by
-  have hNotMem : l ∉ allocation (freshLoc h) values freeable :=
-    fun hFresh => compatible_freshLoc h values freeable l hFresh hMem
+theorem isLive_alloc_of_mem {β : Type} {h : Heap} {values : List β} {kind : AllocKind}
+    {l : Loc} (hMem : l ∈ h) : IsLive (h.alloc values kind).2 l ↔ IsLive h l := by
+  have hNotMem : l ∉ allocation (freshLoc h) values kind :=
+    fun hFresh => compatible_freshLoc h values kind l hFresh hMem
   unfold IsLive
-  rw [show (h.alloc values freeable).2.lookup l = h.lookup l from
+  rw [show (h.alloc values kind).2.lookup l = h.lookup l from
     congrArg (Option.bind · Slot.cell?) (Finmap.lookup_union_right hNotMem)]
 
 /-- The end marker of an allocation is in the heap, so even an empty allocation reserves its id. -/
-theorem mem_alloc_end {α : Type} {freeable : Bool} (h : Heap) (values : List α) :
-    (freshLoc h).shift values.length ∈ (h.alloc values freeable).2 :=
+theorem mem_alloc_end {α : Type} {kind : AllocKind} (h : Heap) (values : List α) :
+    (freshLoc h).shift values.length ∈ (h.alloc values kind).2 :=
   Heap.mem_union.mpr (Or.inl (Heap.mem_union.mpr (Or.inr (mem_endMarker.mpr rfl))))
 
-private theorem lookup_alloc_end {α : Type} (h : Heap) (values : List α) (freeable : Bool) :
-    (h.alloc values freeable).2.impl.lookup ((freshLoc h).shift values.length) =
-      some (.endMarker freeable) := by
+private theorem lookup_alloc_end {α : Type} (h : Heap) (values : List α) (kind : AllocKind) :
+    (h.alloc values kind).2.impl.lookup ((freshLoc h).shift values.length) =
+      some (.endMarker kind) := by
   have hNotRange :
       (freshLoc h).shift values.length ∉ (array (freshLoc h) values).impl := by
     intro hRange
@@ -611,24 +611,24 @@ private theorem lookup_alloc_end {α : Type} (h : Heap) (values : List α) (free
     simp only [Loc.offset_shift] at hOffset
     omega
   have hEnd : (freshLoc h).shift values.length ∈
-      (endMarker ((freshLoc h).shift values.length) freeable).impl :=
+      (endMarker ((freshLoc h).shift values.length) kind).impl :=
     mem_endMarker.mpr rfl
   show Finmap.lookup _ (((array (freshLoc h) values).impl ∪
-    (endMarker ((freshLoc h).shift values.length) freeable).impl) ∪ h.impl) = _
+    (endMarker ((freshLoc h).shift values.length) kind).impl) ∪ h.impl) = _
   rw [Finmap.lookup_union_left (Finmap.mem_union.mpr (Or.inr hEnd)),
     Finmap.lookup_union_right hNotRange]
   simp [endMarker]
 
 /-- The end marker of a fresh allocation holds no value. -/
-theorem not_isLive_alloc_end {β : Type} {freeable : Bool} (h : Heap) (values : List β) :
-    ¬ IsLive (h.alloc values freeable).2 ((freshLoc h).shift values.length) := by
+theorem not_isLive_alloc_end {β : Type} {kind : AllocKind} (h : Heap) (values : List β) :
+    ¬ IsLive (h.alloc values kind).2 ((freshLoc h).shift values.length) := by
   simp [IsLive, Heap.lookup, lookup_alloc_end, Slot.cell?]
 
 /-- The end marker of a fresh allocation records the kind of the allocation. -/
 theorem isEndMarker_alloc_end_iff {α : Type} (h : Heap) (values : List α)
-    (freeable freeable' : Bool) :
-    IsEndMarker (h.alloc values freeable).2 ((freshLoc h).shift values.length) freeable' ↔
-      freeable = freeable' := by
+    (kind kind' : AllocKind) :
+    IsEndMarker (h.alloc values kind).2 ((freshLoc h).shift values.length) kind' ↔
+      kind = kind' := by
   simp [IsEndMarker, lookup_alloc_end]
 
 theorem compatible_singleton {α : Type} {q : RawPtr α M} {r : RawPtr α M'} {value₁ value₂ : α}
@@ -674,18 +674,18 @@ theorem Subheap.isLive {A h : Heap} {l : Loc} (hSub : Heap.Subheap A h)
   obtain ⟨rest, -, rfl⟩ := hSub
   exact isLive_union_left hLive
 
-theorem Subheap.isEndMarker {l : Loc} {h : Heap} {freeable : Bool}
-    (hSub : Heap.Subheap (endMarker l freeable) h) : IsEndMarker h l freeable := by
+theorem Subheap.isEndMarker {l : Loc} {h : Heap} {kind : AllocKind}
+    (hSub : Heap.Subheap (endMarker l kind) h) : IsEndMarker h l kind := by
   obtain ⟨rest, -, rfl⟩ := hSub
-  have hMem : l ∈ endMarker l freeable := mem_endMarker.mpr rfl
-  show Finmap.lookup l ((endMarker l freeable).impl ∪ rest.impl) = _
+  have hMem : l ∈ endMarker l kind := mem_endMarker.mpr rfl
+  show Finmap.lookup l ((endMarker l kind).impl ∪ rest.impl) = _
   rw [Finmap.lookup_union_left hMem]
   simp [endMarker]
 
 /-- The empty heap has no allocation. -/
-@[simp] theorem not_isEndMarker_empty (l : Loc) (freeable : Bool) :
-    ¬ IsEndMarker (∅ : Heap) l freeable := by
-  change ¬ Finmap.lookup l (∅ : HeapImpl) = some (Slot.endMarker freeable)
+@[simp] theorem not_isEndMarker_empty (l : Loc) (kind : AllocKind) :
+    ¬ IsEndMarker (∅ : Heap) l kind := by
+  change ¬ Finmap.lookup l (∅ : HeapImpl) = some (Slot.endMarker kind)
   simp
 
 theorem isLive_array {α : Type} {l : Loc} {values : List α} {i : Nat}
@@ -706,9 +706,9 @@ theorem isLive_array {α : Type} {l : Loc} {values : List α} {i : Nat}
       exact isLive_union_left (ih (by simpa using hIndex))
 
 /-- The values of a fresh allocation are live. -/
-theorem isLive_alloc {α : Type} {h : Heap} {values : List α} {freeable : Bool} {i : Nat}
+theorem isLive_alloc {α : Type} {h : Heap} {values : List α} {kind : AllocKind} {i : Nat}
     (hIndex : i < values.length) :
-    IsLive (h.alloc values freeable).2 ((freshLoc h).shift i) :=
+    IsLive (h.alloc values kind).2 ((freshLoc h).shift i) :=
   Subheap.isLive ((Subheap.union_left (compatible_array_endMarker _ _ _)).trans
     (Subheap.union_left (compatible_freshLoc _ _ _))) (isLive_array hIndex)
 
