@@ -16,7 +16,7 @@ open Contexts
     - [eval_ctx] *)
 val apply_proj_loans_on_symbolic_expansion :
   Meta.span ->
-  RegionId.Set.t ->
+  region_set ->
   symbolic_expansion ->
   rty ->
   rty ->
@@ -27,7 +27,7 @@ val apply_proj_loans_on_symbolic_expansion :
     abstraction expression *)
 val apply_eproj_loans_on_symbolic_expansion :
   Meta.span ->
-  RegionId.Set.t ->
+  region_set ->
   symbolic_expansion ->
   rty ->
   rty ->
@@ -85,12 +85,12 @@ val symbolic_expansion_non_shared_borrow_to_value :
     - [ty = Ref (r, ...)] then we interpret the borrow [l] as belonging to
       region [r] *)
 val apply_proj_borrows :
-  Meta.span -> bool -> eval_ctx -> RegionId.Set.t -> tvalue -> rty -> tavalue
+  Meta.span -> bool -> eval_ctx -> region_set -> tvalue -> rty -> tavalue
 
 (** Similar to [apply_proj_borrows] but evaluates to an abstraction expression
 *)
 val apply_eproj_borrows :
-  Meta.span -> bool -> eval_ctx -> RegionId.Set.t -> tvalue -> rty -> tevalue
+  Meta.span -> bool -> eval_ctx -> region_set -> tvalue -> rty -> tevalue
 
 (** Parameters:
     - [config]
@@ -103,9 +103,9 @@ val apply_eproj_borrows :
     We use this function to project input values into region abstractions when
     evaluating function calls. *)
 val apply_proj_borrows_on_input_value :
-  Meta.span -> eval_ctx -> RegionId.Set.t -> tvalue -> rty -> tavalue
+  Meta.span -> eval_ctx -> region_set -> tvalue -> rty -> tavalue
 
 (** Similar to [apply_eproj_borrows_on_input_value] but evaluates to an
     abstraction expression *)
 val apply_eproj_borrows_on_input_value :
-  Meta.span -> eval_ctx -> RegionId.Set.t -> tvalue -> rty -> tevalue
+  Meta.span -> eval_ctx -> region_set -> tvalue -> rty -> tevalue

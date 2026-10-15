@@ -626,13 +626,15 @@ def do_match_cross_arm_used (t : Two) : Result Nat := do
 
 /-- warning: Variable name `n` is not explicitly referenced.
 
-The binding can be removed (if unused) or named `_` (if used implicitly).
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _n
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ---
 warning: Variable name `n` is not explicitly referenced.
 
-The binding can be removed (if unused) or named `_` (if used implicitly).
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _n
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false` -/
 #guard_msgs in
@@ -648,7 +650,8 @@ def do_let_arrow_id_used : Result Nat := do
 
 /-- warning: Variable name `x` is not explicitly referenced.
 
-The binding can be removed (if unused) or named `_` (if used implicitly).
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _x
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false` -/
 #guard_msgs in
@@ -669,25 +672,29 @@ def do_let_arrow_pat_used : Result Nat := do
 /--
 warning: Variable name `a` is not explicitly referenced.
 
-The binding can be removed (if unused) or named `_` (if used implicitly).
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _a
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ---
 warning: Variable name `b` is not explicitly referenced.
 
-The binding can be removed (if unused) or named `_` (if used implicitly).
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _b
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ---
 warning: Variable name `c` is not explicitly referenced.
 
-The binding can be removed (if unused) or named `_` (if used implicitly).
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _c
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ---
 warning: Variable name `d` is not explicitly referenced.
 
-The binding can be removed (if unused) or named `_` (if used implicitly).
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _d
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 -/
@@ -700,25 +707,29 @@ def do_let_arrow_pat_unused : Result Nat := do
 /--
 warning: Variable name `a` is not explicitly referenced.
 
-The binding can be removed (if unused) or named `_` (if used implicitly).
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _a
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ---
 warning: Variable name `b` is not explicitly referenced.
 
-The binding can be removed (if unused) or named `_` (if used implicitly).
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _b
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ---
 warning: Variable name `c` is not explicitly referenced.
 
-The binding can be removed (if unused) or named `_` (if used implicitly).
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _c
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ---
 warning: Variable name `d` is not explicitly referenced.
 
-The binding can be removed (if unused) or named `_` (if used implicitly).
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _d
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 -/
@@ -730,6 +741,20 @@ def do_let_pat_unused : Result Nat := do
 def unit_bind : Result Nat := do
   let () ← ok ()
   ok 1
+
+/- Dependent `if h : c` (the hypothesis is used in the `then` branch). -/
+def dite_get (l : List Nat) (i : Nat) : Result Nat := do
+  let j ← ok i
+  if h : j < l.length then ok l[j]
+  else if _ : j = l.length then ok 0
+  else fail .panic
+
+example (l : List Nat) (i : Nat) :
+    dite_get l i =
+      Aeneas.Std.bind (ok i) (fun j =>
+        if h : j < l.length then ok l[j]
+        else if _ : j = l.length then ok 0
+        else fail .panic) := rfl
 
 end Tests
 

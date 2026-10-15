@@ -22,6 +22,11 @@ the outputs.
 See `SpecInfo.prepare_intro_output` -/
 abbrev PrepareIntroOutputs := Elab.Tactic.TacticM Nat
 
+/-- Type of a tactic that `step` and `step*` use to discharge goals.
+
+See `SpecInfo.discharge_tactic` -/
+abbrev DischargeTactic := Elab.Tactic.TacticM Unit
+
 structure SpecInfo where
   spec_name : Lean.Name
   arity : Nat
@@ -46,6 +51,22 @@ structure SpecInfo where
   `a`, `b` and `c` into the context. -/
   prepare_intro_outputs : Name
 
+  /-- Name of a `DischargeTactic` callback (optional).
+
+  This lets a specification come with a dedicated tactic for the goals it generates
+  (e.g., with separation logic, applying `iframe` to each entailment).
+
+  When `step` applies the mono or bind theorem, the theorem's preconditions become
+  new goals, and its ghost variables become metavariables.
+  `step` first tries this callback on each precondition, before `singleAssumptionTac` and
+  the generic solvers (`simp`, `grind`, `scalar_tac`). Ghost variables are filled in when a
+  precondition that mentions them is solved.
+  `step*` also tries it on the final goal, which usually has the same shape as those
+  preconditions (for instance, a magic wand application).
+
+  If the tactic does not solve the goal, `step`/`step*` revert any modification it performed. -/
+  discharge_tactic : Option Name := none
+
   to_mvcgen: Option Name
 
   liftings : Array LiftingInfo
@@ -58,6 +79,14 @@ private meta unsafe def evalPrepareIntroOutputsUnsafe (name : Name) :
 /-- Load a registered preparation callback, checking its type before evaluating it. -/
 @[implemented_by evalPrepareIntroOutputsUnsafe]
 meta opaque evalPrepareIntroOutputs (name : Name) : Elab.Tactic.TacticM PrepareIntroOutputs
+
+private meta unsafe def evalDischargeTacticUnsafe (name : Name) :
+    Elab.Tactic.TacticM DischargeTactic :=
+  Lean.evalConstCheck DischargeTactic ``DischargeTactic name
+
+/-- Load a registered discharge tactic, checking its type before evaluating it. -/
+@[implemented_by evalDischargeTacticUnsafe]
+meta opaque evalDischargeTactic (name : Name) : Elab.Tactic.TacticM DischargeTactic
 
 meta structure SpecInfoExtensionState where
   specInfos : Std.HashMap Name SpecInfo
@@ -90,6 +119,18 @@ meta unsafe def register_spec_info : Lean.Elab.Command.CommandElab := fun stx =>
   unless callback.type == Lean.mkConst ``PrepareIntroOutputs do
     throwErrorAt info "Invalid output-preparation callback `{value.prepare_intro_outputs}`: \
       declare it with type `Aeneas.PrepareIntroOutputs`"
+
+  -- checking if the discharge tactic is public so that step*? provides a proof script
+  -- that can be applied
+  if let some dischargeTactic := value.discharge_tactic then
+    let some callback := (← getEnv).find? dischargeTactic
+      | throwErrorAt info "Unknown discharge tactic `{dischargeTactic}`"
+    if isPrivateName dischargeTactic then
+      throwErrorAt info "Private discharge tactic `{privateToUserName dischargeTactic}`: \
+        declare it with `public meta def`"
+    unless callback.type == Lean.mkConst ``DischargeTactic do
+      throwErrorAt info "Invalid discharge tactic `{dischargeTactic}`: \
+        declare it with type `Aeneas.DischargeTactic`"
   specAttr.add value
 
 meta def specInfoLookup (n : Name) : MetaM (Option SpecInfo) := do

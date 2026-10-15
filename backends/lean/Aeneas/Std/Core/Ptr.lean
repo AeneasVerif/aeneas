@@ -73,7 +73,7 @@ inductive core.ptr.alignment.AlignmentEnum where
 | _Align1Shl62 : core.ptr.alignment.AlignmentEnum
 | _Align1Shl63 : core.ptr.alignment.AlignmentEnum
 
-@[reducible, rust_type "core::ptr::alignment::Alignment"]
+@[expose, reducible, rust_type "core::ptr::alignment::Alignment"]
 def core.ptr.alignment.Alignment :=
 core.ptr.alignment.AlignmentEnum
 
@@ -83,7 +83,7 @@ structure core.alloc.layout.Layout where
   align : core.ptr.alignment.Alignment
 
 @[rust_trait "core::alloc::global::GlobalAlloc"]
-structure core.alloc.global.GlobalAlloc (Self : Type) where
+structure core.alloc.global.GlobalAlloc (Self : Type _) where
   alloc : Self → core.alloc.layout.Layout → Result (MutRawPtr U8)
   dealloc : Self → MutRawPtr U8 → core.alloc.layout.Layout → Result Unit
 

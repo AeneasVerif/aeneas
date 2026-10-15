@@ -662,8 +662,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     let sv_s = tvalue_as_symbolic span sv in
 
     (* Project the ADTs into different region abstractions *)
-    let project (rid : RegionId.id) =
-      let regions = RegionId.Set.singleton rid in
+    let project (r : region) =
+      let regions = RegionSet.singleton r in
       let avl0, output0 =
         convert_value_to_output_avalues span ctx0 PLeft v0 regions
           ty_with_regions
@@ -743,7 +743,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
-          regions = { owned = RegionId.Set.singleton rid };
+          regions = { owned = regions };
           ended_subabs = AbsLevelSet.empty;
           avalues = avl0 @ avl1 @ [ av ];
           cont;
@@ -752,7 +752,15 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       [%ldebug "Pushing abs:\n" ^ abs_to_string span ctx0 abs];
       push_abs abs
     in
-    List.iter project fresh_regions;
+    List.iter (fun rid -> project (RVar (Free rid))) fresh_regions;
+    (* The static region is not refreshed: if the type contains it (note that
+       it may be hidden in an ADT, see {!TypesUtils.adt_has_hidden_static}) we
+       also need to introduce an abstraction for the static region. *)
+    if
+      ty_has_regions_in_set ctx0.type_ctx.type_infos
+        (RegionSet.singleton RStatic)
+        ty_with_regions
+    then project RStatic;
 
     (* *)
     sv
@@ -818,14 +826,13 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           let absl =
             List.map
               (fun (abs : abs) ->
-                let rid = RegionId.Set.choose abs.regions.owned in
                 let sb : tavalue =
                   {
                     value =
                       ABorrow
                         (ASharedBorrow
                            (PNone, lid, ctx0.fresh_shared_borrow_id ()));
-                    ty = TRef (RVar (Free rid), v0.ty, RShared);
+                    ty = TRef (abs_pick_region span abs, v0.ty, RShared);
                   }
                 in
                 { abs with avalues = sb :: abs.avalues })
@@ -890,7 +897,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             kind = S.fresh_abs_kind;
             can_end = true;
             parents = AbsId.Set.empty;
-            regions = { owned = RegionId.Set.singleton rid };
+            regions = { owned = RegionSet.singleton (RVar (Free rid)) };
             ended_subabs = AbsLevelSet.empty;
             avalues = av :: (avl0 @ avl1);
             cont;
@@ -938,7 +945,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
               kind = S.fresh_abs_kind;
               can_end = true;
               parents = AbsId.Set.empty;
-              regions = { owned = RegionId.Set.singleton rid };
+              regions = { owned = RegionSet.singleton (RVar (Free rid)) };
               ended_subabs = AbsLevelSet.empty;
               avalues = av :: (avl0 @ avl1);
               cont;
@@ -1029,7 +1036,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
-          regions = { owned = RegionId.Set.singleton rid };
+          regions = { owned = RegionSet.singleton (RVar (Free rid)) };
           ended_subabs = AbsLevelSet.empty;
           avalues;
           cont;
@@ -1095,7 +1102,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
            input := let x = ML bid2 in (x, x)
          ]}
       *)
-      let owned = RegionId.Set.singleton rid in
+      let owned = RegionSet.singleton (RVar (Free rid)) in
       let cont : abs_cont option =
         if S.with_abs_conts then
           let input : tevalue =
@@ -1195,7 +1202,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         [ borrow_av; mk_loan_av PLeft id0; mk_loan_av PRight id1 ]
       in
 
-      let owned = RegionId.Set.singleton rid in
+      let owned = RegionSet.singleton (RVar (Free rid)) in
       let cont : abs_cont option =
         if S.with_abs_conts then
           Some
@@ -1260,7 +1267,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         [ borrow_av; mk_loan_av PLeft id0; mk_loan_av PRight id1 ]
       in
 
-      let owned = RegionId.Set.singleton rid in
+      let owned = RegionSet.singleton (RVar (Free rid)) in
       let cont : abs_cont option =
         if S.with_abs_conts then
           let input : tevalue =
@@ -1371,9 +1378,22 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         let svj = get_symbolic_tvalue span svj in
         let proj_svj = mk_aproj_loans PNone svj.sv_id proj_ty in
         let avalues = [ proj_s0; proj_s1; proj_svj ] in
+        (* Note that the static region is not refreshed: if the type contains it
+           (it may be hidden in an ADT, see {!TypesUtils.adt_has_hidden_static})
+           we also need to introduce an abstraction for the static region. *)
+        let regions =
+          List.map (fun rid -> RVar (Free rid)) fresh_regions
+          @
+          if
+            ty_has_regions_in_set ctx0.type_ctx.type_infos
+              (RegionSet.singleton RStatic)
+              proj_ty
+          then [ RStatic ]
+          else []
+        in
         List.iter
-          (fun rid ->
-            let owned = RegionId.Set.singleton rid in
+          (fun r ->
+            let owned = RegionSet.singleton r in
             (* The abstraction expression continuation *)
             let cont : abs_cont option =
               if S.with_abs_conts then
@@ -1429,7 +1449,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
               }
             in
             push_abs abs)
-          fresh_regions;
+          regions;
         svj)
       else
         (* Otherwise we simply introduce a fresh symbolic value, or reuse a
@@ -1536,7 +1556,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
     let avalues = [ borrow_av; loan_av ] in
 
-    let owned = RegionId.Set.singleton rid in
+    let owned = RegionSet.singleton (RVar (Free rid)) in
     let cont : abs_cont option =
       if S.with_abs_conts then
         Some
@@ -1618,7 +1638,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
     let avalues = [ borrow_av; loan_av ] @ other_avl in
 
-    let owned = RegionId.Set.singleton rid in
+    let owned = RegionSet.singleton (RVar (Free rid)) in
     let cont : abs_cont option =
       if S.with_abs_conts then
         let input : tevalue =
@@ -2345,7 +2365,13 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
     if check_can_end && can_end0 <> can_end1 then
       raise_distinct "match_abstractions: can_end";
     let _ = match_aids parents0 parents1 in
-    let _ = match_rids regions0 regions1 in
+    if region_set_has_static regions0 <> region_set_has_static regions1 then
+      raise_distinct "match_abstractions: static region";
+    let _ =
+      match_rids
+        (region_set_get_region_ids regions0)
+        (region_set_get_region_ids regions1)
+    in
 
     if not (AbsLevelSet.equal ended_subabs0 ended_subabs1) then
       raise_distinct

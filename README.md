@@ -47,9 +47,7 @@ opam switch create 5.3.0
 
 You can then install the dependencies with the following command:
 ```
-opam install calendar core_unix domainslib easy_logging menhir \
-  ocamlformat.0.27.0 ocamlgraph odoc ppx_deriving ppx_deriving_yojson \
-  progress unionFind visitors yojson zarith
+opam install src --deps-only --with-test
 ```
 
 Moreover, Aeneas uses the [Charon](https://github.com/AeneasVerif/charon) project and library.

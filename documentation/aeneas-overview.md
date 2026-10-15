@@ -81,7 +81,7 @@ fn choose<'a, T>(b: bool, x: &'a mut T, y: &'a mut T) -> &'a mut T {
 
 **Lean (generated):**
 ```lean
-def choose {T : Type} (b : Bool) (x : T) (y : T) :
+def choose {T : Type _} (b : Bool) (x : T) (y : T) :
     Result (T × (T → T × T)) :=
   if b
   then ok (x, fun z => (z, y))

@@ -246,10 +246,24 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
         let updated_sv = mk_fresh_symbolic_value span ctx ty in
         let copied_sv = mk_fresh_symbolic_value span ctx ty in
 
+        (* Note that the static region is not refreshed: if the type contains
+           it (it may be hidden in an ADT, see
+           {!TypesUtils.adt_has_hidden_static}) we also need to introduce an
+           abstraction for the static region. *)
+        let regions =
+          List.map (fun rid -> RVar (Free rid)) (RegionId.Map.values regions)
+          @
+          if
+            ty_has_regions_in_set ctx.type_ctx.type_infos
+              (RegionSet.singleton RStatic)
+              ty
+          then [ RStatic ]
+          else []
+        in
         let abs =
           List.map
-            (fun rid ->
-              let owned = RegionId.Set.singleton rid in
+            (fun r ->
+              let owned = RegionSet.singleton r in
 
               (* Create the continuation, for the translation *)
               let abs_cont : abs_cont =
@@ -292,7 +306,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
               (* *)
               abs
               (*mk_abs rid [ sv; updated_sv; copied_sv ]*))
-            (RegionId.Map.values regions)
+            regions
         in
         let abs = List.map (fun a -> EAbs a) (List.rev abs) in
         let ctx = { ctx with env = abs @ ctx.env } in
@@ -397,34 +411,23 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
           | TAdt { builtin = Some TStr; _ } ->
               let v : tvalue = { value = VLiteral lit; ty = cv.ty } in
               (v, ctx, fun e -> e)
-          | TRef (RErased, (TAdt { builtin = Some TStr; _ } as str_ty), RShared)
-            ->
+          | TRef
+              ( (RErased | RStatic),
+                (TAdt { builtin = Some TStr; _ } as str_ty),
+                RShared ) ->
               (* Reference to a string *)
               (* Generate a fresh symbolic value for the string. In the translation,
                  this fresh symbolic value will be defined as equal to the value of
                  the string.
 
-                 We then create a reference to the string. *)
+                 We then create a reference to the string: we put the
+                 corresponding shared loan in a region abstraction owning the
+                 static region. *)
               let sv = mk_fresh_symbolic_value span ctx str_ty in
               let sval = mk_tvalue_from_symbolic_value sv in
-              (* Create a shared loan containing the string, as well as a shared borrow *)
-              let bid = ctx.fresh_borrow_id () in
-              let sid = ctx.fresh_shared_borrow_id () in
-              let loan : tvalue =
-                { value = VLoan (VSharedLoan (bid, sval)); ty = sval.ty }
+              let ctx, borrow =
+                push_value_to_static_shared_loan span ctx sval str_ty
               in
-              let borrow : tvalue =
-                {
-                  value = VBorrow (VSharedBorrow (bid, sid));
-                  ty = TRef (RErased, sval.ty, RShared);
-                }
-              in
-              (* We need to push the shared loan in a dummy variable.
-                 Generally speaking we should not be allowed to put loans in dummy variables,
-                 but in the case of static lifetimes it is ok. TODO: generalize. *)
-              [%cassert] span (not !Config.use_static) "Unimplemented";
-              let dummy_id = ctx.fresh_dummy_var_id () in
-              let ctx = ctx_push_dummy_var ctx dummy_id loan in
               (* Create the symbolic expression *)
               let cf e =
                 let v : tvalue = { value = VLiteral lit; ty = str_ty } in
@@ -444,34 +447,22 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
              Remark: there is a special case if the value is a static reference:
              in this case we directly introduce the expanded borrow.
 
-             TODO: add static lifetimes in region abstractions. *)
+             We put the corresponding shared loan in a region abstraction owning
+             the static region. *)
 
           let ty = cv.ty in
-          (* TODO: the lifetime should be 'static but we erase it in PrePasses *)
           match ty with
           | TRef ((RStatic | RErased), ty_inner, ref_kind) ->
               [%ldebug "static ref"];
-              [%cassert] span (not !Config.use_static) "Unimplemented";
               [%cassert] span (ref_kind = RShared)
                 "Mutable references for lifetime 'static are not supported";
               let sval = mk_fresh_symbolic_tvalue span ctx ty_inner in
-              (* Create a shared loan containing the global, as well as a shared borrow *)
-              let bid = ctx.fresh_borrow_id () in
-              let sid = ctx.fresh_shared_borrow_id () in
-              let loan : tvalue =
-                { value = VLoan (VSharedLoan (bid, sval)); ty = sval.ty }
+              (* Create a shared loan containing the constant (in a region
+                 abstraction owning the static region), as well as a shared
+                 borrow *)
+              let ctx, borrow =
+                push_value_to_static_shared_loan span ctx sval ty_inner
               in
-              let borrow : tvalue =
-                {
-                  value = VBorrow (VSharedBorrow (bid, sid));
-                  ty = TRef (RErased, sval.ty, RShared);
-                }
-              in
-              (* We need to push the shared loan in a dummy variable.
-                 Generally speaking we should not be allowed to put loans in dummy variables,
-                 but in the case of static lifetimes it is ok. TODO: generalize. *)
-              let dummy_id = ctx.fresh_dummy_var_id () in
-              let ctx = ctx_push_dummy_var ctx dummy_id loan in
 
               (* Wrap the generated expression *)
               let cf e =
@@ -781,6 +772,10 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
      [Box<...>] to [Box<dyn ...>]) *)
   match unop with
   | Cast (CastUnsize (ty0, ty1, MetaVTable (trait_ref, _))) -> (
+      [%cassert] span
+        (trait_ref.binder_regions = [])
+        "Higher-ranked vtables are not supported";
+      let trait_ref = Charon.Substitute.poly_trait_ref_erase_binder trait_ref in
       (* Casting a type to a dyn trait *)
       [%ltrace
         "dyn trait cast:" ^ "\n- ty0: " ^ ty_to_string ctx ty0 ^ "\n- ty1: "
@@ -908,7 +903,7 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
               kind = CopySymbolicValue;
               can_end = true;
               parents = AbsId.Set.empty;
-              regions = { owned = RegionId.Set.singleton rid };
+              regions = { owned = RegionSet.singleton (RVar (Free rid)) };
               ended_subabs = AbsLevelSet.empty;
               avalues = borrows @ [ loan ];
               cont =

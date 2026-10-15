@@ -180,7 +180,7 @@ type proj_kind =
           sure *)
 [@@deriving show]
 
-let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
+let compute_tavalue_proj_kind span type_infos (abs_regions : T.region_set)
     (abs_level : abs_level) (current_level : abs_level) (av : V.tavalue) :
     proj_kind =
   let has_borrows = ref false in
@@ -203,7 +203,7 @@ let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
 
   let keep_region (r : T.region) =
     match r with
-    | T.RVar (Free rid) -> T.RegionId.Set.mem rid abs_regions
+    | (T.RVar (Free _) | T.RStatic) as r' -> T.RegionSet.mem r' abs_regions
     | _ -> false
   in
   let ty_has_mut_region =
@@ -412,7 +412,7 @@ let gtranslate_adt_fields ~(project_borrows : bool)
                                   ^^
     ]} *)
 let rec tavalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
-    (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
+    (ectx : C.eval_ctx) (abs_regions : T.region_set) (abs_level : abs_level)
     (current_level : abs_level) (av : V.tavalue) : texpr option =
   let value =
     match av.value with
@@ -450,7 +450,7 @@ let rec tavalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
   value
 
 and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
-    (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
+    (ectx : C.eval_ctx) (abs_regions : T.region_set) (abs_level : abs_level)
     (current_level : abs_level) (av : V.tavalue) (adt_v : V.adt_avalue) :
     texpr option =
   let _, out =
@@ -475,7 +475,7 @@ and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
   Option.map snd out
 
 and aloan_content_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
-    (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
+    (ectx : C.eval_ctx) (abs_regions : T.region_set) (abs_level : abs_level)
     (current_level : abs_level) (lc : V.aloan_content) : texpr option =
   match lc with
   | AMutLoan (_, _, _) | ASharedLoan (_, _, _, _) ->
@@ -533,7 +533,7 @@ and aloan_content_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
       None
 
 and aborrow_content_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
-    (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
+    (ectx : C.eval_ctx) (abs_regions : T.region_set) (abs_level : abs_level)
     (current_level : abs_level) (bc : V.aborrow_content) : texpr option =
   match bc with
   | V.AMutBorrow (_, _, child) | V.AIgnoredMutBorrow (_, child) ->
@@ -562,7 +562,7 @@ and aborrow_content_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
   | V.AEndedSharedBorrow | V.AProjSharedBorrow _ ->
       [%craise] ctx.span "Unimplemented"
 
-and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
+and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.region_set)
     (abs_level : abs_level) (current_level : abs_level) (aproj : V.aproj)
     (ty : T.ty) : texpr option =
   match aproj with
@@ -611,7 +611,7 @@ and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
   | AEmpty | AProjLoans _ | AProjBorrows _ -> [%craise] ctx.span "Unreachable"
 
 let tavalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
-    (abs_regions : T.RegionId.Set.t) (abs_level : abs_level) (av : V.tavalue) :
+    (abs_regions : T.region_set) (abs_level : abs_level) (av : V.tavalue) :
     texpr option =
   (* Check if the value was generated from a loan projector: if yes, and if
      it contains mutable loans, then we generate a consumed value (because
@@ -619,7 +619,7 @@ let tavalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
      Otherwise we ignore it. *)
   [%ltrace
     "Projecting abs_regions: "
-    ^ T.RegionId.Set.to_string None abs_regions
+    ^ T.region_set_to_string abs_regions
     ^ ":\n"
     ^ tavalue_to_string ~with_ended:true ctx av
     ^ "\n<: " ^ ty_to_string ctx av.ty];
@@ -716,10 +716,9 @@ type borrow_or_symbolic_id =
       which gave it back. We need this to compute default values (see
       [bs_ctx.mut_borrow_to_consumed]).
     - the pattern *)
-let rec tavalue_to_given_back_aux ~(filter : bool)
-    (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
-    (current_level : abs_level) (mp : mplace option) (av : V.tavalue)
-    (ctx : bs_ctx) : bs_ctx * tpat option =
+let rec tavalue_to_given_back_aux ~(filter : bool) (abs_regions : T.region_set)
+    (abs_level : abs_level) (current_level : abs_level) (mp : mplace option)
+    (av : V.tavalue) (ctx : bs_ctx) : bs_ctx * tpat option =
   [%ldebug
     "- current_level: "
     ^ string_of_int current_level
@@ -754,10 +753,9 @@ let rec tavalue_to_given_back_aux ~(filter : bool)
   (* Return *)
   (ctx, value)
 
-and adt_avalue_to_given_back_aux ~(filter : bool)
-    (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
-    (current_level : abs_level) (av : V.tavalue) (adt_v : V.adt_avalue)
-    (ctx : bs_ctx) : bs_ctx * tpat option =
+and adt_avalue_to_given_back_aux ~(filter : bool) (abs_regions : T.region_set)
+    (abs_level : abs_level) (current_level : abs_level) (av : V.tavalue)
+    (adt_v : V.adt_avalue) (ctx : bs_ctx) : bs_ctx * tpat option =
   let ctx, out =
     gtranslate_adt_fields ~project_borrows:true (tavalue_to_string ctx)
       (tpat_to_string ctx)
@@ -779,7 +777,7 @@ and adt_avalue_to_given_back_aux ~(filter : bool)
   (ctx, Option.map snd out)
 
 and aloan_content_to_given_back_aux ~(filter : bool)
-    (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
+    (abs_regions : T.region_set) (abs_level : abs_level)
     (current_level : abs_level) (mp : mplace option) (lc : V.aloan_content)
     (ctx : bs_ctx) : bs_ctx * tpat option =
   match lc with
@@ -806,7 +804,7 @@ and aloan_content_to_given_back_aux ~(filter : bool)
   | V.AIgnoredSharedLoan _ -> (ctx, None)
 
 and aborrow_content_to_given_back_aux ~(filter : bool)
-    (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
+    (abs_regions : T.region_set) (abs_level : abs_level)
     (current_level : abs_level) (mp : mplace option) (bc : V.aborrow_content)
     (ty : T.ty) (ctx : bs_ctx) : bs_ctx * tpat option =
   match bc with
@@ -889,9 +887,8 @@ and aproj_to_given_back_aux (_abs_level : abs_level)
       (ctx, Some pat)
   | AEmpty | AProjLoans _ | AProjBorrows _ -> [%craise] ctx.span "Unreachable"
 
-let tavalue_to_given_back (abs_regions : T.RegionId.Set.t)
-    (abs_level : abs_level) (mp : mplace option) (v : V.tavalue) (ctx : bs_ctx)
-    : bs_ctx * tpat option =
+let tavalue_to_given_back (abs_regions : T.region_set) (abs_level : abs_level)
+    (mp : mplace option) (v : V.tavalue) (ctx : bs_ctx) : bs_ctx * tpat option =
   (* Check if the value was generated from a borrow projector: if yes, and if
      it contains mutable borrows we generate a given back pattern (because
      upon ending the borrow the abstraction gave back a value).

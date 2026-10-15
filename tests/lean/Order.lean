@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -23,7 +24,7 @@ namespace order
     Source: 'tests/src/order.rs', lines 7:0-9:1
     Visibility: public -/
 def compare
-  {T : Type} (corecmpOrdInst : core.cmp.Ord T) (x : T) (y : T) :
+  {T : Type _} (corecmpOrdInst : core.cmp.Ord T) (x : T) (y : T) :
   Result Ordering
   := do
   corecmpOrdInst.cmp x y

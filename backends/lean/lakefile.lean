@@ -3,11 +3,13 @@ open Lake DSL
 
 -- Important: mathlib imports std4 and quote4: we mustn't add a `require std4` line
 require mathlib from git
-  "https://github.com/leanprover-community/mathlib4.git" @ "v4.31.0"
+  "https://github.com/leanprover-community/mathlib4.git" @ "v4.35.0-rc4"
 
 package «aeneas» where
   preferReleaseBuild := true
   buildArchive := s!"lean-build-aeneas-{System.Platform.target}.tar.gz"
+  -- Models of the Rust standard library mirror Rust paths (e.g. `core.clone.Clone.clone`)
+  leanOptions := #[⟨`weak.linter.dupNamespace, false⟩]
 
 @[default_target] lean_lib «Aeneas» {}
 

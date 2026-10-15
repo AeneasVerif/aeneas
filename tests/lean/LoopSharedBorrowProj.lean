@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -29,7 +30,8 @@ namespace loop_shared_borrow_proj
 @[rust_fun
   "alloc::vec::{core::iter::traits::collect::IntoIterator<&'a alloc::vec::Vec<@T>, &'a @T, core::slice::iter::Iter<'a, @T>>}::into_iter"]
 axiom SharedAVec.Insts.CoreIterTraitsCollectIntoIteratorSharedATIter.into_iter
-  {T : Type} (A : Type) : alloc.vec.Vec T → Result (core.slice.iter.Iter T)
+  {T : Type _} (A : Type _) :
+  alloc.vec.Vec T → Result (core.slice.iter.Iter T)
 
 /-- [loop_shared_borrow_proj::Cap]
     Source: 'tests/src/loop-shared-borrow-proj.rs', lines 7:0-9:1

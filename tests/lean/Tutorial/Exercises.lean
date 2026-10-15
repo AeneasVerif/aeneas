@@ -248,7 +248,7 @@ example α (hd : α) (tl : List α) : (hd :: tl).length = tl.length + 1 := by
    `simp` repeatedly simplifies the goal until it can't make progress anymore.
  -/
 example α (hd : α) (tl : List α) : (hd :: tl).length = tl.length + 1 := by
-  simp? -- This prints: `simp only [List.length_cons]`
+  simp? -- This prints: `simp only [List.length_cons, Nat.add_left_cancel_iff]`
 
 /- Your turn!
 

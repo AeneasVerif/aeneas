@@ -58,9 +58,7 @@ val reduce_ctx :
   eval_ctx ->
   eval_ctx
 
-type borrow_or_proj =
-  | Borrow of borrow_id
-  | Proj of RegionId.Set.t * symbolic_proj
+type borrow_or_proj = Borrow of borrow_id | Proj of region_set * symbolic_proj
 
 (** Collapse an environment, merging the duplicated borrows/loans.
 
@@ -110,10 +108,23 @@ val collapse_ctx :
     Also note that the sequence of merges the function expects should have the
     merges ordered from the first to perform to the last. This means that if it
     was computed by, e.g., [collapse_ctx], one should reverse the sequence
-    before calling [collapse_ctx_no_markers_following_sequence]. *)
+    before calling [collapse_ctx_no_markers_following_sequence].
+
+    [static_aids]: the identifiers of the abstractions resulting from the merges
+    of the sequence which (eventually) end up in an abstraction owning the
+    static region. We need this information because merging an abstraction
+    owning the static region with other abstractions promotes their regions to
+    the static region: if the abstraction owning the static region is absent
+    from the environment on which we apply the sequence, we need to promote the
+    corresponding abstractions to the static region anyway (see
+    [InterpAbs.merge_into_first_abstraction]). Note that it is sound to force a
+    (non-frozen) region abstraction to live longer (we're adding constraints -
+    the consequence is that we may get stuck if we need to end a non-endable
+    region abstraction). *)
 val collapse_ctx_no_markers_following_sequence :
   Meta.span ->
   (abs_id * abs_id * abs_id) list ->
+  AbsId.Set.t ->
   (abs_id * int * proj_marker * borrow_or_proj * ty) list ->
   abs_kind ->
   with_abs_conts:bool ->

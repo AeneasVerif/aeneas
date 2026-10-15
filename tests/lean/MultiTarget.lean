@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -24,7 +25,7 @@ namespace multi_target
 
 /-- Trait declaration: [multi_target::SimdTrait]
     Source: 'tests/src/multi-target.rs', lines 5:0-8:1 -/
-structure SimdTrait (Self : Type) (Self_Vec : Type) where
+structure SimdTrait (Self : Type _) (Self_Vec : Type _) where
   coremarkerCopyInst : core.marker.Copy Self_Vec
   add : Self_Vec → Self_Vec → Result Self_Vec
 
@@ -71,7 +72,7 @@ def arm.Neon.Insts.Multi_targetSimdTraitU128 : SimdTrait arm.Neon Std.U128 := {
 /-- [multi_target::add_vec]:
     Source: 'tests/src/multi-target.rs', lines 40:0-42:1 -/
 def add_vec
-  {T : Type} {Clause0_Vec : Type} (SimdTraitInst : SimdTrait T Clause0_Vec)
+  {T : Type _} {Clause0_Vec : Type _} (SimdTraitInst : SimdTrait T Clause0_Vec)
   (a : Clause0_Vec) (b : Clause0_Vec) :
   Result Clause0_Vec
   := do

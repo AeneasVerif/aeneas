@@ -10,6 +10,7 @@ set_option linter.unusedVariables false
 set_option linter.style.whitespace false
 set_option linter.style.setOption false
 set_option linter.style.longLine false
+set_option linter.internalConstructors false
 
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
@@ -28,7 +29,7 @@ namespace issue_804_closure_return_ref
     Visibility: public -/
 @[rust_fun "core::array::from_fn"]
 axiom core.array.from_fn
-  {T : Type} {F : Type} (N : Std.Usize) (opsfunctionFnMutFTupleUsizeTInst :
+  {T : Type _} {F : Type _} (N : Std.Usize) (opsfunctionFnMutFTupleUsizeTInst :
   core.ops.function.FnMut F Std.Usize T) :
   F → Result (Array T N)
 

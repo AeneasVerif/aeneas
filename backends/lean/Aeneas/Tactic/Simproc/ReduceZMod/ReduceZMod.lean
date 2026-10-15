@@ -83,9 +83,9 @@ simproc reduceZModInv (@Inv.inv _ (ZMod.instInv _) _) := fun e => do
 simproc reduceZModPow
   (@HPow.hPow _ Nat _
       (@instHPow _ Nat
-        (@Monoid.toPow _
-          (@MonoidWithZero.toMonoid _
-            (@Semiring.toMonoidWithZero _
+        (@NPow.toPow _
+          (@Monoid.toNPow _
+            (@Semiring.toMonoid _
               (@CommSemiring.toSemiring _ (@CommRing.toCommSemiring _ (ZMod.commRing _)))))))
       _ _) := fun e => do
   trace[ReduceZMod] "Visiting: {e}"

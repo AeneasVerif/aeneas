@@ -37,7 +37,7 @@ val convert_value_to_output_avalues :
   eval_ctx ->
   proj_marker ->
   tvalue ->
-  RegionId.Set.t ->
+  region_set ->
   ty ->
   tavalue list * tevalue
 
@@ -262,3 +262,7 @@ val project_context :
     abstractions to reflect the fact that they should be introduced by the
     loop/join. *)
 val add_abs_cont_to_abs : Meta.span -> eval_ctx -> abs -> abs_fun -> abs
+
+(** Make a region abstraction own the static region, by merging all the regions
+    it owns into the static region. *)
+val ctx_promote_abs_to_static : Meta.span -> eval_ctx -> AbsId.id -> eval_ctx

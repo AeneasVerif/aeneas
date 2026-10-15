@@ -389,7 +389,7 @@ let create_empty_abstractions_from_abs_region_groups
    * - the regions of the ancestors of abs_id
    * - the regions of abs_id
    *)
-  let abs_to_ancestors_regions : RegionId.Set.t AbsId.Map.t ref =
+  let abs_to_ancestors_regions : region_set AbsId.Map.t ref =
     ref AbsId.Map.empty
   in
   (* Auxiliary function to create one abstraction *)
@@ -401,11 +401,11 @@ let create_empty_abstractions_from_abs_region_groups
         AbsId.Set.empty rg.parents
     in
     let regions =
-      let owned = RegionId.Set.of_list rg.regions in
+      let owned = RegionSet.of_list rg.regions in
       { owned }
     in
     let ancestors_regions_union_current_regions =
-      RegionId.Set.union regions.owned regions.owned
+      RegionSet.union regions.owned regions.owned
     in
     let can_end = region_can_end rg_id in
     abs_to_ancestors_regions :=
@@ -548,11 +548,7 @@ let eval_function_call_symbolic_inst (span : Meta.span) (func : fn_ptr)
         ~call_generics:func.generics ~call_span:def.item_meta.span
         ~inst_generics:func.generics ~tr_self signature
   | TraitMethod (trait_ref, method_id) ->
-      (* Check that there are no bound regions *)
-      [%cassert] span
-        (trait_ref.trait_decl_ref.binder_regions = [])
-        "Unexpected bound regions";
-      let trait_decl_ref = trait_ref.trait_decl_ref.binder_value in
+      let trait_decl_ref = trait_ref.trait_decl_ref in
       (* This should be a call to a trait clause method (if it were a method
          coming from an impl, there should be no indirection through the
          trait reference itself (Charon should have simplified this). *)
@@ -579,33 +575,14 @@ let eval_function_call_symbolic_inst (span : Meta.span) (func : fn_ptr)
         ~call_generics:func.generics ~call_span:meth.item_meta.span
         ~inst_generics ~tr_self signature
 
-(** Helper to evaluate global references for lifetime static.
+(** Helper: introduce a fresh symbolic value for a global.
 
-    Given a value [v], generate a fresh borrow id [bid], push [_ -> SL bid v] to
-    the context and output [SB bid]. *)
-let push_value_to_dummy_shared_loan span (ctx : eval_ctx) (v : tvalue) :
-    eval_ctx * tvalue =
-  let bid = ctx.fresh_borrow_id () in
-  let sid = ctx.fresh_shared_borrow_id () in
-  let loan : tvalue = { value = VLoan (VSharedLoan (bid, v)); ty = v.ty } in
-  let borrow : tvalue =
-    {
-      value = VBorrow (VSharedBorrow (bid, sid));
-      ty = TRef (RErased, v.ty, RShared);
-    }
-  in
-  (* We need to push the shared loan in a dummy variable.
-     Generally speaking we should not be allowed to put loans in dummy variables,
-     but in the case of static lifetimes it is ok. TODO: generalize. *)
-  [%cassert] span (not !Config.use_static) "Unimplemented";
-  let dummy_id = ctx.fresh_dummy_var_id () in
-  let ctx = ctx_push_dummy_var ctx dummy_id loan in
-  (ctx, borrow)
-
-(** Helper: introduce a fresh symbolic value for a global *)
+    We return the value as well as its type with regions. Note that we currently
+    only support globals whose (instantiated) type doesn't contain regions,
+    except for a top-level static shared reference. *)
 let eval_global_as_fresh_symbolic_value (span : Meta.span)
     (gref : global_decl_ref) (ctx : eval_ctx) :
-    eval_ctx * tvalue * (SA.expr -> SA.expr) =
+    eval_ctx * tvalue * rty * (SA.expr -> SA.expr) =
   let generics = gref.generics in
   let global = ctx_lookup_global_decl span ctx gref.id in
   (* The global might itself be a (static) reference - TODO: generalize *)
@@ -621,19 +598,18 @@ let eval_global_as_fresh_symbolic_value (span : Meta.span)
       (* Decompose *)
       let inner_ty =
         match ty with
-        | TRef (RStatic, ty, RShared) -> ty
+        | TRef (_, ty, RShared) -> ty
         | _ -> [%internal_error] span
       in
       [%cassert] span (ty_no_regions inner_ty) "Unimplemented";
-      (* We do like in [eval_global_ref]: we introduce a borrow whose corresponding
-         loan is in a dummy value, allowing the borrow to live as long as needed.
-         TODO: introduce proper support for 'static
-      *)
+      (* We introduce a borrow whose corresponding loan is in a region
+         abstraction owning the static region, allowing the borrow to live as
+         long as needed. *)
       let sval = mk_fresh_symbolic_value span ctx inner_ty in
       let v = mk_tvalue_from_symbolic_value sval in
-      let ctx, borrow = push_value_to_dummy_shared_loan span ctx v in
+      let ctx, borrow = push_value_to_static_shared_loan span ctx v inner_ty in
       let cc = S.synthesize_global_eval gref sval in
-      (ctx, borrow, cc)
+      (ctx, borrow, TRef (RStatic, inner_ty, RShared), cc)
   | _ ->
       [%cassert] span (ty_no_regions global.ty) "Unimplemented";
       (* Instantiate the type  *)
@@ -643,9 +619,10 @@ let eval_global_as_fresh_symbolic_value (span : Meta.span)
           generics Self
       in
       let ty = Subst.erase_regions_substitute_types subst global.ty in
+      [%cassert] span (ty_no_regions ty) "Unimplemented";
       let sval = mk_fresh_symbolic_value span ctx ty in
       let cc = S.synthesize_global_eval gref sval in
-      (ctx, mk_tvalue_from_symbolic_value sval, cc)
+      (ctx, mk_tvalue_from_symbolic_value sval, ty, cc)
 
 (** Evaluate a statement. *)
 let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
@@ -840,9 +817,12 @@ and eval_global_ref (config : config) (span : Meta.span) (dest : place)
       (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
        * defined as equal to the value of the global (see {!S.synthesize_global_eval}).
        * We then create a reference to the global. *)
-      let ctx, sval, cf = eval_global_as_fresh_symbolic_value span gref ctx in
-      (* Create a shared loan containing the global, as well as a shared borrow *)
-      let ctx, borrow = push_value_to_dummy_shared_loan span ctx sval in
+      let ctx, sval, rty, cf =
+        eval_global_as_fresh_symbolic_value span gref ctx
+      in
+      (* Create a shared loan containing the global (in a region abstraction
+         owning the static region), as well as a shared borrow *)
+      let ctx, borrow = push_value_to_static_shared_loan span ctx sval rty in
       (* Assign the borrow to its destination *)
       let ctx, cc = assign_to_place config span borrow dest ctx in
       ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span (cc_comp cf cc))
@@ -1455,8 +1435,8 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
     in
     (* Introduce the output value *)
     let ret_v =
-      mk_aproj_loans_value_from_symbolic_value abs.regions.owned ret_spc
-        ret_sv_ty
+      mk_aproj_loans_value_from_symbolic_value ctx.type_ctx.type_infos
+        abs.regions.owned ret_spc ret_sv_ty
     in
     (* Compute the continuation used in the translation *)
     let cont : abs_cont =
@@ -1514,7 +1494,11 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
           (* Check if it contains non-ignored loans *)
           && Option.is_none
                (InterpBorrowsCore.get_first_non_ignored_aloan_in_abs span abs 0
-                  (-1)))
+                  (-1))
+          (* Check that we are allowed to end it (this is not the case for
+             instance if it owns the static region and still contains
+             borrows: see [abs_is_endable]) *)
+          && abs_is_endable ctx abs)
         !abs_ids
     in
     (* Check if there are abstractions to end *)

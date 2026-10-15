@@ -344,7 +344,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     | some _ => nhm.len_s = hm.len_s) ⦄ := by
   unfold insert_no_resize
   -- Simplify. Note that this also simplifies some function calls, like array index
-  simp [hash_key, bind_tc_ok]
+  simp [hash_key]
   step as ⟨ hash_mod, hhm ⟩
   simp at hhm
   have _ : hash_mod.val < alloc.vec.Vec.length hm.slots := by
