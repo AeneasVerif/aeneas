@@ -201,7 +201,7 @@ let rec trait_instance_id_reducible (span : Meta.span option)
   match id with
   | BuiltinOrAuto _ | TraitImpl _ -> true
   | Self | Clause _ -> false
-  | ParentClause (tref, _) -> trait_instance_id_reducible span tref.kind
+  | ParentClause (tref, _, _) -> trait_instance_id_reducible span tref.kind
   | Dyn -> [%craise_opt_span] span "Unreachable"
   | ItemClause _ | UnknownTrait _ -> false
 
