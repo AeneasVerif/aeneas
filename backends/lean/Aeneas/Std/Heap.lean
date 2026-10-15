@@ -137,16 +137,13 @@ end RawPtr
 
 namespace Heap
 
-private def lookup (h : Heap) (l : Loc) :
-    Option HeapCell :=
+private def lookup (h : Heap) (l : Loc) : Option HeapCell :=
   (h.impl.lookup l).bind Slot.cell?
 
-private def insert (h : Heap) (l : Loc)
-    (slot : Slot) : Heap :=
+private def insert (h : Heap) (l : Loc) (slot : Slot) : Heap :=
   ⟨h.impl.insert l slot⟩
 
-private def keys (h : Heap) :=
-  h.impl.keys
+private def keys (h : Heap) := h.impl.keys
 
 def empty : Heap := ⟨∅⟩
 
@@ -156,14 +153,12 @@ def union (h₁ h₂ : Heap) : Heap := ⟨h₁.impl ∪ h₂.impl⟩
 
 @[no_expose] instance instUnion : Union Heap := ⟨Heap.union⟩
 
-def Mem (l : Loc) (h : Heap) : Prop :=
-  l ∈ h.impl
+def Mem (l : Loc) (h : Heap) : Prop := l ∈ h.impl
 
 @[no_expose] instance instMembership : Membership Loc Heap :=
   ⟨fun h l => Heap.Mem l h⟩
 
-def Compatible (h₁ h₂ : Heap) : Prop :=
-  Finmap.Disjoint h₁.impl h₂.impl
+def Compatible (h₁ h₂ : Heap) : Prop := Finmap.Disjoint h₁.impl h₂.impl
 
 def singleton (q : RawPtr α M) (value : α) : Heap :=
   ⟨Finmap.singleton q.loc (.live ⟨α, value⟩)⟩
@@ -171,15 +166,9 @@ def singleton (q : RawPtr α M) (value : α) : Heap :=
 def endMarker (l : Loc) (kind : AllocKind) : Heap :=
   ⟨Finmap.singleton l (.endMarker kind)⟩
 
-def IsValid (h : Heap) (q : RawPtr α M) : Prop :=
-  match h.lookup q.loc with
-  | none => False
-  | some ⟨β, _⟩ => β = α
+def IsLive (h : Heap) (l : Loc) : Prop := (h.lookup l).isSome
 
-def IsLive (h : Heap) (l : Loc) : Prop :=
-  (h.lookup l).isSome
-
-/-- `l` is the end marker of an allocation of kind `kind`. -/
+/-- `l` is the end marker of an allocation -/
 def IsEndMarker (h : Heap) (l : Loc) (kind : AllocKind) : Prop :=
   h.impl.lookup l = some (.endMarker kind)
 
@@ -195,27 +184,26 @@ def freshAllocId (h : Heap) : AllocId :=
 
 def freshLoc (h : Heap) : Loc := ⟨freshAllocId h, 0⟩
 
-/-! The operations take their arguments, then the heap and the proof of their precondition, and
-return their result next to the new heap: partially applied, they are the `modify` of
-`Result.guardedModify`, which infers the precondition: `Result.guardedModify _ (read q)`. -/
-
-/-- Total, so it takes no precondition. Returns a pointer to the start of the fresh allocation:
-fresh memory is mutable; `RawPtr.cast_const` gives a const view. -/
-def alloc (values : List α) (kind : AllocKind) (h : Heap) : MutRawPtr α × Heap :=
-  (⟨freshLoc h⟩, allocation (freshLoc h) values kind ∪ h)
-
 /-- `h'` is `h` extended with cells that `h` does not own. -/
 def Subheap (h h' : Heap) : Prop :=
   ∃ rest, Heap.Compatible h rest ∧ h' = h ∪ rest
 
+/-- Creates a fresh allocation in the heap: fresh memory is mutable in Rust. -/
+def alloc (values : List α) (kind : AllocKind) (h : Heap) : MutRawPtr α × Heap :=
+  (⟨freshLoc h⟩, allocation (freshLoc h) values kind ∪ h)
+
+def IsValid (h : Heap) (q : RawPtr α M) : Prop :=
+  match h.lookup q.loc with
+  | none => False
+  | some ⟨β, _⟩ => β = α
+
 def read (q : RawPtr α M) (h : Heap) (hValid : IsValid h q) : α × Heap :=
-  (match hlookup : h.lookup q.loc with
-   | none => by simp [IsValid, hlookup] at hValid
-   | some ⟨β, value⟩ => by
-       have htype : β = α := by
-         simpa [IsValid, hlookup] using hValid
-       exact htype ▸ value,
-   h)
+  match hlookup : h.lookup q.loc with
+  | none => by simp [IsValid, hlookup] at hValid
+  | some ⟨β, value⟩ => by
+     have htype : β = α := by
+       simpa [IsValid, hlookup] using hValid
+     exact (htype ▸ value, h)
 
 def write (q : RawPtr α M) (value : α) (h : Heap) (_ : IsValid h q) : Unit × Heap :=
   ((), h.insert q.loc (.live ⟨α, value⟩))
@@ -224,12 +212,7 @@ def write (q : RawPtr α M) (value : α) (h : Heap) (_ : IsValid h q) : Unit × 
 `n` live slots. With `kind = .global` this is the global allocator's `deallocate`; anything else
 is undefined behaviour in Rust: memory that the global allocator did not allocate, a pointer into
 the middle of an allocation, the wrong size, or memory already deallocated. See the safety section
-of [`Allocator::deallocate`](https://doc.rust-lang.org/std/alloc/trait.Allocator.html#tymethod.deallocate),
-which, unlike `GlobalAlloc::dealloc`, also allows zero-sized allocations (`n = 0`). With
-`kind = .view` it ends a raw-pointer view (`end_from_mut`, `end_as_ptr`, `end_as_mut_ptr`):
-the model's copy of the viewed place is dead, and every later use of the pointer fails. A borrowed
-slot is not live, so an allocation cannot be deallocated while a borrow holds part of it.
--/
+of [`Allocator::deallocate`](https://doc.rust-lang.org/std/alloc/trait.Allocator.html#tymethod.deallocate) -/
 def CanDealloc (h : Heap) (l : Loc) (n : Nat) (kind : AllocKind) : Prop :=
   l.offset = 0 ∧ (∀ i < n, IsLive h (l.shift i)) ∧ IsEndMarker h (l.shift n) kind
 
@@ -255,7 +238,7 @@ def IsBorrowed (h : Heap) (l : Loc) : Prop :=
 def borrow (q : RawPtr α M) (h : Heap) (hValid : IsValid h q) : α × Heap :=
   ((read q h hValid).1, h.insert q.loc .borrowed)
 
-/-- Ends the borrow of the slot of `q`, which holds `value` again: the inverse of `borrow`. -/
+/-- Ends the borrow of `q`. -/
 def endBorrow (q : RawPtr α M) (value : α) (h : Heap) (_ : IsBorrowed h q.loc) : Unit × Heap :=
   ((), h.insert q.loc (.live ⟨α, value⟩))
 
