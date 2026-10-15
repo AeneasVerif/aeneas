@@ -104,7 +104,6 @@ let lean_keywords : string list =
     "haveI";
     "haveI'";
     "hiding";
-    "hydrate_opaque_type";
     "idbg";
     "if";
     "impl_def";
@@ -165,7 +164,6 @@ let lean_keywords : string list =
     "nofun";
     "nomatch";
     "noncomputable";
-    "nonempty_type";
     "nonrec";
     "norm_cast_add_elim";
     "notation";
