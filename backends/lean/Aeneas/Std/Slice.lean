@@ -74,16 +74,16 @@ def Slice.end_as_ptr {T : Type} (s : Slice T) (p : ConstRawPtr T) : Result Unit 
   p.endView s.length
   Result.require (values = s.val)
 
+def Slice.as_ptr {T : Type} (s : Slice T) : Result (ConstRawPtr T × Result Unit) :=
+  Aeneas.Std.bind (RawPtr.allocView s.val) fun p =>
+    .ok (p.cast_const, Slice.end_as_ptr s p.cast_const)
+
 /-- End of the mutable borrow of `as_mut_ptr`: the slots become the new slice, and the view is
 freed. -/
 def Slice.end_as_mut_ptr {T : Type} (s : Slice T) (p : MutRawPtr T) : Result (Slice T) := do
   let values ← p.readRange s.length
   p.endView s.length
   if h : values.length ≤ Usize.max then .ok (Slice.from values h) else .fail .undef
-
-def Slice.as_ptr {T : Type} (s : Slice T) : Result (ConstRawPtr T × Result Unit) :=
-  Aeneas.Std.bind (RawPtr.allocView s.val) fun p =>
-    .ok (p.cast_const, Slice.end_as_ptr s p.cast_const)
 
 def Slice.as_mut_ptr {T : Type} (s : Slice T) : Result (MutRawPtr T × Result (Slice T)) :=
   Aeneas.Std.bind (RawPtr.allocView s.val) fun p => .ok (p, Slice.end_as_mut_ptr s p)

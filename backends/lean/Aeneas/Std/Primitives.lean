@@ -68,8 +68,8 @@ def RustEffect : Effect := {
 
 -- We need Result to be irreducible outside this file (to not break metaprograms which normalize
 -- types), but reducible within. The `unseal` command only affects the local scope.
--- `Result α` lives in `Type 1` even for `α : Type`, because `RustEffect.Input` quantifies over
--- types. Heap cells only hold values in `Type`, so a value containing a `Result`-returning function
+-- `Result α` lives at least in `Type 1` because of `RustEffect.Input`.
+-- Heap cells only hold values in `Type`, so a value containing a `Result`-returning function
 -- (a closure, a function pointer, a trait-instance structure) cannot be stored behind a raw pointer:
 -- that would need a higher-order store. Such pointers fail with a universe error.
 @[irreducible]
