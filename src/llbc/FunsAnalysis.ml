@@ -22,8 +22,8 @@ type fun_info = {
   can_fail : bool;
       (* Not used yet: all the extracted functions use an error monad *)
   stateful : bool;
-      (** The function accesses the heap: it manipulates raw pointers, or
-          (transitively) calls a function which does. *)
+      (** The function accesses the heap: it dereferences raw pointers, or
+          (transitively) calls a function which does (see [analyze_module]). *)
   stateful_region_groups : Types.RegionGroupId.id list option;
       (** For the builtin functions: the region groups whose backward functions
           are stateful (see [Pure.builtin_fun_info.stateful_lifetimes]). [None]
@@ -212,6 +212,16 @@ let analyze_module (m : crate) (type_infos : TypesAnalysis.type_infos)
         (builtin_fun_effects_map ())
     in
 
+    (* Do we determine whether the function accesses the heap by analyzing its
+       body (see below)? *)
+    let has_analyzed_body (f : fun_decl) : bool =
+      get_builtin_info f = None
+      &&
+      match f.body with
+      | StructuredBody _ | TargetDispatchBody _ -> true
+      | _ -> false
+    in
+
     (* JP: Why not use a reduce visitor here with a tuple of the values to be
        computed? *)
     let visit_fun (f : fun_decl) : unit =
@@ -247,6 +257,8 @@ let analyze_module (m : crate) (type_infos : TypesAnalysis.type_infos)
             super#visit_Assert env a
 
           method! visit_rvalue env rv =
+            (* Visit the places (to find the dereferences of raw pointers) *)
+            super#visit_rvalue env rv;
             match rv with
             | Use (Constant { kind = CTraitConst _; _ }, _) ->
                 (* We consider that trait constants can fail, similarly to
@@ -289,7 +301,18 @@ let analyze_module (m : crate) (type_infos : TypesAnalysis.type_infos)
                 self#maybe_stateful crate_uses_raw_ptrs
             | FnOpRegular func -> (
                 match func.kind with
-                | Fun id -> self#visit_fid env id
+                | Fun id -> (
+                    self#visit_fid env id;
+                    (* A function whose body we don't analyze may call the
+                       methods of the trait instances we give it (for instance,
+                       [Option::map] calls the closure): we don't know which
+                       implementations it calls, they may access the heap. *)
+                    match FunDeclId.Map.find_opt id funs_map with
+                    | Some d
+                      when (not (has_analyzed_body d))
+                           && func.generics.trait_refs <> [] ->
+                        self#maybe_stateful crate_uses_raw_ptrs
+                    | _ -> ())
                 | TraitMethod _ ->
                     (* We consider trait functions can fail, but can not diverge.
                        TODO: this may cause issues if we use use a fuel parameter.
@@ -320,7 +343,18 @@ let analyze_module (m : crate) (type_infos : TypesAnalysis.type_infos)
       let builtin_info = get_builtin_info f in
       let has_builtin_info = builtin_info <> None in
       group_has_builtin_info := !group_has_builtin_info || has_builtin_info;
-      (* A function which manipulates raw pointers accesses the heap, except:
+      (* A function accesses the heap if it dereferences a raw pointer, or calls
+         a function which accesses the heap (see the visitor above). Manipulating
+         raw pointers as values (copying them, storing them in structures, etc.)
+         does not access the heap: for instance,
+         [fn links(&self) -> &Links<Self> { &self.links }] is pure even
+         if [Links] contains raw pointers (this matters for the implementations of
+         trait methods, whose models have the pure signatures of the trait
+         declarations).
+
+         We can't look at the bodies of the builtin and opaque functions: we
+         consider that they access the heap if they manipulate raw pointers (their
+         signatures contain raw pointers), except:
          - the builtin functions which can not fail (they don't live in the
            [Result] monad, so they can't access the heap): for instance,
            [RawPtr.cast_const]
@@ -332,18 +366,14 @@ let analyze_module (m : crate) (type_infos : TypesAnalysis.type_infos)
         | Some { can_fail = false; _ } -> true
         | _ -> false
       in
-      if not (fun_decl_is_global_initializer f || pure_builtin) then begin
-        let sg = f.signature in
-        obj#maybe_stateful
-          (List.exists ty_contains_raw_ptr (sg.output :: sg.inputs));
-        match f.body with
-        | StructuredBody body ->
-            obj#maybe_stateful
-              (List.exists
-                 (fun (v : local) -> ty_contains_raw_ptr v.local_ty)
-                 body.locals.locals)
-        | _ -> ()
-      end;
+      (if
+         not
+           (fun_decl_is_global_initializer f
+           || pure_builtin || has_analyzed_body f)
+       then
+         let sg = f.signature in
+         obj#maybe_stateful
+           (List.exists ty_contains_raw_ptr (sg.output :: sg.inputs)));
       (match builtin_info with
       | Some info ->
           (* Convert the indices of the lifetimes to region groups *)

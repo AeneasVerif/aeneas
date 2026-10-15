@@ -1,5 +1,5 @@
 [[92mInfo[39m ] Imported: tests/llbc/raw_pointers_cast_negative.llbc
-[[91mError[39m] Unsupported: pointer casts which change the pointee type (other than by adding or removing one [MaybeUninit])
+[[91mError[39m] Unsupported: pointer casts of a type which mentions boxes, references or packed/aligned types (found: alloc::boxed::Box<u32>)
 Source: 'tests/src/raw_pointers_cast_negative.rs', lines 8:0-10:1
-Compiler source: symbolic/SymbolicToPureExpressions.ml, line 434
+Compiler source: symbolic/SymbolicToPureExpressions.ml, line 402
 

@@ -51,8 +51,8 @@ theorem Node.next._simpLemma_ (value : Std.U32) (next : NonNull Node) (prev :
 theorem Node.prev._simpLemma_ (value : Std.U32) (next : NonNull Node) (prev :
   NonNull Node) : (Node.mk value next prev).prev = prev := by rfl
 
-instance : NonZeroSized Node := ⟨NonZeroSized.nonZero Std.U32 ||
-  NonZeroSized.nonZero (NonNull Node) || NonZeroSized.nonZero (NonNull Node)⟩
+instance : Pointee Node := Pointee.typed Node (Pointee.nonZero Std.U32 ||
+  Pointee.nonZero (NonNull Node) || Pointee.nonZero (NonNull Node))
 
 /-- [nonnull::List]
     Source: 'tests/src/nonnull.rs', lines 14:0-17:1
@@ -61,8 +61,8 @@ structure List where
   head : Option (NonNull Node)
   len : Std.Usize
 
-instance : NonZeroSized List := ⟨NonZeroSized.nonZero (Option (NonNull Node))
-  || NonZeroSized.nonZero Std.Usize⟩
+instance : Pointee List := Pointee.typed List (Pointee.nonZero (Option (NonNull
+  Node)) || Pointee.nonZero Std.Usize)
 
 /-- [nonnull::new_node]:
     Source: 'tests/src/nonnull.rs', lines 20:0-32:1
@@ -236,9 +236,9 @@ structure Iter where
   len : Std.Usize
   _marker : core.marker.PhantomData Node
 
-instance : NonZeroSized Iter := ⟨NonZeroSized.nonZero (Option (NonNull Node))
-  || NonZeroSized.nonZero Std.Usize || NonZeroSized.nonZero
-  (core.marker.PhantomData Node)⟩
+instance : Pointee Iter := Pointee.typed Iter (Pointee.nonZero (Option (NonNull
+  Node)) || Pointee.nonZero Std.Usize || Pointee.nonZero
+  (core.marker.PhantomData Node))
 
 /-- [nonnull::{nonnull::Iter<'a>}::next]:
     Source: 'tests/src/nonnull.rs', lines 137:4-145:5
@@ -403,8 +403,8 @@ theorem Chain.value._simpLemma_ (value : Std.U32) (next : Option (NonNull
 theorem Chain.next._simpLemma_ (value : Std.U32) (next : Option (NonNull
   Chain)) : (Chain.mk value next).next = next := by rfl
 
-instance : NonZeroSized Chain := ⟨NonZeroSized.nonZero Std.U32 ||
-  NonZeroSized.nonZero (Option (NonNull Chain))⟩
+instance : Pointee Chain := Pointee.typed Chain (Pointee.nonZero Std.U32 ||
+  Pointee.nonZero (Option (NonNull Chain)))
 
 /-- [nonnull::next_value]:
     Source: 'tests/src/nonnull.rs', lines 239:0-247:1

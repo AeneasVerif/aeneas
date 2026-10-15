@@ -35,6 +35,56 @@ let concat_generic_args (generics1 : generic_args) (generics2 : generic_args) :
     trait_refs = generics1.trait_refs @ generics2.trait_refs;
   }
 
+(** Does a type have a memory layout which is not modelled by the translation?
+    This is the case of the types which mention (deeply, through the definitions
+    of the ADTs) [Box] or references: the translation erases them ([Box<u32>],
+    [&u32] and [u32] are all translated to [U32]; a one-field tuple struct like
+    [struct W(Box<u64>)] is translated to an alias of [U64]). This is also the
+    case of the ADTs with a [repr(packed)] or [repr(align)] attribute:
+    [#[repr(packed)] struct P(u32)] is an alias of [U32] with alignment 4 in the
+    model while its Rust alignment is 1, and [#[repr(align(8))] struct A(u8)]
+    has Rust size 8. We can not reinterpret the memory of such types. *)
+let ty_has_unmodelled_layout (type_decls : type_decl TypeDeclId.Map.t) (ty : ty)
+    : bool =
+  let exception Found in
+  let visited = ref TypeDeclId.Set.empty in
+  let visitor =
+    object (self)
+      inherit [_] iter_ty as super
+
+      method! visit_ty env ty =
+        match ty with
+        | TRef _ | TAdt { builtin = Some TBox; _ } -> raise Found
+        | TAdt { id; builtin = None; _ }
+          when not (TypeDeclId.Set.mem id !visited) -> (
+            visited := TypeDeclId.Set.add id !visited;
+            match TypeDeclId.Map.find_opt id type_decls with
+            | Some decl ->
+                if
+                  List.exists
+                    (fun (_, (l : layout)) -> l.repr.align_modif <> None)
+                    decl.layout
+                then raise Found;
+                let visit_fields =
+                  List.iter (fun (f : field) -> self#visit_ty env f.field_ty)
+                in
+                (match decl.kind with
+                | Struct fields | Union fields -> visit_fields fields
+                | Enum variants ->
+                    List.iter
+                      (fun (v : variant) -> visit_fields v.fields)
+                      variants
+                | _ -> ());
+                super#visit_ty env ty
+            | None -> super#visit_ty env ty)
+        | _ -> super#visit_ty env ty
+    end
+  in
+  try
+    visitor#visit_ty () ty;
+    false
+  with Found -> true
+
 (** Check if a region belongs to a set of regions.
 
     This shadows {!Charon.TypesUtils.region_in_set}: we use sets of regions
