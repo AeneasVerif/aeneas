@@ -113,6 +113,59 @@ lemma satisfies_spec ty (l : Layout ty) k m :
 
 end Layout
 
+inductive LayoutInput : MType → Type 0 where
+| tuple
+    (field_layouts : (idx : Nat) → (h : idx < ts.length) → (Layout ts[idx] → Prop)) :
+    LayoutInput (.tuple ts)
+| enum
+    (variant_layout_inputs : (idx : Nat) → (h : idx < vs.length) → LayoutInput vs[idx]) :
+    LayoutInput (.enum vs)
+| int :
+    LayoutInput (.int i)
+
+namespace LayoutInput
+
+inductive Satisfies : (m : MType) → Layout m → LayoutInput m → Prop where
+| tuple ts fo fr fl sa :
+  (∀ n (h : n < ts.length), fr n h (fl n h)) →
+  Satisfies (.tuple ts) (.tuple fo fl sa) (.tuple fr)
+| enum vs vt vli vl d sa :
+  (∀ n (h : n < vs.length), Satisfies vs[n] (vl n h) (vli n h)) →
+  Satisfies (.enum vs) (.enum vt vl d sa) (.enum vli)
+
+end LayoutInput
+
+@[expose]
+def RichMType := (m : MType) × LayoutInput m
+
+namespace RichMType
+
+  @[expose, simp, grind =, reducible] def mkTuple (ts : List ((m : MType) × (Layout m → Prop))) : RichMType :=
+    ⟨ .tuple (ts.map (·.1)), .tuple (λ i hi l ↦ ((@List.getElem_map ((m : MType) × _) _ (·.1) ts i hi) ▸ (ts[i]'(by grind)).2) l) ⟩
+
+  instance {α : Type} {f : α → MType} : MType.AllReasonable ([].map f) := ⟨λ _ h ↦ nomatch h⟩
+  instance {α : Type} {f : α → MType} {x : α} {xs : List α} [hx : MType.Reasonable (f x)] [hxs : MType.AllReasonable (xs.map f)] :
+      MType.AllReasonable ((x :: xs).map f) :=
+    ⟨λ | 0, _ => hx | n + 1, h => hxs.out n (Nat.lt_of_succ_lt_succ h)⟩
+
+  instance {ts : List ((m : MType) × (Layout m → Prop))} [h : MType.AllReasonable (ts.map (·.1))] : (mkTuple ts).1.Reasonable :=
+    .tuple _ h.out
+
+  @[expose, simp, grind =, reducible] def mkEnum (ts : List (List ((m : MType) × (Layout m → Prop)))) : RichMType :=
+    let tuples := ts.map mkTuple;
+    ⟨ .enum (tuples.map (·.1)), .enum (λ i hi ↦ ((@List.getElem_map ((m : MType) × _) _ (·.1) tuples i hi) ▸ (tuples[i]'(by grind)).2)) ⟩
+
+  instance {α β : Type} {f1 : α → β} {f2 : β → MType} : MType.AllReasonable (([].map f1).map f2) := ⟨λ _ h ↦ nomatch h⟩
+  instance {α β : Type} {f1 : α → β} {f2 : β → MType}  {x : α} {xs : List α} [hx : MType.Reasonable (f2 (f1 x))] [hxs : MType.AllReasonable ((xs.map f1).map f2)] :
+      MType.AllReasonable (((x :: xs).map f1).map f2) :=
+    ⟨λ | 0, _ => hx | n + 1, h => hxs.out n (Nat.lt_of_succ_lt_succ h)⟩
+
+  instance {ts : List (List ((m : MType) × (Layout m → Prop)))} [h : MType.AllReasonable ((ts.map mkTuple).map (·.1))] : (mkEnum ts).1.Reasonable := by
+    sorry
+
+end RichMType
+
+
 /-! ## The `HasLayout` Type Class -/
 
 macro "has_layout_retract_embed" : tactic => `(tactic| (
@@ -127,6 +180,7 @@ macro "has_layout_embed_retract" : tactic => `(tactic| (
   have h' := h
   cases h'
   all_goals (
+    simp [List.map] at *
     repeat' (
       first
       | exact False.elim (MVal.valid_for.empty_elim ‹_›)
@@ -143,16 +197,31 @@ macro "has_layout_embed_retract" : tactic => `(tactic| (
 /-! Type class associating a Lean type `α` with its machine `MType`.
     Lowering must be bijective. -/
 class HasLayout (α : Type u) where
-  ty : MType
-  embed : α → { v : MVal // v.valid_for ty }
-  retract : { v : MVal // v.valid_for ty } → α
-  reasonable : ty.Reasonable := by infer_instance
+  rty : RichMType
+  embed : α → { v : MVal // v.valid_for rty.1 }
+  retract : { v : MVal // v.valid_for rty.1 } → α
+  layout_meta : LayoutKind × LayoutModifier
+  reasonable : rty.1.Reasonable := by infer_instance
   retract_embed : ∀ x, retract (embed x) = x := by has_layout_retract_embed
   embed_retract : ∀ v, embed (retract v) = v := by has_layout_embed_retract
+  layout_meta_reasonable : Layout.satisfiable ty layout_meta.1 layout_meta.2 := by simp [Layout.satisfiable] <;> trivial
+  -- ... constraints on allowed_layout
 
 namespace HasLayout
 
-instance {α : Type u} [h : HasLayout α] : (HasLayout.ty α).Reasonable :=
+instance {α : Type u} [h : HasLayout α] : ((HasLayout.rty α).1).Reasonable :=
+  h.reasonable
+
+@[expose, simp, grind =] def ty (α : Type u) [h : HasLayout α] : MType := h.rty.1
+
+
+def valid_layouts (α : Type u) [h : HasLayout α] (l : Layout (ty α)) : Prop :=
+  l.satisfies (layout_meta α).1 (layout_meta α).2 ∧ LayoutInput.Satisfies _ l (rty α).2
+
+@[expose, reducible] def xty (α : Type u) [h : HasLayout α] : ((m : MType) × (Layout m → Prop)) := ⟨ty α, valid_layouts α⟩
+
+
+instance {α : Type u} [h : HasLayout α] : ((xty α).1).Reasonable :=
   h.reasonable
 
 attribute [simp] retract_embed embed_retract
@@ -163,60 +232,67 @@ attribute [simp] retract_embed embed_retract
 
 @[expose, inline, simp]
 def mkTuple {ts : List MType} (vs : List MVal)
-    (h : List.Forall₂ MVal.valid_for vs ts := by simp) :
+    (h : List.Forall₂ MVal.valid_for vs ts := by simp <;> grind) :
     { v : MVal // v.valid_for (.tuple ts) } :=
   ⟨.tuple vs, .tuple vs ts h⟩
 
 @[expose, inline, simp]
 def mkVariant {ts : List MType} (d : Nat) (v : MVal)
-    (hb : d < ts.length := by simp)
-    (hv : v.valid_for (ts[d]'hb) := by simp) :
+    (hb : d < ts.length := by simp <;> grind)
+    (hv : v.valid_for (ts[d]'hb) := by constructor; simp <;> grind) :
     { v : MVal // v.valid_for (.enum ts) } :=
   ⟨.variant d v, .enum d v ts hb hv⟩
 
 -- Instances for primitive scalars and standard types
 
 instance {ty : Std.UScalarTy} : HasLayout (Std.UScalar ty) where
-  ty := .int (.unsigned ty)
+  rty := ⟨.int (.unsigned ty), .int⟩
   embed := λ x ↦ ⟨.int x.val, .int ⟨x, rfl⟩⟩
   retract := λ | ⟨.int n, _⟩ => ⟨.ofNat ty.numBits n.toNat⟩
+  layout_meta := (.reprRust, .reasonablyAligned)
   retract_embed := λ x ↦ by cases x; simp
   embed_retract v := match v with
     | ⟨.int n, .int ⟨x, h_eq⟩⟩ => by simp only [←h_eq, IUScalar.val, Std.UScalar.val, BitVec.ofNat_toNat, Int.toNat_natCast, BitVec.setWidth_eq]
 
 instance {ty : Std.IScalarTy} : HasLayout (Std.IScalar ty) where
-  ty := .int (.signed ty)
+  rty := ⟨.int (.signed ty), .int ⟩
   embed := λ x ↦ ⟨.int x.val, .int ⟨x, rfl⟩⟩
   retract := λ | ⟨.int n, _⟩ => ⟨.ofInt ty.numBits n⟩
+  layout_meta := (.reprRust, .reasonablyAligned)
   retract_embed := λ x ↦ by cases x; simp
   embed_retract v := match v with
     | ⟨.int n, .int ⟨x, h_eq⟩⟩ => by simp only [←h_eq, IUScalar.val, Std.IScalar.val, BitVec.ofInt_toInt]
 
 instance : HasLayout Unit where
-  ty := .tuple []
+  rty := RichMType.mkTuple []
   embed := λ _ ↦ mkTuple []
   retract := λ _ ↦ ()
+  layout_meta := (.reprRust, .reasonablyAligned)
+
 
 instance : HasLayout Bool where
-  ty := .enum [.tuple [], .tuple []]
+  rty := RichMType.mkEnum [[], []]
   embed := λ | true => mkVariant 0 (.tuple [])
              | false => mkVariant 1 (.tuple [])
   retract := λ | ⟨.variant 0 _, _⟩ => true
                | ⟨.variant 1 _, _⟩ => false
+  layout_meta := (.reprRust, .reasonablyAligned)
 
 instance {T1 : Type u} {T2 : Type v} [HasLayout T1] [HasLayout T2] : HasLayout (T1 × T2) where
-  ty := .tuple [ty T1, ty T2]
+  rty := RichMType.mkTuple [xty T1, xty T2]
   embed := λ (x0, x1) => mkTuple [embed x0, embed x1]
   retract := λ | ⟨.tuple [x0, x1], h⟩ =>
                   (retract (h.field 0), retract (h.field 1))
+  layout_meta := (.reprRust, .reasonablyAligned)
 
 instance {T1 : Type u} [HasLayout T1] : HasLayout (Option T1) where
-  ty := .enum [.tuple [], .tuple [ty T1]]
+  rty := RichMType.mkEnum [[], [xty T1]]
   embed := λ | .none => mkVariant 0 (.tuple [])
              | .some x => mkVariant 1 (.tuple [embed x])
   retract := λ | ⟨.variant 0 (.tuple []), _⟩ => .none
                | ⟨.variant 1 (.tuple [v0]), h⟩ =>
-                  .some (retract (h.vfield 0))
+                  .some (retract (h.vfield 0 rfl))
+  layout_meta := (.reprRust, .reasonablyAligned)
 
 end HasLayout
 

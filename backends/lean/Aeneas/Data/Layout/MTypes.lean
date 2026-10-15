@@ -134,8 +134,8 @@ def vdata {d : Nat} {v : MVal} {ts : List MType}
 def vfield {d : Nat} {vs : List MVal} {ts vts : List MType}
     (h : valid_for (.variant d (.tuple vs)) (.enum ts))
     (i : Nat)
-    (hi : i < vs.length := by simp)
-    (hv : ts[d]'(h.variant_bound) = .tuple vts := by rfl) :
+    (hv : ts[d]'(h.variant_bound) = .tuple vts := by rfl)
+    (hi : i < vs.length := by simp <;> grind) :
     { v : MVal // v.valid_for (vts[i]'(by grind)) } :=
   ⟨vs[i], (hv ▸ h.variant_proj).tuple_proj i hi⟩
 
