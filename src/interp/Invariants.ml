@@ -709,10 +709,16 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
               check_symbolic_value_type proj.sv_id ty;
               let abs = Option.get info in
               [%sanity_check] span
-                (ty_has_regions_in_set abs.regions.owned proj.proj_ty)
+                (ty_has_regions_in_set ctx.type_ctx.type_infos abs.regions.owned
+                   proj.proj_ty)
           | AProjBorrows { proj; _ } ->
               check_symbolic_value_type proj.sv_id ty;
-              [%sanity_check] span (ty_has_free_regions proj.proj_ty)
+              [%sanity_check] span
+                (ty_has_regions_in_pred ctx.type_ctx.type_infos
+                   (function
+                     | RVar (Free _) | RStatic -> true
+                     | _ -> false)
+                   proj.proj_ty)
           | AEndedProjLoans { proj = _; consumed; borrows } ->
               List.iter
                 (fun (_, proj) ->
@@ -743,7 +749,7 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) (lookups : bool)
 
 type proj_borrows_info = {
   abs_id : AbsId.id;
-  regions : RegionId.Set.t;
+  regions : region_set;
   proj_ty : rty;  (** The regions shouldn't be erased *)
   as_shared_value : bool;  (** True if the value is below a shared borrow *)
 }
@@ -751,7 +757,7 @@ type proj_borrows_info = {
 
 type proj_loans_info = {
   abs_id : AbsId.id;
-  regions : RegionId.Set.t;
+  regions : region_set;
   proj_ty : rty;
 }
 [@@deriving show]
@@ -767,7 +773,7 @@ let proj_borrows_info_to_string (ctx : eval_ctx) (info : proj_borrows_info) :
     string =
   let { abs_id; regions; proj_ty; as_shared_value } = info in
   "{ abs_id = " ^ AbsId.to_string abs_id ^ "; regions = "
-  ^ RegionId.Set.to_string None regions
+  ^ region_set_to_string regions
   ^ "; proj_ty = " ^ ty_to_string ctx proj_ty ^ "; as_shared_value = "
   ^ Print.bool_to_string as_shared_value
   ^ "}"
@@ -776,7 +782,7 @@ let proj_loans_info_to_string (ctx : eval_ctx) (info : proj_loans_info) : string
     =
   let { abs_id; regions; proj_ty } = info in
   "{ abs_id = " ^ AbsId.to_string abs_id ^ "; regions = "
-  ^ RegionId.Set.to_string None regions
+  ^ region_set_to_string regions
   ^ "; proj_ty = " ^ ty_to_string ctx proj_ty ^ "}"
 
 let sv_info_to_string (ctx : eval_ctx) (info : sv_info) : string =
@@ -793,7 +799,7 @@ let sv_info_to_string (ctx : eval_ctx) (info : sv_info) : string =
     This is a variant of {!normalize_proj_ty} that erases shared regions, so
     that two projections sharing a shared region don't collide. *)
 let normalize_mut_proj_ty (type_infos : TypesAnalysis.type_infos)
-    (owned_regions : RegionId.Set.t) (proj_ty : rty) : rty =
+    (owned_regions : region_set) (proj_ty : rty) : rty =
   let conflict_regions =
     ty_get_mutable_regions type_infos owned_regions proj_ty
   in

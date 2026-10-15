@@ -457,8 +457,8 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
                   (* The loan projector *)
                   let _, ty, _ = ty_as_ref ty in
                   let given_back =
-                    mk_aproj_loans_value_from_symbolic_value abs.regions.owned
-                      sv ty
+                    mk_aproj_loans_value_from_symbolic_value
+                      ctx.type_ctx.type_infos abs.regions.owned sv ty
                   in
                   (* Continue giving back in the child value *)
                   let child = super#visit_tavalue opt_abs child in
@@ -670,13 +670,13 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
     over those borrows.
 
     Note that we also update the abstraction expressions. *)
-let end_aproj_borrows (span : Meta.span) (ended_regions : RegionId.Set.t)
+let end_aproj_borrows (span : Meta.span) (ended_regions : region_set)
     (proj : symbolic_proj) (nsv : symbolic_value) (ctx : eval_ctx) : eval_ctx =
   (* Sanity checks *)
   [%sanity_check] span (proj.sv_id <> nsv.sv_id && ty_is_rty proj.proj_ty);
   [%ltrace
     "- ended regions: "
-    ^ RegionId.Set.to_string None ended_regions
+    ^ region_set_to_string ended_regions
     ^ "\n- projection type: "
     ^ ty_to_string ctx proj.proj_ty
     ^ "\n- sv: "
@@ -745,8 +745,8 @@ let end_aproj_borrows (span : Meta.span) (ended_regions : RegionId.Set.t)
 
 (** Give back a *modified* symbolic value. *)
 let give_back_symbolic_value (_config : config) (span : Meta.span)
-    (ended_regions : RegionId.Set.t) (proj : symbolic_proj)
-    (nsv : symbolic_value) (ctx : eval_ctx) : eval_ctx =
+    (ended_regions : region_set) (proj : symbolic_proj) (nsv : symbolic_value)
+    (ctx : eval_ctx) : eval_ctx =
   (* Sanity checks *)
   [%sanity_check] span (proj.sv_id <> nsv.sv_id && ty_is_rty proj.proj_ty);
   (* Substitution functions, to replace the borrow projectors over symbolic values *)
@@ -1197,8 +1197,18 @@ and end_abs_aux (config : config) (span : Meta.span) ~(snapshots : bool)
         "abs not found (already ended): " ^ AbsId.to_string abs_id ^ "\n"];
       (ctx, fun e -> e)
   | Some abs ->
-      (* Check that we can end the abstraction *)
-      if abs.can_end then ()
+      (* Check that we can end the abstraction.
+
+         Remark: if the abstraction is not endable while [abs.can_end] is
+         [true], this necessarily means that the abstraction owns the static
+         region and is not empty, while we are not allowed to end region
+         abstractions owning the static region ([ctx.can_end_static] is
+         [false]): see {!Contexts.abs_is_endable}. *)
+      if abs_is_endable ctx abs then ()
+      else if abs.can_end then
+        [%craise] span
+          ("Can't end abstraction " ^ AbsId.to_string abs.abs_id
+         ^ " as it owns the static region")
       else
         [%craise] span
           ("Can't end abstraction " ^ AbsId.to_string abs.abs_id
@@ -1242,7 +1252,11 @@ and end_abs_aux (config : config) (span : Meta.span) ~(snapshots : bool)
          changes... *)
       let ctx =
         let ended_regions =
-          RegionId.Set.union ctx.ended_regions abs.regions.owned
+          (* Note that we never consider the static region as ended, though we may
+             "eliminate" abstractions that track 'static (in which case we simply
+             forget the abstraction, we don't really end it) *)
+          RegionId.Set.union ctx.ended_regions
+            (region_set_get_region_ids abs.regions.owned)
         in
         { ctx with ended_regions }
       in
@@ -1579,12 +1593,11 @@ and end_abs_synthesize (_config : config) (span : Meta.span) (abs_id : AbsId.id)
     actually doesn't exist anymore when we get here. *)
 and end_proj_loans_symbolic (config : config) (span : Meta.span)
     ~(snapshots : bool) (chain : borrow_loan_abs_ids) (abs_id : AbsId.id)
-    (level : abs_level) (regions : RegionId.Set.t) (proj : symbolic_proj) :
-    cm_fun =
+    (level : abs_level) (regions : region_set) (proj : symbolic_proj) : cm_fun =
  fun ctx ->
   [%ltrace
     "- abs_id: " ^ AbsId.to_string abs_id ^ "\n- regions: "
-    ^ RegionId.Set.to_string None regions
+    ^ region_set_to_string regions
     ^ "\n- sv: "
     ^ symbolic_value_id_to_pretty_string proj.sv_id
     ^ "\n- projection type: "
@@ -2142,8 +2155,8 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) ~(can_end : bool)
                    have the type `& ...` - TODO: this is annoying and not very clean... *)
                 let ty =
                   (* Take the first region of the abstraction - this doesn't really matter *)
-                  let r = RegionId.Set.min_elt abs0.regions.owned in
-                  TRef (RVar (Free r), ty, RShared)
+                  let r = abs_pick_region span abs0 in
+                  TRef (r, ty, RShared)
                 in
                 { value; ty }
               in
@@ -2522,9 +2535,19 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
                (because otherwise ending the borrow would end the loan).
 
                TODO: this limitation is annoying. We need to generalize the join.
+
+               Also note that if the abstraction owns the static region, we can
+               end it only if we are allowed to (see [abs_is_endable]): this
+               is the case in particular if it doesn't contain borrows (note that
+               we already no it doesn't contain any loans), in which case we are
+               allowed to forget it (and so in this context by "ending" we mean
+               removing the abstraction from the context because we are allowed
+               not to keep track of it).
             *)
-            if not (abs_mut_borrows_loans_in_fixed span ctx frozen_abs abs) then
-              raise (FoundAbsId abs.abs_id)
+            if
+              abs_is_endable ctx abs
+              && not (abs_mut_borrows_loans_in_fixed span ctx frozen_abs abs)
+            then raise (FoundAbsId abs.abs_id)
             else EAbs abs :: explore_env ctx env
         | Some _ ->
             [%ldebug

@@ -266,7 +266,7 @@ let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
   in
   let inst_sg = instantiate_fun_sig (Some span) ctx generics tr_self sg in
   let region_groups =
-    List.map (fun (g : region_var_group) -> g.id) inst_sg.regions_hierarchy
+    List.map (fun (g : region_group) -> g.id) inst_sg.regions_hierarchy
   in
   let ctx = { ctx with region_groups } in
   (* Return *)
@@ -325,7 +325,8 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx)
     let avalues =
       List.map
         (fun (sv : symbolic_value) ->
-          mk_aproj_loans_value_from_symbolic_value abs.regions.owned sv sv.sv_ty)
+          mk_aproj_loans_value_from_symbolic_value ctx.type_ctx.type_infos
+            abs.regions.owned sv sv.sv_ty)
         input_svs
     in
     (* The continuation expression *)
@@ -408,7 +409,8 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
      regions as non-endable, and, second, end those parent regions in
      proper order. *)
   let parent_rgs =
-    list_ancestor_region_groups inst_sg.regions_hierarchy back_id
+    RegionsHierarchy.list_ancestor_region_groups inst_sg.regions_hierarchy
+      back_id
   in
   let parent_input_abs_ids =
     RegionGroupId.mapi
@@ -483,6 +485,15 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   (* Set the abstrations as endable *)
   let ctx = InterpBorrowsCore.update_endable ctx target_abs_ids ~can_end:true in
 
+  (* If we are synthesizing the backward function for the static region, we
+     need to allow ending the region abstractions which own the static region
+     (see [abs_is_endable]) *)
+  let ctx =
+    let rg = RegionGroupId.nth inst_sg.regions_hierarchy back_id in
+    if List.mem RStatic rg.regions then { ctx with can_end_static = true }
+    else ctx
+  in
+
   (* Actually end them *)
   let ctx, cc =
     fold_left_apply_continuation
@@ -524,6 +535,7 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
 
   let regions_hierarchy =
     RegionsHierarchy.compute_regions_hierarchy_for_sig (Some span) ctx.crate
+      ctx.type_ctx.type_infos
       (bound_fun_sig_of_decl fdef)
   in
 

@@ -652,7 +652,7 @@ let tevalue_has_fvars (e : tevalue) : bool =
 
     The pattern should be open (it should contain free variables): this helper
     will close it by replacing the free variables with bound variables. *)
-let mk_let (span : Meta.span) (rid_set : region_id_set) (pat : tepat)
+let mk_let (span : Meta.span) (rid_set : region_set) (pat : tepat)
     (bound : tevalue) (e : tevalue) : tevalue =
   (* Close the pattern *)
   let pat, e = close_binder span pat e in
