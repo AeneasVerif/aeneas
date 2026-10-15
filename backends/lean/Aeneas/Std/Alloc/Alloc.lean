@@ -34,6 +34,6 @@ def Global.allocate (_ : Global) (values : List T) : Result (MutRawPtr T) :=
 -- TODO: it should take a NonNull<T>
 -- TODO: then a NonNull<u8> and a Layout
 def Global.deallocate (_ : Global) (p : MutRawPtr T) (count : Nat) : Result Unit :=
-  Result.guardedModify _ (Heap.dealloc p.loc count .global)
+  Result.guardedModify _ (Heap.dealloc p count .global)
 
 end Aeneas.Std

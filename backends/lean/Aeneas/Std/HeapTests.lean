@@ -8,35 +8,37 @@ namespace Aeneas.Std.HeapTests
 
 open Heap
 
+-- The start of the first allocation in the empty heap.
+local notation "p₀" => (RawPtr.mk (freshLoc ∅) : MutRawPtr Nat)
+
 /-- A fresh global allocation can be deallocated, but only once. -/
 example (value : Nat) :
-    ∃ hDealloc : CanDealloc (alloc [value] .global ∅).2 (freshLoc ∅) 1 .global,
-      ¬ CanDealloc ((alloc [value] .global ∅).2.dealloc (freshLoc ∅) 1 .global hDealloc).2
-        (freshLoc ∅) 1 .global :=
+    ∃ hDealloc : CanDealloc (alloc [value] .global ∅).2 p₀ 1 .global,
+      ¬ CanDealloc ((alloc [value] .global ∅).2.dealloc p₀ 1 .global hDealloc).2 p₀ 1 .global :=
   ⟨canDealloc_iff.mpr ⟨freshLoc_offset ∅, fun _ hi => isLive_alloc hi,
     (isEndMarker_alloc_end_iff ∅ [value] .global .global).mpr rfl⟩,
    fun hAgain => not_isEndMarker_dealloc _ (canDealloc_iff.mp hAgain).2.2⟩
 
 /-- A two-slot allocation is deallocated whole. -/
-example (a b : Nat) : CanDealloc (alloc [a, b] .global ∅).2 (freshLoc ∅) 2 .global :=
+example (a b : Nat) : CanDealloc (alloc [a, b] .global ∅).2 p₀ 2 .global :=
   canDealloc_iff.mpr ⟨freshLoc_offset ∅, fun _ hi => isLive_alloc hi,
     (isEndMarker_alloc_end_iff ∅ [a, b] .global .global).mpr rfl⟩
 
 /-- An empty allocation can also be deallocated only once. -/
 example :
-    ∃ hDealloc : CanDealloc (alloc ([] : List Nat) .global ∅).2 (freshLoc ∅) 0 .global,
-      ¬ CanDealloc ((alloc ([] : List Nat) .global ∅).2.dealloc (freshLoc ∅) 0 .global hDealloc).2
-        (freshLoc ∅) 0 .global :=
+    ∃ hDealloc : CanDealloc (alloc ([] : List Nat) .global ∅).2 p₀ 0 .global,
+      ¬ CanDealloc ((alloc ([] : List Nat) .global ∅).2.dealloc p₀ 0 .global hDealloc).2 p₀ 0
+        .global :=
   ⟨canDealloc_iff.mpr ⟨freshLoc_offset ∅, fun _ hi => absurd hi (Nat.not_lt_zero _),
     (isEndMarker_alloc_end_iff ∅ ([] : List Nat) .global .global).mpr rfl⟩,
    fun hAgain => not_isEndMarker_dealloc _ (canDealloc_iff.mp hAgain).2.2⟩
 
 /-- Allocating after a deallocation gets a new id, and the deallocated slot stays dead. -/
-example {α : Type} (h : Heap) (l : Loc) (kind : AllocKind) (hDealloc : CanDealloc h l 1 kind)
-    (value : α) :
-    (freshLoc (h.dealloc l 1 kind hDealloc).2).allocId ≠ l.allocId ∧
-      ¬ IsLive ((h.dealloc l 1 kind hDealloc).2.alloc [value] .view).2 l := by
-  have hMem : l ∈ (h.dealloc l 1 kind hDealloc).2 := by
+example {α : Type} (h : Heap) (q : MutRawPtr Nat) (kind : AllocKind)
+    (hDealloc : CanDealloc h q 1 kind) (value : α) :
+    (freshLoc (h.dealloc q 1 kind hDealloc).2).allocId ≠ q.loc.allocId ∧
+      ¬ IsLive ((h.dealloc q 1 kind hDealloc).2.alloc [value] .view).2 q.loc := by
+  have hMem : q.loc ∈ (h.dealloc q 1 kind hDealloc).2 := by
     simpa using mem_dealloc hDealloc (Nat.zero_le 1)
   refine ⟨fun hEq => notMem_freshAllocId (by simpa using hEq.symm) hMem, fun hLive => ?_⟩
   exact not_isLive_dealloc hDealloc (Nat.zero_le 1)
@@ -54,39 +56,39 @@ example {α β : Type} (h : Heap) (value : β) :
 
 /-- An allocation not from the global allocator (e.g. a copy behind a reference) cannot be
 deallocated through the allocator. -/
-example (value : Nat) : ¬ CanDealloc (alloc [value] .view ∅).2 (freshLoc ∅) 1 .global :=
+example (value : Nat) : ¬ CanDealloc (alloc [value] .view ∅).2 p₀ 1 .global :=
   fun hDealloc => by
     simpa using
       (isEndMarker_alloc_end_iff ∅ [value] .view .global).mp (canDealloc_iff.mp hDealloc).2.2
 
 /-- Conversely, memory from the global allocator cannot be released as a view. -/
-example (value : Nat) : ¬ CanDealloc (alloc [value] .global ∅).2 (freshLoc ∅) 1 .view :=
+example (value : Nat) : ¬ CanDealloc (alloc [value] .global ∅).2 p₀ 1 .view :=
   fun hDealloc => by
     simpa using
       (isEndMarker_alloc_end_iff ∅ [value] .global .view).mp (canDealloc_iff.mp hDealloc).2.2
 
 /-- `endBorrow` never applies to a deallocated slot. -/
-example (h : Heap) (l : Loc) (kind : AllocKind) (hDealloc : CanDealloc h l 1 kind) :
-    ¬ IsBorrowed (h.dealloc l 1 kind hDealloc).2 l := by
+example (h : Heap) (q : MutRawPtr Nat) (kind : AllocKind) (hDealloc : CanDealloc h q 1 kind) :
+    ¬ IsBorrowed (h.dealloc q 1 kind hDealloc).2 q.loc := by
   simpa using not_isBorrowed_dealloc hDealloc (Nat.zero_le 1)
 
 /-- While a slot is borrowed, its allocation cannot be deallocated. -/
 example (h : Heap) (q : MutRawPtr Nat) (hValid : IsValid h q) (kind : AllocKind) :
-    ¬ CanDealloc (h.borrow q hValid).2 q.loc 1 kind :=
+    ¬ CanDealloc (h.borrow q hValid).2 q 1 kind :=
   fun hDealloc =>
     not_isLive_borrow hValid (by simpa using (canDealloc_iff.mp hDealloc).2.1 0 one_pos)
 
 /-- An interior pointer cannot be deallocated. -/
-example (a b : Nat) : ¬ CanDealloc (alloc [a, b] .global ∅).2 ((freshLoc ∅).shift 1) 1 .global :=
+example (a b : Nat) : ¬ CanDealloc (alloc [a, b] .global ∅).2 (RawPtr.shift p₀ 1) 1 .global :=
   fun hDealloc => by simpa using (canDealloc_iff.mp hDealloc).1
 
 /-- A size smaller than the allocation's is rejected. -/
-example (a b : Nat) : ¬ CanDealloc (alloc [a, b] .global ∅).2 (freshLoc ∅) 1 .global :=
+example (a b : Nat) : ¬ CanDealloc (alloc [a, b] .global ∅).2 p₀ 1 .global :=
   fun hDealloc =>
     not_isLive_of_isEndMarker (canDealloc_iff.mp hDealloc).2.2 (isLive_alloc (i := 1) (by simp))
 
 /-- A size larger than the allocation's is rejected. -/
-example (value : Nat) : ¬ CanDealloc (alloc [value] .global ∅).2 (freshLoc ∅) 2 .global :=
+example (value : Nat) : ¬ CanDealloc (alloc [value] .global ∅).2 p₀ 2 .global :=
   fun hDealloc => by
     exact not_isLive_alloc_end (h := ∅) [value] ((canDealloc_iff.mp hDealloc).2.1 1 (by omega))
 

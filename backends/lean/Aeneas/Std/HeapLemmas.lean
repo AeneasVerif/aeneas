@@ -467,8 +467,6 @@ theorem read_union_left {α : Type} {h₁ h₂ : Heap} {q : RawPtr α M}
     (hValid : IsValid h₁ q) :
     (h₁ ∪ h₂).read q (isValid_union_left hValid) = Prod.map id (· ∪ h₂) (h₁.read q hValid) := by
   have hMem : q.loc ∈ h₁ := mem_of_isValid hValid
-  refine Prod.ext ?_ rfl
-  show (Heap.read q (h₁ ∪ h₂) _).1 = (h₁.read q hValid).1
   unfold Heap.read
   split
   · rename_i hLookup
@@ -521,69 +519,70 @@ theorem not_isLive_of_isEndMarker {h : Heap} {l : Loc} {kind : AllocKind}
   unfold IsEndMarker at hEnd
   simp [IsLive, Heap.lookup, hEnd, Slot.cell?]
 
-theorem canDealloc_iff {h : Heap} {l : Loc} {n : Nat} {kind : AllocKind} :
-    CanDealloc h l n kind ↔
-      l.offset = 0 ∧ (∀ i < n, IsLive h (l.shift i)) ∧ IsEndMarker h (l.shift n) kind := by
+theorem canDealloc_iff {h : Heap} {q : RawPtr α M} {n : Nat} {kind : AllocKind} :
+    CanDealloc h q n kind ↔
+      q.loc.offset = 0 ∧ (∀ i < n, IsLive h (q.loc.shift i)) ∧
+        IsEndMarker h (q.loc.shift n) kind := by
   rw [CanDealloc]
 
-theorem canDealloc_union_left {h₁ h₂ : Heap} {l : Loc} {n : Nat} {kind : AllocKind}
-    (hDealloc : CanDealloc h₁ l n kind) : CanDealloc (h₁ ∪ h₂) l n kind :=
+theorem canDealloc_union_left {h₁ h₂ : Heap} {q : RawPtr α M} {n : Nat} {kind : AllocKind}
+    (hDealloc : CanDealloc h₁ q n kind) : CanDealloc (h₁ ∪ h₂) q n kind :=
   ⟨hDealloc.1, fun i hi => isLive_union_left (hDealloc.2.1 i hi),
     isEndMarker_union_left hDealloc.2.2⟩
 
 /-- The slots that `dealloc` kills are already in the heap. -/
-private theorem mem_of_canDealloc {h : Heap} {l : Loc} {n i : Nat} {kind : AllocKind}
-    (hDealloc : CanDealloc h l n kind)
-    (hi : i < n + 1) : l.shift i ∈ h := by
+private theorem mem_of_canDealloc {h : Heap} {q : RawPtr α M} {n i : Nat} {kind : AllocKind}
+    (hDealloc : CanDealloc h q n kind)
+    (hi : i < n + 1) : q.loc.shift i ∈ h := by
   rcases Nat.lt_succ_iff_lt_or_eq.mp hi with hi | rfl
   · exact mem_of_isLive (hDealloc.2.1 i hi)
   · exact Finmap.mem_of_lookup_eq_some hDealloc.2.2
 
-theorem compatible_dealloc_left {h₁ h₂ : Heap} {l : Loc} {n : Nat} {kind : AllocKind}
-    (hCompatible : PartialCommMonoid.Compatible h₁ h₂) (hDealloc : CanDealloc h₁ l n kind) :
-    PartialCommMonoid.Compatible (h₁.dealloc l n kind hDealloc).2 h₂ := by
+theorem compatible_dealloc_left {h₁ h₂ : Heap} {q : RawPtr α M} {n : Nat} {kind : AllocKind}
+    (hCompatible : PartialCommMonoid.Compatible h₁ h₂) (hDealloc : CanDealloc h₁ q n kind) :
+    PartialCommMonoid.Compatible (h₁.dealloc q n kind hDealloc).2 h₂ := by
   intro address hMem hMem₂
-  change address ∈ freedRange l (n + 1) ∪ h₁ at hMem
+  change address ∈ freedRange q.loc (n + 1) ∪ h₁ at hMem
   rcases Heap.mem_union.mp hMem with hFreed | hMem₁
   · obtain ⟨i, hi, rfl⟩ := mem_freedRange.mp hFreed
     exact hCompatible _ (mem_of_canDealloc hDealloc hi) hMem₂
   · exact hCompatible _ hMem₁ hMem₂
 
-theorem dealloc_union_left {h₁ h₂ : Heap} {l : Loc} {n : Nat} {kind : AllocKind}
-    (hDealloc : CanDealloc h₁ l n kind) :
-    (h₁ ∪ h₂).dealloc l n kind (canDealloc_union_left hDealloc) =
-      Prod.map id (· ∪ h₂) (h₁.dealloc l n kind hDealloc) :=
+theorem dealloc_union_left {h₁ h₂ : Heap} {q : RawPtr α M} {n : Nat} {kind : AllocKind}
+    (hDealloc : CanDealloc h₁ q n kind) :
+    (h₁ ∪ h₂).dealloc q n kind (canDealloc_union_left hDealloc) =
+      Prod.map id (· ∪ h₂) (h₁.dealloc q n kind hDealloc) :=
   congrArg (Prod.mk ()) (Heap.union_assoc' _ _ _).symm
 
 /-- Deallocated slots stay in the heap, so their allocation id is never handed out again. -/
-theorem mem_dealloc {h : Heap} {l : Loc} {n i : Nat} {kind : AllocKind}
-    (hDealloc : CanDealloc h l n kind) (hi : i ≤ n) :
-    l.shift i ∈ (h.dealloc l n kind hDealloc).2 :=
+theorem mem_dealloc {h : Heap} {q : RawPtr α M} {n i : Nat} {kind : AllocKind}
+    (hDealloc : CanDealloc h q n kind) (hi : i ≤ n) :
+    q.loc.shift i ∈ (h.dealloc q n kind hDealloc).2 :=
   Heap.mem_union.mpr (Or.inl (mem_freedRange.mpr ⟨i, by omega, rfl⟩))
 
-private theorem lookup_dealloc {h : Heap} {l : Loc} {n i : Nat} {kind : AllocKind}
-    (hDealloc : CanDealloc h l n kind) (hi : i ≤ n) :
-    (h.dealloc l n kind hDealloc).2.impl.lookup (l.shift i) = some .freed := by
-  show Finmap.lookup (l.shift i) ((freedRange l (n + 1)).impl ∪ h.impl) = _
+private theorem lookup_dealloc {h : Heap} {q : RawPtr α M} {n i : Nat} {kind : AllocKind}
+    (hDealloc : CanDealloc h q n kind) (hi : i ≤ n) :
+    (h.dealloc q n kind hDealloc).2.impl.lookup (q.loc.shift i) = some .freed := by
+  show Finmap.lookup (q.loc.shift i) ((freedRange q.loc (n + 1)).impl ∪ h.impl) = _
   rw [Finmap.lookup_union_left (mem_freedRange.mpr ⟨i, by omega, rfl⟩)]
   exact lookup_freedRange (by omega)
 
 /-- A deallocated slot cannot be read or written. -/
-theorem not_isLive_dealloc {h : Heap} {l : Loc} {n i : Nat} {kind : AllocKind}
-    (hDealloc : CanDealloc h l n kind) (hi : i ≤ n) :
-    ¬ IsLive (h.dealloc l n kind hDealloc).2 (l.shift i) := by
+theorem not_isLive_dealloc {h : Heap} {q : RawPtr α M} {n i : Nat} {kind : AllocKind}
+    (hDealloc : CanDealloc h q n kind) (hi : i ≤ n) :
+    ¬ IsLive (h.dealloc q n kind hDealloc).2 (q.loc.shift i) := by
   simp [IsLive, Heap.lookup, lookup_dealloc hDealloc hi, Slot.cell?]
 
 /-- After `dealloc`, the allocation end is freed, so the allocation cannot be deallocated again. -/
-theorem not_isEndMarker_dealloc {h : Heap} {l : Loc} {n : Nat} {kind kind' : AllocKind}
-    (hDealloc : CanDealloc h l n kind) :
-    ¬ IsEndMarker (h.dealloc l n kind hDealloc).2 (l.shift n) kind' := by
+theorem not_isEndMarker_dealloc {h : Heap} {q : RawPtr α M} {n : Nat} {kind kind' : AllocKind}
+    (hDealloc : CanDealloc h q n kind) :
+    ¬ IsEndMarker (h.dealloc q n kind hDealloc).2 (q.loc.shift n) kind' := by
   simp [IsEndMarker, lookup_dealloc hDealloc (Nat.le_refl n)]
 
 /-- A deallocated slot cannot be borrowed back to life. -/
-theorem not_isBorrowed_dealloc {h : Heap} {l : Loc} {n i : Nat} {kind : AllocKind}
-    (hDealloc : CanDealloc h l n kind) (hi : i ≤ n) :
-    ¬ IsBorrowed (h.dealloc l n kind hDealloc).2 (l.shift i) := by
+theorem not_isBorrowed_dealloc {h : Heap} {q : RawPtr α M} {n i : Nat} {kind : AllocKind}
+    (hDealloc : CanDealloc h q n kind) (hi : i ≤ n) :
+    ¬ IsBorrowed (h.dealloc q n kind hDealloc).2 (q.loc.shift i) := by
   simp [IsBorrowed, lookup_dealloc hDealloc hi]
 
 /-- Allocation leaves the slots already in the heap untouched. -/
@@ -645,8 +644,6 @@ theorem isValid_singleton {α : Type} (q : RawPtr α M) (value : α) :
 theorem read_singleton {α : Type} (q : RawPtr α M) (value : α)
     (hValid : IsValid (singleton q value) q) :
     (singleton q value).read q hValid = (value, singleton q value) := by
-  refine Prod.ext ?_ rfl
-  show (Heap.read q (singleton q value) hValid).1 = value
   unfold Heap.read
   split
   · rename_i hLookup

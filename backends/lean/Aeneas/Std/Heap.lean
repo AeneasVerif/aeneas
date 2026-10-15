@@ -208,23 +208,24 @@ def read (q : RawPtr α M) (h : Heap) (hValid : IsValid h q) : α × Heap :=
 def write (q : RawPtr α M) (value : α) (h : Heap) (_ : IsValid h q) : Unit × Heap :=
   ((), h.insert q.loc (.live ⟨α, value⟩))
 
-/-- The guard of `dealloc l n kind`: `l` starts an allocation of kind `kind`, of exactly
-`n` live slots. With `kind = .global` this is the global allocator's `deallocate`; anything else
-is undefined behaviour in Rust: memory that the global allocator did not allocate, a pointer into
-the middle of an allocation, the wrong size, or memory already deallocated. See the safety section
-of [`Allocator::deallocate`](https://doc.rust-lang.org/std/alloc/trait.Allocator.html#tymethod.deallocate) -/
-def CanDealloc (h : Heap) (l : Loc) (n : Nat) (kind : AllocKind) : Prop :=
-  l.offset = 0 ∧ (∀ i < n, IsLive h (l.shift i)) ∧ IsEndMarker h (l.shift n) kind
+/-- The guard of `dealloc q n kind`: `q` starts an allocation of exactly `n` live slots, whose end
+marker records `kind`. So `Global.deallocate` (`.global`) fails on a view, and `endView` (`.view`)
+fails on memory from the global allocator. Anything else is undefined behaviour in Rust as well:
+a pointer into the middle of an allocation, the wrong size, or memory already deallocated. See the
+safety section of
+[`Allocator::deallocate`](https://doc.rust-lang.org/std/alloc/trait.Allocator.html#tymethod.deallocate) -/
+def CanDealloc (h : Heap) (q : RawPtr α M) (n : Nat) (kind : AllocKind) : Prop :=
+  q.loc.offset = 0 ∧ (∀ i < n, IsLive h (q.loc.shift i)) ∧ IsEndMarker h (q.loc.shift n) kind
 
 /-- `n` freed slots from `l` on. -/
 private def freedRange (l : Loc) : Nat → Heap
   | 0 => empty
   | n + 1 => ⟨Finmap.singleton l .freed⟩ ∪ freedRange (l.shift 1) n
 
--- Deallocates the `n` slots at `l` and the marker after them. They stay in the heap as freed slots.
-def dealloc (l : Loc) (n : Nat) (kind : AllocKind) (h : Heap) (_ : CanDealloc h l n kind) :
-    Unit × Heap :=
-  ((), freedRange l (n + 1) ∪ h)
+-- Deallocates the `n` slots at `q` and the marker after them. They stay in the heap as freed slots.
+def dealloc (q : RawPtr α M) (n : Nat) (kind : AllocKind) (h : Heap)
+    (_ : CanDealloc h q n kind) : Unit × Heap :=
+  ((), freedRange q.loc (n + 1) ∪ h)
 
 /-- One borrowed slot at `l`. Owning it is the right to `endBorrow` it. -/
 def borrowedSlot (l : Loc) : Heap :=
