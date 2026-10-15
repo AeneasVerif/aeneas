@@ -120,7 +120,7 @@ and translate_trait_ref_kind (span : Meta.span option)
               ^ Types.show_builtin_impl_data data)
       in
       BuiltinOrAuto data
-  | Clause var ->
+  | Clause (var, _) ->
       Clause var
       (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
   | ParentClause (tref, clause_id) ->
