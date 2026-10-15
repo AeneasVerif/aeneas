@@ -336,26 +336,24 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
           translate_binder span (translate_fun_decl_ref span translate_ty) m ))
       (TraitMethodId.Map.to_list methods)
   in
-  (* The signatures of the methods of the traits defined in other crates are
-     pure: they can not account for the deferred backward functions of the
-     methods which return borrows of values in the heap *)
-  let trait_decl =
-    [%silent_unwrap_opt_span] span
-      (TraitDeclId.Map.find_opt trait_impl.impl_trait.id ctx.crate.trait_decls)
-  in
-  if not trait_decl.item_meta.is_local then
-    TraitMethodId.Map.iter
-      (fun _ (m : T.fun_decl_ref T.binder) ->
-        let fid = m.binder_value.id in
-        match FunDeclId.Map.find_opt fid ctx.crate.fun_decls with
-        | Some d
-          when FunsAnalysis.is_stateful ctx.fun_ctx.fun_infos fid
-               && TypesUtils.ty_has_regions d.signature.output ->
-            [%craise_opt_span] span
-              "Unsupported: implementation of a trait defined in another crate \
-               by a method which accesses the heap and returns a borrow"
-        | _ -> ())
-      trait_impl.methods;
+  (* The models of the trait declarations have pure signatures (for the
+     traits defined in other crates, they are given by the library): they can
+     not account for the deferred backward functions of the methods which
+     access the heap and return borrows (whose backward functions write the
+     values back to the heap). *)
+  TraitMethodId.Map.iter
+    (fun _ (m : T.fun_decl_ref T.binder) ->
+      let fid = m.binder_value.id in
+      match FunDeclId.Map.find_opt fid ctx.crate.fun_decls with
+      | Some d
+        when FunsAnalysis.is_stateful ctx.fun_ctx.fun_infos fid
+             && TypesUtils.ty_has_regions d.signature.output ->
+          [%craise_opt_span] span
+            "Unsupported: implementation of a trait method by a method which \
+             accesses the heap (it dereferences raw pointers, or calls a \
+             function which does) and returns a borrow"
+      | _ -> ())
+    trait_impl.methods;
   (* Lookup the builtin information, if there is *)
   let builtin_info =
     let decl_id = trait_impl.impl_trait.id in

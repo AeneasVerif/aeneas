@@ -137,8 +137,8 @@ structure Counter (Self : Type _) where
 structure PtrCounter where
   p : MutRawPtr Std.U32
 
-instance : NonZeroSized PtrCounter := ⟨NonZeroSized.nonZero (MutRawPtr
-  Std.U32)⟩
+instance : Pointee PtrCounter := Pointee.typed PtrCounter (Pointee.nonZero
+  (MutRawPtr Std.U32))
 
 /-- [raw_pointers::{impl raw_pointers::Counter for raw_pointers::PtrCounter}::next]:
     Source: 'tests/src/raw_pointers.rs', lines 98:4-104:5 -/
@@ -159,7 +159,9 @@ def PtrCounter.Insts.Raw_pointersCounter : Counter PtrCounter := {
 /-- [raw_pointers::next_twice]:
     Source: 'tests/src/raw_pointers.rs', lines 108:0-112:1 -/
 def next_twice
-  {T : Type _} (CounterInst : Counter T) (c : T) : Result Std.U32 := do
+  {T : Type _} [Pointee T] (CounterInst : Counter T) (c : T) :
+  Result Std.U32
+  := do
   let a ← CounterInst.next c
   let b ← CounterInst.next c
   ok (core.num.U32.wrapping_add a b)
@@ -167,13 +169,17 @@ def next_twice
 /-- [raw_pointers::next_once]:
     Source: 'tests/src/raw_pointers.rs', lines 114:0-116:1 -/
 def next_once
-  {T : Type _} (CounterInst : Counter T) (c : T) : Result Std.U32 := do
+  {T : Type _} [Pointee T] (CounterInst : Counter T) (c : T) :
+  Result Std.U32
+  := do
   CounterInst.next c
 
 /-- [raw_pointers::next_twice_via_generic]:
     Source: 'tests/src/raw_pointers.rs', lines 119:0-123:1 -/
 def next_twice_via_generic
-  {T : Type _} (CounterInst : Counter T) (c : T) : Result Std.U32 := do
+  {T : Type _} [Pointee T] (CounterInst : Counter T) (c : T) :
+  Result Std.U32
+  := do
   let a ← next_once CounterInst c
   let b ← next_once CounterInst c
   ok (core.num.U32.wrapping_add a b)

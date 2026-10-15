@@ -729,6 +729,9 @@ let greedy_expand_symbolics_with_borrows (span : Meta.span) : cm_fun =
             (* We can't expand those *)
             [%craise] span
               "Attempted to greedily expand an ADT which can't be expanded "
+        | TRawPtr _ ->
+            [%craise] span
+              "Unsupported: raw pointers to types which contain borrows"
         | _ -> [%craise] span "Unreachable"
       in
       (* *)

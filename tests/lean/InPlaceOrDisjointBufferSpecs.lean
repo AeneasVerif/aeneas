@@ -79,7 +79,7 @@ theorem zero_first_in_place.spec (buf : Slice U8) (h : 0 < buf.length) :
     ⦃ emp ⦄ zero_first_in_place buf ⦃ r => ⌜r = (buf.len, buf.set 0#usize 0#u8)⌝ ⦄ := by
   unfold zero_first_in_place
   step*
-  iterate 2 (try (case hNotNull => apply RawPtr.notNull_of_pos; simp_all); try step*)
+  case hNotNull => apply RawPtr.notNull_of_pos; simp_all
   rw [b_post2]
   step with Slice.end_as_mut_ptr.spec buf b.dst d1.val (by simp [d1_post, d_post])
   step*
@@ -91,12 +91,11 @@ theorem copy_first.spec (src dst : Slice U8) (h : src.length = dst.length)
     ⦃ emp ⦄ copy_first src dst ⦃ r => ⌜r = (src, dst.set 0#usize (src.val[0]'h0))⌝ ⦄ := by
   unfold copy_first
   step*
-  iterate 2 (try (case hNotNull => apply RawPtr.notNull_of_pos; simp_all); try step*)
+  case hNotNull => apply RawPtr.notNull_of_pos; simp_all
   rw [src_back_post]
   step with RawPtr.endBorrowRange.spec b.src src.val
   step*
   case hNotNull => apply RawPtr.notNull_of_pos; simp [b_post]; scalar_tac
-  step*
   rw [b_post1]
   step*
   exact ⟨Slice.ext _ _ s_post, Slice.ext _ _ (by simp_all)⟩
@@ -110,12 +109,12 @@ theorem increment_first_in_place.spec (buf : Slice U8) (h : 0 < buf.length) :
   simp only at b_post b_post1 b_post2
   subst b_post1
   step*
-  iterate 2 (try (case hNotNull => apply RawPtr.notNull_of_pos; simp_all); try step*)
+  case hNotNull => apply RawPtr.notNull_of_pos; simp_all
   rw [src_back_post]
   step with RawPtr.endBorrowRange.spec (RawPtr.cast_const dst) buf.val
   rw [RawPtr.pointsToRange_cast_const]
   step*
-  iterate 2 (try (case hNotNull => apply RawPtr.notNull_of_pos; simp_all); try step*)
+  case hNotNull => apply RawPtr.notNull_of_pos; simp_all
   rw [b_post2]
   step with Slice.end_as_mut_ptr.spec buf dst s2.val (by simp [s2_post, s1_post])
   apply Slice.ext
