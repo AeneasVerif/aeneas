@@ -87,14 +87,14 @@ def Slice.as_ptr {T : Type} (s : Slice T) : Result (ConstRawPtr T × Result Unit
 def Slice.as_mut_ptr {T : Type} (s : Slice T) : Result (MutRawPtr T × Result (Slice T)) :=
   Aeneas.Std.bind (RawPtr.materialize s.val) fun p => .ok (p, Slice.end_as_mut_ptr s p)
 
-/-- Back function of `from_raw_parts_mut`: revives the slots with the final slice. -/
+/-- Back function of `from_raw_parts_mut`: ends the borrow of the slots with the final slice. -/
 def core.slice.raw.from_raw_parts_mut.back {T : Type} (p : MutRawPtr T) (len : Usize)
     (s : Slice T) : Result Unit :=
-  if s.length = len.val then p.reviveRange s.val else .fail .undef
+  if s.length = len.val then p.endBorrowRange s.val else .fail .undef
 
 def core.slice.raw.from_raw_parts {T : Type} (p : ConstRawPtr T) (len : Usize) :
     Result (Slice T × Result Unit) :=
-  Aeneas.Std.bind (p.takeSlice len) fun s => .ok (s, p.reviveRange s.val)
+  Aeneas.Std.bind (p.takeSlice len) fun s => .ok (s, p.endBorrowRange s.val)
 
 def core.slice.raw.from_raw_parts_mut {T : Type} (p : MutRawPtr T) (len : Usize) :
     Result (Slice T × (Slice T → Result Unit)) :=

@@ -142,13 +142,13 @@ def MutRawPtr.write (q : MutRawPtr T) (value : T) : Result Unit :=
 attribute [rust_fun "core::ptr::write"] MutRawPtr.write
 
 /-- Not a Rust function: moves the value out into a borrow; the slot stays `borrowed` until
-`revive`. -/
+`endBorrow`. -/
 def RawPtr.take (q : RawPtr T M) : Result T :=
   Result.guardedModify _ (Heap.borrow q)
 
 /-- Not a Rust function: ends the borrow of the slot of `q`, which holds `value` again. -/
-def RawPtr.revive (q : RawPtr T M) (value : T) : Result Unit :=
-  Result.guardedModify _ (Heap.revive q value)
+def RawPtr.endBorrow (q : RawPtr T M) (value : T) : Result Unit :=
+  Result.guardedModify _ (Heap.endBorrow q value)
 
 /-- Not a Rust function: `take` on the `n` slots from `q` on. -/
 def RawPtr.takeRange (q : RawPtr T M) : Nat → Result (List T)
@@ -158,12 +158,12 @@ def RawPtr.takeRange (q : RawPtr T M) : Nat → Result (List T)
     let values ← (q.shift 1).takeRange n
     .ok (value :: values)
 
-/-- Not a Rust function: `revive` on the `values.length` slots from `q` on. -/
-def RawPtr.reviveRange (q : RawPtr T M) : List T → Result Unit
+/-- Not a Rust function: `endBorrow` on the `values.length` slots from `q` on. -/
+def RawPtr.endBorrowRange (q : RawPtr T M) : List T → Result Unit
   | [] => .ok ()
   | value :: values => do
-    q.revive value
-    (q.shift 1).reviveRange values
+    q.endBorrow value
+    (q.shift 1).endBorrowRange values
 
 /-- Not a Rust function: `read` on the `n` slots from `q` on. -/
 def RawPtr.readRange (q : RawPtr T M) : Nat → Result (List T)
