@@ -5,6 +5,8 @@ public import Aeneas.Std.Core.Core
 public import Aeneas.Std.Core.Ptr
 public section
 
+open Aeneas SepLogic
+
 namespace Aeneas.Std
 
 /-- The type of the global allocator - note it shouldn't appear in the generated code because
@@ -35,5 +37,19 @@ def Global.allocate (_ : Global) (values : List T) : Result (MutRawPtr T) :=
 -- TODO: then a NonNull<u8> and a Layout
 def Global.deallocate (_ : Global) (p : MutRawPtr T) (count : Nat) : Result Unit :=
   Result.guardedModify _ (Heap.dealloc p count .global)
+
+@[step]
+theorem Global.allocate.spec (g : Global) (values : List T) :
+    ⦃ emp ⦄ g.allocate values ⦃ q => q ↦* values ∗ q.freeable values.length⦄ :=
+  Heap.alloc.spec values .global
+
+/-- `q.freeable` is required: without it, `q` could be an interior pointer or point to a local
+behind a reference, and freeing it is undefined behaviour. -/
+@[step]
+theorem Global.deallocate.spec (g : Global) (q : MutRawPtr T) (values : List T) (count : Nat)
+    (hCount : values.length = count) :
+    ⦃ q ↦* values ∗ q.freeable count ⦄ g.deallocate q count ⦃ _ => emp⦄ := by
+  subst hCount
+  exact Heap.dealloc.spec q values .global
 
 end Aeneas.Std
