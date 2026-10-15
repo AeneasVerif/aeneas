@@ -191,7 +191,7 @@ let lean_builtin_funs =
       "alloc.alloc.CloneGlobal.clone";
     (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 43 *)
     mk_fun "alloc::boxed::{core::clone::Clone<Box<@T>>}::clone"
-      "core.alloc.boxed.CloneBox.clone"
+      "alloc.boxed.CloneBox.clone"
       ~keep_params:(Some [ true; false ])
       ~keep_trait_clauses:(Some [ true; false ]);
     (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 54 *)
