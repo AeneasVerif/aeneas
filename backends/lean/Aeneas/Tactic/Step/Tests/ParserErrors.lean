@@ -105,11 +105,10 @@ in the application
 example : True := by
   step* (splits := true)
 
-/- Failed alternatives must leave a real goal for the successful branch. -/
+/- A failed `let*` must leave a real goal for the tactics that follow. -/
 example : f 0 ⦃ r => r = 1 ⦄ := by
-  first
-  | let* ⟨r, hr⟩ ← f_spec true
-  | let* ⟨r, hr⟩ ← f_spec 0
-    exact hr
+  fail_if_success let* ⟨r, hr⟩ ← f_spec true
+  let* ⟨r, hr⟩ ← f_spec 0
+  exact hr
 
 end Aeneas.Tactic.Step.Tests.ParserErrors

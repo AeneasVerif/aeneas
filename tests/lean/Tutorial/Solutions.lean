@@ -352,7 +352,7 @@ theorem add_no_overflow_loop_spec
     step as ⟨ sum ⟩
     step as ⟨ i' ⟩
     step as ⟨ x1 ⟩
-    all_goals simp_all <;> try grind
+    all_goals simp_all; try grind
     -- Small trick: discharging the assumptions of toInt_drop and toInt_update
     -- requires `grind`.
     simp (discharger := grind) [toInt_drop, toInt_update, *]
