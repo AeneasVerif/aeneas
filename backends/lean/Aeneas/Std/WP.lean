@@ -31,11 +31,13 @@ unseal Result
 
 @[expose] section
 
-/-- The WP of the effects of Rust programs (`RustEffect`): no effect is pure. -/
+/-- The WP of the effects of Rust programs (`RustEffect`). -/
 @[reducible]
 def effectWP : EffectWP RustEffect where
   State := Unit
-  wp _ _ _ := False
+  wp effect _ _ :=
+    match effect with
+    | _ => False
 
 instance : EffectWP.Monotonic effectWP where
   wp_monotonic _ := False.elim
@@ -718,7 +720,7 @@ instance Result.instWPMonad : WPMonad Result (.except (ULift Error) (.except PUn
 theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
     (⊢ₛ wp⟦x⟧ (fun a => ⌜P (.ok a)⌝,
                   fun e => ⌜P (.fail e.down)⌝,
-                  fun _ => ⌜False⌝, -- the heap effects, which have no pure semantics
+                  fun _ => ⌜False⌝, -- unreacheable
                   fun .unit => ⌜P .div⌝, .unit)) → P x := by
     intro hspec
     simp only [WP.wp, PredTrans.apply] at hspec
