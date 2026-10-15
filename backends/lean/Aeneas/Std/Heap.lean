@@ -24,22 +24,20 @@ structure Loc where
 
 private abbrev HeapCell := Σ α : Type, α
 
-/-- The kind of an allocation, recorded in its end marker: each kind is freed only its own way. -/
 inductive AllocKind where
-  /-- From the global allocator; freed by `Global.deallocate`. -/
+  /-- Allocated by the global allocator -/
   | global
-  /-- A raw-pointer view of a place owned elsewhere; freed by `endView`. -/
+  /-- A raw-pointer view of a place that Aeneas translates to a plain value -/
   | view
   deriving DecidableEq
 
 private inductive Slot where
   | live (cell : HeapCell)
-  -- the value is held by a live borrow (`from_raw_parts`), and comes back with `endBorrow`
-  | borrowed
-  -- deallocated: final, no operation reads, writes, ends a borrow of or deallocates it again
-  | freed
   -- one past the last value, with the kind of the allocation
   | endMarker (kind : AllocKind)
+  | freed
+  -- the value is held by a live borrow
+  | borrowed
 
 private def Slot.cell? : Slot → Option HeapCell
   | .live cell => some cell
@@ -81,18 +79,22 @@ pub fn borrowed() -> u32 {
 ```
 See the safety section of
 [`GlobalAlloc::dealloc`](https://doc.rust-lang.org/std/alloc/trait.GlobalAlloc.html#tymethod.dealloc).
+-/
 
+/-
 The operations, and how they move slots between `live`, `borrowed` and `freed`. `freed` is final:
 no operation leaves it, so deallocated memory can never be used again. `borrowed` always returns
-to `live`, at the same address.
+to `live`, at the same address. An allocation is one `live` slot per value (`live*`), then an
+`endMarker` with its kind; `dealloc` frees all of it, end marker included, and only for that kind.
 
-| Operation | Slot transition | Used by |
-|---|---|---|
-| `alloc` | fresh id → `live` | `Box::into_raw`, `from_mut`, `as_ptr`, `as_mut_ptr` |
-| `dealloc _ _ .global` | `live` → `freed`, whole allocation, global allocator only | `Box::from_raw` (drop), `Global::deallocate` |
-| `dealloc _ _ .view` | `live` → `freed`, whole allocation, views only | end of `from_mut`, `as_ptr`, `as_mut_ptr` |
-| `borrow` | `live` → `borrowed` | `from_raw_parts`, `from_raw_parts_mut` |
-| `endBorrow` | `borrowed` → `live` | end of `from_raw_parts`, `from_raw_parts_mut` |
+| Operation             | Allocation                          | Used by                                       |
+|-----------------------|-------------------------------------|-----------------------------------------------|
+| `alloc _ .global`     | fresh id → live*, endMarker .global | `Box::into_raw`, `Global::allocate`           |
+| `alloc _ .view`       | fresh id → live*, endMarker .view   | `from_mut`, `as_ptr`, `as_mut_ptr`            |
+| `dealloc _ _ .global` | live*, endMarker .global → freed*   | `Box::from_raw`, `Global::deallocate`         |
+| `dealloc _ _ .view`   | live*, endMarker .view → freed*     | end of `from_mut`, `as_ptr`, `as_mut_ptr`     |
+| `borrow`              | live → borrowed                     | `from_raw_parts`, `from_raw_parts_mut`        |
+| `endBorrow`           | borrowed → live                     | end of `from_raw_parts`, `from_raw_parts_mut` |
 -/
 
 def Loc.shift (l : Loc) (i : Nat) : Loc := ⟨l.allocId, l.offset + i⟩
@@ -100,7 +102,7 @@ def Loc.shift (l : Loc) (i : Nat) : Loc := ⟨l.allocId, l.offset + i⟩
 inductive Mutability where
 | Mut | Const
 
-/-- `T` is a phantom parameter, universe-polymorphic so that pointers to values in higher universes
+/-- `T` is universe-polymorphic so that pointers to values in higher universes
 (`dyn Trait`, functions returning `Result`) elaborate. Only the cells a pointer reads or writes
 need to live in `Type`. -/
 @[ext]
