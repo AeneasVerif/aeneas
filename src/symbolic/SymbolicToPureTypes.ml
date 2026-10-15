@@ -123,7 +123,7 @@ and translate_trait_ref_kind (span : Meta.span option)
   | Clause (var, _) ->
       Clause var
       (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
-  | ParentClause (tref, clause_id) ->
+  | ParentClause (tref, clause_id, _) ->
       let inst_id = translate_trait_ref_kind span translate_ty tref in
       ParentClause (inst_id, tref.trait_decl_ref.id, clause_id)
   | ItemClause _ ->
