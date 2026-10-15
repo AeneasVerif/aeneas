@@ -158,14 +158,14 @@ def RawPtr.readRange (q : RawPtr T M) : Nat → Result (List T)
 
 /-- Not a Rust function: a raw-pointer view of a place owned elsewhere (`from_mut`, `as_ptr`,
 `as_mut_ptr`). The functional model gives the place no address, so the view is a fresh allocation
-holding a copy of `values`, which only `endView` frees (`freeable = false`). -/
+holding a copy of `values`, which only `endView` frees (`AllocKind.view`). -/
 def RawPtr.allocView (values : List T) : Result (MutRawPtr T) :=
-  Result.guardedModify (fun _ => True) fun h _ => h.alloc values false
+  Result.guardedModify (fun _ => True) fun h _ => h.alloc values .view
 
 /-- Not a Rust function: ends the view behind `q`, which holds `count` values: the whole allocation
 is freed, so every later use of a pointer into it fails. -/
 def RawPtr.endView (q : RawPtr T M) (count : Nat) : Result Unit :=
-  Result.guardedModify _ (Heap.dealloc q.loc count false)
+  Result.guardedModify _ (Heap.dealloc q.loc count .view)
 
 /-- Not a Rust function: fails unless `p` holds (`p` need not be decidable). -/
 def Result.require (p : Prop) : Result Unit :=
