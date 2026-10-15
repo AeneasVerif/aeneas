@@ -1,7 +1,11 @@
-/- `alloc::boxed`: `Box<T>` is `T` in the extracted code. -/
+/- `alloc::boxed`: `Box<T>` is `T` in the extracted code, and `into_raw`/`from_raw` move the value
+into and out of a one-slot allocation of the global allocator: "For non-zero-sized values, a `Box`
+will use the `Global` allocator for its allocation"
+([memory layout](https://doc.rust-lang.org/std/boxed/index.html#memory-layout)). Zero-sized values
+are not special-cased: they get a slot too. -/
 module
 public import Aeneas.Std.Alloc.Alloc
-public import Aeneas.Std.Core.Ops
+public import Aeneas.Std.Core.Ptr
 public import Aeneas.Std.Core.Cmp
 public import Aeneas.Std.Core.Convert
 public section
@@ -61,5 +65,19 @@ def core.cmp.PartialEqBox {T : Type _} (PartialEqInst : core.cmp.PartialEq T T) 
   core.cmp.PartialEq T T := {
   eq := alloc.boxed.PartialEqBox.eq PartialEqInst
 }
+
+@[rust_fun "alloc::boxed::{Box<@T>}::into_raw"]
+def alloc.boxed.Box.into_raw (b : T) : Result (MutRawPtr T) :=
+  Global.mk.allocate [b]
+
+/-- Moves the value out and frees the `Box`, as dropping it does: `Global.deallocate` with
+`Layout::for_value(&*p)`, one slot. So `p` must be a pointer returned by `into_raw`. See the safety
+section of [`Box::from_raw`](https://doc.rust-lang.org/std/boxed/struct.Box.html#method.from_raw).
+-/
+@[rust_fun "alloc::boxed::{Box<@T>}::from_raw"]
+def alloc.boxed.Box.from_raw (p : MutRawPtr T) : Result T := do
+  let value ← RawPtr.read p
+  Global.mk.deallocate p 1
+  pure value
 
 end Aeneas.Std
