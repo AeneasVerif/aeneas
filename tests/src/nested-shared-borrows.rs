@@ -49,3 +49,38 @@ impl<'a> S<'a> {
         Ok(y)
     }
 }
+
+// ============================================================
+// Issue #929: `&self` + an array of shared references + a loop
+// ============================================================
+
+pub struct H<T>(pub T);
+
+impl<T> H<T> {
+    /// The loop-carried `max : Option<&T>` is a shared borrow nested below the
+    /// `Option` ADT, and `arr[i]` reborrows `&self.0` (a `& &T`). Verifying the
+    /// loop fixed point exercises joining `None` with `Some(&_)` (nested shared
+    /// borrow) and the region-abstraction bookkeeping across loop iterations.
+    pub fn find_max(&self) -> Option<&T> {
+        let mut max: Option<&T> = None;
+        let arr = [&self.0];
+        for i in 0..1usize {
+            max = Some(arr[i]);
+        }
+        max
+    }
+}
+
+/// Same loop-carried `Option<&T>` pattern as `H::find_max`, but without the
+/// extra nesting introduced by `&self` and the intermediate array: this
+/// exercises the loop-fixed-point region reconciliation (joining `None` at
+/// loop entry with `Some(&arr[i])` at the loop head) on a plain slice.
+pub fn find_max_slice<T>(arr: &[T]) -> Option<&T> {
+    let mut max: Option<&T> = None;
+    let mut i = 0;
+    while i < arr.len() {
+        max = Some(&arr[i]);
+        i += 1;
+    }
+    max
+}
