@@ -26,9 +26,13 @@ theorem ByteArray.length_toList (bs : ByteArray) :
   rw [loop_length 0 [] (Nat.zero_le _)]
   simp
 
-/-- TODO: we shouldn't use `decide +native` but it seems we can't reduce it otherwise. -/
+/-- Prefer a kernel proof of the size bound, avoiding native-computation axioms
+for string literals. Fall back to native computation for other closed strings. -/
 @[expose]
-def toStr (s : String) (h : s.toByteArray.size ≤ U32.max := by decide +native) : Str :=
+def toStr (s : String) (h : s.toByteArray.size ≤ U32.max := by
+    first
+    | (simp only [U32.max, U32.numBits]; decide)
+    | decide +native) : Str :=
   .from (s.toByteArray.toList.map
     (fun x => ⟨ x.toNat, by cases x; simp only [UInt8.toNat_ofBitVec, UScalarTy.U8_numBits_eq, Nat.reducePow]; omega  ⟩))
     (by
