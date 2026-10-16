@@ -391,6 +391,56 @@ and translate_function_call (call : S.call) (e : S.expr) (ctx : bs_ctx) : texpr
       translate_cast_unsize call e ty0 ty1 ctx
   | _ -> translate_function_call_aux call e ctx
 
+(** Pointer casts between [*T] and [*U] (the methods [<*mut T>::cast::<U>] and
+    [<*const T>::cast::<U>], and [as] casts): the accesses through the new
+    pointer check the Lean type of the heap cells, but several Rust types have
+    the same Lean type ([Box<T>] and [&T] are translated to [T]). We thus only
+    accept the casts which add or remove one [MaybeUninit] wrapper, since
+    [MaybeUninit<T>] has the same memory representation as [T] and its heap
+    cells are those of [T] (see [Pointee] in the Lean library). *)
+and raw_ptr_cast_is_supported (ctx : bs_ctx) (src : T.ty) (tgt : T.ty) : bool =
+  let crate = ctx.decls_ctx.crate in
+  let unwrap_maybe_uninit (ty : T.ty) : T.ty option =
+    match ty with
+    | TAdt { id; generics = { types = [ ty' ]; _ }; builtin = None } -> (
+        match T.TypeDeclId.Map.find_opt id crate.type_decls with
+        | Some decl
+          when ExtractName.match_name crate
+                 (NameMatcher.parse_pattern
+                    "core::mem::maybe_uninit::MaybeUninit")
+                 decl.item_meta.name -> Some ty'
+        | _ -> None)
+    | _ -> None
+  in
+  let src = Substitute.erase_regions src in
+  let tgt = Substitute.erase_regions tgt in
+  src = tgt
+  || unwrap_maybe_uninit src = Some tgt
+  || unwrap_maybe_uninit tgt = Some src
+
+and check_raw_ptr_cast (call : S.call) (ctx : bs_ctx) : unit =
+  match call.call_id with
+  | S.Fun (Fun fid, _) -> (
+      let crate = ctx.decls_ctx.crate in
+      let matches (pat : string) (name : Types.name) : bool =
+        ExtractName.match_name crate (NameMatcher.parse_pattern pat) name
+      in
+      match FunDeclId.Map.find_opt fid ctx.decls_ctx.fun_ctx.fun_decls with
+      | Some fun_decl
+        when matches "core::ptr::mut_ptr::{*mut @T}::cast"
+               fun_decl.item_meta.name
+             || matches "core::ptr::const_ptr::{*const @T}::cast"
+                  fun_decl.item_meta.name -> (
+          match call.generics.types with
+          | [ src; tgt ] ->
+              [%cassert] ctx.span
+                (raw_ptr_cast_is_supported ctx src tgt)
+                "Unsupported: pointer casts which change the pointee type \
+                 (other than by adding or removing one [MaybeUninit])"
+          | _ -> [%internal_error] ctx.span)
+      | _ -> ())
+  | _ -> ()
+
 (** Handle the function call cases which are not unsized casts *)
 and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
     texpr =
@@ -400,6 +450,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
   in
   (* Translate the function call *)
   let generics = ctx_translate_fwd_generic_args ctx call.generics in
+  check_raw_ptr_cast call ctx;
   let args =
     let args = List.map (tvalue_to_texpr ctx call.ctx) call.args in
     let args_mplaces =
@@ -583,6 +634,20 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
     | S.Unop
         (E.Cast
            (CastRawPtr (TRawPtr (src_ty, src_rk), TRawPtr (tgt_ty, tgt_rk))))
+      when src_rk = tgt_rk
+           && Substitute.erase_regions src_ty <> Substitute.erase_regions tgt_ty
+           && raw_ptr_cast_is_supported ctx src_ty tgt_ty ->
+        (* [p as *mut U] where [p : *mut T], and [T], [U] are equal up to one
+           [MaybeUninit] wrapper: the same as [p.cast::<U>()] *)
+        let effect_info =
+          { can_fail = false; can_diverge = false; is_rec = false }
+        in
+        let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
+        let dest = mk_tpat_from_fvar dest_mplace dest in
+        (ctx, Fun (Pure RawPtrCast), effect_info, args, [], dest)
+    | S.Unop
+        (E.Cast
+           (CastRawPtr (TRawPtr (src_ty, src_rk), TRawPtr (tgt_ty, tgt_rk))))
       when Substitute.erase_regions src_ty = Substitute.erase_regions tgt_ty ->
         (* A cast which only changes the mutability of a pointer. We do not
            track the permissions in the heap: a pointer obtained from a shared
@@ -742,6 +807,14 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
           | _ -> RawPtrWrite
         in
         (ctx, Fun (Pure fid), effect_info, args, [], dest)
+  in
+  let generics =
+    match (fun_id, call.call_id) with
+    | ( Fun (Pure RawPtrCast),
+        S.Unop (E.Cast (CastRawPtr (TRawPtr (src, _), TRawPtr (tgt, _)))) ) ->
+        mk_generic_args_from_types
+          [ ctx_translate_fwd_ty ctx src; ctx_translate_fwd_ty ctx tgt ]
+    | _ -> generics
   in
   let func = { id = FunOrOp fun_id; generics } in
   let input_tys = (List.map (fun (x : texpr) -> x.ty)) args in

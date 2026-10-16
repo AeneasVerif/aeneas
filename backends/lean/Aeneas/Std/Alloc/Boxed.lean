@@ -5,13 +5,14 @@ public import Aeneas.Std.Alloc.Alloc
 public import Aeneas.Std.Core.Ptr
 public import Aeneas.Std.Core.Cmp
 public import Aeneas.Std.Core.Convert
+public import Aeneas.Std.Core.MaybeUninit
 public section
 
 open Aeneas SepLogic
 
 namespace Aeneas.Std
 
-open Result
+open Result WP
 
 @[expose, rust_fun "alloc::boxed::{core::ops::deref::Deref<Box<@T>, @T>}::deref" -canFail (keepParams := [true, false])]
 def alloc.boxed.Box.deref {T : Type _} (x : T) : T := x
@@ -67,18 +68,18 @@ def core.cmp.PartialEqBox {T : Type _} (PartialEqInst : core.cmp.PartialEq T T) 
 
 /-- Allocates a pointer using `Global.allocate`, as creating a Box in Rust would do --/
 @[rust_fun "alloc::boxed::{Box<@T>}::into_raw"]
-def alloc.boxed.Box.into_raw (b : T) : Result (MutRawPtr T) :=
+def alloc.boxed.Box.into_raw [Pointee T] (b : T) : Result (MutRawPtr T) :=
   Global.mk.allocate [b]
 
 /-- Frees the `Box` using `Global.deallocate`, as dropping a Box in Rust would do --/
 @[rust_fun "alloc::boxed::{Box<@T>}::from_raw"]
-def alloc.boxed.Box.from_raw (p : MutRawPtr T) : Result T := do
+def alloc.boxed.Box.from_raw [Pointee T] (p : MutRawPtr T) : Result T := do
   let value ← RawPtr.read p
   Global.mk.deallocate p 1
   pure value
 
 @[step]
-theorem alloc.boxed.Box.into_raw.spec (value : T) :
+theorem alloc.boxed.Box.into_raw.spec [Pointee T] (value : T) :
     ⦃ emp ⦄ alloc.boxed.Box.into_raw value ⦃ q => q ↦ value ∗ q.freeable⦄ := by
   simpa only [alloc.boxed.Box.into_raw, ← RawPtr.pointsTo_eq_range, List.length_singleton] using
     Global.allocate.spec Global.mk [value]
@@ -87,7 +88,7 @@ theorem alloc.boxed.Box.into_raw.spec (value : T) :
 behind a reference, and freeing it is undefined behaviour
 ([`Box::from_raw`](https://doc.rust-lang.org/std/boxed/struct.Box.html#method.from_raw)). -/
 @[step]
-theorem alloc.boxed.Box.from_raw.spec {value : T} (q : MutRawPtr T) :
+theorem alloc.boxed.Box.from_raw.spec [Pointee T] {value : T} (q : MutRawPtr T) :
     ⦃ q ↦ value ∗ q.freeable ⦄ alloc.boxed.Box.from_raw q
       ⦃ result => ⌜result = value⌝⦄ := by
   unfold alloc.boxed.Box.from_raw
@@ -99,5 +100,58 @@ theorem alloc.boxed.Box.from_raw.spec {value : T} (q : MutRawPtr T) :
   · intro _
     apply (WP.ispec_ok _).2
     iframe
+
+/-- `Box::from_raw` leaves the slot of the box freed. -/
+theorem alloc.boxed.Box.from_raw.spec_freed [Pointee T] {value : T} (q : MutRawPtr T) :
+    ⦃ q ↦ value ∗ q.freeable ⦄ alloc.boxed.Box.from_raw q
+      ⦃ result => ⌜result = value⌝ ∗ q.freed⦄ := by
+  unfold alloc.boxed.Box.from_raw
+  apply WP.ispec_bind (RawPtr.read.spec q value) (entails_refl _)
+  intro result
+  apply WP.ispec_bind (Global.deallocate.spec_freed Global.mk q [value] 1 rfl)
+  · rw [← RawPtr.pointsTo_eq_range]
+    iframe
+  · intro _
+    apply (WP.ispec_ok _).2
+    iframe
+
+/-- Freeing a box twice fails. -/
+theorem alloc.boxed.Box.from_raw.fails_freed [Pointee T] (q : MutRawPtr T) :
+    ifails q.freed (alloc.boxed.Box.from_raw q) := by
+  unfold alloc.boxed.Box.from_raw
+  exact ifails_bind_left (RawPtr.read.fails_freed q)
+
+/-- Freeing a pointer which does not come from a box (`from_mut`, `as_mut_ptr`, ...) fails. -/
+theorem alloc.boxed.Box.from_raw.fails_view [Pointee T] {value : T} (q : MutRawPtr T) :
+    ifails (q ↦ value ∗ q.freeable 1 .view) (alloc.boxed.Box.from_raw q) := by
+  unfold alloc.boxed.Box.from_raw
+  refine ifails_bind (ispec_frame (RawPtr.read.spec q value) (q.freeable 1 .view)) fun _ => ?_
+  exact ifails_bind_left (ifails_mono (by iframe) (Global.deallocate.fails_view Global.mk q 1))
+
+/-- Freeing a pointer one past the cell of a box (an interior pointer) fails. -/
+theorem alloc.boxed.Box.from_raw.fails_end [Pointee T] (q : MutRawPtr T) :
+    ifails q.freeable (alloc.boxed.Box.from_raw (q.shift 1)) := by
+  unfold alloc.boxed.Box.from_raw
+  exact ifails_bind_left (RawPtr.read.fails_end q 1 .global)
+
+/-- `Box::new_uninit`: a box is its content. -/
+@[rust_fun "alloc::boxed::{Box<@T>}::new_uninit"]
+def alloc.boxed.Box.new_uninit (T : Type u) : Result (MaybeUninit T) :=
+  ok .uninit
+
+@[rust_fun "alloc::boxed::{Box<core::mem::maybe_uninit::MaybeUninit<@T>>}::assume_init"
+  (keepParams := [true, false])]
+def alloc.boxed.BoxMaybeUninit.assume_init {T : Type u} (b : MaybeUninit T) : Result T :=
+  core.mem.maybe_uninit.MaybeUninit.assume_init b
+
+@[step]
+theorem alloc.boxed.Box.new_uninit.spec {T : Type u} :
+    alloc.boxed.Box.new_uninit T ⦃ m => m = .uninit ⦄ := by
+  simp [alloc.boxed.Box.new_uninit]
+
+@[step]
+theorem alloc.boxed.BoxMaybeUninit.assume_init.spec {T : Type u} (value : T) :
+    alloc.boxed.BoxMaybeUninit.assume_init (.init value) ⦃ v => v = value ⦄ := by
+  simp [alloc.boxed.BoxMaybeUninit.assume_init, core.mem.maybe_uninit.MaybeUninit.assume_init]
 
 end Aeneas.Std

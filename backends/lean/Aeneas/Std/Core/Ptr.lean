@@ -106,20 +106,72 @@ instance {ty} : IsScalar (IScalar ty) where
 /-! `core::ptr`: the raw-pointer methods (from `core::ptr::mut_ptr` and `core::ptr::const_ptr`) and
 the module functions. Each definition with a `rust_fun` pattern models that Rust function, with the
 signature Aeneas gives it: a `&mut T` argument is returned updated next to the result. The others
-are not Rust functions: `pointsTo`, `pointsToRange` and `pointsToBorrowed` (the `↦`, `↦*` and `↦†`
-assertions) fix what specifications state; `InBounds` is the precondition of `add`; the heap-model
-operations below (`allocView`, `endView`, `borrow`, `endBorrow` and their range versions) build the
-models of the conversions between borrows and raw pointers; and `cast_scalar` is the `as` cast
-between scalar raw pointers that the extractor emits by name. -/
+are not Rust functions: `pointsToCell`, `pointsToCells`, `pointsTo`, `pointsToRange` and
+`pointsToBorrowed` (the `↦?`, `↦*?`, `↦`, `↦*` and `↦†` assertions) fix what specifications state;
+`InBounds` is the precondition of `add`; `Readable` is the precondition of `read`; the heap-model
+operations below (`alloc`, `allocView`, `endView`, `borrow`, `endBorrow` and their range versions)
+build the models of the conversions between borrows and raw pointers; and `cast_scalar` is the `as`
+cast between scalar raw pointers that the extractor emits by name.
+
+The heap is typed: a pointer to `T` reads and writes cells of type `Pointee.Cell T`, which is `T`
+itself except for `MaybeUninit<U>`, whose cells are the (possibly uninitialized) cells of `U`.
+Every access checks the type of the cell, so that casting a pointer (`<*mut T>::cast`) is safe: an
+access at a type which does not match the cell fails. -/
+
+/-- How the values of type `T` are stored in the heap: a value is a cell of type `Cell`, which may
+be uninitialized (`none`). `ofCell` gives back the value stored in a cell, if any: reading an
+uninitialized cell fails unless `T` can represent uninitialized memory (`MaybeUninit`).
+
+The cells of `T` must have the memory representation of `T`: this is what makes pointer casts
+between types with the same cells meaningful.
+
+Limitation: the instance is resolved where a definition is elaborated, so generic code (with a
+type parameter `T`) always uses `Pointee.default`, whose cells have type `T`. Instantiated with
+`T := MaybeUninit U`, such code accesses cells of type `MaybeUninit U`, while the concrete
+functions on `MaybeUninit U` (and the slices, boxes and pointers created from them) use cells of
+type `U`: the accesses of the generic code to those cells always fail (this is sound, but such
+programs can not be verified). -/
+class Pointee (T : Type) where
+  Cell : Type
+  toCell : T → Option Cell
+  ofCell : Option Cell → Option T
+  ofCell_toCell (value : T) : ofCell (toCell value) = some value
+
+/-- By default, the cells of `T` hold initialized values of type `T`. -/
+@[expose] instance (priority := low) Pointee.default {T : Type} : Pointee T where
+  Cell := T
+  toCell := some
+  ofCell := id
+  ofCell_toCell _ := rfl
+
+@[simp] theorem Pointee.toCell_default {T : Type} (value : T) :
+    @Pointee.toCell T Pointee.default value = some value := rfl
+
+@[simp] theorem Pointee.ofCell_default {T : Type} (content : Option T) :
+    @Pointee.ofCell T Pointee.default content = content := rfl
 
 namespace RawPtr
 
-/-- `q` owns the `values.length` slots from `q` on. -/
-@[expose] def pointsToRange (q : RawPtr T M) (values : List T) : IProp :=
-  owns (Heap.array q.loc values)
+/-- `q` as a pointer to the cells of its pointee. -/
+@[expose, reducible] def cellPtr [Pointee T] (q : RawPtr T M) : RawPtr (Pointee.Cell T) M :=
+  ⟨q.loc⟩
 
-@[expose] def pointsTo (q : RawPtr T M) (value : T) : IProp :=
-  owns (Heap.singleton q value)
+/-- `q` owns a cell holding `content` (uninitialized if `content = none`). -/
+@[expose] def pointsToCell [Pointee T] (q : RawPtr T M) (content : Option (Pointee.Cell T)) :
+    IProp :=
+  owns (Heap.cell q.cellPtr content)
+
+/-- `q` owns the `contents.length` cells from `q` on. -/
+@[expose] def pointsToCells [Pointee T] (q : RawPtr T M)
+    (contents : List (Option (Pointee.Cell T))) : IProp :=
+  owns (Heap.array q.loc contents)
+
+@[expose] def pointsTo [Pointee T] (q : RawPtr T M) (value : T) : IProp :=
+  q.pointsToCell (Pointee.toCell value)
+
+/-- `q` owns the `values.length` slots from `q` on. -/
+@[expose] def pointsToRange [Pointee T] (q : RawPtr T M) (values : List T) : IProp :=
+  q.pointsToCells (values.map Pointee.toCell)
 
 /-- `q` owns the `n` borrowed slots from `q` on (borrowed by `borrow`, to be given back by
 `endBorrow`). -/
@@ -129,10 +181,10 @@ namespace RawPtr
 
 end RawPtr
 
-instance instPointsToRawPtr {T : Type} {M : Mutability} :
+instance instPointsToRawPtr {T : Type} [Pointee T] {M : Mutability} :
     PointsTo (RawPtr T M) T := ⟨RawPtr.pointsTo⟩
 
-instance instPointsToRangeRawPtr {T : Type} {M : Mutability} :
+instance instPointsToRangeRawPtr {T : Type} [Pointee T] {M : Mutability} :
     PointsToRange (RawPtr T M) T := ⟨RawPtr.pointsToRange⟩
 
 end Aeneas.Std
@@ -140,6 +192,8 @@ end Aeneas.Std
 namespace Aeneas
 
 scoped notation:50 q:50 " ↦† " n:50 => Std.RawPtr.pointsToBorrowed q n
+scoped notation:50 q:50 " ↦? " content:50 => Std.RawPtr.pointsToCell q content
+scoped notation:50 q:50 " ↦*? " contents:50 => Std.RawPtr.pointsToCells q contents
 
 end Aeneas
 
@@ -162,24 +216,44 @@ def RawPtr.add (q : RawPtr T M) (count : Usize) : Result (RawPtr T M) :=
 
 attribute [rust_fun "core::ptr::const_ptr::{*const @T}::add"] RawPtr.add
 
-@[rust_fun "core::ptr::mut_ptr::{*mut @T}::cast_const" -canFail -lift]
+@[expose, rust_fun "core::ptr::mut_ptr::{*mut @T}::cast_const" -canFail -lift]
 def RawPtr.cast_const (q : MutRawPtr T) : ConstRawPtr T :=
   ⟨q.loc⟩
 
+/-- Changes the pointee type. The accesses through the new pointer check that the cells have the
+type of the cells of the new pointee (see `Pointee`), so a cast is only useful between types with
+the same cells, such as `MaybeUninit<T>` and `T`. -/
+@[expose, rust_fun "core::ptr::mut_ptr::{*mut @T}::cast" -canFail -lift]
+def RawPtr.cast {T : Type _} {M : Mutability} (U : Type _) (q : RawPtr T M) : RawPtr U M :=
+  ⟨q.loc⟩
+
+attribute [rust_fun "core::ptr::const_ptr::{*const @T}::cast" -canFail -lift] RawPtr.cast
+
 namespace RawPtr
 
+/-- `q` points to a live cell of the type of the cells of its pointee, holding a value of the
+pointee. -/
+structure Readable [Pointee T] (q : RawPtr T M) (h : Heap) : Prop where
+  valid : Heap.IsValid h q.cellPtr
+  init : (Pointee.ofCell (h.read q.cellPtr valid).1).isSome
+
+/-- The value `q` points to. -/
+def get [Pointee T] (q : RawPtr T M) (h : Heap) (hReadable : q.Readable h) : T :=
+  (Pointee.ofCell (h.read q.cellPtr hReadable.valid).1).get hReadable.init
+
 @[rust_fun "core::ptr::const_ptr::{*const @T}::read"]
-def read (q : RawPtr T M) : Result T :=
-  Result.guardedModify _ (Heap.read q)
+def read [Pointee T] (q : RawPtr T M) : Result T :=
+  Result.guardedModify q.Readable fun h hReadable => (q.get h hReadable, h)
 
 attribute [rust_fun "core::ptr::mut_ptr::{*mut @T}::read"] read
 attribute [rust_fun "core::ptr::read"] read
 
 end RawPtr
 
+/-- Writing initializes the cell, which may be uninitialized. -/
 @[rust_fun "core::ptr::mut_ptr::{*mut @T}::write"]
-def MutRawPtr.write (q : MutRawPtr T) (value : T) : Result Unit :=
-  Result.guardedModify _ (Heap.write q value)
+def MutRawPtr.write [Pointee T] (q : MutRawPtr T) (value : T) : Result Unit :=
+  Result.guardedModify _ (Heap.write q.cellPtr (Pointee.toCell value))
 
 attribute [rust_fun "core::ptr::write"] MutRawPtr.write
 
@@ -190,13 +264,14 @@ directly. -/
 
 /-- Dereferences `q` and marks its slot as borrowed, so that every access to the slot through a raw
 pointer fails until the borrow is ended with `endBorrow`. -/
-def RawPtr.borrow (q : RawPtr T M) : Result T :=
-  Result.guardedModify _ (Heap.borrow q)
+def RawPtr.borrow [Pointee T] (q : RawPtr T M) : Result T :=
+  Result.guardedModify q.Readable fun h hReadable =>
+    (q.get h hReadable, (h.borrow q.cellPtr hReadable.valid).2)
 
-def RawPtr.endBorrow (q : RawPtr T M) (value : T) : Result Unit :=
-  Result.guardedModify _ (Heap.endBorrow q value)
+def RawPtr.endBorrow [Pointee T] (q : RawPtr T M) (value : T) : Result Unit :=
+  Result.guardedModify _ (Heap.endBorrow q.cellPtr (Pointee.toCell value))
 
-def RawPtr.borrowRange (q : RawPtr T M) : Nat → Result (List T)
+def RawPtr.borrowRange [Pointee T] (q : RawPtr T M) : Nat → Result (List T)
   | 0 => .ok []
   | n + 1 => do
     let value ← q.borrow
@@ -204,39 +279,44 @@ def RawPtr.borrowRange (q : RawPtr T M) : Nat → Result (List T)
     .ok (value :: values)
 
 /-- `endBorrow` on the `values.length` slots from `q` on. -/
-def RawPtr.endBorrowRange (q : RawPtr T M) : List T → Result Unit
+def RawPtr.endBorrowRange [Pointee T] (q : RawPtr T M) : List T → Result Unit
   | [] => .ok ()
   | value :: values => do
     q.endBorrow value
     (q.shift 1).endBorrowRange values
 
 /-- `read` on the `n` slots from `q` on. -/
-def RawPtr.readRange (q : RawPtr T M) : Nat → Result (List T)
+def RawPtr.readRange [Pointee T] (q : RawPtr T M) : Nat → Result (List T)
   | 0 => .ok []
   | n + 1 => do
     let value ← q.read
     let values ← (q.shift 1).readRange n
     .ok (value :: values)
 
+/-- A fresh allocation of kind `kind` holding `values`. Fresh memory is mutable in Rust. -/
+def RawPtr.alloc [Pointee T] (values : List T) (kind : AllocKind) : Result (MutRawPtr T) :=
+  Result.guardedModify (fun _ => True) fun h _ =>
+    (⟨Heap.freshLoc h⟩, (h.alloc (values.map Pointee.toCell) kind).2)
+
 /-- Allocates a raw-pointer view of a place that the functional translation represents as a plain
 value, without an address. Used by `from_mut`, `as_ptr` and `as_mut_ptr`. The view is a fresh
 allocation holding a copy of `values`, which only `endView` frees (`AllocKind.view`). -/
-def RawPtr.allocView (values : List T) : Result (MutRawPtr T) :=
-  Result.guardedModify (fun _ => True) fun h _ => h.alloc values .view
+def RawPtr.allocView [Pointee T] (values : List T) : Result (MutRawPtr T) :=
+  RawPtr.alloc values .view
 
 def RawPtr.endView (q : RawPtr T M) (count : Nat) : Result Unit :=
   Result.guardedModify _ (Heap.dealloc q count .view)
 
 /-- Back function of `from_mut`: reads the value, with the writes made through the pointer, and
 ends the view, so that the pointer can't be used anymore. -/
-def core.ptr.end_from_mut (p : MutRawPtr T) : Result T := do
+def core.ptr.end_from_mut [Pointee T] (p : MutRawPtr T) : Result T := do
   let value ← p.read
   p.endView 1
   .ok value
 
 /-- The pointer is a view of `r`; the back computation runs when the borrow ends. -/
 @[rust_fun "core::ptr::from_mut" (statefulLifetimes := [0])]
-def core.ptr.from_mut (r : T) : Result (MutRawPtr T × Result T) :=
+def core.ptr.from_mut [Pointee T] (r : T) : Result (MutRawPtr T × Result T) :=
   Aeneas.Std.bind (RawPtr.allocView [r]) fun p => .ok (p, core.ptr.end_from_mut p)
 
 open WP
@@ -250,26 +330,111 @@ theorem shift_shift (q : RawPtr T M) (i j : Nat) :
     (q.shift i).shift j = q.shift (i + j) :=
   RawPtr.ext (by simp [Loc.shift_shift])
 
+@[simp] theorem loc_cast (q : RawPtr T M) (U : Type _) : (q.cast U).loc = q.loc := rfl
+
+@[simp] theorem cast_cast (q : RawPtr T M) (U V : Type _) : (q.cast U).cast V = q.cast V := rfl
+
+@[simp] theorem cast_self (q : RawPtr T M) : q.cast T = q := rfl
+
+@[simp] theorem shift_cast (q : RawPtr T M) (U : Type _) (i : Nat) :
+    (q.cast U).shift i = (q.shift i).cast U :=
+  RawPtr.ext (by simp)
+
+@[simp] theorem loc_cast_const (q : MutRawPtr T) : q.cast_const.loc = q.loc := rfl
+
 end RawPtr
 
-theorem RawPtr.pointsTo_eq_singleton (q : RawPtr T M) (value : T) :
-    (q ↦ value) = owns (Heap.singleton q value) := rfl
+section PointsTo
 
-theorem RawPtr.pointsToRange_eq_rangeHeap (q : RawPtr T M) (values : List T) :
-    (q ↦* values) = owns (Heap.array q.loc values) := rfl
-
-theorem RawPtr.pointsTo_eq_range (q : RawPtr T M) (value : T) :
-    (q ↦ value) = (q ↦* [value]) := by
-  rw [RawPtr.pointsTo_eq_singleton, RawPtr.pointsToRange_eq_rangeHeap, Heap.array_singleton,
-    Heap.singleton_eq_of_loc (q := q) (r := (⟨q.loc⟩ : MutRawPtr T)) rfl]
+variable {T : Type} [Pointee T] {M : Mutability}
 
 namespace RawPtr
 
-theorem pointsToRange_append (q : RawPtr T M) (xs ys : List T) :
-    (q ↦* (xs ++ ys)) = iprop(q ↦* xs ∗ (q.shift xs.length) ↦* ys) := by
-  rw [pointsToRange_eq_rangeHeap, pointsToRange_eq_rangeHeap, pointsToRange_eq_rangeHeap, loc_shift,
+@[simp] theorem loc_cellPtr (q : RawPtr T M) : q.cellPtr.loc = q.loc := rfl
+
+theorem pointsTo_eq (q : RawPtr T M) (value : T) :
+    (q ↦ value) = (q ↦? Pointee.toCell value) := rfl
+
+theorem pointsToRange_eq (q : RawPtr T M) (values : List T) :
+    (q ↦* values) = (q ↦*? values.map Pointee.toCell) := rfl
+
+theorem pointsToCell_eq_cell (q : RawPtr T M) (content : Option (Pointee.Cell T)) :
+    (q ↦? content) = owns (Heap.cell q.cellPtr content) := rfl
+
+theorem pointsToCells_eq_array (q : RawPtr T M) (contents : List (Option (Pointee.Cell T))) :
+    (q ↦*? contents) = owns (Heap.array q.loc contents) := rfl
+
+theorem pointsToCell_eq_cells (q : RawPtr T M) (content : Option (Pointee.Cell T)) :
+    (q ↦? content) = (q ↦*? [content]) := by
+  rw [pointsToCell_eq_cell, pointsToCells_eq_array, Heap.array_singleton,
+    Heap.cell_eq_of_loc (q := q.cellPtr) (r := (⟨q.loc⟩ : MutRawPtr (Pointee.Cell T))) rfl]
+
+theorem pointsTo_eq_range (q : RawPtr T M) (value : T) :
+    (q ↦ value) = (q ↦* [value]) :=
+  pointsToCell_eq_cells q _
+
+
+@[simp] theorem pointsToRange_cast_const (q : MutRawPtr T) (values : List T) :
+    (q.cast_const ↦* values) = (q ↦* values) := rfl
+
+@[simp] theorem pointsToCell_cast_const (q : MutRawPtr T) (content : Option (Pointee.Cell T)) :
+    (q.cast_const ↦? content) = (q ↦? content) := by
+  rw [pointsToCell_eq_cell, pointsToCell_eq_cell]
+  exact congrArg owns (Heap.cell_eq_of_loc (q := q.cast_const.cellPtr) (r := q.cellPtr) rfl _)
+
+@[simp] theorem pointsTo_cast_const (q : MutRawPtr T) (value : T) :
+    (q.cast_const ↦ value) = (q ↦ value) :=
+  pointsToCell_cast_const q _
+
+@[simp] theorem pointsToCells_cast_const (q : MutRawPtr T)
+    (contents : List (Option (Pointee.Cell T))) :
+    (q.cast_const ↦*? contents) = (q ↦*? contents) := rfl
+
+theorem pointsToCells_append (q : RawPtr T M) (xs ys : List (Option (Pointee.Cell T))) :
+    (q ↦*? (xs ++ ys)) = iprop(q ↦*? xs ∗ (q.shift xs.length) ↦*? ys) := by
+  rw [pointsToCells_eq_array, pointsToCells_eq_array, pointsToCells_eq_array, loc_shift,
     Heap.array_append q.loc xs ys]
   exact owns_union _ _ (Heap.compatible_array_append q.loc xs ys)
+
+theorem pointsToCells_split (q : RawPtr T M) (contents : List (Option (Pointee.Cell T)))
+    (i : Nat) :
+    (q ↦*? contents) =
+      iprop(q ↦*? contents.take i ∗ (q.shift (contents.take i).length) ↦*? contents.drop i) := by
+  conv_lhs => rw [← List.take_append_drop i contents]
+  exact pointsToCells_append q (contents.take i) (contents.drop i)
+
+theorem pointsToCells_eq_take_get_drop {q : RawPtr T M}
+    {contents : List (Option (Pointee.Cell T))} {i : Nat} (hIndex : i < contents.length) :
+    (q ↦*? contents) =
+      iprop(q ↦*? contents.take i ∗
+        ((q.shift i) ↦? contents[i] ∗ (q.shift (i + 1)) ↦*? contents.drop (i + 1))) := by
+  have hTake : (contents.take i).length = i := by simp; omega
+  have hSplit := pointsToCells_split q contents i
+  rw [hTake] at hSplit
+  rw [hSplit, List.drop_eq_getElem_cons hIndex,
+    show contents[i] :: contents.drop (i + 1)
+      = [contents[i]] ++ contents.drop (i + 1) from rfl,
+    pointsToCells_append (q.shift i) [contents[i]] (contents.drop (i + 1)),
+    ← pointsToCell_eq_cells]
+  simp only [shift_shift, List.length_singleton]
+
+theorem pointsToCells_cons (q : RawPtr T M) (content : Option (Pointee.Cell T))
+    (rest : List (Option (Pointee.Cell T))) :
+    (q ↦*? (content :: rest)) = iprop(q ↦? content ∗ (q.shift 1) ↦*? rest) := by
+  rw [show (content :: rest) = [content] ++ rest from rfl,
+    pointsToCells_append q [content] rest, ← pointsToCell_eq_cells]
+  simp only [List.length_singleton]
+
+@[simp] theorem pointsToCells_nil (q : RawPtr T M) :
+    (q ↦*? ([] : List (Option (Pointee.Cell T)))) = emp :=
+  entails_antisymm (fun _ _ => trivial) fun h _ => by
+    rw [pointsToCells_eq_array, Heap.array_nil]
+    exact Heap.Subheap.of_empty h
+
+theorem pointsToRange_append (q : RawPtr T M) (xs ys : List T) :
+    (q ↦* (xs ++ ys)) = iprop(q ↦* xs ∗ (q.shift xs.length) ↦* ys) := by
+  rw [pointsToRange_eq, List.map_append, pointsToCells_append, List.length_map]
+  rfl
 
 theorem pointsToRange_split (q : RawPtr T M) (values : List T) (i : Nat) :
     (q ↦* values) =
@@ -282,27 +447,24 @@ theorem pointsToRange_eq_take_get_drop {q : RawPtr T M} {values : List T} {i : N
     (q ↦* values) =
       iprop(q ↦* values.take i ∗
         ((q.shift i) ↦ values[i] ∗ (q.shift (i + 1)) ↦* values.drop (i + 1))) := by
-  have hTake : (values.take i).length = i := by simp; omega
-  have hSplit := pointsToRange_split q values i
-  rw [hTake] at hSplit
-  rw [hSplit, List.drop_eq_getElem_cons hIndex,
-    show values[i] :: values.drop (i + 1)
-      = [values[i]] ++ values.drop (i + 1) from rfl,
-    pointsToRange_append (q.shift i) [values[i]] (values.drop (i + 1)),
-    ← pointsTo_eq_range]
-  simp only [shift_shift, List.length_singleton]
+  rw [pointsToRange_eq, pointsToCells_eq_take_get_drop (by simpa using hIndex)]
+  simp only [← List.map_take, ← List.map_drop, List.getElem_map]
+  rfl
 
 theorem pointsToRange_cons (q : RawPtr T M) (value : T) (rest : List T) :
     (q ↦* (value :: rest)) = iprop(q ↦ value ∗ (q.shift 1) ↦* rest) := by
-  rw [show (value :: rest) = [value] ++ rest from rfl,
-    pointsToRange_append q [value] rest, ← pointsTo_eq_range]
-  simp only [List.length_singleton]
+  rw [pointsToRange_eq, List.map_cons, pointsToCells_cons]
+  rfl
 
 @[simp] theorem pointsToRange_nil (q : RawPtr T M) :
     (q ↦* ([] : List T)) = emp :=
-  entails_antisymm (fun _ _ => trivial) fun h _ => by
-    rw [pointsToRange_eq_rangeHeap, Heap.array_nil]
-    exact Heap.Subheap.of_empty h
+  pointsToCells_nil q
+
+end RawPtr
+
+end PointsTo
+
+namespace RawPtr
 
 @[simp] theorem pointsToBorrowed_zero (q : RawPtr T M) : (q ↦† 0) = emp := rfl
 
@@ -313,23 +475,6 @@ theorem pointsToBorrowed_succ (q : RawPtr T M) (n : Nat) :
     (q ↦† (n + 1)) = iprop(q ↦† 1 ∗ (q.shift 1) ↦† n) := by
   rw [pointsToBorrowed_one]
   rfl
-
-end RawPtr
-
-theorem RawPtr.pointsTo_exclusive (q : RawPtr T M) (value₁ value₂ : T) :
-    q ↦ value₁ ∗ q ↦ value₂ ⊢ ⌜False⌝ := by
-  rw [RawPtr.pointsTo_eq_singleton, RawPtr.pointsTo_eq_singleton]
-  exact owns_singleton_exclusive q value₁ value₂
-
-namespace RawPtr
-
-theorem contains_of_pointsTo {q : RawPtr T M} {value : T} {h : Heap}
-    (hPointsTo : (q ↦ value) h) : Heap.IsValid h q :=
-  Heap.Subheap.isValid hPointsTo (Heap.isValid_singleton q value)
-
-theorem disjoint_singleton {q r : RawPtr T M} {value₁ value₂ : T} (hNe : q ≠ r) :
-    PartialCommMonoid.Compatible (Heap.singleton q value₁) (Heap.singleton r value₂) :=
-  Heap.compatible_singleton fun hEq => hNe (RawPtr.ext hEq)
 
 end RawPtr
 
@@ -348,22 +493,74 @@ theorem RawPtr.freeable_holds {count : Nat} {kind : AllocKind} (q : RawPtr T M) 
   Iff.rfl
 
 @[simp] theorem RawPtr.freeable_cast_const (q : MutRawPtr T) (count : Nat) (kind : AllocKind) :
-    q.cast_const.freeable count kind = q.freeable count kind := by
-  unfold RawPtr.cast_const; rfl
+    q.cast_const.freeable count kind = q.freeable count kind := rfl
+
+@[simp] theorem RawPtr.freeable_cast (q : RawPtr T M) (U : Type _) (count : Nat)
+    (kind : AllocKind) : (q.cast U).freeable count kind = q.freeable count kind := rfl
+
+/-- `q` owns the freed slot at `q`: the memory at `q` was deallocated. -/
+@[expose] def RawPtr.freed (q : RawPtr T M) : IProp :=
+  owns (Heap.freedSlot q.loc)
+
+section
+
+variable {T : Type} [Pointee T] {M : Mutability}
+
+theorem RawPtr.pointsToCell_exclusive (q : RawPtr T M)
+    (content₁ content₂ : Option (Pointee.Cell T)) :
+    q ↦? content₁ ∗ q ↦? content₂ ⊢ ⌜False⌝ :=
+  owns_cell_exclusive q.cellPtr content₁ content₂
+
+theorem RawPtr.pointsTo_exclusive (q : RawPtr T M) (value₁ value₂ : T) :
+    q ↦ value₁ ∗ q ↦ value₂ ⊢ ⌜False⌝ :=
+  RawPtr.pointsToCell_exclusive q _ _
+
+namespace RawPtr
+
+theorem isValid_of_pointsToCell {q : RawPtr T M} {content : Option (Pointee.Cell T)} {h : Heap}
+    (hPointsTo : (q ↦? content) h) : Heap.IsValid h q.cellPtr :=
+  Heap.Subheap.isValid hPointsTo (Heap.isValid_cell q.cellPtr content)
+
+theorem get_eq {q : RawPtr T M} {h : Heap} {value : T} (hReadable : q.Readable h)
+    (hValue : Pointee.ofCell (h.read q.cellPtr hReadable.valid).1 = some value) :
+    q.get h hReadable = value :=
+  Option.some.inj ((Option.some_get _).trans hValue)
+
+theorem readable_of_pointsToCell {q : RawPtr T M} {content : Option (Pointee.Cell T)} {value : T}
+    {h : Heap} (hPointsTo : (q ↦? content) h) (hValue : Pointee.ofCell content = some value) :
+    q.Readable h :=
+  have hValid := isValid_of_pointsToCell hPointsTo
+  ⟨hValid, by rw [Heap.read_of_subheap hPointsTo hValid, hValue]; rfl⟩
+
+theorem get_of_pointsToCell {q : RawPtr T M} {content : Option (Pointee.Cell T)} {value : T}
+    {h : Heap} (hPointsTo : (q ↦? content) h) (hValue : Pointee.ofCell content = some value)
+    (hReadable : q.Readable h) : q.get h hReadable = value :=
+  get_eq hReadable (by rw [Heap.read_of_subheap hPointsTo, hValue])
+
+theorem readable_of_pointsTo {q : RawPtr T M} {value : T} {h : Heap}
+    (hPointsTo : (q ↦ value) h) : q.Readable h :=
+  readable_of_pointsToCell hPointsTo (Pointee.ofCell_toCell value)
+
+theorem get_of_pointsTo {q : RawPtr T M} {value : T} {h : Heap}
+    (hPointsTo : (q ↦ value) h) (hReadable : q.Readable h) : q.get h hReadable = value :=
+  get_of_pointsToCell hPointsTo (Pointee.ofCell_toCell value) hReadable
+
+end RawPtr
 
 /-- A fresh allocation hands out its values and the right to deallocate it. -/
-theorem Heap.alloc.spec (values : List T) (kind : AllocKind) :
-    ispec emp (Result.guardedModify (fun _ => True) fun h _ => h.alloc values kind)
-      (fun q => q ↦* values ∗ q.freeable values.length kind) := by
+theorem RawPtr.alloc.spec (values : List T) (kind : AllocKind) :
+    ⦃ emp ⦄ RawPtr.alloc values kind ⦃ q => q ↦* values ∗ q.freeable values.length kind⦄ := by
+  unfold RawPtr.alloc
   apply ispec_guardedModify
   intro h _ frame hCompatible
   have hFresh :
       PartialCommMonoid.Compatible
-        (Heap.allocation (Heap.freshLoc (h ∪ frame)) values kind) (h ∪ frame) :=
+        (Heap.allocation (Heap.freshLoc (h ∪ frame)) (values.map Pointee.toCell) kind)
+        (h ∪ frame) :=
     Heap.compatible_freshLoc _ _ _
   obtain ⟨hFreshH, hFreshFrame⟩ :=
     (PartialCommMonoid.compatible_assoc
-      (Heap.allocation (Heap.freshLoc (h ∪ frame)) values kind) h frame).mpr
+      (Heap.allocation (Heap.freshLoc (h ∪ frame)) (values.map Pointee.toCell) kind) h frame).mpr
         ⟨hCompatible, hFresh⟩
   refine ⟨trivial, _, hFreshFrame, ?_, ?_⟩
   · rw [Heap.alloc_eq]
@@ -371,96 +568,115 @@ theorem Heap.alloc.spec (values : List T) (kind : AllocKind) :
   · rw [Heap.alloc_eq]
     have hAllocation := Heap.Subheap.union_left (h₂ := h) hFreshH
     rw [Heap.allocation_eq] at hAllocation
-    have hSplit : (owns (Heap.array (Heap.freshLoc (h ∪ frame)) values) ∗
-        owns (Heap.endMarker ((Heap.freshLoc (h ∪ frame)).shift values.length) kind))
-          (Heap.allocation (Heap.freshLoc (h ∪ frame)) values kind ∪ h) := by
+    have hSplit : (owns (Heap.array (Heap.freshLoc (h ∪ frame)) (values.map Pointee.toCell)) ∗
+        owns (Heap.endMarker
+          ((Heap.freshLoc (h ∪ frame)).shift (values.map Pointee.toCell).length) kind))
+          (Heap.allocation (Heap.freshLoc (h ∪ frame)) (values.map Pointee.toCell) kind ∪ h) := by
       rw [← owns_union _ _ (Heap.compatible_array_endMarker _ _ _), Heap.allocation_eq]
       exact hAllocation
+    rw [List.length_map] at hSplit
     exact sep_mono (entails_refl _)
       (fun h' hEnd => (RawPtr.freeable_holds _ h').mpr ⟨Heap.freshLoc_offset _, hEnd⟩) _ hSplit
 
 /-- Deallocating needs the values and the right to deallocate them: without it, `q` could be an
-interior pointer, or point to an allocation of another kind. -/
-theorem Heap.dealloc.spec (q : RawPtr T M) (values : List T) (kind : AllocKind) :
-    ispec (q ↦* values ∗ q.freeable values.length kind)
-      (Result.guardedModify _ (Heap.dealloc q values.length kind)) (fun _ => emp) := by
+interior pointer, or point to an allocation of another kind. The slot at `q` is then freed. -/
+theorem Heap.dealloc.spec_freed (q : RawPtr T M) (contents : List (Option (Pointee.Cell T)))
+    (kind : AllocKind) :
+    ispec (q ↦*? contents ∗ q.freeable contents.length kind)
+      (Result.guardedModify _ (Heap.dealloc q contents.length kind)) (fun _ => q.freed) := by
   apply ispec_guardedModify
   intro h hPre frame hCompatible
-  have hRange : Heap.Subheap (Heap.array q.loc values) h := sep_elim_right _ _ h hPre
+  have hRange : Heap.Subheap (Heap.array q.loc contents) h := sep_elim_right _ _ h hPre
   obtain ⟨hOffset, hEnd⟩ := (RawPtr.freeable_holds q h).mp (sep_elim_left _ _ h hPre)
-  have hDealloc : Heap.CanDealloc h q values.length kind :=
+  have hDealloc : Heap.CanDealloc h q contents.length kind :=
     Heap.canDealloc_iff.mpr ⟨hOffset, fun _ hi => hRange.isLive (Heap.isLive_array hi),
       Heap.Subheap.isEndMarker hEnd⟩
-  exact ⟨Heap.canDealloc_union_left hDealloc, (h.dealloc q values.length kind hDealloc).2,
+  exact ⟨Heap.canDealloc_union_left hDealloc, (h.dealloc q contents.length kind hDealloc).2,
     Heap.compatible_dealloc_left hCompatible hDealloc,
-    congrArg Prod.snd (Heap.dealloc_union_left hDealloc), trivial⟩
+    congrArg Prod.snd (Heap.dealloc_union_left hDealloc),
+    Heap.subheap_freedSlot (by simpa using Heap.isFreed_dealloc hDealloc (Nat.zero_le _))⟩
+
+theorem Heap.dealloc.spec (q : RawPtr T M) (contents : List (Option (Pointee.Cell T)))
+    (kind : AllocKind) :
+    ispec (q ↦*? contents ∗ q.freeable contents.length kind)
+      (Result.guardedModify _ (Heap.dealloc q contents.length kind)) (fun _ => emp) :=
+  WP.ispec_mono (Heap.dealloc.spec_freed q contents kind) (entails_of_eq (sep_emp_r_eq _).symm)
+    (by iframe)
 
 @[step]
 theorem RawPtr.allocView.spec (values : List T) :
     ⦃ emp ⦄ RawPtr.allocView values ⦃ p => p ↦* values ∗ p.freeable values.length .view⦄ :=
-  Heap.alloc.spec values .view
+  RawPtr.alloc.spec values .view
+
+/-- Ending a view needs its cells, initialized or not. -/
+theorem RawPtr.endView.spec_cells (q : RawPtr T M) (contents : List (Option (Pointee.Cell T)))
+    (count : Nat) (hCount : contents.length = count) :
+    ⦃ q ↦*? contents ∗ q.freeable count .view ⦄ q.endView count ⦃ emp⦄ := by
+  subst hCount
+  exact Heap.dealloc.spec q contents .view
 
 @[step]
 theorem RawPtr.endView.spec (q : RawPtr T M) (values : List T) (count : Nat)
     (hCount : values.length = count) :
-    ⦃ q ↦* values ∗ q.freeable count .view ⦄ q.endView count ⦃ emp⦄ := by
-  subst hCount
-  exact Heap.dealloc.spec q values .view
+    ⦃ q ↦* values ∗ q.freeable count .view ⦄ q.endView count ⦃ emp⦄ :=
+  RawPtr.endView.spec_cells q (values.map Pointee.toCell) count (by simpa using hCount)
 
 namespace RawPtr
 
-@[simp] theorem addr_cast_const (q : MutRawPtr T) : q.cast_const.loc = q.loc := by
-  unfold RawPtr.cast_const; rfl
-
-@[simp] theorem pointsTo_cast_const (q : MutRawPtr T) (value : T) :
-    (q.cast_const ↦ value) = (q ↦ value) := by
-  rw [pointsTo_eq_singleton, pointsTo_eq_singleton,
-    Heap.singleton_eq_of_loc (q := q.cast_const) (r := q) rfl]
-
-@[simp] theorem pointsToRange_cast_const (q : MutRawPtr T) (values : List T) :
-    (q.cast_const ↦* values) = (q ↦* values) := by
-  unfold RawPtr.cast_const; rfl
+/-- Reading needs the cell to hold a value of the pointee (`hValue`). -/
+theorem read.spec_cell (q : RawPtr T M) (content : Option (Pointee.Cell T)) (value : T)
+    (hValue : Pointee.ofCell content = some value) :
+    ⦃ q ↦? content ⦄ q.read
+      ⦃ result => ⌜result = value⌝ ∗ q ↦? content⦄ := by
+  apply ispec_guardedModify
+  intro h hPointsTo frame hCompatible
+  have hPointsToFrame : (q ↦? content) (h ∪ frame) :=
+    (q ↦? content).up_closed hPointsTo (Heap.Subheap.union_left hCompatible)
+  have hReadable := readable_of_pointsToCell hPointsToFrame hValue
+  exact ⟨hReadable, h, hCompatible, rfl,
+    (sep_pure_l _ _ h).mpr ⟨get_of_pointsToCell hPointsToFrame hValue hReadable, hPointsTo⟩⟩
 
 @[step]
 theorem read.spec (q : RawPtr T M) (value : T) :
     ⦃ q ↦ value ⦄ q.read
-      ⦃ result => ⌜result = value⌝ ∗ q ↦ value⦄ := by
-  apply ispec_guardedModify
-  intro h hPointsTo frame hCompatible
-  have hPointsToFrame : (q ↦ value) (h ∪ frame) :=
-    (q ↦ value).up_closed hPointsTo (Heap.Subheap.union_left hCompatible)
-  have hContains := contains_of_pointsTo hPointsToFrame
-  refine ⟨hContains, h, hCompatible, by rw [Heap.read_snd], ?_⟩
-  exact (sep_pure_l _ _ h).mpr ⟨Heap.read_of_subheap hPointsToFrame hContains, hPointsTo⟩
+      ⦃ result => ⌜result = value⌝ ∗ q ↦ value⦄ :=
+  read.spec_cell q _ value (Pointee.ofCell_toCell value)
 
 end RawPtr
 
-@[step]
-theorem MutRawPtr.write.spec (q : MutRawPtr T) (oldValue newValue : T) :
-    ⦃ q ↦ oldValue ⦄ q.write newValue ⦃ q ↦ newValue⦄ := by
+/-- Writing needs a live cell of the right type, initialized or not. -/
+theorem MutRawPtr.write.spec_cell (q : MutRawPtr T) (content : Option (Pointee.Cell T))
+    (newValue : T) :
+    ⦃ q ↦? content ⦄ q.write newValue ⦃ q ↦ newValue⦄ := by
   apply ispec_guardedModify
   intro h hPointsTo frame hCompatible
   obtain ⟨rest, hCompatibleRest, rfl⟩ := Heap.subheap_iff.mp hPointsTo
-  have hContainsSlot := Heap.isValid_singleton q oldValue
-  have hContains : Heap.IsValid (Heap.singleton q oldValue ∪ rest) q :=
+  have hContainsSlot := Heap.isValid_cell q.cellPtr content
+  have hContains : Heap.IsValid (Heap.cell q.cellPtr content ∪ rest) q.cellPtr :=
     Heap.isValid_union_left hContainsSlot
   refine ⟨Heap.isValid_union_left hContains,
-    (Heap.write q newValue _ hContains).2,
+    (Heap.write q.cellPtr (Pointee.toCell newValue) _ hContains).2,
     Heap.compatible_write_left hCompatible hContains, ?_, ?_⟩
-  · exact congrArg Prod.snd (Heap.write_union_left (h₂ := frame) q newValue hContains)
+  · exact congrArg Prod.snd
+      (Heap.write_union_left (h₂ := frame) q.cellPtr (Pointee.toCell newValue) hContains)
   · have hCompatibleNew :
-        PartialCommMonoid.Compatible (Heap.singleton q newValue) rest := by
-      have hUpdated := Heap.compatible_write_left (value := newValue)
+        PartialCommMonoid.Compatible (Heap.cell q.cellPtr (Pointee.toCell newValue)) rest := by
+      have hUpdated := Heap.compatible_write_left (value := Pointee.toCell newValue)
         hCompatibleRest hContainsSlot
-      rwa [Heap.write_singleton] at hUpdated
+      rwa [Heap.write_cell] at hUpdated
     rw [show hContains = Heap.isValid_union_left hContainsSlot from
-      Subsingleton.elim _ _, Heap.write_union_left q newValue hContainsSlot]
-    simp only [Prod.map_snd, Heap.write_singleton]
+      Subsingleton.elim _ _, Heap.write_union_left q.cellPtr _ hContainsSlot]
+    simp only [Prod.map_snd, Heap.write_cell]
     exact Heap.Subheap.union_left hCompatibleNew
+
+@[step]
+theorem MutRawPtr.write.spec (q : MutRawPtr T) (oldValue newValue : T) :
+    ⦃ q ↦ oldValue ⦄ q.write newValue ⦃ q ↦ newValue⦄ :=
+  MutRawPtr.write.spec_cell q _ newValue
 
 namespace RawPtr
 
-theorem take_set (values : List T) (i : Nat) (value : T) :
+theorem take_set (values : List α) (i : Nat) (value : α) :
     (values.set i value).take i = values.take i := by
   apply List.ext_getElem (by simp)
   intro n h₁ _
@@ -468,7 +684,7 @@ theorem take_set (values : List T) (i : Nat) (value : T) :
   simp only [List.getElem_take, List.getElem_set,
     if_neg (show ¬ i = n by omega)]
 
-theorem drop_set (values : List T) (i : Nat) (value : T) :
+theorem drop_set (values : List α) (i : Nat) (value : α) :
     (values.set i value).drop (i + 1) = values.drop (i + 1) := by
   apply List.ext_getElem (by simp)
   intro n _ _
@@ -487,16 +703,23 @@ theorem read.spec_frame (q : RawPtr T M) (value : T) (H : IProp) :
       ⦃ result => ⌜result = value⌝ ∗ (q ↦ value ∗ H)⦄ := by
   apply WP.ispec_mono (read.spec q value) <;> iframe
 
+/-- `add` stays in bounds of the range of cells `q` owns, initialized or not. -/
+theorem add.spec_cells (q : RawPtr T M) (contents : List (Option (Pointee.Cell T)))
+    (count : Usize) (hCount : count.val ≤ contents.length) :
+    ⦃ q ↦*? contents ⦄ q.add count
+      ⦃ result => ⌜result = q.shift count.val⌝ ∗ q ↦*? contents⦄ := by
+  apply ispec_guardedModify
+  intro h hRange frame hCompatible
+  refine ⟨fun i hi => ?_, h, hCompatible, rfl, (sep_pure_l _ _ h).mpr ⟨rfl, hRange⟩⟩
+  exact Heap.Subheap.isLive ((show Heap.Subheap (Heap.array q.loc contents) h from hRange).trans
+    (Heap.Subheap.union_left hCompatible)) (Heap.isLive_array (by omega))
+
 @[step]
 theorem add.spec (q : RawPtr T M) (values : List T) (count : Usize)
     (hCount : count.val ≤ values.length) :
     ⦃ q ↦* values ⦄ q.add count
-      ⦃ result => ⌜result = q.shift count.val⌝ ∗ q ↦* values⦄ := by
-  apply ispec_guardedModify
-  intro h hRange frame hCompatible
-  refine ⟨fun i hi => ?_, h, hCompatible, rfl, (sep_pure_l _ _ h).mpr ⟨rfl, hRange⟩⟩
-  exact Heap.Subheap.isLive ((show Heap.Subheap (Heap.array q.loc values) h from hRange).trans
-    (Heap.Subheap.union_left hCompatible)) (Heap.isLive_array (by omega))
+      ⦃ result => ⌜result = q.shift count.val⌝ ∗ q ↦* values⦄ :=
+  add.spec_cells q _ count (by simpa using hCount)
 
 end RawPtr
 
@@ -509,6 +732,17 @@ theorem MutRawPtr.write.spec_range (q : MutRawPtr T) (values : List T)
       (show i < (values.set i value).length by simpa using hIndex),
     RawPtr.take_set, RawPtr.drop_set, List.getElem_set_self]
   apply WP.ispec_mono (MutRawPtr.write.spec (q.shift i) values[i] value) <;> iframe
+
+/-- `write.spec_range` on a range of cells, some of which may be uninitialized. -/
+theorem MutRawPtr.write.spec_cells (q : MutRawPtr T) (contents : List (Option (Pointee.Cell T)))
+    (i : Nat) (value : T) (hIndex : i < contents.length) :
+    ⦃ q ↦*? contents ⦄ MutRawPtr.write (q.shift i) value
+      ⦃ q ↦*? contents.set i (Pointee.toCell value)⦄ := by
+  rw [RawPtr.pointsToCells_eq_take_get_drop hIndex,
+    RawPtr.pointsToCells_eq_take_get_drop
+      (show i < (contents.set i (Pointee.toCell value)).length by simpa using hIndex),
+    RawPtr.take_set, RawPtr.drop_set, List.getElem_set_self]
+  apply WP.ispec_mono (MutRawPtr.write.spec_cell (q.shift i) contents[i] value) <;> iframe
 
 theorem MutRawPtr.write.spec_head (q : MutRawPtr T) (values : List T) (value : T)
     (h : 0 < values.length) :
@@ -525,20 +759,21 @@ theorem borrow.spec (q : RawPtr T M) (value : T) :
   intro h hPointsTo frame hCompatible
   have hPointsToFrame : (q ↦ value) (h ∪ frame) :=
     (q ↦ value).up_closed hPointsTo (Heap.Subheap.union_left hCompatible)
+  have hReadable := readable_of_pointsTo hPointsToFrame
   obtain ⟨rest, hCompatibleRest, rfl⟩ := Heap.subheap_iff.mp hPointsTo
-  have hSlot := Heap.isValid_singleton q value
-  have hValid : Heap.IsValid (Heap.singleton q value ∪ rest) q := Heap.isValid_union_left hSlot
-  refine ⟨Heap.isValid_union_left hValid, (Heap.borrow q _ hValid).2,
+  have hSlot := Heap.isValid_cell q.cellPtr (Pointee.toCell value)
+  have hValid : Heap.IsValid (Heap.cell q.cellPtr (Pointee.toCell value) ∪ rest) q.cellPtr :=
+    Heap.isValid_union_left hSlot
+  refine ⟨hReadable, (Heap.borrow q.cellPtr _ hValid).2,
     Heap.compatible_borrow_left hCompatible hValid, ?_, ?_⟩
-  · exact congrArg Prod.snd (Heap.borrow_union_left (h₂ := frame) q hValid)
+  · exact congrArg Prod.snd (Heap.borrow_union_left (h₂ := frame) q.cellPtr hValid)
   · have hBorrowedRest : PartialCommMonoid.Compatible (Heap.borrowedSlot q.loc) rest := by
       have hBorrowed := Heap.compatible_borrow_left hCompatibleRest hSlot
-      rwa [Heap.borrow_singleton] at hBorrowed
-    refine (sep_pure_l _ _ _).mpr
-      ⟨(Heap.borrow_fst _).trans (Heap.read_of_subheap hPointsToFrame _), ?_⟩
+      rwa [Heap.borrow_cell] at hBorrowed
+    refine (sep_pure_l _ _ _).mpr ⟨get_of_pointsTo hPointsToFrame hReadable, ?_⟩
     rw [show hValid = Heap.isValid_union_left hSlot from Subsingleton.elim _ _,
-      Heap.borrow_union_left q hSlot]
-    simp only [Prod.map_snd, Heap.borrow_singleton]
+      Heap.borrow_union_left q.cellPtr hSlot]
+    simp only [Prod.map_snd, Heap.borrow_cell]
     exact Heap.Subheap.union_left hBorrowedRest
 
 @[step]
@@ -548,18 +783,23 @@ theorem endBorrow.spec (q : RawPtr T M) (value : T) :
   apply ispec_guardedModify
   intro h hBorrowedSub frame hCompatible
   obtain ⟨rest, hCompatibleRest, rfl⟩ := Heap.subheap_iff.mp hBorrowedSub
-  have hSlot := Heap.isBorrowed_borrowedSlot q.loc
-  have hBorrowed : Heap.IsBorrowed (Heap.borrowedSlot q.loc ∪ rest) q.loc :=
+  have hSlot : Heap.IsBorrowed (Heap.borrowedSlot q.cellPtr.loc) q.cellPtr.loc :=
+    Heap.isBorrowed_borrowedSlot q.loc
+  have hBorrowed : Heap.IsBorrowed (Heap.borrowedSlot q.cellPtr.loc ∪ rest) q.cellPtr.loc :=
     Heap.isBorrowed_union_left hSlot
-  refine ⟨Heap.isBorrowed_union_left hBorrowed, (Heap.endBorrow q value _ hBorrowed).2,
+  refine ⟨Heap.isBorrowed_union_left hBorrowed,
+    (Heap.endBorrow q.cellPtr (Pointee.toCell value) _ hBorrowed).2,
     Heap.compatible_endBorrow_left hCompatible hBorrowed, ?_, ?_⟩
-  · exact congrArg Prod.snd (Heap.endBorrow_union_left (h₂ := frame) q value hBorrowed)
-  · have hLiveRest : PartialCommMonoid.Compatible (Heap.singleton q value) rest := by
-      have hLive := Heap.compatible_endBorrow_left (value := value) (q := q) hCompatibleRest hSlot
+  · exact congrArg Prod.snd
+      (Heap.endBorrow_union_left (h₂ := frame) q.cellPtr (Pointee.toCell value) hBorrowed)
+  · have hLiveRest :
+        PartialCommMonoid.Compatible (Heap.cell q.cellPtr (Pointee.toCell value)) rest := by
+      have hLive := Heap.compatible_endBorrow_left (value := Pointee.toCell value) (q := q.cellPtr)
+        hCompatibleRest hSlot
       rwa [Heap.endBorrow_borrowedSlot] at hLive
     show Heap.Subheap _ _
     rw [show hBorrowed = Heap.isBorrowed_union_left hSlot from Subsingleton.elim _ _,
-      Heap.endBorrow_union_left q value hSlot]
+      Heap.endBorrow_union_left q.cellPtr _ hSlot]
     simp only [Prod.map_snd, Heap.endBorrow_borrowedSlot]
     exact Heap.Subheap.union_left hLiveRest
 
@@ -652,5 +892,88 @@ theorem core.ptr.end_from_mut.spec (q : MutRawPtr T) (value : T) :
     · intro _
       apply (WP.ispec_ok _).2
       iframe
+
+/-! ### Undefined behaviours rejected by the model -/
+
+namespace RawPtr
+
+/-- Reading a cell which holds no value of the pointee (for instance, uninitialized memory) fails. -/
+theorem read.fails_cell (q : RawPtr T M) (content : Option (Pointee.Cell T))
+    (hNone : Pointee.ofCell content = none) :
+    ifails (q ↦? content) q.read := by
+  apply ifails_guardedModify
+  intro h hPointsTo h' hSub hReadable
+  have hInit := hReadable.init
+  rw [Heap.read_of_subheap (hPointsTo.trans hSub), hNone] at hInit
+  exact Bool.false_ne_true hInit
+
+/-- Reading uninitialized memory fails. -/
+theorem read.fails_uninit (q : RawPtr T M)
+    (hNone : Pointee.ofCell (none : Option (Pointee.Cell T)) = none) :
+    ifails (q ↦? none) q.read :=
+  read.fails_cell q none hNone
+
+/-- Reading a borrowed slot (moved out by `from_raw_parts`) fails. -/
+theorem read.fails_borrowed (q : RawPtr T M) : ifails (q ↦† 1) q.read := by
+  rw [pointsToBorrowed_one]
+  apply ifails_guardedModify
+  intro h hBorrowed h' hSub hReadable
+  exact Heap.not_isLive_of_isBorrowed (Heap.Subheap.isBorrowed (hBorrowed.trans hSub))
+    (Heap.isLive_of_isValid (q := q.cellPtr) hReadable.valid)
+
+/-- Reading freed memory fails. -/
+theorem read.fails_freed (q : RawPtr T M) : ifails q.freed q.read := by
+  apply ifails_guardedModify
+  intro h hFreed h' hSub hReadable
+  exact Heap.not_isLive_of_isFreed (Heap.Subheap.isFreed
+    ((show Heap.Subheap (Heap.freedSlot q.loc) h from hFreed).trans hSub))
+    (Heap.isLive_of_isValid (q := q.cellPtr) hReadable.valid)
+
+/-- Reading the end marker of an allocation (one past its last cell) fails. -/
+theorem read.fails_end (q : RawPtr T M) (count : Nat) (kind : AllocKind) :
+    ifails (q.freeable count kind) (q.shift count).read := by
+  apply ifails_guardedModify
+  intro h hFreeable h' hSub hReadable
+  exact Heap.not_isLive_of_isEndMarker (Heap.Subheap.isEndMarker (hFreeable.2.trans hSub))
+    (by simpa [cellPtr] using Heap.isLive_of_isValid (q := (q.shift count).cellPtr) hReadable.valid)
+
+/-- Moving out of a cell which holds no value of the pointee fails. -/
+theorem borrow.fails_cell (q : RawPtr T M) (content : Option (Pointee.Cell T))
+    (hNone : Pointee.ofCell content = none) :
+    ifails (q ↦? content) q.borrow := by
+  apply ifails_guardedModify
+  intro h hPointsTo h' hSub hReadable
+  have hInit := hReadable.init
+  rw [Heap.read_of_subheap (hPointsTo.trans hSub), hNone] at hInit
+  exact Bool.false_ne_true hInit
+
+/-- Borrowing a range which contains a cell holding no value of the pointee (for instance, an
+uninitialized cell) fails. -/
+theorem borrowRange.fails (q : RawPtr T M) (values : List T)
+    (content : Option (Pointee.Cell T)) (hNone : Pointee.ofCell content = none) (n : Nat)
+    (hn : values.length < n) :
+    ifails iprop(q ↦* values ∗ (q.shift values.length) ↦? content) (q.borrowRange n) := by
+  induction values generalizing q n with
+  | nil =>
+    obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by simp at hn; omega⟩
+    rw [borrowRange]
+    apply ifails_bind_left
+    refine ifails_mono ?_ (borrow.fails_cell q content hNone)
+    simp only [pointsToRange_nil, List.length_nil, shift_zero]
+    iframe
+  | cons value values ih =>
+    obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by simp at hn; omega⟩
+    rw [borrowRange]
+    have hF := ispec_frame (borrow.spec q value)
+      iprop((q.shift 1) ↦* values ∗ ((q.shift 1).shift values.length) ↦? content)
+    refine ifails_mono ?_ (ifails_bind hF fun x => ifails_bind_left
+      (ifails_mono ?_ (ih (q.shift 1) m (by simp at hn; omega))))
+    · rw [pointsToRange_cons, List.length_cons, shift_shift, Nat.add_comm]
+      iframe
+    · exact SepLogic.sep_elim_left _ _
+
+end RawPtr
+
+end
 
 end Aeneas.Std
