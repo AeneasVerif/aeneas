@@ -3,17 +3,17 @@ open ExtractBuiltinCore
 
 let lean_builtin_types =
   [
-    (* file: "Aeneas/Std/Alloc.lean", line: 18 *)
+    (* file: "Aeneas/Std/Alloc/Alloc.lean", line: 12 *)
     mk_type "alloc::alloc::Global" "Global" ~kind:(KEnum [ ("Mk", Some "mk") ]);
-    (* file: "Aeneas/Std/Alloc.lean", line: 13 *)
+    (* file: "Aeneas/Std/Alloc/String.lean", line: 8 *)
     mk_type "alloc::string::String" "String";
-    (* file: "Aeneas/Std/Vec.lean", line: 30 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 30 *)
     mk_type "alloc::vec::Vec" "alloc.vec.Vec"
       ~kind:(KStruct [ ("slice", Some "slice") ]);
-    (* file: "Aeneas/Std/VecIter.lean", line: 10 *)
+    (* file: "Aeneas/Std/Alloc/Vec/IntoIter.lean", line: 11 *)
     mk_type "alloc::vec::into_iter::IntoIter" "alloc.vec.into_iter.IntoIter"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 80 *)
+    (* file: "Aeneas/Std/Core/Alloc.lean", line: 8 *)
     mk_type "core::alloc::layout::Layout" "core.alloc.layout.Layout"
       ~kind:(KStruct [ ("size", Some "size"); ("align", Some "align") ]);
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 126 *)
@@ -52,14 +52,14 @@ let lean_builtin_types =
       ~kind:(KStruct [ ("fst", Some "fst"); ("snd", Some "snd") ]);
     (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 805 *)
     mk_type "core::num::error::TryFromIntError" "core.num.error.TryFromIntError";
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 92 *)
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 78 *)
     mk_type "core::ops::control_flow::ControlFlow"
       "core.ops.control_flow.ControlFlow"
       ~kind:(KEnum [ ("Continue", Some "Continue"); ("Break", Some "Break") ]);
     (* file: "Aeneas/Std/Range.lean", line: 16 *)
     mk_type "core::ops::range::Range" "core.ops.range.Range"
       ~kind:(KStruct [ ("start", Some "start"); ("end", Some "end") ]);
-    (* file: "Aeneas/Std/Core/Core.lean", line: 126 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 105 *)
     mk_type "core::ops::range::RangeFrom" "core.ops.range.RangeFrom"
       ~kind:(KStruct [ ("start", Some "start") ]);
     (* file: "Aeneas/Std/Range.lean", line: 31 *)
@@ -76,13 +76,13 @@ let lean_builtin_types =
     (* file: "Aeneas/Std/Range.lean", line: 22 *)
     mk_type "core::ops::range::RangeTo" "core.ops.range.RangeTo"
       ~kind:(KStruct [ ("end", Some "end") ]);
-    (* file: "Aeneas/Std/Core/Core.lean", line: 15 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 14 *)
     mk_type "core::option::Option" "Option" ~prefix_variant_names:false
       ~kind:(KEnum [ ("None", Some "none"); ("Some", Some "some") ]);
     (* file: "Aeneas/Std/Core/Panic.lean", line: 8 *)
     mk_type "core::panic::panic_info::PanicInfo"
       "core.panic.panic_info.PanicInfo";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 130 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 109 *)
     mk_type "core::panicking::AssertKind" "core.panicking.AssertKind"
       ~kind:
         (KEnum [ ("Eq", Some "Eq"); ("Ne", Some "Ne"); ("Match", Some "Match") ]);
@@ -90,9 +90,9 @@ let lean_builtin_types =
     mk_type "core::pin::Pin" "core.pin.Pin";
     (* file: "Aeneas/Std/Core/Pin.lean", line: 12 *)
     mk_type "core::pin::helper::PinHelper" "core.pin.helper.PinHelper";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 76 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 77 *)
     mk_type "core::ptr::alignment::Alignment" "core.ptr.alignment.Alignment";
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 9 *)
+    (* file: "Aeneas/Std/Core/Ptr.lean", line: 10 *)
     mk_type "core::ptr::alignment::AlignmentEnum"
       "core.ptr.alignment.AlignmentEnum"
       ~kind:
@@ -186,136 +186,136 @@ let lean_builtin_consts = []
 
 let lean_builtin_funs =
   [
-    (* file: "Aeneas/Std/Alloc.lean", line: 27 *)
+    (* file: "Aeneas/Std/Alloc/Alloc.lean", line: 15 *)
     mk_fun "alloc::alloc::{core::clone::Clone<alloc::alloc::Global>}::clone"
       "alloc.alloc.CloneGlobal.clone";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 52 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 43 *)
     mk_fun "alloc::boxed::{core::clone::Clone<Box<@T>>}::clone"
-      "core.alloc.boxed.CloneBox.clone"
+      "alloc.boxed.CloneBox.clone"
       ~keep_params:(Some [ true; false ])
       ~keep_trait_clauses:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 298 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 54 *)
     mk_fun "alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::eq"
       "alloc.boxed.PartialEqBox.eq"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Core/Core.lean", line: 17 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 34 *)
     mk_fun "alloc::boxed::{core::convert::AsMut<Box<@T>, @T>}::as_mut"
       "alloc.boxed.AsMutBox.as_mut"
       ~keep_params:(Some [ true; false ])
       ~can_fail:false;
-    (* file: "Aeneas/Std/Alloc.lean", line: 21 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 13 *)
     mk_fun "alloc::boxed::{core::ops::deref::Deref<Box<@T>, @T>}::deref"
       "alloc.boxed.Box.deref"
       ~keep_params:(Some [ true; false ])
       ~can_fail:false;
-    (* file: "Aeneas/Std/Alloc.lean", line: 24 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 16 *)
     mk_fun "alloc::boxed::{core::ops::deref::DerefMut<Box<@T>, @T>}::deref_mut"
       "alloc.boxed.Box.deref_mut"
       ~keep_params:(Some [ true; false ])
       ~can_fail:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 391 *)
+    (* file: "Aeneas/Std/Alloc/Slice.lean", line: 26 *)
     mk_fun "alloc::slice::{[@T]}::into_vec" "alloc.slice.Slice.into_vec"
       ~keep_params:(Some [ true; false ])
       ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 376 *)
+    (* file: "Aeneas/Std/Alloc/Slice.lean", line: 11 *)
     mk_fun "alloc::slice::{[@T]}::to_vec" "alloc.slice.Slice.to_vec";
-    (* file: "Aeneas/Std/Vec.lean", line: 395 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 376 *)
     mk_fun "alloc::vec::from_elem" "alloc.vec.from_elem";
-    (* file: "Aeneas/Std/VecIter.lean", line: 83 *)
+    (* file: "Aeneas/Std/Alloc/Vec/IntoIter.lean", line: 84 *)
     mk_fun
       "alloc::vec::into_iter::{core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, \
        @A>, @T>}::map"
       "alloc.vec.into_iter.IntoIter.Insts.CoreIterTraitsIteratorIterator.map";
-    (* file: "Aeneas/Std/VecIter.lean", line: 13 *)
+    (* file: "Aeneas/Std/Alloc/Vec/IntoIter.lean", line: 14 *)
     mk_fun
       "alloc::vec::into_iter::{core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, \
        @A>, @T>}::next"
       "alloc.vec.into_iter.IteratorIntoIter.next"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 621 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 602 *)
     mk_fun
       "alloc::vec::partial_eq::{core::cmp::PartialEq<alloc::vec::Vec<@T>, \
        alloc::vec::Vec<@U>>}::eq"
       "alloc.vec.partial_eq.PartialEqVec.eq"
       ~keep_params:(Some [ true; true; false; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 631 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 612 *)
     mk_fun
       "alloc::vec::partial_eq::{core::cmp::PartialEq<alloc::vec::Vec<@T>, \
        alloc::vec::Vec<@U>>}::ne"
       "alloc.vec.partial_eq.PartialEqVec.ne"
       ~keep_params:(Some [ true; true; false; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 416 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 397 *)
     mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::extend_from_slice"
       "alloc.vec.Vec.extend_from_slice"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 170 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 170 *)
     mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::insert" "alloc.vec.Vec.insert"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 88 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 88 *)
     mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::len" "alloc.vec.Vec.len"
       ~keep_params:(Some [ true; false ])
       ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 81 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 81 *)
     mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::new" "alloc.vec.Vec.new"
       ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 155 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 155 *)
     mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::push" "alloc.vec.Vec.push"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 449 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 430 *)
     mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::resize" "alloc.vec.Vec.resize"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 413 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 394 *)
     mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::with_capacity"
       "alloc.vec.Vec.with_capacity" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 607 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 588 *)
     mk_fun "alloc::vec::{core::clone::Clone<alloc::vec::Vec<@T>>}::clone"
       "alloc.vec.CloneVec.clone"
       ~keep_params:(Some [ true; false ])
       ~keep_trait_clauses:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 522 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 503 *)
     mk_fun
       "alloc::vec::{core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>}::from"
       "alloc.vec.FromBoxSliceVec.from"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 508 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 489 *)
     mk_fun
       "alloc::vec::{core::convert::From<alloc::vec::Vec<@T>, [@T; @N]>}::from"
       "alloc.vec.FromVecArray.from";
-    (* file: "Aeneas/Std/Vec.lean", line: 652 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 633 *)
     mk_fun "alloc::vec::{core::fmt::Debug<alloc::vec::Vec<@T>>}::fmt"
       "alloc.vec.DebugVec.fmt"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/VecIter.lean", line: 62 *)
+    (* file: "Aeneas/Std/Alloc/Vec/IntoIter.lean", line: 63 *)
     mk_fun
       "alloc::vec::{core::iter::traits::collect::FromIterator<alloc::vec::Vec<@T>, \
        @T>}::from_iter"
       "alloc.vec.FromIteratorVec.from_iter";
-    (* file: "Aeneas/Std/VecIter.lean", line: 36 *)
+    (* file: "Aeneas/Std/Alloc/Vec/IntoIter.lean", line: 37 *)
     mk_fun
       "alloc::vec::{core::iter::traits::collect::IntoIterator<alloc::vec::Vec<@T>, \
        @T, alloc::vec::into_iter::IntoIter<@T, @A>>}::into_iter"
       "alloc.vec.IntoIteratorVec.into_iter"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 426 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 407 *)
     mk_fun
       "alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>}::deref"
       "alloc.vec.Vec.deref"
       ~keep_params:(Some [ true; false ])
       ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 436 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 417 *)
     mk_fun
       "alloc::vec::{core::ops::deref::DerefMut<alloc::vec::Vec<@T>, \
        [@T]>}::deref_mut"
       "alloc.vec.Vec.deref_mut"
       ~keep_params:(Some [ true; false ])
       ~can_fail:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 233 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 233 *)
     mk_fun
       "alloc::vec::{core::ops::index::Index<alloc::vec::Vec<@T>, @I, \
        @O>}::index"
       "alloc.vec.Vec.index"
       ~keep_params:(Some [ true; true; false; true ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 239 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 239 *)
     mk_fun
       "alloc::vec::{core::ops::index::IndexMut<alloc::vec::Vec<@T>, @I, \
        @O>}::index_mut"
@@ -391,7 +391,7 @@ let lean_builtin_funs =
       "core.array.Array.index_mut";
     (* file: "Aeneas/Std/Core/CoreOption.lean", line: 122 *)
     mk_fun "core::bool::{bool}::then" "core.bool.Bool.then";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 136 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 115 *)
     mk_fun "core::clone::impls::{core::clone::Clone<&'0 @T>}::clone"
       "core.clone.impls.CloneShared.clone";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 23 *)
@@ -875,9 +875,9 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Iter.lean", line: 710 *)
     mk_fun "core::iter::traits::iterator::Iterator::zip"
       "core.iter.traits.iterator.Iterator.zip.trait_default";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 77 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 56 *)
     mk_fun "core::mem::replace" "core.mem.replace" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Core/Core.lean", line: 81 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 60 *)
     mk_fun "core::mem::swap" "core.mem.swap" ~can_fail:false ~lift:false;
     (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 696 *)
     mk_fun "core::num::{i128}::cast_unsigned" "core.num.I128.cast_unsigned";
@@ -1020,7 +1020,7 @@ let lean_builtin_funs =
     mk_fun
       "core::ops::arith::{core::ops::arith::Add<&'0 usize, usize, usize>}::add"
       "SharedUsize.Insts.CoreOpsArithAddUsizeUsize.add";
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 53 *)
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 39 *)
     mk_fun "core::ops::drop::Drop::drop" "core.ops.drop.Drop.drop.default";
     (* file: "Aeneas/Std/Core/Iter.lean", line: 653 *)
     mk_fun
@@ -1032,10 +1032,10 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/CoreOption.lean", line: 14 *)
     mk_fun "core::option::{core::option::Option<@T>}::expect"
       "core.option.Option.expect";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 119 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 98 *)
     mk_fun "core::option::{core::option::Option<@T>}::is_none"
       "core.option.Option.is_none" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Core/Core.lean", line: 123 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 102 *)
     mk_fun "core::option::{core::option::Option<@T>}::is_some"
       "core.option.Option.is_some" ~can_fail:false ~lift:false;
     (* file: "Aeneas/Std/Core/CoreOption.lean", line: 84 *)
@@ -1047,21 +1047,21 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/CoreOption.lean", line: 24 *)
     mk_fun "core::option::{core::option::Option<@T>}::ok_or"
       "core.option.Option.ok_or";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 116 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 95 *)
     mk_fun "core::option::{core::option::Option<@T>}::take"
       "core.option.Option.take" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Core/Core.lean", line: 95 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 74 *)
     mk_fun "core::option::{core::option::Option<@T>}::unwrap"
       "core.option.Option.unwrap";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 104 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 83 *)
     mk_fun "core::option::{core::option::Option<@T>}::unwrap_or"
       "core.option.Option.unwrap_or" ~can_fail:false;
-    (* file: "Aeneas/Std/Core/Convert.lean", line: 113 *)
+    (* file: "Aeneas/Std/Core/Convert.lean", line: 108 *)
     mk_fun
       "core::result::{core::ops::try_trait::FromResidual<core::result::Result<@T, \
        @F>, core::result::Result<!, @E>>}::from_residual"
       "core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual";
-    (* file: "Aeneas/Std/Core/Convert.lean", line: 101 *)
+    (* file: "Aeneas/Std/Core/Convert.lean", line: 96 *)
     mk_fun
       "core::result::{core::ops::try_trait::Try<core::result::Result<@T, \
        @E>>}::branch"
@@ -1069,7 +1069,7 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 116 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::expect"
       "core.result.Result.expect";
-    (* file: "Aeneas/Std/Core/Convert.lean", line: 81 *)
+    (* file: "Aeneas/Std/Core/Convert.lean", line: 76 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::is_ok"
       "core.result.Result.is_ok";
     (* file: "Aeneas/Std/Core/CoreResult.lean", line: 14 *)
@@ -1319,11 +1319,11 @@ let lean_builtin_funs =
 
 let lean_builtin_trait_decls =
   [
-    (* file: "Aeneas/Std/Core/Ptr.lean", line: 85 *)
+    (* file: "Aeneas/Std/Core/Alloc.lean", line: 13 *)
     mk_trait_decl "core::alloc::global::GlobalAlloc"
       "core.alloc.global.GlobalAlloc"
       ~methods:[ ("alloc", "alloc"); ("dealloc", "dealloc") ];
-    (* file: "Aeneas/Std/Core/Core.lean", line: 27 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 22 *)
     mk_trait_decl "core::clone::Clone" "core.clone.Clone"
       ~methods:[ ("clone", "clone"); ("clone_from", "clone_from") ]
       ~default_methods:[ "clone_from" ];
@@ -1356,7 +1356,7 @@ let lean_builtin_trait_decls =
     (* file: "Aeneas/Std/Core/Convert.lean", line: 27 *)
     mk_trait_decl "core::convert::AsRef" "core.convert.AsRef"
       ~methods:[ ("as_ref", "as_ref") ];
-    (* file: "Aeneas/Std/Core/Core.lean", line: 23 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 18 *)
     mk_trait_decl "core::convert::From" "core.convert.From"
       ~methods:[ ("from", "from") ];
     (* file: "Aeneas/Std/Core/Convert.lean", line: 12 *)
@@ -1440,7 +1440,7 @@ let lean_builtin_trait_decls =
           ("enumerate", "enumerate");
           ("take", "take");
         ];
-    (* file: "Aeneas/Std/Core/Core.lean", line: 63 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 42 *)
     mk_trait_decl "core::marker::Copy" "core.marker.Copy"
       ~parent_clauses:[ "cloneInst" ];
     (* file: "Aeneas/Std/Core/Discriminant.lean", line: 10 *)
@@ -1460,45 +1460,45 @@ let lean_builtin_trait_decls =
     (* file: "Aeneas/Std/Core/Marker.lean", line: 7 *)
     mk_trait_decl "core::marker::StructuralPartialEq"
       "core.marker.StructuralPartialEq";
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 45 *)
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 31 *)
     mk_trait_decl "core::ops::bit::BitAnd" "core.ops.bit.BitAnd"
       ~methods:[ ("bitand", "bitand") ];
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 21 *)
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 22 *)
     mk_trait_decl "core::ops::deref::Deref" "core.ops.deref.Deref"
       ~methods:[ ("deref", "deref") ];
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 25 *)
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 26 *)
     mk_trait_decl "core::ops::deref::DerefMut" "core.ops.deref.DerefMut"
       ~parent_clauses:[ "derefInst" ]
       ~methods:[ ("deref_mut", "deref_mut") ];
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 49 *)
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 35 *)
     mk_trait_decl "core::ops::drop::Drop" "core.ops.drop.Drop"
       ~methods:[ ("drop", "drop") ];
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 67 *)
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 53 *)
     mk_trait_decl "core::ops::function::Fn" "core.ops.function.Fn"
       ~parent_clauses:[ "FnMutInst" ]
       ~methods:[ ("call", "call") ];
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 62 *)
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 48 *)
     mk_trait_decl "core::ops::function::FnMut" "core.ops.function.FnMut"
       ~parent_clauses:[ "FnOnceInst" ]
       ~methods:[ ("call_mut", "call_mut") ];
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 58 *)
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 44 *)
     mk_trait_decl "core::ops::function::FnOnce" "core.ops.function.FnOnce"
       ~methods:[ ("call_once", "call_once") ];
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 12 *)
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 13 *)
     mk_trait_decl "core::ops::index::Index" "core.ops.index.Index"
       ~methods:[ ("index", "index") ];
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 16 *)
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 17 *)
     mk_trait_decl "core::ops::index::IndexMut" "core.ops.index.IndexMut"
       ~parent_clauses:[ "indexInst" ]
       ~methods:[ ("index_mut", "index_mut") ];
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 88 *)
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 74 *)
     mk_trait_decl "core::ops::try_trait::FromResidual"
       "core.ops.try_trait.FromResidual"
       ~methods:[ ("from_residual", "from_residual") ];
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 103 *)
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 89 *)
     mk_trait_decl "core::ops::try_trait::Residual" "core.ops.try_trait.Residual"
       ~parent_clauses:[ "TryInst" ];
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 97 *)
+    (* file: "Aeneas/Std/Core/Ops.lean", line: 83 *)
     mk_trait_decl "core::ops::try_trait::Try" "core.ops.try_trait.Try"
       ~parent_clauses:[ "FromResidualInst" ]
       ~methods:[ ("from_output", "from_output"); ("branch", "branch") ];
@@ -1517,32 +1517,32 @@ let lean_builtin_trait_decls =
 
 let lean_builtin_trait_impls =
   [
-    (* file: "Aeneas/Std/Core/Core.lean", line: 57 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 48 *)
     mk_trait_impl "core::clone::Clone<Box<@T>>" "core.clone.CloneBox"
       ~keep_params:(Some [ true; false ])
       ~keep_trait_clauses:(Some [ true; false ]);
     (* file: "Aeneas/Std/Array/Array.lean", line: 379 *)
     mk_trait_impl "core::clone::Clone<[@T; @N]>" "core.clone.CloneArray";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 37 *)
+    (* file: "Aeneas/Std/Alloc/Alloc.lean", line: 18 *)
     mk_trait_impl "core::clone::Clone<alloc::alloc::Global>"
       "core.clone.CloneGlobal";
-    (* file: "Aeneas/Std/Vec.lean", line: 614 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 595 *)
     mk_trait_impl "core::clone::Clone<alloc::vec::Vec<@T>>"
       "core.clone.CloneallocvecVec"
       ~keep_params:(Some [ true; false ])
       ~keep_trait_clauses:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Core/Core.lean", line: 46 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 36 *)
     mk_trait_impl "core::clone::Clone<bool>" "core.clone.CloneBool";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 255 *)
     mk_trait_impl "core::cmp::PartialEq<&'a @A, &'b @B>"
       "core.cmp.PartialEqShared";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 223 *)
     mk_trait_impl "core::cmp::PartialEq<(), ()>" "core.cmp.PartialEqUnit";
-    (* file: "Aeneas/Std/Core/Cmp.lean", line: 303 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 59 *)
     mk_trait_impl "core::cmp::PartialEq<Box<@T>, Box<@T>>"
       "core.cmp.PartialEqBox"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 642 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 623 *)
     mk_trait_impl
       "core::cmp::PartialEq<alloc::vec::Vec<@T>, alloc::vec::Vec<@U>>"
       "core.cmp.PartialEqVec"
@@ -1552,7 +1552,7 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 287 *)
     mk_trait_impl "core::cmp::PartialOrd<&'a @A, &'b @B>"
       "core.cmp.PartialOrdShared";
-    (* file: "Aeneas/Std/Core/Convert.lean", line: 75 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 38 *)
     mk_trait_impl "core::convert::AsMut<Box<@T>, @T>" "core.convert.AsMutBox";
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 486 *)
     mk_trait_impl "core::convert::AsMut<[@T; @N], [@T]>"
@@ -1562,11 +1562,11 @@ let lean_builtin_trait_impls =
       "Array.Insts.CoreConvertAsRefSlice";
     (* file: "Aeneas/Std/Core/Convert.lean", line: 34 *)
     mk_trait_impl "core::convert::From<@Self, @Self>" "core.convert.FromSame";
-    (* file: "Aeneas/Std/Vec.lean", line: 530 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 511 *)
     mk_trait_impl "core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>"
       "core.convert.FromBoxSliceVec"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 514 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 495 *)
     mk_trait_impl "core::convert::From<alloc::vec::Vec<@T>, [@T; @N]>"
       "core.convert.FromVecArray";
     (* file: "Aeneas/Std/Core/Convert.lean", line: 21 *)
@@ -1593,7 +1593,7 @@ let lean_builtin_trait_impls =
     mk_trait_impl "core::fmt::Debug<()>" "core.fmt.DebugUnit";
     (* file: "Aeneas/Std/Array/ArrayDebug.lean", line: 18 *)
     mk_trait_impl "core::fmt::Debug<[@T; @N]>" "Array.Insts.CoreFmtDebug";
-    (* file: "Aeneas/Std/Vec.lean", line: 663 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 644 *)
     mk_trait_impl "core::fmt::Debug<alloc::vec::Vec<@T>>" "core.fmt.DebugVec"
       ~keep_params:(Some [ true; false ]);
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 190 *)
@@ -1649,7 +1649,7 @@ let lean_builtin_trait_impls =
     mk_trait_impl "core::iter::range::Step<u8>" "core.iter.range.StepU8";
     (* file: "Aeneas/Std/Core/Iter.lean", line: 383 *)
     mk_trait_impl "core::iter::range::Step<usize>" "core.iter.range.StepUsize";
-    (* file: "Aeneas/Std/VecIter.lean", line: 74 *)
+    (* file: "Aeneas/Std/Alloc/Vec/IntoIter.lean", line: 75 *)
     mk_trait_impl
       "core::iter::traits::collect::FromIterator<alloc::vec::Vec<@T>, @T>"
       "core.iter.traits.collect.FromIteratorVec";
@@ -1666,7 +1666,7 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Core/Iter.lean", line: 194 *)
     mk_trait_impl "core::iter::traits::collect::IntoIterator<@I, @Item, @I>"
       "core.iter.traits.collect.IntoIterator.Blanket";
-    (* file: "Aeneas/Std/VecIter.lean", line: 41 *)
+    (* file: "Aeneas/Std/Alloc/Vec/IntoIter.lean", line: 42 *)
     mk_trait_impl
       "core::iter::traits::collect::IntoIterator<alloc::vec::Vec<@T>, @T, \
        alloc::vec::into_iter::IntoIter<@T, @A>>"
@@ -1677,7 +1677,7 @@ let lean_builtin_trait_impls =
       "core::iter::traits::double_ended::DoubleEndedIterator<core::ops::range::Range<@A>, \
        @A>"
       "core.ops.range.Range.Insts.DoubleEndedIterator";
-    (* file: "Aeneas/Std/VecIter.lean", line: 22 *)
+    (* file: "Aeneas/Std/Alloc/Vec/IntoIter.lean", line: 23 *)
     mk_trait_impl
       "core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, \
        @A>, @T>"
@@ -1723,21 +1723,21 @@ let lean_builtin_trait_impls =
       "core.iter.traits.iterator.IteratorChars";
     (* file: "Aeneas/Std/Array/Array.lean", line: 477 *)
     mk_trait_impl "core::marker::Copy<[@T; @N]>" "Array.Insts.CoreMarkerCopy";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 67 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 46 *)
     mk_trait_impl "core::marker::Copy<bool>" "core.marker.CopyBool";
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 31 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 20 *)
     mk_trait_impl "core::ops::deref::Deref<Box<@T>, @T>"
       "core.ops.deref.DerefBoxInst"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 431 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 412 *)
     mk_trait_impl "core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>"
       "core.ops.deref.DerefVec"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Core/Ops.lean", line: 38 *)
+    (* file: "Aeneas/Std/Alloc/Boxed.lean", line: 27 *)
     mk_trait_impl "core::ops::deref::DerefMut<Box<@T>, @T>"
       "core.ops.deref.DerefMutBoxInst"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 442 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 423 *)
     mk_trait_impl "core::ops::deref::DerefMut<alloc::vec::Vec<@T>, [@T]>"
       "core.ops.deref.DerefMutVec"
       ~keep_params:(Some [ true; false ]);
@@ -1747,7 +1747,7 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Slice.lean", line: 557 *)
     mk_trait_impl "core::ops::index::Index<[@T], @I, @O>"
       "core.ops.index.IndexSlice";
-    (* file: "Aeneas/Std/Vec.lean", line: 248 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 248 *)
     mk_trait_impl "core::ops::index::Index<alloc::vec::Vec<@T>, @T, @O>"
       "alloc.vec.Vec.Index"
       ~keep_params:(Some [ true; true; false; true ]);
@@ -1757,7 +1757,7 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Slice.lean", line: 564 *)
     mk_trait_impl "core::ops::index::IndexMut<[@T], @I, @O>"
       "core.ops.index.IndexMutSlice";
-    (* file: "Aeneas/Std/Vec.lean", line: 256 *)
+    (* file: "Aeneas/Std/Alloc/Vec.lean", line: 256 *)
     mk_trait_impl "core::ops::index::IndexMut<alloc::vec::Vec<@T>, @T, @O>"
       "alloc.vec.Vec.IndexMut"
       ~keep_params:(Some [ true; true; false; true ]);
