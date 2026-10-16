@@ -161,4 +161,58 @@ def THREE_FEATURES : Std.U32 :=
   let i := FEATURE_A ||| FEATURE_B
   i ||| FEATURE_C
 
+/-- [constants_lean::StaticRef]
+    Source: 'tests/src/constants-lean.rs', lines 61:0-61:38
+    Visibility: public -/
+@[reducible]
+def StaticRef := Std.U8
+
+/-- [constants_lean::STATIC_REF]
+    Source: 'tests/src/constants-lean.rs', lines 63:0-63:44 -/
+@[global_simps, irreducible] def STATIC_REF : StaticRef := 0#u8
+
+/-- [constants_lean::get_static_ref]:
+    Source: 'tests/src/constants-lean.rs', lines 65:0-67:1
+    Visibility: public -/
+def get_static_ref : Result StaticRef := do
+  ok STATIC_REF
+
+/-- [constants_lean::read_static_ref]:
+    Source: 'tests/src/constants-lean.rs', lines 69:0-71:1
+    Visibility: public -/
+def read_static_ref : Result Std.U8 := do
+  let i := STATIC_REF
+  ok i
+
+/-- [constants_lean::StaticStr]
+    Source: 'tests/src/constants-lean.rs', lines 73:0-76:1
+    Visibility: public -/
+structure StaticStr where
+  «name» : Str
+  value : Std.U32
+
+/-- [constants_lean::STATIC_STR]
+    Source: 'tests/src/constants-lean.rs', lines 78:0-81:2 -/
+@[global_simps, irreducible]
+def STATIC_STR : StaticStr := { «name» := (toStr "hello"), value := 3#u32 }
+
+/-- [constants_lean::get_static_str_name]:
+    Source: 'tests/src/constants-lean.rs', lines 83:0-85:1
+    Visibility: public -/
+def get_static_str_name : Result Str := do
+  ok STATIC_STR.name
+
+/-- Trait declaration: [constants_lean::HasStaticRef]
+    Source: 'tests/src/constants-lean.rs', lines 88:0-90:1
+    Visibility: public -/
+structure HasStaticRef (Self : Type _) where
+  C : Result StaticRef
+
+/-- [constants_lean::read_trait_static_ref]:
+    Source: 'tests/src/constants-lean.rs', lines 92:0-94:1
+    Visibility: public -/
+def read_trait_static_ref
+  {T : Type _} (HasStaticRefInst : HasStaticRef T) : Result Std.U8 := do
+  HasStaticRefInst.C
+
 end constants_lean

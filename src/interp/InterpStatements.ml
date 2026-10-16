@@ -579,7 +579,7 @@ let eval_function_call_symbolic_inst (span : Meta.span) (func : fn_ptr)
 
     We return the value as well as its type with regions. Note that we currently
     only support globals whose (instantiated) type doesn't contain regions,
-    except for a top-level static shared reference. *)
+    except for static shared references. *)
 let eval_global_as_fresh_symbolic_value (span : Meta.span)
     (gref : global_decl_ref) (ctx : eval_ctx) :
     eval_ctx * tvalue * rty * (SA.expr -> SA.expr) =
@@ -606,6 +606,8 @@ let eval_global_as_fresh_symbolic_value (span : Meta.span)
          abstraction owning the static region, allowing the borrow to live as
          long as needed. *)
       let sval = mk_fresh_symbolic_value span ctx inner_ty in
+      (* The value may contain static borrows: we need to project their loans *)
+      let ctx = push_static_loans_proj_for_symbolic_value span ctx sval in
       let v = mk_tvalue_from_symbolic_value sval in
       let ctx, borrow = push_value_to_static_shared_loan span ctx v inner_ty in
       let cc = S.synthesize_global_eval gref sval in
@@ -621,6 +623,9 @@ let eval_global_as_fresh_symbolic_value (span : Meta.span)
       let ty = Subst.erase_regions_substitute_types subst global.ty in
       [%cassert] span (ty_no_regions ty) "Unimplemented";
       let sval = mk_fresh_symbolic_value span ctx ty in
+      (* The value may contain static borrows (hidden in ADTs, for instance
+         [struct S(&'static u8)]): we need to project their loans *)
+      let ctx = push_static_loans_proj_for_symbolic_value span ctx sval in
       let cc = S.synthesize_global_eval gref sval in
       (ctx, mk_tvalue_from_symbolic_value sval, ty, cc)
 
