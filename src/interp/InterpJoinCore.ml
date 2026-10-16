@@ -868,6 +868,9 @@ let compute_fixed_abs_ids (ctx0 : eval_ctx) (ctx1 : eval_ctx) : AbsId.Set.t =
       let a1 = AbsId.Map.find aid abs1 in
       (* We ignore the continuation expressions: when computing fixed points we
          might remove/add continuations while the presence/absence shouldn't
-         have an impact on the way we match/unify contexts. *)
-      { a0 with cont = None } = { a1 with cont = None })
+         have an impact on the way we match/unify contexts.
+
+         We use [equal_abs] rather than the structural equality: two equal sets
+         of regions may have different representations. *)
+      equal_abs { a0 with cont = None } { a1 with cont = None })
     abs_ids
