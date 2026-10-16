@@ -169,7 +169,7 @@ theorem Vec.push_spec {α : Type u} (v : Vec α) (x : α) (h : v.val.length < Us
 
 @[expose, rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::insert" (keepParams := [true, false])]
 def Vec.insert {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
-  if i.val < v.length then
+  if i.val ≤ v.length then
     if h : v.length < Usize.max then
       ok (.from (v.val.insertIdx i x)
         (List.length_insertIdx_le_succ.trans (Nat.succ_le_of_lt h)))
@@ -180,10 +180,19 @@ def Vec.insert {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
 
 @[step]
 theorem Vec.insert_spec {α : Type u} (v: Vec α) (i: Usize) (x: α)
-  (hbound : i.val < v.length)
+  (hbound : i.val ≤ v.length)
   (hsize : v.length < Usize.max) :
   v.insert i x ⦃ nv => nv.val = v.val.insertIdx i x ⦄ := by
   simp [insert, *]
+
+example {α : Type u} (v : Vec α) (i : Usize) (x : α) (h : v.length < i.val) :
+  v.insert i x = fail arrayOutOfBounds := by
+  simp [Vec.insert, Nat.not_le_of_gt h]
+
+example {α : Type u} (v : Vec α) (i : Usize) (x : α)
+  (hbound : i.val ≤ v.length) (hsize : Usize.max ≤ v.length) :
+  v.insert i x = fail maximumSizeExceeded := by
+  simp [Vec.insert, hbound, Nat.not_lt_of_ge hsize]
 
 @[expose] def Vec.index_usize {α : Type u} (v: Vec α) (i: Usize) : Result α :=
   match v[i.val]? with
