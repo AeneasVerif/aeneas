@@ -408,11 +408,11 @@ example : ¬ ⦃ emp ⦄ (do
 /-- Deallocating the tail of a two-slot allocation: the size and end marker match, but the pointer
 is not the start of the allocation. -/
 example : ¬ ⦃ emp ⦄ (do
-    let p ← Std.Global.mk.allocate [(1 : Nat), 2]
+    let p ← Std.alloc.alloc.Global.mk.allocate [(1 : Nat), 2]
     let q ← p.ptr.add 1#usize
-    Std.Global.mk.deallocate ⟨q⟩ 1) ⦃ _ => ⌜True⌝ ⦄ := by
+    Std.alloc.alloc.Global.mk.deallocate ⟨q⟩ 1) ⦃ _ => ⌜True⌝ ⦄ := by
   apply not_ispec_of_ifails_emp
-  refine ifails_bind (Std.Global.allocate.spec _ _) fun p => ifails_ipure fun _ => ?_
+  refine ifails_bind (Std.alloc.alloc.Global.allocate.spec _ _) fun p => ifails_ipure fun _ => ?_
   refine ifails_bind (ispec_frame (RawPtr.add.spec p.ptr [1, 2] 1#usize (by simp)) _) fun q => ?_
   refine ifails_mono (entails_of_eq (sep_assoc_eq _ _ _)) (ifails_ipure fun hq => ?_)
   subst hq

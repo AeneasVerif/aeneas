@@ -42,14 +42,7 @@ pub unsafe fn mul_shift_all(m: u64, vp: *mut u64, vm: *mut u64, mm_shift: u32) -
 pub fn d2d_bounds(m: u64, mm_shift: u32) -> (u64, u64, u64) {
     let mut vp_uninit: MaybeUninit<u64> = MaybeUninit::uninit();
     let mut vm_uninit: MaybeUninit<u64> = MaybeUninit::uninit();
-    let vr = unsafe {
-        mul_shift_all(
-            m,
-            vp_uninit.as_mut_ptr(),
-            vm_uninit.as_mut_ptr(),
-            mm_shift,
-        )
-    };
+    let vr = unsafe { mul_shift_all(m, vp_uninit.as_mut_ptr(), vm_uninit.as_mut_ptr(), mm_shift) };
     let vp = unsafe { vp_uninit.assume_init() };
     let vm = unsafe { vm_uninit.assume_init() };
     (vr, vp, vm)

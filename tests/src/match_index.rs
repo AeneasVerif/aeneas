@@ -3,11 +3,19 @@
 //! the value and once again to read its fields in the branch.
 
 pub fn array_get(a: [Option<u32>; 2], i: usize) -> u32 {
-    if let Some(x) = a[i] { x } else { 0 }
+    if let Some(x) = a[i] {
+        x
+    } else {
+        0
+    }
 }
 
 pub fn slice_get(a: &[Option<u32>], i: usize) -> u32 {
-    if let Some(x) = a[i] { x } else { 0 }
+    if let Some(x) = a[i] {
+        x
+    } else {
+        0
+    }
 }
 
 pub struct Links {

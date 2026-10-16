@@ -21,7 +21,7 @@ set_option maxRecDepth 2048
 namespace match_index
 
 /-- [match_index::array_get]:
-    Source: 'tests/src/match_index.rs', lines 5:0-7:1
+    Source: 'tests/src/match_index.rs', lines 5:0-11:1
     Visibility: public -/
 def array_get
   (a : Array (Option Std.U32) 2#usize) (i : Std.Usize) : Result Std.U32 := do
@@ -31,7 +31,7 @@ def array_get
   | some x => ok x
 
 /-- [match_index::slice_get]:
-    Source: 'tests/src/match_index.rs', lines 9:0-11:1
+    Source: 'tests/src/match_index.rs', lines 13:0-19:1
     Visibility: public -/
 def slice_get
   (a : Slice (Option Std.U32)) (i : Std.Usize) : Result Std.U32 := do
@@ -41,13 +41,13 @@ def slice_get
   | some x => ok x
 
 /-- [match_index::Links]
-    Source: 'tests/src/match_index.rs', lines 13:0-15:1
+    Source: 'tests/src/match_index.rs', lines 21:0-23:1
     Visibility: public -/
 structure Links where
   child : Array (Option Std.U32) 2#usize
 
 /-- [match_index::first_child]:
-    Source: 'tests/src/match_index.rs', lines 17:0-23:1
+    Source: 'tests/src/match_index.rs', lines 25:0-31:1
     Visibility: public -/
 def first_child (l : Links) : Result (Std.U32 × Links) := do
   let o ← Array.index_usize l.child 0#usize
@@ -58,7 +58,7 @@ def first_child (l : Links) : Result (Std.U32 × Links) := do
               else ok (1#u32, l)
 
 /-- [match_index::modified]:
-    Source: 'tests/src/match_index.rs', lines 27:0-32:1
+    Source: 'tests/src/match_index.rs', lines 35:0-40:1
     Visibility: public -/
 def modified
   (a : Array (Option Std.U32) 2#usize) : Result (Option Std.U32) := do

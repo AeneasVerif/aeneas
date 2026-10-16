@@ -84,7 +84,7 @@ def mul_shift_all
   ok i
 
 /-- [ryu_raw_pointers::d2d_bounds]:
-    Source: 'tests/src/ryu-raw-pointers.rs', lines 42:0-56:1
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 42:0-49:1
     Visibility: public -/
 def d2d_bounds
   (m : Std.U64) (mm_shift : Std.U32) :
@@ -103,13 +103,13 @@ def d2d_bounds
   ok (vr, vp, vm)
 
 /-- [ryu_raw_pointers::Buffer]
-    Source: 'tests/src/ryu-raw-pointers.rs', lines 58:0-60:1
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 51:0-53:1
     Visibility: public -/
 structure Buffer where
   bytes : Array (MaybeUninit Std.U8) 24#usize
 
 /-- [ryu_raw_pointers::{ryu_raw_pointers::Buffer}::new]:
-    Source: 'tests/src/ryu-raw-pointers.rs', lines 63:4-66:5
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 56:4-59:5
     Visibility: public -/
 def Buffer.new : Result Buffer := do
   let mu ← core.mem.maybe_uninit.MaybeUninit.uninit Std.U8
@@ -117,7 +117,7 @@ def Buffer.new : Result Buffer := do
   ok { bytes }
 
 /-- [ryu_raw_pointers::{ryu_raw_pointers::Buffer}::format_exponent]:
-    Source: 'tests/src/ryu-raw-pointers.rs', lines 68:4-73:5
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 61:4-66:5
     Visibility: public -/
 def Buffer.format_exponent
   (self : Buffer) (k : Std.Isize) :
@@ -140,7 +140,7 @@ def Buffer.format_exponent
   ok (s3, r)
 
 /-- [ryu_raw_pointers::first_char_of_exponent]:
-    Source: 'tests/src/ryu-raw-pointers.rs', lines 76:0-80:1
+    Source: 'tests/src/ryu-raw-pointers.rs', lines 69:0-73:1
     Visibility: public -/
 def first_char_of_exponent (k : Std.Isize) : Result Std.U8 := do
   let buf ← Buffer.new
