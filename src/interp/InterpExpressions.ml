@@ -457,6 +457,12 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
               [%cassert] span (ref_kind = RShared)
                 "Mutable references for lifetime 'static are not supported";
               let sval = mk_fresh_symbolic_tvalue span ctx ty_inner in
+              (* The value may contain static borrows: we need to project their
+                 loans *)
+              let ctx =
+                push_static_loans_proj_for_symbolic_value span ctx
+                  (value_as_symbolic span sval.value)
+              in
               (* Create a shared loan containing the constant (in a region
                  abstraction owning the static region), as well as a shared
                  borrow *)
@@ -477,6 +483,13 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
           | _ ->
               [%ldebug "not a static ref"];
               let v = mk_fresh_symbolic_tvalue span ctx ty in
+              (* The value may contain static borrows (hidden in ADTs, for
+                 instance [struct S(&'static u8)]): we need to project their
+                 loans *)
+              let ctx =
+                push_static_loans_proj_for_symbolic_value span ctx
+                  (value_as_symbolic span v.value)
+              in
               (* Wrap the generated expression *)
               let cf e =
                 SymbolicAst.IntroSymbolic
