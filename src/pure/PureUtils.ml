@@ -259,6 +259,7 @@ let compute_literal_type (cv : literal) : ty =
   | VStr _ -> TAdt (TBuiltin TStr, empty_generic_args)
   | VPureNat _ -> TLiteral TPureNat
   | VPureInt _ -> TLiteral TPureInt
+  | VPureString _ -> TLiteral TPureString
   | VByteStr _ -> [%craise_opt_span] None "Byte string literals are unsupported"
 
 let fvar_get_id (v : fvar) : fvar_id = v.id
@@ -1713,11 +1714,11 @@ let mk_massert_texpr (span : Meta.span) (scrut : texpr) : texpr =
     has type [bool], where [feature] is a target feature such as ["avx2"]. *)
 let mk_target_feature_enabled_texpr (span : Meta.span) (feature : string) :
     texpr =
-  let str_ty = TAdt (TBuiltin TStr, empty_generic_args) in
+  let str_ty = TLiteral TPureString in
   let id = FunOrOp (Fun (Pure TargetFeatureEnabled)) in
   let qualif = Qualif { id; generics = empty_generic_args } in
   let qualif = { e = qualif; ty = mk_arrow str_ty mk_bool_ty } in
-  [%add_loc] mk_app span qualif { e = Const (VStr feature); ty = str_ty }
+  [%add_loc] mk_app span qualif { e = Const (VPureString feature); ty = str_ty }
 
 let append_generic_args (g0 : generic_args) (g1 : generic_args) : generic_args =
   {

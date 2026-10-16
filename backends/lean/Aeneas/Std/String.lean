@@ -26,9 +26,9 @@ theorem ByteArray.length_toList (bs : ByteArray) :
   rw [loop_length 0 [] (Nat.zero_le _)]
   simp
 
-/-- TODO: we shouldn't use `decide +native` but it seems we can't reduce it otherwise. -/
+/-- Convert a Lean `String` literal to a Rust `str`. -/
 @[expose]
-def toStr (s : String) (h : s.toByteArray.size ≤ U32.max := by decide +native) : Str :=
+def toStr (s : String) (h : s.toByteArray.size ≤ U32.max := by rw [U32.max_eq]; decide +kernel) : Str :=
   .from (s.toByteArray.toList.map
     (fun x => ⟨ x.toNat, by cases x; simp only [UInt8.toNat_ofBitVec, UScalarTy.U8_numBits_eq, Nat.reducePow]; omega  ⟩))
     (by
@@ -38,5 +38,7 @@ def toStr (s : String) (h : s.toByteArray.size ≤ U32.max := by decide +native)
       exact h.trans (by scalar_tac))
 
 example : Str := toStr "hello"
+example : Str := toStr "héllo ∀"
+example : Str := toStr ""
 
 end Aeneas.Std
