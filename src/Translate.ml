@@ -311,6 +311,348 @@ type translated_crate = {
   trait_impls : Pure.trait_impl list;
 }
 
+(** Impl-level associated constants can refer to their own trait implementation
+    through [Self::ASSOC]. Lean cannot define such a constant by referring to
+    the impl record before [impl_def] has introduced it. We break the cycle in
+    the same way as trait-declaration defaults: add the current trait instance
+    as a parameter, rewrite self-references in the body to use that parameter,
+    and pass the concrete impl at every use site. *)
+type impl_const_self_clause_info = {
+  impl_id : TraitImplId.id;
+  span : Meta.span;
+  body_id : FunDeclId.id;
+  original_generics : Pure.generic_params;
+  original_llbc_generics : Types.generic_params;
+  self_clause : Pure.trait_param;
+  self_llbc_clause : Types.trait_param;
+  self_trait_ref : Pure.trait_ref;
+}
+
+let next_trait_clause_id (clauses : Pure.trait_param list) : TraitClauseId.id =
+  let next =
+    List.fold_left
+      (fun acc (clause : Pure.trait_param) ->
+        Stdlib.max acc (TraitClauseId.to_int clause.clause_id + 1))
+      0 clauses
+  in
+  TraitClauseId.of_int next
+
+let mk_impl_const_self_clause_info (trans_ctx : trans_ctx)
+    (global : Pure.global_decl) (impl_ref : Types.trait_impl_ref)
+    (trait_ref : Types.trait_decl_ref) : impl_const_self_clause_info =
+  let span = Some global.span in
+  let translate_ty = SymbolicToPureTypes.translate_fwd_ty span trans_ctx in
+  let trait_decl_ref =
+    SymbolicToPureTypes.translate_trait_decl_ref span translate_ty trait_ref
+  in
+  let impl_generics =
+    SymbolicToPureTypes.translate_generic_args span translate_ty
+      impl_ref.generics
+  in
+  let self_trait_ref : Pure.trait_ref =
+    { trait_id = Pure.TraitImpl (impl_ref.id, impl_generics); trait_decl_ref }
+  in
+  let clause_id = next_trait_clause_id global.generics.trait_clauses in
+  let self_clause : Pure.trait_param =
+    {
+      clause_id;
+      trait_id = trait_decl_ref.trait_decl_id;
+      generics = trait_decl_ref.decl_generics;
+    }
+  in
+  let self_llbc_clause : Types.trait_param =
+    {
+      clause_id;
+      span;
+      origin = Types.TraitSelf;
+      trait =
+        {
+          binder_regions = [];
+          regions_outlive = [];
+          types_outlive = [];
+          binder_value = trait_ref;
+        };
+    }
+  in
+  {
+    impl_id = impl_ref.id;
+    span = global.span;
+    body_id = global.body_id;
+    original_generics = global.generics;
+    original_llbc_generics = global.llbc_generics;
+    self_clause;
+    self_llbc_clause;
+    self_trait_ref;
+  }
+
+let fun_body_references_trait_impl (impl_id : TraitImplId.id)
+    (f : Pure.fun_decl) : bool =
+  let found = ref false in
+  let visitor =
+    object
+      inherit [_] Pure.iter_expr as super
+
+      method! visit_trait_instance_id env trait_id =
+        (match trait_id with
+        | Pure.TraitImpl (id, _) when id = impl_id -> found := true
+        | _ -> ());
+        super#visit_trait_instance_id env trait_id
+    end
+  in
+  Option.iter
+    (fun (body : Pure.fun_body) -> visitor#visit_texpr () body.body)
+    f.body;
+  !found
+
+let recompute_fun_sig_generic_info (signature : Pure.fun_sig)
+    (generics : Pure.generic_params) (llbc_generics : Types.generic_params) :
+    Pure.fun_sig =
+  let explicit_info =
+    PureUtils.compute_explicit_info generics signature.inputs
+  in
+  let known_from_trait_refs =
+    PureUtils.compute_known_info explicit_info generics
+  in
+  {
+    signature with
+    generics;
+    llbc_generics;
+    explicit_info;
+    known_from_trait_refs;
+  }
+
+let subst_self_trait_ref_for_global_args (info : impl_const_self_clause_info)
+    (args : Pure.generic_args) : Pure.trait_ref =
+  let subst = PureUtils.make_subst_from_generics info.original_generics args in
+  let visitor =
+    object
+      inherit [_] PureUtils.subst_visitor
+    end
+  in
+  visitor#visit_trait_ref subst info.self_trait_ref
+
+let append_impl_const_self_arg
+    (infos : impl_const_self_clause_info GlobalDeclId.Map.t)
+    (global_id : GlobalDeclId.id) (args : Pure.generic_args) : Pure.generic_args
+    =
+  match GlobalDeclId.Map.find_opt global_id infos with
+  | None -> args
+  | Some info ->
+      [%sanity_check] info.span
+        (List.length args.trait_refs
+        = List.length info.original_generics.trait_clauses);
+      let self_ref = subst_self_trait_ref_for_global_args info args in
+      { args with trait_refs = args.trait_refs @ [ self_ref ] }
+
+let rewrite_impl_const_global_refs
+    (infos : impl_const_self_clause_info GlobalDeclId.Map.t) (f : Pure.fun_decl)
+    : Pure.fun_decl =
+  let visitor =
+    object
+      inherit [_] Pure.map_expr as super
+
+      method! visit_qualif env qualif =
+        let qualif = super#visit_qualif env qualif in
+        match qualif.id with
+        | Pure.Global global_id ->
+            {
+              qualif with
+              generics =
+                append_impl_const_self_arg infos global_id qualif.generics;
+            }
+        | _ -> qualif
+
+      method! visit_global_decl_ref env (gref : Pure.global_decl_ref) =
+        let gref = super#visit_global_decl_ref env gref in
+        {
+          gref with
+          global_generics =
+            append_impl_const_self_arg infos gref.global_id gref.global_generics;
+        }
+    end
+  in
+  let body =
+    Option.map
+      (fun (body : Pure.fun_body) ->
+        ({
+           inputs = List.map (visitor#visit_tpat ()) body.inputs;
+           body = visitor#visit_texpr () body.body;
+         }
+          : Pure.fun_body))
+      f.body
+  in
+  { f with body }
+
+let rewrite_impl_const_self_refs (info : impl_const_self_clause_info)
+    (f : Pure.fun_decl) : Pure.fun_decl =
+  let visitor =
+    object
+      inherit [_] Pure.map_expr as super
+
+      method! visit_trait_ref env (trait_ref : Pure.trait_ref) =
+        let trait_ref = super#visit_trait_ref env trait_ref in
+        match trait_ref.trait_id with
+        | Pure.TraitImpl (impl_id, _) when impl_id = info.impl_id ->
+            (* An impl id also identifies its other generic instantiations. Only
+               the current instantiation can use the Self clause. Keeping another
+               instantiation would still require a forward reference to the impl;
+               reject it instead of silently changing the constant's value. *)
+            [%cassert] info.span
+              (Pure.compare_trait_instance_id trait_ref.trait_id
+                 info.self_trait_ref.trait_id
+              = 0)
+              ("Impl-associated constants cannot yet refer to another "
+             ^ "instantiation of their own trait impl");
+            {
+              trait_ref with
+              trait_id = Pure.Clause (Free info.self_clause.clause_id);
+            }
+        | _ -> trait_ref
+    end
+  in
+  let body =
+    Option.map
+      (fun (body : Pure.fun_body) ->
+        ({
+           inputs = List.map (visitor#visit_tpat ()) body.inputs;
+           body = visitor#visit_texpr () body.body;
+         }
+          : Pure.fun_body))
+      f.body
+  in
+  { f with body }
+
+let add_impl_const_self_clause_to_global
+    (infos : impl_const_self_clause_info GlobalDeclId.Map.t)
+    (global : Pure.global_decl) : Pure.global_decl =
+  match GlobalDeclId.Map.find_opt global.def_id infos with
+  | None -> global
+  | Some info ->
+      let generics =
+        {
+          global.generics with
+          trait_clauses = global.generics.trait_clauses @ [ info.self_clause ];
+        }
+      in
+      let llbc_generics =
+        {
+          global.llbc_generics with
+          trait_clauses =
+            global.llbc_generics.trait_clauses @ [ info.self_llbc_clause ];
+        }
+      in
+      let explicit_info = PureUtils.compute_explicit_info generics [] in
+      { global with generics; llbc_generics; explicit_info }
+
+let add_impl_const_self_clause_to_fun
+    (infos_by_body : impl_const_self_clause_info FunDeclId.Map.t)
+    (f : Pure.fun_decl) : Pure.fun_decl =
+  match FunDeclId.Map.find_opt f.def_id infos_by_body with
+  | None -> f
+  | Some info ->
+      let generics =
+        {
+          f.signature.generics with
+          trait_clauses =
+            f.signature.generics.trait_clauses @ [ info.self_clause ];
+        }
+      in
+      let llbc_generics =
+        {
+          f.signature.llbc_generics with
+          trait_clauses =
+            f.signature.llbc_generics.trait_clauses @ [ info.self_llbc_clause ];
+        }
+      in
+      let signature =
+        recompute_fun_sig_generic_info f.signature generics llbc_generics
+      in
+      { f with signature }
+
+let rewrite_impl_const_self_clause_fun
+    (infos_by_body : impl_const_self_clause_info FunDeclId.Map.t)
+    (infos_by_global : impl_const_self_clause_info GlobalDeclId.Map.t)
+    (f : Pure.fun_decl) : Pure.fun_decl =
+  let f = add_impl_const_self_clause_to_fun infos_by_body f in
+  let f =
+    match FunDeclId.Map.find_opt f.def_id infos_by_body with
+    | None -> f
+    | Some info -> rewrite_impl_const_self_refs info f
+  in
+  rewrite_impl_const_global_refs infos_by_global f
+
+let fix_impl_const_self_cycles (trans_ctx : trans_ctx)
+    (global_decls : Pure.global_decl list)
+    (pure_translations : pure_fun_translation list)
+    (trait_impls : Pure.trait_impl list) :
+    Pure.global_decl list * pure_fun_translation list * Pure.trait_impl list =
+  let body_funs =
+    FunDeclId.Map.of_list
+      (List.map
+         (fun (translation : pure_fun_translation) ->
+           (translation.f.def_id, translation.f))
+         pure_translations)
+  in
+  let infos =
+    List.filter_map
+      (fun (global : Pure.global_decl) ->
+        match global.src with
+        | TraitImplGlobal (impl_ref, trait_ref, _, _) -> (
+            match FunDeclId.Map.find_opt global.body_id body_funs with
+            | Some body when fun_body_references_trait_impl impl_ref.id body ->
+                Some
+                  ( global.def_id,
+                    mk_impl_const_self_clause_info trans_ctx global impl_ref
+                      trait_ref )
+            | _ -> None)
+        | _ -> None)
+      global_decls
+    |> GlobalDeclId.Map.of_list
+  in
+  if GlobalDeclId.Map.is_empty infos then
+    (global_decls, pure_translations, trait_impls)
+  else
+    let infos_by_body =
+      GlobalDeclId.Map.bindings infos
+      |> List.map (fun (_, info) -> (info.body_id, info))
+      |> FunDeclId.Map.of_list
+    in
+    let global_decls =
+      List.map (add_impl_const_self_clause_to_global infos) global_decls
+    in
+    let rewrite_fun = rewrite_impl_const_self_clause_fun infos_by_body infos in
+    let pure_translations =
+      List.map
+        (fun (translation : pure_fun_translation) ->
+          {
+            f = rewrite_fun translation.f;
+            loops = List.map rewrite_fun translation.loops;
+            bodies = List.map rewrite_fun translation.bodies;
+          })
+        pure_translations
+    in
+    let trait_impls =
+      List.map
+        (fun (impl : Pure.trait_impl) ->
+          let consts =
+            List.map
+              (fun (const_id, name, gref) ->
+                let (gref : Pure.global_decl_ref) = gref in
+                ( const_id,
+                  name,
+                  {
+                    gref with
+                    global_generics =
+                      append_impl_const_self_arg infos gref.global_id
+                        gref.global_generics;
+                  } ))
+              impl.consts
+          in
+          { impl with consts })
+        trait_impls
+    in
+    (global_decls, pure_translations, trait_impls)
+
 (* TODO: factor out the return type *)
 let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
     trans_ctx * translated_crate =
@@ -595,6 +937,10 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
   let pure_translations =
     Micro.apply_passes_to_pure_fun_translations crate trans_ctx type_decls
       trait_impls pure_translations
+  in
+  let global_decls, pure_translations, trait_impls =
+    fix_impl_const_self_cycles trans_ctx global_decls pure_translations
+      trait_impls
   in
 
   (* Return *)
