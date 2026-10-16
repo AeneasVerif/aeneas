@@ -282,7 +282,7 @@ and translate_target_dispatch (input_svs : V.symbolic_value list)
     (List.length targets >= 2)
     "TargetDispatchBody must have at least 2 targets";
 
-  let str_ty = TAdt (TBuiltin TStr, empty_generic_args) in
+  let str_ty = TLiteral TPureString in
 
   (* Translate the input symbolic values to pure expressions *)
   let input_exprs =
@@ -324,7 +324,9 @@ and translate_target_dispatch (input_svs : V.symbolic_value list)
   let tgt_expr = mk_texpr_from_fvar tgt_fvar in
 
   let mk_eq_scrut (target_name : string) : texpr =
-    let str_lit : texpr = { e = Const (VStr target_name); ty = str_ty } in
+    let str_lit : texpr =
+      { e = Const (VPureString target_name); ty = str_ty }
+    in
     let bool_ty = TLiteral TBool in
     let eq_qualif : qualif =
       { id = FunOrOp (Binop (Eq str_ty)); generics = empty_generic_args }
