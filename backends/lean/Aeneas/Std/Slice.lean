@@ -4,7 +4,7 @@ public import Aeneas.Data.List
 public import Aeneas.Std.Array.Core
 public import Aeneas.Std.Range
 public import Aeneas.Std.Core.Ops
-public import Aeneas.Std.RawPtr
+public import Aeneas.Std.Core.Ptr
 public import Aeneas.Tactic.Simp.SimpScalar.SimpScalar
 public import Aeneas.Std.SliceDef
 public section
@@ -56,6 +56,51 @@ abbrev Slice.len {α : Type u} (v : Slice α) : Usize :=
 @[simp, scalar_tac_simps, simp_scalar_safe, simp_lists_safe, grind =, agrind =]
 theorem Slice.len_val {α : Type u} (v : Slice α) : (Slice.len v).val = v.length :=
   by simp
+
+/-! Raw-pointer views of slices. The functional slice model has no address: `as_ptr`/`as_mut_ptr`
+copy the slice to a fresh view (`allocView`), freed when the borrow ends;
+`from_raw_parts(_mut)` move the slots out into a borrow (so that raw accesses while the slice is
+live fail). The returned back computations run when the borrow ends. -/
+
+/-- `borrowRange` of `len` slots, as a slice. -/
+def RawPtr.borrowSlice {T : Type} (q : RawPtr T M) (len : Usize) : Result (Slice T) := do
+  let values ← q.borrowRange len.val
+  if h : values.length ≤ Usize.max then .ok (Slice.from values h) else .fail .undef
+
+/-- End of the shared borrow of `as_ptr`: the slots must still hold `s` (writing through a const
+pointer cast to mut is UB), and the view is freed. -/
+def Slice.end_as_ptr {T : Type} (s : Slice T) (p : ConstRawPtr T) : Result Unit := do
+  let values ← p.readRange s.length
+  p.endView s.length
+  Result.require (values = s.val)
+
+def Slice.as_ptr {T : Type} (s : Slice T) : Result (ConstRawPtr T × Result Unit) :=
+  Aeneas.Std.bind (RawPtr.allocView s.val) fun p =>
+    .ok (p.cast_const, Slice.end_as_ptr s p.cast_const)
+
+/-- End of the mutable borrow of `as_mut_ptr`: the slots become the new slice, and the view is
+freed. -/
+def Slice.end_as_mut_ptr {T : Type} (s : Slice T) (p : MutRawPtr T) : Result (Slice T) := do
+  let values ← p.readRange s.length
+  p.endView s.length
+  if h : values.length ≤ Usize.max then .ok (Slice.from values h) else .fail .undef
+
+def Slice.as_mut_ptr {T : Type} (s : Slice T) : Result (MutRawPtr T × Result (Slice T)) :=
+  Aeneas.Std.bind (RawPtr.allocView s.val) fun p => .ok (p, Slice.end_as_mut_ptr s p)
+
+/-- Back function of `from_raw_parts_mut`: ends the borrow of the slots with the final slice. -/
+def core.slice.raw.from_raw_parts_mut.back {T : Type} (p : MutRawPtr T) (len : Usize)
+    (s : Slice T) : Result Unit :=
+  if s.length = len.val then p.endBorrowRange s.val else .fail .undef
+
+def core.slice.raw.from_raw_parts {T : Type} (p : ConstRawPtr T) (len : Usize) :
+    Result (Slice T × Result Unit) :=
+  Aeneas.Std.bind (p.borrowSlice len) fun s => .ok (s, p.endBorrowRange s.val)
+
+def core.slice.raw.from_raw_parts_mut {T : Type} (p : MutRawPtr T) (len : Usize) :
+    Result (Slice T × (Slice T → Result Unit)) :=
+  Aeneas.Std.bind (p.borrowSlice len) fun s =>
+    .ok (s, core.slice.raw.from_raw_parts_mut.back p len)
 
 instance {α : Type u} : GetElem (Slice α) Nat α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i h

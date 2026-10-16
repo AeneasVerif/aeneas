@@ -5,6 +5,7 @@ public import Aeneas.Extract
 public import AeneasMeta.BvEnumToBitVec
 public import Aeneas.Data.Coinductive.ITree
 public import Aeneas.Data.Coinductive.Effect
+public import Aeneas.Std.Heap
 public section
 
 namespace Aeneas
@@ -48,12 +49,15 @@ deriving Repr, BEq
 
 open Error
 
-inductive RustEffect.Input : Type where
+inductive RustEffect.Input : Type 1 where
+| guardedModify (α : Type) (pre : Heap → Prop)
+    (modify : (h : Heap) → pre h → α × Heap) : RustEffect.Input
 | fail : Error → RustEffect.Input
 
 @[implicit_reducible]
-def RustEffect.Output (i : RustEffect.Input) : Type :=
+def RustEffect.Output (i : RustEffect.Input) : Type 1 :=
   match i with
+  | .guardedModify α _ _ => ULift α
   | .fail _ => PEmpty
 
 @[implicit_reducible]
@@ -64,8 +68,12 @@ def RustEffect : Effect := {
 
 -- We need Result to be irreducible outside this file (to not break metaprograms which normalize
 -- types), but reducible within. The `unseal` command only affects the local scope.
+-- `Result α` lives at least in `Type 1` because of `RustEffect.Input`.
+-- Heap cells only hold values in `Type`, so a value containing a `Result`-returning function
+-- (a closure, a function pointer, a trait-instance structure) cannot be stored behind a raw pointer:
+-- that would need a higher-order store. Such pointers fail with a universe error.
 @[irreducible]
-def Result (α : Type u) : Type u := ITree RustEffect α
+def Result (α : Type u) : Type (max u 1) := ITree RustEffect α
 unseal Result
 attribute [local implicit_reducible] Result
 
@@ -99,7 +107,7 @@ def Result.cases {R}
     (div :  motive (Result.div))
     : motive t := ITree.cases ret div vis t
 
-inductive MatchResult (α : Type u) : Type u where
+inductive MatchResult (α : Type u) : Type (max u 1) where
 | ok : (a : α) → MatchResult α
 | div : MatchResult α
 | vis : (eff : RustEffect.Input) → (RustEffect.Output eff → Result α) → MatchResult α
@@ -107,7 +115,7 @@ inductive MatchResult (α : Type u) : Type u where
 /-!
 Can simulate a match on the Result type by matching on the output of this function.
 -/
-def Result.match.{u} {α : Type u} (r : Result α) : MatchResult α :=
+def Result.match {α : Type u} (r : Result α) : MatchResult α :=
   r.cases .ok .vis .div
 
 @[simp, grind =]
@@ -131,6 +139,7 @@ instance Result.reprInst {α : Type u} [Repr α] : Repr (Result α) where
     | .ok a => "Aeneas.Std.Result.ok " ++ repr a
     | .div => "Aeneas.Std.Result.div"
     | .vis (.fail e) _ => "Aeneas.Std.Result.fail " ++ repr e
+    | .vis (.guardedModify ..) _ => "Aeneas.Std.Result.guardedModify"
 
 /-!
 `Result` not being an inductive type it has no built-in constructor facts that grind
@@ -151,7 +160,10 @@ theorem Result.ok_injective {α} : Function.Injective (@Result.ok α) := by
 /-- `Result.fail` is opaque, so its injectivity has to be stated separately. -/
 @[grind inj]
 theorem Result.fail_injective {α} : Function.Injective (@Result.fail α) := by
-  intro a b h; simpa using congrArg Result.match h
+  intro a b h
+  have h := congrArg Result.match h
+  simp only [Result.match.fail, MatchResult.vis.injEq, RustEffect.Input.fail.injEq] at h
+  exact h.1
 
 /-! The disequality lemmas for the constructors of `Result`. They all follow from the fact that
 `Result.match` maps the constructors to *distinct* constructors of the inductive `MatchResult`. -/
@@ -332,12 +344,13 @@ section Order
 
 open Lean.Order
 
-instance : PartialOrder (Result α) := instPartialOrderCoIndOfInhabitedPUnit (ITreeF RustEffect α)
+instance : Lean.Order.PartialOrder (Result α) :=
+  instPartialOrderCoIndOfInhabitedPUnit (ITreeF RustEffect α)
 noncomputable instance : CCPO (Result α) := instCCPOCoIndOfInhabitedPUnit (ITreeF RustEffect α)
 noncomputable instance : MonoBind Result := instMonoBindITree
 
 @[partial_fixpoint_monotone]
-theorem bind_mono {R : Type a} {α} {S : Type b} [PartialOrder α]
+theorem bind_mono {R : Type a} {α} {S : Type b} [Lean.Order.PartialOrder α]
   (f : α → Result R) (g : α → R → Result S) :
   monotone f →
   monotone g →
@@ -391,8 +404,8 @@ open Lean.Order
 
 @[partial_fixpoint_monotone]
 theorem monotone_uncurry
-    {α : Type u} {β : Type v} {φ : Sort w} [PartialOrder φ]
-    {γ : Sort z} [PartialOrder γ]
+    {α : Type u} {β : Type v} {φ : Sort w} [Lean.Order.PartialOrder φ]
+    {γ : Sort z} [Lean.Order.PartialOrder γ]
     (f : γ → α → β → φ)
     (hmono : monotone f) :
     monotone (fun x => uncurry (f x)) := by
@@ -402,8 +415,8 @@ theorem monotone_uncurry
 
 @[partial_fixpoint_monotone]
 theorem monotone_uncurry_applied
-    {α : Type u} {β : Type v} {φ : Sort w} [PartialOrder φ]
-    {γ : Sort z} [PartialOrder γ]
+    {α : Type u} {β : Type v} {φ : Sort w} [Lean.Order.PartialOrder φ]
+    {γ : Sort z} [Lean.Order.PartialOrder γ]
     (f : γ → α → β → φ) (p : α × β)
     (hmono : monotone f) :
     monotone (fun x => uncurry (f x) p) := by
@@ -455,6 +468,14 @@ def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) 
   | ControlFlow.cont x => loop body x
   | ControlFlow.done x => ok x
 partial_fixpoint
+
+def Result.guardedModify {α : Type} (pre : Heap → Prop)
+    (modify : (h : Heap) → pre h → α × Heap) : Result α :=
+  Result.vis (.guardedModify α pre modify) fun answer =>
+    Result.ok answer.down
+
+def Result.require (p : Prop) : Result Unit :=
+  Result.guardedModify (fun _ => p) fun h _ => ((), h)
 
 end
 

@@ -1,7 +1,8 @@
 /- `core::ptr` -/
 module
 public import Aeneas.Std.Core.Core
-public import Aeneas.Std.RawPtr
+public import Aeneas.Std.Heap
+public import Aeneas.Std.Scalar.Core
 public section
 
 namespace Aeneas.Std
@@ -74,8 +75,108 @@ inductive core.ptr.alignment.AlignmentEnum where
 | _Align1Shl62 : core.ptr.alignment.AlignmentEnum
 | _Align1Shl63 : core.ptr.alignment.AlignmentEnum
 
-@[expose, reducible, rust_type "core::ptr::alignment::Alignment"]
-def core.ptr.alignment.Alignment :=
-core.ptr.alignment.AlignmentEnum
+@[reducible, rust_type "core::ptr::alignment::Alignment"]
+def core.ptr.alignment.Alignment := core.ptr.alignment.AlignmentEnum
+
+class IsScalar (T : Type) where
+  isScalar : (∃ ty, T = UScalar ty) ∨ (∃ ty, T = IScalar ty)
+
+instance {ty} : IsScalar (UScalar ty) where
+  isScalar := by simp
+
+instance {ty} : IsScalar (IScalar ty) where
+  isScalar := by simp
+
+/-- Always fails. TODO: the typed heap cannot read a cell at another scalar type, so casts are not
+modelled. -/
+def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability) [IsScalar T] [IsScalar T']
+    (_ : RawPtr T M) : Result (RawPtr T' M') :=
+  .fail .undef
+
+/-- `add` stays in bounds: the slots it steps over hold values. -/
+def RawPtr.InBounds (q : RawPtr T M) (count : Nat) (h : Heap) : Prop :=
+  ∀ i < count, Heap.IsLive h (q.loc.shift i)
+
+@[rust_fun "core::ptr::mut_ptr::{*mut @T}::add"]
+def RawPtr.add (q : RawPtr T M) (count : Usize) : Result (RawPtr T M) :=
+  Result.guardedModify (fun h => q.InBounds count.val h) fun h _ => (q.shift count.val, h)
+
+attribute [rust_fun "core::ptr::const_ptr::{*const @T}::add"] RawPtr.add
+
+@[rust_fun "core::ptr::mut_ptr::{*mut @T}::cast_const" -canFail -lift]
+def RawPtr.cast_const (q : MutRawPtr T) : ConstRawPtr T :=
+  ⟨q.loc⟩
+
+namespace RawPtr
+
+@[rust_fun "core::ptr::const_ptr::{*const @T}::read"]
+def read (q : RawPtr T M) : Result T :=
+  Result.guardedModify _ (Heap.read q)
+
+attribute [rust_fun "core::ptr::mut_ptr::{*mut @T}::read"] read
+attribute [rust_fun "core::ptr::read"] read
+
+end RawPtr
+
+@[rust_fun "core::ptr::mut_ptr::{*mut @T}::write"]
+def MutRawPtr.write (q : MutRawPtr T) (value : T) : Result Unit :=
+  Result.guardedModify _ (Heap.write q value)
+
+attribute [rust_fun "core::ptr::write"] MutRawPtr.write
+
+/-! ### Heap-model operations
+Aeneas builds its models of Rust's raw-pointer functions (`from_mut`, `as_ptr`, `as_mut_ptr`,
+`from_raw_parts`, `from_raw_parts_mut`) from the operations below, which act on the model's heap
+directly. -/
+
+/-- Dereferences `q` and marks its slot as borrowed, so that every access to the slot through a raw
+pointer fails until the borrow is ended with `endBorrow`. -/
+def RawPtr.borrow (q : RawPtr T M) : Result T :=
+  Result.guardedModify _ (Heap.borrow q)
+
+def RawPtr.endBorrow (q : RawPtr T M) (value : T) : Result Unit :=
+  Result.guardedModify _ (Heap.endBorrow q value)
+
+def RawPtr.borrowRange (q : RawPtr T M) : Nat → Result (List T)
+  | 0 => .ok []
+  | n + 1 => do
+    let value ← q.borrow
+    let values ← (q.shift 1).borrowRange n
+    .ok (value :: values)
+
+/-- `endBorrow` on the `values.length` slots from `q` on. -/
+def RawPtr.endBorrowRange (q : RawPtr T M) : List T → Result Unit
+  | [] => .ok ()
+  | value :: values => do
+    q.endBorrow value
+    (q.shift 1).endBorrowRange values
+
+/-- `read` on the `n` slots from `q` on. -/
+def RawPtr.readRange (q : RawPtr T M) : Nat → Result (List T)
+  | 0 => .ok []
+  | n + 1 => do
+    let value ← q.read
+    let values ← (q.shift 1).readRange n
+    .ok (value :: values)
+
+/-- Allocates a raw-pointer view of a place that the functional translation represents as a plain
+value, without an address. Used by `from_mut`, `as_ptr` and `as_mut_ptr`. The view is a fresh
+allocation holding a copy of `values`, which only `endView` frees (`AllocKind.view`). -/
+def RawPtr.allocView (values : List T) : Result (MutRawPtr T) :=
+  Result.guardedModify (fun _ => True) fun h _ => h.alloc values .view
+
+def RawPtr.endView (q : RawPtr T M) (count : Nat) : Result Unit :=
+  Result.guardedModify _ (Heap.dealloc q count .view)
+
+/-- Back function of `from_mut`: reads the value, with the writes made through the pointer, and
+ends the view, so that the pointer can't be used anymore. -/
+def core.ptr.end_from_mut (p : MutRawPtr T) : Result T := do
+  let value ← p.read
+  p.endView 1
+  .ok value
+
+/-- The pointer is a view of `r`; the back computation runs when the borrow ends. -/
+def core.ptr.from_mut (r : T) : Result (MutRawPtr T × Result T) :=
+  Aeneas.Std.bind (RawPtr.allocView [r]) fun p => .ok (p, core.ptr.end_from_mut p)
 
 end Aeneas.Std

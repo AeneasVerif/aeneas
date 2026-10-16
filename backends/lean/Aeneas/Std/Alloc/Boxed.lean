@@ -1,7 +1,8 @@
-/- `alloc::boxed`: `Box<T>` is `T` in the extracted code. -/
+/- `alloc::boxed`: `Box<T>` is `T` in the extracted Lean code, and `into_raw`/`from_raw` move the value
+into and out of a allocation of the global allocator. -/
 module
 public import Aeneas.Std.Alloc.Alloc
-public import Aeneas.Std.Core.Ops
+public import Aeneas.Std.Core.Ptr
 public import Aeneas.Std.Core.Cmp
 public import Aeneas.Std.Core.Convert
 public section
@@ -61,5 +62,17 @@ def core.cmp.PartialEqBox {T : Type _} (PartialEqInst : core.cmp.PartialEq T T) 
   core.cmp.PartialEq T T := {
   eq := alloc.boxed.PartialEqBox.eq PartialEqInst
 }
+
+/-- Allocates a pointer using `Global.allocate`, as creating a Box in Rust would do --/
+@[rust_fun "alloc::boxed::{Box<@T>}::into_raw"]
+def alloc.boxed.Box.into_raw (b : T) : Result (MutRawPtr T) :=
+  Global.mk.allocate [b]
+
+/-- Frees the `Box` using `Global.deallocate`, as dropping a Box in Rust would do --/
+@[rust_fun "alloc::boxed::{Box<@T>}::from_raw"]
+def alloc.boxed.Box.from_raw (p : MutRawPtr T) : Result T := do
+  let value ← RawPtr.read p
+  Global.mk.deallocate p 1
+  pure value
 
 end Aeneas.Std
