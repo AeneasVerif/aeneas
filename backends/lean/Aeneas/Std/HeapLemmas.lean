@@ -719,6 +719,20 @@ theorem read_of_subheap {α : Type} {q : RawPtr α M} {value : α} {h : Heap}
     read_union_left hValidSingleton, read_singleton]
   rfl
 
+/-- `read` leaves the heap alone. -/
+theorem read_snd {α : Type} {h : Heap} {q : RawPtr α M} (hValid : IsValid h q) :
+    (h.read q hValid).2 = h := by
+  unfold Heap.read
+  split
+  · rename_i hLookup
+    simp [IsValid, hLookup] at hValid
+  · rfl
+
+/-- `borrow` returns the value that `read` returns. -/
+theorem borrow_fst {α : Type} {h : Heap} {q : RawPtr α M} (hValid : IsValid h q) :
+    (h.borrow q hValid).1 = (h.read q hValid).1 := by
+  unfold Heap.borrow; rfl
+
 theorem isBorrowed_union_left {h₁ h₂ : Heap} {l : Loc} (hBorrowed : IsBorrowed h₁ l) :
     IsBorrowed (h₁ ∪ h₂) l := by
   show Finmap.lookup l (h₁.impl ∪ h₂.impl) = _

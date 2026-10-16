@@ -26,8 +26,9 @@ partial_fixpoint
 macro "prove_admissible" : tactic =>
   `(tactic| (
       (repeat' apply curry_admissible)
-      (repeat' (apply Lean.Order.admissible_pi ; intro))
-      (apply WP.dspec_func_admissible)
+      (repeat' (first
+        | apply WP.dspec_func_admissible
+        | (apply Lean.Order.admissible_pi ; intro)))
   )
   )
 

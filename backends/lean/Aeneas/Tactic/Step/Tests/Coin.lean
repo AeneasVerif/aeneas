@@ -85,15 +85,6 @@ instance : MonadLift Result ITreeC where
   | .ok a => .ret a
   | _ => .div -- TODO
 
-theorem spec_coinSpec {α} {x : Result α} {p: Post α} : spec x p → coinSpec p x := by
-  intros s
-  cases x
-  · apply coinSpec.ret
-    simp [spec_ok] at s
-    assumption
-  · simp at s
-  · simp at s
-
 @[simp]
 theorem qimp_coinSpec_unit {α} (P : Unit → Prop) (k : Unit → ITreeC α) (Q : α → Prop) :
   qimp_coinSpec P k Q ↔ (P () → coinSpec Q (k ())) := by
@@ -158,11 +149,9 @@ meta def prepareIntroOutputs : PrepareIntroOutputs := do
   mk_spec_bind_skip_args := 4
   prepare_intro_outputs := ``prepareIntroOutputs
   to_mvcgen := .none
-  liftings := #[
-    { from_statement := ``Std.WP.spec
-      conversion_thm := ``spec_coinSpec
-      conversion_thm_inferred_args := 3 }
-  ]
+  /- No lifting from `spec`: the `MonadLift Result ITreeC` instance above sends every effect,
+     `guardedModify` included, to `.div`, so `spec x p → coinSpec p x` does not hold. -/
+  liftings := #[]
 }
 
 instance : Monad ITreeC := instMonadITree
