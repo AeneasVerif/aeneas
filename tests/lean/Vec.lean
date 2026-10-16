@@ -21,7 +21,7 @@ set_option maxRecDepth 2048
 namespace vec
 
 /-- [vec::use_extend_from_slice]:
-    Source: 'tests/src/vec.rs', lines 5:0-7:1 -/
+    Source: 'tests/src/vec.rs', lines 7:0-9:1 -/
 def use_extend_from_slice
   {T : Type _} (corecloneCloneInst : core.clone.Clone T) (v : alloc.vec.Vec T)
   (s : Slice T) :
@@ -30,18 +30,84 @@ def use_extend_from_slice
   alloc.vec.Vec.extend_from_slice corecloneCloneInst v s
 
 /-- [vec::use_alloc_with_capacity]:
-    Source: 'tests/src/vec.rs', lines 9:0-11:1 -/
+    Source: 'tests/src/vec.rs', lines 11:0-13:1 -/
 def use_alloc_with_capacity
   (T : Type _) (n : Std.Usize) : Result (alloc.vec.Vec T) := do
   ok (alloc.vec.Vec.with_capacity T n)
 
 /-- [vec::from_elem]:
-    Source: 'tests/src/vec.rs', lines 13:0-15:1 -/
+    Source: 'tests/src/vec.rs', lines 15:0-17:1 -/
 def from_elem
   {T : Type _} (corecloneCloneInst : core.clone.Clone T) (x : T)
   (n : Std.Usize) :
   Result (alloc.vec.Vec T)
   := do
   alloc.vec.from_elem corecloneCloneInst x n
+
+/-- [vec::test_insert_empty]:
+    Source: 'tests/src/vec.rs', lines 20:0-25:1
+    Visibility: public -/
+def test_insert_empty : Result Unit := do
+  let v ← alloc.vec.Vec.insert (alloc.vec.Vec.new Std.U32) 0#usize 42#u32
+  let i := alloc.vec.Vec.len v
+  massert (i = 1#usize)
+  let i1 ←
+    alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32) v
+      0#usize
+  massert (i1 = 42#u32)
+
+/- Unit test for [vec::test_insert_empty] -/
+#guard (test_insert_empty).reducesTo ()
+
+/-- [vec::test_insert_at_len]:
+    Source: 'tests/src/vec.rs', lines 28:0-37:1
+    Visibility: public -/
+def test_insert_at_len : Result Unit := do
+  let v ← alloc.vec.Vec.push (alloc.vec.Vec.new Std.U32) 10#u32
+  let v1 ← alloc.vec.Vec.push v 20#u32
+  let i := alloc.vec.Vec.len v1
+  let v2 ← alloc.vec.Vec.insert v1 i 30#u32
+  let i1 := alloc.vec.Vec.len v2
+  massert (i1 = 3#usize)
+  let i2 ←
+    alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32) v2
+      0#usize
+  massert (i2 = 10#u32)
+  let i3 ←
+    alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32) v2
+      1#usize
+  massert (i3 = 20#u32)
+  let i4 ←
+    alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32) v2
+      2#usize
+  massert (i4 = 30#u32)
+
+/- Unit test for [vec::test_insert_at_len] -/
+#guard (test_insert_at_len).reducesTo ()
+
+/-- [vec::test_insert_middle]:
+    Source: 'tests/src/vec.rs', lines 40:0-49:1
+    Visibility: public -/
+def test_insert_middle : Result Unit := do
+  let v ← alloc.vec.Vec.push (alloc.vec.Vec.new Std.U32) 10#u32
+  let v1 ← alloc.vec.Vec.push v 20#u32
+  let v2 ← alloc.vec.Vec.insert v1 1#usize 99#u32
+  let i := alloc.vec.Vec.len v2
+  massert (i = 3#usize)
+  let i1 ←
+    alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32) v2
+      0#usize
+  massert (i1 = 10#u32)
+  let i2 ←
+    alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32) v2
+      1#usize
+  massert (i2 = 99#u32)
+  let i3 ←
+    alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32) v2
+      2#usize
+  massert (i3 = 20#u32)
+
+/- Unit test for [vec::test_insert_middle] -/
+#guard (test_insert_middle).reducesTo ()
 
 end vec
