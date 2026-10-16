@@ -1,0 +1,5 @@
+[[92mInfo[39m ] Imported: tests/llbc/raw_pointers_negative_packed_cast.llbc
+[[91mError[39m] Unsupported: pointer casts of a type which mentions boxes, references or packed/aligned types (found: [raw_pointers_negative_packed_cast::PackedWord; 2usize])
+Source: 'tests/src/raw_pointers_negative_packed_cast.rs', lines 9:0-11:1
+Compiler source: symbolic/SymbolicToPureExpressions.ml, line 402
+

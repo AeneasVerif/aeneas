@@ -5,10 +5,10 @@ open Aeneas Aeneas.Std Aeneas.SepLogic Aeneas.Std.WP Result
 namespace raw_pointers
 
 /-- Read through the pointer to the first slot of a range. -/
-theorem read_head.spec {T : Type} {M} (q : RawPtr T M) (values : List T)
-    (h : 0 < values.length) :
+theorem read_head.spec {T : Type} [Pointee T] [Pointee.Lawful T] {M} (q : RawPtr T M)
+    (values : List T) (h : 0 < values.length) (hAlign : q.Aligned) :
     ⦃ q ↦* values ⦄ q.read ⦃ r => ⌜r = values[0]⌝ ∗ q ↦* values ⦄ := by
-  simpa using RawPtr.read.spec_range q values 0 h
+  simpa using RawPtr.read.spec_range q values 0 h hAlign
 
 theorem read_via_ptr.spec (data : Array U16 8#usize) :
     ⦃ emp ⦄ read_via_ptr data ⦃ r => ⌜r = data[1]!⌝ ⦄ := by
@@ -94,7 +94,9 @@ theorem set_via_slice.spec (p : MutRawPtr U8) (len : Usize) (v : U8) (vs : List 
     (h : (v :: vs).length = len.val) :
     ⦃ p ↦* (v :: vs) ⦄ set_via_slice p len ⦃ p ↦* (1#u8 :: vs) ⦄ := by
   unfold set_via_slice
-  step* 2
+  step* 1
+  case hNotNull => apply RawPtr.notNull_of_pos; simp; scalar_tac
+  step* 1
   subst_vars
   rw [show (1#u8 :: vs) = (s.set 0#usize 1#u8).val by simp [s_post]]
   step with core.slice.raw.from_raw_parts_mut.back.spec p len (s.set 0#usize 1#u8)
@@ -106,6 +108,8 @@ theorem sum_via_slice.spec (p : ConstRawPtr U8) (len : Usize) (vs : List U8)
       ⦃ r => ⌜r.val = (vs[0].val + vs[1].val) % 256⌝ ∗ p ↦* vs ⦄ := by
   unfold sum_via_slice
   step* 4
+  try (case hNotNull => apply RawPtr.notNull_of_pos; simp; scalar_tac)
+  try step* 1
   subst from_raw_parts_back_post
   rw [vs_post]
   step*

@@ -81,13 +81,15 @@ section
 
 unseal Result
 
-example (p : MutRawPtr Nat) (Q : IPost Nat) : ¬ dispec emp (read p) Q := by
+/- Partial correctness still rejects an access to a cell which is not in the heap. -/
+example (p : MutRawPtr Nat) (Q : IPost (Option Nat)) :
+    ¬ dispec emp (Aeneas.Std.HeapOp.read Nat p.loc) Q := by
   intro hTriple
   rw [dispec_iff] at hTriple
   have hSpec := hTriple emp ∅ ((entails_of_eq (sep_emp_r_eq emp).symm) ∅ trivial)
-  simp only [Aeneas.Std.RawPtr.read, Result.guardedModify] at hSpec
+  simp only [Aeneas.Std.HeapOp.read, Result.guardedModify] at hSpec
   obtain ⟨hContains, -⟩ := hSpec.vis_view
-  exact Heap.not_isValid_empty p.cellPtr hContains.valid
+  exact Heap.not_isValid_empty _ hContains
 
 end
 

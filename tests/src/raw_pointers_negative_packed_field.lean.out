@@ -1,0 +1,5 @@
+[[92mInfo[39m ] Imported: tests/llbc/raw_pointers_negative_packed_field.llbc
+[[91mError[39m] Unsupported: raw borrows of fields of packed types
+Source: 'tests/src/raw_pointers_negative_packed_field.rs', lines 13:12-13:26
+Compiler source: PrePasses.ml, line 2671
+

@@ -1,0 +1,5 @@
+[[92mInfo[39m ] Imported: tests/llbc/raw_pointers_negative_generic_box.llbc
+[[91mError[39m] Unsupported: instantiation of a generic function accessing the heap of a type which mentions boxes, references or packed/aligned types (found: alloc::boxed::Box<u32>)
+Source: 'tests/src/raw_pointers_negative_generic_box.rs', lines 10:0-12:1
+Compiler source: symbolic/SymbolicToPureExpressions.ml, line 402
+

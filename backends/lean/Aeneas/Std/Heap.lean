@@ -8,7 +8,11 @@ Supports interior pointers, stored pointers, uninitialized memory, provenance by
 Freed slots stay in the map so allocation ids are never reused. The end of
 an allocation also records its `AllocKind`: whether it comes from the global allocator or is a
 raw-pointer view. Each kind is deallocated only its own way, and only whole, otherwise UB.
-Not supported: byte-level representation/type punning,
+The byte representation of integers, `bool` and arrays of them (byte cells) is described by
+`Pointee` (see `Core/Ptr.lean`): a value is stored in several cells, and memory can be read at
+another type with the same cells. Allocation ids tell the alignment of the allocations
+(`freshAllocId`).
+Not supported: byte layouts of structures and enums, the bytes of pointers,
 pointer-integer casts, higher-order store, permissions, the byte-level allocator API
 (`std::alloc::alloc`, `Layout`). -/
 
@@ -18,7 +22,7 @@ namespace Aeneas.Std
 
 abbrev AllocId := Nat
 
-structure Loc where
+@[ext] structure Loc where
   allocId : AllocId
   offset : Nat
   deriving DecidableEq, Inhabited
@@ -132,7 +136,9 @@ meta def delabRawPtr : Delab := do
 
 namespace RawPtr
 
-def shift (q : RawPtr T M) (i : Nat) : RawPtr T M :=
+/-- `q` moved `i` cells forward. Pointer arithmetic counts values (`RawPtr.shift`, which moves by
+the number of cells of the pointee): this is for the cells themselves. -/
+def shiftCells (q : RawPtr T M) (i : Nat) : RawPtr T M :=
   ⟨q.loc.shift i⟩
 
 end RawPtr
@@ -183,18 +189,26 @@ def array (l : Loc) : List (Option α) → Heap
 def allocation (l : Loc) (contents : List (Option α)) (kind : AllocKind) : Heap :=
   array l contents ∪ endMarker (l.shift contents.length) kind
 
-def freshAllocId (h : Heap) : AllocId :=
-  (h.keys.image Loc.allocId).sup id + 1
+/-- The next allocation identifier, past every one in the heap: allocation is deterministic. Since
+freed slots and end markers stay in the heap, an identifier is never handed out twice.
 
-def freshLoc (h : Heap) : Loc := ⟨freshAllocId h, 0⟩
+The identifier also tells how the allocation is aligned: it is an odd multiple of `align`
+(`align` is a power of two, the alignment of the type of the values stored in the allocation), so
+that the largest power of two dividing it is the alignment Rust guarantees for the allocation (see
+`RawPtr.Aligned`). It is never `0`, the allocation of the null pointer. -/
+def freshAllocId (h : Heap) (align : Nat) : AllocId :=
+  max align 1 * (2 * ((h.keys.image Loc.allocId).sup id + 1) + 1)
+
+def freshLoc (h : Heap) (align : Nat) : Loc := ⟨freshAllocId h align, 0⟩
 
 /-- `h'` is `h` extended with cells that `h` does not own. -/
 def Subheap (h h' : Heap) : Prop :=
   ∃ rest, Heap.Compatible h rest ∧ h' = h ∪ rest
 
-/-- Creates a fresh allocation in the heap: fresh memory is mutable in Rust. -/
-def alloc (contents : List (Option α)) (kind : AllocKind) (h : Heap) : MutRawPtr α × Heap :=
-  (⟨freshLoc h⟩, allocation (freshLoc h) contents kind ∪ h)
+/-- Creates a fresh allocation in the heap, aligned to `align`: fresh memory is mutable in Rust. -/
+def alloc (align : Nat) (contents : List (Option α)) (kind : AllocKind) (h : Heap) :
+    MutRawPtr α × Heap :=
+  (⟨freshLoc h align⟩, allocation (freshLoc h align) contents kind ∪ h)
 
 /-- `q` points to a live cell of type `α`, initialized or not. -/
 def IsValid (h : Heap) (q : RawPtr α M) : Prop :=

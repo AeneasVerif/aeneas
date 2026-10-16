@@ -81,17 +81,19 @@ def NonNull.Insts.CoreMarkerCopy (T : Type _) : core.marker.Copy (NonNull T) := 
 /-- See `RawPtr.eq`. -/
 @[rust_fun
   "core::ptr::non_null::{core::cmp::PartialEq<core::ptr::non_null::NonNull<@T>, core::ptr::non_null::NonNull<@T>>}::eq"]
-def NonNull.Insts.CoreCmpPartialEq.eq {T : Type} [Pointee T] [NonZeroSized T] (p q : NonNull T) : Result Bool :=
+def NonNull.Insts.CoreCmpPartialEq.eq {T : Type} [Pointee T] (p q : NonNull T) : Result Bool :=
   RawPtr.eq p.ptr q.ptr
 
 @[reducible, rust_trait_impl
   "core::cmp::PartialEq<core::ptr::non_null::NonNull<@T>, core::ptr::non_null::NonNull<@T>>"]
-def NonNull.Insts.CoreCmpPartialEq (T : Type) [Pointee T] [NonZeroSized T] :
+def NonNull.Insts.CoreCmpPartialEq (T : Type) [Pointee T] :
     core.cmp.PartialEq (NonNull T) (NonNull T) := {
   eq := NonNull.Insts.CoreCmpPartialEq.eq
 }
 
-instance : NonZeroSized (NonNull T) := ⟨true⟩
+instance NonNull.instPointee {T : Type _} : Pointee (NonNull T) := Pointee.typed (NonNull T) true
+
+instance NonNull.instLawful {T : Type _} : Pointee.Lawful (NonNull T) := Pointee.typed.lawful _ _
 
 /-! ### END Trusted definitions -/
 
@@ -103,20 +105,22 @@ theorem NonNull.dangling_ne_null {T : Type _} :
 
 section
 
-variable {T : Type} [Pointee T]
+variable {T : Type} [Pointee T] [Pointee.Lawful T]
 
 @[step]
-theorem NonNull.as_ref.spec (p : NonNull T) (value : T) :
+theorem NonNull.as_ref.spec (p : NonNull T) (value : T)
+    (hAlign : p.ptr.Aligned) :
     ⦃ p.ptr ↦ value ⦄ NonNull.as_ref p
       ⦃ (result, back) => ⌜result = value ∧ back = p.ptr.endBorrow value⌝ ∗ p.ptr ↦† 1⦄ :=
-  RawPtr.as_ref_unchecked.spec p.ptr value
+  RawPtr.as_ref_unchecked.spec p.ptr value hAlign
 
 @[step]
-theorem NonNull.as_mut.spec (p : NonNull T) (value : T) :
+theorem NonNull.as_mut.spec (p : NonNull T) (value : T)
+    (hAlign : p.ptr.Aligned) :
     ⦃ p.ptr ↦ value ⦄ NonNull.as_mut p
       ⦃ (result, back, p') => ⌜result = value ∧ back = p.ptr.endBorrow ∧ p' = p⌝ ∗ p.ptr ↦† 1⦄ := by
   unfold NonNull.as_mut
-  apply WP.ispec_bind (RawPtr.as_mut_unchecked.spec p.ptr value)
+  apply WP.ispec_bind (RawPtr.as_mut_unchecked.spec p.ptr value hAlign)
   · iframe
   · rintro ⟨v, back⟩
     apply (ispec_ok _).2
@@ -126,7 +130,7 @@ theorem NonNull.as_mut.spec (p : NonNull T) (value : T) :
 @[step]
 theorem NonNull.from_mut.spec (value : T) :
     ⦃ emp ⦄ NonNull.from_mut value
-      ⦃ (q, back) => ⌜back = core.ptr.end_from_mut q.ptr⌝ ∗ q.ptr ↦ value ∗
+      ⦃ (q, back) => ⌜back = core.ptr.end_from_mut q.ptr⌝ ∗ ⌜q.ptr.Aligned⌝ ∗ q.ptr ↦ value ∗
         q.ptr.freeable 1 .view⦄ := by
   unfold NonNull.from_mut
   apply WP.ispec_bind (core.ptr.from_mut.spec value)

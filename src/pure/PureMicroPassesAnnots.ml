@@ -208,6 +208,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
           | RawPtrWrite
           | RawPtrCastConst
           | RawPtrCast
+          | Transmute
           | RawPtrEq
           | RawPtrNe -> (f.ty, mk_known (), false)
           | ResultUnwrapMut -> (hole, mk_holes (), false)
