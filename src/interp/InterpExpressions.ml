@@ -49,8 +49,8 @@ let expand_if_borrows_at_place (span : Meta.span) (access : access_kind)
 
     We check that the value *doesn't contain bottoms or reserved borrows*. *)
 let read_place_check (span : Meta.span) (access : access_kind) (p : place)
-    (ctx : eval_ctx) : loan_id option * tvalue =
-  let lid, v = read_place span access p ctx in
+    (ctx : eval_ctx) : loan_id option * tvalue * path =
+  let lid, v, path = eval_place span access p ctx in
   (* Check that there are no bottoms in the value *)
   [%cassert] span
     (not (bottom_in_value ctx.ended_regions v))
@@ -60,12 +60,15 @@ let read_place_check (span : Meta.span) (access : access_kind) (p : place)
     (not (reserved_in_value v))
     "There should be no reserved borrows in the value";
   (* Return *)
-  (lid, v)
+  (lid, v, path)
 
 let access_rplace_reorganize_and_read (config : config) (span : Meta.span)
     (greedy_expand : bool) (access : access_kind) (p : place) (ctx : eval_ctx) :
-    loan_id option * tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)
-    =
+    loan_id option
+    * tvalue
+    * path
+    * eval_ctx
+    * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Make sure we can evaluate the path *)
   let ctx, cc = update_ctx_along_read_place config span access p ctx in
   (* End the proper loans at the place itself *)
@@ -78,16 +81,16 @@ let access_rplace_reorganize_and_read (config : config) (span : Meta.span)
        else (ctx, fun e -> e))
   in
   (* Read the place - note that this checks that the value doesn't contain bottoms *)
-  let lid, value = read_place_check span access p ctx in
+  let lid, value, path = read_place_check span access p ctx in
   (* Compose *)
-  (lid, value, ctx, cc)
+  (lid, value, path, ctx, cc)
 
 let access_rplace_reorganize (config : config) (span : Meta.span)
     (greedy_expand : bool) (access : access_kind) (p : place) : cm_fun =
  fun ctx ->
   if ExpressionsUtils.place_accesses_global p then (ctx, fun x -> x)
   else
-    let _, _, ctx, f =
+    let _, _, _, ctx, f =
       access_rplace_reorganize_and_read config span greedy_expand access p ctx
     in
     (ctx, f)
@@ -583,7 +586,7 @@ let rec eval_operand_no_reorganize (config : config) (span : Meta.span)
   | Copy p ->
       (* Access the value *)
       let access = Read in
-      let _, v = read_place_check span access p ctx in
+      let _, v, path = read_place_check span access p ctx in
       (* Sanity checks *)
       [%cassert] span
         (not (bottom_in_value ctx.ended_regions v))
@@ -598,20 +601,20 @@ let rec eval_operand_no_reorganize (config : config) (span : Meta.span)
         copy_value span allow_adt_copy config ctx v
       in
       (* Update the original value *)
-      let ctx = write_place span access p updated_value ctx in
+      let ctx = write_path span path updated_value ctx in
       (* *)
       (copied_value, ctx, cc)
   | Move p ->
       (* Access the value *)
       let access = Move in
-      let _, v = read_place_check span access p ctx in
+      let _, v, path = read_place_check span access p ctx in
       (* Check that there are no bottoms in the value we are about to move *)
       [%cassert] span
         (not (bottom_in_value ctx.ended_regions v))
         "There should be no bottoms in the value we are about to move";
       (* Move the value *)
       let bottom : tvalue = { value = VBottom; ty = v.ty } in
-      let ctx = write_place span access p bottom ctx in
+      let ctx = write_path span path bottom ctx in
       (v, ctx, fun e -> e)
 
 let eval_operand (config : config) (span : Meta.span) (op : operand)
@@ -1259,7 +1262,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
       in
 
       let greedy_expand = false in
-      let lid, v, ctx, cc =
+      let lid, v, path, ctx, cc =
         access_rplace_reorganize_and_read config span greedy_expand access p ctx
       in
       (* Generate the fresh shared borrow id *)
@@ -1277,7 +1280,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
             (bid, { v with value = v' })
       in
       (* Update the value in the context to replace it with the loan *)
-      let ctx = write_place span access p nv ctx in
+      let ctx = write_path span path nv ctx in
       (* Compute the rvalue - simply a shared borrow with the fresh id.
        * Note that the reference is *mutable* if we do a two-phase borrow *)
       let ref_kind =
@@ -1305,7 +1308,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
       (* Access the value *)
       let access = Write in
       let greedy_expand = false in
-      let _, v, ctx, cc =
+      let _, v, path, ctx, cc =
         access_rplace_reorganize_and_read config span greedy_expand access p ctx
       in
       (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
@@ -1315,7 +1318,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
       (* Compute the loan value with which to replace the value at place p *)
       let nv = { v with value = VLoan (VMutLoan bid) } in
       (* Update the value in the context to replace it with the loan *)
-      let ctx = write_place span access p nv ctx in
+      let ctx = write_path span path nv ctx in
       (* Return *)
       (rv, ctx, cc)
 
@@ -1414,7 +1417,7 @@ let eval_discriminant (config : config) (span : Meta.span) (p : place)
   (* Read the place *)
   let access = Read in
   let expand_prim_copy = false in
-  let _, v, ctx, cf_read =
+  let _, v, _, ctx, cf_read =
     access_rplace_reorganize_and_read config span expand_prim_copy access p ctx
   in
   let v = value_strip_shared_loans v in
@@ -1532,7 +1535,7 @@ let eval_rvalue_not_global (config : config) (span : Meta.span)
 let eval_fake_read (config : config) (span : Meta.span) (p : place) : cm_fun =
  fun ctx ->
   let greedy_expand = false in
-  let _, v, ctx, cc =
+  let _, v, _, ctx, cc =
     access_rplace_reorganize_and_read config span greedy_expand Read p ctx
   in
   [%cassert] span

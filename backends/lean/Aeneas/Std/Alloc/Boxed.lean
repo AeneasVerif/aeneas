@@ -2,6 +2,7 @@
 into and out of a allocation of the global allocator. -/
 module
 public import Aeneas.Std.Alloc.Alloc
+public import Aeneas.Std.Core.Ops
 public import Aeneas.Std.Core.Ptr
 public import Aeneas.Std.Core.Cmp
 public import Aeneas.Std.Core.Convert
@@ -12,7 +13,7 @@ open Aeneas SepLogic
 
 namespace Aeneas.Std
 
-open Result WP
+open Result WP alloc.alloc
 
 @[expose, rust_fun "alloc::boxed::{core::ops::deref::Deref<Box<@T>, @T>}::deref" -canFail (keepParams := [true, false])]
 def alloc.boxed.Box.deref {T : Type _} (x : T) : T := x

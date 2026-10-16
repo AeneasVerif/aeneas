@@ -14,13 +14,13 @@ namespace Aeneas.Std
     we systematically filter it when providing information about the definitions supported by the standard
     libary. -/
 @[rust_type "alloc::alloc::Global"]
-inductive Global where | mk
+inductive alloc.alloc.Global where | mk
 
 @[expose, rust_fun "alloc::alloc::{core::clone::Clone<alloc::alloc::Global>}::clone"]
-def alloc.alloc.CloneGlobal.clone (_ : Global) : Result Global := .ok .mk
+def alloc.alloc.CloneGlobal.clone (_ : alloc.alloc.Global) : Result alloc.alloc.Global := .ok .mk
 
 @[expose, reducible, rust_trait_impl "core::clone::Clone<alloc::alloc::Global>"]
-def core.clone.CloneGlobal : core.clone.Clone Global := {
+def core.clone.CloneGlobal : core.clone.Clone alloc.alloc.Global := {
   clone := alloc.alloc.CloneGlobal.clone
 }
 
@@ -28,18 +28,18 @@ def core.clone.CloneGlobal : core.clone.Clone Global := {
 -- This signature is different from Rust's signature in the following ways:
 -- TODO: it should take a Layout and return a NonNull <u8>
 -- TODO: it should return an AllocError
-def Global.allocate [Pointee T] (_ : Global) (values : List T) : Result (NonNull T) := do
+def alloc.alloc.Global.allocate [Pointee T] (_ : Global) (values : List T) : Result (NonNull T) := do
   let p ← RawPtr.alloc values .global
   .ok ⟨p⟩
 
 -- [`Allocator::deallocate`](https://doc.rust-lang.org/std/alloc/trait.Allocator.html#tymethod.deallocate).
 -- This signature is different from Rust's signature in the following way:
 -- TODO: it should take a NonNull<u8> and a Layout
-def Global.deallocate [Pointee T] (_ : Global) (p : NonNull T) (count : Nat) : Result Unit :=
+def alloc.alloc.Global.deallocate [Pointee T] (_ : Global) (p : NonNull T) (count : Nat) : Result Unit :=
   Result.guardedModify _ (Heap.dealloc p.ptr (count * Pointee.size T) .global)
 
 @[step]
-theorem Global.allocate.spec [Pointee T] [Pointee.Lawful T] (g : Global) (values : List T) :
+theorem alloc.alloc.Global.allocate.spec [Pointee T] [Pointee.Lawful T] (g : alloc.alloc.Global) (values : List T) :
     ⦃ emp ⦄ g.allocate values
       ⦃ q => ⌜q.ptr.Aligned⌝ ∗ q.ptr ↦* values ∗ q.ptr.freeable values.length⦄ := by
   unfold Global.allocate
@@ -52,21 +52,21 @@ theorem Global.allocate.spec [Pointee T] [Pointee.Lawful T] (g : Global) (values
 /-- `q.freeable` is required: without it, `q` could be an interior pointer or point to a local
 behind a reference, and freeing it is undefined behaviour. -/
 @[step]
-theorem Global.deallocate.spec [Pointee T] [Pointee.Lawful T] (g : Global) (q : NonNull T) (values : List T) (count : Nat)
+theorem alloc.alloc.Global.deallocate.spec [Pointee T] [Pointee.Lawful T] (g : alloc.alloc.Global) (q : NonNull T) (values : List T) (count : Nat)
     (hCount : values.length = count) :
     ⦃ q.ptr ↦* values ∗ q.ptr.freeable count ⦄ g.deallocate q count ⦃ _ => emp⦄ := by
   exact Heap.dealloc.spec q.ptr _ count .global
     (by rw [Pointee.length_flatMap_toCells, hCount])
 
 /-- `deallocate` leaves the slot at `q` freed. -/
-theorem Global.deallocate.spec_freed [Pointee T] [Pointee.Lawful T] (g : Global) (q : NonNull T) (values : List T)
+theorem alloc.alloc.Global.deallocate.spec_freed [Pointee T] [Pointee.Lawful T] (g : alloc.alloc.Global) (q : NonNull T) (values : List T)
     (count : Nat) (hCount : values.length = count) :
     ⦃ q.ptr ↦* values ∗ q.ptr.freeable count ⦄ g.deallocate q count ⦃ _ => q.ptr.freed⦄ := by
   exact Heap.dealloc.spec_freed q.ptr _ count .global
     (by rw [Pointee.length_flatMap_toCells, hCount])
 
 /-- Deallocating a raw-pointer view fails: only the global allocator's memory can be freed. -/
-theorem Global.deallocate.fails_view [Pointee T] (g : Global) (q : NonNull T) (count : Nat) :
+theorem alloc.alloc.Global.deallocate.fails_view [Pointee T] (g : alloc.alloc.Global) (q : NonNull T) (count : Nat) :
     WP.ifails (q.ptr.freeable count .view) (g.deallocate q count) := by
   apply WP.ifails_guardedModify
   intro h hFreeable h' hSub hDealloc

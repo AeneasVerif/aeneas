@@ -99,7 +99,7 @@ def sum_by_ref_loop
 def sum_by_ref (v : alloc.vec.Vec Std.U32) : Result Std.U32 := do
   let iter ←
     SharedAVec.Insts.CoreIterTraitsCollectIntoIteratorSharedATIter.into_iter
-      Global v
+      alloc.alloc.Global v
   sum_by_ref_loop iter 0#u32
 
 /-- [vec_iter::sum_step_by]: loop body 0:
