@@ -44,12 +44,12 @@ axiom
   (T : Type _) : Option Never → Result (Option T)
 
 /-- [nested_shared_borrows::do_option]:
-    Source: 'tests/src/nested-shared-borrows.rs', lines 12:0-14:1 -/
+    Source: 'tests/src/nested-shared-borrows.rs', lines 15:0-17:1 -/
 def do_option : Result (Option Unit) := do
   ok (some ())
 
 /-- [nested_shared_borrows::double_ref_option]:
-    Source: 'tests/src/nested-shared-borrows.rs', lines 17:0-20:1
+    Source: 'tests/src/nested-shared-borrows.rs', lines 20:0-23:1
     Visibility: public -/
 def double_ref_option (_arg : Std.U8) : Result (Option Unit) := do
   let o ← do_option
@@ -61,12 +61,12 @@ def double_ref_option (_arg : Std.U8) : Result (Option Unit) := do
       Unit residual
 
 /-- [nested_shared_borrows::do_result]:
-    Source: 'tests/src/nested-shared-borrows.rs', lines 22:0-24:1 -/
+    Source: 'tests/src/nested-shared-borrows.rs', lines 25:0-27:1 -/
 def do_result : Result (core.result.Result Unit Unit) := do
   ok (core.result.Result.Ok ())
 
 /-- [nested_shared_borrows::double_ref_result]:
-    Source: 'tests/src/nested-shared-borrows.rs', lines 27:0-30:1
+    Source: 'tests/src/nested-shared-borrows.rs', lines 30:0-33:1
     Visibility: public -/
 def double_ref_result
   (_arg : Std.U8) : Result (core.result.Result Unit Unit) := do
@@ -80,18 +80,18 @@ def double_ref_result
       Unit (core.convert.FromSame Unit) residual
 
 /-- [nested_shared_borrows::S]
-    Source: 'tests/src/nested-shared-borrows.rs', lines 36:0-38:1
+    Source: 'tests/src/nested-shared-borrows.rs', lines 39:0-41:1
     Visibility: public -/
 structure S where
   r : Std.U8
 
 /-- [nested_shared_borrows::f]:
-    Source: 'tests/src/nested-shared-borrows.rs', lines 40:0-42:1 -/
+    Source: 'tests/src/nested-shared-borrows.rs', lines 43:0-45:1 -/
 def f (x : Std.U8) : Result (core.result.Result Std.U8 Unit) := do
   ok (core.result.Result.Ok x)
 
 /-- [nested_shared_borrows::{nested_shared_borrows::S<'a>}::method_try]:
-    Source: 'tests/src/nested-shared-borrows.rs', lines 47:4-50:5
+    Source: 'tests/src/nested-shared-borrows.rs', lines 50:4-53:5
     Visibility: public -/
 def S.method_try
   (self : S) (x : Std.U8) : Result (core.result.Result Std.U8 Unit) := do
@@ -103,5 +103,54 @@ def S.method_try
   | core.ops.control_flow.ControlFlow.Break residual =>
     core.result.Result.Insts.CoreOpsTry_traitFromResidualResult.from_residual
       Std.U8 (core.convert.FromSame Unit) residual
+
+/-- [nested_shared_borrows::shared_reborrow_same_tuple]:
+    Source: 'tests/src/nested-shared-borrows.rs', lines 57:0-66:1
+    Visibility: public -/
+def shared_reborrow_same_tuple : Result Unit := do
+  massert (2#i32 = 2#i32)
+  massert (1#i32 = 1#i32)
+  massert (1#i32 = 1#i32)
+
+/- Unit test for [nested_shared_borrows::shared_reborrow_same_tuple] -/
+#guard (shared_reborrow_same_tuple).reducesTo ()
+
+/-- [nested_shared_borrows::shared_reborrow_same_box]:
+    Source: 'tests/src/nested-shared-borrows.rs', lines 69:0-77:1
+    Visibility: public -/
+def shared_reborrow_same_box : Result Unit := do
+  massert (2#i32 = 2#i32)
+  massert (1#i32 = 1#i32)
+
+/- Unit test for [nested_shared_borrows::shared_reborrow_same_box] -/
+#guard (shared_reborrow_same_box).reducesTo ()
+
+/-- [nested_shared_borrows::shared_reborrow_inside_mut_borrow]:
+    Source: 'tests/src/nested-shared-borrows.rs', lines 80:0-91:1
+    Visibility: public -/
+def shared_reborrow_inside_mut_borrow : Result Unit := do
+  massert (2#i32 = 2#i32)
+  massert (1#i32 = 1#i32)
+
+/- Unit test for [nested_shared_borrows::shared_reborrow_inside_mut_borrow] -/
+#guard (shared_reborrow_inside_mut_borrow).reducesTo ()
+
+/-- [nested_shared_borrows::shared_reborrow_from_input]:
+    Source: 'tests/src/nested-shared-borrows.rs', lines 93:0-95:1
+    Visibility: public -/
+def shared_reborrow_from_input
+  (x : ((Std.U32 × Std.U32) × (Std.U32 × Std.U32))) : Result Std.U32 := do
+  let (_, (_, i)) := x
+  ok i
+
+/-- [nested_shared_borrows::shared_reborrow_from_input_test]:
+    Source: 'tests/src/nested-shared-borrows.rs', lines 98:0-104:1
+    Visibility: public -/
+def shared_reborrow_from_input_test : Result Unit := do
+  let r ← shared_reborrow_from_input ((1#u32, 2#u32), (1#u32, 2#u32))
+  massert (r = 2#u32)
+
+/- Unit test for [nested_shared_borrows::shared_reborrow_from_input_test] -/
+#guard (shared_reborrow_from_input_test).reducesTo ()
 
 end nested_shared_borrows
