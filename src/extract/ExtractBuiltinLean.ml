@@ -4,7 +4,8 @@ open ExtractBuiltinCore
 let lean_builtin_types =
   [
     (* file: "Aeneas/Std/Alloc/Alloc.lean", line: 12 *)
-    mk_type "alloc::alloc::Global" "Global" ~kind:(KEnum [ ("Mk", Some "mk") ]);
+    mk_type "alloc::alloc::Global" "alloc.alloc.Global"
+      ~kind:(KEnum [ ("Mk", Some "mk") ]);
     (* file: "Aeneas/Std/Alloc/String.lean", line: 8 *)
     mk_type "alloc::string::String" "String";
     (* file: "Aeneas/Std/Alloc/Vec.lean", line: 30 *)

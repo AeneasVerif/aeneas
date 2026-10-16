@@ -87,7 +87,7 @@ def carve (cap_ref : Cap) (x : Std.U32) : Result Bool := do
   let c ← Guard.get parent
   let iter ←
     SharedAVec.Insts.CoreIterTraitsCollectIntoIteratorSharedATIter.into_iter
-      Global c.children
+      alloc.alloc.Global c.children
   carve_loop iter x
 
 end loop_shared_borrow_proj
