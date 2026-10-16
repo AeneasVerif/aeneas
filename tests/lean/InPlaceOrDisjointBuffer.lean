@@ -36,6 +36,11 @@ structure InPlaceOrDisjointBuffer (T : Type _) where
   len : Std.Usize
   _phantom : core.marker.PhantomData (Slice T)
 
+instance {T : Type _} : NonZeroSized (InPlaceOrDisjointBuffer T)
+  := ⟨NonZeroSized.nonZero (ConstRawPtr T) || NonZeroSized.nonZero (MutRawPtr
+  T) || NonZeroSized.nonZero Std.Usize || NonZeroSized.nonZero
+  (core.marker.PhantomData (Slice T))⟩
+
 /-- [in_place_or_disjoint_buffer::{in_place_or_disjoint_buffer::InPlaceOrDisjointBuffer<'a, T>}::new_in_place]:
     Source: 'tests/src/in-place-or-disjoint-buffer.rs', lines 15:4-27:5
     Visibility: public -/
@@ -146,8 +151,8 @@ def increment_first_in_place (buf : Slice Std.U8) : Result (Slice Std.U8) := do
   let (s, src_back) ←
     InPlaceOrDisjointBuffer.impl.src { b with _phantom := () }
   let x ← Slice.index_usize s 0#usize
-  let i ← lift (core.num.U8.wrapping_add x 1#u8)
   src_back
+  let i ← lift (core.num.U8.wrapping_add x 1#u8)
   let (s1, dst_back, _) ←
     InPlaceOrDisjointBuffer.impl.dst { b with _phantom := () }
   let s2 ← Slice.update s1 0#usize i

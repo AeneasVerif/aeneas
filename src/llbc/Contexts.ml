@@ -23,10 +23,24 @@ type interpreter_mode = ConcreteMode | SymbolicMode [@@deriving show]
 type config = {
   mode : interpreter_mode;
       (** Concrete mode (interpreter) or symbolic mode (for synthesis) **)
+  live_locals :
+    ((LocalId.Set.t * LocalId.Set.t) StatementId.Map.t option[@opaque]);
+      (** For the functions which access the heap: the local variables which are
+          live before and after each statement of the body. We use them to end
+          the borrows of values in the heap as soon as they are dead (see
+          [InterpStatements.end_dead_heap_borrows]). *)
+  live_after_switch : (LocalId.Set.t option[@opaque]);
+      (** When evaluating a switch in such a function: the local variables which
+          are live after the switch. We end the dead borrows of values in the
+          heap at the end of every branch before joining the branches: the join
+          would otherwise drop the region abstractions which were ended in some
+          branches only, together with the effects of their backward functions.
+      *)
 }
 [@@deriving show]
 
-let mk_config (mode : interpreter_mode) : config = { mode }
+let mk_config ?(live_locals = None) (mode : interpreter_mode) : config =
+  { mode; live_locals; live_after_switch = None }
 
 type type_ctx = {
   type_decls_groups : type_declaration_group TypeDeclId.Map.t;
@@ -176,6 +190,13 @@ type eval_ctx = {
   fresh_loop_id : unit -> loop_id;
   fresh_meta_id : unit -> meta_id;
   fresh_symbolic_expr_id : unit -> symbolic_expr_id;
+  heap_borrow_abs : ((AbsId.id, unit) Hashtbl.t[@opaque]);
+      (** The region abstractions introduced by the calls to functions which
+          borrow values from the heap (for instance [NonNull::as_mut], or
+          [&mut *p] with [p] a raw pointer): their backward functions give the
+          values back to the heap. We end them as soon as the borrows are dead
+          (see [InterpStatements.end_dead_heap_borrows]). The abstraction ids
+          are unique: we can share the table between the contexts. *)
 }
 [@@deriving show]
 

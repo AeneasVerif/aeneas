@@ -50,3 +50,17 @@ val create_push_abstractions_from_abs_region_groups :
 
 (** Evaluate a function body *)
 val eval_function_body : config -> block -> stl_cm_fun
+
+(** The configuration to evaluate the body of a function in symbolic mode (if
+    the function accesses the heap, it contains the liveness of the locals) *)
+val mk_symbolic_fun_config : eval_ctx -> fun_decl -> config
+
+(** Repeatedly end the region abstractions without parents which satisfy a
+    predicate and whose end is unobservable (see the implementation). *)
+val end_unobservable_abs :
+  config ->
+  Meta.span ->
+  ignore_joins:bool ->
+  (eval_ctx -> abs -> bool) ->
+  (eval_ctx -> eval_ctx -> bool) ->
+  cm_fun
